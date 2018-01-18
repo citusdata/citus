@@ -160,9 +160,8 @@ CREATE TABLE router_executor_table (
     comment varchar(20),
     stats test_composite_type
 );
-
-SELECT master_create_distributed_table('router_executor_table', 'id', 'hash');
-SELECT master_create_worker_shards('router_executor_table', 2, 2);
+SET citus.shard_count TO 2;
+SELECT create_distributed_table('router_executor_table', 'id', 'hash');
 
 -- test parameterized inserts
 PREPARE prepared_insert(varchar(20)) AS
@@ -209,8 +208,9 @@ CREATE TABLE prepare_table (
 	key int,
 	value int
 );
-SELECT master_create_distributed_table('prepare_table','key','hash');
-SELECT master_create_worker_shards('prepare_table',4,1);
+SET citus.shard_count TO 4;
+SET citus.shard_replication_factor TO 1;
+SELECT create_distributed_table('prepare_table','key','hash');
 
 PREPARE prepared_no_parameter_insert AS
 	INSERT INTO prepare_table (key) VALUES (0);
@@ -580,9 +580,10 @@ CREATE OR REPLACE FUNCTION immutable_bleat(text) RETURNS int LANGUAGE plpgsql IM
 \c - - - :master_port
 
 -- test table
+SET citus.shard_count TO 2;
+SET citus.shard_replication_factor TO 2;
 CREATE TABLE test_table (test_id integer NOT NULL, data text);
-SELECT master_create_distributed_table('test_table', 'test_id', 'hash');
-SELECT master_create_worker_shards('test_table', 2, 2);
+SELECT create_distributed_table('test_table', 'test_id', 'hash');
 
 -- avoid 9.6+ only context messages
 \set VERBOSITY terse

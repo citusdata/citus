@@ -3,6 +3,7 @@
 --
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 225000;
 SET citus.multi_shard_commit_protocol = '2pc';
+SET citus.shard_count TO 2;
 -- Verify that a table name > 56 characters gets hashed properly.
 CREATE TABLE too_long_12345678901234567890123456789012345678901234567890 (
         col1 integer not null,
@@ -29,6 +30,8 @@ SELECT master_create_worker_shards('too_long_12345678901234567890123456789012345
 (2 rows)
 
 \c - - - :master_port
+SET citus.shard_count TO 2;
+SET citus.shard_replication_factor TO 2;
 -- Verify that the UDF works and rejects bad arguments.
 SELECT shard_name(NULL, 666666);
  shard_name 
@@ -59,15 +62,9 @@ CREATE TABLE name_lengths (
 	col2 integer not null,
 	constraint constraint_a UNIQUE (col1)
 	);
-SELECT master_create_distributed_table('name_lengths', 'col1', 'hash');
- master_create_distributed_table 
----------------------------------
- 
-(1 row)
-
-SELECT master_create_worker_shards('name_lengths', '2', '2');
- master_create_worker_shards 
------------------------------
+SELECT create_distributed_table('name_lengths', 'col1', 'hash');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 
@@ -167,21 +164,17 @@ btree, for table "public.name_lengths_225003"
 \c - - - :master_port
 -- Verify that distributed tables with too-long names 
 -- for CHECK constraints are no trouble.
+SET citus.shard_count TO 2;
+SET citus.shard_replication_factor TO 2;
 CREATE TABLE sneaky_name_lengths (
 	col1 integer not null,
         col2 integer not null,
         int_col_12345678901234567890123456789012345678901234567890 integer not null,
         CHECK (int_col_12345678901234567890123456789012345678901234567890 > 100)
         );
-SELECT master_create_distributed_table('sneaky_name_lengths', 'col1', 'hash');
- master_create_distributed_table 
----------------------------------
- 
-(1 row)
-
-SELECT master_create_worker_shards('sneaky_name_lengths', '2', '2');
- master_create_worker_shards 
------------------------------
+SELECT create_distributed_table('sneaky_name_lengths', 'col1', 'hash');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 
@@ -231,6 +224,8 @@ SELECT "Constraint", "Definition" FROM table_checks WHERE relid='public.sneaky_n
 (1 row)
 
 \c - - - :master_port
+SET citus.shard_count TO 2;
+SET citus.shard_replication_factor TO 2;
 DROP TABLE sneaky_name_lengths CASCADE;
 -- verify that named constraint with too-long name gets hashed properly
 CREATE TABLE sneaky_name_lengths (
@@ -239,15 +234,9 @@ CREATE TABLE sneaky_name_lengths (
         int_col_12345678901234567890123456789012345678901234567890 integer not null,
         constraint unique_12345678901234567890123456789012345678901234567890 UNIQUE (col1)
         );
-SELECT master_create_distributed_table('sneaky_name_lengths', 'col1', 'hash');
- master_create_distributed_table 
----------------------------------
- 
-(1 row)
-
-SELECT master_create_worker_shards('sneaky_name_lengths', '2', '2');
- master_create_worker_shards 
------------------------------
+SELECT create_distributed_table('sneaky_name_lengths', 'col1', 'hash');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 
@@ -260,21 +249,17 @@ SELECT master_create_worker_shards('sneaky_name_lengths', '2', '2');
 (1 row)
 
 \c - - - :master_port
+SET citus.shard_count TO 2;
+SET citus.shard_replication_factor TO 2;
 DROP TABLE sneaky_name_lengths CASCADE;
 -- Verify that much larger shardIds are handled properly
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 2250000000000;
 CREATE TABLE too_long_12345678901234567890123456789012345678901234567890 (
         col1 integer not null,
         col2 integer not null);
-SELECT master_create_distributed_table('too_long_12345678901234567890123456789012345678901234567890', 'col1', 'hash');
- master_create_distributed_table 
----------------------------------
- 
-(1 row)
-
-SELECT master_create_worker_shards('too_long_12345678901234567890123456789012345678901234567890', '2', '2');
- master_create_worker_shards 
------------------------------
+SELECT create_distributed_table('too_long_12345678901234567890123456789012345678901234567890', 'col1', 'hash');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 
@@ -288,20 +273,16 @@ SELECT master_create_worker_shards('too_long_12345678901234567890123456789012345
 (2 rows)
 
 \c - - - :master_port
+SET citus.shard_count TO 2;
+SET citus.shard_replication_factor TO 2;
 DROP TABLE too_long_12345678901234567890123456789012345678901234567890 CASCADE;
 -- Verify that multi-byte boundaries are respected for databases with UTF8 encoding.
 CREATE TABLE U&"elephant_!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D" UESCAPE '!' (
         col1 integer not null PRIMARY KEY,
         col2 integer not null);
-SELECT master_create_distributed_table(U&'elephant_!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D' UESCAPE '!', 'col1', 'hash');
- master_create_distributed_table 
----------------------------------
- 
-(1 row)
-
-SELECT master_create_worker_shards(U&'elephant_!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D' UESCAPE '!', '2', '2');
- master_create_worker_shards 
------------------------------
+SELECT create_distributed_table(U&'elephant_!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D' UESCAPE '!', 'col1', 'hash');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 
@@ -332,20 +313,16 @@ WHERE logicalrelid = U&'elephant_!0441!043B!043E!043D!0441!043B!043E!043D!0441!0
 (2 rows)
 
 \c - - - :master_port
+SET citus.shard_count TO 2;
+SET citus.shard_replication_factor TO 1;
 -- Verify that shard_name UDF supports schemas
 CREATE SCHEMA multi_name_lengths;
 CREATE TABLE multi_name_lengths.too_long_12345678901234567890123456789012345678901234567890 (
         col1 integer not null,
         col2 integer not null);
-SELECT master_create_distributed_table('multi_name_lengths.too_long_12345678901234567890123456789012345678901234567890', 'col1', 'hash');
- master_create_distributed_table 
----------------------------------
- 
-(1 row)
-
-SELECT master_create_worker_shards('multi_name_lengths.too_long_12345678901234567890123456789012345678901234567890', 2, 1);
- master_create_worker_shards 
------------------------------
+SELECT create_distributed_table('multi_name_lengths.too_long_12345678901234567890123456789012345678901234567890', 'col1', 'hash');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 

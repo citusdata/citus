@@ -58,12 +58,12 @@ SELECT sql_test_no_1();
 SELECT sql_test_no_2();
 
 -- test router executor parameterized sql functions
+SET citus.shard_replication_factor TO 1;
 CREATE TABLE temp_table (
 	key int,
 	value int
 );
-SELECT master_create_distributed_table('temp_table','key','hash');
-SELECT master_create_worker_shards('temp_table',4,1);
+SELECT create_distributed_table('temp_table','key','hash');
 
 CREATE FUNCTION no_parameter_insert_sql() RETURNS void AS $$
 	INSERT INTO temp_table (key) VALUES (0);

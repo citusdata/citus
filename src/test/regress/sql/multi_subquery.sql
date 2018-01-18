@@ -562,15 +562,14 @@ FROM
 		l_orderkey) AS unit_prices;
 
 -- Check that we can prune shards in subqueries with VARCHAR partition columns
-
+SET citus.shard_replication_factor TO 1;
 CREATE TABLE subquery_pruning_varchar_test_table
 (
    a varchar,
    b int
 );
 
-SELECT master_create_distributed_table('subquery_pruning_varchar_test_table', 'a', 'hash');
-SELECT master_create_worker_shards('subquery_pruning_varchar_test_table', 4, 1);
+SELECT create_distributed_table('subquery_pruning_varchar_test_table', 'a', 'hash');
 
 -- temporarily disable router executor to test pruning behaviour of subquery pushdown
 SET citus.enable_router_execution TO off;

@@ -23,9 +23,9 @@ CREATE TABLE lineitem_alter (
 	l_shipmode char(10) not null,
 	l_comment varchar(44) not null
 	);
-SELECT master_create_distributed_table('lineitem_alter', 'l_orderkey', 'append');
- master_create_distributed_table 
----------------------------------
+SELECT create_distributed_table('lineitem_alter', 'l_orderkey', 'append');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 
@@ -531,16 +531,12 @@ SELECT indexname, tablename FROM pg_indexes WHERE tablename = 'lineitem_alter';
 (0 rows)
 
 -- Create single-shard table (to avoid deadlocks in the upcoming test hackery)
+SET citus.shard_count TO 1;
+SET citus.shard_replication_factor TO 2;
 CREATE TABLE single_shard_items (id integer NOT NULL, name text);
-SELECT master_create_distributed_table('single_shard_items', 'id', 'hash');
- master_create_distributed_table 
----------------------------------
- 
-(1 row)
-
-SELECT master_create_worker_shards('single_shard_items', 1, 2);
- master_create_worker_shards 
------------------------------
+SELECT create_distributed_table('single_shard_items', 'id', 'hash');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 
@@ -715,16 +711,11 @@ SELECT indexname, tablename FROM pg_indexes WHERE tablename = 'lineitem_alter';
 
 RESET citus.multi_shard_commit_protocol;
 -- verify that not any of shard placements are marked as failed when a query failure occurs
+SET citus.shard_count TO 8;
 CREATE TABLE test_ab (a int, b int);
-SELECT master_create_distributed_table('test_ab', 'a', 'hash');
- master_create_distributed_table 
----------------------------------
- 
-(1 row)
-
-SELECT master_create_worker_shards('test_ab', 8, 2);
- master_create_worker_shards 
------------------------------
+SELECT create_distributed_table('test_ab', 'a', 'hash');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 
@@ -908,6 +899,8 @@ SELECT  indexname, tablename FROM pg_indexes WHERE tablename like 'lineitem_alte
 
 \c - - - :master_port
 -- verify alter table and drop sequence in the same transaction does not cause deadlock
+SET citus.shard_count TO 4;
+SET citus.shard_replication_factor TO 2;
 CREATE TABLE sequence_deadlock_test (a serial, b serial);
 SELECT create_distributed_table('sequence_deadlock_test', 'a');
  create_distributed_table 

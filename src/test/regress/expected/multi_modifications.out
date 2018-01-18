@@ -18,52 +18,37 @@ CREATE TABLE multiple_hash (
 CREATE TABLE insufficient_shards ( LIKE limit_orders );
 CREATE TABLE range_partitioned ( LIKE limit_orders );
 CREATE TABLE append_partitioned ( LIKE limit_orders );
-SELECT master_create_distributed_table('limit_orders', 'id', 'hash');
- master_create_distributed_table 
----------------------------------
+SET citus.shard_count TO 2;
+SELECT create_distributed_table('limit_orders', 'id', 'hash');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 
-SELECT master_create_distributed_table('multiple_hash', 'category', 'hash');
- master_create_distributed_table 
----------------------------------
+SELECT create_distributed_table('multiple_hash', 'category', 'hash');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 
-SELECT master_create_distributed_table('insufficient_shards', 'id', 'hash');
- master_create_distributed_table 
----------------------------------
- 
-(1 row)
-
-SELECT master_create_distributed_table('range_partitioned', 'id', 'range');
- master_create_distributed_table 
----------------------------------
- 
-(1 row)
-
-SELECT master_create_distributed_table('append_partitioned', 'id', 'append');
- master_create_distributed_table 
----------------------------------
- 
-(1 row)
-
-SELECT master_create_worker_shards('limit_orders', 2, 2);
- master_create_worker_shards 
------------------------------
- 
-(1 row)
-
-SELECT master_create_worker_shards('multiple_hash', 2, 2);
- master_create_worker_shards 
------------------------------
- 
-(1 row)
-
+SET citus.shard_count TO 1;
+SET citus.shard_replication_factor TO 1;
 -- make a single shard that covers no partition values
-SELECT master_create_worker_shards('insufficient_shards', 1, 1);
- master_create_worker_shards 
------------------------------
+SELECT create_distributed_table('insufficient_shards', 'id', 'hash');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+SELECT create_distributed_table('range_partitioned', 'id', 'range');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+SELECT create_distributed_table('append_partitioned', 'id', 'append');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 
@@ -175,21 +160,21 @@ INSERT INTO limit_orders VALUES (18811, 'BUD', 14962, '2014-04-05 08:32:16', 'se
 								 -5.00);
 ERROR:  new row for relation "limit_orders_750000" violates check constraint "limit_orders_limit_price_check"
 DETAIL:  Failing row contains (18811, BUD, 14962, 2014-04-05 08:32:16, sell, -5.00).
-CONTEXT:  while executing command on localhost:57637
+CONTEXT:  while executing command on localhost:57638
 -- INSERT violating primary key constraint
 INSERT INTO limit_orders VALUES (32743, 'LUV', 5994, '2001-04-16 03:37:28', 'buy', 0.58);
 ERROR:  duplicate key value violates unique constraint "limit_orders_pkey_750001"
 DETAIL:  Key (id)=(32743) already exists.
-CONTEXT:  while executing command on localhost:57638
+CONTEXT:  while executing command on localhost:57637
 -- INSERT violating primary key constraint, with RETURNING specified.
 INSERT INTO limit_orders VALUES (32743, 'LUV', 5994, '2001-04-16 03:37:28', 'buy', 0.58) RETURNING *;
 ERROR:  duplicate key value violates unique constraint "limit_orders_pkey_750001"
 DETAIL:  Key (id)=(32743) already exists.
-CONTEXT:  while executing command on localhost:57638
+CONTEXT:  while executing command on localhost:57637
 -- INSERT, with RETURNING specified, failing with a non-constraint error
 INSERT INTO limit_orders VALUES (34153, 'LEE', 5994, '2001-04-16 03:37:28', 'buy', 0.58) RETURNING id / 0;
 ERROR:  division by zero
-CONTEXT:  while executing command on localhost:57637
+CONTEXT:  while executing command on localhost:57638
 SET client_min_messages TO DEFAULT;
 -- commands with non-constant partition values are supported
 INSERT INTO limit_orders VALUES (random() * 100, 'ORCL', 152, '2011-08-25 11:50:45',
@@ -351,7 +336,7 @@ INSERT INTO limit_orders VALUES (275, 'ADR', 140, '2007-07-02 16:32:15', 'sell',
 INSERT INTO limit_orders VALUES (275, 'ADR', 140, '2007-07-02 16:32:15', 'sell', 43.67);
 ERROR:  duplicate key value violates unique constraint "limit_orders_pkey_750001"
 DETAIL:  Key (id)=(275) already exists.
-CONTEXT:  while executing command on localhost:57638
+CONTEXT:  while executing command on localhost:57637
 -- Test that shards which miss a modification are marked unhealthy
 -- First: Connect to the second worker node
 \c - - - :worker_2_port
@@ -613,15 +598,10 @@ SELECT * FROM multiple_hash WHERE category = '2' ORDER BY category, data;
 -- verify interaction of default values, SERIAL, and RETURNING
 \set QUIET on
 CREATE TABLE app_analytics_events (id serial, app_id integer, name text);
-SELECT master_create_distributed_table('app_analytics_events', 'app_id', 'hash');
- master_create_distributed_table 
----------------------------------
- 
-(1 row)
-
-SELECT master_create_worker_shards('app_analytics_events', 4, 1);
- master_create_worker_shards 
------------------------------
+SET citus.shard_count TO 4;
+SELECT create_distributed_table('app_analytics_events', 'app_id', 'hash');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 

@@ -11,8 +11,7 @@ CREATE TABLE multi_shard_modify_test (
         t_key integer not null,
         t_name varchar(25) not null,
         t_value integer not null);
-SELECT master_create_distributed_table('multi_shard_modify_test', 't_key', 'hash');
-SELECT master_create_worker_shards('multi_shard_modify_test', 4, 2);
+SELECT create_distributed_table('multi_shard_modify_test', 't_key', 'hash');
 
 COPY multi_shard_modify_test (t_key, t_name, t_value) FROM STDIN WITH (FORMAT 'csv');
 1,san francisco,99
@@ -74,8 +73,7 @@ CREATE TABLE temp_nations(name text, key integer);
 SELECT master_modify_multiple_shards('DELETE FROM multi_shard_modify_test USING temp_nations WHERE multi_shard_modify_test.t_value = temp_nations.key AND temp_nations.name = ''foobar'' ');
 
 -- commands with a USING clause are unsupported
-SELECT master_create_distributed_table('temp_nations', 'name', 'hash');
-SELECT master_create_worker_shards('temp_nations', 4, 2);
+SELECT create_distributed_table('temp_nations', 'name', 'hash');
 SELECT master_modify_multiple_shards('DELETE FROM multi_shard_modify_test USING temp_nations WHERE multi_shard_modify_test.t_value = temp_nations.key AND temp_nations.name = ''foobar'' ');
 
 -- commands with a RETURNING clause are unsupported

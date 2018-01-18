@@ -30,17 +30,11 @@ CREATE FUNCTION print_sorted_shard_intervals(regclass)
 -- test shard pruning functionality
 -- ===================================================================
 -- create distributed table observe shard pruning
+SET citus.shard_replication_factor TO 1;
 CREATE TABLE pruning ( species text, last_pruned date, plant_id integer );
-SELECT master_create_distributed_table('pruning', 'species', 'hash');
- master_create_distributed_table 
----------------------------------
- 
-(1 row)
-
--- create worker shards
-SELECT master_create_worker_shards('pruning', 4, 1);
- master_create_worker_shards 
------------------------------
+SELECT create_distributed_table('pruning', 'species', 'hash');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 
@@ -134,9 +128,9 @@ SELECT print_sorted_shard_intervals('pruning');
 
 -- create range distributed table observe shard pruning
 CREATE TABLE pruning_range ( species text, last_pruned date, plant_id integer );
-SELECT master_create_distributed_table('pruning_range', 'species', 'range');
- master_create_distributed_table 
----------------------------------
+SELECT create_distributed_table('pruning_range', 'species', 'range');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 

@@ -30,14 +30,14 @@ INSERT INTO products VALUES(1, 'product_1', 1);
 INSERT INTO products VALUES(1, 'product_1', 1);
 ERROR:  duplicate key value violates unique constraint "p_key_1450000"
 DETAIL:  Key (product_no)=(1) already exists.
-CONTEXT:  while executing command on localhost:57637
+CONTEXT:  while executing command on localhost:57638
 ALTER TABLE products DROP CONSTRAINT p_key;
 INSERT INTO products VALUES(1, 'product_1', 1);
 -- Can not create constraint since it conflicts with the existing data
 ALTER TABLE products ADD CONSTRAINT p_key PRIMARY KEY(product_no);
 ERROR:  could not create unique index "p_key_1450000"
 DETAIL:  Key (product_no)=(1) is duplicated.
-CONTEXT:  while executing command on localhost:57638
+CONTEXT:  while executing command on localhost:57637
 DROP TABLE products;
 -- Check "PRIMARY KEY CONSTRAINT" with reference table
 CREATE TABLE products_ref (
@@ -113,7 +113,7 @@ INSERT INTO unique_test_table VALUES(1, 'Ahmet');
 INSERT INTO unique_test_table VALUES(1, 'Mehmet');
 ERROR:  duplicate key value violates unique constraint "unn_id_1450006"
 DETAIL:  Key (id)=(1) already exists.
-CONTEXT:  while executing command on localhost:57637
+CONTEXT:  while executing command on localhost:57638
 ALTER TABLE unique_test_table DROP CONSTRAINT unn_id;
 -- Insert row which will conflict with the next unique constraint command
 INSERT INTO unique_test_table VALUES(1, 'Mehmet');
@@ -121,7 +121,7 @@ INSERT INTO unique_test_table VALUES(1, 'Mehmet');
 ALTER TABLE unique_test_table ADD CONSTRAINT unn_id UNIQUE(id);
 ERROR:  could not create unique index "unn_id_1450006"
 DETAIL:  Key (id)=(1) is duplicated.
-CONTEXT:  while executing command on localhost:57638
+CONTEXT:  while executing command on localhost:57637
 -- Can create unique constraint over multiple columns which must include
 -- distribution column
 ALTER TABLE unique_test_table ADD CONSTRAINT unn_id_name UNIQUE(id, name);
@@ -129,7 +129,7 @@ ALTER TABLE unique_test_table ADD CONSTRAINT unn_id_name UNIQUE(id, name);
 INSERT INTO unique_test_table VALUES(1, 'Mehmet');
 ERROR:  duplicate key value violates unique constraint "unn_id_name_1450006"
 DETAIL:  Key (id, name)=(1, Mehmet) already exists.
-CONTEXT:  while executing command on localhost:57637
+CONTEXT:  while executing command on localhost:57638
 DROP TABLE unique_test_table;
 -- Check "UNIQUE CONSTRAINT" with reference table
 CREATE TABLE unique_test_table_ref(id int, name varchar(20));
@@ -201,12 +201,12 @@ ALTER TABLE products ADD CONSTRAINT p_multi_check CHECK(price > discounted_price
 INSERT INTO products VALUES(1, 'product_1', -1, -2);
 ERROR:  new row for relation "products_1450012" violates check constraint "p_check_1450012"
 DETAIL:  Failing row contains (1, product_1, -1, -2).
-CONTEXT:  while executing command on localhost:57637
+CONTEXT:  while executing command on localhost:57638
 INSERT INTO products VALUES(1, 'product_1', 5, 3);
 INSERT INTO products VALUES(1, 'product_1', 2, 3);
 ERROR:  new row for relation "products_1450012" violates check constraint "p_multi_check_1450012"
 DETAIL:  Failing row contains (1, product_1, 2, 3).
-CONTEXT:  while executing command on localhost:57637
+CONTEXT:  while executing command on localhost:57638
 DROP TABLE products;
 -- Check "CHECK CONSTRAINT" with reference table 
 CREATE TABLE products_ref (
@@ -284,7 +284,7 @@ INSERT INTO products VALUES(2,'product_2', 5);
 INSERT INTO products VALUES(2,'product_2', 5);
 ERROR:  conflicting key value violates exclusion constraint "exc_pno_name_1450021"
 DETAIL:  Key (product_no, name)=(2, product_2) conflicts with existing key (product_no, name)=(2, product_2).
-CONTEXT:  while executing command on localhost:57638
+CONTEXT:  while executing command on localhost:57637
 DROP TABLE products;
 -- Check "EXCLUSION CONSTRAINT" with reference table
 CREATE TABLE products_ref (
@@ -357,7 +357,7 @@ ALTER TABLE products ALTER COLUMN name SET NOT NULL;
 INSERT INTO products VALUES(1,NULL,5);
 ERROR:  null value in column "name" violates not-null constraint
 DETAIL:  Failing row contains (1, null, 5).
-CONTEXT:  while executing command on localhost:57637
+CONTEXT:  while executing command on localhost:57638
 INSERT INTO products VALUES(NULL,'product_1', 5);
 ERROR:  cannot perform an INSERT with NULL in the partition column
 DROP TABLE products;

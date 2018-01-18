@@ -183,12 +183,12 @@ SELECT plpgsql_test_6(155);
 SELECT plpgsql_test_6(1555);
 
 -- test router executor parameterized PL/pgsql functions
+SET citus.shard_replication_factor TO 1;
 CREATE TABLE plpgsql_table (
 	key int,
 	value int
 );
-SELECT master_create_distributed_table('plpgsql_table','key','hash');
-SELECT master_create_worker_shards('plpgsql_table',4,1);
+SELECT create_distributed_table('plpgsql_table','key','hash');
 
 CREATE FUNCTION no_parameter_insert() RETURNS void as $$
 BEGIN
