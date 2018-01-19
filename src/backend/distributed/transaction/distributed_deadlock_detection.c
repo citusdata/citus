@@ -134,7 +134,7 @@ CheckForDistributedDeadlocks(void)
 	{
 		bool deadlockFound = false;
 		List *deadlockPath = NIL;
-		TransactionNode *transactionNodeStack[edgeCount];
+		TransactionNode *transactionNodeStack[edgeCount + 1];
 
 		/* we're only interested in finding deadlocks originating from this node */
 		if (transactionNode->transactionId.initiatorNodeIdentifier != localGroupId)
