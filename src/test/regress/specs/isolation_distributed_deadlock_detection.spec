@@ -97,6 +97,11 @@ step "s1-insert-ref-11"
   INSERT INTO deadlock_detection_reference VALUES (11, 11);
 }
 
+step "s1-update-2-4"
+{
+  UPDATE deadlock_detection_test SET some_val = 1 WHERE user_id = 2 OR user_id = 4;
+}
+
 step "s1-finish"
 {
   COMMIT;
@@ -122,6 +127,11 @@ step "s2-update-2"
 step "s2-update-3"
 {
   UPDATE deadlock_detection_test SET some_val = 2 WHERE user_id = 3;
+}
+
+step "s2-update-4"
+{
+  UPDATE deadlock_detection_test SET some_val = 2 WHERE user_id = 4;
 }
 
 step "s2-upsert-select-all"
@@ -249,6 +259,11 @@ step "s4-update-7"
   UPDATE deadlock_detection_test SET some_val = 4 WHERE user_id = 7;
 }
 
+step "s4-random-adv-lock"
+{
+  SELECT pg_advisory_xact_lock(8765);
+}
+
 step "s4-finish"
 {
   COMMIT;
@@ -294,6 +309,11 @@ step "s5-update-6"
 step "s5-update-7"
 {
   UPDATE deadlock_detection_test SET some_val = 5 WHERE user_id = 7;
+}
+
+step "s5-random-adv-lock"
+{
+  SELECT pg_advisory_xact_lock(8765);
 }
 
 step "s5-finish"
@@ -406,3 +426,11 @@ permutation "s1-begin" "s2-begin" "s3-begin" "s4-begin" "s5-begin" "s6-begin" "s
 
 # a larger graph where the deadlock starts from the last node
 permutation "s1-begin" "s2-begin" "s3-begin" "s4-begin" "s5-begin" "s6-begin" "s5-update-5" "s3-update-2" "s2-update-2" "s4-update-4" "s3-update-4" "s4-update-5" "s1-update-4" "deadlock-checker-call" "s6-update-6" "s5-update-6" "s6-update-5" "deadlock-checker-call" "s5-finish" "s6-finish" "s4-finish" "s3-finish"  "s1-finish" "s2-finish"
+
+# a backend is blocked on multiple backends
+# note that session 5 is not strictly necessary to simulate the deadlock
+# we only added that such that session 4 waits on for that
+# thus if any cancellation happens on session 4, we'd be able to 
+# observe it, otherwise cancelling idle backends has not affect 
+# (cancelling wrong backend used to be a bug and already fixed)
+permutation "s1-begin" "s2-begin" "s3-begin" "s4-begin" "s5-begin" "s1-update-1" "s3-update-3" "s2-update-4" "s2-update-3" "s4-update-2" "s5-random-adv-lock" "s4-random-adv-lock" "s3-update-1" "s1-update-2-4" "deadlock-checker-call" "deadlock-checker-call" "s5-finish" "s4-finish" "s2-finish" "s1-finish" "s3-finish"

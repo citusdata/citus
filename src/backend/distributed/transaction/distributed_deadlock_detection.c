@@ -307,7 +307,7 @@ PrependOutgoingNodesToQueue(TransactionNode *transactionNode, int currentStackDe
 		queuedNode->transactionNode = waitForTransaction;
 		queuedNode->currentStackDepth = currentStackDepth;
 
-		*toBeVisitedNodes = lappend(*toBeVisitedNodes, queuedNode);
+		*toBeVisitedNodes = lcons(queuedNode, *toBeVisitedNodes);
 	}
 }
 
