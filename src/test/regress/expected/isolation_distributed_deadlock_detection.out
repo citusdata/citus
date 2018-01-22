@@ -874,3 +874,85 @@ step s1-finish:
 step s2-finish: 
   COMMIT;
 
+
+starting permutation: s1-begin s2-begin s3-begin s4-begin s5-begin s1-update-1 s3-update-3 s2-update-4 s2-update-3 s4-update-2 s5-random-adv-lock s4-random-adv-lock s3-update-1 s1-update-2-4 deadlock-checker-call deadlock-checker-call s5-finish s4-finish s2-finish s1-finish s3-finish
+step s1-begin: 
+  BEGIN;
+
+step s2-begin: 
+  BEGIN;
+
+step s3-begin: 
+  BEGIN;
+
+step s4-begin: 
+  BEGIN;
+
+step s5-begin: 
+  BEGIN;
+
+step s1-update-1: 
+  UPDATE deadlock_detection_test SET some_val = 1 WHERE user_id = 1;
+
+step s3-update-3: 
+  UPDATE deadlock_detection_test SET some_val = 3 WHERE user_id = 3;
+
+step s2-update-4: 
+  UPDATE deadlock_detection_test SET some_val = 2 WHERE user_id = 4;
+
+step s2-update-3: 
+  UPDATE deadlock_detection_test SET some_val = 2 WHERE user_id = 3;
+ <waiting ...>
+step s4-update-2: 
+  UPDATE deadlock_detection_test SET some_val = 4 WHERE user_id = 2;
+
+step s5-random-adv-lock: 
+  SELECT pg_advisory_xact_lock(8765);
+
+pg_advisory_xact_lock
+
+               
+step s4-random-adv-lock: 
+  SELECT pg_advisory_xact_lock(8765);
+ <waiting ...>
+step s3-update-1: 
+  UPDATE deadlock_detection_test SET some_val = 3 WHERE user_id = 1;
+ <waiting ...>
+step s1-update-2-4: 
+  UPDATE deadlock_detection_test SET some_val = 1 WHERE user_id = 2 OR user_id = 4;
+ <waiting ...>
+step deadlock-checker-call: 
+  SELECT check_distributed_deadlocks();
+
+check_distributed_deadlocks
+
+t              
+step s2-update-3: <... completed>
+error in steps deadlock-checker-call s2-update-3: ERROR:  canceling the transaction since it was involved in a distributed deadlock
+step deadlock-checker-call: 
+  SELECT check_distributed_deadlocks();
+
+check_distributed_deadlocks
+
+f              
+step s5-finish: 
+  COMMIT;
+
+step s4-random-adv-lock: <... completed>
+pg_advisory_xact_lock
+
+               
+step s4-finish: 
+  COMMIT;
+
+step s1-update-2-4: <... completed>
+step s2-finish: 
+  COMMIT;
+
+step s1-finish: 
+  COMMIT;
+
+step s3-update-1: <... completed>
+step s3-finish: 
+  COMMIT;
+
