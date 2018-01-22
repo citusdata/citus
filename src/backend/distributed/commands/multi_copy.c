@@ -59,9 +59,11 @@
 #include "catalog/pg_type.h"
 #include "commands/copy.h"
 #include "commands/defrem.h"
+#include "distributed/listutils.h"
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_copy.h"
+#include "distributed/multi_executor.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_shard_transaction.h"
@@ -71,6 +73,7 @@
 #include "distributed/shard_pruning.h"
 #include "distributed/version_compat.h"
 #include "executor/executor.h"
+#include "libpq/pqformat.h"
 #include "nodes/makefuncs.h"
 #include "tsearch/ts_locale.h"
 #include "utils/builtins.h"
@@ -86,10 +89,16 @@ static const char BinarySignature[11] = "PGCOPY\n\377\r\n\0";
 /* use a global connection to the master node in order to skip passing it around */
 static MultiConnection *masterConnection = NULL;
 
+/* if true, skip validation of JSONB columns during COPY */
+bool SkipJsonbValidationInCopy = true;
+
 
 /* Local functions forward declarations */
 static void CopyFromWorkerNode(CopyStmt *copyStatement, char *completionTag);
 static void CopyToExistingShards(CopyStmt *copyStatement, char *completionTag);
+static bool IsCopyInBinaryFormat(CopyStmt *copyStatement);
+static List * FindJsonbInputColumns(TupleDesc tupleDescriptor,
+									List *inputColumnNameList);
 static void CopyToNewShards(CopyStmt *copyStatement, char *completionTag, Oid relationId);
 static char MasterPartitionMethod(RangeVar *relation);
 static void RemoveMasterOptions(CopyStmt *copyStatement);
@@ -146,6 +155,10 @@ static bool CitusCopyDestReceiverReceive(TupleTableSlot *slot,
 										 DestReceiver *copyDest);
 static void CitusCopyDestReceiverShutdown(DestReceiver *destReceiver);
 static void CitusCopyDestReceiverDestroy(DestReceiver *destReceiver);
+
+
+/* exports for SQL callable functions */
+PG_FUNCTION_INFO_V1(citus_text_send_as_jsonb);
 
 
 /*
@@ -313,6 +326,7 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 
 	char partitionMethod = 0;
 	bool stopOnFailure = false;
+	bool isInputFormatBinary = IsCopyInBinaryFormat(copyStatement);
 
 	CopyState copyState = NULL;
 	uint64 processedRowCount = 0;
@@ -370,38 +384,94 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 	dest->rStartup(dest, 0, tupleDescriptor);
 
 	/*
+	 * Below, we change a few fields in the Relation to control the behaviour
+	 * of BeginCopyFrom. However, we obviously should not do this in relcache
+	 * and therefore make a copy of the Relation.
+	 */
+	copiedDistributedRelation = (Relation) palloc0(sizeof(RelationData));
+	copiedDistributedRelationTuple = (Form_pg_class) palloc(CLASS_TUPLE_SIZE);
+
+	/*
+	 * There is no need to deep copy everything. We will just deep copy of the fields
+	 * we will change.
+	 */
+	memcpy(copiedDistributedRelation, distributedRelation, sizeof(RelationData));
+	memcpy(copiedDistributedRelationTuple, distributedRelation->rd_rel,
+		   CLASS_TUPLE_SIZE);
+
+	copiedDistributedRelation->rd_rel = copiedDistributedRelationTuple;
+	copiedDistributedRelation->rd_att = CreateTupleDescCopyConstr(tupleDescriptor);
+
+	/*
 	 * BeginCopyFrom opens all partitions of given partitioned table with relation_open
 	 * and it expects its caller to close those relations. We do not have direct access
 	 * to opened relations, thus we are changing relkind of partitioned tables so that
 	 * Postgres will treat those tables as regular relations and will not open its
 	 * partitions.
-	 *
-	 * We will make this change on copied version of distributed relation to not change
-	 * anything in relcache.
 	 */
 	if (PartitionedTable(tableId))
 	{
-		copiedDistributedRelation = (Relation) palloc0(sizeof(RelationData));
-		copiedDistributedRelationTuple = (Form_pg_class) palloc(CLASS_TUPLE_SIZE);
-
-		/*
-		 * There is no need to deep copy everything. We will just deep copy of the fields
-		 * we will change.
-		 */
-		memcpy(copiedDistributedRelation, distributedRelation, sizeof(RelationData));
-		memcpy(copiedDistributedRelationTuple, distributedRelation->rd_rel,
-			   CLASS_TUPLE_SIZE);
-
 		copiedDistributedRelationTuple->relkind = RELKIND_RELATION;
-		copiedDistributedRelation->rd_rel = copiedDistributedRelationTuple;
 	}
-	else
+
+	/*
+	 * We make an optimisation to skip JSON parsing for JSONB columns, because many
+	 * Citus users have large objects in this column and parsing it on the coordinator
+	 * causes significant CPU overhead. We do this by forcing BeginCopyFrom and
+	 * NextCopyFrom to parse the column as text and then encoding it as JSON again
+	 * by using citus_text_send_as_jsonb as the binary output function.
+	 *
+	 * The main downside of enabling this optimisation is that it defers validation
+	 * until the object is parsed by the worker, which is unable to give an accurate
+	 * line number.
+	 */
+	if (SkipJsonbValidationInCopy && !isInputFormatBinary)
 	{
-		/*
-		 * If we are not dealing with partitioned table, copiedDistributedRelation is same
-		 * as distributedRelation.
-		 */
-		copiedDistributedRelation = distributedRelation;
+		CopyOutState copyOutState = copyDest->copyOutState;
+		List *jsonbColumnIndexList = NIL;
+		ListCell *jsonbColumnIndexCell = NULL;
+
+		/* get the column indices for all JSONB columns that appear in the input */
+		jsonbColumnIndexList = FindJsonbInputColumns(copiedDistributedRelation->rd_att,
+													 copyStatement->attlist);
+
+		foreach(jsonbColumnIndexCell, jsonbColumnIndexList)
+		{
+			int columnIndex = lfirst_int(jsonbColumnIndexCell);
+			Form_pg_attribute currentColumn =
+				TupleDescAttr(copiedDistributedRelation->rd_att, columnIndex);
+
+			if (columnIndex == partitionColumnIndex)
+			{
+				/*
+				 * In the curious case of using a JSONB column as partition column,
+				 * we leave it as is because we want to make sure the hashing works
+				 * correctly.
+				 */
+				continue;
+			}
+
+			ereport(DEBUG1, (errmsg("parsing JSONB column %s as text",
+									NameStr(currentColumn->attname))));
+
+			/* parse the column as text instead of JSONB */
+			currentColumn->atttypid = TEXTOID;
+
+			if (copyOutState->binary)
+			{
+				Oid textSendAsJsonbFunctionId = CitusTextSendAsJsonbFunctionId();
+
+				/*
+				 * If we're using binary encoding between coordinator and workers
+				 * then we should honour the format expected by jsonb_recv, which
+				 * is a version number followed by text. We therefore use an output
+				 * function which sends the text as if it were jsonb, namely by
+				 * prepending a version number.
+				 */
+				fmgr_info(textSendAsJsonbFunctionId,
+						  &copyDest->columnOutputFunctions[columnIndex]);
+			}
+		}
 	}
 
 	/* initialize copy state to read from COPY data source */
@@ -477,6 +547,83 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 		snprintf(completionTag, COMPLETION_TAG_BUFSIZE,
 				 "COPY " UINT64_FORMAT, processedRowCount);
 	}
+}
+
+
+/*
+ * IsCopyInBinaryFormat determines whether the given COPY statement has the
+ * WITH (format binary) option.
+ */
+static bool
+IsCopyInBinaryFormat(CopyStmt *copyStatement)
+{
+	ListCell *optionCell = NULL;
+
+	foreach(optionCell, copyStatement->options)
+	{
+		DefElem *defel = lfirst_node(DefElem, optionCell);
+		if (strcmp(defel->defname, "format") == 0 &&
+			strcmp(defGetString(defel), "binary") == 0)
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+
+/*
+ * FindJsonbInputColumns finds columns in the tuple descriptor that have
+ * the JSONB type and appear in inputColumnNameList. If the list is empty then
+ * all JSONB columns are returned.
+ */
+static List *
+FindJsonbInputColumns(TupleDesc tupleDescriptor, List *inputColumnNameList)
+{
+	List *jsonbColumnIndexList = NIL;
+	int columnCount = tupleDescriptor->natts;
+	int columnIndex = 0;
+
+	for (columnIndex = 0; columnIndex < columnCount; columnIndex++)
+	{
+		Form_pg_attribute currentColumn = TupleDescAttr(tupleDescriptor, columnIndex);
+		if (currentColumn->attisdropped)
+		{
+			continue;
+		}
+
+		if (currentColumn->atttypid != JSONBOID)
+		{
+			continue;
+		}
+
+		if (inputColumnNameList != NIL)
+		{
+			ListCell *inputColumnCell = NULL;
+			bool isInputColumn = false;
+
+			foreach(inputColumnCell, inputColumnNameList)
+			{
+				char *inputColumnName = strVal(lfirst(inputColumnCell));
+
+				if (namestrcmp(&currentColumn->attname, inputColumnName) == 0)
+				{
+					isInputColumn = true;
+					break;
+				}
+			}
+
+			if (!isInputColumn)
+			{
+				continue;
+			}
+		}
+
+		jsonbColumnIndexList = lappend_int(jsonbColumnIndexList, columnIndex);
+	}
+
+	return jsonbColumnIndexList;
 }
 
 
@@ -1471,6 +1618,25 @@ ColumnOutputFunctions(TupleDesc rowDescriptor, bool binaryFormat)
 		TypeOutputFunctions(columnCount, columnTypes, binaryFormat);
 
 	return outputFunctions;
+}
+
+
+/*
+ * citus_text_send_as_jsonb sends a text as if it was a JSONB. This should only
+ * be used if the text is indeed valid JSON.
+ */
+Datum
+citus_text_send_as_jsonb(PG_FUNCTION_ARGS)
+{
+	text *inputText = PG_GETARG_TEXT_PP(0);
+	StringInfoData buf;
+	int version = 1;
+
+	pq_begintypsend(&buf);
+	pq_sendint(&buf, version, 1);
+	pq_sendtext(&buf, VARDATA_ANY(inputText), VARSIZE_ANY_EXHDR(inputText));
+
+	PG_RETURN_BYTEA_P(pq_endtypsend(&buf));
 }
 
 

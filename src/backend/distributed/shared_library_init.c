@@ -508,6 +508,22 @@ RegisterCitusConfigVariables(void)
 		GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
+	DefineCustomBoolVariable(
+		"citus.skip_jsonb_validation_in_copy",
+		gettext_noop("Skip validation of JSONB columns on the coordinator during COPY "
+					 "into a distributed table"),
+		gettext_noop("Parsing large JSON objects may incur significant CPU overhead, "
+					 "which can lower COPY throughput. If this GUC is set (the default), "
+					 "JSON parsing is skipped on the coordinator, which means you cannot "
+					 "see the line number in case of malformed JSON, but throughput will "
+					 "be higher. This setting does not apply if the input format is "
+					 "binary."),
+		&SkipJsonbValidationInCopy,
+		true,
+		PGC_USERSET,
+		0,
+		NULL, NULL, NULL);
+
 	DefineCustomIntVariable(
 		"citus.shard_count",
 		gettext_noop("Sets the number of shards for a new hash-partitioned table"

@@ -1087,3 +1087,66 @@ NOTICE:  Copying data from local table...
 (1 row)
 
 ABORT;
+-- copy into a table with a JSONB column
+CREATE TABLE copy_jsonb (key text, value jsonb, extra jsonb default '["default"]'::jsonb);
+SELECT create_distributed_table('copy_jsonb', 'key');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+-- JSONB from text should work
+\COPY copy_jsonb (key, value) FROM STDIN
+SELECT * FROM copy_jsonb ORDER BY key;
+  key  |           value            |    extra    
+-------+----------------------------+-------------
+ blue  | {"b": 255, "g": 0, "r": 0} | ["default"]
+ green | {"b": 0, "g": 255, "r": 0} | ["default"]
+(2 rows)
+
+-- JSONB from binary should work
+\COPY copy_jsonb TO '/tmp/copy_jsonb.pgcopy' WITH (format binary)
+\COPY copy_jsonb FROM '/tmp/copy_jsonb.pgcopy' WITH (format binary)
+SELECT * FROM copy_jsonb ORDER BY key;
+  key  |           value            |    extra    
+-------+----------------------------+-------------
+ blue  | {"b": 255, "g": 0, "r": 0} | ["default"]
+ blue  | {"b": 255, "g": 0, "r": 0} | ["default"]
+ green | {"b": 0, "g": 255, "r": 0} | ["default"]
+ green | {"b": 0, "g": 255, "r": 0} | ["default"]
+(4 rows)
+
+-- JSONB parsing error without validation: no line number
+\COPY copy_jsonb (key, value) FROM STDIN
+ERROR:  invalid input syntax for type json
+DETAIL:  The input string ended unexpectedly.
+TRUNCATE copy_jsonb;
+SET citus.skip_jsonb_validation_in_copy TO off;
+-- JSONB from text should work
+\COPY copy_jsonb (key, value) FROM STDIN
+SELECT * FROM copy_jsonb ORDER BY key;
+  key  |           value            |    extra    
+-------+----------------------------+-------------
+ blue  | {"b": 255, "g": 0, "r": 0} | ["default"]
+ green | {"b": 0, "g": 255, "r": 0} | ["default"]
+(2 rows)
+
+-- JSONB from binary should work
+\COPY copy_jsonb TO '/tmp/copy_jsonb.pgcopy' WITH (format binary)
+\COPY copy_jsonb FROM '/tmp/copy_jsonb.pgcopy' WITH (format binary)
+SELECT * FROM copy_jsonb ORDER BY key;
+  key  |           value            |    extra    
+-------+----------------------------+-------------
+ blue  | {"b": 255, "g": 0, "r": 0} | ["default"]
+ blue  | {"b": 255, "g": 0, "r": 0} | ["default"]
+ green | {"b": 0, "g": 255, "r": 0} | ["default"]
+ green | {"b": 0, "g": 255, "r": 0} | ["default"]
+(4 rows)
+
+-- JSONB parsing error with validation: should see line number
+\COPY copy_jsonb (key, value) FROM STDIN
+ERROR:  invalid input syntax for type json
+DETAIL:  The input string ended unexpectedly.
+CONTEXT:  JSON data, line 1: {"r":255,"g":0,"b":0
+COPY copy_jsonb, line 1, column value: "{"r":255,"g":0,"b":0"
+DROP TABLE copy_jsonb;
