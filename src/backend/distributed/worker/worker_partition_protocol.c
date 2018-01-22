@@ -616,15 +616,21 @@ CitusCreateDirectory(StringInfo directoryName)
 
 
 #ifdef WIN32
-static bool FileIsLink(char *filename, struct stat filestat)
+static bool
+FileIsLink(char *filename, struct stat filestat)
 {
 	return pgwin32_is_junction(filename);
 }
+
+
 #else
-static bool FileIsLink(char *filename, struct stat filestat)
+static bool
+FileIsLink(char *filename, struct stat filestat)
 {
 	return S_ISLNK(filestat.st_mode);
 }
+
+
 #endif
 
 
