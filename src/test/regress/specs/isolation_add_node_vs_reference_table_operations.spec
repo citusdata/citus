@@ -43,12 +43,12 @@ session "s2"
 # loading the cache
 step "s2-load-metadata-cache"
 {
-	COPY test_reference_table FROM PROGRAM 'echo "1\n2\n3\n4\n5"';
+	COPY test_reference_table FROM PROGRAM 'seq 1 5';
 }
 
 step "s2-copy-to-reference-table" 
 {
-	COPY test_reference_table FROM PROGRAM 'echo "1\n2\n3\n4\n5"';
+	COPY test_reference_table FROM PROGRAM 'seq 1 5';
 }
 
 step "s2-insert-to-reference-table"

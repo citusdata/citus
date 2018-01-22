@@ -6,7 +6,7 @@ setup
   	SELECT create_distributed_table('table_to_append', 'id', 'append');
   	INSERT INTO table_to_be_appended SELECT generate_series(1,1000);
 
-  	COPY table_to_append FROM PROGRAM 'echo "0\n7\n8\n9\n10000"';
+  	COPY table_to_append FROM PROGRAM 'echo "0:7:8:9:10000" | tr : "\n"';
 }
 
 teardown

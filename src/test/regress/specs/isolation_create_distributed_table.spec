@@ -22,7 +22,7 @@ step "s1-create_distributed_table"
 
 step "s1-copy_to_local_table"
 {
-	COPY table_to_distribute FROM PROGRAM 'echo "0\n1\n2\n3\n4\n5\n6\n7\n8"';
+	INSERT INTO table_to_distribute SELECT s FROM generate_series(0, 8) s;
 }
 
 step "s1-commit"
@@ -44,7 +44,7 @@ step "s2-create_distributed_table"
 
 step "s2-copy_to_local_table"
 {
-	COPY table_to_distribute FROM PROGRAM 'echo "0\n1\n2\n3\n4\n5\n6\n7\n8"';
+	INSERT INTO table_to_distribute SELECT s FROM generate_series(0, 8) s;
 }
 
 step "s2-commit"

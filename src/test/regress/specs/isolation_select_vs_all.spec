@@ -18,7 +18,7 @@ teardown
 
 # session 1
 session "s1"
-step "s1-initialize" { COPY select_append FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV; }
+step "s1-initialize" { COPY select_append FROM PROGRAM 'echo 0, a, 0:1, b, 1:2, c, 2:3, d, 3:4, e, 4 | tr : "\n"' WITH CSV; }
 step "s1-begin" { BEGIN; }
 step "s1-router-select" { SELECT * FROM select_append WHERE id = 1; }
 step "s1-real-time-select" { SELECT * FROM select_append ORDER BY 1, 2; }

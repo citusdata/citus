@@ -23,7 +23,7 @@ teardown
 
 # session 1
 session "s1"
-step "s1-initialize" { COPY truncate_append FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV; }
+step "s1-initialize" { COPY truncate_append FROM PROGRAM 'echo 0, a:1, b:2, c:3, d:4, e | tr : "\n"' WITH CSV; }
 step "s1-begin" { BEGIN; }
 step "s1-truncate" { TRUNCATE truncate_append; }
 step "s1-drop" { DROP TABLE truncate_append; }
