@@ -516,7 +516,7 @@ UpdateNodeLocation(int32 nodeId, char *newNodeName, int32 newNodePort)
 	tupleDescriptor = RelationGetDescr(pgDistNode);
 
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_node_nodeid,
-				BTEqualStrategyNumber, F_INT8EQ, Int32GetDatum(nodeId));
+				BTEqualStrategyNumber, F_INT4EQ, Int32GetDatum(nodeId));
 
 	scanDescriptor = systable_beginscan(pgDistNode, DistNodeNodeIdIndexId(), indexOK,
 										NULL, scanKeyCount, scanKey);
@@ -630,7 +630,7 @@ get_shard_id_for_distribution_column(PG_FUNCTION_ARGS)
 		List *shardIntervalList = LoadShardIntervalList(relationId);
 		if (shardIntervalList == NIL)
 		{
-			PG_RETURN_INT64(NULL);
+			PG_RETURN_INT64(0);
 		}
 
 		shardInterval = (ShardInterval *) linitial(shardIntervalList);
@@ -679,7 +679,7 @@ get_shard_id_for_distribution_column(PG_FUNCTION_ARGS)
 		PG_RETURN_INT64(shardInterval->shardId);
 	}
 
-	PG_RETURN_INT64(NULL);
+	PG_RETURN_INT64(0);
 }
 
 
@@ -1052,7 +1052,7 @@ GetNodeTuple(char *nodeName, int32 nodePort)
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_node_nodename,
 				BTEqualStrategyNumber, F_TEXTEQ, CStringGetTextDatum(nodeName));
 	ScanKeyInit(&scanKey[1], Anum_pg_dist_node_nodeport,
-				BTEqualStrategyNumber, F_INT8EQ, Int32GetDatum(nodePort));
+				BTEqualStrategyNumber, F_INT4EQ, Int32GetDatum(nodePort));
 	scanDescriptor = systable_beginscan(pgDistNode, InvalidOid, indexOK,
 										NULL, scanKeyCount, scanKey);
 
@@ -1296,7 +1296,7 @@ DeleteNodeRow(char *nodeName, int32 nodePort)
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_node_nodename,
 				BTEqualStrategyNumber, F_TEXTEQ, CStringGetTextDatum(nodeName));
 	ScanKeyInit(&scanKey[1], Anum_pg_dist_node_nodeport,
-				BTEqualStrategyNumber, F_INT8EQ, Int32GetDatum(nodePort));
+				BTEqualStrategyNumber, F_INT4EQ, Int32GetDatum(nodePort));
 
 	heapScan = systable_beginscan(pgDistNode, InvalidOid, indexOK,
 								  NULL, scanKeyCount, scanKey);
