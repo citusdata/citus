@@ -38,6 +38,7 @@
 #include "distributed/version_compat.h"
 #include "executor/spi.h"
 #include "mb/pg_wchar.h"
+#include "port.h"
 #include "storage/lmgr.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
@@ -615,87 +616,17 @@ CitusCreateDirectory(StringInfo directoryName)
 
 
 /*
- * CitusRemoveDirectory first checks if the given directory exists. If it does, the
- * function recursively deletes the contents of the given directory, and then
- * deletes the directory itself. This function is modeled on the Boost file
- * system library's remove_all() method.
+ * CitusRemoveDirectory removes the given directory, and errors out if
+ * there were any problems.
  */
 void
 CitusRemoveDirectory(StringInfo filename)
 {
-	struct stat fileStat;
-	int removed = 0;
-
-	int fileStated = stat(filename->data, &fileStat);
-	if (fileStated < 0)
-	{
-		if (errno == ENOENT)
-		{
-			return;  /* if file does not exist, return */
-		}
-		else
-		{
-			ereport(ERROR, (errcode_for_file_access(),
-							errmsg("could not stat file \"%s\": %m", filename->data)));
-		}
-	}
-
-	/*
-	 * If this is a directory, iterate over all its contents and for each
-	 * content, recurse into this function. Also, make sure that we do not
-	 * recurse into symbolic links.
-	 */
-	if (S_ISDIR(fileStat.st_mode) && !S_ISLNK(fileStat.st_mode))
-	{
-		const char *directoryName = filename->data;
-		struct dirent *directoryEntry = NULL;
-
-		DIR *directory = AllocateDir(directoryName);
-		if (directory == NULL)
-		{
-			ereport(ERROR, (errcode_for_file_access(),
-							errmsg("could not open directory \"%s\": %m",
-								   directoryName)));
-		}
-
-		directoryEntry = ReadDir(directory, directoryName);
-		for (; directoryEntry != NULL; directoryEntry = ReadDir(directory, directoryName))
-		{
-			const char *baseFilename = directoryEntry->d_name;
-			StringInfo fullFilename = NULL;
-
-			/* if system file, skip it */
-			if (strncmp(baseFilename, ".", MAXPGPATH) == 0 ||
-				strncmp(baseFilename, "..", MAXPGPATH) == 0)
-			{
-				continue;
-			}
-
-			fullFilename = makeStringInfo();
-			appendStringInfo(fullFilename, "%s/%s", directoryName, baseFilename);
-
-			CitusRemoveDirectory(fullFilename);
-
-			FreeStringInfo(fullFilename);
-		}
-
-		FreeDir(directory);
-	}
-
-	/* we now have an empty directory or a regular file, remove it */
-	if (S_ISDIR(fileStat.st_mode))
-	{
-		removed = rmdir(filename->data);
-	}
-	else
-	{
-		removed = unlink(filename->data);
-	}
-
-	if (removed != 0)
+	bool removeSuccess = rmtree(filename->data, true);
+	if (!removeSuccess)
 	{
 		ereport(ERROR, (errcode_for_file_access(),
-						errmsg("could not remove file \"%s\": %m", filename->data)));
+						errmsg("could not remove directory \"%s\": %m", filename->data)));
 	}
 }
 
