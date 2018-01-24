@@ -22,6 +22,8 @@ extern uint32 ReferenceRelationCount(RelationRestrictionContext *restrictionCont
 extern bool SafeToPushdownUnionSubquery(
 	PlannerRestrictionContext *plannerRestrictionContext);
 extern List * RelationIdList(Query *query);
-
+extern PlannerRestrictionContext * FilterPlannerRestrictionForQuery(
+	PlannerRestrictionContext *plannerRestrictionContext,
+	Query *query);
 
 #endif /* RELATION_RESTRICTION_EQUIVALENCE_H */
