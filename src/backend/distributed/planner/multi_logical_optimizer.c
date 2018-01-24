@@ -1328,8 +1328,6 @@ MasterExtendedOpNode(MultiExtendedOp *originalOpNode,
 	masterExtendedOpNode->limitCount = originalOpNode->limitCount;
 	masterExtendedOpNode->limitOffset = originalOpNode->limitOffset;
 	masterExtendedOpNode->havingQual = newHavingQual;
-	masterExtendedOpNode->hasWindowFuncs = originalOpNode->hasWindowFuncs;
-	masterExtendedOpNode->windowClause = originalOpNode->windowClause;
 
 	return masterExtendedOpNode;
 }
@@ -1821,8 +1819,6 @@ WorkerExtendedOpNode(MultiExtendedOp *originalOpNode,
 	bool enableLimitPushdown = true;
 	bool hasNonPartitionColumnDistinctAgg = false;
 	bool repartitionSubquery = false;
-	List *windowClause = NIL;
-	bool hasWindowFuncs = false;
 
 	walkerContext->expressionList = NIL;
 

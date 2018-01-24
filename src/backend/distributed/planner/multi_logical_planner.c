@@ -225,7 +225,7 @@ static bool
 ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery)
 {
 	List *qualifierList = NIL;
-	StringInfo *errorMessage = NULL;
+	StringInfo errorMessage = NULL;
 
 	/*
 	 * We check the existence of subqueries in FROM clause on the modified query
@@ -270,7 +270,8 @@ ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery)
 	/*
 	 * Check if the query has a window function and it is safe to pushdown
 	 */
-	if (SafeToPushdownWindowFunction(originalQuery, errorMessage))
+	if (originalQuery->hasWindowFuncs && SafeToPushdownWindowFunction(originalQuery,
+																	  &errorMessage))
 	{
 		return true;
 	}
@@ -1038,8 +1039,8 @@ DeferErrorIfCannotPushdownSubquery(Query *subqueryTree, bool outerMostQueryHasLi
 	 * We support window functions when the window function
 	 * is partitioned on distribution column.
 	 */
-	if (subqueryTree->windowClause && !SafeToPushdownWindowFunction(subqueryTree,
-																	&errorInfo))
+	if (subqueryTree->hasWindowFuncs && !SafeToPushdownWindowFunction(subqueryTree,
+																	  &errorInfo))
 	{
 		errorDetail = (char *) errorInfo->data;
 		preconditionsSatisfied = false;
