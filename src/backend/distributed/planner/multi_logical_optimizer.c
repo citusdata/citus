@@ -1328,6 +1328,8 @@ MasterExtendedOpNode(MultiExtendedOp *originalOpNode,
 	masterExtendedOpNode->limitCount = originalOpNode->limitCount;
 	masterExtendedOpNode->limitOffset = originalOpNode->limitOffset;
 	masterExtendedOpNode->havingQual = newHavingQual;
+	masterExtendedOpNode->hasWindowFuncs = originalOpNode->hasWindowFuncs;
+	masterExtendedOpNode->windowClause = originalOpNode->windowClause;
 
 	return masterExtendedOpNode;
 }
@@ -1819,6 +1821,8 @@ WorkerExtendedOpNode(MultiExtendedOp *originalOpNode,
 	bool enableLimitPushdown = true;
 	bool hasNonPartitionColumnDistinctAgg = false;
 	bool repartitionSubquery = false;
+	List *windowClause = NIL;
+	bool hasWindowFuncs = false;
 
 	walkerContext->expressionList = NIL;
 
@@ -1992,6 +1996,8 @@ WorkerExtendedOpNode(MultiExtendedOp *originalOpNode,
 															groupedByDisjointPartitionColumn);
 		workerExtendedOpNode->sortClauseList =
 			WorkerSortClauseList(originalOpNode, groupedByDisjointPartitionColumn);
+		workerExtendedOpNode->hasWindowFuncs = originalOpNode->hasWindowFuncs;
+		workerExtendedOpNode->windowClause = originalOpNode->windowClause;
 	}
 
 	/*
@@ -2017,8 +2023,10 @@ HasNonPartitionColumnDistinctAgg(List *targetEntryList, Node *havingQual,
 								 List *tableNodeList)
 {
 	List *targetVarList = pull_var_clause((Node *) targetEntryList,
-										  PVC_INCLUDE_AGGREGATES);
-	List *havingVarList = pull_var_clause((Node *) havingQual, PVC_INCLUDE_AGGREGATES);
+										  PVC_INCLUDE_AGGREGATES |
+										  PVC_RECURSE_WINDOWFUNCS);
+	List *havingVarList = pull_var_clause((Node *) havingQual, PVC_INCLUDE_AGGREGATES |
+										  PVC_RECURSE_WINDOWFUNCS);
 	List *aggregateCheckList = list_concat(targetVarList, havingVarList);
 
 	ListCell *aggregateCheckCell = NULL;
@@ -2673,7 +2681,8 @@ ErrorIfContainsUnsupportedAggregate(MultiNode *logicalPlanNode)
 	 * PVC_REJECT_PLACEHOLDERS is implicit if PVC_INCLUDE_PLACEHOLDERS isn't
 	 * specified.
 	 */
-	List *expressionList = pull_var_clause((Node *) targetList, PVC_INCLUDE_AGGREGATES);
+	List *expressionList = pull_var_clause((Node *) targetList, PVC_INCLUDE_AGGREGATES |
+										   PVC_INCLUDE_WINDOWFUNCS);
 
 	ListCell *expressionCell = NULL;
 	foreach(expressionCell, expressionList)

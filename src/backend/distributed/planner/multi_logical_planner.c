@@ -225,6 +225,7 @@ static bool
 ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery)
 {
 	List *qualifierList = NIL;
+	StringInfo *errorMessage = NULL;
 
 	/*
 	 * We check the existence of subqueries in FROM clause on the modified query
@@ -262,6 +263,14 @@ ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery)
 	 */
 	qualifierList = QualifierList(rewrittenQuery->jointree);
 	if (DeferErrorIfUnsupportedClause(qualifierList) != NULL)
+	{
+		return true;
+	}
+
+	/*
+	 * Check if the query has a window function and it is safe to pushdown
+	 */
+	if (SafeToPushdownWindowFunction(originalQuery, errorMessage))
 	{
 		return true;
 	}
@@ -2252,6 +2261,7 @@ IsReadIntermediateResultFunction(Node *node)
 DeferredErrorMessage *
 DeferErrorIfQueryNotSupported(Query *queryTree)
 {
+	StringInfo errorInfo = NULL;
 	char *errorMessage = NULL;
 	bool hasTablesample = false;
 	bool hasUnsupportedJoin = false;
@@ -2276,7 +2286,7 @@ DeferErrorIfQueryNotSupported(Query *queryTree)
 		errorHint = filterHint;
 	}
 
-	if (queryTree->hasWindowFuncs)
+	if (queryTree->hasWindowFuncs && !SafeToPushdownWindowFunction(queryTree, &errorInfo))
 	{
 		preconditionsSatisfied = false;
 		errorMessage = "could not run distributed query because the window "
@@ -3314,6 +3324,8 @@ MultiExtendedOpNode(Query *queryTree)
 	extendedOpNode->havingQual = queryTree->havingQual;
 	extendedOpNode->distinctClause = queryTree->distinctClause;
 	extendedOpNode->hasDistinctOn = queryTree->hasDistinctOn;
+	extendedOpNode->windowClause = queryTree->windowClause;
+	extendedOpNode->hasWindowFuncs = queryTree->hasWindowFuncs;
 
 	return extendedOpNode;
 }
@@ -3575,7 +3587,8 @@ pull_var_clause_default(Node *node)
 	 * PVC_REJECT_PLACEHOLDERS is implicit if PVC_INCLUDE_PLACEHOLDERS
 	 * isn't specified.
 	 */
-	List *columnList = pull_var_clause(node, PVC_RECURSE_AGGREGATES);
+	List *columnList = pull_var_clause(node, PVC_RECURSE_AGGREGATES |
+									   PVC_RECURSE_WINDOWFUNCS);
 
 	return columnList;
 }
@@ -4070,7 +4083,7 @@ UpdateVarMappingsForExtendedOpNode(List *columnList, List *subqueryTargetEntryLi
 			TargetEntry *targetEntry = (TargetEntry *) lfirst(targetEntryCell);
 			Var *targetColumn = NULL;
 
-			Assert(IsA(targetEntry->expr, Var));
+/*			Assert(IsA(targetEntry->expr, Var)); */
 			targetColumn = (Var *) targetEntry->expr;
 			if (columnOnTheExtendedNode->varno == targetColumn->varno &&
 				columnOnTheExtendedNode->varattno == targetColumn->varattno)
