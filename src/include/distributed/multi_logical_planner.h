@@ -192,9 +192,6 @@ extern DeferredErrorMessage * DeferErrorIfCannotPushdownSubquery(Query *subquery
 																 bool
 																 outerMostQueryHasLimit);
 extern DeferredErrorMessage * DeferErrorIfUnsupportedUnionQuery(Query *queryTree);
-extern PlannerRestrictionContext * FilterPlannerRestrictionForQuery(
-	PlannerRestrictionContext *plannerRestrictionContext,
-	Query *query);
 extern bool SafeToPushdownWindowFunction(Query *query, StringInfo *errorDetail);
 extern bool TargetListOnPartitionColumn(Query *query, List *targetEntryList);
 extern bool FindNodeCheckInRangeTableList(List *rtable, bool (*check)(Node *));
