@@ -44,6 +44,8 @@ static const char *CitusNodeTagNamesD[] = {
 
 const char **CitusNodeTagNames = CitusNodeTagNamesD;
 
+/* support for CitusNewNode() macro */
+CitusNode *newCitusNodeMacroHolder;
 
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(citus_extradata_container);
