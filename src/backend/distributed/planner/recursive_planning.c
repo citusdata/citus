@@ -115,6 +115,9 @@ typedef struct VarLevelsUpWalkerContext
 static DeferredErrorMessage * RecursivelyPlanSubqueriesAndCTEs(Query *query,
 															   RecursivePlanningContext *
 															   context);
+static bool ShouldRecursivelyPlanAllSublinks(Query *query);
+static bool RecursivelyPlanAllSubqueries(Node *node,
+										 RecursivePlanningContext *planningContext);
 static DeferredErrorMessage * RecursivelyPlanCTEs(Query *query,
 												  RecursivePlanningContext *context);
 static bool RecursivelyPlanSubqueryWalker(Node *node, RecursivePlanningContext *context);
@@ -238,7 +241,64 @@ RecursivelyPlanSubqueriesAndCTEs(Query *query, RecursivePlanningContext *context
 		RecursivelyPlanSetOperations(query, (Node *) query->setOperations, context);
 	}
 
+	/*
+	 * For certain cases, we should recursively plan all the sublinks to sucessefully
+	 * execute the query.
+	 */
+	if (ShouldRecursivelyPlanAllSublinks(query))
+	{
+		RecursivelyPlanAllSubqueries(query->jointree->quals, context);
+	}
+
 	return NULL;
+}
+
+
+/*
+ * ShouldRecursivelyPlanAllSublinks returns true when the input query
+ * contains only recurring tuples in the FROM clause and has subqueries
+ * in WHERE clause. Otherwise, the function returns false.
+ */
+static bool
+ShouldRecursivelyPlanAllSublinks(Query *query)
+{
+	List *sublinkList = SublinkList(query);
+
+	if (sublinkList != NIL &&
+		!FindNodeCheckInRangeTableList(query->rtable, IsDistributedTableRTE))
+	{
+		return true;
+	}
+
+	return false;
+}
+
+
+/*
+ * RecursivelyPlanAllSubqueries descends into an expression tree and recursively
+ * plans all subqueries found from the top.
+ */
+static bool
+RecursivelyPlanAllSubqueries(Node *node, RecursivePlanningContext *planningContext)
+{
+	if (node == NULL)
+	{
+		return false;
+	}
+
+	if (IsA(node, Query))
+	{
+		Query *query = (Query *) node;
+
+		if (FindNodeCheckInRangeTableList(query->rtable, IsDistributedTableRTE))
+		{
+			RecursivelyPlanSubquery(query, planningContext);
+		}
+
+		return false;
+	}
+
+	return expression_tree_walker(node, RecursivelyPlanAllSubqueries, planningContext);
 }
 
 

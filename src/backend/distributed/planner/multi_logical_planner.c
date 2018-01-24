@@ -90,7 +90,6 @@ static bool ExtractSetOperationStatmentWalker(Node *node, List **setOperationLis
 static DeferredErrorMessage * DeferErrorIfUnsupportedTableCombination(Query *queryTree);
 static bool WindowPartitionOnDistributionColumn(Query *query);
 static bool AllTargetExpressionsAreColumnReferences(List *targetEntryList);
-static bool IsDistributedTableRTE(Node *node);
 static FieldSelect * CompositeFieldRecursive(Expr *expression, Query *query);
 static bool FullCompositeFieldList(List *compositeFieldList);
 static MultiNode * MultiNodeTree(Query *queryTree);
@@ -159,7 +158,6 @@ static MultiNode * SubqueryMultiNodeTree(Query *originalQuery,
 										 Query *queryTree,
 										 PlannerRestrictionContext *
 										 plannerRestrictionContext);
-static List * SublinkList(Query *originalQuery);
 static bool ExtractSublinkWalker(Node *node, List **sublinkList);
 static MultiNode * SubqueryPushdownMultiNodeTree(Query *queryTree);
 
@@ -317,7 +315,7 @@ FindNodeCheck(Node *node, bool (*check)(Node *))
  * that the function should be called on the original query given that postgres
  * standard_planner() may convert the subqueries in WHERE clause to joins.
  */
-static List *
+List *
 SublinkList(Query *originalQuery)
 {
 	FromExpr *joinTree = originalQuery->jointree;
@@ -1330,7 +1328,7 @@ QueryContainsDistributedTableRTE(Query *query)
  * is a range table relation entry that points to a distributed
  * relation (i.e., excluding reference tables).
  */
-static bool
+bool
 IsDistributedTableRTE(Node *node)
 {
 	RangeTblEntry *rangeTableEntry = NULL;

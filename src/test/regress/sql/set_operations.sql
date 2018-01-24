@@ -97,8 +97,8 @@ SELECT * FROM ((SELECT * FROM test) UNION (SELECT * FROM test)) foo WHERE x IN (
 -- now both the set operations and the sublink is recursively planned
 SELECT * FROM ((SELECT x,y FROM test) UNION (SELECT y,x FROM test)) foo WHERE x IN (SELECT y FROM test ORDER BY 1 LIMIT 4) ORDER BY 1;
 
--- set operations are recursively planned and not the sublink, thus should error out
-SELECT * FROM ((SELECT x,y FROM test) UNION (SELECT y,x FROM test)) foo WHERE x IN (SELECT y FROM test) ORDER BY 1;
+-- set operations are recursively planned and also the sublink, thus should succeed
+SELECT * FROM ((SELECT x,y FROM test) UNION (SELECT y,x FROM test)) foo WHERE x IN (SELECT y FROM test) ORDER BY 1, 2;
 
 -- set operations works fine with pushdownable window functions
 SELECT x, y, rnk FROM (SELECT *, rank() OVER my_win as rnk FROM test WINDOW my_win AS (PARTITION BY x ORDER BY y DESC)) as foo
@@ -115,7 +115,7 @@ SELECT x, y, rnk FROM (SELECT *, rank() OVER my_win as rnk FROM test WINDOW my_w
 SELECT * FROM ((SELECT * FROM test) EXCEPT (SELECT * FROM test ORDER BY x LIMIT 1)) u JOIN test USING (x) ORDER BY 1,2;
 SELECT * FROM ((SELECT * FROM test) INTERSECT (SELECT * FROM test ORDER BY x LIMIT 1)) u LEFT JOIN test USING (x) ORDER BY 1,2;
 
--- distributed table in WHERE clause, but not FROM clause still disallowed
+-- distributed table in WHERE clause, ant not FROM clause still allowed
 SELECT * FROM ((SELECT * FROM test) UNION (SELECT * FROM ref WHERE a IN (SELECT x FROM test))) u ORDER BY 1,2;
 
 -- subquery union in WHERE clause with partition column equality and implicit join is pushed down

@@ -58,7 +58,7 @@ FROM
 		LIMIT 5
 	) as foo;
 
--- we don't support queries with recurring tuples in the FROM
+-- we do support queries with recurring tuples in the FROM
 -- clause and subquery in WHERE clause
 SELECT
 	* 
