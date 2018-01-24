@@ -73,6 +73,7 @@ static void OutputBinaryHeaders(FileOutputStream *partitionFileArray, uint32 fil
 static void OutputBinaryFooters(FileOutputStream *partitionFileArray, uint32 fileCount);
 static uint32 RangePartitionId(Datum partitionValue, const void *context);
 static uint32 HashPartitionId(Datum partitionValue, const void *context);
+static bool FileIsLink(char *filename, struct stat filestat);
 
 
 /* exports for SQL callable functions */
@@ -614,6 +615,25 @@ CitusCreateDirectory(StringInfo directoryName)
 }
 
 
+#ifdef WIN32
+static bool
+FileIsLink(char *filename, struct stat filestat)
+{
+	return pgwin32_is_junction(filename);
+}
+
+
+#else
+static bool
+FileIsLink(char *filename, struct stat filestat)
+{
+	return S_ISLNK(filestat.st_mode);
+}
+
+
+#endif
+
+
 /*
  * CitusRemoveDirectory first checks if the given directory exists. If it does, the
  * function recursively deletes the contents of the given directory, and then
@@ -645,7 +665,7 @@ CitusRemoveDirectory(StringInfo filename)
 	 * content, recurse into this function. Also, make sure that we do not
 	 * recurse into symbolic links.
 	 */
-	if (S_ISDIR(fileStat.st_mode) && !S_ISLNK(fileStat.st_mode))
+	if (S_ISDIR(fileStat.st_mode) && !FileIsLink(filename->data, fileStat))
 	{
 		const char *directoryName = filename->data;
 		struct dirent *directoryEntry = NULL;

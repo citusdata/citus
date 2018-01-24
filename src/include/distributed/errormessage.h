@@ -11,6 +11,7 @@
 #define ERRORMESSAGE_H
 
 
+#include "c.h"
 #include "distributed/citus_nodes.h"
 
 
@@ -34,7 +35,8 @@ typedef struct DeferredErrorMessage
  * serialized/copied/deserialized, i.e. can be embedded in plans and such.
  */
 #define DeferredError(code, message, detail, hint) \
-	DeferredErrorInternal(code, message, detail, hint, __FILE__, __LINE__, __func__)
+	DeferredErrorInternal(code, message, detail, hint, __FILE__, __LINE__, \
+						  PG_FUNCNAME_MACRO)
 
 DeferredErrorMessage * DeferredErrorInternal(int code, const char *message, const
 											 char *detail, const char *hint,
@@ -48,12 +50,22 @@ DeferredErrorMessage * DeferredErrorInternal(int code, const char *message, cons
  * The trickery with __builtin_constant_p/pg_unreachable aims to have the
  * compiler understand that the function will not return if elevel >= ERROR.
  */
+#ifdef HAVE__BUILTIN_CONSTANT_P
 #define RaiseDeferredError(error, elevel) \
 	do { \
 		RaiseDeferredErrorInternal(error, elevel); \
 		if (__builtin_constant_p(elevel) && (elevel) >= ERROR) { \
 			pg_unreachable(); } \
 	} while (0)
+#else  /* !HAVE_BUILTIN_CONSTANT_P */
+#define RaiseDeferredError(error, elevel) \
+	do { \
+		const int elevel_ = (elevel); \
+		RaiseDeferredErrorInternal(error, elevel_); \
+		if (elevel_ >= ERROR) { \
+			pg_unreachable(); } \
+	} while (0)
+#endif /* HAVE_BUILTIN_CONSTANT_P */
 
 void RaiseDeferredErrorInternal(DeferredErrorMessage *error, int elevel);
 
