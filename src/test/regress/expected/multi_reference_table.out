@@ -1419,7 +1419,7 @@ SELECT part_storage_type, part_key, part_replica_count, part_max_size,
   FROM master_get_table_metadata('reference_schema.reference_table_ddl');
  part_storage_type | part_key | part_replica_count | part_max_size | part_placement_policy 
 -------------------+----------+--------------------+---------------+-----------------------
- t                 |          |                  2 |        307200 |                     2
+ t                 |          |                  2 |       1536000 |                     2
 (1 row)
 
 SELECT shardid AS a_shard_id  FROM pg_dist_shard WHERE logicalrelid = 'reference_schema.reference_table_ddl'::regclass \gset

@@ -433,7 +433,7 @@ UPDATE pg_dist_shard SET shardminvalue = 1, shardmaxvalue = 5986
 WHERE shardid = :new_shard_id;
 SELECT master_create_empty_shard('orders_subquery') AS new_shard_id
 \gset
-UPDATE pg_dist_shard SET shardminvalue = 8997, shardmaxvalue = 14946
+UPDATE pg_dist_shard SET shardminvalue = 8997, shardmaxvalue = 14947
 WHERE shardid = :new_shard_id;
 SET citus.shard_max_size TO "1MB";
 \copy lineitem_subquery FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'

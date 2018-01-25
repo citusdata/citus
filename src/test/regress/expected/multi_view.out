@@ -14,7 +14,7 @@ SELECT count(*) FROM lineitem_hash_part;
 SELECT count(*) FROM orders_hash_part;
  count 
 -------
-  2984
+  2985
 (1 row)
 
 -- create a view for priority orders
@@ -24,14 +24,14 @@ SELECT o_orderpriority, count(*)  FROM priority_orders GROUP BY 1 ORDER BY 2, 1;
  o_orderpriority | count 
 -----------------+-------
  2-HIGH          |   593
- 1-URGENT        |   603
+ 1-URGENT        |   604
 (2 rows)
 
 SELECT o_orderpriority, count(*) FROM orders_hash_part  WHERE o_orderpriority < '3-MEDIUM' GROUP BY 1 ORDER BY 2,1;
  o_orderpriority | count 
 -----------------+-------
  2-HIGH          |   593
- 1-URGENT        |   603
+ 1-URGENT        |   604
 (2 rows)
 
 -- filters
@@ -39,7 +39,7 @@ SELECT o_orderpriority, count(*) as all, count(*) FILTER (WHERE o_orderstatus ='
  o_orderpriority | all | fullfilled 
 -----------------+-----+------------
  2-HIGH          | 593 |        271
- 1-URGENT        | 603 |        280
+ 1-URGENT        | 604 |        280
 (2 rows)
 
 -- having

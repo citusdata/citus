@@ -35,7 +35,7 @@ SELECT master_create_empty_shard('test_schema_support.nation_append');
 SELECT master_append_table_to_shard(1190000, 'public.nation_local', 'localhost', :master_port);
  master_append_table_to_shard 
 ------------------------------
-                    0.0266667
+                   0.00533333
 (1 row)
 
 -- verify table actually appended to shard
@@ -66,7 +66,7 @@ SELECT master_create_empty_shard('test_schema_support."nation._''append"');
 SELECT master_append_table_to_shard(1190001, 'nation_local', 'localhost', :master_port);
  master_append_table_to_shard 
 ------------------------------
-                    0.0266667
+                   0.00533333
 (1 row)
 
 -- verify table actually appended to shard
@@ -81,7 +81,7 @@ SET search_path TO test_schema_support;
 SELECT master_append_table_to_shard(1190000, 'public.nation_local', 'localhost', :master_port);
  master_append_table_to_shard 
 ------------------------------
-                    0.0266667
+                   0.00533333
 (1 row)
 
 -- verify table actually appended to shard
@@ -95,7 +95,7 @@ SELECT COUNT(*) FROM nation_append;
 SELECT master_append_table_to_shard(1190001, 'nation_local', 'localhost', :master_port);
  master_append_table_to_shard 
 ------------------------------
-                    0.0266667
+                   0.00533333
 (1 row)
 
 -- verify table actually appended to shard
@@ -806,6 +806,8 @@ SELECT master_apply_delete_command('DELETE FROM nation_append') ;
 -- create necessary objects and load data to them
 CREATE SCHEMA test_schema_support_join_1;
 CREATE SCHEMA test_schema_support_join_2;
+SET citus.shard_count to 4;
+SET citus.shard_replication_factor to 1;
 CREATE TABLE test_schema_support_join_1.nation_hash (
     n_nationkey integer not null,
     n_name char(25) not null,
@@ -821,41 +823,23 @@ CREATE TABLE test_schema_support_join_2.nation_hash (
     n_name char(25) not null,
     n_regionkey integer not null,
     n_comment varchar(152));
-SELECT master_create_distributed_table('test_schema_support_join_1.nation_hash', 'n_nationkey', 'hash');
- master_create_distributed_table 
----------------------------------
- 
-(1 row)
-
-SELECT master_create_worker_shards('test_schema_support_join_1.nation_hash', 4, 1);
- master_create_worker_shards 
------------------------------
+SELECT create_distributed_table('test_schema_support_join_1.nation_hash', 'n_nationkey');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 
 \copy test_schema_support_join_1.nation_hash FROM STDIN with delimiter '|';
-SELECT master_create_distributed_table('test_schema_support_join_1.nation_hash_2', 'n_nationkey', 'hash');
- master_create_distributed_table 
----------------------------------
- 
-(1 row)
-
-SELECT master_create_worker_shards('test_schema_support_join_1.nation_hash_2', 4, 1);
- master_create_worker_shards 
------------------------------
+SELECT create_distributed_table('test_schema_support_join_1.nation_hash_2', 'n_nationkey');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 
 \copy test_schema_support_join_1.nation_hash_2 FROM STDIN with delimiter '|';
-SELECT master_create_distributed_table('test_schema_support_join_2.nation_hash', 'n_nationkey', 'hash');
- master_create_distributed_table 
----------------------------------
- 
-(1 row)
-
-SELECT master_create_worker_shards('test_schema_support_join_2.nation_hash', 4, 1);
- master_create_worker_shards 
------------------------------
+SELECT create_distributed_table('test_schema_support_join_2.nation_hash', 'n_nationkey');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 
@@ -1109,3 +1093,9 @@ SELECT sum(result::int) FROM run_command_on_shards('run_test_schema.test_table',
 -- Clean up the created schema
 DROP SCHEMA run_test_schema CASCADE;
 NOTICE:  drop cascades to table run_test_schema.test_table
+DROP SCHEMA test_schema_support_join_1 CASCADE;
+NOTICE:  drop cascades to 2 other objects
+DETAIL:  drop cascades to table test_schema_support_join_1.nation_hash
+drop cascades to table test_schema_support_join_1.nation_hash_2
+DROP SCHEMA test_schema_support_join_2 CASCADE;
+NOTICE:  drop cascades to table test_schema_support_join_2.nation_hash

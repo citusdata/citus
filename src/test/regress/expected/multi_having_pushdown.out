@@ -59,8 +59,8 @@ EXPLAIN (COSTS FALSE)
                Group Key: remote_scan.l_orderkey
                Filter: (sum(remote_scan.worker_column_3) > '24'::numeric)
                ->  Custom Scan (Citus Real-Time)
-                     Task Count: 8
-                     Tasks Shown: One of 8
+                     Task Count: 2
+                     Tasks Shown: One of 2
                      ->  Task
                            Node: host=localhost port=57637 dbname=regression
                            ->  HashAggregate

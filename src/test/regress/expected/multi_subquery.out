@@ -17,8 +17,11 @@ FROM
 		l_orderkey = o_orderkey
 	GROUP BY
 		l_orderkey) AS unit_prices;
-ERROR:  cannot push down this subquery
-DETAIL:  Shards of relations in subquery need to have 1-to-1 shard partitioning
+           avg           
+-------------------------
+ 142158.8766934673366834
+(1 row)
+
 -- Update metadata in order to make all shards equal
 -- note that the table is created on multi_insert_select_create_table.sql
 UPDATE 
@@ -271,6 +274,8 @@ ORDER BY l_orderkey DESC
 LIMIT 10;
  l_orderkey 
 ------------
+      14947
+      14947
       14946
       14946
       14945
@@ -279,8 +284,6 @@ LIMIT 10;
       14945
       14945
       14945
-      14944
-      14944
 (10 rows)
 
 -- non-implicit typecast is not supported in equi-join
@@ -672,7 +675,7 @@ WHERE
 	unit_price < 10000;
           avg          
 -----------------------
- 4968.2889885208475549
+ 4968.4946466804019323
 (1 row)
 
 -- Check that if subquery is pulled, we don't error and run query properly.

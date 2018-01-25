@@ -7,6 +7,8 @@ SET citus.explain_distributed_queries TO off;
 SET citus.log_multi_join_order TO TRUE;
 SET citus.task_executor_type = 'task-tracker'; -- can't explain all queries otherwise
 SET client_min_messages TO DEBUG2;
+SET citus.shard_count to 2;
+SET citus.shard_replication_factor to 1;
 -- Create new table definitions for use in testing in distributed planning and
 -- execution functionality. Also create indexes to boost performance.
 CREATE TABLE lineitem_hash (
@@ -29,15 +31,9 @@ CREATE TABLE lineitem_hash (
 	PRIMARY KEY(l_orderkey, l_linenumber) );
 DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "lineitem_hash_pkey" for table "lineitem_hash"
 DEBUG:  building index "lineitem_hash_pkey" on table "lineitem_hash"
-SELECT master_create_distributed_table('lineitem_hash', 'l_orderkey', 'hash');
- master_create_distributed_table 
----------------------------------
- 
-(1 row)
-
-SELECT master_create_worker_shards('lineitem_hash', 2, 1);
- master_create_worker_shards 
------------------------------
+SELECT create_distributed_table('lineitem_hash', 'l_orderkey');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 
@@ -56,15 +52,9 @@ CREATE TABLE orders_hash (
 	PRIMARY KEY(o_orderkey) );
 DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "orders_hash_pkey" for table "orders_hash"
 DEBUG:  building index "orders_hash_pkey" on table "orders_hash"
-SELECT master_create_distributed_table('orders_hash', 'o_orderkey', 'hash');
- master_create_distributed_table 
----------------------------------
- 
-(1 row)
-
-SELECT master_create_worker_shards('orders_hash', 2, 1);
- master_create_worker_shards 
------------------------------
+SELECT create_distributed_table('orders_hash', 'o_orderkey');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 
@@ -77,66 +67,18 @@ CREATE TABLE customer_hash (
 	c_acctbal decimal(15,2) not null,
 	c_mktsegment char(10) not null,
 	c_comment varchar(117) not null);
-SELECT master_create_distributed_table('customer_hash', 'c_custkey', 'hash');
- master_create_distributed_table 
----------------------------------
- 
-(1 row)
-
-SELECT master_create_worker_shards('customer_hash', 2, 1);
- master_create_worker_shards 
------------------------------
+SELECT create_distributed_table('customer_hash', 'c_custkey');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 
 -- The following query checks that we can correctly handle self-joins
 EXPLAIN SELECT l1.l_quantity FROM lineitem l1, lineitem l2
 	WHERE l1.l_orderkey = l2.l_orderkey AND l1.l_quantity > 5;
-LOG:  join order: [ "lineitem" ][ local partition join "lineitem" ]
-DEBUG:  join prunable for intervals [1,1509] and [2951,4455]
-DEBUG:  join prunable for intervals [1,1509] and [4480,5986]
-DEBUG:  join prunable for intervals [1,1509] and [8997,10560]
-DEBUG:  join prunable for intervals [1,1509] and [10560,12036]
-DEBUG:  join prunable for intervals [1,1509] and [12036,13473]
-DEBUG:  join prunable for intervals [1,1509] and [13473,14947]
-DEBUG:  join prunable for intervals [1509,4964] and [8997,10560]
-DEBUG:  join prunable for intervals [1509,4964] and [10560,12036]
-DEBUG:  join prunable for intervals [1509,4964] and [12036,13473]
-DEBUG:  join prunable for intervals [1509,4964] and [13473,14947]
-DEBUG:  join prunable for intervals [2951,4455] and [1,1509]
-DEBUG:  join prunable for intervals [2951,4455] and [4480,5986]
-DEBUG:  join prunable for intervals [2951,4455] and [8997,10560]
-DEBUG:  join prunable for intervals [2951,4455] and [10560,12036]
-DEBUG:  join prunable for intervals [2951,4455] and [12036,13473]
-DEBUG:  join prunable for intervals [2951,4455] and [13473,14947]
-DEBUG:  join prunable for intervals [4480,5986] and [1,1509]
-DEBUG:  join prunable for intervals [4480,5986] and [2951,4455]
-DEBUG:  join prunable for intervals [4480,5986] and [8997,10560]
-DEBUG:  join prunable for intervals [4480,5986] and [10560,12036]
-DEBUG:  join prunable for intervals [4480,5986] and [12036,13473]
-DEBUG:  join prunable for intervals [4480,5986] and [13473,14947]
-DEBUG:  join prunable for intervals [8997,10560] and [1,1509]
-DEBUG:  join prunable for intervals [8997,10560] and [1509,4964]
-DEBUG:  join prunable for intervals [8997,10560] and [2951,4455]
-DEBUG:  join prunable for intervals [8997,10560] and [4480,5986]
-DEBUG:  join prunable for intervals [8997,10560] and [12036,13473]
-DEBUG:  join prunable for intervals [8997,10560] and [13473,14947]
-DEBUG:  join prunable for intervals [10560,12036] and [1,1509]
-DEBUG:  join prunable for intervals [10560,12036] and [1509,4964]
-DEBUG:  join prunable for intervals [10560,12036] and [2951,4455]
-DEBUG:  join prunable for intervals [10560,12036] and [4480,5986]
-DEBUG:  join prunable for intervals [10560,12036] and [13473,14947]
-DEBUG:  join prunable for intervals [12036,13473] and [1,1509]
-DEBUG:  join prunable for intervals [12036,13473] and [1509,4964]
-DEBUG:  join prunable for intervals [12036,13473] and [2951,4455]
-DEBUG:  join prunable for intervals [12036,13473] and [4480,5986]
-DEBUG:  join prunable for intervals [12036,13473] and [8997,10560]
-DEBUG:  join prunable for intervals [13473,14947] and [1,1509]
-DEBUG:  join prunable for intervals [13473,14947] and [1509,4964]
-DEBUG:  join prunable for intervals [13473,14947] and [2951,4455]
-DEBUG:  join prunable for intervals [13473,14947] and [4480,5986]
-DEBUG:  join prunable for intervals [13473,14947] and [8997,10560]
-DEBUG:  join prunable for intervals [13473,14947] and [10560,12036]
+LOG:  join order: [ "lineitem" ][ broadcast join "lineitem" ]
+DEBUG:  join prunable for intervals [1,5986] and [8997,14947]
+DEBUG:  join prunable for intervals [8997,14947] and [1,5986]
                              QUERY PLAN                             
 --------------------------------------------------------------------
  Custom Scan (Citus Task-Tracker)  (cost=0.00..0.00 rows=0 width=0)

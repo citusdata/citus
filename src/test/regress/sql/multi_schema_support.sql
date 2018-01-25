@@ -559,6 +559,8 @@ SELECT master_apply_delete_command('DELETE FROM nation_append') ;
 -- create necessary objects and load data to them
 CREATE SCHEMA test_schema_support_join_1;
 CREATE SCHEMA test_schema_support_join_2;
+SET citus.shard_count to 4;
+SET citus.shard_replication_factor to 1;
 
 CREATE TABLE test_schema_support_join_1.nation_hash (
     n_nationkey integer not null,
@@ -578,8 +580,7 @@ CREATE TABLE test_schema_support_join_2.nation_hash (
     n_regionkey integer not null,
     n_comment varchar(152));
 
-SELECT master_create_distributed_table('test_schema_support_join_1.nation_hash', 'n_nationkey', 'hash');
-SELECT master_create_worker_shards('test_schema_support_join_1.nation_hash', 4, 1);
+SELECT create_distributed_table('test_schema_support_join_1.nation_hash', 'n_nationkey');
 
 \copy test_schema_support_join_1.nation_hash FROM STDIN with delimiter '|';
 0|ALGERIA|0|haggle. carefully final deposits detect slyly agai
@@ -590,8 +591,7 @@ SELECT master_create_worker_shards('test_schema_support_join_1.nation_hash', 4, 
 5|ETHIOPIA|0|ven packages wake quickly. regu
 \.
 
-SELECT master_create_distributed_table('test_schema_support_join_1.nation_hash_2', 'n_nationkey', 'hash');
-SELECT master_create_worker_shards('test_schema_support_join_1.nation_hash_2', 4, 1);
+SELECT create_distributed_table('test_schema_support_join_1.nation_hash_2', 'n_nationkey');
 
 \copy test_schema_support_join_1.nation_hash_2 FROM STDIN with delimiter '|';
 0|ALGERIA|0|haggle. carefully final deposits detect slyly agai
@@ -602,8 +602,7 @@ SELECT master_create_worker_shards('test_schema_support_join_1.nation_hash_2', 4
 5|ETHIOPIA|0|ven packages wake quickly. regu
 \.
 
-SELECT master_create_distributed_table('test_schema_support_join_2.nation_hash', 'n_nationkey', 'hash');
-SELECT master_create_worker_shards('test_schema_support_join_2.nation_hash', 4, 1);
+SELECT create_distributed_table('test_schema_support_join_2.nation_hash', 'n_nationkey');
 
 \copy test_schema_support_join_2.nation_hash FROM STDIN with delimiter '|';
 0|ALGERIA|0|haggle. carefully final deposits detect slyly agai
@@ -783,3 +782,5 @@ SELECT sum(result::int) FROM run_command_on_shards('run_test_schema.test_table',
 
 -- Clean up the created schema
 DROP SCHEMA run_test_schema CASCADE;
+DROP SCHEMA test_schema_support_join_1 CASCADE;
+DROP SCHEMA test_schema_support_join_2 CASCADE;

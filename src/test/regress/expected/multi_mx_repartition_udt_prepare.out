@@ -15,7 +15,7 @@ CREATE OPERATOR = (
     LEFTARG = test_udt,
     RIGHTARG = test_udt,
     PROCEDURE = equal_test_udt_function,
-	COMMUTATOR = =,
+    COMMUTATOR = =,
     HASHES
 );
 -- ... and create a custom operator family for hash indexes...
@@ -38,14 +38,14 @@ OPERATOR 1 = (test_udt, test_udt),
 FUNCTION 1 test_udt_hash(test_udt);
 -- END type creation
 CREATE TABLE repartition_udt (
-	pk integer not null,
-	udtcol test_udt,
-	txtcol text
+    pk integer not null,
+    udtcol test_udt,
+    txtcol text
 );
 CREATE TABLE repartition_udt_other (
-	pk integer not null,
-	udtcol test_udt,
-	txtcol text
+    pk integer not null,
+    udtcol test_udt,
+    txtcol text
 );
 -- Connect directly to a worker, create and drop the type, then 
 -- proceed with type creation as above; thus the OIDs will be different.
@@ -66,7 +66,7 @@ CREATE OPERATOR = (
     LEFTARG = test_udt,
     RIGHTARG = test_udt,
     PROCEDURE = equal_test_udt_function,
-	COMMUTATOR = =,
+    COMMUTATOR = =,
     HASHES
 );
 -- ... and create a custom operator family for hash indexes...
@@ -102,7 +102,7 @@ CREATE OPERATOR = (
     LEFTARG = test_udt,
     RIGHTARG = test_udt,
     PROCEDURE = equal_test_udt_function,
-	COMMUTATOR = =,
+    COMMUTATOR = =,
     HASHES
 );
 -- ... and create a custom operator family for hash indexes...
@@ -161,7 +161,7 @@ SET client_min_messages = LOG;
 -- manually make the query router plannable.
 SELECT * FROM repartition_udt JOIN repartition_udt_other
     ON repartition_udt.pk = repartition_udt_other.pk
-	WHERE repartition_udt.pk = 1;
+    WHERE repartition_udt.pk = 1;
  pk | udtcol | txtcol | pk | udtcol | txtcol 
 ----+--------+--------+----+--------+--------
 (0 rows)
@@ -172,7 +172,7 @@ SET citus.task_executor_type = 'task-tracker';
 SET citus.log_multi_join_order = true;
 EXPLAIN SELECT * FROM repartition_udt JOIN repartition_udt_other
     ON repartition_udt.udtcol = repartition_udt_other.udtcol
-	WHERE repartition_udt.pk > 1;
+    WHERE repartition_udt.pk > 1;
 LOG:  join order: [ "repartition_udt" ][ dual partition join "repartition_udt_other" ]
                              QUERY PLAN                             
 --------------------------------------------------------------------
@@ -189,8 +189,8 @@ LOG:  join order: [ "repartition_udt" ][ dual partition join "repartition_udt_ot
 
 SELECT * FROM repartition_udt JOIN repartition_udt_other
     ON repartition_udt.udtcol = repartition_udt_other.udtcol
-	WHERE repartition_udt.pk > 1
-	ORDER BY repartition_udt.pk;
+    WHERE repartition_udt.pk > 1
+    ORDER BY repartition_udt.pk;
 LOG:  join order: [ "repartition_udt" ][ dual partition join "repartition_udt_other" ]
  pk | udtcol | txtcol | pk | udtcol | txtcol 
 ----+--------+--------+----+--------+--------
@@ -201,6 +201,6 @@ LOG:  join order: [ "repartition_udt" ][ dual partition join "repartition_udt_ot
   6 | (2,3)  | foo    | 12 | (2,3)  | foo
 (5 rows)
 
-	
+    
 \c - - - :worker_1_port
 \c - - - :worker_2_port

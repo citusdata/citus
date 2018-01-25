@@ -380,7 +380,7 @@ ALTER TABLE lineitem_renamed RENAME TO lineitem_alter;
 
 -- show rename worked on one worker, too
 \c - - - :worker_1_port
-SELECT relname FROM pg_class WHERE relname LIKE 'lineitem_alter%' AND relname <> 'lineitem_alter_220009' /* failed copy trails */ ORDER BY relname;
+SELECT relname FROM pg_class WHERE relname LIKE 'lineitem_alter%' AND relname <> 'lineitem_alter_220002' /* failed copy trails */ ORDER BY relname;
 \c - - - :master_port
 
 -- verify that we can set and reset storage parameters
@@ -388,14 +388,14 @@ ALTER TABLE lineitem_alter SET(fillfactor=40);
 SELECT relname, reloptions FROM pg_class WHERE relname = 'lineitem_alter';
 
 \c - - - :worker_1_port
-SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'lineitem_alter%' AND relname <> 'lineitem_alter_220009' /* failed copy trails */ ORDER BY relname;
+SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'lineitem_alter%' AND relname <> 'lineitem_alter_220002' /* failed copy trails */ ORDER BY relname;
 \c - - - :master_port
 
 ALTER TABLE lineitem_alter RESET(fillfactor);
 SELECT relname, reloptions FROM pg_class WHERE relname = 'lineitem_alter';
 
 \c - - - :worker_1_port
-SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'lineitem_alter%'  AND relname <> 'lineitem_alter_220009' /* failed copy trails */ ORDER BY relname;
+SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'lineitem_alter%'  AND relname <> 'lineitem_alter_220002' /* failed copy trails */ ORDER BY relname;
 \c - - - :master_port
 
 -- verify that we can rename indexes on distributed tables
@@ -494,7 +494,7 @@ CREATE FUNCTION update_value() RETURNS trigger AS $up$
 $up$ LANGUAGE plpgsql;
 
 CREATE TRIGGER update_value
-BEFORE INSERT ON trigger_table_220028
+BEFORE INSERT ON trigger_table_220017
 FOR EACH ROW EXECUTE PROCEDURE update_value();
 
 \c - - - :master_port

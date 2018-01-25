@@ -391,7 +391,7 @@ SELECT o_orderstatus, count(*), avg(o_totalprice) FROM orders
 	ORDER BY o_orderstatus;
  o_orderstatus | count |         avg         
 ---------------+-------+---------------------
- O             |  1460 | 143355.847013698630
+ O             |  1461 | 143326.447029431896
  P             |    75 | 164847.914533333333
 (2 rows)
 
@@ -403,7 +403,7 @@ SELECT o_orderstatus, sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
  o_orderstatus | sum  |        avg         
 ---------------+------+--------------------
  F             | 8559 | 3.0126715945089757
- O             | 8901 | 3.0050641458474004
+ O             | 8904 | 3.0040485829959514
 (2 rows)
 
 -- now, test the cases where Citus do or do not need to create

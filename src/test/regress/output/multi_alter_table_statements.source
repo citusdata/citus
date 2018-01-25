@@ -43,10 +43,7 @@ SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'lineitem_alter%' OR
         relname        |   reloptions    
 -----------------------+-----------------
  lineitem_alter_220000 | {fillfactor=80}
- lineitem_alter_220001 | {fillfactor=80}
- lineitem_alter_220002 | {fillfactor=80}
- lineitem_alter_220003 | {fillfactor=80}
-(4 rows)
+(1 row)
 
 \c - - - :master_port
 -- Verify that we can add columns
@@ -393,7 +390,7 @@ LINE 1: ALTER TABLE lineitem_alter ADD COLUMN new_column non_existen...
                                                          ^
 ALTER TABLE lineitem_alter ALTER COLUMN null_column SET NOT NULL;
 ERROR:  column "null_column" contains null values
-CONTEXT:  while executing command on localhost:57638
+CONTEXT:  while executing command on localhost:57637
 ALTER TABLE lineitem_alter ALTER COLUMN l_partkey SET DEFAULT 'a';
 ERROR:  invalid input syntax for integer: "a"
 -- Verify that we error out on RENAME CONSTRAINT statement
@@ -750,7 +747,7 @@ SELECT master_create_worker_shards('test_ab', 8, 2);
 INSERT INTO test_ab VALUES (2, 10);
 INSERT INTO test_ab VALUES (2, 11);
 CREATE UNIQUE INDEX temp_unique_index_1 ON test_ab(a);
-ERROR:  could not create unique index "temp_unique_index_1_220022"
+ERROR:  could not create unique index "temp_unique_index_1_220011"
 DETAIL:  Key (a)=(2) is duplicated.
 CONTEXT:  while executing command on localhost:57638
 SELECT shardid FROM pg_dist_shard_placement NATURAL JOIN pg_dist_shard 
@@ -823,43 +820,21 @@ SELECT relname FROM pg_class WHERE relname LIKE 'lineitem_renamed%'  ORDER BY re
 -------------------------
  lineitem_renamed_220000
  lineitem_renamed_220001
- lineitem_renamed_220002
  lineitem_renamed_220003
- lineitem_renamed_220004
- lineitem_renamed_220005
- lineitem_renamed_220006
- lineitem_renamed_220007
- lineitem_renamed_220008
- lineitem_renamed_220010
- lineitem_renamed_220011
- lineitem_renamed_220012
- lineitem_renamed_220013
- lineitem_renamed_220014
-(14 rows)
+(3 rows)
 
 \c - - - :master_port
 -- revert it to original name
 ALTER TABLE lineitem_renamed RENAME TO lineitem_alter;
 -- show rename worked on one worker, too
 \c - - - :worker_1_port
-SELECT relname FROM pg_class WHERE relname LIKE 'lineitem_alter%' AND relname <> 'lineitem_alter_220009' /* failed copy trails */ ORDER BY relname;
+SELECT relname FROM pg_class WHERE relname LIKE 'lineitem_alter%' AND relname <> 'lineitem_alter_220002' /* failed copy trails */ ORDER BY relname;
         relname        
 -----------------------
  lineitem_alter_220000
  lineitem_alter_220001
- lineitem_alter_220002
  lineitem_alter_220003
- lineitem_alter_220004
- lineitem_alter_220005
- lineitem_alter_220006
- lineitem_alter_220007
- lineitem_alter_220008
- lineitem_alter_220010
- lineitem_alter_220011
- lineitem_alter_220012
- lineitem_alter_220013
- lineitem_alter_220014
-(14 rows)
+(3 rows)
 
 \c - - - :master_port
 -- verify that we can set and reset storage parameters
@@ -871,24 +846,13 @@ SELECT relname, reloptions FROM pg_class WHERE relname = 'lineitem_alter';
 (1 row)
 
 \c - - - :worker_1_port
-SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'lineitem_alter%' AND relname <> 'lineitem_alter_220009' /* failed copy trails */ ORDER BY relname;
+SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'lineitem_alter%' AND relname <> 'lineitem_alter_220002' /* failed copy trails */ ORDER BY relname;
         relname        |   reloptions    
 -----------------------+-----------------
  lineitem_alter_220000 | {fillfactor=40}
  lineitem_alter_220001 | {fillfactor=40}
- lineitem_alter_220002 | {fillfactor=40}
  lineitem_alter_220003 | {fillfactor=40}
- lineitem_alter_220004 | {fillfactor=40}
- lineitem_alter_220005 | {fillfactor=40}
- lineitem_alter_220006 | {fillfactor=40}
- lineitem_alter_220007 | {fillfactor=40}
- lineitem_alter_220008 | {fillfactor=40}
- lineitem_alter_220010 | {fillfactor=40}
- lineitem_alter_220011 | {fillfactor=40}
- lineitem_alter_220012 | {fillfactor=40}
- lineitem_alter_220013 | {fillfactor=40}
- lineitem_alter_220014 | {fillfactor=40}
-(14 rows)
+(3 rows)
 
 \c - - - :master_port
 ALTER TABLE lineitem_alter RESET(fillfactor);
@@ -899,24 +863,13 @@ SELECT relname, reloptions FROM pg_class WHERE relname = 'lineitem_alter';
 (1 row)
 
 \c - - - :worker_1_port
-SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'lineitem_alter%'  AND relname <> 'lineitem_alter_220009' /* failed copy trails */ ORDER BY relname;
+SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'lineitem_alter%'  AND relname <> 'lineitem_alter_220002' /* failed copy trails */ ORDER BY relname;
         relname        | reloptions 
 -----------------------+------------
  lineitem_alter_220000 | 
  lineitem_alter_220001 | 
- lineitem_alter_220002 | 
  lineitem_alter_220003 | 
- lineitem_alter_220004 | 
- lineitem_alter_220005 | 
- lineitem_alter_220006 | 
- lineitem_alter_220007 | 
- lineitem_alter_220008 | 
- lineitem_alter_220010 | 
- lineitem_alter_220011 | 
- lineitem_alter_220012 | 
- lineitem_alter_220013 | 
- lineitem_alter_220014 | 
-(14 rows)
+(3 rows)
 
 \c - - - :master_port
 -- verify that we can rename indexes on distributed tables
@@ -936,19 +889,8 @@ SELECT relname FROM pg_class WHERE relname LIKE 'idx_lineitem_linenumber%' ORDER
 --------------------------------
  idx_lineitem_linenumber_220000
  idx_lineitem_linenumber_220001
- idx_lineitem_linenumber_220002
  idx_lineitem_linenumber_220003
- idx_lineitem_linenumber_220004
- idx_lineitem_linenumber_220005
- idx_lineitem_linenumber_220006
- idx_lineitem_linenumber_220007
- idx_lineitem_linenumber_220008
- idx_lineitem_linenumber_220010
- idx_lineitem_linenumber_220011
- idx_lineitem_linenumber_220012
- idx_lineitem_linenumber_220013
- idx_lineitem_linenumber_220014
-(14 rows)
+(3 rows)
 
 \c - - - :master_port
 -- now get rid of the index
@@ -1052,7 +994,7 @@ CREATE FUNCTION update_value() RETURNS trigger AS $up$
     END;
 $up$ LANGUAGE plpgsql;
 CREATE TRIGGER update_value
-BEFORE INSERT ON trigger_table_220028
+BEFORE INSERT ON trigger_table_220017
 FOR EACH ROW EXECUTE PROCEDURE update_value();
 \c - - - :master_port
 INSERT INTO trigger_table VALUES (1, 'trigger disabled');
@@ -1096,7 +1038,7 @@ SET citus.enable_ddl_propagation to true;
 SELECT master_apply_delete_command('DELETE FROM lineitem_alter');
  master_apply_delete_command 
 -----------------------------
-                          14
+                           3
 (1 row)
 
 DROP TABLE lineitem_alter;
@@ -1106,7 +1048,7 @@ DROP TABLE lineitem_alter;
 SELECT relname FROM pg_class WHERE relname LIKE 'lineitem_alter%';
         relname        
 -----------------------
- lineitem_alter_220009
+ lineitem_alter_220002
 (1 row)
 
 \c - - - :master_port
@@ -1149,10 +1091,10 @@ SELECT relname, reloptions FROM pg_class WHERE relname = 'hash_dist';
 SELECT relname, reloptions FROM pg_class WHERE relkind = 'r' AND relname LIKE 'hash_dist%' ORDER BY relname;
      relname      |   reloptions    
 ------------------+-----------------
- hash_dist_220033 | {fillfactor=40}
- hash_dist_220034 | {fillfactor=40}
- hash_dist_220035 | {fillfactor=40}
- hash_dist_220036 | {fillfactor=40}
+ hash_dist_220022 | {fillfactor=40}
+ hash_dist_220023 | {fillfactor=40}
+ hash_dist_220024 | {fillfactor=40}
+ hash_dist_220025 | {fillfactor=40}
 (4 rows)
 
 \c - - - :master_port
@@ -1168,10 +1110,10 @@ SELECT relname, reloptions FROM pg_class WHERE relname = 'hash_dist_pkey';
 SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'hash_dist_pkey%' ORDER BY relname;
         relname        |   reloptions    
 -----------------------+-----------------
- hash_dist_pkey_220033 | {fillfactor=40}
- hash_dist_pkey_220034 | {fillfactor=40}
- hash_dist_pkey_220035 | {fillfactor=40}
- hash_dist_pkey_220036 | {fillfactor=40}
+ hash_dist_pkey_220022 | {fillfactor=40}
+ hash_dist_pkey_220023 | {fillfactor=40}
+ hash_dist_pkey_220024 | {fillfactor=40}
+ hash_dist_pkey_220025 | {fillfactor=40}
 (4 rows)
 
 \c - - - :master_port
@@ -1186,10 +1128,10 @@ SELECT relname, reloptions FROM pg_class WHERE relname = 'hash_dist_pkey';
 SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'hash_dist_pkey%' ORDER BY relname;
         relname        | reloptions 
 -----------------------+------------
- hash_dist_pkey_220033 | 
- hash_dist_pkey_220034 | 
- hash_dist_pkey_220035 | 
- hash_dist_pkey_220036 | 
+ hash_dist_pkey_220022 | 
+ hash_dist_pkey_220023 | 
+ hash_dist_pkey_220024 | 
+ hash_dist_pkey_220025 | 
 (4 rows)
 
 \c - - - :master_port
@@ -1210,10 +1152,10 @@ SELECT relname, reloptions FROM pg_class WHERE relname = 'another_index';
 SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'another_index%' ORDER BY relname;
        relname        |   reloptions    
 ----------------------+-----------------
- another_index_220033 | {fillfactor=50}
- another_index_220034 | {fillfactor=50}
- another_index_220035 | {fillfactor=50}
- another_index_220036 | {fillfactor=50}
+ another_index_220022 | {fillfactor=50}
+ another_index_220023 | {fillfactor=50}
+ another_index_220024 | {fillfactor=50}
+ another_index_220025 | {fillfactor=50}
 (4 rows)
 
 \c - - - :master_port

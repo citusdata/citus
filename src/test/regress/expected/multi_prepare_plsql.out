@@ -139,25 +139,25 @@ SET client_min_messages TO INFO;
 SELECT plpgsql_test_1();
  plpgsql_test_1 
 ----------------
-           2984
+           2985
 (1 row)
 
 SELECT plpgsql_test_2();
  plpgsql_test_2 
 ----------------
-          11998
+          12000
 (1 row)
 
 SELECT plpgsql_test_3();
  plpgsql_test_3 
 ----------------
-           1955
+           1956
 (1 row)
 
 SELECT plpgsql_test_4();
  plpgsql_test_4 
 ----------------
-           7804
+           7806
 (1 row)
 
 SELECT plpgsql_test_5();
@@ -170,13 +170,13 @@ SELECT plpgsql_test_5();
 SELECT plpgsql_test_6(155);
  plpgsql_test_6 
 ----------------
-          11811
+          11813
 (1 row)
 
 SELECT plpgsql_test_6(1555);
  plpgsql_test_6 
 ----------------
-          10183
+          10185
 (1 row)
 
 SELECT plpgsql_test_7('UNITED KINGDOM', 'CHINA');
@@ -195,13 +195,13 @@ SELECT plpgsql_test_7('FRANCE', 'GERMANY');
 SELECT plpgsql_test_6(155);
  plpgsql_test_6 
 ----------------
-          11811
+          11813
 (1 row)
 
 SELECT plpgsql_test_3();
  plpgsql_test_3 
 ----------------
-           1955
+           1956
 (1 row)
 
 SELECT plpgsql_test_7('FRANCE', 'GERMANY');
@@ -219,19 +219,19 @@ SELECT plpgsql_test_5();
 SELECT plpgsql_test_1();
  plpgsql_test_1 
 ----------------
-           2984
+           2985
 (1 row)
 
 SELECT plpgsql_test_6(1555);
  plpgsql_test_6 
 ----------------
-          10183
+          10185
 (1 row)
 
 SELECT plpgsql_test_4();
  plpgsql_test_4 
 ----------------
-           7804
+           7806
 (1 row)
 
 SELECT plpgsql_test_7('UNITED KINGDOM', 'CHINA');
@@ -243,7 +243,7 @@ SELECT plpgsql_test_7('UNITED KINGDOM', 'CHINA');
 SELECT plpgsql_test_2();
  plpgsql_test_2 
 ----------------
-          11998
+          12000
 (1 row)
 
 -- run the tests which do not require re-partition
@@ -253,26 +253,26 @@ SET citus.task_executor_type TO 'real-time';
 SELECT plpgsql_test_1();
  plpgsql_test_1 
 ----------------
-           2984
+           2985
 (1 row)
 
 SELECT plpgsql_test_2();
  plpgsql_test_2 
 ----------------
-          11998
+          12000
 (1 row)
 
 -- run PL/pgsql functions with different parameters
 SELECT plpgsql_test_6(155);
  plpgsql_test_6 
 ----------------
-          11811
+          11813
 (1 row)
 
 SELECT plpgsql_test_6(1555);
  plpgsql_test_6 
 ----------------
-          10183
+          10185
 (1 row)
 
 -- test router executor parameterized PL/pgsql functions

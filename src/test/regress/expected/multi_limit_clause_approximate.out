@@ -40,7 +40,7 @@ DEBUG:  push down of limit count: 600
     199283 | 2726988572
     185925 | 2672114100
     196629 | 2622637602
-    157064 | 2614644408
+    149926 | 2606013732
 (10 rows)
 
 -- Disable limit optimization for our second test. This time, we have a query
@@ -79,11 +79,11 @@ DEBUG:  push down of limit count: 150
  c_custkey |       c_name       | lineitem_count 
 -----------+--------------------+----------------
         43 | Customer#000000043 |             42
-       370 | Customer#000000370 |             38
-        79 | Customer#000000079 |             37
-       689 | Customer#000000689 |             36
-       472 | Customer#000000472 |             35
-       685 | Customer#000000685 |             35
+       370 | Customer#000000370 |             40
+        79 | Customer#000000079 |             38
+       689 | Customer#000000689 |             38
+       685 | Customer#000000685 |             37
+       472 | Customer#000000472 |             36
        643 | Customer#000000643 |             34
        226 | Customer#000000226 |             33
        496 | Customer#000000496 |             32

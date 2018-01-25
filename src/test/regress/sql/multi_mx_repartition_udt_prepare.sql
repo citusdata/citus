@@ -20,7 +20,7 @@ CREATE OPERATOR = (
     LEFTARG = test_udt,
     RIGHTARG = test_udt,
     PROCEDURE = equal_test_udt_function,
-	COMMUTATOR = =,
+    COMMUTATOR = =,
     HASHES
 );
 
@@ -50,15 +50,15 @@ FUNCTION 1 test_udt_hash(test_udt);
 -- END type creation
 
 CREATE TABLE repartition_udt (
-	pk integer not null,
-	udtcol test_udt,
-	txtcol text
+    pk integer not null,
+    udtcol test_udt,
+    txtcol text
 );
 
 CREATE TABLE repartition_udt_other (
-	pk integer not null,
-	udtcol test_udt,
-	txtcol text
+    pk integer not null,
+    udtcol test_udt,
+    txtcol text
 );
 
 -- Connect directly to a worker, create and drop the type, then 
@@ -86,7 +86,7 @@ CREATE OPERATOR = (
     LEFTARG = test_udt,
     RIGHTARG = test_udt,
     PROCEDURE = equal_test_udt_function,
-	COMMUTATOR = =,
+    COMMUTATOR = =,
     HASHES
 );
 
@@ -133,7 +133,7 @@ CREATE OPERATOR = (
     LEFTARG = test_udt,
     RIGHTARG = test_udt,
     PROCEDURE = equal_test_udt_function,
-	COMMUTATOR = =,
+    COMMUTATOR = =,
     HASHES
 );
 
@@ -197,7 +197,7 @@ SET client_min_messages = LOG;
 -- manually make the query router plannable.
 SELECT * FROM repartition_udt JOIN repartition_udt_other
     ON repartition_udt.pk = repartition_udt_other.pk
-	WHERE repartition_udt.pk = 1;
+    WHERE repartition_udt.pk = 1;
 
 -- Query that should result in a repartition join on UDT column.
 SET citus.large_table_shard_count = 1;
@@ -206,12 +206,12 @@ SET citus.log_multi_join_order = true;
 
 EXPLAIN SELECT * FROM repartition_udt JOIN repartition_udt_other
     ON repartition_udt.udtcol = repartition_udt_other.udtcol
-	WHERE repartition_udt.pk > 1;
+    WHERE repartition_udt.pk > 1;
 
 SELECT * FROM repartition_udt JOIN repartition_udt_other
     ON repartition_udt.udtcol = repartition_udt_other.udtcol
-	WHERE repartition_udt.pk > 1
-	ORDER BY repartition_udt.pk;
-	
+    WHERE repartition_udt.pk > 1
+    ORDER BY repartition_udt.pk;
+    
 \c - - - :worker_1_port
 \c - - - :worker_2_port

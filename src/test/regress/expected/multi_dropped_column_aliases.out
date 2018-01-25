@@ -48,7 +48,7 @@ SELECT * FROM customer LIMIT 2;
 SELECT count(*) FROM customer, orders WHERE c_custkey = o_custkey;
  count 
 -------
-  1955
+  1956
 (1 row)
 
 -- Test joinExpr aliases by performing an outer-join. This code path is
