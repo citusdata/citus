@@ -124,10 +124,6 @@ static void ListConcatUniqueAttributeClassMemberLists(AttributeEquivalenceClass 
 													  secondClass);
 static Index RelationRestrictionPartitionKeyIndex(RelationRestriction *
 												  relationRestriction);
-static RelationRestrictionContext * FilterRelationRestrictionContext(
-	RelationRestrictionContext *relationRestrictionContext,
-	Relids
-	queryRteIdentities);
 static JoinRestrictionContext * FilterJoinRestrictionContext(
 	JoinRestrictionContext *joinRestrictionContext, Relids
 	queryRteIdentities);
@@ -1607,7 +1603,7 @@ FilterPlannerRestrictionForQuery(PlannerRestrictionContext *plannerRestrictionCo
  * in the queryRteIdentities and returns a newly allocated
  * RelationRestrictionContext.
  */
-static RelationRestrictionContext *
+RelationRestrictionContext *
 FilterRelationRestrictionContext(RelationRestrictionContext *relationRestrictionContext,
 								 Relids queryRteIdentities)
 {

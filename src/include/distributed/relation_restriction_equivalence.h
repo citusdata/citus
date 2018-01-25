@@ -30,6 +30,10 @@ extern List * RelationIdList(Query *query);
 extern PlannerRestrictionContext * FilterPlannerRestrictionForQuery(
 	PlannerRestrictionContext *plannerRestrictionContext,
 	Query *query);
+extern RelationRestrictionContext * FilterRelationRestrictionContext(
+	RelationRestrictionContext *relationRestrictionContext,
+	Relids
+	queryRteIdentities);
 extern RelationRestrictionContext * ExcludeRelationRestrictionContext(
 	RelationRestrictionContext *relationRestrictionContext,
 	Relids
