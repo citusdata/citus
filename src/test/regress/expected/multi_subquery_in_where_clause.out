@@ -646,13 +646,22 @@ WHERE  user_id
        5
 (2 rows)
 
--- semi join is not on the partition key for the third subquery
+-- semi join is not on the partition key for the third subquery recursively planned
 SELECT user_id
 FROM users_table
 WHERE user_id IN (SELECT user_id FROM users_table WHERE value_1 >= 1 AND value_1 <= 2)
     AND user_id IN (SELECT user_id FROM users_table WHERE value_1 >= 3 AND value_1 <= 4)
-    AND value_2 IN (SELECT user_id FROM users_table WHERE  value_1 >= 5 AND value_1 <= 6);
-ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
+    AND value_2 IN (SELECT user_id FROM users_table WHERE  value_1 >= 5 AND value_1 <= 6) 
+ORDER BY 1 DESC LIMIT 5;
+ user_id 
+---------
+       6
+       6
+       6
+       6
+       6
+(5 rows)
+
 CREATE FUNCTION test_join_function(integer, integer) RETURNS bool
     AS 'select $1 > $2;'
     LANGUAGE SQL

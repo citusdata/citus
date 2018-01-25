@@ -121,7 +121,7 @@ SELECT * FROM ((SELECT * FROM test) UNION (SELECT * FROM ref WHERE a IN (SELECT 
 -- subquery union in WHERE clause with partition column equality and implicit join is pushed down
 SELECT * FROM test a WHERE x IN (SELECT x FROM test b WHERE y = 1 UNION SELECT x FROM test c WHERE y = 2) ORDER BY 1,2;
 
--- subquery union in WHERE clause with partition column equality, without implicit join on partition column
+-- subquery union in WHERE clause with partition column equality, without implicit join on partition column still recursively planned
 SELECT * FROM test a WHERE x NOT IN (SELECT x FROM test b WHERE y = 1 UNION SELECT x FROM test c WHERE y = 2) ORDER BY 1,2;
 
 -- subquery union in WHERE clause without parition column equality is recursively planned
