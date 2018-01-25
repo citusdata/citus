@@ -6,6 +6,8 @@
 
 * Adds support for set operations (UNION, INTERSECT, ...)
 
+* Adds support for 2PC auto-recovery
+
 * Adds support for querying local tables in CTEs and subqueries
 
 * Adds support for more SQL coverage in subqueries for reference tables
