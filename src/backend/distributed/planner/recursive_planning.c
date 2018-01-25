@@ -115,6 +115,8 @@ typedef struct VarLevelsUpWalkerContext
 static DeferredErrorMessage * RecursivelyPlanSubqueriesAndCTEs(Query *query,
 															   RecursivePlanningContext *
 															   context);
+static bool ShouldRecursivelyPlanNonColocatedJoins(Query *query,
+												   RecursivePlanningContext *context);
 static bool ShouldRecursivelyPlanAllSublinks(Query *query);
 static bool RecursivelyPlanAllSubqueries(Node *node,
 										 RecursivePlanningContext *planningContext);
@@ -250,7 +252,43 @@ RecursivelyPlanSubqueriesAndCTEs(Query *query, RecursivePlanningContext *context
 		RecursivelyPlanAllSubqueries(query->jointree->quals, context);
 	}
 
+	/*
+	 * Each subquery is individually can be executed successfully. However,
+	 * they cannot be executed in combination with each other via non-colocated
+	 * joins (i.e., joins on non distribution keys).
+	 */
+	if (ShouldRecursivelyPlanNonColocatedJoins(query, context))
+	{ }
+
 	return NULL;
+}
+
+
+/*
+ * ShouldRecursivelyPlanNonColocatedJoins returns true if not all the distributed
+ * relations are joined on their distribution columns.
+ *
+ * The function returns false if the query contains any local relations since
+ * joins among distributed relations and local relations are not supported.
+ */
+static bool
+ShouldRecursivelyPlanNonColocatedJoins(Query *query, RecursivePlanningContext *context)
+{
+	PlannerRestrictionContext *filteredRestrictionContext = NULL;
+
+	if (FindNodeCheckInRangeTableList(query->rtable, IsLocalTableRTE))
+	{
+		return false;
+	}
+
+	filteredRestrictionContext =
+		FilterPlannerRestrictionForQuery(context->plannerRestrictionContext, query);
+	if (!RestrictionEquivalenceForPartitionKeys(filteredRestrictionContext))
+	{
+		return true;
+	}
+
+	return false;
 }
 
 
