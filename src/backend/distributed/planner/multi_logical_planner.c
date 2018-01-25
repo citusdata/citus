@@ -1319,6 +1319,8 @@ DeferErrorIfUnsupportedTableCombination(Query *queryTree)
 /*
  * SafeToPushdownWindowFunction checks if the query with window function is supported.
  * It returns the result accordingly and modifies the error detail.
+ * It should be noted that this method returns true if there is no window
+ * function in the query.
  */
 bool
 SafeToPushdownWindowFunction(Query *query, StringInfo *errorDetail)
@@ -2294,8 +2296,8 @@ DeferErrorIfQueryNotSupported(Query *queryTree)
 					   "function that is used cannot be pushed down";
 		errorHint = "Window functions are supported in two ways. Either add "
 					"an equality filter on the distributed tables' partition "
-					"column or use the window functions inside a subquery with "
-					"a PARTITION BY clause containing the distribution column";
+					"column or use the window functions with a PARTITION BY "
+					"clause containing the distribution column";
 	}
 
 	if (queryTree->setOperations)
@@ -3991,9 +3993,9 @@ SubqueryPushdownMultiNodeTree(Query *queryTree)
 
 	/*
 	 * We build the extended operator node to capture aggregate functions, group
-	 * clauses, sort clauses, limit/offset clauses, and expressions. We need to
-	 * distinguish between aggregates and expressions; and we address this later
-	 * in the logical optimizer.
+	 * clauses, sort clauses, limit/offset clauses, expressions and window
+	 * functions. We need to distinguish between aggregates and expressions;
+	 * and we address this later in the logical optimizer.
 	 */
 	extendedOpNode = MultiExtendedOpNode(queryTree);
 
@@ -4084,7 +4086,7 @@ UpdateVarMappingsForExtendedOpNode(List *columnList, List *subqueryTargetEntryLi
 			TargetEntry *targetEntry = (TargetEntry *) lfirst(targetEntryCell);
 			Var *targetColumn = NULL;
 
-/*			Assert(IsA(targetEntry->expr, Var)); */
+			Assert(IsA(targetEntry->expr, Var));
 			targetColumn = (Var *) targetEntry->expr;
 			if (columnOnTheExtendedNode->varno == targetColumn->varno &&
 				columnOnTheExtendedNode->varattno == targetColumn->varattno)
