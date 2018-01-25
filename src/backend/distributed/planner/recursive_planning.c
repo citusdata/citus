@@ -117,6 +117,9 @@ static DeferredErrorMessage * RecursivelyPlanSubqueriesAndCTEs(Query *query,
 															   context);
 static bool ShouldRecursivelyPlanNonColocatedJoins(Query *query,
 												   RecursivePlanningContext *context);
+static void RecursivelyPlanNonColocatedJoins(Query *query,
+											 RecursivePlanningContext *context);
+static Relids RTEIdentitiesOfSubqueriesInWhere(Query *query);
 static bool ShouldRecursivelyPlanAllSublinks(Query *query);
 static bool RecursivelyPlanAllSubqueries(Node *node,
 										 RecursivePlanningContext *planningContext);
@@ -258,7 +261,9 @@ RecursivelyPlanSubqueriesAndCTEs(Query *query, RecursivePlanningContext *context
 	 * joins (i.e., joins on non distribution keys).
 	 */
 	if (ShouldRecursivelyPlanNonColocatedJoins(query, context))
-	{ }
+	{
+		RecursivelyPlanNonColocatedJoins(query, context);
+	}
 
 	return NULL;
 }
@@ -276,11 +281,25 @@ ShouldRecursivelyPlanNonColocatedJoins(Query *query, RecursivePlanningContext *c
 {
 	PlannerRestrictionContext *filteredRestrictionContext = NULL;
 
+	/* we may consider handinling regular non-equi joins seperately */
+	if (context->level == 0 && !query->hasSubLinks)
+	{
+		return false;
+	}
+
+	/* set operations are not our target */
+	if (ContainsUnionSubquery(query) || query->setOperations != NULL)
+	{
+		return false;
+	}
+
+	/* direct joins with local tables are not supported by any of Citus planners */
 	if (FindNodeCheckInRangeTableList(query->rtable, IsLocalTableRTE))
 	{
 		return false;
 	}
 
+	/* trigger recursive planning if there is no partition key equality */
 	filteredRestrictionContext =
 		FilterPlannerRestrictionForQuery(context->plannerRestrictionContext, query);
 	if (!RestrictionEquivalenceForPartitionKeys(filteredRestrictionContext))
@@ -289,6 +308,86 @@ ShouldRecursivelyPlanNonColocatedJoins(Query *query, RecursivePlanningContext *c
 	}
 
 	return false;
+}
+
+
+/*
+ * RecursivelyPlanNonColocatedJoins picks the necessary subquery (or subqueries)
+ * and recursively plans to make the input query executable.
+ *
+ * The non colocated joins could appear in the FROM clause and/or via subqueries
+ * in WHERE clause.
+ *
+ * The function currently only supports recursive planning for subqueries in
+ * WHERE clause.
+ *
+ * TODO: Implement the necessary logic for supporting non colocated joins in
+ * the FROM clause.
+ */
+static void
+RecursivelyPlanNonColocatedJoins(Query *query, RecursivePlanningContext *context)
+{
+	Relids rteIdentitiesOfSubqueriesInWhere = RTEIdentitiesOfSubqueriesInWhere(query);
+
+	PlannerRestrictionContext *queryRestrictionContext =
+		FilterPlannerRestrictionForQuery(context->plannerRestrictionContext, query);
+	List *queryAttributeEquivalenceList =
+		GenerateAllAttributedEquivalances(queryRestrictionContext);
+	RelationRestrictionContext *queryRelationRestrictionContext =
+		queryRestrictionContext->relationRestrictionContext;
+	RelationRestrictionContext *fromClauseRelationRestrictionContext =
+		ExcludeRelationRestrictionContext(queryRelationRestrictionContext,
+										  rteIdentitiesOfSubqueriesInWhere);
+
+	/*
+	 * We have more than one relation in the FROM clause and they don't have a distribution
+	 * key equality.
+	 */
+	if (list_length(fromClauseRelationRestrictionContext->relationRestrictionList) > 1 &&
+		!EquivalenceListContainsRelationsEquality(queryAttributeEquivalenceList,
+												  fromClauseRelationRestrictionContext))
+	{
+		/*
+		 * TODO: Implement recursive planning on non-colocated joins in the FROM clause. Note that
+		 * we should also consider OUTER JOINs that are non-colocated.
+		 */
+		return;
+	}
+}
+
+
+/*
+ * RTEIdentitiesOfSubqueriesInWhere returns a bitmap of the rte identities of the
+ * relations that appear in the subqueries in WHERE clause for the given query.
+ */
+static Relids
+RTEIdentitiesOfSubqueriesInWhere(Query *query)
+{
+	List *sublinkList = SublinkList(query);
+	Relids allSublinkRteIdentities = NULL;
+	ListCell *subLinkCell = NULL;
+
+	foreach(subLinkCell, sublinkList)
+	{
+		SubLink *sublink = (SubLink *) lfirst(subLinkCell);
+		Node *subselect = sublink->subselect;
+		Query *subquery = NULL;
+		Relids subqueryRteIdentities = NULL;
+
+		if (!IsA(subselect, Query))
+		{
+			continue;
+		}
+
+		subquery = (Query *) subselect;
+
+		subqueryRteIdentities = QueryRteIdentities(subquery);
+
+		allSublinkRteIdentities = bms_union(allSublinkRteIdentities,
+											subqueryRteIdentities);
+	}
+
+	return allSublinkRteIdentities;
 }
 
 

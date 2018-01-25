@@ -65,9 +65,6 @@ typedef struct AttributeEquivalenceClassMember
 
 static Var * FindTranslatedVar(List *appendRelList, Oid relationOid,
 							   Index relationRteIndex, Index *partitionKeyIndex);
-static bool EquivalenceListContainsRelationsEquality(List *attributeEquivalenceList,
-													 RelationRestrictionContext *
-													 restrictionContext);
 static List * GenerateAttributeEquivalencesForRelationRestrictions(
 	RelationRestrictionContext *restrictionContext);
 static AttributeEquivalenceClass * AttributeEquivalenceClassForEquivalenceClass(
@@ -137,7 +134,6 @@ static JoinRestrictionContext * FilterJoinRestrictionContext(
 static bool RangeTableArrayContainsAnyRTEIdentities(RangeTblEntry **rangeTableEntries, int
 													rangeTableArrayLength, Relids
 													queryRteIdentities);
-static Relids QueryRteIdentities(Query *queryTree);
 
 
 /*
@@ -404,11 +400,7 @@ RestrictionEquivalenceForPartitionKeys(PlannerRestrictionContext *
 {
 	RelationRestrictionContext *restrictionContext =
 		plannerRestrictionContext->relationRestrictionContext;
-	JoinRestrictionContext *joinRestrictionContext =
-		plannerRestrictionContext->joinRestrictionContext;
 
-	List *relationRestrictionAttributeEquivalenceList = NIL;
-	List *joinRestrictionAttributeEquivalenceList = NIL;
 	List *allAttributeEquivalenceList = NIL;
 
 	uint32 referenceRelationCount = ReferenceRelationCount(restrictionContext);
@@ -433,6 +425,30 @@ RestrictionEquivalenceForPartitionKeys(PlannerRestrictionContext *
 		return true;
 	}
 
+	allAttributeEquivalenceList =
+		GenerateAllAttributedEquivalances(plannerRestrictionContext);
+
+	return EquivalenceListContainsRelationsEquality(allAttributeEquivalenceList,
+													restrictionContext);
+}
+
+
+/*
+ *
+ *
+ */
+List *
+GenerateAllAttributedEquivalances(PlannerRestrictionContext *plannerRestrictionContext)
+{
+	RelationRestrictionContext *restrictionContext =
+		plannerRestrictionContext->relationRestrictionContext;
+	JoinRestrictionContext *joinRestrictionContext =
+		plannerRestrictionContext->joinRestrictionContext;
+
+	List *relationRestrictionAttributeEquivalenceList = NIL;
+	List *joinRestrictionAttributeEquivalenceList = NIL;
+	List *allAttributeEquivalenceList = NIL;
+
 	/* reset the equivalence id counter per call to prevent overflows */
 	attributeEquivalenceId = 1;
 
@@ -445,8 +461,7 @@ RestrictionEquivalenceForPartitionKeys(PlannerRestrictionContext *
 		list_concat(relationRestrictionAttributeEquivalenceList,
 					joinRestrictionAttributeEquivalenceList);
 
-	return EquivalenceListContainsRelationsEquality(allAttributeEquivalenceList,
-													restrictionContext);
+	return allAttributeEquivalenceList;
 }
 
 
@@ -482,7 +497,7 @@ ReferenceRelationCount(RelationRestrictionContext *restrictionContext)
  * whether all the relations exists in the common equivalence class.
  *
  */
-static bool
+bool
 EquivalenceListContainsRelationsEquality(List *attributeEquivalenceList,
 										 RelationRestrictionContext *restrictionContext)
 {
@@ -1621,6 +1636,42 @@ FilterRelationRestrictionContext(RelationRestrictionContext *relationRestriction
 
 
 /*
+ * ExcludeRelationRestrictionContext gets a relation restriction context and
+ * set of rte identities. It returns the relation restrictions that do not appear
+ * in the excluteRteIdentities and returns a newly allocated
+ * RelationRestrictionContext.
+ */
+RelationRestrictionContext *
+ExcludeRelationRestrictionContext(RelationRestrictionContext *relationRestrictionContext,
+								  Relids excluteRteIdentities)
+{
+	RelationRestrictionContext *excludedRestrictionContext =
+		palloc0(sizeof(RelationRestrictionContext));
+
+	ListCell *relationRestrictionCell = NULL;
+
+	foreach(relationRestrictionCell, relationRestrictionContext->relationRestrictionList)
+	{
+		RelationRestriction *relationRestriction =
+			(RelationRestriction *) lfirst(relationRestrictionCell);
+
+		int rteIdentity = GetRTEIdentity(relationRestriction->rte);
+
+		if (bms_is_member(rteIdentity, excluteRteIdentities))
+		{
+			continue;
+		}
+
+		excludedRestrictionContext->relationRestrictionList =
+			lappend(excludedRestrictionContext->relationRestrictionList,
+					relationRestriction);
+	}
+
+	return excludedRestrictionContext;
+}
+
+
+/*
  * FilterJoinRestrictionContext gets a join restriction context and
  * set of rte identities. It returns the join restrictions that that appear
  * in the queryRteIdentities and returns a newly allocated
@@ -1708,7 +1759,7 @@ RangeTableArrayContainsAnyRTEIdentities(RangeTblEntry **rangeTableEntries, int
  * QueryRteIdentities gets a queryTree, find get all the rte identities assigned by
  * us.
  */
-static Relids
+Relids
 QueryRteIdentities(Query *queryTree)
 {
 	List *rangeTableList = NULL;
