@@ -27,7 +27,7 @@ extern bool LogRemoteCommands;
 extern bool IsResponseOK(struct pg_result *result);
 extern void ForgetResults(MultiConnection *connection);
 extern bool ClearResults(MultiConnection *connection, bool raiseErrors);
-extern bool NonblockingForgetResults(MultiConnection *connection);
+extern bool ClearResultsIfReady(MultiConnection *connection);
 extern bool SqlStateMatchesCategory(char *sqlStateString, int category);
 
 /* report errors & warnings */

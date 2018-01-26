@@ -382,7 +382,14 @@ StartRemoteTransactionAbort(MultiConnection *connection)
 	}
 	else
 	{
-		if (!NonblockingForgetResults(connection))
+		/*
+		 * In case of a cancellation, the connection might still be working
+		 * on some commands. Try to consume the results such that the
+		 * connection can be reused, but do not want to wait for commands
+		 * to finish. Instead we just close the connection if the command
+		 * is still busy.
+		 */
+		if (!ClearResultsIfReady(connection))
 		{
 			ShutdownConnection(connection);
 

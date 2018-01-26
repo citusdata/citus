@@ -58,7 +58,7 @@ IsResponseOK(PGresult *result)
  * ForgetResults clears a connection from pending activity.
  *
  * Note that this might require network IO. If that's not acceptable, use
- * NonblockingForgetResults().
+ * ClearResultsIfReady().
  *
  * ClearResults is variant of this function which can also raise errors.
  */
@@ -93,7 +93,7 @@ ForgetResults(MultiConnection *connection)
  * is marked critical.
  *
  * Note that this might require network IO. If that's not acceptable, use
- * NonblockingForgetResults().
+ * ClearResultsIfReady().
  */
 bool
 ClearResults(MultiConnection *connection, bool raiseErrors)
@@ -133,12 +133,12 @@ ClearResults(MultiConnection *connection, bool raiseErrors)
 
 
 /*
- * NonblockingForgetResults clears a connection from pending activity if doing
+ * ClearResultsIfReady clears a connection from pending activity if doing
  * so does not require network IO. Returns true if successful, false
  * otherwise.
  */
 bool
-NonblockingForgetResults(MultiConnection *connection)
+ClearResultsIfReady(MultiConnection *connection)
 {
 	PGconn *pgConn = connection->pgConn;
 
@@ -152,6 +152,7 @@ NonblockingForgetResults(MultiConnection *connection)
 	while (true)
 	{
 		PGresult *result = NULL;
+		ExecStatusType resultStatus;
 
 		/* just in case there's a lot of results */
 		CHECK_FOR_INTERRUPTS();
@@ -182,19 +183,31 @@ NonblockingForgetResults(MultiConnection *connection)
 		}
 
 		result = PQgetResult(pgConn);
-		if (PQresultStatus(result) == PGRES_COPY_IN ||
-			PQresultStatus(result) == PGRES_COPY_OUT)
+		if (result == NULL)
+		{
+			/* no more results available */
+			return true;
+		}
+
+		resultStatus = PQresultStatus(result);
+
+		/* only care about the status, can clear now */
+		PQclear(result);
+
+		if (resultStatus == PGRES_COPY_IN || resultStatus == PGRES_COPY_OUT)
 		{
 			/* in copy, can't reliably recover without blocking */
 			return false;
 		}
 
-		if (result == NULL)
+		if (!(resultStatus == PGRES_SINGLE_TUPLE || resultStatus == PGRES_TUPLES_OK ||
+			  resultStatus == PGRES_COMMAND_OK))
 		{
-			return true;
+			/* an error occcurred just when we were aborting */
+			return false;
 		}
 
-		PQclear(result);
+		/* check if there are more results to consume */
 	}
 
 	pg_unreachable();
