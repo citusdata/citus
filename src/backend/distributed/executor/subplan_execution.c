@@ -34,8 +34,16 @@ ExecuteSubPlans(DistributedPlan *distributedPlan)
 	uint64 planId = distributedPlan->planId;
 	List *subPlanList = distributedPlan->subPlanList;
 	ListCell *subPlanCell = NULL;
-	List *nodeList = ActiveReadableNodeList();
+	List *nodeList = NIL;
 	bool writeLocalFile = false;
+
+	if (subPlanList == NIL)
+	{
+		/* no subplans to execute */
+		return;
+	}
+
+	nodeList = ActiveReadableNodeList();
 
 	foreach(subPlanCell, subPlanList)
 	{
