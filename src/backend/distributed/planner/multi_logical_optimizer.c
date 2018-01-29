@@ -1976,6 +1976,8 @@ WorkerExtendedOpNode(MultiExtendedOp *originalOpNode,
 	workerExtendedOpNode->targetList = newTargetEntryList;
 	workerExtendedOpNode->distinctClause = NIL;
 	workerExtendedOpNode->hasDistinctOn = false;
+	workerExtendedOpNode->hasWindowFuncs = originalOpNode->hasWindowFuncs;
+	workerExtendedOpNode->windowClause = originalOpNode->windowClause;
 
 	if (!queryHasAggregates)
 	{
@@ -1992,8 +1994,6 @@ WorkerExtendedOpNode(MultiExtendedOp *originalOpNode,
 															groupedByDisjointPartitionColumn);
 		workerExtendedOpNode->sortClauseList =
 			WorkerSortClauseList(originalOpNode, groupedByDisjointPartitionColumn);
-		workerExtendedOpNode->hasWindowFuncs = originalOpNode->hasWindowFuncs;
-		workerExtendedOpNode->windowClause = originalOpNode->windowClause;
 	}
 
 	/*
