@@ -7,12 +7,12 @@ SET citus.next_shard_id TO 230000;
 
 
 -- Initialize tables to join
-CREATE TABLE multi_append_table_to_shard_right
+CREATE TABLE multi_append_table_to_shard_right_reference
 (
 	right_number INTEGER not null,
 	right_text TEXT not null
 );
-SELECT master_create_distributed_table('multi_append_table_to_shard_right', 'right_number', 'append');
+SELECT create_reference_table('multi_append_table_to_shard_right_reference');
 
 CREATE TABLE multi_append_table_to_shard_left
 (
@@ -21,13 +21,13 @@ CREATE TABLE multi_append_table_to_shard_left
 );
 SELECT master_create_distributed_table('multi_append_table_to_shard_left', 'left_number', 'append');
 
-CREATE TABLE multi_append_table_to_shard_right_hash
+CREATE TABLE multi_append_table_to_shard_right_reference_hash
 (
 	right_number INTEGER not null,
 	right_text TEXT not null
 );
-SELECT master_create_distributed_table('multi_append_table_to_shard_right_hash', 'right_number', 'hash');
-SELECT master_create_worker_shards('multi_append_table_to_shard_right_hash', 1, 1);
+SELECT master_create_distributed_table('multi_append_table_to_shard_right_reference_hash', 'right_number', 'hash');
+SELECT master_create_worker_shards('multi_append_table_to_shard_right_reference_hash', 1, 1);
 
 -- Replicate 'left' table on both workers
 SELECT set_config('citus.shard_replication_factor', '2', false);
@@ -35,8 +35,7 @@ SELECT set_config('citus.shard_replication_factor', '2', false);
 \copy multi_append_table_to_shard_left FROM '@abs_srcdir@/data/agg.data'
 
 -- Place 'right' table on both workers
-SELECT set_config('citus.shard_replication_factor', '2', false);
-\copy multi_append_table_to_shard_right FROM '@abs_srcdir@/data/agg.data'
+\copy multi_append_table_to_shard_right_reference FROM '@abs_srcdir@/data/agg.data'
 
 -- Reset shard replication factor to ensure tasks will be assigned to both workers
 SELECT set_config('citus.shard_replication_factor', '2', false);
@@ -44,7 +43,7 @@ SELECT set_config('citus.shard_replication_factor', '2', false);
 -- All 8 rows in left table match a row in right table
 SELECT	COUNT(*)
 FROM	multi_append_table_to_shard_left,
-		multi_append_table_to_shard_right
+		multi_append_table_to_shard_right_reference
 WHERE	left_number = right_number;
 
 -- Now append more data to the 'right' table
@@ -57,18 +56,17 @@ CREATE TABLE multi_append_table_to_shard_stage
 COPY multi_append_table_to_shard_stage FROM '@abs_srcdir@/data/large_records.data' with delimiter '|';
 
 -- Check that we error out if we try to append data to a hash partitioned table.
-SELECT master_create_empty_shard('multi_append_table_to_shard_right_hash');
+SELECT master_create_empty_shard('multi_append_table_to_shard_right_reference_hash');
 
 SELECT	master_append_table_to_shard(shardid, 'multi_append_table_to_shard_stage', 'localhost', 57636)
 FROM
 		pg_dist_shard
-WHERE	'multi_append_table_to_shard_right_hash'::regclass::oid = logicalrelid;
+WHERE	'multi_append_table_to_shard_right_reference_hash'::regclass::oid = logicalrelid;
 
 -- Clean up after test
-SELECT master_apply_delete_command('DELETE FROM multi_append_table_to_shard_right');
 SELECT master_apply_delete_command('DELETE FROM multi_append_table_to_shard_left');
 DROP TABLE multi_append_table_to_shard_stage;
-DROP TABLE multi_append_table_to_shard_right;
+DROP TABLE multi_append_table_to_shard_right_reference;
 DROP TABLE multi_append_table_to_shard_left;
 
 -- Check partitioning by date

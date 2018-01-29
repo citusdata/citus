@@ -36,6 +36,23 @@ SELECT master_create_distributed_table('multi_outer_join_right', 'r_custkey', 'a
  
 (1 row)
 
+CREATE TABLE multi_outer_join_right_reference
+(
+	r_custkey integer not null,
+	r_name varchar(25) not null,
+	r_address varchar(40) not null,
+	r_nationkey integer not null,
+	r_phone char(15) not null,
+	r_acctbal decimal(15,2) not null,
+	r_mktsegment char(10) not null,
+	r_comment varchar(117) not null
+);
+SELECT create_reference_table('multi_outer_join_right_reference');
+ create_reference_table 
+------------------------
+ 
+(1 row)
+
 CREATE TABLE multi_outer_join_third
 (
 	t_custkey integer not null,
@@ -53,18 +70,40 @@ SELECT master_create_distributed_table('multi_outer_join_third', 't_custkey', 'a
  
 (1 row)
 
+CREATE TABLE multi_outer_join_third_reference
+(
+	t_custkey integer not null,
+	t_name varchar(25) not null,
+	t_address varchar(40) not null,
+	t_nationkey integer not null,
+	t_phone char(15) not null,
+	t_acctbal decimal(15,2) not null,
+	t_mktsegment char(10) not null,
+	t_comment varchar(117) not null
+);
+SELECT create_reference_table('multi_outer_join_third_reference');
+ create_reference_table 
+------------------------
+ 
+(1 row)
+
 -- Make sure we do not crash if both tables have no shards
 SELECT
 	min(l_custkey), max(l_custkey)
 FROM
 	multi_outer_join_left a LEFT JOIN multi_outer_join_third b ON (l_custkey = t_custkey);
-ERROR:  cannot perform distributed planning on this query
-DETAIL:  Shards of relations in outer join queries must have 1-to-1 shard partitioning
+LOG:  join order: [ "multi_outer_join_left" ][ local partition join "multi_outer_join_third" ]
+ min | max 
+-----+-----
+     |    
+(1 row)
+
 -- Left table is a large table
 \copy multi_outer_join_left FROM '@abs_srcdir@/data/customer-1-10.data' with delimiter '|'
 \copy multi_outer_join_left FROM '@abs_srcdir@/data/customer-11-20.data' with delimiter '|'
 -- Right table is a small table
 \copy multi_outer_join_right FROM '@abs_srcdir@/data/customer-1-15.data' with delimiter '|'
+\copy multi_outer_join_right_reference FROM '@abs_srcdir@/data/customer-1-15.data' with delimiter '|'
 -- Make sure we do not crash if one table has no shards
 SELECT
 	min(l_custkey), max(l_custkey)
@@ -75,8 +114,8 @@ DETAIL:  Outer joins requiring repartitioning are not supported.
 SELECT
 	min(t_custkey), max(t_custkey)
 FROM
-	multi_outer_join_third a LEFT JOIN multi_outer_join_right b ON (r_custkey = t_custkey);
-LOG:  join order: [ "multi_outer_join_third" ][ broadcast join "multi_outer_join_right" ]
+	multi_outer_join_third a LEFT JOIN multi_outer_join_right_reference b ON (r_custkey = t_custkey);
+LOG:  join order: [ "multi_outer_join_third" ][ reference join "multi_outer_join_right_reference" ]
  min | max 
 -----+-----
      |    
@@ -84,12 +123,13 @@ LOG:  join order: [ "multi_outer_join_third" ][ broadcast join "multi_outer_join
 
 -- Third table is a single shard table with all data
 \copy multi_outer_join_third FROM '@abs_srcdir@/data/customer-1-30.data' with delimiter '|'
+\copy multi_outer_join_third_reference FROM '@abs_srcdir@/data/customer-1-30.data' with delimiter '|'
 -- Regular outer join should return results for all rows
 SELECT
 	min(l_custkey), max(l_custkey)
 FROM
-	multi_outer_join_left a LEFT JOIN multi_outer_join_right b ON (l_custkey = r_custkey);
-LOG:  join order: [ "multi_outer_join_left" ][ broadcast join "multi_outer_join_right" ]
+	multi_outer_join_left a LEFT JOIN multi_outer_join_right_reference b ON (l_custkey = r_custkey);
+LOG:  join order: [ "multi_outer_join_left" ][ reference join "multi_outer_join_right_reference" ]
  min | max 
 -----+-----
    1 |  20
@@ -99,8 +139,8 @@ LOG:  join order: [ "multi_outer_join_left" ][ broadcast join "multi_outer_join_
 SELECT
 	count(*)
 FROM
-	multi_outer_join_left a LEFT JOIN multi_outer_join_right b ON (l_nationkey = r_nationkey);
-LOG:  join order: [ "multi_outer_join_left" ][ broadcast join "multi_outer_join_right" ]
+	multi_outer_join_left a LEFT JOIN multi_outer_join_right_reference b ON (l_nationkey = r_nationkey);
+LOG:  join order: [ "multi_outer_join_left" ][ reference join "multi_outer_join_right_reference" ]
  count 
 -------
     28
@@ -110,10 +150,10 @@ LOG:  join order: [ "multi_outer_join_left" ][ broadcast join "multi_outer_join_
 SELECT
 	min(l_custkey), max(l_custkey)
 FROM
-	multi_outer_join_left a LEFT JOIN multi_outer_join_right b ON (l_custkey = r_custkey)
+	multi_outer_join_left a LEFT JOIN multi_outer_join_right_reference b ON (l_custkey = r_custkey)
 WHERE
 	r_custkey IS NULL;
-LOG:  join order: [ "multi_outer_join_left" ][ broadcast join "multi_outer_join_right" ]
+LOG:  join order: [ "multi_outer_join_left" ][ reference join "multi_outer_join_right_reference" ]
  min | max 
 -----+-----
   16 |  20
@@ -123,10 +163,10 @@ LOG:  join order: [ "multi_outer_join_left" ][ broadcast join "multi_outer_join_
 SELECT
 	min(l_custkey), max(l_custkey)
 FROM
-	multi_outer_join_left a LEFT JOIN multi_outer_join_right b ON (l_custkey = r_custkey)
+	multi_outer_join_left a LEFT JOIN multi_outer_join_right_reference b ON (l_custkey = r_custkey)
 WHERE
 	r_custkey IS NULL OR r_custkey = 5;
-LOG:  join order: [ "multi_outer_join_left" ][ broadcast join "multi_outer_join_right" ]
+LOG:  join order: [ "multi_outer_join_left" ][ reference join "multi_outer_join_right_reference" ]
  min | max 
 -----+-----
    5 |  20
@@ -137,10 +177,10 @@ LOG:  join order: [ "multi_outer_join_left" ][ broadcast join "multi_outer_join_
 SELECT
 	min(l_custkey), max(l_custkey)
 FROM
-	multi_outer_join_left a LEFT JOIN multi_outer_join_right b ON (l_custkey = r_custkey)
+	multi_outer_join_left a LEFT JOIN multi_outer_join_right_reference b ON (l_custkey = r_custkey)
 WHERE
 	r_custkey = 5 or r_custkey > 15;
-LOG:  join order: [ "multi_outer_join_left" ][ broadcast join "multi_outer_join_right" ]
+LOG:  join order: [ "multi_outer_join_left" ][ reference join "multi_outer_join_right_reference" ]
  min | max 
 -----+-----
    5 |   5
@@ -150,9 +190,9 @@ LOG:  join order: [ "multi_outer_join_left" ][ broadcast join "multi_outer_join_
 SELECT
 	count(l_custkey), count(r_custkey)
 FROM
-	multi_outer_join_left a LEFT JOIN multi_outer_join_right b
+	multi_outer_join_left a LEFT JOIN multi_outer_join_right_reference b
 	ON (l_custkey = r_custkey AND r_custkey = 5);
-LOG:  join order: [ "multi_outer_join_left" ][ broadcast join "multi_outer_join_right" ]
+LOG:  join order: [ "multi_outer_join_left" ][ reference join "multi_outer_join_right_reference" ]
  count | count 
 -------+-------
     20 |     1
@@ -162,9 +202,9 @@ LOG:  join order: [ "multi_outer_join_left" ][ broadcast join "multi_outer_join_
 SELECT
 	count(l_custkey), count(r_custkey)
 FROM
-	multi_outer_join_left a LEFT JOIN multi_outer_join_right b
+	multi_outer_join_left a LEFT JOIN multi_outer_join_right_reference b
 	ON (l_custkey = r_custkey AND r_custkey = -1 /* nonexistant */);
-LOG:  join order: [ "multi_outer_join_left" ][ broadcast join "multi_outer_join_right" ]
+LOG:  join order: [ "multi_outer_join_left" ][ reference join "multi_outer_join_right_reference" ]
  count | count 
 -------+-------
     20 |     0
@@ -174,9 +214,9 @@ LOG:  join order: [ "multi_outer_join_left" ][ broadcast join "multi_outer_join_
 SELECT
 	count(l_custkey), count(r_custkey)
 FROM
-	multi_outer_join_left a LEFT JOIN multi_outer_join_right b
+	multi_outer_join_left a LEFT JOIN multi_outer_join_right_reference b
 	ON (l_custkey = r_custkey AND l_custkey = -1 /* nonexistant */);
-LOG:  join order: [ "multi_outer_join_left" ][ broadcast join "multi_outer_join_right" ]
+LOG:  join order: [ "multi_outer_join_left" ][ reference join "multi_outer_join_right_reference" ]
  count | count 
 -------+-------
     20 |     0
@@ -193,8 +233,8 @@ DETAIL:  Outer joins requiring repartitioning are not supported.
 SELECT
 	min(l_custkey), max(l_custkey)
 FROM
-	multi_outer_join_right a RIGHT JOIN multi_outer_join_left b ON (l_custkey = r_custkey);
-LOG:  join order: [ "multi_outer_join_left" ][ broadcast join "multi_outer_join_right" ]
+	multi_outer_join_right_reference a RIGHT JOIN multi_outer_join_left b ON (l_custkey = r_custkey);
+LOG:  join order: [ "multi_outer_join_left" ][ reference join "multi_outer_join_right_reference" ]
  min | max 
 -----+-----
    1 |  20
@@ -346,8 +386,8 @@ SELECT
 FROM
 	multi_outer_join_left l1
 	LEFT JOIN multi_outer_join_right r1 ON (l1.l_custkey = r1.r_custkey)
-	LEFT JOIN multi_outer_join_third t1 ON (r1.r_custkey  = t1.t_custkey);
-LOG:  join order: [ "multi_outer_join_left" ][ local partition join "multi_outer_join_right" ][ broadcast join "multi_outer_join_third" ]
+	LEFT JOIN multi_outer_join_third_reference t1 ON (r1.r_custkey  = t1.t_custkey);
+LOG:  join order: [ "multi_outer_join_left" ][ local partition join "multi_outer_join_right" ][ reference join "multi_outer_join_third_reference" ]
  l_custkey | r_custkey | t_custkey 
 -----------+-----------+-----------
         11 |        11 |        11
@@ -375,16 +415,16 @@ SELECT
 FROM
 	multi_outer_join_left l1
 	LEFT JOIN multi_outer_join_right r1 ON (l1.l_custkey = r1.r_custkey)
-	RIGHT JOIN multi_outer_join_third t1 ON (r1.r_custkey  = t1.t_custkey);
+	RIGHT JOIN multi_outer_join_third_reference t1 ON (r1.r_custkey  = t1.t_custkey);
 ERROR:  could not run distributed query with complex join orders
 -- Right join with single shard left most table should work
 SELECT
 	t_custkey, r_custkey, l_custkey
 FROM
-	multi_outer_join_third t1
+	multi_outer_join_third_reference t1
 	RIGHT JOIN multi_outer_join_right r1 ON (t1.t_custkey = r1.r_custkey)
 	LEFT JOIN multi_outer_join_left l1 ON (r1.r_custkey  = l1.l_custkey);
-LOG:  join order: [ "multi_outer_join_right" ][ broadcast join "multi_outer_join_third" ][ local partition join "multi_outer_join_left" ]
+LOG:  join order: [ "multi_outer_join_right" ][ reference join "multi_outer_join_third_reference" ][ local partition join "multi_outer_join_left" ]
  t_custkey | r_custkey | l_custkey 
 -----------+-----------+-----------
         11 |        11 |        11
@@ -410,12 +450,12 @@ LOG:  join order: [ "multi_outer_join_right" ][ broadcast join "multi_outer_join
 SELECT
 	t_custkey, r_custkey, l_custkey
 FROM
-	multi_outer_join_third t1
+	multi_outer_join_third_reference t1
 	RIGHT JOIN multi_outer_join_right r1 ON (t1.t_custkey = r1.r_custkey)
 	LEFT JOIN multi_outer_join_left l1 ON (r1.r_custkey  = l1.l_custkey)
 WHERE
 	l_custkey is NULL;
-LOG:  join order: [ "multi_outer_join_right" ][ broadcast join "multi_outer_join_third" ][ local partition join "multi_outer_join_left" ]
+LOG:  join order: [ "multi_outer_join_right" ][ reference join "multi_outer_join_third_reference" ][ local partition join "multi_outer_join_left" ]
  t_custkey | r_custkey | l_custkey 
 -----------+-----------+-----------
         13 |        13 |          
@@ -427,7 +467,7 @@ LOG:  join order: [ "multi_outer_join_right" ][ broadcast join "multi_outer_join
 SELECT
 	t_custkey, r_custkey, l_custkey
 FROM
-	multi_outer_join_third t1
+	multi_outer_join_third_reference t1
 	RIGHT JOIN multi_outer_join_right r1 ON (t1.t_custkey = r1.r_custkey)
 	RIGHT JOIN multi_outer_join_left l1 ON (r1.r_custkey  = l1.l_custkey);
 ERROR:  could not run distributed query with complex join orders
@@ -527,8 +567,8 @@ SELECT
 FROM
 	multi_outer_join_left l1
 	INNER JOIN multi_outer_join_right r1 ON (l1.l_custkey = r1.r_custkey)
-	LEFT JOIN multi_outer_join_third t1 ON (r1.r_custkey  = t1.t_custkey);
-LOG:  join order: [ "multi_outer_join_left" ][ local partition join "multi_outer_join_right" ][ broadcast join "multi_outer_join_third" ]
+	LEFT JOIN multi_outer_join_third_reference t1 ON (r1.r_custkey  = t1.t_custkey);
+LOG:  join order: [ "multi_outer_join_left" ][ local partition join "multi_outer_join_right" ][ reference join "multi_outer_join_third_reference" ]
  l_custkey | r_custkey | t_custkey 
 -----------+-----------+-----------
         11 |        11 |        11
@@ -552,9 +592,9 @@ SELECT
 	l_custkey, t_custkey, r_custkey
 FROM
 	multi_outer_join_left l1
-	INNER JOIN multi_outer_join_third t1 ON (l1.l_custkey = t1.t_custkey)
+	INNER JOIN multi_outer_join_third_reference t1 ON (l1.l_custkey = t1.t_custkey)
 	LEFT JOIN multi_outer_join_right r1 ON (l1.l_custkey  = r1.r_custkey);
-LOG:  join order: [ "multi_outer_join_left" ][ broadcast join "multi_outer_join_third" ][ local partition join "multi_outer_join_right" ]
+LOG:  join order: [ "multi_outer_join_left" ][ reference join "multi_outer_join_third_reference" ][ local partition join "multi_outer_join_right" ]
  l_custkey | t_custkey | r_custkey 
 -----------+-----------+-----------
         11 |        11 |        11
@@ -580,7 +620,7 @@ LOG:  join order: [ "multi_outer_join_left" ][ broadcast join "multi_outer_join_
 SELECT
 	t_custkey, l_custkey, r_custkey
 FROM
-	multi_outer_join_third t1
+	multi_outer_join_third_reference t1
 	INNER JOIN multi_outer_join_left l1 ON (l1.l_custkey = t1.t_custkey)
 	LEFT JOIN multi_outer_join_right r1 ON (l1.l_custkey  = r1.r_custkey);
 ERROR:  cannot run outer join query if join is not on the partition column
@@ -590,9 +630,9 @@ SELECT
 	l_custkey, t_custkey, r_custkey
 FROM
 	multi_outer_join_left l1
-	INNER JOIN multi_outer_join_third t1 ON (l1.l_custkey = t1.t_custkey)
+	INNER JOIN multi_outer_join_third_reference t1 ON (l1.l_custkey = t1.t_custkey)
 	LEFT JOIN multi_outer_join_right r1 ON (l1.l_custkey  = r1.r_custkey);
-LOG:  join order: [ "multi_outer_join_left" ][ broadcast join "multi_outer_join_third" ][ local partition join "multi_outer_join_right" ]
+LOG:  join order: [ "multi_outer_join_left" ][ reference join "multi_outer_join_third_reference" ][ local partition join "multi_outer_join_right" ]
  l_custkey | t_custkey | r_custkey 
 -----------+-----------+-----------
         11 |        11 |        11
@@ -619,11 +659,11 @@ SELECT
 	l_custkey, t_custkey, r_custkey
 FROM
 	multi_outer_join_left l1
-	INNER JOIN multi_outer_join_third t1 ON (l1.l_custkey = t1.t_custkey)
+	INNER JOIN multi_outer_join_third_reference t1 ON (l1.l_custkey = t1.t_custkey)
 	LEFT JOIN multi_outer_join_right r1 ON (l1.l_custkey  = r1.r_custkey)
 WHERE
 	r_custkey is NULL;
-LOG:  join order: [ "multi_outer_join_left" ][ broadcast join "multi_outer_join_third" ][ local partition join "multi_outer_join_right" ]
+LOG:  join order: [ "multi_outer_join_left" ][ reference join "multi_outer_join_third_reference" ][ local partition join "multi_outer_join_right" ]
  l_custkey | t_custkey | r_custkey 
 -----------+-----------+-----------
         23 |        23 |          
@@ -638,8 +678,8 @@ FROM
 	(multi_outer_join_right r1 
 	LEFT OUTER JOIN multi_outer_join_left l1 ON (l1.l_custkey = r1.r_custkey)) AS
     test(c_custkey, c_nationkey)
-    INNER JOIN multi_outer_join_third t1 ON (test.c_custkey = t1.t_custkey);
-LOG:  join order: [ "multi_outer_join_right" ][ local partition join "multi_outer_join_left" ][ broadcast join "multi_outer_join_third" ]
+    INNER JOIN multi_outer_join_third_reference t1 ON (test.c_custkey = t1.t_custkey);
+LOG:  join order: [ "multi_outer_join_right" ][ local partition join "multi_outer_join_left" ][ reference join "multi_outer_join_third_reference" ]
  t_custkey 
 -----------
         11

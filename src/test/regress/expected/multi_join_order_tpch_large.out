@@ -37,7 +37,7 @@ EXPLAIN SELECT
 	o_orderdate,
 	o_shippriority
 FROM
-	customer,
+	customer_append,
 	orders,
 	lineitem
 WHERE
@@ -53,7 +53,7 @@ GROUP BY
 ORDER BY
 	revenue DESC,
 	o_orderdate;
-LOG:  join order: [ "orders" ][ local partition join "lineitem" ][ single partition join "customer" ]
+LOG:  join order: [ "orders" ][ local partition join "lineitem" ][ single partition join "customer_append" ]
                                            QUERY PLAN                                           
 ------------------------------------------------------------------------------------------------
  Sort  (cost=0.00..0.00 rows=0 width=0)
@@ -75,7 +75,7 @@ EXPLAIN SELECT
 	c_phone,
 	c_comment
 FROM
-	customer,
+	customer_append,
 	orders,
 	lineitem,
 	nation
@@ -96,7 +96,7 @@ GROUP BY
 	c_comment
 ORDER BY
 	revenue DESC;
-LOG:  join order: [ "orders" ][ local partition join "lineitem" ][ single partition join "customer" ][ broadcast join "nation" ]
+LOG:  join order: [ "orders" ][ local partition join "lineitem" ][ single partition join "customer_append" ][ reference join "nation" ]
                                                                                  QUERY PLAN                                                                                 
 ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
  Sort  (cost=0.00..0.00 rows=0 width=0)
@@ -112,7 +112,7 @@ EXPLAIN SELECT
 	sum(l_extendedprice* (1 - l_discount)) as revenue
 FROM
 	lineitem,
-	part
+	part_append
 WHERE
 	(
 		p_partkey = l_partkey
@@ -137,7 +137,7 @@ WHERE
 		AND l_shipmode in ('AIR', 'AIR REG', 'TRUCK')
 		AND l_shipinstruct = 'DELIVER IN PERSON'
 	);
-LOG:  join order: [ "lineitem" ][ single partition join "part" ]
+LOG:  join order: [ "lineitem" ][ single partition join "part_append" ]
                                 QUERY PLAN                                
 --------------------------------------------------------------------------
  Aggregate  (cost=0.00..0.00 rows=0 width=0)
@@ -149,14 +149,14 @@ LOG:  join order: [ "lineitem" ][ single partition join "part" ]
 EXPLAIN SELECT
 	l_partkey, count(*)
 FROM
-	lineitem, part, orders, customer
+	lineitem, part_append, orders, customer_append
 WHERE
 	l_orderkey = o_orderkey AND
 	l_partkey = p_partkey AND
 	c_custkey = o_custkey
 GROUP BY
       l_partkey;
-LOG:  join order: [ "lineitem" ][ local partition join "orders" ][ single partition join "part" ][ single partition join "customer" ]
+LOG:  join order: [ "lineitem" ][ local partition join "orders" ][ single partition join "part_append" ][ single partition join "customer_append" ]
                                 QUERY PLAN                                
 --------------------------------------------------------------------------
  HashAggregate  (cost=0.00..0.00 rows=0 width=0)

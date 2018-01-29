@@ -40,7 +40,7 @@ EXPLAIN SELECT
 	o_orderdate,
 	o_shippriority
 FROM
-	customer,
+	customer_append,
 	orders,
 	lineitem
 WHERE
@@ -69,7 +69,7 @@ EXPLAIN SELECT
 	c_phone,
 	c_comment
 FROM
-	customer,
+	customer_append,
 	orders,
 	lineitem,
 	nation
@@ -97,7 +97,7 @@ EXPLAIN SELECT
 	sum(l_extendedprice* (1 - l_discount)) as revenue
 FROM
 	lineitem,
-	part
+	part_append
 WHERE
 	(
 		p_partkey = l_partkey
@@ -128,7 +128,7 @@ WHERE
 EXPLAIN SELECT
 	l_partkey, count(*)
 FROM
-	lineitem, part, orders, customer
+	lineitem, part_append, orders, customer_append
 WHERE
 	l_orderkey = o_orderkey AND
 	l_partkey = p_partkey AND

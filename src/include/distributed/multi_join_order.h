@@ -28,7 +28,7 @@
 typedef enum JoinRuleType
 {
 	JOIN_RULE_INVALID_FIRST = 0,
-	BROADCAST_JOIN = 1,
+	REFERENCE_JOIN = 1,
 	LOCAL_PARTITION_JOIN = 2,
 	SINGLE_PARTITION_JOIN = 3,
 	DUAL_PARTITION_JOIN = 4,
@@ -69,7 +69,6 @@ typedef struct JoinOrderNode
 	Var *partitionColumn;       /* not relevant for the first table */
 	char partitionMethod;
 	List *joinClauseList;       /* not relevant for the first table */
-	List *shardIntervalList;
 	TableEntry *anchorTable;
 } JoinOrderNode;
 

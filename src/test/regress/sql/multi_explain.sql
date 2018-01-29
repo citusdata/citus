@@ -404,35 +404,35 @@ SET citus.large_table_shard_count TO 1;
 
 EXPLAIN (COSTS FALSE)
 	SELECT count(*)
-	FROM lineitem, orders, customer, supplier_single_shard
+	FROM lineitem, orders, customer_append, supplier_single_shard
 	WHERE l_orderkey = o_orderkey
 	AND o_custkey = c_custkey
 	AND l_suppkey = s_suppkey;
 
 EXPLAIN (COSTS FALSE, FORMAT JSON)
 	SELECT count(*)
-	FROM lineitem, orders, customer, supplier_single_shard
+	FROM lineitem, orders, customer_append, supplier_single_shard
 	WHERE l_orderkey = o_orderkey
 	AND o_custkey = c_custkey
 	AND l_suppkey = s_suppkey;
 
 SELECT true AS valid FROM explain_json($$
 	SELECT count(*)
-	FROM lineitem, orders, customer, supplier_single_shard
+	FROM lineitem, orders, customer_append, supplier_single_shard
 	WHERE l_orderkey = o_orderkey
 	AND o_custkey = c_custkey
 	AND l_suppkey = s_suppkey$$);
 
 EXPLAIN (COSTS FALSE, FORMAT XML)
 	SELECT count(*)
-	FROM lineitem, orders, customer, supplier_single_shard
+	FROM lineitem, orders, customer_append, supplier_single_shard
 	WHERE l_orderkey = o_orderkey
 	AND o_custkey = c_custkey
 	AND l_suppkey = s_suppkey;
 
 SELECT true AS valid FROM explain_xml($$
 	SELECT count(*)
-	FROM lineitem, orders, customer, supplier
+	FROM lineitem, orders, customer_append, supplier
 	WHERE l_orderkey = o_orderkey
 	AND o_custkey = c_custkey
 	AND l_suppkey = s_suppkey$$);

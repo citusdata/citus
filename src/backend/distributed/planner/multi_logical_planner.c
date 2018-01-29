@@ -131,7 +131,7 @@ static MultiNode * ApplyJoinRule(MultiNode *leftNode, MultiNode *rightNode,
 								 JoinRuleType ruleType, Var *partitionColumn,
 								 JoinType joinType, List *joinClauseList);
 static RuleApplyFunction JoinRuleApplyFunction(JoinRuleType ruleType);
-static MultiNode * ApplyBroadcastJoin(MultiNode *leftNode, MultiNode *rightNode,
+static MultiNode * ApplyReferenceJoin(MultiNode *leftNode, MultiNode *rightNode,
 									  Var *partitionColumn, JoinType joinType,
 									  List *joinClauses);
 static MultiNode * ApplyLocalJoin(MultiNode *leftNode, MultiNode *rightNode,
@@ -3473,7 +3473,7 @@ JoinRuleApplyFunction(JoinRuleType ruleType)
 
 	if (!ruleApplyFunctionInitialized)
 	{
-		RuleApplyFunctionArray[BROADCAST_JOIN] = &ApplyBroadcastJoin;
+		RuleApplyFunctionArray[REFERENCE_JOIN] = &ApplyReferenceJoin;
 		RuleApplyFunctionArray[LOCAL_PARTITION_JOIN] = &ApplyLocalJoin;
 		RuleApplyFunctionArray[SINGLE_PARTITION_JOIN] = &ApplySinglePartitionJoin;
 		RuleApplyFunctionArray[DUAL_PARTITION_JOIN] = &ApplyDualPartitionJoin;
@@ -3494,12 +3494,12 @@ JoinRuleApplyFunction(JoinRuleType ruleType)
  * right node. The new node uses the broadcast join rule to perform the join.
  */
 static MultiNode *
-ApplyBroadcastJoin(MultiNode *leftNode, MultiNode *rightNode,
+ApplyReferenceJoin(MultiNode *leftNode, MultiNode *rightNode,
 				   Var *partitionColumn, JoinType joinType,
 				   List *applicableJoinClauses)
 {
 	MultiJoin *joinNode = CitusMakeNode(MultiJoin);
-	joinNode->joinRuleType = BROADCAST_JOIN;
+	joinNode->joinRuleType = REFERENCE_JOIN;
 	joinNode->joinType = joinType;
 	joinNode->joinClauseList = applicableJoinClauses;
 

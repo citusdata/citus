@@ -108,7 +108,7 @@ SET citus.large_table_shard_count TO 1;
 
 -- Validate that we don't use a single-partition join method for a hash
 -- re-partitioned table, thus preventing a partition of just the customer table.
-EXPLAIN SELECT count(*) FROM orders, lineitem, customer
+EXPLAIN SELECT count(*) FROM orders, lineitem, customer_append
 	WHERE o_custkey = l_partkey AND o_custkey = c_nationkey;
 
 -- Validate that we don't chose a single-partition join method with a
@@ -118,7 +118,7 @@ EXPLAIN SELECT count(*) FROM orders, customer_hash
 
 -- Validate that we can re-partition a hash partitioned table to join with a
 -- range partitioned one.
-EXPLAIN SELECT count(*) FROM orders_hash, customer
+EXPLAIN SELECT count(*) FROM orders_hash, customer_append
 	WHERE c_custkey = o_custkey;
 
 COMMIT;
