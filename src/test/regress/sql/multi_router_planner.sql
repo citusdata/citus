@@ -911,7 +911,8 @@ SELECT
 	FROM
 		articles_hash
  	GROUP BY
-		author_id;
+		author_id
+	ORDER BY c;
 
 -- queries inside transactions can be router plannable
 BEGIN;
