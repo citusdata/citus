@@ -1192,20 +1192,18 @@ GetNextNodeId()
 	Datum sequenceIdDatum = ObjectIdGetDatum(sequenceId);
 	Oid savedUserId = InvalidOid;
 	int savedSecurityContext = 0;
-	Datum nextNodedIdDatum = 0;
+	Datum nextNodeIdDatum;
 	int nextNodeId = 0;
 
 	GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
 	SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);
 
 	/* generate new and unique shardId from sequence */
-	nextNodedIdDatum = DirectFunctionCall1(nextval_oid, sequenceIdDatum);
+	nextNodeIdDatum = DirectFunctionCall1(nextval_oid, sequenceIdDatum);
 
 	SetUserIdAndSecContext(savedUserId, savedSecurityContext);
 
-	PG_RETURN_DATUM(nextNodedIdDatum);
-
-	nextNodeId = DatumGetUInt32(nextNodeId);
+	nextNodeId = DatumGetUInt32(nextNodeIdDatum);
 
 	return nextNodeId;
 }
