@@ -154,9 +154,6 @@ ClearResultsIfReady(MultiConnection *connection)
 		PGresult *result = NULL;
 		ExecStatusType resultStatus;
 
-		/* just in case there's a lot of results */
-		CHECK_FOR_INTERRUPTS();
-
 		/*
 		 * If busy, there might still be results already received and buffered
 		 * by the OS. As connection is in non-blocking mode, we can check for
