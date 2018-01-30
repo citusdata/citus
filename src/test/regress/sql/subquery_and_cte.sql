@@ -1,8 +1,7 @@
 -- ===================================================================
 -- test recursive planning functionality with subqueries and CTEs
 -- ===================================================================
-CREATE SCHEMA subquery_and_ctes;
-SET search_path TO subquery_and_ctes, public;
+SET search_path TO subquery_and_ctes;
 
 
 CREATE TABLE users_table_local AS SELECT * FROM users_table;
