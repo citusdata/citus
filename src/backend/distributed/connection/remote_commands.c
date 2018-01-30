@@ -744,15 +744,11 @@ WaitForAllConnections(List *connectionList, bool raiseInterrupts)
 	int connectionIndex = 0;
 	ListCell *connectionCell = NULL;
 
-	MultiConnection *allConnections[REMOTE_MAX_CONNECTIONS];
-	WaitEvent events[REMOTE_MAX_CONNECTIONS];
-	bool connectionReady[REMOTE_MAX_CONNECTIONS];
+	MultiConnection **allConnections =
+		palloc(totalConnectionCount * sizeof(MultiConnection *));
+	WaitEvent *events = palloc(totalConnectionCount * sizeof(WaitEvent));
+	bool *connectionReady = palloc(totalConnectionCount * sizeof(bool));
 	WaitEventSet *waitEventSet = NULL;
-
-	if (totalConnectionCount > REMOTE_MAX_CONNECTIONS)
-	{
-		ereport(ERROR, (errmsg("too many connections")));
-	}
 
 	/* convert connection list to an array such that we can move items around */
 	foreach(connectionCell, connectionList)
@@ -765,8 +761,7 @@ WaitForAllConnections(List *connectionList, bool raiseInterrupts)
 	}
 
 	/* make an initial pass to check for failed and idle connections */
-	for (connectionIndex = pendingConnectionsStartIndex;
-		 connectionIndex < totalConnectionCount; connectionIndex++)
+	for (connectionIndex = 0; connectionIndex < totalConnectionCount; connectionIndex++)
 	{
 		MultiConnection *connection = allConnections[connectionIndex];
 
@@ -953,6 +948,10 @@ WaitForAllConnections(List *connectionList, bool raiseInterrupts)
 			FreeWaitEventSet(waitEventSet);
 			waitEventSet = NULL;
 		}
+
+		pfree(allConnections);
+		pfree(events);
+		pfree(connectionReady);
 	}
 	PG_CATCH();
 	{
@@ -962,6 +961,10 @@ WaitForAllConnections(List *connectionList, bool raiseInterrupts)
 			FreeWaitEventSet(waitEventSet);
 			waitEventSet = NULL;
 		}
+
+		pfree(allConnections);
+		pfree(events);
+		pfree(connectionReady);
 
 		PG_RE_THROW();
 	}

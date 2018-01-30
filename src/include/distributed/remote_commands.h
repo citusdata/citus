@@ -17,8 +17,6 @@
 #define QUERY_SEND_FAILED 1
 #define RESPONSE_NOT_OKAY 2
 
-#define REMOTE_MAX_CONNECTIONS 1024
-
 struct pg_result; /* target of the PGresult typedef */
 
 /* GUC, determining whether statements sent to remote nodes are logged */
