@@ -289,7 +289,7 @@ BuildAggregatePlan(Query *masterQuery, Plan *subPlan)
 	if (groupColumnCount > 0)
 	{
 		bool groupingIsHashable = grouping_is_hashable(groupColumnList);
-		bool groupingIsSortable = grouping_is_hashable(groupColumnList);
+		bool groupingIsSortable = grouping_is_sortable(groupColumnList);
 		bool hasDistinctAggregate = HasDistinctAggregate(masterQuery);
 
 		if (!groupingIsHashable && !groupingIsSortable)
