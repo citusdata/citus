@@ -66,6 +66,18 @@ EXPLAIN (COSTS FALSE)
 		HAVING count(*) > 5
 		ORDER BY 2 DESC, 1;
 
+-- check the plan if the hash aggreate is disabled
+SET enable_hashagg TO off;
+EXPLAIN (COSTS FALSE)
+	SELECT DISTINCT l_orderkey, count(*)
+		FROM lineitem_hash_part
+		WHERE l_orderkey < 200
+		GROUP BY 1
+		HAVING count(*) > 5
+		ORDER BY 2 DESC, 1;
+
+SET enable_hashagg TO on;
+
 -- distinct on non-partition column with aggregate
 -- this is the same as non-distinct version due to group by
 SELECT DISTINCT l_partkey, count(*)

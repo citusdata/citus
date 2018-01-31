@@ -54,6 +54,26 @@ Sort
                     ->  HashAggregate
                           Group Key: l_quantity
                           ->  Seq Scan on lineitem_290001 lineitem
+-- Test disable hash aggregate
+SET enable_hashagg TO off;
+EXPLAIN (COSTS FALSE, FORMAT TEXT)
+	SELECT l_quantity, count(*) count_quantity FROM lineitem
+	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
+Sort
+  Sort Key: COALESCE((pg_catalog.sum((COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint))))::bigint, '0'::bigint), remote_scan.l_quantity
+  ->  GroupAggregate
+        Group Key: remote_scan.l_quantity
+        ->  Sort
+              Sort Key: remote_scan.l_quantity
+              ->  Custom Scan (Citus Real-Time)
+                    Task Count: 8
+                    Tasks Shown: One of 8
+                    ->  Task
+                          Node: host=localhost port=57637 dbname=regression
+                          ->  HashAggregate
+                                Group Key: l_quantity
+                                ->  Seq Scan on lineitem_290001 lineitem
+SET enable_hashagg TO on;
 -- Test JSON format
 EXPLAIN (COSTS FALSE, FORMAT JSON)
 	SELECT l_quantity, count(*) count_quantity FROM lineitem
@@ -1128,7 +1148,7 @@ SELECT l_orderkey FROM series JOIN keys ON (s = l_orderkey)
 ORDER BY s;
 Custom Scan (Citus Router)
   Output: remote_scan.l_orderkey
-  ->  Distributed Subplan 54_1
+  ->  Distributed Subplan 55_1
         ->  HashAggregate
               Output: remote_scan.l_orderkey
               Group Key: remote_scan.l_orderkey
@@ -1143,7 +1163,7 @@ Custom Scan (Citus Router)
                                 Group Key: lineitem_hash_part.l_orderkey
                                 ->  Seq Scan on public.lineitem_hash_part_360038 lineitem_hash_part
                                       Output: l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment
-  ->  Distributed Subplan 54_2
+  ->  Distributed Subplan 55_2
         ->  Function Scan on pg_catalog.generate_series s
               Output: s
               Function Call: generate_series(1, 10)
@@ -1159,13 +1179,13 @@ Custom Scan (Citus Router)
                     Sort Key: intermediate_result.s
                     ->  Function Scan on pg_catalog.read_intermediate_result intermediate_result
                           Output: intermediate_result.s
-                          Function Call: read_intermediate_result('54_2'::text, 'binary'::citus_copy_format)
+                          Function Call: read_intermediate_result('55_2'::text, 'binary'::citus_copy_format)
               ->  Sort
                     Output: intermediate_result_1.l_orderkey
                     Sort Key: intermediate_result_1.l_orderkey
                     ->  Function Scan on pg_catalog.read_intermediate_result intermediate_result_1
                           Output: intermediate_result_1.l_orderkey
-                          Function Call: read_intermediate_result('54_1'::text, 'binary'::citus_copy_format)
+                          Function Call: read_intermediate_result('55_1'::text, 'binary'::citus_copy_format)
 SELECT true AS valid FROM explain_json($$
   WITH result AS (
     SELECT l_quantity, count(*) count_quantity FROM lineitem
