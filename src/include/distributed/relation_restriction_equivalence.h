@@ -18,6 +18,8 @@
 extern bool ContainsUnionSubquery(Query *queryTree);
 extern bool RestrictionEquivalenceForPartitionKeys(PlannerRestrictionContext *
 												   plannerRestrictionContext);
+extern List * GenerateAllAttributeEquivalences(PlannerRestrictionContext *
+											   plannerRestrictionContext);
 extern uint32 ReferenceRelationCount(RelationRestrictionContext *restrictionContext);
 extern bool SafeToPushdownUnionSubquery(
 	PlannerRestrictionContext *plannerRestrictionContext);

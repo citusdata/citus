@@ -404,11 +404,6 @@ RestrictionEquivalenceForPartitionKeys(PlannerRestrictionContext *
 {
 	RelationRestrictionContext *restrictionContext =
 		plannerRestrictionContext->relationRestrictionContext;
-	JoinRestrictionContext *joinRestrictionContext =
-		plannerRestrictionContext->joinRestrictionContext;
-
-	List *relationRestrictionAttributeEquivalenceList = NIL;
-	List *joinRestrictionAttributeEquivalenceList = NIL;
 	List *allAttributeEquivalenceList = NIL;
 
 	uint32 referenceRelationCount = ReferenceRelationCount(restrictionContext);
@@ -433,20 +428,43 @@ RestrictionEquivalenceForPartitionKeys(PlannerRestrictionContext *
 		return true;
 	}
 
+	allAttributeEquivalenceList =
+		GenerateAllAttributeEquivalences(plannerRestrictionContext);
+
+	return EquivalenceListContainsRelationsEquality(allAttributeEquivalenceList,
+													restrictionContext);
+}
+
+
+/*
+ * GenerateAllAttributeEquivalances gets the planner restriction context and returns
+ * the list of all attribute equivalences based on both join restrictions and relation
+ * restrictions.
+ */
+List *
+GenerateAllAttributeEquivalences(PlannerRestrictionContext *plannerRestrictionContext)
+{
+	RelationRestrictionContext *relationRestrictionContext =
+		plannerRestrictionContext->relationRestrictionContext;
+	JoinRestrictionContext *joinRestrictionContext =
+		plannerRestrictionContext->joinRestrictionContext;
+
+	List *relationRestrictionAttributeEquivalenceList = NIL;
+	List *joinRestrictionAttributeEquivalenceList = NIL;
+	List *allAttributeEquivalenceList = NIL;
+
 	/* reset the equivalence id counter per call to prevent overflows */
 	attributeEquivalenceId = 1;
 
 	relationRestrictionAttributeEquivalenceList =
-		GenerateAttributeEquivalencesForRelationRestrictions(restrictionContext);
+		GenerateAttributeEquivalencesForRelationRestrictions(relationRestrictionContext);
 	joinRestrictionAttributeEquivalenceList =
 		GenerateAttributeEquivalencesForJoinRestrictions(joinRestrictionContext);
 
-	allAttributeEquivalenceList =
-		list_concat(relationRestrictionAttributeEquivalenceList,
-					joinRestrictionAttributeEquivalenceList);
+	allAttributeEquivalenceList = list_concat(relationRestrictionAttributeEquivalenceList,
+											  joinRestrictionAttributeEquivalenceList);
 
-	return EquivalenceListContainsRelationsEquality(allAttributeEquivalenceList,
-													restrictionContext);
+	return allAttributeEquivalenceList;
 }
 
 
