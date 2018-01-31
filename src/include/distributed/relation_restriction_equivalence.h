@@ -27,5 +27,7 @@ extern List * RelationIdList(Query *query);
 extern PlannerRestrictionContext * FilterPlannerRestrictionForQuery(
 	PlannerRestrictionContext *plannerRestrictionContext,
 	Query *query);
+extern JoinRestrictionContext * RemoveDuplicateJoinRestrictions(JoinRestrictionContext *
+																joinRestrictionContext);
 
 #endif /* RELATION_RESTRICTION_EQUIVALENCE_H */

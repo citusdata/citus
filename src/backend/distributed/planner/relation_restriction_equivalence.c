@@ -138,6 +138,9 @@ static bool RangeTableArrayContainsAnyRTEIdentities(RangeTblEntry **rangeTableEn
 													rangeTableArrayLength, Relids
 													queryRteIdentities);
 static Relids QueryRteIdentities(Query *queryTree);
+static bool JoinRestrictionListExistsInContext(JoinRestriction *joinRestrictionInput,
+											   JoinRestrictionContext *
+											   joinRestrictionContext);
 
 
 /*
@@ -1750,4 +1753,93 @@ QueryRteIdentities(Query *queryTree)
 	}
 
 	return queryRteIdentities;
+}
+
+
+/*
+ * RemoveDuplicateJoinRestrictions gets a join restriction context and returns a
+ * newly allocated join restriction context where the duplicate join restrictions
+ * removed.
+ *
+ * Note that we use PostgreSQL hooks to accumulate the join restrictions and PostgreSQL
+ * gives us all the join paths it tries while deciding on the join order. Thus, for
+ * queries that has many joins, this function is likely to remove lots of duplicate join
+ * restrictions. This becomes relevant for Citus on query pushdown check peformance.
+ */
+JoinRestrictionContext *
+RemoveDuplicateJoinRestrictions(JoinRestrictionContext *joinRestrictionContext)
+{
+	JoinRestrictionContext *filteredContext = palloc0(sizeof(JoinRestrictionContext));
+	ListCell *joinRestrictionCell = NULL;
+
+	filteredContext->joinRestrictionList = NIL;
+
+	foreach(joinRestrictionCell, joinRestrictionContext->joinRestrictionList)
+	{
+		JoinRestriction *joinRestriction = lfirst(joinRestrictionCell);
+
+		/* if we already have the same restrictions, skip */
+		if (JoinRestrictionListExistsInContext(joinRestriction, filteredContext))
+		{
+			continue;
+		}
+
+		filteredContext->joinRestrictionList =
+			lappend(filteredContext->joinRestrictionList, joinRestriction);
+	}
+
+	return filteredContext;
+}
+
+
+/*
+ * JoinRestrictionListExistsInContext returns true if the given joinRestrictionInput
+ * has an equivalent of in the given joinRestrictionContext.
+ */
+static bool
+JoinRestrictionListExistsInContext(JoinRestriction *joinRestrictionInput,
+								   JoinRestrictionContext *joinRestrictionContext)
+{
+	List *joinRestrictionList = joinRestrictionContext->joinRestrictionList;
+	List *inputJoinRestrictInfoList = joinRestrictionInput->joinRestrictInfoList;
+
+	ListCell *joinRestrictionCell = NULL;
+
+	foreach(joinRestrictionCell, joinRestrictionList)
+	{
+		JoinRestriction *joinRestriction = lfirst(joinRestrictionCell);
+		List *joinRestrictInfoList = joinRestriction->joinRestrictInfoList;
+
+		/* obviously we shouldn't treat different join types as being the same */
+		if (joinRestriction->joinType != joinRestrictionInput->joinType)
+		{
+			continue;
+		}
+
+		/*
+		 * If we're dealing with different queries, we shouldn't treat their
+		 * restrictions as being the same.
+		 */
+		if (joinRestriction->plannerInfo != joinRestrictionInput->plannerInfo)
+		{
+			continue;
+		}
+
+		/*
+		 * We check whether the restrictions in joinRestriction is a super set
+		 * of the restrictions in joinRestrictionInput in the sense that all the
+		 * restrictions in the latter already exists in the former.
+		 *
+		 * Also, note that list_difference() returns a list that contains all the
+		 * cells in joinRestrictInfoList that are not in inputJoinRestrictInfoList.
+		 * Finally, each element in these lists is a pointer to RestrictInfo
+		 * structure, where equal() function is implemented for the struct.
+		 */
+		if (list_difference(joinRestrictInfoList, inputJoinRestrictInfoList) == NIL)
+		{
+			return true;
+		}
+	}
+
+	return false;
 }

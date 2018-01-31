@@ -478,11 +478,16 @@ CreateDistributedPlan(uint64 planId, PlannedStmt *localPlan, Query *originalQuer
 	DistributedPlan *distributedPlan = NULL;
 	PlannedStmt *resultPlan = NULL;
 	bool hasUnresolvedParams = false;
+	JoinRestrictionContext *joinRestrictionContext =
+		plannerRestrictionContext->joinRestrictionContext;
 
 	if (HasUnresolvedExternParamsWalker((Node *) originalQuery, boundParams))
 	{
 		hasUnresolvedParams = true;
 	}
+
+	plannerRestrictionContext->joinRestrictionContext =
+		RemoveDuplicateJoinRestrictions(joinRestrictionContext);
 
 	if (IsModifyCommand(query))
 	{
