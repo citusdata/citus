@@ -496,7 +496,6 @@ Aggregate
                     ->  Index Only Scan using lineitem_mx_pkey_1220052 on lineitem_mx_1220052 lineitem_mx
                           Index Cond: (l_orderkey > 9030)
 -- Test re-partition join
-SET citus.large_table_shard_count TO 1;
 EXPLAIN (COSTS FALSE)
 	SELECT count(*)
 	FROM lineitem_mx, orders_mx, customer_mx, supplier_mx

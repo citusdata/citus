@@ -1,5 +1,5 @@
 --
--- MULTI_JOIN_ORDER_TPCH_LARGE
+-- MULTI_JOIN_ORDER_TPCH_REPARTITION
 --
 
 
@@ -13,12 +13,9 @@ SET citus.log_multi_join_order TO TRUE;
 SET citus.task_executor_type = 'task-tracker'; -- can't explain all queries otherwise
 SET client_min_messages TO LOG;
 
--- Change configuration to treat lineitem, orders, customer, and part tables as
--- large. The following queries are basically the same as the ones in tpch_small
+-- The following queries are basically the same as the ones in tpch_small
 -- except that more data has been loaded into customer and part tables. Therefore,
 -- we will apply different distributed join strategies for these queries.
-
-SET citus.large_table_shard_count TO 2;
 
 -- Query #6 from the TPC-H decision support benchmark
 

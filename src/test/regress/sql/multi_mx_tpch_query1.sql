@@ -6,10 +6,6 @@
 -- connect to the coordinator
 \c - - - :master_port
 
--- Change configuration to treat lineitem and orders tables as large
-
-SET citus.large_table_shard_count TO 2;
-
 -- Query #1 from the TPC-H decision support benchmark
 
 SELECT
@@ -37,10 +33,6 @@ ORDER BY
 -- connect one of the workers
 \c - - - :worker_1_port
 
--- Change configuration to treat lineitem and orders tables as large
-
-SET citus.large_table_shard_count TO 2;
-
 -- Query #1 from the TPC-H decision support benchmark
 
 SELECT
@@ -67,10 +59,6 @@ ORDER BY
 
 	-- connect to the other node
 \c - - - :worker_2_port
-
--- Change configuration to treat lineitem and orders tables as large
-
-SET citus.large_table_shard_count TO 2;
 
 -- Query #1 from the TPC-H decision support benchmark
 

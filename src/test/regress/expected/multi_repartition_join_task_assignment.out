@@ -1,5 +1,5 @@
 --
--- MULTI_LARGE_TABLE_TASK_ASSIGNMENT
+-- MULTI_REPARTITION_JOIN_TASK_ASSIGNMENT
 --
 -- Tests which cover task assignment for MapMerge jobs for single range repartition
 -- and dual hash repartition joins. The tests also cover task assignment propagation
@@ -11,20 +11,12 @@ SHOW server_version \gset
 SELECT substring(:'server_version', '\d+')::int > 9 AS version_above_nine;
  version_above_nine 
 --------------------
- f
+ t
 (1 row)
 
 BEGIN;
 SET client_min_messages TO DEBUG3;
-DEBUG:  CommitTransactionCommand
-SET citus.large_table_shard_count TO 2;
-DEBUG:  StartTransactionCommand
-DEBUG:  ProcessUtility
-DEBUG:  CommitTransactionCommand
 SET citus.task_executor_type TO 'task-tracker';
-DEBUG:  StartTransactionCommand
-DEBUG:  ProcessUtility
-DEBUG:  CommitTransactionCommand
 -- Single range repartition join to test anchor-shard based task assignment and
 -- assignment propagation to merge and data-fetch tasks.
 SELECT
@@ -33,7 +25,6 @@ FROM
 	orders, customer_append
 WHERE
 	o_custkey = c_custkey;
-DEBUG:  StartTransactionCommand
 DEBUG:  assigned task 2 to node localhost:57637
 DEBUG:  assigned task 1 to node localhost:57638
 DEBUG:  join prunable for intervals [1,1000] and [1001,2000]
@@ -51,7 +42,6 @@ DETAIL:  Creating dependency on merge taskId 9
 DEBUG:  assigned task 4 to node localhost:57637
 DEBUG:  assigned task 6 to node localhost:57638
 DEBUG:  assigned task 2 to node localhost:57637
-DEBUG:  CommitTransactionCommand
  count 
 -------
   2985
@@ -60,11 +50,7 @@ DEBUG:  CommitTransactionCommand
 -- Single range repartition join, along with a join with a small table containing
 -- more than one shard. This situation results in multiple sql tasks depending on
 -- the same merge task, and tests our constraint group creation and assignment
--- propagation. Here 'orders' is considered the small table.
-SET citus.large_table_shard_count TO 3;
-DEBUG:  StartTransactionCommand
-DEBUG:  ProcessUtility
-DEBUG:  CommitTransactionCommand
+-- propagation.
 SELECT
 	count(*)
 FROM
@@ -72,7 +58,6 @@ FROM
 WHERE
 	o_custkey = c_custkey AND
 	o_orderkey = l_orderkey;
-DEBUG:  StartTransactionCommand
 DEBUG:  assigned task 2 to node localhost:57637
 DEBUG:  assigned task 3 to node localhost:57638
 DEBUG:  assigned task 1 to node localhost:57637
@@ -84,16 +69,11 @@ DEBUG:  pruning merge fetch taskId 3
 DETAIL:  Creating dependency on merge taskId 8
 DEBUG:  assigned task 4 to node localhost:57637
 DEBUG:  assigned task 2 to node localhost:57638
-DEBUG:  CommitTransactionCommand
  count 
 -------
  12000
 (1 row)
 
-SET citus.large_table_shard_count TO 2;
-DEBUG:  StartTransactionCommand
-DEBUG:  ProcessUtility
-DEBUG:  CommitTransactionCommand
 -- Dual hash repartition join which tests the separate hash repartition join
 -- task assignment algorithm.
 SELECT
@@ -102,7 +82,6 @@ FROM
 	lineitem, customer_append
 WHERE
 	l_partkey = c_nationkey;
-DEBUG:  StartTransactionCommand
 DEBUG:  assigned task 2 to node localhost:57637
 DEBUG:  assigned task 1 to node localhost:57638
 DEBUG:  assigned task 2 to node localhost:57637
@@ -140,7 +119,6 @@ DEBUG:  assigned task 3 to node localhost:57638
 DEBUG:  assigned task 6 to node localhost:57637
 DEBUG:  assigned task 9 to node localhost:57638
 DEBUG:  assigned task 12 to node localhost:57637
-DEBUG:  CommitTransactionCommand
  count 
 -------
    125
@@ -148,6 +126,4 @@ DEBUG:  CommitTransactionCommand
 
 -- Reset client logging level to its previous value
 SET client_min_messages TO NOTICE;
-DEBUG:  StartTransactionCommand
-DEBUG:  ProcessUtility
 COMMIT;

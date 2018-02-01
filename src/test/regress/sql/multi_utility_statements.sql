@@ -39,8 +39,6 @@ SELECT * FROM lineitem_pricing_summary ORDER BY l_returnflag, l_linestatus;
 
 -- Test we can handle joins
 
-SET citus.large_table_shard_count TO 2;
-
 CREATE TABLE shipping_priority AS 
 (
     SELECT

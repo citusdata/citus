@@ -53,7 +53,6 @@ SELECT avg(distinct l_orderkey) FROM lineitem_range;
 -- Run count(distinct) on join between a range partitioned table and a single
 -- sharded table. For this test, we also change a config setting to ensure that
 -- we don't repartition any of the tables during the query.
-SET citus.large_table_shard_count TO 2;
 SELECT p_partkey, count(distinct l_orderkey) FROM lineitem_range, part
 	WHERE l_partkey = p_partkey
 	GROUP BY p_partkey
@@ -72,7 +71,6 @@ SELECT p_partkey, count(distinct l_orderkey) FROM lineitem_range, part
        222 |     1
 (10 rows)
 
-RESET citus.large_table_shard_count;
 -- Check that we support count(distinct) on non-partition column.
 SELECT count(distinct l_partkey) FROM lineitem_range;
  count 

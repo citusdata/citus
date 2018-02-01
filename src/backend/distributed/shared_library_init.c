@@ -71,6 +71,7 @@ static bool StatisticsCollectionGucCheckHook(bool *newval, void **extra, GucSour
 
 /* static variable to hold value of deprecated GUC variable */
 static bool ExpireCachedShards = false;
+static int LargeTableShardCount = 0;
 
 
 /* *INDENT-OFF* */
@@ -656,15 +657,12 @@ RegisterCitusConfigVariables(void)
 
 	DefineCustomIntVariable(
 		"citus.large_table_shard_count",
-		gettext_noop("The shard count threshold over which a table is considered large."),
-		gettext_noop("A distributed table is considered to be large if it has "
-					 "more shards than the value specified here. This largeness "
-					 "criteria is then used in picking a table join order during "
-					 "distributed query planning."),
+		gettext_noop("This variable has been deprecated."),
+		gettext_noop("Consider reference tables instead"),
 		&LargeTableShardCount,
 		4, 1, 10000,
 		PGC_USERSET,
-		0,
+		GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(

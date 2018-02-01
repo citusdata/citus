@@ -8,10 +8,6 @@ SET citus.explain_distributed_queries TO off;
 SET citus.log_multi_join_order TO TRUE;
 SET client_min_messages TO LOG;
 
--- Change configuration to treat lineitem and orders tables as large
-
-SET citus.large_table_shard_count TO 2;
-
 -- Query #6 from the TPC-H decision support benchmark
 
 EXPLAIN SELECT

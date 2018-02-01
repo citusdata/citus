@@ -831,7 +831,6 @@ Aggregate
                     ->  Seq Scan on lineitem_290001 lineitem
                           Filter: (l_orderkey > 9030)
 -- Test re-partition join
-SET citus.large_table_shard_count TO 1;
 EXPLAIN (COSTS FALSE)
 	SELECT count(*)
 	FROM lineitem, orders, customer_append, supplier_single_shard

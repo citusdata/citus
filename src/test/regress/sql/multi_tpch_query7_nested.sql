@@ -3,10 +3,6 @@
 --
 
 
--- Change configuration to treat lineitem AND orders tables AS large
-
-SET citus.large_table_shard_count TO 2;
-
 -- Query #7 from the TPC-H benchmark; modified to include sub-selects
 
 SELECT

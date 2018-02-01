@@ -51,7 +51,7 @@ test: multi_tpch_query7 multi_tpch_query7_nested
 # below; and therefore these tests should come after the execution tests.
 # ----------
 test: multi_load_more_data
-test: multi_join_order_tpch_large
+test: multi_join_order_tpch_repartition
 
 # ----------
 # Tests to check our large record loading and shard deletion behavior

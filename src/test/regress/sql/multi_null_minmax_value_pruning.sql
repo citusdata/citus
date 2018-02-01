@@ -20,7 +20,6 @@ SET citus.task_executor_type TO 'real-time';
 
 -- Change configuration to treat lineitem and orders tables as large
 
-SET citus.large_table_shard_count TO 2;
 SET citus.log_multi_join_order to true;
 SET citus.enable_repartition_joins to ON;
 

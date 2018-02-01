@@ -3,8 +3,6 @@
 --
 -- connect to the coordinator
 \c - - - :master_port
--- Change configuration to treat lineitem AND orders tables AS large
-SET citus.large_table_shard_count TO 2;
 -- Query #7 from the TPC-H benchmark; modified to include sub-selects
 SELECT
 	supp_nation,
@@ -61,8 +59,6 @@ ORDER BY
 
 -- connect to one of the workers
 \c - - - :worker_1_port
--- Change configuration to treat lineitem AND orders tables AS large
-SET citus.large_table_shard_count TO 2;
 -- Query #7 from the TPC-H benchmark; modified to include sub-selects
 SELECT
 	supp_nation,
@@ -119,8 +115,6 @@ ORDER BY
 
 -- connect to the coordinator
 \c - - - :worker_2_port
--- Change configuration to treat lineitem AND orders tables AS large
-SET citus.large_table_shard_count TO 2;
 -- Query #7 from the TPC-H benchmark; modified to include sub-selects
 SELECT
 	supp_nation,

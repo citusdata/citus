@@ -85,14 +85,14 @@ test: multi_tpch_query7 multi_tpch_query7_nested
 # ----------
 test: multi_join_order_tpch_small multi_join_order_additional
 test: multi_load_more_data
-test: multi_join_order_tpch_large
+test: multi_join_order_tpch_repartition
 
 # ----------
-# Tests for large-table join planning and execution. Be careful when creating
+# Tests for repartition join planning and execution. Be careful when creating
 # new shards before these tests, as they expect specific shard identifiers in
 # the output.
 # ----------
-test: multi_large_table_join_planning multi_large_table_pruning multi_large_table_task_assignment
+test: multi_repartition_join_planning multi_repartition_join_pruning multi_repartition_join_task_assignment
 
 # ---------
 # Tests for recursive planning.
