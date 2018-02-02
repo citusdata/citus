@@ -433,6 +433,66 @@ SELECT *
 		2 DESC,1 DESC
 	LIMIT 10;
 
+-- distinct on non-var (type cast/field select) columns are also
+-- supported if grouped on distribution column
+-- random is added to prevent flattening by postgresql
+SELECT 
+	l_orderkey, count(a::int), count(distinct a::int)
+	FROM (
+		SELECT l_orderkey, l_orderkey * 1.5 a, random() b
+			FROM lineitem_hash) sub
+	GROUP BY 1
+	ORDER BY 1 DESC
+	LIMIT 5;
+
+SELECT user_id,
+       count(sub.a::int),
+       count(DISTINCT sub.a::int),
+       count(DISTINCT (sub).a)
+FROM
+  (SELECT user_id,
+          unnest(ARRAY[user_id * 1.5])a,
+          random() b
+   FROM users_table
+   ) sub
+GROUP BY 1
+ORDER BY 1 DESC
+LIMIT 5;
+
+CREATE TYPE test_item AS
+(
+  id       INTEGER,
+  duration INTEGER
+);
+SELECT * FROM run_command_on_workers($$CREATE TYPE test_item AS
+(
+  id       INTEGER,
+  duration INTEGER
+)$$) ORDER BY nodeport;
+
+CREATE TABLE test_count_distinct_array (key int, value int ,  value_arr test_item[]);
+SELECT create_distributed_table('test_count_distinct_array', 'key');
+
+INSERT INTO test_count_distinct_array SELECT i, i, ARRAY[(i,i)::test_item] FROM generate_Series(0, 1000) i;
+
+SELECT
+	key,
+	count(DISTINCT value),
+	count(DISTINCT (item)."id"),
+	count(DISTINCT (item)."id" * 3)
+FROM
+	(
+		SELECT key, unnest(value_arr) as item, value FROM test_count_distinct_array
+	) as sub
+GROUP BY 1
+ORDER BY 1 DESC
+LIMIT 5;
+
+DROP TABLE test_count_distinct_array;
+
+DROP TYPE test_item;
+SELECT * FROM run_command_on_workers($$DROP TYPE test_item$$) ORDER BY nodeport;
+
 -- other distinct aggregate are not supported
 SELECT *
 	FROM (

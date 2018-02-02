@@ -2888,6 +2888,8 @@ ErrorIfUnsupportedAggregateDistinct(Aggref *aggregateExpression,
  * AggregateDistinctColumn checks if the given aggregate expression's distinct
  * clause is on a single column. If it is, the function finds and returns that
  * column. Otherwise, the function returns null.
+ * The function expects to find a single column here, no FieldSelect or other
+ * expressions are accepted as a column.
  */
 static Var *
 AggregateDistinctColumn(Aggref *aggregateExpression)
@@ -2941,7 +2943,8 @@ TablePartitioningSupportsDistinct(List *tableNodeList, MultiExtendedOp *opNode,
 		char partitionMethod = 0;
 		List *shardList = NIL;
 
-		if (relationId == SUBQUERY_RELATION_ID)
+		if (relationId == SUBQUERY_RELATION_ID ||
+			relationId == SUBQUERY_PUSHDOWN_RELATION_ID)
 		{
 			return true;
 		}
