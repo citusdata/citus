@@ -32,6 +32,7 @@
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
 #include "nodes/relation.h"
+#include "nodes/print.h"
 #include "optimizer/clauses.h"
 #include "optimizer/prep.h"
 #include "optimizer/tlist.h"
@@ -42,6 +43,7 @@
 #include "utils/syscache.h"
 #include "utils/rel.h"
 #include "utils/relcache.h"
+
 
 
 /* Config variable managed via guc.c */
@@ -55,6 +57,21 @@ typedef struct QualifierWalkerContext
 	List *outerJoinQualifierList;
 } QualifierWalkerContext;
 
+typedef struct JoinMutatorContext
+{
+	Query *originalQuery;
+} JoinMutatorContext;
+
+typedef struct RTableJoinWalkerState
+{
+	HTAB *hashTable;
+} RTableJoinWalkerState;
+
+typedef struct JoinAliasMapping
+{
+	Var *joinalias;
+	RangeTblEntry *join;
+} JoinAliasMapping;
 
 /*
  * RecurringTuplesType is used to distinguish different types of expressions
@@ -178,6 +195,9 @@ static List * CreateSubqueryTargetEntryList(List *columnList);
 static void UpdateVarMappingsForExtendedOpNode(List *columnList,
 											   List *subqueryTargetEntryList);
 static MultiTable * MultiSubqueryPushdownTable(Query *subquery);
+
+
+static Node *flatten_join_citus_mutator(Node *node, JoinMutatorContext *jcontext);
 
 
 /*
@@ -3959,9 +3979,42 @@ SubqueryPushdownMultiNodeTree(Query *queryTree)
 	 * uniqueColumnList. Columns mentioned in multiProject node and multiExtendedOp
 	 * node are indexed with their respective position in uniqueColumnList.
 	 */
+
+//	PlannerInfo *root = palloc0(sizeof(PlannerInfo));
+//	root->parse = queryTree;
+//
+//	flatten_join_alias_vars(root, (Node *) queryTree);
+
+	targetEntryList = queryTree->targetList;
+
+	elog(INFO, "%s", pretty_format_node_dump(nodeToString((Node *)targetEntryList)));
+
+	JoinMutatorContext jcontext;
+	jcontext.originalQuery = queryTree;
+	List *newTargetEntryList = NIL;
+	ListCell *targetEntryCell = NULL;
+	foreach(targetEntryCell, targetEntryList)
+	{
+		TargetEntry *originalTargetEntry = (TargetEntry *) lfirst(targetEntryCell);
+		TargetEntry *newTargetEntry = copyObject(originalTargetEntry);
+		Expr *originalExpression = originalTargetEntry->expr;
+		Expr *newExpression = NULL;
+		Node *newNode = flatten_join_citus_mutator((Node *)originalExpression, &jcontext);
+		newExpression = (Expr *)newNode;
+		newTargetEntry->expr = newExpression;
+		newTargetEntryList = lappend(newTargetEntryList, newTargetEntry);
+	}
+
+	targetEntryList = newTargetEntryList;
+	queryTree->targetList = targetEntryList;
+	elog(INFO, "%s", pretty_format_node_dump(nodeToString((Node *)targetEntryList)));
+
 	targetColumnList = pull_var_clause_default((Node *) targetEntryList);
+
 	havingClauseColumnList = pull_var_clause_default(queryTree->havingQual);
 	columnList = list_concat(targetColumnList, havingClauseColumnList);
+
+
 
 	/* create a target entry for each unique column */
 	subqueryTargetEntryList = CreateSubqueryTargetEntryList(columnList);
@@ -4027,6 +4080,38 @@ SubqueryPushdownMultiNodeTree(Query *queryTree)
 	currentTopNode = (MultiNode *) extendedOpNode;
 
 	return currentTopNode;
+}
+
+
+static Node *
+flatten_join_citus_mutator(Node *originalNode, JoinMutatorContext *jcontext)
+{
+	Node *newNode = NULL;
+	Query *queryTree = jcontext->originalQuery;
+	if (originalNode == NULL)
+	{
+		return NULL;
+	}
+
+	if (IsA(originalNode, Var))
+	{
+		Var *var = (Var *) originalNode;
+		RangeTblEntry *rte = rt_fetch(var->varno, queryTree->rtable);
+
+		if (rte->rtekind == RTE_JOIN)
+		{
+			elog(INFO, "%s", pretty_format_node_dump(nodeToString((Node *) var)));
+			newNode = (Node *) list_nth(rte->joinaliasvars, var->varattno - 1);
+			newNode = copyObject(newNode);
+			if (IsA(newNode, Var))
+				((Var *) newNode)->location = var->location;
+			elog(INFO, "%s", pretty_format_node_dump(nodeToString((Node *) newNode)));
+			return newNode;
+		}
+	}
+
+	return expression_tree_mutator(originalNode, flatten_join_citus_mutator,
+			  (void *) jcontext);
 }
 
 
