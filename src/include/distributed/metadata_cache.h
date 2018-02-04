@@ -49,6 +49,7 @@ typedef struct
 
 	/* pg_dist_partition metadata for this table */
 	char *partitionKeyString;
+	Var *partitionColumn;
 	char partitionMethod;
 	uint32 colocationId;
 	char replicationModel;
