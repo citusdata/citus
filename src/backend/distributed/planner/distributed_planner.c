@@ -828,6 +828,9 @@ ResolveExternalParams(Node *inputNode, ParamListInfo boundParams)
 
 /*
  * GetDistributedPlan returns the associated DistributedPlan for a CustomScan.
+ *
+ * Callers should only read from the returned data structure, since it may be
+ * the plan of a prepared statement and may therefore be reused.
  */
 DistributedPlan *
 GetDistributedPlan(CustomScan *customScan)
@@ -840,16 +843,9 @@ GetDistributedPlan(CustomScan *customScan)
 	node = (Node *) linitial(customScan->custom_private);
 	Assert(CitusIsA(node, DistributedPlan));
 
-	node = CheckNodeCopyAndSerialization(node);
+	CheckNodeCopyAndSerialization(node);
 
-	/*
-	 * When using prepared statements the same plan gets reused across
-	 * multiple statements and transactions. We make several modifications
-	 * to the DistributedPlan during execution such as assigning task placements
-	 * and evaluating functions and parameters. These changes should not
-	 * persist, so we always work on a copy.
-	 */
-	distributedPlan = (DistributedPlan *) copyObject(node);
+	distributedPlan = (DistributedPlan *) node;
 
 	return distributedPlan;
 }

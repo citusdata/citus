@@ -395,11 +395,21 @@ void
 CitusModifyBeginScan(CustomScanState *node, EState *estate, int eflags)
 {
 	CitusScanState *scanState = (CitusScanState *) node;
-	DistributedPlan *distributedPlan = scanState->distributedPlan;
-	Job *workerJob = distributedPlan->workerJob;
-	Query *jobQuery = workerJob->jobQuery;
-	List *taskList = workerJob->taskList;
-	bool deferredPruning = workerJob->deferredPruning;
+	DistributedPlan *distributedPlan = NULL;
+	Job *workerJob = NULL;
+	Query *jobQuery = NULL;
+	List *taskList = NIL;
+
+	/*
+	 * We must not change the distributed plan since it may be reused across multiple
+	 * executions of a prepared statement. Instead we create a deep copy that we only
+	 * use for the current execution.
+	 */
+	distributedPlan = scanState->distributedPlan = copyObject(scanState->distributedPlan);
+
+	workerJob = distributedPlan->workerJob;
+	jobQuery = workerJob->jobQuery;
+	taskList = workerJob->taskList;
 
 	if (workerJob->requiresMasterEvaluation)
 	{
@@ -416,7 +426,7 @@ CitusModifyBeginScan(CustomScanState *node, EState *estate, int eflags)
 		 */
 		executorState->es_param_list_info = NULL;
 
-		if (deferredPruning)
+		if (workerJob->deferredPruning)
 		{
 			DeferredErrorMessage *planningError = NULL;
 
