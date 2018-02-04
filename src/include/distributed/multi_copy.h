@@ -108,6 +108,10 @@ typedef struct CitusCopyDestReceiver
 } CitusCopyDestReceiver;
 
 
+/* GUCs */
+extern bool SkipJsonbValidationInCopy;
+
+
 /* function declarations for copying into a distributed table */
 extern CitusCopyDestReceiver * CreateCitusCopyDestReceiver(Oid relationId,
 														   List *columnNameList,

@@ -130,6 +130,7 @@ extern Oid CitusCopyFormatTypeId(void);
 extern Oid CitusReadIntermediateResultFuncId(void);
 extern Oid CitusExtraDataContainerFuncId(void);
 extern Oid CitusWorkerHashFunctionId(void);
+extern Oid CitusTextSendAsJsonbFunctionId(void);
 
 /* enum oids */
 extern Oid PrimaryNodeRoleId(void);

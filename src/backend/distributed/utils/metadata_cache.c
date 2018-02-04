@@ -121,6 +121,7 @@ typedef struct MetadataCacheData
 	Oid readIntermediateResultFuncId;
 	Oid extraDataContainerFuncId;
 	Oid workerHashFunctionId;
+	Oid textSendAsJsonbFunctionId;
 	Oid extensionOwner;
 	Oid binaryCopyFormatId;
 	Oid textCopyFormatId;
@@ -1938,6 +1939,24 @@ CitusWorkerHashFunctionId(void)
 	}
 
 	return MetadataCache.workerHashFunctionId;
+}
+
+
+/* return oid of the citus_text_send_as_jsonb(text) function */
+Oid
+CitusTextSendAsJsonbFunctionId(void)
+{
+	if (MetadataCache.textSendAsJsonbFunctionId == InvalidOid)
+	{
+		List *nameList = list_make2(makeString("pg_catalog"),
+									makeString("citus_text_send_as_jsonb"));
+		Oid paramOids[1] = { TEXTOID };
+
+		MetadataCache.textSendAsJsonbFunctionId =
+			LookupFuncName(nameList, 1, paramOids, false);
+	}
+
+	return MetadataCache.textSendAsJsonbFunctionId;
 }
 
 
