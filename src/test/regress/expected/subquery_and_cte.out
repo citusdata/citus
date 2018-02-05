@@ -423,6 +423,586 @@ FROM
      ) as bar  
 WHERE foo.user_id = bar.user_id;
 ERROR:  recursive CTEs are not supported in distributed queries
+--CTEs can be used as a recurring tuple with subqueries in WHERE
+WITH event_id AS (
+	SELECT user_id as events_user_id, time as events_time, event_type
+	FROM events_table
+)
+SELECT
+	count(*)
+FROM
+	event_id
+WHERE
+	events_user_id IN (SELECT user_id FROM users_table);
+DEBUG:  generating subplan 45_1 for CTE event_id: SELECT user_id AS events_user_id, "time" AS events_time, event_type FROM public.events_table
+DEBUG:  generating subplan 45_2 for subquery SELECT user_id FROM public.users_table
+ count 
+-------
+   101
+(1 row)
+
+--Correlated subqueries can not be used in WHERE clause
+WITH event_id AS (
+	SELECT user_id as events_user_id, time as events_time, event_type
+	FROM events_table
+)
+SELECT
+	count(*)
+FROM
+	event_id
+WHERE
+	events_user_id IN (SELECT user_id FROM users_table where users_table.time = events_time);
+DEBUG:  generating subplan 48_1 for CTE event_id: SELECT user_id AS events_user_id, "time" AS events_time, event_type FROM public.events_table
+ERROR:  cannot pushdown the subquery
+DETAIL:  Complex subqueries and CTEs are not allowed in the FROM clause when the query has correlated subqueries WHERE clause and it references a column from another query
+-- Recurring tuples as empty join tree
+SELECT
+	*
+FROM (
+	SELECT
+		1 AS id,
+		2 AS value_1,
+		3 AS value_3
+	) AS tt1
+WHERE
+	id
+IN (
+	SELECT
+		user_id
+	FROM
+	events_table
+   );
+DEBUG:  generating subplan 50_1 for subquery SELECT user_id FROM public.events_table
+ id | value_1 | value_3 
+----+---------+---------
+  1 |       2 |       3
+(1 row)
+
+-- Recurring tuples in from clause as CTE and SET operation in WHERE clause
+SELECT
+	COUNT(*)
+FROM
+	(
+		WITH event_id AS (
+			SELECT
+				user_id as events_user_id, time as events_time, event_type
+			FROM
+				events_table
+		)
+		SELECT
+			events_user_id, events_time, event_type
+		FROM
+			event_id
+		LIMIT
+			10
+	) as SUB_TABLE
+WHERE
+	events_user_id
+IN
+	(
+		(SELECT
+			user_id
+		FROM
+			users_table
+		LIMIT
+			10
+		)
+		UNION ALL
+		(SELECT
+			value_1
+		FROM
+			users_table
+		LIMIT
+			10
+		)
+	);
+DEBUG:  push down of limit count: 10
+DEBUG:  generating subplan 52_1 for subquery SELECT user_id FROM public.users_table LIMIT 10
+DEBUG:  push down of limit count: 10
+DEBUG:  generating subplan 52_2 for subquery SELECT value_1 FROM public.users_table LIMIT 10
+DEBUG:  generating subplan 52_3 for subquery SELECT intermediate_result.user_id FROM read_intermediate_result('52_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer) UNION ALL SELECT intermediate_result.value_1 FROM read_intermediate_result('52_2'::text, 'binary'::citus_copy_format) intermediate_result(value_1 integer)
+DEBUG:  generating subplan 52_4 for CTE event_id: SELECT user_id AS events_user_id, "time" AS events_time, event_type FROM public.events_table
+DEBUG:  generating subplan 52_5 for subquery SELECT events_user_id, events_time, event_type FROM (SELECT intermediate_result.events_user_id, intermediate_result.events_time, intermediate_result.event_type FROM read_intermediate_result('52_4'::text, 'binary'::citus_copy_format) intermediate_result(events_user_id integer, events_time timestamp without time zone, event_type integer)) event_id LIMIT 10
+ count 
+-------
+    10
+(1 row)
+
+-- Recurring tuples in fram clause as SET operation on recursively plannable
+-- queries and CTE in WHERE clause
+SELECT
+	*
+FROM
+	(
+		(SELECT
+			user_id
+		FROM
+			users_table
+		ORDER BY
+			user_id ASC
+		LIMIT
+			10
+		)
+		UNION ALL
+		(SELECT
+			value_1
+		FROM
+			users_table
+		ORDER BY
+			value_1 ASC
+		LIMIT
+			10
+		)
+	) as SUB_TABLE
+WHERE
+	user_id
+IN
+	(
+	WITH event_id AS (
+		SELECT
+			user_id as events_user_id, time as events_time, event_type
+		FROM
+			events_table
+	)
+	SELECT
+		events_user_id
+	FROM
+		event_id
+	ORDER BY
+		events_user_id
+	LIMIT
+		10
+	);
+DEBUG:  generating subplan 58_1 for CTE event_id: SELECT user_id AS events_user_id, "time" AS events_time, event_type FROM public.events_table
+DEBUG:  generating subplan 58_2 for subquery SELECT events_user_id FROM (SELECT intermediate_result.events_user_id, intermediate_result.events_time, intermediate_result.event_type FROM read_intermediate_result('58_1'::text, 'binary'::citus_copy_format) intermediate_result(events_user_id integer, events_time timestamp without time zone, event_type integer)) event_id ORDER BY events_user_id LIMIT 10
+DEBUG:  push down of limit count: 10
+DEBUG:  generating subplan 58_3 for subquery SELECT user_id FROM public.users_table ORDER BY user_id LIMIT 10
+DEBUG:  push down of limit count: 10
+DEBUG:  generating subplan 58_4 for subquery SELECT value_1 FROM public.users_table ORDER BY value_1 LIMIT 10
+DEBUG:  generating subplan 58_5 for subquery SELECT intermediate_result.user_id FROM read_intermediate_result('58_3'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer) UNION ALL SELECT intermediate_result.value_1 FROM read_intermediate_result('58_4'::text, 'binary'::citus_copy_format) intermediate_result(value_1 integer)
+ user_id 
+---------
+       1
+       1
+       1
+       1
+       1
+       1
+       1
+(7 rows)
+
+-- Complex target list in WHERE clause
+SELECT
+	COUNT(*)
+FROM
+	(SELECT
+		user_id as events_user_id, time as events_time, event_type
+	FROM
+		events_table
+	LIMIT
+		10
+	) as SUB_TABLE
+WHERE
+	events_user_id
+<= (
+	SELECT
+		max(abs(value_1 * 1) + mod(value_1, 3)) as val_1
+	FROM
+		users_table
+);
+DEBUG:  generating subplan 64_1 for subquery SELECT max((abs((value_1 * 1)) + mod(value_1, 3))) AS val_1 FROM public.users_table
+DEBUG:  push down of limit count: 10
+DEBUG:  generating subplan 64_2 for subquery SELECT user_id AS events_user_id, "time" AS events_time, event_type FROM public.events_table LIMIT 10
+ count 
+-------
+    10
+(1 row)
+
+-- DISTINCT clause in WHERE
+SELECT
+	COUNT(*)
+FROM
+	(SELECT
+		user_id as events_user_id, time as events_time, event_type
+	FROM
+		events_table
+	LIMIT
+		10
+	) as SUB_TABLE
+WHERE
+	events_user_id
+IN (
+	SELECT
+		distinct value_1
+	FROM
+		users_table
+);
+DEBUG:  generating subplan 67_1 for subquery SELECT DISTINCT value_1 FROM public.users_table
+DEBUG:  push down of limit count: 10
+DEBUG:  generating subplan 67_2 for subquery SELECT user_id AS events_user_id, "time" AS events_time, event_type FROM public.events_table LIMIT 10
+ count 
+-------
+    10
+(1 row)
+
+-- AND in WHERE clause
+SELECT
+	COUNT(*)
+FROM
+	(SELECT
+		user_id as events_user_id, time as events_time, event_type
+	FROM
+		events_table
+	LIMIT
+		10
+	) as SUB_TABLE
+WHERE
+	events_user_id
+> (
+	SELECT
+		min(value_1)
+	FROM
+		users_table
+)
+AND
+	events_user_id
+< (
+	SELECT
+		max(value_2)
+	FROM
+		users_table
+);
+DEBUG:  generating subplan 70_1 for subquery SELECT min(value_1) AS min FROM public.users_table
+DEBUG:  generating subplan 70_2 for subquery SELECT max(value_2) AS max FROM public.users_table
+DEBUG:  push down of limit count: 10
+DEBUG:  generating subplan 70_3 for subquery SELECT user_id AS events_user_id, "time" AS events_time, event_type FROM public.events_table LIMIT 10
+ count 
+-------
+     4
+(1 row)
+
+-- Planning subqueries in WHERE clause in CTE recursively
+WITH cte AS (
+	SELECT
+		*
+	FROM
+		(SELECT
+			*
+		FROM
+			users_table
+		ORDER BY
+			user_id ASC,
+			value_2 DESC
+		LIMIT
+			10
+		) as sub_table
+	WHERE
+		user_id
+	IN
+		(SELECT
+			value_2
+		FROM
+			events_table
+		)
+)
+SELECT
+	COUNT(*)
+FROM
+	cte;
+DEBUG:  generating subplan 74_1 for CTE cte: SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM (SELECT users_table.user_id, users_table."time", users_table.value_1, users_table.value_2, users_table.value_3, users_table.value_4 FROM public.users_table ORDER BY users_table.user_id, users_table.value_2 DESC LIMIT 10) sub_table WHERE (user_id IN (SELECT events_table.value_2 FROM public.events_table))
+DEBUG:  push down of limit count: 10
+DEBUG:  generating subplan 75_1 for subquery SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.users_table ORDER BY user_id, value_2 DESC LIMIT 10
+DEBUG:  generating subplan 75_2 for subquery SELECT value_2 FROM public.events_table
+ count 
+-------
+    10
+(1 row)
+
+-- Planing subquery in WHERE clause in FROM clause of a subquery recursively
+SELECT
+	COUNT(*)
+FROM
+	(SELECT
+		*
+	FROM
+		(SELECT
+			*
+		FROM
+			users_table
+		ORDER BY
+			user_id ASC,
+			value_2 DESC
+		LIMIT
+			10
+		) as sub_table_1
+	WHERE
+		user_id
+	IN
+		(SELECT
+			value_2
+		FROM
+			events_table
+		)
+	) as sub_table_2;
+DEBUG:  push down of limit count: 10
+DEBUG:  generating subplan 78_1 for subquery SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.users_table ORDER BY user_id, value_2 DESC LIMIT 10
+DEBUG:  generating subplan 78_2 for subquery SELECT value_2 FROM public.events_table
+DEBUG:  generating subplan 78_3 for subquery SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM (SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.value_1, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('78_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, value_1 integer, value_2 integer, value_3 double precision, value_4 bigint)) sub_table_1 WHERE (user_id IN (SELECT intermediate_result.value_2 FROM read_intermediate_result('78_2'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer)))
+ count 
+-------
+    10
+(1 row)
+
+-- Recurring table in the FROM clause of a subquery in the FROM clause
+-- Recurring table is created by joining a two recurrign table
+SELECT
+	SUM(user_id)
+FROM
+	(SELECT
+		*
+	FROM
+		(SELECT
+			user_id
+		FROM
+			users_table
+		ORDER BY
+			user_id
+		LIMIT 10) as t1
+		INNER JOIN
+		(SELECT
+			user_id as user_id_2
+		FROM
+			users_table
+		ORDER BY
+			user_id
+		LIMIT
+			10) as t2
+		ON
+			t1.user_id = t2.user_id_2
+		WHERE
+			t1.user_id
+		IN
+			(SELECT
+				value_2
+			FROM
+				events_table)
+	) as t3
+WHERE
+	user_id
+>
+	(SELECT
+		min(value_3)
+	FROM
+		events_table);
+DEBUG:  generating subplan 82_1 for subquery SELECT min(value_3) AS min FROM public.events_table
+DEBUG:  push down of limit count: 10
+DEBUG:  generating subplan 82_2 for subquery SELECT user_id FROM public.users_table ORDER BY user_id LIMIT 10
+DEBUG:  push down of limit count: 10
+DEBUG:  generating subplan 82_3 for subquery SELECT user_id AS user_id_2 FROM public.users_table ORDER BY user_id LIMIT 10
+DEBUG:  generating subplan 82_4 for subquery SELECT value_2 FROM public.events_table
+DEBUG:  generating subplan 82_5 for subquery SELECT t1.user_id, t2.user_id_2 FROM ((SELECT intermediate_result.user_id FROM read_intermediate_result('82_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) t1 JOIN (SELECT intermediate_result.user_id_2 FROM read_intermediate_result('82_3'::text, 'binary'::citus_copy_format) intermediate_result(user_id_2 integer)) t2 ON ((t1.user_id = t2.user_id_2))) WHERE (t1.user_id IN (SELECT intermediate_result.value_2 FROM read_intermediate_result('82_4'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer)))
+ sum 
+-----
+  67
+(1 row)
+
+-- Same example with the above query, but now check the rows with EXISTS
+SELECT
+	SUM(user_id)
+FROM
+	(SELECT
+		*
+	FROM
+		(SELECT
+			user_id
+		FROM
+			users_table
+		ORDER BY
+			user_id
+		LIMIT 10) as t1
+		INNER JOIN
+		(SELECT
+			user_id as user_id_2
+		FROM
+			users_table
+		ORDER BY
+			user_id
+		LIMIT
+			10) as t2
+		ON
+			t1.user_id = t2.user_id_2
+		WHERE
+			t1.user_id
+		IN
+			(SELECT
+				value_2
+			FROM
+				events_table)
+	) as t3
+WHERE EXISTS
+	(SELECT
+		1,2
+	FROM
+		events_table
+	WHERE
+		events_table.value_2 = user_id);
+DEBUG:  push down of limit count: 10
+DEBUG:  generating subplan 88_1 for subquery SELECT user_id FROM public.users_table ORDER BY user_id LIMIT 10
+DEBUG:  push down of limit count: 10
+DEBUG:  generating subplan 88_2 for subquery SELECT user_id AS user_id_2 FROM public.users_table ORDER BY user_id LIMIT 10
+DEBUG:  generating subplan 88_3 for subquery SELECT value_2 FROM public.events_table
+DEBUG:  generating subplan 88_4 for subquery SELECT t1.user_id, t2.user_id_2 FROM ((SELECT intermediate_result.user_id FROM read_intermediate_result('88_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) t1 JOIN (SELECT intermediate_result.user_id_2 FROM read_intermediate_result('88_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id_2 integer)) t2 ON ((t1.user_id = t2.user_id_2))) WHERE (t1.user_id IN (SELECT intermediate_result.value_2 FROM read_intermediate_result('88_3'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer)))
+DEBUG:  generating subplan 88_5 for subquery SELECT 1, 2 FROM public.events_table WHERE (value_2 = user_id)
+ sum 
+-----
+  67
+(1 row)
+
+-- Same query with the above one, yet now we check the row's NON-existence
+-- by NOT EXISTS. Note that, max value_2 of events_table is 5
+SELECT
+	SUM(user_id)
+FROM
+	(SELECT
+		*
+	FROM
+		(SELECT
+			user_id
+		FROM
+			users_table
+		ORDER BY
+			user_id
+		LIMIT 10) as t1
+		INNER JOIN
+		(SELECT
+			user_id as user_id_2
+		FROM
+			users_table
+		ORDER BY
+			user_id
+		LIMIT
+			10) as t2
+		ON
+			t1.user_id = t2.user_id_2
+		WHERE
+			t1.user_id
+		IN
+			(SELECT
+				value_2
+			FROM
+				events_table)
+	) as t3
+WHERE NOT EXISTS
+	(SELECT
+		1,2
+	FROM
+		events_table
+	WHERE
+		events_table.value_2 = user_id + 6);
+DEBUG:  push down of limit count: 10
+DEBUG:  generating subplan 94_1 for subquery SELECT user_id FROM public.users_table ORDER BY user_id LIMIT 10
+DEBUG:  push down of limit count: 10
+DEBUG:  generating subplan 94_2 for subquery SELECT user_id AS user_id_2 FROM public.users_table ORDER BY user_id LIMIT 10
+DEBUG:  generating subplan 94_3 for subquery SELECT value_2 FROM public.events_table
+DEBUG:  generating subplan 94_4 for subquery SELECT t1.user_id, t2.user_id_2 FROM ((SELECT intermediate_result.user_id FROM read_intermediate_result('94_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) t1 JOIN (SELECT intermediate_result.user_id_2 FROM read_intermediate_result('94_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id_2 integer)) t2 ON ((t1.user_id = t2.user_id_2))) WHERE (t1.user_id IN (SELECT intermediate_result.value_2 FROM read_intermediate_result('94_3'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer)))
+DEBUG:  generating subplan 94_5 for subquery SELECT 1, 2 FROM public.events_table WHERE (value_2 = (user_id + 6))
+ sum 
+-----
+  67
+(1 row)
+
+-- Check the existence of row by comparing it with the result of subquery in
+-- WHERE clause. Note that subquery is planned recursively since there is no
+-- distributed table in the from
+SELECT
+	*
+FROM
+	(SELECT
+		user_id, value_1
+	FROM
+		users_table
+	ORDER BY
+		user_id ASC,
+		value_1 ASC
+	LIMIT 10) as t3
+WHERE row(user_id, value_1) =
+	(SELECT
+		min(value_2) + 1, min(value_2) + 1
+	FROM
+		events_table);
+DEBUG:  generating subplan 100_1 for subquery SELECT (min(value_2) + 1), (min(value_2) + 1) FROM public.events_table
+DEBUG:  push down of limit count: 10
+DEBUG:  generating subplan 100_2 for subquery SELECT user_id, value_1 FROM public.users_table ORDER BY user_id, value_1 LIMIT 10
+ user_id | value_1 
+---------+---------
+       1 |       1
+(1 row)
+
+-- Recursively plan subquery in WHERE clause when the FROM clause has a subquery
+-- generated by generate_series function
+SELECT
+	*
+FROM
+	(SELECT
+		*
+	FROM
+		generate_series(1,10)
+	) as gst
+WHERE
+	generate_series
+IN
+	(SELECT
+		value_2
+	FROM
+		events_table
+	)
+ORDER BY
+	generate_series ASC;
+DEBUG:  generating subplan 103_1 for subquery SELECT value_2 FROM public.events_table
+ generate_series 
+-----------------
+               1
+               2
+               3
+               4
+               5
+(5 rows)
+
+-- Similar to the test above, now we also have a generate_series in WHERE clause
+SELECT
+	*
+FROM
+	(SELECT
+		*
+	FROM
+		generate_series(1,10)
+	) as gst
+WHERE
+	generate_series
+IN
+	(SELECT
+		user_id
+	FROM
+		users_table
+	WHERE
+		user_id
+	IN
+		(SELECT
+			*
+		FROM
+			generate_series(1,3)
+		)
+	)
+ORDER BY
+	generate_series ASC;
+DEBUG:  generating subplan 105_1 for subquery SELECT user_id FROM public.users_table WHERE (user_id IN (SELECT generate_series.generate_series FROM generate_series(1, 3) generate_series(generate_series)))
+ generate_series 
+-----------------
+               1
+               2
+               3
+(3 rows)
+
 SET client_min_messages TO DEFAULT;
 DROP SCHEMA subquery_and_ctes CASCADE;
 NOTICE:  drop cascades to table users_table_local

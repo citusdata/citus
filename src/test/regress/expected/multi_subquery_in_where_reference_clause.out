@@ -63,7 +63,7 @@ WHERE
       )
 LIMIT 3;
 ERROR:  cannot pushdown the subquery
-DETAIL:  Reference tables are not allowed in FROM clause when the query has subqueries in WHERE clause
+DETAIL:  Reference tables are not allowed in FROM clause when the query has subqueries in WHERE clause and it references a column from another query
 -- immutable functions are also treated as reference tables
 SELECT
   user_id
@@ -80,7 +80,7 @@ WHERE
       )
 LIMIT 3;
 ERROR:  cannot pushdown the subquery
-DETAIL:  Functions are not allowed in FROM clause when the query has subqueries in WHERE clause
+DETAIL:  Functions are not allowed in FROM clause when the query has subqueries in WHERE clause and it references a column from another query
 -- subqueries without FROM are also treated as reference tables
 SELECT
   user_id
@@ -97,7 +97,7 @@ WHERE
       )
 LIMIT 3;
 ERROR:  cannot pushdown the subquery
-DETAIL:  Subqueries without FROM are not allowed in FROM clause when the outer query has subqueries in WHERE clause
+DETAIL:  Subqueries without FROM are not allowed in FROM clause when the outer query has subqueries in WHERE clause and it references a column from another query
 -- join with distributed table prevents FROM from recurring
 SELECT
   DISTINCT user_id
@@ -454,7 +454,7 @@ ORDER BY 2 DESC,
          1 DESC
 LIMIT 5;
 ERROR:  cannot pushdown the subquery
-DETAIL:  Reference tables are not allowed in FROM clause when the query has subqueries in WHERE clause
+DETAIL:  Reference tables are not allowed in FROM clause when the query has subqueries in WHERE clause and it references a column from another query
 -- reference tables are not allowed if there is sublink
 -- this time in the subquery
 SELECT *

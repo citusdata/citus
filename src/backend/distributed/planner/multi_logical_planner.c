@@ -864,7 +864,8 @@ DeferErrorIfFromClauseRecurs(Query *queryTree)
 							 "cannot pushdown the subquery",
 							 "Reference tables are not allowed in FROM "
 							 "clause when the query has subqueries in "
-							 "WHERE clause", NULL);
+							 "WHERE clause and it references a column "
+							 "from another query", NULL);
 	}
 	else if (recurType == RECURRING_TUPLES_FUNCTION)
 	{
@@ -872,15 +873,17 @@ DeferErrorIfFromClauseRecurs(Query *queryTree)
 							 "cannot pushdown the subquery",
 							 "Functions are not allowed in FROM "
 							 "clause when the query has subqueries in "
-							 "WHERE clause", NULL);
+							 "WHERE clause and it references a column "
+							 "from another query", NULL);
 	}
 	else if (recurType == RECURRING_TUPLES_RESULT_FUNCTION)
 	{
 		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 							 "cannot pushdown the subquery",
 							 "Complex subqueries and CTEs are not allowed in "
-							 "the FROM clause when the query has subqueries in the "
-							 "WHERE clause", NULL);
+							 "the FROM clause when the query has correlated subqueries "
+							 "WHERE clause and it references a column "
+							 "from another query", NULL);
 	}
 	else if (recurType == RECURRING_TUPLES_EMPTY_JOIN_TREE)
 	{
@@ -888,7 +891,8 @@ DeferErrorIfFromClauseRecurs(Query *queryTree)
 							 "cannot pushdown the subquery",
 							 "Subqueries without FROM are not allowed in FROM "
 							 "clause when the outer query has subqueries in "
-							 "WHERE clause", NULL);
+							 "WHERE clause and it references a column "
+							 "from another query", NULL);
 	}
 
 	/*
