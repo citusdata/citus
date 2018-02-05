@@ -21,6 +21,7 @@
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
 #include "optimizer/clauses.h"
+#include "optimizer/cost.h"
 #include "optimizer/planmain.h"
 #include "optimizer/tlist.h"
 #include "optimizer/var.h"
@@ -289,7 +290,7 @@ BuildAggregatePlan(Query *masterQuery, Plan *subPlan)
 	if (groupColumnCount > 0)
 	{
 		bool groupingIsHashable = grouping_is_hashable(groupColumnList);
-		bool groupingIsSortable = grouping_is_hashable(groupColumnList);
+		bool groupingIsSortable = grouping_is_sortable(groupColumnList);
 		bool hasDistinctAggregate = HasDistinctAggregate(masterQuery);
 
 		if (!groupingIsHashable && !groupingIsSortable)
@@ -303,13 +304,20 @@ BuildAggregatePlan(Query *masterQuery, Plan *subPlan)
 		 * see nodeAgg.c:build_pertrans_for_aggref(). In that case we use
 		 * sorted agg strategy, otherwise we use hash strategy.
 		 */
-		if (!groupingIsHashable || hasDistinctAggregate)
+		if (!enable_hashagg || !groupingIsHashable || hasDistinctAggregate)
 		{
+			char *messageHint = NULL;
+			if (!enable_hashagg && groupingIsHashable)
+			{
+				messageHint = "Consider setting enable_hashagg to on.";
+			}
+
 			if (!groupingIsSortable)
 			{
 				ereport(ERROR, (errmsg("grouped column list must cannot be sorted"),
 								errdetail("Having a distinct aggregate requires "
-										  "grouped column list to be sortable.")));
+										  "grouped column list to be sortable."),
+								messageHint ? errhint("%s", messageHint) : 0));
 			}
 
 			aggregateStrategy = AGG_SORTED;
@@ -418,7 +426,8 @@ BuildDistinctPlan(Query *masterQuery, Plan *subPlan)
 	 */
 	distinctClausesHashable = grouping_is_hashable(distinctClauseList);
 	hasDistinctAggregate = HasDistinctAggregate(masterQuery);
-	if (distinctClausesHashable && !hasDistinctAggregate)
+
+	if (enable_hashagg && distinctClausesHashable && !hasDistinctAggregate)
 	{
 		const long rowEstimate = 10;  /* using the same value as BuildAggregatePlan() */
 		AttrNumber *distinctColumnIdArray = extract_grouping_cols(distinctClauseList,
