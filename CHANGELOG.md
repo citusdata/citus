@@ -1,3 +1,11 @@
+### citus v7.2.1 (February 6, 2018) ###
+
+* Fixes count distinct bug on column expressions when used with subqueries
+
+* Adds support for respecting enable_hashagg in the master plan
+
+* Fixes a bug canceling backends that are not involved in distributed deadlocks
+
 ### citus v7.2.0 (January 16, 2018) ###
 
 * Adds support for CTEs
