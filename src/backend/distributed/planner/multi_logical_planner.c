@@ -45,7 +45,6 @@
 #include "utils/relcache.h"
 
 
-
 /* Config variable managed via guc.c */
 bool SubqueryPushdown = false; /* is subquery pushdown enabled */
 
@@ -68,9 +67,23 @@ typedef struct RTableJoinWalkerState
 	HTAB *hashTable;
 } RTableJoinWalkerState;
 
+typedef struct JoinAliasAsKey
+{
+	Index varno;                /* index of this var's relation in the range
+	                            * table, or INNER_VAR/OUTER_VAR/INDEX_VAR */
+	AttrNumber varattno;        /* attribute number of this var, or zero for
+	                             * all */
+	Oid vartype;                /* pg_type OID for the type of this var */
+	int32 vartypmod;            /* pg_attribute typmod value */
+	Oid varcollid;              /* OID of collation, or InvalidOid if none */
+	Index varlevelsup;          /* for subquery variables referencing outer
+	                             * relations; 0 in a normal var, >0 means N
+	                             * levels up */
+} JoinAliasAsKey;
+
 typedef struct JoinAliasMapping
 {
-	RangeTblEntry *joinalias;
+	JoinAliasAsKey joinalias;
 	Var *join;
 } JoinAliasMapping;
 
@@ -198,7 +211,7 @@ static void UpdateVarMappingsForExtendedOpNode(List *columnList,
 static MultiTable * MultiSubqueryPushdownTable(Query *subquery);
 
 
-static Node *flatten_join_citus_mutator(Node *node, JoinMutatorContext *jcontext);
+static Node * flatten_join_citus_mutator(Node *node, JoinMutatorContext *jcontext);
 
 
 /*
@@ -3981,16 +3994,14 @@ SubqueryPushdownMultiNodeTree(Query *queryTree)
 	 * node are indexed with their respective position in uniqueColumnList.
 	 */
 
-//	PlannerInfo *root = palloc0(sizeof(PlannerInfo));
-//	root->parse = queryTree;
-//
-//	flatten_join_alias_vars(root, (Node *) queryTree);
+/*	PlannerInfo *root = palloc0(sizeof(PlannerInfo)); */
+/*	root->parse = queryTree; */
+/* */
+/*	flatten_join_alias_vars(root, (Node *) queryTree); */
 
 	targetEntryList = queryTree->targetList;
 
-//	elog(INFO, "INITIALLLLLLLLLL %s", pretty_format_node_dump(nodeToString((Node *)targetEntryList)));
-
-
+/*	elog(INFO, "INITIALLLLLLLLLL %s", pretty_format_node_dump(nodeToString((Node *)targetEntryList))); */
 
 	RTableJoinWalkerState *rTableJoinWalkerState = NULL;
 	Size rTableJoinWalkerStateSize = sizeof(RTableJoinWalkerState);
@@ -4001,14 +4012,14 @@ SubqueryPushdownMultiNodeTree(Query *queryTree)
 
 	hashTableSize = 10;
 	memset(&hashInfo, 0, sizeof(hashInfo));
-	hashInfo.keysize = sizeof(Var *);
+	hashInfo.keysize = sizeof(JoinAliasAsKey);
 	hashInfo.entrysize = sizeof(JoinAliasMapping);
 	hashInfo.hcxt = CurrentMemoryContext;
-	rTableJoinWalkerState->hashTable = hash_create("RTable Join Alias Map", hashTableSize, &hashInfo,
-									   HASH_ELEM | HASH_CONTEXT);
+	rTableJoinWalkerState->hashTable = hash_create("RTable Join Alias Map", hashTableSize,
+												   &hashInfo,
+												   HASH_ELEM | HASH_CONTEXT | HASH_BLOBS);
 
 	ListCell *targetCell = NULL;
-	List *rteList = queryTree->rtable;
 
 	foreach(targetCell, targetEntryList)
 	{
@@ -4018,18 +4029,30 @@ SubqueryPushdownMultiNodeTree(Query *queryTree)
 		{
 			Var *var = (Var *) expression;
 			RangeTblEntry *rteOrg = rt_fetch(var->varno, queryTree->rtable);
-			if (rteOrg->rtekind == RTE_JOIN)
+			if (rteOrg->joinaliasvars)
 			{
-				RangeTblEntry *rte = (RangeTblEntry *) list_nth(rteOrg->joinaliasvars, var->varattno - 1);
-	//			elog(INFO, "PUTS %s", pretty_format_node_dump(nodeToString((Node *)rte)));
-	//			elog(INFO, "INSTEAD %s", pretty_format_node_dump(nodeToString((Node *)var)));
-
+				RangeTblEntry *rte = (RangeTblEntry *) list_nth(rteOrg->joinaliasvars,
+																var->varattno - 1);
+				Var *varRTE = ((Var *) rte);
+				JoinAliasAsKey joinKey = {
+					varRTE->varno, varRTE->varattno, varRTE->vartype, varRTE->vartypmod,
+					varRTE->varcollid, varRTE->varlevelsup
+				};
+				((Var *) rte)->location = 0;
 				bool found = 0;
-				JoinAliasMapping *item = hash_search(rTableJoinWalkerState->hashTable, (void *) var, HASH_ENTER, &found);
+				JoinAliasMapping *item = hash_search(rTableJoinWalkerState->hashTable,
+													 (void *) &joinKey, HASH_ENTER,
+													 &found);
+				item->join = var;
 
-	//			Assert(found == 0);
-				item->join = (Var *)rte;
+/*				elog(INFO, "FVAL %s", pretty_format_node_dump(nodeToString((Node *)item->join))); */
+/*				elog(INFO, "FKEY %s", pretty_format_node_dump(nodeToString((Node *)&joinKey))); */
 
+				JoinAliasMapping *itemPut = hash_search(rTableJoinWalkerState->hashTable,
+														(void *) &joinKey, HASH_FIND,
+														&found);
+/*				if (found) */
+/*					elog(INFO, "FVAL_FOUND %s", pretty_format_node_dump(nodeToString((Node *)itemPut->join))); */
 			}
 		}
 	}
@@ -4046,21 +4069,23 @@ SubqueryPushdownMultiNodeTree(Query *queryTree)
 		TargetEntry *newTargetEntry = copyObject(originalTargetEntry);
 		Expr *originalExpression = originalTargetEntry->expr;
 		Expr *newExpression = NULL;
-		Node *newNode = flatten_join_citus_mutator((Node *)originalExpression, &jcontext);
-		newExpression = (Expr *)newNode;
+		Node *newNode = flatten_join_citus_mutator((Node *) originalExpression,
+												   &jcontext);
+/*		elog(INFO, "OUTER NEW NODE %s", pretty_format_node_dump(nodeToString(newNode))); */
+		newExpression = (Expr *) newNode;
 		newTargetEntry->expr = newExpression;
-		newTargetEntryList = lappend(newTargetEntryList, newTargetEntry);
+		newTargetEntryList = lappend(newTargetEntryList, copyObject(newTargetEntry));
+/*		elog(INFO, "DEVELOPING %s", pretty_format_node_dump(nodeToString((Node *)newTargetEntryList))); */
 	}
 
 	targetEntryList = newTargetEntryList;
 	queryTree->targetList = targetEntryList;
-//	elog(INFO, "LASTTTTTTTTTTTTTTTT %s", pretty_format_node_dump(nodeToString((Node *)targetEntryList)));
+/*	elog(INFO, "LASTTTTTTTTTTTTTTTT %s", pretty_format_node_dump(nodeToString((Node *)targetEntryList))); */
 
 	targetColumnList = pull_var_clause_default((Node *) targetEntryList);
 
 	havingClauseColumnList = pull_var_clause_default(queryTree->havingQual);
 	columnList = list_concat(targetColumnList, havingClauseColumnList);
-
 
 
 	/* create a target entry for each unique column */
@@ -4144,28 +4169,36 @@ flatten_join_citus_mutator(Node *originalNode, JoinMutatorContext *jcontext)
 	if (IsA(originalNode, Var))
 	{
 		Var *var = (Var *) originalNode;
+/*		elog(INFO, "VAR %s", pretty_format_node_dump(nodeToString((Node *) var))); */
+
 		RangeTblEntry *rte = rt_fetch(var->varno, queryTree->rtable);
 
-		if (rte->rtekind == RTE_SUBQUERY)
+		if (rte->rtekind != RTE_JOIN)
 		{
+/*			elog(INFO, "VAR %s", pretty_format_node_dump(nodeToString((Node *) var))); */
 			bool found = 0;
-			JoinAliasMapping *item = hash_search(hashTable, (void *) var,
+			JoinAliasAsKey key = {
+				var->varno, var->varattno, var->vartype, var->vartypmod, var->varcollid,
+				var->varlevelsup
+			};
+			JoinAliasMapping *item = hash_search(hashTable, (void *) &key,
 												 HASH_FIND, &found);
-
-			if(found)
+			if (found)
 			{
-	//			elog(INFO, "ESKI %s", pretty_format_node_dump(nodeToString((Node *) var)));
-				newNode = (Node *)copyObject(item->join);
+/*				elog(INFO, "OLDRTE %s", pretty_format_node_dump(nodeToString((Node *) &key))); */
+				newNode = (Node *) copyObject(item->join);
 				if (IsA(newNode, Var))
+				{
 					((Var *) newNode)->location = var->location;
-		//		elog(INFO, "YENI %s", pretty_format_node_dump(nodeToString((Node *) newNode)));
+				}
+/*				elog(INFO, "NEWNODE %s", pretty_format_node_dump(nodeToString((Node *) newNode))); */
 				return newNode;
 			}
 		}
 	}
 
 	return expression_tree_mutator(originalNode, flatten_join_citus_mutator,
-			  (void *) jcontext);
+								   (void *) jcontext);
 }
 
 
