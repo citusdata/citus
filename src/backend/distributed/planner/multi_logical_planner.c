@@ -210,8 +210,11 @@ static void UpdateVarMappingsForExtendedOpNode(List *columnList,
 											   List *subqueryTargetEntryList);
 static MultiTable * MultiSubqueryPushdownTable(Query *subquery);
 
-
-static Node * flatten_join_citus_mutator(Node *node, JoinMutatorContext *jcontext);
+static void BuildJoinAliasJoinMapping(RTableJoinWalkerState *walkerState,
+									  Query *queryTree);
+static void CreateRTableJoinWalkerStateHash(RTableJoinWalkerState *walkerState);
+static void FlattenJoinAlias(RTableJoinWalkerState *walkerState, Query *queryTree);
+static Node * FlattenJoinAliasCitusMutator(Node *node, JoinMutatorContext *jcontext);
 
 
 /*
@@ -3939,6 +3942,8 @@ SubqueryPushdownMultiNodeTree(Query *queryTree)
 	List *subqueryTargetEntryList = NIL;
 	List *havingClauseColumnList = NIL;
 	DeferredErrorMessage *unsupportedQueryError = NULL;
+	RTableJoinWalkerState *walkerState = NULL;
+	Size walkerStateSize = 0;
 
 	/* verify we can perform distributed planning on this query */
 	unsupportedQueryError = DeferErrorIfQueryNotSupported(queryTree);
@@ -3986,6 +3991,12 @@ SubqueryPushdownMultiNodeTree(Query *queryTree)
 	 *
 	 * Master and worker queries will be created out of this MultiTree at later stages.
 	 */
+	walkerStateSize = sizeof(RTableJoinWalkerState);
+	walkerState = (RTableJoinWalkerState *) palloc0(walkerStateSize);
+
+	CreateRTableJoinWalkerStateHash(walkerState);
+	BuildJoinAliasJoinMapping(walkerState, queryTree);
+	FlattenJoinAlias(walkerState, queryTree);
 
 	/*
 	 * uniqueColumnList contains all columns returned by subquery. Subquery target
@@ -3994,99 +4005,10 @@ SubqueryPushdownMultiNodeTree(Query *queryTree)
 	 * node are indexed with their respective position in uniqueColumnList.
 	 */
 
-/*	PlannerInfo *root = palloc0(sizeof(PlannerInfo)); */
-/*	root->parse = queryTree; */
-/* */
-/*	flatten_join_alias_vars(root, (Node *) queryTree); */
-
 	targetEntryList = queryTree->targetList;
-
-/*	elog(INFO, "INITIALLLLLLLLLL %s", pretty_format_node_dump(nodeToString((Node *)targetEntryList))); */
-
-	RTableJoinWalkerState *rTableJoinWalkerState = NULL;
-	Size rTableJoinWalkerStateSize = sizeof(RTableJoinWalkerState);
-
-	rTableJoinWalkerState = (RTableJoinWalkerState *) palloc0(rTableJoinWalkerStateSize);
-	int32 hashTableSize = 0;
-	HASHCTL hashInfo;
-
-	hashTableSize = 10;
-	memset(&hashInfo, 0, sizeof(hashInfo));
-	hashInfo.keysize = sizeof(JoinAliasAsKey);
-	hashInfo.entrysize = sizeof(JoinAliasMapping);
-	hashInfo.hcxt = CurrentMemoryContext;
-	rTableJoinWalkerState->hashTable = hash_create("RTable Join Alias Map", hashTableSize,
-												   &hashInfo,
-												   HASH_ELEM | HASH_CONTEXT | HASH_BLOBS);
-
-	ListCell *targetCell = NULL;
-
-	foreach(targetCell, targetEntryList)
-	{
-		TargetEntry *tEntry = (TargetEntry *) lfirst(targetCell);
-		Expr *expression = tEntry->expr;
-		if (IsA(expression, Var))
-		{
-			Var *var = (Var *) expression;
-			RangeTblEntry *rteOrg = rt_fetch(var->varno, queryTree->rtable);
-			if (rteOrg->joinaliasvars)
-			{
-				RangeTblEntry *rte = (RangeTblEntry *) list_nth(rteOrg->joinaliasvars,
-																var->varattno - 1);
-				Var *varRTE = ((Var *) rte);
-				JoinAliasAsKey joinKey = {
-					varRTE->varno, varRTE->varattno, varRTE->vartype, varRTE->vartypmod,
-					varRTE->varcollid, varRTE->varlevelsup
-				};
-				((Var *) rte)->location = 0;
-				bool found = 0;
-				JoinAliasMapping *item = hash_search(rTableJoinWalkerState->hashTable,
-													 (void *) &joinKey, HASH_ENTER,
-													 &found);
-				item->join = var;
-
-/*				elog(INFO, "FVAL %s", pretty_format_node_dump(nodeToString((Node *)item->join))); */
-/*				elog(INFO, "FKEY %s", pretty_format_node_dump(nodeToString((Node *)&joinKey))); */
-
-				JoinAliasMapping *itemPut = hash_search(rTableJoinWalkerState->hashTable,
-														(void *) &joinKey, HASH_FIND,
-														&found);
-/*				if (found) */
-/*					elog(INFO, "FVAL_FOUND %s", pretty_format_node_dump(nodeToString((Node *)itemPut->join))); */
-			}
-		}
-	}
-
-	JoinMutatorContext jcontext;
-	jcontext.originalQuery = queryTree;
-	jcontext.hash = rTableJoinWalkerState->hashTable;
-
-	List *newTargetEntryList = NIL;
-	ListCell *targetEntryCell = NULL;
-	foreach(targetEntryCell, targetEntryList)
-	{
-		TargetEntry *originalTargetEntry = (TargetEntry *) lfirst(targetEntryCell);
-		TargetEntry *newTargetEntry = copyObject(originalTargetEntry);
-		Expr *originalExpression = originalTargetEntry->expr;
-		Expr *newExpression = NULL;
-		Node *newNode = flatten_join_citus_mutator((Node *) originalExpression,
-												   &jcontext);
-/*		elog(INFO, "OUTER NEW NODE %s", pretty_format_node_dump(nodeToString(newNode))); */
-		newExpression = (Expr *) newNode;
-		newTargetEntry->expr = newExpression;
-		newTargetEntryList = lappend(newTargetEntryList, copyObject(newTargetEntry));
-/*		elog(INFO, "DEVELOPING %s", pretty_format_node_dump(nodeToString((Node *)newTargetEntryList))); */
-	}
-
-	targetEntryList = newTargetEntryList;
-	queryTree->targetList = targetEntryList;
-/*	elog(INFO, "LASTTTTTTTTTTTTTTTT %s", pretty_format_node_dump(nodeToString((Node *)targetEntryList))); */
-
 	targetColumnList = pull_var_clause_default((Node *) targetEntryList);
-
 	havingClauseColumnList = pull_var_clause_default(queryTree->havingQual);
 	columnList = list_concat(targetColumnList, havingClauseColumnList);
-
 
 	/* create a target entry for each unique column */
 	subqueryTargetEntryList = CreateSubqueryTargetEntryList(columnList);
@@ -4155,8 +4077,86 @@ SubqueryPushdownMultiNodeTree(Query *queryTree)
 }
 
 
+static void
+CreateRTableJoinWalkerStateHash(RTableJoinWalkerState *walkerState)
+{
+	int32 hashTableSize = 10;
+	HASHCTL hashInfo;
+
+	memset(&hashInfo, 0, sizeof(hashInfo));
+	hashInfo.keysize = sizeof(JoinAliasAsKey);
+	hashInfo.entrysize = sizeof(JoinAliasMapping);
+	hashInfo.hcxt = CurrentMemoryContext;
+	walkerState->hashTable = hash_create("RTable Join Alias Map", hashTableSize,
+										 &hashInfo,
+										 HASH_ELEM | HASH_CONTEXT | HASH_BLOBS);
+}
+
+
+static void
+BuildJoinAliasJoinMapping(RTableJoinWalkerState *walkerState, Query *queryTree)
+{
+	ListCell *targetCell = NULL;
+	List *targetEntryList = queryTree->targetList;
+
+	foreach(targetCell, targetEntryList)
+	{
+		TargetEntry *tEntry = (TargetEntry *) lfirst(targetCell);
+		Expr *expression = tEntry->expr;
+		if (IsA(expression, Var))
+		{
+			Var *var = (Var *) expression;
+			RangeTblEntry *outerRte = rt_fetch(var->varno, queryTree->rtable);
+			if (outerRte->rtekind == RTE_JOIN)
+			{
+				bool found = 0;
+				RangeTblEntry *rte = (RangeTblEntry *) list_nth(outerRte->joinaliasvars,
+																var->varattno - 1);
+				Var *varRTE = ((Var *) rte);
+				JoinAliasAsKey joinKey = {
+					varRTE->varno, varRTE->varattno, varRTE->vartype, varRTE->vartypmod,
+					varRTE->varcollid, varRTE->varlevelsup
+				};
+
+				JoinAliasMapping *item = hash_search(walkerState->hashTable,
+													 (void *) &joinKey, HASH_ENTER,
+													 &found);
+				item->join = var;
+			}
+		}
+	}
+}
+
+
+static void
+FlattenJoinAlias(RTableJoinWalkerState *walkerState, Query *queryTree)
+{
+	JoinMutatorContext jcontext;
+	jcontext.originalQuery = queryTree;
+	jcontext.hash = walkerState->hashTable;
+
+	List *newTargetEntryList = NIL;
+	ListCell *targetEntryCell = NULL;
+	List *targetEntryList = queryTree->targetList;
+	foreach(targetEntryCell, targetEntryList)
+	{
+		TargetEntry *originalTargetEntry = (TargetEntry *) lfirst(targetEntryCell);
+		TargetEntry *newTargetEntry = copyObject(originalTargetEntry);
+		Expr *originalExpression = originalTargetEntry->expr;
+		Expr *newExpression = NULL;
+		Node *newNode = FlattenJoinAliasCitusMutator((Node *) originalExpression,
+													 &jcontext);
+		newExpression = (Expr *) newNode;
+		newTargetEntry->expr = newExpression;
+		newTargetEntryList = lappend(newTargetEntryList, copyObject(newTargetEntry));
+	}
+
+	queryTree->targetList = newTargetEntryList;
+}
+
+
 static Node *
-flatten_join_citus_mutator(Node *originalNode, JoinMutatorContext *jcontext)
+FlattenJoinAliasCitusMutator(Node *originalNode, JoinMutatorContext *jcontext)
 {
 	Node *newNode = NULL;
 	Query *queryTree = jcontext->originalQuery;
@@ -4169,13 +4169,10 @@ flatten_join_citus_mutator(Node *originalNode, JoinMutatorContext *jcontext)
 	if (IsA(originalNode, Var))
 	{
 		Var *var = (Var *) originalNode;
-/*		elog(INFO, "VAR %s", pretty_format_node_dump(nodeToString((Node *) var))); */
-
 		RangeTblEntry *rte = rt_fetch(var->varno, queryTree->rtable);
 
 		if (rte->rtekind != RTE_JOIN)
 		{
-/*			elog(INFO, "VAR %s", pretty_format_node_dump(nodeToString((Node *) var))); */
 			bool found = 0;
 			JoinAliasAsKey key = {
 				var->varno, var->varattno, var->vartype, var->vartypmod, var->varcollid,
@@ -4185,19 +4182,17 @@ flatten_join_citus_mutator(Node *originalNode, JoinMutatorContext *jcontext)
 												 HASH_FIND, &found);
 			if (found)
 			{
-/*				elog(INFO, "OLDRTE %s", pretty_format_node_dump(nodeToString((Node *) &key))); */
 				newNode = (Node *) copyObject(item->join);
 				if (IsA(newNode, Var))
 				{
 					((Var *) newNode)->location = var->location;
 				}
-/*				elog(INFO, "NEWNODE %s", pretty_format_node_dump(nodeToString((Node *) newNode))); */
 				return newNode;
 			}
 		}
 	}
 
-	return expression_tree_mutator(originalNode, flatten_join_citus_mutator,
+	return expression_tree_mutator(originalNode, FlattenJoinAliasCitusMutator,
 								   (void *) jcontext);
 }
 
