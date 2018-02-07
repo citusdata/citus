@@ -45,6 +45,7 @@
 #include "utils/relcache.h"
 
 
+
 /* Config variable managed via guc.c */
 bool SubqueryPushdown = false; /* is subquery pushdown enabled */
 
@@ -215,6 +216,9 @@ static void BuildJoinAliasJoinMapping(RTableJoinWalkerState *walkerState,
 static void CreateRTableJoinWalkerStateHash(RTableJoinWalkerState *walkerState);
 static void FlattenJoinAlias(RTableJoinWalkerState *walkerState, Query *queryTree);
 static Node * FlattenJoinAliasCitusMutator(Node *node, JoinMutatorContext *jcontext);
+
+
+static Node *flatten_join_citus_mutator(Node *node, JoinMutatorContext *jcontext);
 
 
 /*
@@ -4007,8 +4011,11 @@ SubqueryPushdownMultiNodeTree(Query *queryTree)
 
 	targetEntryList = queryTree->targetList;
 	targetColumnList = pull_var_clause_default((Node *) targetEntryList);
+
 	havingClauseColumnList = pull_var_clause_default(queryTree->havingQual);
 	columnList = list_concat(targetColumnList, havingClauseColumnList);
+
+
 
 	/* create a target entry for each unique column */
 	subqueryTargetEntryList = CreateSubqueryTargetEntryList(columnList);
