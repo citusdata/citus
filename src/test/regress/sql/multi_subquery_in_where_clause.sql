@@ -547,12 +547,13 @@ WHERE  user_id
 		WHERE f_inner.user_id = f_outer.user_id
           ) ORDER BY 1 LIMIT 3;
 
--- semi join is not on the partition key for the third subquery
+-- semi join is not on the partition key for the third subquery recursively planned
 SELECT user_id
 FROM users_table
 WHERE user_id IN (SELECT user_id FROM users_table WHERE value_1 >= 1 AND value_1 <= 2)
     AND user_id IN (SELECT user_id FROM users_table WHERE value_1 >= 3 AND value_1 <= 4)
-    AND value_2 IN (SELECT user_id FROM users_table WHERE  value_1 >= 5 AND value_1 <= 6);
+    AND value_2 IN (SELECT user_id FROM users_table WHERE  value_1 >= 5 AND value_1 <= 6) 
+ORDER BY 1 DESC LIMIT 5;
 
 CREATE FUNCTION test_join_function(integer, integer) RETURNS bool
     AS 'select $1 > $2;'

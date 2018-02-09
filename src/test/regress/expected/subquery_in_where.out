@@ -1,0 +1,273 @@
+-- General theme is the following queries
+-- SELECT .. FROM distributed_table WHERE [NOT] IN (SELECT FROM subquery_p / distributed_table) 
+SET client_min_messages TO DEBUG1;
+-- a simple subquery in WHERE clause
+SELECT 
+	count(*) 
+FROM
+	users_table
+WHERE
+	user_id IN (SELECT value_2 FROM events_table);
+DEBUG:  generating subplan 1_1 for subquery SELECT value_2 FROM public.events_table
+DEBUG:  Plan 1 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM public.users_table WHERE (user_id IN (SELECT intermediate_result.value_2 FROM read_intermediate_result('1_1'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer)))
+ count 
+-------
+    91
+(1 row)
+
+-- the other way araound
+SELECT 
+	count(*) 
+FROM
+	users_table
+WHERE
+	value_2 IN (SELECT user_id FROM events_table);
+DEBUG:  generating subplan 3_1 for subquery SELECT user_id FROM public.events_table
+DEBUG:  Plan 3 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM public.users_table WHERE (value_2 IN (SELECT intermediate_result.user_id FROM read_intermediate_result('3_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)))
+ count 
+-------
+    92
+(1 row)
+
+-- similar queries with NOT IN
+SELECT 
+	count(*) 
+FROM
+	users_table
+WHERE
+	user_id NOT IN (SELECT value_2 FROM events_table);
+DEBUG:  generating subplan 5_1 for subquery SELECT value_2 FROM public.events_table
+DEBUG:  Plan 5 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM public.users_table WHERE (NOT (user_id IN (SELECT intermediate_result.value_2 FROM read_intermediate_result('5_1'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer))))
+ count 
+-------
+    10
+(1 row)
+
+-- the other way araound with NOT IN
+SELECT 
+	count(*) 
+FROM
+	users_table
+WHERE
+	value_2 NOT IN (SELECT user_id FROM events_table);
+DEBUG:  generating subplan 7_1 for subquery SELECT user_id FROM public.events_table
+DEBUG:  Plan 7 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM public.users_table WHERE (NOT (value_2 IN (SELECT intermediate_result.user_id FROM read_intermediate_result('7_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer))))
+ count 
+-------
+     9
+(1 row)
+
+-- similar query with an expression in the target list
+SELECT 
+	count(*) 
+FROM
+	users_table
+WHERE
+	user_id IN (SELECT value_2 / 2 FROM events_table);
+DEBUG:  generating subplan 9_1 for subquery SELECT (value_2 / 2) FROM public.events_table
+DEBUG:  Plan 9 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM public.users_table WHERE (user_id IN (SELECT intermediate_result."?column?" FROM read_intermediate_result('9_1'::text, 'binary'::citus_copy_format) intermediate_result("?column?" integer)))
+ count 
+-------
+    25
+(1 row)
+
+-- Subqueries in where clause with greater than operator
+SELECT 
+	count(*) 
+FROM
+	users_table
+WHERE
+	value_1 > (SELECT avg(value_2) FROM events_table WHERE false GROUP BY user_id);
+DEBUG:  generating subplan 11_1 for subquery SELECT avg(value_2) AS avg FROM public.events_table WHERE false GROUP BY user_id
+DEBUG:  Plan 11 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM public.users_table WHERE ((value_1)::numeric > (SELECT intermediate_result.avg FROM read_intermediate_result('11_1'::text, 'binary'::citus_copy_format) intermediate_result(avg numeric)))
+ count 
+-------
+     0
+(1 row)
+
+SELECT * FROM users_table WHERE 1 < (SELECT count(*) FROM events_table WHERE user_id > 10 GROUP BY user_id);
+DEBUG:  generating subplan 13_1 for subquery SELECT count(*) AS count FROM public.events_table WHERE (user_id > 10) GROUP BY user_id
+DEBUG:  Plan 13 query after replacing subqueries and CTEs: SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.users_table WHERE (1 < (SELECT intermediate_result.count FROM read_intermediate_result('13_1'::text, 'binary'::citus_copy_format) intermediate_result(count bigint)))
+ user_id | time | value_1 | value_2 | value_3 | value_4 
+---------+------+---------+---------+---------+---------
+(0 rows)
+
+-- subquery with ANY operator
+SELECT 
+	*
+FROM 
+	users_table 
+WHERE 
+	value_1= ANY(SELECT user_id FROM events_table) ORDER BY 1,2,3,4 LIMIT 5 ;
+DEBUG:  generating subplan 15_1 for subquery SELECT user_id FROM public.events_table
+DEBUG:  Plan 15 query after replacing subqueries and CTEs: SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.users_table WHERE (value_1 IN (SELECT intermediate_result.user_id FROM read_intermediate_result('15_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer))) ORDER BY user_id, "time", value_1, value_2 LIMIT 5
+DEBUG:  push down of limit count: 5
+ user_id |              time               | value_1 | value_2 | value_3 | value_4 
+---------+---------------------------------+---------+---------+---------+---------
+       1 | Wed Nov 22 22:51:43.132261 2017 |       4 |       0 |       3 |        
+       1 | Thu Nov 23 03:32:50.803031 2017 |       3 |       2 |       1 |        
+       1 | Thu Nov 23 09:26:42.145043 2017 |       1 |       3 |       3 |        
+       1 | Thu Nov 23 11:11:24.40789 2017  |       3 |       4 |       0 |        
+       1 | Thu Nov 23 11:44:57.515981 2017 |       4 |       3 |       4 |        
+(5 rows)
+
+SELECT * FROM users_table WHERE row(user_id, value_1) = (SELECT user_id, value_2 FROM events_table WHERE false);
+DEBUG:  generating subplan 17_1 for subquery SELECT user_id, value_2 FROM public.events_table WHERE false
+DEBUG:  Plan 17 query after replacing subqueries and CTEs: SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.users_table WHERE ((user_id, value_1) = (SELECT intermediate_result.user_id, intermediate_result.value_2 FROM read_intermediate_result('17_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, value_2 integer)))
+ user_id | time | value_1 | value_2 | value_3 | value_4 
+---------+------+---------+---------+---------+---------
+(0 rows)
+
+SELECT * FROM users_table WHERE row(user_id, value_1) = (SELECT user_id, value_2 FROM events_table WHERE user_id = 15);
+DEBUG:  generating subplan 19_1 for subquery SELECT user_id, value_2 FROM public.events_table WHERE (user_id = 15)
+DEBUG:  Plan 19 query after replacing subqueries and CTEs: SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.users_table WHERE ((user_id, value_1) = (SELECT intermediate_result.user_id, intermediate_result.value_2 FROM read_intermediate_result('19_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, value_2 integer)))
+ user_id | time | value_1 | value_2 | value_3 | value_4 
+---------+------+---------+---------+---------+---------
+(0 rows)
+
+SELECT 
+	count(*)
+FROM 
+	users_table 
+WHERE 
+ EXISTS (SELECT user_id FROM events_table);
+DEBUG:  generating subplan 21_1 for subquery SELECT user_id FROM public.events_table
+DEBUG:  Plan 21 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM public.users_table WHERE (EXISTS (SELECT intermediate_result.user_id FROM read_intermediate_result('21_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)))
+ count 
+-------
+   101
+(1 row)
+
+SELECT 
+	count(*)
+FROM 
+	users_table 
+WHERE 
+ NOT EXISTS (SELECT user_id FROM events_table);
+DEBUG:  generating subplan 23_1 for subquery SELECT user_id FROM public.events_table
+DEBUG:  Plan 23 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM public.users_table WHERE (NOT (EXISTS (SELECT intermediate_result.user_id FROM read_intermediate_result('23_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer))))
+ count 
+-------
+     0
+(1 row)
+
+-- this is kind of a weird that, subquery in WHERE would be replaced earlier
+-- once we implement that feature
+SELECT count(*)
+FROM users_table_ref
+WHERE user_id NOT IN
+    (SELECT users_table.value_2
+     FROM users_table
+     JOIN users_table_ref AS u2 ON users_table.value_2 = u2.value_2);
+ERROR:  relation "users_table_ref" does not exist
+LINE 2: FROM users_table_ref
+             ^
+SELECT 
+	count(*) 
+FROM 
+	users_table, events_table 
+WHERE 
+	users_table.user_id = events_table.user_id AND 
+	value_1 IN (SELECT user_id FROM users_table);
+DEBUG:  generating subplan 25_1 for subquery SELECT user_id FROM public.users_table
+DEBUG:  Plan 25 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM public.users_table, public.events_table WHERE ((users_table.user_id = events_table.user_id) AND (users_table.value_1 IN (SELECT intermediate_result.user_id FROM read_intermediate_result('25_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer))))
+ count 
+-------
+  1540
+(1 row)
+
+-- replace three queries
+SELECT 
+	count(*) 
+FROM 
+	users_table, events_table 
+WHERE 
+	users_table.user_id = events_table.user_id AND 
+	users_table.value_1 IN (SELECT user_id FROM users_table) AND
+	users_table.value_2 IN (SELECT user_id FROM users_table) AND
+	users_table.value_3 IN (SELECT user_id FROM users_table);
+DEBUG:  generating subplan 27_1 for subquery SELECT user_id FROM public.users_table
+DEBUG:  generating subplan 27_2 for subquery SELECT user_id FROM public.users_table
+DEBUG:  generating subplan 27_3 for subquery SELECT user_id FROM public.users_table
+DEBUG:  Plan 27 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM public.users_table, public.events_table WHERE ((users_table.user_id = events_table.user_id) AND (users_table.value_1 IN (SELECT intermediate_result.user_id FROM read_intermediate_result('27_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer))) AND (users_table.value_2 IN (SELECT intermediate_result.user_id FROM read_intermediate_result('27_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer))) AND (users_table.value_3 IN (SELECT intermediate_result.user_id FROM read_intermediate_result('27_3'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer))))
+ count 
+-------
+  1300
+(1 row)
+
+-- replace two queries
+SELECT 
+	count(*) 
+FROM 
+	users_table, events_table 
+WHERE 
+	users_table.user_id = events_table.user_id AND 
+	users_table.user_id IN (SELECT user_id FROM users_table) AND
+	users_table.value_2 IN (SELECT user_id + 1 FROM users_table) AND
+	users_table.value_3 IN (SELECT user_id + 2 FROM users_table);
+DEBUG:  generating subplan 31_1 for subquery SELECT (user_id + 1) FROM public.users_table
+DEBUG:  generating subplan 31_2 for subquery SELECT (user_id + 2) FROM public.users_table
+DEBUG:  Plan 31 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM public.users_table, public.events_table WHERE ((users_table.user_id = events_table.user_id) AND (users_table.user_id IN (SELECT users_table_1.user_id FROM public.users_table users_table_1)) AND (users_table.value_2 IN (SELECT intermediate_result."?column?" FROM read_intermediate_result('31_1'::text, 'binary'::citus_copy_format) intermediate_result("?column?" integer))) AND (users_table.value_3 IN (SELECT intermediate_result."?column?" FROM read_intermediate_result('31_2'::text, 'binary'::citus_copy_format) intermediate_result("?column?" integer))))
+ count 
+-------
+   665
+(1 row)
+
+-- replace single query
+SELECT 
+	count(*) 
+FROM 
+	users_table, events_table 
+WHERE 
+	users_table.user_id = events_table.user_id AND 
+	users_table.user_id IN (SELECT user_id FROM users_table) AND
+	users_table.user_id IN (SELECT user_id FROM users_table) AND
+	users_table.value_3 IN (SELECT user_id + 2 FROM users_table);
+DEBUG:  generating subplan 34_1 for subquery SELECT (user_id + 2) FROM public.users_table
+DEBUG:  Plan 34 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM public.users_table, public.events_table WHERE ((users_table.user_id = events_table.user_id) AND (users_table.user_id IN (SELECT users_table_1.user_id FROM public.users_table users_table_1)) AND (users_table.user_id IN (SELECT users_table_1.user_id FROM public.users_table users_table_1)) AND (users_table.value_3 IN (SELECT intermediate_result."?column?" FROM read_intermediate_result('34_1'::text, 'binary'::citus_copy_format) intermediate_result("?column?" integer))))
+ count 
+-------
+  1036
+(1 row)
+
+-- replace single query
+SELECT 
+	count(*) 
+FROM 
+	users_table, events_table 
+WHERE 
+	users_table.user_id = events_table.user_id AND 
+	users_table.user_id IN (SELECT user_id FROM users_table) AND
+	users_table.user_id IN (SELECT user_id FROM users_table) AND
+	users_table.user_id IN (SELECT user_id + 2 FROM users_table);
+DEBUG:  generating subplan 36_1 for subquery SELECT (user_id + 2) FROM public.users_table
+DEBUG:  Plan 36 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM public.users_table, public.events_table WHERE ((users_table.user_id = events_table.user_id) AND (users_table.user_id IN (SELECT users_table_1.user_id FROM public.users_table users_table_1)) AND (users_table.user_id IN (SELECT users_table_1.user_id FROM public.users_table users_table_1)) AND (users_table.user_id IN (SELECT intermediate_result."?column?" FROM read_intermediate_result('36_1'::text, 'binary'::citus_copy_format) intermediate_result("?column?" integer))))
+ count 
+-------
+  1212
+(1 row)
+
+-- this is pusbdownable
+SELECT 
+	count(*) 
+FROM 
+	users_table, events_table 
+WHERE 
+	users_table.user_id = events_table.user_id AND 
+	users_table.user_id IN (SELECT user_id FROM users_table) AND
+	users_table.user_id IN (SELECT user_id FROM users_table) AND
+	users_table.user_id IN (SELECT user_id FROM users_table);
+ count 
+-------
+  1749
+(1 row)
+
+-- not supported at all
+SELECT 
+	user_id, AVG(value_1) 
+FROM 
+	users_table GROUP BY user_id 
+HAVING 
+	AVG(value_1)>=ALL(SELECT AVG(value_2) FROM events_table GROUP BY user_id);
+ERROR:  could not run distributed query with subquery outside the FROM and WHERE clauses
+HINT:  Consider using an equality filter on the distributed table's partition column.

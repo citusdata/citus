@@ -260,11 +260,26 @@ DEBUG:  Plan 45 query after replacing subqueries and CTEs: SELECT u.x, u.y, test
 ---+---+---
 (0 rows)
 
--- distributed table in WHERE clause, but not FROM clause still disallowed
+-- distributed table in WHERE clause, and not FROM clause still allowed
 SELECT * FROM ((SELECT x FROM test) UNION (SELECT x FROM (SELECT x FROM local_test) as foo WHERE x IN (SELECT x FROM test))) u ORDER BY 1;
 DEBUG:  generating subplan 48_1 for subquery SELECT x FROM recursive_set_local.local_test
-ERROR:  cannot pushdown the subquery
-DETAIL:  Complex subqueries and CTEs are not allowed in the FROM clause when the query has subqueries in the WHERE clause
+DEBUG:  generating subplan 48_2 for subquery SELECT x FROM recursive_set_local.test
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+DEBUG:  generating subplan 48_3 for subquery SELECT x FROM (SELECT intermediate_result.x FROM read_intermediate_result('48_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer)) foo WHERE (x IN (SELECT intermediate_result.x FROM read_intermediate_result('48_2'::text, 'binary'::citus_copy_format) intermediate_result(x integer)))
+DEBUG:  generating subplan 48_4 for subquery SELECT x FROM recursive_set_local.test
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+DEBUG:  generating subplan 48_5 for subquery SELECT intermediate_result.x FROM read_intermediate_result('48_4'::text, 'binary'::citus_copy_format) intermediate_result(x integer) UNION SELECT intermediate_result.x FROM read_intermediate_result('48_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer)
+DEBUG:  Plan 48 query after replacing subqueries and CTEs: SELECT x FROM (SELECT intermediate_result.x FROM read_intermediate_result('48_5'::text, 'binary'::citus_copy_format) intermediate_result(x integer)) u ORDER BY x
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ x 
+---
+ 1
+ 2
+(2 rows)
+
 SET citus.enable_repartition_joins TO ON;
 --  repartition is recursively planned before the set operation
 (SELECT x FROM test) INTERSECT (SELECT t1.x FROM test as t1, test as t2 WHERE t1.x = t2.y LIMIT 2) INTERSECT (((SELECT x FROM local_test) UNION ALL (SELECT x FROM test)) INTERSECT (SELECT i FROM generate_series(0, 100) i)) ORDER BY 1 DESC; 
@@ -299,11 +314,11 @@ DEBUG:  pruning merge fetch taskId 11
 DETAIL:  Creating dependency on merge taskId 24
 DEBUG:  cannot use real time executor with repartition jobs
 HINT:  Since you enabled citus.enable_repartition_joins Citus chose to use task-tracker.
-DEBUG:  generating subplan 50_1 for subquery SELECT t1.x FROM recursive_set_local.test t1, recursive_set_local.test t2 WHERE (t1.x = t2.y) LIMIT 2
-DEBUG:  generating subplan 50_2 for subquery SELECT x FROM recursive_set_local.local_test
-DEBUG:  generating subplan 50_3 for subquery SELECT x FROM recursive_set_local.test
-DEBUG:  generating subplan 50_4 for subquery SELECT x FROM recursive_set_local.test
-DEBUG:  Plan 50 query after replacing subqueries and CTEs: SELECT intermediate_result.x FROM read_intermediate_result('50_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer) INTERSECT SELECT intermediate_result.x FROM read_intermediate_result('50_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer) INTERSECT ((SELECT intermediate_result.x FROM read_intermediate_result('50_2'::text, 'binary'::citus_copy_format) intermediate_result(x integer) UNION ALL SELECT intermediate_result.x FROM read_intermediate_result('50_4'::text, 'binary'::citus_copy_format) intermediate_result(x integer)) INTERSECT SELECT i.i FROM generate_series(0, 100) i(i)) ORDER BY 1 DESC
+DEBUG:  generating subplan 53_1 for subquery SELECT t1.x FROM recursive_set_local.test t1, recursive_set_local.test t2 WHERE (t1.x = t2.y) LIMIT 2
+DEBUG:  generating subplan 53_2 for subquery SELECT x FROM recursive_set_local.local_test
+DEBUG:  generating subplan 53_3 for subquery SELECT x FROM recursive_set_local.test
+DEBUG:  generating subplan 53_4 for subquery SELECT x FROM recursive_set_local.test
+DEBUG:  Plan 53 query after replacing subqueries and CTEs: SELECT intermediate_result.x FROM read_intermediate_result('53_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer) INTERSECT SELECT intermediate_result.x FROM read_intermediate_result('53_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer) INTERSECT ((SELECT intermediate_result.x FROM read_intermediate_result('53_2'::text, 'binary'::citus_copy_format) intermediate_result(x integer) UNION ALL SELECT intermediate_result.x FROM read_intermediate_result('53_4'::text, 'binary'::citus_copy_format) intermediate_result(x integer)) INTERSECT SELECT i.i FROM generate_series(0, 100) i(i)) ORDER BY 1 DESC
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  x 

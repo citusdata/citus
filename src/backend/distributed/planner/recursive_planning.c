@@ -111,10 +111,39 @@ typedef struct VarLevelsUpWalkerContext
 } VarLevelsUpWalkerContext;
 
 
+/*
+ * QueryWalkerWithRTEIdentity
+ */
+typedef struct QueryWalkerWithRTEIdentity
+{
+	int rteIdentity;
+	Query *query;
+} QueryWalkerWithRTEIdentity;
+
+
 /* local function forward declarations */
 static DeferredErrorMessage * RecursivelyPlanSubqueriesAndCTEs(Query *query,
 															   RecursivePlanningContext *
 															   context);
+static bool ShouldRecursivelyPlanNonColocatedJoins(Query *query,
+												   RecursivePlanningContext *context);
+static void RecursivelyPlanNonColocatedJoins(Query *query,
+											 RecursivePlanningContext *context);
+static bool ExtractQueryWalkerWithRTEIdentity(Node *node,
+											  QueryWalkerWithRTEIdentity *context);
+static void RecursivelyPlanSubqueriesInWhereClause(Query *query,
+												   RecursivePlanningContext *context,
+												   List *queryAttributeEquivalenceList,
+												   RelationRestrictionContext *
+												   queryRelationRestrictionContext,
+												   RelationRestrictionContext *
+												   fromClauseRelationRestrictionContext,
+												   Relids rteIdentitiesOfSubqueriesInWhere);
+
+static Relids RTEIdentitiesOfSubqueriesInWhere(Query *query);
+static bool ShouldRecursivelyPlanAllSublinks(Query *query);
+static bool RecursivelyPlanAllSubqueries(Node *node,
+										 RecursivePlanningContext *planningContext);
 static DeferredErrorMessage * RecursivelyPlanCTEs(Query *query,
 												  RecursivePlanningContext *context);
 static bool RecursivelyPlanSubqueryWalker(Node *node, RecursivePlanningContext *context);
@@ -238,7 +267,318 @@ RecursivelyPlanSubqueriesAndCTEs(Query *query, RecursivePlanningContext *context
 		RecursivelyPlanSetOperations(query, (Node *) query->setOperations, context);
 	}
 
+	/*
+	 * For certain cases, we should recursively plan all the sublinks to sucessefully
+	 * execute the query.
+	 */
+	if (ShouldRecursivelyPlanAllSublinks(query))
+	{
+		RecursivelyPlanAllSubqueries(query->jointree->quals, context);
+	}
+
+	/*
+	 * Each subquery is individually can be executed successfully. However,
+	 * they cannot be executed in combination with each other via non-colocated
+	 * joins (i.e., joins on non distribution keys).
+	 */
+	if (ShouldRecursivelyPlanNonColocatedJoins(query, context))
+	{
+		RecursivelyPlanNonColocatedJoins(query, context);
+	}
+
 	return NULL;
+}
+
+
+/*
+ * ShouldRecursivelyPlanNonColocatedJoins returns true if not all the distributed
+ * relations are joined on their distribution columns.
+ *
+ * The function returns false if the query contains any local relations since
+ * joins among distributed relations and local relations are not supported.
+ */
+static bool
+ShouldRecursivelyPlanNonColocatedJoins(Query *query, RecursivePlanningContext *context)
+{
+	PlannerRestrictionContext *filteredRestrictionContext = NULL;
+
+	/* we may consider handinling regular non-equi joins seperately */
+	if (context->level == 0 && !query->hasSubLinks)
+	{
+		return false;
+	}
+
+	/* set operations are not our target */
+	if (ContainsUnionSubquery(query) || query->setOperations != NULL)
+	{
+		return false;
+	}
+
+	/* direct joins with local tables are not supported by any of Citus planners */
+	if (FindNodeCheckInRangeTableList(query->rtable, IsLocalTableRTE))
+	{
+		return false;
+	}
+
+	/* trigger recursive planning if there is no partition key equality */
+	filteredRestrictionContext =
+		FilterPlannerRestrictionForQuery(context->plannerRestrictionContext, query);
+	if (!RestrictionEquivalenceForPartitionKeys(filteredRestrictionContext))
+	{
+		return true;
+	}
+
+	return false;
+}
+
+
+/*
+ * RecursivelyPlanNonColocatedJoins picks the necessary subquery (or subqueries)
+ * and recursively plans to make the input query executable.
+ *
+ * The non colocated joins could appear in the FROM clause and/or via subqueries
+ * in WHERE clause.
+ *
+ * The function currently only supports recursive planning for subqueries in
+ * WHERE clause.
+ *
+ * TODO: Implement the necessary logic for supporting non colocated joins in
+ * the FROM clause.
+ */
+static void
+RecursivelyPlanNonColocatedJoins(Query *query, RecursivePlanningContext *context)
+{
+	Relids rteIdentitiesOfSubqueriesInWhere = RTEIdentitiesOfSubqueriesInWhere(query);
+
+	PlannerRestrictionContext *queryRestrictionContext =
+		FilterPlannerRestrictionForQuery(context->plannerRestrictionContext, query);
+	List *queryAttributeEquivalenceList =
+		GenerateAllAttributedEquivalances(queryRestrictionContext);
+	RelationRestrictionContext *queryRelationRestrictionContext =
+		queryRestrictionContext->relationRestrictionContext;
+	RelationRestrictionContext *fromClauseRelationRestrictionContext =
+		ExcludeRelationRestrictionContext(queryRelationRestrictionContext,
+										  rteIdentitiesOfSubqueriesInWhere);
+
+	/*
+	 * We have more than one relation in the FROM clause and they don't have a distribution
+	 * key equality.
+	 */
+	if (list_length(fromClauseRelationRestrictionContext->relationRestrictionList) > 1 &&
+		!EquivalenceListContainsRelationsEquality(queryAttributeEquivalenceList,
+												  fromClauseRelationRestrictionContext))
+	{
+		/*
+		 * TODO: Implement recursive planning on non-colocated joins in the FROM clause. Note that
+		 * we should also consider OUTER JOINs that are non-colocated.
+		 */
+		return;
+	}
+
+	/*
+	 * At this point we're sure that FROM clause entries are safe to pushdown but not the
+	 * whole query. Thus, we should recursively plan some (or all) subqueries in WHERE clause
+	 * to be able to execute the whole query.
+	 */
+
+	/*
+	 * First check whether we'd want to recursively plan all subqueries in WHERE clause.
+	 * This could happen if all FROM subqueries are replaced above.
+	 */
+	if (ShouldRecursivelyPlanAllSublinks(query))
+	{
+		RecursivelyPlanAllSubqueries(query->jointree->quals, context);
+	}
+	else
+	{
+		RecursivelyPlanSubqueriesInWhereClause(query, context,
+											   queryAttributeEquivalenceList,
+											   queryRelationRestrictionContext,
+											   fromClauseRelationRestrictionContext,
+											   rteIdentitiesOfSubqueriesInWhere);
+	}
+}
+
+
+/*
+ * RecursivelyPlanSubqueriesInWhereClause replaces the subqueries in WHERE clause
+ * which are not joined on distribution column with the FROM clause subqueries.
+ */
+static void
+RecursivelyPlanSubqueriesInWhereClause(Query *query,
+									   RecursivePlanningContext *context,
+									   List *queryAttributeEquivalenceList,
+									   RelationRestrictionContext *
+									   queryRelationRestrictionContext,
+									   RelationRestrictionContext *
+									   fromClauseRelationRestrictionContext,
+									   Relids rteIdentitiesOfSubqueriesInWhere)
+{
+	int rteIdentity = -1;
+	List *fromClauseRelationRestrictionList =
+		fromClauseRelationRestrictionContext->relationRestrictionList;
+
+	/*
+	 * Iterate on each of the RTE_RELATION in the sublinks. When a non-equi join
+	 * among the Ffound, recursively plan
+	 */
+	while ((rteIdentity =
+				bms_next_member(rteIdentitiesOfSubqueriesInWhere, rteIdentity)) >= 0)
+	{
+		RelationRestrictionContext *relationRestrictionContext =
+			FilterRelationRestrictionContext(queryRelationRestrictionContext,
+											 bms_make_singleton(rteIdentity));
+		RelationRestriction *relationRestriction =
+			(RelationRestriction *)
+			linitial(relationRestrictionContext->relationRestrictionList);
+
+		List *copyOfFromClauseRelationRestrictionList =
+			list_copy(fromClauseRelationRestrictionList);
+
+		List *mergedRelationRestrictionList =
+			lappend(copyOfFromClauseRelationRestrictionList, relationRestriction);
+
+		RelationRestrictionContext *mergedRestrictionContext =
+			palloc0(sizeof(RelationRestrictionContext));
+
+		mergedRestrictionContext->relationRestrictionList = mergedRelationRestrictionList;
+
+		/*
+		 * We found an RTE_RELATION in the subquery in WHERE clause, which doesn't have
+		 * a distribution key equality with the from clause sub(queries). Thus, recursively
+		 * plan the subquery that this RTE_RELATION resides in.
+		 */
+		if (!EquivalenceListContainsRelationsEquality(queryAttributeEquivalenceList,
+													  mergedRestrictionContext))
+		{
+			QueryWalkerWithRTEIdentity queryWalkerWithRTEIdentity;
+
+			queryWalkerWithRTEIdentity.rteIdentity = rteIdentity;
+
+			ExtractQueryWalkerWithRTEIdentity(query->jointree->quals,
+											  &queryWalkerWithRTEIdentity);
+
+			if (queryWalkerWithRTEIdentity.query != NULL)
+			{
+				RecursivelyPlanSubquery(queryWalkerWithRTEIdentity.query, context);
+			}
+		}
+	}
+}
+
+
+/*
+ * ExtractQueryWalkerWithRTEIdentity walks over a query top-down, finds the query with
+ * the given rte identity returns finializes the traversal.
+ */
+static bool
+ExtractQueryWalkerWithRTEIdentity(Node *node, QueryWalkerWithRTEIdentity *context)
+{
+	if (node == NULL)
+	{
+		return false;
+	}
+
+	if (IsA(node, Query))
+	{
+		Query *query = (Query *) node;
+		Relids queryRTEIdentites = QueryRteIdentities(query);
+
+		if (bms_is_member(context->rteIdentity, queryRTEIdentites))
+		{
+			context->query = query;
+
+			/* we're done */
+			return false;
+		}
+
+		return query_tree_walker(query, ExtractQueryWalkerWithRTEIdentity, context, 0);
+	}
+
+	return expression_tree_walker(node, ExtractQueryWalkerWithRTEIdentity, context);
+}
+
+
+/*
+ * RTEIdentitiesOfSubqueriesInWhere returns a bitmap of the rte identities of the
+ * relations that appear in the subqueries in WHERE clause for the given query.
+ */
+static Relids
+RTEIdentitiesOfSubqueriesInWhere(Query *query)
+{
+	List *sublinkList = SublinkList(query);
+	Relids allSublinkRteIdentities = NULL;
+	ListCell *subLinkCell = NULL;
+
+	foreach(subLinkCell, sublinkList)
+	{
+		SubLink *sublink = (SubLink *) lfirst(subLinkCell);
+		Node *subselect = sublink->subselect;
+		Query *subquery = NULL;
+		Relids subqueryRteIdentities = NULL;
+
+		if (!IsA(subselect, Query))
+		{
+			continue;
+		}
+
+		subquery = (Query *) subselect;
+
+		subqueryRteIdentities = QueryRteIdentities(subquery);
+
+		allSublinkRteIdentities = bms_union(allSublinkRteIdentities,
+											subqueryRteIdentities);
+	}
+
+	return allSublinkRteIdentities;
+}
+
+
+/*
+ * ShouldRecursivelyPlanAllSublinks returns true when the input query
+ * contains only recurring tuples in the FROM clause and has subqueries
+ * in WHERE clause. Otherwise, the function returns false.
+ */
+static bool
+ShouldRecursivelyPlanAllSublinks(Query *query)
+{
+	List *sublinkList = SublinkList(query);
+
+	if (sublinkList != NIL &&
+		!FindNodeCheckInRangeTableList(query->rtable, IsDistributedTableRTE))
+	{
+		return true;
+	}
+
+	return false;
+}
+
+
+/*
+ * RecursivelyPlanAllSubqueries descends into an expression tree and recursively
+ * plans all subqueries found from the top.
+ */
+static bool
+RecursivelyPlanAllSubqueries(Node *node, RecursivePlanningContext *planningContext)
+{
+	if (node == NULL)
+	{
+		return false;
+	}
+
+	if (IsA(node, Query))
+	{
+		Query *query = (Query *) node;
+
+		if (FindNodeCheckInRangeTableList(query->rtable, IsDistributedTableRTE))
+		{
+			RecursivelyPlanSubquery(query, planningContext);
+		}
+
+		return false;
+	}
+
+	return expression_tree_walker(node, RecursivelyPlanAllSubqueries, planningContext);
 }
 
 
