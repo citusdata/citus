@@ -2517,7 +2517,7 @@ PrepareWorkerNodeCache(void)
 static void
 InitializeWorkerNodeCache(void)
 {
-	HTAB *oldWorkerNodeHash = NULL;
+	HTAB *newWorkerNodeHash = NULL;
 	List *workerNodeList = NIL;
 	ListCell *workerNodeCell = NULL;
 	HASHCTL info;
@@ -2543,10 +2543,7 @@ InitializeWorkerNodeCache(void)
 	info.match = WorkerNodeCompare;
 	hashFlags = HASH_ELEM | HASH_FUNCTION | HASH_CONTEXT | HASH_COMPARE;
 
-	oldWorkerNodeHash = WorkerNodeHash;
-	WorkerNodeHash = hash_create("Worker Node Hash",
-								 maxTableSize,
-								 &info, hashFlags);
+	newWorkerNodeHash = hash_create("Worker Node Hash", maxTableSize, &info, hashFlags);
 
 	/* read the list from pg_dist_node */
 	workerNodeList = ReadWorkerNodes(includeNodesFromOtherClusters);
@@ -2565,7 +2562,7 @@ InitializeWorkerNodeCache(void)
 
 		/* search for the worker node in the hash, and then insert the values */
 		hashKey = (void *) currentNode;
-		workerNode = (WorkerNode *) hash_search(WorkerNodeHash, hashKey,
+		workerNode = (WorkerNode *) hash_search(newWorkerNodeHash, hashKey,
 												HASH_ENTER, &handleFound);
 
 		/* fill the newly allocated workerNode in the cache */
@@ -2593,7 +2590,7 @@ InitializeWorkerNodeCache(void)
 	}
 
 	/* now, safe to destroy the old hash */
-	hash_destroy(oldWorkerNodeHash);
+	hash_destroy(WorkerNodeHash);
 
 	if (WorkerNodeArray != NULL)
 	{
@@ -2602,7 +2599,7 @@ InitializeWorkerNodeCache(void)
 
 	WorkerNodeCount = newWorkerNodeCount;
 	WorkerNodeArray = newWorkerNodeArray;
-
+	WorkerNodeHash = newWorkerNodeHash;
 }
 
 
