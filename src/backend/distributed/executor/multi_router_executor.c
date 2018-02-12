@@ -1469,11 +1469,10 @@ StoreQueryResult(CitusScanState *scanState, MultiConnection *connection,
 				else
 				{
 					columnArray[columnIndex] = PQgetvalue(result, rowIndex, columnIndex);
-					if (SubPlanLevel > 0)
+					if (SubPlanLevel > 0 && executionStats)
 					{
-						executionStats->totalIntermediateResultSize += PQgetlength(result,
-																				   rowIndex,
-																				   columnIndex);
+						int rowLength = PQgetlength(result, rowIndex, columnIndex);
+						executionStats->totalIntermediateResultSize += rowLength;
 					}
 				}
 			}

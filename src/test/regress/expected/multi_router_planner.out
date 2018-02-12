@@ -428,13 +428,55 @@ WITH RECURSIVE hierarchy as (
 				ce.company_id = 2))
 SELECT * FROM hierarchy WHERE LEVEL <= 2;
 ERROR:  recursive CTEs are not supported in distributed queries
--- CTE with queries other than SELECT is not supported
+-- Test router modifying CTEs
 WITH new_article AS (
-    INSERT INTO articles_hash VALUES (1,  1, 'arsenous', 9572) RETURNING *
+    INSERT INTO articles_hash VALUES (1,  1, 'arsenous', 9) RETURNING *
 )
 SELECT * FROM new_article;
 DEBUG:  data-modifying statements are not supported in the WITH clauses of distributed queries
-ERROR:  data-modifying statements are not supported in the WITH clauses of distributed queries
+DEBUG:  generating subplan 81_1 for CTE new_article: INSERT INTO public.articles_hash (id, author_id, title, word_count) VALUES (1, 1, 'arsenous'::character varying, 9) RETURNING id, author_id, title, word_count
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+DEBUG:  Plan 81 query after replacing subqueries and CTEs: SELECT id, author_id, title, word_count FROM (SELECT intermediate_result.id, intermediate_result.author_id, intermediate_result.title, intermediate_result.word_count FROM read_intermediate_result('81_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, author_id bigint, title character varying(20), word_count integer)) new_article
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ id | author_id |  title   | word_count 
+----+-----------+----------+------------
+  1 |         1 | arsenous |          9
+(1 row)
+
+WITH update_article AS (
+    UPDATE articles_hash SET word_count = 10 WHERE id = 1 AND word_count = 9 RETURNING *
+)
+SELECT * FROM update_article;
+DEBUG:  data-modifying statements are not supported in the WITH clauses of distributed queries
+DEBUG:  generating subplan 83_1 for CTE update_article: UPDATE public.articles_hash SET word_count = 10 WHERE ((id = 1) AND (word_count = 9)) RETURNING id, author_id, title, word_count
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+DEBUG:  Plan 83 query after replacing subqueries and CTEs: SELECT id, author_id, title, word_count FROM (SELECT intermediate_result.id, intermediate_result.author_id, intermediate_result.title, intermediate_result.word_count FROM read_intermediate_result('83_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, author_id bigint, title character varying(20), word_count integer)) update_article
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ id | author_id |  title   | word_count 
+----+-----------+----------+------------
+  1 |         1 | arsenous |         10
+(1 row)
+
+WITH delete_article AS (
+    DELETE FROM articles_hash WHERE id = 1 AND word_count = 10 RETURNING *
+)
+SELECT * FROM delete_article;
+DEBUG:  data-modifying statements are not supported in the WITH clauses of distributed queries
+DEBUG:  generating subplan 85_1 for CTE delete_article: DELETE FROM public.articles_hash WHERE ((id = 1) AND (word_count = 10)) RETURNING id, author_id, title, word_count
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+DEBUG:  Plan 85 query after replacing subqueries and CTEs: SELECT id, author_id, title, word_count FROM (SELECT intermediate_result.id, intermediate_result.author_id, intermediate_result.title, intermediate_result.word_count FROM read_intermediate_result('85_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, author_id bigint, title character varying(20), word_count integer)) delete_article
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ id | author_id |  title   | word_count 
+----+-----------+----------+------------
+  1 |         1 | arsenous |         10
+(1 row)
+
 -- Modifying statement in nested CTE case is covered by PostgreSQL itself
 WITH new_article AS (
     WITH nested_cte AS (
@@ -557,8 +599,8 @@ DEBUG:  Plan is router executable
 SELECT articles_hash.id,test.word_count
 FROM articles_hash, (SELECT id, word_count FROM articles_hash) AS test WHERE test.id = articles_hash.id
 ORDER BY test.word_count DESC, articles_hash.id LIMIT 5;
-DEBUG:  generating subplan 88_1 for subquery SELECT id, word_count FROM public.articles_hash
-DEBUG:  Plan 88 query after replacing subqueries and CTEs: SELECT articles_hash.id, test.word_count FROM public.articles_hash, (SELECT intermediate_result.id, intermediate_result.word_count FROM read_intermediate_result('88_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, word_count integer)) test WHERE (test.id = articles_hash.id) ORDER BY test.word_count DESC, articles_hash.id LIMIT 5
+DEBUG:  generating subplan 93_1 for subquery SELECT id, word_count FROM public.articles_hash
+DEBUG:  Plan 93 query after replacing subqueries and CTEs: SELECT articles_hash.id, test.word_count FROM public.articles_hash, (SELECT intermediate_result.id, intermediate_result.word_count FROM read_intermediate_result('93_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, word_count integer)) test WHERE (test.id = articles_hash.id) ORDER BY test.word_count DESC, articles_hash.id LIMIT 5
 DEBUG:  push down of limit count: 5
  id | word_count 
 ----+------------
@@ -573,8 +615,8 @@ SELECT articles_hash.id,test.word_count
 FROM articles_hash, (SELECT id, word_count FROM articles_hash) AS test 
 WHERE test.id = articles_hash.id and articles_hash.author_id = 1
 ORDER BY articles_hash.id;
-DEBUG:  generating subplan 90_1 for subquery SELECT id, word_count FROM public.articles_hash
-DEBUG:  Plan 90 query after replacing subqueries and CTEs: SELECT articles_hash.id, test.word_count FROM public.articles_hash, (SELECT intermediate_result.id, intermediate_result.word_count FROM read_intermediate_result('90_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, word_count integer)) test WHERE ((test.id = articles_hash.id) AND (articles_hash.author_id = 1)) ORDER BY articles_hash.id
+DEBUG:  generating subplan 95_1 for subquery SELECT id, word_count FROM public.articles_hash
+DEBUG:  Plan 95 query after replacing subqueries and CTEs: SELECT articles_hash.id, test.word_count FROM public.articles_hash, (SELECT intermediate_result.id, intermediate_result.word_count FROM read_intermediate_result('95_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, word_count integer)) test WHERE ((test.id = articles_hash.id) AND (articles_hash.author_id = 1)) ORDER BY articles_hash.id
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  id | word_count 
@@ -690,10 +732,10 @@ SELECT a.author_id as first_author, b.word_count as second_word_count
 	WHERE a.author_id = 2 and a.author_id = b.author_id
 	LIMIT 3;
 DEBUG:  Found no worker with all shard placements
-DEBUG:  generating subplan 99_1 for CTE single_shard: SELECT id, author_id, title, word_count FROM public.articles_single_shard_hash
+DEBUG:  generating subplan 104_1 for CTE single_shard: SELECT id, author_id, title, word_count FROM public.articles_single_shard_hash
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-DEBUG:  Plan 99 query after replacing subqueries and CTEs: SELECT a.author_id AS first_author, b.word_count AS second_word_count FROM public.articles_hash a, (SELECT intermediate_result.id, intermediate_result.author_id, intermediate_result.title, intermediate_result.word_count FROM read_intermediate_result('99_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, author_id bigint, title character varying(20), word_count integer)) b WHERE ((a.author_id = 2) AND (a.author_id = b.author_id)) LIMIT 3
+DEBUG:  Plan 104 query after replacing subqueries and CTEs: SELECT a.author_id AS first_author, b.word_count AS second_word_count FROM public.articles_hash a, (SELECT intermediate_result.id, intermediate_result.author_id, intermediate_result.title, intermediate_result.word_count FROM read_intermediate_result('104_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, author_id bigint, title character varying(20), word_count integer)) b WHERE ((a.author_id = 2) AND (a.author_id = b.author_id)) LIMIT 3
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  first_author | second_word_count 

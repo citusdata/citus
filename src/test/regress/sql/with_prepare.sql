@@ -198,7 +198,6 @@ FROM
 WHERE
 	events_user_id IN (SELECT user_id FROM users_table);
 
-
 EXECUTE prepared_test_1;
 EXECUTE prepared_test_1;
 EXECUTE prepared_test_1;
@@ -242,5 +241,10 @@ EXECUTE prepared_test_6;
 EXECUTE prepared_test_6;
 
 EXECUTE prepared_partition_column_insert(1);
+EXECUTE prepared_partition_column_insert(2);
+EXECUTE prepared_partition_column_insert(3);
+EXECUTE prepared_partition_column_insert(4);
+EXECUTE prepared_partition_column_insert(5);
+EXECUTE prepared_partition_column_insert(6);
 
 DEALLOCATE ALL;

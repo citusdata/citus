@@ -323,20 +323,20 @@ UPDATE users_test_table SET value_2 = 5 FROM events_test_table WHERE users_test_
 ERROR:  cannot perform distributed planning for the given modification
 DETAIL:  Joins are not supported in distributed modifications.
 UPDATE users_test_table SET value_2 = (SELECT value_3 FROM users_test_table);
-ERROR:  subqueries are not supported in modifications across multiple shards
-DETAIL:  Consider using an equality filter on partition column "user_id" to target a single shard.
+ERROR:  cannot perform distributed planning for the given modification
+DETAIL:  Joins are not supported in distributed modifications.
 UPDATE users_test_table SET value_2 = (SELECT value_2 FROM events_test_table);
-ERROR:  subqueries are not supported in modifications across multiple shards
-DETAIL:  Consider using an equality filter on partition column "user_id" to target a single shard.
+ERROR:  cannot perform distributed planning for the given modification
+DETAIL:  Joins are not supported in distributed modifications.
 DELETE FROM users_test_table USING events_test_table WHERE users_test_table.user_id = events_test_table.user_id;
 ERROR:  cannot perform distributed planning for the given modification
 DETAIL:  Joins are not supported in distributed modifications.
 DELETE FROM users_test_table WHERE users_test_table.user_id = (SELECT user_id FROM events_test_table);
-ERROR:  subqueries are not supported in modifications across multiple shards
-DETAIL:  Consider using an equality filter on partition column "user_id" to target a single shard.
+ERROR:  cannot perform distributed planning for the given modification
+DETAIL:  Joins are not supported in distributed modifications.
 DELETE FROM users_test_table WHERE users_test_table.user_id = (SELECT value_1 FROM users_test_table);
-ERROR:  subqueries are not supported in modifications across multiple shards
-DETAIL:  Consider using an equality filter on partition column "user_id" to target a single shard.
+ERROR:  cannot perform distributed planning for the given modification
+DETAIL:  Joins are not supported in distributed modifications.
 -- Cursors are not supported
 BEGIN;
 DECLARE test_cursor CURSOR FOR SELECT * FROM users_test_table;

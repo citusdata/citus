@@ -224,6 +224,7 @@ extern bool ExtractRangeTableRelationWalker(Node *node, List **rangeTableList);
 extern bool ExtractRangeTableEntryWalker(Node *node, List **rangeTableList);
 extern List * pull_var_clause_default(Node *node);
 extern bool OperatorImplementsEquality(Oid opno);
+extern bool FindNodeCheck(Node *node, bool (*check)(Node *));
 
 
 #endif   /* MULTI_LOGICAL_PLANNER_H */

@@ -964,12 +964,12 @@ SELECT * FROM summary_table ORDER BY id;
 -- unsupported multi-shard updates
 UPDATE summary_table SET average_value = average_query.average FROM (
 	SELECT avg(value) AS average FROM raw_table) average_query;
-ERROR:  subqueries are not supported in modifications across multiple shards
-DETAIL:  Consider using an equality filter on partition column "id" to target a single shard.
+ERROR:  cannot perform distributed planning for the given modification
+DETAIL:  Joins are not supported in distributed modifications.
 UPDATE summary_table SET average_value = average_value + 1 WHERE id =
   (SELECT id FROM raw_table WHERE value > 100);
-ERROR:  subqueries are not supported in modifications across multiple shards
-DETAIL:  Consider using an equality filter on partition column "id" to target a single shard.
+ERROR:  cannot perform distributed planning for the given modification
+DETAIL:  Joins are not supported in distributed modifications.
 -- test complex queries
 UPDATE summary_table
 SET
@@ -1108,8 +1108,8 @@ SELECT master_modify_multiple_shards('
 		SELECT avg(value) AS average FROM raw_table WHERE id = 1
 		) average_query
 	WHERE id = 1');
-ERROR:  subqueries are not supported in modifications across multiple shards
-DETAIL:  Consider using an equality filter on partition column "id" to target a single shard.
+ERROR:  cannot perform distributed planning for the given modification
+DETAIL:  Joins are not supported in distributed modifications.
 -- test connection API via using COPY
 -- COPY on SELECT part
 BEGIN;

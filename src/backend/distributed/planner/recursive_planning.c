@@ -667,15 +667,6 @@ RecursivelyPlanCTEs(Query *query, RecursivePlanningContext *planningContext)
 		return NULL;
 	}
 
-	if (query->hasModifyingCTE)
-	{
-		/* we could easily support these, but it's a little scary */
-		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-							 "data-modifying statements are not supported in "
-							 "the WITH clauses of distributed queries",
-							 NULL, NULL);
-	}
-
 	if (query->hasRecursive)
 	{
 		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
@@ -1335,8 +1326,18 @@ BuildSubPlanResultQuery(Query *subquery, List *columnAliasList, uint64 planId,
 	Oid copyFormatId = BinaryCopyFormatId();
 	int columnAliasCount = list_length(columnAliasList);
 
+	List *targetEntryList = NIL;
+	if (subquery->returningList)
+	{
+		targetEntryList = subquery->returningList;
+	}
+	else
+	{
+		targetEntryList = subquery->targetList;
+	}
+
 	/* build the target list and column definition list */
-	foreach(targetEntryCell, subquery->targetList)
+	foreach(targetEntryCell, targetEntryList)
 	{
 		TargetEntry *targetEntry = (TargetEntry *) lfirst(targetEntryCell);
 		Node *targetExpr = (Node *) targetEntry->expr;
