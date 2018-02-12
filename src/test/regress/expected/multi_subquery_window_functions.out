@@ -791,7 +791,7 @@ ORDER BY
 LIMIT
   10;
 ERROR:  could not run distributed query because the window function that is used cannot be pushed down
-HINT:  Window functions are supported in two ways. Either add an equality filter on the distributed tables' partition column or use the window functions inside a subquery with a PARTITION BY clause containing the distribution column
+HINT:  Window functions are supported in two ways. Either add an equality filter on the distributed tables' partition column or use the window functions with a PARTITION BY clause containing the distribution column
 -- user needs to supply partition by which should
 -- include the distribution key
 SELECT
@@ -809,7 +809,7 @@ ORDER BY
 LIMIT
   10;
 ERROR:  could not run distributed query because the window function that is used cannot be pushed down
-HINT:  Window functions are supported in two ways. Either add an equality filter on the distributed tables' partition column or use the window functions inside a subquery with a PARTITION BY clause containing the distribution column
+HINT:  Window functions are supported in two ways. Either add an equality filter on the distributed tables' partition column or use the window functions with a PARTITION BY clause containing the distribution column
 -- user needs to supply partition by which should
 -- include the distribution key
 SELECT
@@ -827,7 +827,7 @@ ORDER BY
 LIMIT
   10;
 ERROR:  could not run distributed query because the window function that is used cannot be pushed down
-HINT:  Window functions are supported in two ways. Either add an equality filter on the distributed tables' partition column or use the window functions inside a subquery with a PARTITION BY clause containing the distribution column
+HINT:  Window functions are supported in two ways. Either add an equality filter on the distributed tables' partition column or use the window functions with a PARTITION BY clause containing the distribution column
 -- w2 should not be pushed down
 SELECT * FROM
 (
@@ -844,7 +844,7 @@ SELECT * FROM
 ORDER BY 3 DESC, 1 DESC, 2 DESC NULLS LAST
 LIMIT 10;
 ERROR:  could not run distributed query because the window function that is used cannot be pushed down
-HINT:  Window functions are supported in two ways. Either add an equality filter on the distributed tables' partition column or use the window functions inside a subquery with a PARTITION BY clause containing the distribution column
+HINT:  Window functions are supported in two ways. Either add an equality filter on the distributed tables' partition column or use the window functions with a PARTITION BY clause containing the distribution column
 -- w2 should not be pushed down
 SELECT * FROM
 (
@@ -863,7 +863,7 @@ ORDER BY
 LIMIT
   10;
 ERROR:  could not run distributed query because the window function that is used cannot be pushed down
-HINT:  Window functions are supported in two ways. Either add an equality filter on the distributed tables' partition column or use the window functions inside a subquery with a PARTITION BY clause containing the distribution column
+HINT:  Window functions are supported in two ways. Either add an equality filter on the distributed tables' partition column or use the window functions with a PARTITION BY clause containing the distribution column
 -- GROUP BY includes the partition key, but not the WINDOW function
 SELECT
    user_id, time, my_rank
@@ -884,7 +884,7 @@ ORDER BY
 LIMIT
   10;
 ERROR:  could not run distributed query because the window function that is used cannot be pushed down
-HINT:  Window functions are supported in two ways. Either add an equality filter on the distributed tables' partition column or use the window functions inside a subquery with a PARTITION BY clause containing the distribution column
+HINT:  Window functions are supported in two ways. Either add an equality filter on the distributed tables' partition column or use the window functions with a PARTITION BY clause containing the distribution column
 -- GROUP BY includes the partition key, but not the WINDOW function
 SELECT
    user_id, time, my_rank
@@ -905,7 +905,7 @@ ORDER BY
 LIMIT
   10;
 ERROR:  could not run distributed query because the window function that is used cannot be pushed down
-HINT:  Window functions are supported in two ways. Either add an equality filter on the distributed tables' partition column or use the window functions inside a subquery with a PARTITION BY clause containing the distribution column
+HINT:  Window functions are supported in two ways. Either add an equality filter on the distributed tables' partition column or use the window functions with a PARTITION BY clause containing the distribution column
 -- Overriding window function but not supported
 SELECT * FROM (
   SELECT
@@ -924,7 +924,7 @@ SELECT * FROM (
 ORDER BY
 1,2,3;
 ERROR:  could not run distributed query because the window function that is used cannot be pushed down
-HINT:  Window functions are supported in two ways. Either add an equality filter on the distributed tables' partition column or use the window functions inside a subquery with a PARTITION BY clause containing the distribution column
+HINT:  Window functions are supported in two ways. Either add an equality filter on the distributed tables' partition column or use the window functions with a PARTITION BY clause containing the distribution column
 -- Aggregate function on distribution column should error out
 SELECT * FROM (
   SELECT
@@ -937,7 +937,7 @@ SELECT * FROM (
 ORDER BY
   1 DESC, 2 DESC;
 ERROR:  could not run distributed query because the window function that is used cannot be pushed down
-HINT:  Window functions are supported in two ways. Either add an equality filter on the distributed tables' partition column or use the window functions inside a subquery with a PARTITION BY clause containing the distribution column
+HINT:  Window functions are supported in two ways. Either add an equality filter on the distributed tables' partition column or use the window functions with a PARTITION BY clause containing the distribution column
 -- test with reference table partitioned on only a column from reference table
 SELECT *
 FROM
@@ -952,7 +952,7 @@ ORDER BY
 LIMIT
   20;
 ERROR:  could not run distributed query because the window function that is used cannot be pushed down
-HINT:  Window functions are supported in two ways. Either add an equality filter on the distributed tables' partition column or use the window functions inside a subquery with a PARTITION BY clause containing the distribution column
+HINT:  Window functions are supported in two ways. Either add an equality filter on the distributed tables' partition column or use the window functions with a PARTITION BY clause containing the distribution column
 -- UNION ALL with only one of them is not partitioned over distribution column which
 -- should not be allowed.
 SELECT
@@ -975,7 +975,7 @@ GROUP BY user_id
 ORDER BY 1 DESC
 LIMIT 5;
 ERROR:  could not run distributed query because the window function that is used cannot be pushed down
-HINT:  Window functions are supported in two ways. Either add an equality filter on the distributed tables' partition column or use the window functions inside a subquery with a PARTITION BY clause containing the distribution column
+HINT:  Window functions are supported in two ways. Either add an equality filter on the distributed tables' partition column or use the window functions with a PARTITION BY clause containing the distribution column
 -- UNION with only one subquery which has a partition on non-distribution column should
 -- error out
 SELECT *
@@ -1012,5 +1012,5 @@ FROM (
 ORDER BY 2 DESC, 1 DESC
 LIMIT 5;
 ERROR:  could not run distributed query because the window function that is used cannot be pushed down
-HINT:  Window functions are supported in two ways. Either add an equality filter on the distributed tables' partition column or use the window functions inside a subquery with a PARTITION BY clause containing the distribution column
+HINT:  Window functions are supported in two ways. Either add an equality filter on the distributed tables' partition column or use the window functions with a PARTITION BY clause containing the distribution column
 DROP VIEW subq;

@@ -161,6 +161,7 @@ static MultiNode * SubqueryMultiNodeTree(Query *originalQuery,
 										 plannerRestrictionContext);
 static MultiNode * SubqueryPushdownMultiNodeTree(Query *queryTree);
 
+static void FlattenJoinVars(List *columnList, Query *queryTree);
 static List * CreateSubqueryTargetEntryList(List *columnList);
 static void UpdateVarMappingsForExtendedOpNode(List *columnList,
 											   List *subqueryTargetEntryList);
@@ -212,6 +213,7 @@ static bool
 ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery)
 {
 	List *qualifierList = NIL;
+	StringInfo errorMessage = NULL;
 
 	/*
 	 * We check the existence of subqueries in FROM clause on the modified query
@@ -249,6 +251,13 @@ ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery)
 	 */
 	qualifierList = QualifierList(rewrittenQuery->jointree);
 	if (DeferErrorIfUnsupportedClause(qualifierList) != NULL)
+	{
+		return true;
+	}
+
+	/* check if the query has a window function and it is safe to pushdown */
+	if (originalQuery->hasWindowFuncs &&
+		SafeToPushdownWindowFunction(originalQuery, &errorMessage))
 	{
 		return true;
 	}
@@ -850,8 +859,8 @@ DeferErrorIfCannotPushdownSubquery(Query *subqueryTree, bool outerMostQueryHasLi
 	 * We support window functions when the window function
 	 * is partitioned on distribution column.
 	 */
-	if (subqueryTree->windowClause && !SafeToPushdownWindowFunction(subqueryTree,
-																	&errorInfo))
+	if (subqueryTree->hasWindowFuncs && !SafeToPushdownWindowFunction(subqueryTree,
+																	  &errorInfo))
 	{
 		errorDetail = (char *) errorInfo->data;
 		preconditionsSatisfied = false;
@@ -2079,6 +2088,7 @@ DeferErrorIfQueryNotSupported(Query *queryTree)
 	bool hasComplexJoinOrder = false;
 	bool hasComplexRangeTableType = false;
 	bool preconditionsSatisfied = true;
+	StringInfo errorInfo = NULL;
 	const char *errorHint = NULL;
 	const char *joinHint = "Consider joining tables on partition column and have "
 						   "equal filter on joining columns.";
@@ -2097,15 +2107,16 @@ DeferErrorIfQueryNotSupported(Query *queryTree)
 		errorHint = filterHint;
 	}
 
-	if (queryTree->hasWindowFuncs)
+	if (queryTree->hasWindowFuncs &&
+		!SafeToPushdownWindowFunction(queryTree, &errorInfo))
 	{
 		preconditionsSatisfied = false;
 		errorMessage = "could not run distributed query because the window "
 					   "function that is used cannot be pushed down";
 		errorHint = "Window functions are supported in two ways. Either add "
 					"an equality filter on the distributed tables' partition "
-					"column or use the window functions inside a subquery with "
-					"a PARTITION BY clause containing the distribution column";
+					"column or use the window functions with a PARTITION BY "
+					"clause containing the distribution column";
 	}
 
 	if (queryTree->setOperations)
@@ -3135,6 +3146,8 @@ MultiExtendedOpNode(Query *queryTree)
 	extendedOpNode->havingQual = queryTree->havingQual;
 	extendedOpNode->distinctClause = queryTree->distinctClause;
 	extendedOpNode->hasDistinctOn = queryTree->hasDistinctOn;
+	extendedOpNode->hasWindowFuncs = queryTree->hasWindowFuncs;
+	extendedOpNode->windowClause = queryTree->windowClause;
 
 	return extendedOpNode;
 }
@@ -3396,7 +3409,8 @@ pull_var_clause_default(Node *node)
 	 * PVC_REJECT_PLACEHOLDERS is implicit if PVC_INCLUDE_PLACEHOLDERS
 	 * isn't specified.
 	 */
-	List *columnList = pull_var_clause(node, PVC_RECURSE_AGGREGATES);
+	List *columnList = pull_var_clause(node, PVC_RECURSE_AGGREGATES |
+									   PVC_RECURSE_WINDOWFUNCS);
 
 	return columnList;
 }
@@ -3768,6 +3782,8 @@ SubqueryPushdownMultiNodeTree(Query *queryTree)
 	havingClauseColumnList = pull_var_clause_default(queryTree->havingQual);
 	columnList = list_concat(targetColumnList, havingClauseColumnList);
 
+	FlattenJoinVars(columnList, queryTree);
+
 	/* create a target entry for each unique column */
 	subqueryTargetEntryList = CreateSubqueryTargetEntryList(columnList);
 
@@ -3832,6 +3848,73 @@ SubqueryPushdownMultiNodeTree(Query *queryTree)
 	currentTopNode = (MultiNode *) extendedOpNode;
 
 	return currentTopNode;
+}
+
+
+/*
+ * FlattenJoinVars iterates over provided columnList to identify
+ * Var's that are referenced from join RTE, and reverts back to their
+ * original RTEs.
+ *
+ * This is required because Postgres allows columns to be referenced using
+ * a join alias. Therefore the same column from a table could be referenced
+ * twice using its absolute table name (t1.a), and without table name (a).
+ * This is a problem when one of them is inside the group by clause and the
+ * other is not. Postgres is smart about it to detect that both target columns
+ * resolve to the same thing, and allows a single group by clause to cover
+ * both target entries when standard planner is called. Since we operate on
+ * the original query, we want to make sure we provide correct varno/varattno
+ * values to Postgres so that it could produce valid query.
+ *
+ * Only exception is that, if a join is given an alias name, we do not want to
+ * flatten those var's. If we do, deparsing fails since it expects to see a join
+ * alias, and cannot access the RTE in the join tree by their names.
+ */
+static void
+FlattenJoinVars(List *columnList, Query *queryTree)
+{
+	ListCell *columnCell = NULL;
+	List *rteList = queryTree->rtable;
+
+	foreach(columnCell, columnList)
+	{
+		Var *column = (Var *) lfirst(columnCell);
+		RangeTblEntry *columnRte = NULL;
+		PlannerInfo *root = NULL;
+
+		Assert(IsA(column, Var));
+
+		/*
+		 * if join does not have an alias, it is copied over join rte.
+		 * There is no need to find the JoinExpr to check whether it has
+		 * an alias defined.
+		 *
+		 * We use the planner's flatten_join_alias_vars routine to do
+		 * the flattening; it wants a PlannerInfo root node, which
+		 * fortunately can be mostly dummy.
+		 */
+		columnRte = rt_fetch(column->varno, rteList);
+		if (columnRte->rtekind == RTE_JOIN && columnRte->alias == NULL)
+		{
+			Var *normalizedVar = NULL;
+
+			if (root == NULL)
+			{
+				root = makeNode(PlannerInfo);
+				root->parse = (queryTree);
+				root->planner_cxt = CurrentMemoryContext;
+				root->hasJoinRTEs = true;
+			}
+
+			normalizedVar = (Var *) flatten_join_alias_vars(root, (Node *) column);
+
+			/*
+			 * We need to copy values over existing one to make sure it is updated on
+			 * respective places.
+			 */
+			memcpy(column, normalizedVar, sizeof(Var));
+		}
+	}
 }
 
 
