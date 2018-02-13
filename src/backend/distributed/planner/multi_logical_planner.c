@@ -90,7 +90,6 @@ static bool ExtractSetOperationStatmentWalker(Node *node, List **setOperationLis
 static DeferredErrorMessage * DeferErrorIfUnsupportedTableCombination(Query *queryTree);
 static bool WindowPartitionOnDistributionColumn(Query *query);
 static bool AllTargetExpressionsAreColumnReferences(List *targetEntryList);
-static bool IsDistributedTableRTE(Node *node);
 static FieldSelect * CompositeFieldRecursive(Expr *expression, Query *query);
 static bool FullCompositeFieldList(List *compositeFieldList);
 static MultiNode * MultiNodeTree(Query *queryTree);
@@ -657,7 +656,8 @@ DeferErrorIfFromClauseRecurs(Query *queryTree)
 							 "cannot pushdown the subquery",
 							 "Reference tables are not allowed in FROM "
 							 "clause when the query has subqueries in "
-							 "WHERE clause", NULL);
+							 "WHERE clause and it references a column "
+							 "from another query", NULL);
 	}
 	else if (recurType == RECURRING_TUPLES_FUNCTION)
 	{
@@ -665,7 +665,8 @@ DeferErrorIfFromClauseRecurs(Query *queryTree)
 							 "cannot pushdown the subquery",
 							 "Functions are not allowed in FROM "
 							 "clause when the query has subqueries in "
-							 "WHERE clause", NULL);
+							 "WHERE clause and it references a column "
+							 "from another query", NULL);
 	}
 	else if (recurType == RECURRING_TUPLES_RESULT_FUNCTION)
 	{
@@ -673,7 +674,8 @@ DeferErrorIfFromClauseRecurs(Query *queryTree)
 							 "cannot pushdown the subquery",
 							 "Complex subqueries and CTEs are not allowed in "
 							 "the FROM clause when the query has subqueries in the "
-							 "WHERE clause", NULL);
+							 "WHERE clause and it references a column "
+							 "from another query", NULL);
 	}
 	else if (recurType == RECURRING_TUPLES_EMPTY_JOIN_TREE)
 	{
@@ -681,7 +683,8 @@ DeferErrorIfFromClauseRecurs(Query *queryTree)
 							 "cannot pushdown the subquery",
 							 "Subqueries without FROM are not allowed in FROM "
 							 "clause when the outer query has subqueries in "
-							 "WHERE clause", NULL);
+							 "WHERE clause and it references a column "
+							 "from another query", NULL);
 	}
 
 	/*
@@ -1330,7 +1333,7 @@ QueryContainsDistributedTableRTE(Query *query)
  * is a range table relation entry that points to a distributed
  * relation (i.e., excluding reference tables).
  */
-static bool
+bool
 IsDistributedTableRTE(Node *node)
 {
 	RangeTblEntry *rangeTableEntry = NULL;

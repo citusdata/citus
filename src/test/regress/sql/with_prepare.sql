@@ -185,6 +185,18 @@ ORDER BY
   1, 2, 3, 4, 5, 6
 LIMIT 10;
 
+-- Prepare a statement with a sublink in WHERE clause and recurring tuple in FORM
+PREPARE prepared_test_6 AS
+WITH event_id AS (
+	SELECT user_id as events_user_id, time as events_time, event_type
+	FROM events_table
+)
+SELECT
+	count(*) 
+FROM
+	event_id
+WHERE
+	events_user_id IN (SELECT user_id FROM users_table);
 
 
 EXECUTE prepared_test_1;
@@ -221,6 +233,13 @@ EXECUTE prepared_test_5(3, 4, 5);
 EXECUTE prepared_test_5(4, 5, 6);
 EXECUTE prepared_test_5(5, 6, 7);
 EXECUTE prepared_test_5(6, 7, 8);
+
+EXECUTE prepared_test_6;
+EXECUTE prepared_test_6;
+EXECUTE prepared_test_6;
+EXECUTE prepared_test_6;
+EXECUTE prepared_test_6;
+EXECUTE prepared_test_6;
 
 EXECUTE prepared_partition_column_insert(1);
 
