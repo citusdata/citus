@@ -162,7 +162,7 @@ QueryContainsDistributionKeyEquality(PlannerRestrictionContext *plannerRestricti
 		return true;
 	}
 
-	if (ContainsUnionSubquery(originalQuery))
+	if (originalQuery->setOperations || ContainsUnionSubquery(originalQuery))
 	{
 		return SafeToPushdownUnionSubquery(plannerRestrictionContext);
 	}
