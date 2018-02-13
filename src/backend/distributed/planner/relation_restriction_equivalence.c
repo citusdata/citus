@@ -144,6 +144,34 @@ static bool JoinRestrictionListExistsInContext(JoinRestriction *joinRestrictionI
 
 
 /*
+ * QueryContainsDistributionKeyEquality returns true if either
+ *    (i)  there exists join in the query and all relations joined on their
+ *         partition keys
+ *    (ii) there exists only union set operations and all relations has
+ *         partition keys in the same ordinal position in the query
+ */
+bool
+QueryContainsDistributionKeyEquality(PlannerRestrictionContext *plannerRestrictionContext,
+									 Query *originalQuery)
+{
+	bool restrictionEquivalenceForPartitionKeys =
+		RestrictionEquivalenceForPartitionKeys(plannerRestrictionContext);
+
+	if (restrictionEquivalenceForPartitionKeys)
+	{
+		return true;
+	}
+
+	if (ContainsUnionSubquery(originalQuery))
+	{
+		return SafeToPushdownUnionSubquery(plannerRestrictionContext);
+	}
+
+	return false;
+}
+
+
+/*
  * SafeToPushdownUnionSubquery returns true if all the relations are returns
  * partition keys in the same ordinal position and there is no reference table
  * exists.
