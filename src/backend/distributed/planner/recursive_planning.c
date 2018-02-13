@@ -86,6 +86,7 @@ typedef struct RecursivePlanningContext
 {
 	int level;
 	uint64 planId;
+	bool queryContainsDistributionKeyEquality; /* used for some optimizations */
 	List *subPlanList;
 	PlannerRestrictionContext *plannerRestrictionContext;
 } RecursivePlanningContext;
@@ -121,7 +122,11 @@ static bool RecursivelyPlanAllSubqueries(Node *node,
 static DeferredErrorMessage * RecursivelyPlanCTEs(Query *query,
 												  RecursivePlanningContext *context);
 static bool RecursivelyPlanSubqueryWalker(Node *node, RecursivePlanningContext *context);
-static bool ShouldRecursivelyPlanSubquery(Query *subquery);
+static bool ShouldRecursivelyPlanSubquery(Query *subquery,
+										  RecursivePlanningContext *context);
+static bool SubqueryContainsDistributionKeyEquality(Query *subquery,
+													PlannerRestrictionContext *
+													restrictionContext);
 static bool ShouldRecursivelyPlanSetOperation(Query *query,
 											  RecursivePlanningContext *context);
 static void RecursivelyPlanSetOperations(Query *query, Node *node,
@@ -161,6 +166,21 @@ GenerateSubplansForSubqueriesAndCTEs(uint64 planId, Query *originalQuery,
 	context.planId = planId;
 	context.subPlanList = NIL;
 	context.plannerRestrictionContext = plannerRestrictionContext;
+
+	/*
+	 * Calculating the distribution key equality upfront is a trade-off for us.
+	 *
+	 * When the originalQuery contains the distribution key equality, we'd be
+	 * able to skip further checks for each lower level subqueries (i.e., if the
+	 * all query contains distribution key equality, each subquery also contains
+	 * distribution key equality.)
+	 *
+	 * When the originalQuery doesn't contain the distribution key equality,
+	 * calculating this wouldn't help us at all, we should individually check
+	 * each each subquery and subquery joins among subqueries.
+	 */
+	context.queryContainsDistributionKeyEquality =
+		QueryContainsDistributionKeyEquality(plannerRestrictionContext, originalQuery);
 
 	error = RecursivelyPlanSubqueriesAndCTEs(originalQuery, &context);
 	if (error != NULL)
@@ -497,7 +517,7 @@ RecursivelyPlanSubqueryWalker(Node *node, RecursivePlanningContext *context)
 		 * Recursively plan this subquery if it cannot be pushed down and is
 		 * eligible for recursive planning.
 		 */
-		if (ShouldRecursivelyPlanSubquery(query))
+		if (ShouldRecursivelyPlanSubquery(query, context))
 		{
 			RecursivelyPlanSubquery(query, context);
 		}
@@ -517,7 +537,7 @@ RecursivelyPlanSubqueryWalker(Node *node, RecursivePlanningContext *context)
  * For the details, see the cases in the function.
  */
 static bool
-ShouldRecursivelyPlanSubquery(Query *subquery)
+ShouldRecursivelyPlanSubquery(Query *subquery, RecursivePlanningContext *context)
 {
 	if (FindNodeCheckInRangeTableList(subquery->rtable, IsLocalTableRTE))
 	{
@@ -534,6 +554,22 @@ ShouldRecursivelyPlanSubquery(Query *subquery)
 	else if (DeferErrorIfCannotPushdownSubquery(subquery, false) == NULL)
 	{
 		/*
+		 * We should do one more check for the distribution key equality.
+		 *
+		 * If the input query to the planner doesn't contain distribution key equality,
+		 * we should further check whether this individual subquery contains or not.
+		 *
+		 * If all the relations are not joined on their distribution keys for the
+		 * subquery, we cannot pushdown the it, thus, recursively plan it.
+		 */
+		if (!context->queryContainsDistributionKeyEquality &&
+			!SubqueryContainsDistributionKeyEquality(subquery,
+													 context->plannerRestrictionContext))
+		{
+			return true;
+		}
+
+		/*
 		 * Citus can pushdown this subquery, no need to recursively
 		 * plan which is much expensive than pushdown.
 		 */
@@ -546,6 +582,39 @@ ShouldRecursivelyPlanSubquery(Query *subquery)
 		 * Citus can plan this and execute via repartitioning. Thus,
 		 * no need to recursively plan.
 		 */
+		return false;
+	}
+
+	return true;
+}
+
+
+/*
+ * SubqueryContainsDistributionKeyEquality is a wrapper function
+ * for QueryContainsDistributionKeyEquality(). Here, we filter the
+ * planner restrictions for the given subquery and do the restriction
+ * equality checks on the filtered restriction.
+ */
+static bool
+SubqueryContainsDistributionKeyEquality(Query *subquery,
+										PlannerRestrictionContext *restrictionContext)
+{
+	bool queryContainsDistributionKeyEquality = false;
+	PlannerRestrictionContext *filteredRestrictionContext = NULL;
+
+	/* we don't support distribution eq. checks for CTEs yet */
+	if (subquery->cteList != NIL)
+	{
+		return false;
+	}
+
+	filteredRestrictionContext =
+		FilterPlannerRestrictionForQuery(restrictionContext, subquery);
+
+	queryContainsDistributionKeyEquality =
+		QueryContainsDistributionKeyEquality(filteredRestrictionContext, subquery);
+	if (!queryContainsDistributionKeyEquality)
+	{
 		return false;
 	}
 

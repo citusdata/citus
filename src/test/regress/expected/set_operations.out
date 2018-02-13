@@ -776,7 +776,6 @@ DEBUG:  Plan is router executable
 
 --  repartition is recursively planned with the set operation
 (SELECT x FROM test) INTERSECT (SELECT t1.x FROM test as t1, test as t2 WHERE t1.x = t2.y) ORDER BY 1 DESC;
-DEBUG:  generating subplan 164_1 for subquery SELECT x FROM recursive_union.test
 DEBUG:  join prunable for task partitionId 0 and 1
 DEBUG:  join prunable for task partitionId 0 and 2
 DEBUG:  join prunable for task partitionId 0 and 3
@@ -807,8 +806,9 @@ DEBUG:  pruning merge fetch taskId 11
 DETAIL:  Creating dependency on merge taskId 24
 DEBUG:  cannot use real time executor with repartition jobs
 HINT:  Since you enabled citus.enable_repartition_joins Citus chose to use task-tracker.
-DEBUG:  generating subplan 164_2 for subquery SELECT t1.x FROM recursive_union.test t1, recursive_union.test t2 WHERE (t1.x = t2.y)
-DEBUG:  Plan 164 query after replacing subqueries and CTEs: SELECT intermediate_result.x FROM read_intermediate_result('164_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer) INTERSECT SELECT intermediate_result.x FROM read_intermediate_result('164_2'::text, 'binary'::citus_copy_format) intermediate_result(x integer) ORDER BY 1 DESC
+DEBUG:  generating subplan 164_1 for subquery SELECT t1.x FROM recursive_union.test t1, recursive_union.test t2 WHERE (t1.x = t2.y)
+DEBUG:  generating subplan 164_2 for subquery SELECT x FROM recursive_union.test
+DEBUG:  Plan 164 query after replacing subqueries and CTEs: SELECT intermediate_result.x FROM read_intermediate_result('164_2'::text, 'binary'::citus_copy_format) intermediate_result(x integer) INTERSECT SELECT intermediate_result.x FROM read_intermediate_result('164_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer) ORDER BY 1 DESC
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  x 

@@ -319,7 +319,10 @@ GROUP BY
 ORDER BY 
   types;
 
--- not supported since events_subquery_5 is not joined on partition key
+SET citus.enable_repartition_joins to ON;
+SET client_min_messages TO DEBUG1;
+
+-- recursively planned since events_subquery_5 is not joined on partition key
 SELECT ("final_query"."event_types") as types, count(*) AS sumOfEventType
 FROM
   ( SELECT 
@@ -390,6 +393,9 @@ GROUP BY
   types
 ORDER BY 
   types;
+
+RESET client_min_messages;
+SET citus.enable_repartition_joins to OFF;
 
 -- not supported since the join is not equi join
 SELECT ("final_query"."event_types") as types, count(*) AS sumOfEventType
@@ -1357,7 +1363,11 @@ ORDER BY
   user_id DESC
 LIMIT 10;
 
--- not supported since the inner JOIN is not on the partition key
+
+SET citus.enable_repartition_joins to ON;
+SET client_min_messages TO DEBUG1;
+
+-- recursively planner since the inner JOIN is not on the partition key
 SELECT user_id, lastseen
 FROM
   (SELECT 
@@ -1411,6 +1421,9 @@ ORDER BY
   user_id DESC
 LIMIT 10;
 
+
+SET citus.enable_repartition_joins to OFF;
+RESET client_min_messages;
 
 -- not supported since upper LATERAL JOIN is not equi join
 SELECT user_id, lastseen
@@ -1565,7 +1578,11 @@ GROUP BY
 ORDER BY 
   generated_group_field DESC, value DESC;
 
--- not supported since the first inner join is not on the partition key
+
+SET citus.enable_repartition_joins to ON;
+SET client_min_messages TO DEBUG1;
+
+-- recursively planned since the first inner join is not on the partition key
 SELECT 
  count(*) AS value, "generated_group_field" 
  FROM
@@ -1608,7 +1625,7 @@ GROUP BY
 ORDER BY 
   generated_group_field DESC, value DESC;
 
--- not supported since the first inner join is not an equi join
+-- recursive planning didn't kick-in since the non-equi join is among subqueries
 SELECT 
  count(*) AS value, "generated_group_field" 
  FROM
@@ -1651,6 +1668,10 @@ GROUP BY
 ORDER BY 
   generated_group_field DESC, value DESC;
 
+ 
+SET citus.enable_repartition_joins to OFF;
+RESET client_min_messages;
+
 -- single level inner joins
 SELECT 
   "value_3", count(*) AS cnt 
@@ -1690,7 +1711,12 @@ GROUP BY "value_3"
 ORDER BY cnt, value_3 DESC LIMIT 10;
 
 
--- not supported since there is no partition column equality at all
+
+SET citus.enable_repartition_joins to ON;
+SET client_min_messages TO DEBUG1;
+
+-- not supported since there is no column equality at all
+-- but still recursive planning is tried
 SELECT 
   "value_3", count(*) AS cnt 
 FROM
@@ -1727,6 +1753,9 @@ FROM
     ) segmentalias_1) "tempQuery" 
 GROUP BY "value_3"
 ORDER BY cnt, value_3 DESC LIMIT 10;
+
+SET citus.enable_repartition_joins to OFF;
+RESET client_min_messages;
 
 -- nested LATERAL JOINs
 SET citus.subquery_pushdown to ON;

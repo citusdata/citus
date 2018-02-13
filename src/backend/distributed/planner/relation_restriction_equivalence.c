@@ -63,6 +63,7 @@ typedef struct AttributeEquivalenceClassMember
 } AttributeEquivalenceClassMember;
 
 
+static bool ContextContainsLocalRelation(RelationRestrictionContext *restrictionContext);
 static Var * FindTranslatedVar(List *appendRelList, Oid relationOid,
 							   Index relationRteIndex, Index *partitionKeyIndex);
 static bool EquivalenceListContainsRelationsEquality(List *attributeEquivalenceList,
@@ -154,9 +155,24 @@ bool
 QueryContainsDistributionKeyEquality(PlannerRestrictionContext *plannerRestrictionContext,
 									 Query *originalQuery)
 {
-	bool restrictionEquivalenceForPartitionKeys =
-		RestrictionEquivalenceForPartitionKeys(plannerRestrictionContext);
+	bool restrictionEquivalenceForPartitionKeys = false;
+	RelationRestrictionContext *restrictionContext = NULL;
 
+	/* we don't support distribution key equality checks for CTEs yet */
+	if (originalQuery->cteList != NIL)
+	{
+		return false;
+	}
+
+	/* we don't support distribution key equality checks for local tables */
+	restrictionContext = plannerRestrictionContext->relationRestrictionContext;
+	if (ContextContainsLocalRelation(restrictionContext))
+	{
+		return false;
+	}
+
+	restrictionEquivalenceForPartitionKeys =
+		RestrictionEquivalenceForPartitionKeys(plannerRestrictionContext);
 	if (restrictionEquivalenceForPartitionKeys)
 	{
 		return true;
@@ -165,6 +181,29 @@ QueryContainsDistributionKeyEquality(PlannerRestrictionContext *plannerRestricti
 	if (originalQuery->setOperations || ContainsUnionSubquery(originalQuery))
 	{
 		return SafeToPushdownUnionSubquery(plannerRestrictionContext);
+	}
+
+	return false;
+}
+
+
+/*
+ * ContextContainsLocalRelation determines whether the given
+ * RelationRestrictionContext contains any local tables.
+ */
+static bool
+ContextContainsLocalRelation(RelationRestrictionContext *restrictionContext)
+{
+	ListCell *relationRestrictionCell = NULL;
+
+	foreach(relationRestrictionCell, restrictionContext->relationRestrictionList)
+	{
+		RelationRestriction *relationRestriction = lfirst(relationRestrictionCell);
+
+		if (!relationRestriction->distributedRelation)
+		{
+			return true;
+		}
 	}
 
 	return false;
@@ -215,27 +254,12 @@ SafeToPushdownUnionSubquery(PlannerRestrictionContext *plannerRestrictionContext
 	foreach(relationRestrictionCell, restrictionContext->relationRestrictionList)
 	{
 		RelationRestriction *relationRestriction = lfirst(relationRestrictionCell);
-		Oid relationId = relationRestriction->relationId;
 		Index partitionKeyIndex = InvalidAttrNumber;
 		PlannerInfo *relationPlannerRoot = relationRestriction->plannerInfo;
 		List *targetList = relationPlannerRoot->parse->targetList;
 		List *appendRelList = relationPlannerRoot->append_rel_list;
 		Var *varToBeAdded = NULL;
 		TargetEntry *targetEntryToAdd = NULL;
-
-		/*
-		 * Although it is not the best place to error out when facing with reference
-		 * tables, we decide to error out here. Otherwise, we need to add equality
-		 * for each reference table and it is more complex to implement. In the
-		 * future implementation all checks will be gathered to single point.
-		 */
-		if (PartitionMethod(relationId) == DISTRIBUTE_BY_NONE)
-		{
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("cannot pushdown this query"),
-							errdetail(
-								"Reference tables are not allowed with set operations")));
-		}
 
 		/*
 		 * We first check whether UNION ALLs are pulled up or not. Note that Postgres
