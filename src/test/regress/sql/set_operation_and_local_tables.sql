@@ -88,7 +88,7 @@ SELECT * FROM ((SELECT * FROM local_test) INTERSECT (SELECT * FROM test ORDER BY
 -- recurively plan left part of the join, and run a final real-time query
 SELECT * FROM ((SELECT * FROM local_test) INTERSECT (SELECT * FROM test ORDER BY x LIMIT 1)) u INNER JOIN test USING (x) ORDER BY 1,2;
 
--- distributed table in WHERE clause, but not FROM clause still disallowed
+-- set operations and the sublink can be recursively planned
 SELECT * FROM ((SELECT x FROM test) UNION (SELECT x FROM (SELECT x FROM local_test) as foo WHERE x IN (SELECT x FROM test))) u ORDER BY 1;
 
 SET citus.enable_repartition_joins TO ON;

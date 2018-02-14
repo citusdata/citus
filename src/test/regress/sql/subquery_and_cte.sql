@@ -81,10 +81,8 @@ WHERE
 	users_table.user_id IN (SELECT DISTINCT value_2 FROM users_table WHERE value_1 >= 1 AND value_1 <= 20 ORDER BY 1 LIMIT 5)
     ORDER BY 1 DESC;
 
--- a very similar query as the above, but this time errors 
--- out since we don't support subqueries in WHERE clause
--- when there is only intermediate results on the range table
--- note that this time subquery in WHERE clause is not replaced
+-- subquery in WHERE clause is planned recursively due to the recurring table
+-- in FROM clause
 WITH cte AS (
 	WITH local_cte AS (
 		SELECT * FROM users_table_local

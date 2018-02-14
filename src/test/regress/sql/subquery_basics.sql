@@ -311,3 +311,17 @@ GROUP BY user_id
 HAVING count(*) > 1 AND sum(value_2) > 29
 ORDER BY 1;
 
+-- we support queries with recurring tuples in the FROM
+-- clause and subquery in WHERE clause
+SELECT
+	*
+FROM
+	(
+		SELECT
+			users_table.user_id
+		FROM
+			users_table, (SELECT user_id FROM events_table) as evs
+		WHERE users_table.user_id = evs.user_id
+		ORDER BY 1
+		LIMIT 5
+	) as foo WHERE user_id IN (SELECT count(*) FROM users_table GROUP BY user_id);

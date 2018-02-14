@@ -58,20 +58,6 @@ FROM
 		LIMIT 5
 	) as foo;
 
--- we don't support queries with recurring tuples in the FROM
--- clause and subquery in WHERE clause
-SELECT
-	* 
-FROM
-	(
-		SELECT 
-			users_table.user_id 
-		FROM 
-			users_table, (SELECT user_id FROM events_table) as evs
-		WHERE users_table.user_id = evs.user_id
-		LIMIT 5
-	) as foo WHERE user_id IN (SELECT count(*) FROM users_table GROUP BY user_id);
-
 -- we don't support recursive subqueries when router executor is disabled
 SET citus.enable_router_execution TO false;
 SELECT

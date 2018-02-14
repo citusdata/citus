@@ -38,8 +38,8 @@ GROUP BY user_id
 ORDER BY user_id
 LIMIT 3;
 
--- subqueries in WHERE with NOT EXISTS operator, should not work
--- there is a reference table in the outer part of the join
+-- subqueries in WHERE with NOT EXISTS operator, should not work since 
+-- there is a correlated subquery in WHERE clause
 SELECT 
   user_id
 FROM 
@@ -55,7 +55,8 @@ WHERE
       )
 LIMIT 3;
 
--- immutable functions are also treated as reference tables
+-- immutable functions are also treated as reference tables, query should not
+-- work since there is a correlated subquery in the WHERE clause
 SELECT
   user_id
 FROM
@@ -71,7 +72,8 @@ WHERE
       )
 LIMIT 3;
 
--- subqueries without FROM are also treated as reference tables
+-- subqueries without FROM are also treated as reference tables, query should not
+-- work since there is a correlated subquery in the WHERE clause
 SELECT
   user_id
 FROM
@@ -353,7 +355,10 @@ SELECT user_id, value_2 FROM users_table WHERE
 )
 ORDER BY 1, 2;
 
--- reference tables are not allowed if there is sublink
+-- change debug level to check recursive planning output
+SET client_min_messages TO DEBUG1;
+
+-- recursively planning subqueries in WHERE clause due to recurring table in FROM
 SELECT
   count(*) 
 FROM 
@@ -362,8 +367,7 @@ WHERE user_id
   NOT IN
 (SELECT users_table.value_2 FROM users_table JOIN users_reference_table as u2 ON users_table.value_2 = u2.value_2);
 
-
--- reference tables are not allowed if there is sublink
+-- recursively planning subqueries in WHERE clause due to recurring table in FROM
 SELECT count(*)
 FROM
   (SELECT 
@@ -373,7 +377,7 @@ FROM
      FROM users_table
      JOIN users_reference_table AS u2 ON users_table.value_2 = u2.value_2);
 
--- reference tables are not allowed if there is sublink
+-- query should not work since there is a correlated subquery in the WHERE clause
 SELECT user_id,
        count(*)
 FROM users_reference_table
@@ -388,8 +392,7 @@ ORDER BY 2 DESC,
          1 DESC
 LIMIT 5;
 
--- reference tables are not allowed if there is sublink
--- this time in the subquery
+-- query will be planned as a SEMI JOIN
 SELECT *
 FROM users_table
 WHERE user_id IN
@@ -401,6 +404,8 @@ WHERE user_id IN
           FROM users_reference_table AS u2))
 ORDER BY 1,2,3
 LIMIT 5;
+
+SET client_min_messages TO DEFAULT;
 
 -- not supported since GROUP BY references to an upper level query
 SELECT 

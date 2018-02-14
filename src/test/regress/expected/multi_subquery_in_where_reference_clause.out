@@ -46,8 +46,8 @@ LIMIT 3;
 ---------
 (0 rows)
 
--- subqueries in WHERE with NOT EXISTS operator, should not work
--- there is a reference table in the outer part of the join
+-- subqueries in WHERE with NOT EXISTS operator, should not work since 
+-- there is a correlated subquery in WHERE clause
 SELECT 
   user_id
 FROM 
@@ -63,8 +63,9 @@ WHERE
       )
 LIMIT 3;
 ERROR:  cannot pushdown the subquery
-DETAIL:  Reference tables are not allowed in FROM clause when the query has subqueries in WHERE clause
--- immutable functions are also treated as reference tables
+DETAIL:  Reference tables are not allowed in FROM clause when the query has subqueries in WHERE clause and it references a column from another query
+-- immutable functions are also treated as reference tables, query should not
+-- work since there is a correlated subquery in the WHERE clause
 SELECT
   user_id
 FROM
@@ -80,8 +81,9 @@ WHERE
       )
 LIMIT 3;
 ERROR:  cannot pushdown the subquery
-DETAIL:  Functions are not allowed in FROM clause when the query has subqueries in WHERE clause
--- subqueries without FROM are also treated as reference tables
+DETAIL:  Functions are not allowed in FROM clause when the query has subqueries in WHERE clause and it references a column from another query
+-- subqueries without FROM are also treated as reference tables, query should not
+-- work since there is a correlated subquery in the WHERE clause
 SELECT
   user_id
 FROM
@@ -97,7 +99,7 @@ WHERE
       )
 LIMIT 3;
 ERROR:  cannot pushdown the subquery
-DETAIL:  Subqueries without FROM are not allowed in FROM clause when the outer query has subqueries in WHERE clause
+DETAIL:  Subqueries without FROM are not allowed in FROM clause when the outer query has subqueries in WHERE clause and it references a column from another query
 -- join with distributed table prevents FROM from recurring
 SELECT
   DISTINCT user_id
@@ -413,7 +415,9 @@ ORDER BY 1, 2;
        5 |       5
 (2 rows)
 
--- reference tables are not allowed if there is sublink
+-- change debug level to check recursive planning output
+SET client_min_messages TO DEBUG1;
+-- recursively planning subqueries in WHERE clause due to recurring table in FROM
 SELECT
   count(*) 
 FROM 
@@ -421,9 +425,14 @@ FROM
 WHERE user_id 
   NOT IN
 (SELECT users_table.value_2 FROM users_table JOIN users_reference_table as u2 ON users_table.value_2 = u2.value_2);
-ERROR:  cannot pushdown the subquery
-DETAIL:  Reference tables are not allowed in FROM clause when the query has subqueries in WHERE clause
--- reference tables are not allowed if there is sublink
+DEBUG:  generating subplan 16_1 for subquery SELECT users_table.value_2 FROM (public.users_table JOIN public.users_reference_table u2 ON ((users_table.value_2 = u2.value_2)))
+DEBUG:  Plan 16 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM public.users_reference_table WHERE (NOT (user_id IN (SELECT intermediate_result.value_2 FROM read_intermediate_result('16_1'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer))))
+ count 
+-------
+    10
+(1 row)
+
+-- recursively planning subqueries in WHERE clause due to recurring table in FROM
 SELECT count(*)
 FROM
   (SELECT 
@@ -432,9 +441,14 @@ FROM
     (SELECT users_table.value_2
      FROM users_table
      JOIN users_reference_table AS u2 ON users_table.value_2 = u2.value_2);
-ERROR:  cannot pushdown the subquery
-DETAIL:  Reference tables are not allowed in FROM clause when the query has subqueries in WHERE clause
--- reference tables are not allowed if there is sublink
+DEBUG:  generating subplan 18_1 for subquery SELECT users_table.value_2 FROM (public.users_table JOIN public.users_reference_table u2 ON ((users_table.value_2 = u2.value_2)))
+DEBUG:  Plan 18 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT users_reference_table.user_id, random() AS random FROM public.users_reference_table) vals WHERE (NOT (user_id IN (SELECT intermediate_result.value_2 FROM read_intermediate_result('18_1'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer))))
+ count 
+-------
+    10
+(1 row)
+
+-- query should not work since there is a correlated subquery in the WHERE clause
 SELECT user_id,
        count(*)
 FROM users_reference_table
@@ -449,9 +463,8 @@ ORDER BY 2 DESC,
          1 DESC
 LIMIT 5;
 ERROR:  cannot pushdown the subquery
-DETAIL:  Reference tables are not allowed in FROM clause when the query has subqueries in WHERE clause
--- reference tables are not allowed if there is sublink
--- this time in the subquery
+DETAIL:  Reference tables are not allowed in FROM clause when the query has subqueries in WHERE clause and it references a column from another query
+-- query will be planned as a SEMI JOIN
 SELECT *
 FROM users_table
 WHERE user_id IN
@@ -463,6 +476,7 @@ WHERE user_id IN
           FROM users_reference_table AS u2))
 ORDER BY 1,2,3
 LIMIT 5;
+DEBUG:  push down of limit count: 5
  user_id |              time               | value_1 | value_2 | value_3 | value_4 
 ---------+---------------------------------+---------+---------+---------+---------
        1 | Wed Nov 22 22:51:43.132261 2017 |       4 |       0 |       3 |        
@@ -472,6 +486,7 @@ LIMIT 5;
        1 | Thu Nov 23 11:44:57.515981 2017 |       4 |       3 |       4 |        
 (5 rows)
 
+SET client_min_messages TO DEFAULT;
 -- not supported since GROUP BY references to an upper level query
 SELECT 
   user_id
