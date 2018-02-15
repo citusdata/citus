@@ -67,6 +67,7 @@ typedef struct ShardInterval
 	Datum minValue;     /* a shard's typed min value datum */
 	Datum maxValue;     /* a shard's typed max value datum */
 	uint64 shardId;
+	int shardIndex;
 } ShardInterval;
 
 
