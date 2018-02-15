@@ -116,6 +116,12 @@ typedef struct VarLevelsUpWalkerContext
 static DeferredErrorMessage * RecursivelyPlanSubqueriesAndCTEs(Query *query,
 															   RecursivePlanningContext *
 															   context);
+
+static bool ShouldRecursivelyPlanNonColocatedSubqueries(Query *subquery,
+														RecursivePlanningContext *
+														context);
+static void RecursivelyPlanNonColocatedSubqueries(Query *subquery,
+												  RecursivePlanningContext *context);
 static bool ShouldRecursivelyPlanAllSubqueriesInWhere(Query *query);
 static bool RecursivelyPlanAllSubqueries(Node *node,
 										 RecursivePlanningContext *planningContext);
@@ -272,8 +278,75 @@ RecursivelyPlanSubqueriesAndCTEs(Query *query, RecursivePlanningContext *context
 		RecursivelyPlanAllSubqueries((Node *) query->jointree->quals, context);
 	}
 
+	if (ShouldRecursivelyPlanNonColocatedSubqueries(query, context))
+	{
+		RecursivelyPlanNonColocatedSubqueries(query, context);
+	}
+
 	return NULL;
 }
+
+
+/*
+ * ShouldRecursivelyPlanNonColocatedSubqueries returns true if the input query contains joins
+ * that are not on the distribution key.
+ * *
+ * Note that at the point that this function is called, we've already recursively planned all
+ * the leaf subqueries. Thus, we're actually checking whether the joins among the subqueries
+ * on the distribution key or not.
+ */
+static bool
+ShouldRecursivelyPlanNonColocatedSubqueries(Query *subquery,
+											RecursivePlanningContext *context)
+{
+	/* if the input query already contains the equality, simply return */
+	if (context->queryContainsDistributionKeyEquality)
+	{
+		return false;
+	}
+
+	/*
+	 * This check helps us in two ways:
+	 *   (i) We're not targeting queries that don't include subqueries at all,
+	 *       they should go through regular planning.
+	 *  (ii) Lower level subqueries are already recursively planned, so we should
+	 *       only bother non-colocated subquery joins, which only happens when
+	 *       there are subqueries.
+	 */
+	if (SubqueryEntryList(subquery) == NIL && SublinkList(subquery) == NIL)
+	{
+		return false;
+	}
+
+	/*
+	 * At this point, we might be recursively planning a a subquery which will be pulled
+	 * by PostgreSQL standard_planner (i.e., tpch_7_nested). However, checking for those
+	 * cases are pretty complicated and, seems not super useful thing to implement.
+	 */
+
+
+	/* direct joins with local tables are not supported by any of Citus planners */
+	if (FindNodeCheckInRangeTableList(subquery->rtable, IsLocalTableRTE))
+	{
+		return false;
+	}
+
+	/*
+	 * Finally, check whether this subquery contains distribution key equality or not.
+	 */
+	if (!SubqueryContainsDistributionKeyEquality(subquery,
+												 context->plannerRestrictionContext))
+	{
+		return true;
+	}
+
+	return false;
+}
+
+
+static void
+RecursivelyPlanNonColocatedSubqueries(Query *query, RecursivePlanningContext *context)
+{ }
 
 
 /*

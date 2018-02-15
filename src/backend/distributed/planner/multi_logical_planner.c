@@ -158,7 +158,6 @@ static MultiNode * SubqueryMultiNodeTree(Query *originalQuery,
 										 Query *queryTree,
 										 PlannerRestrictionContext *
 										 plannerRestrictionContext);
-static List * SublinkList(Query *originalQuery);
 static bool ExtractSublinkWalker(Node *node, List **sublinkList);
 static MultiNode * SubqueryPushdownMultiNodeTree(Query *queryTree);
 
@@ -316,7 +315,7 @@ FindNodeCheck(Node *node, bool (*check)(Node *))
  * that the function should be called on the original query given that postgres
  * standard_planner() may convert the subqueries in WHERE clause to joins.
  */
-static List *
+List *
 SublinkList(Query *originalQuery)
 {
 	FromExpr *joinTree = originalQuery->jointree;
