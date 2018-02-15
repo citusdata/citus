@@ -1,0 +1,173 @@
+-- ===================================================================
+-- test recursive planning functionality for non-colocated subqueries
+-- We prefered to use EXPLAIN almost all the queries here,
+-- otherwise the execution time of so many repartition queries would
+-- be too high for the regression tests. Also, note that we're mostly
+-- interested in recurive planning side of the things, thus supressing
+-- the actual explain output.
+-- ===================================================================
+SET client_min_messages TO DEBUG1;
+SET log_error_verbosity TO TERSE;
+\set VERBOSITY terse
+SET citus.enable_repartition_joins TO ON;
+-- Function that parses explain output as JSON
+-- copied from multi_explain.sql
+CREATE OR REPLACE FUNCTION explain_json(query text)
+RETURNS jsonb
+AS $BODY$
+DECLARE
+  result jsonb;
+BEGIN
+  EXECUTE format('EXPLAIN (FORMAT JSON) %s', query) INTO result;
+  RETURN result;
+END;
+$BODY$ LANGUAGE plpgsql;
+SHOW log_error_verbosity;
+ log_error_verbosity 
+---------------------
+ terse
+(1 row)
+
+-- should recursively plan foo
+SELECT true AS valid FROM explain_json($$SELECT
+    count(*)
+FROM
+    (SELECT users_table.user_id, random() FROM users_table, events_table WHERE users_table.user_id = events_table.value_2 AND event_type IN (1,2,3,4)) as foo,
+    (SELECT users_table.user_id FROM users_table, events_table WHERE users_table.user_id = events_table.user_id AND event_type IN (5,6,7,8)) as bar
+WHERE
+    foo.user_id = bar.user_id;$$);
+DEBUG:  cannot use real time executor with repartition jobs
+DEBUG:  generating subplan 1_1 for subquery SELECT users_table.user_id, random() AS random FROM public.users_table, public.events_table WHERE ((users_table.user_id = events_table.value_2) AND (events_table.event_type = ANY (ARRAY[1, 2, 3, 4])))
+DEBUG:  Plan 1 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.user_id, intermediate_result.random FROM read_intermediate_result('1_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, random double precision)) foo, (SELECT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id = events_table.user_id) AND (events_table.event_type = ANY (ARRAY[5, 6, 7, 8])))) bar WHERE (foo.user_id = bar.user_id)
+ valid 
+-------
+ t
+(1 row)
+
+ -- should recursively plan both foo and bar
+SELECT true AS valid FROM explain_json($$SELECT
+    count(*)
+FROM
+    (SELECT users_table.user_id, random() FROM users_table, events_table WHERE users_table.user_id = events_table.value_2 AND event_type IN (1,2,3,4)) as foo,
+    (SELECT users_table.user_id FROM users_table, events_table WHERE users_table.user_id = events_table.value_2 AND event_type IN (5,6,7,8)) as bar
+WHERE
+    foo.user_id = bar.user_id;$$);
+DEBUG:  cannot use real time executor with repartition jobs
+DEBUG:  generating subplan 3_1 for subquery SELECT users_table.user_id, random() AS random FROM public.users_table, public.events_table WHERE ((users_table.user_id = events_table.value_2) AND (events_table.event_type = ANY (ARRAY[1, 2, 3, 4])))
+DEBUG:  cannot use real time executor with repartition jobs
+DEBUG:  generating subplan 3_2 for subquery SELECT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id = events_table.value_2) AND (events_table.event_type = ANY (ARRAY[5, 6, 7, 8])))
+DEBUG:  Plan 3 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.user_id, intermediate_result.random FROM read_intermediate_result('3_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, random double precision)) foo, (SELECT intermediate_result.user_id FROM read_intermediate_result('3_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) bar WHERE (foo.user_id = bar.user_id)
+ valid 
+-------
+ t
+(1 row)
+
+-- should recursively plan the subquery in WHERE clause
+SELECT true AS valid FROM explain_json($$SELECT
+	count(*)
+FROM
+	users_table
+WHERE
+	value_1 
+		IN
+	(SELECT 
+		users_table.user_id 
+	 FROM 
+	 	users_table, events_table 
+	 WHERE 
+	 	users_table.user_id = events_table.value_2 AND event_type IN (5,6));$$);
+DEBUG:  cannot use real time executor with repartition jobs
+DEBUG:  generating subplan 6_1 for subquery SELECT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id = events_table.value_2) AND (events_table.event_type = ANY (ARRAY[5, 6])))
+DEBUG:  Plan 6 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM public.users_table WHERE (value_1 IN (SELECT intermediate_result.user_id FROM read_intermediate_result('6_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)))
+ valid 
+-------
+ t
+(1 row)
+
+-- should work fine when used with CTEs
+SELECT true AS valid FROM explain_json($$
+	WITH q1 AS (SELECT user_id FROM users_table) 
+SELECT count(*) FROM q1, (SELECT 
+					users_table.user_id, random() 
+				FROM 
+					users_table, events_table 
+				WHERE 
+					users_table.user_id = events_table.value_2 AND event_type IN (1,2,3,4)) as bar WHERE bar.user_id = q1.user_id ;$$);
+DEBUG:  generating subplan 8_1 for CTE q1: SELECT user_id FROM public.users_table
+DEBUG:  cannot use real time executor with repartition jobs
+DEBUG:  generating subplan 8_2 for subquery SELECT users_table.user_id, random() AS random FROM public.users_table, public.events_table WHERE ((users_table.user_id = events_table.value_2) AND (events_table.event_type = ANY (ARRAY[1, 2, 3, 4])))
+DEBUG:  Plan 8 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('8_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) q1, (SELECT intermediate_result.user_id, intermediate_result.random FROM read_intermediate_result('8_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, random double precision)) bar WHERE (bar.user_id = q1.user_id)
+ valid 
+-------
+ t
+(1 row)
+
+-- should work fine within UNIONs
+SELECT true AS valid FROM explain_json($$
+    (SELECT users_table.user_id FROM users_table, events_table WHERE users_table.user_id = events_table.value_2 AND event_type IN (1,2,3,4)) UNION
+    (SELECT users_table.user_id FROM users_table, events_table WHERE users_table.user_id = events_table.user_id AND event_type IN (5,6,7,8));$$);
+DEBUG:  cannot use real time executor with repartition jobs
+DEBUG:  generating subplan 11_1 for subquery SELECT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id = events_table.value_2) AND (events_table.event_type = ANY (ARRAY[1, 2, 3, 4])))
+DEBUG:  generating subplan 11_2 for subquery SELECT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id = events_table.user_id) AND (events_table.event_type = ANY (ARRAY[5, 6, 7, 8])))
+DEBUG:  Plan 11 query after replacing subqueries and CTEs: SELECT intermediate_result.user_id FROM read_intermediate_result('11_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer) UNION SELECT intermediate_result.user_id FROM read_intermediate_result('11_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)
+ valid 
+-------
+ t
+(1 row)
+
+-- should work fine within leaf queries of deeper subqueries
+SELECT true AS valid FROM explain_json($$
+SELECT event, array_length(events_table, 1)
+FROM (
+  SELECT event, array_agg(t.user_id) AS events_table
+  FROM (
+    SELECT 
+    	DISTINCT ON(e.event_type::text) e.event_type::text as event, e.time, e.user_id
+    FROM 
+    	users_table AS u,
+        events_table AS e,
+        (SELECT users_table.user_id FROM users_table, events_table WHERE users_table.user_id = events_table.value_2 AND event_type IN (5,6,7,8)) as bar
+    WHERE u.user_id = e.user_id AND 
+    		u.user_id IN 
+    		(
+    			SELECT 
+    				user_id 
+    			FROM 
+    				users_table 
+    			WHERE value_2 >= 5
+			    AND  EXISTS (SELECT users_table.user_id FROM users_table, events_table WHERE users_table.user_id = events_table.value_2 AND event_type IN (1,2,3,4))
+				LIMIT 5
+    		)
+  ) t, users_table WHERE users_table.value_1 = t.event::int
+  GROUP BY event
+) q
+ORDER BY 2 DESC, 1;
+$$);
+DEBUG:  cannot use real time executor with repartition jobs
+DEBUG:  generating subplan 14_1 for subquery SELECT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id = events_table.value_2) AND (events_table.event_type = ANY (ARRAY[1, 2, 3, 4])))
+DEBUG:  push down of limit count: 5
+DEBUG:  generating subplan 14_2 for subquery SELECT user_id FROM public.users_table WHERE ((value_2 >= 5) AND (EXISTS (SELECT intermediate_result.user_id FROM read_intermediate_result('14_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)))) LIMIT 5
+DEBUG:  cannot use real time executor with repartition jobs
+DEBUG:  generating subplan 14_3 for subquery SELECT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id = events_table.value_2) AND (events_table.event_type = ANY (ARRAY[5, 6, 7, 8])))
+DEBUG:  generating subplan 14_4 for subquery SELECT DISTINCT ON ((e.event_type)::text) (e.event_type)::text AS event, e."time", e.user_id FROM public.users_table u, public.events_table e, (SELECT intermediate_result.user_id FROM read_intermediate_result('14_3'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) bar WHERE ((u.user_id = e.user_id) AND (u.user_id IN (SELECT intermediate_result.user_id FROM read_intermediate_result('14_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer))))
+DEBUG:  generating subplan 14_5 for subquery SELECT t.event, array_agg(t.user_id) AS events_table FROM (SELECT intermediate_result.event, intermediate_result."time", intermediate_result.user_id FROM read_intermediate_result('14_4'::text, 'binary'::citus_copy_format) intermediate_result(event text, "time" timestamp without time zone, user_id integer)) t, public.users_table WHERE (users_table.value_1 = (t.event)::integer) GROUP BY t.event
+DEBUG:  Plan 14 query after replacing subqueries and CTEs: SELECT event, array_length(events_table, 1) AS array_length FROM (SELECT intermediate_result.event, intermediate_result.events_table FROM read_intermediate_result('14_5'::text, 'binary'::citus_copy_format) intermediate_result(event text, events_table integer[])) q ORDER BY (array_length(events_table, 1)) DESC, event
+ valid 
+-------
+ t
+(1 row)
+
+ -- should not recursively plan any subquery given that we don't support
+ -- non-colocated subquery joins among the subqueries yet
+SELECT true AS valid FROM explain_json($$SELECT
+    count(*)
+FROM
+    (SELECT users_table.user_id, random() FROM users_table, events_table WHERE users_table.user_id = events_table.user_id AND event_type IN (1,2,3,4)) as foo,
+    (SELECT users_table.user_id, value_1 FROM users_table, events_table WHERE users_table.user_id = events_table.user_id AND event_type IN (5,6,7,8)) as bar
+WHERE
+    foo.user_id = bar.value_1;$$);
+ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
+SET log_error_verbosity TO DEFAULT;
+SET client_min_messages TO DEFAULT;
+SET citus.enable_repartition_joins TO DEFAULT;
+DROP FUNCTION explain_json(text);
