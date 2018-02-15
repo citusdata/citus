@@ -259,6 +259,7 @@ ReadShardInterval(READFUNC_ARGS)
 		local_node->maxValue = readDatum(local_node->valueByVal);
 
 	READ_UINT64_FIELD(shardId);
+	READ_INT_FIELD(shardIndex);
 
 	READ_DONE();
 }

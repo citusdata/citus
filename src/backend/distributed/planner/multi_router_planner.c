@@ -127,10 +127,6 @@ static Job * RouterJob(Query *originalQuery,
 					   RelationRestrictionContext *restrictionContext,
 					   DeferredErrorMessage **planningError);
 static bool RelationPrunesToMultipleShards(List *relationShardList);
-static List * TargetShardIntervalsForRouter(Query *query,
-											RelationRestrictionContext *restrictionContext,
-											bool *multiShardQuery);
-static List * WorkersContainingAllShards(List *prunedShardIntervalsList);
 static void NormalizeMultiRowInsertTargetList(Query *query);
 static List * BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError);
 static List * GroupInsertValuesByShardId(List *insertValuesList);
@@ -1678,9 +1674,9 @@ PlanRouterQuery(Query *originalQuery, RelationRestrictionContext *restrictionCon
 	bool isMultiShardModifyQuery = false;
 
 	*placementList = NIL;
-	prunedRelationShardList = TargetShardIntervalsForRouter(originalQuery,
-															restrictionContext,
-															&isMultiShardQuery);
+	prunedRelationShardList = TargetShardIntervalsForQuery(originalQuery,
+														   restrictionContext,
+														   &isMultiShardQuery);
 
 	if (isMultiShardQuery)
 	{
@@ -1851,7 +1847,7 @@ GetInitialShardId(List *relationShardList)
 
 
 /*
- * TargetShardIntervalsForRouter performs shard pruning for all referenced relations
+ * TargetShardIntervalsForQuery performs shard pruning for all referenced relations
  * in the query and returns list of shards per relation. Shard pruning is done based
  * on provided restriction context per relation. The function sets multiShardQuery
  * to true if any of the relations pruned down to more than one active shard. It
@@ -1860,10 +1856,10 @@ GetInitialShardId(List *relationShardList)
  * 'and 1=0', such queries are treated as if all of the shards of joining
  * relations are pruned out.
  */
-static List *
-TargetShardIntervalsForRouter(Query *query,
-							  RelationRestrictionContext *restrictionContext,
-							  bool *multiShardQuery)
+List *
+TargetShardIntervalsForQuery(Query *query,
+							 RelationRestrictionContext *restrictionContext,
+							 bool *multiShardQuery)
 {
 	List *prunedRelationShardList = NIL;
 	ListCell *restrictionCell = NULL;
@@ -1949,7 +1945,7 @@ RelationPrunesToMultipleShards(List *relationShardList)
  * exists. The caller should check if there are any shard intervals exist for
  * placement check prior to calling this function.
  */
-static List *
+List *
 WorkersContainingAllShards(List *prunedShardIntervalsList)
 {
 	ListCell *prunedShardIntervalCell = NULL;

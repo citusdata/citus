@@ -812,9 +812,6 @@ SET client_min_messages TO DEBUG2;
 SELECT * FROM
 	(SELECT count(*) FROM subquery_pruning_varchar_test_table WHERE a = 'onder' GROUP BY a)
 AS foo;
-DEBUG:  Skipping the target shard interval 570033 because SELECT query is pruned away for the interval
-DEBUG:  Skipping the target shard interval 570034 because SELECT query is pruned away for the interval
-DEBUG:  Skipping the target shard interval 570036 because SELECT query is pruned away for the interval
  count 
 -------
 (0 rows)
@@ -822,9 +819,6 @@ DEBUG:  Skipping the target shard interval 570036 because SELECT query is pruned
 SELECT * FROM
 	(SELECT count(*) FROM subquery_pruning_varchar_test_table WHERE 'eren' = a GROUP BY a)
 AS foo;
-DEBUG:  Skipping the target shard interval 570033 because SELECT query is pruned away for the interval
-DEBUG:  Skipping the target shard interval 570035 because SELECT query is pruned away for the interval
-DEBUG:  Skipping the target shard interval 570036 because SELECT query is pruned away for the interval
  count 
 -------
 (0 rows)

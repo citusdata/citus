@@ -1128,6 +1128,9 @@ BuildCachedShardList(DistTableCacheEntry *cacheEntry)
 
 		cacheEntry->arrayOfPlacementArrays[shardIndex] = placementArray;
 		cacheEntry->arrayOfPlacementArrayLengths[shardIndex] = numberOfPlacements;
+
+		/* store the shard index in the ShardInterval */
+		shardInterval->shardIndex = shardIndex;
 	}
 
 	cacheEntry->shardIntervalArrayLength = shardIntervalArrayLength;
