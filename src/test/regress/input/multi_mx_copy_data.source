@@ -20,8 +20,8 @@ SET search_path TO public;
 \COPY orders_mx FROM '@abs_srcdir@/data/orders.1.data' with delimiter '|'
 \COPY orders_mx FROM '@abs_srcdir@/data/orders.2.data' with delimiter '|'
 
--- and use second worker as well
-\c - - - :worker_2_port
+-- and use coordinator for reference tables
+\c - - - :master_port
 SET search_path TO public;
 
 \COPY customer_mx FROM '@abs_srcdir@/data/customer.1.data' with delimiter '|'
