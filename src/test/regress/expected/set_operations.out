@@ -587,7 +587,7 @@ SELECT x, y, rnk FROM (SELECT *, rank() OVER my_win as rnk FROM test WINDOW my_w
 UNION
 SELECT x, y, rnk FROM (SELECT *, rank() OVER my_win as rnk FROM test WINDOW my_win AS (PARTITION BY y ORDER BY x DESC)) as bar;
 ERROR:  could not run distributed query because the window function that is used cannot be pushed down
-HINT:  Window functions are supported in two ways. Either add an equality filter on the distributed tables' partition column or use the window functions inside a subquery with a PARTITION BY clause containing the distribution column
+HINT:  Window functions are supported in two ways. Either add an equality filter on the distributed tables' partition column or use the window functions with a PARTITION BY clause containing the distribution column
 -- other set operations in joins also cannot be pushed down
 SELECT * FROM ((SELECT * FROM test) EXCEPT (SELECT * FROM test ORDER BY x LIMIT 1)) u JOIN test USING (x) ORDER BY 1,2;
 DEBUG:  push down of limit count: 1

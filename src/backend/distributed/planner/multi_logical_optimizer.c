@@ -1976,6 +1976,8 @@ WorkerExtendedOpNode(MultiExtendedOp *originalOpNode,
 	workerExtendedOpNode->targetList = newTargetEntryList;
 	workerExtendedOpNode->distinctClause = NIL;
 	workerExtendedOpNode->hasDistinctOn = false;
+	workerExtendedOpNode->hasWindowFuncs = originalOpNode->hasWindowFuncs;
+	workerExtendedOpNode->windowClause = originalOpNode->windowClause;
 
 	if (!queryHasAggregates)
 	{
@@ -2017,8 +2019,10 @@ HasNonPartitionColumnDistinctAgg(List *targetEntryList, Node *havingQual,
 								 List *tableNodeList)
 {
 	List *targetVarList = pull_var_clause((Node *) targetEntryList,
-										  PVC_INCLUDE_AGGREGATES);
-	List *havingVarList = pull_var_clause((Node *) havingQual, PVC_INCLUDE_AGGREGATES);
+										  PVC_INCLUDE_AGGREGATES |
+										  PVC_RECURSE_WINDOWFUNCS);
+	List *havingVarList = pull_var_clause((Node *) havingQual, PVC_INCLUDE_AGGREGATES |
+										  PVC_RECURSE_WINDOWFUNCS);
 	List *aggregateCheckList = list_concat(targetVarList, havingVarList);
 
 	ListCell *aggregateCheckCell = NULL;
@@ -2673,7 +2677,8 @@ ErrorIfContainsUnsupportedAggregate(MultiNode *logicalPlanNode)
 	 * PVC_REJECT_PLACEHOLDERS is implicit if PVC_INCLUDE_PLACEHOLDERS isn't
 	 * specified.
 	 */
-	List *expressionList = pull_var_clause((Node *) targetList, PVC_INCLUDE_AGGREGATES);
+	List *expressionList = pull_var_clause((Node *) targetList, PVC_INCLUDE_AGGREGATES |
+										   PVC_INCLUDE_WINDOWFUNCS);
 
 	ListCell *expressionCell = NULL;
 	foreach(expressionCell, expressionList)

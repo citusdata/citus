@@ -32,6 +32,7 @@
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
 #include "nodes/relation.h"
+#include "nodes/print.h"
 #include "optimizer/clauses.h"
 #include "optimizer/prep.h"
 #include "optimizer/tlist.h"
@@ -55,6 +56,36 @@ typedef struct QualifierWalkerContext
 	List *outerJoinQualifierList;
 } QualifierWalkerContext;
 
+typedef struct JoinMutatorContext
+{
+	Query *originalQuery;
+	HTAB *hash;
+} JoinMutatorContext;
+
+typedef struct RTableJoinWalkerState
+{
+	HTAB *hashTable;
+} RTableJoinWalkerState;
+
+typedef struct JoinAliasAsKey
+{
+	Index varno;                /* index of this var's relation in the range
+	                            * table, or INNER_VAR/OUTER_VAR/INDEX_VAR */
+	AttrNumber varattno;        /* attribute number of this var, or zero for
+	                             * all */
+	Oid vartype;                /* pg_type OID for the type of this var */
+	int32 vartypmod;            /* pg_attribute typmod value */
+	Oid varcollid;              /* OID of collation, or InvalidOid if none */
+	Index varlevelsup;          /* for subquery variables referencing outer
+	                             * relations; 0 in a normal var, >0 means N
+	                             * levels up */
+} JoinAliasAsKey;
+
+typedef struct JoinAliasMapping
+{
+	JoinAliasAsKey joinalias;
+	Var *join;
+} JoinAliasMapping;
 
 /*
  * RecurringTuplesType is used to distinguish different types of expressions
@@ -167,6 +198,12 @@ static void UpdateVarMappingsForExtendedOpNode(List *columnList,
 											   List *subqueryTargetEntryList);
 static MultiTable * MultiSubqueryPushdownTable(Query *subquery);
 
+static void BuildJoinAliasJoinMapping(RTableJoinWalkerState *walkerState,
+									  Query *queryTree);
+static void CreateRTableJoinWalkerStateHash(RTableJoinWalkerState *walkerState);
+static void FlattenJoinAlias(RTableJoinWalkerState *walkerState, Query *queryTree);
+static Node * FlattenJoinAliasCitusMutator(Node *node, JoinMutatorContext *jcontext);
+
 
 /*
  * MultiLogicalPlanCreate takes in both the original query and its corresponding modified
@@ -213,6 +250,7 @@ static bool
 ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery)
 {
 	List *qualifierList = NIL;
+	StringInfo errorMessage = NULL;
 
 	/*
 	 * We check the existence of subqueries in FROM clause on the modified query
@@ -250,6 +288,15 @@ ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery)
 	 */
 	qualifierList = QualifierList(rewrittenQuery->jointree);
 	if (DeferErrorIfUnsupportedClause(qualifierList) != NULL)
+	{
+		return true;
+	}
+
+	/*
+	 * Check if the query has a window function and it is safe to pushdown
+	 */
+	if (originalQuery->hasWindowFuncs && SafeToPushdownWindowFunction(originalQuery,
+																	  &errorMessage))
 	{
 		return true;
 	}
@@ -817,8 +864,8 @@ DeferErrorIfCannotPushdownSubquery(Query *subqueryTree, bool outerMostQueryHasLi
 	 * We support window functions when the window function
 	 * is partitioned on distribution column.
 	 */
-	if (subqueryTree->windowClause && !SafeToPushdownWindowFunction(subqueryTree,
-																	&errorInfo))
+	if (subqueryTree->hasWindowFuncs && !SafeToPushdownWindowFunction(subqueryTree,
+																	  &errorInfo))
 	{
 		errorDetail = (char *) errorInfo->data;
 		preconditionsSatisfied = false;
@@ -1097,6 +1144,8 @@ DeferErrorIfUnsupportedTableCombination(Query *queryTree)
 /*
  * SafeToPushdownWindowFunction checks if the query with window function is supported.
  * It returns the result accordingly and modifies the error detail.
+ * It should be noted that this method returns true if there is no window
+ * function in the query.
  */
 bool
 SafeToPushdownWindowFunction(Query *query, StringInfo *errorDetail)
@@ -2040,6 +2089,7 @@ IsReadIntermediateResultFunction(Node *node)
 DeferredErrorMessage *
 DeferErrorIfQueryNotSupported(Query *queryTree)
 {
+	StringInfo errorInfo = NULL;
 	char *errorMessage = NULL;
 	bool hasTablesample = false;
 	bool hasUnsupportedJoin = false;
@@ -2064,15 +2114,15 @@ DeferErrorIfQueryNotSupported(Query *queryTree)
 		errorHint = filterHint;
 	}
 
-	if (queryTree->hasWindowFuncs)
+	if (queryTree->hasWindowFuncs && !SafeToPushdownWindowFunction(queryTree, &errorInfo))
 	{
 		preconditionsSatisfied = false;
 		errorMessage = "could not run distributed query because the window "
 					   "function that is used cannot be pushed down";
 		errorHint = "Window functions are supported in two ways. Either add "
 					"an equality filter on the distributed tables' partition "
-					"column or use the window functions inside a subquery with "
-					"a PARTITION BY clause containing the distribution column";
+					"column or use the window functions with a PARTITION BY "
+					"clause containing the distribution column";
 	}
 
 	if (queryTree->setOperations)
@@ -3102,6 +3152,8 @@ MultiExtendedOpNode(Query *queryTree)
 	extendedOpNode->havingQual = queryTree->havingQual;
 	extendedOpNode->distinctClause = queryTree->distinctClause;
 	extendedOpNode->hasDistinctOn = queryTree->hasDistinctOn;
+	extendedOpNode->windowClause = queryTree->windowClause;
+	extendedOpNode->hasWindowFuncs = queryTree->hasWindowFuncs;
 
 	return extendedOpNode;
 }
@@ -3363,7 +3415,8 @@ pull_var_clause_default(Node *node)
 	 * PVC_REJECT_PLACEHOLDERS is implicit if PVC_INCLUDE_PLACEHOLDERS
 	 * isn't specified.
 	 */
-	List *columnList = pull_var_clause(node, PVC_RECURSE_AGGREGATES);
+	List *columnList = pull_var_clause(node, PVC_RECURSE_AGGREGATES |
+									   PVC_RECURSE_WINDOWFUNCS);
 
 	return columnList;
 }
@@ -3677,6 +3730,8 @@ SubqueryPushdownMultiNodeTree(Query *queryTree)
 	List *subqueryTargetEntryList = NIL;
 	List *havingClauseColumnList = NIL;
 	DeferredErrorMessage *unsupportedQueryError = NULL;
+	RTableJoinWalkerState *walkerState = NULL;
+	Size walkerStateSize = 0;
 
 	/* verify we can perform distributed planning on this query */
 	unsupportedQueryError = DeferErrorIfQueryNotSupported(queryTree);
@@ -3724,6 +3779,12 @@ SubqueryPushdownMultiNodeTree(Query *queryTree)
 	 *
 	 * Master and worker queries will be created out of this MultiTree at later stages.
 	 */
+	walkerStateSize = sizeof(RTableJoinWalkerState);
+	walkerState = (RTableJoinWalkerState *) palloc0(walkerStateSize);
+
+	CreateRTableJoinWalkerStateHash(walkerState);
+	BuildJoinAliasJoinMapping(walkerState, queryTree);
+	FlattenJoinAlias(walkerState, queryTree);
 
 	/*
 	 * uniqueColumnList contains all columns returned by subquery. Subquery target
@@ -3731,9 +3792,13 @@ SubqueryPushdownMultiNodeTree(Query *queryTree)
 	 * uniqueColumnList. Columns mentioned in multiProject node and multiExtendedOp
 	 * node are indexed with their respective position in uniqueColumnList.
 	 */
+
+	targetEntryList = queryTree->targetList;
 	targetColumnList = pull_var_clause_default((Node *) targetEntryList);
+
 	havingClauseColumnList = pull_var_clause_default(queryTree->havingQual);
 	columnList = list_concat(targetColumnList, havingClauseColumnList);
+
 
 	/* create a target entry for each unique column */
 	subqueryTargetEntryList = CreateSubqueryTargetEntryList(columnList);
@@ -3765,9 +3830,9 @@ SubqueryPushdownMultiNodeTree(Query *queryTree)
 
 	/*
 	 * We build the extended operator node to capture aggregate functions, group
-	 * clauses, sort clauses, limit/offset clauses, and expressions. We need to
-	 * distinguish between aggregates and expressions; and we address this later
-	 * in the logical optimizer.
+	 * clauses, sort clauses, limit/offset clauses, expressions and window
+	 * functions. We need to distinguish between aggregates and expressions;
+	 * and we address this later in the logical optimizer.
 	 */
 	extendedOpNode = MultiExtendedOpNode(queryTree);
 
@@ -3799,6 +3864,127 @@ SubqueryPushdownMultiNodeTree(Query *queryTree)
 	currentTopNode = (MultiNode *) extendedOpNode;
 
 	return currentTopNode;
+}
+
+
+static void
+CreateRTableJoinWalkerStateHash(RTableJoinWalkerState *walkerState)
+{
+	int32 hashTableSize = 10;
+	HASHCTL hashInfo;
+
+	memset(&hashInfo, 0, sizeof(hashInfo));
+	hashInfo.keysize = sizeof(JoinAliasAsKey);
+	hashInfo.entrysize = sizeof(JoinAliasMapping);
+	hashInfo.hcxt = CurrentMemoryContext;
+	walkerState->hashTable = hash_create("RTable Join Alias Map", hashTableSize,
+										 &hashInfo,
+										 HASH_ELEM | HASH_CONTEXT | HASH_BLOBS);
+}
+
+
+static void
+BuildJoinAliasJoinMapping(RTableJoinWalkerState *walkerState, Query *queryTree)
+{
+	ListCell *targetCell = NULL;
+	List *targetEntryList = queryTree->targetList;
+
+	foreach(targetCell, targetEntryList)
+	{
+		TargetEntry *tEntry = (TargetEntry *) lfirst(targetCell);
+		Expr *expression = tEntry->expr;
+		if (IsA(expression, Var))
+		{
+			Var *var = (Var *) expression;
+			RangeTblEntry *outerRte = rt_fetch(var->varno, queryTree->rtable);
+			if (outerRte->rtekind == RTE_JOIN)
+			{
+				bool found = 0;
+				RangeTblEntry *rte = (RangeTblEntry *) list_nth(outerRte->joinaliasvars,
+																var->varattno - 1);
+				Var *varRTE = ((Var *) rte);
+				JoinAliasAsKey joinKey = {
+					varRTE->varno, varRTE->varattno, varRTE->vartype, varRTE->vartypmod,
+					varRTE->varcollid, varRTE->varlevelsup
+				};
+
+				JoinAliasMapping *item = hash_search(walkerState->hashTable,
+													 (void *) &joinKey, HASH_ENTER,
+													 &found);
+				item->join = var;
+			}
+		}
+	}
+}
+
+
+static void
+FlattenJoinAlias(RTableJoinWalkerState *walkerState, Query *queryTree)
+{
+	List *newTargetEntryList = NIL;
+	ListCell *targetEntryCell = NULL;
+	List *targetEntryList = NIL;
+	JoinMutatorContext jcontext;
+	jcontext.originalQuery = queryTree;
+	jcontext.hash = walkerState->hashTable;
+
+	targetEntryList = queryTree->targetList;
+	foreach(targetEntryCell, targetEntryList)
+	{
+		TargetEntry *originalTargetEntry = (TargetEntry *) lfirst(targetEntryCell);
+		TargetEntry *newTargetEntry = copyObject(originalTargetEntry);
+		Expr *originalExpression = originalTargetEntry->expr;
+		Expr *newExpression = NULL;
+		Node *newNode = FlattenJoinAliasCitusMutator((Node *) originalExpression,
+													 &jcontext);
+		newExpression = (Expr *) newNode;
+		newTargetEntry->expr = newExpression;
+		newTargetEntryList = lappend(newTargetEntryList, copyObject(newTargetEntry));
+	}
+
+	queryTree->targetList = newTargetEntryList;
+}
+
+
+static Node *
+FlattenJoinAliasCitusMutator(Node *originalNode, JoinMutatorContext *jcontext)
+{
+	Node *newNode = NULL;
+	Query *queryTree = jcontext->originalQuery;
+	HTAB *hashTable = jcontext->hash;
+	if (originalNode == NULL)
+	{
+		return NULL;
+	}
+
+	if (IsA(originalNode, Var))
+	{
+		Var *var = (Var *) originalNode;
+		RangeTblEntry *rte = rt_fetch(var->varno, queryTree->rtable);
+
+		if (rte->rtekind != RTE_JOIN)
+		{
+			bool found = 0;
+			JoinAliasAsKey key = {
+				var->varno, var->varattno, var->vartype, var->vartypmod, var->varcollid,
+				var->varlevelsup
+			};
+			JoinAliasMapping *item = hash_search(hashTable, (void *) &key,
+												 HASH_FIND, &found);
+			if (found)
+			{
+				newNode = (Node *) copyObject(item->join);
+				if (IsA(newNode, Var))
+				{
+					((Var *) newNode)->location = var->location;
+				}
+				return newNode;
+			}
+		}
+	}
+
+	return expression_tree_mutator(originalNode, FlattenJoinAliasCitusMutator,
+								   (void *) jcontext);
 }
 
 
