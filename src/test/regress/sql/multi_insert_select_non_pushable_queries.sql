@@ -124,6 +124,9 @@ FROM (
 ) t GROUP BY user_id, hasdone_event;
 
 -- the LEFT JOIN conditon is not on the partition column (i.e., is it part_key divided by 2)
+-- still, recursive planning will kick in to plan some part of the query
+SET client_min_messages TO DEBUG1;
+
 INSERT INTO agg_results_third (user_id, value_1_agg, value_2_agg )
 SELECT user_id, sum(array_length(events_table, 1)), length(hasdone_event)
 FROM (
@@ -163,6 +166,7 @@ FROM (
   ) t2 ON (t1.user_id = (t2.user_id)/2)
   GROUP BY  t1.user_id, hasdone_event
 ) t GROUP BY user_id, hasdone_event;
+RESET client_min_messages;
 
 ------------------------------------
 ------------------------------------
@@ -240,6 +244,8 @@ ORDER BY
 
 -- not pushable since the JOIN condition is not equi JOIN
 -- (subquery_1 JOIN subquery_2)
+-- still, recursive planning will kick in
+SET client_min_messages TO DEBUG1;
 INSERT INTO agg_results_third (user_id, value_1_agg, value_2_agg)
 SELECT
   user_id,
@@ -305,6 +311,7 @@ GROUP BY
   count_pay, user_id
 ORDER BY
   count_pay;
+RESET client_min_messages;
 
 ------------------------------------
 ------------------------------------

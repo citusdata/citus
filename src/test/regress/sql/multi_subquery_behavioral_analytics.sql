@@ -643,7 +643,8 @@ SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM assets;
 DROP TABLE assets;
 
 -- count number of distinct users who have value_1 equal to 5 or 13 but not 3
--- original query that fails
+-- is recusrively planned
+SET client_min_messages TO DEBUG1;
 SELECT count(*) FROM
 (
   SELECT 
@@ -658,6 +659,8 @@ SELECT count(*) FROM
   HAVING 
     count(distinct value_1) = 2
 ) as foo;
+
+RESET client_min_messages;
 
 -- previous push down query
 SELECT subquery_count FROM

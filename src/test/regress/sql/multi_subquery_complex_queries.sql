@@ -397,7 +397,8 @@ ORDER BY
 RESET client_min_messages;
 SET citus.enable_repartition_joins to OFF;
 
--- not supported since the join is not equi join
+-- recursively planned since the join is not equi join
+SET client_min_messages TO DEBUG1;
 SELECT ("final_query"."event_types") as types, count(*) AS sumOfEventType
 FROM
   ( SELECT *, random()
@@ -458,6 +459,7 @@ GROUP BY
   types
 ORDER BY 
   types;
+RESET client_min_messages;
 
 -- not supported since subquery 3 includes a JOIN with non-equi join
 SELECT ("final_query"."event_types") as types, count(*) AS sumOfEventType
@@ -897,8 +899,9 @@ GROUP BY
   user_id ORDER BY cnt DESC, user_id DESC 
 LIMIT 10;
 
--- not supported since the join between t and t2 is not equi join
+-- recursively planned since the join between t and t2 is not equi join
 -- union all with inner and left joins
+SET client_min_messages TO DEBUG1;
 SELECT user_id, count(*) as cnt
 FROM
   (SELECT first_query.user_id, random()
@@ -970,6 +973,8 @@ INNER JOIN
 GROUP BY 
   user_id ORDER BY cnt DESC, user_id DESC 
 LIMIT 10;
+
+RESET client_min_messages;
 
  -- 
  -- Union, inner join and left join
@@ -1309,7 +1314,8 @@ LIMIT 10;
 
 SET citus.subquery_pushdown to OFF;
 
--- not supported since the inner JOIN is not equi join
+-- not supported since the inner JOIN is not equi join and LATERAL JOIN prevents recursive planning
+SET client_min_messages TO DEBUG2;
 SELECT user_id, lastseen
 FROM
   (SELECT 
@@ -1625,7 +1631,7 @@ GROUP BY
 ORDER BY 
   generated_group_field DESC, value DESC;
 
--- recursive planning didn't kick-in since the non-equi join is among subqueries
+-- recursive planning kicked-in since the non-equi join is among subqueries
 SELECT 
  count(*) AS value, "generated_group_field" 
  FROM
@@ -1715,8 +1721,9 @@ ORDER BY cnt, value_3 DESC LIMIT 10;
 SET citus.enable_repartition_joins to ON;
 SET client_min_messages TO DEBUG1;
 
--- not supported since there is no column equality at all
--- but still recursive planning is tried
+-- although there is no column equality at all
+-- still recursive planning plans "some_users_data"
+-- and the query becomes OK
 SELECT 
   "value_3", count(*) AS cnt 
 FROM

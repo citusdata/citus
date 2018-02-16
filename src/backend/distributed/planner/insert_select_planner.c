@@ -215,7 +215,7 @@ CreateDistributedInsertSelectPlan(Query *originalQuery,
 	RelationRestrictionContext *relationRestrictionContext =
 		plannerRestrictionContext->relationRestrictionContext;
 	bool allReferenceTables = relationRestrictionContext->allReferenceTables;
-	bool queryContainsDistributionKeyEquality = false;
+	bool allDistributionKeysInQueryAreEqual = false;
 
 	distributedPlan->operation = originalQuery->commandType;
 
@@ -232,8 +232,8 @@ CreateDistributedInsertSelectPlan(Query *originalQuery,
 		return distributedPlan;
 	}
 
-	queryContainsDistributionKeyEquality =
-		QueryContainsDistributionKeyEquality(plannerRestrictionContext, originalQuery);
+	allDistributionKeysInQueryAreEqual =
+		AllDistributionKeysInQueryAreEqual(originalQuery, plannerRestrictionContext);
 
 	/*
 	 * Plan select query for each shard in the target table. Do so by replacing the
@@ -253,7 +253,7 @@ CreateDistributedInsertSelectPlan(Query *originalQuery,
 		modifyTask = RouterModifyTaskForShardInterval(originalQuery, targetShardInterval,
 													  relationRestrictionContext,
 													  taskIdIndex,
-													  queryContainsDistributionKeyEquality);
+													  allDistributionKeysInQueryAreEqual);
 
 		/* add the task if it could be created */
 		if (modifyTask != NULL)

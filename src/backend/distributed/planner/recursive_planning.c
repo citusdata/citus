@@ -62,12 +62,15 @@
 #include "distributed/multi_logical_planner.h"
 #include "distributed/multi_router_planner.h"
 #include "distributed/multi_physical_planner.h"
-#include "distributed/recursive_planning.h"
 #include "distributed/multi_server_executor.h"
+#include "distributed/query_colocation_checker.h"
+#include "distributed/recursive_planning.h"
 #include "distributed/relation_restriction_equivalence.h"
 #include "lib/stringinfo.h"
 #include "optimizer/planner.h"
+#include "optimizer/prep.h"
 #include "parser/parsetree.h"
+#include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
 #include "nodes/nodes.h"
 #include "nodes/pg_list.h"
@@ -86,7 +89,7 @@ typedef struct RecursivePlanningContext
 {
 	int level;
 	uint64 planId;
-	bool queryContainsDistributionKeyEquality; /* used for some optimizations */
+	bool allDistributionKeysInQueryAreEqual; /* used for some optimizations */
 	List *subPlanList;
 	PlannerRestrictionContext *plannerRestrictionContext;
 } RecursivePlanningContext;
@@ -116,12 +119,24 @@ typedef struct VarLevelsUpWalkerContext
 static DeferredErrorMessage * RecursivelyPlanSubqueriesAndCTEs(Query *query,
 															   RecursivePlanningContext *
 															   context);
-
 static bool ShouldRecursivelyPlanNonColocatedSubqueries(Query *subquery,
 														RecursivePlanningContext *
 														context);
+static bool ContainsSubquery(Query *query);
 static void RecursivelyPlanNonColocatedSubqueries(Query *subquery,
 												  RecursivePlanningContext *context);
+static void RecursivelyPlanNonColocatedJoinWalker(Node *joinNode,
+												  ColocatedJoinChecker *
+												  colocatedJoinChecker,
+												  RecursivePlanningContext *
+												  recursivePlanningContext);
+static void RecursivelyPlanNonColocatedSubqueriesInWhere(Query *query,
+														 ColocatedJoinChecker *
+														 colocatedJoinChecker,
+														 RecursivePlanningContext *
+														 recursivePlanningContext);
+static List * SublinkList(Query *originalQuery);
+static bool ExtractSublinkWalker(Node *node, List **sublinkList);
 static bool ShouldRecursivelyPlanAllSubqueriesInWhere(Query *query);
 static bool RecursivelyPlanAllSubqueries(Node *node,
 										 RecursivePlanningContext *planningContext);
@@ -130,9 +145,9 @@ static DeferredErrorMessage * RecursivelyPlanCTEs(Query *query,
 static bool RecursivelyPlanSubqueryWalker(Node *node, RecursivePlanningContext *context);
 static bool ShouldRecursivelyPlanSubquery(Query *subquery,
 										  RecursivePlanningContext *context);
-static bool SubqueryContainsDistributionKeyEquality(Query *subquery,
-													PlannerRestrictionContext *
-													restrictionContext);
+static bool AllDistributionKeysInSubqueryAreEqual(Query *subquery,
+												  PlannerRestrictionContext *
+												  restrictionContext);
 static bool ShouldRecursivelyPlanSetOperation(Query *query,
 											  RecursivePlanningContext *context);
 static void RecursivelyPlanSetOperations(Query *query, Node *node,
@@ -185,8 +200,8 @@ GenerateSubplansForSubqueriesAndCTEs(uint64 planId, Query *originalQuery,
 	 * calculating this wouldn't help us at all, we should individually check
 	 * each each subquery and subquery joins among subqueries.
 	 */
-	context.queryContainsDistributionKeyEquality =
-		QueryContainsDistributionKeyEquality(plannerRestrictionContext, originalQuery);
+	context.allDistributionKeysInQueryAreEqual =
+		AllDistributionKeysInQueryAreEqual(originalQuery, plannerRestrictionContext);
 
 	error = RecursivelyPlanSubqueriesAndCTEs(originalQuery, &context);
 	if (error != NULL)
@@ -278,6 +293,10 @@ RecursivelyPlanSubqueriesAndCTEs(Query *query, RecursivePlanningContext *context
 		RecursivelyPlanAllSubqueries((Node *) query->jointree->quals, context);
 	}
 
+	/*
+	 * If the query doesn't have distribution key equality,
+	 * recursively plan some of its subqueries.
+	 */
 	if (ShouldRecursivelyPlanNonColocatedSubqueries(query, context))
 	{
 		RecursivelyPlanNonColocatedSubqueries(query, context);
@@ -299,8 +318,11 @@ static bool
 ShouldRecursivelyPlanNonColocatedSubqueries(Query *subquery,
 											RecursivePlanningContext *context)
 {
-	/* if the input query already contains the equality, simply return */
-	if (context->queryContainsDistributionKeyEquality)
+	/*
+	 * If the input query already contains the equality, simply return since it is not
+	 * possible to find any non colocated subqueries.
+	 */
+	if (context->allDistributionKeysInQueryAreEqual)
 	{
 		return false;
 	}
@@ -313,17 +335,10 @@ ShouldRecursivelyPlanNonColocatedSubqueries(Query *subquery,
 	 *       only bother non-colocated subquery joins, which only happens when
 	 *       there are subqueries.
 	 */
-	if (SubqueryEntryList(subquery) == NIL && SublinkList(subquery) == NIL)
+	if (!ContainsSubquery(subquery))
 	{
 		return false;
 	}
-
-	/*
-	 * At this point, we might be recursively planning a a subquery which will be pulled
-	 * by PostgreSQL standard_planner (i.e., tpch_7_nested). However, checking for those
-	 * cases are pretty complicated and, seems not super useful thing to implement.
-	 */
-
 
 	/* direct joins with local tables are not supported by any of Citus planners */
 	if (FindNodeCheckInRangeTableList(subquery->rtable, IsLocalTableRTE))
@@ -334,8 +349,8 @@ ShouldRecursivelyPlanNonColocatedSubqueries(Query *subquery,
 	/*
 	 * Finally, check whether this subquery contains distribution key equality or not.
 	 */
-	if (!SubqueryContainsDistributionKeyEquality(subquery,
-												 context->plannerRestrictionContext))
+	if (!AllDistributionKeysInSubqueryAreEqual(subquery,
+											   context->plannerRestrictionContext))
 	{
 		return true;
 	}
@@ -344,9 +359,228 @@ ShouldRecursivelyPlanNonColocatedSubqueries(Query *subquery,
 }
 
 
+/*
+ * ContainsSubquery returns true if the input query contains any subqueries
+ * in the FROM or WHERE clauses.
+ */
+static bool
+ContainsSubquery(Query *query)
+{
+	return JoinTreeContainsSubquery(query) || WhereClauseContainsSubquery(query);
+}
+
+
+/*
+ * RecursivelyPlanNonColocatedSubqueries gets a query which includes one or more
+ * other subqueries that are not joined on their distribution keys. The function
+ * tries to recursively plan some of the subqueries to make the input query
+ * executable by Citus.
+ *
+ * The function picks an anchor subquery and iterates on the remaining subqueries.
+ * Whenever it finds a non colocated subquery with the anchor subquery, the function
+ * decides to recursively plan the non colocated subquery.
+ *
+ * The function first handles subqueries in FROM clause (i.e., jointree->fromlist) and then
+ * subqueries in WHERE clause (i.e., jointree->quals).
+ *
+ * The function does not treat outer joins seperately. Thus, we might end up with
+ * a query where the function decides to recursively plan an outer side of an outer
+ * join (i.e., LEFT side of LEFT JOIN). For simplicity, we chose to do so and handle
+ * outer joins with a seperate pass on the join tree.
+ */
 static void
-RecursivelyPlanNonColocatedSubqueries(Query *query, RecursivePlanningContext *context)
-{ }
+RecursivelyPlanNonColocatedSubqueries(Query *subquery, RecursivePlanningContext *context)
+{
+	ColocatedJoinChecker colocatedJoinChecker;
+
+	FromExpr *joinTree = subquery->jointree;
+	PlannerRestrictionContext *restrictionContext = NULL;
+
+	/* create the context for the non colocated subquery planning */
+	restrictionContext = context->plannerRestrictionContext;
+	colocatedJoinChecker = CreateColocatedJoinChecker(subquery, restrictionContext);
+
+	/*
+	 * Although this is a rare case, we weren't able to pick an anchor
+	 * range table entry, so we cannot continue.
+	 */
+	if (colocatedJoinChecker.anchorRelationRestrictionList == NIL)
+	{
+		return;
+	}
+
+	/* handle from clause subqueries first */
+	RecursivelyPlanNonColocatedJoinWalker((Node *) joinTree, &colocatedJoinChecker,
+										  context);
+
+	/* handle subqueries in WHERE clause */
+	RecursivelyPlanNonColocatedSubqueriesInWhere(subquery, &colocatedJoinChecker,
+												 context);
+}
+
+
+/*
+ * RecursivelyPlanNonColocatedJoinWalker gets a join node and walks over it to find
+ * subqueries that live under the node.
+ *
+ * When a subquery found, its checked whether the subquery is colocated with the
+ * anchor subquery specified in the nonColocatedJoinContext. If not,
+ * the subquery is recursively planned.
+ */
+static void
+RecursivelyPlanNonColocatedJoinWalker(Node *joinNode,
+									  ColocatedJoinChecker *colocatedJoinChecker,
+									  RecursivePlanningContext *recursivePlanningContext)
+{
+	if (joinNode == NULL)
+	{
+		return;
+	}
+	else if (IsA(joinNode, FromExpr))
+	{
+		FromExpr *fromExpr = (FromExpr *) joinNode;
+		ListCell *fromExprCell;
+
+		/*
+		 * For each element of the from list, check whether the element is
+		 * colocated with the anchor subquery by recursing until we
+		 * find the subqueries.
+		 */
+		foreach(fromExprCell, fromExpr->fromlist)
+		{
+			Node *fromElement = (Node *) lfirst(fromExprCell);
+
+			RecursivelyPlanNonColocatedJoinWalker(fromElement, colocatedJoinChecker,
+												  recursivePlanningContext);
+		}
+	}
+	else if (IsA(joinNode, JoinExpr))
+	{
+		JoinExpr *joinExpr = (JoinExpr *) joinNode;
+
+		/* recurse into the left subtree */
+		RecursivelyPlanNonColocatedJoinWalker(joinExpr->larg, colocatedJoinChecker,
+											  recursivePlanningContext);
+
+		/* recurse into the right subtree */
+		RecursivelyPlanNonColocatedJoinWalker(joinExpr->rarg, colocatedJoinChecker,
+											  recursivePlanningContext);
+	}
+	else if (IsA(joinNode, RangeTblRef))
+	{
+		int rangeTableIndex = ((RangeTblRef *) joinNode)->rtindex;
+		List *rangeTableList = colocatedJoinChecker->subquery->rtable;
+		RangeTblEntry *rte = rt_fetch(rangeTableIndex, rangeTableList);
+		Query *subquery = NULL;
+
+		/* we're only interested in subqueries for now */
+		if (rte->rtekind != RTE_SUBQUERY)
+		{
+			return;
+		}
+
+		/*
+		 * If the subquery is not colocated with the anchor subquery,
+		 * recursively plan it.
+		 */
+		subquery = rte->subquery;
+		if (!SubqueryColocated(subquery, colocatedJoinChecker))
+		{
+			RecursivelyPlanSubquery(subquery, recursivePlanningContext);
+		}
+	}
+	else
+	{
+		pg_unreachable();
+	}
+}
+
+
+/*
+ * RecursivelyPlanNonColocatedJoinWalker gets a query and walks over its sublinks
+ * to find subqueries that live in WHERE clause.
+ *
+ * When a subquery found, its checked whether the subquery is colocated with the
+ * anchor subquery specified in the nonColocatedJoinContext. If not,
+ * the subquery is recursively planned.
+ */
+static void
+RecursivelyPlanNonColocatedSubqueriesInWhere(Query *query,
+											 ColocatedJoinChecker *colocatedJoinChecker,
+											 RecursivePlanningContext *
+											 recursivePlanningContext)
+{
+	List *sublinkList = SublinkList(query);
+	ListCell *sublinkCell = NULL;
+
+	foreach(sublinkCell, sublinkList)
+	{
+		SubLink *sublink = (SubLink *) lfirst(sublinkCell);
+		Query *subselect = (Query *) sublink->subselect;
+
+		/* subselect is probably never NULL, but anyway lets keep the check */
+		if (subselect == NULL)
+		{
+			continue;
+		}
+
+		if (!SubqueryColocated(subselect, colocatedJoinChecker))
+		{
+			RecursivelyPlanSubquery(subselect, recursivePlanningContext);
+		}
+	}
+}
+
+
+/*
+ * SublinkList finds the subquery nodes in the where clause of the given query. Note
+ * that the function should be called on the original query given that postgres
+ * standard_planner() may convert the subqueries in WHERE clause to joins.
+ */
+static List *
+SublinkList(Query *originalQuery)
+{
+	FromExpr *joinTree = originalQuery->jointree;
+	Node *queryQuals = NULL;
+	List *sublinkList = NIL;
+
+	if (!joinTree)
+	{
+		return NIL;
+	}
+
+	queryQuals = joinTree->quals;
+	ExtractSublinkWalker(queryQuals, &sublinkList);
+
+	return sublinkList;
+}
+
+
+/*
+ * ExtractSublinkWalker walks over a quals node, and finds all sublinks
+ * in that node.
+ */
+static bool
+ExtractSublinkWalker(Node *node, List **sublinkList)
+{
+	bool walkerResult = false;
+	if (node == NULL)
+	{
+		return false;
+	}
+
+	if (IsA(node, SubLink))
+	{
+		(*sublinkList) = lappend(*sublinkList, node);
+	}
+	else
+	{
+		walkerResult = expression_tree_walker(node, ExtractSublinkWalker,
+											  sublinkList);
+	}
+
+	return walkerResult;
+}
 
 
 /*
@@ -632,12 +866,13 @@ ShouldRecursivelyPlanSubquery(Query *subquery, RecursivePlanningContext *context
 		 * If the input query to the planner doesn't contain distribution key equality,
 		 * we should further check whether this individual subquery contains or not.
 		 *
-		 * If all the relations are not joined on their distribution keys for the
-		 * subquery, we cannot pushdown the it, thus, recursively plan it.
+		 * If all relations are not joined on their distribution keys for the given
+		 * subquery, we cannot push push it down and therefore we should try to
+		 * recursively plan it.
 		 */
-		if (!context->queryContainsDistributionKeyEquality &&
-			!SubqueryContainsDistributionKeyEquality(subquery,
-													 context->plannerRestrictionContext))
+		if (!context->allDistributionKeysInQueryAreEqual &&
+			!AllDistributionKeysInSubqueryAreEqual(subquery,
+												   context->plannerRestrictionContext))
 		{
 			return true;
 		}
@@ -663,16 +898,16 @@ ShouldRecursivelyPlanSubquery(Query *subquery, RecursivePlanningContext *context
 
 
 /*
- * SubqueryContainsDistributionKeyEquality is a wrapper function
- * for QueryContainsDistributionKeyEquality(). Here, we filter the
+ * AllDistributionKeysInSubqueryAreEqual is a wrapper function
+ * for AllDistributionKeysInQueryAreEqual(). Here, we filter the
  * planner restrictions for the given subquery and do the restriction
  * equality checks on the filtered restriction.
  */
 static bool
-SubqueryContainsDistributionKeyEquality(Query *subquery,
-										PlannerRestrictionContext *restrictionContext)
+AllDistributionKeysInSubqueryAreEqual(Query *subquery,
+									  PlannerRestrictionContext *restrictionContext)
 {
-	bool queryContainsDistributionKeyEquality = false;
+	bool allDistributionKeysInSubqueryAreEqual = false;
 	PlannerRestrictionContext *filteredRestrictionContext = NULL;
 
 	/* we don't support distribution eq. checks for CTEs yet */
@@ -684,9 +919,9 @@ SubqueryContainsDistributionKeyEquality(Query *subquery,
 	filteredRestrictionContext =
 		FilterPlannerRestrictionForQuery(restrictionContext, subquery);
 
-	queryContainsDistributionKeyEquality =
-		QueryContainsDistributionKeyEquality(filteredRestrictionContext, subquery);
-	if (!queryContainsDistributionKeyEquality)
+	allDistributionKeysInSubqueryAreEqual =
+		AllDistributionKeysInQueryAreEqual(subquery, filteredRestrictionContext);
+	if (!allDistributionKeysInSubqueryAreEqual)
 	{
 		return false;
 	}

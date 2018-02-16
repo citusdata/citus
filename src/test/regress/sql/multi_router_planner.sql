@@ -291,7 +291,7 @@ ORDER BY articles_hash.id;
 -- subqueries are supported in FROM clause but they are not router plannable
 SELECT articles_hash.id,test.word_count
 FROM articles_hash, (SELECT id, word_count FROM articles_hash) AS test WHERE test.id = articles_hash.id
-ORDER BY articles_hash.id;
+ORDER BY test.word_count DESC, articles_hash.id LIMIT 5;
 
 
 SELECT articles_hash.id,test.word_count

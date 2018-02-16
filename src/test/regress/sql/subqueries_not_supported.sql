@@ -96,17 +96,6 @@ ORDER BY
 LIMIT
   10) as foo;
 
--- top level join is not on the distribution key thus not supported
--- (use random to prevent Postgres to pull subqueries)
-SELECT
-    foo.value_2
-FROM
-    (SELECT users_table.value_2, random() FROM users_table, events_table WHERE users_table.user_id = events_table.user_id AND event_type IN (1,2,3,4)) as foo,
-    (SELECT users_table.value_2 FROM users_table, events_table WHERE users_table.user_id = events_table.user_id AND event_type IN (5,6,7,8)) as bar
-WHERE
-    foo.value_2 = bar.value_2;
-
-
 -- OUTER JOINs where the outer part is recursively planned and not the other way 
 -- around is not supported
 SELECT

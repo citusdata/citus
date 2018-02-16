@@ -187,7 +187,9 @@ extern bool SubqueryPushdown;
 extern MultiTreeRoot * MultiLogicalPlanCreate(Query *originalQuery, Query *queryTree,
 											  PlannerRestrictionContext *
 											  plannerRestrictionContext);
-extern List * SublinkList(Query *originalQuery);
+extern bool JoinTreeContainsSubquery(Query *query);
+extern bool WhereClauseContainsSubquery(Query *query);
+extern bool FindNodeCheck(Node *node, bool (*check)(Node *));
 extern bool SingleRelationRepartitionSubquery(Query *queryTree);
 extern DeferredErrorMessage * DeferErrorIfCannotPushdownSubquery(Query *subqueryTree,
 																 bool

@@ -152,13 +152,13 @@ static MultiNode * ApplyCartesianProduct(MultiNode *leftNode, MultiNode *rightNo
  * functions will be removed with upcoming subqery changes.
  */
 static bool ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery);
+static bool JoinTreeContainsSubqueryWalker(Node *joinTreeNode, void *context);
 static bool IsFunctionRTE(Node *node);
-static bool FindNodeCheck(Node *node, bool (*check)(Node *));
+static bool IsNodeQuery(Node *node);
 static MultiNode * SubqueryMultiNodeTree(Query *originalQuery,
 										 Query *queryTree,
 										 PlannerRestrictionContext *
 										 plannerRestrictionContext);
-static bool ExtractSublinkWalker(Node *node, List **sublinkList);
 static MultiNode * SubqueryPushdownMultiNodeTree(Query *queryTree);
 
 static List * CreateSubqueryTargetEntryList(List *columnList);
@@ -218,7 +218,7 @@ ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery)
 	 * given that if postgres already flattened the subqueries, MultiPlanTree()
 	 * can plan corresponding distributed plan.
 	 */
-	if (SubqueryEntryList(rewrittenQuery) != NIL)
+	if (JoinTreeContainsSubquery(rewrittenQuery))
 	{
 		return true;
 	}
@@ -229,7 +229,7 @@ ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery)
 	 * standard_planner() may replace the sublinks with anti/semi joins and
 	 * MultiPlanTree() cannot plan such queries.
 	 */
-	if (SublinkList(originalQuery) != NIL)
+	if (WhereClauseContainsSubquery(originalQuery))
 	{
 		return true;
 	}
@@ -254,6 +254,55 @@ ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery)
 	}
 
 	return false;
+}
+
+
+/*
+ * JoinTreeContainsSubquery returns true if the input query contains any subqueries
+ * in the join tree (e.g., FROM clause).
+ */
+bool
+JoinTreeContainsSubquery(Query *query)
+{
+	FromExpr *joinTree = query->jointree;
+
+	if (!joinTree)
+	{
+		return false;
+	}
+
+	return JoinTreeContainsSubqueryWalker((Node *) joinTree, query);
+}
+
+
+/*
+ * JoinTreeContainsSubqueryWalker returns true if the input joinTreeNode
+ * references to a subquery. Otherwise, recurses into the expression.
+ */
+static bool
+JoinTreeContainsSubqueryWalker(Node *joinTreeNode, void *context)
+{
+	if (joinTreeNode == NULL)
+	{
+		return false;
+	}
+
+	if (IsA(joinTreeNode, RangeTblRef))
+	{
+		Query *query = (Query *) context;
+
+		RangeTblRef *rangeTableRef = (RangeTblRef *) joinTreeNode;
+		RangeTblEntry *rangeTableEntry = rt_fetch(rangeTableRef->rtindex, query->rtable);
+
+		if (rangeTableEntry->rtekind == RTE_SUBQUERY)
+		{
+			return true;
+		}
+
+		return false;
+	}
+
+	return expression_tree_walker(joinTreeNode, JoinTreeContainsSubqueryWalker, context);
 }
 
 
@@ -283,7 +332,7 @@ IsFunctionRTE(Node *node)
  * To call this function directly with an RTE, use:
  * range_table_walker(rte, FindNodeCheck, check, QTW_EXAMINE_RTES)
  */
-static bool
+bool
 FindNodeCheck(Node *node, bool (*check)(Node *))
 {
 	if (node == NULL)
@@ -311,53 +360,38 @@ FindNodeCheck(Node *node, bool (*check)(Node *))
 
 
 /*
- * SublinkList finds the subquery nodes in the where clause of the given query. Note
- * that the function should be called on the original query given that postgres
- * standard_planner() may convert the subqueries in WHERE clause to joins.
+ * WhereClauseContainsSubquery returns true if the input query contains
+ * any subqueries in the WHERE clause.
  */
-List *
-SublinkList(Query *originalQuery)
+bool
+WhereClauseContainsSubquery(Query *query)
 {
-	FromExpr *joinTree = originalQuery->jointree;
+	FromExpr *joinTree = query->jointree;
 	Node *queryQuals = NULL;
-	List *sublinkList = NIL;
 
 	if (!joinTree)
 	{
-		return NIL;
+		return false;
 	}
 
 	queryQuals = joinTree->quals;
-	ExtractSublinkWalker(queryQuals, &sublinkList);
 
-	return sublinkList;
+	return FindNodeCheck(queryQuals, IsNodeQuery);
 }
 
 
 /*
- * ExtractSublinkWalker walks over a quals node, and finds all sublinks
- * in that node.
+ * IsNodeQuery returns true if the given node is a Query.
  */
 static bool
-ExtractSublinkWalker(Node *node, List **sublinkList)
+IsNodeQuery(Node *node)
 {
-	bool walkerResult = false;
 	if (node == NULL)
 	{
 		return false;
 	}
 
-	if (IsA(node, SubLink))
-	{
-		(*sublinkList) = lappend(*sublinkList, node);
-	}
-	else
-	{
-		walkerResult = expression_tree_walker(node, ExtractSublinkWalker,
-											  sublinkList);
-	}
-
-	return walkerResult;
+	return IsA(node, Query);
 }
 
 
@@ -2055,7 +2089,7 @@ DeferErrorIfQueryNotSupported(Query *queryTree)
 	 * There could be Sublinks in the target list as well. To produce better
 	 * error messages we're checking sublinks in the where clause.
 	 */
-	if (queryTree->hasSubLinks && SublinkList(queryTree) == NIL)
+	if (queryTree->hasSubLinks && !WhereClauseContainsSubquery(queryTree))
 	{
 		preconditionsSatisfied = false;
 		errorMessage = "could not run distributed query with subquery outside the "

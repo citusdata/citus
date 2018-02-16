@@ -556,71 +556,36 @@ DEBUG:  Plan is router executable
 -- subqueries are supported in FROM clause but they are not router plannable
 SELECT articles_hash.id,test.word_count
 FROM articles_hash, (SELECT id, word_count FROM articles_hash) AS test WHERE test.id = articles_hash.id
-ORDER BY articles_hash.id;
-DEBUG:  join prunable for task partitionId 0 and 1
-DEBUG:  join prunable for task partitionId 0 and 2
-DEBUG:  join prunable for task partitionId 0 and 3
-DEBUG:  join prunable for task partitionId 1 and 0
-DEBUG:  join prunable for task partitionId 1 and 2
-DEBUG:  join prunable for task partitionId 1 and 3
-DEBUG:  join prunable for task partitionId 2 and 0
-DEBUG:  join prunable for task partitionId 2 and 1
-DEBUG:  join prunable for task partitionId 2 and 3
-DEBUG:  join prunable for task partitionId 3 and 0
-DEBUG:  join prunable for task partitionId 3 and 1
-DEBUG:  join prunable for task partitionId 3 and 2
-DEBUG:  pruning merge fetch taskId 1
-DETAIL:  Creating dependency on merge taskId 5
-DEBUG:  pruning merge fetch taskId 2
-DETAIL:  Creating dependency on merge taskId 5
-DEBUG:  pruning merge fetch taskId 4
-DETAIL:  Creating dependency on merge taskId 8
-DEBUG:  pruning merge fetch taskId 5
-DETAIL:  Creating dependency on merge taskId 8
-DEBUG:  pruning merge fetch taskId 7
-DETAIL:  Creating dependency on merge taskId 11
-DEBUG:  pruning merge fetch taskId 8
-DETAIL:  Creating dependency on merge taskId 11
-DEBUG:  pruning merge fetch taskId 10
-DETAIL:  Creating dependency on merge taskId 14
-DEBUG:  pruning merge fetch taskId 11
-DETAIL:  Creating dependency on merge taskId 14
-ERROR:  the query contains a join that requires repartitioning
-HINT:  Set citus.enable_repartition_joins to on to enable repartitioning
+ORDER BY test.word_count DESC, articles_hash.id LIMIT 5;
+DEBUG:  generating subplan 88_1 for subquery SELECT id, word_count FROM public.articles_hash
+DEBUG:  Plan 88 query after replacing subqueries and CTEs: SELECT articles_hash.id, test.word_count FROM public.articles_hash, (SELECT intermediate_result.id, intermediate_result.word_count FROM read_intermediate_result('88_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, word_count integer)) test WHERE (test.id = articles_hash.id) ORDER BY test.word_count DESC, articles_hash.id LIMIT 5
+DEBUG:  push down of limit count: 5
+ id | word_count 
+----+------------
+ 50 |      19519
+ 14 |      19094
+ 48 |      18610
+ 12 |      18185
+ 46 |      17702
+(5 rows)
+
 SELECT articles_hash.id,test.word_count
 FROM articles_hash, (SELECT id, word_count FROM articles_hash) AS test 
 WHERE test.id = articles_hash.id and articles_hash.author_id = 1
 ORDER BY articles_hash.id;
-DEBUG:  join prunable for task partitionId 0 and 1
-DEBUG:  join prunable for task partitionId 0 and 2
-DEBUG:  join prunable for task partitionId 0 and 3
-DEBUG:  join prunable for task partitionId 1 and 0
-DEBUG:  join prunable for task partitionId 1 and 2
-DEBUG:  join prunable for task partitionId 1 and 3
-DEBUG:  join prunable for task partitionId 2 and 0
-DEBUG:  join prunable for task partitionId 2 and 1
-DEBUG:  join prunable for task partitionId 2 and 3
-DEBUG:  join prunable for task partitionId 3 and 0
-DEBUG:  join prunable for task partitionId 3 and 1
-DEBUG:  join prunable for task partitionId 3 and 2
-DEBUG:  pruning merge fetch taskId 1
-DETAIL:  Creating dependency on merge taskId 3
-DEBUG:  pruning merge fetch taskId 2
-DETAIL:  Creating dependency on merge taskId 5
-DEBUG:  pruning merge fetch taskId 4
-DETAIL:  Creating dependency on merge taskId 5
-DEBUG:  pruning merge fetch taskId 5
-DETAIL:  Creating dependency on merge taskId 8
-DEBUG:  pruning merge fetch taskId 7
-DETAIL:  Creating dependency on merge taskId 7
-DEBUG:  pruning merge fetch taskId 8
-DETAIL:  Creating dependency on merge taskId 11
-DEBUG:  pruning merge fetch taskId 10
-DETAIL:  Creating dependency on merge taskId 9
-DEBUG:  pruning merge fetch taskId 11
-DETAIL:  Creating dependency on merge taskId 14
-ERROR:  the query contains a join that requires repartitioning
-HINT:  Set citus.enable_repartition_joins to on to enable repartitioning
+DEBUG:  generating subplan 90_1 for subquery SELECT id, word_count FROM public.articles_hash
+DEBUG:  Plan 90 query after replacing subqueries and CTEs: SELECT articles_hash.id, test.word_count FROM public.articles_hash, (SELECT intermediate_result.id, intermediate_result.word_count FROM read_intermediate_result('90_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, word_count integer)) test WHERE ((test.id = articles_hash.id) AND (articles_hash.author_id = 1)) ORDER BY articles_hash.id
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ id | word_count 
+----+------------
+  1 |       9572
+ 11 |       1347
+ 21 |       5890
+ 31 |       7271
+ 41 |      11814
+(5 rows)
+
 -- subqueries are not supported in SELECT clause
 SELECT a.title AS name, (SELECT a2.id FROM articles_single_shard_hash a2 WHERE a.id = a2.id  LIMIT 1)
 						 AS special_price FROM articles_hash a;
@@ -725,10 +690,10 @@ SELECT a.author_id as first_author, b.word_count as second_word_count
 	WHERE a.author_id = 2 and a.author_id = b.author_id
 	LIMIT 3;
 DEBUG:  Found no worker with all shard placements
-DEBUG:  generating subplan 97_1 for CTE single_shard: SELECT id, author_id, title, word_count FROM public.articles_single_shard_hash
+DEBUG:  generating subplan 99_1 for CTE single_shard: SELECT id, author_id, title, word_count FROM public.articles_single_shard_hash
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-DEBUG:  Plan 97 query after replacing subqueries and CTEs: SELECT a.author_id AS first_author, b.word_count AS second_word_count FROM public.articles_hash a, (SELECT intermediate_result.id, intermediate_result.author_id, intermediate_result.title, intermediate_result.word_count FROM read_intermediate_result('97_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, author_id bigint, title character varying(20), word_count integer)) b WHERE ((a.author_id = 2) AND (a.author_id = b.author_id)) LIMIT 3
+DEBUG:  Plan 99 query after replacing subqueries and CTEs: SELECT a.author_id AS first_author, b.word_count AS second_word_count FROM public.articles_hash a, (SELECT intermediate_result.id, intermediate_result.author_id, intermediate_result.title, intermediate_result.word_count FROM read_intermediate_result('99_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, author_id bigint, title character varying(20), word_count integer)) b WHERE ((a.author_id = 2) AND (a.author_id = b.author_id)) LIMIT 3
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  first_author | second_word_count 

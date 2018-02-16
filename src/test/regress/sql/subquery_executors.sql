@@ -22,7 +22,7 @@ FROM
 WHERE foo.value_2 = bar.user_id; 
 
 -- subquery with router but not logical plannable
--- should fail
+-- bar is recursively planned
 SELECT
 	count(*) 
 FROM

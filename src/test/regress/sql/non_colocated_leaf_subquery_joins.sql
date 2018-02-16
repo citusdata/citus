@@ -105,8 +105,8 @@ FROM (
 ORDER BY 2 DESC, 1;
 $$);
 
- -- should not recursively plan any subquery given that we don't support
- -- non-colocated subquery joins among the subqueries yet
+ -- should recursively plan bar subquery given that it is not joined
+ -- on the distribution key with bar
 SELECT true AS valid FROM explain_json($$SELECT
     count(*)
 FROM

@@ -15,14 +15,18 @@
 #include "distributed/distributed_planner.h"
 
 
-extern bool QueryContainsDistributionKeyEquality(PlannerRestrictionContext *
-												 plannerRestrictionContext,
-												 Query *originalQuery);
+extern bool AllDistributionKeysInQueryAreEqual(Query *originalQuery,
+											   PlannerRestrictionContext *
+											   plannerRestrictionContext);
 extern bool SafeToPushdownUnionSubquery(PlannerRestrictionContext *
 										plannerRestrictionContext);
 extern bool ContainsUnionSubquery(Query *queryTree);
 extern bool RestrictionEquivalenceForPartitionKeys(PlannerRestrictionContext *
 												   plannerRestrictionContext);
+bool RestrictionEquivalenceForPartitionKeysViaEquivalances(PlannerRestrictionContext *
+														   plannerRestrictionContext,
+														   List *
+														   allAttributeEquivalenceList);
 extern List * GenerateAllAttributeEquivalences(PlannerRestrictionContext *
 											   plannerRestrictionContext);
 extern uint32 ReferenceRelationCount(RelationRestrictionContext *restrictionContext);
@@ -33,5 +37,9 @@ extern PlannerRestrictionContext * FilterPlannerRestrictionForQuery(
 	Query *query);
 extern JoinRestrictionContext * RemoveDuplicateJoinRestrictions(JoinRestrictionContext *
 																joinRestrictionContext);
+
+extern bool EquivalenceListContainsRelationsEquality(List *attributeEquivalenceList,
+													 RelationRestrictionContext *
+													 restrictionContext);
 
 #endif /* RELATION_RESTRICTION_EQUIVALENCE_H */

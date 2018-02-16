@@ -215,60 +215,7 @@ ERROR:  Complex subqueries and CTEs are not supported when task_executor_type is
 SELECT articles.id,test.word_count
 FROM articles, (SELECT id, word_count FROM articles) AS test WHERE test.id = articles.id
 ORDER BY articles.id;
- id | word_count 
-----+------------
-  1 |       9572
-  2 |      13642
-  3 |      10480
-  4 |      14551
-  5 |      11389
-  6 |      15459
-  7 |      12298
-  8 |      16368
-  9 |        438
- 10 |      17277
- 11 |       1347
- 12 |      18185
- 13 |       2255
- 14 |      19094
- 15 |       3164
- 16 |          2
- 17 |       4073
- 18 |        911
- 19 |       4981
- 20 |       1820
- 21 |       5890
- 22 |       2728
- 23 |       6799
- 24 |       3637
- 25 |       7707
- 26 |       4545
- 27 |       8616
- 28 |       5454
- 29 |       9524
- 30 |       6363
- 31 |       7271
- 32 |      11342
- 33 |       8180
- 34 |      12250
- 35 |       9089
- 36 |      13159
- 37 |       9997
- 38 |      14067
- 39 |      10906
- 40 |      14976
- 41 |      11814
- 42 |      15885
- 43 |      12723
- 44 |      16793
- 45 |        864
- 46 |      17702
- 47 |       1772
- 48 |      18610
- 49 |       2681
- 50 |      19519
-(50 rows)
-
+ERROR:  Complex subqueries and CTEs are not supported when task_executor_type is set to 'task-tracker'
 -- subqueries are not supported in SELECT clause
 SELECT a.title AS name, (SELECT a2.id FROM articles_single_shard a2 WHERE a.id = a2.id  LIMIT 1)
 						 AS special_price FROM articles a;

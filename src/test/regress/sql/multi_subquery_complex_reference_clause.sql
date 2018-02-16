@@ -908,7 +908,8 @@ SELECT count(*) FROM
   (SELECT random() FROM users_ref_test_table LEFT JOIN user_buy_test_table
   ON user_buy_test_table.item_id > users_ref_test_table.id) subquery_1;
 
--- we don't allow non equi join among hash partitioned tables
+-- we do allow non equi join among subqueries via recursive planning
+SET client_min_messages TO DEBUG1;
 SELECT count(*) FROM
   (SELECT user_buy_test_table.user_id, random() FROM user_buy_test_table LEFT JOIN users_ref_test_table
   ON user_buy_test_table.item_id > users_ref_test_table.id) subquery_1,
@@ -916,8 +917,9 @@ SELECT count(*) FROM
   ON user_buy_test_table.user_id > users_ref_test_table.id) subquery_2
 WHERE subquery_1.user_id != subquery_2.user_id ;
 
--- we cannot push this query since hash partitioned tables
--- are not joined on partition keys with equality
+-- we could not push this query not due to non colocated
+-- subqueries (i.e., they are recursively planned)
+-- but due to outer join restrictions
 SELECT
 count(*) AS cnt, "generated_group_field"
  FROM
@@ -954,6 +956,9 @@ count(*) AS cnt, "generated_group_field"
   ORDER BY
     cnt DESC, generated_group_field ASC
   LIMIT 10;
+
+RESET client_min_messages;
+
 
 -- two hash partitioned relations are not joined
 -- on partiton keys although reference table is fine
