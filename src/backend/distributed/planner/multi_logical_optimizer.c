@@ -155,6 +155,10 @@ static Const * MakeIntegerConstInt64(int64 integerValue);
 /* Local functions forward declarations for aggregate expression checks */
 static void ErrorIfContainsUnsupportedAggregate(MultiNode *logicalPlanNode);
 static void ErrorIfUnsupportedArrayAggregate(Aggref *arrayAggregateExpression);
+static void ErrorIfUnsupportedJsonAggregate(AggregateType type,
+											Aggref *aggregateExpression);
+static void ErrorIfUnsupportedJsonObjectAggregate(AggregateType type,
+												  Aggref *aggregateExpression);
 static void ErrorIfUnsupportedAggregateDistinct(Aggref *aggregateExpression,
 												MultiNode *logicalPlanNode);
 static Var * AggregateDistinctColumn(Aggref *aggregateExpression);
@@ -1585,41 +1589,71 @@ MasterAggregateExpression(Aggref *originalAggregate,
 
 		newMasterExpression = (Expr *) coalesceExpr;
 	}
-	else if (aggregateType == AGGREGATE_ARRAY_AGG)
+	else if (aggregateType == AGGREGATE_ARRAY_AGG ||
+			 aggregateType == AGGREGATE_JSONB_AGG ||
+			 aggregateType == AGGREGATE_JSONB_OBJECT_AGG ||
+			 aggregateType == AGGREGATE_JSON_AGG ||
+			 aggregateType == AGGREGATE_JSON_OBJECT_AGG)
 	{
 		/*
-		 * Array aggregates are handled in two steps. First, we compute array_agg()
-		 * on the worker nodes. Then, we gather the arrays on the master and
-		 * compute the array_cat_agg() aggregate on them to get the final array.
+		 * Array and json aggregates are handled in two steps. First, we compute
+		 * array_agg() or json aggregate on the worker nodes. Then, we gather
+		 * the arrays or jsons on the master and compute the array_cat_agg()
+		 * or jsonb_cat_agg() aggregate on them to get the final array or json.
 		 */
 		Var *column = NULL;
-		TargetEntry *arrayCatAggArgument = NULL;
+		TargetEntry *catAggArgument = NULL;
 		Aggref *newMasterAggregate = NULL;
 		Oid aggregateFunctionId = InvalidOid;
+		const char *catAggregateName = NULL;
+		Oid catInputType = InvalidOid;
 
 		/* worker aggregate and original aggregate have same return type */
 		Oid workerReturnType = exprType((Node *) originalAggregate);
 		int32 workerReturnTypeMod = exprTypmod((Node *) originalAggregate);
 		Oid workerCollationId = exprCollation((Node *) originalAggregate);
 
-		/* assert that we do not support array_agg() with distinct or order by */
+		/* assert that we do not support array or json aggregation with
+		 * distinct or order by */
 		Assert(!originalAggregate->aggorder);
 		Assert(!originalAggregate->aggdistinct);
 
-		/* array_cat_agg() takes anyarray as input */
-		aggregateFunctionId = AggregateFunctionOid(ARRAY_CAT_AGGREGATE_NAME,
-												   ANYARRAYOID);
+		if (aggregateType == AGGREGATE_ARRAY_AGG)
+		{
+			/* array_cat_agg() takes anyarray as input */
+			catAggregateName = ARRAY_CAT_AGGREGATE_NAME;
+			catInputType = ANYARRAYOID;
+		}
+		else if (aggregateType == AGGREGATE_JSONB_AGG ||
+				 aggregateType == AGGREGATE_JSONB_OBJECT_AGG)
+		{
+			/* jsonb_cat_agg() takes jsonb as input */
+			catAggregateName = JSONB_CAT_AGGREGATE_NAME;
+			catInputType = JSONBOID;
+		}
+		else
+		{
+			/* json_cat_agg() takes json as input */
+			catAggregateName = JSON_CAT_AGGREGATE_NAME;
+			catInputType = JSONOID;
+		}
 
-		/* create argument for the array_cat_agg() aggregate */
+		Assert(catAggregateName != NULL);
+		Assert(catInputType != InvalidOid);
+
+		aggregateFunctionId = AggregateFunctionOid(catAggregateName,
+												   catInputType);
+
+		/* create argument for the array_cat_agg() or jsonb_cat_agg() aggregate */
 		column = makeVar(masterTableId, walkerContext->columnId, workerReturnType,
 						 workerReturnTypeMod, workerCollationId, columnLevelsUp);
-		arrayCatAggArgument = makeTargetEntry((Expr *) column, argumentId, NULL, false);
+		catAggArgument = makeTargetEntry((Expr *) column, argumentId, NULL, false);
 		walkerContext->columnId++;
 
-		/* construct the master array_cat_agg() expression */
+		/* construct the master array_cat_agg() or jsonb_cat_agg() expression */
 		newMasterAggregate = copyObject(originalAggregate);
 		newMasterAggregate->aggfnoid = aggregateFunctionId;
-		newMasterAggregate->args = list_make1(arrayCatAggArgument);
+		newMasterAggregate->args = list_make1(catAggArgument);
 		newMasterAggregate->aggfilter = NULL;
 		newMasterAggregate->aggtranstype = InvalidOid;
 		newMasterAggregate->aggargtypes = list_make1_oid(ANYARRAYOID);
@@ -2367,7 +2401,7 @@ AggregateArgumentType(Aggref *aggregate)
 	TargetEntry *argument = (TargetEntry *) linitial(argumentList);
 	Oid returnTypeId = exprType((Node *) argument->expr);
 
-	/* We currently support aggregates with only one argument; assert that. */
+	/* Here we currently support aggregates with only one argument; assert that. */
 	Assert(list_length(argumentList) == 1);
 
 	return returnTypeId;
@@ -2702,6 +2736,16 @@ ErrorIfContainsUnsupportedAggregate(MultiNode *logicalPlanNode)
 		{
 			ErrorIfUnsupportedArrayAggregate(aggregateExpression);
 		}
+		else if (aggregateType == AGGREGATE_JSONB_AGG ||
+				 aggregateType == AGGREGATE_JSON_AGG)
+		{
+			ErrorIfUnsupportedJsonAggregate(aggregateType, aggregateExpression);
+		}
+		else if (aggregateType == AGGREGATE_JSONB_OBJECT_AGG ||
+				 aggregateType == AGGREGATE_JSON_OBJECT_AGG)
+		{
+			ErrorIfUnsupportedJsonObjectAggregate(aggregateType, aggregateExpression);
+		}
 		else if (aggregateExpression->aggdistinct)
 		{
 			ErrorIfUnsupportedAggregateDistinct(aggregateExpression, logicalPlanNode);
@@ -2730,6 +2774,60 @@ ErrorIfUnsupportedArrayAggregate(Aggref *arrayAggregateExpression)
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						errmsg("array_agg (distinct) is unsupported")));
+	}
+}
+
+
+/*
+ * ErrorIfUnsupportedJsonAggregate checks if we can transform the json
+ * aggregate expression and push it down to the worker node. If we cannot
+ * transform the aggregate, this function errors.
+ */
+static void
+ErrorIfUnsupportedJsonAggregate(AggregateType type,
+								Aggref *aggregateExpression)
+{
+	/* if json aggregate has order by, we error out */
+	if (aggregateExpression->aggorder)
+	{
+		const char *name = AggregateNames[type];
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("%s with order by is unsupported", name)));
+	}
+
+	/* if json aggregate has distinct, we error out */
+	if (aggregateExpression->aggdistinct)
+	{
+		const char *name = AggregateNames[type];
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("%s (distinct) is unsupported", name)));
+	}
+}
+
+
+/*
+ * ErrorIfUnsupportedJsonObjectAggregate checks if we can transform the
+ * json object aggregate expression and push it down to the worker node.
+ * If we cannot transform the aggregate, this function errors.
+ */
+static void
+ErrorIfUnsupportedJsonObjectAggregate(AggregateType type,
+									  Aggref *aggregateExpression)
+{
+	/* if json object aggregate has order by, we error out */
+	if (aggregateExpression->aggorder)
+	{
+		const char *name = AggregateNames[type];
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("%s with order by is unsupported", name)));
+	}
+
+	/* if json object aggregate has distinct, we error out */
+	if (aggregateExpression->aggdistinct)
+	{
+		const char *name = AggregateNames[type];
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("%s (distinct) is unsupported", name)));
 	}
 }
 
