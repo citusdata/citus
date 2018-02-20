@@ -23,10 +23,10 @@ teardown
 session "s1"
 step "s1-initialize"
 {
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
+	INSERT INTO insert_of_insert_select_hash VALUES (0, 'a'), (1, 'b'), (2, 'c'), (3, 'd'), (4, 'e');
+	INSERT INTO select_of_insert_select_hash VALUES (0, 'a'), (1, 'b'), (2, 'c'), (3, 'd'), (4, 'e');
+	INSERT INTO insert_of_insert_select_hash VALUES (5, 'a'), (6, 'b'), (7, 'c'), (8, 'd'), (9, 'e');
+	INSERT INTO select_of_insert_select_hash VALUES (5, 'a'), (6, 'b'), (7, 'c'), (8, 'd'), (9, 'e');
 }
 step "s1-begin" { BEGIN; }
 step "s1-insert-select" { INSERT INTO insert_of_insert_select_hash SELECT * FROM select_of_insert_select_hash ORDER BY 1, 2 LIMIT 5;; }

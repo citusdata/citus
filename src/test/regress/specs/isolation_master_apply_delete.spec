@@ -4,7 +4,7 @@ setup
 
   	SELECT create_distributed_table('table_to_delete_from', 'id', 'append');
 
-  	COPY table_to_delete_from FROM PROGRAM 'echo "0\n1\n2\n3\n4\n5\n6\n7\n8\n9\n10"';
+  	COPY table_to_delete_from FROM PROGRAM 'echo "0:1:2:3:4:5:6:7:8:9:10" | tr : "\n"';
 }
 
 teardown
