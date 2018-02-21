@@ -78,6 +78,270 @@ EXPLAIN (COSTS FALSE)
 
 SET enable_hashagg TO on;
 
+-- distinct on aggregate of group by columns, we try to check whether we handle
+-- queries which does not have any group by column in distinct columns properly.
+SELECT DISTINCT count(*)
+	FROM lineitem_hash_part
+	GROUP BY l_suppkey, l_linenumber
+	ORDER BY 1;
+	
+-- explain the query to see actual plan. We expect to see Aggregate node having 
+-- group by key on count(*) column, since columns in the Group By doesn't guarantee
+-- the uniqueness of the result.
+EXPLAIN (COSTS FALSE)
+	SELECT DISTINCT count(*)
+		FROM lineitem_hash_part
+		GROUP BY l_suppkey, l_linenumber
+		ORDER BY 1;
+
+-- check the plan if the hash aggreate is disabled. We expect to see sort+unique
+-- instead of aggregate plan node to handle distinct.
+SET enable_hashagg TO off;
+EXPLAIN (COSTS FALSE)
+	SELECT DISTINCT count(*)
+		FROM lineitem_hash_part
+		GROUP BY l_suppkey, l_linenumber
+		ORDER BY 1;
+
+SET enable_hashagg TO on;
+
+-- Now we have only part of group clause columns in distinct, yet it is still not
+-- enough to use Group By columns to guarantee uniqueness of result list.
+SELECT DISTINCT l_suppkey, count(*)
+	FROM lineitem_hash_part
+	GROUP BY l_suppkey, l_linenumber
+	ORDER BY 1
+	LIMIT 10;
+	
+-- explain the query to see actual plan. Similar to the explain of the query above.
+EXPLAIN (COSTS FALSE)
+	SELECT DISTINCT l_suppkey, count(*)
+		FROM lineitem_hash_part
+		GROUP BY l_suppkey, l_linenumber
+		ORDER BY 1
+		LIMIT 10;
+
+-- check the plan if the hash aggreate is disabled. Similar to the explain of 
+-- the query above.
+SET enable_hashagg TO off;
+EXPLAIN (COSTS FALSE)
+	SELECT DISTINCT l_suppkey, count(*)
+		FROM lineitem_hash_part
+		GROUP BY l_suppkey, l_linenumber
+		ORDER BY 1
+		LIMIT 10;
+
+SET enable_hashagg TO on;
+
+-- Similar to the above query, not with count but avg. Only difference with the
+-- above query is that, we create run two aggregate functions in workers.
+SELECT DISTINCT l_suppkey, avg(l_partkey)
+	FROM lineitem_hash_part
+	GROUP BY l_suppkey, l_linenumber
+	ORDER BY 1,2
+	LIMIT 10;
+	
+-- explain the query to see actual plan. Similar to the explain of the query above.
+-- Only aggregate functions will be changed.
+EXPLAIN (COSTS FALSE)
+	SELECT DISTINCT l_suppkey, avg(l_partkey)
+		FROM lineitem_hash_part
+		GROUP BY l_suppkey, l_linenumber
+		ORDER BY 1,2
+		LIMIT 10;
+
+-- check the plan if the hash aggreate is disabled. This explain errors out due
+-- to a bug right now, expectation must be corrected after fixing it.
+SET enable_hashagg TO off;
+EXPLAIN (COSTS FALSE)
+	SELECT DISTINCT l_suppkey, avg(l_partkey)
+		FROM lineitem_hash_part
+		GROUP BY l_suppkey, l_linenumber
+		ORDER BY 1,2
+		LIMIT 10;
+
+SET enable_hashagg TO on;
+
+-- Similar to the above query but with distinct on
+SELECT DISTINCT ON (l_suppkey) avg(l_partkey)
+	FROM lineitem_hash_part
+	GROUP BY l_suppkey, l_linenumber
+	ORDER BY l_suppkey,1
+	LIMIT 10;
+	
+-- explain the query to see actual plan. We expect to see sort+unique to handle
+-- distinct on.
+EXPLAIN (COSTS FALSE)
+	SELECT DISTINCT ON (l_suppkey) avg(l_partkey)
+		FROM lineitem_hash_part
+		GROUP BY l_suppkey, l_linenumber
+		ORDER BY l_suppkey,1
+		LIMIT 10;
+
+-- check the plan if the hash aggreate is disabled. We expect to see sort+unique to 
+-- handle distinct on.
+SET enable_hashagg TO off;
+EXPLAIN (COSTS FALSE)
+	SELECT DISTINCT ON (l_suppkey) avg(l_partkey)
+		FROM lineitem_hash_part
+		GROUP BY l_suppkey, l_linenumber
+		ORDER BY l_suppkey,1
+		LIMIT 10;
+
+SET enable_hashagg TO on;
+
+-- distinct with expression and aggregation
+SELECT DISTINCT avg(ceil(l_partkey / 2))
+	FROM lineitem_hash_part
+	GROUP BY l_suppkey, l_linenumber
+	ORDER BY 1
+	LIMIT 10;
+	
+-- explain the query to see actual plan
+EXPLAIN (COSTS FALSE)
+	SELECT DISTINCT avg(ceil(l_partkey / 2))
+		FROM lineitem_hash_part
+		GROUP BY l_suppkey, l_linenumber
+		ORDER BY 1
+		LIMIT 10;
+
+-- check the plan if the hash aggreate is disabled. This explain errors out due
+-- to a bug right now, expectation must be corrected after fixing it.
+SET enable_hashagg TO off;
+EXPLAIN (COSTS FALSE)
+	SELECT DISTINCT avg(ceil(l_partkey / 2))
+		FROM lineitem_hash_part
+		GROUP BY l_suppkey, l_linenumber
+		ORDER BY 1
+		LIMIT 10;	
+		
+SET enable_hashagg TO on;		
+
+-- expression among aggregations.
+SELECT DISTINCT sum(l_suppkey) + count(l_partkey) AS dis 
+	FROM lineitem_hash_part 
+	GROUP BY l_suppkey, l_linenumber
+	ORDER BY 1
+	LIMIT 10;
+	
+-- explain the query to see actual plan
+EXPLAIN (COSTS FALSE)
+	SELECT DISTINCT sum(l_suppkey) + count(l_partkey) AS dis 
+		FROM lineitem_hash_part 
+		GROUP BY l_suppkey, l_linenumber
+		ORDER BY 1
+		LIMIT 10;
+
+-- check the plan if the hash aggreate is disabled. This explain errors out due
+-- to a bug right now, expectation must be corrected after fixing it.
+SET enable_hashagg TO off;
+EXPLAIN (COSTS FALSE)
+	SELECT DISTINCT sum(l_suppkey) + count(l_partkey) AS dis 
+		FROM lineitem_hash_part 
+		GROUP BY l_suppkey, l_linenumber
+		ORDER BY 1
+		LIMIT 10;	
+		
+SET enable_hashagg TO on;		
+		
+-- distinct on all columns, note Group By columns guarantees uniqueness of the
+-- result list.		
+SELECT DISTINCT * 
+	FROM lineitem_hash_part 
+	GROUP BY 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16
+	ORDER BY 1,2
+	LIMIT 10;
+	
+-- explain the query to see actual plan. We expect to see only one aggregation
+-- node since group by columns guarantees the uniqueness.
+EXPLAIN (COSTS FALSE)
+	SELECT DISTINCT * 
+		FROM lineitem_hash_part 
+		GROUP BY 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16
+		ORDER BY 1,2
+		LIMIT 10;
+
+-- check the plan if the hash aggreate is disabled. We expect to see only one 
+-- aggregation node since group by columns guarantees the uniqueness.
+SET enable_hashagg TO off;
+EXPLAIN (COSTS FALSE)
+	SELECT DISTINCT * 
+		FROM lineitem_hash_part 
+		GROUP BY 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16
+		ORDER BY 1,2
+		LIMIT 10;	
+		
+SET enable_hashagg TO on;
+
+-- distinct on count distinct
+SELECT DISTINCT count(DISTINCT l_partkey), count(DISTINCT l_shipmode)
+	FROM lineitem_hash_part
+	GROUP BY l_orderkey
+	ORDER BY 1,2;
+	
+-- explain the query to see actual plan. We expect to see aggregation plan for
+-- the outer distinct.
+EXPLAIN (COSTS FALSE)
+	SELECT DISTINCT count(DISTINCT l_partkey), count(DISTINCT l_shipmode)
+		FROM lineitem_hash_part
+		GROUP BY l_orderkey
+		ORDER BY 1,2;
+
+-- check the plan if the hash aggreate is disabled. We expect to see sort + unique 
+-- plans for the outer distinct.
+SET enable_hashagg TO off;
+EXPLAIN (COSTS FALSE)
+	SELECT DISTINCT count(DISTINCT l_partkey), count(DISTINCT l_shipmode)
+		FROM lineitem_hash_part
+		GROUP BY l_orderkey
+		ORDER BY 1,2;
+		
+SET enable_hashagg TO on;
+
+-- distinct on aggregation with filter and expression
+SELECT DISTINCT ceil(count(case when l_partkey > 100000 THEN 1 ELSE 0 END) / 2) AS count 
+	FROM lineitem_hash_part 
+	GROUP BY l_suppkey
+	ORDER BY 1;
+	
+-- explain the query to see actual plan
+EXPLAIN (COSTS FALSE)
+	SELECT DISTINCT ceil(count(case when l_partkey > 100000 THEN 1 ELSE 0 END) / 2) AS count 
+		FROM lineitem_hash_part 
+		GROUP BY l_suppkey
+		ORDER BY 1;
+
+-- check the plan if the hash aggreate is disabled
+SET enable_hashagg TO off;
+EXPLAIN (COSTS FALSE)
+	SELECT DISTINCT ceil(count(case when l_partkey > 100000 THEN 1 ELSE 0 END) / 2) AS count 
+		FROM lineitem_hash_part 
+		GROUP BY l_suppkey
+		ORDER BY 1;
+		
+SET enable_hashagg TO on;
+	
+-- explain the query to see actual plan with array_agg aggregation. Note that, 
+-- worker query created for this query is not correct. It will be fixed soon.  
+EXPLAIN (COSTS FALSE)
+	SELECT DISTINCT array_agg(l_linenumber), array_length(array_agg(l_linenumber), 1)
+		FROM lineitem_hash_part 
+		GROUP BY l_orderkey
+		ORDER BY 2
+		LIMIT 15;
+
+-- check the plan if the hash aggreate is disabled. Note that, 
+-- worker query created for this query is not correct. It will be fixed soon. 
+SET enable_hashagg TO off;
+EXPLAIN (COSTS FALSE)
+	SELECT DISTINCT array_agg(l_linenumber), array_length(array_agg(l_linenumber), 1)
+		FROM lineitem_hash_part 
+		GROUP BY l_orderkey
+		ORDER BY 2
+		LIMIT 15;
+		
+SET enable_hashagg TO on;
+
 -- distinct on non-partition column with aggregate
 -- this is the same as non-distinct version due to group by
 SELECT DISTINCT l_partkey, count(*)
