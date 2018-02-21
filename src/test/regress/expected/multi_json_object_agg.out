@@ -1,0 +1,192 @@
+--
+-- MULTI_JSON_OBJECT_AGG
+--
+SET citus.next_shard_id TO 520000;
+CREATE OR REPLACE FUNCTION count_keys (json)
+RETURNS bigint LANGUAGE SQL
+AS $$
+SELECT count(*) FROM (SELECT * FROM json_object_keys($1)) t
+$$;
+CREATE OR REPLACE FUNCTION keys_sort (json)
+RETURNS json LANGUAGE SQL
+AS $$
+SELECT json_object_agg(key, value) FROM (
+	SELECT * FROM json_each($1) ORDER BY key
+) t
+$$;
+-- Check multi_cat_agg() aggregate which is used to implement json_object_agg()
+SELECT json_cat_agg(i) FROM 
+	(VALUES ('{"c":[], "b":2}'::json), (NULL), ('{"d":null, "a":{"b":3}, "b":2}'::json)) AS t(i);
+                       json_cat_agg                        
+-----------------------------------------------------------
+ { "c" : [], "b" : 2, "d" : null, "a" : {"b":3}, "b" : 2 }
+(1 row)
+
+-- Check that we don't support distinct and order by with json_object_agg()
+SELECT json_object_agg(distinct l_shipmode, l_orderkey) FROM lineitem;
+ERROR:  json_object_agg (distinct) is unsupported
+SELECT json_object_agg(l_shipmode, l_orderkey ORDER BY l_shipmode) FROM lineitem;
+ERROR:  json_object_agg with order by is unsupported
+SELECT json_object_agg(distinct l_orderkey, l_shipmode ORDER BY l_orderkey) FROM lineitem;
+ERROR:  json_object_agg with order by is unsupported
+-- Check json_object_agg() for different data types and LIMIT clauses
+SELECT keys_sort(json_object_agg(l_orderkey::text || l_linenumber::text, l_partkey)) 
+	FROM lineitem GROUP BY l_orderkey
+	ORDER BY l_orderkey LIMIT 10;
+                                                 keys_sort                                                 
+-----------------------------------------------------------------------------------------------------------
+ { "11" : 155190, "12" : 67310, "13" : 63700, "14" : 2132, "15" : 24027, "16" : 15635 }
+ { "21" : 106170 }
+ { "31" : 4297, "32" : 19036, "33" : 128449, "34" : 29380, "35" : 183095, "36" : 62143 }
+ { "41" : 88035 }
+ { "51" : 108570, "52" : 123927, "53" : 37531 }
+ { "61" : 139636 }
+ { "71" : 182052, "72" : 145243, "73" : 94780, "74" : 163073, "75" : 151894, "76" : 79251, "77" : 157238 }
+ { "321" : 82704, "322" : 197921, "323" : 44161, "324" : 2743, "325" : 85811, "326" : 11615 }
+ { "331" : 61336, "332" : 60519, "333" : 137469, "334" : 33918 }
+ { "341" : 88362, "342" : 89414, "343" : 169544 }
+(10 rows)
+
+SELECT keys_sort(json_object_agg(l_orderkey::text || l_linenumber::text, l_extendedprice)) 
+	FROM lineitem GROUP BY l_orderkey
+	ORDER BY l_orderkey LIMIT 10;
+                                                        keys_sort                                                         
+--------------------------------------------------------------------------------------------------------------------------
+ { "11" : 21168.23, "12" : 45983.16, "13" : 13309.60, "14" : 28955.64, "15" : 22824.48, "16" : 49620.16 }
+ { "21" : 44694.46 }
+ { "31" : 54058.05, "32" : 46796.47, "33" : 39890.88, "34" : 2618.76, "35" : 32986.52, "36" : 28733.64 }
+ { "41" : 30690.90 }
+ { "51" : 23678.55, "52" : 50723.92, "53" : 73426.50 }
+ { "61" : 61998.31 }
+ { "71" : 13608.60, "72" : 11594.16, "73" : 81639.88, "74" : 31809.96, "75" : 73943.82, "76" : 43058.75, "77" : 6476.15 }
+ { "321" : 47227.60, "322" : 64605.44, "323" : 2210.32, "324" : 6582.96, "325" : 79059.64, "326" : 9159.66 }
+ { "331" : 40217.23, "332" : 47344.32, "333" : 7532.30, "334" : 75928.31 }
+ { "341" : 17554.68, "342" : 30875.02, "343" : 9681.24 }
+(10 rows)
+
+SELECT keys_sort(json_object_agg(l_orderkey::text || l_linenumber::text, l_shipmode)) 
+	FROM lineitem GROUP BY l_orderkey
+	ORDER BY l_orderkey LIMIT 10;
+                                                                       keys_sort                                                                       
+-------------------------------------------------------------------------------------------------------------------------------------------------------
+ { "11" : "TRUCK     ", "12" : "MAIL      ", "13" : "REG AIR   ", "14" : "AIR       ", "15" : "FOB       ", "16" : "MAIL      " }
+ { "21" : "RAIL      " }
+ { "31" : "AIR       ", "32" : "RAIL      ", "33" : "SHIP      ", "34" : "TRUCK     ", "35" : "FOB       ", "36" : "RAIL      " }
+ { "41" : "REG AIR   " }
+ { "51" : "AIR       ", "52" : "FOB       ", "53" : "AIR       " }
+ { "61" : "TRUCK     " }
+ { "71" : "FOB       ", "72" : "SHIP      ", "73" : "MAIL      ", "74" : "FOB       ", "75" : "TRUCK     ", "76" : "FOB       ", "77" : "FOB       " }
+ { "321" : "TRUCK     ", "322" : "AIR       ", "323" : "AIR       ", "324" : "REG AIR   ", "325" : "AIR       ", "326" : "RAIL      " }
+ { "331" : "TRUCK     ", "332" : "MAIL      ", "333" : "AIR       ", "334" : "MAIL      " }
+ { "341" : "REG AIR   ", "342" : "FOB       ", "343" : "FOB       " }
+(10 rows)
+
+SELECT keys_sort(json_object_agg(l_orderkey::text || l_linenumber::text, l_shipdate)) 
+	FROM lineitem GROUP BY l_orderkey
+	ORDER BY l_orderkey LIMIT 10;
+                                                                       keys_sort                                                                       
+-------------------------------------------------------------------------------------------------------------------------------------------------------
+ { "11" : "1996-03-13", "12" : "1996-04-12", "13" : "1996-01-29", "14" : "1996-04-21", "15" : "1996-03-30", "16" : "1996-01-30" }
+ { "21" : "1997-01-28" }
+ { "31" : "1994-02-02", "32" : "1993-11-09", "33" : "1994-01-16", "34" : "1993-12-04", "35" : "1993-12-14", "36" : "1993-10-29" }
+ { "41" : "1996-01-10" }
+ { "51" : "1994-10-31", "52" : "1994-10-16", "53" : "1994-08-08" }
+ { "61" : "1992-04-27" }
+ { "71" : "1996-05-07", "72" : "1996-02-01", "73" : "1996-01-15", "74" : "1996-03-21", "75" : "1996-02-11", "76" : "1996-01-16", "77" : "1996-02-10" }
+ { "321" : "1995-10-23", "322" : "1995-08-14", "323" : "1995-08-07", "324" : "1995-08-04", "325" : "1995-08-28", "326" : "1995-07-21" }
+ { "331" : "1993-10-29", "332" : "1993-12-09", "333" : "1993-12-09", "334" : "1993-11-09" }
+ { "341" : "1998-10-23", "342" : "1998-10-09", "343" : "1998-10-30" }
+(10 rows)
+
+-- Check that we can execute json_object_agg() within other functions
+SELECT count_keys(json_object_agg(l_shipdate, l_orderkey)) FROM lineitem;
+ count_keys 
+------------
+      12000
+(1 row)
+
+-- Check that we can execute json_object_agg() on select queries that hit multiple
+-- shards and contain different aggregates, filter clauses and other complex
+-- expressions. Note that the l_orderkey ranges are such that the matching rows
+-- lie in different shards.
+SELECT l_quantity, count(*), avg(l_extendedprice), 
+		keys_sort(json_object_agg(l_orderkey::text || l_linenumber::text, l_shipdate)) 
+	FROM lineitem
+	WHERE l_quantity < 5 AND l_orderkey > 5000 AND l_orderkey < 5300
+	GROUP BY l_quantity ORDER BY l_quantity;
+ l_quantity | count |          avg          |                                                                                             keys_sort                                                                                              
+------------+-------+-----------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+       1.00 |     8 | 1748.3387500000000000 | { "50635" : "1997-09-03", "51551" : "1994-07-03", "51872" : "1997-08-08", "52221" : "1994-08-19", "52832" : "1994-06-20", "52855" : "1994-03-14", "52856" : "1994-02-08", "52861" : "1997-11-25" }
+       2.00 |     8 | 2990.9825000000000000 | { "50292" : "1992-11-25", "50633" : "1997-06-17", "50904" : "1997-04-07", "50952" : "1992-07-09", "51216" : "1992-08-10", "52191" : "1997-06-26", "52501" : "1995-08-09", "52551" : "1996-09-27" }
+       3.00 |     2 | 4744.8000000000000000 | { "50275" : "1997-09-30", "52863" : "1997-12-04" }
+       4.00 |     4 | 5795.6800000000000000 | { "50313" : "1994-12-26", "50622" : "1993-02-06", "50891" : "1992-09-18", "51893" : "1993-12-21" }
+(4 rows)
+
+SELECT l_quantity, keys_sort(json_object_agg(l_orderkey::text || l_linenumber::text, 
+											extract (month FROM o_orderdate)))
+	FROM lineitem, orders WHERE l_orderkey = o_orderkey AND l_quantity < 5
+	AND l_orderkey > 5000 AND l_orderkey < 5300 GROUP BY l_quantity ORDER BY l_quantity;
+ l_quantity |                                                  keys_sort                                                  
+------------+-------------------------------------------------------------------------------------------------------------
+       1.00 | { "50635" : 5, "51551" : 6, "51872" : 7, "52221" : 5, "52832" : 6, "52855" : 1, "52856" : 1, "52861" : 9 }
+       2.00 | { "50292" : 11, "50633" : 5, "50904" : 3, "50952" : 4, "51216" : 5, "52191" : 2, "52501" : 7, "52551" : 7 }
+       3.00 | { "50275" : 8, "52863" : 9 }
+       4.00 | { "50313" : 12, "50622" : 10, "50891" : 7, "51893" : 11 }
+(4 rows)
+
+SELECT l_quantity, keys_sort(json_object_agg(l_orderkey::text || l_linenumber::text, l_orderkey * 2 + 1)) 
+	FROM lineitem WHERE l_quantity < 5
+	AND octet_length(l_comment) + octet_length('randomtext'::text) > 40
+	AND l_orderkey > 5000 AND l_orderkey < 6000 GROUP BY l_quantity ORDER BY l_quantity;
+ l_quantity |                                                                 keys_sort                                                                  
+------------+--------------------------------------------------------------------------------------------------------------------------------------------
+       1.00 | { "51551" : 10311, "52221" : 10445, "52855" : 10571, "56345" : 11269, "56986" : 11397, "58561" : 11713, "58573" : 11715, "59863" : 11973 }
+       2.00 | { "52191" : 10439, "53513" : 10703, "59233" : 11847 }
+       3.00 | { "54401" : 10881 }
+       4.00 | { "50313" : 10063, "50622" : 10125, "58261" : 11653, "58291" : 11659 }
+(4 rows)
+
+-- Check that we can execute json_object_agg() with an expression containing NULL values
+SELECT keys_sort(json_object_agg(l_orderkey::text || l_linenumber::text, 
+								case when l_quantity > 20 then l_quantity else NULL end))
+	FROM lineitem WHERE l_orderkey < 5;
+                                                                                              keys_sort                                                                                              
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ { "11" : null, "12" : 36.00, "13" : null, "14" : 28.00, "15" : 24.00, "16" : 32.00, "21" : 38.00, "31" : 45.00, "32" : 49.00, "33" : 27.00, "34" : null, "35" : 28.00, "36" : 26.00, "41" : 30.00 }
+(1 row)
+
+	
+-- Check that we can execute json_object_agg() with an expression containing different types
+SELECT keys_sort(json_object_agg(l_orderkey::text || l_linenumber::text, 
+								case when l_quantity > 20 then to_json(l_quantity) else '"f"'::json end))
+	FROM lineitem WHERE l_orderkey < 5;
+                                                                                            keys_sort                                                                                             
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ { "11" : "f", "12" : 36.00, "13" : "f", "14" : 28.00, "15" : 24.00, "16" : 32.00, "21" : 38.00, "31" : 45.00, "32" : 49.00, "33" : 27.00, "34" : "f", "35" : 28.00, "36" : 26.00, "41" : 30.00 }
+(1 row)
+
+	
+-- Check that we can execute json_object_agg() with an expression containing json arrays
+SELECT keys_sort(json_object_agg(l_orderkey::text || l_linenumber::text, json_build_array(l_quantity, l_shipdate)))
+	FROM lineitem WHERE l_orderkey < 3;
+                                                                                                      keys_sort                                                                                                      
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ { "11" : [17.00, "1996-03-13"], "12" : [36.00, "1996-04-12"], "13" : [8.00, "1996-01-29"], "14" : [28.00, "1996-04-21"], "15" : [24.00, "1996-03-30"], "16" : [32.00, "1996-01-30"], "21" : [38.00, "1997-01-28"] }
+(1 row)
+
+	
+-- Check that we can execute json_object_agg() with an expression containing arrays
+SELECT keys_sort(json_object_agg(l_orderkey::text || l_linenumber::text, ARRAY[l_quantity, l_orderkey]))
+	FROM lineitem WHERE l_orderkey < 3;
+                                                            keys_sort                                                            
+---------------------------------------------------------------------------------------------------------------------------------
+ { "11" : [17.00,1], "12" : [36.00,1], "13" : [8.00,1], "14" : [28.00,1], "15" : [24.00,1], "16" : [32.00,1], "21" : [38.00,2] }
+(1 row)
+
+-- Check that we return NULL in case there are no input rows to json_object_agg()
+SELECT json_object_agg(l_shipdate, l_orderkey) FROM lineitem WHERE l_quantity < 0;
+ json_object_agg 
+-----------------
+ 
+(1 row)
+
