@@ -379,6 +379,18 @@ for my $workeroff (0 .. $#followerWorkerPorts)
 
 if ($usingWindows)
 {
+	print $fh "--variable=dev_null=\"/nul\" ";
+	print $fh "--variable=temp_dir=\"%TEMP%\\\"";
+}
+else
+{
+	print $fh "--variable=dev_null=\"/dev/null\" ";	
+	print $fh "--variable=temp_dir=\"/tmp/\"";
+}
+
+
+if ($usingWindows)
+{
 	print $fh "%*\n"; # pass on the commandline arguments
 }
 else
@@ -399,7 +411,7 @@ if ($followercluster)
     make_path(catfile('tmp_check', 'master-follower', 'log')) or die "Could not create follower directory";
     for my $port (@followerWorkerPorts)
     {
-        make_path(catfile("tmp_check", "follower.$port", "log")) == 0
+        make_path(catfile("tmp_check", "follower.$port", "log"))
             or die "Could not create worker directory";
     }
 }
