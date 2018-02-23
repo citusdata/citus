@@ -172,6 +172,10 @@ static Node * WorkerLimitCount(MultiExtendedOp *originalOpNode,
 							   bool groupedByDisjointPartitionColumn);
 static List * WorkerSortClauseList(MultiExtendedOp *originalOpNode,
 								   bool groupedByDisjointPartitionColumn);
+static List * GenerateNewTargetEntriesForSortClauses(List *originalTargetList,
+													 List *sortClauseList,
+													 AttrNumber *targetProjectionNumber,
+													 Index *nextSortGroupRefIndex);
 static bool CanPushDownLimitApproximate(List *sortClauseList, List *targetList);
 static bool HasOrderByAggregate(List *sortClauseList, List *targetList);
 static bool HasOrderByAverage(List *sortClauseList, List *targetList);
@@ -2007,7 +2011,6 @@ WorkerExtendedOpNode(MultiExtendedOp *originalOpNode,
 	}
 
 	workerExtendedOpNode = CitusMakeNode(MultiExtendedOp);
-	workerExtendedOpNode->targetList = newTargetEntryList;
 	workerExtendedOpNode->distinctClause = NIL;
 	workerExtendedOpNode->hasDistinctOn = false;
 
@@ -2021,12 +2024,25 @@ WorkerExtendedOpNode(MultiExtendedOp *originalOpNode,
 
 	if (enableLimitPushdown)
 	{
+		List *newTargetEntryListForSortClauses = NIL;
+
 		/* if we can push down the limit, also set related fields */
 		workerExtendedOpNode->limitCount = WorkerLimitCount(originalOpNode,
 															groupedByDisjointPartitionColumn);
 		workerExtendedOpNode->sortClauseList =
 			WorkerSortClauseList(originalOpNode, groupedByDisjointPartitionColumn);
+
+		newTargetEntryListForSortClauses =
+			GenerateNewTargetEntriesForSortClauses(originalOpNode->targetList,
+												   workerExtendedOpNode->sortClauseList,
+												   &targetProjectionNumber,
+												   &nextSortGroupRefIndex);
+
+		newTargetEntryList = list_concat(newTargetEntryList,
+										 newTargetEntryListForSortClauses);
 	}
+
+	workerExtendedOpNode->targetList = newTargetEntryList;
 
 	/*
 	 * If grouped by a partition column whose values are shards have disjoint sets
@@ -3495,7 +3511,7 @@ WorkerSortClauseList(MultiExtendedOp *originalOpNode,
 {
 	List *workerSortClauseList = NIL;
 	List *groupClauseList = originalOpNode->groupClauseList;
-	List *sortClauseList = originalOpNode->sortClauseList;
+	List *sortClauseList = copyObject(originalOpNode->sortClauseList);
 	List *targetList = originalOpNode->targetList;
 
 	/* if no limit node and no hasDistinctOn, no need to push down sort clauses */
@@ -3514,7 +3530,7 @@ WorkerSortClauseList(MultiExtendedOp *originalOpNode,
 	 */
 	if (groupClauseList == NIL || groupedByDisjointPartitionColumn)
 	{
-		workerSortClauseList = originalOpNode->sortClauseList;
+		workerSortClauseList = sortClauseList;
 	}
 	else if (sortClauseList != NIL)
 	{
@@ -3523,16 +3539,98 @@ WorkerSortClauseList(MultiExtendedOp *originalOpNode,
 
 		if (orderByNonAggregates)
 		{
-			workerSortClauseList = list_copy(sortClauseList);
+			workerSortClauseList = sortClauseList;
 			workerSortClauseList = list_concat(workerSortClauseList, groupClauseList);
 		}
 		else if (canApproximate)
 		{
-			workerSortClauseList = originalOpNode->sortClauseList;
+			workerSortClauseList = sortClauseList;
 		}
 	}
 
 	return workerSortClauseList;
+}
+
+
+/*
+ * GenerateNewTargetEntriesForSortClauses goes over provided sort clause lists and
+ * creates new target entries if needed to make sure sort clauses has correct
+ * references. The function returns list of new target entries, caller is
+ * responsible to add those target entries to the end of worker target list.
+ *
+ * The function is required because we change the target entry if it contains an
+ * expression having an aggregate operation, or just the AVG aggregate.
+ * Afterwards any order by clause referring to original target entry starts
+ * to point to a wrong expression.
+ *
+ * Note the function modifies SortGroupClause items in sortClauseList,
+ * targetProjectionNumber, and nextSortGroupRefIndex.
+ */
+static List *
+GenerateNewTargetEntriesForSortClauses(List *originalTargetList,
+									   List *sortClauseList,
+									   AttrNumber *targetProjectionNumber,
+									   Index *nextSortGroupRefIndex)
+{
+	List *createdTargetList = NIL;
+	ListCell *sortClauseCell = NULL;
+
+	foreach(sortClauseCell, sortClauseList)
+	{
+		SortGroupClause *sgClause = (SortGroupClause *) lfirst(sortClauseCell);
+		TargetEntry *targetEntry = get_sortgroupclause_tle(sgClause, originalTargetList);
+		Expr *targetExpr = targetEntry->expr;
+		bool containsAggregate = contain_agg_clause((Node *) targetExpr);
+		bool createNewTargetEntry = false;
+
+		/* we are only interested in target entries containing aggregates */
+		if (!containsAggregate)
+		{
+			continue;
+		}
+
+		/*
+		 * If the target expression is not an Aggref, it is either an expression
+		 * on a single aggregate, or expression containing multiple aggregates.
+		 * Worker query mutates these target entries to have a naked target entry
+		 * per aggregate function. We want to use original target entries if this
+		 * the case.
+		 * If the original target expression is an avg aggref, we also want to use
+		 * original target entry.
+		 */
+		if (!IsA(targetExpr, Aggref))
+		{
+			createNewTargetEntry = true;
+		}
+		else
+		{
+			Aggref *aggNode = (Aggref *) targetExpr;
+			AggregateType aggregateType = GetAggregateType(aggNode->aggfnoid);
+			if (aggregateType == AGGREGATE_AVERAGE)
+			{
+				createNewTargetEntry = true;
+			}
+		}
+
+		if (createNewTargetEntry)
+		{
+			bool resJunk = true;
+			AttrNumber nextResNo = (*targetProjectionNumber);
+			Expr *newExpr = copyObject(targetExpr);
+			TargetEntry *newTargetEntry = makeTargetEntry(newExpr, nextResNo,
+														  targetEntry->resname, resJunk);
+			newTargetEntry->ressortgroupref = *nextSortGroupRefIndex;
+
+			createdTargetList = lappend(createdTargetList, newTargetEntry);
+
+			sgClause->tleSortGroupRef = *nextSortGroupRefIndex;
+
+			(*nextSortGroupRefIndex)++;
+			(*targetProjectionNumber)++;
+		}
+	}
+
+	return createdTargetList;
 }
 
 
