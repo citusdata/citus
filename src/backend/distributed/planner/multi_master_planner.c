@@ -37,6 +37,8 @@ static PlannedStmt * BuildSelectStatement(Query *masterQuery, List *masterTarget
 static Agg * BuildAggregatePlan(Query *masterQuery, Plan *subPlan);
 static bool HasDistinctAggregate(Query *masterQuery);
 static Plan * BuildDistinctPlan(Query *masterQuery, Plan *subPlan);
+static List * PrepareTargetListForNextPlan(List *targetList);
+static bool IsGroupBySubsetOfDistinct(Query *masterQuery);
 
 
 /*
@@ -397,27 +399,28 @@ BuildDistinctPlan(Query *masterQuery, Plan *subPlan)
 	bool distinctClausesHashable = true;
 	List *distinctClauseList = masterQuery->distinctClause;
 	List *targetList = copyObject(masterQuery->targetList);
-	List *columnList = pull_var_clause_default((Node *) targetList);
-	ListCell *columnCell = NULL;
 	bool hasDistinctAggregate = false;
 
-	if (IsA(subPlan, Agg))
+	/*
+	 * We don't need to add distinct plan if all of the columns used in group by
+	 * clause also used in distinct clause, since group by clause guarantees the
+	 * uniqueness of the target list for every row.
+	 */
+	if (IsGroupBySubsetOfDistinct(masterQuery))
 	{
 		return subPlan;
 	}
 
+	/*
+	 * We need to adjust varno to OUTER_VAR, since planner expects that for upper
+	 * level plans above the sequential scan. We also need to convert aggregations
+	 * (if exists) to regular Vars since the aggregation would be applied by the
+	 * previous aggregation plan and we don't want them to be applied again.
+	 */
+	targetList = PrepareTargetListForNextPlan(targetList);
+
 	Assert(masterQuery->distinctClause);
 	Assert(!masterQuery->hasDistinctOn);
-
-	/*
-	 * For upper level plans above the sequential scan, the planner expects the
-	 * table id (varno) to be set to OUTER_VAR.
-	 */
-	foreach(columnCell, columnList)
-	{
-		Var *column = (Var *) lfirst(columnCell);
-		column->varno = OUTER_VAR;
-	}
 
 	/*
 	 * Create group by plan with HashAggregate if all distinct
@@ -450,4 +453,85 @@ BuildDistinctPlan(Query *masterQuery, Plan *subPlan)
 	}
 
 	return distinctPlan;
+}
+
+
+/*
+ * PrepareTargetListForNextPlan handles both regular columns to have right varno
+ * and convert aggregates to regular Vars in the target list.
+ */
+static List *
+PrepareTargetListForNextPlan(List *targetList)
+{
+	List *newtargetList = NIL;
+	ListCell *targetEntryCell = NULL;
+
+	foreach(targetEntryCell, targetList)
+	{
+		TargetEntry *targetEntry = lfirst(targetEntryCell);
+		TargetEntry *newTargetEntry = NULL;
+		Var *newVar = NULL;
+
+		Assert(IsA(targetEntry, TargetEntry));
+
+		/*
+		 * For upper level plans above the sequential scan, the planner expects the
+		 * table id (varno) to be set to OUTER_VAR.
+		 */
+		newVar = makeVarFromTargetEntry(OUTER_VAR, targetEntry);
+		newTargetEntry = flatCopyTargetEntry(targetEntry);
+		newTargetEntry->expr = (Expr *) newVar;
+		newtargetList = lappend(newtargetList, newTargetEntry);
+	}
+
+	return newtargetList;
+}
+
+
+/*
+ * IsGroupBySubsetOfDistinct checks whether each clause in group clauses also
+ * exists in the distinct clauses. Note that, empty group clause is not a subset
+ * of distinct clause.
+ */
+static bool
+IsGroupBySubsetOfDistinct(Query *masterQuery)
+{
+	List *distinctClauses = masterQuery->distinctClause;
+	List *groupClauses = masterQuery->groupClause;
+	ListCell *distinctCell = NULL;
+	ListCell *groupCell = NULL;
+
+	/* There must be a group clause */
+	if (list_length(groupClauses) == 0)
+	{
+		return false;
+	}
+
+	foreach(groupCell, groupClauses)
+	{
+		SortGroupClause *groupClause = (SortGroupClause *) lfirst(groupCell);
+		bool isFound = false;
+
+		foreach(distinctCell, distinctClauses)
+		{
+			SortGroupClause *distinctClause = (SortGroupClause *) lfirst(distinctCell);
+
+			if (groupClause->tleSortGroupRef == distinctClause->tleSortGroupRef)
+			{
+				isFound = true;
+				break;
+			}
+		}
+
+		/*
+		 * If we can't find any member of group clause in the distinct clause,
+		 * that means group clause is not a subset of distinct clause.
+		 */
+		if (!isFound)
+		{
+			return false;
+		}
+	}
+
+	return true;
 }
