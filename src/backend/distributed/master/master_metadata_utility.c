@@ -210,7 +210,7 @@ DistributedTableSizeOnWorker(WorkerNode *workerNode, Oid relationId, char *sizeQ
 	char *tableSizeString;
 	uint64 tableSize = 0;
 	MultiConnection *connection = NULL;
-	uint32 connectionFlag = FORCE_NEW_CONNECTION;
+	uint32 connectionFlag = 0;
 	PGresult *result = NULL;
 	int queryResult = 0;
 	List *sizeList = NIL;
