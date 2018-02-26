@@ -63,11 +63,11 @@ typedef struct AttributeEquivalenceClassMember
 } AttributeEquivalenceClassMember;
 
 
+static bool ContextContainsLocalRelation(RelationRestrictionContext *restrictionContext);
 static Var * FindTranslatedVar(List *appendRelList, Oid relationOid,
 							   Index relationRteIndex, Index *partitionKeyIndex);
-static bool EquivalenceListContainsRelationsEquality(List *attributeEquivalenceList,
-													 RelationRestrictionContext *
-													 restrictionContext);
+static bool ContainsMultipleDistributedRelations(PlannerRestrictionContext *
+												 plannerRestrictionContext);
 static List * GenerateAttributeEquivalencesForRelationRestrictions(
 	RelationRestrictionContext *restrictionContext);
 static AttributeEquivalenceClass * AttributeEquivalenceClassForEquivalenceClass(
@@ -144,6 +144,72 @@ static bool JoinRestrictionListExistsInContext(JoinRestriction *joinRestrictionI
 
 
 /*
+ * AllDistributionKeysInQueryAreEqual returns true if either
+ *    (i)  there exists join in the query and all relations joined on their
+ *         partition keys
+ *    (ii) there exists only union set operations and all relations has
+ *         partition keys in the same ordinal position in the query
+ */
+bool
+AllDistributionKeysInQueryAreEqual(Query *originalQuery,
+								   PlannerRestrictionContext *plannerRestrictionContext)
+{
+	bool restrictionEquivalenceForPartitionKeys = false;
+	RelationRestrictionContext *restrictionContext = NULL;
+
+	/* we don't support distribution key equality checks for CTEs yet */
+	if (originalQuery->cteList != NIL)
+	{
+		return false;
+	}
+
+	/* we don't support distribution key equality checks for local tables */
+	restrictionContext = plannerRestrictionContext->relationRestrictionContext;
+	if (ContextContainsLocalRelation(restrictionContext))
+	{
+		return false;
+	}
+
+	restrictionEquivalenceForPartitionKeys =
+		RestrictionEquivalenceForPartitionKeys(plannerRestrictionContext);
+	if (restrictionEquivalenceForPartitionKeys)
+	{
+		return true;
+	}
+
+	if (originalQuery->setOperations || ContainsUnionSubquery(originalQuery))
+	{
+		return SafeToPushdownUnionSubquery(plannerRestrictionContext);
+	}
+
+	return false;
+}
+
+
+/*
+ * ContextContainsLocalRelation determines whether the given
+ * RelationRestrictionContext contains any local tables.
+ */
+static bool
+ContextContainsLocalRelation(RelationRestrictionContext *restrictionContext)
+{
+	ListCell *relationRestrictionCell = NULL;
+
+	foreach(relationRestrictionCell, restrictionContext->relationRestrictionList)
+	{
+		RelationRestriction *relationRestriction = lfirst(relationRestrictionCell);
+
+		if (!relationRestriction->distributedRelation)
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+
+/*
  * SafeToPushdownUnionSubquery returns true if all the relations are returns
  * partition keys in the same ordinal position and there is no reference table
  * exists.
@@ -187,27 +253,12 @@ SafeToPushdownUnionSubquery(PlannerRestrictionContext *plannerRestrictionContext
 	foreach(relationRestrictionCell, restrictionContext->relationRestrictionList)
 	{
 		RelationRestriction *relationRestriction = lfirst(relationRestrictionCell);
-		Oid relationId = relationRestriction->relationId;
 		Index partitionKeyIndex = InvalidAttrNumber;
 		PlannerInfo *relationPlannerRoot = relationRestriction->plannerInfo;
 		List *targetList = relationPlannerRoot->parse->targetList;
 		List *appendRelList = relationPlannerRoot->append_rel_list;
 		Var *varToBeAdded = NULL;
 		TargetEntry *targetEntryToAdd = NULL;
-
-		/*
-		 * Although it is not the best place to error out when facing with reference
-		 * tables, we decide to error out here. Otherwise, we need to add equality
-		 * for each reference table and it is more complex to implement. In the
-		 * future implementation all checks will be gathered to single point.
-		 */
-		if (PartitionMethod(relationId) == DISTRIBUTE_BY_NONE)
-		{
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("cannot pushdown this query"),
-							errdetail(
-								"Reference tables are not allowed with set operations")));
-		}
 
 		/*
 		 * We first check whether UNION ALLs are pulled up or not. Note that Postgres
@@ -378,6 +429,9 @@ FindTranslatedVar(List *appendRelList, Oid relationOid, Index relationRteIndex,
  * RTE_RELATION follows the above rule, we can conclude that all RTE_RELATIONs are
  * joined on their partition keys.
  *
+ * Before doing the expensive equality checks, we do a cheaper check to understand
+ * whether there are more than one distributed relations. Otherwise, we exit early.
+ *
  * The function returns true if all relations are joined on their partition keys.
  * Otherwise, the function returns false. We ignore reference tables at all since
  * they don't have partition keys.
@@ -399,15 +453,61 @@ FindTranslatedVar(List *appendRelList, Oid relationOid, Index relationRteIndex,
  * RestrictionEquivalenceForPartitionKeys uses both relation restrictions and join restrictions
  * to find as much as information that Postgres planner provides to extensions. For the
  * details of the usage, please see GenerateAttributeEquivalencesForRelationRestrictions()
- * and GenerateAttributeEquivalencesForJoinRestrictions()
+ * and GenerateAttributeEquivalencesForJoinRestrictions().
  */
 bool
-RestrictionEquivalenceForPartitionKeys(PlannerRestrictionContext *
-									   plannerRestrictionContext)
+RestrictionEquivalenceForPartitionKeys(PlannerRestrictionContext *restrictionContext)
+{
+	List *attributeEquivalenceList = NIL;
+
+	/* there is a single distributed relation, no need to continue */
+	if (!ContainsMultipleDistributedRelations(restrictionContext))
+	{
+		return true;
+	}
+
+	attributeEquivalenceList = GenerateAllAttributeEquivalences(restrictionContext);
+
+	return RestrictionEquivalenceForPartitionKeysViaEquivalances(restrictionContext,
+																 attributeEquivalenceList);
+}
+
+
+/*
+ * RestrictionEquivalenceForPartitionKeysViaEquivalances follows the same rules
+ * with RestrictionEquivalenceForPartitionKeys(). The only difference is that
+ * this function allows passing pre-computed attribute equivalances along with
+ * the planner restriction context.
+ */
+bool
+RestrictionEquivalenceForPartitionKeysViaEquivalances(PlannerRestrictionContext *
+													  plannerRestrictionContext,
+													  List *allAttributeEquivalenceList)
 {
 	RelationRestrictionContext *restrictionContext =
 		plannerRestrictionContext->relationRestrictionContext;
-	List *allAttributeEquivalenceList = NIL;
+
+	/* there is a single distributed relation, no need to continue */
+	if (!ContainsMultipleDistributedRelations(plannerRestrictionContext))
+	{
+		return true;
+	}
+
+	return EquivalenceListContainsRelationsEquality(allAttributeEquivalenceList,
+													restrictionContext);
+}
+
+
+/*
+ * ContainsMultipleDistributedRelations returns true if the input planner
+ * restriction context contains more than one distributed relation.
+ */
+static bool
+ContainsMultipleDistributedRelations(PlannerRestrictionContext *
+									 plannerRestrictionContext)
+{
+	RelationRestrictionContext *restrictionContext =
+		plannerRestrictionContext->relationRestrictionContext;
 
 	uint32 referenceRelationCount = ReferenceRelationCount(restrictionContext);
 	uint32 totalRelationCount = list_length(restrictionContext->relationRestrictionList);
@@ -428,14 +528,10 @@ RestrictionEquivalenceForPartitionKeys(PlannerRestrictionContext *
 	 */
 	if (nonReferenceRelationCount <= 1)
 	{
-		return true;
+		return false;
 	}
 
-	allAttributeEquivalenceList =
-		GenerateAllAttributeEquivalences(plannerRestrictionContext);
-
-	return EquivalenceListContainsRelationsEquality(allAttributeEquivalenceList,
-													restrictionContext);
+	return true;
 }
 
 
@@ -503,7 +599,7 @@ ReferenceRelationCount(RelationRestrictionContext *restrictionContext)
  * whether all the relations exists in the common equivalence class.
  *
  */
-static bool
+bool
 EquivalenceListContainsRelationsEquality(List *attributeEquivalenceList,
 										 RelationRestrictionContext *restrictionContext)
 {
@@ -576,6 +672,11 @@ GenerateAttributeEquivalencesForRelationRestrictions(RelationRestrictionContext
 {
 	List *attributeEquivalenceList = NIL;
 	ListCell *relationRestrictionCell = NULL;
+
+	if (restrictionContext == NULL)
+	{
+		return attributeEquivalenceList;
+	}
 
 	foreach(relationRestrictionCell, restrictionContext->relationRestrictionList)
 	{
@@ -927,6 +1028,11 @@ GenerateAttributeEquivalencesForJoinRestrictions(JoinRestrictionContext *
 {
 	List *attributeEquivalenceList = NIL;
 	ListCell *joinRestrictionCell = NULL;
+
+	if (joinRestrictionContext == NULL)
+	{
+		return attributeEquivalenceList;
+	}
 
 	foreach(joinRestrictionCell, joinRestrictionContext->joinRestrictionList)
 	{

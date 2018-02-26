@@ -41,8 +41,6 @@
 static DistributedPlan * CreateDistributedInsertSelectPlan(Query *originalQuery,
 														   PlannerRestrictionContext *
 														   plannerRestrictionContext);
-static bool SafeToPushDownSubquery(PlannerRestrictionContext *plannerRestrictionContext,
-								   Query *originalQuery);
 static Task * RouterModifyTaskForShardInterval(Query *originalQuery,
 											   ShardInterval *shardInterval,
 											   RelationRestrictionContext *
@@ -217,7 +215,7 @@ CreateDistributedInsertSelectPlan(Query *originalQuery,
 	RelationRestrictionContext *relationRestrictionContext =
 		plannerRestrictionContext->relationRestrictionContext;
 	bool allReferenceTables = relationRestrictionContext->allReferenceTables;
-	bool safeToPushDownSubquery = false;
+	bool allDistributionKeysInQueryAreEqual = false;
 
 	distributedPlan->operation = originalQuery->commandType;
 
@@ -234,8 +232,8 @@ CreateDistributedInsertSelectPlan(Query *originalQuery,
 		return distributedPlan;
 	}
 
-	safeToPushDownSubquery = SafeToPushDownSubquery(plannerRestrictionContext,
-													originalQuery);
+	allDistributionKeysInQueryAreEqual =
+		AllDistributionKeysInQueryAreEqual(originalQuery, plannerRestrictionContext);
 
 	/*
 	 * Plan select query for each shard in the target table. Do so by replacing the
@@ -255,7 +253,7 @@ CreateDistributedInsertSelectPlan(Query *originalQuery,
 		modifyTask = RouterModifyTaskForShardInterval(originalQuery, targetShardInterval,
 													  relationRestrictionContext,
 													  taskIdIndex,
-													  safeToPushDownSubquery);
+													  allDistributionKeysInQueryAreEqual);
 
 		/* add the task if it could be created */
 		if (modifyTask != NULL)
@@ -389,34 +387,6 @@ DistributedInsertSelectSupported(Query *queryTree, RangeTblEntry *insertRte,
 	}
 
 	return NULL;
-}
-
-
-/*
- * SafeToPushDownSubquery returns true if either
- *    (i)  there exists join in the query and all relations joined on their
- *         partition keys
- *    (ii) there exists only union set operations and all relations has
- *         partition keys in the same ordinal position in the query
- */
-static bool
-SafeToPushDownSubquery(PlannerRestrictionContext *plannerRestrictionContext,
-					   Query *originalQuery)
-{
-	bool restrictionEquivalenceForPartitionKeys =
-		RestrictionEquivalenceForPartitionKeys(plannerRestrictionContext);
-
-	if (restrictionEquivalenceForPartitionKeys)
-	{
-		return true;
-	}
-
-	if (ContainsUnionSubquery(originalQuery))
-	{
-		return SafeToPushdownUnionSubquery(plannerRestrictionContext);
-	}
-
-	return false;
 }
 
 

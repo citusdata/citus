@@ -129,6 +129,9 @@ EXPLAIN (COSTS FALSE)
 
 -- make the outputs more consistent
 VACUUM ANALYZE lineitem_mx;
+VACUUM ANALYZE orders_mx;
+VACUUM ANALYZE customer_mx;
+VACUUM ANALYZE supplier_mx;
 
 -- Test single-shard SELECT
 EXPLAIN (COSTS FALSE)

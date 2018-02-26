@@ -80,11 +80,11 @@ SELECT o_orderkey, l_linenumber FROM priority_orders left join air_shipped_linei
 
 -- repartition query on view join
 -- it passes planning, fails at execution stage
-SELECT * FROM priority_orders JOIN air_shipped_lineitems ON (o_custkey = l_suppkey);
+SET client_min_messages TO DEBUG1;
+SELECT * FROM priority_orders JOIN air_shipped_lineitems ON (o_custkey = l_suppkey) ORDER BY o_orderkey DESC, o_custkey DESC, o_orderpriority DESC LIMIT 5;
+RESET client_min_messages;
 
-SET citus.task_executor_type to "task-tracker";
 SELECT count(*) FROM priority_orders JOIN air_shipped_lineitems ON (o_custkey = l_suppkey);
-SET citus.task_executor_type to DEFAULT;
 
 -- materialized views work
 -- insert into... select works with views
@@ -217,6 +217,7 @@ SELECT * FROM
 ORDER BY 2 DESC, 1;
 
 -- non-partition key joins are not supported inside subquery
+-- since the join with a table
 SELECT * FROM
 	(SELECT ru.user_id, count(*) 
 		FROM recent_users ru 
@@ -263,6 +264,7 @@ SELECT * FROM
 ORDER BY 2 DESC, 1;
 
 -- event vs table non-partition-key join is not supported
+-- given that we cannot recursively plan tables yet
 SELECT * FROM
 	(SELECT ru.user_id, CASE WHEN et.user_id IS NULL THEN 'NO' ELSE 'YES' END as done_event
 		FROM recent_users ru

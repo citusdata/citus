@@ -1171,16 +1171,24 @@ SELECT count(*) FROM
   ON user_buy_test_table.item_id > users_ref_test_table.id) subquery_1;
 ERROR:  cannot pushdown the subquery
 DETAIL:  There exist a reference table in the outer part of the outer join
--- we don't allow non equi join among hash partitioned tables
+-- we do allow non equi join among subqueries via recursive planning
+SET client_min_messages TO DEBUG1;
 SELECT count(*) FROM
   (SELECT user_buy_test_table.user_id, random() FROM user_buy_test_table LEFT JOIN users_ref_test_table
   ON user_buy_test_table.item_id > users_ref_test_table.id) subquery_1,
 (SELECT user_buy_test_table.user_id, random() FROM user_buy_test_table LEFT JOIN users_ref_test_table
   ON user_buy_test_table.user_id > users_ref_test_table.id) subquery_2
 WHERE subquery_1.user_id != subquery_2.user_id ;
-ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
--- we cannot push this query since hash partitioned tables
--- are not joined on partition keys with equality
+DEBUG:  generating subplan 79_1 for subquery SELECT user_buy_test_table.user_id, random() AS random FROM (public.user_buy_test_table LEFT JOIN public.users_ref_test_table ON ((user_buy_test_table.user_id > users_ref_test_table.id)))
+DEBUG:  Plan 79 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT user_buy_test_table.user_id, random() AS random FROM (public.user_buy_test_table LEFT JOIN public.users_ref_test_table ON ((user_buy_test_table.item_id > users_ref_test_table.id)))) subquery_1, (SELECT intermediate_result.user_id, intermediate_result.random FROM read_intermediate_result('79_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, random double precision)) subquery_2 WHERE (subquery_1.user_id <> subquery_2.user_id)
+ count 
+-------
+    67
+(1 row)
+
+-- we could not push this query not due to non colocated
+-- subqueries (i.e., they are recursively planned)
+-- but due to outer join restrictions
 SELECT
 count(*) AS cnt, "generated_group_field"
  FROM
@@ -1217,7 +1225,11 @@ count(*) AS cnt, "generated_group_field"
   ORDER BY
     cnt DESC, generated_group_field ASC
   LIMIT 10;
-ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
+DEBUG:  generating subplan 81_1 for subquery SELECT user_id, value_2 AS generated_group_field FROM public.users_table users
+DEBUG:  Plan 81 query after replacing subqueries and CTEs: SELECT count(*) AS cnt, generated_group_field FROM (SELECT "eventQuery".user_id, random() AS random, "eventQuery".generated_group_field FROM (SELECT multi_group_wrapper_1."time", multi_group_wrapper_1.event_user_id, multi_group_wrapper_1.user_id, left_group_by_1.generated_group_field, random() AS random FROM ((SELECT temp_data_queries."time", temp_data_queries.event_user_id, user_filters_1.user_id FROM ((SELECT events."time", events.user_id AS event_user_id FROM public.events_table events WHERE (events.user_id > 2)) temp_data_queries JOIN (SELECT users.user_id FROM public.users_reference_table users WHERE ((users.user_id > 2) AND (users.value_2 = 5))) user_filters_1 ON ((temp_data_queries.event_user_id < user_filters_1.user_id)))) multi_group_wrapper_1 RIGHT JOIN (SELECT intermediate_result.user_id, intermediate_result.generated_group_field FROM read_intermediate_result('81_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, generated_group_field integer)) left_group_by_1 ON ((left_group_by_1.user_id > multi_group_wrapper_1.event_user_id)))) "eventQuery") "pushedDownQuery" GROUP BY generated_group_field ORDER BY (count(*)) DESC, generated_group_field LIMIT 10
+ERROR:  cannot pushdown the subquery
+DETAIL:  Complex subqueries and CTEs cannot be in the outer part of the outer join
+RESET client_min_messages;
 -- two hash partitioned relations are not joined
 -- on partiton keys although reference table is fine
 -- to push down
