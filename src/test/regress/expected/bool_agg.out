@@ -16,11 +16,11 @@ SELECT bool_and(flag), bool_or(flag), every(flag) FROM bool_test;
  f        | t       | f
 (1 row)
 
-SELECT kind, bool_and(flag), bool_or(flag), every(flag) FROM bool_test GROUP BY kind ORDER BY kind;
+SELECT kind, bool_and(flag), bool_or(flag), every(flag) FROM bool_test GROUP BY kind ORDER BY 2;
  kind | bool_and | bool_or | every 
 ------+----------+---------+-------
-   88 | t        | t       | t
    99 | f        | t       | f
+   88 | t        | t       | t
 (2 rows)
 
 -- expressions in aggregate
@@ -30,7 +30,7 @@ SELECT bool_or(val > 2 OR id < 2), bool_and(val < 3) FROM bool_test;
  t       | f
 (1 row)
 
-SELECT kind, bool_or(val > 2 OR id < 2), bool_and(val < 3) FROM bool_test GROUP BY kind ORDER BY kind;
+SELECT kind, bool_or(val > 2 OR id < 2), bool_and(val < 3) FROM bool_test GROUP BY kind ORDER BY 3;
  kind | bool_or | bool_and 
 ------+---------+----------
    88 | t       | f

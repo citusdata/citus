@@ -8,11 +8,11 @@ INSERT INTO bool_test VALUES (1, 1, true, 99), (2, 2, false, 99), (2, 3, true, 8
 
 -- mix of true and false
 SELECT bool_and(flag), bool_or(flag), every(flag) FROM bool_test;
-SELECT kind, bool_and(flag), bool_or(flag), every(flag) FROM bool_test GROUP BY kind ORDER BY kind;
+SELECT kind, bool_and(flag), bool_or(flag), every(flag) FROM bool_test GROUP BY kind ORDER BY 2;
 
 -- expressions in aggregate
 SELECT bool_or(val > 2 OR id < 2), bool_and(val < 3) FROM bool_test;
-SELECT kind, bool_or(val > 2 OR id < 2), bool_and(val < 3) FROM bool_test GROUP BY kind ORDER BY kind;
+SELECT kind, bool_or(val > 2 OR id < 2), bool_and(val < 3) FROM bool_test GROUP BY kind ORDER BY 3;
 
 -- 1 & 3, 1 | 3
 SELECT bit_and(val), bit_or(val) FROM bool_test WHERE flag;
