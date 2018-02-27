@@ -10,8 +10,10 @@
 
 #include "distributed/citus_clauses.h"
 #include "distributed/insert_select_planner.h"
+#include "distributed/metadata_cache.h"
 #include "distributed/multi_router_planner.h"
 
+#include "catalog/pg_proc.h"
 #include "catalog/pg_type.h"
 #include "executor/executor.h"
 #include "nodes/makefuncs.h"
@@ -38,6 +40,8 @@ static Node * PartiallyEvaluateExpressionMutator(Node *expression,
 												 FunctionEvaluationContext *context);
 static Expr * citus_evaluate_expr(Expr *expr, Oid result_type, int32 result_typmod,
 								  Oid result_collation, PlanState *planState);
+static bool CitusIsVolatileFunctionIdChecker(Oid func_id, void *context);
+static bool CitusIsMutableFunctionIdChecker(Oid func_id, void *context);
 
 
 /*
@@ -54,7 +58,7 @@ RequiresMasterEvaluation(Query *query)
 	{
 		TargetEntry *targetEntry = (TargetEntry *) lfirst(targetEntryCell);
 
-		if (contain_mutable_functions((Node *) targetEntry->expr))
+		if (FindNodeCheck((Node *) targetEntry->expr, CitusIsMutableFunction))
 		{
 			return true;
 		}
@@ -73,7 +77,7 @@ RequiresMasterEvaluation(Query *query)
 		}
 		else if (rte->rtekind == RTE_VALUES)
 		{
-			if (contain_mutable_functions((Node *) rte->values_lists))
+			if (FindNodeCheck((Node *) rte->values_lists, CitusIsMutableFunction))
 			{
 				return true;
 			}
@@ -92,7 +96,10 @@ RequiresMasterEvaluation(Query *query)
 
 	if (query->jointree && query->jointree->quals)
 	{
-		return contain_mutable_functions((Node *) query->jointree->quals);
+		if (FindNodeCheck((Node *) query->jointree->quals, CitusIsMutableFunction))
+		{
+			return true;
+		}
 	}
 
 	return false;
@@ -391,5 +398,96 @@ citus_evaluate_expr(Expr *expr, Oid result_type, int32 result_typmod,
 							  const_val, const_is_null,
 							  resultTypByVal);
 }
+
+
+/*
+ * CitusIsVolatileFunctionIdChecker checks if the given function id is
+ * a volatile function other than read_intermediate_result().
+ */
+static bool
+CitusIsVolatileFunctionIdChecker(Oid func_id, void *context)
+{
+	if (func_id == CitusReadIntermediateResultFuncId())
+	{
+		return false;
+	}
+
+	return (func_volatile(func_id) == PROVOLATILE_VOLATILE);
+}
+
+
+/*
+ * CitusIsVolatileFunction checks if the given node is a volatile function
+ * other than Citus's internal functions.
+ */
+bool
+CitusIsVolatileFunction(Node *node)
+{
+	/* Check for volatile functions in node itself */
+	if (check_functions_in_node(node, CitusIsVolatileFunctionIdChecker, NULL))
+	{
+		return true;
+	}
+
+#if (PG_VERSION_NUM >= 100000)
+	if (IsA(node, NextValueExpr))
+	{
+		/* NextValueExpr is volatile */
+		return true;
+	}
+#endif
+
+	return false;
+}
+
+
+/*
+ * CitusIsMutableFunctionIdChecker checks if the given function id is
+ * a mutable function other than read_intermediate_result().
+ */
+static bool
+CitusIsMutableFunctionIdChecker(Oid func_id, void *context)
+{
+	if (func_id == CitusReadIntermediateResultFuncId())
+	{
+		return false;
+	}
+	else
+	{
+		return (func_volatile(func_id) != PROVOLATILE_IMMUTABLE);
+	}
+}
+
+
+/*
+ * CitusIsMutableFunction checks if the given node is a mutable function
+ * other than Citus's internal functions.
+ */
+bool
+CitusIsMutableFunction(Node *node)
+{
+	/* Check for mutable functions in node itself */
+	if (check_functions_in_node(node, CitusIsMutableFunctionIdChecker, NULL))
+	{
+		return true;
+	}
+
+#if (PG_VERSION_NUM >= 100000)
+	if (IsA(node, SQLValueFunction))
+	{
+		/* all variants of SQLValueFunction are stable */
+		return true;
+	}
+
+	if (IsA(node, NextValueExpr))
+	{
+		/* NextValueExpr is volatile */
+		return true;
+	}
+#endif
+
+	return false;
+}
+
 
 /* *INDENT-ON* */

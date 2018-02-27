@@ -40,7 +40,7 @@ extern DeferredErrorMessage * PlanRouterQuery(Query *originalQuery,
 											  bool *multiShardModifyQuery);
 extern List * RouterInsertTaskList(Query *query, DeferredErrorMessage **planningError);
 extern List * IntersectPlacementList(List *lhsPlacementList, List *rhsPlacementList);
-extern DeferredErrorMessage * ModifyQuerySupported(Query *queryTree,
+extern DeferredErrorMessage * ModifyQuerySupported(Query *queryTree, Query *originalQuery,
 												   bool multiShardQuery);
 extern List * ShardIntervalOpExpressions(ShardInterval *shardInterval, Index rteIndex);
 extern RelationRestrictionContext * CopyRelationRestrictionContext(

@@ -110,6 +110,7 @@ static DistributedPlan * CreateSingleTaskRouterPlan(Query *originalQuery,
 													Query *query,
 													RelationRestrictionContext *
 													restrictionContext);
+static bool IsTidColumn(Node *node);
 static bool MasterIrreducibleExpression(Node *expression, bool *varArgument,
 										bool *badCoalesce);
 static bool MasterIrreducibleExpressionWalker(Node *expression, WalkerState *state);
@@ -191,7 +192,8 @@ CreateModifyPlan(Query *originalQuery, Query *query,
 
 	distributedPlan->operation = query->commandType;
 
-	distributedPlan->planningError = ModifyQuerySupported(query, multiShardQuery);
+	distributedPlan->planningError = ModifyQuerySupported(query, originalQuery,
+														  multiShardQuery);
 	if (distributedPlan->planningError != NULL)
 	{
 		return distributedPlan;
@@ -489,11 +491,36 @@ ExtractInsertRangeTableEntry(Query *query)
 
 
 /*
+ * IsTidColumn gets a node and returns true if the node is a Var type of TID.
+ */
+static bool
+IsTidColumn(Node *node)
+{
+	if (IsA(node, Var))
+	{
+		Var *column = (Var *) node;
+		if (column->vartype == TIDOID)
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+
+/*
  * ModifyQuerySupported returns NULL if the query only contains supported
  * features, otherwise it returns an error description.
+ * Note that we need both the original query and the modified one because
+ * different checks need different versions. In particular, we cannot
+ * perform the ContainsReadIntermediateResultFunction check on the
+ * rewritten query because it may have been replaced by a subplan,
+ * while some of the checks for setting the partition column value rely
+ * on the rewritten query.
  */
 DeferredErrorMessage *
-ModifyQuerySupported(Query *queryTree, bool multiShardQuery)
+ModifyQuerySupported(Query *queryTree, Query *originalQuery, bool multiShardQuery)
 {
 	Oid distributedTableId = ExtractFirstDistributedTableId(queryTree);
 	uint32 rangeTableId = 1;
@@ -507,8 +534,27 @@ ModifyQuerySupported(Query *queryTree, bool multiShardQuery)
 	List *onConflictSet = NIL;
 	Node *arbiterWhere = NULL;
 	Node *onConflictWhere = NULL;
-
 	CmdType commandType = queryTree->commandType;
+
+	/*
+	 * Here, we check if a recursively planned query tries to modify
+	 * rows based on the ctid column. This is a bad idea because ctid of
+	 * the rows could be changed before the modification part of
+	 * the query is executed.
+	 */
+	if (ContainsReadIntermediateResultFunction((Node *) originalQuery))
+	{
+		bool hasTidColumn = FindNodeCheck((Node *) originalQuery->jointree, IsTidColumn);
+		if (hasTidColumn)
+		{
+			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+								 "cannot perform distributed planning for the given "
+								 "modification",
+								 "Recursively planned distributed modifications "
+								 "with ctid on where clause are not supported.",
+								 NULL);
+		}
+	}
 
 	/*
 	 * Reject subqueries which are in SELECT or WHERE clause.
@@ -520,7 +566,7 @@ ModifyQuerySupported(Query *queryTree, bool multiShardQuery)
 		 * We support UPDATE and DELETE with subqueries unless they are multi
 		 * shard queries.
 		 */
-		if (!UpdateOrDeleteQuery(queryTree) || multiShardQuery)
+		if (!UpdateOrDeleteQuery(queryTree))
 		{
 			StringInfo errorHint = makeStringInfo();
 			DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(
@@ -604,7 +650,7 @@ ModifyQuerySupported(Query *queryTree, bool multiShardQuery)
 			 * We support UPDATE and DELETE with subqueries and joins unless
 			 * they are multi shard queries.
 			 */
-			if (UpdateOrDeleteQuery(queryTree) && !multiShardQuery)
+			if (UpdateOrDeleteQuery(queryTree))
 			{
 				continue;
 			}
@@ -707,7 +753,7 @@ ModifyQuerySupported(Query *queryTree, bool multiShardQuery)
 			}
 
 			if (commandType == CMD_UPDATE &&
-				contain_volatile_functions((Node *) targetEntry->expr))
+				FindNodeCheck((Node *) targetEntry->expr, CitusIsVolatileFunction))
 			{
 				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 									 "functions used in UPDATE queries on distributed "
@@ -732,7 +778,7 @@ ModifyQuerySupported(Query *queryTree, bool multiShardQuery)
 
 		if (joinTree != NULL)
 		{
-			if (contain_volatile_functions(joinTree->quals))
+			if (FindNodeCheck((Node *) joinTree->quals, CitusIsVolatileFunction))
 			{
 				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 									 "functions used in the WHERE clause of modification "
@@ -981,9 +1027,6 @@ MasterIrreducibleExpressionWalker(Node *expression, WalkerState *state)
 	 * Once you've added them to this check, make sure you also evaluate them in the
 	 * executor!
 	 */
-
-	/* subqueries aren't allowed and should fail before control reaches this point */
-	Assert(!IsA(expression, Query));
 
 	hasVolatileFunction =
 		check_functions_in_node(expression, MasterIrreducibleExpressionFunctionChecker,
@@ -1668,7 +1711,8 @@ PlanRouterQuery(Query *originalQuery, RelationRestrictionContext *restrictionCon
 
 		Assert(UpdateOrDeleteQuery(originalQuery));
 
-		planningError = ModifyQuerySupported(originalQuery, isMultiShardQuery);
+		planningError = ModifyQuerySupported(originalQuery, originalQuery,
+											 isMultiShardQuery);
 		if (planningError != NULL)
 		{
 			return planningError;

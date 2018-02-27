@@ -591,5 +591,39 @@ EXECUTE prepared_test_6;
 (1 row)
 
 EXECUTE prepared_partition_column_insert(1);
-ERROR:  data-modifying statements are not supported in the WITH clauses of distributed queries
+ user_id | time | value_1 | value_2 | value_3 | value_4 
+---------+------+---------+---------+---------+---------
+       1 |      |         |         |         |        
+(1 row)
+
+EXECUTE prepared_partition_column_insert(2);
+ user_id | time | value_1 | value_2 | value_3 | value_4 
+---------+------+---------+---------+---------+---------
+       2 |      |         |         |         |        
+(1 row)
+
+EXECUTE prepared_partition_column_insert(3);
+ user_id | time | value_1 | value_2 | value_3 | value_4 
+---------+------+---------+---------+---------+---------
+       3 |      |         |         |         |        
+(1 row)
+
+EXECUTE prepared_partition_column_insert(4);
+ user_id | time | value_1 | value_2 | value_3 | value_4 
+---------+------+---------+---------+---------+---------
+       4 |      |         |         |         |        
+(1 row)
+
+EXECUTE prepared_partition_column_insert(5);
+ user_id | time | value_1 | value_2 | value_3 | value_4 
+---------+------+---------+---------+---------+---------
+       5 |      |         |         |         |        
+(1 row)
+
+EXECUTE prepared_partition_column_insert(6);
+ user_id | time | value_1 | value_2 | value_3 | value_4 
+---------+------+---------+---------+---------+---------
+       6 |      |         |         |         |        
+(1 row)
+
 DEALLOCATE ALL;

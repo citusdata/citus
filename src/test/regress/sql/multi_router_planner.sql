@@ -236,11 +236,21 @@ WITH RECURSIVE hierarchy as (
 				ce.company_id = 2))
 SELECT * FROM hierarchy WHERE LEVEL <= 2;
 
--- CTE with queries other than SELECT is not supported
+-- Test router modifying CTEs
 WITH new_article AS (
-    INSERT INTO articles_hash VALUES (1,  1, 'arsenous', 9572) RETURNING *
+    INSERT INTO articles_hash VALUES (1,  1, 'arsenous', 9) RETURNING *
 )
 SELECT * FROM new_article;
+
+WITH update_article AS (
+    UPDATE articles_hash SET word_count = 10 WHERE id = 1 AND word_count = 9 RETURNING *
+)
+SELECT * FROM update_article;
+
+WITH delete_article AS (
+    DELETE FROM articles_hash WHERE id = 1 AND word_count = 10 RETURNING *
+)
+SELECT * FROM delete_article;
 
 -- Modifying statement in nested CTE case is covered by PostgreSQL itself
 WITH new_article AS (
