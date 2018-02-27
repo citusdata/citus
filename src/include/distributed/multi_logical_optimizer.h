@@ -105,7 +105,8 @@ static const char *const AggregateNames[] = {
 	"invalid", "avg", "min", "max",
 	"sum", "count", "array_agg",
 	"jsonb_agg", "jsonb_object_agg",
-	"json_agg", "json_object_agg"
+	"json_agg", "json_object_agg",
+	"bit_and", "bit_or", "bool_and", "bool_or", "every"
 };
 
 
