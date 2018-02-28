@@ -106,6 +106,14 @@ ClearResults(MultiConnection *connection, bool raiseErrors)
 			MarkRemoteTransactionFailed(connection, raiseErrors);
 
 			success = false;
+
+			/* an error happened, there is nothing we can do more */
+			if (PQresultStatus(result) == PGRES_FATAL_ERROR)
+			{
+				PQclear(result);
+
+				break;
+			}
 		}
 
 		PQclear(result);
@@ -533,6 +541,12 @@ GetRemoteCommandResult(MultiConnection *connection, bool raiseInterrupts)
 
 	if (!FinishConnectionIO(connection, raiseInterrupts))
 	{
+		/* some error(s) happened while doing the I/O, signal the callers */
+		if (PQstatus(pgConn) == CONNECTION_BAD)
+		{
+			return PQmakeEmptyPGresult(pgConn, PGRES_FATAL_ERROR);
+		}
+
 		return NULL;
 	}
 
