@@ -65,24 +65,7 @@ IsResponseOK(PGresult *result)
 void
 ForgetResults(MultiConnection *connection)
 {
-	while (true)
-	{
-		PGresult *result = NULL;
-		const bool dontRaiseErrors = false;
-
-		result = GetRemoteCommandResult(connection, dontRaiseErrors);
-		if (result == NULL)
-		{
-			break;
-		}
-		if (PQresultStatus(result) == PGRES_COPY_IN)
-		{
-			PQputCopyEnd(connection->pgConn, NULL);
-
-			/* TODO: mark transaction as failed, once we can. */
-		}
-		PQclear(result);
-	}
+	ClearResults(connection, false);
 }
 
 
