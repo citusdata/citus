@@ -2351,8 +2351,7 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 	else
 	{
 		/*
-		 * All other aggregates are sent as they are to the worker nodes. These
-		 * aggregate functions include sum, count, min, max, and array_agg.
+		 * All other aggregates are sent as they are to the worker nodes.
 		 */
 		Aggref *workerAggregate = copyObject(originalAggregate);
 		workerAggregateList = lappend(workerAggregateList, workerAggregate);

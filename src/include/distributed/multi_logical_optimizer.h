@@ -61,7 +61,12 @@ typedef enum
 	AGGREGATE_JSONB_AGG = 7,
 	AGGREGATE_JSONB_OBJECT_AGG = 8,
 	AGGREGATE_JSON_AGG = 9,
-	AGGREGATE_JSON_OBJECT_AGG = 10
+	AGGREGATE_JSON_OBJECT_AGG = 10,
+	AGGREGATE_BIT_AND = 11,
+	AGGREGATE_BIT_OR = 12,
+	AGGREGATE_BOOL_AND = 13,
+	AGGREGATE_BOOL_OR = 14,
+	AGGREGATE_EVERY = 15
 } AggregateType;
 
 
@@ -105,7 +110,8 @@ static const char *const AggregateNames[] = {
 	"invalid", "avg", "min", "max",
 	"sum", "count", "array_agg",
 	"jsonb_agg", "jsonb_object_agg",
-	"json_agg", "json_object_agg"
+	"json_agg", "json_object_agg",
+	"bit_and", "bit_or", "bool_and", "bool_or", "every"
 };
 
 
