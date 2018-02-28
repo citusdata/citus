@@ -245,3 +245,4 @@ SELECT
 	HAVING count(*) FILTER (WHERE l_shipmode = 'AIR') > 1
 	ORDER BY 2 DESC, 1 DESC
 	LIMIT 10;
+

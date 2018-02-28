@@ -321,8 +321,7 @@ EXPLAIN (COSTS FALSE)
 		
 SET enable_hashagg TO on;
 	
--- explain the query to see actual plan with array_agg aggregation. Note that, 
--- worker query created for this query is not correct. It will be fixed soon.  
+-- explain the query to see actual plan with array_agg aggregation.  
 EXPLAIN (COSTS FALSE)
 	SELECT DISTINCT array_agg(l_linenumber), array_length(array_agg(l_linenumber), 1)
 		FROM lineitem_hash_part 
@@ -330,8 +329,7 @@ EXPLAIN (COSTS FALSE)
 		ORDER BY 2
 		LIMIT 15;
 
--- check the plan if the hash aggreate is disabled. Note that, 
--- worker query created for this query is not correct. It will be fixed soon. 
+-- check the plan if the hash aggreate is disabled. 
 SET enable_hashagg TO off;
 EXPLAIN (COSTS FALSE)
 	SELECT DISTINCT array_agg(l_linenumber), array_length(array_agg(l_linenumber), 1)

@@ -81,9 +81,17 @@ MasterTargetList(List *workerTargetList)
 	foreach(workerTargetCell, workerTargetList)
 	{
 		TargetEntry *workerTargetEntry = (TargetEntry *) lfirst(workerTargetCell);
-		TargetEntry *masterTargetEntry = copyObject(workerTargetEntry);
+		TargetEntry *masterTargetEntry = NULL;
+		Var *masterColumn = NULL;
 
-		Var *masterColumn = makeVarFromTargetEntry(tableId, workerTargetEntry);
+		if (workerTargetEntry->resjunk)
+		{
+			continue;
+		}
+
+		masterTargetEntry = copyObject(workerTargetEntry);
+
+		masterColumn = makeVarFromTargetEntry(tableId, workerTargetEntry);
 		masterColumn->varattno = columnId;
 		masterColumn->varoattno = columnId;
 		columnId++;
