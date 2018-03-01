@@ -2313,3 +2313,90 @@ GROUP BY
   types
 ORDER BY 
   types;
+
+-- we've fixed a bug related to joins w/wout alias 
+-- while implementing top window functions
+-- thus adding some tests related to that (i.e., next 3 tests)
+WITH users_events AS
+(
+  SELECT
+    user_id
+  FROM
+    users_table
+)
+SELECT
+  uid,
+  event_type,
+  value_2,
+  value_3 
+FROM (
+  (SELECT
+    user_id as uid
+  FROM
+    users_events
+  ) users
+  JOIN
+    events_table
+  ON
+    users.uid = events_table.event_type
+  ) a
+ORDER BY
+  1,2,3,4
+LIMIT 5;
+
+-- the following queries are almost the same,
+-- the only difference is the final GROUP BY
+SELECT a.user_id, avg(b.value_2) as subquery_avg
+FROM
+  (SELECT 
+      user_id
+   FROM 
+      users_table
+   WHERE 
+      (value_1 > 2)
+   GROUP BY 
+      user_id
+   HAVING 
+      count(distinct value_1) > 2
+  ) as a
+  LEFT JOIN
+  (SELECT 
+      DISTINCT ON (value_2) value_2 , user_id, value_3
+   FROM 
+      users_table
+   WHERE 
+      (value_1 > 3)
+   ORDER BY 
+      1,2,3
+  ) AS b
+  USING (user_id)
+GROUP BY user_id
+ORDER BY 1;
+
+-- see the comment for the above query
+SELECT a.user_id, avg(b.value_2) as subquery_avg
+FROM
+  (SELECT 
+      user_id
+   FROM 
+      users_table
+   WHERE 
+      (value_1 > 2)
+   GROUP BY 
+      user_id
+   HAVING 
+      count(distinct value_1) > 2
+  ) as a
+  LEFT JOIN
+  (SELECT 
+      DISTINCT ON (value_2) value_2 , user_id, value_3
+   FROM 
+      users_table
+   WHERE 
+      (value_1 > 3)
+   ORDER BY 
+      1,2,3
+  ) AS b
+  USING (user_id)
+GROUP BY a.user_id
+ORDER BY 1;

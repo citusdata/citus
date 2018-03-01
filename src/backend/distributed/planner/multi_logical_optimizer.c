@@ -1296,7 +1296,13 @@ MasterExtendedOpNode(MultiExtendedOp *originalOpNode,
 		Expr *newExpression = NULL;
 
 		bool hasAggregates = contain_agg_clause((Node *) originalExpression);
-		if (hasAggregates)
+		bool hasWindowFunction = contain_window_function((Node *) originalExpression);
+
+		/*
+		 * if the aggregate belongs to a window function, it is not mutated, but pushed
+		 * down to worker as it is. Master query should treat that as a Var.
+		 */
+		if (hasAggregates && !hasWindowFunction)
 		{
 			Node *newNode = MasterAggregateMutator((Node *) originalExpression,
 												   walkerContext);
@@ -1858,6 +1864,9 @@ WorkerExtendedOpNode(MultiExtendedOp *originalOpNode,
 	bool hasNonPartitionColumnDistinctAgg = false;
 	bool repartitionSubquery = false;
 
+	/* only window functions that can be pushed down reach here */
+	bool pushDownWindowFunction = originalOpNode->hasWindowFuncs;
+
 	walkerContext->expressionList = NIL;
 
 	/* find max of sort group ref index */
@@ -1893,12 +1902,18 @@ WorkerExtendedOpNode(MultiExtendedOp *originalOpNode,
 		List *newExpressionList = NIL;
 		ListCell *newExpressionCell = NULL;
 		bool hasAggregates = contain_agg_clause((Node *) originalExpression);
+		bool hasWindowFunction = contain_window_function((Node *) originalExpression);
 
 		/* reset walker context */
 		walkerContext->expressionList = NIL;
 		walkerContext->createGroupByClause = false;
 
-		if (hasAggregates)
+		/*
+		 * If the expression uses aggregates inside window function contain agg
+		 * clause still returns true. We want to make sure it is not a part of
+		 * window function before we proceed.
+		 */
+		if (hasAggregates && !hasWindowFunction)
 		{
 			WorkerAggregateWalker((Node *) originalExpression, walkerContext);
 
@@ -2013,6 +2028,8 @@ WorkerExtendedOpNode(MultiExtendedOp *originalOpNode,
 	workerExtendedOpNode = CitusMakeNode(MultiExtendedOp);
 	workerExtendedOpNode->distinctClause = NIL;
 	workerExtendedOpNode->hasDistinctOn = false;
+	workerExtendedOpNode->hasWindowFuncs = originalOpNode->hasWindowFuncs;
+	workerExtendedOpNode->windowClause = originalOpNode->windowClause;
 
 	if (!queryHasAggregates)
 	{
@@ -2042,13 +2059,48 @@ WorkerExtendedOpNode(MultiExtendedOp *originalOpNode,
 										 newTargetEntryListForSortClauses);
 	}
 
+	if (workerExtendedOpNode->windowClause)
+	{
+		List *windowClauseList = workerExtendedOpNode->windowClause;
+		ListCell *windowClauseCell = NULL;
+
+		foreach(windowClauseCell, windowClauseList)
+		{
+			WindowClause *windowClause = (WindowClause *) lfirst(windowClauseCell);
+
+			List *partitionClauseTargetList =
+				GenerateNewTargetEntriesForSortClauses(originalOpNode->targetList,
+													   windowClause->partitionClause,
+													   &targetProjectionNumber,
+													   &nextSortGroupRefIndex);
+			List *orderClauseTargetList =
+				GenerateNewTargetEntriesForSortClauses(originalOpNode->targetList,
+													   windowClause->orderClause,
+													   &targetProjectionNumber,
+													   &nextSortGroupRefIndex);
+
+			newTargetEntryList = list_concat(newTargetEntryList,
+											 partitionClauseTargetList);
+			newTargetEntryList = list_concat(newTargetEntryList,
+											 orderClauseTargetList);
+		}
+	}
+
 	workerExtendedOpNode->targetList = newTargetEntryList;
 
 	/*
 	 * If grouped by a partition column whose values are shards have disjoint sets
 	 * of partition values, we can push down the having qualifier.
+	 *
+	 * When a query with subquery is provided, we can't determine if
+	 * groupedByDisjointPartitionColumn, therefore we also check if there is a
+	 * window function too. If there is a window function we would know that it
+	 * is safe to push down (i.e. it is partitioned on distribution column, and
+	 * if there is a group by, it contains distribution column).
+	 *
 	 */
-	if (havingQual != NULL && groupedByDisjointPartitionColumn)
+	if (havingQual != NULL &&
+		(groupedByDisjointPartitionColumn || pushDownWindowFunction))
 	{
 		workerExtendedOpNode->havingQual = originalOpNode->havingQual;
 	}
@@ -2067,7 +2119,10 @@ HasNonPartitionColumnDistinctAgg(List *targetEntryList, Node *havingQual,
 								 List *tableNodeList)
 {
 	List *targetVarList = pull_var_clause((Node *) targetEntryList,
-										  PVC_INCLUDE_AGGREGATES);
+										  PVC_INCLUDE_AGGREGATES |
+										  PVC_RECURSE_WINDOWFUNCS);
+
+	/* having clause can't have window functions, no need to recurse for that */
 	List *havingVarList = pull_var_clause((Node *) havingQual, PVC_INCLUDE_AGGREGATES);
 	List *aggregateCheckList = list_concat(targetVarList, havingVarList);
 
@@ -2722,7 +2777,8 @@ ErrorIfContainsUnsupportedAggregate(MultiNode *logicalPlanNode)
 	 * PVC_REJECT_PLACEHOLDERS is implicit if PVC_INCLUDE_PLACEHOLDERS isn't
 	 * specified.
 	 */
-	List *expressionList = pull_var_clause((Node *) targetList, PVC_INCLUDE_AGGREGATES);
+	List *expressionList = pull_var_clause((Node *) targetList, PVC_INCLUDE_AGGREGATES |
+										   PVC_INCLUDE_WINDOWFUNCS);
 
 	ListCell *expressionCell = NULL;
 	foreach(expressionCell, expressionList)
