@@ -4,6 +4,7 @@
 -- Tests select distinct, and select distinct on features.
 --
 
+ANALYZE lineitem_hash_part;
 
 -- function calls are supported
 SELECT DISTINCT l_orderkey, now() FROM lineitem_hash_part LIMIT 0;

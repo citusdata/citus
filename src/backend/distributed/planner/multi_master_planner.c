@@ -13,6 +13,7 @@
 
 #include "postgres.h"
 
+#include "distributed/multi_logical_optimizer.h"
 #include "distributed/multi_master_planner.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/distributed_planner.h"
@@ -38,7 +39,6 @@ static Agg * BuildAggregatePlan(Query *masterQuery, Plan *subPlan);
 static bool HasDistinctAggregate(Query *masterQuery);
 static Plan * BuildDistinctPlan(Query *masterQuery, Plan *subPlan);
 static List * PrepareTargetListForNextPlan(List *targetList);
-static bool IsGroupBySubsetOfDistinct(Query *masterQuery);
 
 
 /*
@@ -414,7 +414,7 @@ BuildDistinctPlan(Query *masterQuery, Plan *subPlan)
 	 * clause also used in distinct clause, since group by clause guarantees the
 	 * uniqueness of the target list for every row.
 	 */
-	if (IsGroupBySubsetOfDistinct(masterQuery))
+	if (IsGroupBySubsetOfDistinct(masterQuery->groupClause, masterQuery->distinctClause))
 	{
 		return subPlan;
 	}
@@ -493,53 +493,4 @@ PrepareTargetListForNextPlan(List *targetList)
 	}
 
 	return newtargetList;
-}
-
-
-/*
- * IsGroupBySubsetOfDistinct checks whether each clause in group clauses also
- * exists in the distinct clauses. Note that, empty group clause is not a subset
- * of distinct clause.
- */
-static bool
-IsGroupBySubsetOfDistinct(Query *masterQuery)
-{
-	List *distinctClauses = masterQuery->distinctClause;
-	List *groupClauses = masterQuery->groupClause;
-	ListCell *distinctCell = NULL;
-	ListCell *groupCell = NULL;
-
-	/* There must be a group clause */
-	if (list_length(groupClauses) == 0)
-	{
-		return false;
-	}
-
-	foreach(groupCell, groupClauses)
-	{
-		SortGroupClause *groupClause = (SortGroupClause *) lfirst(groupCell);
-		bool isFound = false;
-
-		foreach(distinctCell, distinctClauses)
-		{
-			SortGroupClause *distinctClause = (SortGroupClause *) lfirst(distinctCell);
-
-			if (groupClause->tleSortGroupRef == distinctClause->tleSortGroupRef)
-			{
-				isFound = true;
-				break;
-			}
-		}
-
-		/*
-		 * If we can't find any member of group clause in the distinct clause,
-		 * that means group clause is not a subset of distinct clause.
-		 */
-		if (!isFound)
-		{
-			return false;
-		}
-	}
-
-	return true;
 }

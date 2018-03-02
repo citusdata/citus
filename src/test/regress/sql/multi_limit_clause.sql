@@ -102,6 +102,125 @@ SELECT
 	GROUP BY l_linestatus, l_shipmode
 	ORDER BY 3 DESC, 1, 2 LIMIT 5;
 
+-- Push down limit even if there is distinct on
+SELECT
+	DISTINCT ON (l_orderkey, l_linenumber) l_orderkey, l_linenumber
+	FROM lineitem_hash
+	GROUP BY l_orderkey, l_linenumber
+	ORDER BY l_orderkey, l_linenumber
+	LIMIT 5;
+
+-- Don't push down limit when group by clause not included in distinct on
+SELECT
+	DISTINCT ON (l_linenumber) l_orderkey, l_linenumber
+	FROM lineitem_hash
+	GROUP BY l_orderkey, l_linenumber
+	ORDER BY l_linenumber, l_orderkey
+	LIMIT 5;
+
+-- Push down limit when there is const in distinct on
+-- referring to a column such that group by clause
+-- list is contained in distinct on
+SELECT
+	DISTINCT ON (l_linenumber, 1) l_orderkey, l_linenumber
+	FROM lineitem_hash
+	GROUP BY l_orderkey, l_linenumber
+	ORDER BY l_linenumber, l_orderkey
+	LIMIT 5;
+
+-- Don't push down limit when there is const expression in distinct on
+-- even if there is a group by on the expression
+-- This is due to fact that postgres removes (1+1) from distinct on
+-- clause but keeps it in group by list.
+SELECT
+	DISTINCT ON (l_linenumber, 1+1, l_linenumber) l_orderkey, l_linenumber
+	FROM lineitem_hash
+	GROUP BY l_orderkey, (1+1), l_linenumber
+	ORDER BY l_linenumber, (1+1), l_orderkey
+	LIMIT 5;
+
+-- Don't push down limit when there is const reference
+-- does not point to a column to make distinct clause superset
+-- of group by
+SELECT
+	DISTINCT ON (l_linenumber, 2) l_orderkey, l_linenumber
+	FROM lineitem_hash
+	GROUP BY l_orderkey, l_linenumber
+	ORDER BY l_linenumber, l_orderkey
+	LIMIT 5;
+
+-- Push down limit even when there is a column expression
+-- in distinct clause provided that distinct clause covers
+-- group by expression, and there is no aggregates in the query.
+SELECT
+	DISTINCT ON (l_orderkey + 1) l_orderkey + 1
+	FROM lineitem_hash
+	GROUP BY l_orderkey + 1
+	ORDER BY l_orderkey + 1
+	LIMIT 5;
+
+-- Limit is not pushed down when there are aggregates in the query
+-- This is because group by is not on distribution column itself
+-- but on an expression on distribution column
+SELECT
+	DISTINCT ON (l_orderkey + 1, count(*)) l_orderkey + 1, count(*)
+	FROM lineitem_hash
+	GROUP BY l_orderkey + 1
+	ORDER BY l_orderkey + 1 , 2
+	LIMIT 5;
+
+-- same query with column instead of column expression, limit is pushed down
+-- because group by is on distribution column
+SELECT
+	DISTINCT ON (l_orderkey, count(*)) l_orderkey, count(*)
+	FROM lineitem_hash
+	GROUP BY l_orderkey
+	ORDER BY l_orderkey , 2
+	LIMIT 5;
+
+-- limit is not pushed down because distinct clause
+-- does not cover group by clause
+SELECT
+	DISTINCT ON (count(*)) l_orderkey, count(*)
+	FROM lineitem_hash
+	GROUP BY l_orderkey
+	ORDER BY 2 DESC, 1
+	LIMIT 2;
+
+-- push down limit if there is a window function in distinct on
+SELECT
+	DISTINCT ON (l_orderkey, RANK() OVER (partition by l_orderkey)) l_orderkey, RANK() OVER (partition by l_orderkey)
+	FROM lineitem_hash
+	GROUP BY l_orderkey
+	ORDER BY l_orderkey , 2
+	LIMIT 5;
+
+-- do not push down limit if there is an aggragete in distinct on
+-- we should be able to push this down, but query goes to subquery
+-- planner and we can't safely determine it is grouped by partition
+-- column.
+SELECT
+	DISTINCT ON (l_orderkey, RANK() OVER (partition by l_orderkey)) l_orderkey, count(*), RANK() OVER (partition by l_orderkey)
+	FROM lineitem_hash
+	GROUP BY l_orderkey
+	ORDER BY l_orderkey , 3, 2
+	LIMIT 5;
+
+-- limit is not pushed down due to same reason
+SELECT
+	DISTINCT ON (l_orderkey, count(*) OVER (partition by l_orderkey)) l_orderkey, l_linenumber, count(*), count(*) OVER (partition by l_orderkey)
+	FROM lineitem_hash
+	GROUP BY l_orderkey, l_linenumber
+	ORDER BY l_orderkey , count(*) OVER (partition by l_orderkey), count(*), l_linenumber
+	LIMIT 5;
+
+-- limit is not pushed down since distinct clause is not superset of group clause
+SELECT
+	DISTINCT ON (RANK() OVER (partition by l_orderkey)) l_orderkey, RANK() OVER (partition by l_orderkey)
+	FROM lineitem_hash
+	GROUP BY l_orderkey
+	ORDER BY 2 DESC, 1 
+	LIMIT 5;
 
 SET client_min_messages TO NOTICE;
 DROP TABLE lineitem_hash;
