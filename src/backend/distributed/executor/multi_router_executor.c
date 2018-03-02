@@ -1446,6 +1446,12 @@ StoreQueryResult(CitusScanState *scanState, MultiConnection *connection,
 
 			commandFailed = true;
 
+			/* an error happened, there is nothing we can do more */
+			if (resultStatus == PGRES_FATAL_ERROR)
+			{
+				break;
+			}
+
 			/* continue, there could be other lingering results due to row mode */
 			continue;
 		}
@@ -1564,6 +1570,12 @@ ConsumeQueryResult(MultiConnection *connection, bool failOnError, int64 *rows)
 			PQclear(result);
 
 			commandFailed = true;
+
+			/* an error happened, there is nothing we can do more */
+			if (status == PGRES_FATAL_ERROR)
+			{
+				break;
+			}
 
 			/* continue, there could be other lingering results due to row mode */
 			continue;

@@ -65,24 +65,7 @@ IsResponseOK(PGresult *result)
 void
 ForgetResults(MultiConnection *connection)
 {
-	while (true)
-	{
-		PGresult *result = NULL;
-		const bool dontRaiseErrors = false;
-
-		result = GetRemoteCommandResult(connection, dontRaiseErrors);
-		if (result == NULL)
-		{
-			break;
-		}
-		if (PQresultStatus(result) == PGRES_COPY_IN)
-		{
-			PQputCopyEnd(connection->pgConn, NULL);
-
-			/* TODO: mark transaction as failed, once we can. */
-		}
-		PQclear(result);
-	}
+	ClearResults(connection, false);
 }
 
 
@@ -123,6 +106,14 @@ ClearResults(MultiConnection *connection, bool raiseErrors)
 			MarkRemoteTransactionFailed(connection, raiseErrors);
 
 			success = false;
+
+			/* an error happened, there is nothing we can do more */
+			if (PQresultStatus(result) == PGRES_FATAL_ERROR)
+			{
+				PQclear(result);
+
+				break;
+			}
 		}
 
 		PQclear(result);
@@ -550,6 +541,12 @@ GetRemoteCommandResult(MultiConnection *connection, bool raiseInterrupts)
 
 	if (!FinishConnectionIO(connection, raiseInterrupts))
 	{
+		/* some error(s) happened while doing the I/O, signal the callers */
+		if (PQstatus(pgConn) == CONNECTION_BAD)
+		{
+			return PQmakeEmptyPGresult(pgConn, PGRES_FATAL_ERROR);
+		}
+
 		return NULL;
 	}
 
