@@ -1275,6 +1275,20 @@ SELECT * FROM summary_table ORDER BY id;
 ----+-----------+---------------+-------+---------
 (0 rows)
 
+-- we don't support subqueries in VALUES clause
+INSERT INTO summary_table (id) VALUES ((SELECT id FROM summary_table));
+ERROR:  subqueries are not supported within INSERT queries
+HINT:  Try rewriting your queries with 'INSERT INTO ... SELECT' syntax.
+INSERT INTO summary_table (id) VALUES (5), ((SELECT id FROM summary_table));
+ERROR:  subqueries are not supported within INSERT queries
+HINT:  Try rewriting your queries with 'INSERT INTO ... SELECT' syntax.
+-- similar queries with reference tables
+INSERT INTO reference_summary_table (id) VALUES ((SELECT id FROM summary_table));
+ERROR:  subqueries are not supported within INSERT queries
+HINT:  Try rewriting your queries with 'INSERT INTO ... SELECT' syntax.
+INSERT INTO summary_table (id) VALUES ((SELECT id FROM reference_summary_table));
+ERROR:  subqueries are not supported within INSERT queries
+HINT:  Try rewriting your queries with 'INSERT INTO ... SELECT' syntax.
 DROP TABLE raw_table;
 DROP TABLE summary_table;
 DROP TABLE reference_raw_table;

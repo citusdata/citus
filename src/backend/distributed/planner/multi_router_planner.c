@@ -562,27 +562,15 @@ ModifyQuerySupported(Query *queryTree, Query *originalQuery, bool multiShardQuer
 	 */
 	if (queryTree->hasSubLinks == true)
 	{
-		/*
-		 * We support UPDATE and DELETE with subqueries unless they are multi
-		 * shard queries.
-		 */
+		/* we support subqueries for INSERTs only via INSERT INTO ... SELECT */
 		if (!UpdateOrDeleteQuery(queryTree))
 		{
-			StringInfo errorHint = makeStringInfo();
-			DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(
-				distributedTableId);
-			char *partitionKeyString = cacheEntry->partitionKeyString;
-			char *partitionColumnName = ColumnNameToColumn(distributedTableId,
-														   partitionKeyString);
-
-			appendStringInfo(errorHint,
-							 "Consider using an equality filter on partition column \"%s\" to target a single shard.",
-							 partitionColumnName);
+			Assert(queryTree->commandType == CMD_INSERT);
 
 			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-								 "subqueries are not supported in modifications across "
-								 "multiple shards",
-								 errorHint->data, NULL);
+								 "subqueries are not supported within INSERT queries",
+								 NULL, "Try rewriting your queries with 'INSERT "
+									   "INTO ... SELECT' syntax.");
 		}
 	}
 

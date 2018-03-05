@@ -253,8 +253,8 @@ INSERT INTO dropcol_distributed AS dropcol (key, keep1) VALUES (1, '5') ON CONFL
 -- subquery in the SET clause
 INSERT INTO upsert_test (part_key, other_col) VALUES (1, 1) ON CONFLICT (part_key) DO
 	UPDATE SET other_col = (SELECT count(*) from upsert_test);
-ERROR:  subqueries are not supported in modifications across multiple shards
-DETAIL:  Consider using an equality filter on partition column "part_key" to target a single shard.
+ERROR:  subqueries are not supported within INSERT queries
+HINT:  Try rewriting your queries with 'INSERT INTO ... SELECT' syntax.
 -- non mutable function call in the SET
 INSERT INTO upsert_test (part_key, other_col) VALUES (1, 1) ON CONFLICT (part_key) DO
 	UPDATE SET other_col = random()::int;

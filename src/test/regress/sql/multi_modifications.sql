@@ -821,6 +821,14 @@ EXECUTE prepared_delete_with_join(6);
 
 SELECT * FROM summary_table ORDER BY id;
 
+-- we don't support subqueries in VALUES clause
+INSERT INTO summary_table (id) VALUES ((SELECT id FROM summary_table));
+INSERT INTO summary_table (id) VALUES (5), ((SELECT id FROM summary_table));
+
+-- similar queries with reference tables
+INSERT INTO reference_summary_table (id) VALUES ((SELECT id FROM summary_table));
+INSERT INTO summary_table (id) VALUES ((SELECT id FROM reference_summary_table));
+
 DROP TABLE raw_table;
 DROP TABLE summary_table;
 DROP TABLE reference_raw_table;
