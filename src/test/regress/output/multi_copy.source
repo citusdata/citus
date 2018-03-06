@@ -1120,6 +1120,8 @@ SELECT * FROM copy_jsonb ORDER BY key;
 \COPY copy_jsonb (key, value) FROM STDIN
 ERROR:  invalid input syntax for type json
 DETAIL:  The input string ended unexpectedly.
+CONTEXT:  JSON data, line 1: {"r":255,"g":0,"b":0
+COPY copy_jsonb, line 1, column value: "{"r":255,"g":0,"b":0"
 TRUNCATE copy_jsonb;
 SET citus.skip_jsonb_validation_in_copy TO off;
 -- JSONB from text should work

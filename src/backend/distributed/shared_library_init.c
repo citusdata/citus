@@ -519,9 +519,9 @@ RegisterCitusConfigVariables(void)
 					 "be higher. This setting does not apply if the input format is "
 					 "binary."),
 		&SkipJsonbValidationInCopy,
-		true,
+		false,
 		PGC_USERSET,
-		0,
+		GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
