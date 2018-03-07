@@ -75,6 +75,7 @@
 #include "executor/executor.h"
 #include "libpq/pqformat.h"
 #include "nodes/makefuncs.h"
+#include "parser/parse_func.h"
 #include "tsearch/ts_locale.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
@@ -469,6 +470,15 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 				 * prepending a version number.
 				 */
 				fmgr_info(textSendAsJsonbFunctionId,
+						  &copyDest->columnOutputFunctions[columnIndex]);
+			}
+			else
+			{
+				List *nameList = list_make2(makeString("pg_catalog"),
+											makeString("textout"));
+				Oid paramOids[1] = { TEXTOID };
+				Oid textoutFunctionId = LookupFuncName(nameList, 1, paramOids, false);
+				fmgr_info(textoutFunctionId,
 						  &copyDest->columnOutputFunctions[columnIndex]);
 			}
 		}
