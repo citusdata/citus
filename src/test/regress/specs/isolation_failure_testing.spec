@@ -27,9 +27,7 @@ step "gdb-break"
     SELECT pid FROM pg_stat_activity WHERE application_name = 'gdb-process'
   ) SELECT citus.gdb_attach(pid.pid) FROM pid;
 
-  SELECT pg_sleep(1);
   SELECT citus.run_command('!break NeedsDistributedPlanning');
-  SELECT pg_sleep(1);
   SELECT citus.run_command('continue');
 }
 
