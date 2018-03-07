@@ -1860,7 +1860,9 @@ WorkerExtendedOpNode(MultiExtendedOp *originalOpNode,
 		palloc0(sizeof(WorkerAggregateWalkerContext));
 	Index nextSortGroupRefIndex = 0;
 	bool queryHasAggregates = false;
-	bool enableLimitPushdown = true;
+	bool distinctClauseSupersetofGroupClause = false;
+	bool distinctPreventsLimitPushdown = false;
+	bool createdNewGroupByClause = false;
 	bool hasNonPartitionColumnDistinctAgg = false;
 	bool repartitionSubquery = false;
 
@@ -1949,11 +1951,7 @@ WorkerExtendedOpNode(MultiExtendedOp *originalOpNode,
 				groupClauseList = lappend(groupClauseList, groupByClause);
 				nextSortGroupRefIndex++;
 
-				/*
-				 * If we introduce new columns accompanied by a new group by clause,
-				 * than pushing down limits will cause incorrect results.
-				 */
-				enableLimitPushdown = false;
+				createdNewGroupByClause = true;
 			}
 
 			if (newTargetEntry->resname == NULL)
@@ -2013,11 +2011,7 @@ WorkerExtendedOpNode(MultiExtendedOp *originalOpNode,
 				groupClauseList = lappend(groupClauseList, groupByClause);
 				nextSortGroupRefIndex++;
 
-				/*
-				 * If we introduce new columns accompanied by a new group by clause,
-				 * than pushing down limits will cause incorrect results.
-				 */
-				enableLimitPushdown = false;
+				createdNewGroupByClause = true;
 			}
 
 			newTargetEntryList = lappend(newTargetEntryList, newTargetEntry);
@@ -2030,16 +2024,52 @@ WorkerExtendedOpNode(MultiExtendedOp *originalOpNode,
 	workerExtendedOpNode->hasDistinctOn = false;
 	workerExtendedOpNode->hasWindowFuncs = originalOpNode->hasWindowFuncs;
 	workerExtendedOpNode->windowClause = originalOpNode->windowClause;
-
-	if (!queryHasAggregates)
-	{
-		workerExtendedOpNode->distinctClause = originalOpNode->distinctClause;
-		workerExtendedOpNode->hasDistinctOn = originalOpNode->hasDistinctOn;
-	}
-
 	workerExtendedOpNode->groupClauseList = groupClauseList;
 
-	if (enableLimitPushdown)
+	if (originalOpNode->distinctClause)
+	{
+		bool shouldPushdownDistinct = false;
+		if (groupClauseList == NIL ||
+			IsGroupBySubsetOfDistinct(groupClauseList,
+									  originalOpNode->distinctClause))
+		{
+			distinctClauseSupersetofGroupClause = true;
+		}
+		else
+		{
+			distinctClauseSupersetofGroupClause = false;
+
+			/*
+			 * GROUP BY being a subset of DISTINCT guarantees the
+			 * distinctness on the workers. Otherwise, pushing down
+			 * LIMIT might cause missing the necessary data from
+			 * the worker query
+			 */
+			distinctPreventsLimitPushdown = true;
+		}
+
+		/*
+		 * Distinct is pushed down to worker query only if the query does not
+		 * contain an aggregate in which master processing might be required to
+		 * complete the final result before distinct operation. We also prevent
+		 * distinct pushdown if distinct clause is missing some entries that
+		 * group by clause has.
+		 */
+		shouldPushdownDistinct = !queryHasAggregates &&
+								 distinctClauseSupersetofGroupClause;
+		if (shouldPushdownDistinct)
+		{
+			workerExtendedOpNode->distinctClause = originalOpNode->distinctClause;
+			workerExtendedOpNode->hasDistinctOn = originalOpNode->hasDistinctOn;
+		}
+	}
+
+	/*
+	 * Order by and limit clauses are pushed down only if
+	 * (1) We do not create a new group by clause during aggregate mutation, and
+	 * (2) There distinct clause does not prevent limit pushdown
+	 */
+	if (!createdNewGroupByClause && !distinctPreventsLimitPushdown)
 	{
 		List *newTargetEntryListForSortClauses = NIL;
 
@@ -3857,4 +3887,51 @@ HasOrderByHllType(List *sortClauseList, List *targetList)
 	}
 
 	return hasOrderByHllType;
+}
+
+
+/*
+ * IsGroupBySubsetOfDistinct checks whether each clause in group clauses also
+ * exists in the distinct clauses. Note that, empty group clause is not a subset
+ * of distinct clause.
+ */
+bool
+IsGroupBySubsetOfDistinct(List *groupClause, List *distinctClause)
+{
+	ListCell *distinctCell = NULL;
+	ListCell *groupCell = NULL;
+
+	/* There must be a group clause */
+	if (list_length(groupClause) == 0)
+	{
+		return false;
+	}
+
+	foreach(groupCell, groupClause)
+	{
+		SortGroupClause *groupClause = (SortGroupClause *) lfirst(groupCell);
+		bool isFound = false;
+
+		foreach(distinctCell, distinctClause)
+		{
+			SortGroupClause *distinctClause = (SortGroupClause *) lfirst(distinctCell);
+
+			if (groupClause->tleSortGroupRef == distinctClause->tleSortGroupRef)
+			{
+				isFound = true;
+				break;
+			}
+		}
+
+		/*
+		 * If we can't find any member of group clause in the distinct clause,
+		 * that means group clause is not a subset of distinct clause.
+		 */
+		if (!isFound)
+		{
+			return false;
+		}
+	}
+
+	return true;
 }

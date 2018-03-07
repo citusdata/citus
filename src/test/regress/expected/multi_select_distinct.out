@@ -3,6 +3,7 @@
 --
 -- Tests select distinct, and select distinct on features.
 --
+ANALYZE lineitem_hash_part;
 -- function calls are supported
 SELECT DISTINCT l_orderkey, now() FROM lineitem_hash_part LIMIT 0;
  l_orderkey | now 
@@ -360,13 +361,10 @@ EXPLAIN (COSTS FALSE)
                            Tasks Shown: One of 4
                            ->  Task
                                  Node: host=localhost port=57637 dbname=regression
-                                 ->  Limit
-                                       ->  Sort
-                                             Sort Key: l_suppkey, l_linenumber
-                                             ->  HashAggregate
-                                                   Group Key: l_suppkey, l_linenumber
-                                                   ->  Seq Scan on lineitem_hash_part_360038 lineitem_hash_part
-(18 rows)
+                                 ->  HashAggregate
+                                       Group Key: l_suppkey, l_linenumber
+                                       ->  Seq Scan on lineitem_hash_part_360038 lineitem_hash_part
+(15 rows)
 
 -- check the plan if the hash aggreate is disabled. Similar to the explain of 
 -- the query above.
@@ -394,13 +392,10 @@ EXPLAIN (COSTS FALSE)
                                        Tasks Shown: One of 4
                                        ->  Task
                                              Node: host=localhost port=57637 dbname=regression
-                                             ->  Limit
-                                                   ->  Sort
-                                                         Sort Key: l_suppkey, l_linenumber
-                                                         ->  HashAggregate
-                                                               Group Key: l_suppkey, l_linenumber
-                                                               ->  Seq Scan on lineitem_hash_part_360038 lineitem_hash_part
-(21 rows)
+                                             ->  HashAggregate
+                                                   Group Key: l_suppkey, l_linenumber
+                                                   ->  Seq Scan on lineitem_hash_part_360038 lineitem_hash_part
+(18 rows)
 
 SET enable_hashagg TO on;
 -- Similar to the above query, not with count but avg. Only difference with the
@@ -930,15 +925,12 @@ EXPLAIN (COSTS FALSE)
                            Tasks Shown: One of 4
                            ->  Task
                                  Node: host=localhost port=57637 dbname=regression
-                                 ->  Limit
+                                 ->  GroupAggregate
+                                       Group Key: l_orderkey
                                        ->  Sort
-                                             Sort Key: (array_length(array_agg(l_linenumber), 1))
-                                             ->  GroupAggregate
-                                                   Group Key: l_orderkey
-                                                   ->  Sort
-                                                         Sort Key: l_orderkey
-                                                         ->  Seq Scan on lineitem_hash_part_360038 lineitem_hash_part
-(20 rows)
+                                             Sort Key: l_orderkey
+                                             ->  Seq Scan on lineitem_hash_part_360038 lineitem_hash_part
+(17 rows)
 
 -- check the plan if the hash aggreate is disabled. 
 SET enable_hashagg TO off;
@@ -965,15 +957,12 @@ EXPLAIN (COSTS FALSE)
                                        Tasks Shown: One of 4
                                        ->  Task
                                              Node: host=localhost port=57637 dbname=regression
-                                             ->  Limit
+                                             ->  GroupAggregate
+                                                   Group Key: l_orderkey
                                                    ->  Sort
-                                                         Sort Key: (array_length(array_agg(l_linenumber), 1))
-                                                         ->  GroupAggregate
-                                                               Group Key: l_orderkey
-                                                               ->  Sort
-                                                                     Sort Key: l_orderkey
-                                                                     ->  Seq Scan on lineitem_hash_part_360038 lineitem_hash_part
-(23 rows)
+                                                         Sort Key: l_orderkey
+                                                         ->  Seq Scan on lineitem_hash_part_360038 lineitem_hash_part
+(20 rows)
 
 		
 SET enable_hashagg TO on;
