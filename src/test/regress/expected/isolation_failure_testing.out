@@ -1,0 +1,68 @@
+Parsed test spec with 3 sessions
+
+starting permutation: s2-lock-2 s1-lock-1 s1-lock-2 s2-lock-1 s2-commit s1-commit
+step s2-lock-2: SELECT pg_advisory_xact_lock(2);
+pg_advisory_xact_lock
+
+               
+step s1-lock-1: SELECT pg_advisory_xact_lock(1);
+pg_advisory_xact_lock
+
+               
+step s1-lock-2: SELECT pg_advisory_xact_lock(2); <waiting ...>
+step s2-lock-1: SELECT pg_advisory_xact_lock(1); <waiting ...>
+step s2-lock-1: <... completed>
+pg_advisory_xact_lock
+
+               
+step s1-lock-2: <... completed>
+error in steps s2-lock-1 s1-lock-2: ERROR:  deadlock detected
+step s2-commit: COMMIT;
+step s1-commit: COMMIT;
+
+starting permutation: s2-lock-2 s1-lock-1 s1-lock-2 gdb-break s2-lock-1-gdb s2-commit s1-commit
+step s2-lock-2: SELECT pg_advisory_xact_lock(2);
+pg_advisory_xact_lock
+
+               
+step s1-lock-1: SELECT pg_advisory_xact_lock(1);
+pg_advisory_xact_lock
+
+               
+step s1-lock-2: SELECT pg_advisory_xact_lock(2); <waiting ...>
+step gdb-break: 
+  WITH pid AS (
+    SELECT pid FROM pg_stat_activity WHERE application_name = 'gdb-process'
+  ) SELECT citus.gdb_attach(pid.pid) FROM pid;
+
+  SELECT pg_sleep(1);
+  SELECT citus.run_command('!break NeedsDistributedPlanning');
+  SELECT pg_sleep(1);
+  SELECT citus.run_command('continue');
+
+gdb_attach     
+
+               
+pg_sleep       
+
+               
+run_command    
+
+               
+pg_sleep       
+
+               
+run_command    
+
+               
+step s2-lock-1-gdb: 
+  SELECT 1;
+ <waiting ...>
+step s2-lock-1-gdb: <... completed>
+step s1-lock-2: <... completed>
+pg_advisory_xact_lock
+
+               
+error in steps s2-lock-1-gdb s1-lock-2: ERROR:  deadlock detected
+step s2-commit: COMMIT;
+step s1-commit: COMMIT;

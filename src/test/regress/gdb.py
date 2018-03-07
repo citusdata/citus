@@ -41,6 +41,8 @@ def spawn_gdb():
     return process
 
 def listen_socket():
+    # you can run a client manually with "nc -U gdb.sock"
+
     filename = '/home/brian/Work/citus/src/test/regress/gdb.sock'
 
     # before attempting to use this socket make sure it doesn't already exist
