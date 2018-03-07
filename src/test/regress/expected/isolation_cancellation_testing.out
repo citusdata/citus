@@ -1,0 +1,30 @@
+Parsed test spec with 2 sessions
+
+starting permutation: gdb-attach create-table commit
+step gdb-attach: 
+  WITH pid AS (
+    SELECT pid FROM pg_stat_activity WHERE application_name = 'gdb-process'
+  ) SELECT citus.gdb_attach(pid.pid) FROM pid;
+
+  -- ShardStorageType is called just after HOLD_INTERRUPTS()
+  SELECT citus.run_command('!nested-cancel CreateShardsWithRoundRobinPolicy ShardStorageType');
+  SELECT citus.run_command('continue');
+
+gdb_attach     
+
+               
+run_command    
+
+               
+run_command    
+
+               
+step create-table: 
+  CREATE TABLE test (a int, b int);
+  SELECT create_distributed_table('test', 'a');
+
+WARNING:  cancel requests are ignored during shard creation
+create_distributed_table
+
+               
+step commit: COMMIT;

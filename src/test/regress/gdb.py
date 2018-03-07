@@ -84,9 +84,13 @@ def accept_command_from_client(stream, state):
         return
 
     breakre = '!break ([a-zA-Z]+)'
+    nestedcancelre = '!nested-cancel ([a-zA-Z]+) ([a-zA-Z]+)'
     if re.match(breakre, nextline):
         location = re.match(breakre, nextline).groups()[0]
         state.gdb_break(location)
+    elif re.match(nestedcancelre, nextline):
+        first, second = re.match(nestedcancelre, nextline).groups()
+        state.gdb_nested_cancel(first, second)
     elif nextline == '\x03\n' or nextline == '!interrupt\n':
         print('[client ctrl-c] sending signal to gdb')
         state.gdb.send_signal(signal.SIGINT)
@@ -129,6 +133,24 @@ class State:
               continue
             end
         '''.format(location=location))
+
+    def gdb_nested_cancel(self, first, second):
+        '''
+        Will send a SIGINT to the process the first time {second} is called after the
+        first time {first} is called
+        '''
+        self.send_gdb_command('''
+            break {first}
+            commands
+              delete breakpoints
+              break {second}
+              commands
+                delete breakpoints
+                signal SIGINT
+              end
+              continue
+            end
+        '''.format(first=first, second=second))
 
     def gdb_continue(self):
         self.send_gdb_command('continue')
