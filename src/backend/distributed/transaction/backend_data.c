@@ -538,6 +538,15 @@ AssignDistributedTransactionId(void)
 
 	SpinLockAcquire(&MyBackendData->mutex);
 
+	if (MyBackendData->transactionId.transactionNumber != 0)
+	{
+		/* we already have an id, probably from assign_distributed_transaction_id */
+		MyBackendData->transactionId.transactionOriginator = true;
+		MyBackendData->transactionId.initiatorNodeIdentifier = localGroupId;
+		SpinLockRelease(&MyBackendData->mutex);
+		return;
+	}
+
 	MyBackendData->databaseId = MyDatabaseId;
 
 	MyBackendData->transactionId.initiatorNodeIdentifier = localGroupId;
