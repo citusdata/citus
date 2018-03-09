@@ -25,6 +25,7 @@ struct CustomScan;
 extern PlannedStmt * MasterNodeSelectPlan(struct DistributedPlan *distributedPlan,
 										  struct CustomScan *dataScan);
 extern Unique * make_unique_from_sortclauses(Plan *lefttree, List *distinctList);
+extern void set_dummy_tlist_references(Plan *plan, int rtoffset);
 
 
 #endif   /* MULTI_MASTER_PLANNER_H */

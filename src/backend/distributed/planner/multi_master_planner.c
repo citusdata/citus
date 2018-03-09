@@ -21,6 +21,7 @@
 #include "distributed/worker_protocol.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
+#include "nodes/print.h"
 #include "optimizer/clauses.h"
 #include "optimizer/cost.h"
 #include "optimizer/planmain.h"
@@ -156,6 +157,9 @@ BuildSelectStatement(Query *masterQuery, List *masterTargetList, CustomScan *rem
 
 		aggregationPlan = BuildAggregatePlan(masterQuery, &remoteScan->scan.plan);
 		topLevelPlan = (Plan *) aggregationPlan;
+
+		/* fix the plan for EXPLAIN purposes */
+		set_dummy_tlist_references(topLevelPlan, 1);
 	}
 	else
 	{
@@ -200,6 +204,9 @@ BuildSelectStatement(Query *masterQuery, List *masterTargetList, CustomScan *rem
 	{
 		Plan *distinctPlan = BuildDistinctPlan(masterQuery, topLevelPlan);
 		topLevelPlan = distinctPlan;
+
+		/* fix the plan for EXPLAIN purposes */
+		set_dummy_tlist_references(topLevelPlan, 1);
 	}
 
 	/* (4) add a sorting plan if needed */
@@ -213,6 +220,9 @@ BuildSelectStatement(Query *masterQuery, List *masterTargetList, CustomScan *rem
 		sortPlan->plan.plan_rows = 0;
 
 		topLevelPlan = (Plan *) sortPlan;
+
+		/* fix the plan for EXPLAIN purposes */
+		set_dummy_tlist_references(topLevelPlan, 1);
 	}
 
 	/*
@@ -226,6 +236,9 @@ BuildSelectStatement(Query *masterQuery, List *masterTargetList, CustomScan *rem
 		topLevelPlan =
 			(Plan *) make_unique_from_sortclauses(topLevelPlan,
 												  masterQuery->distinctClause);
+
+		/* fix the plan for EXPLAIN purposes */
+		set_dummy_tlist_references(topLevelPlan, 1);
 	}
 
 	/* (5) add a limit plan if needed */
@@ -235,6 +248,9 @@ BuildSelectStatement(Query *masterQuery, List *masterTargetList, CustomScan *rem
 		Node *limitOffset = masterQuery->limitOffset;
 		Limit *limitPlan = make_limit(topLevelPlan, limitOffset, limitCount);
 		topLevelPlan = (Plan *) limitPlan;
+
+		/* fix the plan for EXPLAIN purposes */
+		set_dummy_tlist_references(topLevelPlan, 1);
 	}
 
 	/* (6) finally set our top level plan in the plan tree */
@@ -281,7 +297,8 @@ BuildAggregatePlan(Query *masterQuery, Plan *subPlan)
 
 	/*
 	 * For upper level plans above the sequential scan, the planner expects the
-	 * table id (varno) to be set to OUTER_VAR.
+	 * table id (varno) to be set to OUTER_VAR when referencing output from the
+	 * lefttree subplan.
 	 */
 	aggregateColumnList = pull_var_clause_default((Node *) aggregateTargetList);
 	havingColumnList = pull_var_clause_default(havingQual);
