@@ -1411,7 +1411,22 @@ StoreQueryResult(CitusScanState *scanState, MultiConnection *connection,
 		bool doRaiseInterrupts = true;
 
 		PGresult *result = GetRemoteCommandResult(connection, doRaiseInterrupts);
-		if (result == NULL)
+
+		if (PQstatus(connection->pgConn) == CONNECTION_BAD)
+		{
+			if (failOnError)
+			{
+				ReportResultError(connection, result, ERROR);
+			}
+			else
+			{
+				ReportResultError(connection, result, WARNING);
+			}
+
+			commandFailed = true;
+			break;
+		}
+		else if (result == NULL)
 		{
 			break;
 		}
