@@ -1,3 +1,37 @@
+### citus v7.3.0 (March 15, 2018) ###
+
+* Adds support for non-colocated joins between subqueries
+
+* Adds support for window functions that can be pushed down to worker
+
+* Adds support for modifying CTEs
+
+* Adds recursive plan for subqueries in WHERE clause with recurring FROM clause
+
+* Adds support for bool_ and bit_ aggregates
+
+* Adds support for Postgres `jsonb` and `json` aggregation functions
+
+* Adds support for respecting enable_hashagg in the master plan
+
+* Performance improvements to reduce distributed planning time
+
+* Fixes a bug on planner when aggregate is used in ORDER BY
+
+* Fixes a bug on planner when DISTINCT (ON) clause is used with GROUP BY
+
+* Fixes a bug of creating coordinator planner with distinct and aggregate clause
+
+* Fixes a bug that could open a new connection on every table size function call
+
+* Fixes a bug canceling backends that are not involved in distributed deadlocks
+
+* Fixes count distinct bug on column expressions when used with subqueries
+
+* Improves error handling on worker node failures
+
+* Improves error messages for INSERT queries that have subqueries
+
 ### citus v7.2.1 (February 6, 2018) ###
 
 * Fixes count distinct bug on column expressions when used with subqueries
