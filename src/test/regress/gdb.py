@@ -13,12 +13,26 @@ import enum
 import fcntl
 import functools
 import os
+import queue
 import re
 import select
 import signal
 import socket
 import subprocess
 import sys
+import threading
+import time
+
+class GdbThread(threading.Thread):
+    def __init__(self, stream):
+        super().__init__(daemon=True)
+        self.stream = stream
+
+    def run(self):
+        nextline = self.stream.readline()
+        while len(nextline) != 0:
+            print('[gdb] {}'.format(nextline.rstrip()))
+            nextline = self.stream.readline()
 
 def spawn_gdb():
     process = subprocess.Popen(
@@ -36,7 +50,7 @@ def spawn_gdb():
         flags = fcntl.fcntl(fd, fcntl.F_GETFL)
         fcntl.fcntl(fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
     setnonblocking(process.stdin.fileno())
-    setnonblocking(process.stdout.fileno())
+    # setnonblocking(process.stdout.fileno())
 
     return process
 
@@ -60,7 +74,7 @@ def listen_socket():
 
     return sock
 
-def accept_gdb_startup(stream, state):
+def accept_gdb_output(stream, state):
     nextline = stream.readline()
     while len(nextline):
         print('[gdb] {}'.format(nextline.rstrip()))
@@ -83,14 +97,40 @@ def accept_command_from_client(stream, state):
         disconnect(state)
         return
 
+    # TODO: automatically !interrupt if a command comes in while we're running?
+
     breakre = '!break ([a-zA-Z]+)'
     nestedcancelre = '!nested-cancel ([a-zA-Z]+) ([a-zA-Z]+)'
+    systemre = '!system ([\S ]+)'  # all non-whitespace chars and space
+    partitionre = '!worker-partition (add|remove) ([0-9]+)'
     if re.match(breakre, nextline):
         location = re.match(breakre, nextline).groups()[0]
         state.gdb_break(location)
     elif re.match(nestedcancelre, nextline):
         first, second = re.match(nestedcancelre, nextline).groups()
         state.gdb_nested_cancel(first, second)
+    elif re.match(systemre, nextline):
+        command = re.match(systemre, nextline).groups()
+        result = subprocess.run(command,
+            shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT
+        )
+        print('[system] {}'.format(result.stdout))
+    elif re.match(partitionre, nextline):
+        command, port = re.match(partitionre, nextline).groups()
+        if command == 'add':
+            command = '-A'
+        elif command == 'remove':
+            command = '-D'
+        else:
+            print('invalid command!')
+            return
+        shell = 'iptables {} OUTPUT -p tcp --dport {} -s localhost -j REJECT --reject-with tcp-reset'.format(
+            command, port
+        )
+        result = subprocess.run(shell,
+            shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT
+        )
+        print('[iptables] {}'.format(shell))
     elif nextline == '\x03\n' or nextline == '!interrupt\n':
         print('[client ctrl-c] sending signal to gdb')
         state.gdb.send_signal(signal.SIGINT)
@@ -117,6 +157,7 @@ class State:
         self.callbacks = callbacks if callbacks is not None else {}
 
     def send_gdb_command(self, command):
+        command = command.lstrip()  # remove any leading newlines
         print('[gdb>] {}'.format(command))
         self.gdb.stdin.write('{}\n'.format(command))
 
@@ -133,6 +174,17 @@ class State:
               continue
             end
         '''.format(location=location))
+
+#          break elog_finish if elevel == 19
+#          commands
+#            bt
+#            continue
+#          end
+#          break errstart if elevel == 19
+#          commands
+#            bt
+#            continue
+#          end
 
     def gdb_nested_cancel(self, first, second):
         '''
@@ -162,11 +214,13 @@ if __name__ == '__main__':
     process = spawn_gdb()
     clientsock = listen_socket()
 
-    poll.register(process.stdout.fileno(), select.POLLIN)
+    # emit the process's output in the background, so it's never blocked
+    thread = GdbThread(process.stdout).start()
+
+    poll.register(process.stdout.fileno(), select.POLLHUP)
     poll.register(clientsock, select.POLLIN)
 
     callbacks = {
-        (process.stdout.fileno(), select.POLLIN): functools.partial(accept_gdb_startup, process.stdout),
         (clientsock.fileno(), select.POLLIN): functools.partial(accept_client_connection, clientsock),
         (process.stdout.fileno(), select.POLLHUP): accept_gdb_disconnect
     }
@@ -174,7 +228,7 @@ if __name__ == '__main__':
     state = State(gdb=process, poll=poll, callbacks=callbacks)
 
     while True:
-        readies = poll.poll(1000 * 60)  # timeout expressed in milliseconds
+        readies = poll.poll(1000 * 60 * 60)  # timeout expressed in milliseconds
         if not len(readies):
             print('nothing happened for a while, giving up')
             break
