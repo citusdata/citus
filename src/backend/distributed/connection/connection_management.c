@@ -533,20 +533,27 @@ FinishConnectionEstablishment(MultiConnection *connection)
 				 */
 				break;
 			}
-			else if (pollResult != EINTR)
-			{
-				/* Retrying, signal interrupted. So check. */
-				CHECK_FOR_INTERRUPTS();
-			}
 			else
 			{
-				/*
-				 * We ERROR here, instead of just returning a failed
-				 * connection, because this shouldn't happen, and indicates a
-				 * programming error somewhere, not a network etc. issue.
-				 */
-				ereport(ERROR, (errcode_for_socket_access(),
-								errmsg("poll() failed: %m")));
+				int errorCode = errno;
+#ifdef WIN32
+				errorCode = WSAGetLastError();
+#endif
+				if (errorCode == EINTR)
+				{
+					/* Retrying, signal interrupted. So check. */
+					CHECK_FOR_INTERRUPTS();
+				}
+				else
+				{
+					/*
+					 * We ERROR here, instead of just returning a failed
+					 * connection, because this shouldn't happen, and indicates a
+					 * programming error somewhere, not a network etc. issue.
+					 */
+					ereport(ERROR, (errcode_for_socket_access(),
+									errmsg("poll()/select() failed: %m")));
+				}
 			}
 		}
 	}
