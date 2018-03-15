@@ -1,0 +1,77 @@
+Parsed test spec with 2 sessions
+
+starting permutation: attach
+pg_advisory_lock
+
+               
+step attach: 
+  WITH pid AS (
+    SELECT pid FROM pg_stat_activity WHERE application_name = 'gdb-process' LIMIT 1
+  ) SELECT citus.gdb_attach(pid.pid) FROM pid;
+  SELECT citus.run_command('continue');
+
+gdb_attach     
+
+               
+run_command    
+
+               
+pg_advisory_unlock_all
+
+               
+
+starting permutation: break-before-send update partition-worker continue select reconnect-worker
+pg_advisory_lock
+
+               
+step break-before-send: 
+  -- we're already attached
+  SELECT citus.run_command('!interrupt');
+
+  -- fail one of the workers right before sending the query to it
+  SELECT citus.run_command('!break SendQueryInSingleRowMode');
+  SELECT citus.run_command('continue');
+
+run_command    
+
+               
+run_command    
+
+               
+run_command    
+
+               
+step update: 
+  UPDATE test_table SET b = 2 WHERE a = 1; 
+ <waiting ...>
+step partition-worker: 
+  SELECT citus.run_command('!worker-partition add 57637');
+
+run_command    
+
+               
+step continue: 
+  SELECT pg_advisory_unlock_all();
+
+pg_advisory_unlock_all
+
+               
+step update: <... completed>
+error in steps continue update: ERROR:  could not modify any active placements
+WARNING:  connection error: localhost:57637
+DETAIL:  could not connect to server: Connection refused
+	Is the server running on host "localhost" (127.0.0.1) and accepting
+	TCP/IP connections on port 57637?
+step select: 
+  SELECT * FROM test_table WHERE a = 1;
+
+ERROR:  could not receive query results
+step reconnect-worker: 
+  SELECT citus.run_command('!worker-partition remove 57637');
+
+run_command    
+
+               
+pg_advisory_unlock_all
+
+               
