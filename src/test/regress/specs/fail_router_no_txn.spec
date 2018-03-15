@@ -30,6 +30,8 @@ step "select"
   SELECT * FROM test_table WHERE a = 1;
 }
 
+step "select-1" { SELECT 1; }
+
 teardown { SELECT pg_advisory_unlock_all(); }
 
 session "gdb"
@@ -54,6 +56,16 @@ step "break-before-send"
   SELECT citus.run_command('continue');
 }
 
+step "break-before-consume"
+{
+  -- we're already attached
+  SELECT citus.run_command('!interrupt');
+
+  -- fail one of the workers right before sending the query to it
+  SELECT citus.run_command('!break ConsumeQueryResult');
+  SELECT citus.run_command('continue');
+}
+
 step "partition-worker"
 {
   SELECT citus.run_command('!worker-partition add 57637');
@@ -71,3 +83,4 @@ step "continue"
 
 permutation "attach"
 permutation "break-before-send" "update" "partition-worker" "continue" "select" "reconnect-worker"
+permutation "break-before-consume" "update" "partition-worker" "continue" "select" "select-1" "select" "reconnect-worker" "select"
