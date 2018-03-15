@@ -79,7 +79,7 @@ check_distributed_deadlocks(PG_FUNCTION_ARGS)
 
 
 /*
- * CheckForDistributedDeadlocks is the entry point for detecing
+ * CheckForDistributedDeadlocks is the entry point for detecting
  * distributed deadlocks.
  *
  * In plain words, the function first builds a wait graph by
