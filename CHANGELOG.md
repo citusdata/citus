@@ -14,6 +14,12 @@
 
 * Adds support for respecting enable_hashagg in the master plan
 
+* Adds support for renaming a distributed table
+
+* Adds support for ALTER INDEX (SET|RESET|RENAME TO) commands
+
+* Adds support for setting storage parameters on distributed tables
+
 * Performance improvements to reduce distributed planning time
 
 * Fixes a bug on planner when aggregate is used in ORDER BY
