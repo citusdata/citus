@@ -530,6 +530,10 @@ INSERT INTO lineitem_hash_part
 ( SELECT s FROM generate_series(1,5) s) UNION
 ( SELECT s FROM generate_series(5,10) s);
 
+-- explain avg() aggregate with an order by clause
+EXPLAIN (COSTS OFF, VERBOSE true)
+select l_orderkey, avg(l_discount) from lineitem group by 1 order by 2 desc;
+
 -- explain with recursive planning
 EXPLAIN (COSTS OFF, VERBOSE true)
 WITH keys AS (

@@ -159,7 +159,7 @@ BuildSelectStatement(Query *masterQuery, List *masterTargetList, CustomScan *rem
 		topLevelPlan = (Plan *) aggregationPlan;
 
 		/* fix the plan for EXPLAIN purposes */
-		set_dummy_tlist_references(topLevelPlan, 1);
+		/* set_dummy_tlist_references(topLevelPlan, 1); */
 	}
 	else
 	{
@@ -206,7 +206,7 @@ BuildSelectStatement(Query *masterQuery, List *masterTargetList, CustomScan *rem
 		topLevelPlan = distinctPlan;
 
 		/* fix the plan for EXPLAIN purposes */
-		set_dummy_tlist_references(topLevelPlan, 1);
+		/* set_dummy_tlist_references(topLevelPlan, 1); */
 	}
 
 	/* (4) add a sorting plan if needed */
@@ -238,7 +238,7 @@ BuildSelectStatement(Query *masterQuery, List *masterTargetList, CustomScan *rem
 												  masterQuery->distinctClause);
 
 		/* fix the plan for EXPLAIN purposes */
-		set_dummy_tlist_references(topLevelPlan, 1);
+		/* set_dummy_tlist_references(topLevelPlan, 1); */
 	}
 
 	/* (5) add a limit plan if needed */
@@ -250,8 +250,15 @@ BuildSelectStatement(Query *masterQuery, List *masterTargetList, CustomScan *rem
 		topLevelPlan = (Plan *) limitPlan;
 
 		/* fix the plan for EXPLAIN purposes */
-		set_dummy_tlist_references(topLevelPlan, 1);
+		/* set_dummy_tlist_references(topLevelPlan, 1); */
 	}
+
+	/*
+	 * To fix EXPLAIN in every cases, we might have to call the PostgreSQL
+	 * planner function set_plan_references, which requires a PlannerInfo *root
+	 * and the plan.
+	 */
+	/* topLevelplan = set_plan_references(root, topLevelPlan); */
 
 	/* (6) finally set our top level plan in the plan tree */
 	selectStatement->planTree = topLevelPlan;
