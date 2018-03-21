@@ -37,7 +37,7 @@ output_files := $(patsubst $(citus_abs_srcdir)/output/%.source,expected/%.out, $
 # intermediate, for muscle memory backward compatibility.
 check: check-full
 # check-full triggers all tests that ought to be run routinely
-check-full: check-multi check-multi-mx check-multi-task-tracker-extra check-worker check-follower-cluster
+check-full: check-multi check-multi-mx check-multi-task-tracker-extra check-worker check-follower-cluster check-failure
 
 # using pg_regress_multi_check unnecessarily starts up multiple nodes, which isn't needed
 # for check-worker. But that's harmless besides a few cycles.
@@ -78,6 +78,10 @@ check-multi-task-tracker-extra: all tempinstall-main
 check-follower-cluster: all
 	$(pg_regress_multi_check) --load-extension=citus --follower-cluster \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_follower_schedule $(EXTRA_TESTS)
+
+check-failure: all
+	$(pg_regress_multi_check) --load-extension=citus --mitmproxy \
+	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/failure_schedule $(EXTRA_TESTS)
 
 clean distclean maintainer-clean:
 	rm -f $(output_files) $(input_files)
