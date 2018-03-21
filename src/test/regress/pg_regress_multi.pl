@@ -19,6 +19,8 @@ use Getopt::Long;
 use File::Spec::Functions;
 use File::Path qw(make_path remove_tree);
 use Config;
+use POSIX qw( WNOHANG mkfifo );
+use Cwd 'abs_path';
 
 sub Usage()
 {
@@ -42,6 +44,7 @@ sub Usage()
     print "  --valgrind-log-file	Path to the write valgrind logs\n";
     print "  --pg_ctl-timeout    	Timeout for pg_ctl\n";
     print "  --connection-timeout	Timeout for connecting to worker nodes\n";
+    print "  --mitmproxy        	Start a mitmproxy for one of the workers\n";
     exit 1;
 }
 
@@ -67,9 +70,12 @@ my $valgrindPath = "valgrind";
 my $valgrindLogFile = "valgrind_test_log.txt";
 my $pgCtlTimeout = undef;
 my $connectionTimeout = 5000;
+my $useMitmproxy = 0;
+my $mitmFifoPath = catfile("tmp_check", "mitmproxy.fifo");
 
 my $serversAreShutdown = "TRUE";
 my $usingWindows = 0;
+my $mitmPid = 0;
 
 if ($Config{osname} eq "MSWin32")
 {
@@ -93,6 +99,7 @@ GetOptions(
     'valgrind-log-file=s' => \$valgrindLogFile,
     'pg_ctl-timeout=s' => \$pgCtlTimeout,
     'connection-timeout=s' => \$connectionTimeout,
+    'mitmproxy' => \$useMitmproxy,
     'help' => sub { Usage() });
 
 # Update environment to include [DY]LD_LIBRARY_PATH/LIBDIR/etc -
@@ -179,6 +186,11 @@ Vanilla tests can only be run when source (detected as ${postgresSrcdir})
 and build (detected as ${postgresBuilddir}) directory corresponding to $bindir
 are present.
 MESSAGE
+}
+
+if ($useMitmproxy)
+{
+  system("mitmdump --version") == 0 or die "make sure mitmdump is on PATH";
 }
 
 # If pgCtlTimeout is defined, we will set related environment variable.
@@ -291,6 +303,23 @@ push(@pgOptions, '-c', "citus.task_tracker_delay=10ms");
 push(@pgOptions, '-c', "citus.remote_task_check_interval=1ms");
 push(@pgOptions, '-c', "citus.shard_replication_factor=2");
 push(@pgOptions, '-c', "citus.node_connection_timeout=${connectionTimeout}");
+
+if ($useMitmproxy)
+{
+  # make tests reproducible by never trying to negotiate ssl
+  push(@pgOptions, '-c', "citus.node_conninfo=sslmode=disable");
+}
+
+if ($useMitmproxy)
+{
+  if (! -e "tmp_check")
+  {
+    make_path("tmp_check") or die 'could not create tmp_check directory';
+  }
+  my $absoluteFifoPath = abs_path($mitmFifoPath);
+  die 'abs_path returned empty string' unless ($absoluteFifoPath ne "");
+  push(@pgOptions, '-c', "citus.mitmfifo=$absoluteFifoPath");
+}
 
 if ($followercluster)
 {
@@ -507,9 +536,47 @@ sub ShutdownServers()
                     or warn "Could not shutdown worker server";
             }
         }
+	if ($mitmPid != 0)
+	{
+	  # '-' means signal the process group, 2 is SIGINT
+          kill(-2, $mitmPid) or warn "could not interrupt mitmdump";
+	}
         $serversAreShutdown = "TRUE";
     }
 }
+
+if ($useMitmproxy)
+{
+  if (! -e $mitmFifoPath)
+  {
+    mkfifo($mitmFifoPath, 0777) or die "could not create fifo";
+  }
+
+  if (! -p $mitmFifoPath)
+  {
+    die "a file already exists at $mitmFifoPath, delete it before trying again";
+  }
+
+  my $childPid = fork();
+
+  die("Failed to fork\n")
+   unless (defined $childPid);
+
+  die("No child process\n")
+    if ($childPid < 0);
+
+  $mitmPid = $childPid;
+
+  if ($mitmPid eq 0) {
+    setpgrp(0,0); # we're about to spawn both a shell and a mitmdump, kill them as a group
+    exec("mitmdump --rawtcp -p 57640 --mode reverse:localhost:57638 -s mitmscripts/fluent.py --set fifo=$mitmFifoPath --set flow_detail=0 --set termlog_verbosity=warn >proxy.output 2>&1");
+    die 'could not start mitmdump';
+  }
+}
+
+$SIG{CHLD} = sub {
+  while ((my $waitpid = waitpid(-1, WNOHANG)) > 0) {}
+}; # If, for some reason, mitmproxy dies before we do
 
 # Set signals to shutdown servers
 $SIG{INT} = \&ShutdownServers;
@@ -537,6 +604,7 @@ if ($valgrind)
 {
     replace_postgres();
 }
+
 
 # Signal that servers should be shutdown
 $serversAreShutdown = "FALSE";
@@ -672,7 +740,6 @@ my @arguments = (
     "--host", $host,
     '--port', $masterPort,
     '--user', $user,
-#    '--bindir', 'C:\Users\Administrator\Downloads\pg-64\bin',
     '--bindir', catfile("tmp_check", "tmp-bin")
 );
 
