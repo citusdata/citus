@@ -1,0 +1,192 @@
+Parsed test spec with 2 sessions
+
+starting permutation: attach
+create_distributed_table
+
+               
+pg_advisory_lock
+
+               
+step attach: 
+  WITH pid AS (
+    SELECT pid FROM pg_stat_activity WHERE application_name = 'gdb-process' LIMIT 1
+  ) SELECT citus.gdb_attach(pid.pid) FROM pid;
+  SELECT citus.run_command('continue');
+
+gdb_attach     
+
+               
+run_command    
+
+               
+pg_advisory_unlock_all
+
+               
+
+starting permutation: break-before-send insert-select partition-worker continue select reconnect-worker rollback
+create_distributed_table
+
+               
+pg_advisory_lock
+
+               
+step break-before-send: 
+  -- we're already attached
+  SELECT citus.run_command('!interrupt');
+
+  -- fail one of the workers right before sending the query to it
+  SELECT citus.run_command('!break ExecuteQueryIntoDestReceiver');
+  SELECT citus.run_command('continue');
+
+run_command    
+
+               
+run_command    
+
+               
+run_command    
+
+               
+step insert-select: 
+  BEGIN;
+  INSERT INTO tt2 SELECT * FROM tt1;
+ <waiting ...>
+step partition-worker: 
+  -- kill those COPYs
+  SELECT master_run_on_worker(ARRAY['localhost'], ARRAY[57637], ARRAY['
+   WITH pids AS (
+	   SELECT pg_terminate_backend(pid)
+	   FROM pg_stat_activity
+           WHERE query LIKE ''COPY%''
+  ) SELECT count(1) FROM pids;
+  '], false);
+
+  SELECT citus.run_command('!worker-partition add 57637');
+
+master_run_on_worker
+
+(localhost,57637,t,0)
+run_command    
+
+               
+step continue: 
+  SELECT pg_advisory_unlock_all();
+
+pg_advisory_unlock_all
+
+               
+WARNING:  connection error: localhost:57637
+DETAIL:  could not connect to server: Connection refused
+	Is the server running on host "localhost" (127.0.0.1) and accepting
+	TCP/IP connections on port 57637?
+step insert-select: <... completed>
+WARNING:  connection error: localhost:57637
+DETAIL:  could not connect to server: Connection refused
+	Is the server running on host "localhost" (127.0.0.1) and accepting
+	TCP/IP connections on port 57637?
+WARNING:  connection error: localhost:57637
+DETAIL:  could not connect to server: Connection refused
+	Is the server running on host "localhost" (127.0.0.1) and accepting
+	TCP/IP connections on port 57637?
+WARNING:  connection error: localhost:57637
+DETAIL:  could not connect to server: Connection refused
+	Is the server running on host "localhost" (127.0.0.1) and accepting
+	TCP/IP connections on port 57637?
+WARNING:  connection error: localhost:57637
+DETAIL:  could not connect to server: Connection refused
+	Is the server running on host "localhost" (127.0.0.1) and accepting
+	TCP/IP connections on port 57637?
+WARNING:  connection error: localhost:57637
+DETAIL:  could not connect to server: Connection refused
+	Is the server running on host "localhost" (127.0.0.1) and accepting
+	TCP/IP connections on port 57637?
+error in steps continue insert-select: ERROR:  failed to execute task 2
+step select: 
+  SELECT 1;
+
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+step reconnect-worker: 
+  SELECT citus.run_command('!worker-partition remove 57637');
+
+run_command    
+
+               
+step rollback: 
+  ROLLBACK
+
+pg_advisory_unlock_all
+
+               
+
+starting permutation: break-on-receive insert-select partition-worker continue select reconnect-worker rollback
+create_distributed_table
+
+               
+pg_advisory_lock
+
+               
+step break-on-receive: 
+  -- we're already attached
+  SELECT citus.run_command('!interrupt');
+
+  -- fail one of the workers once we start getting results
+  SELECT citus.run_command('!break CitusCopyDestReceiverReceive');
+  SELECT citus.run_command('continue');
+
+run_command    
+
+               
+run_command    
+
+               
+run_command    
+
+               
+step insert-select: 
+  BEGIN;
+  INSERT INTO tt2 SELECT * FROM tt1;
+ <waiting ...>
+step partition-worker: 
+  -- kill those COPYs
+  SELECT master_run_on_worker(ARRAY['localhost'], ARRAY[57637], ARRAY['
+   WITH pids AS (
+	   SELECT pg_terminate_backend(pid)
+	   FROM pg_stat_activity
+           WHERE query LIKE ''COPY%''
+  ) SELECT count(1) FROM pids;
+  '], false);
+
+  SELECT citus.run_command('!worker-partition add 57637');
+
+master_run_on_worker
+
+(localhost,57637,t,2)
+run_command    
+
+               
+step continue: 
+  SELECT pg_advisory_unlock_all();
+
+pg_advisory_unlock_all
+
+               
+step insert-select: <... completed>
+WARNING:  terminating connection due to administrator command
+WARNING:  failed to abort 1PC transaction "" on localhost:57637
+error in steps continue insert-select: ERROR:  terminating connection due to administrator command
+step select: 
+  SELECT 1;
+
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+step reconnect-worker: 
+  SELECT citus.run_command('!worker-partition remove 57637');
+
+run_command    
+
+               
+step rollback: 
+  ROLLBACK
+
+pg_advisory_unlock_all
+
+               
