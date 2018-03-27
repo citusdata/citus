@@ -1,8 +1,6 @@
 # Citus toplevel Makefile
 
 EXTENSION = citus
-DATA = citus--7.0-15.sql
-
 
 MODULE_big = citus
 
@@ -80,6 +78,7 @@ OBJS = src/backend/distributed/shared_library_init.o \
      src/backend/distributed/utils/citus_outfuncs.o \
      src/backend/distributed/utils/citus_readfuncs.o \
      src/backend/distributed/utils/citus_ruleutils.o \
+     src/backend/distributed/utils/citus_version.o \
      src/backend/distributed/utils/colocation_utils.o \
      src/backend/distributed/utils/distribution_column.o \
      src/backend/distributed/utils/errormessage.o \
@@ -107,7 +106,6 @@ OBJS = src/backend/distributed/shared_library_init.o \
      $(WIN32RES)
 
 EXTENSION=
-DATA=
 MODULE_big=
 OBJS=
 
