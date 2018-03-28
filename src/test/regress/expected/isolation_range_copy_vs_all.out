@@ -4,10 +4,10 @@ starting permutation: s1-initialize s1-begin s1-copy s2-copy s1-commit s1-select
 create_distributed_table
 
                
-step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
+step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
-step s1-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5\\n6, g, 6\\n7, h, 7\\n8, i, 8\\n9, j, 9' WITH CSV;
-step s2-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5\\n6, g, 6\\n7, h, 7\\n8, i, 8\\n9, j, 9' WITH CSV;
+step s1-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5 && echo 6, g, 6 && echo 7, h, 7 && echo 8, i, 8 && echo 9, j, 9' WITH CSV;
+step s2-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5 && echo 6, g, 6 && echo 7, h, 7 && echo 8, i, 8 && echo 9, j, 9' WITH CSV;
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM range_copy;
 count          
@@ -18,9 +18,9 @@ starting permutation: s1-initialize s1-begin s1-copy s2-router-select s1-commit 
 create_distributed_table
 
                
-step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
+step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
-step s1-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5\\n6, g, 6\\n7, h, 7\\n8, i, 8\\n9, j, 9' WITH CSV;
+step s1-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5 && echo 6, g, 6 && echo 7, h, 7 && echo 8, i, 8 && echo 9, j, 9' WITH CSV;
 step s2-router-select: SELECT * FROM range_copy WHERE id = 1;
 id             data           int_data       
 
@@ -35,9 +35,9 @@ starting permutation: s1-initialize s1-begin s1-copy s2-real-time-select s1-comm
 create_distributed_table
 
                
-step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
+step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
-step s1-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5\\n6, g, 6\\n7, h, 7\\n8, i, 8\\n9, j, 9' WITH CSV;
+step s1-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5 && echo 6, g, 6 && echo 7, h, 7 && echo 8, i, 8 && echo 9, j, 9' WITH CSV;
 step s2-real-time-select: SELECT * FROM range_copy ORDER BY 1, 2;
 id             data           int_data       
 
@@ -56,9 +56,9 @@ starting permutation: s1-initialize s1-begin s1-copy s2-task-tracker-select s1-c
 create_distributed_table
 
                
-step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
+step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
-step s1-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5\\n6, g, 6\\n7, h, 7\\n8, i, 8\\n9, j, 9' WITH CSV;
+step s1-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5 && echo 6, g, 6 && echo 7, h, 7 && echo 8, i, 8 && echo 9, j, 9' WITH CSV;
 step s2-task-tracker-select: 
 	SET citus.task_executor_type TO "task-tracker";
 	SELECT * FROM range_copy AS t1 JOIN range_copy AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
@@ -80,9 +80,9 @@ starting permutation: s1-initialize s1-begin s1-copy s2-insert s1-commit s1-sele
 create_distributed_table
 
                
-step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
+step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
-step s1-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5\\n6, g, 6\\n7, h, 7\\n8, i, 8\\n9, j, 9' WITH CSV;
+step s1-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5 && echo 6, g, 6 && echo 7, h, 7 && echo 8, i, 8 && echo 9, j, 9' WITH CSV;
 step s2-insert: INSERT INTO range_copy VALUES(0, 'k', 0);
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM range_copy;
@@ -94,9 +94,9 @@ starting permutation: s1-initialize s1-begin s1-copy s2-insert-select s1-commit 
 create_distributed_table
 
                
-step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
+step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
-step s1-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5\\n6, g, 6\\n7, h, 7\\n8, i, 8\\n9, j, 9' WITH CSV;
+step s1-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5 && echo 6, g, 6 && echo 7, h, 7 && echo 8, i, 8 && echo 9, j, 9' WITH CSV;
 step s2-insert-select: INSERT INTO range_copy SELECT * FROM range_copy;
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM range_copy;
@@ -108,9 +108,9 @@ starting permutation: s1-initialize s1-begin s1-copy s2-update s1-commit s1-sele
 create_distributed_table
 
                
-step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
+step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
-step s1-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5\\n6, g, 6\\n7, h, 7\\n8, i, 8\\n9, j, 9' WITH CSV;
+step s1-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5 && echo 6, g, 6 && echo 7, h, 7 && echo 8, i, 8 && echo 9, j, 9' WITH CSV;
 step s2-update: UPDATE range_copy SET data = 'l' WHERE id = 0;
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM range_copy;
@@ -122,9 +122,9 @@ starting permutation: s1-initialize s1-begin s1-copy s2-delete s1-commit s1-sele
 create_distributed_table
 
                
-step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
+step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
-step s1-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5\\n6, g, 6\\n7, h, 7\\n8, i, 8\\n9, j, 9' WITH CSV;
+step s1-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5 && echo 6, g, 6 && echo 7, h, 7 && echo 8, i, 8 && echo 9, j, 9' WITH CSV;
 step s2-delete: DELETE FROM range_copy WHERE id = 1;
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM range_copy;
@@ -136,9 +136,9 @@ starting permutation: s1-initialize s1-begin s1-copy s2-truncate s1-commit s1-se
 create_distributed_table
 
                
-step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
+step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
-step s1-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5\\n6, g, 6\\n7, h, 7\\n8, i, 8\\n9, j, 9' WITH CSV;
+step s1-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5 && echo 6, g, 6 && echo 7, h, 7 && echo 8, i, 8 && echo 9, j, 9' WITH CSV;
 step s2-truncate: TRUNCATE range_copy; <waiting ...>
 step s1-commit: COMMIT;
 step s2-truncate: <... completed>
@@ -151,9 +151,9 @@ starting permutation: s1-initialize s1-begin s1-copy s2-drop s1-commit s1-select
 create_distributed_table
 
                
-step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
+step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
-step s1-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5\\n6, g, 6\\n7, h, 7\\n8, i, 8\\n9, j, 9' WITH CSV;
+step s1-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5 && echo 6, g, 6 && echo 7, h, 7 && echo 8, i, 8 && echo 9, j, 9' WITH CSV;
 step s2-drop: DROP TABLE range_copy; <waiting ...>
 step s1-commit: COMMIT;
 step s2-drop: <... completed>
@@ -164,9 +164,9 @@ starting permutation: s1-initialize s1-begin s1-copy s2-ddl-create-index s1-comm
 create_distributed_table
 
                
-step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
+step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
-step s1-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5\\n6, g, 6\\n7, h, 7\\n8, i, 8\\n9, j, 9' WITH CSV;
+step s1-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5 && echo 6, g, 6 && echo 7, h, 7 && echo 8, i, 8 && echo 9, j, 9' WITH CSV;
 step s2-ddl-create-index: CREATE INDEX range_copy_index ON range_copy(id); <waiting ...>
 step s1-commit: COMMIT;
 step s2-ddl-create-index: <... completed>
@@ -184,10 +184,10 @@ starting permutation: s1-initialize s1-ddl-create-index s1-begin s1-copy s2-ddl-
 create_distributed_table
 
                
-step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
+step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-ddl-create-index: CREATE INDEX range_copy_index ON range_copy(id);
 step s1-begin: BEGIN;
-step s1-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5\\n6, g, 6\\n7, h, 7\\n8, i, 8\\n9, j, 9' WITH CSV;
+step s1-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5 && echo 6, g, 6 && echo 7, h, 7 && echo 8, i, 8 && echo 9, j, 9' WITH CSV;
 step s2-ddl-drop-index: DROP INDEX range_copy_index; <waiting ...>
 step s1-commit: COMMIT;
 step s2-ddl-drop-index: <... completed>
@@ -205,9 +205,9 @@ starting permutation: s1-initialize s1-begin s1-copy s2-ddl-create-index-concurr
 create_distributed_table
 
                
-step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
+step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
-step s1-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5\\n6, g, 6\\n7, h, 7\\n8, i, 8\\n9, j, 9' WITH CSV;
+step s1-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5 && echo 6, g, 6 && echo 7, h, 7 && echo 8, i, 8 && echo 9, j, 9' WITH CSV;
 step s2-ddl-create-index-concurrently: CREATE INDEX CONCURRENTLY range_copy_index ON range_copy(id); <waiting ...>
 step s1-commit: COMMIT;
 step s2-ddl-create-index-concurrently: <... completed>
@@ -225,9 +225,9 @@ starting permutation: s1-initialize s1-begin s1-copy s2-ddl-add-column s1-commit
 create_distributed_table
 
                
-step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
+step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
-step s1-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5\\n6, g, 6\\n7, h, 7\\n8, i, 8\\n9, j, 9' WITH CSV;
+step s1-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5 && echo 6, g, 6 && echo 7, h, 7 && echo 8, i, 8 && echo 9, j, 9' WITH CSV;
 step s2-ddl-add-column: ALTER TABLE range_copy ADD new_column int DEFAULT 0; <waiting ...>
 step s1-commit: COMMIT;
 step s2-ddl-add-column: <... completed>
@@ -245,10 +245,10 @@ starting permutation: s1-initialize s1-ddl-add-column s1-begin s1-copy-additiona
 create_distributed_table
 
                
-step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
+step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-ddl-add-column: ALTER TABLE range_copy ADD new_column int DEFAULT 0;
 step s1-begin: BEGIN;
-step s1-copy-additional-column: COPY range_copy FROM PROGRAM 'echo 5, f, 5, 5\\n6, g, 6, 6\\n7, h, 7, 7\\n8, i, 8, 8\\n9, j, 9, 9' WITH CSV;
+step s1-copy-additional-column: COPY range_copy FROM PROGRAM 'echo 5, f, 5, 5 && echo 6, g, 6, 6 && echo 7, h, 7, 7 && echo 8, i, 8, 8 && echo 9, j, 9, 9' WITH CSV;
 step s2-ddl-drop-column: ALTER TABLE range_copy DROP new_column; <waiting ...>
 step s1-commit: COMMIT;
 step s2-ddl-drop-column: <... completed>
@@ -266,9 +266,9 @@ starting permutation: s1-initialize s1-begin s1-copy s2-ddl-rename-column s1-com
 create_distributed_table
 
                
-step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
+step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
-step s1-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5\\n6, g, 6\\n7, h, 7\\n8, i, 8\\n9, j, 9' WITH CSV;
+step s1-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5 && echo 6, g, 6 && echo 7, h, 7 && echo 8, i, 8 && echo 9, j, 9' WITH CSV;
 step s2-ddl-rename-column: ALTER TABLE range_copy RENAME data TO new_column; <waiting ...>
 step s1-commit: COMMIT;
 step s2-ddl-rename-column: <... completed>
@@ -286,9 +286,9 @@ starting permutation: s1-initialize s1-begin s1-copy s2-table-size s1-commit s1-
 create_distributed_table
 
                
-step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
+step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
-step s1-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5\\n6, g, 6\\n7, h, 7\\n8, i, 8\\n9, j, 9' WITH CSV;
+step s1-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5 && echo 6, g, 6 && echo 7, h, 7 && echo 8, i, 8 && echo 9, j, 9' WITH CSV;
 step s2-table-size: SELECT citus_total_relation_size('range_copy');
 citus_total_relation_size
 
@@ -303,9 +303,9 @@ starting permutation: s1-initialize s1-begin s1-copy s2-master-modify-multiple-s
 create_distributed_table
 
                
-step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
+step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
-step s1-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5\\n6, g, 6\\n7, h, 7\\n8, i, 8\\n9, j, 9' WITH CSV;
+step s1-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5 && echo 6, g, 6 && echo 7, h, 7 && echo 8, i, 8 && echo 9, j, 9' WITH CSV;
 step s2-master-modify-multiple-shards: SELECT master_modify_multiple_shards('DELETE FROM range_copy;');
 master_modify_multiple_shards
 
@@ -320,9 +320,9 @@ starting permutation: s1-initialize s1-begin s1-copy s2-master-apply-delete-comm
 create_distributed_table
 
                
-step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
+step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
-step s1-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5\\n6, g, 6\\n7, h, 7\\n8, i, 8\\n9, j, 9' WITH CSV;
+step s1-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5 && echo 6, g, 6 && echo 7, h, 7 && echo 8, i, 8 && echo 9, j, 9' WITH CSV;
 step s2-master-apply-delete-command: SELECT master_apply_delete_command('DELETE FROM range_copy WHERE id <= 4;'); <waiting ...>
 step s1-commit: COMMIT;
 step s2-master-apply-delete-command: <... completed>
@@ -338,9 +338,9 @@ starting permutation: s1-initialize s1-begin s1-copy s2-master-drop-all-shards s
 create_distributed_table
 
                
-step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
+step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
-step s1-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5\\n6, g, 6\\n7, h, 7\\n8, i, 8\\n9, j, 9' WITH CSV;
+step s1-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5 && echo 6, g, 6 && echo 7, h, 7 && echo 8, i, 8 && echo 9, j, 9' WITH CSV;
 step s2-master-drop-all-shards: SELECT master_drop_all_shards('range_copy'::regclass, 'public', 'range_copy'); <waiting ...>
 step s1-commit: COMMIT;
 step s2-master-drop-all-shards: <... completed>
@@ -359,7 +359,7 @@ create_distributed_table
 step s1-drop: DROP TABLE range_copy;
 step s1-create-non-distributed-table: CREATE TABLE range_copy(id integer, data text, int_data int);
 step s1-begin: BEGIN;
-step s1-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5\\n6, g, 6\\n7, h, 7\\n8, i, 8\\n9, j, 9' WITH CSV;
+step s1-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5 && echo 6, g, 6 && echo 7, h, 7 && echo 8, i, 8 && echo 9, j, 9' WITH CSV;
 step s2-distribute-table: SELECT create_distributed_table('range_copy', 'id', 'range'); <waiting ...>
 step s1-commit: COMMIT;
 step s2-distribute-table: <... completed>
@@ -375,13 +375,13 @@ starting permutation: s1-initialize s1-begin s1-router-select s2-copy s1-commit 
 create_distributed_table
 
                
-step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
+step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-router-select: SELECT * FROM range_copy WHERE id = 1;
 id             data           int_data       
 
 1               b             1              
-step s2-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5\\n6, g, 6\\n7, h, 7\\n8, i, 8\\n9, j, 9' WITH CSV;
+step s2-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5 && echo 6, g, 6 && echo 7, h, 7 && echo 8, i, 8 && echo 9, j, 9' WITH CSV;
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM range_copy;
 count          
@@ -392,7 +392,7 @@ starting permutation: s1-initialize s1-begin s1-real-time-select s2-copy s1-comm
 create_distributed_table
 
                
-step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
+step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-real-time-select: SELECT * FROM range_copy ORDER BY 1, 2;
 id             data           int_data       
@@ -402,7 +402,7 @@ id             data           int_data
 2               c             2              
 3               d             3              
 4               e             4              
-step s2-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5\\n6, g, 6\\n7, h, 7\\n8, i, 8\\n9, j, 9' WITH CSV;
+step s2-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5 && echo 6, g, 6 && echo 7, h, 7 && echo 8, i, 8 && echo 9, j, 9' WITH CSV;
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM range_copy;
 count          
@@ -413,7 +413,7 @@ starting permutation: s1-initialize s1-begin s1-task-tracker-select s2-copy s1-c
 create_distributed_table
 
                
-step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
+step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-task-tracker-select: 
 	SET citus.task_executor_type TO "task-tracker";
@@ -426,7 +426,7 @@ id             data           int_data       id             data           int_d
 2               c             2              2               c             2              
 3               d             3              3               d             3              
 4               e             4              4               e             4              
-step s2-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5\\n6, g, 6\\n7, h, 7\\n8, i, 8\\n9, j, 9' WITH CSV;
+step s2-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5 && echo 6, g, 6 && echo 7, h, 7 && echo 8, i, 8 && echo 9, j, 9' WITH CSV;
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM range_copy;
 count          
@@ -437,10 +437,10 @@ starting permutation: s1-initialize s1-begin s1-insert s2-copy s1-commit s1-sele
 create_distributed_table
 
                
-step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
+step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-insert: INSERT INTO range_copy VALUES(0, 'k', 0);
-step s2-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5\\n6, g, 6\\n7, h, 7\\n8, i, 8\\n9, j, 9' WITH CSV;
+step s2-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5 && echo 6, g, 6 && echo 7, h, 7 && echo 8, i, 8 && echo 9, j, 9' WITH CSV;
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM range_copy;
 count          
@@ -451,10 +451,10 @@ starting permutation: s1-initialize s1-begin s1-insert-select s2-copy s1-commit 
 create_distributed_table
 
                
-step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
+step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-insert-select: INSERT INTO range_copy SELECT * FROM range_copy;
-step s2-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5\\n6, g, 6\\n7, h, 7\\n8, i, 8\\n9, j, 9' WITH CSV;
+step s2-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5 && echo 6, g, 6 && echo 7, h, 7 && echo 8, i, 8 && echo 9, j, 9' WITH CSV;
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM range_copy;
 count          
@@ -465,10 +465,10 @@ starting permutation: s1-initialize s1-begin s1-update s2-copy s1-commit s1-sele
 create_distributed_table
 
                
-step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
+step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-update: UPDATE range_copy SET data = 'l' WHERE id = 0;
-step s2-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5\\n6, g, 6\\n7, h, 7\\n8, i, 8\\n9, j, 9' WITH CSV;
+step s2-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5 && echo 6, g, 6 && echo 7, h, 7 && echo 8, i, 8 && echo 9, j, 9' WITH CSV;
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM range_copy;
 count          
@@ -479,10 +479,10 @@ starting permutation: s1-initialize s1-begin s1-delete s2-copy s1-commit s1-sele
 create_distributed_table
 
                
-step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
+step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-delete: DELETE FROM range_copy WHERE id = 1;
-step s2-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5\\n6, g, 6\\n7, h, 7\\n8, i, 8\\n9, j, 9' WITH CSV;
+step s2-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5 && echo 6, g, 6 && echo 7, h, 7 && echo 8, i, 8 && echo 9, j, 9' WITH CSV;
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM range_copy;
 count          
@@ -493,10 +493,10 @@ starting permutation: s1-initialize s1-begin s1-truncate s2-copy s1-commit s1-se
 create_distributed_table
 
                
-step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
+step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-truncate: TRUNCATE range_copy;
-step s2-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5\\n6, g, 6\\n7, h, 7\\n8, i, 8\\n9, j, 9' WITH CSV; <waiting ...>
+step s2-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5 && echo 6, g, 6 && echo 7, h, 7 && echo 8, i, 8 && echo 9, j, 9' WITH CSV; <waiting ...>
 step s1-commit: COMMIT;
 step s2-copy: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM range_copy;
@@ -508,10 +508,10 @@ starting permutation: s1-initialize s1-begin s1-drop s2-copy s1-commit s1-select
 create_distributed_table
 
                
-step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
+step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-drop: DROP TABLE range_copy;
-step s2-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5\\n6, g, 6\\n7, h, 7\\n8, i, 8\\n9, j, 9' WITH CSV; <waiting ...>
+step s2-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5 && echo 6, g, 6 && echo 7, h, 7 && echo 8, i, 8 && echo 9, j, 9' WITH CSV; <waiting ...>
 step s1-commit: COMMIT;
 step s2-copy: <... completed>
 error in steps s1-commit s2-copy: ERROR:  relation "range_copy" does not exist
@@ -522,10 +522,10 @@ starting permutation: s1-initialize s1-begin s1-ddl-create-index s2-copy s1-comm
 create_distributed_table
 
                
-step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
+step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-ddl-create-index: CREATE INDEX range_copy_index ON range_copy(id);
-step s2-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5\\n6, g, 6\\n7, h, 7\\n8, i, 8\\n9, j, 9' WITH CSV; <waiting ...>
+step s2-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5 && echo 6, g, 6 && echo 7, h, 7 && echo 8, i, 8 && echo 9, j, 9' WITH CSV; <waiting ...>
 step s1-commit: COMMIT;
 step s2-copy: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM range_copy;
@@ -542,11 +542,11 @@ starting permutation: s1-initialize s1-ddl-create-index s1-begin s1-ddl-drop-ind
 create_distributed_table
 
                
-step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
+step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-ddl-create-index: CREATE INDEX range_copy_index ON range_copy(id);
 step s1-begin: BEGIN;
 step s1-ddl-drop-index: DROP INDEX range_copy_index;
-step s2-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5\\n6, g, 6\\n7, h, 7\\n8, i, 8\\n9, j, 9' WITH CSV; <waiting ...>
+step s2-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5 && echo 6, g, 6 && echo 7, h, 7 && echo 8, i, 8 && echo 9, j, 9' WITH CSV; <waiting ...>
 step s1-commit: COMMIT;
 step s2-copy: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM range_copy;
@@ -563,10 +563,10 @@ starting permutation: s1-initialize s1-begin s1-ddl-add-column s2-copy s1-commit
 create_distributed_table
 
                
-step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
+step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-ddl-add-column: ALTER TABLE range_copy ADD new_column int DEFAULT 0;
-step s2-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5\\n6, g, 6\\n7, h, 7\\n8, i, 8\\n9, j, 9' WITH CSV; <waiting ...>
+step s2-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5 && echo 6, g, 6 && echo 7, h, 7 && echo 8, i, 8 && echo 9, j, 9' WITH CSV; <waiting ...>
 step s1-commit: COMMIT;
 step s2-copy: <... completed>
 error in steps s1-commit s2-copy: ERROR:  missing data for column "new_column"
@@ -584,11 +584,11 @@ starting permutation: s1-initialize s1-ddl-add-column s1-begin s1-ddl-drop-colum
 create_distributed_table
 
                
-step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
+step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-ddl-add-column: ALTER TABLE range_copy ADD new_column int DEFAULT 0;
 step s1-begin: BEGIN;
 step s1-ddl-drop-column: ALTER TABLE range_copy DROP new_column;
-step s2-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5\\n6, g, 6\\n7, h, 7\\n8, i, 8\\n9, j, 9' WITH CSV; <waiting ...>
+step s2-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5 && echo 6, g, 6 && echo 7, h, 7 && echo 8, i, 8 && echo 9, j, 9' WITH CSV; <waiting ...>
 step s1-commit: COMMIT;
 step s2-copy: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM range_copy;
@@ -605,10 +605,10 @@ starting permutation: s1-initialize s1-begin s1-ddl-rename-column s2-copy s1-com
 create_distributed_table
 
                
-step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
+step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-ddl-rename-column: ALTER TABLE range_copy RENAME data TO new_column;
-step s2-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5\\n6, g, 6\\n7, h, 7\\n8, i, 8\\n9, j, 9' WITH CSV; <waiting ...>
+step s2-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5 && echo 6, g, 6 && echo 7, h, 7 && echo 8, i, 8 && echo 9, j, 9' WITH CSV; <waiting ...>
 step s1-commit: COMMIT;
 step s2-copy: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM range_copy;
@@ -625,13 +625,13 @@ starting permutation: s1-initialize s1-begin s1-table-size s2-copy s1-commit s1-
 create_distributed_table
 
                
-step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
+step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-table-size: SELECT citus_total_relation_size('range_copy');
 citus_total_relation_size
 
 32768          
-step s2-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5\\n6, g, 6\\n7, h, 7\\n8, i, 8\\n9, j, 9' WITH CSV;
+step s2-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5 && echo 6, g, 6 && echo 7, h, 7 && echo 8, i, 8 && echo 9, j, 9' WITH CSV;
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM range_copy;
 count          
@@ -642,13 +642,13 @@ starting permutation: s1-initialize s1-begin s1-master-modify-multiple-shards s2
 create_distributed_table
 
                
-step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
+step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-master-modify-multiple-shards: SELECT master_modify_multiple_shards('DELETE FROM range_copy;');
 master_modify_multiple_shards
 
 5              
-step s2-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5\\n6, g, 6\\n7, h, 7\\n8, i, 8\\n9, j, 9' WITH CSV;
+step s2-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5 && echo 6, g, 6 && echo 7, h, 7 && echo 8, i, 8 && echo 9, j, 9' WITH CSV;
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM range_copy;
 count          
@@ -659,13 +659,13 @@ starting permutation: s1-initialize s1-begin s1-master-apply-delete-command s2-c
 create_distributed_table
 
                
-step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
+step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-master-apply-delete-command: SELECT master_apply_delete_command('DELETE FROM range_copy WHERE id <= 4;');
 master_apply_delete_command
 
 1              
-step s2-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5\\n6, g, 6\\n7, h, 7\\n8, i, 8\\n9, j, 9' WITH CSV; <waiting ...>
+step s2-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5 && echo 6, g, 6 && echo 7, h, 7 && echo 8, i, 8 && echo 9, j, 9' WITH CSV; <waiting ...>
 step s1-commit: COMMIT;
 step s2-copy: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM range_copy;
@@ -677,13 +677,13 @@ starting permutation: s1-initialize s1-begin s1-master-drop-all-shards s2-copy s
 create_distributed_table
 
                
-step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
+step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-master-drop-all-shards: SELECT master_drop_all_shards('range_copy'::regclass, 'public', 'range_copy');
 master_drop_all_shards
 
 1              
-step s2-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5\\n6, g, 6\\n7, h, 7\\n8, i, 8\\n9, j, 9' WITH CSV; <waiting ...>
+step s2-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5 && echo 6, g, 6 && echo 7, h, 7 && echo 8, i, 8 && echo 9, j, 9' WITH CSV; <waiting ...>
 step s1-commit: COMMIT;
 step s2-copy: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM range_copy;
@@ -702,7 +702,7 @@ step s1-distribute-table: SELECT create_distributed_table('range_copy', 'id', 'r
 create_distributed_table
 
                
-step s2-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5\\n6, g, 6\\n7, h, 7\\n8, i, 8\\n9, j, 9' WITH CSV; <waiting ...>
+step s2-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5 && echo 6, g, 6 && echo 7, h, 7 && echo 8, i, 8 && echo 9, j, 9' WITH CSV; <waiting ...>
 step s1-commit: COMMIT;
 step s2-copy: <... completed>
 error in steps s1-commit s2-copy: ERROR:  could not find any shards into which to copy

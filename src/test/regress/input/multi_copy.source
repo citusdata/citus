@@ -482,8 +482,8 @@ CREATE TABLE packed_numbers_hash (
 
 SELECT master_create_distributed_table('packed_numbers_hash', 'id', 'hash');
 SELECT master_create_worker_shards('packed_numbers_hash', 4, 1);
-COPY (SELECT 1, ARRAY[ROW(42, 42), ROW(42, 42)]) TO '/tmp/copy_test_array_of_composite';
-COPY packed_numbers_hash FROM '/tmp/copy_test_array_of_composite';
+COPY (SELECT 1, ARRAY[ROW(42, 42), ROW(42, 42)]) TO :'temp_dir''copy_test_array_of_composite';
+COPY packed_numbers_hash FROM :'temp_dir''copy_test_array_of_composite';
 
 -- Verify data is actually copied
 SELECT * FROM packed_numbers_hash;
@@ -497,8 +497,8 @@ CREATE TABLE super_packed_numbers_hash (
 
 SELECT master_create_distributed_table('super_packed_numbers_hash', 'id', 'hash');
 SELECT master_create_worker_shards('super_packed_numbers_hash', 4, 1);
-COPY (SELECT 1, ROW(ROW(42, 42), ROW(42, 42))) TO '/tmp/copy_test_composite_of_composite';
-COPY super_packed_numbers_hash FROM '/tmp/copy_test_composite_of_composite';
+COPY (SELECT 1, ROW(ROW(42, 42), ROW(42, 42))) TO :'temp_dir''copy_test_composite_of_composite';
+COPY super_packed_numbers_hash FROM :'temp_dir''copy_test_composite_of_composite';
 
 -- Verify data is actually copied
 SELECT * FROM super_packed_numbers_hash;
@@ -510,7 +510,7 @@ CREATE TABLE packed_numbers_append (
 );
 
 SELECT master_create_distributed_table('packed_numbers_append', 'id', 'append');
-COPY packed_numbers_append FROM '/tmp/copy_test_array_of_composite';
+COPY packed_numbers_append FROM :'temp_dir''copy_test_array_of_composite';
 
 -- Verify data is actually copied
 SELECT * FROM packed_numbers_append;
@@ -523,7 +523,7 @@ CREATE TABLE super_packed_numbers_append (
 );
 
 SELECT master_create_distributed_table('super_packed_numbers_append', 'id', 'append');
-COPY super_packed_numbers_append FROM '/tmp/copy_test_composite_of_composite';
+COPY super_packed_numbers_append FROM :'temp_dir''copy_test_composite_of_composite';
 
 -- Verify data is actually copied
 SELECT * FROM super_packed_numbers_append;

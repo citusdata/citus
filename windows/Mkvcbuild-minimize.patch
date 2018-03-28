@@ -1,0 +1,254 @@
+diff --git a/src/tools/msvc/Mkvcbuild.pm b/src/tools/msvc/Mkvcbuild.pm
+index 93f364a..d1b0968 100644
+--- a/src/tools/msvc/Mkvcbuild.pm
++++ b/src/tools/msvc/Mkvcbuild.pm
+@@ -344,66 +344,66 @@ sub mkvcbuild
+ 		AddSimpleFrontend($d);
+ 	}
+ 
+-	my $pgbasebackup = AddSimpleFrontend('pg_basebackup', 1);
+-	$pgbasebackup->AddFile('src/bin/pg_basebackup/pg_basebackup.c');
+-	$pgbasebackup->AddLibrary('ws2_32.lib');
+-
+-	my $pgreceivewal = AddSimpleFrontend('pg_basebackup', 1);
+-	$pgreceivewal->{name} = 'pg_receivewal';
+-	$pgreceivewal->AddFile('src/bin/pg_basebackup/pg_receivewal.c');
+-	$pgreceivewal->AddLibrary('ws2_32.lib');
+-
+-	my $pgrecvlogical = AddSimpleFrontend('pg_basebackup', 1);
+-	$pgrecvlogical->{name} = 'pg_recvlogical';
+-	$pgrecvlogical->AddFile('src/bin/pg_basebackup/pg_recvlogical.c');
+-	$pgrecvlogical->AddLibrary('ws2_32.lib');
+-
+-	my $pgrewind = AddSimpleFrontend('pg_rewind', 1);
+-	$pgrewind->{name} = 'pg_rewind';
+-	$pgrewind->AddFile('src/backend/access/transam/xlogreader.c');
+-	$pgrewind->AddLibrary('ws2_32.lib');
+-	$pgrewind->AddDefine('FRONTEND');
+-
+-	my $pgevent = $solution->AddProject('pgevent', 'dll', 'bin');
+-	$pgevent->AddFiles('src/bin/pgevent', 'pgevent.c', 'pgmsgevent.rc');
+-	$pgevent->AddResourceFile('src/bin/pgevent', 'Eventlog message formatter',
+-		'win32');
+-	$pgevent->RemoveFile('src/bin/pgevent/win32ver.rc');
+-	$pgevent->UseDef('src/bin/pgevent/pgevent.def');
+-	$pgevent->DisableLinkerWarnings('4104');
+-
+-	my $pgdump = AddSimpleFrontend('pg_dump', 1);
+-	$pgdump->AddIncludeDir('src/backend');
+-	$pgdump->AddFile('src/bin/pg_dump/pg_dump.c');
+-	$pgdump->AddFile('src/bin/pg_dump/common.c');
+-	$pgdump->AddFile('src/bin/pg_dump/pg_dump_sort.c');
+-	$pgdump->AddLibrary('ws2_32.lib');
+-
+-	my $pgdumpall = AddSimpleFrontend('pg_dump', 1);
+-
+-	# pg_dumpall doesn't use the files in the Makefile's $(OBJS), unlike
+-	# pg_dump and pg_restore.
+-	# So remove their sources from the object, keeping the other setup that
+-	# AddSimpleFrontend() has done.
+-	my @nodumpall = grep { m!src/bin/pg_dump/.*\.c$! }
+-	  keys %{ $pgdumpall->{files} };
+-	delete @{ $pgdumpall->{files} }{@nodumpall};
+-	$pgdumpall->{name} = 'pg_dumpall';
+-	$pgdumpall->AddIncludeDir('src/backend');
+-	$pgdumpall->AddFile('src/bin/pg_dump/pg_dumpall.c');
+-	$pgdumpall->AddFile('src/bin/pg_dump/dumputils.c');
+-	$pgdumpall->AddLibrary('ws2_32.lib');
+-
+-	my $pgrestore = AddSimpleFrontend('pg_dump', 1);
+-	$pgrestore->{name} = 'pg_restore';
+-	$pgrestore->AddIncludeDir('src/backend');
+-	$pgrestore->AddFile('src/bin/pg_dump/pg_restore.c');
+-	$pgrestore->AddLibrary('ws2_32.lib');
+-
+-	my $zic = $solution->AddProject('zic', 'exe', 'utils');
+-	$zic->AddFiles('src/timezone', 'zic.c');
+-	$zic->AddDirResourceFile('src/timezone');
+-	$zic->AddReference($libpgcommon, $libpgport);
++#	my $pgbasebackup = AddSimpleFrontend('pg_basebackup', 1);
++#	$pgbasebackup->AddFile('src/bin/pg_basebackup/pg_basebackup.c');
++#	$pgbasebackup->AddLibrary('ws2_32.lib');
++#
++#	my $pgreceivewal = AddSimpleFrontend('pg_basebackup', 1);
++#	$pgreceivewal->{name} = 'pg_receivewal';
++#	$pgreceivewal->AddFile('src/bin/pg_basebackup/pg_receivewal.c');
++#	$pgreceivewal->AddLibrary('ws2_32.lib');
++#
++#	my $pgrecvlogical = AddSimpleFrontend('pg_basebackup', 1);
++#	$pgrecvlogical->{name} = 'pg_recvlogical';
++#	$pgrecvlogical->AddFile('src/bin/pg_basebackup/pg_recvlogical.c');
++#	$pgrecvlogical->AddLibrary('ws2_32.lib');
++#
++#	my $pgrewind = AddSimpleFrontend('pg_rewind', 1);
++#	$pgrewind->{name} = 'pg_rewind';
++#	$pgrewind->AddFile('src/backend/access/transam/xlogreader.c');
++#	$pgrewind->AddLibrary('ws2_32.lib');
++#	$pgrewind->AddDefine('FRONTEND');
++#
++#	my $pgevent = $solution->AddProject('pgevent', 'dll', 'bin');
++#	$pgevent->AddFiles('src/bin/pgevent', 'pgevent.c', 'pgmsgevent.rc');
++#	$pgevent->AddResourceFile('src/bin/pgevent', 'Eventlog message formatter',
++#		'win32');
++#	$pgevent->RemoveFile('src/bin/pgevent/win32ver.rc');
++#	$pgevent->UseDef('src/bin/pgevent/pgevent.def');
++#	$pgevent->DisableLinkerWarnings('4104');
++#
++#	my $pgdump = AddSimpleFrontend('pg_dump', 1);
++#	$pgdump->AddIncludeDir('src/backend');
++#	$pgdump->AddFile('src/bin/pg_dump/pg_dump.c');
++#	$pgdump->AddFile('src/bin/pg_dump/common.c');
++#	$pgdump->AddFile('src/bin/pg_dump/pg_dump_sort.c');
++#	$pgdump->AddLibrary('ws2_32.lib');
++#
++#	my $pgdumpall = AddSimpleFrontend('pg_dump', 1);
++#
++#	# pg_dumpall doesn't use the files in the Makefile's $(OBJS), unlike
++#	# pg_dump and pg_restore.
++#	# So remove their sources from the object, keeping the other setup that
++#	# AddSimpleFrontend() has done.
++#	my @nodumpall = grep { m!src/bin/pg_dump/.*\.c$! }
++#	  keys %{ $pgdumpall->{files} };
++#	delete @{ $pgdumpall->{files} }{@nodumpall};
++#	$pgdumpall->{name} = 'pg_dumpall';
++#	$pgdumpall->AddIncludeDir('src/backend');
++#	$pgdumpall->AddFile('src/bin/pg_dump/pg_dumpall.c');
++#	$pgdumpall->AddFile('src/bin/pg_dump/dumputils.c');
++#	$pgdumpall->AddLibrary('ws2_32.lib');
++#
++#	my $pgrestore = AddSimpleFrontend('pg_dump', 1);
++#	$pgrestore->{name} = 'pg_restore';
++#	$pgrestore->AddIncludeDir('src/backend');
++#	$pgrestore->AddFile('src/bin/pg_dump/pg_restore.c');
++#	$pgrestore->AddLibrary('ws2_32.lib');
++#
++#	my $zic = $solution->AddProject('zic', 'exe', 'utils');
++#	$zic->AddFiles('src/timezone', 'zic.c');
++#	$zic->AddDirResourceFile('src/timezone');
++#	$zic->AddReference($libpgcommon, $libpgport);
+ 
+ 	if (!$solution->{options}->{xml})
+ 	{
+@@ -422,39 +422,39 @@ sub mkvcbuild
+ 
+ 	# AddProject() does not recognize the constructs used to populate OBJS in
+ 	# the pgcrypto Makefile, so it will discover no files.
+-	my $pgcrypto =
+-	  $solution->AddProject('pgcrypto', 'dll', 'crypto', 'contrib/pgcrypto');
+-	$pgcrypto->AddFiles(
+-		'contrib/pgcrypto', 'pgcrypto.c',
+-		'px.c',             'px-hmac.c',
+-		'px-crypt.c',       'crypt-gensalt.c',
+-		'crypt-blowfish.c', 'crypt-des.c',
+-		'crypt-md5.c',      'mbuf.c',
+-		'pgp.c',            'pgp-armor.c',
+-		'pgp-cfb.c',        'pgp-compress.c',
+-		'pgp-decrypt.c',    'pgp-encrypt.c',
+-		'pgp-info.c',       'pgp-mpi.c',
+-		'pgp-pubdec.c',     'pgp-pubenc.c',
+-		'pgp-pubkey.c',     'pgp-s2k.c',
+-		'pgp-pgsql.c');
+-	if ($solution->{options}->{openssl})
+-	{
+-		$pgcrypto->AddFiles('contrib/pgcrypto', 'openssl.c',
+-			'pgp-mpi-openssl.c');
+-	}
+-	else
+-	{
+-		$pgcrypto->AddFiles(
+-			'contrib/pgcrypto', 'md5.c',
+-			'sha1.c',           'internal.c',
+-			'internal-sha2.c',  'blf.c',
+-			'rijndael.c',       'pgp-mpi-internal.c',
+-			'imath.c');
+-	}
+-	$pgcrypto->AddReference($postgres);
+-	$pgcrypto->AddLibrary('ws2_32.lib');
+-	my $mf = Project::read_file('contrib/pgcrypto/Makefile');
+-	GenerateContribSqlFiles('pgcrypto', $mf);
++#	my $pgcrypto =
++#	  $solution->AddProject('pgcrypto', 'dll', 'crypto', 'contrib/pgcrypto');
++#	$pgcrypto->AddFiles(
++#		'contrib/pgcrypto', 'pgcrypto.c',
++#		'px.c',             'px-hmac.c',
++#		'px-crypt.c',       'crypt-gensalt.c',
++#		'crypt-blowfish.c', 'crypt-des.c',
++#		'crypt-md5.c',      'mbuf.c',
++#		'pgp.c',            'pgp-armor.c',
++#		'pgp-cfb.c',        'pgp-compress.c',
++#		'pgp-decrypt.c',    'pgp-encrypt.c',
++#		'pgp-info.c',       'pgp-mpi.c',
++#		'pgp-pubdec.c',     'pgp-pubenc.c',
++#		'pgp-pubkey.c',     'pgp-s2k.c',
++#		'pgp-pgsql.c');
++#	if ($solution->{options}->{openssl})
++#	{
++#		$pgcrypto->AddFiles('contrib/pgcrypto', 'openssl.c',
++#			'pgp-mpi-openssl.c');
++#	}
++#	else
++#	{
++#		$pgcrypto->AddFiles(
++#			'contrib/pgcrypto', 'md5.c',
++#			'sha1.c',           'internal.c',
++#			'internal-sha2.c',  'blf.c',
++#			'rijndael.c',       'pgp-mpi-internal.c',
++#			'imath.c');
++#	}
++#	$pgcrypto->AddReference($postgres);
++#	$pgcrypto->AddLibrary('ws2_32.lib');
++#	my $mf = Project::read_file('contrib/pgcrypto/Makefile');
++#	GenerateContribSqlFiles('pgcrypto', $mf);
+ 
+ 	foreach my $subdir ('contrib', 'src/test/modules')
+ 	{
+@@ -472,7 +472,8 @@ sub mkvcbuild
+ 	# Build Perl and Python modules after contrib/ modules to satisfy some
+ 	# dependencies with transform contrib modules, like hstore_plpython
+ 	# ltree_plpython and hstore_plperl.
+-	if ($solution->{options}->{python})
++#	if ($solution->{options}->{python})
++	if (0)
+ 	{
+ 
+ 		# Attempt to get python version and location.
+@@ -512,7 +513,8 @@ sub mkvcbuild
+ 			'PLPYTHON_LIBNAME="plpython' . $pymajorver . '"');
+ 	}
+ 
+-	if ($solution->{options}->{perl})
++#	if ($solution->{options}->{perl})
++	if (0)
+ 	{
+ 		my $plperlsrc = "src/pl/plperl/";
+ 		my $plperl =
+@@ -748,7 +750,7 @@ sub mkvcbuild
+ 		}
+ 	}
+ 
+-	$mf =
++	my $mf =
+ 	  Project::read_file('src/backend/utils/mb/conversion_procs/Makefile');
+ 	$mf =~ s{\\\r?\n}{}g;
+ 	$mf =~ m{SUBDIRS\s*=\s*(.*)$}m
+@@ -802,13 +804,13 @@ sub mkvcbuild
+ 
+ 	# fix up pg_waldump once it's been set up
+ 	# files symlinked on Unix are copied on windows
+-	my $pg_waldump = AddSimpleFrontend('pg_waldump');
+-	$pg_waldump->AddDefine('FRONTEND');
+-	foreach my $xf (glob('src/backend/access/rmgrdesc/*desc.c'))
+-	{
+-		$pg_waldump->AddFile($xf);
+-	}
+-	$pg_waldump->AddFile('src/backend/access/transam/xlogreader.c');
++#	my $pg_waldump = AddSimpleFrontend('pg_waldump');
++#	$pg_waldump->AddDefine('FRONTEND');
++#	foreach my $xf (glob('src/backend/access/rmgrdesc/*desc.c'))
++#	{
++#		$pg_waldump->AddFile($xf);
++#	}
++#	$pg_waldump->AddFile('src/backend/access/transam/xlogreader.c');
+ 
+ 	$solution->Save();
+ 	return $solution->{vcver};

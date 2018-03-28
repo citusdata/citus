@@ -101,7 +101,7 @@ COPY (
 -- check copying to file
 -- (quiet off to force number of copied records to be displayed)
 \set QUIET off
-COPY nation TO '/dev/null';
+COPY nation TO :'dev_null';
 \set QUIET on
 -- stdout
 COPY nation TO STDOUT;

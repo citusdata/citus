@@ -4,7 +4,7 @@ starting permutation: s1-initialize s1-begin s2-begin s1-update s2-update s1-com
 create_distributed_table
 
                
-step s1-initialize: COPY update_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY update_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-update: UPDATE update_hash SET data = 'l' WHERE id = 4;
@@ -24,7 +24,7 @@ starting permutation: s1-initialize s1-begin s2-begin s1-update s2-delete s1-com
 create_distributed_table
 
                
-step s1-initialize: COPY update_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY update_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-update: UPDATE update_hash SET data = 'l' WHERE id = 4;
@@ -44,7 +44,7 @@ starting permutation: s1-initialize s1-begin s2-begin s1-update s2-truncate s1-c
 create_distributed_table
 
                
-step s1-initialize: COPY update_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY update_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-update: UPDATE update_hash SET data = 'l' WHERE id = 4;
@@ -64,7 +64,7 @@ starting permutation: s1-initialize s1-begin s2-begin s1-update s2-drop s1-commi
 create_distributed_table
 
                
-step s1-initialize: COPY update_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY update_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-update: UPDATE update_hash SET data = 'l' WHERE id = 4;
@@ -82,7 +82,7 @@ starting permutation: s1-initialize s1-begin s2-begin s1-update s2-ddl-create-in
 create_distributed_table
 
                
-step s1-initialize: COPY update_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY update_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-update: UPDATE update_hash SET data = 'l' WHERE id = 4;
@@ -107,7 +107,7 @@ starting permutation: s1-initialize s1-ddl-create-index s1-begin s2-begin s1-upd
 create_distributed_table
 
                
-step s1-initialize: COPY update_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY update_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-ddl-create-index: CREATE INDEX update_hash_index ON update_hash(id);
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
@@ -133,7 +133,7 @@ starting permutation: s1-initialize s1-begin s1-update s2-ddl-create-index-concu
 create_distributed_table
 
                
-step s1-initialize: COPY update_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY update_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s1-update: UPDATE update_hash SET data = 'l' WHERE id = 4;
 step s2-ddl-create-index-concurrently: CREATE INDEX CONCURRENTLY update_hash_index ON update_hash(id); <waiting ...>
@@ -156,7 +156,7 @@ starting permutation: s1-initialize s1-begin s2-begin s1-update s2-ddl-add-colum
 create_distributed_table
 
                
-step s1-initialize: COPY update_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY update_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-update: UPDATE update_hash SET data = 'l' WHERE id = 4;
@@ -181,7 +181,7 @@ starting permutation: s1-initialize s1-ddl-add-column s1-begin s2-begin s1-updat
 create_distributed_table
 
                
-step s1-initialize: COPY update_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY update_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-ddl-add-column: ALTER TABLE update_hash ADD new_column int DEFAULT 0;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
@@ -207,7 +207,7 @@ starting permutation: s1-initialize s1-begin s2-begin s1-update s2-ddl-rename-co
 create_distributed_table
 
                
-step s1-initialize: COPY update_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY update_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-update: UPDATE update_hash SET data = 'l' WHERE id = 4;
@@ -232,7 +232,7 @@ starting permutation: s1-initialize s1-begin s2-begin s1-update s2-table-size s1
 create_distributed_table
 
                
-step s1-initialize: COPY update_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY update_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-update: UPDATE update_hash SET data = 'l' WHERE id = 4;
@@ -254,7 +254,7 @@ starting permutation: s1-initialize s1-begin s2-begin s1-update s2-master-modify
 create_distributed_table
 
                
-step s1-initialize: COPY update_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY update_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-update: UPDATE update_hash SET data = 'l' WHERE id = 4;
@@ -278,8 +278,8 @@ create_distributed_table
 
                
 step s1-drop: DROP TABLE update_hash;
-step s1-create-non-distributed-table: CREATE TABLE update_hash(id integer, data text); COPY update_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-step s1-initialize: COPY update_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-create-non-distributed-table: CREATE TABLE update_hash(id integer, data text); COPY update_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+step s1-initialize: COPY update_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-update: UPDATE update_hash SET data = 'l' WHERE id = 4;
@@ -302,7 +302,7 @@ starting permutation: s1-initialize s1-begin s2-begin s1-delete s2-update s1-com
 create_distributed_table
 
                
-step s1-initialize: COPY update_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY update_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-delete: DELETE FROM update_hash WHERE id = 4;
@@ -322,7 +322,7 @@ starting permutation: s1-initialize s1-begin s2-begin s1-truncate s2-update s1-c
 create_distributed_table
 
                
-step s1-initialize: COPY update_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY update_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-truncate: TRUNCATE update_hash;
@@ -342,7 +342,7 @@ starting permutation: s1-initialize s1-begin s2-begin s1-drop s2-update s1-commi
 create_distributed_table
 
                
-step s1-initialize: COPY update_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY update_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-drop: DROP TABLE update_hash;
@@ -361,7 +361,7 @@ starting permutation: s1-initialize s1-begin s2-begin s1-ddl-create-index s2-upd
 create_distributed_table
 
                
-step s1-initialize: COPY update_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY update_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-ddl-create-index: CREATE INDEX update_hash_index ON update_hash(id);
@@ -386,7 +386,7 @@ starting permutation: s1-initialize s1-ddl-create-index s1-begin s2-begin s1-ddl
 create_distributed_table
 
                
-step s1-initialize: COPY update_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY update_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-ddl-create-index: CREATE INDEX update_hash_index ON update_hash(id);
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
@@ -412,7 +412,7 @@ starting permutation: s1-initialize s1-begin s2-begin s1-ddl-add-column s2-updat
 create_distributed_table
 
                
-step s1-initialize: COPY update_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY update_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-ddl-add-column: ALTER TABLE update_hash ADD new_column int DEFAULT 0;
@@ -437,7 +437,7 @@ starting permutation: s1-initialize s1-ddl-add-column s1-begin s2-begin s1-ddl-d
 create_distributed_table
 
                
-step s1-initialize: COPY update_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY update_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-ddl-add-column: ALTER TABLE update_hash ADD new_column int DEFAULT 0;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
@@ -463,7 +463,7 @@ starting permutation: s1-initialize s1-begin s2-begin s1-ddl-rename-column s2-up
 create_distributed_table
 
                
-step s1-initialize: COPY update_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY update_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-ddl-rename-column: ALTER TABLE update_hash RENAME data TO new_column;
@@ -489,7 +489,7 @@ starting permutation: s1-initialize s1-begin s2-begin s1-table-size s2-update s1
 create_distributed_table
 
                
-step s1-initialize: COPY update_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY update_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-table-size: SELECT citus_total_relation_size('update_hash');
@@ -511,7 +511,7 @@ starting permutation: s1-initialize s1-begin s2-begin s1-master-modify-multiple-
 create_distributed_table
 
                
-step s1-initialize: COPY update_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY update_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-master-modify-multiple-shards: SELECT master_modify_multiple_shards('DELETE FROM update_hash;');
@@ -535,8 +535,8 @@ create_distributed_table
 
                
 step s1-drop: DROP TABLE update_hash;
-step s1-create-non-distributed-table: CREATE TABLE update_hash(id integer, data text); COPY update_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-step s1-initialize: COPY update_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-create-non-distributed-table: CREATE TABLE update_hash(id integer, data text); COPY update_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+step s1-initialize: COPY update_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-distribute-table: SELECT create_distributed_table('update_hash', 'id');

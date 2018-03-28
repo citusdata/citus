@@ -2,10 +2,10 @@ Parsed test spec with 2 sessions
 
 starting permutation: s1-load-cache s2-load-cache s2-set-placement-inactive s2-begin s2-repair-placement s1-repair-placement s2-commit
 step s1-load-cache: 
-	COPY test_hash_table FROM PROGRAM 'echo "1,1\n2,2\n3,3\n4,4\n5,5"' WITH CSV;
+	COPY test_hash_table FROM PROGRAM 'echo 1,1 && echo 2,2 && echo 3,3 && echo 4,4 && echo 5,5' WITH CSV;
 
 step s2-load-cache: 
-	COPY test_hash_table FROM PROGRAM 'echo "1,1\n2,2\n3,3\n4,4\n5,5"' WITH CSV;
+	COPY test_hash_table FROM PROGRAM 'echo 1,1 && echo 2,2 && echo 3,3 && echo 4,4 && echo 5,5' WITH CSV;
 
 step s2-set-placement-inactive: 
 	UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid IN (SELECT * FROM selected_shard_for_test_table) AND nodeport = 57638;

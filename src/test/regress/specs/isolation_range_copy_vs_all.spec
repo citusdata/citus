@@ -18,10 +18,10 @@ teardown
 
 # session 1
 session "s1"
-step "s1-initialize" { COPY range_copy FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV; }
+step "s1-initialize" { COPY range_copy FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV; }
 step "s1-begin" { BEGIN; }
-step "s1-copy" { COPY range_copy FROM PROGRAM 'echo 5, f, 5\\n6, g, 6\\n7, h, 7\\n8, i, 8\\n9, j, 9' WITH CSV; }
-step "s1-copy-additional-column" { COPY range_copy FROM PROGRAM 'echo 5, f, 5, 5\\n6, g, 6, 6\\n7, h, 7, 7\\n8, i, 8, 8\\n9, j, 9, 9' WITH CSV; }
+step "s1-copy" { COPY range_copy FROM PROGRAM 'echo 5, f, 5 && echo 6, g, 6 && echo 7, h, 7 && echo 8, i, 8 && echo 9, j, 9' WITH CSV; }
+step "s1-copy-additional-column" { COPY range_copy FROM PROGRAM 'echo 5, f, 5, 5 && echo 6, g, 6, 6 && echo 7, h, 7, 7 && echo 8, i, 8, 8 && echo 9, j, 9, 9' WITH CSV; }
 step "s1-router-select" { SELECT * FROM range_copy WHERE id = 1; }
 step "s1-real-time-select" { SELECT * FROM range_copy ORDER BY 1, 2; }
 step "s1-task-tracker-select"
@@ -55,8 +55,8 @@ step "s1-commit" { COMMIT; }
 
 # session 2
 session "s2"
-step "s2-copy" { COPY range_copy FROM PROGRAM 'echo 5, f, 5\\n6, g, 6\\n7, h, 7\\n8, i, 8\\n9, j, 9' WITH CSV; }
-step "s2-copy-additional-column" { COPY range_copy FROM PROGRAM 'echo 5, f, 5, 5\\n6, g, 6, 6\\n7, h, 7, 7\\n8, i, 8, 8\\n9, j, 9, 9' WITH CSV; }
+step "s2-copy" { COPY range_copy FROM PROGRAM 'echo 5, f, 5 && echo 6, g, 6 && echo 7, h, 7 && echo 8, i, 8 && echo 9, j, 9' WITH CSV; }
+step "s2-copy-additional-column" { COPY range_copy FROM PROGRAM 'echo 5, f, 5, 5 && echo 6, g, 6, 6 && echo 7, h, 7, 7 && echo 8, i, 8, 8 && echo 9, j, 9, 9' WITH CSV; }
 step "s2-router-select" { SELECT * FROM range_copy WHERE id = 1; }
 step "s2-real-time-select" { SELECT * FROM range_copy ORDER BY 1, 2; }
 step "s2-task-tracker-select"
