@@ -54,7 +54,7 @@ SELECT worker_range_partition_table(:JobId, :TaskId, :Select_Query_Text,
 
 SELECT worker_hash_partition_table(:JobId, :TaskId, :Select_Query_Text,
        				    :Partition_Column_Name, :Bad_Partition_Column_Type,
-				    :Partition_Count);
+				    ARRAY[-2147483648, -1073741824, 0, 1073741824]::int4[]);
 
 -- Now, partition table data using valid arguments
 

@@ -14,6 +14,7 @@
 #include "postgres.h"
 
 #include <math.h>
+#include <stdint.h>
 
 #include "miscadmin.h"
 
@@ -320,7 +321,8 @@ BuildJobTree(MultiTreeRoot *multiTree)
 		if (currentNodeType == T_MultiJoin)
 		{
 			MultiJoin *joinNode = (MultiJoin *) currentNode;
-			if (joinNode->joinRuleType == SINGLE_PARTITION_JOIN ||
+			if (joinNode->joinRuleType == SINGLE_HASH_PARTITION_JOIN ||
+				joinNode->joinRuleType == SINGLE_RANGE_PARTITION_JOIN ||
 				joinNode->joinRuleType == DUAL_PARTITION_JOIN)
 			{
 				boundaryNodeJobType = JOIN_MAP_MERGE_JOB;
@@ -350,14 +352,19 @@ BuildJobTree(MultiTreeRoot *multiTree)
 			PartitionType partitionType = PARTITION_INVALID_FIRST;
 			Oid baseRelationId = InvalidOid;
 
-			if (joinNode->joinRuleType == SINGLE_PARTITION_JOIN)
+			if (joinNode->joinRuleType == SINGLE_RANGE_PARTITION_JOIN)
 			{
 				partitionType = RANGE_PARTITION_TYPE;
 				baseRelationId = RangePartitionJoinBaseRelationId(joinNode);
 			}
+			else if (joinNode->joinRuleType == SINGLE_HASH_PARTITION_JOIN)
+			{
+				partitionType = SINGLE_HASH_PARTITION_TYPE;
+				baseRelationId = RangePartitionJoinBaseRelationId(joinNode);
+			}
 			else if (joinNode->joinRuleType == DUAL_PARTITION_JOIN)
 			{
-				partitionType = HASH_PARTITION_TYPE;
+				partitionType = DUAL_HASH_PARTITION_TYPE;
 			}
 
 			if (CitusIsA(leftChildNode, MultiPartition))
@@ -411,7 +418,8 @@ BuildJobTree(MultiTreeRoot *multiTree)
 			Query *jobQuery = BuildJobQuery(queryNode, dependedJobList);
 
 			MapMergeJob *mapMergeJob = BuildMapMergeJob(jobQuery, dependedJobList,
-														partitionKey, HASH_PARTITION_TYPE,
+														partitionKey,
+														DUAL_HASH_PARTITION_TYPE,
 														InvalidOid,
 														SUBQUERY_MAP_MERGE_JOB);
 
@@ -1849,21 +1857,20 @@ BuildMapMergeJob(Query *jobQuery, List *dependedJobList, Var *partitionKey,
 	 * If join type is not set, this means this job represents a subquery, and
 	 * uses hash partitioning.
 	 */
-	if (partitionType == HASH_PARTITION_TYPE)
+	if (partitionType == DUAL_HASH_PARTITION_TYPE)
 	{
 		uint32 partitionCount = HashPartitionCount();
 
-		mapMergeJob->partitionType = HASH_PARTITION_TYPE;
+		mapMergeJob->partitionType = DUAL_HASH_PARTITION_TYPE;
 		mapMergeJob->partitionCount = partitionCount;
 	}
-	else if (partitionType == RANGE_PARTITION_TYPE)
+	else if (partitionType == SINGLE_HASH_PARTITION_TYPE || partitionType ==
+			 RANGE_PARTITION_TYPE)
 	{
-		/* build the split point object for the table on the right-hand side */
 		DistTableCacheEntry *cache = DistributedTableCacheEntry(baseRelationId);
 		bool hasUninitializedShardInterval = false;
 		uint32 shardCount = cache->shardIntervalArrayLength;
 		ShardInterval **sortedShardIntervalArray = cache->sortedShardIntervalArray;
-		char basePartitionMethod PG_USED_FOR_ASSERTS_ONLY = 0;
 
 		hasUninitializedShardInterval = cache->hasUninitializedShardInterval;
 		if (hasUninitializedShardInterval)
@@ -1872,12 +1879,7 @@ BuildMapMergeJob(Query *jobQuery, List *dependedJobList, Var *partitionKey,
 								   "missing min/max values")));
 		}
 
-		basePartitionMethod = PartitionMethod(baseRelationId);
-
-		/* this join-type currently doesn't work for hash partitioned tables */
-		Assert(basePartitionMethod != DISTRIBUTE_BY_HASH);
-
-		mapMergeJob->partitionType = RANGE_PARTITION_TYPE;
+		mapMergeJob->partitionType = partitionType;
 		mapMergeJob->partitionCount = shardCount;
 		mapMergeJob->sortedShardIntervalArray = sortedShardIntervalArray;
 		mapMergeJob->sortedShardIntervalArrayLength = shardCount;
@@ -2729,7 +2731,7 @@ DependsOnHashPartitionJob(Job *job)
 		if (CitusIsA(dependedJob, MapMergeJob))
 		{
 			MapMergeJob *mapMergeJob = (MapMergeJob *) dependedJob;
-			if (mapMergeJob->partitionType == HASH_PARTITION_TYPE)
+			if (mapMergeJob->partitionType == DUAL_HASH_PARTITION_TYPE)
 			{
 				dependsOnHashPartitionJob = true;
 			}
@@ -3758,6 +3760,7 @@ JoinPrunable(RangeTableFragment *leftFragment, RangeTableFragment *rightFragment
 		Task *leftMergeTask = (Task *) leftFragment->fragmentReference;
 		Task *rightMergeTask = (Task *) rightFragment->fragmentReference;
 
+
 		if (leftMergeTask->partitionId != rightMergeTask->partitionId)
 		{
 			ereport(DEBUG2, (errmsg("join prunable for task partitionId %u and %u",
@@ -3771,8 +3774,9 @@ JoinPrunable(RangeTableFragment *leftFragment, RangeTableFragment *rightFragment
 		}
 	}
 
+
 	/*
-	 * We have a range (re)partition join. We now get shard intervals for both
+	 * We have a single (re)partition join. We now get shard intervals for both
 	 * fragments, and then check if these intervals overlap.
 	 */
 	leftFragmentInterval = FragmentInterval(leftFragment);
@@ -4261,13 +4265,32 @@ MapTaskList(MapMergeJob *mapMergeJob, List *filterTaskList)
 							 filterQueryEscapedText, partitionColumnName,
 							 partitionColumnTypeFullName, splitPointString->data);
 		}
+		else if (partitionType == SINGLE_HASH_PARTITION_TYPE)
+		{
+			ShardInterval **intervalArray = mapMergeJob->sortedShardIntervalArray;
+			uint32 intervalCount = mapMergeJob->partitionCount;
+
+			ArrayType *splitPointObject = SplitPointObject(intervalArray, intervalCount);
+			StringInfo splitPointString = SplitPointArrayString(splitPointObject,
+																partitionColumnType,
+																partitionColumnTypeMod);
+			appendStringInfo(mapQueryString, HASH_PARTITION_COMMAND, jobId, taskId,
+							 filterQueryEscapedText, partitionColumnName,
+							 partitionColumnTypeFullName, splitPointString->data);
+		}
 		else
 		{
 			uint32 partitionCount = mapMergeJob->partitionCount;
+			ShardInterval **intervalArray =
+				GenerateSyntheticShardIntervalArray(partitionCount);
+			ArrayType *splitPointObject = SplitPointObject(intervalArray,
+														   mapMergeJob->partitionCount);
+			StringInfo splitPointString =
+				SplitPointArrayString(splitPointObject, INT4OID, get_typmodin(INT4OID));
 
 			appendStringInfo(mapQueryString, HASH_PARTITION_COMMAND, jobId, taskId,
 							 filterQueryEscapedText, partitionColumnName,
-							 partitionColumnTypeFullName, partitionCount);
+							 partitionColumnTypeFullName, splitPointString->data);
 		}
 
 		/* convert filter query task into map task */
@@ -4279,6 +4302,46 @@ MapTaskList(MapMergeJob *mapMergeJob, List *filterTaskList)
 	}
 
 	return mapTaskList;
+}
+
+
+/*
+ * GenerateSyntheticShardIntervalArray returns a shard interval pointer array
+ * which has a uniform hash distribution for the given input partitionCount.
+ *
+ * The function only fills the min/max values of shard the intervals. Thus, should
+ * not be used for general purpose operations.
+ */
+ShardInterval **
+GenerateSyntheticShardIntervalArray(int partitionCount)
+{
+	ShardInterval **shardIntervalArray = palloc0(partitionCount *
+												 sizeof(ShardInterval *));
+	uint64 hashTokenIncrement = HASH_TOKEN_COUNT / partitionCount;
+	int shardIndex = 0;
+
+	for (shardIndex = 0; shardIndex < partitionCount; ++shardIndex)
+	{
+		ShardInterval *shardInterval = CitusMakeNode(ShardInterval);
+
+		/* calculate the split of the hash space */
+		int32 shardMinHashToken = INT32_MIN + (shardIndex * hashTokenIncrement);
+		int32 shardMaxHashToken = shardMinHashToken + (hashTokenIncrement - 1);
+
+		shardInterval->relationId = InvalidOid;
+		shardInterval->minValueExists = true;
+		shardInterval->minValue = Int32GetDatum(shardMinHashToken);
+
+		shardInterval->maxValueExists = true;
+		shardInterval->maxValue = Int32GetDatum(shardMaxHashToken);
+
+		shardInterval->shardId = INVALID_SHARD_ID;
+		shardInterval->valueTypeId = INT4OID;
+
+		shardIntervalArray[shardIndex] = shardInterval;
+	}
+
+	return shardIntervalArray;
 }
 
 
@@ -4396,6 +4459,10 @@ MergeTaskList(MapMergeJob *mapMergeJob, List *mapTaskList, uint32 taskIdIndex)
 		initialPartitionId = 1;
 		partitionCount = partitionCount + 1;
 	}
+	else if (mapMergeJob->partitionType == SINGLE_HASH_PARTITION_TYPE)
+	{
+		initialPartitionId = 0;
+	}
 
 	/* build merge tasks and their associated "map output fetch" tasks */
 	for (partitionId = initialPartitionId; partitionId < partitionCount; partitionId++)
@@ -4463,10 +4530,18 @@ MergeTaskList(MapMergeJob *mapMergeJob, List *mapTaskList, uint32 taskIdIndex)
 		/* merge task depends on completion of fetch tasks */
 		mergeTask->dependedTaskList = mapOutputFetchTaskList;
 
-		/* if range repartitioned, each merge task represents an interval */
+		/* if single repartitioned, each merge task represents an interval */
 		if (mapMergeJob->partitionType == RANGE_PARTITION_TYPE)
 		{
 			int32 mergeTaskIntervalId = partitionId - 1;
+			ShardInterval **mergeTaskIntervals = mapMergeJob->sortedShardIntervalArray;
+			Assert(mergeTaskIntervalId >= 0);
+
+			mergeTask->shardInterval = mergeTaskIntervals[mergeTaskIntervalId];
+		}
+		else if (mapMergeJob->partitionType == SINGLE_HASH_PARTITION_TYPE)
+		{
+			int32 mergeTaskIntervalId = partitionId;
 			ShardInterval **mergeTaskIntervals = mapMergeJob->sortedShardIntervalArray;
 			Assert(mergeTaskIntervalId >= 0);
 

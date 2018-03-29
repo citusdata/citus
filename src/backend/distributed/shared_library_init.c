@@ -374,6 +374,17 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
+		"citus.enable_single_hash_repartition_joins",
+		gettext_noop("Enables single hash repartitioning between hash "
+					 "distributed tables"),
+		NULL,
+		&EnableSingleHashRepartitioning,
+		false,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
 		"citus.subquery_pushdown",
 		gettext_noop("Enables supported subquery pushdown to workers."),
 		NULL,

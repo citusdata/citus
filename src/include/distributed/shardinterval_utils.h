@@ -36,6 +36,10 @@ extern int ShardIndex(ShardInterval *shardInterval);
 extern ShardInterval * FindShardInterval(Datum partitionColumnValue,
 										 DistTableCacheEntry *cacheEntry);
 extern int FindShardIntervalIndex(Datum searchedValue, DistTableCacheEntry *cacheEntry);
+extern int SearchCachedShardInterval(Datum partitionColumnValue,
+									 ShardInterval **shardIntervalCache,
+									 int shardCount, FmgrInfo *compareFunction);
 extern bool SingleReplicatedTable(Oid relationId);
+
 
 #endif /* SHARDINTERVAL_UTILS_H_ */

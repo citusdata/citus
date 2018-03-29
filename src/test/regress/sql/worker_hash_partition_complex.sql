@@ -10,11 +10,12 @@
 \set Partition_Column_Text '\'l_partkey\''
 \set Partition_Column_Type 23
 \set Partition_Count 4
+\set hashTokenIncrement 1073741824
 
 \set Select_Columns 'SELECT l_partkey, l_discount, l_shipdate, l_comment'
 \set Select_Filters 'l_shipdate >= date \'1992-01-15\' AND l_discount between 0.02 AND 0.08'
 
-\set Hash_Mod_Function '( (hashint4(l_partkey) & 2147483647) % 4 )'
+\set Hash_Mod_Function '( hashint4(l_partkey)::int8 - (-2147483648))::int8 / :hashTokenIncrement::int8'
 
 \set Table_Part_00 lineitem_hash_complex_part_00
 \set Table_Part_01 lineitem_hash_complex_part_01
@@ -30,7 +31,7 @@ SELECT worker_hash_partition_table(:JobId, :TaskId,
 				   ' WHERE l_shipdate >= date ''1992-01-15'''
 				   ' AND l_discount between 0.02 AND 0.08',
 				   :Partition_Column_Text, :Partition_Column_Type,
-				   :Partition_Count);
+				   ARRAY[-2147483648, -1073741824, 0, 1073741824]::int4[]);
 
 -- Copy partitioned data files into tables for testing purposes
 

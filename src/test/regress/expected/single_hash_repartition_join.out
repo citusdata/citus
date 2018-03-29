@@ -1,0 +1,465 @@
+--
+-- MULTI_SINGLE_HASH_REPARTITION_JOIN
+--
+CREATE SCHEMA single_hash_repartition;
+SET search_path TO 'single_hash_repartition';
+SET citus.enable_single_hash_repartition_joins TO ON;
+CREATE TABLE single_hash_repartition_first (id int, sum int, avg float);
+CREATE TABLE single_hash_repartition_second (id int, sum int, avg float);
+CREATE TABLE ref_table (id int, sum int, avg float);
+SET citus.shard_count TO 4;
+SELECT create_distributed_table('single_hash_repartition_first', 'id');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+SELECT create_distributed_table('single_hash_repartition_second', 'id');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+SELECT create_reference_table('ref_table');
+ create_reference_table 
+------------------------
+ 
+(1 row)
+
+SET citus.log_multi_join_order TO ON;
+SET client_min_messages TO DEBUG2;
+-- a very basic single hash re-partitioning example
+EXPLAIN SELECT 
+	count(*) 
+FROM
+	single_hash_repartition_first t1, single_hash_repartition_second t2
+WHERE
+	t1.id = t2.sum;
+LOG:  join order: [ "single_hash_repartition_first" ][ single hash partition join "single_hash_repartition_second" ]
+DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [-1073741824,-1]
+DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [0,1073741823]
+DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [1073741824,2147483647]
+DEBUG:  join prunable for intervals [-1073741824,-1] and [-2147483648,-1073741825]
+DEBUG:  join prunable for intervals [-1073741824,-1] and [0,1073741823]
+DEBUG:  join prunable for intervals [-1073741824,-1] and [1073741824,2147483647]
+DEBUG:  join prunable for intervals [0,1073741823] and [-2147483648,-1073741825]
+DEBUG:  join prunable for intervals [0,1073741823] and [-1073741824,-1]
+DEBUG:  join prunable for intervals [0,1073741823] and [1073741824,2147483647]
+DEBUG:  join prunable for intervals [1073741824,2147483647] and [-2147483648,-1073741825]
+DEBUG:  join prunable for intervals [1073741824,2147483647] and [-1073741824,-1]
+DEBUG:  join prunable for intervals [1073741824,2147483647] and [0,1073741823]
+DEBUG:  pruning merge fetch taskId 1
+DETAIL:  Creating dependency on merge taskId 5
+DEBUG:  pruning merge fetch taskId 3
+DETAIL:  Creating dependency on merge taskId 10
+DEBUG:  pruning merge fetch taskId 5
+DETAIL:  Creating dependency on merge taskId 15
+DEBUG:  pruning merge fetch taskId 7
+DETAIL:  Creating dependency on merge taskId 20
+ERROR:  the query contains a join that requires repartitioning
+HINT:  Set citus.enable_repartition_joins to on to enable repartitioning
+-- the same query with the orders of the tables have changed
+EXPLAIN SELECT 
+	count(*) 
+FROM
+	single_hash_repartition_second t1, single_hash_repartition_first t2
+WHERE
+	t2.sum = t1.id;
+LOG:  join order: [ "single_hash_repartition_second" ][ single hash partition join "single_hash_repartition_first" ]
+DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [-1073741824,-1]
+DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [0,1073741823]
+DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [1073741824,2147483647]
+DEBUG:  join prunable for intervals [-1073741824,-1] and [-2147483648,-1073741825]
+DEBUG:  join prunable for intervals [-1073741824,-1] and [0,1073741823]
+DEBUG:  join prunable for intervals [-1073741824,-1] and [1073741824,2147483647]
+DEBUG:  join prunable for intervals [0,1073741823] and [-2147483648,-1073741825]
+DEBUG:  join prunable for intervals [0,1073741823] and [-1073741824,-1]
+DEBUG:  join prunable for intervals [0,1073741823] and [1073741824,2147483647]
+DEBUG:  join prunable for intervals [1073741824,2147483647] and [-2147483648,-1073741825]
+DEBUG:  join prunable for intervals [1073741824,2147483647] and [-1073741824,-1]
+DEBUG:  join prunable for intervals [1073741824,2147483647] and [0,1073741823]
+DEBUG:  pruning merge fetch taskId 1
+DETAIL:  Creating dependency on merge taskId 5
+DEBUG:  pruning merge fetch taskId 3
+DETAIL:  Creating dependency on merge taskId 10
+DEBUG:  pruning merge fetch taskId 5
+DETAIL:  Creating dependency on merge taskId 15
+DEBUG:  pruning merge fetch taskId 7
+DETAIL:  Creating dependency on merge taskId 20
+ERROR:  the query contains a join that requires repartitioning
+HINT:  Set citus.enable_repartition_joins to on to enable repartitioning
+-- single hash repartition after bcast joins
+EXPLAIN SELECT
+	count(*)
+FROM
+	ref_table r1, single_hash_repartition_second t1, single_hash_repartition_first t2
+WHERE
+	r1.id = t1.id AND t2.sum = t1.id;
+LOG:  join order: [ "single_hash_repartition_second" ][ reference join "ref_table" ][ single hash partition join "single_hash_repartition_first" ]
+DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [-1073741824,-1]
+DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [0,1073741823]
+DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [1073741824,2147483647]
+DEBUG:  join prunable for intervals [-1073741824,-1] and [-2147483648,-1073741825]
+DEBUG:  join prunable for intervals [-1073741824,-1] and [0,1073741823]
+DEBUG:  join prunable for intervals [-1073741824,-1] and [1073741824,2147483647]
+DEBUG:  join prunable for intervals [0,1073741823] and [-2147483648,-1073741825]
+DEBUG:  join prunable for intervals [0,1073741823] and [-1073741824,-1]
+DEBUG:  join prunable for intervals [0,1073741823] and [1073741824,2147483647]
+DEBUG:  join prunable for intervals [1073741824,2147483647] and [-2147483648,-1073741825]
+DEBUG:  join prunable for intervals [1073741824,2147483647] and [-1073741824,-1]
+DEBUG:  join prunable for intervals [1073741824,2147483647] and [0,1073741823]
+DEBUG:  pruning merge fetch taskId 1
+DETAIL:  Creating dependency on merge taskId 5
+DEBUG:  pruning merge fetch taskId 3
+DETAIL:  Creating dependency on merge taskId 10
+DEBUG:  pruning merge fetch taskId 5
+DETAIL:  Creating dependency on merge taskId 15
+DEBUG:  pruning merge fetch taskId 7
+DETAIL:  Creating dependency on merge taskId 20
+ERROR:  the query contains a join that requires repartitioning
+HINT:  Set citus.enable_repartition_joins to on to enable repartitioning
+-- a more complicated join order, first colocated join, later single hash repartition join
+EXPLAIN SELECT 
+	count(*) 
+FROM
+	single_hash_repartition_first t1, single_hash_repartition_first t2, single_hash_repartition_second t3
+WHERE
+	t1.id = t2.id AND t1.sum = t3.id;
+LOG:  join order: [ "single_hash_repartition_first" ][ local partition join "single_hash_repartition_first" ][ single hash partition join "single_hash_repartition_second" ]
+DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [-1073741824,-1]
+DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [0,1073741823]
+DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [1073741824,2147483647]
+DEBUG:  join prunable for intervals [-1073741824,-1] and [-2147483648,-1073741825]
+DEBUG:  join prunable for intervals [-1073741824,-1] and [0,1073741823]
+DEBUG:  join prunable for intervals [-1073741824,-1] and [1073741824,2147483647]
+DEBUG:  join prunable for intervals [0,1073741823] and [-2147483648,-1073741825]
+DEBUG:  join prunable for intervals [0,1073741823] and [-1073741824,-1]
+DEBUG:  join prunable for intervals [0,1073741823] and [1073741824,2147483647]
+DEBUG:  join prunable for intervals [1073741824,2147483647] and [-2147483648,-1073741825]
+DEBUG:  join prunable for intervals [1073741824,2147483647] and [-1073741824,-1]
+DEBUG:  join prunable for intervals [1073741824,2147483647] and [0,1073741823]
+DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [-1073741824,-1]
+DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [0,1073741823]
+DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [1073741824,2147483647]
+DEBUG:  join prunable for intervals [-1073741824,-1] and [-2147483648,-1073741825]
+DEBUG:  join prunable for intervals [-1073741824,-1] and [0,1073741823]
+DEBUG:  join prunable for intervals [-1073741824,-1] and [1073741824,2147483647]
+DEBUG:  join prunable for intervals [0,1073741823] and [-2147483648,-1073741825]
+DEBUG:  join prunable for intervals [0,1073741823] and [-1073741824,-1]
+DEBUG:  join prunable for intervals [0,1073741823] and [1073741824,2147483647]
+DEBUG:  join prunable for intervals [1073741824,2147483647] and [-2147483648,-1073741825]
+DEBUG:  join prunable for intervals [1073741824,2147483647] and [-1073741824,-1]
+DEBUG:  join prunable for intervals [1073741824,2147483647] and [0,1073741823]
+DEBUG:  pruning merge fetch taskId 1
+DETAIL:  Creating dependency on merge taskId 5
+DEBUG:  pruning merge fetch taskId 3
+DETAIL:  Creating dependency on merge taskId 10
+DEBUG:  pruning merge fetch taskId 5
+DETAIL:  Creating dependency on merge taskId 15
+DEBUG:  pruning merge fetch taskId 7
+DETAIL:  Creating dependency on merge taskId 20
+ERROR:  the query contains a join that requires repartitioning
+HINT:  Set citus.enable_repartition_joins to on to enable repartitioning
+-- a more complicated join order, first hash-repartition join, later single hash repartition join
+EXPLAIN SELECT 
+	count(*) 
+FROM
+	single_hash_repartition_first t1, single_hash_repartition_first t2, single_hash_repartition_second t3
+WHERE
+	t1.sum = t2.sum AND t1.sum = t3.id;
+LOG:  join order: [ "single_hash_repartition_first" ][ single hash partition join "single_hash_repartition_second" ][ dual partition join "single_hash_repartition_first" ]
+DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [-1073741824,-1]
+DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [0,1073741823]
+DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [1073741824,2147483647]
+DEBUG:  join prunable for intervals [-1073741824,-1] and [-2147483648,-1073741825]
+DEBUG:  join prunable for intervals [-1073741824,-1] and [0,1073741823]
+DEBUG:  join prunable for intervals [-1073741824,-1] and [1073741824,2147483647]
+DEBUG:  join prunable for intervals [0,1073741823] and [-2147483648,-1073741825]
+DEBUG:  join prunable for intervals [0,1073741823] and [-1073741824,-1]
+DEBUG:  join prunable for intervals [0,1073741823] and [1073741824,2147483647]
+DEBUG:  join prunable for intervals [1073741824,2147483647] and [-2147483648,-1073741825]
+DEBUG:  join prunable for intervals [1073741824,2147483647] and [-1073741824,-1]
+DEBUG:  join prunable for intervals [1073741824,2147483647] and [0,1073741823]
+DEBUG:  pruning merge fetch taskId 1
+DETAIL:  Creating dependency on merge taskId 5
+DEBUG:  pruning merge fetch taskId 3
+DETAIL:  Creating dependency on merge taskId 10
+DEBUG:  pruning merge fetch taskId 5
+DETAIL:  Creating dependency on merge taskId 15
+DEBUG:  pruning merge fetch taskId 7
+DETAIL:  Creating dependency on merge taskId 20
+DEBUG:  join prunable for task partitionId 0 and 1
+DEBUG:  join prunable for task partitionId 0 and 2
+DEBUG:  join prunable for task partitionId 0 and 3
+DEBUG:  join prunable for task partitionId 1 and 0
+DEBUG:  join prunable for task partitionId 1 and 2
+DEBUG:  join prunable for task partitionId 1 and 3
+DEBUG:  join prunable for task partitionId 2 and 0
+DEBUG:  join prunable for task partitionId 2 and 1
+DEBUG:  join prunable for task partitionId 2 and 3
+DEBUG:  join prunable for task partitionId 3 and 0
+DEBUG:  join prunable for task partitionId 3 and 1
+DEBUG:  join prunable for task partitionId 3 and 2
+DEBUG:  pruning merge fetch taskId 1
+DETAIL:  Creating dependency on merge taskId 9
+DEBUG:  pruning merge fetch taskId 2
+DETAIL:  Creating dependency on merge taskId 5
+DEBUG:  pruning merge fetch taskId 4
+DETAIL:  Creating dependency on merge taskId 14
+DEBUG:  pruning merge fetch taskId 5
+DETAIL:  Creating dependency on merge taskId 10
+DEBUG:  pruning merge fetch taskId 7
+DETAIL:  Creating dependency on merge taskId 19
+DEBUG:  pruning merge fetch taskId 8
+DETAIL:  Creating dependency on merge taskId 15
+DEBUG:  pruning merge fetch taskId 10
+DETAIL:  Creating dependency on merge taskId 24
+DEBUG:  pruning merge fetch taskId 11
+DETAIL:  Creating dependency on merge taskId 20
+ERROR:  the query contains a join that requires repartitioning
+HINT:  Set citus.enable_repartition_joins to on to enable repartitioning
+-- single hash repartitioning is not supported between different column types
+EXPLAIN SELECT 
+	count(*) 
+FROM
+	single_hash_repartition_first t1, single_hash_repartition_first t2, single_hash_repartition_second t3
+WHERE
+	t1.id = t2.id AND t1.avg = t3.id;
+DEBUG:  single partition column types do not match
+DEBUG:  single partition column types do not match
+DEBUG:  dual partition column types do not match
+DEBUG:  single partition column types do not match
+DEBUG:  single partition column types do not match
+DEBUG:  dual partition column types do not match
+DEBUG:  single partition column types do not match
+DEBUG:  single partition column types do not match
+DEBUG:  dual partition column types do not match
+DEBUG:  single partition column types do not match
+DEBUG:  single partition column types do not match
+DEBUG:  dual partition column types do not match
+LOG:  join order: [ "single_hash_repartition_first" ][ local partition join "single_hash_repartition_first" ][ cartesian product "single_hash_repartition_second" ]
+ERROR:  cannot perform distributed planning on this query
+DETAIL:  Cartesian products are currently unsupported
+-- single repartition query in CTE
+-- should work fine
+EXPLAIN WITH cte1 AS 
+(
+	SELECT 
+		t1.id * t2.avg as data
+	FROM
+		single_hash_repartition_first t1, single_hash_repartition_second t2
+	WHERE
+		t1.id = t2.sum
+	AND t1.sum > 5000
+	ORDER BY 1 DESC
+	LIMIT 50
+)
+SELECT
+	count(*)
+FROM
+	cte1, single_hash_repartition_first
+WHERE
+	cte1.data > single_hash_repartition_first.id;
+DEBUG:  generating subplan 7_1 for CTE cte1: SELECT ((t1.id)::double precision * t2.avg) AS data FROM single_hash_repartition.single_hash_repartition_first t1, single_hash_repartition.single_hash_repartition_second t2 WHERE ((t1.id = t2.sum) AND (t1.sum > 5000)) ORDER BY ((t1.id)::double precision * t2.avg) DESC LIMIT 50
+LOG:  join order: [ "single_hash_repartition_first" ][ single hash partition join "single_hash_repartition_second" ]
+DEBUG:  push down of limit count: 50
+DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [-1073741824,-1]
+DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [0,1073741823]
+DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [1073741824,2147483647]
+DEBUG:  join prunable for intervals [-1073741824,-1] and [-2147483648,-1073741825]
+DEBUG:  join prunable for intervals [-1073741824,-1] and [0,1073741823]
+DEBUG:  join prunable for intervals [-1073741824,-1] and [1073741824,2147483647]
+DEBUG:  join prunable for intervals [0,1073741823] and [-2147483648,-1073741825]
+DEBUG:  join prunable for intervals [0,1073741823] and [-1073741824,-1]
+DEBUG:  join prunable for intervals [0,1073741823] and [1073741824,2147483647]
+DEBUG:  join prunable for intervals [1073741824,2147483647] and [-2147483648,-1073741825]
+DEBUG:  join prunable for intervals [1073741824,2147483647] and [-1073741824,-1]
+DEBUG:  join prunable for intervals [1073741824,2147483647] and [0,1073741823]
+DEBUG:  pruning merge fetch taskId 1
+DETAIL:  Creating dependency on merge taskId 5
+DEBUG:  pruning merge fetch taskId 3
+DETAIL:  Creating dependency on merge taskId 10
+DEBUG:  pruning merge fetch taskId 5
+DETAIL:  Creating dependency on merge taskId 15
+DEBUG:  pruning merge fetch taskId 7
+DETAIL:  Creating dependency on merge taskId 20
+ERROR:  the query contains a join that requires repartitioning
+HINT:  Set citus.enable_repartition_joins to on to enable repartitioning
+-- two single repartitions
+EXPLAIN SELECT 
+	count(*)
+FROM
+	single_hash_repartition_first t1, single_hash_repartition_second t2, single_hash_repartition_second t3
+WHERE
+	t1.id = t2.sum AND t2.sum = t3.id;
+LOG:  join order: [ "single_hash_repartition_first" ][ single hash partition join "single_hash_repartition_second" ][ single hash partition join "single_hash_repartition_second" ]
+DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [-1073741824,-1]
+DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [0,1073741823]
+DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [1073741824,2147483647]
+DEBUG:  join prunable for intervals [-1073741824,-1] and [-2147483648,-1073741825]
+DEBUG:  join prunable for intervals [-1073741824,-1] and [0,1073741823]
+DEBUG:  join prunable for intervals [-1073741824,-1] and [1073741824,2147483647]
+DEBUG:  join prunable for intervals [0,1073741823] and [-2147483648,-1073741825]
+DEBUG:  join prunable for intervals [0,1073741823] and [-1073741824,-1]
+DEBUG:  join prunable for intervals [0,1073741823] and [1073741824,2147483647]
+DEBUG:  join prunable for intervals [1073741824,2147483647] and [-2147483648,-1073741825]
+DEBUG:  join prunable for intervals [1073741824,2147483647] and [-1073741824,-1]
+DEBUG:  join prunable for intervals [1073741824,2147483647] and [0,1073741823]
+DEBUG:  pruning merge fetch taskId 1
+DETAIL:  Creating dependency on merge taskId 5
+DEBUG:  pruning merge fetch taskId 3
+DETAIL:  Creating dependency on merge taskId 10
+DEBUG:  pruning merge fetch taskId 5
+DETAIL:  Creating dependency on merge taskId 15
+DEBUG:  pruning merge fetch taskId 7
+DETAIL:  Creating dependency on merge taskId 20
+DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [-1073741824,-1]
+DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [0,1073741823]
+DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [1073741824,2147483647]
+DEBUG:  join prunable for intervals [-1073741824,-1] and [-2147483648,-1073741825]
+DEBUG:  join prunable for intervals [-1073741824,-1] and [0,1073741823]
+DEBUG:  join prunable for intervals [-1073741824,-1] and [1073741824,2147483647]
+DEBUG:  join prunable for intervals [0,1073741823] and [-2147483648,-1073741825]
+DEBUG:  join prunable for intervals [0,1073741823] and [-1073741824,-1]
+DEBUG:  join prunable for intervals [0,1073741823] and [1073741824,2147483647]
+DEBUG:  join prunable for intervals [1073741824,2147483647] and [-2147483648,-1073741825]
+DEBUG:  join prunable for intervals [1073741824,2147483647] and [-1073741824,-1]
+DEBUG:  join prunable for intervals [1073741824,2147483647] and [0,1073741823]
+DEBUG:  pruning merge fetch taskId 1
+DETAIL:  Creating dependency on merge taskId 9
+DEBUG:  pruning merge fetch taskId 3
+DETAIL:  Creating dependency on merge taskId 14
+DEBUG:  pruning merge fetch taskId 5
+DETAIL:  Creating dependency on merge taskId 19
+DEBUG:  pruning merge fetch taskId 7
+DETAIL:  Creating dependency on merge taskId 24
+ERROR:  the query contains a join that requires repartitioning
+HINT:  Set citus.enable_repartition_joins to on to enable repartitioning
+-- two single repartitions again, but this 
+-- time the columns of the second join is reverted
+EXPLAIN SELECT 
+	avg(t1.avg + t2.avg)
+FROM
+	single_hash_repartition_first t1, single_hash_repartition_second t2, single_hash_repartition_second t3
+WHERE
+	t1.id = t2.sum AND t2.id = t3.sum
+LIMIT 10;
+LOG:  join order: [ "single_hash_repartition_second" ][ single hash partition join "single_hash_repartition_second" ][ single hash partition join "single_hash_repartition_first" ]
+DEBUG:  push down of limit count: 10
+DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [-1073741824,-1]
+DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [0,1073741823]
+DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [1073741824,2147483647]
+DEBUG:  join prunable for intervals [-1073741824,-1] and [-2147483648,-1073741825]
+DEBUG:  join prunable for intervals [-1073741824,-1] and [0,1073741823]
+DEBUG:  join prunable for intervals [-1073741824,-1] and [1073741824,2147483647]
+DEBUG:  join prunable for intervals [0,1073741823] and [-2147483648,-1073741825]
+DEBUG:  join prunable for intervals [0,1073741823] and [-1073741824,-1]
+DEBUG:  join prunable for intervals [0,1073741823] and [1073741824,2147483647]
+DEBUG:  join prunable for intervals [1073741824,2147483647] and [-2147483648,-1073741825]
+DEBUG:  join prunable for intervals [1073741824,2147483647] and [-1073741824,-1]
+DEBUG:  join prunable for intervals [1073741824,2147483647] and [0,1073741823]
+DEBUG:  pruning merge fetch taskId 1
+DETAIL:  Creating dependency on merge taskId 5
+DEBUG:  pruning merge fetch taskId 3
+DETAIL:  Creating dependency on merge taskId 10
+DEBUG:  pruning merge fetch taskId 5
+DETAIL:  Creating dependency on merge taskId 15
+DEBUG:  pruning merge fetch taskId 7
+DETAIL:  Creating dependency on merge taskId 20
+DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [-1073741824,-1]
+DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [0,1073741823]
+DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [1073741824,2147483647]
+DEBUG:  join prunable for intervals [-1073741824,-1] and [-2147483648,-1073741825]
+DEBUG:  join prunable for intervals [-1073741824,-1] and [0,1073741823]
+DEBUG:  join prunable for intervals [-1073741824,-1] and [1073741824,2147483647]
+DEBUG:  join prunable for intervals [0,1073741823] and [-2147483648,-1073741825]
+DEBUG:  join prunable for intervals [0,1073741823] and [-1073741824,-1]
+DEBUG:  join prunable for intervals [0,1073741823] and [1073741824,2147483647]
+DEBUG:  join prunable for intervals [1073741824,2147483647] and [-2147483648,-1073741825]
+DEBUG:  join prunable for intervals [1073741824,2147483647] and [-1073741824,-1]
+DEBUG:  join prunable for intervals [1073741824,2147483647] and [0,1073741823]
+DEBUG:  pruning merge fetch taskId 1
+DETAIL:  Creating dependency on merge taskId 9
+DEBUG:  pruning merge fetch taskId 3
+DETAIL:  Creating dependency on merge taskId 14
+DEBUG:  pruning merge fetch taskId 5
+DETAIL:  Creating dependency on merge taskId 19
+DEBUG:  pruning merge fetch taskId 7
+DETAIL:  Creating dependency on merge taskId 24
+ERROR:  the query contains a join that requires repartitioning
+HINT:  Set citus.enable_repartition_joins to on to enable repartitioning
+-- lets try one more thing, show that non uniform shard distribution doesn't
+-- end up with single hash repartitioning
+ UPDATE pg_dist_shard SET shardmaxvalue = shardmaxvalue::int - 1 WHERE logicalrelid IN ('single_hash_repartition_first'::regclass);
+-- the following queries should also be a single hash repartition queries
+-- note that since we've manually updated the metadata without changing the
+-- the corresponding data, the results of the query would be wrong
+EXPLAIN SELECT 
+	count(*) 
+FROM
+	single_hash_repartition_first t1, single_hash_repartition_second t2
+WHERE
+	t1.id = t2.sum;
+LOG:  join order: [ "single_hash_repartition_first" ][ single hash partition join "single_hash_repartition_second" ]
+DEBUG:  join prunable for intervals [-2147483648,-1073741826] and [-1073741824,-2]
+DEBUG:  join prunable for intervals [-2147483648,-1073741826] and [0,1073741822]
+DEBUG:  join prunable for intervals [-2147483648,-1073741826] and [1073741824,2147483646]
+DEBUG:  join prunable for intervals [-1073741824,-2] and [-2147483648,-1073741826]
+DEBUG:  join prunable for intervals [-1073741824,-2] and [0,1073741822]
+DEBUG:  join prunable for intervals [-1073741824,-2] and [1073741824,2147483646]
+DEBUG:  join prunable for intervals [0,1073741822] and [-2147483648,-1073741826]
+DEBUG:  join prunable for intervals [0,1073741822] and [-1073741824,-2]
+DEBUG:  join prunable for intervals [0,1073741822] and [1073741824,2147483646]
+DEBUG:  join prunable for intervals [1073741824,2147483646] and [-2147483648,-1073741826]
+DEBUG:  join prunable for intervals [1073741824,2147483646] and [-1073741824,-2]
+DEBUG:  join prunable for intervals [1073741824,2147483646] and [0,1073741822]
+DEBUG:  pruning merge fetch taskId 1
+DETAIL:  Creating dependency on merge taskId 5
+DEBUG:  pruning merge fetch taskId 3
+DETAIL:  Creating dependency on merge taskId 10
+DEBUG:  pruning merge fetch taskId 5
+DETAIL:  Creating dependency on merge taskId 15
+DEBUG:  pruning merge fetch taskId 7
+DETAIL:  Creating dependency on merge taskId 20
+ERROR:  the query contains a join that requires repartitioning
+HINT:  Set citus.enable_repartition_joins to on to enable repartitioning
+-- the following queries should also be a single hash repartition queries
+-- note that since we've manually updated the metadata without changing the
+-- the corresponding data, the results of the query would be wrong
+EXPLAIN SELECT 
+	count(*) 
+FROM
+	single_hash_repartition_first t1, single_hash_repartition_second t2
+WHERE
+	t1.sum = t2.id;
+LOG:  join order: [ "single_hash_repartition_first" ][ single hash partition join "single_hash_repartition_second" ]
+DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [-1073741824,-1]
+DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [0,1073741823]
+DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [1073741824,2147483647]
+DEBUG:  join prunable for intervals [-1073741824,-1] and [-2147483648,-1073741825]
+DEBUG:  join prunable for intervals [-1073741824,-1] and [0,1073741823]
+DEBUG:  join prunable for intervals [-1073741824,-1] and [1073741824,2147483647]
+DEBUG:  join prunable for intervals [0,1073741823] and [-2147483648,-1073741825]
+DEBUG:  join prunable for intervals [0,1073741823] and [-1073741824,-1]
+DEBUG:  join prunable for intervals [0,1073741823] and [1073741824,2147483647]
+DEBUG:  join prunable for intervals [1073741824,2147483647] and [-2147483648,-1073741825]
+DEBUG:  join prunable for intervals [1073741824,2147483647] and [-1073741824,-1]
+DEBUG:  join prunable for intervals [1073741824,2147483647] and [0,1073741823]
+DEBUG:  pruning merge fetch taskId 1
+DETAIL:  Creating dependency on merge taskId 5
+DEBUG:  pruning merge fetch taskId 3
+DETAIL:  Creating dependency on merge taskId 10
+DEBUG:  pruning merge fetch taskId 5
+DETAIL:  Creating dependency on merge taskId 15
+DEBUG:  pruning merge fetch taskId 7
+DETAIL:  Creating dependency on merge taskId 20
+ERROR:  the query contains a join that requires repartitioning
+HINT:  Set citus.enable_repartition_joins to on to enable repartitioning
+RESET client_min_messages;
+RESET search_path;
+DROP SCHEMA single_hash_repartition CASCADE;
+NOTICE:  drop cascades to 3 other objects
+DETAIL:  drop cascades to table single_hash_repartition.single_hash_repartition_first
+drop cascades to table single_hash_repartition.single_hash_repartition_second
+drop cascades to table single_hash_repartition.ref_table
+SET citus.enable_single_hash_repartition_joins TO OFF;
