@@ -42,6 +42,7 @@ typedef struct AttributeEquivalenceClass
 {
 	uint32 equivalenceId;
 	List *equivalentAttributes;
+	List *outerAttributes;
 } AttributeEquivalenceClass;
 
 /*
@@ -946,6 +947,9 @@ GenerateAttributeEquivalencesForJoinRestrictions(JoinRestrictionContext *
 			Var *rightVar = NULL;
 			Expr *restrictionClause = rinfo->clause;
 			AttributeEquivalenceClass *attributeEquivalance = NULL;
+			bool rightVarOuter = false;
+			bool leftVarOuter = false;
+			int leftRelationCount = 0;
 
 			if (!IsA(restrictionClause, OpExpr))
 			{
@@ -977,14 +981,56 @@ GenerateAttributeEquivalencesForJoinRestrictions(JoinRestrictionContext *
 			leftVar = (Var *) strippedLeftExpr;
 			rightVar = (Var *) strippedRightExpr;
 
+
+			if (!bms_is_empty(rinfo->outer_relids))
+			{
+				leftVarOuter = bms_is_member(leftVar->varno, rinfo->outer_relids);
+				rightVarOuter = bms_is_member(rightVar->varno, rinfo->outer_relids);
+			}
+
 			attributeEquivalance = palloc0(sizeof(AttributeEquivalenceClass));
 			attributeEquivalance->equivalenceId = attributeEquivalenceId++;
 
 			AddToAttributeEquivalenceClass(&attributeEquivalance,
 										   joinRestriction->plannerInfo, leftVar);
 
+			if (leftVarOuter)
+			{
+				ListCell *aecCell = NULL;
+				foreach(aecCell, attributeEquivalance->equivalentAttributes)
+				{
+					AttributeEquivalenceClassMember *aecm =
+						(AttributeEquivalenceClassMember *) lfirst(aecCell);
+					attributeEquivalance->outerAttributes = lappend_int(
+						attributeEquivalance->outerAttributes,
+						aecm->rteIdentity);
+					leftRelationCount++;
+				}
+			}
+
 			AddToAttributeEquivalenceClass(&attributeEquivalance,
 										   joinRestriction->plannerInfo, rightVar);
+
+			if (rightVarOuter)
+			{
+				ListCell *aecCell = NULL;
+				int skippedCount = 0;
+				foreach(aecCell, attributeEquivalance->equivalentAttributes)
+				{
+					AttributeEquivalenceClassMember *aecm =
+						(AttributeEquivalenceClassMember *) lfirst(aecCell);
+
+					if (skippedCount < leftRelationCount)
+					{
+						skippedCount++;
+						continue;
+					}
+
+					attributeEquivalance->outerAttributes = lappend_int(
+						attributeEquivalance->outerAttributes,
+						aecm->rteIdentity);
+				}
+			}
 
 			attributeEquivalenceList =
 				AddAttributeClassToAttributeClassList(attributeEquivalenceList,

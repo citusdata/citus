@@ -127,6 +127,19 @@ static Job * BuildJobTreeTaskList(Job *jobTree,
 								  PlannerRestrictionContext *plannerRestrictionContext);
 static List * SubquerySqlTaskList(Job *job,
 								  PlannerRestrictionContext *plannerRestrictionContext);
+static Bitmapset ** CreateFilterDependencies(
+	PlannerRestrictionContext *plannerRestrictionContext,
+	int maxRelationIdentity);
+static void CopyRelationRestrictionsToDependedRelations(Bitmapset **filterDependencyArray,
+														int maxRelationIdentity,
+														PlannerRestrictionContext *
+														plannerRestrictionContext);
+static RelationRestriction * GetRelationRestrictionForIdentity(
+	RelationRestrictionContext *relationRestrictionContext, int relationIdentity);
+static List * ExtractRangeFiltersOnColumn(RelationRestriction *relationRestriction,
+										  Var *partitionColumn);
+static void CopyFiltersToRelationRestriction(List *rangeFilterList,
+											 RelationRestriction *relationRestriction);
 static void ErrorIfUnsupportedShardDistribution(Query *query);
 static bool CoPartitionedTables(Oid firstRelationId, Oid secondRelationId);
 static bool ShardIntervalsEqual(FmgrInfo *comparisonFunction,
@@ -198,6 +211,25 @@ static StringInfo IntermediateTableQueryString(uint64 jobId, uint32 taskIdIndex,
 											   Query *reduceQuery);
 static uint32 FinalTargetEntryCount(List *targetEntryList);
 
+
+typedef struct AttributeEquivalenceClass
+{
+	uint32 equivalenceId;
+	List *equivalentAttributes;
+	List *outerAttributes;
+} AttributeEquivalenceClass;
+
+typedef struct AttributeEquivalenceClassMember
+{
+	Oid relationId;
+	int rteIdentity;
+	Index varno;
+	AttrNumber varattno;
+} AttributeEquivalenceClassMember;
+
+
+extern List * GenerateAllAttributeEquivalences(
+	PlannerRestrictionContext *plannerRestrictionContext);
 
 /*
  * CreatePhysicalDistributedPlan is the entry point for physical plan generation. The
@@ -2039,6 +2071,109 @@ BuildJobTreeTaskList(Job *jobTree, PlannerRestrictionContext *plannerRestriction
 }
 
 
+static Bitmapset **
+CreateFilterDependencies(PlannerRestrictionContext *plannerRestrictionContext,
+						 int maxRelationIdentity)
+{
+	/* use 1-based array, offset 0 is wasted */
+	Bitmapset **filterDependencyArray = palloc0(sizeof(Bitmapset *) *
+												(maxRelationIdentity + 1));
+	List *allAttributeEquivalenceList = GenerateAllAttributeEquivalences(
+		plannerRestrictionContext);
+	ListCell *equivalanceCell = NULL;
+	List *rteEquivalanceList = NIL;
+	bool done = false;
+
+	/* following loop could be moved to a function in relation_restriction_equivalance.c */
+	foreach(equivalanceCell, allAttributeEquivalenceList)
+	{
+		AttributeEquivalenceClass *attributeEquivalance =
+			(AttributeEquivalenceClass *) lfirst(equivalanceCell);
+		ListCell *equivalanceMemberCell = NULL;
+		Bitmapset *equivalentRteSet = NULL;
+		foreach(equivalanceMemberCell, attributeEquivalance->equivalentAttributes)
+		{
+			AttributeEquivalenceClassMember *eqMember =
+				(AttributeEquivalenceClassMember *) lfirst(
+					equivalanceMemberCell);
+			ListCell *targetECCell = NULL;
+			int anchorIdentity = eqMember->rteIdentity;
+			equivalentRteSet = bms_add_member(equivalentRteSet,
+											  eqMember->rteIdentity);
+
+			foreach(targetECCell, attributeEquivalance->equivalentAttributes)
+			{
+				AttributeEquivalenceClassMember *targetECMember =
+					(AttributeEquivalenceClassMember *) lfirst(
+						targetECCell);
+				if (targetECMember->rteIdentity != anchorIdentity &&
+					!list_member_int(
+						attributeEquivalance->outerAttributes,
+						targetECMember->rteIdentity))
+				{
+					filterDependencyArray[anchorIdentity] = bms_add_member(
+						filterDependencyArray[anchorIdentity],
+						targetECMember->rteIdentity);
+				}
+			}
+		}
+		rteEquivalanceList = lappend(rteEquivalanceList, equivalentRteSet);
+	}
+
+	/* run merge loop until it converges to a fixed state */
+	done = false;
+	while (!done)
+	{
+		done = true;
+		int currentRTEId = 0;
+		for (currentRTEId = 1; currentRTEId <= maxRelationIdentity;
+			 currentRTEId++)
+		{
+			Bitmapset *currentSet = filterDependencyArray[currentRTEId];
+			int dependendRTEId = -1;
+
+			if (bms_is_empty(currentSet))
+			{
+				continue;
+			}
+
+			while ((dependendRTEId = bms_next_member(currentSet,
+													 dependendRTEId)) != -2)
+			{
+				Bitmapset *dependendSet =
+					filterDependencyArray[dependendRTEId];
+				Bitmapset *newSet = NULL;
+				int currentSetSize = 0;
+				int newSetSize = 0;
+
+				currentSetSize = bms_num_members(currentSet);
+
+				if (dependendRTEId == currentRTEId || dependendSet == NULL ||
+					bms_is_empty(dependendSet))
+				{
+					continue;
+				}
+
+				newSet = bms_union(currentSet, dependendSet);
+				newSetSize = bms_num_members(newSet);
+
+				/* we made a change, so loop needs to continue */
+				if (newSetSize > currentSetSize)
+				{
+					done = false;
+				}
+
+				bms_free(currentSet);
+				currentSet = newSet;
+			}
+			filterDependencyArray[currentRTEId] = currentSet;
+		}
+	}
+
+	return filterDependencyArray;
+}
+
+
 /*
  * SubquerySqlTaskList creates a list of SQL tasks to execute the given subquery
  * pushdown job. For this, the it is being checked whether the query is router
@@ -2053,8 +2188,9 @@ SubquerySqlTaskList(Job *job, PlannerRestrictionContext *plannerRestrictionConte
 	uint64 jobId = job->jobId;
 	List *sqlTaskList = NIL;
 	List *rangeTableList = NIL;
+	ListCell *rangeTableCell = NULL;
 	ListCell *restrictionCell = NULL;
-	uint32 taskIdIndex = 1; /* 0 is reserved for invalid taskId */
+	uint32 taskIdIndex = 1;     /* 0 is reserved for invalid taskId */
 	int shardCount = 0;
 	int shardOffset = 0;
 	RelationRestrictionContext *relationRestrictionContext =
@@ -2064,12 +2200,31 @@ SubquerySqlTaskList(Job *job, PlannerRestrictionContext *plannerRestrictionConte
 	ListCell *prunedRelationShardCell = NULL;
 	bool isMultiShardQuery = false;
 	bool hasDistributedTable = false;
+	int maxRelationIdentity = 0;
+	Bitmapset **filterDependencyArray = NULL;
 
 	/* error if shards are not co-partitioned */
 	ErrorIfUnsupportedShardDistribution(subquery);
 
 	/* get list of all range tables in subquery tree */
 	ExtractRangeTableRelationWalker((Node *) subquery, &rangeTableList);
+
+	foreach(rangeTableCell, rangeTableList)
+	{
+		RangeTblEntry *rte = (RangeTblEntry *) lfirst(rangeTableCell);
+		int rteIdentity = GetRTEIdentity(rte);
+		if (rteIdentity > maxRelationIdentity)
+		{
+			maxRelationIdentity = rteIdentity;
+		}
+	}
+
+
+	filterDependencyArray = CreateFilterDependencies(plannerRestrictionContext,
+													 maxRelationIdentity);
+	CopyRelationRestrictionsToDependedRelations(filterDependencyArray,
+												maxRelationIdentity,
+												plannerRestrictionContext);
 
 	if (list_length(relationRestrictionContext->relationRestrictionList) == 0)
 	{
@@ -2112,7 +2267,8 @@ SubquerySqlTaskList(Job *job, PlannerRestrictionContext *plannerRestrictionConte
 
 		foreach(shardIntervalCell, prunedShardList)
 		{
-			ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
+			ShardInterval *shardInterval = (ShardInterval *) lfirst(
+				shardIntervalCell);
 			int shardIndex = shardInterval->shardIndex;
 
 			taskRequiredForShardIndex[shardIndex] = true;
@@ -2131,7 +2287,8 @@ SubquerySqlTaskList(Job *job, PlannerRestrictionContext *plannerRestrictionConte
 	{
 		Task *subqueryTask = NULL;
 
-		if (taskRequiredForShardIndex != NULL && !taskRequiredForShardIndex[shardOffset])
+		if (taskRequiredForShardIndex != NULL &&
+			!taskRequiredForShardIndex[shardOffset])
 		{
 			/* this shard index is pruned away for all relations */
 			continue;
@@ -2146,6 +2303,204 @@ SubquerySqlTaskList(Job *job, PlannerRestrictionContext *plannerRestrictionConte
 	}
 
 	return sqlTaskList;
+}
+
+
+static void
+CopyRelationRestrictionsToDependedRelations(Bitmapset **filterDependencyArray, int
+											maxRelationIdentity,
+											PlannerRestrictionContext *
+											plannerRestrictionContext)
+{
+	int relationIdentity = 0;
+	RelationRestrictionContext *relationRestrictionContext =
+		plannerRestrictionContext->relationRestrictionContext;
+	List **rangeFilterArray = palloc0(maxRelationIdentity * sizeof(List *));
+
+	/* determine the range filters to be copied from each relation restriction */
+	for (relationIdentity = 1; relationIdentity <= maxRelationIdentity;
+		 relationIdentity++)
+	{
+		Bitmapset *currentSet = filterDependencyArray[relationIdentity];
+		RelationRestriction *relationRestriction = NULL;
+		Var *partitionColumn = NULL;
+
+		if (currentSet == NULL || bms_is_empty(currentSet))
+		{
+			continue;
+		}
+
+		relationRestriction = GetRelationRestrictionForIdentity(
+			relationRestrictionContext, relationIdentity);
+
+		/* relationRestriction->index is range table id */
+		partitionColumn = PartitionColumn(relationRestriction->relationId,
+										  relationRestriction->index);
+		rangeFilterArray[relationIdentity] = ExtractRangeFiltersOnColumn(
+			relationRestriction, partitionColumn);
+	}
+
+	for (relationIdentity = 1; relationIdentity <= maxRelationIdentity;
+		 relationIdentity++)
+	{
+		Bitmapset *currentSet = filterDependencyArray[relationIdentity];
+		int dependedRteIdentity = -1;
+		List *rangeFilterList = rangeFilterArray[relationIdentity];
+
+		/* if no other relation has dependency on this one, nothing to do */
+		if (currentSet == NULL || bms_is_empty(currentSet))
+		{
+			continue;
+		}
+
+		/* if not range filter is specified on this relation nothing to do */
+		if (rangeFilterList == NIL)
+		{
+			continue;
+		}
+
+		dependedRteIdentity = -1;
+		while ((dependedRteIdentity = bms_next_member(currentSet, dependedRteIdentity)) !=
+			   -2)
+		{
+			RelationRestriction *relationRestriction = GetRelationRestrictionForIdentity(
+				relationRestrictionContext, dependedRteIdentity);
+			CopyFiltersToRelationRestriction(rangeFilterList, relationRestriction);
+		}
+	}
+}
+
+
+static RelationRestriction *
+GetRelationRestrictionForIdentity(RelationRestrictionContext *relationRestrictionContext,
+								  int relationIdentity)
+{
+	ListCell *restrictionCell = NULL;
+	foreach(restrictionCell, relationRestrictionContext->relationRestrictionList)
+	{
+		RelationRestriction *relationRestriction = (RelationRestriction *) lfirst(
+			restrictionCell);
+		int rteIdentity = GetRTEIdentity(relationRestriction->rte);
+		if (rteIdentity == relationIdentity)
+		{
+			return relationRestriction;
+		}
+	}
+
+	Assert(false);
+	return NULL;
+}
+
+
+static List *
+ExtractRangeFiltersOnColumn(RelationRestriction *relationRestriction, Var *targetColumn)
+{
+	ListCell *restrictInfoCell = NULL;
+	List *rangeFilterList = NIL;
+
+	foreach(restrictInfoCell, relationRestriction->relOptInfo->baserestrictinfo)
+	{
+		RestrictInfo *restrictInfo = (RestrictInfo *) lfirst(restrictInfoCell);
+		Expr *clause = restrictInfo->clause;
+		OpExpr *opExpr = NULL;
+		Oid opno = InvalidOid;
+		List *argumentList = NIL;
+		Node *leftArgument = NULL;
+		Node *rightArgument = NULL;
+		Node *strippedLeftArgument = NULL;
+		Node *strippedRightArgument = NULL;
+		Var *foundColumn = NULL;
+
+		if (!IsA(clause, OpExpr))
+		{
+			continue;
+		}
+
+		opExpr = (OpExpr *) clause;
+		argumentList = opExpr->args;
+		if (list_length(argumentList) != 2)
+		{
+			continue;
+		}
+
+		opno = opExpr->opno;
+		if (!OperatorImplementsComparison(opno))
+		{
+			continue;
+		}
+
+		/* get left and right side of the expression */
+		leftArgument = (Node *) linitial(argumentList);
+		rightArgument = (Node *) lsecond(argumentList);
+
+		strippedLeftArgument = strip_implicit_coercions(leftArgument);
+		strippedRightArgument = strip_implicit_coercions(rightArgument);
+
+		if (IsA(strippedLeftArgument, Var) && IsA(strippedRightArgument, Const))
+		{
+			foundColumn = (Var *) strippedLeftArgument;
+		}
+		else if (IsA(strippedRightArgument, Var) && IsA(strippedLeftArgument, Const))
+		{
+			foundColumn = (Var *) strippedRightArgument;
+		}
+		else
+		{
+			continue;
+		}
+
+		Assert(foundColumn->varno == targetColumn->varno);
+
+		if (foundColumn->varno == targetColumn->varno && foundColumn->varattno ==
+			targetColumn->varattno)
+		{
+			rangeFilterList = lappend(rangeFilterList, clause);
+		}
+	}
+
+	return rangeFilterList;
+}
+
+
+static void
+CopyFiltersToRelationRestriction(List *rangeFilterList,
+								 RelationRestriction *relationRestriction)
+{
+	ListCell *rangeFilterCell = NULL;
+	Var *partitionColumn = PartitionColumn(relationRestriction->relationId,
+										   relationRestriction->index);
+	List *baseRestrictInfo = relationRestriction->relOptInfo->baserestrictinfo;
+
+	foreach(rangeFilterCell, rangeFilterList)
+	{
+		Node *clause = (Node *) lfirst(rangeFilterCell);
+		Node *clauseCopy = copyObject(clause);
+		RestrictInfo *newRestrictInfo = NULL;
+		bool is_pushed_down = false;
+		bool outerjoin_delayed = false;
+		bool pseudoconstant = false;
+		Index security_level = 0;
+		Relids required_relids = NULL;
+		Relids outer_relids = NULL;
+		Relids nullable_relids = NULL;
+		List *columnList = pull_var_clause_default(clauseCopy);
+		Var *column = NULL;
+
+		Assert(list_length(columnList) == 1);
+		column = (Var *) linitial(columnList);
+
+		memcpy(column, partitionColumn, sizeof(Var));
+		required_relids = pull_varnos(clauseCopy);
+
+		newRestrictInfo = make_restrictinfo((Expr *) clauseCopy, is_pushed_down,
+											outerjoin_delayed, pseudoconstant,
+											security_level, required_relids, outer_relids,
+											nullable_relids);
+
+		baseRestrictInfo = lappend(baseRestrictInfo, newRestrictInfo);
+	}
+
+	relationRestriction->relOptInfo->baserestrictinfo = baseRestrictInfo;
 }
 
 
@@ -2245,9 +2600,12 @@ CoPartitionedTables(Oid firstRelationId, Oid secondRelationId)
 {
 	bool coPartitionedTables = true;
 	uint32 intervalIndex = 0;
-	DistTableCacheEntry *firstTableCache = DistributedTableCacheEntry(firstRelationId);
-	DistTableCacheEntry *secondTableCache = DistributedTableCacheEntry(secondRelationId);
-	ShardInterval **sortedFirstIntervalArray = firstTableCache->sortedShardIntervalArray;
+	DistTableCacheEntry *firstTableCache = DistributedTableCacheEntry(
+		firstRelationId);
+	DistTableCacheEntry *secondTableCache = DistributedTableCacheEntry(
+		secondRelationId);
+	ShardInterval **sortedFirstIntervalArray =
+		firstTableCache->sortedShardIntervalArray;
 	ShardInterval **sortedSecondIntervalArray =
 		secondTableCache->sortedShardIntervalArray;
 	uint32 firstListShardCount = firstTableCache->shardIntervalArrayLength;
@@ -2401,8 +2759,9 @@ SubqueryTaskCreate(Query *originalQuery, int shardIndex,
 	selectPlacementList = WorkersContainingAllShards(taskShardList);
 	if (list_length(selectPlacementList) == 0)
 	{
-		ereport(ERROR, (errmsg("cannot find a worker that has active placements for all "
-							   "shards in the query")));
+		ereport(ERROR, (errmsg(
+							"cannot find a worker that has active placements for all "
+							"shards in the query")));
 
 		return NULL;
 	}
@@ -2448,7 +2807,7 @@ static List *
 SqlTaskList(Job *job)
 {
 	List *sqlTaskList = NIL;
-	uint32 taskIdIndex = 1; /* 0 is reserved for invalid taskId */
+	uint32 taskIdIndex = 1;     /* 0 is reserved for invalid taskId */
 	uint64 jobId = job->jobId;
 	bool anchorRangeTableBasedAssignment = false;
 	uint32 anchorRangeTableId = 0;
@@ -2521,7 +2880,8 @@ SqlTaskList(Job *job)
 		List *fragmentRangeTableList = NIL;
 
 		/* create tasks to fetch fragments required for the sql task */
-		dataFetchTaskList = DataFetchTaskList(jobId, taskIdIndex, fragmentCombination);
+		dataFetchTaskList = DataFetchTaskList(jobId, taskIdIndex,
+											  fragmentCombination);
 		dataFetchTaskCount = list_length(dataFetchTaskList);
 		taskIdIndex += dataFetchTaskCount;
 
@@ -2762,7 +3122,7 @@ RangeTableFragmentsList(List *rangeTableList, List *whereClauseList,
 	ListCell *rangeTableCell = NULL;
 	foreach(rangeTableCell, rangeTableList)
 	{
-		uint32 tableId = rangeTableIndex + 1; /* tableId starts from 1 */
+		uint32 tableId = rangeTableIndex + 1;     /* tableId starts from 1 */
 
 		RangeTblEntry *rangeTableEntry = (RangeTblEntry *) lfirst(rangeTableCell);
 		CitusRTEKind rangeTableKind = GetRangeTblKind(rangeTableEntry);
@@ -2828,7 +3188,8 @@ RangeTableFragmentsList(List *rangeTableList, List *whereClauseList,
 				mergeTaskFragment->fragmentType = CITUS_RTE_REMOTE_QUERY;
 				mergeTaskFragment->rangeTableId = tableId;
 
-				mergeTaskFragmentList = lappend(mergeTaskFragmentList, mergeTaskFragment);
+				mergeTaskFragmentList = lappend(mergeTaskFragmentList,
+												mergeTaskFragment);
 			}
 
 			rangeTableFragmentsList = lappend(rangeTableFragmentsList,
@@ -2908,7 +3269,7 @@ MakeOpExpression(Var *variable, int16 strategyNumber)
 
 	/* Now make the expression with the given variable and a null constant */
 	expression = (OpExpr *) make_opclause(operatorId,
-										  InvalidOid, /* no result type yet */
+										  InvalidOid,     /* no result type yet */
 										  false,      /* no return set */
 										  (Expr *) variable,
 										  (Expr *) constantValue,
@@ -3035,7 +3396,7 @@ SimpleOpExpression(Expr *clause)
 	}
 	else
 	{
-		return false; /* not a binary opclause */
+		return false;     /* not a binary opclause */
 	}
 
 	/* strip coercions before doing check */
@@ -3128,7 +3489,8 @@ MakeInt4Constant(Datum constantValue)
 	bool constantIsNull = false;
 	bool constantByValue = true;
 
-	Const *int4Constant = makeConst(constantType, constantTypeMode, constantCollationId,
+	Const *int4Constant = makeConst(constantType, constantTypeMode,
+									constantCollationId,
 									constantLength, constantValue, constantIsNull,
 									constantByValue);
 	return int4Constant;
@@ -3143,8 +3505,8 @@ UpdateConstraint(Node *baseConstraint, ShardInterval *shardInterval)
 	Node *lessThanExpr = (Node *) linitial(andExpr->args);
 	Node *greaterThanExpr = (Node *) lsecond(andExpr->args);
 
-	Node *minNode = get_rightop((Expr *) greaterThanExpr); /* right op */
-	Node *maxNode = get_rightop((Expr *) lessThanExpr);    /* right op */
+	Node *minNode = get_rightop((Expr *) greaterThanExpr);     /* right op */
+	Node *maxNode = get_rightop((Expr *) lessThanExpr);     /* right op */
 	Const *minConstant = NULL;
 	Const *maxConstant = NULL;
 
@@ -3222,7 +3584,8 @@ FragmentCombinationList(List *rangeTableFragmentsList, Query *jobQuery,
 
 		/* find the next range table to add to our search space */
 		tableId = joinSequenceArray[joinSequenceIndex].rangeTableId;
-		tableFragments = FindRangeTableFragmentsList(rangeTableFragmentsList, tableId);
+		tableFragments = FindRangeTableFragmentsList(rangeTableFragmentsList,
+													 tableId);
 
 		/* resolve sequence index for the previous range table we join against */
 		joiningTableId = joinSequenceArray[joinSequenceIndex].joiningRangeTableId;
@@ -3231,7 +3594,8 @@ FragmentCombinationList(List *rangeTableFragmentsList, Query *jobQuery,
 			int32 sequenceIndex = 0;
 			for (sequenceIndex = 0; sequenceIndex < rangeTableCount; sequenceIndex++)
 			{
-				JoinSequenceNode *joinSequenceNode = &joinSequenceArray[sequenceIndex];
+				JoinSequenceNode *joinSequenceNode =
+					&joinSequenceArray[sequenceIndex];
 				if (joinSequenceNode->rangeTableId == joiningTableId)
 				{
 					joiningTableSequenceIndex = sequenceIndex;
@@ -3265,7 +3629,8 @@ FragmentCombinationList(List *rangeTableFragmentsList, Query *jobQuery,
 			if (!joinPrunable)
 			{
 				List *newFragmentCombination = list_copy(fragmentCombination);
-				newFragmentCombination = lappend(newFragmentCombination, tableFragment);
+				newFragmentCombination = lappend(newFragmentCombination,
+												 tableFragment);
 
 				fragmentCombinationQueue = lappend(fragmentCombinationQueue,
 												   newFragmentCombination);
@@ -3284,7 +3649,8 @@ FragmentCombinationList(List *rangeTableFragmentsList, Query *jobQuery,
  * range table list and the id of a preceding table with which it is joined, if any.
  */
 static JoinSequenceNode *
-JoinSequenceArray(List *rangeTableFragmentsList, Query *jobQuery, List *dependedJobList)
+JoinSequenceArray(List *rangeTableFragmentsList, Query *jobQuery,
+				  List *dependedJobList)
 {
 	List *rangeTableList = jobQuery->rtable;
 	uint32 rangeTableCount = (uint32) list_length(rangeTableList);
@@ -3335,8 +3701,10 @@ JoinSequenceArray(List *rangeTableFragmentsList, Query *jobQuery, List *depended
 		if (nextJoinClauseList == NIL)
 		{
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("cannot perform distributed planning on this query"),
-							errdetail("Cartesian products are currently unsupported")));
+							errmsg(
+								"cannot perform distributed planning on this query"),
+							errdetail(
+								"Cartesian products are currently unsupported")));
 		}
 
 		/*
@@ -3544,7 +3912,8 @@ CheckJoinBetweenColumns(OpExpr *joinClause)
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						errmsg("cannot perform local joins that involve expressions"),
-						errdetail("local joins can be performed between columns only")));
+						errdetail(
+							"local joins can be performed between columns only")));
 	}
 }
 
@@ -3740,7 +4109,8 @@ FragmentIntervalString(ShardInterval *fragmentInterval)
 	maxValueString = OutputFunctionCall(outputFunction, fragmentInterval->maxValue);
 
 	fragmentIntervalString = makeStringInfo();
-	appendStringInfo(fragmentIntervalString, "[%s,%s]", minValueString, maxValueString);
+	appendStringInfo(fragmentIntervalString, "[%s,%s]", minValueString,
+					 maxValueString);
 
 	return fragmentIntervalString;
 }
@@ -3765,7 +4135,8 @@ DataFetchTaskList(uint64 jobId, uint32 taskIdIndex, List *fragmentList)
 			uint64 shardId = shardInterval->shardId;
 			StringInfo shardFetchQueryString = ShardFetchQueryString(shardId);
 
-			Task *shardFetchTask = CreateBasicTask(jobId, taskIdIndex, SHARD_FETCH_TASK,
+			Task *shardFetchTask = CreateBasicTask(jobId, taskIdIndex,
+												   SHARD_FETCH_TASK,
 												   shardFetchQueryString->data);
 			shardFetchTask->shardId = shardId;
 
@@ -3778,7 +4149,8 @@ DataFetchTaskList(uint64 jobId, uint32 taskIdIndex, List *fragmentList)
 			char *undefinedQueryString = NULL;
 
 			/* create merge fetch task and have it depend on the merge task */
-			Task *mergeFetchTask = CreateBasicTask(jobId, taskIdIndex, MERGE_FETCH_TASK,
+			Task *mergeFetchTask = CreateBasicTask(jobId, taskIdIndex,
+												   MERGE_FETCH_TASK,
 												   undefinedQueryString);
 			mergeFetchTask->dependedTaskList = list_make1(mergeTask);
 
@@ -3847,7 +4219,8 @@ ShardFetchQueryString(uint64 shardId)
 			char *qualifiedTableName = quote_qualified_identifier(shardSchemaName,
 																  shardTableName);
 
-			appendStringInfo(shardFetchQuery, FOREIGN_FETCH_COMMAND, qualifiedTableName,
+			appendStringInfo(shardFetchQuery, FOREIGN_FETCH_COMMAND,
+							 qualifiedTableName,
 							 shardLength, nodeNameArrayString->data,
 							 nodePortArrayString->data);
 		}
@@ -3879,7 +4252,8 @@ NodeNameArrayString(List *shardPlacementList)
 
 	foreach(shardPlacementCell, shardPlacementList)
 	{
-		ShardPlacement *shardPlacement = (ShardPlacement *) lfirst(shardPlacementCell);
+		ShardPlacement *shardPlacement = (ShardPlacement *) lfirst(
+			shardPlacementCell);
 		Datum nodeName = CStringGetDatum(shardPlacement->nodeName);
 
 		nodeNameArray[nodeNameIndex] = nodeName;
@@ -3908,7 +4282,8 @@ NodePortArrayString(List *shardPlacementList)
 
 	foreach(shardPlacementCell, shardPlacementList)
 	{
-		ShardPlacement *shardPlacement = (ShardPlacement *) lfirst(shardPlacementCell);
+		ShardPlacement *shardPlacement = (ShardPlacement *) lfirst(
+			shardPlacementCell);
 		Datum nodePort = UInt32GetDatum(shardPlacement->nodePort);
 
 		nodePortArray[nodePortIndex] = nodePort;
@@ -3993,7 +4368,8 @@ BuildRelationShardList(List *rangeTableList, List *fragmentList)
 		CitusRTEKind fragmentType = fragment->fragmentType;
 		if (fragmentType == CITUS_RTE_RELATION)
 		{
-			ShardInterval *shardInterval = (ShardInterval *) fragment->fragmentReference;
+			ShardInterval *shardInterval =
+				(ShardInterval *) fragment->fragmentReference;
 			RelationShard *relationShard = CitusMakeNode(RelationShard);
 
 			relationShard->relationId = rangeTableEntry->relid;
@@ -4170,7 +4546,8 @@ PruneSqlTaskDependencies(List *sqlTaskList)
 			if (dataFetchTask->taskType == SHARD_FETCH_TASK &&
 				dataFetchTask->shardId != sqlTask->anchorShardId)
 			{
-				prunedDependedTaskList = lappend(prunedDependedTaskList, dataFetchTask);
+				prunedDependedTaskList = lappend(prunedDependedTaskList,
+												 dataFetchTask);
 			}
 			else if (dataFetchTask->taskType == MERGE_FETCH_TASK)
 			{
@@ -4221,7 +4598,8 @@ MapTaskList(MapMergeJob *mapMergeJob, List *filterTaskList)
 		List *targetEntryList = filterQuery->targetList;
 		List *groupTargetEntryList = GroupTargetEntryList(groupClauseList,
 														  targetEntryList);
-		TargetEntry *groupByTargetEntry = (TargetEntry *) linitial(groupTargetEntryList);
+		TargetEntry *groupByTargetEntry = (TargetEntry *) linitial(
+			groupTargetEntryList);
 
 		partitionColumnName = groupByTargetEntry->resname;
 	}
@@ -4248,7 +4626,8 @@ MapTaskList(MapMergeJob *mapMergeJob, List *filterTaskList)
 			ShardInterval **intervalArray = mapMergeJob->sortedShardIntervalArray;
 			uint32 intervalCount = mapMergeJob->partitionCount;
 
-			ArrayType *splitPointObject = SplitPointObject(intervalArray, intervalCount);
+			ArrayType *splitPointObject = SplitPointObject(intervalArray,
+														   intervalCount);
 			StringInfo splitPointString = SplitPointArrayString(splitPointObject,
 																partitionColumnType,
 																partitionColumnTypeMod);
@@ -4318,7 +4697,8 @@ ColumnName(Var *column, List *rangeTableList)
  * representations.
  */
 static StringInfo
-SplitPointArrayString(ArrayType *splitPointObject, Oid columnType, int32 columnTypeMod)
+SplitPointArrayString(ArrayType *splitPointObject, Oid columnType, int32
+					  columnTypeMod)
 {
 	StringInfo splitPointArrayString = NULL;
 	Datum splitPointDatum = PointerGetDatum(splitPointObject);
@@ -4394,7 +4774,8 @@ MergeTaskList(MapMergeJob *mapMergeJob, List *mapTaskList, uint32 taskIdIndex)
 	}
 
 	/* build merge tasks and their associated "map output fetch" tasks */
-	for (partitionId = initialPartitionId; partitionId < partitionCount; partitionId++)
+	for (partitionId = initialPartitionId; partitionId < partitionCount;
+		 partitionId++)
 	{
 		Task *mergeTask = NULL;
 		List *mapOutputFetchTaskList = NIL;
@@ -4410,7 +4791,8 @@ MergeTaskList(MapMergeJob *mapMergeJob, List *mapTaskList, uint32 taskIdIndex)
 
 			StringInfo mergeQueryString = makeStringInfo();
 			appendStringInfo(mergeQueryString, MERGE_FILES_INTO_TABLE_COMMAND,
-							 jobId, taskIdIndex, columnNames->data, columnTypes->data);
+							 jobId, taskIdIndex, columnNames->data,
+							 columnTypes->data);
 
 			/* create merge task */
 			mergeTask = CreateBasicTask(jobId, mergeTaskId, MERGE_TASK,
@@ -4427,7 +4809,8 @@ MergeTaskList(MapMergeJob *mapMergeJob, List *mapTaskList, uint32 taskIdIndex)
 			char *escapedIntermediateTableQueryString =
 				quote_literal_cstr(intermediateTableQueryString->data);
 			StringInfo mergeAndRunQueryString = makeStringInfo();
-			appendStringInfo(mergeAndRunQueryString, MERGE_FILES_AND_RUN_QUERY_COMMAND,
+			appendStringInfo(mergeAndRunQueryString,
+							 MERGE_FILES_AND_RUN_QUERY_COMMAND,
 							 jobId, taskIdIndex, escapedMergeTableQueryString,
 							 escapedIntermediateTableQueryString);
 
@@ -4453,7 +4836,8 @@ MergeTaskList(MapMergeJob *mapMergeJob, List *mapTaskList, uint32 taskIdIndex)
 			mapOutputFetchTask->dependedTaskList = list_make1(mapTask);
 			taskIdIndex++;
 
-			mapOutputFetchTaskList = lappend(mapOutputFetchTaskList, mapOutputFetchTask);
+			mapOutputFetchTaskList = lappend(mapOutputFetchTaskList,
+											 mapOutputFetchTask);
 		}
 
 		/* merge task depends on completion of fetch tasks */
@@ -4463,7 +4847,8 @@ MergeTaskList(MapMergeJob *mapMergeJob, List *mapTaskList, uint32 taskIdIndex)
 		if (mapMergeJob->partitionType == RANGE_PARTITION_TYPE)
 		{
 			int32 mergeTaskIntervalId = partitionId - 1;
-			ShardInterval **mergeTaskIntervals = mapMergeJob->sortedShardIntervalArray;
+			ShardInterval **mergeTaskIntervals =
+				mapMergeJob->sortedShardIntervalArray;
 			Assert(mergeTaskIntervalId >= 0);
 
 			mergeTask->shardInterval = mergeTaskIntervals[mergeTaskIntervalId];
@@ -4501,7 +4886,8 @@ ColumnNameArrayString(uint32 columnCount, uint64 generatingJobId)
 		columnNameIndex++;
 	}
 
-	columnNameArrayString = DatumArrayString(columnNameArray, columnCount, CSTRINGOID);
+	columnNameArrayString = DatumArrayString(columnNameArray, columnCount,
+											 CSTRINGOID);
 
 	return columnNameArrayString;
 }
@@ -4535,7 +4921,8 @@ ColumnTypeArrayString(List *targetEntryList)
 		columnTypeIndex++;
 	}
 
-	columnTypeArrayString = DatumArrayString(columnTypeArray, columnCount, CSTRINGOID);
+	columnTypeArrayString = DatumArrayString(columnTypeArray, columnCount,
+											 CSTRINGOID);
 
 	return columnTypeArrayString;
 }
@@ -4940,7 +5327,8 @@ GreedyAssignTaskList(List *taskList)
  * task, it overwrites the corresponding task list pointer.
  */
 static Task *
-GreedyAssignTask(WorkerNode *workerNode, List *taskList, List *activeShardPlacementLists)
+GreedyAssignTask(WorkerNode *workerNode, List *taskList,
+				 List *activeShardPlacementLists)
 {
 	Task *assignedTask = NULL;
 	List *taskPlacementList = NIL;
@@ -5002,8 +5390,10 @@ GreedyAssignTask(WorkerNode *workerNode, List *taskList, List *activeShardPlacem
 		taskPlacementList = LeftRotateList(taskPlacementList, rotatePlacementListBy);
 		assignedTask->taskPlacementList = taskPlacementList;
 
-		primaryPlacement = (ShardPlacement *) linitial(assignedTask->taskPlacementList);
-		ereport(DEBUG3, (errmsg("assigned task %u to node %s:%u", assignedTask->taskId,
+		primaryPlacement = (ShardPlacement *) linitial(
+			assignedTask->taskPlacementList);
+		ereport(DEBUG3, (errmsg("assigned task %u to node %s:%u",
+								assignedTask->taskId,
 								primaryPlacement->nodeName,
 								primaryPlacement->nodePort)));
 	}
@@ -5477,7 +5867,8 @@ MergeTableQueryString(uint32 taskIdIndex, List *targetEntryList)
 		}
 	}
 
-	appendStringInfo(mergeTableQueryString, CREATE_TABLE_COMMAND, mergeTableName->data,
+	appendStringInfo(mergeTableQueryString, CREATE_TABLE_COMMAND,
+					 mergeTableName->data,
 					 columnsString->data);
 
 	return mergeTableQueryString;

@@ -3931,3 +3931,35 @@ OperatorImplementsEquality(Oid opno)
 
 	return equalityOperator;
 }
+
+
+bool
+OperatorImplementsComparison(Oid opno)
+{
+	bool comparisonOperator = false;
+	List *btreeIntepretationList = get_op_btree_interpretation(opno);
+	ListCell *btreeInterpretationCell = NULL;
+	foreach(btreeInterpretationCell, btreeIntepretationList)
+	{
+		OpBtreeInterpretation *btreeIntepretation = (OpBtreeInterpretation *)
+													lfirst(btreeInterpretationCell);
+		switch (btreeIntepretation->strategy)
+		{
+			case BTLessStrategyNumber:
+			case BTLessEqualStrategyNumber:
+			case BTGreaterEqualStrategyNumber:
+			case BTGreaterStrategyNumber:
+			{
+				comparisonOperator = true;
+				break;
+			}
+
+			default:
+			{
+				break;
+			}
+		}
+	}
+
+	return comparisonOperator;
+}
