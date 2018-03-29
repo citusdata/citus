@@ -2618,7 +2618,6 @@ FROM (
 ) AS ftop
 LIMIT 5;
 ERROR:  value too long for type character(1)
-DETAIL:  (null)
 SELECT * FROM coerce_agg;
  user_id | value_1_agg 
 ---------+-------------
@@ -2637,7 +2636,6 @@ FROM (
 ) AS ftop
 LIMIT 5;
 ERROR:  value too long for type character(1)
-DETAIL:  (null)
 -- char(1) -> char(5)
 ALTER TABLE coerce_events ALTER COLUMN value_1 TYPE char(1) USING value_1::char(1);
 ALTER TABLE coerce_agg ALTER COLUMN value_1_agg TYPE char(5);
