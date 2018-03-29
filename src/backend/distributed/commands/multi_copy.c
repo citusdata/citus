@@ -1234,6 +1234,11 @@ ReportCopyError(MultiConnection *connection, PGresult *result)
 		/* probably a constraint violation, show remote message and detail */
 		char *remoteDetail = PQresultErrorField(result, PG_DIAG_MESSAGE_DETAIL);
 
+		if (remoteDetail == NULL)
+		{
+			remoteDetail = "(null)";
+		}
+
 		ereport(ERROR, (errmsg("%s", remoteMessage),
 						errdetail("%s", remoteDetail)));
 	}
