@@ -240,10 +240,7 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_ddl_table_1
 
 -- Show that DDL commands are done within a two-phase commit transaction
 \c - - - :master_port
-SET client_min_messages TO debug2;
 CREATE INDEX ddl_test_index ON mx_ddl_table(value);
-DEBUG:  building index "ddl_test_index" on table "mx_ddl_table"
-RESET client_min_messages;
 DROP INDEX ddl_test_index;
 -- show that sequences owned by mx tables result in unique values
 SET citus.shard_replication_factor TO 1;

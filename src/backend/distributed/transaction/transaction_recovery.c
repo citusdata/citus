@@ -32,6 +32,7 @@
 #include "distributed/remote_commands.h"
 #include "distributed/transaction_recovery.h"
 #include "distributed/worker_manager.h"
+#include "distributed/version_compat.h"
 #include "lib/stringinfo.h"
 #include "storage/lmgr.h"
 #include "storage/lock.h"
@@ -176,11 +177,12 @@ RecoverWorkerTransactions(WorkerNode *workerNode)
 		return 0;
 	}
 
-	localContext = AllocSetContextCreate(CurrentMemoryContext,
-										 "RecoverWorkerTransactions",
-										 ALLOCSET_DEFAULT_MINSIZE,
-										 ALLOCSET_DEFAULT_INITSIZE,
-										 ALLOCSET_DEFAULT_MAXSIZE);
+	localContext = AllocSetContextCreateExtended(CurrentMemoryContext,
+												 "RecoverWorkerTransactions",
+												 ALLOCSET_DEFAULT_MINSIZE,
+												 ALLOCSET_DEFAULT_INITSIZE,
+												 ALLOCSET_DEFAULT_MAXSIZE);
+
 	oldContext = MemoryContextSwitchTo(localContext);
 
 	/* take table lock first to avoid running concurrently */

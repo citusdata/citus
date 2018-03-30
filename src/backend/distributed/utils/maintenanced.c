@@ -35,6 +35,7 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/statistics_collection.h"
 #include "distributed/transaction_recovery.h"
+#include "distributed/version_compat.h"
 #include "nodes/makefuncs.h"
 #include "postmaster/bgworker.h"
 #include "nodes/makefuncs.h"
@@ -276,7 +277,7 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 		 databaseOid, myDbData->userOid);
 
 	/* connect to database, after that we can actually access catalogs */
-	BackgroundWorkerInitializeConnectionByOid(databaseOid, myDbData->userOid);
+	BackgroundWorkerInitializeConnectionByOid(databaseOid, myDbData->userOid, 0);
 
 	/* make worker recognizable in pg_stat_activity */
 	pgstat_report_appname("Citus Maintenance Daemon");

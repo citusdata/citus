@@ -128,9 +128,10 @@ static Node * WorkerProcessAlterTableStmt(AlterTableStmt *alterTableStatement,
 static List * PlanAlterObjectSchemaStmt(AlterObjectSchemaStmt *alterObjectSchemaStmt,
 										const char *alterObjectSchemaCommand);
 static void ProcessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand);
-static bool IsSupportedDistributedVacuumStmt(Oid relationId, VacuumStmt *vacuumStmt);
-static List * VacuumTaskList(Oid relationId, VacuumStmt *vacuumStmt);
-static StringInfo DeparseVacuumStmtPrefix(VacuumStmt *vacuumStmt);
+static bool IsSupportedDistributedVacuumStmt(VacuumStmt *vacuumStmt,
+											 List *vacuumRelationIdList);
+static List * VacuumTaskList(Oid relationId, int vacuumOptions, List *vacuumColumnList);
+static StringInfo DeparseVacuumStmtPrefix(int vacuumFlags);
 static char * DeparseVacuumColumnNames(List *columnNameList);
 
 
@@ -1162,8 +1163,7 @@ PlanDropIndexStmt(DropStmt *dropIndexStatement, const char *dropIndexCommand)
 		Oid relationId = InvalidOid;
 		bool isDistributedRelation = false;
 		struct DropRelationCallbackState state;
-		bool missingOK = true;
-		bool noWait = false;
+		uint32 rvrFlags = RVR_MISSING_OK;
 		LOCKMODE lockmode = AccessExclusiveLock;
 
 		List *objectNameList = (List *) lfirst(dropObjectCell);
@@ -1188,8 +1188,9 @@ PlanDropIndexStmt(DropStmt *dropIndexStatement, const char *dropIndexCommand)
 		state.relkind = RELKIND_INDEX;
 		state.heapOid = InvalidOid;
 		state.concurrent = dropIndexStatement->concurrent;
-		indexId = RangeVarGetRelidExtended(rangeVar, lockmode, missingOK,
-										   noWait, RangeVarCallbackForDropIndex,
+
+		indexId = RangeVarGetRelidInternal(rangeVar, lockmode, rvrFlags,
+										   RangeVarCallbackForDropIndex,
 										   (void *) &state);
 
 		/*
@@ -1568,17 +1569,15 @@ PlanAlterObjectSchemaStmt(AlterObjectSchemaStmt *alterObjectSchemaStmt,
 						  const char *alterObjectSchemaCommand)
 {
 	Oid relationId = InvalidOid;
-	bool noWait = false;
 
 	if (alterObjectSchemaStmt->relation == NULL)
 	{
 		return NIL;
 	}
 
-	relationId = RangeVarGetRelidExtended(alterObjectSchemaStmt->relation,
-										  AccessExclusiveLock,
-										  alterObjectSchemaStmt->missing_ok,
-										  noWait, NULL, NULL);
+	relationId = RangeVarGetRelid(alterObjectSchemaStmt->relation,
+								  AccessExclusiveLock,
+								  alterObjectSchemaStmt->missing_ok);
 
 	/* first check whether a distributed relation is affected */
 	if (!OidIsValid(relationId) || !IsDistributedTable(relationId))
@@ -1609,73 +1608,107 @@ PlanAlterObjectSchemaStmt(AlterObjectSchemaStmt *alterObjectSchemaStmt,
 static void
 ProcessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand)
 {
-	Oid relationId = InvalidOid;
-	List *taskList = NIL;
+	int relationIndex = 0;
 	bool supportedVacuumStmt = false;
+	List *vacuumRelationList = ExtractVacuumTargetRels(vacuumStmt);
+	ListCell *vacuumRelationCell = NULL;
+	List *relationIdList = NIL;
+	ListCell *relationIdCell = NULL;
+	LOCKMODE lockMode = (vacuumStmt->options & VACOPT_FULL) ? AccessExclusiveLock :
+						ShareUpdateExclusiveLock;
+	int executedVacuumCount = 0;
 
-	if (vacuumStmt->relation != NULL)
+	foreach(vacuumRelationCell, vacuumRelationList)
 	{
-		LOCKMODE lockMode = (vacuumStmt->options & VACOPT_FULL) ?
-							AccessExclusiveLock : ShareUpdateExclusiveLock;
-
-		relationId = RangeVarGetRelid(vacuumStmt->relation, lockMode, false);
-
-		if (relationId == InvalidOid)
-		{
-			return;
-		}
+		RangeVar *vacuumRelation = (RangeVar *) lfirst(vacuumRelationCell);
+		Oid relationId = RangeVarGetRelid(vacuumRelation, lockMode, false);
+		relationIdList = lappend_oid(relationIdList, relationId);
 	}
 
-	supportedVacuumStmt = IsSupportedDistributedVacuumStmt(relationId, vacuumStmt);
+	supportedVacuumStmt = IsSupportedDistributedVacuumStmt(vacuumStmt, relationIdList);
 	if (!supportedVacuumStmt)
 	{
 		return;
 	}
 
-	taskList = VacuumTaskList(relationId, vacuumStmt);
-
-	/*
-	 * VACUUM commands cannot run inside a transaction block, so we use
-	 * the "bare" commit protocol without BEGIN/COMMIT. However, ANALYZE
-	 * commands can run inside a transaction block.
-	 */
-	if ((vacuumStmt->options & VACOPT_VACUUM) != 0)
+	/* execute vacuum on distributed tables */
+	foreach(relationIdCell, relationIdList)
 	{
-		/* save old commit protocol to restore at xact end */
-		Assert(SavedMultiShardCommitProtocol == COMMIT_PROTOCOL_BARE);
-		SavedMultiShardCommitProtocol = MultiShardCommitProtocol;
-		MultiShardCommitProtocol = COMMIT_PROTOCOL_BARE;
-	}
+		Oid relationId = lfirst_oid(relationIdCell);
+		if (IsDistributedTable(relationId))
+		{
+			List *vacuumColumnList = NIL;
+			List *taskList = NIL;
 
-	ExecuteModifyTasksWithoutResults(taskList);
+			/*
+			 * VACUUM commands cannot run inside a transaction block, so we use
+			 * the "bare" commit protocol without BEGIN/COMMIT. However, ANALYZE
+			 * commands can run inside a transaction block. Notice that we do this
+			 * once even if there are multiple distributed tables to be vacuumed.
+			 */
+			if (executedVacuumCount == 0 && (vacuumStmt->options & VACOPT_VACUUM) != 0)
+			{
+				/* save old commit protocol to restore at xact end */
+				Assert(SavedMultiShardCommitProtocol == COMMIT_PROTOCOL_BARE);
+				SavedMultiShardCommitProtocol = MultiShardCommitProtocol;
+				MultiShardCommitProtocol = COMMIT_PROTOCOL_BARE;
+			}
+
+			vacuumColumnList = VacuumColumnList(vacuumStmt, relationIndex);
+			taskList = VacuumTaskList(relationId, vacuumStmt->options, vacuumColumnList);
+
+			ExecuteModifyTasksWithoutResults(taskList);
+
+			executedVacuumCount++;
+		}
+		relationIndex++;
+	}
 }
 
 
 /*
  * IsSupportedDistributedVacuumStmt returns whether distributed execution of a
- * given VacuumStmt is supported. The provided relationId (if valid) represents
- * the table targeted by the provided statement.
+ * given VacuumStmt is supported. The provided relationId list represents
+ * the list of tables targeted by the provided statement.
  *
  * Returns true if the statement requires distributed execution and returns
  * false otherwise; however, this function will raise errors if the provided
  * statement needs distributed execution but contains unsupported options.
  */
 static bool
-IsSupportedDistributedVacuumStmt(Oid relationId, VacuumStmt *vacuumStmt)
+IsSupportedDistributedVacuumStmt(VacuumStmt *vacuumStmt, List *vacuumRelationIdList)
 {
 	const char *stmtName = (vacuumStmt->options & VACOPT_VACUUM) ? "VACUUM" : "ANALYZE";
 	bool distributeStmt = false;
+	ListCell *relationIdCell = NULL;
+	int distributedRelationCount = 0;
+	int vacuumedRelationCount = 0;
 
-	if (vacuumStmt->relation == NULL)
+	/*
+	 * No table in the vacuum statement means vacuuming all relations
+	 * which is not supported by citus.
+	 */
+	vacuumedRelationCount = list_length(vacuumRelationIdList);
+	if (vacuumedRelationCount == 0)
 	{
 		/* WARN for unqualified VACUUM commands */
 		ereport(WARNING, (errmsg("not propagating %s command to worker nodes", stmtName),
 						  errhint("Provide a specific table in order to %s "
 								  "distributed tables.", stmtName)));
 	}
-	else if (!OidIsValid(relationId) || !IsDistributedTable(relationId))
+
+	foreach(relationIdCell, vacuumRelationIdList)
 	{
-		/* Nothing to do here; relation no longer exists or is not distributed */
+		Oid relationId = lfirst_oid(relationIdCell);
+		if (OidIsValid(relationId) && IsDistributedTable(relationId))
+		{
+			distributedRelationCount++;
+		}
+	}
+
+	if (distributedRelationCount == 0)
+	{
+		/* nothing to do here */
 	}
 	else if (!EnableDDLPropagation)
 	{
@@ -1705,19 +1738,21 @@ IsSupportedDistributedVacuumStmt(Oid relationId, VacuumStmt *vacuumStmt)
  * a VacuumStmt which targets a distributed relation.
  */
 static List *
-VacuumTaskList(Oid relationId, VacuumStmt *vacuumStmt)
+VacuumTaskList(Oid relationId, int vacuumOptions, List *vacuumColumnList)
 {
 	List *taskList = NIL;
 	List *shardIntervalList = NIL;
 	ListCell *shardIntervalCell = NULL;
 	uint64 jobId = INVALID_JOB_ID;
 	int taskId = 1;
-	StringInfo vacuumString = DeparseVacuumStmtPrefix(vacuumStmt);
-	const char *columnNames = DeparseVacuumColumnNames(vacuumStmt->va_cols);
+	StringInfo vacuumString = DeparseVacuumStmtPrefix(vacuumOptions);
+	const char *columnNames = NULL;
 	const int vacuumPrefixLen = vacuumString->len;
 	Oid schemaId = get_rel_namespace(relationId);
 	char *schemaName = get_namespace_name(schemaId);
 	char *tableName = get_rel_name(relationId);
+
+	columnNames = DeparseVacuumColumnNames(vacuumColumnList);
 
 	/*
 	 * We obtain ShareUpdateExclusiveLock here to not conflict with INSERT's
@@ -1770,10 +1805,9 @@ VacuumTaskList(Oid relationId, VacuumStmt *vacuumStmt)
  * statements.
  */
 static StringInfo
-DeparseVacuumStmtPrefix(VacuumStmt *vacuumStmt)
+DeparseVacuumStmtPrefix(int vacuumFlags)
 {
 	StringInfo vacuumPrefix = makeStringInfo();
-	int vacuumFlags = vacuumStmt->options;
 	const int unsupportedFlags PG_USED_FOR_ASSERTS_ONLY = ~(
 		VACOPT_ANALYZE |
 		VACOPT_DISABLE_PAGE_SKIPPING |
@@ -2433,7 +2467,7 @@ ErrorIfUnsupportedConstraint(Relation relation, char distributionMethod,
 		}
 
 		attributeCount = indexInfo->ii_NumIndexAttrs;
-		attributeNumberArray = indexInfo->ii_KeyAttrNumbers;
+		attributeNumberArray = IndexInfoAttributeNumberArray(indexInfo);
 
 		for (attributeIndex = 0; attributeIndex < attributeCount; attributeIndex++)
 		{
@@ -3390,8 +3424,9 @@ RangeVarCallbackForDropIndex(const RangeVar *rel, Oid relOid, Oid oldRelOid, voi
 	/* Allow DROP to either table owner or schema owner */
 	if (!pg_class_ownercheck(relOid, GetUserId()) &&
 		!pg_namespace_ownercheck(classform->relnamespace, GetUserId()))
-		aclcheck_error(ACLCHECK_NOT_OWNER, ACL_KIND_CLASS,
-					   rel->relname);
+	{
+		aclcheck_error(ACLCHECK_NOT_OWNER, ACLCHECK_OBJECT_INDEX, rel->relname);
+	}
 
 	if (!allowSystemTableMods && IsSystemClass(relOid, classform))
 		ereport(ERROR,
@@ -3657,7 +3692,7 @@ PlanGrantStmt(GrantStmt *grantStmt)
 	 * grants aren't interesting anyway.
 	 */
 	if (grantStmt->targtype != ACL_TARGET_OBJECT ||
-		grantStmt->objtype != ACL_OBJECT_RELATION)
+		grantStmt->objtype != RELATION_OBJECT_TYPE)
 	{
 		return NIL;
 	}

@@ -99,7 +99,8 @@ test: multi_large_table_join_planning multi_large_table_pruning multi_large_tabl
 # ---------
 
 test: with_nested with_where with_basics with_prepare with_set_operations
-test: with_modifying with_executors with_join with_partitioning
+test: with_modifying
+test: with_executors with_join with_partitioning
 
 # ----------
 # Tests to check our large record loading and shard deletion behavior

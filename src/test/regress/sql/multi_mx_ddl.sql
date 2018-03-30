@@ -91,11 +91,7 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_ddl_table_1
 -- Show that DDL commands are done within a two-phase commit transaction
 \c - - - :master_port
 
-SET client_min_messages TO debug2;
-
 CREATE INDEX ddl_test_index ON mx_ddl_table(value);
-
-RESET client_min_messages;
 
 DROP INDEX ddl_test_index;
 

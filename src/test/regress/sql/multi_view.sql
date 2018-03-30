@@ -7,6 +7,10 @@
 -- router queries, single row inserts, multi row inserts via insert
 -- into select, multi row insert via copy commands.
 
+-- print whether we're using version > 10 to make version-specific tests clear
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int > 10 AS version_above_ten;
+
 SELECT count(*) FROM lineitem_hash_part;
 
 SELECT count(*) FROM orders_hash_part;

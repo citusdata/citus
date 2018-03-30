@@ -6,9 +6,9 @@ SET citus.next_shard_id TO 650000;
 SET citus.explain_distributed_queries TO off;
 SET citus.log_multi_join_order TO TRUE;
 SET citus.task_executor_type = 'task-tracker'; -- can't explain all queries otherwise
-SET client_min_messages TO DEBUG2;
 SET citus.shard_count to 2;
 SET citus.shard_replication_factor to 1;
+RESET client_min_messages;
 -- Create new table definitions for use in testing in distributed planning and
 -- execution functionality. Also create indexes to boost performance.
 CREATE TABLE lineitem_hash (
@@ -29,8 +29,6 @@ CREATE TABLE lineitem_hash (
 	l_shipmode char(10) not null,
 	l_comment varchar(44) not null,
 	PRIMARY KEY(l_orderkey, l_linenumber) );
-DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "lineitem_hash_pkey" for table "lineitem_hash"
-DEBUG:  building index "lineitem_hash_pkey" on table "lineitem_hash"
 SELECT create_distributed_table('lineitem_hash', 'l_orderkey');
  create_distributed_table 
 --------------------------
@@ -38,7 +36,6 @@ SELECT create_distributed_table('lineitem_hash', 'l_orderkey');
 (1 row)
 
 CREATE INDEX lineitem_hash_time_index ON lineitem_hash (l_shipdate);
-DEBUG:  building index "lineitem_hash_time_index" on table "lineitem_hash"
 CREATE TABLE orders_hash (
 	o_orderkey bigint not null,
 	o_custkey integer not null,
@@ -50,8 +47,6 @@ CREATE TABLE orders_hash (
 	o_shippriority integer not null,
 	o_comment varchar(79) not null,
 	PRIMARY KEY(o_orderkey) );
-DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "orders_hash_pkey" for table "orders_hash"
-DEBUG:  building index "orders_hash_pkey" on table "orders_hash"
 SELECT create_distributed_table('orders_hash', 'o_orderkey');
  create_distributed_table 
 --------------------------
@@ -73,6 +68,7 @@ SELECT create_distributed_table('customer_hash', 'c_custkey');
  
 (1 row)
 
+SET client_min_messages TO DEBUG2;
 -- The following query checks that we can correctly handle self-joins
 EXPLAIN SELECT l1.l_quantity FROM lineitem l1, lineitem l2
 	WHERE l1.l_orderkey = l2.l_orderkey AND l1.l_quantity > 5;

@@ -18,6 +18,7 @@
 #include "access/htup_details.h"
 #include "distributed/distribution_column.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/version_compat.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodes.h"
 #include "nodes/primnodes.h"
@@ -205,7 +206,7 @@ ColumnNameToColumn(Oid relationId, char *columnNodeString)
 							   columnNumber, relationName)));
 	}
 
-	columnName = get_attname(relationId, column->varattno);
+	columnName = get_attname_internal(relationId, column->varattno, false);
 	if (columnName == NULL)
 	{
 		char *relationName = get_rel_name(relationId);

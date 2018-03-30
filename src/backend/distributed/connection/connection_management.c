@@ -25,6 +25,7 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/hash_helpers.h"
 #include "distributed/placement_connection.h"
+#include "distributed/version_compat.h"
 #include "mb/pg_wchar.h"
 #include "utils/hsearch.h"
 #include "utils/memutils.h"
@@ -58,10 +59,11 @@ InitializeConnectionManagement(void)
 	 * management. Doing so, instead of allocating in TopMemoryContext, makes
 	 * it easier to associate used memory.
 	 */
-	ConnectionContext = AllocSetContextCreate(TopMemoryContext, "Connection Context",
-											  ALLOCSET_DEFAULT_MINSIZE,
-											  ALLOCSET_DEFAULT_INITSIZE,
-											  ALLOCSET_DEFAULT_MAXSIZE);
+	ConnectionContext = AllocSetContextCreateExtended(TopMemoryContext,
+													  "Connection Context",
+													  ALLOCSET_DEFAULT_MINSIZE,
+													  ALLOCSET_DEFAULT_INITSIZE,
+													  ALLOCSET_DEFAULT_MAXSIZE);
 
 	/* create (host,port,user,database) -> [connection] hash */
 	memset(&info, 0, sizeof(info));

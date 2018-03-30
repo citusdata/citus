@@ -1142,6 +1142,7 @@ CreateCoordinatorInsertSelectPlan(Query *parse)
 
 		/* copy CTEs from the INSERT ... SELECT statement into outer SELECT */
 		selectQuery->cteList = copyObject(insertSelectQuery->cteList);
+		selectQuery->hasModifyingCTE = insertSelectQuery->hasModifyingCTE;
 	}
 	else if (selectQuery->setOperations != NULL)
 	{

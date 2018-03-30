@@ -684,8 +684,7 @@ DEBUG:  Plan 69 query after replacing subqueries and CTEs: SELECT count(*) AS co
     10
 (1 row)
 
-DROP TABLE local_table;
-DEBUG:  EventTriggerInvoke 19977
 SET client_min_messages TO DEFAULT;
+DROP TABLE local_table;
 DROP SCHEMA subquery_in_where CASCADE;
 SET search_path TO public;

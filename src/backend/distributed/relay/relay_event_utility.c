@@ -31,6 +31,7 @@
 #include "catalog/pg_constraint.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/relay_utility.h"
+#include "distributed/version_compat.h"
 #include "lib/stringinfo.h"
 #include "mb/pg_wchar.h"
 #include "nodes/nodes.h"
@@ -289,9 +290,8 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 		case T_GrantStmt:
 		{
 			GrantStmt *grantStmt = (GrantStmt *) parseTree;
-
 			if (grantStmt->targtype == ACL_TARGET_OBJECT &&
-				grantStmt->objtype == ACL_OBJECT_RELATION)
+				grantStmt->objtype == RELATION_OBJECT_TYPE)
 			{
 				ListCell *lc;
 

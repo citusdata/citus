@@ -47,6 +47,7 @@
 #include "distributed/task_tracker.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_protocol.h"
+#include "distributed/version_compat.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
 #include "optimizer/clauses.h"
@@ -4234,7 +4235,7 @@ ColumnName(Var *column, List *rangeTableList)
 	else if (rangeTableKind == CITUS_RTE_RELATION)
 	{
 		Oid relationId = rangeTableEntry->relid;
-		columnName = get_attname(relationId, columnNumber);
+		columnName = get_attname_internal(relationId, columnNumber, false);
 	}
 
 	Assert(columnName != NULL);

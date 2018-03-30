@@ -509,9 +509,8 @@ IN
 	FROM
 		local_table);
 
-DROP TABLE local_table;
-
 SET client_min_messages TO DEFAULT;
 
+DROP TABLE local_table;
 DROP SCHEMA subquery_in_where CASCADE;
 SET search_path TO public;

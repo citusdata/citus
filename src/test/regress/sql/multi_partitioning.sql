@@ -6,6 +6,10 @@ SET citus.next_shard_id TO 1660000;
 SET citus.shard_count TO 4;
 SET citus.shard_replication_factor TO 1;
 
+-- print major version number for version-specific tests
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int AS server_version;
+
 --
 -- Distributed Partitioned Table Creation Tests
 --
@@ -257,6 +261,7 @@ SELECT master_modify_multiple_shards('UPDATE partitioning_test_2009 SET time = t
 
 -- test CREATE INDEX
 -- CREATE INDEX on partitioned table - this will error out
+-- on earlier versions of postgres earlier than 11.
 CREATE INDEX partitioning_index ON partitioning_test(id);
 
 -- CREATE INDEX on partition

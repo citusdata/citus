@@ -43,6 +43,7 @@ typedef struct utsname
 #include "distributed/shardinterval_utils.h"
 #include "distributed/statistics_collection.h"
 #include "distributed/worker_manager.h"
+#include "distributed/version_compat.h"
 #include "lib/stringinfo.h"
 #include "utils/builtins.h"
 #include "utils/json.h"
@@ -249,7 +250,7 @@ CheckForUpdatesCallback(char *contents, size_t size, size_t count, void *userDat
 	{
 		Datum responseCStringDatum = CStringGetDatum(responseNullTerminated->data);
 		Datum responseJasonbDatum = DirectFunctionCall1(jsonb_in, responseCStringDatum);
-		responseJsonb = DatumGetJsonb(responseJasonbDatum);
+		responseJsonb = DatumGetJsonbP(responseJasonbDatum);
 		ReleaseCurrentSubTransaction();
 	}
 	PG_CATCH();

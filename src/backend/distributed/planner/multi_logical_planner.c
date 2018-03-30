@@ -29,6 +29,7 @@
 #include "distributed/relation_restriction_equivalence.h"
 #include "distributed/multi_router_planner.h"
 #include "distributed/worker_protocol.h"
+#include "distributed/version_compat.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
 #include "nodes/relation.h"
@@ -2706,7 +2707,8 @@ ExtractFromExpressionWalker(Node *node, QualifierWalkerContext *walkerContext)
 			{
 				/* this part of code only run for subqueries */
 				Node *joinClause = eval_const_expressions(NULL, joinQualifiersNode);
-				joinClause = (Node *) canonicalize_qual((Expr *) joinClause);
+				joinClause = (Node *) canonicalize_qual_compat((Expr *) joinClause,
+															   false);
 				joinQualifierList = make_ands_implicit((Expr *) joinClause);
 			}
 		}
@@ -2739,7 +2741,8 @@ ExtractFromExpressionWalker(Node *node, QualifierWalkerContext *walkerContext)
 			{
 				/* this part of code only run for subqueries */
 				Node *fromClause = eval_const_expressions(NULL, fromQualifiersNode);
-				fromClause = (Node *) canonicalize_qual((Expr *) fromClause);
+				fromClause = (Node *) canonicalize_qual_compat((Expr *) fromClause,
+															   false);
 				fromQualifierList = make_ands_implicit((Expr *) fromClause);
 			}
 

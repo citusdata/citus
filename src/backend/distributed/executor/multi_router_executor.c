@@ -46,6 +46,7 @@
 #include "distributed/remote_commands.h"
 #include "distributed/remote_transaction.h"
 #include "distributed/resource_lock.h"
+#include "distributed/version_compat.h"
 #include "executor/execdesc.h"
 #include "executor/executor.h"
 #include "executor/instrument.h"
@@ -1260,6 +1261,9 @@ SendQueryInSingleRowMode(MultiConnection *connection, char *query,
 		Oid *parameterTypes = NULL;
 		const char **parameterValues = NULL;
 
+		/* force evaluation of bound params */
+		paramListInfo = copyParamList(paramListInfo);
+
 		ExtractParametersFromParamListInfo(paramListInfo, &parameterTypes,
 										   &parameterValues);
 
@@ -1381,11 +1385,12 @@ StoreQueryResult(CitusScanState *scanState, MultiConnection *connection,
 	bool randomAccess = true;
 	bool interTransactions = false;
 	bool commandFailed = false;
-	MemoryContext ioContext = AllocSetContextCreate(CurrentMemoryContext,
-													"StoreQueryResult",
-													ALLOCSET_DEFAULT_MINSIZE,
-													ALLOCSET_DEFAULT_INITSIZE,
-													ALLOCSET_DEFAULT_MAXSIZE);
+	MemoryContext ioContext = AllocSetContextCreateExtended(CurrentMemoryContext,
+															"StoreQueryResult",
+															ALLOCSET_DEFAULT_MINSIZE,
+															ALLOCSET_DEFAULT_INITSIZE,
+															ALLOCSET_DEFAULT_MAXSIZE);
+
 	*rows = 0;
 
 	if (scanState->tuplestorestate == NULL)

@@ -9,7 +9,7 @@ SHOW server_version \gset
 SELECT substring(:'server_version', '\d+')::int AS server_version;
  server_version 
 ----------------
-             11
+              9
 (1 row)
 
 --
@@ -18,34 +18,46 @@ SELECT substring(:'server_version', '\d+')::int AS server_version;
 -- 1-) Distributing partitioned table
 -- create partitioned table
 CREATE TABLE partitioning_test(id int, time date) PARTITION BY RANGE (time);
+ERROR:  syntax error at or near "PARTITION"
+LINE 1: CREATE TABLE partitioning_test(id int, time date) PARTITION ...
+                                                          ^
  
 -- create its partitions
 CREATE TABLE partitioning_test_2009 PARTITION OF partitioning_test FOR VALUES FROM ('2009-01-01') TO ('2010-01-01');
+ERROR:  syntax error at or near "PARTITION"
+LINE 1: CREATE TABLE partitioning_test_2009 PARTITION OF partitionin...
+                                            ^
 CREATE TABLE partitioning_test_2010 PARTITION OF partitioning_test FOR VALUES FROM ('2010-01-01') TO ('2011-01-01');
+ERROR:  syntax error at or near "PARTITION"
+LINE 1: CREATE TABLE partitioning_test_2010 PARTITION OF partitionin...
+                                            ^
 -- load some data and distribute tables
 INSERT INTO partitioning_test VALUES (1, '2009-06-06');
+ERROR:  relation "partitioning_test" does not exist
+LINE 1: INSERT INTO partitioning_test VALUES (1, '2009-06-06');
+                    ^
 INSERT INTO partitioning_test VALUES (2, '2010-07-07');
+ERROR:  relation "partitioning_test" does not exist
+LINE 1: INSERT INTO partitioning_test VALUES (2, '2010-07-07');
+                    ^
 INSERT INTO partitioning_test_2009 VALUES (3, '2009-09-09');
+ERROR:  relation "partitioning_test_2009" does not exist
+LINE 1: INSERT INTO partitioning_test_2009 VALUES (3, '2009-09-09');
+                    ^
 INSERT INTO partitioning_test_2010 VALUES (4, '2010-03-03');
+ERROR:  relation "partitioning_test_2010" does not exist
+LINE 1: INSERT INTO partitioning_test_2010 VALUES (4, '2010-03-03');
+                    ^
 -- distribute partitioned table
 SELECT create_distributed_table('partitioning_test', 'id');
-NOTICE:  Copying data from local table...
-NOTICE:  Copying data from local table...
- create_distributed_table 
---------------------------
- 
-(1 row)
-
+ERROR:  relation "partitioning_test" does not exist
+LINE 1: SELECT create_distributed_table('partitioning_test', 'id');
+                                        ^
 -- see the data is loaded to shards
 SELECT * FROM partitioning_test ORDER BY 1;
- id |    time    
-----+------------
-  1 | 06-06-2009
-  2 | 07-07-2010
-  3 | 09-09-2009
-  4 | 03-03-2010
-(4 rows)
-
+ERROR:  relation "partitioning_test" does not exist
+LINE 1: SELECT * FROM partitioning_test ORDER BY 1;
+                      ^
 -- see partitioned table and its partitions are distributed
 SELECT 
 	logicalrelid 
@@ -54,13 +66,9 @@ FROM
 WHERE 
 	logicalrelid IN ('partitioning_test', 'partitioning_test_2009', 'partitioning_test_2010')
 ORDER BY 1;
-      logicalrelid      
-------------------------
- partitioning_test
- partitioning_test_2009
- partitioning_test_2010
-(3 rows)
-
+ERROR:  relation "partitioning_test" does not exist
+LINE 6:  logicalrelid IN ('partitioning_test', 'partitioning_test_20...
+                          ^
 SELECT 
 	logicalrelid, count(*) 
 FROM pg_dist_shard 
@@ -69,15 +77,14 @@ GROUP BY
 	logicalrelid
 ORDER BY
 	1,2;
-      logicalrelid      | count 
-------------------------+-------
- partitioning_test      |     4
- partitioning_test_2009 |     4
- partitioning_test_2010 |     4
-(3 rows)
-
+ERROR:  relation "partitioning_test" does not exist
+LINE 4:  WHERE logicalrelid IN ('partitioning_test', 'partitioning_t...
+                                ^
 -- 2-) Creating partition of a distributed table
 CREATE TABLE partitioning_test_2011 PARTITION OF partitioning_test FOR VALUES FROM ('2011-01-01') TO ('2012-01-01');
+ERROR:  syntax error at or near "PARTITION"
+LINE 1: CREATE TABLE partitioning_test_2011 PARTITION OF partitionin...
+                                            ^
 -- new partition is automatically distributed as well
 SELECT 
 	logicalrelid 
@@ -86,12 +93,9 @@ FROM
 WHERE 
 	logicalrelid IN ('partitioning_test', 'partitioning_test_2011')
 ORDER BY 1;
-      logicalrelid      
-------------------------
- partitioning_test
- partitioning_test_2011
-(2 rows)
-
+ERROR:  relation "partitioning_test" does not exist
+LINE 6:  logicalrelid IN ('partitioning_test', 'partitioning_test_20...
+                          ^
 SELECT 
 	logicalrelid, count(*) 
 FROM pg_dist_shard 
@@ -100,19 +104,18 @@ GROUP BY
 	logicalrelid
 ORDER BY
 	1,2;
-      logicalrelid      | count 
-------------------------+-------
- partitioning_test      |     4
- partitioning_test_2011 |     4
-(2 rows)
-
+ERROR:  relation "partitioning_test" does not exist
+LINE 4:  WHERE logicalrelid IN ('partitioning_test', 'partitioning_t...
+                                ^
 -- 3-) Attaching non distributed table to a distributed table
 CREATE TABLE partitioning_test_2012(id int, time date);
 -- load some data
 INSERT INTO partitioning_test_2012 VALUES (5, '2012-06-06');
 INSERT INTO partitioning_test_2012 VALUES (6, '2012-07-07');
 ALTER TABLE partitioning_test ATTACH PARTITION partitioning_test_2012 FOR VALUES FROM ('2012-01-01') TO ('2013-01-01');
-NOTICE:  Copying data from local table...
+ERROR:  syntax error at or near "ATTACH"
+LINE 1: ALTER TABLE partitioning_test ATTACH PARTITION partitioning_...
+                                      ^
 -- attached partition is distributed as well
 SELECT 
 	logicalrelid 
@@ -121,12 +124,9 @@ FROM
 WHERE 
 	logicalrelid IN ('partitioning_test', 'partitioning_test_2012')
 ORDER BY 1;
-      logicalrelid      
-------------------------
- partitioning_test
- partitioning_test_2012
-(2 rows)
-
+ERROR:  relation "partitioning_test" does not exist
+LINE 6:  logicalrelid IN ('partitioning_test', 'partitioning_test_20...
+                          ^
 SELECT 
 	logicalrelid, count(*) 
 FROM pg_dist_shard 
@@ -135,24 +135,14 @@ GROUP BY
 	logicalrelid
 ORDER BY
 	1,2;
-      logicalrelid      | count 
-------------------------+-------
- partitioning_test      |     4
- partitioning_test_2012 |     4
-(2 rows)
-
+ERROR:  relation "partitioning_test" does not exist
+LINE 4:  WHERE logicalrelid IN ('partitioning_test', 'partitioning_t...
+                                ^
 -- see the data is loaded to shards
 SELECT * FROM partitioning_test ORDER BY 1;
- id |    time    
-----+------------
-  1 | 06-06-2009
-  2 | 07-07-2010
-  3 | 09-09-2009
-  4 | 03-03-2010
-  5 | 06-06-2012
-  6 | 07-07-2012
-(6 rows)
-
+ERROR:  relation "partitioning_test" does not exist
+LINE 1: SELECT * FROM partitioning_test ORDER BY 1;
+                      ^
 -- 4-) Attaching distributed table to distributed table
 CREATE TABLE partitioning_test_2013(id int, time date);
 SELECT create_distributed_table('partitioning_test_2013', 'id');
@@ -165,42 +155,51 @@ SELECT create_distributed_table('partitioning_test_2013', 'id');
 INSERT INTO partitioning_test_2013 VALUES (7, '2013-06-06');
 INSERT INTO partitioning_test_2013 VALUES (8, '2013-07-07');
 ALTER TABLE partitioning_test ATTACH PARTITION partitioning_test_2013 FOR VALUES FROM ('2013-01-01') TO ('2014-01-01');
+ERROR:  syntax error at or near "ATTACH"
+LINE 1: ALTER TABLE partitioning_test ATTACH PARTITION partitioning_...
+                                      ^
 -- see the data is loaded to shards
 SELECT * FROM partitioning_test ORDER BY 1;
- id |    time    
-----+------------
-  1 | 06-06-2009
-  2 | 07-07-2010
-  3 | 09-09-2009
-  4 | 03-03-2010
-  5 | 06-06-2012
-  6 | 07-07-2012
-  7 | 06-06-2013
-  8 | 07-07-2013
-(8 rows)
-
+ERROR:  relation "partitioning_test" does not exist
+LINE 1: SELECT * FROM partitioning_test ORDER BY 1;
+                      ^
 -- 5-) Failure cases while creating distributed partitioned tables
 -- cannot distribute a partition if its parent is not distributed
 CREATE TABLE partitioning_test_failure(id int, time date) PARTITION BY RANGE (time);
+ERROR:  syntax error at or near "PARTITION"
+LINE 1: ...ABLE partitioning_test_failure(id int, time date) PARTITION ...
+                                                             ^
 CREATE TABLE partitioning_test_failure_2009 PARTITION OF partitioning_test_failure FOR VALUES FROM ('2009-01-01') TO ('2010-01-01');
+ERROR:  syntax error at or near "PARTITION"
+LINE 1: CREATE TABLE partitioning_test_failure_2009 PARTITION OF par...
+                                                    ^
 SELECT create_distributed_table('partitioning_test_failure_2009', 'id');
-ERROR:  cannot distribute relation "partitioning_test_failure_2009" which is partition of "partitioning_test_failure"
-DETAIL:  Citus does not support distributing partitions if their parent is not distributed table.
-HINT:  Distribute the partitioned table "partitioning_test_failure" instead.
+ERROR:  relation "partitioning_test_failure_2009" does not exist
+LINE 1: SELECT create_distributed_table('partitioning_test_failure_2...
+                                        ^
 -- only hash distributed tables can have partitions
 SELECT create_distributed_table('partitioning_test_failure', 'id', 'append');
-ERROR:  distributing partitioned tables in only supported for hash-distributed tables
+ERROR:  relation "partitioning_test_failure" does not exist
+LINE 1: SELECT create_distributed_table('partitioning_test_failure',...
+                                        ^
 SELECT create_distributed_table('partitioning_test_failure', 'id', 'range');
-ERROR:  distributing partitioned tables in only supported for hash-distributed tables
+ERROR:  relation "partitioning_test_failure" does not exist
+LINE 1: SELECT create_distributed_table('partitioning_test_failure',...
+                                        ^
 SELECT create_reference_table('partitioning_test_failure');
-ERROR:  distributing partitioned tables in only supported for hash-distributed tables
+ERROR:  relation "partitioning_test_failure" does not exist
+LINE 1: SELECT create_reference_table('partitioning_test_failure');
+                                      ^
 -- replication factor > 1 is not allowed in distributed partitioned tables
 SET citus.shard_replication_factor TO 2;
 SELECT create_distributed_table('partitioning_test_failure', 'id');
-ERROR:  distributing partitioned tables with replication factor greater than 1 is not supported
+ERROR:  relation "partitioning_test_failure" does not exist
+LINE 1: SELECT create_distributed_table('partitioning_test_failure',...
+                                        ^
 SET citus.shard_replication_factor TO 1;
 -- non-distributed tables cannot have distributed partitions;
 DROP TABLE partitioning_test_failure_2009;
+ERROR:  table "partitioning_test_failure_2009" does not exist
 CREATE TABLE partitioning_test_failure_2009(id int, time date);
 SELECT create_distributed_table('partitioning_test_failure_2009', 'id');
  create_distributed_table 
@@ -209,107 +208,123 @@ SELECT create_distributed_table('partitioning_test_failure_2009', 'id');
 (1 row)
 
 ALTER TABLE partitioning_test_failure ATTACH PARTITION partitioning_test_failure_2009 FOR VALUES FROM ('2009-01-01') TO ('2010-01-01');
-ERROR:  non-distributed tables cannot have distributed partitions
-HINT:  Distribute the partitioned table "partitioning_test_failure_2009" instead
+ERROR:  syntax error at or near "ATTACH"
+LINE 1: ALTER TABLE partitioning_test_failure ATTACH PARTITION parti...
+                                              ^
 -- multi-level partitioning is not allowed
 DROP TABLE partitioning_test_failure_2009;
 CREATE TABLE partitioning_test_failure_2009 PARTITION OF partitioning_test_failure FOR VALUES FROM ('2009-01-01') TO ('2010-01-01') PARTITION BY RANGE (time);
+ERROR:  syntax error at or near "PARTITION"
+LINE 1: CREATE TABLE partitioning_test_failure_2009 PARTITION OF par...
+                                                    ^
 SELECT create_distributed_table('partitioning_test_failure', 'id');
-ERROR:  distributing multi-level partitioned tables is not supported
-DETAIL:  Relation "partitioning_test_failure_2009" is partitioned table itself and it is also partition of relation "partitioning_test_failure".
+ERROR:  relation "partitioning_test_failure" does not exist
+LINE 1: SELECT create_distributed_table('partitioning_test_failure',...
+                                        ^
 -- multi-level partitioning is not allowed in different order
 DROP TABLE partitioning_test_failure_2009;
+ERROR:  table "partitioning_test_failure_2009" does not exist
 SELECT create_distributed_table('partitioning_test_failure', 'id');
- create_distributed_table 
---------------------------
- 
-(1 row)
-
+ERROR:  relation "partitioning_test_failure" does not exist
+LINE 1: SELECT create_distributed_table('partitioning_test_failure',...
+                                        ^
 CREATE TABLE partitioning_test_failure_2009 PARTITION OF partitioning_test_failure FOR VALUES FROM ('2009-01-01') TO ('2010-01-01') PARTITION BY RANGE (time);
-ERROR:  distributing multi-level partitioned tables is not supported
-DETAIL:  Relation "partitioning_test_failure_2009" is partitioned table itself and it is also partition of relation "partitioning_test_failure".
+ERROR:  syntax error at or near "PARTITION"
+LINE 1: CREATE TABLE partitioning_test_failure_2009 PARTITION OF par...
+                                                    ^
 --
 -- DMLs in distributed partitioned tables
 --
 -- test COPY
 -- COPY data to partitioned table
 COPY partitioning_test FROM STDIN WITH CSV;
+ERROR:  relation "partitioning_test" does not exist
+9,2009-01-01
+10,2010-01-01
+11,2011-01-01
+12,2012-01-01
+\.
+invalid command \.
 -- COPY data to partition directly
 COPY partitioning_test_2009 FROM STDIN WITH CSV;
+ERROR:  syntax error at or near "9"
+LINE 1: 9,2009-01-01
+        ^
+13,2009-01-02
+14,2009-01-03
+\.
+invalid command \.
 -- see the data is loaded to shards
 SELECT * FROM partitioning_test WHERE id >= 9 ORDER BY 1;
- id |    time    
-----+------------
-  9 | 01-01-2009
- 10 | 01-01-2010
- 11 | 01-01-2011
- 12 | 01-01-2012
- 13 | 01-02-2009
- 14 | 01-03-2009
-(6 rows)
-
+ERROR:  syntax error at or near "13"
+LINE 1: 13,2009-01-02
+        ^
 -- test INSERT
 -- INSERT INTO the partitioned table
 INSERT INTO partitioning_test VALUES(15, '2009-02-01');
+ERROR:  relation "partitioning_test" does not exist
+LINE 1: INSERT INTO partitioning_test VALUES(15, '2009-02-01');
+                    ^
 INSERT INTO partitioning_test VALUES(16, '2010-02-01');
+ERROR:  relation "partitioning_test" does not exist
+LINE 1: INSERT INTO partitioning_test VALUES(16, '2010-02-01');
+                    ^
 INSERT INTO partitioning_test VALUES(17, '2011-02-01');
+ERROR:  relation "partitioning_test" does not exist
+LINE 1: INSERT INTO partitioning_test VALUES(17, '2011-02-01');
+                    ^
 INSERT INTO partitioning_test VALUES(18, '2012-02-01');
+ERROR:  relation "partitioning_test" does not exist
+LINE 1: INSERT INTO partitioning_test VALUES(18, '2012-02-01');
+                    ^
 -- INSERT INTO the partitions directly table
 INSERT INTO partitioning_test VALUES(19, '2009-02-02');
+ERROR:  relation "partitioning_test" does not exist
+LINE 1: INSERT INTO partitioning_test VALUES(19, '2009-02-02');
+                    ^
 INSERT INTO partitioning_test VALUES(20, '2010-02-02');
+ERROR:  relation "partitioning_test" does not exist
+LINE 1: INSERT INTO partitioning_test VALUES(20, '2010-02-02');
+                    ^
 -- see the data is loaded to shards
 SELECT * FROM partitioning_test WHERE id >= 15 ORDER BY 1;
- id |    time    
-----+------------
- 15 | 02-01-2009
- 16 | 02-01-2010
- 17 | 02-01-2011
- 18 | 02-01-2012
- 19 | 02-02-2009
- 20 | 02-02-2010
-(6 rows)
-
+ERROR:  relation "partitioning_test" does not exist
+LINE 1: SELECT * FROM partitioning_test WHERE id >= 15 ORDER BY 1;
+                      ^
 -- test INSERT/SELECT
 -- INSERT/SELECT from partition to partitioned table
 INSERT INTO partitioning_test SELECT * FROM partitioning_test_2011;
+ERROR:  relation "partitioning_test" does not exist
+LINE 1: INSERT INTO partitioning_test SELECT * FROM partitioning_tes...
+                    ^
 -- INSERT/SELECT from partitioned table to partition
 INSERT INTO partitioning_test_2012 SELECT * FROM partitioning_test WHERE time >= '2012-01-01' AND time < '2013-01-01';
+ERROR:  relation "partitioning_test" does not exist
+LINE 1: INSERT INTO partitioning_test_2012 SELECT * FROM partitionin...
+                                                         ^
 -- see the data is loaded to shards (rows in the given range should be duplicated)
 SELECT * FROM partitioning_test WHERE time >= '2011-01-01' AND time < '2013-01-01' ORDER BY 1;
- id |    time    
-----+------------
-  5 | 06-06-2012
-  5 | 06-06-2012
-  6 | 07-07-2012
-  6 | 07-07-2012
- 11 | 01-01-2011
- 11 | 01-01-2011
- 12 | 01-01-2012
- 12 | 01-01-2012
- 17 | 02-01-2011
- 17 | 02-01-2011
- 18 | 02-01-2012
- 18 | 02-01-2012
-(12 rows)
-
+ERROR:  relation "partitioning_test" does not exist
+LINE 1: SELECT * FROM partitioning_test WHERE time >= '2011-01-01' A...
+                      ^
 -- test UPDATE
 -- UPDATE partitioned table
 UPDATE partitioning_test SET time = '2013-07-07' WHERE id = 7;
+ERROR:  relation "partitioning_test" does not exist
+LINE 1: UPDATE partitioning_test SET time = '2013-07-07' WHERE id = ...
+               ^
 -- UPDATE partition directly
 UPDATE partitioning_test_2013 SET time = '2013-08-08' WHERE id = 8;
 -- see the data is updated
 SELECT * FROM partitioning_test WHERE id = 7 OR id = 8 ORDER BY 1;
- id |    time    
-----+------------
-  7 | 07-07-2013
-  8 | 08-08-2013
-(2 rows)
-
+ERROR:  relation "partitioning_test" does not exist
+LINE 1: SELECT * FROM partitioning_test WHERE id = 7 OR id = 8 ORDER...
+                      ^
 -- UPDATE that tries to move a row to a non-existing partition (this should fail)
 UPDATE partitioning_test SET time = '2020-07-07' WHERE id = 7;
-ERROR:  no partition of relation "partitioning_test_1660001" found for row
-DETAIL:  Partition key of the failing row contains ("time") = (2020-07-07).
-CONTEXT:  while executing command on localhost:57638
+ERROR:  relation "partitioning_test" does not exist
+LINE 1: UPDATE partitioning_test SET time = '2020-07-07' WHERE id = ...
+               ^
 -- UPDATE with subqueries on partitioned table
 UPDATE
     partitioning_test
@@ -317,6 +332,9 @@ SET
     time = time + INTERVAL '1 day'
 WHERE
     id IN (SELECT id FROM partitioning_test WHERE id = 1);
+ERROR:  relation "partitioning_test" does not exist
+LINE 2:     partitioning_test
+            ^
 -- UPDATE with subqueries on partition
 UPDATE
     partitioning_test_2009
@@ -324,87 +342,50 @@ SET
     time = time + INTERVAL '1 month'
 WHERE
     id IN (SELECT id FROM partitioning_test WHERE id = 2);
+ERROR:  relation "partitioning_test_2009" does not exist
+LINE 2:     partitioning_test_2009
+            ^
 -- see the data is updated
 SELECT * FROM partitioning_test WHERE id = 1 OR id = 2 ORDER BY 1;
- id |    time    
-----+------------
-  1 | 06-07-2009
-  2 | 07-07-2010
-(2 rows)
-
+ERROR:  relation "partitioning_test" does not exist
+LINE 1: SELECT * FROM partitioning_test WHERE id = 1 OR id = 2 ORDER...
+                      ^
 -- test DELETE
 -- DELETE from partitioned table
 DELETE FROM partitioning_test WHERE id = 9;
+ERROR:  relation "partitioning_test" does not exist
+LINE 1: DELETE FROM partitioning_test WHERE id = 9;
+                    ^
 -- DELETE from partition directly
 DELETE FROM partitioning_test_2010 WHERE id = 10;
+ERROR:  relation "partitioning_test_2010" does not exist
+LINE 1: DELETE FROM partitioning_test_2010 WHERE id = 10;
+                    ^
 -- see the data is deleted
 SELECT * FROM partitioning_test WHERE id = 9 OR id = 10 ORDER BY 1;
- id | time 
-----+------
-(0 rows)
-
+ERROR:  relation "partitioning_test" does not exist
+LINE 1: SELECT * FROM partitioning_test WHERE id = 9 OR id = 10 ORDE...
+                      ^
 -- test master_modify_multiple_shards
 -- master_modify_multiple_shards on partitioned table
 SELECT master_modify_multiple_shards('UPDATE partitioning_test SET time = time + INTERVAL ''1 day''');
- master_modify_multiple_shards 
--------------------------------
-                            24
-(1 row)
-
+ERROR:  relation "partitioning_test" does not exist
 -- see rows are UPDATED
 SELECT * FROM partitioning_test ORDER BY 1;
- id |    time    
-----+------------
-  1 | 06-08-2009
-  2 | 07-08-2010
-  3 | 09-10-2009
-  4 | 03-04-2010
-  5 | 06-07-2012
-  5 | 06-07-2012
-  6 | 07-08-2012
-  6 | 07-08-2012
-  7 | 07-08-2013
-  8 | 08-09-2013
- 11 | 01-02-2011
- 11 | 01-02-2011
- 12 | 01-02-2012
- 12 | 01-02-2012
- 13 | 01-03-2009
- 14 | 01-04-2009
- 15 | 02-02-2009
- 16 | 02-02-2010
- 17 | 02-02-2011
- 17 | 02-02-2011
- 18 | 02-02-2012
- 18 | 02-02-2012
- 19 | 02-03-2009
- 20 | 02-03-2010
-(24 rows)
-
+ERROR:  relation "partitioning_test" does not exist
+LINE 1: SELECT * FROM partitioning_test ORDER BY 1;
+                      ^
 -- master_modify_multiple_shards on partition directly
 SELECT master_modify_multiple_shards('UPDATE partitioning_test_2009 SET time = time + INTERVAL ''1 day''');
- master_modify_multiple_shards 
--------------------------------
-                             6
-(1 row)
-
+ERROR:  relation "partitioning_test_2009" does not exist
 -- see rows are UPDATED
 SELECT * FROM partitioning_test_2009 ORDER BY 1;
- id |    time    
-----+------------
-  1 | 06-09-2009
-  3 | 09-11-2009
- 13 | 01-04-2009
- 14 | 01-05-2009
- 15 | 02-03-2009
- 19 | 02-04-2009
-(6 rows)
-
+ERROR:  relation "partitioning_test_2009" does not exist
+LINE 1: SELECT * FROM partitioning_test_2009 ORDER BY 1;
+                      ^
 -- test master_modify_multiple_shards which fails in workers (updated value is outside of partition bounds)
 SELECT master_modify_multiple_shards('UPDATE partitioning_test_2009 SET time = time + INTERVAL ''6 month''');
-ERROR:  new row for relation "partitioning_test_2009_1660005" violates partition constraint
-DETAIL:  Failing row contains (3, 2010-03-11).
-CONTEXT:  while executing command on localhost:57638
+ERROR:  relation "partitioning_test_2009" does not exist
 --
 -- DDL in distributed partitioned tables
 --
@@ -412,53 +393,42 @@ CONTEXT:  while executing command on localhost:57638
 -- CREATE INDEX on partitioned table - this will error out
 -- on earlier versions of postgres earlier than 11.
 CREATE INDEX partitioning_index ON partitioning_test(id);
+ERROR:  relation "partitioning_test" does not exist
 -- CREATE INDEX on partition
 CREATE INDEX partitioning_2009_index ON partitioning_test_2009(id);
+ERROR:  relation "partitioning_test_2009" does not exist
 -- CREATE INDEX CONCURRENTLY on partition
 CREATE INDEX CONCURRENTLY partitioned_2010_index ON partitioning_test_2010(id);
+ERROR:  relation "partitioning_test_2010" does not exist
 -- see index is created
 SELECT tablename, indexname FROM pg_indexes WHERE tablename LIKE 'partitioning_test%' ORDER BY indexname;
-       tablename        |           indexname           
-------------------------+-------------------------------
- partitioning_test_2010 | partitioned_2010_index
- partitioning_test_2009 | partitioning_2009_index
- partitioning_test_2009 | partitioning_test_2009_id_idx
- partitioning_test_2010 | partitioning_test_2010_id_idx
- partitioning_test_2011 | partitioning_test_2011_id_idx
- partitioning_test_2012 | partitioning_test_2012_id_idx
- partitioning_test_2013 | partitioning_test_2013_id_idx
-(7 rows)
+ tablename | indexname 
+-----------+-----------
+(0 rows)
 
 -- test add COLUMN
 -- add COLUMN to partitioned table
 ALTER TABLE partitioning_test ADD new_column int;
+ERROR:  relation "partitioning_test" does not exist
 -- add COLUMN to partition - this will error out
 ALTER TABLE partitioning_test_2010 ADD new_column_2 int;
-ERROR:  cannot add column to a partition
+ERROR:  relation "partitioning_test_2010" does not exist
 -- see additional column is created
 SELECT name, type FROM table_attrs WHERE relid = 'partitioning_test'::regclass ORDER BY 1;
-    name    |  type   
-------------+---------
- id         | integer
- new_column | integer
- time       | date
-(3 rows)
-
+ERROR:  relation "partitioning_test" does not exist
+LINE 1: SELECT name, type FROM table_attrs WHERE relid = 'partitioni...
+                                                         ^
 SELECT name, type FROM table_attrs WHERE relid = 'partitioning_test_2010'::regclass ORDER BY 1;
-    name    |  type   
-------------+---------
- id         | integer
- new_column | integer
- time       | date
-(3 rows)
-
+ERROR:  relation "partitioning_test_2010" does not exist
+LINE 1: SELECT name, type FROM table_attrs WHERE relid = 'partitioni...
+                                                         ^
 -- test add PRIMARY KEY
 -- add PRIMARY KEY to partitioned table - this will error out
 ALTER TABLE partitioning_test ADD CONSTRAINT partitioning_primary PRIMARY KEY (id);
-ERROR:  insufficient columns in PRIMARY KEY constraint definition
-DETAIL:  PRIMARY KEY constraint on table "partitioning_test" lacks column "time" which is part of the partition key.
+ERROR:  relation "partitioning_test" does not exist
 -- ADD PRIMARY KEY to partition
 ALTER TABLE partitioning_test_2009 ADD CONSTRAINT partitioning_2009_primary PRIMARY KEY (id);
+ERROR:  relation "partitioning_test_2009" does not exist
 -- see PRIMARY KEY is created
 SELECT
     table_name,
@@ -469,168 +439,169 @@ FROM
 WHERE
     table_name = 'partitioning_test_2009' AND 
     constraint_name = 'partitioning_2009_primary';
-       table_name       |      constraint_name      | constraint_type 
-------------------------+---------------------------+-----------------
- partitioning_test_2009 | partitioning_2009_primary | PRIMARY KEY
-(1 row)
+ table_name | constraint_name | constraint_type 
+------------+-----------------+-----------------
+(0 rows)
 
 -- test ADD FOREIGN CONSTRAINT
 -- add FOREIGN CONSTRAINT to partitioned table -- this will error out
 ALTER TABLE partitioning_test ADD CONSTRAINT partitioning_foreign FOREIGN KEY (id) REFERENCES partitioning_test_2009 (id);
-ERROR:  cannot ALTER TABLE "partitioning_test_2009" because it is being used by active queries in this session
+ERROR:  relation "partitioning_test" does not exist
 -- add FOREIGN CONSTRAINT to partition
 INSERT INTO partitioning_test_2009 VALUES (5, '2009-06-06');
+ERROR:  relation "partitioning_test_2009" does not exist
+LINE 1: INSERT INTO partitioning_test_2009 VALUES (5, '2009-06-06');
+                    ^
 INSERT INTO partitioning_test_2009 VALUES (6, '2009-07-07');
+ERROR:  relation "partitioning_test_2009" does not exist
+LINE 1: INSERT INTO partitioning_test_2009 VALUES (6, '2009-07-07');
+                    ^
 INSERT INTO partitioning_test_2009 VALUES(12, '2009-02-01');
+ERROR:  relation "partitioning_test_2009" does not exist
+LINE 1: INSERT INTO partitioning_test_2009 VALUES(12, '2009-02-01');
+                    ^
 INSERT INTO partitioning_test_2009 VALUES(18, '2009-02-01');
+ERROR:  relation "partitioning_test_2009" does not exist
+LINE 1: INSERT INTO partitioning_test_2009 VALUES(18, '2009-02-01');
+                    ^
 ALTER TABLE partitioning_test_2012 ADD CONSTRAINT partitioning_2012_foreign FOREIGN KEY (id) REFERENCES partitioning_test_2009 (id) ON DELETE CASCADE;
+ERROR:  relation "partitioning_test_2009" does not exist
 -- see FOREIGN KEY is created
 SELECT "Constraint" FROM table_fkeys WHERE relid = 'partitioning_test_2012'::regclass ORDER BY 1;
-        Constraint         
----------------------------
- partitioning_2012_foreign
-(1 row)
+ Constraint 
+------------
+(0 rows)
 
 -- test ON DELETE CASCADE works
 DELETE FROM partitioning_test_2009 WHERE id = 5;
+ERROR:  relation "partitioning_test_2009" does not exist
+LINE 1: DELETE FROM partitioning_test_2009 WHERE id = 5;
+                    ^
 -- see that element is deleted from both partitions
 SELECT * FROM partitioning_test_2009 WHERE id = 5 ORDER BY 1;
- id | time | new_column 
-----+------+------------
-(0 rows)
-
+ERROR:  relation "partitioning_test_2009" does not exist
+LINE 1: SELECT * FROM partitioning_test_2009 WHERE id = 5 ORDER BY 1...
+                      ^
 SELECT * FROM partitioning_test_2012 WHERE id = 5 ORDER BY 1;
- id | time | new_column 
-----+------+------------
-(0 rows)
+ id |    time    
+----+------------
+  5 | 06-06-2012
+(1 row)
 
 -- test DETACH partition
 ALTER TABLE partitioning_test DETACH PARTITION partitioning_test_2009;
+ERROR:  syntax error at or near "DETACH"
+LINE 1: ALTER TABLE partitioning_test DETACH PARTITION partitioning_...
+                                      ^
 -- see DETACHed partitions content is not accessible from partitioning_test;
 SELECT * FROM partitioning_test WHERE time >= '2009-01-01' AND time < '2010-01-01' ORDER BY 1;
- id | time | new_column 
-----+------+------------
-(0 rows)
-
+ERROR:  relation "partitioning_test" does not exist
+LINE 1: SELECT * FROM partitioning_test WHERE time >= '2009-01-01' A...
+                      ^
 --
 -- Transaction tests
 --
 -- DDL in transaction
 BEGIN;
 ALTER TABLE partitioning_test ADD newer_column int;
+ERROR:  relation "partitioning_test" does not exist
 -- see additional column is created
 SELECT name, type FROM table_attrs WHERE relid = 'partitioning_test'::regclass ORDER BY 1;
-     name     |  type   
---------------+---------
- id           | integer
- new_column   | integer
- newer_column | integer
- time         | date
-(4 rows)
-
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
 ROLLBACK;
 -- see rollback is successful
 SELECT name, type FROM table_attrs WHERE relid = 'partitioning_test'::regclass ORDER BY 1;
-    name    |  type   
-------------+---------
- id         | integer
- new_column | integer
- time       | date
-(3 rows)
-
+ERROR:  relation "partitioning_test" does not exist
+LINE 1: SELECT name, type FROM table_attrs WHERE relid = 'partitioni...
+                                                         ^
 -- COPY in transaction
 BEGIN;
 COPY partitioning_test FROM STDIN WITH CSV;
+ERROR:  relation "partitioning_test" does not exist
+22,2010-01-01,22
+23,2011-01-01,23
+24,2013-01-01,24
+\.
+invalid command \.
 -- see the data is loaded to shards
 SELECT * FROM partitioning_test WHERE id = 22 ORDER BY 1;
- id |    time    | new_column 
-----+------------+------------
- 22 | 01-01-2010 |         22
-(1 row)
-
+ERROR:  syntax error at or near "22"
+LINE 1: 22,2010-01-01,22
+        ^
 SELECT * FROM partitioning_test WHERE id = 23 ORDER BY 1;
- id |    time    | new_column 
-----+------------+------------
- 23 | 01-01-2011 |         23
-(1 row)
-
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
 SELECT * FROM partitioning_test WHERE id = 24 ORDER BY 1;
- id |    time    | new_column 
-----+------------+------------
- 24 | 01-01-2013 |         24
-(1 row)
-
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
 ROLLBACK;
 -- see rollback is successful
 SELECT * FROM partitioning_test WHERE id >= 22 ORDER BY 1;
- id | time | new_column 
-----+------+------------
-(0 rows)
-
+ERROR:  relation "partitioning_test" does not exist
+LINE 1: SELECT * FROM partitioning_test WHERE id >= 22 ORDER BY 1;
+                      ^
 -- DML in transaction
 BEGIN;
 -- INSERT in transaction
 INSERT INTO partitioning_test VALUES(25, '2010-02-02');
+ERROR:  relation "partitioning_test" does not exist
+LINE 1: INSERT INTO partitioning_test VALUES(25, '2010-02-02');
+                    ^
 -- see the data is loaded to shards
 SELECT * FROM partitioning_test WHERE id = 25 ORDER BY 1;
- id |    time    | new_column 
-----+------------+------------
- 25 | 02-02-2010 |           
-(1 row)
-
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
 -- INSERT/SELECT in transaction
 INSERT INTO partitioning_test SELECT * FROM partitioning_test WHERE id = 25;
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
 -- see the data is loaded to shards
 SELECT * FROM partitioning_test WHERE id = 25 ORDER BY 1;
- id |    time    | new_column 
-----+------------+------------
- 25 | 02-02-2010 |           
- 25 | 02-02-2010 |           
-(2 rows)
-
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
 -- UPDATE in transaction
 UPDATE partitioning_test SET time = '2010-10-10' WHERE id = 25;
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
 -- see the data is updated
 SELECT * FROM partitioning_test WHERE id = 25 ORDER BY 1;
- id |    time    | new_column 
-----+------------+------------
- 25 | 10-10-2010 |           
- 25 | 10-10-2010 |           
-(2 rows)
-
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
 -- perform operations on partition and partioned tables together
 INSERT INTO partitioning_test VALUES(26, '2010-02-02', 26);
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
 INSERT INTO partitioning_test_2010 VALUES(26, '2010-02-02', 26);
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
 COPY partitioning_test FROM STDIN WITH CSV;
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+26,2010-02-02,26
+\.
+invalid command \.
 COPY partitioning_test_2010 FROM STDIN WITH CSV;
+ERROR:  syntax error at or near "26"
+LINE 1: 26,2010-02-02,26
+        ^
+26,2010-02-02,26
+\.
+invalid command \.
 -- see the data is loaded to shards (we should see 4 rows with same content)
 SELECT * FROM partitioning_test WHERE id = 26 ORDER BY 1;
- id |    time    | new_column 
-----+------------+------------
- 26 | 02-02-2010 |         26
- 26 | 02-02-2010 |         26
- 26 | 02-02-2010 |         26
- 26 | 02-02-2010 |         26
-(4 rows)
-
+ERROR:  syntax error at or near "26"
+LINE 1: 26,2010-02-02,26
+        ^
 ROLLBACK;
 -- see rollback is successful
 SELECT * FROM partitioning_test WHERE id = 26 ORDER BY 1;
- id | time | new_column 
-----+------+------------
-(0 rows)
-
+ERROR:  relation "partitioning_test" does not exist
+LINE 1: SELECT * FROM partitioning_test WHERE id = 26 ORDER BY 1;
+                      ^
 -- DETACH and DROP in a transaction
 BEGIN;
 ALTER TABLE partitioning_test DETACH PARTITION partitioning_test_2011;
+ERROR:  syntax error at or near "DETACH"
+LINE 1: ALTER TABLE partitioning_test DETACH PARTITION partitioning_...
+                                      ^
 DROP TABLE partitioning_test_2011;
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
 COMMIT;
 -- see DROPed partitions content is not accessible
 SELECT * FROM partitioning_test WHERE time >= '2011-01-01' AND time < '2012-01-01' ORDER BY 1;
- id | time | new_column 
-----+------+------------
-(0 rows)
-
+ERROR:  relation "partitioning_test" does not exist
+LINE 1: SELECT * FROM partitioning_test WHERE time >= '2011-01-01' A...
+                      ^
 --
 -- Misc tests
 --
@@ -639,58 +610,76 @@ SELECT * FROM partitioning_test WHERE time >= '2011-01-01' AND time < '2012-01-0
 TRUNCATE partitioning_test_2012;
 -- see partition is TRUNCATEd
 SELECT * FROM partitioning_test_2012 ORDER BY 1;
- id | time | new_column 
-----+------+------------
+ id | time 
+----+------
 (0 rows)
 
 -- test TRUNCATE partitioned table
 TRUNCATE partitioning_test;
+ERROR:  relation "partitioning_test" does not exist
 -- see partitioned table is TRUNCATEd
 SELECT * FROM partitioning_test ORDER BY 1;
- id | time | new_column 
-----+------+------------
-(0 rows)
-
+ERROR:  relation "partitioning_test" does not exist
+LINE 1: SELECT * FROM partitioning_test ORDER BY 1;
+                      ^
 -- test DROP
 -- test DROP partition
 INSERT INTO partitioning_test_2010 VALUES(27, '2010-02-01');
+ERROR:  relation "partitioning_test_2010" does not exist
+LINE 1: INSERT INTO partitioning_test_2010 VALUES(27, '2010-02-01');
+                    ^
 DROP TABLE partitioning_test_2010;
+ERROR:  table "partitioning_test_2010" does not exist
 -- see DROPped partitions content is not accessible from partitioning_test;
 SELECT * FROM partitioning_test WHERE time >= '2010-01-01' AND time < '2011-01-01' ORDER BY 1;
- id | time | new_column 
-----+------+------------
-(0 rows)
-
+ERROR:  relation "partitioning_test" does not exist
+LINE 1: SELECT * FROM partitioning_test WHERE time >= '2010-01-01' A...
+                      ^
 -- test DROP partitioned table
 DROP TABLE partitioning_test;
+ERROR:  table "partitioning_test" does not exist
 -- dropping the parent should CASCADE to the children as well
 SELECT table_name FROM information_schema.tables WHERE table_name LIKE 'partitioning_test%' ORDER BY 1;
-        table_name         
----------------------------
- partitioning_test_2009
- partitioning_test_failure
+       table_name       
+------------------------
+ partitioning_test_2012
+ partitioning_test_2013
 (2 rows)
 
 -- test distributing partitioned table colocated with non-partitioned table
 CREATE TABLE partitioned_users_table (user_id int, time timestamp, value_1 int, value_2 int, value_3 float, value_4 bigint) PARTITION BY RANGE (time);
+ERROR:  syntax error at or near "PARTITION"
+LINE 1: ... int, value_2 int, value_3 float, value_4 bigint) PARTITION ...
+                                                             ^
 CREATE TABLE partitioned_events_table (user_id int, time timestamp, event_type int, value_2 int, value_3 float, value_4 bigint) PARTITION BY RANGE (time);
+ERROR:  syntax error at or near "PARTITION"
+LINE 1: ... int, value_2 int, value_3 float, value_4 bigint) PARTITION ...
+                                                             ^
 SELECT create_distributed_table('partitioned_users_table', 'user_id', colocate_with => 'users_table');
- create_distributed_table 
---------------------------
- 
-(1 row)
-
+ERROR:  relation "partitioned_users_table" does not exist
+LINE 1: SELECT create_distributed_table('partitioned_users_table', '...
+                                        ^
 SELECT create_distributed_table('partitioned_events_table', 'user_id', colocate_with => 'events_table');
- create_distributed_table 
---------------------------
- 
-(1 row)
-
+ERROR:  relation "partitioned_events_table" does not exist
+LINE 1: SELECT create_distributed_table('partitioned_events_table', ...
+                                        ^
 -- INSERT/SELECT from regular table to partitioned table
 CREATE TABLE partitioned_users_table_2009 PARTITION OF partitioned_users_table FOR VALUES FROM ('2017-01-01') TO ('2018-01-01');
+ERROR:  syntax error at or near "PARTITION"
+LINE 1: CREATE TABLE partitioned_users_table_2009 PARTITION OF parti...
+                                                  ^
 CREATE TABLE partitioned_events_table_2009 PARTITION OF partitioned_events_table FOR VALUES FROM ('2017-01-01') TO ('2018-01-01');
+ERROR:  syntax error at or near "PARTITION"
+LINE 1: CREATE TABLE partitioned_events_table_2009 PARTITION OF part...
+                                                   ^
 INSERT INTO partitioned_events_table SELECT * FROM events_table;
+ERROR:  relation "partitioned_events_table" does not exist
+LINE 1: INSERT INTO partitioned_events_table SELECT * FROM events_ta...
+                    ^
 INSERT INTO partitioned_users_table_2009 SELECT * FROM users_table;
+ERROR:  relation "partitioned_users_table_2009" does not exist
+LINE 1: INSERT INTO partitioned_users_table_2009 SELECT * FROM users...
+                    ^
 --
 -- Complex JOINs, subqueries, UNIONs etc...
 --
@@ -736,14 +725,9 @@ FROM
 ) AS final_query
 GROUP BY types
 ORDER BY types;
- types | sumofeventtype 
--------+----------------
-     0 |             43
-     1 |             44
-     2 |              8
-     3 |             25
-(4 rows)
-
+ERROR:  relation "partitioned_events_table" does not exist
+LINE 14:                     partitioned_events_table as  "events"
+                             ^
 -- UNION and JOIN on both partitioned and regular tables
 SELECT ("final_query"."event_types") as types, count(*) AS sumOfEventType
 FROM
@@ -815,25 +799,31 @@ GROUP BY
   types
 ORDER BY 
   types;
- types | sumofeventtype 
--------+----------------
-     0 |            367
-     2 |            360
-     3 |             57
-(3 rows)
-
+ERROR:  relation "partitioned_events_table" does not exist
+LINE 18:                       partitioned_events_table as "events"
+                               ^
 -- test LIST partitioning
 CREATE TABLE list_partitioned_events_table (user_id int, time date, event_type int, value_2 int, value_3 float, value_4 bigint) PARTITION BY LIST (time);
+ERROR:  syntax error at or near "PARTITION"
+LINE 1: ... int, value_2 int, value_3 float, value_4 bigint) PARTITION ...
+                                                             ^
 CREATE TABLE list_partitioned_events_table_2014_01_01_05 PARTITION OF list_partitioned_events_table FOR VALUES IN ('2017-11-21', '2017-11-22', '2017-11-23', '2017-11-24', '2017-11-25');
+ERROR:  syntax error at or near "PARTITION"
+LINE 1: ...TABLE list_partitioned_events_table_2014_01_01_05 PARTITION ...
+                                                             ^
 CREATE TABLE list_partitioned_events_table_2014_01_06_10 PARTITION OF list_partitioned_events_table FOR VALUES IN ('2017-11-26', '2017-11-27', '2017-11-28', '2017-11-29', '2017-11-30');
+ERROR:  syntax error at or near "PARTITION"
+LINE 1: ...TABLE list_partitioned_events_table_2014_01_06_10 PARTITION ...
+                                                             ^
 CREATE TABLE list_partitioned_events_table_2014_01_11_15 PARTITION OF list_partitioned_events_table FOR VALUES IN ('2017-12-01', '2017-12-02', '2017-12-03', '2017-12-04', '2017-12-05');
+ERROR:  syntax error at or near "PARTITION"
+LINE 1: ...TABLE list_partitioned_events_table_2014_01_11_15 PARTITION ...
+                                                             ^
 -- test distributing partitioned table colocated with another partitioned table
 SELECT create_distributed_table('list_partitioned_events_table', 'user_id', colocate_with => 'partitioned_events_table');
- create_distributed_table 
---------------------------
- 
-(1 row)
-
+ERROR:  relation "list_partitioned_events_table" does not exist
+LINE 1: SELECT create_distributed_table('list_partitioned_events_tab...
+                                        ^
 -- INSERT/SELECT from partitioned table to partitioned table
 INSERT INTO
     list_partitioned_events_table
@@ -849,6 +839,9 @@ FROM
 WHERE
     time >= '2017-11-21' AND
     time <= '2017-12-01';
+ERROR:  relation "list_partitioned_events_table" does not exist
+LINE 2:     list_partitioned_events_table
+            ^
 -- LEFT JOINs used with INNER JOINs on range partitioned table, list partitioned table and non-partitioned table
 SELECT
 count(*) AS cnt, "generated_group_field"
@@ -886,164 +879,139 @@ count(*) AS cnt, "generated_group_field"
   ORDER BY 
     cnt DESC, generated_group_field ASC
   LIMIT 10;
- cnt  | generated_group_field 
-------+-----------------------
- 1851 |                     1
- 1077 |                     4
-  963 |                     2
-  955 |                     3
-  768 |                     5
-  639 |                     0
-(6 rows)
-
+ERROR:  relation "list_partitioned_events_table" does not exist
+LINE 15:              list_partitioned_events_table as "list_partitio...
+                      ^
 --
 -- Additional partitioning features
 --
 -- test multi column partitioning
 CREATE TABLE multi_column_partitioning(c1 int, c2 int) PARTITION BY RANGE (c1, c2);
+ERROR:  syntax error at or near "PARTITION"
+LINE 1: ...E TABLE multi_column_partitioning(c1 int, c2 int) PARTITION ...
+                                                             ^
 CREATE TABLE multi_column_partitioning_0_0_10_0 PARTITION OF multi_column_partitioning FOR VALUES FROM (0, 0) TO (10, 0);
+ERROR:  syntax error at or near "PARTITION"
+LINE 1: CREATE TABLE multi_column_partitioning_0_0_10_0 PARTITION OF...
+                                                        ^
 SELECT create_distributed_table('multi_column_partitioning', 'c1');
- create_distributed_table 
---------------------------
- 
-(1 row)
-
+ERROR:  relation "multi_column_partitioning" does not exist
+LINE 1: SELECT create_distributed_table('multi_column_partitioning',...
+                                        ^
 -- test INSERT to multi-column partitioned table
 INSERT INTO multi_column_partitioning VALUES(1, 1);
+ERROR:  relation "multi_column_partitioning" does not exist
+LINE 1: INSERT INTO multi_column_partitioning VALUES(1, 1);
+                    ^
 INSERT INTO multi_column_partitioning_0_0_10_0 VALUES(5, -5);
+ERROR:  relation "multi_column_partitioning_0_0_10_0" does not exist
+LINE 1: INSERT INTO multi_column_partitioning_0_0_10_0 VALUES(5, -5)...
+                    ^
 -- test INSERT to multi-column partitioned table where no suitable partition exists
 INSERT INTO multi_column_partitioning VALUES(10, 1);
-ERROR:  no partition of relation "multi_column_partitioning_1660068" found for row
-DETAIL:  Partition key of the failing row contains (c1, c2) = (10, 1).
-CONTEXT:  while executing command on localhost:57637
+ERROR:  relation "multi_column_partitioning" does not exist
+LINE 1: INSERT INTO multi_column_partitioning VALUES(10, 1);
+                    ^
 -- test with MINVALUE/MAXVALUE
 CREATE TABLE multi_column_partitioning_10_max_20_min PARTITION OF multi_column_partitioning FOR VALUES FROM (10, MAXVALUE) TO (20, MINVALUE);
+ERROR:  syntax error at or near "PARTITION"
+LINE 1: ...ATE TABLE multi_column_partitioning_10_max_20_min PARTITION ...
+                                                             ^
 -- test INSERT to partition with MINVALUE/MAXVALUE bounds
 INSERT INTO multi_column_partitioning VALUES(11, -11);
+ERROR:  relation "multi_column_partitioning" does not exist
+LINE 1: INSERT INTO multi_column_partitioning VALUES(11, -11);
+                    ^
 INSERT INTO multi_column_partitioning_10_max_20_min VALUES(19, -19);
+ERROR:  relation "multi_column_partitioning_10_max_20_min" does not exist
+LINE 1: INSERT INTO multi_column_partitioning_10_max_20_min VALUES(1...
+                    ^
 -- test INSERT to multi-column partitioned table where no suitable partition exists
 INSERT INTO multi_column_partitioning VALUES(20, -20);
-ERROR:  no partition of relation "multi_column_partitioning_1660068" found for row
-DETAIL:  Partition key of the failing row contains (c1, c2) = (20, -20).
-CONTEXT:  while executing command on localhost:57637
+ERROR:  relation "multi_column_partitioning" does not exist
+LINE 1: INSERT INTO multi_column_partitioning VALUES(20, -20);
+                    ^
 -- see data is loaded to multi-column partitioned table
 SELECT * FROM multi_column_partitioning ORDER BY 1, 2;
- c1 | c2  
-----+-----
-  1 |   1
-  5 |  -5
- 11 | -11
- 19 | -19
-(4 rows)
-
+ERROR:  relation "multi_column_partitioning" does not exist
+LINE 1: SELECT * FROM multi_column_partitioning ORDER BY 1, 2;
+                      ^
 --
 -- Tests for locks on partitioned tables
 --
 CREATE TABLE partitioning_locks(id int, ref_id int, time date) PARTITION BY RANGE (time);
+ERROR:  syntax error at or near "PARTITION"
+LINE 1: ...partitioning_locks(id int, ref_id int, time date) PARTITION ...
+                                                             ^
 -- create its partitions
 CREATE TABLE partitioning_locks_2009 PARTITION OF partitioning_locks FOR VALUES FROM ('2009-01-01') TO ('2010-01-01');
+ERROR:  syntax error at or near "PARTITION"
+LINE 1: CREATE TABLE partitioning_locks_2009 PARTITION OF partitioni...
+                                             ^
 CREATE TABLE partitioning_locks_2010 PARTITION OF partitioning_locks FOR VALUES FROM ('2010-01-01') TO ('2011-01-01');
+ERROR:  syntax error at or near "PARTITION"
+LINE 1: CREATE TABLE partitioning_locks_2010 PARTITION OF partitioni...
+                                             ^
 -- distribute partitioned table
 SELECT create_distributed_table('partitioning_locks', 'id');
- create_distributed_table 
---------------------------
- 
-(1 row)
-
+ERROR:  relation "partitioning_locks" does not exist
+LINE 1: SELECT create_distributed_table('partitioning_locks', 'id');
+                                        ^
 -- test locks on router SELECT
 BEGIN;
 SELECT * FROM partitioning_locks WHERE id = 1 ORDER BY 1, 2;
- id | ref_id | time 
-----+--------+------
-(0 rows)
-
+ERROR:  relation "partitioning_locks" does not exist
+LINE 1: SELECT * FROM partitioning_locks WHERE id = 1 ORDER BY 1, 2;
+                      ^
 SELECT relation::regclass, locktype, mode FROM pg_locks WHERE relation::regclass::text LIKE 'partitioning_locks%' AND pid = pg_backend_pid() ORDER BY 1, 2, 3;
-        relation         | locktype |      mode       
--------------------------+----------+-----------------
- partitioning_locks      | relation | AccessShareLock
- partitioning_locks_2009 | relation | AccessShareLock
- partitioning_locks_2010 | relation | AccessShareLock
-(3 rows)
-
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
 COMMIT;
 -- test locks on real-time SELECT
 BEGIN;
 SELECT * FROM partitioning_locks ORDER BY 1, 2;
- id | ref_id | time 
-----+--------+------
-(0 rows)
-
+ERROR:  relation "partitioning_locks" does not exist
+LINE 1: SELECT * FROM partitioning_locks ORDER BY 1, 2;
+                      ^
 SELECT relation::regclass, locktype, mode FROM pg_locks WHERE relation::regclass::text LIKE 'partitioning_locks%' AND pid = pg_backend_pid() ORDER BY 1, 2, 3;
-        relation         | locktype |      mode       
--------------------------+----------+-----------------
- partitioning_locks      | relation | AccessShareLock
- partitioning_locks_2009 | relation | AccessShareLock
- partitioning_locks_2010 | relation | AccessShareLock
-(3 rows)
-
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
 COMMIT;
 -- test locks on task-tracker SELECT
 SET citus.task_executor_type TO 'task-tracker';
 BEGIN;
 SELECT * FROM partitioning_locks AS pl1 JOIN partitioning_locks AS pl2 ON pl1.id = pl2.ref_id ORDER BY 1, 2;
- id | ref_id | time | id | ref_id | time 
-----+--------+------+----+--------+------
-(0 rows)
-
+ERROR:  relation "partitioning_locks" does not exist
+LINE 1: SELECT * FROM partitioning_locks AS pl1 JOIN partitioning_lo...
+                      ^
 SELECT relation::regclass, locktype, mode FROM pg_locks WHERE relation::regclass::text LIKE 'partitioning_locks%' AND pid = pg_backend_pid() ORDER BY 1, 2, 3;
-        relation         | locktype |      mode       
--------------------------+----------+-----------------
- partitioning_locks      | relation | AccessShareLock
- partitioning_locks_2009 | relation | AccessShareLock
- partitioning_locks_2010 | relation | AccessShareLock
-(3 rows)
-
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
 COMMIT;
 SET citus.task_executor_type TO 'real-time';
 -- test locks on INSERT
 BEGIN;
 INSERT INTO partitioning_locks VALUES(1, 1, '2009-01-01');
+ERROR:  relation "partitioning_locks" does not exist
+LINE 1: INSERT INTO partitioning_locks VALUES(1, 1, '2009-01-01');
+                    ^
 SELECT relation::regclass, locktype, mode FROM pg_locks WHERE relation::regclass::text LIKE 'partitioning_locks%' AND pid = pg_backend_pid() ORDER BY 1, 2, 3;
-        relation         | locktype |       mode       
--------------------------+----------+------------------
- partitioning_locks      | relation | AccessShareLock
- partitioning_locks      | relation | RowExclusiveLock
- partitioning_locks_2009 | relation | AccessShareLock
- partitioning_locks_2009 | relation | RowExclusiveLock
- partitioning_locks_2010 | relation | AccessShareLock
- partitioning_locks_2010 | relation | RowExclusiveLock
-(6 rows)
-
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
 COMMIT;
 -- test locks on UPDATE
 BEGIN;
 UPDATE partitioning_locks SET time = '2009-02-01' WHERE id = 1;
+ERROR:  relation "partitioning_locks" does not exist
+LINE 1: UPDATE partitioning_locks SET time = '2009-02-01' WHERE id =...
+               ^
 SELECT relation::regclass, locktype, mode FROM pg_locks WHERE relation::regclass::text LIKE 'partitioning_locks%' AND pid = pg_backend_pid() ORDER BY 1, 2, 3;
-        relation         | locktype |       mode       
--------------------------+----------+------------------
- partitioning_locks      | relation | AccessShareLock
- partitioning_locks      | relation | RowExclusiveLock
- partitioning_locks_2009 | relation | AccessShareLock
- partitioning_locks_2009 | relation | RowExclusiveLock
- partitioning_locks_2010 | relation | AccessShareLock
- partitioning_locks_2010 | relation | RowExclusiveLock
-(6 rows)
-
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
 COMMIT;
 -- test locks on DELETE
 BEGIN;
 DELETE FROM partitioning_locks WHERE id = 1;
+ERROR:  relation "partitioning_locks" does not exist
+LINE 1: DELETE FROM partitioning_locks WHERE id = 1;
+                    ^
 SELECT relation::regclass, locktype, mode FROM pg_locks WHERE relation::regclass::text LIKE 'partitioning_locks%' AND pid = pg_backend_pid() ORDER BY 1, 2, 3;
-        relation         | locktype |       mode       
--------------------------+----------+------------------
- partitioning_locks      | relation | AccessShareLock
- partitioning_locks      | relation | RowExclusiveLock
- partitioning_locks_2009 | relation | AccessShareLock
- partitioning_locks_2009 | relation | RowExclusiveLock
- partitioning_locks_2010 | relation | AccessShareLock
- partitioning_locks_2010 | relation | RowExclusiveLock
-(6 rows)
-
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
 COMMIT;
 -- test locks on INSERT/SELECT
 CREATE TABLE partitioning_locks_for_select(id int, ref_id int, time date);
@@ -1055,91 +1023,46 @@ SELECT create_distributed_table('partitioning_locks_for_select', 'id');
 
 BEGIN;
 INSERT INTO partitioning_locks SELECT * FROM partitioning_locks_for_select;
+ERROR:  relation "partitioning_locks" does not exist
+LINE 1: INSERT INTO partitioning_locks SELECT * FROM partitioning_lo...
+                    ^
 SELECT relation::regclass, locktype, mode FROM pg_locks WHERE relation::regclass::text LIKE 'partitioning_locks%' AND pid = pg_backend_pid() ORDER BY 1, 2, 3;
-           relation            | locktype |       mode       
--------------------------------+----------+------------------
- partitioning_locks            | relation | AccessShareLock
- partitioning_locks            | relation | RowExclusiveLock
- partitioning_locks_2009       | relation | AccessShareLock
- partitioning_locks_2009       | relation | RowExclusiveLock
- partitioning_locks_2010       | relation | AccessShareLock
- partitioning_locks_2010       | relation | RowExclusiveLock
- partitioning_locks_for_select | relation | AccessShareLock
-(7 rows)
-
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
 COMMIT;
 -- test locks on coordinator INSERT/SELECT
 BEGIN;
 INSERT INTO partitioning_locks SELECT * FROM partitioning_locks_for_select LIMIT 5;
+ERROR:  relation "partitioning_locks" does not exist
+LINE 1: INSERT INTO partitioning_locks SELECT * FROM partitioning_lo...
+                    ^
 SELECT relation::regclass, locktype, mode FROM pg_locks WHERE relation::regclass::text LIKE 'partitioning_locks%' AND pid = pg_backend_pid() ORDER BY 1, 2, 3;
-           relation            | locktype |       mode       
--------------------------------+----------+------------------
- partitioning_locks            | relation | AccessShareLock
- partitioning_locks            | relation | RowExclusiveLock
- partitioning_locks_2009       | relation | RowExclusiveLock
- partitioning_locks_2010       | relation | RowExclusiveLock
- partitioning_locks_for_select | relation | AccessShareLock
-(5 rows)
-
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
 COMMIT;
 -- test locks on master_modify_multiple_shards
 BEGIN;
 SELECT master_modify_multiple_shards('UPDATE partitioning_locks SET time = ''2009-03-01''');
- master_modify_multiple_shards 
--------------------------------
-                             0
-(1 row)
-
+ERROR:  relation "partitioning_locks" does not exist
 SELECT relation::regclass, locktype, mode FROM pg_locks WHERE relation::regclass::text LIKE 'partitioning_locks%' AND pid = pg_backend_pid() ORDER BY 1, 2, 3;
-        relation         | locktype |       mode       
--------------------------+----------+------------------
- partitioning_locks      | relation | AccessShareLock
- partitioning_locks      | relation | RowExclusiveLock
- partitioning_locks_2009 | relation | RowExclusiveLock
- partitioning_locks_2010 | relation | RowExclusiveLock
-(4 rows)
-
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
 COMMIT;
 -- test locks on DDL
 BEGIN;
 ALTER TABLE partitioning_locks ADD COLUMN new_column int;
+ERROR:  relation "partitioning_locks" does not exist
 SELECT relation::regclass, locktype, mode FROM pg_locks WHERE relation::regclass::text LIKE 'partitioning_locks%' AND pid = pg_backend_pid() ORDER BY 1, 2, 3;
-        relation         | locktype |        mode         
--------------------------+----------+---------------------
- partitioning_locks      | relation | AccessExclusiveLock
- partitioning_locks      | relation | AccessShareLock
- partitioning_locks_2009 | relation | AccessExclusiveLock
- partitioning_locks_2010 | relation | AccessExclusiveLock
-(4 rows)
-
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
 COMMIT;
 -- test locks on TRUNCATE
 BEGIN;
 TRUNCATE partitioning_locks;
+ERROR:  relation "partitioning_locks" does not exist
 SELECT relation::regclass, locktype, mode FROM pg_locks WHERE relation::regclass::text LIKE 'partitioning_locks%' AND pid = pg_backend_pid() ORDER BY 1, 2, 3;
-        relation         | locktype |        mode         
--------------------------+----------+---------------------
- partitioning_locks      | relation | AccessExclusiveLock
- partitioning_locks      | relation | AccessShareLock
- partitioning_locks_2009 | relation | AccessExclusiveLock
- partitioning_locks_2009 | relation | AccessShareLock
- partitioning_locks_2009 | relation | RowExclusiveLock
- partitioning_locks_2009 | relation | ShareLock
- partitioning_locks_2010 | relation | AccessExclusiveLock
- partitioning_locks_2010 | relation | AccessShareLock
- partitioning_locks_2010 | relation | RowExclusiveLock
- partitioning_locks_2010 | relation | ShareLock
-(10 rows)
-
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
 COMMIT;
 -- test shard resource locks with master_modify_multiple_shards
 BEGIN;
 SELECT master_modify_multiple_shards('UPDATE partitioning_locks_2009 SET time = ''2009-03-01''');
- master_modify_multiple_shards 
--------------------------------
-                             0
-(1 row)
-
+ERROR:  relation "partitioning_locks_2009" does not exist
 -- see the locks on parent table
 SELECT
     logicalrelid,
@@ -1154,26 +1077,12 @@ WHERE
     pid = pg_backend_pid()
 ORDER BY
     1, 2, 3;
-      logicalrelid       | locktype |           mode           
--------------------------+----------+--------------------------
- partitioning_locks      | advisory | ShareUpdateExclusiveLock
- partitioning_locks      | advisory | ShareUpdateExclusiveLock
- partitioning_locks      | advisory | ShareUpdateExclusiveLock
- partitioning_locks      | advisory | ShareUpdateExclusiveLock
- partitioning_locks_2009 | advisory | ShareLock
- partitioning_locks_2009 | advisory | ShareLock
- partitioning_locks_2009 | advisory | ShareLock
- partitioning_locks_2009 | advisory | ShareLock
- partitioning_locks_2009 | advisory | ShareUpdateExclusiveLock
- partitioning_locks_2009 | advisory | ShareUpdateExclusiveLock
- partitioning_locks_2009 | advisory | ShareUpdateExclusiveLock
- partitioning_locks_2009 | advisory | ShareUpdateExclusiveLock
-(12 rows)
-
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
 COMMIT;
 -- test shard resource locks with TRUNCATE
 BEGIN;
 TRUNCATE partitioning_locks_2009;
+ERROR:  relation "partitioning_locks_2009" does not exist
 -- see the locks on parent table
 SELECT
     logicalrelid,
@@ -1188,26 +1097,14 @@ WHERE
     pid = pg_backend_pid()
 ORDER BY
     1, 2, 3;
-      logicalrelid       | locktype |           mode           
--------------------------+----------+--------------------------
- partitioning_locks      | advisory | ShareUpdateExclusiveLock
- partitioning_locks      | advisory | ShareUpdateExclusiveLock
- partitioning_locks      | advisory | ShareUpdateExclusiveLock
- partitioning_locks      | advisory | ShareUpdateExclusiveLock
- partitioning_locks_2009 | advisory | ShareLock
- partitioning_locks_2009 | advisory | ShareLock
- partitioning_locks_2009 | advisory | ShareLock
- partitioning_locks_2009 | advisory | ShareLock
- partitioning_locks_2009 | advisory | ShareUpdateExclusiveLock
- partitioning_locks_2009 | advisory | ShareUpdateExclusiveLock
- partitioning_locks_2009 | advisory | ShareUpdateExclusiveLock
- partitioning_locks_2009 | advisory | ShareUpdateExclusiveLock
-(12 rows)
-
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
 COMMIT;
 -- test shard resource locks with INSERT/SELECT
 BEGIN;
 INSERT INTO partitioning_locks_2009 SELECT * FROM partitioning_locks WHERE time >= '2009-01-01' AND time < '2010-01-01';
+ERROR:  relation "partitioning_locks_2009" does not exist
+LINE 1: INSERT INTO partitioning_locks_2009 SELECT * FROM partitioni...
+                    ^
 -- see the locks on parent table
 SELECT
     logicalrelid,
@@ -1222,22 +1119,7 @@ WHERE
     pid = pg_backend_pid()
 ORDER BY
     1, 2, 3;
-      logicalrelid       | locktype |           mode           
--------------------------+----------+--------------------------
- partitioning_locks      | advisory | ShareUpdateExclusiveLock
- partitioning_locks      | advisory | ShareUpdateExclusiveLock
- partitioning_locks      | advisory | ShareUpdateExclusiveLock
- partitioning_locks      | advisory | ShareUpdateExclusiveLock
- partitioning_locks_2009 | advisory | ShareLock
- partitioning_locks_2009 | advisory | ShareLock
- partitioning_locks_2009 | advisory | ShareLock
- partitioning_locks_2009 | advisory | ShareLock
- partitioning_locks_2009 | advisory | ShareUpdateExclusiveLock
- partitioning_locks_2009 | advisory | ShareUpdateExclusiveLock
- partitioning_locks_2009 | advisory | ShareUpdateExclusiveLock
- partitioning_locks_2009 | advisory | ShareUpdateExclusiveLock
-(12 rows)
-
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
 COMMIT;
 DROP TABLE
 IF EXISTS
@@ -1248,28 +1130,43 @@ IF EXISTS
     multi_column_partitioning,
     partitioning_locks,
     partitioning_locks_for_select;
+NOTICE:  table "partitioning_test_2009" does not exist, skipping
+NOTICE:  table "partitioned_events_table" does not exist, skipping
+NOTICE:  table "partitioned_users_table" does not exist, skipping
+NOTICE:  table "list_partitioned_events_table" does not exist, skipping
+NOTICE:  table "multi_column_partitioning" does not exist, skipping
+NOTICE:  table "partitioning_locks" does not exist, skipping
 -- make sure we can create a partitioned table with streaming replication
 SET citus.replication_model TO 'streaming';
 CREATE TABLE partitioning_test(id int, time date) PARTITION BY RANGE (time);
+ERROR:  syntax error at or near "PARTITION"
+LINE 1: CREATE TABLE partitioning_test(id int, time date) PARTITION ...
+                                                          ^
 CREATE TABLE partitioning_test_2009 PARTITION OF partitioning_test FOR VALUES FROM ('2009-01-01') TO ('2010-01-01');
+ERROR:  syntax error at or near "PARTITION"
+LINE 1: CREATE TABLE partitioning_test_2009 PARTITION OF partitionin...
+                                            ^
 SELECT create_distributed_table('partitioning_test', 'id');
- create_distributed_table 
---------------------------
- 
-(1 row)
-
+ERROR:  relation "partitioning_test" does not exist
+LINE 1: SELECT create_distributed_table('partitioning_test', 'id');
+                                        ^
 DROP TABLE partitioning_test;
+ERROR:  table "partitioning_test" does not exist
 -- make sure we can attach partitions to a distributed table in a schema
 CREATE SCHEMA partitioning_schema;
 CREATE TABLE partitioning_schema."schema-test"(id int, time date) PARTITION BY RANGE (time);
+ERROR:  syntax error at or near "PARTITION"
+LINE 1: ...titioning_schema."schema-test"(id int, time date) PARTITION ...
+                                                             ^
 SELECT create_distributed_table('partitioning_schema."schema-test"', 'id');
- create_distributed_table 
---------------------------
- 
-(1 row)
-
+ERROR:  relation "partitioning_schema.schema-test" does not exist
+LINE 1: SELECT create_distributed_table('partitioning_schema."schema...
+                                        ^
 CREATE TABLE partitioning_schema."schema-test_2009"(id int, time date);
 ALTER TABLE partitioning_schema."schema-test" ATTACH PARTITION partitioning_schema."schema-test_2009" FOR VALUES FROM ('2009-01-01') TO ('2010-01-01');
+ERROR:  syntax error at or near "ATTACH"
+LINE 1: ALTER TABLE partitioning_schema."schema-test" ATTACH PARTITI...
+                                                      ^
 -- attached partition is distributed as well
 SELECT 
 	logicalrelid 
@@ -1278,12 +1175,9 @@ FROM
 WHERE 
 	logicalrelid IN ('partitioning_schema."schema-test"'::regclass, 'partitioning_schema."schema-test_2009"'::regclass)
 ORDER BY 1;
-              logicalrelid              
-----------------------------------------
- partitioning_schema."schema-test"
- partitioning_schema."schema-test_2009"
-(2 rows)
-
+ERROR:  relation "partitioning_schema.schema-test" does not exist
+LINE 6:  logicalrelid IN ('partitioning_schema."schema-test"'::regcl...
+                          ^
 SELECT 
 	logicalrelid, count(*) 
 FROM
@@ -1294,22 +1188,24 @@ GROUP BY
 	logicalrelid
 ORDER BY
 	1,2;
-              logicalrelid              | count 
-----------------------------------------+-------
- partitioning_schema."schema-test"      |     4
- partitioning_schema."schema-test_2009" |     4
-(2 rows)
-
+ERROR:  relation "partitioning_schema.schema-test" does not exist
+LINE 6:     logicalrelid IN ('partitioning_schema."schema-test"'::re...
+                             ^
 DROP TABLE partitioning_schema."schema-test";
+ERROR:  table "schema-test" does not exist
 -- make sure we can create partition of a distributed table in a schema
 CREATE TABLE partitioning_schema."schema-test"(id int, time date) PARTITION BY RANGE (time);
+ERROR:  syntax error at or near "PARTITION"
+LINE 1: ...titioning_schema."schema-test"(id int, time date) PARTITION ...
+                                                             ^
 SELECT create_distributed_table('partitioning_schema."schema-test"', 'id');
- create_distributed_table 
---------------------------
- 
-(1 row)
-
+ERROR:  relation "partitioning_schema.schema-test" does not exist
+LINE 1: SELECT create_distributed_table('partitioning_schema."schema...
+                                        ^
 CREATE TABLE partitioning_schema."schema-test_2009" PARTITION OF partitioning_schema."schema-test" FOR VALUES FROM ('2009-01-01') TO ('2010-01-01');
+ERROR:  syntax error at or near "PARTITION"
+LINE 1: ...EATE TABLE partitioning_schema."schema-test_2009" PARTITION ...
+                                                             ^
 -- newly created partition is distributed as well
 SELECT 
 	logicalrelid 
@@ -1318,12 +1214,9 @@ FROM
 WHERE 
 	logicalrelid IN ('partitioning_schema."schema-test"'::regclass, 'partitioning_schema."schema-test_2009"'::regclass)
 ORDER BY 1;
-              logicalrelid              
-----------------------------------------
- partitioning_schema."schema-test"
- partitioning_schema."schema-test_2009"
-(2 rows)
-
+ERROR:  relation "partitioning_schema.schema-test" does not exist
+LINE 6:  logicalrelid IN ('partitioning_schema."schema-test"'::regcl...
+                          ^
 SELECT 
 	logicalrelid, count(*) 
 FROM
@@ -1334,23 +1227,25 @@ GROUP BY
 	logicalrelid
 ORDER BY
 	1,2;
-              logicalrelid              | count 
-----------------------------------------+-------
- partitioning_schema."schema-test"      |     4
- partitioning_schema."schema-test_2009" |     4
-(2 rows)
-
+ERROR:  relation "partitioning_schema.schema-test" does not exist
+LINE 6:     logicalrelid IN ('partitioning_schema."schema-test"'::re...
+                             ^
 DROP TABLE partitioning_schema."schema-test";
+ERROR:  table "schema-test" does not exist
 -- make sure creating partitioned tables works while search_path is set
 CREATE TABLE partitioning_schema."schema-test"(id int, time date) PARTITION BY RANGE (time);
+ERROR:  syntax error at or near "PARTITION"
+LINE 1: ...titioning_schema."schema-test"(id int, time date) PARTITION ...
+                                                             ^
 SET search_path = partitioning_schema;
 SELECT create_distributed_table('"schema-test"', 'id');
- create_distributed_table 
---------------------------
- 
-(1 row)
-
+ERROR:  relation "schema-test" does not exist
+LINE 1: SELECT create_distributed_table('"schema-test"', 'id');
+                                        ^
 CREATE TABLE partitioning_schema."schema-test_2009" PARTITION OF "schema-test" FOR VALUES FROM ('2009-01-01') TO ('2010-01-01');
+ERROR:  syntax error at or near "PARTITION"
+LINE 1: ...EATE TABLE partitioning_schema."schema-test_2009" PARTITION ...
+                                                             ^
 -- newly created partition is distributed as well
 SELECT 
 	logicalrelid 
@@ -1359,12 +1254,9 @@ FROM
 WHERE 
 	logicalrelid IN ('partitioning_schema."schema-test"'::regclass, 'partitioning_schema."schema-test_2009"'::regclass)
 ORDER BY 1;
-    logicalrelid    
---------------------
- "schema-test"
- "schema-test_2009"
-(2 rows)
-
+ERROR:  relation "partitioning_schema.schema-test" does not exist
+LINE 6:  logicalrelid IN ('partitioning_schema."schema-test"'::regcl...
+                          ^
 SELECT 
 	logicalrelid, count(*) 
 FROM
@@ -1375,11 +1267,8 @@ GROUP BY
 	logicalrelid
 ORDER BY
 	1,2;
-    logicalrelid    | count 
---------------------+-------
- "schema-test"      |     4
- "schema-test_2009" |     4
-(2 rows)
-
+ERROR:  relation "partitioning_schema.schema-test" does not exist
+LINE 6:     logicalrelid IN ('partitioning_schema."schema-test"'::re...
+                             ^
 DROP SCHEMA partitioning_schema CASCADE;
-NOTICE:  drop cascades to table "schema-test"
+NOTICE:  drop cascades to table "schema-test_2009"

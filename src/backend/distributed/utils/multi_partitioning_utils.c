@@ -15,7 +15,9 @@
 #endif
 #include "catalog/pg_class.h"
 #include "catalog/pg_inherits.h"
-#include "catalog/pg_inherits_fn.h"
+#if (PG_VERSION_NUM < 110000)
+#include "catalog/pg_constraint_fn.h"
+#endif
 #include "distributed/citus_ruleutils.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "lib/stringinfo.h"
@@ -23,6 +25,7 @@
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
+#include "utils/rel.h"
 #include "utils/syscache.h"
 
 

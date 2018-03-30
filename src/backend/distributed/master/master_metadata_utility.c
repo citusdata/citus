@@ -41,6 +41,7 @@
 #include "distributed/remote_commands.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_protocol.h"
+#include "distributed/version_compat.h"
 #include "nodes/makefuncs.h"
 #include "parser/scansup.h"
 #include "storage/lmgr.h"
@@ -1278,8 +1279,7 @@ EnsureTablePermissions(Oid relationId, AclMode mode)
 
 	if (aclresult != ACLCHECK_OK)
 	{
-		aclcheck_error(aclresult, ACL_KIND_CLASS,
-					   get_rel_name(relationId));
+		aclcheck_error(aclresult, ACLCHECK_OBJECT_TABLE, get_rel_name(relationId));
 	}
 }
 
@@ -1293,7 +1293,7 @@ EnsureTableOwner(Oid relationId)
 {
 	if (!pg_class_ownercheck(relationId, GetUserId()))
 	{
-		aclcheck_error(ACLCHECK_NOT_OWNER, ACL_KIND_CLASS,
+		aclcheck_error(ACLCHECK_NOT_OWNER, ACLCHECK_OBJECT_TABLE,
 					   get_rel_name(relationId));
 	}
 }

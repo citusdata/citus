@@ -1,3 +1,7 @@
+-- print whether we're using version > 10 to make version-specific tests clear
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int > 10 AS version_above_nine;
+
 
 CREATE TABLE artists (
     id bigint NOT NULL,
