@@ -147,6 +147,10 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 
 			result = CreateDistributedPlannedStmt(planId, result, originalQuery, parse,
 												  boundParams, plannerRestrictionContext);
+
+			setPartitionedTablesInherited = true;
+			AdjustPartitioningForDistributedPlanning(parse,
+													 setPartitionedTablesInherited);
 		}
 	}
 	PG_CATCH();
@@ -155,13 +159,6 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 		PG_RE_THROW();
 	}
 	PG_END_TRY();
-
-	if (needsDistributedPlanning)
-	{
-		setPartitionedTablesInherited = true;
-
-		AdjustPartitioningForDistributedPlanning(parse, setPartitionedTablesInherited);
-	}
 
 	/* remove the context from the context list */
 	PopPlannerRestrictionContext();
@@ -1445,6 +1442,13 @@ CurrentPlannerRestrictionContext(void)
 
 	plannerRestrictionContext =
 		(PlannerRestrictionContext *) linitial(plannerRestrictionContextList);
+
+	if (plannerRestrictionContext == NULL)
+	{
+		ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
+						errmsg("planner restriction context stack was empty"),
+						errdetail("Please report this to the Citus core team.")));
+	}
 
 	return plannerRestrictionContext;
 }
