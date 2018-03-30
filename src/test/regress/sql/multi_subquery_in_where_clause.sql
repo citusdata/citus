@@ -83,7 +83,7 @@ ORDER BY 1;
 FROM 
   users_table 
 WHERE 
-  user_id =ANY(SELECT user_id FROM users_table WHERE value_1 >= 10 AND value_1 <= 20) GROUP BY 1 ORDER BY 2 DESC LIMIT 5;
+  user_id =ANY(SELECT user_id FROM users_table WHERE value_1 >= 10 AND value_1 <= 20) GROUP BY 1 ORDER BY 2 DESC, 1 ASC LIMIT 5;
 
 -- users that appeared more than 118 times
 SELECT 

@@ -74,7 +74,7 @@ from
 group by
     suppkey_bin
 order by
-    avg_count desc
+    avg_count desc, suppkey_bin DESC
 limit 20;
 
 select
