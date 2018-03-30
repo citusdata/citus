@@ -57,9 +57,9 @@ SET client_min_messages TO DEBUG3;
 -- First test the default greedy task assignment policy
 SET citus.task_assignment_policy TO 'greedy';
 EXPLAIN SELECT count(*) FROM task_assignment_test_table;
-DEBUG:  assigned task 6 to node localhost:57637
-DEBUG:  assigned task 2 to node localhost:57638
-DEBUG:  assigned task 4 to node localhost:57637
+DEBUG:  assigned task 3 to node localhost:57637
+DEBUG:  assigned task 1 to node localhost:57638
+DEBUG:  assigned task 2 to node localhost:57637
                               QUERY PLAN                               
 -----------------------------------------------------------------------
  Aggregate  (cost=0.00..0.00 rows=0 width=0)
@@ -68,9 +68,9 @@ DEBUG:  assigned task 4 to node localhost:57637
 (3 rows)
 
 EXPLAIN SELECT count(*) FROM task_assignment_test_table;
-DEBUG:  assigned task 6 to node localhost:57637
-DEBUG:  assigned task 2 to node localhost:57638
-DEBUG:  assigned task 4 to node localhost:57637
+DEBUG:  assigned task 3 to node localhost:57637
+DEBUG:  assigned task 1 to node localhost:57638
+DEBUG:  assigned task 2 to node localhost:57637
                               QUERY PLAN                               
 -----------------------------------------------------------------------
  Aggregate  (cost=0.00..0.00 rows=0 width=0)
@@ -81,9 +81,9 @@ DEBUG:  assigned task 4 to node localhost:57637
 -- Next test the first-replica task assignment policy
 SET citus.task_assignment_policy TO 'first-replica';
 EXPLAIN SELECT count(*) FROM task_assignment_test_table;
-DEBUG:  assigned task 6 to node localhost:57637
-DEBUG:  assigned task 4 to node localhost:57637
-DEBUG:  assigned task 2 to node localhost:57638
+DEBUG:  assigned task 3 to node localhost:57637
+DEBUG:  assigned task 2 to node localhost:57637
+DEBUG:  assigned task 1 to node localhost:57638
                               QUERY PLAN                               
 -----------------------------------------------------------------------
  Aggregate  (cost=0.00..0.00 rows=0 width=0)
@@ -92,9 +92,9 @@ DEBUG:  assigned task 2 to node localhost:57638
 (3 rows)
 
 EXPLAIN SELECT count(*) FROM task_assignment_test_table;
-DEBUG:  assigned task 6 to node localhost:57637
-DEBUG:  assigned task 4 to node localhost:57637
-DEBUG:  assigned task 2 to node localhost:57638
+DEBUG:  assigned task 3 to node localhost:57637
+DEBUG:  assigned task 2 to node localhost:57637
+DEBUG:  assigned task 1 to node localhost:57638
                               QUERY PLAN                               
 -----------------------------------------------------------------------
  Aggregate  (cost=0.00..0.00 rows=0 width=0)
@@ -105,20 +105,9 @@ DEBUG:  assigned task 2 to node localhost:57638
 -- Finally test the round-robin task assignment policy
 SET citus.task_assignment_policy TO 'round-robin';
 EXPLAIN SELECT count(*) FROM task_assignment_test_table;
-DEBUG:  assigned task 6 to node localhost:57638
-DEBUG:  assigned task 4 to node localhost:57638
-DEBUG:  assigned task 2 to node localhost:57637
-                              QUERY PLAN                               
------------------------------------------------------------------------
- Aggregate  (cost=0.00..0.00 rows=0 width=0)
-   ->  Custom Scan (Citus Real-Time)  (cost=0.00..0.00 rows=0 width=0)
-         explain statements for distributed queries are not enabled
-(3 rows)
-
-EXPLAIN SELECT count(*) FROM task_assignment_test_table;
-DEBUG:  assigned task 6 to node localhost:57637
-DEBUG:  assigned task 4 to node localhost:57637
+DEBUG:  assigned task 3 to node localhost:57638
 DEBUG:  assigned task 2 to node localhost:57638
+DEBUG:  assigned task 1 to node localhost:57637
                               QUERY PLAN                               
 -----------------------------------------------------------------------
  Aggregate  (cost=0.00..0.00 rows=0 width=0)
@@ -127,9 +116,20 @@ DEBUG:  assigned task 2 to node localhost:57638
 (3 rows)
 
 EXPLAIN SELECT count(*) FROM task_assignment_test_table;
-DEBUG:  assigned task 6 to node localhost:57638
-DEBUG:  assigned task 4 to node localhost:57638
+DEBUG:  assigned task 3 to node localhost:57637
 DEBUG:  assigned task 2 to node localhost:57637
+DEBUG:  assigned task 1 to node localhost:57638
+                              QUERY PLAN                               
+-----------------------------------------------------------------------
+ Aggregate  (cost=0.00..0.00 rows=0 width=0)
+   ->  Custom Scan (Citus Real-Time)  (cost=0.00..0.00 rows=0 width=0)
+         explain statements for distributed queries are not enabled
+(3 rows)
+
+EXPLAIN SELECT count(*) FROM task_assignment_test_table;
+DEBUG:  assigned task 3 to node localhost:57638
+DEBUG:  assigned task 2 to node localhost:57638
+DEBUG:  assigned task 1 to node localhost:57637
                               QUERY PLAN                               
 -----------------------------------------------------------------------
  Aggregate  (cost=0.00..0.00 rows=0 width=0)

@@ -331,20 +331,18 @@ ManageTaskExecution(Task *task, TaskExecution *taskExecution,
 			ConnectStatus pollStatus = MultiClientConnectPoll(connectionId);
 
 			/*
-			 * If the connection is established, we reset the data fetch counter and
-			 * change our status to data fetching.
+			 * If the connection is established, we change our state based on
+			 * whether a coordinated transaction has been started.
 			 */
 			if (pollStatus == CLIENT_CONNECTION_READY)
 			{
-				taskExecution->dataFetchTaskIndex = -1;
-
 				if (InCoordinatedTransaction())
 				{
 					taskStatusArray[currentIndex] = EXEC_BEGIN_START;
 				}
 				else
 				{
-					taskStatusArray[currentIndex] = EXEC_FETCH_TASK_LOOP;
+					taskStatusArray[currentIndex] = EXEC_COMPUTE_TASK_START;
 				}
 			}
 			else if (pollStatus == CLIENT_CONNECTION_BUSY)
@@ -393,8 +391,8 @@ ManageTaskExecution(Task *task, TaskExecution *taskExecution,
 			/*
 			 * On task failure, we close the connection. We also reset our execution
 			 * status assuming that we might fail on all other worker nodes and come
-			 * back to this failed node. In that case, we will retry the same fetch
-			 * and compute task(s) on this node again.
+			 * back to this failed node. In that case, we will retry compute task(s)
+			 * on this node again.
 			 */
 			int32 connectionId = connectionIdArray[currentIndex];
 			MultiConnection *connection = MultiClientGetConnection(connectionId);
@@ -453,11 +451,6 @@ ManageTaskExecution(Task *task, TaskExecution *taskExecution,
 			}
 			else
 			{
-				/*
-				 * We skip data fetches when in a distributed transaction since
-				 * they cannot be performed in a transactional way (e.g. would
-				 * trigger deadlock detection).
-				 */
 				taskStatusArray[currentIndex] = EXEC_COMPUTE_TASK_START;
 				break;
 			}
@@ -493,99 +486,9 @@ ManageTaskExecution(Task *task, TaskExecution *taskExecution,
 			}
 			else
 			{
-				/*
-				 * We skip data fetches when in a distributed transaction since
-				 * they cannot be performed in a transactional way (e.g. would
-				 * trigger deadlock detection).
-				 */
 				taskStatusArray[currentIndex] = EXEC_COMPUTE_TASK_START;
 				break;
 			}
-		}
-
-		case EXEC_FETCH_TASK_LOOP:
-		{
-			List *dataFetchTaskList = task->dependedTaskList;
-			int32 dataFetchTaskCount = list_length(dataFetchTaskList);
-
-			/* move to the next data fetch task */
-			taskExecution->dataFetchTaskIndex++;
-
-			if (taskExecution->dataFetchTaskIndex < dataFetchTaskCount)
-			{
-				taskStatusArray[currentIndex] = EXEC_FETCH_TASK_START;
-			}
-			else
-			{
-				taskStatusArray[currentIndex] = EXEC_COMPUTE_TASK_START;
-			}
-
-			break;
-		}
-
-		case EXEC_FETCH_TASK_START:
-		{
-			List *dataFetchTaskList = task->dependedTaskList;
-			int32 dataFetchTaskIndex = taskExecution->dataFetchTaskIndex;
-			Task *dataFetchTask = (Task *) list_nth(dataFetchTaskList,
-													dataFetchTaskIndex);
-
-			char *dataFetchQuery = dataFetchTask->queryString;
-			int32 connectionId = connectionIdArray[currentIndex];
-
-			bool querySent = MultiClientSendQuery(connectionId, dataFetchQuery);
-			if (querySent)
-			{
-				taskStatusArray[currentIndex] = EXEC_FETCH_TASK_RUNNING;
-			}
-			else
-			{
-				taskStatusArray[currentIndex] = EXEC_TASK_FAILED;
-			}
-
-			break;
-		}
-
-		case EXEC_FETCH_TASK_RUNNING:
-		{
-			int32 connectionId = connectionIdArray[currentIndex];
-			ResultStatus resultStatus = MultiClientResultStatus(connectionId);
-			QueryStatus queryStatus = CLIENT_INVALID_QUERY;
-
-			/* check if query results are in progress or unavailable */
-			if (resultStatus == CLIENT_RESULT_BUSY)
-			{
-				*executionStatus = TASK_STATUS_SOCKET_READ;
-				taskStatusArray[currentIndex] = EXEC_FETCH_TASK_RUNNING;
-				break;
-			}
-			else if (resultStatus == CLIENT_RESULT_UNAVAILABLE)
-			{
-				taskStatusArray[currentIndex] = EXEC_TASK_FAILED;
-				break;
-			}
-
-			Assert(resultStatus == CLIENT_RESULT_READY);
-
-			/*
-			 * If the query executed successfully, loop onto the next data fetch
-			 * task. Else if the query failed, try data fetching on another node.
-			 */
-			queryStatus = MultiClientQueryStatus(connectionId);
-			if (queryStatus == CLIENT_QUERY_DONE)
-			{
-				taskStatusArray[currentIndex] = EXEC_FETCH_TASK_LOOP;
-			}
-			else if (queryStatus == CLIENT_QUERY_FAILED)
-			{
-				taskStatusArray[currentIndex] = EXEC_TASK_FAILED;
-			}
-			else
-			{
-				ereport(FATAL, (errmsg("invalid query status: %d", queryStatus)));
-			}
-
-			break;
 		}
 
 		case EXEC_COMPUTE_TASK_START:
@@ -827,7 +730,6 @@ CancelRequestIfActive(TaskExecStatus taskStatus, int connectionId)
 	/*
 	 * We use the task status to determine if we have an active request being
 	 * processed by the worker node. If we do, we send a cancellation request.
-	 * Note that we don't cancel data fetch tasks, and allow them to complete.
 	 */
 	if (taskStatus == EXEC_COMPUTE_TASK_RUNNING)
 	{

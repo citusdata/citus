@@ -69,6 +69,9 @@ static void NormalizeWorkerListPath(void);
 static bool StatisticsCollectionGucCheckHook(bool *newval, void **extra, GucSource
 											 source);
 
+/* static variable to hold value of deprecated GUC variable */
+static bool ExpireCachedShards = false;
+
 
 /* *INDENT-OFF* */
 /* GUC enum definitions */
@@ -360,11 +363,8 @@ RegisterCitusConfigVariables(void)
 
 	DefineCustomBoolVariable(
 		"citus.expire_cached_shards",
-		gettext_noop("Enables shard cache expiration if a shard's size on disk has "
-					 "changed."),
-		gettext_noop("When appending to an existing shard, old data may still be cached "
-					 "on other workers. This configuration entry activates automatic "
-					 "expiration, but should not be used with manual updates to shards."),
+		gettext_noop("This GUC variable has been deprecated."),
+		NULL,
 		&ExpireCachedShards,
 		false,
 		PGC_SIGHUP,

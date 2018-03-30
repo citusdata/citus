@@ -1667,31 +1667,81 @@ DEBUG:  Plan is router executable
 ----+-----------+-------+------------+------+----
 (0 rows)
 
--- multi-shard join is not router plannable
-SELECT * FROM articles_range ar join authors_range au on (ar.author_id = au.id)
+-- This query was intended to test "multi-shard join is not router plannable"
+-- To run it using repartition join logic we change the join columns
+SET citus.task_executor_type to "task-tracker";
+SELECT * FROM articles_range ar join authors_range au on (ar.title = au.name)
 	WHERE ar.author_id = 35;
-DEBUG:  join prunable for intervals [21,40] and [1,10]
-DEBUG:  join prunable for intervals [31,40] and [1,10]
-DEBUG:  join prunable for intervals [31,40] and [11,30]
+DEBUG:  join prunable for task partitionId 0 and 1
+DEBUG:  join prunable for task partitionId 0 and 2
+DEBUG:  join prunable for task partitionId 0 and 3
+DEBUG:  join prunable for task partitionId 1 and 0
+DEBUG:  join prunable for task partitionId 1 and 2
+DEBUG:  join prunable for task partitionId 1 and 3
+DEBUG:  join prunable for task partitionId 2 and 0
+DEBUG:  join prunable for task partitionId 2 and 1
+DEBUG:  join prunable for task partitionId 2 and 3
+DEBUG:  join prunable for task partitionId 3 and 0
+DEBUG:  join prunable for task partitionId 3 and 1
+DEBUG:  join prunable for task partitionId 3 and 2
+DEBUG:  pruning merge fetch taskId 1
+DETAIL:  Creating dependency on merge taskId 3
+DEBUG:  pruning merge fetch taskId 2
+DETAIL:  Creating dependency on merge taskId 5
+DEBUG:  pruning merge fetch taskId 4
+DETAIL:  Creating dependency on merge taskId 6
+DEBUG:  pruning merge fetch taskId 5
+DETAIL:  Creating dependency on merge taskId 10
+DEBUG:  pruning merge fetch taskId 7
+DETAIL:  Creating dependency on merge taskId 9
+DEBUG:  pruning merge fetch taskId 8
+DETAIL:  Creating dependency on merge taskId 15
+DEBUG:  pruning merge fetch taskId 10
+DETAIL:  Creating dependency on merge taskId 12
+DEBUG:  pruning merge fetch taskId 11
+DETAIL:  Creating dependency on merge taskId 20
  id | author_id | title | word_count | name | id 
 ----+-----------+-------+------------+------+----
 (0 rows)
 
--- this is a bug, it is a single shard join query but not router plannable
-SELECT * FROM articles_range ar join authors_range au on (ar.author_id = au.id) 
+-- This query was intended to test "this is a bug, it is a single shard join
+-- query but not router plannable". To run it using repartition join logic we
+-- change the join columns.
+SELECT * FROM articles_range ar join authors_range au on (ar.title = au.name) 
 	WHERE ar.author_id = 1 or au.id = 5;
-DEBUG:  join prunable for intervals [1,10] and [11,30]
-DEBUG:  join prunable for intervals [1,10] and [21,40]
-DEBUG:  join prunable for intervals [1,10] and [31,40]
-DEBUG:  join prunable for intervals [11,30] and [1,10]
-DEBUG:  join prunable for intervals [11,30] and [31,40]
-DEBUG:  join prunable for intervals [21,40] and [1,10]
-DEBUG:  join prunable for intervals [31,40] and [1,10]
-DEBUG:  join prunable for intervals [31,40] and [11,30]
+DEBUG:  join prunable for task partitionId 0 and 1
+DEBUG:  join prunable for task partitionId 0 and 2
+DEBUG:  join prunable for task partitionId 0 and 3
+DEBUG:  join prunable for task partitionId 1 and 0
+DEBUG:  join prunable for task partitionId 1 and 2
+DEBUG:  join prunable for task partitionId 1 and 3
+DEBUG:  join prunable for task partitionId 2 and 0
+DEBUG:  join prunable for task partitionId 2 and 1
+DEBUG:  join prunable for task partitionId 2 and 3
+DEBUG:  join prunable for task partitionId 3 and 0
+DEBUG:  join prunable for task partitionId 3 and 1
+DEBUG:  join prunable for task partitionId 3 and 2
+DEBUG:  pruning merge fetch taskId 1
+DETAIL:  Creating dependency on merge taskId 5
+DEBUG:  pruning merge fetch taskId 2
+DETAIL:  Creating dependency on merge taskId 5
+DEBUG:  pruning merge fetch taskId 4
+DETAIL:  Creating dependency on merge taskId 10
+DEBUG:  pruning merge fetch taskId 5
+DETAIL:  Creating dependency on merge taskId 10
+DEBUG:  pruning merge fetch taskId 7
+DETAIL:  Creating dependency on merge taskId 15
+DEBUG:  pruning merge fetch taskId 8
+DETAIL:  Creating dependency on merge taskId 15
+DEBUG:  pruning merge fetch taskId 10
+DETAIL:  Creating dependency on merge taskId 20
+DEBUG:  pruning merge fetch taskId 11
+DETAIL:  Creating dependency on merge taskId 20
  id | author_id | title | word_count | name | id 
 ----+-----------+-------+------------+------+----
 (0 rows)
 
+RESET citus.task_executor_type;
 -- bogus query, join on non-partition column, but router plannable due to filters
 SELECT * FROM articles_range ar join authors_range au on (ar.id = au.id) 
 	WHERE ar.author_id = 1 and au.id < 10;
@@ -1726,21 +1776,21 @@ DEBUG:  join prunable for intervals [21,40] and [1,10]
 DEBUG:  join prunable for intervals [31,40] and [1,10]
 DEBUG:  join prunable for intervals [31,40] and [11,30]
 DEBUG:  pruning merge fetch taskId 1
-DETAIL:  Creating dependency on merge taskId 3
-DEBUG:  pruning merge fetch taskId 4
-DETAIL:  Creating dependency on merge taskId 5
+DETAIL:  Creating dependency on merge taskId 2
+DEBUG:  pruning merge fetch taskId 3
+DETAIL:  Creating dependency on merge taskId 4
+DEBUG:  pruning merge fetch taskId 5
+DETAIL:  Creating dependency on merge taskId 4
 DEBUG:  pruning merge fetch taskId 7
-DETAIL:  Creating dependency on merge taskId 5
-DEBUG:  pruning merge fetch taskId 10
-DETAIL:  Creating dependency on merge taskId 7
+DETAIL:  Creating dependency on merge taskId 6
+DEBUG:  pruning merge fetch taskId 9
+DETAIL:  Creating dependency on merge taskId 6
+DEBUG:  pruning merge fetch taskId 11
+DETAIL:  Creating dependency on merge taskId 6
 DEBUG:  pruning merge fetch taskId 13
-DETAIL:  Creating dependency on merge taskId 7
-DEBUG:  pruning merge fetch taskId 16
-DETAIL:  Creating dependency on merge taskId 7
-DEBUG:  pruning merge fetch taskId 19
-DETAIL:  Creating dependency on merge taskId 9
-DEBUG:  pruning merge fetch taskId 22
-DETAIL:  Creating dependency on merge taskId 9
+DETAIL:  Creating dependency on merge taskId 8
+DEBUG:  pruning merge fetch taskId 15
+DETAIL:  Creating dependency on merge taskId 8
 ERROR:  the query contains a join that requires repartitioning
 HINT:  Set citus.enable_repartition_joins to on to enable repartitioning
 -- join between a range partitioned table and reference table is router plannable
@@ -1794,7 +1844,7 @@ WARNING:  relation "public.articles_append" does not exist
 CONTEXT:  while executing command on localhost:57638
 WARNING:  relation "public.articles_append" does not exist
 CONTEXT:  while executing command on localhost:57638
-ERROR:  failed to execute task 2
+ERROR:  failed to execute task 1
 -- same query with where false but evaluation left to worker
 SELECT author_id FROM articles_append
 	WHERE 
@@ -1809,7 +1859,7 @@ WARNING:  relation "public.articles_append" does not exist
 CONTEXT:  while executing command on localhost:57638
 WARNING:  relation "public.articles_append" does not exist
 CONTEXT:  while executing command on localhost:57638
-ERROR:  failed to execute task 2
+ERROR:  failed to execute task 1
 -- same query on router planner with where false but evaluation left to worker
 SELECT author_id FROM articles_single_shard_hash
 	WHERE 

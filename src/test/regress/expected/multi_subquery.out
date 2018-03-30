@@ -60,53 +60,6 @@ FROM
 		l_orderkey) AS unit_prices;
 ERROR:  cannot perform distributed planning on this query
 DETAIL:  Cartesian products are currently unsupported
--- this query is only required to execute
--- the following query given that recursive planning
--- (in general real-time queries in transactions)
--- do not execute shard fetch tasks and the next
--- query relies on that
-SELECT
-		l_orderkey,
-		avg(o_totalprice / l_quantity) AS unit_price
-	FROM
-		lineitem_subquery,
-		orders_subquery
-	WHERE
-		l_orderkey = o_custkey
-	GROUP BY
-		l_orderkey
-	ORDER BY 2 DESC, 1 DESC
-	LIMIT 5;
-DEBUG:  push down of limit count: 5
- l_orderkey |       unit_price       
-------------+------------------------
-        421 |    102749.853333333333
-        806 | 96257.4480681818181818
-        418 | 57151.4156630824373871
-       1124 | 56102.2804738959822181
-        230 | 53847.0509778948909754
-(5 rows)
-
-SELECT
-	avg(unit_price)
-FROM
-	(SELECT
-		l_orderkey,
-		avg(o_totalprice / l_quantity) AS unit_price
-	FROM
-		lineitem_subquery,
-		orders_subquery
-	WHERE
-		l_orderkey = o_custkey
-	GROUP BY
-		l_orderkey) AS unit_prices;
-DEBUG:  generating subplan 7_1 for subquery SELECT lineitem_subquery.l_orderkey, avg((orders_subquery.o_totalprice / lineitem_subquery.l_quantity)) AS unit_price FROM public.lineitem_subquery, public.orders_subquery WHERE (lineitem_subquery.l_orderkey = orders_subquery.o_custkey) GROUP BY lineitem_subquery.l_orderkey
-DEBUG:  Plan 7 query after replacing subqueries and CTEs: SELECT avg(unit_price) AS avg FROM (SELECT intermediate_result.l_orderkey, intermediate_result.unit_price FROM read_intermediate_result('7_1'::text, 'binary'::citus_copy_format) intermediate_result(l_orderkey bigint, unit_price numeric)) unit_prices
-          avg           
-------------------------
- 12973.7343244916919367
-(1 row)
-
 RESET client_min_messages;
 -- Subqueries without relation with a volatile functions (non-constant) are planned recursively
 SELECT count(*) FROM (
@@ -124,11 +77,11 @@ SELECT count(*) FROM
    (SELECT l_orderkey FROM lineitem_subquery) UNION ALL
    (SELECT 1::bigint)
 ) b;
-DEBUG:  generating subplan 10_1 for subquery SELECT l_orderkey FROM public.lineitem_subquery
+DEBUG:  generating subplan 7_1 for subquery SELECT l_orderkey FROM public.lineitem_subquery
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-DEBUG:  generating subplan 10_2 for subquery SELECT intermediate_result.l_orderkey FROM read_intermediate_result('10_1'::text, 'binary'::citus_copy_format) intermediate_result(l_orderkey bigint) UNION ALL SELECT (1)::bigint AS int8
-DEBUG:  Plan 10 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.l_orderkey FROM read_intermediate_result('10_2'::text, 'binary'::citus_copy_format) intermediate_result(l_orderkey bigint)) b
+DEBUG:  generating subplan 7_2 for subquery SELECT intermediate_result.l_orderkey FROM read_intermediate_result('7_1'::text, 'binary'::citus_copy_format) intermediate_result(l_orderkey bigint) UNION ALL SELECT (1)::bigint AS int8
+DEBUG:  Plan 7 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.l_orderkey FROM read_intermediate_result('7_2'::text, 'binary'::citus_copy_format) intermediate_result(l_orderkey bigint)) b
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  count 
@@ -142,12 +95,12 @@ SELECT count(*) FROM
    (SELECT l_orderkey FROM lineitem_subquery) UNION
    (SELECT l_partkey FROM lineitem_subquery)
 ) b;
-DEBUG:  generating subplan 13_1 for subquery SELECT l_orderkey FROM public.lineitem_subquery
-DEBUG:  generating subplan 13_2 for subquery SELECT l_partkey FROM public.lineitem_subquery
+DEBUG:  generating subplan 10_1 for subquery SELECT l_orderkey FROM public.lineitem_subquery
+DEBUG:  generating subplan 10_2 for subquery SELECT l_partkey FROM public.lineitem_subquery
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-DEBUG:  generating subplan 13_3 for subquery SELECT intermediate_result.l_orderkey FROM read_intermediate_result('13_1'::text, 'binary'::citus_copy_format) intermediate_result(l_orderkey bigint) UNION SELECT intermediate_result.l_partkey FROM read_intermediate_result('13_2'::text, 'binary'::citus_copy_format) intermediate_result(l_partkey integer)
-DEBUG:  Plan 13 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.l_orderkey FROM read_intermediate_result('13_3'::text, 'binary'::citus_copy_format) intermediate_result(l_orderkey bigint)) b
+DEBUG:  generating subplan 10_3 for subquery SELECT intermediate_result.l_orderkey FROM read_intermediate_result('10_1'::text, 'binary'::citus_copy_format) intermediate_result(l_orderkey bigint) UNION SELECT intermediate_result.l_partkey FROM read_intermediate_result('10_2'::text, 'binary'::citus_copy_format) intermediate_result(l_partkey integer)
+DEBUG:  Plan 10 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.l_orderkey FROM read_intermediate_result('10_3'::text, 'binary'::citus_copy_format) intermediate_result(l_orderkey bigint)) b
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  count 

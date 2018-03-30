@@ -215,6 +215,7 @@ SELECT * FROM articles WHERE author_id IN (SELECT id FROM authors WHERE name LIK
 (0 rows)
 
 -- subqueries are supported in FROM clause
+SET citus.large_table_shard_count TO 1;
 SELECT articles.id,test.word_count
 FROM articles, (SELECT id, word_count FROM articles) AS test WHERE test.id = articles.id
 ORDER BY articles.id;
@@ -272,6 +273,7 @@ ORDER BY articles.id;
  50 |      19519
 (50 rows)
 
+RESET citus.large_table_shard_count;
 -- subqueries are not supported in SELECT clause
 SELECT a.title AS name, (SELECT a2.id FROM articles_single_shard a2 WHERE a.id = a2.id  LIMIT 1)
 						 AS special_price FROM articles a;
@@ -575,21 +577,21 @@ DEBUG:  join prunable for task partitionId 3 and 0
 DEBUG:  join prunable for task partitionId 3 and 1
 DEBUG:  join prunable for task partitionId 3 and 2
 DEBUG:  pruning merge fetch taskId 1
-DETAIL:  Creating dependency on merge taskId 3
+DETAIL:  Creating dependency on merge taskId 2
 DEBUG:  pruning merge fetch taskId 2
-DETAIL:  Creating dependency on merge taskId 5
+DETAIL:  Creating dependency on merge taskId 3
 DEBUG:  pruning merge fetch taskId 4
-DETAIL:  Creating dependency on merge taskId 5
+DETAIL:  Creating dependency on merge taskId 4
 DEBUG:  pruning merge fetch taskId 5
-DETAIL:  Creating dependency on merge taskId 8
+DETAIL:  Creating dependency on merge taskId 6
 DEBUG:  pruning merge fetch taskId 7
-DETAIL:  Creating dependency on merge taskId 7
+DETAIL:  Creating dependency on merge taskId 6
 DEBUG:  pruning merge fetch taskId 8
-DETAIL:  Creating dependency on merge taskId 11
-DEBUG:  pruning merge fetch taskId 10
 DETAIL:  Creating dependency on merge taskId 9
+DEBUG:  pruning merge fetch taskId 10
+DETAIL:  Creating dependency on merge taskId 8
 DEBUG:  pruning merge fetch taskId 11
-DETAIL:  Creating dependency on merge taskId 14
+DETAIL:  Creating dependency on merge taskId 12
 ERROR:  the query contains a join that requires repartitioning
 HINT:  Set citus.enable_repartition_joins to on to enable repartitioning
 -- system columns from shard tables can be queried and retrieved

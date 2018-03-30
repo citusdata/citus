@@ -1821,6 +1821,24 @@ FROM
   ORDER BY 1,2
   LIMIT 5;
 
+-- Getting aggregation of value which is created by aggregation in subquery
+SELECT
+  count(1),
+  avg(agg_value)
+FROM
+  (SELECT
+    users_table.user_id,
+    avg(users_table.value_1 / events_table.value_4) AS agg_value
+  FROM
+    users_table,
+    events_table
+  WHERE
+    users_table.user_id = events_table.user_id
+  GROUP BY
+    1
+  ) AS temp;
+
+
 
 DROP FUNCTION test_join_function_2(integer, integer);
 

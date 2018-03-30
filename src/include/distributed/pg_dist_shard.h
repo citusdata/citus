@@ -52,10 +52,9 @@ typedef FormData_pg_dist_shard *Form_pg_dist_shard;
 #define Anum_pg_dist_shard_shardmaxvalue 6
 
 /*
- * Valid values for shard storage types include relay file, foreign table,
- * (standard) table and columnar table. Relay file types are currently unused.
+ * Valid values for shard storage types include foreign table, (standard) table
+ * and columnar table.
  */
-#define SHARD_STORAGE_RELAY 'r'
 #define SHARD_STORAGE_FOREIGN 'f'
 #define SHARD_STORAGE_TABLE 't'
 #define SHARD_STORAGE_COLUMNAR 'c'

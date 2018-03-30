@@ -8,6 +8,10 @@ ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1320000;
 \a\t
 SET citus.task_executor_type TO 'real-time';
 SET citus.explain_distributed_queries TO on;
+VACUUM ANALYZE lineitem_mx;
+VACUUM ANALYZE orders_mx;
+VACUUM ANALYZE customer_mx;
+VACUUM ANALYZE supplier_mx;
 \c - - - :worker_1_port
 -- Function that parses explain output as JSON
 CREATE FUNCTION explain_json(query text)

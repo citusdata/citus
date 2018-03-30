@@ -1351,7 +1351,6 @@ CreateTask(TaskType taskType)
 	task->upstreamTaskId = INVALID_TASK_ID;
 	task->shardInterval = NULL;
 	task->assignmentConstrained = false;
-	task->shardId = INVALID_SHARD_ID;
 	task->taskExecution = NULL;
 	task->upsertQuery = false;
 	task->replicationModel = REPLICATION_MODEL_INVALID;

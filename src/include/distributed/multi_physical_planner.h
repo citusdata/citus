@@ -33,10 +33,6 @@
 #define NON_PRUNABLE_JOIN -1
 #define RESERVED_HASHED_COLUMN_ID MaxAttrNumber
 #define MERGE_COLUMN_FORMAT "merge_column_%u"
-#define TABLE_FETCH_COMMAND "SELECT worker_fetch_regular_table \
- ('%s', " UINT64_FORMAT ", '%s', '%s')"
-#define FOREIGN_FETCH_COMMAND "SELECT worker_fetch_foreign_file \
- ('%s', " UINT64_FORMAT ", '%s', '%s')"
 #define MAP_OUTPUT_FETCH_COMMAND "SELECT worker_fetch_partition_file \
  (" UINT64_FORMAT ", %u, %u, %u, '%s', %u)"
 #define RANGE_PARTITION_COMMAND "SELECT worker_range_partition_table \
@@ -84,12 +80,11 @@ typedef enum
 	SQL_TASK = 1,
 	MAP_TASK = 2,
 	MERGE_TASK = 3,
-	SHARD_FETCH_TASK = 4,
-	MAP_OUTPUT_FETCH_TASK = 5,
-	MERGE_FETCH_TASK = 6,
-	MODIFY_TASK = 7,
-	ROUTER_TASK = 8,
-	DDL_TASK = 9
+	MAP_OUTPUT_FETCH_TASK = 4,
+	MERGE_FETCH_TASK = 5,
+	MODIFY_TASK = 6,
+	ROUTER_TASK = 7,
+	DDL_TASK = 8
 } TaskType;
 
 
@@ -151,7 +146,7 @@ typedef struct MapMergeJob
 /*
  * Task represents an executable unit of work. We conceptualize our tasks into
  * compute and data fetch task types. SQL, map, and merge tasks are considered
- * as compute tasks; and shard fetch, map fetch, and merge fetch tasks are data
+ * as compute tasks; and map fetch, and merge fetch tasks are data
  * fetch tasks. We also forward declare the task execution struct here to avoid
  * including the executor header files.
  *
@@ -180,7 +175,6 @@ typedef struct Task
 	uint32 upstreamTaskId;         /* only applies to data fetch tasks */
 	ShardInterval *shardInterval;  /* only applies to merge tasks */
 	bool assignmentConstrained;    /* only applies to merge tasks */
-	uint64 shardId;                /* only applies to shard fetch tasks */
 	TaskExecution *taskExecution;  /* used by task tracker executor */
 	bool upsertQuery;              /* only applies to modify tasks */
 	char replicationModel;         /* only applies to modify tasks */
@@ -303,7 +297,6 @@ extern bool EnableUniqueJobIds;
 extern DistributedPlan * CreatePhysicalDistributedPlan(MultiTreeRoot *multiTree,
 													   PlannerRestrictionContext *
 													   plannerRestrictionContext);
-extern StringInfo ShardFetchQueryString(uint64 shardId);
 extern Task * CreateBasicTask(uint64 jobId, uint32 taskId, TaskType taskType,
 							  char *queryString);
 
@@ -331,7 +324,6 @@ extern List * TaskListAppendUnique(List *list, Task *task);
 extern List * TaskListConcatUnique(List *list1, List *list2);
 extern bool TaskListMember(const List *taskList, const Task *task);
 extern List * TaskListDifference(const List *list1, const List *list2);
-extern List * TaskListUnion(const List *list1, const List *list2);
 extern List * AssignAnchorShardTaskList(List *taskList);
 extern List * FirstReplicaAssignTaskList(List *taskList);
 

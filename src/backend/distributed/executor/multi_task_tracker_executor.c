@@ -121,7 +121,6 @@ static List * ConstrainedMergeTaskList(List *taskAndExecutionList, Task *task);
 static List * MergeTaskList(List *taskList);
 static void ReassignTaskList(List *taskList);
 static void ReassignMapFetchTaskList(List *mapFetchTaskList);
-static List * ShardFetchTaskList(List *taskList);
 
 /* Local functions forward declarations to manage task trackers */
 static void ManageTaskTracker(TaskTracker *taskTracker);
@@ -1839,9 +1838,9 @@ TransmitTrackerConnectionId(TaskTracker *transmitTracker, Task *task)
  * ConstrainedTaskList finds the given task's constraint group within the given
  * task and execution list. We define a constraint group as all tasks that need
  * to be assigned (or reassigned) to the same task tracker for query execution
- * to complete. At a high level, compute tasks and their data fetch dependencies
- * are part of the same constraint group. Also, the transitive closure of tasks
- * that have the same merge task dependency are part of one constraint group.
+ * to complete. At a high level, compute tasks are part of the same constraint
+ * group. Also, the transitive closure of tasks that have the same merge task
+ * dependency are part of one constraint group.
  */
 static List *
 ConstrainedTaskList(List *taskAndExecutionList, Task *task)
@@ -1907,8 +1906,7 @@ ConstrainedTaskList(List *taskAndExecutionList, Task *task)
 /*
  * ConstrainedNonMergeTaskList finds the constraint group for the given task,
  * assuming that the given task doesn't have any merge task dependencies. This
- * constraint group includes a compute task and its downstream data fetch task
- * dependencies.
+ * constraint group includes compute task.
  */
 static List *
 ConstrainedNonMergeTaskList(List *taskAndExecutionList, Task *task)
@@ -1921,14 +1919,6 @@ ConstrainedNonMergeTaskList(List *taskAndExecutionList, Task *task)
 	if (taskType == SQL_TASK || taskType == MAP_TASK)
 	{
 		upstreamTask = task;
-		dependedTaskList = upstreamTask->dependedTaskList;
-	}
-	else if (taskType == SHARD_FETCH_TASK)
-	{
-		List *upstreamTaskList = UpstreamDependencyList(taskAndExecutionList, task);
-		Assert(list_length(upstreamTaskList) == 1);
-
-		upstreamTask = (Task *) linitial(upstreamTaskList);
 		dependedTaskList = upstreamTask->dependedTaskList;
 	}
 	Assert(upstreamTask != NULL);
@@ -2008,20 +1998,6 @@ ConstrainedMergeTaskList(List *taskAndExecutionList, Task *task)
 	{
 		constrainedMergeTaskList = MergeTaskList(task->dependedTaskList);
 	}
-	else if (taskType == SHARD_FETCH_TASK)
-	{
-		Task *upstreamTask = NULL;
-		List *upstreamTaskList = UpstreamDependencyList(taskAndExecutionList, task);
-
-		/*
-		 * A shard fetch task can only have one SQL/map task parent. We now get
-		 * that parent. From the parent, we find any merge task dependencies.
-		 */
-		Assert(list_length(upstreamTaskList) == 1);
-		upstreamTask = (Task *) linitial(upstreamTaskList);
-
-		constrainedMergeTaskList = MergeTaskList(upstreamTask->dependedTaskList);
-	}
 	else if (taskType == MAP_OUTPUT_FETCH_TASK)
 	{
 		List *taskList = UpstreamDependencyList(taskAndExecutionList, task);
@@ -2093,8 +2069,7 @@ ReassignTaskList(List *taskList)
 
 	/*
 	 * As an optimization, we first find the SQL tasks whose results we already
-	 * fetched to the master node. We don't need to re-execute these SQL tasks
-	 * or their shard fetch dependencies.
+	 * fetched to the master node. We don't need to re-execute these SQL tasks.
 	 */
 	foreach(taskCell, taskList)
 	{
@@ -2104,10 +2079,7 @@ ReassignTaskList(List *taskList)
 		bool transmitCompleted = TransmitExecutionCompleted(taskExecution);
 		if ((task->taskType == SQL_TASK) && transmitCompleted)
 		{
-			List *shardFetchTaskList = ShardFetchTaskList(task->dependedTaskList);
-
 			completedTaskList = lappend(completedTaskList, task);
-			completedTaskList = TaskListUnion(completedTaskList, shardFetchTaskList);
 		}
 	}
 
@@ -2159,29 +2131,6 @@ ReassignMapFetchTaskList(List *mapFetchTaskList)
 		 */
 		taskStatusArray[currentNodeIndex] = EXEC_TASK_UNASSIGNED;
 	}
-}
-
-
-/*
- * ShardFetchTaskList walks over the given task list, finds the shard fetch tasks
- * in the list, and returns the found tasks in a new list.
- */
-static List *
-ShardFetchTaskList(List *taskList)
-{
-	List *shardFetchTaskList = NIL;
-	ListCell *taskCell = NULL;
-
-	foreach(taskCell, taskList)
-	{
-		Task *task = (Task *) lfirst(taskCell);
-		if (task->taskType == SHARD_FETCH_TASK)
-		{
-			shardFetchTaskList = lappend(shardFetchTaskList, task);
-		}
-	}
-
-	return shardFetchTaskList;
 }
 
 

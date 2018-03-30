@@ -182,7 +182,6 @@ InitTaskExecution(Task *task, TaskExecStatus initialTaskExecStatus)
 	taskExecution->nodeCount = nodeCount;
 	taskExecution->connectStartTime = 0;
 	taskExecution->currentNodeIndex = 0;
-	taskExecution->dataFetchTaskIndex = -1;
 	taskExecution->failureCount = 0;
 
 	taskExecution->taskStatusArray = palloc0(nodeCount * sizeof(TaskExecStatus));
@@ -283,7 +282,6 @@ AdjustStateForFailure(TaskExecution *taskExecution)
 		taskExecution->currentNodeIndex = 0; /* go back to the first worker node */
 	}
 
-	taskExecution->dataFetchTaskIndex = -1; /* reset data fetch counter */
 	taskExecution->failureCount++;          /* record failure */
 }
 

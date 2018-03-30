@@ -116,7 +116,7 @@ INSERT INTO researchers_mx VALUES (8, 5, 'Douglas Engelbart');
 INSERT INTO labs_mx VALUES (5, 'Los Alamos');
 COMMIT;
 
-SELECT * FROM researchers_mx, labs_mx WHERE labs_mx.id = researchers_mx.lab_id;
+SELECT * FROM researchers_mx, labs_mx WHERE labs_mx.id = researchers_mx.lab_id and researchers_mx.lab_id = 5;;
 
 -- and the other way around is also allowed
 BEGIN;
@@ -132,7 +132,7 @@ INSERT INTO researchers_mx VALUES (8, 5, 'Douglas Engelbart');
 INSERT INTO labs_mx VALUES (5, 'Los Alamos');
 COMMIT;
 
-SELECT * FROM researchers_mx, labs_mx WHERE labs_mx.id = researchers_mx.lab_id;
+SELECT * FROM researchers_mx, labs_mx WHERE labs_mx.id = researchers_mx.lab_id and researchers_mx.lab_id = 5;
 
 -- and the other way around is also allowed
 BEGIN;

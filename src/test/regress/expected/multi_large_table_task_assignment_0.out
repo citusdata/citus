@@ -34,8 +34,8 @@ FROM
 WHERE
 	o_custkey = c_custkey;
 DEBUG:  StartTransactionCommand
-DEBUG:  assigned task 4 to node localhost:57637
-DEBUG:  assigned task 2 to node localhost:57638
+DEBUG:  assigned task 2 to node localhost:57637
+DEBUG:  assigned task 1 to node localhost:57638
 DEBUG:  join prunable for intervals [1,1000] and [1001,2000]
 DEBUG:  join prunable for intervals [1,1000] and [6001,7000]
 DEBUG:  join prunable for intervals [1001,2000] and [1,1000]
@@ -43,14 +43,14 @@ DEBUG:  join prunable for intervals [1001,2000] and [6001,7000]
 DEBUG:  join prunable for intervals [6001,7000] and [1,1000]
 DEBUG:  join prunable for intervals [6001,7000] and [1001,2000]
 DEBUG:  pruning merge fetch taskId 1
-DETAIL:  Creating dependency on merge taskId 5
-DEBUG:  pruning merge fetch taskId 4
-DETAIL:  Creating dependency on merge taskId 8
-DEBUG:  pruning merge fetch taskId 7
-DETAIL:  Creating dependency on merge taskId 11
-DEBUG:  assigned task 6 to node localhost:57637
-DEBUG:  assigned task 9 to node localhost:57638
-DEBUG:  assigned task 3 to node localhost:57637
+DETAIL:  Creating dependency on merge taskId 3
+DEBUG:  pruning merge fetch taskId 3
+DETAIL:  Creating dependency on merge taskId 6
+DEBUG:  pruning merge fetch taskId 5
+DETAIL:  Creating dependency on merge taskId 9
+DEBUG:  assigned task 4 to node localhost:57637
+DEBUG:  assigned task 6 to node localhost:57638
+DEBUG:  assigned task 2 to node localhost:57637
 DEBUG:  CommitTransactionCommand
  count 
 -------
@@ -73,12 +73,12 @@ WHERE
 	o_custkey = c_custkey AND
 	o_orderkey = l_orderkey;
 DEBUG:  StartTransactionCommand
-DEBUG:  assigned task 9 to node localhost:57637
-DEBUG:  assigned task 15 to node localhost:57638
-DEBUG:  assigned task 12 to node localhost:57637
-DEBUG:  assigned task 18 to node localhost:57638
 DEBUG:  assigned task 3 to node localhost:57637
+DEBUG:  assigned task 5 to node localhost:57638
+DEBUG:  assigned task 4 to node localhost:57637
 DEBUG:  assigned task 6 to node localhost:57638
+DEBUG:  assigned task 1 to node localhost:57637
+DEBUG:  assigned task 2 to node localhost:57638
 DEBUG:  join prunable for intervals [1,1509] and [2951,4455]
 DEBUG:  join prunable for intervals [1,1509] and [4480,5986]
 DEBUG:  join prunable for intervals [1,1509] and [8997,10560]
@@ -124,65 +124,65 @@ DEBUG:  join prunable for intervals [13473,14947] and [4480,5986]
 DEBUG:  join prunable for intervals [13473,14947] and [8997,10560]
 DEBUG:  join prunable for intervals [13473,14947] and [10560,12036]
 DEBUG:  pruning merge fetch taskId 1
-DETAIL:  Creating dependency on merge taskId 19
-DEBUG:  pruning merge fetch taskId 4
-DETAIL:  Creating dependency on merge taskId 19
+DETAIL:  Creating dependency on merge taskId 7
+DEBUG:  pruning merge fetch taskId 3
+DETAIL:  Creating dependency on merge taskId 7
+DEBUG:  pruning merge fetch taskId 5
+DETAIL:  Creating dependency on merge taskId 14
 DEBUG:  pruning merge fetch taskId 7
-DETAIL:  Creating dependency on merge taskId 26
-DEBUG:  pruning merge fetch taskId 10
-DETAIL:  Creating dependency on merge taskId 26
+DETAIL:  Creating dependency on merge taskId 14
+DEBUG:  pruning merge fetch taskId 9
+DETAIL:  Creating dependency on merge taskId 14
+DEBUG:  pruning merge fetch taskId 11
+DETAIL:  Creating dependency on merge taskId 14
 DEBUG:  pruning merge fetch taskId 13
-DETAIL:  Creating dependency on merge taskId 26
-DEBUG:  pruning merge fetch taskId 16
-DETAIL:  Creating dependency on merge taskId 26
+DETAIL:  Creating dependency on merge taskId 21
+DEBUG:  pruning merge fetch taskId 15
+DETAIL:  Creating dependency on merge taskId 21
+DEBUG:  pruning merge fetch taskId 17
+DETAIL:  Creating dependency on merge taskId 28
 DEBUG:  pruning merge fetch taskId 19
-DETAIL:  Creating dependency on merge taskId 33
-DEBUG:  pruning merge fetch taskId 22
-DETAIL:  Creating dependency on merge taskId 33
+DETAIL:  Creating dependency on merge taskId 28
+DEBUG:  pruning merge fetch taskId 21
+DETAIL:  Creating dependency on merge taskId 35
+DEBUG:  pruning merge fetch taskId 23
+DETAIL:  Creating dependency on merge taskId 35
 DEBUG:  pruning merge fetch taskId 25
-DETAIL:  Creating dependency on merge taskId 40
-DEBUG:  pruning merge fetch taskId 28
-DETAIL:  Creating dependency on merge taskId 40
+DETAIL:  Creating dependency on merge taskId 42
+DEBUG:  pruning merge fetch taskId 27
+DETAIL:  Creating dependency on merge taskId 42
+DEBUG:  pruning merge fetch taskId 29
+DETAIL:  Creating dependency on merge taskId 42
 DEBUG:  pruning merge fetch taskId 31
-DETAIL:  Creating dependency on merge taskId 47
-DEBUG:  pruning merge fetch taskId 34
-DETAIL:  Creating dependency on merge taskId 47
+DETAIL:  Creating dependency on merge taskId 49
+DEBUG:  pruning merge fetch taskId 33
+DETAIL:  Creating dependency on merge taskId 49
+DEBUG:  pruning merge fetch taskId 35
+DETAIL:  Creating dependency on merge taskId 49
 DEBUG:  pruning merge fetch taskId 37
-DETAIL:  Creating dependency on merge taskId 54
-DEBUG:  pruning merge fetch taskId 40
-DETAIL:  Creating dependency on merge taskId 54
-DEBUG:  pruning merge fetch taskId 43
-DETAIL:  Creating dependency on merge taskId 54
-DEBUG:  pruning merge fetch taskId 46
-DETAIL:  Creating dependency on merge taskId 61
-DEBUG:  pruning merge fetch taskId 49
-DETAIL:  Creating dependency on merge taskId 61
-DEBUG:  pruning merge fetch taskId 52
-DETAIL:  Creating dependency on merge taskId 61
-DEBUG:  pruning merge fetch taskId 55
-DETAIL:  Creating dependency on merge taskId 68
-DEBUG:  pruning merge fetch taskId 58
-DETAIL:  Creating dependency on merge taskId 68
-DEBUG:  assigned task 21 to node localhost:57637
-DEBUG:  assigned task 3 to node localhost:57638
-DEBUG:  assigned task 27 to node localhost:57637
-DEBUG:  assigned task 9 to node localhost:57638
-DEBUG:  assigned task 48 to node localhost:57637
-DEBUG:  assigned task 33 to node localhost:57638
-DEBUG:  assigned task 39 to node localhost:57637
-DEBUG:  assigned task 57 to node localhost:57638
-DEBUG:  propagating assignment from merge task 19 to constrained sql task 6
-DEBUG:  propagating assignment from merge task 26 to constrained sql task 12
-DEBUG:  propagating assignment from merge task 26 to constrained sql task 15
-DEBUG:  propagating assignment from merge task 26 to constrained sql task 18
-DEBUG:  propagating assignment from merge task 33 to constrained sql task 24
-DEBUG:  propagating assignment from merge task 40 to constrained sql task 30
-DEBUG:  propagating assignment from merge task 47 to constrained sql task 36
-DEBUG:  propagating assignment from merge task 54 to constrained sql task 42
-DEBUG:  propagating assignment from merge task 54 to constrained sql task 45
-DEBUG:  propagating assignment from merge task 61 to constrained sql task 51
-DEBUG:  propagating assignment from merge task 61 to constrained sql task 54
-DEBUG:  propagating assignment from merge task 68 to constrained sql task 60
+DETAIL:  Creating dependency on merge taskId 56
+DEBUG:  pruning merge fetch taskId 39
+DETAIL:  Creating dependency on merge taskId 56
+DEBUG:  assigned task 14 to node localhost:57637
+DEBUG:  assigned task 2 to node localhost:57638
+DEBUG:  assigned task 18 to node localhost:57637
+DEBUG:  assigned task 6 to node localhost:57638
+DEBUG:  assigned task 32 to node localhost:57637
+DEBUG:  assigned task 22 to node localhost:57638
+DEBUG:  assigned task 26 to node localhost:57637
+DEBUG:  assigned task 38 to node localhost:57638
+DEBUG:  propagating assignment from merge task 7 to constrained sql task 4
+DEBUG:  propagating assignment from merge task 14 to constrained sql task 8
+DEBUG:  propagating assignment from merge task 14 to constrained sql task 10
+DEBUG:  propagating assignment from merge task 14 to constrained sql task 12
+DEBUG:  propagating assignment from merge task 21 to constrained sql task 16
+DEBUG:  propagating assignment from merge task 28 to constrained sql task 20
+DEBUG:  propagating assignment from merge task 35 to constrained sql task 24
+DEBUG:  propagating assignment from merge task 42 to constrained sql task 28
+DEBUG:  propagating assignment from merge task 42 to constrained sql task 30
+DEBUG:  propagating assignment from merge task 49 to constrained sql task 34
+DEBUG:  propagating assignment from merge task 49 to constrained sql task 36
+DEBUG:  propagating assignment from merge task 56 to constrained sql task 40
 DEBUG:  CommitTransactionCommand
  count 
 -------
@@ -202,17 +202,17 @@ FROM
 WHERE
 	l_partkey = c_nationkey;
 DEBUG:  StartTransactionCommand
-DEBUG:  assigned task 4 to node localhost:57637
-DEBUG:  assigned task 2 to node localhost:57638
-DEBUG:  assigned task 8 to node localhost:57637
-DEBUG:  assigned task 6 to node localhost:57638
-DEBUG:  assigned task 12 to node localhost:57637
-DEBUG:  assigned task 10 to node localhost:57638
-DEBUG:  assigned task 16 to node localhost:57637
-DEBUG:  assigned task 14 to node localhost:57638
-DEBUG:  assigned task 4 to node localhost:57637
-DEBUG:  assigned task 6 to node localhost:57638
 DEBUG:  assigned task 2 to node localhost:57637
+DEBUG:  assigned task 1 to node localhost:57638
+DEBUG:  assigned task 4 to node localhost:57637
+DEBUG:  assigned task 3 to node localhost:57638
+DEBUG:  assigned task 6 to node localhost:57637
+DEBUG:  assigned task 5 to node localhost:57638
+DEBUG:  assigned task 8 to node localhost:57637
+DEBUG:  assigned task 7 to node localhost:57638
+DEBUG:  assigned task 2 to node localhost:57637
+DEBUG:  assigned task 3 to node localhost:57638
+DEBUG:  assigned task 1 to node localhost:57637
 DEBUG:  join prunable for task partitionId 0 and 1
 DEBUG:  join prunable for task partitionId 0 and 2
 DEBUG:  join prunable for task partitionId 0 and 3
@@ -226,21 +226,21 @@ DEBUG:  join prunable for task partitionId 3 and 0
 DEBUG:  join prunable for task partitionId 3 and 1
 DEBUG:  join prunable for task partitionId 3 and 2
 DEBUG:  pruning merge fetch taskId 1
-DETAIL:  Creating dependency on merge taskId 17
+DETAIL:  Creating dependency on merge taskId 9
 DEBUG:  pruning merge fetch taskId 2
-DETAIL:  Creating dependency on merge taskId 7
+DETAIL:  Creating dependency on merge taskId 4
 DEBUG:  pruning merge fetch taskId 4
-DETAIL:  Creating dependency on merge taskId 26
+DETAIL:  Creating dependency on merge taskId 18
 DEBUG:  pruning merge fetch taskId 5
-DETAIL:  Creating dependency on merge taskId 11
+DETAIL:  Creating dependency on merge taskId 8
 DEBUG:  pruning merge fetch taskId 7
-DETAIL:  Creating dependency on merge taskId 35
+DETAIL:  Creating dependency on merge taskId 27
 DEBUG:  pruning merge fetch taskId 8
-DETAIL:  Creating dependency on merge taskId 15
+DETAIL:  Creating dependency on merge taskId 12
 DEBUG:  pruning merge fetch taskId 10
-DETAIL:  Creating dependency on merge taskId 44
+DETAIL:  Creating dependency on merge taskId 36
 DEBUG:  pruning merge fetch taskId 11
-DETAIL:  Creating dependency on merge taskId 19
+DETAIL:  Creating dependency on merge taskId 16
 DEBUG:  assigned task 3 to node localhost:57638
 DEBUG:  assigned task 6 to node localhost:57637
 DEBUG:  assigned task 9 to node localhost:57638

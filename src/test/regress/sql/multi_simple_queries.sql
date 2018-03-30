@@ -132,9 +132,14 @@ SELECT * FROM articles, position('om' in 'Thomas') ORDER BY 2 DESC, 1 DESC, 3 DE
 SELECT * FROM articles WHERE author_id IN (SELECT id FROM authors WHERE name LIKE '%a');
 
 -- subqueries are supported in FROM clause
+
+SET citus.large_table_shard_count TO 1;
+
 SELECT articles.id,test.word_count
 FROM articles, (SELECT id, word_count FROM articles) AS test WHERE test.id = articles.id
 ORDER BY articles.id;
+
+RESET citus.large_table_shard_count;
 
 -- subqueries are not supported in SELECT clause
 SELECT a.title AS name, (SELECT a2.id FROM articles_single_shard a2 WHERE a.id = a2.id  LIMIT 1)

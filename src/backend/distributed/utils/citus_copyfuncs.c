@@ -241,7 +241,6 @@ CopyNodeTask(COPYFUNC_ARGS)
 	COPY_SCALAR_FIELD(upstreamTaskId);
 	COPY_NODE_FIELD(shardInterval);
 	COPY_SCALAR_FIELD(assignmentConstrained);
-	COPY_SCALAR_FIELD(shardId);
 	COPY_NODE_FIELD(taskExecution);
 	COPY_SCALAR_FIELD(upsertQuery);
 	COPY_SCALAR_FIELD(replicationModel);
@@ -268,7 +267,6 @@ CopyNodeTaskExecution(COPYFUNC_ARGS)
 	COPY_SCALAR_FIELD(connectStartTime);
 	COPY_SCALAR_FIELD(currentNodeIndex);
 	COPY_SCALAR_FIELD(querySourceNodeIndex);
-	COPY_SCALAR_FIELD(dataFetchTaskIndex);
 	COPY_SCALAR_FIELD(failureCount);
 }
 

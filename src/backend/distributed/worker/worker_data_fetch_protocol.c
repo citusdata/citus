@@ -52,10 +52,6 @@
 #endif
 
 
-/* Config variable managed via guc.c */
-bool ExpireCachedShards = false;
-
-
 /* Local functions forward declarations */
 static void FetchRegularFileAsSuperUser(const char *nodeName, uint32 nodePort,
 										StringInfo remoteFilename,
@@ -66,20 +62,7 @@ static bool ReceiveRegularFile(const char *nodeName, uint32 nodePort,
 static void ReceiveResourceCleanup(int32 connectionId, const char *filename,
 								   int32 fileDescriptor);
 static void CitusDeleteFile(const char *filename);
-static void FetchTableCommon(text *tableName, uint64 remoteTableSize,
-							 ArrayType *nodeNameObject, ArrayType *nodePortObject,
-							 bool (*FetchTableFunction)(const char *, uint32,
-														const char *));
-static uint64 LocalTableSize(Oid relationId);
 static uint64 ExtractShardId(const char *tableName);
-static bool FetchRegularTable(const char *nodeName, uint32 nodePort,
-							  const char *tableName);
-static bool FetchForeignTable(const char *nodeName, uint32 nodePort,
-							  const char *tableName);
-static const char * RemoteTableOwner(const char *nodeName, uint32 nodePort,
-									 const char *tableName);
-static StringInfo ForeignFilePath(const char *nodeName, uint32 nodePort,
-								  const char *tableName);
 static bool check_log_statement(List *stmt_list);
 static void AlterSequenceMinMax(Oid sequenceId, char *schemaName, char *sequenceName);
 static void SetDefElemArg(AlterSeqStmt *statement, const char *name, Node *arg);
@@ -91,9 +74,15 @@ PG_FUNCTION_INFO_V1(worker_fetch_query_results_file);
 PG_FUNCTION_INFO_V1(worker_apply_shard_ddl_command);
 PG_FUNCTION_INFO_V1(worker_apply_inter_shard_ddl_command);
 PG_FUNCTION_INFO_V1(worker_apply_sequence_command);
+PG_FUNCTION_INFO_V1(worker_append_table_to_shard);
+
+/*
+ * Following UDFs are stub functions, you can check their comments for more
+ * detail.
+ */
 PG_FUNCTION_INFO_V1(worker_fetch_regular_table);
 PG_FUNCTION_INFO_V1(worker_fetch_foreign_file);
-PG_FUNCTION_INFO_V1(worker_append_table_to_shard);
+PG_FUNCTION_INFO_V1(master_expire_table_cache);
 
 
 /*
@@ -537,236 +526,6 @@ worker_apply_sequence_command(PG_FUNCTION_ARGS)
 }
 
 
-/*
- * worker_fetch_regular_table caches the given PostgreSQL table on the local
- * node. The function caches this table by trying the given list of node names
- * and node ports in sequential order. On success, the function simply returns.
- */
-Datum
-worker_fetch_regular_table(PG_FUNCTION_ARGS)
-{
-	text *regularTableName = PG_GETARG_TEXT_P(0);
-	uint64 generationStamp = PG_GETARG_INT64(1);
-	ArrayType *nodeNameObject = PG_GETARG_ARRAYTYPE_P(2);
-	ArrayType *nodePortObject = PG_GETARG_ARRAYTYPE_P(3);
-
-	CheckCitusVersion(ERROR);
-
-	/*
-	 * Run common logic to fetch the remote table, and use the provided function
-	 * pointer to perform the actual table fetching.
-	 */
-	FetchTableCommon(regularTableName, generationStamp, nodeNameObject, nodePortObject,
-					 &FetchRegularTable);
-
-	PG_RETURN_VOID();
-}
-
-
-/*
- * worker_fetch_foreign_file caches the given file-backed foreign table on the
- * local node. The function caches this table by trying the given list of node
- * names and node ports in sequential order. On success, the function returns.
- */
-Datum
-worker_fetch_foreign_file(PG_FUNCTION_ARGS)
-{
-	text *foreignTableName = PG_GETARG_TEXT_P(0);
-	uint64 foreignFileSize = PG_GETARG_INT64(1);
-	ArrayType *nodeNameObject = PG_GETARG_ARRAYTYPE_P(2);
-	ArrayType *nodePortObject = PG_GETARG_ARRAYTYPE_P(3);
-
-	CheckCitusVersion(ERROR);
-
-	/*
-	 * Run common logic to fetch the remote table, and use the provided function
-	 * pointer to perform the actual table fetching.
-	 */
-	FetchTableCommon(foreignTableName, foreignFileSize, nodeNameObject, nodePortObject,
-					 &FetchForeignTable);
-
-	PG_RETURN_VOID();
-}
-
-
-/*
- * FetchTableCommon executes common logic that wraps around the actual data
- * fetching function. This common logic includes ensuring that only one process
- * tries to fetch this table at any given time, and that data fetch operations
- * are retried in case of node failures.
- */
-static void
-FetchTableCommon(text *tableNameText, uint64 remoteTableSize,
-				 ArrayType *nodeNameObject, ArrayType *nodePortObject,
-				 bool (*FetchTableFunction)(const char *, uint32, const char *))
-{
-	uint64 shardId = INVALID_SHARD_ID;
-	Oid relationId = InvalidOid;
-	List *relationNameList = NIL;
-	RangeVar *relation = NULL;
-	uint32 nodeIndex = 0;
-	bool tableFetched = false;
-	char *tableName = text_to_cstring(tableNameText);
-
-	Datum *nodeNameArray = DeconstructArrayObject(nodeNameObject);
-	Datum *nodePortArray = DeconstructArrayObject(nodePortObject);
-	int32 nodeNameCount = ArrayObjectCount(nodeNameObject);
-	int32 nodePortCount = ArrayObjectCount(nodePortObject);
-
-	/* we should have the same number of node names and port numbers */
-	if (nodeNameCount != nodePortCount)
-	{
-		ereport(ERROR, (errmsg("node name array size: %d and node port array size: %d"
-							   " do not match", nodeNameCount, nodePortCount)));
-	}
-
-	/*
-	 * We lock on the shardId, but do not unlock. When the function returns, and
-	 * the transaction for this function commits, this lock will automatically
-	 * be released. This ensures that concurrent caching commands will see the
-	 * newly created table when they acquire the lock (in read committed mode).
-	 */
-	shardId = ExtractShardId(tableName);
-	LockShardResource(shardId, AccessExclusiveLock);
-
-	relationNameList = textToQualifiedNameList(tableNameText);
-	relation = makeRangeVarFromNameList(relationNameList);
-	relationId = RangeVarGetRelid(relation, NoLock, true);
-
-	/* check if we already fetched the table */
-	if (relationId != InvalidOid)
-	{
-		uint64 localTableSize = 0;
-
-		if (!ExpireCachedShards)
-		{
-			return;
-		}
-
-		/*
-		 * Check if the cached shard has the same size on disk as it has as on
-		 * the placement (is up to date).
-		 *
-		 * Note 1: performing updates or deletes on the original shard leads to
-		 * inconsistent sizes between different databases in which case the data
-		 * would be fetched every time, or worse, the placement would get into
-		 * a deadlock when it tries to fetch from itself while holding the lock.
-		 * Therefore, this option is disabled by default.
-		 *
-		 * Note 2: when appending data to a shard, the size on disk only
-		 * increases when a new page is added (the next 8kB block).
-		 */
-		localTableSize = LocalTableSize(relationId);
-
-		if (remoteTableSize > localTableSize)
-		{
-			/* table is not up to date, drop the table */
-			ObjectAddress tableObject = { InvalidOid, InvalidOid, 0 };
-
-			tableObject.classId = RelationRelationId;
-			tableObject.objectId = relationId;
-			tableObject.objectSubId = 0;
-
-			performDeletion(&tableObject, DROP_RESTRICT, PERFORM_DELETION_INTERNAL);
-		}
-		else
-		{
-			/* table is up to date */
-			return;
-		}
-	}
-
-	/* loop until we fetch the table or try all nodes */
-	while (!tableFetched && (nodeIndex < nodeNameCount))
-	{
-		Datum nodeNameDatum = nodeNameArray[nodeIndex];
-		Datum nodePortDatum = nodePortArray[nodeIndex];
-		char *nodeName = TextDatumGetCString(nodeNameDatum);
-		uint32 nodePort = DatumGetUInt32(nodePortDatum);
-
-		tableFetched = (*FetchTableFunction)(nodeName, nodePort, tableName);
-
-		nodeIndex++;
-	}
-
-	/* error out if we tried all nodes and could not fetch the table */
-	if (!tableFetched)
-	{
-		ereport(ERROR, (errmsg("could not fetch relation: \"%s\"", tableName)));
-	}
-}
-
-
-/* LocalTableSize returns the size on disk of the given table. */
-static uint64
-LocalTableSize(Oid relationId)
-{
-	uint64 tableSize = 0;
-	char relationType = 0;
-	Datum relationIdDatum = ObjectIdGetDatum(relationId);
-
-	relationType = get_rel_relkind(relationId);
-	if (RegularTable(relationId))
-	{
-		Datum tableSizeDatum = DirectFunctionCall1(pg_table_size, relationIdDatum);
-
-		tableSize = DatumGetInt64(tableSizeDatum);
-	}
-	else if (relationType == RELKIND_FOREIGN_TABLE)
-	{
-		bool cstoreTable = CStoreTable(relationId);
-		if (cstoreTable)
-		{
-			/* extract schema name of cstore */
-			Oid cstoreId = get_extension_oid(CSTORE_FDW_NAME, false);
-			Oid cstoreSchemaOid = get_extension_schema(cstoreId);
-			const char *cstoreSchemaName = get_namespace_name(cstoreSchemaOid);
-
-			const int tableSizeArgumentCount = 1;
-
-			Oid tableSizeFunctionOid = FunctionOid(cstoreSchemaName,
-												   CSTORE_TABLE_SIZE_FUNCTION_NAME,
-												   tableSizeArgumentCount);
-			Datum tableSizeDatum = OidFunctionCall1(tableSizeFunctionOid,
-													relationIdDatum);
-
-			tableSize = DatumGetInt64(tableSizeDatum);
-		}
-		else
-		{
-			char *relationName = get_rel_name(relationId);
-			struct stat fileStat;
-
-			int statOK = 0;
-
-			StringInfo localFilePath = makeStringInfo();
-			appendStringInfo(localFilePath, FOREIGN_CACHED_FILE_PATH, relationName);
-
-			/* extract the file size using stat, analogous to pg_stat_file */
-			statOK = stat(localFilePath->data, &fileStat);
-			if (statOK < 0)
-			{
-				ereport(ERROR, (errcode_for_file_access(),
-								errmsg("could not stat file \"%s\": %m",
-									   localFilePath->data)));
-			}
-
-			tableSize = (uint64) fileStat.st_size;
-		}
-	}
-	else
-	{
-		char *relationName = get_rel_name(relationId);
-
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("cannot get size for table \"%s\"", relationName),
-						errdetail("Only regular and foreign tables are supported.")));
-	}
-
-	return tableSize;
-}
-
-
 /* Extracts shard id from the given table name, and returns it. */
 static uint64
 ExtractShardId(const char *tableName)
@@ -798,222 +557,6 @@ ExtractShardId(const char *tableName)
 
 
 /*
- * FetchRegularTable fetches the given table's data using the copy out command.
- * The function then fetches the DDL commands necessary to create this table's
- * replica, and locally applies these DDL commands. Last, the function copies
- * the fetched table data into the created table; and on success, returns true.
- * On failure due to connectivity issues with remote node, the function returns
- * false. On other types of failures, the function errors out.
- */
-static bool
-FetchRegularTable(const char *nodeName, uint32 nodePort, const char *tableName)
-{
-	StringInfo localFilePath = NULL;
-	StringInfo remoteCopyCommand = NULL;
-	List *ddlCommandList = NIL;
-	ListCell *ddlCommandCell = NULL;
-	CopyStmt *localCopyCommand = NULL;
-	RangeVar *localTable = NULL;
-	uint64 shardId = 0;
-	bool received = false;
-	StringInfo queryString = NULL;
-	const char *tableOwner = NULL;
-	Oid tableOwnerId = InvalidOid;
-	Oid savedUserId = InvalidOid;
-	int savedSecurityContext = 0;
-	List *tableNameList = NIL;
-
-	/* copy remote table's data to this node in an idempotent manner */
-	shardId = ExtractShardId(tableName);
-	localFilePath = makeStringInfo();
-	appendStringInfo(localFilePath, "base/%s/%s" UINT64_FORMAT,
-					 PG_JOB_CACHE_DIR, TABLE_FILE_PREFIX, shardId);
-
-	remoteCopyCommand = makeStringInfo();
-	appendStringInfo(remoteCopyCommand, COPY_OUT_COMMAND, tableName);
-
-	received = ReceiveRegularFile(nodeName, nodePort, NULL, remoteCopyCommand,
-								  localFilePath);
-	if (!received)
-	{
-		return false;
-	}
-
-	/* fetch the ddl commands needed to create the table */
-	tableOwner = RemoteTableOwner(nodeName, nodePort, tableName);
-	if (tableOwner == NULL)
-	{
-		return false;
-	}
-	tableOwnerId = get_role_oid(tableOwner, false);
-
-	/* fetch the ddl commands needed to create the table */
-	ddlCommandList = TableDDLCommandList(nodeName, nodePort, tableName);
-	if (ddlCommandList == NIL)
-	{
-		return false;
-	}
-
-	/*
-	 * Apply DDL commands against the database. Note that on failure from here
-	 * on, we immediately error out instead of returning false.  Have to do
-	 * this as the table's owner to ensure the local table is created with
-	 * compatible permissions.
-	 */
-	GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
-	SetUserIdAndSecContext(tableOwnerId, SECURITY_LOCAL_USERID_CHANGE);
-
-	foreach(ddlCommandCell, ddlCommandList)
-	{
-		StringInfo ddlCommand = (StringInfo) lfirst(ddlCommandCell);
-		Node *ddlCommandNode = ParseTreeNode(ddlCommand->data);
-
-		CitusProcessUtility(ddlCommandNode, ddlCommand->data, PROCESS_UTILITY_TOPLEVEL,
-							NULL, None_Receiver, NULL);
-		CommandCounterIncrement();
-	}
-
-	/*
-	 * Copy local file into the relation. We call ProcessUtility() instead of
-	 * directly calling DoCopy() because some extensions (e.g. cstore_fdw) hook
-	 * into process utility to provide their custom COPY behavior.
-	 */
-	tableNameList = stringToQualifiedNameList(tableName);
-	localTable = makeRangeVarFromNameList(tableNameList);
-	localCopyCommand = CopyStatement(localTable, localFilePath->data);
-
-	queryString = makeStringInfo();
-	appendStringInfo(queryString, COPY_IN_COMMAND, tableName, localFilePath->data);
-
-	CitusProcessUtility((Node *) localCopyCommand, queryString->data,
-						PROCESS_UTILITY_TOPLEVEL, NULL, None_Receiver, NULL);
-
-	/* finally delete the temporary file we created */
-	CitusDeleteFile(localFilePath->data);
-
-	SetUserIdAndSecContext(savedUserId, savedSecurityContext);
-
-	return true;
-}
-
-
-/*
- * FetchForeignTable fetches the foreign file for the given table name from the
- * remote node. The function then fetches the DDL commands needed to create the
- * table, and applies these DDL commands locally to create the foreign table.
- * On success, the function returns true. On failure due to connectivity issues
- * with remote node, the function returns false. On failure due to applying DDL
- * commands against the local database, the function errors out.
- */
-static bool
-FetchForeignTable(const char *nodeName, uint32 nodePort, const char *tableName)
-{
-	const char *nodeUser = NULL;
-	StringInfo localFilePath = NULL;
-	StringInfo remoteFilePath = NULL;
-	StringInfo transmitCommand = NULL;
-	StringInfo alterTableCommand = NULL;
-	bool received = false;
-	List *ddlCommandList = NIL;
-	ListCell *ddlCommandCell = NULL;
-
-	/*
-	 * Fetch a foreign file to this node in an idempotent manner. It's OK that
-	 * this file name lacks the schema, as the table name will have a shard id
-	 * attached to it, which is unique (so conflicts are avoided even if two
-	 * tables in different schemas have the same name).
-	 */
-	localFilePath = makeStringInfo();
-	appendStringInfo(localFilePath, FOREIGN_CACHED_FILE_PATH, tableName);
-
-	remoteFilePath = ForeignFilePath(nodeName, nodePort, tableName);
-	if (remoteFilePath == NULL)
-	{
-		return false;
-	}
-
-	transmitCommand = makeStringInfo();
-	appendStringInfo(transmitCommand, TRANSMIT_REGULAR_COMMAND, remoteFilePath->data);
-
-	/*
-	 * We allow some arbitrary input in the file name and connect to the remote
-	 * node as superuser to transmit. Therefore, we only allow calling this
-	 * function when already running as superuser.
-	 */
-	EnsureSuperUser();
-	nodeUser = CitusExtensionOwnerName();
-
-	received = ReceiveRegularFile(nodeName, nodePort, nodeUser, transmitCommand,
-								  localFilePath);
-	if (!received)
-	{
-		return false;
-	}
-
-	/* fetch the ddl commands needed to create the table */
-	ddlCommandList = TableDDLCommandList(nodeName, nodePort, tableName);
-	if (ddlCommandList == NIL)
-	{
-		return false;
-	}
-
-	alterTableCommand = makeStringInfo();
-	appendStringInfo(alterTableCommand, SET_FOREIGN_TABLE_FILENAME, tableName,
-					 localFilePath->data);
-
-	ddlCommandList = lappend(ddlCommandList, alterTableCommand);
-
-	/*
-	 * Apply DDL commands against the database. Note that on failure here, we
-	 * immediately error out instead of returning false.
-	 */
-	foreach(ddlCommandCell, ddlCommandList)
-	{
-		StringInfo ddlCommand = (StringInfo) lfirst(ddlCommandCell);
-		Node *ddlCommandNode = ParseTreeNode(ddlCommand->data);
-
-		CitusProcessUtility(ddlCommandNode, ddlCommand->data, PROCESS_UTILITY_TOPLEVEL,
-							NULL, None_Receiver, NULL);
-		CommandCounterIncrement();
-	}
-
-	return true;
-}
-
-
-/*
- * RemoteTableOwner takes in the given table name, and fetches the owner of
- * the table. If an error occurs during fetching, return NULL.
- */
-static const char *
-RemoteTableOwner(const char *nodeName, uint32 nodePort, const char *tableName)
-{
-	List *ownerList = NIL;
-	StringInfo queryString = NULL;
-	StringInfo relationOwner;
-	MultiConnection *connection = NULL;
-	uint32 connectionFlag = FORCE_NEW_CONNECTION;
-	PGresult *result = NULL;
-
-	queryString = makeStringInfo();
-	appendStringInfo(queryString, GET_TABLE_OWNER, tableName);
-	connection = GetNodeConnection(connectionFlag, nodeName, nodePort);
-
-	ExecuteOptionalRemoteCommand(connection, queryString->data, &result);
-
-	ownerList = ReadFirstColumnAsText(result);
-	if (list_length(ownerList) != 1)
-	{
-		return NULL;
-	}
-
-	relationOwner = (StringInfo) linitial(ownerList);
-
-	return relationOwner->data;
-}
-
-
-/*
  * TableDDLCommandList takes in the given table name, and fetches the list of
  * DDL commands used in creating the table. If an error occurs during fetching,
  * the function returns an empty list.
@@ -1038,37 +581,6 @@ TableDDLCommandList(const char *nodeName, uint32 nodePort, const char *tableName
 	CloseConnection(connection);
 
 	return ddlCommandList;
-}
-
-
-/*
- * ForeignFilePath takes in the foreign table name, and fetches this table's
- * remote file path. If an error occurs during fetching, the function returns
- * null.
- */
-static StringInfo
-ForeignFilePath(const char *nodeName, uint32 nodePort, const char *tableName)
-{
-	List *foreignPathList = NIL;
-	StringInfo foreignPathCommand = NULL;
-	StringInfo foreignPath = NULL;
-	MultiConnection *connection = NULL;
-	PGresult *result = NULL;
-	int connectionFlag = FORCE_NEW_CONNECTION;
-
-	foreignPathCommand = makeStringInfo();
-	appendStringInfo(foreignPathCommand, FOREIGN_FILE_PATH_COMMAND, tableName);
-	connection = GetNodeConnection(connectionFlag, nodeName, nodePort);
-
-	ExecuteOptionalRemoteCommand(connection, foreignPathCommand->data, &result);
-
-	foreignPathList = ReadFirstColumnAsText(result);
-	if (foreignPathList != NIL)
-	{
-		foreignPath = (StringInfo) linitial(foreignPathList);
-	}
-
-	return foreignPath;
 }
 
 
@@ -1426,4 +938,40 @@ SetDefElemArg(AlterSeqStmt *statement, const char *name, Node *arg)
 #endif
 
 	statement->options = lappend(statement->options, defElem);
+}
+
+
+/*
+ * worker_fetch_regular_table UDF is a stub UDF to install Citus flawlessly.
+ * Otherwise we need to delete them from our sql files, which is confusing
+ */
+Datum
+worker_fetch_regular_table(PG_FUNCTION_ARGS)
+{
+	ereport(DEBUG2, (errmsg("this function is deprecated and no longer is used")));
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * worker_fetch_foreign_file UDF is a stub UDF to install Citus flawlessly.
+ * Otherwise we need to delete them from our sql files, which is confusing
+ */
+Datum
+worker_fetch_foreign_file(PG_FUNCTION_ARGS)
+{
+	ereport(DEBUG2, (errmsg("this function is deprecated and no longer is used")));
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * master_expire_table_cache UDF is a stub UDF to install Citus flawlessly.
+ * Otherwise we need to delete them from our sql files, which is confusing
+ */
+Datum
+master_expire_table_cache(PG_FUNCTION_ARGS)
+{
+	ereport(DEBUG2, (errmsg("this function is deprecated and no longer is used")));
+	PG_RETURN_VOID();
 }
