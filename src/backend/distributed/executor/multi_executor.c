@@ -148,6 +148,7 @@ ReadFileIntoTupleStore(char *fileName, char *copyFormat, TupleDesc tupleDescript
 	EState *executorState = CreateExecutorState();
 	MemoryContext executorTupleContext = GetPerTupleMemoryContext(executorState);
 	ExprContext *executorExpressionContext = GetPerTupleExprContext(executorState);
+	MemoryContext oldContext = NULL;
 
 	int columnCount = tupleDescriptor->natts;
 	Datum *columnValues = palloc0(columnCount * sizeof(Datum));
@@ -172,25 +173,43 @@ ReadFileIntoTupleStore(char *fileName, char *copyFormat, TupleDesc tupleDescript
 							  copyOptions);
 #endif
 
-	while (true)
+	PG_TRY();
 	{
-		MemoryContext oldContext = NULL;
-		bool nextRowFound = false;
+		while (true)
+		{
+			bool nextRowFound = false;
 
-		ResetPerTupleExprContext(executorState);
-		oldContext = MemoryContextSwitchTo(executorTupleContext);
+			ResetPerTupleExprContext(executorState);
+			oldContext = MemoryContextSwitchTo(executorTupleContext);
 
-		nextRowFound = NextCopyFrom(copyState, executorExpressionContext,
-									columnValues, columnNulls, NULL);
-		if (!nextRowFound)
+			nextRowFound = NextCopyFrom(copyState, executorExpressionContext,
+										columnValues, columnNulls, NULL);
+			if (!nextRowFound)
+			{
+				MemoryContextSwitchTo(oldContext);
+				break;
+			}
+
+			tuplestore_putvalues(tupstore, tupleDescriptor, columnValues, columnNulls);
+			MemoryContextSwitchTo(oldContext);
+		}
+	}
+	PG_CATCH();
+	{
+		/* 
+		 * This is only necessary on windows, in the abort handler we might try to remove
+		 * the file being COPY'd (if it was an intermediate result), but on Windows that's
+		 * not possible unless we first close our handle to the file.
+		 */
+		if (oldContext != NULL)
 		{
 			MemoryContextSwitchTo(oldContext);
-			break;
 		}
 
-		tuplestore_putvalues(tupstore, tupleDescriptor, columnValues, columnNulls);
-		MemoryContextSwitchTo(oldContext);
+		EndCopyFrom(copyState);
+		PG_RE_THROW();
 	}
+	PG_END_TRY();
 
 	EndCopyFrom(copyState);
 	pfree(columnValues);
