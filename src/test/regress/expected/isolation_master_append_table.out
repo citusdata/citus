@@ -17,7 +17,7 @@ step s1-master_append_table_to_shard:
 
 master_append_table_to_shard
 
-0.213333       
+0.0426667      
 step s2-master_append_table_to_shard: 
 
    	SELECT	
@@ -33,7 +33,7 @@ step s1-commit:
 step s2-master_append_table_to_shard: <... completed>
 master_append_table_to_shard
 
-0.32           
+0.064          
 step s2-commit: 
 	COMMIT;
 

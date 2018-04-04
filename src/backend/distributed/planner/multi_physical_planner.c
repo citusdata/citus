@@ -127,7 +127,6 @@ static Job * BuildJobTreeTaskList(Job *jobTree,
 static List * SubquerySqlTaskList(Job *job,
 								  PlannerRestrictionContext *plannerRestrictionContext);
 static void ErrorIfUnsupportedShardDistribution(Query *query);
-static bool CoPartitionedTables(Oid firstRelationId, Oid secondRelationId);
 static bool ShardIntervalsEqual(FmgrInfo *comparisonFunction,
 								ShardInterval *firstInterval,
 								ShardInterval *secondInterval);
@@ -2228,9 +2227,13 @@ ErrorIfUnsupportedShardDistribution(Query *query)
 
 /*
  * CoPartitionedTables checks if given two distributed tables have 1-to-1 shard
- * partitioning.
+ * placement matching. It first checks for the shard count, if tables don't have
+ * same amount shard then it returns false. Note that, if any table does not
+ * have any shard, it returns true. If two tables have same amount of shards,
+ * we check colocationIds for hash distributed tables and shardInterval's min
+ * max values for append and range distributed tables.
  */
-static bool
+bool
 CoPartitionedTables(Oid firstRelationId, Oid secondRelationId)
 {
 	bool coPartitionedTables = true;
@@ -2266,6 +2269,20 @@ CoPartitionedTables(Oid firstRelationId, Oid secondRelationId)
 	{
 		return true;
 	}
+
+	/*
+	 * For hash distributed tables two tables are accepted as colocated only if
+	 * they have the same colocationId. Otherwise they may have same minimum and
+	 * maximum values for each shard interval, yet hash function may result with
+	 * different values for the same value. int vs bigint can be given as an
+	 * example.
+	 */
+	if (firstTableCache->partitionMethod == DISTRIBUTE_BY_HASH ||
+		secondTableCache->partitionMethod == DISTRIBUTE_BY_HASH)
+	{
+		return false;
+	}
+
 
 	/*
 	 * If not known to be colocated check if the remaining shards are

@@ -70,6 +70,7 @@ typedef struct JoinOrderNode
 	char partitionMethod;
 	List *joinClauseList;       /* not relevant for the first table */
 	List *shardIntervalList;
+	TableEntry *anchorTable;
 } JoinOrderNode;
 
 

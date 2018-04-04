@@ -108,7 +108,7 @@ SELECT p_mfgr, count(distinct p_partkey) FROM part GROUP BY p_mfgr ORDER BY p_mf
 SELECT count(distinct o_orderkey), count(distinct o_custkey) FROM orders;
  count | count 
 -------+-------
-  2984 |   923
+  2985 |   923
 (1 row)
 
 -- Hash partitioned tables:

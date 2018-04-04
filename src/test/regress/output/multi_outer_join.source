@@ -70,8 +70,8 @@ SELECT
 	min(l_custkey), max(l_custkey)
 FROM
 	multi_outer_join_left a LEFT JOIN multi_outer_join_third b ON (l_custkey = t_custkey);
-ERROR:  cannot perform distributed planning on this query
-DETAIL:  Shards of relations in outer join queries must have 1-to-1 shard partitioning
+ERROR:  cannot run outer join query if join is not on the partition column
+DETAIL:  Outer joins requiring repartitioning are not supported.
 SELECT
 	min(t_custkey), max(t_custkey)
 FROM
@@ -187,8 +187,8 @@ SELECT
 	min(r_custkey), max(r_custkey)
 FROM
 	multi_outer_join_left a RIGHT JOIN multi_outer_join_right b ON (l_custkey = r_custkey);
-ERROR:  cannot perform distributed planning on this query
-DETAIL:  Shards of relations in outer join queries must have 1-to-1 shard partitioning
+ERROR:  cannot run outer join query if join is not on the partition column
+DETAIL:  Outer joins requiring repartitioning are not supported.
 -- Reverse right join should be same as left join
 SELECT
 	min(l_custkey), max(l_custkey)
@@ -207,8 +207,8 @@ SELECT
 	min(l_custkey), max(l_custkey)
 FROM
 	multi_outer_join_left a LEFT JOIN multi_outer_join_right b ON (l_custkey = r_custkey);
-ERROR:  cannot perform distributed planning on this query
-DETAIL:  Shards of relations in outer join queries must have 1-to-1 shard partitioning
+ERROR:  cannot run outer join query if join is not on the partition column
+DETAIL:  Outer joins requiring repartitioning are not supported.
 -- empty tables
 SELECT * FROM master_apply_delete_command('DELETE FROM multi_outer_join_left');
  master_apply_delete_command 
@@ -223,10 +223,10 @@ SELECT * FROM master_apply_delete_command('DELETE FROM multi_outer_join_right');
 (1 row)
 
 -- reload shards with 1-1 matching
-\copy multi_outer_join_left FROM '@abs_srcdir@/data/customer-1-15.data' with delimiter '|'
+\copy multi_outer_join_left FROM '@abs_srcdir@/data/customer-subset-11-20.data' with delimiter '|'
 \copy multi_outer_join_left FROM '@abs_srcdir@/data/customer-21-30.data' with delimiter '|'
 \copy multi_outer_join_right FROM '@abs_srcdir@/data/customer-11-20.data' with delimiter '|'
-\copy multi_outer_join_right FROM '@abs_srcdir@/data/customer-21-30.data' with delimiter '|'
+\copy multi_outer_join_right FROM '@abs_srcdir@/data/customer-subset-21-30.data' with delimiter '|'
 -- multi_outer_join_third is a single shard table
 -- Regular left join should work as expected
 SELECT
@@ -236,7 +236,7 @@ FROM
 LOG:  join order: [ "multi_outer_join_left" ][ local partition join "multi_outer_join_right" ]
  min | max 
 -----+-----
-   1 |  30
+  11 |  30
 (1 row)
 
 -- Since we cannot broadcast or re-partition, joining on a different key should error out
@@ -256,7 +256,7 @@ WHERE
 LOG:  join order: [ "multi_outer_join_left" ][ local partition join "multi_outer_join_right" ]
  min | max 
 -----+-----
-   1 |  10
+  23 |  29
 (1 row)
 
 -- Partial anti-join with specific value (5, 11-15)
@@ -269,7 +269,7 @@ WHERE
 LOG:  join order: [ "multi_outer_join_left" ][ local partition join "multi_outer_join_right" ]
  min | max 
 -----+-----
-   1 |  15
+  23 |  29
 (1 row)
 
 -- This query is an INNER JOIN in disguise since there cannot be NULL results (21)
@@ -295,7 +295,7 @@ FROM
 LOG:  join order: [ "multi_outer_join_left" ][ local partition join "multi_outer_join_right" ]
  count | count 
 -------+-------
-    25 |     1
+    17 |     1
 (1 row)
 
 -- Right join should be allowed in this case
@@ -317,7 +317,7 @@ FROM
 LOG:  join order: [ "multi_outer_join_left" ][ local partition join "multi_outer_join_right" ]
  min | max 
 -----+-----
-   1 |  30
+  11 |  30
 (1 row)
 
 -- complex query tree should error out
@@ -350,32 +350,24 @@ FROM
 LOG:  join order: [ "multi_outer_join_left" ][ local partition join "multi_outer_join_right" ][ broadcast join "multi_outer_join_third" ]
  l_custkey | r_custkey | t_custkey 
 -----------+-----------+-----------
-         1 |           |          
-         2 |           |          
-         3 |           |          
-         4 |           |          
-         5 |           |          
-         6 |           |          
-         7 |           |          
-         8 |           |          
-         9 |           |          
-        10 |           |          
         11 |        11 |        11
         12 |        12 |        12
-        13 |        13 |        13
         14 |        14 |        14
-        15 |        15 |        15
+        16 |        16 |        16
+        17 |        17 |        17
+        18 |        18 |        18
+        20 |        20 |        20
         21 |        21 |        21
         22 |        22 |        22
-        23 |        23 |        23
+        23 |           |          
         24 |        24 |        24
-        25 |        25 |        25
+        25 |           |          
         26 |        26 |        26
         27 |        27 |        27
         28 |        28 |        28
-        29 |        29 |        29
+        29 |           |          
         30 |        30 |        30
-(25 rows)
+(17 rows)
 
 -- Right join with single shard right most table should error out
 SELECT
@@ -397,25 +389,22 @@ LOG:  join order: [ "multi_outer_join_right" ][ broadcast join "multi_outer_join
 -----------+-----------+-----------
         11 |        11 |        11
         12 |        12 |        12
-        13 |        13 |        13
+        13 |        13 |          
         14 |        14 |        14
-        15 |        15 |        15
-        16 |        16 |          
-        17 |        17 |          
-        18 |        18 |          
+        15 |        15 |          
+        16 |        16 |        16
+        17 |        17 |        17
+        18 |        18 |        18
         19 |        19 |          
-        20 |        20 |          
+        20 |        20 |        20
         21 |        21 |        21
         22 |        22 |        22
-        23 |        23 |        23
         24 |        24 |        24
-        25 |        25 |        25
         26 |        26 |        26
         27 |        27 |        27
         28 |        28 |        28
-        29 |        29 |        29
         30 |        30 |        30
-(20 rows)
+(17 rows)
 
 -- Make it anti-join, should display values with l_custkey is null
 SELECT
@@ -429,12 +418,10 @@ WHERE
 LOG:  join order: [ "multi_outer_join_right" ][ broadcast join "multi_outer_join_third" ][ local partition join "multi_outer_join_left" ]
  t_custkey | r_custkey | l_custkey 
 -----------+-----------+-----------
-        16 |        16 |          
-        17 |        17 |          
-        18 |        18 |          
+        13 |        13 |          
+        15 |        15 |          
         19 |        19 |          
-        20 |        20 |          
-(5 rows)
+(3 rows)
 
 -- Cascading right join with single shard left most table should error out
 SELECT
@@ -453,37 +440,27 @@ FROM
 LOG:  join order: [ "multi_outer_join_left" ][ local partition join "multi_outer_join_right" ]
  l_custkey | r_custkey 
 -----------+-----------
-         1 |          
-         2 |          
-         3 |          
-         4 |          
-         5 |          
-         6 |          
-         7 |          
-         8 |          
-         9 |          
-        10 |          
         11 |        11
         12 |        12
-        13 |        13
         14 |        14
-        15 |        15
-           |        20
-           |        17
-           |        18
+        16 |        16
+        17 |        17
+        18 |        18
+        20 |        20
+           |        15
+           |        13
            |        19
-           |        16
         21 |        21
         22 |        22
-        23 |        23
+        23 |          
         24 |        24
-        25 |        25
+        25 |          
         26 |        26
         27 |        27
         28 |        28
-        29 |        29
+        29 |          
         30 |        30
-(30 rows)
+(20 rows)
 
 -- full outer join + anti (right) should work with 1-1 matched shards
 SELECT
@@ -496,17 +473,10 @@ WHERE
 LOG:  join order: [ "multi_outer_join_left" ][ local partition join "multi_outer_join_right" ]
  l_custkey | r_custkey 
 -----------+-----------
-         1 |          
-         2 |          
-         3 |          
-         4 |          
-         5 |          
-         6 |          
-         7 |          
-         8 |          
-         9 |          
-        10 |          
-(10 rows)
+        23 |          
+        25 |          
+        29 |          
+(3 rows)
 
 -- full outer join + anti (left) should work with 1-1 matched shards
 SELECT
@@ -519,12 +489,10 @@ WHERE
 LOG:  join order: [ "multi_outer_join_left" ][ local partition join "multi_outer_join_right" ]
  l_custkey | r_custkey 
 -----------+-----------
-           |        20
-           |        17
-           |        18
+           |        15
+           |        13
            |        19
-           |        16
-(5 rows)
+(3 rows)
 
 -- full outer join + anti (both) should work with 1-1 matched shards
 SELECT
@@ -537,22 +505,13 @@ WHERE
 LOG:  join order: [ "multi_outer_join_left" ][ local partition join "multi_outer_join_right" ]
  l_custkey | r_custkey 
 -----------+-----------
-         1 |          
-         2 |          
-         3 |          
-         4 |          
-         5 |          
-         6 |          
-         7 |          
-         8 |          
-         9 |          
-        10 |          
-           |        20
-           |        17
-           |        18
+           |        15
+           |        13
            |        19
-           |        16
-(15 rows)
+        23 |          
+        25 |          
+        29 |          
+(6 rows)
 
 -- full outer join should error out for mismatched shards
 SELECT
@@ -560,8 +519,8 @@ SELECT
 FROM
 	multi_outer_join_left l1
 	FULL JOIN multi_outer_join_third t1 ON (l1.l_custkey = t1.t_custkey);
-ERROR:  cannot perform distributed planning on this query
-DETAIL:  Shards of relations in outer join queries must have 1-to-1 shard partitioning
+ERROR:  cannot run outer join query if join is not on the partition column
+DETAIL:  Outer joins requiring repartitioning are not supported.
 -- inner join  + single shard left join should work
 SELECT
 	l_custkey, r_custkey, t_custkey
@@ -574,20 +533,19 @@ LOG:  join order: [ "multi_outer_join_left" ][ local partition join "multi_outer
 -----------+-----------+-----------
         11 |        11 |        11
         12 |        12 |        12
-        13 |        13 |        13
         14 |        14 |        14
-        15 |        15 |        15
+        16 |        16 |        16
+        17 |        17 |        17
+        18 |        18 |        18
+        20 |        20 |        20
         21 |        21 |        21
         22 |        22 |        22
-        23 |        23 |        23
         24 |        24 |        24
-        25 |        25 |        25
         26 |        26 |        26
         27 |        27 |        27
         28 |        28 |        28
-        29 |        29 |        29
         30 |        30 |        30
-(15 rows)
+(14 rows)
 
 -- inner (broadcast) join  + 2 shards left (local) join should work
 SELECT
@@ -599,32 +557,24 @@ FROM
 LOG:  join order: [ "multi_outer_join_left" ][ broadcast join "multi_outer_join_third" ][ local partition join "multi_outer_join_right" ]
  l_custkey | t_custkey | r_custkey 
 -----------+-----------+-----------
-         1 |         1 |          
-         2 |         2 |          
-         3 |         3 |          
-         4 |         4 |          
-         5 |         5 |          
-         6 |         6 |          
-         7 |         7 |          
-         8 |         8 |          
-         9 |         9 |          
-        10 |        10 |          
         11 |        11 |        11
         12 |        12 |        12
-        13 |        13 |        13
         14 |        14 |        14
-        15 |        15 |        15
+        16 |        16 |        16
+        17 |        17 |        17
+        18 |        18 |        18
+        20 |        20 |        20
         21 |        21 |        21
         22 |        22 |        22
-        23 |        23 |        23
+        23 |        23 |          
         24 |        24 |        24
-        25 |        25 |        25
+        25 |        25 |          
         26 |        26 |        26
         27 |        27 |        27
         28 |        28 |        28
-        29 |        29 |        29
+        29 |        29 |          
         30 |        30 |        30
-(25 rows)
+(17 rows)
 
 -- inner (local) join  + 2 shards left (dual partition) join should error out
 SELECT
@@ -633,8 +583,8 @@ FROM
 	multi_outer_join_third t1
 	INNER JOIN multi_outer_join_left l1 ON (l1.l_custkey = t1.t_custkey)
 	LEFT JOIN multi_outer_join_right r1 ON (l1.l_custkey  = r1.r_custkey);
-ERROR:  cannot perform distributed planning on this query
-DETAIL:  Shards of relations in outer join queries must have 1-to-1 shard partitioning
+ERROR:  cannot run outer join query if join is not on the partition column
+DETAIL:  Outer joins requiring repartitioning are not supported.
 -- inner (local) join  + 2 shards left (dual partition) join should error out
 SELECT
 	l_custkey, t_custkey, r_custkey
@@ -645,32 +595,24 @@ FROM
 LOG:  join order: [ "multi_outer_join_left" ][ broadcast join "multi_outer_join_third" ][ local partition join "multi_outer_join_right" ]
  l_custkey | t_custkey | r_custkey 
 -----------+-----------+-----------
-         1 |         1 |          
-         2 |         2 |          
-         3 |         3 |          
-         4 |         4 |          
-         5 |         5 |          
-         6 |         6 |          
-         7 |         7 |          
-         8 |         8 |          
-         9 |         9 |          
-        10 |        10 |          
         11 |        11 |        11
         12 |        12 |        12
-        13 |        13 |        13
         14 |        14 |        14
-        15 |        15 |        15
+        16 |        16 |        16
+        17 |        17 |        17
+        18 |        18 |        18
+        20 |        20 |        20
         21 |        21 |        21
         22 |        22 |        22
-        23 |        23 |        23
+        23 |        23 |          
         24 |        24 |        24
-        25 |        25 |        25
+        25 |        25 |          
         26 |        26 |        26
         27 |        27 |        27
         28 |        28 |        28
-        29 |        29 |        29
+        29 |        29 |          
         30 |        30 |        30
-(25 rows)
+(17 rows)
 
 -- inner (broadcast) join  + 2 shards left (local) + anti join should work
 SELECT
@@ -684,17 +626,10 @@ WHERE
 LOG:  join order: [ "multi_outer_join_left" ][ broadcast join "multi_outer_join_third" ][ local partition join "multi_outer_join_right" ]
  l_custkey | t_custkey | r_custkey 
 -----------+-----------+-----------
-         1 |         1 |          
-         2 |         2 |          
-         3 |         3 |          
-         4 |         4 |          
-         5 |         5 |          
-         6 |         6 |          
-         7 |         7 |          
-         8 |         8 |          
-         9 |         9 |          
-        10 |        10 |          
-(10 rows)
+        23 |        23 |          
+        25 |        25 |          
+        29 |        29 |          
+(3 rows)
 
 -- Test joinExpr aliases by performing an outer-join. 
 SELECT 
@@ -719,15 +654,12 @@ LOG:  join order: [ "multi_outer_join_right" ][ local partition join "multi_oute
         20
         21
         22
-        23
         24
-        25
         26
         27
         28
-        29
         30
-(20 rows)
+(17 rows)
 
 -- flattened out subqueries with outer joins are not supported
 SELECT
@@ -755,20 +687,20 @@ SELECT
 	min(l_custkey), max(l_custkey)
 FROM
 	multi_outer_join_left a LEFT JOIN multi_outer_join_right b ON (l_custkey = r_custkey);
-ERROR:  cannot perform distributed planning on this query
-DETAIL:  Shards of relations in outer join queries must have 1-to-1 shard partitioning
+ERROR:  cannot run outer join query if join is not on the partition column
+DETAIL:  Outer joins requiring repartitioning are not supported.
 SELECT
 	min(l_custkey), max(l_custkey)
 FROM
 	multi_outer_join_left a RIGHT JOIN multi_outer_join_right b ON (l_custkey = r_custkey);
-ERROR:  cannot perform distributed planning on this query
-DETAIL:  Shards of relations in outer join queries must have 1-to-1 shard partitioning
+ERROR:  cannot run outer join query if join is not on the partition column
+DETAIL:  Outer joins requiring repartitioning are not supported.
 SELECT
 	min(l_custkey), max(l_custkey)
 FROM
 	multi_outer_join_left a FULL JOIN multi_outer_join_right b ON (l_custkey = r_custkey);
-ERROR:  cannot perform distributed planning on this query
-DETAIL:  Shards of relations in outer join queries must have 1-to-1 shard partitioning
+ERROR:  cannot run outer join query if join is not on the partition column
+DETAIL:  Outer joins requiring repartitioning are not supported.
 SELECT 
 	t_custkey
 FROM   
@@ -776,33 +708,23 @@ FROM
 	LEFT OUTER JOIN multi_outer_join_left l1 ON (l1.l_custkey = r1.r_custkey)) AS
     test(c_custkey, c_nationkey)
     INNER JOIN multi_outer_join_third t1 ON (test.c_custkey = t1.t_custkey);
-ERROR:  cannot perform distributed planning on this query
-DETAIL:  Shards of relations in outer join queries must have 1-to-1 shard partitioning
+ERROR:  cannot run outer join query if join is not on the partition column
+DETAIL:  Outer joins requiring repartitioning are not supported.
 -- simple test to ensure anti-joins work with hash-partitioned tables
 CREATE TABLE left_values(val int);
-SELECT master_create_distributed_table('left_values', 'val', 'hash');
- master_create_distributed_table 
----------------------------------
- 
-(1 row)
-
-SELECT master_create_worker_shards('left_values', 16, 1);
- master_create_worker_shards 
------------------------------
+SET citus.shard_count to 16;
+SET citus.shard_replication_factor to 1;
+SELECT create_distributed_table('left_values', 'val');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 
 \copy left_values from stdin
 CREATE TABLE right_values(val int);
-SELECT master_create_distributed_table('right_values', 'val', 'hash');
- master_create_distributed_table 
----------------------------------
- 
-(1 row)
-
-SELECT master_create_worker_shards('right_values', 16, 1);
- master_create_worker_shards 
------------------------------
+SELECT create_distributed_table('right_values', 'val');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 

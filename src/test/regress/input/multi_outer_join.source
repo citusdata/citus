@@ -163,14 +163,13 @@ SELECT * FROM master_apply_delete_command('DELETE FROM multi_outer_join_left');
 SELECT * FROM master_apply_delete_command('DELETE FROM multi_outer_join_right');
 
 -- reload shards with 1-1 matching
-\copy multi_outer_join_left FROM '@abs_srcdir@/data/customer-1-15.data' with delimiter '|'
+\copy multi_outer_join_left FROM '@abs_srcdir@/data/customer-subset-11-20.data' with delimiter '|'
 \copy multi_outer_join_left FROM '@abs_srcdir@/data/customer-21-30.data' with delimiter '|'
 
 \copy multi_outer_join_right FROM '@abs_srcdir@/data/customer-11-20.data' with delimiter '|'
-\copy multi_outer_join_right FROM '@abs_srcdir@/data/customer-21-30.data' with delimiter '|'
+\copy multi_outer_join_right FROM '@abs_srcdir@/data/customer-subset-21-30.data' with delimiter '|'
 
 -- multi_outer_join_third is a single shard table
-
 -- Regular left join should work as expected
 SELECT
 	min(l_custkey), max(l_custkey)
@@ -438,8 +437,10 @@ FROM
 -- simple test to ensure anti-joins work with hash-partitioned tables
 CREATE TABLE left_values(val int);
 
-SELECT master_create_distributed_table('left_values', 'val', 'hash');
-SELECT master_create_worker_shards('left_values', 16, 1);
+SET citus.shard_count to 16;
+SET citus.shard_replication_factor to 1;
+
+SELECT create_distributed_table('left_values', 'val');
 
 \copy left_values from stdin
 1
@@ -451,8 +452,7 @@ SELECT master_create_worker_shards('left_values', 16, 1);
 
 CREATE TABLE right_values(val int);
 
-SELECT master_create_distributed_table('right_values', 'val', 'hash');
-SELECT master_create_worker_shards('right_values', 16, 1);
+SELECT create_distributed_table('right_values', 'val');
 
 \copy right_values from stdin
 2

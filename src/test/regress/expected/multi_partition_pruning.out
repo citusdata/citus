@@ -5,7 +5,7 @@
 -- need to increase the logging verbosity of messages displayed on the client.
 SET citus.next_shard_id TO 770000;
 -- Adding additional l_orderkey = 1 to make this query not router executable
-SELECT l_orderkey, l_linenumber, l_shipdate FROM lineitem WHERE l_orderkey = 9030 or l_orderkey = 1;
+SELECT l_orderkey, l_linenumber, l_shipdate FROM lineitem WHERE l_orderkey = 9030 or l_orderkey = 1 ORDER BY 1,2;
  l_orderkey | l_linenumber | l_shipdate 
 ------------+--------------+------------
           1 |            1 | 03-13-1996

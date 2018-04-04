@@ -9,7 +9,7 @@
 SET citus.next_shard_id TO 770000;
 
 -- Adding additional l_orderkey = 1 to make this query not router executable
-SELECT l_orderkey, l_linenumber, l_shipdate FROM lineitem WHERE l_orderkey = 9030 or l_orderkey = 1;
+SELECT l_orderkey, l_linenumber, l_shipdate FROM lineitem WHERE l_orderkey = 9030 or l_orderkey = 1 ORDER BY 1,2;
 
 -- We use the l_linenumber field for the following aggregations. We need to use
 -- an integer type, as aggregations on numerics or big integers return numerics

@@ -906,6 +906,8 @@ DROP TRIGGER reject_bad_reference ON reference_modifying_xacts_1200006;
 -- now create a hash distributed table and run tests
 -- including both the reference table and the hash
 -- distributed table
+-- To prevent colocating a hash table with append table
+DELETE FROM pg_dist_colocation WHERE colocationid = 100001;
 SET citus.next_shard_id TO 1200007;
 SET citus.shard_count = 4;
 SET citus.shard_replication_factor = 1;

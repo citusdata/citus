@@ -6,6 +6,8 @@
 
 
 SET citus.next_shard_id TO 630000;
+SET citus.shard_count to 4;
+SET citus.shard_replication_factor to 1;
 
 -- Create a table partitioned on integer column and update partition type to
 -- hash. Then load data into this table and update shard min max values with
@@ -22,8 +24,7 @@ CREATE TABLE orders_hash_partitioned (
 	o_clerk char(15),
 	o_shippriority integer,
 	o_comment varchar(79) );
-SELECT master_create_distributed_table('orders_hash_partitioned', 'o_orderkey', 'hash');
-SELECT master_create_worker_shards('orders_hash_partitioned', 4, 1);
+SELECT create_distributed_table('orders_hash_partitioned', 'o_orderkey');
 
 SET client_min_messages TO DEBUG2;
 

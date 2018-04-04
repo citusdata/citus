@@ -206,7 +206,7 @@ SELECT count(*) FROM orders
 	WHERE o_comment IS NOT null;
  count 
 -------
-  2984
+  2985
 (1 row)
 
 -- functions can be pushed down
@@ -418,10 +418,11 @@ SELECT o_custkey FROM orders ORDER BY o_custkey OFFSET 2980;
  o_custkey 
 -----------
       1498
+      1498
       1499
       1499
       1499
-(4 rows)
+(5 rows)
 
 -- LIMIT/OFFSET with Joins
 SELECT 

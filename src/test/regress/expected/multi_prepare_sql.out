@@ -101,25 +101,25 @@ SET client_min_messages TO INFO;
 EXECUTE prepared_test_1;
  count 
 -------
-  2984
+  2985
 (1 row)
 
 EXECUTE prepared_test_2;
  count 
 -------
- 11998
+ 12000
 (1 row)
 
 EXECUTE prepared_test_3;
  count 
 -------
-  1955
+  1956
 (1 row)
 
 EXECUTE prepared_test_4;
  count 
 -------
-  7804
+  7806
 (1 row)
 
 EXECUTE prepared_test_5;
@@ -132,13 +132,13 @@ EXECUTE prepared_test_5;
 EXECUTE prepared_test_6(155);
  count 
 -------
- 11811
+ 11813
 (1 row)
 
 EXECUTE prepared_test_6(1555);
  count 
 -------
- 10183
+ 10185
 (1 row)
 
 EXECUTE prepared_test_7('UNITED KINGDOM', 'CHINA');
@@ -157,13 +157,13 @@ EXECUTE prepared_test_7('FRANCE', 'GERMANY');
 EXECUTE prepared_test_6(155);
  count 
 -------
- 11811
+ 11813
 (1 row)
 
 EXECUTE prepared_test_3;
  count 
 -------
-  1955
+  1956
 (1 row)
 
 EXECUTE prepared_test_7('FRANCE', 'GERMANY');
@@ -181,19 +181,19 @@ EXECUTE prepared_test_5;
 EXECUTE prepared_test_1;
  count 
 -------
-  2984
+  2985
 (1 row)
 
 EXECUTE prepared_test_6(1555);
  count 
 -------
- 10183
+ 10185
 (1 row)
 
 EXECUTE prepared_test_4;
  count 
 -------
-  7804
+  7806
 (1 row)
 
 EXECUTE prepared_test_7('UNITED KINGDOM', 'CHINA');
@@ -205,7 +205,7 @@ EXECUTE prepared_test_7('UNITED KINGDOM', 'CHINA');
 EXECUTE prepared_test_2;
  count 
 -------
- 11998
+ 12000
 (1 row)
 
 -- CREATE TABLE ... AS EXECUTE prepared_statement tests
@@ -222,26 +222,26 @@ SET citus.task_executor_type TO 'real-time';
 EXECUTE prepared_test_1;
  count 
 -------
-  2984
+  2985
 (1 row)
 
 EXECUTE prepared_test_2;
  count 
 -------
- 11998
+ 12000
 (1 row)
 
 -- execute prepared statements with different parameters
 EXECUTE prepared_test_6(155);
  count 
 -------
- 11811
+ 11813
 (1 row)
 
 EXECUTE prepared_test_6(1555);
  count 
 -------
- 10183
+ 10185
 (1 row)
 
 -- test router executor with parameterized non-partition columns
