@@ -201,6 +201,7 @@ MultiRealTimeExecute(Job *job)
 		}
 
 #ifdef WIN32
+
 		/*
 		 * Don't call CHECK_FOR_INTERRUPTS because we want to clean up after ourselves,
 		 * calling pgwin32_dispatch_queued_signals sets QueryCancelPending so we leave

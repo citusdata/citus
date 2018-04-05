@@ -201,7 +201,7 @@ ReadFileIntoTupleStore(char *fileName, char *copyFormat, TupleDesc tupleDescript
 			MemoryContextSwitchTo(oldContext);
 		}
 
-		/* 
+		/*
 		 * This is only necessary on windows, in the abort handler we might try to remove
 		 * the file being COPY'd (if it was an intermediate result), but on Windows that's
 		 * not possible unless we first close our handle to the file.
