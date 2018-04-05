@@ -27,25 +27,28 @@
 extern bool EnableRouterExecution;
 
 extern DistributedPlan * CreateRouterPlan(Query *originalQuery, Query *query,
-										  RelationRestrictionContext *restrictionContext);
+										  PlannerRestrictionContext *
+										  plannerRestrictionContext);
 extern DistributedPlan * CreateModifyPlan(Query *originalQuery, Query *query,
 										  PlannerRestrictionContext *
 										  plannerRestrictionContext);
 extern DeferredErrorMessage * PlanRouterQuery(Query *originalQuery,
-											  RelationRestrictionContext *
-											  restrictionContext,
+											  PlannerRestrictionContext *
+											  plannerRestrictionContext,
 											  List **placementList, uint64 *anchorShardId,
 											  List **relationShardList, bool
 											  replacePrunedQueryWithDummy,
 											  bool *multiShardModifyQuery);
 extern List * RouterInsertTaskList(Query *query, DeferredErrorMessage **planningError);
-extern List * TargetShardIntervalsForQuery(Query *query,
-										   RelationRestrictionContext *restrictionContext,
-										   bool *multiShardQuery);
+List * TargetShardIntervalsForQuery(Query *query,
+									RelationRestrictionContext *restrictionContext,
+									bool *multiShardQuery);
 extern List * WorkersContainingAllShards(List *prunedShardIntervalsList);
 extern List * IntersectPlacementList(List *lhsPlacementList, List *rhsPlacementList);
 extern DeferredErrorMessage * ModifyQuerySupported(Query *queryTree, Query *originalQuery,
-												   bool multiShardQuery);
+												   bool multiShardQuery,
+												   PlannerRestrictionContext *
+												   plannerRestrictionContext);
 extern List * ShardIntervalOpExpressions(ShardInterval *shardInterval, Index rteIndex);
 extern RelationRestrictionContext * CopyRelationRestrictionContext(
 	RelationRestrictionContext *oldContext);
@@ -58,6 +61,6 @@ extern bool IsMultiRowInsert(Query *query);
 extern void AddShardIntervalRestrictionToSelect(Query *subqery,
 												ShardInterval *shardInterval);
 extern bool UpdateOrDeleteQuery(Query *query);
-
+extern List * WorkersContainingAllShards(List *prunedShardIntervalsList);
 
 #endif /* MULTI_ROUTER_PLANNER_H */

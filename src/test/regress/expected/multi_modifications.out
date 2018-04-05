@@ -1108,8 +1108,8 @@ SELECT master_modify_multiple_shards('
 		SELECT avg(value) AS average FROM raw_table WHERE id = 1
 		) average_query
 	WHERE id = 1');
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Joins are not supported in distributed modifications.
+ERROR:  cannot run multi shard modify query with master_modify_multiple_shard
+DETAIL:  Send your query directly.
 -- test connection API via using COPY
 -- COPY on SELECT part
 BEGIN;

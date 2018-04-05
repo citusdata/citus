@@ -44,8 +44,8 @@ static DistributedPlan * CreateDistributedInsertSelectPlan(Query *originalQuery,
 														   plannerRestrictionContext);
 static Task * RouterModifyTaskForShardInterval(Query *originalQuery,
 											   ShardInterval *shardInterval,
-											   RelationRestrictionContext *
-											   restrictionContext,
+											   PlannerRestrictionContext *
+											   plannerRestrictionContext,
 											   uint32 taskIdIndex,
 											   bool allRelationsJoinedOnPartitionKey);
 static DeferredErrorMessage * DistributedInsertSelectSupported(Query *queryTree,
@@ -252,7 +252,7 @@ CreateDistributedInsertSelectPlan(Query *originalQuery,
 		Task *modifyTask = NULL;
 
 		modifyTask = RouterModifyTaskForShardInterval(originalQuery, targetShardInterval,
-													  relationRestrictionContext,
+													  plannerRestrictionContext,
 													  taskIdIndex,
 													  allDistributionKeysInQueryAreEqual);
 
@@ -404,7 +404,7 @@ DistributedInsertSelectSupported(Query *queryTree, RangeTblEntry *insertRte,
  */
 static Task *
 RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInterval,
-								 RelationRestrictionContext *restrictionContext,
+								 PlannerRestrictionContext *plannerRestrictionContext,
 								 uint32 taskIdIndex,
 								 bool safeToPushdownSubquery)
 {
@@ -418,7 +418,11 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(distributedTableId);
 
 	RelationRestrictionContext *copiedRestrictionContext =
-		CopyRelationRestrictionContext(restrictionContext);
+		CopyRelationRestrictionContext(
+			plannerRestrictionContext->relationRestrictionContext);
+	RelationRestrictionContext *originalRestrictionContext =
+		CopyRelationRestrictionContext(
+			plannerRestrictionContext->relationRestrictionContext);
 
 	StringInfo queryString = makeStringInfo();
 	ListCell *restrictionCell = NULL;
@@ -431,7 +435,8 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 	List *intersectedPlacementList = NULL;
 	bool upsertQuery = false;
 	bool replacePrunedQueryWithDummy = false;
-	bool allReferenceTables = restrictionContext->allReferenceTables;
+	bool allReferenceTables =
+		plannerRestrictionContext->relationRestrictionContext->allReferenceTables;
 	List *shardOpExpressions = NIL;
 	RestrictInfo *shardRestrictionList = NULL;
 	DeferredErrorMessage *planningError = NULL;
@@ -493,10 +498,13 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 	 * If we can, we also rely on the side-effects that all RTEs have been updated
 	 * to point to the relevant nodes and selectPlacementList is determined.
 	 */
-	planningError = PlanRouterQuery(copiedSubquery, copiedRestrictionContext,
+
+	plannerRestrictionContext->relationRestrictionContext = copiedRestrictionContext;
+	planningError = PlanRouterQuery(copiedSubquery, plannerRestrictionContext,
 									&selectPlacementList, &selectAnchorShardId,
 									&relationShardList, replacePrunedQueryWithDummy,
 									&multiShardModifyQuery);
+	plannerRestrictionContext->relationRestrictionContext = originalRestrictionContext;
 
 	Assert(!multiShardModifyQuery);
 

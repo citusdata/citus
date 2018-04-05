@@ -39,6 +39,7 @@
 #include "distributed/listutils.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/relation_restriction_equivalence.h"
+#include "distributed/query_pushdown_planning_utils.h"
 #include "distributed/relay_utility.h"
 #include "distributed/resource_lock.h"
 #include "distributed/shardinterval_utils.h"
@@ -108,8 +109,8 @@ bool EnableRouterExecution = true;
 /* planner functions forward declarations */
 static DistributedPlan * CreateSingleTaskRouterPlan(Query *originalQuery,
 													Query *query,
-													RelationRestrictionContext *
-													restrictionContext);
+													PlannerRestrictionContext *
+													plannerRestrictionContext);
 static bool IsTidColumn(Node *node);
 static bool MasterIrreducibleExpression(Node *expression, bool *varArgument,
 										bool *badCoalesce);
@@ -124,7 +125,7 @@ static bool CanShardPrune(Oid distributedTableId, Query *query);
 static Job * CreateJob(Query *query);
 static Task * CreateTask(TaskType taskType);
 static Job * RouterJob(Query *originalQuery,
-					   RelationRestrictionContext *restrictionContext,
+					   PlannerRestrictionContext *plannerRestrictionContext,
 					   DeferredErrorMessage **planningError);
 static bool RelationPrunesToMultipleShards(List *relationShardList);
 static void NormalizeMultiRowInsertTargetList(Query *query);
@@ -157,12 +158,13 @@ static List * MultiShardModifyTaskList(Query *originalQuery, List *relationShard
  */
 DistributedPlan *
 CreateRouterPlan(Query *originalQuery, Query *query,
-				 RelationRestrictionContext *restrictionContext)
+				 PlannerRestrictionContext *plannerRestrictionContext)
 {
-	if (MultiRouterPlannableQuery(query, restrictionContext))
+	if (MultiRouterPlannableQuery(query,
+								  plannerRestrictionContext->relationRestrictionContext))
 	{
 		return CreateSingleTaskRouterPlan(originalQuery, query,
-										  restrictionContext);
+										  plannerRestrictionContext);
 	}
 
 	/*
@@ -189,7 +191,8 @@ CreateModifyPlan(Query *originalQuery, Query *query,
 	distributedPlan->operation = query->commandType;
 
 	distributedPlan->planningError = ModifyQuerySupported(query, originalQuery,
-														  multiShardQuery);
+														  multiShardQuery,
+														  plannerRestrictionContext);
 	if (distributedPlan->planningError != NULL)
 	{
 		return distributedPlan;
@@ -197,10 +200,7 @@ CreateModifyPlan(Query *originalQuery, Query *query,
 
 	if (UpdateOrDeleteQuery(query))
 	{
-		RelationRestrictionContext *restrictionContext =
-			plannerRestrictionContext->relationRestrictionContext;
-
-		job = RouterJob(originalQuery, restrictionContext,
+		job = RouterJob(originalQuery, plannerRestrictionContext,
 						&distributedPlan->planningError);
 	}
 	else
@@ -238,7 +238,7 @@ CreateModifyPlan(Query *originalQuery, Query *query,
  */
 static DistributedPlan *
 CreateSingleTaskRouterPlan(Query *originalQuery, Query *query,
-						   RelationRestrictionContext *restrictionContext)
+						   PlannerRestrictionContext *plannerRestrictionContext)
 {
 	Job *job = NULL;
 	DistributedPlan *distributedPlan = CitusMakeNode(DistributedPlan);
@@ -253,7 +253,8 @@ CreateSingleTaskRouterPlan(Query *originalQuery, Query *query,
 	}
 
 	/* we cannot have multi shard update/delete query via this code path */
-	job = RouterJob(originalQuery, restrictionContext, &distributedPlan->planningError);
+	job = RouterJob(originalQuery, plannerRestrictionContext,
+					&distributedPlan->planningError);
 
 	if (distributedPlan->planningError)
 	{
@@ -516,7 +517,8 @@ IsTidColumn(Node *node)
  * on the rewritten query.
  */
 DeferredErrorMessage *
-ModifyQuerySupported(Query *queryTree, Query *originalQuery, bool multiShardQuery)
+ModifyQuerySupported(Query *queryTree, Query *originalQuery, bool multiShardQuery,
+					 PlannerRestrictionContext *plannerRestrictionContext)
 {
 	Oid distributedTableId = ExtractFirstDistributedTableId(queryTree);
 	uint32 rangeTableId = 1;
@@ -686,24 +688,53 @@ ModifyQuerySupported(Query *queryTree, Query *originalQuery, bool multiShardQuer
 		}
 	}
 
-	/*
-	 * Reject queries which involve joins. Note that UPSERTs are exceptional for this case.
-	 * Queries like "INSERT INTO table_name ON CONFLICT DO UPDATE (col) SET other_col = ''"
-	 * contains two range table entries, and we have to allow them.
-	 */
 	if (commandType != CMD_INSERT && queryTableCount != 1)
 	{
-		/*
-		 * We support UPDATE and DELETE with joins unless they are multi shard
-		 * queries.
-		 */
-		if (!UpdateOrDeleteQuery(queryTree) || multiShardQuery)
+		/* We can not get restriction context via master_modify_multiple_shards path */
+		if (plannerRestrictionContext == NULL)
 		{
 			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-								 "cannot perform distributed planning for the given "
-								 "modification",
-								 "Joins are not supported in distributed "
-								 "modifications.", NULL);
+								 "cannot run multi shard modify query with master_modify_multiple_shard",
+								 "Send your query directly.", NULL);
+		}
+
+		/* If it is a multi-shard modify query with multiple tables */
+		if (multiShardQuery)
+		{
+			DeferredErrorMessage *errorMessage = NULL;
+			RangeTblEntry *resultRangeTable = rt_fetch(originalQuery->resultRelation, originalQuery->rtable);
+			Oid resultRelationOid = resultRangeTable->relid;
+			char resultPartitionMethod = PartitionMethod(resultRelationOid);
+			bool allReferenceTable = plannerRestrictionContext->relationRestrictionContext->allReferenceTables;
+
+			if (!AllDistributionKeysInQueryAreEqual(originalQuery,
+													plannerRestrictionContext))
+			{
+				errorMessage = DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+									 "cannot perform distributed planning for the given "
+									 "modification",
+									 "Joins are not supported in distributed "
+									 "modifications.", NULL);
+			}
+
+			else if (resultPartitionMethod == DISTRIBUTE_BY_NONE && !allReferenceTable)
+			{
+				errorMessage = DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+												 "only reference tables may be queried when targeting "
+												 "a reference table with multi shard UPDATE/DELETE queries "
+												 "with multiple tables ",
+												 NULL, NULL);
+			}
+
+			else
+			{
+				errorMessage = DeferErrorIfUnsupportedSubqueryPushdown(originalQuery, plannerRestrictionContext);
+			}
+
+			if (errorMessage != NULL)
+			{
+				return errorMessage;
+			}
 		}
 	}
 
@@ -1393,7 +1424,7 @@ ExtractFirstDistributedTableId(Query *query)
  * multiple shard update/delete queries.
  */
 static Job *
-RouterJob(Query *originalQuery, RelationRestrictionContext *restrictionContext,
+RouterJob(Query *originalQuery, PlannerRestrictionContext *plannerRestrictionContext,
 		  DeferredErrorMessage **planningError)
 {
 	Job *job = NULL;
@@ -1412,7 +1443,7 @@ RouterJob(Query *originalQuery, RelationRestrictionContext *restrictionContext,
 	/* check if this query requires master evaluation */
 	requiresMasterEvaluation = RequiresMasterEvaluation(originalQuery);
 
-	(*planningError) = PlanRouterQuery(originalQuery, restrictionContext,
+	(*planningError) = PlanRouterQuery(originalQuery, plannerRestrictionContext,
 									   &placementList, &shardId, &relationShardList,
 									   replacePrunedQueryWithDummy,
 									   &isMultiShardModifyQuery);
@@ -1446,8 +1477,21 @@ RouterJob(Query *originalQuery, RelationRestrictionContext *restrictionContext,
 	}
 	else if (isMultiShardModifyQuery)
 	{
-		job->taskList = MultiShardModifyTaskList(originalQuery, relationShardList,
-												 requiresMasterEvaluation);
+		/* If it is a modify task with multiple tables */
+		if (list_length(
+				plannerRestrictionContext->relationRestrictionContext->
+				relationRestrictionList) > 1)
+		{
+			job->taskList = QueryPushdownSqlTaskList(originalQuery, 0,
+													 plannerRestrictionContext->
+													 relationRestrictionContext,
+													 relationShardList, MODIFY_TASK);
+		}
+		else
+		{
+			job->taskList = MultiShardModifyTaskList(originalQuery, relationShardList,
+													 requiresMasterEvaluation);
+		}
 	}
 	else
 	{
@@ -1657,7 +1701,8 @@ SelectsFromDistributedTable(List *rangeTableList)
  * 0 values in UpdateRelationToShardNames.
  */
 DeferredErrorMessage *
-PlanRouterQuery(Query *originalQuery, RelationRestrictionContext *restrictionContext,
+PlanRouterQuery(Query *originalQuery,
+				PlannerRestrictionContext *plannerRestrictionContext,
 				List **placementList, uint64 *anchorShardId, List **relationShardList,
 				bool replacePrunedQueryWithDummy, bool *multiShardModifyQuery)
 {
@@ -1672,10 +1717,12 @@ PlanRouterQuery(Query *originalQuery, RelationRestrictionContext *restrictionCon
 	uint64 shardId = INVALID_SHARD_ID;
 	CmdType commandType = originalQuery->commandType;
 	bool isMultiShardModifyQuery = false;
+	bool isMultipleTableModifyQuery = false;
 
 	*placementList = NIL;
 	prunedRelationShardList = TargetShardIntervalsForQuery(originalQuery,
-														   restrictionContext,
+														   plannerRestrictionContext->
+														   relationRestrictionContext,
 														   &isMultiShardQuery);
 
 	if (isMultiShardQuery)
@@ -1694,14 +1741,32 @@ PlanRouterQuery(Query *originalQuery, RelationRestrictionContext *restrictionCon
 
 		Assert(UpdateOrDeleteQuery(originalQuery));
 
+		isMultipleTableModifyQuery = (list_length(
+										  plannerRestrictionContext->
+										  relationRestrictionContext->
+										  relationRestrictionList) > 1);
+
 		planningError = ModifyQuerySupported(originalQuery, originalQuery,
-											 isMultiShardQuery);
+											 isMultipleTableModifyQuery,
+											 plannerRestrictionContext);
 		if (planningError != NULL)
 		{
 			return planningError;
 		}
 
 		isMultiShardModifyQuery = true;
+	}
+
+	/*
+	 * If the modify query uses multiple tables, relation shard list should be
+	 * returned as list of shard list for each table. Check the implementation
+	 * of QueryPushdownSqlTaskList.
+	 */
+	if (isMultipleTableModifyQuery)
+	{
+		*relationShardList = prunedRelationShardList;
+		*multiShardModifyQuery = true;
+		return planningError;
 	}
 
 	foreach(prunedRelationShardListCell, prunedRelationShardList)
