@@ -165,16 +165,16 @@ ReadFileIntoTupleStore(char *fileName, char *copyFormat, TupleDesc tupleDescript
 #endif
 	copyOptions = lappend(copyOptions, copyOption);
 
-#if (PG_VERSION_NUM >= 100000)
-	copyState = BeginCopyFrom(NULL, stubRelation, fileName, false, NULL,
-							  NULL, copyOptions);
-#else
-	copyState = BeginCopyFrom(stubRelation, fileName, false, NULL,
-							  copyOptions);
-#endif
-
 	PG_TRY();
 	{
+#if (PG_VERSION_NUM >= 100000)
+		copyState = BeginCopyFrom(NULL, stubRelation, fileName, false, NULL,
+								  NULL, copyOptions);
+#else
+		copyState = BeginCopyFrom(stubRelation, fileName, false, NULL,
+								  copyOptions);
+#endif
+
 		while (true)
 		{
 			bool nextRowFound = false;
@@ -196,17 +196,21 @@ ReadFileIntoTupleStore(char *fileName, char *copyFormat, TupleDesc tupleDescript
 	}
 	PG_CATCH();
 	{
-		/* 
-		 * This is only necessary on windows, in the abort handler we might try to remove
-		 * the file being COPY'd (if it was an intermediate result), but on Windows that's
-		 * not possible unless we first close our handle to the file.
-		 */
 		if (oldContext != NULL)
 		{
 			MemoryContextSwitchTo(oldContext);
 		}
 
-		EndCopyFrom(copyState);
+		/* 
+		 * This is only necessary on windows, in the abort handler we might try to remove
+		 * the file being COPY'd (if it was an intermediate result), but on Windows that's
+		 * not possible unless we first close our handle to the file.
+		 *
+		 * This was already going to be called during abort, but it was going to be called
+		 * after we try to delete the file, we need it to be called before.
+		 */
+		AtEOXact_Files();
+
 		PG_RE_THROW();
 	}
 	PG_END_TRY();
