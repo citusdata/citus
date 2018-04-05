@@ -342,9 +342,9 @@ SELECT generate_alter_table_attach_partition_command('multi_column_partition_2')
 (1 row)
 
 SELECT generate_alter_table_detach_partition_command('multi_column_partition_2');
-                         generate_alter_table_detach_partition_command                         
------------------------------------------------------------------------------------------------
- ALTER TABLE public.multi_column_partitioned DETACH PARTITION public.multi_column_partition_2;
+                              generate_alter_table_detach_partition_command                              
+---------------------------------------------------------------------------------------------------------
+ ALTER TABLE IF EXISTS public.multi_column_partitioned DETACH PARTITION public.multi_column_partition_2;
 (1 row)
 
 -- finally a test with LIST partitioning
