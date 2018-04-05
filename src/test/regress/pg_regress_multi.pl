@@ -383,12 +383,14 @@ for my $workeroff (0 .. $#followerWorkerPorts)
 if ($usingWindows)
 {
 	print $fh "--variable=dev_null=\"/nul\" ";
-	print $fh "--variable=temp_dir=\"%TEMP%\"";
+	print $fh "--variable=temp_dir=\"%TEMP%\" ";
+	print $fh "--variable=psql=\"".catfile($bindir, "psql")."\" ";
 }
 else
 {
 	print $fh "--variable=dev_null=\"/dev/null\" ";	
-	print $fh "--variable=temp_dir=\"/tmp/\"";
+	print $fh "--variable=temp_dir=\"/tmp/\" ";
+	print $fh "--variable=psql=\"psql\" ";
 }
 
 

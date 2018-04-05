@@ -114,8 +114,8 @@ END;
 -- pipe query output into a result file and create a table to check the result
 COPY (SELECT s, s*s FROM generate_series(1,5) s)
 TO PROGRAM
-  $$psql -h localhost -p 57636 -U postgres -d regression -c "BEGIN; COPY squares FROM STDIN WITH (format result); CREATE TABLE intermediate_results.squares AS SELECT * FROM read_intermediate_result('squares', 'binary') AS res(x int, x2 int); END;"$$
-WITH (FORMAT binary);
+  $$psql -h localhost -p 57636 -U postgres -d regression -c "BEGIN; COPY squares FROM STDIN WITH (format result); CREATE TABLE intermediate_results.squares AS SELECT * FROM read_intermediate_result('squares', 'text') AS res(x int, x2 int); END;"$$
+WITH (FORMAT text);
 
 SELECT * FROM squares ORDER BY x;
 
