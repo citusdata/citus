@@ -1105,8 +1105,8 @@ SELECT * FROM copy_jsonb ORDER BY key;
 (2 rows)
 
 -- JSONB from binary should work
-\COPY copy_jsonb TO '/tmp/copy_jsonb.pgcopy' WITH (format binary)
-\COPY copy_jsonb FROM '/tmp/copy_jsonb.pgcopy' WITH (format binary)
+COPY copy_jsonb TO :'temp_dir''copy_jsonb.pgcopy' WITH (format binary);
+COPY copy_jsonb FROM :'temp_dir''copy_jsonb.pgcopy' WITH (format binary);
 SELECT * FROM copy_jsonb ORDER BY key;
   key  |           value            |    extra    
 -------+----------------------------+-------------
@@ -1134,8 +1134,8 @@ SELECT * FROM copy_jsonb ORDER BY key;
 (2 rows)
 
 -- JSONB from binary should work
-\COPY copy_jsonb TO '/tmp/copy_jsonb.pgcopy' WITH (format binary)
-\COPY copy_jsonb FROM '/tmp/copy_jsonb.pgcopy' WITH (format binary)
+COPY copy_jsonb TO :'temp_dir''copy_jsonb.pgcopy' WITH (format binary);
+COPY copy_jsonb FROM :'temp_dir''copy_jsonb.pgcopy' WITH (format binary);
 SELECT * FROM copy_jsonb ORDER BY key;
   key  |           value            |    extra    
 -------+----------------------------+-------------

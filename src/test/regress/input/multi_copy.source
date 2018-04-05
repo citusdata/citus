@@ -825,8 +825,8 @@ green	{"r":0,"g":255,"b":0}
 SELECT * FROM copy_jsonb ORDER BY key;
 
 -- JSONB from binary should work
-\COPY copy_jsonb TO '/tmp/copy_jsonb.pgcopy' WITH (format binary)
-\COPY copy_jsonb FROM '/tmp/copy_jsonb.pgcopy' WITH (format binary)
+COPY copy_jsonb TO :'temp_dir''copy_jsonb.pgcopy' WITH (format binary);
+COPY copy_jsonb FROM :'temp_dir''copy_jsonb.pgcopy' WITH (format binary);
 SELECT * FROM copy_jsonb ORDER BY key;
 
 -- JSONB parsing error without validation: no line number
@@ -845,8 +845,8 @@ green	{"r":0,"g":255,"b":0}
 SELECT * FROM copy_jsonb ORDER BY key;
 
 -- JSONB from binary should work
-\COPY copy_jsonb TO '/tmp/copy_jsonb.pgcopy' WITH (format binary)
-\COPY copy_jsonb FROM '/tmp/copy_jsonb.pgcopy' WITH (format binary)
+COPY copy_jsonb TO :'temp_dir''copy_jsonb.pgcopy' WITH (format binary);
+COPY copy_jsonb FROM :'temp_dir''copy_jsonb.pgcopy' WITH (format binary);
 SELECT * FROM copy_jsonb ORDER BY key;
 
 -- JSONB parsing error with validation: should see line number
