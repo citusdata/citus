@@ -242,7 +242,8 @@ GenerateDetachPartitionCommand(Oid partitionTableId)
 	tableQualifiedName = generate_qualified_relation_name(partitionTableId);
 	parentTableQualifiedName = generate_qualified_relation_name(parentId);
 
-	appendStringInfo(detachPartitionCommand, "ALTER TABLE %s DETACH PARTITION %s;",
+	appendStringInfo(detachPartitionCommand,
+					 "ALTER TABLE IF EXISTS %s DETACH PARTITION %s;",
 					 parentTableQualifiedName, tableQualifiedName);
 #endif
 

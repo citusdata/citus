@@ -17,6 +17,7 @@ test: multi_extension
 test: multi_cluster_management
 test: multi_test_helpers
 
+test: multi_mx_partitioning
 test: multi_mx_create_table
 test: multi_mx_copy_data multi_mx_router_planner
 test: multi_mx_schema_support multi_mx_tpch_query1 multi_mx_tpch_query10

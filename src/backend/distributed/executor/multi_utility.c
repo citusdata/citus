@@ -170,6 +170,7 @@ static void RangeVarCallbackForDropIndex(const RangeVar *rel, Oid relOid, Oid ol
 static void CheckCopyPermissions(CopyStmt *copyStatement);
 static List * CopyGetAttnums(TupleDesc tupDesc, Relation rel, List *attnamelist);
 static void PostProcessUtility(Node *parsetree);
+static void ProcessDropTableStmt(DropStmt *dropTableStatement);
 
 
 /*
@@ -361,6 +362,11 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 			if (dropStatement->removeType == OBJECT_INDEX)
 			{
 				ddlJobs = PlanDropIndexStmt(dropStatement, queryString);
+			}
+
+			if (dropStatement->removeType == OBJECT_TABLE)
+			{
+				ProcessDropTableStmt(dropStatement);
 			}
 		}
 
@@ -3769,4 +3775,59 @@ PlanGrantStmt(GrantStmt *grantStmt)
 	}
 
 	return ddlJobs;
+}
+
+
+/*
+ * ProcessDropTableStmt processes DROP TABLE commands for partitioned tables.
+ * If we are trying to DROP partitioned tables, we first need to go to MX nodes
+ * and DETACH partitions from their parents. Otherwise, we process DROP command
+ * multiple times in MX workers. For shards, we send DROP commands with IF EXISTS
+ * parameter which solves problem of processing same command multiple times.
+ * However, for distributed table itself, we directly remove related table from
+ * Postgres catalogs via performDeletion function, thus we need to be cautious
+ * about not processing same DROP command twice.
+ */
+static void
+ProcessDropTableStmt(DropStmt *dropTableStatement)
+{
+	ListCell *dropTableCell = NULL;
+
+	Assert(dropTableStatement->removeType == OBJECT_TABLE);
+
+	foreach(dropTableCell, dropTableStatement->objects)
+	{
+		List *tableNameList = (List *) lfirst(dropTableCell);
+		RangeVar *tableRangeVar = makeRangeVarFromNameList(tableNameList);
+		bool missingOK = true;
+		List *partitionList = NIL;
+		ListCell *partitionCell = NULL;
+
+		Oid relationId = RangeVarGetRelid(tableRangeVar, AccessShareLock, missingOK);
+
+		if (relationId == InvalidOid ||
+			!IsDistributedTable(relationId) ||
+			!ShouldSyncTableMetadata(relationId) ||
+			!PartitionedTable(relationId))
+		{
+			continue;
+		}
+
+		partitionList = PartitionList(relationId);
+		if (list_length(partitionList) == 0)
+		{
+			continue;
+		}
+
+		SendCommandToWorkers(WORKERS_WITH_METADATA, DISABLE_DDL_PROPAGATION);
+
+		foreach(partitionCell, partitionList)
+		{
+			Oid partitionRelationId = lfirst_oid(partitionCell);
+			char *detachPartitionCommand =
+				GenerateDetachPartitionCommand(partitionRelationId);
+
+			SendCommandToWorkers(WORKERS_WITH_METADATA, detachPartitionCommand);
+		}
+	}
 }

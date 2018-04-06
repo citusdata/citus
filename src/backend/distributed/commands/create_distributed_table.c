@@ -369,6 +369,12 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 		CreateReferenceTableShard(relationId);
 	}
 
+
+	if (ShouldSyncTableMetadata(relationId))
+	{
+		CreateTableMetadataOnWorkers(relationId);
+	}
+
 	/* if this table is partitioned table, distribute its partitions too */
 	if (PartitionedTable(relationId))
 	{
@@ -397,11 +403,6 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 	if (colocatedRelation != NULL)
 	{
 		relation_close(colocatedRelation, NoLock);
-	}
-
-	if (ShouldSyncTableMetadata(relationId))
-	{
-		CreateTableMetadataOnWorkers(relationId);
 	}
 }
 
@@ -725,15 +726,6 @@ EnsureRelationCanBeDistributed(Oid relationId, Var *distributionColumn,
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 							errmsg("distributing partitioned tables with replication "
 								   "factor greater than 1 is not supported")));
-		}
-
-		/* we currently don't support MX tables to be distributed partitioned table */
-		if (replicationModel == REPLICATION_MODEL_STREAMING &&
-			CountPrimariesWithMetadata() > 0)
-		{
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("distributing partitioned tables is not supported "
-								   "with Citus MX")));
 		}
 
 		/* we don't support distributing tables with multi-level partitioning */
