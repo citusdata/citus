@@ -205,6 +205,9 @@ SELECT inhrelid::regclass FROM pg_inherits WHERE inhparent = 'partitioning_test'
 ERROR:  relation "partitioning_test" does not exist
 LINE 1: ...elid::regclass FROM pg_inherits WHERE inhparent = 'partition...
                                                              ^
+-- make sure DROPping from worker node is not allowed
+DROP TABLE partitioning_test;
+ERROR:  table "partitioning_test" does not exist
 \c - - - :master_port
 -- make sure we can repeatedly call start_metadata_sync_to_node
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
