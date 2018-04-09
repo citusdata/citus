@@ -156,6 +156,9 @@ ALTER TABLE partitioning_test DETACH PARTITION partitioning_test_2009;
 
 SELECT inhrelid::regclass FROM pg_inherits WHERE inhparent = 'partitioning_test'::regclass;
 
+-- make sure DROPping from worker node is not allowed
+DROP TABLE partitioning_test;
+
 \c - - - :master_port
 
 -- make sure we can repeatedly call start_metadata_sync_to_node

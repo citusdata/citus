@@ -3813,6 +3813,8 @@ ProcessDropTableStmt(DropStmt *dropTableStatement)
 			continue;
 		}
 
+		EnsureCoordinator();
+
 		partitionList = PartitionList(relationId);
 		if (list_length(partitionList) == 0)
 		{

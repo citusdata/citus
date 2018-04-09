@@ -241,6 +241,10 @@ SELECT inhrelid::regclass FROM pg_inherits WHERE inhparent = 'partitioning_test'
  partitioning_test_2013
 (4 rows)
 
+-- make sure DROPping from worker node is not allowed
+DROP TABLE partitioning_test;
+ERROR:  operation is not allowed on this node
+HINT:  Connect to the coordinator and run it again.
 \c - - - :master_port
 -- make sure we can repeatedly call start_metadata_sync_to_node
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
