@@ -408,7 +408,6 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 
 	PG_TRY();
 	{
-
 		/* initialize copy state to read from COPY data source */
 #if (PG_VERSION_NUM >= 100000)
 		copyState = BeginCopyFrom(NULL,

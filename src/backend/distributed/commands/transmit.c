@@ -50,7 +50,6 @@ RedirectCopyDataToRegularFile(const char *filename)
 
 	PG_TRY();
 	{
-
 		SendCopyInStart();
 
 		copyDone = ReceiveCopyData(copyData);
