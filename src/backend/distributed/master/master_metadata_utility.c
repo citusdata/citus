@@ -561,6 +561,7 @@ CopyShardInterval(ShardInterval *srcInterval, ShardInterval *destInterval)
 	destInterval->minValueExists = srcInterval->minValueExists;
 	destInterval->maxValueExists = srcInterval->maxValueExists;
 	destInterval->shardId = srcInterval->shardId;
+	destInterval->shardIndex = srcInterval->shardIndex;
 
 	destInterval->minValue = 0;
 	if (destInterval->minValueExists)

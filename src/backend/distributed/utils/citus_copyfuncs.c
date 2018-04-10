@@ -157,6 +157,7 @@ CopyNodeShardInterval(COPYFUNC_ARGS)
 	}
 
 	COPY_SCALAR_FIELD(shardId);
+	COPY_SCALAR_FIELD(shardIndex);
 }
 
 

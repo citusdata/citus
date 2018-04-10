@@ -359,6 +359,7 @@ OutShardInterval(OUTFUNC_ARGS)
 		outDatum(str, node->maxValue, node->valueTypeLen, node->valueByVal);
 
 	WRITE_UINT64_FIELD(shardId);
+	WRITE_INT_FIELD(shardIndex);
 }
 
 
