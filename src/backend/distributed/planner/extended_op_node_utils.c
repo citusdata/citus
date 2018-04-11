@@ -123,6 +123,10 @@ GroupedByDisjointPartitionColumn(List *tableNodeList, MultiExtendedOp *opNode)
 }
 
 
+/*
+ * ExtendedOpNodeContainsRepartitionSubquery is a utility function that
+ * returns true if the extended op node contains a re-partition subquery.
+ */
 static bool
 ExtendedOpNodeContainsRepartitionSubquery(MultiExtendedOp *originalOpNode)
 {
