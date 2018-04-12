@@ -21,11 +21,22 @@ if (NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 endif (NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 
 # TODO do something smart with the version
-project (citus
+project (Citus
 	VERSION 7.4.0
 	DESCRIPTION "Citus distributed database"
 	LANGUAGES C
 )
+
+set (CITUS_EDITION  "Community")
+set (COMPAT_VERSION "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}")
+set (SCHEMA_VERSION "1")
+set (REPORTS_BASE_URL "https://reports.citusdata.com")
+
+include (FindCURL)
+set (HAVE_LIBCURL ${CURL_FOUND})
+
+set (CITUS_VERSION_H "src/include/citus_version.h")
+configure_file ("${CITUS_VERSION_H}.in" "${CITUS_VERSION_H}" @ONLY)
 
 # TODO make this configurable
 set (PG_CONFIG "pg_config" CACHE STRING
@@ -100,7 +111,8 @@ execute_process (
 )
 
 # Add our main library...
-add_library ("${PROJECT_NAME}" MODULE
+string (TOLOWER "${PROJECT_NAME}" EXT_NAME)
+add_library ("${EXT_NAME}" MODULE
   "src/backend/distributed/commands/create_distributed_table.c"
   "src/backend/distributed/commands/drop_distributed_table.c"
   "src/backend/distributed/commands/multi_copy.c"
@@ -209,9 +221,9 @@ set (DATAMODULEDIR "extension") # TODO should be configurable and be 'contrib' s
 # set up compiler and linker flags on *nix-y OSes
 if (UNIX)
 # ... its include directories.
-	target_include_directories ("${PROJECT_NAME}"
-    PUBLIC "${PROJECT_SOURCE_DIR}/src/include"
+	target_include_directories ("${EXT_NAME}"
 		PUBLIC "${PROJECT_BINARY_DIR}/src/include"
+    PUBLIC "${PROJECT_SOURCE_DIR}/src/include"
 		PUBLIC "${PGC_INCLUDEDIR_SERVER}"
 		PUBLIC "${PGC_PKGINCLUDEDIR}/internal"
 	)
@@ -232,11 +244,10 @@ if (UNIX)
 
   string (APPEND PROJ_LDFLAGS " -L${PGC_LIBDIR} -lpq")
 
-  include (FindCURL)
-  target_link_libraries ("${PROJECT_NAME}" ${CURL_LIBRARIES})
+  target_link_libraries ("${EXT_NAME}" ${CURL_LIBRARIES})
 
 	# ... and add those from pg_config.
-	target_compile_options (${PROJECT_NAME} PUBLIC ${PGC_CFLAGS}
+	target_compile_options (${EXT_NAME} PUBLIC ${PGC_CFLAGS}
 											PUBLIC ${PGC_CPPFLAGS})
 endif (UNIX)
 
@@ -248,7 +259,7 @@ if (APPLE)
 	set (CMAKE_MODULE_LINKER_FLAGS "-bundle -bundle_loader ${PGC_BINDIR}/postgres")
 
 	# Get rid of symbol, prefix, and PIC settings; set link flags.
-	set_target_properties ("${PROJECT_NAME}" PROPERTIES
+	set_target_properties ("${EXT_NAME}" PROPERTIES
 		PREFIX ""
 		DEFINE_SYMBOL ""
 		POSITION_INDEPENDENT_CODE FALSE
@@ -258,7 +269,7 @@ endif (APPLE)
 
 if (WIN32)
 # ... its include directories.
-	target_include_directories ("${PROJECT_NAME}"
+	target_include_directories ("${EXT_NAME}"
 		PUBLIC "${PROJECT_BINARY_DIR}"
 		PUBLIC "${PGC_INCLUDEDIR}"
 		PUBLIC "${PGC_INCLUDEDIR_SERVER}"
@@ -266,7 +277,7 @@ if (WIN32)
 		PUBLIC "${PGC_INCLUDEDIR_SERVER}/port/win32"
 	)
 
-	target_compile_options("${PROJECT_NAME}" PUBLIC "-D_CRT_SECURE_NO_WARNINGS")
+	target_compile_options("${EXT_NAME}" PUBLIC "-D_CRT_SECURE_NO_WARNINGS")
 
 	set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} /MANIFEST:NO ${PGC_LIBDIR}/postgres.lib ws2_32.lib")
 
@@ -276,11 +287,11 @@ if (WIN32)
 endif (WIN32)
 
 install (
-  TARGETS ${PROJECT_NAME}
+  TARGETS ${EXT_NAME}
   DESTINATION ${PGC_PKGLIBDIR}
 )
 
-set (EXT_CONTROL_FILE "${PROJECT_SOURCE_DIR}/src/backend/distributed/${PROJECT_NAME}.control")
+set (EXT_CONTROL_FILE "${PROJECT_SOURCE_DIR}/src/backend/distributed/${EXT_NAME}.control")
 # configure_file (${EXT_CONTROL_FILE}.in ${EXT_CONTROL_FILE} @ONLY)
 
 install (
@@ -288,7 +299,7 @@ install (
 	DESTINATION "${PGC_SHAREDIR}/extension"
 )
 
-set (SQL_FILE_NAME "src/backend/distributed/${PROJECT_NAME}--7.4-1.sql")
+set (SQL_FILE_NAME "src/backend/distributed/${EXT_NAME}--7.4-1.sql")
 configure_file ("${SQL_FILE_NAME}" "${SQL_FILE_NAME}" COPYONLY)
 
 install (

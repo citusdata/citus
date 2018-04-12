@@ -1,28 +1,33 @@
-/* This file is created manually */
-
-/* Citus full name as a string */
-#undef CITUS_NAME
+/*
+ * citus_version.h.in is converted into citus_version.h by cmake. Include when code needs to
+ * depend on determinations made by cmake.
+ *
+ * Do not manually edit!
+ */
 
 /* Citus edition as a string */
-#undef CITUS_EDITION
+#define CITUS_EDITION "@CITUS_EDITION@"
 
 /* Extension version expected by this Citus build */
-#undef CITUS_EXTENSIONVERSION
+#define CITUS_EXTENSIONVERSION "@COMPAT_VERSION@-@SCHEMA_VERSION@"
 
 /* Citus major version as a string */
-#undef CITUS_MAJORVERSION
+#define CITUS_MAJORVERSION "@COMPAT_VERSION@"
+
+/* Citus full name as a string */
+#define CITUS_NAME "@PROJECT_NAME@"
 
 /* Citus version as a string */
-#undef CITUS_VERSION
+#define CITUS_VERSION "@COMPAT_VERSION@devel"
 
 /* Citus version as a number */
-#undef CITUS_VERSION_NUM
+#define CITUS_VERSION_NUM @PROJECT_MAJOR_VERSION@0@PROJECT_MINOR_VERSION@00
 
 /* A string containing the version number, platform, and C compiler */
-#undef CITUS_VERSION_STR
+#define CITUS_VERSION_STR "Unknown"
 
-/* Define to 1 if you have the `curl' library (-lcurl). */
-#undef HAVE_LIBCURL
+/* Define if you have the `curl' library (-lcurl), otherwise leave undefined */
+#cmakedefine HAVE_LIBCURL
 
 /* Base URL for statistics collection and update checks */
-#undef REPORTS_BASE_URL
+#define REPORTS_BASE_URL "@REPORTS_BASE_URL@"
