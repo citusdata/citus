@@ -65,6 +65,7 @@
 #include "distributed/multi_server_executor.h"
 #include "distributed/query_colocation_checker.h"
 #include "distributed/recursive_planning.h"
+#include "distributed/query_pushdown_planning_utils.h"
 #include "distributed/relation_restriction_equivalence.h"
 #include "lib/stringinfo.h"
 #include "optimizer/planner.h"
