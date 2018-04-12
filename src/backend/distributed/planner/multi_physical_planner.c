@@ -42,6 +42,7 @@
 #include "distributed/multi_physical_planner.h"
 #include "distributed/pg_dist_partition.h"
 #include "distributed/pg_dist_shard.h"
+#include "distributed/query_pushdown_planning.h"
 #include "distributed/shardinterval_utils.h"
 #include "distributed/shard_pruning.h"
 #include "distributed/task_tracker.h"
@@ -126,15 +127,18 @@ static ArrayType * SplitPointObject(ShardInterval **shardIntervalArray,
 static bool DistributedPlanRouterExecutable(DistributedPlan *distributedPlan);
 static Job * BuildJobTreeTaskList(Job *jobTree,
 								  PlannerRestrictionContext *plannerRestrictionContext);
-static List * SubquerySqlTaskList(Job *job,
-								  PlannerRestrictionContext *plannerRestrictionContext);
+static List * QueryPushdownSqlTaskList(Query *query, uint64 jobId,
+									   RelationRestrictionContext *
+									   relationRestrictionContext,
+									   List *prunedRelationShardList, TaskType taskType);
 static void ErrorIfUnsupportedShardDistribution(Query *query);
+static Task * QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
+									  RelationRestrictionContext *restrictionContext,
+									  uint32 taskId,
+									  TaskType taskType);
 static bool ShardIntervalsEqual(FmgrInfo *comparisonFunction,
 								ShardInterval *firstInterval,
 								ShardInterval *secondInterval);
-static Task * SubqueryTaskCreate(Query *originalQuery, int shardIndex,
-								 RelationRestrictionContext *restrictionContext,
-								 uint32 taskId);
 static List * SqlTaskList(Job *job);
 static bool DependsOnHashPartitionJob(Job *job);
 static uint32 AnchorRangeTableId(List *rangeTableList);
@@ -1994,7 +1998,17 @@ BuildJobTreeTaskList(Job *jobTree, PlannerRestrictionContext *plannerRestriction
 		/* create sql tasks for the job, and prune redundant data fetch tasks */
 		if (job->subqueryPushdown)
 		{
-			sqlTaskList = SubquerySqlTaskList(job, plannerRestrictionContext);
+			bool isMultiShardQuery = false;
+			List *prunedRelationShardList = TargetShardIntervalsForQuery(job->jobQuery,
+																		 plannerRestrictionContext
+																		 ->
+																		 relationRestrictionContext,
+																		 &
+																		 isMultiShardQuery);
+			sqlTaskList = QueryPushdownSqlTaskList(job->jobQuery, job->jobId,
+												   plannerRestrictionContext->
+												   relationRestrictionContext,
+												   prunedRelationShardList, SQL_TASK);
 		}
 		else
 		{
@@ -2045,17 +2059,17 @@ BuildJobTreeTaskList(Job *jobTree, PlannerRestrictionContext *plannerRestriction
 
 
 /*
- * SubquerySqlTaskList creates a list of SQL tasks to execute the given subquery
+ * QueryPushdownSqlTaskList creates a list of SQL tasks to execute the given subquery
  * pushdown job. For this, the it is being checked whether the query is router
  * plannable per target shard interval. For those router plannable worker
  * queries, we create a SQL task and append the task to the task list that is going
  * to be executed.
  */
-static List *
-SubquerySqlTaskList(Job *job, PlannerRestrictionContext *plannerRestrictionContext)
+List *
+QueryPushdownSqlTaskList(Query *query, uint64 jobId,
+						 RelationRestrictionContext *relationRestrictionContext,
+						 List *prunedRelationShardList, TaskType taskType)
 {
-	Query *subquery = job->jobQuery;
-	uint64 jobId = job->jobId;
 	List *sqlTaskList = NIL;
 	ListCell *restrictionCell = NULL;
 	uint32 taskIdIndex = 1; /* 0 is reserved for invalid taskId */
@@ -2063,15 +2077,11 @@ SubquerySqlTaskList(Job *job, PlannerRestrictionContext *plannerRestrictionConte
 	int shardOffset = 0;
 	int minShardOffset = 0;
 	int maxShardOffset = 0;
-	RelationRestrictionContext *relationRestrictionContext =
-		plannerRestrictionContext->relationRestrictionContext;
 	bool *taskRequiredForShardIndex = NULL;
-	List *prunedRelationShardList = NIL;
 	ListCell *prunedRelationShardCell = NULL;
-	bool isMultiShardQuery = false;
 
 	/* error if shards are not co-partitioned */
-	ErrorIfUnsupportedShardDistribution(subquery);
+	ErrorIfUnsupportedShardDistribution(query);
 
 	if (list_length(relationRestrictionContext->relationRestrictionList) == 0)
 	{
@@ -2082,10 +2092,6 @@ SubquerySqlTaskList(Job *job, PlannerRestrictionContext *plannerRestrictionConte
 	/* defaults to be used if this is a reference table-only query */
 	minShardOffset = 0;
 	maxShardOffset = 0;
-
-	prunedRelationShardList = TargetShardIntervalsForQuery(subquery,
-														   relationRestrictionContext,
-														   &isMultiShardQuery);
 
 	forboth(prunedRelationShardCell, prunedRelationShardList,
 			restrictionCell, relationRestrictionContext->relationRestrictionList)
@@ -2160,8 +2166,9 @@ SubquerySqlTaskList(Job *job, PlannerRestrictionContext *plannerRestrictionConte
 			continue;
 		}
 
-		subqueryTask = SubqueryTaskCreate(subquery, shardOffset,
-										  relationRestrictionContext, taskIdIndex);
+		subqueryTask = QueryPushdownTaskCreate(query, shardOffset,
+											   relationRestrictionContext, taskIdIndex,
+											   taskType);
 		subqueryTask->jobId = jobId;
 		sqlTaskList = lappend(sqlTaskList, subqueryTask);
 
@@ -2256,6 +2263,104 @@ ErrorIfUnsupportedShardDistribution(Query *query)
 									  "have 1-to-1 shard partitioning")));
 		}
 	}
+}
+
+
+/*
+ * SubqueryTaskCreate creates a sql task by replacing the target
+ * shardInterval's boundary value.
+ */
+static Task *
+QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
+						RelationRestrictionContext *restrictionContext, uint32 taskId,
+						TaskType taskType)
+{
+	Query *taskQuery = copyObject(originalQuery);
+
+	StringInfo queryString = makeStringInfo();
+	ListCell *restrictionCell = NULL;
+	Task *subqueryTask = NULL;
+	List *taskShardList = NIL;
+	List *relationShardList = NIL;
+	List *selectPlacementList = NIL;
+	uint64 jobId = INVALID_JOB_ID;
+	uint64 anchorShardId = INVALID_SHARD_ID;
+
+	/*
+	 * Find the relevant shard out of each relation for this task.
+	 */
+	foreach(restrictionCell, restrictionContext->relationRestrictionList)
+	{
+		RelationRestriction *relationRestriction =
+			(RelationRestriction *) lfirst(restrictionCell);
+		Oid relationId = relationRestriction->relationId;
+		DistTableCacheEntry *cacheEntry = NULL;
+		ShardInterval *shardInterval = NULL;
+		RelationShard *relationShard = NULL;
+
+		cacheEntry = DistributedTableCacheEntry(relationId);
+		if (cacheEntry->partitionMethod == DISTRIBUTE_BY_NONE)
+		{
+			/* reference table only has one shard */
+			shardInterval = cacheEntry->sortedShardIntervalArray[0];
+
+			/* only use reference table as anchor shard if none exists yet */
+			if (anchorShardId == INVALID_SHARD_ID)
+			{
+				anchorShardId = shardInterval->shardId;
+			}
+		}
+		else
+		{
+			/* use the shard from a specific index */
+			shardInterval = cacheEntry->sortedShardIntervalArray[shardIndex];
+
+			/* use a shard from a distributed table as the anchor shard */
+			anchorShardId = shardInterval->shardId;
+		}
+
+		taskShardList = lappend(taskShardList, list_make1(shardInterval));
+
+		relationShard = CitusMakeNode(RelationShard);
+		relationShard->relationId = shardInterval->relationId;
+		relationShard->shardId = shardInterval->shardId;
+
+		relationShardList = lappend(relationShardList, relationShard);
+	}
+
+	selectPlacementList = WorkersContainingAllShards(taskShardList);
+	if (list_length(selectPlacementList) == 0)
+	{
+		ereport(ERROR, (errmsg("cannot find a worker that has active placements for all "
+							   "shards in the query")));
+	}
+
+	/*
+	 * Augment the relations in the query with the shard IDs.
+	 */
+	UpdateRelationToShardNames((Node *) taskQuery, relationShardList);
+
+	/*
+	 * Ands are made implicit during shard pruning, as predicate comparison and
+	 * refutation depend on it being so. We need to make them explicit again so
+	 * that the query string is generated as (...) AND (...) as opposed to
+	 * (...), (...).
+	 */
+	taskQuery->jointree->quals =
+		(Node *) make_ands_explicit((List *) taskQuery->jointree->quals);
+
+	/* and generate the full query string */
+	pg_get_query_def(taskQuery, queryString);
+	ereport(DEBUG4, (errmsg("distributed statement: %s", queryString->data)));
+
+	subqueryTask = CreateBasicTask(jobId, taskId, taskType, queryString->data);
+	subqueryTask->dependedTaskList = NULL;
+	subqueryTask->anchorShardId = anchorShardId;
+	subqueryTask->taskPlacementList = selectPlacementList;
+	subqueryTask->upsertQuery = false;
+	subqueryTask->relationShardList = relationShardList;
+
+	return subqueryTask;
 }
 
 
@@ -2417,103 +2522,6 @@ ShardIntervalsEqual(FmgrInfo *comparisonFunction, ShardInterval *firstInterval,
 	}
 
 	return shardIntervalsEqual;
-}
-
-
-/*
- * SubqueryTaskCreate creates a sql task by replacing the target
- * shardInterval's boundary value.
- */
-static Task *
-SubqueryTaskCreate(Query *originalQuery, int shardIndex,
-				   RelationRestrictionContext *restrictionContext, uint32 taskId)
-{
-	Query *taskQuery = copyObject(originalQuery);
-
-	StringInfo queryString = makeStringInfo();
-	ListCell *restrictionCell = NULL;
-	Task *subqueryTask = NULL;
-	List *taskShardList = NIL;
-	List *relationShardList = NIL;
-	List *selectPlacementList = NIL;
-	uint64 jobId = INVALID_JOB_ID;
-	uint64 anchorShardId = INVALID_SHARD_ID;
-
-	/*
-	 * Find the relevant shard out of each relation for this task.
-	 */
-	foreach(restrictionCell, restrictionContext->relationRestrictionList)
-	{
-		RelationRestriction *relationRestriction =
-			(RelationRestriction *) lfirst(restrictionCell);
-		Oid relationId = relationRestriction->relationId;
-		DistTableCacheEntry *cacheEntry = NULL;
-		ShardInterval *shardInterval = NULL;
-		RelationShard *relationShard = NULL;
-
-		cacheEntry = DistributedTableCacheEntry(relationId);
-		if (cacheEntry->partitionMethod == DISTRIBUTE_BY_NONE)
-		{
-			/* reference table only has one shard */
-			shardInterval = cacheEntry->sortedShardIntervalArray[0];
-
-			/* only use reference table as anchor shard if none exists yet */
-			if (anchorShardId == INVALID_SHARD_ID)
-			{
-				anchorShardId = shardInterval->shardId;
-			}
-		}
-		else
-		{
-			/* use the shard from a specific index */
-			shardInterval = cacheEntry->sortedShardIntervalArray[shardIndex];
-
-			/* use a shard from a distributed table as the anchor shard */
-			anchorShardId = shardInterval->shardId;
-		}
-
-		taskShardList = lappend(taskShardList, list_make1(shardInterval));
-
-		relationShard = CitusMakeNode(RelationShard);
-		relationShard->relationId = shardInterval->relationId;
-		relationShard->shardId = shardInterval->shardId;
-
-		relationShardList = lappend(relationShardList, relationShard);
-	}
-
-	selectPlacementList = WorkersContainingAllShards(taskShardList);
-	if (list_length(selectPlacementList) == 0)
-	{
-		ereport(ERROR, (errmsg("cannot find a worker that has active placements for all "
-							   "shards in the query")));
-	}
-
-	/*
-	 * Augment the relations in the query with the shard IDs.
-	 */
-	UpdateRelationToShardNames((Node *) taskQuery, relationShardList);
-
-	/*
-	 * Ands are made implicit during shard pruning, as predicate comparison and
-	 * refutation depend on it being so. We need to make them explicit again so
-	 * that the query string is generated as (...) AND (...) as opposed to
-	 * (...), (...).
-	 */
-	taskQuery->jointree->quals =
-		(Node *) make_ands_explicit((List *) taskQuery->jointree->quals);
-
-	/* and generate the full query string */
-	pg_get_query_def(taskQuery, queryString);
-	ereport(DEBUG4, (errmsg("distributed statement: %s", queryString->data)));
-
-	subqueryTask = CreateBasicTask(jobId, taskId, SQL_TASK, queryString->data);
-	subqueryTask->dependedTaskList = NULL;
-	subqueryTask->anchorShardId = anchorShardId;
-	subqueryTask->taskPlacementList = selectPlacementList;
-	subqueryTask->upsertQuery = false;
-	subqueryTask->relationShardList = relationShardList;
-
-	return subqueryTask;
 }
 
 

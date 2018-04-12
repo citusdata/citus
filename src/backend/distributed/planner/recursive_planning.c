@@ -78,6 +78,7 @@
 #include "nodes/relation.h"
 #include "utils/builtins.h"
 #include "utils/guc.h"
+#include "../../../include/distributed/query_pushdown_planning.h"
 
 
 /*

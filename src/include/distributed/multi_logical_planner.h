@@ -181,23 +181,12 @@ typedef struct MultiExtendedOp
 } MultiExtendedOp;
 
 
-/* Config variables managed via guc.c */
-extern bool SubqueryPushdown;
-
-
 /* Function declarations for building logical plans */
 extern MultiTreeRoot * MultiLogicalPlanCreate(Query *originalQuery, Query *queryTree,
 											  PlannerRestrictionContext *
 											  plannerRestrictionContext);
-extern bool JoinTreeContainsSubquery(Query *query);
-extern bool WhereClauseContainsSubquery(Query *query);
 extern bool FindNodeCheck(Node *node, bool (*check)(Node *));
 extern bool SingleRelationRepartitionSubquery(Query *queryTree);
-extern DeferredErrorMessage * DeferErrorIfCannotPushdownSubquery(Query *subqueryTree,
-																 bool
-																 outerMostQueryHasLimit);
-extern DeferredErrorMessage * DeferErrorIfUnsupportedUnionQuery(Query *queryTree);
-extern bool SafeToPushdownWindowFunction(Query *query, StringInfo *errorDetail);
 extern bool TargetListOnPartitionColumn(Query *query, List *targetEntryList);
 extern bool FindNodeCheckInRangeTableList(List *rtable, bool (*check)(Node *));
 extern bool IsDistributedTableRTE(Node *node);
@@ -227,6 +216,12 @@ extern bool ExtractRangeTableEntryWalker(Node *node, List **rangeTableList);
 extern List * pull_var_clause_default(Node *node);
 extern bool OperatorImplementsEquality(Oid opno);
 extern bool FindNodeCheck(Node *node, bool (*check)(Node *));
+extern DeferredErrorMessage * DeferErrorIfUnsupportedClause(List *clauseList);
+extern MultiProject * MultiProjectNode(List *targetEntryList);
+extern MultiExtendedOp * MultiExtendedOpNode(Query *queryTree);
+extern DeferredErrorMessage * DeferErrorIfUnsupportedSubqueryRepartition(Query *
+																		 subqueryTree);
+extern MultiNode * MultiNodeTree(Query *queryTree);
 
 
 #endif   /* MULTI_LOGICAL_PLANNER_H */
