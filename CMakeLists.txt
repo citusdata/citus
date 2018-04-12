@@ -9,11 +9,11 @@ set (default_build_type "Release")
 
 if (NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
   message (STATUS "Using default build type: '${default_build_type}'.")
-	
+
   set (CMAKE_BUILD_TYPE "${default_build_type}" CACHE STRING
 		"Choose the type of build." FORCE
 	)
-	
+
   # Set the possible values of build type for cmake-gui
   set_property (CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS
 		"Debug" "Release" "MinSizeRel" "RelWithDebInfo"
@@ -299,11 +299,122 @@ install (
 	DESTINATION "${PGC_SHAREDIR}/extension"
 )
 
-set (SQL_FILE_NAME "src/backend/distributed/${EXT_NAME}--7.4-1.sql")
-configure_file ("${SQL_FILE_NAME}" "${SQL_FILE_NAME}" COPYONLY)
+set (SQL_DIR "src/backend/distributed")
+set (PREV_FILE "${PROJECT_BINARY_DIR}/${SQL_DIR}/citus--5.0.sql")
+configure_file ("${SQL_DIR}/citus.sql" "${PREV_FILE}" COPYONLY)
+
+set(SQL_UPDATES
+  citus--5.0--5.0-1.sql
+  citus--5.0-1--5.0-2.sql
+  citus--5.0-2--5.1-1.sql
+  citus--5.1-1--5.1-2.sql
+  citus--5.1-2--5.1-3.sql
+  citus--5.1-3--5.1-4.sql
+  citus--5.1-4--5.1-5.sql
+  citus--5.1-5--5.1-6.sql
+  citus--5.1-6--5.1-7.sql
+  citus--5.1-7--5.1-8.sql
+  citus--5.1-8--5.2-1.sql
+  citus--5.2-1--5.2-2.sql
+  citus--5.2-2--5.2-3.sql
+  citus--5.2-3--5.2-4.sql
+  citus--5.2-4--6.0-1.sql
+  citus--6.0-1--6.0-2.sql
+  citus--6.0-2--6.0-3.sql
+  citus--6.0-3--6.0-4.sql
+  citus--6.0-4--6.0-5.sql
+  citus--6.0-5--6.0-6.sql
+  citus--6.0-6--6.0-7.sql
+  citus--6.0-7--6.0-8.sql
+  citus--6.0-8--6.0-9.sql
+  citus--6.0-9--6.0-10.sql
+  citus--6.0-10--6.0-11.sql
+  citus--6.0-11--6.0-12.sql
+  citus--6.0-12--6.0-13.sql
+  citus--6.0-13--6.0-14.sql
+  citus--6.0-14--6.0-15.sql
+  citus--6.0-15--6.0-16.sql
+  citus--6.0-16--6.0-17.sql
+  citus--6.0-17--6.0-18.sql
+  citus--6.0-18--6.1-1.sql
+  citus--6.1-1--6.1-2.sql
+  citus--6.1-2--6.1-3.sql
+  citus--6.1-3--6.1-4.sql
+  citus--6.1-4--6.1-5.sql
+  citus--6.1-5--6.1-6.sql
+  citus--6.1-6--6.1-7.sql
+  citus--6.1-7--6.1-8.sql
+  citus--6.1-8--6.1-9.sql
+  citus--6.1-9--6.1-10.sql
+  citus--6.1-10--6.1-11.sql
+  citus--6.1-11--6.1-12.sql
+  citus--6.1-12--6.1-13.sql
+  citus--6.1-13--6.1-14.sql
+  citus--6.1-14--6.1-15.sql
+  citus--6.1-15--6.1-16.sql
+  citus--6.1-16--6.1-17.sql
+  citus--6.1-17--6.2-1.sql
+  citus--6.2-1--6.2-2.sql
+  citus--6.2-2--6.2-3.sql
+  citus--6.2-3--6.2-4.sql
+  citus--6.2-4--7.0-1.sql
+  citus--7.0-1--7.0-2.sql
+  citus--7.0-2--7.0-3.sql
+  citus--7.0-3--7.0-4.sql
+  citus--7.0-4--7.0-5.sql
+  citus--7.0-5--7.0-6.sql
+  citus--7.0-6--7.0-7.sql
+  citus--7.0-7--7.0-8.sql
+  citus--7.0-8--7.0-9.sql
+  citus--7.0-9--7.0-10.sql
+  citus--7.0-10--7.0-11.sql
+  citus--7.0-11--7.0-12.sql
+  citus--7.0-12--7.0-13.sql
+  citus--7.0-13--7.0-14.sql
+  citus--7.0-14--7.0-15.sql
+  citus--7.0-15--7.1-1.sql
+  citus--7.1-1--7.1-2.sql
+  citus--7.1-2--7.1-3.sql
+  citus--7.1-3--7.1-4.sql
+  citus--7.1-4--7.2-1.sql
+  citus--7.2-1--7.2-2.sql
+  citus--7.2-2--7.2-3.sql
+  citus--7.2-3--7.3-1.sql
+  citus--7.3-1--7.3-2.sql
+  citus--7.3-2--7.3-3.sql
+  citus--7.3-3--7.4-1.sql
+)
+set(UPDATE_REGEX "([0-9]+\\.[0-9]+-*[0-9]*)--([0-9]+\\.[0-9]+-*[0-9]*).sql")
+set(UPDATE_FILES "${PREV_FILE}")
+
+function(cat IN_FILE OUT_FILE)
+  file(READ "${IN_FILE}" CONTENTS)
+  file(APPEND "${OUT_FILE}" "${CONTENTS}")
+endfunction(cat)
+
+foreach (UPDATE ${SQL_UPDATES})
+  if (NOT (${UPDATE} MATCHES ${UPDATE_REGEX}))
+    message(FATAL_ERROR "Cannot parse update file name ${UPDATE}")
+  endif ()
+
+  set (START_VERSION ${CMAKE_MATCH_1})
+  set (END_VERSION ${CMAKE_MATCH_2})
+
+  set (UPDATE_FILE "${SQL_DIR}/${UPDATE}")
+  set (CURR_FILE "${PROJECT_BINARY_DIR}/${SQL_DIR}/citus--${END_VERSION}.sql")
+
+  cat("${PREV_FILE}" "${CURR_FILE}")
+  cat("${UPDATE_FILE}" "${CURR_FILE}")
+
+  list(APPEND UPDATE_FILES "${UPDATE_FILE}")
+  list(APPEND UPDATE_FILES "${CURR_FILE}")
+
+  set (PREV_FILE "${CURR_FILE}")
+endforeach (UPDATE ${SQL_UPDATES})
+
 
 install (
-	FILES "${SQL_FILE_NAME}"
+	FILES ${UPDATE_FILES}
 	DESTINATION "${PGC_SHAREDIR}/${DATAMODULEDIR}"
 )
 
