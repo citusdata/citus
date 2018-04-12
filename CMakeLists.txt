@@ -33,6 +33,7 @@ set (SCHEMA_VERSION "1")
 set (REPORTS_BASE_URL "https://reports.citusdata.com")
 
 include (FindCURL)
+include (FindPostgreSQL)
 set (HAVE_LIBCURL ${CURL_FOUND})
 
 set (CITUS_VERSION_H "src/include/citus_version.h")
@@ -242,8 +243,7 @@ if (UNIX)
 		string (APPEND PROJ_LDFLAGS " ${FLAG}")
 	endforeach (FLAG ${PGC_LDFLAGS})
 
-  string (APPEND PROJ_LDFLAGS " -L${PGC_LIBDIR} -lpq")
-
+  target_link_libraries ("${EXT_NAME}" ${PostgreSQL_LIBRARIES})
   target_link_libraries ("${EXT_NAME}" ${CURL_LIBRARIES})
 
 	# ... and add those from pg_config.
@@ -292,7 +292,6 @@ install (
 )
 
 set (EXT_CONTROL_FILE "${PROJECT_SOURCE_DIR}/src/backend/distributed/${EXT_NAME}.control")
-# configure_file (${EXT_CONTROL_FILE}.in ${EXT_CONTROL_FILE} @ONLY)
 
 install (
 	FILES "${EXT_CONTROL_FILE}"
@@ -387,11 +386,6 @@ set(SQL_UPDATES
 set(UPDATE_REGEX "([0-9]+\\.[0-9]+-*[0-9]*)--([0-9]+\\.[0-9]+-*[0-9]*).sql")
 set(UPDATE_FILES "${PREV_FILE}")
 
-function(cat IN_FILE OUT_FILE)
-  file(READ "${IN_FILE}" CONTENTS)
-  file(APPEND "${OUT_FILE}" "${CONTENTS}")
-endfunction(cat)
-
 foreach (UPDATE ${SQL_UPDATES})
   if (NOT (${UPDATE} MATCHES ${UPDATE_REGEX}))
     message(FATAL_ERROR "Cannot parse update file name ${UPDATE}")
@@ -403,8 +397,9 @@ foreach (UPDATE ${SQL_UPDATES})
   set (UPDATE_FILE "${SQL_DIR}/${UPDATE}")
   set (CURR_FILE "${PROJECT_BINARY_DIR}/${SQL_DIR}/citus--${END_VERSION}.sql")
 
-  cat("${PREV_FILE}" "${CURR_FILE}")
-  cat("${UPDATE_FILE}" "${CURR_FILE}")
+  configure_file ("${PREV_FILE}" "${CURR_FILE}" COPYONLY)
+  file(READ "${UPDATE_FILE}" CONTENTS)
+  file(APPEND "${CURR_FILE}" "${CONTENTS}")
 
   list(APPEND UPDATE_FILES "${UPDATE_FILE}")
   list(APPEND UPDATE_FILES "${CURR_FILE}")
