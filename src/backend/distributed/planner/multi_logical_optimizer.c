@@ -2133,6 +2133,19 @@ WorkerExtendedOpNode(MultiExtendedOp *originalOpNode,
 		(groupedByDisjointPartitionColumn || pushDownWindowFunction))
 	{
 		workerExtendedOpNode->havingQual = originalOpNode->havingQual;
+
+		/*
+		 * We converted the having expression to a list in subquery pushdown
+		 * planner. However, this query cannot be parsed as it is in the worker.
+		 * We should convert this back to being explicit for worker query
+		 * so that it can be parsed when it hits to the standard planner in
+		 * worker.
+		 */
+		if (IsA(workerExtendedOpNode->havingQual, List))
+		{
+			workerExtendedOpNode->havingQual =
+				(Node *) make_ands_explicit((List *) workerExtendedOpNode->havingQual);
+		}
 	}
 
 	return workerExtendedOpNode;
