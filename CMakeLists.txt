@@ -270,7 +270,8 @@ endif (APPLE)
 if (WIN32)
 # ... its include directories.
 	target_include_directories ("${EXT_NAME}"
-		PUBLIC "${PROJECT_BINARY_DIR}"
+		PUBLIC "${PROJECT_BINARY_DIR}/src/include"
+    PUBLIC "${PROJECT_SOURCE_DIR}/src/include"
 		PUBLIC "${PGC_INCLUDEDIR}"
 		PUBLIC "${PGC_INCLUDEDIR_SERVER}"
 		PUBLIC "${PGC_PKGINCLUDEDIR}/internal"
