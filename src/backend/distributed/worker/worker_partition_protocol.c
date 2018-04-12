@@ -660,6 +660,8 @@ CitusRemoveDirectory(StringInfo filename)
 		}
 	}
 
+	ereport(ERROR, (errmsg("could not remove file \"%s\"", filename->data)));
+
 	/*
 	 * If this is a directory, iterate over all its contents and for each
 	 * content, recurse into this function. Also, make sure that we do not
