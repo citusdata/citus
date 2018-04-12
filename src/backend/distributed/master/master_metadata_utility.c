@@ -214,6 +214,7 @@ DistributedTableSizeOnWorker(WorkerNode *workerNode, Oid relationId, char *sizeQ
 	PGresult *result = NULL;
 	int queryResult = 0;
 	List *sizeList = NIL;
+	bool raiseErrors = true;
 
 	List *shardIntervalsOnNode = ShardIntervalsOnWorkerGroup(workerNode, relationId);
 
@@ -234,6 +235,8 @@ DistributedTableSizeOnWorker(WorkerNode *workerNode, Oid relationId, char *sizeQ
 	tableSizeStringInfo = (StringInfo) linitial(sizeList);
 	tableSizeString = tableSizeStringInfo->data;
 	tableSize = atol(tableSizeString);
+
+	ClearResults(connection, raiseErrors);
 
 	return tableSize;
 }
