@@ -276,5 +276,112 @@ ERROR:  could not create distributed plan
 DETAIL:  Possibly this is caused by the use of parameters in SQL functions, which is not supported in Citus.
 HINT:  Consider using PL/pgSQL functions instead.
 CONTEXT:  SQL function "sql_subquery_test" statement 1
+-- the joins are actually removed since they are
+-- not needed by PostgreSQL planner (e.g., target list 
+-- doesn't contain anything from there)
+-- but Citus can still pushdown this query
+SELECT
+    t1.user_id, count(*)
+FROM users_table t1
+LEFT JOIN (
+                SELECT
+                        user_id
+                FROM
+                        users_table
+                UNION
+                        SELECT
+                                user_id
+                        FROM
+                                events_table
+) t2 ON t1.user_id = t2.user_id
+INNER JOIN (
+        SELECT
+                user_id
+        FROM
+                users_table
+) t3 ON t1.user_id = t3.user_id
+GROUP BY 1
+ORDER BY 2 DESC;
+ user_id | count 
+---------+-------
+       5 |   676
+       4 |   529
+       2 |   324
+       3 |   289
+       6 |   100
+       1 |    49
+(6 rows)
+
+-- the joins are actually removed since they are
+-- not needed by PostgreSQL planner (e.g., target list 
+-- doesn't contain anything from there)
+-- but Citus can still plan this query even though the query
+-- is not safe to pushdown
+SELECT
+    t1.user_id, count(*)
+FROM users_table t1
+LEFT JOIN (
+                SELECT
+                        user_id
+                FROM
+                        users_table
+                UNION
+                        SELECT
+                                value_2
+                        FROM
+                                events_table
+) t2 ON t1.user_id = t2.user_id
+INNER JOIN (
+        SELECT
+                user_id
+        FROM
+                users_table
+) t3 ON t1.user_id = t3.user_id
+GROUP BY 1
+ORDER BY 2 DESC;
+ user_id | count 
+---------+-------
+       5 |   676
+       4 |   529
+       2 |   324
+       3 |   289
+       6 |   100
+       1 |    49
+(6 rows)
+
+-- Similar to the above queries, but
+-- this time the joins are not removed because
+-- target list contains all the entries
+SELECT
+    *
+FROM users_table t1
+LEFT JOIN (
+                SELECT
+                        user_id
+                FROM
+                        users_table
+                UNION
+                        SELECT
+                                user_id
+                        FROM
+                                events_table
+) t2 ON t1.user_id = t2.user_id
+INNER JOIN (
+        SELECT
+                user_id
+        FROM
+                users_table
+) t3 ON t1.user_id = t3.user_id
+ORDER BY 1 DESC, 2 DESC, 3 DESC, 4 DESC, 5 DESC, 6 DESC, 7 DESC, 8 DESC
+LIMIT 5;
+ user_id |              time               | value_1 | value_2 | value_3 | value_4 | user_id | user_id 
+---------+---------------------------------+---------+---------+---------+---------+---------+---------
+       6 | Thu Nov 23 14:43:18.024104 2017 |       3 |       2 |       5 |         |       6 |       6
+       6 | Thu Nov 23 14:43:18.024104 2017 |       3 |       2 |       5 |         |       6 |       6
+       6 | Thu Nov 23 14:43:18.024104 2017 |       3 |       2 |       5 |         |       6 |       6
+       6 | Thu Nov 23 14:43:18.024104 2017 |       3 |       2 |       5 |         |       6 |       6
+       6 | Thu Nov 23 14:43:18.024104 2017 |       3 |       2 |       5 |         |       6 |       6
+(5 rows)
+
 DROP FUNCTION plpgsql_subquery_test(int, int);
 DROP FUNCTION sql_subquery_test(int, int);
