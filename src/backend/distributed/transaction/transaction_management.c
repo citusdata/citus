@@ -30,6 +30,7 @@
 #include "utils/hsearch.h"
 #include "utils/guc.h"
 #include "utils/memutils.h"
+#include "storage/fd.h"
 
 
 CoordinatedTransactionState CurrentCoordinatedTransactionState = COORD_TRANS_NONE;
@@ -195,7 +196,17 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			 * transaction management. Do so before doing other work, so the
 			 * callbacks still can perform work if needed.
 			 */
-			SwallowErrors(RemoveIntermediateResultsDirectory);
+			{
+				/*
+				 * On Windows it's not possible to delete a file before you've closed all
+				 * handles to it (rmdir will return success but not take effect). Since
+				 * we're in an ABORT handler it's very likely that not all handles have
+				 * been closed; force them closed here before running
+				 * RemoveIntermediateResultsDirectory.
+				 */
+				AtEOXact_Files();
+				SwallowErrors(RemoveIntermediateResultsDirectory);
+			}
 			ResetShardPlacementTransactionState();
 
 			/* handles both already prepared and open transactions */
