@@ -63,6 +63,7 @@ static void CoordinatedSubTransactionCallback(SubXactEvent event, SubTransaction
 static void AdjustMaxPreparedTransactions(void);
 static void PushSubXact(SubTransactionId subId);
 static void PopSubXact(SubTransactionId subId);
+static void SwallowErrors(void (*func)());
 
 
 /*
@@ -194,7 +195,7 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			 * transaction management. Do so before doing other work, so the
 			 * callbacks still can perform work if needed.
 			 */
-			RemoveIntermediateResultsDirectory();
+			SwallowErrors(RemoveIntermediateResultsDirectory);
 			ResetShardPlacementTransactionState();
 
 			/* handles both already prepared and open transactions */
@@ -422,4 +423,49 @@ ActiveSubXacts(void)
 	}
 
 	return activeSubXactsReversed;
+}
+
+
+/*
+ * If an ERROR is thrown while processing a transaction the ABORT handler is called.
+ * ERRORS thrown during ABORT are not treated any differently, the ABORT handler is also
+ * called during processing of those. If an ERROR was raised the first time through it's
+ * unlikely that the second try will succeed; more likely that an ERROR will be thrown
+ * again. This loop continues until Postgres notices and PANICs, complaining about a stack
+ * overflow.
+ *
+ * Instead of looping and crashing, SwallowErrors lets us attempt to continue running the
+ * ABORT logic. This wouldn't be safe in most other parts of the codebase, in
+ * approximately none of the places where we emit ERROR do we first clean up after
+ * ourselves! It's fine inside the ABORT handler though; Postgres is going to clean
+ * everything up before control passes back to us.
+ */
+static void
+SwallowErrors(void (*func)())
+{
+	MemoryContext savedContext = CurrentMemoryContext;
+
+	PG_TRY();
+	{
+		func();
+	}
+	PG_CATCH();
+	{
+		ErrorData *edata = CopyErrorData();
+
+		/* don't try to intercept PANIC or FATAL, let those breeze past us */
+		if (edata->elevel != ERROR)
+		{
+			PG_RE_THROW();
+		}
+
+		/* turn the ERROR into a WARNING and emit it */
+		edata->elevel = WARNING;
+		ThrowErrorData(edata);
+
+		/* leave the error handling system */
+		FlushErrorState();
+		MemoryContextSwitchTo(savedContext);
+	}
+	PG_END_TRY();
 }
