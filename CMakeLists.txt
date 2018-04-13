@@ -33,7 +33,6 @@ set (SCHEMA_VERSION "1")
 set (REPORTS_BASE_URL "https://reports.citusdata.com")
 
 include (FindCURL)
-include (FindPostgreSQL)
 set (HAVE_LIBCURL ${CURL_FOUND})
 
 set (CITUS_VERSION_H "src/include/citus_version.h")
@@ -224,7 +223,7 @@ if (UNIX)
 # ... its include directories.
 	target_include_directories ("${EXT_NAME}"
 		PUBLIC "${PROJECT_BINARY_DIR}/src/include"
-    PUBLIC "${PROJECT_SOURCE_DIR}/src/include"
+		PUBLIC "${PROJECT_SOURCE_DIR}/src/include"
 		PUBLIC "${PGC_INCLUDEDIR_SERVER}"
 		PUBLIC "${PGC_PKGINCLUDEDIR}/internal"
 	)
@@ -243,7 +242,6 @@ if (UNIX)
 		string (APPEND PROJ_LDFLAGS " ${FLAG}")
 	endforeach (FLAG ${PGC_LDFLAGS})
 
-  target_link_libraries ("${EXT_NAME}" ${PostgreSQL_LIBRARIES})
   target_link_libraries ("${EXT_NAME}" ${CURL_LIBRARIES})
 
 	# ... and add those from pg_config.
@@ -270,22 +268,36 @@ endif (APPLE)
 if (WIN32)
 # ... its include directories.
 	target_include_directories ("${EXT_NAME}"
-		PUBLIC "${PROJECT_BINARY_DIR}/src/include"
-    PUBLIC "${PROJECT_SOURCE_DIR}/src/include"
 		PUBLIC "${PGC_INCLUDEDIR}"
-		PUBLIC "${PGC_INCLUDEDIR_SERVER}"
-		PUBLIC "${PGC_PKGINCLUDEDIR}/internal"
 		PUBLIC "${PGC_INCLUDEDIR_SERVER}/port/win32"
 	)
+
+	if (MSVC)
+		target_include_directories ("${EXT_NAME}" PUBLIC "${PGC_INCLUDEDIR_SERVER}/port/win32_msvc")
+	endif (MSVC)
+
+	target_include_directories ("${EXT_NAME}"
+		PUBLIC "${PROJECT_BINARY_DIR}/src/include"
+	    PUBLIC "${PROJECT_SOURCE_DIR}/src/include"
+		PUBLIC "${PGC_INCLUDEDIR_SERVER}"
+		PUBLIC "${PGC_PKGINCLUDEDIR}/internal"
+		PUBLIC "C:/Users/citus/Desktop/icu/include"
+	)
+
 
 	target_compile_options("${EXT_NAME}" PUBLIC "-D_CRT_SECURE_NO_WARNINGS")
 
 	set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} /MANIFEST:NO ${PGC_LIBDIR}/postgres.lib ws2_32.lib")
-
-	if (MSVC)
-		include_directories("${PGC_INCLUDEDIR_SERVER}/port/win32_msvc")
-	endif (MSVC)
 endif (WIN32)
+
+find_library(
+	LIBPQ
+	NAMES "pq" "libpq"
+	PATHS "${PGC_LIBDIR}"
+	NO_DEFAULT_PATH
+)
+
+target_link_libraries ("${EXT_NAME}" "${LIBPQ}")
 
 install (
   TARGETS ${EXT_NAME}
