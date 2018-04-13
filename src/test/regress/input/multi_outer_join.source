@@ -32,6 +32,19 @@ CREATE TABLE multi_outer_join_right
 );
 SELECT master_create_distributed_table('multi_outer_join_right', 'r_custkey', 'append');
 
+CREATE TABLE multi_outer_join_right_reference
+(
+	r_custkey integer not null,
+	r_name varchar(25) not null,
+	r_address varchar(40) not null,
+	r_nationkey integer not null,
+	r_phone char(15) not null,
+	r_acctbal decimal(15,2) not null,
+	r_mktsegment char(10) not null,
+	r_comment varchar(117) not null
+);
+SELECT create_reference_table('multi_outer_join_right_reference');
+
 CREATE TABLE multi_outer_join_third
 (
 	t_custkey integer not null,
@@ -45,6 +58,20 @@ CREATE TABLE multi_outer_join_third
 );
 SELECT master_create_distributed_table('multi_outer_join_third', 't_custkey', 'append');
 
+CREATE TABLE multi_outer_join_third_reference
+(
+	t_custkey integer not null,
+	t_name varchar(25) not null,
+	t_address varchar(40) not null,
+	t_nationkey integer not null,
+	t_phone char(15) not null,
+	t_acctbal decimal(15,2) not null,
+	t_mktsegment char(10) not null,
+	t_comment varchar(117) not null
+);
+SELECT create_reference_table('multi_outer_join_third_reference');
+
+
 -- Make sure we do not crash if both tables have no shards
 SELECT
 	min(l_custkey), max(l_custkey)
@@ -57,6 +84,7 @@ FROM
 
 -- Right table is a small table
 \copy multi_outer_join_right FROM '@abs_srcdir@/data/customer-1-15.data' with delimiter '|'
+\copy multi_outer_join_right_reference FROM '@abs_srcdir@/data/customer-1-15.data' with delimiter '|'
 
 -- Make sure we do not crash if one table has no shards
 SELECT
@@ -67,29 +95,30 @@ FROM
 SELECT
 	min(t_custkey), max(t_custkey)
 FROM
-	multi_outer_join_third a LEFT JOIN multi_outer_join_right b ON (r_custkey = t_custkey);
+	multi_outer_join_third a LEFT JOIN multi_outer_join_right_reference b ON (r_custkey = t_custkey);
 
 -- Third table is a single shard table with all data
 \copy multi_outer_join_third FROM '@abs_srcdir@/data/customer-1-30.data' with delimiter '|'
+\copy multi_outer_join_third_reference FROM '@abs_srcdir@/data/customer-1-30.data' with delimiter '|'
 
 -- Regular outer join should return results for all rows
 SELECT
 	min(l_custkey), max(l_custkey)
 FROM
-	multi_outer_join_left a LEFT JOIN multi_outer_join_right b ON (l_custkey = r_custkey);
+	multi_outer_join_left a LEFT JOIN multi_outer_join_right_reference b ON (l_custkey = r_custkey);
 
 -- Since this is a broadcast join, we should be able to join on any key
 SELECT
 	count(*)
 FROM
-	multi_outer_join_left a LEFT JOIN multi_outer_join_right b ON (l_nationkey = r_nationkey);
+	multi_outer_join_left a LEFT JOIN multi_outer_join_right_reference b ON (l_nationkey = r_nationkey);
 
 
 -- Anti-join should return customers for which there is no row in the right table
 SELECT
 	min(l_custkey), max(l_custkey)
 FROM
-	multi_outer_join_left a LEFT JOIN multi_outer_join_right b ON (l_custkey = r_custkey)
+	multi_outer_join_left a LEFT JOIN multi_outer_join_right_reference b ON (l_custkey = r_custkey)
 WHERE
 	r_custkey IS NULL;
 
@@ -98,7 +127,7 @@ WHERE
 SELECT
 	min(l_custkey), max(l_custkey)
 FROM
-	multi_outer_join_left a LEFT JOIN multi_outer_join_right b ON (l_custkey = r_custkey)
+	multi_outer_join_left a LEFT JOIN multi_outer_join_right_reference b ON (l_custkey = r_custkey)
 WHERE
 	r_custkey IS NULL OR r_custkey = 5;
 
@@ -108,7 +137,7 @@ WHERE
 SELECT
 	min(l_custkey), max(l_custkey)
 FROM
-	multi_outer_join_left a LEFT JOIN multi_outer_join_right b ON (l_custkey = r_custkey)
+	multi_outer_join_left a LEFT JOIN multi_outer_join_right_reference b ON (l_custkey = r_custkey)
 WHERE
 	r_custkey = 5 or r_custkey > 15;
 
@@ -117,21 +146,21 @@ WHERE
 SELECT
 	count(l_custkey), count(r_custkey)
 FROM
-	multi_outer_join_left a LEFT JOIN multi_outer_join_right b
+	multi_outer_join_left a LEFT JOIN multi_outer_join_right_reference b
 	ON (l_custkey = r_custkey AND r_custkey = 5);
 
 -- Apply a filter before the join (no matches right)
 SELECT
 	count(l_custkey), count(r_custkey)
 FROM
-	multi_outer_join_left a LEFT JOIN multi_outer_join_right b
+	multi_outer_join_left a LEFT JOIN multi_outer_join_right_reference b
 	ON (l_custkey = r_custkey AND r_custkey = -1 /* nonexistant */);
 
 -- Apply a filter before the join (no matches left)
 SELECT
 	count(l_custkey), count(r_custkey)
 FROM
-	multi_outer_join_left a LEFT JOIN multi_outer_join_right b
+	multi_outer_join_left a LEFT JOIN multi_outer_join_right_reference b
 	ON (l_custkey = r_custkey AND l_custkey = -1 /* nonexistant */);
 
 -- Right join should be disallowed in this case
@@ -145,7 +174,7 @@ FROM
 SELECT
 	min(l_custkey), max(l_custkey)
 FROM
-	multi_outer_join_right a RIGHT JOIN multi_outer_join_left b ON (l_custkey = r_custkey);
+	multi_outer_join_right_reference a RIGHT JOIN multi_outer_join_left b ON (l_custkey = r_custkey);
 
 
 -- Turn the right table into a large table
@@ -260,7 +289,7 @@ SELECT
 FROM
 	multi_outer_join_left l1
 	LEFT JOIN multi_outer_join_right r1 ON (l1.l_custkey = r1.r_custkey)
-	LEFT JOIN multi_outer_join_third t1 ON (r1.r_custkey  = t1.t_custkey);
+	LEFT JOIN multi_outer_join_third_reference t1 ON (r1.r_custkey  = t1.t_custkey);
 
 -- Right join with single shard right most table should error out
 SELECT
@@ -268,13 +297,13 @@ SELECT
 FROM
 	multi_outer_join_left l1
 	LEFT JOIN multi_outer_join_right r1 ON (l1.l_custkey = r1.r_custkey)
-	RIGHT JOIN multi_outer_join_third t1 ON (r1.r_custkey  = t1.t_custkey);
+	RIGHT JOIN multi_outer_join_third_reference t1 ON (r1.r_custkey  = t1.t_custkey);
 
 -- Right join with single shard left most table should work
 SELECT
 	t_custkey, r_custkey, l_custkey
 FROM
-	multi_outer_join_third t1
+	multi_outer_join_third_reference t1
 	RIGHT JOIN multi_outer_join_right r1 ON (t1.t_custkey = r1.r_custkey)
 	LEFT JOIN multi_outer_join_left l1 ON (r1.r_custkey  = l1.l_custkey);
 
@@ -282,7 +311,7 @@ FROM
 SELECT
 	t_custkey, r_custkey, l_custkey
 FROM
-	multi_outer_join_third t1
+	multi_outer_join_third_reference t1
 	RIGHT JOIN multi_outer_join_right r1 ON (t1.t_custkey = r1.r_custkey)
 	LEFT JOIN multi_outer_join_left l1 ON (r1.r_custkey  = l1.l_custkey)
 WHERE
@@ -292,7 +321,7 @@ WHERE
 SELECT
 	t_custkey, r_custkey, l_custkey
 FROM
-	multi_outer_join_third t1
+	multi_outer_join_third_reference t1
 	RIGHT JOIN multi_outer_join_right r1 ON (t1.t_custkey = r1.r_custkey)
 	RIGHT JOIN multi_outer_join_left l1 ON (r1.r_custkey  = l1.l_custkey);
 
@@ -343,21 +372,21 @@ SELECT
 FROM
 	multi_outer_join_left l1
 	INNER JOIN multi_outer_join_right r1 ON (l1.l_custkey = r1.r_custkey)
-	LEFT JOIN multi_outer_join_third t1 ON (r1.r_custkey  = t1.t_custkey);
+	LEFT JOIN multi_outer_join_third_reference t1 ON (r1.r_custkey  = t1.t_custkey);
 
 -- inner (broadcast) join  + 2 shards left (local) join should work
 SELECT
 	l_custkey, t_custkey, r_custkey
 FROM
 	multi_outer_join_left l1
-	INNER JOIN multi_outer_join_third t1 ON (l1.l_custkey = t1.t_custkey)
+	INNER JOIN multi_outer_join_third_reference t1 ON (l1.l_custkey = t1.t_custkey)
 	LEFT JOIN multi_outer_join_right r1 ON (l1.l_custkey  = r1.r_custkey);
 
 -- inner (local) join  + 2 shards left (dual partition) join should error out
 SELECT
 	t_custkey, l_custkey, r_custkey
 FROM
-	multi_outer_join_third t1
+	multi_outer_join_third_reference t1
 	INNER JOIN multi_outer_join_left l1 ON (l1.l_custkey = t1.t_custkey)
 	LEFT JOIN multi_outer_join_right r1 ON (l1.l_custkey  = r1.r_custkey);
 
@@ -366,7 +395,7 @@ SELECT
 	l_custkey, t_custkey, r_custkey
 FROM
 	multi_outer_join_left l1
-	INNER JOIN multi_outer_join_third t1 ON (l1.l_custkey = t1.t_custkey)
+	INNER JOIN multi_outer_join_third_reference t1 ON (l1.l_custkey = t1.t_custkey)
 	LEFT JOIN multi_outer_join_right r1 ON (l1.l_custkey  = r1.r_custkey);
 
 -- inner (broadcast) join  + 2 shards left (local) + anti join should work
@@ -374,7 +403,7 @@ SELECT
 	l_custkey, t_custkey, r_custkey
 FROM
 	multi_outer_join_left l1
-	INNER JOIN multi_outer_join_third t1 ON (l1.l_custkey = t1.t_custkey)
+	INNER JOIN multi_outer_join_third_reference t1 ON (l1.l_custkey = t1.t_custkey)
 	LEFT JOIN multi_outer_join_right r1 ON (l1.l_custkey  = r1.r_custkey)
 WHERE
 	r_custkey is NULL;
@@ -386,7 +415,7 @@ FROM
 	(multi_outer_join_right r1 
 	LEFT OUTER JOIN multi_outer_join_left l1 ON (l1.l_custkey = r1.r_custkey)) AS
     test(c_custkey, c_nationkey)
-    INNER JOIN multi_outer_join_third t1 ON (test.c_custkey = t1.t_custkey);
+    INNER JOIN multi_outer_join_third_reference t1 ON (test.c_custkey = t1.t_custkey);
 
 -- flattened out subqueries with outer joins are not supported
 SELECT

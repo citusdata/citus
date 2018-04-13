@@ -25,7 +25,7 @@ SET citus.task_executor_type TO 'task-tracker';
 SELECT
 	count(*)
 FROM
-	orders, customer
+	orders, customer_append
 WHERE
 	o_custkey = c_custkey;
 
@@ -39,20 +39,19 @@ SET citus.large_table_shard_count TO 3;
 SELECT
 	count(*)
 FROM
-	orders, customer, lineitem
+	orders_reference, customer_append, lineitem
 WHERE
 	o_custkey = c_custkey AND
 	o_orderkey = l_orderkey;
 
 SET citus.large_table_shard_count TO 2;
-
 -- Dual hash repartition join which tests the separate hash repartition join
 -- task assignment algorithm.
 
 SELECT
 	count(*)
 FROM
-	lineitem, customer
+	lineitem, customer_append
 WHERE
 	l_partkey = c_nationkey;
 

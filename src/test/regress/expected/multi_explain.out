@@ -762,20 +762,20 @@ Custom Scan (Citus Router)
   Tasks Shown: All
   ->  Task
         Node: host=localhost port=57637 dbname=regression
-        ->  Update on lineitem_hash_part_360038 lineitem_hash_part
-              ->  Seq Scan on lineitem_hash_part_360038 lineitem_hash_part
-  ->  Task
-        Node: host=localhost port=57638 dbname=regression
-        ->  Update on lineitem_hash_part_360039 lineitem_hash_part
-              ->  Seq Scan on lineitem_hash_part_360039 lineitem_hash_part
-  ->  Task
-        Node: host=localhost port=57637 dbname=regression
-        ->  Update on lineitem_hash_part_360040 lineitem_hash_part
-              ->  Seq Scan on lineitem_hash_part_360040 lineitem_hash_part
-  ->  Task
-        Node: host=localhost port=57638 dbname=regression
         ->  Update on lineitem_hash_part_360041 lineitem_hash_part
               ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
+  ->  Task
+        Node: host=localhost port=57638 dbname=regression
+        ->  Update on lineitem_hash_part_360042 lineitem_hash_part
+              ->  Seq Scan on lineitem_hash_part_360042 lineitem_hash_part
+  ->  Task
+        Node: host=localhost port=57637 dbname=regression
+        ->  Update on lineitem_hash_part_360043 lineitem_hash_part
+              ->  Seq Scan on lineitem_hash_part_360043 lineitem_hash_part
+  ->  Task
+        Node: host=localhost port=57638 dbname=regression
+        ->  Update on lineitem_hash_part_360044 lineitem_hash_part
+              ->  Seq Scan on lineitem_hash_part_360044 lineitem_hash_part
 	
 EXPLAIN (COSTS FALSE)
 	UPDATE lineitem_hash_part
@@ -786,13 +786,13 @@ Custom Scan (Citus Router)
   Tasks Shown: All
   ->  Task
         Node: host=localhost port=57637 dbname=regression
-        ->  Update on lineitem_hash_part_360038 lineitem_hash_part
-              ->  Seq Scan on lineitem_hash_part_360038 lineitem_hash_part
+        ->  Update on lineitem_hash_part_360041 lineitem_hash_part
+              ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
                     Filter: ((l_orderkey = 1) OR (l_orderkey = 3))
   ->  Task
         Node: host=localhost port=57638 dbname=regression
-        ->  Update on lineitem_hash_part_360039 lineitem_hash_part
-              ->  Seq Scan on lineitem_hash_part_360039 lineitem_hash_part
+        ->  Update on lineitem_hash_part_360042 lineitem_hash_part
+              ->  Seq Scan on lineitem_hash_part_360042 lineitem_hash_part
                     Filter: ((l_orderkey = 1) OR (l_orderkey = 3))
 -- Test multi shard delete
 EXPLAIN (COSTS FALSE)
@@ -802,20 +802,20 @@ Custom Scan (Citus Router)
   Tasks Shown: All
   ->  Task
         Node: host=localhost port=57637 dbname=regression
-        ->  Delete on lineitem_hash_part_360038 lineitem_hash_part
-              ->  Seq Scan on lineitem_hash_part_360038 lineitem_hash_part
-  ->  Task
-        Node: host=localhost port=57638 dbname=regression
-        ->  Delete on lineitem_hash_part_360039 lineitem_hash_part
-              ->  Seq Scan on lineitem_hash_part_360039 lineitem_hash_part
-  ->  Task
-        Node: host=localhost port=57637 dbname=regression
-        ->  Delete on lineitem_hash_part_360040 lineitem_hash_part
-              ->  Seq Scan on lineitem_hash_part_360040 lineitem_hash_part
-  ->  Task
-        Node: host=localhost port=57638 dbname=regression
         ->  Delete on lineitem_hash_part_360041 lineitem_hash_part
               ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
+  ->  Task
+        Node: host=localhost port=57638 dbname=regression
+        ->  Delete on lineitem_hash_part_360042 lineitem_hash_part
+              ->  Seq Scan on lineitem_hash_part_360042 lineitem_hash_part
+  ->  Task
+        Node: host=localhost port=57637 dbname=regression
+        ->  Delete on lineitem_hash_part_360043 lineitem_hash_part
+              ->  Seq Scan on lineitem_hash_part_360043 lineitem_hash_part
+  ->  Task
+        Node: host=localhost port=57638 dbname=regression
+        ->  Delete on lineitem_hash_part_360044 lineitem_hash_part
+              ->  Seq Scan on lineitem_hash_part_360044 lineitem_hash_part
 -- Test track tracker
 SET citus.task_executor_type TO 'task-tracker';
 SET citus.explain_all_tasks TO off;
@@ -834,7 +834,7 @@ Aggregate
 SET citus.large_table_shard_count TO 1;
 EXPLAIN (COSTS FALSE)
 	SELECT count(*)
-	FROM lineitem, orders, customer, supplier_single_shard
+	FROM lineitem, orders, customer_append, supplier_single_shard
 	WHERE l_orderkey = o_orderkey
 	AND o_custkey = c_custkey
 	AND l_suppkey = s_suppkey;
@@ -850,7 +850,7 @@ Aggregate
                     Merge Task Count: 1
 EXPLAIN (COSTS FALSE, FORMAT JSON)
 	SELECT count(*)
-	FROM lineitem, orders, customer, supplier_single_shard
+	FROM lineitem, orders, customer_append, supplier_single_shard
 	WHERE l_orderkey = o_orderkey
 	AND o_custkey = c_custkey
 	AND l_suppkey = s_suppkey;
@@ -892,14 +892,14 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
 ]
 SELECT true AS valid FROM explain_json($$
 	SELECT count(*)
-	FROM lineitem, orders, customer, supplier_single_shard
+	FROM lineitem, orders, customer_append, supplier_single_shard
 	WHERE l_orderkey = o_orderkey
 	AND o_custkey = c_custkey
 	AND l_suppkey = s_suppkey$$);
 t
 EXPLAIN (COSTS FALSE, FORMAT XML)
 	SELECT count(*)
-	FROM lineitem, orders, customer, supplier_single_shard
+	FROM lineitem, orders, customer_append, supplier_single_shard
 	WHERE l_orderkey = o_orderkey
 	AND o_custkey = c_custkey
 	AND l_suppkey = s_suppkey;
@@ -941,7 +941,7 @@ EXPLAIN (COSTS FALSE, FORMAT XML)
 </explain>
 SELECT true AS valid FROM explain_xml($$
 	SELECT count(*)
-	FROM lineitem, orders, customer, supplier
+	FROM lineitem, orders, customer_append, supplier
 	WHERE l_orderkey = o_orderkey
 	AND o_custkey = c_custkey
 	AND l_suppkey = s_suppkey$$);
@@ -980,11 +980,8 @@ EXPLAIN (COSTS FALSE, FORMAT YAML)
             Task Count: 1
             Tasks Shown: "None, not supported for re-partition queries"
             Depended Jobs: 
-              - Map Task Count: 1
+              - Map Task Count: 2
                 Merge Task Count: 1
-                Depended Jobs: 
-                  - Map Task Count: 2
-                    Merge Task Count: 1
 -- test parallel aggregates
 SET parallel_setup_cost=0;
 SET parallel_tuple_cost=0;
@@ -1075,7 +1072,7 @@ Custom Scan (Citus INSERT ... SELECT via coordinator)
               ->  Task
                     Node: host=localhost port=57637 dbname=regression
                     ->  Limit
-                          ->  Seq Scan on orders_hash_part_360043 orders_hash_part
+                          ->  Seq Scan on orders_hash_part_360046 orders_hash_part
 SELECT true AS valid FROM explain_json($$
   INSERT INTO lineitem_hash_part (l_orderkey)
   SELECT o_orderkey FROM orders_hash_part LIMIT 3;
@@ -1092,7 +1089,7 @@ Custom Scan (Citus INSERT ... SELECT via coordinator)
               ->  Task
                     Node: host=localhost port=57637 dbname=regression
                     ->  Limit
-                          ->  Seq Scan on orders_hash_part_360043 orders_hash_part
+                          ->  Seq Scan on orders_hash_part_360046 orders_hash_part
 EXPLAIN (COSTS OFF)
 INSERT INTO lineitem_hash_part (l_orderkey)
 SELECT s FROM generate_series(1,5) s;
@@ -1145,7 +1142,7 @@ Custom Scan (Citus Router)
                           ->  HashAggregate
                                 Output: l_orderkey
                                 Group Key: lineitem_hash_part.l_orderkey
-                                ->  Seq Scan on public.lineitem_hash_part_360038 lineitem_hash_part
+                                ->  Seq Scan on public.lineitem_hash_part_360041 lineitem_hash_part
                                       Output: l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment
   ->  Distributed Subplan 55_2
         ->  Function Scan on pg_catalog.generate_series s

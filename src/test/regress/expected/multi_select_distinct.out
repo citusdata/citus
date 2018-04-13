@@ -212,7 +212,7 @@ EXPLAIN (COSTS FALSE)
                      ->  HashAggregate
                            Group Key: l_orderkey
                            Filter: (count(*) > 5)
-                           ->  Seq Scan on lineitem_hash_part_360038 lineitem_hash_part
+                           ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
                                  Filter: (l_orderkey < 200)
 (15 rows)
 
@@ -242,7 +242,7 @@ EXPLAIN (COSTS FALSE)
                            ->  HashAggregate
                                  Group Key: l_orderkey
                                  Filter: (count(*) > 5)
-                                 ->  Seq Scan on lineitem_hash_part_360038 lineitem_hash_part
+                                 ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
                                        Filter: (l_orderkey < 200)
 (17 rows)
 
@@ -285,7 +285,7 @@ EXPLAIN (COSTS FALSE)
                            Node: host=localhost port=57637 dbname=regression
                            ->  HashAggregate
                                  Group Key: l_suppkey, l_linenumber
-                                 ->  Seq Scan on lineitem_hash_part_360038 lineitem_hash_part
+                                 ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
 (14 rows)
 
 -- check the plan if the hash aggreate is disabled. We expect to see sort+unique
@@ -314,7 +314,7 @@ EXPLAIN (COSTS FALSE)
                                        Node: host=localhost port=57637 dbname=regression
                                        ->  HashAggregate
                                              Group Key: l_suppkey, l_linenumber
-                                             ->  Seq Scan on lineitem_hash_part_360038 lineitem_hash_part
+                                             ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
 (17 rows)
 
 SET enable_hashagg TO on;
@@ -363,7 +363,7 @@ EXPLAIN (COSTS FALSE)
                                  Node: host=localhost port=57637 dbname=regression
                                  ->  HashAggregate
                                        Group Key: l_suppkey, l_linenumber
-                                       ->  Seq Scan on lineitem_hash_part_360038 lineitem_hash_part
+                                       ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
 (15 rows)
 
 -- check the plan if the hash aggreate is disabled. Similar to the explain of 
@@ -394,7 +394,7 @@ EXPLAIN (COSTS FALSE)
                                              Node: host=localhost port=57637 dbname=regression
                                              ->  HashAggregate
                                                    Group Key: l_suppkey, l_linenumber
-                                                   ->  Seq Scan on lineitem_hash_part_360038 lineitem_hash_part
+                                                   ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
 (18 rows)
 
 SET enable_hashagg TO on;
@@ -444,7 +444,7 @@ EXPLAIN (COSTS FALSE)
                                  Node: host=localhost port=57637 dbname=regression
                                  ->  HashAggregate
                                        Group Key: l_suppkey, l_linenumber
-                                       ->  Seq Scan on lineitem_hash_part_360038 lineitem_hash_part
+                                       ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
 (15 rows)
 
 -- check the plan if the hash aggreate is disabled. This explain errors out due
@@ -502,7 +502,7 @@ EXPLAIN (COSTS FALSE)
                                  Node: host=localhost port=57637 dbname=regression
                                  ->  HashAggregate
                                        Group Key: l_suppkey, l_linenumber
-                                       ->  Seq Scan on lineitem_hash_part_360038 lineitem_hash_part
+                                       ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
 (14 rows)
 
 -- check the plan if the hash aggreate is disabled. We expect to see sort+unique to 
@@ -531,7 +531,7 @@ EXPLAIN (COSTS FALSE)
                                        Node: host=localhost port=57637 dbname=regression
                                        ->  HashAggregate
                                              Group Key: l_suppkey, l_linenumber
-                                             ->  Seq Scan on lineitem_hash_part_360038 lineitem_hash_part
+                                             ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
 (16 rows)
 
 SET enable_hashagg TO on;
@@ -579,7 +579,7 @@ EXPLAIN (COSTS FALSE)
                                  Node: host=localhost port=57637 dbname=regression
                                  ->  HashAggregate
                                        Group Key: l_suppkey, l_linenumber
-                                       ->  Seq Scan on lineitem_hash_part_360038 lineitem_hash_part
+                                       ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
 (15 rows)
 
 -- check the plan if the hash aggreate is disabled. This explain errors out due
@@ -638,7 +638,7 @@ EXPLAIN (COSTS FALSE)
                                  Node: host=localhost port=57637 dbname=regression
                                  ->  HashAggregate
                                        Group Key: l_suppkey, l_linenumber
-                                       ->  Seq Scan on lineitem_hash_part_360038 lineitem_hash_part
+                                       ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
 (15 rows)
 
 -- check the plan if the hash aggreate is disabled. This explain errors out due
@@ -702,7 +702,7 @@ EXPLAIN (COSTS FALSE)
                                              Group Key: l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment
                                              ->  Sort
                                                    Sort Key: l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment
-                                                   ->  Seq Scan on lineitem_hash_part_360038 lineitem_hash_part
+                                                   ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
 (17 rows)
 
 -- check the plan if the hash aggreate is disabled. We expect to see only one 
@@ -734,7 +734,7 @@ EXPLAIN (COSTS FALSE)
                                                    Group Key: l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment
                                                    ->  Sort
                                                          Sort Key: l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment
-                                                         ->  Seq Scan on lineitem_hash_part_360038 lineitem_hash_part
+                                                         ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
 (19 rows)
 
 		
@@ -798,7 +798,7 @@ EXPLAIN (COSTS FALSE)
                                  Group Key: l_orderkey
                                  ->  Sort
                                        Sort Key: l_orderkey
-                                       ->  Seq Scan on lineitem_hash_part_360038 lineitem_hash_part
+                                       ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
 (16 rows)
 
 -- check the plan if the hash aggreate is disabled. We expect to see sort + unique 
@@ -829,7 +829,7 @@ EXPLAIN (COSTS FALSE)
                                              Group Key: l_orderkey
                                              ->  Sort
                                                    Sort Key: l_orderkey
-                                                   ->  Seq Scan on lineitem_hash_part_360038 lineitem_hash_part
+                                                   ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
 (19 rows)
 
 		
@@ -870,7 +870,7 @@ EXPLAIN (COSTS FALSE)
                            Node: host=localhost port=57637 dbname=regression
                            ->  HashAggregate
                                  Group Key: l_suppkey
-                                 ->  Seq Scan on lineitem_hash_part_360038 lineitem_hash_part
+                                 ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
 (14 rows)
 
 -- check the plan if the hash aggreate is disabled
@@ -898,7 +898,7 @@ EXPLAIN (COSTS FALSE)
                                        Node: host=localhost port=57637 dbname=regression
                                        ->  HashAggregate
                                              Group Key: l_suppkey
-                                             ->  Seq Scan on lineitem_hash_part_360038 lineitem_hash_part
+                                             ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
 (17 rows)
 
 		
@@ -929,7 +929,7 @@ EXPLAIN (COSTS FALSE)
                                        Group Key: l_orderkey
                                        ->  Sort
                                              Sort Key: l_orderkey
-                                             ->  Seq Scan on lineitem_hash_part_360038 lineitem_hash_part
+                                             ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
 (17 rows)
 
 -- check the plan if the hash aggreate is disabled. 
@@ -961,7 +961,7 @@ EXPLAIN (COSTS FALSE)
                                                    Group Key: l_orderkey
                                                    ->  Sort
                                                          Sort Key: l_orderkey
-                                                         ->  Seq Scan on lineitem_hash_part_360038 lineitem_hash_part
+                                                         ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
 (20 rows)
 
 		
@@ -1010,7 +1010,7 @@ EXPLAIN (COSTS FALSE)
                      Node: host=localhost port=57637 dbname=regression
                      ->  HashAggregate
                            Group Key: l_partkey
-                           ->  Seq Scan on lineitem_hash_part_360038 lineitem_hash_part
+                           ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
 (13 rows)
 
 -- distinct on non-partition column and avg
@@ -1083,7 +1083,7 @@ EXPLAIN (COSTS FALSE)
                      ->  Unique
                            ->  Sort
                                  Sort Key: l_partkey, l_suppkey
-                                 ->  Seq Scan on lineitem_hash_part_360038 lineitem_hash_part
+                                 ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
                                        Filter: ((l_orderkey < 100) AND (l_shipmode = 'AIR'::bpchar))
 (14 rows)
 
@@ -1125,7 +1125,7 @@ EXPLAIN (COSTS FALSE)
                      ->  Unique
                            ->  Sort
                                  Sort Key: l_orderkey
-                                 ->  Seq Scan on lineitem_hash_part_360038 lineitem_hash_part
+                                 ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
                                        Filter: (l_orderkey < 35)
 (13 rows)
 
@@ -1181,7 +1181,7 @@ EXPLAIN (COSTS FALSE)
                                  ->  Unique
                                        ->  Sort
                                              Sort Key: l_partkey, l_orderkey
-                                             ->  Seq Scan on lineitem_hash_part_360038 lineitem_hash_part
+                                             ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
 (14 rows)
 
 -- distinct on with joins
@@ -1224,9 +1224,9 @@ EXPLAIN (COSTS FALSE)
                                  Sort Key: orders_hash_part.o_custkey, lineitem_hash_part.l_orderkey
                                  ->  Hash Join
                                        Hash Cond: (lineitem_hash_part.l_orderkey = orders_hash_part.o_orderkey)
-                                       ->  Seq Scan on lineitem_hash_part_360038 lineitem_hash_part
+                                       ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
                                        ->  Hash
-                                             ->  Seq Scan on orders_hash_part_360042 orders_hash_part
+                                             ->  Seq Scan on orders_hash_part_360045 orders_hash_part
                                                    Filter: (o_custkey < 15)
 (17 rows)
 
@@ -1251,9 +1251,9 @@ EXPLAIN (COSTS FALSE)
                                  Sort Key: orders_hash_part.o_custkey
                                  ->  Hash Join
                                        Hash Cond: (lineitem_hash_part.l_orderkey = orders_hash_part.o_orderkey)
-                                       ->  Seq Scan on lineitem_hash_part_360038 lineitem_hash_part
+                                       ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
                                        ->  Hash
-                                             ->  Seq Scan on orders_hash_part_360042 orders_hash_part
+                                             ->  Seq Scan on orders_hash_part_360045 orders_hash_part
                                                    Filter: (o_custkey < 15)
 (17 rows)
 
@@ -1322,9 +1322,9 @@ EXPLAIN (COSTS FALSE)
                                  Sort Key: orders_hash_part.o_custkey, lineitem_hash_part.l_orderkey
                                  ->  Hash Join
                                        Hash Cond: (lineitem_hash_part.l_orderkey = orders_hash_part.o_orderkey)
-                                       ->  Seq Scan on lineitem_hash_part_360038 lineitem_hash_part
+                                       ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
                                        ->  Hash
-                                             ->  Seq Scan on orders_hash_part_360042 orders_hash_part
+                                             ->  Seq Scan on orders_hash_part_360045 orders_hash_part
                                                    Filter: (o_custkey < 20)
 (17 rows)
 
@@ -1412,7 +1412,7 @@ EXPLAIN (COSTS FALSE)
                                        Sort Key: l_orderkey, l_partkey
                                        ->  HashAggregate
                                              Group Key: l_orderkey, l_partkey
-                                             ->  Seq Scan on lineitem_hash_part_360038 lineitem_hash_part
+                                             ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
 (16 rows)
 
 SELECT DISTINCT l_orderkey, cnt
@@ -1465,7 +1465,7 @@ EXPLAIN (COSTS FALSE)
                                              Group Key: lineitem_hash_part.l_orderkey, count(*)
                                              ->  HashAggregate
                                                    Group Key: lineitem_hash_part.l_orderkey
-                                                   ->  Seq Scan on lineitem_hash_part_360038 lineitem_hash_part
+                                                   ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
 (18 rows)
 
 -- distinct on partition column
@@ -1518,7 +1518,7 @@ EXPLAIN (COSTS FALSE)
                                              Sort Key: q.l_orderkey, q.l_partkey
                                              ->  Subquery Scan on q
                                                    Filter: (q.r > 1)
-                                                   ->  Seq Scan on lineitem_hash_part_360038 lineitem_hash_part
+                                                   ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
 (16 rows)
 
 -- distinct on non-partition column
@@ -1570,6 +1570,6 @@ EXPLAIN (COSTS FALSE)
                                              Sort Key: q.l_partkey, q.l_orderkey
                                              ->  Subquery Scan on q
                                                    Filter: (q.r > 1)
-                                                   ->  Seq Scan on lineitem_hash_part_360038 lineitem_hash_part
+                                                   ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
 (16 rows)
 

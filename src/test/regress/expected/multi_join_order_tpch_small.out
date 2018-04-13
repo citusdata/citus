@@ -48,7 +48,7 @@ GROUP BY
 ORDER BY
 	revenue DESC,
 	o_orderdate;
-LOG:  join order: [ "orders" ][ broadcast join "customer" ][ local partition join "lineitem" ]
+LOG:  join order: [ "orders" ][ reference join "customer" ][ local partition join "lineitem" ]
                                            QUERY PLAN                                           
 ------------------------------------------------------------------------------------------------
  Sort  (cost=0.00..0.00 rows=0 width=0)
@@ -91,7 +91,7 @@ GROUP BY
 	c_comment
 ORDER BY
 	revenue DESC;
-LOG:  join order: [ "orders" ][ broadcast join "customer" ][ broadcast join "nation" ][ local partition join "lineitem" ]
+LOG:  join order: [ "orders" ][ reference join "customer" ][ reference join "nation" ][ local partition join "lineitem" ]
                                                                                  QUERY PLAN                                                                                 
 ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
  Sort  (cost=0.00..0.00 rows=0 width=0)
@@ -132,7 +132,7 @@ WHERE
 		AND l_shipmode in ('AIR', 'AIR REG', 'TRUCK')
 		AND l_shipinstruct = 'DELIVER IN PERSON'
 	);
-LOG:  join order: [ "lineitem" ][ broadcast join "part" ]
+LOG:  join order: [ "lineitem" ][ reference join "part" ]
                               QUERY PLAN                               
 -----------------------------------------------------------------------
  Aggregate  (cost=0.00..0.00 rows=0 width=0)

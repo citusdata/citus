@@ -76,7 +76,7 @@ SELECT create_distributed_table('customer_hash', 'c_custkey');
 -- The following query checks that we can correctly handle self-joins
 EXPLAIN SELECT l1.l_quantity FROM lineitem l1, lineitem l2
 	WHERE l1.l_orderkey = l2.l_orderkey AND l1.l_quantity > 5;
-LOG:  join order: [ "lineitem" ][ broadcast join "lineitem" ]
+LOG:  join order: [ "lineitem" ][ local partition join "lineitem" ]
 DEBUG:  join prunable for intervals [1,5986] and [8997,14947]
 DEBUG:  join prunable for intervals [8997,14947] and [1,5986]
                              QUERY PLAN                             
@@ -137,7 +137,7 @@ LOG:  join order: [ "orders_hash" ][ local partition join "lineitem_hash" ]
 -- Validate that we can handle broadcast joins with hash-partitioned tables.
 EXPLAIN SELECT count(*) FROM customer_hash, nation
 	WHERE c_nationkey = n_nationkey;
-LOG:  join order: [ "customer_hash" ][ broadcast join "nation" ]
+LOG:  join order: [ "customer_hash" ][ reference join "nation" ]
                                 QUERY PLAN                                
 --------------------------------------------------------------------------
  Aggregate  (cost=0.00..0.00 rows=0 width=0)
@@ -149,9 +149,9 @@ LOG:  join order: [ "customer_hash" ][ broadcast join "nation" ]
 SET citus.large_table_shard_count TO 1;
 -- Validate that we don't use a single-partition join method for a hash
 -- re-partitioned table, thus preventing a partition of just the customer table.
-EXPLAIN SELECT count(*) FROM orders, lineitem, customer
+EXPLAIN SELECT count(*) FROM orders, lineitem, customer_append
 	WHERE o_custkey = l_partkey AND o_custkey = c_nationkey;
-LOG:  join order: [ "orders" ][ dual partition join "lineitem" ][ dual partition join "customer" ]
+LOG:  join order: [ "orders" ][ dual partition join "lineitem" ][ dual partition join "customer_append" ]
                                 QUERY PLAN                                
 --------------------------------------------------------------------------
  Aggregate  (cost=0.00..0.00 rows=0 width=0)
@@ -173,9 +173,9 @@ LOG:  join order: [ "orders" ][ dual partition join "customer_hash" ]
 
 -- Validate that we can re-partition a hash partitioned table to join with a
 -- range partitioned one.
-EXPLAIN SELECT count(*) FROM orders_hash, customer
+EXPLAIN SELECT count(*) FROM orders_hash, customer_append
 	WHERE c_custkey = o_custkey;
-LOG:  join order: [ "orders_hash" ][ single partition join "customer" ]
+LOG:  join order: [ "orders_hash" ][ single partition join "customer_append" ]
                                 QUERY PLAN                                
 --------------------------------------------------------------------------
  Aggregate  (cost=0.00..0.00 rows=0 width=0)

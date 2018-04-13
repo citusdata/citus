@@ -6,7 +6,9 @@ ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 360000;
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 100000;
 
 -- Create new table definitions for use in testing in distributed planning and
--- execution functionality. Also create indexes to boost performance.
+-- execution functionality. Also create indexes to boost performance. Since we
+-- need to cover both reference join and partitioned join, we have created
+-- reference and append distributed version of orders, customer and part tables.
 
 CREATE TABLE lineitem (
 	l_orderkey bigint not null,
@@ -43,6 +45,20 @@ CREATE TABLE orders (
 	PRIMARY KEY(o_orderkey) );
 SELECT master_create_distributed_table('orders', 'o_orderkey', 'append');
 
+CREATE TABLE orders_reference (
+	o_orderkey bigint not null,
+	o_custkey integer not null,
+	o_orderstatus char(1) not null,
+	o_totalprice decimal(15,2) not null,
+	o_orderdate date not null,
+	o_orderpriority char(15) not null,
+	o_clerk char(15) not null,
+	o_shippriority integer not null,
+	o_comment varchar(79) not null,
+	PRIMARY KEY(o_orderkey) );
+SELECT create_reference_table('orders_reference');
+
+
 CREATE TABLE customer (
 	c_custkey integer not null,
 	c_name varchar(25) not null,
@@ -52,7 +68,18 @@ CREATE TABLE customer (
 	c_acctbal decimal(15,2) not null,
 	c_mktsegment char(10) not null,
 	c_comment varchar(117) not null);
-SELECT master_create_distributed_table('customer', 'c_custkey', 'append');
+SELECT create_reference_table('customer');
+
+CREATE TABLE customer_append (
+	c_custkey integer not null,
+	c_name varchar(25) not null,
+	c_address varchar(40) not null,
+	c_nationkey integer not null,
+	c_phone char(15) not null,
+	c_acctbal decimal(15,2) not null,
+	c_mktsegment char(10) not null,
+	c_comment varchar(117) not null);
+SELECT master_create_distributed_table('customer_append', 'c_custkey', 'append');
 
 CREATE TABLE nation (
 	n_nationkey integer not null,
@@ -72,7 +99,19 @@ CREATE TABLE part (
 	p_container char(10) not null,
 	p_retailprice decimal(15,2) not null,
 	p_comment varchar(23) not null);
-SELECT master_create_distributed_table('part', 'p_partkey', 'append');
+SELECT create_reference_table('part');
+
+CREATE TABLE part_append (
+	p_partkey integer not null,
+	p_name varchar(55) not null,
+	p_mfgr char(25) not null,
+	p_brand char(10) not null,
+	p_type varchar(25) not null,
+	p_size integer not null,
+	p_container char(10) not null,
+	p_retailprice decimal(15,2) not null,
+	p_comment varchar(23) not null);
+SELECT master_create_distributed_table('part_append', 'p_partkey', 'append');
 
 CREATE TABLE supplier
 (
@@ -380,8 +419,8 @@ COMMIT;
 
 -- Table should exist on the worker node
 \c - - - :worker_1_port
-SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid = 'public.tt1_360066'::regclass;
-SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid = 'public.tt2_360070'::regclass;
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid = 'public.tt1_360069'::regclass;
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid = 'public.tt2_360073'::regclass;
 \c - - - :master_port
 
 DROP TABLE tt1;
@@ -397,7 +436,7 @@ ROLLBACK;
 
 -- Table exists on the worker node.
 \c - - - :worker_1_port
-SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid = 'public.append_tt1_360074'::regclass;
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid = 'public.append_tt1_360077'::regclass;
 \c - - - :master_port
 
 -- There should be no table on the worker node
@@ -417,7 +456,7 @@ COMMIT;
 
 -- Placements should be created on the worker
 \c - - - :worker_1_port
-SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid = 'public.tt1_360075'::regclass;
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid = 'public.tt1_360078'::regclass;
 \c - - - :master_port
 
 DROP TABLE tt1;

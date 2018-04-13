@@ -18,13 +18,13 @@ EXPLAIN (COSTS OFF)
 SELECT
 	count(*)
 FROM
-	orders, customer
+	orders, customer_append
 WHERE
 	o_custkey = c_custkey;
 SELECT
 	count(*)
 FROM
-	orders, customer
+	orders, customer_append
 WHERE
 	o_custkey = c_custkey;
 
@@ -34,14 +34,14 @@ EXPLAIN (COSTS OFF)
 SELECT
 	count(*)
 FROM
-	orders, customer
+	orders, customer_append
 WHERE
 	o_custkey = c_custkey AND
 	o_orderkey < 0;
 SELECT
 	count(*)
 FROM
-	orders, customer
+	orders, customer_append
 WHERE
 	o_custkey = c_custkey AND
 	o_orderkey < 0;
@@ -52,14 +52,14 @@ EXPLAIN (COSTS OFF)
 SELECT
 	count(*)
 FROM
-	orders, customer
+	orders, customer_append
 WHERE
 	o_custkey = c_custkey AND
 	c_custkey < 0;
 SELECT
 	count(*)
 FROM
-	orders, customer
+	orders, customer_append
 WHERE
 	o_custkey = c_custkey AND
 	c_custkey < 0;
@@ -71,13 +71,13 @@ EXPLAIN (COSTS OFF)
 SELECT
 	count(*)
 FROM
-	lineitem, customer
+	lineitem, customer_append
 WHERE
 	l_partkey = c_nationkey;
 SELECT
 	count(*)
 FROM
-	lineitem, customer
+	lineitem, customer_append
 WHERE
 	l_partkey = c_nationkey;
 
@@ -87,14 +87,14 @@ EXPLAIN (COSTS OFF)
 SELECT
 	count(*)
 FROM
-	lineitem, customer
+	lineitem, customer_append
 WHERE
 	l_partkey = c_nationkey AND
 	l_orderkey < 0;
 SELECT
 	count(*)
 FROM
-	lineitem, customer
+	lineitem, customer_append
 WHERE
 	l_partkey = c_nationkey AND
 	l_orderkey < 0;
@@ -104,14 +104,14 @@ EXPLAIN (COSTS OFF)
 SELECT
 	o_orderkey
 FROM
-	orders INNER JOIN customer ON (o_custkey = c_custkey)
+	orders INNER JOIN customer_append ON (o_custkey = c_custkey)
 WHERE
 	false;
 -- execute once, to verify that's handled
 SELECT
 	o_orderkey
 FROM
-	orders INNER JOIN customer ON (o_custkey = c_custkey)
+	orders INNER JOIN customer_append ON (o_custkey = c_custkey)
 WHERE
 	false;
 
@@ -119,7 +119,7 @@ EXPLAIN (COSTS OFF)
 SELECT
 	o_orderkey
 FROM
-	orders INNER JOIN customer ON (o_custkey = c_custkey)
+	orders INNER JOIN customer_append ON (o_custkey = c_custkey)
 WHERE
 	1=0 AND c_custkey < 0;
 
@@ -127,12 +127,12 @@ EXPLAIN (COSTS OFF)
 SELECT
 	o_orderkey
 FROM
-	orders INNER JOIN customer ON (o_custkey = c_custkey AND false);
+	orders INNER JOIN customer_append ON (o_custkey = c_custkey AND false);
 
 EXPLAIN (COSTS OFF)
 SELECT
 	o_orderkey
 FROM
-	orders, customer
+	orders, customer_append
 WHERE
 	o_custkey = c_custkey AND false;

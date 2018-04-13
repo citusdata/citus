@@ -13,7 +13,7 @@ EXPLAIN (COSTS OFF)
 SELECT
 	count(*)
 FROM
-	orders, customer
+	orders, customer_append
 WHERE
 	o_custkey = c_custkey;
 DEBUG:  join prunable for intervals [1,1000] and [1001,2000]
@@ -42,7 +42,7 @@ DETAIL:  Creating dependency on merge taskId 9
 SELECT
 	count(*)
 FROM
-	orders, customer
+	orders, customer_append
 WHERE
 	o_custkey = c_custkey;
 DEBUG:  join prunable for intervals [1,1000] and [1001,2000]
@@ -68,7 +68,7 @@ EXPLAIN (COSTS OFF)
 SELECT
 	count(*)
 FROM
-	orders, customer
+	orders, customer_append
 WHERE
 	o_custkey = c_custkey AND
 	o_orderkey < 0;
@@ -86,7 +86,7 @@ WHERE
 SELECT
 	count(*)
 FROM
-	orders, customer
+	orders, customer_append
 WHERE
 	o_custkey = c_custkey AND
 	o_orderkey < 0;
@@ -101,7 +101,7 @@ EXPLAIN (COSTS OFF)
 SELECT
 	count(*)
 FROM
-	orders, customer
+	orders, customer_append
 WHERE
 	o_custkey = c_custkey AND
 	c_custkey < 0;
@@ -119,7 +119,7 @@ WHERE
 SELECT
 	count(*)
 FROM
-	orders, customer
+	orders, customer_append
 WHERE
 	o_custkey = c_custkey AND
 	c_custkey < 0;
@@ -135,7 +135,7 @@ EXPLAIN (COSTS OFF)
 SELECT
 	count(*)
 FROM
-	lineitem, customer
+	lineitem, customer_append
 WHERE
 	l_partkey = c_nationkey;
 DEBUG:  join prunable for task partitionId 0 and 1
@@ -183,7 +183,7 @@ DETAIL:  Creating dependency on merge taskId 16
 SELECT
 	count(*)
 FROM
-	lineitem, customer
+	lineitem, customer_append
 WHERE
 	l_partkey = c_nationkey;
 DEBUG:  join prunable for task partitionId 0 and 1
@@ -225,7 +225,7 @@ EXPLAIN (COSTS OFF)
 SELECT
 	count(*)
 FROM
-	lineitem, customer
+	lineitem, customer_append
 WHERE
 	l_partkey = c_nationkey AND
 	l_orderkey < 0;
@@ -246,7 +246,7 @@ WHERE
 SELECT
 	count(*)
 FROM
-	lineitem, customer
+	lineitem, customer_append
 WHERE
 	l_partkey = c_nationkey AND
 	l_orderkey < 0;
@@ -260,7 +260,7 @@ EXPLAIN (COSTS OFF)
 SELECT
 	o_orderkey
 FROM
-	orders INNER JOIN customer ON (o_custkey = c_custkey)
+	orders INNER JOIN customer_append ON (o_custkey = c_custkey)
 WHERE
 	false;
                          QUERY PLAN                          
@@ -277,7 +277,7 @@ WHERE
 SELECT
 	o_orderkey
 FROM
-	orders INNER JOIN customer ON (o_custkey = c_custkey)
+	orders INNER JOIN customer_append ON (o_custkey = c_custkey)
 WHERE
 	false;
  o_orderkey 
@@ -288,7 +288,7 @@ EXPLAIN (COSTS OFF)
 SELECT
 	o_orderkey
 FROM
-	orders INNER JOIN customer ON (o_custkey = c_custkey)
+	orders INNER JOIN customer_append ON (o_custkey = c_custkey)
 WHERE
 	1=0 AND c_custkey < 0;
                          QUERY PLAN                          
@@ -305,7 +305,7 @@ EXPLAIN (COSTS OFF)
 SELECT
 	o_orderkey
 FROM
-	orders INNER JOIN customer ON (o_custkey = c_custkey AND false);
+	orders INNER JOIN customer_append ON (o_custkey = c_custkey AND false);
             QUERY PLAN            
 ----------------------------------
  Custom Scan (Citus Task-Tracker)
@@ -317,7 +317,7 @@ EXPLAIN (COSTS OFF)
 SELECT
 	o_orderkey
 FROM
-	orders, customer
+	orders, customer_append
 WHERE
 	o_custkey = c_custkey AND false;
             QUERY PLAN            

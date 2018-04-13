@@ -32,7 +32,7 @@ SET citus.task_executor_type TO 'task-tracker';
 SELECT
 	l_partkey, o_orderkey, count(*)
 FROM
-	lineitem, part, orders, customer
+	lineitem, part_append, orders, customer_append
 WHERE
 	l_orderkey = o_orderkey AND
 	l_partkey = p_partkey AND
