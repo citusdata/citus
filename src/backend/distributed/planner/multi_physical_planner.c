@@ -194,7 +194,8 @@ static StringInfo MergeTableQueryString(uint32 taskIdIndex, List *targetEntryLis
 static StringInfo IntermediateTableQueryString(uint64 jobId, uint32 taskIdIndex,
 											   Query *reduceQuery);
 static uint32 FinalTargetEntryCount(List *targetEntryList);
-
+static bool CoPlacedShardIntervals(ShardInterval *firstInterval,
+								   ShardInterval *secondInterval);
 
 /*
  * CreatePhysicalDistributedPlan is the entry point for physical plan generation. The
@@ -2320,7 +2321,8 @@ CoPartitionedTables(Oid firstRelationId, Oid secondRelationId)
 	 * If not known to be colocated check if the remaining shards are
 	 * anyway. Do so by comparing the shard interval arrays that are sorted on
 	 * interval minimum values. Then it compares every shard interval in order
-	 * and if any pair of shard intervals are not equal it returns false.
+	 * and if any pair of shard intervals are not equal or they are not located
+	 * in the same node it returns false.
 	 */
 	for (intervalIndex = 0; intervalIndex < firstListShardCount; intervalIndex++)
 	{
@@ -2330,7 +2332,8 @@ CoPartitionedTables(Oid firstRelationId, Oid secondRelationId)
 		bool shardIntervalsEqual = ShardIntervalsEqual(comparisonFunction,
 													   firstInterval,
 													   secondInterval);
-		if (!shardIntervalsEqual)
+		if (!shardIntervalsEqual || !CoPlacedShardIntervals(firstInterval,
+															secondInterval))
 		{
 			coPartitionedTables = false;
 			break;
@@ -2338,6 +2341,45 @@ CoPartitionedTables(Oid firstRelationId, Oid secondRelationId)
 	}
 
 	return coPartitionedTables;
+}
+
+
+/*
+ * CoPlacedShardIntervals checks whether the given intervals located in the same nodes.
+ */
+static bool
+CoPlacedShardIntervals(ShardInterval *firstInterval, ShardInterval *secondInterval)
+{
+	List *firstShardPlacementList = ShardPlacementList(firstInterval->shardId);
+	List *secondShardPlacementList = ShardPlacementList(secondInterval->shardId);
+	ListCell *firstShardPlacementCell = NULL;
+	ListCell *secondShardPlacementCell = NULL;
+
+	/* Shards must have same number of placements */
+	if (list_length(firstShardPlacementList) != list_length(secondShardPlacementList))
+	{
+		return false;
+	}
+
+	firstShardPlacementList = SortList(firstShardPlacementList, CompareShardPlacements);
+	secondShardPlacementList = SortList(secondShardPlacementList, CompareShardPlacements);
+
+	forboth(firstShardPlacementCell, firstShardPlacementList, secondShardPlacementCell,
+			secondShardPlacementList)
+	{
+		ShardPlacement *firstShardPlacement = (ShardPlacement *) lfirst(
+			firstShardPlacementCell);
+		ShardPlacement *secondShardPlacement = (ShardPlacement *) lfirst(
+			secondShardPlacementCell);
+
+		if (strcmp(firstShardPlacement->nodeName, secondShardPlacement->nodeName) != 0 ||
+			firstShardPlacement->nodePort != secondShardPlacement->nodePort)
+		{
+			return false;
+		}
+	}
+
+	return true;
 }
 
 
