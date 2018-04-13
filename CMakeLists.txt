@@ -3,28 +3,25 @@ cmake_minimum_required (VERSION 3.7)
 # Set a default build type if none was specified
 # adapted from https://blog.kitware.com/cmake-and-the-default-build-type/
 set (default_build_type "Release")
-# if(EXISTS "${CMAKE_SOURCE_DIR}/.git")
-#   set(default_build_type "Debug")
-# endif()
 
 if (NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
   message (STATUS "Using default build type: '${default_build_type}'.")
 
   set (CMAKE_BUILD_TYPE "${default_build_type}" CACHE STRING
-		"Choose the type of build." FORCE
-	)
+    "Choose the type of build." FORCE
+  )
 
   # Set the possible values of build type for cmake-gui
   set_property (CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS
-		"Debug" "Release" "MinSizeRel" "RelWithDebInfo"
-	)
+    "Debug" "Release" "MinSizeRel" "RelWithDebInfo"
+  )
 endif (NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 
 # TODO do something smart with the version
 project (Citus
-	VERSION 7.4.0
-	DESCRIPTION "Citus distributed database"
-	LANGUAGES C
+  VERSION 7.4.0
+  DESCRIPTION "Citus distributed database"
+  LANGUAGES C
 )
 
 set (CITUS_EDITION  "Community")
@@ -38,10 +35,19 @@ set (HAVE_LIBCURL ${CURL_FOUND})
 set (CITUS_VERSION_H "src/include/citus_version.h")
 configure_file ("${CITUS_VERSION_H}.in" "${CITUS_VERSION_H}" @ONLY)
 
-# TODO make this configurable
-set (PG_CONFIG "pg_config" CACHE STRING
-	"Location to find pg_config for target PostgreSQL instalation (default PATH)."
+find_program (PG_CONFIG NAMES "pg_config"
+  DOC "Location to find pg_config for target PostgreSQL installation (default PATH)."
+  NO_CMAKE_PATH
+  NO_CMAKE_ENVIRONMENT_PATH
+  NO_CMAKE_SYSTEM_PATH
+  NO_CMAKE_FIND_ROOT_PATH
 )
+
+if (NOT PG_CONFIG)
+  message (FATAL_ERROR "Could not find pg_config. Set PG_CONFIG or PATH.")
+else ()
+  message (STATUS "Using pg_config found at: ${PG_CONFIG}")
+endif (NOT PG_CONFIG)
 
 # Get PostgreSQL configuration from pg_config
 execute_process (
@@ -221,80 +227,81 @@ set (DATAMODULEDIR "extension") # TODO should be configurable and be 'contrib' s
 # set up compiler and linker flags on *nix-y OSes
 if (UNIX)
 # ... its include directories.
-	target_include_directories ("${EXT_NAME}"
-		PUBLIC "${PROJECT_BINARY_DIR}/src/include"
-		PUBLIC "${PROJECT_SOURCE_DIR}/src/include"
-		PUBLIC "${PGC_INCLUDEDIR_SERVER}"
-		PUBLIC "${PGC_PKGINCLUDEDIR}/internal"
-	)
+  target_include_directories ("${EXT_NAME}"
+    PUBLIC "${PROJECT_BINARY_DIR}/src/include"
+    PUBLIC "${PROJECT_SOURCE_DIR}/src/include"
+    PUBLIC "${PGC_INCLUDEDIR_SERVER}"
+    PUBLIC "${PGC_PKGINCLUDEDIR}/internal"
+  )
 
-	# get variables into list form
-	separate_arguments (PGC_CFLAGS)
-	separate_arguments (PGC_CPPFLAGS)
-	separate_arguments (PGC_LDFLAGS)
+  # get variables into list form
+  separate_arguments (PGC_CFLAGS)
+  separate_arguments (PGC_CPPFLAGS)
+  separate_arguments (PGC_LDFLAGS)
 
-	# Remove bad input from pg_config
-	list (REMOVE_ITEM PGC_CPPFLAGS "-DFRONTEND")
-	list (FILTER PGC_LDFLAGS EXCLUDE REGEX -L\\.\\.)
+  # Remove bad input from pg_config
+  list (REMOVE_ITEM PGC_CPPFLAGS "-DFRONTEND")
+  list (FILTER PGC_LDFLAGS EXCLUDE REGEX -L\\.\\.)
 
-	# Build LDFLAGS back into string
-	foreach (FLAG ${PGC_LDFLAGS})
-		string (APPEND PROJ_LDFLAGS " ${FLAG}")
-	endforeach (FLAG ${PGC_LDFLAGS})
+  # Build LDFLAGS back into string
+  foreach (FLAG ${PGC_LDFLAGS})
+    string (APPEND PROJ_LDFLAGS " ${FLAG}")
+  endforeach (FLAG ${PGC_LDFLAGS})
 
   target_link_libraries ("${EXT_NAME}" ${CURL_LIBRARIES})
 
-	# ... and add those from pg_config.
-	target_compile_options (${EXT_NAME} PUBLIC ${PGC_CFLAGS}
-											PUBLIC ${PGC_CPPFLAGS})
+  # ... and add those from pg_config.
+  target_compile_options (${EXT_NAME} PUBLIC ${PGC_CFLAGS} PUBLIC ${PGC_CPPFLAGS})
 endif (UNIX)
 
+# TODO Add Linux section?
+
 if (APPLE)
-	# Remove built-in MODULE compilation flags...
-	unset (CMAKE_SHARED_MODULE_CREATE_C_FLAGS)
+  # Remove built-in MODULE compilation flags...
+  unset (CMAKE_SHARED_MODULE_CREATE_C_FLAGS)
 
-	# Override module linker flags to specify bundle loader
-	set (CMAKE_MODULE_LINKER_FLAGS "-bundle -bundle_loader ${PGC_BINDIR}/postgres")
+  # Override module linker flags to specify bundle loader
+  set (CMAKE_MODULE_LINKER_FLAGS "-bundle -bundle_loader ${PGC_BINDIR}/postgres")
 
-	# Get rid of symbol, prefix, and PIC settings; set link flags.
-	set_target_properties ("${EXT_NAME}" PROPERTIES
-		PREFIX ""
-		DEFINE_SYMBOL ""
-		POSITION_INDEPENDENT_CODE FALSE
-		LINK_FLAGS "${PROJ_LDFLAGS}"
-	)
+  # Get rid of symbol, prefix, and PIC settings; set link flags.
+  set_target_properties ("${EXT_NAME}" PROPERTIES
+    PREFIX ""
+    DEFINE_SYMBOL ""
+    POSITION_INDEPENDENT_CODE FALSE
+    LINK_FLAGS "${PROJ_LDFLAGS}"
+  )
 endif (APPLE)
 
 if (WIN32)
-# ... its include directories.
-	target_include_directories ("${EXT_NAME}"
-		PUBLIC "${PGC_INCLUDEDIR}"
-		PUBLIC "${PGC_INCLUDEDIR_SERVER}/port/win32"
-	)
+  # ... its include directories.
+  target_include_directories ("${EXT_NAME}"
+    PUBLIC "${PGC_INCLUDEDIR}"
+    PUBLIC "${PGC_INCLUDEDIR_SERVER}/port/win32"
+  )
 
-	if (MSVC)
-		target_include_directories ("${EXT_NAME}" PUBLIC "${PGC_INCLUDEDIR_SERVER}/port/win32_msvc")
-	endif (MSVC)
+  if (MSVC)
+    target_include_directories ("${EXT_NAME}" PUBLIC "${PGC_INCLUDEDIR_SERVER}/port/win32_msvc")
+  endif (MSVC)
 
-	target_include_directories ("${EXT_NAME}"
-		PUBLIC "${PROJECT_BINARY_DIR}/src/include"
-	    PUBLIC "${PROJECT_SOURCE_DIR}/src/include"
-		PUBLIC "${PGC_INCLUDEDIR_SERVER}"
-		PUBLIC "${PGC_PKGINCLUDEDIR}/internal"
-		PUBLIC "C:/Users/citus/Desktop/icu/include"
-	)
+  target_include_directories ("${EXT_NAME}"
+    PUBLIC "${PROJECT_BINARY_DIR}/src/include"
+    PUBLIC "${PROJECT_SOURCE_DIR}/src/include"
+    PUBLIC "${PGC_INCLUDEDIR_SERVER}"
+    PUBLIC "${PGC_PKGINCLUDEDIR}/internal"
+    PUBLIC "C:/Users/citus/Desktop/icu/include"
+  )
 
+  # TODO Take more of these from PostgreSQL?
+  target_compile_options ("${EXT_NAME}" PUBLIC "-D_CRT_SECURE_NO_WARNINGS")
 
-	target_compile_options("${EXT_NAME}" PUBLIC "-D_CRT_SECURE_NO_WARNINGS")
-
-	set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} /MANIFEST:NO ${PGC_LIBDIR}/postgres.lib ws2_32.lib")
+  set (CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} /MANIFEST:NO ${PGC_LIBDIR}/postgres.lib ws2_32.lib")
 endif (WIN32)
 
-find_library(
-	LIBPQ
-	NAMES "pq" "libpq"
-	PATHS "${PGC_LIBDIR}"
-	NO_DEFAULT_PATH
+find_library (
+  LIBPQ
+  NAMES "pq" "libpq"
+  PATHS "${PGC_LIBDIR}"
+  NO_DEFAULT_PATH
 )
 
 target_link_libraries ("${EXT_NAME}" "${LIBPQ}")
@@ -307,15 +314,15 @@ install (
 set (EXT_CONTROL_FILE "${PROJECT_SOURCE_DIR}/src/backend/distributed/${EXT_NAME}.control")
 
 install (
-	FILES "${EXT_CONTROL_FILE}"
-	DESTINATION "${PGC_SHAREDIR}/extension"
+  FILES "${EXT_CONTROL_FILE}"
+  DESTINATION "${PGC_SHAREDIR}/extension"
 )
 
 set (SQL_DIR "src/backend/distributed")
 set (PREV_FILE "${PROJECT_BINARY_DIR}/${SQL_DIR}/citus--5.0.sql")
 configure_file ("${SQL_DIR}/citus.sql" "${PREV_FILE}" COPYONLY)
 
-set(SQL_UPDATES
+set (SQL_UPDATES
   citus--5.0--5.0-1.sql
   citus--5.0-1--5.0-2.sql
   citus--5.0-2--5.1-1.sql
@@ -396,12 +403,12 @@ set(SQL_UPDATES
   citus--7.3-2--7.3-3.sql
   citus--7.3-3--7.4-1.sql
 )
-set(UPDATE_REGEX "([0-9]+\\.[0-9]+-*[0-9]*)--([0-9]+\\.[0-9]+-*[0-9]*).sql")
-set(UPDATE_FILES "${PREV_FILE}")
+set (UPDATE_REGEX "([0-9]+\\.[0-9]+-*[0-9]*)--([0-9]+\\.[0-9]+-*[0-9]*).sql")
+set (UPDATE_FILES "${PREV_FILE}")
 
 foreach (UPDATE ${SQL_UPDATES})
   if (NOT (${UPDATE} MATCHES ${UPDATE_REGEX}))
-    message(FATAL_ERROR "Cannot parse update file name ${UPDATE}")
+    message (FATAL_ERROR "Cannot parse update file name ${UPDATE}")
   endif ()
 
   set (START_VERSION ${CMAKE_MATCH_1})
@@ -411,19 +418,18 @@ foreach (UPDATE ${SQL_UPDATES})
   set (CURR_FILE "${PROJECT_BINARY_DIR}/${SQL_DIR}/citus--${END_VERSION}.sql")
 
   configure_file ("${PREV_FILE}" "${CURR_FILE}" COPYONLY)
-  file(READ "${UPDATE_FILE}" CONTENTS)
-  file(APPEND "${CURR_FILE}" "${CONTENTS}")
+  file (READ "${UPDATE_FILE}" CONTENTS)
+  file (APPEND "${CURR_FILE}" "${CONTENTS}")
 
-  list(APPEND UPDATE_FILES "${UPDATE_FILE}")
-  list(APPEND UPDATE_FILES "${CURR_FILE}")
+  list (APPEND UPDATE_FILES "${UPDATE_FILE}")
+  list (APPEND UPDATE_FILES "${CURR_FILE}")
 
   set (PREV_FILE "${CURR_FILE}")
 endforeach (UPDATE ${SQL_UPDATES})
 
-
 install (
-	FILES ${UPDATE_FILES}
-	DESTINATION "${PGC_SHAREDIR}/${DATAMODULEDIR}"
+  FILES ${UPDATE_FILES}
+  DESTINATION "${PGC_SHAREDIR}/${DATAMODULEDIR}"
 )
 
 get_filename_component (PGC_BASEDIR "${PGC_PGXS}" DIRECTORY)
@@ -431,35 +437,35 @@ get_filename_component (PGC_BASEDIR "${PGC_BASEDIR}" DIRECTORY)
 get_filename_component (PGC_BASEDIR "${PGC_BASEDIR}" DIRECTORY)
 
 if (WIN32)
-	find_program (PG_REGRESS pg_regress
-		HINTS "${PGC_BASEDIR}/src/test/regress/" "${PGC_BINDIR}"
-		NO_DEFAULT_PATH)
+  find_program (PG_REGRESS pg_regress
+    HINTS "${PGC_BASEDIR}/src/test/regress/" "${PGC_BINDIR}"
+    NO_DEFAULT_PATH)
 else ()
-	set (PG_REGRESS "${PGC_BASEDIR}/src/test/regress/pg_regress")
+  set (PG_REGRESS "${PGC_BASEDIR}/src/test/regress/pg_regress")
 endif (WIN32)
 
 set (REGRESS_OPTS
-	   --dbname=contrib_regression
+     --dbname=contrib_regression
      --inputdir="${PROJECT_SOURCE_DIR}/test"
      --outputdir="${PROJECT_BINARY_DIR}/test"
-	   --load-language=plpgsql
-		 --bindir="${PGC_BINDIR}")
-set (REGRESS "base36")
+     --load-language=plpgsql
+     --bindir="${PGC_BINDIR}")
+set (REGRESS "TODO")
 
 # installchecklocal tests against an existing postgres instance
 add_custom_target (installcheck
-	COMMAND ${CMAKE_COMMAND}
-	--build .
-	--target install
-	--config $<CONFIGURATION>
+  COMMAND ${CMAKE_COMMAND}
+  --build .
+  --target install
+  --config $<CONFIGURATION>
   COMMAND ${PG_REGRESS}
-	${REGRESS_OPTS}
-	${REGRESS}
+  ${REGRESS_OPTS}
+  ${REGRESS}
   USES_TERMINAL
 )
 
 set_property (DIRECTORY PROPERTY ADDITIONAL_MAKE_CLEAN_FILES
-	results
-	regression.diffs
-	regression.out
+  results
+  regression.diffs
+  regression.out
 )
