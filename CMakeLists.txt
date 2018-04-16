@@ -1,11 +1,56 @@
 cmake_minimum_required (VERSION 3.7)
 
+set (CITUS_MAJORVERSION "7.4" CACHE STRING
+     "Major-minor version identifying a release lineage." FORCE)
+
+set (CITUS_PATCHLEVEL "devel" CACHE STRING
+     "Patch level of this build; either an integer or 'devel'." FORCE)
+
+set (CITUS_EDITION "Community" CACHE STRING "Edition of this build." FORCE)
+set_property (CACHE CITUS_EDITION PROPERTY STRINGS Community Enterprise)
+
+set (CITUS_EXTRA_VERSION "" CACHE STRING "Information to be appended to version.")
+
+if (NOT "${CITUS_MAJORVERSION}" MATCHES "^[0-9]+\\.[0-9]+$")
+  message(FATAL_ERROR "CITUS_MAJORVERSION ('${CITUS_MAJORVERSION}') did not match the format <MAJOR>.<MINOR>.")
+elseif(NOT "${CITUS_PATCHLEVEL}" MATCHES "^[0-9]+|devel$")
+  message(FATAL_ERROR "CITUS_PATCHLEVEL ('${CITUS_PATCHLEVEL}') must be a nonnegative integer or 'devel'.")
+elseif(NOT "${CITUS_EDITION}" MATCHES "^Community|Enterprise$")
+  message(FATAL_ERROR "CITUS_EDITION ('${CITUS_EDITION}') must be 'Community' or 'Enterprise'.")
+endif()
+
+set (VERSION "${CITUS_MAJORVERSION}")
+if ("${CITUS_PATCHLEVEL}" GREATER_EQUAL "0")
+  string(APPEND VERSION ".${CITUS_PATCHLEVEL}")
+  set (CITUS_VERSION "${VERSION}")
+else()
+  set (CITUS_VERSION "${VERSION}${CITUS_PATCHLEVEL}")
+endif()
+
+set (CITUS_VERSION "${CITUS_VERSION}${CITUS_EXTRA_VERSION}" CACHE STRING "Full version of this build." FORCE)
+
+# TODO What is --with-reports-hostname?
+set (REPORTS_BASE_URL "https://reports.citusdata.com" CACHE STRING "Base URL for statistics collection and update checks" FORCE)
+
+project (Citus VERSION "${VERSION}" DESCRIPTION "Citus distributed database" LANGUAGES C)
+
+math(EXPR BITS "8*${CMAKE_SIZEOF_VOID_P}")
+set (CITUS_VERSION_STR "${PROJECT_NAME} ${CITUS_EDITION} ${CITUS_VERSION} on ${CMAKE_SYSTEM_NAME}, compiled by ${CMAKE_C_COMPILER_ID} ${CMAKE_C_COMPILER_VERSION}, ${BITS}-bit" CACHE STRING "String containing the version number, platform, and C compiler for this build." FORCE)
+
+if(NOT (PROJECT_VERSION_PATCH))
+  set(PROJECT_VERSION_PATCH "0")
+endif()
+
+math (EXPR CITUS_VERSION_NUM "${PROJECT_VERSION_MAJOR} * 10000 + \
+                              ${PROJECT_VERSION_MINOR} * 100   + \
+                              ${PROJECT_VERSION_PATCH} * 1")
+
 # Set a default build type if none was specified
 # adapted from https://blog.kitware.com/cmake-and-the-default-build-type/
 set (default_build_type "Release")
 
 if (NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
-  message (STATUS "Using default build type: '${default_build_type}'.")
+  message (STATUS "Using default build type: '${default_build_type}'")
 
   set (CMAKE_BUILD_TYPE "${default_build_type}" CACHE STRING
     "Choose the type of build." FORCE
@@ -17,23 +62,8 @@ if (NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
   )
 endif (NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 
-# TODO do something smart with the version
-project (Citus
-  VERSION 7.4.0
-  DESCRIPTION "Citus distributed database"
-  LANGUAGES C
-)
-
-set (CITUS_EDITION  "Community")
-set (COMPAT_VERSION "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}")
-set (SCHEMA_VERSION "1")
-set (REPORTS_BASE_URL "https://reports.citusdata.com")
-
 include (FindCURL)
 set (HAVE_LIBCURL ${CURL_FOUND})
-
-set (CITUS_VERSION_H "src/include/citus_version.h")
-configure_file ("${CITUS_VERSION_H}.in" "${CITUS_VERSION_H}" @ONLY)
 
 find_program (PG_CONFIG NAMES "pg_config"
   DOC "Location to find pg_config for target PostgreSQL installation (default PATH)."
@@ -50,6 +80,12 @@ else ()
 endif (NOT PG_CONFIG)
 
 # Get PostgreSQL configuration from pg_config
+execute_process (
+  COMMAND ${PG_CONFIG} --version
+  OUTPUT_VARIABLE PGC_VERSION
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+
 execute_process (
   COMMAND ${PG_CONFIG} --includedir
   OUTPUT_VARIABLE PGC_INCLUDEDIR
@@ -115,6 +151,23 @@ execute_process (
   OUTPUT_VARIABLE PGC_PGXS
   OUTPUT_STRIP_TRAILING_WHITESPACE
 )
+
+if ("${PGC_VERSION}" MATCHES "^PostgreSQL ([0-9]*).([0-9]*)(.([0-9]*))?")
+  set (SUPPORTED_PGVERSIONS "9.6" "10" "11")
+
+  set (PG_MAJORVERSION "${CMAKE_MATCH_1}")
+  if (PG_MAJORVERSION LESS 10)
+    string (APPEND PG_MAJORVERSION ".${CMAKE_MATCH_2}")
+  endif()
+
+  if (NOT (PG_MAJORVERSION IN_LIST SUPPORTED_PGVERSIONS))
+    message(FATAL_ERROR "Citus is not compatible with the detected PostgreSQL version ${PG_MAJORVERSION}.")
+  else()
+    message(STATUS "Building against PostgreSQL ${PG_MAJORVERSION}")
+  endif()
+else()
+  message(FATAL_ERROR "Could not detect PostgreSQL version from pg_config.")
+endif()
 
 # Add our main library...
 string (TOLOWER "${PROJECT_NAME}" EXT_NAME)
@@ -222,7 +275,7 @@ add_library ("${EXT_NAME}" MODULE
 )
 
 set (PGC_DATADIR PGC_SHAREDIR)
-set (DATAMODULEDIR "extension") # TODO should be configurable and be 'contrib' sometimes
+set (DATAMODULEDIR "extension") # TODO should be configurable and be 'contrib' sometimes, if we want to generalize
 
 # set up compiler and linker flags on *nix-y OSes
 if (UNIX)
@@ -302,8 +355,13 @@ find_library (
   LIBPQ
   NAMES "pq" "libpq"
   PATHS "${PGC_LIBDIR}"
+  DOC "Postgres C API library."
   NO_DEFAULT_PATH
 )
+
+if (NOT LIBPQ)
+  message(FATAL_ERROR "Could not locate libpq.")
+endif()
 
 target_link_libraries ("${EXT_NAME}" "${LIBPQ}")
 
@@ -311,17 +369,6 @@ install (
   TARGETS ${EXT_NAME}
   DESTINATION ${PGC_PKGLIBDIR}
 )
-
-set (EXT_CONTROL_FILE "${PROJECT_SOURCE_DIR}/src/backend/distributed/${EXT_NAME}.control")
-
-install (
-  FILES "${EXT_CONTROL_FILE}"
-  DESTINATION "${PGC_SHAREDIR}/extension"
-)
-
-set (SQL_DIR "src/backend/distributed")
-set (PREV_FILE "${PROJECT_BINARY_DIR}/${SQL_DIR}/citus--5.0.sql")
-configure_file ("${SQL_DIR}/citus.sql" "${PREV_FILE}" COPYONLY)
 
 set (SQL_UPDATES
   citus--5.0--5.0-1.sql
@@ -404,12 +451,39 @@ set (SQL_UPDATES
   citus--7.3-2--7.3-3.sql
   citus--7.3-3--7.4-1.sql
 )
-set (UPDATE_REGEX "([0-9]+\\.[0-9]+-*[0-9]*)--([0-9]+\\.[0-9]+-*[0-9]*).sql")
+
+list (GET SQL_UPDATES -1 FINAL_UPDATE)
+set (UPDATE_REGEX "^citus--([0-9]+\\.[0-9]+-*[0-9]*)--(([0-9]+\\.[0-9]+)-*[0-9]*).sql$")
+
+if ("${FINAL_UPDATE}" MATCHES ${UPDATE_REGEX})
+  set (CITUS_EXTENSIONVERSION "${CMAKE_MATCH_2}")
+
+  if (NOT (CITUS_MAJORVERSION STREQUAL "${CMAKE_MATCH_3}"))
+    message(FATAL_ERROR "CITUS_MAJORVERSION ('${CITUS_MAJORVERSION}') incompatible with CITUS_EXTENSIONVERSION ('${CITUS_EXTENSIONVERSION'})")
+  endif()
+else()
+    message (FATAL_ERROR "Cannot parse update file name '${FINAL_UPDATE}'")
+endif()
+
+set (CITUS_VERSION_H "src/include/citus_version.h")
+configure_file ("${CITUS_VERSION_H}.in" "${CITUS_VERSION_H}" @ONLY)
+
+set (EXT_CONTROL_FILE "${PROJECT_SOURCE_DIR}/src/backend/distributed/${EXT_NAME}.control")
+
+install (
+  FILES "${EXT_CONTROL_FILE}"
+  DESTINATION "${PGC_SHAREDIR}/extension"
+)
+
+set (SQL_DIR "src/backend/distributed")
+set (PREV_FILE "${PROJECT_BINARY_DIR}/${SQL_DIR}/citus--5.0.sql")
+configure_file ("${SQL_DIR}/citus.sql" "${PREV_FILE}" COPYONLY)
+
 set (UPDATE_FILES "${PREV_FILE}")
 
 foreach (UPDATE ${SQL_UPDATES})
   if (NOT (${UPDATE} MATCHES ${UPDATE_REGEX}))
-    message (FATAL_ERROR "Cannot parse update file name ${UPDATE}")
+    message (FATAL_ERROR "Cannot parse update file name '${UPDATE}'")
   endif ()
 
   set (START_VERSION ${CMAKE_MATCH_1})

@@ -9,22 +9,22 @@
 #define CITUS_EDITION "@CITUS_EDITION@"
 
 /* Extension version expected by this Citus build */
-#define CITUS_EXTENSIONVERSION "@COMPAT_VERSION@-@SCHEMA_VERSION@"
+#define CITUS_EXTENSIONVERSION "@CITUS_EXTENSIONVERSION@"
 
 /* Citus major version as a string */
-#define CITUS_MAJORVERSION "@COMPAT_VERSION@"
+#define CITUS_MAJORVERSION "@CITUS_MAJORVERSION@"
 
 /* Citus full name as a string */
 #define CITUS_NAME "@PROJECT_NAME@"
 
 /* Citus version as a string */
-#define CITUS_VERSION "@COMPAT_VERSION@devel"
+#define CITUS_VERSION "@CITUS_VERSION@"
 
 /* Citus version as a number */
-#define CITUS_VERSION_NUM @PROJECT_MAJOR_VERSION@0@PROJECT_MINOR_VERSION@00
+#define CITUS_VERSION_NUM @CITUS_VERSION_NUM@
 
 /* A string containing the version number, platform, and C compiler */
-#define CITUS_VERSION_STR "Unknown"
+#define CITUS_VERSION_STR "@CITUS_VERSION_STR@"
 
 /* Define if you have the `curl' library (-lcurl), otherwise leave undefined */
 #cmakedefine HAVE_LIBCURL
