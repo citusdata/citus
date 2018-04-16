@@ -27,6 +27,7 @@
 #include "distributed/remote_commands.h"
 #include "distributed/transmit.h"
 #include "distributed/transaction_identifier.h"
+#include "distributed/version_compat.h"
 #include "distributed/worker_protocol.h"
 #include "nodes/makefuncs.h"
 #include "nodes/parsenodes.h"
@@ -93,9 +94,9 @@ static char * QueryResultFileName(const char *resultId);
 
 
 /* exports for SQL callable functions */
-PG_FUNCTION_INFO_V1(read_intermediate_result);
-PG_FUNCTION_INFO_V1(broadcast_intermediate_result);
-PG_FUNCTION_INFO_V1(create_intermediate_result);
+CITUS_FUNCTION(read_intermediate_result);
+CITUS_FUNCTION(broadcast_intermediate_result);
+CITUS_FUNCTION(create_intermediate_result);
 
 
 /*

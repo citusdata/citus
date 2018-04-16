@@ -44,6 +44,7 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/pg_dist_shard.h"
+#include "distributed/version_compat.h"
 #include "distributed/worker_manager.h"
 #include "foreign/foreign.h"
 #include "lib/stringinfo.h"
@@ -75,14 +76,14 @@ static List * GetTableReplicaIdentityCommand(Oid relationId);
 static Datum WorkerNodeGetDatum(WorkerNode *workerNode, TupleDesc tupleDescriptor);
 
 /* exports for SQL callable functions */
-PG_FUNCTION_INFO_V1(master_get_table_metadata);
-PG_FUNCTION_INFO_V1(master_get_table_ddl_events);
-PG_FUNCTION_INFO_V1(master_get_new_shardid);
-PG_FUNCTION_INFO_V1(master_get_new_placementid);
-PG_FUNCTION_INFO_V1(master_get_active_worker_nodes);
-PG_FUNCTION_INFO_V1(master_get_round_robin_candidate_nodes);
-PG_FUNCTION_INFO_V1(master_stage_shard_row);
-PG_FUNCTION_INFO_V1(master_stage_shard_placement_row);
+CITUS_FUNCTION(master_get_table_metadata);
+CITUS_FUNCTION(master_get_table_ddl_events);
+CITUS_FUNCTION(master_get_new_shardid);
+CITUS_FUNCTION(master_get_new_placementid);
+CITUS_FUNCTION(master_get_active_worker_nodes);
+CITUS_FUNCTION(master_get_round_robin_candidate_nodes);
+CITUS_FUNCTION(master_stage_shard_row);
+CITUS_FUNCTION(master_stage_shard_placement_row);
 
 
 /*

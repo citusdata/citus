@@ -28,6 +28,7 @@
 #include "distributed/multi_physical_planner.h"
 #include "distributed/pg_dist_shard.h"
 #include "distributed/resource_lock.h"
+#include "distributed/version_compat.h"
 #include "lib/stringinfo.h"
 #include "nodes/pg_list.h"
 #include "nodes/primnodes.h"
@@ -40,14 +41,14 @@
 
 
 /* declarations for dynamic loading */
-PG_FUNCTION_INFO_V1(load_shard_id_array);
-PG_FUNCTION_INFO_V1(load_shard_interval_array);
-PG_FUNCTION_INFO_V1(load_shard_placement_array);
-PG_FUNCTION_INFO_V1(partition_column_id);
-PG_FUNCTION_INFO_V1(partition_type);
-PG_FUNCTION_INFO_V1(is_distributed_table);
-PG_FUNCTION_INFO_V1(create_monolithic_shard_row);
-PG_FUNCTION_INFO_V1(acquire_shared_shard_lock);
+CITUS_FUNCTION(load_shard_id_array);
+CITUS_FUNCTION(load_shard_interval_array);
+CITUS_FUNCTION(load_shard_placement_array);
+CITUS_FUNCTION(partition_column_id);
+CITUS_FUNCTION(partition_type);
+CITUS_FUNCTION(is_distributed_table);
+CITUS_FUNCTION(create_monolithic_shard_row);
+CITUS_FUNCTION(acquire_shared_shard_lock);
 
 
 /*

@@ -39,6 +39,7 @@
 #include "distributed/relay_utility.h"
 #include "distributed/resource_lock.h"
 #include "distributed/remote_commands.h"
+#include "distributed/version_compat.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_protocol.h"
 #include "nodes/makefuncs.h"
@@ -72,9 +73,9 @@ static void ErrorIfNotSuitableToGetSize(Oid relationId);
 
 
 /* exports for SQL callable functions */
-PG_FUNCTION_INFO_V1(citus_table_size);
-PG_FUNCTION_INFO_V1(citus_total_relation_size);
-PG_FUNCTION_INFO_V1(citus_relation_size);
+CITUS_FUNCTION(citus_table_size);
+CITUS_FUNCTION(citus_total_relation_size);
+CITUS_FUNCTION(citus_relation_size);
 
 
 /*

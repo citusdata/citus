@@ -32,6 +32,7 @@
 #include "distributed/reference_table_utils.h"
 #include "distributed/resource_lock.h"
 #include "distributed/shardinterval_utils.h"
+#include "distributed/version_compat.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_transaction.h"
 #include "lib/stringinfo.h"
@@ -73,15 +74,15 @@ static WorkerNode * TupleToWorkerNode(TupleDesc tupleDescriptor, HeapTuple heapT
 static void UpdateNodeLocation(int32 nodeId, char *newNodeName, int32 newNodePort);
 
 /* declarations for dynamic loading */
-PG_FUNCTION_INFO_V1(master_add_node);
-PG_FUNCTION_INFO_V1(master_add_inactive_node);
-PG_FUNCTION_INFO_V1(master_add_secondary_node);
-PG_FUNCTION_INFO_V1(master_remove_node);
-PG_FUNCTION_INFO_V1(master_disable_node);
-PG_FUNCTION_INFO_V1(master_activate_node);
-PG_FUNCTION_INFO_V1(master_update_node);
-PG_FUNCTION_INFO_V1(master_initialize_node_metadata);
-PG_FUNCTION_INFO_V1(get_shard_id_for_distribution_column);
+CITUS_FUNCTION(master_add_node);
+CITUS_FUNCTION(master_add_inactive_node);
+CITUS_FUNCTION(master_add_secondary_node);
+CITUS_FUNCTION(master_remove_node);
+CITUS_FUNCTION(master_disable_node);
+CITUS_FUNCTION(master_activate_node);
+CITUS_FUNCTION(master_update_node);
+CITUS_FUNCTION(master_initialize_node_metadata);
+CITUS_FUNCTION(get_shard_id_for_distribution_column);
 
 
 /*

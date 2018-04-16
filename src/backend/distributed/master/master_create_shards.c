@@ -36,6 +36,7 @@
 #include "distributed/resource_lock.h"
 #include "distributed/shardinterval_utils.h"
 #include "distributed/transaction_management.h"
+#include "distributed/version_compat.h"
 #include "distributed/worker_manager.h"
 #include "lib/stringinfo.h"
 #include "nodes/pg_list.h"
@@ -52,7 +53,7 @@
 
 
 /* declarations for dynamic loading */
-PG_FUNCTION_INFO_V1(master_create_worker_shards);
+CITUS_FUNCTION(master_create_worker_shards);
 
 
 /*

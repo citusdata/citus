@@ -98,9 +98,9 @@ static List * TupleDescColumnNameList(TupleDesc tupleDescriptor);
 static bool RelationUsesIdentityColumns(TupleDesc relationDesc);
 
 /* exports for SQL callable functions */
-PG_FUNCTION_INFO_V1(master_create_distributed_table);
-PG_FUNCTION_INFO_V1(create_distributed_table);
-PG_FUNCTION_INFO_V1(create_reference_table);
+CITUS_FUNCTION(master_create_distributed_table);
+CITUS_FUNCTION(create_distributed_table);
+CITUS_FUNCTION(create_reference_table);
 
 
 /*

@@ -39,6 +39,7 @@
 #include "distributed/pg_dist_placement.h"
 #include "distributed/shared_library_init.h"
 #include "distributed/shardinterval_utils.h"
+#include "distributed/version_compat.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_protocol.h"
 #include "executor/executor.h"
@@ -207,11 +208,11 @@ static Oid LookupEnumValueId(Oid typeId, char *valueName);
 
 
 /* exports for SQL callable functions */
-PG_FUNCTION_INFO_V1(master_dist_partition_cache_invalidate);
-PG_FUNCTION_INFO_V1(master_dist_shard_cache_invalidate);
-PG_FUNCTION_INFO_V1(master_dist_placement_cache_invalidate);
-PG_FUNCTION_INFO_V1(master_dist_node_cache_invalidate);
-PG_FUNCTION_INFO_V1(master_dist_local_group_cache_invalidate);
+CITUS_FUNCTION(master_dist_partition_cache_invalidate);
+CITUS_FUNCTION(master_dist_shard_cache_invalidate);
+CITUS_FUNCTION(master_dist_placement_cache_invalidate);
+CITUS_FUNCTION(master_dist_node_cache_invalidate);
+CITUS_FUNCTION(master_dist_local_group_cache_invalidate);
 
 
 /*

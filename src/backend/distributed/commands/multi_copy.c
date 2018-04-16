@@ -150,7 +150,7 @@ static void CitusCopyDestReceiverDestroy(DestReceiver *destReceiver);
 
 
 /* exports for SQL callable functions */
-PG_FUNCTION_INFO_V1(citus_text_send_as_jsonb);
+CITUS_FUNCTION(citus_text_send_as_jsonb);
 
 
 /*

@@ -25,6 +25,7 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_router_executor.h"
 #include "distributed/resource_lock.h"
+#include "distributed/version_compat.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/worker_transaction.h"
@@ -55,8 +56,8 @@ static List * RecreateTableDDLCommandList(Oid relationId);
 static List * WorkerApplyShardDDLCommandList(List *ddlCommandList, int64 shardId);
 
 /* declarations for dynamic loading */
-PG_FUNCTION_INFO_V1(master_copy_shard_placement);
-PG_FUNCTION_INFO_V1(master_move_shard_placement);
+CITUS_FUNCTION(master_copy_shard_placement);
+CITUS_FUNCTION(master_move_shard_placement);
 
 
 /*

@@ -28,6 +28,7 @@
 #include "distributed/worker_manager.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/worker_transaction.h"
+#include "distributed/version_compat.h"
 #include "nodes/pg_list.h"
 #include "storage/lock.h"
 #include "utils/builtins.h"
@@ -38,8 +39,8 @@
 
 
 /* declarations for dynamic loading */
-PG_FUNCTION_INFO_V1(isolate_tenant_to_new_shard);
-PG_FUNCTION_INFO_V1(worker_hash);
+CITUS_FUNCTION(isolate_tenant_to_new_shard);
+CITUS_FUNCTION(worker_hash);
 
 
 /*

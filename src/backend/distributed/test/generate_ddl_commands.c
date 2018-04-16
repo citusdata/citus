@@ -19,6 +19,7 @@
 #include "catalog/pg_type.h"
 #include "distributed/listutils.h"
 #include "distributed/master_protocol.h"
+#include "distributed/version_compat.h"
 #include "lib/stringinfo.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodes.h"
@@ -31,7 +32,7 @@
 
 
 /* declarations for dynamic loading */
-PG_FUNCTION_INFO_V1(table_ddl_command_array);
+CITUS_FUNCTION(table_ddl_command_array);
 
 
 /*

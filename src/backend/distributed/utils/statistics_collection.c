@@ -20,8 +20,6 @@
 
 bool EnableStatisticsCollection = true; /* send basic usage statistics to Citus */
 
-PG_FUNCTION_INFO_V1(citus_server_id);
-
 #ifdef HAVE_LIBCURL
 
 #include <curl/curl.h>
@@ -42,6 +40,7 @@ typedef struct utsname
 #include "distributed/multi_join_order.h"
 #include "distributed/shardinterval_utils.h"
 #include "distributed/statistics_collection.h"
+#include "distributed/version_compat.h"
 #include "distributed/worker_manager.h"
 #include "lib/stringinfo.h"
 #include "utils/builtins.h"
@@ -51,6 +50,8 @@ typedef struct utsname
 #if PG_VERSION_NUM >= 100000
 #include "utils/fmgrprotos.h"
 #endif
+
+CITUS_FUNCTION(citus_server_id);
 
 static size_t StatisticsCallback(char *contents, size_t size, size_t count,
 								 void *userData);

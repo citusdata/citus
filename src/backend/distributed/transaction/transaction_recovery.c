@@ -31,6 +31,7 @@
 #include "distributed/pg_dist_transaction.h"
 #include "distributed/remote_commands.h"
 #include "distributed/transaction_recovery.h"
+#include "distributed/version_compat.h"
 #include "distributed/worker_manager.h"
 #include "lib/stringinfo.h"
 #include "storage/lmgr.h"
@@ -42,7 +43,7 @@
 
 
 /* exports for SQL callable functions */
-PG_FUNCTION_INFO_V1(recover_prepared_transactions);
+CITUS_FUNCTION(recover_prepared_transactions);
 
 
 /* Local functions forward declarations */

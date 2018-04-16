@@ -22,6 +22,7 @@
 #include "distributed/lock_graph.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/transaction_identifier.h"
+#include "distributed/version_compat.h"
 #include "nodes/pg_list.h"
 #include "utils/hsearch.h"
 #include "utils/timestamp.h"
@@ -61,7 +62,7 @@ static void LogCancellingBackend(TransactionNode *transactionNode);
 static void LogTransactionNode(TransactionNode *transactionNode);
 static void LogDistributedDeadlockDebugMessage(const char *errorMessage);
 
-PG_FUNCTION_INFO_V1(check_distributed_deadlocks);
+CITUS_FUNCTION(check_distributed_deadlocks);
 
 
 /*

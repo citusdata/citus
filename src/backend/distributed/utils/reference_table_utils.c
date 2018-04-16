@@ -26,6 +26,7 @@
 #include "distributed/resource_lock.h"
 #include "distributed/shardinterval_utils.h"
 #include "distributed/transaction_management.h"
+#include "distributed/version_compat.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_transaction.h"
 #include "storage/lmgr.h"
@@ -42,7 +43,7 @@ static void ReplicateShardToNode(ShardInterval *shardInterval, char *nodeName,
 static void ConvertToReferenceTableMetadata(Oid relationId, uint64 shardId);
 
 /* exports for SQL callable functions */
-PG_FUNCTION_INFO_V1(upgrade_to_reference_table);
+CITUS_FUNCTION(upgrade_to_reference_table);
 
 
 /*

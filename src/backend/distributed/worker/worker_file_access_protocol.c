@@ -16,6 +16,7 @@
 
 #include "commands/defrem.h"
 #include "distributed/master_protocol.h"
+#include "distributed/version_compat.h"
 #include "distributed/worker_protocol.h"
 #include "foreign/foreign.h"
 #include "utils/builtins.h"
@@ -23,8 +24,8 @@
 
 
 /* exports for SQL callable functions */
-PG_FUNCTION_INFO_V1(worker_foreign_file_path);
-PG_FUNCTION_INFO_V1(worker_find_block_local_path);
+CITUS_FUNCTION(worker_foreign_file_path);
+CITUS_FUNCTION(worker_find_block_local_path);
 
 
 /*

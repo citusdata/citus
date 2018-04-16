@@ -14,13 +14,14 @@
 #include "distributed/master_metadata_utility.h"
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_sync.h"
+#include "distributed/version_compat.h"
 #include "distributed/worker_transaction.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
 
 
 /* exports for SQL callable functions */
-PG_FUNCTION_INFO_V1(master_drop_distributed_table_metadata);
+CITUS_FUNCTION(master_drop_distributed_table_metadata);
 
 
 /*

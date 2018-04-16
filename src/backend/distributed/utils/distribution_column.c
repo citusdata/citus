@@ -18,6 +18,7 @@
 #include "access/htup_details.h"
 #include "distributed/distribution_column.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/version_compat.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodes.h"
 #include "nodes/primnodes.h"
@@ -32,9 +33,9 @@
 
 
 /* exports for SQL callable functions */
-PG_FUNCTION_INFO_V1(column_name_to_column);
-PG_FUNCTION_INFO_V1(column_name_to_column_id);
-PG_FUNCTION_INFO_V1(column_to_column_name);
+CITUS_FUNCTION(column_name_to_column);
+CITUS_FUNCTION(column_name_to_column_id);
+CITUS_FUNCTION(column_to_column_name);
 
 
 /*
