@@ -27,15 +27,7 @@ lib*dll.def
 lib*.pc
 
 # Local excludes in root directory
-/config.log
-/config.status
-/pgsql.sln
-/pgsql.sln.cache
-/Debug/
-/Release/
-/autom4te.cache
 /Makefile.global
-/src/Makefile.custom
 
 # temporary files vim creates
 *.swp
