@@ -183,8 +183,7 @@ static HTAB *ConnectionShardHash;
 
 
 static MultiConnection * FindPlacementListConnection(int flags, List *placementAccessList,
-													 const char *userName,
-													 List **placementEntryList);
+													 const char *userName);
 static ConnectionPlacementHashEntry * FindOrCreatePlacementEntry(
 	ShardPlacement *placement);
 static bool CanUseExistingConnection(uint32 flags, const char *userName,
@@ -285,9 +284,6 @@ StartPlacementListConnection(uint32 flags, List *placementAccessList,
 							 const char *userName)
 {
 	char *freeUserName = NULL;
-	ListCell *placementAccessCell = NULL;
-	List *placementEntryList = NIL;
-	ListCell *placementEntryCell = NULL;
 	MultiConnection *chosenConnection = NULL;
 
 	if (userName == NULL)
@@ -295,8 +291,7 @@ StartPlacementListConnection(uint32 flags, List *placementAccessList,
 		userName = freeUserName = CurrentUserName();
 	}
 
-	chosenConnection = FindPlacementListConnection(flags, placementAccessList, userName,
-												   &placementEntryList);
+	chosenConnection = FindPlacementListConnection(flags, placementAccessList, userName);
 	if (chosenConnection == NULL)
 	{
 		/* use the first placement from the list to extract nodename and nodeport */
@@ -337,28 +332,63 @@ StartPlacementListConnection(uint32 flags, List *placementAccessList,
 		}
 	}
 
-	/*
-	 * Now that a connection has been chosen, initialise or update the connection
-	 * references for all placements.
-	 */
-	forboth(placementAccessCell, placementAccessList,
-			placementEntryCell, placementEntryList)
+	/* remember which connection we're going to use to access the placements */
+	AssignPlacementListToConnection(placementAccessList, chosenConnection);
+
+	if (freeUserName)
+	{
+		pfree(freeUserName);
+	}
+
+	return chosenConnection;
+}
+
+
+/*
+ * AssignPlacementListToConnection assigns a set of shard placement accesses to a
+ * given connection, meaning that connection must be used for all (conflicting)
+ * accesses of the same shard placements to make sure reads see writes and to 
+ * make sure we don't take conflicting locks.
+ */
+void
+AssignPlacementListToConnection(List *placementAccessList, MultiConnection *connection)
+{
+	ListCell *placementAccessCell = NULL;
+	char *userName = connection->user;
+
+	foreach(placementAccessCell, placementAccessList)
 	{
 		ShardPlacementAccess *placementAccess =
 			(ShardPlacementAccess *) lfirst(placementAccessCell);
+		ShardPlacement *placement = placementAccess->placement;
 		ShardPlacementAccessType accessType = placementAccess->accessType;
-		ConnectionPlacementHashEntry *placementEntry =
-			(ConnectionPlacementHashEntry *) lfirst(placementEntryCell);
-		ConnectionReference *placementConnection = placementEntry->primaryConnection;
 
-		if (placementConnection->connection == chosenConnection)
+		ConnectionPlacementHashEntry *placementEntry = NULL;
+		ConnectionReference *placementConnection = NULL;
+
+		if (placement->shardId == INVALID_SHARD_ID)
+		{
+			/*
+			 * When a SELECT prunes down to 0 shard, we use a dummy placement
+			 * which is only used to route the query to a worker node, but
+			 * the SELECT doesn't actually access any shard placement.
+			 *
+			 * FIXME: this can be removed if we evaluate empty SELECTs locally.
+			 */
+			continue;
+		}
+
+		placementEntry = FindOrCreatePlacementEntry(placement);
+		placementConnection = placementEntry->primaryConnection;
+
+		if (placementConnection->connection == connection)
 		{
 			/* using the connection that was already assigned to the placement */
 		}
 		else if (placementConnection->connection == NULL)
 		{
 			/* placement does not have a connection assigned yet */
-			placementConnection->connection = chosenConnection;
+			placementConnection->connection = connection;
 			placementConnection->hadDDL = false;
 			placementConnection->hadDML = false;
 			placementConnection->userName = MemoryContextStrdup(TopTransactionContext,
@@ -366,7 +396,7 @@ StartPlacementListConnection(uint32 flags, List *placementAccessList,
 			placementConnection->placementId = placementAccess->placement->placementId;
 
 			/* record association with connection */
-			dlist_push_tail(&chosenConnection->referencedPlacements,
+			dlist_push_tail(&connection->referencedPlacements,
 							&placementConnection->connectionNode);
 		}
 		else
@@ -384,7 +414,7 @@ StartPlacementListConnection(uint32 flags, List *placementAccessList,
 				 * accessing the placement. However, we do register that it exists in
 				 * hasSecondaryConnections.
 				 */
-				placementConnection->connection = chosenConnection;
+				placementConnection->connection = connection;
 				placementConnection->userName = MemoryContextStrdup(TopTransactionContext,
 																	userName);
 
@@ -392,7 +422,7 @@ StartPlacementListConnection(uint32 flags, List *placementAccessList,
 				Assert(!placementConnection->hadDML);
 
 				/* record association with connection */
-				dlist_push_tail(&chosenConnection->referencedPlacements,
+				dlist_push_tail(&connection->referencedPlacements,
 								&placementConnection->connectionNode);
 			}
 
@@ -422,13 +452,29 @@ StartPlacementListConnection(uint32 flags, List *placementAccessList,
 			placementConnection->hadDML = true;
 		}
 	}
+}
 
-	if (freeUserName)
+
+MultiConnection *
+GetPlacementListConnectionIfCached(int flags, List *placementAccessList,
+								   const char *userName)
+{
+	MultiConnection *connection = NULL;
+	char *freeUserName = NULL;
+
+	if (userName == NULL)
+	{
+		userName = freeUserName = CurrentUserName();
+	}
+
+	connection = FindPlacementListConnection(flags, placementAccessList, userName);
+
+	if (freeUserName != NULL)
 	{
 		pfree(freeUserName);
 	}
 
-	return chosenConnection;
+	return connection;
 }
 
 
@@ -475,12 +521,10 @@ GetConnectionIfPlacementAccessedInXact(int flags, List *placementAccessList,
  * function throws an error.
  *
  * The function returns the connection that needs to be used, if such a connection
- * exists, and the current placement entries for all placements in the placement
- * access list.
+ * exists.
  */
 static MultiConnection *
-FindPlacementListConnection(int flags, List *placementAccessList, const char *userName,
-							List **placementEntryList)
+FindPlacementListConnection(int flags, List *placementAccessList, const char *userName)
 {
 	bool foundModifyingConnection = false;
 	ListCell *placementAccessCell = NULL;
@@ -677,8 +721,6 @@ FindPlacementListConnection(int flags, List *placementAccessList, const char *us
 			Assert(!placementConnection->hadDML);
 			Assert(accessType != PLACEMENT_ACCESS_DDL);
 		}
-
-		*placementEntryList = lappend(*placementEntryList, placementEntry);
 
 		/* record the relation access mapping */
 		AssociatePlacementAccessWithRelation(placement, accessType);
