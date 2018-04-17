@@ -45,7 +45,6 @@ extern MultiConnection * GetPlacementConnection(uint32 flags,
 extern MultiConnection * StartPlacementConnection(uint32 flags,
 												  struct ShardPlacement *placement,
 												  const char *userName);
-
 extern MultiConnection *  GetConnectionIfPlacementAccessedInXact(int flags,
 																 List *placementAccessList,
 																 const char *userName);
@@ -57,6 +56,8 @@ extern MultiConnection * StartPlacementListConnection(uint32 flags,
 													  const char *userName);
 extern ShardPlacementAccess * CreatePlacementAccess(ShardPlacement *placement,
 													ShardPlacementAccessType accessType);
+extern void AssignPlacementListToConnection(List *placementAccessList,
+											MultiConnection *connection);
 
 extern void ResetPlacementConnectionManagement(void);
 extern void MarkFailedShardPlacements(void);
