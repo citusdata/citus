@@ -86,8 +86,6 @@ int StoredProcedureLevel = 0;
 
 /* functions needed during run phase */
 static void AcquireMetadataLocks(List *taskList);
-static ShardPlacementAccess * CreatePlacementAccess(ShardPlacement *placement,
-													ShardPlacementAccessType accessType);
 static int64 ExecuteSingleModifyTask(CitusScanState *scanState, Task *task, CmdType
 									 operation, bool alwaysThrowErrorOnFailure, bool
 									 expectResults);
@@ -102,9 +100,6 @@ static void AcquireExecutorMultiShardLocks(List *taskList);
 static bool RequiresConsistentSnapshot(Task *task);
 static void RouterMultiModifyExecScan(CustomScanState *node);
 static void RouterSequentialModifyExecScan(CustomScanState *node);
-static void ExtractParametersFromParamListInfo(ParamListInfo paramListInfo,
-											   Oid **parameterTypes,
-											   const char ***parameterValues);
 static bool SendQueryInSingleRowMode(MultiConnection *connection, char *query,
 									 ParamListInfo paramListInfo);
 static bool StoreQueryResult(CitusScanState *scanState, MultiConnection *connection, bool
@@ -941,7 +936,7 @@ BuildPlacementAccessList(uint32 groupId, List *relationShardList,
  * CreatePlacementAccess returns a new ShardPlacementAccess for the given placement
  * and access type.
  */
-static ShardPlacementAccess *
+ShardPlacementAccess *
 CreatePlacementAccess(ShardPlacement *placement, ShardPlacementAccessType accessType)
 {
 	ShardPlacementAccess *placementAccess = NULL;
@@ -1631,7 +1626,7 @@ SendQueryInSingleRowMode(MultiConnection *connection, char *query,
  * ExtractParametersFromParamListInfo extracts parameter types and values from
  * the given ParamListInfo structure, and fills parameter type and value arrays.
  */
-static void
+void
 ExtractParametersFromParamListInfo(ParamListInfo paramListInfo, Oid **parameterTypes,
 								   const char ***parameterValues)
 {
