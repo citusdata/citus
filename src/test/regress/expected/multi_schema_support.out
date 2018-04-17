@@ -1090,6 +1090,115 @@ SELECT sum(result::int) FROM run_command_on_shards('run_test_schema.test_table',
  24576
 (1 row)
 
+-- test capital letters on both table and schema names
+SET citus.task_executor_type to "real-time";
+-- create schema with weird names
+CREATE SCHEMA "CiTuS.TeeN";
+CREATE SCHEMA "CiTUS.TEEN2";
+-- create table with weird names
+CREATE TABLE "CiTuS.TeeN"."TeeNTabLE.1!?!"(id int, "TeNANt_Id" int);
+CREATE TABLE "CiTUS.TEEN2"."CAPITAL_TABLE"(i int, j int);
+-- create distributed table with weird names
+SELECT create_distributed_table('"CiTuS.TeeN"."TeeNTabLE.1!?!"', 'TeNANt_Id');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+SELECT create_distributed_table('"CiTUS.TEEN2"."CAPITAL_TABLE"', 'i');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+-- insert into table with weird names
+INSERT INTO "CiTuS.TeeN"."TeeNTabLE.1!?!" VALUES(1, 1),(1, 0),(0, 1),(2, 3),(3, 2),(4, 4);
+INSERT INTO "CiTUS.TEEN2"."CAPITAL_TABLE" VALUES(0, 1),(1, 0),(2, 1),(4, 3),(3, 2),(4, 4);
+-- join on tables with weird names
+SELECT * 
+FROM "CiTuS.TeeN"."TeeNTabLE.1!?!", "CiTUS.TEEN2"."CAPITAL_TABLE" 
+WHERE "CiTUS.TEEN2"."CAPITAL_TABLE".i = "CiTuS.TeeN"."TeeNTabLE.1!?!"."TeNANt_Id"
+ORDER BY 1,2,3,4;
+ id | TeNANt_Id | i | j 
+----+-----------+---+---
+  0 |         1 | 1 | 0
+  1 |         0 | 0 | 1
+  1 |         1 | 1 | 0
+  2 |         3 | 3 | 2
+  3 |         2 | 2 | 1
+  4 |         4 | 4 | 3
+  4 |         4 | 4 | 4
+(7 rows)
+
+-- add group by, having, order by clauses
+SELECT * 
+FROM "CiTuS.TeeN"."TeeNTabLE.1!?!", "CiTUS.TEEN2"."CAPITAL_TABLE" 
+WHERE "CiTUS.TEEN2"."CAPITAL_TABLE".i = "CiTuS.TeeN"."TeeNTabLE.1!?!"."TeNANt_Id"
+GROUP BY "TeNANt_Id", id, i, j 
+HAVING "TeNANt_Id" > 0 AND j >= id ORDER BY "TeNANt_Id";
+ id | TeNANt_Id | i | j 
+----+-----------+---+---
+  0 |         1 | 1 | 0
+  2 |         3 | 3 | 2
+  4 |         4 | 4 | 4
+(3 rows)
+
+SELECT * 
+FROM "CiTuS.TeeN"."TeeNTabLE.1!?!" join "CiTUS.TEEN2"."CAPITAL_TABLE" on
+("CiTUS.TEEN2"."CAPITAL_TABLE".i = "CiTuS.TeeN"."TeeNTabLE.1!?!"."TeNANt_Id")
+GROUP BY "TeNANt_Id", id, i, j 
+HAVING "TeNANt_Id" > 0 AND j >= id
+ORDER BY 1,2,3,4;
+ id | TeNANt_Id | i | j 
+----+-----------+---+---
+  0 |         1 | 1 | 0
+  2 |         3 | 3 | 2
+  4 |         4 | 4 | 4
+(3 rows)
+
+-- run with CTEs
+WITH "cTE" AS (
+  SELECT * 
+  FROM "CiTuS.TeeN"."TeeNTabLE.1!?!"
+)
+SELECT * FROM "cTE" join "CiTUS.TEEN2"."CAPITAL_TABLE" on
+("cTE"."TeNANt_Id" = "CiTUS.TEEN2"."CAPITAL_TABLE".i)
+GROUP BY "TeNANt_Id", id, i, j 
+HAVING "TeNANt_Id" > 0 AND j >= id
+ORDER BY 1,2,3,4;
+ id | TeNANt_Id | i | j 
+----+-----------+---+---
+  0 |         1 | 1 | 0
+  2 |         3 | 3 | 2
+  4 |         4 | 4 | 4
+(3 rows)
+
+SET search_path to "CiTuS.TeeN";
+-- and subqueries
+SELECT * 
+FROM (
+      SELECT * 
+      FROM "TeeNTabLE.1!?!"
+      ) "cTE"
+join "CiTUS.TEEN2"."CAPITAL_TABLE" on
+("cTE"."TeNANt_Id" = "CiTUS.TEEN2"."CAPITAL_TABLE".i)
+GROUP BY "TeNANt_Id", id, i, j 
+HAVING "TeNANt_Id" > 0 AND j >= id
+ORDER BY 1,2,3,4;
+ id | TeNANt_Id | i | j 
+----+-----------+---+---
+  0 |         1 | 1 | 0
+  2 |         3 | 3 | 2
+  4 |         4 | 4 | 4
+(3 rows)
+
+SET search_path to default;
+-- Some DDL
+ALTER TABLE "CiTuS.TeeN"."TeeNTabLE.1!?!" ADD COLUMN "NEW_TeeN:COl" text;
+-- Some DML
+DELETE FROM "CiTuS.TeeN"."TeeNTabLE.1!?!" WHERE "TeNANt_Id"=1;
+-- Some more DDL
+ALTER TABLE "CiTuS.TeeN"."TeeNTabLE.1!?!" ADD CONSTRAINT "ConsNAmE<>" PRIMARY KEY ("TeNANt_Id");
 -- Clean up the created schema
 DROP SCHEMA run_test_schema CASCADE;
 NOTICE:  drop cascades to table run_test_schema.test_table
@@ -1099,3 +1208,7 @@ DETAIL:  drop cascades to table test_schema_support_join_1.nation_hash
 drop cascades to table test_schema_support_join_1.nation_hash_2
 DROP SCHEMA test_schema_support_join_2 CASCADE;
 NOTICE:  drop cascades to table test_schema_support_join_2.nation_hash
+DROP SCHEMA "CiTuS.TeeN" CASCADE;
+NOTICE:  drop cascades to table "CiTuS.TeeN"."TeeNTabLE.1!?!"
+DROP SCHEMA "CiTUS.TEEN2" CASCADE;
+NOTICE:  drop cascades to table "CiTUS.TEEN2"."CAPITAL_TABLE"
