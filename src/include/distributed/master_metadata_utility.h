@@ -109,9 +109,7 @@ typedef struct ShardPlacement
 extern int ReplicationModel;
 
 /* Size functions */
-extern Datum citus_table_size(PG_FUNCTION_ARGS);
-extern Datum citus_total_relation_size(PG_FUNCTION_ARGS);
-extern Datum citus_relation_size(PG_FUNCTION_ARGS);
+extern PGDLLEXPORT Datum citus_table_size(PG_FUNCTION_ARGS);
 
 /* Function declarations to read shard and shard placement data */
 extern uint32 TableShardReplicationFactor(Oid relationId);

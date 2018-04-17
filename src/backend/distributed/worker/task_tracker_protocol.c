@@ -27,7 +27,6 @@
 #include "distributed/multi_server_executor.h"
 #include "distributed/resource_lock.h"
 #include "distributed/task_tracker.h"
-#include "distributed/task_tracker_protocol.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_protocol.h"
 #include "storage/lwlock.h"

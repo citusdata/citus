@@ -130,25 +130,5 @@ extern Datum CompareCall2(FmgrInfo *funcInfo, Datum leftArgument, Datum rightArg
 extern Node * ParseTreeNode(const char *ddlCommand);
 extern Node * ParseTreeRawStmt(const char *ddlCommand);
 
-/* Function declarations for applying distributed execution primitives */
-extern Datum worker_fetch_partition_file(PG_FUNCTION_ARGS);
-extern Datum worker_fetch_query_results_file(PG_FUNCTION_ARGS);
-extern Datum worker_apply_shard_ddl_command(PG_FUNCTION_ARGS);
-extern Datum worker_range_partition_table(PG_FUNCTION_ARGS);
-extern Datum worker_hash_partition_table(PG_FUNCTION_ARGS);
-extern Datum worker_merge_files_into_table(PG_FUNCTION_ARGS);
-extern Datum worker_merge_files_and_run_query(PG_FUNCTION_ARGS);
-extern Datum worker_cleanup_job_schema_cache(PG_FUNCTION_ARGS);
-
-/* Function declarations for fetching regular and foreign tables */
-extern Datum worker_fetch_foreign_file(PG_FUNCTION_ARGS);
-extern Datum worker_fetch_regular_table(PG_FUNCTION_ARGS);
-extern Datum worker_append_table_to_shard(PG_FUNCTION_ARGS);
-extern Datum worker_foreign_file_path(PG_FUNCTION_ARGS);
-extern Datum worker_find_block_local_path(PG_FUNCTION_ARGS);
-
-/* Function declaration for calculating hashed value */
-extern Datum worker_hash(PG_FUNCTION_ARGS);
-
 
 #endif   /* WORKER_PROTOCOL_H */

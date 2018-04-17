@@ -137,30 +137,10 @@ extern void CheckTableSchemaNameForDrop(Oid relationId, char **schemaName,
 extern text * IntegerToText(int32 value);
 
 /* Function declarations for generating metadata for shard and placement creation */
-extern Datum master_get_table_metadata(PG_FUNCTION_ARGS);
-extern Datum master_get_table_ddl_events(PG_FUNCTION_ARGS);
-extern Datum master_get_new_shardid(PG_FUNCTION_ARGS);
-extern Datum master_get_new_placementid(PG_FUNCTION_ARGS);
-extern Datum master_get_active_worker_nodes(PG_FUNCTION_ARGS);
-extern Datum master_get_round_robin_candidate_nodes(PG_FUNCTION_ARGS);
-extern Datum master_stage_shard_row(PG_FUNCTION_ARGS);
-extern Datum master_stage_shard_placement_row(PG_FUNCTION_ARGS);
+extern PGDLLEXPORT Datum master_get_new_placementid(PG_FUNCTION_ARGS);
 
 /* Function declarations to help with data staging and deletion */
-extern Datum master_create_empty_shard(PG_FUNCTION_ARGS);
-extern Datum master_append_table_to_shard(PG_FUNCTION_ARGS);
-extern Datum master_update_shard_statistics(PG_FUNCTION_ARGS);
-extern Datum master_apply_delete_command(PG_FUNCTION_ARGS);
-extern Datum master_drop_sequences(PG_FUNCTION_ARGS);
-extern Datum master_modify_multiple_shards(PG_FUNCTION_ARGS);
-extern Datum master_drop_all_shards(PG_FUNCTION_ARGS);
-
-/* function declarations for shard creation functionality */
-extern Datum master_create_worker_shards(PG_FUNCTION_ARGS);
-extern Datum isolate_tenant_to_new_shard(PG_FUNCTION_ARGS);
-
-/* function declarations for shard repair functionality */
-extern Datum master_copy_shard_placement(PG_FUNCTION_ARGS);
+extern PGDLLEXPORT Datum master_create_empty_shard(PG_FUNCTION_ARGS);
 
 /* function declarations for shard copy functinality */
 extern List * CopyShardCommandList(ShardInterval *shardInterval, char *sourceNodeName,

@@ -21,7 +21,7 @@
 
 /* define symbols that are undefined in PostgreSQL <= 9.6 */
 #define DSM_HANDLE_INVALID 0
-extern Datum pg_stat_get_progress_info(PG_FUNCTION_ARGS);
+extern PGDLLEXPORT Datum pg_stat_get_progress_info(PG_FUNCTION_ARGS);
 #endif
 
 typedef struct ProgressMonitorData
