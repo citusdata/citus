@@ -50,6 +50,14 @@ enum MultiConnectionMode
 	CONNECTION_PER_PLACEMENT = 1 << 4
 };
 
+typedef enum MultiConnectionState
+{
+	MULTI_CONNECTION_INITIAL,
+	MULTI_CONNECTION_CONNECTING,
+	MULTI_CONNECTION_CONNECTED,
+	MULTI_CONNECTION_WAIT_RETRY,
+	MULTI_CONNECTION_FAILED
+} MultiConnectionState;
 
 /* declaring this directly above makes uncrustify go crazy */
 typedef enum MultiConnectionMode MultiConnectionMode;
@@ -64,6 +72,15 @@ typedef struct MultiConnection
 
 	/* underlying libpq connection */
 	struct pg_conn *pgConn;
+
+	/* state of the connection */
+	MultiConnectionState connectionState;
+
+	/* signal that the connection is ready for read/write */
+	bool ioReady;
+
+	/* whether to wait for read/write */
+	int waitFlags;
 
 	/* is the connection intended to be kept after transaction end */
 	bool sessionLifespan;
