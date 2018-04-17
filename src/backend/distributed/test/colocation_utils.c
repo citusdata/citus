@@ -17,14 +17,15 @@
 #include "distributed/colocation_utils.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/version_compat.h"
 
 
 /* declarations for dynamic loading */
-PG_FUNCTION_INFO_V1(get_table_colocation_id);
-PG_FUNCTION_INFO_V1(tables_colocated);
-PG_FUNCTION_INFO_V1(shards_colocated);
-PG_FUNCTION_INFO_V1(get_colocated_table_array);
-PG_FUNCTION_INFO_V1(find_shard_interval_index);
+CITUS_FUNCTION(get_table_colocation_id);
+CITUS_FUNCTION(tables_colocated);
+CITUS_FUNCTION(shards_colocated);
+CITUS_FUNCTION(get_colocated_table_array);
+CITUS_FUNCTION(find_shard_interval_index);
 
 
 /*

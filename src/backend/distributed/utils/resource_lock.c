@@ -27,6 +27,7 @@
 #include "distributed/relay_utility.h"
 #include "distributed/resource_lock.h"
 #include "distributed/shardinterval_utils.h"
+#include "distributed/version_compat.h"
 #include "distributed/worker_protocol.h"
 #include "storage/lmgr.h"
 
@@ -36,8 +37,8 @@ static LOCKMODE IntToLockMode(int mode);
 
 
 /* exports for SQL callable functions */
-PG_FUNCTION_INFO_V1(lock_shard_metadata);
-PG_FUNCTION_INFO_V1(lock_shard_resources);
+CITUS_FUNCTION(lock_shard_metadata);
+CITUS_FUNCTION(lock_shard_resources);
 
 
 /*

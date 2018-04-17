@@ -41,6 +41,7 @@
 #include "distributed/resource_lock.h"
 #include "distributed/shardinterval_utils.h"
 #include "distributed/shard_pruning.h"
+#include "distributed/version_compat.h"
 #include "distributed/worker_protocol.h"
 #include "optimizer/clauses.h"
 #include "optimizer/predtest.h"
@@ -58,7 +59,7 @@
 static List * ModifyMultipleShardsTaskList(Query *query, List *shardIntervalList);
 
 
-PG_FUNCTION_INFO_V1(master_modify_multiple_shards);
+CITUS_FUNCTION(master_modify_multiple_shards);
 
 
 /*

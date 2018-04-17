@@ -24,6 +24,7 @@
 #include "distributed/lock_graph.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/remote_commands.h"
+#include "distributed/version_compat.h"
 #include "storage/proc.h"
 #include "utils/builtins.h"
 #include "utils/hsearch.h"
@@ -64,8 +65,8 @@ static bool IsSameLockGroup(PGPROC *leftProc, PGPROC *rightProc);
 static bool IsConflictingLockMask(int holdMask, int conflictMask);
 
 
-PG_FUNCTION_INFO_V1(dump_local_wait_edges);
-PG_FUNCTION_INFO_V1(dump_global_wait_edges);
+CITUS_FUNCTION(dump_local_wait_edges);
+CITUS_FUNCTION(dump_global_wait_edges);
 
 
 /*

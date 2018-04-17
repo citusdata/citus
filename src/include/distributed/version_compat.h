@@ -13,6 +13,10 @@
 
 #include "postgres.h"
 
+#define CITUS_FUNCTION(funcname) \
+	PGDLLEXPORT Datum funcname(PG_FUNCTION_ARGS); \
+	PG_FUNCTION_INFO_V1(funcname)
+
 #if (PG_VERSION_NUM >= 90600 && PG_VERSION_NUM < 90700)
 
 /* Backports from PostgreSQL 10 */

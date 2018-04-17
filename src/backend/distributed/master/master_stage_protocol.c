@@ -42,6 +42,7 @@
 #include "distributed/remote_commands.h"
 #include "distributed/resource_lock.h"
 #include "distributed/transaction_management.h"
+#include "distributed/version_compat.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_protocol.h"
 #include "storage/lmgr.h"
@@ -60,9 +61,9 @@ static bool WorkerShardStats(ShardPlacement *placement, Oid relationId,
 							 text **shardMinValue, text **shardMaxValue);
 
 /* exports for SQL callable functions */
-PG_FUNCTION_INFO_V1(master_create_empty_shard);
-PG_FUNCTION_INFO_V1(master_append_table_to_shard);
-PG_FUNCTION_INFO_V1(master_update_shard_statistics);
+CITUS_FUNCTION(master_create_empty_shard);
+CITUS_FUNCTION(master_append_table_to_shard);
+CITUS_FUNCTION(master_update_shard_statistics);
 
 
 /*

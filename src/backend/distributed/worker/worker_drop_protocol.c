@@ -22,11 +22,12 @@
 #include "distributed/distribution_column.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/version_compat.h"
 #include "foreign/foreign.h"
 #include "utils/fmgroids.h"
 
 
-PG_FUNCTION_INFO_V1(worker_drop_distributed_table);
+CITUS_FUNCTION(worker_drop_distributed_table);
 
 
 /*

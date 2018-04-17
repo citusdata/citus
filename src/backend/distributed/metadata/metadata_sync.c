@@ -60,8 +60,8 @@ static char * SchemaOwnerName(Oid objectId);
 static bool HasMetadataWorkers(void);
 static List * DetachPartitionCommandList(void);
 
-PG_FUNCTION_INFO_V1(start_metadata_sync_to_node);
-PG_FUNCTION_INFO_V1(stop_metadata_sync_to_node);
+CITUS_FUNCTION(start_metadata_sync_to_node);
+CITUS_FUNCTION(stop_metadata_sync_to_node);
 
 
 /*

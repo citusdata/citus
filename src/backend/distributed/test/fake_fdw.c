@@ -16,6 +16,7 @@
 
 #include <stddef.h>
 
+#include "distributed/version_compat.h"
 #include "executor/tuptable.h"
 #include "foreign/fdwapi.h"
 #include "nodes/execnodes.h"
@@ -44,7 +45,7 @@ static void FakeEndForeignScan(ForeignScanState *node);
 
 
 /* declarations for dynamic loading */
-PG_FUNCTION_INFO_V1(fake_fdw_handler);
+CITUS_FUNCTION(fake_fdw_handler);
 
 
 /*

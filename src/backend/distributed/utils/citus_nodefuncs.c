@@ -17,6 +17,7 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/distributed_planner.h"
 #include "distributed/multi_server_executor.h"
+#include "distributed/version_compat.h"
 
 static const char *CitusNodeTagNamesD[] = {
 	"MultiNode",
@@ -48,7 +49,7 @@ const char **CitusNodeTagNames = CitusNodeTagNamesD;
 CitusNode *newCitusNodeMacroHolder;
 
 /* exports for SQL callable functions */
-PG_FUNCTION_INFO_V1(citus_extradata_container);
+CITUS_FUNCTION(citus_extradata_container);
 
 
 /*

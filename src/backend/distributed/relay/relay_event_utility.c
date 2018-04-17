@@ -31,6 +31,7 @@
 #include "catalog/pg_constraint.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/relay_utility.h"
+#include "distributed/version_compat.h"
 #include "lib/stringinfo.h"
 #include "mb/pg_wchar.h"
 #include "nodes/nodes.h"
@@ -54,7 +55,7 @@ static void SetSchemaNameIfNotExist(char **schemaName, char *newSchemaName);
 static bool UpdateWholeRowColumnReferencesWalker(Node *node, uint64 *shardId);
 
 /* exports for SQL callable functions */
-PG_FUNCTION_INFO_V1(shard_name);
+CITUS_FUNCTION(shard_name);
 
 /*
  * RelayEventExtendNames extends relation names in the given parse tree for

@@ -21,6 +21,7 @@
 #include "distributed/citus_ruleutils.h"
 #include "distributed/insert_select_planner.h"
 #include "distributed/multi_router_planner.h"
+#include "distributed/version_compat.h"
 #include "lib/stringinfo.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodes.h"
@@ -34,7 +35,7 @@
 
 
 /* declarations for dynamic loading */
-PG_FUNCTION_INFO_V1(deparse_shard_query_test);
+CITUS_FUNCTION(deparse_shard_query_test);
 
 
 Datum

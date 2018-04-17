@@ -19,14 +19,15 @@
 #include <unistd.h>
 
 #include "distributed/multi_progress.h"
+#include "distributed/version_compat.h"
 #include "nodes/execnodes.h"
 #include "utils/tuplestore.h"
 
 
-PG_FUNCTION_INFO_V1(create_progress);
-PG_FUNCTION_INFO_V1(update_progress);
-PG_FUNCTION_INFO_V1(finish_progress);
-PG_FUNCTION_INFO_V1(show_progress);
+CITUS_FUNCTION(create_progress);
+CITUS_FUNCTION(update_progress);
+CITUS_FUNCTION(finish_progress);
+CITUS_FUNCTION(show_progress);
 
 
 Datum

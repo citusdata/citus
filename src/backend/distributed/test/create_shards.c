@@ -17,6 +17,7 @@
 #include <string.h>
 
 #include "distributed/listutils.h"
+#include "distributed/version_compat.h"
 #include "lib/stringinfo.h"
 #include "nodes/pg_list.h"
 
@@ -26,7 +27,7 @@ static int CompareStrings(const void *leftElement, const void *rightElement);
 
 
 /* declarations for dynamic loading */
-PG_FUNCTION_INFO_V1(sort_names);
+CITUS_FUNCTION(sort_names);
 
 
 /*

@@ -19,6 +19,7 @@
 #include "distributed/master_metadata_utility.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/remote_commands.h"
+#include "distributed/version_compat.h"
 #include "nodes/pg_list.h"
 #include "storage/lmgr.h"
 #include "storage/lock.h"
@@ -36,7 +37,7 @@ static void CreateRemoteRestorePoints(char *restoreName, List *connectionList);
 
 
 /* exports for SQL callable functions */
-PG_FUNCTION_INFO_V1(citus_create_restore_point);
+CITUS_FUNCTION(citus_create_restore_point);
 
 
 /*

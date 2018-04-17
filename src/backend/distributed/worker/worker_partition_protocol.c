@@ -77,8 +77,8 @@ static bool FileIsLink(char *filename, struct stat filestat);
 
 
 /* exports for SQL callable functions */
-PG_FUNCTION_INFO_V1(worker_range_partition_table);
-PG_FUNCTION_INFO_V1(worker_hash_partition_table);
+CITUS_FUNCTION(worker_range_partition_table);
+CITUS_FUNCTION(worker_hash_partition_table);
 
 
 /*

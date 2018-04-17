@@ -22,6 +22,7 @@
 #include "distributed/lock_graph.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/transaction_identifier.h"
+#include "distributed/version_compat.h"
 #include "nodes/execnodes.h"
 #include "storage/ipc.h"
 #include "storage/lwlock.h"
@@ -65,9 +66,9 @@ static void BackendManagementShmemInit(void);
 static size_t BackendManagementShmemSize(void);
 
 
-PG_FUNCTION_INFO_V1(assign_distributed_transaction_id);
-PG_FUNCTION_INFO_V1(get_current_transaction_id);
-PG_FUNCTION_INFO_V1(get_all_active_transactions);
+CITUS_FUNCTION(assign_distributed_transaction_id);
+CITUS_FUNCTION(get_current_transaction_id);
+CITUS_FUNCTION(get_all_active_transactions);
 
 
 /*

@@ -19,13 +19,14 @@
 #include "distributed/multi_join_order.h"
 #include "distributed/multi_utility.h"
 #include "distributed/pg_dist_partition.h"
+#include "distributed/version_compat.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
 
 
 /* exports for SQL callable functions */
-PG_FUNCTION_INFO_V1(citus_truncate_trigger);
+CITUS_FUNCTION(citus_truncate_trigger);
 
 
 /*

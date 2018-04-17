@@ -20,8 +20,6 @@
 
 bool EnableStatisticsCollection = true; /* send basic usage statistics to Citus */
 
-PG_FUNCTION_INFO_V1(citus_server_id);
-
 #ifdef HAVE_LIBCURL
 
 #include <curl/curl.h>
@@ -42,6 +40,7 @@ typedef struct utsname
 #include "distributed/multi_join_order.h"
 #include "distributed/shardinterval_utils.h"
 #include "distributed/statistics_collection.h"
+#include "distributed/version_compat.h"
 #include "distributed/worker_manager.h"
 #include "lib/stringinfo.h"
 #include "utils/builtins.h"
@@ -51,6 +50,8 @@ typedef struct utsname
 #if PG_VERSION_NUM >= 100000
 #include "utils/fmgrprotos.h"
 #endif
+
+CITUS_FUNCTION(citus_server_id);
 
 static size_t StatisticsCallback(char *contents, size_t size, size_t count,
 								 void *userData);
@@ -593,6 +594,105 @@ PerformHttpRequest(CURL *curl)
 }
 
 
+#ifdef WIN32
+
+/*
+* Inspired by perl5's win32_uname
+* https://github.com/Perl/perl5/blob/69374fe705978962b85217f3eb828a93f836fd8d/win32/win32.c#L2057
+*/
+static int
+uname(struct utsname *buf)
+{
+	OSVERSIONINFO ver;
+
+	ver.dwOSVersionInfoSize = sizeof(ver);
+	GetVersionEx(&ver);
+
+	switch (ver.dwPlatformId)
+	{
+	case VER_PLATFORM_WIN32_WINDOWS:
+	{
+		strcpy(buf->sysname, "Windows");
+		break;
+	}
+
+	case VER_PLATFORM_WIN32_NT:
+	{
+		strcpy(buf->sysname, "Windows NT");
+		break;
+	}
+
+	case VER_PLATFORM_WIN32s:
+	{
+		strcpy(buf->sysname, "Win32s");
+		break;
+	}
+
+	default:
+	{
+		strcpy(buf->sysname, "Win32 Unknown");
+		break;
+	}
+	}
+
+	sprintf(buf->release, "%d.%d", ver.dwMajorVersion, ver.dwMinorVersion);
+
+	{
+		SYSTEM_INFO info;
+		DWORD procarch;
+		char *arch;
+
+		GetSystemInfo(&info);
+		procarch = info.wProcessorArchitecture;
+
+		switch (procarch)
+		{
+		case PROCESSOR_ARCHITECTURE_INTEL:
+		{
+			arch = "x86";
+			break;
+		}
+
+		case PROCESSOR_ARCHITECTURE_IA64:
+		{
+			arch = "x86";
+			break;
+		}
+
+		case PROCESSOR_ARCHITECTURE_AMD64:
+		{
+			arch = "x86";
+			break;
+		}
+
+		case PROCESSOR_ARCHITECTURE_UNKNOWN:
+		{
+			arch = "x86";
+			break;
+		}
+
+		default:
+		{
+			arch = NULL;
+			break;
+		}
+		}
+
+		if (arch != NULL)
+		{
+			strcpy(buf->machine, arch);
+		}
+		else
+		{
+			sprintf(buf->machine, "unknown(0x%x)", procarch);
+		}
+	}
+
+	return 0;
+}
+
+#endif /* WIN32 */
+
 #endif /* HAVE_LIBCURL */
 
 /*
@@ -630,104 +730,3 @@ citus_server_id(PG_FUNCTION_ARGS)
 
 	PG_RETURN_UUID_P((pg_uuid_t *) buf);
 }
-
-
-#ifdef WIN32
-
-/*
- * Inspired by perl5's win32_uname
- * https://github.com/Perl/perl5/blob/69374fe705978962b85217f3eb828a93f836fd8d/win32/win32.c#L2057
- */
-static int
-uname(struct utsname *buf)
-{
-	OSVERSIONINFO ver;
-
-	ver.dwOSVersionInfoSize = sizeof(ver);
-	GetVersionEx(&ver);
-
-	switch (ver.dwPlatformId)
-	{
-		case VER_PLATFORM_WIN32_WINDOWS:
-		{
-			strcpy(buf->sysname, "Windows");
-			break;
-		}
-
-		case VER_PLATFORM_WIN32_NT:
-		{
-			strcpy(buf->sysname, "Windows NT");
-			break;
-		}
-
-		case VER_PLATFORM_WIN32s:
-		{
-			strcpy(buf->sysname, "Win32s");
-			break;
-		}
-
-		default:
-		{
-			strcpy(buf->sysname, "Win32 Unknown");
-			break;
-		}
-	}
-
-	sprintf(buf->release, "%d.%d", ver.dwMajorVersion, ver.dwMinorVersion);
-
-	{
-		SYSTEM_INFO info;
-		DWORD procarch;
-		char *arch;
-
-		GetSystemInfo(&info);
-		procarch = info.wProcessorArchitecture;
-
-		switch (procarch)
-		{
-			case PROCESSOR_ARCHITECTURE_INTEL:
-			{
-				arch = "x86";
-				break;
-			}
-
-			case PROCESSOR_ARCHITECTURE_IA64:
-			{
-				arch = "x86";
-				break;
-			}
-
-			case PROCESSOR_ARCHITECTURE_AMD64:
-			{
-				arch = "x86";
-				break;
-			}
-
-			case PROCESSOR_ARCHITECTURE_UNKNOWN:
-			{
-				arch = "x86";
-				break;
-			}
-
-			default:
-			{
-				arch = NULL;
-				break;
-			}
-		}
-
-		if (arch != NULL)
-		{
-			strcpy(buf->machine, arch);
-		}
-		else
-		{
-			sprintf(buf->machine, "unknown(0x%x)", procarch);
-		}
-	}
-
-	return 0;
-}
-
-
-#endif

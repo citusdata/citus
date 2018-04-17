@@ -29,6 +29,7 @@
 #include "distributed/pg_dist_colocation.h"
 #include "distributed/resource_lock.h"
 #include "distributed/shardinterval_utils.h"
+#include "distributed/version_compat.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/worker_transaction.h"
 #include "storage/lmgr.h"
@@ -53,8 +54,8 @@ static void DeleteColocationGroup(uint32 colocationId);
 
 
 /* exports for SQL callable functions */
-PG_FUNCTION_INFO_V1(mark_tables_colocated);
-PG_FUNCTION_INFO_V1(get_colocated_shard_array);
+CITUS_FUNCTION(mark_tables_colocated);
+CITUS_FUNCTION(get_colocated_shard_array);
 
 
 /*

@@ -13,10 +13,11 @@
 
 #include "citus_version.h"
 #include "utils/builtins.h"
+#include "distributed/version_compat.h"
 
 
 /* exports for SQL callable functions */
-PG_FUNCTION_INFO_V1(citus_version);
+CITUS_FUNCTION(citus_version);
 
 
 Datum

@@ -24,6 +24,7 @@
 #include "commands/copy.h"
 #include "commands/tablecmds.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/version_compat.h"
 #include "distributed/worker_protocol.h"
 #include "executor/spi.h"
 #include "nodes/makefuncs.h"
@@ -45,9 +46,9 @@ static void CopyTaskFilesFromDirectory(StringInfo schemaName, StringInfo relatio
 
 
 /* exports for SQL callable functions */
-PG_FUNCTION_INFO_V1(worker_merge_files_into_table);
-PG_FUNCTION_INFO_V1(worker_merge_files_and_run_query);
-PG_FUNCTION_INFO_V1(worker_cleanup_job_schema_cache);
+CITUS_FUNCTION(worker_merge_files_into_table);
+CITUS_FUNCTION(worker_merge_files_and_run_query);
+CITUS_FUNCTION(worker_cleanup_job_schema_cache);
 
 
 /*

@@ -69,20 +69,20 @@ static void SetDefElemArg(AlterSeqStmt *statement, const char *name, Node *arg);
 
 
 /* exports for SQL callable functions */
-PG_FUNCTION_INFO_V1(worker_fetch_partition_file);
-PG_FUNCTION_INFO_V1(worker_fetch_query_results_file);
-PG_FUNCTION_INFO_V1(worker_apply_shard_ddl_command);
-PG_FUNCTION_INFO_V1(worker_apply_inter_shard_ddl_command);
-PG_FUNCTION_INFO_V1(worker_apply_sequence_command);
-PG_FUNCTION_INFO_V1(worker_append_table_to_shard);
+CITUS_FUNCTION(worker_fetch_partition_file);
+CITUS_FUNCTION(worker_fetch_query_results_file);
+CITUS_FUNCTION(worker_apply_shard_ddl_command);
+CITUS_FUNCTION(worker_apply_inter_shard_ddl_command);
+CITUS_FUNCTION(worker_apply_sequence_command);
+CITUS_FUNCTION(worker_append_table_to_shard);
 
 /*
  * Following UDFs are stub functions, you can check their comments for more
  * detail.
  */
-PG_FUNCTION_INFO_V1(worker_fetch_regular_table);
-PG_FUNCTION_INFO_V1(worker_fetch_foreign_file);
-PG_FUNCTION_INFO_V1(master_expire_table_cache);
+CITUS_FUNCTION(worker_fetch_regular_table);
+CITUS_FUNCTION(worker_fetch_foreign_file);
+CITUS_FUNCTION(master_expire_table_cache);
 
 
 /*

@@ -30,7 +30,7 @@
 #include "distributed/multi_client_executor.h"
 
 
-PG_FUNCTION_INFO_V1(master_run_on_worker);
+CITUS_FUNCTION(master_run_on_worker);
 
 static int ParseCommandParameters(FunctionCallInfo fcinfo, StringInfo **nodeNameArray,
 								  int **nodePortsArray, StringInfo **commandStringArray,

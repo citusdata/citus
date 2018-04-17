@@ -39,6 +39,7 @@
 #include "distributed/placement_connection.h"
 #include "distributed/relay_utility.h"
 #include "distributed/remote_commands.h"
+#include "distributed/version_compat.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/worker_transaction.h"
 #include "lib/stringinfo.h"
@@ -71,9 +72,9 @@ static int DropShards(Oid relationId, char *schemaName, char *relationName,
 
 
 /* exports for SQL callable functions */
-PG_FUNCTION_INFO_V1(master_apply_delete_command);
-PG_FUNCTION_INFO_V1(master_drop_all_shards);
-PG_FUNCTION_INFO_V1(master_drop_sequences);
+CITUS_FUNCTION(master_apply_delete_command);
+CITUS_FUNCTION(master_drop_all_shards);
+CITUS_FUNCTION(master_drop_sequences);
 
 
 /*

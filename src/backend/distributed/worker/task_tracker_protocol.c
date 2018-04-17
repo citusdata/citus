@@ -27,7 +27,7 @@
 #include "distributed/multi_server_executor.h"
 #include "distributed/resource_lock.h"
 #include "distributed/task_tracker.h"
-#include "distributed/task_tracker_protocol.h"
+#include "distributed/version_compat.h"
 #include "distributed/worker_protocol.h"
 #include "storage/lwlock.h"
 #include "storage/pmsignal.h"
@@ -43,9 +43,9 @@ static void CleanupTask(WorkerTask *workerTask);
 
 
 /* exports for SQL callable functions */
-PG_FUNCTION_INFO_V1(task_tracker_assign_task);
-PG_FUNCTION_INFO_V1(task_tracker_task_status);
-PG_FUNCTION_INFO_V1(task_tracker_cleanup_job);
+CITUS_FUNCTION(task_tracker_assign_task);
+CITUS_FUNCTION(task_tracker_task_status);
+CITUS_FUNCTION(task_tracker_cleanup_job);
 
 
 /*

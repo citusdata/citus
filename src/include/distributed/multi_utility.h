@@ -47,8 +47,8 @@ extern List * PlanGrantStmt(GrantStmt *grantStmt);
 extern void ErrorIfUnsupportedConstraint(Relation relation, char distributionMethod,
 										 Var *distributionColumn, uint32 colocationId);
 
-extern Datum master_drop_all_shards(PG_FUNCTION_ARGS);
-extern Datum master_modify_multiple_shards(PG_FUNCTION_ARGS);
+extern PGDLLEXPORT Datum master_drop_all_shards(PG_FUNCTION_ARGS);
+extern PGDLLEXPORT Datum master_modify_multiple_shards(PG_FUNCTION_ARGS);
 
 
 #endif /* MULTI_UTILITY_H */

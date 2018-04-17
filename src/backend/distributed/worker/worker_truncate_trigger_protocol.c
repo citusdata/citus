@@ -18,12 +18,13 @@
 #include "distributed/master_metadata_utility.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
+#include "distributed/version_compat.h"
 #include "utils/elog.h"
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
 
 
-PG_FUNCTION_INFO_V1(worker_create_truncate_trigger);
+CITUS_FUNCTION(worker_create_truncate_trigger);
 
 
 /*

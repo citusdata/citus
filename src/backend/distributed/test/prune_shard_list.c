@@ -25,6 +25,7 @@
 #include "distributed/multi_physical_planner.h"
 #include "distributed/resource_lock.h"
 #include "distributed/shard_pruning.h"
+#include "distributed/version_compat.h"
 #include "nodes/pg_list.h"
 #include "nodes/primnodes.h"
 #include "nodes/nodes.h"
@@ -40,12 +41,12 @@ static ArrayType * SortedShardIntervalArray(Oid distributedTableId);
 
 
 /* declarations for dynamic loading */
-PG_FUNCTION_INFO_V1(prune_using_no_values);
-PG_FUNCTION_INFO_V1(prune_using_single_value);
-PG_FUNCTION_INFO_V1(prune_using_either_value);
-PG_FUNCTION_INFO_V1(prune_using_both_values);
-PG_FUNCTION_INFO_V1(debug_equality_expression);
-PG_FUNCTION_INFO_V1(print_sorted_shard_intervals);
+CITUS_FUNCTION(prune_using_no_values);
+CITUS_FUNCTION(prune_using_single_value);
+CITUS_FUNCTION(prune_using_either_value);
+CITUS_FUNCTION(prune_using_both_values);
+CITUS_FUNCTION(debug_equality_expression);
+CITUS_FUNCTION(print_sorted_shard_intervals);
 
 
 /*
