@@ -1,4 +1,3 @@
-# FIXME The changes here are an example; haven't actually tested on AppVeyor
 # Notes:
 #   - Minimal appveyor.yml file is an empty file. All sections are optional.
 #   - Indent each level of configuration with 2 spaces. Do not use tabs!
@@ -43,6 +42,8 @@ shallow_clone: true                 # default is "false"
 
 # scripts which run after cloning repository
 install:
+  - ps: Invoke-WebRequest -Uri "https://get.enterprisedb.com/postgresql/postgresql-10.3-1-windows-x64-binaries.zip" -OutFile "C:\projects\postgresql.zip"
+  - cd C:\projects && 7z x postgresql.zip
   - '"C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\VC\Auxiliary\Build\vcvars64.bat"'
   # we need this for usage reporting
   - vcpkg install curl:x64-windows & exit 0
@@ -56,9 +57,10 @@ configuration:
   - Release
 
 build_script:
-  - ps: cd C:\projects\citus
+  - cd C:\projects\citus
   - mkdir build && cd build
-  - cmake -DPG_CONFIG=C:\Program Files\PostgreSQL\10\bin\pg_config ..
+  - cmake -DPG_CONFIG=C:\projects\pgsql\bin\pg_config -G "Visual Studio 15 2017 Win64" ..
+  - cmake --build . --config Release
 
 #---------------------------------#
 #       tests configuration       #
@@ -68,7 +70,7 @@ build_script:
 
 test_script:
   - ps: cd C:\projects\citus\src\test\regress
-  - perl pg_regress_multi.pl --bindir=C:\Program Files\PostgreSQL\10\bin --load-extension=citus -- --schedule=multi_schedule
+  - perl pg_regress_multi.pl --bindir=C:\projects\pgsql\bin --load-extension=citus -- --schedule=multi_schedule
 
 on_failure:
   - ps: cd C:\projects\citus\src\test\regress
