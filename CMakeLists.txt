@@ -137,6 +137,9 @@ execute_process(COMMAND ${PG_CONFIG} --sharedir
 execute_process(COMMAND ${PG_CONFIG} --pgxs
                 OUTPUT_VARIABLE PGC_PGXS
                 OUTPUT_STRIP_TRAILING_WHITESPACE)
+execute_process(COMMAND ${PG_CONFIG} --configure
+                OUTPUT_VARIABLE PGC_CONFIG_OPTS
+                OUTPUT_STRIP_TRAILING_WHITESPACE)
 
 # Ensure target PostgreSQL version is known and supported
 if ("${PGC_VERSION}" MATCHES "^PostgreSQL ([0-9]*).([0-9]*)(.([0-9]*))?")
@@ -328,8 +331,44 @@ if (WIN32)
                              PUBLIC "${PROJECT_BINARY_DIR}/src/include"
                              PUBLIC "${PROJECT_SOURCE_DIR}/src/include"
                              PUBLIC "${PGC_INCLUDEDIR_SERVER}"
-                             PUBLIC "${PGC_PKGINCLUDEDIR}/internal"
-                             PUBLIC "C:/Users/citus/Desktop/icu/include")
+                             PUBLIC "${PGC_PKGINCLUDEDIR}/internal")
+
+  separate_arguments(PGC_CONFIG_OPTS)
+  if ("--with-icu" IN_LIST PGC_CONFIG_OPTS)
+    find_package(ICU)
+
+    if (ICU_FOUND)
+      target_include_directories("${EXT_NAME}" PUBLIC "${ICU_INCLUDE_DIRS}")
+    else ()
+      file(GLOB ICU_DLLS
+           LIST_DIRECTORIES FALSE
+           "${PGC_BINDIR}/icu????.dll")
+      if (NOT (ICU_DLLS))
+        message(FATAL_ERROR "PostgreSQL was built with ICU support but no \
+                             headers can be found.")
+      endif ()
+
+      list(GET ICU_DLLS 0 ICU_DLL)
+      file(TO_NATIVE_PATH "${ICU_DLL}" ICU_DLL)
+
+      set(PS_PROG "&{(get-item \"${ICU_DLL}\").VersionInfo |")
+      string(APPEND PS_PROG " % {write-host ('{0}.{1}' -f $_.ProductMajorPart,$_.ProductMinorPart)}}")
+      execute_process(COMMAND powershell "-command" "${PS_PROG}"
+                      OUTPUT_VARIABLE LIBICU_VERSION
+                      OUTPUT_STRIP_TRAILING_WHITESPACE)
+
+      string(REPLACE "." "_" ICU_FILE "icu4c-${LIBICU_VERSION}-Win${BITS}-msvc10")
+      set(LOCAL_ICU_FILE "${PROJECT_BINARY_DIR}/icu4c.zip")
+      file(DOWNLOAD
+           "https://ssl.icu-project.org/files/icu4c/${LIBICU_VERSION}/${ICU_FILE}.zip"
+           "${PROJECT_BINARY_DIR}/icu4c.zip" SHOW_PROGRESS)
+
+      execute_process(COMMAND "${CMAKE_COMMAND}" -E tar xzf "${PROJECT_BINARY_DIR}/icu4c.zip")
+      execute_process(COMMAND "${CMAKE_COMMAND}" -E remove "${PROJECT_BINARY_DIR}/icu4c.zip")
+
+      target_include_directories("${EXT_NAME}" PUBLIC "${PROJECT_BINARY_DIR}/icu/include")
+    endif ()
+  endif ()
 
   # TODO Take more of these from PostgreSQL?
   target_compile_options("${EXT_NAME}" PUBLIC "-D_CRT_SECURE_NO_WARNINGS")
