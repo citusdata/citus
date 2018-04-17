@@ -329,24 +329,15 @@ AcquireExecutorMultiShardLocks(List *taskList)
 
 /*
  * RequiresConsistentSnapshot returns true if the given task need to take
- * the necessary locks to ensure that a subquery in the INSERT ... SELECT
- * query returns the same output for all task placements.
+ * the necessary locks to ensure that a subquery in the modify query
+ * returns the same output for all task placements.
  */
 static bool
 RequiresConsistentSnapshot(Task *task)
 {
 	bool requiresIsolation = false;
 
-	if (!task->insertSelectQuery)
-	{
-		/*
-		 * Only INSERT/SELECT commands currently require SELECT isolation.
-		 * Other commands do not read from other shards.
-		 */
-
-		requiresIsolation = false;
-	}
-	else if (list_length(task->taskPlacementList) == 1)
+	if (list_length(task->taskPlacementList) == 1)
 	{
 		/*
 		 * If there is only one replica then we fully rely on PostgreSQL to

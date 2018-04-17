@@ -177,6 +177,7 @@ FindNodeCheck(Node *node, bool (*check)(Node *))
 	return expression_tree_walker(node, FindNodeCheck, check);
 }
 
+
 /*
  * SingleRelationRepartitionSubquery returns true if it is eligible single
  * repartition query planning in the sense that:

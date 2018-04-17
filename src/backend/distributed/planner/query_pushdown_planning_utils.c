@@ -45,7 +45,6 @@ static bool IsRecurringRTE(RangeTblEntry *rangeTableEntry,
 static bool IsRecurringRangeTable(List *rangeTable, RecurringTuplesType *recurType);
 
 
-
 static MultiNode * SubqueryPushdownMultiNodeTree(Query *queryTree);
 static void FlattenJoinVars(List *columnList, Query *queryTree);
 static void UpdateVarMappingsForExtendedOpNode(List *columnList,
@@ -1624,6 +1623,19 @@ QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 	List *selectPlacementList = NIL;
 	uint64 jobId = INVALID_JOB_ID;
 	uint64 anchorShardId = INVALID_SHARD_ID;
+	bool isModifyWithSubselect = originalQuery->resultRelation > 0;
+	RangeTblEntry *resultRangeTable = NULL;
+	Oid resultRelationOid = InvalidOid;
+
+	/*
+	 * If it is a modify query with sub-select, we need to have result relation
+	 * to obtain right lock on it.
+	 */
+	if (isModifyWithSubselect)
+	{
+		resultRangeTable = rt_fetch(originalQuery->resultRelation, originalQuery->rtable);
+		resultRelationOid = resultRangeTable->relid;
+	}
 
 	/*
 	 * Find the relevant shard out of each relation for this task.
@@ -1643,8 +1655,12 @@ QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 			/* reference table only has one shard */
 			shardInterval = cacheEntry->sortedShardIntervalArray[0];
 
-			/* only use reference table as anchor shard if none exists yet */
-			if (anchorShardId == INVALID_SHARD_ID)
+			/*
+			 * Only use reference table as anchor shard if none exists yet or
+			 * it is a result relation of modify query with sub-select.
+			 */
+			if (anchorShardId == INVALID_SHARD_ID ||
+				(isModifyWithSubselect && relationId == resultRelationOid))
 			{
 				anchorShardId = shardInterval->shardId;
 			}
@@ -1654,10 +1670,23 @@ QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 			/* use the shard from a specific index */
 			shardInterval = cacheEntry->sortedShardIntervalArray[shardIndex];
 
-			/* use a shard from a distributed table as the anchor shard */
-			anchorShardId = shardInterval->shardId;
+			/*
+			 * We take row exclusive lock for result relation and access share
+			 * lock for other relations in the modify executor.
+			 */
+			if (isModifyWithSubselect)
+			{
+				if (relationId == resultRelationOid)
+				{
+					anchorShardId = shardInterval->shardId;
+				}
+			}
+			else
+			{
+				/* use a shard from a distributed table as the anchor shard */
+				anchorShardId = shardInterval->shardId;
+			}
 		}
-
 		taskShardList = lappend(taskShardList, list_make1(shardInterval));
 
 		relationShard = CitusMakeNode(RelationShard);
@@ -1685,8 +1714,11 @@ QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 	 * that the query string is generated as (...) AND (...) as opposed to
 	 * (...), (...).
 	 */
-	taskQuery->jointree->quals =
-		(Node *) make_ands_explicit((List *) taskQuery->jointree->quals);
+	if (taskQuery->jointree->quals != NULL && IsA(taskQuery->jointree->quals, List))
+	{
+		taskQuery->jointree->quals = (Node *) make_ands_explicit(
+			(List *) taskQuery->jointree->quals);
+	}
 
 	/* and generate the full query string */
 	pg_get_query_def(taskQuery, queryString);
@@ -1701,4 +1733,3 @@ QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 
 	return subqueryTask;
 }
-

@@ -203,15 +203,269 @@ SET citus.multi_shard_modify_mode to sequential;
 UPDATE tt2 SET col_2 = 3 RETURNING id, col_2;
 DROP TABLE tt2;
 
--- Multiple RTEs are not supported
+-- Multiple RTEs are only supported if subquery is pushdownable
 SET citus.multi_shard_modify_mode to DEFAULT;
-UPDATE users_test_table SET value_2 = 5 FROM events_test_table WHERE users_test_table.user_id = events_test_table.user_id; 
-UPDATE users_test_table SET value_2 = (SELECT value_3 FROM users_test_table);
-UPDATE users_test_table SET value_2 = (SELECT value_2 FROM events_test_table);
 
-DELETE FROM users_test_table USING events_test_table WHERE users_test_table.user_id = events_test_table.user_id;
-DELETE FROM users_test_table WHERE users_test_table.user_id = (SELECT user_id FROM events_test_table);
-DELETE FROM users_test_table WHERE users_test_table.user_id = (SELECT value_1 FROM users_test_table);
+-- To test colocation between tables in modify query
+SET citus.shard_count to 6;
+
+CREATE TABLE events_test_table_2 (user_id int, value_1 int, value_2 int, value_3 int);
+SELECT create_distributed_table('events_test_table_2', 'user_id');
+\COPY events_test_table_2 FROM STDIN DELIMITER AS ',';
+1, 5, 7, 7
+3, 11, 78, 18
+5, 22, 9, 25
+7, 41, 10, 23
+9, 34, 11, 21
+1, 20, 12, 25
+3, 26, 13, 18
+5, 17, 14, 4
+7, 37, 15, 22
+9, 42, 16, 22
+1, 60, 17, 17
+3, 5, 18, 8
+5, 15, 19, 44
+7, 24, 20, 38
+9, 54, 21, 17
+\.
+
+CREATE TABLE events_test_table_local (user_id int, value_1 int, value_2 int, value_3 int);
+\COPY events_test_table_local FROM STDIN DELIMITER AS ',';
+1, 5, 7, 7
+3, 11, 78, 18
+5, 22, 9, 25
+7, 41, 10, 23
+9, 34, 11, 21
+1, 20, 12, 25
+3, 26, 13, 18
+5, 17, 14, 4
+7, 37, 15, 22
+9, 42, 16, 22
+1, 60, 17, 17
+3, 5, 18, 8
+5, 15, 19, 44
+7, 24, 20, 38
+9, 54, 21, 17
+\.
+
+-- We can pushdown query if there is partition key equality
+UPDATE users_test_table
+SET    value_2 = 5
+FROM   events_test_table
+WHERE  users_test_table.user_id = events_test_table.user_id;
+
+DELETE FROM users_test_table
+USING  events_test_table
+WHERE  users_test_table.user_id = events_test_table.user_id;
+
+UPDATE users_test_table
+SET    value_1 = 3
+WHERE  user_id IN (SELECT user_id
+              FROM   events_test_table);
+
+UPDATE users_test_table
+SET    value_1 = 5
+FROM   events_test_table
+WHERE  users_test_table.user_id = events_test_table.user_id
+       AND events_test_table.user_id > 5;
+
+UPDATE users_test_table
+SET    value_1 = 4
+WHERE  user_id IN (SELECT user_id
+              FROM   users_test_table
+              UNION
+              SELECT user_id
+              FROM   events_test_table);
+
+UPDATE users_test_table
+SET    value_1 = 4
+WHERE  user_id IN (SELECT user_id
+              FROM   users_test_table
+              UNION
+              SELECT user_id
+              FROM   events_test_table) returning *;
+
+UPDATE users_test_table
+SET value_1 = 5
+WHERE 
+  value_2 >  
+          (SELECT 
+              max(value_2) 
+           FROM 
+              events_test_table  
+           WHERE 
+              users_test_table.user_id = events_test_table.user_id
+           GROUP BY
+              user_id
+          );
+
+UPDATE users_test_table
+SET value_3 = 1
+WHERE 
+  value_2 >  
+          (SELECT 
+              max(value_2) 
+           FROM 
+              events_test_table 
+           WHERE 
+              users_test_table.user_id = events_test_table.user_id AND 
+              users_test_table.value_2 > events_test_table.value_2
+           GROUP BY
+              user_id
+          );
+
+UPDATE users_test_table
+SET value_2 = 4 
+WHERE
+  value_1 > 1 AND value_1 < 3
+  AND value_2 >= 1
+  AND user_id IN
+  (
+		SELECT
+		  e1.user_id
+		FROM (
+		  SELECT
+		    user_id,
+		    1 AS view_homepage
+		  FROM events_test_table
+		  WHERE
+		     value_1 IN (0, 1)
+		) e1 LEFT JOIN LATERAL (
+		  SELECT
+		    user_id,
+		    1 AS use_demo
+		  FROM events_test_table
+		  WHERE
+		    user_id = e1.user_id
+		) e2 ON true
+);
+
+-- We don't need partition key equality with reference tables
+UPDATE events_test_table
+SET    value_2 = 5
+FROM   users_reference_copy_table
+WHERE  users_reference_copy_table.user_id = events_test_table.value_1;
+
+-- We don't need equality check with constant values in sub-select
+UPDATE users_reference_copy_table
+SET    value_2 = 6
+WHERE  user_id IN (SELECT 2);
+
+UPDATE users_reference_copy_table
+SET    value_2 = 6
+WHERE  value_1 IN (SELECT 2);
+
+UPDATE users_test_table
+SET    value_2 = 6
+WHERE  user_id IN (SELECT 2);
+
+UPDATE users_test_table
+SET    value_2 = 6
+WHERE  value_1 IN (SELECT 2);
+
+-- We can not pushdown a query if the target relation is reference table
+UPDATE users_reference_copy_table
+SET    value_2 = 5
+FROM   events_test_table
+WHERE  users_reference_copy_table.user_id = events_test_table.user_id;
+
+-- We can not pushdown query if there is no partition key equality
+UPDATE users_test_table
+SET    value_1 = 1
+WHERE  user_id IN (SELECT Count(value_1)
+              FROM   events_test_table
+              GROUP  BY user_id);
+
+UPDATE users_test_table
+SET    value_1 = (SELECT Count(*)
+                  FROM   events_test_table);
+
+UPDATE users_test_table
+SET    value_1 = 4
+WHERE  user_id IN (SELECT user_id
+              FROM   users_test_table
+              UNION
+              SELECT value_1
+              FROM   events_test_table);
+
+UPDATE users_test_table
+SET    value_1 = 4
+WHERE  user_id IN (SELECT user_id
+              FROM   users_test_table
+              INTERSECT
+              SELECT Sum(value_1)
+              FROM   events_test_table
+              GROUP  BY user_id);
+
+UPDATE users_test_table
+SET    value_2 = (SELECT value_3
+                  FROM   users_test_table);
+
+UPDATE users_test_table
+SET value_2 = 2
+WHERE
+  value_2 >
+          (SELECT
+              max(value_2)
+           FROM
+              events_test_table
+           WHERE
+              users_test_table.user_id > events_test_table.user_id AND
+              users_test_table.value_1 = events_test_table.value_1
+           GROUP BY
+              user_id
+          );
+
+UPDATE users_test_table
+SET (value_1, value_2) = row(2,1)
+WHERE  user_id IN
+       (SELECT user_id
+        FROM   users_test_table
+        INTERSECT
+        SELECT user_id
+        FROM   events_test_table);
+
+-- Volatile functions are also not supported
+UPDATE users_test_table
+SET    value_2 = 5
+FROM   events_test_table
+WHERE  users_test_table.user_id = events_test_table.user_id * random();
+
+UPDATE users_test_table
+SET    value_2 = 5 * random()
+FROM   events_test_table
+WHERE  users_test_table.user_id = events_test_table.user_id;
+
+UPDATE users_test_table
+SET    value_2 = 5
+WHERE  users_test_table.user_id IN (SELECT user_id * random() FROM events_test_table);
+
+-- Local tables are not supported
+UPDATE users_test_table
+SET    value_2 = 5
+FROM   events_test_table_local
+WHERE  users_test_table.user_id = events_test_table_local.user_id;
+
+UPDATE users_test_table
+SET    value_2 = 5
+WHERE  users_test_table.user_id IN(SELECT user_id FROM events_test_table_local);
+
+UPDATE events_test_table_local
+SET    value_2 = 5
+FROM   users_test_table
+WHERE  events_test_table_local.user_id = users_test_table.user_id;
+
+-- Shard counts of tables must be equal to pushdown the query
+UPDATE users_test_table
+SET    value_2 = 5
+FROM   events_test_table_2
+WHERE  users_test_table.user_id = events_test_table_2.user_id;
+
+-- Should error out due to multiple row return from subquery, but we can not get this information within 
+-- subquery pushdown planner. This query will be sent to worker with recursive planner.
+DELETE FROM users_test_table
+WHERE  users_test_table.user_id = (SELECT user_id
+                                   FROM   events_test_table);
 
 -- Cursors are not supported
 BEGIN;

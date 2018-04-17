@@ -526,8 +526,11 @@ WITH deleted_rows AS (
 	DELETE FROM modify_table WHERE id IN (SELECT id FROM modify_table WHERE val = 4) RETURNING *
 )
 SELECT * FROM deleted_rows;
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Joins are not supported in distributed modifications.
+ id | val 
+----+-----
+  2 |   4
+(1 row)
+
 WITH select_rows AS (
 	SELECT id FROM modify_table WHERE val = 4
 ),
@@ -537,8 +540,7 @@ deleted_rows AS (
 SELECT * FROM deleted_rows;
  id | val 
 ----+-----
-  2 |   4
-(1 row)
+(0 rows)
 
 WITH deleted_rows AS (
 	DELETE FROM modify_table WHERE val IN (SELECT val FROM modify_table WHERE id = 3) RETURNING *
