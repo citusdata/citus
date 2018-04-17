@@ -105,9 +105,6 @@ static void AcquireExecutorMultiShardLocks(List *taskList);
 static bool RequiresConsistentSnapshot(Task *task);
 static void RouterMultiModifyExecScan(CustomScanState *node);
 static void RouterSequentialModifyExecScan(CustomScanState *node);
-static void ExtractParametersFromParamListInfo(ParamListInfo paramListInfo,
-											   Oid **parameterTypes,
-											   const char ***parameterValues);
 static bool SendQueryInSingleRowMode(MultiConnection *connection, char *query,
 									 ParamListInfo paramListInfo);
 static bool StoreQueryResult(CitusScanState *scanState, MultiConnection *connection, bool
@@ -1713,7 +1710,7 @@ SendQueryInSingleRowMode(MultiConnection *connection, char *query,
  * ExtractParametersFromParamListInfo extracts parameter types and values from
  * the given ParamListInfo structure, and fills parameter type and value arrays.
  */
-static void
+void
 ExtractParametersFromParamListInfo(ParamListInfo paramListInfo, Oid **parameterTypes,
 								   const char ***parameterValues)
 {
