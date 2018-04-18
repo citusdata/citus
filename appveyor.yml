@@ -61,6 +61,7 @@ build_script:
   - mkdir build && cd build
   - cmake -DPG_CONFIG=C:\projects\pgsql\bin\pg_config -G "Visual Studio 15 2017 Win64" ..
   - cmake --build . --config Release
+  - cmake --build . --config Release --target install
 
 #---------------------------------#
 #       tests configuration       #
