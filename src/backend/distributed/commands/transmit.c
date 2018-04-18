@@ -48,31 +48,41 @@ RedirectCopyDataToRegularFile(const char *filename)
 
 	fileDesc = FileOpenForTransmit(filename, fileFlags, fileMode);
 
-	SendCopyInStart();
-
-	copyDone = ReceiveCopyData(copyData);
-	while (!copyDone)
+	PG_TRY();
 	{
-		/* if received data has contents, append to regular file */
-		if (copyData->len > 0)
+		SendCopyInStart();
+
+		copyDone = ReceiveCopyData(copyData);
+		while (!copyDone)
 		{
+			/* if received data has contents, append to regular file */
+			if (copyData->len > 0)
+			{
 #if (PG_VERSION_NUM >= 100000)
-			int appended = FileWrite(fileDesc, copyData->data, copyData->len,
-									 PG_WAIT_IO);
+				int appended = FileWrite(fileDesc, copyData->data, copyData->len,
+										 PG_WAIT_IO);
 #else
-			int appended = FileWrite(fileDesc, copyData->data, copyData->len);
+				int appended = FileWrite(fileDesc, copyData->data, copyData->len);
 #endif
 
-			if (appended != copyData->len)
-			{
-				ereport(ERROR, (errcode_for_file_access(),
-								errmsg("could not append to received file: %m")));
+				if (appended != copyData->len)
+				{
+					ereport(ERROR, (errcode_for_file_access(),
+									errmsg("could not append to received file: %m")));
+				}
 			}
-		}
 
-		resetStringInfo(copyData);
-		copyDone = ReceiveCopyData(copyData);
+			resetStringInfo(copyData);
+			copyDone = ReceiveCopyData(copyData);
+		}
 	}
+	PG_CATCH();
+	{
+		FreeStringInfo(copyData);
+		FileClose(fileDesc);
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
 
 	FreeStringInfo(copyData);
 	FileClose(fileDesc);

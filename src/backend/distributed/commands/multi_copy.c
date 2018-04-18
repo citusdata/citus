@@ -323,6 +323,7 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 	uint64 processedRowCount = 0;
 
 	ErrorContextCallback errorCallback;
+	volatile MemoryContext oldContext;
 
 	/* allocate column values and nulls arrays */
 	distributedRelation = heap_open(tableId, RowExclusiveLock);
@@ -405,56 +406,68 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 		copiedDistributedRelationTuple->relkind = RELKIND_RELATION;
 	}
 
-	/* initialize copy state to read from COPY data source */
+	PG_TRY();
+	{
+		/* initialize copy state to read from COPY data source */
 #if (PG_VERSION_NUM >= 100000)
-	copyState = BeginCopyFrom(NULL,
-							  copiedDistributedRelation,
-							  copyStatement->filename,
-							  copyStatement->is_program,
-							  NULL,
-							  copyStatement->attlist,
-							  copyStatement->options);
+		copyState = BeginCopyFrom(NULL,
+								  copiedDistributedRelation,
+								  copyStatement->filename,
+								  copyStatement->is_program,
+								  NULL,
+								  copyStatement->attlist,
+								  copyStatement->options);
 #else
-	copyState = BeginCopyFrom(copiedDistributedRelation,
-							  copyStatement->filename,
-							  copyStatement->is_program,
-							  copyStatement->attlist,
-							  copyStatement->options);
+		copyState = BeginCopyFrom(copiedDistributedRelation,
+								  copyStatement->filename,
+								  copyStatement->is_program,
+								  copyStatement->attlist,
+								  copyStatement->options);
 #endif
 
-	/* set up callback to identify error line number */
-	errorCallback.callback = CopyFromErrorCallback;
-	errorCallback.arg = (void *) copyState;
-	errorCallback.previous = error_context_stack;
-	error_context_stack = &errorCallback;
+		/* set up callback to identify error line number */
+		errorCallback.callback = CopyFromErrorCallback;
+		errorCallback.arg = (void *) copyState;
+		errorCallback.previous = error_context_stack;
+		error_context_stack = &errorCallback;
 
-	while (true)
+		while (true)
+		{
+			bool nextRowFound = false;
+
+			ResetPerTupleExprContext(executorState);
+
+			oldContext = MemoryContextSwitchTo(executorTupleContext);
+
+			/* parse a row from the input */
+			nextRowFound = NextCopyFrom(copyState, executorExpressionContext,
+										columnValues, columnNulls, NULL);
+
+			if (!nextRowFound)
+			{
+				MemoryContextSwitchTo(oldContext);
+				break;
+			}
+
+			CHECK_FOR_INTERRUPTS();
+
+			MemoryContextSwitchTo(oldContext);
+
+			dest->receiveSlot(tupleTableSlot, dest);
+
+			processedRowCount += 1;
+		}
+	}
+	PG_CATCH();
 	{
-		bool nextRowFound = false;
-		MemoryContext oldContext = NULL;
-
-		ResetPerTupleExprContext(executorState);
-
-		oldContext = MemoryContextSwitchTo(executorTupleContext);
-
-		/* parse a row from the input */
-		nextRowFound = NextCopyFrom(copyState, executorExpressionContext,
-									columnValues, columnNulls, NULL);
-
-		if (!nextRowFound)
+		if (oldContext != NULL)
 		{
 			MemoryContextSwitchTo(oldContext);
-			break;
 		}
-
-		CHECK_FOR_INTERRUPTS();
-
-		MemoryContextSwitchTo(oldContext);
-
-		dest->receiveSlot(tupleTableSlot, dest);
-
-		processedRowCount += 1;
+		AtEOXact_Files();
+		PG_RE_THROW();
 	}
+	PG_END_TRY();
 
 	EndCopyFrom(copyState);
 
@@ -1234,6 +1247,11 @@ ReportCopyError(MultiConnection *connection, PGresult *result)
 		/* probably a constraint violation, show remote message and detail */
 		char *remoteDetail = PQresultErrorField(result, PG_DIAG_MESSAGE_DETAIL);
 		bool haveDetail = remoteDetail != NULL;
+
+		if (remoteDetail == NULL)
+		{
+			remoteDetail = "(null)";
+		}
 
 		ereport(ERROR, (errmsg("%s", remoteMessage),
 						haveDetail ? errdetail("%s", remoteDetail) : 0));

@@ -49,11 +49,6 @@ install:
   # make postgres think we're a contrib module
   - git clone -b REL_10_STABLE https://github.com/postgres/postgres C:\projects\postgres
   - git -C C:\projects\postgres apply C:\projects\citus\windows\Mkvcbuild.pm.patch
-  # temporary hack: mark enable_hashagg PGDLLIMPORT
-  - git -C C:\projects\postgres cherry-pick 935dee9ad5a8d12f4d3b772a6e6c99d245e5ad44 & exit 0
-  # an even bigger hack, this file has a merge conflict so skip it
-  - git -C C:\projects\postgres reset src\include\optimizer\cost.h
-  - git -C C:\projects\postgres checkout src\include\optimizer\cost.h
   # only build Citus, don't build the other contrib modules
   - git -C C:\projects\postgres apply C:\projects\citus\windows\Mkvcbuild-minimize.patch
   - rmdir /s /q C:\projects\postgres\contrib
@@ -80,4 +75,18 @@ build_script:
 #---------------------------------#
 
 # disable automatic tests
-test: off
+
+before_test:
+  - ps: cd C:\projects\postgres\src\tools\msvc
+  - install C:\projects\pgsql
+  - cd C:\projects\postgres\contrib\citus\src\backend\distributed
+  - copy citus--*.sql C:\projects\pgsql\share\extension\
+  - perl install.pl C:\projects\pgsql
+
+test_script:
+  - ps: cd C:\projects\postgres\contrib\citus\src\test\regress
+  - perl pg_regress_multi.pl --bindir=C:\projects\pgsql\bin --load-extension=citus -- --schedule=multi_schedule
+
+on_failure:
+  - ps: cd C:\projects\postgres\contrib\citus\src\test\regress
+  - type regression.diffs

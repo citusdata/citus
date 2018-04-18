@@ -115,9 +115,12 @@ if (defined $libdir)
 # want to find binaries if they're not in PATH.
 if (defined $bindir)
 {
-    $ENV{PATH} = ($ENV{PATH} || '').":$bindir";
+    if ($usingWindows) {
+        $ENV{PATH} = ($ENV{PATH} || '').";$bindir";
+    } else {
+        $ENV{PATH} = ($ENV{PATH} || '').":$bindir";
+    }
 }
-
 
 # Most people are used to unified diffs these days, rather than the
 # context diffs pg_regress defaults to.  Change default to avoid
@@ -393,11 +396,11 @@ else
 
 if ($usingWindows)
 {
-	print $fh "%*\n"; # pass on the commandline arguments
+	print $fh " %*\n"; # pass on the commandline arguments
 }
 else
 {
-	print $fh "\"\$@\"\n"; # pass on the commandline arguments
+	print $fh " \"\$@\"\n"; # pass on the commandline arguments
 }
 close $fh;
 
@@ -448,6 +451,12 @@ else
 	}
 }
 
+if ($usingWindows)
+{
+	# takeown returns a failing result code no matter what happens, so skip the check
+	system("takeown /f data");
+	system("icacls data /grant \%userdomain\%\\\%username\%:F");
+}
 
 # Routine to shutdown servers at failure/exit
 sub ShutdownServers()

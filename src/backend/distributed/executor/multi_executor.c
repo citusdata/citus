@@ -148,6 +148,7 @@ ReadFileIntoTupleStore(char *fileName, char *copyFormat, TupleDesc tupleDescript
 	EState *executorState = CreateExecutorState();
 	MemoryContext executorTupleContext = GetPerTupleMemoryContext(executorState);
 	ExprContext *executorExpressionContext = GetPerTupleExprContext(executorState);
+	MemoryContext oldContext = NULL;
 
 	int columnCount = tupleDescriptor->natts;
 	Datum *columnValues = palloc0(columnCount * sizeof(Datum));
@@ -164,33 +165,55 @@ ReadFileIntoTupleStore(char *fileName, char *copyFormat, TupleDesc tupleDescript
 #endif
 	copyOptions = lappend(copyOptions, copyOption);
 
+	PG_TRY();
+	{
 #if (PG_VERSION_NUM >= 100000)
-	copyState = BeginCopyFrom(NULL, stubRelation, fileName, false, NULL,
-							  NULL, copyOptions);
+		copyState = BeginCopyFrom(NULL, stubRelation, fileName, false, NULL,
+								  NULL, copyOptions);
 #else
-	copyState = BeginCopyFrom(stubRelation, fileName, false, NULL,
-							  copyOptions);
+		copyState = BeginCopyFrom(stubRelation, fileName, false, NULL,
+								  copyOptions);
 #endif
 
-	while (true)
+		while (true)
+		{
+			bool nextRowFound = false;
+
+			ResetPerTupleExprContext(executorState);
+			oldContext = MemoryContextSwitchTo(executorTupleContext);
+
+			nextRowFound = NextCopyFrom(copyState, executorExpressionContext,
+										columnValues, columnNulls, NULL);
+			if (!nextRowFound)
+			{
+				MemoryContextSwitchTo(oldContext);
+				break;
+			}
+
+			tuplestore_putvalues(tupstore, tupleDescriptor, columnValues, columnNulls);
+			MemoryContextSwitchTo(oldContext);
+		}
+	}
+	PG_CATCH();
 	{
-		MemoryContext oldContext = NULL;
-		bool nextRowFound = false;
-
-		ResetPerTupleExprContext(executorState);
-		oldContext = MemoryContextSwitchTo(executorTupleContext);
-
-		nextRowFound = NextCopyFrom(copyState, executorExpressionContext,
-									columnValues, columnNulls, NULL);
-		if (!nextRowFound)
+		if (oldContext != NULL)
 		{
 			MemoryContextSwitchTo(oldContext);
-			break;
 		}
 
-		tuplestore_putvalues(tupstore, tupleDescriptor, columnValues, columnNulls);
-		MemoryContextSwitchTo(oldContext);
+		/*
+		 * This is only necessary on windows, in the abort handler we might try to remove
+		 * the file being COPY'd (if it was an intermediate result), but on Windows that's
+		 * not possible unless we first close our handle to the file.
+		 *
+		 * This was already going to be called during abort, but it was going to be called
+		 * after we try to delete the file, we need it to be called before.
+		 */
+		AtEOXact_Files();
+
+		PG_RE_THROW();
 	}
+	PG_END_TRY();
 
 	EndCopyFrom(copyState);
 	pfree(columnValues);
