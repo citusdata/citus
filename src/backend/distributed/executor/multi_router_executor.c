@@ -309,8 +309,7 @@ AcquireExecutorMultiShardLocks(List *taskList)
 		/*
 		 * If the task has a subselect, then we may need to lock the shards from which
 		 * the query selects as well to prevent the subselects from seeing different
-		 * results on different replicas. In particular this prevents INSERT..SELECT
-		 * commands from having different effects on different placements.
+		 * results on different replicas.
 		 */
 
 		if (RequiresConsistentSnapshot(task))
@@ -336,6 +335,15 @@ static bool
 RequiresConsistentSnapshot(Task *task)
 {
 	bool requiresIsolation = false;
+
+	if (!task->modifyWithMultipleTableQuery)
+	{
+		/*
+		 * Other commands do not read from other shards.
+		 */
+
+		requiresIsolation = false;
+	}
 
 	if (list_length(task->taskPlacementList) == 1)
 	{

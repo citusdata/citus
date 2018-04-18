@@ -702,33 +702,34 @@ ModifyQuerySupported(Query *queryTree, Query *originalQuery, bool multiShardQuer
 		if (multiShardQuery)
 		{
 			DeferredErrorMessage *errorMessage = NULL;
-			RangeTblEntry *resultRangeTable = rt_fetch(originalQuery->resultRelation, originalQuery->rtable);
+			RangeTblEntry *resultRangeTable = rt_fetch(originalQuery->resultRelation,
+													   originalQuery->rtable);
 			Oid resultRelationOid = resultRangeTable->relid;
 			char resultPartitionMethod = PartitionMethod(resultRelationOid);
-			bool allReferenceTable = plannerRestrictionContext->relationRestrictionContext->allReferenceTables;
+			bool allReferenceTable =
+				plannerRestrictionContext->relationRestrictionContext->allReferenceTables;
 
 			if (!AllDistributionKeysInQueryAreEqual(originalQuery,
 													plannerRestrictionContext))
 			{
 				errorMessage = DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-									 "cannot perform distributed planning for the given "
-									 "modification",
-									 "Joins are not supported in distributed "
-									 "modifications.", NULL);
+											 "cannot perform distributed planning for the given "
+											 "modification",
+											 "Joins are not supported in distributed "
+											 "modifications.", NULL);
 			}
-
 			else if (resultPartitionMethod == DISTRIBUTE_BY_NONE && !allReferenceTable)
 			{
 				errorMessage = DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-												 "only reference tables may be queried when targeting "
-												 "a reference table with multi shard UPDATE/DELETE queries "
-												 "with multiple tables ",
-												 NULL, NULL);
+											 "only reference tables may be queried when targeting "
+											 "a reference table with multi shard UPDATE/DELETE queries "
+											 "with multiple tables",
+											 NULL, NULL);
 			}
-
 			else
 			{
-				errorMessage = DeferErrorIfUnsupportedSubqueryPushdown(originalQuery, plannerRestrictionContext);
+				errorMessage = DeferErrorIfUnsupportedSubqueryPushdown(originalQuery,
+																	   plannerRestrictionContext);
 			}
 
 			if (errorMessage != NULL)
@@ -1382,7 +1383,7 @@ CreateTask(TaskType taskType)
 	task->upsertQuery = false;
 	task->replicationModel = REPLICATION_MODEL_INVALID;
 
-	task->insertSelectQuery = false;
+	task->modifyWithMultipleTableQuery = false;
 	task->relationShardList = NIL;
 
 	return task;
@@ -1478,14 +1479,20 @@ RouterJob(Query *originalQuery, PlannerRestrictionContext *plannerRestrictionCon
 	else if (isMultiShardModifyQuery)
 	{
 		/* If it is a modify task with multiple tables */
-		if (list_length(
-				plannerRestrictionContext->relationRestrictionContext->
-				relationRestrictionList) > 1)
+		if (list_length(plannerRestrictionContext->relationRestrictionContext->
+						relationRestrictionList) > 1)
 		{
+			ListCell *taskCell = NULL;
 			job->taskList = QueryPushdownSqlTaskList(originalQuery, 0,
 													 plannerRestrictionContext->
 													 relationRestrictionContext,
 													 relationShardList, MODIFY_TASK);
+
+			foreach(taskCell, job->taskList)
+			{
+				Task *task = (Task *) lfirst(taskCell);
+				task->modifyWithMultipleTableQuery = true;
+			}
 		}
 		else
 		{
@@ -1741,10 +1748,11 @@ PlanRouterQuery(Query *originalQuery,
 
 		Assert(UpdateOrDeleteQuery(originalQuery));
 
-		isMultipleTableModifyQuery = (list_length(
-										  plannerRestrictionContext->
-										  relationRestrictionContext->
-										  relationRestrictionList) > 1);
+		if (list_length(plannerRestrictionContext->relationRestrictionContext->
+						relationRestrictionList) > 1)
+		{
+			isMultipleTableModifyQuery = true;
+		}
 
 		planningError = ModifyQuerySupported(originalQuery, originalQuery,
 											 isMultipleTableModifyQuery,

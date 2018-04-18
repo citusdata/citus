@@ -248,6 +248,12 @@ CREATE TABLE events_test_table_local (user_id int, value_1 int, value_2 int, val
 9, 54, 21, 17
 \.
 
+CREATE TABLE test_table_1(id int, date_col timestamptz, col_3 int);
+INSERT INTO test_table_1 VALUES(1, '2014-04-05 08:32:12', 5);
+INSERT INTO test_table_1 VALUES(2, '2015-02-01 08:31:16', 7);
+INSERT INTO test_table_1 VALUES(3, '2011-01-12 08:35:19', 9);
+SELECT create_distributed_table('test_table_1', 'id');
+
 -- We can pushdown query if there is partition key equality
 UPDATE users_test_table
 SET    value_2 = 5
@@ -346,6 +352,13 @@ SET    value_2 = 5
 FROM   users_reference_copy_table
 WHERE  users_reference_copy_table.user_id = events_test_table.value_1;
 
+-- Both reference tables and hash distributed tables can be used in subquery
+UPDATE events_test_table as ett
+SET    value_2 = 6
+WHERE ett.value_3 IN (SELECT utt.value_3 
+                                    FROM users_test_table as utt, users_reference_copy_table as uct
+                                    WHERE utt.user_id = uct.user_id AND utt.user_id = ett.user_id);
+
 -- We don't need equality check with constant values in sub-select
 UPDATE users_reference_copy_table
 SET    value_2 = 6
@@ -362,6 +375,15 @@ WHERE  user_id IN (SELECT 2);
 UPDATE users_test_table
 SET    value_2 = 6
 WHERE  value_1 IN (SELECT 2);
+
+UPDATE test_table_1
+SET    col_3 = 6
+WHERE  date_col IN (SELECT now());
+
+-- Subquery must return single value to use it with comparison operators
+UPDATE users_test_table as utt
+SET    value_1 = 3
+WHERE value_2 > (SELECT value_3 FROM events_test_table as ett WHERE utt.user_id = ett.id);
 
 -- We can not pushdown a query if the target relation is reference table
 UPDATE users_reference_copy_table
@@ -475,12 +497,6 @@ UPDATE users_test_table SET value_2 = 5 WHERE CURRENT OF test_cursor;
 ROLLBACK;
 
 -- Stable functions are supported
-CREATE TABLE test_table_1(id int, date_col timestamptz, col_3 int);
-INSERT INTO test_table_1 VALUES(1, '2014-04-05 08:32:12', 5);
-INSERT INTO test_table_1 VALUES(2, '2015-02-01 08:31:16', 7);
-INSERT INTO test_table_1 VALUES(3, '2011-01-12 08:35:19', 9);
-SELECT create_distributed_table('test_table_1', 'id');
-
 SELECT * FROM test_table_1;
 UPDATE test_table_1 SET col_3 = 3 WHERE date_col < now();
 SELECT * FROM test_table_1;

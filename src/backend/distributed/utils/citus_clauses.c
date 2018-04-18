@@ -233,6 +233,11 @@ PartiallyEvaluateExpressionMutator(Node *expression, FunctionEvaluationContext *
 									   context);
 	}
 
+	if (IsA(expression, SubLink))
+	{
+		return expression;
+	}
+
 	if (IsA(expression, Var))
 	{
 		context->containsVar = true;

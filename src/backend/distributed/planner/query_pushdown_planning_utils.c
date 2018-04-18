@@ -1623,9 +1623,15 @@ QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 	List *selectPlacementList = NIL;
 	uint64 jobId = INVALID_JOB_ID;
 	uint64 anchorShardId = INVALID_SHARD_ID;
-	bool isModifyWithSubselect = originalQuery->resultRelation > 0;
+	bool isModifyWithSubselect = false;
 	RangeTblEntry *resultRangeTable = NULL;
 	Oid resultRelationOid = InvalidOid;
+
+	if (UpdateOrDeleteQuery(originalQuery) && list_length(
+			restrictionContext->relationRestrictionList) > 1)
+	{
+		isModifyWithSubselect = true;
+	}
 
 	/*
 	 * If it is a modify query with sub-select, we need to have result relation
@@ -1656,11 +1662,9 @@ QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 			shardInterval = cacheEntry->sortedShardIntervalArray[0];
 
 			/*
-			 * Only use reference table as anchor shard if none exists yet or
-			 * it is a result relation of modify query with sub-select.
+			 * Only use reference table as anchor shard if none exists yet
 			 */
-			if (anchorShardId == INVALID_SHARD_ID ||
-				(isModifyWithSubselect && relationId == resultRelationOid))
+			if (anchorShardId == INVALID_SHARD_ID)
 			{
 				anchorShardId = shardInterval->shardId;
 			}

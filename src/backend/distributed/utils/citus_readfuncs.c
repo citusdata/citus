@@ -367,7 +367,7 @@ ReadTask(READFUNC_ARGS)
 	READ_NODE_FIELD(taskExecution);
 	READ_BOOL_FIELD(upsertQuery);
 	READ_CHAR_FIELD(replicationModel);
-	READ_BOOL_FIELD(insertSelectQuery);
+	READ_BOOL_FIELD(modifyWithMultipleTableQuery);
 	READ_NODE_FIELD(relationShardList);
 	READ_NODE_FIELD(rowValuesLists);
 

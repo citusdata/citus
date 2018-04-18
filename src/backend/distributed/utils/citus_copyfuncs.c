@@ -245,7 +245,7 @@ CopyNodeTask(COPYFUNC_ARGS)
 	COPY_NODE_FIELD(taskExecution);
 	COPY_SCALAR_FIELD(upsertQuery);
 	COPY_SCALAR_FIELD(replicationModel);
-	COPY_SCALAR_FIELD(insertSelectQuery);
+	COPY_SCALAR_FIELD(modifyWithMultipleTableQuery);
 	COPY_NODE_FIELD(relationShardList);
 	COPY_NODE_FIELD(rowValuesLists);
 }

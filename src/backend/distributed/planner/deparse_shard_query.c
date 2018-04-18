@@ -58,7 +58,7 @@ RebuildQueryStrings(Query *originalQuery, List *taskList)
 		{
 			query = copyObject(originalQuery);
 		}
-		else if (task->insertSelectQuery)
+		else if (query->commandType == CMD_INSERT && task->modifyWithMultipleTableQuery)
 		{
 			/* for INSERT..SELECT, adjust shard names in SELECT part */
 			RangeTblEntry *copiedInsertRte = NULL;
