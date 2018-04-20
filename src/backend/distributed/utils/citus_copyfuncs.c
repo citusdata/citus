@@ -269,6 +269,7 @@ CopyNodeTaskExecution(COPYFUNC_ARGS)
 	COPY_SCALAR_FIELD(currentNodeIndex);
 	COPY_SCALAR_FIELD(querySourceNodeIndex);
 	COPY_SCALAR_FIELD(failureCount);
+	COPY_SCALAR_FIELD(criticalErrorOccurred);
 }
 
 
