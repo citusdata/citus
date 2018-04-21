@@ -151,5 +151,90 @@ $$ LANGUAGE SQL;
 -- should error out
 SELECT sql_subquery_test(1,1);
 
+
+
+-- the joins are actually removed since they are
+-- not needed by PostgreSQL planner (e.g., target list 
+-- doesn't contain anything from there)
+-- but Citus can still pushdown this query
+SELECT
+    t1.user_id, count(*)
+FROM users_table t1
+LEFT JOIN (
+                SELECT
+                        user_id
+                FROM
+                        users_table
+                UNION
+                        SELECT
+                                user_id
+                        FROM
+                                events_table
+) t2 ON t1.user_id = t2.user_id
+INNER JOIN (
+        SELECT
+                user_id
+        FROM
+                users_table
+) t3 ON t1.user_id = t3.user_id
+GROUP BY 1
+ORDER BY 2 DESC;
+
+
+-- the joins are actually removed since they are
+-- not needed by PostgreSQL planner (e.g., target list 
+-- doesn't contain anything from there)
+-- but Citus can still plan this query even though the query
+-- is not safe to pushdown
+SELECT
+    t1.user_id, count(*)
+FROM users_table t1
+LEFT JOIN (
+                SELECT
+                        user_id
+                FROM
+                        users_table
+                UNION
+                        SELECT
+                                value_2
+                        FROM
+                                events_table
+) t2 ON t1.user_id = t2.user_id
+INNER JOIN (
+        SELECT
+                user_id
+        FROM
+                users_table
+) t3 ON t1.user_id = t3.user_id
+GROUP BY 1
+ORDER BY 2 DESC;
+
+
+-- Similar to the above queries, but
+-- this time the joins are not removed because
+-- target list contains all the entries
+SELECT
+    *
+FROM users_table t1
+LEFT JOIN (
+                SELECT
+                        user_id
+                FROM
+                        users_table
+                UNION
+                        SELECT
+                                user_id
+                        FROM
+                                events_table
+) t2 ON t1.user_id = t2.user_id
+INNER JOIN (
+        SELECT
+                user_id
+        FROM
+                users_table
+) t3 ON t1.user_id = t3.user_id
+ORDER BY 1 DESC, 2 DESC, 3 DESC, 4 DESC, 5 DESC, 6 DESC, 7 DESC, 8 DESC
+LIMIT 5;
+
 DROP FUNCTION plpgsql_subquery_test(int, int);
 DROP FUNCTION sql_subquery_test(int, int);

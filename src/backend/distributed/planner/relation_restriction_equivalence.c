@@ -1179,6 +1179,22 @@ AddRteSubqueryToAttributeEquivalenceClass(AttributeEquivalenceClass
 	TargetEntry *subqueryTargetEntry = NULL;
 	Query *targetSubquery = GetTargetSubquery(root, rangeTableEntry, varToBeAdded);
 
+	/*
+	 * We might not always get the subquery because the subquery might be a
+	 * referencing to RELOPT_DEADREL such that the corresponding join is
+	 * removed via join_is_removable().
+	 *
+	 * Returning here implies that PostgreSQL doesn't need to plan the
+	 * subquery because it doesn't contribute to the query result at all.
+	 * Since the relations in the subquery does not appear in the query
+	 * plan as well, Citus would simply ignore the subquery and treat that
+	 * as a safe-to-pushdown subquery.
+	 */
+	if (targetSubquery == NULL)
+	{
+		return;
+	}
+
 	subqueryTargetEntry = get_tle_by_resno(targetSubquery->targetList,
 										   varToBeAdded->varattno);
 
@@ -1252,7 +1268,7 @@ GetTargetSubquery(PlannerInfo *root, RangeTblEntry *rangeTableEntry, Var *varToB
 	{
 		RelOptInfo *baseRelOptInfo = find_base_rel(root, varToBeAdded->varno);
 
-		/* If the targetSubquery hasn't been planned yet, we have to punt */
+		/* If the targetSubquery was not planned, we have to punt */
 		if (baseRelOptInfo->subroot == NULL)
 		{
 			return NULL;
