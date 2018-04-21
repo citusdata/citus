@@ -244,7 +244,8 @@ ReportConnectionError(MultiConnection *connection, int elevel)
 	char *nodeName = connection->hostname;
 	int nodePort = connection->port;
 
-	ereport(elevel, (errmsg("connection error: %s:%d", nodeName, nodePort),
+	ereport(elevel, (errcode(ERRCODE_CONNECTION_FAILURE),
+					 errmsg("connection error: %s:%d", nodeName, nodePort),
 					 errdetail("%s", pchomp(PQerrorMessage(connection->pgConn)))));
 }
 
