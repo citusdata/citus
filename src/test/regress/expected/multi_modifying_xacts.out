@@ -878,14 +878,12 @@ FOR EACH ROW EXECUTE PROCEDURE reject_bad_reference();
 \set VERBOSITY terse
 -- try without wrapping inside a transaction
 INSERT INTO reference_modifying_xacts VALUES (999, 3);
-WARNING:  illegal value
-ERROR:  failure on connection marked as essential: localhost:57637
+ERROR:  illegal value
 -- same test within a transaction
 BEGIN;
 INSERT INTO reference_modifying_xacts VALUES (999, 3);
 COMMIT;
-WARNING:  illegal value
-ERROR:  failure on connection marked as essential: localhost:57637
+ERROR:  illegal value
 -- all placements should be healthy
 SELECT   s.logicalrelid::regclass::text, sp.shardstate, count(*)
 FROM     pg_dist_shard_placement AS sp,
@@ -977,8 +975,7 @@ BEGIN;
 INSERT INTO reference_modifying_xacts VALUES (12, 12);
 INSERT INTO hash_modifying_xacts VALUES (997, 1);
 COMMIT;
-WARNING:  illegal value
-ERROR:  failure on connection marked as essential: localhost:57637
+ERROR:  illegal value
 -- ensure that the values didn't go into the reference table
 SELECT * FROM reference_modifying_xacts WHERE key = 12;
  key | value 
@@ -1180,13 +1177,11 @@ ALTER USER test_user RENAME TO test_user_new;
  \c - test_user - :master_port
 -- should fail since the worker doesn't have test_user anymore
 INSERT INTO reference_failure_test VALUES (1, '1');
-WARNING:  connection error: localhost:57637
-ERROR:  failure on connection marked as essential: localhost:57637
+ERROR:  connection error: localhost:57637
 -- the same as the above, but wrapped within a transaction
 BEGIN;
 INSERT INTO reference_failure_test VALUES (1, '1');
-WARNING:  connection error: localhost:57637
-ERROR:  failure on connection marked as essential: localhost:57637
+ERROR:  connection error: localhost:57637
 COMMIT;
 BEGIN;
 COPY reference_failure_test FROM STDIN WITH (FORMAT 'csv');

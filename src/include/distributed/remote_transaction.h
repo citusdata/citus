@@ -11,6 +11,7 @@
 #define REMOTE_TRANSACTION_H
 
 
+#include "libpq-fe.h"
 #include "nodes/pg_list.h"
 #include "lib/ilist.h"
 
@@ -107,6 +108,10 @@ extern void RemoteTransactionBeginIfNecessary(struct MultiConnection *connection
 extern void RemoteTransactionsBeginIfNecessary(List *connectionList);
 
 /* other public functionality */
+extern void HandleRemoteTransactionConnectionError(struct MultiConnection *connection,
+												   bool raiseError);
+extern void HandleRemoteTransactionResultError(struct MultiConnection *connection,
+											   PGresult *result, bool raiseErrors);
 extern void MarkRemoteTransactionFailed(struct MultiConnection *connection,
 										bool allowErrorPromotion);
 extern void MarkRemoteTransactionCritical(struct MultiConnection *connection);
