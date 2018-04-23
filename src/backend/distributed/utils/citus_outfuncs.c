@@ -479,6 +479,7 @@ OutTaskExecution(OUTFUNC_ARGS)
 	WRITE_UINT_FIELD(currentNodeIndex);
 	WRITE_UINT_FIELD(querySourceNodeIndex);
 	WRITE_UINT_FIELD(failureCount);
+	WRITE_BOOL_FIELD(criticalErrorOccurred);
 }
 
 
