@@ -131,6 +131,7 @@ extern Oid FunctionOid(const char *schemaName, const char *functionName,
 					   int argumentCount);
 
 /* Function declaration for helper functions in subquery pushdown */
+extern bool GroupedByColumn(List *groupClauseList, List *targetList, Var *column);
 extern List * SubqueryMultiTableList(MultiNode *multiNode);
 extern List * GroupTargetEntryList(List *groupClauseList, List *targetEntryList);
 extern bool ExtractQueryWalker(Node *node, List **queryList);

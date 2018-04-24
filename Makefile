@@ -40,6 +40,7 @@ OBJS = src/backend/distributed/shared_library_init.o \
      src/backend/distributed/metadata/metadata_sync.o \
      src/backend/distributed/planner/deparse_shard_query.o \
      src/backend/distributed/planner/distributed_planner.o \
+     src/backend/distributed/planner/extended_op_node_utils.o \
      src/backend/distributed/planner/insert_select_planner.o \
      src/backend/distributed/planner/multi_explain.o \
      src/backend/distributed/planner/multi_join_order.o \
