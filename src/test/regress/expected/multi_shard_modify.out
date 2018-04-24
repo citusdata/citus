@@ -84,8 +84,8 @@ SELECT master_create_worker_shards('temp_nations', 4, 2);
 (1 row)
 
 SELECT master_modify_multiple_shards('DELETE FROM multi_shard_modify_test USING temp_nations WHERE multi_shard_modify_test.t_value = temp_nations.key AND temp_nations.name = ''foobar'' ');
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Joins are not supported in distributed modifications.
+ERROR:  cannot run multi shard modify query with master_modify_multiple_shards when the query involves subquery or join
+DETAIL:  Execute the query without using master_modify_multiple_shards()
 -- commands with a RETURNING clause are unsupported
 SELECT master_modify_multiple_shards('DELETE FROM multi_shard_modify_test WHERE t_key = 3 RETURNING *');
 ERROR:  master_modify_multiple_shards() does not support RETURNING
@@ -222,8 +222,8 @@ SELECT master_modify_multiple_shards('UPDATE multi_shard_modify_test SET t_key=3
 ERROR:  modifying the partition value of rows is not allowed
 -- UPDATEs with a FROM clause are unsupported
 SELECT master_modify_multiple_shards('UPDATE multi_shard_modify_test SET t_name = ''FAIL'' FROM temp_nations WHERE multi_shard_modify_test.t_key = 3 AND multi_shard_modify_test.t_value = temp_nations.key AND temp_nations.name = ''dummy'' ');
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Joins are not supported in distributed modifications.
+ERROR:  cannot run multi shard modify query with master_modify_multiple_shards when the query involves subquery or join
+DETAIL:  Execute the query without using master_modify_multiple_shards()
 -- commands with a RETURNING clause are unsupported
 SELECT master_modify_multiple_shards('UPDATE multi_shard_modify_test SET t_name=''FAIL'' WHERE t_key=4 RETURNING *');
 ERROR:  master_modify_multiple_shards() does not support RETURNING

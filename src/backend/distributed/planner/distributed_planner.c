@@ -593,9 +593,6 @@ CreateDistributedSelectPlan(uint64 planId, Query *originalQuery, Query *query,
 							ParamListInfo boundParams, bool hasUnresolvedParams,
 							PlannerRestrictionContext *plannerRestrictionContext)
 {
-	RelationRestrictionContext *relationRestrictionContext =
-		plannerRestrictionContext->relationRestrictionContext;
-
 	DistributedPlan *distributedPlan = NULL;
 	MultiTreeRoot *logicalPlan = NULL;
 	List *subPlanList = NIL;
@@ -608,7 +605,7 @@ CreateDistributedSelectPlan(uint64 planId, Query *originalQuery, Query *query,
 	 */
 
 	distributedPlan = CreateRouterPlan(originalQuery, query,
-									   relationRestrictionContext);
+									   plannerRestrictionContext);
 	if (distributedPlan != NULL)
 	{
 		if (distributedPlan->planningError == NULL)

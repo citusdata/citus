@@ -392,9 +392,23 @@ EXPLAIN (COSTS FALSE)
 EXPLAIN (COSTS FALSE)
 	DELETE FROM lineitem_hash_part;
 
+SET citus.explain_all_tasks TO off;
+
+-- Test update with subquery
+EXPLAIN (COSTS FALSE)
+	UPDATE lineitem_hash_part
+	SET l_suppkey = 12
+	FROM orders_hash_part
+	WHERE orders_hash_part.o_orderkey = lineitem_hash_part.l_orderkey;
+
+-- Test delete with subquery
+EXPLAIN (COSTS FALSE)
+	DELETE FROM lineitem_hash_part
+	USING orders_hash_part
+	WHERE orders_hash_part.o_orderkey = lineitem_hash_part.l_orderkey;
+
 -- Test track tracker
 SET citus.task_executor_type TO 'task-tracker';
-SET citus.explain_all_tasks TO off;
 
 EXPLAIN (COSTS FALSE)
 	SELECT avg(l_linenumber) FROM lineitem WHERE l_orderkey > 9030;

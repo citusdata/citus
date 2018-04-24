@@ -127,15 +127,12 @@ static ArrayType * SplitPointObject(ShardInterval **shardIntervalArray,
 static bool DistributedPlanRouterExecutable(DistributedPlan *distributedPlan);
 static Job * BuildJobTreeTaskList(Job *jobTree,
 								  PlannerRestrictionContext *plannerRestrictionContext);
-static List * QueryPushdownSqlTaskList(Query *query, uint64 jobId,
-									   RelationRestrictionContext *
-									   relationRestrictionContext,
-									   List *prunedRelationShardList, TaskType taskType);
 static void ErrorIfUnsupportedShardDistribution(Query *query);
 static Task * QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 									  RelationRestrictionContext *restrictionContext,
 									  uint32 taskId,
-									  TaskType taskType);
+									  TaskType taskType,
+									  bool modifyRequiresMasterEvaluation);
 static bool ShardIntervalsEqual(FmgrInfo *comparisonFunction,
 								ShardInterval *firstInterval,
 								ShardInterval *secondInterval);
@@ -201,6 +198,7 @@ static StringInfo IntermediateTableQueryString(uint64 jobId, uint32 taskIdIndex,
 static uint32 FinalTargetEntryCount(List *targetEntryList);
 static bool CoPlacedShardIntervals(ShardInterval *firstInterval,
 								   ShardInterval *secondInterval);
+
 
 /*
  * CreatePhysicalDistributedPlan is the entry point for physical plan generation. The
@@ -2008,7 +2006,8 @@ BuildJobTreeTaskList(Job *jobTree, PlannerRestrictionContext *plannerRestriction
 			sqlTaskList = QueryPushdownSqlTaskList(job->jobQuery, job->jobId,
 												   plannerRestrictionContext->
 												   relationRestrictionContext,
-												   prunedRelationShardList, SQL_TASK);
+												   prunedRelationShardList, SQL_TASK,
+												   false);
 		}
 		else
 		{
@@ -2068,7 +2067,8 @@ BuildJobTreeTaskList(Job *jobTree, PlannerRestrictionContext *plannerRestriction
 List *
 QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 						 RelationRestrictionContext *relationRestrictionContext,
-						 List *prunedRelationShardList, TaskType taskType)
+						 List *prunedRelationShardList, TaskType taskType, bool
+						 modifyRequiresMasterEvaluation)
 {
 	List *sqlTaskList = NIL;
 	ListCell *restrictionCell = NULL;
@@ -2168,11 +2168,23 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 
 		subqueryTask = QueryPushdownTaskCreate(query, shardOffset,
 											   relationRestrictionContext, taskIdIndex,
-											   taskType);
+											   taskType, modifyRequiresMasterEvaluation);
 		subqueryTask->jobId = jobId;
 		sqlTaskList = lappend(sqlTaskList, subqueryTask);
 
 		++taskIdIndex;
+	}
+
+	/* If it is a modify task with multiple tables */
+	if (taskType == MODIFY_TASK && list_length(
+			relationRestrictionContext->relationRestrictionList) > 1)
+	{
+		ListCell *taskCell = NULL;
+		foreach(taskCell, sqlTaskList)
+		{
+			Task *task = (Task *) lfirst(taskCell);
+			task->modifyWithSubquery = true;
+		}
 	}
 
 	return sqlTaskList;
@@ -2198,6 +2210,7 @@ ErrorIfUnsupportedShardDistribution(Query *query)
 	uint32 relationIndex = 0;
 	uint32 rangeDistributedRelationCount = 0;
 	uint32 hashDistributedRelationCount = 0;
+	uint32 appendDistributedRelationCount = 0;
 
 	foreach(relationIdCell, relationIdList)
 	{
@@ -2222,10 +2235,17 @@ ErrorIfUnsupportedShardDistribution(Query *query)
 		}
 		else
 		{
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("cannot push down this subquery"),
-							errdetail("Currently append partitioned relations "
-									  "are not supported")));
+			DistTableCacheEntry *distTableEntry = DistributedTableCacheEntry(relationId);
+			if (distTableEntry->hasOverlappingShardInterval)
+			{
+				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+								errmsg("cannot push down this subquery"),
+								errdetail("Currently append partitioned relations "
+										  "with overlapping shard intervals are "
+										  "not supported")));
+			}
+
+			appendDistributedRelationCount++;
 		}
 	}
 
@@ -2234,6 +2254,20 @@ ErrorIfUnsupportedShardDistribution(Query *query)
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						errmsg("cannot push down this subquery"),
 						errdetail("A query including both range and hash "
+								  "partitioned relations are unsupported")));
+	}
+	else if ((rangeDistributedRelationCount > 0) && (appendDistributedRelationCount > 0))
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("cannot push down this subquery"),
+						errdetail("A query including both range and append "
+								  "partitioned relations are unsupported")));
+	}
+	else if ((appendDistributedRelationCount > 0) && (hashDistributedRelationCount > 0))
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("cannot push down this subquery"),
+						errdetail("A query including both append and hash "
 								  "partitioned relations are unsupported")));
 	}
 
@@ -2273,7 +2307,7 @@ ErrorIfUnsupportedShardDistribution(Query *query)
 static Task *
 QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 						RelationRestrictionContext *restrictionContext, uint32 taskId,
-						TaskType taskType)
+						TaskType taskType, bool modifyRequiresMasterEvaluation)
 {
 	Query *taskQuery = copyObject(originalQuery);
 
@@ -2285,6 +2319,20 @@ QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 	List *selectPlacementList = NIL;
 	uint64 jobId = INVALID_JOB_ID;
 	uint64 anchorShardId = INVALID_SHARD_ID;
+	bool modifyWithSubselect = false;
+	RangeTblEntry *resultRangeTable = NULL;
+	Oid resultRelationOid = InvalidOid;
+
+	/*
+	 * If it is a modify query with sub-select, we need to set result relation shard's id
+	 * as anchor shard id.
+	 */
+	if (UpdateOrDeleteQuery(originalQuery))
+	{
+		resultRangeTable = rt_fetch(originalQuery->resultRelation, originalQuery->rtable);
+		resultRelationOid = resultRangeTable->relid;
+		modifyWithSubselect = true;
+	}
 
 	/*
 	 * Find the relevant shard out of each relation for this task.
@@ -2310,12 +2358,19 @@ QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 				anchorShardId = shardInterval->shardId;
 			}
 		}
+		else if (UpdateOrDeleteQuery(originalQuery))
+		{
+			shardInterval = cacheEntry->sortedShardIntervalArray[shardIndex];
+			if (!modifyWithSubselect || relationId == resultRelationOid)
+			{
+				/* for UPDATE/DELETE the shard in the result relation becomes the anchor shard */
+				anchorShardId = shardInterval->shardId;
+			}
+		}
 		else
 		{
-			/* use the shard from a specific index */
+			/* for SELECT we pick an arbitrary shard as the anchor shard */
 			shardInterval = cacheEntry->sortedShardIntervalArray[shardIndex];
-
-			/* use a shard from a distributed table as the anchor shard */
 			anchorShardId = shardInterval->shardId;
 		}
 
@@ -2327,6 +2382,8 @@ QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 
 		relationShardList = lappend(relationShardList, relationShard);
 	}
+
+	Assert(anchorShardId != INVALID_SHARD_ID);
 
 	selectPlacementList = WorkersContainingAllShards(taskShardList);
 	if (list_length(selectPlacementList) == 0)
@@ -2346,14 +2403,22 @@ QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 	 * that the query string is generated as (...) AND (...) as opposed to
 	 * (...), (...).
 	 */
-	taskQuery->jointree->quals =
-		(Node *) make_ands_explicit((List *) taskQuery->jointree->quals);
+	if (taskQuery->jointree->quals != NULL && IsA(taskQuery->jointree->quals, List))
+	{
+		taskQuery->jointree->quals = (Node *) make_ands_explicit(
+			(List *) taskQuery->jointree->quals);
+	}
 
-	/* and generate the full query string */
-	pg_get_query_def(taskQuery, queryString);
-	ereport(DEBUG4, (errmsg("distributed statement: %s", queryString->data)));
+	subqueryTask = CreateBasicTask(jobId, taskId, taskType, NULL);
 
-	subqueryTask = CreateBasicTask(jobId, taskId, taskType, queryString->data);
+	if ((taskType == MODIFY_TASK && !modifyRequiresMasterEvaluation) ||
+		taskType == SQL_TASK)
+	{
+		pg_get_query_def(taskQuery, queryString);
+		ereport(DEBUG4, (errmsg("distributed statement: %s", queryString->data)));
+		subqueryTask->queryString = queryString->data;
+	}
+
 	subqueryTask->dependedTaskList = NULL;
 	subqueryTask->anchorShardId = anchorShardId;
 	subqueryTask->taskPlacementList = selectPlacementList;

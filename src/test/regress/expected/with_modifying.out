@@ -378,6 +378,8 @@ raw_data AS (
 	DELETE FROM modify_table WHERE id >= (SELECT min(id) FROM select_data WHERE id > 10) RETURNING *
 )
 INSERT INTO summary_table SELECT id, COUNT(*) AS counter FROM raw_data GROUP BY id;
+ERROR:  cannot push down this subquery
+DETAIL:  Aggregates without group by are currently unsupported when a subquery references a column from another query
 INSERT INTO modify_table VALUES (21, 1), (22, 2), (23, 3);
 -- read ids from the same table
 WITH distinct_ids AS (
@@ -390,7 +392,7 @@ update_data AS (
 SELECT count(*) FROM update_data;
  count 
 -------
-     3
+     6
 (1 row)
 
 -- read ids from a different table
@@ -418,7 +420,7 @@ WITH update_data AS (
 SELECT COUNT(*) FROM update_data;
  count 
 -------
-     1
+     2
 (1 row)
 
 WITH delete_rows AS (
@@ -427,10 +429,13 @@ WITH delete_rows AS (
 SELECT * FROM delete_rows ORDER BY id, val;
  id | val 
 ----+-----
+ 11 | 100
+ 12 | 300
+ 13 | 100
  21 | 300
  22 | 200
  23 | 100
-(3 rows)
+(6 rows)
 
 WITH delete_rows AS (
 	DELETE FROM summary_table WHERE id > 10 RETURNING *
@@ -438,10 +443,7 @@ WITH delete_rows AS (
 SELECT * FROM delete_rows ORDER BY id, counter;
  id | counter 
 ----+---------
- 11 |       1
- 12 |       1
- 13 |       1
-(3 rows)
+(0 rows)
 
 -- Check modifiying CTEs inside a transaction
 BEGIN;
@@ -526,8 +528,11 @@ WITH deleted_rows AS (
 	DELETE FROM modify_table WHERE id IN (SELECT id FROM modify_table WHERE val = 4) RETURNING *
 )
 SELECT * FROM deleted_rows;
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Joins are not supported in distributed modifications.
+ id | val 
+----+-----
+  2 |   4
+(1 row)
+
 WITH select_rows AS (
 	SELECT id FROM modify_table WHERE val = 4
 ),
@@ -537,15 +542,13 @@ deleted_rows AS (
 SELECT * FROM deleted_rows;
  id | val 
 ----+-----
-  2 |   4
-(1 row)
+(0 rows)
 
 WITH deleted_rows AS (
 	DELETE FROM modify_table WHERE val IN (SELECT val FROM modify_table WHERE id = 3) RETURNING *
 )
 SELECT * FROM deleted_rows;
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Joins are not supported in distributed modifications.
+ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
 WITH select_rows AS (
 	SELECT val FROM modify_table WHERE id = 3
 ),
@@ -562,8 +565,7 @@ WITH deleted_rows AS (
 	DELETE FROM modify_table WHERE ctid IN (SELECT ctid FROM modify_table WHERE id = 1) RETURNING *
 )
 SELECT * FROM deleted_rows;
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Joins are not supported in distributed modifications.
+ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
 WITH select_rows AS (
 	SELECT ctid FROM modify_table WHERE id = 1
 ),
@@ -644,8 +646,7 @@ raw_data AS (
 	RETURNING id, val
 )
 SELECT * FROM raw_data ORDER BY val;
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Joins are not supported in distributed modifications.
+ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
 -- Test with replication factor 2
 SET citus.shard_replication_factor to 2;
 DROP TABLE modify_table;
