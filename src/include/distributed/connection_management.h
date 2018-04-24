@@ -21,6 +21,9 @@
 /* maximum (textual) lengths of hostname and port */
 #define MAX_NODE_LENGTH 255 /* includes 0 byte */
 
+/* default notice level */
+#define DEFAULT_CITUS_NOTICE_LEVEL DEBUG1
+
 /* forward declare, to avoid forcing large headers on everyone */
 struct pg_conn; /* target of the PGconn typedef */
 struct MemoryContextData;
@@ -164,6 +167,12 @@ extern void FinishConnectionListEstablishment(List *multiConnectionList);
 extern void FinishConnectionEstablishment(MultiConnection *connection);
 extern void ClaimConnectionExclusively(MultiConnection *connection);
 extern void UnclaimConnection(MultiConnection *connection);
+
+/* dealing with notice handler */
+extern void SetCitusNoticeProcessor(MultiConnection *connection);
+extern void SetCitusNoticeLevel(int level);
+extern char * TrimLogLevel(const char *message);
+extern void UnsetCitusNoticeLevel(void);
 
 
 #endif /* CONNECTION_MANAGMENT_H */

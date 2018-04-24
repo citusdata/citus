@@ -237,6 +237,7 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			 */
 			SubPlanLevel = 0;
 			UnSetDistributedTransactionId();
+			UnsetCitusNoticeLevel();
 			break;
 		}
 
@@ -352,6 +353,8 @@ CoordinatedSubTransactionCallback(SubXactEvent event, SubTransactionId subId,
 			{
 				CoordinatedRemoteTransactionsSavepointRollback(subId);
 			}
+
+			UnsetCitusNoticeLevel();
 			break;
 		}
 

@@ -1718,12 +1718,6 @@ IsSupportedDistributedVacuumStmt(VacuumStmt *vacuumStmt, List *vacuumRelationIdL
 								  "send targeted %s commands to worker nodes.",
 								  stmtName)));
 	}
-	else if (vacuumStmt->options & VACOPT_VERBOSE)
-	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("the VERBOSE option is currently unsupported in "
-							   "distributed %s commands", stmtName)));
-	}
 	else
 	{
 		distributeStmt = true;
@@ -1784,7 +1778,7 @@ VacuumTaskList(Oid relationId, int vacuumOptions, List *vacuumColumnList)
 		task = CitusMakeNode(Task);
 		task->jobId = jobId;
 		task->taskId = taskId++;
-		task->taskType = DDL_TASK;
+		task->taskType = VACUUM_ANALYZE_TASK;
 		task->queryString = pstrdup(vacuumString->data);
 		task->dependedTaskList = NULL;
 		task->replicationModel = REPLICATION_MODEL_INVALID;
@@ -1812,7 +1806,8 @@ DeparseVacuumStmtPrefix(int vacuumFlags)
 		VACOPT_ANALYZE |
 		VACOPT_DISABLE_PAGE_SKIPPING |
 		VACOPT_FREEZE |
-		VACOPT_FULL
+		VACOPT_FULL |
+		VACOPT_VERBOSE
 		);
 
 	/* determine actual command and block out its bit */
@@ -1825,6 +1820,12 @@ DeparseVacuumStmtPrefix(int vacuumFlags)
 	{
 		appendStringInfoString(vacuumPrefix, "ANALYZE ");
 		vacuumFlags &= ~VACOPT_ANALYZE;
+
+		if (vacuumFlags & VACOPT_VERBOSE)
+		{
+			appendStringInfoString(vacuumPrefix, "VERBOSE ");
+			vacuumFlags &= ~VACOPT_VERBOSE;
+		}
 	}
 
 	/* unsupported flags should have already been rejected */
@@ -1857,6 +1858,11 @@ DeparseVacuumStmtPrefix(int vacuumFlags)
 	if (vacuumFlags & VACOPT_FULL)
 	{
 		appendStringInfoString(vacuumPrefix, "FULL,");
+	}
+
+	if (vacuumFlags & VACOPT_VERBOSE)
+	{
+		appendStringInfoString(vacuumPrefix, "VERBOSE,");
 	}
 
 	vacuumPrefix->data[vacuumPrefix->len - 1] = ')';
