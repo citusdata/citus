@@ -62,6 +62,7 @@
 #include "foreign/foreign.h"
 #include "lib/stringinfo.h"
 #include "nodes/bitmapset.h"
+#include "nodes/memnodes.h"
 #include "nodes/nodes.h"
 #include "nodes/params.h"
 #include "nodes/parsenodes.h"
@@ -311,11 +312,16 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 
 	if (IsA(parsetree, CopyStmt))
 	{
-		/* copy parse tree since we might scribble on it to fix the schema name */
-		parsetree = copyObject(parsetree);
+		MemoryContext planContext = GetMemoryChunkContext(parsetree);
+		MemoryContext previousContext;
 
+		parsetree = copyObject(parsetree);
 		parsetree = ProcessCopyStmt((CopyStmt *) parsetree, completionTag,
 									&commandMustRunAsOwner);
+
+		previousContext = MemoryContextSwitchTo(planContext);
+		parsetree = copyObject(parsetree);
+		MemoryContextSwitchTo(previousContext);
 
 		if (parsetree == NULL)
 		{

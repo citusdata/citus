@@ -1233,9 +1233,31 @@ SELECT copy_in_plpgsql();
  
 (1 row)
 
+-- test prepared COPY on a non-distributed table
+CREATE TABLE local_ddl (x int);
+CREATE OR REPLACE FUNCTION local_copy_in_plpgsql()
+RETURNS VOID  AS
+$BODY$
+BEGIN
+    COPY local_ddl (x) FROM PROGRAM 'echo 1' WITH CSV;
+END;
+$BODY$ LANGUAGE plpgsql;
+SELECT local_copy_in_plpgsql();
+ local_copy_in_plpgsql 
+-----------------------
+ 
+(1 row)
+
+SELECT local_copy_in_plpgsql();
+ local_copy_in_plpgsql 
+-----------------------
+ 
+(1 row)
+
 DROP FUNCTION ddl_in_plpgsql();
 DROP FUNCTION copy_in_plpgsql();
 DROP TABLE prepare_ddl;
+DROP TABLE local_ddl;
 -- clean-up functions
 DROP FUNCTION plpgsql_test_1();
 DROP FUNCTION plpgsql_test_2();
