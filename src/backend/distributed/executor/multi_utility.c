@@ -128,8 +128,7 @@ static Node * WorkerProcessAlterTableStmt(AlterTableStmt *alterTableStatement,
 static List * PlanAlterObjectSchemaStmt(AlterObjectSchemaStmt *alterObjectSchemaStmt,
 										const char *alterObjectSchemaCommand);
 static void ProcessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand);
-static bool IsSupportedDistributedVacuumStmt(VacuumStmt *vacuumStmt,
-											 List *vacuumRelationIdList);
+static bool IsDistributedVacuumStmt(VacuumStmt *vacuumStmt, List *vacuumRelationIdList);
 static List * VacuumTaskList(Oid relationId, int vacuumOptions, List *vacuumColumnList);
 static StringInfo DeparseVacuumStmtPrefix(int vacuumFlags);
 static char * DeparseVacuumColumnNames(List *columnNameList);
@@ -1609,7 +1608,7 @@ static void
 ProcessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand)
 {
 	int relationIndex = 0;
-	bool supportedVacuumStmt = false;
+	bool distributedVacuumStmt = false;
 	List *vacuumRelationList = ExtractVacuumTargetRels(vacuumStmt);
 	ListCell *vacuumRelationCell = NULL;
 	List *relationIdList = NIL;
@@ -1625,8 +1624,8 @@ ProcessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand)
 		relationIdList = lappend_oid(relationIdList, relationId);
 	}
 
-	supportedVacuumStmt = IsSupportedDistributedVacuumStmt(vacuumStmt, relationIdList);
-	if (!supportedVacuumStmt)
+	distributedVacuumStmt = IsDistributedVacuumStmt(vacuumStmt, relationIdList);
+	if (!distributedVacuumStmt)
 	{
 		return;
 	}
@@ -1672,11 +1671,10 @@ ProcessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand)
  * the list of tables targeted by the provided statement.
  *
  * Returns true if the statement requires distributed execution and returns
- * false otherwise; however, this function will raise errors if the provided
- * statement needs distributed execution but contains unsupported options.
+ * false otherwise.
  */
 static bool
-IsSupportedDistributedVacuumStmt(VacuumStmt *vacuumStmt, List *vacuumRelationIdList)
+IsDistributedVacuumStmt(VacuumStmt *vacuumStmt, List *vacuumRelationIdList)
 {
 	const char *stmtName = (vacuumStmt->options & VACOPT_VACUUM) ? "VACUUM" : "ANALYZE";
 	bool distributeStmt = false;
