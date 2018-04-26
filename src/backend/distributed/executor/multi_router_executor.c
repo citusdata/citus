@@ -1277,16 +1277,18 @@ SendQueryInSingleRowMode(MultiConnection *connection, char *query,
 
 	if (querySent == 0)
 	{
-		MarkRemoteTransactionFailed(connection, false);
-		ReportConnectionError(connection, WARNING);
+		const bool raiseErrors = false;
+
+		HandleRemoteTransactionConnectionError(connection, raiseErrors);
 		return false;
 	}
 
 	singleRowMode = PQsetSingleRowMode(connection->pgConn);
 	if (singleRowMode == 0)
 	{
-		MarkRemoteTransactionFailed(connection, false);
-		ReportConnectionError(connection, WARNING);
+		const bool raiseErrors = false;
+
+		HandleRemoteTransactionConnectionError(connection, raiseErrors);
 		return false;
 	}
 

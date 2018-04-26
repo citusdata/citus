@@ -67,6 +67,7 @@
 #include "distributed/multi_shard_transaction.h"
 #include "distributed/placement_connection.h"
 #include "distributed/remote_commands.h"
+#include "distributed/remote_transaction.h"
 #include "distributed/resource_lock.h"
 #include "distributed/shard_pruning.h"
 #include "distributed/version_compat.h"
@@ -842,8 +843,9 @@ OpenCopyConnections(CopyStmt *copyStatement, ShardConnections *shardConnections,
 			}
 			else
 			{
-				ReportConnectionError(connection, WARNING);
-				MarkRemoteTransactionFailed(connection, true);
+				const bool raiseErrors = true;
+
+				HandleRemoteTransactionConnectionError(connection, raiseErrors);
 
 				failedPlacementCount++;
 				continue;
