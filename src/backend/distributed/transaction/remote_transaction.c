@@ -418,34 +418,30 @@ void
 FinishRemoteTransactionAbort(MultiConnection *connection)
 {
 	RemoteTransaction *transaction = &connection->remoteTransaction;
-	PGresult *result = NULL;
-	const bool dontRaiseErrors = false;
-	const bool isNotCommit = false;
+	const bool raiseErrors = false;
 
-	result = GetRemoteCommandResult(connection, dontRaiseErrors);
-
-	if (!IsResponseOK(result))
+	if (transaction->transactionState == REMOTE_TRANS_2PC_ABORTING)
 	{
-		ReportResultError(connection, result, WARNING);
-		MarkRemoteTransactionFailed(connection, dontRaiseErrors);
+		PGresult *result = GetRemoteCommandResult(connection, raiseErrors);
+		if (!IsResponseOK(result))
+		{
+			const bool isCommit = false;
+			WarnAboutLeakedPreparedTransaction(connection, isCommit);
+		}
 
-		if (transaction->transactionState == REMOTE_TRANS_2PC_ABORTING)
-		{
-			WarnAboutLeakedPreparedTransaction(connection, isNotCommit);
-		}
-		else
-		{
-			ereport(WARNING,
-					(errmsg("failed to abort 1PC transaction \"%s\" on %s:%d",
-							transaction->preparedName, connection->hostname,
-							connection->port)));
-		}
+		PQclear(result);
 	}
 
-	PQclear(result);
-
-	result = GetRemoteCommandResult(connection, dontRaiseErrors);
-	Assert(!result);
+	/*
+	 * Try to consume results of any in-progress commands. In the 1PC case
+	 * this is also where we consume the result of the ROLLBACK.
+	 *
+	 * If we don't succeed the connection will be in a bad state, so we close it.
+	 */
+	if (!ClearResults(connection, raiseErrors))
+	{
+		ShutdownConnection(connection);
+	}
 
 	transaction->transactionState = REMOTE_TRANS_ABORTED;
 }
