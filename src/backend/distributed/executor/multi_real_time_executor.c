@@ -300,8 +300,20 @@ ManageTaskExecution(Task *task, TaskExecution *taskExecution,
 			placementAccessList = BuildPlacementSelectList(taskPlacement->groupId,
 														   relationShardList);
 
-			/* should at least have an entry for the anchor shard */
-			Assert(list_length(placementAccessList) > 0);
+			/*
+			 * Should at least have an entry for the anchor shard. If this is not the
+			 * case, we should have errored out in the physical planner. We are
+			 * rechecking here until we find the root cause of
+			 * https://github.com/citusdata/citus/issues/2092.
+			 */
+			if (placementAccessList == NIL)
+			{
+				ereport(WARNING, (errmsg("could not find any placements for task %d",
+										 task->taskId)));
+				taskStatusArray[currentIndex] = EXEC_TASK_FAILED;
+
+				break;
+			}
 
 			connectionId = MultiClientPlacementConnectStart(placementAccessList,
 															NULL);
