@@ -8,9 +8,9 @@
 
 SET citus.next_shard_id TO 760000;
 
--- print whether we're using version > 9 to make version-specific tests clear
+-- print major version number for version-specific tests
 SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int > 9 AS version_above_nine;
+SELECT substring(:'server_version', '\d+')::int AS server_version;
 
 SET client_min_messages TO DEBUG2;
 SET citus.explain_all_tasks TO on;

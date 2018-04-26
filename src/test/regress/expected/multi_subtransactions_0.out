@@ -3,7 +3,7 @@ SHOW server_version \gset
 SELECT substring(:'server_version', '\d+')::int > 10 AS version_above_nine;
  version_above_nine 
 --------------------
- t
+ f
 (1 row)
 
 CREATE TABLE artists (
@@ -127,7 +127,7 @@ ERROR:  null value in column "name" violates not-null constraint
 SAVEPOINT s3;
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
 ROLLBACK TO SAVEPOINT s3;
-ERROR:  savepoint "s3" does not exist
+ERROR:  no such savepoint
 COMMIT;
 -- ===================================================================
 -- Tests for replication factor > 1

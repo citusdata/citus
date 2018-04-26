@@ -33,7 +33,9 @@
 #include "catalog/namespace.h"
 #include "catalog/pg_class.h"
 #include "catalog/pg_constraint.h"
+#if (PG_VERSION_NUM < 110000)
 #include "catalog/pg_constraint_fn.h"
+#endif
 #include "catalog/pg_index.h"
 #include "catalog/pg_type.h"
 #include "catalog/pg_namespace.h"

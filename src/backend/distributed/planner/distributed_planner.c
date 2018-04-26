@@ -639,6 +639,9 @@ CreateDistributedSelectPlan(uint64 planId, Query *originalQuery, Query *query,
 		return NULL;
 	}
 
+	/* force evaluation of bound params */
+	boundParams = copyParamList(boundParams);
+
 	/*
 	 * If there are parameters that do have a value in boundParams, replace
 	 * them in the original query. This allows us to more easily cut the
@@ -1464,14 +1467,22 @@ HasUnresolvedExternParamsWalker(Node *expression, ParamListInfo boundParams)
 		if (boundParams && paramId > 0 && paramId <= boundParams->numParams)
 		{
 			ParamExternData *externParam = &boundParams->params[paramId - 1];
+			Oid paramType = externParam->ptype;
 
 			/* give hook a chance in case parameter is dynamic */
-			if (!OidIsValid(externParam->ptype) && boundParams->paramFetch != NULL)
+			if (!OidIsValid(paramType) && boundParams->paramFetch != NULL)
 			{
+#if (PG_VERSION_NUM >= 110000)
+				ParamExternData externParamPlaceholder;
+				externParam = (*boundParams->paramFetch)(boundParams, paramId, false,
+														 &externParamPlaceholder);
+#else
 				(*boundParams->paramFetch)(boundParams, paramId);
+#endif
+				paramType = externParam->ptype;
 			}
 
-			if (OidIsValid(externParam->ptype))
+			if (OidIsValid(paramType))
 			{
 				return false;
 			}

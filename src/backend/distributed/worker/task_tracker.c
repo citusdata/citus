@@ -35,6 +35,7 @@
 #include "distributed/task_tracker.h"
 #include "distributed/transmit.h"
 #include "distributed/worker_protocol.h"
+#include "distributed/version_compat.h"
 #include "libpq/hba.h"
 #include "libpq/pqsignal.h"
 #include "lib/stringinfo.h"
@@ -145,10 +146,10 @@ TaskTrackerMain(Datum main_arg)
 	 * that we can reset the context during error recovery and thereby avoid
 	 * possible memory leaks.
 	 */
-	TaskTrackerContext = AllocSetContextCreate(TopMemoryContext, "Task Tracker",
-											   ALLOCSET_DEFAULT_MINSIZE,
-											   ALLOCSET_DEFAULT_INITSIZE,
-											   ALLOCSET_DEFAULT_MAXSIZE);
+	TaskTrackerContext = AllocSetContextCreateExtended(TopMemoryContext, "Task Tracker",
+													   ALLOCSET_DEFAULT_MINSIZE,
+													   ALLOCSET_DEFAULT_INITSIZE,
+													   ALLOCSET_DEFAULT_MAXSIZE);
 	MemoryContextSwitchTo(TaskTrackerContext);
 
 	/*

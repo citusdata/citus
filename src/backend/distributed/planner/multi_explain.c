@@ -36,6 +36,7 @@
 #include "distributed/recursive_planning.h"
 #include "distributed/placement_connection.h"
 #include "distributed/worker_protocol.h"
+#include "distributed/version_compat.h"
 #include "lib/stringinfo.h"
 #include "nodes/plannodes.h"
 #include "nodes/primnodes.h"
@@ -241,7 +242,7 @@ ExplainJob(Job *job, ExplainState *es)
 
 	ExplainOpenGroup("Job", "Job", true, es);
 
-	ExplainPropertyInteger("Task Count", taskCount, es);
+	ExplainPropertyIntegerInternal("Task Count", NULL, taskCount, es);
 
 	if (dependedJobCount > 0)
 	{
@@ -317,9 +318,8 @@ ExplainMapMergeJob(MapMergeJob *mapMergeJob, ExplainState *es)
 	}
 
 	ExplainOpenGroup("MapMergeJob", NULL, true, es);
-
-	ExplainPropertyInteger("Map Task Count", mapTaskCount, es);
-	ExplainPropertyInteger("Merge Task Count", mergeTaskCount, es);
+	ExplainPropertyIntegerInternal("Map Task Count", NULL, mapTaskCount, es);
+	ExplainPropertyIntegerInternal("Merge Task Count", NULL, mergeTaskCount, es);
 
 	if (dependedJobCount > 0)
 	{
@@ -662,7 +662,10 @@ ExplainOneQuery(Query *query, IntoClause *into, ExplainState *es,
 {
 	/* if an advisor plugin is present, let it manage things */
 	if (ExplainOneQuery_hook)
-#if (PG_VERSION_NUM >= 100000)
+#if (PG_VERSION_NUM >= 110000)
+		(*ExplainOneQuery_hook) (query, cursorOptions, into, es,
+								 queryString, params, queryEnv);
+#elif (PG_VERSION_NUM >= 100000)
 		(*ExplainOneQuery_hook) (query, cursorOptions, into, es,
 								 queryString, params);
 #else

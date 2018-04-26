@@ -181,30 +181,30 @@ LIMIT 2;
        1
 (2 rows)
 
-EXPLAIN
+EXPLAIN (COSTS OFF)
 SELECT user_id
 FROM users_table
 GROUP BY user_id
 ORDER BY (10000 / (sum(value_1 + value_2)))  DESC
 LIMIT 2;
-                                                           QUERY PLAN                                                            
----------------------------------------------------------------------------------------------------------------------------------
- Limit  (cost=0.00..0.00 rows=0 width=0)
-   ->  Sort  (cost=0.00..0.00 rows=0 width=0)
+                                                          QUERY PLAN                                                          
+------------------------------------------------------------------------------------------------------------------------------
+ Limit
+   ->  Sort
          Sort Key: (10000 / (pg_catalog.sum(((10000 / (pg_catalog.sum(remote_scan.worker_column_2))::bigint))))::bigint) DESC
-         ->  HashAggregate  (cost=0.00..0.00 rows=0 width=0)
+         ->  HashAggregate
                Group Key: remote_scan.user_id
-               ->  Custom Scan (Citus Real-Time)  (cost=0.00..0.00 rows=0 width=0)
+               ->  Custom Scan (Citus Real-Time)
                      Task Count: 4
                      Tasks Shown: One of 4
                      ->  Task
                            Node: host=localhost port=57637 dbname=regression
-                           ->  Limit  (cost=1.78..1.78 rows=2 width=20)
-                                 ->  Sort  (cost=1.78..1.78 rows=2 width=20)
+                           ->  Limit
+                                 ->  Sort
                                        Sort Key: ((10000 / sum((value_1 + value_2)))) DESC
-                                       ->  HashAggregate  (cost=1.74..1.77 rows=2 width=20)
+                                       ->  HashAggregate
                                              Group Key: user_id
-                                             ->  Seq Scan on users_table_1400000 users_table  (cost=0.00..1.33 rows=33 width=12)
+                                             ->  Seq Scan on users_table_1400000 users_table
 (16 rows)
 
 SELECT 10000 / (sum(value_1 + value_2))
@@ -249,30 +249,30 @@ LIMIT 2;
        4
 (2 rows)
 
-EXPLAIN
+EXPLAIN (COSTS OFF)
 SELECT user_id
 FROM users_table
 GROUP BY user_id
 ORDER BY sum(value_1) DESC
 LIMIT 2;
-                                                           QUERY PLAN                                                           
---------------------------------------------------------------------------------------------------------------------------------
- Limit  (cost=0.00..0.00 rows=0 width=0)
-   ->  Sort  (cost=0.00..0.00 rows=0 width=0)
+                                                QUERY PLAN                                                
+----------------------------------------------------------------------------------------------------------
+ Limit
+   ->  Sort
          Sort Key: (pg_catalog.sum(((pg_catalog.sum(remote_scan.worker_column_2))::bigint)))::bigint DESC
-         ->  HashAggregate  (cost=0.00..0.00 rows=0 width=0)
+         ->  HashAggregate
                Group Key: remote_scan.user_id
-               ->  Custom Scan (Citus Real-Time)  (cost=0.00..0.00 rows=0 width=0)
+               ->  Custom Scan (Citus Real-Time)
                      Task Count: 4
                      Tasks Shown: One of 4
                      ->  Task
                            Node: host=localhost port=57637 dbname=regression
-                           ->  Limit  (cost=1.53..1.53 rows=2 width=12)
-                                 ->  Sort  (cost=1.53..1.53 rows=2 width=12)
+                           ->  Limit
+                                 ->  Sort
                                        Sort Key: (sum(value_1)) DESC
-                                       ->  HashAggregate  (cost=1.50..1.52 rows=2 width=12)
+                                       ->  HashAggregate
                                              Group Key: user_id
-                                             ->  Seq Scan on users_table_1400000 users_table  (cost=0.00..1.33 rows=33 width=8)
+                                             ->  Seq Scan on users_table_1400000 users_table
 (16 rows)
 
 SELECT ut.user_id, avg(ut.value_2)
@@ -290,7 +290,7 @@ LIMIT 5;
        4 | 2.1739130434782609
 (5 rows)
 
-EXPLAIN
+EXPLAIN (COSTS OFF)
 SELECT ut.user_id, avg(ut.value_2)
 FROM users_table ut, events_table et
 WHERE ut.user_id = et.user_id and et.value_2 < 5
@@ -325,7 +325,7 @@ LIMIT 2;
        6 |     5
 (2 rows)
 
-EXPLAIN
+EXPLAIN (COSTS OFF)
 SELECT ut.user_id, count(DISTINCT ut.value_2)
 FROM users_table ut, events_table et
 WHERE ut.user_id = et.user_id and et.value_2 < 5

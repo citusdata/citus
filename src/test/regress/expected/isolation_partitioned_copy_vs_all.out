@@ -231,7 +231,7 @@ step s1-copy: COPY partitioned_copy FROM PROGRAM 'echo 5, f, 5 && echo 6, g, 6 &
 step s2-table-size: SELECT citus_total_relation_size('partitioned_copy');
 citus_total_relation_size
 
-32768          
+0              
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM partitioned_copy;
 count          
@@ -511,7 +511,7 @@ step s1-begin: BEGIN;
 step s1-table-size: SELECT citus_total_relation_size('partitioned_copy');
 citus_total_relation_size
 
-32768          
+0              
 step s2-copy: COPY partitioned_copy FROM PROGRAM 'echo 5, f, 5 && echo 6, g, 6 && echo 7, h, 7 && echo 8, i, 8 && echo 9, j, 9' WITH CSV;
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM partitioned_copy;

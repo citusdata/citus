@@ -1,3 +1,7 @@
+-- This test has different output per major version
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int as server_major_version;
+
 -- ===================================================================
 -- create test functions
 -- ===================================================================

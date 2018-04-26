@@ -25,6 +25,7 @@
 #include "commands/tablecmds.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/worker_protocol.h"
+#include "distributed/version_compat.h"
 #include "executor/spi.h"
 #include "nodes/makefuncs.h"
 #include "parser/parse_type.h"
@@ -333,7 +334,7 @@ RemoveJobSchema(StringInfo schemaName)
 		bool permissionsOK = pg_namespace_ownercheck(schemaId, GetUserId());
 		if (!permissionsOK)
 		{
-			aclcheck_error(ACLCHECK_NOT_OWNER, ACL_KIND_NAMESPACE, schemaName->data);
+			aclcheck_error(ACLCHECK_NOT_OWNER, ACLCHECK_OBJECT_SCHEMA, schemaName->data);
 		}
 
 		schemaObject.classId = NamespaceRelationId;

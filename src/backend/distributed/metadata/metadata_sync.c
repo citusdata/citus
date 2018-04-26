@@ -92,10 +92,9 @@ start_metadata_sync_to_node(PG_FUNCTION_ARGS)
 	EnsureModificationsCanRun();
 	CheckCitusVersion(ERROR);
 
-	PreventTransactionChain(true, "start_metadata_sync_to_node");
+	PreventInTransactionBlock(true, "start_metadata_sync_to_node");
 
 	workerNode = FindWorkerNode(nodeNameString, nodePort);
-
 	if (workerNode == NULL)
 	{
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),

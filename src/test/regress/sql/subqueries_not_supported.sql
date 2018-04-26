@@ -20,6 +20,7 @@ FROM
 		WHERE users_table_local.user_id = evs.user_id
 	) as foo;
 
+RESET client_min_messages;
 -- we don't support subqueries with local tables when they are not leaf queries
 SELECT user_id FROM users_table WHERE user_id IN 
 	(SELECT 
@@ -28,6 +29,8 @@ SELECT user_id FROM users_table WHERE user_id IN
 	 	users_table_local JOIN (SELECT user_id FROM events_table_local) as foo 
 	 USING (user_id)
 	 );
+
+SET client_min_messages TO DEBUG1;
 
 -- we don't support aggregate distinct if the group by is not on partition key, expect for count distinct
 -- thus baz and bar are recursively planned but not foo

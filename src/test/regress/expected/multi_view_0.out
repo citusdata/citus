@@ -10,7 +10,7 @@ SHOW server_version \gset
 SELECT substring(:'server_version', '\d+')::int > 10 AS version_above_ten;
  version_above_ten 
 -------------------
- t
+ f
 (1 row)
 
 SELECT count(*) FROM lineitem_hash_part;
@@ -797,8 +797,8 @@ RESET citus.subquery_pushdown;
 VACUUM ANALYZE users_table;
 -- explain tests
 EXPLAIN (COSTS FALSE) SELECT user_id FROM recent_selected_users GROUP BY 1 ORDER BY 1;
-                                                                 QUERY PLAN                                                                  
----------------------------------------------------------------------------------------------------------------------------------------------
+                                                                       QUERY PLAN                                                                        
+---------------------------------------------------------------------------------------------------------------------------------------------------------
  Sort
    Sort Key: remote_scan.user_id
    ->  HashAggregate
@@ -810,17 +810,19 @@ EXPLAIN (COSTS FALSE) SELECT user_id FROM recent_selected_users GROUP BY 1 ORDER
                      Node: host=localhost port=57637 dbname=regression
                      ->  HashAggregate
                            Group Key: users_table.user_id
-                           ->  Nested Loop
-                                 Join Filter: (users_table.user_id = users_table_1.user_id)
-                                 ->  Sort
-                                       Sort Key: (max(users_table_1."time")) DESC
-                                       ->  HashAggregate
-                                             Group Key: users_table_1.user_id
-                                             Filter: (max(users_table_1."time") > '2017-11-23 16:20:33.264457'::timestamp without time zone)
-                                             ->  Seq Scan on users_table_1400000 users_table_1
+                           ->  Hash Join
+                                 Hash Cond: (users_table.user_id = ru.user_id)
                                  ->  Seq Scan on users_table_1400000 users_table
                                        Filter: ((value_1 >= 1) AND (value_1 < 3))
-(21 rows)
+                                 ->  Hash
+                                       ->  Subquery Scan on ru
+                                             ->  Sort
+                                                   Sort Key: (max(users_table_1."time")) DESC
+                                                   ->  HashAggregate
+                                                         Group Key: users_table_1.user_id
+                                                         Filter: (max(users_table_1."time") > '2017-11-23 16:20:33.264457'::timestamp without time zone)
+                                                         ->  Seq Scan on users_table_1400000 users_table_1
+(23 rows)
 
 EXPLAIN (COSTS FALSE) SELECT *
 	FROM (

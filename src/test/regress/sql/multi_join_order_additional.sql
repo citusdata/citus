@@ -10,9 +10,9 @@ SET citus.next_shard_id TO 650000;
 SET citus.explain_distributed_queries TO off;
 SET citus.log_multi_join_order TO TRUE;
 SET citus.task_executor_type = 'task-tracker'; -- can't explain all queries otherwise
-SET client_min_messages TO DEBUG2;
 SET citus.shard_count to 2;
 SET citus.shard_replication_factor to 1;
+RESET client_min_messages;
 
 -- Create new table definitions for use in testing in distributed planning and
 -- execution functionality. Also create indexes to boost performance.
@@ -63,6 +63,7 @@ CREATE TABLE customer_hash (
 	c_comment varchar(117) not null);
 SELECT create_distributed_table('customer_hash', 'c_custkey');
 
+SET client_min_messages TO DEBUG2;
 -- The following query checks that we can correctly handle self-joins
 
 EXPLAIN SELECT l1.l_quantity FROM lineitem l1, lineitem l2
