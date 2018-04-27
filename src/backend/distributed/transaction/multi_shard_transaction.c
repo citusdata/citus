@@ -81,7 +81,7 @@ OpenTransactionsForAllTasks(List *taskList, int connectionFlags)
 		else
 		{
 			/* can only open connections for DDL and DML commands */
-			Assert(task->taskType == DDL_TASK);
+			Assert(task->taskType == DDL_TASK || VACUUM_ANALYZE_TASK);
 
 			accessType = PLACEMENT_ACCESS_DDL;
 		}

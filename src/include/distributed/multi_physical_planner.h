@@ -84,7 +84,8 @@ typedef enum
 	MERGE_FETCH_TASK = 5,
 	MODIFY_TASK = 6,
 	ROUTER_TASK = 7,
-	DDL_TASK = 8
+	DDL_TASK = 8,
+	VACUUM_ANALYZE_TASK = 9
 } TaskType;
 
 

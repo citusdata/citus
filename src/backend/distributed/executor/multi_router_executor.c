@@ -1092,7 +1092,7 @@ ExecuteModifyTasks(List *taskList, bool expectResults, ParamListInfo paramListIn
 		CoordinatedTransactionUse2PC();
 	}
 
-	if (firstTask->taskType == DDL_TASK)
+	if (firstTask->taskType == DDL_TASK || firstTask->taskType == VACUUM_ANALYZE_TASK)
 	{
 		connectionFlags = FOR_DDL;
 	}
@@ -1174,6 +1174,15 @@ ExecuteModifyTasks(List *taskList, bool expectResults, ParamListInfo paramListIn
 			connection = (MultiConnection *) list_nth(connectionList, placementIndex);
 
 			/*
+			 * if the task is a VACUUM or ANALYZE, we set CitusNoticeLogLevel to INFO
+			 * to see the logs in console.
+			 */
+			if (task->taskType == VACUUM_ANALYZE_TASK)
+			{
+				SetCitusNoticeLevel(INFO);
+			}
+
+			/*
 			 * If caller is interested, store query results the first time
 			 * through. The output of the query's execution on other shards is
 			 * discarded if we run there (because it's a modification query).
@@ -1234,6 +1243,9 @@ ExecuteModifyTasks(List *taskList, bool expectResults, ParamListInfo paramListIn
 
 		placementIndex++;
 	}
+
+	/* we should set the log level back to its default value since the task is done */
+	UnsetCitusNoticeLevel();
 
 	UnclaimAllShardConnections(shardConnectionHash);
 

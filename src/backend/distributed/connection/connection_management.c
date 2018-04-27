@@ -25,6 +25,7 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/hash_helpers.h"
 #include "distributed/placement_connection.h"
+#include "distributed/remote_commands.h"
 #include "distributed/version_compat.h"
 #include "mb/pg_wchar.h"
 #include "utils/hsearch.h"
@@ -41,7 +42,11 @@ static uint32 ConnectionHashHash(const void *key, Size keysize);
 static int ConnectionHashCompare(const void *a, const void *b, Size keysize);
 static MultiConnection * StartConnectionEstablishment(ConnectionHashKey *key);
 static void AfterXactHostConnectionHandling(ConnectionHashEntry *entry, bool isCommit);
+static void DefaultCitusNoticeProcessor(void *arg, const char *message);
 static MultiConnection * FindAvailableConnection(dlist_head *connections, uint32 flags);
+
+
+static int CitusNoticeLogLevel = DEFAULT_CITUS_NOTICE_LEVEL;
 
 
 /*
@@ -663,6 +668,8 @@ StartConnectionEstablishment(ConnectionHashKey *key)
 	 */
 	PQsetnonblocking(connection->pgConn, true);
 
+	SetCitusNoticeProcessor(connection);
+
 	return connection;
 }
 
@@ -765,4 +772,84 @@ AfterXactHostConnectionHandling(ConnectionHashEntry *entry, bool isCommit)
 			UnclaimConnection(connection);
 		}
 	}
+}
+
+
+/*
+ * SetCitusNoticeProcessor sets the NoticeProcessor to DefaultCitusNoticeProcessor
+ */
+void
+SetCitusNoticeProcessor(MultiConnection *connection)
+{
+	PQsetNoticeProcessor(connection->pgConn, DefaultCitusNoticeProcessor,
+						 connection);
+}
+
+
+/*
+ * SetCitusNoticeLevel is used to set the notice level for distributed
+ * queries.
+ */
+void
+SetCitusNoticeLevel(int level)
+{
+	CitusNoticeLogLevel = level;
+}
+
+
+/*
+ * UnsetCitusNoticeLevel sets the CitusNoticeLogLevel back to
+ * its default value.
+ */
+void
+UnsetCitusNoticeLevel()
+{
+	CitusNoticeLogLevel = DEFAULT_CITUS_NOTICE_LEVEL;
+}
+
+
+/*
+ * DefaultCitusNoticeProcessor is used to redirect worker notices
+ * from logfile to console.
+ */
+static void
+DefaultCitusNoticeProcessor(void *arg, const char *message)
+{
+	MultiConnection *connection = (MultiConnection *) arg;
+	char *nodeName = connection->hostname;
+	uint32 nodePort = connection->port;
+	char *chompedMessage = pchomp(message);
+	char *trimmedMessage = TrimLogLevel(chompedMessage);
+	char *level = strtok((char *) message, ":");
+
+	ereport(CitusNoticeLogLevel, (errmsg("%s", trimmedMessage),
+								  errdetail("%s from %s:%d",
+											level, nodeName, nodePort)));
+}
+
+
+/*
+ * TrimLogLevel makes a copy of the string with the leading log level
+ * and spaces removed such as
+ *      From:
+ *          INFO:  "normal2_102070": scanned 0 of 0 pages...
+ *      To:
+ *          "normal2_102070": scanned 0 of 0 pages...
+ */
+char *
+TrimLogLevel(const char *message)
+{
+	size_t n;
+
+	n = 0;
+	while (n < strlen(message) && message[n] != ':')
+	{
+		n++;
+	}
+
+	do {
+		n++;
+	} while (n < strlen(message) && message[n] == ' ');
+
+	return pstrdup(message + n);
 }
