@@ -201,12 +201,10 @@ WITH cte AS (
 	SELECT value_2 FROM users_table WHERE user_id IN (1, 2, 3)
 )
 DELETE FROM modify_table WHERE id IN (SELECT value_2 FROM cte);
-ERROR:  common table expressions are not supported in distributed modifications
 WITH cte AS (
 	SELECT value_2 FROM users_table WHERE user_id IN (1, 2, 3)
 )
 UPDATE modify_table SET val=-1 WHERE val IN (SELECT * FROM cte);
-ERROR:  common table expressions are not supported in distributed modifications
 WITH cte AS (
 	WITH basic AS (
 		SELECT value_2 FROM users_table WHERE user_id IN (1, 2, 3)
@@ -214,7 +212,7 @@ WITH cte AS (
 	INSERT INTO modify_table (SELECT * FROM basic) RETURNING *
 )
 UPDATE modify_table SET val=-2 WHERE id IN (SELECT id FROM cte);
-ERROR:  common table expressions are not supported in distributed modifications
+ERROR:  RETURNING is not supported in INSERT ... SELECT via coordinator
 WITH cte AS (
 	WITH basic AS (
 		SELECT * FROM events_table WHERE event_type = 5
@@ -237,10 +235,10 @@ INSERT INTO summary_table SELECT id, COUNT(*) AS counter FROM raw_data GROUP BY 
 SELECT * FROM summary_table ORDER BY id;
  id | counter 
 ----+---------
-  2 |     153
-  3 |     184
-  4 |     160
-  5 |     170
+  2 |      20
+  3 |      38
+  4 |      24
+  5 |      27
 (4 rows)
 
 SELECT COUNT(*) FROM modify_table;
@@ -259,11 +257,11 @@ SELECT * FROM summary_table ORDER BY id, counter;
 ----+---------
   1 |       1
   2 |       1
-  2 |     153
+  2 |      20
   3 |       1
-  3 |     184
-  4 |     160
-  5 |     170
+  3 |      38
+  4 |      24
+  5 |      27
 (7 rows)
 
 SELECT COUNT(*) FROM modify_table;
@@ -310,10 +308,10 @@ SELECT * FROM summary_table ORDER BY id, counter;
  id | counter 
 ----+---------
   1 |       1
-  2 |     154
-  3 |     185
-  4 |     160
-  5 |     170
+  2 |      21
+  3 |      39
+  4 |      24
+  5 |      27
 (5 rows)
 
 WITH added_data AS (
@@ -334,10 +332,10 @@ SELECT * FROM summary_table ORDER BY id, counter;
 ----+---------
   1 |       1
   1 |       1
-  2 |     154
-  3 |     185
-  4 |     160
-  5 |     170
+  2 |      21
+  3 |      39
+  4 |      24
+  5 |      27
 (6 rows)
 
 -- Merge rows in the summary_table
@@ -349,10 +347,10 @@ SELECT * FROM summary_table ORDER BY id, counter;
  id | counter 
 ----+---------
   1 |       2
-  2 |     154
-  3 |     185
-  4 |     160
-  5 |     170
+  2 |      21
+  3 |      39
+  4 |      24
+  5 |      27
 (5 rows)
 
 SELECT * FROM modify_table ORDER BY id, val;
@@ -378,8 +376,6 @@ raw_data AS (
 	DELETE FROM modify_table WHERE id >= (SELECT min(id) FROM select_data WHERE id > 10) RETURNING *
 )
 INSERT INTO summary_table SELECT id, COUNT(*) AS counter FROM raw_data GROUP BY id;
-ERROR:  cannot push down this subquery
-DETAIL:  Aggregates without group by are currently unsupported when a subquery references a column from another query
 INSERT INTO modify_table VALUES (21, 1), (22, 2), (23, 3);
 -- read ids from the same table
 WITH distinct_ids AS (
@@ -392,7 +388,7 @@ update_data AS (
 SELECT count(*) FROM update_data;
  count 
 -------
-     6
+     3
 (1 row)
 
 -- read ids from a different table
@@ -420,7 +416,7 @@ WITH update_data AS (
 SELECT COUNT(*) FROM update_data;
  count 
 -------
-     2
+     1
 (1 row)
 
 WITH delete_rows AS (
@@ -429,13 +425,10 @@ WITH delete_rows AS (
 SELECT * FROM delete_rows ORDER BY id, val;
  id | val 
 ----+-----
- 11 | 100
- 12 | 300
- 13 | 100
  21 | 300
  22 | 200
  23 | 100
-(6 rows)
+(3 rows)
 
 WITH delete_rows AS (
 	DELETE FROM summary_table WHERE id > 10 RETURNING *
@@ -443,7 +436,10 @@ WITH delete_rows AS (
 SELECT * FROM delete_rows ORDER BY id, counter;
  id | counter 
 ----+---------
-(0 rows)
+ 11 |       1
+ 12 |       1
+ 13 |       1
+(3 rows)
 
 -- Check modifiying CTEs inside a transaction
 BEGIN;
@@ -467,11 +463,11 @@ SELECT * FROM summary_table ORDER BY id, counter;
   1 |       1
   1 |       2
   2 |       1
-  2 |     154
+  2 |      21
   3 |       1
-  3 |     185
-  4 |     160
-  5 |     170
+  3 |      39
+  4 |      24
+  5 |      27
 (8 rows)
 
 SELECT * FROM modify_table ORDER BY id, val;
@@ -493,10 +489,10 @@ SELECT * FROM summary_table ORDER BY id, counter;
  id | counter 
 ----+---------
   1 |       2
-  2 |     154
-  3 |     185
-  4 |     160
-  5 |     170
+  2 |      21
+  3 |      39
+  4 |      24
+  5 |      27
 (5 rows)
 
 SELECT * FROM modify_table ORDER BY id, val;
@@ -548,7 +544,11 @@ WITH deleted_rows AS (
 	DELETE FROM modify_table WHERE val IN (SELECT val FROM modify_table WHERE id = 3) RETURNING *
 )
 SELECT * FROM deleted_rows;
-ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
+ id | val 
+----+-----
+  3 |   6
+(1 row)
+
 WITH select_rows AS (
 	SELECT val FROM modify_table WHERE id = 3
 ),
@@ -558,14 +558,14 @@ deleted_rows AS (
 SELECT * FROM deleted_rows;
  id | val 
 ----+-----
-  3 |   6
-(1 row)
+(0 rows)
 
 WITH deleted_rows AS (
 	DELETE FROM modify_table WHERE ctid IN (SELECT ctid FROM modify_table WHERE id = 1) RETURNING *
 )
 SELECT * FROM deleted_rows;
-ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
+ERROR:  cannot perform distributed planning for the given modification
+DETAIL:  Recursively planned distributed modifications with ctid on where clause are not supported.
 WITH select_rows AS (
 	SELECT ctid FROM modify_table WHERE id = 1
 ),
@@ -646,7 +646,10 @@ raw_data AS (
 	RETURNING id, val
 )
 SELECT * FROM raw_data ORDER BY val;
-ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
+ id | val 
+----+-----
+(0 rows)
+
 -- Test with replication factor 2
 SET citus.shard_replication_factor to 2;
 DROP TABLE modify_table;

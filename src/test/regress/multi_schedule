@@ -32,7 +32,7 @@ test: multi_read_from_secondaries
 test: multi_create_table
 test: multi_create_table_constraints multi_master_protocol multi_load_data multi_behavioral_analytics_create_table
 test: multi_behavioral_analytics_basics multi_behavioral_analytics_single_shard_queries multi_insert_select_non_pushable_queries multi_insert_select
-test: multi_insert_select_window multi_shard_update_delete window_functions
+test: multi_insert_select_window multi_shard_update_delete window_functions dml_recursive recursive_dml_with_different_planners_executors
 
 # ----------
 # Tests for partitioning support
@@ -99,8 +99,8 @@ test: multi_repartition_join_planning multi_repartition_join_pruning multi_repar
 # ---------
 
 test: with_nested with_where with_basics with_prepare with_set_operations
-test: with_modifying
-test: with_executors with_join with_partitioning
+test: with_modifying cte_prepared_modify cte_nested_modification
+test: with_executors with_join with_partitioning with_transactions with_dml
 
 # ----------
 # Tests to check our large record loading and shard deletion behavior

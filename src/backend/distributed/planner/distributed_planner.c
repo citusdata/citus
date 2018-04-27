@@ -50,17 +50,16 @@ static uint64 NextPlanId = 1;
 
 /* local function forward declarations */
 static bool NeedsDistributedPlanningWalker(Node *node, void *context);
-static PlannedStmt * CreateDistributedPlan(uint64 planId, PlannedStmt *localPlan,
-										   Query *originalQuery, Query *query,
-										   ParamListInfo boundParams,
-										   PlannerRestrictionContext *
-										   plannerRestrictionContext);
-static DistributedPlan * CreateDistributedSelectPlan(uint64 planId, Query *originalQuery,
-													 Query *query,
-													 ParamListInfo boundParams,
-													 bool hasUnresolvedParams,
-													 PlannerRestrictionContext *
-													 plannerRestrictionContext);
+static PlannedStmt * CreateDistributedPlannedStmt(uint64 planId, PlannedStmt *localPlan,
+												  Query *originalQuery, Query *query,
+												  ParamListInfo boundParams,
+												  PlannerRestrictionContext *
+												  plannerRestrictionContext);
+static DistributedPlan * CreateDistributedPlan(uint64 planId, Query *originalQuery,
+											   Query *query, ParamListInfo boundParams,
+											   bool hasUnresolvedParams,
+											   PlannerRestrictionContext *
+											   plannerRestrictionContext);
 static Node * ResolveExternalParams(Node *inputNode, ParamListInfo boundParams);
 
 static void AssignRTEIdentities(Query *queryTree);
@@ -146,8 +145,8 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 		{
 			uint64 planId = NextPlanId++;
 
-			result = CreateDistributedPlan(planId, result, originalQuery, parse,
-										   boundParams, plannerRestrictionContext);
+			result = CreateDistributedPlannedStmt(planId, result, originalQuery, parse,
+												  boundParams, plannerRestrictionContext);
 		}
 	}
 	PG_CATCH();
@@ -467,13 +466,13 @@ IsModifyDistributedPlan(DistributedPlan *distributedPlan)
 
 
 /*
- * CreateDistributedPlan encapsulates the logic needed to transform a particular
- * query into a distributed plan.
+ * CreateDistributedPlannedStmt encapsulates the logic needed to transform a particular
+ * query into a distributed plan that is encapsulated by a PlannedStmt.
  */
 static PlannedStmt *
-CreateDistributedPlan(uint64 planId, PlannedStmt *localPlan, Query *originalQuery,
-					  Query *query, ParamListInfo boundParams,
-					  PlannerRestrictionContext *plannerRestrictionContext)
+CreateDistributedPlannedStmt(uint64 planId, PlannedStmt *localPlan, Query *originalQuery,
+							 Query *query, ParamListInfo boundParams,
+							 PlannerRestrictionContext *plannerRestrictionContext)
 {
 	DistributedPlan *distributedPlan = NULL;
 	PlannedStmt *resultPlan = NULL;
@@ -489,31 +488,9 @@ CreateDistributedPlan(uint64 planId, PlannedStmt *localPlan, Query *originalQuer
 	plannerRestrictionContext->joinRestrictionContext =
 		RemoveDuplicateJoinRestrictions(joinRestrictionContext);
 
-	if (IsModifyCommand(query))
-	{
-		EnsureModificationsCanRun();
-
-		if (InsertSelectIntoDistributedTable(originalQuery))
-		{
-			distributedPlan =
-				CreateInsertSelectPlan(originalQuery, plannerRestrictionContext);
-		}
-		else
-		{
-			/* modifications are always routed through the same planner/executor */
-			distributedPlan =
-				CreateModifyPlan(originalQuery, query, plannerRestrictionContext);
-		}
-
-		Assert(distributedPlan);
-	}
-	else
-	{
-		distributedPlan =
-			CreateDistributedSelectPlan(planId, originalQuery, query, boundParams,
-										hasUnresolvedParams,
-										plannerRestrictionContext);
-	}
+	distributedPlan =
+		CreateDistributedPlan(planId, originalQuery, query, boundParams,
+							  hasUnresolvedParams, plannerRestrictionContext);
 
 	/*
 	 * If no plan was generated, prepare a generic error to be emitted.
@@ -580,7 +557,7 @@ CreateDistributedPlan(uint64 planId, PlannedStmt *localPlan, Query *originalQuer
 
 
 /*
- * CreateDistributedSelectPlan generates a distributed plan for a SELECT query.
+ * CreateDistributedPlan generates a distributed plan for a query.
  * It goes through 3 steps:
  *
  * 1. Try router planner
@@ -589,37 +566,68 @@ CreateDistributedPlan(uint64 planId, PlannedStmt *localPlan, Query *originalQuer
  * 3. Logical planner
  */
 static DistributedPlan *
-CreateDistributedSelectPlan(uint64 planId, Query *originalQuery, Query *query,
-							ParamListInfo boundParams, bool hasUnresolvedParams,
-							PlannerRestrictionContext *plannerRestrictionContext)
+CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamListInfo
+					  boundParams, bool hasUnresolvedParams,
+					  PlannerRestrictionContext *plannerRestrictionContext)
 {
 	DistributedPlan *distributedPlan = NULL;
 	MultiTreeRoot *logicalPlan = NULL;
 	List *subPlanList = NIL;
 
-	/*
-	 * For select queries we, if router executor is enabled, first try to
-	 * plan the query as a router query. If not supported, otherwise try
-	 * the full blown plan/optimize/physical planing process needed to
-	 * produce distributed query plans.
-	 */
-
-	distributedPlan = CreateRouterPlan(originalQuery, query,
-									   plannerRestrictionContext);
-	if (distributedPlan != NULL)
+	if (IsModifyCommand(originalQuery))
 	{
+		EnsureModificationsCanRun();
+
+		if (InsertSelectIntoDistributedTable(originalQuery))
+		{
+			distributedPlan =
+				CreateInsertSelectPlan(originalQuery, plannerRestrictionContext);
+		}
+		else
+		{
+			/* modifications are always routed through the same planner/executor */
+			distributedPlan =
+				CreateModifyPlan(originalQuery, query, plannerRestrictionContext);
+		}
+
+		/* the functions above always return a plan, possibly with an error */
+		Assert(distributedPlan);
+
 		if (distributedPlan->planningError == NULL)
 		{
-			/* successfully created a router plan */
 			return distributedPlan;
 		}
 		else
 		{
-			/*
-			 * For debugging it's useful to display why query was not
-			 * router plannable.
-			 */
 			RaiseDeferredError(distributedPlan->planningError, DEBUG1);
+		}
+	}
+	else
+	{
+		/*
+		 * For select queries we, if router executor is enabled, first try to
+		 * plan the query as a router query. If not supported, otherwise try
+		 * the full blown plan/optimize/physical planing process needed to
+		 * produce distributed query plans.
+		 */
+
+		distributedPlan = CreateRouterPlan(originalQuery, query,
+										   plannerRestrictionContext);
+		if (distributedPlan != NULL)
+		{
+			if (distributedPlan->planningError == NULL)
+			{
+				/* successfully created a router plan */
+				return distributedPlan;
+			}
+			else
+			{
+				/*
+				 * For debugging it's useful to display why query was not
+				 * router plannable.
+				 */
+				RaiseDeferredError(distributedPlan->planningError, DEBUG1);
+			}
 		}
 	}
 
@@ -693,11 +701,21 @@ CreateDistributedSelectPlan(uint64 planId, Query *originalQuery, Query *query,
 		/* overwrite the old transformed query with the new transformed query */
 		memcpy(query, newQuery, sizeof(Query));
 
-		/* recurse into CreateDistributedSelectPlan with subqueries/CTEs replaced */
-		distributedPlan = CreateDistributedSelectPlan(planId, originalQuery, query, NULL,
-													  false, plannerRestrictionContext);
+		/* recurse into CreateDistributedPlan with subqueries/CTEs replaced */
+		distributedPlan = CreateDistributedPlan(planId, originalQuery, query, NULL, false,
+												plannerRestrictionContext);
 		distributedPlan->subPlanList = subPlanList;
 
+		return distributedPlan;
+	}
+
+	/*
+	 * DML command returns a planning error, even after recursive planning. The
+	 * logical planner cannot handle DML commands so return the plan with the
+	 * error.
+	 */
+	if (IsModifyCommand(originalQuery))
+	{
 		return distributedPlan;
 	}
 

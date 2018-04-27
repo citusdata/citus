@@ -84,9 +84,9 @@ INSERT INTO limit_orders_mx VALUES (2037, 'GOOG', 5634, now(), 'buy', random()),
 -- connect back to the other node
 \c - - - :worker_1_port
 
--- commands containing a CTE are unsupported
-WITH deleted_orders AS (DELETE FROM limit_orders_mx RETURNING *)
-INSERT INTO limit_orders_mx DEFAULT VALUES;
+-- commands containing a CTE are supported
+WITH deleted_orders AS (DELETE FROM limit_orders_mx WHERE id < 0 RETURNING *)
+INSERT INTO limit_orders_mx SELECT * FROM deleted_orders;
 
 -- test simple DELETE
 INSERT INTO limit_orders_mx VALUES (246, 'TSLA', 162, '2007-07-02 16:32:15', 'sell', 20.69);
@@ -115,9 +115,9 @@ DELETE FROM limit_orders_mx USING bidders WHERE limit_orders_mx.id = 246 AND
 											 limit_orders_mx.bidder_id = bidders.id AND
 											 bidders.name = 'Bernie Madoff';
 
--- commands containing a CTE are unsupported
-WITH deleted_orders AS (INSERT INTO limit_orders_mx DEFAULT VALUES RETURNING *)
-DELETE FROM limit_orders_mx;
+-- commands containing a CTE are supported
+WITH new_orders AS (INSERT INTO limit_orders_mx VALUES (411, 'FLO', 12, '2017-07-02 16:32:15', 'buy', 66))
+DELETE FROM limit_orders_mx WHERE id < 0;
 
 -- cursors are not supported
 DELETE FROM limit_orders_mx WHERE CURRENT OF cursor_name;
@@ -161,8 +161,8 @@ UPDATE limit_orders_mx SET limit_price = 0.00 FROM bidders
 						  limit_orders_mx.bidder_id = bidders.id AND
 						  bidders.name = 'Bernie Madoff';
 
--- commands containing a CTE are unsupported
-WITH deleted_orders AS (INSERT INTO limit_orders_mx DEFAULT VALUES RETURNING *)
+-- commands containing a CTE are supported
+WITH deleted_orders AS (INSERT INTO limit_orders_mx VALUES (399, 'PDR', 14, '2017-07-02 16:32:15', 'sell', 43))
 UPDATE limit_orders_mx SET symbol = 'GM';
 
 SELECT symbol, bidder_id FROM limit_orders_mx WHERE id = 246;
