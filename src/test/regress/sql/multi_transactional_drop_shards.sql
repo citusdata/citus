@@ -374,3 +374,17 @@ SELECT master_remove_node('localhost', :master_port);
 -- clean the workspace
 DROP TABLE transactional_drop_shards, transactional_drop_reference;
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
+
+-- test DROP TABLE as a non-superuser in a transaction block
+CREATE USER try_drop_table WITH LOGIN;
+GRANT ALL ON SCHEMA public TO try_drop_table;
+SELECT run_command_on_workers('CREATE USER try_drop_table WITH LOGIN');
+SELECT run_command_on_workers('GRANT ALL ON SCHEMA public TO try_drop_table');
+
+\c - try_drop_table - :master_port
+
+BEGIN;
+CREATE TABLE temp_dist_table (x int, y int);
+SELECT create_distributed_table('temp_dist_table','x');
+DROP TABLE temp_dist_table;
+END;

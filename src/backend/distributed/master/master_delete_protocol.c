@@ -223,9 +223,18 @@ master_drop_all_shards(PG_FUNCTION_ARGS)
 	char *schemaName = text_to_cstring(schemaNameText);
 	char *relationName = text_to_cstring(relationNameText);
 
-	EnsureCoordinator();
 	CheckCitusVersion(ERROR);
 
+	/*
+	 * The SQL_DROP trigger calls this function even for tables that are
+	 * not distributed. In that case, silently ignore and return -1.
+	 */
+	if (!IsDistributedTable(relationId) || !EnableDDLPropagation)
+	{
+		PG_RETURN_INT32(-1);
+	}
+
+	EnsureCoordinator();
 	CheckTableSchemaNameForDrop(relationId, &schemaName, &relationName);
 
 	/*
@@ -325,12 +334,6 @@ CheckTableSchemaNameForDrop(Oid relationId, char **schemaName, char **tableName)
 
 		EnsureTableOwner(relationId);
 	}
-	else if (!superuser())
-	{
-		/* table does not exist, must be called from drop trigger */
-		ereport(ERROR, (errmsg("cannot drop distributed table metadata as a "
-							   "non-superuser")));
-	}
 }
 
 
@@ -382,7 +385,6 @@ DropShards(Oid relationId, char *schemaName, char *relationName,
 			StringInfo workerDropQuery = makeStringInfo();
 			MultiConnection *connection = NULL;
 			uint32 connectionFlags = FOR_DDL;
-			char *extensionOwner = CitusExtensionOwnerName();
 
 			char storageType = shardInterval->storageType;
 			if (storageType == SHARD_STORAGE_TABLE)
@@ -397,8 +399,7 @@ DropShards(Oid relationId, char *schemaName, char *relationName,
 								 quotedShardName);
 			}
 
-			connection = GetPlacementConnection(connectionFlags, shardPlacement,
-												extensionOwner);
+			connection = GetPlacementConnection(connectionFlags, shardPlacement, NULL);
 
 			RemoteTransactionBeginIfNecessary(connection);
 
