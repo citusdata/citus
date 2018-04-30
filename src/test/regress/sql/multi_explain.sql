@@ -400,7 +400,6 @@ EXPLAIN (COSTS FALSE)
 	SELECT avg(l_linenumber) FROM lineitem WHERE l_orderkey > 9030;
 
 -- Test re-partition join
-SET citus.large_table_shard_count TO 1;
 
 EXPLAIN (COSTS FALSE)
 	SELECT count(*)

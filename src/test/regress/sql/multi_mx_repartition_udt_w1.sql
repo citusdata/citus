@@ -5,7 +5,6 @@
 \c - - - :worker_1_port
 SET client_min_messages = LOG;
 -- Query that should result in a repartition join on UDT column.
-SET citus.large_table_shard_count = 1;
 SET citus.task_executor_type = 'task-tracker';
 SET citus.log_multi_join_order = true;
 

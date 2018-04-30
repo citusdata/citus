@@ -81,8 +81,6 @@ DEBUG:  join prunable for intervals [8997,14947] and [1,5986]
    explain statements for distributed queries are not enabled
 (2 rows)
 
--- Update configuration to treat lineitem and orders tables as large
-SET citus.large_table_shard_count TO 2;
 SET client_min_messages TO LOG;
 -- The following queries check that we correctly handle joins and OR clauses. In
 -- particular, these queries check that we factorize out OR clauses if possible,
@@ -103,12 +101,6 @@ EXPLAIN SELECT l_quantity FROM lineitem, orders
 LOG:  join order: [ "lineitem" ][ cartesian product "orders" ]
 ERROR:  cannot perform distributed planning on this query
 DETAIL:  Cartesian products are currently unsupported
--- The below queries modify the partition method in pg_dist_partition. We thus
--- begin a transaction here so the changes don't impact any other parallel
--- running tests.
-BEGIN;
--- Validate that we take into account the partition method when building the
--- join-order plan.
 EXPLAIN SELECT count(*) FROM orders, lineitem_hash
 	WHERE o_orderkey = l_orderkey;
 LOG:  join order: [ "orders" ][ single partition join "lineitem_hash" ]
@@ -141,8 +133,6 @@ LOG:  join order: [ "customer_hash" ][ reference join "nation" ]
          explain statements for distributed queries are not enabled
 (3 rows)
 
--- Update the large table shard count for all the following tests.
-SET citus.large_table_shard_count TO 1;
 -- Validate that we don't use a single-partition join method for a hash
 -- re-partitioned table, thus preventing a partition of just the customer table.
 EXPLAIN SELECT count(*) FROM orders, lineitem, customer_append
@@ -179,7 +169,6 @@ LOG:  join order: [ "orders_hash" ][ single partition join "customer_append" ]
          explain statements for distributed queries are not enabled
 (3 rows)
 
-COMMIT;
 -- Reset client logging level to its previous value
 SET client_min_messages TO NOTICE;
 DROP TABLE lineitem_hash;

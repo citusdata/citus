@@ -57,7 +57,6 @@ INSERT INTO articles_hash_mx VALUES (48,  8, 'alkylic', 18610);
 INSERT INTO articles_hash_mx VALUES (49,  9, 'anyone', 2681);
 INSERT INTO articles_hash_mx VALUES (50, 10, 'anjanette', 19519);
 SET citus.task_executor_type TO 'real-time';
-SET citus.large_table_shard_count TO 2;
 SET client_min_messages TO 'DEBUG2';
 -- insert a single row for the test
 INSERT INTO articles_single_shard_hash_mx VALUES (50, 10, 'anjanette', 19519);

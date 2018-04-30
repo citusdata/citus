@@ -199,7 +199,6 @@ SELECT * FROM repartition_udt JOIN repartition_udt_other
     ON repartition_udt.pk = repartition_udt_other.pk;
 
 -- Query that should result in a repartition join on UDT column.
-SET citus.large_table_shard_count = 1;
 SET citus.log_multi_join_order = true;
 
 EXPLAIN SELECT * FROM repartition_udt JOIN repartition_udt_other

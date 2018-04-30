@@ -34,7 +34,6 @@
 
 
 /* Config variables managed via guc.c */
-int LargeTableShardCount = 4;   /* shard counts for a large table */
 bool LogMultiJoinOrder = false; /* print join order as a debugging aid */
 
 /* Function pointer type definition for join rule evaluation functions */

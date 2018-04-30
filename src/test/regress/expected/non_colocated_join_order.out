@@ -9,7 +9,6 @@ SELECT master_create_distributed_table('test_table_1', 'id', 'append');
  
 (1 row)
 
-SET citus.large_table_shard_count to 1;
 \copy test_table_1 FROM STDIN DELIMITER ','
 \copy test_table_1 FROM STDIN DELIMITER ','
 CREATE TABLE test_table_2(id int, value_1 int);

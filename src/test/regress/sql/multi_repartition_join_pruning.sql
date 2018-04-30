@@ -1,7 +1,7 @@
 --
--- MULTI_LARGE_TABLE_PRUNING
+-- MULTI_REPARTITION_JOIN_PRUNING
 --
--- Tests covering partition and join-pruning for large table joins. Note that we
+-- Tests covering partition and join-pruning for repartition joins. Note that we
 -- set executor type to task tracker executor here, as we cannot run repartition
 -- jobs with real time executor.
 
@@ -9,7 +9,6 @@
 SET citus.next_shard_id TO 700000;
 
 
-SET citus.large_table_shard_count TO 2;
 SET client_min_messages TO DEBUG2;
 SET citus.task_executor_type TO 'task-tracker';
 

@@ -74,7 +74,6 @@ typedef struct JoinOrderNode
 
 
 /* Config variables managed via guc.c */
-extern int LargeTableShardCount;
 extern bool LogMultiJoinOrder;
 
 

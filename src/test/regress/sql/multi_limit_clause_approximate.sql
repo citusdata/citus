@@ -34,20 +34,15 @@ SELECT c_custkey, c_name, count(*) as lineitem_count
 	GROUP BY c_custkey, c_name
 	ORDER BY lineitem_count DESC, c_custkey LIMIT 10;
 
--- Now, enable limit optimization to fetch half of each task's results. For this
--- test, we also change a config setting to ensure that we don't repartition any
--- of the tables during the query.
+-- Now, enable limit optimization to fetch half of each task's results.
 
 SET citus.limit_clause_row_fetch_count TO 150;
-SET citus.large_table_shard_count TO 2;
 
 SELECT c_custkey, c_name, count(*) as lineitem_count
 	FROM customer, orders, lineitem
 	WHERE c_custkey = o_custkey AND l_orderkey = o_orderkey
 	GROUP BY c_custkey, c_name
 	ORDER BY lineitem_count DESC, c_custkey LIMIT 10;
-
-RESET citus.large_table_shard_count;
 
 -- We now test scenarios where applying the limit optimization wouldn't produce
 -- meaningful results. First, we check that we don't push down the limit clause

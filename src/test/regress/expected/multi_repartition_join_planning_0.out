@@ -1,7 +1,7 @@
 --
--- MULTI_LARGE_TABLE_PLANNING
+-- MULTI_REPARTITION_JOIN_PLANNING
 --
--- Tests that cover large table join planning. Note that we explicitly start a
+-- Tests that cover repartition join planning. Note that we explicitly start a
 -- transaction block here so that we don't emit debug messages with changing
 -- transaction ids in them. Also, we set the executor type to task tracker
 -- executor here, as we cannot run repartition jobs with real time executor.
@@ -17,10 +17,6 @@ SELECT substring(:'server_version', '\d+')::int > 9 AS version_above_nine;
 
 BEGIN;
 SET client_min_messages TO DEBUG4;
-DEBUG:  CommitTransactionCommand
-SET citus.large_table_shard_count TO 2;
-DEBUG:  StartTransactionCommand
-DEBUG:  ProcessUtility
 DEBUG:  CommitTransactionCommand
 SET citus.task_executor_type TO 'task-tracker';
 DEBUG:  StartTransactionCommand

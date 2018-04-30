@@ -65,11 +65,8 @@ SELECT c_custkey, c_name, count(*) as lineitem_count
        304 | Customer#000000304 |             31
 (10 rows)
 
--- Now, enable limit optimization to fetch half of each task's results. For this
--- test, we also change a config setting to ensure that we don't repartition any
--- of the tables during the query.
+-- Now, enable limit optimization to fetch half of each task's results.
 SET citus.limit_clause_row_fetch_count TO 150;
-SET citus.large_table_shard_count TO 2;
 SELECT c_custkey, c_name, count(*) as lineitem_count
 	FROM customer, orders, lineitem
 	WHERE c_custkey = o_custkey AND l_orderkey = o_orderkey
@@ -90,7 +87,6 @@ DEBUG:  push down of limit count: 150
        304 | Customer#000000304 |             31
 (10 rows)
 
-RESET citus.large_table_shard_count;
 -- We now test scenarios where applying the limit optimization wouldn't produce
 -- meaningful results. First, we check that we don't push down the limit clause
 -- for non-commutative aggregates.

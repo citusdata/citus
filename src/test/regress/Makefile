@@ -73,7 +73,6 @@ check-multi-mx: all tempinstall-main
 check-multi-task-tracker-extra: all tempinstall-main
 	$(pg_regress_multi_check) --load-extension=citus \
 	--server-option=citus.task_executor_type=task-tracker \
-	--server-option=citus.large_table_shard_count=1 \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_task_tracker_extra_schedule $(EXTRA_TESTS)
 
 check-follower-cluster: all
