@@ -14,6 +14,7 @@
 #include "distributed/master_metadata_utility.h"
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_sync.h"
+#include "distributed/multi_utility.h"
 #include "distributed/worker_transaction.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
@@ -38,8 +39,20 @@ master_drop_distributed_table_metadata(PG_FUNCTION_ARGS)
 	char *schemaName = text_to_cstring(schemaNameText);
 	char *tableName = text_to_cstring(tableNameText);
 
-	EnsureCoordinator();
 	CheckCitusVersion(ERROR);
+
+	/*
+	 * The SQL_DROP trigger calls this function even for tables that are
+	 * not distributed. In that case, silently ignore. This is not very
+	 * user-friendly, but this function is really only meant to be called
+	 * from the trigger.
+	 */
+	if (!IsDistributedTable(relationId) || !EnableDDLPropagation)
+	{
+		PG_RETURN_VOID();
+	}
+
+	EnsureCoordinator();
 
 	CheckTableSchemaNameForDrop(relationId, &schemaName, &tableName);
 
