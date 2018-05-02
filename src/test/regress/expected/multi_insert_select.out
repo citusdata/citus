@@ -1775,6 +1775,25 @@ SELECT count(*) FROM raw_events_second;
     38
 (1 row)
 
+-- intermediate results (CTEs) should be allowed when doing INSERT...SELECT within a CTE
+WITH series AS (
+  SELECT s AS val FROM generate_series(60,70) s
+),
+inserts AS (
+  INSERT INTO raw_events_second (user_id)
+  SELECT
+    user_id
+  FROM
+    raw_events_first JOIN series ON (value_1 = val)
+  RETURNING
+    NULL
+)
+SELECT count(*) FROM inserts;
+ count 
+-------
+     2
+(1 row)
+
 -- we need this in our next test
 truncate raw_events_first;
 SET client_min_messages TO DEBUG2;
