@@ -179,7 +179,7 @@ TaskTrackerMain(Datum main_arg)
 		 * hash and an LWLock guarding that hash.
 		 */
 		LWLockReleaseAll();
-		AtEOXact_Files();
+		AtEOXact_Files(false);
 		AtEOXact_HashTables(false);
 
 		/*

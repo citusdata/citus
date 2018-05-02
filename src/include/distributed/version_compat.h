@@ -55,6 +55,8 @@
 #define BackgroundWorkerInitializeConnectionByOid(dboid, useroid, flags) \
 	BackgroundWorkerInitializeConnectionByOid(dboid, useroid)
 
+#define AtEOXact_Files(isCommit) \
+	AtEOXact_Files()
 
 #define ACLCHECK_OBJECT_TABLE ACL_KIND_CLASS
 #define ACLCHECK_OBJECT_SCHEMA ACL_KIND_NAMESPACE

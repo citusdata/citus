@@ -27,6 +27,7 @@
 #include "distributed/transaction_management.h"
 #include "distributed/placement_connection.h"
 #include "distributed/subplan_execution.h"
+#include "distributed/version_compat.h"
 #include "utils/hsearch.h"
 #include "utils/guc.h"
 #include "utils/memutils.h"
@@ -204,7 +205,7 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 				 * been closed; force them closed here before running
 				 * RemoveIntermediateResultsDirectory.
 				 */
-				AtEOXact_Files();
+				AtEOXact_Files(false);
 				SwallowErrors(RemoveIntermediateResultsDirectory);
 			}
 			ResetShardPlacementTransactionState();
