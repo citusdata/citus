@@ -33,9 +33,9 @@ CREATE TABLE aggregate_type (
        float_value float(20) not null,
        double_value float(40) not null,
        interval_value interval not null);
-SELECT master_create_distributed_table('aggregate_type', 'float_value', 'append');
- master_create_distributed_table 
----------------------------------
+SELECT create_distributed_table('aggregate_type', 'float_value', 'append');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 

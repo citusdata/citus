@@ -4,6 +4,7 @@
 
 
 SET citus.next_shard_id TO 13100000;
+SET citus.shard_replication_factor TO 1;
 
 CREATE FUNCTION deparse_shard_query_test(text)
 	RETURNS VOID
@@ -23,8 +24,7 @@ CREATE TABLE raw_events_1
 	 event_at date DEfAULT now()
 	 );
 
-SELECT master_create_distributed_table('raw_events_1', 'tenant_id', 'hash');
-SELECT master_create_worker_shards('raw_events_1', 4, 1);
+SELECT create_distributed_table('raw_events_1', 'tenant_id', 'hash');
 
 -- create the first table
 CREATE TABLE raw_events_2
@@ -39,8 +39,7 @@ CREATE TABLE raw_events_2
 	 event_at date DEfAULT now()
 	 );
 
-SELECT master_create_distributed_table('raw_events_2', 'tenant_id', 'hash');
-SELECT master_create_worker_shards('raw_events_2', 4, 1);
+SELECT create_distributed_table('raw_events_2', 'tenant_id', 'hash');
 
 CREATE TABLE aggregated_events
 	(tenant_id bigint,
@@ -52,8 +51,7 @@ CREATE TABLE aggregated_events
 	 average_value_6 int,
 	 rollup_hour date);
 
-SELECT master_create_distributed_table('aggregated_events', 'tenant_id', 'hash');
-SELECT master_create_worker_shards('aggregated_events', 4, 1);
+SELECT create_distributed_table('aggregated_events', 'tenant_id', 'hash');
 
 
 -- start with very simple examples on a single table

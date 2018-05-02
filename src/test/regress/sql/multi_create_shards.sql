@@ -53,25 +53,25 @@ CREATE TABLE table_to_distribute (
 
 -- use the table WITH (OIDS) set
 ALTER TABLE table_to_distribute SET WITH OIDS;
-SELECT master_create_distributed_table('table_to_distribute', 'id', 'hash');
+SELECT create_distributed_table('table_to_distribute', 'id', 'hash');
 
 -- revert WITH (OIDS) from above
 ALTER TABLE table_to_distribute SET WITHOUT OIDS;
 
 -- use an index instead of table name
-SELECT master_create_distributed_table('table_to_distribute_pkey', 'id', 'hash');
+SELECT create_distributed_table('table_to_distribute_pkey', 'id', 'hash');
 
 -- use a bad column name
-SELECT master_create_distributed_table('table_to_distribute', 'bad_column', 'hash');
+SELECT create_distributed_table('table_to_distribute', 'bad_column', 'hash');
 
 -- use unrecognized partition type
-SELECT master_create_distributed_table('table_to_distribute', 'name', 'unrecognized');
+SELECT create_distributed_table('table_to_distribute', 'name', 'unrecognized');
 
 -- use a partition column of a type lacking any default operator class
-SELECT master_create_distributed_table('table_to_distribute', 'json_data', 'hash');
+SELECT create_distributed_table('table_to_distribute', 'json_data', 'hash');
 
 -- use a partition column of type lacking the required support function (hash)
-SELECT master_create_distributed_table('table_to_distribute', 'test_type_data', 'hash');
+SELECT create_distributed_table('table_to_distribute', 'test_type_data', 'hash');
 
 -- distribute table and inspect side effects
 SELECT master_create_distributed_table('table_to_distribute', 'name', 'hash');
@@ -119,8 +119,9 @@ CREATE FOREIGN TABLE foreign_table_to_distribute
 )
 SERVER fake_fdw_server;
 
-SELECT master_create_distributed_table('foreign_table_to_distribute', 'id', 'hash');
-SELECT master_create_worker_shards('foreign_table_to_distribute', 16, 1);
+SET citus.shard_count TO 16;
+SET citus.shard_replication_factor TO 1;
+SELECT create_distributed_table('foreign_table_to_distribute', 'id', 'hash');
 
 SELECT shardstorage, shardminvalue, shardmaxvalue FROM pg_dist_shard
 	WHERE logicalrelid = 'foreign_table_to_distribute'::regclass
@@ -133,8 +134,8 @@ CREATE TABLE weird_shard_count
 	id bigint
 );
 
-SELECT master_create_distributed_table('weird_shard_count', 'id', 'hash');
-SELECT master_create_worker_shards('weird_shard_count', 7, 1);
+SET citus.shard_count TO 7;
+SELECT create_distributed_table('weird_shard_count', 'id', 'hash');
 
 -- Citus ensures all shards are roughly the same size
 SELECT shardmaxvalue::integer - shardminvalue::integer AS shard_size

@@ -12,8 +12,7 @@ CREATE TABLE upsert_test
 );
 
 -- distribute the table and create shards
-SELECT master_create_distributed_table('upsert_test', 'part_key', 'hash');
-SELECT master_create_worker_shards('upsert_test', '4', '2');
+SELECT create_distributed_table('upsert_test', 'part_key', 'hash');
 
 -- do a regular insert
 INSERT INTO upsert_test (part_key, other_col) VALUES (1, 1), (2, 2);
@@ -116,8 +115,7 @@ CREATE TABLE upsert_test_2
 );
 
 -- distribute the table and create shards
-SELECT master_create_distributed_table('upsert_test_2', 'part_key', 'hash');
-SELECT master_create_worker_shards('upsert_test_2', '4', '2');
+SELECT create_distributed_table('upsert_test_2', 'part_key', 'hash');
 
 -- now show that Citus works with multiple columns as the PRIMARY KEY, including the partiton key
 INSERT INTO upsert_test_2 (part_key, other_col) VALUES (1, 1);
@@ -137,8 +135,7 @@ CREATE TABLE upsert_test_3
 CREATE INDEX idx_ups_test ON upsert_test_3(part_key);
 
 -- distribute the table and create shards
-SELECT master_create_distributed_table('upsert_test_3', 'part_key', 'hash');
-SELECT master_create_worker_shards('upsert_test_3', '4', '2');
+SELECT create_distributed_table('upsert_test_3', 'part_key', 'hash');
 
 -- since there are no unique indexes, error-out
 INSERT INTO upsert_test_3 VALUES (1, 0) ON CONFLICT(part_key) DO UPDATE SET count = upsert_test_3.count + 1;
@@ -151,8 +148,7 @@ CREATE TABLE upsert_test_4
 );
 
 -- distribute the table and create shards
-SELECT master_create_distributed_table('upsert_test_4', 'part_key', 'hash');
-SELECT master_create_worker_shards('upsert_test_4', '4', '2');
+SELECT create_distributed_table('upsert_test_4', 'part_key', 'hash');
 
 -- a single row insert
 INSERT INTO upsert_test_4 VALUES (1, 0);
@@ -169,9 +165,9 @@ INSERT INTO upsert_test_4 VALUES (1, 0) ON CONFLICT(part_key) DO UPDATE SET coun
 SELECT * FROM upsert_test_4;
 
 -- now test dropped columns
+SET citus.shard_replication_factor TO 1;
 CREATE TABLE dropcol_distributed(key int primary key, drop1 int, keep1 text, drop2 numeric, keep2 float);
-SELECT master_create_distributed_table('dropcol_distributed', 'key', 'hash');
-SELECT master_create_worker_shards('dropcol_distributed', 4, 1);
+SELECT create_distributed_table('dropcol_distributed', 'key', 'hash');
 
 INSERT INTO dropcol_distributed AS dropcol (key, keep1, keep2) VALUES (1, '5', 5) ON CONFLICT(key)
 	DO UPDATE SET keep1 = dropcol.keep1;

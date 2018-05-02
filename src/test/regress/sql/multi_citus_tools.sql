@@ -208,9 +208,9 @@ SELECT * FROM run_command_on_workers('select 1') ORDER BY 2 ASC;
 SELECT * FROM run_command_on_workers('select count(*) from pg_dist_partition') ORDER BY 2 ASC;
 
 -- make sure run_on_all_placements respects shardstate
+SET citus.shard_count TO 5;
 CREATE TABLE check_placements (key int);
-SELECT master_create_distributed_table('check_placements', 'key', 'hash');
-SELECT master_create_worker_shards('check_placements', 5, 2);
+SELECT create_distributed_table('check_placements', 'key', 'hash');
 SELECT * FROM run_command_on_placements('check_placements', 'select 1');
 UPDATE pg_dist_shard_placement SET shardstate = 3
 	WHERE shardid % 2 = 0 AND nodeport = :worker_1_port;
@@ -219,11 +219,11 @@ DROP TABLE check_placements CASCADE;
 
 -- make sure run_on_all_colocated_placements correctly detects colocation
 CREATE TABLE check_colocated (key int);
-SELECT master_create_distributed_table('check_colocated', 'key', 'hash');
-SELECT master_create_worker_shards('check_colocated', 5, 2);
+SELECT create_distributed_table('check_colocated', 'key', 'hash');
 CREATE TABLE second_table (key int);
-SELECT master_create_distributed_table('second_table', 'key', 'hash');
-SELECT master_create_worker_shards('second_table', 4, 2);
+
+SET citus.shard_count TO 4;
+SELECT create_distributed_table('second_table', 'key', 'hash');
 SELECT * FROM run_command_on_colocated_placements('check_colocated', 'second_table',
 												  'select 1');
 -- even when the difference is in replication factor, an error is thrown
@@ -256,9 +256,10 @@ DROP TABLE check_colocated CASCADE;
 DROP TABLE second_table CASCADE;
 
 -- runs on all shards
+SET citus.shard_count TO 5;
+
 CREATE TABLE check_shards (key int);
-SELECT master_create_distributed_table('check_shards', 'key', 'hash');
-SELECT master_create_worker_shards('check_shards', 5, 2);
+SELECT create_distributed_table('check_shards', 'key', 'hash');
 SELECT * FROM run_command_on_shards('check_shards', 'select 1');
 UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid % 2 = 0;
 SELECT * FROM run_command_on_shards('check_shards', 'select 1');

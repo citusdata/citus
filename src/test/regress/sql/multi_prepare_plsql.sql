@@ -187,8 +187,8 @@ CREATE TABLE plpgsql_table (
 	key int,
 	value int
 );
-SELECT master_create_distributed_table('plpgsql_table','key','hash');
-SELECT master_create_worker_shards('plpgsql_table',4,1);
+SET citus.shard_replication_factor TO 1;
+SELECT create_distributed_table('plpgsql_table','key','hash');
 
 CREATE FUNCTION no_parameter_insert() RETURNS void as $$
 BEGIN

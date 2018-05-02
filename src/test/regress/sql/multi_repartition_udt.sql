@@ -167,11 +167,11 @@ FUNCTION 1 test_udt_hash(test_udt);
 \c - - - :master_port
 
 -- Distribute and populate the two tables.
-
-SELECT master_create_distributed_table('repartition_udt', 'pk', 'hash');
-SELECT master_create_worker_shards('repartition_udt', 3, 1);
-SELECT master_create_distributed_table('repartition_udt_other', 'pk', 'hash');
-SELECT master_create_worker_shards('repartition_udt_other', 5, 1);
+SET citus.shard_count TO 3;
+SET citus.shard_replication_factor TO 1;
+SELECT create_distributed_table('repartition_udt', 'pk', 'hash');
+SET citus.shard_count TO 5;
+SELECT create_distributed_table('repartition_udt_other', 'pk', 'hash');
 
 INSERT INTO repartition_udt values (1, '(1,1)'::test_udt, 'foo');
 INSERT INTO repartition_udt values (2, '(1,2)'::test_udt, 'foo');

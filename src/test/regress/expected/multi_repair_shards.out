@@ -11,16 +11,12 @@ CREATE INDEX ON customer_engagements (id);
 CREATE INDEX ON customer_engagements (created_at);
 CREATE INDEX ON customer_engagements (event_data);
 -- distribute the table
-SELECT master_create_distributed_table('customer_engagements', 'id', 'hash');
- master_create_distributed_table 
----------------------------------
- 
-(1 row)
-
 -- create a single shard on the first worker
-SELECT master_create_worker_shards('customer_engagements', 1, 2);
- master_create_worker_shards 
------------------------------
+SET citus.shard_count TO 1;
+SET citus.shard_replication_factor TO 2;
+SELECT create_distributed_table('customer_engagements', 'id', 'hash');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 
@@ -105,17 +101,13 @@ CREATE FOREIGN TABLE remote_engagements (
 	event_data text
 ) SERVER fake_fdw_server;
 -- distribute the table
-SELECT master_create_distributed_table('remote_engagements', 'id', 'hash');
- master_create_distributed_table 
----------------------------------
- 
-(1 row)
-
 -- create a single shard on the first worker
-SELECT master_create_worker_shards('remote_engagements', 1, 2);
+SET citus.shard_count TO 1;
+SET citus.shard_replication_factor TO 2;
+SELECT create_distributed_table('remote_engagements', 'id', 'hash');
 NOTICE:  foreign-data wrapper "fake_fdw" does not have an extension defined
- master_create_worker_shards 
------------------------------
+ create_distributed_table 
+--------------------------
  
 (1 row)
 

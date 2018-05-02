@@ -10,7 +10,7 @@ SET citus.next_shard_id TO 1210000;
 -- expect all shards to be dropped
 --
 CREATE TABLE test_truncate_append(a int);
-SELECT master_create_distributed_table('test_truncate_append', 'a', 'append');
+SELECT create_distributed_table('test_truncate_append', 'a', 'append');
 
 -- verify no error is thrown when no shards are present
 TRUNCATE TABLE test_truncate_append;
@@ -50,7 +50,7 @@ DROP TABLE test_truncate_append;
 -- expect shard to be present, data to be truncated
 --
 CREATE TABLE test_truncate_range(a int);
-SELECT master_create_distributed_table('test_truncate_range', 'a', 'range');
+SELECT create_distributed_table('test_truncate_range', 'a', 'range');
 
 -- verify no error is thrown when no shards are present
 TRUNCATE TABLE test_truncate_range;
@@ -145,9 +145,9 @@ SELECT count(*) FROM test_truncate_hash;
 DROP TABLE test_truncate_hash;
 
 -- test with table with spaces in it
+SET citus.shard_replication_factor TO 1;
 CREATE TABLE "a b hash" (a int, b int);
-SELECT master_create_distributed_table('"a b hash"', 'a', 'hash');
-SELECT master_create_worker_shards('"a b hash"', 4, 1);
+SELECT create_distributed_table('"a b hash"', 'a', 'hash');
 INSERT INTO "a b hash" values (1, 0);
 SELECT * from "a b hash";
 TRUNCATE TABLE "a b hash";
@@ -157,7 +157,7 @@ DROP TABLE "a b hash";
 
 -- now with append
 CREATE TABLE "a b append" (a int, b int);
-SELECT master_create_distributed_table('"a b append"', 'a', 'append');
+SELECT create_distributed_table('"a b append"', 'a', 'append');
 SELECT master_create_empty_shard('"a b append"') AS new_shard_id \gset
 UPDATE pg_dist_shard SET shardminvalue = 1, shardmaxvalue = 500
 WHERE shardid = :new_shard_id;

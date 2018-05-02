@@ -137,15 +137,10 @@ CREATE TABLE researchers (
   lab_id int NOT NULL,
   name text NOT NULL
 );
-SELECT master_create_distributed_table('researchers', 'lab_id', 'hash');
- master_create_distributed_table 
----------------------------------
- 
-(1 row)
-
-SELECT master_create_worker_shards('researchers', 2, 2);
- master_create_worker_shards 
------------------------------
+SET citus.shard_count TO 2;
+SELECT create_distributed_table('researchers', 'lab_id', 'hash');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 

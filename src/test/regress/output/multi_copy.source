@@ -826,17 +826,17 @@ COPY numbers_hash FROM STDIN WITH (FORMAT 'csv');
 -- verify each placement is active
 SELECT shardid, shardstate, nodename, nodeport
 	FROM pg_dist_shard_placement join pg_dist_shard using(shardid) 
-	WHERE logicalrelid = 'numbers_hash'::regclass order by placementid;
+	WHERE logicalrelid = 'numbers_hash'::regclass order by placementid, shardid, nodeport;
  shardid | shardstate | nodename  | nodeport 
 ---------+------------+-----------+----------
-  560171 |          1 | localhost |    57637
   560171 |          1 | localhost |    57638
-  560172 |          1 | localhost |    57638
+  560171 |          1 | localhost |    57637
   560172 |          1 | localhost |    57637
-  560173 |          1 | localhost |    57637
+  560172 |          1 | localhost |    57638
   560173 |          1 | localhost |    57638
-  560174 |          1 | localhost |    57638
+  560173 |          1 | localhost |    57637
   560174 |          1 | localhost |    57637
+  560174 |          1 | localhost |    57638
 (8 rows)
 
 -- create a reference table
@@ -858,17 +858,17 @@ SELECT create_distributed_table('numbers_hash_other', 'a');
 
 SELECT shardid, shardstate, nodename, nodeport
 	FROM pg_dist_shard_placement join pg_dist_shard using(shardid) 
-	WHERE logicalrelid = 'numbers_hash_other'::regclass order by placementid;
+	WHERE logicalrelid = 'numbers_hash_other'::regclass order by placementid, shardid, nodeport;
  shardid | shardstate | nodename  | nodeport 
 ---------+------------+-----------+----------
-  560176 |          1 | localhost |    57638
   560176 |          1 | localhost |    57637
-  560177 |          1 | localhost |    57637
+  560176 |          1 | localhost |    57638
   560177 |          1 | localhost |    57638
-  560178 |          1 | localhost |    57638
+  560177 |          1 | localhost |    57637
   560178 |          1 | localhost |    57637
-  560179 |          1 | localhost |    57637
+  560178 |          1 | localhost |    57638
   560179 |          1 | localhost |    57638
+  560179 |          1 | localhost |    57637
 (8 rows)
 
 -- manually corrupt pg_dist_shard such that both copies of one shard is placed in
@@ -897,17 +897,17 @@ CONTEXT:  COPY numbers_hash, line 6: "6,6"
 -- verify shards in the first worker as marked invalid
 SELECT shardid, shardstate, nodename, nodeport
 	FROM pg_dist_shard_placement join pg_dist_shard using(shardid) 
-	WHERE logicalrelid = 'numbers_hash'::regclass order by placementid;
+	WHERE logicalrelid = 'numbers_hash'::regclass order by placementid, shardid, nodeport;
  shardid | shardstate | nodename  | nodeport 
 ---------+------------+-----------+----------
-  560171 |          3 | localhost |    57637
   560171 |          1 | localhost |    57638
-  560172 |          1 | localhost |    57638
+  560171 |          3 | localhost |    57637
   560172 |          3 | localhost |    57637
-  560173 |          3 | localhost |    57637
+  560172 |          1 | localhost |    57638
   560173 |          1 | localhost |    57638
-  560174 |          1 | localhost |    57638
+  560173 |          3 | localhost |    57637
   560174 |          3 | localhost |    57637
+  560174 |          1 | localhost |    57638
 (8 rows)
 
 -- try to insert into a reference table copy should fail
@@ -941,17 +941,17 @@ CONTEXT:  COPY numbers_hash_other, line 1: "1,1"
 -- since copy has failed altogether
 SELECT shardid, shardstate, nodename, nodeport
 	FROM pg_dist_shard_placement join pg_dist_shard using(shardid) 
-	WHERE logicalrelid = 'numbers_hash_other'::regclass order by placementid;
+	WHERE logicalrelid = 'numbers_hash_other'::regclass order by placementid, shardid, nodeport;
  shardid | shardstate | nodename  | nodeport 
 ---------+------------+-----------+----------
   560176 |          1 | localhost |    57637
   560176 |          1 | localhost |    57637
-  560177 |          1 | localhost |    57637
   560177 |          1 | localhost |    57638
-  560178 |          1 | localhost |    57638
+  560177 |          1 | localhost |    57637
   560178 |          1 | localhost |    57637
-  560179 |          1 | localhost |    57637
+  560178 |          1 | localhost |    57638
   560179 |          1 | localhost |    57638
+  560179 |          1 | localhost |    57637
 (8 rows)
 
 -- re-enable test_user on the first worker
@@ -993,17 +993,17 @@ SELECT count(a) FROM numbers_hash;
 -- verify shard is still marked as valid
 SELECT shardid, shardstate, nodename, nodeport
 	FROM pg_dist_shard_placement join pg_dist_shard using(shardid) 
-	WHERE logicalrelid = 'numbers_hash'::regclass order by placementid;
+	WHERE logicalrelid = 'numbers_hash'::regclass order by placementid, shardid, nodeport;
  shardid | shardstate | nodename  | nodeport 
 ---------+------------+-----------+----------
-  560180 |          1 | localhost |    57637
   560180 |          1 | localhost |    57638
-  560181 |          1 | localhost |    57638
+  560180 |          1 | localhost |    57637
   560181 |          1 | localhost |    57637
-  560182 |          1 | localhost |    57637
+  560181 |          1 | localhost |    57638
   560182 |          1 | localhost |    57638
-  560183 |          1 | localhost |    57638
+  560182 |          1 | localhost |    57637
   560183 |          1 | localhost |    57637
+  560183 |          1 | localhost |    57638
 (8 rows)
 
 DROP TABLE numbers_hash;
@@ -1094,7 +1094,7 @@ NOTICE:  Copying data from local table...
 ABORT;
 -- copy into a table with a JSONB column
 CREATE TABLE copy_jsonb (key text, value jsonb, extra jsonb default '["default"]'::jsonb);
-SELECT create_distributed_table('copy_jsonb', 'key');
+SELECT create_distributed_table('copy_jsonb', 'key', colocate_with => 'none');
  create_distributed_table 
 --------------------------
  
