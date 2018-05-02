@@ -38,6 +38,7 @@
 #include "distributed/multi_utility.h"
 #include "distributed/pg_dist_partition.h"
 #include "distributed/placement_connection.h"
+#include "distributed/query_pushdown_planning.h"
 #include "distributed/remote_commands.h"
 #include "distributed/shared_library_init.h"
 #include "distributed/statistics_collection.h"

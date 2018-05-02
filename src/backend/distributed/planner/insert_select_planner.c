@@ -23,6 +23,7 @@
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_router_planner.h"
 #include "distributed/pg_dist_partition.h"
+#include "distributed/query_pushdown_planning.h"
 #include "distributed/resource_lock.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"

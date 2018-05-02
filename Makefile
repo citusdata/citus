@@ -47,6 +47,7 @@ OBJS = src/backend/distributed/shared_library_init.o \
      src/backend/distributed/planner/multi_master_planner.o \
      src/backend/distributed/planner/multi_physical_planner.o \
      src/backend/distributed/planner/query_colocation_checker.o \
+     src/backend/distributed/planner/query_pushdown_planning.o \
      src/backend/distributed/planner/multi_router_planner.o \
      src/backend/distributed/planner/postgres_planning_functions.o \
      src/backend/distributed/planner/recursive_planning.o \
