@@ -5,7 +5,7 @@
 SET citus.next_shard_id TO 1350000;
 
 -- set shard_count to 4 for faster tests, because we create/drop lots of shards in this test.
-SET citus.shard_count TO 4;
+SET citus.shard_count TO 32;
 
 -- create tables
 CREATE TABLE referenced_table(id int UNIQUE, test_column int, PRIMARY KEY(id, test_column));
@@ -37,7 +37,7 @@ SET citus.shard_count TO 8;
 CREATE TABLE referencing_table(id int, ref_id int, FOREIGN KEY(ref_id) REFERENCES referenced_table(id));
 SELECT create_distributed_table('referencing_table', 'ref_id', 'hash');
 DROP TABLE referencing_table;
-SET citus.shard_count TO 4;
+SET citus.shard_count TO 32;
 
 -- test foreign constraint creation on non-partition columns
 CREATE TABLE referencing_table(id int, ref_id int, FOREIGN KEY(id) REFERENCES referenced_table(id));

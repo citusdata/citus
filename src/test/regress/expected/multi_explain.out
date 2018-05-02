@@ -471,10 +471,10 @@ Aggregate
                                 Sort Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id)
                                 ->  Hash Join
                                       Hash Cond: (users.composite_id = events.composite_id)
-                                      ->  Seq Scan on users_1400033 users
+                                      ->  Seq Scan on users_1400289 users
                                             Filter: ((composite_id >= '(1,-9223372036854775808)'::user_composite_type) AND (composite_id <= '(1,9223372036854775807)'::user_composite_type))
                                       ->  Hash
-                                            ->  Seq Scan on events_1400029 events
+                                            ->  Seq Scan on events_1400285 events
                                                   Filter: ((event_type)::text = ANY ('{click,submit,pay}'::text[]))
 -- Union and left join subquery pushdown
 EXPLAIN (COSTS OFF)
@@ -562,24 +562,24 @@ HashAggregate
                                                         ->  Append
                                                               ->  Hash Join
                                                                     Hash Cond: (users.composite_id = events.composite_id)
-                                                                    ->  Seq Scan on users_1400033 users
+                                                                    ->  Seq Scan on users_1400289 users
                                                                           Filter: ((composite_id >= '(1,-9223372036854775808)'::user_composite_type) AND (composite_id <= '(1,9223372036854775807)'::user_composite_type))
                                                                     ->  Hash
-                                                                          ->  Seq Scan on events_1400029 events
+                                                                          ->  Seq Scan on events_1400285 events
                                                                                 Filter: ((event_type)::text = 'click'::text)
                                                               ->  Hash Join
                                                                     Hash Cond: (users_1.composite_id = events_1.composite_id)
-                                                                    ->  Seq Scan on users_1400033 users_1
+                                                                    ->  Seq Scan on users_1400289 users_1
                                                                           Filter: ((composite_id >= '(1,-9223372036854775808)'::user_composite_type) AND (composite_id <= '(1,9223372036854775807)'::user_composite_type))
                                                                     ->  Hash
-                                                                          ->  Seq Scan on events_1400029 events_1
+                                                                          ->  Seq Scan on events_1400285 events_1
                                                                                 Filter: ((event_type)::text = 'submit'::text)
                                                   ->  Hash
                                                         ->  Subquery Scan on subquery_2
                                                               ->  Unique
                                                                     ->  Sort
                                                                           Sort Key: ((events_2.composite_id).tenant_id), ((events_2.composite_id).user_id)
-                                                                          ->  Seq Scan on events_1400029 events_2
+                                                                          ->  Seq Scan on events_1400285 events_2
                                                                                 Filter: ((composite_id >= '(1,-9223372036854775808)'::user_composite_type) AND (composite_id <= '(1,9223372036854775807)'::user_composite_type) AND ((event_type)::text = 'pay'::text))
 -- Union, left join and having subquery pushdown
 EXPLAIN (COSTS OFF)
@@ -725,12 +725,12 @@ Limit
                                                   ->  Limit
                                                         ->  Sort
                                                               Sort Key: users.lastseen DESC
-                                                              ->  Seq Scan on users_1400033 users
+                                                              ->  Seq Scan on users_1400289 users
                                                                     Filter: ((composite_id >= '(1,-9223372036854775808)'::user_composite_type) AND (composite_id <= '(1,9223372036854775807)'::user_composite_type))
                                                   ->  Limit
                                                         ->  Sort
                                                               Sort Key: events.event_time DESC
-                                                              ->  Seq Scan on events_1400029 events
+                                                              ->  Seq Scan on events_1400285 events
                                                                     Filter: (composite_id = users.composite_id)
 RESET citus.subquery_pushdown;
 -- Test all tasks output

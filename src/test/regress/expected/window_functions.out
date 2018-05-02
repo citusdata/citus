@@ -530,7 +530,7 @@ ORDER BY
                                              Sort Key: users_table.user_id, (max(users_table.user_id)), (min(users_table.value_2))
                                              ->  HashAggregate  (cost=2.07..2.65 rows=33 width=96)
                                                    Group Key: users_table.user_id
-                                                   ->  Seq Scan on users_table_1400000 users_table  (cost=0.00..1.33 rows=33 width=12)
+                                                   ->  Seq Scan on users_table_1400256 users_table  (cost=0.00..1.33 rows=33 width=12)
 (18 rows)
 
 SELECT
@@ -606,7 +606,7 @@ ORDER BY
                                  Group Key: users_table.user_id, users_table.value_2
                                  ->  Sort  (cost=2.16..2.24 rows=33 width=12)
                                        Sort Key: users_table.user_id, users_table.value_2
-                                       ->  Seq Scan on users_table_1400000 users_table  (cost=0.00..1.33 rows=33 width=12)
+                                       ->  Seq Scan on users_table_1400256 users_table  (cost=0.00..1.33 rows=33 width=12)
 (15 rows)
 
 SELECT
@@ -744,7 +744,7 @@ ORDER BY user_id, avg(value_1) DESC;
                                  Sort Key: users_table.user_id, (('1'::numeric / ('1'::numeric + avg(users_table.value_1))))
                                  ->  HashAggregate  (cost=1.91..2.49 rows=33 width=56)
                                        Group Key: users_table.user_id, users_table.value_2
-                                       ->  Seq Scan on users_table_1400000 users_table  (cost=0.00..1.33 rows=33 width=12)
+                                       ->  Seq Scan on users_table_1400256 users_table  (cost=0.00..1.33 rows=33 width=12)
 (15 rows)
 
 -- order by in the window function is same as avg(value_1) DESC
@@ -820,7 +820,7 @@ LIMIT 5;
                                        Sort Key: users_table.user_id, (('1'::numeric / ('1'::numeric + avg(users_table.value_1))))
                                        ->  HashAggregate  (cost=1.91..2.49 rows=33 width=56)
                                              Group Key: users_table.user_id, users_table.value_2
-                                             ->  Seq Scan on users_table_1400000 users_table  (cost=0.00..1.33 rows=33 width=12)
+                                             ->  Seq Scan on users_table_1400256 users_table  (cost=0.00..1.33 rows=33 width=12)
 (16 rows)
 
 EXPLAIN
@@ -850,7 +850,7 @@ LIMIT 5;
                                        Sort Key: users_table.user_id, (('1'::numeric / ('1'::numeric + avg(users_table.value_1))))
                                        ->  HashAggregate  (cost=1.91..2.49 rows=33 width=56)
                                              Group Key: users_table.user_id, users_table.value_2
-                                             ->  Seq Scan on users_table_1400000 users_table  (cost=0.00..1.33 rows=33 width=12)
+                                             ->  Seq Scan on users_table_1400256 users_table  (cost=0.00..1.33 rows=33 width=12)
 (16 rows)
 
 EXPLAIN
@@ -880,7 +880,7 @@ LIMIT 5;
                                        Sort Key: users_table.user_id, ((1 / (1 + sum(users_table.value_2))))
                                        ->  HashAggregate  (cost=1.83..2.32 rows=33 width=40)
                                              Group Key: users_table.user_id, users_table.value_2
-                                             ->  Seq Scan on users_table_1400000 users_table  (cost=0.00..1.33 rows=33 width=12)
+                                             ->  Seq Scan on users_table_1400256 users_table  (cost=0.00..1.33 rows=33 width=12)
 (16 rows)
 
 EXPLAIN
@@ -910,6 +910,6 @@ LIMIT 5;
                                        Sort Key: users_table.user_id, (sum(users_table.value_2))
                                        ->  HashAggregate  (cost=1.74..2.07 rows=33 width=32)
                                              Group Key: users_table.user_id, users_table.value_2
-                                             ->  Seq Scan on users_table_1400000 users_table  (cost=0.00..1.33 rows=33 width=12)
+                                             ->  Seq Scan on users_table_1400256 users_table  (cost=0.00..1.33 rows=33 width=12)
 (16 rows)
 
