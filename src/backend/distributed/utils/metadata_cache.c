@@ -168,8 +168,6 @@ static ShardInterval ** SortShardIntervalArray(ShardInterval **shardIntervalArra
 											   int shardCount,
 											   FmgrInfo *
 											   shardIntervalSortCompareFunction);
-static bool HasUniformHashDistribution(ShardInterval **shardIntervalArray,
-									   int shardIntervalArrayLength);
 static void PrepareWorkerNodeCache(void);
 static bool HasUninitializedShardInterval(ShardInterval **sortedShardIntervalArray,
 										  int shardCount);
@@ -1181,7 +1179,7 @@ SortShardIntervalArray(ShardInterval **shardIntervalArray, int shardCount,
  * has a uniform hash distribution, as produced by master_create_worker_shards for
  * hash partitioned tables.
  */
-static bool
+bool
 HasUniformHashDistribution(ShardInterval **shardIntervalArray,
 						   int shardIntervalArrayLength)
 {

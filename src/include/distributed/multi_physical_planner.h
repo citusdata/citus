@@ -38,7 +38,7 @@
 #define RANGE_PARTITION_COMMAND "SELECT worker_range_partition_table \
  (" UINT64_FORMAT ", %d, %s, '%s', '%s'::regtype, %s)"
 #define HASH_PARTITION_COMMAND "SELECT worker_hash_partition_table \
- (" UINT64_FORMAT ", %d, %s, '%s', '%s'::regtype, %d)"
+ (" UINT64_FORMAT ", %d, %s, '%s', '%s'::regtype, %s)"
 #define MERGE_FILES_INTO_TABLE_COMMAND "SELECT worker_merge_files_into_table \
  (" UINT64_FORMAT ", %d, '%s', '%s')"
 #define MERGE_FILES_AND_RUN_QUERY_COMMAND \
@@ -69,7 +69,8 @@ typedef enum
 {
 	PARTITION_INVALID_FIRST = 0,
 	RANGE_PARTITION_TYPE = 1,
-	HASH_PARTITION_TYPE = 2
+	SINGLE_HASH_PARTITION_TYPE = 2,
+	DUAL_HASH_PARTITION_TYPE = 3
 } PartitionType;
 
 
@@ -323,6 +324,8 @@ extern int CompareShardPlacements(const void *leftElement, const void *rightElem
 extern bool ShardIntervalsOverlap(ShardInterval *firstInterval,
 								  ShardInterval *secondInterval);
 extern bool CoPartitionedTables(Oid firstRelationId, Oid secondRelationId);
+extern ShardInterval ** GenerateSyntheticShardIntervalArray(int partitionCount);
+
 
 /* function declarations for Task and Task list operations */
 extern bool TasksEqual(const Task *a, const Task *b);

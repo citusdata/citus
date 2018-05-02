@@ -30,9 +30,10 @@ typedef enum JoinRuleType
 	JOIN_RULE_INVALID_FIRST = 0,
 	REFERENCE_JOIN = 1,
 	LOCAL_PARTITION_JOIN = 2,
-	SINGLE_PARTITION_JOIN = 3,
-	DUAL_PARTITION_JOIN = 4,
-	CARTESIAN_PRODUCT = 5,
+	SINGLE_HASH_PARTITION_JOIN = 3,
+	SINGLE_RANGE_PARTITION_JOIN = 4,
+	DUAL_PARTITION_JOIN = 5,
+	CARTESIAN_PRODUCT = 6,
 
 	/*
 	 * Add new join rule types above this comment. After adding, you must also
@@ -75,6 +76,7 @@ typedef struct JoinOrderNode
 
 /* Config variables managed via guc.c */
 extern bool LogMultiJoinOrder;
+extern bool EnableSingleHashRepartitioning;
 
 
 /* Function declaration for determining table join orders */

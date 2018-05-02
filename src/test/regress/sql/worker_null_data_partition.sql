@@ -69,7 +69,8 @@ SELECT COUNT(*) AS diff_rhs_02 FROM (
 
 \set Hash_TaskId 101107
 \set Partition_Count 4
-\set Hash_Mod_Function '( (hashint4(s_nationkey) & 2147483647) % 4 )'
+\set Hash_Mod_Function '( hashint4(s_nationkey)::int8 - (-2147483648))::int8 / :hashTokenIncrement::int8'
+\set hashTokenIncrement 1073741824
 
 \set Hash_Table_Part_00 supplier_hash_part_00
 \set Hash_Table_Part_01 supplier_hash_part_01
@@ -79,7 +80,7 @@ SELECT COUNT(*) AS diff_rhs_02 FROM (
 
 SELECT worker_hash_partition_table(:JobId, :Hash_TaskId, :Select_Query_Text,
        				   :Partition_Column_Text, :Partition_Column_Type,
-				   :Partition_Count);
+				   ARRAY[-2147483648, -1073741824, 0, 1073741824]::int4[]);
 
 COPY :Hash_Table_Part_00 FROM 'base/pgsql_job_cache/job_201010/task_101107/p_00000';
 COPY :Hash_Table_Part_01 FROM 'base/pgsql_job_cache/job_201010/task_101107/p_00001';

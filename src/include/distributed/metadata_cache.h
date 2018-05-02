@@ -90,6 +90,8 @@ extern void CitusInvalidateRelcacheByShardId(int64 shardId);
 extern void FlushDistTableCache(void);
 extern void InvalidateMetadataSystemCache(void);
 extern Datum DistNodeMetadata(void);
+extern bool HasUniformHashDistribution(ShardInterval **shardIntervalArray,
+									   int shardIntervalArrayLength);
 
 extern bool CitusHasBeenLoaded(void);
 extern bool CheckCitusVersion(int elevel);

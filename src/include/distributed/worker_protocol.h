@@ -15,6 +15,7 @@
 #define WORKER_PROTOCOL_H
 
 #include "fmgr.h"
+#include "distributed/shardinterval_utils.h"
 #include "lib/stringinfo.h"
 #include "nodes/parsenodes.h"
 #include "storage/fd.h"
@@ -73,7 +74,10 @@ typedef struct RangePartitionContext
 typedef struct HashPartitionContext
 {
 	FmgrInfo *hashFunction;
+	FmgrInfo *comparisonFunction;
+	ShardInterval **syntheticShardIntervalArray;
 	uint32 partitionCount;
+	bool hasUniformHashDistribution;
 } HashPartitionContext;
 
 

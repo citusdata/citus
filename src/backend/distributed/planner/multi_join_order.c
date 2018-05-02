@@ -35,6 +35,7 @@
 
 /* Config variables managed via guc.c */
 bool LogMultiJoinOrder = false; /* print join order as a debugging aid */
+bool EnableSingleHashRepartitioning = false;
 
 /* Function pointer type definition for join rule evaluation functions */
 typedef JoinOrderNode *(*RuleEvalFunction) (JoinOrderNode *currentJoinNode,
@@ -178,7 +179,7 @@ FixedJoinOrderList(FromExpr *fromExpr, List *tableEntryList)
 		nextJoinNode = EvaluateJoinRules(joinedTableList, currentJoinNode,
 										 nextTable, joinClauseList, joinType);
 
-		if (nextJoinNode->joinRuleType >= SINGLE_PARTITION_JOIN)
+		if (nextJoinNode->joinRuleType >= SINGLE_HASH_PARTITION_JOIN)
 		{
 			/* re-partitioning for OUTER joins is not implemented */
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -669,7 +670,8 @@ LargeDataTransferLocation(List *joinOrder)
 		JoinRuleType joinRuleType = joinOrderNode->joinRuleType;
 
 		/* we consider the following join rules to cause large data transfers */
-		if (joinRuleType == SINGLE_PARTITION_JOIN ||
+		if (joinRuleType == SINGLE_HASH_PARTITION_JOIN ||
+			joinRuleType == SINGLE_RANGE_PARTITION_JOIN ||
 			joinRuleType == DUAL_PARTITION_JOIN ||
 			joinRuleType == CARTESIAN_PRODUCT)
 		{
@@ -862,7 +864,8 @@ JoinRuleEvalFunction(JoinRuleType ruleType)
 	{
 		RuleEvalFunctionArray[REFERENCE_JOIN] = &ReferenceJoin;
 		RuleEvalFunctionArray[LOCAL_PARTITION_JOIN] = &LocalJoin;
-		RuleEvalFunctionArray[SINGLE_PARTITION_JOIN] = &SinglePartitionJoin;
+		RuleEvalFunctionArray[SINGLE_RANGE_PARTITION_JOIN] = &SinglePartitionJoin;
+		RuleEvalFunctionArray[SINGLE_HASH_PARTITION_JOIN] = &SinglePartitionJoin;
 		RuleEvalFunctionArray[DUAL_PARTITION_JOIN] = &DualPartitionJoin;
 		RuleEvalFunctionArray[CARTESIAN_PRODUCT] = &CartesianProduct;
 
@@ -888,7 +891,10 @@ JoinRuleName(JoinRuleType ruleType)
 		/* use strdup() to be independent of memory contexts */
 		RuleNameArray[REFERENCE_JOIN] = strdup("reference join");
 		RuleNameArray[LOCAL_PARTITION_JOIN] = strdup("local partition join");
-		RuleNameArray[SINGLE_PARTITION_JOIN] = strdup("single partition join");
+		RuleNameArray[SINGLE_HASH_PARTITION_JOIN] =
+			strdup("single hash partition join");
+		RuleNameArray[SINGLE_RANGE_PARTITION_JOIN] =
+			strdup("single range partition join");
 		RuleNameArray[DUAL_PARTITION_JOIN] = strdup("dual partition join");
 		RuleNameArray[CARTESIAN_PRODUCT] = strdup("cartesian product");
 
@@ -1043,6 +1049,9 @@ SinglePartitionJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 	Var *currentPartitionColumn = currentJoinNode->partitionColumn;
 	char currentPartitionMethod = currentJoinNode->partitionMethod;
 	TableEntry *currentAnchorTable = currentJoinNode->anchorTable;
+	JoinRuleType currentJoinRuleType = currentJoinNode->joinRuleType;
+
+	OpExpr *joinClause = NULL;
 
 	Oid relationId = candidateTable->relationId;
 	uint32 tableId = candidateTable->rangeTableId;
@@ -1056,22 +1065,38 @@ SinglePartitionJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 	}
 
 	/*
-	 * If we previously dual-hash re-partitioned the tables for a join, we
-	 * currently don't allow a single-repartition join.
+	 * If we previously dual-hash re-partitioned the tables for a join or made
+	 * cartesian product, we currently don't allow a single-repartition join.
 	 */
-	if (currentPartitionMethod == REDISTRIBUTE_BY_HASH)
+	if (currentJoinRuleType == DUAL_PARTITION_JOIN ||
+		currentJoinRuleType == CARTESIAN_PRODUCT)
 	{
 		return NULL;
 	}
 
-	if (currentPartitionMethod != DISTRIBUTE_BY_HASH)
+	joinClause =
+		SinglePartitionJoinClause(currentPartitionColumn, applicableJoinClauses);
+	if (joinClause != NULL)
 	{
-		OpExpr *joinClause = SinglePartitionJoinClause(currentPartitionColumn,
-													   applicableJoinClauses);
-
-		if (joinClause != NULL)
+		if (currentPartitionMethod == DISTRIBUTE_BY_HASH)
 		{
-			nextJoinNode = MakeJoinOrderNode(candidateTable, SINGLE_PARTITION_JOIN,
+			/*
+			 * Single hash repartitioning may perform worse than dual hash
+			 * repartitioning. Thus, we control it via a guc.
+			 */
+			if (!EnableSingleHashRepartitioning)
+			{
+				return NULL;
+			}
+
+			nextJoinNode = MakeJoinOrderNode(candidateTable, SINGLE_HASH_PARTITION_JOIN,
+											 currentPartitionColumn,
+											 currentPartitionMethod,
+											 currentAnchorTable);
+		}
+		else
+		{
+			nextJoinNode = MakeJoinOrderNode(candidateTable, SINGLE_RANGE_PARTITION_JOIN,
 											 currentPartitionColumn,
 											 currentPartitionMethod,
 											 currentAnchorTable);
@@ -1079,18 +1104,38 @@ SinglePartitionJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 	}
 
 	/* evaluate re-partitioning the current table only if the rule didn't apply above */
-	if (nextJoinNode == NULL && candidatePartitionMethod != DISTRIBUTE_BY_HASH &&
-		candidatePartitionMethod != DISTRIBUTE_BY_NONE)
+	if (nextJoinNode == NULL && candidatePartitionMethod != DISTRIBUTE_BY_NONE)
 	{
 		OpExpr *joinClause = SinglePartitionJoinClause(candidatePartitionColumn,
 													   applicableJoinClauses);
 
 		if (joinClause != NULL)
 		{
-			nextJoinNode = MakeJoinOrderNode(candidateTable, SINGLE_PARTITION_JOIN,
-											 candidatePartitionColumn,
-											 candidatePartitionMethod,
-											 candidateTable);
+			if (candidatePartitionMethod == DISTRIBUTE_BY_HASH)
+			{
+				/*
+				 * Single hash repartitioning may perform worse than dual hash
+				 * repartitioning. Thus, we control it via a guc.
+				 */
+				if (!EnableSingleHashRepartitioning)
+				{
+					return NULL;
+				}
+
+				nextJoinNode = MakeJoinOrderNode(candidateTable,
+												 SINGLE_HASH_PARTITION_JOIN,
+												 candidatePartitionColumn,
+												 candidatePartitionMethod,
+												 candidateTable);
+			}
+			else
+			{
+				nextJoinNode = MakeJoinOrderNode(candidateTable,
+												 SINGLE_RANGE_PARTITION_JOIN,
+												 candidatePartitionColumn,
+												 candidatePartitionMethod,
+												 candidateTable);
+			}
 		}
 	}
 

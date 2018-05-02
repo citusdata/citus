@@ -46,7 +46,7 @@ ERROR:  partition column type 20 and split point type 25 do not match
 -- Check that we fail with bad partition column type on hash partitioning
 SELECT worker_hash_partition_table(:JobId, :TaskId, :Select_Query_Text,
        				    :Partition_Column_Name, :Bad_Partition_Column_Type,
-				    :Partition_Count);
+				    ARRAY[-2147483648, -1073741824, 0, 1073741824]::int4[]);
 ERROR:  partition column types 25 and 20 do not match
 -- Now, partition table data using valid arguments
 SELECT worker_range_partition_table(:JobId, :TaskId, :Select_Query_Text,
