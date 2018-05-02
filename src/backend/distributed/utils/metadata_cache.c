@@ -504,6 +504,30 @@ ResolveGroupShardPlacement(GroupShardPlacement *groupShardPlacement,
 
 
 /*
+ * LookupNodeByNodeId returns a worker node by nodeId or NULL if the node
+ * cannot be found.
+ */
+WorkerNode *
+LookupNodeByNodeId(uint32 nodeId)
+{
+	int workerNodeIndex = 0;
+
+	PrepareWorkerNodeCache();
+
+	for (workerNodeIndex = 0; workerNodeIndex < WorkerNodeCount; workerNodeIndex++)
+	{
+		WorkerNode *workerNode = WorkerNodeArray[workerNodeIndex];
+		if (workerNode->nodeId == nodeId)
+		{
+			return workerNode;
+		}
+	}
+
+	return NULL;
+}
+
+
+/*
  * LookupNodeForGroup searches the WorkerNodeHash for a worker which is a member of the
  * given group and also readable (a primary if we're reading from primaries, a secondary
  * if we're reading from secondaries). If such a node does not exist it emits an

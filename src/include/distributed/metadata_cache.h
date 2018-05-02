@@ -102,6 +102,7 @@ extern void EnsureModificationsCanRun(void);
 
 /* access WorkerNodeHash */
 extern HTAB * GetWorkerNodeHash(void);
+extern WorkerNode * LookupNodeByNodeId(uint32 nodeId);
 
 /* relation oids */
 extern Oid DistColocationRelationId(void);

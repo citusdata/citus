@@ -468,27 +468,61 @@ master_update_node(PG_FUNCTION_ARGS)
 	int32 newNodePort = PG_GETARG_INT32(2);
 
 	char *newNodeNameString = text_to_cstring(newNodeName);
+	WorkerNode *workerNode = NULL;
+	WorkerNode *workerNodeWithSameAddress = NULL;
+	List *placementList = NIL;
 
 	CheckCitusVersion(ERROR);
 
+	workerNodeWithSameAddress = FindWorkerNodeAnyCluster(newNodeNameString, newNodePort);
+	if (workerNodeWithSameAddress != NULL)
+	{
+		/* a node with the given hostname and port already exists in the metadata */
+
+		if (workerNodeWithSameAddress->nodeId == nodeId)
+		{
+			/* it's the node itself, meaning this is a noop update */
+			PG_RETURN_VOID();
+		}
+		else
+		{
+			ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+							errmsg("there is already another node with the specified "
+								   "hostname and port")));
+		}
+	}
+
+	workerNode = LookupNodeByNodeId(nodeId);
+	if (workerNode == NULL)
+	{
+		ereport(ERROR, (errcode(ERRCODE_NO_DATA_FOUND),
+						errmsg("node %u not found", nodeId)));
+	}
+
 	/*
+	 * If the node is a primary node we block reads and writes.
+	 *
 	 * This lock has two purposes:
-	 * - Ensure buggy code in Citus doesn't cause failures when the nodename/nodeport of
-	 *   a node changes mid-query
-	 * - Provide fencing during failover, after this function returns all connections
-	 *   will use the new node location.
+	 *
+	 * - Ensure buggy code in Citus doesn't cause failures when the
+	 *   nodename/nodeport of a node changes mid-query
+	 *
+	 * - Provide fencing during failover, after this function returns all
+	 *   connections will use the new node location.
 	 *
 	 * Drawback:
-	 * - This function blocks until all previous queries have finished. This means that
-	 *   long-running queries will prevent failover.
+	 *
+	 * - This function blocks until all previous queries have finished. This
+	 *   means that long-running queries will prevent failover.
+	 *
+	 * It might be worth blocking reads to a secondary for the same reasons,
+	 * though we currently only query secondaries on follower clusters
+	 * where these locks will have no effect.
 	 */
-	LockRelationOid(DistNodeRelationId(), AccessExclusiveLock);
-
-	if (FindWorkerNodeAnyCluster(newNodeNameString, newNodePort) != NULL)
+	if (WorkerNodeIsPrimary(workerNode))
 	{
-		ereport(ERROR, (errmsg("node at \"%s:%u\" already exists",
-							   newNodeNameString,
-							   newNodePort)));
+		placementList = AllShardPlacementsOnNodeGroup(workerNode->groupId);
+		LockShardsInPlacementListMetadata(placementList, AccessExclusiveLock);
 	}
 
 	UpdateNodeLocation(nodeId, newNodeNameString, newNodePort);

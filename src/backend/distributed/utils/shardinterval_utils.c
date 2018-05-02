@@ -130,6 +130,34 @@ CompareShardIntervalsById(const void *leftElement, const void *rightElement)
 
 
 /*
+ * CompareShardPlacementsByShardId is a comparison function for sorting shard
+ * placement by their shard ID.
+ */
+int
+CompareShardPlacementsByShardId(const void *leftElement, const void *rightElement)
+{
+	GroupShardPlacement *left = *((GroupShardPlacement **) leftElement);
+	GroupShardPlacement *right = *((GroupShardPlacement **) rightElement);
+	int64 leftShardId = left->shardId;
+	int64 rightShardId = right->shardId;
+
+	/* we compare 64-bit integers, instead of casting their difference to int */
+	if (leftShardId > rightShardId)
+	{
+		return 1;
+	}
+	else if (leftShardId < rightShardId)
+	{
+		return -1;
+	}
+	else
+	{
+		return 0;
+	}
+}
+
+
+/*
  * CompareRelationShards is a comparison function for sorting relation
  * to shard mappings by their relation ID and then shard ID.
  */

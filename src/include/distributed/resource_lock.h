@@ -77,6 +77,8 @@ extern void UnlockJobResource(uint64 jobId, LOCKMODE lockmode);
 
 /* Lock multiple shards for safe modification */
 extern void LockShardListMetadata(List *shardIntervalList, LOCKMODE lockMode);
+extern void LockShardsInPlacementListMetadata(List *shardPlacementList,
+											  LOCKMODE lockMode);
 extern void LockShardListResources(List *shardIntervalList, LOCKMODE lockMode);
 extern void LockRelationShardResources(List *relationShardList, LOCKMODE lockMode);
 
