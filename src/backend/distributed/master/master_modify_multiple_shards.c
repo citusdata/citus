@@ -151,7 +151,7 @@ master_modify_multiple_shards(PG_FUNCTION_ARGS)
 	{
 		bool multiShardQuery = true;
 		DeferredErrorMessage *error =
-			ModifyQuerySupported(modifyQuery, modifyQuery, multiShardQuery);
+			ModifyQuerySupported(modifyQuery, modifyQuery, multiShardQuery, NULL);
 
 		if (error)
 		{

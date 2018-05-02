@@ -221,6 +221,7 @@ SELECT * FROM modify_table ORDER BY id, val;
 SELECT * FROM anchor_table ORDER BY id;
 
 INSERT INTO modify_table VALUES (11, 1), (12, 2), (13, 3);
+
 WITH select_data AS (
 	SELECT * FROM modify_table
 ),

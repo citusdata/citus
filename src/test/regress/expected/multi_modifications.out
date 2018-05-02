@@ -964,12 +964,10 @@ SELECT * FROM summary_table ORDER BY id;
 -- unsupported multi-shard updates
 UPDATE summary_table SET average_value = average_query.average FROM (
 	SELECT avg(value) AS average FROM raw_table) average_query;
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Joins are not supported in distributed modifications.
+ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
 UPDATE summary_table SET average_value = average_value + 1 WHERE id =
   (SELECT id FROM raw_table WHERE value > 100);
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Joins are not supported in distributed modifications.
+ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
 -- test complex queries
 UPDATE summary_table
 SET
@@ -1108,8 +1106,8 @@ SELECT master_modify_multiple_shards('
 		SELECT avg(value) AS average FROM raw_table WHERE id = 1
 		) average_query
 	WHERE id = 1');
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Joins are not supported in distributed modifications.
+ERROR:  cannot run multi shard modify query with master_modify_multiple_shards when the query involves subquery or join
+DETAIL:  Execute the query without using master_modify_multiple_shards()
 -- test connection API via using COPY
 -- COPY on SELECT part
 BEGIN;

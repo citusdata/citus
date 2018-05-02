@@ -44,8 +44,8 @@ static DistributedPlan * CreateDistributedInsertSelectPlan(Query *originalQuery,
 														   plannerRestrictionContext);
 static Task * RouterModifyTaskForShardInterval(Query *originalQuery,
 											   ShardInterval *shardInterval,
-											   RelationRestrictionContext *
-											   restrictionContext,
+											   PlannerRestrictionContext *
+											   plannerRestrictionContext,
 											   uint32 taskIdIndex,
 											   bool allRelationsJoinedOnPartitionKey);
 static DeferredErrorMessage * DistributedInsertSelectSupported(Query *queryTree,
@@ -252,14 +252,14 @@ CreateDistributedInsertSelectPlan(Query *originalQuery,
 		Task *modifyTask = NULL;
 
 		modifyTask = RouterModifyTaskForShardInterval(originalQuery, targetShardInterval,
-													  relationRestrictionContext,
+													  plannerRestrictionContext,
 													  taskIdIndex,
 													  allDistributionKeysInQueryAreEqual);
 
 		/* add the task if it could be created */
 		if (modifyTask != NULL)
 		{
-			modifyTask->insertSelectQuery = true;
+			modifyTask->modifyWithSubquery = true;
 
 			sqlTaskList = lappend(sqlTaskList, modifyTask);
 		}
@@ -404,7 +404,7 @@ DistributedInsertSelectSupported(Query *queryTree, RangeTblEntry *insertRte,
  */
 static Task *
 RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInterval,
-								 RelationRestrictionContext *restrictionContext,
+								 PlannerRestrictionContext *plannerRestrictionContext,
 								 uint32 taskIdIndex,
 								 bool safeToPushdownSubquery)
 {
@@ -417,8 +417,8 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 	Oid distributedTableId = shardInterval->relationId;
 	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(distributedTableId);
 
-	RelationRestrictionContext *copiedRestrictionContext =
-		CopyRelationRestrictionContext(restrictionContext);
+	PlannerRestrictionContext *copyOfPlannerRestrictionContext = palloc0(
+		sizeof(PlannerRestrictionContext));
 
 	StringInfo queryString = makeStringInfo();
 	ListCell *restrictionCell = NULL;
@@ -431,11 +431,22 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 	List *intersectedPlacementList = NULL;
 	bool upsertQuery = false;
 	bool replacePrunedQueryWithDummy = false;
-	bool allReferenceTables = restrictionContext->allReferenceTables;
+	bool allReferenceTables =
+		plannerRestrictionContext->relationRestrictionContext->allReferenceTables;
 	List *shardOpExpressions = NIL;
 	RestrictInfo *shardRestrictionList = NULL;
 	DeferredErrorMessage *planningError = NULL;
 	bool multiShardModifyQuery = false;
+	List *relationRestrictionList = NIL;
+
+	copyOfPlannerRestrictionContext->relationRestrictionContext =
+		CopyRelationRestrictionContext(
+			plannerRestrictionContext->relationRestrictionContext);
+	copyOfPlannerRestrictionContext->joinRestrictionContext =
+		plannerRestrictionContext->joinRestrictionContext;
+	relationRestrictionList =
+		copyOfPlannerRestrictionContext->relationRestrictionContext->
+		relationRestrictionList;
 
 	/* grab shared metadata lock to stop concurrent placement additions */
 	LockShardDistributionMetadata(shardId, ShareLock);
@@ -444,7 +455,7 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 	 * Replace the partitioning qual parameter value in all baserestrictinfos.
 	 * Note that this has to be done on a copy, as the walker modifies in place.
 	 */
-	foreach(restrictionCell, copiedRestrictionContext->relationRestrictionList)
+	foreach(restrictionCell, relationRestrictionList)
 	{
 		RelationRestriction *restriction = lfirst(restrictionCell);
 		List *originalBaseRestrictInfo = restriction->relOptInfo->baserestrictinfo;
@@ -493,7 +504,7 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 	 * If we can, we also rely on the side-effects that all RTEs have been updated
 	 * to point to the relevant nodes and selectPlacementList is determined.
 	 */
-	planningError = PlanRouterQuery(copiedSubquery, copiedRestrictionContext,
+	planningError = PlanRouterQuery(copiedSubquery, copyOfPlannerRestrictionContext,
 									&selectPlacementList, &selectAnchorShardId,
 									&relationShardList, replacePrunedQueryWithDummy,
 									&multiShardModifyQuery);

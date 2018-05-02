@@ -233,6 +233,16 @@ PartiallyEvaluateExpressionMutator(Node *expression, FunctionEvaluationContext *
 									   context);
 	}
 
+	/* ExecInitExpr cannot handle PARAM_SUBLINK */
+	if (IsA(expression, Param))
+	{
+		Param *param = (Param *) expression;
+		if (param->paramkind == PARAM_SUBLINK)
+		{
+			return expression;
+		}
+	}
+
 	if (IsA(expression, Var))
 	{
 		context->containsVar = true;
@@ -241,6 +251,15 @@ PartiallyEvaluateExpressionMutator(Node *expression, FunctionEvaluationContext *
 		return expression_tree_mutator(expression,
 									   PartiallyEvaluateExpressionMutator,
 									   context);
+	}
+
+	/* expression_tree_mutator does not descend into Query trees */
+	if (IsA(expression, Query))
+	{
+		Query *query = (Query *) expression;
+
+		return (Node *) query_tree_mutator(query, PartiallyEvaluateExpressionMutator,
+										   context, 0);
 	}
 
 	copy = expression_tree_mutator(expression,

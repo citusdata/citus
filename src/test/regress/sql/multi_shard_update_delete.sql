@@ -135,16 +135,22 @@ INSERT INTO append_stage_table VALUES(1,3);
 INSERT INTO append_stage_table VALUES(3,2);
 INSERT INTO append_stage_table VALUES(5,4);
 
+CREATE TABLE append_stage_table_2(id int, col_2 int);
+INSERT INTO append_stage_table_2 VALUES(8,3);
+INSERT INTO append_stage_table_2 VALUES(9,2);
+INSERT INTO append_stage_table_2 VALUES(10,4);
+
 CREATE TABLE test_append_table(id int, col_2 int);
 SELECT create_distributed_table('test_append_table','id','append');
 SELECT master_create_empty_shard('test_append_table');
 SELECT * FROM master_append_table_to_shard(1440010, 'append_stage_table', 'localhost', :master_port);
 SELECT master_create_empty_shard('test_append_table') AS new_shard_id;
-SELECT * FROM master_append_table_to_shard(1440011, 'append_stage_table', 'localhost', :master_port);
+SELECT * FROM master_append_table_to_shard(1440011, 'append_stage_table_2', 'localhost', :master_port);
 UPDATE test_append_table SET col_2 = 5;
 SELECT * FROM test_append_table;
 
 DROP TABLE append_stage_table;
+DROP TABLE append_stage_table_2;
 DROP TABLE test_append_table;
 
 -- Update multi shard of partitioned distributed table
@@ -203,15 +209,407 @@ SET citus.multi_shard_modify_mode to sequential;
 UPDATE tt2 SET col_2 = 3 RETURNING id, col_2;
 DROP TABLE tt2;
 
--- Multiple RTEs are not supported
+-- Multiple RTEs are only supported if subquery is pushdownable
 SET citus.multi_shard_modify_mode to DEFAULT;
-UPDATE users_test_table SET value_2 = 5 FROM events_test_table WHERE users_test_table.user_id = events_test_table.user_id; 
-UPDATE users_test_table SET value_2 = (SELECT value_3 FROM users_test_table);
-UPDATE users_test_table SET value_2 = (SELECT value_2 FROM events_test_table);
 
-DELETE FROM users_test_table USING events_test_table WHERE users_test_table.user_id = events_test_table.user_id;
-DELETE FROM users_test_table WHERE users_test_table.user_id = (SELECT user_id FROM events_test_table);
-DELETE FROM users_test_table WHERE users_test_table.user_id = (SELECT value_1 FROM users_test_table);
+-- To test colocation between tables in modify query
+SET citus.shard_count to 6;
+
+CREATE TABLE events_test_table_2 (user_id int, value_1 int, value_2 int, value_3 int);
+SELECT create_distributed_table('events_test_table_2', 'user_id');
+\COPY events_test_table_2 FROM STDIN DELIMITER AS ',';
+1, 5, 7, 7
+3, 11, 78, 18
+5, 22, 9, 25
+7, 41, 10, 23
+9, 34, 11, 21
+1, 20, 12, 25
+3, 26, 13, 18
+5, 17, 14, 4
+7, 37, 15, 22
+9, 42, 16, 22
+1, 60, 17, 17
+3, 5, 18, 8
+5, 15, 19, 44
+7, 24, 20, 38
+9, 54, 21, 17
+\.
+
+CREATE TABLE events_test_table_local (user_id int, value_1 int, value_2 int, value_3 int);
+\COPY events_test_table_local FROM STDIN DELIMITER AS ',';
+1, 5, 7, 7
+3, 11, 78, 18
+5, 22, 9, 25
+7, 41, 10, 23
+9, 34, 11, 21
+1, 20, 12, 25
+3, 26, 13, 18
+5, 17, 14, 4
+7, 37, 15, 22
+9, 42, 16, 22
+1, 60, 17, 17
+3, 5, 18, 8
+5, 15, 19, 44
+7, 24, 20, 38
+9, 54, 21, 17
+\.
+
+CREATE TABLE test_table_1(id int, date_col timestamptz, col_3 int);
+INSERT INTO test_table_1 VALUES(1, '2014-04-05 08:32:12', 5);
+INSERT INTO test_table_1 VALUES(2, '2015-02-01 08:31:16', 7);
+INSERT INTO test_table_1 VALUES(3, '2111-01-12 08:35:19', 9);
+SELECT create_distributed_table('test_table_1', 'id');
+
+-- We can pushdown query if there is partition key equality
+UPDATE users_test_table
+SET    value_2 = 5
+FROM   events_test_table
+WHERE  users_test_table.user_id = events_test_table.user_id;
+
+DELETE FROM users_test_table
+USING  events_test_table
+WHERE  users_test_table.user_id = events_test_table.user_id;
+
+UPDATE users_test_table
+SET    value_1 = 3
+WHERE  user_id IN (SELECT user_id
+              FROM   events_test_table);
+
+DELETE FROM users_test_table
+WHERE  user_id IN (SELECT user_id
+                   FROM events_test_table);
+
+DELETE FROM events_test_table_2
+WHERE now() > (SELECT max(date_col)
+               FROM test_table_1
+               WHERE test_table_1.id = events_test_table_2.user_id
+               GROUP BY id)
+RETURNING *;
+
+UPDATE users_test_table
+SET    value_1 = 5
+FROM   events_test_table
+WHERE  users_test_table.user_id = events_test_table.user_id
+       AND events_test_table.user_id > 5;
+
+UPDATE users_test_table
+SET    value_1 = 4
+WHERE  user_id IN (SELECT user_id
+              FROM   users_test_table
+              UNION
+              SELECT user_id
+              FROM   events_test_table);
+
+UPDATE users_test_table
+SET    value_1 = 4
+WHERE  user_id IN (SELECT user_id
+              FROM   users_test_table
+              UNION
+              SELECT user_id
+              FROM   events_test_table) returning *;
+
+UPDATE users_test_table
+SET    value_1 = 4
+WHERE  user_id IN (SELECT user_id
+              FROM   users_test_table
+              UNION ALL
+              SELECT user_id
+              FROM   events_test_table) returning *;
+
+UPDATE users_test_table
+SET value_1 = 5
+WHERE 
+  value_2 >  
+          (SELECT 
+              max(value_2) 
+           FROM 
+              events_test_table  
+           WHERE 
+              users_test_table.user_id = events_test_table.user_id
+           GROUP BY
+              user_id
+          );
+
+UPDATE users_test_table
+SET value_3 = 1
+WHERE 
+  value_2 >  
+          (SELECT 
+              max(value_2) 
+           FROM 
+              events_test_table 
+           WHERE 
+              users_test_table.user_id = events_test_table.user_id AND 
+              users_test_table.value_2 > events_test_table.value_2
+           GROUP BY
+              user_id
+          );
+
+UPDATE users_test_table
+SET value_2 = 4 
+WHERE
+  value_1 > 1 AND value_1 < 3
+  AND value_2 >= 1
+  AND user_id IN
+  (
+    SELECT
+      e1.user_id
+    FROM (
+      SELECT
+        user_id,
+        1 AS view_homepage
+      FROM events_test_table
+      WHERE
+         value_1 IN (0, 1)
+    ) e1 LEFT JOIN LATERAL (
+      SELECT
+        user_id,
+        1 AS use_demo
+      FROM events_test_table
+      WHERE
+        user_id = e1.user_id
+    ) e2 ON true
+);
+
+UPDATE users_test_table
+SET value_3 = 5
+WHERE value_2 IN (SELECT AVG(value_1) OVER (PARTITION BY user_id) FROM events_test_table WHERE events_test_table.user_id = users_test_table.user_id);
+
+-- Test it within transaction
+BEGIN;
+
+INSERT INTO users_test_table
+SELECT * FROM events_test_table
+WHERE events_test_table.user_id = 1 OR events_test_table.user_id = 5;
+
+SELECT SUM(value_2) FROM users_test_table;
+
+UPDATE users_test_table
+SET value_2 = 1
+FROM events_test_table
+WHERE users_test_table.user_id = events_test_table.user_id;
+
+SELECT SUM(value_2) FROM users_test_table;
+
+COMMIT;
+
+-- Test with schema
+CREATE SCHEMA sec_schema;
+CREATE TABLE sec_schema.tt1(id int, value_1 int);
+SELECT create_distributed_table('sec_schema.tt1','id');
+INSERT INTO sec_schema.tt1 values(1,1),(2,2),(7,7),(9,9);
+
+UPDATE sec_schema.tt1
+SET value_1 = 11
+WHERE id < (SELECT max(value_2) FROM events_test_table_2
+             WHERE sec_schema.tt1.id = events_test_table_2.user_id
+             GROUP BY user_id)
+RETURNING *;
+
+DROP SCHEMA sec_schema CASCADE;
+
+-- We don't need partition key equality with reference tables
+UPDATE events_test_table
+SET    value_2 = 5
+FROM   users_reference_copy_table
+WHERE  users_reference_copy_table.user_id = events_test_table.value_1;
+
+-- Both reference tables and hash distributed tables can be used in subquery
+UPDATE events_test_table as ett
+SET    value_2 = 6
+WHERE ett.value_3 IN (SELECT utt.value_3 
+                                    FROM users_test_table as utt, users_reference_copy_table as uct
+                                    WHERE utt.user_id = uct.user_id AND utt.user_id = ett.user_id);
+
+-- We don't need equality check with constant values in sub-select
+UPDATE users_reference_copy_table
+SET    value_2 = 6
+WHERE  user_id IN (SELECT 2);
+
+UPDATE users_reference_copy_table
+SET    value_2 = 6
+WHERE  value_1 IN (SELECT 2);
+
+UPDATE users_test_table
+SET    value_2 = 6
+WHERE  user_id IN (SELECT 2);
+
+UPDATE users_test_table
+SET    value_2 = 6
+WHERE  value_1 IN (SELECT 2);
+
+-- Can only use immutable functions
+UPDATE test_table_1
+SET    col_3 = 6
+WHERE  date_col IN (SELECT now());
+
+-- Test with prepared statements
+SELECT COUNT(*) FROM users_test_table WHERE value_1 = 0;
+PREPARE foo_plan_2(int,int) AS UPDATE users_test_table
+                               SET value_1 = $1, value_3 = $2
+                               FROM events_test_table
+                               WHERE users_test_table.user_id = events_test_table.user_id;
+
+EXECUTE foo_plan_2(1,5);
+EXECUTE foo_plan_2(3,15);
+EXECUTE foo_plan_2(5,25);
+EXECUTE foo_plan_2(7,35);
+EXECUTE foo_plan_2(9,45);
+EXECUTE foo_plan_2(0,0);
+SELECT COUNT(*) FROM users_test_table WHERE value_1 = 0;
+
+-- Test with varying WHERE expressions
+UPDATE users_test_table
+SET value_1 = 7
+FROM events_test_table
+WHERE users_test_table.user_id = events_test_table.user_id OR FALSE;
+
+UPDATE users_test_table
+SET value_1 = 7
+FROM events_test_table
+WHERE users_test_table.user_id = events_test_table.user_id AND TRUE;
+
+-- Test with inactive shard-placement
+-- manually set shardstate of one placement of users_test_table as inactive
+UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid = 1440000;
+UPDATE users_test_table
+SET    value_2 = 5
+FROM   events_test_table
+WHERE  users_test_table.user_id = events_test_table.user_id;
+
+-- manually set shardstate of one placement of events_test_table as inactive
+UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid = 1440004;
+UPDATE users_test_table
+SET    value_2 = 5
+FROM   events_test_table
+WHERE  users_test_table.user_id = events_test_table.user_id;
+
+UPDATE pg_dist_shard_placement SET shardstate = 1 WHERE shardid = 1440000;
+UPDATE pg_dist_shard_placement SET shardstate = 1 WHERE shardid = 1440004;
+
+-- Subquery must return single value to use it with comparison operators
+UPDATE users_test_table as utt
+SET    value_1 = 3
+WHERE value_2 > (SELECT value_3 FROM events_test_table as ett WHERE utt.user_id = ett.user_id);
+
+-- We can not pushdown a query if the target relation is reference table
+UPDATE users_reference_copy_table
+SET    value_2 = 5
+FROM   events_test_table
+WHERE  users_reference_copy_table.user_id = events_test_table.user_id;
+
+-- We cannot push down it if the query has outer join and using
+UPDATE events_test_table
+SET value_2 = users_test_table.user_id
+FROM users_test_table
+FULL OUTER JOIN events_test_table e2 USING (user_id)
+WHERE e2.user_id = events_test_table.user_id RETURNING events_test_table.value_2;
+
+-- We can not pushdown query if there is no partition key equality
+UPDATE users_test_table
+SET    value_1 = 1
+WHERE  user_id IN (SELECT Count(value_1)
+              FROM   events_test_table
+              GROUP  BY user_id);
+
+UPDATE users_test_table
+SET    value_1 = (SELECT Count(*)
+                  FROM   events_test_table);
+
+UPDATE users_test_table
+SET    value_1 = 4
+WHERE  user_id IN (SELECT user_id
+              FROM   users_test_table
+              UNION
+              SELECT value_1
+              FROM   events_test_table);
+
+UPDATE users_test_table
+SET    value_1 = 4
+WHERE  user_id IN (SELECT user_id
+              FROM   users_test_table
+              INTERSECT
+              SELECT Sum(value_1)
+              FROM   events_test_table
+              GROUP  BY user_id);
+
+UPDATE users_test_table
+SET    value_2 = (SELECT value_3
+                  FROM   users_test_table);
+
+UPDATE users_test_table
+SET value_2 = 2
+WHERE
+  value_2 >
+          (SELECT
+              max(value_2)
+           FROM
+              events_test_table
+           WHERE
+              users_test_table.user_id > events_test_table.user_id AND
+              users_test_table.value_1 = events_test_table.value_1
+           GROUP BY
+              user_id
+          );
+
+UPDATE users_test_table
+SET (value_1, value_2) = (2,1)
+WHERE  user_id IN
+       (SELECT user_id
+        FROM   users_test_table
+        INTERSECT
+        SELECT user_id
+        FROM   events_test_table);
+
+-- Reference tables can not locate on the outer part of the outer join
+UPDATE users_test_table
+SET value_1 = 4
+WHERE user_id IN
+    (SELECT DISTINCT e2.user_id
+     FROM users_reference_copy_table
+     LEFT JOIN users_test_table e2 ON (e2.user_id = users_reference_copy_table.value_1)) RETURNING *;
+
+-- Volatile functions are also not supported
+UPDATE users_test_table
+SET    value_2 = 5
+FROM   events_test_table
+WHERE  users_test_table.user_id = events_test_table.user_id * random();
+
+UPDATE users_test_table
+SET    value_2 = 5 * random()
+FROM   events_test_table
+WHERE  users_test_table.user_id = events_test_table.user_id;
+
+UPDATE users_test_table
+SET    value_2 = 5
+WHERE  users_test_table.user_id IN (SELECT user_id * random() FROM events_test_table);
+
+-- Local tables are not supported
+UPDATE users_test_table
+SET    value_2 = 5
+FROM   events_test_table_local
+WHERE  users_test_table.user_id = events_test_table_local.user_id;
+
+UPDATE users_test_table
+SET    value_2 = 5
+WHERE  users_test_table.user_id IN(SELECT user_id FROM events_test_table_local);
+
+UPDATE events_test_table_local
+SET    value_2 = 5
+FROM   users_test_table
+WHERE  events_test_table_local.user_id = users_test_table.user_id;
+
+-- Shard counts of tables must be equal to pushdown the query
+UPDATE users_test_table
+SET    value_2 = 5
+FROM   events_test_table_2
+WHERE  users_test_table.user_id = events_test_table_2.user_id;
+
+-- Should error out due to multiple row return from subquery, but we can not get this information within 
+-- subquery pushdown planner. This query will be sent to worker with recursive planner.
+DELETE FROM users_test_table
+WHERE  users_test_table.user_id = (SELECT user_id
+                                   FROM   events_test_table);
 
 -- Cursors are not supported
 BEGIN;
@@ -221,12 +619,6 @@ UPDATE users_test_table SET value_2 = 5 WHERE CURRENT OF test_cursor;
 ROLLBACK;
 
 -- Stable functions are supported
-CREATE TABLE test_table_1(id int, date_col timestamptz, col_3 int);
-INSERT INTO test_table_1 VALUES(1, '2014-04-05 08:32:12', 5);
-INSERT INTO test_table_1 VALUES(2, '2015-02-01 08:31:16', 7);
-INSERT INTO test_table_1 VALUES(3, '2011-01-12 08:35:19', 9);
-SELECT create_distributed_table('test_table_1', 'id');
-
 SELECT * FROM test_table_1;
 UPDATE test_table_1 SET col_3 = 3 WHERE date_col < now();
 SELECT * FROM test_table_1;

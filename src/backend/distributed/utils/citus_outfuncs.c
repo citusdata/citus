@@ -454,7 +454,7 @@ OutTask(OUTFUNC_ARGS)
 	WRITE_NODE_FIELD(taskExecution);
 	WRITE_BOOL_FIELD(upsertQuery);
 	WRITE_CHAR_FIELD(replicationModel);
-	WRITE_BOOL_FIELD(insertSelectQuery);
+	WRITE_BOOL_FIELD(modifyWithSubquery);
 	WRITE_NODE_FIELD(relationShardList);
 	WRITE_NODE_FIELD(rowValuesLists);
 }
