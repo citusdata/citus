@@ -743,14 +743,14 @@ EXPLAIN (COSTS FALSE, VERBOSE TRUE)
                                                                      ->  Sort
                                                                            Output: users_table.user_id, users_table.value_2
                                                                            Sort Key: users_table.user_id
-                                                                           ->  Seq Scan on public.users_table_1400000 users_table
+                                                                           ->  Seq Scan on public.users_table_1400256 users_table
                                                                                  Output: users_table.user_id, users_table.value_2
                                                                ->  WindowAgg
                                                                      Output: events_table.user_id, sum(events_table.value_2) OVER (?)
                                                                      ->  Sort
                                                                            Output: events_table.user_id, events_table.value_2
                                                                            Sort Key: events_table.user_id
-                                                                           ->  Seq Scan on public.events_table_1400004 events_table
+                                                                           ->  Seq Scan on public.events_table_1400260 events_table
                                                                                  Output: events_table.user_id, events_table.value_2
                                              ->  HashAggregate
                                                    Output: users_table_1.user_id, sum((sum(users_table_1.value_2) OVER (?)))
@@ -764,14 +764,14 @@ EXPLAIN (COSTS FALSE, VERBOSE TRUE)
                                                                      ->  Sort
                                                                            Output: users_table_1.user_id, users_table_1.value_2
                                                                            Sort Key: users_table_1.user_id
-                                                                           ->  Seq Scan on public.users_table_1400000 users_table_1
+                                                                           ->  Seq Scan on public.users_table_1400256 users_table_1
                                                                                  Output: users_table_1.user_id, users_table_1.value_2
                                                                ->  WindowAgg
                                                                      Output: events_table_1.user_id, sum(events_table_1.value_2) OVER (?)
                                                                      ->  Sort
                                                                            Output: events_table_1.user_id, events_table_1.value_2
                                                                            Sort Key: events_table_1.user_id
-                                                                           ->  Seq Scan on public.events_table_1400004 events_table_1
+                                                                           ->  Seq Scan on public.events_table_1400260 events_table_1
                                                                                  Output: events_table_1.user_id, events_table_1.value_2
 (62 rows)
 

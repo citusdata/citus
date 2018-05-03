@@ -1,4 +1,4 @@
-
+SET citus.shard_count TO 32;
 SET citus.next_shard_id TO 750000;
 
 
