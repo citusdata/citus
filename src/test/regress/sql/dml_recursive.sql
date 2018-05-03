@@ -1,5 +1,6 @@
 CREATE SCHEMA recursive_dml_queries;
 SET search_path TO recursive_dml_queries, public;
+SET citus.next_shard_id TO 2370000;
 
 CREATE TABLE recursive_dml_queries.distributed_table (tenant_id text, dept int, info jsonb);
 SELECT create_distributed_table('distributed_table', 'tenant_id');
@@ -216,9 +217,24 @@ INSERT INTO
 	second_distributed_table (tenant_id, dept) 
 VALUES ('3', (SELECT 3));
 
--- we error out of the CTE is not referenced
--- by any part of the query (e.g., cte2 is not referenced)
+-- DML with an unreferenced SELECT CTE
 WITH cte_1 AS (
+    WITH cte_2 AS (
+        SELECT tenant_id as cte2_id 
+        FROM second_distributed_table 
+        WHERE dept >= 2
+    )
+    
+    UPDATE distributed_table 
+    SET dept = 10
+    RETURNING *
+)
+UPDATE distributed_table
+SET dept = 5
+FROM cte_1
+WHERE distributed_table.tenant_id < cte_1.tenant_id;
+
+EXPLAIN (COSTS FALSE) WITH cte_1 AS (
     WITH cte_2 AS (
         SELECT tenant_id as cte2_id 
         FROM second_distributed_table 

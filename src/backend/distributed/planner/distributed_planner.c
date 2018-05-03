@@ -573,6 +573,7 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 	DistributedPlan *distributedPlan = NULL;
 	MultiTreeRoot *logicalPlan = NULL;
 	List *subPlanList = NIL;
+	bool hasCtes = originalQuery->cteList != NIL;
 
 	if (IsModifyCommand(originalQuery))
 	{
@@ -670,8 +671,13 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 	 * We could simplify this code if the logical planner was capable of dealing
 	 * with an original query. In that case, we would only have to filter the
 	 * planner restriction context.
+	 *
+	 * Note that we check both for subplans and whether the query had CTEs
+	 * prior to calling GenerateSubplansForSubqueriesAndCTEs. If none of
+	 * the CTEs are referenced then there are no subplans, but we still want
+	 * to retry the router planner.
 	 */
-	if (list_length(subPlanList) > 0)
+	if (list_length(subPlanList) > 0 || hasCtes)
 	{
 		Query *newQuery = copyObject(originalQuery);
 		bool setPartitionedTablesInherited = false;
