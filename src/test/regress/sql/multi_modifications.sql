@@ -1,5 +1,6 @@
 SET citus.shard_count TO 32;
 SET citus.next_shard_id TO 750000;
+SET citus.next_placement_id TO 750000;
 
 
 -- ===================================================================
@@ -168,13 +169,9 @@ INSERT INTO limit_orders VALUES (random() * 10 + 70000, 'GOOG', 5634, now(), 'bu
 
 SELECT COUNT(*) FROM limit_orders WHERE id BETWEEN 70000 AND 90000;
 
--- Who says that? :)
--- INSERT ... SELECT ... FROM commands are unsupported
--- INSERT INTO limit_orders SELECT * FROM limit_orders;
-
--- commands containing a CTE are unsupported
-WITH deleted_orders AS (DELETE FROM limit_orders RETURNING *)
-INSERT INTO limit_orders DEFAULT VALUES;
+-- commands containing a CTE are supported
+WITH deleted_orders AS (DELETE FROM limit_orders WHERE id < 0 RETURNING *)
+INSERT INTO limit_orders SELECT * FROM deleted_orders;
 
 -- test simple DELETE
 INSERT INTO limit_orders VALUES (246, 'TSLA', 162, '2007-07-02 16:32:15', 'sell', 20.69);
@@ -194,15 +191,15 @@ SELECT COUNT(*) FROM limit_orders WHERE id = 246;
 DELETE FROM limit_orders WHERE id = (2 * 123);
 SELECT COUNT(*) FROM limit_orders WHERE id = 246;
 
--- commands with a USING clause are unsupported
+-- commands with a USING clause are supported
 CREATE TABLE bidders ( name text, id bigint );
 DELETE FROM limit_orders USING bidders WHERE limit_orders.id = 246 AND
 											 limit_orders.bidder_id = bidders.id AND
 											 bidders.name = 'Bernie Madoff';
 
--- commands containing a CTE are unsupported
-WITH deleted_orders AS (INSERT INTO limit_orders DEFAULT VALUES RETURNING *)
-DELETE FROM limit_orders;
+-- commands containing a CTE are supported
+WITH new_orders AS (INSERT INTO limit_orders VALUES (411, 'FLO', 12, '2017-07-02 16:32:15', 'buy', 66))
+DELETE FROM limit_orders WHERE id < 0;
 
 INSERT INTO limit_orders VALUES (246, 'TSLA', 162, '2007-07-02 16:32:15', 'sell', 20.69);
 
@@ -307,8 +304,8 @@ UPDATE limit_orders SET limit_price = 0.00 FROM bidders
 						  limit_orders.bidder_id = bidders.id AND
 						  bidders.name = 'Bernie Madoff';
 
--- commands containing a CTE are unsupported
-WITH deleted_orders AS (INSERT INTO limit_orders DEFAULT VALUES RETURNING *)
+-- the connection used for the INSERT is claimed by pull-push, causing the UPDATE to fail
+WITH deleted_orders AS (INSERT INTO limit_orders VALUES (399, 'PDR', 14, '2017-07-02 16:32:15', 'sell', 43))
 UPDATE limit_orders SET symbol = 'GM';
 
 SELECT symbol, bidder_id FROM limit_orders WHERE id = 246;
@@ -572,12 +569,16 @@ WHERE id = 1;
 
 SELECT * FROM summary_table ORDER BY id;
 
--- unsupported multi-shard updates
+-- multi-shard updates with recursively planned subqueries
+BEGIN;
 UPDATE summary_table SET average_value = average_query.average FROM (
 	SELECT avg(value) AS average FROM raw_table) average_query;
+ROLLBACK;
 
+BEGIN;
 UPDATE summary_table SET average_value = average_value + 1 WHERE id =
-  (SELECT id FROM raw_table WHERE value > 100);
+  (SELECT id FROM raw_table WHERE value > 100 LIMIT 1);
+ROLLBACK;
 
 -- test complex queries
 UPDATE summary_table

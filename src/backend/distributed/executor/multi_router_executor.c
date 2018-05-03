@@ -487,6 +487,8 @@ RouterSequentialModifyExecScan(CustomScanState *node)
 			BeginOrContinueCoordinatedTransaction();
 		}
 
+		ExecuteSubPlans(distributedPlan);
+
 		foreach(taskCell, taskList)
 		{
 			Task *task = (Task *) lfirst(taskCell);
@@ -522,6 +524,7 @@ RouterMultiModifyExecScan(CustomScanState *node)
 		bool hasReturning = distributedPlan->hasReturning;
 		bool isModificationQuery = true;
 
+		ExecuteSubPlans(distributedPlan);
 		ExecuteMultipleTasks(scanState, taskList, isModificationQuery, hasReturning);
 
 		scanState->finishedRemoteScan = true;

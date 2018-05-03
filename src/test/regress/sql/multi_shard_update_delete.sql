@@ -314,7 +314,7 @@ WHERE  user_id IN (SELECT user_id
               FROM   users_test_table
               UNION ALL
               SELECT user_id
-              FROM   events_test_table) returning *;
+              FROM   events_test_table) returning value_3;
 
 UPDATE users_test_table
 SET value_1 = 5
@@ -438,7 +438,7 @@ UPDATE users_test_table
 SET    value_2 = 6
 WHERE  value_1 IN (SELECT 2);
 
--- Can only use immutable functions
+-- Function calls in subqueries will be recursively planned
 UPDATE test_table_1
 SET    col_3 = 6
 WHERE  date_col IN (SELECT now());
@@ -505,7 +505,7 @@ FROM users_test_table
 FULL OUTER JOIN events_test_table e2 USING (user_id)
 WHERE e2.user_id = events_test_table.user_id RETURNING events_test_table.value_2;
 
--- We can not pushdown query if there is no partition key equality
+-- Non-pushdownable subqueries, but will be handled through recursive planning
 UPDATE users_test_table
 SET    value_1 = 1
 WHERE  user_id IN (SELECT Count(value_1)
@@ -580,6 +580,7 @@ SET    value_2 = 5 * random()
 FROM   events_test_table
 WHERE  users_test_table.user_id = events_test_table.user_id;
 
+-- Volatile functions in a subquery are recursively planned
 UPDATE users_test_table
 SET    value_2 = 5
 WHERE  users_test_table.user_id IN (SELECT user_id * random() FROM events_test_table);
@@ -590,14 +591,15 @@ SET    value_2 = 5
 FROM   events_test_table_local
 WHERE  users_test_table.user_id = events_test_table_local.user_id;
 
-UPDATE users_test_table
-SET    value_2 = 5
-WHERE  users_test_table.user_id IN(SELECT user_id FROM events_test_table_local);
-
 UPDATE events_test_table_local
 SET    value_2 = 5
 FROM   users_test_table
 WHERE  events_test_table_local.user_id = users_test_table.user_id;
+
+-- Local tables in a subquery are supported through recursive planning
+UPDATE users_test_table
+SET    value_2 = 5
+WHERE  users_test_table.user_id IN(SELECT user_id FROM events_test_table_local);
 
 -- Shard counts of tables must be equal to pushdown the query
 UPDATE users_test_table

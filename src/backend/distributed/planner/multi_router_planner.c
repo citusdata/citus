@@ -594,14 +594,21 @@ ModifyQuerySupported(Query *queryTree, Query *originalQuery, bool multiShardQuer
 
 		if (rangeTableEntry->rtekind == RTE_RELATION)
 		{
-			/*
-			 * We are sure that the table should be distributed, therefore no need to
-			 * call IsDistributedTable() here and DistributedTableCacheEntry will
-			 * error out if the table is not distributed
-			 */
-			DistTableCacheEntry *distTableEntry =
-				DistributedTableCacheEntry(rangeTableEntry->relid);
+			DistTableCacheEntry *distTableEntry = NULL;
 
+			if (!IsDistributedTable(rangeTableEntry->relid))
+			{
+				StringInfo errorMessage = makeStringInfo();
+				char *relationName = get_rel_name(rangeTableEntry->relid);
+
+				appendStringInfo(errorMessage, "relation %s is not distributed",
+								 relationName);
+
+				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+									 errorMessage->data, NULL, NULL);
+			}
+
+			distTableEntry = DistributedTableCacheEntry(rangeTableEntry->relid);
 			if (distTableEntry->partitionMethod == DISTRIBUTE_BY_NONE)
 			{
 				referenceTable = true;

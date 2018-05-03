@@ -332,7 +332,7 @@ DistributedInsertSelectSupported(Query *queryTree, RangeTblEntry *insertRte,
 		}
 	}
 
-	if (contain_volatile_functions((Node *) queryTree))
+	if (FindNodeCheck((Node *) queryTree, CitusIsVolatileFunction))
 	{
 		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 							 "volatile functions are not allowed in distributed "

@@ -1420,6 +1420,21 @@ INSERT INTO raw_events_first (user_id, time, value_1, value_2, value_3, value_4)
 INSERT INTO raw_events_second SELECT * FROM test_view WHERE user_id = 17 GROUP BY 1,2,3,4,5,6;
 SELECT count(*) FROM raw_events_second;
 
+-- intermediate results (CTEs) should be allowed when doing INSERT...SELECT within a CTE
+WITH series AS (
+  SELECT s AS val FROM generate_series(60,70) s
+),
+inserts AS (
+  INSERT INTO raw_events_second (user_id)
+  SELECT
+    user_id
+  FROM
+    raw_events_first JOIN series ON (value_1 = val)
+  RETURNING
+    NULL
+)
+SELECT count(*) FROM inserts;
+
 -- we need this in our next test
 truncate raw_events_first;
 

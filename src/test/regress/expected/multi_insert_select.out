@@ -1775,6 +1775,25 @@ SELECT count(*) FROM raw_events_second;
     38
 (1 row)
 
+-- intermediate results (CTEs) should be allowed when doing INSERT...SELECT within a CTE
+WITH series AS (
+  SELECT s AS val FROM generate_series(60,70) s
+),
+inserts AS (
+  INSERT INTO raw_events_second (user_id)
+  SELECT
+    user_id
+  FROM
+    raw_events_first JOIN series ON (value_1 = val)
+  RETURNING
+    NULL
+)
+SELECT count(*) FROM inserts;
+ count 
+-------
+     2
+(1 row)
+
 -- we need this in our next test
 truncate raw_events_first;
 SET client_min_messages TO DEBUG2;
@@ -2176,12 +2195,14 @@ INSERT INTO raw_events_first (user_id, value_1)
 SELECT s, nextval('insert_select_test_seq') FROM generate_series(1, 5) s
 ON CONFLICT DO NOTHING;
 DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
+DEBUG:  ON CONFLICT is not supported in INSERT ... SELECT via coordinator
 ERROR:  ON CONFLICT is not supported in INSERT ... SELECT via coordinator
 -- RETURNING is unsupported
 INSERT INTO raw_events_first (user_id, value_1)
 SELECT s, nextval('insert_select_test_seq') FROM generate_series(1, 5) s
 RETURNING *;
 DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
+DEBUG:  RETURNING is not supported in INSERT ... SELECT via coordinator
 ERROR:  RETURNING is not supported in INSERT ... SELECT via coordinator
 RESET client_min_messages;
 -- INSERT ... SELECT and multi-shard SELECT in the same transaction is supported

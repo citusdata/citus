@@ -699,11 +699,11 @@ RecursivelyPlanCTEs(Query *query, RecursivePlanningContext *planningContext)
 								 NULL, NULL);
 		}
 
-		if (cte->cterefcount == 0)
+		if (cte->cterefcount == 0 && subquery->commandType == CMD_SELECT)
 		{
 			/*
-			 * CTEs that aren't referenced aren't executed in postgres. We
-			 * don't need to generate a subplan for it and can take the rest
+			 * SELECT CTEs that aren't referenced aren't executed in postgres.
+			 * We don't need to generate a subplan for it and can take the rest
 			 * of this iteration off.
 			 */
 			continue;
