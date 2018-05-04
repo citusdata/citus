@@ -1,3 +1,7 @@
+### citus v7.2.2 (May 4, 2018) ###
+
+* Fixes a bug that could cause SELECTs to crash during a rebalance
+
 ### citus v7.2.1 (February 6, 2018) ###
 
 * Fixes count distinct bug on column expressions when used with subqueries
