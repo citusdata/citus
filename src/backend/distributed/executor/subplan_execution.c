@@ -15,6 +15,7 @@
 #include "distributed/multi_physical_planner.h"
 #include "distributed/recursive_planning.h"
 #include "distributed/subplan_execution.h"
+#include "distributed/transaction_management.h"
 #include "distributed/worker_manager.h"
 #include "executor/executor.h"
 
@@ -42,6 +43,14 @@ ExecuteSubPlans(DistributedPlan *distributedPlan)
 		/* no subplans to execute */
 		return;
 	}
+
+	/*
+	 * Make sure that this transaction has a distributed transaction ID.
+	 *
+	 * Intermediate results of subplans will be stored in a directory that is
+	 * derived from the distributed transaction ID.
+	 */
+	BeginOrContinueCoordinatedTransaction();
 
 	nodeList = ActiveReadableNodeList();
 

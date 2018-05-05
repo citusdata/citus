@@ -117,6 +117,14 @@ broadcast_intermediate_result(PG_FUNCTION_ARGS)
 
 	CheckCitusVersion(ERROR);
 
+	/*
+	 * Make sure that this transaction has a distributed transaction ID.
+	 *
+	 * Intermediate results will be stored in a directory that is derived
+	 * from the distributed transaction ID.
+	 */
+	BeginOrContinueCoordinatedTransaction();
+
 	nodeList = ActivePrimaryNodeList();
 	estate = CreateExecutorState();
 	resultDest = (RemoteFileDestReceiver *) CreateRemoteFileDestReceiver(resultIdString,
@@ -151,6 +159,14 @@ create_intermediate_result(PG_FUNCTION_ARGS)
 
 	CheckCitusVersion(ERROR);
 
+	/*
+	 * Make sure that this transaction has a distributed transaction ID.
+	 *
+	 * Intermediate results will be stored in a directory that is derived
+	 * from the distributed transaction ID.
+	 */
+	BeginOrContinueCoordinatedTransaction();
+
 	estate = CreateExecutorState();
 	resultDest = (RemoteFileDestReceiver *) CreateRemoteFileDestReceiver(resultIdString,
 																		 estate, nodeList,
@@ -167,7 +183,9 @@ create_intermediate_result(PG_FUNCTION_ARGS)
 
 /*
  * CreateRemoteFileDestReceiver creates a DestReceiver that streams results
- * to a set of worker nodes.
+ * to a set of worker nodes. If the scope of the intermediate result is a
+ * distributed transaction, then it's up to the caller to ensure that a
+ * coordinated transaction is started prior to using the DestReceiver.
  */
 DestReceiver *
 CreateRemoteFileDestReceiver(char *resultId, EState *executorState,
@@ -230,19 +248,6 @@ RemoteFileDestReceiverStartup(DestReceiver *dest, int operation,
 
 	resultDest->columnOutputFunctions = ColumnOutputFunctions(inputTupleDescriptor,
 															  copyOutState->binary);
-
-	/*
-	 * Make sure that this transaction has a distributed transaction ID.
-	 *
-	 * Intermediate results will be stored in a directory that is derived from
-	 * the distributed transaction ID across all workers and on the coordinator
-	 * itself. Even if we only store results locally, we still want to assign
-	 * a transaction ID in case we later store results on workers.
-	 *
-	 * When we start using broadcast_intermediate_result from workers, we
-	 * need to make sure that we don't override the transaction ID here.
-	 */
-	BeginOrContinueCoordinatedTransaction();
 
 	if (resultDest->writeLocalFile)
 	{
