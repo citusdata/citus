@@ -7550,7 +7550,6 @@ generate_operator_name(Oid operid, Oid arg1, Oid arg2)
 	Form_pg_operator operform;
 	char	   *oprname;
 	char	   *nspname;
-	Operator	p_result;
 
 	initStringInfo(&buf);
 
@@ -7561,45 +7560,15 @@ generate_operator_name(Oid operid, Oid arg1, Oid arg2)
 	oprname = NameStr(operform->oprname);
 
 	/*
-	 * The idea here is to schema-qualify only if the parser would fail to
-	 * resolve the correct operator given the unqualified op name with the
-	 * specified argtypes.
+	 * Unlike generate_operator_name() in postgres/src/backend/utils/adt/ruleutils.c,
+	 * we don't check if the operator is in current namespace or not. This is
+	 * because this check is costly when the operator is not in current namespace.
 	 */
-	switch (operform->oprkind)
-	{
-		case 'b':
-			p_result = oper(NULL, list_make1(makeString(oprname)), arg1, arg2,
-							true, -1);
-			break;
-		case 'l':
-			p_result = left_oper(NULL, list_make1(makeString(oprname)), arg2,
-								 true, -1);
-			break;
-		case 'r':
-			p_result = right_oper(NULL, list_make1(makeString(oprname)), arg1,
-								  true, -1);
-			break;
-		default:
-			elog(ERROR, "unrecognized oprkind: %d", operform->oprkind);
-			p_result = NULL;	/* keep compiler quiet */
-			break;
-	}
-
-	if (p_result != NULL && oprid(p_result) == operid)
-		nspname = NULL;
-	else
-	{
-		nspname = get_namespace_name(operform->oprnamespace);
-		appendStringInfo(&buf, "OPERATOR(%s.", quote_identifier(nspname));
-	}
-
+	nspname = get_namespace_name(operform->oprnamespace);
+	Assert(nspname != NULL);
+	appendStringInfo(&buf, "OPERATOR(%s.", quote_identifier(nspname));
 	appendStringInfoString(&buf, oprname);
-
-	if (nspname)
-		appendStringInfoChar(&buf, ')');
-
-	if (p_result != NULL)
-		ReleaseSysCache(p_result);
+	appendStringInfoChar(&buf, ')');
 
 	ReleaseSysCache(opertup);
 

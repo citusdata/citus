@@ -217,7 +217,7 @@ UNION
 (SELECT test.x, ref.a FROM test LEFT JOIN ref ON (x = a))
 ORDER BY 1,2;
 DEBUG:  generating subplan 39_1 for subquery SELECT x, y FROM recursive_union.test
-DEBUG:  generating subplan 39_2 for subquery SELECT test.x, ref.a FROM (recursive_union.test LEFT JOIN recursive_union.ref ON ((test.x = ref.a)))
+DEBUG:  generating subplan 39_2 for subquery SELECT test.x, ref.a FROM (recursive_union.test LEFT JOIN recursive_union.ref ON ((test.x OPERATOR(pg_catalog.=) ref.a)))
 DEBUG:  Plan 39 query after replacing subqueries and CTEs: (((SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('39_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer) INTERSECT SELECT ref.a, ref.b FROM recursive_union.ref) UNION ALL SELECT s.s, s.s FROM generate_series(1, 10) s(s)) EXCEPT SELECT 1, 1) UNION SELECT intermediate_result.x, intermediate_result.a FROM read_intermediate_result('39_2'::text, 'binary'::citus_copy_format) intermediate_result(x integer, a integer) ORDER BY 1, 2
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
@@ -524,7 +524,7 @@ DETAIL:  Each leaf query of the UNION should return the partition column in the 
 SELECT * FROM ((SELECT * FROM test) UNION (SELECT * FROM test)) foo WHERE x IN (SELECT y FROM test ORDER BY 1 LIMIT 4) ORDER BY 1;
 DEBUG:  push down of limit count: 4
 DEBUG:  generating subplan 105_1 for subquery SELECT y FROM recursive_union.test ORDER BY y LIMIT 4
-DEBUG:  Plan 105 query after replacing subqueries and CTEs: SELECT x, y FROM (SELECT test.x, test.y FROM recursive_union.test UNION SELECT test.x, test.y FROM recursive_union.test) foo WHERE (x IN (SELECT intermediate_result.y FROM read_intermediate_result('105_1'::text, 'binary'::citus_copy_format) intermediate_result(y integer))) ORDER BY x
+DEBUG:  Plan 105 query after replacing subqueries and CTEs: SELECT x, y FROM (SELECT test.x, test.y FROM recursive_union.test UNION SELECT test.x, test.y FROM recursive_union.test) foo WHERE (x OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.y FROM read_intermediate_result('105_1'::text, 'binary'::citus_copy_format) intermediate_result(y integer))) ORDER BY x
  x | y 
 ---+---
  1 | 1
@@ -540,7 +540,7 @@ DEBUG:  generating subplan 107_3 for subquery SELECT y, x FROM recursive_union.t
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 DEBUG:  generating subplan 107_4 for subquery SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('107_2'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer) UNION SELECT intermediate_result.y, intermediate_result.x FROM read_intermediate_result('107_3'::text, 'binary'::citus_copy_format) intermediate_result(y integer, x integer)
-DEBUG:  Plan 107 query after replacing subqueries and CTEs: SELECT x, y FROM (SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('107_4'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)) foo WHERE (x IN (SELECT intermediate_result.y FROM read_intermediate_result('107_1'::text, 'binary'::citus_copy_format) intermediate_result(y integer))) ORDER BY x
+DEBUG:  Plan 107 query after replacing subqueries and CTEs: SELECT x, y FROM (SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('107_4'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)) foo WHERE (x OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.y FROM read_intermediate_result('107_1'::text, 'binary'::citus_copy_format) intermediate_result(y integer))) ORDER BY x
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  x | y 
@@ -557,7 +557,7 @@ DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 DEBUG:  generating subplan 112_3 for subquery SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('112_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer) UNION SELECT intermediate_result.y, intermediate_result.x FROM read_intermediate_result('112_2'::text, 'binary'::citus_copy_format) intermediate_result(y integer, x integer)
 DEBUG:  generating subplan 112_4 for subquery SELECT y FROM recursive_union.test
-DEBUG:  Plan 112 query after replacing subqueries and CTEs: SELECT x, y FROM (SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('112_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)) foo WHERE (x IN (SELECT intermediate_result.y FROM read_intermediate_result('112_4'::text, 'binary'::citus_copy_format) intermediate_result(y integer))) ORDER BY x
+DEBUG:  Plan 112 query after replacing subqueries and CTEs: SELECT x, y FROM (SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('112_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)) foo WHERE (x OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.y FROM read_intermediate_result('112_4'::text, 'binary'::citus_copy_format) intermediate_result(y integer))) ORDER BY x
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  x | y 
@@ -617,7 +617,7 @@ SELECT * FROM ((SELECT * FROM test) UNION (SELECT * FROM ref WHERE a IN (SELECT 
 DEBUG:  generating subplan 130_1 for subquery SELECT x FROM recursive_union.test
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-DEBUG:  generating subplan 130_2 for subquery SELECT a, b FROM recursive_union.ref WHERE (a IN (SELECT intermediate_result.x FROM read_intermediate_result('130_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer)))
+DEBUG:  generating subplan 130_2 for subquery SELECT a, b FROM recursive_union.ref WHERE (a OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.x FROM read_intermediate_result('130_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer)))
 DEBUG:  generating subplan 130_3 for subquery SELECT x, y FROM recursive_union.test
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
@@ -641,13 +641,13 @@ SELECT * FROM test a WHERE x IN (SELECT x FROM test b WHERE y = 1 UNION SELECT x
 
 -- subquery union in WHERE clause with partition column equality, without implicit join on partition column is recursively planned
 SELECT * FROM test a WHERE x NOT IN (SELECT x FROM test b WHERE y = 1 UNION SELECT x FROM test c WHERE y = 2) ORDER BY 1,2;
-DEBUG:  generating subplan 137_1 for subquery SELECT x FROM recursive_union.test b WHERE (y = 1)
-DEBUG:  generating subplan 137_2 for subquery SELECT x FROM recursive_union.test c WHERE (y = 2)
+DEBUG:  generating subplan 137_1 for subquery SELECT x FROM recursive_union.test b WHERE (y OPERATOR(pg_catalog.=) 1)
+DEBUG:  generating subplan 137_2 for subquery SELECT x FROM recursive_union.test c WHERE (y OPERATOR(pg_catalog.=) 2)
 DEBUG:  Plan 137 query after replacing subqueries and CTEs: SELECT intermediate_result.x FROM read_intermediate_result('137_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer) UNION SELECT intermediate_result.x FROM read_intermediate_result('137_2'::text, 'binary'::citus_copy_format) intermediate_result(x integer)
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-DEBUG:  generating subplan 136_1 for subquery SELECT b.x FROM recursive_union.test b WHERE (b.y = 1) UNION SELECT c.x FROM recursive_union.test c WHERE (c.y = 2)
-DEBUG:  Plan 136 query after replacing subqueries and CTEs: SELECT x, y FROM recursive_union.test a WHERE (NOT (x IN (SELECT intermediate_result.x FROM read_intermediate_result('136_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer)))) ORDER BY x, y
+DEBUG:  generating subplan 136_1 for subquery SELECT b.x FROM recursive_union.test b WHERE (b.y OPERATOR(pg_catalog.=) 1) UNION SELECT c.x FROM recursive_union.test c WHERE (c.y OPERATOR(pg_catalog.=) 2)
+DEBUG:  Plan 136 query after replacing subqueries and CTEs: SELECT x, y FROM recursive_union.test a WHERE (NOT (x OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.x FROM read_intermediate_result('136_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer)))) ORDER BY x, y
  x | y 
 ---+---
 (0 rows)
@@ -659,7 +659,7 @@ DEBUG:  generating subplan 140_2 for subquery SELECT y FROM recursive_union.test
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 DEBUG:  generating subplan 140_3 for subquery SELECT intermediate_result.x FROM read_intermediate_result('140_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer) UNION SELECT intermediate_result.y FROM read_intermediate_result('140_2'::text, 'binary'::citus_copy_format) intermediate_result(y integer)
-DEBUG:  Plan 140 query after replacing subqueries and CTEs: SELECT x, y FROM recursive_union.test a WHERE (x IN (SELECT intermediate_result.x FROM read_intermediate_result('140_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer))) ORDER BY x, y
+DEBUG:  Plan 140 query after replacing subqueries and CTEs: SELECT x, y FROM recursive_union.test a WHERE (x OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.x FROM read_intermediate_result('140_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer))) ORDER BY x, y
  x | y 
 ---+---
  1 | 1
@@ -672,7 +672,7 @@ DEBUG:  generating subplan 144_1 for subquery SELECT x FROM recursive_union.test
 DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
 DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
 DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
-DEBUG:  Plan 144 query after replacing subqueries and CTEs: SELECT x, y FROM recursive_union.test a WHERE (x IN (SELECT intermediate_result.x FROM read_intermediate_result('144_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer) UNION SELECT c.y FROM recursive_union.test c WHERE (a.x = c.x))) ORDER BY x, y
+DEBUG:  Plan 144 query after replacing subqueries and CTEs: SELECT x, y FROM recursive_union.test a WHERE (x OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.x FROM read_intermediate_result('144_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer) UNION SELECT c.y FROM recursive_union.test c WHERE (a.x OPERATOR(pg_catalog.=) c.x))) ORDER BY x, y
 DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
 DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
 DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
@@ -777,7 +777,7 @@ DEBUG:  pruning merge fetch taskId 11
 DETAIL:  Creating dependency on merge taskId 20
 DEBUG:  cannot use real time executor with repartition jobs
 HINT:  Since you enabled citus.enable_repartition_joins Citus chose to use task-tracker.
-DEBUG:  generating subplan 164_1 for subquery SELECT t1.x FROM recursive_union.test t1, recursive_union.test t2 WHERE (t1.x = t2.y) LIMIT 0
+DEBUG:  generating subplan 164_1 for subquery SELECT t1.x FROM recursive_union.test t1, recursive_union.test t2 WHERE (t1.x OPERATOR(pg_catalog.=) t2.y) LIMIT 0
 DEBUG:  generating subplan 164_2 for subquery SELECT x FROM recursive_union.test
 DEBUG:  Plan 164 query after replacing subqueries and CTEs: SELECT intermediate_result.x FROM read_intermediate_result('164_2'::text, 'binary'::citus_copy_format) intermediate_result(x integer) INTERSECT SELECT intermediate_result.x FROM read_intermediate_result('164_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer) ORDER BY 1 DESC
 DEBUG:  Creating router plan
@@ -818,7 +818,7 @@ DEBUG:  pruning merge fetch taskId 11
 DETAIL:  Creating dependency on merge taskId 20
 DEBUG:  cannot use real time executor with repartition jobs
 HINT:  Since you enabled citus.enable_repartition_joins Citus chose to use task-tracker.
-DEBUG:  generating subplan 167_1 for subquery SELECT t1.x FROM recursive_union.test t1, recursive_union.test t2 WHERE (t1.x = t2.y)
+DEBUG:  generating subplan 167_1 for subquery SELECT t1.x FROM recursive_union.test t1, recursive_union.test t2 WHERE (t1.x OPERATOR(pg_catalog.=) t2.y)
 DEBUG:  generating subplan 167_2 for subquery SELECT x FROM recursive_union.test
 DEBUG:  Plan 167 query after replacing subqueries and CTEs: SELECT intermediate_result.x FROM read_intermediate_result('167_2'::text, 'binary'::citus_copy_format) intermediate_result(x integer) INTERSECT SELECT intermediate_result.x FROM read_intermediate_result('167_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer) ORDER BY 1 DESC
 DEBUG:  Creating router plan
