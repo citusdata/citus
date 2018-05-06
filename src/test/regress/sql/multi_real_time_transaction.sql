@@ -176,6 +176,12 @@ DELETE FROM test_table where id = 1 or id = 3;
 SELECT * FROM co_test_table;
 ROLLBACK;
 
+-- Make sure SELECT takes AccessShare metadata locks on all shards
+BEGIN;
+SELECT count(*) FROM test_table;
+SELECT objid, mode, granted FROM pg_locks WHERE locktype = 'advisory' AND objid BETWEEN 1610000 AND 1610100 ORDER BY objid;
+END;
+
 -- Test cancelling behaviour. See https://github.com/citusdata/citus/pull/1905.
 -- Repeating it multiple times to increase the chance of failure before PR #1905.
 SET client_min_messages TO ERROR;

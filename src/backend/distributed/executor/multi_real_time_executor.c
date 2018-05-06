@@ -1002,6 +1002,8 @@ RealTimeExecScan(CustomScanState *node)
 		DistributedPlan *distributedPlan = scanState->distributedPlan;
 		Job *workerJob = distributedPlan->workerJob;
 
+		AcquireMetadataLocks(workerJob->taskList, AccessShareLock);
+
 		/* we are taking locks on partitions of partitioned tables */
 		LockPartitionsInRelationList(distributedPlan->relationIdList, AccessShareLock);
 

@@ -101,6 +101,27 @@ INSERT INTO articles_hash VALUES (48,  8, 'alkylic', 18610);
 INSERT INTO articles_hash VALUES (49,  9, 'anyone', 2681);
 INSERT INTO articles_hash VALUES (50, 10, 'anjanette', 19519);
 
+-- check whether router plannable queries take the expected locks
+SELECT get_shard_id_for_distribution_column('articles_hash', 10);
+
+-- SELECT takes AccessShare lock on the shard ID
+BEGIN;
+SELECT count(*) FROM articles_hash WHERE author_id = 10;
+SELECT objid, mode, granted FROM pg_locks WHERE locktype = 'advisory' AND objid BETWEEN 840000 AND 840100;
+END;
+
+-- INSERT takes Share lock on the shard ID
+BEGIN;
+INSERT INTO articles_hash VALUES (51, 10, 'soup', 19533);
+SELECT objid, mode, granted FROM pg_locks WHERE locktype = 'advisory' AND objid BETWEEN 840000 AND 840100;
+ROLLBACK;
+
+-- DELETE takes Share lock on the shard ID
+BEGIN;
+DELETE FROM articles_hash WHERE author_id = 10;
+SELECT objid, mode, granted FROM pg_locks WHERE locktype = 'advisory' AND objid BETWEEN 840000 AND 840100;
+ROLLBACK;
+
 
 
 SET citus.task_executor_type TO 'real-time';

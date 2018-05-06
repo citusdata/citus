@@ -35,6 +35,7 @@ typedef struct XactShardConnSet
 extern bool AllModificationsCommutative;
 extern bool EnableDeadlockPrevention;
 
+extern void AcquireMetadataLocks(List *taskList, LOCKMODE lockMode);
 extern void CitusModifyBeginScan(CustomScanState *node, EState *estate, int eflags);
 extern TupleTableSlot * RouterSequentialModifyExecScan(CustomScanState *node);
 extern TupleTableSlot * RouterSelectExecScan(CustomScanState *node);
