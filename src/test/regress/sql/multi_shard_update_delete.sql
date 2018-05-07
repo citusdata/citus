@@ -580,10 +580,29 @@ SET    value_2 = 5 * random()
 FROM   events_test_table
 WHERE  users_test_table.user_id = events_test_table.user_id;
 
+-- Recursive modify planner does not take care of following test because the query
+-- is fully pushdownable, yet not allowed because it would lead to inconsistent replicas.
+UPDATE users_test_table
+SET    value_2 = subquery.random FROM (SELECT user_id, random()
+                                       FROM events_test_table) subquery
+WHERE  users_test_table.user_id = subquery.user_id;
+
 -- Volatile functions in a subquery are recursively planned
 UPDATE users_test_table
 SET    value_2 = 5
 WHERE  users_test_table.user_id IN (SELECT user_id * random() FROM events_test_table);
+
+UPDATE users_test_table
+SET    value_2 = subquery.random FROM (SELECT user_id, random()
+                                       FROM events_test_table) subquery;
+
+UPDATE users_test_table
+SET    value_2 = subquery.random FROM (SELECT user_id, random()
+                                       FROM events_test_table OFFSET 0) subquery
+WHERE  users_test_table.user_id = subquery.user_id;
+
+-- Make following tests consistent
+UPDATE users_test_table SET value_2 = 0;
 
 -- Local tables are not supported
 UPDATE users_test_table
