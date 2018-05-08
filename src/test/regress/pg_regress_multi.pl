@@ -130,7 +130,9 @@ if (defined $bindir)
 # context diffs pg_regress defaults to.  Change default to avoid
 # everyone having to (re-)learn how to change that setting.  Also add
 # a bit more context to make it easier to locate failed test sections.
-$ENV{PG_REGRESS_DIFF_OPTS} = '-dU10';
+#
+# Also, ignore whitespace, without this the diffs on windows are unreadable
+$ENV{PG_REGRESS_DIFF_OPTS} = '-dU10 -w';
 
 my $plainRegress = "";
 my $isolationRegress = "";
