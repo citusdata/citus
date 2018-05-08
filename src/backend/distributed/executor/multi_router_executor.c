@@ -78,7 +78,6 @@ bool AllModificationsCommutative = false;
 bool EnableDeadlockPrevention = true;
 
 /* functions needed during run phase */
-static void AcquireMetadataLocks(List *taskList);
 static ShardPlacementAccess * CreatePlacementAccess(ShardPlacement *placement,
 													ShardPlacementAccessType accessType);
 static void ExecuteSingleModifyTask(CitusScanState *scanState, Task *task,
@@ -109,8 +108,8 @@ static bool ConsumeQueryResult(MultiConnection *connection, bool failOnError,
  * shards in the task list to prevent a shard being modified while it
  * is being copied.
  */
-static void
-AcquireMetadataLocks(List *taskList)
+void
+AcquireMetadataLocks(List *taskList, LOCKMODE lockMode)
 {
 	ListCell *taskCell = NULL;
 
@@ -125,7 +124,7 @@ AcquireMetadataLocks(List *taskList)
 	{
 		Task *task = (Task *) lfirst(taskCell);
 
-		LockShardDistributionMetadata(task->anchorShardId, ShareLock);
+		LockShardDistributionMetadata(task->anchorShardId, lockMode);
 	}
 }
 
@@ -444,7 +443,7 @@ CitusModifyBeginScan(CustomScanState *node, EState *estate, int eflags)
 	}
 
 	/* prevent concurrent placement changes */
-	AcquireMetadataLocks(taskList);
+	AcquireMetadataLocks(taskList, ShareLock);
 
 	/*
 	 * We are taking locks on partitions of partitioned tables. These locks are
@@ -552,6 +551,8 @@ RouterSelectExecScan(CustomScanState *node)
 		DistributedPlan *distributedPlan = scanState->distributedPlan;
 		Job *workerJob = distributedPlan->workerJob;
 		List *taskList = workerJob->taskList;
+
+		AcquireMetadataLocks(taskList, AccessShareLock);
 
 		/* we are taking locks on partitions of partitioned tables */
 		LockPartitionsInRelationList(distributedPlan->relationIdList, AccessShareLock);

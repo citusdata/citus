@@ -291,6 +291,24 @@ SELECT * FROM co_test_table;
 (1 row)
 
 ROLLBACK;
+-- Make sure SELECT takes AccessShare metadata locks on all shards
+BEGIN;
+SELECT count(*) FROM test_table;
+ count 
+-------
+     6
+(1 row)
+
+SELECT objid, mode, granted FROM pg_locks WHERE locktype = 'advisory' AND objid BETWEEN 1610000 AND 1610100 ORDER BY objid;
+  objid  |      mode       | granted 
+---------+-----------------+---------
+ 1610000 | AccessShareLock | t
+ 1610001 | AccessShareLock | t
+ 1610002 | AccessShareLock | t
+ 1610003 | AccessShareLock | t
+(4 rows)
+
+END;
 -- Test cancelling behaviour. See https://github.com/citusdata/citus/pull/1905.
 -- Repeating it multiple times to increase the chance of failure before PR #1905.
 SET client_min_messages TO ERROR;
