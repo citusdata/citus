@@ -201,6 +201,11 @@ DELETE FROM limit_orders USING bidders WHERE limit_orders.id = 246 AND
 WITH new_orders AS (INSERT INTO limit_orders VALUES (411, 'FLO', 12, '2017-07-02 16:32:15', 'buy', 66))
 DELETE FROM limit_orders WHERE id < 0;
 
+-- we have to be careful that modifying CTEs are part of the transaction and can thus roll back
+WITH new_orders AS (INSERT INTO limit_orders VALUES (412, 'FLO', 12, '2017-07-02 16:32:15', 'buy', 66))
+DELETE FROM limit_orders RETURNING id / 0;
+SELECT * FROM limit_orders WHERE id = 412;
+
 INSERT INTO limit_orders VALUES (246, 'TSLA', 162, '2007-07-02 16:32:15', 'sell', 20.69);
 
 -- simple UPDATE
