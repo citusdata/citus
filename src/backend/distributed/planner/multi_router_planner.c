@@ -939,6 +939,13 @@ MultiShardModifyQuerySupported(Query *originalQuery,
 									 "ON instead",
 									 NULL, NULL);
 	}
+	else if (FindNodeCheck((Node *) originalQuery, CitusIsVolatileFunction))
+	{
+		errorMessage = DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+									 "functions used in UPDATE queries on distributed "
+									 "tables must not be VOLATILE",
+									 NULL, NULL);
+	}
 	else if (resultPartitionMethod == DISTRIBUTE_BY_NONE)
 	{
 		errorMessage = DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
