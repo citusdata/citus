@@ -49,6 +49,9 @@ dlist_head InProgressTransactions = DLIST_STATIC_INIT(InProgressTransactions);
 /* stack of active sub-transactions */
 static List *activeSubXacts = NIL;
 
+/* some pre-allocated memory so we don't need to call malloc() during callbacks */
+MemoryContext CommitContext = NULL;
+
 /*
  * Should this coordinated transaction use 2PC? Set by
  * CoordinatedTransactionUse2PC(), e.g. if DDL was issued and
@@ -136,6 +139,13 @@ InitializeTransactionManagement(void)
 	RegisterSubXactCallback(CoordinatedSubTransactionCallback, NULL);
 
 	AdjustMaxPreparedTransactions();
+
+	/* set aside 8kb of memory for use in CoordinatedTransactionCallback */
+	CommitContext = AllocSetContextCreate(TopMemoryContext,
+										  "CommitContext",
+										  8 * 1024,
+										  8 * 1024,
+										  8 * 1024);
 }
 
 
@@ -154,6 +164,24 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 	{
 		case XACT_EVENT_COMMIT:
 		{
+			/*
+			 * ERRORs thrown during XACT_EVENT_COMMIT will cause postgres to abort, at
+			 * this point enough work has been done that it's not possible to rollback.
+			 *
+			 * One possible source of errors is memory allocation failures. To minimize
+			 * the chance of those happening we've pre-allocated some memory in the
+			 * CommitContext, it has 8kb of memory that we're allowed to use.
+			 *
+			 * We only do this in the COMMIT callback because:
+			 * - Errors thrown in other callbacks (such as PRE_COMMIT) won't cause
+			 *   crashes, they will simply cause the ABORT handler to be called.
+			 * - The exception is ABORT, errors thrown there could also cause crashes, but
+			 *   postgres already creates a TransactionAbortContext which performs this
+			 *   trick, so there's no need for us to do it again.
+			 */
+			MemoryContext previousContext = CurrentMemoryContext;
+			MemoryContextSwitchTo(CommitContext);
+
 			/*
 			 * Call other parts of citus that need to integrate into
 			 * transaction management. Do so before doing other work, so the
@@ -180,6 +208,10 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			CoordinatedTransactionUses2PC = false;
 
 			UnSetDistributedTransactionId();
+
+			/* empty the CommitContext to ensure we're not leaking memory */
+			MemoryContextSwitchTo(previousContext);
+			MemoryContextReset(CommitContext);
 			break;
 		}
 
