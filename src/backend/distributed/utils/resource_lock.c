@@ -274,6 +274,30 @@ LockShardListMetadata(List *shardIntervalList, LOCKMODE lockMode)
 
 
 /*
+ * LockPlacementListMetadata takes locks on the metadata of all shards in
+ * shardPlacementList to prevent concurrent placement changes.
+ */
+void
+LockShardsInPlacementListMetadata(List *shardPlacementList, LOCKMODE lockMode)
+{
+	ListCell *shardPlacementCell = NULL;
+
+	/* lock shards in order of shard id to prevent deadlock */
+	shardPlacementList =
+		SortList(shardPlacementList, CompareShardPlacementsByShardId);
+
+	foreach(shardPlacementCell, shardPlacementList)
+	{
+		GroupShardPlacement *placement =
+			(GroupShardPlacement *) lfirst(shardPlacementCell);
+		int64 shardId = placement->shardId;
+
+		LockShardDistributionMetadata(shardId, lockMode);
+	}
+}
+
+
+/*
  * LockShardListResources takes locks on all shards in shardIntervalList to
  * prevent concurrent DML statements on those shards.
  */

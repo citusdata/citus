@@ -30,6 +30,8 @@ extern ShardInterval * LowestShardIntervalById(List *shardIntervalList);
 extern int CompareShardIntervals(const void *leftElement, const void *rightElement,
 								 FmgrInfo *typeCompareFunction);
 extern int CompareShardIntervalsById(const void *leftElement, const void *rightElement);
+extern int CompareShardPlacementsByShardId(const void *leftElement, const
+										   void *rightElement);
 extern int CompareRelationShards(const void *leftElement,
 								 const void *rightElement);
 extern int ShardIndex(ShardInterval *shardInterval);

@@ -774,6 +774,51 @@ BuildShardPlacementList(ShardInterval *shardInterval)
 
 
 /*
+ * BuildShardPlacementListForGroup finds shard placements for the given groupId
+ * from system catalogs, converts these placements to their in-memory
+ * representation, and returns the converted shard placements in a new list.
+ */
+List *
+AllShardPlacementsOnNodeGroup(int32 groupId)
+{
+	List *shardPlacementList = NIL;
+	Relation pgPlacement = NULL;
+	SysScanDesc scanDescriptor = NULL;
+	ScanKeyData scanKey[1];
+	int scanKeyCount = 1;
+	bool indexOK = true;
+	HeapTuple heapTuple = NULL;
+
+	pgPlacement = heap_open(DistPlacementRelationId(), AccessShareLock);
+
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_placement_groupid,
+				BTEqualStrategyNumber, F_INT4EQ, Int32GetDatum(groupId));
+
+	scanDescriptor = systable_beginscan(pgPlacement,
+										DistPlacementGroupidIndexId(), indexOK,
+										NULL, scanKeyCount, scanKey);
+
+	heapTuple = systable_getnext(scanDescriptor);
+	while (HeapTupleIsValid(heapTuple))
+	{
+		TupleDesc tupleDescriptor = RelationGetDescr(pgPlacement);
+
+		GroupShardPlacement *placement =
+			TupleToGroupShardPlacement(tupleDescriptor, heapTuple);
+
+		shardPlacementList = lappend(shardPlacementList, placement);
+
+		heapTuple = systable_getnext(scanDescriptor);
+	}
+
+	systable_endscan(scanDescriptor);
+	heap_close(pgPlacement, NoLock);
+
+	return shardPlacementList;
+}
+
+
+/*
  * TupleToGroupShardPlacement takes in a heap tuple from pg_dist_placement,
  * and converts this tuple to in-memory struct. The function assumes the
  * caller already has locks on the tuple, and doesn't perform any locking.
