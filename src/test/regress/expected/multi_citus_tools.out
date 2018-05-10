@@ -375,16 +375,11 @@ SELECT * FROM run_command_on_workers('select count(*) from pg_dist_partition') O
 (2 rows)
 
 -- make sure run_on_all_placements respects shardstate
+SET citus.shard_count TO 5;
 CREATE TABLE check_placements (key int);
-SELECT master_create_distributed_table('check_placements', 'key', 'hash');
- master_create_distributed_table 
----------------------------------
- 
-(1 row)
-
-SELECT master_create_worker_shards('check_placements', 5, 2);
- master_create_worker_shards 
------------------------------
+SELECT create_distributed_table('check_placements', 'key', 'hash');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 
@@ -420,28 +415,17 @@ SELECT * FROM run_command_on_placements('check_placements', 'select 1');
 DROP TABLE check_placements CASCADE;
 -- make sure run_on_all_colocated_placements correctly detects colocation
 CREATE TABLE check_colocated (key int);
-SELECT master_create_distributed_table('check_colocated', 'key', 'hash');
- master_create_distributed_table 
----------------------------------
- 
-(1 row)
-
-SELECT master_create_worker_shards('check_colocated', 5, 2);
- master_create_worker_shards 
------------------------------
+SELECT create_distributed_table('check_colocated', 'key', 'hash');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 
 CREATE TABLE second_table (key int);
-SELECT master_create_distributed_table('second_table', 'key', 'hash');
- master_create_distributed_table 
----------------------------------
- 
-(1 row)
-
-SELECT master_create_worker_shards('second_table', 4, 2);
- master_create_worker_shards 
------------------------------
+SET citus.shard_count TO 4;
+SELECT create_distributed_table('second_table', 'key', 'hash');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 
@@ -526,16 +510,11 @@ SELECT * FROM run_command_on_colocated_placements('check_colocated', 'second_tab
 DROP TABLE check_colocated CASCADE;
 DROP TABLE second_table CASCADE;
 -- runs on all shards
+SET citus.shard_count TO 5;
 CREATE TABLE check_shards (key int);
-SELECT master_create_distributed_table('check_shards', 'key', 'hash');
- master_create_distributed_table 
----------------------------------
- 
-(1 row)
-
-SELECT master_create_worker_shards('check_shards', 5, 2);
- master_create_worker_shards 
------------------------------
+SELECT create_distributed_table('check_shards', 'key', 'hash');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 

@@ -5,9 +5,9 @@ CREATE TABLE nation (
 	n_name char(25) not null,
 	n_regionkey integer not null,
 	n_comment varchar(152));
-SELECT master_create_distributed_table('tpch.nation', 'n_nationkey', 'append');
- master_create_distributed_table 
----------------------------------
+SELECT create_distributed_table('tpch.nation', 'n_nationkey', 'append');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 

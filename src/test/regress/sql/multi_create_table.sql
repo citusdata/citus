@@ -28,7 +28,7 @@ CREATE TABLE lineitem (
 	l_shipmode char(10) not null,
 	l_comment varchar(44) not null,
 	PRIMARY KEY(l_orderkey, l_linenumber) );
-SELECT master_create_distributed_table('lineitem', 'l_orderkey', 'append');
+SELECT create_distributed_table('lineitem', 'l_orderkey', 'append');
 
 CREATE INDEX lineitem_time_index ON lineitem (l_shipdate);
 
@@ -43,7 +43,7 @@ CREATE TABLE orders (
 	o_shippriority integer not null,
 	o_comment varchar(79) not null,
 	PRIMARY KEY(o_orderkey) );
-SELECT master_create_distributed_table('orders', 'o_orderkey', 'append');
+SELECT create_distributed_table('orders', 'o_orderkey', 'append');
 
 CREATE TABLE orders_reference (
 	o_orderkey bigint not null,
@@ -79,7 +79,7 @@ CREATE TABLE customer_append (
 	c_acctbal decimal(15,2) not null,
 	c_mktsegment char(10) not null,
 	c_comment varchar(117) not null);
-SELECT master_create_distributed_table('customer_append', 'c_custkey', 'append');
+SELECT create_distributed_table('customer_append', 'c_custkey', 'append');
 
 CREATE TABLE nation (
 	n_nationkey integer not null,
@@ -111,7 +111,7 @@ CREATE TABLE part_append (
 	p_container char(10) not null,
 	p_retailprice decimal(15,2) not null,
 	p_comment varchar(23) not null);
-SELECT master_create_distributed_table('part_append', 'p_partkey', 'append');
+SELECT create_distributed_table('part_append', 'p_partkey', 'append');
 
 CREATE TABLE supplier
 (
@@ -137,7 +137,7 @@ CREATE TABLE supplier_single_shard
   	s_acctbal decimal(15,2) not null,
   	s_comment varchar(101) not null
 );
-SELECT master_create_distributed_table('supplier_single_shard', 's_suppkey', 'append');
+SELECT create_distributed_table('supplier_single_shard', 's_suppkey', 'append');
 
 CREATE TABLE mx_table_test (col1 int, col2 text);
 

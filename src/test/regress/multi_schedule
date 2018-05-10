@@ -147,7 +147,8 @@ test: multi_outer_join
 # is independed from the rest of the group, it is added to increase parallelism.
 # ---
 test: multi_create_fdw
-test: multi_complex_count_distinct multi_select_distinct multi_modifications
+test: multi_complex_count_distinct multi_select_distinct
+test: multi_modifications
 test: multi_distribution_metadata
 test: multi_generate_ddl_commands multi_create_shards multi_prune_shard_list multi_repair_shards 
 test: multi_upsert multi_simple_queries multi_create_insert_proxy multi_data_types

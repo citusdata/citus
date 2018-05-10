@@ -5,10 +5,6 @@
 -- Check that we can run CREATE INDEX and DROP INDEX statements on distributed
 -- tables.
 
-
-SET citus.next_shard_id TO 640000;
-
-
 --
 -- CREATE TEST TABLES
 --
@@ -16,16 +12,17 @@ SET citus.next_shard_id TO 640000;
 SET citus.next_shard_id TO 102080;
 
 CREATE TABLE index_test_range(a int, b int, c int);
-SELECT master_create_distributed_table('index_test_range', 'a', 'range');
+SELECT create_distributed_table('index_test_range', 'a', 'range');
 SELECT master_create_empty_shard('index_test_range');
 SELECT master_create_empty_shard('index_test_range');
 
+SET citus.shard_count TO 8;
+SET citus.shard_replication_factor TO 2;
 CREATE TABLE index_test_hash(a int, b int, c int);
-SELECT master_create_distributed_table('index_test_hash', 'a', 'hash');
-SELECT master_create_worker_shards('index_test_hash', 8, 2);
+SELECT create_distributed_table('index_test_hash', 'a', 'hash');
 
 CREATE TABLE index_test_append(a int, b int, c int);
-SELECT master_create_distributed_table('index_test_append', 'a', 'append');
+SELECT create_distributed_table('index_test_append', 'a', 'append');
 SELECT master_create_empty_shard('index_test_append');
 SELECT master_create_empty_shard('index_test_append');
 

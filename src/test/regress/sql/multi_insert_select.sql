@@ -1742,7 +1742,7 @@ TRUNCATE raw_events_first;
 BEGIN;
 INSERT INTO raw_events_first (user_id, value_1)
 SELECT s, s FROM generate_series(1, 5) s;
-SELECT user_id, value_1 FROM raw_events_first;
+SELECT user_id, value_1 FROM raw_events_first ORDER BY 1;
 ROLLBACK;
 
 -- INSERT ... SELECT and single-shard SELECT in the same transaction is supported

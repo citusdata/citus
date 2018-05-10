@@ -46,16 +46,9 @@ CREATE TABLE events_hash (
 	id bigint,
 	name text
 );
-SELECT master_create_distributed_table('events_hash', 'name', 'hash');
- master_create_distributed_table 
----------------------------------
- 
-(1 row)
-
--- create worker shards
-SELECT master_create_worker_shards('events_hash', 4, 2);
- master_create_worker_shards 
------------------------------
+SELECT create_distributed_table('events_hash', 'name', 'hash');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 

@@ -8,7 +8,7 @@ SET citus.next_shard_id TO 870000;
 
 
 CREATE TABLE testtableddl(somecol int, distributecol text NOT NULL);
-SELECT master_create_distributed_table('testtableddl', 'distributecol', 'append');
+SELECT create_distributed_table('testtableddl', 'distributecol', 'append');
 
 -- verify that the citus extension can't be dropped while distributed tables exist
 DROP EXTENSION citus;
@@ -28,7 +28,7 @@ COMMIT;
 
 -- recreate testtableddl
 CREATE TABLE testtableddl(somecol int, distributecol text NOT NULL);
-SELECT master_create_distributed_table('testtableddl', 'distributecol', 'append');
+SELECT create_distributed_table('testtableddl', 'distributecol', 'append');
 
 -- verify that the table can be dropped
 DROP TABLE testtableddl;
@@ -38,7 +38,7 @@ CREATE TABLE testtableddl(somecol int, distributecol text NOT NULL);
 
 -- create table and do create empty shard test here, too
 SET citus.shard_replication_factor TO 1;
-SELECT master_create_distributed_table('testtableddl', 'distributecol', 'append');
+SELECT create_distributed_table('testtableddl', 'distributecol', 'append');
 SELECT 1 FROM master_create_empty_shard('testtableddl');
 
 -- now actually drop table and shards
@@ -61,8 +61,10 @@ SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 
 -- create a table with a SERIAL column
 CREATE TABLE testserialtable(id serial, group_id integer);
-SELECT master_create_distributed_table('testserialtable', 'group_id', 'hash');
-SELECT master_create_worker_shards('testserialtable', 2, 1);
+
+SET citus.shard_count TO 2;
+SET citus.shard_replication_factor TO 1;
+SELECT create_distributed_table('testserialtable', 'group_id', 'hash');
 
 -- should not be able to add additional serial columns
 ALTER TABLE testserialtable ADD COLUMN other_id serial;

@@ -19,7 +19,7 @@ SET citus.explain_distributed_queries TO off;
 -- and check that tasks are assigned to worker nodes as expected.
 
 CREATE TABLE task_assignment_test_table (test_id integer);
-SELECT master_create_distributed_table('task_assignment_test_table', 'test_id', 'append');
+SELECT create_distributed_table('task_assignment_test_table', 'test_id', 'append');
 
 -- Create logical shards with shardids 200, 201, and 202
 

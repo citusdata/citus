@@ -25,12 +25,12 @@ CREATE TABLE lineitem (
 	l_shipmode char(10) not null,
 	l_comment varchar(44) not null,
 	PRIMARY KEY(l_orderkey, l_linenumber) );
-SELECT master_create_distributed_table('lineitem', 'l_orderkey', 'append');
+SELECT create_distributed_table('lineitem', 'l_orderkey', 'append');
 WARNING:  table "lineitem" has a UNIQUE or EXCLUDE constraint
 DETAIL:  UNIQUE constraints, EXCLUDE constraints, and PRIMARY KEYs on append-partitioned tables cannot be enforced.
 HINT:  Consider using hash partitioning.
- master_create_distributed_table 
----------------------------------
+ create_distributed_table 
+--------------------------
  
 (1 row)
 
@@ -46,12 +46,12 @@ CREATE TABLE orders (
 	o_shippriority integer not null,
 	o_comment varchar(79) not null,
 	PRIMARY KEY(o_orderkey) );
-SELECT master_create_distributed_table('orders', 'o_orderkey', 'append');
+SELECT create_distributed_table('orders', 'o_orderkey', 'append');
 WARNING:  table "orders" has a UNIQUE or EXCLUDE constraint
 DETAIL:  UNIQUE constraints, EXCLUDE constraints, and PRIMARY KEYs on append-partitioned tables cannot be enforced.
 HINT:  Consider using hash partitioning.
- master_create_distributed_table 
----------------------------------
+ create_distributed_table 
+--------------------------
  
 (1 row)
 
@@ -96,9 +96,9 @@ CREATE TABLE customer_append (
 	c_acctbal decimal(15,2) not null,
 	c_mktsegment char(10) not null,
 	c_comment varchar(117) not null);
-SELECT master_create_distributed_table('customer_append', 'c_custkey', 'append');
- master_create_distributed_table 
----------------------------------
+SELECT create_distributed_table('customer_append', 'c_custkey', 'append');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 
@@ -139,9 +139,9 @@ CREATE TABLE part_append (
 	p_container char(10) not null,
 	p_retailprice decimal(15,2) not null,
 	p_comment varchar(23) not null);
-SELECT master_create_distributed_table('part_append', 'p_partkey', 'append');
- master_create_distributed_table 
----------------------------------
+SELECT create_distributed_table('part_append', 'p_partkey', 'append');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 
@@ -173,9 +173,9 @@ CREATE TABLE supplier_single_shard
   	s_acctbal decimal(15,2) not null,
   	s_comment varchar(101) not null
 );
-SELECT master_create_distributed_table('supplier_single_shard', 's_suppkey', 'append');
- master_create_distributed_table 
----------------------------------
+SELECT create_distributed_table('supplier_single_shard', 's_suppkey', 'append');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 

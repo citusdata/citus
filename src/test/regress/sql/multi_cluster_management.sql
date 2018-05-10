@@ -32,10 +32,12 @@ SELECT master_disable_node('localhost', :worker_2_port);
 SELECT master_get_active_worker_nodes();
 
 -- add some shard placements to the cluster
+SET citus.shard_count TO 16;
+SET citus.shard_replication_factor TO 1;
+
 SELECT isactive FROM master_activate_node('localhost', :worker_2_port);
 CREATE TABLE cluster_management_test (col_1 text, col_2 int);
-SELECT master_create_distributed_table('cluster_management_test', 'col_1', 'hash');
-SELECT master_create_worker_shards('cluster_management_test', 16, 1);
+SELECT create_distributed_table('cluster_management_test', 'col_1', 'hash');
 
 -- see that there are some active placements in the candidate node
 SELECT shardid, shardstate, nodename, nodeport FROM pg_dist_shard_placement WHERE nodeport=:worker_2_port;
@@ -152,6 +154,7 @@ SELECT 1 FROM master_add_node('localhost', :worker_1_port);
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 
 -- check that a distributed table can be created after adding a node in a transaction
+SET citus.shard_count TO 4;
 
 SELECT master_remove_node('localhost', :worker_2_port);
 BEGIN;

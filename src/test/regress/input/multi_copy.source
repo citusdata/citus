@@ -632,7 +632,7 @@ COPY numbers_hash FROM STDIN WITH (FORMAT 'csv');
 -- verify each placement is active
 SELECT shardid, shardstate, nodename, nodeport
 	FROM pg_dist_shard_placement join pg_dist_shard using(shardid) 
-	WHERE logicalrelid = 'numbers_hash'::regclass order by placementid;
+	WHERE logicalrelid = 'numbers_hash'::regclass order by placementid, shardid, nodeport;
 
 -- create a reference table
 CREATE TABLE numbers_reference(a int, b int);
@@ -647,7 +647,7 @@ CREATE TABLE numbers_hash_other(a int, b int);
 SELECT create_distributed_table('numbers_hash_other', 'a');
 SELECT shardid, shardstate, nodename, nodeport
 	FROM pg_dist_shard_placement join pg_dist_shard using(shardid) 
-	WHERE logicalrelid = 'numbers_hash_other'::regclass order by placementid;
+	WHERE logicalrelid = 'numbers_hash_other'::regclass order by placementid, shardid, nodeport;
 
 -- manually corrupt pg_dist_shard such that both copies of one shard is placed in
 -- worker_1. This is to test the behavior when no replica of a shard is accessible.
@@ -675,7 +675,7 @@ COPY numbers_hash FROM STDIN WITH (FORMAT 'csv');
 -- verify shards in the first worker as marked invalid
 SELECT shardid, shardstate, nodename, nodeport
 	FROM pg_dist_shard_placement join pg_dist_shard using(shardid) 
-	WHERE logicalrelid = 'numbers_hash'::regclass order by placementid;
+	WHERE logicalrelid = 'numbers_hash'::regclass order by placementid, shardid, nodeport;
 
 -- try to insert into a reference table copy should fail
 COPY numbers_reference FROM STDIN WITH (FORMAT 'csv');
@@ -702,7 +702,7 @@ COPY numbers_hash_other FROM STDIN WITH (FORMAT 'csv');
 -- since copy has failed altogether
 SELECT shardid, shardstate, nodename, nodeport
 	FROM pg_dist_shard_placement join pg_dist_shard using(shardid) 
-	WHERE logicalrelid = 'numbers_hash_other'::regclass order by placementid;
+	WHERE logicalrelid = 'numbers_hash_other'::regclass order by placementid, shardid, nodeport;
 
 -- re-enable test_user on the first worker
 \c - :default_user - :worker_1_port
@@ -748,7 +748,7 @@ SELECT count(a) FROM numbers_hash;
 -- verify shard is still marked as valid
 SELECT shardid, shardstate, nodename, nodeport
 	FROM pg_dist_shard_placement join pg_dist_shard using(shardid) 
-	WHERE logicalrelid = 'numbers_hash'::regclass order by placementid;
+	WHERE logicalrelid = 'numbers_hash'::regclass order by placementid, shardid, nodeport;
 
 DROP TABLE numbers_hash;
 SELECT * FROM run_command_on_workers('DROP USER test_user');
@@ -815,7 +815,7 @@ ABORT;
 
 -- copy into a table with a JSONB column
 CREATE TABLE copy_jsonb (key text, value jsonb, extra jsonb default '["default"]'::jsonb);
-SELECT create_distributed_table('copy_jsonb', 'key');
+SELECT create_distributed_table('copy_jsonb', 'key', colocate_with => 'none');
 
 -- JSONB from text should work
 \COPY copy_jsonb (key, value) FROM STDIN
