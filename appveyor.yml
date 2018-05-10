@@ -11,6 +11,9 @@
 
 version: 1.0.{build}-{branch}
 
+init:
+  - git config --global core.autocrlf true
+
 # Maximum number of concurrent jobs for the project
 max_jobs: 1
 
@@ -29,10 +32,6 @@ image: Visual Studio 2017
 environment:
   VCPKG_DIR: C:\tools\vcpkg
   APPVEYOR_SAVE_CACHE_ON_ERROR: true
-
-# scripts that are called at very beginning, before repo cloning
-init:
-  - git config --global core.autocrlf input
 
 # clone directory
 clone_folder: c:\projects\citus
