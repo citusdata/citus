@@ -818,8 +818,7 @@ DefaultCitusNoticeProcessor(void *arg, const char *message)
 	MultiConnection *connection = (MultiConnection *) arg;
 	char *nodeName = connection->hostname;
 	uint32 nodePort = connection->port;
-	char *chompedMessage = pchomp(message);
-	char *trimmedMessage = TrimLogLevel(chompedMessage);
+	char *trimmedMessage = TrimLogLevel(message);
 	char *level = strtok((char *) message, ":");
 
 	ereport(CitusNoticeLogLevel, (errmsg("%s", trimmedMessage),
@@ -829,7 +828,7 @@ DefaultCitusNoticeProcessor(void *arg, const char *message)
 
 
 /*
- * TrimLogLevel makes a copy of the string with the leading log level
+ * TrimLogLevel returns a copy of the string with the leading log level
  * and spaces removed such as
  *      From:
  *          INFO:  "normal2_102070": scanned 0 of 0 pages...
@@ -839,17 +838,18 @@ DefaultCitusNoticeProcessor(void *arg, const char *message)
 char *
 TrimLogLevel(const char *message)
 {
+	char *chompedMessage = pchomp(message);
 	size_t n;
 
 	n = 0;
-	while (n < strlen(message) && message[n] != ':')
+	while (n < strlen(chompedMessage) && chompedMessage[n] != ':')
 	{
 		n++;
 	}
 
 	do {
 		n++;
-	} while (n < strlen(message) && message[n] == ' ');
+	} while (n < strlen(chompedMessage) && chompedMessage[n] == ' ');
 
-	return pstrdup(message + n);
+	return chompedMessage + n;
 }
