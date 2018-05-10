@@ -126,3 +126,6 @@ SELECT * FROM varchar_hash_partitioned_table WHERE id = 1;
 UPDATE varchar_hash_partitioned_table SET id = 6 WHERE name = 'Jason';
 
 SELECT * FROM varchar_hash_partitioned_table WHERE id = 6;
+DROP TABLE composite_type_partitioned_table;
+DROP TABLE bugs;
+DROP TABLE varchar_hash_partitioned_table;

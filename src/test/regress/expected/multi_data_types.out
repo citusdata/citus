@@ -142,3 +142,6 @@ SELECT * FROM varchar_hash_partitioned_table WHERE id = 6;
   6 | Jason
 (1 row)
 
+DROP TABLE composite_type_partitioned_table;
+DROP TABLE bugs;
+DROP TABLE varchar_hash_partitioned_table;
