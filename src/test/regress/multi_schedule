@@ -95,12 +95,17 @@ test: multi_join_order_tpch_repartition
 test: multi_repartition_join_planning multi_repartition_join_pruning multi_repartition_join_task_assignment
 
 # ---------
+# Tests that modify data should run sequentially
+# ---------
+test: with_prepare
+
+# ---------
 # Tests for recursive planning.
 # ---------
-
-test: with_nested with_where with_basics with_prepare with_set_operations
+test: with_nested with_where with_basics with_set_operations
 test: with_modifying cte_prepared_modify cte_nested_modification
 test: with_executors with_join with_partitioning with_transactions with_dml
+
 
 # ----------
 # Tests to check our large record loading and shard deletion behavior

@@ -298,11 +298,11 @@ DEBUG:  generating subplan 61_2 for CTE cte_1: SELECT user_id, value_2 FROM publ
 DEBUG:  Plan 61 query after replacing subqueries and CTEs: SELECT cte_1.x, cte_1.value_2 FROM (SELECT intermediate_result.user_id AS x, intermediate_result.value_2 FROM read_intermediate_result('61_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, value_2 integer)) cte_1 UNION SELECT cte_1.x, cte_1.value_2 FROM (SELECT intermediate_result.user_id AS x, intermediate_result.value_2 FROM read_intermediate_result('61_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, value_2 integer)) cte_1 ORDER BY 1 DESC, 2 DESC LIMIT 5
  x | value_2 
 ---+---------
+ 6 |        
  6 |       4
  6 |       3
  6 |       2
  6 |       1
- 6 |       0
 (5 rows)
 
 -- simple subqueries in WHERE with unions
