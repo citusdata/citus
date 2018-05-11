@@ -159,7 +159,6 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			 * transaction management. Do so before doing other work, so the
 			 * callbacks still can perform work if needed.
 			 */
-			RemoveIntermediateResultsDirectory();
 			ResetShardPlacementTransactionState();
 
 			if (CurrentCoordinatedTransactionState == COORD_TRANS_PREPARED)
@@ -256,6 +255,8 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 
 		case XACT_EVENT_PRE_COMMIT:
 		{
+			RemoveIntermediateResultsDirectory();
+
 			/* nothing further to do if there's no managed remote xacts */
 			if (CurrentCoordinatedTransactionState == COORD_TRANS_NONE)
 			{
