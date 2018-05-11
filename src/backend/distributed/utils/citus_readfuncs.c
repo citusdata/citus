@@ -181,6 +181,7 @@ readJobInfo(Job *local_node)
 	READ_BOOL_FIELD(subqueryPushdown);
 	READ_BOOL_FIELD(requiresMasterEvaluation);
 	READ_BOOL_FIELD(deferredPruning);
+	READ_NODE_FIELD(partitionValueConst);
 }
 
 

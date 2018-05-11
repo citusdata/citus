@@ -38,11 +38,14 @@ extern DeferredErrorMessage * PlanRouterQuery(Query *originalQuery,
 											  List **placementList, uint64 *anchorShardId,
 											  List **relationShardList, bool
 											  replacePrunedQueryWithDummy,
-											  bool *multiShardModifyQuery);
+											  bool *multiShardModifyQuery,
+											  Const **partitionValueConst);
 extern List * RouterInsertTaskList(Query *query, DeferredErrorMessage **planningError);
+extern Const * ExtractInsertPartitionValueConst(Query *query);
 extern List * TargetShardIntervalsForQuery(Query *query,
 										   RelationRestrictionContext *restrictionContext,
-										   bool *multiShardQuery);
+										   bool *multiShardQuery,
+										   Const **partitionValueConst);
 extern List * WorkersContainingAllShards(List *prunedShardIntervalsList);
 extern List * IntersectPlacementList(List *lhsPlacementList, List *rhsPlacementList);
 extern DeferredErrorMessage * ModifyQuerySupported(Query *queryTree, Query *originalQuery,

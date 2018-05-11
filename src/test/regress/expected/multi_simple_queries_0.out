@@ -358,6 +358,7 @@ SELECT *
 	WHERE author_id = 1;
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DETAIL:  distribution column value: 1
  id | author_id |    title     | word_count 
 ----+-----------+--------------+------------
   1 |         1 | arsenous     |       9572
@@ -401,6 +402,7 @@ SELECT id as article_id, word_count * id as random_value
 	WHERE author_id = 1;
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DETAIL:  distribution column value: 1
  article_id | random_value 
 ------------+--------------
           1 |         9572
@@ -418,6 +420,7 @@ SELECT a.author_id as first_author, b.word_count as second_word_count
 	LIMIT 3;
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DETAIL:  distribution column value: 10
  first_author | second_word_count 
 --------------+-------------------
            10 |             17277
@@ -433,6 +436,7 @@ SELECT a.author_id as first_author, b.word_count as second_word_count
 	LIMIT 3;
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DETAIL:  distribution column value: 10
  first_author | second_word_count 
 --------------+-------------------
            10 |             19519
@@ -447,6 +451,7 @@ SELECT *
 	LIMIT 2;
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DETAIL:  distribution column value: 1
  id | author_id |  title   | word_count 
 ----+-----------+----------+------------
   1 |         1 | arsenous |       9572
@@ -463,6 +468,7 @@ SELECT id
 	ORDER BY id;
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DETAIL:  distribution column value: 1
  id 
 ----
   1
@@ -483,6 +489,7 @@ SELECT avg(word_count)
 	WHERE author_id = 2;
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DETAIL:  distribution column value: 2
         avg         
 --------------------
  12356.400000000000
@@ -496,6 +503,7 @@ SELECT max(word_count) as max, min(word_count) as min,
 	WHERE author_id = 2;
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DETAIL:  distribution column value: 2
   max  | min  |  sum  | cnt 
 -------+------+-------+-----
  18185 | 2728 | 61782 |   5

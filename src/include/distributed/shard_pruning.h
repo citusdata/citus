@@ -17,7 +17,8 @@
 #define INVALID_SHARD_INDEX -1
 
 /* Function declarations for shard pruning */
-extern List * PruneShards(Oid relationId, Index rangeTableId, List *whereClauseList);
+extern List * PruneShards(Oid relationId, Index rangeTableId, List *whereClauseList,
+						  Const **partitionValueConst);
 extern bool ContainsFalseClause(List *whereClauseList);
 
 #endif /* SHARD_PRUNING_H_ */

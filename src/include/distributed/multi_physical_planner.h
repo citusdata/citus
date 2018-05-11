@@ -127,6 +127,7 @@ typedef struct Job
 	bool subqueryPushdown;
 	bool requiresMasterEvaluation; /* only applies to modify jobs */
 	bool deferredPruning;
+	Const *partitionValueConst;
 } Job;
 
 
