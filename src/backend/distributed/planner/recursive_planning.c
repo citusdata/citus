@@ -67,8 +67,10 @@
 #include "distributed/recursive_planning.h"
 #include "distributed/relation_restriction_equivalence.h"
 #include "lib/stringinfo.h"
+#include "optimizer/clauses.h"
 #include "optimizer/planner.h"
 #include "optimizer/prep.h"
+#include "optimizer/var.h"
 #include "parser/parsetree.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
@@ -225,6 +227,10 @@ GenerateSubplansForSubqueriesAndCTEs(uint64 planId, Query *originalQuery,
 }
 
 
+static bool ShouldDeCorrelateSubqueries(Query *query, RecursivePlanningContext *context);
+static void ExamineSublinks(Node *quals, RecursivePlanningContext *context);
+static bool SublinkSafeToDeCorrelate(SubLink *sublink);
+
 /*
  * RecursivelyPlanSubqueriesAndCTEs finds subqueries and CTEs that cannot be pushed down to
  * workers directly and instead plans them by recursively calling the planner and
@@ -301,9 +307,225 @@ RecursivelyPlanSubqueriesAndCTEs(Query *query, RecursivePlanningContext *context
 	if (ShouldRecursivelyPlanNonColocatedSubqueries(query, context))
 	{
 		RecursivelyPlanNonColocatedSubqueries(query, context);
+
+		if (ShouldDeCorrelateSubqueries(query, context))
+		{
+			elog(INFO, "Yes, lets de correlate subqueries");
+		}
 	}
 
 	return NULL;
+}
+
+
+static bool
+ShouldDeCorrelateSubqueries(Query *query, RecursivePlanningContext *context)
+{
+	FromExpr *joinTree = query->jointree;
+	Node *queryQuals = NULL;
+	List *sublinkList = NIL;
+
+	if (!joinTree)
+	{
+		return false;
+	}
+
+	queryQuals = joinTree->quals;
+
+	/* only queries with */
+	if (queryQuals == NULL)
+	{
+		return false;
+	}
+
+	ExamineSublinks(queryQuals, context);
+
+
+	return true;
+}
+
+
+static void
+ExamineSublinks(Node *node, RecursivePlanningContext *context)
+{
+	if (node == NULL)
+	{
+		return;
+	}
+
+	if (IsA(node, SubLink))
+	{
+		SubLink *sublink = (SubLink *) node;
+
+		if (sublink->subLinkType == ANY_SUBLINK)
+		{
+			if (SublinkSafeToDeCorrelate(sublink))
+			{
+				elog(INFO, "Any sublink found for de corrolation");
+			}
+		}
+		else if (sublink->subLinkType == EXISTS_SUBLINK)
+		{
+			if (SublinkSafeToDeCorrelate(sublink))
+			{
+				elog(INFO, "exists sublink found for de corrolation");
+				Query *subselect = (Query *) sublink->subselect;
+				List *varList = pull_vars_of_level(subselect->jointree->quals, 1);
+
+				/*
+				 * What we actually need to do is to fetch the necessary
+				 * expression and operate on that.
+				 */
+
+				subselect->jointree->quals = NULL;
+
+				sublink->subLinkType = ANY_SUBLINK;
+				/* sublink->operName = list_make1("="); */
+				Var *v = linitial(varList);
+
+				v->varlevelsup -= 1;
+				Param *p = makeNode(Param);
+
+				p = makeNode(Param);
+				p->paramkind = PARAM_EXEC;
+				p->paramid = 10000;
+				p->paramtype = v->vartype;
+				p->paramtypmod = v->vartypmod;
+				p->paramcollid = v->varcollid;
+				p->location = v->location;
+
+				sublink->testexpr = (Node *) make_opclause(670, 16, false, (Expr *) v,
+														   (Expr *) p, 0, 0);
+				TargetEntry *tList = makeTargetEntry((Expr *) copyObject(v), 1, "col",
+													 false);
+				subselect->targetList = list_make1(tList);
+
+				RecursivelyPlanSubquery(subselect, context);
+			}
+		}
+	}
+
+	if (not_clause(node))
+	{
+		SubLink *sublink = (SubLink *) get_notclausearg((Expr *) node);
+
+		if (sublink && IsA(sublink, SubLink))
+		{
+			if (sublink->subLinkType == EXISTS_SUBLINK)
+			{
+				if (SublinkSafeToDeCorrelate(sublink))
+				{
+					elog(INFO, "not exists sublink found for decorrolation");
+				}
+			}
+		}
+	}
+
+
+	if (is_opclause(node))
+	{
+		Node *leftOp = get_leftop((Expr *) node);
+		Node *rightOp = get_rightop((Expr *) node);
+
+
+		if (IsA(strip_implicit_coercions(leftOp), SubLink))
+		{
+			if (SublinkSafeToDeCorrelate((SubLink *) strip_implicit_coercions(leftOp)))
+			{
+				elog(INFO, "OpClause is found on the left");
+			}
+		}
+
+		if (IsA(strip_implicit_coercions(rightOp), SubLink))
+		{
+			if (SublinkSafeToDeCorrelate((SubLink *) strip_implicit_coercions(rightOp)))
+			{
+				elog(INFO, "OpClause is found on the right");
+			}
+		}
+	}
+
+	if (and_clause(node))
+	{
+		ListCell *l;
+		foreach(l, ((BoolExpr *) node)->args)
+		{
+			Node *oldclause = (Node *) lfirst(l);
+			ExamineSublinks(oldclause, context);
+		}
+	}
+}
+
+
+static bool
+SublinkSafeToDeCorrelate(SubLink *sublink)
+{
+	Query *subselect = (Query *) sublink->subselect;
+	Node *whereClause = NULL;
+
+	/*
+	 * Can't flatten if it contains WITH.  (We could arrange to pull up the
+	 * WITH into the parent query's cteList, but that risks changing the
+	 * semantics, since a WITH ought to be executed once per associated query
+	 * call.)  Note that convert_ANY_sublink_to_join doesn't have to reject
+	 * this case, since it just produces a subquery RTE that doesn't have to
+	 * get flattened into the parent query.
+	 */
+	if (subselect->cteList)
+	{
+		return false;
+	}
+
+	/*
+	 * Copy the subquery so we can modify it safely (see comments in
+	 * make_subplan).
+	 */
+	subselect = copyObject(subselect);
+
+	/*
+	 * The subquery must have a nonempty jointree, else we won't have a join.
+	 */
+	if (subselect->jointree->fromlist == NIL)
+	{
+		return false;
+	}
+
+	/*
+	 * Separate out the WHERE clause.  (We could theoretically also remove
+	 * top-level plain JOIN/ON clauses, but it's probably not worth the
+	 * trouble.)
+	 */
+	whereClause = subselect->jointree->quals;
+	subselect->jointree->quals = NULL;
+
+	/*
+	 * The rest of the sub-select must not refer to any Vars of the parent
+	 * query.  (Vars of higher levels should be okay, though.)
+	 */
+	if (contain_vars_of_level((Node *) subselect, 1))
+	{
+		return false;
+	}
+
+	/*
+	 * On the other hand, the WHERE clause must contain some Vars of the
+	 * parent query, else it's not gonna be a join.
+	 */
+	if (!contain_vars_of_level(whereClause, 1))
+	{
+		return false;
+	}
+
+	/*
+	 * We don't risk optimizing if the WHERE clause is volatile, either.
+	 */
+	if (contain_volatile_functions(whereClause))
+	{
+		return false;
+	}
+
+
+	return true;
 }
 
 
