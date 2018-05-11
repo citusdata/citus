@@ -306,7 +306,7 @@ WHERE  user_id IN (SELECT user_id
               FROM   users_test_table
               UNION
               SELECT user_id
-              FROM   events_test_table) returning *;
+              FROM   events_test_table) returning value_3; 
 
 UPDATE users_test_table
 SET    value_1 = 4
@@ -634,7 +634,7 @@ WHERE  users_test_table.user_id = (SELECT user_id
 
 -- Cursors are not supported
 BEGIN;
-DECLARE test_cursor CURSOR FOR SELECT * FROM users_test_table;
+DECLARE test_cursor CURSOR FOR SELECT * FROM users_test_table ORDER BY user_id;
 FETCH test_cursor;
 UPDATE users_test_table SET value_2 = 5 WHERE CURRENT OF test_cursor;
 ROLLBACK;
