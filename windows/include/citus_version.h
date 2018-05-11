@@ -5,7 +5,7 @@
 #define CITUS_EDITION "community"
 
 /* Extension version expected by this Citus build */
-#define CITUS_EXTENSIONVERSION "7.4-1"
+#define CITUS_EXTENSIONVERSION "7.4-3"
 
 /* Citus major version as a string */
 #define CITUS_MAJORVERSION "7.4"

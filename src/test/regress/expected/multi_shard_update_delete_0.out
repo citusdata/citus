@@ -416,20 +416,20 @@ WHERE  user_id IN (SELECT user_id
               FROM   users_test_table
               UNION
               SELECT user_id
-              FROM   events_test_table) returning *;
- user_id | value_1 | value_2 | value_3 
----------+---------+---------+---------
-       8 |       4 |      13 |       0
-      20 |       4 |         |       0
-      20 |       4 |         |       0
-      20 |       4 |         |       0
-       4 |       4 |       9 |       0
-       4 |       4 |      17 |       0
-      16 |       4 |         |       0
-       6 |       4 |      11 |       0
-       6 |       4 |      15 |       0
-       2 |       4 |       7 |       0
-       2 |       4 |      19 |       0
+              FROM   events_test_table) returning value_3; 
+ value_3 
+---------
+       0
+       0
+       0
+       0
+       0
+       0
+       0
+       0
+       0
+       0
+       0
 (11 rows)
 
 UPDATE users_test_table
@@ -773,11 +773,11 @@ ERROR:  more than one row returned by a subquery used as an expression
 CONTEXT:  while executing command on localhost:57637
 -- Cursors are not supported
 BEGIN;
-DECLARE test_cursor CURSOR FOR SELECT * FROM users_test_table;
+DECLARE test_cursor CURSOR FOR SELECT * FROM users_test_table ORDER BY user_id;
 FETCH test_cursor;
  user_id | value_1 | value_2 | value_3 
 ---------+---------+---------+---------
-       8 |       4 |       0 |       0
+       1 |       2 |       5 |       0
 (1 row)
 
 UPDATE users_test_table SET value_2 = 5 WHERE CURRENT OF test_cursor;
