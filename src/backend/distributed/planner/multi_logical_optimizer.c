@@ -1806,6 +1806,52 @@ MasterAggregateExpression(Aggref *originalAggregate,
 
 		newMasterExpression = (Expr *) unionAggregate;
 	}
+	else if(aggregateType == AGGREGATE_TOPN_UNION_AGG ||
+			aggregateType == AGGREGATE_TOPN_ADD_AGG)
+	{
+		/*
+		 * Array and json aggregates are handled in two steps. First, we compute
+		 * array_agg() or json aggregate on the worker nodes. Then, we gather
+		 * the arrays or jsons on the master and compute the array_cat_agg()
+		 * or jsonb_cat_agg() aggregate on them to get the final array or json.
+		 */
+		Var *column = NULL;
+		TargetEntry *catAggArgument = NULL;
+		Aggref *newMasterAggregate = NULL;
+		Oid aggregateFunctionId = InvalidOid;
+		const char *catAggregateName = NULL;
+		Oid catInputType = InvalidOid;
+
+		/* worker aggregate and original aggregate have same return type */
+		Oid workerReturnType = exprType((Node *) originalAggregate);
+		int32 workerReturnTypeMod = exprTypmod((Node *) originalAggregate);
+		Oid workerCollationId = exprCollation((Node *) originalAggregate);
+
+		catAggregateName = TOPN_UNION_AGGREGATE_NAME;
+		catInputType = JSONBOID;
+
+		aggregateFunctionId = AggregateFunctionOid(catAggregateName,
+												   catInputType);
+
+		/* create argument for the array_cat_agg() or jsonb_cat_agg() aggregate */
+		column = makeVar(masterTableId, walkerContext->columnId, workerReturnType,
+						 workerReturnTypeMod, workerCollationId, columnLevelsUp);
+		catAggArgument = makeTargetEntry((Expr *) column, argumentId, NULL, false);
+
+		List *args = list_make1(catAggArgument);
+		walkerContext->columnId++;
+
+		/* construct the master array_cat_agg() or jsonb_cat_agg() expression */
+		newMasterAggregate = copyObject(originalAggregate);
+		newMasterAggregate->aggfnoid = aggregateFunctionId;
+		newMasterAggregate->args = args;
+		newMasterAggregate->aggfilter = NULL;
+		newMasterAggregate->aggtranstype = InvalidOid;
+		newMasterAggregate->aggargtypes = list_make1_oid(JSONBOID);
+		newMasterAggregate->aggsplit = AGGSPLIT_SIMPLE;
+
+		newMasterExpression = (Expr *) newMasterAggregate;
+	}
 	else
 	{
 		/*
