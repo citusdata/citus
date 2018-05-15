@@ -22,7 +22,7 @@ matrix:
   allow_failures:
     - env: PGVERSION=11
 before_install:
-  - git clone -b v0.7.6 --depth 1 https://github.com/citusdata/tools.git
+  - git clone -b add-citus-control-check --depth 1 https://github.com/citusdata/tools.git
   - sudo make -C tools install
   - setup_apt
   - curl https://install.citusdata.com/community/deb.sh | sudo bash
@@ -38,7 +38,9 @@ install:
       apt-get download "postgresql-${PGVERSION}-hll=2.10.2.citus-1"
       sudo dpkg --force-confold --force-confdef --force-all -i *hll*.deb
     fi
-before_script: citus_indent --quiet --check
+before_script:
+  - citus_indent --quiet --check
+  - check_citus_control
 script: CFLAGS=-Werror pg_travis_multi_test check
 after_success:
   - sync_to_enterprise
