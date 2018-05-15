@@ -1,4 +1,7 @@
 # Citus extension
+# There is a copy of this file in the root directory of the repository. Any changes made
+# to this file need to be made to that file as well (it supports builds on Windows; those
+# don't use Make and need more hand-holding)
 comment = 'Citus distributed database'
 default_version = '7.4-3'
 module_pathname = '$libdir/citus'
