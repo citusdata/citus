@@ -1,3 +1,37 @@
+### citus v7.4.0 (May 15, 2018) ###
+
+* Adds support for non-pushdownable subqueries and CTEs in UPDATE/DELETE queries
+
+* Adds support for pushdownable subqueries and joins in UPDATE/DELETE queries
+
+* Adds faster shard pruning for subqueries
+
+* Adds partitioning support to MX table
+
+* Adds support for (VACUUM | ANALYZE) VERBOSE
+
+* Adds support for multiple ANDs in `HAVING` for pushdown planner
+
+* Adds support for quotation needy schema names
+
+* Improves operator check time in physical planner for custom data types
+
+* Removes broadcast join logic
+
+* Deprecates `large_table_shard_count` and `master_expire_table_cache()`  
+
+* Modifies master_update_node to lock write on shards hosted by node over update
+
+* `DROP TABLE` now drops shards as the currrent user instead of the superuser
+
+* Adds specialised error codes for connection failures
+
+* Improves error messages on connection failure
+
+* Fixes issue which prevented multiple `citus_table_size` calls per query
+
+* Tests are updated to use `create_distributed_table`
+
 ### citus v7.3.0 (March 15, 2018) ###
 
 * Adds support for non-colocated joins between subqueries
