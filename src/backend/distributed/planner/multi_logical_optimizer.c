@@ -1806,51 +1806,59 @@ MasterAggregateExpression(Aggref *originalAggregate,
 
 		newMasterExpression = (Expr *) unionAggregate;
 	}
-	else if(aggregateType == AGGREGATE_TOPN_UNION_AGG ||
-			aggregateType == AGGREGATE_TOPN_ADD_AGG)
+	else if (aggregateType == AGGREGATE_TOPN_UNION_AGG ||
+			 aggregateType == AGGREGATE_TOPN_ADD_AGG)
 	{
 		/*
-		 * Array and json aggregates are handled in two steps. First, we compute
-		 * array_agg() or json aggregate on the worker nodes. Then, we gather
-		 * the arrays or jsons on the master and compute the array_cat_agg()
-		 * or jsonb_cat_agg() aggregate on them to get the final array or json.
+		 * Top-N aggregates are handled in two steps. First, we compute
+		 * topn_add_agg() or topn_union_agg() aggregates on the worker nodes.
+		 * Then, we gather the Top-Ns on the master and take the union of all
+		 * to get the final topn.
 		 */
 		Var *column = NULL;
-		TargetEntry *catAggArgument = NULL;
-		Aggref *newMasterAggregate = NULL;
+		TargetEntry *topNAggArgument = NULL;
+		Aggref *masterUnionAggregate = NULL;
 		Oid aggregateFunctionId = InvalidOid;
-		const char *catAggregateName = NULL;
-		Oid catInputType = InvalidOid;
+		const char *unionAggregateName = TOPN_UNION_AGGREGATE_NAME;
+		Oid unionInputType = JSONBOID;
+		List *args = NULL;
 
 		/* worker aggregate and original aggregate have same return type */
 		Oid workerReturnType = exprType((Node *) originalAggregate);
 		int32 workerReturnTypeMod = exprTypmod((Node *) originalAggregate);
 		Oid workerCollationId = exprCollation((Node *) originalAggregate);
 
-		catAggregateName = TOPN_UNION_AGGREGATE_NAME;
-		catInputType = JSONBOID;
+		aggregateFunctionId = AggregateFunctionOid(unionAggregateName,
+												   unionInputType);
 
-		aggregateFunctionId = AggregateFunctionOid(catAggregateName,
-												   catInputType);
-
-		/* create argument for the array_cat_agg() or jsonb_cat_agg() aggregate */
+		/* create argument for the topn_union_agg() aggregate */
 		column = makeVar(masterTableId, walkerContext->columnId, workerReturnType,
 						 workerReturnTypeMod, workerCollationId, columnLevelsUp);
-		catAggArgument = makeTargetEntry((Expr *) column, argumentId, NULL, false);
+		topNAggArgument = makeTargetEntry((Expr *) column, argumentId, NULL, false);
 
-		List *args = list_make1(catAggArgument);
+		args = list_make1(topNAggArgument);
+
+		/*
+		 * In case the custom number of counters is used in topn_add_agg()
+		 * or topn_union_agg()
+		 */
+		if (list_length(originalAggregate->args) == 2)
+		{
+			args = lappend(args, list_nth(originalAggregate->args, 1));
+		}
+
 		walkerContext->columnId++;
 
-		/* construct the master array_cat_agg() or jsonb_cat_agg() expression */
-		newMasterAggregate = copyObject(originalAggregate);
-		newMasterAggregate->aggfnoid = aggregateFunctionId;
-		newMasterAggregate->args = args;
-		newMasterAggregate->aggfilter = NULL;
-		newMasterAggregate->aggtranstype = InvalidOid;
-		newMasterAggregate->aggargtypes = list_make1_oid(JSONBOID);
-		newMasterAggregate->aggsplit = AGGSPLIT_SIMPLE;
+		/* construct the master topn_union_agg() expression */
+		masterUnionAggregate = copyObject(originalAggregate);
+		masterUnionAggregate->aggfnoid = aggregateFunctionId;
+		masterUnionAggregate->args = args;
+		masterUnionAggregate->aggfilter = NULL;
+		masterUnionAggregate->aggtranstype = InvalidOid;
+		masterUnionAggregate->aggargtypes = list_make1_oid(JSONBOID);
+		masterUnionAggregate->aggsplit = AGGSPLIT_SIMPLE;
 
-		newMasterExpression = (Expr *) newMasterAggregate;
+		newMasterExpression = (Expr *) masterUnionAggregate;
 	}
 	else
 	{
