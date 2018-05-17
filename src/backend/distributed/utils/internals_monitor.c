@@ -23,11 +23,14 @@ static void SetupReturnSet(FunctionCallInfo fcinfo, List *values, List *nulls);
 static Datum NextRecord(FunctionCallInfo fcinfo);
 static Datum DatumCopy(Datum datum, bool datumTypeByValue, int datumTypeLength);
 
-extern HTAB *ConnectionHash;
-
 Datum
 citus_connections_hash(PG_FUNCTION_ARGS)
 {
+	const char *remoteXactStateStr[] = {
+		"INVALID", "STARTING", "STARTED", "PREPARING", "PREPARED",
+		"1PC_ABORTING", "2PC_ABORTING", "ABORTED", "1PC_COMMITTING",
+		"2PC_COMMITTING", "COMMITTED"
+	};
 	if (SRF_IS_FIRSTCALL())
 	{
 		List *valuesTupleList = NIL;
@@ -44,8 +47,9 @@ citus_connections_hash(PG_FUNCTION_ARGS)
 			{
 				MultiConnection *connection =
 					dlist_container(MultiConnection, connectionNode, iter.cur);
-				Datum *valuesTuple = palloc0(8 * sizeof(Datum));
-				bool *nullsTuple = palloc0(8 * sizeof(bool));
+				Datum *valuesTuple = palloc0(12 * sizeof(Datum));
+				bool *nullsTuple = palloc0(12 * sizeof(bool));
+				RemoteTransaction *xact = &connection->remoteTransaction;
 
 				valuesTuple[0] = CStringGetTextDatum(connection->hostname);
 				valuesTuple[1] = Int32GetDatum(connection->port);
@@ -55,6 +59,11 @@ citus_connections_hash(PG_FUNCTION_ARGS)
 				valuesTuple[5] = BoolGetDatum(connection->sessionLifespan);
 				valuesTuple[6] = BoolGetDatum(connection->claimedExclusively);
 				valuesTuple[7] = TimestampTzGetDatum(connection->connectionStart);
+				valuesTuple[8] = CStringGetTextDatum(
+					remoteXactStateStr[xact->transactionState]);
+				valuesTuple[9] = BoolGetDatum(xact->transactionCritical);
+				valuesTuple[10] = BoolGetDatum(xact->transactionFailed);
+				valuesTuple[11] = CStringGetTextDatum(xact->preparedName);
 
 				valuesTupleList = lappend(valuesTupleList, valuesTuple);
 				nullsTupleList = lappend(nullsTupleList, nullsTuple);
