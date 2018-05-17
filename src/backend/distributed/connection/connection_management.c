@@ -764,7 +764,9 @@ AfterXactHostConnectionHandling(ConnectionHashEntry *entry, bool isCommit)
 			}
 			else
 			{
+				MemoryContext oldContext = MemoryContextSwitchTo(TopMemoryContext);
 				ZombieConnections = lappend(ZombieConnections, connection);
+				MemoryContextSwitchTo(oldContext);
 			}
 		}
 		else

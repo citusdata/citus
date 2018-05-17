@@ -123,6 +123,8 @@ cleanup_zombie_connections(PG_FUNCTION_ARGS)
 		MultiConnection *connection = lfirst(connectionCell);
 		ShutdownConnection(connection);
 	}
+	list_free(ZombieConnections);
+	ZombieConnections = NIL;
 	PG_RETURN_VOID();
 }
 
@@ -170,8 +172,6 @@ SetupReturnSet(FunctionCallInfo fcinfo, List *valuesTupleList, List *nullsTupleL
 	int i = 0;
 
 	FuncCallContext *functionContext = SRF_FIRSTCALL_INIT();
-
-	elog(WARNING, "tupleCount: %d", tupleCount);
 
 	/*
 	 * Switch to multi_call_memory_ctx so the results calculated here
