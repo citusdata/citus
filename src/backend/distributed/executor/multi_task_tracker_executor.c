@@ -2939,8 +2939,9 @@ TrackerHashCleanupJob(HTAB *taskTrackerHash, Task *jobCleanupTask)
 													   taskTracker);
 				}
 			}
-			else if (timedOut)
+			else if (resultStatus == CLIENT_RESULT_UNAVAILABLE || timedOut)
 			{
+				/* CLIENT_RESULT_UNAVAILABLE is returned if the connection failed somehow */
 				ereport(WARNING, (errmsg("could not receive response for cleanup query "
 										 "result for job " UINT64_FORMAT " on node "
 																		 "\"%s:%u\" with status %d",
