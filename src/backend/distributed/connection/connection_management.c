@@ -35,6 +35,7 @@
 int NodeConnectionTimeout = 5000;
 int CitusSSLMode = CITUS_SSL_MODE_PREFER;
 HTAB *ConnectionHash = NULL;
+List *ZombieConnections = NIL;
 MemoryContext ConnectionContext = NULL;
 
 
@@ -753,12 +754,18 @@ AfterXactHostConnectionHandling(ConnectionHashEntry *entry, bool isCommit)
 			PQstatus(connection->pgConn) != CONNECTION_OK ||
 			PQtransactionStatus(connection->pgConn) != PQTRANS_IDLE)
 		{
-			ShutdownConnection(connection);
-
 			/* unlink from list */
 			dlist_delete(iter.cur);
 
-			pfree(connection);
+			if (!connection->dontKill)
+			{
+				ShutdownConnection(connection);
+				pfree(connection);
+			}
+			else
+			{
+				ZombieConnections = lappend(ZombieConnections, connection);
+			}
 		}
 		else
 		{

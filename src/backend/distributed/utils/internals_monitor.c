@@ -18,7 +18,12 @@
 #include "distributed/connection_management.h"
 
 PG_FUNCTION_INFO_V1(citus_connections_hash);
+PG_FUNCTION_INFO_V1(citus_zombie_connections);
+PG_FUNCTION_INFO_V1(dont_kill_multiconnection);
+PG_FUNCTION_INFO_V1(cleanup_zombie_connections);
 
+static void CreateMultiConnectionTuple(MultiConnection *connection, Datum **valuesTuple,
+									   bool **nullsTuple);
 static void SetupReturnSet(FunctionCallInfo fcinfo, List *values, List *nulls);
 static Datum NextRecord(FunctionCallInfo fcinfo);
 static Datum DatumCopy(Datum datum, bool datumTypeByValue, int datumTypeLength);
@@ -26,11 +31,6 @@ static Datum DatumCopy(Datum datum, bool datumTypeByValue, int datumTypeLength);
 Datum
 citus_connections_hash(PG_FUNCTION_ARGS)
 {
-	const char *remoteXactStateStr[] = {
-		"INVALID", "STARTING", "STARTED", "PREPARING", "PREPARED",
-		"1PC_ABORTING", "2PC_ABORTING", "ABORTED", "1PC_COMMITTING",
-		"2PC_COMMITTING", "COMMITTED"
-	};
 	if (SRF_IS_FIRSTCALL())
 	{
 		List *valuesTupleList = NIL;
@@ -47,24 +47,9 @@ citus_connections_hash(PG_FUNCTION_ARGS)
 			{
 				MultiConnection *connection =
 					dlist_container(MultiConnection, connectionNode, iter.cur);
-				Datum *valuesTuple = palloc0(12 * sizeof(Datum));
-				bool *nullsTuple = palloc0(12 * sizeof(bool));
-				RemoteTransaction *xact = &connection->remoteTransaction;
-
-				valuesTuple[0] = CStringGetTextDatum(connection->hostname);
-				valuesTuple[1] = Int32GetDatum(connection->port);
-				valuesTuple[2] = CStringGetTextDatum(connection->user);
-				valuesTuple[3] = CStringGetTextDatum(connection->database);
-				valuesTuple[4] = Int32GetDatum(PQsocket(connection->pgConn));
-				valuesTuple[5] = BoolGetDatum(connection->sessionLifespan);
-				valuesTuple[6] = BoolGetDatum(connection->claimedExclusively);
-				valuesTuple[7] = TimestampTzGetDatum(connection->connectionStart);
-				valuesTuple[8] = CStringGetTextDatum(
-					remoteXactStateStr[xact->transactionState]);
-				valuesTuple[9] = BoolGetDatum(xact->transactionCritical);
-				valuesTuple[10] = BoolGetDatum(xact->transactionFailed);
-				valuesTuple[11] = CStringGetTextDatum(xact->preparedName);
-
+				Datum *valuesTuple;
+				bool *nullsTuple;
+				CreateMultiConnectionTuple(connection, &valuesTuple, &nullsTuple);
 				valuesTupleList = lappend(valuesTupleList, valuesTuple);
 				nullsTupleList = lappend(nullsTupleList, nullsTuple);
 			}
@@ -74,6 +59,102 @@ citus_connections_hash(PG_FUNCTION_ARGS)
 	}
 
 	return NextRecord(fcinfo);
+}
+
+
+Datum
+citus_zombie_connections(PG_FUNCTION_ARGS)
+{
+	if (SRF_IS_FIRSTCALL())
+	{
+		List *valuesTupleList = NIL;
+		List *nullsTupleList = NIL;
+		ListCell *connectionCell = NULL;
+		foreach(connectionCell, ZombieConnections)
+		{
+			MultiConnection *connection = lfirst(connectionCell);
+			Datum *valuesTuple;
+			bool *nullsTuple;
+			CreateMultiConnectionTuple(connection, &valuesTuple, &nullsTuple);
+			valuesTupleList = lappend(valuesTupleList, valuesTuple);
+			nullsTupleList = lappend(nullsTupleList, nullsTuple);
+		}
+
+		SetupReturnSet(fcinfo, valuesTupleList, nullsTupleList);
+	}
+
+	return NextRecord(fcinfo);
+}
+
+
+Datum
+dont_kill_multiconnection(PG_FUNCTION_ARGS)
+{
+	int socketId = PG_GETARG_INT32(0);
+	HASH_SEQ_STATUS status;
+	ConnectionHashEntry *entry;
+
+	hash_seq_init(&status, ConnectionHash);
+	while ((entry = (ConnectionHashEntry *) hash_seq_search(&status)) != 0)
+	{
+		dlist_mutable_iter iter;
+
+		dlist_foreach_modify(iter, entry->connections)
+		{
+			MultiConnection *connection =
+				dlist_container(MultiConnection, connectionNode, iter.cur);
+			if (PQsocket(connection->pgConn) == socketId)
+			{
+				connection->dontKill = true;
+			}
+		}
+	}
+
+	PG_RETURN_VOID();
+}
+
+
+Datum
+cleanup_zombie_connections(PG_FUNCTION_ARGS)
+{
+	ListCell *connectionCell = NULL;
+	foreach(connectionCell, ZombieConnections)
+	{
+		MultiConnection *connection = lfirst(connectionCell);
+		ShutdownConnection(connection);
+	}
+	PG_RETURN_VOID();
+}
+
+
+static void
+CreateMultiConnectionTuple(MultiConnection *connection, Datum **valuesTuple,
+						   bool **nullsTuple)
+{
+	RemoteTransaction *xact = &connection->remoteTransaction;
+	const char *remoteXactStateStr[] = {
+		"INVALID", "STARTING", "STARTED", "PREPARING", "PREPARED",
+		"1PC_ABORTING", "2PC_ABORTING", "ABORTED", "1PC_COMMITTING",
+		"2PC_COMMITTING", "COMMITTED"
+	};
+
+	*valuesTuple = palloc0(13 * sizeof(Datum));
+	*nullsTuple = palloc0(13 * sizeof(bool));
+
+	(*valuesTuple)[0] = CStringGetTextDatum(connection->hostname);
+	(*valuesTuple)[1] = Int32GetDatum(connection->port);
+	(*valuesTuple)[2] = CStringGetTextDatum(connection->user);
+	(*valuesTuple)[3] = CStringGetTextDatum(connection->database);
+	(*valuesTuple)[4] = Int32GetDatum(PQsocket(connection->pgConn));
+	(*valuesTuple)[5] = BoolGetDatum(connection->sessionLifespan);
+	(*valuesTuple)[6] = BoolGetDatum(connection->claimedExclusively);
+	(*valuesTuple)[7] = TimestampTzGetDatum(connection->connectionStart);
+	(*valuesTuple)[8] = CStringGetTextDatum(
+		remoteXactStateStr[xact->transactionState]);
+	(*valuesTuple)[9] = BoolGetDatum(xact->transactionCritical);
+	(*valuesTuple)[10] = BoolGetDatum(xact->transactionFailed);
+	(*valuesTuple)[11] = CStringGetTextDatum(xact->preparedName);
+	(*valuesTuple)[12] = BoolGetDatum(connection->dontKill);
 }
 
 
