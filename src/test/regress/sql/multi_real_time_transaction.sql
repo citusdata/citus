@@ -179,7 +179,7 @@ ROLLBACK;
 -- Test cancelling behaviour. See https://github.com/citusdata/citus/pull/1905.
 -- Repeating it multiple times to increase the chance of failure before PR #1905.
 SET client_min_messages TO ERROR;
-alter system set deadlock_timeout TO '1ms';
+alter system set deadlock_timeout TO '50ms';
 SELECT pg_reload_conf();
 
 BEGIN;
