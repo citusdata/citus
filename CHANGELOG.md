@@ -32,6 +32,10 @@
 
 * Tests are updated to use `create_distributed_table`
 
+### citus v7.2.2 (May 4, 2018) ###
+
+* Fixes a bug that could cause SELECTs to crash during a rebalance
+
 ### citus v7.3.0 (March 15, 2018) ###
 
 * Adds support for non-colocated joins between subqueries
