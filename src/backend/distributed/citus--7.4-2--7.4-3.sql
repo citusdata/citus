@@ -10,8 +10,6 @@ COMMENT ON FUNCTION worker_hash_partition_table(bigint, integer, text, text, oid
                                                 anyarray)
     IS 'hash partition query results';
 
-RESET search_path;
-
 CREATE FUNCTION citus_connections_hash()
 RETURNS TABLE (
     hostname TEXT,
@@ -86,8 +84,14 @@ RETURNS TABLE (
 AS 'MODULE_PATHNAME', 'remote_command_logs'
 LANGUAGE C STRICT;
 
-
 CREATE FUNCTION clear_remote_command_logs()
 RETURNS VOID
 AS 'MODULE_PATHNAME', 'clear_remote_command_logs'
 LANGUAGE C STRICT;
+
+CREATE FUNCTION xact_modification_level()
+RETURNS TEXT
+AS 'MODULE_PATHNAME', 'xact_modification_level'
+LANGUAGE C STRICT;
+
+RESET search_path;

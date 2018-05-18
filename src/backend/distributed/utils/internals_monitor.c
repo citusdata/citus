@@ -26,6 +26,7 @@ PG_FUNCTION_INFO_V1(cleanup_zombie_connections);
 PG_FUNCTION_INFO_V1(citus_connection_placement_hash);
 PG_FUNCTION_INFO_V1(remote_command_logs);
 PG_FUNCTION_INFO_V1(clear_remote_command_logs);
+PG_FUNCTION_INFO_V1(xact_modification_level);
 
 static void CreateMultiConnectionTuple(MultiConnection *connection, Datum **valuesTuple,
 									   bool **nullsTuple);
@@ -211,6 +212,18 @@ clear_remote_command_logs(PG_FUNCTION_ARGS)
 	/* TODO: free contents of RemoteCommandLogs */
 	RemoteCommandLogs = NIL;
 	PG_RETURN_VOID();
+}
+
+
+Datum
+xact_modification_level(PG_FUNCTION_ARGS)
+{
+	const char *modificationLevelStr[] = {
+		"XACT_MODIFICATION_INVALID",
+		"XACT_MODIFICATION_NONE",
+		"XACT_MODIFICATION_DATA"
+	};
+	PG_RETURN_DATUM(CStringGetTextDatum(modificationLevelStr[XactModificationLevel]));
 }
 
 
