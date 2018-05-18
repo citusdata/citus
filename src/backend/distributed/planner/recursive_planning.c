@@ -230,6 +230,8 @@ GenerateSubplansForSubqueriesAndCTEs(uint64 planId, Query *originalQuery,
 static bool ShouldDeCorrelateSubqueries(Query *query, RecursivePlanningContext *context);
 static void ExamineSublinks(Node *quals, RecursivePlanningContext *context);
 static bool SublinkSafeToDeCorrelate(SubLink *sublink);
+static Expr * ColumnMatchExpressionAtTopLevelConjunction(Node *node, Var *column);
+static bool SimpleJoinExpression(Expr *clause);
 
 /*
  * RecursivelyPlanSubqueriesAndCTEs finds subqueries and CTEs that cannot be pushed down to
@@ -371,36 +373,46 @@ ExamineSublinks(Node *node, RecursivePlanningContext *context)
 				elog(INFO, "exists sublink found for de corrolation");
 				Query *subselect = (Query *) sublink->subselect;
 				List *varList = pull_vars_of_level(subselect->jointree->quals, 1);
+				ListCell *varCell = NULL;
 
-				/*
-				 * What we actually need to do is to fetch the necessary
-				 * expression and operate on that.
-				 */
+				foreach(varCell, varList)
+				{
+					Var *v = (Var *) lfirst(varCell);
+					Var *secondVar = NULL;
+					Expr *expr =
+						ColumnMatchExpressionAtTopLevelConjunction(
+							subselect->jointree->quals, v);
 
-				subselect->jointree->quals = NULL;
 
-				sublink->subLinkType = ANY_SUBLINK;
-				/* sublink->operName = list_make1("="); */
-				Var *v = linitial(varList);
+					subselect->jointree->quals = NULL;
 
-				v->varlevelsup -= 1;
-				Param *p = makeNode(Param);
+					sublink->subLinkType = ANY_SUBLINK;
 
-				p = makeNode(Param);
-				p->paramkind = PARAM_EXEC;
-				p->paramid = 10000;
-				p->paramtype = v->vartype;
-				p->paramtypmod = v->vartypmod;
-				p->paramcollid = v->varcollid;
-				p->location = v->location;
+					v->varlevelsup -= 1;
+					Param *p = makeNode(Param);
 
-				sublink->testexpr = (Node *) make_opclause(670, 16, false, (Expr *) v,
-														   (Expr *) p, 0, 0);
-				TargetEntry *tList = makeTargetEntry((Expr *) copyObject(v), 1, "col",
-													 false);
-				subselect->targetList = list_make1(tList);
+					p = makeNode(Param);
+					p->paramkind = PARAM_EXEC;
+					p->paramid = 10000;
+					p->paramtype = v->vartype;
+					p->paramtypmod = v->vartypmod;
+					p->paramcollid = v->varcollid;
+					p->location = v->location;
 
-				RecursivelyPlanSubquery(subselect, context);
+					if (equal(get_leftop(expr), v))
+						secondVar = (Var *) get_rightop(expr);
+					else
+						secondVar = (Var *) get_leftop(expr);
+
+
+					sublink->testexpr = (Node *) make_opclause(670, 16, false, (Expr *) v,
+															   (Expr *) p, 0, 0);
+					TargetEntry *tList = makeTargetEntry((Expr *) copyObject(secondVar), 1, "col",
+														 false);
+					subselect->targetList = list_make1(tList);
+
+					RecursivelyPlanSubquery(subselect, context);
+				}
 			}
 		}
 	}
@@ -454,6 +466,97 @@ ExamineSublinks(Node *node, RecursivePlanningContext *context)
 			ExamineSublinks(oldclause, context);
 		}
 	}
+}
+
+
+
+/*
+ * ColumnMatchExpressionAtTopLevelConjunction returns true if the query contains an exact
+ * match (equal) expression on the provided column. The function returns true only
+ * if the match expression has an AND relation with the rest of the expression tree.
+ */
+static Expr *
+ColumnMatchExpressionAtTopLevelConjunction(Node *node, Var *column)
+{
+	if (node == NULL)
+	{
+		return NULL;
+	}
+
+	if (IsA(node, OpExpr))
+	{
+		OpExpr *opExpr = (OpExpr *) node;
+		bool simpleExpression = SimpleJoinExpression((Expr *) opExpr);
+		bool columnInExpr = false;
+
+		if (!simpleExpression)
+		{
+			return NULL;
+		}
+
+		columnInExpr = OpExpressionContainsColumn(opExpr, column);
+		if (!columnInExpr)
+		{
+			return NULL;
+		}
+
+		return (Expr *) opExpr;
+	}
+	else if (IsA(node, BoolExpr))
+	{
+		BoolExpr *boolExpr = (BoolExpr *) node;
+		List *argumentList = boolExpr->args;
+		ListCell *argumentCell = NULL;
+
+		/* handling OR or NOT EXPRs seems hard for now */
+		if (boolExpr->boolop != AND_EXPR)
+		{
+			return NULL;
+		}
+
+		foreach(argumentCell, argumentList)
+		{
+			Node *argumentNode = (Node *) lfirst(argumentCell);
+			Expr *columnExpr =
+				ColumnMatchExpressionAtTopLevelConjunction(argumentNode, column);
+			if (columnExpr)
+			{
+				return columnExpr;
+			}
+		}
+	}
+
+	return NULL;
+}
+
+
+static bool
+SimpleJoinExpression(Expr *clause)
+{
+	Node *leftOperand = NULL;
+	Node *rightOperand = NULL;
+	Const *constantClause = NULL;
+
+	if (is_opclause(clause) && list_length(((OpExpr *) clause)->args) == 2)
+	{
+		leftOperand = get_leftop(clause);
+		rightOperand = get_rightop(clause);
+	}
+	else
+	{
+		return false; /* not a binary opclause */
+	}
+
+	/* strip coercions before doing check */
+	leftOperand = strip_implicit_coercions(leftOperand);
+	rightOperand = strip_implicit_coercions(rightOperand);
+
+	if (IsA(rightOperand, Var) && IsA(leftOperand, Var))
+	{
+		return true;
+	}
+
+	return false;
 }
 
 
