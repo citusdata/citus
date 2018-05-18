@@ -16,11 +16,13 @@
 #include "funcapi.h"
 #include "utils/builtins.h"
 #include "distributed/connection_management.h"
+#include "distributed/placement_connection.h"
 
 PG_FUNCTION_INFO_V1(citus_connections_hash);
 PG_FUNCTION_INFO_V1(citus_zombie_connections);
 PG_FUNCTION_INFO_V1(dont_kill_multiconnection);
 PG_FUNCTION_INFO_V1(cleanup_zombie_connections);
+PG_FUNCTION_INFO_V1(citus_connection_placement_hash);
 
 static void CreateMultiConnectionTuple(MultiConnection *connection, Datum **valuesTuple,
 									   bool **nullsTuple);
@@ -111,6 +113,44 @@ dont_kill_multiconnection(PG_FUNCTION_ARGS)
 	}
 
 	PG_RETURN_VOID();
+}
+
+
+Datum
+citus_connection_placement_hash(PG_FUNCTION_ARGS)
+{
+	if (SRF_IS_FIRSTCALL())
+	{
+		List *valuesTupleList = NIL;
+		List *nullsTupleList = NIL;
+		HASH_SEQ_STATUS status;
+		ConnectionPlacementHashEntry *entry;
+
+		hash_seq_init(&status, ConnectionPlacementHash);
+		while ((entry = (ConnectionPlacementHashEntry *) hash_seq_search(&status)) != 0)
+		{
+			ConnectionReference *conn = entry->primaryConnection;
+			Datum *valuesTuple = palloc0(9 * sizeof(Datum));
+			bool *nullsTuple = palloc0(9 * sizeof(bool));
+
+			valuesTuple[0] = Int64GetDatum(entry->key.placementId);
+			valuesTuple[1] = BoolGetDatum(entry->failed);
+			valuesTuple[2] = BoolGetDatum(entry->hasSecondaryConnections);
+			valuesTuple[3] = CStringGetTextDatum(conn->userName);
+			valuesTuple[4] = Int32GetDatum(PQsocket(conn->connection->pgConn));
+			valuesTuple[5] = BoolGetDatum(conn->hadDML);
+			valuesTuple[6] = BoolGetDatum(conn->hadDDL);
+			valuesTuple[7] = Int32GetDatum(conn->colocationGroupId);
+			valuesTuple[8] = Int32GetDatum(conn->representativeValue);
+
+			valuesTupleList = lappend(valuesTupleList, valuesTuple);
+			nullsTupleList = lappend(nullsTupleList, nullsTuple);
+		}
+
+		SetupReturnSet(fcinfo, valuesTupleList, nullsTupleList);
+	}
+
+	return NextRecord(fcinfo);
 }
 
 

@@ -22,92 +22,7 @@
 #include "utils/hsearch.h"
 #include "utils/memutils.h"
 
-
-/*
- * A connection reference is used to register that a connection has been used
- * to read or modify either a) a shard placement as a particular user b) a
- * group of colocated placements (which depend on whether the reference is
- * from ConnectionPlacementHashEntry or ColocatedPlacementHashEntry).
- */
-typedef struct ConnectionReference
-{
-	/*
-	 * The user used to read/modify the placement. We cannot reuse connections
-	 * that were performed using a different role, since it would not have the
-	 * right permissions.
-	 */
-	const char *userName;
-
-	/* the connection */
-	MultiConnection *connection;
-
-	/*
-	 * Information about what the connection is used for. There can only be
-	 * one connection executing DDL/DML for a placement to avoid deadlock
-	 * issues/read-your-own-writes violations.  The difference between DDL/DML
-	 * currently is only used to emit more precise error messages.
-	 */
-	bool hadDML;
-	bool hadDDL;
-
-	/* colocation group of the placement, if any */
-	uint32 colocationGroupId;
-	uint32 representativeValue;
-
-	/* placementId of the placement, used only for append distributed tables */
-	uint64 placementId;
-
-	/* membership in MultiConnection->referencedPlacements */
-	dlist_node connectionNode;
-} ConnectionReference;
-
-
-struct ColocatedPlacementsHashEntry;
-
-
-/*
- * Hash table mapping placements to a list of connections.
- *
- * This stores a list of connections for each placement, because multiple
- * connections to the same placement may exist at the same time. E.g. a
- * real-time executor query may reference the same placement in several
- * sub-tasks.
- *
- * We keep track about a connection having executed DML or DDL, since we can
- * only ever allow a single transaction to do either to prevent deadlocks and
- * consistency violations (e.g. read-your-own-writes).
- */
-
-/* hash key */
-typedef struct ConnectionPlacementHashKey
-{
-	uint64 placementId;
-} ConnectionPlacementHashKey;
-
-/* hash entry */
-typedef struct ConnectionPlacementHashEntry
-{
-	ConnectionPlacementHashKey key;
-
-	/* did any remote transactions fail? */
-	bool failed;
-
-	/* primary connection used to access the placement */
-	ConnectionReference *primaryConnection;
-
-	/* are any other connections reading from the placements? */
-	bool hasSecondaryConnections;
-
-	/* entry for the set of co-located placements */
-	struct ColocatedPlacementsHashEntry *colocatedEntry;
-
-	/* membership in ConnectionShardHashEntry->placementConnections */
-	dlist_node shardNode;
-} ConnectionPlacementHashEntry;
-
-/* hash table */
-static HTAB *ConnectionPlacementHash;
-
+HTAB *ConnectionPlacementHash;
 
 /*
  * A hash-table mapping colocated placements to connections. Colocated
@@ -815,7 +730,7 @@ ConnectionAccessedDifferentPlacement(MultiConnection *connection,
  * AssociatePlacementWithShard records shard->placement relation in
  * ConnectionShardHash.
  *
- * That association is later used, in CheckForFailedPlacements, to invalidate
+ * That association is later used, in MarkFailedShardPlacements, to invalidate
  * shard placements if necessary.
  */
 static void
@@ -1005,7 +920,7 @@ PostCommitMarkFailedShardPlacements(bool using2PC)
 
 
 /*
- * CheckShardPlacements is a helper function for CheckForFailedPlacements that
+ * CheckShardPlacements is a helper function for MarkFailedShardPlacements that
  * performs the per-shard work.
  */
 static bool
