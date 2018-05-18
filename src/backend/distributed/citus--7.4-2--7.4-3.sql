@@ -73,3 +73,21 @@ RETURNS TABLE (
 )
 AS 'MODULE_PATHNAME', 'citus_connection_placement_hash'
 LANGUAGE C STRICT;
+
+CREATE FUNCTION remote_command_logs()
+RETURNS TABLE (
+    socketId INTEGER,
+    hostname TEXT,
+    port INTEGER,
+    "user" TEXT,
+    database TEXT,
+    query TEXT
+)
+AS 'MODULE_PATHNAME', 'remote_command_logs'
+LANGUAGE C STRICT;
+
+
+CREATE FUNCTION clear_remote_command_logs()
+RETURNS VOID
+AS 'MODULE_PATHNAME', 'clear_remote_command_logs'
+LANGUAGE C STRICT;

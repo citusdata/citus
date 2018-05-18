@@ -12,6 +12,7 @@
 #define REMOTE_COMMAND_H
 
 #include "distributed/connection_management.h"
+#include "lib/stringinfo.h"
 
 /* errors which ExecuteRemoteCommand might return */
 #define QUERY_SEND_FAILED 1
@@ -22,6 +23,17 @@ struct pg_result; /* target of the PGresult typedef */
 /* GUC, determining whether statements sent to remote nodes are logged */
 extern bool LogRemoteCommands;
 
+typedef struct
+{
+	int socket;
+	char hostname[MAX_NODE_LENGTH];
+	int32 port;
+	char user[NAMEDATALEN];
+	char database[NAMEDATALEN];
+	StringInfo query;
+} RemoteCommandLogRecord;
+
+extern List *RemoteCommandLogs;
 
 /* simple helpers */
 extern bool IsResponseOK(struct pg_result *result);

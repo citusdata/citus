@@ -19,7 +19,7 @@
 #include "miscadmin.h"
 #include "storage/latch.h"
 #include "utils/palloc.h"
-
+#include "utils/memutils.h"
 
 #define MAX_PUT_COPY_DATA_BUFFER_SIZE (8 * 1024 * 1024)
 
@@ -27,6 +27,7 @@
 /* GUC, determining whether statements sent to remote nodes are logged */
 bool LogRemoteCommands = false;
 
+List *RemoteCommandLogs = NIL;
 
 static bool FinishConnectionIO(MultiConnection *connection, bool raiseInterrupts);
 static WaitEventSet * BuildWaitEventSet(MultiConnection **allConnections,
@@ -339,10 +340,28 @@ pchomp(const char *in)
 void
 LogRemoteCommand(MultiConnection *connection, const char *command)
 {
+	MemoryContext oldContext;
+	RemoteCommandLogRecord *logRecord;
+
 	if (!LogRemoteCommands)
 	{
 		return;
 	}
+
+	oldContext = MemoryContextSwitchTo(TopMemoryContext);
+
+	logRecord = palloc0(sizeof(RemoteCommandLogRecord));
+	logRecord->socket = PQsocket(connection->pgConn);
+	strlcpy(logRecord->hostname, connection->hostname, MAX_NODE_LENGTH);
+	strlcpy(logRecord->user, connection->user, NAMEDATALEN);
+	strlcpy(logRecord->database, connection->database, NAMEDATALEN);
+	logRecord->port = connection->port;
+	logRecord->query = makeStringInfo();
+	appendStringInfoString(logRecord->query, command);
+
+	RemoteCommandLogs = lappend(RemoteCommandLogs, logRecord);
+
+	MemoryContextSwitchTo(oldContext);
 
 	ereport(LOG, (errmsg("issuing %s", command),
 				  errdetail("on server %s:%d", connection->hostname, connection->port)));

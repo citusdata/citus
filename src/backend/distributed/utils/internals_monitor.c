@@ -17,12 +17,15 @@
 #include "utils/builtins.h"
 #include "distributed/connection_management.h"
 #include "distributed/placement_connection.h"
+#include "distributed/remote_commands.h"
 
 PG_FUNCTION_INFO_V1(citus_connections_hash);
 PG_FUNCTION_INFO_V1(citus_zombie_connections);
 PG_FUNCTION_INFO_V1(dont_kill_multiconnection);
 PG_FUNCTION_INFO_V1(cleanup_zombie_connections);
 PG_FUNCTION_INFO_V1(citus_connection_placement_hash);
+PG_FUNCTION_INFO_V1(remote_command_logs);
+PG_FUNCTION_INFO_V1(clear_remote_command_logs);
 
 static void CreateMultiConnectionTuple(MultiConnection *connection, Datum **valuesTuple,
 									   bool **nullsTuple);
@@ -165,6 +168,48 @@ cleanup_zombie_connections(PG_FUNCTION_ARGS)
 	}
 	list_free(ZombieConnections);
 	ZombieConnections = NIL;
+	PG_RETURN_VOID();
+}
+
+
+Datum
+remote_command_logs(PG_FUNCTION_ARGS)
+{
+	if (SRF_IS_FIRSTCALL())
+	{
+		List *valuesTupleList = NIL;
+		List *nullsTupleList = NIL;
+		ListCell *commandLogCell = NULL;
+
+		foreach(commandLogCell, RemoteCommandLogs)
+		{
+			RemoteCommandLogRecord *logRecord = lfirst(commandLogCell);
+			Datum *valuesTuple = palloc0(6 * sizeof(Datum));
+			bool *nullsTuple = palloc0(6 * sizeof(bool));
+
+			valuesTuple[0] = Int32GetDatum(logRecord->socket);
+			valuesTuple[1] = CStringGetTextDatum(logRecord->hostname);
+			valuesTuple[2] = Int32GetDatum(logRecord->port);
+			valuesTuple[3] = CStringGetTextDatum(logRecord->user);
+			valuesTuple[4] = CStringGetTextDatum(logRecord->database);
+			valuesTuple[5] = CStringGetTextDatum(logRecord->query->data);
+
+			valuesTupleList = lappend(valuesTupleList, valuesTuple);
+			nullsTupleList = lappend(nullsTupleList, nullsTuple);
+		}
+
+		SetupReturnSet(fcinfo, valuesTupleList, nullsTupleList);
+	}
+
+	return NextRecord(fcinfo);
+}
+
+
+Datum
+clear_remote_command_logs(PG_FUNCTION_ARGS)
+{
+	/* TODO: free contents of RemoteCommandLogs */
+	RemoteCommandLogs = NIL;
 	PG_RETURN_VOID();
 }
 
