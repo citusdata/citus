@@ -120,7 +120,7 @@ static const char *const AggregateNames[] = {
 	"jsonb_agg", "jsonb_object_agg",
 	"json_agg", "json_object_agg",
 	"bit_and", "bit_or", "bool_and", "bool_or", "every",
-	"hll_add_agg", "hll_union_agg"
+	"hll_add_agg", "hll_union_agg",
 	"topn_add_agg", "topn_union_agg"
 };
 

@@ -1822,6 +1822,7 @@ MasterAggregateExpression(Aggref *originalAggregate,
 		const char *unionAggregateName = TOPN_UNION_AGGREGATE_NAME;
 		Oid unionInputType = JSONBOID;
 		List *args = NULL;
+		List *aggArgTypes = NULL;
 
 		/* worker aggregate and original aggregate have same return type */
 		Oid workerReturnType = exprType((Node *) originalAggregate);
@@ -1838,14 +1839,15 @@ MasterAggregateExpression(Aggref *originalAggregate,
 		topNAggArgument = makeTargetEntry((Expr *) column, argumentId, NULL, false);
 
 		args = list_make1(topNAggArgument);
-
+		aggArgTypes = list_make1_oid(JSONBOID);
 		/*
 		 * In case the custom number of counters is used in topn_add_agg()
 		 * or topn_union_agg()
 		 */
 		if (list_length(originalAggregate->args) == 2)
 		{
-			args = lappend(args, list_nth(originalAggregate->args, 1));
+			args = lappend(args, (TargetEntry *)list_nth(originalAggregate->args, 1));
+			aggArgTypes = list_make2_oid(JSONBOID, INT4OID);
 		}
 
 		walkerContext->columnId++;
@@ -1854,10 +1856,11 @@ MasterAggregateExpression(Aggref *originalAggregate,
 		masterUnionAggregate = copyObject(originalAggregate);
 		masterUnionAggregate->aggfnoid = aggregateFunctionId;
 		masterUnionAggregate->args = args;
-		masterUnionAggregate->aggfilter = NULL;
-		masterUnionAggregate->aggtranstype = InvalidOid;
-		masterUnionAggregate->aggargtypes = list_make2_oid(JSONBOID, INT4OID);
-		masterUnionAggregate->aggsplit = AGGSPLIT_SIMPLE;
+		masterUnionAggregate->aggtype = originalAggregate->aggtype;
+		masterUnionAggregate->aggargtypes = aggArgTypes;
+
+		elog(INFO, "MASTER: %s", nodeToString(masterUnionAggregate));
+		elog(INFO, "ORIGINAL: %s", nodeToString(originalAggregate));
 
 		newMasterExpression = (Expr *) masterUnionAggregate;
 	}
