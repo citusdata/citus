@@ -78,6 +78,7 @@
 #include "nodes/pg_list.h"
 #include "nodes/primnodes.h"
 #include "nodes/relation.h"
+#include "rewrite/rewriteManip.h"
 #include "utils/builtins.h"
 #include "utils/guc.h"
 #include "../../../include/distributed/query_pushdown_planning.h"
@@ -228,7 +229,7 @@ GenerateSubplansForSubqueriesAndCTEs(uint64 planId, Query *originalQuery,
 
 
 static bool ShouldDeCorrelateSubqueries(Query *query, RecursivePlanningContext *context);
-static void ExamineSublinks(Node *quals, RecursivePlanningContext *context);
+static void ExamineSublinks(Query *query, Node *quals, RecursivePlanningContext *context);
 static bool SublinkSafeToDeCorrelate(SubLink *sublink);
 static Expr * ColumnMatchExpressionAtTopLevelConjunction(Node *node, Var *column);
 static bool SimpleJoinExpression(Expr *clause);
@@ -340,7 +341,7 @@ ShouldDeCorrelateSubqueries(Query *query, RecursivePlanningContext *context)
 		return false;
 	}
 
-	ExamineSublinks(queryQuals, context);
+	ExamineSublinks(query, queryQuals, context);
 
 
 	return true;
@@ -348,7 +349,7 @@ ShouldDeCorrelateSubqueries(Query *query, RecursivePlanningContext *context)
 
 
 static void
-ExamineSublinks(Node *node, RecursivePlanningContext *context)
+ExamineSublinks(Query *query, Node *node, RecursivePlanningContext *context)
 {
 	if (node == NULL)
 	{
@@ -452,6 +453,182 @@ ExamineSublinks(Node *node, RecursivePlanningContext *context)
 				if (SublinkSafeToDeCorrelate(sublink))
 				{
 					elog(INFO, "not exists sublink found for decorrolation");
+					Query	   *subselect = (Query *) sublink->subselect;
+
+					List *varList = pull_vars_of_level(subselect->jointree->quals, 1);
+							if (list_length(varList) != 1)
+							{
+								elog(DEBUG2, "skipping since expression condition didn't hold");
+
+								return;
+							}
+
+
+
+							Var *v = linitial(varList);
+							Var *secondVar = NULL;
+							Expr *expr =
+								ColumnMatchExpressionAtTopLevelConjunction(
+									subselect->jointree->quals, v);
+
+							if (!IsA(expr, OpExpr))
+							{
+								elog(DEBUG2, "skipping since OP EXPRs condition didn't hold");
+							}
+
+							if (equal(strip_implicit_coercions(get_leftop(expr)), v))
+							{
+								secondVar = (Var *) strip_implicit_coercions(get_rightop(expr));
+							}
+							else
+							{
+								secondVar = (Var *) strip_implicit_coercions(get_leftop(expr));
+							}
+
+
+					subselect = copyObject(subselect);
+
+					/*
+					 * The subquery must have a nonempty jointree, else we won't have a join.
+					 */
+					if (subselect->jointree->fromlist == NIL)
+						return;
+					/*
+					 * Separate out the WHERE clause.  (We could theoretically also remove
+					 * top-level plain JOIN/ON clauses, but it's probably not worth the
+					 * trouble.)
+					 */
+					Node *whereClause = subselect->jointree->quals;
+					subselect->jointree->quals = NULL;
+
+					/*
+					 * The rest of the sub-select must not refer to any Vars of the parent
+					 * query.  (Vars of higher levels should be okay, though.)
+					 */
+					if (contain_vars_of_level((Node *) subselect, 1))
+						return;
+
+					/*
+					 * On the other hand, the WHERE clause must contain some Vars of the
+					 * parent query, else it's not gonna be a join.
+					 */
+					if (!contain_vars_of_level(whereClause, 1))
+						return;
+
+					/*
+					 * We don't risk optimizing if the WHERE clause is volatile, either.
+					 */
+					if (contain_volatile_functions(whereClause))
+						return;
+
+
+
+
+
+
+					int rtoffset = list_length(query->rtable);
+					//OffsetVarNodes((Node *) subselect, rtoffset, 0);
+					OffsetVarNodes(whereClause, rtoffset, 0);
+
+					/*
+					 * Upper-level vars in subquery will now be one level closer to their
+					 * parent than before; in particular, anything that had been level 1
+					 * becomes level zero.
+					 */
+					IncrementVarSublevelsUp((Node *) subselect, -1, 1);
+					IncrementVarSublevelsUp(whereClause, -1, 1);
+
+
+					TargetEntry *tList = makeTargetEntry((Expr *) copyObject(secondVar), 1,
+														 "col",
+														 false);
+					subselect->targetList = list_make1(tList);
+
+
+
+					RangeTblEntry *newRte = makeNode(RangeTblEntry);
+					newRte->rtekind = RTE_SUBQUERY;
+					newRte->subquery = subselect;
+
+
+					List *subselectTList = pull_var_clause_default(subselect->targetList);
+
+					ListCell *joinalcell1 = NULL;
+						List *erefs2 = NIL;
+						foreach(joinalcell1, subselectTList)
+						{
+							erefs2 = lappend(erefs2, makeString("c1"));
+						}
+
+					newRte->alias = makeAlias("decorralated", erefs2);
+					newRte->eref =  makeAlias("decorralated", erefs2);
+
+
+					/* Now we can attach the modified subquery rtable to the parent */
+					query->rtable = list_concat(query->rtable, list_make1(newRte));
+					RangeTblRef *newRangeTableRef = makeNode(RangeTblRef);
+					newRangeTableRef->rtindex = list_length(query->rtable);
+
+
+					/*
+					 * And finally, build the JoinExpr node.
+					 */
+					JoinExpr *result = makeNode(JoinExpr);
+					result->jointype = JOIN_ANTI;
+					result->isNatural = false;
+
+
+					result->rarg = newRangeTableRef;
+
+					result->usingClause = NIL;
+					result->quals = whereClause;
+					result->alias = NULL;
+					result->rtindex = list_length(query->rtable) + 1;
+
+					query->jointree->quals = NULL;
+
+					if (list_length(query->jointree->fromlist) == 1)
+						result->larg = (Node *) linitial(query->jointree->fromlist);
+					else
+						result->larg = (Node *) query->jointree;
+
+					query->jointree = makeFromExpr(list_make1(result), NULL);
+
+
+					RangeTblEntry *rteJoin = makeNode(RangeTblEntry);
+
+					rteJoin->rtekind = RTE_JOIN;
+					rteJoin->relid = InvalidOid;
+					rteJoin->subquery = NULL;
+					rteJoin->jointype = JOIN_ANTI;
+					Var *v2 = v;
+					v2->varlevelsup-=1;
+					v2->varno+=1;
+
+					RangeTblEntry *firstRel = linitial(query->rtable);
+					firstRel->alias = copyObject(firstRel->eref);
+
+					rteJoin->joinaliasvars = list_concat(rteJoin->joinaliasvars, pull_var_clause_default(query->targetList));
+					rteJoin->joinaliasvars = list_concat(rteJoin->joinaliasvars, pull_var_clause_default(subselect->targetList));
+
+
+					ListCell *joinalcell = NULL;
+					List *erefs = NIL;
+					foreach(joinalcell, rteJoin->joinaliasvars)
+					{
+						erefs = lappend(erefs, makeString("c1"));
+					}
+
+					rteJoin->eref =  makeAlias("join", erefs);
+					rteJoin->alias =  makeAlias("join", erefs);
+
+					query->rtable = lappend(query->rtable, rteJoin);
+
+
+					StringInfo buf = makeStringInfo();
+					deparse_shard_query(query, 0, 0, buf);
+					elog(INFO, "buf:%s", buf->data);
+					RecursivelyPlanSubquery(query, context);
 				}
 			}
 		}
@@ -487,7 +664,7 @@ ExamineSublinks(Node *node, RecursivePlanningContext *context)
 		foreach(l, ((BoolExpr *) node)->args)
 		{
 			Node *oldclause = (Node *) lfirst(l);
-			ExamineSublinks(oldclause, context);
+			ExamineSublinks(query, oldclause, context);
 		}
 	}
 }
