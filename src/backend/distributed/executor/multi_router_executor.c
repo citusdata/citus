@@ -89,6 +89,7 @@ static void ExecuteMultipleTasks(CitusScanState *scanState, List *taskList,
 								 bool isModificationQuery, bool expectResults);
 static int64 ExecuteModifyTasks(List *taskList, bool expectResults,
 								ParamListInfo paramListInfo, CitusScanState *scanState);
+static void ExecuteSingleDDLTaskWithoutResults(Task *task);
 static void AcquireExecutorShardLock(Task *task, CmdType commandType);
 static void AcquireExecutorMultiShardLocks(List *taskList);
 static bool RequiresConsistentSnapshot(Task *task);
@@ -1019,22 +1020,76 @@ ExecuteModifyTasksWithoutResults(List *taskList)
 
 
 /*
- * ExecuteTasksSequentiallyWithoutResults basically calls ExecuteModifyTasks in
- * a loop in order to simulate sequential execution of a list of tasks. Useful
- * in cases where issuing commands in parallel before waiting for results could
- * result in deadlocks (such as CREATE INDEX CONCURRENTLY).
+ * ExecuteTasksSequentiallyWithoutResults basically calls
+ * ExecuteSingleDDLTaskWithoutResults in a loop in order to simulate sequential
+ * execution of a list of tasks. Useful in cases where issuing commands in
+ * parallel before waiting for results could result in deadlocks (such as
+ * CREATE INDEX CONCURRENTLY).
+ *
+ * Note that this function does not acquire executor locks, so should not be used
+ * for DML tasks.
  */
 void
-ExecuteTasksSequentiallyWithoutResults(List *taskList)
+ExecuteDDLTasksSequentiallyWithoutResults(List *taskList)
 {
 	ListCell *taskCell = NULL;
 
 	foreach(taskCell, taskList)
 	{
 		Task *task = (Task *) lfirst(taskCell);
-		List *singleTask = list_make1(task);
 
-		ExecuteModifyTasksWithoutResults(singleTask);
+		ExecuteSingleDDLTaskWithoutResults(task);
+	}
+}
+
+
+/*
+ * ExecuteSingleDDLTaskWithoutResults executes the task on the task's
+ * placement list.
+ *
+ * The connections are marked as critical. Note that this function doesn't
+ * necessarily open a new connection per placment, instead re-uses the
+ * existing connections to the worker nodes when possible. Similarly, the
+ * function does not claim the connections exclusively. Thus, the function
+ * could be used to implement a sequential execution of DDL commands over a
+ * single connection to a worker node.
+ */
+static void
+ExecuteSingleDDLTaskWithoutResults(Task *task)
+{
+	List *connectionList = NIL;
+	ListCell *connectionCell = NULL;
+	bool markCritical = true;
+
+	char *queryString = task->queryString;
+
+	if (MultiShardCommitProtocol == COMMIT_PROTOCOL_2PC ||
+		task->replicationModel == REPLICATION_MODEL_2PC)
+	{
+		BeginOrContinueCoordinatedTransaction();
+		CoordinatedTransactionUse2PC();
+	}
+
+	Assert(task->taskType == DDL_TASK);
+
+	/*
+	 * Get connections required to execute task. This will,
+	 * establish the connection, mark as critical and start
+	 * a transaction (when in a transaction).
+	 */
+	connectionList = GetModifyConnections(task, markCritical);
+
+	/* try to execute modification on all placements */
+	foreach(connectionCell, connectionList)
+	{
+		MultiConnection *connection = (MultiConnection *) lfirst(connectionCell);
+
+		ExecuteCriticalRemoteCommand(connection, queryString);
+	}
+
+	if (IsTransactionBlock())
+	{
+		XactModificationLevel = XACT_MODIFICATION_DATA;
 	}
 }
 

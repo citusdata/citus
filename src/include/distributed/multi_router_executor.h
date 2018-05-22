@@ -41,7 +41,7 @@ extern TupleTableSlot * RouterSelectExecScan(CustomScanState *node);
 extern TupleTableSlot * RouterMultiModifyExecScan(CustomScanState *node);
 
 extern int64 ExecuteModifyTasksWithoutResults(List *taskList);
-extern void ExecuteTasksSequentiallyWithoutResults(List *taskList);
+extern void ExecuteDDLTasksSequentiallyWithoutResults(List *taskList);
 
 extern List * BuildPlacementSelectList(uint32 groupId, List *relationShardList);
 
