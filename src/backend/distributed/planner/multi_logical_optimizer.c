@@ -1763,6 +1763,49 @@ MasterAggregateExpression(Aggref *originalAggregate,
 
 		newMasterExpression = (Expr *) newMasterAggregate;
 	}
+	else if (aggregateType == AGGREGATE_HLL_ADD ||
+			 aggregateType == AGGREGATE_HLL_UNION)
+	{
+		/*
+		 * If hll aggregates are called, we simply create the hll_union_aggregate
+		 * to apply in the master after running the original aggregate in
+		 * workers.
+		 */
+		const int argCount = list_length(originalAggregate->args);
+		const int defaultTypeMod = -1;
+
+		TargetEntry *hllTargetEntry = NULL;
+		Aggref *unionAggregate = NULL;
+
+		/* extract schema name of hll */
+		Oid hllId = get_extension_oid(HLL_EXTENSION_NAME, false);
+		Oid hllSchemaOid = get_extension_schema(hllId);
+		const char *hllSchemaName = get_namespace_name(hllSchemaOid);
+
+		Oid unionFunctionId = FunctionOid(hllSchemaName, HLL_UNION_AGGREGATE_NAME,
+										  argCount);
+
+		Oid hllType = TypeOid(hllSchemaOid, HLL_TYPE_NAME);
+		Oid hllTypeCollationId = get_typcollation(hllType);
+		Var *hllColumn = makeVar(masterTableId, walkerContext->columnId, hllType,
+								 defaultTypeMod,
+								 hllTypeCollationId, columnLevelsUp);
+		walkerContext->columnId++;
+
+		hllTargetEntry = makeTargetEntry((Expr *) hllColumn, argumentId, NULL, false);
+
+		unionAggregate = makeNode(Aggref);
+		unionAggregate->aggfnoid = unionFunctionId;
+		unionAggregate->aggtype = hllType;
+		unionAggregate->args = list_make1(hllTargetEntry);
+		unionAggregate->aggkind = AGGKIND_NORMAL;
+		unionAggregate->aggfilter = NULL;
+		unionAggregate->aggtranstype = InvalidOid;
+		unionAggregate->aggargtypes = list_make1_oid(unionAggregate->aggtype);
+		unionAggregate->aggsplit = AGGSPLIT_SIMPLE;
+
+		newMasterExpression = (Expr *) unionAggregate;
+	}
 	else
 	{
 		/*

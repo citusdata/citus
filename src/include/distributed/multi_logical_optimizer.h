@@ -66,7 +66,9 @@ typedef enum
 	AGGREGATE_BIT_OR = 12,
 	AGGREGATE_BOOL_AND = 13,
 	AGGREGATE_BOOL_OR = 14,
-	AGGREGATE_EVERY = 15
+	AGGREGATE_EVERY = 15,
+	AGGREGATE_HLL_ADD = 16,
+	AGGREGATE_HLL_UNION = 17
 } AggregateType;
 
 
@@ -111,7 +113,8 @@ static const char *const AggregateNames[] = {
 	"sum", "count", "array_agg",
 	"jsonb_agg", "jsonb_object_agg",
 	"json_agg", "json_object_agg",
-	"bit_and", "bit_or", "bool_and", "bool_or", "every"
+	"bit_and", "bit_or", "bool_and", "bool_or", "every",
+	"hll_add_agg", "hll_union_agg"
 };
 
 
