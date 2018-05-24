@@ -6,6 +6,9 @@
 -- taken from other regression test files and converted into
 -- prepared statements.
 
+-- print whether we're using version > 10 to make version-specific tests clear
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int > 10 AS version_above_ten;
 
 PREPARE prepared_test_1 AS
 SELECT

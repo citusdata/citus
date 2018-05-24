@@ -3,6 +3,9 @@
 --
 
 -- Tests for ensuring unsupported functions on workers error out.
+-- print server version > 10 to make version-specific tests clear
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int > 10 as version_above_ten;
 
 SET citus.next_shard_id TO 1270000;
 ALTER SEQUENCE pg_catalog.pg_dist_groupid_seq RESTART 1370000;
