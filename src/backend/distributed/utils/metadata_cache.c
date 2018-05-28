@@ -359,6 +359,20 @@ LoadShardInterval(uint64 shardId)
 
 
 /*
+ * ReferenceTableShardId returns true if the given shardId belongs to
+ * a reference table.
+ */
+bool
+ReferenceTableShardId(uint64 shardId)
+{
+	ShardCacheEntry *shardEntry = LookupShardCacheEntry(shardId);
+	DistTableCacheEntry *tableEntry = shardEntry->tableEntry;
+
+	return (tableEntry->partitionMethod == DISTRIBUTE_BY_NONE);
+}
+
+
+/*
  * LoadGroupShardPlacement returns the cached shard placement metadata
  *
  * The return value is a copy of the cached GroupShardPlacement struct and may
