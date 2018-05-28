@@ -3241,7 +3241,8 @@ OpExpressionContainsColumn(OpExpr *operatorExpression, Var *partitionColumn)
 	{
 		column = (Var *) leftOperand;
 	}
-	else
+
+	if (IsA(rightOperand, Var))
 	{
 		column = (Var *) rightOperand;
 	}

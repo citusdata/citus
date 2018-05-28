@@ -840,7 +840,7 @@ DeferErrorIfQueryNotSupported(Query *queryTree)
 	 */
 	if (queryTree->hasSubLinks && !WhereClauseContainsSubquery(queryTree))
 	{
-		preconditionsSatisfied = false;
+		//preconditionsSatisfied = false;
 		errorMessage = "could not run distributed query with subquery outside the "
 					   "FROM and WHERE clauses";
 		errorHint = filterHint;
