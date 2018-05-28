@@ -141,4 +141,8 @@ extern void FindReferencedTableColumn(Expr *columnExpression, List *parentQueryL
 
 extern bool IsGroupBySubsetOfDistinct(List *groupClause, List *distinctClause);
 
+extern Index GetNextSortGroupRef(List *targetEntryList);
+extern SortGroupClause * CreateSortGroupClause(Var *column);
+
+
 #endif   /* MULTI_LOGICAL_OPTIMIZER_H */

@@ -240,7 +240,6 @@ static void ExpandWorkerTargetEntry(List *expressionList,
 									bool addToGroupByClause,
 									QueryTargetList *queryTargetList,
 									QueryGroupClause *queryGroupClause);
-static Index GetNextSortGroupRef(List *targetEntryList);
 static TargetEntry * GenerateWorkerTargetEntry(TargetEntry *targetEntry,
 											   Expr *workerExpression,
 											   AttrNumber targetProjectionNumber);
@@ -254,7 +253,6 @@ static AggregateType GetAggregateType(Oid aggFunctionId);
 static Oid AggregateArgumentType(Aggref *aggregate);
 static Oid AggregateFunctionOid(const char *functionName, Oid inputType);
 static Oid TypeOid(Oid schemaId, const char *typeName);
-static SortGroupClause * CreateSortGroupClause(Var *column);
 
 /* Local functions forward declarations for count(distinct) approximations */
 static char * CountDistinctHashFunctionName(Oid argumentType);
@@ -2508,7 +2506,7 @@ ExpandWorkerTargetEntry(List *expressionList, TargetEntry *originalTargetEntry,
  * the next ressortgroupref that should be used based on the
  * input target list.
  */
-static Index
+Index
 GetNextSortGroupRef(List *targetEntryList)
 {
 	ListCell *targetEntryCell = NULL;
@@ -2976,7 +2974,7 @@ TypeOid(Oid schemaId, const char *typeName)
  * The caller should set tleSortGroupRef field and respective
  * TargetEntry->ressortgroupref fields to appropriate SortGroupRefIndex.
  */
-static SortGroupClause *
+SortGroupClause *
 CreateSortGroupClause(Var *column)
 {
 	Oid lessThanOperator = InvalidOid;

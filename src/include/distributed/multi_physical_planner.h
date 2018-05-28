@@ -316,6 +316,8 @@ extern Node * BuildBaseConstraint(Var *column);
 extern void UpdateConstraint(Node *baseConstraint, ShardInterval *shardInterval);
 extern bool SimpleOpExpression(Expr *clause);
 extern bool OpExpressionContainsColumn(OpExpr *operatorExpression, Var *partitionColumn);
+extern OperatorCacheEntry * LookupOperatorByType(Oid typeId, Oid accessMethodId,
+												 int16 strategyNumber);
 
 /* helper functions */
 extern Var * MakeInt4Column(void);
