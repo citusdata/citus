@@ -1,16 +1,4 @@
--- Create HLL extension if present, print false result otherwise
-SELECT CASE WHEN COUNT(*) > 0 THEN
-  'CREATE EXTENSION HLL'
-ELSE 'SELECT false AS hll_present' END
-AS create_cmd FROM pg_available_extensions()
-WHERE name = 'hll'
-\gset
-:create_cmd;
-\c - - - :worker_1_port
-:create_cmd;
-\c - - - :worker_2_port
-:create_cmd;
-\c - - - :master_port
+-- Assuming HLL is already created in multi_agg_approximate_distinct.sql
 SET citus.shard_count TO 4;
 CREATE TABLE raw_table (day date, user_id int);
 CREATE TABLE daily_uniques(day date, unique_users hll);
@@ -100,3 +88,5 @@ FROM daily_uniques
 WINDOW two_days AS (ORDER BY day ASC ROWS 1 PRECEDING);
 ERROR:  could not run distributed query because the window function that is used cannot be pushed down
 HINT:  Window functions are supported in two ways. Either add an equality filter on the distributed tables' partition column or use the window functions with a PARTITION BY clause containing the distribution column
+DROP TABLE raw_table;
+DROP TABLE daily_uniques;

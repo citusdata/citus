@@ -1,20 +1,5 @@
--- Create HLL extension if present, print false result otherwise
-SELECT CASE WHEN COUNT(*) > 0 THEN
-  'CREATE EXTENSION HLL'
-ELSE 'SELECT false AS hll_present' END
-AS create_cmd FROM pg_available_extensions()
-WHERE name = 'hll'
-\gset
+-- Assuming HLL is already created in multi_agg_approximate_distinct.sql
 
-:create_cmd;
-
-\c - - - :worker_1_port
-:create_cmd;
-
-\c - - - :worker_2_port
-:create_cmd;
-
-\c - - - :master_port
 SET citus.shard_count TO 4;
 
 CREATE TABLE raw_table (day date, user_id int);
@@ -72,4 +57,5 @@ SELECT day, (#hll_union_agg(unique_users) OVER two_days) - #unique_users AS lost
 FROM daily_uniques
 WINDOW two_days AS (ORDER BY day ASC ROWS 1 PRECEDING);
 
-
+DROP TABLE raw_table;
+DROP TABLE daily_uniques;
