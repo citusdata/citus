@@ -740,6 +740,7 @@ ExamineSublinks(Query *query, Node *node, RecursivePlanningContext *context)
 		}
 
 		correlatedVar = linitial(correlatedVarList);
+		int varNoOfCorrelatedVar = correlatedVar->varno;
 
 		correlationExpr =
 			ColumnMatchExpressionAtTopLevelConjunction(
@@ -800,6 +801,7 @@ ExamineSublinks(Query *query, Node *node, RecursivePlanningContext *context)
 		rteSubquery->rtekind = RTE_SUBQUERY;
 		rteSubquery->subquery = subselect;
 		rteSubquery->lateral = false;
+		rteSubquery->inFromCl = true;
 		rteSubquery->alias = makeAlias("new_sub_1", list_make2(makeString("Onder_col"), makeString("onder_2_col")));
 		rteSubquery->eref = makeAlias("new_sub_1",list_make2(makeString("Onder_col"), makeString("onder_2_col")));
 
@@ -847,18 +849,22 @@ ExamineSublinks(Query *query, Node *node, RecursivePlanningContext *context)
 
 		result->rarg = subqueryRteRef;
 
-		if (list_length(query->jointree->fromlist) == 1)
+		RangeTblRef *otherRef = makeNode(RangeTblRef);
+		otherRef->rtindex = varNoOfCorrelatedVar;
+		result->larg = otherRef;
+
+		//if (list_length(query->jointree->fromlist) == 1)
 		{
-			result->larg = (Node *) linitial(query->jointree->fromlist);
+			//result->larg = (Node *) linitial(query->jointree->fromlist);
 		}
-		else
+		//else
 		{
-			result->larg = (Node *) query->jointree;
+			//result->larg = (Node *) query->jointree;
 		}
 
 
 		result->usingClause = NIL;
-		result->quals = equaltyOp;
+		//result->quals = equaltyOp;
 
 
 		TargetEntry *existingAggrageteColumn = copyObject(list_nth(subselect->targetList, 0));
@@ -874,17 +880,18 @@ ExamineSublinks(Query *query, Node *node, RecursivePlanningContext *context)
 		existingGroupByColumn->vartypmod = ((Var *)addedGroupByTargetEntry->expr)->vartypmod;
 		existingGroupByColumn->varcollid = ((Var *)addedGroupByTargetEntry->expr)->varcollid;
 
-				OpExpr *otherOperator = MakeOpExpressionEquality(topLevelOpClaueVar, existingGroupByColumn, OperatorBtreeStrategy(topLevelOpExpr->opno));
+		OpExpr *otherOperator = MakeOpExpressionEquality(topLevelOpClaueVar, existingGroupByColumn, OperatorBtreeStrategy(topLevelOpExpr->opno));
 
 
-		result->quals = make_and_qual(result->quals, otherOperator);
+		//result->quals = make_and_qual(result->quals, otherOperator);
 
 
 		result->alias = NULL;
 		result->rtindex = list_length(query->rtable) + 1;
-		query->jointree = makeFromExpr(list_make1(result), NULL);
-
-		expandRTE(linitial(query->rtable), 1, 0, -1, false,
+		List *fromList = lappend(query->jointree->fromlist, subqueryRteRef);
+		query->jointree = makeFromExpr(fromList, make_and_qual(make_and_qual(equaltyOp, otherOperator), query->jointree->quals));
+elog(INFO, "%s", nodeToString(query->jointree ));
+		expandRTE(rt_fetch(varNoOfCorrelatedVar, query->rtable), varNoOfCorrelatedVar, 0, -1, false,
 				  &leftColumnNames, &leftColumnVars);
 
 		joinedColumnNames = list_concat(joinedColumnNames, leftColumnNames);
@@ -902,11 +909,12 @@ ExamineSublinks(Query *query, Node *node, RecursivePlanningContext *context)
 		rteJoin->subquery = NULL;
 		rteJoin->jointype = JOIN_INNER;
 		rteJoin->joinaliasvars = joinedColumnVars;
+		rteJoin->inFromCl = true;
 
 		rteJoin->eref = makeAlias("unnamed_citus_join", joinedColumnNames);
 		rteJoin->alias = makeAlias("unnamed_citus_join", joinedColumnNames);
 
-		query->rtable = lappend(query->rtable, rteJoin);
+		//query->rtable = lappend(query->rtable, rteJoin);
 
 
 		StringInfo str = makeStringInfo();
