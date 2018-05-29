@@ -252,7 +252,7 @@ static List * WorkerAggregateExpressionList(Aggref *originalAggregate,
 											WorkerAggregateWalkerContext *walkerContextry);
 static AggregateType GetAggregateType(Oid aggFunctionId);
 static Oid AggregateArgumentType(Aggref *aggregate);
-static Oid AggregateFunctionOid(const char *functionName, Oid inputType);
+static Oid AggregateFunctionOid(const char *functionName, Oid inputType, int argCount);
 static Oid TypeOid(Oid schemaId, const char *typeName);
 static SortGroupClause * CreateSortGroupClause(Var *column);
 
@@ -1619,8 +1619,8 @@ MasterAggregateExpression(Aggref *originalAggregate,
 
 		Oid argumentType = AggregateArgumentType(originalAggregate);
 
-		Oid sumFunctionId = AggregateFunctionOid(sumAggregateName, argumentType);
-		Oid countFunctionId = AggregateFunctionOid(countAggregateName, ANYOID);
+		Oid sumFunctionId = AggregateFunctionOid(sumAggregateName, argumentType, 1);
+		Oid countFunctionId = AggregateFunctionOid(countAggregateName, ANYOID, 1);
 
 		/* calculate the aggregate types that worker nodes are going to return */
 		Oid workerSumReturnType = get_func_rettype(sumFunctionId);
@@ -1650,7 +1650,7 @@ MasterAggregateExpression(Aggref *originalAggregate,
 		Oid workerCollationId = exprCollation((Node *) originalAggregate);
 
 		const char *sumAggregateName = AggregateNames[AGGREGATE_SUM];
-		Oid sumFunctionId = AggregateFunctionOid(sumAggregateName, workerReturnType);
+		Oid sumFunctionId = AggregateFunctionOid(sumAggregateName, workerReturnType, 1);
 		Oid masterReturnType = get_func_rettype(sumFunctionId);
 
 		Aggref *newMasterAggregate = copyObject(originalAggregate);
@@ -1744,7 +1744,7 @@ MasterAggregateExpression(Aggref *originalAggregate,
 		Assert(catInputType != InvalidOid);
 
 		aggregateFunctionId = AggregateFunctionOid(catAggregateName,
-												   catInputType);
+												   catInputType, 1);
 
 		/* create argument for the array_cat_agg() or jsonb_cat_agg() aggregate */
 		column = makeVar(masterTableId, walkerContext->columnId, workerReturnType,
@@ -1763,6 +1763,107 @@ MasterAggregateExpression(Aggref *originalAggregate,
 
 		newMasterExpression = (Expr *) newMasterAggregate;
 	}
+	else if (aggregateType == AGGREGATE_HLL_ADD ||
+			 aggregateType == AGGREGATE_HLL_UNION)
+	{
+		/*
+		 * If hll aggregates are called, we simply create the hll_union_aggregate
+		 * to apply in the master after running the original aggregate in
+		 * workers.
+		 */
+		const int argCount = list_length(originalAggregate->args);
+		const int defaultTypeMod = -1;
+
+		TargetEntry *hllTargetEntry = NULL;
+		Aggref *unionAggregate = NULL;
+
+		/* extract schema name of hll */
+		Oid hllId = get_extension_oid(HLL_EXTENSION_NAME, false);
+		Oid hllSchemaOid = get_extension_schema(hllId);
+		const char *hllSchemaName = get_namespace_name(hllSchemaOid);
+
+		Oid unionFunctionId = FunctionOid(hllSchemaName, HLL_UNION_AGGREGATE_NAME,
+										  argCount);
+
+		Oid hllType = TypeOid(hllSchemaOid, HLL_TYPE_NAME);
+		Oid hllTypeCollationId = get_typcollation(hllType);
+		Var *hllColumn = makeVar(masterTableId, walkerContext->columnId, hllType,
+								 defaultTypeMod,
+								 hllTypeCollationId, columnLevelsUp);
+		walkerContext->columnId++;
+
+		hllTargetEntry = makeTargetEntry((Expr *) hllColumn, argumentId, NULL, false);
+
+		unionAggregate = makeNode(Aggref);
+		unionAggregate->aggfnoid = unionFunctionId;
+		unionAggregate->aggtype = hllType;
+		unionAggregate->args = list_make1(hllTargetEntry);
+		unionAggregate->aggkind = AGGKIND_NORMAL;
+		unionAggregate->aggfilter = NULL;
+		unionAggregate->aggtranstype = InvalidOid;
+		unionAggregate->aggargtypes = list_make1_oid(unionAggregate->aggtype);
+		unionAggregate->aggsplit = AGGSPLIT_SIMPLE;
+
+		newMasterExpression = (Expr *) unionAggregate;
+	}
+	else if (aggregateType == AGGREGATE_TOPN_UNION_AGG ||
+			 aggregateType == AGGREGATE_TOPN_ADD_AGG)
+	{
+		/*
+		 * Top-N aggregates are handled in two steps. First, we compute
+		 * topn_add_agg() or topn_union_agg() aggregates on the worker nodes.
+		 * Then, we gather the Top-Ns on the master and take the union of all
+		 * to get the final topn.
+		 */
+		Var *column = NULL;
+		TargetEntry *topNAggArgument = NULL;
+		Aggref *masterUnionAggregate = NULL;
+		Oid aggregateFunctionId = InvalidOid;
+		const char *unionAggregateName = TOPN_UNION_AGGREGATE_NAME;
+		Oid unionInputType = JSONBOID;
+		List *args = NULL;
+		List *aggArgTypes = NULL;
+
+		/* worker aggregate and original aggregate have same return type */
+		Oid workerReturnType = exprType((Node *) originalAggregate);
+		int32 workerReturnTypeMod = exprTypmod((Node *) originalAggregate);
+		Oid workerCollationId = exprCollation((Node *) originalAggregate);
+
+		aggregateFunctionId = AggregateFunctionOid(unionAggregateName,
+												   unionInputType,
+												   list_length(originalAggregate->args));
+
+		/* create argument for the topn_union_agg() aggregate */
+		column = makeVar(masterTableId, walkerContext->columnId, workerReturnType,
+						 workerReturnTypeMod, workerCollationId, columnLevelsUp);
+		topNAggArgument = makeTargetEntry((Expr *) column, argumentId, NULL, false);
+
+		args = list_make1(topNAggArgument);
+		aggArgTypes = list_make1_oid(JSONBOID);
+		/*
+		 * In case the custom number of counters is used in topn_add_agg()
+		 * or topn_union_agg()
+		 */
+		if (list_length(originalAggregate->args) == 2)
+		{
+			args = lappend(args, (TargetEntry *)list_nth(originalAggregate->args, 1));
+			aggArgTypes = list_make2_oid(JSONBOID, INT4OID);
+		}
+
+		walkerContext->columnId++;
+
+		/* construct the master topn_union_agg() expression */
+		masterUnionAggregate = copyObject(originalAggregate);
+		masterUnionAggregate->aggfnoid = aggregateFunctionId;
+		masterUnionAggregate->args = args;
+		masterUnionAggregate->aggtype = originalAggregate->aggtype;
+		masterUnionAggregate->aggargtypes = aggArgTypes;
+
+		elog(INFO, "MASTER: %s", nodeToString(masterUnionAggregate));
+		elog(INFO, "ORIGINAL: %s", nodeToString(originalAggregate));
+
+		newMasterExpression = (Expr *) masterUnionAggregate;
+	}
 	else
 	{
 		/*
@@ -1778,7 +1879,7 @@ MasterAggregateExpression(Aggref *originalAggregate,
 		Oid workerCollationId = exprCollation((Node *) originalAggregate);
 
 		const char *aggregateName = AggregateNames[aggregateType];
-		Oid aggregateFunctionId = AggregateFunctionOid(aggregateName, workerReturnType);
+		Oid aggregateFunctionId = AggregateFunctionOid(aggregateName, workerReturnType, 1);
 		Oid masterReturnType = get_func_rettype(aggregateFunctionId);
 
 		Aggref *newMasterAggregate = copyObject(originalAggregate);
@@ -1855,7 +1956,7 @@ MasterAverageExpression(Oid sumAggregateType, Oid countAggregateType,
 	(*columnId)++;
 
 	firstSum = makeNode(Aggref);
-	firstSum->aggfnoid = AggregateFunctionOid(sumAggregateName, sumAggregateType);
+	firstSum->aggfnoid = AggregateFunctionOid(sumAggregateName, sumAggregateType, 1);
 	firstSum->aggtype = get_func_rettype(firstSum->aggfnoid);
 	firstSum->args = list_make1(firstTargetEntry);
 	firstSum->aggkind = AGGKIND_NORMAL;
@@ -1870,7 +1971,7 @@ MasterAverageExpression(Oid sumAggregateType, Oid countAggregateType,
 	(*columnId)++;
 
 	secondSum = makeNode(Aggref);
-	secondSum->aggfnoid = AggregateFunctionOid(sumAggregateName, countAggregateType);
+	secondSum->aggfnoid = AggregateFunctionOid(sumAggregateName, countAggregateType, 1);
 	secondSum->aggtype = get_func_rettype(secondSum->aggfnoid);
 	secondSum->args = list_make1(secondTargetEntry);
 	secondSum->aggkind = AGGKIND_NORMAL;
@@ -2768,7 +2869,7 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 		Oid argumentType = AggregateArgumentType(originalAggregate);
 
 		/* find function implementing sum over the original type */
-		sumAggregate->aggfnoid = AggregateFunctionOid(sumAggregateName, argumentType);
+		sumAggregate->aggfnoid = AggregateFunctionOid(sumAggregateName, argumentType, 1);
 		sumAggregate->aggtype = get_func_rettype(sumAggregate->aggfnoid);
 
 		sumAggregate->aggtranstype = InvalidOid;
@@ -2776,7 +2877,7 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 		sumAggregate->aggsplit = AGGSPLIT_SIMPLE;
 
 		/* count has any input type */
-		countAggregate->aggfnoid = AggregateFunctionOid(countAggregateName, ANYOID);
+		countAggregate->aggfnoid = AggregateFunctionOid(countAggregateName, ANYOID, 1);
 		countAggregate->aggtype = get_func_rettype(countAggregate->aggfnoid);
 		countAggregate->aggtranstype = InvalidOid;
 		countAggregate->aggargtypes = list_make1_oid(argumentType);
@@ -2866,7 +2967,7 @@ AggregateArgumentType(Aggref *aggregate)
  * name and input type.
  */
 static Oid
-AggregateFunctionOid(const char *functionName, Oid inputType)
+AggregateFunctionOid(const char *functionName, Oid inputType, int argCount)
 {
 	Oid functionOid = InvalidOid;
 	Relation procRelation = NULL;
@@ -2891,7 +2992,7 @@ AggregateFunctionOid(const char *functionName, Oid inputType)
 		Form_pg_proc procForm = (Form_pg_proc) GETSTRUCT(heapTuple);
 		int argumentCount = procForm->pronargs;
 
-		if (argumentCount == 1)
+		if (argumentCount == argCount)
 		{
 			/* check if input type and found value type match */
 			if (procForm->proargtypes.values[0] == inputType)

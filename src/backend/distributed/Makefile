@@ -201,7 +201,6 @@ $(EXTENSION)--7.4-2.sql: $(EXTENSION)--7.4-1.sql $(EXTENSION)--7.4-1--7.4-2.sql
 $(EXTENSION)--7.4-3.sql: $(EXTENSION)--7.4-2.sql $(EXTENSION)--7.4-2--7.4-3.sql
 	cat $^ > $@
 $(EXTENSION)--7.5-1.sql: $(EXTENSION)--7.4-3.sql $(EXTENSION)--7.4-3--7.5-1.sql
-	cat $^ > $@
 
 NO_PGXS = 1
 
