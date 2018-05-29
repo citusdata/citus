@@ -9,6 +9,7 @@
 
 #include "stdint.h"
 #include "postgres.h"
+#include "libpq-fe.h"
 #include "miscadmin.h"
 
 #include "access/genam.h"
@@ -26,6 +27,7 @@
 #include "commands/extension.h"
 #include "commands/trigger.h"
 #include "distributed/colocation_utils.h"
+#include "distributed/connection_management.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/metadata_cache.h"
@@ -48,6 +50,7 @@
 #include "utils/builtins.h"
 #include "utils/catcache.h"
 #include "utils/datum.h"
+#include "utils/elog.h"
 #include "utils/hsearch.h"
 #include "utils/inval.h"
 #include "utils/fmgroids.h"
@@ -209,6 +212,8 @@ PG_FUNCTION_INFO_V1(master_dist_shard_cache_invalidate);
 PG_FUNCTION_INFO_V1(master_dist_placement_cache_invalidate);
 PG_FUNCTION_INFO_V1(master_dist_node_cache_invalidate);
 PG_FUNCTION_INFO_V1(master_dist_local_group_cache_invalidate);
+PG_FUNCTION_INFO_V1(role_exists);
+PG_FUNCTION_INFO_V1(authinfo_valid);
 
 
 /*
@@ -3428,4 +3433,35 @@ DistNodeMetadata(void)
 	heap_close(pgDistNodeMetadata, AccessShareLock);
 
 	return metadata;
+}
+
+
+/*
+ * role_exists is a check constraint which ensures that roles referenced in the
+ * pg_dist_authinfo catalog actually exist (at least at the time of insertion).
+ */
+Datum
+role_exists(PG_FUNCTION_ARGS)
+{
+	Name roleName = PG_GETARG_NAME(0);
+	bool roleExists = SearchSysCacheExists1(AUTHNAME, NameGetDatum(roleName));
+
+	PG_RETURN_BOOL(roleExists);
+}
+
+
+/*
+ * authinfo_valid is a check constraint which errors on all rows, intended for
+ * use in prohibiting writes to pg_dist_authinfo in Citus Community.
+ */
+Datum
+authinfo_valid(PG_FUNCTION_ARGS)
+{
+	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					errmsg("cannot write to pg_dist_authinfo"),
+					errdetail("Citus Community Edition does not support the use of "
+							  "custom authentication options."),
+					errhint("To learn more about using advanced authentication schemes "
+							"with Citus, please contact us at "
+							"https://citusdata.com/about/contact_us")));
 }

@@ -14,3 +14,7 @@ HINT:  Connect to worker nodes directly to manually create all necessary users a
 CREATE USER new_user;
 NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
 HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
+INSERT INTO pg_dist_authinfo VALUES (0, 'new_user', 'password=1234');
+ERROR:  cannot write to pg_dist_authinfo
+DETAIL:  Citus Community Edition does not support the use of custom authentication options.
+HINT:  To learn more about using advanced authentication schemes with Citus, please contact us at https://citusdata.com/about/contact_us
