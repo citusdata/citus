@@ -9,7 +9,6 @@
 
 #include "stdint.h"
 #include "postgres.h"
-
 #include "miscadmin.h"
 
 #include "access/genam.h"
