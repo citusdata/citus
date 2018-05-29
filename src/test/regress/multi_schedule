@@ -129,7 +129,7 @@ test: multi_create_schema
 
 # ----------
 # Tests to check if we inform the user about potential caveats of creating new
-# databases, schemas, and roles.
+# databases, schemas, roles, and authentication information.
 # ----------
 test: multi_utility_warnings
 
