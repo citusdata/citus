@@ -155,6 +155,71 @@ CREATE INDEX CONCURRENTLY test_table_rep_2_i_6 ON test_table_rep_2(a);
 -- we shouldn't see any distributed transactions
 SELECT no_distributed_2PCs();
 
+-- test TRUNCATE on sequential and parallel modes
+CREATE TABLE test_seq_truncate (a int);
+INSERT INTO test_seq_truncate SELECT i FROM generate_series(0, 100) i;
+SELECT create_distributed_table('test_seq_truncate', 'a');
+
+-- with parallel modification mode, we should see #shards records
+SET citus.multi_shard_modify_mode TO 'parallel';
+SELECT recover_prepared_transactions();
+TRUNCATE test_seq_truncate;
+SELECT distributed_2PCs_are_equal_to_placement_count();
+
+-- with sequential modification mode, we should see #primary worker records
+SET citus.multi_shard_modify_mode TO 'sequential';
+SELECT recover_prepared_transactions();
+TRUNCATE test_seq_truncate;
+SELECT distributed_2PCs_are_equal_to_worker_count();
+
+-- truncate with rep > 1 should work both in parallel and seq. modes
+CREATE TABLE test_seq_truncate_rep_2 (a int);
+INSERT INTO test_seq_truncate_rep_2 SELECT i FROM generate_series(0, 100) i;
+SET citus.shard_replication_factor TO 2;
+SELECT create_distributed_table('test_seq_truncate_rep_2', 'a');
+
+SET citus.multi_shard_modify_mode TO 'sequential';
+SELECT recover_prepared_transactions();
+TRUNCATE test_seq_truncate_rep_2;
+SELECT distributed_2PCs_are_equal_to_worker_count();
+
+SET citus.multi_shard_modify_mode TO 'parallel';
+SELECT recover_prepared_transactions();
+TRUNCATE test_seq_truncate_rep_2;
+SELECT distributed_2PCs_are_equal_to_placement_count();
+
+CREATE TABLE multi_shard_modify_test (
+        t_key integer not null,
+        t_name varchar(25) not null,
+        t_value integer not null);
+SELECT create_distributed_table('multi_shard_modify_test', 't_key');
+
+-- with parallel modification mode, we should see #shards records
+SET citus.multi_shard_modify_mode TO 'parallel';
+SELECT recover_prepared_transactions();
+SELECT master_modify_multiple_shards('DELETE FROM multi_shard_modify_test');
+SELECT distributed_2PCs_are_equal_to_placement_count();
+
+-- with sequential modification mode, we should see #primary worker records
+SET citus.multi_shard_modify_mode TO 'sequential';
+SELECT recover_prepared_transactions();
+SELECT master_modify_multiple_shards('DELETE FROM multi_shard_modify_test');
+SELECT distributed_2PCs_are_equal_to_worker_count();
+
+-- one more realistic test with sequential inserts and truncate in the same tx
+INSERT INTO multi_shard_modify_test SELECT i, i::text, i FROM generate_series(0,100) i;
+BEGIN;
+    INSERT INTO multi_shard_modify_test VALUES (1,'1',1), (2,'2',2), (3,'3',3), (4,'4',4);
+
+    -- now switch to sequential mode to enable a successful TRUNCATE
+    SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
+    TRUNCATE multi_shard_modify_test;
+COMMIT;
+
+-- see that all the data successfully removed
+SELECT count(*) FROM multi_shard_modify_test;
+
+
 ALTER SYSTEM SET citus.recover_2pc_interval TO DEFAULT;
 SET citus.shard_replication_factor TO DEFAULT;
 SELECT pg_reload_conf();
