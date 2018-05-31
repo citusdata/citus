@@ -1058,6 +1058,7 @@ CREATE TABLE failure_test (a int, b int);
 SELECT master_create_distributed_table('failure_test', 'a', 'hash');
 SELECT master_create_worker_shards('failure_test', 2);
 
+SET citus.enable_ddl_propagation TO off;
 CREATE USER router_user;
 GRANT INSERT ON ALL TABLES IN SCHEMA public TO router_user;
 \c - - - :worker_1_port
