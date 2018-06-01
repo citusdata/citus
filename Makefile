@@ -12,6 +12,7 @@ OBJS = src/backend/distributed/shared_library_init.o \
      src/backend/distributed/connection/connection_management.o \
      src/backend/distributed/connection/placement_connection.o \
      src/backend/distributed/connection/remote_commands.o \
+     src/backend/distributed/ddl/foreign_constraint.o \
      src/backend/distributed/executor/citus_custom_scan.o \
      src/backend/distributed/executor/insert_select_executor.o \
      src/backend/distributed/executor/intermediate_results.o \
@@ -84,6 +85,7 @@ OBJS = src/backend/distributed/shared_library_init.o \
      src/backend/distributed/utils/colocation_utils.o \
      src/backend/distributed/utils/distribution_column.o \
      src/backend/distributed/utils/errormessage.o \
+     src/backend/distributed/utils/foreign_constraint_utils.o \
      src/backend/distributed/utils/hash_helpers.o \
      src/backend/distributed/utils/listutils.o \
      src/backend/distributed/utils/maintenanced.o \

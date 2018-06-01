@@ -158,7 +158,6 @@ extern void EnsureTableOwner(Oid relationId);
 extern void EnsureSuperUser(void);
 extern void EnsureReplicationSettings(Oid relationId, char replicationModel);
 extern bool RegularTable(Oid relationId);
-extern bool TableReferenced(Oid relationId);
 extern char * ConstructQualifiedShardName(ShardInterval *shardInterval);
 extern Datum StringToDatum(char *inputString, Oid dataType);
 extern char * DatumToString(Datum datum, Oid dataType);
