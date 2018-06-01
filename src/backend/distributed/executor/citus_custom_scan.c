@@ -199,7 +199,15 @@ RouterCreateScan(CustomScan *scan)
 	/* check whether query has at most one shard */
 	if (list_length(taskList) <= 1)
 	{
-		if (isModificationQuery)
+		List *relationRowLockList = NIL;
+		if (list_length(taskList) == 1)
+		{
+			Task *task = (Task *) linitial(taskList);
+			relationRowLockList = task->relationRowLockList;
+		}
+
+		/* if query is SELECT ... FOR UPDATE query, use modify logic */
+		if (isModificationQuery || relationRowLockList != NIL)
 		{
 			scanState->customScanState.methods = &RouterSequentialModifyCustomExecMethods;
 		}

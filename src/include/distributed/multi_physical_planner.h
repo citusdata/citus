@@ -186,6 +186,7 @@ typedef struct Task
 	bool upsertQuery;              /* only applies to modify tasks */
 	char replicationModel;         /* only applies to modify tasks */
 
+	List *relationRowLockList;
 	bool modifyWithSubquery;
 	List *relationShardList;
 

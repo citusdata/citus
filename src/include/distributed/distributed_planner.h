@@ -73,6 +73,13 @@ typedef struct RelationShard
 	uint64 shardId;
 } RelationShard;
 
+typedef struct RelationRowLock
+{
+	CitusNode type;
+	Oid relationId;
+	LockClauseStrength rowLockStrength;
+} RelationRowLock;
+
 
 extern PlannedStmt * distributed_planner(Query *parse, int cursorOptions,
 										 ParamListInfo boundParams);

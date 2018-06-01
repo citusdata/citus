@@ -16,6 +16,7 @@
 #include "distributed/errormessage.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/distributed_planner.h"
+#include "distributed/multi_router_planner.h"
 #include "distributed/multi_server_executor.h"
 
 static const char *CitusNodeTagNamesD[] = {
@@ -38,6 +39,7 @@ static const char *CitusNodeTagNamesD[] = {
 	"ShardInterval",
 	"ShardPlacement",
 	"RelationShard",
+	"RelationRowLock",
 	"DeferredErrorMessage",
 	"GroupShardPlacement"
 };
@@ -393,6 +395,7 @@ const ExtensibleNodeMethods nodeMethods[] =
 	DEFINE_NODE_METHODS(MapMergeJob),
 	DEFINE_NODE_METHODS(ShardPlacement),
 	DEFINE_NODE_METHODS(RelationShard),
+	DEFINE_NODE_METHODS(RelationRowLock),
 	DEFINE_NODE_METHODS(Task),
 	DEFINE_NODE_METHODS(TaskExecution),
 	DEFINE_NODE_METHODS(DeferredErrorMessage),
