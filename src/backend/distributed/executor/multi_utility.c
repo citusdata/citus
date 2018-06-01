@@ -2892,7 +2892,14 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 			SendCommandToWorkers(WORKERS_WITH_METADATA, (char *) ddlJob->commandString);
 		}
 
-		ExecuteModifyTasksWithoutResults(ddlJob->taskList);
+		if (ddlJob->executeSequentially)
+		{
+			ExecuteDDLTasksSequentiallyWithoutResults(ddlJob->taskList);
+		}
+		else
+		{
+			ExecuteModifyTasksWithoutResults(ddlJob->taskList);
+		}
 	}
 	else
 	{
@@ -2903,7 +2910,7 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 
 		PG_TRY();
 		{
-			ExecuteTasksSequentiallyWithoutResults(ddlJob->taskList);
+			ExecuteDDLTasksSequentiallyWithoutResults(ddlJob->taskList);
 
 			if (shouldSyncMetadata)
 			{
