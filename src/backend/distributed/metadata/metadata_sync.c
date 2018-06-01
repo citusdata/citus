@@ -29,6 +29,7 @@
 #include "catalog/pg_type.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/distribution_column.h"
+#include "distributed/foreign_constraint_utils.h"
 #include "distributed/listutils.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/master_protocol.h"

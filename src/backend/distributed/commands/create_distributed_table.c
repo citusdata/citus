@@ -34,6 +34,7 @@
 #include "distributed/citus_ruleutils.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/distribution_column.h"
+#include "distributed/foreign_constraint_utils.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"

@@ -30,6 +30,7 @@
 #include "distributed/citus_ruleutils.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/connection_management.h"
+#include "distributed/foreign_constraint_utils.h"
 #include "distributed/multi_client_executor.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/master_protocol.h"
