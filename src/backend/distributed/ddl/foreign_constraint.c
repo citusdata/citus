@@ -34,12 +34,16 @@
  * environment.
  *
  * To support foreign constraints, we require that;
- * - Referencing and referenced tables are hash distributed.
- * - Referencing and referenced tables are co-located.
- * - Foreign constraint is defined over distribution column.
- * - ON DELETE/UPDATE SET NULL, ON DELETE/UPDATE SET DEFAULT and ON UPDATE CASCADE options
- *   are not used.
- * - Replication factors of referencing and referenced table are 1.
+ * - If referencing and referenced tables are hash-distributed
+ *		- Referencing and referenced tables are co-located.
+ *      - Foreign constraint is defined over distribution column.
+ *		- ON DELETE/UPDATE SET NULL, ON DELETE/UPDATE SET DEFAULT and ON UPDATE CASCADE options
+ *        are not used.
+ *      - Replication factors of referencing and referenced table are 1.
+ * - If referenced table is a reference table
+ *      - ON DELETE/UPDATE SET NULL, ON DELETE/UPDATE SET DEFAULT and ON UPDATE CASCADE options
+ *        are not used on the distribution key of the referencing column.
+ * - If referencing table is a reference table, error out
  */
 void
 ErrorIfUnsupportedForeignConstraint(Relation relation, char distributionMethod,
@@ -66,6 +70,8 @@ ErrorIfUnsupportedForeignConstraint(Relation relation, char distributionMethod,
 	int attrIdx = 0;
 	bool foreignConstraintOnPartitionColumn = false;
 	bool selfReferencingTable = false;
+	bool referencedTableIsAReferenceTable = false;
+	bool referencingColumnsIncludeDistKey = false;
 
 	pgConstraint = heap_open(ConstraintRelationId, AccessShareLock);
 	ScanKeyInit(&scanKey[0], Anum_pg_constraint_conrelid, BTEqualStrategyNumber, F_OIDEQ,
@@ -85,54 +91,25 @@ ErrorIfUnsupportedForeignConstraint(Relation relation, char distributionMethod,
 			continue;
 		}
 
+		/*
+		 * We should make this check in this loop because the error message will only
+		 * be given if the table has a foreign constraint and the table is a reference
+		 * table.
+		 */
+		if (distributionMethod == DISTRIBUTE_BY_NONE)
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("cannot create foreign key constraint because "
+								   "reference tables are not supported as the "
+								   "referencing table of a foreign constraint"),
+							errdetail("Reference tables are only supported as the "
+									  "referenced table of a foreign key when the "
+									  "referencing table is a hash distributed "
+									  "table")));
+		}
+
 		referencedTableId = constraintForm->confrelid;
 		selfReferencingTable = referencingTableId == referencedTableId;
-
-		/*
-		 * We do not support foreign keys for reference tables. Here we skip the second
-		 * part of check if the table is a self referencing table because;
-		 * - PartitionMethod only works for distributed tables and this table may not be
-		 * distributed yet.
-		 * - Since referencing and referenced tables are same, it is OK to not checking
-		 * distribution method twice.
-		 */
-		if (distributionMethod == DISTRIBUTE_BY_NONE ||
-			(!selfReferencingTable &&
-			 PartitionMethod(referencedTableId) == DISTRIBUTE_BY_NONE))
-		{
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("cannot create foreign key constraint from or to "
-								   "reference tables")));
-		}
-
-		/*
-		 * ON DELETE SET NULL and ON DELETE SET DEFAULT is not supported. Because we do
-		 * not want to set partition column to NULL or default value.
-		 */
-		if (constraintForm->confdeltype == FKCONSTR_ACTION_SETNULL ||
-			constraintForm->confdeltype == FKCONSTR_ACTION_SETDEFAULT)
-		{
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("cannot create foreign key constraint"),
-							errdetail("SET NULL or SET DEFAULT is not supported"
-									  " in ON DELETE operation.")));
-		}
-
-		/*
-		 * ON UPDATE SET NULL, ON UPDATE SET DEFAULT and UPDATE CASCADE is not supported.
-		 * Because we do not want to set partition column to NULL or default value. Also
-		 * cascading update operation would require re-partitioning. Updating partition
-		 * column value is not allowed anyway even outside of foreign key concept.
-		 */
-		if (constraintForm->confupdtype == FKCONSTR_ACTION_SETNULL ||
-			constraintForm->confupdtype == FKCONSTR_ACTION_SETDEFAULT ||
-			constraintForm->confupdtype == FKCONSTR_ACTION_CASCADE)
-		{
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("cannot create foreign key constraint"),
-							errdetail("SET NULL, SET DEFAULT or CASCADE is not"
-									  " supported in ON UPDATE operation.")));
-		}
 
 		/*
 		 * Some checks are not meaningful if foreign key references the table itself.
@@ -148,28 +125,43 @@ ErrorIfUnsupportedForeignConstraint(Relation relation, char distributionMethod,
 										  "table.")));
 			}
 
-			/* to enforce foreign constraints, tables must be co-located */
-			referencedTableColocationId = TableColocationId(referencedTableId);
-			if (colocationId == INVALID_COLOCATION_ID ||
-				colocationId != referencedTableColocationId)
+			/*
+			 * PartitionMethod errors out when it is called for non-distributed
+			 * tables. This is why we make this check under !selfReferencingTable
+			 * and after !IsDistributedTable(referencedTableId).
+			 */
+			if (PartitionMethod(referencedTableId) == DISTRIBUTE_BY_NONE)
 			{
-				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-								errmsg("cannot create foreign key constraint"),
-								errdetail("Foreign key constraint can only be created"
-										  " on co-located tables.")));
+				referencedTableIsAReferenceTable = true;
 			}
 
 			/*
-			 * Partition column must exist in both referencing and referenced side of the
-			 * foreign key constraint. They also must be in same ordinal.
+			 * To enforce foreign constraints, tables must be co-located unless a
+			 * reference table is referenced.
 			 */
+			referencedTableColocationId = TableColocationId(referencedTableId);
+			if (colocationId == INVALID_COLOCATION_ID ||
+				(colocationId != referencedTableColocationId &&
+				 !referencedTableIsAReferenceTable))
+			{
+				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+								errmsg("cannot create foreign key constraint since "
+									   "relations are not colocated or not referencing "
+									   "a reference table"),
+								errdetail(
+									"A distributed table can only have foreign keys "
+									"if it is referencing another colocated hash "
+									"distributed table or a reference table")));
+			}
+
 			referencedTablePartitionColumn = DistPartitionKey(referencedTableId);
 		}
 		else
 		{
 			/*
-			 * Partition column must exist in both referencing and referenced side of the
-			 * foreign key constraint. They also must be in same ordinal.
+			 * If the referenced table is not a reference table, the distribution
+			 * column in referencing table should be the distribution column in
+			 * referenced table as well.
 			 */
 			referencedTablePartitionColumn = distributionColumn;
 		}
@@ -198,28 +190,83 @@ ErrorIfUnsupportedForeignConstraint(Relation relation, char distributionMethod,
 			AttrNumber referencedAttrNo = DatumGetInt16(referencedColumnArray[attrIdx]);
 
 			if (distributionColumn->varattno == referencingAttrNo &&
-				referencedTablePartitionColumn->varattno == referencedAttrNo)
+				(!referencedTableIsAReferenceTable &&
+				 referencedTablePartitionColumn->varattno == referencedAttrNo))
 			{
 				foreignConstraintOnPartitionColumn = true;
 			}
+
+			if (distributionColumn->varattno == referencingAttrNo)
+			{
+				referencingColumnsIncludeDistKey = true;
+			}
 		}
 
-		if (!foreignConstraintOnPartitionColumn)
+
+		/*
+		 * If columns in the foreign key includes the distribution key from the
+		 * referencing side, we do not allow update/delete operations through
+		 * foreign key constraints (e.g. ... ON UPDATE SET NULL)
+		 */
+
+		if (referencingColumnsIncludeDistKey)
+		{
+			/*
+			 * ON DELETE SET NULL and ON DELETE SET DEFAULT is not supported. Because we do
+			 * not want to set partition column to NULL or default value.
+			 */
+			if (constraintForm->confdeltype == FKCONSTR_ACTION_SETNULL ||
+				constraintForm->confdeltype == FKCONSTR_ACTION_SETDEFAULT)
+			{
+				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+								errmsg("cannot create foreign key constraint"),
+								errdetail("SET NULL or SET DEFAULT is not supported"
+										  " in ON DELETE operation when distribution "
+										  "key is included in the foreign key constraint")));
+			}
+
+			/*
+			 * ON UPDATE SET NULL, ON UPDATE SET DEFAULT and UPDATE CASCADE is not supported.
+			 * Because we do not want to set partition column to NULL or default value. Also
+			 * cascading update operation would require re-partitioning. Updating partition
+			 * column value is not allowed anyway even outside of foreign key concept.
+			 */
+			if (constraintForm->confupdtype == FKCONSTR_ACTION_SETNULL ||
+				constraintForm->confupdtype == FKCONSTR_ACTION_SETDEFAULT ||
+				constraintForm->confupdtype == FKCONSTR_ACTION_CASCADE)
+			{
+				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+								errmsg("cannot create foreign key constraint"),
+								errdetail("SET NULL, SET DEFAULT or CASCADE is not "
+										  "supported in ON UPDATE operation  when "
+										  "distribution key included in the foreign "
+										  "constraint.")));
+			}
+		}
+
+		/*
+		 * if tables are hash-distributed and colocated, we need to make sure that
+		 * the distribution key is included in foreign constraint.
+		 */
+		if (!referencedTableIsAReferenceTable && !foreignConstraintOnPartitionColumn)
 		{
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 							errmsg("cannot create foreign key constraint"),
-							errdetail("Partition column must exist both "
-									  "referencing and referenced side of the "
-									  "foreign constraint statement and it must "
-									  "be in the same ordinal in both sides.")));
+							errdetail("Foreign keys are supported in two cases, "
+									  "either in between two colocated tables including "
+									  "partition column in the same ordinal in the both "
+									  "tables or from distributed to reference tables")));
 		}
 
 		/*
 		 * We do not allow to create foreign constraints if shard replication factor is
 		 * greater than 1. Because in our current design, multiple replicas may cause
-		 * locking problems and inconsistent shard contents. We don't check the referenced
-		 * table, since referenced and referencing tables should be co-located and
-		 * colocation check has been done above.
+		 * locking problems and inconsistent shard contents.
+		 *
+		 * Note that we allow referenced table to be a reference table (e.g., not a
+		 * single replicated table). This is allowed since (a) we are sure that
+		 * placements always be in the same state (b) executors are aware of reference
+		 * tables and handle concurrency related issues accordingly.
 		 */
 		if (IsDistributedTable(referencingTableId))
 		{
@@ -231,6 +278,8 @@ ErrorIfUnsupportedForeignConstraint(Relation relation, char distributionMethod,
 		}
 		else
 		{
+			Assert(distributionMethod == DISTRIBUTE_BY_HASH);
+
 			/* check whether creating single replicated table with foreign constraint */
 			if (ShardReplicationFactor > 1)
 			{

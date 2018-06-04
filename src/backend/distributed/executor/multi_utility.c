@@ -1380,6 +1380,17 @@ PlanAlterTableStmt(AlterTableStmt *alterTableStatement, const char *alterTableCo
 		/* if foreign key related, use specialized task list function ... */
 		ddlJob->taskList = InterShardDDLTaskList(leftRelationId, rightRelationId,
 												 alterTableCommand);
+
+		/*
+		 * We need to execute the ddls working with reference tables on the
+		 * right side sequentially, because parallel ddl operations
+		 * relating to one and only shard of a reference table on a worker
+		 * may cause self-deadlocks.
+		 */
+		if (PartitionMethod(rightRelationId) == DISTRIBUTE_BY_NONE)
+		{
+			ddlJob->executeSequentially = true;
+		}
 	}
 	else
 	{
@@ -2885,13 +2896,14 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 			SendCommandToWorkers(WORKERS_WITH_METADATA, (char *) ddlJob->commandString);
 		}
 
-		if (MultiShardConnectionType == PARALLEL_CONNECTION)
+		if (MultiShardConnectionType == SEQUENTIAL_CONNECTION ||
+			ddlJob->executeSequentially)
 		{
-			ExecuteModifyTasksWithoutResults(ddlJob->taskList);
+			ExecuteModifyTasksSequentiallyWithoutResults(ddlJob->taskList, CMD_UTILITY);
 		}
 		else
 		{
-			ExecuteModifyTasksSequentiallyWithoutResults(ddlJob->taskList, CMD_UTILITY);
+			ExecuteModifyTasksWithoutResults(ddlJob->taskList);
 		}
 	}
 	else
@@ -3102,6 +3114,7 @@ InterShardDDLTaskList(Oid leftRelationId, Oid rightRelationId,
 	char *leftSchemaName = get_namespace_name(leftSchemaId);
 	char *escapedLeftSchemaName = quote_literal_cstr(leftSchemaName);
 
+	char rightPartitionMethod = PartitionMethod(rightRelationId);
 	List *rightShardList = LoadShardIntervalList(rightRelationId);
 	ListCell *rightShardCell = NULL;
 	Oid rightSchemaId = get_rel_namespace(rightRelationId);
@@ -3111,6 +3124,29 @@ InterShardDDLTaskList(Oid leftRelationId, Oid rightRelationId,
 	char *escapedCommandString = quote_literal_cstr(commandString);
 	uint64 jobId = INVALID_JOB_ID;
 	int taskId = 1;
+
+	/*
+	 * If the rightPartitionMethod is a reference table, we need to make sure
+	 * that the tasks are created in a way that the right shard stays the same
+	 * since we only have one placement per worker. This hack is first implemented
+	 * for foreign constraint support from distributed tables to reference tables.
+	 */
+	if (rightPartitionMethod == DISTRIBUTE_BY_NONE)
+	{
+		ShardInterval *rightShardInterval = NULL;
+		int rightShardCount = list_length(rightShardList);
+		int leftShardCount = list_length(leftShardList);
+		int shardCounter = 0;
+
+		Assert(rightShardCount == 1);
+
+		rightShardInterval = (ShardInterval *) linitial(rightShardList);
+		for (shardCounter = rightShardCount; shardCounter < leftShardCount;
+			 shardCounter++)
+		{
+			rightShardList = lappend(rightShardList, rightShardInterval);
+		}
+	}
 
 	/* lock metadata before getting placement lists */
 	LockShardListMetadata(leftShardList, ShareLock);

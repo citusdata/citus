@@ -164,7 +164,7 @@ test: multi_modifications
 test: multi_distribution_metadata
 test: multi_generate_ddl_commands multi_create_shards multi_prune_shard_list multi_repair_shards 
 test: multi_upsert multi_simple_queries multi_create_insert_proxy multi_data_types
-test: multi_utilities
+test: multi_utilities foreign_key_to_reference_table
 test: multi_modifying_xacts
 test: multi_repartition_udt multi_repartitioned_subquery_udf multi_subtransactions
 test: multi_transaction_recovery
