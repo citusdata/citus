@@ -25,6 +25,7 @@ typedef struct DDLJob
 {
 	Oid targetRelationId;      /* oid of the target distributed relation */
 	bool concurrentIndexCmd;   /* related to a CONCURRENTLY index command? */
+	bool executeSequentially;
 	const char *commandString; /* initial (coordinator) DDL command string */
 	List *taskList;            /* worker DDL tasks to execute */
 } DDLJob;
