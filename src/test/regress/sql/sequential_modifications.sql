@@ -219,6 +219,30 @@ COMMIT;
 -- see that all the data successfully removed
 SELECT count(*) FROM multi_shard_modify_test;
 
+-- test INSERT ... SELECT queries
+-- with sequential modification mode, we should see #primary worker records
+SET citus.multi_shard_modify_mode TO 'sequential';
+SELECT recover_prepared_transactions();
+INSERT INTO multi_shard_modify_test SELECT * FROM multi_shard_modify_test;
+SELECT distributed_2PCs_are_equal_to_worker_count();
+
+SET citus.multi_shard_modify_mode TO 'parallel';
+SELECT recover_prepared_transactions();
+INSERT INTO multi_shard_modify_test SELECT * FROM multi_shard_modify_test;
+SELECT distributed_2PCs_are_equal_to_placement_count();
+
+-- one more realistic test with sequential inserts and INSERT .. SELECT in the same tx
+INSERT INTO multi_shard_modify_test SELECT i, i::text, i FROM generate_series(0,100) i;
+BEGIN;
+    INSERT INTO multi_shard_modify_test VALUES (1,'1',1), (2,'2',2), (3,'3',3), (4,'4',4);
+
+    -- now switch to sequential mode to enable a successful INSERT .. SELECT
+    SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
+    INSERT INTO multi_shard_modify_test SELECT * FROM multi_shard_modify_test;
+COMMIT;
+
+-- see that all the data successfully inserted
+SELECT count(*) FROM multi_shard_modify_test;
 
 ALTER SYSTEM SET citus.recover_2pc_interval TO DEFAULT;
 SET citus.shard_replication_factor TO DEFAULT;
