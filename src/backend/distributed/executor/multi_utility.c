@@ -1387,6 +1387,11 @@ PlanAlterTableStmt(AlterTableStmt *alterTableStatement, const char *alterTableCo
 		/* if foreign key related, use specialized task list function ... */
 		ddlJob->taskList = InterShardDDLTaskList(leftRelationId, rightRelationId,
 												 alterTableCommand);
+
+		if (PartitionMethod(rightRelationId) == DISTRIBUTE_BY_NONE)
+		{
+			ddlJob->executeSequentially = true;
+		}
 	}
 	else
 	{
@@ -3109,6 +3114,7 @@ InterShardDDLTaskList(Oid leftRelationId, Oid rightRelationId,
 	char *leftSchemaName = get_namespace_name(leftSchemaId);
 	char *escapedLeftSchemaName = quote_literal_cstr(leftSchemaName);
 
+	char rightPartitionMethod = PartitionMethod(rightRelationId);
 	List *rightShardList = LoadShardIntervalList(rightRelationId);
 	ListCell *rightShardCell = NULL;
 	Oid rightSchemaId = get_rel_namespace(rightRelationId);
@@ -3118,6 +3124,23 @@ InterShardDDLTaskList(Oid leftRelationId, Oid rightRelationId,
 	char *escapedCommandString = quote_literal_cstr(commandString);
 	uint64 jobId = INVALID_JOB_ID;
 	int taskId = 1;
+
+	if (rightPartitionMethod == DISTRIBUTE_BY_NONE)
+	{
+		ShardInterval *rightShardInterval = NULL;
+		int rightShardCount = list_length(rightShardList);
+		int leftShardCount = list_length(leftShardList);
+		int shardCounter = 0;
+
+		Assert(rightShardCount == 1);
+
+		rightShardInterval = (ShardInterval *) linitial(rightShardList);
+		for (shardCounter = rightShardCount; shardCounter < leftShardCount;
+			 shardCounter++)
+		{
+			rightShardList = lappend(rightShardList, rightShardInterval);
+		}
+	}
 
 	/* lock metadata before getting placement lists */
 	LockShardListMetadata(leftShardList, ShareLock);
