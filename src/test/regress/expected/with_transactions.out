@@ -105,6 +105,23 @@ SELECT count(*) FROM second_raw_table;
      0
 (1 row)
 
+-- sequential insert followed by a sequential real-time query should be fine
+BEGIN;
+SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
+WITH ids_inserted AS
+(
+  INSERT INTO raw_table (tenant_id) VALUES (11), (12), (13), (14) RETURNING tenant_id
+)
+SELECT income FROM second_raw_table WHERE tenant_id IN (SELECT * FROM ids_inserted) ORDER BY 1 DESC LIMIT 3;
+DEBUG:  data-modifying statements are not supported in the WITH clauses of distributed queries
+DEBUG:  generating subplan 17_1 for CTE ids_inserted: INSERT INTO with_transactions.raw_table (tenant_id) VALUES (11), (12), (13), (14) RETURNING raw_table.tenant_id
+DEBUG:  Plan 17 query after replacing subqueries and CTEs: SELECT income FROM with_transactions.second_raw_table WHERE (tenant_id OPERATOR(pg_catalog.=) ANY (SELECT ids_inserted.tenant_id FROM (SELECT intermediate_result.tenant_id FROM read_intermediate_result('17_1'::text, 'binary'::citus_copy_format) intermediate_result(tenant_id integer)) ids_inserted)) ORDER BY income DESC LIMIT 3
+DEBUG:  push down of limit count: 3
+ income 
+--------
+(0 rows)
+
+ROLLBACK;
 RESET client_min_messages;
 RESET citus.shard_count;
 DROP SCHEMA with_transactions CASCADE;
