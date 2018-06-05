@@ -1279,6 +1279,7 @@ RouterInsertJob(Query *originalQuery, Query *query, DeferredErrorMessage **plann
 	Job *job = NULL;
 	bool requiresMasterEvaluation = false;
 	bool deferredPruning = false;
+	Const *partitionValueConst = NULL;
 
 	bool isMultiRowInsert = IsMultiRowInsert(query);
 	if (isMultiRowInsert)
@@ -1321,12 +1322,16 @@ RouterInsertJob(Query *originalQuery, Query *query, DeferredErrorMessage **plann
 	{
 		/* no functions or parameters, build the query strings upfront */
 		RebuildQueryStrings(originalQuery, taskList);
+
+		/* remember the partition column value */
+		partitionValueConst = ExtractInsertPartitionValueConst(originalQuery);
 	}
 
 	job = CreateJob(originalQuery);
 	job->taskList = taskList;
 	job->requiresMasterEvaluation = requiresMasterEvaluation;
 	job->deferredPruning = deferredPruning;
+	job->partitionValueConst = partitionValueConst;
 
 	return job;
 }
@@ -1540,6 +1545,7 @@ RouterJob(Query *originalQuery, PlannerRestrictionContext *plannerRestrictionCon
 	bool requiresMasterEvaluation = false;
 	RangeTblEntry *updateOrDeleteRTE = NULL;
 	bool isMultiShardModifyQuery = false;
+	Const *partitionValueConst = NULL;
 
 	/* router planner should create task even if it deosn't hit a shard at all */
 	replacePrunedQueryWithDummy = true;
@@ -1550,13 +1556,15 @@ RouterJob(Query *originalQuery, PlannerRestrictionContext *plannerRestrictionCon
 	(*planningError) = PlanRouterQuery(originalQuery, plannerRestrictionContext,
 									   &placementList, &shardId, &relationShardList,
 									   replacePrunedQueryWithDummy,
-									   &isMultiShardModifyQuery);
+									   &isMultiShardModifyQuery,
+									   &partitionValueConst);
 	if (*planningError)
 	{
 		return NULL;
 	}
 
 	job = CreateJob(originalQuery);
+	job->partitionValueConst = partitionValueConst;
 
 	ExtractRangeTableEntryWalker((Node *) originalQuery, &rangeTableList);
 	updateOrDeleteRTE = GetUpdateOrDeleteRTE(rangeTableList);
@@ -1758,7 +1766,8 @@ DeferredErrorMessage *
 PlanRouterQuery(Query *originalQuery,
 				PlannerRestrictionContext *plannerRestrictionContext,
 				List **placementList, uint64 *anchorShardId, List **relationShardList,
-				bool replacePrunedQueryWithDummy, bool *multiShardModifyQuery)
+				bool replacePrunedQueryWithDummy, bool *multiShardModifyQuery,
+				Const **partitionValueConst)
 {
 	static uint32 zeroShardQueryRoundRobin = 0;
 
@@ -1776,7 +1785,8 @@ PlanRouterQuery(Query *originalQuery,
 	prunedRelationShardList = TargetShardIntervalsForQuery(originalQuery,
 														   plannerRestrictionContext->
 														   relationRestrictionContext,
-														   &isMultiShardQuery);
+														   &isMultiShardQuery,
+														   partitionValueConst);
 
 	if (isMultiShardQuery)
 	{
@@ -1963,10 +1973,12 @@ GetInitialShardId(List *relationShardList)
 List *
 TargetShardIntervalsForQuery(Query *query,
 							 RelationRestrictionContext *restrictionContext,
-							 bool *multiShardQuery)
+							 bool *multiShardQuery, Const **partitionValueConst)
 {
 	List *prunedRelationShardList = NIL;
 	ListCell *restrictionCell = NULL;
+	bool multiplePartitionValuesExist = false;
+	Const *queryPartitionValueConst = NULL;
 
 	Assert(restrictionContext != NULL);
 
@@ -1996,16 +2008,43 @@ TargetShardIntervalsForQuery(Query *query,
 		whereFalseQuery = ContainsFalseClause(pseudoRestrictionList);
 		if (!whereFalseQuery && shardCount > 0)
 		{
-			prunedShardList = PruneShards(relationId, tableId, restrictClauseList);
+			Const *restrictionPartitionValueConst = NULL;
+			prunedShardList = PruneShards(relationId, tableId, restrictClauseList,
+										  &restrictionPartitionValueConst);
 
 			if (list_length(prunedShardList) > 1)
 			{
 				(*multiShardQuery) = true;
 			}
+			if (restrictionPartitionValueConst != NULL &&
+				queryPartitionValueConst == NULL)
+			{
+				queryPartitionValueConst = restrictionPartitionValueConst;
+			}
+			else if (restrictionPartitionValueConst != NULL &&
+					 !equal(queryPartitionValueConst, restrictionPartitionValueConst))
+			{
+				multiplePartitionValuesExist = true;
+			}
 		}
 
 		relationRestriction->prunedShardIntervalList = prunedShardList;
 		prunedRelationShardList = lappend(prunedRelationShardList, prunedShardList);
+	}
+
+	/*
+	 * Different resrictions might have different partition columns.
+	 * We report partition column value if there is only one.
+	 */
+	if (multiplePartitionValuesExist)
+	{
+		queryPartitionValueConst = NULL;
+	}
+
+	/* set the outgoing partition column value if requested */
+	if (partitionValueConst != NULL)
+	{
+		*partitionValueConst = queryPartitionValueConst;
 	}
 
 	return prunedRelationShardList;
@@ -2221,7 +2260,7 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 			restrictClauseList = list_make1(equalityExpr);
 
 			prunedShardList = PruneShards(distributedTableId, tableId,
-										  restrictClauseList);
+										  restrictClauseList, NULL);
 		}
 
 		prunedShardCount = list_length(prunedShardList);
@@ -2579,6 +2618,99 @@ ExtractInsertValuesList(Query *query, Var *partitionColumn)
 	}
 
 	return insertValuesList;
+}
+
+
+/*
+ * ExtractInsertPartitionValueConst extracts the partition column value
+ * from an INSERT query. If the expression in the partition column is
+ * non-constant or it is a multi-row INSERT with multiple different partition
+ * column values, the function returns NULL.
+ */
+Const *
+ExtractInsertPartitionValueConst(Query *query)
+{
+	Oid distributedTableId = ExtractFirstDistributedTableId(query);
+	uint32 rangeTableId = 1;
+	Var *partitionColumn = NULL;
+	TargetEntry *targetEntry = NULL;
+	Const *singlePartitionValueConst = NULL;
+
+	char partitionMethod = PartitionMethod(distributedTableId);
+	if (partitionMethod == DISTRIBUTE_BY_NONE)
+	{
+		return NULL;
+	}
+
+	partitionColumn = PartitionColumn(distributedTableId, rangeTableId);
+	targetEntry = get_tle_by_resno(query->targetList, partitionColumn->varattno);
+	if (targetEntry == NULL)
+	{
+		/* partition column value not specified */
+		return NULL;
+	}
+
+	/*
+	 * Multi-row INSERTs have a Var in the target list that points to
+	 * an RTE_VALUES.
+	 */
+	if (IsA(targetEntry->expr, Var))
+	{
+		Var *partitionVar = (Var *) targetEntry->expr;
+		RangeTblEntry *referencedRTE = NULL;
+		ListCell *valuesListCell = NULL;
+
+		referencedRTE = rt_fetch(partitionVar->varno, query->rtable);
+
+		foreach(valuesListCell, referencedRTE->values_lists)
+		{
+			List *rowValues = (List *) lfirst(valuesListCell);
+			Expr *partitionValueExpr = list_nth(rowValues, partitionVar->varattno - 1);
+			Const *partitionValueConst = NULL;
+
+			if (!IsA(partitionValueExpr, Const))
+			{
+				/* non-constant value in the partition column */
+				singlePartitionValueConst = NULL;
+				break;
+			}
+
+			partitionValueConst = (Const *) partitionValueExpr;
+
+			if (singlePartitionValueConst == NULL)
+			{
+				/* first row has a constant in the partition column, looks promising! */
+				singlePartitionValueConst = partitionValueConst;
+			}
+			else if (!equal(partitionValueConst, singlePartitionValueConst))
+			{
+				/* multiple different values in the partition column, too bad */
+				singlePartitionValueConst = NULL;
+				break;
+			}
+			else
+			{
+				/* another row with the same partition column value! */
+			}
+		}
+	}
+	else if (IsA(targetEntry->expr, Const))
+	{
+		/* single-row INSERT with a constant partition column value */
+		singlePartitionValueConst = (Const *) targetEntry->expr;
+	}
+	else
+	{
+		/* single-row INSERT with a non-constant partition column value */
+		singlePartitionValueConst = NULL;
+	}
+
+	if (singlePartitionValueConst != NULL)
+	{
+		singlePartitionValueConst = copyObject(singlePartitionValueConst);
+	}
+
+	return singlePartitionValueConst;
 }
 
 

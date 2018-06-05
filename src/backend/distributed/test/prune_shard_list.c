@@ -208,7 +208,7 @@ PrunedShardIdsForTable(Oid distributedTableId, List *whereClauseList)
 	int shardIdCount = -1;
 	Datum *shardIdDatumArray = NULL;
 
-	shardList = PruneShards(distributedTableId, tableId, whereClauseList);
+	shardList = PruneShards(distributedTableId, tableId, whereClauseList, NULL);
 
 	shardIdCount = list_length(shardList);
 	shardIdDatumArray = palloc0(shardIdCount * sizeof(Datum));

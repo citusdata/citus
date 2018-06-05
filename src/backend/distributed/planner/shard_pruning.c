@@ -211,9 +211,13 @@ static int LowerShardBoundary(Datum partitionColumnValue,
  *
  * For reference tables, the function simply returns the single shard that the
  * table has.
+ *
+ * When there is a single <partition column> = <constant> filter in the where
+ * clause list, the constant is written to the partitionValueConst pointer.
  */
 List *
-PruneShards(Oid relationId, Index rangeTableId, List *whereClauseList)
+PruneShards(Oid relationId, Index rangeTableId, List *whereClauseList,
+			Const **partitionValueConst)
 {
 	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(relationId);
 	int shardCount = cacheEntry->shardIntervalArrayLength;
@@ -222,6 +226,8 @@ PruneShards(Oid relationId, Index rangeTableId, List *whereClauseList)
 	ListCell *pruneCell;
 	List *prunedList = NIL;
 	bool foundRestriction = false;
+	bool foundPartitionColumnValue = false;
+	Const *singlePartitionValueConst = NULL;
 
 	/* there are no shards to return */
 	if (shardCount == 0)
@@ -305,15 +311,33 @@ PruneShards(Oid relationId, Index rangeTableId, List *whereClauseList)
 			break;
 		}
 
-		/*
-		 * Similar to the above, if hash-partitioned and there's nothing to
-		 * prune by, we're done.
-		 */
-		if (context.partitionMethod == DISTRIBUTE_BY_HASH &&
-			!prune->evaluatesToFalse && !prune->equalConsts && !prune->hashedEqualConsts)
+		if (context.partitionMethod == DISTRIBUTE_BY_HASH)
 		{
-			foundRestriction = false;
-			break;
+			if (!prune->evaluatesToFalse && !prune->equalConsts &&
+				!prune->hashedEqualConsts)
+			{
+				/* if hash-partitioned and no equals constraints, return all shards */
+				foundRestriction = false;
+				break;
+			}
+			else if (partitionValueConst != NULL && prune->equalConsts != NULL)
+			{
+				if (!foundPartitionColumnValue)
+				{
+					/* remember the partition column value */
+					singlePartitionValueConst = prune->equalConsts;
+					foundPartitionColumnValue = true;
+				}
+				else if (singlePartitionValueConst == NULL)
+				{
+					/* already found multiple partition column values */
+				}
+				else if (!equal(prune->equalConsts, singlePartitionValueConst))
+				{
+					/* found multiple partition column values */
+					singlePartitionValueConst = NULL;
+				}
+			}
 		}
 
 		pruneOneList = PruneOne(cacheEntry, &context, prune);
@@ -341,6 +365,19 @@ PruneShards(Oid relationId, Index rangeTableId, List *whereClauseList)
 	{
 		prunedList = ShardArrayToList(cacheEntry->sortedShardIntervalArray,
 									  cacheEntry->shardIntervalArrayLength);
+	}
+
+	/* if requested, copy the partition value constant */
+	if (partitionValueConst != NULL)
+	{
+		if (singlePartitionValueConst != NULL)
+		{
+			*partitionValueConst = copyObject(singlePartitionValueConst);
+		}
+		else
+		{
+			*partitionValueConst = NULL;
+		}
 	}
 
 	/*

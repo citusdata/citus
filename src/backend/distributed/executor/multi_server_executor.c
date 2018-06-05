@@ -25,6 +25,7 @@
 #include "distributed/multi_server_executor.h"
 #include "distributed/subplan_execution.h"
 #include "distributed/worker_protocol.h"
+#include "utils/lsyscache.h"
 
 int RemoteTaskCheckInterval = 100; /* per cycle sleep interval in millisecs */
 int TaskExecutorType = MULTI_EXECUTOR_REAL_TIME; /* distributed executor type */
@@ -53,7 +54,26 @@ JobExecutorType(DistributedPlan *distributedPlan)
 	/* check if can switch to router executor */
 	if (routerExecutablePlan)
 	{
-		ereport(DEBUG2, (errmsg("Plan is router executable")));
+		if (log_min_messages <= DEBUG2 || client_min_messages <= DEBUG2)
+		{
+			Const *partitionValueConst = job->partitionValueConst;
+
+			if (partitionValueConst != NULL && !partitionValueConst->constisnull)
+			{
+				Datum partitionColumnValue = partitionValueConst->constvalue;
+				Oid partitionColumnType = partitionValueConst->consttype;
+				char *partitionColumnString = DatumToString(partitionColumnValue,
+															partitionColumnType);
+
+				ereport(DEBUG2, (errmsg("Plan is router executable"),
+								 errdetail("distribution column value: %s",
+										   partitionColumnString)));
+			}
+			else
+			{
+				ereport(DEBUG2, (errmsg("Plan is router executable")));
+			}
+		}
 		return MULTI_EXECUTOR_ROUTER;
 	}
 

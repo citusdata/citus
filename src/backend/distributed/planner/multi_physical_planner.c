@@ -2004,7 +2004,8 @@ BuildJobTreeTaskList(Job *jobTree, PlannerRestrictionContext *plannerRestriction
 																		 ->
 																		 relationRestrictionContext,
 																		 &
-																		 isMultiShardQuery);
+																		 isMultiShardQuery,
+																		 NULL);
 			sqlTaskList = QueryPushdownSqlTaskList(job->jobQuery, job->jobId,
 												   plannerRestrictionContext->
 												   relationRestrictionContext,
@@ -2929,7 +2930,7 @@ RangeTableFragmentsList(List *rangeTableList, List *whereClauseList,
 			ListCell *shardIntervalCell = NULL;
 			List *shardFragmentList = NIL;
 			List *prunedShardIntervalList = PruneShards(relationId, tableId,
-														whereClauseList);
+														whereClauseList, NULL);
 
 			/*
 			 * If we prune all shards for one table, query results will be empty.

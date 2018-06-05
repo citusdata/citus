@@ -84,6 +84,7 @@ copyJobInfo(Job *newnode, Job *from)
 	COPY_SCALAR_FIELD(subqueryPushdown);
 	COPY_SCALAR_FIELD(requiresMasterEvaluation);
 	COPY_SCALAR_FIELD(deferredPruning);
+	COPY_NODE_FIELD(partitionValueConst);
 }
 
 

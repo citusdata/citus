@@ -319,6 +319,7 @@ OutJobFields(StringInfo str, const Job *node)
 	WRITE_BOOL_FIELD(subqueryPushdown);
 	WRITE_BOOL_FIELD(requiresMasterEvaluation);
 	WRITE_BOOL_FIELD(deferredPruning);
+	WRITE_NODE_FIELD(partitionValueConst);
 }
 
 

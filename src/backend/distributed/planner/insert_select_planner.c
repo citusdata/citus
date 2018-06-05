@@ -507,7 +507,7 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 	planningError = PlanRouterQuery(copiedSubquery, copyOfPlannerRestrictionContext,
 									&selectPlacementList, &selectAnchorShardId,
 									&relationShardList, replacePrunedQueryWithDummy,
-									&multiShardModifyQuery);
+									&multiShardModifyQuery, NULL);
 
 	Assert(!multiShardModifyQuery);
 

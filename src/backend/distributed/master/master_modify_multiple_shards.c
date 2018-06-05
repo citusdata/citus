@@ -172,7 +172,7 @@ master_modify_multiple_shards(PG_FUNCTION_ARGS)
 	restrictClauseList = WhereClauseList(modifyQuery->jointree);
 
 	prunedShardIntervalList =
-		PruneShards(relationId, tableId, restrictClauseList);
+		PruneShards(relationId, tableId, restrictClauseList, NULL);
 
 	CHECK_FOR_INTERRUPTS();
 

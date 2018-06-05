@@ -37,6 +37,7 @@ SELECT count(*) FROM orders_hash_partitioned;
 SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = 1;
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DETAIL:  distribution column value: 1
  count 
 -------
      0
@@ -45,6 +46,7 @@ DEBUG:  Plan is router executable
 SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = 2;
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DETAIL:  distribution column value: 2
  count 
 -------
      0
@@ -53,6 +55,7 @@ DEBUG:  Plan is router executable
 SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = 3;
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DETAIL:  distribution column value: 3
  count 
 -------
      0
@@ -61,6 +64,7 @@ DEBUG:  Plan is router executable
 SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = 4;
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DETAIL:  distribution column value: 4
  count 
 -------
      0
@@ -70,6 +74,7 @@ SELECT count(*) FROM orders_hash_partitioned
 	WHERE o_orderkey = 1 AND o_clerk = 'aaa';
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DETAIL:  distribution column value: 1
  count 
 -------
      0
@@ -78,6 +83,7 @@ DEBUG:  Plan is router executable
 SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = abs(-1);
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DETAIL:  distribution column value: 1
  count 
 -------
      0
@@ -179,6 +185,7 @@ SELECT count(*) FROM
        (SELECT o_orderkey FROM orders_hash_partitioned WHERE o_orderkey = 1) AS orderkeys;
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DETAIL:  distribution column value: 1
  count 
 -------
      0
@@ -322,6 +329,7 @@ SELECT count(*) FROM orders_hash_partitioned
 	WHERE o_orderkey = random() AND o_orderkey = 1;
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DETAIL:  distribution column value: 1
  count 
 -------
      0
@@ -355,6 +363,7 @@ SELECT count(*)
 	AND orders2.o_orderkey is NULL;
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DETAIL:  distribution column value: 1
  count 
 -------
      0
