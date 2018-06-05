@@ -790,7 +790,7 @@ CREATE TABLE reference_table(id int, referencing_column int REFERENCES reference
 SELECT create_reference_table('reference_table');
 ERROR:  cannot create foreign key constraint from reference tables
 DETAIL:  Reference tables can only be on the referenced side of a foreign key from a hash distributed table
--- test foreign key creation on CREATE TABLE to reference table
+-- test foreign key creation on CREATE TABLE from + to reference table
 DROP TABLE reference_table;
 CREATE TABLE reference_table(id int PRIMARY KEY, referencing_column int);
 SELECT create_reference_table('reference_table');
@@ -799,22 +799,18 @@ SELECT create_reference_table('reference_table');
  
 (1 row)
 
-CREATE TABLE references_to_reference_table(id int, referencing_column int REFERENCES reference_table(id));
-SELECT create_distributed_table('references_to_reference_table', 'referencing_column');
-ERROR:  cannot create foreign key constraint from or to reference tables
--- test foreign key creation on CREATE TABLE from + to reference table
 CREATE TABLE reference_table_second(id int, referencing_column int REFERENCES reference_table(id));
 SELECT create_reference_table('reference_table_second');
-ERROR:  cannot create foreign key constraint from or to reference tables
+ERROR:  cannot create foreign key constraint from reference tables
+DETAIL:  Reference tables can only be on the referenced side of a foreign key from a hash distributed table
 -- test foreign key creation on CREATE TABLE from reference table to local table
 CREATE TABLE referenced_local_table(id int PRIMARY KEY, other_column int);
 DROP TABLE reference_table CASCADE;
-NOTICE:  drop cascades to 2 other objects
-DETAIL:  drop cascades to constraint references_to_reference_table_referencing_column_fkey on table references_to_reference_table
-drop cascades to constraint reference_table_second_referencing_column_fkey on table reference_table_second
+NOTICE:  drop cascades to constraint reference_table_second_referencing_column_fkey on table reference_table_second
 CREATE TABLE reference_table(id int, referencing_column int REFERENCES referenced_local_table(id));
 SELECT create_reference_table('reference_table');
-ERROR:  cannot create foreign key constraint from or to reference tables
+ERROR:  cannot create foreign key constraint from reference tables
+DETAIL:  Reference tables can only be on the referenced side of a foreign key from a hash distributed table
 -- test foreign key creation on CREATE TABLE on self referencing reference table
 CREATE TABLE self_referencing_reference_table(
     id int,
@@ -824,7 +820,8 @@ CREATE TABLE self_referencing_reference_table(
     FOREIGN KEY(id, other_column_ref) REFERENCES self_referencing_reference_table(id, other_column)
 );
 SELECT create_reference_table('self_referencing_reference_table');
-ERROR:  cannot create foreign key constraint from or to reference tables
+ERROR:  cannot create foreign key constraint from reference tables
+DETAIL:  Reference tables can only be on the referenced side of a foreign key from a hash distributed table
 -- test foreign key creation on ALTER TABLE from reference table
 DROP TABLE reference_table;
 CREATE TABLE reference_table(id int PRIMARY KEY, referencing_column int);
@@ -835,9 +832,9 @@ SELECT create_reference_table('reference_table');
 (1 row)
 
 ALTER TABLE reference_table ADD CONSTRAINT fk FOREIGN KEY(referencing_column) REFERENCES referenced_by_reference_table(id);
-ERROR:  cannot create foreign key constraint from or to reference tables
+ERROR:  cannot create foreign key constraint from reference tables
+DETAIL:  Reference tables can only be on the referenced side of a foreign key from a hash distributed table
 -- test foreign key creation on ALTER TABLE to reference table
-DROP TABLE references_to_reference_table;
 CREATE TABLE references_to_reference_table(id int, referencing_column int);
 SELECT create_distributed_table('references_to_reference_table', 'referencing_column');
  create_distributed_table 
@@ -846,7 +843,6 @@ SELECT create_distributed_table('references_to_reference_table', 'referencing_co
 (1 row)
 
 ALTER TABLE references_to_reference_table ADD CONSTRAINT fk FOREIGN KEY(referencing_column) REFERENCES reference_table(id);
-ERROR:  cannot create foreign key constraint from or to reference tables
 -- test foreign key creation on ALTER TABLE from + to reference table
 DROP TABLE reference_table_second;
 CREATE TABLE reference_table_second(id int, referencing_column int);
@@ -857,9 +853,11 @@ SELECT create_reference_table('reference_table_second');
 (1 row)
 
 ALTER TABLE reference_table_second ADD CONSTRAINT fk FOREIGN KEY(referencing_column) REFERENCES reference_table(id);
-ERROR:  cannot create foreign key constraint from or to reference tables
+ERROR:  cannot create foreign key constraint from reference tables
+DETAIL:  Reference tables can only be on the referenced side of a foreign key from a hash distributed table
 -- test foreign key creation on ALTER TABLE from reference table to local table
-DROP TABLE reference_table;
+DROP TABLE reference_table CASCADE;
+NOTICE:  drop cascades to constraint fk on table references_to_reference_table
 CREATE TABLE reference_table(id int PRIMARY KEY, referencing_column int);
 SELECT create_reference_table('reference_table');
  create_reference_table 
@@ -884,6 +882,7 @@ SELECT create_reference_table('self_referencing_reference_table');
 (1 row)
 
 ALTER TABLE self_referencing_reference_table ADD CONSTRAINT fk FOREIGN KEY(id, other_column_ref) REFERENCES self_referencing_reference_table(id, other_column);
-ERROR:  cannot create foreign key constraint from or to reference tables
+ERROR:  cannot create foreign key constraint from reference tables
+DETAIL:  Reference tables can only be on the referenced side of a foreign key from a hash distributed table
 -- we no longer need those tables
 DROP TABLE referenced_by_reference_table, references_to_reference_table, reference_table, reference_table_second, referenced_local_table, self_referencing_reference_table;

@@ -468,15 +468,11 @@ SELECT create_distributed_table('referenced_by_reference_table', 'id');
 CREATE TABLE reference_table(id int, referencing_column int REFERENCES referenced_by_reference_table(id));
 SELECT create_reference_table('reference_table');
 
--- test foreign key creation on CREATE TABLE to reference table
+-- test foreign key creation on CREATE TABLE from + to reference table
 DROP TABLE reference_table;
 CREATE TABLE reference_table(id int PRIMARY KEY, referencing_column int);
 SELECT create_reference_table('reference_table');
 
-CREATE TABLE references_to_reference_table(id int, referencing_column int REFERENCES reference_table(id));
-SELECT create_distributed_table('references_to_reference_table', 'referencing_column');
-
--- test foreign key creation on CREATE TABLE from + to reference table
 CREATE TABLE reference_table_second(id int, referencing_column int REFERENCES reference_table(id));
 SELECT create_reference_table('reference_table_second');
 
@@ -503,7 +499,6 @@ SELECT create_reference_table('reference_table');
 ALTER TABLE reference_table ADD CONSTRAINT fk FOREIGN KEY(referencing_column) REFERENCES referenced_by_reference_table(id);
 
 -- test foreign key creation on ALTER TABLE to reference table
-DROP TABLE references_to_reference_table;
 CREATE TABLE references_to_reference_table(id int, referencing_column int);
 SELECT create_distributed_table('references_to_reference_table', 'referencing_column');
 ALTER TABLE references_to_reference_table ADD CONSTRAINT fk FOREIGN KEY(referencing_column) REFERENCES reference_table(id);
@@ -515,7 +510,7 @@ SELECT create_reference_table('reference_table_second');
 ALTER TABLE reference_table_second ADD CONSTRAINT fk FOREIGN KEY(referencing_column) REFERENCES reference_table(id);
 
 -- test foreign key creation on ALTER TABLE from reference table to local table
-DROP TABLE reference_table;
+DROP TABLE reference_table CASCADE;
 CREATE TABLE reference_table(id int PRIMARY KEY, referencing_column int);
 SELECT create_reference_table('reference_table');
 ALTER TABLE reference_table ADD CONSTRAINT fk FOREIGN KEY(referencing_column) REFERENCES referenced_local_table(id);
