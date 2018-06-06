@@ -133,6 +133,13 @@ test: multi_create_schema
 # ----------
 test: multi_utility_warnings
 
+# ----------
+# Tests to check the sequential and parallel executions of DDL and modification
+# commands
+# Should not be executed in parallel with other tests
+# ----------
+test: sequential_modifications
+
 # ---------
 # multi_append_table_to_shard loads data to create shards in a way that forces
 # shard caching.

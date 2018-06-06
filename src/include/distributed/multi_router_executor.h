@@ -41,8 +41,10 @@ extern TupleTableSlot * RouterSelectExecScan(CustomScanState *node);
 extern TupleTableSlot * RouterMultiModifyExecScan(CustomScanState *node);
 
 extern int64 ExecuteModifyTasksWithoutResults(List *taskList);
-extern void ExecuteTasksSequentiallyWithoutResults(List *taskList);
+extern int64 ExecuteModifyTasksSequentiallyWithoutResults(List *taskList);
 
+/* helper functions */
+extern bool TaskListRequires2PC(List *taskList);
 extern List * BuildPlacementSelectList(uint32 groupId, List *relationShardList);
 
 #endif /* MULTI_ROUTER_EXECUTOR_H_ */

@@ -192,6 +192,12 @@ BEGIN;
 ALTER TABLE labs ADD COLUMN motto text;
 INSERT INTO labs VALUES (6, 'Bell Labs');
 ABORT;
+-- this should work find with sequential DDL as well
+BEGIN;
+SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
+ALTER TABLE labs ADD COLUMN motto text;
+INSERT INTO labs VALUES (6, 'Bell Labs');
+ABORT;
 -- but the DDL should correctly roll back
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.labs'::regclass;
  Column |  Type  | Modifiers 
@@ -418,7 +424,7 @@ BEGIN;
 \copy labs from stdin delimiter ','
 ALTER TABLE labs ADD COLUMN motto text;
 ABORT;
--- cannot perform DDL once a connection is used for multiple shards
+-- cannot perform parallel DDL once a connection is used for multiple shards
 BEGIN;
 SELECT lab_id FROM researchers WHERE lab_id = 1 AND id = 0;
  lab_id 
@@ -432,6 +438,21 @@ SELECT lab_id FROM researchers WHERE lab_id = 2 AND id = 0;
 
 ALTER TABLE researchers ADD COLUMN motto text;
 ERROR:  cannot perform a parallel DDL command because multiple placements have been accessed over the same connection
+ROLLBACK;
+-- can perform sequential DDL once a connection is used for multiple shards
+BEGIN;
+SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
+SELECT lab_id FROM researchers WHERE lab_id = 1 AND id = 0;
+ lab_id 
+--------
+(0 rows)
+
+SELECT lab_id FROM researchers WHERE lab_id = 2 AND id = 0;
+ lab_id 
+--------
+(0 rows)
+
+ALTER TABLE researchers ADD COLUMN motto text;
 ROLLBACK;
 -- multi-shard operations can co-exist with DDL in a transactional way
 BEGIN;
@@ -1422,7 +1443,7 @@ INSERT INTO users VALUES (3, 'burak');
 \COPY items FROM STDIN WITH CSV
 ERROR:  cannot establish a new connection for placement 1200042, since DML has been executed on a connection that is in use
 END;
--- cannot perform DDL after a co-located table has been read over 1 connection
+-- cannot perform parallel DDL after a co-located table has been read over 1 connection
 BEGIN;
 SELECT id FROM users WHERE id = 1;
  id 
@@ -1439,6 +1460,23 @@ SELECT id FROM users WHERE id = 6;
 ALTER TABLE items ADD COLUMN last_update timestamptz;
 ERROR:  cannot perform a parallel DDL command because multiple placements have been accessed over the same connection
 END;
+-- can perform sequential DDL after a co-located table has been read over 1 connection
+BEGIN;
+SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
+SELECT id FROM users WHERE id = 1;
+ id 
+----
+  1
+(1 row)
+
+SELECT id FROM users WHERE id = 6;
+ id 
+----
+  6
+(1 row)
+
+ALTER TABLE items ADD COLUMN last_update timestamptz;
+ROLLBACK;
 -- but the other way around is fine
 BEGIN;
 ALTER TABLE items ADD COLUMN last_update timestamptz;

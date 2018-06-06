@@ -158,6 +158,13 @@ ALTER TABLE labs ADD COLUMN motto text;
 INSERT INTO labs VALUES (6, 'Bell Labs');
 ABORT;
 
+-- this should work find with sequential DDL as well
+BEGIN;
+SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
+ALTER TABLE labs ADD COLUMN motto text;
+INSERT INTO labs VALUES (6, 'Bell Labs');
+ABORT;
+
 -- but the DDL should correctly roll back
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.labs'::regclass;
 SELECT * FROM labs WHERE id = 6;
@@ -331,8 +338,16 @@ BEGIN;
 ALTER TABLE labs ADD COLUMN motto text;
 ABORT;
 
--- cannot perform DDL once a connection is used for multiple shards
+-- cannot perform parallel DDL once a connection is used for multiple shards
 BEGIN;
+SELECT lab_id FROM researchers WHERE lab_id = 1 AND id = 0;
+SELECT lab_id FROM researchers WHERE lab_id = 2 AND id = 0;
+ALTER TABLE researchers ADD COLUMN motto text;
+ROLLBACK;
+
+-- can perform sequential DDL once a connection is used for multiple shards
+BEGIN;
+SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
 SELECT lab_id FROM researchers WHERE lab_id = 1 AND id = 0;
 SELECT lab_id FROM researchers WHERE lab_id = 2 AND id = 0;
 ALTER TABLE researchers ADD COLUMN motto text;
@@ -1057,12 +1072,20 @@ INSERT INTO users VALUES (3, 'burak');
 \.
 END;
 
--- cannot perform DDL after a co-located table has been read over 1 connection
+-- cannot perform parallel DDL after a co-located table has been read over 1 connection
 BEGIN;
 SELECT id FROM users WHERE id = 1;
 SELECT id FROM users WHERE id = 6;
 ALTER TABLE items ADD COLUMN last_update timestamptz;
 END;
+
+-- can perform sequential DDL after a co-located table has been read over 1 connection
+BEGIN;
+SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
+SELECT id FROM users WHERE id = 1;
+SELECT id FROM users WHERE id = 6;
+ALTER TABLE items ADD COLUMN last_update timestamptz;
+ROLLBACK;
 
 -- but the other way around is fine
 BEGIN;

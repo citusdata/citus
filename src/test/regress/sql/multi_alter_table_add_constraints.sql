@@ -505,6 +505,7 @@ SELECT (run_command_on_workers($$
     $$)).*
 ORDER BY 
     1,2,3,4;
+
 SET search_path TO 'public';
 
 DROP SCHEMA sc1 CASCADE;
