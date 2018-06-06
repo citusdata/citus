@@ -16,47 +16,47 @@ SELECT create_distributed_table('referenced_table', 'id', 'hash');
 CREATE TABLE referencing_table(id int, ref_id int, FOREIGN KEY(ref_id) REFERENCES referenced_table(id) ON DELETE SET NULL);
 SELECT create_distributed_table('referencing_table', 'ref_id', 'hash');
 ERROR:  cannot create foreign key constraint
-DETAIL:  SET NULL or SET DEFAULT is not supported in ON DELETE operation.
+DETAIL:  SET NULL or SET DEFAULT is not supported in ON DELETE operation when distribution key is included in the foreign key constraint
 DROP TABLE referencing_table;
 CREATE TABLE referencing_table(id int, ref_id int, FOREIGN KEY(ref_id) REFERENCES referenced_table(id) ON DELETE SET DEFAULT);
 SELECT create_distributed_table('referencing_table', 'ref_id', 'hash');
 ERROR:  cannot create foreign key constraint
-DETAIL:  SET NULL or SET DEFAULT is not supported in ON DELETE operation.
+DETAIL:  SET NULL or SET DEFAULT is not supported in ON DELETE operation when distribution key is included in the foreign key constraint
 DROP TABLE referencing_table;
 CREATE TABLE referencing_table(id int, ref_id int, FOREIGN KEY(ref_id) REFERENCES referenced_table(id) ON UPDATE SET NULL);
 SELECT create_distributed_table('referencing_table', 'ref_id', 'hash');
 ERROR:  cannot create foreign key constraint
-DETAIL:  SET NULL, SET DEFAULT or CASCADE is not supported in ON UPDATE operation.
+DETAIL:  SET NULL, SET DEFAULT or CASCADE is not supported in ON UPDATE operation  when distribution key included in the foreign constraint.
 DROP TABLE referencing_table;
 CREATE TABLE referencing_table(id int, ref_id int, FOREIGN KEY(ref_id) REFERENCES referenced_table(id) ON UPDATE SET DEFAULT);
 SELECT create_distributed_table('referencing_table', 'ref_id', 'hash');
 ERROR:  cannot create foreign key constraint
-DETAIL:  SET NULL, SET DEFAULT or CASCADE is not supported in ON UPDATE operation.
+DETAIL:  SET NULL, SET DEFAULT or CASCADE is not supported in ON UPDATE operation  when distribution key included in the foreign constraint.
 DROP TABLE referencing_table;
 CREATE TABLE referencing_table(id int, ref_id int, FOREIGN KEY(ref_id) REFERENCES referenced_table(id) ON UPDATE CASCADE);
 SELECT create_distributed_table('referencing_table', 'ref_id', 'hash');
 ERROR:  cannot create foreign key constraint
-DETAIL:  SET NULL, SET DEFAULT or CASCADE is not supported in ON UPDATE operation.
+DETAIL:  SET NULL, SET DEFAULT or CASCADE is not supported in ON UPDATE operation  when distribution key included in the foreign constraint.
 DROP TABLE referencing_table;
 -- test foreign constraint creation on NOT co-located tables
 SET citus.shard_count TO 8;
 CREATE TABLE referencing_table(id int, ref_id int, FOREIGN KEY(ref_id) REFERENCES referenced_table(id));
 SELECT create_distributed_table('referencing_table', 'ref_id', 'hash');
-ERROR:  cannot create foreign key constraint
-DETAIL:  Foreign key constraint can only be created on co-located tables.
+ERROR:  cannot create foreign key constraint since relations are not colocated
+DETAIL:  Foreign key constraint can only be created on co-located tables or reference tables.
 DROP TABLE referencing_table;
 SET citus.shard_count TO 32;
 -- test foreign constraint creation on non-partition columns
 CREATE TABLE referencing_table(id int, ref_id int, FOREIGN KEY(id) REFERENCES referenced_table(id));
 SELECT create_distributed_table('referencing_table', 'ref_id', 'hash');
 ERROR:  cannot create foreign key constraint
-DETAIL:  Partition column must exist both referencing and referenced side of the foreign constraint statement and it must be in the same ordinal in both sides.
+DETAIL:  Foreign keys are only supported when both tables are colocated and includes partition column or from distributed to reference tables
 DROP TABLE referencing_table;
 -- test foreign constraint creation while column list are in incorrect order
 CREATE TABLE referencing_table(id int, ref_id int, FOREIGN KEY(id, ref_id) REFERENCES referenced_table(id, test_column));
 SELECT create_distributed_table('referencing_table', 'ref_id', 'hash');
 ERROR:  cannot create foreign key constraint
-DETAIL:  Partition column must exist both referencing and referenced side of the foreign constraint statement and it must be in the same ordinal in both sides.
+DETAIL:  Foreign keys are only supported when both tables are colocated and includes partition column or from distributed to reference tables
 DROP TABLE referencing_table;
 -- test foreign constraint with replication factor > 1
 CREATE TABLE referencing_table(id int, ref_id int, FOREIGN KEY(ref_id) REFERENCES referenced_table(id));
@@ -414,20 +414,20 @@ ABORT;
 -- test foreign constraint creation
 -- test foreign constraint creation with not supported parameters
 ALTER TABLE referencing_table ADD CONSTRAINT test_constraint FOREIGN KEY(ref_id) REFERENCES referenced_table(id) ON DELETE SET NULL;
-ERROR:  cannot create foreign key constraint
-DETAIL:  SET NULL or SET DEFAULT is not supported in ON DELETE operation.
+ERROR:  cannot create foreign key constraint since relations are not colocated
+DETAIL:  Foreign key constraint can only be created on co-located tables or reference tables.
 ALTER TABLE referencing_table ADD CONSTRAINT test_constraint FOREIGN KEY(ref_id) REFERENCES referenced_table(id) ON DELETE SET DEFAULT;
-ERROR:  cannot create foreign key constraint
-DETAIL:  SET NULL or SET DEFAULT is not supported in ON DELETE operation.
+ERROR:  cannot create foreign key constraint since relations are not colocated
+DETAIL:  Foreign key constraint can only be created on co-located tables or reference tables.
 ALTER TABLE referencing_table ADD CONSTRAINT test_constraint FOREIGN KEY(ref_id) REFERENCES referenced_table(id) ON UPDATE SET NULL;
-ERROR:  cannot create foreign key constraint
-DETAIL:  SET NULL, SET DEFAULT or CASCADE is not supported in ON UPDATE operation.
+ERROR:  cannot create foreign key constraint since relations are not colocated
+DETAIL:  Foreign key constraint can only be created on co-located tables or reference tables.
 ALTER TABLE referencing_table ADD CONSTRAINT test_constraint FOREIGN KEY(ref_id) REFERENCES referenced_table(id) ON UPDATE SET DEFAULT;
-ERROR:  cannot create foreign key constraint
-DETAIL:  SET NULL, SET DEFAULT or CASCADE is not supported in ON UPDATE operation.
+ERROR:  cannot create foreign key constraint since relations are not colocated
+DETAIL:  Foreign key constraint can only be created on co-located tables or reference tables.
 ALTER TABLE referencing_table ADD CONSTRAINT test_constraint FOREIGN KEY(ref_id) REFERENCES referenced_table(id) ON UPDATE CASCADE;
-ERROR:  cannot create foreign key constraint
-DETAIL:  SET NULL, SET DEFAULT or CASCADE is not supported in ON UPDATE operation.
+ERROR:  cannot create foreign key constraint since relations are not colocated
+DETAIL:  Foreign key constraint can only be created on co-located tables or reference tables.
 -- test foreign constraint creation with multiple subcommands
 ALTER TABLE referencing_table ADD CONSTRAINT test_constraint FOREIGN KEY(ref_id) REFERENCES referenced_table(id),
 							  ADD CONSTRAINT test_constraint FOREIGN KEY(id) REFERENCES referenced_table(test_column);
@@ -438,8 +438,8 @@ ALTER TABLE referencing_table ADD FOREIGN KEY(ref_id) REFERENCES referenced_tabl
 ERROR:  cannot create constraint without a name on a distributed table
 -- test foreign constraint creation on NOT co-located tables
 ALTER TABLE referencing_table ADD CONSTRAINT test_constraint FOREIGN KEY(ref_id) REFERENCES referenced_table(id);
-ERROR:  cannot create foreign key constraint
-DETAIL:  Foreign key constraint can only be created on co-located tables.
+ERROR:  cannot create foreign key constraint since relations are not colocated
+DETAIL:  Foreign key constraint can only be created on co-located tables or reference tables.
 -- create co-located tables
 DROP TABLE referencing_table;
 DROP TABLE referenced_table;
@@ -463,11 +463,11 @@ ERROR:  number of referencing and referenced columns for foreign key disagree
 -- test foreign constraint creation on non-partition columns
 ALTER TABLE referencing_table ADD CONSTRAINT test_constraint FOREIGN KEY(id) REFERENCES referenced_table(id);
 ERROR:  cannot create foreign key constraint
-DETAIL:  Partition column must exist both referencing and referenced side of the foreign constraint statement and it must be in the same ordinal in both sides.
+DETAIL:  Foreign keys are only supported when both tables are colocated and includes partition column or from distributed to reference tables
 -- test foreign constraint creation while column list are in incorrect order
 ALTER TABLE referencing_table ADD CONSTRAINT test_constraint FOREIGN KEY(id, ref_id) REFERENCES referenced_table(id, test_column);
 ERROR:  cannot create foreign key constraint
-DETAIL:  Partition column must exist both referencing and referenced side of the foreign constraint statement and it must be in the same ordinal in both sides.
+DETAIL:  Foreign keys are only supported when both tables are colocated and includes partition column or from distributed to reference tables
 -- test foreign constraint creation while column list are not in same length
 ALTER TABLE referencing_table ADD CONSTRAINT test_constraint FOREIGN KEY(ref_id) REFERENCES referenced_table(id, test_column);
 ERROR:  number of referencing and referenced columns for foreign key disagree
@@ -788,7 +788,8 @@ SELECT create_distributed_table('referenced_by_reference_table', 'id');
 
 CREATE TABLE reference_table(id int, referencing_column int REFERENCES referenced_by_reference_table(id));
 SELECT create_reference_table('reference_table');
-ERROR:  cannot create foreign key constraint from or to reference tables
+ERROR:  cannot create foreign key constraint from reference tables
+DETAIL:  Reference tables can only be on the referenced side of a foreign key from a hash distributed table
 -- test foreign key creation on CREATE TABLE to reference table
 DROP TABLE reference_table;
 CREATE TABLE reference_table(id int PRIMARY KEY, referencing_column int);
@@ -800,11 +801,16 @@ SELECT create_reference_table('reference_table');
 
 CREATE TABLE references_to_reference_table(id int, referencing_column int REFERENCES reference_table(id));
 SELECT create_distributed_table('references_to_reference_table', 'referencing_column');
-ERROR:  cannot create foreign key constraint from or to reference tables
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
 -- test foreign key creation on CREATE TABLE from + to reference table
 CREATE TABLE reference_table_second(id int, referencing_column int REFERENCES reference_table(id));
 SELECT create_reference_table('reference_table_second');
-ERROR:  cannot create foreign key constraint from or to reference tables
+ERROR:  cannot create foreign key constraint from reference tables
+DETAIL:  Reference tables can only be on the referenced side of a foreign key from a hash distributed table
 -- test foreign key creation on CREATE TABLE from reference table to local table
 CREATE TABLE referenced_local_table(id int PRIMARY KEY, other_column int);
 DROP TABLE reference_table CASCADE;
@@ -813,7 +819,8 @@ DETAIL:  drop cascades to constraint references_to_reference_table_referencing_c
 drop cascades to constraint reference_table_second_referencing_column_fkey on table reference_table_second
 CREATE TABLE reference_table(id int, referencing_column int REFERENCES referenced_local_table(id));
 SELECT create_reference_table('reference_table');
-ERROR:  cannot create foreign key constraint from or to reference tables
+ERROR:  cannot create foreign key constraint from reference tables
+DETAIL:  Reference tables can only be on the referenced side of a foreign key from a hash distributed table
 -- test foreign key creation on CREATE TABLE on self referencing reference table
 CREATE TABLE self_referencing_reference_table(
     id int,
@@ -823,7 +830,8 @@ CREATE TABLE self_referencing_reference_table(
     FOREIGN KEY(id, other_column_ref) REFERENCES self_referencing_reference_table(id, other_column)
 );
 SELECT create_reference_table('self_referencing_reference_table');
-ERROR:  cannot create foreign key constraint from or to reference tables
+ERROR:  cannot create foreign key constraint from reference tables
+DETAIL:  Reference tables can only be on the referenced side of a foreign key from a hash distributed table
 -- test foreign key creation on ALTER TABLE from reference table
 DROP TABLE reference_table;
 CREATE TABLE reference_table(id int PRIMARY KEY, referencing_column int);
@@ -834,7 +842,8 @@ SELECT create_reference_table('reference_table');
 (1 row)
 
 ALTER TABLE reference_table ADD CONSTRAINT fk FOREIGN KEY(referencing_column) REFERENCES referenced_by_reference_table(id);
-ERROR:  cannot create foreign key constraint from or to reference tables
+ERROR:  cannot create foreign key constraint from reference tables
+DETAIL:  Reference tables can only be on the referenced side of a foreign key from a hash distributed table
 -- test foreign key creation on ALTER TABLE to reference table
 DROP TABLE references_to_reference_table;
 CREATE TABLE references_to_reference_table(id int, referencing_column int);
@@ -845,7 +854,6 @@ SELECT create_distributed_table('references_to_reference_table', 'referencing_co
 (1 row)
 
 ALTER TABLE references_to_reference_table ADD CONSTRAINT fk FOREIGN KEY(referencing_column) REFERENCES reference_table(id);
-ERROR:  cannot create foreign key constraint from or to reference tables
 -- test foreign key creation on ALTER TABLE from + to reference table
 DROP TABLE reference_table_second;
 CREATE TABLE reference_table_second(id int, referencing_column int);
@@ -856,7 +864,8 @@ SELECT create_reference_table('reference_table_second');
 (1 row)
 
 ALTER TABLE reference_table_second ADD CONSTRAINT fk FOREIGN KEY(referencing_column) REFERENCES reference_table(id);
-ERROR:  cannot create foreign key constraint from or to reference tables
+ERROR:  cannot create foreign key constraint from reference tables
+DETAIL:  Reference tables can only be on the referenced side of a foreign key from a hash distributed table
 -- test foreign key creation on ALTER TABLE from reference table to local table
 DROP TABLE reference_table;
 CREATE TABLE reference_table(id int PRIMARY KEY, referencing_column int);
@@ -883,6 +892,7 @@ SELECT create_reference_table('self_referencing_reference_table');
 (1 row)
 
 ALTER TABLE self_referencing_reference_table ADD CONSTRAINT fk FOREIGN KEY(id, other_column_ref) REFERENCES self_referencing_reference_table(id, other_column);
-ERROR:  cannot create foreign key constraint from or to reference tables
+ERROR:  cannot create foreign key constraint from reference tables
+DETAIL:  Reference tables can only be on the referenced side of a foreign key from a hash distributed table
 -- we no longer need those tables
 DROP TABLE referenced_by_reference_table, references_to_reference_table, reference_table, reference_table_second, referenced_local_table, self_referencing_reference_table;

@@ -89,6 +89,7 @@ static void ExecuteMultipleTasks(CitusScanState *scanState, List *taskList,
 								 bool isModificationQuery, bool expectResults);
 static int64 ExecuteModifyTasks(List *taskList, bool expectResults,
 								ParamListInfo paramListInfo, CitusScanState *scanState);
+static void ExecuteSingleDDLTaskWithoutResults(Task *task);
 static void AcquireExecutorShardLock(Task *task, CmdType commandType);
 static void AcquireExecutorMultiShardLocks(List *taskList);
 static bool RequiresConsistentSnapshot(Task *task);
@@ -908,7 +909,7 @@ ExecuteSingleModifyTask(CitusScanState *scanState, Task *task, bool multipleTask
 
 /*
  * GetModifyConnections returns the list of connections required to execute
- * modify commands on the placements in tasPlacementList.  If necessary remote
+ * modify commands on the placements in taskPlacementList.  If necessary remote
  * transactions are started.
  *
  * If markCritical is true remote transactions are marked as critical.
@@ -1025,16 +1026,60 @@ ExecuteModifyTasksWithoutResults(List *taskList)
  * result in deadlocks (such as CREATE INDEX CONCURRENTLY).
  */
 void
-ExecuteTasksSequentiallyWithoutResults(List *taskList)
+ExecuteDDLTasksSequentiallyWithoutResults(List *taskList)
 {
 	ListCell *taskCell = NULL;
 
 	foreach(taskCell, taskList)
 	{
 		Task *task = (Task *) lfirst(taskCell);
-		List *singleTask = list_make1(task);
 
-		ExecuteModifyTasksWithoutResults(singleTask);
+		ExecuteSingleDDLTaskWithoutResults(task);
+	}
+}
+
+
+/*
+ * ExecuteSingleDDLTasksWithoutResults executes the task on the task's
+ * placement list.
+ *
+ * The connections are marked as critical. Note that this function doesn't
+ * necessarily open a new connection per placement, instead re-uses the
+ * existing connections to the worker nodes when possible. Similarly, the
+ * function does not claim the connections exclusively. Thus, the function
+ * could be used to implement a sequential execution of DDL commands over a
+ * single connection to a worker node.
+ */
+static void
+ExecuteSingleDDLTaskWithoutResults(Task *task)
+{
+	List *connectionList = NIL;
+	ListCell *connectionCell = NULL;
+	bool markCritical = true;
+
+	char *queryString = task->queryString;
+
+	if (MultiShardCommitProtocol == COMMIT_PROTOCOL_2PC ||
+		task->replicationModel == REPLICATION_MODEL_2PC)
+	{
+		BeginOrContinueCoordinatedTransaction();
+		CoordinatedTransactionUse2PC();
+	}
+
+	Assert(task->taskType == DDL_TASK);
+
+	connectionList = GetModifyConnections(task, markCritical);
+
+	foreach(connectionCell, connectionList)
+	{
+		MultiConnection *connection = (MultiConnection *) lfirst(connectionCell);
+
+		ExecuteCriticalRemoteCommand(connection, queryString);
+	}
+
+	if (IsTransactionBlock())
+	{
+		XactModificationLevel = XACT_MODIFICATION_DATA;
 	}
 }
 
