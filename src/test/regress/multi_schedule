@@ -131,7 +131,7 @@ test: multi_create_schema
 # Tests to check if we inform the user about potential caveats of creating new
 # databases, schemas, and roles.
 # ----------
-test: multi_utility_warnings
+test: multi_utility_warnings access_tracking
 
 # ----------
 # Tests to check the sequential and parallel executions of DDL and modification
