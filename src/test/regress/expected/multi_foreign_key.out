@@ -919,7 +919,8 @@ SELECT create_reference_table('reference_table');
 (1 row)
 
 ALTER TABLE reference_table ADD CONSTRAINT fk FOREIGN KEY(referencing_column) REFERENCES referenced_local_table(id);
-ERROR:  relation referenced_local_table is not distributed
+ERROR:  cannot create foreign key constraint because reference tables are not supported as the referencing table of a foreign constraint
+DETAIL:  Reference tables are only supported as the referenced table of a foreign key when the referencing table is a hash distributed table
 -- test foreign key creation on ALTER TABLE on self referencing reference table
 DROP TABLE self_referencing_reference_table;
 CREATE TABLE self_referencing_reference_table(

@@ -22,10 +22,73 @@
 #include "distributed/master_protocol.h"
 #include "distributed/multi_join_order.h"
 #include "utils/fmgroids.h"
+#include "utils/lsyscache.h"
 #include "utils/rel.h"
 #include "utils/relcache.h"
 #include "utils/ruleutils.h"
 #include "utils/syscache.h"
+
+
+static bool HeapTupleOfForeignConstraintIncludesColumn(HeapTuple heapTuple, Oid
+													   relationId, int pgConstraintKey,
+													   char *columnName);
+
+/*
+ * ConstraintIsAForeignKeyToReferenceTable function scans the pgConstraint to
+ * fetch all of the constraints on the given relationId and see if at least one
+ * of them is a foreign key referencing to a reference table.
+ */
+bool
+ConstraintIsAForeignKeyToReferenceTable(char *constraintName, Oid relationId)
+{
+	Relation pgConstraint = NULL;
+	SysScanDesc scanDescriptor = NULL;
+	ScanKeyData scanKey[1];
+	int scanKeyCount = 1;
+	HeapTuple heapTuple = NULL;
+	bool foreignKeyToReferenceTable = false;
+
+
+	pgConstraint = heap_open(ConstraintRelationId, AccessShareLock);
+
+	ScanKeyInit(&scanKey[0], Anum_pg_constraint_contype, BTEqualStrategyNumber, F_CHAREQ,
+				CharGetDatum(CONSTRAINT_FOREIGN));
+	scanDescriptor = systable_beginscan(pgConstraint, InvalidOid, false,
+										NULL, scanKeyCount, scanKey);
+
+	heapTuple = systable_getnext(scanDescriptor);
+	while (HeapTupleIsValid(heapTuple))
+	{
+		Oid referencedTableId = InvalidOid;
+		Form_pg_constraint constraintForm = (Form_pg_constraint) GETSTRUCT(heapTuple);
+		char *constraintName = (constraintForm->conname).data;
+
+		if (strncmp(constraintName, constraintName, NAMEDATALEN) != 0 ||
+			constraintForm->conrelid != relationId)
+		{
+			heapTuple = systable_getnext(scanDescriptor);
+			continue;
+		}
+
+		referencedTableId = constraintForm->confrelid;
+
+		Assert(IsDistributedTable(referencedTableId));
+
+		if (PartitionMethod(referencedTableId) == DISTRIBUTE_BY_NONE)
+		{
+			foreignKeyToReferenceTable = true;
+			break;
+		}
+
+		heapTuple = systable_getnext(scanDescriptor);
+	}
+
+	/* clean up scan and close system catalog */
+	systable_endscan(scanDescriptor);
+	heap_close(pgConstraint, AccessShareLock);
+
+	return foreignKeyToReferenceTable;
+}
 
 
 /*
@@ -60,11 +123,11 @@ ErrorIfUnsupportedForeignConstraint(Relation relation, char distributionMethod,
 	uint32 referencedTableColocationId = INVALID_COLOCATION_ID;
 	Var *referencedTablePartitionColumn = NULL;
 
-	Datum referencingColumnsDatum;
-	Datum *referencingColumnArray;
+	Datum referencingColumnsDatum = 0;
+	Datum *referencingColumnArray = NULL;
 	int referencingColumnCount = 0;
-	Datum referencedColumnsDatum;
-	Datum *referencedColumnArray;
+	Datum referencedColumnsDatum = 0;
+	Datum *referencedColumnArray = NULL;
 	int referencedColumnCount = 0;
 	bool isNull = false;
 	int attrIdx = 0;
@@ -310,6 +373,87 @@ ErrorIfUnsupportedForeignConstraint(Relation relation, char distributionMethod,
 
 
 /*
+ * ColumnAppearsInForeignKeyToReferenceTable checks if there is foreign constraint
+ * from/to a reference table on the given column. We iterate pgConstraint to fetch
+ * the constraint on the given relationId and find if any of the constraints
+ * includes the given column.
+ */
+bool
+ColumnAppearsInForeignKeyToReferenceTable(char *columnName, Oid relationId)
+{
+	Relation pgConstraint = NULL;
+	SysScanDesc scanDescriptor = NULL;
+	ScanKeyData scanKey[1];
+	int scanKeyCount = 1;
+	HeapTuple heapTuple = NULL;
+	bool foreignKeyToReferenceTableIncludesGivenColumn = false;
+
+	pgConstraint = heap_open(ConstraintRelationId, AccessShareLock);
+
+	ScanKeyInit(&scanKey[0], Anum_pg_constraint_contype, BTEqualStrategyNumber, F_CHAREQ,
+				CharGetDatum(CONSTRAINT_FOREIGN));
+
+	scanDescriptor = systable_beginscan(pgConstraint, InvalidOid, false,
+										NULL, scanKeyCount, scanKey);
+
+	heapTuple = systable_getnext(scanDescriptor);
+	while (HeapTupleIsValid(heapTuple))
+	{
+		Oid referencedTableId = InvalidOid;
+		Oid referencingTableId = InvalidOid;
+		int pgConstraintKey = 0;
+		Form_pg_constraint constraintForm = (Form_pg_constraint) GETSTRUCT(heapTuple);
+
+		referencedTableId = constraintForm->confrelid;
+		referencingTableId = constraintForm->conrelid;
+
+		if (referencedTableId == relationId)
+		{
+			pgConstraintKey = Anum_pg_constraint_confkey;
+		}
+		else if (referencingTableId == relationId)
+		{
+			pgConstraintKey = Anum_pg_constraint_conkey;
+		}
+		else
+		{
+			/*
+			 * If the constraint is not from/to the given relation, we should simply
+			 * skip.
+			 */
+			heapTuple = systable_getnext(scanDescriptor);
+			continue;
+		}
+
+		/*
+		 * We check if the referenced table is a reference table. There cannot be
+		 * any foreign constraint from a distributed table to a local table.
+		 */
+		Assert(IsDistributedTable(referencedTableId));
+		if (PartitionMethod(referencedTableId) != DISTRIBUTE_BY_NONE)
+		{
+			heapTuple = systable_getnext(scanDescriptor);
+			continue;
+		}
+
+		if (HeapTupleOfForeignConstraintIncludesColumn(heapTuple, relationId,
+													   pgConstraintKey, columnName))
+		{
+			foreignKeyToReferenceTableIncludesGivenColumn = true;
+			break;
+		}
+
+		heapTuple = systable_getnext(scanDescriptor);
+	}
+
+	/* clean up scan and close system catalog */
+	systable_endscan(scanDescriptor);
+	heap_close(pgConstraint, AccessShareLock);
+	return foreignKeyToReferenceTableIncludesGivenColumn;
+}
+
+
+/*
  * GetTableForeignConstraints takes in a relationId, and returns the list of foreign
  * constraint commands needed to reconstruct foreign constraints of that table.
  */
@@ -469,6 +613,39 @@ TableReferenced(Oid relationId)
 
 	systable_endscan(scanDescriptor);
 	heap_close(pgConstraint, NoLock);
+
+	return false;
+}
+
+
+/*
+ * HeapTupleOfForeignConstraintIncludesColumn fetches the columns from the foreign
+ * constraint and checks if the given column name matches one of them.
+ */
+static bool
+HeapTupleOfForeignConstraintIncludesColumn(HeapTuple heapTuple, Oid relationId,
+										   int pgConstraintKey, char *columnName)
+{
+	Datum columnsDatum = 0;
+	Datum *columnArray = NULL;
+	int columnCount = 0;
+	int attrIdx = 0;
+	bool isNull = false;
+
+	columnsDatum = SysCacheGetAttr(CONSTROID, heapTuple, pgConstraintKey, &isNull);
+	deconstruct_array(DatumGetArrayTypeP(columnsDatum), INT2OID, 2, true,
+					  's', &columnArray, NULL, &columnCount);
+
+	for (attrIdx = 0; attrIdx < columnCount; ++attrIdx)
+	{
+		AttrNumber attrNo = DatumGetInt16(columnArray[attrIdx]);
+
+		char *colName = get_relid_attribute_name(relationId, attrNo);
+		if (strncmp(colName, columnName, NAMEDATALEN) == 0)
+		{
+			return true;
+		}
+	}
 
 	return false;
 }

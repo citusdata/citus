@@ -164,6 +164,12 @@ static void PostProcessUtility(Node *parsetree);
 static List * CollectGrantTableIdList(GrantStmt *grantStmt);
 static void ProcessDropTableStmt(DropStmt *dropTableStatement);
 
+/*
+ * We need to run some of the commands sequentially if there is a foreign constraint
+ * from/to reference table.
+ */
+static bool ShouldExecuteAlterTableSequentially(Oid relationId, AlterTableCmd *command);
+
 
 /*
  * multi_ProcessUtility9x is the 9.x-compatible wrapper for Citus' main utility
@@ -1247,6 +1253,7 @@ PlanAlterTableStmt(AlterTableStmt *alterTableStatement, const char *alterTableCo
 	bool isDistributedRelation = false;
 	List *commandList = NIL;
 	ListCell *commandCell = NULL;
+	bool executeSequentially = false;
 
 	/* first check whether a distributed relation is affected */
 	if (alterTableStatement->relation == NULL)
@@ -1295,8 +1302,8 @@ PlanAlterTableStmt(AlterTableStmt *alterTableStatement, const char *alterTableCo
 	}
 
 	/*
-	 * We check if there is a ADD FOREIGN CONSTRAINT command in sub commands list.
-	 * If there is we assign referenced releation id to rightRelationId and we also
+	 * We check if there is a ADD/DROP FOREIGN CONSTRAINT command in sub commands list.
+	 * If there is we assign referenced relation id to rightRelationId and we also
 	 * set skip_validation to true to prevent PostgreSQL to verify validity of the
 	 * foreign constraint in master. Validity will be checked in workers anyway.
 	 */
@@ -1368,28 +1375,27 @@ PlanAlterTableStmt(AlterTableStmt *alterTableStatement, const char *alterTableCo
 			rightRelationId = RangeVarGetRelid(partitionCommand->name, NoLock, false);
 		}
 #endif
+		executeSequentially |= ShouldExecuteAlterTableSequentially(leftRelationId,
+																   command);
 	}
 
 	ddlJob = palloc0(sizeof(DDLJob));
 	ddlJob->targetRelationId = leftRelationId;
 	ddlJob->concurrentIndexCmd = false;
 	ddlJob->commandString = alterTableCommand;
+	ddlJob->executeSequentially = executeSequentially;
 
 	if (rightRelationId)
 	{
-		/* if foreign key related, use specialized task list function ... */
-		ddlJob->taskList = InterShardDDLTaskList(leftRelationId, rightRelationId,
-												 alterTableCommand);
-
-		/*
-		 * We need to execute the ddls working with reference tables on the
-		 * right side sequentially, because parallel ddl operations
-		 * relating to one and only shard of a reference table on a worker
-		 * may cause self-deadlocks.
-		 */
-		if (PartitionMethod(rightRelationId) == DISTRIBUTE_BY_NONE)
+		if (!IsDistributedTable(rightRelationId))
 		{
-			ddlJob->executeSequentially = true;
+			ddlJob->taskList = NIL;
+		}
+		else
+		{
+			/* if foreign key related, use specialized task list function ... */
+			ddlJob->taskList = InterShardDDLTaskList(leftRelationId, rightRelationId,
+													 alterTableCommand);
 		}
 	}
 	else
@@ -3786,4 +3792,67 @@ ProcessDropTableStmt(DropStmt *dropTableStatement)
 			SendCommandToWorkers(WORKERS_WITH_METADATA, detachPartitionCommand);
 		}
 	}
+}
+
+
+/*
+ * ShouldExecuteAlterTableSequentially checks if the given ALTER TABLE
+ * statements should be executed sequentially when there is a foreign
+ * constraint from a distributed table to a reference table.
+ * In case of a column related ALTER TABLE operation, we check explicitly
+ * if there is a foreign constraint on this column from/to a reference table.
+ * Additionally, if the command is run inside a transaction block, we call
+ * SetLocalMultiShardModifyModeToSequential so that the further commands
+ * in the same transaction uses the same connections and does not error out.
+ */
+static bool
+ShouldExecuteAlterTableSequentially(Oid relationId, AlterTableCmd *command)
+{
+	bool executeSequentially = false;
+	AlterTableType alterTableType = command->subtype;
+	if (alterTableType == AT_DropConstraint)
+	{
+		char *constraintName = command->name;
+		if (ConstraintIsAForeignKeyToReferenceTable(constraintName, relationId))
+		{
+			executeSequentially = true;
+		}
+	}
+	else if (alterTableType == AT_DropColumn || alterTableType == AT_AlterColumnType)
+	{
+		char *affectedColumnName = command->name;
+
+		if (ColumnAppearsInForeignKeyToReferenceTable(affectedColumnName,
+													  relationId))
+		{
+			if (IsTransactionBlock() && alterTableType == AT_AlterColumnType)
+			{
+				SetLocalMultiShardModifyModeToSequential();
+			}
+
+			executeSequentially = true;
+		}
+	}
+	else if (alterTableType == AT_AddConstraint)
+	{
+		/*
+		 * We need to execute the ddls working with reference tables on the
+		 * right side sequentially, because parallel ddl operations
+		 * relating to one and only shard of a reference table on a worker
+		 * may cause self-deadlocks.
+		 */
+		Constraint *constraint = (Constraint *) command->def;
+		if (constraint->contype == CONSTR_FOREIGN)
+		{
+			Oid rightRelationId = RangeVarGetRelid(constraint->pktable, NoLock,
+												   false);
+			if (IsDistributedTable(rightRelationId) &&
+				PartitionMethod(rightRelationId) == DISTRIBUTE_BY_NONE)
+			{
+				executeSequentially = true;
+			}
+		}
+	}
+
+	return executeSequentially;
 }
