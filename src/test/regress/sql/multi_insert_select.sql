@@ -1361,8 +1361,16 @@ ROLLBACK;
 -- Altering a reference table and then performing an INSERT ... SELECT which
 -- joins with the reference table is not allowed, since the INSERT ... SELECT
 -- would read from the reference table over others connections than the ones
--- that performed the DDL.
+-- that performed the parallel DDL.
 BEGIN;
+ALTER TABLE reference_table ADD COLUMN z int;
+INSERT INTO raw_events_first (user_id)
+SELECT user_id FROM raw_events_second JOIN reference_table USING (user_id);
+ROLLBACK;
+
+-- the same test with sequential DDL should work fine
+BEGIN;
+SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
 ALTER TABLE reference_table ADD COLUMN z int;
 INSERT INTO raw_events_first (user_id)
 SELECT user_id FROM raw_events_second JOIN reference_table USING (user_id);

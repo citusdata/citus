@@ -213,11 +213,10 @@ RouterCreateScan(CustomScan *scan)
 		Assert(isModificationQuery);
 
 		if (IsMultiRowInsert(workerJob->jobQuery) ||
-			(IsUpdateOrDelete(distributedPlan) &&
-			 MultiShardConnectionType == SEQUENTIAL_CONNECTION))
+			MultiShardConnectionType == SEQUENTIAL_CONNECTION)
 		{
 			/*
-			 * Multi shard update deletes while multi_shard_modify_mode equals
+			 * Multi shard modifications while multi_shard_modify_mode equals
 			 * to 'sequential' or Multi-row INSERT are executed sequentially
 			 * instead of using parallel connections.
 			 */
