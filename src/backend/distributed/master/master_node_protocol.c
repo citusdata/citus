@@ -771,67 +771,6 @@ GetTableIndexAndConstraintCommands(Oid relationId)
 
 
 /*
- * GetTableForeignConstraints takes in a relationId, and returns the list of foreign
- * constraint commands needed to reconstruct foreign constraints of that table.
- */
-List *
-GetTableForeignConstraintCommands(Oid relationId)
-{
-	List *tableForeignConstraints = NIL;
-
-	Relation pgConstraint = NULL;
-	SysScanDesc scanDescriptor = NULL;
-	ScanKeyData scanKey[1];
-	int scanKeyCount = 1;
-	HeapTuple heapTuple = NULL;
-
-	/*
-	 * Set search_path to NIL so that all objects outside of pg_catalog will be
-	 * schema-prefixed. pg_catalog will be added automatically when we call
-	 * PushOverrideSearchPath(), since we set addCatalog to true;
-	 */
-	OverrideSearchPath *overridePath = GetOverrideSearchPath(CurrentMemoryContext);
-	overridePath->schemas = NIL;
-	overridePath->addCatalog = true;
-	PushOverrideSearchPath(overridePath);
-
-	/* open system catalog and scan all constraints that belong to this table */
-	pgConstraint = heap_open(ConstraintRelationId, AccessShareLock);
-	ScanKeyInit(&scanKey[0], Anum_pg_constraint_conrelid, BTEqualStrategyNumber, F_OIDEQ,
-				relationId);
-	scanDescriptor = systable_beginscan(pgConstraint, ConstraintRelidIndexId, true, NULL,
-										scanKeyCount, scanKey);
-
-	heapTuple = systable_getnext(scanDescriptor);
-	while (HeapTupleIsValid(heapTuple))
-	{
-		Form_pg_constraint constraintForm = (Form_pg_constraint) GETSTRUCT(heapTuple);
-
-		if (constraintForm->contype == CONSTRAINT_FOREIGN)
-		{
-			Oid constraintId = get_relation_constraint_oid(relationId,
-														   constraintForm->conname.data,
-														   true);
-			char *statementDef = pg_get_constraintdef_command(constraintId);
-
-			tableForeignConstraints = lappend(tableForeignConstraints, statementDef);
-		}
-
-		heapTuple = systable_getnext(scanDescriptor);
-	}
-
-	/* clean up scan and close system catalog */
-	systable_endscan(scanDescriptor);
-	heap_close(pgConstraint, AccessShareLock);
-
-	/* revert back to original search_path */
-	PopOverrideSearchPath();
-
-	return tableForeignConstraints;
-}
-
-
-/*
  * ShardStorageType returns the shard storage type according to relation type.
  */
 char
