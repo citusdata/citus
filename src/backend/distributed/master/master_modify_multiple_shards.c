@@ -84,6 +84,7 @@ master_modify_multiple_shards(PG_FUNCTION_ARGS)
 	List *prunedShardIntervalList = NIL;
 	List *taskList = NIL;
 	int32 affectedTupleCount = 0;
+	CmdType operation = CMD_UNKNOWN;
 #if (PG_VERSION_NUM >= 100000)
 	RawStmt *rawStmt = (RawStmt *) ParseTreeRawStmt(queryString);
 	queryTreeNode = rawStmt->stmt;
@@ -147,7 +148,8 @@ master_modify_multiple_shards(PG_FUNCTION_ARGS)
 #endif
 	modifyQuery = (Query *) linitial(queryTreeList);
 
-	if (modifyQuery->commandType != CMD_UTILITY)
+	operation = modifyQuery->commandType;
+	if (operation != CMD_UTILITY)
 	{
 		bool multiShardQuery = true;
 		DeferredErrorMessage *error =
@@ -176,8 +178,18 @@ master_modify_multiple_shards(PG_FUNCTION_ARGS)
 
 	CHECK_FOR_INTERRUPTS();
 
-	taskList = ModifyMultipleShardsTaskList(modifyQuery, prunedShardIntervalList);
-	affectedTupleCount = ExecuteModifyTasksWithoutResults(taskList);
+	taskList =
+		ModifyMultipleShardsTaskList(modifyQuery, prunedShardIntervalList);
+
+	if (MultiShardConnectionType == SEQUENTIAL_CONNECTION)
+	{
+		affectedTupleCount =
+			ExecuteModifyTasksSequentiallyWithoutResults(taskList, operation);
+	}
+	else
+	{
+		affectedTupleCount = ExecuteModifyTasksWithoutResults(taskList);
+	}
 
 	PG_RETURN_INT32(affectedTupleCount);
 }

@@ -901,21 +901,31 @@ LookupWorkerForTask(HTAB *workerHash, Task *task, TaskExecution *taskExecution)
 /*
  * WorkerConnectionsExhausted determines if the current query has exhausted the
  * maximum number of open connections that can be made to a worker.
+ *
+ * Note that the function takes sequential exection of the queries into account
+ * as well. In other words, in the sequential mode, the connections are considered
+ * to be exahusted when there is already a connection opened to the given worker.
  */
 static bool
 WorkerConnectionsExhausted(WorkerNodeState *workerNodeState)
 {
 	bool reachedLimit = false;
 
-	/*
-	 * A worker cannot accept more than max_connections connections. If we have a
-	 * small number of workers with many shards, then a single query could exhaust
-	 * max_connections unless we throttle here. We use the value of max_connections
-	 * on the master as a proxy for the worker configuration to avoid introducing a
-	 * new configuration value.
-	 */
-	if (workerNodeState->openConnectionCount >= MaxConnections)
+	if (MultiShardConnectionType == SEQUENTIAL_CONNECTION &&
+		workerNodeState->openConnectionCount >= 1)
 	{
+		reachedLimit = true;
+	}
+	else if (MultiShardConnectionType == PARALLEL_CONNECTION &&
+			 workerNodeState->openConnectionCount >= MaxConnections)
+	{
+		/*
+		 * A worker cannot accept more than max_connections connections. If we have a
+		 * small number of workers with many shards, then a single query could exhaust
+		 * max_connections unless we throttle here. We use the value of max_connections
+		 * on the master as a proxy for the worker configuration to avoid introducing a
+		 * new configuration value.
+		 */
 		reachedLimit = true;
 	}
 

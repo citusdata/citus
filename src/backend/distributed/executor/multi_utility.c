@@ -3133,7 +3133,7 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 		}
 		else
 		{
-			ExecuteModifyTasksSequentiallyWithoutResults(ddlJob->taskList);
+			ExecuteModifyTasksSequentiallyWithoutResults(ddlJob->taskList, CMD_UTILITY);
 		}
 	}
 	else
@@ -3145,7 +3145,7 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 
 		PG_TRY();
 		{
-			ExecuteModifyTasksSequentiallyWithoutResults(ddlJob->taskList);
+			ExecuteModifyTasksSequentiallyWithoutResults(ddlJob->taskList, CMD_UTILITY);
 
 			if (shouldSyncMetadata)
 			{

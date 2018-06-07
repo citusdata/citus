@@ -20,6 +20,7 @@
 #include "commands/dbcommands.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/connection_management.h"
+#include "distributed/multi_executor.h"
 #include "distributed/multi_client_executor.h"
 #include "distributed/multi_server_executor.h"
 #include "distributed/placement_connection.h"
@@ -188,7 +189,17 @@ MultiClientPlacementConnectStart(List *placementAccessList, const char *userName
 	MultiConnection *connection = NULL;
 	ConnStatusType connStatusType = CONNECTION_OK;
 	int32 connectionId = AllocateConnectionId();
-	int connectionFlags = CONNECTION_PER_PLACEMENT; /* no cached connections for now */
+	int connectionFlags = 0;
+
+	/*
+	 * Although we're opening connections for SELECT queries, we're relying
+	 * on multi_shard_modify_mode GUC. The name of the GUC is unfortunate, but,
+	 * adding one more GUC (or renaming the GUC) would make the UX even worse.
+	 */
+	if (MultiShardConnectionType == PARALLEL_CONNECTION)
+	{
+		connectionFlags = CONNECTION_PER_PLACEMENT;
+	}
 
 	if (connectionId == INVALID_CONNECTION_ID)
 	{

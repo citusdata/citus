@@ -40,7 +40,10 @@
 #include "utils/memutils.h"
 
 
-/* controls the connection type for multi shard update/delete queries */
+/*
+ * Controls the connection type for multi shard modifications, DDLs
+ * TRUNCATE and real-time SELECT queries.
+ */
 int MultiShardConnectionType = PARALLEL_CONNECTION;
 
 

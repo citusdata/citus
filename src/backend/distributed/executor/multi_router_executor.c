@@ -82,7 +82,8 @@ static void AcquireMetadataLocks(List *taskList);
 static ShardPlacementAccess * CreatePlacementAccess(ShardPlacement *placement,
 													ShardPlacementAccessType accessType);
 static int64 ExecuteSingleModifyTask(CitusScanState *scanState, Task *task,
-									 bool failOnError, bool expectResults);
+									 CmdType operation, bool failOnError,
+									 bool expectResults);
 static void ExecuteSingleSelectTask(CitusScanState *scanState, Task *task);
 static List * GetModifyConnections(Task *task, bool markCritical);
 static void ExecuteMultipleTasks(CitusScanState *scanState, List *taskList,
@@ -479,6 +480,7 @@ RouterSequentialModifyExecScan(CustomScanState *node)
 		EState *executorState = scanState->customScanState.ss.ps.state;
 		bool taskListRequires2PC = TaskListRequires2PC(taskList);
 		bool failOnError = false;
+		CmdType operation = scanState->distributedPlan->operation;
 
 		/*
 		 * We could naturally handle function-based transactions (i.e. those using
@@ -521,7 +523,8 @@ RouterSequentialModifyExecScan(CustomScanState *node)
 			Task *task = (Task *) lfirst(taskCell);
 
 			executorState->es_processed +=
-				ExecuteSingleModifyTask(scanState, task, failOnError, hasReturning);
+				ExecuteSingleModifyTask(scanState, task, operation, failOnError,
+										hasReturning);
 		}
 
 		scanState->finishedRemoteScan = true;
@@ -817,10 +820,9 @@ CreatePlacementAccess(ShardPlacement *placement, ShardPlacementAccessType access
  * The function returns affectedTupleCount if applicable.
  */
 static int64
-ExecuteSingleModifyTask(CitusScanState *scanState, Task *task, bool failOnError,
-						bool expectResults)
+ExecuteSingleModifyTask(CitusScanState *scanState, Task *task, CmdType operation,
+						bool failOnError, bool expectResults)
 {
-	CmdType operation = CMD_UNKNOWN;
 	EState *executorState = NULL;
 	ParamListInfo paramListInfo = NULL;
 	List *taskPlacementList = task->taskPlacementList;
@@ -839,7 +841,6 @@ ExecuteSingleModifyTask(CitusScanState *scanState, Task *task, bool failOnError,
 
 	if (scanState)
 	{
-		operation = scanState->distributedPlan->operation;
 		executorState = scanState->customScanState.ss.ps.state;
 		paramListInfo = executorState->es_param_list_info;
 	}
@@ -864,9 +865,15 @@ ExecuteSingleModifyTask(CitusScanState *scanState, Task *task, bool failOnError,
 		LockPartitionRelations(relationId, RowExclusiveLock);
 	}
 
-	if (task->taskType == MODIFY_TASK)
+	/*
+	 * Prevent replicas of the same shard from diverging. We don't
+	 * need to acquire lock for TRUNCATE and DDLs since they already
+	 * acquire the necessary locks on the relations, and blocks any
+	 * unsafe concurrent operations.
+	 */
+	if (operation == CMD_INSERT || operation == CMD_UPDATE ||
+		operation == CMD_DELETE || operation == CMD_SELECT)
 	{
-		/* prevent replicas of the same shard from diverging */
 		AcquireExecutorShardLock(task, operation);
 	}
 
@@ -1106,7 +1113,7 @@ ExecuteModifyTasksWithoutResults(List *taskList)
  * returns 0.
  */
 int64
-ExecuteModifyTasksSequentiallyWithoutResults(List *taskList)
+ExecuteModifyTasksSequentiallyWithoutResults(List *taskList, CmdType operation)
 {
 	ListCell *taskCell = NULL;
 	bool multipleTasks = list_length(taskList) > 1;
@@ -1142,7 +1149,7 @@ ExecuteModifyTasksSequentiallyWithoutResults(List *taskList)
 		Task *task = (Task *) lfirst(taskCell);
 
 		affectedTupleCount +=
-			ExecuteSingleModifyTask(NULL, task, failOnError, expectResults);
+			ExecuteSingleModifyTask(NULL, task, operation, failOnError, expectResults);
 	}
 
 	return affectedTupleCount;
@@ -1196,6 +1203,10 @@ ExecuteModifyTasks(List *taskList, bool expectResults, ParamListInfo paramListIn
 	 * Ensure that there are no concurrent modifications on the same
 	 * shards. For DDL commands, we already obtained the appropriate
 	 * locks in ProcessUtility.
+	 *
+	 * We don't need to acquire lock for TRUNCATE_TASK since it already
+	 * acquires AccessExclusiveLock on the relation, and blocks any
+	 * concurrent operation.
 	 */
 	if (firstTask->taskType == MODIFY_TASK)
 	{
