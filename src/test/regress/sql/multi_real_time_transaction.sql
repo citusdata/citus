@@ -213,6 +213,13 @@ BEGIN;
 SELECT id, pg_advisory_lock(15) FROM test_table;
 ROLLBACK;
 
+-- sequential real-time queries should be successfully executed
+-- since the queries are sent over the same connection
+BEGIN;
+SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
+SELECT id, pg_advisory_lock(15) FROM test_table ORDER BY 1 DESC;
+ROLLBACK;
+
 SET client_min_messages TO DEFAULT;
 alter system set deadlock_timeout TO DEFAULT;
 SELECT pg_reload_conf();

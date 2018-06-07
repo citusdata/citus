@@ -70,6 +70,16 @@ SELECT count(*) FROM raw_table;
 SELECT count(*) FROM raw_table WHERE created_at = '2001-02-10 20:00:00';
 SELECT count(*) FROM second_raw_table;
 
+-- sequential insert followed by a sequential real-time query should be fine
+BEGIN;
+SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
+WITH ids_inserted AS
+(
+  INSERT INTO raw_table (tenant_id) VALUES (11), (12), (13), (14) RETURNING tenant_id
+)
+SELECT income FROM second_raw_table WHERE tenant_id IN (SELECT * FROM ids_inserted) ORDER BY 1 DESC LIMIT 3;
+ROLLBACK;
+
 RESET client_min_messages;
 RESET citus.shard_count;
 DROP SCHEMA with_transactions CASCADE;
