@@ -576,7 +576,7 @@ BEGIN;
    101
 (1 row)
 
-	SELECT * FROM relation_acesses  WHERE table_name IN ('table_6', 'table_1');
+	SELECT * FROM relation_acesses  WHERE table_name IN ('table_6', 'table_1') ORDER BY 1,2;
  table_name |  select_access  |  dml_access  |  ddl_access  
 ------------+-----------------+--------------+--------------
  table_1    | parallel_access | not_accessed | not_accessed
