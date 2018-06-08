@@ -1418,18 +1418,18 @@ SendQueryInSingleRowMode(MultiConnection *connection, char *query,
 
 	if (querySent == 0)
 	{
-		const bool raiseErrors = false;
+		const bool raiseIfTransactionIsCritical = true;
 
-		HandleRemoteTransactionConnectionError(connection, raiseErrors);
+		HandleRemoteTransactionConnectionError(connection, raiseIfTransactionIsCritical);
 		return false;
 	}
 
 	singleRowMode = PQsetSingleRowMode(connection->pgConn);
 	if (singleRowMode == 0)
 	{
-		const bool raiseErrors = false;
+		const bool raiseIfTransactionIsCritical = true;
 
-		HandleRemoteTransactionConnectionError(connection, raiseErrors);
+		HandleRemoteTransactionConnectionError(connection, raiseIfTransactionIsCritical);
 		return false;
 	}
 
@@ -1571,6 +1571,10 @@ StoreQueryResult(CitusScanState *scanState, MultiConnection *connection,
 			int category = 0;
 			bool isConstraintViolation = false;
 
+			/*
+			 * Mark transaction as failed, but don't throw an error. This allows us
+			 * to give a more meaningful error message below.
+			 */
 			MarkRemoteTransactionFailed(connection, false);
 
 			/*
@@ -1581,7 +1585,8 @@ StoreQueryResult(CitusScanState *scanState, MultiConnection *connection,
 			category = ERRCODE_TO_CATEGORY(ERRCODE_INTEGRITY_CONSTRAINT_VIOLATION);
 			isConstraintViolation = SqlStateMatchesCategory(sqlStateString, category);
 
-			if (isConstraintViolation || failOnError)
+			if (isConstraintViolation || failOnError ||
+				IsRemoteTransactionCritical(connection))
 			{
 				ReportResultError(connection, result, ERROR);
 			}
@@ -1696,6 +1701,11 @@ ConsumeQueryResult(MultiConnection *connection, bool failOnError, int64 *rows)
 			int category = 0;
 			bool isConstraintViolation = false;
 
+			/*
+			 * Mark transaction as failed, but don't throw an error even if the
+			 * transaction is critical. This allows us to give a more meaningful
+			 * error message below.
+			 */
 			MarkRemoteTransactionFailed(connection, false);
 
 			/*
@@ -1706,7 +1716,8 @@ ConsumeQueryResult(MultiConnection *connection, bool failOnError, int64 *rows)
 			category = ERRCODE_TO_CATEGORY(ERRCODE_INTEGRITY_CONSTRAINT_VIOLATION);
 			isConstraintViolation = SqlStateMatchesCategory(sqlStateString, category);
 
-			if (isConstraintViolation || failOnError)
+			if (isConstraintViolation || failOnError ||
+				IsRemoteTransactionCritical(connection))
 			{
 				ReportResultError(connection, result, ERROR);
 			}
