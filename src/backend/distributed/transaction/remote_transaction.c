@@ -43,7 +43,6 @@ static void StartRemoteTransactionSavepointRollback(MultiConnection *connection,
 static void FinishRemoteTransactionSavepointRollback(MultiConnection *connection,
 													 SubTransactionId subId);
 
-static void CheckTransactionHealth(void);
 static void Assign2PCIdentifier(MultiConnection *connection);
 static void WarnAboutLeakedPreparedTransaction(MultiConnection *connection, bool commit);
 
@@ -838,12 +837,6 @@ CoordinatedRemoteTransactionsCommit(void)
 	bool raiseInterrupts = false;
 
 	/*
-	 * Before starting to commit on any of the nodes - after which we can't
-	 * completely roll-back anymore - check that things are in a good state.
-	 */
-	CheckTransactionHealth();
-
-	/*
 	 * Issue appropriate transaction commands to remote nodes. If everything
 	 * went well that's going to be COMMIT or COMMIT PREPARED, if individual
 	 * connections had errors, some or all of them might require a ROLLBACK.
@@ -1229,13 +1222,13 @@ FinishRemoteTransactionSavepointRollback(MultiConnection *connection, SubTransac
 
 
 /*
- * CheckTransactionHealth checks if any of the participating transactions in a
+ * CheckRemoteTransactionsHealth checks if any of the participating transactions in a
  * coordinated transaction failed, and what consequence that should have.
  * This needs to be called before the coordinated transaction commits (but
  * after they've been PREPAREd if 2PC is in use).
  */
-static void
-CheckTransactionHealth(void)
+void
+CheckRemoteTransactionsHealth(void)
 {
 	dlist_iter iter;
 

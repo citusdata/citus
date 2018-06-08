@@ -130,6 +130,7 @@ extern void ResetRemoteTransaction(struct MultiConnection *connection);
 extern void CoordinatedRemoteTransactionsPrepare(void);
 extern void CoordinatedRemoteTransactionsCommit(void);
 extern void CoordinatedRemoteTransactionsAbort(void);
+extern void CheckRemoteTransactionsHealth(void);
 
 /* remote savepoint commands */
 extern void CoordinatedRemoteTransactionsSavepointBegin(SubTransactionId subId);
