@@ -115,6 +115,7 @@ extern void HandleRemoteTransactionResultError(struct MultiConnection *connectio
 extern void MarkRemoteTransactionFailed(struct MultiConnection *connection,
 										bool allowErrorPromotion);
 extern void MarkRemoteTransactionCritical(struct MultiConnection *connection);
+extern bool IsRemoteTransactionCritical(struct MultiConnection *connection);
 
 
 /*

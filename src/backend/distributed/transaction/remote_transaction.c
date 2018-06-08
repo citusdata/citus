@@ -722,6 +722,19 @@ MarkRemoteTransactionCritical(struct MultiConnection *connection)
 
 
 /*
+ * IsRemoteTransactionCritical returns whether the remote transaction on
+ * the given connection has been marked as critical.
+ */
+bool
+IsRemoteTransactionCritical(struct MultiConnection *connection)
+{
+	RemoteTransaction *transaction = &connection->remoteTransaction;
+
+	return transaction->transactionCritical;
+}
+
+
+/*
  * CloseRemoteTransaction handles closing a connection that, potentially, is
  * part of a coordinated transaction.  This should only ever be called from
  * connection_management.c, while closing a connection during a transaction.
