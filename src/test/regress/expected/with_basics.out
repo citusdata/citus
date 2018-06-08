@@ -106,9 +106,8 @@ WITH cte AS (
 	SELECT user_id FROM users_table WHERE value_2 IN (1, 2)
 )
 SELECT (SELECT * FROM cte);
-WARNING:  more than one row returned by a subquery used as an expression
+ERROR:  more than one row returned by a subquery used as an expression
 CONTEXT:  while executing command on localhost:57637
-ERROR:  could not receive query results
 WITH cte_basic AS (
 	SELECT user_id FROM users_table WHERE user_id = 1
 )
