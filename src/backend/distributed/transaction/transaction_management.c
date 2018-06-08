@@ -283,9 +283,17 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			{
 				CoordinatedRemoteTransactionsPrepare();
 				CurrentCoordinatedTransactionState = COORD_TRANS_PREPARED;
+
+				/*
+				 * Make sure we did not have any failures on connections marked as
+				 * critical before committing.
+				 */
+				CheckRemoteTransactionsHealth();
 			}
 			else
 			{
+				CheckRemoteTransactionsHealth();
+
 				/*
 				 * Have to commit remote transactions in PRE_COMMIT, to allow
 				 * us to mark failed placements as invalid.  Better don't use
