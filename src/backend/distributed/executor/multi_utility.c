@@ -2893,7 +2893,7 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 		if (MultiShardConnectionType == SEQUENTIAL_CONNECTION ||
 			ddlJob->executeSequentially)
 		{
-			ExecuteModifyTasksSequentiallyWithoutResults(ddlJob->taskList);
+			ExecuteModifyTasksSequentiallyWithoutResults(ddlJob->taskList, CMD_UTILITY);
 		}
 		else
 		{
