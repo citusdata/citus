@@ -64,6 +64,7 @@ OBJS = src/backend/distributed/shared_library_init.o \
      src/backend/distributed/test/distributed_deadlock_detection.o \
      src/backend/distributed/test/distribution_metadata.o \
      src/backend/distributed/test/fake_fdw.o \
+     src/backend/distributed/test/foreign_key_relationship_query.o \
      src/backend/distributed/test/generate_ddl_commands.o \
      src/backend/distributed/test/metadata_sync.o \
      src/backend/distributed/test/partitioning_utils.o \
@@ -90,6 +91,7 @@ OBJS = src/backend/distributed/shared_library_init.o \
      src/backend/distributed/utils/colocation_utils.o \
      src/backend/distributed/utils/distribution_column.o \
      src/backend/distributed/utils/errormessage.o \
+     src/backend/distributed/utils/foreign_key_relationship.o \
      src/backend/distributed/utils/hash_helpers.o \
      src/backend/distributed/utils/listutils.o \
      src/backend/distributed/utils/maintenanced.o \

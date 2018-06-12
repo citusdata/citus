@@ -228,7 +228,7 @@ test: multi_citus_tools
 # ----------
 # multi_foreign_key tests foreign key push down on distributed tables
 # ----------
-test: multi_foreign_key
+test: multi_foreign_key multi_foreign_key_relation_graph
 
 # ----------
 # multi_upgrade_reference_table tests for upgrade_reference_table UDF

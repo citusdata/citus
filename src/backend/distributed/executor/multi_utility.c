@@ -75,6 +75,7 @@
 #include "utils/builtins.h"
 #include "utils/elog.h"
 #include "utils/errcodes.h"
+#include "utils/fmgroids.h"
 #include "utils/guc.h"
 #include "utils/hsearch.h"
 #include "utils/inval.h"
@@ -85,6 +86,10 @@
 
 
 bool EnableDDLPropagation = true; /* ddl propagation is enabled */
+
+
+static bool shouldInvalidateForeignKeyGraph = false;
+
 
 /*
  * This struct defines the state for the callback for drop statements.
@@ -162,7 +167,11 @@ static void CheckCopyPermissions(CopyStmt *copyStatement);
 static List * CopyGetAttnums(TupleDesc tupDesc, Relation rel, List *attnamelist);
 static void PostProcessUtility(Node *parsetree);
 static List * CollectGrantTableIdList(GrantStmt *grantStmt);
+static char * GetSchemaNameFromDropObject(ListCell *dropSchemaCell);
 static void ProcessDropTableStmt(DropStmt *dropTableStatement);
+static void ProcessDropSchemaStmt(DropStmt *dropSchemaStatement);
+static void InvalidateForeignKeyGraphForDDL(void);
+
 
 /*
  * We need to run some of the commands sequentially if there is a foreign constraint
@@ -371,6 +380,11 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 			{
 				ProcessDropTableStmt(dropStatement);
 			}
+
+			if (dropStatement->removeType == OBJECT_SCHEMA)
+			{
+				ProcessDropSchemaStmt(dropStatement);
+			}
 		}
 
 		if (IsA(parsetree, AlterTableStmt))
@@ -530,6 +544,16 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		SetUserIdAndSecContext(savedUserId, savedSecurityContext);
 	}
 
+	/*
+	 * Re-forming the foreign key graph relies on the command being executed
+	 * on the local table first. However, in order to decide whether the
+	 * command leads to an invalidation, we need to check before the command
+	 * is being executed since we read pg_constraint table. Thus, we maintain a
+	 * local flag and do the invalidation after multi_ProcessUtility,
+	 * before ExecuteDistributedDDLJob().
+	 */
+	InvalidateForeignKeyGraphForDDL();
+
 	/* after local command has completed, finish by executing worker DDLJobs, if any */
 	if (ddlJobs != NIL)
 	{
@@ -556,8 +580,27 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 
 				if (alterTableType == AT_AddConstraint)
 				{
+					LOCKMODE lockmode = NoLock;
+					Oid relationId = InvalidOid;
+					Constraint *constraint = NULL;
+
 					Assert(list_length(commandList) == 1);
+
 					ErrorIfUnsupportedAlterAddConstraintStmt(alterTableStatement);
+
+					lockmode = AlterTableGetLockLevel(alterTableStatement->cmds);
+					relationId = AlterTableLookupRelation(alterTableStatement, lockmode);
+
+					if (!OidIsValid(relationId))
+					{
+						continue;
+					}
+
+					constraint = (Constraint *) command->def;
+					if (ConstraintIsAForeignKey(constraint->conname, relationId))
+					{
+						InvalidateForeignKeyGraph();
+					}
 				}
 			}
 		}
@@ -614,6 +657,22 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 	 * EXTENSION. This is important to register some invalidation callbacks.
 	 */
 	CitusHasBeenLoaded();
+}
+
+
+/*
+ * InvalidateForeignKeyGraphForDDL simply keeps track of whether
+ * the foreign key graph should be invalidated due to a DDL.
+ */
+static void
+InvalidateForeignKeyGraphForDDL(void)
+{
+	if (shouldInvalidateForeignKeyGraph)
+	{
+		InvalidateForeignKeyGraph();
+
+		shouldInvalidateForeignKeyGraph = false;
+	}
 }
 
 
@@ -2244,8 +2303,25 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 			}
 
 #endif
-			case AT_SetNotNull:
 			case AT_DropConstraint:
+			{
+				LOCKMODE lockmode = AlterTableGetLockLevel(alterTableStatement->cmds);
+				Oid relationId = AlterTableLookupRelation(alterTableStatement, lockmode);
+
+				if (!OidIsValid(relationId))
+				{
+					return;
+				}
+
+				if (ConstraintIsAForeignKey(command->name, relationId))
+				{
+					shouldInvalidateForeignKeyGraph = true;
+				}
+
+				break;
+			}
+
+			case AT_SetNotNull:
 			case AT_EnableTrigAll:
 			case AT_DisableTrigAll:
 			case AT_ReplicaIdentity:
@@ -3748,6 +3824,99 @@ RoleSpecString(RoleSpec *spec)
 
 
 /*
+ * ProcessDropSchemaStmt invalidates the foreign key cache if any table created
+ * under dropped schema involved in any foreign key relationship.
+ */
+static void
+ProcessDropSchemaStmt(DropStmt *dropStatement)
+{
+	Relation pgClass = NULL;
+	HeapTuple heapTuple = NULL;
+	SysScanDesc scanDescriptor = NULL;
+	ScanKeyData scanKey[1];
+	int scanKeyCount = 1;
+	Oid scanIndexId = InvalidOid;
+	bool useIndex = false;
+	ListCell *dropSchemaCell;
+
+	if (dropStatement->behavior != DROP_CASCADE)
+	{
+		return;
+	}
+
+	foreach(dropSchemaCell, dropStatement->objects)
+	{
+		char *schemaString = GetSchemaNameFromDropObject(dropSchemaCell);
+		Oid namespaceOid = get_namespace_oid(schemaString, true);
+
+		if (namespaceOid == InvalidOid)
+		{
+			continue;
+		}
+
+		pgClass = heap_open(RelationRelationId, AccessShareLock);
+
+		ScanKeyInit(&scanKey[0], Anum_pg_class_relnamespace, BTEqualStrategyNumber,
+					F_OIDEQ, namespaceOid);
+		scanDescriptor = systable_beginscan(pgClass, scanIndexId, useIndex, NULL,
+											scanKeyCount, scanKey);
+
+		heapTuple = systable_getnext(scanDescriptor);
+		while (HeapTupleIsValid(heapTuple))
+		{
+			Form_pg_class relationForm = (Form_pg_class) GETSTRUCT(heapTuple);
+			char *relationName = NameStr(relationForm->relname);
+			Oid relationId = get_relname_relid(relationName, namespaceOid);
+
+			/* we're not interested in non-valid, non-distributed relations */
+			if (relationId == InvalidOid || !IsDistributedTable(relationId))
+			{
+				heapTuple = systable_getnext(scanDescriptor);
+				continue;
+			}
+
+			/* invalidate foreign key cache if the table involved in any foreign key */
+			if (TableReferenced(relationId) || TableReferencing(relationId))
+			{
+				shouldInvalidateForeignKeyGraph = true;
+
+				systable_endscan(scanDescriptor);
+				heap_close(pgClass, NoLock);
+				return;
+			}
+
+			heapTuple = systable_getnext(scanDescriptor);
+		}
+
+		systable_endscan(scanDescriptor);
+		heap_close(pgClass, NoLock);
+	}
+}
+
+
+/*
+ * GetSchemaNameFromDropObject gets the name of the drop schema from given
+ * list cell. This function is defined due to API change between PG 9.6 and
+ * PG 10.
+ */
+static char *
+GetSchemaNameFromDropObject(ListCell *dropSchemaCell)
+{
+	char *schemaString = NULL;
+
+#if (PG_VERSION_NUM >= 100000)
+	Value *schemaValue = (Value *) lfirst(dropSchemaCell);
+	schemaString = strVal(schemaValue);
+#else
+	List *schemaNameList = (List *) lfirst(dropSchemaCell);
+	schemaString = NameListToString(schemaNameList);
+#endif
+
+	return schemaString;
+}
+
+
+/*
  * ProcessDropTableStmt processes DROP TABLE commands for partitioned tables.
  * If we are trying to DROP partitioned tables, we first need to go to MX nodes
  * and DETACH partitions from their parents. Otherwise, we process DROP command
@@ -3774,10 +3943,20 @@ ProcessDropTableStmt(DropStmt *dropTableStatement)
 
 		Oid relationId = RangeVarGetRelid(tableRangeVar, AccessShareLock, missingOK);
 
-		if (relationId == InvalidOid ||
-			!IsDistributedTable(relationId) ||
-			!ShouldSyncTableMetadata(relationId) ||
-			!PartitionedTable(relationId))
+		/* we're not interested in non-valid, non-distributed relations */
+		if (relationId == InvalidOid || !IsDistributedTable(relationId))
+		{
+			continue;
+		}
+
+		/* invalidate foreign key cache if the table involved in any foreign key */
+		if ((TableReferenced(relationId) || TableReferencing(relationId)))
+		{
+			shouldInvalidateForeignKeyGraph = true;
+		}
+
+		/* we're only interested in partitioned and mx tables */
+		if (!ShouldSyncTableMetadata(relationId) || !PartitionedTable(relationId))
 		{
 			continue;
 		}

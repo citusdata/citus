@@ -649,3 +649,97 @@ HeapTupleOfForeignConstraintIncludesColumn(HeapTuple heapTuple, Oid relationId,
 
 	return false;
 }
+
+
+/*
+ * TableReferencing function checks whether given table is referencing by another table
+ * via foreign constraints. If it is referencing, this function returns true. To check
+ * that, this function searches given relation at pg_constraints system catalog. However
+ * since there is no index for the column we searched, this function performs sequential
+ * search, therefore call this function with caution.
+ */
+bool
+TableReferencing(Oid relationId)
+{
+	Relation pgConstraint = NULL;
+	HeapTuple heapTuple = NULL;
+	SysScanDesc scanDescriptor = NULL;
+	ScanKeyData scanKey[1];
+	int scanKeyCount = 1;
+	Oid scanIndexId = InvalidOid;
+	bool useIndex = false;
+
+	pgConstraint = heap_open(ConstraintRelationId, AccessShareLock);
+
+	ScanKeyInit(&scanKey[0], Anum_pg_constraint_conrelid, BTEqualStrategyNumber, F_OIDEQ,
+				relationId);
+	scanDescriptor = systable_beginscan(pgConstraint, scanIndexId, useIndex, NULL,
+										scanKeyCount, scanKey);
+
+	heapTuple = systable_getnext(scanDescriptor);
+	while (HeapTupleIsValid(heapTuple))
+	{
+		Form_pg_constraint constraintForm = (Form_pg_constraint) GETSTRUCT(heapTuple);
+
+		if (constraintForm->contype == CONSTRAINT_FOREIGN)
+		{
+			systable_endscan(scanDescriptor);
+			heap_close(pgConstraint, NoLock);
+
+			return true;
+		}
+
+		heapTuple = systable_getnext(scanDescriptor);
+	}
+
+	systable_endscan(scanDescriptor);
+	heap_close(pgConstraint, NoLock);
+
+	return false;
+}
+
+
+/*
+ * ConstraintIsAForeignKey returns true if the given constraint name
+ * is a foreign key to defined on the relation.
+ */
+bool
+ConstraintIsAForeignKey(char *constraintNameInput, Oid relationId)
+{
+	Relation pgConstraint = NULL;
+	SysScanDesc scanDescriptor = NULL;
+	ScanKeyData scanKey[1];
+	int scanKeyCount = 1;
+	HeapTuple heapTuple = NULL;
+
+	pgConstraint = heap_open(ConstraintRelationId, AccessShareLock);
+
+	ScanKeyInit(&scanKey[0], Anum_pg_constraint_contype, BTEqualStrategyNumber, F_CHAREQ,
+				CharGetDatum(CONSTRAINT_FOREIGN));
+	scanDescriptor = systable_beginscan(pgConstraint, InvalidOid, false,
+										NULL, scanKeyCount, scanKey);
+
+	heapTuple = systable_getnext(scanDescriptor);
+	while (HeapTupleIsValid(heapTuple))
+	{
+		Form_pg_constraint constraintForm = (Form_pg_constraint) GETSTRUCT(heapTuple);
+		char *constraintName = (constraintForm->conname).data;
+
+		if (strncmp(constraintName, constraintNameInput, NAMEDATALEN) == 0 &&
+			constraintForm->conrelid == relationId)
+		{
+			systable_endscan(scanDescriptor);
+			heap_close(pgConstraint, AccessShareLock);
+
+			return true;
+		}
+
+		heapTuple = systable_getnext(scanDescriptor);
+	}
+
+	/* clean up scan and close system catalog */
+	systable_endscan(scanDescriptor);
+	heap_close(pgConstraint, AccessShareLock);
+
+	return false;
+}
