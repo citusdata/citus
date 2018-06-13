@@ -33,10 +33,9 @@
 
 
 int NodeConnectionTimeout = 5000;
-int CitusSSLMode = CITUS_SSL_MODE_PREFER;
 HTAB *ConnectionHash = NULL;
+HTAB *ConnParamsHash = NULL;
 MemoryContext ConnectionContext = NULL;
-
 
 static uint32 ConnectionHashHash(const void *key, Size keysize);
 static int ConnectionHashCompare(const void *a, const void *b, Size keysize);
@@ -55,9 +54,8 @@ static int CitusNoticeLogLevel = DEFAULT_CITUS_NOTICE_LEVEL;
 void
 InitializeConnectionManagement(void)
 {
-	HASHCTL info;
+	HASHCTL info, connParamsInfo;
 	uint32 hashFlags = 0;
-
 
 	/*
 	 * Create a single context for connection and transaction related memory
@@ -79,8 +77,14 @@ InitializeConnectionManagement(void)
 	info.hcxt = ConnectionContext;
 	hashFlags = (HASH_ELEM | HASH_FUNCTION | HASH_CONTEXT | HASH_COMPARE);
 
+	memcpy(&connParamsInfo, &info, sizeof(HASHCTL));
+	connParamsInfo.entrysize = sizeof(ConnParamsHashEntry);
+
 	ConnectionHash = hash_create("citus connection cache (host,port,user,database)",
 								 64, &info, hashFlags);
+
+	ConnParamsHash = hash_create("citus connparams cache (host,port,user,database)",
+								 64, &connParamsInfo, hashFlags);
 }
 
 
@@ -635,30 +639,29 @@ ConnectionHashCompare(const void *a, const void *b, Size keysize)
 static MultiConnection *
 StartConnectionEstablishment(ConnectionHashKey *key)
 {
-	char nodePortString[12];
-	const char *clientEncoding = GetDatabaseEncodingName();
+	bool found = false;
 	MultiConnection *connection = NULL;
-	const char *sslmode = CitusSSLModeString();
+	ConnParamsHashEntry *entry = NULL;
 
-	const char *keywords[] = {
-		"host", "port", "dbname", "user", "sslmode",
-		"client_encoding", "fallback_application_name",
-		NULL
-	};
-	const char *values[] = {
-		key->hostname, nodePortString, key->database, key->user, sslmode,
-		clientEncoding, "citus", NULL
-	};
+	/* search our cache for precomputed connection settings */
+	entry = hash_search(ConnParamsHash, key, HASH_ENTER, &found);
+	if (!found)
+	{
+		/* if they're not found, compute them from GUC, runtime, etc. */
+		GetConnParams(key, &entry->keywords, &entry->values, ConnectionContext);
+	}
 
 	connection = MemoryContextAllocZero(ConnectionContext, sizeof(MultiConnection));
-	sprintf(nodePortString, "%d", key->port);
 
 	strlcpy(connection->hostname, key->hostname, MAX_NODE_LENGTH);
 	connection->port = key->port;
 	strlcpy(connection->database, key->database, NAMEDATALEN);
 	strlcpy(connection->user, key->user, NAMEDATALEN);
 
-	connection->pgConn = PQconnectStartParams(keywords, values, false);
+
+	connection->pgConn = PQconnectStartParams((const char **) entry->keywords,
+											  (const char **) entry->values,
+											  false);
 	connection->connectionStart = GetCurrentTimestamp();
 
 	/*
@@ -671,52 +674,6 @@ StartConnectionEstablishment(ConnectionHashKey *key)
 	SetCitusNoticeProcessor(connection);
 
 	return connection;
-}
-
-
-/*
- * CitusSSLModeString returns the current value of citus.sslmode.
- */
-char *
-CitusSSLModeString(void)
-{
-	switch (CitusSSLMode)
-	{
-		case CITUS_SSL_MODE_DISABLE:
-		{
-			return "disable";
-		}
-
-		case CITUS_SSL_MODE_ALLOW:
-		{
-			return "allow";
-		}
-
-		case CITUS_SSL_MODE_PREFER:
-		{
-			return "prefer";
-		}
-
-		case CITUS_SSL_MODE_REQUIRE:
-		{
-			return "require";
-		}
-
-		case CITUS_SSL_MODE_VERIFY_CA:
-		{
-			return "verify-ca";
-		}
-
-		case CITUS_SSL_MODE_VERIFY_FULL:
-		{
-			return "verify-full";
-		}
-
-		default:
-		{
-			ereport(ERROR, (errmsg("unrecognized value for citus.sslmode")));
-		}
-	}
 }
 
 

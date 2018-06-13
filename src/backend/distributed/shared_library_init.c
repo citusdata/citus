@@ -67,6 +67,8 @@ static void RegisterCitusConfigVariables(void);
 static bool ErrorIfNotASuitableDeadlockFactor(double *newval, void **extra,
 											  GucSource source);
 static void NormalizeWorkerListPath(void);
+static bool NodeConninfoGucCheckHook(char **newval, void **extra, GucSource source);
+static void NodeConninfoGucAssignHook(const char *newval, void *extra);
 static bool StatisticsCollectionGucCheckHook(bool *newval, void **extra, GucSource
 											 source);
 
@@ -74,6 +76,19 @@ static bool StatisticsCollectionGucCheckHook(bool *newval, void **extra, GucSour
 static bool ExpireCachedShards = false;
 static int LargeTableShardCount = 0;
 
+/*
+ * SSL modes available for connecting to worker nodes.
+ */
+enum CitusSSLMode
+{
+	CITUS_SSL_MODE_DISABLE = 1 << 0,
+	CITUS_SSL_MODE_ALLOW = 1 << 1,
+	CITUS_SSL_MODE_PREFER = 1 << 2,
+	CITUS_SSL_MODE_REQUIRE = 1 << 3,
+	CITUS_SSL_MODE_VERIFY_CA = 1 << 4,
+	CITUS_SSL_MODE_VERIFY_FULL = 1 << 5
+};
+static int CitusSSLMode = CITUS_SSL_MODE_PREFER;
 
 /* *INDENT-OFF* */
 /* GUC enum definitions */
@@ -183,6 +198,8 @@ _PG_init(void)
 	{
 		CreateRequiredDirectories();
 	}
+
+	InitConnParams();
 
 	/*
 	 * Register Citus configuration variables. Do so before intercepting
@@ -329,15 +346,13 @@ RegisterCitusConfigVariables(void)
 
 	DefineCustomEnumVariable(
 		"citus.sslmode",
-		gettext_noop("SSL mode to use for connections to worker nodes."),
-		gettext_noop("When connecting to a worker node, specify whether the SSL mode"
-					 "mode for the connection is 'disable', 'allow', 'prefer' "
-					 "(the default), 'require', 'verify-ca' or 'verify-full'."),
+		gettext_noop("This GUC variable has been deprecated."),
+		NULL,
 		&CitusSSLMode,
 		CITUS_SSL_MODE_PREFER,
 		citus_ssl_mode_options,
 		PGC_POSTMASTER,
-		GUC_SUPERUSER_ONLY,
+		GUC_SUPERUSER_ONLY | GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -926,6 +941,20 @@ RegisterCitusConfigVariables(void)
 		&StatisticsCollectionGucCheckHook,
 		NULL, NULL);
 
+	DefineCustomStringVariable(
+		"citus.node_conninfo",
+		gettext_noop("Sets parameters used for outbound connections."),
+		NULL,
+		&NodeConninfo,
+		"sslmode=prefer",
+		PGC_POSTMASTER,
+		GUC_SUPERUSER_ONLY,
+		NodeConninfoGucCheckHook,
+		NodeConninfoGucAssignHook,
+		NULL);
+	NormalizeWorkerListPath();
+
+
 	/* warn about config items in the citus namespace that are not registered above */
 	EmitWarningsOnPlaceholders("citus");
 }
@@ -994,6 +1023,87 @@ NormalizeWorkerListPath(void)
 	SetConfigOption("citus.worker_list_file", absoluteFileName, PGC_POSTMASTER,
 					PGC_S_OVERRIDE);
 	free(absoluteFileName);
+}
+
+
+/*
+ * NodeConninfoGucCheckHook ensures conninfo settings are in the expected form
+ * and that the keywords of all non-null settings are on a whitelist devised to
+ * keep users from setting options that may result in confusion.
+ */
+static bool
+NodeConninfoGucCheckHook(char **newval, void **extra, GucSource source)
+{
+	/* this array _must_ be kept in an order usable by bsearch */
+	const char *whitelist[] = {
+		"application_name",
+		"connect_timeout",
+			#if defined(ENABLE_GSS) && defined(ENABLE_SSPI)
+		"gsslib",
+			#endif
+		"keepalives",
+		"keepalives_count",
+		"keepalives_idle",
+		"keepalives_interval",
+			#if defined(ENABLE_GSS) || defined(ENABLE_SSPI)
+		"krbsrvname",
+			#endif
+		"sslcompression",
+		"sslcrl",
+		"sslmode",
+		"sslrootcert"
+	};
+	char *errorMsg = NULL;
+	bool conninfoValid = CheckConninfo(*newval, whitelist, lengthof(whitelist),
+									   &errorMsg);
+
+	if (!conninfoValid)
+	{
+		GUC_check_errdetail("%s", errorMsg);
+	}
+
+	return conninfoValid;
+}
+
+
+/*
+ * NodeConninfoGucAssignHook is the assignment hook for the node_conninfo GUC
+ * variable. Though this GUC is a "string", we actually parse it as a non-URI
+ * PQconninfo key/value setting, storing the resultant PQconninfoOption values
+ * using the public functions in connection_configuration.c.
+ */
+static void
+NodeConninfoGucAssignHook(const char *newval, void *extra)
+{
+	PQconninfoOption *optionArray = NULL;
+	PQconninfoOption *option = NULL;
+
+	if (newval == NULL)
+	{
+		newval = "";
+	}
+
+	optionArray = PQconninfoParse(newval, NULL);
+	if (optionArray == NULL)
+	{
+		ereport(FATAL, (errmsg("cannot parse node_conninfo value"),
+						errdetail("The GUC check hook should prevent "
+								  "all malformed values.")));
+	}
+
+	ResetConnParams();
+
+	for (option = optionArray; option->keyword != NULL; option++)
+	{
+		if (option->val == NULL || option->val[0] == '\0')
+		{
+			continue;
+		}
+
+		AddConnParam(option->keyword, option->val);
+	}
+
+	PQconninfoFree(optionArray);
 }
 
 

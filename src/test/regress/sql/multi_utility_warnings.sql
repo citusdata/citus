@@ -14,3 +14,5 @@ CREATE DATABASE new_database;
 CREATE ROLE new_role;
 
 CREATE USER new_user;
+
+INSERT INTO pg_dist_authinfo VALUES (0, 'new_user', 'password=1234');
