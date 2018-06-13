@@ -3514,7 +3514,7 @@ PlanGrantStmt(GrantStmt *grantStmt)
 		}
 	}
 
-	/* deparse the privileges */
+	/* deparse the grantees */
 	isFirst = true;
 	foreach(granteeCell, grantStmt->grantees)
 	{
@@ -3526,22 +3526,7 @@ PlanGrantStmt(GrantStmt *grantStmt)
 		}
 		isFirst = false;
 
-		if (spec->roletype == ROLESPEC_CSTRING)
-		{
-			appendStringInfoString(&granteesString, quote_identifier(spec->rolename));
-		}
-		else if (spec->roletype == ROLESPEC_CURRENT_USER)
-		{
-			appendStringInfoString(&granteesString, "CURRENT_USER");
-		}
-		else if (spec->roletype == ROLESPEC_SESSION_USER)
-		{
-			appendStringInfoString(&granteesString, "SESSION_USER");
-		}
-		else if (spec->roletype == ROLESPEC_PUBLIC)
-		{
-			appendStringInfoString(&granteesString, "PUBLIC");
-		}
+		appendStringInfoString(&granteesString, RoleSpecString(spec));
 	}
 
 	/*
@@ -3668,6 +3653,46 @@ CollectGrantTableIdList(GrantStmt *grantStmt)
 	}
 
 	return grantTableList;
+}
+
+
+/*
+ * RoleSpecString resolves the role specification to its string form that is suitable for transport to a worker node.
+ * This function resolves the following identifiers from the current context so they are safe to transfer.
+ *
+ * CURRENT_USER - resolved to the user name of the current role being used
+ * SESSION_USER - resolved to the user name of the user that opened the session
+ */
+const char *
+RoleSpecString(RoleSpec *spec)
+{
+	switch (spec->roletype)
+	{
+		case ROLESPEC_CSTRING:
+		{
+			return quote_identifier(spec->rolename);
+		}
+
+		case ROLESPEC_CURRENT_USER:
+		{
+			return quote_identifier(GetUserNameFromId(GetUserId(), false));
+		}
+
+		case ROLESPEC_SESSION_USER:
+		{
+			return quote_identifier(GetUserNameFromId(GetSessionUserId(), false));
+		}
+
+		case ROLESPEC_PUBLIC:
+		{
+			return "PUBLIC";
+		}
+
+		default:
+		{
+			elog(ERROR, "unexpected role type %d", spec->roletype);
+		}
+	}
 }
 
 
