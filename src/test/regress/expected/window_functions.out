@@ -579,36 +579,6 @@ ORDER BY
        6 |        5 | 3.0000000000000000
 (32 rows)
 
-EXPLAIN (COSTS FALSE)
-SELECT
-	user_id,
-	1 + sum(value_1),
-	1 + AVG(value_2) OVER (partition by user_id)
-FROM
-	users_table
-GROUP BY
-	user_id, value_2
-ORDER BY
-	user_id, value_2;
-                                        QUERY PLAN                                        
-------------------------------------------------------------------------------------------
- Sort
-   Sort Key: remote_scan.user_id, remote_scan.worker_column_4
-   ->  HashAggregate
-         Group Key: remote_scan.user_id, remote_scan.worker_column_4
-         ->  Custom Scan (Citus Real-Time)
-               Task Count: 4
-               Tasks Shown: One of 4
-               ->  Task
-                     Node: host=localhost port=57637 dbname=regression
-                     ->  WindowAgg
-                           ->  GroupAggregate
-                                 Group Key: users_table.user_id, users_table.value_2
-                                 ->  Sort
-                                       Sort Key: users_table.user_id, users_table.value_2
-                                       ->  Seq Scan on users_table_1400256 users_table
-(15 rows)
-
 SELECT
 	user_id,
 	1 + sum(value_1),

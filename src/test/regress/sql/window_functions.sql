@@ -311,18 +311,6 @@ GROUP BY
 ORDER BY
 	user_id, value_2;
 
-EXPLAIN (COSTS FALSE)
-SELECT
-	user_id,
-	1 + sum(value_1),
-	1 + AVG(value_2) OVER (partition by user_id)
-FROM
-	users_table
-GROUP BY
-	user_id, value_2
-ORDER BY
-	user_id, value_2;
-
 SELECT
 	user_id,
 	1 + sum(value_1),
