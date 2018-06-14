@@ -101,6 +101,7 @@ ExecuteSelectIntoRelation(Oid targetRelationId, List *insertTargetList,
 	int partitionColumnIndex = -1;
 
 	CitusCopyDestReceiver *copyDest = NULL;
+	Query *queryCopy = NULL;
 
 	partitionMethod = PartitionMethod(targetRelationId);
 	if (partitionMethod == DISTRIBUTE_BY_NONE)
@@ -135,7 +136,14 @@ ExecuteSelectIntoRelation(Oid targetRelationId, List *insertTargetList,
 										   partitionColumnIndex, executorState,
 										   stopOnFailure);
 
-	ExecuteQueryIntoDestReceiver(selectQuery, paramListInfo, (DestReceiver *) copyDest);
+	/*
+	 * Make a copy of the query, since ExecuteQueryIntoDestReceiver may scribble on it
+	 * and we want it to be replanned every time if it is stored in a prepared
+	 * statement.
+	 */
+	queryCopy = copyObject(selectQuery);
+
+	ExecuteQueryIntoDestReceiver(queryCopy, paramListInfo, (DestReceiver *) copyDest);
 
 	executorState->es_processed = copyDest->tuplesSent;
 
