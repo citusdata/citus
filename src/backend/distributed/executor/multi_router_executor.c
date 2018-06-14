@@ -41,6 +41,7 @@
 #include "distributed/multi_router_planner.h"
 #include "distributed/multi_shard_transaction.h"
 #include "distributed/placement_connection.h"
+#include "distributed/relation_access_tracking.h"
 #include "distributed/subplan_execution.h"
 #include "distributed/relay_utility.h"
 #include "distributed/remote_commands.h"
@@ -1334,6 +1335,20 @@ ExecuteModifyTasks(List *taskList, bool expectResults, ParamListInfo paramListIn
 			shardConnections = GetShardHashConnections(shardConnectionHash, shardId,
 													   &shardConnectionsFound);
 			connectionList = shardConnections->connectionList;
+
+			if (task->taskType == MODIFY_TASK)
+			{
+				RecordRelationMultiShardModifyAccessForTask(task);
+			}
+			else if (task->taskType == DDL_TASK &&
+					 PartitionMethod(RelationIdForShard(shardId)) != DISTRIBUTE_BY_NONE)
+			{
+				/*
+				 * Even single task DDLs hit here, so we'd prefer
+				 * not to record for reference tables.
+				 */
+				RecordRelationMultiShardDDLAccessForTask(task);
+			}
 
 			if (placementIndex >= list_length(connectionList))
 			{

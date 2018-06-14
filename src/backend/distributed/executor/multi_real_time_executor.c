@@ -32,6 +32,8 @@
 #include "distributed/multi_resowner.h"
 #include "distributed/multi_router_executor.h"
 #include "distributed/multi_server_executor.h"
+#include "distributed/placement_connection.h"
+#include "distributed/relation_access_tracking.h"
 #include "distributed/resource_lock.h"
 #include "distributed/subplan_execution.h"
 #include "distributed/worker_protocol.h"
@@ -146,6 +148,13 @@ MultiRealTimeExecute(Job *job)
 
 			/* update the connection counter for throttling */
 			UpdateConnectionCounter(workerNodeState, connectAction);
+
+			/* keep track of multi shard select accesses */
+			if (MultiShardConnectionType == PARALLEL_CONNECTION &&
+				connectAction == CONNECT_ACTION_OPENED)
+			{
+				RecordRelationMultiShardSelectAccessForTask(task);
+			}
 
 			/*
 			 * If this task failed, we need to iterate over task executions, and
