@@ -115,6 +115,7 @@ extern void HandleRemoteTransactionResultError(struct MultiConnection *connectio
 extern void MarkRemoteTransactionFailed(struct MultiConnection *connection,
 										bool allowErrorPromotion);
 extern void MarkRemoteTransactionCritical(struct MultiConnection *connection);
+extern bool IsRemoteTransactionCritical(struct MultiConnection *connection);
 
 
 /*
@@ -129,6 +130,7 @@ extern void ResetRemoteTransaction(struct MultiConnection *connection);
 extern void CoordinatedRemoteTransactionsPrepare(void);
 extern void CoordinatedRemoteTransactionsCommit(void);
 extern void CoordinatedRemoteTransactionsAbort(void);
+extern void CheckRemoteTransactionsHealth(void);
 
 /* remote savepoint commands */
 extern void CoordinatedRemoteTransactionsSavepointBegin(SubTransactionId subId);

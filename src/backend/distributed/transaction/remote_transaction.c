@@ -43,7 +43,6 @@ static void StartRemoteTransactionSavepointRollback(MultiConnection *connection,
 static void FinishRemoteTransactionSavepointRollback(MultiConnection *connection,
 													 SubTransactionId subId);
 
-static void CheckTransactionHealth(void);
 static void Assign2PCIdentifier(MultiConnection *connection);
 static void WarnAboutLeakedPreparedTransaction(MultiConnection *connection, bool commit);
 
@@ -722,6 +721,19 @@ MarkRemoteTransactionCritical(struct MultiConnection *connection)
 
 
 /*
+ * IsRemoteTransactionCritical returns whether the remote transaction on
+ * the given connection has been marked as critical.
+ */
+bool
+IsRemoteTransactionCritical(struct MultiConnection *connection)
+{
+	RemoteTransaction *transaction = &connection->remoteTransaction;
+
+	return transaction->transactionCritical;
+}
+
+
+/*
  * CloseRemoteTransaction handles closing a connection that, potentially, is
  * part of a coordinated transaction.  This should only ever be called from
  * connection_management.c, while closing a connection during a transaction.
@@ -823,12 +835,6 @@ CoordinatedRemoteTransactionsCommit(void)
 	dlist_iter iter;
 	List *connectionList = NIL;
 	bool raiseInterrupts = false;
-
-	/*
-	 * Before starting to commit on any of the nodes - after which we can't
-	 * completely roll-back anymore - check that things are in a good state.
-	 */
-	CheckTransactionHealth();
 
 	/*
 	 * Issue appropriate transaction commands to remote nodes. If everything
@@ -1216,13 +1222,13 @@ FinishRemoteTransactionSavepointRollback(MultiConnection *connection, SubTransac
 
 
 /*
- * CheckTransactionHealth checks if any of the participating transactions in a
+ * CheckRemoteTransactionsHealth checks if any of the participating transactions in a
  * coordinated transaction failed, and what consequence that should have.
  * This needs to be called before the coordinated transaction commits (but
  * after they've been PREPAREd if 2PC is in use).
  */
-static void
-CheckTransactionHealth(void)
+void
+CheckRemoteTransactionsHealth(void)
 {
 	dlist_iter iter;
 
