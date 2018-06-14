@@ -50,5 +50,6 @@ extern void ErrorIfUnsupportedConstraint(Relation relation, char distributionMet
 extern Datum master_drop_all_shards(PG_FUNCTION_ARGS);
 extern Datum master_modify_multiple_shards(PG_FUNCTION_ARGS);
 
+extern const char * RoleSpecString(RoleSpec *spec);
 
 #endif /* MULTI_UTILITY_H */
