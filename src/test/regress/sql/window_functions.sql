@@ -288,7 +288,7 @@ GROUP BY
 ORDER BY
 	3 DESC, 2 DESC, 1 DESC;
 
-EXPLAIN
+EXPLAIN (COSTS FALSE)
 SELECT
 	user_id, 
 	AVG(avg(value_1)) OVER (PARTITION BY user_id, max(user_id), MIN(value_2)), 
@@ -311,7 +311,7 @@ GROUP BY
 ORDER BY
 	user_id, value_2;
 
-EXPLAIN
+EXPLAIN (COSTS FALSE)
 SELECT
 	user_id,
 	1 + sum(value_1),
@@ -355,7 +355,7 @@ FROM
 GROUP BY user_id, value_2
 ORDER BY user_id, avg(value_1) DESC;
 
-EXPLAIN
+EXPLAIN (COSTS FALSE)
 SELECT
 	user_id,
 	avg(value_1),
@@ -376,7 +376,7 @@ GROUP BY user_id, value_2
 ORDER BY user_id, avg(value_1) DESC;
 
 -- limit is not pushed down to worker !!
-EXPLAIN
+EXPLAIN (COSTS FALSE)
 SELECT
 	user_id,
 	avg(value_1),
@@ -387,7 +387,7 @@ GROUP BY user_id, value_2
 ORDER BY user_id, avg(value_1) DESC
 LIMIT 5;
 
-EXPLAIN
+EXPLAIN (COSTS FALSE)
 SELECT
 	user_id,
 	avg(value_1),
@@ -398,7 +398,7 @@ GROUP BY user_id, value_2
 ORDER BY user_id, avg(value_1) DESC
 LIMIT 5;
 
-EXPLAIN
+EXPLAIN (COSTS FALSE)
 SELECT
 	user_id,
 	avg(value_1),
@@ -409,7 +409,7 @@ GROUP BY user_id, value_2
 ORDER BY user_id, avg(value_1) DESC
 LIMIT 5;
 
-EXPLAIN
+EXPLAIN (COSTS FALSE)
 SELECT
 	user_id,
 	avg(value_1),
