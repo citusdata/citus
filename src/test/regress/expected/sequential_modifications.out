@@ -51,6 +51,10 @@ BEGIN
 END;
 $$
 LANGUAGE 'plpgsql' IMMUTABLE;
+CREATE OR REPLACE FUNCTION set_local_multi_shard_modify_mode_to_sequential()
+    RETURNS void
+    LANGUAGE C STABLE STRICT
+    AS 'citus', $$set_local_multi_shard_modify_mode_to_sequential$$;
 -- disbable 2PC recovery since our tests will check that
 ALTER SYSTEM SET citus.recover_2pc_interval TO -1;
 SELECT pg_reload_conf();
@@ -63,6 +67,14 @@ CREATE TABLE test_table(a int, b int);
 SELECT create_distributed_table('test_table', 'a');
  create_distributed_table 
 --------------------------
+ 
+(1 row)
+
+-- not useful if not in transaction
+SELECT set_local_multi_shard_modify_mode_to_sequential();
+WARNING:  SET LOCAL can only be used in transaction blocks
+ set_local_multi_shard_modify_mode_to_sequential 
+-------------------------------------------------
  
 (1 row)
 
@@ -406,7 +418,12 @@ INSERT INTO multi_shard_modify_test SELECT i, i::text, i FROM generate_series(0,
 BEGIN;
     INSERT INTO multi_shard_modify_test VALUES (1,'1',1), (2,'2',2), (3,'3',3), (4,'4',4);
     -- now switch to sequential mode to enable a successful TRUNCATE
-    SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
+    SELECT set_local_multi_shard_modify_mode_to_sequential();
+ set_local_multi_shard_modify_mode_to_sequential 
+-------------------------------------------------
+ 
+(1 row)
+
     TRUNCATE multi_shard_modify_test;
 COMMIT;
 -- see that all the data successfully removed
@@ -451,7 +468,12 @@ INSERT INTO multi_shard_modify_test SELECT i, i::text, i FROM generate_series(0,
 BEGIN;
     INSERT INTO multi_shard_modify_test VALUES (1,'1',1), (2,'2',2), (3,'3',3), (4,'4',4);
     -- now switch to sequential mode to enable a successful INSERT .. SELECT
-    SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
+    SELECT set_local_multi_shard_modify_mode_to_sequential();
+ set_local_multi_shard_modify_mode_to_sequential 
+-------------------------------------------------
+ 
+(1 row)
+
     INSERT INTO multi_shard_modify_test SELECT * FROM multi_shard_modify_test;
 COMMIT;
 -- see that all the data successfully inserted
@@ -471,10 +493,11 @@ SELECT pg_reload_conf();
 
 SET search_path TO 'public';
 DROP SCHEMA test_seq_ddl CASCADE;
-NOTICE:  drop cascades to 9 other objects
+NOTICE:  drop cascades to 10 other objects
 DETAIL:  drop cascades to function test_seq_ddl.distributed_2pcs_are_equal_to_worker_count()
 drop cascades to function test_seq_ddl.distributed_2pcs_are_equal_to_placement_count()
 drop cascades to function test_seq_ddl.no_distributed_2pcs()
+drop cascades to function test_seq_ddl.set_local_multi_shard_modify_mode_to_sequential()
 drop cascades to table test_seq_ddl.test_table
 drop cascades to table test_seq_ddl.ref_test
 drop cascades to table test_seq_ddl.test_table_rep_2

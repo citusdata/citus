@@ -57,12 +57,20 @@ END;
 $$
 LANGUAGE 'plpgsql' IMMUTABLE;
 
+CREATE OR REPLACE FUNCTION set_local_multi_shard_modify_mode_to_sequential()
+    RETURNS void
+    LANGUAGE C STABLE STRICT
+    AS 'citus', $$set_local_multi_shard_modify_mode_to_sequential$$;
+
 -- disbable 2PC recovery since our tests will check that
 ALTER SYSTEM SET citus.recover_2pc_interval TO -1;
 SELECT pg_reload_conf();
 
 CREATE TABLE test_table(a int, b int);
 SELECT create_distributed_table('test_table', 'a');
+
+-- not useful if not in transaction
+SELECT set_local_multi_shard_modify_mode_to_sequential();
 
 -- we should see #worker transactions
 -- when sequential mode is used
@@ -212,7 +220,7 @@ BEGIN;
     INSERT INTO multi_shard_modify_test VALUES (1,'1',1), (2,'2',2), (3,'3',3), (4,'4',4);
 
     -- now switch to sequential mode to enable a successful TRUNCATE
-    SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
+    SELECT set_local_multi_shard_modify_mode_to_sequential();
     TRUNCATE multi_shard_modify_test;
 COMMIT;
 
@@ -237,7 +245,7 @@ BEGIN;
     INSERT INTO multi_shard_modify_test VALUES (1,'1',1), (2,'2',2), (3,'3',3), (4,'4',4);
 
     -- now switch to sequential mode to enable a successful INSERT .. SELECT
-    SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
+    SELECT set_local_multi_shard_modify_mode_to_sequential();
     INSERT INTO multi_shard_modify_test SELECT * FROM multi_shard_modify_test;
 COMMIT;
 
