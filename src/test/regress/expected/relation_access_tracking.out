@@ -584,13 +584,34 @@ BEGIN;
 (2 rows)
 
 ROLLBACK;
--- FIXME: TRUNCATE should be DDL
+-- TRUNCATE should be DDL
 BEGIN;
 	TRUNCATE table_1;
 	SELECT * FROM relation_acesses  WHERE table_name IN ('table_1')  ORDER BY 1;
- table_name | select_access |   dml_access    |  ddl_access  
-------------+---------------+-----------------+--------------
- table_1    | not_accessed  | parallel_access | not_accessed
+ table_name | select_access |  dml_access  |   ddl_access    
+------------+---------------+--------------+-----------------
+ table_1    | not_accessed  | not_accessed | parallel_access
+(1 row)
+
+ROLLBACK;
+-- TRUNCATE can be a sequential DDL
+BEGIN;
+	SET LOCAL citus.multi_shard_modify_mode = 'sequential';
+	TRUNCATE table_1;
+	SELECT * FROM relation_acesses  WHERE table_name IN ('table_1')  ORDER BY 1;
+ table_name | select_access |  dml_access  |    ddl_access     
+------------+---------------+--------------+-------------------
+ table_1    | not_accessed  | not_accessed | sequential_access
+(1 row)
+
+ROLLBACK;
+-- TRUNCATE on a reference table should be sequential
+BEGIN;
+	TRUNCATE table_6;
+	SELECT * FROM relation_acesses  WHERE table_name IN ('table_6')  ORDER BY 1;
+ table_name | select_access |  dml_access  |    ddl_access     
+------------+---------------+--------------+-------------------
+ table_6    | not_accessed  | not_accessed | sequential_access
 (1 row)
 
 ROLLBACK;
@@ -673,10 +694,10 @@ BEGIN;
 	TRUNCATE table_1 CASCADE;
 NOTICE:  truncate cascades to table "table_2"
 	SELECT * FROM relation_acesses  WHERE table_name IN ('table_1', 'table_2')  ORDER BY 1;
- table_name | select_access |   dml_access    |  ddl_access  
-------------+---------------+-----------------+--------------
- table_1    | not_accessed  | parallel_access | not_accessed
- table_2    | not_accessed  | parallel_access | not_accessed
+ table_name | select_access |  dml_access  |   ddl_access    
+------------+---------------+--------------+-----------------
+ table_1    | not_accessed  | not_accessed | parallel_access
+ table_2    | not_accessed  | not_accessed | parallel_access
 (2 rows)
 
 ROLLBACK;

@@ -1316,17 +1316,14 @@ ExecuteModifyTasks(List *taskList, bool expectResults, ParamListInfo paramListIn
 
 	/*
 	 * Ensure that there are no concurrent modifications on the same
-	 * shards. For DDL commands, we already obtained the appropriate
-	 * locks in ProcessUtility.
-	 *
-	 * We don't need to acquire lock for TRUNCATE_TASK since it already
-	 * acquires AccessExclusiveLock on the relation, and blocks any
-	 * concurrent operation.
+	 * shards. In general, for DDL commands, we already obtained the
+	 * appropriate locks in ProcessUtility. However, we still prefer to
+	 * acquire the executor locks for DDLs specifically for TRUNCATE
+	 * command on a partition table since AcquireExecutorMultiShardLocks()
+	 * ensures that no concurrent modifications happens on the parent
+	 * tables.
 	 */
-	if (firstTask->taskType == MODIFY_TASK)
-	{
-		AcquireExecutorMultiShardLocks(taskList);
-	}
+	AcquireExecutorMultiShardLocks(taskList);
 
 	BeginOrContinueCoordinatedTransaction();
 

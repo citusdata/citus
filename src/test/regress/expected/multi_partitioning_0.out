@@ -1122,13 +1122,11 @@ SELECT relation::regclass, locktype, mode FROM pg_locks WHERE relation::regclass
  partitioning_locks      | relation | AccessShareLock
  partitioning_locks_2009 | relation | AccessExclusiveLock
  partitioning_locks_2009 | relation | AccessShareLock
- partitioning_locks_2009 | relation | RowExclusiveLock
  partitioning_locks_2009 | relation | ShareLock
  partitioning_locks_2010 | relation | AccessExclusiveLock
  partitioning_locks_2010 | relation | AccessShareLock
- partitioning_locks_2010 | relation | RowExclusiveLock
  partitioning_locks_2010 | relation | ShareLock
-(10 rows)
+(8 rows)
 
 COMMIT;
 -- test shard resource locks with master_modify_multiple_shards

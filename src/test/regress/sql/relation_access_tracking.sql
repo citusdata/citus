@@ -351,10 +351,23 @@ BEGIN;
 	SELECT * FROM relation_acesses  WHERE table_name IN ('table_6', 'table_1');
 ROLLBACK;
 
--- FIXME: TRUNCATE should be DDL
+-- TRUNCATE should be DDL
 BEGIN;
 	TRUNCATE table_1;
 	SELECT * FROM relation_acesses  WHERE table_name IN ('table_1')  ORDER BY 1;
+ROLLBACK;
+
+-- TRUNCATE can be a sequential DDL
+BEGIN;
+	SET LOCAL citus.multi_shard_modify_mode = 'sequential';
+	TRUNCATE table_1;
+	SELECT * FROM relation_acesses  WHERE table_name IN ('table_1')  ORDER BY 1;
+ROLLBACK;
+
+-- TRUNCATE on a reference table should be sequential
+BEGIN;
+	TRUNCATE table_6;
+	SELECT * FROM relation_acesses  WHERE table_name IN ('table_6')  ORDER BY 1;
 ROLLBACK;
 
 -- creating foreign keys should consider adding the placement accesses for the referenced table

@@ -55,7 +55,8 @@
 #include "utils/memutils.h"
 
 
-static List * ModifyMultipleShardsTaskList(Query *query, List *shardIntervalList);
+static List * ModifyMultipleShardsTaskList(Query *query, List *shardIntervalList, TaskType
+										   taskType);
 
 
 PG_FUNCTION_INFO_V1(master_modify_multiple_shards);
@@ -85,6 +86,7 @@ master_modify_multiple_shards(PG_FUNCTION_ARGS)
 	List *taskList = NIL;
 	int32 affectedTupleCount = 0;
 	CmdType operation = CMD_UNKNOWN;
+	TaskType taskType = TASK_TYPE_INVALID_FIRST;
 #if (PG_VERSION_NUM >= 100000)
 	RawStmt *rawStmt = (RawStmt *) ParseTreeRawStmt(queryString);
 	queryTreeNode = rawStmt->stmt;
@@ -159,6 +161,12 @@ master_modify_multiple_shards(PG_FUNCTION_ARGS)
 		{
 			RaiseDeferredError(error, ERROR);
 		}
+
+		taskType = MODIFY_TASK;
+	}
+	else
+	{
+		taskType = DDL_TASK;
 	}
 
 	/* reject queries with a returning list */
@@ -179,7 +187,7 @@ master_modify_multiple_shards(PG_FUNCTION_ARGS)
 	CHECK_FOR_INTERRUPTS();
 
 	taskList =
-		ModifyMultipleShardsTaskList(modifyQuery, prunedShardIntervalList);
+		ModifyMultipleShardsTaskList(modifyQuery, prunedShardIntervalList, taskType);
 
 	if (MultiShardConnectionType == SEQUENTIAL_CONNECTION)
 	{
@@ -200,7 +208,7 @@ master_modify_multiple_shards(PG_FUNCTION_ARGS)
  * given list of shards.
  */
 static List *
-ModifyMultipleShardsTaskList(Query *query, List *shardIntervalList)
+ModifyMultipleShardsTaskList(Query *query, List *shardIntervalList, TaskType taskType)
 {
 	List *taskList = NIL;
 	ListCell *shardIntervalCell = NULL;
@@ -223,7 +231,7 @@ ModifyMultipleShardsTaskList(Query *query, List *shardIntervalList)
 		task = CitusMakeNode(Task);
 		task->jobId = jobId;
 		task->taskId = taskId++;
-		task->taskType = MODIFY_TASK;
+		task->taskType = taskType;
 		task->queryString = shardQueryString->data;
 		task->dependedTaskList = NULL;
 		task->replicationModel = REPLICATION_MODEL_INVALID;
