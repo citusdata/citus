@@ -86,6 +86,8 @@ static int64 ExecuteSingleModifyTask(CitusScanState *scanState, Task *task, CmdT
 									 operation, bool alwaysThrowErrorOnFailure, bool
 									 expectResults);
 static void ExecuteSingleSelectTask(CitusScanState *scanState, Task *task);
+static List * BuildPlacementAccessList(uint32 groupId, List *relationShardList,
+									   ShardPlacementAccessType accessType);
 static List * GetModifyConnections(Task *task, bool markCritical);
 static void ExecuteMultipleTasks(CitusScanState *scanState, List *taskList,
 								 bool isModificationQuery, bool expectResults);
@@ -843,6 +845,28 @@ ExecuteSingleSelectTask(CitusScanState *scanState, Task *task)
 List *
 BuildPlacementSelectList(uint32 groupId, List *relationShardList)
 {
+	return BuildPlacementAccessList(groupId, relationShardList, PLACEMENT_ACCESS_SELECT);
+}
+
+
+/*
+ * BuildPlacementDDLList is a warpper around BuildPlacementAccessList() for DDL access.
+ */
+List *
+BuildPlacementDDLList(uint32 groupId, List *relationShardList)
+{
+	return BuildPlacementAccessList(groupId, relationShardList, PLACEMENT_ACCESS_DDL);
+}
+
+
+/*
+ * BuildPlacementAccessList returns a list of placement accesses for the given
+ * relationShardList and the access type.
+ */
+static List *
+BuildPlacementAccessList(uint32 groupId, List *relationShardList,
+						 ShardPlacementAccessType accessType)
+{
 	ListCell *relationShardCell = NULL;
 	List *placementAccessList = NIL;
 
@@ -858,7 +882,7 @@ BuildPlacementSelectList(uint32 groupId, List *relationShardList)
 			continue;
 		}
 
-		placementAccess = CreatePlacementAccess(placement, PLACEMENT_ACCESS_SELECT);
+		placementAccess = CreatePlacementAccess(placement, accessType);
 		placementAccessList = lappend(placementAccessList, placementAccess);
 	}
 
@@ -1092,9 +1116,22 @@ GetModifyConnections(Task *task, bool markCritical)
 			accessType = PLACEMENT_ACCESS_DML;
 		}
 
-		/* create placement accesses for placements that appear in a subselect */
-		placementAccessList = BuildPlacementSelectList(taskPlacement->groupId,
-													   relationShardList);
+		if (accessType == PLACEMENT_ACCESS_DDL)
+		{
+			/*
+			 * All relations appearing inter-shard DDL commands should be marked
+			 * with DDL access.
+			 */
+			placementAccessList =
+				BuildPlacementDDLList(taskPlacement->groupId, relationShardList);
+		}
+		else
+		{
+			/* create placement accesses for placements that appear in a subselect */
+			placementAccessList =
+				BuildPlacementSelectList(taskPlacement->groupId, relationShardList);
+		}
+
 
 		Assert(list_length(placementAccessList) == list_length(relationShardList));
 

@@ -14,6 +14,7 @@
 #include "access/sdir.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_physical_planner.h"
+#include "distributed/placement_connection.h"
 #include "executor/execdesc.h"
 #include "executor/tuptable.h"
 #include "nodes/pg_list.h"
@@ -47,5 +48,6 @@ extern int64 ExecuteModifyTasksSequentiallyWithoutResults(List *taskList,
 /* helper functions */
 extern bool TaskListRequires2PC(List *taskList);
 extern List * BuildPlacementSelectList(uint32 groupId, List *relationShardList);
+extern List * BuildPlacementDDLList(uint32 groupId, List *relationShardList);
 
 #endif /* MULTI_ROUTER_EXECUTOR_H_ */

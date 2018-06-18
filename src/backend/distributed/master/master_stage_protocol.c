@@ -30,8 +30,10 @@
 #include "distributed/citus_ruleutils.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/connection_management.h"
+#include "distributed/distributed_planner.h"
 #include "distributed/foreign_constraint.h"
 #include "distributed/multi_client_executor.h"
+#include "distributed/multi_router_executor.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
@@ -531,8 +533,38 @@ CreateShardsOnWorkers(Oid distributedRelationId, List *shardPlacements,
 			shardIndex = ShardIndex(shardInterval);
 		}
 
-		connection = GetPlacementConnection(connectionFlags, shardPlacement,
-											placementOwner);
+		/*
+		 * For partitions, make sure that we mark the parent table relation access
+		 * with DDL. This is only important for parallel relation access in transaction
+		 * blocks, thus check useExclusiveConnection and transaction block as well.
+		 */
+		if ((IsTransactionBlock() && useExclusiveConnection) &&
+			alterTableAttachPartitionCommand != NULL)
+		{
+			RelationShard *parentRelationShard = CitusMakeNode(RelationShard);
+			RelationShard *partitionRelationShard = CitusMakeNode(RelationShard);
+			List *relationShardList = NIL;
+			List *placementAccessList = NIL;
+
+			parentRelationShard->relationId = PartitionParentOid(distributedRelationId);
+			parentRelationShard->shardId =
+				ColocatedShardIdInRelation(parentRelationShard->relationId, shardIndex);
+			partitionRelationShard->relationId = distributedRelationId;
+			partitionRelationShard->shardId = shardId;
+
+			relationShardList = list_make2(parentRelationShard, partitionRelationShard);
+			placementAccessList = BuildPlacementDDLList(shardPlacement->groupId,
+														relationShardList);
+
+			connection = GetPlacementListConnection(connectionFlags, placementAccessList,
+													placementOwner);
+		}
+		else
+		{
+			connection = GetPlacementConnection(connectionFlags, shardPlacement,
+												placementOwner);
+		}
+
 		if (useExclusiveConnection)
 		{
 			ClaimConnectionExclusively(connection);

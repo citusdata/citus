@@ -357,9 +357,18 @@ BEGIN;
 	SELECT * FROM relation_acesses  WHERE table_name IN ('table_1')  ORDER BY 1;
 ROLLBACK;
 
--- FIXME: creating foreign keys should consider adding the placement accesses for the referenced table
+-- creating foreign keys should consider adding the placement accesses for the referenced table
 ALTER TABLE table_1 ADD CONSTRAINT table_1_u UNIQUE (key);
 BEGIN;
+	ALTER TABLE table_2 ADD CONSTRAINT table_2_u FOREIGN KEY (key) REFERENCES table_1(key);
+	SELECT * FROM relation_acesses  WHERE table_name IN ('table_1', 'table_2')  ORDER BY 1;
+ROLLBACK;
+
+-- creating foreign keys should consider adding the placement accesses for the referenced table
+-- in sequential mode as well
+BEGIN;
+	SET LOCAL citus.multi_shard_modify_mode = 'sequential';
+
 	ALTER TABLE table_2 ADD CONSTRAINT table_2_u FOREIGN KEY (key) REFERENCES table_1(key);
 	SELECT * FROM relation_acesses  WHERE table_name IN ('table_1', 'table_2')  ORDER BY 1;
 ROLLBACK;
@@ -367,17 +376,25 @@ ROLLBACK;
 CREATE TABLE partitioning_test(id int, time date) PARTITION BY RANGE (time);
 SELECT create_distributed_table('partitioning_test', 'id');
 
--- FIXME: Adding partition tables should have DDL access the partitioned table as well
+-- Adding partition tables via CREATE TABLE should have DDL access the partitioned table as well
 BEGIN;
 	CREATE TABLE partitioning_test_2009 PARTITION OF partitioning_test FOR VALUES FROM ('2009-01-01') TO ('2010-01-01');
 	SELECT * FROM relation_acesses  WHERE table_name IN ('partitioning_test', 'partitioning_test_2009')  ORDER BY 1;
 ROLLBACK;
 
--- FIXME: Adding partition tables should have DDL access the partitioned table as well
+-- Adding partition tables via ATTACH PARTITION on local tables should have DDL access the partitioned table as well
 CREATE TABLE partitioning_test_2009 AS SELECT * FROM partitioning_test;
 BEGIN;
 	ALTER TABLE partitioning_test ATTACH PARTITION partitioning_test_2009 FOR VALUES FROM ('2009-01-01') TO ('2010-01-01');
 	SELECT * FROM relation_acesses  WHERE table_name IN ('partitioning_test', 'partitioning_test_2009')  ORDER BY 1;
+ROLLBACK;
+
+-- Adding partition tables via ATTACH PARTITION on distributed tables should have DDL access the partitioned table as well
+CREATE TABLE partitioning_test_2010 AS SELECT * FROM partitioning_test;
+SELECT create_distributed_table('partitioning_test_2010', 'id');
+BEGIN;
+	ALTER TABLE partitioning_test ATTACH PARTITION partitioning_test_2010 FOR VALUES FROM ('2010-01-01') TO ('2011-01-01');
+	SELECT * FROM relation_acesses  WHERE table_name IN ('partitioning_test', 'partitioning_test_2010')  ORDER BY 1;
 ROLLBACK;
 
 -- TRUNCATE CASCADE works fine

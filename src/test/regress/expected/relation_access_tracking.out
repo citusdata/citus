@@ -594,15 +594,28 @@ BEGIN;
 (1 row)
 
 ROLLBACK;
--- FIXME: creating foreign keys should consider adding the placement accesses for the referenced table
+-- creating foreign keys should consider adding the placement accesses for the referenced table
 ALTER TABLE table_1 ADD CONSTRAINT table_1_u UNIQUE (key);
 BEGIN;
 	ALTER TABLE table_2 ADD CONSTRAINT table_2_u FOREIGN KEY (key) REFERENCES table_1(key);
 	SELECT * FROM relation_acesses  WHERE table_name IN ('table_1', 'table_2')  ORDER BY 1;
  table_name | select_access |  dml_access  |   ddl_access    
 ------------+---------------+--------------+-----------------
- table_1    | not_accessed  | not_accessed | not_accessed
+ table_1    | not_accessed  | not_accessed | parallel_access
  table_2    | not_accessed  | not_accessed | parallel_access
+(2 rows)
+
+ROLLBACK;
+-- creating foreign keys should consider adding the placement accesses for the referenced table
+-- in sequential mode as well
+BEGIN;
+	SET LOCAL citus.multi_shard_modify_mode = 'sequential';
+	ALTER TABLE table_2 ADD CONSTRAINT table_2_u FOREIGN KEY (key) REFERENCES table_1(key);
+	SELECT * FROM relation_acesses  WHERE table_name IN ('table_1', 'table_2')  ORDER BY 1;
+ table_name | select_access |  dml_access  |    ddl_access     
+------------+---------------+--------------+-------------------
+ table_1    | not_accessed  | not_accessed | sequential_access
+ table_2    | not_accessed  | not_accessed | sequential_access
 (2 rows)
 
 ROLLBACK;
@@ -613,26 +626,44 @@ SELECT create_distributed_table('partitioning_test', 'id');
  
 (1 row)
 
--- FIXME: Adding partition tables should have DDL access the partitioned table as well
+-- Adding partition tables via CREATE TABLE should have DDL access the partitioned table as well
 BEGIN;
 	CREATE TABLE partitioning_test_2009 PARTITION OF partitioning_test FOR VALUES FROM ('2009-01-01') TO ('2010-01-01');
 	SELECT * FROM relation_acesses  WHERE table_name IN ('partitioning_test', 'partitioning_test_2009')  ORDER BY 1;
        table_name       | select_access |  dml_access  |   ddl_access    
 ------------------------+---------------+--------------+-----------------
- partitioning_test      | not_accessed  | not_accessed | not_accessed
+ partitioning_test      | not_accessed  | not_accessed | parallel_access
  partitioning_test_2009 | not_accessed  | not_accessed | parallel_access
 (2 rows)
 
 ROLLBACK;
--- FIXME: Adding partition tables should have DDL access the partitioned table as well
+-- Adding partition tables via ATTACH PARTITION on local tables should have DDL access the partitioned table as well
 CREATE TABLE partitioning_test_2009 AS SELECT * FROM partitioning_test;
 BEGIN;
 	ALTER TABLE partitioning_test ATTACH PARTITION partitioning_test_2009 FOR VALUES FROM ('2009-01-01') TO ('2010-01-01');
 	SELECT * FROM relation_acesses  WHERE table_name IN ('partitioning_test', 'partitioning_test_2009')  ORDER BY 1;
        table_name       | select_access |  dml_access  |   ddl_access    
 ------------------------+---------------+--------------+-----------------
- partitioning_test      | not_accessed  | not_accessed | not_accessed
+ partitioning_test      | not_accessed  | not_accessed | parallel_access
  partitioning_test_2009 | not_accessed  | not_accessed | parallel_access
+(2 rows)
+
+ROLLBACK;
+-- Adding partition tables via ATTACH PARTITION on distributed tables should have DDL access the partitioned table as well
+CREATE TABLE partitioning_test_2010 AS SELECT * FROM partitioning_test;
+SELECT create_distributed_table('partitioning_test_2010', 'id');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+BEGIN;
+	ALTER TABLE partitioning_test ATTACH PARTITION partitioning_test_2010 FOR VALUES FROM ('2010-01-01') TO ('2011-01-01');
+	SELECT * FROM relation_acesses  WHERE table_name IN ('partitioning_test', 'partitioning_test_2010')  ORDER BY 1;
+       table_name       | select_access |  dml_access  |   ddl_access    
+------------------------+---------------+--------------+-----------------
+ partitioning_test      | not_accessed  | not_accessed | parallel_access
+ partitioning_test_2010 | not_accessed  | not_accessed | parallel_access
 (2 rows)
 
 ROLLBACK;
@@ -758,7 +789,7 @@ NOTICE:  Copying data from local table...
 COMMIT;
 SET search_path TO 'public';
 DROP SCHEMA access_tracking CASCADE;
-NOTICE:  drop cascades to 14 other objects
+NOTICE:  drop cascades to 15 other objects
 DETAIL:  drop cascades to function access_tracking.relation_select_access_mode(oid)
 drop cascades to function access_tracking.relation_dml_access_mode(oid)
 drop cascades to function access_tracking.relation_ddl_access_mode(oid)
@@ -772,4 +803,5 @@ drop cascades to table access_tracking.table_6
 drop cascades to table access_tracking.table_7
 drop cascades to table access_tracking.partitioning_test
 drop cascades to table access_tracking.partitioning_test_2009
+drop cascades to table access_tracking.partitioning_test_2010
 drop cascades to table access_tracking.table_3

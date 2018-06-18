@@ -109,9 +109,22 @@ OpenTransactionsForAllTasks(List *taskList, int connectionFlags)
 
 			placementAccessList = lappend(placementAccessList, &placementModification);
 
-			/* add additional placement accesses for subselects (e.g. INSERT .. SELECT) */
-			placementSelectList = BuildPlacementSelectList(shardPlacement->groupId,
-														   task->relationShardList);
+			if (accessType == PLACEMENT_ACCESS_DDL)
+			{
+				/*
+				 * All relations appearing inter-shard DDL commands should be marked
+				 * with DDL access.
+				 */
+				placementSelectList = BuildPlacementDDLList(shardPlacement->groupId,
+															task->relationShardList);
+			}
+			else
+			{
+				/* add additional placement accesses for subselects (e.g. INSERT .. SELECT) */
+				placementSelectList = BuildPlacementSelectList(shardPlacement->groupId,
+															   task->relationShardList);
+			}
+
 			placementAccessList = list_concat(placementAccessList, placementSelectList);
 
 			/*

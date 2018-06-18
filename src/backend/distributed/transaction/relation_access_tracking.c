@@ -215,12 +215,24 @@ RecordRelationMultiShardModifyAccessForTask(Task *task)
 
 
 /*
- * RecordRelationMultiShardDDLAccessForTask is a wrapper around
- * RecordParallelDDLAccess
+ * RecordRelationMultiShardDDLAccessForTask marks all the relationShards
+ * with parallel DDL access if exists. That case is valid for inter-shard
+ * DDL commands such as foreign key creation. The function also records
+ * the relation that anchorShardId belongs to.
  */
 void
 RecordRelationMultiShardDDLAccessForTask(Task *task)
 {
+	List *relationShardList = task->relationShardList;
+	ListCell *relationShardCell = NULL;
+
+	foreach(relationShardCell, relationShardList)
+	{
+		RelationShard *relationShard = (RelationShard *) lfirst(relationShardCell);
+
+		RecordParallelDDLAccess(relationShard->relationId);
+	}
+
 	RecordParallelDDLAccess(RelationIdForShard(task->anchorShardId));
 }
 
