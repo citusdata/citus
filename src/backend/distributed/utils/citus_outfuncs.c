@@ -436,6 +436,17 @@ OutRelationShard(OUTFUNC_ARGS)
 
 
 void
+OutRelationRowLock(OUTFUNC_ARGS)
+{
+	WRITE_LOCALS(RelationRowLock);
+	WRITE_NODE_TYPE("RELATIONROWLOCK");
+
+	WRITE_OID_FIELD(relationId);
+	WRITE_ENUM_FIELD(rowLockStrength, LockClauseStrength);
+}
+
+
+void
 OutTask(OUTFUNC_ARGS)
 {
 	WRITE_LOCALS(Task);
@@ -457,6 +468,7 @@ OutTask(OUTFUNC_ARGS)
 	WRITE_CHAR_FIELD(replicationModel);
 	WRITE_BOOL_FIELD(modifyWithSubquery);
 	WRITE_NODE_FIELD(relationShardList);
+	WRITE_NODE_FIELD(relationRowLockList);
 	WRITE_NODE_FIELD(rowValuesLists);
 }
 

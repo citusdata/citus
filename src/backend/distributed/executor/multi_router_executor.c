@@ -151,7 +151,7 @@ AcquireExecutorShardLock(Task *task, CmdType commandType)
 	LOCKMODE lockMode = NoLock;
 	int64 shardId = task->anchorShardId;
 
-	if (commandType == CMD_SELECT || list_length(task->taskPlacementList) == 1)
+	if (commandType == CMD_SELECT)
 	{
 		/*
 		 * The executor shard lock is used to maintain consistency between
@@ -160,6 +160,28 @@ AcquireExecutorShardLock(Task *task, CmdType commandType)
 		 */
 
 		lockMode = NoLock;
+	}
+	else if (list_length(task->taskPlacementList) == 1)
+	{
+		if (task->replicationModel == REPLICATION_MODEL_2PC)
+		{
+			/*
+			 * While we don't need a lock to ensure writes are applied in
+			 * a consistent order when there is a single replica. We also use
+			 * shard resource locks as a crude implementation of SELECT..
+			 * FOR UPDATE on reference tables, so we should always take
+			 * a lock that conflicts with the FOR UPDATE/SHARE locks.
+			 */
+			lockMode = RowExclusiveLock;
+		}
+		else
+		{
+			/*
+			 * When there is no replication, the worker itself can decide on
+			 * on the order in which writes are applied.
+			 */
+			lockMode = NoLock;
+		}
 	}
 	else if (AllModificationsCommutative)
 	{
@@ -222,6 +244,55 @@ AcquireExecutorShardLock(Task *task, CmdType commandType)
 	if (shardId != INVALID_SHARD_ID && lockMode != NoLock)
 	{
 		LockShardResource(shardId, lockMode);
+	}
+
+	/*
+	 * If lock clause exists and it effects any reference table, we need to get
+	 * lock on shard resource. Type of lock is determined by the type of row lock
+	 * given in the query. If the type of row lock is either FOR NO KEY UPDATE or
+	 * FOR UPDATE we get ExclusiveLock on shard resource. We get ShareLock if it
+	 * is FOR KEY SHARE or FOR KEY SHARE.
+	 *
+	 * We have selected these lock types according to conflict table given in the
+	 * Postgres documentation. It is given that FOR UPDATE and FOR NO KEY UPDATE
+	 * must be conflict with each other modify command. By getting ExlcusiveLock
+	 * we guarantee that. Note that, getting ExlusiveLock does not mimic the
+	 * behaviour of Postgres exactly. Getting row lock with FOR NO KEY UPDATE and
+	 * FOR KEY SHARE do not conflicts in Postgres, yet they block each other in
+	 * our implementation. Since FOR SHARE and FOR KEY SHARE does not conflict
+	 * with each other but conflicts with modify commands, we get ShareLock for
+	 * them.
+	 */
+	if (task->relationRowLockList != NIL)
+	{
+		ListCell *rtiLockCell = NULL;
+		LOCKMODE rowLockMode = NoLock;
+
+		foreach(rtiLockCell, task->relationRowLockList)
+		{
+			RelationRowLock *relationRowLock = (RelationRowLock *) lfirst(rtiLockCell);
+			LockClauseStrength rowLockStrength = relationRowLock->rowLockStrength;
+			Oid relationId = relationRowLock->relationId;
+
+			if (PartitionMethod(relationId) == DISTRIBUTE_BY_NONE)
+			{
+				List *shardIntervalList = LoadShardIntervalList(relationId);
+				ShardInterval *referenceTableShardInterval = (ShardInterval *) linitial(
+					shardIntervalList);
+
+				if (rowLockStrength == LCS_FORKEYSHARE || rowLockStrength == LCS_FORSHARE)
+				{
+					rowLockMode = ShareLock;
+				}
+				else if (rowLockStrength == LCS_FORNOKEYUPDATE || rowLockStrength ==
+						 LCS_FORUPDATE)
+				{
+					rowLockMode = ExclusiveLock;
+				}
+
+				LockShardResource(referenceTableShardInterval->shardId, rowLockMode);
+			}
+		}
 	}
 
 	/*
@@ -462,6 +533,7 @@ CitusModifyBeginScan(CustomScanState *node, EState *estate, int eflags)
 /*
  * RouterSequentialModifyExecScan executes 0 or more modifications on a
  * distributed table sequentially and returns results if there are any.
+ * Note that we also use this path for SELECT ... FOR UPDATE queries.
  */
 TupleTableSlot *
 RouterSequentialModifyExecScan(CustomScanState *node)
@@ -522,9 +594,13 @@ RouterSequentialModifyExecScan(CustomScanState *node)
 		{
 			Task *task = (Task *) lfirst(taskCell);
 
+			/*
+			 * Result is expected for SELECT ... FOR UPDATE queries as well.
+			 */
 			executorState->es_processed +=
 				ExecuteSingleModifyTask(scanState, task, operation,
-										alwaysThrowErrorOnFailure, hasReturning);
+										alwaysThrowErrorOnFailure,
+										hasReturning || task->relationRowLockList != NIL);
 		}
 
 		scanState->finishedRemoteScan = true;

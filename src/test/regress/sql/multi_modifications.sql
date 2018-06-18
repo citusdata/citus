@@ -653,6 +653,11 @@ UPDATE reference_summary_table SET average_value = average_query.average FROM (
 	) average_query
 WHERE id = 1;
 
+UPDATE reference_summary_table SET average_value = average_query.average_value FROM (
+	SELECT average_value FROM summary_table WHERE id = 1 FOR UPDATE
+	) average_query
+WHERE id = 1;
+
 UPDATE reference_summary_table SET (min_value, average_value) =
 	(SELECT min(value), avg(value) FROM reference_raw_table WHERE id = 2)
 WHERE id = 2;

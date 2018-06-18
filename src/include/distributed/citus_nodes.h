@@ -62,6 +62,7 @@ typedef enum CitusNodeTag
 	T_ShardInterval,
 	T_ShardPlacement,
 	T_RelationShard,
+	T_RelationRowLock,
 	T_DeferredErrorMessage,
 	T_GroupShardPlacement
 } CitusNodeTag;

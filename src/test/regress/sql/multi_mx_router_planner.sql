@@ -62,8 +62,6 @@ INSERT INTO articles_hash_mx VALUES (48,  8, 'alkylic', 18610);
 INSERT INTO articles_hash_mx VALUES (49,  9, 'anyone', 2681);
 INSERT INTO articles_hash_mx VALUES (50, 10, 'anjanette', 19519);
 
-
-
 SET citus.task_executor_type TO 'real-time';
 SET client_min_messages TO 'DEBUG2';
 
@@ -408,6 +406,10 @@ SELECT *
 SELECT *
 	FROM articles_hash_mx
 	WHERE author_id = (random()::int  * 0 + 1);
+
+-- SELECT ... FOR UPDATE does not supported from MX nodes if it contains
+-- reference table.
+SELECT * FROM customer_mx FOR UPDATE;
 
 -- not router plannable due to or
 SELECT *

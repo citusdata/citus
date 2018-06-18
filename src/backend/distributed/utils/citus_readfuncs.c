@@ -350,6 +350,18 @@ ReadRelationShard(READFUNC_ARGS)
 
 
 READFUNC_RET
+ReadRelationRowLock(READFUNC_ARGS)
+{
+	READ_LOCALS(RelationRowLock);
+
+	READ_OID_FIELD(relationId);
+	READ_ENUM_FIELD(rowLockStrength, LockClauseStrength);
+
+	READ_DONE();
+}
+
+
+READFUNC_RET
 ReadTask(READFUNC_ARGS)
 {
 	READ_LOCALS(Task);
@@ -370,6 +382,7 @@ ReadTask(READFUNC_ARGS)
 	READ_CHAR_FIELD(replicationModel);
 	READ_BOOL_FIELD(modifyWithSubquery);
 	READ_NODE_FIELD(relationShardList);
+	READ_NODE_FIELD(relationRowLockList);
 	READ_NODE_FIELD(rowValuesLists);
 
 	READ_DONE();

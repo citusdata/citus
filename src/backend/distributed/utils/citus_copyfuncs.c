@@ -228,6 +228,16 @@ CopyNodeRelationShard(COPYFUNC_ARGS)
 
 
 void
+CopyNodeRelationRowLock(COPYFUNC_ARGS)
+{
+	DECLARE_FROM_AND_NEW_NODE(RelationRowLock);
+
+	COPY_SCALAR_FIELD(relationId);
+	COPY_SCALAR_FIELD(rowLockStrength);
+}
+
+
+void
 CopyNodeTask(COPYFUNC_ARGS)
 {
 	DECLARE_FROM_AND_NEW_NODE(Task);
@@ -248,6 +258,7 @@ CopyNodeTask(COPYFUNC_ARGS)
 	COPY_SCALAR_FIELD(replicationModel);
 	COPY_SCALAR_FIELD(modifyWithSubquery);
 	COPY_NODE_FIELD(relationShardList);
+	COPY_NODE_FIELD(relationRowLockList);
 	COPY_NODE_FIELD(rowValuesLists);
 }
 
