@@ -40,6 +40,7 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/multi_copy.h"
+#include "distributed/multi_executor.h"
 #include "distributed/multi_logical_planner.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/multi_utility.h"
@@ -475,9 +476,34 @@ CreateHashDistributedTableShards(Oid relationId, Oid colocatedTableId,
 	 */
 	EnsureSchemaExistsOnAllNodes(relationId);
 
+	/*
+	 * Decide whether to use exclusive connections per placement or not. Note that
+	 * if the local table is not empty, we cannot use sequential mode since the COPY
+	 * operation that'd load the data into shards currently requires exclusive
+	 * connections.
+	 */
 	if (RegularTable(relationId))
 	{
-		useExclusiveConnection = IsTransactionBlock() || !localTableEmpty;
+		if (!localTableEmpty && MultiShardConnectionType == SEQUENTIAL_CONNECTION)
+		{
+			char *relationName = get_rel_name(relationId);
+
+			ereport(ERROR, (errmsg("cannot distribute \"%s\" in sequential mode "
+								   "because it is not empty", relationName),
+							errhint("If you have manually set "
+									"citus.multi_shard_modify_mode to 'sequential', "
+									"try with 'parallel' option. If that is not the "
+									"case, try distributing local tables when they "
+									"are empty.")));
+		}
+		else if (MultiShardConnectionType == SEQUENTIAL_CONNECTION)
+		{
+			useExclusiveConnection = false;
+		}
+		else if (!localTableEmpty || IsTransactionBlock())
+		{
+			useExclusiveConnection = true;
+		}
 	}
 
 	if (colocatedTableId != InvalidOid)
