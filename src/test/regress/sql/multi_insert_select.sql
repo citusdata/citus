@@ -2090,6 +2090,20 @@ LIMIT 5;
 
 SELECT * FROM coerce_agg;
 
+-- INSERT..SELECT + prepared statements + recursive planning
+BEGIN;
+PREPARE prepared_recursive_insert_select AS 
+INSERT INTO users_table 
+SELECT * FROM users_table 
+WHERE value_1 IN (SELECT value_2 FROM events_table OFFSET 0);
+EXECUTE prepared_recursive_insert_select;
+EXECUTE prepared_recursive_insert_select;
+EXECUTE prepared_recursive_insert_select;
+EXECUTE prepared_recursive_insert_select;
+EXECUTE prepared_recursive_insert_select;
+EXECUTE prepared_recursive_insert_select;
+ROLLBACK;
+
 -- wrap in a transaction to improve performance
 BEGIN;
 DROP TABLE coerce_events;
