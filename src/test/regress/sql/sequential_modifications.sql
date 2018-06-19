@@ -6,6 +6,8 @@
 --
 CREATE SCHEMA test_seq_ddl;
 SET search_path TO 'test_seq_ddl';
+SET citus.next_shard_id TO 1600;
+SET citus.next_placement_id TO 1600;
 
 -- this function simply checks the equality of the number of transactions in the
 -- pg_dist_transaction and number of primary worker nodes
@@ -182,9 +184,9 @@ SELECT distributed_2PCs_are_equal_to_worker_count();
 
 -- truncate with rep > 1 should work both in parallel and seq. modes
 CREATE TABLE test_seq_truncate_rep_2 (a int);
-INSERT INTO test_seq_truncate_rep_2 SELECT i FROM generate_series(0, 100) i;
 SET citus.shard_replication_factor TO 2;
 SELECT create_distributed_table('test_seq_truncate_rep_2', 'a');
+INSERT INTO test_seq_truncate_rep_2 SELECT i FROM generate_series(0, 100) i;
 
 SET citus.multi_shard_modify_mode TO 'sequential';
 SELECT recover_prepared_transactions();
@@ -255,6 +257,88 @@ SELECT count(*) FROM multi_shard_modify_test;
 ALTER SYSTEM SET citus.recover_2pc_interval TO DEFAULT;
 SET citus.shard_replication_factor TO DEFAULT;
 SELECT pg_reload_conf();
+
+-- The following tests are added to test if create_distributed_table honors sequential mode
+SELECT recover_prepared_transactions();
+
+-- Check if multi_shard_update works properly after create_distributed_table in sequential mode
+CREATE TABLE test_seq_multi_shard_update(a int, b int);
+BEGIN;
+    SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
+    SELECT create_distributed_table('test_seq_multi_shard_update', 'a');
+    INSERT INTO test_seq_multi_shard_update VALUES (0, 0), (1, 0), (2, 0), (3, 0), (4, 0);
+    SELECT master_modify_multiple_shards('DELETE FROM test_seq_multi_shard_update WHERE b < 2');
+COMMIT;
+SELECT distributed_2PCs_are_equal_to_worker_count();
+DROP TABLE test_seq_multi_shard_update;
+
+
+-- Check if truncate works properly after create_distributed_table in sequential mode
+SELECT recover_prepared_transactions();
+CREATE TABLE test_seq_truncate_after_create(a int, b int);
+BEGIN;
+    SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
+    SELECT create_distributed_table('test_seq_truncate_after_create', 'a');
+    INSERT INTO test_seq_truncate_after_create VALUES (0, 0), (1, 0), (2, 0), (3, 0), (4, 0);
+    TRUNCATE test_seq_truncate_after_create;
+COMMIT;
+SELECT distributed_2PCs_are_equal_to_worker_count();
+DROP TABLE test_seq_truncate_after_create;
+
+
+-- Check if drop table works properly after create_distributed_table in sequential mode
+SELECT recover_prepared_transactions();
+CREATE TABLE test_seq_drop_table(a int, b int);
+BEGIN;
+    SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
+    SELECT create_distributed_table('test_seq_drop_table', 'a');
+    DROP TABLE test_seq_drop_table;
+COMMIT;
+SELECT distributed_2PCs_are_equal_to_worker_count();
+
+
+-- Check if copy errors out properly after create_distributed_table in sequential mode
+SELECT recover_prepared_transactions();
+CREATE TABLE test_seq_copy(a int, b int);
+BEGIN;
+    SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
+    SELECT create_distributed_table('test_seq_copy', 'a');
+    \COPY test_seq_copy FROM STDIN DELIMITER AS ',';
+1,1
+2,2
+3,3
+\.
+ROLLBACK;
+SELECT distributed_2PCs_are_equal_to_worker_count();
+DROP TABLE test_seq_copy;
+
+
+-- Check if DDL + CREATE INDEX works properly after create_distributed_table in sequential mode
+SELECT recover_prepared_transactions();
+CREATE TABLE test_seq_ddl_index(a int, b int);
+BEGIN;
+    SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
+    SELECT create_distributed_table('test_seq_ddl_index', 'a');
+    INSERT INTO test_seq_ddl_index VALUES (0, 0), (1, 0), (2, 0), (3, 0), (4, 0);
+    ALTER TABLE test_seq_ddl_index ADD COLUMN c int;
+    CREATE INDEX idx ON test_seq_ddl_index(c);
+COMMIT;
+SELECT distributed_2PCs_are_equal_to_worker_count();
+DROP TABLE test_seq_ddl_index;
+
+-- create_distributed_table should fail on relations with data in sequential mode in and out transaction block
+CREATE TABLE test_create_seq_table (a int);
+INSERT INTO test_create_seq_table VALUES (1);
+
+SET citus.multi_shard_modify_mode TO 'sequential';
+SELECT create_distributed_table('test_create_seq_table' ,'a');
+
+RESET citus.multi_shard_modify_mode;
+
+BEGIN;
+    SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
+    select create_distributed_table('test_create_seq_table' ,'a');
+ROLLBACK;
 
 SET search_path TO 'public';
 DROP SCHEMA test_seq_ddl CASCADE;
