@@ -371,6 +371,62 @@ GetTableForeignConstraintCommands(Oid relationId)
 
 
 /*
+ * HasForeignKeyToReferenceTable function scans the pgConstraint table to
+ * fetch all of the constraints on the given relationId and see if at least one
+ * of them is a foreign key referencing to a reference table.
+ */
+bool
+HasForeignKeyToReferenceTable(Oid relationId)
+{
+	Relation pgConstraint = NULL;
+	SysScanDesc scanDescriptor = NULL;
+	ScanKeyData scanKey[1];
+	int scanKeyCount = 1;
+	HeapTuple heapTuple = NULL;
+	bool hasForeignKeyToReferenceTable = false;
+
+	pgConstraint = heap_open(ConstraintRelationId, AccessShareLock);
+	ScanKeyInit(&scanKey[0], Anum_pg_constraint_conrelid, BTEqualStrategyNumber, F_OIDEQ,
+				relationId);
+	scanDescriptor = systable_beginscan(pgConstraint, ConstraintRelidIndexId, true, NULL,
+										scanKeyCount, scanKey);
+
+	heapTuple = systable_getnext(scanDescriptor);
+	while (HeapTupleIsValid(heapTuple))
+	{
+		Oid referencedTableId = InvalidOid;
+		Form_pg_constraint constraintForm = (Form_pg_constraint) GETSTRUCT(heapTuple);
+
+		if (constraintForm->contype != CONSTRAINT_FOREIGN)
+		{
+			heapTuple = systable_getnext(scanDescriptor);
+			continue;
+		}
+
+		referencedTableId = constraintForm->confrelid;
+
+		if (!IsDistributedTable(referencedTableId))
+		{
+			continue;
+		}
+
+		if (PartitionMethod(referencedTableId) == DISTRIBUTE_BY_NONE)
+		{
+			hasForeignKeyToReferenceTable = true;
+			break;
+		}
+
+		heapTuple = systable_getnext(scanDescriptor);
+	}
+
+	/* clean up scan and close system catalog */
+	systable_endscan(scanDescriptor);
+	heap_close(pgConstraint, NoLock);
+	return hasForeignKeyToReferenceTable;
+}
+
+
+/*
  * TableReferenced function checks whether given table is referenced by another table
  * via foreign constraints. If it is referenced, this function returns true. To check
  * that, this function searches given relation at pg_constraints system catalog. However
