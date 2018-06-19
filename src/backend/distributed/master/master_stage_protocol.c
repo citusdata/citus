@@ -668,6 +668,13 @@ WorkerCreateShard(Oid relationId, int shardIndex, uint64 shardId, List *ddlComma
 		{
 			referencedShardId = shardId;
 		}
+		else if (PartitionMethod(referencedRelationId) == DISTRIBUTE_BY_NONE)
+		{
+			List *shardList = LoadShardList(referencedRelationId);
+			uint64 *shardIdPointer = (uint64 *) linitial(shardList);
+
+			referencedShardId = (*shardIdPointer);
+		}
 		else
 		{
 			referencedShardId = ColocatedShardIdInRelation(referencedRelationId,
