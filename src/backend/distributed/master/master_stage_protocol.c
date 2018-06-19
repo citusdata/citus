@@ -662,7 +662,10 @@ WorkerCreateShard(Oid relationId, int shardIndex, uint64 shardId, List *ddlComma
 		 * In case of self referencing shards, relation itself might not be distributed
 		 * already. Therefore we cannot use ColocatedShardIdInRelation which assumes
 		 * given relation is distributed. Besides, since we know foreign key references
-		 * itself, referencedShardId is actual shardId anyway.
+		 * itself, referencedShardId is actual shardId anyway. Also, if the referenced
+		 * relation is a reference table, we cannot use ColocatedShardIdInRelation since
+		 * reference tables only have one shard. Instead, we fetch the one and only shard
+		 * from shardlist and use it.
 		 */
 		if (relationId == referencedRelationId)
 		{
