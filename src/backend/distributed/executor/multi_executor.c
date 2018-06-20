@@ -48,41 +48,7 @@ int MultiShardConnectionType = PARALLEL_CONNECTION;
 
 
 /* local function forward declarations */
-static void SetLocalMultiShardModifyModeToSequential(void);
 static Relation StubRelation(TupleDesc tupleDescriptor);
-
-
-/* exports for SQL callable functions */
-PG_FUNCTION_INFO_V1(set_local_multi_shard_modify_mode_to_sequential);
-
-
-/*
- * set_local_multi_shard_modify_mode_to_sequential is a SQL
- * interface for testing SetLocalMultiShardModifyModeToSequential().
- */
-Datum
-set_local_multi_shard_modify_mode_to_sequential(PG_FUNCTION_ARGS)
-{
-	SetLocalMultiShardModifyModeToSequential();
-
-	PG_RETURN_VOID();
-}
-
-
-/*
- * SetLocalMultiShardModifyModeToSequential simply a C interface for
- * setting the following:
- *      SET LOCAL citus.multi_shard_modify_mode = 'sequential';
- */
-static void
-SetLocalMultiShardModifyModeToSequential()
-{
-	WarnNoTransactionChain(true, "SET LOCAL");
-
-	set_config_option("citus.multi_shard_modify_mode", "sequential",
-					  (superuser() ? PGC_SUSET : PGC_USERSET), PGC_S_SESSION,
-					  GUC_ACTION_LOCAL, true, 0, false);
-}
 
 
 /*
@@ -333,4 +299,20 @@ ExecutePlanIntoDestReceiver(PlannedStmt *queryPlan, ParamListInfo params,
 	PortalRun(portal, count, false, dest, dest, NULL);
 #endif
 	PortalDrop(portal, false);
+}
+
+
+/*
+ * SetLocalMultiShardModifyModeToSequential simply a C interface for
+ * setting the following:
+ *      SET LOCAL citus.multi_shard_modify_mode = 'sequential';
+ */
+void
+SetLocalMultiShardModifyModeToSequential()
+{
+	WarnNoTransactionChain(true, "SET LOCAL");
+
+	set_config_option("citus.multi_shard_modify_mode", "sequential",
+					  (superuser() ? PGC_SUSET : PGC_USERSET), PGC_S_SESSION,
+					  GUC_ACTION_LOCAL, true, 0, false);
 }
