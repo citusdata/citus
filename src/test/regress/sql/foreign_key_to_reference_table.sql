@@ -7,6 +7,7 @@ SET search_path TO 'fkey_reference_table';
 SET citus.shard_replication_factor TO 1;
 SET citus.shard_count TO 8;
 SET citus.next_shard_id TO 7000000;
+SET citus.next_placement_id TO 7000000;
 
 CREATE TYPE foreign_details AS (name text, relid text, refd_relid text);
 SELECT run_command_on_workers($$CREATE TYPE foreign_details AS (name text, relid text, refd_relid text)$$);
@@ -38,15 +39,28 @@ SELECT create_distributed_table('referencing_table', 'ref_id');
 ALTER TABLE referencing_table ADD CONSTRAINT fkey_ref FOREIGN KEY(ref_id) REFERENCES referenced_table(id) ON DELETE SET NULL;
 DROP TABLE referencing_table;
 
+CREATE TABLE referencing_table(id int, ref_id int, FOREIGN KEY(ref_id) REFERENCES referenced_table(id) ON DELETE SET NULL);
+SELECT create_distributed_table('referencing_table', 'ref_id');
+DROP TABLE referencing_table;
+
 CREATE TABLE referencing_table(id int, ref_id int);
 SELECT create_distributed_table('referencing_table', 'ref_id');
 ALTER TABLE referencing_table ADD CONSTRAINT fkey_ref FOREIGN KEY(ref_id) REFERENCES referenced_table(id) ON DELETE SET DEFAULT;
+DROP TABLE referencing_table;
+
+CREATE TABLE referencing_table(id int, ref_id int, FOREIGN KEY(ref_id) REFERENCES referenced_table(id) ON DELETE SET DEFAULT);
+SELECT create_distributed_table('referencing_table', 'ref_id');
 DROP TABLE referencing_table;
 
 CREATE TABLE referencing_table(id int, ref_id int);
 SELECT create_distributed_table('referencing_table', 'ref_id');
 ALTER TABLE referencing_table ADD CONSTRAINT fkey_ref FOREIGN KEY(ref_id) REFERENCES referenced_table(id) ON UPDATE SET NULL;
 DROP TABLE referencing_table;
+
+BEGIN;
+  CREATE TABLE referencing_table(id int, ref_id int, FOREIGN KEY(ref_id) REFERENCES referenced_table(id) ON UPDATE SET NULL);
+  SELECT create_distributed_table('referencing_table', 'ref_id');
+ROLLBACK;
 
 -- try with multiple columns including the distribution column
 DROP TABLE referenced_table;
@@ -58,10 +72,19 @@ SELECT create_distributed_table('referencing_table', 'ref_id');
 ALTER TABLE referencing_table ADD CONSTRAINT fkey_ref FOREIGN KEY(id, ref_id) REFERENCES referenced_table(id, test_column) ON UPDATE SET DEFAULT;
 DROP TABLE referencing_table;
 
+CREATE TABLE referencing_table(id int, ref_id int, FOREIGN KEY(id, ref_id) REFERENCES referenced_table(id, test_column) ON UPDATE SET DEFAULT);
+SELECT create_distributed_table('referencing_table', 'ref_id');
+DROP TABLE referencing_table;
+
 CREATE TABLE referencing_table(id int, ref_id int);
 SELECT create_distributed_table('referencing_table', 'ref_id');
 ALTER TABLE referencing_table ADD CONSTRAINT fkey_ref FOREIGN KEY(id, ref_id) REFERENCES referenced_table(id, test_column) ON UPDATE CASCADE;
 DROP TABLE referencing_table;
+
+BEGIN;
+  CREATE TABLE referencing_table(id int, ref_id int, FOREIGN KEY(id, ref_id) REFERENCES referenced_table(id, test_column) ON UPDATE CASCADE);
+  SELECT create_distributed_table('referencing_table', 'ref_id');
+ROLLBACK;
 
 -- all of the above is supported if the foreign key does not include distribution column
 DROP TABLE referenced_table;
@@ -74,9 +97,21 @@ ALTER TABLE referencing_table ADD CONSTRAINT fkey_ref FOREIGN KEY(id) REFERENCES
 SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%' ORDER BY 1,2,3;
 DROP TABLE referencing_table;
 
+CREATE TABLE referencing_table(id int, ref_id int, FOREIGN KEY(id) REFERENCES referenced_table(id) ON DELETE SET NULL);
+SELECT create_distributed_table('referencing_table', 'ref_id');
+SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%' ORDER BY 1,2,3;
+DROP TABLE referencing_table;
+
 CREATE TABLE referencing_table(id int, ref_id int);
 SELECT create_distributed_table('referencing_table', 'ref_id');
 ALTER TABLE referencing_table ADD CONSTRAINT fkey_ref FOREIGN KEY(id) REFERENCES referenced_table(id) ON DELETE SET DEFAULT;
+SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%' ORDER BY 1,2,3;
+DROP TABLE referencing_table;
+
+BEGIN;
+  CREATE TABLE referencing_table(id int, ref_id int, FOREIGN KEY(id) REFERENCES referenced_table(id) ON DELETE SET DEFAULT);
+  SELECT create_distributed_table('referencing_table', 'ref_id');
+COMMIT;
 SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%' ORDER BY 1,2,3;
 DROP TABLE referencing_table;
 
@@ -106,6 +141,22 @@ ALTER TABLE referencing_table ADD CONSTRAINT fkey_ref FOREIGN KEY (id) REFERENCE
 SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%' ORDER BY 1,2,3;
 DROP TABLE referencing_table;
 SET citus.shard_replication_factor TO 1;
+
+-- simple create_distributed_table should work in/out transactions on tables with foreign key to reference tables
+CREATE TABLE referencing_table(id int, ref_id int, FOREIGN KEY (id) REFERENCES referenced_table(id));
+SELECT create_distributed_table('referencing_table', 'ref_id');
+SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%' ORDER BY 1,2,3;
+DROP TABLE referencing_table;
+DROP TABLE referenced_table;
+
+BEGIN;
+  CREATE TABLE referenced_table(id int, test_column int, PRIMARY KEY(id));
+  SELECT create_reference_table('referenced_table');
+  CREATE TABLE referencing_table(id int, ref_id int, FOREIGN KEY (id) REFERENCES referenced_table(id));
+  SELECT create_distributed_table('referencing_table', 'ref_id');
+COMMIT;
+SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%' ORDER BY 1,2,3;
+DROP TABLE referencing_table;
 
 -- foreign keys are supported either in between distributed tables including the 
 -- distribution column or from distributed tables to reference tables.
@@ -340,6 +391,20 @@ SELECT * FROM referencing_table WHERE ref_id < 0 ORDER BY 1;
 DROP TABLE referenced_table CASCADE;
 DROP TABLE referencing_table CASCADE;
 
+-- create_distributed_table should fail for tables with data if fkey exists to reference table
+CREATE TABLE referenced_table(test_column int, test_column2 int, PRIMARY KEY(test_column));
+CREATE TABLE referencing_table(id int, ref_id int DEFAULT -1, FOREIGN KEY (ref_id) REFERENCES referenced_table(test_column) ON UPDATE CASCADE);
+INSERT INTO referenced_table VALUES (1,1), (2,2), (3,3);
+INSERT INTO referencing_table VALUES (1,1), (2,2), (3,3);
+SELECT create_reference_table('referenced_table');
+SELECT create_distributed_table('referencing_table', 'id');
+
+BEGIN;
+  SELECT create_distributed_table('referencing_table', 'id');
+COMMIT;
+
+DROP TABLE referenced_table CASCADE;
+DROP TABLE referencing_table CASCADE;
 
 -- Chained references 
 -- In the following test, we create foreign keys from one column in a distributed
@@ -380,6 +445,19 @@ DROP TABLE referenced_table CASCADE;
 DROP TABLE referenced_table2 CASCADE;
 DROP TABLE referencing_table CASCADE;
 
+-- check if the above fkeys are created with create_distributed_table
+CREATE TABLE referenced_table(test_column int, test_column2 int, PRIMARY KEY(test_column));
+CREATE TABLE referenced_table2(test_column int, test_column2 int, PRIMARY KEY(test_column2));
+CREATE TABLE referencing_table(id int, ref_id int, FOREIGN KEY (id) REFERENCES referenced_table(test_column) ON DELETE CASCADE, FOREIGN KEY (id) REFERENCES referenced_table2(test_column2) ON DELETE CASCADE);
+SELECT create_reference_table('referenced_table');
+SELECT create_reference_table('referenced_table2');
+SELECT create_distributed_table('referencing_table', 'id');
+
+SELECT count(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+
+DROP TABLE referenced_table CASCADE;
+DROP TABLE referenced_table2 CASCADE;
+DROP TABLE referencing_table CASCADE;
 
 -- In the following test, we create foreign keys from two columns in a distributed
 -- table to two reference tables separately. We expect to see that even if a data 
@@ -396,8 +474,8 @@ SELECT create_reference_table('referenced_table2');
 SELECT create_distributed_table('referencing_table', 'id');
 
 BEGIN;
-ALTER TABLE referencing_table ADD CONSTRAINT fkey_ref FOREIGN KEY (id) REFERENCES referenced_table(test_column) ON DELETE CASCADE;
-ALTER TABLE referencing_table ADD CONSTRAINT foreign_key_2 FOREIGN KEY (ref_id) REFERENCES referenced_table2(test_column2) ON DELETE CASCADE;
+  ALTER TABLE referencing_table ADD CONSTRAINT fkey_ref FOREIGN KEY (id) REFERENCES referenced_table(test_column) ON DELETE CASCADE;
+  ALTER TABLE referencing_table ADD CONSTRAINT foreign_key_2 FOREIGN KEY (ref_id) REFERENCES referenced_table2(test_column2) ON DELETE CASCADE;
 COMMIT;
 
 SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%' ORDER BY 1,2,3;
@@ -418,6 +496,24 @@ DELETE FROM referenced_table WHERE test_column < 700;
 SELECT count(*) FROM referencing_table;
 DELETE FROM referenced_table2 WHERE test_column2 > 800;
 SELECT count(*) FROM referencing_table;
+
+DROP TABLE referenced_table CASCADE;
+DROP TABLE referenced_table2 CASCADE;
+DROP TABLE referencing_table CASCADE;
+
+-- check if the above fkeys are created when create_distributed_table is used for 1 foreign key and alter table for the other
+CREATE TABLE referenced_table(test_column int, test_column2 int, PRIMARY KEY(test_column));
+CREATE TABLE referenced_table2(test_column int, test_column2 int, PRIMARY KEY(test_column2));
+CREATE TABLE referencing_table(id int, ref_id int, FOREIGN KEY (id) REFERENCES referenced_table(test_column) ON DELETE CASCADE);
+
+BEGIN;
+  SELECT create_reference_table('referenced_table');
+  SELECT create_reference_table('referenced_table2');
+  SELECT create_distributed_table('referencing_table', 'id');
+  ALTER TABLE referencing_table ADD CONSTRAINT foreign_key_2 FOREIGN KEY (ref_id) REFERENCES referenced_table2(test_column2) ON DELETE CASCADE;
+COMMIT;
+
+SELECT count(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
 
 DROP TABLE referenced_table CASCADE;
 DROP TABLE referenced_table2 CASCADE;
@@ -445,7 +541,7 @@ ALTER TABLE referencing_table2 ADD CONSTRAINT fkey_ref FOREIGN KEY (ref_id) REFE
 ALTER TABLE referencing_table2 ADD CONSTRAINT fkey_ref_to_dist FOREIGN KEY (id) REFERENCES referencing_table(id) ON DELETE CASCADE;
 COMMIT;
 
-SELECT * FROM table_fkeys_in_workers WHERE name LIKE 'fkey_ref%' ORDER BY 1,2,3;
+SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%' ORDER BY 1,2,3;
 
 INSERT INTO referenced_table SELECT x, x+1 FROM generate_series(0,1000) AS f(x);
 -- should fail
@@ -462,6 +558,23 @@ SELECT count(*) FROM referencing_table;
 SELECT count(*) FROM referencing_table2;
 DELETE FROM referencing_table WHERE id > 200;
 SELECT count(*) FROM referencing_table2;
+
+DROP TABLE referenced_table CASCADE;
+DROP TABLE referencing_table CASCADE;
+DROP TABLE referencing_table2 CASCADE;
+
+-- Check if the above fkeys are created with create_distributed_table
+CREATE TABLE referenced_table(test_column int, test_column2 int UNIQUE, PRIMARY KEY(test_column));
+CREATE TABLE referencing_table(id int PRIMARY KEY, ref_id int, FOREIGN KEY (id) REFERENCES referenced_table(test_column) ON DELETE CASCADE);
+CREATE TABLE referencing_table2(id int, ref_id int, FOREIGN KEY (ref_id) REFERENCES referenced_table(test_column2) ON DELETE CASCADE, FOREIGN KEY (id) REFERENCES referencing_table(id) ON DELETE CASCADE);
+SELECT create_reference_table('referenced_table');
+BEGIN;
+  SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
+  SELECT create_distributed_table('referencing_table', 'id');
+  SELECT create_distributed_table('referencing_table2', 'id');
+COMMIT;
+
+SELECT count(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
 
 DROP TABLE referenced_table CASCADE;
 DROP TABLE referencing_table CASCADE;
@@ -493,6 +606,79 @@ SELECT max(ref_id) FROM referencing_referencing_table;
 DROP TABLE referenced_table CASCADE;
 DROP TABLE referencing_table CASCADE;
 DROP TABLE referencing_referencing_table;
+
+-- test if create_distributed_table works in transactions with some edge cases
+-- the following checks if create_distributed_table works on foreign keys when 
+-- one of them is a self-referencing table of multiple distributed tables
+BEGIN;
+  CREATE TABLE test_table_1(id int PRIMARY KEY);
+  SELECT create_reference_table('test_table_1'); 
+
+  CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int, FOREIGN KEY(id) REFERENCES test_table_1(id));
+  SELECT create_distributed_table('test_table_2', 'id');
+
+  CREATE TABLE test_table_3(id int PRIMARY KEY, value_1 int, FOREIGN KEY(value_1) REFERENCES test_table_1(id), FOREIGN KEY(id) REFERENCES test_table_2(id));
+  SELECT create_distributed_table('test_table_3', 'id');
+
+  DROP TABLE test_table_1 CASCADE;
+ROLLBACK;
+
+-- create_reference_table, create_distributed_table and ALTER TABLE in the same transaction
+-- FIXME: fails for now
+BEGIN;
+  CREATE TABLE test_table_1(id int PRIMARY KEY);
+  SELECT create_reference_table('test_table_1');
+
+  CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int);
+  SELECT create_distributed_table('test_table_2', 'id');
+
+  ALTER TABLE test_table_2 ADD CONSTRAINT c_check FOREIGN KEY (value_1) REFERENCES test_table_1(id);
+
+  DROP TABLE test_table_1, test_table_2;
+COMMIT;
+
+-- the order of create_reference_table and create_distributed_table is changed
+-- FIXME: fails for now
+BEGIN;
+  CREATE TABLE test_table_1(id int PRIMARY KEY, value_1 int);
+  SELECT create_distributed_table('test_table_1', 'id');
+
+  CREATE TABLE test_table_2(id int PRIMARY KEY);
+  SELECT create_reference_table('test_table_2');
+
+  ALTER TABLE test_table_1 ADD CONSTRAINT c_check FOREIGN KEY (value_1) REFERENCES test_table_2(id);
+
+  DROP TABLE test_table_2 CASCADE;
+ROLLBACK;
+
+-- make sure that we fail if we need parallel data load
+BEGIN;
+  
+  CREATE TABLE test_table_1(id int PRIMARY KEY);
+  INSERT INTO test_table_1 SELECT i FROM generate_series(0,100) i;
+
+  CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int, FOREIGN KEY(value_1) REFERENCES test_table_1(id));
+  INSERT INTO test_table_2 SELECT i, i FROM generate_series(0,100) i;
+
+  SELECT create_reference_table('test_table_1');
+  SELECT create_distributed_table('test_table_2', 'id');
+  DROP TABLE test_table_2, test_table_1;
+COMMIT;
+
+-- make sure that other DDLs/DMLs also work fine
+-- FIXME: fails for now
+BEGIN;
+  CREATE TABLE test_table_1(id int PRIMARY KEY);
+  CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int, FOREIGN KEY(value_1) REFERENCES test_table_1(id));
+
+  SELECT create_reference_table('test_table_1');
+  SELECT create_distributed_table('test_table_2', 'id');
+
+  CREATE INDEX i1 ON test_table_1(id);
+  ALTER TABLE test_table_2 ADD CONSTRAINT check_val CHECK (id > 0);
+
+  DROP TABLE test_table_2, test_table_1;
+COMMIT;
 
 DROP SCHEMA fkey_reference_table CASCADE;
 SET search_path TO DEFAULT;
