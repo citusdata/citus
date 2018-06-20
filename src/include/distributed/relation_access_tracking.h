@@ -28,14 +28,15 @@ extern void ResetRelationAccessHash(void);
 extern void AssociatePlacementAccessWithRelation(ShardPlacement *placement,
 												 ShardPlacementAccessType accessType);
 extern void RecordParallelSelectAccess(Oid relationId);
-extern void RecordRelationMultiShardSelectAccessForTask(Task *task);
-extern void RecordRelationMultiShardModifyAccessForTask(Task *task);
+extern void RecordRelationParallelSelectAccessForTask(Task *task);
+extern void RecordRelationParallelModifyAccessForTask(Task *task);
 extern void RecordParallelModifyAccess(Oid relationId);
 extern void RecordParallelDDLAccess(Oid relationId);
-extern void RecordRelationMultiShardDDLAccessForTask(Task *task);
+extern void RecordRelationParallelDDLAccessForTask(Task *task);
 extern RelationAccessMode GetRelationDDLAccessMode(Oid relationId);
 extern RelationAccessMode GetRelationDMLAccessMode(Oid relationId);
 extern RelationAccessMode GetRelationSelectAccessMode(Oid relationId);
+extern bool ShouldRecordRelationAccess(void);
 
 
 #endif /* RELATION_ACCESS_TRACKING_H_ */

@@ -338,9 +338,9 @@ ROLLBACK;
 BEGIN;
 	UPDATE table_1 SET value = 15;
 	SELECT * FROM relation_acesses WHERE table_name = 'table_1';
- table_name |   select_access   |   dml_access    |  ddl_access  
-------------+-------------------+-----------------+--------------
- table_1    | sequential_access | parallel_access | not_accessed
+ table_name |  select_access  |   dml_access    |  ddl_access  
+------------+-----------------+-----------------+--------------
+ table_1    | parallel_access | parallel_access | not_accessed
 (1 row)
 
 	SET LOCAL citus.multi_shard_modify_mode = 'sequential';
@@ -348,7 +348,7 @@ BEGIN;
 	SELECT * FROM relation_acesses WHERE table_name IN ('table_1', 'table_2')  ORDER BY 1;
  table_name |   select_access   |    dml_access     |  ddl_access  
 ------------+-------------------+-------------------+--------------
- table_1    | sequential_access | parallel_access   | not_accessed
+ table_1    | parallel_access   | parallel_access   | not_accessed
  table_2    | sequential_access | sequential_access | not_accessed
 (2 rows)
 
@@ -497,12 +497,12 @@ BEGIN;
 		) as foo
 	) AND value IN (SELECT key FROM table_4);
 	SELECT * FROM relation_acesses  WHERE table_name IN ('table_1', 'table_2', 'table_3', 'table_4')  ORDER BY 1;
- table_name |   select_access   |   dml_access    |  ddl_access  
-------------+-------------------+-----------------+--------------
- table_1    | parallel_access   | not_accessed    | not_accessed
- table_2    | parallel_access   | not_accessed    | not_accessed
- table_3    | sequential_access | parallel_access | not_accessed
- table_4    | parallel_access   | not_accessed    | not_accessed
+ table_name |  select_access  |   dml_access    |  ddl_access  
+------------+-----------------+-----------------+--------------
+ table_1    | parallel_access | not_accessed    | not_accessed
+ table_2    | parallel_access | not_accessed    | not_accessed
+ table_3    | parallel_access | parallel_access | not_accessed
+ table_4    | parallel_access | not_accessed    | not_accessed
 (4 rows)
 
 ROLLBACK;
@@ -669,7 +669,7 @@ LINE 1: ALTER TABLE partitioning_test ATTACH PARTITION partitioning_...
                                       ^
 	SELECT * FROM relation_acesses  WHERE table_name IN ('partitioning_test', 'partitioning_test_2009')  ORDER BY 1;
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
-ROLLBACK;
+COMMIT;
 -- Adding partition tables via ATTACH PARTITION on distributed tables should have DDL access the partitioned table as well
 CREATE TABLE partitioning_test_2010 AS SELECT * FROM partitioning_test;
 ERROR:  relation "partitioning_test" does not exist
@@ -685,6 +685,112 @@ ERROR:  syntax error at or near "ATTACH"
 LINE 1: ALTER TABLE partitioning_test ATTACH PARTITION partitioning_...
                                       ^
 	SELECT * FROM relation_acesses  WHERE table_name IN ('partitioning_test', 'partitioning_test_2010')  ORDER BY 1;
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+COMMIT;
+-- reading from partitioned table marks all of its partitions
+BEGIN;
+	SELECT count(*) FROM partitioning_test;
+ERROR:  relation "partitioning_test" does not exist
+LINE 1: SELECT count(*) FROM partitioning_test;
+                             ^
+	SELECT * FROM relation_acesses  WHERE table_name IN ('partitioning_test', 'partitioning_test_2009', 'partitioning_test_2010')  ORDER BY 1;
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+COMMIT;
+-- reading from partitioned table sequentially marks all of its partitions with sequential accesses
+BEGIN;
+	SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
+	SELECT count(*) FROM partitioning_test;
+ERROR:  relation "partitioning_test" does not exist
+LINE 1: SELECT count(*) FROM partitioning_test;
+                             ^
+	SELECT * FROM relation_acesses  WHERE table_name IN ('partitioning_test', 'partitioning_test_2009', 'partitioning_test_2010')  ORDER BY 1;
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+COMMIT;
+-- updating partitioned table marks all of its partitions
+BEGIN;
+	UPDATE partitioning_test SET time = now();
+ERROR:  relation "partitioning_test" does not exist
+LINE 1: UPDATE partitioning_test SET time = now();
+               ^
+	SELECT * FROM relation_acesses  WHERE table_name IN ('partitioning_test', 'partitioning_test_2009', 'partitioning_test_2010')  ORDER BY 1;
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+COMMIT;
+-- updating partitioned table sequentially marks all of its partitions with sequential accesses
+BEGIN;
+	SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
+	UPDATE partitioning_test SET time = now();
+ERROR:  relation "partitioning_test" does not exist
+LINE 1: UPDATE partitioning_test SET time = now();
+               ^
+	SELECT * FROM relation_acesses  WHERE table_name IN ('partitioning_test', 'partitioning_test_2009', 'partitioning_test_2010')  ORDER BY 1;
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+COMMIT;
+-- DDLs on partitioned table marks all of its partitions
+BEGIN;
+	ALTER TABLE partitioning_test ADD COLUMN X INT;
+ERROR:  relation "partitioning_test" does not exist
+	SELECT * FROM relation_acesses  WHERE table_name IN ('partitioning_test', 'partitioning_test_2009', 'partitioning_test_2010')  ORDER BY 1;
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+ROLLBACK;
+-- DDLs on partitioned table sequentially marks all of its partitions with sequential accesses
+BEGIN;
+	SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
+	ALTER TABLE partitioning_test ADD COLUMN X INT;
+ERROR:  relation "partitioning_test" does not exist
+	SELECT * FROM relation_acesses  WHERE table_name IN ('partitioning_test', 'partitioning_test_2009', 'partitioning_test_2010')  ORDER BY 1;
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+ROLLBACK;
+-- reading from partition table marks its parent
+BEGIN;
+	SELECT count(*) FROM partitioning_test_2009;
+ERROR:  relation "partitioning_test_2009" does not exist
+LINE 1: SELECT count(*) FROM partitioning_test_2009;
+                             ^
+	SELECT * FROM relation_acesses  WHERE table_name IN ('partitioning_test', 'partitioning_test_2009', 'partitioning_test_2010')  ORDER BY 1;
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+COMMIT;
+-- rreading from partition table marks its parent with sequential accesses
+BEGIN;
+	SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
+	SELECT count(*) FROM partitioning_test_2009;
+ERROR:  relation "partitioning_test_2009" does not exist
+LINE 1: SELECT count(*) FROM partitioning_test_2009;
+                             ^
+	SELECT * FROM relation_acesses  WHERE table_name IN ('partitioning_test', 'partitioning_test_2009', 'partitioning_test_2010')  ORDER BY 1;
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+COMMIT;
+-- updating from partition table marks its parent
+BEGIN;
+	UPDATE partitioning_test_2009 SET time = now();
+ERROR:  relation "partitioning_test_2009" does not exist
+LINE 1: UPDATE partitioning_test_2009 SET time = now();
+               ^
+	SELECT * FROM relation_acesses  WHERE table_name IN ('partitioning_test', 'partitioning_test_2009', 'partitioning_test_2010')  ORDER BY 1;
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+COMMIT;
+-- updating from partition table marks its parent sequential accesses
+BEGIN;
+	SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
+	UPDATE partitioning_test_2009 SET time = now();
+ERROR:  relation "partitioning_test_2009" does not exist
+LINE 1: UPDATE partitioning_test_2009 SET time = now();
+               ^
+	SELECT * FROM relation_acesses  WHERE table_name IN ('partitioning_test', 'partitioning_test_2009', 'partitioning_test_2010')  ORDER BY 1;
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+COMMIT;
+-- DDLs on partition table marks its parent
+BEGIN;
+	CREATE INDEX i1000000 ON partitioning_test_2009 (id);
+ERROR:  relation "partitioning_test_2009" does not exist
+	SELECT * FROM relation_acesses  WHERE table_name IN ('partitioning_test', 'partitioning_test_2009', 'partitioning_test_2010')  ORDER BY 1;
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+ROLLBACK;
+-- DDLs on partition table marks its parent in sequential mode
+BEGIN;
+	SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
+	CREATE INDEX i1000000 ON partitioning_test_2009 (id);
+ERROR:  relation "partitioning_test_2009" does not exist
+	SELECT * FROM relation_acesses  WHERE table_name IN ('partitioning_test', 'partitioning_test_2009', 'partitioning_test_2010')  ORDER BY 1;
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
 ROLLBACK;
 -- TRUNCATE CASCADE works fine
@@ -764,9 +870,9 @@ BEGIN;
 (1 row)
 
 	SELECT * FROM relation_acesses  WHERE table_name IN ('table_1')  ORDER BY 1;
- table_name |   select_access   |   dml_access    |  ddl_access  
-------------+-------------------+-----------------+--------------
- table_1    | sequential_access | parallel_access | not_accessed
+ table_name |  select_access  |   dml_access    |  ddl_access  
+------------+-----------------+-----------------+--------------
+ table_1    | parallel_access | parallel_access | not_accessed
 (1 row)
 
 ROLLBACK;
@@ -781,9 +887,9 @@ BEGIN;
 (1 row)
 
 	SELECT * FROM relation_acesses  WHERE table_name IN ('table_1')  ORDER BY 1;
- table_name |   select_access   |   dml_access    |  ddl_access  
-------------+-------------------+-----------------+--------------
- table_1    | sequential_access | parallel_access | not_accessed
+ table_name |  select_access  |   dml_access    |  ddl_access  
+------------+-----------------+-----------------+--------------
+ table_1    | parallel_access | parallel_access | not_accessed
 (1 row)
 
 ROLLBACK;

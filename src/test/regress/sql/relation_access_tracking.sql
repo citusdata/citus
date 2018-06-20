@@ -400,7 +400,7 @@ CREATE TABLE partitioning_test_2009 AS SELECT * FROM partitioning_test;
 BEGIN;
 	ALTER TABLE partitioning_test ATTACH PARTITION partitioning_test_2009 FOR VALUES FROM ('2009-01-01') TO ('2010-01-01');
 	SELECT * FROM relation_acesses  WHERE table_name IN ('partitioning_test', 'partitioning_test_2009')  ORDER BY 1;
-ROLLBACK;
+COMMIT;
 
 -- Adding partition tables via ATTACH PARTITION on distributed tables should have DDL access the partitioned table as well
 CREATE TABLE partitioning_test_2010 AS SELECT * FROM partitioning_test;
@@ -408,6 +408,87 @@ SELECT create_distributed_table('partitioning_test_2010', 'id');
 BEGIN;
 	ALTER TABLE partitioning_test ATTACH PARTITION partitioning_test_2010 FOR VALUES FROM ('2010-01-01') TO ('2011-01-01');
 	SELECT * FROM relation_acesses  WHERE table_name IN ('partitioning_test', 'partitioning_test_2010')  ORDER BY 1;
+COMMIT;
+
+-- reading from partitioned table marks all of its partitions
+BEGIN;
+	SELECT count(*) FROM partitioning_test;
+	SELECT * FROM relation_acesses  WHERE table_name IN ('partitioning_test', 'partitioning_test_2009', 'partitioning_test_2010')  ORDER BY 1;
+COMMIT;
+
+-- reading from partitioned table sequentially marks all of its partitions with sequential accesses
+BEGIN;
+	SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
+	SELECT count(*) FROM partitioning_test;
+	SELECT * FROM relation_acesses  WHERE table_name IN ('partitioning_test', 'partitioning_test_2009', 'partitioning_test_2010')  ORDER BY 1;
+COMMIT;
+
+-- updating partitioned table marks all of its partitions
+BEGIN;
+	UPDATE partitioning_test SET time = now();
+	SELECT * FROM relation_acesses  WHERE table_name IN ('partitioning_test', 'partitioning_test_2009', 'partitioning_test_2010')  ORDER BY 1;
+COMMIT;
+
+-- updating partitioned table sequentially marks all of its partitions with sequential accesses
+BEGIN;
+	SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
+	UPDATE partitioning_test SET time = now();
+	SELECT * FROM relation_acesses  WHERE table_name IN ('partitioning_test', 'partitioning_test_2009', 'partitioning_test_2010')  ORDER BY 1;
+COMMIT;
+
+
+-- DDLs on partitioned table marks all of its partitions
+BEGIN;
+	ALTER TABLE partitioning_test ADD COLUMN X INT;
+	SELECT * FROM relation_acesses  WHERE table_name IN ('partitioning_test', 'partitioning_test_2009', 'partitioning_test_2010')  ORDER BY 1;
+ROLLBACK;
+
+-- DDLs on partitioned table sequentially marks all of its partitions with sequential accesses
+BEGIN;
+	SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
+	ALTER TABLE partitioning_test ADD COLUMN X INT;
+	SELECT * FROM relation_acesses  WHERE table_name IN ('partitioning_test', 'partitioning_test_2009', 'partitioning_test_2010')  ORDER BY 1;
+ROLLBACK;
+
+
+-- reading from partition table marks its parent
+BEGIN;
+	SELECT count(*) FROM partitioning_test_2009;
+	SELECT * FROM relation_acesses  WHERE table_name IN ('partitioning_test', 'partitioning_test_2009', 'partitioning_test_2010')  ORDER BY 1;
+COMMIT;
+
+-- rreading from partition table marks its parent with sequential accesses
+BEGIN;
+	SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
+	SELECT count(*) FROM partitioning_test_2009;
+	SELECT * FROM relation_acesses  WHERE table_name IN ('partitioning_test', 'partitioning_test_2009', 'partitioning_test_2010')  ORDER BY 1;
+COMMIT;
+
+-- updating from partition table marks its parent
+BEGIN;
+	UPDATE partitioning_test_2009 SET time = now();
+	SELECT * FROM relation_acesses  WHERE table_name IN ('partitioning_test', 'partitioning_test_2009', 'partitioning_test_2010')  ORDER BY 1;
+COMMIT;
+
+-- updating from partition table marks its parent sequential accesses
+BEGIN;
+	SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
+	UPDATE partitioning_test_2009 SET time = now();
+	SELECT * FROM relation_acesses  WHERE table_name IN ('partitioning_test', 'partitioning_test_2009', 'partitioning_test_2010')  ORDER BY 1;
+COMMIT;
+
+
+-- DDLs on partition table marks its parent
+BEGIN;
+	CREATE INDEX i1000000 ON partitioning_test_2009 (id);
+	SELECT * FROM relation_acesses  WHERE table_name IN ('partitioning_test', 'partitioning_test_2009', 'partitioning_test_2010')  ORDER BY 1;
+ROLLBACK;
+
+-- DDLs on partition table marks its parent in sequential mode
+BEGIN;
+	SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
+	CREATE INDEX i1000000 ON partitioning_test_2009 (id);
+	SELECT * FROM relation_acesses  WHERE table_name IN ('partitioning_test', 'partitioning_test_2009', 'partitioning_test_2010')  ORDER BY 1;
 ROLLBACK;
 
 -- TRUNCATE CASCADE works fine

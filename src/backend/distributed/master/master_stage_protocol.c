@@ -42,6 +42,7 @@
 #include "distributed/pg_dist_partition.h"
 #include "distributed/pg_dist_shard.h"
 #include "distributed/placement_connection.h"
+#include "distributed/relation_access_tracking.h"
 #include "distributed/remote_commands.h"
 #include "distributed/resource_lock.h"
 #include "distributed/transaction_management.h"
@@ -520,6 +521,19 @@ CreateShardsOnWorkers(Oid distributedRelationId, List *shardPlacements,
 		CoordinatedTransactionUse2PC();
 	}
 
+	/* mark parallel relation accesses before opening connections */
+	if (ShouldRecordRelationAccess() && useExclusiveConnection)
+	{
+		RecordParallelDDLAccess(distributedRelationId);
+
+		/* we should mark the parent as well */
+		if (alterTableAttachPartitionCommand != NULL)
+		{
+			Oid parentRelationId = PartitionParentOid(distributedRelationId);
+			RecordParallelDDLAccess(parentRelationId);
+		}
+	}
+
 	foreach(shardPlacementCell, shardPlacements)
 	{
 		ShardPlacement *shardPlacement = (ShardPlacement *) lfirst(shardPlacementCell);
@@ -538,7 +552,7 @@ CreateShardsOnWorkers(Oid distributedRelationId, List *shardPlacements,
 		 * with DDL. This is only important for parallel relation access in transaction
 		 * blocks, thus check useExclusiveConnection and transaction block as well.
 		 */
-		if ((IsTransactionBlock() && useExclusiveConnection) &&
+		if ((ShouldRecordRelationAccess() && useExclusiveConnection) &&
 			alterTableAttachPartitionCommand != NULL)
 		{
 			RelationShard *parentRelationShard = CitusMakeNode(RelationShard);

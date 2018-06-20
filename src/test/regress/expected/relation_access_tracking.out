@@ -338,9 +338,9 @@ ROLLBACK;
 BEGIN;
 	UPDATE table_1 SET value = 15;
 	SELECT * FROM relation_acesses WHERE table_name = 'table_1';
- table_name |   select_access   |   dml_access    |  ddl_access  
-------------+-------------------+-----------------+--------------
- table_1    | sequential_access | parallel_access | not_accessed
+ table_name |  select_access  |   dml_access    |  ddl_access  
+------------+-----------------+-----------------+--------------
+ table_1    | parallel_access | parallel_access | not_accessed
 (1 row)
 
 	SET LOCAL citus.multi_shard_modify_mode = 'sequential';
@@ -348,7 +348,7 @@ BEGIN;
 	SELECT * FROM relation_acesses WHERE table_name IN ('table_1', 'table_2')  ORDER BY 1;
  table_name |   select_access   |    dml_access     |  ddl_access  
 ------------+-------------------+-------------------+--------------
- table_1    | sequential_access | parallel_access   | not_accessed
+ table_1    | parallel_access   | parallel_access   | not_accessed
  table_2    | sequential_access | sequential_access | not_accessed
 (2 rows)
 
@@ -497,12 +497,12 @@ BEGIN;
 		) as foo
 	) AND value IN (SELECT key FROM table_4);
 	SELECT * FROM relation_acesses  WHERE table_name IN ('table_1', 'table_2', 'table_3', 'table_4')  ORDER BY 1;
- table_name |   select_access   |   dml_access    |  ddl_access  
-------------+-------------------+-----------------+--------------
- table_1    | parallel_access   | not_accessed    | not_accessed
- table_2    | parallel_access   | not_accessed    | not_accessed
- table_3    | sequential_access | parallel_access | not_accessed
- table_4    | parallel_access   | not_accessed    | not_accessed
+ table_name |  select_access  |   dml_access    |  ddl_access  
+------------+-----------------+-----------------+--------------
+ table_1    | parallel_access | not_accessed    | not_accessed
+ table_2    | parallel_access | not_accessed    | not_accessed
+ table_3    | parallel_access | parallel_access | not_accessed
+ table_4    | parallel_access | not_accessed    | not_accessed
 (4 rows)
 
 ROLLBACK;
@@ -669,7 +669,7 @@ BEGIN;
  partitioning_test_2009 | not_accessed  | not_accessed | parallel_access
 (2 rows)
 
-ROLLBACK;
+COMMIT;
 -- Adding partition tables via ATTACH PARTITION on distributed tables should have DDL access the partitioned table as well
 CREATE TABLE partitioning_test_2010 AS SELECT * FROM partitioning_test;
 SELECT create_distributed_table('partitioning_test_2010', 'id');
@@ -686,6 +686,176 @@ BEGIN;
  partitioning_test      | not_accessed  | not_accessed | parallel_access
  partitioning_test_2010 | not_accessed  | not_accessed | parallel_access
 (2 rows)
+
+COMMIT;
+-- reading from partitioned table marks all of its partitions
+BEGIN;
+	SELECT count(*) FROM partitioning_test;
+ count 
+-------
+     0
+(1 row)
+
+	SELECT * FROM relation_acesses  WHERE table_name IN ('partitioning_test', 'partitioning_test_2009', 'partitioning_test_2010')  ORDER BY 1;
+       table_name       |  select_access  |  dml_access  |  ddl_access  
+------------------------+-----------------+--------------+--------------
+ partitioning_test      | parallel_access | not_accessed | not_accessed
+ partitioning_test_2009 | parallel_access | not_accessed | not_accessed
+ partitioning_test_2010 | parallel_access | not_accessed | not_accessed
+(3 rows)
+
+COMMIT;
+-- reading from partitioned table sequentially marks all of its partitions with sequential accesses
+BEGIN;
+	SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
+	SELECT count(*) FROM partitioning_test;
+ count 
+-------
+     0
+(1 row)
+
+	SELECT * FROM relation_acesses  WHERE table_name IN ('partitioning_test', 'partitioning_test_2009', 'partitioning_test_2010')  ORDER BY 1;
+       table_name       |   select_access   |  dml_access  |  ddl_access  
+------------------------+-------------------+--------------+--------------
+ partitioning_test      | sequential_access | not_accessed | not_accessed
+ partitioning_test_2009 | sequential_access | not_accessed | not_accessed
+ partitioning_test_2010 | sequential_access | not_accessed | not_accessed
+(3 rows)
+
+COMMIT;
+-- updating partitioned table marks all of its partitions
+BEGIN;
+	UPDATE partitioning_test SET time = now();
+	SELECT * FROM relation_acesses  WHERE table_name IN ('partitioning_test', 'partitioning_test_2009', 'partitioning_test_2010')  ORDER BY 1;
+       table_name       |  select_access  |   dml_access    |  ddl_access  
+------------------------+-----------------+-----------------+--------------
+ partitioning_test      | parallel_access | parallel_access | not_accessed
+ partitioning_test_2009 | parallel_access | parallel_access | not_accessed
+ partitioning_test_2010 | parallel_access | parallel_access | not_accessed
+(3 rows)
+
+COMMIT;
+-- updating partitioned table sequentially marks all of its partitions with sequential accesses
+BEGIN;
+	SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
+	UPDATE partitioning_test SET time = now();
+	SELECT * FROM relation_acesses  WHERE table_name IN ('partitioning_test', 'partitioning_test_2009', 'partitioning_test_2010')  ORDER BY 1;
+       table_name       |   select_access   |    dml_access     |  ddl_access  
+------------------------+-------------------+-------------------+--------------
+ partitioning_test      | sequential_access | sequential_access | not_accessed
+ partitioning_test_2009 | sequential_access | sequential_access | not_accessed
+ partitioning_test_2010 | sequential_access | sequential_access | not_accessed
+(3 rows)
+
+COMMIT;
+-- DDLs on partitioned table marks all of its partitions
+BEGIN;
+	ALTER TABLE partitioning_test ADD COLUMN X INT;
+	SELECT * FROM relation_acesses  WHERE table_name IN ('partitioning_test', 'partitioning_test_2009', 'partitioning_test_2010')  ORDER BY 1;
+       table_name       | select_access |  dml_access  |   ddl_access    
+------------------------+---------------+--------------+-----------------
+ partitioning_test      | not_accessed  | not_accessed | parallel_access
+ partitioning_test_2009 | not_accessed  | not_accessed | parallel_access
+ partitioning_test_2010 | not_accessed  | not_accessed | parallel_access
+(3 rows)
+
+ROLLBACK;
+-- DDLs on partitioned table sequentially marks all of its partitions with sequential accesses
+BEGIN;
+	SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
+	ALTER TABLE partitioning_test ADD COLUMN X INT;
+	SELECT * FROM relation_acesses  WHERE table_name IN ('partitioning_test', 'partitioning_test_2009', 'partitioning_test_2010')  ORDER BY 1;
+       table_name       | select_access |  dml_access  |    ddl_access     
+------------------------+---------------+--------------+-------------------
+ partitioning_test      | not_accessed  | not_accessed | sequential_access
+ partitioning_test_2009 | not_accessed  | not_accessed | sequential_access
+ partitioning_test_2010 | not_accessed  | not_accessed | sequential_access
+(3 rows)
+
+ROLLBACK;
+-- reading from partition table marks its parent
+BEGIN;
+	SELECT count(*) FROM partitioning_test_2009;
+ count 
+-------
+     0
+(1 row)
+
+	SELECT * FROM relation_acesses  WHERE table_name IN ('partitioning_test', 'partitioning_test_2009', 'partitioning_test_2010')  ORDER BY 1;
+       table_name       |  select_access  |  dml_access  |  ddl_access  
+------------------------+-----------------+--------------+--------------
+ partitioning_test      | parallel_access | not_accessed | not_accessed
+ partitioning_test_2009 | parallel_access | not_accessed | not_accessed
+ partitioning_test_2010 | not_accessed    | not_accessed | not_accessed
+(3 rows)
+
+COMMIT;
+-- rreading from partition table marks its parent with sequential accesses
+BEGIN;
+	SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
+	SELECT count(*) FROM partitioning_test_2009;
+ count 
+-------
+     0
+(1 row)
+
+	SELECT * FROM relation_acesses  WHERE table_name IN ('partitioning_test', 'partitioning_test_2009', 'partitioning_test_2010')  ORDER BY 1;
+       table_name       |   select_access   |  dml_access  |  ddl_access  
+------------------------+-------------------+--------------+--------------
+ partitioning_test      | sequential_access | not_accessed | not_accessed
+ partitioning_test_2009 | sequential_access | not_accessed | not_accessed
+ partitioning_test_2010 | not_accessed      | not_accessed | not_accessed
+(3 rows)
+
+COMMIT;
+-- updating from partition table marks its parent
+BEGIN;
+	UPDATE partitioning_test_2009 SET time = now();
+	SELECT * FROM relation_acesses  WHERE table_name IN ('partitioning_test', 'partitioning_test_2009', 'partitioning_test_2010')  ORDER BY 1;
+       table_name       |  select_access  |   dml_access    |  ddl_access  
+------------------------+-----------------+-----------------+--------------
+ partitioning_test      | parallel_access | parallel_access | not_accessed
+ partitioning_test_2009 | parallel_access | parallel_access | not_accessed
+ partitioning_test_2010 | not_accessed    | not_accessed    | not_accessed
+(3 rows)
+
+COMMIT;
+-- updating from partition table marks its parent sequential accesses
+BEGIN;
+	SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
+	UPDATE partitioning_test_2009 SET time = now();
+	SELECT * FROM relation_acesses  WHERE table_name IN ('partitioning_test', 'partitioning_test_2009', 'partitioning_test_2010')  ORDER BY 1;
+       table_name       |   select_access   |    dml_access     |  ddl_access  
+------------------------+-------------------+-------------------+--------------
+ partitioning_test      | sequential_access | sequential_access | not_accessed
+ partitioning_test_2009 | sequential_access | sequential_access | not_accessed
+ partitioning_test_2010 | not_accessed      | not_accessed      | not_accessed
+(3 rows)
+
+COMMIT;
+-- DDLs on partition table marks its parent
+BEGIN;
+	CREATE INDEX i1000000 ON partitioning_test_2009 (id);
+	SELECT * FROM relation_acesses  WHERE table_name IN ('partitioning_test', 'partitioning_test_2009', 'partitioning_test_2010')  ORDER BY 1;
+       table_name       | select_access |  dml_access  |   ddl_access    
+------------------------+---------------+--------------+-----------------
+ partitioning_test      | not_accessed  | not_accessed | parallel_access
+ partitioning_test_2009 | not_accessed  | not_accessed | parallel_access
+ partitioning_test_2010 | not_accessed  | not_accessed | not_accessed
+(3 rows)
+
+ROLLBACK;
+-- DDLs on partition table marks its parent in sequential mode
+BEGIN;
+	SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
+	CREATE INDEX i1000000 ON partitioning_test_2009 (id);
+	SELECT * FROM relation_acesses  WHERE table_name IN ('partitioning_test', 'partitioning_test_2009', 'partitioning_test_2010')  ORDER BY 1;
+       table_name       | select_access |  dml_access  |    ddl_access     
+------------------------+---------------+--------------+-------------------
+ partitioning_test      | not_accessed  | not_accessed | sequential_access
+ partitioning_test_2009 | not_accessed  | not_accessed | sequential_access
+ partitioning_test_2010 | not_accessed  | not_accessed | not_accessed
+(3 rows)
 
 ROLLBACK;
 -- TRUNCATE CASCADE works fine
@@ -765,9 +935,9 @@ BEGIN;
 (1 row)
 
 	SELECT * FROM relation_acesses  WHERE table_name IN ('table_1')  ORDER BY 1;
- table_name |   select_access   |   dml_access    |  ddl_access  
-------------+-------------------+-----------------+--------------
- table_1    | sequential_access | parallel_access | not_accessed
+ table_name |  select_access  |   dml_access    |  ddl_access  
+------------+-----------------+-----------------+--------------
+ table_1    | parallel_access | parallel_access | not_accessed
 (1 row)
 
 ROLLBACK;
@@ -782,9 +952,9 @@ BEGIN;
 (1 row)
 
 	SELECT * FROM relation_acesses  WHERE table_name IN ('table_1')  ORDER BY 1;
- table_name |   select_access   |   dml_access    |  ddl_access  
-------------+-------------------+-----------------+--------------
- table_1    | sequential_access | parallel_access | not_accessed
+ table_name |  select_access  |   dml_access    |  ddl_access  
+------------+-----------------+-----------------+--------------
+ table_1    | parallel_access | parallel_access | not_accessed
 (1 row)
 
 ROLLBACK;
@@ -810,7 +980,7 @@ NOTICE:  Copying data from local table...
 COMMIT;
 SET search_path TO 'public';
 DROP SCHEMA access_tracking CASCADE;
-NOTICE:  drop cascades to 15 other objects
+NOTICE:  drop cascades to 13 other objects
 DETAIL:  drop cascades to function access_tracking.relation_select_access_mode(oid)
 drop cascades to function access_tracking.relation_dml_access_mode(oid)
 drop cascades to function access_tracking.relation_ddl_access_mode(oid)
@@ -823,6 +993,4 @@ drop cascades to table access_tracking.table_5
 drop cascades to table access_tracking.table_6
 drop cascades to table access_tracking.table_7
 drop cascades to table access_tracking.partitioning_test
-drop cascades to table access_tracking.partitioning_test_2009
-drop cascades to table access_tracking.partitioning_test_2010
 drop cascades to table access_tracking.table_3

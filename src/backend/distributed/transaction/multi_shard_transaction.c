@@ -91,7 +91,6 @@ OpenTransactionsForAllTasks(List *taskList, int connectionFlags)
 			ShardPlacement *shardPlacement = (ShardPlacement *) lfirst(placementCell);
 			ShardPlacementAccess placementModification;
 			List *placementAccessList = NIL;
-			List *placementSelectList = NIL;
 			MultiConnection *connection = NULL;
 
 			WorkerNode *workerNode = FindWorkerNode(shardPlacement->nodeName,
@@ -111,21 +110,25 @@ OpenTransactionsForAllTasks(List *taskList, int connectionFlags)
 
 			if (accessType == PLACEMENT_ACCESS_DDL)
 			{
+				List *placementDDLList = BuildPlacementDDLList(shardPlacement->groupId,
+															   task->relationShardList);
+
 				/*
 				 * All relations appearing inter-shard DDL commands should be marked
 				 * with DDL access.
 				 */
-				placementSelectList = BuildPlacementDDLList(shardPlacement->groupId,
-															task->relationShardList);
+				placementAccessList = list_concat(placementAccessList, placementDDLList);
 			}
 			else
 			{
-				/* add additional placement accesses for subselects (e.g. INSERT .. SELECT) */
-				placementSelectList = BuildPlacementSelectList(shardPlacement->groupId,
-															   task->relationShardList);
-			}
+				List *placementSelectList =
+					BuildPlacementSelectList(shardPlacement->groupId,
+											 task->relationShardList);
 
-			placementAccessList = list_concat(placementAccessList, placementSelectList);
+				/* add additional placement accesses for subselects (e.g. INSERT .. SELECT) */
+				placementAccessList =
+					list_concat(placementAccessList, placementSelectList);
+			}
 
 			/*
 			 * Find a connection that sees preceding writes and cannot self-deadlock,

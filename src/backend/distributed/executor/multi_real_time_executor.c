@@ -106,8 +106,15 @@ MultiRealTimeExecute(Job *job)
 	foreach(taskCell, taskList)
 	{
 		Task *task = (Task *) lfirst(taskCell);
+		TaskExecution *taskExecution = NULL;
 
-		TaskExecution *taskExecution = InitTaskExecution(task, EXEC_TASK_CONNECT_START);
+		/* keep track of multi shard accesses before opening the connections */
+		if (MultiShardConnectionType == PARALLEL_CONNECTION)
+		{
+			RecordRelationParallelSelectAccessForTask(task);
+		}
+
+		taskExecution = InitTaskExecution(task, EXEC_TASK_CONNECT_START);
 		taskExecutionList = lappend(taskExecutionList, taskExecution);
 	}
 
@@ -148,13 +155,6 @@ MultiRealTimeExecute(Job *job)
 
 			/* update the connection counter for throttling */
 			UpdateConnectionCounter(workerNodeState, connectAction);
-
-			/* keep track of multi shard select accesses */
-			if (MultiShardConnectionType == PARALLEL_CONNECTION &&
-				connectAction == CONNECT_ACTION_OPENED)
-			{
-				RecordRelationMultiShardSelectAccessForTask(task);
-			}
 
 			/*
 			 * If this task failed, we need to iterate over task executions, and

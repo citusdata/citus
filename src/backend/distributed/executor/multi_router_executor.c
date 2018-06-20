@@ -1333,6 +1333,32 @@ ExecuteModifyTasks(List *taskList, bool expectResults, ParamListInfo paramListIn
 		CoordinatedTransactionUse2PC();
 	}
 
+	/*
+	 * With a similar rationale as above, where we expect all tasks to operate on
+	 * the same relations, we prefer to record relation accesses for the first
+	 * task only.
+	 */
+	if (firstTask->taskType == MODIFY_TASK)
+	{
+		RecordRelationParallelModifyAccessForTask(firstTask);
+
+		/*
+		 * We prefer to mark with SELECT access as well because for multi shard
+		 * modification queries, the placement access list is always marked with both
+		 * DML and SELECT accesses.
+		 */
+		RecordRelationParallelSelectAccessForTask(firstTask);
+	}
+	else if (firstTask->taskType == DDL_TASK &&
+			 PartitionMethod(firstShardInterval->relationId) != DISTRIBUTE_BY_NONE)
+	{
+		/*
+		 * Even single task DDLs hit here, so we'd prefer
+		 * not to record for reference tables.
+		 */
+		RecordRelationParallelDDLAccessForTask(firstTask);
+	}
+
 	if (firstTask->taskType == DDL_TASK || firstTask->taskType == VACUUM_ANALYZE_TASK)
 	{
 		connectionFlags = FOR_DDL;
@@ -1369,20 +1395,6 @@ ExecuteModifyTasks(List *taskList, bool expectResults, ParamListInfo paramListIn
 			shardConnections = GetShardHashConnections(shardConnectionHash, shardId,
 													   &shardConnectionsFound);
 			connectionList = shardConnections->connectionList;
-
-			if (task->taskType == MODIFY_TASK)
-			{
-				RecordRelationMultiShardModifyAccessForTask(task);
-			}
-			else if (task->taskType == DDL_TASK &&
-					 PartitionMethod(RelationIdForShard(shardId)) != DISTRIBUTE_BY_NONE)
-			{
-				/*
-				 * Even single task DDLs hit here, so we'd prefer
-				 * not to record for reference tables.
-				 */
-				RecordRelationMultiShardDDLAccessForTask(task);
-			}
 
 			if (placementIndex >= list_length(connectionList))
 			{

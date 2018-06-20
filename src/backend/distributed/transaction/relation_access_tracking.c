@@ -18,8 +18,10 @@
 #include "miscadmin.h"
 
 #include "access/xact.h"
+#include "distributed/colocation_utils.h"
 #include "distributed/hash_helpers.h"
 #include "distributed/multi_join_order.h"
+#include "distributed/multi_partitioning_utils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/relation_access_tracking.h"
 #include "utils/hsearch.h"
@@ -63,10 +65,15 @@ typedef struct RelationAccessHashEntry
 
 static HTAB *RelationAccessHash;
 
+
+static void RecordPlacementAccessToCache(Oid relationId,
+										 ShardPlacementAccessType accessType);
 static RelationAccessMode GetRelationAccessMode(Oid relationId,
 												ShardPlacementAccessType accessType);
 static void RecordParallelRelationAccess(Oid relationId, ShardPlacementAccessType
 										 placementAccess);
+static void RecordParallelRelationAccessToCache(Oid relationId,
+												ShardPlacementAccessType placementAccess);
 
 
 /*
@@ -83,7 +90,7 @@ ResetRelationAccessHash()
  * Allocate RelationAccessHash.
  */
 void
-AllocateRelationAccessHash()
+AllocateRelationAccessHash(void)
 {
 	HASHCTL info;
 	uint32 hashFlags = 0;
@@ -108,8 +115,81 @@ void
 AssociatePlacementAccessWithRelation(ShardPlacement *placement,
 									 ShardPlacementAccessType accessType)
 {
-	uint64 shardId = placement->shardId;
-	Oid relationId = RelationIdForShard(shardId);
+	uint64 shardId = INVALID_SHARD_ID;
+	Oid relationId = InvalidOid;
+
+	if (!ShouldRecordRelationAccess())
+	{
+		return;
+	}
+
+	shardId = placement->shardId;
+	relationId = RelationIdForShard(shardId);
+
+	/*
+	 * If a relation is partitioned, record accesses to all of its partitions as well.
+	 * We prefer to use PartitionedTableNoLock() because at this point the necessary
+	 * locks on the relation has already been acquired.
+	 */
+	if (PartitionedTableNoLock(relationId))
+	{
+		List *partitionList = PartitionList(relationId);
+		ShardInterval *shardInterval = LoadShardInterval(shardId);
+		int shardIndex = shardInterval->shardIndex;
+		ListCell *partitionCell = NULL;
+
+		foreach(partitionCell, partitionList)
+		{
+			Oid partitionOid = lfirst_oid(partitionCell);
+			uint64 partitionShardId = INVALID_SHARD_ID;
+			List *partitionShardPlacementList = NIL;
+			ShardPlacement *partitionInitialShardPlacement = NULL;
+
+			/*
+			 * During create_distributed_table, the partitions may not
+			 * have been created yet and so there are no placements yet.
+			 * We're already going to register them when we distribute
+			 * the partitions.
+			 */
+			if (!IsDistributedTable(partitionOid))
+			{
+				continue;
+			}
+
+			partitionShardId =
+				ColocatedShardIdInRelation(partitionOid, shardIndex);
+			partitionShardPlacementList = ShardPlacementList(partitionShardId);
+			partitionInitialShardPlacement =
+				(ShardPlacement *) linitial(partitionShardPlacementList);
+
+			/*
+			 * Recursively record all relation accesses of its partitions. Note that
+			 * we prefer to recursively call AssociatePlacementAccessWithRelation()
+			 * to support multi-level partitioned tables.
+			 */
+			AssociatePlacementAccessWithRelation(partitionInitialShardPlacement,
+												 accessType);
+		}
+	}
+	else if (PartitionTableNoLock(relationId))
+	{
+		Oid parentOid = PartitionParentOid(relationId);
+
+		/* only record the parent */
+		RecordPlacementAccessToCache(parentOid, accessType);
+	}
+
+	RecordPlacementAccessToCache(relationId, accessType);
+}
+
+
+/*
+ * RecordPlacementAccessToCache is a utility function which saves the given
+ * relation id's access to the RelationAccessHash.
+ */
+static void
+RecordPlacementAccessToCache(Oid relationId, ShardPlacementAccessType accessType)
+{
 	RelationAccessHashKey hashKey;
 	RelationAccessHashEntry *hashEntry;
 	bool found = false;
@@ -128,18 +208,18 @@ AssociatePlacementAccessWithRelation(ShardPlacement *placement,
 
 
 /*
- * RecordRelationMultiShardSelectAccessForTask goes over all the relations
+ * RecordRelationParallelSelectAccessForTask goes over all the relations
  * in the relationShardList and records the select access per each table.
  */
 void
-RecordRelationMultiShardSelectAccessForTask(Task *task)
+RecordRelationParallelSelectAccessForTask(Task *task)
 {
 	List *relationShardList = NIL;
 	ListCell *relationShardCell = NULL;
 	Oid lastRelationId = InvalidOid;
 
 	/* no point in recoding accesses in non-transaction blocks, skip the loop */
-	if (!IsTransactionBlock())
+	if (!ShouldRecordRelationAccess())
 	{
 		return;
 	}
@@ -168,20 +248,20 @@ RecordRelationMultiShardSelectAccessForTask(Task *task)
 
 
 /*
- * RecordRelationMultiShardModifyAccessForTask gets a task and records
+ * RecordRelationParallelModifyAccessForTask gets a task and records
  * the accesses. Note that the target relation is recorded with modify access
  * where as the subqueries inside the modify query is recorded with select
  * access.
  */
 void
-RecordRelationMultiShardModifyAccessForTask(Task *task)
+RecordRelationParallelModifyAccessForTask(Task *task)
 {
 	List *relationShardList = NULL;
 	ListCell *relationShardCell = NULL;
 	Oid lastRelationId = InvalidOid;
 
 	/* no point in recoding accesses in non-transaction blocks, skip the loop */
-	if (!IsTransactionBlock())
+	if (!ShouldRecordRelationAccess())
 	{
 		return;
 	}
@@ -215,22 +295,34 @@ RecordRelationMultiShardModifyAccessForTask(Task *task)
 
 
 /*
- * RecordRelationMultiShardDDLAccessForTask marks all the relationShards
+ * RecordRelationParallelDDLAccessForTask marks all the relationShards
  * with parallel DDL access if exists. That case is valid for inter-shard
  * DDL commands such as foreign key creation. The function also records
  * the relation that anchorShardId belongs to.
  */
 void
-RecordRelationMultiShardDDLAccessForTask(Task *task)
+RecordRelationParallelDDLAccessForTask(Task *task)
 {
 	List *relationShardList = task->relationShardList;
 	ListCell *relationShardCell = NULL;
+	Oid lastRelationId = InvalidOid;
 
 	foreach(relationShardCell, relationShardList)
 	{
 		RelationShard *relationShard = (RelationShard *) lfirst(relationShardCell);
+		Oid currentRelationId = relationShard->relationId;
 
-		RecordParallelDDLAccess(relationShard->relationId);
+		/*
+		 * An optimization, skip going to hash table if we've already
+		 * recorded the relation.
+		 */
+		if (currentRelationId == lastRelationId)
+		{
+			continue;
+		}
+
+		RecordParallelDDLAccess(currentRelationId);
+		lastRelationId = currentRelationId;
 	}
 
 	RecordParallelDDLAccess(RelationIdForShard(task->anchorShardId));
@@ -271,21 +363,58 @@ RecordParallelDDLAccess(Oid relationId)
  * RecordParallelRelationAccess records the relation access mode as parallel
  * for the given access type (e.g., select, dml or ddl) in the RelationAccessHash.
  *
- * The function becomes no-op for non-transaction blocks
+ * The function also takes partitions and partitioned tables into account.
  */
 static void
 RecordParallelRelationAccess(Oid relationId, ShardPlacementAccessType placementAccess)
 {
-	RelationAccessHashKey hashKey;
-	RelationAccessHashEntry *hashEntry;
-	bool found = false;
-	int multiShardAccessBit = 0;
-
-	/* no point in recoding accesses in non-transaction blocks */
-	if (!IsTransactionBlock())
+	if (!ShouldRecordRelationAccess())
 	{
 		return;
 	}
+
+	/*
+	 * If a relation is partitioned, record accesses to all of its partitions as well.
+	 * We prefer to use PartitionedTableNoLock() because at this point the necessary
+	 * locks on the relation has already been acquired.
+	 */
+	if (PartitionedTableNoLock(relationId))
+	{
+		List *partitionList = PartitionList(relationId);
+		ListCell *partitionCell = NULL;
+
+		foreach(partitionCell, partitionList)
+		{
+			Oid partitionOid = lfirst_oid(partitionCell);
+
+			/* recursively record all relation accesses of its partitions */
+			RecordParallelRelationAccess(partitionOid, placementAccess);
+		}
+	}
+	else if (PartitionTableNoLock(relationId))
+	{
+		Oid parentOid = PartitionParentOid(relationId);
+
+		/* only record the parent */
+		RecordParallelRelationAccessToCache(parentOid, placementAccess);
+	}
+
+	RecordParallelRelationAccessToCache(relationId, placementAccess);
+}
+
+
+/*
+ * RecordParallelRelationAccessToCache is a utility function which saves the given
+ * relation id's access to the RelationAccessHash.
+ */
+static void
+RecordParallelRelationAccessToCache(Oid relationId,
+									ShardPlacementAccessType placementAccess)
+{
+	RelationAccessHashKey hashKey;
+	RelationAccessHashEntry *hashEntry;
+	bool found = false;
+	int parallelRelationAccessBit = 0;
 
 	hashKey.relationId = relationId;
 
@@ -299,8 +428,8 @@ RecordParallelRelationAccess(Oid relationId, ShardPlacementAccessType placementA
 	hashEntry->relationAccessMode |= (1 << (placementAccess));
 
 	/* set the bit representing access mode */
-	multiShardAccessBit = placementAccess + PARALLEL_MODE_FLAG_OFFSET;
-	hashEntry->relationAccessMode |= (1 << multiShardAccessBit);
+	parallelRelationAccessBit = placementAccess + PARALLEL_MODE_FLAG_OFFSET;
+	hashEntry->relationAccessMode |= (1 << parallelRelationAccessBit);
 }
 
 
@@ -345,10 +474,10 @@ GetRelationAccessMode(Oid relationId, ShardPlacementAccessType accessType)
 	RelationAccessHashEntry *hashEntry;
 	int relationAcessMode = 0;
 	bool found = false;
-	int multiShardAccessBit = accessType + PARALLEL_MODE_FLAG_OFFSET;
+	int parallelRelationAccessBit = accessType + PARALLEL_MODE_FLAG_OFFSET;
 
 	/* no point in getting the mode when not inside a transaction block */
-	if (!IsTransactionBlock())
+	if (!ShouldRecordRelationAccess())
 	{
 		return RELATION_NOT_ACCESSED;
 	}
@@ -370,7 +499,7 @@ GetRelationAccessMode(Oid relationId, ShardPlacementAccessType accessType)
 		return RELATION_NOT_ACCESSED;
 	}
 
-	if (relationAcessMode & (1 << multiShardAccessBit))
+	if (relationAcessMode & (1 << parallelRelationAccessBit))
 	{
 		return RELATION_PARALLEL_ACCESSED;
 	}
@@ -378,4 +507,26 @@ GetRelationAccessMode(Oid relationId, ShardPlacementAccessType accessType)
 	{
 		return RELATION_SEQUENTIAL_ACCESSED;
 	}
+}
+
+
+/*
+ * ShouldRecordRelationAccess returns true when we should keep track
+ * of the relation accesses.
+ *
+ * In many cases, we'd only need IsTransactionBlock(), however, for some cases such as
+ * CTEs, where Citus uses the same connections accross multiple queries, we should
+ * still record the relation accesses even not inside an explicit transaction block.
+ * Thus, keeping track of the relation accesses inside coordinated transactions is
+ * also required.
+ */
+bool
+ShouldRecordRelationAccess()
+{
+	if (IsTransactionBlock() || InCoordinatedTransaction())
+	{
+		return true;
+	}
+
+	return false;
 }
