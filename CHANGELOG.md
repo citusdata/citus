@@ -1,3 +1,9 @@
+### citus v7.4.1 (June 20, 2018) ###
+
+* Fixes a bug that could cause transactions to incorrectly proceed after failure
+
+* Fixes a bug on INSERT ... SELECT queries in prepared statements
+
 ### citus v7.4.0 (May 15, 2018) ###
 
 * Adds support for non-pushdownable subqueries and CTEs in UPDATE/DELETE queries
