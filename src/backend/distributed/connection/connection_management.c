@@ -645,10 +645,12 @@ StartConnectionEstablishment(ConnectionHashKey *key)
 
 	/* search our cache for precomputed connection settings */
 	entry = hash_search(ConnParamsHash, key, HASH_ENTER, &found);
-	if (!found)
+	if (!found || !entry->isValid)
 	{
 		/* if they're not found, compute them from GUC, runtime, etc. */
 		GetConnParams(key, &entry->keywords, &entry->values, ConnectionContext);
+
+		entry->isValid = true;
 	}
 
 	connection = MemoryContextAllocZero(ConnectionContext, sizeof(MultiConnection));
