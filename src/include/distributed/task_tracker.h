@@ -109,6 +109,7 @@ typedef struct WorkerTasksSharedStateData
 	LWLockTranche taskHashLockTranche;
 #endif
 	LWLock taskHashLock;
+	bool conninfosValid;
 } WorkerTasksSharedStateData;
 
 

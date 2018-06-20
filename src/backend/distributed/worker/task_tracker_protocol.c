@@ -22,6 +22,7 @@
 #include "access/xact.h"
 #include "commands/dbcommands.h"
 #include "commands/schemacmds.h"
+#include "commands/trigger.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_client_executor.h"
 #include "distributed/multi_server_executor.h"
@@ -46,6 +47,7 @@ static void CleanupTask(WorkerTask *workerTask);
 PG_FUNCTION_INFO_V1(task_tracker_assign_task);
 PG_FUNCTION_INFO_V1(task_tracker_task_status);
 PG_FUNCTION_INFO_V1(task_tracker_cleanup_job);
+PG_FUNCTION_INFO_V1(task_tracker_conninfo_cache_invalidate);
 
 
 /*
@@ -219,6 +221,30 @@ task_tracker_cleanup_job(PG_FUNCTION_ARGS)
 	UnlockJobResource(jobId, AccessExclusiveLock);
 
 	PG_RETURN_VOID();
+}
+
+
+/*
+ * task_tracker_conninfo_cache_invalidate is a trigger function that signals to
+ * the task tracker to refresh its conn params cache after a authinfo change.
+ *
+ * NB: We decided there is little point in checking permissions here, there
+ * are much easier ways to waste CPU than causing cache invalidations.
+ */
+Datum
+task_tracker_conninfo_cache_invalidate(PG_FUNCTION_ARGS)
+{
+	if (!CALLED_AS_TRIGGER(fcinfo))
+	{
+		ereport(ERROR, (errcode(ERRCODE_E_R_I_E_TRIGGER_PROTOCOL_VIOLATED),
+						errmsg("must be called as trigger")));
+	}
+
+	CheckCitusVersion(ERROR);
+
+	/* no-op in community edition */
+
+	PG_RETURN_DATUM(PointerGetDatum(NULL));
 }
 
 

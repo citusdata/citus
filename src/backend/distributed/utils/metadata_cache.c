@@ -212,6 +212,7 @@ PG_FUNCTION_INFO_V1(master_dist_shard_cache_invalidate);
 PG_FUNCTION_INFO_V1(master_dist_placement_cache_invalidate);
 PG_FUNCTION_INFO_V1(master_dist_node_cache_invalidate);
 PG_FUNCTION_INFO_V1(master_dist_local_group_cache_invalidate);
+PG_FUNCTION_INFO_V1(master_dist_authinfo_cache_invalidate);
 PG_FUNCTION_INFO_V1(role_exists);
 PG_FUNCTION_INFO_V1(authinfo_valid);
 
@@ -2419,6 +2420,31 @@ master_dist_node_cache_invalidate(PG_FUNCTION_ARGS)
 
 
 /*
+ * master_dist_authinfo_cache_invalidate is a trigger function that performs
+ * relcache invalidations when the contents of pg_dist_authinfo are changed
+ * on the SQL level.
+ *
+ * NB: We decided there is little point in checking permissions here, there
+ * are much easier ways to waste CPU than causing cache invalidations.
+ */
+Datum
+master_dist_authinfo_cache_invalidate(PG_FUNCTION_ARGS)
+{
+	if (!CALLED_AS_TRIGGER(fcinfo))
+	{
+		ereport(ERROR, (errcode(ERRCODE_E_R_I_E_TRIGGER_PROTOCOL_VIOLATED),
+						errmsg("must be called as trigger")));
+	}
+
+	CheckCitusVersion(ERROR);
+
+	/* no-op in community edition */
+
+	PG_RETURN_DATUM(PointerGetDatum(NULL));
+}
+
+
+/*
  * master_dist_local_group_cache_invalidate is a trigger function that performs
  * relcache invalidations when the contents of pg_dist_local_group are changed
  * on the SQL level.
@@ -2951,11 +2977,21 @@ CreateDistTableCache(void)
 
 /*
  * InvalidateMetadataSystemCache resets all the cached OIDs and the extensionLoaded flag,
- * and invalidates the worker node and local group ID caches.
+ * and invalidates the worker node, ConnParams, and local group ID caches.
  */
 void
 InvalidateMetadataSystemCache(void)
 {
+	ConnParamsHashEntry *entry = NULL;
+	HASH_SEQ_STATUS status;
+
+	hash_seq_init(&status, ConnParamsHash);
+
+	while ((entry = (ConnParamsHashEntry *) hash_seq_search(&status)) != NULL)
+	{
+		entry->isValid = false;
+	}
+
 	memset(&MetadataCache, 0, sizeof(MetadataCache));
 	workerNodeHashValid = false;
 	LocalGroupId = -1;
