@@ -39,6 +39,7 @@ extern void ExecuteQueryIntoDestReceiver(Query *query, ParamListInfo params,
 										 DestReceiver *dest);
 extern void ExecutePlanIntoDestReceiver(PlannedStmt *queryPlan, ParamListInfo params,
 										DestReceiver *dest);
+extern void SetLocalMultiShardModifyModeToSequential(void);
 
 
 #endif /* MULTI_EXECUTOR_H */

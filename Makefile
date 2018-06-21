@@ -68,6 +68,7 @@ OBJS = src/backend/distributed/shared_library_init.o \
      src/backend/distributed/test/partitioning_utils.o \
      src/backend/distributed/test/progress_utils.o \
      src/backend/distributed/test/prune_shard_list.o \
+     src/backend/distributed/test/sequential_execution.o \
      src/backend/distributed/transaction/backend_data.o \
      src/backend/distributed/transaction/distributed_deadlock_detection.o \
      src/backend/distributed/transaction/lock_graph.o \
