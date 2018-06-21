@@ -268,12 +268,17 @@ RemoteFileDestReceiverStartup(DestReceiver *dest, int operation,
 	foreach(initialNodeCell, initialNodeList)
 	{
 		WorkerNode *workerNode = (WorkerNode *) lfirst(initialNodeCell);
-		int connectionFlags = 0;
 		char *nodeName = workerNode->workerName;
 		int nodePort = workerNode->workerPort;
 		MultiConnection *connection = NULL;
 
-		connection = StartNodeConnection(connectionFlags, nodeName, nodePort);
+		/*
+		 * We prefer to use a connection that is not associcated with
+		 * any placements. The reason is that we claim this connection
+		 * exclusively and that would prevent the consecutive DML/DDL
+		 * use the same connection.
+		 */
+		connection = StartNonDataAccessConnection(nodeName, nodePort);
 		ClaimConnectionExclusively(connection);
 		MarkRemoteTransactionCritical(connection);
 

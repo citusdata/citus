@@ -701,6 +701,25 @@ SELECT * FROM summary_table ORDER BY id, counter;
   6 |      11
 (6 rows)
 
+-- make sure that the intermediate result uses a connection
+-- that does not interfere with placement connections
+BEGIN;
+	INSERT INTO modify_table (id) VALUES (10000);
+	WITH test_cte AS (SELECT count(*) FROM modify_table) SELECT * FROM test_cte;
+ count 
+-------
+     1
+(1 row)
+
+ROLLBACK;
+-- similarly, make sure that the intermediate result uses a seperate connection
+ WITH first_query AS (INSERT INTO modify_table (id) VALUES (10001)), 
+ 	second_query AS (SELECT * FROM modify_table) SELECT count(*) FROM second_query;
+ count 
+-------
+     1
+(1 row)
+
 DROP SCHEMA with_modifying CASCADE;
 NOTICE:  drop cascades to 4 other objects
 DETAIL:  drop cascades to table users_table

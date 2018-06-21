@@ -417,4 +417,15 @@ INSERT INTO summary_table SELECT id, COUNT(*) AS counter FROM raw_data GROUP BY 
 SELECT COUNT(*) FROM modify_table;
 SELECT * FROM summary_table ORDER BY id, counter;
 
+-- make sure that the intermediate result uses a connection
+-- that does not interfere with placement connections
+BEGIN;
+	INSERT INTO modify_table (id) VALUES (10000);
+	WITH test_cte AS (SELECT count(*) FROM modify_table) SELECT * FROM test_cte;
+ROLLBACK;
+
+-- similarly, make sure that the intermediate result uses a seperate connection
+ WITH first_query AS (INSERT INTO modify_table (id) VALUES (10001)), 
+ 	second_query AS (SELECT * FROM modify_table) SELECT count(*) FROM second_query;
+
 DROP SCHEMA with_modifying CASCADE;
