@@ -128,6 +128,50 @@ GetNodeConnection(uint32 flags, const char *hostname, int32 port)
 
 
 /*
+ * GetNonDataAccessConnection() establishes a connection to remote node, using
+ * default user and database. The returned connection is guaranteed to not have
+ * been used for any data access over any placements.
+ *
+ * See StartNonDataAccessConnection for details.
+ */
+MultiConnection *
+GetNonDataAccessConnection(const char *hostname, int32 port)
+{
+	MultiConnection *connection;
+
+	connection = StartNonDataAccessConnection(hostname, port);
+
+	FinishConnectionEstablishment(connection);
+
+	return connection;
+}
+
+
+/*
+ * StartNonDataAccessConnection() initiates a connection that is
+ * guaranteed to not have been used for any data access over any
+ * placements.
+ *
+ * The returned connection is started with the default user and database.
+ */
+MultiConnection *
+StartNonDataAccessConnection(const char *hostname, int32 port)
+{
+	uint32 flags = 0;
+	MultiConnection *connection = StartNodeConnection(flags, hostname, port);
+
+	if (ConnectionUsedForAnyPlacements(connection))
+	{
+		flags = FORCE_NEW_CONNECTION;
+
+		connection = StartNodeConnection(flags, hostname, port);
+	}
+
+	return connection;
+}
+
+
+/*
  * StartNodeConnection initiates a connection to remote node, using default
  * user and database.
  *

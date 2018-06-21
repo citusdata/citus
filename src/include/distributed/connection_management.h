@@ -152,6 +152,8 @@ extern bool CheckConninfo(const char *conninfo, const char **whitelist,
 /* Low-level connection establishment APIs */
 extern MultiConnection * GetNodeConnection(uint32 flags, const char *hostname,
 										   int32 port);
+extern MultiConnection * GetNonDataAccessConnection(const char *hostname, int32 port);
+extern MultiConnection * StartNonDataAccessConnection(const char *hostname, int32 port);
 extern MultiConnection * StartNodeConnection(uint32 flags, const char *hostname,
 											 int32 port);
 extern MultiConnection * GetNodeUserDatabaseConnection(uint32 flags, const char *hostname,
