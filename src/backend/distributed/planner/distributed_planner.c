@@ -940,6 +940,7 @@ FinalizePlan(PlannedStmt *localPlan, DistributedPlan *distributedPlan)
 	}
 
 	distributedPlan->relationIdList = localPlan->relationOids;
+	distributedPlan->queryId = localPlan->queryId;
 
 	distributedPlanData = (Node *) distributedPlan;
 

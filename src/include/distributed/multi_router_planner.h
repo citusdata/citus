@@ -41,7 +41,7 @@ extern DeferredErrorMessage * PlanRouterQuery(Query *originalQuery,
 											  bool *multiShardModifyQuery,
 											  Const **partitionValueConst);
 extern List * RouterInsertTaskList(Query *query, DeferredErrorMessage **planningError);
-extern Const * ExtractInsertPartitionValueConst(Query *query);
+extern Const * ExtractInsertPartitionKeyValue(Query *query);
 extern List * TargetShardIntervalsForQuery(Query *query,
 										   RelationRestrictionContext *restrictionContext,
 										   bool *multiShardQuery,

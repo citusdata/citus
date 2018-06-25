@@ -513,7 +513,7 @@ CitusModifyBeginScan(CustomScanState *node, EState *estate, int eflags)
 			}
 
 			workerJob->taskList = taskList;
-			workerJob->partitionValueConst = ExtractInsertPartitionValueConst(jobQuery);
+			workerJob->partitionKeyValue = ExtractInsertPartitionKeyValue(jobQuery);
 		}
 
 		RebuildQueryStrings(jobQuery, taskList);

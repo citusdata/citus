@@ -181,7 +181,7 @@ readJobInfo(Job *local_node)
 	READ_BOOL_FIELD(subqueryPushdown);
 	READ_BOOL_FIELD(requiresMasterEvaluation);
 	READ_BOOL_FIELD(deferredPruning);
-	READ_NODE_FIELD(partitionValueConst);
+	READ_NODE_FIELD(partitionKeyValue);
 }
 
 
@@ -208,6 +208,7 @@ ReadDistributedPlan(READFUNC_ARGS)
 	READ_NODE_FIELD(workerJob);
 	READ_NODE_FIELD(masterQuery);
 	READ_BOOL_FIELD(routerExecutable);
+	READ_UINT64_FIELD(queryId);
 	READ_NODE_FIELD(relationIdList);
 
 	READ_NODE_FIELD(insertSelectSubquery);

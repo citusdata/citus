@@ -182,6 +182,7 @@ OutDistributedPlan(OUTFUNC_ARGS)
 	WRITE_NODE_FIELD(workerJob);
 	WRITE_NODE_FIELD(masterQuery);
 	WRITE_BOOL_FIELD(routerExecutable);
+	WRITE_UINT64_FIELD(queryId);
 	WRITE_NODE_FIELD(relationIdList);
 
 	WRITE_NODE_FIELD(insertSelectSubquery);
@@ -319,7 +320,7 @@ OutJobFields(StringInfo str, const Job *node)
 	WRITE_BOOL_FIELD(subqueryPushdown);
 	WRITE_BOOL_FIELD(requiresMasterEvaluation);
 	WRITE_BOOL_FIELD(deferredPruning);
-	WRITE_NODE_FIELD(partitionValueConst);
+	WRITE_NODE_FIELD(partitionKeyValue);
 }
 
 
