@@ -19,6 +19,7 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/distributed_planner.h"
 #include "distributed/placement_connection.h"
+#include "distributed/relation_access_tracking.h"
 #include "utils/hsearch.h"
 #include "utils/memutils.h"
 
@@ -646,6 +647,9 @@ FindPlacementListConnection(int flags, List *placementAccessList, const char *us
 		}
 
 		*placementEntryList = lappend(*placementEntryList, placementEntry);
+
+		/* record the relation access mapping */
+		AssociatePlacementAccessWithRelation(placement, accessType);
 	}
 
 	return chosenConnection;
@@ -920,6 +924,7 @@ ResetPlacementConnectionManagement(void)
 	hash_delete_all(ConnectionPlacementHash);
 	hash_delete_all(ConnectionShardHash);
 	hash_delete_all(ColocatedPlacementsHash);
+	ResetRelationAccessHash();
 
 	/*
 	 * NB: memory for ConnectionReference structs and subordinate data is
@@ -1129,6 +1134,9 @@ InitPlacementConnectionManagement(void)
 
 	ConnectionShardHash = hash_create("citus connection cache (shardid)",
 									  64, &info, hashFlags);
+
+	/* (relationId) = [relationAccessMode] hash */
+	AllocateRelationAccessHash();
 }
 
 

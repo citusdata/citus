@@ -364,6 +364,26 @@ LoadShardInterval(uint64 shardId)
 
 
 /*
+ * RelationIdOfShard returns the relationId of the given
+ * shardId.
+ */
+Oid
+RelationIdForShard(uint64 shardId)
+{
+	ShardCacheEntry *shardEntry = NULL;
+	DistTableCacheEntry *tableEntry = NULL;
+
+	shardEntry = LookupShardCacheEntry(shardId);
+
+	tableEntry = shardEntry->tableEntry;
+
+	Assert(tableEntry->isDistributedTable);
+
+	return tableEntry->relationId;
+}
+
+
+/*
  * ReferenceTableShardId returns true if the given shardId belongs to
  * a reference table.
  */

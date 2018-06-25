@@ -32,6 +32,8 @@
 #include "distributed/multi_resowner.h"
 #include "distributed/multi_router_executor.h"
 #include "distributed/multi_server_executor.h"
+#include "distributed/placement_connection.h"
+#include "distributed/relation_access_tracking.h"
 #include "distributed/resource_lock.h"
 #include "distributed/subplan_execution.h"
 #include "distributed/worker_protocol.h"
@@ -104,8 +106,15 @@ MultiRealTimeExecute(Job *job)
 	foreach(taskCell, taskList)
 	{
 		Task *task = (Task *) lfirst(taskCell);
+		TaskExecution *taskExecution = NULL;
 
-		TaskExecution *taskExecution = InitTaskExecution(task, EXEC_TASK_CONNECT_START);
+		/* keep track of multi shard accesses before opening the connections */
+		if (MultiShardConnectionType == PARALLEL_CONNECTION)
+		{
+			RecordRelationParallelSelectAccessForTask(task);
+		}
+
+		taskExecution = InitTaskExecution(task, EXEC_TASK_CONNECT_START);
 		taskExecutionList = lappend(taskExecutionList, taskExecution);
 	}
 

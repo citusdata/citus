@@ -105,6 +105,9 @@ typedef struct CitusCopyDestReceiver
 
 	/* number of tuples sent */
 	int64 tuplesSent;
+
+	/* useful for tracking multi shard accesses */
+	bool multiShardCopy;
 } CitusCopyDestReceiver;
 
 

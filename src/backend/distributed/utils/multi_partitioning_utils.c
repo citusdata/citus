@@ -58,6 +58,37 @@ PartitionedTable(Oid relationId)
 
 
 /*
+ * Returns true if the given relation is a partitioned table. The function
+ * doesn't acquire any locks on the input relation, thus the caller is
+ * reponsible for holding the appropriate locks.
+ */
+bool
+PartitionedTableNoLock(Oid relationId)
+{
+	Relation rel = try_relation_open(relationId, NoLock);
+	bool partitionedTable = false;
+
+	/* don't error out for tables that are dropped */
+	if (rel == NULL)
+	{
+		return false;
+	}
+
+#if (PG_VERSION_NUM >= 100000)
+	if (rel->rd_rel->relkind == RELKIND_PARTITIONED_TABLE)
+	{
+		partitionedTable = true;
+	}
+#endif
+
+	/* keep the lock */
+	heap_close(rel, NoLock);
+
+	return partitionedTable;
+}
+
+
+/*
  * Returns true if the given relation is a partition.
  */
 bool
@@ -65,6 +96,34 @@ PartitionTable(Oid relationId)
 {
 	Relation rel = heap_open(relationId, AccessShareLock);
 	bool partitionTable = false;
+
+#if (PG_VERSION_NUM >= 100000)
+	partitionTable = rel->rd_rel->relispartition;
+#endif
+
+	/* keep the lock */
+	heap_close(rel, NoLock);
+
+	return partitionTable;
+}
+
+
+/*
+ * Returns true if the given relation is a partition.  The function
+ * doesn't acquire any locks on the input relation, thus the caller is
+ * reponsible for holding the appropriate locks.
+ */
+bool
+PartitionTableNoLock(Oid relationId)
+{
+	Relation rel = try_relation_open(relationId, NoLock);
+	bool partitionTable = false;
+
+	/* don't error out for tables that are dropped */
+	if (rel == NULL)
+	{
+		return false;
+	}
 
 #if (PG_VERSION_NUM >= 100000)
 	partitionTable = rel->rd_rel->relispartition;

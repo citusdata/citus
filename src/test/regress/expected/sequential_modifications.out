@@ -6,8 +6,8 @@
 --
 CREATE SCHEMA test_seq_ddl;
 SET search_path TO 'test_seq_ddl';
-SET citus.next_shard_id TO 1600;
-SET citus.next_placement_id TO 1600;
+SET citus.next_shard_id TO 16000;
+SET citus.next_placement_id TO 16000;
 -- this function simply checks the equality of the number of transactions in the
 -- pg_dist_transaction and number of primary worker nodes
 -- The function is useful to ensure that a single connection is opened per worker
@@ -591,7 +591,7 @@ BEGIN;
 (1 row)
 
     \COPY test_seq_copy FROM STDIN DELIMITER AS ',';
-ERROR:  cannot establish a new connection for placement 1673, since DDL has been executed on a connection that is in use
+ERROR:  cannot establish a new connection for placement 16073, since DDL has been executed on a connection that is in use
 CONTEXT:  COPY test_seq_copy, line 2: "2,2"
 ROLLBACK;
 SELECT distributed_2PCs_are_equal_to_worker_count();

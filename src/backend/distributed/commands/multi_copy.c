@@ -66,6 +66,7 @@
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_shard_transaction.h"
 #include "distributed/placement_connection.h"
+#include "distributed/relation_access_tracking.h"
 #include "distributed/remote_commands.h"
 #include "distributed/remote_transaction.h"
 #include "distributed/resource_lock.h"
@@ -2167,6 +2168,7 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
 	copyOutState->fe_msgbuf = makeStringInfo();
 	copyOutState->rowcontext = GetPerTupleMemoryContext(copyDest->executorState);
 	copyDest->copyOutState = copyOutState;
+	copyDest->multiShardCopy = false;
 
 	/* prepare functions to call on received tuples */
 	{
@@ -2311,6 +2313,21 @@ CitusCopyDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
 											   &shardConnectionsFound);
 	if (!shardConnectionsFound)
 	{
+		/*
+		 * Keep track of multi shard accesses before opening connection
+		 * the second shard.
+		 */
+		if (!copyDest->multiShardCopy && hash_get_num_entries(shardConnectionHash) == 2)
+		{
+			Oid relationId = copyDest->distributedRelationId;
+
+			/* mark as multi shard to skip doing the same thing over and over */
+			copyDest->multiShardCopy = true;
+
+			/* when we see multiple shard connections, we mark COPY as parallel modify */
+			RecordParallelModifyAccess(relationId);
+		}
+
 		/* open connections and initiate COPY on shard placements */
 		OpenCopyConnections(copyStatement, shardConnections, stopOnFailure,
 							copyOutState->binary);

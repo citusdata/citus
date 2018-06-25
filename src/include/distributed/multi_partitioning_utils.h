@@ -12,7 +12,9 @@
 
 
 extern bool PartitionedTable(Oid relationId);
+extern bool PartitionedTableNoLock(Oid relationId);
 extern bool PartitionTable(Oid relationId);
+extern bool PartitionTableNoLock(Oid relationId);
 extern bool IsChildTable(Oid relationId);
 extern bool IsParentTable(Oid relationId);
 extern Oid PartitionParentOid(Oid partitionOid);

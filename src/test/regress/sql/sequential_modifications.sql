@@ -6,8 +6,8 @@
 --
 CREATE SCHEMA test_seq_ddl;
 SET search_path TO 'test_seq_ddl';
-SET citus.next_shard_id TO 1600;
-SET citus.next_placement_id TO 1600;
+SET citus.next_shard_id TO 16000;
+SET citus.next_placement_id TO 16000;
 
 -- this function simply checks the equality of the number of transactions in the
 -- pg_dist_transaction and number of primary worker nodes

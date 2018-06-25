@@ -3121,9 +3121,17 @@ InterShardDDLTaskList(Oid leftRelationId, Oid rightRelationId,
 		uint64 leftShardId = leftShardInterval->shardId;
 		StringInfo applyCommand = makeStringInfo();
 		Task *task = NULL;
+		RelationShard *leftRelationShard = CitusMakeNode(RelationShard);
+		RelationShard *rightRelationShard = CitusMakeNode(RelationShard);
 
 		ShardInterval *rightShardInterval = (ShardInterval *) lfirst(rightShardCell);
 		uint64 rightShardId = rightShardInterval->shardId;
+
+		leftRelationShard->relationId = leftRelationId;
+		leftRelationShard->shardId = leftShardId;
+
+		rightRelationShard->relationId = rightRelationId;
+		rightRelationShard->shardId = rightShardId;
 
 		appendStringInfo(applyCommand, WORKER_APPLY_INTER_SHARD_DDL_COMMAND,
 						 leftShardId, escapedLeftSchemaName, rightShardId,
@@ -3138,6 +3146,7 @@ InterShardDDLTaskList(Oid leftRelationId, Oid rightRelationId,
 		task->replicationModel = REPLICATION_MODEL_INVALID;
 		task->anchorShardId = leftShardId;
 		task->taskPlacementList = FinalizedShardPlacementList(leftShardId);
+		task->relationShardList = list_make2(leftRelationShard, rightRelationShard);
 
 		taskList = lappend(taskList, task);
 	}

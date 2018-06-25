@@ -41,6 +41,7 @@
 #include "distributed/multi_router_planner.h"
 #include "distributed/multi_shard_transaction.h"
 #include "distributed/placement_connection.h"
+#include "distributed/relation_access_tracking.h"
 #include "distributed/subplan_execution.h"
 #include "distributed/relay_utility.h"
 #include "distributed/remote_commands.h"
@@ -85,6 +86,8 @@ static int64 ExecuteSingleModifyTask(CitusScanState *scanState, Task *task, CmdT
 									 operation, bool alwaysThrowErrorOnFailure, bool
 									 expectResults);
 static void ExecuteSingleSelectTask(CitusScanState *scanState, Task *task);
+static List * BuildPlacementAccessList(uint32 groupId, List *relationShardList,
+									   ShardPlacementAccessType accessType);
 static List * GetModifyConnections(Task *task, bool markCritical);
 static void ExecuteMultipleTasks(CitusScanState *scanState, List *taskList,
 								 bool isModificationQuery, bool expectResults);
@@ -842,6 +845,28 @@ ExecuteSingleSelectTask(CitusScanState *scanState, Task *task)
 List *
 BuildPlacementSelectList(uint32 groupId, List *relationShardList)
 {
+	return BuildPlacementAccessList(groupId, relationShardList, PLACEMENT_ACCESS_SELECT);
+}
+
+
+/*
+ * BuildPlacementDDLList is a warpper around BuildPlacementAccessList() for DDL access.
+ */
+List *
+BuildPlacementDDLList(uint32 groupId, List *relationShardList)
+{
+	return BuildPlacementAccessList(groupId, relationShardList, PLACEMENT_ACCESS_DDL);
+}
+
+
+/*
+ * BuildPlacementAccessList returns a list of placement accesses for the given
+ * relationShardList and the access type.
+ */
+static List *
+BuildPlacementAccessList(uint32 groupId, List *relationShardList,
+						 ShardPlacementAccessType accessType)
+{
 	ListCell *relationShardCell = NULL;
 	List *placementAccessList = NIL;
 
@@ -857,7 +882,7 @@ BuildPlacementSelectList(uint32 groupId, List *relationShardList)
 			continue;
 		}
 
-		placementAccess = CreatePlacementAccess(placement, PLACEMENT_ACCESS_SELECT);
+		placementAccess = CreatePlacementAccess(placement, accessType);
 		placementAccessList = lappend(placementAccessList, placementAccess);
 	}
 
@@ -1091,9 +1116,22 @@ GetModifyConnections(Task *task, bool markCritical)
 			accessType = PLACEMENT_ACCESS_DML;
 		}
 
-		/* create placement accesses for placements that appear in a subselect */
-		placementAccessList = BuildPlacementSelectList(taskPlacement->groupId,
-													   relationShardList);
+		if (accessType == PLACEMENT_ACCESS_DDL)
+		{
+			/*
+			 * All relations appearing inter-shard DDL commands should be marked
+			 * with DDL access.
+			 */
+			placementAccessList =
+				BuildPlacementDDLList(taskPlacement->groupId, relationShardList);
+		}
+		else
+		{
+			/* create placement accesses for placements that appear in a subselect */
+			placementAccessList =
+				BuildPlacementSelectList(taskPlacement->groupId, relationShardList);
+		}
+
 
 		Assert(list_length(placementAccessList) == list_length(relationShardList));
 
@@ -1278,17 +1316,14 @@ ExecuteModifyTasks(List *taskList, bool expectResults, ParamListInfo paramListIn
 
 	/*
 	 * Ensure that there are no concurrent modifications on the same
-	 * shards. For DDL commands, we already obtained the appropriate
-	 * locks in ProcessUtility.
-	 *
-	 * We don't need to acquire lock for TRUNCATE_TASK since it already
-	 * acquires AccessExclusiveLock on the relation, and blocks any
-	 * concurrent operation.
+	 * shards. In general, for DDL commands, we already obtained the
+	 * appropriate locks in ProcessUtility. However, we still prefer to
+	 * acquire the executor locks for DDLs specifically for TRUNCATE
+	 * command on a partition table since AcquireExecutorMultiShardLocks()
+	 * ensures that no concurrent modifications happens on the parent
+	 * tables.
 	 */
-	if (firstTask->taskType == MODIFY_TASK)
-	{
-		AcquireExecutorMultiShardLocks(taskList);
-	}
+	AcquireExecutorMultiShardLocks(taskList);
 
 	BeginOrContinueCoordinatedTransaction();
 
@@ -1296,6 +1331,32 @@ ExecuteModifyTasks(List *taskList, bool expectResults, ParamListInfo paramListIn
 		firstTask->replicationModel == REPLICATION_MODEL_2PC)
 	{
 		CoordinatedTransactionUse2PC();
+	}
+
+	/*
+	 * With a similar rationale as above, where we expect all tasks to operate on
+	 * the same relations, we prefer to record relation accesses for the first
+	 * task only.
+	 */
+	if (firstTask->taskType == MODIFY_TASK)
+	{
+		RecordRelationParallelModifyAccessForTask(firstTask);
+
+		/*
+		 * We prefer to mark with SELECT access as well because for multi shard
+		 * modification queries, the placement access list is always marked with both
+		 * DML and SELECT accesses.
+		 */
+		RecordRelationParallelSelectAccessForTask(firstTask);
+	}
+	else if (firstTask->taskType == DDL_TASK &&
+			 PartitionMethod(firstShardInterval->relationId) != DISTRIBUTE_BY_NONE)
+	{
+		/*
+		 * Even single task DDLs hit here, so we'd prefer
+		 * not to record for reference tables.
+		 */
+		RecordRelationParallelDDLAccessForTask(firstTask);
 	}
 
 	if (firstTask->taskType == DDL_TASK || firstTask->taskType == VACUUM_ANALYZE_TASK)
