@@ -21,6 +21,7 @@
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
 #include "optimizer/clauses.h"
+#include "optimizer/cost.h"
 #include "optimizer/planmain.h"
 #include "optimizer/tlist.h"
 #include "optimizer/var.h"
@@ -128,13 +129,47 @@ BuildAggregatePlan(Query *masterQuery, Plan *subPlan)
 	/* if we have grouping, then initialize appropriate information */
 	if (groupColumnCount > 0)
 	{
-		if (!grouping_is_hashable(groupColumnList))
+		bool groupingIsHashable = grouping_is_hashable(groupColumnList);
+		bool groupingIsSortable = grouping_is_sortable(groupColumnList);
+
+		if (!groupingIsHashable && !groupingIsSortable)
 		{
-			ereport(ERROR, (errmsg("grouped column list cannot be hashed")));
+			ereport(ERROR, (errmsg("grouped column list cannot be hashed or sorted")));
 		}
 
-		/* switch to hashed aggregate strategy to allow grouping */
-		aggregateStrategy = AGG_HASHED;
+		/*
+		 * Postgres hash aggregate strategy does not support distinct aggregates
+		 * in group and order by with aggregate operations.
+		 * see nodeAgg.c:build_pertrans_for_aggref(). In that case we use
+		 * sorted agg strategy, otherwise we use hash strategy.
+		 */
+		if (!enable_hashagg || !groupingIsHashable)
+		{
+			char *messageHint = NULL;
+			if (!enable_hashagg && groupingIsHashable)
+			{
+				messageHint = "Consider setting enable_hashagg to on.";
+			}
+
+			if (!groupingIsSortable)
+			{
+				ereport(ERROR, (errmsg("grouped column list must cannot be sorted"),
+								errdetail("Having a distinct aggregate requires "
+										  "grouped column list to be sortable."),
+								messageHint ? errhint("%s", messageHint) : 0));
+			}
+
+			aggregateStrategy = AGG_SORTED;
+#if (PG_VERSION_NUM >= 90600)
+			subPlan = (Plan *) make_sort_from_sortclauses(groupColumnList, subPlan);
+#else
+			subPlan = (Plan *) make_sort_from_sortclauses(NULL, groupColumnList, subPlan);
+#endif
+		}
+		else
+		{
+			aggregateStrategy = AGG_HASHED;
+		}
 
 		/* get column indexes that are being grouped */
 		groupColumnIdArray = extract_grouping_cols(groupColumnList, subPlan->targetlist);
