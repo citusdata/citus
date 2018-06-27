@@ -2988,7 +2988,7 @@ InvalidateForeignKeyGraph(void)
 {
 	CitusInvalidateRelcacheByRelid(DistColocationRelationId());
 
-	/* bump command counter, to force invalidation to take effect */
+	/* bump command counter to force invalidation to take effect */
 	CommandCounterIncrement();
 }
 

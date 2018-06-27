@@ -47,6 +47,7 @@
 #include "distributed/pg_dist_colocation.h"
 #include "distributed/pg_dist_partition.h"
 #include "distributed/reference_table_utils.h"
+#include "distributed/relation_access_tracking.h"
 #include "distributed/remote_commands.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/worker_transaction.h"
@@ -1119,6 +1120,26 @@ CanUseExclusiveConnections(Oid relationId, bool localTableEmpty)
 								"try with 'parallel' option. If that is not the "
 								"case, try distributing local tables when they "
 								"are empty.")));
+	}
+	else if (shouldRunSequential && ParallelQueryExecutedInTransaction())
+	{
+		char *relationName = get_rel_name(relationId);
+
+		/*
+		 * If there has already been a parallel query executed, the sequential mode
+		 * would still use the already opened parallel connections to the workers,
+		 * thus contradicting our purpose of using sequential mode.
+		 */
+		ereport(ERROR, (errmsg("cannot distribute relation \"%s\" in this "
+							   "transaction because it has a foreign key to "
+							   "a reference table", relationName),
+						errdetail("If a hash distributed table has a foreign key "
+								  "to a reference table, it has to be created "
+								  "in sequential mode before any parallel commands "
+								  "have been executed in the same transaction"),
+						errhint("Try re-running the transaction with "
+								"\"SET LOCAL citus.multi_shard_modify_mode TO "
+								"\'sequential\';\"")));
 	}
 	else if (shouldRunSequential)
 	{
