@@ -127,7 +127,7 @@ typedef struct Job
 	bool subqueryPushdown;
 	bool requiresMasterEvaluation; /* only applies to modify jobs */
 	bool deferredPruning;
-	Const *partitionValueConst;
+	Const *partitionKeyValue;
 } Job;
 
 
@@ -243,6 +243,9 @@ typedef struct DistributedPlan
 
 	/* a router executable query is executed entirely on a worker */
 	bool routerExecutable;
+
+	/* query identifier (copied from the top-level PlannedStmt) */
+	uint64 queryId;
 
 	/* which relations are accessed by this distributed plan */
 	List *relationIdList;

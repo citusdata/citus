@@ -56,7 +56,7 @@ JobExecutorType(DistributedPlan *distributedPlan)
 	{
 		if (log_min_messages <= DEBUG2 || client_min_messages <= DEBUG2)
 		{
-			Const *partitionValueConst = job->partitionValueConst;
+			Const *partitionValueConst = job->partitionKeyValue;
 
 			if (partitionValueConst != NULL && !partitionValueConst->constisnull)
 			{

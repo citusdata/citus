@@ -39,6 +39,7 @@
 #include "distributed/pg_dist_partition.h"
 #include "distributed/placement_connection.h"
 #include "distributed/query_pushdown_planning.h"
+#include "distributed/query_stats.h"
 #include "distributed/remote_commands.h"
 #include "distributed/shared_library_init.h"
 #include "distributed/statistics_collection.h"
@@ -241,6 +242,7 @@ _PG_init(void)
 	InitializeBackendManagement();
 	InitializeConnectionManagement();
 	InitPlacementConnectionManagement();
+	InitializeCitusQueryStats();
 
 	/* enable modification of pg_catalog tables during pg_upgrade */
 	if (IsBinaryUpgrade)

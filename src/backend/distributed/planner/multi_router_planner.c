@@ -1279,7 +1279,7 @@ RouterInsertJob(Query *originalQuery, Query *query, DeferredErrorMessage **plann
 	Job *job = NULL;
 	bool requiresMasterEvaluation = false;
 	bool deferredPruning = false;
-	Const *partitionValueConst = NULL;
+	Const *partitionKeyValue = NULL;
 
 	bool isMultiRowInsert = IsMultiRowInsert(query);
 	if (isMultiRowInsert)
@@ -1324,14 +1324,14 @@ RouterInsertJob(Query *originalQuery, Query *query, DeferredErrorMessage **plann
 		RebuildQueryStrings(originalQuery, taskList);
 
 		/* remember the partition column value */
-		partitionValueConst = ExtractInsertPartitionValueConst(originalQuery);
+		partitionKeyValue = ExtractInsertPartitionKeyValue(originalQuery);
 	}
 
 	job = CreateJob(originalQuery);
 	job->taskList = taskList;
 	job->requiresMasterEvaluation = requiresMasterEvaluation;
 	job->deferredPruning = deferredPruning;
-	job->partitionValueConst = partitionValueConst;
+	job->partitionKeyValue = partitionKeyValue;
 
 	return job;
 }
@@ -1545,7 +1545,7 @@ RouterJob(Query *originalQuery, PlannerRestrictionContext *plannerRestrictionCon
 	bool requiresMasterEvaluation = false;
 	RangeTblEntry *updateOrDeleteRTE = NULL;
 	bool isMultiShardModifyQuery = false;
-	Const *partitionValueConst = NULL;
+	Const *partitionKeyValue = NULL;
 
 	/* router planner should create task even if it deosn't hit a shard at all */
 	replacePrunedQueryWithDummy = true;
@@ -1557,14 +1557,14 @@ RouterJob(Query *originalQuery, PlannerRestrictionContext *plannerRestrictionCon
 									   &placementList, &shardId, &relationShardList,
 									   replacePrunedQueryWithDummy,
 									   &isMultiShardModifyQuery,
-									   &partitionValueConst);
+									   &partitionKeyValue);
 	if (*planningError)
 	{
 		return NULL;
 	}
 
 	job = CreateJob(originalQuery);
-	job->partitionValueConst = partitionValueConst;
+	job->partitionKeyValue = partitionKeyValue;
 
 	updateOrDeleteRTE = GetUpdateOrDeleteRTE(originalQuery);
 
@@ -2648,13 +2648,13 @@ ExtractInsertValuesList(Query *query, Var *partitionColumn)
 
 
 /*
- * ExtractInsertPartitionValueConst extracts the partition column value
+ * ExtractInsertPartitionKeyValue extracts the partition column value
  * from an INSERT query. If the expression in the partition column is
  * non-constant or it is a multi-row INSERT with multiple different partition
  * column values, the function returns NULL.
  */
 Const *
-ExtractInsertPartitionValueConst(Query *query)
+ExtractInsertPartitionKeyValue(Query *query)
 {
 	Oid distributedTableId = ExtractFirstDistributedTableId(query);
 	uint32 rangeTableId = 1;

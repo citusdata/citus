@@ -84,7 +84,7 @@ copyJobInfo(Job *newnode, Job *from)
 	COPY_SCALAR_FIELD(subqueryPushdown);
 	COPY_SCALAR_FIELD(requiresMasterEvaluation);
 	COPY_SCALAR_FIELD(deferredPruning);
-	COPY_NODE_FIELD(partitionValueConst);
+	COPY_NODE_FIELD(partitionKeyValue);
 }
 
 
@@ -109,6 +109,7 @@ CopyNodeDistributedPlan(COPYFUNC_ARGS)
 	COPY_NODE_FIELD(workerJob);
 	COPY_NODE_FIELD(masterQuery);
 	COPY_SCALAR_FIELD(routerExecutable);
+	COPY_SCALAR_FIELD(queryId);
 	COPY_NODE_FIELD(relationIdList);
 
 	COPY_NODE_FIELD(insertSelectSubquery);
