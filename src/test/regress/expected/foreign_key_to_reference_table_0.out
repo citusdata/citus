@@ -1267,7 +1267,6 @@ DETAIL:  drop cascades to constraint test_table_2_id_fkey on table test_table_2
 drop cascades to constraint test_table_3_value_1_fkey on table test_table_3
 ROLLBACK;
 -- create_reference_table, create_distributed_table and ALTER TABLE in the same transaction
--- FIXME: fails for now
 BEGIN;
   CREATE TABLE test_table_1(id int PRIMARY KEY);
   SELECT create_reference_table('test_table_1');
@@ -1284,12 +1283,13 @@ BEGIN;
 (1 row)
 
   ALTER TABLE test_table_2 ADD CONSTRAINT c_check FOREIGN KEY (value_1) REFERENCES test_table_1(id);
-ERROR:  cannot perform query with placements that were modified over multiple connections
+ERROR:  cannot modify table "test_table_2" because there was a parallel operation on a distributed tablein the transaction
+DETAIL:  When there is a foreign key to a reference table, Citus needs to perform all operations over a single connection per node to ensure consistency.
+HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
   DROP TABLE test_table_1, test_table_2;
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
 COMMIT;
 -- the order of create_reference_table and create_distributed_table is changed
--- FIXME: fails for now
 BEGIN;
   CREATE TABLE test_table_1(id int PRIMARY KEY, value_1 int);
   SELECT create_distributed_table('test_table_1', 'id');
@@ -1306,7 +1306,9 @@ BEGIN;
 (1 row)
 
   ALTER TABLE test_table_1 ADD CONSTRAINT c_check FOREIGN KEY (value_1) REFERENCES test_table_2(id);
-ERROR:  cannot perform query with placements that were modified over multiple connections
+ERROR:  cannot modify table "test_table_1" because there was a parallel operation on a distributed tablein the transaction
+DETAIL:  When there is a foreign key to a reference table, Citus needs to perform all operations over a single connection per node to ensure consistency.
+HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
   DROP TABLE test_table_2 CASCADE;
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
 ROLLBACK;
@@ -1331,7 +1333,6 @@ HINT:  If you have manually set citus.multi_shard_modify_mode to 'sequential', t
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
 COMMIT;
 -- make sure that other DDLs/DMLs also work fine
--- FIXME: fails for now
 BEGIN;
   CREATE TABLE test_table_1(id int PRIMARY KEY);
   CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int, FOREIGN KEY(value_1) REFERENCES test_table_1(id));
@@ -1349,9 +1350,7 @@ BEGIN;
 
   CREATE INDEX i1 ON test_table_1(id);
   ALTER TABLE test_table_2 ADD CONSTRAINT check_val CHECK (id > 0);
-ERROR:  cannot establish a new connection for placement 7000388, since DDL has been executed on a connection that is in use
   DROP TABLE test_table_2, test_table_1;
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
 COMMIT;
 -- The following tests check if the DDLs affecting foreign keys work as expected
 -- check if we can drop the foreign constraint
@@ -1384,7 +1383,6 @@ SELECT count(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_tab
 
 DROP TABLE test_table_1, test_table_2;
 -- check if we can drop the foreign constraint in a transaction right after ADD CONSTRAINT
--- FIXME: fails for now
 BEGIN;
   CREATE TABLE test_table_1(id int PRIMARY KEY);
   CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int);
@@ -1401,7 +1399,9 @@ BEGIN;
 (1 row)
 
   ALTER TABLE test_table_2 ADD CONSTRAINT foreign_key FOREIGN KEY(value_1) REFERENCES test_table_1(id);
-ERROR:  cannot perform query with placements that were modified over multiple connections
+ERROR:  cannot modify table "test_table_2" because there was a parallel operation on a distributed tablein the transaction
+DETAIL:  When there is a foreign key to a reference table, Citus needs to perform all operations over a single connection per node to ensure consistency.
+HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
   ALTER TABLE test_table_2 DROP CONSTRAINT test_table_2_value_1_fkey;
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
 COMMIT;
@@ -1770,7 +1770,6 @@ SELECT * FROM test_table_1;
 DROP TABLE test_table_1, test_table_2;
 -- check if we successfuly set multi_shard_modify_mode to sequential after sequentially running DDLs
 -- in transaction since the upcoming DDLs need to run sequentially. 
--- FIXME: fails for now
 CREATE TABLE test_table_1(id int PRIMARY KEY);
 CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int);
 CREATE TABLE test_table_3(id int PRIMARY KEY, value_1 int);
@@ -1795,11 +1794,9 @@ SELECT create_distributed_table('test_table_3', 'id');
 BEGIN;
   ALTER TABLE test_table_2 ADD CONSTRAINT fkey FOREIGN KEY (value_1) REFERENCES test_table_1(id);
   ALTER TABLE test_table_3 ADD COLUMN test_column int;
-ERROR:  cannot establish a new connection for placement 7000556, since DDL has been executed on a connection that is in use
   ALTER TABLE test_table_1 DROP COLUMN id CASCADE;
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
+NOTICE:  drop cascades to constraint fkey on table test_table_2
   ALTER TABLE test_table_1 ADD COLUMN id int;
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
 COMMIT;
 DROP TABLE test_table_1, test_table_2, test_table_3;
 -- NOTE: Postgres does not support foreign keys on partitioned tables currently.

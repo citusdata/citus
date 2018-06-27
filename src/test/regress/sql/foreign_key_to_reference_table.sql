@@ -623,7 +623,6 @@ BEGIN;
 ROLLBACK;
 
 -- create_reference_table, create_distributed_table and ALTER TABLE in the same transaction
--- FIXME: fails for now
 BEGIN;
   CREATE TABLE test_table_1(id int PRIMARY KEY);
   SELECT create_reference_table('test_table_1');
@@ -637,7 +636,6 @@ BEGIN;
 COMMIT;
 
 -- the order of create_reference_table and create_distributed_table is changed
--- FIXME: fails for now
 BEGIN;
   CREATE TABLE test_table_1(id int PRIMARY KEY, value_1 int);
   SELECT create_distributed_table('test_table_1', 'id');
@@ -665,7 +663,6 @@ BEGIN;
 COMMIT;
 
 -- make sure that other DDLs/DMLs also work fine
--- FIXME: fails for now
 BEGIN;
   CREATE TABLE test_table_1(id int PRIMARY KEY);
   CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int, FOREIGN KEY(value_1) REFERENCES test_table_1(id));
@@ -694,7 +691,6 @@ SELECT count(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_tab
 DROP TABLE test_table_1, test_table_2;
 
 -- check if we can drop the foreign constraint in a transaction right after ADD CONSTRAINT
--- FIXME: fails for now
 BEGIN;
   CREATE TABLE test_table_1(id int PRIMARY KEY);
   CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int);
@@ -894,7 +890,6 @@ DROP TABLE test_table_1, test_table_2;
 
 -- check if we successfuly set multi_shard_modify_mode to sequential after sequentially running DDLs
 -- in transaction since the upcoming DDLs need to run sequentially. 
--- FIXME: fails for now
 CREATE TABLE test_table_1(id int PRIMARY KEY);
 CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int);
 CREATE TABLE test_table_3(id int PRIMARY KEY, value_1 int);

@@ -13,6 +13,10 @@
 #include "distributed/multi_physical_planner.h" /* access Task struct */
 #include "distributed/placement_connection.h"
 
+/* Config variables managed via guc.c */
+extern bool EnforceForeignKeyRestrictions;
+
+
 /* forward declare, to avoid dependency on ShardPlacement definition */
 struct ShardPlacement;
 
@@ -37,6 +41,8 @@ extern RelationAccessMode GetRelationDDLAccessMode(Oid relationId);
 extern RelationAccessMode GetRelationDMLAccessMode(Oid relationId);
 extern RelationAccessMode GetRelationSelectAccessMode(Oid relationId);
 extern bool ShouldRecordRelationAccess(void);
+extern void CheckConflictingParallelCopyAccesses(Oid relationId);
+extern bool ParallelQueryExecutedInTransaction(void);
 
 
 #endif /* RELATION_ACCESS_TRACKING_H_ */

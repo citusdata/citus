@@ -49,6 +49,7 @@
 #include "distributed/multi_shard_transaction.h"
 #include "distributed/multi_utility.h" /* IWYU pragma: keep */
 #include "distributed/pg_dist_partition.h"
+#include "distributed/relation_access_tracking.h"
 #include "distributed/resource_lock.h"
 #include "distributed/transaction_management.h"
 #include "distributed/transmit.h"
@@ -4040,6 +4041,30 @@ ShouldExecuteAlterTableSequentially(Oid relationId, AlterTableCmd *command)
 				executeSequentially = true;
 			}
 		}
+	}
+
+	/*
+	 * If there has already been a parallel query executed, the sequential mode
+	 * would still use the already opened parallel connections to the workers for
+	 * the distributed tables, thus contradicting our purpose of using
+	 * sequential mode.
+	 */
+	if (executeSequentially && IsDistributedTable(relationId) &&
+		PartitionMethod(relationId) != DISTRIBUTE_BY_NONE &&
+		ParallelQueryExecutedInTransaction())
+	{
+		char *relationName = get_rel_name(relationId);
+
+		ereport(ERROR, (errmsg("cannot modify table \"%s\" because there "
+							   "was a parallel operation on a distributed table"
+							   "in the transaction", relationName),
+						errdetail("When there is a foreign key to a reference "
+								  "table, Citus needs to perform all operations "
+								  "over a single connection per node to ensure "
+								  "consistency."),
+						errhint("Try re-running the transaction with "
+								"\"SET LOCAL citus.multi_shard_modify_mode TO "
+								"\'sequential\';\"")));
 	}
 
 	return executeSequentially;

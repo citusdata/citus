@@ -2324,6 +2324,9 @@ CitusCopyDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
 			/* mark as multi shard to skip doing the same thing over and over */
 			copyDest->multiShardCopy = true;
 
+			/* error out of conflicting COPY */
+			CheckConflictingParallelCopyAccesses(relationId);
+
 			/* when we see multiple shard connections, we mark COPY as parallel modify */
 			RecordParallelModifyAccess(relationId);
 		}
