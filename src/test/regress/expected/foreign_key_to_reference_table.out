@@ -1284,8 +1284,7 @@ BEGIN;
 (1 row)
 
   ALTER TABLE test_table_2 ADD CONSTRAINT c_check FOREIGN KEY (value_1) REFERENCES test_table_1(id);
-ERROR:  relation "fkey_reference_table.test_table_1_7000325" does not exist
-CONTEXT:  while executing command on localhost:57637
+ERROR:  cannot perform query with placements that were modified over multiple connections
   DROP TABLE test_table_1, test_table_2;
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
 COMMIT;
@@ -1307,8 +1306,7 @@ BEGIN;
 (1 row)
 
   ALTER TABLE test_table_1 ADD CONSTRAINT c_check FOREIGN KEY (value_1) REFERENCES test_table_2(id);
-ERROR:  relation "fkey_reference_table.test_table_2_7000342" does not exist
-CONTEXT:  while executing command on localhost:57637
+ERROR:  cannot perform query with placements that were modified over multiple connections
   DROP TABLE test_table_2 CASCADE;
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
 ROLLBACK;
@@ -1403,8 +1401,7 @@ BEGIN;
 (1 row)
 
   ALTER TABLE test_table_2 ADD CONSTRAINT foreign_key FOREIGN KEY(value_1) REFERENCES test_table_1(id);
-ERROR:  relation "fkey_reference_table.test_table_1_7000362" does not exist
-CONTEXT:  while executing command on localhost:57637
+ERROR:  cannot perform query with placements that were modified over multiple connections
   ALTER TABLE test_table_2 DROP CONSTRAINT test_table_2_value_1_fkey;
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
 COMMIT;

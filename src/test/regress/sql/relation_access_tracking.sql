@@ -348,7 +348,7 @@ ROLLBACK;
 -- reference table join with a distributed table
 BEGIN;
 	SELECT count(*) FROM table_1 JOIN table_6 USING(key);
-	SELECT * FROM relation_acesses  WHERE table_name IN ('table_6', 'table_1');
+	SELECT * FROM relation_acesses  WHERE table_name IN ('table_6', 'table_1') ORDER BY 1,2;
 ROLLBACK;
 
 -- TRUNCATE should be DDL
