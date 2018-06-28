@@ -381,7 +381,6 @@ CreateAppendDistributedShardPlacements(Oid relationId, int64 shardId,
 	int placementsCreated = 0;
 	int attemptNumber = 0;
 	List *foreignConstraintCommandList = GetTableForeignConstraintCommands(relationId);
-	char *alterTableAttachPartitionCommand = NULL;
 	bool includeSequenceDefaults = false;
 	List *ddlCommandList = GetTableDDLEvents(relationId, includeSequenceDefaults);
 	uint32 connectionFlag = FOR_DDL;
@@ -416,8 +415,7 @@ CreateAppendDistributedShardPlacements(Oid relationId, int64 shardId,
 		}
 
 		WorkerCreateShard(relationId, shardIndex, shardId, ddlCommandList,
-						  foreignConstraintCommandList, alterTableAttachPartitionCommand,
-						  connection);
+						  foreignConstraintCommandList, connection);
 
 		InsertShardPlacementRow(shardId, INVALID_PLACEMENT_ID, shardState, shardSize,
 								nodeGroupId);
@@ -499,19 +497,13 @@ CreateShardsOnWorkers(Oid distributedRelationId, List *shardPlacements,
 	ListCell *connectionCell = NULL;
 	ListCell *shardPlacementCell = NULL;
 	int connectionFlags = FOR_DDL;
-	char *alterTableAttachPartitionCommand = NULL;
+	bool partitionTable = PartitionTable(distributedRelationId);
 
 	if (useExclusiveConnection)
 	{
 		connectionFlags |= CONNECTION_PER_PLACEMENT;
 	}
 
-
-	if (PartitionTable(distributedRelationId))
-	{
-		alterTableAttachPartitionCommand =
-			GenerateAlterTableAttachPartitionCommand(distributedRelationId);
-	}
 
 	BeginOrContinueCoordinatedTransaction();
 
@@ -527,7 +519,7 @@ CreateShardsOnWorkers(Oid distributedRelationId, List *shardPlacements,
 		RecordParallelDDLAccess(distributedRelationId);
 
 		/* we should mark the parent as well */
-		if (alterTableAttachPartitionCommand != NULL)
+		if (partitionTable)
 		{
 			Oid parentRelationId = PartitionParentOid(distributedRelationId);
 			RecordParallelDDLAccess(parentRelationId);
@@ -552,8 +544,7 @@ CreateShardsOnWorkers(Oid distributedRelationId, List *shardPlacements,
 		 * with DDL. This is only important for parallel relation access in transaction
 		 * blocks, thus check useExclusiveConnection and transaction block as well.
 		 */
-		if ((ShouldRecordRelationAccess() && useExclusiveConnection) &&
-			alterTableAttachPartitionCommand != NULL)
+		if (ShouldRecordRelationAccess() && useExclusiveConnection && partitionTable)
 		{
 			RelationShard *parentRelationShard = CitusMakeNode(RelationShard);
 			RelationShard *partitionRelationShard = CitusMakeNode(RelationShard);
@@ -589,8 +580,7 @@ CreateShardsOnWorkers(Oid distributedRelationId, List *shardPlacements,
 		MarkRemoteTransactionCritical(connection);
 
 		WorkerCreateShard(distributedRelationId, shardIndex, shardId,
-						  ddlCommandList, foreignConstraintCommandList,
-						  alterTableAttachPartitionCommand, connection);
+						  ddlCommandList, foreignConstraintCommandList, connection);
 	}
 
 	/*
@@ -613,8 +603,7 @@ CreateShardsOnWorkers(Oid distributedRelationId, List *shardPlacements,
  */
 void
 WorkerCreateShard(Oid relationId, int shardIndex, uint64 shardId, List *ddlCommandList,
-				  List *foreignConstraintCommandList,
-				  char *alterTableAttachPartitionCommand, MultiConnection *connection)
+				  List *foreignConstraintCommandList, MultiConnection *connection)
 {
 	Oid schemaId = get_rel_namespace(relationId);
 	char *schemaName = get_namespace_name(schemaId);
@@ -697,34 +686,11 @@ WorkerCreateShard(Oid relationId, int shardIndex, uint64 shardId, List *ddlComma
 	 * If the shard is created for a partition, send the command to create the
 	 * partitioning hierarcy on the shard.
 	 */
-	if (alterTableAttachPartitionCommand != NULL)
+	if (PartitionTable(relationId))
 	{
-		Oid parentRelationId = PartitionParentOid(relationId);
-		uint64 correspondingParentShardId = InvalidOid;
-		StringInfo applyAttachPartitionCommand = makeStringInfo();
-
-		Oid parentSchemaId = InvalidOid;
-		char *parentSchemaName = NULL;
-		char *escapedParentSchemaName = NULL;
-		char *escapedCommand = NULL;
-
-		Assert(PartitionTable(relationId));
-
-		parentSchemaId = get_rel_namespace(parentRelationId);
-		parentSchemaName = get_namespace_name(parentSchemaId);
-		escapedParentSchemaName = quote_literal_cstr(parentSchemaName);
-		escapedCommand = quote_literal_cstr(alterTableAttachPartitionCommand);
-
-		correspondingParentShardId = ColocatedShardIdInRelation(parentRelationId,
-																shardIndex);
-
-		appendStringInfo(applyAttachPartitionCommand,
-						 WORKER_APPLY_INTER_SHARD_DDL_COMMAND, correspondingParentShardId,
-						 escapedParentSchemaName, shardId, escapedSchemaName,
-						 escapedCommand);
-
-
-		ExecuteCriticalRemoteCommand(connection, applyAttachPartitionCommand->data);
+		ShardInterval *shardInterval = LoadShardInterval(shardId);
+		char *attachPartitionCommand = GenerateAttachShardPartitionCommand(shardInterval);
+		ExecuteCriticalRemoteCommand(connection, attachPartitionCommand);
 	}
 }
 

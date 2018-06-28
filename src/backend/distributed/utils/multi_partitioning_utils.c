@@ -19,7 +19,11 @@
 #include "catalog/pg_constraint_fn.h"
 #endif
 #include "distributed/citus_ruleutils.h"
+#include "distributed/colocation_utils.h"
+#include "distributed/master_metadata_utility.h"
+#include "distributed/master_protocol.h"
 #include "distributed/multi_partitioning_utils.h"
+#include "distributed/shardinterval_utils.h"
 #include "lib/stringinfo.h"
 #include "nodes/pg_list.h"
 #include "utils/builtins.h"
@@ -339,6 +343,50 @@ GeneratePartitioningInformation(Oid parentTableId)
 #endif
 
 	return partitionBoundCString;
+}
+
+
+/*
+ * GenerateAttachShardPartitionCommand generates command to attach a child table
+ * table to its parent in a partitioning hierarchy.
+ */
+char *
+GenerateAttachShardPartitionCommand(ShardInterval *shardInterval)
+{
+	Oid schemaId = get_rel_namespace(shardInterval->relationId);
+	char *schemaName = get_namespace_name(schemaId);
+	char *escapedSchemaName = quote_literal_cstr(schemaName);
+
+	char *command = GenerateAlterTableAttachPartitionCommand(shardInterval->relationId);
+	char *escapedCommand = quote_literal_cstr(command);
+	int shardIndex = ShardIndex(shardInterval);
+
+	Oid parentSchemaId = InvalidOid;
+	char *parentSchemaName = NULL;
+	char *escapedParentSchemaName = NULL;
+	uint64 parentShardId = INVALID_SHARD_ID;
+
+	StringInfo attachPartitionCommand = makeStringInfo();
+
+	Oid parentRelationId = PartitionParentOid(shardInterval->relationId);
+	if (parentRelationId == InvalidOid)
+	{
+		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+						errmsg("cannot attach partition"),
+						errdetail("Referenced relation cannot be found.")));
+	}
+
+	parentSchemaId = get_rel_namespace(parentRelationId);
+	parentSchemaName = get_namespace_name(parentSchemaId);
+	escapedParentSchemaName = quote_literal_cstr(parentSchemaName);
+	parentShardId = ColocatedShardIdInRelation(parentRelationId, shardIndex);
+
+	appendStringInfo(attachPartitionCommand,
+					 WORKER_APPLY_INTER_SHARD_DDL_COMMAND, parentShardId,
+					 escapedParentSchemaName, shardInterval->shardId,
+					 escapedSchemaName, escapedCommand);
+
+	return attachPartitionCommand->data;
 }
 
 

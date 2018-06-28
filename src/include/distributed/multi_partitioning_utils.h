@@ -8,6 +8,7 @@
 #define MULTI_PARTITIONING_UTILS_H_
 
 
+#include "distributed/master_metadata_utility.h"
 #include "nodes/pg_list.h"
 
 
@@ -20,6 +21,7 @@ extern bool IsParentTable(Oid relationId);
 extern Oid PartitionParentOid(Oid partitionOid);
 extern List * PartitionList(Oid parentRelationId);
 extern char * GenerateDetachPartitionCommand(Oid partitionTableId);
+extern char * GenerateAttachShardPartitionCommand(ShardInterval *shardInterval);
 extern char * GenerateAlterTableAttachPartitionCommand(Oid partitionTableId);
 extern char * GeneratePartitioningInformation(Oid tableId);
 
