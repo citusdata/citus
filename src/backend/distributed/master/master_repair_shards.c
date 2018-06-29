@@ -189,6 +189,16 @@ RepairShardPlacement(int64 shardId, char *sourceNodeName, int32 sourceNodePort,
 	}
 
 	/*
+	 * We take a lock on the referenced table if there is a foreign constraint
+	 * during the copy procedure. If we do not block DMLs on the referenced
+	 * table, we cannot avoid the inconsistency between the two copies of the
+	 * data. Currently, we do not support replication factor > 1 on the tables
+	 * with foreign constraints, so this command will fail for this case anyway.
+	 * However, it is taken as a precaution in case we support it one day.
+	 */
+	LockReferencedReferenceShardDistributionMetadata(shardId, ExclusiveLock);
+
+	/*
 	 * We plan to move the placement to the healthy state, so we need to grab a shard
 	 * metadata lock (in exclusive mode).
 	 */
@@ -393,7 +403,6 @@ CopyShardForeignConstraintCommandList(ShardInterval *shardInterval)
 
 	return copyShardForeignConstraintCommandList;
 }
-
 
 /*
  * ConstuctQualifiedShardName creates the fully qualified name string of the

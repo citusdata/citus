@@ -67,6 +67,10 @@ typedef enum AdvisoryLocktagClass
 extern void LockShardDistributionMetadata(int64 shardId, LOCKMODE lockMode);
 extern bool TryLockShardDistributionMetadata(int64 shardId, LOCKMODE lockMode);
 
+/* Lock shard/relation metadata of the referenced reference table if exists */
+extern void LockReferencedReferenceShardDistributionMetadata(uint64 shardId, LOCKMODE
+															 lock);
+
 /* Lock shard data, for DML commands or remote fetches */
 extern void LockShardResource(uint64 shardId, LOCKMODE lockmode);
 extern void UnlockShardResource(uint64 shardId, LOCKMODE lockmode);

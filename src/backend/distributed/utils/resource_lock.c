@@ -25,6 +25,7 @@
 #include "distributed/distributed_planner.h"
 #include "distributed/multi_router_executor.h"
 #include "distributed/relay_utility.h"
+#include "distributed/reference_table_utils.h"
 #include "distributed/resource_lock.h"
 #include "distributed/shardinterval_utils.h"
 #include "distributed/worker_protocol.h"
@@ -33,6 +34,7 @@
 
 /* local function forward declarations */
 static LOCKMODE IntToLockMode(int mode);
+static List * GetSortedReferenceShardIntervals(List *relationList);
 
 
 /* exports for SQL callable functions */
@@ -161,6 +163,60 @@ LockShardDistributionMetadata(int64 shardId, LOCKMODE lockMode)
 	SET_LOCKTAG_SHARD_METADATA_RESOURCE(tag, MyDatabaseId, shardId);
 
 	(void) LockAcquire(&tag, lockMode, sessionLock, dontWait);
+}
+
+
+/*
+ * LockReferencedReferenceShardDistributionMetadata acquires the given lock
+ * on the reference tables which has a foreign key from the given relation.
+ */
+void
+LockReferencedReferenceShardDistributionMetadata(uint64 shardId, LOCKMODE lock)
+{
+	ListCell *shardIntervalCell = NULL;
+	Oid relationId = RelationIdForShard(shardId);
+
+	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(relationId);
+	List *referencedRelationList = cacheEntry->referencedRelationsViaForeignKey;
+
+	List *shardIntervalList = GetSortedReferenceShardIntervals(referencedRelationList);
+	foreach(shardIntervalCell, shardIntervalList)
+	{
+		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
+
+		LockShardDistributionMetadata(shardInterval->shardId, lock);
+	}
+}
+
+
+/*
+ * GetSortedReferenceShards iterates through the given relation list.
+ * Lists the shards of reference tables and returns the list after sorting.
+ */
+static List *
+GetSortedReferenceShardIntervals(List *relationList)
+{
+	List *shardIntervalList = NIL;
+	ListCell *relationCell = NULL;
+
+	foreach(relationCell, relationList)
+	{
+		Oid relationId = lfirst_oid(relationCell);
+		List *currentShardIntervalList = NIL;
+
+		if (PartitionMethod(relationId) != DISTRIBUTE_BY_NONE)
+		{
+			continue;
+		}
+
+		currentShardIntervalList = LoadShardIntervalList(relationId);
+		shardIntervalList = lappend(shardIntervalList, linitial(
+										currentShardIntervalList));
+	}
+
+	shardIntervalList = SortList(shardIntervalList, CompareShardIntervalsById);
+
+	return shardIntervalList;
 }
 
 
