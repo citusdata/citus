@@ -62,6 +62,7 @@ SET client_min_messages TO 'DEBUG2';
 INSERT INTO articles_single_shard_hash_mx VALUES (50, 10, 'anjanette', 19519);
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DETAIL:  distribution column value: 10
 -- single-shard tests
 -- test simple select for a single row
 SELECT * FROM articles_hash_mx WHERE author_id = 10 AND id = 50;
@@ -1460,6 +1461,7 @@ CREATE MATERIALIZED VIEW mv_articles_hash_mx_error AS
 INSERT INTO articles_hash_mx VALUES (51,  1, 'amateus', 1814);
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DETAIL:  distribution column value: 1
 -- verify insert is successfull (not router plannable and executable)
 SELECT id
 	FROM articles_hash_mx

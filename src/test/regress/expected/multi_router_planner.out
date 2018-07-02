@@ -122,6 +122,7 @@ SET client_min_messages TO 'DEBUG2';
 INSERT INTO articles_single_shard_hash VALUES (50, 10, 'anjanette', 19519);
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DETAIL:  distribution column value: 10
 -- single-shard tests
 -- test simple select for a single row
 SELECT * FROM articles_hash WHERE author_id = 10 AND id = 50;
@@ -455,6 +456,7 @@ DEBUG:  data-modifying statements are not supported in the WITH clauses of distr
 DEBUG:  generating subplan 81_1 for CTE new_article: INSERT INTO public.articles_hash (id, author_id, title, word_count) VALUES (1, 1, 'arsenous'::character varying, 9) RETURNING id, author_id, title, word_count
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DETAIL:  distribution column value: 1
 DEBUG:  Plan 81 query after replacing subqueries and CTEs: SELECT id, author_id, title, word_count FROM (SELECT intermediate_result.id, intermediate_result.author_id, intermediate_result.title, intermediate_result.word_count FROM read_intermediate_result('81_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, author_id bigint, title character varying(20), word_count integer)) new_article
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
@@ -2305,7 +2307,7 @@ DETAIL:  distribution column value: 1
 (5 rows)
 
 -- insert query is router plannable even under task-tracker
-INSERT INTO articles_hash VALUES (51,  1, 'amateus', 1814);
+INSERT INTO articles_hash VALUES (51, 1, 'amateus', 1814), (52, 1, 'second amateus', 2824);
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 -- verify insert is successfull (not router plannable and executable)
@@ -2323,7 +2325,8 @@ DETAIL:  distribution column value: 1
  31
  41
  51
-(6 rows)
+ 52
+(7 rows)
 
 SET client_min_messages to 'NOTICE';
 -- test that a connection failure marks placements invalid
