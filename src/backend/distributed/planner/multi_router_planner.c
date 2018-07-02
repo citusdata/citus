@@ -2661,6 +2661,7 @@ ExtractInsertPartitionKeyValue(Query *query)
 	Var *partitionColumn = NULL;
 	TargetEntry *targetEntry = NULL;
 	Const *singlePartitionValueConst = NULL;
+	Node *targetExpression = NULL;
 
 	char partitionMethod = PartitionMethod(distributedTableId);
 	if (partitionMethod == DISTRIBUTE_BY_NONE)
@@ -2676,13 +2677,15 @@ ExtractInsertPartitionKeyValue(Query *query)
 		return NULL;
 	}
 
+	targetExpression = strip_implicit_coercions((Node *) targetEntry->expr);
+
 	/*
 	 * Multi-row INSERTs have a Var in the target list that points to
 	 * an RTE_VALUES.
 	 */
-	if (IsA(targetEntry->expr, Var))
+	if (IsA(targetExpression, Var))
 	{
-		Var *partitionVar = (Var *) targetEntry->expr;
+		Var *partitionVar = (Var *) targetExpression;
 		RangeTblEntry *referencedRTE = NULL;
 		ListCell *valuesListCell = NULL;
 
@@ -2691,7 +2694,9 @@ ExtractInsertPartitionKeyValue(Query *query)
 		foreach(valuesListCell, referencedRTE->values_lists)
 		{
 			List *rowValues = (List *) lfirst(valuesListCell);
-			Expr *partitionValueExpr = list_nth(rowValues, partitionVar->varattno - 1);
+			Node *partitionValueNode = list_nth(rowValues, partitionVar->varattno - 1);
+			Expr *partitionValueExpr = (Expr *) strip_implicit_coercions(
+				partitionValueNode);
 			Const *partitionValueConst = NULL;
 
 			if (!IsA(partitionValueExpr, Const))
@@ -2720,10 +2725,10 @@ ExtractInsertPartitionKeyValue(Query *query)
 			}
 		}
 	}
-	else if (IsA(targetEntry->expr, Const))
+	else if (IsA(targetExpression, Const))
 	{
 		/* single-row INSERT with a constant partition column value */
-		singlePartitionValueConst = (Const *) targetEntry->expr;
+		singlePartitionValueConst = (Const *) targetExpression;
 	}
 	else
 	{

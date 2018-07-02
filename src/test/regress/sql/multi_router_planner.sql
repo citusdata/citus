@@ -1043,7 +1043,7 @@ SELECT id
 	WHERE author_id = 1;
 
 -- insert query is router plannable even under task-tracker
-INSERT INTO articles_hash VALUES (51,  1, 'amateus', 1814);
+INSERT INTO articles_hash VALUES (51, 1, 'amateus', 1814), (52, 1, 'second amateus', 2824);
 
 -- verify insert is successfull (not router plannable and executable)
 SELECT id
