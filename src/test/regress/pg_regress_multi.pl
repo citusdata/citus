@@ -136,16 +136,19 @@ $ENV{PG_REGRESS_DIFF_OPTS} = '-dU10 -w';
 
 my $plainRegress = "";
 my $isolationRegress = "";
+my $pgConfig = "";
 
 if ($usingWindows)
 {
 	$plainRegress = "$bindir\\pg_regress.exe";
 	$isolationRegress = "$bindir\\pg_isolation_regress.exe";
+	$pgConfig = "$bindir\\pg_config.exe";
 }
 else
 {
 	$plainRegress = "$pgxsdir/src/test/regress/pg_regress";
 	$isolationRegress = "${postgresBuilddir}/src/test/isolation/pg_isolation_regress";
+	$pgConfig = "$bindir/pg_config";
 }
 
 if ($isolationtester && ! -f "$isolationRegress")
@@ -263,7 +266,20 @@ push(@pgOptions, '-c', "listen_addresses=${host}");
 # not required, and we don't necessarily have access to the default directory
 push(@pgOptions, '-c', "unix_socket_directories=");
 push(@pgOptions, '-c', "fsync=off");
-push(@pgOptions, '-c', "shared_preload_libraries=citus");
+
+my $sharedPreloadLibraries = "citus";
+
+# check if pg_stat_statements extension is installed
+# if it is add it to shared preload libraries
+my $sharedir = `$pgConfig --sharedir`;
+chomp $sharedir;
+my $pg_stat_statements_control = catfile($sharedir, "extension", "pg_stat_statements.control");
+if (-e $pg_stat_statements_control)
+{
+	$sharedPreloadLibraries .= ',pg_stat_statements'; 
+}
+push(@pgOptions, '-c', "shared_preload_libraries=${sharedPreloadLibraries}");
+
 push(@pgOptions, '-c', "wal_level=logical");
 
 # Citus options set for the tests
