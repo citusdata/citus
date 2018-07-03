@@ -29,6 +29,7 @@
 #include "distributed/colocation_utils.h"
 #include "distributed/connection_management.h"
 #include "distributed/citus_ruleutils.h"
+#include "distributed/foreign_key_relationship.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_logical_optimizer.h"
@@ -44,6 +45,8 @@
 #include "distributed/worker_protocol.h"
 #include "executor/executor.h"
 #include "nodes/makefuncs.h"
+#include "nodes/memnodes.h"
+#include "nodes/pg_list.h"
 #include "parser/parse_func.h"
 #include "parser/parse_type.h"
 #include "storage/lmgr.h"
@@ -55,6 +58,7 @@
 #include "utils/inval.h"
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
+#include "utils/palloc.h"
 #include "utils/rel.h"
 #include "utils/relfilenodemap.h"
 #include "utils/relmapper.h"
@@ -182,11 +186,13 @@ static bool HasOverlappingShardInterval(ShardInterval **shardIntervalArray,
 static void InitializeCaches(void);
 static void InitializeDistTableCache(void);
 static void InitializeWorkerNodeCache(void);
+static void RegisterForeignKeyGraphCacheCallbacks(void);
 static void RegisterWorkerNodeCacheCallbacks(void);
 static void RegisterLocalGroupIdCacheCallbacks(void);
 static uint32 WorkerNodeHashCode(const void *key, Size keySize);
 static void ResetDistTableCacheEntry(DistTableCacheEntry *cacheEntry);
 static void CreateDistTableCache(void);
+static void InvalidateForeignRelationGraphCacheCallback(Datum argument, Oid relationId);
 static void InvalidateDistRelationCacheCallback(Datum argument, Oid relationId);
 static void InvalidateNodeRelationCacheCallback(Datum argument, Oid relationId);
 static void InvalidateLocalGroupIdRelationCacheCallback(Datum argument, Oid relationId);
@@ -204,6 +210,7 @@ static ShardPlacement * ResolveGroupShardPlacement(
 	GroupShardPlacement *groupShardPlacement, ShardCacheEntry *shardEntry);
 static WorkerNode * LookupNodeForGroup(uint32 groupid);
 static Oid LookupEnumValueId(Oid typeId, char *valueName);
+static void InvalidateEntireDistCache(void);
 
 
 /* exports for SQL callable functions */
@@ -980,6 +987,15 @@ BuildDistTableCacheEntry(DistTableCacheEntry *cacheEntry)
 	{
 		cacheEntry->hashFunction = NULL;
 	}
+
+	oldContext = MemoryContextSwitchTo(CacheMemoryContext);
+
+	cacheEntry->referencedRelationsViaForeignKey = ReferencedRelationIdList(
+		cacheEntry->relationId);
+	cacheEntry->referencingRelationsViaForeignKey = ReferencingRelationIdList(
+		cacheEntry->relationId);
+
+	MemoryContextSwitchTo(oldContext);
 
 	heap_close(pgDistPartition, NoLock);
 }
@@ -2510,6 +2526,7 @@ InitializeCaches(void)
 		}
 
 		InitializeDistTableCache();
+		RegisterForeignKeyGraphCacheCallbacks();
 		RegisterWorkerNodeCacheCallbacks();
 		RegisterLocalGroupIdCacheCallbacks();
 	}
@@ -2698,6 +2715,19 @@ InitializeWorkerNodeCache(void)
 	WorkerNodeCount = newWorkerNodeCount;
 	WorkerNodeArray = newWorkerNodeArray;
 	WorkerNodeHash = newWorkerNodeHash;
+}
+
+
+/*
+ * RegisterForeignKeyGraphCacheCallbacks registers callbacks required for
+ * the foreign key graph cache.
+ */
+static void
+RegisterForeignKeyGraphCacheCallbacks(void)
+{
+	/* Watch for invalidation events. */
+	CacheRegisterRelcacheCallback(InvalidateForeignRelationGraphCacheCallback,
+								  (Datum) 0);
 }
 
 
@@ -2905,11 +2935,61 @@ ResetDistTableCacheEntry(DistTableCacheEntry *cacheEntry)
 		pfree(cacheEntry->arrayOfPlacementArrays);
 		cacheEntry->arrayOfPlacementArrays = NULL;
 	}
+	if (cacheEntry->referencedRelationsViaForeignKey)
+	{
+		list_free(cacheEntry->referencedRelationsViaForeignKey);
+		cacheEntry->referencedRelationsViaForeignKey = NIL;
+	}
+	if (cacheEntry->referencingRelationsViaForeignKey)
+	{
+		list_free(cacheEntry->referencingRelationsViaForeignKey);
+		cacheEntry->referencingRelationsViaForeignKey = NIL;
+	}
 
 	cacheEntry->shardIntervalArrayLength = 0;
 	cacheEntry->hasUninitializedShardInterval = false;
 	cacheEntry->hasUniformHashDistribution = false;
 	cacheEntry->hasOverlappingShardInterval = false;
+}
+
+
+/*
+ * InvalidateForeignRelationGraphCacheCallback invalidates the foreign key relation
+ * graph and entire distributed cache entries.
+ */
+static void
+InvalidateForeignRelationGraphCacheCallback(Datum argument, Oid relationId)
+{
+	/* when invalidation happens simply set the LocalGroupId to the default value */
+	if (relationId == MetadataCache.distColocationRelationId)
+	{
+		SetForeignConstraintRelationshipGraphInvalid();
+		InvalidateEntireDistCache();
+	}
+}
+
+
+/*
+ * InvalidateForeignKeyGraph is used to invalidate the cached foreign key
+ * graph (see ForeignKeyRelationGraph @ utils/foreign_key_relationship.c).
+ *
+ * To invalidate the foreign key graph, we hack around relcache invalidation
+ * callbacks. Given that there is no metadata table associated with the foreign
+ * key graph cache, we use pg_dist_colocation, which is never invalidated for
+ * other purposes.
+ *
+ * We acknowledge that it is not a very intiutive way of implementing this cache
+ * invalidation, but, seems acceptable for now. If this becomes problematic, we
+ * could try using a magic oid where we're sure that no relation would ever use
+ * that oid.
+ */
+void
+InvalidateForeignKeyGraph(void)
+{
+	CitusInvalidateRelcacheByRelid(DistColocationRelationId());
+
+	/* bump command counter to force invalidation to take effect */
+	CommandCounterIncrement();
 }
 
 
@@ -2923,20 +3003,13 @@ InvalidateDistRelationCacheCallback(Datum argument, Oid relationId)
 	/* invalidate either entire cache or a specific entry */
 	if (relationId == InvalidOid)
 	{
-		DistTableCacheEntry *cacheEntry = NULL;
-		HASH_SEQ_STATUS status;
-
-		hash_seq_init(&status, DistTableCacheHash);
-
-		while ((cacheEntry = (DistTableCacheEntry *) hash_seq_search(&status)) != NULL)
-		{
-			cacheEntry->isValid = false;
-		}
+		InvalidateEntireDistCache();
 	}
 	else
 	{
 		void *hashKey = (void *) &relationId;
 		bool foundInCache = false;
+
 
 		DistTableCacheEntry *cacheEntry = hash_search(DistTableCacheHash, hashKey,
 													  HASH_FIND, &foundInCache);
@@ -2954,6 +3027,24 @@ InvalidateDistRelationCacheCallback(Datum argument, Oid relationId)
 	if (relationId != InvalidOid && relationId == MetadataCache.distPartitionRelationId)
 	{
 		InvalidateMetadataSystemCache();
+	}
+}
+
+
+/*
+ * InvalidateEntireDistCache makes entire cache entries invalid.
+ */
+static void
+InvalidateEntireDistCache()
+{
+	DistTableCacheEntry *cacheEntry = NULL;
+	HASH_SEQ_STATUS status;
+
+	hash_seq_init(&status, DistTableCacheHash);
+
+	while ((cacheEntry = (DistTableCacheEntry *) hash_seq_search(&status)) != NULL)
+	{
+		cacheEntry->isValid = false;
 	}
 }
 

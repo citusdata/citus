@@ -22,10 +22,73 @@
 #include "distributed/master_protocol.h"
 #include "distributed/multi_join_order.h"
 #include "utils/fmgroids.h"
+#include "utils/lsyscache.h"
 #include "utils/rel.h"
 #include "utils/relcache.h"
 #include "utils/ruleutils.h"
 #include "utils/syscache.h"
+
+
+static bool HeapTupleOfForeignConstraintIncludesColumn(HeapTuple heapTuple, Oid
+													   relationId, int pgConstraintKey,
+													   char *columnName);
+
+/*
+ * ConstraintIsAForeignKeyToReferenceTable function scans the pgConstraint to
+ * fetch all of the constraints on the given relationId and see if at least one
+ * of them is a foreign key referencing to a reference table.
+ */
+bool
+ConstraintIsAForeignKeyToReferenceTable(char *constraintName, Oid relationId)
+{
+	Relation pgConstraint = NULL;
+	SysScanDesc scanDescriptor = NULL;
+	ScanKeyData scanKey[1];
+	int scanKeyCount = 1;
+	HeapTuple heapTuple = NULL;
+	bool foreignKeyToReferenceTable = false;
+
+
+	pgConstraint = heap_open(ConstraintRelationId, AccessShareLock);
+
+	ScanKeyInit(&scanKey[0], Anum_pg_constraint_contype, BTEqualStrategyNumber, F_CHAREQ,
+				CharGetDatum(CONSTRAINT_FOREIGN));
+	scanDescriptor = systable_beginscan(pgConstraint, InvalidOid, false,
+										NULL, scanKeyCount, scanKey);
+
+	heapTuple = systable_getnext(scanDescriptor);
+	while (HeapTupleIsValid(heapTuple))
+	{
+		Oid referencedTableId = InvalidOid;
+		Form_pg_constraint constraintForm = (Form_pg_constraint) GETSTRUCT(heapTuple);
+		char *constraintName = (constraintForm->conname).data;
+
+		if (strncmp(constraintName, constraintName, NAMEDATALEN) != 0 ||
+			constraintForm->conrelid != relationId)
+		{
+			heapTuple = systable_getnext(scanDescriptor);
+			continue;
+		}
+
+		referencedTableId = constraintForm->confrelid;
+
+		Assert(IsDistributedTable(referencedTableId));
+
+		if (PartitionMethod(referencedTableId) == DISTRIBUTE_BY_NONE)
+		{
+			foreignKeyToReferenceTable = true;
+			break;
+		}
+
+		heapTuple = systable_getnext(scanDescriptor);
+	}
+
+	/* clean up scan and close system catalog */
+	systable_endscan(scanDescriptor);
+	heap_close(pgConstraint, AccessShareLock);
+
+	return foreignKeyToReferenceTable;
+}
 
 
 /*
@@ -34,12 +97,16 @@
  * environment.
  *
  * To support foreign constraints, we require that;
- * - Referencing and referenced tables are hash distributed.
- * - Referencing and referenced tables are co-located.
- * - Foreign constraint is defined over distribution column.
- * - ON DELETE/UPDATE SET NULL, ON DELETE/UPDATE SET DEFAULT and ON UPDATE CASCADE options
- *   are not used.
- * - Replication factors of referencing and referenced table are 1.
+ * - If referencing and referenced tables are hash-distributed
+ *		- Referencing and referenced tables are co-located.
+ *      - Foreign constraint is defined over distribution column.
+ *		- ON DELETE/UPDATE SET NULL, ON DELETE/UPDATE SET DEFAULT and ON UPDATE CASCADE options
+ *        are not used.
+ *      - Replication factors of referencing and referenced table are 1.
+ * - If referenced table is a reference table
+ *      - ON DELETE/UPDATE SET NULL, ON DELETE/UPDATE SET DEFAULT and ON UPDATE CASCADE options
+ *        are not used on the distribution key of the referencing column.
+ * - If referencing table is a reference table, error out
  */
 void
 ErrorIfUnsupportedForeignConstraint(Relation relation, char distributionMethod,
@@ -56,16 +123,18 @@ ErrorIfUnsupportedForeignConstraint(Relation relation, char distributionMethod,
 	uint32 referencedTableColocationId = INVALID_COLOCATION_ID;
 	Var *referencedTablePartitionColumn = NULL;
 
-	Datum referencingColumnsDatum;
-	Datum *referencingColumnArray;
+	Datum referencingColumnsDatum = 0;
+	Datum *referencingColumnArray = NULL;
 	int referencingColumnCount = 0;
-	Datum referencedColumnsDatum;
-	Datum *referencedColumnArray;
+	Datum referencedColumnsDatum = 0;
+	Datum *referencedColumnArray = NULL;
 	int referencedColumnCount = 0;
 	bool isNull = false;
 	int attrIdx = 0;
 	bool foreignConstraintOnPartitionColumn = false;
 	bool selfReferencingTable = false;
+	bool referencedTableIsAReferenceTable = false;
+	bool referencingColumnsIncludeDistKey = false;
 
 	pgConstraint = heap_open(ConstraintRelationId, AccessShareLock);
 	ScanKeyInit(&scanKey[0], Anum_pg_constraint_conrelid, BTEqualStrategyNumber, F_OIDEQ,
@@ -85,54 +154,25 @@ ErrorIfUnsupportedForeignConstraint(Relation relation, char distributionMethod,
 			continue;
 		}
 
+		/*
+		 * We should make this check in this loop because the error message will only
+		 * be given if the table has a foreign constraint and the table is a reference
+		 * table.
+		 */
+		if (distributionMethod == DISTRIBUTE_BY_NONE)
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("cannot create foreign key constraint because "
+								   "reference tables are not supported as the "
+								   "referencing table of a foreign constraint"),
+							errdetail("Reference tables are only supported as the "
+									  "referenced table of a foreign key when the "
+									  "referencing table is a hash distributed "
+									  "table")));
+		}
+
 		referencedTableId = constraintForm->confrelid;
 		selfReferencingTable = referencingTableId == referencedTableId;
-
-		/*
-		 * We do not support foreign keys for reference tables. Here we skip the second
-		 * part of check if the table is a self referencing table because;
-		 * - PartitionMethod only works for distributed tables and this table may not be
-		 * distributed yet.
-		 * - Since referencing and referenced tables are same, it is OK to not checking
-		 * distribution method twice.
-		 */
-		if (distributionMethod == DISTRIBUTE_BY_NONE ||
-			(!selfReferencingTable &&
-			 PartitionMethod(referencedTableId) == DISTRIBUTE_BY_NONE))
-		{
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("cannot create foreign key constraint from or to "
-								   "reference tables")));
-		}
-
-		/*
-		 * ON DELETE SET NULL and ON DELETE SET DEFAULT is not supported. Because we do
-		 * not want to set partition column to NULL or default value.
-		 */
-		if (constraintForm->confdeltype == FKCONSTR_ACTION_SETNULL ||
-			constraintForm->confdeltype == FKCONSTR_ACTION_SETDEFAULT)
-		{
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("cannot create foreign key constraint"),
-							errdetail("SET NULL or SET DEFAULT is not supported"
-									  " in ON DELETE operation.")));
-		}
-
-		/*
-		 * ON UPDATE SET NULL, ON UPDATE SET DEFAULT and UPDATE CASCADE is not supported.
-		 * Because we do not want to set partition column to NULL or default value. Also
-		 * cascading update operation would require re-partitioning. Updating partition
-		 * column value is not allowed anyway even outside of foreign key concept.
-		 */
-		if (constraintForm->confupdtype == FKCONSTR_ACTION_SETNULL ||
-			constraintForm->confupdtype == FKCONSTR_ACTION_SETDEFAULT ||
-			constraintForm->confupdtype == FKCONSTR_ACTION_CASCADE)
-		{
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("cannot create foreign key constraint"),
-							errdetail("SET NULL, SET DEFAULT or CASCADE is not"
-									  " supported in ON UPDATE operation.")));
-		}
 
 		/*
 		 * Some checks are not meaningful if foreign key references the table itself.
@@ -148,28 +188,43 @@ ErrorIfUnsupportedForeignConstraint(Relation relation, char distributionMethod,
 										  "table.")));
 			}
 
-			/* to enforce foreign constraints, tables must be co-located */
-			referencedTableColocationId = TableColocationId(referencedTableId);
-			if (colocationId == INVALID_COLOCATION_ID ||
-				colocationId != referencedTableColocationId)
+			/*
+			 * PartitionMethod errors out when it is called for non-distributed
+			 * tables. This is why we make this check under !selfReferencingTable
+			 * and after !IsDistributedTable(referencedTableId).
+			 */
+			if (PartitionMethod(referencedTableId) == DISTRIBUTE_BY_NONE)
 			{
-				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-								errmsg("cannot create foreign key constraint"),
-								errdetail("Foreign key constraint can only be created"
-										  " on co-located tables.")));
+				referencedTableIsAReferenceTable = true;
 			}
 
 			/*
-			 * Partition column must exist in both referencing and referenced side of the
-			 * foreign key constraint. They also must be in same ordinal.
+			 * To enforce foreign constraints, tables must be co-located unless a
+			 * reference table is referenced.
 			 */
+			referencedTableColocationId = TableColocationId(referencedTableId);
+			if (colocationId == INVALID_COLOCATION_ID ||
+				(colocationId != referencedTableColocationId &&
+				 !referencedTableIsAReferenceTable))
+			{
+				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+								errmsg("cannot create foreign key constraint since "
+									   "relations are not colocated or not referencing "
+									   "a reference table"),
+								errdetail(
+									"A distributed table can only have foreign keys "
+									"if it is referencing another colocated hash "
+									"distributed table or a reference table")));
+			}
+
 			referencedTablePartitionColumn = DistPartitionKey(referencedTableId);
 		}
 		else
 		{
 			/*
-			 * Partition column must exist in both referencing and referenced side of the
-			 * foreign key constraint. They also must be in same ordinal.
+			 * If the referenced table is not a reference table, the distribution
+			 * column in referencing table should be the distribution column in
+			 * referenced table as well.
 			 */
 			referencedTablePartitionColumn = distributionColumn;
 		}
@@ -198,28 +253,83 @@ ErrorIfUnsupportedForeignConstraint(Relation relation, char distributionMethod,
 			AttrNumber referencedAttrNo = DatumGetInt16(referencedColumnArray[attrIdx]);
 
 			if (distributionColumn->varattno == referencingAttrNo &&
-				referencedTablePartitionColumn->varattno == referencedAttrNo)
+				(!referencedTableIsAReferenceTable &&
+				 referencedTablePartitionColumn->varattno == referencedAttrNo))
 			{
 				foreignConstraintOnPartitionColumn = true;
 			}
+
+			if (distributionColumn->varattno == referencingAttrNo)
+			{
+				referencingColumnsIncludeDistKey = true;
+			}
 		}
 
-		if (!foreignConstraintOnPartitionColumn)
+
+		/*
+		 * If columns in the foreign key includes the distribution key from the
+		 * referencing side, we do not allow update/delete operations through
+		 * foreign key constraints (e.g. ... ON UPDATE SET NULL)
+		 */
+
+		if (referencingColumnsIncludeDistKey)
+		{
+			/*
+			 * ON DELETE SET NULL and ON DELETE SET DEFAULT is not supported. Because we do
+			 * not want to set partition column to NULL or default value.
+			 */
+			if (constraintForm->confdeltype == FKCONSTR_ACTION_SETNULL ||
+				constraintForm->confdeltype == FKCONSTR_ACTION_SETDEFAULT)
+			{
+				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+								errmsg("cannot create foreign key constraint"),
+								errdetail("SET NULL or SET DEFAULT is not supported"
+										  " in ON DELETE operation when distribution "
+										  "key is included in the foreign key constraint")));
+			}
+
+			/*
+			 * ON UPDATE SET NULL, ON UPDATE SET DEFAULT and UPDATE CASCADE is not supported.
+			 * Because we do not want to set partition column to NULL or default value. Also
+			 * cascading update operation would require re-partitioning. Updating partition
+			 * column value is not allowed anyway even outside of foreign key concept.
+			 */
+			if (constraintForm->confupdtype == FKCONSTR_ACTION_SETNULL ||
+				constraintForm->confupdtype == FKCONSTR_ACTION_SETDEFAULT ||
+				constraintForm->confupdtype == FKCONSTR_ACTION_CASCADE)
+			{
+				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+								errmsg("cannot create foreign key constraint"),
+								errdetail("SET NULL, SET DEFAULT or CASCADE is not "
+										  "supported in ON UPDATE operation  when "
+										  "distribution key included in the foreign "
+										  "constraint.")));
+			}
+		}
+
+		/*
+		 * if tables are hash-distributed and colocated, we need to make sure that
+		 * the distribution key is included in foreign constraint.
+		 */
+		if (!referencedTableIsAReferenceTable && !foreignConstraintOnPartitionColumn)
 		{
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 							errmsg("cannot create foreign key constraint"),
-							errdetail("Partition column must exist both "
-									  "referencing and referenced side of the "
-									  "foreign constraint statement and it must "
-									  "be in the same ordinal in both sides.")));
+							errdetail("Foreign keys are supported in two cases, "
+									  "either in between two colocated tables including "
+									  "partition column in the same ordinal in the both "
+									  "tables or from distributed to reference tables")));
 		}
 
 		/*
 		 * We do not allow to create foreign constraints if shard replication factor is
 		 * greater than 1. Because in our current design, multiple replicas may cause
-		 * locking problems and inconsistent shard contents. We don't check the referenced
-		 * table, since referenced and referencing tables should be co-located and
-		 * colocation check has been done above.
+		 * locking problems and inconsistent shard contents.
+		 *
+		 * Note that we allow referenced table to be a reference table (e.g., not a
+		 * single replicated table). This is allowed since (a) we are sure that
+		 * placements always be in the same state (b) executors are aware of reference
+		 * tables and handle concurrency related issues accordingly.
 		 */
 		if (IsDistributedTable(referencingTableId))
 		{
@@ -231,6 +341,8 @@ ErrorIfUnsupportedForeignConstraint(Relation relation, char distributionMethod,
 		}
 		else
 		{
+			Assert(distributionMethod == DISTRIBUTE_BY_HASH);
+
 			/* check whether creating single replicated table with foreign constraint */
 			if (ShardReplicationFactor > 1)
 			{
@@ -257,6 +369,87 @@ ErrorIfUnsupportedForeignConstraint(Relation relation, char distributionMethod,
 	/* clean up scan and close system catalog */
 	systable_endscan(scanDescriptor);
 	heap_close(pgConstraint, AccessShareLock);
+}
+
+
+/*
+ * ColumnAppearsInForeignKeyToReferenceTable checks if there is foreign constraint
+ * from/to a reference table on the given column. We iterate pgConstraint to fetch
+ * the constraint on the given relationId and find if any of the constraints
+ * includes the given column.
+ */
+bool
+ColumnAppearsInForeignKeyToReferenceTable(char *columnName, Oid relationId)
+{
+	Relation pgConstraint = NULL;
+	SysScanDesc scanDescriptor = NULL;
+	ScanKeyData scanKey[1];
+	int scanKeyCount = 1;
+	HeapTuple heapTuple = NULL;
+	bool foreignKeyToReferenceTableIncludesGivenColumn = false;
+
+	pgConstraint = heap_open(ConstraintRelationId, AccessShareLock);
+
+	ScanKeyInit(&scanKey[0], Anum_pg_constraint_contype, BTEqualStrategyNumber, F_CHAREQ,
+				CharGetDatum(CONSTRAINT_FOREIGN));
+
+	scanDescriptor = systable_beginscan(pgConstraint, InvalidOid, false,
+										NULL, scanKeyCount, scanKey);
+
+	heapTuple = systable_getnext(scanDescriptor);
+	while (HeapTupleIsValid(heapTuple))
+	{
+		Oid referencedTableId = InvalidOid;
+		Oid referencingTableId = InvalidOid;
+		int pgConstraintKey = 0;
+		Form_pg_constraint constraintForm = (Form_pg_constraint) GETSTRUCT(heapTuple);
+
+		referencedTableId = constraintForm->confrelid;
+		referencingTableId = constraintForm->conrelid;
+
+		if (referencedTableId == relationId)
+		{
+			pgConstraintKey = Anum_pg_constraint_confkey;
+		}
+		else if (referencingTableId == relationId)
+		{
+			pgConstraintKey = Anum_pg_constraint_conkey;
+		}
+		else
+		{
+			/*
+			 * If the constraint is not from/to the given relation, we should simply
+			 * skip.
+			 */
+			heapTuple = systable_getnext(scanDescriptor);
+			continue;
+		}
+
+		/*
+		 * We check if the referenced table is a reference table. There cannot be
+		 * any foreign constraint from a distributed table to a local table.
+		 */
+		Assert(IsDistributedTable(referencedTableId));
+		if (PartitionMethod(referencedTableId) != DISTRIBUTE_BY_NONE)
+		{
+			heapTuple = systable_getnext(scanDescriptor);
+			continue;
+		}
+
+		if (HeapTupleOfForeignConstraintIncludesColumn(heapTuple, relationId,
+													   pgConstraintKey, columnName))
+		{
+			foreignKeyToReferenceTableIncludesGivenColumn = true;
+			break;
+		}
+
+		heapTuple = systable_getnext(scanDescriptor);
+	}
+
+	/* clean up scan and close system catalog */
+	systable_endscan(scanDescriptor);
+	heap_close(pgConstraint, AccessShareLock);
+	return foreignKeyToReferenceTableIncludesGivenColumn;
 }
 
 
@@ -322,6 +515,62 @@ GetTableForeignConstraintCommands(Oid relationId)
 
 
 /*
+ * HasForeignKeyToReferenceTable function scans the pgConstraint table to
+ * fetch all of the constraints on the given relationId and see if at least one
+ * of them is a foreign key referencing to a reference table.
+ */
+bool
+HasForeignKeyToReferenceTable(Oid relationId)
+{
+	Relation pgConstraint = NULL;
+	SysScanDesc scanDescriptor = NULL;
+	ScanKeyData scanKey[1];
+	int scanKeyCount = 1;
+	HeapTuple heapTuple = NULL;
+	bool hasForeignKeyToReferenceTable = false;
+
+	pgConstraint = heap_open(ConstraintRelationId, AccessShareLock);
+	ScanKeyInit(&scanKey[0], Anum_pg_constraint_conrelid, BTEqualStrategyNumber, F_OIDEQ,
+				relationId);
+	scanDescriptor = systable_beginscan(pgConstraint, ConstraintRelidIndexId, true, NULL,
+										scanKeyCount, scanKey);
+
+	heapTuple = systable_getnext(scanDescriptor);
+	while (HeapTupleIsValid(heapTuple))
+	{
+		Oid referencedTableId = InvalidOid;
+		Form_pg_constraint constraintForm = (Form_pg_constraint) GETSTRUCT(heapTuple);
+
+		if (constraintForm->contype != CONSTRAINT_FOREIGN)
+		{
+			heapTuple = systable_getnext(scanDescriptor);
+			continue;
+		}
+
+		referencedTableId = constraintForm->confrelid;
+
+		if (!IsDistributedTable(referencedTableId))
+		{
+			continue;
+		}
+
+		if (PartitionMethod(referencedTableId) == DISTRIBUTE_BY_NONE)
+		{
+			hasForeignKeyToReferenceTable = true;
+			break;
+		}
+
+		heapTuple = systable_getnext(scanDescriptor);
+	}
+
+	/* clean up scan and close system catalog */
+	systable_endscan(scanDescriptor);
+	heap_close(pgConstraint, NoLock);
+	return hasForeignKeyToReferenceTable;
+}
+
+
+/*
  * TableReferenced function checks whether given table is referenced by another table
  * via foreign constraints. If it is referenced, this function returns true. To check
  * that, this function searches given relation at pg_constraints system catalog. However
@@ -364,6 +613,133 @@ TableReferenced(Oid relationId)
 
 	systable_endscan(scanDescriptor);
 	heap_close(pgConstraint, NoLock);
+
+	return false;
+}
+
+
+/*
+ * HeapTupleOfForeignConstraintIncludesColumn fetches the columns from the foreign
+ * constraint and checks if the given column name matches one of them.
+ */
+static bool
+HeapTupleOfForeignConstraintIncludesColumn(HeapTuple heapTuple, Oid relationId,
+										   int pgConstraintKey, char *columnName)
+{
+	Datum columnsDatum = 0;
+	Datum *columnArray = NULL;
+	int columnCount = 0;
+	int attrIdx = 0;
+	bool isNull = false;
+
+	columnsDatum = SysCacheGetAttr(CONSTROID, heapTuple, pgConstraintKey, &isNull);
+	deconstruct_array(DatumGetArrayTypeP(columnsDatum), INT2OID, 2, true,
+					  's', &columnArray, NULL, &columnCount);
+
+	for (attrIdx = 0; attrIdx < columnCount; ++attrIdx)
+	{
+		AttrNumber attrNo = DatumGetInt16(columnArray[attrIdx]);
+
+		char *colName = get_relid_attribute_name(relationId, attrNo);
+		if (strncmp(colName, columnName, NAMEDATALEN) == 0)
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+
+/*
+ * TableReferencing function checks whether given table is referencing by another table
+ * via foreign constraints. If it is referencing, this function returns true. To check
+ * that, this function searches given relation at pg_constraints system catalog. However
+ * since there is no index for the column we searched, this function performs sequential
+ * search, therefore call this function with caution.
+ */
+bool
+TableReferencing(Oid relationId)
+{
+	Relation pgConstraint = NULL;
+	HeapTuple heapTuple = NULL;
+	SysScanDesc scanDescriptor = NULL;
+	ScanKeyData scanKey[1];
+	int scanKeyCount = 1;
+	Oid scanIndexId = InvalidOid;
+	bool useIndex = false;
+
+	pgConstraint = heap_open(ConstraintRelationId, AccessShareLock);
+
+	ScanKeyInit(&scanKey[0], Anum_pg_constraint_conrelid, BTEqualStrategyNumber, F_OIDEQ,
+				relationId);
+	scanDescriptor = systable_beginscan(pgConstraint, scanIndexId, useIndex, NULL,
+										scanKeyCount, scanKey);
+
+	heapTuple = systable_getnext(scanDescriptor);
+	while (HeapTupleIsValid(heapTuple))
+	{
+		Form_pg_constraint constraintForm = (Form_pg_constraint) GETSTRUCT(heapTuple);
+
+		if (constraintForm->contype == CONSTRAINT_FOREIGN)
+		{
+			systable_endscan(scanDescriptor);
+			heap_close(pgConstraint, NoLock);
+
+			return true;
+		}
+
+		heapTuple = systable_getnext(scanDescriptor);
+	}
+
+	systable_endscan(scanDescriptor);
+	heap_close(pgConstraint, NoLock);
+
+	return false;
+}
+
+
+/*
+ * ConstraintIsAForeignKey returns true if the given constraint name
+ * is a foreign key to defined on the relation.
+ */
+bool
+ConstraintIsAForeignKey(char *constraintNameInput, Oid relationId)
+{
+	Relation pgConstraint = NULL;
+	SysScanDesc scanDescriptor = NULL;
+	ScanKeyData scanKey[1];
+	int scanKeyCount = 1;
+	HeapTuple heapTuple = NULL;
+
+	pgConstraint = heap_open(ConstraintRelationId, AccessShareLock);
+
+	ScanKeyInit(&scanKey[0], Anum_pg_constraint_contype, BTEqualStrategyNumber, F_CHAREQ,
+				CharGetDatum(CONSTRAINT_FOREIGN));
+	scanDescriptor = systable_beginscan(pgConstraint, InvalidOid, false,
+										NULL, scanKeyCount, scanKey);
+
+	heapTuple = systable_getnext(scanDescriptor);
+	while (HeapTupleIsValid(heapTuple))
+	{
+		Form_pg_constraint constraintForm = (Form_pg_constraint) GETSTRUCT(heapTuple);
+		char *constraintName = (constraintForm->conname).data;
+
+		if (strncmp(constraintName, constraintNameInput, NAMEDATALEN) == 0 &&
+			constraintForm->conrelid == relationId)
+		{
+			systable_endscan(scanDescriptor);
+			heap_close(pgConstraint, AccessShareLock);
+
+			return true;
+		}
+
+		heapTuple = systable_getnext(scanDescriptor);
+	}
+
+	/* clean up scan and close system catalog */
+	systable_endscan(scanDescriptor);
+	heap_close(pgConstraint, AccessShareLock);
 
 	return false;
 }

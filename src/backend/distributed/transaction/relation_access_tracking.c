@@ -20,14 +20,27 @@
 #include "access/xact.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/hash_helpers.h"
+#include "distributed/multi_executor.h"
 #include "distributed/multi_join_order.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/relation_access_tracking.h"
 #include "utils/hsearch.h"
+#include "utils/lsyscache.h"
 
+
+/* Config variables managed via guc.c */
+bool EnforceForeignKeyRestrictions = true;
 
 #define PARALLEL_MODE_FLAG_OFFSET 3
+#define PARALLEL_ACCESS_MASK (int) (0 | \
+									(1 << (PLACEMENT_ACCESS_SELECT + \
+										   PARALLEL_MODE_FLAG_OFFSET)) | \
+									(1 << (PLACEMENT_ACCESS_DML + \
+										   PARALLEL_MODE_FLAG_OFFSET)) | \
+									(1 << (PLACEMENT_ACCESS_DDL + \
+										   PARALLEL_MODE_FLAG_OFFSET)))
+
 
 /*
  * Hash table mapping relations to the
@@ -66,6 +79,7 @@ typedef struct RelationAccessHashEntry
 static HTAB *RelationAccessHash;
 
 
+/* functions related to access recording */
 static void RecordRelationAccess(Oid relationId, ShardPlacementAccessType accessType);
 static void RecordPlacementAccessToCache(Oid relationId,
 										 ShardPlacementAccessType accessType);
@@ -75,6 +89,26 @@ static void RecordParallelRelationAccess(Oid relationId, ShardPlacementAccessTyp
 										 placementAccess);
 static void RecordParallelRelationAccessToCache(Oid relationId,
 												ShardPlacementAccessType placementAccess);
+
+/* functions related to access conflict checks */
+static char * PlacementAccessTypeToText(ShardPlacementAccessType accessType);
+static void CheckConflictingRelationAccesses(Oid relationId,
+											 ShardPlacementAccessType accessType);
+static bool HoldsConflictingLockWithReferencingRelations(Oid relationId,
+														 ShardPlacementAccessType
+														 placementAccess,
+														 Oid *conflictingRelationId,
+														 ShardPlacementAccessType *
+														 conflictingAccessMode);
+static void CheckConflictingParallelRelationAccesses(Oid relationId,
+													 ShardPlacementAccessType
+													 accessType);
+static bool HoldsConflictingLockWithReferencedRelations(Oid relationId,
+														ShardPlacementAccessType
+														placementAccess,
+														Oid *conflictingRelationId,
+														ShardPlacementAccessType *
+														conflictingAccessMode);
 
 
 /*
@@ -132,6 +166,40 @@ AssociatePlacementAccessWithRelation(ShardPlacement *placement,
 
 
 /*
+ * PlacementAccessTypeToText converts ShardPlacementAccessType to
+ * text representation.
+ */
+static char *
+PlacementAccessTypeToText(ShardPlacementAccessType accessType)
+{
+	switch (accessType)
+	{
+		case PLACEMENT_ACCESS_SELECT:
+		{
+			return "SELECT";
+			break;
+		}
+
+		case PLACEMENT_ACCESS_DML:
+		{
+			return "DML";
+		}
+
+		case PLACEMENT_ACCESS_DDL:
+		{
+			return "DDL";
+		}
+
+		default:
+		{
+			return "None";
+			break;
+		}
+	}
+}
+
+
+/*
  * RecordRelationAccess associates the access to the distributed relation. The
  * function takes partitioned relations into account as well.
  *
@@ -142,6 +210,9 @@ AssociatePlacementAccessWithRelation(ShardPlacement *placement,
 static void
 RecordRelationAccess(Oid relationId, ShardPlacementAccessType accessType)
 {
+	/* make sure that this is not a conflicting access */
+	CheckConflictingRelationAccesses(relationId, accessType);
+
 	/*
 	 * If a relation is partitioned, record accesses to all of its partitions as well.
 	 * We prefer to use PartitionedTableNoLock() because at this point the necessary
@@ -374,6 +445,9 @@ RecordParallelRelationAccess(Oid relationId, ShardPlacementAccessType placementA
 		return;
 	}
 
+	/* act accordingly if it's a conflicting access */
+	CheckConflictingParallelRelationAccesses(relationId, placementAccess);
+
 	/*
 	 * If a relation is partitioned, record accesses to all of its partitions as well.
 	 * We prefer to use PartitionedTableNoLock() because at this point the necessary
@@ -431,6 +505,40 @@ RecordParallelRelationAccessToCache(Oid relationId,
 	/* set the bit representing access mode */
 	parallelRelationAccessBit = placementAccess + PARALLEL_MODE_FLAG_OFFSET;
 	hashEntry->relationAccessMode |= (1 << parallelRelationAccessBit);
+}
+
+
+/*
+ * ParallelQueryExecutedInTransaction returns true if any parallel query
+ * is executed in the current transaction.
+ */
+bool
+ParallelQueryExecutedInTransaction(void)
+{
+	HASH_SEQ_STATUS status;
+	RelationAccessHashEntry *hashEntry;
+
+	if (!ShouldRecordRelationAccess() || RelationAccessHash == NULL)
+	{
+		return false;
+	}
+
+	hash_seq_init(&status, RelationAccessHash);
+
+	hashEntry = (RelationAccessHashEntry *) hash_seq_search(&status);
+	while (hashEntry != NULL)
+	{
+		int relationAccessMode = hashEntry->relationAccessMode;
+		if ((relationAccessMode & PARALLEL_ACCESS_MASK))
+		{
+			hash_seq_term(&status);
+			return true;
+		}
+
+		hashEntry = (RelationAccessHashEntry *) hash_seq_search(&status);
+	}
+
+	return false;
 }
 
 
@@ -524,9 +632,413 @@ GetRelationAccessMode(Oid relationId, ShardPlacementAccessType accessType)
 bool
 ShouldRecordRelationAccess()
 {
-	if (IsTransactionBlock() || InCoordinatedTransaction())
+	if (EnforceForeignKeyRestrictions &&
+		(IsTransactionBlock() || InCoordinatedTransaction()))
 	{
 		return true;
+	}
+
+	return false;
+}
+
+
+/*
+ * CheckConflictingRelationAccesses is mostly a wrapper around
+ * HoldsConflictingLockWithReferencingRelations(). We're only interested in accesses
+ * to reference tables that are referenced via a foreign constraint by a
+ * hash distributed tables.
+ */
+static void
+CheckConflictingRelationAccesses(Oid relationId, ShardPlacementAccessType accessType)
+{
+	DistTableCacheEntry *cacheEntry = NULL;
+	Oid conflictingReferencingRelationId = InvalidOid;
+	ShardPlacementAccessType conflictingAccessType = PLACEMENT_ACCESS_SELECT;
+
+	if (!EnforceForeignKeyRestrictions || !IsDistributedTable(relationId))
+	{
+		return;
+	}
+
+	cacheEntry = DistributedTableCacheEntry(relationId);
+
+	if (!(cacheEntry->partitionMethod == DISTRIBUTE_BY_NONE &&
+		  cacheEntry->referencingRelationsViaForeignKey != NIL))
+	{
+		return;
+	}
+
+	if (HoldsConflictingLockWithReferencingRelations(relationId, accessType,
+													 &conflictingReferencingRelationId,
+													 &conflictingAccessType))
+	{
+		char *relationName = get_rel_name(relationId);
+		char *conflictingRelationName = get_rel_name(conflictingReferencingRelationId);
+
+		char *accessTypeText = PlacementAccessTypeToText(accessType);
+		char *conflictingAccessTypeText =
+			PlacementAccessTypeToText(conflictingAccessType);
+
+		ereport(ERROR, (errmsg("cannot execute %s on reference relation \"%s\" because "
+							   "there was a parallel %s access to distributed relation "
+							   "\"%s\" in the same transaction",
+							   accessTypeText, relationName, conflictingAccessTypeText,
+							   conflictingRelationName),
+						errhint("Try re-running the transaction with "
+								"\"SET LOCAL citus.multi_shard_modify_mode TO "
+								"\'sequential\';\"")));
+	}
+	else if (cacheEntry->referencingRelationsViaForeignKey != NIL &&
+			 accessType > PLACEMENT_ACCESS_SELECT)
+	{
+		char *relationName = get_rel_name(relationId);
+
+		if (ParallelQueryExecutedInTransaction())
+		{
+			/*
+			 * If there has already been a parallel query executed, the sequential mode
+			 * would still use the already opened parallel connections to the workers,
+			 * thus contradicting our purpose of using sequential mode.
+			 */
+			ereport(ERROR, (errmsg("cannot modify reference table \"%s\" because there "
+								   "was a parallel operation on a distributed table",
+								   relationName),
+							errdetail("When there is a foreign key to a reference "
+									  "table, Citus needs to perform all operations "
+									  "over a single connection per node to ensure "
+									  "consistency."),
+							errhint("Try re-running the transaction with "
+									"\"SET LOCAL citus.multi_shard_modify_mode TO "
+									"\'sequential\';\"")));
+		}
+		else if (MultiShardConnectionType == PARALLEL_CONNECTION)
+		{
+			/*
+			 * We can still continue with multi-shard queries in sequential mode, so
+			 * set it.
+			 */
+			ereport(DEBUG1, (errmsg("switching to sequential query execution mode"),
+							 errdetail(
+								 "Reference relation \"%s\" is modified, which might lead "
+								 "to data inconsistencies or distributed deadlocks via "
+								 "parallel accesses to hash distributed relations due to "
+								 "foreign keys. Any parallel modification to "
+								 "those hash distributed relations in the same "
+								 "transaction can only be executed in sequential query "
+								 "execution mode", relationName)));
+
+			/*
+			 * Switching to sequential mode is admittedly confusing and, could be useless
+			 * and less performant in some cases. However, if we do not switch to
+			 * sequential mode at this point, we'd loose the opportunity to do so
+			 * later when a parallel query is executed on the hash distributed relations
+			 * that are referencing this reference table.
+			 */
+			SetLocalMultiShardModifyModeToSequential();
+		}
+	}
+}
+
+
+/*
+ * CheckConflictingParallelRelationAccesses is mostly a wrapper around
+ * HoldsConflictingLockWithReferencedRelations().  We're only interested in parallel
+ * accesses to distributed tables that refers reference tables via foreign constraint.
+ *
+ */
+static void
+CheckConflictingParallelRelationAccesses(Oid relationId, ShardPlacementAccessType
+										 accessType)
+{
+	DistTableCacheEntry *cacheEntry = NULL;
+	Oid conflictingReferencingRelationId = InvalidOid;
+	ShardPlacementAccessType conflictingAccessType = PLACEMENT_ACCESS_SELECT;
+
+	if (!EnforceForeignKeyRestrictions || !IsDistributedTable(relationId))
+	{
+		return;
+	}
+
+	cacheEntry = DistributedTableCacheEntry(relationId);
+	if (!(cacheEntry->partitionMethod == DISTRIBUTE_BY_HASH &&
+		  cacheEntry->referencedRelationsViaForeignKey != NIL))
+	{
+		return;
+	}
+
+	if (MultiShardConnectionType == PARALLEL_CONNECTION &&
+		HoldsConflictingLockWithReferencedRelations(relationId, accessType,
+													&conflictingReferencingRelationId,
+													&conflictingAccessType))
+	{
+		char *relationName = get_rel_name(relationId);
+		char *conflictingRelationName = get_rel_name(conflictingReferencingRelationId);
+
+		char *accessTypeText = PlacementAccessTypeToText(accessType);
+		char *conflictingAccessTypeText =
+			PlacementAccessTypeToText(conflictingAccessType);
+
+		if (ParallelQueryExecutedInTransaction())
+		{
+			/*
+			 * If there has already been a parallel query executed, the sequential mode
+			 * would still use the already opened parallel connections to the workers,
+			 * thus contradicting our purpose of using sequential mode.
+			 */
+			ereport(ERROR, (errmsg("cannot execute parallel %s on relation \"%s\" "
+								   "after %s command on reference relation "
+								   "\"%s\" because there is a foreign key between "
+								   "them and \"%s\" has been accessed in this transaction",
+								   accessTypeText, relationName,
+								   conflictingAccessTypeText, conflictingRelationName,
+								   conflictingRelationName),
+							errdetail("When there is a foreign key to a reference "
+									  "table, Citus needs to perform all operations "
+									  "over a single connection per node to ensure "
+									  "consistency."),
+							errhint("Try re-running the transaction with "
+									"\"SET LOCAL citus.multi_shard_modify_mode TO "
+									"\'sequential\';\"")));
+		}
+		else
+		{
+			ereport(DEBUG1, (errmsg("switching to sequential query execution mode"),
+							 errdetail("cannot execute parallel %s on relation \"%s\" "
+									   "after %s command on reference relation "
+									   "\"%s\" because there is a foreign key between "
+									   "them and \"%s\" has been accessed in this transaction",
+									   accessTypeText, relationName,
+									   conflictingAccessTypeText, conflictingRelationName,
+									   conflictingRelationName)));
+
+			SetLocalMultiShardModifyModeToSequential();
+		}
+	}
+}
+
+
+/*
+ * CheckConflictingParallelCopyAccesses is mostly a wrapper around
+ * HoldsConflictingLockWithReferencedRelations().  We're only interested in parallel
+ * accesses to distributed tables that refers reference tables via foreign constraint.
+ * Since COPY cannot be used in sequential mode, we're erroring out.
+ */
+void
+CheckConflictingParallelCopyAccesses(Oid relationId)
+{
+	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(relationId);
+	Oid conflictingReferencingRelationId = InvalidOid;
+	ShardPlacementAccessType conflictingAccessType = PLACEMENT_ACCESS_SELECT;
+
+	if (!(cacheEntry->partitionMethod == DISTRIBUTE_BY_HASH &&
+		  cacheEntry->referencedRelationsViaForeignKey != NIL))
+	{
+		return;
+	}
+
+
+	if (HoldsConflictingLockWithReferencedRelations(relationId, PLACEMENT_ACCESS_DML,
+													&conflictingReferencingRelationId,
+													&conflictingAccessType))
+	{
+		char *relationName = get_rel_name(relationId);
+		char *conflictingRelationName = get_rel_name(conflictingReferencingRelationId);
+
+		char *conflictingAccessTypeText =
+			PlacementAccessTypeToText(conflictingAccessType);
+
+		ereport(ERROR, (errmsg("cannot execute parallel COPY on relation \"%s\" "
+							   "after %s command on reference relation "
+							   "\"%s\" because there is a foreign key between "
+							   "them and \"%s\" has been modified in this transaction",
+							   relationName, conflictingAccessTypeText,
+							   conflictingRelationName, conflictingRelationName),
+						errdetail("COPY to a distributed table uses a separate set of "
+								  "connections which will not be able to see the "
+								  "uncommitted changes to the reference table."),
+						errhint("Perform the COPY in a separate transaction.")));
+	}
+}
+
+
+/*
+ * HoldsConflictingLockWithReferencedRelations returns true if the input relationId is a
+ * hash distributed table and it holds any conflicting locks with the reference tables that
+ * the distributed table has a foreign key to the reference table.
+ */
+static bool
+HoldsConflictingLockWithReferencedRelations(Oid relationId, ShardPlacementAccessType
+											placementAccess,
+											Oid *conflictingRelationId,
+
+											ShardPlacementAccessType *
+											conflictingAccessMode)
+{
+	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(relationId);
+	ListCell *referencedRelationCell = NULL;
+
+	foreach(referencedRelationCell, cacheEntry->referencedRelationsViaForeignKey)
+	{
+		Oid referencedRelation = lfirst_oid(referencedRelationCell);
+		RelationAccessMode selectMode = RELATION_NOT_ACCESSED;
+		RelationAccessMode dmlMode = RELATION_NOT_ACCESSED;
+		RelationAccessMode ddlMode = RELATION_NOT_ACCESSED;
+
+		/* we're only interested in foreign keys to reference tables */
+		if (PartitionMethod(referencedRelation) != DISTRIBUTE_BY_NONE)
+		{
+			continue;
+		}
+
+		/*
+		 * A select on a reference table could conflict with a DDL
+		 * on a distributed table.
+		 */
+		selectMode = GetRelationSelectAccessMode(referencedRelation);
+		if (placementAccess == PLACEMENT_ACCESS_DDL &&
+			selectMode != RELATION_NOT_ACCESSED)
+		{
+			*conflictingRelationId = referencedRelation;
+			*conflictingAccessMode = PLACEMENT_ACCESS_SELECT;
+
+			return true;
+		}
+
+		/*
+		 * Both DML and DDL operations on a reference table conflicts with
+		 * any parallel operation on distributed tables.
+		 */
+		dmlMode = GetRelationDMLAccessMode(referencedRelation);
+		if (dmlMode != RELATION_NOT_ACCESSED)
+		{
+			*conflictingRelationId = referencedRelation;
+			*conflictingAccessMode = PLACEMENT_ACCESS_DML;
+
+			return true;
+		}
+
+		ddlMode = GetRelationDDLAccessMode(referencedRelation);
+		if (ddlMode != RELATION_NOT_ACCESSED)
+		{
+			*conflictingRelationId = referencedRelation;
+			*conflictingAccessMode = PLACEMENT_ACCESS_DDL;
+
+			return true;
+		}
+	}
+
+	return false;
+}
+
+
+/*
+ * HoldsConflictingLockWithReferencingRelations returns true when the input relationId is a
+ * reference table and it holds any conflicting locks with the distributed tables where
+ * the distributed table has a foreign key to the reference table.
+ *
+ * If returns true, the referencing relation and conflictingAccessMode are also set.
+ */
+static bool
+HoldsConflictingLockWithReferencingRelations(Oid relationId, ShardPlacementAccessType
+											 placementAccess, Oid *conflictingRelationId,
+											 ShardPlacementAccessType *
+											 conflictingAccessMode)
+{
+	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(relationId);
+	ListCell *referencingRelationCell = NULL;
+	bool holdsConflictingLocks = false;
+
+	Assert(PartitionMethod(relationId) == DISTRIBUTE_BY_NONE);
+
+	foreach(referencingRelationCell, cacheEntry->referencingRelationsViaForeignKey)
+	{
+		Oid referencingRelation = lfirst_oid(referencingRelationCell);
+
+		/*
+		 * We're only interested in foreign keys to reference tables from
+		 * hash distributed tables.
+		 */
+		if (!IsDistributedTable(referencingRelation) ||
+			PartitionMethod(referencingRelation) != DISTRIBUTE_BY_HASH)
+		{
+			continue;
+		}
+
+		/*
+		 * Rules that we apply:
+		 *      - SELECT on a reference might table conflict with
+		 *        a previous parallel DDL on a distributed table
+		 *      - DML on a reference table might conflict with
+		 *        a previous parallel DML or DDL on a distributed
+		 *        table
+		 *      - DDL on a reference table might conflict with
+		 *        a parellel SELECT, DML or DDL on a distributed
+		 *        table
+		 */
+		if (placementAccess == PLACEMENT_ACCESS_SELECT)
+		{
+			RelationAccessMode ddlMode = GetRelationDDLAccessMode(referencingRelation);
+
+			if (ddlMode == RELATION_PARALLEL_ACCESSED)
+			{
+				/* SELECT on a distributed table conflicts with DDL / TRUNCATE */
+				holdsConflictingLocks = true;
+				*conflictingAccessMode = PLACEMENT_ACCESS_DDL;
+			}
+		}
+		else if (placementAccess == PLACEMENT_ACCESS_DML)
+		{
+			RelationAccessMode ddlMode = RELATION_NOT_ACCESSED;
+			RelationAccessMode dmlMode = GetRelationDMLAccessMode(referencingRelation);
+
+			if (dmlMode == RELATION_PARALLEL_ACCESSED)
+			{
+				holdsConflictingLocks = true;
+				*conflictingAccessMode = PLACEMENT_ACCESS_DML;
+			}
+
+			ddlMode = GetRelationDDLAccessMode(referencingRelation);
+			if (ddlMode == RELATION_PARALLEL_ACCESSED)
+			{
+				/* SELECT on a distributed table conflicts with DDL / TRUNCATE */
+				holdsConflictingLocks = true;
+				*conflictingAccessMode = PLACEMENT_ACCESS_DDL;
+			}
+		}
+		else if (placementAccess == PLACEMENT_ACCESS_DDL)
+		{
+			RelationAccessMode selectMode = RELATION_NOT_ACCESSED;
+			RelationAccessMode ddlMode = RELATION_NOT_ACCESSED;
+			RelationAccessMode dmlMode = RELATION_NOT_ACCESSED;
+
+			selectMode = GetRelationSelectAccessMode(referencingRelation);
+			if (selectMode == RELATION_PARALLEL_ACCESSED)
+			{
+				holdsConflictingLocks = true;
+				*conflictingAccessMode = PLACEMENT_ACCESS_SELECT;
+			}
+
+			dmlMode = GetRelationDMLAccessMode(referencingRelation);
+			if (dmlMode == RELATION_PARALLEL_ACCESSED)
+			{
+				holdsConflictingLocks = true;
+				*conflictingAccessMode = PLACEMENT_ACCESS_DML;
+			}
+
+			ddlMode = GetRelationDDLAccessMode(referencingRelation);
+			if (ddlMode == RELATION_PARALLEL_ACCESSED)
+			{
+				holdsConflictingLocks = true;
+				*conflictingAccessMode = PLACEMENT_ACCESS_DDL;
+			}
+		}
+
+		if (holdsConflictingLocks)
+		{
+			*conflictingRelationId = referencingRelation;
+
+			return true;
+		}
 	}
 
 	return false;

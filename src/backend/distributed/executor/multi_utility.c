@@ -49,6 +49,7 @@
 #include "distributed/multi_shard_transaction.h"
 #include "distributed/multi_utility.h" /* IWYU pragma: keep */
 #include "distributed/pg_dist_partition.h"
+#include "distributed/relation_access_tracking.h"
 #include "distributed/resource_lock.h"
 #include "distributed/transaction_management.h"
 #include "distributed/transmit.h"
@@ -75,6 +76,7 @@
 #include "utils/builtins.h"
 #include "utils/elog.h"
 #include "utils/errcodes.h"
+#include "utils/fmgroids.h"
 #include "utils/guc.h"
 #include "utils/hsearch.h"
 #include "utils/inval.h"
@@ -85,6 +87,10 @@
 
 
 bool EnableDDLPropagation = true; /* ddl propagation is enabled */
+
+
+static bool shouldInvalidateForeignKeyGraph = false;
+
 
 /*
  * This struct defines the state for the callback for drop statements.
@@ -162,7 +168,17 @@ static void CheckCopyPermissions(CopyStmt *copyStatement);
 static List * CopyGetAttnums(TupleDesc tupDesc, Relation rel, List *attnamelist);
 static void PostProcessUtility(Node *parsetree);
 static List * CollectGrantTableIdList(GrantStmt *grantStmt);
+static char * GetSchemaNameFromDropObject(ListCell *dropSchemaCell);
 static void ProcessDropTableStmt(DropStmt *dropTableStatement);
+static void ProcessDropSchemaStmt(DropStmt *dropSchemaStatement);
+static void InvalidateForeignKeyGraphForDDL(void);
+
+
+/*
+ * We need to run some of the commands sequentially if there is a foreign constraint
+ * from/to reference table.
+ */
+static bool ShouldExecuteAlterTableSequentially(Oid relationId, AlterTableCmd *command);
 
 
 /*
@@ -365,6 +381,11 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 			{
 				ProcessDropTableStmt(dropStatement);
 			}
+
+			if (dropStatement->removeType == OBJECT_SCHEMA)
+			{
+				ProcessDropSchemaStmt(dropStatement);
+			}
 		}
 
 		if (IsA(parsetree, AlterTableStmt))
@@ -524,6 +545,16 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		SetUserIdAndSecContext(savedUserId, savedSecurityContext);
 	}
 
+	/*
+	 * Re-forming the foreign key graph relies on the command being executed
+	 * on the local table first. However, in order to decide whether the
+	 * command leads to an invalidation, we need to check before the command
+	 * is being executed since we read pg_constraint table. Thus, we maintain a
+	 * local flag and do the invalidation after multi_ProcessUtility,
+	 * before ExecuteDistributedDDLJob().
+	 */
+	InvalidateForeignKeyGraphForDDL();
+
 	/* after local command has completed, finish by executing worker DDLJobs, if any */
 	if (ddlJobs != NIL)
 	{
@@ -550,8 +581,27 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 
 				if (alterTableType == AT_AddConstraint)
 				{
+					LOCKMODE lockmode = NoLock;
+					Oid relationId = InvalidOid;
+					Constraint *constraint = NULL;
+
 					Assert(list_length(commandList) == 1);
+
 					ErrorIfUnsupportedAlterAddConstraintStmt(alterTableStatement);
+
+					lockmode = AlterTableGetLockLevel(alterTableStatement->cmds);
+					relationId = AlterTableLookupRelation(alterTableStatement, lockmode);
+
+					if (!OidIsValid(relationId))
+					{
+						continue;
+					}
+
+					constraint = (Constraint *) command->def;
+					if (ConstraintIsAForeignKey(constraint->conname, relationId))
+					{
+						InvalidateForeignKeyGraph();
+					}
 				}
 			}
 		}
@@ -608,6 +658,22 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 	 * EXTENSION. This is important to register some invalidation callbacks.
 	 */
 	CitusHasBeenLoaded();
+}
+
+
+/*
+ * InvalidateForeignKeyGraphForDDL simply keeps track of whether
+ * the foreign key graph should be invalidated due to a DDL.
+ */
+static void
+InvalidateForeignKeyGraphForDDL(void)
+{
+	if (shouldInvalidateForeignKeyGraph)
+	{
+		InvalidateForeignKeyGraph();
+
+		shouldInvalidateForeignKeyGraph = false;
+	}
 }
 
 
@@ -1247,6 +1313,7 @@ PlanAlterTableStmt(AlterTableStmt *alterTableStatement, const char *alterTableCo
 	bool isDistributedRelation = false;
 	List *commandList = NIL;
 	ListCell *commandCell = NULL;
+	bool executeSequentially = false;
 
 	/* first check whether a distributed relation is affected */
 	if (alterTableStatement->relation == NULL)
@@ -1295,8 +1362,8 @@ PlanAlterTableStmt(AlterTableStmt *alterTableStatement, const char *alterTableCo
 	}
 
 	/*
-	 * We check if there is a ADD FOREIGN CONSTRAINT command in sub commands list.
-	 * If there is we assign referenced releation id to rightRelationId and we also
+	 * We check if there is a ADD/DROP FOREIGN CONSTRAINT command in sub commands list.
+	 * If there is we assign referenced relation id to rightRelationId and we also
 	 * set skip_validation to true to prevent PostgreSQL to verify validity of the
 	 * foreign constraint in master. Validity will be checked in workers anyway.
 	 */
@@ -1368,18 +1435,28 @@ PlanAlterTableStmt(AlterTableStmt *alterTableStatement, const char *alterTableCo
 			rightRelationId = RangeVarGetRelid(partitionCommand->name, NoLock, false);
 		}
 #endif
+		executeSequentially |= ShouldExecuteAlterTableSequentially(leftRelationId,
+																   command);
 	}
 
 	ddlJob = palloc0(sizeof(DDLJob));
 	ddlJob->targetRelationId = leftRelationId;
 	ddlJob->concurrentIndexCmd = false;
 	ddlJob->commandString = alterTableCommand;
+	ddlJob->executeSequentially = executeSequentially;
 
 	if (rightRelationId)
 	{
-		/* if foreign key related, use specialized task list function ... */
-		ddlJob->taskList = InterShardDDLTaskList(leftRelationId, rightRelationId,
-												 alterTableCommand);
+		if (!IsDistributedTable(rightRelationId))
+		{
+			ddlJob->taskList = NIL;
+		}
+		else
+		{
+			/* if foreign key related, use specialized task list function ... */
+			ddlJob->taskList = InterShardDDLTaskList(leftRelationId, rightRelationId,
+													 alterTableCommand);
+		}
 	}
 	else
 	{
@@ -2227,8 +2304,25 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 			}
 
 #endif
-			case AT_SetNotNull:
 			case AT_DropConstraint:
+			{
+				LOCKMODE lockmode = AlterTableGetLockLevel(alterTableStatement->cmds);
+				Oid relationId = AlterTableLookupRelation(alterTableStatement, lockmode);
+
+				if (!OidIsValid(relationId))
+				{
+					return;
+				}
+
+				if (ConstraintIsAForeignKey(command->name, relationId))
+				{
+					shouldInvalidateForeignKeyGraph = true;
+				}
+
+				break;
+			}
+
+			case AT_SetNotNull:
 			case AT_EnableTrigAll:
 			case AT_DisableTrigAll:
 			case AT_ReplicaIdentity:
@@ -2885,13 +2979,14 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 			SendCommandToWorkers(WORKERS_WITH_METADATA, (char *) ddlJob->commandString);
 		}
 
-		if (MultiShardConnectionType == PARALLEL_CONNECTION)
+		if (MultiShardConnectionType == SEQUENTIAL_CONNECTION ||
+			ddlJob->executeSequentially)
 		{
-			ExecuteModifyTasksWithoutResults(ddlJob->taskList);
+			ExecuteModifyTasksSequentiallyWithoutResults(ddlJob->taskList, CMD_UTILITY);
 		}
 		else
 		{
-			ExecuteModifyTasksSequentiallyWithoutResults(ddlJob->taskList, CMD_UTILITY);
+			ExecuteModifyTasksWithoutResults(ddlJob->taskList);
 		}
 	}
 	else
@@ -3102,6 +3197,7 @@ InterShardDDLTaskList(Oid leftRelationId, Oid rightRelationId,
 	char *leftSchemaName = get_namespace_name(leftSchemaId);
 	char *escapedLeftSchemaName = quote_literal_cstr(leftSchemaName);
 
+	char rightPartitionMethod = PartitionMethod(rightRelationId);
 	List *rightShardList = LoadShardIntervalList(rightRelationId);
 	ListCell *rightShardCell = NULL;
 	Oid rightSchemaId = get_rel_namespace(rightRelationId);
@@ -3111,6 +3207,29 @@ InterShardDDLTaskList(Oid leftRelationId, Oid rightRelationId,
 	char *escapedCommandString = quote_literal_cstr(commandString);
 	uint64 jobId = INVALID_JOB_ID;
 	int taskId = 1;
+
+	/*
+	 * If the rightPartitionMethod is a reference table, we need to make sure
+	 * that the tasks are created in a way that the right shard stays the same
+	 * since we only have one placement per worker. This hack is first implemented
+	 * for foreign constraint support from distributed tables to reference tables.
+	 */
+	if (rightPartitionMethod == DISTRIBUTE_BY_NONE)
+	{
+		ShardInterval *rightShardInterval = NULL;
+		int rightShardCount = list_length(rightShardList);
+		int leftShardCount = list_length(leftShardList);
+		int shardCounter = 0;
+
+		Assert(rightShardCount == 1);
+
+		rightShardInterval = (ShardInterval *) linitial(rightShardList);
+		for (shardCounter = rightShardCount; shardCounter < leftShardCount;
+			 shardCounter++)
+		{
+			rightShardList = lappend(rightShardList, rightShardInterval);
+		}
+	}
 
 	/* lock metadata before getting placement lists */
 	LockShardListMetadata(leftShardList, ShareLock);
@@ -3706,6 +3825,99 @@ RoleSpecString(RoleSpec *spec)
 
 
 /*
+ * ProcessDropSchemaStmt invalidates the foreign key cache if any table created
+ * under dropped schema involved in any foreign key relationship.
+ */
+static void
+ProcessDropSchemaStmt(DropStmt *dropStatement)
+{
+	Relation pgClass = NULL;
+	HeapTuple heapTuple = NULL;
+	SysScanDesc scanDescriptor = NULL;
+	ScanKeyData scanKey[1];
+	int scanKeyCount = 1;
+	Oid scanIndexId = InvalidOid;
+	bool useIndex = false;
+	ListCell *dropSchemaCell;
+
+	if (dropStatement->behavior != DROP_CASCADE)
+	{
+		return;
+	}
+
+	foreach(dropSchemaCell, dropStatement->objects)
+	{
+		char *schemaString = GetSchemaNameFromDropObject(dropSchemaCell);
+		Oid namespaceOid = get_namespace_oid(schemaString, true);
+
+		if (namespaceOid == InvalidOid)
+		{
+			continue;
+		}
+
+		pgClass = heap_open(RelationRelationId, AccessShareLock);
+
+		ScanKeyInit(&scanKey[0], Anum_pg_class_relnamespace, BTEqualStrategyNumber,
+					F_OIDEQ, namespaceOid);
+		scanDescriptor = systable_beginscan(pgClass, scanIndexId, useIndex, NULL,
+											scanKeyCount, scanKey);
+
+		heapTuple = systable_getnext(scanDescriptor);
+		while (HeapTupleIsValid(heapTuple))
+		{
+			Form_pg_class relationForm = (Form_pg_class) GETSTRUCT(heapTuple);
+			char *relationName = NameStr(relationForm->relname);
+			Oid relationId = get_relname_relid(relationName, namespaceOid);
+
+			/* we're not interested in non-valid, non-distributed relations */
+			if (relationId == InvalidOid || !IsDistributedTable(relationId))
+			{
+				heapTuple = systable_getnext(scanDescriptor);
+				continue;
+			}
+
+			/* invalidate foreign key cache if the table involved in any foreign key */
+			if (TableReferenced(relationId) || TableReferencing(relationId))
+			{
+				shouldInvalidateForeignKeyGraph = true;
+
+				systable_endscan(scanDescriptor);
+				heap_close(pgClass, NoLock);
+				return;
+			}
+
+			heapTuple = systable_getnext(scanDescriptor);
+		}
+
+		systable_endscan(scanDescriptor);
+		heap_close(pgClass, NoLock);
+	}
+}
+
+
+/*
+ * GetSchemaNameFromDropObject gets the name of the drop schema from given
+ * list cell. This function is defined due to API change between PG 9.6 and
+ * PG 10.
+ */
+static char *
+GetSchemaNameFromDropObject(ListCell *dropSchemaCell)
+{
+	char *schemaString = NULL;
+
+#if (PG_VERSION_NUM >= 100000)
+	Value *schemaValue = (Value *) lfirst(dropSchemaCell);
+	schemaString = strVal(schemaValue);
+#else
+	List *schemaNameList = (List *) lfirst(dropSchemaCell);
+	schemaString = NameListToString(schemaNameList);
+#endif
+
+	return schemaString;
+}
+
+
+/*
  * ProcessDropTableStmt processes DROP TABLE commands for partitioned tables.
  * If we are trying to DROP partitioned tables, we first need to go to MX nodes
  * and DETACH partitions from their parents. Otherwise, we process DROP command
@@ -3732,10 +3944,20 @@ ProcessDropTableStmt(DropStmt *dropTableStatement)
 
 		Oid relationId = RangeVarGetRelid(tableRangeVar, AccessShareLock, missingOK);
 
-		if (relationId == InvalidOid ||
-			!IsDistributedTable(relationId) ||
-			!ShouldSyncTableMetadata(relationId) ||
-			!PartitionedTable(relationId))
+		/* we're not interested in non-valid, non-distributed relations */
+		if (relationId == InvalidOid || !IsDistributedTable(relationId))
+		{
+			continue;
+		}
+
+		/* invalidate foreign key cache if the table involved in any foreign key */
+		if ((TableReferenced(relationId) || TableReferencing(relationId)))
+		{
+			shouldInvalidateForeignKeyGraph = true;
+		}
+
+		/* we're only interested in partitioned and mx tables */
+		if (!ShouldSyncTableMetadata(relationId) || !PartitionedTable(relationId))
 		{
 			continue;
 		}
@@ -3759,4 +3981,91 @@ ProcessDropTableStmt(DropStmt *dropTableStatement)
 			SendCommandToWorkers(WORKERS_WITH_METADATA, detachPartitionCommand);
 		}
 	}
+}
+
+
+/*
+ * ShouldExecuteAlterTableSequentially checks if the given ALTER TABLE
+ * statements should be executed sequentially when there is a foreign
+ * constraint from a distributed table to a reference table.
+ * In case of a column related ALTER TABLE operation, we check explicitly
+ * if there is a foreign constraint on this column from/to a reference table.
+ * Additionally, if the command is run inside a transaction block, we call
+ * SetLocalMultiShardModifyModeToSequential so that the further commands
+ * in the same transaction uses the same connections and does not error out.
+ */
+static bool
+ShouldExecuteAlterTableSequentially(Oid relationId, AlterTableCmd *command)
+{
+	bool executeSequentially = false;
+	AlterTableType alterTableType = command->subtype;
+	if (alterTableType == AT_DropConstraint)
+	{
+		char *constraintName = command->name;
+		if (ConstraintIsAForeignKeyToReferenceTable(constraintName, relationId))
+		{
+			executeSequentially = true;
+		}
+	}
+	else if (alterTableType == AT_DropColumn || alterTableType == AT_AlterColumnType)
+	{
+		char *affectedColumnName = command->name;
+
+		if (ColumnAppearsInForeignKeyToReferenceTable(affectedColumnName,
+													  relationId))
+		{
+			if (IsTransactionBlock() && alterTableType == AT_AlterColumnType)
+			{
+				SetLocalMultiShardModifyModeToSequential();
+			}
+
+			executeSequentially = true;
+		}
+	}
+	else if (alterTableType == AT_AddConstraint)
+	{
+		/*
+		 * We need to execute the ddls working with reference tables on the
+		 * right side sequentially, because parallel ddl operations
+		 * relating to one and only shard of a reference table on a worker
+		 * may cause self-deadlocks.
+		 */
+		Constraint *constraint = (Constraint *) command->def;
+		if (constraint->contype == CONSTR_FOREIGN)
+		{
+			Oid rightRelationId = RangeVarGetRelid(constraint->pktable, NoLock,
+												   false);
+			if (IsDistributedTable(rightRelationId) &&
+				PartitionMethod(rightRelationId) == DISTRIBUTE_BY_NONE)
+			{
+				executeSequentially = true;
+			}
+		}
+	}
+
+	/*
+	 * If there has already been a parallel query executed, the sequential mode
+	 * would still use the already opened parallel connections to the workers for
+	 * the distributed tables, thus contradicting our purpose of using
+	 * sequential mode.
+	 */
+	if (executeSequentially && IsDistributedTable(relationId) &&
+		PartitionMethod(relationId) != DISTRIBUTE_BY_NONE &&
+		ParallelQueryExecutedInTransaction())
+	{
+		char *relationName = get_rel_name(relationId);
+
+		ereport(ERROR, (errmsg("cannot modify table \"%s\" because there "
+							   "was a parallel operation on a distributed table"
+							   "in the transaction", relationName),
+						errdetail("When there is a foreign key to a reference "
+								  "table, Citus needs to perform all operations "
+								  "over a single connection per node to ensure "
+								  "consistency."),
+						errhint("Try re-running the transaction with "
+								"\"SET LOCAL citus.multi_shard_modify_mode TO "
+								"\'sequential\';\"")));
+	}
+
+	return executeSequentially;
 }

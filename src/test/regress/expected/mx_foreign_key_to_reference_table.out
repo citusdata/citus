@@ -1,0 +1,90 @@
+CREATE SCHEMA fkey_reference_table;
+SET search_path TO 'fkey_reference_table';
+SET citus.shard_replication_factor TO 1;
+SET citus.shard_count TO 8;
+SET citus.next_shard_id TO 7000000;
+SET citus.next_placement_id TO 7000000;
+SET citus.replication_model TO streaming;
+-- Setup the view so that we can check if the foreign keys are created properly
+CREATE TYPE foreign_details AS (name text, relid text, refd_relid text);
+SELECT run_command_on_workers($$CREATE TYPE foreign_details AS (name text, relid text, refd_relid text)$$);
+      run_command_on_workers       
+-----------------------------------
+ (localhost,57637,t,"CREATE TYPE")
+ (localhost,57638,t,"CREATE TYPE")
+(2 rows)
+
+CREATE VIEW table_fkeys_in_workers AS 
+SELECT
+(json_populate_record(NULL::foreign_details, 
+  json_array_elements_text((run_command_on_workers( $$ 
+    SELECT
+      COALESCE(json_agg(row_to_json(d)), '[]'::json) 
+    FROM
+      (
+        SELECT
+          distinct name,
+          relid::regclass::text,
+          refd_relid::regclass::text
+        FROM
+          table_fkey_cols 
+      )
+      d $$ )).RESULT::json )::json )).* ;
+-- Check if MX can create foreign keys properly on foreign keys from distributed to reference tables
+CREATE TABLE referenced_table(test_column int, test_column2 int, PRIMARY KEY(test_column));
+CREATE TABLE referenced_table2(test_column int, test_column2 int, PRIMARY KEY(test_column2));
+CREATE TABLE referencing_table(id int, ref_id int);
+ALTER TABLE referencing_table ADD CONSTRAINT fkey_ref FOREIGN KEY (id) REFERENCES referenced_table(test_column) ON DELETE CASCADE;
+ALTER TABLE referencing_table ADD CONSTRAINT foreign_key_2 FOREIGN KEY (id) REFERENCES referenced_table2(test_column2) ON DELETE CASCADE;
+SELECT create_reference_table('referenced_table');
+ create_reference_table 
+------------------------
+ 
+(1 row)
+
+SELECT create_reference_table('referenced_table2');
+ create_reference_table 
+------------------------
+ 
+(1 row)
+
+SELECT create_distributed_table('referencing_table', 'id');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+SET search_path TO 'fkey_reference_table';
+SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%' ORDER BY 1, 2;
+         name          |                     relid                      |                   refd_relid                   
+-----------------------+------------------------------------------------+------------------------------------------------
+ fkey_ref              | fkey_reference_table.referencing_table         | fkey_reference_table.referenced_table
+ fkey_ref              | fkey_reference_table.referencing_table         | fkey_reference_table.referenced_table
+ fkey_ref_7000002      | fkey_reference_table.referencing_table_7000002 | fkey_reference_table.referenced_table_7000000
+ fkey_ref_7000003      | fkey_reference_table.referencing_table_7000003 | fkey_reference_table.referenced_table_7000000
+ fkey_ref_7000004      | fkey_reference_table.referencing_table_7000004 | fkey_reference_table.referenced_table_7000000
+ fkey_ref_7000005      | fkey_reference_table.referencing_table_7000005 | fkey_reference_table.referenced_table_7000000
+ fkey_ref_7000006      | fkey_reference_table.referencing_table_7000006 | fkey_reference_table.referenced_table_7000000
+ fkey_ref_7000007      | fkey_reference_table.referencing_table_7000007 | fkey_reference_table.referenced_table_7000000
+ fkey_ref_7000008      | fkey_reference_table.referencing_table_7000008 | fkey_reference_table.referenced_table_7000000
+ fkey_ref_7000009      | fkey_reference_table.referencing_table_7000009 | fkey_reference_table.referenced_table_7000000
+ foreign_key_2         | fkey_reference_table.referencing_table         | fkey_reference_table.referenced_table2
+ foreign_key_2         | fkey_reference_table.referencing_table         | fkey_reference_table.referenced_table2
+ foreign_key_2_7000002 | fkey_reference_table.referencing_table_7000002 | fkey_reference_table.referenced_table2_7000001
+ foreign_key_2_7000003 | fkey_reference_table.referencing_table_7000003 | fkey_reference_table.referenced_table2_7000001
+ foreign_key_2_7000004 | fkey_reference_table.referencing_table_7000004 | fkey_reference_table.referenced_table2_7000001
+ foreign_key_2_7000005 | fkey_reference_table.referencing_table_7000005 | fkey_reference_table.referenced_table2_7000001
+ foreign_key_2_7000006 | fkey_reference_table.referencing_table_7000006 | fkey_reference_table.referenced_table2_7000001
+ foreign_key_2_7000007 | fkey_reference_table.referencing_table_7000007 | fkey_reference_table.referenced_table2_7000001
+ foreign_key_2_7000008 | fkey_reference_table.referencing_table_7000008 | fkey_reference_table.referenced_table2_7000001
+ foreign_key_2_7000009 | fkey_reference_table.referencing_table_7000009 | fkey_reference_table.referenced_table2_7000001
+(20 rows)
+
+DROP SCHEMA fkey_reference_table CASCADE;
+NOTICE:  drop cascades to 5 other objects
+DETAIL:  drop cascades to type foreign_details
+drop cascades to view table_fkeys_in_workers
+drop cascades to table referenced_table
+drop cascades to table referenced_table2
+drop cascades to table referencing_table
+SET search_path TO DEFAULT;

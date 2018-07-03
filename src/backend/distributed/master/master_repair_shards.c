@@ -189,6 +189,16 @@ RepairShardPlacement(int64 shardId, char *sourceNodeName, int32 sourceNodePort,
 	}
 
 	/*
+	 * We take a lock on the referenced table if there is a foreign constraint
+	 * during the copy procedure. If we do not block DMLs on the referenced
+	 * table, we cannot avoid the inconsistency between the two copies of the
+	 * data. Currently, we do not support replication factor > 1 on the tables
+	 * with foreign constraints, so this command will fail for this case anyway.
+	 * However, it is taken as a precaution in case we support it one day.
+	 */
+	LockReferencedReferenceShardDistributionMetadata(shardId, ExclusiveLock);
+
+	/*
 	 * We plan to move the placement to the healthy state, so we need to grab a shard
 	 * metadata lock (in exclusive mode).
 	 */
@@ -338,8 +348,31 @@ CopyShardCommandList(ShardInterval *shardInterval,
 List *
 CopyShardForeignConstraintCommandList(ShardInterval *shardInterval)
 {
-	List *copyShardForeignConstraintCommandList = NIL;
+	List *colocatedShardForeignConstraintCommandList = NIL;
+	List *referenceTableForeignConstraintList = NIL;
 
+	CopyShardForeignConstraintCommandListGrouped(shardInterval,
+												 &
+												 colocatedShardForeignConstraintCommandList,
+												 &referenceTableForeignConstraintList);
+
+	return list_concat(colocatedShardForeignConstraintCommandList,
+					   referenceTableForeignConstraintList);
+}
+
+
+/*
+ * CopyShardForeignConstraintCommandListGrouped generates command lists
+ * to create foreign constraints existing in source shard after copying it to other
+ * node in separate groups for foreign constraints in between hash distributed tables
+ * and from a hash distributed to reference tables.
+ */
+void
+CopyShardForeignConstraintCommandListGrouped(ShardInterval *shardInterval,
+											 List **
+											 colocatedShardForeignConstraintCommandList,
+											 List **referenceTableForeignConstraintList)
+{
 	Oid schemaId = get_rel_namespace(shardInterval->relationId);
 	char *schemaName = get_namespace_name(schemaId);
 	char *escapedSchemaName = quote_literal_cstr(schemaName);
@@ -354,6 +387,9 @@ CopyShardForeignConstraintCommandList(ShardInterval *shardInterval)
 		shardIndex = ShardIndex(shardInterval);
 	}
 
+	*colocatedShardForeignConstraintCommandList = NIL;
+	*referenceTableForeignConstraintList = NIL;
+
 	foreach(commandCell, commandList)
 	{
 		char *command = (char *) lfirst(commandCell);
@@ -364,6 +400,7 @@ CopyShardForeignConstraintCommandList(ShardInterval *shardInterval)
 		char *referencedSchemaName = NULL;
 		char *escapedReferencedSchemaName = NULL;
 		uint64 referencedShardId = INVALID_SHARD_ID;
+		bool colocatedForeignKey = false;
 
 		StringInfo applyForeignConstraintCommand = makeStringInfo();
 
@@ -379,19 +416,40 @@ CopyShardForeignConstraintCommandList(ShardInterval *shardInterval)
 		referencedSchemaId = get_rel_namespace(referencedRelationId);
 		referencedSchemaName = get_namespace_name(referencedSchemaId);
 		escapedReferencedSchemaName = quote_literal_cstr(referencedSchemaName);
-		referencedShardId = ColocatedShardIdInRelation(referencedRelationId, shardIndex);
+
+		if (PartitionMethod(referencedRelationId) == DISTRIBUTE_BY_NONE)
+		{
+			List *shardList = LoadShardList(referencedRelationId);
+			uint64 *shardIdPointer = (uint64 *) linitial(shardList);
+
+			referencedShardId = (*shardIdPointer);
+		}
+		else
+		{
+			referencedShardId = ColocatedShardIdInRelation(referencedRelationId,
+														   shardIndex);
+
+			colocatedForeignKey = true;
+		}
 
 		appendStringInfo(applyForeignConstraintCommand,
 						 WORKER_APPLY_INTER_SHARD_DDL_COMMAND, shardInterval->shardId,
 						 escapedSchemaName, referencedShardId,
 						 escapedReferencedSchemaName, escapedCommand);
 
-		copyShardForeignConstraintCommandList = lappend(
-			copyShardForeignConstraintCommandList,
-			applyForeignConstraintCommand->data);
+		if (colocatedForeignKey)
+		{
+			*colocatedShardForeignConstraintCommandList = lappend(
+				*colocatedShardForeignConstraintCommandList,
+				applyForeignConstraintCommand->data);
+		}
+		else
+		{
+			*referenceTableForeignConstraintList = lappend(
+				*referenceTableForeignConstraintList,
+				applyForeignConstraintCommand->data);
+		}
 	}
-
-	return copyShardForeignConstraintCommandList;
 }
 
 

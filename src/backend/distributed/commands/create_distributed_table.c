@@ -47,6 +47,7 @@
 #include "distributed/pg_dist_colocation.h"
 #include "distributed/pg_dist_partition.h"
 #include "distributed/reference_table_utils.h"
+#include "distributed/relation_access_tracking.h"
 #include "distributed/remote_commands.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/worker_transaction.h"
@@ -100,6 +101,7 @@ static bool LocalTableEmpty(Oid tableId);
 static void CopyLocalDataIntoShards(Oid relationId);
 static List * TupleDescColumnNameList(TupleDesc tupleDescriptor);
 static bool RelationUsesIdentityColumns(TupleDesc relationDesc);
+static bool CanUseExclusiveConnections(Oid relationId, bool localTableEmpty);
 
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(master_create_distributed_table);
@@ -484,26 +486,8 @@ CreateHashDistributedTableShards(Oid relationId, Oid colocatedTableId,
 	 */
 	if (RegularTable(relationId))
 	{
-		if (!localTableEmpty && MultiShardConnectionType == SEQUENTIAL_CONNECTION)
-		{
-			char *relationName = get_rel_name(relationId);
-
-			ereport(ERROR, (errmsg("cannot distribute \"%s\" in sequential mode "
-								   "because it is not empty", relationName),
-							errhint("If you have manually set "
-									"citus.multi_shard_modify_mode to 'sequential', "
-									"try with 'parallel' option. If that is not the "
-									"case, try distributing local tables when they "
-									"are empty.")));
-		}
-		else if (MultiShardConnectionType == SEQUENTIAL_CONNECTION)
-		{
-			useExclusiveConnection = false;
-		}
-		else if (!localTableEmpty || IsTransactionBlock())
-		{
-			useExclusiveConnection = true;
-		}
+		useExclusiveConnection = CanUseExclusiveConnections(relationId,
+															localTableEmpty);
 	}
 
 	if (colocatedTableId != InvalidOid)
@@ -775,6 +759,11 @@ EnsureRelationCanBeDistributed(Oid relationId, Var *distributionColumn,
 
 	ErrorIfUnsupportedConstraint(relation, distributionMethod, distributionColumn,
 								 colocationId);
+
+	if (TableReferenced(relationId) || TableReferencing(relationId))
+	{
+		InvalidateForeignKeyGraph();
+	}
 
 	relation_close(relation, NoLock);
 }
@@ -1104,6 +1093,64 @@ LocalTableEmpty(Oid tableId)
 	SPI_finish();
 
 	return localTableEmpty;
+}
+
+
+/*
+ * CanUseExclusiveConnections checks if we can open parallel connections
+ * while creating shards. We simply error out if we need to execute
+ * sequentially but there is data in the table, since we cannot copy the
+ * data to shards sequentially.
+ */
+static bool
+CanUseExclusiveConnections(Oid relationId, bool localTableEmpty)
+{
+	bool hasForeignKeyToReferenceTable = HasForeignKeyToReferenceTable(relationId);
+	bool shouldRunSequential = MultiShardConnectionType == SEQUENTIAL_CONNECTION ||
+							   hasForeignKeyToReferenceTable;
+
+	if (!localTableEmpty && shouldRunSequential)
+	{
+		char *relationName = get_rel_name(relationId);
+
+		ereport(ERROR, (errmsg("cannot distribute \"%s\" in sequential mode "
+							   "because it is not empty", relationName),
+						errhint("If you have manually set "
+								"citus.multi_shard_modify_mode to 'sequential', "
+								"try with 'parallel' option. If that is not the "
+								"case, try distributing local tables when they "
+								"are empty.")));
+	}
+	else if (shouldRunSequential && ParallelQueryExecutedInTransaction())
+	{
+		char *relationName = get_rel_name(relationId);
+
+		/*
+		 * If there has already been a parallel query executed, the sequential mode
+		 * would still use the already opened parallel connections to the workers,
+		 * thus contradicting our purpose of using sequential mode.
+		 */
+		ereport(ERROR, (errmsg("cannot distribute relation \"%s\" in this "
+							   "transaction because it has a foreign key to "
+							   "a reference table", relationName),
+						errdetail("If a hash distributed table has a foreign key "
+								  "to a reference table, it has to be created "
+								  "in sequential mode before any parallel commands "
+								  "have been executed in the same transaction"),
+						errhint("Try re-running the transaction with "
+								"\"SET LOCAL citus.multi_shard_modify_mode TO "
+								"\'sequential\';\"")));
+	}
+	else if (shouldRunSequential)
+	{
+		return false;
+	}
+	else if (!localTableEmpty || IsTransactionBlock())
+	{
+		return true;
+	}
+
+	return false;
 }
 
 

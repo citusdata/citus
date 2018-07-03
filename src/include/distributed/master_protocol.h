@@ -164,6 +164,11 @@ extern Datum master_copy_shard_placement(PG_FUNCTION_ARGS);
 extern List * CopyShardCommandList(ShardInterval *shardInterval, char *sourceNodeName,
 								   int32 sourceNodePort);
 extern List * CopyShardForeignConstraintCommandList(ShardInterval *shardInterval);
+extern void CopyShardForeignConstraintCommandListGrouped(ShardInterval *shardInterval,
+														 List **
+														 colocatedShardForeignConstraintCommandList,
+														 List **
+														 referenceTableForeignConstraintList);
 extern ShardPlacement * SearchShardPlacementInList(List *shardPlacementList,
 												   char *nodeName, uint32 nodePort,
 												   bool missingOk);

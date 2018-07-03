@@ -32,6 +32,16 @@ CREATE TABLE referencing_table(id int, ref_id int, FOREIGN KEY(ref_id) REFERENCE
 SELECT create_distributed_table('referencing_table', 'ref_id', 'hash');
 DROP TABLE referencing_table;
 
+-- self referencing table with replication factor > 1
+CREATE TABLE self_referencing_table(id int, ref_id int, PRIMARY KEY (id, ref_id), FOREIGN KEY(id,ref_id) REFERENCES self_referencing_table(id, ref_id));
+SELECT create_distributed_table('self_referencing_table', 'id', 'hash');
+DROP TABLE self_referencing_table;
+
+CREATE TABLE self_referencing_table(id int, ref_id int, PRIMARY KEY (id, ref_id));
+SELECT create_distributed_table('self_referencing_table', 'id', 'hash');
+ALTER TABLE self_referencing_table ADD CONSTRAINT fkey FOREIGN KEY(id,ref_id) REFERENCES self_referencing_table(id, ref_id);
+DROP TABLE self_referencing_table;
+
 -- test foreign constraint creation on NOT co-located tables
 SET citus.shard_count TO 8;
 CREATE TABLE referencing_table(id int, ref_id int, FOREIGN KEY(ref_id) REFERENCES referenced_table(id));
@@ -55,8 +65,26 @@ SELECT create_distributed_table('referencing_table', 'ref_id', 'hash');
 DROP TABLE referencing_table;
 DROP TABLE referenced_table;
 
--- test foreign constraint with correct conditions
+-- test foreign constraint creation on append and range distributed tables
+-- foreign keys are supported either in between distributed tables including the 
+-- distribution column or from distributed tables to reference tables.
 SET citus.shard_replication_factor TO 1;
+CREATE TABLE referenced_table(id int UNIQUE, test_column int, PRIMARY KEY(id, test_column));
+SELECT create_distributed_table('referenced_table', 'id', 'hash');
+
+CREATE TABLE referencing_table(id int, ref_id int, FOREIGN KEY (id) REFERENCES referenced_table(id));
+SELECT create_distributed_table('referencing_table', 'id', 'append');
+DROP TABLE referencing_table;
+DROP TABLE referenced_table;
+
+CREATE TABLE referenced_table(id int UNIQUE, test_column int, PRIMARY KEY(id, test_column));
+SELECT create_distributed_table('referenced_table', 'id', 'range');
+CREATE TABLE referencing_table(id int, ref_id int,FOREIGN KEY (id) REFERENCES referenced_table(id));
+SELECT create_distributed_table('referencing_table', 'id', 'range');
+DROP TABLE referencing_table;
+DROP TABLE referenced_table;
+
+-- test foreign constraint with correct conditions
 CREATE TABLE referenced_table(id int UNIQUE, test_column int, PRIMARY KEY(id, test_column));
 CREATE TABLE referencing_table(id int, ref_id int, FOREIGN KEY(ref_id) REFERENCES referenced_table(id));
 SELECT create_distributed_table('referenced_table', 'id', 'hash');
@@ -211,13 +239,12 @@ DROP TABLE referenced_table;
 
 -- Similar tests, but this time we push foreign key constraints created by ALTER TABLE queries
 -- create tables
+SET citus.shard_count TO 4;
 CREATE TABLE referenced_table(id int UNIQUE, test_column int, PRIMARY KEY(id, test_column));
-SELECT master_create_distributed_table('referenced_table', 'id', 'hash');
-SELECT master_create_worker_shards('referenced_table', 4, 1);
+SELECT create_distributed_table('referenced_table', 'id', 'hash');
 
 CREATE TABLE referencing_table(id int, ref_id int);
-SELECT master_create_distributed_table('referencing_table', 'ref_id', 'hash');
-SELECT master_create_worker_shards('referencing_table', 4, 1);
+SELECT create_distributed_table('referencing_table', 'ref_id', 'hash');
 
 -- verify that we skip foreign key validation when propagation is turned off
 -- not skipping validation would result in a distributed query, which emits debug messages
@@ -243,6 +270,13 @@ ALTER TABLE referencing_table ADD CONSTRAINT test_constraint FOREIGN KEY(ref_id)
 ALTER TABLE referencing_table ADD FOREIGN KEY(ref_id) REFERENCES referenced_table(id);
 
 -- test foreign constraint creation on NOT co-located tables
+DROP TABLE referencing_table;
+DROP TABLE referenced_table;
+CREATE TABLE referenced_table(id int UNIQUE, test_column int, PRIMARY KEY(id, test_column));
+SELECT create_distributed_table('referenced_table', 'id', 'hash');
+
+CREATE TABLE referencing_table(id int, ref_id int);
+SELECT create_distributed_table('referencing_table', 'ref_id', 'hash', colocate_with => 'none');
 ALTER TABLE referencing_table ADD CONSTRAINT test_constraint FOREIGN KEY(ref_id) REFERENCES referenced_table(id);
 
 -- create co-located tables
@@ -468,15 +502,11 @@ SELECT create_distributed_table('referenced_by_reference_table', 'id');
 CREATE TABLE reference_table(id int, referencing_column int REFERENCES referenced_by_reference_table(id));
 SELECT create_reference_table('reference_table');
 
--- test foreign key creation on CREATE TABLE to reference table
+-- test foreign key creation on CREATE TABLE from + to reference table
 DROP TABLE reference_table;
 CREATE TABLE reference_table(id int PRIMARY KEY, referencing_column int);
 SELECT create_reference_table('reference_table');
 
-CREATE TABLE references_to_reference_table(id int, referencing_column int REFERENCES reference_table(id));
-SELECT create_distributed_table('references_to_reference_table', 'referencing_column');
-
--- test foreign key creation on CREATE TABLE from + to reference table
 CREATE TABLE reference_table_second(id int, referencing_column int REFERENCES reference_table(id));
 SELECT create_reference_table('reference_table_second');
 
@@ -503,7 +533,6 @@ SELECT create_reference_table('reference_table');
 ALTER TABLE reference_table ADD CONSTRAINT fk FOREIGN KEY(referencing_column) REFERENCES referenced_by_reference_table(id);
 
 -- test foreign key creation on ALTER TABLE to reference table
-DROP TABLE references_to_reference_table;
 CREATE TABLE references_to_reference_table(id int, referencing_column int);
 SELECT create_distributed_table('references_to_reference_table', 'referencing_column');
 ALTER TABLE references_to_reference_table ADD CONSTRAINT fk FOREIGN KEY(referencing_column) REFERENCES reference_table(id);
@@ -515,7 +544,7 @@ SELECT create_reference_table('reference_table_second');
 ALTER TABLE reference_table_second ADD CONSTRAINT fk FOREIGN KEY(referencing_column) REFERENCES reference_table(id);
 
 -- test foreign key creation on ALTER TABLE from reference table to local table
-DROP TABLE reference_table;
+DROP TABLE reference_table CASCADE;
 CREATE TABLE reference_table(id int PRIMARY KEY, referencing_column int);
 SELECT create_reference_table('reference_table');
 ALTER TABLE reference_table ADD CONSTRAINT fk FOREIGN KEY(referencing_column) REFERENCES referenced_local_table(id);
