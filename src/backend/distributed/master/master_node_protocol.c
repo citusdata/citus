@@ -46,6 +46,7 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/pg_dist_shard.h"
+#include "distributed/policy.h"
 #include "distributed/worker_manager.h"
 #include "foreign/foreign.h"
 #include "lib/stringinfo.h"
@@ -558,6 +559,7 @@ GetTableDDLEvents(Oid relationId, bool includeSequenceDefaults)
 	List *tableCreationCommandList = NIL;
 	List *indexAndConstraintCommandList = NIL;
 	List *replicaIdentityEvents = NIL;
+	List *policyCommands = NIL;
 
 	tableCreationCommandList = GetTableCreationCommands(relationId,
 														includeSequenceDefaults);
@@ -568,6 +570,9 @@ GetTableDDLEvents(Oid relationId, bool includeSequenceDefaults)
 
 	replicaIdentityEvents = GetTableReplicaIdentityCommand(relationId);
 	tableDDLEventList = list_concat(tableDDLEventList, replicaIdentityEvents);
+
+	policyCommands = CreatePolicyCommands(relationId);
+	tableDDLEventList = list_concat(tableDDLEventList, policyCommands);
 
 	return tableDDLEventList;
 }

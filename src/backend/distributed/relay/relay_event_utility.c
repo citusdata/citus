@@ -30,6 +30,7 @@
 #include "catalog/pg_class.h"
 #include "catalog/pg_constraint.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/policy.h"
 #include "distributed/relay_utility.h"
 #include "distributed/version_compat.h"
 #include "lib/stringinfo.h"
@@ -51,7 +52,6 @@
 
 /* Local functions forward declarations */
 static void AppendShardIdToConstraintName(AlterTableCmd *command, uint64 shardId);
-static void SetSchemaNameIfNotExist(char **schemaName, char *newSchemaName);
 static bool UpdateWholeRowColumnReferencesWalker(Node *node, uint64 *shardId);
 
 /* exports for SQL callable functions */
@@ -277,6 +277,10 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 				relationName = &(relationNameValue->val.str);
 				AppendShardIdToName(relationName, shardId);
 			}
+			else if (objectType == OBJECT_POLICY)
+			{
+				DropPolicyEventExtendNames(dropStmt, schemaName, shardId);
+			}
 			else
 			{
 				ereport(WARNING, (errmsg("unsafe object type in drop statement"),
@@ -307,6 +311,20 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 					AppendShardIdToName(relationName, shardId);
 				}
 			}
+			break;
+		}
+
+		case T_CreatePolicyStmt:
+		{
+			CreatePolicyEventExtendNames((CreatePolicyStmt *) parseTree, schemaName,
+										 shardId);
+			break;
+		}
+
+		case T_AlterPolicyStmt:
+		{
+			AlterPolicyEventExtendNames((AlterPolicyStmt *) parseTree, schemaName,
+										shardId);
 			break;
 		}
 
@@ -429,6 +447,10 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 				SetSchemaNameIfNotExist(objectSchemaName, schemaName);
 
 				AppendShardIdToName(relationName, shardId);
+			}
+			else if (objectType == OBJECT_POLICY)
+			{
+				RenamePolicyEventExtendNames(renameStmt, schemaName, shardId);
 			}
 			else
 			{
@@ -623,8 +645,8 @@ UpdateWholeRowColumnReferencesWalker(Node *node, uint64 *shardId)
  * SetSchemaNameIfNotExist function checks whether schemaName is set and if it is not set
  * it sets its value to given newSchemaName.
  */
-static void
-SetSchemaNameIfNotExist(char **schemaName, char *newSchemaName)
+void
+SetSchemaNameIfNotExist(char **schemaName, const char *newSchemaName)
 {
 	if ((*schemaName) == NULL)
 	{

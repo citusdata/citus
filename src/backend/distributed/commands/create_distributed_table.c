@@ -46,6 +46,7 @@
 #include "distributed/multi_utility.h"
 #include "distributed/pg_dist_colocation.h"
 #include "distributed/pg_dist_partition.h"
+#include "distributed/policy.h"
 #include "distributed/reference_table_utils.h"
 #include "distributed/relation_access_tracking.h"
 #include "distributed/remote_commands.h"
@@ -764,6 +765,8 @@ EnsureRelationCanBeDistributed(Oid relationId, Var *distributionColumn,
 	{
 		InvalidateForeignKeyGraph();
 	}
+
+	ErrorIfUnsupportedPolicy(relation);
 
 	relation_close(relation, NoLock);
 }

@@ -14,6 +14,7 @@ OBJS = src/backend/distributed/shared_library_init.o \
      src/backend/distributed/connection/placement_connection.o \
      src/backend/distributed/connection/remote_commands.o \
      src/backend/distributed/ddl/foreign_constraint.o \
+     src/backend/distributed/ddl/policy.o \
      src/backend/distributed/executor/citus_custom_scan.o \
      src/backend/distributed/executor/insert_select_executor.o \
      src/backend/distributed/executor/intermediate_results.o \
