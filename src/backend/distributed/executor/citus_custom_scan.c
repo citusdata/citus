@@ -18,6 +18,7 @@
 #include "distributed/multi_server_executor.h"
 #include "distributed/multi_router_executor.h"
 #include "distributed/multi_router_planner.h"
+#include "distributed/query_stats.h"
 #include "distributed/subplan_execution.h"
 #include "distributed/worker_protocol.h"
 #include "executor/executor.h"
@@ -297,6 +298,29 @@ static void
 CitusEndScan(CustomScanState *node)
 {
 	CitusScanState *scanState = (CitusScanState *) node;
+	Job *workerJob = scanState->distributedPlan->workerJob;
+	uint64 queryId = scanState->distributedPlan->queryId;
+	MultiExecutorType executorType = scanState->executorType;
+	Const *partitionKeyConst = NULL;
+	char *partitionKeyString = NULL;
+
+	if (workerJob != NULL)
+	{
+		partitionKeyConst = workerJob->partitionKeyValue;
+	}
+
+	/* queryId is not set if pg_stat_statements is not installed */
+	if (queryId != 0)
+	{
+		if (executorType == MULTI_EXECUTOR_ROUTER && partitionKeyConst != NULL)
+		{
+			partitionKeyString = DatumToString(partitionKeyConst->constvalue,
+											   partitionKeyConst->consttype);
+		}
+
+		/* queries without partition key are also recorded */
+		CitusQueryStatsExecutorsEntry(queryId, executorType, partitionKeyString);
+	}
 
 	if (scanState->tuplestorestate)
 	{
