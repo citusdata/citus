@@ -178,7 +178,7 @@ static void InvalidateForeignKeyGraphForDDL(void);
  * We need to run some of the commands sequentially if there is a foreign constraint
  * from/to reference table.
  */
-static bool ShouldExecuteAlterTableSequentially(Oid relationId, AlterTableCmd *command);
+static bool SetupExecutionModeForAlterTable(Oid relationId, AlterTableCmd *command);
 
 
 /*
@@ -1450,8 +1450,8 @@ PlanAlterTableStmt(AlterTableStmt *alterTableStatement, const char *alterTableCo
 			rightRelationId = RangeVarGetRelid(partitionCommand->name, NoLock, false);
 		}
 #endif
-		executeSequentially |= ShouldExecuteAlterTableSequentially(leftRelationId,
-																   command);
+		executeSequentially |= SetupExecutionModeForAlterTable(leftRelationId,
+															   command);
 	}
 
 	ddlJob = palloc0(sizeof(DDLJob));
@@ -4002,17 +4002,30 @@ ProcessDropTableStmt(DropStmt *dropTableStatement)
 
 
 /*
- * ShouldExecuteAlterTableSequentially checks if the given ALTER TABLE
- * statements should be executed sequentially when there is a foreign
- * constraint from a distributed table to a reference table.
- * In case of a column related ALTER TABLE operation, we check explicitly
- * if there is a foreign constraint on this column from/to a reference table.
- * Additionally, if the command is run inside a transaction block, we call
- * SetLocalMultiShardModifyModeToSequential so that the further commands
- * in the same transaction uses the same connections and does not error out.
+ * SetupExecutionModeForAlterTable is the function that is responsible
+ * for two things for practial purpose for not doing the same checks
+ * twice:
+ *     (a) For any command, decide and return whether we should
+ *         run the command in sequntial mode
+ *     (b) For commands in a transaction block, set the transaction local
+ *         multi-shard modify mode to sequential when necessary
+ *
+ * The commands that operate on the same reference table shard in parallel
+ * is in the interest of (a), where the return value indicates the executor
+ * to run the command sequentially to prevent self-deadlocks.
+ *
+ * The commands that both operate on the same reference table shard in parallel
+ * and cascades to run any parallel operation is in the interest of (b). By
+ * setting the multi-shard mode, we ensure that the cascading parallel commands
+ * are executed sequentially to prevent self-deadlocks.
+ *
+ * One final note on the function is that if the function decides to execute
+ * the command in sequential mode, and a parallel command has already been
+ * executed in the same transaction, the function errors out. See the comment
+ * in the function for the rationale.
  */
 static bool
-ShouldExecuteAlterTableSequentially(Oid relationId, AlterTableCmd *command)
+SetupExecutionModeForAlterTable(Oid relationId, AlterTableCmd *command)
 {
 	bool executeSequentially = false;
 	AlterTableType alterTableType = command->subtype;

@@ -382,6 +382,15 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 		CreateTableMetadataOnWorkers(relationId);
 	}
 
+	/*
+	 * We've a custom way of foreign key graph invalidation,
+	 * see InvalidateForeignKeyGraph().
+	 */
+	if (TableReferenced(relationId) || TableReferencing(relationId))
+	{
+		InvalidateForeignKeyGraph();
+	}
+
 	/* if this table is partitioned table, distribute its partitions too */
 	if (PartitionedTable(relationId))
 	{
@@ -761,13 +770,8 @@ EnsureRelationCanBeDistributed(Oid relationId, Var *distributionColumn,
 	ErrorIfUnsupportedConstraint(relation, distributionMethod, distributionColumn,
 								 colocationId);
 
-	if (TableReferenced(relationId) || TableReferencing(relationId))
-	{
-		InvalidateForeignKeyGraph();
-	}
 
 	ErrorIfUnsupportedPolicy(relation);
-
 	relation_close(relation, NoLock);
 }
 

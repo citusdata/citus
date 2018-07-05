@@ -159,6 +159,7 @@ extern void EnsureSuperUser(void);
 extern void EnsureReplicationSettings(Oid relationId, char replicationModel);
 extern bool RegularTable(Oid relationId);
 extern char * ConstructQualifiedShardName(ShardInterval *shardInterval);
+extern uint64 GetFirstShardId(Oid relationId);
 extern Datum StringToDatum(char *inputString, Oid dataType);
 extern char * DatumToString(Datum datum, Oid dataType);
 
