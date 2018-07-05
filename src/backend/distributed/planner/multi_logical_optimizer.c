@@ -1489,7 +1489,7 @@ MasterAggregateMutator(Node *originalNode, MasterAggregateWalkerContext *walkerC
 /*
  * MasterAggregateExpression creates the master aggregate expression using the
  * original aggregate and aggregate's type information. This function handles
- * the average, count, and array_agg aggregates separately due to differences
+ * the average, count, array_agg, and hll aggregates separately due to differences
  * in these aggregate functions' transformations.
  *
  * Note that this function has implicit knowledge of the transformations applied
@@ -1762,6 +1762,40 @@ MasterAggregateExpression(Aggref *originalAggregate,
 		newMasterAggregate->aggsplit = AGGSPLIT_SIMPLE;
 
 		newMasterExpression = (Expr *) newMasterAggregate;
+	}
+	else if (aggregateType == AGGREGATE_HLL_ADD ||
+			 aggregateType == AGGREGATE_HLL_UNION)
+	{
+		/*
+		 * If hll aggregates are called, we simply create the hll_union_aggregate
+		 * to apply in the master after running the original aggregate in
+		 * workers.
+		 */
+		TargetEntry *hllTargetEntry = NULL;
+		Aggref *unionAggregate = NULL;
+
+		Oid hllType = exprType((Node *) originalAggregate);
+		Oid unionFunctionId = AggregateFunctionOid(HLL_UNION_AGGREGATE_NAME, hllType);
+		int32 hllReturnTypeMod = exprTypmod((Node *) originalAggregate);
+		Oid hllTypeCollationId = exprCollation((Node *) originalAggregate);
+
+		Var *hllColumn = makeVar(masterTableId, walkerContext->columnId, hllType,
+								 hllReturnTypeMod, hllTypeCollationId, columnLevelsUp);
+		walkerContext->columnId++;
+
+		hllTargetEntry = makeTargetEntry((Expr *) hllColumn, argumentId, NULL, false);
+
+		unionAggregate = makeNode(Aggref);
+		unionAggregate->aggfnoid = unionFunctionId;
+		unionAggregate->aggtype = hllType;
+		unionAggregate->args = list_make1(hllTargetEntry);
+		unionAggregate->aggkind = AGGKIND_NORMAL;
+		unionAggregate->aggfilter = NULL;
+		unionAggregate->aggtranstype = InvalidOid;
+		unionAggregate->aggargtypes = list_make1_oid(hllType);
+		unionAggregate->aggsplit = AGGSPLIT_SIMPLE;
+
+		newMasterExpression = (Expr *) unionAggregate;
 	}
 	else
 	{
