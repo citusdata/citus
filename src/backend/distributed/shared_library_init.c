@@ -77,20 +77,7 @@ static bool StatisticsCollectionGucCheckHook(bool *newval, void **extra, GucSour
 /* static variable to hold value of deprecated GUC variable */
 static bool ExpireCachedShards = false;
 static int LargeTableShardCount = 0;
-
-/*
- * SSL modes available for connecting to worker nodes.
- */
-enum CitusSSLMode
-{
-	CITUS_SSL_MODE_DISABLE = 1 << 0,
-	CITUS_SSL_MODE_ALLOW = 1 << 1,
-	CITUS_SSL_MODE_PREFER = 1 << 2,
-	CITUS_SSL_MODE_REQUIRE = 1 << 3,
-	CITUS_SSL_MODE_VERIFY_CA = 1 << 4,
-	CITUS_SSL_MODE_VERIFY_FULL = 1 << 5
-};
-static int CitusSSLMode = CITUS_SSL_MODE_PREFER;
+static int CitusSSLMode = 0;
 
 /* *INDENT-OFF* */
 /* GUC enum definitions */
@@ -129,16 +116,6 @@ static const struct config_enum_entry use_secondary_nodes_options[] = {
 static const struct config_enum_entry multi_shard_commit_protocol_options[] = {
 	{ "1pc", COMMIT_PROTOCOL_1PC, false },
 	{ "2pc", COMMIT_PROTOCOL_2PC, false },
-	{ NULL, 0, false }
-};
-
-static const struct config_enum_entry citus_ssl_mode_options[] = {
-	{ "disable", CITUS_SSL_MODE_DISABLE, false },
-	{ "allow", CITUS_SSL_MODE_ALLOW, false },
-	{ "prefer", CITUS_SSL_MODE_PREFER, false },
-	{ "require", CITUS_SSL_MODE_REQUIRE, false },
-	{ "verify-ca", CITUS_SSL_MODE_VERIFY_CA, false },
-	{ "verify-full", CITUS_SSL_MODE_VERIFY_FULL, false },
 	{ NULL, 0, false }
 };
 
@@ -347,13 +324,13 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 	NormalizeWorkerListPath();
 
-	DefineCustomEnumVariable(
+	DefineCustomIntVariable(
 		"citus.sslmode",
-		gettext_noop("This GUC variable has been deprecated."),
+		gettext_noop("This variable has been deprecated. Use the citus.node_conninfo "
+					 "GUC instead."),
 		NULL,
 		&CitusSSLMode,
-		CITUS_SSL_MODE_PREFER,
-		citus_ssl_mode_options,
+		0, 0, 32,
 		PGC_POSTMASTER,
 		GUC_SUPERUSER_ONLY | GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
