@@ -274,7 +274,8 @@ static void ErrorIfUnsupportedAggregateDistinct(Aggref *aggregateExpression,
 static Var * AggregateDistinctColumn(Aggref *aggregateExpression);
 static bool TablePartitioningSupportsDistinct(List *tableNodeList,
 											  MultiExtendedOp *opNode,
-											  Var *distinctColumn);
+											  Var *distinctColumn,
+											  AggregateType aggregateType);
 
 /* Local functions forward declarations for limit clauses */
 static Node * WorkerLimitCount(Node *limitCount, Node *limitOffset, OrderByLimitReference
@@ -3388,7 +3389,8 @@ ErrorIfUnsupportedAggregateDistinct(Aggref *aggregateExpression,
 			 */
 			distinctSupported = TablePartitioningSupportsDistinct(tableNodeList,
 																  extendedOpNode,
-																  distinctColumn);
+																  distinctColumn,
+																  aggregateType);
 			if (!distinctSupported)
 			{
 				errorDetail = "aggregate (distinct) on complex expressions is"
@@ -3399,7 +3401,8 @@ ErrorIfUnsupportedAggregateDistinct(Aggref *aggregateExpression,
 		{
 			bool supports = TablePartitioningSupportsDistinct(tableNodeList,
 															  extendedOpNode,
-															  distinctColumn);
+															  distinctColumn,
+															  aggregateType);
 			if (!supports)
 			{
 				distinctSupported = false;
@@ -3475,7 +3478,7 @@ AggregateDistinctColumn(Aggref *aggregateExpression)
  */
 static bool
 TablePartitioningSupportsDistinct(List *tableNodeList, MultiExtendedOp *opNode,
-								  Var *distinctColumn)
+								  Var *distinctColumn, AggregateType aggregateType)
 {
 	bool distinctSupported = true;
 	ListCell *tableNodeCell = NULL;
@@ -3512,6 +3515,11 @@ TablePartitioningSupportsDistinct(List *tableNodeList, MultiExtendedOp *opNode,
 		{
 			Var *tablePartitionColumn = tableNode->partitionColumn;
 			bool groupedByPartitionColumn = false;
+
+			if (aggregateType == AGGREGATE_COUNT)
+			{
+				tableDistinctSupported = true;
+			}
 
 			/* if distinct is on table partition column, we can push it down */
 			if (distinctColumn != NULL &&
