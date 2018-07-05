@@ -33,6 +33,8 @@
 bool EnforceForeignKeyRestrictions = true;
 
 #define PARALLEL_MODE_FLAG_OFFSET 3
+
+/* simply set parallel bits as defined below for select, dml and ddl */
 #define PARALLEL_ACCESS_MASK (int) (0 | \
 									(1 << (PLACEMENT_ACCESS_SELECT + \
 										   PARALLEL_MODE_FLAG_OFFSET)) | \

@@ -419,10 +419,7 @@ CopyShardForeignConstraintCommandListGrouped(ShardInterval *shardInterval,
 
 		if (PartitionMethod(referencedRelationId) == DISTRIBUTE_BY_NONE)
 		{
-			List *shardList = LoadShardList(referencedRelationId);
-			uint64 *shardIdPointer = (uint64 *) linitial(shardList);
-
-			referencedShardId = (*shardIdPointer);
+			referencedShardId = GetFirstShardId(referencedRelationId);
 		}
 		else
 		{
@@ -450,6 +447,21 @@ CopyShardForeignConstraintCommandListGrouped(ShardInterval *shardInterval,
 				applyForeignConstraintCommand->data);
 		}
 	}
+}
+
+
+/*
+ * GetFirstShardId is a helper function which returns the first
+ * shardId of the given distributed relation. The function doesn't
+ * sort the shardIds, so it is mostly useful for reference tables.
+ */
+uint64
+GetFirstShardId(Oid relationId)
+{
+	List *shardList = LoadShardList(relationId);
+	uint64 *shardIdPointer = (uint64 *) linitial(shardList);
+
+	return (*shardIdPointer);
 }
 
 

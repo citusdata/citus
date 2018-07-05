@@ -1001,12 +1001,12 @@ DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
 DETAIL:  NOTICE from localhost:57638
 DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
 DETAIL:  NOTICE from localhost:57637
-DEBUG:  switching to sequential query execution mode
-DETAIL:  Reference relation "test_table_1" is modified, which might lead to data inconsistencies or distributed deadlocks via parallel accesses to hash distributed relations due to foreign keys. Any parallel modification to those hash distributed relations in the same transaction can only be executed in sequential query execution mode
 DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
 DETAIL:  NOTICE from localhost:57637
 DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
 DETAIL:  NOTICE from localhost:57638
+DEBUG:  switching to sequential query execution mode
+DETAIL:  Reference relation "test_table_1" is modified, which might lead to data inconsistencies or distributed deadlocks via parallel accesses to hash distributed relations due to foreign keys. Any parallel modification to those hash distributed relations in the same transaction can only be executed in sequential query execution mode
 NOTICE:  Copying data from local table...
 DEBUG:  Copied 101 rows
  create_reference_table 
