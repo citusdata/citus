@@ -224,5 +224,10 @@ SET client_min_messages TO DEFAULT;
 alter system set deadlock_timeout TO DEFAULT;
 SELECT pg_reload_conf();
 
+BEGIN;
+SET citus.select_opens_transaction_block TO off;
+-- This query would self-deadlock if it ran in a distributed transaction
+SELECT id, pg_advisory_lock(15) FROM test_table ORDER BY id;
+END;
 
 DROP SCHEMA multi_real_time_transaction CASCADE;

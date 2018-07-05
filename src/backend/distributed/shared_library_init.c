@@ -498,6 +498,23 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
+		"citus.select_opens_transaction_block",
+		gettext_noop("Open transaction blocks for SELECT commands"),
+		gettext_noop("When enabled, Citus will always send a BEGIN to workers when "
+					 "running a distributed SELECT in a transaction block (the "
+					 "default). When disabled, Citus will only send BEGIN before "
+					 "the first write or other operation that requires a distributed "
+					 "transaction, meaning the SELECT on the worker commits "
+					 "immediately, releasing any locks and apply any changes made "
+					 "through function calls even if the distributed transaction "
+					 "aborts."),
+		&SelectOpensTransactionBlock,
+		true,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
 		"citus.enable_deadlock_prevention",
 		gettext_noop("Prevents transactions from expanding to multiple nodes"),
 		gettext_noop("When enabled, consecutive DML statements that write to "
