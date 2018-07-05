@@ -49,6 +49,7 @@
 #include "distributed/multi_shard_transaction.h"
 #include "distributed/multi_utility.h" /* IWYU pragma: keep */
 #include "distributed/pg_dist_partition.h"
+#include "distributed/policy.h"
 #include "distributed/relation_access_tracking.h"
 #include "distributed/resource_lock.h"
 #include "distributed/transaction_management.h"
@@ -157,7 +158,6 @@ static bool IsIndexRenameStmt(RenameStmt *renameStmt);
 static bool AlterInvolvesPartitionColumn(AlterTableStmt *alterTableStatement,
 										 AlterTableCmd *command);
 static void ExecuteDistributedDDLJob(DDLJob *ddlJob);
-static List * DDLTaskList(Oid relationId, const char *commandString);
 static List * CreateIndexTaskList(Oid relationId, IndexStmt *indexStmt);
 static List * DropIndexTaskList(Oid relationId, Oid indexId, DropStmt *dropStmt);
 static List * InterShardDDLTaskList(Oid leftRelationId, Oid rightRelationId,
@@ -386,6 +386,11 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 			{
 				ProcessDropSchemaStmt(dropStatement);
 			}
+
+			if (dropStatement->removeType == OBJECT_POLICY)
+			{
+				ddlJobs = PlanDropPolicyStmt(dropStatement, queryString);
+			}
 		}
 
 		if (IsA(parsetree, AlterTableStmt))
@@ -415,6 +420,16 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		{
 			AlterObjectSchemaStmt *setSchemaStmt = (AlterObjectSchemaStmt *) parsetree;
 			ddlJobs = PlanAlterObjectSchemaStmt(setSchemaStmt, queryString);
+		}
+
+		if (IsA(parsetree, CreatePolicyStmt))
+		{
+			ddlJobs = PlanCreatePolicyStmt((CreatePolicyStmt *) parsetree);
+		}
+
+		if (IsA(parsetree, AlterPolicyStmt))
+		{
+			ddlJobs = PlanAlterPolicyStmt((AlterPolicyStmt *) parsetree);
 		}
 
 		/*
@@ -1490,7 +1505,8 @@ PlanRenameStmt(RenameStmt *renameStmt, const char *renameCommand)
 	 * our list include only renaming table and index (related) objects.
 	 */
 	if (!IsAlterTableRenameStmt(renameStmt) &&
-		!IsIndexRenameStmt(renameStmt))
+		!IsIndexRenameStmt(renameStmt) &&
+		!IsPolicyRenameStmt(renameStmt))
 	{
 		return NIL;
 	}
@@ -1519,6 +1535,7 @@ PlanRenameStmt(RenameStmt *renameStmt, const char *renameCommand)
 		case OBJECT_TABLE:
 		case OBJECT_COLUMN:
 		case OBJECT_TABCONSTRAINT:
+		case OBJECT_POLICY:
 		{
 			/* the target object is our tableRelationId. */
 			tableRelationId = objectRelationId;
@@ -3026,7 +3043,7 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
  * DDLTaskList builds a list of tasks to execute a DDL command on a
  * given list of shards.
  */
-static List *
+List *
 DDLTaskList(Oid relationId, const char *commandString)
 {
 	List *taskList = NIL;

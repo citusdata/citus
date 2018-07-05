@@ -49,4 +49,6 @@ extern void RelayEventExtendNamesForInterShardCommands(Node *parseTree,
 													   char *rightShardSchemaName);
 extern void AppendShardIdToName(char **name, uint64 shardId);
 
+extern void SetSchemaNameIfNotExist(char **schemaName, const char *newSchemaName);
+
 #endif   /* RELAY_UTILITY_H */
