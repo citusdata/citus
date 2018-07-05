@@ -13,14 +13,6 @@ env:
     - secure: degV+qb2xHiea7E2dGk/WLvmYjq4ZsBn6ZPko+YhRcNm2GRXRaU3FqMBIecPtsEEFYaL5GwCQq/CgBf9aQxgDQ+t2CrmtGTtI9AGAbVBl//amNeJOoLe6QvrDpSQX5pUxwDLCng8cvoQK7ZxGlNCzDKiu4Ep4DUWgQVpauJkQ9nHjtSMZvUqCoI9h1lBy9Mxh7YFfHPW2PAXCqpV4VlNiIYF84UKdX3MXKLy9Yt0JBSNTWLZFp/fFw2qNwzFvN94rF3ZvFSD7Wp6CIhT6R5/6k6Zx8YQIrjWhgm6OVy1osUA8X7W79h2ISPqKqMNVJkjJ+N8S4xuQU0kfejnQ74Ie/uJiHCmbW5W2TjpL1aU3FQpPsGwR8h0rSeHhJAJzd8Ma+z8vvnnQHDyvetPBB0WgA/VMQCu8uEutyfYw2hDmB2+l2dDwkViaI7R95bReAGrpd5uNqklAXuR7yOeArz0ZZpHV0aZHGcNBxznMaZExSVZ5DVPW38UPn7Kgse8BnOWeLgnA1hJVp6CmBCtu+hKYt+atBPgRbM8IUINnKKZf/Sk6HeJIJZs662jD8/X93vFi0ZtyV2jEKJpouWw8j4vrGGsaDzTEUcyJgDqZj7tPJptM2L5B3BcFJmkGj2HO3N+LGDarJrVBBSiEjhTgx4NnLiKZnUbMx547mCRg2akk2w=
     # During push builds (not pull request builds), use custom-built PostgreSQL
     - USE_CUSTOM_PG=$([ -z $TRAVIS_PULL_REQUEST_SHA ] && echo "true")
-matrix:
-  fast_finish: true
-  include:
-    - env: PGVERSION=9.6
-    - env: PGVERSION=10
-    - env: PGVERSION=11
-  allow_failures:
-    - env: PGVERSION=11
 before_install:
   - git clone -b v0.7.8 --depth 1 https://github.com/citusdata/tools.git
   - sudo make -C tools install
@@ -38,8 +30,28 @@ install:
       apt-get download "postgresql-${PGVERSION}-hll=2.10.2.citus-1"
       sudo dpkg --force-confold --force-confdef --force-all -i *hll*.deb
     fi
-before_script: citus_indent --quiet --check
-script: CFLAGS=-Werror pg_travis_multi_test check
-after_success:
-  - sync_to_enterprise
-  - bash <(curl -s https://codecov.io/bash)
+jobs:
+  include:
+    - stage: PG9_6
+      env: PGVERSION=9.6
+      before_script: citus_indent --quiet --check
+    - script: CFLAGS=-Werror pg_travis_multi_test check-multi
+      env: PGVERSION=9.6
+    - script: CFLAGS=-Werror pg_travis_multi_test check-multi-mx check-multi-task-tracker-extra
+      env: PGVERSION=9.6
+    - script: CFLAGS=-Werror pg_travis_multi_test check-worker check-follower-cluster check-vanilla
+      env: PGVERSION=9.6
+    - script: CFLAGS=-Werror pg_travis_multi_test check-isolation
+      env: PGVERSION=9.6
+    - script: CFLAGS=-Werror pg_travis_multi_test check-multi
+      env: PGVERSION=10
+    - script: CFLAGS=-Werror pg_travis_multi_test check-multi-mx check-multi-task-tracker-extra
+      env: PGVERSION=10
+    - script: CFLAGS=-Werror pg_travis_multi_test check-worker check-follower-cluster check-vanilla
+      env: PGVERSION=10
+    - script: CFLAGS=-Werror pg_travis_multi_test check-isolation
+      env: PGVERSION=10
+    - stage: deploy
+      script: sync_to_enterprise
+    - stage: code_cov
+      script: bash <(curl -s https://codecov.io/bash)
