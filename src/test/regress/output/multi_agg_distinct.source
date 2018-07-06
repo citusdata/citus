@@ -71,18 +71,44 @@ SELECT p_partkey, count(distinct l_orderkey) FROM lineitem_range, part
        222 |     1
 (10 rows)
 
--- Check that we support count(distinct) on non-partition column.
+-- Check that we support more complex expressions.
+SELECT count(distinct (l_orderkey)) FROM lineitem_range;
+ count 
+-------
+  2985
+(1 row)
+
+SELECT count(distinct (l_orderkey + 1)) FROM lineitem_range;
+ count 
+-------
+  2985
+(1 row)
+
+SELECT count(distinct (l_orderkey % 5)) FROM lineitem_range;
+ count 
+-------
+     5
+(1 row)
+
+-- count(distinct) on non-partition column is allowed
 SELECT count(distinct l_partkey) FROM lineitem_range;
  count 
 -------
  11661
 (1 row)
 
--- Check that we don't support complex expressions.
-SELECT count(distinct (l_orderkey + 1)) FROM lineitem_range;
-ERROR:  cannot compute aggregate (distinct)
-DETAIL:  aggregate (distinct) on complex expressions is unsupported
-HINT:  You can load the hll extension from contrib packages and enable distinct approximations.
+SELECT count(distinct (l_partkey + 1)) FROM lineitem_range;
+ count 
+-------
+ 11661
+(1 row)
+
+SELECT count(distinct (l_partkey % 5)) FROM lineitem_range;
+ count 
+-------
+     5
+(1 row)
+
 -- Now test append partitioned tables. First run count(distinct) on a single
 -- sharded table.
 SELECT count(distinct p_mfgr) FROM part;
@@ -149,6 +175,25 @@ SELECT avg(distinct l_orderkey) FROM lineitem_hash;
  7463.9474036850921273
 (1 row)
 
+-- Check that we support more complex expressions.
+SELECT count(distinct (l_orderkey)) FROM lineitem_hash;
+ count 
+-------
+  2985
+(1 row)
+
+SELECT count(distinct (l_orderkey + 1)) FROM lineitem_hash;
+ count 
+-------
+  2985
+(1 row)
+
+SELECT count(distinct (l_orderkey % 5)) FROM lineitem_hash;
+ count 
+-------
+     5
+(1 row)
+
 -- count(distinct) on non-partition column is allowed
 SELECT count(distinct l_partkey) FROM lineitem_hash;
  count 
@@ -156,11 +201,18 @@ SELECT count(distinct l_partkey) FROM lineitem_hash;
  11661
 (1 row)
 
--- count(distinct) on column expression is not allowed
-SELECT count(distinct (l_orderkey + 1)) FROM lineitem_hash;
-ERROR:  cannot compute aggregate (distinct)
-DETAIL:  aggregate (distinct) on complex expressions is unsupported
-HINT:  You can load the hll extension from contrib packages and enable distinct approximations.
+SELECT count(distinct (l_partkey + 1)) FROM lineitem_hash;
+ count 
+-------
+ 11661
+(1 row)
+
+SELECT count(distinct (l_partkey % 5)) FROM lineitem_hash;
+ count 
+-------
+     5
+(1 row)
+
 -- agg(distinct) is allowed if we group by partition column
 SELECT l_orderkey, count(distinct l_partkey) INTO hash_results FROM lineitem_hash GROUP BY l_orderkey;
 SELECT l_orderkey, count(distinct l_partkey) INTO range_results FROM lineitem_range GROUP BY l_orderkey;

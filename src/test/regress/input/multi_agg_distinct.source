@@ -53,12 +53,15 @@ SELECT p_partkey, count(distinct l_orderkey) FROM lineitem_range, part
 	GROUP BY p_partkey
 	ORDER BY p_partkey LIMIT 10;
 
-
--- Check that we support count(distinct) on non-partition column.
-SELECT count(distinct l_partkey) FROM lineitem_range;
-
--- Check that we don't support complex expressions.
+-- Check that we support more complex expressions.
+SELECT count(distinct (l_orderkey)) FROM lineitem_range;
 SELECT count(distinct (l_orderkey + 1)) FROM lineitem_range;
+SELECT count(distinct (l_orderkey % 5)) FROM lineitem_range;
+
+-- count(distinct) on non-partition column is allowed
+SELECT count(distinct l_partkey) FROM lineitem_range;
+SELECT count(distinct (l_partkey + 1)) FROM lineitem_range;
+SELECT count(distinct (l_partkey % 5)) FROM lineitem_range;
 
 -- Now test append partitioned tables. First run count(distinct) on a single
 -- sharded table.
@@ -98,11 +101,16 @@ SELECT create_distributed_table('lineitem_hash', 'l_orderkey', 'hash');
 SELECT count(distinct l_orderkey) FROM lineitem_hash;
 SELECT avg(distinct l_orderkey) FROM lineitem_hash;
 
+-- Check that we support more complex expressions.
+SELECT count(distinct (l_orderkey)) FROM lineitem_hash;
+SELECT count(distinct (l_orderkey + 1)) FROM lineitem_hash;
+SELECT count(distinct (l_orderkey % 5)) FROM lineitem_hash;
+
 -- count(distinct) on non-partition column is allowed
 SELECT count(distinct l_partkey) FROM lineitem_hash;
+SELECT count(distinct (l_partkey + 1)) FROM lineitem_hash;
+SELECT count(distinct (l_partkey % 5)) FROM lineitem_hash;
 
--- count(distinct) on column expression is not allowed
-SELECT count(distinct (l_orderkey + 1)) FROM lineitem_hash;
 
 -- agg(distinct) is allowed if we group by partition column
 SELECT l_orderkey, count(distinct l_partkey) INTO hash_results FROM lineitem_hash GROUP BY l_orderkey;

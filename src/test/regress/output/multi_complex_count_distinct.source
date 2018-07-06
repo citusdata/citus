@@ -813,7 +813,7 @@ SELECT *
       12.00 |    13
 (10 rows)
 
--- count DISTINCT is part of an expression which inclues another aggregate
+-- count DISTINCT is part of an expression which includes another aggregate
 SELECT *
 	FROM (
 		SELECT
@@ -842,7 +842,7 @@ SELECT *
  40.50298377916903813318 | TRUCK     
 (7 rows)
 
---- count DISTINCT CASE WHEN expression
+-- count DISTINCT CASE WHEN expression
 SELECT *
 	FROM (
 		SELECT
@@ -1034,4 +1034,97 @@ SELECT *
 	LIMIT 10;
 ERROR:  cannot compute count (distinct)
 DETAIL:  Non-column references are not supported yet
+-- count distinct pushdown is enabled
+SELECT *
+   FROM (
+       SELECT
+           l_shipdate,
+           count(DISTINCT
+               CASE
+                   WHEN l_shipmode = 'TRUCK' THEN l_partkey
+                   ELSE NULL
+               END) as distinct_part,
+           extract(year from l_shipdate) as year
+           FROM
+               lineitem_hash
+           GROUP BY  l_shipdate, year) sub
+   WHERE year = 1995
+   ORDER BY 2 DESC, 1
+   LIMIT 10;
+ l_shipdate | distinct_part | year 
+------------+---------------+------
+ 11-29-1995 |             5 | 1995
+ 03-24-1995 |             4 | 1995
+ 09-18-1995 |             4 | 1995
+ 01-17-1995 |             3 | 1995
+ 04-02-1995 |             3 | 1995
+ 05-23-1995 |             3 | 1995
+ 08-11-1995 |             3 | 1995
+ 09-27-1995 |             3 | 1995
+ 10-27-1995 |             3 | 1995
+ 10-30-1995 |             3 | 1995
+(10 rows)
+
+RESET citus.task_executor_type;
+-- count distinct pushdown is enabled
+SELECT *
+   FROM (
+       SELECT
+           l_shipdate,
+           count(DISTINCT
+               CASE
+                   WHEN l_shipmode = 'TRUCK' THEN l_partkey
+                   ELSE NULL
+               END) as distinct_part,
+           extract(year from l_shipdate) as year
+           FROM
+               lineitem_hash
+           GROUP BY  l_shipdate, year) sub
+   WHERE year = 1995
+   ORDER BY 2 DESC, 1
+   LIMIT 10;
+ l_shipdate | distinct_part | year 
+------------+---------------+------
+ 11-29-1995 |             5 | 1995
+ 03-24-1995 |             4 | 1995
+ 09-18-1995 |             4 | 1995
+ 01-17-1995 |             3 | 1995
+ 04-02-1995 |             3 | 1995
+ 05-23-1995 |             3 | 1995
+ 08-11-1995 |             3 | 1995
+ 09-27-1995 |             3 | 1995
+ 10-27-1995 |             3 | 1995
+ 10-30-1995 |             3 | 1995
+(10 rows)
+
+SELECT *
+   FROM (
+       SELECT
+           l_shipdate,
+           count(DISTINCT
+               CASE
+                   WHEN l_shipmode = 'TRUCK' THEN l_partkey
+                   ELSE NULL
+               END) as distinct_part,
+           extract(year from l_shipdate) as year
+           FROM
+               lineitem_hash
+           GROUP BY  l_shipdate) sub
+   WHERE year = 1995
+   ORDER BY 2 DESC, 1
+   LIMIT 10;
+ l_shipdate | distinct_part | year 
+------------+---------------+------
+ 11-29-1995 |             5 | 1995
+ 03-24-1995 |             4 | 1995
+ 09-18-1995 |             4 | 1995
+ 01-17-1995 |             3 | 1995
+ 04-02-1995 |             3 | 1995
+ 05-23-1995 |             3 | 1995
+ 08-11-1995 |             3 | 1995
+ 09-27-1995 |             3 | 1995
+ 10-27-1995 |             3 | 1995
+ 10-30-1995 |             3 | 1995
+(10 rows)
+
 DROP TABLE lineitem_hash;

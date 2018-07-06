@@ -384,7 +384,7 @@ SELECT *
 		2 DESC, 1 DESC
 	LIMIT 10;
 
--- count DISTINCT is part of an expression which inclues another aggregate
+-- count DISTINCT is part of an expression which includes another aggregate
 SELECT *
 	FROM (
 		SELECT
@@ -403,7 +403,7 @@ SELECT *
 		1 DESC, 2 DESC
 	LIMIT 10;
 
---- count DISTINCT CASE WHEN expression
+-- count DISTINCT CASE WHEN expression
 SELECT *
 	FROM (
 		SELECT
@@ -531,6 +531,61 @@ SELECT *
 			GROUP BY l_linenumber) sub
 	ORDER BY 2 DESC, 1 DESC
 	LIMIT 10;
+
+-- count distinct pushdown is enabled
+SELECT *
+   FROM (
+       SELECT
+           l_shipdate,
+           count(DISTINCT
+               CASE
+                   WHEN l_shipmode = 'TRUCK' THEN l_partkey
+                   ELSE NULL
+               END) as distinct_part,
+           extract(year from l_shipdate) as year
+           FROM
+               lineitem_hash
+           GROUP BY  l_shipdate, year) sub
+   WHERE year = 1995
+   ORDER BY 2 DESC, 1
+   LIMIT 10;
+
+RESET citus.task_executor_type;
+
+-- count distinct pushdown is enabled
+SELECT *
+   FROM (
+       SELECT
+           l_shipdate,
+           count(DISTINCT
+               CASE
+                   WHEN l_shipmode = 'TRUCK' THEN l_partkey
+                   ELSE NULL
+               END) as distinct_part,
+           extract(year from l_shipdate) as year
+           FROM
+               lineitem_hash
+           GROUP BY  l_shipdate, year) sub
+   WHERE year = 1995
+   ORDER BY 2 DESC, 1
+   LIMIT 10;
+
+SELECT *
+   FROM (
+       SELECT
+           l_shipdate,
+           count(DISTINCT
+               CASE
+                   WHEN l_shipmode = 'TRUCK' THEN l_partkey
+                   ELSE NULL
+               END) as distinct_part,
+           extract(year from l_shipdate) as year
+           FROM
+               lineitem_hash
+           GROUP BY  l_shipdate) sub
+   WHERE year = 1995
+   ORDER BY 2 DESC, 1
+   LIMIT 10;
 
 DROP TABLE lineitem_hash;
 

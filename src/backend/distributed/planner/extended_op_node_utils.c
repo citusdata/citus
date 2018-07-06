@@ -15,6 +15,7 @@
 #include "distributed/multi_logical_optimizer.h"
 #include "distributed/pg_dist_partition.h"
 #include "optimizer/var.h"
+#include "nodes/nodeFuncs.h"
 #include "nodes/pg_list.h"
 
 
@@ -146,6 +147,10 @@ ExtendedOpNodeContainsRepartitionSubquery(MultiExtendedOp *originalOpNode)
  * HasNonPartitionColumnDistinctAgg returns true if target entry or having qualifier
  * has non-partition column reference in aggregate (distinct) definition. Note that,
  * it only checks aggs subfield of Aggref, it does not check FILTER or SORT clauses.
+ * Having any non-column reference like operator expression, function call, or const
+ * is considered as a non-partition column. Even if the expression contains partition column
+ * like (column + 1), it needs to be evaluated at coordinator, since we can't reliably verify
+ * the distinctness of the expression result like (column % 5) or (column + column).
  */
 static bool
 HasNonPartitionColumnDistinctAgg(List *targetEntryList, Node *havingQual,
@@ -167,6 +172,8 @@ HasNonPartitionColumnDistinctAgg(List *targetEntryList, Node *havingQual,
 		List *varList = NIL;
 		ListCell *varCell = NULL;
 		bool isPartitionColumn = false;
+		TargetEntry *firstTargetEntry = NULL;
+		Node *firstTargetExprNode = NULL;
 
 		if (IsA(targetNode, Var))
 		{
@@ -178,6 +185,22 @@ HasNonPartitionColumnDistinctAgg(List *targetEntryList, Node *havingQual,
 		if (targetAgg->aggdistinct == NIL)
 		{
 			continue;
+		}
+
+		/*
+		 * We are dealing with a more complex count distinct, it needs to be
+		 * evaluated at coordinator level.
+		 */
+		if (list_length(targetAgg->args) > 1 || list_length(targetAgg->aggdistinct) > 1)
+		{
+			return true;
+		}
+
+		firstTargetEntry = linitial_node(TargetEntry, targetAgg->args);
+		firstTargetExprNode = strip_implicit_coercions((Node *) firstTargetEntry->expr);
+		if (!IsA(firstTargetExprNode, Var))
+		{
+			return true;
 		}
 
 		varList = pull_var_clause_default((Node *) targetAgg->args);
