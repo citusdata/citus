@@ -1,4 +1,4 @@
-### citus v6.2.5 (July 06, 2018) ###
+### citus v6.2.6 (July 06, 2018) ###
 
 * Adds support for respecting enable_hashagg in the master planner
 
