@@ -686,3 +686,23 @@ Custom Scan (Citus Router)
         ->  Seq Scan on explain_table_570001 explain_table
               Filter: (id = 1)
 ROLLBACK;
+-- Test disable hash aggregate
+SET enable_hashagg TO off;
+EXPLAIN (COSTS FALSE, FORMAT TEXT)
+	SELECT l_quantity, count(*) count_quantity FROM lineitem
+	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
+Sort
+  Sort Key: COALESCE((pg_catalog.sum((COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint))))::bigint, '0'::bigint), remote_scan.l_quantity
+  ->  GroupAggregate
+        Group Key: remote_scan.l_quantity
+        ->  Sort
+              Sort Key: remote_scan.l_quantity
+              ->  Custom Scan (Citus Real-Time)
+                    Task Count: 8
+                    Tasks Shown: One of 8
+                    ->  Task
+                          Node: host=localhost port=57637 dbname=regression
+                          ->  HashAggregate
+                                Group Key: l_quantity
+                                ->  Seq Scan on lineitem_290001 lineitem
+SET enable_hashagg TO on;

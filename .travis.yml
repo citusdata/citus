@@ -14,7 +14,7 @@ env:
     - PGVERSION=9.5
     - PGVERSION=9.6
 before_install:
-  - git clone -b v0.6.1 --depth 1 https://github.com/citusdata/tools.git
+  - git clone -b v0.7.6 --depth 1 https://github.com/citusdata/tools.git
   - sudo make -C tools install
   - setup_apt
   - curl https://install.citusdata.com/community/deb.sh | sudo bash

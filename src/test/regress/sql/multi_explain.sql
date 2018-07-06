@@ -247,3 +247,11 @@ ALTER TABLE explain_table ADD COLUMN value int;
 EXPLAIN (COSTS FALSE) SELECT value FROM explain_table WHERE id = 1;
 
 ROLLBACK;
+
+-- Test disable hash aggregate
+SET enable_hashagg TO off;
+EXPLAIN (COSTS FALSE, FORMAT TEXT)
+	SELECT l_quantity, count(*) count_quantity FROM lineitem
+	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
+
+SET enable_hashagg TO on;
