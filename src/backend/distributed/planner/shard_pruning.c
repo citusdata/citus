@@ -632,8 +632,8 @@ AddPartitionKeyRestrictionToInstance(ClauseWalkerContext *context, OpExpr *opCla
 					prune->lessConsts = constantClause;
 				}
 				matchedOp = true;
+				break;
 			}
-			break;
 
 			case BTLessEqualStrategyNumber:
 			{
@@ -645,8 +645,8 @@ AddPartitionKeyRestrictionToInstance(ClauseWalkerContext *context, OpExpr *opCla
 					prune->lessEqualConsts = constantClause;
 				}
 				matchedOp = true;
+				break;
 			}
-			break;
 
 			case BTEqualStrategyNumber:
 			{
@@ -662,8 +662,8 @@ AddPartitionKeyRestrictionToInstance(ClauseWalkerContext *context, OpExpr *opCla
 					prune->evaluatesToFalse = true;
 				}
 				matchedOp = true;
+				break;
 			}
-			break;
 
 			case BTGreaterEqualStrategyNumber:
 			{
@@ -676,8 +676,8 @@ AddPartitionKeyRestrictionToInstance(ClauseWalkerContext *context, OpExpr *opCla
 					prune->greaterEqualConsts = constantClause;
 				}
 				matchedOp = true;
+				break;
 			}
-			break;
 
 			case BTGreaterStrategyNumber:
 			{
@@ -689,15 +689,15 @@ AddPartitionKeyRestrictionToInstance(ClauseWalkerContext *context, OpExpr *opCla
 					prune->greaterConsts = constantClause;
 				}
 				matchedOp = true;
+				break;
 			}
-			break;
 
 			case ROWCOMPARE_NE:
 			{
 				/* TODO: could add support for this, if we feel like it */
 				matchedOp = false;
+				break;
 			}
-			break;
 
 			default:
 				Assert(false);

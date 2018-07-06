@@ -492,26 +492,26 @@ BuildRemoteExplainQuery(char *queryString, ExplainState *es)
 		case EXPLAIN_FORMAT_XML:
 		{
 			formatStr = "XML";
+			break;
 		}
-		break;
 
 		case EXPLAIN_FORMAT_JSON:
 		{
 			formatStr = "JSON";
+			break;
 		}
-		break;
 
 		case EXPLAIN_FORMAT_YAML:
 		{
 			formatStr = "YAML";
+			break;
 		}
-		break;
 
 		default:
 		{
 			formatStr = "TEXT";
+			break;
 		}
-		break;
 	}
 
 	appendStringInfo(explainQuery,
