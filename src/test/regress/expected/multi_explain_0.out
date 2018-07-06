@@ -663,7 +663,7 @@ EXPLAIN (COSTS FALSE, FORMAT TEXT)
 	SELECT l_quantity, count(*) count_quantity FROM lineitem
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
 Sort
-  Sort Key: COALESCE((pg_catalog.sum((COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint))))::bigint, '0'::bigint), remote_scan.l_quantity
+  Sort Key: COALESCE((sum((COALESCE((sum(remote_scan.count_quantity))::bigint, '0'::bigint))))::bigint, '0'::bigint), remote_scan.l_quantity
   ->  GroupAggregate
         Group Key: remote_scan.l_quantity
         ->  Sort
