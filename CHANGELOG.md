@@ -1,7 +1,3 @@
-### citus v6.2.5 (July 06, 2018) ###
-
-* Adds support for respecting enable_hashagg in the master planner
-
 ### citus v7.4.1 (June 20, 2018) ###
 
 * Fixes a bug that could cause transactions to incorrectly proceed after failure
