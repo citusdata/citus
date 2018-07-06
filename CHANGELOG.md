@@ -1,3 +1,7 @@
+### citus v6.2.6 (July 06, 2018) ###
+
+* Adds support for respecting enable_hashagg in the master planner
+
 ### citus v6.2.5 (January 11, 2018) ###
 
 * Fixes a bug that could crash the coordinator while reporting a remote error
