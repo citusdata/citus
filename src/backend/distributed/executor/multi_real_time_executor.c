@@ -42,6 +42,13 @@
 #include "utils/timestamp.h"
 
 
+/*
+ * GUC that determines whether a SELECT in a transaction block should also run in
+ * a transaction block on the worker even if no writes have occurred yet.
+ */
+bool SelectOpensTransactionBlock;
+
+
 /* Local functions forward declarations */
 static ConnectAction ManageTaskExecution(Task *task, TaskExecution *taskExecution,
 										 TaskExecutionStatus *executionStatus,
@@ -97,7 +104,7 @@ MultiRealTimeExecute(Job *job)
 	workerNodeList = ActiveReadableNodeList();
 	workerHash = WorkerHash(workerHashName, workerNodeList);
 
-	if (IsTransactionBlock())
+	if (IsTransactionBlock() && SelectOpensTransactionBlock)
 	{
 		BeginOrContinueCoordinatedTransaction();
 	}

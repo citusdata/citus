@@ -53,6 +53,12 @@ typedef enum
 	COMMIT_PROTOCOL_2PC = 2
 } CommitProtocolType;
 
+/*
+ * GUC that determines whether a SELECT in a transaction block should also run in
+ * a transaction block on the worker.
+ */
+extern bool SelectOpensTransactionBlock;
+
 /* config variable managed via guc.c */
 extern int MultiShardCommitProtocol;
 
