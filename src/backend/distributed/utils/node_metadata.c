@@ -1132,6 +1132,8 @@ GenerateNodeTuple(WorkerNode *workerNode)
 	values[Anum_pg_dist_node_isactive - 1] = BoolGetDatum(workerNode->isActive);
 	values[Anum_pg_dist_node_noderole - 1] = ObjectIdGetDatum(workerNode->nodeRole);
 	values[Anum_pg_dist_node_nodecluster - 1] = nodeClusterNameDatum;
+	isNulls[Anum_pg_dist_node_directname - 1] = true;
+	isNulls[Anum_pg_dist_node_directport - 1] = true;
 
 	pgDistNode = heap_open(DistNodeRelationId(), AccessShareLock);
 
@@ -1293,6 +1295,8 @@ InsertNodeRow(int nodeid, char *nodeName, int32 nodePort, uint32 groupId, char *
 	values[Anum_pg_dist_node_isactive - 1] = BoolGetDatum(isActive);
 	values[Anum_pg_dist_node_noderole - 1] = ObjectIdGetDatum(nodeRole);
 	values[Anum_pg_dist_node_nodecluster - 1] = nodeClusterNameDatum;
+	isNulls[Anum_pg_dist_node_directname - 1] = true;
+	isNulls[Anum_pg_dist_node_directport - 1] = true;
 
 	pgDistNode = heap_open(DistNodeRelationId(), RowExclusiveLock);
 
@@ -1537,8 +1541,6 @@ TupleToWorkerNode(TupleDesc tupleDescriptor, HeapTuple heapTuple)
 								  tupleDescriptor, &isNull);
 	Datum nodeCluster = heap_getattr(heapTuple, Anum_pg_dist_node_nodecluster,
 									 tupleDescriptor, &isNull);
-
-	Assert(!HeapTupleHasNulls(heapTuple));
 
 	workerNode = (WorkerNode *) palloc0(sizeof(WorkerNode));
 	workerNode->nodeId = DatumGetUInt32(nodeId);
