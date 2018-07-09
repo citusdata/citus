@@ -222,6 +222,7 @@ PG_FUNCTION_INFO_V1(master_dist_local_group_cache_invalidate);
 PG_FUNCTION_INFO_V1(master_dist_authinfo_cache_invalidate);
 PG_FUNCTION_INFO_V1(role_exists);
 PG_FUNCTION_INFO_V1(authinfo_valid);
+PG_FUNCTION_INFO_V1(poolinfo_valid);
 
 
 /*
@@ -3609,6 +3610,23 @@ authinfo_valid(PG_FUNCTION_ARGS)
 					errdetail("Citus Community Edition does not support the use of "
 							  "custom authentication options."),
 					errhint("To learn more about using advanced authentication schemes "
+							"with Citus, please contact us at "
+							"https://citusdata.com/about/contact_us")));
+}
+
+
+/*
+ * poolinfo_valid is a check constraint which errors on all rows, intended for
+ * use in prohibiting writes to pg_dist_poolinfo in Citus Community.
+ */
+Datum
+poolinfo_valid(PG_FUNCTION_ARGS)
+{
+	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					errmsg("cannot write to pg_dist_poolinfo"),
+					errdetail("Citus Community Edition does not support the use of "
+							  "pooler options."),
+					errhint("To learn more about using advanced pooling schemes "
 							"with Citus, please contact us at "
 							"https://citusdata.com/about/contact_us")));
 }

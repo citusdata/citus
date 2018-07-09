@@ -38,7 +38,7 @@ extern char * PlacementUpsertCommand(uint64 shardId, uint64 placementId, int sha
 extern void CreateTableMetadataOnWorkers(Oid relationId);
 
 
-#define DELETE_ALL_NODES "TRUNCATE pg_dist_node"
+#define DELETE_ALL_NODES "TRUNCATE pg_dist_node CASCADE"
 #define REMOVE_ALL_CLUSTERED_TABLES_COMMAND \
 	"SELECT worker_drop_distributed_table(logicalrelid) FROM pg_dist_partition"
 #define DISABLE_DDL_PROPAGATION "SET citus.enable_ddl_propagation TO 'off'"
