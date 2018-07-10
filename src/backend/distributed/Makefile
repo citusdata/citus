@@ -16,7 +16,7 @@ EXTVERSIONS = 5.0 5.0-1 5.0-2  \
 	7.2-1 7.2-2 7.2-3 \
 	7.3-1 7.3-2 7.3-3 \
 	7.4-1 7.4-2 7.4-3 \
-	7.5-1 7.5-2 7.5-3 7.5-4 7.5-5
+	7.5-1 7.5-2 7.5-3 7.5-4 7.5-5 7.5-6
 
 # All citus--*.sql files in the source directory
 DATA = $(patsubst $(citus_abs_srcdir)/%.sql,%.sql,$(wildcard $(citus_abs_srcdir)/$(EXTENSION)--*--*.sql))
@@ -209,6 +209,8 @@ $(EXTENSION)--7.5-3.sql: $(EXTENSION)--7.5-2.sql $(EXTENSION)--7.5-2--7.5-3.sql
 $(EXTENSION)--7.5-4.sql: $(EXTENSION)--7.5-3.sql $(EXTENSION)--7.5-3--7.5-4.sql
 	cat $^ > $@
 $(EXTENSION)--7.5-5.sql: $(EXTENSION)--7.5-4.sql $(EXTENSION)--7.5-4--7.5-5.sql
+	cat $^ > $@
+$(EXTENSION)--7.5-6.sql: $(EXTENSION)--7.5-5.sql $(EXTENSION)--7.5-5--7.5-6.sql
 	cat $^ > $@
 
 NO_PGXS = 1

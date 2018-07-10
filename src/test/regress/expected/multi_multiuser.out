@@ -210,6 +210,8 @@ BEGIN;
 SELECT create_intermediate_result('topten', 'SELECT count(*) FROM test');
 ERROR:  permission denied for table test
 ABORT;
+SELECT * FROM citus_stat_statements_reset();
+ERROR:  permission denied for function citus_stat_statements_reset
 RESET ROLE;
 DROP TABLE test;
 DROP USER full_access;

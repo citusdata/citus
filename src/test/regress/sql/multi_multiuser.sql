@@ -136,6 +136,8 @@ BEGIN;
 SELECT create_intermediate_result('topten', 'SELECT count(*) FROM test');
 ABORT;
 
+SELECT * FROM citus_stat_statements_reset();
+
 RESET ROLE;
 
 DROP TABLE test;
