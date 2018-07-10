@@ -1490,8 +1490,8 @@ MasterAggregateMutator(Node *originalNode, MasterAggregateWalkerContext *walkerC
 /*
  * MasterAggregateExpression creates the master aggregate expression using the
  * original aggregate and aggregate's type information. This function handles
- * the average, count, array_agg, and hll aggregates separately due to differences
- * in these aggregate functions' transformations.
+ * the average, count, array_agg, hll and topn aggregates separately due to
+ * differences in these aggregate functions' transformations.
  *
  * Note that this function has implicit knowledge of the transformations applied
  * for worker nodes on the original aggregate. The function uses this implicit
@@ -1794,6 +1794,45 @@ MasterAggregateExpression(Aggref *originalAggregate,
 		unionAggregate->aggfilter = NULL;
 		unionAggregate->aggtranstype = InvalidOid;
 		unionAggregate->aggargtypes = list_make1_oid(hllType);
+		unionAggregate->aggsplit = AGGSPLIT_SIMPLE;
+
+		newMasterExpression = (Expr *) unionAggregate;
+	}
+	else if (aggregateType == AGGREGATE_TOPN_UNION_AGG ||
+			 aggregateType == AGGREGATE_TOPN_ADD_AGG)
+	{
+		/*
+		 * Top-N aggregates are handled in two steps. First, we compute
+		 * topn_add_agg() or topn_union_agg() aggregates on the worker nodes.
+		 * Then, we gather the Top-Ns on the master and take the union of all
+		 * to get the final topn.
+		 */
+		TargetEntry *topNTargetEntry = NULL;
+		Aggref *unionAggregate = NULL;
+
+		/* worker aggregate and original aggregate have same return type */
+		Oid topnType = exprType((Node *) originalAggregate);
+		Oid unionFunctionId = AggregateFunctionOid(TOPN_UNION_AGGREGATE_NAME,
+												   topnType);
+		int32 topnReturnTypeMod = exprTypmod((Node *) originalAggregate);
+		Oid topnTypeCollationId = exprCollation((Node *) originalAggregate);
+
+		/* create argument for the topn_union_agg() aggregate */
+		Var *topnColumn = makeVar(masterTableId, walkerContext->columnId, topnType,
+								  topnReturnTypeMod, topnTypeCollationId, columnLevelsUp);
+		walkerContext->columnId++;
+
+		topNTargetEntry = makeTargetEntry((Expr *) topnColumn, argumentId, NULL, false);
+
+		/* construct the master topn_union_agg() expression */
+		unionAggregate = makeNode(Aggref);
+		unionAggregate->aggfnoid = unionFunctionId;
+		unionAggregate->aggtype = topnType;
+		unionAggregate->args = list_make1(topNTargetEntry);
+		unionAggregate->aggkind = AGGKIND_NORMAL;
+		unionAggregate->aggfilter = NULL;
+		unionAggregate->aggtranstype = InvalidOid;
+		unionAggregate->aggargtypes = list_make1_oid(topnType);
 		unionAggregate->aggsplit = AGGSPLIT_SIMPLE;
 
 		newMasterExpression = (Expr *) unionAggregate;

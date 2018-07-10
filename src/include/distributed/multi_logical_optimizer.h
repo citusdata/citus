@@ -39,6 +39,10 @@
 #define HLL_UNION_AGGREGATE_NAME "hll_union_agg"
 #define HLL_CARDINALITY_FUNC_NAME "hll_cardinality"
 
+/* Definitions related to Top-N approximations */
+#define TOPN_ADD_AGGREGATE_NAME "topn_add_agg"
+#define TOPN_UNION_AGGREGATE_NAME "topn_union_agg"
+
 
 /*
  * AggregateType represents an aggregate function's type, where the function is
@@ -68,7 +72,9 @@ typedef enum
 	AGGREGATE_BOOL_OR = 14,
 	AGGREGATE_EVERY = 15,
 	AGGREGATE_HLL_ADD = 16,
-	AGGREGATE_HLL_UNION = 17
+	AGGREGATE_HLL_UNION = 17,
+	AGGREGATE_TOPN_ADD_AGG = 18,
+	AGGREGATE_TOPN_UNION_AGG = 19
 } AggregateType;
 
 
@@ -114,7 +120,8 @@ static const char *const AggregateNames[] = {
 	"jsonb_agg", "jsonb_object_agg",
 	"json_agg", "json_object_agg",
 	"bit_and", "bit_or", "bool_and", "bool_or", "every",
-	"hll_add_agg", "hll_union_agg"
+	"hll_add_agg", "hll_union_agg",
+	"topn_add_agg", "topn_union_agg"
 };
 
 

@@ -42,12 +42,17 @@ install:
   - pip3 install --user mitmproxy==3.0.4
   - pip3 install --user construct==2.9.45
   - mitmproxy --version
-  # download and install HLL manually, as custom builds won't satisfy deps
+  # download and install HLL and TopN manually, as custom builds won't satisfy deps
   # only install if performing non-11 build
   - |
     if [ "${PGVERSION}" != "11" ]; then
       apt-get download "postgresql-${PGVERSION}-hll=2.10.2.citus-1"
       sudo dpkg --force-confold --force-confdef --force-all -i *hll*.deb
+    fi
+  - |
+    if [ "${PGVERSION}" != "11" ]; then
+      apt-get download "postgresql-${PGVERSION}-topn=2.1.0"
+      sudo dpkg --force-confold --force-confdef --force-all -i *topn*.deb
     fi
 before_script: citus_indent --quiet --check
 script: CFLAGS=-Werror pg_travis_multi_test check
