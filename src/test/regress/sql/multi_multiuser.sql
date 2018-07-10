@@ -138,8 +138,14 @@ ABORT;
 
 SELECT * FROM citus_stat_statements_reset();
 
+-- table owner should be the same on the shards, even when distributing the table as superuser
+SET ROLE full_access;
+CREATE TABLE my_table (id integer, val integer);
 RESET ROLE;
+SELECT create_distributed_table('my_table', 'id');
+SELECT result FROM run_command_on_workers($$SELECT tableowner FROM pg_tables WHERE tablename LIKE 'my_table_%' LIMIT 1$$);
 
+DROP TABLE my_table;
 DROP TABLE test;
 DROP USER full_access;
 DROP USER read_access;

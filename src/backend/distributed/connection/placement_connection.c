@@ -311,7 +311,8 @@ StartPlacementListConnection(uint32 flags, List *placementAccessList,
 		 * No suitable connection in the placement->connection mapping, get one from
 		 * the node->connection pool.
 		 */
-		chosenConnection = StartNodeConnection(flags, nodeName, nodePort);
+		chosenConnection = StartNodeUserDatabaseConnection(flags, nodeName, nodePort,
+														   userName, NULL);
 
 		if (flags & CONNECTION_PER_PLACEMENT &&
 			ConnectionAccessedDifferentPlacement(chosenConnection, placement))
@@ -328,8 +329,10 @@ StartPlacementListConnection(uint32 flags, List *placementAccessList,
 			 * ID as the current placement, then we'd no longer able to write to
 			 * placement B later in the COPY.
 			 */
-			chosenConnection = StartNodeConnection(flags | FORCE_NEW_CONNECTION, nodeName,
-												   nodePort);
+			chosenConnection = StartNodeUserDatabaseConnection(flags |
+															   FORCE_NEW_CONNECTION,
+															   nodeName, nodePort,
+															   userName, NULL);
 
 			Assert(!ConnectionAccessedDifferentPlacement(chosenConnection, placement));
 		}
