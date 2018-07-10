@@ -296,3 +296,29 @@ SELECT pg_reload_conf();
  t
 (1 row)
 
+-- make sure master_drop_sequences enforces permissions
+SET citus.shard_replication_factor TO 1;
+SET citus.replication_model TO streaming;
+CREATE TABLE drop_seq (no bigserial);
+SELECT create_distributed_table('drop_seq', 'no');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+CREATE USER cannot_drop_sequence;
+NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
+HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
+SELECT result FROM run_command_on_workers('CREATE USER cannot_drop_sequence');
+   result    
+-------------
+ CREATE ROLE
+ CREATE ROLE
+(2 rows)
+
+SET ROLE cannot_drop_sequence;
+SELECT master_drop_sequences(ARRAY['drop_seq_no_seq']);
+ERROR:  must be owner of relation drop_seq_no_seq
+CONTEXT:  while executing command on localhost:57638
+RESET ROLE;
+DROP TABLE drop_seq;

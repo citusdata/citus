@@ -175,3 +175,17 @@ SELECT count(*) FROM pg_tables WHERE tablename = 'should_commit';
 \c - - - :master_port
 ALTER SYSTEM RESET citus.recover_2pc_interval;
 SELECT pg_reload_conf();
+
+-- make sure master_drop_sequences enforces permissions
+SET citus.shard_replication_factor TO 1;
+SET citus.replication_model TO streaming;
+CREATE TABLE drop_seq (no bigserial);
+SELECT create_distributed_table('drop_seq', 'no');
+
+CREATE USER cannot_drop_sequence;
+SELECT result FROM run_command_on_workers('CREATE USER cannot_drop_sequence');
+SET ROLE cannot_drop_sequence;
+SELECT master_drop_sequences(ARRAY['drop_seq_no_seq']);
+
+RESET ROLE;
+DROP TABLE drop_seq;
