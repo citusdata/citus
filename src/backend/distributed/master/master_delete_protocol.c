@@ -268,12 +268,11 @@ master_drop_sequences(PG_FUNCTION_ARGS)
 	Datum sequenceText = 0;
 	bool isNull = false;
 	StringInfo dropSeqCommand = makeStringInfo();
-	bool coordinator = IsCoordinator();
 
 	CheckCitusVersion(ERROR);
 
 	/* do nothing if DDL propagation is switched off or this is not the coordinator */
-	if (!EnableDDLPropagation || !coordinator)
+	if (!EnableDDLPropagation || !IsCoordinator())
 	{
 		PG_RETURN_VOID();
 	}
