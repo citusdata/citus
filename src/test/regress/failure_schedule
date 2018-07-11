@@ -9,3 +9,4 @@ test: failure_ddl
 test: failure_truncate
 test: failure_create_index_concurrently
 test: failure_add_disable_node
+test: failure_copy_to_reference
