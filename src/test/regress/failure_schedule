@@ -4,6 +4,7 @@ test: failure_test_helpers
 # this should only be run by pg_regress_multi, you don't need it
 test: failure_setup
 test: multi_test_helpers
+
 test: failure_ddl
 test: failure_truncate
 test: failure_create_index_concurrently
@@ -11,6 +12,7 @@ test: failure_add_disable_node
 test: failure_copy_to_reference
 test: failure_copy_on_hash
 test: failure_create_reference_table
+test: failure_create_distributed_table_non_empty
 
 test: failure_1pc_copy_hash
 test: failure_1pc_copy_append
