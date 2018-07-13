@@ -8,3 +8,4 @@ test: multi_test_helpers
 test: failure_ddl
 test: failure_truncate
 test: failure_create_index_concurrently
+test: failure_add_disable_node
