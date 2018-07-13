@@ -30,9 +30,10 @@ extern Query * ReorderInsertSelectTargetLists(Query *originalQuery,
 											  RangeTblEntry *subqueryRte);
 extern void CoordinatorInsertSelectExplainScan(CustomScanState *node, List *ancestors,
 											   struct ExplainState *es);
-extern DistributedPlan * CreateInsertSelectPlan(Query *originalQuery,
+extern DistributedPlan * CreateInsertSelectPlan(uint64 planId, Query *originalQuery,
 												PlannerRestrictionContext *
 												plannerRestrictionContext);
+extern char * InsertSelectResultIdPrefix(uint64 planId);
 
 
 #endif /* INSERT_SELECT_PLANNER_H */

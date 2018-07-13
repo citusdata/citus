@@ -1296,7 +1296,8 @@ CopyLocalDataIntoShards(Oid distributedRelationId)
 		(DestReceiver *) CreateCitusCopyDestReceiver(distributedRelationId,
 													 columnNameList,
 													 partitionColumnIndex,
-													 estate, stopOnFailure);
+													 estate, stopOnFailure,
+													 NULL);
 
 	/* initialise state for writing to shards, we'll open connections on demand */
 	copyDest->rStartup(copyDest, 0, tupleDescriptor);

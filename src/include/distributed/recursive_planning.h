@@ -22,6 +22,8 @@ extern List * GenerateSubplansForSubqueriesAndCTEs(uint64 planId, Query *origina
 												   PlannerRestrictionContext *
 												   plannerRestrictionContext);
 extern char * GenerateResultId(uint64 planId, uint32 subPlanId);
+extern Query * BuildSubPlanResultQuery(List *targetEntryList, List *columnAliasList,
+									   char *resultId);
 
 
 #endif /* RECURSIVE_PLANNING_H */

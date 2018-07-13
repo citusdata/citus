@@ -44,6 +44,9 @@ extern void CitusModifyBeginScan(CustomScanState *node, EState *estate, int efla
 extern TupleTableSlot * RouterSelectExecScan(CustomScanState *node);
 extern TupleTableSlot * RouterModifyExecScan(CustomScanState *node);
 
+extern void ExecuteMultipleTasks(CitusScanState *scanState, List *taskList,
+								 bool isModificationQuery, bool expectResults);
+
 extern int64 ExecuteModifyTasksWithoutResults(List *taskList);
 extern int64 ExecuteModifyTasksSequentiallyWithoutResults(List *taskList,
 														  CmdType operation);

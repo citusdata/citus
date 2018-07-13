@@ -259,6 +259,16 @@ typedef struct DistributedPlan
 	/* target relation of an INSERT ... SELECT via the coordinator */
 	Oid targetRelationId;
 
+	/*
+	 * If intermediateResultIdPrefix is non-null, an INSERT ... SELECT
+	 * via the coordinator is written to a set of intermediate results
+	 * named according to <intermediateResultIdPrefix>_<anchorShardId>.
+	 * That way we can run a distributed INSERT ... SELECT with
+	 * RETURNING or ON CONFLICT from the intermediate results to the
+	 * target relation.
+	 */
+	char *intermediateResultIdPrefix;
+
 	/* list of subplans to execute before the distributed query */
 	List *subPlanList;
 

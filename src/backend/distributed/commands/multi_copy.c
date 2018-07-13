@@ -141,7 +141,6 @@ static FmgrInfo * TypeOutputFunctions(uint32 columnCount, Oid *typeIdArray,
 static Datum CoerceColumnValue(Datum inputValue, CopyCoercionData *coercionPath);
 static void CreateLocalTable(RangeVar *relation, char *nodeName, int32 nodePort);
 static List * CopyGetAttnums(TupleDesc tupDesc, Relation rel, List *attnamelist);
-static bool IsCopyResultStmt(CopyStmt *copyStatement);
 static bool CopyStatementHasFormat(CopyStmt *copyStatement, char *formatName);
 static bool IsCopyFromWorker(CopyStmt *copyStatement);
 static NodeAddress * MasterNodeAddress(CopyStmt *copyStatement);
@@ -389,7 +388,7 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 
 	/* set up the destination for the COPY */
 	copyDest = CreateCitusCopyDestReceiver(tableId, columnNameList, partitionColumnIndex,
-										   executorState, stopOnFailure);
+										   executorState, stopOnFailure, NULL);
 	dest = (DestReceiver *) copyDest;
 	dest->rStartup(dest, 0, tupleDescriptor);
 
@@ -1150,7 +1149,11 @@ ConstructCopyStatement(CopyStmt *copyStatement, int64 shardId, bool useBinaryCop
 
 	appendStringInfo(command, "FROM STDIN WITH ");
 
-	if (useBinaryCopyFormat)
+	if (IsCopyResultStmt(copyStatement))
+	{
+		appendStringInfoString(command, "(FORMAT RESULT)");
+	}
+	else if (useBinaryCopyFormat)
 	{
 		appendStringInfoString(command, "(FORMAT BINARY)");
 	}
@@ -2049,10 +2052,16 @@ CopyFlushOutput(CopyOutState cstate, char *start, char *pointer)
  * The caller should provide the list of column names to use in the
  * remote COPY statement, and the partition column index in the tuple
  * descriptor (*not* the column name list).
+ *
+ * If intermediateResultIdPrefix is not NULL, the COPY will go into a set
+ * of intermediate results that are co-located with the actual table.
+ * The names of the intermediate results with be of the form:
+ * intermediateResultIdPrefix_<shardid>
  */
 CitusCopyDestReceiver *
 CreateCitusCopyDestReceiver(Oid tableId, List *columnNameList, int partitionColumnIndex,
-							EState *executorState, bool stopOnFailure)
+							EState *executorState, bool stopOnFailure,
+							char *intermediateResultIdPrefix)
 {
 	CitusCopyDestReceiver *copyDest = NULL;
 
@@ -2071,6 +2080,7 @@ CreateCitusCopyDestReceiver(Oid tableId, List *columnNameList, int partitionColu
 	copyDest->partitionColumnIndex = partitionColumnIndex;
 	copyDest->executorState = executorState;
 	copyDest->stopOnFailure = stopOnFailure;
+	copyDest->intermediateResultIdPrefix = intermediateResultIdPrefix;
 	copyDest->memoryContext = CurrentMemoryContext;
 
 	return copyDest;
@@ -2215,13 +2225,31 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
 
 	/* define the template for the COPY statement that is sent to workers */
 	copyStatement = makeNode(CopyStmt);
-	copyStatement->relation = makeRangeVar(schemaName, relationName, -1);
+
+	if (copyDest->intermediateResultIdPrefix != NULL)
+	{
+		DefElem *formatResultOption = NULL;
+		copyStatement->relation = makeRangeVar(NULL, copyDest->intermediateResultIdPrefix,
+											   -1);
+
+		#if (PG_VERSION_NUM >= 100000)
+		formatResultOption = makeDefElem("format", (Node *) makeString("result"), -1);
+		#else
+		formatResultOption = makeDefElem("format", (Node *) makeString("result"));
+		#endif
+		copyStatement->options = list_make1(formatResultOption);
+	}
+	else
+	{
+		copyStatement->relation = makeRangeVar(schemaName, relationName, -1);
+		copyStatement->options = NIL;
+	}
+
 	copyStatement->query = NULL;
 	copyStatement->attlist = quotedColumnNameList;
 	copyStatement->is_from = true;
 	copyStatement->is_program = false;
 	copyStatement->filename = NULL;
-	copyStatement->options = NIL;
 	copyDest->copyStatement = copyStatement;
 
 	copyDest->shardConnectionHash = CreateShardConnectionHash(TopTransactionContext);
@@ -2443,7 +2471,7 @@ CitusCopyDestReceiverDestroy(DestReceiver *destReceiver)
  * COPY "resultkey" FROM STDIN WITH (format result) statement, which is used
  * to copy query results from the coordinator into workers.
  */
-static bool
+bool
 IsCopyResultStmt(CopyStmt *copyStatement)
 {
 	return CopyStatementHasFormat(copyStatement, "result");

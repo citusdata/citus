@@ -188,6 +188,7 @@ OutDistributedPlan(OUTFUNC_ARGS)
 	WRITE_NODE_FIELD(insertSelectSubquery);
 	WRITE_NODE_FIELD(insertTargetList);
 	WRITE_OID_FIELD(targetRelationId);
+	WRITE_STRING_FIELD(intermediateResultIdPrefix);
 
 	WRITE_NODE_FIELD(subPlanList);
 

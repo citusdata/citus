@@ -95,8 +95,6 @@ static void ExecuteSingleSelectTask(CitusScanState *scanState, Task *task);
 static List * BuildPlacementAccessList(uint32 groupId, List *relationShardList,
 									   ShardPlacementAccessType accessType);
 static List * GetModifyConnections(Task *task, bool markCritical);
-static void ExecuteMultipleTasks(CitusScanState *scanState, List *taskList,
-								 bool isModificationQuery, bool expectResults);
 static int64 ExecuteModifyTasks(List *taskList, bool expectResults,
 								ParamListInfo paramListInfo, CitusScanState *scanState);
 static void AcquireExecutorShardLock(Task *task, CmdType commandType);
@@ -1233,7 +1231,7 @@ GetModifyConnections(Task *task, bool markCritical)
  * Otherwise, the changes are committed using 2PC when the local transaction
  * commits.
  */
-static void
+void
 ExecuteMultipleTasks(CitusScanState *scanState, List *taskList,
 					 bool isModificationQuery, bool expectResults)
 {
