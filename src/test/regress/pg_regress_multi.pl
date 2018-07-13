@@ -269,6 +269,8 @@ for (my $workerIndex = 1; $workerIndex <= $workerCount; $workerIndex++) {
     push(@followerWorkerPorts, $workerPort);
 }
 
+my $workerBehindProxyPort = $workerPorts[1] + 2;
+
 my $host = "localhost";
 my $user = "postgres";
 my @pgOptions = ();
@@ -417,6 +419,7 @@ if ($usingWindows)
 }
 print $fh catfile($bindir, "psql")." ";
 print $fh "--variable=master_port=$masterPort ";
+print $fh "--variable=worker_2_proxy_port=$workerBehindProxyPort ";
 print $fh "--variable=follower_master_port=$followerCoordPort ";
 print $fh "--variable=default_user=$user ";
 print $fh "--variable=SHOW_CONTEXT=always ";

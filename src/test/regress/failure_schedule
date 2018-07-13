@@ -6,3 +6,4 @@ test: failure_setup
 test: multi_test_helpers
 
 test: failure_ddl
+test: failure_create_index_concurrently
