@@ -3186,6 +3186,8 @@ ErrorIfContainsUnsupportedAggregate(MultiNode *logicalPlanNode)
 {
 	List *opNodeList = FindNodesOfType(logicalPlanNode, T_MultiExtendedOp);
 	MultiExtendedOp *extendedOpNode = (MultiExtendedOp *) linitial(opNodeList);
+	List *tableNodeList = FindNodesOfType(logicalPlanNode, T_MultiTable);
+	bool distinctSupported = TablePartitioningSupportsDistinct(tableNodeList, extendedOpNode, NULL);
 
 	List *targetList = extendedOpNode->targetList;
 
@@ -3205,6 +3207,12 @@ ErrorIfContainsUnsupportedAggregate(MultiNode *logicalPlanNode)
 
 		/* only consider aggregate expressions */
 		if (!IsA(expression, Aggref))
+		{
+			continue;
+		}
+
+		/* only consider aggregates that aren't grouped by the partition column */
+		if (distinctSupported)
 		{
 			continue;
 		}
