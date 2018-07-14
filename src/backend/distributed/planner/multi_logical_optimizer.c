@@ -1809,11 +1809,16 @@ MasterAggregateExpression(Aggref *originalAggregate,
 		 */
 		TargetEntry *topNTargetEntry = NULL;
 		Aggref *unionAggregate = NULL;
+		List *args = NIL;
+		List *argTypes = NIL;
+
+		int aggregateArgCount = list_length(originalAggregate->args);
 
 		/* worker aggregate and original aggregate have same return type */
 		Oid topnType = exprType((Node *) originalAggregate);
-		Oid unionFunctionId = AggregateFunctionOid(TOPN_UNION_AGGREGATE_NAME,
-												   topnType);
+		Oid unionFunctionId = FunctionOid(NULL, TOPN_UNION_AGGREGATE_NAME,
+										  aggregateArgCount);
+
 		int32 topnReturnTypeMod = exprTypmod((Node *) originalAggregate);
 		Oid topnTypeCollationId = exprCollation((Node *) originalAggregate);
 
@@ -1823,16 +1828,25 @@ MasterAggregateExpression(Aggref *originalAggregate,
 		walkerContext->columnId++;
 
 		topNTargetEntry = makeTargetEntry((Expr *) topnColumn, argumentId, NULL, false);
+		args = list_make1(topNTargetEntry);
+		argTypes = list_make1_oid(topnType);
+
+		if (aggregateArgCount == 2)
+		{
+			args = lappend(args, (TargetEntry *) list_nth(originalAggregate->args, 1));
+			argTypes = lappend_oid(argTypes, list_nth_oid(originalAggregate->aggargtypes,
+														  1));
+		}
 
 		/* construct the master topn_union_agg() expression */
 		unionAggregate = makeNode(Aggref);
 		unionAggregate->aggfnoid = unionFunctionId;
 		unionAggregate->aggtype = topnType;
-		unionAggregate->args = list_make1(topNTargetEntry);
+		unionAggregate->args = args;
 		unionAggregate->aggkind = AGGKIND_NORMAL;
 		unionAggregate->aggfilter = NULL;
 		unionAggregate->aggtranstype = InvalidOid;
-		unionAggregate->aggargtypes = list_make1_oid(topnType);
+		unionAggregate->aggargtypes = argTypes;
 		unionAggregate->aggsplit = AGGSPLIT_SIMPLE;
 
 		newMasterExpression = (Expr *) unionAggregate;
