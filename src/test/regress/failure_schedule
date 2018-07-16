@@ -17,3 +17,4 @@ test: failure_create_table
 
 test: failure_1pc_copy_hash
 test: failure_1pc_copy_append
+test: failure_multi_shard_update_delete
