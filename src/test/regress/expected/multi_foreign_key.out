@@ -465,6 +465,10 @@ DETAIL:  SET NULL, SET DEFAULT or CASCADE is not supported in ON UPDATE operatio
 ALTER TABLE referencing_table ADD CONSTRAINT test_constraint FOREIGN KEY(ref_id) REFERENCES referenced_table(id) ON UPDATE CASCADE;
 ERROR:  cannot create foreign key constraint
 DETAIL:  SET NULL, SET DEFAULT or CASCADE is not supported in ON UPDATE operation  when distribution key included in the foreign constraint.
+-- test foreign constraint creation while adding the column
+ALTER TABLE referencing_table ADD COLUMN referencing_col int REFERENCES referenced_table(id) ON UPDATE CASCADE;;
+ERROR:  cannot create foreign key constraint
+DETAIL:  Foreign keys are supported in two cases, either in between two colocated tables including partition column in the same ordinal in the both tables or from distributed to reference tables
 -- test foreign constraint creation with multiple subcommands
 ALTER TABLE referencing_table ADD CONSTRAINT test_constraint FOREIGN KEY(ref_id) REFERENCES referenced_table(id),
 							  ADD CONSTRAINT test_constraint FOREIGN KEY(id) REFERENCES referenced_table(test_column);

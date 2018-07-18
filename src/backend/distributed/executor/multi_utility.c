@@ -173,6 +173,8 @@ static void ProcessDropTableStmt(DropStmt *dropTableStatement);
 static void ProcessDropSchemaStmt(DropStmt *dropSchemaStatement);
 static void InvalidateForeignKeyGraphForDDL(void);
 
+static void ErrorUnsupportedAlterTableAddColumn(Oid relationId, AlterTableCmd *command,
+												Constraint *constraint);
 
 /*
  * We need to run some of the commands sequentially if there is a foreign constraint
@@ -618,6 +620,42 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 						InvalidateForeignKeyGraph();
 					}
 				}
+				else if (alterTableType == AT_AddColumn)
+				{
+					List *columnConstraints = NIL;
+					ListCell *columnConstraint = NULL;
+					Oid relationId = InvalidOid;
+					LOCKMODE lockmode = NoLock;
+
+					ColumnDef *columnDefinition = (ColumnDef *) command->def;
+					columnConstraints = columnDefinition->constraints;
+					if (columnConstraints)
+					{
+						ErrorIfUnsupportedAlterAddConstraintStmt(alterTableStatement);
+					}
+
+					lockmode = AlterTableGetLockLevel(alterTableStatement->cmds);
+					relationId = AlterTableLookupRelation(alterTableStatement, lockmode);
+					if (!OidIsValid(relationId))
+					{
+						continue;
+					}
+
+					foreach(columnConstraint, columnConstraints)
+					{
+						Constraint *constraint = (Constraint *) lfirst(columnConstraint);
+
+						if (constraint->conname == NULL &&
+							(constraint->contype == CONSTR_PRIMARY ||
+							 constraint->contype == CONSTR_UNIQUE ||
+							 constraint->contype == CONSTR_FOREIGN ||
+							 constraint->contype == CONSTR_CHECK))
+						{
+							ErrorUnsupportedAlterTableAddColumn(relationId, command,
+																constraint);
+						}
+					}
+				}
 			}
 		}
 
@@ -673,6 +711,89 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 	 * EXTENSION. This is important to register some invalidation callbacks.
 	 */
 	CitusHasBeenLoaded();
+}
+
+
+static void
+ErrorUnsupportedAlterTableAddColumn(Oid relationId, AlterTableCmd *command,
+									Constraint *constraint)
+{
+	ColumnDef *columnDefinition = (ColumnDef *) command->def;
+	char *colName = columnDefinition->colname;
+	char *errMsg =
+		"cannot execute ADD COLUMN command with PRIMARY KEY, UNIQUE, FOREIGN and CHECK constraints";
+	StringInfo errHint = makeStringInfo();
+	appendStringInfo(errHint, "You can issue each command separately such as ");
+	appendStringInfo(errHint,
+					 "ALTER TABLE %s ADD COLUMN %s data_type; ALTER TABLE %s ADD CONSTRAINT constraint_name ",
+					 get_rel_name(relationId),
+					 colName, get_rel_name(relationId));
+
+	if (constraint->contype == CONSTR_UNIQUE)
+	{
+		appendStringInfo(errHint, "UNIQUE (%s)", colName);
+	}
+	else if (constraint->contype == CONSTR_PRIMARY)
+	{
+		appendStringInfo(errHint, "PRIMARY KEY (%s)", colName);
+	}
+	else if (constraint->contype == CONSTR_CHECK)
+	{
+		appendStringInfo(errHint, "CHECK (check_expression)");
+	}
+	else if (constraint->contype == CONSTR_FOREIGN)
+	{
+		RangeVar *referencedTable = constraint->pktable;
+		char *referencedColumn = strVal(lfirst(list_head(constraint->pk_attrs)));
+		Oid referencedRelationId = RangeVarGetRelid(referencedTable, NoLock, false);
+
+		appendStringInfo(errHint, "FOREIGN KEY (%s) REFERENCES %s(%s)", colName,
+						 get_rel_name(referencedRelationId), referencedColumn);
+
+		if (constraint->fk_del_action == FKCONSTR_ACTION_SETNULL)
+		{
+			appendStringInfo(errHint, " %s", "ON DELETE SET NULL");
+		}
+		else if (constraint->fk_del_action == FKCONSTR_ACTION_CASCADE)
+		{
+			appendStringInfo(errHint, " %s", "ON DELETE CASCADE");
+		}
+		else if (constraint->fk_del_action == FKCONSTR_ACTION_SETDEFAULT)
+		{
+			appendStringInfo(errHint, " %s", "ON DELETE SET DEFAULT");
+		}
+		else if (constraint->fk_del_action == FKCONSTR_ACTION_RESTRICT)
+		{
+			appendStringInfo(errHint, " %s", "ON DELETE RESTRICT");
+		}
+
+		if (constraint->fk_upd_action == FKCONSTR_ACTION_SETNULL)
+		{
+			appendStringInfo(errHint, " %s", "ON UPDATE SET NULL");
+		}
+		else if (constraint->fk_upd_action == FKCONSTR_ACTION_CASCADE)
+		{
+			appendStringInfo(errHint, " %s", "ON UPDATE CASCADE");
+		}
+		else if (constraint->fk_upd_action == FKCONSTR_ACTION_SETDEFAULT)
+		{
+			appendStringInfo(errHint, " %s", "ON UPDATE SET DEFAULT");
+		}
+		else if (constraint->fk_upd_action == FKCONSTR_ACTION_RESTRICT)
+		{
+			appendStringInfo(errHint, " %s", "ON UPDATE RESTRICT");
+		}
+	}
+
+	appendStringInfo(errHint, "%s", ";");
+
+	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					errmsg("%s", errMsg),
+					errhint("%s", errHint->data),
+					errdetail("Adding a column with a constraint in "
+							  "one command is not supported because "
+							  "all constraints in Citus must have "
+							  "explicit names")));
 }
 
 
@@ -1412,6 +1533,39 @@ PlanAlterTableStmt(AlterTableStmt *alterTableStatement, const char *alterTableCo
 				 * transaction is in process, which causes deadlock.
 				 */
 				constraint->skip_validation = true;
+			}
+		}
+		else if (alterTableType == AT_AddColumn)
+		{
+			/*
+			 * TODO: This code path is nothing beneficial since we do not
+			 * support ALTER TABLE %s ADD COLUMN %s [constraint] for foreign keys.
+			 * However, the code is kept in case we fix the constraint
+			 * creation without a name and allow foreign key creation with the mentioned
+			 * command.
+			 */
+			ColumnDef *columnDefinition = (ColumnDef *) command->def;
+			List *columnConstraints = columnDefinition->constraints;
+
+			ListCell *columnConstraint = NULL;
+			foreach(columnConstraint, columnConstraints)
+			{
+				Constraint *constraint = (Constraint *) lfirst(columnConstraint);
+				if (constraint->contype == CONSTR_FOREIGN)
+				{
+					rightRelationId = RangeVarGetRelid(constraint->pktable, lockmode,
+													   alterTableStatement->missing_ok);
+
+					/*
+					 * Foreign constraint validations will be done in workers. If we do not
+					 * set this flag, PostgreSQL tries to do additional checking when we drop
+					 * to standard_ProcessUtility. standard_ProcessUtility tries to open new
+					 * connections to workers to verify foreign constraints while original
+					 * transaction is in process, which causes deadlock.
+					 */
+					constraint->skip_validation = true;
+					break;
+				}
 			}
 		}
 #if (PG_VERSION_NUM >= 100000)
@@ -4035,6 +4189,34 @@ SetupExecutionModeForAlterTable(Oid relationId, AlterTableCmd *command)
 		if (ConstraintIsAForeignKeyToReferenceTable(constraintName, relationId))
 		{
 			executeSequentially = true;
+		}
+	}
+	else if (alterTableType == AT_AddColumn)
+	{
+		/*
+		 * TODO: This code path will never be executed since we do not
+		 * support foreign constraint creation via
+		 * ALTER TABLE %s ADD COLUMN %s [constraint]. However, the code
+		 * is kept in case we fix the constraint creation without a name
+		 * and allow foreign key creation with the mentioned command.
+		 */
+		ColumnDef *columnDefinition = (ColumnDef *) command->def;
+		List *columnConstraints = columnDefinition->constraints;
+
+		ListCell *columnConstraint = NULL;
+		foreach(columnConstraint, columnConstraints)
+		{
+			Constraint *constraint = (Constraint *) lfirst(columnConstraint);
+			if (constraint->contype == CONSTR_FOREIGN)
+			{
+				Oid rightRelationId = RangeVarGetRelid(constraint->pktable, NoLock,
+													   false);
+				if (IsDistributedTable(rightRelationId) &&
+					PartitionMethod(rightRelationId) == DISTRIBUTE_BY_NONE)
+				{
+					executeSequentially = true;
+				}
+			}
 		}
 	}
 	else if (alterTableType == AT_DropColumn || alterTableType == AT_AlterColumnType)

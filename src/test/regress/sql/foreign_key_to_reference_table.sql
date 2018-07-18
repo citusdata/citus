@@ -133,11 +133,25 @@ ALTER TABLE referencing_table ADD CONSTRAINT fkey_ref FOREIGN KEY(id) REFERENCES
 SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%' ORDER BY 1,2,3;
 DROP TABLE referencing_table;
 
+-- check if we can add the foreign key while adding the column
+CREATE TABLE referencing_table(id int, ref_id int);
+SELECT create_distributed_table('referencing_table', 'ref_id');
+ALTER TABLE referencing_table ADD COLUMN referencing int REFERENCES referenced_table(id) ON UPDATE CASCADE;
+SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%' ORDER BY 1,2,3;
+DROP TABLE referencing_table;
+
 -- foreign keys are only supported when the replication factor = 1
 SET citus.shard_replication_factor TO 2;
 CREATE TABLE referencing_table(id int, ref_id int);
 SELECT create_distributed_table('referencing_table', 'ref_id');
 ALTER TABLE referencing_table ADD CONSTRAINT fkey_ref FOREIGN KEY (id) REFERENCES referenced_table(id);
+SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%' ORDER BY 1,2,3;
+DROP TABLE referencing_table;
+
+-- should fail when we add the column as well
+CREATE TABLE referencing_table(id int, ref_id int);
+SELECT create_distributed_table('referencing_table', 'ref_id');
+ALTER TABLE referencing_table ADD COLUMN referencing_col int REFERENCES referenced_table(id) ON DELETE SET NULL;
 SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%' ORDER BY 1,2,3;
 DROP TABLE referencing_table;
 SET citus.shard_replication_factor TO 1;
