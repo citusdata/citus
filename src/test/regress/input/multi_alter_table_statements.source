@@ -585,3 +585,24 @@ SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'another_index%' ORD
 
 -- get rid of the index
 DROP INDEX another_index;
+
+-- check if we fail properly when a column with un-supported constraint is added
+-- UNIQUE, PRIMARY KEY on non-distribution column is not supported
+-- CHECK, FOREIGN KEY, UNIQE, PRIMARY KEY cannot be added together with ADD COLUMN
+SET citus.shard_replication_factor TO 1;
+CREATE TABLE test_table_1(id int);
+SELECT create_distributed_table('test_table_1', 'id');
+ALTER TABLE test_table_1 ADD COLUMN test_col int UNIQUE;
+ALTER TABLE test_table_1 ADD COLUMN test_col int PRIMARY KEY;
+ALTER TABLE test_table_1 ADD COLUMN test_col int CHECK (test_col > 3);
+
+CREATE TABLE reference_table(i int UNIQUE);
+SELECT create_reference_table('reference_table');
+ALTER TABLE test_table_1 ADD COLUMN test_col int REFERENCES reference_table(i) ON DELETE CASCADE;
+ALTER TABLE test_table_1 ADD COLUMN test_col int REFERENCES reference_table(i) ON DELETE CASCADE ON UPDATE SET NULL;
+DROP TABLE reference_table;
+
+CREATE TABLE referenced_table(i int UNIQUE);
+SELECT create_distributed_table('referenced_table', 'i');
+ALTER TABLE test_table_1 ADD COLUMN test_col int REFERENCES referenced_table(i);
+DROP TABLE referenced_table, test_table_1;

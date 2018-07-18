@@ -513,8 +513,8 @@ ORDER BY
     1,2,3,4;
  nodename  | nodeport | success |       result        
 -----------+----------+---------+---------------------
- localhost |    57637 | t       | alter_pk_idx_220026
- localhost |    57638 | t       | alter_pk_idx_220026
+ localhost |    57637 | t       | alter_pk_idx_220035
+ localhost |    57638 | t       | alter_pk_idx_220035
 (2 rows)
 
 CREATE SCHEMA sc2;
@@ -544,8 +544,8 @@ ORDER BY
     1,2,3,4;
  nodename  | nodeport | success |       result        
 -----------+----------+---------+---------------------
- localhost |    57637 | t       | alter_pk_idx_220028
- localhost |    57638 | t       | alter_pk_idx_220028
+ localhost |    57637 | t       | alter_pk_idx_220037
+ localhost |    57638 | t       | alter_pk_idx_220037
 (2 rows)
 
 -- We are running almost the same test with a slight change on the constraint name because if the constraint has a different name than the index, Postgres renames the index.
@@ -579,8 +579,8 @@ ORDER BY
     1,2,3,4;
  nodename  | nodeport | success |       result        
 -----------+----------+---------+---------------------
- localhost |    57637 | t       | a_constraint_220030
- localhost |    57638 | t       | a_constraint_220030
+ localhost |    57637 | t       | a_constraint_220039
+ localhost |    57638 | t       | a_constraint_220039
 (2 rows)
 
 ALTER TABLE alter_add_prim_key DROP CONSTRAINT a_constraint;

@@ -520,6 +520,29 @@ RelayEventExtendNamesForInterShardCommands(Node *parseTree, uint64 leftShardId,
 						relationSchemaName = &(constraint->pktable->schemaname);
 					}
 				}
+				else if (command->subtype == AT_AddColumn)
+				{
+					/*
+					 * TODO: This code path will never be executed since we do not
+					 * support foreign constraint creation via
+					 * ALTER TABLE %s ADD COLUMN %s [constraint]. However, the code
+					 * is kept in case we fix the constraint creation without a name
+					 * and allow foreign key creation with the mentioned command.
+					 */
+					ColumnDef *columnDefinition = (ColumnDef *) command->def;
+					List *columnConstraints = columnDefinition->constraints;
+
+					ListCell *columnConstraint = NULL;
+					foreach(columnConstraint, columnConstraints)
+					{
+						Constraint *constraint = (Constraint *) lfirst(columnConstraint);
+						if (constraint->contype == CONSTR_FOREIGN)
+						{
+							referencedTableName = &(constraint->pktable->relname);
+							relationSchemaName = &(constraint->pktable->schemaname);
+						}
+					}
+				}
 #if (PG_VERSION_NUM >= 100000)
 				else if (command->subtype == AT_AttachPartition ||
 						 command->subtype == AT_DetachPartition)
