@@ -2104,6 +2104,22 @@ EXECUTE prepared_recursive_insert_select;
 EXECUTE prepared_recursive_insert_select;
 ROLLBACK;
 
+-- upsert with on conflict update distribution column is unsupported
+INSERT INTO agg_events AS ae
+            (
+                        user_id,
+                        value_1_agg,
+                        agg_time
+            )
+SELECT user_id,
+       value_1,
+       time
+FROM   raw_events_first
+ON conflict (user_id, value_1_agg)
+DO UPDATE
+   SET    user_id = 42
+RETURNING user_id, value_1_agg;
+
 -- wrap in a transaction to improve performance
 BEGIN;
 DROP TABLE coerce_events;
