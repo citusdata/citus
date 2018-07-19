@@ -52,6 +52,7 @@ extern DeferredErrorMessage * ModifyQuerySupported(Query *queryTree, Query *orig
 												   bool multiShardQuery,
 												   PlannerRestrictionContext *
 												   plannerRestrictionContext);
+extern DeferredErrorMessage * ErrorIfOnConflictNotSupported(Query *queryTree);
 extern List * ShardIntervalOpExpressions(ShardInterval *shardInterval, Index rteIndex);
 extern RelationRestrictionContext * CopyRelationRestrictionContext(
 	RelationRestrictionContext *oldContext);
