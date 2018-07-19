@@ -530,12 +530,8 @@ ModifyQuerySupported(Query *queryTree, Query *originalQuery, bool multiShardQuer
 	List *rangeTableList = NIL;
 	ListCell *rangeTableCell = NULL;
 	uint32 queryTableCount = 0;
-	bool specifiesPartitionValue = false;
-	ListCell *setTargetCell = NULL;
-	List *onConflictSet = NIL;
-	Node *arbiterWhere = NULL;
-	Node *onConflictWhere = NULL;
 	CmdType commandType = queryTree->commandType;
+	DeferredErrorMessage *deferredError = NULL;
 
 	/*
 	 * Here, we check if a recursively planned query tries to modify
@@ -769,7 +765,10 @@ ModifyQuerySupported(Query *queryTree, Query *originalQuery, bool multiShardQuer
 				TargetEntryChangesValue(targetEntry, partitionColumn,
 										queryTree->jointree))
 			{
-				specifiesPartitionValue = true;
+				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+									 "modifying the partition value of rows is not "
+									 "allowed",
+									 NULL, NULL);
 			}
 
 			if (commandType == CMD_UPDATE &&
@@ -829,12 +828,45 @@ ModifyQuerySupported(Query *queryTree, Query *originalQuery, bool multiShardQuer
 		}
 	}
 
-	if (commandType == CMD_INSERT && queryTree->onConflict != NULL)
+	deferredError = ErrorIfOnConflictNotSupported(queryTree);
+	if (deferredError != NULL)
 	{
-		onConflictSet = queryTree->onConflict->onConflictSet;
-		arbiterWhere = queryTree->onConflict->arbiterWhere;
-		onConflictWhere = queryTree->onConflict->onConflictWhere;
+		return deferredError;
 	}
+
+	return NULL;
+}
+
+
+/*
+ * ErrorIfOnConflictNotSupprted returns an error if an INSERT query has an
+ * unsupported ON CONFLICT clause. In particular, changing the partition
+ * column value or using volatile functions is not allowed.
+ */
+DeferredErrorMessage *
+ErrorIfOnConflictNotSupported(Query *queryTree)
+{
+	Oid distributedTableId = InvalidOid;
+	uint32 rangeTableId = 1;
+	Var *partitionColumn = NULL;
+	List *onConflictSet = NIL;
+	Node *arbiterWhere = NULL;
+	Node *onConflictWhere = NULL;
+	ListCell *setTargetCell = NULL;
+	bool specifiesPartitionValue = false;
+
+	CmdType commandType = queryTree->commandType;
+	if (commandType != CMD_INSERT || queryTree->onConflict == NULL)
+	{
+		return NULL;
+	}
+
+	distributedTableId = ExtractFirstDistributedTableId(queryTree);
+	partitionColumn = PartitionColumn(distributedTableId, rangeTableId);
+
+	onConflictSet = queryTree->onConflict->onConflictSet;
+	arbiterWhere = queryTree->onConflict->arbiterWhere;
+	onConflictWhere = queryTree->onConflict->onConflictWhere;
 
 	/*
 	 * onConflictSet is expanded via expand_targetlist() on the standard planner.
