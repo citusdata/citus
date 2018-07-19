@@ -161,7 +161,7 @@ BEGIN;
 (1 row)
 
 	ALTER TABLE on_update_fkey_table DROP COLUMN value_1 CASCADE;
-ERROR:  cannot modify table "on_update_fkey_table" because there was a parallel operation on a distributed tablein the transaction
+ERROR:  cannot modify table "on_update_fkey_table" because there was a parallel operation on a distributed table in the transaction
 DETAIL:  When there is a foreign key to a reference table, Citus needs to perform all operations over a single connection per node to ensure consistency.
 HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
 ROLLBACK;
@@ -549,7 +549,7 @@ ROLLBACK;
 BEGIN;
 	ALTER TABLE on_update_fkey_table ADD COLUMN X int;
 	ALTER TABLE on_update_fkey_table ALTER COLUMN value_1 SET DATA TYPE smallint;
-ERROR:  cannot modify table "on_update_fkey_table" because there was a parallel operation on a distributed tablein the transaction
+ERROR:  cannot modify table "on_update_fkey_table" because there was a parallel operation on a distributed table in the transaction
 DETAIL:  When there is a foreign key to a reference table, Citus needs to perform all operations over a single connection per node to ensure consistency.
 HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
 ROLLBACK;
@@ -796,7 +796,7 @@ DETAIL:  NOTICE from localhost:57638
 (1 row)
 
 	ALTER TABLE test_table_2 ADD CONSTRAINT c_check FOREIGN KEY (value_1) REFERENCES test_table_1(id);
-ERROR:  cannot modify table "test_table_2" because there was a parallel operation on a distributed tablein the transaction
+ERROR:  cannot modify table "test_table_2" because there was a parallel operation on a distributed table in the transaction
 DETAIL:  When there is a foreign key to a reference table, Citus needs to perform all operations over a single connection per node to ensure consistency.
 HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
 	-- make sure that the output isn't too verbose
@@ -895,7 +895,7 @@ DETAIL:  NOTICE from localhost:57638
 (1 row)
 
 	ALTER TABLE test_table_2 ADD CONSTRAINT c_check FOREIGN KEY (value_1) REFERENCES test_table_1(id);
-ERROR:  cannot modify table "test_table_2" because there was a parallel operation on a distributed tablein the transaction
+ERROR:  cannot modify table "test_table_2" because there was a parallel operation on a distributed table in the transaction
 DETAIL:  When there is a foreign key to a reference table, Citus needs to perform all operations over a single connection per node to ensure consistency.
 HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
 	-- make sure that the output isn't too verbose

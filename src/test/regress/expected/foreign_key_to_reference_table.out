@@ -1283,7 +1283,7 @@ BEGIN;
 (1 row)
 
   ALTER TABLE test_table_2 ADD CONSTRAINT c_check FOREIGN KEY (value_1) REFERENCES test_table_1(id);
-ERROR:  cannot modify table "test_table_2" because there was a parallel operation on a distributed tablein the transaction
+ERROR:  cannot modify table "test_table_2" because there was a parallel operation on a distributed table in the transaction
 DETAIL:  When there is a foreign key to a reference table, Citus needs to perform all operations over a single connection per node to ensure consistency.
 HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
   DROP TABLE test_table_1, test_table_2;
@@ -1306,7 +1306,7 @@ BEGIN;
 (1 row)
 
   ALTER TABLE test_table_1 ADD CONSTRAINT c_check FOREIGN KEY (value_1) REFERENCES test_table_2(id);
-ERROR:  cannot modify table "test_table_1" because there was a parallel operation on a distributed tablein the transaction
+ERROR:  cannot modify table "test_table_1" because there was a parallel operation on a distributed table in the transaction
 DETAIL:  When there is a foreign key to a reference table, Citus needs to perform all operations over a single connection per node to ensure consistency.
 HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
   DROP TABLE test_table_2 CASCADE;
@@ -1399,7 +1399,7 @@ BEGIN;
 (1 row)
 
   ALTER TABLE test_table_2 ADD CONSTRAINT foreign_key FOREIGN KEY(value_1) REFERENCES test_table_1(id);
-ERROR:  cannot modify table "test_table_2" because there was a parallel operation on a distributed tablein the transaction
+ERROR:  cannot modify table "test_table_2" because there was a parallel operation on a distributed table in the transaction
 DETAIL:  When there is a foreign key to a reference table, Citus needs to perform all operations over a single connection per node to ensure consistency.
 HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
   ALTER TABLE test_table_2 DROP CONSTRAINT test_table_2_value_1_fkey;
