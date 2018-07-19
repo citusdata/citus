@@ -212,7 +212,24 @@ ERROR:  permission denied for relation test
 ABORT;
 SELECT * FROM citus_stat_statements_reset();
 ERROR:  permission denied for function citus_stat_statements_reset
+-- table owner should be the same on the shards, even when distributing the table as superuser
+SET ROLE full_access;
+CREATE TABLE my_table (id integer, val integer);
 RESET ROLE;
+SELECT create_distributed_table('my_table', 'id');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+SELECT result FROM run_command_on_workers($$SELECT tableowner FROM pg_tables WHERE tablename LIKE 'my_table_%' LIMIT 1$$);
+   result    
+-------------
+ full_access
+ full_access
+(2 rows)
+
+DROP TABLE my_table;
 DROP TABLE test;
 DROP USER full_access;
 DROP USER read_access;
