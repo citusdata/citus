@@ -283,6 +283,14 @@ MultiClientConnectPoll(int32 connectionId)
 MultiConnection *
 MultiClientGetConnection(int32 connectionId)
 {
+	if (connectionId == INVALID_CONNECTION_ID)
+	{
+		return NULL;
+	}
+
+	Assert(connectionId >= 0);
+	Assert(connectionId < MAX_CONNECTION_COUNT);
+
 	return ClientConnectionArray[connectionId];
 }
 
