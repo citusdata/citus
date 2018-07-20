@@ -615,7 +615,7 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 					}
 
 					constraint = (Constraint *) command->def;
-					if (ConstraintIsAForeignKey(constraint->conname, relationId))
+					if (constraint->contype == CONSTR_FOREIGN)
 					{
 						InvalidateForeignKeyGraph();
 					}
