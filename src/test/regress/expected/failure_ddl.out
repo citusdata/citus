@@ -38,12 +38,6 @@ ERROR:  connection error: localhost:57640
 DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
-SELECT citus.mitmproxy('conn.allow()');
- mitmproxy 
------------
- 
-(1 row)
-
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
   array_agg  
 -------------
@@ -60,12 +54,6 @@ SELECT citus.mitmproxy('conn.onAuthenticationOk().cancel(' ||  pg_backend_pid() 
 
 ALTER TABLE test_table ADD COLUMN new_column INT;
 ERROR:  canceling statement due to user request
-SELECT citus.mitmproxy('conn.allow()');
- mitmproxy 
------------
- 
-(1 row)
-
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
   array_agg  
 -------------
@@ -81,12 +69,6 @@ SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL R
 
 ALTER TABLE test_table ADD COLUMN new_column INT;
 ERROR:  failure on connection marked as essential: localhost:57640
-SELECT citus.mitmproxy('conn.allow()');
- mitmproxy 
------------
- 
-(1 row)
-
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
   array_agg  
 -------------
@@ -102,12 +84,6 @@ SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL R
 
 ALTER TABLE test_table ADD COLUMN new_column INT;
 ERROR:  canceling statement due to user request
-SELECT citus.mitmproxy('conn.allow()');
- mitmproxy 
------------
- 
-(1 row)
-
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
   array_agg  
 -------------
@@ -126,12 +102,6 @@ ERROR:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
 CONTEXT:  while executing command on localhost:57640
-SELECT citus.mitmproxy('conn.allow()');
- mitmproxy 
------------
- 
-(1 row)
-
 -- show that we've never commited the changes
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
   array_agg  
@@ -148,12 +118,6 @@ SELECT citus.mitmproxy('conn.onQuery(query="worker_apply_shard_ddl_command").can
 
 ALTER TABLE test_table ADD COLUMN new_column INT;
 ERROR:  canceling statement due to user request
-SELECT citus.mitmproxy('conn.allow()');
- mitmproxy 
------------
- 
-(1 row)
-
 -- show that we've never commited the changes
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
   array_agg  
@@ -322,12 +286,6 @@ WARNING:  connection not open
 CONTEXT:  while executing command on localhost:57640
 WARNING:  connection not open
 CONTEXT:  while executing command on localhost:57640
-SELECT citus.mitmproxy('conn.allow()');
- mitmproxy 
------------
- 
-(1 row)
-
 -- now cancel just after the worker sends response to 
 -- but Postgres doesn't accepts interrupts during COMMIT and ROLLBACK
 -- so should not cancel at all, so not an effective test but adding in
@@ -341,12 +299,6 @@ SELECT citus.mitmproxy('conn.onQuery(query="ROLLBACK").cancel(' ||  pg_backend_p
 BEGIN;
 ALTER TABLE test_table DROP COLUMN new_column;
 ROLLBACK;
-SELECT citus.mitmproxy('conn.allow()');
- mitmproxy 
------------
- 
-(1 row)
-
 -- but now kill just after the worker sends response to 
 -- ROLLBACK command, so we'll have lots of warnings but the command
 -- should have been rollbacked both on the distributed table and the placements
@@ -395,12 +347,6 @@ ERROR:  connection error: localhost:57640
 DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
-SELECT citus.mitmproxy('conn.allow()');
- mitmproxy 
------------
- 
-(1 row)
-
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
        array_agg        
 ------------------------
@@ -417,12 +363,6 @@ SELECT citus.mitmproxy('conn.onAuthenticationOk().cancel(' ||  pg_backend_pid() 
 
 ALTER TABLE test_table DROP COLUMN new_column;
 ERROR:  canceling statement due to user request
-SELECT citus.mitmproxy('conn.allow()');
- mitmproxy 
------------
- 
-(1 row)
-
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
        array_agg        
 ------------------------
@@ -438,12 +378,6 @@ SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL R
 
 ALTER TABLE test_table DROP COLUMN new_column;
 ERROR:  failure on connection marked as essential: localhost:57640
-SELECT citus.mitmproxy('conn.allow()');
- mitmproxy 
------------
- 
-(1 row)
-
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
        array_agg        
 ------------------------
@@ -459,12 +393,6 @@ SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL R
 
 ALTER TABLE test_table DROP COLUMN new_column;
 ERROR:  canceling statement due to user request
-SELECT citus.mitmproxy('conn.allow()');
- mitmproxy 
------------
- 
-(1 row)
-
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
        array_agg        
 ------------------------
@@ -483,12 +411,6 @@ ERROR:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
 CONTEXT:  while executing command on localhost:57640
-SELECT citus.mitmproxy('conn.allow()');
- mitmproxy 
------------
- 
-(1 row)
-
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
        array_agg        
 ------------------------
@@ -504,12 +426,6 @@ SELECT citus.mitmproxy('conn.onQuery(query="worker_apply_shard_ddl_command").can
 
 ALTER TABLE test_table DROP COLUMN new_column;
 ERROR:  canceling statement due to user request
-SELECT citus.mitmproxy('conn.allow()');
- mitmproxy 
------------
- 
-(1 row)
-
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
        array_agg        
 ------------------------
@@ -799,12 +715,6 @@ ERROR:  connection error: localhost:57640
 DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
-SELECT citus.mitmproxy('conn.allow()');
- mitmproxy 
------------
- 
-(1 row)
-
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
   array_agg  
 -------------
@@ -821,12 +731,6 @@ SELECT citus.mitmproxy('conn.onAuthenticationOk().cancel(' ||  pg_backend_pid() 
 
 ALTER TABLE test_table ADD COLUMN new_column INT;
 ERROR:  canceling statement due to user request
-SELECT citus.mitmproxy('conn.allow()');
- mitmproxy 
------------
- 
-(1 row)
-
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
   array_agg  
 -------------
@@ -842,12 +746,6 @@ SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL R
 
 ALTER TABLE test_table ADD COLUMN new_column INT;
 ERROR:  failure on connection marked as essential: localhost:57640
-SELECT citus.mitmproxy('conn.allow()');
- mitmproxy 
------------
- 
-(1 row)
-
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
   array_agg  
 -------------
@@ -863,12 +761,6 @@ SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL R
 
 ALTER TABLE test_table ADD COLUMN new_column INT;
 ERROR:  canceling statement due to user request
-SELECT citus.mitmproxy('conn.allow()');
- mitmproxy 
------------
- 
-(1 row)
-
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
   array_agg  
 -------------
@@ -887,12 +779,6 @@ ERROR:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
 CONTEXT:  while executing command on localhost:57640
-SELECT citus.mitmproxy('conn.allow()');
- mitmproxy 
------------
- 
-(1 row)
-
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
   array_agg  
 -------------
@@ -908,12 +794,6 @@ SELECT citus.mitmproxy('conn.onQuery(query="worker_apply_shard_ddl_command").can
 
 ALTER TABLE test_table ADD COLUMN new_column INT;
 ERROR:  canceling statement due to user request
-SELECT citus.mitmproxy('conn.allow()');
- mitmproxy 
------------
- 
-(1 row)
-
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
   array_agg  
 -------------
@@ -1157,12 +1037,6 @@ SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL R
 
 ALTER TABLE test_table ADD COLUMN new_column INT;
 ERROR:  failure on connection marked as essential: localhost:57640
-SELECT citus.mitmproxy('conn.allow()');
- mitmproxy 
------------
- 
-(1 row)
-
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
   array_agg  
 -------------
@@ -1178,12 +1052,6 @@ SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL R
 
 ALTER TABLE test_table ADD COLUMN new_column INT;
 ERROR:  canceling statement due to user request
-SELECT citus.mitmproxy('conn.allow()');
- mitmproxy 
------------
- 
-(1 row)
-
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
   array_agg  
 -------------
@@ -1202,12 +1070,6 @@ ERROR:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
 CONTEXT:  while executing command on localhost:57640
-SELECT citus.mitmproxy('conn.allow()');
- mitmproxy 
------------
- 
-(1 row)
-
 -- kill as soon as the coordinator after it sends worker_apply_shard_ddl_command 2nd time
 SELECT citus.mitmproxy('conn.onQuery(query="worker_apply_shard_ddl_command").after(2).kill()');
  mitmproxy 
@@ -1220,12 +1082,6 @@ ERROR:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
 CONTEXT:  while executing command on localhost:57640
-SELECT citus.mitmproxy('conn.allow()');
- mitmproxy 
------------
- 
-(1 row)
-
 -- cancel as soon as the coordinator after it sends worker_apply_shard_ddl_command 2nd time
 SELECT citus.mitmproxy('conn.onQuery(query="worker_apply_shard_ddl_command").after(2).cancel(' ||  pg_backend_pid() || ')');
  mitmproxy 
@@ -1235,11 +1091,5 @@ SELECT citus.mitmproxy('conn.onQuery(query="worker_apply_shard_ddl_command").aft
 
 ALTER TABLE test_table ADD COLUMN new_column INT;
 ERROR:  canceling statement due to user request
-SELECT citus.mitmproxy('conn.allow()');
- mitmproxy 
------------
- 
-(1 row)
-
 SET search_path TO 'public';
 DROP SCHEMA ddl_failure CASCADE;
