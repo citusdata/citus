@@ -28,32 +28,27 @@ SELECT create_distributed_table('test_table', 'key');
 -- response we get from the worker
 SELECT citus.mitmproxy('conn.onAuthenticationOk().kill()');
 ALTER TABLE test_table ADD COLUMN new_column INT;
-SELECT citus.mitmproxy('conn.allow()');
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
 
 -- cancel just in the first 
 -- response we get from the worker
 SELECT citus.mitmproxy('conn.onAuthenticationOk().cancel(' ||  pg_backend_pid() || ')');
 ALTER TABLE test_table ADD COLUMN new_column INT;
-SELECT citus.mitmproxy('conn.allow()');
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
 
 -- kill as soon as the coordinator sends begin
 SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED").kill()');
 ALTER TABLE test_table ADD COLUMN new_column INT;
-SELECT citus.mitmproxy('conn.allow()');
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
 
 -- cancel as soon as the coordinator sends begin
 SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED").cancel(' ||  pg_backend_pid() || ')');
 ALTER TABLE test_table ADD COLUMN new_column INT;
-SELECT citus.mitmproxy('conn.allow()');
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
 
 -- kill as soon as the coordinator sends worker_apply_shard_ddl_command
 SELECT citus.mitmproxy('conn.onQuery(query="worker_apply_shard_ddl_command").kill()');
 ALTER TABLE test_table ADD COLUMN new_column INT;
-SELECT citus.mitmproxy('conn.allow()');
 
 -- show that we've never commited the changes
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
@@ -61,7 +56,6 @@ SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where r
 -- cancel as soon as the coordinator sends worker_apply_shard_ddl_command
 SELECT citus.mitmproxy('conn.onQuery(query="worker_apply_shard_ddl_command").cancel(' ||  pg_backend_pid() || ')');
 ALTER TABLE test_table ADD COLUMN new_column INT;
-SELECT citus.mitmproxy('conn.allow()');
 
 -- show that we've never commited the changes
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
@@ -135,7 +129,6 @@ BEGIN;
 SET LOCAL client_min_messages TO WARNING;
 ALTER TABLE test_table DROP COLUMN new_column;
 ROLLBACK;
-SELECT citus.mitmproxy('conn.allow()');
 
 -- now cancel just after the worker sends response to 
 -- but Postgres doesn't accepts interrupts during COMMIT and ROLLBACK
@@ -145,7 +138,6 @@ SELECT citus.mitmproxy('conn.onQuery(query="ROLLBACK").cancel(' ||  pg_backend_p
 BEGIN;
 ALTER TABLE test_table DROP COLUMN new_column;
 ROLLBACK;
-SELECT citus.mitmproxy('conn.allow()');
 
 -- but now kill just after the worker sends response to 
 -- ROLLBACK command, so we'll have lots of warnings but the command
@@ -166,38 +158,32 @@ SET citus.multi_shard_commit_protocol TO '2pc';
 -- response we get from the worker
 SELECT citus.mitmproxy('conn.onAuthenticationOk().kill()');
 ALTER TABLE test_table DROP COLUMN new_column;
-SELECT citus.mitmproxy('conn.allow()');
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
 
 -- cancel just in the first 
 -- response we get from the worker
 SELECT citus.mitmproxy('conn.onAuthenticationOk().cancel(' ||  pg_backend_pid() || ')');
 ALTER TABLE test_table DROP COLUMN new_column;
-SELECT citus.mitmproxy('conn.allow()');
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
 
 -- kill as soon as the coordinator sends begin
 SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED").kill()');
 ALTER TABLE test_table DROP COLUMN new_column;
-SELECT citus.mitmproxy('conn.allow()');
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
 
 -- cancel as soon as the coordinator sends begin
 SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED").cancel(' ||  pg_backend_pid() || ')');
 ALTER TABLE test_table DROP COLUMN new_column;
-SELECT citus.mitmproxy('conn.allow()');
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
 
 -- kill as soon as the coordinator sends worker_apply_shard_ddl_command
 SELECT citus.mitmproxy('conn.onQuery(query="worker_apply_shard_ddl_command").kill()');
 ALTER TABLE test_table DROP COLUMN new_column;
-SELECT citus.mitmproxy('conn.allow()');
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
 
 -- cancel as soon as the coordinator sends worker_apply_shard_ddl_command
 SELECT citus.mitmproxy('conn.onQuery(query="worker_apply_shard_ddl_command").cancel(' ||  pg_backend_pid() || ')');
 ALTER TABLE test_table DROP COLUMN new_column;
-SELECT citus.mitmproxy('conn.allow()');
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
 
 
@@ -296,38 +282,32 @@ SELECT create_distributed_table('test_table', 'key');
 -- response we get from the worker
 SELECT citus.mitmproxy('conn.onAuthenticationOk().kill()');
 ALTER TABLE test_table ADD COLUMN new_column INT;
-SELECT citus.mitmproxy('conn.allow()');
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
 
 -- cancel just in the first 
 -- response we get from the worker
 SELECT citus.mitmproxy('conn.onAuthenticationOk().cancel(' ||  pg_backend_pid() || ')');
 ALTER TABLE test_table ADD COLUMN new_column INT;
-SELECT citus.mitmproxy('conn.allow()');
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
 
 -- kill as soon as the coordinator sends begin
 SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED").kill()');
 ALTER TABLE test_table ADD COLUMN new_column INT;
-SELECT citus.mitmproxy('conn.allow()');
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
 
 -- cancel as soon as the coordinator sends begin
 SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED").cancel(' ||  pg_backend_pid() || ')');
 ALTER TABLE test_table ADD COLUMN new_column INT;
-SELECT citus.mitmproxy('conn.allow()');
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
 
 -- kill as soon as the coordinator sends worker_apply_shard_ddl_command
 SELECT citus.mitmproxy('conn.onQuery(query="worker_apply_shard_ddl_command").kill()');
 ALTER TABLE test_table ADD COLUMN new_column INT;
-SELECT citus.mitmproxy('conn.allow()');
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
 
 -- cancel as soon as the coordinator sends worker_apply_shard_ddl_command
 SELECT citus.mitmproxy('conn.onQuery(query="worker_apply_shard_ddl_command").cancel(' ||  pg_backend_pid() || ')');
 ALTER TABLE test_table ADD COLUMN new_column INT;
-SELECT citus.mitmproxy('conn.allow()');
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
 
 -- killing on PREPARE should be fine, everything should be rollbacked
@@ -404,29 +384,24 @@ SET citus.multi_shard_modify_mode TO 'sequential';
 -- kill as soon as the coordinator sends begin
 SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED").kill()');
 ALTER TABLE test_table ADD COLUMN new_column INT;
-SELECT citus.mitmproxy('conn.allow()');
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
 
 -- cancel as soon as the coordinator sends begin
 SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED").cancel(' ||  pg_backend_pid() || ')');
 ALTER TABLE test_table ADD COLUMN new_column INT;
-SELECT citus.mitmproxy('conn.allow()');
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
 
 -- kill as soon as the coordinator sends worker_apply_shard_ddl_command
 SELECT citus.mitmproxy('conn.onQuery(query="worker_apply_shard_ddl_command").kill()');
 ALTER TABLE test_table ADD COLUMN new_column INT;
-SELECT citus.mitmproxy('conn.allow()');
 
 -- kill as soon as the coordinator after it sends worker_apply_shard_ddl_command 2nd time
 SELECT citus.mitmproxy('conn.onQuery(query="worker_apply_shard_ddl_command").after(2).kill()');
 ALTER TABLE test_table ADD COLUMN new_column INT;
-SELECT citus.mitmproxy('conn.allow()');
 
 -- cancel as soon as the coordinator after it sends worker_apply_shard_ddl_command 2nd time
 SELECT citus.mitmproxy('conn.onQuery(query="worker_apply_shard_ddl_command").after(2).cancel(' ||  pg_backend_pid() || ')');
 ALTER TABLE test_table ADD COLUMN new_column INT;
-SELECT citus.mitmproxy('conn.allow()');
 
 SET search_path TO 'public';
 DROP SCHEMA ddl_failure CASCADE;
