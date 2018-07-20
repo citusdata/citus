@@ -80,7 +80,7 @@ check-follower-cluster: all
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_follower_schedule $(EXTRA_TESTS)
 
 check-failure: all
-	$(pg_regress_multi_check) --load-extension=citus --mitmproxy \
+	$(citus_abs_srcdir)/wrap_test.sh $(pg_regress_multi_check) --load-extension=citus --mitmproxy \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/failure_schedule $(EXTRA_TESTS)
 
 clean distclean maintainer-clean:
