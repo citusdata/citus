@@ -4086,7 +4086,7 @@ SetupExecutionModeForAlterTable(Oid relationId, AlterTableCmd *command)
 		char *relationName = get_rel_name(relationId);
 
 		ereport(ERROR, (errmsg("cannot modify table \"%s\" because there "
-							   "was a parallel operation on a distributed table"
+							   "was a parallel operation on a distributed table "
 							   "in the transaction", relationName),
 						errdetail("When there is a foreign key to a reference "
 								  "table, Citus needs to perform all operations "
