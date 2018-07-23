@@ -176,6 +176,14 @@ CreateInsertSelectPlan(Query *originalQuery,
 					   PlannerRestrictionContext *plannerRestrictionContext)
 {
 	DistributedPlan *distributedPlan = NULL;
+	DeferredErrorMessage *deferredError = NULL;
+
+	deferredError = ErrorIfOnConflictNotSupported(originalQuery);
+	if (deferredError != NULL)
+	{
+		/* raising the error as there is no possible solution for the unsupported on conflict statements */
+		RaiseDeferredError(deferredError, ERROR);
+	}
 
 	distributedPlan = CreateDistributedInsertSelectPlan(originalQuery,
 														plannerRestrictionContext);
