@@ -1,3 +1,4 @@
+import logging
 import re
 import os
 import pprint
@@ -14,6 +15,8 @@ from mitmproxy.utils import strutils
 from mitmproxy.proxy.protocol import TlsLayer, RawTCPLayer
 
 import structs
+
+logging.basicConfig(format="%(asctime)s %(levelname)s %(message)s", level=logging.DEBUG)
 
 # I. Command Strings
 
@@ -317,6 +320,7 @@ def listen_for_commands(fifoname):
         with open(fifoname, mode='r') as fifo:
             print('successfully opened the fifo for reading')
             slug = fifo.read()
+            logging.info('received new command: %s', slug.rstrip())
 
         try:
             handler = build_handler(slug)
@@ -337,6 +341,7 @@ def listen_for_commands(fifoname):
         with open(fifoname, mode='w') as fifo:
             print('successfully opened the fifo for writing')
             fifo.write('{}\n'.format(result))
+            logging.info('responded to command: %s', result.split("\n")[0])
 
 def create_thread(fifoname):
     global command_thread
