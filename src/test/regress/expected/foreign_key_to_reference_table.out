@@ -294,6 +294,24 @@ SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' A
 (8 rows)
 
 DROP TABLE referencing_table;
+-- check if we can add the foreign key while adding the column
+CREATE TABLE referencing_table(id int, ref_id int);
+SELECT create_distributed_table('referencing_table', 'ref_id');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+ALTER TABLE referencing_table ADD COLUMN referencing int REFERENCES referenced_table(id) ON UPDATE CASCADE;
+ERROR:  cannot execute ADD COLUMN command with PRIMARY KEY, UNIQUE, FOREIGN and CHECK constraints
+DETAIL:  Adding a column with a constraint in one command is not supported because all constraints in Citus must have explicit names
+HINT:  You can issue each command separately such as ALTER TABLE referencing_table ADD COLUMN referencing data_type; ALTER TABLE referencing_table ADD CONSTRAINT constraint_name FOREIGN KEY (referencing) REFERENCES referenced_table(id) ON UPDATE CASCADE;
+SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%' ORDER BY 1,2,3;
+ name | relid | refd_relid 
+------+-------+------------
+(0 rows)
+
+DROP TABLE referencing_table;
 -- foreign keys are only supported when the replication factor = 1
 SET citus.shard_replication_factor TO 2;
 CREATE TABLE referencing_table(id int, ref_id int);
@@ -304,6 +322,24 @@ SELECT create_distributed_table('referencing_table', 'ref_id');
 (1 row)
 
 ALTER TABLE referencing_table ADD CONSTRAINT fkey_ref FOREIGN KEY (id) REFERENCES referenced_table(id);
+ERROR:  cannot create foreign key constraint
+DETAIL:  Citus Community Edition currently supports foreign key constraints only for "citus.shard_replication_factor = 1".
+HINT:  Please change "citus.shard_replication_factor to 1". To learn more about using foreign keys with other replication factors, please contact us at https://citusdata.com/about/contact_us.
+SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%' ORDER BY 1,2,3;
+ name | relid | refd_relid 
+------+-------+------------
+(0 rows)
+
+DROP TABLE referencing_table;
+-- should fail when we add the column as well
+CREATE TABLE referencing_table(id int, ref_id int);
+SELECT create_distributed_table('referencing_table', 'ref_id');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+ALTER TABLE referencing_table ADD COLUMN referencing_col int REFERENCES referenced_table(id) ON DELETE SET NULL;
 ERROR:  cannot create foreign key constraint
 DETAIL:  Citus Community Edition currently supports foreign key constraints only for "citus.shard_replication_factor = 1".
 HINT:  Please change "citus.shard_replication_factor to 1". To learn more about using foreign keys with other replication factors, please contact us at https://citusdata.com/about/contact_us.
@@ -325,14 +361,14 @@ SELECT create_distributed_table('referencing_table', 'ref_id');
 SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%' ORDER BY 1,2,3;
                name                |                     relid                      |                  refd_relid                   
 -----------------------------------+------------------------------------------------+-----------------------------------------------
- referencing_table_id_fkey_7000107 | fkey_reference_table.referencing_table_7000107 | fkey_reference_table.referenced_table_7000042
- referencing_table_id_fkey_7000108 | fkey_reference_table.referencing_table_7000108 | fkey_reference_table.referenced_table_7000042
- referencing_table_id_fkey_7000109 | fkey_reference_table.referencing_table_7000109 | fkey_reference_table.referenced_table_7000042
- referencing_table_id_fkey_7000110 | fkey_reference_table.referencing_table_7000110 | fkey_reference_table.referenced_table_7000042
- referencing_table_id_fkey_7000111 | fkey_reference_table.referencing_table_7000111 | fkey_reference_table.referenced_table_7000042
- referencing_table_id_fkey_7000112 | fkey_reference_table.referencing_table_7000112 | fkey_reference_table.referenced_table_7000042
- referencing_table_id_fkey_7000113 | fkey_reference_table.referencing_table_7000113 | fkey_reference_table.referenced_table_7000042
- referencing_table_id_fkey_7000114 | fkey_reference_table.referencing_table_7000114 | fkey_reference_table.referenced_table_7000042
+ referencing_table_id_fkey_7000123 | fkey_reference_table.referencing_table_7000123 | fkey_reference_table.referenced_table_7000042
+ referencing_table_id_fkey_7000124 | fkey_reference_table.referencing_table_7000124 | fkey_reference_table.referenced_table_7000042
+ referencing_table_id_fkey_7000125 | fkey_reference_table.referencing_table_7000125 | fkey_reference_table.referenced_table_7000042
+ referencing_table_id_fkey_7000126 | fkey_reference_table.referencing_table_7000126 | fkey_reference_table.referenced_table_7000042
+ referencing_table_id_fkey_7000127 | fkey_reference_table.referencing_table_7000127 | fkey_reference_table.referenced_table_7000042
+ referencing_table_id_fkey_7000128 | fkey_reference_table.referencing_table_7000128 | fkey_reference_table.referenced_table_7000042
+ referencing_table_id_fkey_7000129 | fkey_reference_table.referencing_table_7000129 | fkey_reference_table.referenced_table_7000042
+ referencing_table_id_fkey_7000130 | fkey_reference_table.referencing_table_7000130 | fkey_reference_table.referenced_table_7000042
 (8 rows)
 
 DROP TABLE referencing_table;
@@ -356,14 +392,14 @@ COMMIT;
 SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%' ORDER BY 1,2,3;
                name                |                     relid                      |                  refd_relid                   
 -----------------------------------+------------------------------------------------+-----------------------------------------------
- referencing_table_id_fkey_7000116 | fkey_reference_table.referencing_table_7000116 | fkey_reference_table.referenced_table_7000115
- referencing_table_id_fkey_7000117 | fkey_reference_table.referencing_table_7000117 | fkey_reference_table.referenced_table_7000115
- referencing_table_id_fkey_7000118 | fkey_reference_table.referencing_table_7000118 | fkey_reference_table.referenced_table_7000115
- referencing_table_id_fkey_7000119 | fkey_reference_table.referencing_table_7000119 | fkey_reference_table.referenced_table_7000115
- referencing_table_id_fkey_7000120 | fkey_reference_table.referencing_table_7000120 | fkey_reference_table.referenced_table_7000115
- referencing_table_id_fkey_7000121 | fkey_reference_table.referencing_table_7000121 | fkey_reference_table.referenced_table_7000115
- referencing_table_id_fkey_7000122 | fkey_reference_table.referencing_table_7000122 | fkey_reference_table.referenced_table_7000115
- referencing_table_id_fkey_7000123 | fkey_reference_table.referencing_table_7000123 | fkey_reference_table.referenced_table_7000115
+ referencing_table_id_fkey_7000132 | fkey_reference_table.referencing_table_7000132 | fkey_reference_table.referenced_table_7000131
+ referencing_table_id_fkey_7000133 | fkey_reference_table.referencing_table_7000133 | fkey_reference_table.referenced_table_7000131
+ referencing_table_id_fkey_7000134 | fkey_reference_table.referencing_table_7000134 | fkey_reference_table.referenced_table_7000131
+ referencing_table_id_fkey_7000135 | fkey_reference_table.referencing_table_7000135 | fkey_reference_table.referenced_table_7000131
+ referencing_table_id_fkey_7000136 | fkey_reference_table.referencing_table_7000136 | fkey_reference_table.referenced_table_7000131
+ referencing_table_id_fkey_7000137 | fkey_reference_table.referencing_table_7000137 | fkey_reference_table.referenced_table_7000131
+ referencing_table_id_fkey_7000138 | fkey_reference_table.referencing_table_7000138 | fkey_reference_table.referenced_table_7000131
+ referencing_table_id_fkey_7000139 | fkey_reference_table.referencing_table_7000139 | fkey_reference_table.referenced_table_7000131
 (8 rows)
 
 DROP TABLE referencing_table;
@@ -421,8 +457,8 @@ ALTER TABLE referencing_table ADD CONSTRAINT fkey_ref FOREIGN KEY (ref_id) REFER
 -- test inserts
 -- test insert to referencing table while there is NO corresponding value in referenced table
 INSERT INTO referencing_table VALUES(1, 1);
-ERROR:  insert or update on table "referencing_table_7000125" violates foreign key constraint "fkey_ref_7000125"
-DETAIL:  Key (ref_id)=(1) is not present in table "referenced_table_7000124".
+ERROR:  insert or update on table "referencing_table_7000141" violates foreign key constraint "fkey_ref_7000141"
+DETAIL:  Key (ref_id)=(1) is not present in table "referenced_table_7000140".
 CONTEXT:  while executing command on localhost:57637
 -- test insert to referencing while there is corresponding value in referenced table
 INSERT INTO referenced_table SELECT x, x from generate_series(1,1000) as f(x);
@@ -430,8 +466,8 @@ INSERT INTO referencing_table SELECT x, x from generate_series(1,500) as f(x);
 -- test deletes
 -- test delete from referenced table while there is corresponding value in referencing table
 DELETE FROM referenced_table WHERE id > 3;
-ERROR:  update or delete on table "referenced_table_7000124" violates foreign key constraint "fkey_ref_7000127" on table "referencing_table_7000127"
-DETAIL:  Key (id)=(4) is still referenced from table "referencing_table_7000127".
+ERROR:  update or delete on table "referenced_table_7000140" violates foreign key constraint "fkey_ref_7000143" on table "referencing_table_7000143"
+DETAIL:  Key (id)=(4) is still referenced from table "referencing_table_7000143".
 CONTEXT:  while executing command on localhost:57637
 -- test delete from referenced table while there is NO corresponding value in referencing table
 DELETE FROM referenced_table WHERE id = 501;
@@ -626,8 +662,8 @@ INSERT INTO referenced_table SELECT x,x FROM generate_series(1,1000) AS f(x);
 INSERT INTO referencing_table(id) SELECT x FROM generate_series(1,1000) AS f(x);
 -- Fails for non existing value inserts (serial is already incremented)
 INSERT INTO referencing_table(id) SELECT x FROM generate_series(1,10) AS f(x);
-ERROR:  insert or update on table "referencing_table_7000172" violates foreign key constraint "fkey_ref_7000172"
-DETAIL:  Key (ref_id)=(1001) is not present in table "referenced_table_7000171".
+ERROR:  insert or update on table "referencing_table_7000195" violates foreign key constraint "fkey_ref_7000195"
+DETAIL:  Key (ref_id)=(1009) is not present in table "referenced_table_7000187".
 DROP TABLE referenced_table CASCADE;
 NOTICE:  drop cascades to constraint fkey_ref on table referencing_table
 DROP TABLE referencing_table CASCADE;
@@ -657,8 +693,8 @@ INSERT INTO referenced_table(test_column2) SELECT x FROM generate_series(1,1000)
 INSERT INTO referencing_table(id) SELECT x FROM generate_series(1,1000) AS f(x);
 -- Fails for non existing value inserts (serial is already incremented)
 INSERT INTO referencing_table(id) SELECT x FROM generate_series(1,10) AS f(x);
-ERROR:  insert or update on table "referencing_table_7000181" violates foreign key constraint "fkey_ref_7000181"
-DETAIL:  Key (ref_id)=(1001) is not present in table "referenced_table_7000180".
+ERROR:  insert or update on table "referencing_table_7000197" violates foreign key constraint "fkey_ref_7000197"
+DETAIL:  Key (ref_id)=(1001) is not present in table "referenced_table_7000196".
 DROP TABLE referenced_table CASCADE;
 NOTICE:  drop cascades to constraint fkey_ref on table referencing_table
 DROP TABLE referencing_table CASCADE;
@@ -709,8 +745,8 @@ INSERT INTO referenced_table SELECT x, x FROM generate_series(0,1000) AS f(x);
 INSERT INTO referencing_table SELECT x, x FROM generate_series(0,1000) AS f(x);
 -- we expect this to fail because of the foreign constraint.
 INSERT INTO referencing_table SELECT x, x FROM generate_series(1000,1001) AS f(x);
-ERROR:  insert or update on table "referencing_table_7000204" violates foreign key constraint "fkey_ref_7000204"
-DETAIL:  Key (ref_id)=(1001) is not present in table "referenced_table_7000198".
+ERROR:  insert or update on table "referencing_table_7000220" violates foreign key constraint "fkey_ref_7000220"
+DETAIL:  Key (ref_id)=(1001) is not present in table "referenced_table_7000214".
 -- currently not supported
 ALTER TABLE referencing_table VALIDATE CONSTRAINT fkey_ref;
 ERROR:  alter table command is currently unsupported
@@ -809,38 +845,38 @@ ALTER TABLE referencing_table ADD CONSTRAINT foreign_key_2 FOREIGN KEY (id) REFE
 SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%' ORDER BY 1,2,3;
          name          |                     relid                      |                   refd_relid                   
 -----------------------+------------------------------------------------+------------------------------------------------
- fkey_ref_7000219      | fkey_reference_table.referencing_table_7000219 | fkey_reference_table.referenced_table_7000217
- fkey_ref_7000220      | fkey_reference_table.referencing_table_7000220 | fkey_reference_table.referenced_table_7000217
- fkey_ref_7000221      | fkey_reference_table.referencing_table_7000221 | fkey_reference_table.referenced_table_7000217
- fkey_ref_7000222      | fkey_reference_table.referencing_table_7000222 | fkey_reference_table.referenced_table_7000217
- fkey_ref_7000223      | fkey_reference_table.referencing_table_7000223 | fkey_reference_table.referenced_table_7000217
- fkey_ref_7000224      | fkey_reference_table.referencing_table_7000224 | fkey_reference_table.referenced_table_7000217
- fkey_ref_7000225      | fkey_reference_table.referencing_table_7000225 | fkey_reference_table.referenced_table_7000217
- fkey_ref_7000226      | fkey_reference_table.referencing_table_7000226 | fkey_reference_table.referenced_table_7000217
- foreign_key_2_7000219 | fkey_reference_table.referencing_table_7000219 | fkey_reference_table.referenced_table2_7000218
- foreign_key_2_7000220 | fkey_reference_table.referencing_table_7000220 | fkey_reference_table.referenced_table2_7000218
- foreign_key_2_7000221 | fkey_reference_table.referencing_table_7000221 | fkey_reference_table.referenced_table2_7000218
- foreign_key_2_7000222 | fkey_reference_table.referencing_table_7000222 | fkey_reference_table.referenced_table2_7000218
- foreign_key_2_7000223 | fkey_reference_table.referencing_table_7000223 | fkey_reference_table.referenced_table2_7000218
- foreign_key_2_7000224 | fkey_reference_table.referencing_table_7000224 | fkey_reference_table.referenced_table2_7000218
- foreign_key_2_7000225 | fkey_reference_table.referencing_table_7000225 | fkey_reference_table.referenced_table2_7000218
- foreign_key_2_7000226 | fkey_reference_table.referencing_table_7000226 | fkey_reference_table.referenced_table2_7000218
+ fkey_ref_7000235      | fkey_reference_table.referencing_table_7000235 | fkey_reference_table.referenced_table_7000233
+ fkey_ref_7000236      | fkey_reference_table.referencing_table_7000236 | fkey_reference_table.referenced_table_7000233
+ fkey_ref_7000237      | fkey_reference_table.referencing_table_7000237 | fkey_reference_table.referenced_table_7000233
+ fkey_ref_7000238      | fkey_reference_table.referencing_table_7000238 | fkey_reference_table.referenced_table_7000233
+ fkey_ref_7000239      | fkey_reference_table.referencing_table_7000239 | fkey_reference_table.referenced_table_7000233
+ fkey_ref_7000240      | fkey_reference_table.referencing_table_7000240 | fkey_reference_table.referenced_table_7000233
+ fkey_ref_7000241      | fkey_reference_table.referencing_table_7000241 | fkey_reference_table.referenced_table_7000233
+ fkey_ref_7000242      | fkey_reference_table.referencing_table_7000242 | fkey_reference_table.referenced_table_7000233
+ foreign_key_2_7000235 | fkey_reference_table.referencing_table_7000235 | fkey_reference_table.referenced_table2_7000234
+ foreign_key_2_7000236 | fkey_reference_table.referencing_table_7000236 | fkey_reference_table.referenced_table2_7000234
+ foreign_key_2_7000237 | fkey_reference_table.referencing_table_7000237 | fkey_reference_table.referenced_table2_7000234
+ foreign_key_2_7000238 | fkey_reference_table.referencing_table_7000238 | fkey_reference_table.referenced_table2_7000234
+ foreign_key_2_7000239 | fkey_reference_table.referencing_table_7000239 | fkey_reference_table.referenced_table2_7000234
+ foreign_key_2_7000240 | fkey_reference_table.referencing_table_7000240 | fkey_reference_table.referenced_table2_7000234
+ foreign_key_2_7000241 | fkey_reference_table.referencing_table_7000241 | fkey_reference_table.referenced_table2_7000234
+ foreign_key_2_7000242 | fkey_reference_table.referencing_table_7000242 | fkey_reference_table.referenced_table2_7000234
 (16 rows)
 
 INSERT INTO referenced_table SELECT x, x+1 FROM generate_series(0,1000) AS f(x);
 INSERT INTO referenced_table2 SELECT x, x+1 FROM generate_series(500,1500) AS f(x);
 -- should fail
 INSERT INTO referencing_table SELECT x, x+1 FROM generate_series(0,1500) AS f(x);
-ERROR:  insert or update on table "referencing_table_7000220" violates foreign key constraint "foreign_key_2_7000220"
-DETAIL:  Key (id)=(5) is not present in table "referenced_table2_7000218".
+ERROR:  insert or update on table "referencing_table_7000242" violates foreign key constraint "foreign_key_2_7000242"
+DETAIL:  Key (id)=(9) is not present in table "referenced_table2_7000234".
 -- should fail
 INSERT INTO referencing_table SELECT x, x+1 FROM generate_series(0,400) AS f(x);
-ERROR:  insert or update on table "referencing_table_7000220" violates foreign key constraint "foreign_key_2_7000220"
-DETAIL:  Key (id)=(5) is not present in table "referenced_table2_7000218".
+ERROR:  insert or update on table "referencing_table_7000242" violates foreign key constraint "foreign_key_2_7000242"
+DETAIL:  Key (id)=(9) is not present in table "referenced_table2_7000234".
 -- should fail
 INSERT INTO referencing_table SELECT x, x+1 FROM generate_series(1000,1400) AS f(x);
-ERROR:  insert or update on table "referencing_table_7000220" violates foreign key constraint "fkey_ref_7000220"
-DETAIL:  Key (id)=(1005) is not present in table "referenced_table_7000217".
+ERROR:  insert or update on table "referencing_table_7000242" violates foreign key constraint "fkey_ref_7000242"
+DETAIL:  Key (id)=(1023) is not present in table "referenced_table_7000233".
 -- should success
 INSERT INTO referencing_table SELECT x, x+1 FROM generate_series(600,900) AS f(x);
 SELECT count(*) FROM referencing_table;
@@ -936,38 +972,38 @@ COMMIT;
 SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%' ORDER BY 1,2,3;
          name          |                     relid                      |                   refd_relid                   
 -----------------------+------------------------------------------------+------------------------------------------------
- fkey_ref_7000239      | fkey_reference_table.referencing_table_7000239 | fkey_reference_table.referenced_table_7000237
- fkey_ref_7000240      | fkey_reference_table.referencing_table_7000240 | fkey_reference_table.referenced_table_7000237
- fkey_ref_7000241      | fkey_reference_table.referencing_table_7000241 | fkey_reference_table.referenced_table_7000237
- fkey_ref_7000242      | fkey_reference_table.referencing_table_7000242 | fkey_reference_table.referenced_table_7000237
- fkey_ref_7000243      | fkey_reference_table.referencing_table_7000243 | fkey_reference_table.referenced_table_7000237
- fkey_ref_7000244      | fkey_reference_table.referencing_table_7000244 | fkey_reference_table.referenced_table_7000237
- fkey_ref_7000245      | fkey_reference_table.referencing_table_7000245 | fkey_reference_table.referenced_table_7000237
- fkey_ref_7000246      | fkey_reference_table.referencing_table_7000246 | fkey_reference_table.referenced_table_7000237
- foreign_key_2_7000239 | fkey_reference_table.referencing_table_7000239 | fkey_reference_table.referenced_table2_7000238
- foreign_key_2_7000240 | fkey_reference_table.referencing_table_7000240 | fkey_reference_table.referenced_table2_7000238
- foreign_key_2_7000241 | fkey_reference_table.referencing_table_7000241 | fkey_reference_table.referenced_table2_7000238
- foreign_key_2_7000242 | fkey_reference_table.referencing_table_7000242 | fkey_reference_table.referenced_table2_7000238
- foreign_key_2_7000243 | fkey_reference_table.referencing_table_7000243 | fkey_reference_table.referenced_table2_7000238
- foreign_key_2_7000244 | fkey_reference_table.referencing_table_7000244 | fkey_reference_table.referenced_table2_7000238
- foreign_key_2_7000245 | fkey_reference_table.referencing_table_7000245 | fkey_reference_table.referenced_table2_7000238
- foreign_key_2_7000246 | fkey_reference_table.referencing_table_7000246 | fkey_reference_table.referenced_table2_7000238
+ fkey_ref_7000255      | fkey_reference_table.referencing_table_7000255 | fkey_reference_table.referenced_table_7000253
+ fkey_ref_7000256      | fkey_reference_table.referencing_table_7000256 | fkey_reference_table.referenced_table_7000253
+ fkey_ref_7000257      | fkey_reference_table.referencing_table_7000257 | fkey_reference_table.referenced_table_7000253
+ fkey_ref_7000258      | fkey_reference_table.referencing_table_7000258 | fkey_reference_table.referenced_table_7000253
+ fkey_ref_7000259      | fkey_reference_table.referencing_table_7000259 | fkey_reference_table.referenced_table_7000253
+ fkey_ref_7000260      | fkey_reference_table.referencing_table_7000260 | fkey_reference_table.referenced_table_7000253
+ fkey_ref_7000261      | fkey_reference_table.referencing_table_7000261 | fkey_reference_table.referenced_table_7000253
+ fkey_ref_7000262      | fkey_reference_table.referencing_table_7000262 | fkey_reference_table.referenced_table_7000253
+ foreign_key_2_7000255 | fkey_reference_table.referencing_table_7000255 | fkey_reference_table.referenced_table2_7000254
+ foreign_key_2_7000256 | fkey_reference_table.referencing_table_7000256 | fkey_reference_table.referenced_table2_7000254
+ foreign_key_2_7000257 | fkey_reference_table.referencing_table_7000257 | fkey_reference_table.referenced_table2_7000254
+ foreign_key_2_7000258 | fkey_reference_table.referencing_table_7000258 | fkey_reference_table.referenced_table2_7000254
+ foreign_key_2_7000259 | fkey_reference_table.referencing_table_7000259 | fkey_reference_table.referenced_table2_7000254
+ foreign_key_2_7000260 | fkey_reference_table.referencing_table_7000260 | fkey_reference_table.referenced_table2_7000254
+ foreign_key_2_7000261 | fkey_reference_table.referencing_table_7000261 | fkey_reference_table.referenced_table2_7000254
+ foreign_key_2_7000262 | fkey_reference_table.referencing_table_7000262 | fkey_reference_table.referenced_table2_7000254
 (16 rows)
 
 INSERT INTO referenced_table SELECT x, x+1 FROM generate_series(0,1000) AS f(x);
 INSERT INTO referenced_table2 SELECT x, x+1 FROM generate_series(500,1500) AS f(x);
 -- should fail
 INSERT INTO referencing_table SELECT x, x+1 FROM generate_series(0,1500) AS f(x);
-ERROR:  insert or update on table "referencing_table_7000245" violates foreign key constraint "foreign_key_2_7000245"
-DETAIL:  Key (ref_id)=(3) is not present in table "referenced_table2_7000238".
+ERROR:  insert or update on table "referencing_table_7000260" violates foreign key constraint "foreign_key_2_7000260"
+DETAIL:  Key (ref_id)=(7) is not present in table "referenced_table2_7000254".
 -- should fail
 INSERT INTO referencing_table SELECT x, x+1 FROM generate_series(0,400) AS f(x);
-ERROR:  insert or update on table "referencing_table_7000245" violates foreign key constraint "foreign_key_2_7000245"
-DETAIL:  Key (ref_id)=(3) is not present in table "referenced_table2_7000238".
+ERROR:  insert or update on table "referencing_table_7000260" violates foreign key constraint "foreign_key_2_7000260"
+DETAIL:  Key (ref_id)=(7) is not present in table "referenced_table2_7000254".
 -- should fail
 INSERT INTO referencing_table SELECT x, x+1 FROM generate_series(1000,1400) AS f(x);
-ERROR:  insert or update on table "referencing_table_7000245" violates foreign key constraint "fkey_ref_7000245"
-DETAIL:  Key (id)=(1002) is not present in table "referenced_table_7000237".
+ERROR:  insert or update on table "referencing_table_7000260" violates foreign key constraint "fkey_ref_7000260"
+DETAIL:  Key (id)=(1001) is not present in table "referenced_table_7000253".
 -- should success
 INSERT INTO referencing_table SELECT x, x+501 FROM generate_series(0,1000) AS f(x);
 SELECT count(*) FROM referencing_table;
@@ -1069,43 +1105,43 @@ COMMIT;
 SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%' ORDER BY 1,2,3;
            name           |                      relid                      |                   refd_relid                   
 --------------------------+-------------------------------------------------+------------------------------------------------
- fkey_ref_7000258         | fkey_reference_table.referencing_table_7000258  | fkey_reference_table.referenced_table_7000257
- fkey_ref_7000259         | fkey_reference_table.referencing_table_7000259  | fkey_reference_table.referenced_table_7000257
- fkey_ref_7000260         | fkey_reference_table.referencing_table_7000260  | fkey_reference_table.referenced_table_7000257
- fkey_ref_7000261         | fkey_reference_table.referencing_table_7000261  | fkey_reference_table.referenced_table_7000257
- fkey_ref_7000262         | fkey_reference_table.referencing_table_7000262  | fkey_reference_table.referenced_table_7000257
- fkey_ref_7000263         | fkey_reference_table.referencing_table_7000263  | fkey_reference_table.referenced_table_7000257
- fkey_ref_7000264         | fkey_reference_table.referencing_table_7000264  | fkey_reference_table.referenced_table_7000257
- fkey_ref_7000265         | fkey_reference_table.referencing_table_7000265  | fkey_reference_table.referenced_table_7000257
- fkey_ref_7000266         | fkey_reference_table.referencing_table2_7000266 | fkey_reference_table.referenced_table_7000257
- fkey_ref_7000267         | fkey_reference_table.referencing_table2_7000267 | fkey_reference_table.referenced_table_7000257
- fkey_ref_7000268         | fkey_reference_table.referencing_table2_7000268 | fkey_reference_table.referenced_table_7000257
- fkey_ref_7000269         | fkey_reference_table.referencing_table2_7000269 | fkey_reference_table.referenced_table_7000257
- fkey_ref_7000270         | fkey_reference_table.referencing_table2_7000270 | fkey_reference_table.referenced_table_7000257
- fkey_ref_7000271         | fkey_reference_table.referencing_table2_7000271 | fkey_reference_table.referenced_table_7000257
- fkey_ref_7000272         | fkey_reference_table.referencing_table2_7000272 | fkey_reference_table.referenced_table_7000257
- fkey_ref_7000273         | fkey_reference_table.referencing_table2_7000273 | fkey_reference_table.referenced_table_7000257
- fkey_ref_to_dist_7000266 | fkey_reference_table.referencing_table2_7000266 | fkey_reference_table.referencing_table_7000258
- fkey_ref_to_dist_7000267 | fkey_reference_table.referencing_table2_7000267 | fkey_reference_table.referencing_table_7000259
- fkey_ref_to_dist_7000268 | fkey_reference_table.referencing_table2_7000268 | fkey_reference_table.referencing_table_7000260
- fkey_ref_to_dist_7000269 | fkey_reference_table.referencing_table2_7000269 | fkey_reference_table.referencing_table_7000261
- fkey_ref_to_dist_7000270 | fkey_reference_table.referencing_table2_7000270 | fkey_reference_table.referencing_table_7000262
- fkey_ref_to_dist_7000271 | fkey_reference_table.referencing_table2_7000271 | fkey_reference_table.referencing_table_7000263
- fkey_ref_to_dist_7000272 | fkey_reference_table.referencing_table2_7000272 | fkey_reference_table.referencing_table_7000264
- fkey_ref_to_dist_7000273 | fkey_reference_table.referencing_table2_7000273 | fkey_reference_table.referencing_table_7000265
+ fkey_ref_7000274         | fkey_reference_table.referencing_table_7000274  | fkey_reference_table.referenced_table_7000273
+ fkey_ref_7000275         | fkey_reference_table.referencing_table_7000275  | fkey_reference_table.referenced_table_7000273
+ fkey_ref_7000276         | fkey_reference_table.referencing_table_7000276  | fkey_reference_table.referenced_table_7000273
+ fkey_ref_7000277         | fkey_reference_table.referencing_table_7000277  | fkey_reference_table.referenced_table_7000273
+ fkey_ref_7000278         | fkey_reference_table.referencing_table_7000278  | fkey_reference_table.referenced_table_7000273
+ fkey_ref_7000279         | fkey_reference_table.referencing_table_7000279  | fkey_reference_table.referenced_table_7000273
+ fkey_ref_7000280         | fkey_reference_table.referencing_table_7000280  | fkey_reference_table.referenced_table_7000273
+ fkey_ref_7000281         | fkey_reference_table.referencing_table_7000281  | fkey_reference_table.referenced_table_7000273
+ fkey_ref_7000282         | fkey_reference_table.referencing_table2_7000282 | fkey_reference_table.referenced_table_7000273
+ fkey_ref_7000283         | fkey_reference_table.referencing_table2_7000283 | fkey_reference_table.referenced_table_7000273
+ fkey_ref_7000284         | fkey_reference_table.referencing_table2_7000284 | fkey_reference_table.referenced_table_7000273
+ fkey_ref_7000285         | fkey_reference_table.referencing_table2_7000285 | fkey_reference_table.referenced_table_7000273
+ fkey_ref_7000286         | fkey_reference_table.referencing_table2_7000286 | fkey_reference_table.referenced_table_7000273
+ fkey_ref_7000287         | fkey_reference_table.referencing_table2_7000287 | fkey_reference_table.referenced_table_7000273
+ fkey_ref_7000288         | fkey_reference_table.referencing_table2_7000288 | fkey_reference_table.referenced_table_7000273
+ fkey_ref_7000289         | fkey_reference_table.referencing_table2_7000289 | fkey_reference_table.referenced_table_7000273
+ fkey_ref_to_dist_7000282 | fkey_reference_table.referencing_table2_7000282 | fkey_reference_table.referencing_table_7000274
+ fkey_ref_to_dist_7000283 | fkey_reference_table.referencing_table2_7000283 | fkey_reference_table.referencing_table_7000275
+ fkey_ref_to_dist_7000284 | fkey_reference_table.referencing_table2_7000284 | fkey_reference_table.referencing_table_7000276
+ fkey_ref_to_dist_7000285 | fkey_reference_table.referencing_table2_7000285 | fkey_reference_table.referencing_table_7000277
+ fkey_ref_to_dist_7000286 | fkey_reference_table.referencing_table2_7000286 | fkey_reference_table.referencing_table_7000278
+ fkey_ref_to_dist_7000287 | fkey_reference_table.referencing_table2_7000287 | fkey_reference_table.referencing_table_7000279
+ fkey_ref_to_dist_7000288 | fkey_reference_table.referencing_table2_7000288 | fkey_reference_table.referencing_table_7000280
+ fkey_ref_to_dist_7000289 | fkey_reference_table.referencing_table2_7000289 | fkey_reference_table.referencing_table_7000281
 (24 rows)
 
 INSERT INTO referenced_table SELECT x, x+1 FROM generate_series(0,1000) AS f(x);
 -- should fail
 INSERT INTO referencing_table2 SELECT x, x+1 FROM generate_series(0,100) AS f(x);
-ERROR:  insert or update on table "referencing_table2_7000272" violates foreign key constraint "fkey_ref_to_dist_7000272"
-DETAIL:  Key (id)=(2) is not present in table "referencing_table_7000264".
+ERROR:  insert or update on table "referencing_table2_7000284" violates foreign key constraint "fkey_ref_to_dist_7000284"
+DETAIL:  Key (id)=(4) is not present in table "referencing_table_7000276".
 -- should success
 INSERT INTO referencing_table SELECT x, x+1 FROM generate_series(0,400) AS f(x);
 -- should fail
 INSERT INTO referencing_table2 SELECT x, x+1 FROM generate_series(200,500) AS f(x);
-ERROR:  insert or update on table "referencing_table2_7000272" violates foreign key constraint "fkey_ref_to_dist_7000272"
-DETAIL:  Key (id)=(404) is not present in table "referencing_table_7000264".
+ERROR:  insert or update on table "referencing_table2_7000284" violates foreign key constraint "fkey_ref_to_dist_7000284"
+DETAIL:  Key (id)=(408) is not present in table "referencing_table_7000276".
 -- should success
 INSERT INTO referencing_table2 SELECT x, x+1 FROM generate_series(0,300) AS f(x);
 DELETE FROM referenced_table WHERE test_column < 200;
@@ -1203,22 +1239,22 @@ ALTER TABLE referencing_table ADD CONSTRAINT fkey_ref FOREIGN KEY (ref_id, ref_i
 SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.referencing%' ORDER BY 1,2,3;
                      name                      |                           relid                            |                   refd_relid                   
 -----------------------------------------------+------------------------------------------------------------+------------------------------------------------
- fkey_ref_7000292                              | fkey_reference_table.referencing_table_7000292             | fkey_reference_table.referenced_table_7000291
- fkey_ref_7000293                              | fkey_reference_table.referencing_table_7000293             | fkey_reference_table.referenced_table_7000291
- fkey_ref_7000294                              | fkey_reference_table.referencing_table_7000294             | fkey_reference_table.referenced_table_7000291
- fkey_ref_7000295                              | fkey_reference_table.referencing_table_7000295             | fkey_reference_table.referenced_table_7000291
- fkey_ref_7000296                              | fkey_reference_table.referencing_table_7000296             | fkey_reference_table.referenced_table_7000291
- fkey_ref_7000297                              | fkey_reference_table.referencing_table_7000297             | fkey_reference_table.referenced_table_7000291
- fkey_ref_7000298                              | fkey_reference_table.referencing_table_7000298             | fkey_reference_table.referenced_table_7000291
- fkey_ref_7000299                              | fkey_reference_table.referencing_table_7000299             | fkey_reference_table.referenced_table_7000291
- referencing_referencing_table_id_fkey_7000300 | fkey_reference_table.referencing_referencing_table_7000300 | fkey_reference_table.referencing_table_7000292
- referencing_referencing_table_id_fkey_7000301 | fkey_reference_table.referencing_referencing_table_7000301 | fkey_reference_table.referencing_table_7000293
- referencing_referencing_table_id_fkey_7000302 | fkey_reference_table.referencing_referencing_table_7000302 | fkey_reference_table.referencing_table_7000294
- referencing_referencing_table_id_fkey_7000303 | fkey_reference_table.referencing_referencing_table_7000303 | fkey_reference_table.referencing_table_7000295
- referencing_referencing_table_id_fkey_7000304 | fkey_reference_table.referencing_referencing_table_7000304 | fkey_reference_table.referencing_table_7000296
- referencing_referencing_table_id_fkey_7000305 | fkey_reference_table.referencing_referencing_table_7000305 | fkey_reference_table.referencing_table_7000297
- referencing_referencing_table_id_fkey_7000306 | fkey_reference_table.referencing_referencing_table_7000306 | fkey_reference_table.referencing_table_7000298
- referencing_referencing_table_id_fkey_7000307 | fkey_reference_table.referencing_referencing_table_7000307 | fkey_reference_table.referencing_table_7000299
+ fkey_ref_7000308                              | fkey_reference_table.referencing_table_7000308             | fkey_reference_table.referenced_table_7000307
+ fkey_ref_7000309                              | fkey_reference_table.referencing_table_7000309             | fkey_reference_table.referenced_table_7000307
+ fkey_ref_7000310                              | fkey_reference_table.referencing_table_7000310             | fkey_reference_table.referenced_table_7000307
+ fkey_ref_7000311                              | fkey_reference_table.referencing_table_7000311             | fkey_reference_table.referenced_table_7000307
+ fkey_ref_7000312                              | fkey_reference_table.referencing_table_7000312             | fkey_reference_table.referenced_table_7000307
+ fkey_ref_7000313                              | fkey_reference_table.referencing_table_7000313             | fkey_reference_table.referenced_table_7000307
+ fkey_ref_7000314                              | fkey_reference_table.referencing_table_7000314             | fkey_reference_table.referenced_table_7000307
+ fkey_ref_7000315                              | fkey_reference_table.referencing_table_7000315             | fkey_reference_table.referenced_table_7000307
+ referencing_referencing_table_id_fkey_7000316 | fkey_reference_table.referencing_referencing_table_7000316 | fkey_reference_table.referencing_table_7000308
+ referencing_referencing_table_id_fkey_7000317 | fkey_reference_table.referencing_referencing_table_7000317 | fkey_reference_table.referencing_table_7000309
+ referencing_referencing_table_id_fkey_7000318 | fkey_reference_table.referencing_referencing_table_7000318 | fkey_reference_table.referencing_table_7000310
+ referencing_referencing_table_id_fkey_7000319 | fkey_reference_table.referencing_referencing_table_7000319 | fkey_reference_table.referencing_table_7000311
+ referencing_referencing_table_id_fkey_7000320 | fkey_reference_table.referencing_referencing_table_7000320 | fkey_reference_table.referencing_table_7000312
+ referencing_referencing_table_id_fkey_7000321 | fkey_reference_table.referencing_referencing_table_7000321 | fkey_reference_table.referencing_table_7000313
+ referencing_referencing_table_id_fkey_7000322 | fkey_reference_table.referencing_referencing_table_7000322 | fkey_reference_table.referencing_table_7000314
+ referencing_referencing_table_id_fkey_7000323 | fkey_reference_table.referencing_referencing_table_7000323 | fkey_reference_table.referencing_table_7000315
 (16 rows)
 
 INSERT INTO referenced_table SELECT x, x+1 FROM generate_series(1,1000) AS f(x);
@@ -1830,8 +1866,8 @@ ALTER TABLE referencing_table_4 ADD CONSTRAINT fkey FOREIGN KEY (id) REFERENCES 
 ALTER TABLE referencing_table_4 ADD CONSTRAINT fkey_to_ref FOREIGN KEY (value_1) REFERENCES referenced_table;
 -- should fail since the data will flow to partitioning_test_4 and it has a foreign constraint to partitioning_test_0 on id column
 INSERT INTO referencing_table VALUES (0, 5);
-ERROR:  insert or update on table "referencing_table_4_7000533" violates foreign key constraint "fkey_7000533"
-DETAIL:  Key (id)=(0) is not present in table "referencing_table_0_7000517".
+ERROR:  insert or update on table "referencing_table_4_7000549" violates foreign key constraint "fkey_7000549"
+DETAIL:  Key (id)=(0) is not present in table "referencing_table_0_7000533".
 CONTEXT:  while executing command on localhost:57638
 -- should succeed on partitioning_test_0
 INSERT INTO referencing_table VALUES (0, 1);
@@ -1843,8 +1879,8 @@ SELECT * FROM referencing_table;
 
 -- should fail since partitioning_test_4 has foreign constraint to referenced_table on value_1 column
 INSERT INTO referencing_table VALUES (0, 5);
-ERROR:  insert or update on table "referencing_table_4_7000533" violates foreign key constraint "fkey_to_ref_7000533"
-DETAIL:  Key (value_1)=(5) is not present in table "referenced_table_7000505".
+ERROR:  insert or update on table "referencing_table_4_7000549" violates foreign key constraint "fkey_to_ref_7000549"
+DETAIL:  Key (value_1)=(5) is not present in table "referenced_table_7000521".
 CONTEXT:  while executing command on localhost:57638
 INSERT INTO referenced_table VALUES(5,5);
 -- should succeed since both of the foreign constraints are positive
