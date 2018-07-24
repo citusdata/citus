@@ -1,3 +1,21 @@
+### citus v7.5.0 (July 24, 2018) ###
+
+* ALTER TABLE ADD COLUMN constraint check is fixed
+
+* Fix real-time query segfault during online shard move
+
+* fixes bug where INSERT ... SELECT was allowed to update distribution column
+
+* Fixes a bug that might cause shards to have the wrong owner
+
+* GUC select_opens_transaction_block defers opening transaction block on workers
+
+* Allow non-partition columns to be in count distinct
+
+* Utils to implement DDLs for policies in future, warn about being unsupported.
+
+* Foreign Key support from hash distributed to reference tables
+
 ### citus v6.2.6 (July 06, 2018) ###
 
 * Adds support for respecting enable_hashagg in the master planner
