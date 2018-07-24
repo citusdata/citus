@@ -560,6 +560,11 @@ if ($useMitmproxy)
     die "a file already exists at $mitmFifoPath, delete it before trying again";
   }
 
+  system('lsof -i :57640');
+  if (! $?) {
+    die "cannot start mitmproxy because a process already exists on port 57640";
+  }
+
   my $childPid = fork();
 
   die("Failed to fork\n")
@@ -578,8 +583,15 @@ if ($useMitmproxy)
 }
 
 $SIG{CHLD} = sub {
-  while ((my $waitpid = waitpid(-1, WNOHANG)) > 0) {}
-}; # If, for some reason, mitmproxy dies before we do
+ # If, for some reason, mitmproxy dies before we do, we should also die!
+  while ((my $waitpid = waitpid(-1, WNOHANG)) > 0) {
+    if ($mitmPid != 0 && $mitmPid == $waitpid) {
+      warn("proxy failed with output:");
+      system('cat proxy.output');
+      die "aborting tests because mitmdump failed unexpectedly, check proxy.output";
+    }
+  }
+};
 
 # Set signals to shutdown servers
 $SIG{INT} = \&ShutdownServers;
