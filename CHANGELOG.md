@@ -1,3 +1,33 @@
+### citus v7.5.0 (July 25, 2018) ###
+
+* Adds foreign key support from hash distributed to reference tables
+
+* Adds SELECT ... FOR UPDATE support for router plannable queries
+
+* Adds support for non-partition columns in count distinct
+
+* Fixes a segfault in real-time executor during online shard move
+
+* Fixes ALTER TABLE ADD COLUMN constraint check
+
+* Fixes a bug where INSERT ... SELECT was allowed to update distribution column
+
+* Allows DDL commands to be sequentialized via `citus.multi_shard_modify_mode`
+
+* Adds support for topn_union_agg and topn_add_agg across shards
+
+* Adds support for hll_union_agg and hll_add_agg across shards
+
+* Fixes a bug that might cause shards to have a wrong owner
+
+* GUC select_opens_transaction_block defers opening transaction block on workers
+
+* Utils to implement DDLs for policies in future, warn about being unsupported
+
+* Intermediate results use separate connections to avoid interfering with tasks
+
+* Adds a node_conninfo GUC to set outgoing connection settings
+
 ### citus v6.2.6 (July 06, 2018) ###
 
 * Adds support for respecting enable_hashagg in the master planner
