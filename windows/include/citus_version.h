@@ -5,19 +5,19 @@
 #define CITUS_EDITION "community"
 
 /* Extension version expected by this Citus build */
-#define CITUS_EXTENSIONVERSION "7.5-7"
+#define CITUS_EXTENSIONVERSION "8.0-1"
 
 /* Citus major version as a string */
-#define CITUS_MAJORVERSION "7.5"
+#define CITUS_MAJORVERSION "8.0"
 
 /* Citus version as a string */
-#define CITUS_VERSION "7.5devel"
+#define CITUS_VERSION "8.0devel"
 
 /* Citus version as a number */
-#define CITUS_VERSION_NUM 70500
+#define CITUS_VERSION_NUM 80000
 
 /* A string containing the version number, platform, and C compiler */
-#define CITUS_VERSION_STR "Citus 7.5devel on x86_64-windows, compiled by Visual Studio"
+#define CITUS_VERSION_STR "Citus 8.0devel on x86_64-windows, compiled by Visual Studio"
 
 /* Define to 1 if you have the `curl' library (-lcurl). */
 #define HAVE_LIBCURL 0
