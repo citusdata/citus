@@ -37,7 +37,7 @@ output_files := $(patsubst $(citus_abs_srcdir)/output/%.source,expected/%.out, $
 # intermediate, for muscle memory backward compatibility.
 check: check-full
 # check-full triggers all tests that ought to be run routinely
-check-full: check-multi check-multi-mx check-multi-task-tracker-extra check-worker check-follower-cluster check-failure
+check-full: check-failure check-multi check-multi-mx check-multi-task-tracker-extra check-worker check-follower-cluster
 
 # using pg_regress_multi_check unnecessarily starts up multiple nodes, which isn't needed
 # for check-worker. But that's harmless besides a few cycles.

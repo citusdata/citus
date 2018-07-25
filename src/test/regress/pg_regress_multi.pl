@@ -577,7 +577,7 @@ if ($useMitmproxy)
 
   if ($mitmPid eq 0) {
     setpgrp(0,0); # we're about to spawn both a shell and a mitmdump, kill them as a group
-    exec("mitmdump --rawtcp -p 57640 --mode reverse:localhost:57638 -s mitmscripts/fluent.py --set fifo=$mitmFifoPath --set flow_detail=0 --set termlog_verbosity=warn >proxy.output 2>&1");
+    exec("mitmdump --rawtcp -p 57640 --mode reverse:localhost:57638 -s mitmscripts/fluent.py --set fifo=$mitmFifoPath --set flow_detail=0 --set termlog_verbosity=warn && echo 'mitmdump died'");
     die 'could not start mitmdump';
   }
 }
@@ -586,9 +586,7 @@ $SIG{CHLD} = sub {
  # If, for some reason, mitmproxy dies before we do, we should also die!
   while ((my $waitpid = waitpid(-1, WNOHANG)) > 0) {
     if ($mitmPid != 0 && $mitmPid == $waitpid) {
-      warn("proxy failed with output:");
-      system('cat proxy.output');
-      die "aborting tests because mitmdump failed unexpectedly, check proxy.output";
+      die "aborting tests because mitmdump failed unexpectedly";
     }
   }
 };

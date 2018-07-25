@@ -9,7 +9,6 @@ regress_pid=$!
 sleep 60 &
 sleep_pid=$!
 
-echo $regress_pid
 wait -n
 process_status=$?
 
@@ -18,9 +17,6 @@ if $(kill -0 $regress_pid); then
 
   printf 'is mitmdump running?\n'
   ps aux | grep mitm
-
-  printf '\nthe proxy output:\n'
-  cat proxy.output
 
   # what is mitmdump doing?
   sudo timeout 1 strace -p `pgrep mitmdump`

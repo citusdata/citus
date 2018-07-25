@@ -310,15 +310,15 @@ def listen_for_commands(fifoname):
             pass
         result = '\n'.join(results)
 
-        print('about to write to fifo')
+        logging.debug('about to write to fifo')
         with open(fifoname, mode='w') as fifo:
-            print('successfully opened the fifo for writing')
+            logging.debug('successfully opened the fifo for writing')
             fifo.write('{}'.format(result))
 
     while True:
-        print('about to read from fifo')
+        logging.debug('about to read from fifo')
         with open(fifoname, mode='r') as fifo:
-            print('successfully opened the fifo for reading')
+            logging.debug('successfully opened the fifo for reading')
             slug = fifo.read()
             logging.info('received new command: %s', slug.rstrip())
 
@@ -337,9 +337,9 @@ def listen_for_commands(fifoname):
             command_queue.put(slug)
             result = response_queue.get()
 
-        print('about to write to fifo')
+        logging.debug('about to write to fifo')
         with open(fifoname, mode='w') as fifo:
-            print('successfully opened the fifo for writing')
+            logging.debug('successfully opened the fifo for writing')
             fifo.write('{}\n'.format(result))
             logging.info('responded to command: %s', result.split("\n")[0])
 
