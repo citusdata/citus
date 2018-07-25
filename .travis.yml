@@ -55,7 +55,7 @@ install:
       sudo dpkg --force-confold --force-confdef --force-all -i *topn*.deb
     fi
 before_script: citus_indent --quiet --check
-script: CFLAGS=-Werror WRAPFAILURE=yes pg_travis_multi_test check
+script: CFLAGS=-Werror pg_travis_multi_test check
 after_success:
   - sync_to_enterprise
   - bash <(curl -s https://codecov.io/bash)
