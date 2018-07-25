@@ -252,6 +252,8 @@ sub revert_replace_postgres
 # partial run, even if we're now not using valgrind.
 revert_replace_postgres();
 
+my $mitmPort = 9060;
+
 # Set some default configuration options
 my $masterPort = 57636;
 my $workerCount = 2;
@@ -268,8 +270,6 @@ for (my $workerIndex = 1; $workerIndex <= $workerCount; $workerIndex++) {
     my $workerPort = $followerCoordPort + $workerIndex;
     push(@followerWorkerPorts, $workerPort);
 }
-
-my $workerBehindProxyPort = $workerPorts[1] + 2;
 
 my $host = "localhost";
 my $user = "postgres";
@@ -419,7 +419,7 @@ if ($usingWindows)
 }
 print $fh catfile($bindir, "psql")." ";
 print $fh "--variable=master_port=$masterPort ";
-print $fh "--variable=worker_2_proxy_port=$workerBehindProxyPort ";
+print $fh "--variable=worker_2_proxy_port=$mitmPort ";
 print $fh "--variable=follower_master_port=$followerCoordPort ";
 print $fh "--variable=default_user=$user ";
 print $fh "--variable=SHOW_CONTEXT=always ";
@@ -548,6 +548,16 @@ sub ShutdownServers()
     }
 }
 
+# setup the signal handler before we fork
+$SIG{CHLD} = sub {
+ # If, for some reason, mitmproxy dies before we do, we should also die!
+  while ((my $waitpid = waitpid(-1, WNOHANG)) > 0) {
+    if ($mitmPid != 0 && $mitmPid == $waitpid) {
+      die "aborting tests because mitmdump failed unexpectedly";
+    }
+  }
+};
+
 if ($useMitmproxy)
 {
   if (! -e $mitmFifoPath)
@@ -560,13 +570,12 @@ if ($useMitmproxy)
     die "a file already exists at $mitmFifoPath, delete it before trying again";
   }
 
-  system('lsof -i :57640');
+  system("lsof -i :$mitmPort");
   if (! $?) {
-    die "cannot start mitmproxy because a process already exists on port 57640";
+    die "cannot start mitmproxy because a process already exists on port $mitmPort";
   }
 
-  system('netstat --tcp -n | grep 57640');
-  system('netstat --tcp -n | grep TIME_WAIT');
+  system("netstat --tcp -n | grep $mitmPort");
 
   my $childPid = fork();
 
@@ -581,19 +590,10 @@ if ($useMitmproxy)
   if ($mitmPid eq 0) {
     print("forked, about to exec mitmdump\n");
     setpgrp(0,0); # we're about to spawn both a shell and a mitmdump, kill them as a group
-    exec("mitmdump --rawtcp -p 57640 --mode reverse:localhost:57638 -s mitmscripts/fluent.py --set fifo=$mitmFifoPath --set flow_detail=0 --set termlog_verbosity=warn && echo 'mitmdump died'");
+    exec("mitmdump --rawtcp -p $mitmPort --mode reverse:localhost:57638 -s mitmscripts/fluent.py --set fifo=$mitmFifoPath --set flow_detail=0 --set termlog_verbosity=warn && echo 'mitmdump died'");
     die 'could not start mitmdump';
   }
 }
-
-$SIG{CHLD} = sub {
- # If, for some reason, mitmproxy dies before we do, we should also die!
-  while ((my $waitpid = waitpid(-1, WNOHANG)) > 0) {
-    if ($mitmPid != 0 && $mitmPid == $waitpid) {
-      die "aborting tests because mitmdump failed unexpectedly";
-    }
-  }
-};
 
 # Set signals to shutdown servers
 $SIG{INT} = \&ShutdownServers;
