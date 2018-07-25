@@ -40,7 +40,7 @@ SELECT * FROM run_command_on_workers($$SELECT count(*) FROM pg_indexes WHERE ind
 WHERE nodeport = :worker_2_proxy_port;
  nodename  | nodeport | success | result 
 -----------+----------+---------+--------
- localhost |    57640 | t       | 0
+ localhost |     9060 | t       | 0
 (1 row)
 
 DROP TABLE index_test;
@@ -73,7 +73,7 @@ SELECT * FROM run_command_on_workers($$SELECT count(*) FROM pg_indexes WHERE ind
 WHERE nodeport = :worker_2_proxy_port;
  nodename  | nodeport | success | result 
 -----------+----------+---------+--------
- localhost |    57640 | t       | 1
+ localhost |     9060 | t       | 1
 (1 row)
 
 DROP TABLE index_test;
@@ -184,7 +184,7 @@ SELECT * FROM run_command_on_workers($$SELECT count(*) FROM pg_indexes WHERE ind
 WHERE nodeport = :worker_2_proxy_port;
  nodename  | nodeport | success | result 
 -----------+----------+---------+--------
- localhost |    57640 | t       | 4
+ localhost |     9060 | t       | 4
 (1 row)
 
 RESET SEARCH_PATH;
@@ -195,6 +195,6 @@ SELECT * FROM run_command_on_workers($$SELECT count(*) FROM pg_indexes WHERE ind
 WHERE nodeport = :worker_2_proxy_port;
  nodename  | nodeport | success | result 
 -----------+----------+---------+--------
- localhost |    57640 | t       | 0
+ localhost |     9060 | t       | 0
 (1 row)
 

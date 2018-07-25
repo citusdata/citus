@@ -40,7 +40,7 @@ SELECT citus.mitmproxy('conn.onAuthenticationOk().kill()');
 (1 row)
 
 TRUNCATE test_table;
-ERROR:  connection error: localhost:57640
+ERROR:  connection error: localhost:9060
 DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
@@ -98,7 +98,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL R
 (1 row)
 
 TRUNCATE test_table;
-ERROR:  failure on connection marked as essential: localhost:57640
+ERROR:  failure on connection marked as essential: localhost:9060
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
 -----------
@@ -155,7 +155,7 @@ TRUNCATE test_table;
 ERROR:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
-CONTEXT:  while executing command on localhost:57640
+CONTEXT:  while executing command on localhost:9060
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
 -----------
@@ -228,7 +228,7 @@ SELECT * FROM unhealthy_shard_count;
 SELECT count(*) FROM test_table;
  count 
 -------
-    12
+     8
 (1 row)
 
 -- refill the table
@@ -277,17 +277,17 @@ SELECT citus.mitmproxy('conn.onCommandComplete(command="^COMMIT").kill()');
 
 TRUNCATE test_table;
 WARNING:  connection not open
-CONTEXT:  while executing command on localhost:57640
-WARNING:  failed to commit critical transaction on localhost:57640, metadata is likely out of sync
+CONTEXT:  while executing command on localhost:9060
+WARNING:  failed to commit critical transaction on localhost:9060, metadata is likely out of sync
 WARNING:  connection not open
-CONTEXT:  while executing command on localhost:57640
+CONTEXT:  while executing command on localhost:9060
 WARNING:  connection not open
-CONTEXT:  while executing command on localhost:57640
-WARNING:  failed to commit critical transaction on localhost:57640, metadata is likely out of sync
+CONTEXT:  while executing command on localhost:9060
+WARNING:  failed to commit critical transaction on localhost:9060, metadata is likely out of sync
 WARNING:  connection not open
-CONTEXT:  while executing command on localhost:57640
-WARNING:  could not commit transaction for shard 120001 on any active node
-WARNING:  could not commit transaction for shard 120003 on any active node
+CONTEXT:  while executing command on localhost:9060
+WARNING:  could not commit transaction for shard 120002 on any active node
+WARNING:  could not commit transaction for shard 120000 on any active node
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
 -----------
@@ -358,7 +358,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="PREPARE TRANSACTION").kill()');
 
 TRUNCATE reference_table CASCADE;
 ERROR:  connection not open
-CONTEXT:  while executing command on localhost:57640
+CONTEXT:  while executing command on localhost:9060
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
 -----------
@@ -429,7 +429,7 @@ TRUNCATE reference_table CASCADE;
 ERROR:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
-CONTEXT:  while executing command on localhost:57640
+CONTEXT:  while executing command on localhost:9060
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
 -----------
@@ -499,7 +499,7 @@ SELECT citus.mitmproxy('conn.onCommandComplete(command="PREPARE TRANSACTION").ki
 
 TRUNCATE reference_table CASCADE;
 ERROR:  connection not open
-CONTEXT:  while executing command on localhost:57640
+CONTEXT:  while executing command on localhost:9060
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
 -----------
@@ -570,7 +570,7 @@ SELECT citus.mitmproxy('conn.onAuthenticationOk().kill()');
 (1 row)
 
 TRUNCATE test_table;
-ERROR:  connection error: localhost:57640
+ERROR:  connection error: localhost:9060
 DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
@@ -628,7 +628,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL R
 (1 row)
 
 TRUNCATE test_table;
-ERROR:  failure on connection marked as essential: localhost:57640
+ERROR:  failure on connection marked as essential: localhost:9060
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
 -----------
@@ -685,7 +685,7 @@ TRUNCATE test_table;
 ERROR:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
-CONTEXT:  while executing command on localhost:57640
+CONTEXT:  while executing command on localhost:9060
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
 -----------
@@ -740,7 +740,7 @@ SELECT citus.mitmproxy('conn.onCommandComplete(command="^PREPARE TRANSACTION").k
 
 TRUNCATE test_table;
 ERROR:  connection not open
-CONTEXT:  while executing command on localhost:57640
+CONTEXT:  while executing command on localhost:9060
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
 -----------
@@ -946,7 +946,7 @@ SELECT citus.mitmproxy('conn.onAuthenticationOk().kill()');
 (1 row)
 
 TRUNCATE test_table;
-ERROR:  connection error: localhost:57640
+ERROR:  connection error: localhost:9060
 DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
@@ -1004,7 +1004,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL R
 (1 row)
 
 TRUNCATE test_table;
-ERROR:  failure on connection marked as essential: localhost:57640
+ERROR:  failure on connection marked as essential: localhost:9060
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
 -----------
@@ -1061,7 +1061,7 @@ TRUNCATE test_table;
 ERROR:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
-CONTEXT:  while executing command on localhost:57640
+CONTEXT:  while executing command on localhost:9060
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
 -----------
@@ -1116,7 +1116,7 @@ SELECT citus.mitmproxy('conn.onCommandComplete(command="PREPARE TRANSACTION").ki
 
 TRUNCATE test_table;
 ERROR:  connection not open
-CONTEXT:  while executing command on localhost:57640
+CONTEXT:  while executing command on localhost:9060
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
 -----------
