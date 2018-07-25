@@ -565,6 +565,9 @@ if ($useMitmproxy)
     die "cannot start mitmproxy because a process already exists on port 57640";
   }
 
+  system('netstat --tcp -n | grep 57640');
+  system('netstat --tcp -n | grep TIME_WAIT');
+
   my $childPid = fork();
 
   die("Failed to fork\n")
@@ -576,7 +579,7 @@ if ($useMitmproxy)
   $mitmPid = $childPid;
 
   if ($mitmPid eq 0) {
-    print('forked, about to exec mitmdump');
+    print("forked, about to exec mitmdump\n");
     setpgrp(0,0); # we're about to spawn both a shell and a mitmdump, kill them as a group
     exec("mitmdump --rawtcp -p 57640 --mode reverse:localhost:57638 -s mitmscripts/fluent.py --set fifo=$mitmFifoPath --set flow_detail=0 --set termlog_verbosity=warn && echo 'mitmdump died'");
     die 'could not start mitmdump';
