@@ -32,7 +32,7 @@ PG_FUNCTION_INFO_V1(worker_drop_distributed_table);
 /*
  * worker_drop_distributed_table drops the distributed table with the given oid,
  * then, removes the associated rows from pg_dist_partition, pg_dist_shard and
- * pg_dist_placement. The function also drops the server for foreign tables.
+ * pg_dist_placement. The function does not drop the server for foreign tables.
  *
  * Note that drop fails if any dependent objects are present for any of the
  * distributed tables. Also, shard placements of the distributed tables are
@@ -72,33 +72,9 @@ worker_drop_distributed_table(PG_FUNCTION_ARGS)
 	distributedTableObject.objectId = relationId;
 	distributedTableObject.objectSubId = 0;
 
-	/* drop the server for the foreign relations */
-	if (relationKind == RELKIND_FOREIGN_TABLE)
-	{
-		ObjectAddresses *objects = new_object_addresses();
-		ObjectAddress foreignServerObject = { InvalidOid, InvalidOid, 0 };
-		ForeignTable *foreignTable = GetForeignTable(relationId);
-		Oid serverId = foreignTable->serverid;
-
-		/* prepare foreignServerObject for dropping the server */
-		foreignServerObject.classId = ForeignServerRelationId;
-		foreignServerObject.objectId = serverId;
-		foreignServerObject.objectSubId = 0;
-
-		/* add the addresses that are going to be dropped */
-		add_exact_object_address(&distributedTableObject, objects);
-		add_exact_object_address(&foreignServerObject, objects);
-
-		/* drop both the table and the server */
-		performMultipleDeletions(objects, DROP_RESTRICT,
-								 PERFORM_DELETION_INTERNAL);
-	}
-	else
-	{
-		/* drop the table with cascade since other tables may be referring to it */
-		performDeletion(&distributedTableObject, DROP_CASCADE,
-						PERFORM_DELETION_INTERNAL);
-	}
+	/* drop the table with cascade since other tables may be referring to it */
+	performDeletion(&distributedTableObject, DROP_CASCADE,
+					PERFORM_DELETION_INTERNAL);
 
 	/* iterate over shardList to delete the corresponding rows */
 	foreach(shardCell, shardList)

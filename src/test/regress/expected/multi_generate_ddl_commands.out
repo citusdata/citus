@@ -138,9 +138,9 @@ CREATE FOREIGN TABLE foreign_table (
 ) SERVER fake_fdw_server OPTIONS (encoding 'utf-8', compression 'true');
 SELECT table_ddl_command_array('foreign_table');
 NOTICE:  foreign-data wrapper "fake_fdw" does not have an extension defined
-                                                                                                             table_ddl_command_array                                                                                                              
---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- {"CREATE SERVER fake_fdw_server FOREIGN DATA WRAPPER fake_fdw","CREATE FOREIGN TABLE public.foreign_table (id bigint NOT NULL, full_name text DEFAULT ''::text NOT NULL) SERVER fake_fdw_server OPTIONS (encoding 'utf-8', compression 'true')"}
+                                                                                                                    table_ddl_command_array                                                                                                                     
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ {"CREATE SERVER IF NOT EXISTS fake_fdw_server FOREIGN DATA WRAPPER fake_fdw","CREATE FOREIGN TABLE public.foreign_table (id bigint NOT NULL, full_name text DEFAULT ''::text NOT NULL) SERVER fake_fdw_server OPTIONS (encoding 'utf-8', compression 'true')"}
 (1 row)
 
 -- propagating views is not supported

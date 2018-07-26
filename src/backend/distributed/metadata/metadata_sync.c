@@ -312,7 +312,6 @@ MetadataCreateCommands(void)
 		List *shardIntervalList = NIL;
 		List *shardCreateCommandList = NIL;
 		char *metadataCommand = NULL;
-		char *truncateTriggerCreateCommand = NULL;
 		Oid clusteredTableId = cacheEntry->relationId;
 
 		/* add the table metadata command first*/
@@ -320,11 +319,18 @@ MetadataCreateCommands(void)
 		metadataSnapshotCommandList = lappend(metadataSnapshotCommandList,
 											  metadataCommand);
 
-		/* add the truncate trigger command after the table became distributed */
-		truncateTriggerCreateCommand =
-			TruncateTriggerCreateCommand(cacheEntry->relationId);
-		metadataSnapshotCommandList = lappend(metadataSnapshotCommandList,
-											  truncateTriggerCreateCommand);
+		/*
+		 * Add the truncate trigger command after the table became distributed.
+		 * Notice that foreign tables do not support TRUNCATE trigger, therefore
+		 * trigger is not created for them.
+		 */
+		if (RegularTable(cacheEntry->relationId))
+		{
+			char *truncateTriggerCreateCommand =
+				TruncateTriggerCreateCommand(cacheEntry->relationId);
+			metadataSnapshotCommandList = lappend(metadataSnapshotCommandList,
+												  truncateTriggerCreateCommand);
+		}
 
 		/* add the pg_dist_shard{,placement} entries */
 		shardIntervalList = LoadShardIntervalList(clusteredTableId);
@@ -377,8 +383,11 @@ GetDistributedTableDDLEvents(Oid relationId)
 	commandList = lappend(commandList, metadataCommand);
 
 	/* commands to create the truncate trigger of the table */
-	truncateTriggerCreateCommand = TruncateTriggerCreateCommand(relationId);
-	commandList = lappend(commandList, truncateTriggerCreateCommand);
+	if (RegularTable(cacheEntry->relationId))
+	{
+		truncateTriggerCreateCommand = TruncateTriggerCreateCommand(relationId);
+		commandList = lappend(commandList, truncateTriggerCreateCommand);
+	}
 
 	/* commands to insert pg_dist_shard & pg_dist_placement entries */
 	shardIntervalList = LoadShardIntervalList(relationId);
