@@ -252,6 +252,11 @@ sub revert_replace_postgres
 # partial run, even if we're now not using valgrind.
 revert_replace_postgres();
 
+# n.b. previously this was on port 57640, which caused issues because that's in the
+# ephemeral port range, it was sometimes in the TIME_WAIT state which prevented us from
+# binding to it. 9060 is now used because it will never be used for client connections,
+# and there don't appear to be any other applications on this port that developers are
+# likely to be running.
 my $mitmPort = 9060;
 
 # Set some default configuration options
