@@ -52,7 +52,6 @@ worker_drop_distributed_table(PG_FUNCTION_ARGS)
 	Relation distributedRelation = NULL;
 	List *shardList = NULL;
 	ListCell *shardCell = NULL;
-	char relationKind = '\0';
 
 	CheckCitusVersion(ERROR);
 	EnsureSuperUser();
@@ -61,7 +60,6 @@ worker_drop_distributed_table(PG_FUNCTION_ARGS)
 
 	/* first check the relation type */
 	distributedRelation = relation_open(relationId, AccessShareLock);
-	relationKind = distributedRelation->rd_rel->relkind;
 	EnsureRelationKindSupported(relationId);
 
 	/* close the relation since we do not need anymore */
