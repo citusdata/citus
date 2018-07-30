@@ -22,6 +22,8 @@ use Config;
 use POSIX qw( WNOHANG mkfifo );
 use Cwd 'abs_path';
 
+my $regressdir = (File::Spec->splitpath(__FILE__))[1];
+
 sub Usage()
 {
     print "pg_regress_multi - Citus test runner\n";
@@ -580,7 +582,14 @@ if ($useMitmproxy)
     die "cannot start mitmproxy because a process already exists on port $mitmPort";
   }
 
-  system("netstat --tcp -n | grep $mitmPort");
+  if ($Config{osname} eq "linux")
+  {
+    system("netstat --tcp -n | grep $mitmPort");
+  }
+  else
+  {
+    system("netstat -p tcp -n | grep $mitmPort");
+  }
 
   my $childPid = fork();
 
@@ -595,7 +604,7 @@ if ($useMitmproxy)
   if ($mitmPid eq 0) {
     print("forked, about to exec mitmdump\n");
     setpgrp(0,0); # we're about to spawn both a shell and a mitmdump, kill them as a group
-    exec("mitmdump --rawtcp -p $mitmPort --mode reverse:localhost:57638 -s mitmscripts/fluent.py --set fifo=$mitmFifoPath --set flow_detail=0 --set termlog_verbosity=warn >proxy.output 2>&1");
+    exec("mitmdump --rawtcp -p $mitmPort --mode reverse:localhost:57638 -s $regressdir/mitmscripts/fluent.py --set fifo=$mitmFifoPath --set flow_detail=0 --set termlog_verbosity=warn >proxy.output 2>&1");
     die 'could not start mitmdump';
   }
 }
