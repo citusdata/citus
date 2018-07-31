@@ -22,6 +22,8 @@ use Config;
 use POSIX qw( WNOHANG mkfifo );
 use Cwd 'abs_path';
 
+my $regressdir = (File::Spec->splitpath(__FILE__))[1];
+
 sub Usage()
 {
     print "pg_regress_multi - Citus test runner\n";
@@ -252,6 +254,13 @@ sub revert_replace_postgres
 # partial run, even if we're now not using valgrind.
 revert_replace_postgres();
 
+# n.b. previously this was on port 57640, which caused issues because that's in the
+# ephemeral port range, it was sometimes in the TIME_WAIT state which prevented us from
+# binding to it. 9060 is now used because it will never be used for client connections,
+# and there don't appear to be any other applications on this port that developers are
+# likely to be running.
+my $mitmPort = 9060;
+
 # Set some default configuration options
 my $masterPort = 57636;
 my $workerCount = 2;
@@ -268,8 +277,6 @@ for (my $workerIndex = 1; $workerIndex <= $workerCount; $workerIndex++) {
     my $workerPort = $followerCoordPort + $workerIndex;
     push(@followerWorkerPorts, $workerPort);
 }
-
-my $workerBehindProxyPort = $workerPorts[1] + 2;
 
 my $host = "localhost";
 my $user = "postgres";
@@ -419,7 +426,7 @@ if ($usingWindows)
 }
 print $fh catfile($bindir, "psql")." ";
 print $fh "--variable=master_port=$masterPort ";
-print $fh "--variable=worker_2_proxy_port=$workerBehindProxyPort ";
+print $fh "--variable=worker_2_proxy_port=$mitmPort ";
 print $fh "--variable=follower_master_port=$followerCoordPort ";
 print $fh "--variable=default_user=$user ";
 print $fh "--variable=SHOW_CONTEXT=always ";
@@ -548,6 +555,16 @@ sub ShutdownServers()
     }
 }
 
+# setup the signal handler before we fork
+$SIG{CHLD} = sub {
+ # If, for some reason, mitmproxy dies before we do, we should also die!
+  while ((my $waitpid = waitpid(-1, WNOHANG)) > 0) {
+    if ($mitmPid != 0 && $mitmPid == $waitpid) {
+      die "aborting tests because mitmdump failed unexpectedly";
+    }
+  }
+};
+
 if ($useMitmproxy)
 {
   if (! -e $mitmFifoPath)
@@ -558,6 +575,20 @@ if ($useMitmproxy)
   if (! -p $mitmFifoPath)
   {
     die "a file already exists at $mitmFifoPath, delete it before trying again";
+  }
+
+  system("lsof -i :$mitmPort");
+  if (! $?) {
+    die "cannot start mitmproxy because a process already exists on port $mitmPort";
+  }
+
+  if ($Config{osname} eq "linux")
+  {
+    system("netstat --tcp -n | grep $mitmPort");
+  }
+  else
+  {
+    system("netstat -p tcp -n | grep $mitmPort");
   }
 
   my $childPid = fork();
@@ -571,15 +602,12 @@ if ($useMitmproxy)
   $mitmPid = $childPid;
 
   if ($mitmPid eq 0) {
+    print("forked, about to exec mitmdump\n");
     setpgrp(0,0); # we're about to spawn both a shell and a mitmdump, kill them as a group
-    exec("mitmdump --rawtcp -p 57640 --mode reverse:localhost:57638 -s mitmscripts/fluent.py --set fifo=$mitmFifoPath --set flow_detail=0 --set termlog_verbosity=warn >proxy.output 2>&1");
+    exec("mitmdump --rawtcp -p $mitmPort --mode reverse:localhost:57638 -s $regressdir/mitmscripts/fluent.py --set fifo=$mitmFifoPath --set flow_detail=0 --set termlog_verbosity=warn >proxy.output 2>&1");
     die 'could not start mitmdump';
   }
 }
-
-$SIG{CHLD} = sub {
-  while ((my $waitpid = waitpid(-1, WNOHANG)) > 0) {}
-}; # If, for some reason, mitmproxy dies before we do
 
 # Set signals to shutdown servers
 $SIG{INT} = \&ShutdownServers;
