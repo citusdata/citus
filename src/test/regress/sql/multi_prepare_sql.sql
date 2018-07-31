@@ -201,7 +201,10 @@ EXECUTE prepared_partition_column_insert(4);
 EXECUTE prepared_partition_column_insert(5);
 EXECUTE prepared_partition_column_insert(6);
 
+-- suppress notice message caused by DROP ... CASCADE to prevent pg version difference
+SET client_min_messages TO 'WARNING';
 DROP TYPE test_composite_type CASCADE;
+RESET client_min_messages;
 
 -- test router executor with prepare statements
 CREATE TABLE prepare_table (

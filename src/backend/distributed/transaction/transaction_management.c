@@ -141,11 +141,11 @@ InitializeTransactionManagement(void)
 	AdjustMaxPreparedTransactions();
 
 	/* set aside 8kb of memory for use in CoordinatedTransactionCallback */
-	CommitContext = AllocSetContextCreate(TopMemoryContext,
-										  "CommitContext",
-										  8 * 1024,
-										  8 * 1024,
-										  8 * 1024);
+	CommitContext = AllocSetContextCreateExtended(TopMemoryContext,
+												  "CommitContext",
+												  8 * 1024,
+												  8 * 1024,
+												  8 * 1024);
 }
 
 

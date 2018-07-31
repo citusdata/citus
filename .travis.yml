@@ -24,7 +24,7 @@ matrix:
   allow_failures:
     - env: PGVERSION=11
 before_install:
-  - git clone -b v0.7.8 --depth 1 https://github.com/citusdata/tools.git
+  - git clone -b v0.7.9 --depth 1 https://github.com/citusdata/tools.git
   - sudo make -C tools install
   - setup_apt
   - curl https://install.citusdata.com/community/deb.sh | sudo bash

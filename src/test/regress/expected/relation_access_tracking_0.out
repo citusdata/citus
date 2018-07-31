@@ -2,10 +2,10 @@
 --- tests around access tracking within transaction blocks
 ---
 SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int AS server_version;
- server_version 
-----------------
-              9
+SELECT substring(:'server_version', '\d+')::int >= 10 AS version_ten_or_above;
+ version_ten_or_above 
+----------------------
+ f
 (1 row)
 
 CREATE SCHEMA access_tracking;

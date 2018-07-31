@@ -960,8 +960,10 @@ SELECT create_distributed_table('sequence_deadlock_test', 'a');
 
 BEGIN;
 ALTER TABLE sequence_deadlock_test ADD COLUMN c int;
+-- suppress notice message caused by DROP ... CASCADE to prevent pg version difference
+SET client_min_messages TO 'WARNING';
 DROP SEQUENCE sequence_deadlock_test_b_seq CASCADE;
-NOTICE:  drop cascades to default for table sequence_deadlock_test column b
+RESET client_min_messages;
 END;
 DROP TABLE sequence_deadlock_test;
 -- verify enable/disable trigger all works

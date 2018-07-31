@@ -3,6 +3,8 @@
 -- there is foreign key relation between reference
 -- tables and distributed tables
 --
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int > 10 AS version_above_ten;
 
 CREATE SCHEMA test_fkey_to_ref_in_tx;
 SET search_path TO 'test_fkey_to_ref_in_tx';

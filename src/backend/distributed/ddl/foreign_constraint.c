@@ -15,12 +15,15 @@
 #include "access/htup_details.h"
 #include "catalog/namespace.h"
 #include "catalog/pg_constraint.h"
+#if (PG_VERSION_NUM < 110000)
 #include "catalog/pg_constraint_fn.h"
+#endif
 #include "catalog/pg_type.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/foreign_constraint.h"
 #include "distributed/master_protocol.h"
 #include "distributed/multi_join_order.h"
+#include "distributed/version_compat.h"
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
@@ -640,7 +643,7 @@ HeapTupleOfForeignConstraintIncludesColumn(HeapTuple heapTuple, Oid relationId,
 	{
 		AttrNumber attrNo = DatumGetInt16(columnArray[attrIdx]);
 
-		char *colName = get_relid_attribute_name(relationId, attrNo);
+		char *colName = get_attname_internal(relationId, attrNo, false);
 		if (strncmp(colName, columnName, NAMEDATALEN) == 0)
 		{
 			return true;
