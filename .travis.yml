@@ -2,7 +2,7 @@ sudo: required
 dist: trusty
 language: c
 python:
-  - "3.5"
+  - "3.6"
 cache:
   apt: true
   directories:
@@ -33,14 +33,12 @@ before_install:
   - pyenv global 3.6
   - sudo apt-get install python3-pip
   - sudo pip3 install --upgrade pip
-  - python --version
-  - python3 --version
+  - pip3 install --user pipenv
 install:
   - install_uncrustify
   - install_pg
   - install_custom_pg
-  - pip3 install --user mitmproxy==4.0.4
-  - pip3 install --user construct==2.9.45
+  - PIPENV_PIPFILE="${TRAVIS_BUILD_DIR}"/src/test/regress/Pipfile pipenv install --system --deploy
   - mitmproxy --version
   # download and install HLL and TopN manually, as custom builds won't satisfy deps
   # only install if performing non-11 build

@@ -1,19 +1,19 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "3286c9e0c4c77c82a7e1edb2f15f57044889b13497909910887b82cfb90977fc"
+            "sha256": "1d99f17bd98cc90bbebdf6da999b3d82e1530ba5dbbeeceaf50cf090b78bbd12"
         },
         "host-environment-markers": {
             "implementation_name": "cpython",
-            "implementation_version": "3.5.2",
+            "implementation_version": "3.6.6",
             "os_name": "posix",
             "platform_machine": "x86_64",
             "platform_python_implementation": "CPython",
             "platform_release": "4.4.0-130-generic",
             "platform_system": "Linux",
             "platform_version": "#156-Ubuntu SMP Thu Jun 14 08:53:28 UTC 2018",
-            "python_full_version": "3.5.2",
-            "python_version": "3.5",
+            "python_full_version": "3.6.6",
+            "python_version": "3.6",
             "sys_platform": "linux"
         },
         "pipfile-spec": 6,
