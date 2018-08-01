@@ -39,7 +39,7 @@ install:
   - install_uncrustify
   - install_pg
   - install_custom_pg
-  - pip3 install --user mitmproxy==3.0.4
+  - pip3 install --user mitmproxy==4.0.4
   - pip3 install --user construct==2.9.45
   - mitmproxy --version
   # download and install HLL and TopN manually, as custom builds won't satisfy deps
