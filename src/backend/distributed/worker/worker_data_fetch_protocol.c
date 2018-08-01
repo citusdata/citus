@@ -526,12 +526,12 @@ worker_apply_sequence_command(PG_FUNCTION_ARGS)
 
 
 /*
- * ExtractShardId tries to extract shard id from the given table name,
+ * ExtractShardIdFromTableName tries to extract shard id from the given table name,
  * and returns the shard id if table name is formatted as shard name.
  * Else, the function returns INVALID_SHARD_ID.
  */
 uint64
-ExtractShardId(const char *tableName, bool missingOk)
+ExtractShardIdFromTableName(const char *tableName, bool missingOk)
 {
 	uint64 shardId = 0;
 	char *shardIdString = NULL;
@@ -776,7 +776,7 @@ worker_append_table_to_shard(PG_FUNCTION_ARGS)
 	 * the transaction for this function commits, this lock will automatically
 	 * be released. This ensures appends to a shard happen in a serial manner.
 	 */
-	shardId = ExtractShardId(shardTableName, false);
+	shardId = ExtractShardIdFromTableName(shardTableName, false);
 	LockShardResource(shardId, AccessExclusiveLock);
 
 	/* copy remote table's data to this node */

@@ -99,6 +99,7 @@ extern ShardPlacement * LoadShardPlacement(uint64 shardId, uint64 placementId);
 extern DistTableCacheEntry * DistributedTableCacheEntry(Oid distributedRelationId);
 extern int GetLocalGroupId(void);
 extern List * DistTableOidList(void);
+extern Oid LookupShardRelation(int64 shardId, bool missing_ok);
 extern List * ShardPlacementList(uint64 shardId);
 extern void CitusInvalidateRelcacheByRelid(Oid relationId);
 extern void CitusInvalidateRelcacheByShardId(int64 shardId);
@@ -151,6 +152,8 @@ extern Oid CitusReadIntermediateResultFuncId(void);
 extern Oid CitusExtraDataContainerFuncId(void);
 extern Oid CitusWorkerHashFunctionId(void);
 extern Oid CitusTextSendAsJsonbFunctionId(void);
+extern Oid PgTableVisibleFuncId(void);
+extern Oid CitusTableVisibleFuncId(void);
 
 /* enum oids */
 extern Oid PrimaryNodeRoleId(void);
