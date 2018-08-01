@@ -79,5 +79,30 @@ FROM information_schema.check_constraints cc,
 WHERE cc.constraint_schema = ccu.constraint_schema AND
       cc.constraint_name = ccu.constraint_name
 ORDER BY cc.constraint_name ASC;
+
+CREATE VIEW index_attrs AS
+WITH indexoid AS (
+	SELECT c.oid,
+	  n.nspname,
+	  c.relname
+	FROM pg_catalog.pg_class c
+	     LEFT JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+	WHERE pg_catalog.pg_table_is_visible(c.oid)
+	ORDER BY 2, 3
+)
+SELECT
+  indexoid.nspname AS "nspname",
+  indexoid.relname AS "relname",
+  a.attrelid AS "relid",
+  a.attname AS "Column",
+  pg_catalog.format_type(a.atttypid, a.atttypmod) AS "Type",
+  pg_catalog.pg_get_indexdef(a.attrelid, a.attnum, TRUE) AS "Definition"
+FROM pg_catalog.pg_attribute a
+LEFT JOIN indexoid ON (a.attrelid = indexoid.oid)
+WHERE true
+	AND a.attnum > 0
+	AND NOT a.attisdropped
+ORDER BY a.attrelid, a.attnum;
+
 $desc_views$
 );

@@ -463,9 +463,11 @@ SET search_path TO public;
 CREATE INDEX index1 ON test_schema_support.nation_hash(n_name);
 
 --verify INDEX is created
-\d test_schema_support.index1
+SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
+    relid = 'test_schema_support.index1'::regclass;
 \c - - - :worker_1_port
-\d test_schema_support.index1_1190003
+SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
+    relid = 'test_schema_support.index1_1190003'::regclass;
 \c - - - :master_port
 
 -- DROP index
@@ -484,9 +486,11 @@ SET search_path TO test_schema_support;
 CREATE INDEX index1 ON nation_hash(n_name);
 
 --verify INDEX is created
-\d test_schema_support.index1
+SELECT "Column", "Type", "Definition" FROM public.index_attrs WHERE
+    relid = 'test_schema_support.index1'::regclass;
 \c - - - :worker_1_port
-\d test_schema_support.index1_1190003
+SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
+    relid = 'test_schema_support.index1_1190003'::regclass;
 \c - - - :master_port
 
 -- DROP index

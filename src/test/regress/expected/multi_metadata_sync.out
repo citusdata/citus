@@ -282,19 +282,19 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_testing_sch
  col_3  | bigint  | not null default nextval('mx_testing_schema.mx_test_table_col_3_seq'::regclass)
 (3 rows)
 
-\d mx_testing_schema.mx_test_table_col_1_key
-Index "mx_testing_schema.mx_test_table_col_1_key"
+SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
+    relid = 'mx_testing_schema.mx_test_table_col_1_key'::regclass;
  Column |  Type   | Definition 
 --------+---------+------------
  col_1  | integer | col_1
-unique, btree, for table "mx_testing_schema.mx_test_table"
+(1 row)
 
-\d mx_testing_schema.mx_index
-Index "mx_testing_schema.mx_index"
+SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
+    relid = 'mx_testing_schema.mx_index'::regclass;
  Column | Type | Definition 
 --------+------+------------
  col_2  | text | col_2
-btree, for table "mx_testing_schema.mx_test_table"
+(1 row)
 
 -- Check that pg_dist_colocation is not synced
 SELECT * FROM pg_dist_colocation ORDER BY colocationid;
@@ -421,19 +421,19 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_testing_sch
  col_3  | bigint  | not null default nextval('mx_testing_schema.mx_test_table_col_3_seq'::regclass)
 (3 rows)
 
-\d mx_testing_schema.mx_test_table_col_1_key
-Index "mx_testing_schema.mx_test_table_col_1_key"
+SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
+    relid = 'mx_testing_schema.mx_test_table_col_1_key'::regclass;
  Column |  Type   | Definition 
 --------+---------+------------
  col_1  | integer | col_1
-unique, btree, for table "mx_testing_schema.mx_test_table"
+(1 row)
 
-\d mx_testing_schema.mx_index
-Index "mx_testing_schema.mx_index"
+SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
+    relid = 'mx_testing_schema.mx_index'::regclass;
  Column | Type | Definition 
 --------+------+------------
  col_2  | text | col_2
-btree, for table "mx_testing_schema.mx_test_table"
+(1 row)
 
 SELECT count(*) FROM pg_trigger WHERE tgrelid='mx_testing_schema.mx_test_table'::regclass;
  count 
@@ -560,19 +560,19 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_test_schema
  col2   | text    | 
 (2 rows)
 
-\d mx_test_schema_1.mx_table_1_col1_key
-Index "mx_test_schema_1.mx_table_1_col1_key"
+SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
+    relid = 'mx_test_schema_1.mx_table_1_col1_key'::regclass;
  Column |  Type   | Definition 
 --------+---------+------------
  col1   | integer | col1
-unique, btree, for table "mx_test_schema_1.mx_table_1"
+(1 row)
 
-\d mx_test_schema_1.mx_index_1
-Index "mx_test_schema_1.mx_index_1"
+SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
+    relid = 'mx_test_schema_1.mx_index_1'::regclass;
  Column |  Type   | Definition 
 --------+---------+------------
  col1   | integer | col1
-btree, for table "mx_test_schema_1.mx_table_1"
+(1 row)
 
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_test_schema_2.mx_table_2'::regclass;
  Column |  Type   | Modifiers 
@@ -581,12 +581,12 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_test_schema
  col2   | text    | 
 (2 rows)
 
-\d mx_test_schema_2.mx_index_2
-Index "mx_test_schema_2.mx_index_2"
+SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
+    relid = 'mx_test_schema_2.mx_index_2'::regclass;
  Column | Type | Definition 
 --------+------+------------
  col2   | text | col2
-btree, for table "mx_test_schema_2.mx_table_2"
+(1 row)
 
 SELECT "Constraint", "Definition" FROM table_fkeys WHERE relid='mx_test_schema_2.mx_table_2'::regclass;
     Constraint    |                           Definition                            
@@ -722,26 +722,30 @@ SET client_min_messages TO 'ERROR';
 CREATE INDEX mx_index_3 ON mx_test_schema_2.mx_table_2 USING hash (col1);
 ALTER TABLE mx_test_schema_2.mx_table_2 ADD CONSTRAINT mx_table_2_col1_key UNIQUE (col1);
 \c - - - :worker_1_port
-\d mx_test_schema_2.mx_index_3
-Index "mx_test_schema_2.mx_index_3"
+SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
+    relid = 'mx_test_schema_2.mx_index_3'::regclass;
  Column |  Type   | Definition 
 --------+---------+------------
  col1   | integer | col1
-hash, for table "mx_test_schema_2.mx_table_2"
+(1 row)
 
-\d mx_test_schema_2.mx_table_2_col1_key
-Index "mx_test_schema_2.mx_table_2_col1_key"
+SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
+    relid = 'mx_test_schema_2.mx_table_2_col1_key'::regclass;
  Column |  Type   | Definition 
 --------+---------+------------
  col1   | integer | col1
-unique, btree, for table "mx_test_schema_2.mx_table_2"
+(1 row)
 
 -- Check that DROP INDEX statement is propagated
 \c - - - :master_port
 SET citus.multi_shard_commit_protocol TO '2pc';
 DROP INDEX mx_test_schema_2.mx_index_3;
 \c - - - :worker_1_port
-\d mx_test_schema_2.mx_index_3
+SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
+    relid = 'mx_test_schema_2.mx_index_3'::regclass;
+ERROR:  relation "mx_test_schema_2.mx_index_3" does not exist
+LINE 2:     relid = 'mx_test_schema_2.mx_index_3'::regclass;
+                    ^
 -- Check that ALTER TABLE statements are propagated
 \c - - - :master_port
 SET citus.multi_shard_commit_protocol TO '2pc';
@@ -1293,12 +1297,12 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_ref'::regcl
  col_3  | numeric | default 0
 (3 rows)
 
-\d mx_ref_index
-  Index "public.mx_ref_index"
+SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
+    relid = 'mx_ref_index'::regclass;
  Column |  Type   | Definition 
 --------+---------+------------
  col_1  | integer | col_1
-btree, for table "public.mx_ref"
+(1 row)
 
 \c - - - :worker_1_port
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_ref'::regclass;
@@ -1309,20 +1313,28 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_ref'::regcl
  col_3  | numeric | default 0
 (3 rows)
 
-\d mx_ref_index
-  Index "public.mx_ref_index"
+SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
+    relid = 'mx_ref_index'::regclass;
  Column |  Type   | Definition 
 --------+---------+------------
  col_1  | integer | col_1
-btree, for table "public.mx_ref"
+(1 row)
 
 	
 -- Check that metada is cleaned successfully upon drop table
 \c - - - :master_port
 DROP TABLE mx_ref;
-\d mx_ref
+SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
+    relid = 'mx_ref_index'::regclass;
+ERROR:  relation "mx_ref_index" does not exist
+LINE 2:     relid = 'mx_ref_index'::regclass;
+                    ^
 \c - - - :worker_1_port
-\d mx_ref
+SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
+    relid = 'mx_ref_index'::regclass;
+ERROR:  relation "mx_ref_index" does not exist
+LINE 2:     relid = 'mx_ref_index'::regclass;
+                    ^
 SELECT * FROM pg_dist_shard WHERE shardid=:ref_table_shardid;
  logicalrelid | shardid | shardstorage | shardminvalue | shardmaxvalue 
 --------------+---------+--------------+---------------+---------------

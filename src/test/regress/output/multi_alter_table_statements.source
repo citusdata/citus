@@ -479,12 +479,12 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.lineite
  first           | integer               | 
 (18 rows)
 
-\d temp_index_2
-   Index "public.temp_index_2"
+SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
+    relid = 'temp_index_2'::regclass;
    Column   |  Type  | Definition 
 ------------+--------+------------
  l_orderkey | bigint | l_orderkey
-btree, for table "public.lineitem_alter"
+(1 row)
 
 ALTER TABLE lineitem_alter DROP COLUMN first;
 DROP INDEX temp_index_2;

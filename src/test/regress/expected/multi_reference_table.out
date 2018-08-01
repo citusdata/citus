@@ -1336,13 +1336,13 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='reference_sche
  value_5 | double precision            | 
 (4 rows)
 
-\d reference_schema.reference_index_2
-Index "reference_schema.reference_index_2"
+SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
+    relid = 'reference_schema.reference_index_2'::regclass;
  Column  |       Type       | Definition 
 ---------+------------------+------------
  value_2 | double precision | value_2
  value_3 | text             | value_3
-btree, for table "reference_schema.reference_table_ddl"
+(2 rows)
 
 -- also to the shard placements
 \c - - - :worker_1_port
@@ -1355,13 +1355,13 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='reference_sche
  value_5 | double precision            | 
 (4 rows)
 
-\d reference_schema.reference_index_2_1250019
-Index "reference_schema.reference_index_2_1250019"
+SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
+    relid = 'reference_schema.reference_index_2_1250019'::regclass;
  Column  |       Type       | Definition 
 ---------+------------------+------------
  value_2 | double precision | value_2
  value_3 | text             | value_3
-btree, for table "reference_schema.reference_table_ddl_1250019"
+(2 rows)
 
 \c - - - :master_port
 DROP INDEX reference_schema.reference_index_2;

@@ -90,8 +90,10 @@ SELECT * FROM pg_dist_partition ORDER BY logicalrelid;
 SELECT * FROM pg_dist_shard ORDER BY shardid;
 SELECT * FROM pg_dist_shard_placement ORDER BY shardid, nodename, nodeport;
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_testing_schema.mx_test_table'::regclass;
-\d mx_testing_schema.mx_test_table_col_1_key
-\d mx_testing_schema.mx_index
+SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
+    relid = 'mx_testing_schema.mx_test_table_col_1_key'::regclass;
+SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
+    relid = 'mx_testing_schema.mx_index'::regclass;
 
 -- Check that pg_dist_colocation is not synced
 SELECT * FROM pg_dist_colocation ORDER BY colocationid;
@@ -140,8 +142,10 @@ SELECT * FROM pg_dist_partition ORDER BY logicalrelid;
 SELECT * FROM pg_dist_shard ORDER BY shardid;
 SELECT * FROM pg_dist_shard_placement ORDER BY shardid, nodename, nodeport;
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_testing_schema.mx_test_table'::regclass;
-\d mx_testing_schema.mx_test_table_col_1_key
-\d mx_testing_schema.mx_index
+SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
+    relid = 'mx_testing_schema.mx_test_table_col_1_key'::regclass;
+SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
+    relid = 'mx_testing_schema.mx_index'::regclass;
 SELECT count(*) FROM pg_trigger WHERE tgrelid='mx_testing_schema.mx_test_table'::regclass;
 
 -- Make sure that start_metadata_sync_to_node cannot be called inside a transaction
@@ -206,11 +210,14 @@ CREATE INDEX mx_index_2 ON mx_test_schema_2.mx_table_2 (col2);
 ALTER TABLE mx_test_schema_2.mx_table_2 ADD CONSTRAINT mx_fk_constraint FOREIGN KEY(col1) REFERENCES mx_test_schema_1.mx_table_1(col1);
 
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_test_schema_1.mx_table_1'::regclass;
-\d mx_test_schema_1.mx_table_1_col1_key
-\d mx_test_schema_1.mx_index_1
+SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
+    relid = 'mx_test_schema_1.mx_table_1_col1_key'::regclass;
+SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
+    relid = 'mx_test_schema_1.mx_index_1'::regclass;
 
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_test_schema_2.mx_table_2'::regclass;
-\d mx_test_schema_2.mx_index_2
+SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
+    relid = 'mx_test_schema_2.mx_index_2'::regclass;
 SELECT "Constraint", "Definition" FROM table_fkeys WHERE relid='mx_test_schema_2.mx_table_2'::regclass;
 
 SELECT create_distributed_table('mx_test_schema_1.mx_table_1', 'col1');
@@ -281,15 +288,18 @@ SET client_min_messages TO 'ERROR';
 CREATE INDEX mx_index_3 ON mx_test_schema_2.mx_table_2 USING hash (col1);
 ALTER TABLE mx_test_schema_2.mx_table_2 ADD CONSTRAINT mx_table_2_col1_key UNIQUE (col1);
 \c - - - :worker_1_port
-\d mx_test_schema_2.mx_index_3
-\d mx_test_schema_2.mx_table_2_col1_key
+SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
+    relid = 'mx_test_schema_2.mx_index_3'::regclass;
+SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
+    relid = 'mx_test_schema_2.mx_table_2_col1_key'::regclass;
 
 -- Check that DROP INDEX statement is propagated
 \c - - - :master_port
 SET citus.multi_shard_commit_protocol TO '2pc';
 DROP INDEX mx_test_schema_2.mx_index_3;
 \c - - - :worker_1_port
-\d mx_test_schema_2.mx_index_3
+SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
+    relid = 'mx_test_schema_2.mx_index_3'::regclass;
 
 -- Check that ALTER TABLE statements are propagated
 \c - - - :master_port
@@ -581,19 +591,24 @@ SELECT shardid AS ref_table_shardid FROM pg_dist_shard WHERE logicalrelid='mx_re
 ALTER TABLE mx_ref ADD COLUMN col_3 NUMERIC DEFAULT 0;
 CREATE INDEX mx_ref_index ON mx_ref(col_1);
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_ref'::regclass;
-\d mx_ref_index
+SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
+    relid = 'mx_ref_index'::regclass;
+
 
 \c - - - :worker_1_port
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_ref'::regclass;
-\d mx_ref_index
+SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
+    relid = 'mx_ref_index'::regclass;
 	
 -- Check that metada is cleaned successfully upon drop table
 \c - - - :master_port
 DROP TABLE mx_ref;
-\d mx_ref
+SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
+    relid = 'mx_ref_index'::regclass;
 
 \c - - - :worker_1_port
-\d mx_ref
+SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
+    relid = 'mx_ref_index'::regclass;
 SELECT * FROM pg_dist_shard WHERE shardid=:ref_table_shardid;
 SELECT * FROM pg_dist_shard_placement WHERE shardid=:ref_table_shardid;
 

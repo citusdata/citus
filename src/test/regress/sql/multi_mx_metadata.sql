@@ -33,8 +33,10 @@ SELECT count(*) FROM pg_dist_transaction;
 \c - - - :worker_1_port
 
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='distributed_mx_table'::regclass;
-\d distributed_mx_table_pkey
-\d distributed_mx_table_value_idx
+SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
+    relid = 'distributed_mx_table_pkey'::regclass;
+SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
+    relid = 'distributed_mx_table_value_idx'::regclass;
 
 SELECT repmodel FROM pg_dist_partition
 WHERE logicalrelid = 'distributed_mx_table'::regclass;
@@ -45,8 +47,10 @@ WHERE logicalrelid = 'distributed_mx_table'::regclass;
 \c - - - :worker_2_port
 
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='distributed_mx_table'::regclass;
-\d distributed_mx_table_pkey
-\d distributed_mx_table_value_idx
+SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
+    relid = 'distributed_mx_table_pkey'::regclass;
+SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
+    relid = 'distributed_mx_table_value_idx'::regclass;
 
 SELECT repmodel FROM pg_dist_partition
 WHERE logicalrelid = 'distributed_mx_table'::regclass;

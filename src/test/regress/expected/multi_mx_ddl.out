@@ -36,18 +36,13 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_ddl_table':
  version | integer | not null default 1
 (3 rows)
 
-\d ddl_test*_index
-Index "public.ddl_test_concurrent_index"
- Column |  Type   | Definition 
---------+---------+------------
- value  | integer | value
-btree, for table "public.mx_ddl_table"
-
- Index "public.ddl_test_index"
- Column |  Type   | Definition 
---------+---------+------------
- value  | integer | value
-btree, for table "public.mx_ddl_table"
+SELECT "relname", "Column", "Type", "Definition" FROM index_attrs WHERE
+    relname LIKE 'ddl_test%_index';
+          relname          | Column |  Type   | Definition 
+---------------------------+--------+---------+------------
+ ddl_test_index            | value  | integer | value
+ ddl_test_concurrent_index | value  | integer | value
+(2 rows)
 
 \c - - - :worker_1_port
 -- make sure we don't break the following tests by hiding the shard names
@@ -60,18 +55,13 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_ddl_table':
  version | integer | not null default 1
 (3 rows)
 
-\d ddl_test*_index
-Index "public.ddl_test_concurrent_index"
- Column |  Type   | Definition 
---------+---------+------------
- value  | integer | value
-btree, for table "public.mx_ddl_table"
-
- Index "public.ddl_test_index"
- Column |  Type   | Definition 
---------+---------+------------
- value  | integer | value
-btree, for table "public.mx_ddl_table"
+SELECT "relname", "Column", "Type", "Definition" FROM index_attrs WHERE
+    relname LIKE 'ddl_test%_index';
+          relname          | Column |  Type   | Definition 
+---------------------------+--------+---------+------------
+ ddl_test_index            | value  | integer | value
+ ddl_test_concurrent_index | value  | integer | value
+(2 rows)
 
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_ddl_table_1220088'::regclass;
  Column  |  Type   |     Modifiers      
@@ -81,18 +71,13 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_ddl_table_1
  version | integer | not null default 1
 (3 rows)
 
-\d ddl_test*_index_1220088
-Index "public.ddl_test_concurrent_index_1220088"
- Column |  Type   | Definition 
---------+---------+------------
- value  | integer | value
-btree, for table "public.mx_ddl_table_1220088"
-
-Index "public.ddl_test_index_1220088"
- Column |  Type   | Definition 
---------+---------+------------
- value  | integer | value
-btree, for table "public.mx_ddl_table_1220088"
+SELECT "relname", "Column", "Type", "Definition" FROM index_attrs WHERE
+    relname LIKE 'ddl_test%_index_1220088';
+              relname              | Column |  Type   | Definition 
+-----------------------------------+--------+---------+------------
+ ddl_test_index_1220088            | value  | integer | value
+ ddl_test_concurrent_index_1220088 | value  | integer | value
+(2 rows)
 
 \c - - - :worker_2_port
 -- make sure we don't break the following tests by hiding the shard names
@@ -105,18 +90,13 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_ddl_table':
  version | integer | not null default 1
 (3 rows)
 
-\d ddl_test*_index
-Index "public.ddl_test_concurrent_index"
- Column |  Type   | Definition 
---------+---------+------------
- value  | integer | value
-btree, for table "public.mx_ddl_table"
-
- Index "public.ddl_test_index"
- Column |  Type   | Definition 
---------+---------+------------
- value  | integer | value
-btree, for table "public.mx_ddl_table"
+SELECT "relname", "Column", "Type", "Definition" FROM index_attrs WHERE
+    relname LIKE 'ddl_test%_index';
+          relname          | Column |  Type   | Definition 
+---------------------------+--------+---------+------------
+ ddl_test_index            | value  | integer | value
+ ddl_test_concurrent_index | value  | integer | value
+(2 rows)
 
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_ddl_table_1220089'::regclass;
  Column  |  Type   |     Modifiers      
@@ -126,18 +106,13 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_ddl_table_1
  version | integer | not null default 1
 (3 rows)
 
-\d ddl_test*_index_1220089
-Index "public.ddl_test_concurrent_index_1220089"
- Column |  Type   | Definition 
---------+---------+------------
- value  | integer | value
-btree, for table "public.mx_ddl_table_1220089"
-
-Index "public.ddl_test_index_1220089"
- Column |  Type   | Definition 
---------+---------+------------
- value  | integer | value
-btree, for table "public.mx_ddl_table_1220089"
+SELECT "relname", "Column", "Type", "Definition" FROM index_attrs WHERE
+    relname LIKE 'ddl_test%_index_1220089';
+              relname              | Column |  Type   | Definition 
+-----------------------------------+--------+---------+------------
+ ddl_test_index_1220089            | value  | integer | value
+ ddl_test_concurrent_index_1220089 | value  | integer | value
+(2 rows)
 
 INSERT INTO mx_ddl_table VALUES (37, 78, 2);
 INSERT INTO mx_ddl_table VALUES (38, 78);
