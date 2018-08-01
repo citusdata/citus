@@ -65,9 +65,9 @@ class Message:
         if not hasattr(cls, "_msgtypes"):
             raise Exception('Do not call this method on Message, call it on a subclass')
         if isinstance(msg, cl.ListContainer):
-            return ValueError("do not call this on a list of messages")
+            raise ValueError("do not call this on a list of messages")
         if not isinstance(msg, cl.Container):
-            return ValueError("must call this on a parsed message")
+            raise ValueError("must call this on a parsed message")
         if not hasattr(msg, "_type"):
             return "Anonymous"
         if msg._type and msg._type not in cls._classes:
