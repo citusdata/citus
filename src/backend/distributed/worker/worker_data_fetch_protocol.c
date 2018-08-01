@@ -62,7 +62,6 @@ static bool ReceiveRegularFile(const char *nodeName, uint32 nodePort,
 static void ReceiveResourceCleanup(int32 connectionId, const char *filename,
 								   int32 fileDescriptor);
 static void CitusDeleteFile(const char *filename);
-static uint64 ExtractShardId(const char *tableName);
 static bool check_log_statement(List *stmt_list);
 static void AlterSequenceMinMax(Oid sequenceId, char *schemaName, char *sequenceName);
 static void SetDefElemArg(AlterSeqStmt *statement, const char *name, Node *arg);
@@ -526,9 +525,13 @@ worker_apply_sequence_command(PG_FUNCTION_ARGS)
 }
 
 
-/* Extracts shard id from the given table name, and returns it. */
-static uint64
-ExtractShardId(const char *tableName)
+/*
+ * ExtractShardId tries to extract shard id from the given table name,
+ * and returns the shard id if table name is formatted as shard name.
+ * Else, the function returns INVALID_SHARD_ID.
+ */
+uint64
+ExtractShardId(const char *tableName, bool missingOk)
 {
 	uint64 shardId = 0;
 	char *shardIdString = NULL;
@@ -536,11 +539,16 @@ ExtractShardId(const char *tableName)
 
 	/* find the last underscore and increment for shardId string */
 	shardIdString = strrchr(tableName, SHARD_NAME_SEPARATOR);
-	if (shardIdString == NULL)
+	if (shardIdString == NULL && !missingOk)
 	{
 		ereport(ERROR, (errmsg("could not extract shardId from table name \"%s\"",
 							   tableName)));
 	}
+	else if (shardIdString == NULL && missingOk)
+	{
+		return INVALID_SHARD_ID;
+	}
+
 	shardIdString++;
 
 	errno = 0;
@@ -548,8 +556,15 @@ ExtractShardId(const char *tableName)
 
 	if (errno != 0 || (*shardIdStringEnd != '\0'))
 	{
-		ereport(ERROR, (errmsg("could not extract shardId from table name \"%s\"",
-							   tableName)));
+		if (!missingOk)
+		{
+			ereport(ERROR, (errmsg("could not extract shardId from table name \"%s\"",
+								   tableName)));
+		}
+		else
+		{
+			return INVALID_SHARD_ID;
+		}
 	}
 
 	return shardId;
@@ -761,7 +776,7 @@ worker_append_table_to_shard(PG_FUNCTION_ARGS)
 	 * the transaction for this function commits, this lock will automatically
 	 * be released. This ensures appends to a shard happen in a serial manner.
 	 */
-	shardId = ExtractShardId(shardTableName);
+	shardId = ExtractShardId(shardTableName, false);
 	LockShardResource(shardId, AccessExclusiveLock);
 
 	/* copy remote table's data to this node */
