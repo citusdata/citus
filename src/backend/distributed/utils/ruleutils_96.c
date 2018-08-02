@@ -6660,6 +6660,7 @@ get_from_clause_item(Node *jtnode, Query *query, deparse_context *context)
 		deparse_columns *colinfo = deparse_columns_fetch(varno, dpns);
 		RangeTblFunction *rtfunc1 = NULL;
 		bool		printalias;
+		CitusRTEKind rteKind = GetRangeTblKind(rte);
 
 		if (rte->lateral)
 			appendStringInfoString(buf, "LATERAL ");
@@ -6876,8 +6877,11 @@ get_from_clause_item(Node *jtnode, Query *query, deparse_context *context)
 		}
 
 		/* Tablesample clause must go after any alias */
-		if (rte->rtekind == RTE_RELATION && rte->tablesample)
+		if ((rteKind == CITUS_RTE_RELATION || rteKind == CITUS_RTE_SHARD) &&
+			rte->tablesample)
+		{
 			get_tablesample_def(rte->tablesample, context);
+		}
 	}
 	else if (IsA(jtnode, JoinExpr))
 	{
