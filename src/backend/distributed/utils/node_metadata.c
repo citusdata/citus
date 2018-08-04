@@ -256,6 +256,9 @@ master_disable_node(PG_FUNCTION_ARGS)
 
 	CheckCitusVersion(ERROR);
 
+	EnsureCoordinator();
+	EnsureSuperUser();
+
 	/* take an exclusive lock on pg_dist_node to serialize pg_dist_node changes */
 	LockRelationOid(DistNodeRelationId(), ExclusiveLock);
 
@@ -300,6 +303,9 @@ master_activate_node(PG_FUNCTION_ARGS)
 	Datum nodeRecord = 0;
 
 	CheckCitusVersion(ERROR);
+
+	EnsureCoordinator();
+	EnsureSuperUser();
 
 	nodeRecord = ActivateNode(nodeNameString, nodePort);
 

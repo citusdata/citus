@@ -57,6 +57,13 @@ SELECT master_get_active_worker_nodes();
 -- try to disable a node which does not exist and see that an error is thrown
 SELECT master_disable_node('localhost.noexist', 2345);
 
+-- try to disable a node via non-super user
+CREATE USER non_super_user;
+\c - non_super_user - :master_port
+SELECT master_disable_node('localhost', :worker_1_port);
+\c - postgres - :master_port
+SELECT master_get_active_worker_nodes();
+
 -- restore the node for next tests
 SELECT isactive FROM master_activate_node('localhost', :worker_2_port);
 
