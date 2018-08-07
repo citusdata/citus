@@ -106,6 +106,7 @@ OBJS = src/backend/distributed/shared_library_init.o \
      src/backend/distributed/utils/ruleutils_96.o \
      src/backend/distributed/utils/shardinterval_utils.o \
      src/backend/distributed/utils/statistics_collection.o \
+     src/backend/distributed/worker/worker_shard_visibility.o \
      src/backend/distributed/worker/task_tracker.o \
      src/backend/distributed/worker/task_tracker_protocol.o \
      src/backend/distributed/worker/worker_data_fetch_protocol.o \

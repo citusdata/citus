@@ -134,6 +134,8 @@ typedef struct MetadataCacheData
 	Oid primaryNodeRoleId;
 	Oid secondaryNodeRoleId;
 	Oid unavailableNodeRoleId;
+	Oid pgTableIsVisibleFuncId;
+	Oid citusTableIsVisibleFuncId;
 } MetadataCacheData;
 
 
@@ -198,7 +200,6 @@ static void InvalidateNodeRelationCacheCallback(Datum argument, Oid relationId);
 static void InvalidateLocalGroupIdRelationCacheCallback(Datum argument, Oid relationId);
 static HeapTuple LookupDistPartitionTuple(Relation pgDistPartition, Oid relationId);
 static List * LookupDistShardTuples(Oid relationId);
-static Oid LookupShardRelation(int64 shardId);
 static void GetPartitionTypeInputInfo(char *partitionKeyString, char partitionMethod,
 									  Oid *columnTypeId, int32 *columnTypeMod,
 									  Oid *intervalTypeId, int32 *intervalTypeMod);
@@ -706,7 +707,7 @@ LookupShardCacheEntry(int64 shardId)
 		 * know that the shard has to be in the cache if it exists.  If the
 		 * shard does *not* exist LookupShardRelation() will error out.
 		 */
-		Oid relationId = LookupShardRelation(shardId);
+		Oid relationId = LookupShardRelation(shardId, false);
 
 		/* trigger building the cache for the shard id */
 		LookupDistTableCacheEntry(relationId);
@@ -724,7 +725,7 @@ LookupShardCacheEntry(int64 shardId)
 		if (!shardEntry->tableEntry->isValid)
 		{
 			Oid oldRelationId = shardEntry->tableEntry->relationId;
-			Oid currentRelationId = LookupShardRelation(shardId);
+			Oid currentRelationId = LookupShardRelation(shardId, false);
 
 			/*
 			 * The relation OID to which the shard belongs could have changed,
@@ -2052,6 +2053,42 @@ CitusTextSendAsJsonbFunctionId(void)
 
 
 /*
+ * PgTableVisibleFuncId returns oid of the pg_table_is_visible function.
+ */
+Oid
+PgTableVisibleFuncId(void)
+{
+	if (MetadataCache.pgTableIsVisibleFuncId == InvalidOid)
+	{
+		const int argCount = 1;
+
+		MetadataCache.pgTableIsVisibleFuncId =
+			FunctionOid("pg_catalog", "pg_table_is_visible", argCount);
+	}
+
+	return MetadataCache.pgTableIsVisibleFuncId;
+}
+
+
+/*
+ * CitusTableVisibleFuncId returns oid of the citus_table_is_visible function.
+ */
+Oid
+CitusTableVisibleFuncId(void)
+{
+	if (MetadataCache.citusTableIsVisibleFuncId == InvalidOid)
+	{
+		const int argCount = 1;
+
+		MetadataCache.citusTableIsVisibleFuncId =
+			FunctionOid("pg_catalog", "citus_table_is_visible", argCount);
+	}
+
+	return MetadataCache.citusTableIsVisibleFuncId;
+}
+
+
+/*
  * CitusExtensionOwner() returns the owner of the 'citus' extension. That user
  * is, amongst others, used to perform actions a normal user might not be
  * allowed to perform.
@@ -3263,10 +3300,11 @@ LookupDistShardTuples(Oid relationId)
 /*
  * LookupShardRelation returns the logical relation oid a shard belongs to.
  *
- * Errors out if the shardId does not exist.
+ * Errors out if the shardId does not exist and missingOk is false. Returns
+ * InvalidOid if the shardId does not exist and missingOk is true.
  */
-static Oid
-LookupShardRelation(int64 shardId)
+Oid
+LookupShardRelation(int64 shardId, bool missingOk)
 {
 	SysScanDesc scanDescriptor = NULL;
 	ScanKeyData scanKey[1];
@@ -3284,14 +3322,21 @@ LookupShardRelation(int64 shardId)
 										NULL, scanKeyCount, scanKey);
 
 	heapTuple = systable_getnext(scanDescriptor);
-	if (!HeapTupleIsValid(heapTuple))
+	if (!HeapTupleIsValid(heapTuple) && !missingOk)
 	{
 		ereport(ERROR, (errmsg("could not find valid entry for shard "
 							   UINT64_FORMAT, shardId)));
 	}
 
-	shardForm = (Form_pg_dist_shard) GETSTRUCT(heapTuple);
-	relationId = shardForm->logicalrelid;
+	if (!HeapTupleIsValid(heapTuple))
+	{
+		relationId = InvalidOid;
+	}
+	else
+	{
+		shardForm = (Form_pg_dist_shard) GETSTRUCT(heapTuple);
+		relationId = shardForm->logicalrelid;
+	}
 
 	systable_endscan(scanDescriptor);
 	heap_close(pgDistShard, NoLock);

@@ -28,6 +28,7 @@
 #include "distributed/multi_master_planner.h"
 #include "distributed/multi_router_planner.h"
 #include "distributed/recursive_planning.h"
+#include "distributed/worker_shard_visibility.h"
 #include "executor/executor.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
@@ -128,6 +129,12 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 		setPartitionedTablesInherited = false;
 		AdjustPartitioningForDistributedPlanning(parse, setPartitionedTablesInherited);
 	}
+
+	/*
+	 * Make sure that we hide shard names on the Citus MX worker nodes. See comments in
+	 * ReplaceTableVisibleFunction() for the details.
+	 */
+	parse = (Query *) ReplaceTableVisibleFunction((Node *) parse);
 
 	/* create a restriction context and put it at the end if context list */
 	plannerRestrictionContext = CreateAndPushPlannerRestrictionContext();

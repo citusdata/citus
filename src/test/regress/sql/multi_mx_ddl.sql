@@ -25,12 +25,18 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_ddl_table':
 
 \c - - - :worker_1_port
 
+-- make sure we don't break the following tests by hiding the shard names
+SET citus.override_table_visibility TO FALSE;
+
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_ddl_table'::regclass;
 \d ddl_test*_index
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_ddl_table_1220088'::regclass;
 \d ddl_test*_index_1220088
 
 \c - - - :worker_2_port
+
+-- make sure we don't break the following tests by hiding the shard names
+SET citus.override_table_visibility TO FALSE;
 
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_ddl_table'::regclass;
 \d ddl_test*_index

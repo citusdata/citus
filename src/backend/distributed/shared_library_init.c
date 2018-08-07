@@ -50,6 +50,7 @@
 #include "distributed/transaction_recovery.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_protocol.h"
+#include "distributed/worker_shard_visibility.h"
 #include "postmaster/postmaster.h"
 #include "optimizer/planner.h"
 #include "optimizer/paths.h"
@@ -375,6 +376,19 @@ RegisterCitusConfigVariables(void)
 		NULL,
 		&EnableSingleHashRepartitioning,
 		false,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		"citus.override_table_visibility",
+		gettext_noop("Enables replacing occurencens of pg_catalog.pg_table_visible() "
+					 "with pg_catalog.citus_table_visible()"),
+		gettext_noop("When enabled, shards on the Citus MX worker (data) nodes would be "
+					 "filtered out by many psql commands to provide better user "
+					 "experience."),
+		&OverrideTableVisibility,
+		true,
 		PGC_USERSET,
 		GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
