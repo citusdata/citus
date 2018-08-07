@@ -18,3 +18,10 @@ INSERT INTO pg_dist_authinfo VALUES (0, 'new_user', 'password=1234');
 ERROR:  cannot write to pg_dist_authinfo
 DETAIL:  Citus Community Edition does not support the use of custom authentication options.
 HINT:  To learn more about using advanced authentication schemes with Citus, please contact us at https://citusdata.com/about/contact_us
+BEGIN;
+INSERT INTO pg_dist_node VALUES (1234567890, 1234567890, 'localhost', 5432);
+INSERT INTO pg_dist_poolinfo VALUES (1234567890, 'port=1234');
+ERROR:  cannot write to pg_dist_poolinfo
+DETAIL:  Citus Community Edition does not support the use of pooler options.
+HINT:  To learn more about using advanced pooling schemes with Citus, please contact us at https://citusdata.com/about/contact_us
+ROLLBACK;
