@@ -158,6 +158,8 @@ static bool IsIndexRenameStmt(RenameStmt *renameStmt);
 static bool AlterInvolvesPartitionColumn(AlterTableStmt *alterTableStatement,
 										 AlterTableCmd *command);
 static void ExecuteDistributedDDLJob(DDLJob *ddlJob);
+static char * SetSearchPathToCurrentSearchPathCommand(void);
+static char * CurrentSearchPath(void);
 static List * CreateIndexTaskList(Oid relationId, IndexStmt *indexStmt);
 static List * DropIndexTaskList(Oid relationId, Oid indexId, DropStmt *dropStmt);
 static List * InterShardDDLTaskList(Oid leftRelationId, Oid rightRelationId,
@@ -3146,7 +3148,19 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 	{
 		if (shouldSyncMetadata)
 		{
+			char *setSearchPathCommand = SetSearchPathToCurrentSearchPathCommand();
+
 			SendCommandToWorkers(WORKERS_WITH_METADATA, DISABLE_DDL_PROPAGATION);
+
+			/*
+			 * Given that we're relaying the query to the worker nodes directly,
+			 * we should set the search path exactly the same when necessary.
+			 */
+			if (setSearchPathCommand != NULL)
+			{
+				SendCommandToWorkers(WORKERS_WITH_METADATA, setSearchPathCommand);
+			}
+
 			SendCommandToWorkers(WORKERS_WITH_METADATA, (char *) ddlJob->commandString);
 		}
 
@@ -3173,8 +3187,19 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 
 			if (shouldSyncMetadata)
 			{
-				List *commandList = list_make2(DISABLE_DDL_PROPAGATION,
-											   (char *) ddlJob->commandString);
+				List *commandList = list_make1(DISABLE_DDL_PROPAGATION);
+				char *setSearchPathCommand = SetSearchPathToCurrentSearchPathCommand();
+
+				/*
+				 * Given that we're relaying the query to the worker nodes directly,
+				 * we should set the search path exactly the same when necessary.
+				 */
+				if (setSearchPathCommand != NULL)
+				{
+					commandList = lappend(commandList, setSearchPathCommand);
+				}
+
+				commandList = lappend(commandList, (char *) ddlJob->commandString);
 
 				SendBareCommandListToWorkers(WORKERS_WITH_METADATA, commandList);
 			}
@@ -3190,6 +3215,77 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 		}
 		PG_END_TRY();
 	}
+}
+
+
+/*
+ * SetSearchPathToCurrentSearchPathCommand generates a command which can
+ * set the search path to the exact same search path that the issueing node
+ * has.
+ *
+ * If the current search path is null (or doesn't have any valid schemas),
+ * the function returns NULL.
+ */
+static char *
+SetSearchPathToCurrentSearchPathCommand(void)
+{
+	StringInfo setCommand = NULL;
+	char *currentSearchPath = CurrentSearchPath();
+
+	if (currentSearchPath == NULL)
+	{
+		return NULL;
+	}
+
+	setCommand = makeStringInfo();
+	appendStringInfo(setCommand, "SET search_path TO %s;", currentSearchPath);
+
+	return setCommand->data;
+}
+
+
+/*
+ * CurrentSearchPath is a C interface for calling current_schemas(bool) that
+ * PostgreSQL exports.
+ *
+ * CurrentSchemas returns all the schemas in the seach_path that are seperated
+ * with comma (,) sign. The returned string can be used to set the search_path.
+ *
+ * The function omits implicit schemas.
+ *
+ * The function returns NULL if there are no valid schemas in the search_path,
+ * mimicing current_schemas(false) function.
+ */
+static char *
+CurrentSearchPath(void)
+{
+	StringInfo currentSearchPath = makeStringInfo();
+	List *searchPathList = fetch_search_path(false);
+	ListCell *searchPathCell;
+	bool schemaAdded = false;
+
+	foreach(searchPathCell, searchPathList)
+	{
+		char *schemaName = get_namespace_name(lfirst_oid(searchPathCell));
+
+		/* watch out for deleted namespace */
+		if (schemaName)
+		{
+			if (schemaAdded)
+			{
+				appendStringInfoString(currentSearchPath, ",");
+				schemaAdded = false;
+			}
+
+			appendStringInfoString(currentSearchPath, quote_identifier(schemaName));
+			schemaAdded = true;
+		}
+	}
+
+	/* fetch_search_path() returns a palloc'd list that we should free now */
+	list_free(searchPathList);
+
+	return (currentSearchPath->len > 0 ? currentSearchPath->data : NULL);
 }
 
 
