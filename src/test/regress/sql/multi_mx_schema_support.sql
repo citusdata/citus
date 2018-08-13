@@ -220,3 +220,82 @@ WHERE
 -- set task_executor back to real-time
 SET citus.task_executor_type TO "real-time";
 
+-- connect to the master and do some test
+-- regarding DDL support on schemas where
+-- the search_path is set
+\c - - - :master_port
+
+CREATE SCHEMA mx_ddl_schema_1;
+CREATE SCHEMA mx_ddl_schema_2;
+CREATE SCHEMA "CiTuS.TeAeN";
+
+SET citus.shard_count TO 4;
+SET citus.shard_replication_factor TO 1;
+SET citus.replication_model TO 'streaming';
+
+-- in the first test make sure that we handle DDLs
+-- when search path is set
+SET search_path TO mx_ddl_schema_1;
+CREATE TABLE table_1 (key int PRIMARY KEY, value text);
+SELECT create_distributed_table('table_1', 'key');
+CREATE INDEX i1 ON table_1(value);
+CREATE INDEX CONCURRENTLY i2 ON table_1(value);
+
+
+-- now create a foriegn key on tables that are on seperate schemas
+SET search_path TO mx_ddl_schema_1, mx_ddl_schema_2;
+CREATE TABLE mx_ddl_schema_2.table_2 (key int PRIMARY KEY, value text);
+SELECT create_distributed_table('mx_ddl_schema_2.table_2', 'key');
+
+ALTER TABLE table_2 ADD CONSTRAINT test_constraint FOREIGN KEY (key) REFERENCES table_1(key);
+
+-- we can also handle schema/table names with quotation 
+SET search_path TO "CiTuS.TeAeN";
+CREATE TABLE "TeeNTabLE.1!?!"(id int, "TeNANt_Id" int);
+SELECT create_distributed_table('"TeeNTabLE.1!?!"', 'id');
+
+CREATE INDEX "MyTenantIndex" ON  "CiTuS.TeAeN"."TeeNTabLE.1!?!"("TeNANt_Id");
+SET search_path TO "CiTuS.TeAeN", mx_ddl_schema_1, mx_ddl_schema_2;
+
+ALTER TABLE "TeeNTabLE.1!?!" ADD CONSTRAINT test_constraint_2 FOREIGN KEY (id) REFERENCES table_1(key);
+
+ALTER TABLE "TeeNTabLE.1!?!" ADD COLUMN new_col INT;
+
+-- same semantics with CREATE INDEX CONCURRENTLY such that
+-- it uses a single connection to execute all the commands
+SET citus.multi_shard_modify_mode TO 'sequential';
+ALTER TABLE "TeeNTabLE.1!?!" DROP COLUMN new_col;
+
+-- set it back to the default value
+SET citus.multi_shard_modify_mode TO 'parallel';
+
+-- test with a not existing schema is in the search path
+SET search_path TO not_existing_schema, "CiTuS.TeAeN";
+ALTER TABLE "TeeNTabLE.1!?!" ADD COLUMN new_col INT;
+
+-- test with a public schema is in the search path
+SET search_path TO public, "CiTuS.TeAeN";
+ALTER TABLE "TeeNTabLE.1!?!" DROP COLUMN new_col;
+
+-- make sure that we handle transaction blocks properly 
+BEGIN;
+    SET search_path TO public, "CiTuS.TeAeN";
+    ALTER TABLE "TeeNTabLE.1!?!" ADD COLUMN new_col INT;
+
+    SET search_path TO mx_ddl_schema_1;
+    CREATE INDEX i55 ON table_1(value);
+
+    SET search_path TO mx_ddl_schema_1, public, "CiTuS.TeAeN";
+    ALTER TABLE "TeeNTabLE.1!?!" DROP COLUMN new_col;
+    DROP INDEX i55;
+COMMIT;
+
+-- set the search_path to null
+SET search_path TO '';
+ALTER TABLE "CiTuS.TeAeN"."TeeNTabLE.1!?!" ADD COLUMN new_col INT;
+
+-- set the search_path to not existing schema
+SET search_path TO not_existing_schema;
+ALTER TABLE "CiTuS.TeAeN"."TeeNTabLE.1!?!" DROP COLUMN new_col;
+
+DROP SCHEMA mx_ddl_schema_1, mx_ddl_schema_2, "CiTuS.TeAeN" CASCADE;
