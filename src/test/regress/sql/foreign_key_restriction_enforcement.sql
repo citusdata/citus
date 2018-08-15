@@ -570,6 +570,69 @@ BEGIN;
 	DROP TABLE test_table_2, test_table_1;
 COMMIT;
 
+-- make sure that modifications to reference tables in a CTE can
+-- set the mode to sequential for the next operations
+CREATE TABLE reference_table(id int PRIMARY KEY);
+SELECT create_reference_table('reference_table');
+
+CREATE TABLE distributed_table(id int PRIMARY KEY, value_1 int);
+SELECT create_distributed_table('distributed_table', 'id');
+
+ALTER TABLE 
+	distributed_table 
+ADD CONSTRAINT 
+	fkey_delete FOREIGN KEY(value_1) 
+REFERENCES 
+	reference_table(id) ON DELETE CASCADE;
+
+INSERT INTO reference_table SELECT i FROM generate_series(0, 10) i;
+INSERT INTO distributed_table SELECT i, i % 10  FROM generate_series(0, 100) i;
+
+-- this query returns 100 rows in Postgres, but not in Citus
+-- see https://github.com/citusdata/citus_docs/issues/664 for the discussion
+WITH t1 AS (DELETE FROM reference_table RETURNING id) 
+	DELETE FROM distributed_table USING t1 WHERE value_1 = t1.id RETURNING *;
+
+-- load some more data for one more test with real-time selects
+INSERT INTO reference_table SELECT i FROM generate_series(0, 10) i;
+INSERT INTO distributed_table SELECT i, i % 10  FROM generate_series(0, 100) i;
+
+-- this query returns 100 rows in Postgres, but not in Citus
+-- see https://github.com/citusdata/citus_docs/issues/664 for the discussion
+WITH t1 AS (DELETE FROM reference_table RETURNING id) 
+	SELECT count(*) FROM distributed_table, t1 WHERE  value_1 = t1.id;
+
+-- this query should fail since we first to a parallel access to a distributed table 
+-- with t1, and then access to t2
+WITH t1 AS (DELETE FROM distributed_table RETURNING id),
+	t2 AS (DELETE FROM reference_table RETURNING id)
+	SELECT count(*) FROM distributed_table, t1, t2 WHERE  value_1 = t1.id AND value_1 = t2.id;
+
+-- similarly this should fail since we first access to a distributed
+-- table via t1, and then access to the reference table in the main query
+WITH t1 AS (DELETE FROM distributed_table RETURNING id)
+	DELETE FROM reference_table RETURNING id;
+
+
+-- finally, make sure that we can execute the same queries
+-- in the sequential mode
+BEGIN;
+	
+	SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
+
+	WITH t1 AS (DELETE FROM distributed_table RETURNING id),
+		t2 AS (DELETE FROM reference_table RETURNING id)
+		SELECT count(*) FROM distributed_table, t1, t2 WHERE  value_1 = t1.id AND value_1 = t2.id;
+ROLLBACK;
+
+BEGIN;
+	
+	SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
+
+	WITH t1 AS (DELETE FROM distributed_table RETURNING id)
+		DELETE FROM reference_table RETURNING id;
+ROLLBACK;
+
 RESET client_min_messages;
 
 DROP SCHEMA test_fkey_to_ref_in_tx CASCADE;

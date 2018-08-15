@@ -88,19 +88,10 @@ static CustomExecMethods TaskTrackerCustomExecMethods = {
 	.ExplainCustomScan = CitusExplainScan
 };
 
-static CustomExecMethods RouterSequentialModifyCustomExecMethods = {
-	.CustomName = "RouterSequentialModifyScan",
+static CustomExecMethods RouterModifyCustomExecMethods = {
+	.CustomName = "RouterModifyScan",
 	.BeginCustomScan = CitusModifyBeginScan,
-	.ExecCustomScan = RouterSequentialModifyExecScan,
-	.EndCustomScan = CitusEndScan,
-	.ReScanCustomScan = CitusReScan,
-	.ExplainCustomScan = CitusExplainScan
-};
-
-static CustomExecMethods RouterMultiModifyCustomExecMethods = {
-	.CustomName = "RouterMultiModifyScan",
-	.BeginCustomScan = CitusModifyBeginScan,
-	.ExecCustomScan = RouterMultiModifyExecScan,
+	.ExecCustomScan = RouterModifyExecScan,
 	.EndCustomScan = CitusEndScan,
 	.ReScanCustomScan = CitusReScan,
 	.ExplainCustomScan = CitusExplainScan
@@ -187,6 +178,8 @@ RouterCreateScan(CustomScan *scan)
 	List *taskList = NIL;
 	bool isModificationQuery = false;
 
+	List *relationRowLockList = NIL;
+
 	scanState->executorType = MULTI_EXECUTOR_ROUTER;
 	scanState->customScanState.ss.ps.type = T_CustomScanState;
 	scanState->distributedPlan = GetDistributedPlan(scan);
@@ -194,47 +187,22 @@ RouterCreateScan(CustomScan *scan)
 	distributedPlan = scanState->distributedPlan;
 	workerJob = distributedPlan->workerJob;
 	taskList = workerJob->taskList;
-
 	isModificationQuery = IsModifyDistributedPlan(distributedPlan);
 
-	/* check whether query has at most one shard */
-	if (list_length(taskList) <= 1)
+	if (list_length(taskList) == 1)
 	{
-		List *relationRowLockList = NIL;
-		if (list_length(taskList) == 1)
-		{
-			Task *task = (Task *) linitial(taskList);
-			relationRowLockList = task->relationRowLockList;
-		}
+		Task *task = (Task *) linitial(taskList);
+		relationRowLockList = task->relationRowLockList;
+	}
 
-		/* if query is SELECT ... FOR UPDATE query, use modify logic */
-		if (isModificationQuery || relationRowLockList != NIL)
-		{
-			scanState->customScanState.methods = &RouterSequentialModifyCustomExecMethods;
-		}
-		else
-		{
-			scanState->customScanState.methods = &RouterSelectCustomExecMethods;
-		}
+	/* if query is SELECT ... FOR UPDATE query, use modify logic */
+	if (isModificationQuery || relationRowLockList != NIL)
+	{
+		scanState->customScanState.methods = &RouterModifyCustomExecMethods;
 	}
 	else
 	{
-		Assert(isModificationQuery);
-
-		if (IsMultiRowInsert(workerJob->jobQuery) ||
-			MultiShardConnectionType == SEQUENTIAL_CONNECTION)
-		{
-			/*
-			 * Multi shard modifications while multi_shard_modify_mode equals
-			 * to 'sequential' or Multi-row INSERT are executed sequentially
-			 * instead of using parallel connections.
-			 */
-			scanState->customScanState.methods = &RouterSequentialModifyCustomExecMethods;
-		}
-		else
-		{
-			scanState->customScanState.methods = &RouterMultiModifyCustomExecMethods;
-		}
+		scanState->customScanState.methods = &RouterSelectCustomExecMethods;
 	}
 
 	return (Node *) scanState;
