@@ -1143,10 +1143,155 @@ DEBUG:  verifying table "test_table_2"
  	SET LOCAL client_min_messages TO ERROR;
 	DROP TABLE test_table_2, test_table_1;
 COMMIT;
+-- make sure that modifications to reference tables in a CTE can
+-- set the mode to sequential for the next operations
+CREATE TABLE reference_table(id int PRIMARY KEY);
+DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "reference_table_pkey" for table "reference_table"
+DEBUG:  building index "reference_table_pkey" on table "reference_table" serially
+SELECT create_reference_table('reference_table');
+DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
+DETAIL:  NOTICE from localhost:57638
+DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
+DETAIL:  NOTICE from localhost:57637
+DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
+DETAIL:  NOTICE from localhost:57637
+DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
+DETAIL:  NOTICE from localhost:57638
+ create_reference_table 
+------------------------
+ 
+(1 row)
+
+CREATE TABLE distributed_table(id int PRIMARY KEY, value_1 int);
+DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "distributed_table_pkey" for table "distributed_table"
+DEBUG:  building index "distributed_table_pkey" on table "distributed_table" serially
+SELECT create_distributed_table('distributed_table', 'id');
+DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
+DETAIL:  NOTICE from localhost:57638
+DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
+DETAIL:  NOTICE from localhost:57637
+DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
+DETAIL:  NOTICE from localhost:57637
+DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
+DETAIL:  NOTICE from localhost:57638
+DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
+DETAIL:  NOTICE from localhost:57637
+DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
+DETAIL:  NOTICE from localhost:57638
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+ALTER TABLE 
+	distributed_table 
+ADD CONSTRAINT 
+	fkey_delete FOREIGN KEY(value_1) 
+REFERENCES 
+	reference_table(id) ON DELETE CASCADE;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  Reference relation "reference_table" is modified, which might lead to data inconsistencies or distributed deadlocks via parallel accesses to hash distributed relations due to foreign keys. Any parallel modification to those hash distributed relations in the same transaction can only be executed in sequential query execution mode
+INSERT INTO reference_table SELECT i FROM generate_series(0, 10) i;
+DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+DEBUG:  switching to sequential query execution mode
+DETAIL:  Reference relation "reference_table" is modified, which might lead to data inconsistencies or distributed deadlocks via parallel accesses to hash distributed relations due to foreign keys. Any parallel modification to those hash distributed relations in the same transaction can only be executed in sequential query execution mode
+INSERT INTO distributed_table SELECT i, i % 10  FROM generate_series(0, 100) i;
+DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+-- this query returns 100 rows in Postgres, but not in Citus
+-- see https://github.com/citusdata/citus_docs/issues/664 for the discussion
+WITH t1 AS (DELETE FROM reference_table RETURNING id) 
+	DELETE FROM distributed_table USING t1 WHERE value_1 = t1.id RETURNING *;
+DEBUG:  common table expressions are not supported in distributed modifications
+DEBUG:  generating subplan 92_1 for CTE t1: DELETE FROM test_fkey_to_ref_in_tx.reference_table RETURNING id
+DEBUG:  Plan 92 query after replacing subqueries and CTEs: DELETE FROM test_fkey_to_ref_in_tx.distributed_table USING (SELECT intermediate_result.id FROM read_intermediate_result('92_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) t1 WHERE (distributed_table.value_1 OPERATOR(pg_catalog.=) t1.id) RETURNING distributed_table.id, distributed_table.value_1, t1.id
+DEBUG:  switching to sequential query execution mode
+DETAIL:  Reference relation "reference_table" is modified, which might lead to data inconsistencies or distributed deadlocks via parallel accesses to hash distributed relations due to foreign keys. Any parallel modification to those hash distributed relations in the same transaction can only be executed in sequential query execution mode
+ id | value_1 | id 
+----+---------+----
+(0 rows)
+
+-- load some more data for one more test with real-time selects
+INSERT INTO reference_table SELECT i FROM generate_series(0, 10) i;
+DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+DEBUG:  switching to sequential query execution mode
+DETAIL:  Reference relation "reference_table" is modified, which might lead to data inconsistencies or distributed deadlocks via parallel accesses to hash distributed relations due to foreign keys. Any parallel modification to those hash distributed relations in the same transaction can only be executed in sequential query execution mode
+INSERT INTO distributed_table SELECT i, i % 10  FROM generate_series(0, 100) i;
+DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+-- this query returns 100 rows in Postgres, but not in Citus
+-- see https://github.com/citusdata/citus_docs/issues/664 for the discussion
+WITH t1 AS (DELETE FROM reference_table RETURNING id) 
+	SELECT count(*) FROM distributed_table, t1 WHERE  value_1 = t1.id;
+DEBUG:  data-modifying statements are not supported in the WITH clauses of distributed queries
+DEBUG:  generating subplan 96_1 for CTE t1: DELETE FROM test_fkey_to_ref_in_tx.reference_table RETURNING id
+DEBUG:  Plan 96 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM test_fkey_to_ref_in_tx.distributed_table, (SELECT intermediate_result.id FROM read_intermediate_result('96_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) t1 WHERE (distributed_table.value_1 OPERATOR(pg_catalog.=) t1.id)
+DEBUG:  switching to sequential query execution mode
+DETAIL:  Reference relation "reference_table" is modified, which might lead to data inconsistencies or distributed deadlocks via parallel accesses to hash distributed relations due to foreign keys. Any parallel modification to those hash distributed relations in the same transaction can only be executed in sequential query execution mode
+ count 
+-------
+     0
+(1 row)
+
+-- this query should fail since we first to a parallel access to a distributed table 
+-- with t1, and then access to t2
+WITH t1 AS (DELETE FROM distributed_table RETURNING id),
+	t2 AS (DELETE FROM reference_table RETURNING id)
+	SELECT count(*) FROM distributed_table, t1, t2 WHERE  value_1 = t1.id AND value_1 = t2.id;
+DEBUG:  data-modifying statements are not supported in the WITH clauses of distributed queries
+DEBUG:  generating subplan 98_1 for CTE t1: DELETE FROM test_fkey_to_ref_in_tx.distributed_table RETURNING id
+DEBUG:  generating subplan 98_2 for CTE t2: DELETE FROM test_fkey_to_ref_in_tx.reference_table RETURNING id
+DEBUG:  Plan 98 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM test_fkey_to_ref_in_tx.distributed_table, (SELECT intermediate_result.id FROM read_intermediate_result('98_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) t1, (SELECT intermediate_result.id FROM read_intermediate_result('98_2'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) t2 WHERE ((distributed_table.value_1 OPERATOR(pg_catalog.=) t1.id) AND (distributed_table.value_1 OPERATOR(pg_catalog.=) t2.id))
+ERROR:  cannot execute DML on reference relation "reference_table" because there was a parallel DML access to distributed relation "distributed_table" in the same transaction
+HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
+-- similarly this should fail since we first access to a distributed
+-- table via t1, and then access to the reference table in the main query
+WITH t1 AS (DELETE FROM distributed_table RETURNING id)
+	DELETE FROM reference_table RETURNING id;
+DEBUG:  common table expressions are not supported in distributed modifications
+DEBUG:  generating subplan 101_1 for CTE t1: DELETE FROM test_fkey_to_ref_in_tx.distributed_table RETURNING id
+DEBUG:  Plan 101 query after replacing subqueries and CTEs: DELETE FROM test_fkey_to_ref_in_tx.reference_table RETURNING id
+ERROR:  cannot execute DML on reference relation "reference_table" because there was a parallel DML access to distributed relation "distributed_table" in the same transaction
+HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
+-- finally, make sure that we can execute the same queries
+-- in the sequential mode
+BEGIN;
+	
+	SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
+	WITH t1 AS (DELETE FROM distributed_table RETURNING id),
+		t2 AS (DELETE FROM reference_table RETURNING id)
+		SELECT count(*) FROM distributed_table, t1, t2 WHERE  value_1 = t1.id AND value_1 = t2.id;
+DEBUG:  data-modifying statements are not supported in the WITH clauses of distributed queries
+DEBUG:  generating subplan 103_1 for CTE t1: DELETE FROM test_fkey_to_ref_in_tx.distributed_table RETURNING id
+DEBUG:  generating subplan 103_2 for CTE t2: DELETE FROM test_fkey_to_ref_in_tx.reference_table RETURNING id
+DEBUG:  Plan 103 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM test_fkey_to_ref_in_tx.distributed_table, (SELECT intermediate_result.id FROM read_intermediate_result('103_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) t1, (SELECT intermediate_result.id FROM read_intermediate_result('103_2'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) t2 WHERE ((distributed_table.value_1 OPERATOR(pg_catalog.=) t1.id) AND (distributed_table.value_1 OPERATOR(pg_catalog.=) t2.id))
+ count 
+-------
+     0
+(1 row)
+
+ROLLBACK;
+BEGIN;
+	
+	SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
+	WITH t1 AS (DELETE FROM distributed_table RETURNING id)
+		DELETE FROM reference_table RETURNING id;
+DEBUG:  common table expressions are not supported in distributed modifications
+DEBUG:  generating subplan 106_1 for CTE t1: DELETE FROM test_fkey_to_ref_in_tx.distributed_table RETURNING id
+DEBUG:  Plan 106 query after replacing subqueries and CTEs: DELETE FROM test_fkey_to_ref_in_tx.reference_table RETURNING id
+ id 
+----
+(0 rows)
+
+ROLLBACK;
 RESET client_min_messages;
 DROP SCHEMA test_fkey_to_ref_in_tx CASCADE;
-NOTICE:  drop cascades to 3 other objects
+NOTICE:  drop cascades to 5 other objects
 DETAIL:  drop cascades to table referece_table
 drop cascades to table on_update_fkey_table
 drop cascades to table unrelated_dist_table
+drop cascades to table reference_table
+drop cascades to table distributed_table
 SET search_path TO public;
