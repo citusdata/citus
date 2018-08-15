@@ -7,7 +7,7 @@ SHOW server_version \gset
 SELECT substring(:'server_version', '\d+')::int > 10 as version_above_ten;
  version_above_ten 
 -------------------
- t
+ f
 (1 row)
 
 SET citus.next_shard_id TO 1270000;
@@ -401,7 +401,7 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.mx_tabl
 (3 rows)
 
 DROP SEQUENCE mx_table_col_3_seq CASCADE;
-NOTICE:  drop cascades to default value for column col_3 of table mx_table
+NOTICE:  drop cascades to default for table mx_table column col_3
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.mx_table'::regclass;
  Column |  Type   | Modifiers 
 --------+---------+-----------

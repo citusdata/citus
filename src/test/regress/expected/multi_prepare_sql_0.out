@@ -9,7 +9,7 @@ SHOW server_version \gset
 SELECT substring(:'server_version', '\d+')::int > 10 AS version_above_ten;
  version_above_ten 
 -------------------
- t
+ f
 (1 row)
 
 PREPARE prepared_test_1 AS
