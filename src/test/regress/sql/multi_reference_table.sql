@@ -859,12 +859,14 @@ ALTER TABLE reference_schema.reference_table_ddl ALTER COLUMN value_3 SET NOT NU
 
 -- see that Citus applied all DDLs to the table
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='reference_schema.reference_table_ddl'::regclass;
-\d reference_schema.reference_index_2
+SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
+    relid = 'reference_schema.reference_index_2'::regclass;
 
 -- also to the shard placements
 \c - - - :worker_1_port
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='reference_schema.reference_table_ddl_1250019'::regclass;
-\d reference_schema.reference_index_2_1250019
+SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
+    relid = 'reference_schema.reference_index_2_1250019'::regclass;
 \c - - - :master_port
 DROP INDEX reference_schema.reference_index_2;
 \c - - - :worker_1_port

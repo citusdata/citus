@@ -335,12 +335,12 @@ SELECT create_distributed_table('check_example', 'partition_col', 'hash');
 (1 row)
 
 \c - - - :worker_1_port
-\d check_example_partition_col_key_365056
-Index "public.check_example_partition_col_key_365056"
+SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
+    relid = 'check_example_partition_col_key_365056'::regclass;
     Column     |  Type   |  Definition   
 ---------------+---------+---------------
  partition_col | integer | partition_col
-unique, btree, for table "public.check_example_365056"
+(1 row)
 
 SELECT "Constraint", "Definition" FROM table_checks WHERE relid='public.check_example_365056'::regclass;
              Constraint              |             Definition              

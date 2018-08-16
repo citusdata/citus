@@ -225,7 +225,8 @@ CREATE TABLE check_example
 );
 SELECT create_distributed_table('check_example', 'partition_col', 'hash');
 \c - - - :worker_1_port
-\d check_example_partition_col_key_365056
+SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
+    relid = 'check_example_partition_col_key_365056'::regclass;
 SELECT "Constraint", "Definition" FROM table_checks WHERE relid='public.check_example_365056'::regclass;
 \c - - - :master_port
 

@@ -117,18 +117,13 @@ ERROR:  renaming constraints belonging to distributed tables is currently unsupp
 -- Verify that CREATE INDEX on already distributed table has proper shard names.
 CREATE INDEX tmp_idx_12345678901234567890123456789012345678901234567890 ON name_lengths(col2);
 \c - - - :worker_1_port
-\d tmp_idx_*
-Index "public.tmp_idx_123456789012345678901234567890123456789_5e470afa_225002"
- Column |  Type   | Definition 
---------+---------+------------
- col2   | integer | col2
-btree, for table "public.name_lengths_225002"
-
-Index "public.tmp_idx_123456789012345678901234567890123456789_5e470afa_225003"
- Column |  Type   | Definition 
---------+---------+------------
- col2   | integer | col2
-btree, for table "public.name_lengths_225003"
+SELECT "relname", "Column", "Type", "Definition" FROM index_attrs WHERE
+    relname LIKE 'tmp_idx_%';
+                             relname                             | Column |  Type   | Definition 
+-----------------------------------------------------------------+--------+---------+------------
+ tmp_idx_123456789012345678901234567890123456789_5e470afa_225003 | col2   | integer | col2
+ tmp_idx_123456789012345678901234567890123456789_5e470afa_225002 | col2   | integer | col2
+(2 rows)
 
 \c - - - :master_port
 -- Verify that a new index name > 63 characters is auto-truncated
@@ -136,30 +131,15 @@ btree, for table "public.name_lengths_225003"
 CREATE INDEX tmp_idx_123456789012345678901234567890123456789012345678901234567890 ON name_lengths(col2);
 NOTICE:  identifier "tmp_idx_123456789012345678901234567890123456789012345678901234567890" will be truncated to "tmp_idx_1234567890123456789012345678901234567890123456789012345"
 \c - - - :worker_1_port
-\d tmp_idx_*
-Index "public.tmp_idx_123456789012345678901234567890123456789_599636aa_225002"
- Column |  Type   | Definition 
---------+---------+------------
- col2   | integer | col2
-btree, for table "public.name_lengths_225002"
-
-Index "public.tmp_idx_123456789012345678901234567890123456789_599636aa_225003"
- Column |  Type   | Definition 
---------+---------+------------
- col2   | integer | col2
-btree, for table "public.name_lengths_225003"
-
-Index "public.tmp_idx_123456789012345678901234567890123456789_5e470afa_225002"
- Column |  Type   | Definition 
---------+---------+------------
- col2   | integer | col2
-btree, for table "public.name_lengths_225002"
-
-Index "public.tmp_idx_123456789012345678901234567890123456789_5e470afa_225003"
- Column |  Type   | Definition 
---------+---------+------------
- col2   | integer | col2
-btree, for table "public.name_lengths_225003"
+SELECT "relname", "Column", "Type", "Definition" FROM index_attrs WHERE
+    relname LIKE 'tmp_idx_%';
+                             relname                             | Column |  Type   | Definition 
+-----------------------------------------------------------------+--------+---------+------------
+ tmp_idx_123456789012345678901234567890123456789_5e470afa_225003 | col2   | integer | col2
+ tmp_idx_123456789012345678901234567890123456789_5e470afa_225002 | col2   | integer | col2
+ tmp_idx_123456789012345678901234567890123456789_599636aa_225003 | col2   | integer | col2
+ tmp_idx_123456789012345678901234567890123456789_599636aa_225002 | col2   | integer | col2
+(4 rows)
 
 \c - - - :master_port
 SET citus.shard_count TO 2;

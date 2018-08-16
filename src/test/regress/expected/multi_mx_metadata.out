@@ -53,19 +53,19 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='distributed_mx
  value  | jsonb | 
 (2 rows)
 
-\d distributed_mx_table_pkey
-Index "public.distributed_mx_table_pkey"
+SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
+    relid = 'distributed_mx_table_pkey'::regclass;
  Column | Type | Definition 
 --------+------+------------
  key    | text | key
-primary key, btree, for table "public.distributed_mx_table"
+(1 row)
 
-\d distributed_mx_table_value_idx
-Index "public.distributed_mx_table_value_idx"
+SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
+    relid = 'distributed_mx_table_value_idx'::regclass;
  Column | Type | Definition 
 --------+------+------------
  value  | text | value
-gin, for table "public.distributed_mx_table"
+(1 row)
 
 SELECT repmodel FROM pg_dist_partition
 WHERE logicalrelid = 'distributed_mx_table'::regclass;
@@ -89,19 +89,19 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='distributed_mx
  value  | jsonb | 
 (2 rows)
 
-\d distributed_mx_table_pkey
-Index "public.distributed_mx_table_pkey"
+SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
+    relid = 'distributed_mx_table_pkey'::regclass;
  Column | Type | Definition 
 --------+------+------------
  key    | text | key
-primary key, btree, for table "public.distributed_mx_table"
+(1 row)
 
-\d distributed_mx_table_value_idx
-Index "public.distributed_mx_table_value_idx"
+SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
+    relid = 'distributed_mx_table_value_idx'::regclass;
  Column | Type | Definition 
 --------+------+------------
  value  | text | value
-gin, for table "public.distributed_mx_table"
+(1 row)
 
 SELECT repmodel FROM pg_dist_partition
 WHERE logicalrelid = 'distributed_mx_table'::regclass;

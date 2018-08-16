@@ -74,7 +74,8 @@ ALTER TABLE name_lengths RENAME CONSTRAINT unique_123456789012345678901234567890
 CREATE INDEX tmp_idx_12345678901234567890123456789012345678901234567890 ON name_lengths(col2);
 
 \c - - - :worker_1_port
-\d tmp_idx_*
+SELECT "relname", "Column", "Type", "Definition" FROM index_attrs WHERE
+    relname LIKE 'tmp_idx_%';
 \c - - - :master_port
 
 -- Verify that a new index name > 63 characters is auto-truncated
@@ -82,7 +83,8 @@ CREATE INDEX tmp_idx_12345678901234567890123456789012345678901234567890 ON name_
 CREATE INDEX tmp_idx_123456789012345678901234567890123456789012345678901234567890 ON name_lengths(col2);
 
 \c - - - :worker_1_port
-\d tmp_idx_*
+SELECT "relname", "Column", "Type", "Definition" FROM index_attrs WHERE
+    relname LIKE 'tmp_idx_%';
 \c - - - :master_port
 
 SET citus.shard_count TO 2;

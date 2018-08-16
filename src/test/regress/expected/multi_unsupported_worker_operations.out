@@ -392,8 +392,10 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.mx_tabl
  col_3  | bigint  | not null default nextval('mx_table_col_3_seq'::regclass)
 (3 rows)
 
+-- suppress notice message caused by DROP ... CASCADE to prevent pg version difference
+SET client_min_messages TO 'WARNING';
 DROP SEQUENCE mx_table_col_3_seq CASCADE;
-NOTICE:  drop cascades to default for table mx_table column col_3
+RESET client_min_messages;
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.mx_table'::regclass;
  Column |  Type   | Modifiers 
 --------+---------+-----------

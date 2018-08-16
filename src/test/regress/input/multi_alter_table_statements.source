@@ -193,7 +193,8 @@ ALTER TABLE lineitem_alter ADD COLUMN first integer;
 COMMIT;
 
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.lineitem_alter'::regclass;
-\d temp_index_2
+SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
+    relid = 'temp_index_2'::regclass;
 
 ALTER TABLE lineitem_alter DROP COLUMN first;
 DROP INDEX temp_index_2;
@@ -470,7 +471,10 @@ SELECT create_distributed_table('sequence_deadlock_test', 'a');
 
 BEGIN;
 ALTER TABLE sequence_deadlock_test ADD COLUMN c int;
+-- suppress notice message caused by DROP ... CASCADE to prevent pg version difference
+SET client_min_messages TO 'WARNING';
 DROP SEQUENCE sequence_deadlock_test_b_seq CASCADE;
+RESET client_min_messages;
 END;
 
 DROP TABLE sequence_deadlock_test;
