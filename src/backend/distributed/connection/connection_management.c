@@ -22,6 +22,7 @@
 #include "access/hash.h"
 #include "commands/dbcommands.h"
 #include "distributed/connection_management.h"
+#include "distributed/errormessage.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/hash_helpers.h"
 #include "distributed/placement_connection.h"
@@ -824,9 +825,9 @@ DefaultCitusNoticeProcessor(void *arg, const char *message)
 	char *trimmedMessage = TrimLogLevel(message);
 	char *level = strtok((char *) message, ":");
 
-	ereport(CitusNoticeLogLevel, (errmsg("%s", trimmedMessage),
-								  errdetail("%s from %s:%d",
-											level, nodeName, nodePort)));
+	ereport(CitusNoticeLogLevel,
+			(errmsg("%s", ApplyLogRedaction(trimmedMessage)),
+			 errdetail("%s from %s:%d", level, nodeName, nodePort)));
 }
 
 

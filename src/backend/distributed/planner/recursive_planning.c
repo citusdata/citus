@@ -218,7 +218,7 @@ GenerateSubplansForSubqueriesAndCTEs(uint64 planId, Query *originalQuery,
 		ereport(DEBUG1, (errmsg(
 							 "Plan " UINT64_FORMAT
 							 " query after replacing subqueries and CTEs: %s", planId,
-							 subPlanString->data)));
+							 ApplyLogRedaction(subPlanString->data))));
 	}
 
 	return context.subPlanList;
@@ -715,9 +715,10 @@ RecursivelyPlanCTEs(Query *query, RecursivePlanningContext *planningContext)
 		{
 			StringInfo subPlanString = makeStringInfo();
 			pg_get_query_def(subquery, subPlanString);
-			ereport(DEBUG1, (errmsg("generating subplan " UINT64_FORMAT "_%u for "
-																		"CTE %s: %s",
-									planId, subPlanId, cteName, subPlanString->data)));
+			ereport(DEBUG1, (errmsg("generating subplan " UINT64_FORMAT
+									"_%u for CTE %s: %s", planId, subPlanId,
+									cteName,
+									ApplyLogRedaction(subPlanString->data))));
 		}
 
 		/* build a sub plan for the CTE */
@@ -1120,9 +1121,9 @@ RecursivelyPlanSubquery(Query *subquery, RecursivePlanningContext *planningConte
 
 		pg_get_query_def(debugQuery, subqueryString);
 
-		ereport(DEBUG1, (errmsg("generating subplan " UINT64_FORMAT "_%u for "
-																	"subquery %s",
-								planId, subPlanId, subqueryString->data)));
+		ereport(DEBUG1, (errmsg("generating subplan " UINT64_FORMAT
+								"_%u for subquery %s", planId, subPlanId,
+								ApplyLogRedaction(subqueryString->data))));
 	}
 
 	/* finally update the input subquery to point the result query */

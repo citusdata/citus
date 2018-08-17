@@ -14,6 +14,7 @@
 #include "libpq-fe.h"
 
 #include "distributed/connection_management.h"
+#include "distributed/errormessage.h"
 #include "distributed/remote_commands.h"
 #include "lib/stringinfo.h"
 #include "miscadmin.h"
@@ -253,7 +254,8 @@ ReportConnectionError(MultiConnection *connection, int elevel)
 
 	ereport(elevel, (errcode(ERRCODE_CONNECTION_FAILURE),
 					 errmsg("connection error: %s:%d", nodeName, nodePort),
-					 messageDetail != NULL ? errdetail("%s", messageDetail) : 0));
+					 messageDetail != NULL ?
+					 errdetail("%s", ApplyLogRedaction(messageDetail)) : 0));
 }
 
 
@@ -295,7 +297,8 @@ ReportResultError(MultiConnection *connection, PGresult *result, int elevel)
 		}
 
 		ereport(elevel, (errcode(sqlState), errmsg("%s", messagePrimary),
-						 messageDetail ? errdetail("%s", messageDetail) : 0,
+						 messageDetail ?
+						 errdetail("%s", ApplyLogRedaction(messageDetail)) : 0,
 						 messageHint ? errhint("%s", messageHint) : 0,
 						 messageContext ? errcontext("%s", messageContext) : 0,
 						 errcontext("while executing command on %s:%d",
@@ -344,7 +347,7 @@ LogRemoteCommand(MultiConnection *connection, const char *command)
 		return;
 	}
 
-	ereport(LOG, (errmsg("issuing %s", command),
+	ereport(LOG, (errmsg("issuing %s", ApplyLogRedaction(command)),
 				  errdetail("on server %s:%d", connection->hostname, connection->port)));
 }
 

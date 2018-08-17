@@ -1240,7 +1240,8 @@ ReportCopyError(MultiConnection *connection, PGresult *result)
 		bool haveDetail = remoteDetail != NULL;
 
 		ereport(ERROR, (errmsg("%s", remoteMessage),
-						haveDetail ? errdetail("%s", remoteDetail) : 0));
+						haveDetail ? errdetail("%s", ApplyLogRedaction(remoteDetail)) :
+						0));
 	}
 	else
 	{
@@ -1250,7 +1251,7 @@ ReportCopyError(MultiConnection *connection, PGresult *result)
 		ereport(ERROR, (errcode(ERRCODE_IO_ERROR),
 						errmsg("failed to complete COPY on %s:%d", connection->hostname,
 							   connection->port),
-						errdetail("%s", remoteMessage)));
+						errdetail("%s", ApplyLogRedaction(remoteMessage))));
 	}
 }
 

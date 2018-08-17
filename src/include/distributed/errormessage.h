@@ -70,3 +70,5 @@ DeferredErrorMessage * DeferredErrorInternal(int code, const char *message, cons
 void RaiseDeferredErrorInternal(DeferredErrorMessage *error, int elevel);
 
 #endif
+
+extern char * ApplyLogRedaction(const char *text);

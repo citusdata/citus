@@ -122,7 +122,7 @@ master_apply_delete_command(PG_FUNCTION_ARGS)
 	if (!IsA(queryTreeNode, DeleteStmt))
 	{
 		ereport(ERROR, (errmsg("query \"%s\" is not a delete statement",
-							   queryString)));
+							   ApplyLogRedaction(queryString))));
 	}
 
 	deleteStatement = (DeleteStmt *) queryTreeNode;
