@@ -145,7 +145,7 @@ master_modify_multiple_shards(PG_FUNCTION_ARGS)
 	else
 	{
 		ereport(ERROR, (errmsg("query \"%s\" is not a delete, update, or truncate "
-							   "statement", queryString)));
+							   "statement", ApplyLogRedaction(queryString))));
 	}
 
 	CheckDistributedTable(relationId);

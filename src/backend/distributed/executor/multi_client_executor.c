@@ -419,8 +419,17 @@ MultiClientSendQuery(int32 connectionId, const char *query)
 	if (querySent == 0)
 	{
 		char *errorMessage = pchomp(PQerrorMessage(connection->pgConn));
-		ereport(WARNING, (errmsg("could not send remote query \"%s\"", query),
-						  errdetail("Client error: %s", errorMessage)));
+
+		/*
+		 * query might include the user query coming from the taskTracker
+		 * code path, that's why we hash it, too. Otherwise, this code
+		 * path is generally exercised for the kind of errors that
+		 * we cannot send the queries that Citus itself produced.
+		 */
+		ereport(WARNING, (errmsg("could not send remote query \"%s\"",
+								 ApplyLogRedaction(query)),
+						  errdetail("Client error: %s",
+									ApplyLogRedaction(errorMessage))));
 
 		success = false;
 	}
