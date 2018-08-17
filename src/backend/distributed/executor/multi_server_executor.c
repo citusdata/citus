@@ -67,7 +67,7 @@ JobExecutorType(DistributedPlan *distributedPlan)
 
 				ereport(DEBUG2, (errmsg("Plan is router executable"),
 								 errdetail("distribution column value: %s",
-										   partitionColumnString)));
+										   ApplyLogRedaction(partitionColumnString))));
 			}
 			else
 			{

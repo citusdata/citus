@@ -714,7 +714,8 @@ PrintJoinOrderList(List *joinOrder)
 		}
 	}
 
-	ereport(LOG, (errmsg("join order: %s", printBuffer->data)));
+	ereport(LOG, (errmsg("join order: %s",
+						 ApplyLogRedaction(printBuffer->data))));
 }
 
 

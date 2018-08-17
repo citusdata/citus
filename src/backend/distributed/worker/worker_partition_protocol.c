@@ -923,7 +923,7 @@ FilterAndPartitionTable(const char *filterQuery,
 	if (queryPortal == NULL)
 	{
 		ereport(ERROR, (errmsg("could not open implicit cursor for query \"%s\"",
-							   filterQuery)));
+							   ApplyLogRedaction(filterQuery))));
 	}
 
 	rowOutputState = InitRowOutputState();

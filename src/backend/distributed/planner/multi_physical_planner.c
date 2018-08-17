@@ -2418,7 +2418,8 @@ QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 		taskType == SQL_TASK)
 	{
 		pg_get_query_def(taskQuery, queryString);
-		ereport(DEBUG4, (errmsg("distributed statement: %s", queryString->data)));
+		ereport(DEBUG4, (errmsg("distributed statement: %s",
+								ApplyLogRedaction(queryString->data))));
 		subqueryTask->queryString = queryString->data;
 	}
 
@@ -2698,7 +2699,8 @@ SqlTaskList(Job *job)
 
 		/* log the query string we generated */
 		ereport(DEBUG4, (errmsg("generated sql query for task %d", sqlTask->taskId),
-						 errdetail("query string: \"%s\"", sqlQueryString->data)));
+						 errdetail("query string: \"%s\"",
+								   ApplyLogRedaction(sqlQueryString->data))));
 
 		sqlTask->anchorShardId = INVALID_SHARD_ID;
 		if (anchorRangeTableBasedAssignment)

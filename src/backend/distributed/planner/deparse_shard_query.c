@@ -109,11 +109,13 @@ RebuildQueryStrings(Query *originalQuery, List *taskList)
 			}
 		}
 
-		ereport(DEBUG4, (errmsg("query before rebuilding: %s", task->queryString)));
+		ereport(DEBUG4, (errmsg("query before rebuilding: %s",
+								ApplyLogRedaction(task->queryString))));
 
 		UpdateTaskQueryString(query, relationId, valuesRTE, task);
 
-		ereport(DEBUG4, (errmsg("query after rebuilding:  %s", task->queryString)));
+		ereport(DEBUG4, (errmsg("query after rebuilding:  %s",
+								ApplyLogRedaction(task->queryString))));
 	}
 }
 

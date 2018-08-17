@@ -13,6 +13,16 @@
 
 
 /*
+ * ApplyLogRedaction is only supported in Citus Enterprise
+ */
+char *
+ApplyLogRedaction(const char *text)
+{
+	return (char *) text;
+}
+
+
+/*
  * DeferredErrorInternal is a helper function for DeferredError().
  */
 DeferredErrorMessage *
