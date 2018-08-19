@@ -165,7 +165,8 @@ DROP TABLE mx_table;
 SELECT count(*) FROM mx_table;
 
 -- master_drop_distributed_table_metadata
-SELECT master_drop_distributed_table_metadata('mx_table'::regclass, 'public', 'mx_table');
+SELECT master_remove_distributed_table_metadata_from_workers('mx_table'::regclass, 'public', 'mx_table');
+SELECT master_remove_partition_metadata('mx_table'::regclass, 'public', 'mx_table');
 SELECT count(*) FROM mx_table;
 
 -- master_copy_shard_placement
