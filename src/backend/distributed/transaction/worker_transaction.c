@@ -117,7 +117,15 @@ SendBareCommandListToWorkers(TargetWorkerSet targetWorkerSet, List *commandList)
 		int nodePort = workerNode->workerPort;
 		int connectionFlags = FORCE_NEW_CONNECTION;
 
-		if (targetWorkerSet == WORKERS_WITH_METADATA && !workerNode->hasMetadata)
+		if ((targetWorkerSet == WORKERS_WITH_METADATA ||
+			 targetWorkerSet == WORKERS_WITH_METADATA_EXCLUDE_CURRENT_WORKER) &&
+			!workerNode->hasMetadata)
+		{
+			continue;
+		}
+
+		if (targetWorkerSet == WORKERS_WITH_METADATA_EXCLUDE_CURRENT_WORKER &&
+			workerNode->groupId == GetLocalGroupId())
 		{
 			continue;
 		}
@@ -169,7 +177,15 @@ SendCommandToWorkersParams(TargetWorkerSet targetWorkerSet, char *command,
 		MultiConnection *connection = NULL;
 		int connectionFlags = 0;
 
-		if (targetWorkerSet == WORKERS_WITH_METADATA && !workerNode->hasMetadata)
+		if ((targetWorkerSet == WORKERS_WITH_METADATA ||
+			 targetWorkerSet == WORKERS_WITH_METADATA_EXCLUDE_CURRENT_WORKER) &&
+			!workerNode->hasMetadata)
+		{
+			continue;
+		}
+
+		if (targetWorkerSet == WORKERS_WITH_METADATA_EXCLUDE_CURRENT_WORKER &&
+			workerNode->groupId == GetLocalGroupId())
 		{
 			continue;
 		}
