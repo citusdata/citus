@@ -31,6 +31,7 @@
 #include "distributed/master_metadata_utility.h"
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/metadata_sync.h"
 #include "distributed/multi_client_executor.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_router_executor.h"
@@ -43,6 +44,7 @@
 #include "distributed/shardinterval_utils.h"
 #include "distributed/shard_pruning.h"
 #include "distributed/worker_protocol.h"
+#include "distributed/worker_transaction.h"
 #include "optimizer/clauses.h"
 #include "optimizer/predtest.h"
 #include "optimizer/restrictinfo.h"
@@ -89,6 +91,7 @@ master_modify_multiple_shards(PG_FUNCTION_ARGS)
 	int32 affectedTupleCount = 0;
 	CmdType operation = CMD_UNKNOWN;
 	TaskType taskType = TASK_TYPE_INVALID_FIRST;
+	bool truncateOperation = false;
 #if (PG_VERSION_NUM >= 100000)
 	RawStmt *rawStmt = (RawStmt *) ParseTreeRawStmt(queryString);
 	queryTreeNode = rawStmt->stmt;
@@ -96,9 +99,13 @@ master_modify_multiple_shards(PG_FUNCTION_ARGS)
 	queryTreeNode = ParseTreeNode(queryString);
 #endif
 
-	EnsureCoordinator();
 	CheckCitusVersion(ERROR);
 
+	truncateOperation = IsA(queryTreeNode, TruncateStmt);
+	if (!truncateOperation)
+	{
+		EnsureCoordinator();
+	}
 
 	if (IsA(queryTreeNode, DeleteStmt))
 	{
@@ -195,6 +202,30 @@ master_modify_multiple_shards(PG_FUNCTION_ARGS)
 
 	taskList =
 		ModifyMultipleShardsTaskList(modifyQuery, prunedShardIntervalList, taskType);
+
+	/*
+	 * We should execute "TRUNCATE table_name;" on the other worker nodes before
+	 * executing the truncate commands on the shards. This is necessary to prevent
+	 * distributed deadlocks where a concurrent operation on the same table (or a
+	 * cascading table) is executed on the other nodes.
+	 *
+	 * Note that we should skip the current node to prevent a self-deadlock.
+	 */
+	if (truncateOperation && ShouldSyncTableMetadata(relationId))
+	{
+		SendCommandToWorkers(OTHER_WORKERS_WITH_METADATA,
+							 DISABLE_DDL_PROPAGATION);
+
+
+		/*
+		 * Note that here we ignore the schema and send the queryString as is
+		 * since citus_truncate_trigger already uses qualified table name.
+		 * If that was not the case, we should also had to set the search path
+		 * as we do for regular DDLs.
+		 */
+		SendCommandToWorkers(OTHER_WORKERS_WITH_METADATA,
+							 queryString);
+	}
 
 	if (MultiShardConnectionType == SEQUENTIAL_CONNECTION)
 	{
