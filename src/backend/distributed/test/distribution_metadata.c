@@ -32,6 +32,7 @@
 #include "nodes/pg_list.h"
 #include "nodes/primnodes.h"
 #include "storage/lock.h"
+#include "tcop/tcopprot.h"
 #include "utils/array.h"
 #include "utils/elog.h"
 #include "utils/errcodes.h"
@@ -48,6 +49,7 @@ PG_FUNCTION_INFO_V1(partition_type);
 PG_FUNCTION_INFO_V1(is_distributed_table);
 PG_FUNCTION_INFO_V1(create_monolithic_shard_row);
 PG_FUNCTION_INFO_V1(acquire_shared_shard_lock);
+PG_FUNCTION_INFO_V1(relation_count_in_query);
 
 
 /*
@@ -248,4 +250,44 @@ acquire_shared_shard_lock(PG_FUNCTION_ARGS)
 	LockShardResource(shardId, ShareLock);
 
 	PG_RETURN_VOID();
+}
+
+
+/*
+ * relation_count_in_query return the first query's relation count.
+ */
+Datum
+relation_count_in_query(PG_FUNCTION_ARGS)
+{
+	text *queryString = PG_GETARG_TEXT_P(0);
+
+	char *queryStringChar = text_to_cstring(queryString);
+	List *parseTreeList = pg_parse_query(queryStringChar);
+	ListCell *parseTreeCell = NULL;
+
+	foreach(parseTreeCell, parseTreeList)
+	{
+		Node *parsetree = (Node *) lfirst(parseTreeCell);
+		ListCell *queryTreeCell = NULL;
+		List *queryTreeList = NIL;
+
+#if (PG_VERSION_NUM >= 100000)
+		queryTreeList = pg_analyze_and_rewrite((RawStmt *) parsetree, queryStringChar,
+											   NULL, 0, NULL);
+#else
+		queryTreeList = pg_analyze_and_rewrite(parsetree, queryStringChar, NULL, 0);
+#endif
+
+		foreach(queryTreeCell, queryTreeList)
+		{
+			Query *query = lfirst(queryTreeCell);
+			List *rangeTableList = NIL;
+
+			ExtractRangeTableRelationWalker((Node *) query, &rangeTableList);
+
+			PG_RETURN_INT32(list_length(rangeTableList));
+		}
+	}
+
+	PG_RETURN_INT32(0);
 }
