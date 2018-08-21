@@ -1825,8 +1825,21 @@ RangeTableArrayContainsAnyRTEIdentities(RangeTblEntry **rangeTableEntries, int
 		 * (i.e.,rangeTableEntry could be a subquery where we're interested
 		 * in relations).
 		 */
-		ExtractRangeTableRelationWalker((Node *) rangeTableEntry,
-										&rangeTableRelationList);
+		if (rangeTableEntry->rtekind == RTE_SUBQUERY)
+		{
+			ExtractRangeTableRelationWalker((Node *) rangeTableEntry->subquery,
+											&rangeTableRelationList);
+		}
+		else if (rangeTableEntry->rtekind == RTE_RELATION)
+		{
+			ExtractRangeTableRelationWalker((Node *) rangeTableEntry,
+											&rangeTableRelationList);
+		}
+		else
+		{
+			/* we currently do not accept any other RTE types here */
+			continue;
+		}
 
 		foreach(rteRelationCell, rangeTableRelationList)
 		{

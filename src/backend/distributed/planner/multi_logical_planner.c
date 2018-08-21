@@ -2080,12 +2080,6 @@ ExtractRangeTableRelationWalker(Node *node, List **rangeTableRelationList)
 
 			walkIsComplete = false;
 		}
-		else
-		{
-			walkIsComplete = range_table_walker(list_make1(rangeTable),
-												ExtractRangeTableRelationWalker,
-												rangeTableRelationList, 0);
-		}
 	}
 	else if (IsA(node, Query))
 	{
