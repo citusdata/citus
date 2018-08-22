@@ -51,6 +51,11 @@ CREATE FUNCTION acquire_shared_shard_lock(bigint)
 	AS 'citus'
 	LANGUAGE C STRICT;
 
+CREATE FUNCTION relation_count_in_query(text)
+	RETURNS int
+	AS 'citus'
+	LANGUAGE C STRICT;
+
 -- ===================================================================
 -- test distribution metadata functionality
 -- ===================================================================
@@ -259,5 +264,85 @@ SELECT get_shard_id_for_distribution_column('get_shardid_test_table5', 3248);
 SELECT get_shard_id_for_distribution_column('get_shardid_test_table5', 4001);
 SELECT get_shard_id_for_distribution_column('get_shardid_test_table5', -999);
 
+
+SET citus.shard_count TO 2;
+CREATE TABLE events_table_count (user_id int, time timestamp, event_type int, value_2 int, value_3 float, value_4 bigint);
+SELECT create_distributed_table('events_table_count', 'user_id');
+
+CREATE TABLE users_table_count (user_id int, time timestamp, value_1 int, value_2 int, value_3 float, value_4 bigint);
+SELECT create_distributed_table('users_table_count', 'user_id');
+
+SELECT relation_count_in_query($$-- we can support arbitrary subqueries within UNIONs
+SELECT ("final_query"."event_types") as types, count(*) AS sumOfEventType
+FROM
+  ( SELECT 
+      *, random()
+    FROM
+     (SELECT 
+        "t"."user_id", "t"."time", unnest("t"."collected_events") AS "event_types"
+      FROM
+        ( SELECT 
+            "t1"."user_id", min("t1"."time") AS "time", array_agg(("t1"."event") ORDER BY TIME ASC, event DESC) AS collected_events
+          FROM (
+                (SELECT 
+                    *
+                 FROM
+                   (SELECT 
+                          events_table."time", 0 AS event, events_table."user_id"
+                    FROM 
+                       "events_table_count" as events_table
+                    WHERE 
+                      events_table.event_type IN (1, 2) ) events_subquery_1) 
+                UNION 
+                 (SELECT *
+                  FROM
+                    (
+                          SELECT * FROM
+                          (
+                              SELECT 
+                                max("events_table_count"."time"),
+                                0 AS event,
+                                "events_table_count"."user_id"
+                              FROM 
+                                "events_table_count", users_table_count as "users"
+                              WHERE 
+                                 "events_table_count".user_id = users.user_id AND
+                                "events_table_count".event_type IN (1, 2)
+                                GROUP BY   "events_table_count"."user_id"
+                          ) as events_subquery_5
+                     ) events_subquery_2)
+               UNION 
+                 (SELECT *
+                  FROM
+                    (SELECT 
+                        "events_table_count"."time", 2 AS event, "events_table_count"."user_id"
+                     FROM 
+                       "events_table_count"
+                     WHERE 
+                      event_type IN (3, 4) ) events_subquery_3)
+               UNION 
+                 (SELECT *
+                  FROM
+                    (SELECT
+                       "events_table_count"."time", 3 AS event, "events_table_count"."user_id"
+                     FROM 
+                       "events_table_count"
+                     WHERE 
+                      event_type IN (5, 6)) events_subquery_4)
+                 ) t1
+         GROUP BY "t1"."user_id") AS t) "q" 
+INNER JOIN
+     (SELECT 
+        "events_table_count"."user_id"
+      FROM 
+        users_table_count as "events_table_count"
+      WHERE 
+        value_1 > 0 and value_1 < 4) AS t 
+     ON (t.user_id = q.user_id)) as final_query
+GROUP BY 
+  types
+ORDER BY 
+  types;$$);
+
 -- clear unnecessary tables;
-DROP TABLE get_shardid_test_table1, get_shardid_test_table2, get_shardid_test_table3, get_shardid_test_table4, get_shardid_test_table5;
+DROP TABLE get_shardid_test_table1, get_shardid_test_table2, get_shardid_test_table3, get_shardid_test_table4, get_shardid_test_table5, events_table_count;
