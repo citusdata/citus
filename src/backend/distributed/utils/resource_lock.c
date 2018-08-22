@@ -123,6 +123,46 @@ lock_shard_resources(PG_FUNCTION_ARGS)
 
 
 /*
+ * LockShardListMetadataOnWorkers acquires the matadata locks for the specified shards on
+ * metadata workers. Note that the function does not sort the shard list, therefore the
+ * caller should sort the shard list in order to avoid deadlocks.
+ */
+void
+LockShardListMetadataOnWorkers(LOCKMODE lockmode, List *shardIntervalList)
+{
+	StringInfo lockCommand = makeStringInfo();
+	ListCell *shardIntervalCell = NULL;
+	int processedShardIntervalCount = 0;
+	int totalShardIntervalCount = list_length(shardIntervalList);
+
+	if (list_length(shardIntervalList) == 0)
+	{
+		return;
+	}
+
+	appendStringInfo(lockCommand, "SELECT lock_shard_metadata(%d, ARRAY[", lockmode);
+
+	foreach(shardIntervalCell, shardIntervalList)
+	{
+		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
+		int64 shardId = shardInterval->shardId;
+
+		appendStringInfo(lockCommand, "%lu", shardId);
+
+		processedShardIntervalCount++;
+		if (processedShardIntervalCount != totalShardIntervalCount)
+		{
+			appendStringInfo(lockCommand, ", ");
+		}
+	}
+
+	appendStringInfo(lockCommand, "])");
+
+	SendCommandToWorkers(WORKERS_WITH_METADATA, lockCommand->data);
+}
+
+
+/*
  * IntToLockMode verifies whether the specified integer is an accepted lock mode
  * and returns it as a LOCKMODE enum.
  */
