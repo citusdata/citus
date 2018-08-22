@@ -29,6 +29,7 @@ typedef enum TargetWorkerSet
 /* Functions declarations for worker transactions */
 extern List * GetWorkerTransactions(void);
 extern void SendCommandToWorker(char *nodeName, int32 nodePort, char *command);
+extern void SendCommandToFirstWorker(char *command);
 extern void SendCommandToWorkers(TargetWorkerSet targetWorkerSet, char *command);
 extern void SendBareCommandListToWorkers(TargetWorkerSet targetWorkerSet,
 										 List *commandList);

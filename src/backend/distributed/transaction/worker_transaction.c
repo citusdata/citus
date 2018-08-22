@@ -20,6 +20,7 @@
 
 #include "access/xact.h"
 #include "distributed/connection_management.h"
+#include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_shard_transaction.h"
 #include "distributed/resource_lock.h"
@@ -52,6 +53,30 @@ SendCommandToWorker(char *nodeName, int32 nodePort, char *command)
 	MarkRemoteTransactionCritical(transactionConnection);
 	RemoteTransactionBeginIfNecessary(transactionConnection);
 	ExecuteCriticalRemoteCommand(transactionConnection, command);
+}
+
+
+/*
+ * SendCommandToFirstWorker sends the given command only to the first worker node
+ * sorted by host name and port number using SendCommandToWorker.
+ */
+void
+SendCommandToFirstWorker(char *command)
+{
+	List *workerNodeList = ActivePrimaryNodeList();
+	WorkerNode *firstWorkerNode = NULL;
+
+	workerNodeList = SortList(workerNodeList, CompareWorkerNodes);
+
+	if (list_length(workerNodeList) == 0)
+	{
+		ereport(ERROR, (errmsg("cannot find a worker node")));
+	}
+
+	firstWorkerNode = (WorkerNode *) linitial(workerNodeList);
+
+	SendCommandToWorker(firstWorkerNode->workerName, firstWorkerNode->workerPort,
+						command);
 }
 
 

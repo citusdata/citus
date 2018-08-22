@@ -2101,12 +2101,6 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
 	copyDest->distributedRelation = distributedRelation;
 	copyDest->tupleDescriptor = inputTupleDescriptor;
 
-	/* we don't support copy to reference tables from workers */
-	if (partitionMethod == DISTRIBUTE_BY_NONE)
-	{
-		EnsureCoordinator();
-	}
-
 	/* load the list of shards and verify that we have shards to copy into */
 	shardIntervalList = LoadShardIntervalList(tableId);
 	if (shardIntervalList == NIL)
@@ -2147,7 +2141,7 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
 	 * Prevent concurrent UPDATE/DELETE on replication factor >1
 	 * (see AcquireExecutorMultiShardLocks() at multi_router_executor.c)
 	 */
-	LockShardListResources(shardIntervalList, RowExclusiveLock);
+	SerializeNonCommutativeWrites(shardIntervalList, RowExclusiveLock);
 
 	/* keep the table metadata to avoid looking it up for every tuple */
 	copyDest->tableMetadata = cacheEntry;

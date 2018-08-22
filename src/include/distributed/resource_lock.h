@@ -13,6 +13,7 @@
 #include "postgres.h" /* IWYU pragma: keep */
 #include "c.h"
 
+#include "distributed/worker_transaction.h"
 #include "nodes/pg_list.h"
 #include "storage/lock.h"
 
@@ -67,6 +68,7 @@ typedef enum AdvisoryLocktagClass
 extern void LockShardDistributionMetadata(int64 shardId, LOCKMODE lockMode);
 extern bool TryLockShardDistributionMetadata(int64 shardId, LOCKMODE lockMode);
 extern void LockShardListMetadataOnWorkers(LOCKMODE lockmode, List *shardIntervalList);
+extern void BlockWritesToShardList(List *shardList);
 
 /* Lock shard/relation metadata of the referenced reference table if exists */
 extern void LockReferencedReferenceShardDistributionMetadata(uint64 shardId, LOCKMODE
@@ -84,8 +86,9 @@ extern void UnlockJobResource(uint64 jobId, LOCKMODE lockmode);
 extern void LockShardListMetadata(List *shardIntervalList, LOCKMODE lockMode);
 extern void LockShardsInPlacementListMetadata(List *shardPlacementList,
 											  LOCKMODE lockMode);
-extern void LockShardListResources(List *shardIntervalList, LOCKMODE lockMode);
+extern void SerializeNonCommutativeWrites(List *shardIntervalList, LOCKMODE lockMode);
 extern void LockRelationShardResources(List *relationShardList, LOCKMODE lockMode);
+extern List * GetSortedReferenceShardIntervals(List *relationList);
 
 /* Lock partitions of partitioned table */
 extern void LockPartitionsInRelationList(List *relationIdList, LOCKMODE lockmode);

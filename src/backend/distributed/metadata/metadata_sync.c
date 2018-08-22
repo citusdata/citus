@@ -184,6 +184,31 @@ stop_metadata_sync_to_node(PG_FUNCTION_ARGS)
 
 
 /*
+ * ClusterHasKnownMetadataWorkers returns true if the node executing the function
+ * knows at least one worker with metadata. We do it
+ * (a) by checking the node that executes the function is a worker with metadata
+ * (b) the coordinator knows at least one worker with metadata.
+ */
+bool
+ClusterHasKnownMetadataWorkers()
+{
+	bool workerWithMetadata = false;
+
+	if (GetLocalGroupId() != 0)
+	{
+		workerWithMetadata = true;
+	}
+
+	if (workerWithMetadata || HasMetadataWorkers())
+	{
+		return true;
+	}
+
+	return false;
+}
+
+
+/*
  * ShouldSyncTableMetadata checks if the metadata of a distributed table should be
  * propagated to metadata workers, i.e. the table is an MX table or reference table.
  * Tables with streaming replication model (which means RF=1) and hash distribution are

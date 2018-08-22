@@ -172,6 +172,5 @@ extern void CopyShardForeignConstraintCommandListGrouped(ShardInterval *shardInt
 extern ShardPlacement * SearchShardPlacementInList(List *shardPlacementList,
 												   char *nodeName, uint32 nodePort,
 												   bool missingOk);
-extern void BlockWritesToShardList(List *shardList);
 
 #endif   /* MASTER_PROTOCOL_H */

@@ -108,35 +108,6 @@ SELECT count(*) FROM pg_dist_shard WHERE logicalrelid='mx_table'::regclass;
      5
 (1 row)
 
--- INSERT/UPDATE/DELETE/COPY on reference tables
-SELECT * FROM mx_ref_table ORDER BY col_1;
- col_1 | col_2  
--------+--------
-   -78 | sapien
-   -37 | morbi
-   -34 | augue
-(3 rows)
-
-INSERT INTO mx_ref_table (col_1, col_2) VALUES (-6, 'vestibulum');
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Modifications to reference tables are supported only from the coordinator.
-UPDATE mx_ref_table SET col_2 = 'habitant' WHERE col_1 = -37;
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Modifications to reference tables are supported only from the coordinator.
-DELETE FROM mx_ref_table WHERE col_1 = -78;
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Modifications to reference tables are supported only from the coordinator.
-COPY mx_ref_table (col_1, col_2) FROM STDIN WITH (FORMAT 'csv');
-ERROR:  operation is not allowed on this node
-HINT:  Connect to the coordinator and run it again.
-SELECT * FROM mx_ref_table ORDER BY col_1;
- col_1 | col_2  
--------+--------
-   -78 | sapien
-   -37 | morbi
-   -34 | augue
-(3 rows)
-
 \c - - - :master_port
 DROP TABLE mx_ref_table;
 CREATE UNIQUE INDEX mx_test_uniq_index ON mx_table(col_1);

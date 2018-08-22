@@ -526,7 +526,6 @@ ModifyQuerySupported(Query *queryTree, Query *originalQuery, bool multiShardQuer
 	Oid distributedTableId = ExtractFirstDistributedTableId(queryTree);
 	uint32 rangeTableId = 1;
 	Var *partitionColumn = PartitionColumn(distributedTableId, rangeTableId);
-	bool isCoordinator = IsCoordinator();
 	List *rangeTableList = NIL;
 	ListCell *rangeTableCell = NULL;
 	uint32 queryTableCount = 0;
@@ -586,12 +585,9 @@ ModifyQuerySupported(Query *queryTree, Query *originalQuery, bool multiShardQuer
 	foreach(rangeTableCell, rangeTableList)
 	{
 		RangeTblEntry *rangeTableEntry = (RangeTblEntry *) lfirst(rangeTableCell);
-		bool referenceTable = false;
 
 		if (rangeTableEntry->rtekind == RTE_RELATION)
 		{
-			DistTableCacheEntry *distTableEntry = NULL;
-
 			if (!IsDistributedTable(rangeTableEntry->relid))
 			{
 				StringInfo errorMessage = makeStringInfo();
@@ -602,22 +598,6 @@ ModifyQuerySupported(Query *queryTree, Query *originalQuery, bool multiShardQuer
 
 				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 									 errorMessage->data, NULL, NULL);
-			}
-
-			distTableEntry = DistributedTableCacheEntry(rangeTableEntry->relid);
-			if (distTableEntry->partitionMethod == DISTRIBUTE_BY_NONE)
-			{
-				referenceTable = true;
-			}
-
-			if (referenceTable && !isCoordinator)
-			{
-				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-									 "cannot perform distributed planning for the given"
-									 " modification",
-									 "Modifications to reference tables are "
-									 "supported only from the coordinator.",
-									 NULL);
 			}
 
 			queryTableCount++;
@@ -2842,12 +2822,6 @@ MultiRouterPlannableQuery(Query *query, RelationRestrictionContext *restrictionC
 			{
 				uint32 tableReplicationFactor = TableShardReplicationFactor(
 					distributedTableId);
-
-				if (partitionMethod == DISTRIBUTE_BY_NONE)
-				{
-					EnsureCoordinator();
-				}
-
 
 				if (tableReplicationFactor > 1 && partitionMethod != DISTRIBUTE_BY_NONE)
 				{

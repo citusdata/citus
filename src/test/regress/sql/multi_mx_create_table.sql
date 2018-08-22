@@ -3,6 +3,7 @@
 --
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1220000;
+ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 1390000;
 
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 SELECT start_metadata_sync_to_node('localhost', :worker_2_port);

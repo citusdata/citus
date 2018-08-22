@@ -128,7 +128,9 @@ void
 ReplicateAllReferenceTablesToNode(char *nodeName, int nodePort)
 {
 	List *referenceTableList = ReferenceTableOidList();
+	List *referenceShardIntervalList = NIL;
 	ListCell *referenceTableCell = NULL;
+	ListCell *referenceShardIntervalCell = NULL;
 	List *workerNodeList = ActivePrimaryNodeList();
 	uint32 workerCount = 0;
 	Oid firstReferenceTableId = InvalidOid;
@@ -150,6 +152,20 @@ ReplicateAllReferenceTablesToNode(char *nodeName, int nodePort)
 		Oid referenceTableId = lfirst_oid(referenceTableCell);
 		List *shardIntervalList = LoadShardIntervalList(referenceTableId);
 		ShardInterval *shardInterval = (ShardInterval *) linitial(shardIntervalList);
+
+		referenceShardIntervalList = lappend(referenceShardIntervalList,
+											 shardInterval);
+	}
+
+	if (ClusterHasKnownMetadataWorkers())
+	{
+		BlockWritesToShardList(referenceShardIntervalList);
+	}
+
+	foreach(referenceShardIntervalCell, referenceShardIntervalList)
+	{
+		ShardInterval *shardInterval = (ShardInterval *) lfirst(
+			referenceShardIntervalCell);
 		uint64 shardId = shardInterval->shardId;
 
 		LockShardDistributionMetadata(shardId, ExclusiveLock);
@@ -394,6 +410,7 @@ void
 DeleteAllReferenceTablePlacementsFromNodeGroup(uint32 groupId)
 {
 	List *referenceTableList = ReferenceTableOidList();
+	List *referenceShardIntervalList = NIL;
 	ListCell *referenceTableCell = NULL;
 
 	/* if there are no reference tables, we do not need to do anything */
@@ -407,6 +424,13 @@ DeleteAllReferenceTablePlacementsFromNodeGroup(uint32 groupId)
 	 * DeleteAllReferenceTablePlacementsFromNodeGroup calls.
 	 */
 	referenceTableList = SortList(referenceTableList, CompareOids);
+	if (ClusterHasKnownMetadataWorkers())
+	{
+		referenceShardIntervalList = GetSortedReferenceShardIntervals(referenceTableList);
+
+		BlockWritesToShardList(referenceShardIntervalList);
+	}
+
 	foreach(referenceTableCell, referenceTableList)
 	{
 		GroupShardPlacement *placement = NULL;
