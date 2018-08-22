@@ -2545,6 +2545,12 @@ IntersectPlacementList(List *lhsPlacementList, List *rhsPlacementList)
 						WORKER_LENGTH) == 0)
 			{
 				placementList = lappend(placementList, rhsPlacement);
+
+				/*
+				 * We don't need to add the same placement over and over again. This
+				 * could happen if both placements of a shard appear on the same node.
+				 */
+				break;
 			}
 		}
 	}
