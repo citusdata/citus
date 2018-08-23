@@ -96,6 +96,8 @@ static int64 ExecuteModifyTasks(List *taskList, bool expectResults,
 static void AcquireExecutorShardLock(Task *task, CmdType commandType);
 static void AcquireExecutorMultiShardLocks(List *taskList);
 static bool RequiresConsistentSnapshot(Task *task);
+static void RouterMultiModifyExecScan(CustomScanState *node);
+static void RouterSequentialModifyExecScan(CustomScanState *node);
 static void ExtractParametersFromParamListInfo(ParamListInfo paramListInfo,
 											   Oid **parameterTypes,
 											   const char ***parameterValues);
@@ -534,12 +536,15 @@ CitusModifyBeginScan(CustomScanState *node, EState *estate, int eflags)
 
 
 /*
- * RouterSequentialModifyExecScan executes 0 or more modifications on a
- * distributed table sequentially and returns results if there are any.
- * Note that we also use this path for SELECT ... FOR UPDATE queries.
+ * RouterModifyExecScan executes a list of tasks on remote nodes, retrieves
+ * the results and, if RETURNING is used or SELECT FOR UPDATE executed,
+ * returns the results with a TupleTableSlot.
+ *
+ * The function can handle both single task query executions,
+ * sequential or parallel multi-task query executions.
  */
 TupleTableSlot *
-RouterSequentialModifyExecScan(CustomScanState *node)
+RouterModifyExecScan(CustomScanState *node)
 {
 	CitusScanState *scanState = (CitusScanState *) node;
 	TupleTableSlot *resultSlot = NULL;
@@ -547,63 +552,26 @@ RouterSequentialModifyExecScan(CustomScanState *node)
 	if (!scanState->finishedRemoteScan)
 	{
 		DistributedPlan *distributedPlan = scanState->distributedPlan;
-		bool hasReturning = distributedPlan->hasReturning;
 		Job *workerJob = distributedPlan->workerJob;
 		List *taskList = workerJob->taskList;
-		ListCell *taskCell = NULL;
-		bool multipleTasks = list_length(taskList) > 1;
-		EState *executorState = scanState->customScanState.ss.ps.state;
-		bool taskListRequires2PC = TaskListRequires2PC(taskList);
-		bool alwaysThrowErrorOnFailure = false;
-		CmdType operation = scanState->distributedPlan->operation;
-
-		/*
-		 * We could naturally handle function-based transactions (i.e. those using
-		 * PL/pgSQL or similar) by checking the type of queryDesc->dest, but some
-		 * customers already use functions that touch multiple shards from within
-		 * a function, so we'll ignore functions for now.
-		 */
-		if (IsTransactionBlock() || multipleTasks || taskListRequires2PC)
-		{
-			BeginOrContinueCoordinatedTransaction();
-
-			/*
-			 * Although using two phase commit protocol is an independent decision than
-			 * failing on any error, we prefer to couple them. Our motivation is that
-			 * the failures are rare, and we prefer to avoid marking placements invalid
-			 * in case of failures.
-			 *
-			 * For reference tables, we always set alwaysThrowErrorOnFailure since we
-			 * absolutely want to avoid marking any placements invalid.
-			 *
-			 * We also cannot handle failures when there is RETURNING and there are more
-			 * than one task to execute.
-			 */
-			if (taskListRequires2PC)
-			{
-				CoordinatedTransactionUse2PC();
-
-				alwaysThrowErrorOnFailure = true;
-			}
-			else if (multipleTasks && hasReturning)
-			{
-				alwaysThrowErrorOnFailure = true;
-			}
-		}
+		bool parallelExecution = true;
 
 		ExecuteSubPlans(distributedPlan);
 
-		foreach(taskCell, taskList)
+		if (list_length(taskList) <= 1 ||
+			IsMultiRowInsert(workerJob->jobQuery) ||
+			MultiShardConnectionType == SEQUENTIAL_CONNECTION)
 		{
-			Task *task = (Task *) lfirst(taskCell);
+			parallelExecution = false;
+		}
 
-			/*
-			 * Result is expected for SELECT ... FOR UPDATE queries as well.
-			 */
-			executorState->es_processed +=
-				ExecuteSingleModifyTask(scanState, task, operation,
-										alwaysThrowErrorOnFailure,
-										hasReturning || task->relationRowLockList != NIL);
+		if (parallelExecution)
+		{
+			RouterMultiModifyExecScan(node);
+		}
+		else
+		{
+			RouterSequentialModifyExecScan(node);
 		}
 
 		scanState->finishedRemoteScan = true;
@@ -612,6 +580,75 @@ RouterSequentialModifyExecScan(CustomScanState *node)
 	resultSlot = ReturnTupleFromTuplestore(scanState);
 
 	return resultSlot;
+}
+
+
+/*
+ * RouterSequentialModifyExecScan executes 0 or more modifications on a
+ * distributed table sequentially and stores them in custom scan's tuple
+ * store. Note that we also use this path for SELECT ... FOR UPDATE queries.
+ */
+static void
+RouterSequentialModifyExecScan(CustomScanState *node)
+{
+	CitusScanState *scanState = (CitusScanState *) node;
+	DistributedPlan *distributedPlan = scanState->distributedPlan;
+	bool hasReturning = distributedPlan->hasReturning;
+	Job *workerJob = distributedPlan->workerJob;
+	List *taskList = workerJob->taskList;
+	ListCell *taskCell = NULL;
+	bool multipleTasks = list_length(taskList) > 1;
+	EState *executorState = scanState->customScanState.ss.ps.state;
+	bool taskListRequires2PC = TaskListRequires2PC(taskList);
+	bool alwaysThrowErrorOnFailure = false;
+	CmdType operation = scanState->distributedPlan->operation;
+
+	Assert(!scanState->finishedRemoteScan);
+
+	/*
+	 * We could naturally handle function-based transactions (i.e. those using
+	 * PL/pgSQL or similar) by checking the type of queryDesc->dest, but some
+	 * customers already use functions that touch multiple shards from within
+	 * a function, so we'll ignore functions for now.
+	 */
+	if (IsTransactionBlock() || multipleTasks || taskListRequires2PC)
+	{
+		BeginOrContinueCoordinatedTransaction();
+
+		/*
+		 * Although using two phase commit protocol is an independent decision than
+		 * failing on any error, we prefer to couple them. Our motivation is that
+		 * the failures are rare, and we prefer to avoid marking placements invalid
+		 * in case of failures.
+		 *
+		 * For reference tables, we always set alwaysThrowErrorOnFailure since we
+		 * absolutely want to avoid marking any placements invalid.
+		 *
+		 * We also cannot handle failures when there is RETURNING and there are more
+		 * than one task to execute.
+		 */
+		if (taskListRequires2PC)
+		{
+			CoordinatedTransactionUse2PC();
+
+			alwaysThrowErrorOnFailure = true;
+		}
+		else if (multipleTasks && hasReturning)
+		{
+			alwaysThrowErrorOnFailure = true;
+		}
+	}
+
+
+	foreach(taskCell, taskList)
+	{
+		Task *task = (Task *) lfirst(taskCell);
+		bool expectResults = (hasReturning || task->relationRowLockList != NIL);
+
+		executorState->es_processed +=
+			ExecuteSingleModifyTask(scanState, task, operation,
+									alwaysThrowErrorOnFailure, expectResults);
+	}
 }
 
 
@@ -667,31 +704,20 @@ TaskListRequires2PC(List *taskList)
 /*
  * RouterMultiModifyExecScan executes a list of tasks on remote nodes, retrieves
  * the results and, if RETURNING is used, stores them in custom scan's tuple store.
- * Then, it returns tuples one by one from this tuple store.
  */
-TupleTableSlot *
+static void
 RouterMultiModifyExecScan(CustomScanState *node)
 {
 	CitusScanState *scanState = (CitusScanState *) node;
-	TupleTableSlot *resultSlot = NULL;
+	DistributedPlan *distributedPlan = scanState->distributedPlan;
+	Job *workerJob = distributedPlan->workerJob;
+	List *taskList = workerJob->taskList;
+	bool hasReturning = distributedPlan->hasReturning;
+	bool isModificationQuery = true;
 
-	if (!scanState->finishedRemoteScan)
-	{
-		DistributedPlan *distributedPlan = scanState->distributedPlan;
-		Job *workerJob = distributedPlan->workerJob;
-		List *taskList = workerJob->taskList;
-		bool hasReturning = distributedPlan->hasReturning;
-		bool isModificationQuery = true;
+	Assert(!scanState->finishedRemoteScan);
 
-		ExecuteSubPlans(distributedPlan);
-		ExecuteMultipleTasks(scanState, taskList, isModificationQuery, hasReturning);
-
-		scanState->finishedRemoteScan = true;
-	}
-
-	resultSlot = ReturnTupleFromTuplestore(scanState);
-
-	return resultSlot;
+	ExecuteMultipleTasks(scanState, taskList, isModificationQuery, hasReturning);
 }
 
 
