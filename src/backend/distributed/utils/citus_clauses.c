@@ -26,18 +26,8 @@
 #include "utils/lsyscache.h"
 
 
-typedef struct FunctionEvaluationContext
-{
-	PlanState *planState;
-	bool containsVar;
-} FunctionEvaluationContext;
-
-
 /* private function declarations */
-static void EvaluateValuesListsItems(List *valuesLists, PlanState *planState);
-static Node * EvaluateNodeIfReferencesFunction(Node *expression, PlanState *planState);
-static Node * PartiallyEvaluateExpressionMutator(Node *expression,
-												 FunctionEvaluationContext *context);
+static bool IsVarNode(Node *node);
 static Expr * citus_evaluate_expr(Expr *expr, Oid result_type, int32 result_typmod,
 								  Oid result_collation, PlanState *planState);
 static bool CitusIsVolatileFunctionIdChecker(Oid func_id, void *context);
@@ -45,250 +35,36 @@ static bool CitusIsMutableFunctionIdChecker(Oid func_id, void *context);
 
 
 /*
- * Whether the executor needs to reparse and try to execute this query.
+ * RequiresMastereEvaluation returns the executor needs to reparse and
+ * try to execute this query, which is the case if the query contains
+ * any stable or volatile function.
  */
 bool
 RequiresMasterEvaluation(Query *query)
 {
-	ListCell *targetEntryCell = NULL;
-	ListCell *rteCell = NULL;
-	ListCell *cteCell = NULL;
-
-	foreach(targetEntryCell, query->targetList)
-	{
-		TargetEntry *targetEntry = (TargetEntry *) lfirst(targetEntryCell);
-
-		if (FindNodeCheck((Node *) targetEntry->expr, CitusIsMutableFunction))
-		{
-			return true;
-		}
-	}
-
-	foreach(rteCell, query->rtable)
-	{
-		RangeTblEntry *rte = (RangeTblEntry *) lfirst(rteCell);
-
-		if (rte->rtekind == RTE_SUBQUERY)
-		{
-			if (RequiresMasterEvaluation(rte->subquery))
-			{
-				return true;
-			}
-		}
-		else if (rte->rtekind == RTE_VALUES)
-		{
-			if (FindNodeCheck((Node *) rte->values_lists, CitusIsMutableFunction))
-			{
-				return true;
-			}
-		}
-	}
-
-	foreach(cteCell, query->cteList)
-	{
-		CommonTableExpr *expr = (CommonTableExpr *) lfirst(cteCell);
-
-		if (RequiresMasterEvaluation((Query *) expr->ctequery))
-		{
-			return true;
-		}
-	}
-
-	if (query->jointree && query->jointree->quals)
-	{
-		if (FindNodeCheck((Node *) query->jointree->quals, CitusIsMutableFunction))
-		{
-			return true;
-		}
-	}
-
-	return false;
+	return FindNodeCheck((Node *) query, CitusIsMutableFunction);
 }
 
 
 /*
- * Looks at each TargetEntry of the query and the jointree quals, evaluating
- * any sub-expressions which don't include Vars.
+ * ExecuteMasterEvaluableFunctions evaluates expressions that can be resolved
+ * to a constant.
  */
 void
 ExecuteMasterEvaluableFunctions(Query *query, PlanState *planState)
 {
-	ListCell *targetEntryCell = NULL;
-	ListCell *rteCell = NULL;
-	ListCell *cteCell = NULL;
-	Node *modifiedNode = NULL;
-
-	if (query->jointree && query->jointree->quals)
-	{
-		query->jointree->quals = PartiallyEvaluateExpression(query->jointree->quals,
-															 planState);
-	}
-
-	foreach(targetEntryCell, query->targetList)
-	{
-		TargetEntry *targetEntry = (TargetEntry *) lfirst(targetEntryCell);
-
-		/* performance optimization for the most common cases */
-		if (IsA(targetEntry->expr, Const) || IsA(targetEntry->expr, Var))
-		{
-			continue;
-		}
-
-		modifiedNode = PartiallyEvaluateExpression((Node *) targetEntry->expr,
-												   planState);
-
-		targetEntry->expr = (Expr *) modifiedNode;
-	}
-
-	foreach(rteCell, query->rtable)
-	{
-		RangeTblEntry *rte = (RangeTblEntry *) lfirst(rteCell);
-
-		if (rte->rtekind == RTE_SUBQUERY)
-		{
-			ExecuteMasterEvaluableFunctions(rte->subquery, planState);
-		}
-		else if (rte->rtekind == RTE_VALUES)
-		{
-			EvaluateValuesListsItems(rte->values_lists, planState);
-		}
-	}
-
-	foreach(cteCell, query->cteList)
-	{
-		CommonTableExpr *expr = (CommonTableExpr *) lfirst(cteCell);
-
-		ExecuteMasterEvaluableFunctions((Query *) expr->ctequery, planState);
-	}
+	PartiallyEvaluateExpression((Node *) query, planState);
 }
 
 
 /*
- * EvaluateValuesListsItems siply does the work of walking over each expression
- * in each value list contained in a multi-row INSERT's VALUES RTE. Basically
- * a nested for loop to perform an in-place replacement of expressions with
- * their ultimate values, should evaluation be necessary.
- */
-static void
-EvaluateValuesListsItems(List *valuesLists, PlanState *planState)
-{
-	ListCell *exprListCell = NULL;
-
-	foreach(exprListCell, valuesLists)
-	{
-		List *exprList = (List *) lfirst(exprListCell);
-		ListCell *exprCell = NULL;
-
-		foreach(exprCell, exprList)
-		{
-			Expr *expr = (Expr *) lfirst(exprCell);
-			Node *modifiedNode = NULL;
-
-			modifiedNode = PartiallyEvaluateExpression((Node *) expr, planState);
-
-			exprCell->data.ptr_value = (void *) modifiedNode;
-		}
-	}
-}
-
-
-/*
- * Walks the expression evaluating any node which invokes a function as long as a Var
- * doesn't show up in the parameter list.
+ * PartiallyEvaluateExpression descend into an expression tree to evaluate
+ * expressions that can be resolved to a constant on the master. Expressions
+ * containing a Var are skipped, since the value of the Var is not known
+ * on the master.
  */
 Node *
 PartiallyEvaluateExpression(Node *expression, PlanState *planState)
-{
-	FunctionEvaluationContext globalContext = { planState, false };
-
-	return PartiallyEvaluateExpressionMutator(expression, &globalContext);
-}
-
-
-/*
- * When you find a function call evaluate it, the planner made sure there were no Vars.
- *
- * Tell your parent if either you or one if your children is a Var.
- *
- * A little inefficient. It goes to the bottom of the tree then calls EvaluateExpression
- * on each function on the way back up. Say we had an expression with no Vars, we could
- * only call EvaluateExpression on the top-most level and get the same result.
- */
-static Node *
-PartiallyEvaluateExpressionMutator(Node *expression, FunctionEvaluationContext *context)
-{
-	Node *copy = NULL;
-	FunctionEvaluationContext localContext = { context->planState, false };
-
-	if (expression == NULL)
-	{
-		return expression;
-	}
-
-	/* pass any argument lists back to the mutator to copy and recurse for us */
-	if (IsA(expression, List))
-	{
-		return expression_tree_mutator(expression,
-									   PartiallyEvaluateExpressionMutator,
-									   context);
-	}
-
-	/* ExecInitExpr cannot handle PARAM_SUBLINK */
-	if (IsA(expression, Param))
-	{
-		Param *param = (Param *) expression;
-		if (param->paramkind == PARAM_SUBLINK)
-		{
-			return expression;
-		}
-	}
-
-	if (IsA(expression, Var))
-	{
-		context->containsVar = true;
-
-		/* makes a copy for us */
-		return expression_tree_mutator(expression,
-									   PartiallyEvaluateExpressionMutator,
-									   context);
-	}
-
-	/* expression_tree_mutator does not descend into Query trees */
-	if (IsA(expression, Query))
-	{
-		Query *query = (Query *) expression;
-
-		return (Node *) query_tree_mutator(query, PartiallyEvaluateExpressionMutator,
-										   context, 0);
-	}
-
-	copy = expression_tree_mutator(expression,
-								   PartiallyEvaluateExpressionMutator,
-								   &localContext);
-
-	if (localContext.containsVar)
-	{
-		context->containsVar = true;
-	}
-	else
-	{
-		copy = EvaluateNodeIfReferencesFunction(copy, context->planState);
-	}
-
-	return copy;
-}
-
-
-/*
- * Used to evaluate functions during queries on the master before sending them to workers
- *
- * The idea isn't to evaluate every kind of expression, just the kinds whoes result might
- * change between invocations (the idea is to allow users to use functions but still have
- * consistent shard replicas, since we use statement replication). This means evaluating
- * all nodes which invoke functions which might not be IMMUTABLE.
- */
-static Node *
-EvaluateNodeIfReferencesFunction(Node *expression, PlanState *planState)
 {
 	if (expression == NULL || IsA(expression, Const))
 	{
@@ -297,6 +73,16 @@ EvaluateNodeIfReferencesFunction(Node *expression, PlanState *planState)
 
 	switch (nodeTag(expression))
 	{
+		case T_Param:
+		{
+			Param *param = (Param *) expression;
+			if (param->paramkind == PARAM_SUBLINK)
+			{
+				/* ExecInitExpr cannot handle PARAM_SUBLINK */
+				return expression;
+			}
+		}
+
 		case T_FuncExpr:
 		case T_OpExpr:
 		case T_DistinctExpr:
@@ -305,10 +91,16 @@ EvaluateNodeIfReferencesFunction(Node *expression, PlanState *planState)
 		case T_ArrayCoerceExpr:
 		case T_ScalarArrayOpExpr:
 		case T_RowCompareExpr:
-		case T_Param:
 		case T_RelabelType:
 		case T_CoerceToDomain:
 		{
+			if (FindNodeCheck(expression, IsVarNode))
+			{
+				return (Node *) expression_tree_mutator(expression,
+														PartiallyEvaluateExpression,
+														planState);
+			}
+
 			return (Node *) citus_evaluate_expr((Expr *) expression,
 												exprType(expression),
 												exprTypmod(expression),
@@ -316,13 +108,32 @@ EvaluateNodeIfReferencesFunction(Node *expression, PlanState *planState)
 												planState);
 		}
 
+		case T_Query:
+		{
+			return (Node *) query_tree_mutator((Query *) expression,
+											   PartiallyEvaluateExpression,
+											   planState, QTW_DONT_COPY_QUERY);
+		}
+
 		default:
 		{
-			break;
+			return (Node *) expression_tree_mutator(expression,
+													PartiallyEvaluateExpression,
+													planState);
 		}
 	}
 
 	return expression;
+}
+
+
+/*
+ * IsVarNode returns whether a node is a Var (column reference).
+ */
+static bool
+IsVarNode(Node *node)
+{
+	return IsA(node, Var);
 }
 
 
