@@ -24,6 +24,7 @@
 #include "distributed/listutils.h"
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/metadata_sync.h"
 #include "distributed/multi_router_executor.h"
 #include "distributed/resource_lock.h"
 #include "distributed/worker_manager.h"
@@ -120,6 +121,54 @@ master_move_shard_placement(PG_FUNCTION_ARGS)
 	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 					errmsg("master_move_shard_placement() is only supported on "
 						   "Citus Enterprise")));
+}
+
+
+/*
+ * BlockWritesToShardList blocks writes to all shards in the given shard
+ * list. The function assumes that all the shards in the list are colocated.
+ */
+void
+BlockWritesToShardList(List *shardList)
+{
+	ListCell *shardCell = NULL;
+
+	bool shouldSyncMetadata = false;
+	ShardInterval *firstShardInterval = NULL;
+	Oid firstDistributedTableId = InvalidOid;
+
+	foreach(shardCell, shardList)
+	{
+		ShardInterval *shard = (ShardInterval *) lfirst(shardCell);
+
+		/*
+		 * We need to lock the referenced reference table metadata to avoid
+		 * asynchronous shard copy in case of cascading DML operations.
+		 */
+		LockReferencedReferenceShardDistributionMetadata(shard->shardId,
+														 ExclusiveLock);
+
+		LockShardDistributionMetadata(shard->shardId, ExclusiveLock);
+	}
+
+	/* following code relies on the list to have at least one shard */
+	if (list_length(shardList) == 0)
+	{
+		return;
+	}
+
+	/*
+	 * Since the function assumes that the input shards are colocated,
+	 * calculating shouldSyncMetadata for a single table is sufficient.
+	 */
+	firstShardInterval = (ShardInterval *) linitial(shardList);
+	firstDistributedTableId = firstShardInterval->relationId;
+
+	shouldSyncMetadata = ShouldSyncTableMetadata(firstDistributedTableId);
+	if (shouldSyncMetadata)
+	{
+		LockShardListMetadataOnWorkers(ExclusiveLock, shardList);
+	}
 }
 
 

@@ -931,11 +931,6 @@ SELECT *
  41 |         1 | aznavour     |      11814
 (5 rows)
 
--- SELECT ... FOR UPDATE does not supported from MX nodes if it contains
--- reference table.
-SELECT * FROM customer_mx FOR UPDATE;
-ERROR:  operation is not allowed on this node
-HINT:  Connect to the coordinator and run it again.
 -- not router plannable due to or
 SELECT *
 	FROM articles_hash_mx

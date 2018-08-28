@@ -2,6 +2,7 @@
 -- MULTI_MX_CREATE_TABLE
 --
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1220000;
+ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 1390000;
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
  start_metadata_sync_to_node 
 -----------------------------
@@ -474,20 +475,20 @@ ORDER BY colocationid, logicalrelid;
  mx_ddl_table                                           |            3 |           4 | h          | s
  app_analytics_events_mx                                |            3 |           4 | h          | s
  company_employees_mx                                   |            3 |           4 | h          | s
- nation_hash                                            |            4 |          16 | h          | s
- citus_mx_test_schema.nation_hash                       |            4 |          16 | h          | s
- lineitem_mx                                            |            5 |          16 | h          | s
- orders_mx                                              |            5 |          16 | h          | s
- customer_mx                                            |            6 |           1 | n          | t
- nation_mx                                              |            6 |           1 | n          | t
- part_mx                                                |            6 |           1 | n          | t
- supplier_mx                                            |            6 |           1 | n          | t
- limit_orders_mx                                        |            7 |           2 | h          | s
- articles_hash_mx                                       |            7 |           2 | h          | s
- multiple_hash_mx                                       |            8 |           2 | h          | s
- researchers_mx                                         |            9 |           2 | h          | s
- labs_mx                                                |           10 |           1 | h          | s
- objects_mx                                             |           10 |           1 | h          | s
- articles_single_shard_hash_mx                          |           10 |           1 | h          | s
+ customer_mx                                            |            4 |           1 | n          | t
+ nation_mx                                              |            4 |           1 | n          | t
+ part_mx                                                |            4 |           1 | n          | t
+ supplier_mx                                            |            4 |           1 | n          | t
+ nation_hash                                            |      1390000 |          16 | h          | s
+ citus_mx_test_schema.nation_hash                       |      1390000 |          16 | h          | s
+ lineitem_mx                                            |      1390001 |          16 | h          | s
+ orders_mx                                              |      1390001 |          16 | h          | s
+ limit_orders_mx                                        |      1390002 |           2 | h          | s
+ articles_hash_mx                                       |      1390002 |           2 | h          | s
+ multiple_hash_mx                                       |      1390003 |           2 | h          | s
+ researchers_mx                                         |      1390004 |           2 | h          | s
+ labs_mx                                                |      1390005 |           1 | h          | s
+ objects_mx                                             |      1390005 |           1 | h          | s
+ articles_single_shard_hash_mx                          |      1390005 |           1 | h          | s
 (23 rows)
 

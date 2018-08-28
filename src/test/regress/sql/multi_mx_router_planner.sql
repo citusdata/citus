@@ -407,10 +407,6 @@ SELECT *
 	FROM articles_hash_mx
 	WHERE author_id = (random()::int  * 0 + 1);
 
--- SELECT ... FOR UPDATE does not supported from MX nodes if it contains
--- reference table.
-SELECT * FROM customer_mx FOR UPDATE;
-
 -- not router plannable due to or
 SELECT *
 	FROM articles_hash_mx

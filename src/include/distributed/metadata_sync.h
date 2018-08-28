@@ -18,6 +18,7 @@
 
 
 /* Functions declarations for metadata syncing */
+extern bool ClusterHasKnownMetadataWorkers(void);
 extern bool ShouldSyncTableMetadata(Oid relationId);
 extern List * MetadataCreateCommands(void);
 extern List * GetDistributedTableDDLEvents(Oid relationId);

@@ -32,7 +32,9 @@
 #include "distributed/deparse_shard_query.h"
 #include "distributed/listutils.h"
 #include "distributed/master_metadata_utility.h"
+#include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/metadata_sync.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/multi_physical_planner.h"
@@ -248,7 +250,9 @@ AcquireExecutorShardLock(Task *task, CmdType commandType)
 
 	if (shardId != INVALID_SHARD_ID && lockMode != NoLock)
 	{
-		LockShardResource(shardId, lockMode);
+		ShardInterval *shardInterval = LoadShardInterval(shardId);
+
+		SerializeNonCommutativeWrites(list_make1(shardInterval), lockMode);
 	}
 
 	/*
@@ -282,8 +286,6 @@ AcquireExecutorShardLock(Task *task, CmdType commandType)
 			if (PartitionMethod(relationId) == DISTRIBUTE_BY_NONE)
 			{
 				List *shardIntervalList = LoadShardIntervalList(relationId);
-				ShardInterval *referenceTableShardInterval = (ShardInterval *) linitial(
-					shardIntervalList);
 
 				if (rowLockStrength == LCS_FORKEYSHARE || rowLockStrength == LCS_FORSHARE)
 				{
@@ -295,7 +297,7 @@ AcquireExecutorShardLock(Task *task, CmdType commandType)
 					rowLockMode = ExclusiveLock;
 				}
 
-				LockShardResource(referenceTableShardInterval->shardId, rowLockMode);
+				SerializeNonCommutativeWrites(shardIntervalList, rowLockMode);
 			}
 		}
 	}

@@ -20,7 +20,9 @@
 #include "distributed/colocation_utils.h"
 #include "distributed/listutils.h"
 #include "distributed/master_metadata_utility.h"
+#include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/metadata_sync.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/distributed_planner.h"
 #include "distributed/multi_router_executor.h"
@@ -34,7 +36,10 @@
 
 /* local function forward declarations */
 static LOCKMODE IntToLockMode(int mode);
-static List * GetSortedReferenceShardIntervals(List *relationList);
+static void LockShardListResources(List *shardIntervalList, LOCKMODE lockMode);
+static void LockShardListResourcesOnFirstWorker(LOCKMODE lockmode,
+												List *shardIntervalList);
+static bool IsFirstWorkerNode();
 
 
 /* exports for SQL callable functions */
@@ -83,7 +88,7 @@ lock_shard_metadata(PG_FUNCTION_ARGS)
 
 
 /*
- * lock_shard_resources allows shard resources  to be locked
+ * lock_shard_resources allows shard resources to be locked
  * remotely to serialise non-commutative writes on shards.
  *
  * This function does not sort the array to avoid deadlock, callers
@@ -123,6 +128,111 @@ lock_shard_resources(PG_FUNCTION_ARGS)
 
 
 /*
+ * LockShardListResourcesOnFirstWorker acquires the resource locks for the specified
+ * shards on the first worker. Acquiring a lock with or without metadata does not
+ * matter for us. So, worker does not have to be an MX node, acquiring the lock
+ * on any worker node is enough. Note that the function does not sort the shard list,
+ * therefore the caller should sort the shard list in order to avoid deadlocks.
+ */
+static void
+LockShardListResourcesOnFirstWorker(LOCKMODE lockmode, List *shardIntervalList)
+{
+	StringInfo lockCommand = makeStringInfo();
+	ListCell *shardIntervalCell = NULL;
+	int processedShardIntervalCount = 0;
+	int totalShardIntervalCount = list_length(shardIntervalList);
+
+	appendStringInfo(lockCommand, "SELECT lock_shard_resources(%d, ARRAY[", lockmode);
+
+	foreach(shardIntervalCell, shardIntervalList)
+	{
+		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
+		int64 shardId = shardInterval->shardId;
+
+		appendStringInfo(lockCommand, "%lu", shardId);
+
+		processedShardIntervalCount++;
+		if (processedShardIntervalCount != totalShardIntervalCount)
+		{
+			appendStringInfo(lockCommand, ", ");
+		}
+	}
+
+	appendStringInfo(lockCommand, "])");
+
+	SendCommandToFirstWorker(lockCommand->data);
+}
+
+
+/*
+ * IsFirstWorkerNode checks whether the node is the first worker node sorted
+ * according to the host name and port number.
+ */
+static bool
+IsFirstWorkerNode()
+{
+	List *workerNodeList = ActivePrimaryNodeList();
+	WorkerNode *firstWorkerNode = NULL;
+
+	workerNodeList = SortList(workerNodeList, CompareWorkerNodes);
+
+	if (list_length(workerNodeList) == 0)
+	{
+		return false;
+	}
+
+	firstWorkerNode = (WorkerNode *) linitial(workerNodeList);
+
+	if (firstWorkerNode->groupId == GetLocalGroupId())
+	{
+		return true;
+	}
+
+	return false;
+}
+
+
+/*
+ * LockShardListMetadataOnWorkers acquires the matadata locks for the specified shards on
+ * metadata workers. Note that the function does not sort the shard list, therefore the
+ * caller should sort the shard list in order to avoid deadlocks.
+ */
+void
+LockShardListMetadataOnWorkers(LOCKMODE lockmode, List *shardIntervalList)
+{
+	StringInfo lockCommand = makeStringInfo();
+	ListCell *shardIntervalCell = NULL;
+	int processedShardIntervalCount = 0;
+	int totalShardIntervalCount = list_length(shardIntervalList);
+
+	if (list_length(shardIntervalList) == 0)
+	{
+		return;
+	}
+
+	appendStringInfo(lockCommand, "SELECT lock_shard_metadata(%d, ARRAY[", lockmode);
+
+	foreach(shardIntervalCell, shardIntervalList)
+	{
+		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
+		int64 shardId = shardInterval->shardId;
+
+		appendStringInfo(lockCommand, "%lu", shardId);
+
+		processedShardIntervalCount++;
+		if (processedShardIntervalCount != totalShardIntervalCount)
+		{
+			appendStringInfo(lockCommand, ", ");
+		}
+	}
+
+	appendStringInfo(lockCommand, "])");
+
+	SendCommandToWorkers(WORKERS_WITH_METADATA, lockCommand->data);
+}
+
+
+/*
  * IntToLockMode verifies whether the specified integer is an accepted lock mode
  * and returns it as a LOCKMODE enum.
  */
@@ -140,6 +250,10 @@ IntToLockMode(int mode)
 	else if (mode == AccessShareLock)
 	{
 		return AccessShareLock;
+	}
+	else if (mode == RowExclusiveLock)
+	{
+		return RowExclusiveLock;
 	}
 	else
 	{
@@ -169,6 +283,9 @@ LockShardDistributionMetadata(int64 shardId, LOCKMODE lockMode)
 /*
  * LockReferencedReferenceShardDistributionMetadata acquires the given lock
  * on the reference tables which has a foreign key from the given relation.
+ *
+ * It also gets metadata locks on worker nodes to prevent concurrent write
+ * operations on reference tables from metadata nodes.
  */
 void
 LockReferencedReferenceShardDistributionMetadata(uint64 shardId, LOCKMODE lock)
@@ -178,8 +295,13 @@ LockReferencedReferenceShardDistributionMetadata(uint64 shardId, LOCKMODE lock)
 
 	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(relationId);
 	List *referencedRelationList = cacheEntry->referencedRelationsViaForeignKey;
-
 	List *shardIntervalList = GetSortedReferenceShardIntervals(referencedRelationList);
+
+	if (list_length(shardIntervalList) > 0 && ClusterHasKnownMetadataWorkers())
+	{
+		LockShardListMetadataOnWorkers(lock, shardIntervalList);
+	}
+
 	foreach(shardIntervalCell, shardIntervalList)
 	{
 		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
@@ -193,7 +315,7 @@ LockReferencedReferenceShardDistributionMetadata(uint64 shardId, LOCKMODE lock)
  * GetSortedReferenceShards iterates through the given relation list.
  * Lists the shards of reference tables and returns the list after sorting.
  */
-static List *
+List *
 GetSortedReferenceShardIntervals(List *relationList)
 {
 	List *shardIntervalList = NIL;
@@ -354,10 +476,42 @@ LockShardsInPlacementListMetadata(List *shardPlacementList, LOCKMODE lockMode)
 
 
 /*
+ * SerializeNonCommutativeWrites acquires the required locks to prevent concurrent
+ * writes on the given shards.
+ *
+ * If the modified shard is a reference table's shard and the cluster is an MX
+ * cluster we need to get shard resource lock on the first worker node to
+ * prevent divergence possibility between placements of the reference table.
+ *
+ * In other workers, by acquiring a lock on the first worker, we're serializing
+ * non-commutative modifications to a reference table. If the node executing the
+ * command is the first worker, defined via IsFirstWorker(), we skip acquiring
+ * the lock remotely to avoid an extra round-trip and/or self-deadlocks.
+ *
+ * Finally, if we're not dealing with reference tables on MX cluster, we'll
+ * always acquire the lock with LockShardListResources() call.
+ */
+void
+SerializeNonCommutativeWrites(List *shardIntervalList, LOCKMODE lockMode)
+{
+	ShardInterval *firstShardInterval = (ShardInterval *) linitial(shardIntervalList);
+	int64 firstShardId = firstShardInterval->shardId;
+
+	if (ReferenceTableShardId(firstShardId) && ClusterHasKnownMetadataWorkers() &&
+		!IsFirstWorkerNode())
+	{
+		LockShardListResourcesOnFirstWorker(lockMode, shardIntervalList);
+	}
+
+	LockShardListResources(shardIntervalList, lockMode);
+}
+
+
+/*
  * LockShardListResources takes locks on all shards in shardIntervalList to
  * prevent concurrent DML statements on those shards.
  */
-void
+static void
 LockShardListResources(List *shardIntervalList, LOCKMODE lockMode)
 {
 	ListCell *shardIntervalCell = NULL;

@@ -79,15 +79,6 @@ SELECT count(*) FROM pg_dist_shard WHERE logicalrelid='mx_table'::regclass;
 INSERT INTO pg_dist_shard SELECT * FROM pg_dist_shard_temp;
 SELECT count(*) FROM pg_dist_shard WHERE logicalrelid='mx_table'::regclass;
 
-
--- INSERT/UPDATE/DELETE/COPY on reference tables
-SELECT * FROM mx_ref_table ORDER BY col_1;
-INSERT INTO mx_ref_table (col_1, col_2) VALUES (-6, 'vestibulum');
-UPDATE mx_ref_table SET col_2 = 'habitant' WHERE col_1 = -37;
-DELETE FROM mx_ref_table WHERE col_1 = -78;
-COPY mx_ref_table (col_1, col_2) FROM STDIN WITH (FORMAT 'csv');
-SELECT * FROM mx_ref_table ORDER BY col_1;
-
 \c - - - :master_port
 DROP TABLE mx_ref_table;
 CREATE UNIQUE INDEX mx_test_uniq_index ON mx_table(col_1);
