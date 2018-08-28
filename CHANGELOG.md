@@ -1,3 +1,9 @@
+### citus v7.5.1 (August 28, 2018) ###
+
+* Improves query pushdown planning performance
+
+* Fixes a bug that could cause modifying CTEs to select wrong execution mode
+
 ### citus v7.4.2 (July 27, 2018) ###
 
 * Fixes a segfault in real-time executor during online shard move
