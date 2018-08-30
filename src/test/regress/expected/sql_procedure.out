@@ -128,7 +128,6 @@ SELECT * FROM test_table ORDER BY 1, 2;
 (1 row)
 
 -- delete is commited but insert is rolled back
--- there is a bug #2371 on that preventing rollback
 CREATE PROCEDURE test_procedure_rollback(tt_id int, tt_org_id int) LANGUAGE PLPGSQL AS $$
 BEGIN
 	DELETE FROM test_table;
@@ -141,8 +140,7 @@ CALL test_procedure_rollback(2,5);
 SELECT * FROM test_table ORDER BY 1, 2;
  id | org_id 
 ----+--------
-  2 |      5
-(1 row)
+(0 rows)
 
 -- rollback is successfull when insert is on multiple rows
 CREATE PROCEDURE test_procedure_rollback_2(tt_id int, tt_org_id int) LANGUAGE PLPGSQL AS $$
@@ -177,13 +175,48 @@ SELECT * FROM test_table ORDER BY 1, 2;
   2 |     15
 (2 rows)
 
+TRUNCATE test_table;
+-- nested procedure calls should roll back normally
+CREATE OR REPLACE PROCEDURE test_procedure_rollback(tt_id int, tt_org_id int) LANGUAGE PLPGSQL AS $$
+BEGIN
+    INSERT INTO test_table VALUES (tt_id+12, tt_org_id+12);
+    ROLLBACK;
+END;
+$$;
+CREATE OR REPLACE PROCEDURE test_procedure_rollback_2(tt_id int, tt_org_id int) LANGUAGE PLPGSQL AS $$
+BEGIN
+    INSERT INTO test_table VALUES (tt_id+2, tt_org_id+1);
+    ROLLBACK;
+END;
+$$;
+CREATE OR REPLACE PROCEDURE test_procedure(tt_id int, tt_org_id int) LANGUAGE PLPGSQL AS $$
+BEGIN
+    CALL test_procedure_rollback(tt_id, tt_org_id);
+    CALL test_procedure_rollback_2(tt_id, tt_org_id);
+    INSERT INTO test_table VALUES (tt_id+100, tt_org_id+100);
+    ROLLBACK;
+END;
+$$;
+SELECT * from test_table;
+ id | org_id 
+----+--------
+(0 rows)
+
+call test_procedure(1,1);
+call test_procedure(20, 20);
+SELECT * from test_table;
+ id | org_id 
+----+--------
+(0 rows)
+
 DROP SCHEMA procedure_schema CASCADE;
-NOTICE:  drop cascades to 7 other objects
+NOTICE:  drop cascades to 8 other objects
 DETAIL:  drop cascades to table test_table
 drop cascades to function test_procedure_delete_insert(integer,integer)
 drop cascades to function test_procedure_modify_insert(integer,integer)
 drop cascades to function test_procedure_modify_insert_commit(integer,integer)
+drop cascades to function test_procedure_rollback_3(integer,integer)
 drop cascades to function test_procedure_rollback(integer,integer)
 drop cascades to function test_procedure_rollback_2(integer,integer)
-drop cascades to function test_procedure_rollback_3(integer,integer)
+drop cascades to function test_procedure(integer,integer)
 RESET SEARCH_PATH;

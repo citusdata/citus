@@ -36,6 +36,10 @@ typedef struct XactShardConnSet
 extern bool AllModificationsCommutative;
 extern bool EnableDeadlockPrevention;
 
+/* number of nested stored procedure call levels we are currently in */
+extern int StoredProcedureLevel;
+
+
 extern void CitusModifyBeginScan(CustomScanState *node, EState *estate, int eflags);
 extern TupleTableSlot * RouterSelectExecScan(CustomScanState *node);
 extern TupleTableSlot * RouterModifyExecScan(CustomScanState *node);

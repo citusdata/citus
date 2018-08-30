@@ -96,7 +96,6 @@ CALL test_procedure_modify_insert_commit(2,30);
 SELECT * FROM test_table ORDER BY 1, 2;
 
 -- delete is commited but insert is rolled back
--- there is a bug #2371 on that preventing rollback
 CREATE PROCEDURE test_procedure_rollback(tt_id int, tt_org_id int) LANGUAGE PLPGSQL AS $$
 BEGIN
 	DELETE FROM test_table;
@@ -135,6 +134,37 @@ $$;
 INSERT INTO test_table VALUES (1, 1), (2, 2);
 CALL test_procedure_rollback_3(2,15);
 SELECT * FROM test_table ORDER BY 1, 2;
+
+TRUNCATE test_table;
+
+-- nested procedure calls should roll back normally
+CREATE OR REPLACE PROCEDURE test_procedure_rollback(tt_id int, tt_org_id int) LANGUAGE PLPGSQL AS $$
+BEGIN
+    INSERT INTO test_table VALUES (tt_id+12, tt_org_id+12);
+    ROLLBACK;
+END;
+$$;
+
+CREATE OR REPLACE PROCEDURE test_procedure_rollback_2(tt_id int, tt_org_id int) LANGUAGE PLPGSQL AS $$
+BEGIN
+    INSERT INTO test_table VALUES (tt_id+2, tt_org_id+1);
+    ROLLBACK;
+END;
+$$;
+
+CREATE OR REPLACE PROCEDURE test_procedure(tt_id int, tt_org_id int) LANGUAGE PLPGSQL AS $$
+BEGIN
+    CALL test_procedure_rollback(tt_id, tt_org_id);
+    CALL test_procedure_rollback_2(tt_id, tt_org_id);
+    INSERT INTO test_table VALUES (tt_id+100, tt_org_id+100);
+    ROLLBACK;
+END;
+$$;
+
+SELECT * from test_table;
+call test_procedure(1,1);
+call test_procedure(20, 20);
+SELECT * from test_table;
 
 DROP SCHEMA procedure_schema CASCADE;
 
