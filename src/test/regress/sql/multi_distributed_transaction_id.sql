@@ -96,8 +96,8 @@ SELECT s AS a, s AS b, s AS c, s AS d, s AS e, s AS f, s AS g, s AS h FROM gener
 INSERT INTO parallel_id_test VALUES (1234567), (1234567), (1234568), (1234568);
 ANALYSE parallel_id_test;
 
-SET LOCAL max_parallel_workers_per_gather TO 8;
-SET LOCAL cpu_tuple_cost TO 1000000;
+SET LOCAL max_parallel_workers_per_gather TO 2;
+SET LOCAL parallel_tuple_cost TO 0;
 
 EXPLAIN (COSTS OFF)
 SELECT a FROM parallel_id_test WHERE a = parallel_worker_transaction_id_test();
