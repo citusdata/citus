@@ -220,17 +220,7 @@ SELECT master_remove_node('localhost', 5432);
  
 (1 row)
 
--- TRUNCATE
 \c - - - :worker_1_port
-TRUNCATE mx_table;
-ERROR:  operation is not allowed on this node
-HINT:  Connect to the coordinator and run it again.
-SELECT count(*) FROM mx_table;
- count 
--------
-     5
-(1 row)
-
 -- mark_tables_colocated
 UPDATE pg_dist_partition SET colocationid = 0 WHERE logicalrelid='mx_table_2'::regclass;
 SELECT mark_tables_colocated('mx_table', ARRAY['mx_table_2']);
