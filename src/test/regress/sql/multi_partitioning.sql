@@ -17,10 +17,15 @@ SELECT substring(:'server_version', '\d+')::int AS server_version;
 -- 1-) Distributing partitioned table
 -- create partitioned table
 CREATE TABLE partitioning_test(id int, time date) PARTITION BY RANGE (time);
- 
+
+CREATE TABLE partitioning_hash_test(id int, subid int) PARTITION BY HASH(subid);
+
 -- create its partitions
 CREATE TABLE partitioning_test_2009 PARTITION OF partitioning_test FOR VALUES FROM ('2009-01-01') TO ('2010-01-01');
 CREATE TABLE partitioning_test_2010 PARTITION OF partitioning_test FOR VALUES FROM ('2010-01-01') TO ('2011-01-01');
+
+CREATE TABLE partitioning_hash_test_0 PARTITION OF partitioning_hash_test FOR VALUES WITH (MODULUS 3, REMAINDER 0);
+CREATE TABLE partitioning_hash_test_1 PARTITION OF partitioning_hash_test FOR VALUES WITH (MODULUS 3, REMAINDER 1);
 
 -- load some data and distribute tables
 INSERT INTO partitioning_test VALUES (1, '2009-06-06');
@@ -29,11 +34,20 @@ INSERT INTO partitioning_test VALUES (2, '2010-07-07');
 INSERT INTO partitioning_test_2009 VALUES (3, '2009-09-09');
 INSERT INTO partitioning_test_2010 VALUES (4, '2010-03-03');
 
+INSERT INTO partitioning_hash_test VALUES (1, 2);
+INSERT INTO partitioning_hash_test VALUES (2, 13);
+INSERT INTO partitioning_hash_test VALUES (3, 7);
+INSERT INTO partitioning_hash_test VALUES (4, 4);
+
 -- distribute partitioned table
 SELECT create_distributed_table('partitioning_test', 'id');
 
+SELECT create_distributed_table('partitioning_hash_test', 'id');
+
 -- see the data is loaded to shards
 SELECT * FROM partitioning_test ORDER BY 1;
+
+SELECT * FROM partitioning_hash_test ORDER BY 1;
 
 -- see partitioned table and its partitions are distributed
 SELECT 
@@ -48,6 +62,23 @@ SELECT
 	logicalrelid, count(*) 
 FROM pg_dist_shard 
 	WHERE logicalrelid IN ('partitioning_test', 'partitioning_test_2009', 'partitioning_test_2010')
+GROUP BY
+	logicalrelid
+ORDER BY
+	1,2;
+
+SELECT 
+	logicalrelid 
+FROM 
+	pg_dist_partition 
+WHERE 
+	logicalrelid IN ('partitioning_hash_test', 'partitioning_hash_test_0', 'partitioning_hash_test_1')
+ORDER BY 1;
+
+SELECT 
+	logicalrelid, count(*) 
+FROM pg_dist_shard 
+	WHERE logicalrelid IN ('partitioning_hash_test', 'partitioning_hash_test_0', 'partitioning_hash_test_1')
 GROUP BY
 	logicalrelid
 ORDER BY
@@ -101,8 +132,22 @@ GROUP BY
 ORDER BY
 	1,2;
 
+-- try to insert a new data to hash partitioned table
+-- no partition is defined for value 5
+INSERT INTO partitioning_hash_test VALUES (8, 5);
+INSERT INTO partitioning_hash_test VALUES (9, 12);
+
+CREATE TABLE partitioning_hash_test_2 (id int, subid int);
+INSERT INTO partitioning_hash_test_2 VALUES (8, 5);
+
+ALTER TABLE partitioning_hash_test ATTACH PARTITION partitioning_hash_test_2 FOR VALUES WITH (MODULUS 3, REMAINDER 2);
+
+INSERT INTO partitioning_hash_test VALUES (9, 12);
+
 -- see the data is loaded to shards
 SELECT * FROM partitioning_test ORDER BY 1;
+
+SELECT * FROM partitioning_hash_test ORDER BY 1;
 
 -- 4-) Attaching distributed table to distributed table
 CREATE TABLE partitioning_test_2013(id int, time date);
@@ -239,6 +284,33 @@ DELETE FROM partitioning_test_2010 WHERE id = 10;
 -- see the data is deleted
 SELECT * FROM partitioning_test WHERE id = 9 OR id = 10 ORDER BY 1;
 
+-- create default partition
+CREATE TABLE partitioning_test_default PARTITION OF partitioning_test DEFAULT;
+
+\d+ partitioning_test
+
+INSERT INTO partitioning_test VALUES(21, '2014-02-02');
+INSERT INTO partitioning_test VALUES(22, '2015-04-02');
+
+-- see they are inserted into default partition
+SELECT * FROM partitioning_test WHERE id > 20;
+SELECT * FROM partitioning_test_default;
+
+-- create a new partition (will fail)
+CREATE TABLE partitioning_test_2014 PARTITION OF partitioning_test FOR VALUES FROM ('2014-01-01') TO ('2015-01-01');
+
+BEGIN;
+ALTER TABLE partitioning_test DETACH PARTITION partitioning_test_default;
+CREATE TABLE partitioning_test_2014 PARTITION OF partitioning_test FOR VALUES FROM ('2014-01-01') TO ('2015-01-01');
+INSERT INTO partitioning_test SELECT * FROM partitioning_test_default WHERE time >= '2014-01-01' AND time < '2015-01-01';
+DELETE FROM partitioning_test_default WHERE time >= '2014-01-01' AND time < '2015-01-01';
+ALTER TABLE partitioning_test ATTACH PARTITION partitioning_test_default DEFAULT;
+END;
+
+-- see data is in the table, but some moved out from default partition
+SELECT * FROM partitioning_test WHERE id > 20;
+SELECT * FROM partitioning_test_default;
+
 -- test master_modify_multiple_shards
 -- master_modify_multiple_shards on partitioned table
 SELECT master_modify_multiple_shards('UPDATE partitioning_test SET time = time + INTERVAL ''1 day''');
@@ -302,8 +374,23 @@ WHERE
     table_name = 'partitioning_test_2009' AND 
     constraint_name = 'partitioning_2009_primary';
 
+-- however, you can add primary key if it contains both distribution and partition key
+ALTER TABLE partitioning_hash_test ADD CONSTRAINT partitioning_hash_primary PRIMARY KEY (id, subid);
+
+-- see PRIMARY KEY is created
+SELECT
+    table_name,
+    constraint_name,
+    constraint_type
+FROM
+    information_schema.table_constraints
+WHERE
+    table_name LIKE 'partitioning_hash_test%' AND
+    constraint_type = 'PRIMARY KEY'
+ORDER BY 1;
+
 -- test ADD FOREIGN CONSTRAINT
--- add FOREIGN CONSTRAINT to partitioned table -- this will error out
+-- add FOREIGN CONSTRAINT to partitioned table -- this will error out (it is a self reference)
 ALTER TABLE partitioning_test ADD CONSTRAINT partitioning_foreign FOREIGN KEY (id) REFERENCES partitioning_test_2009 (id);
 
 -- add FOREIGN CONSTRAINT to partition
@@ -328,6 +415,24 @@ ALTER TABLE partitioning_test DETACH PARTITION partitioning_test_2009;
 
 -- see DETACHed partitions content is not accessible from partitioning_test;
 SELECT * FROM partitioning_test WHERE time >= '2009-01-01' AND time < '2010-01-01' ORDER BY 1;
+
+-- delete from default partition
+DELETE FROM partitioning_test WHERE time >= '2015-01-01';
+SELECT * FROM partitioning_test_default;
+
+
+-- create a reference table for foreign key test
+CREATE TABLE partitioning_test_reference(id int PRIMARY KEY, subid int);
+INSERT INTO partitioning_test_reference SELECT a, a FROM generate_series(1, 50) a;
+
+SELECT create_reference_table('partitioning_test_reference');
+
+ALTER TABLE partitioning_test ADD CONSTRAINT partitioning_reference_fkey FOREIGN KEY (id) REFERENCES partitioning_test_reference(id) ON DELETE CASCADE;
+
+SELECT * FROM partitioning_test WHERE id = 11 or id = 12;
+DELETE FROM partitioning_test_reference WHERE id = 11 or id = 12;
+-- see data is deleted from referencing table
+SELECT * FROM partitioning_test WHERE id = 11 or id = 12;
 
 --
 -- Transaction tests
@@ -438,6 +543,7 @@ SELECT * FROM partitioning_test WHERE time >= '2010-01-01' AND time < '2011-01-0
 
 -- test DROP partitioned table
 DROP TABLE partitioning_test;
+DROP TABLE partitioning_test_reference;
 
 -- dropping the parent should CASCADE to the children as well
 SELECT table_name FROM information_schema.tables WHERE table_name LIKE 'partitioning_test%' ORDER BY 1;
@@ -808,6 +914,41 @@ WHERE
 ORDER BY
     1, 2, 3;
 COMMIT;
+
+-- test partition-wise join
+
+CREATE TABLE partitioning_hash_join_test(id int, subid int) PARTITION BY HASH(subid);
+CREATE TABLE partitioning_hash_join_test_0 PARTITION OF partitioning_hash_join_test FOR VALUES WITH (MODULUS 3, REMAINDER 0);
+CREATE TABLE partitioning_hash_join_test_1 PARTITION OF partitioning_hash_join_test FOR VALUES WITH (MODULUS 3, REMAINDER 1);
+CREATE TABLE partitioning_hash_join_test_2 PARTITION OF partitioning_hash_join_test FOR VALUES WITH (MODULUS 3, REMAINDER 2);
+
+SELECT create_distributed_table('partitioning_hash_join_test', 'id');
+
+-- see the query plan without partition-wise join
+EXPLAIN
+SELECT * FROM partitioning_hash_test JOIN partitioning_hash_join_test USING (id, subid);
+
+-- set partition-wise join on
+SELECT success FROM run_command_on_workers('alter system set enable_partitionwise_join to on');
+SELECT success FROM run_command_on_workers('select pg_reload_conf()');
+
+SET enable_partitionwise_join TO on;
+
+-- see the new query plan
+EXPLAIN
+SELECT * FROM partitioning_hash_test JOIN partitioning_hash_join_test USING (id, subid);
+
+-- note that partition-wise joins only work when partition key is in the join
+-- following join does not have that, therefore join will not be pushed down to
+-- partitions
+EXPLAIN
+SELECT * FROM partitioning_hash_test JOIN partitioning_hash_join_test USING (id);
+
+-- reset partition-wise join
+SELECT success FROM run_command_on_workers('reset enable_partitionwise_join');
+SELECT success FROM run_command_on_workers('select pg_reload_conf()');
+
+RESET enable_partitionwise_join;
 
 DROP TABLE
 IF EXISTS
