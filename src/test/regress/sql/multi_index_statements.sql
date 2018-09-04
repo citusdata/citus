@@ -5,6 +5,9 @@
 -- Check that we can run CREATE INDEX and DROP INDEX statements on distributed
 -- tables.
 
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int AS major_version;
+
 --
 -- CREATE TEST TABLES
 --
@@ -49,6 +52,7 @@ CREATE UNIQUE INDEX index_test_hash_index_a ON index_test_hash(a);
 CREATE UNIQUE INDEX index_test_hash_index_a_b ON index_test_hash(a,b);
 CREATE UNIQUE INDEX index_test_hash_index_a_b_partial ON index_test_hash(a,b) WHERE c IS NOT NULL;
 CREATE UNIQUE INDEX index_test_range_index_a_b_partial ON index_test_range(a,b) WHERE c IS NOT NULL;
+CREATE UNIQUE INDEX index_test_hash_index_a_b_c ON index_test_hash(a) INCLUDE (b,c);
 RESET client_min_messages;
 
 -- Verify that we handle if not exists statements correctly

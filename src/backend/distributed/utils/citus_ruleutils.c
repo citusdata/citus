@@ -62,6 +62,8 @@
 #include "utils/syscache.h"
 
 
+static void deparse_index_columns(StringInfo buffer, List *indexParameterList,
+								  List *deparseContext);
 static void AppendOptionListToString(StringInfo stringData, List *options);
 static void AppendStorageParametersToString(StringInfo stringBuffer,
 											List *optionList);
@@ -686,7 +688,6 @@ deparse_shard_index_statement(IndexStmt *origStmt, Oid distrelid, int64 shardid,
 	IndexStmt *indexStmt = copyObject(origStmt); /* copy to avoid modifications */
 	char *relationName = indexStmt->relation->relname;
 	char *indexName = indexStmt->idxname;
-	ListCell *indexParameterCell = NULL;
 	List *deparseContext = NULL;
 
 	/* extend relation and index name using shard identifier */
@@ -708,13 +709,42 @@ deparse_shard_index_statement(IndexStmt *origStmt, Oid distrelid, int64 shardid,
 
 	/* index column or expression list begins here */
 	appendStringInfoChar(buffer, '(');
+	deparse_index_columns(buffer, indexStmt->indexParams, deparseContext);
+	appendStringInfoString(buffer, ") ");
 
-	foreach(indexParameterCell, indexStmt->indexParams)
+#if PG_VERSION_NUM >= 110000
+
+	/* column/expressions for INCLUDE list */
+	if (indexStmt->indexIncludingParams != NIL)
+	{
+		appendStringInfoString(buffer, "INCLUDE (");
+		deparse_index_columns(buffer, indexStmt->indexIncludingParams, deparseContext);
+		appendStringInfoChar(buffer, ')');
+	}
+#endif
+
+	AppendStorageParametersToString(buffer, indexStmt->options);
+
+	if (indexStmt->whereClause != NULL)
+	{
+		appendStringInfo(buffer, "WHERE %s", deparse_expression(indexStmt->whereClause,
+																deparseContext, false,
+																false));
+	}
+}
+
+
+/* deparse_index_columns appends index or include parameters to the provided buffer */
+static void
+deparse_index_columns(StringInfo buffer, List *indexParameterList, List *deparseContext)
+{
+	ListCell *indexParameterCell = NULL;
+	foreach(indexParameterCell, indexParameterList)
 	{
 		IndexElem *indexElement = (IndexElem *) lfirst(indexParameterCell);
 
 		/* use commas to separate subsequent elements */
-		if (indexParameterCell != list_head(indexStmt->indexParams))
+		if (indexParameterCell != list_head(indexParameterList))
 		{
 			appendStringInfoChar(buffer, ',');
 		}
@@ -753,17 +783,6 @@ deparse_shard_index_statement(IndexStmt *origStmt, Oid distrelid, int64 shardid,
 			bool nullsFirst = (indexElement->nulls_ordering == SORTBY_NULLS_FIRST);
 			appendStringInfo(buffer, "NULLS %s ", (nullsFirst ? "FIRST" : "LAST"));
 		}
-	}
-
-	appendStringInfoString(buffer, ") ");
-
-	AppendStorageParametersToString(buffer, indexStmt->options);
-
-	if (indexStmt->whereClause != NULL)
-	{
-		appendStringInfo(buffer, "WHERE %s", deparse_expression(indexStmt->whereClause,
-																deparseContext, false,
-																false));
 	}
 }
 
