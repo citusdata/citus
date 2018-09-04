@@ -2,6 +2,9 @@
 -- test top level window functions that are pushdownable
 -- ===================================================================
 
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int > 10 AS version_above_ten;
+
 -- a very simple window function with an aggregate and a window function
 -- distribution column is on the partition by clause
 SELECT
@@ -224,6 +227,51 @@ GROUP BY
 	1
 ORDER BY
 	4 DESC,3 DESC,2 DESC ,1 DESC;
+
+-- test exclude supported
+SELECT
+	user_id,
+	value_1,
+	array_agg(value_1) OVER (PARTITION BY user_id ORDER BY value_1 RANGE BETWEEN  UNBOUNDED PRECEDING AND CURRENT ROW),
+	array_agg(value_1) OVER (PARTITION BY user_id ORDER BY value_1 RANGE BETWEEN  UNBOUNDED PRECEDING AND CURRENT ROW EXCLUDE CURRENT ROW)
+FROM
+	users_table
+WHERE
+	user_id > 2 AND user_id < 6
+ORDER BY
+	user_id, value_1;
+
+-- test <offset> preceding and <offset> following on RANGE window
+SELECT
+	user_id,
+	value_1,
+	array_agg(value_1) OVER range_window,
+	array_agg(value_1) OVER range_window_exclude
+FROM
+	users_table
+WHERE
+	user_id > 2 AND user_id < 6
+WINDOW
+	range_window as (PARTITION BY user_id ORDER BY value_1 RANGE BETWEEN  1 PRECEDING AND 1 FOLLOWING),
+	range_window_exclude as (PARTITION BY user_id ORDER BY value_1 RANGE BETWEEN  1 PRECEDING AND 1 FOLLOWING EXCLUDE CURRENT ROW)
+ORDER BY
+	user_id, value_1;
+
+-- test <offset> preceding and <offset> following on ROW window
+SELECT
+	user_id,
+	value_1,
+	array_agg(value_1) OVER row_window,
+	array_agg(value_1) OVER row_window_exclude
+FROM
+	users_table
+WHERE
+	user_id > 2 and user_id < 6
+WINDOW
+	row_window as (PARTITION BY user_id ORDER BY value_1 ROWS BETWEEN  1 PRECEDING AND 1 FOLLOWING),
+	row_window_exclude as (PARTITION BY user_id ORDER BY value_1 ROWS BETWEEN  1 PRECEDING AND 1 FOLLOWING EXCLUDE CURRENT ROW)
+ORDER BY
+	user_id, value_1;
 
 -- some tests with GROUP BY, HAVING and LIMIT
 SELECT 
