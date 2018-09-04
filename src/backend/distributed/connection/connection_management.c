@@ -26,6 +26,7 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/hash_helpers.h"
 #include "distributed/placement_connection.h"
+#include "distributed/run_from_same_connection.h"
 #include "distributed/remote_commands.h"
 #include "distributed/version_compat.h"
 #include "mb/pg_wchar.h"
@@ -44,6 +45,7 @@ static MultiConnection * StartConnectionEstablishment(ConnectionHashKey *key);
 static void AfterXactHostConnectionHandling(ConnectionHashEntry *entry, bool isCommit);
 static void DefaultCitusNoticeProcessor(void *arg, const char *message);
 static MultiConnection * FindAvailableConnection(dlist_head *connections, uint32 flags);
+static bool RemoteTransactionIdle(MultiConnection *connection);
 
 
 static int CitusNoticeLogLevel = DEFAULT_CITUS_NOTICE_LEVEL;
@@ -755,7 +757,7 @@ AfterXactHostConnectionHandling(ConnectionHashEntry *entry, bool isCommit)
 		 */
 		if (!connection->sessionLifespan ||
 			PQstatus(connection->pgConn) != CONNECTION_OK ||
-			PQtransactionStatus(connection->pgConn) != PQTRANS_IDLE)
+			!RemoteTransactionIdle(connection))
 		{
 			ShutdownConnection(connection);
 
@@ -776,6 +778,30 @@ AfterXactHostConnectionHandling(ConnectionHashEntry *entry, bool isCommit)
 			UnclaimConnection(connection);
 		}
 	}
+}
+
+
+/*
+ * RemoteTransactionIdle function returns true if we manually
+ * set flag on run_commands_on_session_level_connection_to_node to true to
+ * force connection API keeping connection open or the status of the connection
+ * is idle.
+ */
+static bool
+RemoteTransactionIdle(MultiConnection *connection)
+{
+	/*
+	 * This is a very special case where we're running isolation tests on MX.
+	 * We don't care whether the transaction is idle or not when we're
+	 * running MX isolation tests. Thus, let the caller act as if the remote
+	 * transactions is idle.
+	 */
+	if (AllowNonIdleTransactionOnXactHandling())
+	{
+		return true;
+	}
+
+	return PQtransactionStatus(connection->pgConn) == PQTRANS_IDLE;
 }
 
 

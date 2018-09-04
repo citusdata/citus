@@ -72,6 +72,7 @@ OBJS = src/backend/distributed/shared_library_init.o \
      src/backend/distributed/test/progress_utils.o \
      src/backend/distributed/test/prune_shard_list.o \
      src/backend/distributed/test/relation_access_tracking.o \
+     src/backend/distributed/test/run_from_same_connection.o \
      src/backend/distributed/test/sequential_execution.o \
      src/backend/distributed/transaction/backend_data.o \
      src/backend/distributed/transaction/citus_dist_stat_activity.o \

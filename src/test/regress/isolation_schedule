@@ -43,3 +43,6 @@ test: isolation_truncate_vs_all
 test: isolation_drop_vs_all
 test: isolation_ddl_vs_all
 test: isolation_citus_dist_activity
+
+# MX tests
+test: isolation_reference_on_mx
