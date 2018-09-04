@@ -293,8 +293,8 @@ DELETE FROM pg_dist_node;
 DROP TABLE mx_table;
 ERROR:  operation is not allowed on this node
 HINT:  Connect to the coordinator and run it again.
-CONTEXT:  SQL statement "SELECT master_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name)"
-PL/pgSQL function citus_drop_trigger() line 17 at PERFORM
+CONTEXT:  SQL statement "SELECT master_remove_distributed_table_metadata_from_workers(v_obj.objid, v_obj.schema_name, v_obj.object_name)"
+PL/pgSQL function citus_drop_trigger() line 19 at PERFORM
 SELECT count(*) FROM mx_table;
  count 
 -------
@@ -302,7 +302,10 @@ SELECT count(*) FROM mx_table;
 (1 row)
 
 -- master_drop_distributed_table_metadata
-SELECT master_drop_distributed_table_metadata('mx_table'::regclass, 'public', 'mx_table');
+SELECT master_remove_distributed_table_metadata_from_workers('mx_table'::regclass, 'public', 'mx_table');
+ERROR:  operation is not allowed on this node
+HINT:  Connect to the coordinator and run it again.
+SELECT master_remove_partition_metadata('mx_table'::regclass, 'public', 'mx_table');
 ERROR:  operation is not allowed on this node
 HINT:  Connect to the coordinator and run it again.
 SELECT count(*) FROM mx_table;
