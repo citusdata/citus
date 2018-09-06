@@ -36,11 +36,23 @@ BEGIN;
 CREATE TABLE should_be_sorted_into_middle (value int);
 PREPARE TRANSACTION 'citus_12_should_be_sorted_into_middle';
 
+-- this node (e.g., node id 12) should not touch
+-- transactions with different nodeIds in the gid
+BEGIN;
+CREATE TABLE table_should_do_nothing (value int);
+PREPARE TRANSACTION 'citus_122_should_do_nothing';
+
 -- Add "fake" pg_dist_transaction records and run recovery
 INSERT INTO pg_dist_transaction VALUES (12, 'citus_12_should_commit');
 INSERT INTO pg_dist_transaction VALUES (12, 'citus_12_should_be_forgotten');
+INSERT INTO pg_dist_transaction VALUES (122, 'citus_122_should_do_nothing');
 
 SELECT recover_prepared_transactions();
+
+-- delete the citus_122_should_do_nothing transaction
+DELETE FROM pg_dist_transaction WHERE gid = 'citus_122_should_do_nothing' RETURNING *;
+ROLLBACK PREPARED 'citus_122_should_do_nothing';
+
 SELECT count(*) FROM pg_dist_transaction;
 
 SELECT count(*) FROM pg_tables WHERE tablename = 'table_should_abort';
