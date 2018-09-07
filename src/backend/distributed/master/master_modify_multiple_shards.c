@@ -43,6 +43,7 @@
 #include "distributed/resource_lock.h"
 #include "distributed/shardinterval_utils.h"
 #include "distributed/shard_pruning.h"
+#include "distributed/version_compat.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/worker_transaction.h"
 #include "optimizer/clauses.h"
@@ -59,6 +60,10 @@
 #if (PG_VERSION_NUM >= 100000)
 #include "utils/varlena.h"
 #endif
+
+#define LOCK_RELATION_IF_EXISTS "SELECT lock_relation_if_exists('%s', '%s');"
+#define REMOTE_LOCK_MODE_FOR_TRUNCATE "ACCESS EXCLUSIVE"
+
 
 static List * ModifyMultipleShardsTaskList(Query *query, List *shardIntervalList, TaskType
 										   taskType);
@@ -208,27 +213,23 @@ master_modify_multiple_shards(PG_FUNCTION_ARGS)
 		ModifyMultipleShardsTaskList(modifyQuery, prunedShardIntervalList, taskType);
 
 	/*
-	 * We should execute "TRUNCATE table_name;" on the other worker nodes before
+	 * We lock the relation we're TRUNCATING on the other worker nodes before
 	 * executing the truncate commands on the shards. This is necessary to prevent
 	 * distributed deadlocks where a concurrent operation on the same table (or a
 	 * cascading table) is executed on the other nodes.
 	 *
-	 * Note that we should skip the current node to prevent a self-deadlock.
+	 * Note that we should skip the current node to prevent a self-deadlock that's why
+	 * we use OTHER_WORKERS tag.
 	 */
 	if (truncateOperation && ShouldSyncTableMetadata(relationId))
 	{
-		SendCommandToWorkers(OTHER_WORKERS_WITH_METADATA,
-							 DISABLE_DDL_PROPAGATION);
+		char *qualifiedRelationName = generate_qualified_relation_name(relationId);
+		StringInfo lockRelation = makeStringInfo();
 
+		appendStringInfo(lockRelation, LOCK_RELATION_IF_EXISTS, qualifiedRelationName,
+						 REMOTE_LOCK_MODE_FOR_TRUNCATE);
 
-		/*
-		 * Note that here we ignore the schema and send the queryString as is
-		 * since citus_truncate_trigger already uses qualified table name.
-		 * If that was not the case, we should also had to set the search path
-		 * as we do for regular DDLs.
-		 */
-		SendCommandToWorkers(OTHER_WORKERS_WITH_METADATA,
-							 queryString);
+		SendCommandToWorkers(OTHER_WORKERS, lockRelation->data);
 	}
 
 	if (MultiShardConnectionType == SEQUENTIAL_CONNECTION)
@@ -342,7 +343,7 @@ lock_relation_if_exists(PG_FUNCTION_ARGS)
 	LOCKMODE lockMode = NoLock;
 
 	/* ensure that we're in a transaction block */
-	RequireTransactionChain(true, "lock_relation_if_exists");
+	RequireTransactionBlock(true, "lock_relation_if_exists");
 
 	relationId = ResolveRelationId(relationName, true);
 	if (!OidIsValid(relationId))
@@ -352,7 +353,6 @@ lock_relation_if_exists(PG_FUNCTION_ARGS)
 
 	/* get the lock mode */
 	lockMode = LockModeTextToLockMode(lockModeCString);
-
 
 	/* resolve relationId from passed in schema and relation name */
 	relationNameList = textToQualifiedNameList(relationName);

@@ -22,7 +22,7 @@
 typedef enum TargetWorkerSet
 {
 	WORKERS_WITH_METADATA,
-	OTHER_WORKERS_WITH_METADATA,
+	OTHER_WORKERS,
 	ALL_WORKERS
 } TargetWorkerSet;
 

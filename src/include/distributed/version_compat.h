@@ -37,6 +37,7 @@
 /* following functions are renamed in PG11 */
 #define PreventInTransactionBlock PreventTransactionChain
 #define DatumGetJsonbP(d) DatumGetJsonb(d)
+#define RequireTransactionBlock RequireTransactionChain
 
 /* following defines also exist for PG11 */
 #define RELATION_OBJECT_TYPE ACL_OBJECT_RELATION
