@@ -420,7 +420,7 @@ PendingWorkerTransactionList(MultiConnection *connection)
 	int coordinatorId = GetLocalGroupId();
 
 	appendStringInfo(command, "SELECT gid FROM pg_prepared_xacts "
-							  "WHERE gid LIKE 'citus_%d_%%'",
+							  "WHERE gid LIKE 'citus\\_%d\\_%%'",
 					 coordinatorId);
 
 	querySent = SendRemoteCommand(connection, command->data);
