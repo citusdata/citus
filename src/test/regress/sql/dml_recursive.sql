@@ -234,8 +234,7 @@ SET dept = 5
 FROM cte_1
 WHERE distributed_table.tenant_id < cte_1.tenant_id;
 
-SET citus.explain_all_tasks TO ON;
-EXPLAIN (COSTS FALSE) WITH cte_1 AS (
+WITH cte_1 AS (
     WITH cte_2 AS (
         SELECT tenant_id as cte2_id 
         FROM second_distributed_table 
