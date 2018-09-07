@@ -36,7 +36,7 @@ worker_foreign_file_path(PG_FUNCTION_ARGS)
 {
 	text *foreignTableName = PG_GETARG_TEXT_P(0);
 	text *foreignFilePath = NULL;
-	Oid relationId = ResolveRelationId(foreignTableName);
+	Oid relationId = ResolveRelationId(foreignTableName, false);
 	ForeignTable *foreignTable = GetForeignTable(relationId);
 
 	ListCell *optionCell = NULL;

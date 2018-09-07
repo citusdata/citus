@@ -591,7 +591,7 @@ ColocationIdForNewTable(Oid relationId, Var *distributionColumn,
 		else
 		{
 			text *colocateWithTableNameText = cstring_to_text(colocateWithTableName);
-			Oid sourceRelationId = ResolveRelationId(colocateWithTableNameText);
+			Oid sourceRelationId = ResolveRelationId(colocateWithTableNameText, false);
 
 			EnsureTableCanBeColocatedWith(relationId, replicationModel,
 										  distributionColumnType, sourceRelationId);

@@ -56,14 +56,18 @@
 #include "utils/inval.h"
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
-
+#if (PG_VERSION_NUM >= 100000)
+#include "utils/varlena.h"
+#endif
 
 static List * ModifyMultipleShardsTaskList(Query *query, List *shardIntervalList, TaskType
 										   taskType);
 static bool ShouldExecuteTruncateStmtSequential(TruncateStmt *command);
+static LOCKMODE LockModeTextToLockMode(const char *lockModeName);
 
 
 PG_FUNCTION_INFO_V1(master_modify_multiple_shards);
+PG_FUNCTION_INFO_V1(lock_relation_if_exists);
 
 
 /*
@@ -311,4 +315,107 @@ ShouldExecuteTruncateStmtSequential(TruncateStmt *command)
 	}
 
 	return false;
+}
+
+
+/*
+ * lock_relation_if_exists gets a relation name and lock mode
+ * and returns true if the relation exists and can be locked with
+ * the given lock mode. If the relation doesn't exists, the function
+ * return false.
+ *
+ * The relation name should be qualified with the schema name.
+ *
+ * The function errors out of the lockmode isn't defined in the PostgreSQL's
+ * explicit locking table.
+ */
+Datum
+lock_relation_if_exists(PG_FUNCTION_ARGS)
+{
+	text *relationName = PG_GETARG_TEXT_P(0);
+	text *lockModeText = PG_GETARG_TEXT_P(1);
+
+	Oid relationId = InvalidOid;
+	char *lockModeCString = text_to_cstring(lockModeText);
+	List *relationNameList = NIL;
+	RangeVar *relation = NULL;
+	LOCKMODE lockMode = NoLock;
+
+	/* ensure that we're in a transaction block */
+	RequireTransactionChain(true, "lock_relation_if_exists");
+
+	relationId = ResolveRelationId(relationName, true);
+	if (!OidIsValid(relationId))
+	{
+		PG_RETURN_BOOL(false);
+	}
+
+	/* get the lock mode */
+	lockMode = LockModeTextToLockMode(lockModeCString);
+
+
+	/* resolve relationId from passed in schema and relation name */
+	relationNameList = textToQualifiedNameList(relationName);
+	relation = makeRangeVarFromNameList(relationNameList);
+
+	/* lock the relation with the lock mode */
+	RangeVarGetRelid(relation, lockMode, false);
+
+	PG_RETURN_BOOL(true);
+}
+
+
+/*
+ * LockModeTextToLockMode gets a lockMode name and returns its corresponding LOCKMODE.
+ * The function errors out if the input lock mode isn't defined in the PostgreSQL's
+ * explicit locking table.
+ */
+static LOCKMODE
+LockModeTextToLockMode(const char *lockModeName)
+{
+	if (pg_strncasecmp("NoLock", lockModeName, NAMEDATALEN) == 0)
+	{
+		/* there is no explict call for NoLock, but keeping it here for convinience */
+		return NoLock;
+	}
+	else if (pg_strncasecmp("ACCESS SHARE", lockModeName, NAMEDATALEN) == 0)
+	{
+		return AccessShareLock;
+	}
+	else if (pg_strncasecmp("ROW SHARE", lockModeName, NAMEDATALEN) == 0)
+	{
+		return RowShareLock;
+	}
+	else if (pg_strncasecmp("ROW EXCLUSIVE", lockModeName, NAMEDATALEN) == 0)
+	{
+		return RowExclusiveLock;
+	}
+	else if (pg_strncasecmp("SHARE UPDATE EXCLUSIVE", lockModeName, NAMEDATALEN) == 0)
+	{
+		return ShareUpdateExclusiveLock;
+	}
+	else if (pg_strncasecmp("SHARE", lockModeName, NAMEDATALEN) == 0)
+	{
+		return ShareLock;
+	}
+	else if (pg_strncasecmp("SHARE ROW EXCLUSIVE", lockModeName, NAMEDATALEN) == 0)
+	{
+		return ShareRowExclusiveLock;
+	}
+	else if (pg_strncasecmp("EXCLUSIVE", lockModeName, NAMEDATALEN) == 0)
+	{
+		return ExclusiveLock;
+	}
+	else if (pg_strncasecmp("ACCESS EXCLUSIVE", lockModeName, NAMEDATALEN) == 0)
+	{
+		return AccessExclusiveLock;
+	}
+	else
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_LOCK_NOT_AVAILABLE),
+				 errmsg("unknown lock mode: %s", lockModeName)));
+	}
+
+	return NoLock;
 }

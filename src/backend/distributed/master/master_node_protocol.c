@@ -98,7 +98,7 @@ Datum
 master_get_table_metadata(PG_FUNCTION_ARGS)
 {
 	text *relationName = PG_GETARG_TEXT_P(0);
-	Oid relationId = ResolveRelationId(relationName);
+	Oid relationId = ResolveRelationId(relationName, false);
 
 	DistTableCacheEntry *partitionEntry = NULL;
 	char *partitionKeyString = NULL;
@@ -215,7 +215,7 @@ master_get_table_ddl_events(PG_FUNCTION_ARGS)
 	if (SRF_IS_FIRSTCALL())
 	{
 		text *relationName = PG_GETARG_TEXT_P(0);
-		Oid relationId = ResolveRelationId(relationName);
+		Oid relationId = ResolveRelationId(relationName, false);
 		bool includeSequenceDefaults = true;
 
 		MemoryContext oldContext = NULL;
@@ -320,7 +320,7 @@ GetNextShardId()
 	}
 
 	sequenceName = cstring_to_text(SHARDID_SEQUENCE_NAME);
-	sequenceId = ResolveRelationId(sequenceName);
+	sequenceId = ResolveRelationId(sequenceName, false);
 	sequenceIdDatum = ObjectIdGetDatum(sequenceId);
 
 	GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
@@ -399,7 +399,7 @@ GetNextPlacementId(void)
 	}
 
 	sequenceName = cstring_to_text(PLACEMENTID_SEQUENCE_NAME);
-	sequenceId = ResolveRelationId(sequenceName);
+	sequenceId = ResolveRelationId(sequenceName, false);
 	sequenceIdDatum = ObjectIdGetDatum(sequenceId);
 
 	GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
@@ -527,17 +527,16 @@ master_get_active_worker_nodes(PG_FUNCTION_ARGS)
 
 /* Finds the relationId from a potentially qualified relation name. */
 Oid
-ResolveRelationId(text *relationName)
+ResolveRelationId(text *relationName, bool missingOk)
 {
 	List *relationNameList = NIL;
 	RangeVar *relation = NULL;
 	Oid relationId = InvalidOid;
-	bool failOK = false;        /* error if relation cannot be found */
 
 	/* resolve relationId from passed in schema and relation name */
 	relationNameList = textToQualifiedNameList(relationName);
 	relation = makeRangeVarFromNameList(relationNameList);
-	relationId = RangeVarGetRelid(relation, NoLock, failOK);
+	relationId = RangeVarGetRelid(relation, NoLock, missingOk);
 
 	return relationId;
 }

@@ -67,7 +67,7 @@ master_create_worker_shards(PG_FUNCTION_ARGS)
 	int32 shardCount = PG_GETARG_INT32(1);
 	int32 replicationFactor = PG_GETARG_INT32(2);
 
-	Oid distributedTableId = ResolveRelationId(tableNameText);
+	Oid distributedTableId = ResolveRelationId(tableNameText, false);
 
 	/* do not add any data */
 	bool useExclusiveConnections = false;
