@@ -153,6 +153,7 @@ canonicalize_qual_compat(Expr *qual, bool is_check)
 #define ACLCHECK_OBJECT_SCHEMA OBJECT_SCHEMA
 #define ACLCHECK_OBJECT_INDEX OBJECT_INDEX
 
+#define ConstraintRelidIndexId ConstraintRelidTypidNameIndexId
 
 static inline void
 ExplainPropertyIntegerInternal(const char *qlabel, const char *unit, int64 value,
