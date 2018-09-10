@@ -129,6 +129,115 @@ BEGIN;
 ROLLBACK;
 RESET client_min_messages;
 \c - - - :master_port
+-- also test the infrastructure that is used for supporting 
+-- TRUNCATE from worker nodes
+-- should fail since it is not in transaction block
+SELECT lock_relation_if_exists('on_update_fkey_table', 'ACCESS SHARE');
+ERROR:  lock_relation_if_exists can only be used in transaction blocks
+BEGIN;
+	-- should fail since the schema is not provided
+	SELECT lock_relation_if_exists('on_update_fkey_table', 'ACCESS SHARE');
+ lock_relation_if_exists 
+-------------------------
+ f
+(1 row)
+
+ROLLBACK;
+BEGIN;
+	-- should work since the schema is in the search path
+	SET search_path TO 'truncate_from_workers';
+	SELECT lock_relation_if_exists('on_update_fkey_table', 'ACCESS SHARE');
+ lock_relation_if_exists 
+-------------------------
+ t
+(1 row)
+
+ROLLBACK;
+BEGIN;
+	-- should return false since there is no such table
+	SELECT lock_relation_if_exists('truncate_from_workers.on_update_fkey_tableXXX', 'ACCESS SHARE');
+ lock_relation_if_exists 
+-------------------------
+ f
+(1 row)
+
+ROLLBACK;
+BEGIN;
+	-- should fail since there is no such lock mode
+	SELECT lock_relation_if_exists('truncate_from_workers.on_update_fkey_table', 'MY LOCK MODE');
+ERROR:  unknown lock mode: MY LOCK MODE
+ROLLBACK;
+BEGIN;
+	-- test all lock levels
+	SELECT lock_relation_if_exists('truncate_from_workers.on_update_fkey_table', 'ACCESS SHARE');
+ lock_relation_if_exists 
+-------------------------
+ t
+(1 row)
+
+	SELECT lock_relation_if_exists('truncate_from_workers.on_update_fkey_table', 'ROW SHARE');
+ lock_relation_if_exists 
+-------------------------
+ t
+(1 row)
+
+	SELECT lock_relation_if_exists('truncate_from_workers.on_update_fkey_table', 'ROW EXCLUSIVE');
+ lock_relation_if_exists 
+-------------------------
+ t
+(1 row)
+
+	SELECT lock_relation_if_exists('truncate_from_workers.on_update_fkey_table', 'SHARE UPDATE EXCLUSIVE');
+ lock_relation_if_exists 
+-------------------------
+ t
+(1 row)
+
+	SELECT lock_relation_if_exists('truncate_from_workers.on_update_fkey_table', 'SHARE');
+ lock_relation_if_exists 
+-------------------------
+ t
+(1 row)
+
+	SELECT lock_relation_if_exists('truncate_from_workers.on_update_fkey_table', 'SHARE ROW EXCLUSIVE');
+ lock_relation_if_exists 
+-------------------------
+ t
+(1 row)
+
+	SELECT lock_relation_if_exists('truncate_from_workers.on_update_fkey_table', 'SHARE ROW EXCLUSIVE');
+ lock_relation_if_exists 
+-------------------------
+ t
+(1 row)
+
+	SELECT lock_relation_if_exists('truncate_from_workers.on_update_fkey_table', 'EXCLUSIVE');
+ lock_relation_if_exists 
+-------------------------
+ t
+(1 row)
+
+	SELECT lock_relation_if_exists('truncate_from_workers.on_update_fkey_table', 'ACCESS EXCLUSIVE');
+ lock_relation_if_exists 
+-------------------------
+ t
+(1 row)
+
+	-- see them all
+	SELECT relation::regclass, mode FROM pg_locks WHERE pid = pg_backend_pid() AND relation = 'truncate_from_workers.on_update_fkey_table'::regclass ORDER BY 2 DESC;
+                  relation                  |           mode           
+--------------------------------------------+--------------------------
+ truncate_from_workers.on_update_fkey_table | ShareUpdateExclusiveLock
+ truncate_from_workers.on_update_fkey_table | ShareRowExclusiveLock
+ truncate_from_workers.on_update_fkey_table | ShareLock
+ truncate_from_workers.on_update_fkey_table | RowShareLock
+ truncate_from_workers.on_update_fkey_table | RowExclusiveLock
+ truncate_from_workers.on_update_fkey_table | ExclusiveLock
+ truncate_from_workers.on_update_fkey_table | AccessShareLock
+ truncate_from_workers.on_update_fkey_table | AccessExclusiveLock
+(8 rows)
+
+COMMIT;
 DROP SCHEMA truncate_from_workers CASCADE;
 NOTICE:  drop cascades to 2 other objects
 DETAIL:  drop cascades to table truncate_from_workers.referece_table

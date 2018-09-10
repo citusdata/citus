@@ -43,6 +43,7 @@
 #include "distributed/resource_lock.h"
 #include "distributed/shardinterval_utils.h"
 #include "distributed/shard_pruning.h"
+#include "distributed/version_compat.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/worker_transaction.h"
 #include "optimizer/clauses.h"
@@ -56,14 +57,22 @@
 #include "utils/inval.h"
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
+#if (PG_VERSION_NUM >= 100000)
+#include "utils/varlena.h"
+#endif
+
+#define LOCK_RELATION_IF_EXISTS "SELECT lock_relation_if_exists('%s', '%s');"
+#define REMOTE_LOCK_MODE_FOR_TRUNCATE "ACCESS EXCLUSIVE"
 
 
 static List * ModifyMultipleShardsTaskList(Query *query, List *shardIntervalList, TaskType
 										   taskType);
 static bool ShouldExecuteTruncateStmtSequential(TruncateStmt *command);
+static LOCKMODE LockModeTextToLockMode(const char *lockModeName);
 
 
 PG_FUNCTION_INFO_V1(master_modify_multiple_shards);
+PG_FUNCTION_INFO_V1(lock_relation_if_exists);
 
 
 /*
@@ -204,27 +213,23 @@ master_modify_multiple_shards(PG_FUNCTION_ARGS)
 		ModifyMultipleShardsTaskList(modifyQuery, prunedShardIntervalList, taskType);
 
 	/*
-	 * We should execute "TRUNCATE table_name;" on the other worker nodes before
+	 * We lock the relation we're TRUNCATING on the other worker nodes before
 	 * executing the truncate commands on the shards. This is necessary to prevent
 	 * distributed deadlocks where a concurrent operation on the same table (or a
 	 * cascading table) is executed on the other nodes.
 	 *
-	 * Note that we should skip the current node to prevent a self-deadlock.
+	 * Note that we should skip the current node to prevent a self-deadlock that's why
+	 * we use OTHER_WORKERS tag.
 	 */
 	if (truncateOperation && ShouldSyncTableMetadata(relationId))
 	{
-		SendCommandToWorkers(OTHER_WORKERS_WITH_METADATA,
-							 DISABLE_DDL_PROPAGATION);
+		char *qualifiedRelationName = generate_qualified_relation_name(relationId);
+		StringInfo lockRelation = makeStringInfo();
 
+		appendStringInfo(lockRelation, LOCK_RELATION_IF_EXISTS, qualifiedRelationName,
+						 REMOTE_LOCK_MODE_FOR_TRUNCATE);
 
-		/*
-		 * Note that here we ignore the schema and send the queryString as is
-		 * since citus_truncate_trigger already uses qualified table name.
-		 * If that was not the case, we should also had to set the search path
-		 * as we do for regular DDLs.
-		 */
-		SendCommandToWorkers(OTHER_WORKERS_WITH_METADATA,
-							 queryString);
+		SendCommandToWorkers(OTHER_WORKERS, lockRelation->data);
 	}
 
 	if (MultiShardConnectionType == SEQUENTIAL_CONNECTION)
@@ -311,4 +316,106 @@ ShouldExecuteTruncateStmtSequential(TruncateStmt *command)
 	}
 
 	return false;
+}
+
+
+/*
+ * lock_relation_if_exists gets a relation name and lock mode
+ * and returns true if the relation exists and can be locked with
+ * the given lock mode. If the relation doesn't exists, the function
+ * return false.
+ *
+ * The relation name should be qualified with the schema name.
+ *
+ * The function errors out of the lockmode isn't defined in the PostgreSQL's
+ * explicit locking table.
+ */
+Datum
+lock_relation_if_exists(PG_FUNCTION_ARGS)
+{
+	text *relationName = PG_GETARG_TEXT_P(0);
+	text *lockModeText = PG_GETARG_TEXT_P(1);
+
+	Oid relationId = InvalidOid;
+	char *lockModeCString = text_to_cstring(lockModeText);
+	List *relationNameList = NIL;
+	RangeVar *relation = NULL;
+	LOCKMODE lockMode = NoLock;
+
+	/* ensure that we're in a transaction block */
+	RequireTransactionBlock(true, "lock_relation_if_exists");
+
+	relationId = ResolveRelationId(relationName, true);
+	if (!OidIsValid(relationId))
+	{
+		PG_RETURN_BOOL(false);
+	}
+
+	/* get the lock mode */
+	lockMode = LockModeTextToLockMode(lockModeCString);
+
+	/* resolve relationId from passed in schema and relation name */
+	relationNameList = textToQualifiedNameList(relationName);
+	relation = makeRangeVarFromNameList(relationNameList);
+
+	/* lock the relation with the lock mode */
+	RangeVarGetRelid(relation, lockMode, false);
+
+	PG_RETURN_BOOL(true);
+}
+
+
+/*
+ * LockModeTextToLockMode gets a lockMode name and returns its corresponding LOCKMODE.
+ * The function errors out if the input lock mode isn't defined in the PostgreSQL's
+ * explicit locking table.
+ */
+static LOCKMODE
+LockModeTextToLockMode(const char *lockModeName)
+{
+	if (pg_strncasecmp("NoLock", lockModeName, NAMEDATALEN) == 0)
+	{
+		/* there is no explict call for NoLock, but keeping it here for convinience */
+		return NoLock;
+	}
+	else if (pg_strncasecmp("ACCESS SHARE", lockModeName, NAMEDATALEN) == 0)
+	{
+		return AccessShareLock;
+	}
+	else if (pg_strncasecmp("ROW SHARE", lockModeName, NAMEDATALEN) == 0)
+	{
+		return RowShareLock;
+	}
+	else if (pg_strncasecmp("ROW EXCLUSIVE", lockModeName, NAMEDATALEN) == 0)
+	{
+		return RowExclusiveLock;
+	}
+	else if (pg_strncasecmp("SHARE UPDATE EXCLUSIVE", lockModeName, NAMEDATALEN) == 0)
+	{
+		return ShareUpdateExclusiveLock;
+	}
+	else if (pg_strncasecmp("SHARE", lockModeName, NAMEDATALEN) == 0)
+	{
+		return ShareLock;
+	}
+	else if (pg_strncasecmp("SHARE ROW EXCLUSIVE", lockModeName, NAMEDATALEN) == 0)
+	{
+		return ShareRowExclusiveLock;
+	}
+	else if (pg_strncasecmp("EXCLUSIVE", lockModeName, NAMEDATALEN) == 0)
+	{
+		return ExclusiveLock;
+	}
+	else if (pg_strncasecmp("ACCESS EXCLUSIVE", lockModeName, NAMEDATALEN) == 0)
+	{
+		return AccessExclusiveLock;
+	}
+	else
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_LOCK_NOT_AVAILABLE),
+				 errmsg("unknown lock mode: %s", lockModeName)));
+	}
+
+	return NoLock;
 }

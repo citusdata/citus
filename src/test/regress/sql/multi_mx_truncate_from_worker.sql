@@ -95,6 +95,50 @@ RESET client_min_messages;
 
 \c - - - :master_port
 
+-- also test the infrastructure that is used for supporting 
+-- TRUNCATE from worker nodes
+
+-- should fail since it is not in transaction block
+SELECT lock_relation_if_exists('on_update_fkey_table', 'ACCESS SHARE');
+
+BEGIN;
+	-- should fail since the schema is not provided
+	SELECT lock_relation_if_exists('on_update_fkey_table', 'ACCESS SHARE');
+ROLLBACK;
+
+BEGIN;
+	-- should work since the schema is in the search path
+	SET search_path TO 'truncate_from_workers';
+	SELECT lock_relation_if_exists('on_update_fkey_table', 'ACCESS SHARE');
+ROLLBACK;
+
+BEGIN;
+	-- should return false since there is no such table
+	SELECT lock_relation_if_exists('truncate_from_workers.on_update_fkey_tableXXX', 'ACCESS SHARE');
+ROLLBACK;
+
+
+BEGIN;
+	-- should fail since there is no such lock mode
+	SELECT lock_relation_if_exists('truncate_from_workers.on_update_fkey_table', 'MY LOCK MODE');
+ROLLBACK;
+
+BEGIN;
+	-- test all lock levels
+	SELECT lock_relation_if_exists('truncate_from_workers.on_update_fkey_table', 'ACCESS SHARE');
+	SELECT lock_relation_if_exists('truncate_from_workers.on_update_fkey_table', 'ROW SHARE');
+	SELECT lock_relation_if_exists('truncate_from_workers.on_update_fkey_table', 'ROW EXCLUSIVE');
+	SELECT lock_relation_if_exists('truncate_from_workers.on_update_fkey_table', 'SHARE UPDATE EXCLUSIVE');
+	SELECT lock_relation_if_exists('truncate_from_workers.on_update_fkey_table', 'SHARE');
+	SELECT lock_relation_if_exists('truncate_from_workers.on_update_fkey_table', 'SHARE ROW EXCLUSIVE');
+	SELECT lock_relation_if_exists('truncate_from_workers.on_update_fkey_table', 'SHARE ROW EXCLUSIVE');
+	SELECT lock_relation_if_exists('truncate_from_workers.on_update_fkey_table', 'EXCLUSIVE');
+	SELECT lock_relation_if_exists('truncate_from_workers.on_update_fkey_table', 'ACCESS EXCLUSIVE');
+
+	-- see them all
+	SELECT relation::regclass, mode FROM pg_locks WHERE pid = pg_backend_pid() AND relation = 'truncate_from_workers.on_update_fkey_table'::regclass ORDER BY 2 DESC;
+COMMIT;
+
 DROP SCHEMA truncate_from_workers CASCADE;
 
 SET search_path TO public;

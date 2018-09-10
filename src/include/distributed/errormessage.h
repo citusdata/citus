@@ -56,7 +56,8 @@ DeferredErrorMessage * DeferredErrorInternal(int code, const char *message, cons
 		RaiseDeferredErrorInternal(error, elevel); \
 		if (__builtin_constant_p(elevel) && (elevel) >= ERROR) { \
 			pg_unreachable(); } \
-	} while (0)
+	} \
+	while (0)
 #else  /* !HAVE_BUILTIN_CONSTANT_P */
 #define RaiseDeferredError(error, elevel) \
 	do { \
@@ -64,7 +65,8 @@ DeferredErrorMessage * DeferredErrorInternal(int code, const char *message, cons
 		RaiseDeferredErrorInternal(error, elevel_); \
 		if (elevel_ >= ERROR) { \
 			pg_unreachable(); } \
-	} while (0)
+	} \
+	while (0)
 #endif /* HAVE_BUILTIN_CONSTANT_P */
 
 void RaiseDeferredErrorInternal(DeferredErrorMessage *error, int elevel);

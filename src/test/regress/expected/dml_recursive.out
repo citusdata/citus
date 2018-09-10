@@ -295,8 +295,7 @@ DEBUG:  common table expressions are not supported in distributed modifications
 DEBUG:  generating subplan 20_1 for CTE cte_1: WITH cte_2 AS (SELECT second_distributed_table.tenant_id AS cte2_id FROM recursive_dml_queries.second_distributed_table WHERE (second_distributed_table.dept OPERATOR(pg_catalog.>=) 2)) UPDATE recursive_dml_queries.distributed_table SET dept = 10 RETURNING tenant_id, dept, info
 DEBUG:  common table expressions are not supported in distributed modifications
 DEBUG:  Plan 20 query after replacing subqueries and CTEs: UPDATE recursive_dml_queries.distributed_table SET dept = 5 FROM (SELECT intermediate_result.tenant_id, intermediate_result.dept, intermediate_result.info FROM read_intermediate_result('20_1'::text, 'binary'::citus_copy_format) intermediate_result(tenant_id text, dept integer, info jsonb)) cte_1 WHERE (distributed_table.tenant_id OPERATOR(pg_catalog.<) cte_1.tenant_id)
-SET citus.explain_all_tasks TO ON;
-EXPLAIN (COSTS FALSE) WITH cte_1 AS (
+WITH cte_1 AS (
     WITH cte_2 AS (
         SELECT tenant_id as cte2_id 
         FROM second_distributed_table 
@@ -315,65 +314,6 @@ DEBUG:  common table expressions are not supported in distributed modifications
 DEBUG:  generating subplan 22_1 for CTE cte_1: WITH cte_2 AS (SELECT second_distributed_table.tenant_id AS cte2_id FROM recursive_dml_queries.second_distributed_table WHERE (second_distributed_table.dept OPERATOR(pg_catalog.>=) 2)) UPDATE recursive_dml_queries.distributed_table SET dept = 10 RETURNING tenant_id, dept, info
 DEBUG:  common table expressions are not supported in distributed modifications
 DEBUG:  Plan 22 query after replacing subqueries and CTEs: UPDATE recursive_dml_queries.distributed_table SET dept = 5 FROM (SELECT intermediate_result.tenant_id, intermediate_result.dept, intermediate_result.info FROM read_intermediate_result('22_1'::text, 'binary'::citus_copy_format) intermediate_result(tenant_id text, dept integer, info jsonb)) cte_1 WHERE (distributed_table.tenant_id OPERATOR(pg_catalog.<) cte_1.tenant_id)
-                                           QUERY PLAN                                           
-------------------------------------------------------------------------------------------------
- Custom Scan (Citus Router)
-   ->  Distributed Subplan 22_1
-         ->  Custom Scan (Citus Router)
-               Task Count: 4
-               Tasks Shown: All
-               ->  Task
-                     Node: host=localhost port=57638 dbname=regression
-                     ->  Update on distributed_table_2370000 distributed_table
-                           ->  Seq Scan on distributed_table_2370000 distributed_table
-               ->  Task
-                     Node: host=localhost port=57637 dbname=regression
-                     ->  Update on distributed_table_2370001 distributed_table
-                           ->  Seq Scan on distributed_table_2370001 distributed_table
-               ->  Task
-                     Node: host=localhost port=57638 dbname=regression
-                     ->  Update on distributed_table_2370002 distributed_table
-                           ->  Seq Scan on distributed_table_2370002 distributed_table
-               ->  Task
-                     Node: host=localhost port=57637 dbname=regression
-                     ->  Update on distributed_table_2370003 distributed_table
-                           ->  Seq Scan on distributed_table_2370003 distributed_table
-   Task Count: 4
-   Tasks Shown: All
-   ->  Task
-         Node: host=localhost port=57638 dbname=regression
-         ->  Update on distributed_table_2370000 distributed_table
-               ->  Nested Loop
-                     Join Filter: (distributed_table.tenant_id < intermediate_result.tenant_id)
-                     ->  Function Scan on read_intermediate_result intermediate_result
-                     ->  Materialize
-                           ->  Seq Scan on distributed_table_2370000 distributed_table
-   ->  Task
-         Node: host=localhost port=57637 dbname=regression
-         ->  Update on distributed_table_2370001 distributed_table
-               ->  Nested Loop
-                     Join Filter: (distributed_table.tenant_id < intermediate_result.tenant_id)
-                     ->  Function Scan on read_intermediate_result intermediate_result
-                     ->  Materialize
-                           ->  Seq Scan on distributed_table_2370001 distributed_table
-   ->  Task
-         Node: host=localhost port=57638 dbname=regression
-         ->  Update on distributed_table_2370002 distributed_table
-               ->  Nested Loop
-                     Join Filter: (distributed_table.tenant_id < intermediate_result.tenant_id)
-                     ->  Function Scan on read_intermediate_result intermediate_result
-                     ->  Materialize
-                           ->  Seq Scan on distributed_table_2370002 distributed_table
-   ->  Task
-         Node: host=localhost port=57637 dbname=regression
-         ->  Update on distributed_table_2370003 distributed_table
-               ->  Nested Loop
-                     Join Filter: (distributed_table.tenant_id < intermediate_result.tenant_id)
-                     ->  Function Scan on read_intermediate_result intermediate_result
-                     ->  Materialize
-                           ->  Seq Scan on distributed_table_2370003 distributed_table
-(55 rows)
-
 -- we don't support updating local table with a join with
 -- distributed tables
 UPDATE 

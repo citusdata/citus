@@ -1165,7 +1165,7 @@ int32
 GetNextGroupId()
 {
 	text *sequenceName = cstring_to_text(GROUPID_SEQUENCE_NAME);
-	Oid sequenceId = ResolveRelationId(sequenceName);
+	Oid sequenceId = ResolveRelationId(sequenceName, false);
 	Datum sequenceIdDatum = ObjectIdGetDatum(sequenceId);
 	Oid savedUserId = InvalidOid;
 	int savedSecurityContext = 0;
@@ -1227,7 +1227,7 @@ int
 GetNextNodeId()
 {
 	text *sequenceName = cstring_to_text(NODEID_SEQUENCE_NAME);
-	Oid sequenceId = ResolveRelationId(sequenceName);
+	Oid sequenceId = ResolveRelationId(sequenceName, false);
 	Datum sequenceIdDatum = ObjectIdGetDatum(sequenceId);
 	Oid savedUserId = InvalidOid;
 	int savedSecurityContext = 0;

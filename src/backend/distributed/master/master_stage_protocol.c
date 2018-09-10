@@ -91,7 +91,7 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 	char partitionMethod = 0;
 	char storageType = SHARD_STORAGE_TABLE;
 
-	Oid relationId = ResolveRelationId(relationNameText);
+	Oid relationId = ResolveRelationId(relationNameText, false);
 	char relationKind = get_rel_relkind(relationId);
 	char replicationModel = REPLICATION_MODEL_INVALID;
 

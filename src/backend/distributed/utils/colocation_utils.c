@@ -546,7 +546,7 @@ uint32
 GetNextColocationId()
 {
 	text *sequenceName = cstring_to_text(COLOCATIONID_SEQUENCE_NAME);
-	Oid sequenceId = ResolveRelationId(sequenceName);
+	Oid sequenceId = ResolveRelationId(sequenceName, false);
 	Datum sequenceIdDatum = ObjectIdGetDatum(sequenceId);
 	Oid savedUserId = InvalidOid;
 	int savedSecurityContext = 0;
