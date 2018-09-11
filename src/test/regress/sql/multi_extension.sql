@@ -147,6 +147,7 @@ ALTER EXTENSION citus UPDATE TO '8.0-1';
 ALTER EXTENSION citus UPDATE TO '8.0-2';
 ALTER EXTENSION citus UPDATE TO '8.0-3';
 ALTER EXTENSION citus UPDATE TO '8.0-4';
+ALTER EXTENSION citus UPDATE TO '8.0-5';
 
 -- show running version
 SHOW citus.version;

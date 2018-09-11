@@ -44,9 +44,6 @@ typedef struct PROCStack
 
 
 static void AddWaitEdgeFromResult(WaitGraph *waitGraph, PGresult *result, int rowIndex);
-static int64 ParseIntField(PGresult *result, int rowIndex, int colIndex);
-static bool ParseBoolField(PGresult *result, int rowIndex, int colIndex);
-static TimestampTz ParseTimestampTzField(PGresult *result, int rowIndex, int colIndex);
 static void ReturnWaitGraph(WaitGraph *waitGraph, FunctionCallInfo fcinfo);
 static WaitGraph * BuildLocalWaitGraph(void);
 static bool IsProcessWaitingForSafeOperations(PGPROC *proc);
@@ -204,7 +201,7 @@ AddWaitEdgeFromResult(WaitGraph *waitGraph, PGresult *result, int rowIndex)
  * ParseIntField parses a int64 from a remote result or returns 0 if the
  * result is NULL.
  */
-static int64
+int64
 ParseIntField(PGresult *result, int rowIndex, int colIndex)
 {
 	char *resultString = NULL;
@@ -224,7 +221,7 @@ ParseIntField(PGresult *result, int rowIndex, int colIndex)
  * ParseBoolField parses a bool from a remote result or returns false if the
  * result is NULL.
  */
-static bool
+bool
 ParseBoolField(PGresult *result, int rowIndex, int colIndex)
 {
 	char *resultString = NULL;
@@ -248,7 +245,7 @@ ParseBoolField(PGresult *result, int rowIndex, int colIndex)
  * ParseTimestampTzField parses a timestamptz from a remote result or returns
  * 0 if the result is NULL.
  */
-static TimestampTz
+TimestampTz
 ParseTimestampTzField(PGresult *result, int rowIndex, int colIndex)
 {
 	char *resultString = NULL;
@@ -257,7 +254,7 @@ ParseTimestampTzField(PGresult *result, int rowIndex, int colIndex)
 
 	if (PQgetisnull(result, rowIndex, colIndex))
 	{
-		return 0;
+		return DT_NOBEGIN;
 	}
 
 	resultString = PQgetvalue(result, rowIndex, colIndex);

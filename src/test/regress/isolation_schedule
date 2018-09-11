@@ -8,7 +8,6 @@ test: isolation_create_table_vs_add_remove_node
 # isolation_cluster_management such that tests
 # that come later can be parallelized
 test: isolation_cluster_management
-
 test: isolation_dml_vs_repair isolation_copy_placement_vs_copy_placement
 
 test: isolation_concurrent_dml isolation_data_migration
@@ -43,3 +42,4 @@ test: isolation_delete_vs_all
 test: isolation_truncate_vs_all
 test: isolation_drop_vs_all
 test: isolation_ddl_vs_all
+test: isolation_citus_dist_activity
