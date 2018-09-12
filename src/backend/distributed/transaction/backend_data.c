@@ -18,18 +18,24 @@
 #include "catalog/pg_type.h"
 #include "datatype/timestamp.h"
 #include "distributed/backend_data.h"
+#include "distributed/connection_management.h"
 #include "distributed/listutils.h"
 #include "distributed/lock_graph.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/remote_commands.h"
 #include "distributed/transaction_identifier.h"
 #include "nodes/execnodes.h"
 #include "storage/ipc.h"
+#include "storage/lmgr.h"
 #include "storage/lwlock.h"
 #include "storage/proc.h"
 #include "storage/spin.h"
 #include "storage/s_lock.h"
 #include "utils/timestamp.h"
 
+
+#define GET_ACTIVE_TRANSACTION_QUERY "SELECT * FROM get_all_active_transactions();"
+#define ACTIVE_TRANSACTION_COLUMN_COUNT 6
 
 /*
  * Each backend's data reside in the shared memory
@@ -56,6 +62,9 @@ typedef struct BackendManagementShmemData
 } BackendManagementShmemData;
 
 
+static void StoreAllActiveTransactions(Tuplestorestate *tupleStore, TupleDesc
+									   tupleDescriptor);
+static void CheckReturnSetInfo(ReturnSetInfo *returnSetInfo);
 static shmem_startup_hook_type prev_shmem_startup_hook = NULL;
 static BackendManagementShmemData *backendManagementShmemData = NULL;
 static BackendData *MyBackendData = NULL;
@@ -67,6 +76,7 @@ static size_t BackendManagementShmemSize(void);
 
 PG_FUNCTION_INFO_V1(assign_distributed_transaction_id);
 PG_FUNCTION_INFO_V1(get_current_transaction_id);
+PG_FUNCTION_INFO_V1(get_global_active_transactions);
 PG_FUNCTION_INFO_V1(get_all_active_transactions);
 
 
@@ -181,6 +191,143 @@ get_current_transaction_id(PG_FUNCTION_ARGS)
 
 
 /*
+ * get_global_active_transactions returns all the available information about all
+ * the active backends from each node of the cluster. If you call that function from
+ * the coordinator, it will returns back active transaction from the coordinator as
+ * well. Yet, if you call it from the worker, result won't include the transactions
+ * on the coordinator node, since worker nodes do not aware of the coordinator.
+ */
+Datum
+get_global_active_transactions(PG_FUNCTION_ARGS)
+{
+	ReturnSetInfo *returnSetInfo = (ReturnSetInfo *) fcinfo->resultinfo;
+	TupleDesc tupleDescriptor = NULL;
+	Tuplestorestate *tupleStore = NULL;
+	MemoryContext perQueryContext = NULL;
+	MemoryContext oldContext = NULL;
+	List *workerNodeList = ActivePrimaryNodeList();
+	ListCell *workerNodeCell = NULL;
+	List *connectionList = NIL;
+	ListCell *connectionCell = NULL;
+	StringInfo queryToSend = makeStringInfo();
+
+	CheckCitusVersion(ERROR);
+	CheckReturnSetInfo(returnSetInfo);
+
+	/* build a tuple descriptor for our result type */
+	if (get_call_result_type(fcinfo, NULL, &tupleDescriptor) != TYPEFUNC_COMPOSITE)
+	{
+		elog(ERROR, "return type must be a row type");
+	}
+
+	appendStringInfo(queryToSend, GET_ACTIVE_TRANSACTION_QUERY);
+
+	perQueryContext = returnSetInfo->econtext->ecxt_per_query_memory;
+
+	oldContext = MemoryContextSwitchTo(perQueryContext);
+
+	tupleStore = tuplestore_begin_heap(true, false, work_mem);
+	returnSetInfo->returnMode = SFRM_Materialize;
+	returnSetInfo->setResult = tupleStore;
+	returnSetInfo->setDesc = tupleDescriptor;
+
+	MemoryContextSwitchTo(oldContext);
+
+	/* add active transactions for local node */
+	StoreAllActiveTransactions(tupleStore, tupleDescriptor);
+
+	/* open connections in parallel */
+	foreach(workerNodeCell, workerNodeList)
+	{
+		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
+		char *nodeName = workerNode->workerName;
+		int nodePort = workerNode->workerPort;
+		MultiConnection *connection = NULL;
+		int connectionFlags = 0;
+
+		if (workerNode->groupId == GetLocalGroupId())
+		{
+			/* we already get these transactions via GetAllActiveTransactions() */
+			continue;
+		}
+
+		connection = StartNodeConnection(connectionFlags, nodeName, nodePort);
+
+		connectionList = lappend(connectionList, connection);
+	}
+
+	FinishConnectionListEstablishment(connectionList);
+
+	/* send commands in parallel */
+	foreach(connectionCell, connectionList)
+	{
+		MultiConnection *connection = (MultiConnection *) lfirst(connectionCell);
+		int querySent = false;
+
+		querySent = SendRemoteCommand(connection, queryToSend->data);
+		if (querySent == 0)
+		{
+			ReportConnectionError(connection, WARNING);
+		}
+	}
+
+	/* receive query results */
+	foreach(connectionCell, connectionList)
+	{
+		MultiConnection *connection = (MultiConnection *) lfirst(connectionCell);
+		PGresult *result = NULL;
+		bool raiseInterrupts = true;
+		Datum values[ACTIVE_TRANSACTION_COLUMN_COUNT];
+		bool isNulls[ACTIVE_TRANSACTION_COLUMN_COUNT];
+		int64 rowIndex = 0;
+		int64 rowCount = 0;
+		int64 colCount = 0;
+
+		result = GetRemoteCommandResult(connection, raiseInterrupts);
+		if (!IsResponseOK(result))
+		{
+			ReportResultError(connection, result, WARNING);
+			continue;
+		}
+
+		rowCount = PQntuples(result);
+		colCount = PQnfields(result);
+
+		/* Although it is not expected */
+		if (colCount != ACTIVE_TRANSACTION_COLUMN_COUNT)
+		{
+			ereport(WARNING, (errmsg("unexpected number of columns from "
+									 "get_all_active_transactions")));
+			continue;
+		}
+
+		for (rowIndex = 0; rowIndex < rowCount; rowIndex++)
+		{
+			memset(values, 0, sizeof(values));
+			memset(isNulls, false, sizeof(isNulls));
+
+			values[0] = ParseIntField(result, rowIndex, 0);
+			values[1] = ParseIntField(result, rowIndex, 1);
+			values[2] = ParseIntField(result, rowIndex, 2);
+			values[3] = ParseBoolField(result, rowIndex, 3);
+			values[4] = ParseIntField(result, rowIndex, 4);
+			values[5] = ParseTimestampTzField(result, rowIndex, 5);
+
+			tuplestore_putvalues(tupleStore, tupleDescriptor, values, isNulls);
+		}
+
+		PQclear(result);
+		ForgetResults(connection);
+	}
+
+	/* clean up and return the tuplestore */
+	tuplestore_donestoring(tupleStore);
+
+	PG_RETURN_VOID();
+}
+
+
+/*
  * get_all_active_transactions returns all the avaliable information about all
  * the active backends.
  */
@@ -193,29 +340,8 @@ get_all_active_transactions(PG_FUNCTION_ARGS)
 	MemoryContext perQueryContext = NULL;
 	MemoryContext oldContext = NULL;
 
-	int backendIndex = 0;
-
-	Datum values[6];
-	bool isNulls[6];
-
 	CheckCitusVersion(ERROR);
-
-	/* check to see if caller supports us returning a tuplestore */
-	if (returnSetInfo == NULL || !IsA(returnSetInfo, ReturnSetInfo))
-	{
-		ereport(ERROR,
-				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg("set-valued function called in context " \
-						"that cannot accept a set")));
-	}
-
-	if (!(returnSetInfo->allowedModes & SFRM_Materialize))
-	{
-		ereport(ERROR,
-				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg("materialize mode required, but it is not " \
-						"allowed in this context")));
-	}
+	CheckReturnSetInfo(returnSetInfo);
 
 	/* build a tuple descriptor for our result type */
 	if (get_call_result_type(fcinfo, NULL, &tupleDescriptor) != TYPEFUNC_COMPOSITE)
@@ -233,6 +359,26 @@ get_all_active_transactions(PG_FUNCTION_ARGS)
 	returnSetInfo->setDesc = tupleDescriptor;
 
 	MemoryContextSwitchTo(oldContext);
+	StoreAllActiveTransactions(tupleStore, tupleDescriptor);
+
+	/* clean up and return the tuplestore */
+	tuplestore_donestoring(tupleStore);
+
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * StoreAllActiveTransactions gets active transaction from the local node and inserts
+ * them into the given tuplestore.
+ */
+static void
+StoreAllActiveTransactions(Tuplestorestate *tupleStore, TupleDesc tupleDescriptor)
+{
+	int backendIndex = 0;
+
+	Datum values[ACTIVE_TRANSACTION_COLUMN_COUNT];
+	bool isNulls[ACTIVE_TRANSACTION_COLUMN_COUNT];
 
 	/*
 	 * We don't want to initialize memory while spinlock is held so we
@@ -288,11 +434,32 @@ get_all_active_transactions(PG_FUNCTION_ARGS)
 	}
 
 	UnlockBackendSharedMemory();
+}
 
-	/* clean up and return the tuplestore */
-	tuplestore_donestoring(tupleStore);
 
-	PG_RETURN_VOID();
+/*
+ * CheckReturnSetInfo checks whether the defined given returnSetInfo is
+ * proper for returning tuplestore.
+ */
+static void
+CheckReturnSetInfo(ReturnSetInfo *returnSetInfo)
+{
+	/* check to see if caller supports us returning a tuplestore */
+	if (returnSetInfo == NULL || !IsA(returnSetInfo, ReturnSetInfo))
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("set-valued function called in context " \
+						"that cannot accept a set")));
+	}
+
+	if (!(returnSetInfo->allowedModes & SFRM_Materialize))
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("materialize mode required, but it is not " \
+						"allowed in this context")));
+	}
 }
 
 

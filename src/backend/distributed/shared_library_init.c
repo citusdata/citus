@@ -39,6 +39,7 @@
 #include "distributed/pg_dist_partition.h"
 #include "distributed/placement_connection.h"
 #include "distributed/relation_access_tracking.h"
+#include "distributed/run_from_same_connection.h"
 #include "distributed/query_pushdown_planning.h"
 #include "distributed/query_stats.h"
 #include "distributed/remote_commands.h"
@@ -977,6 +978,27 @@ RegisterCitusConfigVariables(void)
 		NodeConninfoGucCheckHook,
 		NodeConninfoGucAssignHook,
 		NULL);
+
+	DefineCustomIntVariable(
+		"citus.isolation_test_session_remote_process_id",
+		NULL,
+		NULL,
+		&IsolationTestSessionRemoteProcessID,
+		-1, -1, INT_MAX,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
+	DefineCustomIntVariable(
+		"citus.isolation_test_session_process_id",
+		NULL,
+		NULL,
+		&IsolationTestSessionProcessID,
+		-1, -1, INT_MAX,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
 	NormalizeWorkerListPath();
 
 

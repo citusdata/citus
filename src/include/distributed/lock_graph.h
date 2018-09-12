@@ -15,7 +15,10 @@
 
 #include "postgres.h"
 #include "libpq-fe.h"
+
 #include "datatype/timestamp.h"
+#include "distributed/backend_data.h"
+#include "storage/lock.h"
 
 
 /*
@@ -58,6 +61,8 @@ typedef struct WaitGraph
 extern WaitGraph * BuildGlobalWaitGraph(void);
 extern bool IsProcessWaitingForLock(PGPROC *proc);
 extern bool IsInDistributedTransaction(BackendData *backendData);
+extern TimestampTz ParseTimestampTzField(PGresult *result, int rowIndex, int colIndex);
+extern int64 ParseIntField(PGresult *result, int rowIndex, int colIndex);
 
 /* some utility function to parse results */
 extern int64 ParseIntField(PGresult *result, int rowIndex, int colIndex);
