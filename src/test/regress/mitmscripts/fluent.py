@@ -1,3 +1,4 @@
+from collections import defaultdict
 import logging
 import re
 import os
@@ -10,6 +11,7 @@ import time
 import traceback
 import queue
 
+from construct.lib import ListContainer
 from mitmproxy import ctx
 from mitmproxy.utils import strutils
 from mitmproxy.proxy.protocol import TlsLayer, RawTCPLayer
@@ -286,6 +288,37 @@ def listen_for_commands(fifoname):
         pretty = structs.print(message.parsed)
         return emit_row(message.connection_id, message.from_client, pretty)
 
+    def all_items(queue_):
+        'Pulls everything out of the queue without blocking'
+        try:
+            while True:
+                yield queue_.get(block=False)
+        except queue.Empty:
+            pass
+
+    def drop_terminate_messages(messages):
+        '''
+        Terminate() messages happen eventually, Citus doesn't feel any need to send them
+        immediately, so tests which embed them aren't reproducible and fail to timing
+        issues. Here we simply drop those messages.
+        '''
+        def isTerminate(msg, from_client):
+            kind = structs.message_type(msg, from_client)
+            return kind == 'Terminate'
+
+        for message in messages:
+            if not message.parsed:
+                yield message
+                continue
+            message.parsed = ListContainer([
+                msg for msg in message.parsed
+                if not isTerminate(msg, message.from_client)
+            ])
+            message.parsed.from_frontend = message.from_client
+            if len(message.parsed) == 0:
+                continue
+            yield message
+
     def handle_recorder(recorder):
         global connection_count
         result = ''
@@ -297,15 +330,13 @@ def listen_for_commands(fifoname):
             # this should never happen
             raise Exception('Unrecognized command: {}'.format(recorder.command))
 
-        try:
-            results = []
-            while True:
-                message = captured_messages.get(block=False)
-                if recorder.command is 'reset':
-                    continue
-                results.append(emit_message(message))
-        except queue.Empty:
-            pass
+        results = []
+        messages = all_items(captured_messages)
+        messages = drop_terminate_messages(messages)
+        for message in messages:
+            if recorder.command is 'reset':
+                continue
+            results.append(emit_message(message))
         result = '\n'.join(results)
 
         logging.debug('about to write to fifo')
