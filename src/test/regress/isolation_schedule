@@ -46,3 +46,4 @@ test: isolation_citus_dist_activity
 
 # MX tests
 test: isolation_reference_on_mx
+test: isolation_get_distributed_wait_queries
