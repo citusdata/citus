@@ -266,8 +266,6 @@ def build_handler(spec):
 
 handler = None  # the current handler used to process packets
 command_thread = None  # sits on the fifo and waits for new commands to come in
-command_queue = queue.Queue()  # we poll this from the main thread and apply commands
-response_queue = queue.Queue()  # the main thread uses this to reply to command_thread
 captured_messages = queue.Queue()  # where we store messages used for recorder.dump()
 connection_count = 0  # so we can give connections ids in recorder.dump()
 
@@ -334,8 +332,12 @@ def listen_for_commands(fifoname):
             result = None
 
         if not result:
-            command_queue.put(slug)
-            result = response_queue.get()
+            try:
+                ctx.options.update(slug=slug)
+            except Exception as e:
+                result = str(e)
+            else:
+                result = ''
 
         logging.debug('about to write to fifo')
         with open(fifoname, mode='w') as fifo:
@@ -363,22 +365,6 @@ def create_thread(fifoname):
 def load(loader):
     loader.add_option('slug', str, 'conn.allow()', "A script to run")
     loader.add_option('fifo', str, '', "Which fifo to listen on for commands")
-
-
-def tick():
-    # we do this crazy dance because ctx isn't threadsafe, it is only useable while a
-    # callback (such as this one) is being called.
-    try:
-        slug = command_queue.get_nowait()
-    except queue.Empty:
-        return
-
-    try:
-        ctx.options.update(slug=slug)
-    except Exception as e:
-        response_queue.put(str(e))
-    else:
-        response_queue.put('')
 
 
 def configure(updated):

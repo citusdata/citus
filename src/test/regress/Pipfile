@@ -1,20 +1,13 @@
 [[source]]
-
 name = "pypi"
 url = "https://pypi.python.org/simple"
 verify_ssl = true
 
-
 [packages]
-
-mitmproxy = "==3.0.4"
-construct = "*"
-
+mitmproxy = "==4.0.4"
+construct = "==2.9.45"
 
 [dev-packages]
 
-
-
 [requires]
-
-python_version = "3.5"
+python_version = "3.6"
