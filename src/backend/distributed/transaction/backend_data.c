@@ -365,9 +365,11 @@ BackendManagementShmemInit(void)
 
 		/*
 		 * We need to init per backend's spinlock before any backend
-		 * starts its execution.
+		 * starts its execution. Note that we initialize TotalProcs (e.g., not
+		 * MaxBackends) since some of the blocking processes could be prepared
+		 * transactions, which aren't covered by MaxBackends.
 		 */
-		for (backendIndex = 0; backendIndex < MaxBackends; ++backendIndex)
+		for (backendIndex = 0; backendIndex < TotalProcs; ++backendIndex)
 		{
 			SpinLockInit(&backendManagementShmemData->backends[backendIndex].mutex);
 		}
@@ -392,7 +394,7 @@ BackendManagementShmemSize(void)
 	Size size = 0;
 
 	size = add_size(size, sizeof(BackendManagementShmemData));
-	size = add_size(size, mul_size(sizeof(BackendData), MaxBackends));
+	size = add_size(size, mul_size(sizeof(BackendData), TotalProcs));
 
 	return size;
 }
