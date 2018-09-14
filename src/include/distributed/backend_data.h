@@ -13,12 +13,16 @@
 #define BACKEND_DATA_H
 
 
+#include "access/twophase.h"
 #include "datatype/timestamp.h"
 #include "distributed/transaction_identifier.h"
 #include "nodes/pg_list.h"
 #include "storage/lwlock.h"
 #include "storage/proc.h"
 #include "storage/s_lock.h"
+
+
+#define TotalProcs (MaxBackends + NUM_AUXILIARY_PROCS + max_prepared_xacts)
 
 
 /*
