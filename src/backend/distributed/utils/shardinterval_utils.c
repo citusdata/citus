@@ -414,19 +414,21 @@ SearchCachedShardInterval(Datum partitionColumnValue, ShardInterval **shardInter
 bool
 SingleReplicatedTable(Oid relationId)
 {
-	List *shardIntervalList = LoadShardList(relationId);
-	ListCell *shardIntervalCell = NULL;
+	List *shardList = LoadShardList(relationId);
+	List *shardPlacementList = NIL;
+	Oid shardId = INVALID_SHARD_ID;
 
-	foreach(shardIntervalCell, shardIntervalList)
+	if (list_length(shardList) <= 1)
 	{
-		uint64 *shardIdPointer = (uint64 *) lfirst(shardIntervalCell);
-		uint64 shardId = (*shardIdPointer);
-		List *shardPlacementList = ShardPlacementList(shardId);
+		return false;
+	}
 
-		if (list_length(shardPlacementList) != 1)
-		{
-			return false;
-		}
+	/* checking only for the first shard id should suffice */
+	shardId = (*(uint64 *) linitial(shardList));
+	shardPlacementList = ShardPlacementList(shardId);
+	if (list_length(shardPlacementList) != 1)
+	{
+		return false;
 	}
 
 	return true;

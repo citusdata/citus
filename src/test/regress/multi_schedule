@@ -37,7 +37,7 @@ test: multi_insert_select_window multi_shard_update_delete window_functions dml_
 # ----------
 # Tests for partitioning support
 # ----------
-test: multi_partitioning_utils multi_partitioning
+test: multi_partitioning_utils multi_partitioning replicated_partitioned_table
 
 
 # ----------

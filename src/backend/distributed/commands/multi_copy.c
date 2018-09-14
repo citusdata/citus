@@ -64,6 +64,7 @@
 #include "distributed/multi_copy.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/multi_physical_planner.h"
+#include "distributed/multi_router_planner.h"
 #include "distributed/multi_shard_transaction.h"
 #include "distributed/placement_connection.h"
 #include "distributed/relation_access_tracking.h"
@@ -198,6 +199,9 @@ CitusCopyFrom(CopyStmt *copyStatement, char *completionTag)
 	{
 		Oid relationId = RangeVarGetRelid(copyStatement->relation, NoLock, false);
 		char partitionMethod = PartitionMethod(relationId);
+
+		/* disallow modifications to a partition table which have rep. factpr > 1 */
+		EnsurePartitionTableNotReplicated(relationId);
 
 		if (partitionMethod == DISTRIBUTE_BY_HASH || partitionMethod ==
 			DISTRIBUTE_BY_RANGE || partitionMethod == DISTRIBUTE_BY_NONE)

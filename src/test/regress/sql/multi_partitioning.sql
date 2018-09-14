@@ -173,9 +173,6 @@ SELECT create_distributed_table('partitioning_test_failure', 'id', 'append');
 SELECT create_distributed_table('partitioning_test_failure', 'id', 'range');
 SELECT create_reference_table('partitioning_test_failure');
 
--- replication factor > 1 is not allowed in distributed partitioned tables
-SET citus.shard_replication_factor TO 2;
-SELECT create_distributed_table('partitioning_test_failure', 'id');
 SET citus.shard_replication_factor TO 1;
 
 -- non-distributed tables cannot have distributed partitions;
