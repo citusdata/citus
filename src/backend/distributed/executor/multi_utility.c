@@ -3578,7 +3578,7 @@ InterShardDDLTaskList(Oid leftRelationId, Oid rightRelationId,
  *
  * This code is heavily borrowed from RangeVarCallbackForDropRelation() in
  * commands/tablecmds.c in Postgres source. We need this to ensure the right
- * order of locking while dealing with DROP INDEX statments. Because we are
+ * order of locking while dealing with DROP INDEX statements. Because we are
  * exclusively using this callback for INDEX processing, the PARTITION-related
  * logic from PostgreSQL's similar callback has been omitted as unneeded.
  */
@@ -3589,6 +3589,7 @@ RangeVarCallbackForDropIndex(const RangeVar *rel, Oid relOid, Oid oldRelOid, voi
 	HeapTuple	tuple;
 	struct DropRelationCallbackState *state;
 	char		relkind;
+	char		expected_relkind;
 	Form_pg_class classform;
 	LOCKMODE	heap_lockmode;
 
@@ -3619,7 +3620,21 @@ RangeVarCallbackForDropIndex(const RangeVar *rel, Oid relOid, Oid oldRelOid, voi
 		return;					/* concurrently dropped, so nothing to do */
 	classform = (Form_pg_class) GETSTRUCT(tuple);
 
-	if (classform->relkind != relkind)
+	/*
+	 * PG 11 sends relkind as partitioned index for an index
+	 * on partitioned table. It is handled the same
+	 * as regular index as far as we are concerned here.
+	 *
+	 * See tablecmds.c:RangeVarCallbackForDropRelation()
+	 */
+	expected_relkind = classform->relkind;
+
+#if PG_VERSION_NUM >= 110000
+	if (expected_relkind == RELKIND_PARTITIONED_INDEX)
+		expected_relkind = RELKIND_INDEX;
+#endif
+
+	if (expected_relkind != relkind)
 		ereport(ERROR, (errcode(ERRCODE_WRONG_OBJECT_TYPE),
 						errmsg("\"%s\" is not an index", rel->relname)));
 

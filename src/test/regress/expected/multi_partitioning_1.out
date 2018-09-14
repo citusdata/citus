@@ -541,6 +541,44 @@ SELECT tablename, indexname FROM pg_indexes WHERE tablename LIKE 'partitioning_t
 -----------+-----------
 (0 rows)
 
+-- test drop
+-- indexes created on parent table can only be dropped on parent table
+-- ie using the same index name
+-- following will fail
+DROP INDEX partitioning_test_2009_id_idx;
+ERROR:  index "partitioning_test_2009_id_idx" does not exist
+-- but dropping index on parent table will succeed
+DROP INDEX partitioning_index;
+ERROR:  index "partitioning_index" does not exist
+-- this index was already created on partition table
+DROP INDEX partitioning_2009_index;
+ERROR:  index "partitioning_2009_index" does not exist
+-- test drop index on non-distributed, partitioned table
+CREATE TABLE non_distributed_partitioned_table(a int, b int) PARTITION BY RANGE (a);
+ERROR:  syntax error at or near "PARTITION"
+LINE 1: ...E non_distributed_partitioned_table(a int, b int) PARTITION ...
+                                                             ^
+CREATE TABLE non_distributed_partitioned_table_1 PARTITION OF non_distributed_partitioned_table
+FOR VALUES FROM (0) TO (10);
+ERROR:  syntax error at or near "PARTITION"
+LINE 1: CREATE TABLE non_distributed_partitioned_table_1 PARTITION O...
+                                                         ^
+CREATE INDEX non_distributed_partitioned_table_index ON non_distributed_partitioned_table(a);
+ERROR:  relation "non_distributed_partitioned_table" does not exist
+-- see index is created
+SELECT tablename, indexname FROM pg_indexes WHERE tablename LIKE 'non_distributed%' ORDER BY indexname;
+ tablename | indexname 
+-----------+-----------
+(0 rows)
+
+-- drop the index and see it is dropped
+DROP INDEX non_distributed_partitioned_table_index;
+ERROR:  index "non_distributed_partitioned_table_index" does not exist
+SELECT tablename, indexname FROM pg_indexes WHERE tablename LIKE 'non_distributed%' ORDER BY indexname;
+ tablename | indexname 
+-----------+-----------
+(0 rows)
+
 -- test add COLUMN
 -- add COLUMN to partitioned table
 ALTER TABLE partitioning_test ADD new_column int;
@@ -1532,3 +1570,13 @@ LINE 6:     logicalrelid IN ('partitioning_schema."schema-test"'::re...
                              ^
 DROP SCHEMA partitioning_schema CASCADE;
 NOTICE:  drop cascades to table "schema-test_2009"
+RESET SEARCH_PATH;
+DROP TABLE IF EXISTS
+	partitioning_hash_test,
+	partitioning_hash_join_test,
+	partitioning_test_failure,
+	non_distributed_partitioned_table;
+NOTICE:  table "partitioning_hash_test" does not exist, skipping
+NOTICE:  table "partitioning_hash_join_test" does not exist, skipping
+NOTICE:  table "partitioning_test_failure" does not exist, skipping
+NOTICE:  table "non_distributed_partitioned_table" does not exist, skipping

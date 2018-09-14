@@ -345,6 +345,31 @@ CREATE INDEX CONCURRENTLY partitioned_2010_index ON partitioning_test_2010(id);
 -- see index is created
 SELECT tablename, indexname FROM pg_indexes WHERE tablename LIKE 'partitioning_test%' ORDER BY indexname;
 
+-- test drop
+-- indexes created on parent table can only be dropped on parent table
+-- ie using the same index name
+-- following will fail
+DROP INDEX partitioning_test_2009_id_idx;
+
+-- but dropping index on parent table will succeed
+DROP INDEX partitioning_index;
+
+-- this index was already created on partition table
+DROP INDEX partitioning_2009_index;
+
+-- test drop index on non-distributed, partitioned table
+CREATE TABLE non_distributed_partitioned_table(a int, b int) PARTITION BY RANGE (a);
+CREATE TABLE non_distributed_partitioned_table_1 PARTITION OF non_distributed_partitioned_table
+FOR VALUES FROM (0) TO (10);
+CREATE INDEX non_distributed_partitioned_table_index ON non_distributed_partitioned_table(a);
+
+-- see index is created
+SELECT tablename, indexname FROM pg_indexes WHERE tablename LIKE 'non_distributed%' ORDER BY indexname;
+
+-- drop the index and see it is dropped
+DROP INDEX non_distributed_partitioned_table_index;
+SELECT tablename, indexname FROM pg_indexes WHERE tablename LIKE 'non_distributed%' ORDER BY indexname;
+
 -- test add COLUMN
 -- add COLUMN to partitioned table
 ALTER TABLE partitioning_test ADD new_column int;
@@ -1050,3 +1075,10 @@ ORDER BY
 	1,2;
 
 DROP SCHEMA partitioning_schema CASCADE;
+RESET SEARCH_PATH;
+DROP TABLE IF EXISTS
+	partitioning_hash_test,
+	partitioning_hash_join_test,
+	partitioning_test_failure,
+	non_distributed_partitioned_table;
+
