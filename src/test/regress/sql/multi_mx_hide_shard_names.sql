@@ -43,6 +43,19 @@ SET search_path TO 'mx_hide_shard_names';
 SELECT * FROM citus_shards_on_worker ORDER BY 2;
 SELECT * FROM citus_shard_indexes_on_worker ORDER BY 2;
 
+-- also show that nested calls to pg_table_is_visible works fine
+-- if both of the calls to the pg_table_is_visible haven't been
+-- replaced, we would get 0 rows in the output
+SELECT 
+	pg_table_is_visible((SELECT 
+								"t1"."Name"::regclass 
+						 FROM 
+						 	citus_shards_on_worker as t1 
+						 WHERE 
+						 	NOT pg_table_is_visible("t1"."Name"::regclass) 
+						 LIMIT 
+						 	1));
+
 -- now create an index
 \c - - - :master_port
 SET search_path TO 'mx_hide_shard_names';

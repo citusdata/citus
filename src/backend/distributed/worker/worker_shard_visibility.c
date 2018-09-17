@@ -24,7 +24,7 @@
 bool OverrideTableVisibility = true;
 
 static bool RelationIsAKnownShard(Oid shardRelationId);
-static Node * ReplaceTableVisibleFunctionWalker(Node *inputNode);
+static bool ReplaceTableVisibleFunctionWalker(Node *inputNode);
 
 PG_FUNCTION_INFO_V1(citus_table_is_visible);
 PG_FUNCTION_INFO_V1(relation_is_a_known_shard);
@@ -189,16 +189,16 @@ RelationIsAKnownShard(Oid shardRelationId)
  * The replace functionality can be enabled/disable via a GUC. This function also
  * ensures that the extension is loaded and the version is compatible.
  */
-Node *
+void
 ReplaceTableVisibleFunction(Node *inputNode)
 {
 	if (!OverrideTableVisibility ||
 		!CitusHasBeenLoaded() || !CheckCitusVersion(DEBUG2))
 	{
-		return inputNode;
+		return;
 	}
 
-	return ReplaceTableVisibleFunctionWalker(inputNode);
+	ReplaceTableVisibleFunctionWalker(inputNode);
 }
 
 
@@ -210,13 +210,19 @@ ReplaceTableVisibleFunction(Node *inputNode)
  * Note that the only difference between the functions is that
  * the latter filters the tables that are known to be shards on
  * Citus MX worker (data) nodes.
+ *
+ * Note that although the function mutates the input node, we
+ * prefer to use query_tree_walker/expression_tree_walker over
+ * their mutator equivalents. This is safe because we ensure that
+ * the replaced function has the exact same input/output values with
+ * its precedent.
  */
-static Node *
+static bool
 ReplaceTableVisibleFunctionWalker(Node *inputNode)
 {
 	if (inputNode == NULL)
 	{
-		return NULL;
+		return false;
 	}
 
 	if (IsA(inputNode, FuncExpr))
@@ -235,14 +241,16 @@ ReplaceTableVisibleFunctionWalker(Node *inputNode)
 			 */
 			functionToProcess->funcid = CitusTableVisibleFuncId();
 
-			return (Node *) functionToProcess;
+			/* although not very likely, we could have nested calls to pg_table_is_visible */
+			return expression_tree_walker(inputNode, ReplaceTableVisibleFunctionWalker,
+										  NULL);
 		}
 	}
 	else if (IsA(inputNode, Query))
 	{
-		return (Node *) query_tree_mutator((Query *) inputNode,
-										   ReplaceTableVisibleFunctionWalker, NULL, 0);
+		return query_tree_walker((Query *) inputNode, ReplaceTableVisibleFunctionWalker,
+								 NULL, 0);
 	}
 
-	return expression_tree_mutator(inputNode, ReplaceTableVisibleFunctionWalker, NULL);
+	return expression_tree_walker(inputNode, ReplaceTableVisibleFunctionWalker, NULL);
 }
