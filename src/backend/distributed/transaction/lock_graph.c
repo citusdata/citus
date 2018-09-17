@@ -398,12 +398,12 @@ BuildLocalWaitGraph(void)
 	 */
 	waitGraph = (WaitGraph *) palloc0(sizeof(WaitGraph));
 	waitGraph->localNodeId = GetLocalGroupId();
-	waitGraph->allocatedSize = MaxBackends * 3;
+	waitGraph->allocatedSize = TotalProcs * 3;
 	waitGraph->edgeCount = 0;
 	waitGraph->edges = (WaitEdge *) palloc(waitGraph->allocatedSize * sizeof(WaitEdge));
 
-	remaining.procs = (PGPROC **) palloc(sizeof(PGPROC *) * MaxBackends);
-	remaining.procAdded = (bool *) palloc0(sizeof(bool *) * MaxBackends);
+	remaining.procs = (PGPROC **) palloc(sizeof(PGPROC *) * TotalProcs);
+	remaining.procAdded = (bool *) palloc0(sizeof(bool *) * TotalProcs);
 	remaining.procCount = 0;
 
 	LockLockData();
@@ -416,7 +416,7 @@ BuildLocalWaitGraph(void)
 	 */
 
 	/* build list of starting procs */
-	for (curBackend = 0; curBackend < MaxBackends; curBackend++)
+	for (curBackend = 0; curBackend < TotalProcs; curBackend++)
 	{
 		PGPROC *currentProc = &ProcGlobal->allProcs[curBackend];
 		BackendData currentBackendData;
@@ -762,7 +762,7 @@ AddProcToVisit(PROCStack *remaining, PGPROC *proc)
 		return;
 	}
 
-	Assert(remaining->procCount < MaxBackends);
+	Assert(remaining->procCount < TotalProcs);
 
 	remaining->procs[remaining->procCount++] = proc;
 	remaining->procAdded[proc->pgprocno] = true;
