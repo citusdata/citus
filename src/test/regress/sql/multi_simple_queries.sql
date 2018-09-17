@@ -296,4 +296,10 @@ SELECT count(*) FROM (
                   xmax IS NOT NULL
 ) x;
 
+-- tablesample is supported
+SELECT * FROM articles TABLESAMPLE SYSTEM (0) WHERE author_id = 1;
+SELECT * FROM articles TABLESAMPLE BERNOULLI (0) WHERE author_id = 1;
+SELECT * FROM articles TABLESAMPLE SYSTEM (100) WHERE author_id = 1 ORDER BY id;
+SELECT * FROM articles TABLESAMPLE BERNOULLI (100) WHERE author_id = 1 ORDER BY id;
+
 SET client_min_messages to 'NOTICE';
