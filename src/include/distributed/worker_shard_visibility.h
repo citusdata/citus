@@ -16,7 +16,7 @@
 extern bool OverrideTableVisibility;
 
 
-extern Node * ReplaceTableVisibleFunction(Node *inputNode);
+extern void ReplaceTableVisibleFunction(Node *inputNode);
 
 
 #endif /* WORKER_SHARD_VISIBILITY_H */
