@@ -143,7 +143,6 @@ master_modify_multiple_shards(PG_FUNCTION_ARGS)
 			rangeVar->schemaname = schemaName;
 		}
 
-		EnsurePartitionTableNotReplicated(relationId);
 		EnsureTablePermissions(relationId, ACL_TRUNCATE);
 
 		if (ShouldExecuteTruncateStmtSequential(truncateStatement))

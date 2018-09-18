@@ -152,6 +152,7 @@ static void ErrorIfUnsupportedSeqStmt(CreateSeqStmt *createSeqStmt);
 static void ErrorIfDistributedAlterSeqOwnedBy(AlterSeqStmt *alterSeqStmt);
 static void ErrorIfUnsupportedTruncateStmt(TruncateStmt *truncateStatement);
 static void ProcessTruncateStatement(TruncateStmt *truncateStatement);
+static void EnsurePartitionTableNotReplicatedForTruncate(TruncateStmt *truncateStatement);
 static void LockTruncatedRelationMetadataInWorkers(TruncateStmt *truncateStatement);
 static void AcquireDistributedLockOnRelations(List *relationIdList, LOCKMODE lockMode);
 static bool OptionsSpecifyOwnedBy(List *optionList, Oid *ownedByTableId);
@@ -2931,7 +2932,51 @@ ErrorIfUnsupportedTruncateStmt(TruncateStmt *truncateStatement)
 
 
 /*
- * ProcessTruncateStatement handles distributed locking
+ * ProcessTruncateStatement handles few things that should be
+ * done before standard process utility is called for truncate
+ * command.
+ */
+static void
+ProcessTruncateStatement(TruncateStmt *truncateStatement)
+{
+	EnsurePartitionTableNotReplicatedForTruncate(truncateStatement);
+	LockTruncatedRelationMetadataInWorkers(truncateStatement);
+}
+
+
+/*
+ * EnsurePartitionTableNotReplicatedForTruncate a simple wrapper around
+ * EnsurePartitionTableNotReplicated for TRUNCATE command.
+ */
+static void
+EnsurePartitionTableNotReplicatedForTruncate(TruncateStmt *truncateStatement)
+{
+	ListCell *relationCell = NULL;
+
+	foreach(relationCell, truncateStatement->relations)
+	{
+		RangeVar *relationRV = (RangeVar *) lfirst(relationCell);
+		Relation relation = heap_openrv(relationRV, NoLock);
+		Oid relationId = RelationGetRelid(relation);
+
+		if (!IsDistributedTable(relationId))
+		{
+			heap_close(relation, NoLock);
+			continue;
+		}
+
+		EnsurePartitionTableNotReplicated(relationId);
+
+		heap_close(relation, NoLock);
+	}
+}
+
+
+/*
+ * LockTruncatedRelationMetadataInWorkers determines if distributed
+ * lock is necessary for truncated relations, and acquire locks.
+ *
+ * LockTruncatedRelationMetadataInWorkers handles distributed locking
  * of truncated tables before standard utility takes over.
  *
  * Actual distributed truncation occurs inside truncate trigger.
@@ -2939,17 +2984,6 @@ ErrorIfUnsupportedTruncateStmt(TruncateStmt *truncateStatement)
  * This is only for distributed serialization of truncate commands.
  * The function assumes that there is no foreign key relation between
  * non-distributed and distributed relations.
- */
-static void
-ProcessTruncateStatement(TruncateStmt *truncateStatement)
-{
-	LockTruncatedRelationMetadataInWorkers(truncateStatement);
-}
-
-
-/*
- * LockTruncatedRelationMetadataInWorkers determines if distributed
- * lock is necessary for truncated relations, and acquire locks.
  */
 static void
 LockTruncatedRelationMetadataInWorkers(TruncateStmt *truncateStatement)
@@ -3316,7 +3350,11 @@ AlterInvolvesPartitionColumn(AlterTableStmt *alterTableStatement,
  * in its default value of '1pc', then a notice message indicating that '2pc' might be
  * used for extra safety. In the commit protocol, a BEGIN is sent after connection to
  * each shard placement and COMMIT/ROLLBACK is handled by
- * CompleteShardPlacementTransactions function.
+ * CoordinatedTransactionCallback function.
+ *
+ * The function errors out if the node is not the coordinator or if the DDL is on
+ * a partitioned table which has replication factor > 1.
+ *
  */
 static void
 ExecuteDistributedDDLJob(DDLJob *ddlJob)

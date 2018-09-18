@@ -284,7 +284,9 @@ ReplicateShardToNode(ShardInterval *shardInterval, char *nodeName, int nodePort)
 	ShardPlacement *sourceShardPlacement = FinalizedShardPlacement(shardId, missingOk);
 	char *srcNodeName = sourceShardPlacement->nodeName;
 	uint32 srcNodePort = sourceShardPlacement->nodePort;
-	List *ddlCommandList = CopyShardCommandList(shardInterval, srcNodeName, srcNodePort);
+	bool includeData = true;
+	List *ddlCommandList =
+		CopyShardCommandList(shardInterval, srcNodeName, srcNodePort, includeData);
 
 	List *shardPlacementList = ShardPlacementList(shardId);
 	bool missingWorkerOk = true;
