@@ -97,4 +97,8 @@ extern void LockPartitionRelations(Oid relationId, LOCKMODE lockMode);
 /* Lock parent table's colocated shard resource */
 extern void LockParentShardResourceIfPartition(uint64 shardId, LOCKMODE lockMode);
 
+/* Lock mode translation between text and enum */
+extern LOCKMODE LockModeTextToLockMode(const char *lockModeName);
+extern const char * LockModeToLockModeText(LOCKMODE lockMode);
+
 #endif /* RESOURCE_LOCK_H */

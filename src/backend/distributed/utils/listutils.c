@@ -59,6 +59,11 @@ SortList(List *pointerList, int (*comparisonFunction)(const void *, const void *
 
 	pfree(array);
 
+	if (sortedList != NIL)
+	{
+		sortedList->type = pointerList->type;
+	}
+
 	return sortedList;
 }
 

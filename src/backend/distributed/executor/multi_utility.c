@@ -36,6 +36,7 @@
 #include "distributed/colocation_utils.h"
 #include "distributed/foreign_constraint.h"
 #include "distributed/intermediate_results.h"
+#include "distributed/listutils.h"
 #include "distributed/maintenanced.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/master_protocol.h"
@@ -50,6 +51,7 @@
 #include "distributed/multi_utility.h" /* IWYU pragma: keep */
 #include "distributed/pg_dist_partition.h"
 #include "distributed/policy.h"
+#include "distributed/reference_table_utils.h"
 #include "distributed/relation_access_tracking.h"
 #include "distributed/resource_lock.h"
 #include "distributed/transaction_management.h"
@@ -85,6 +87,9 @@
 #include "utils/memutils.h"
 #include "utils/palloc.h"
 #include "utils/syscache.h"
+
+
+#define LOCK_RELATION_IF_EXISTS "SELECT lock_relation_if_exists('%s', '%s');"
 
 
 bool EnableDDLPropagation = true; /* ddl propagation is enabled */
@@ -146,6 +151,9 @@ static void ErrorIfAlterDropsPartitionColumn(AlterTableStmt *alterTableStatement
 static void ErrorIfUnsupportedSeqStmt(CreateSeqStmt *createSeqStmt);
 static void ErrorIfDistributedAlterSeqOwnedBy(AlterSeqStmt *alterSeqStmt);
 static void ErrorIfUnsupportedTruncateStmt(TruncateStmt *truncateStatement);
+static void ProcessTruncateStatement(TruncateStmt *truncateStatement);
+static void LockTruncatedRelationMetadataInWorkers(TruncateStmt *truncateStatement);
+static void AcquireDistributedLockOnRelations(List *relationIdList, LOCKMODE lockMode);
 static bool OptionsSpecifyOwnedBy(List *optionList, Oid *ownedByTableId);
 static void ErrorIfUnsupportedRenameStmt(RenameStmt *renameStmt);
 static void ErrorIfUnsupportedAlterAddConstraintStmt(AlterTableStmt *alterTableStatement);
@@ -386,6 +394,7 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 	if (IsA(parsetree, TruncateStmt))
 	{
 		ErrorIfUnsupportedTruncateStmt((TruncateStmt *) parsetree);
+		ProcessTruncateStatement((TruncateStmt *) parsetree);
 	}
 
 	/* only generate worker DDLJobs if propagation is enabled */
@@ -2916,6 +2925,147 @@ ErrorIfUnsupportedTruncateStmt(TruncateStmt *truncateStatement)
 								   "currently unsupported"),
 							errhint("Use master_drop_all_shards to remove "
 									"foreign table's shards.")));
+		}
+	}
+}
+
+
+/*
+ * ProcessTruncateStatement handles distributed locking
+ * of truncated tables before standard utility takes over.
+ *
+ * Actual distributed truncation occurs inside truncate trigger.
+ *
+ * This is only for distributed serialization of truncate commands.
+ * The function assumes that there is no foreign key relation between
+ * non-distributed and distributed relations.
+ */
+static void
+ProcessTruncateStatement(TruncateStmt *truncateStatement)
+{
+	LockTruncatedRelationMetadataInWorkers(truncateStatement);
+}
+
+
+/*
+ * LockTruncatedRelationMetadataInWorkers determines if distributed
+ * lock is necessary for truncated relations, and acquire locks.
+ */
+static void
+LockTruncatedRelationMetadataInWorkers(TruncateStmt *truncateStatement)
+{
+	List *distributedRelationList = NIL;
+	ListCell *relationCell = NULL;
+
+	/* nothing to do if there is no metadata at worker nodes */
+	if (!ClusterHasKnownMetadataWorkers())
+	{
+		return;
+	}
+
+	foreach(relationCell, truncateStatement->relations)
+	{
+		RangeVar *relationRV = (RangeVar *) lfirst(relationCell);
+		Relation relation = heap_openrv(relationRV, NoLock);
+		Oid relationId = RelationGetRelid(relation);
+		DistTableCacheEntry *cacheEntry = NULL;
+		List *referencingTableList = NIL;
+		ListCell *referencingTableCell = NULL;
+
+		if (!IsDistributedTable(relationId))
+		{
+			heap_close(relation, NoLock);
+			continue;
+		}
+
+		if (list_member_oid(distributedRelationList, relationId))
+		{
+			heap_close(relation, NoLock);
+			continue;
+		}
+
+		distributedRelationList = lappend_oid(distributedRelationList, relationId);
+
+		cacheEntry = DistributedTableCacheEntry(relationId);
+		Assert(cacheEntry != NULL);
+
+		referencingTableList = cacheEntry->referencingRelationsViaForeignKey;
+		foreach(referencingTableCell, referencingTableList)
+		{
+			Oid referencingRelationId = lfirst_oid(referencingTableCell);
+			distributedRelationList = list_append_unique_oid(distributedRelationList,
+															 referencingRelationId);
+		}
+
+		heap_close(relation, NoLock);
+	}
+
+	if (distributedRelationList != NIL)
+	{
+		AcquireDistributedLockOnRelations(distributedRelationList, AccessExclusiveLock);
+	}
+}
+
+
+/*
+ * AcquireDistributedLockOnRelations acquire a distributed lock on worker nodes
+ * for given list of relations ids. Relation id list and worker node list
+ * sorted so that the lock is acquired in the same order regardless of which
+ * node it was run on. Notice that no lock is acquired on coordinator node.
+ *
+ * Notice that the locking functions is sent to all workers regardless of if
+ * it has metadata or not. This is because a worker node only knows itself
+ * and previous workers that has metadata sync turned on. The node does not
+ * know about other nodes that have metadata sync turned on afterwards.
+ */
+static void
+AcquireDistributedLockOnRelations(List *relationIdList, LOCKMODE lockMode)
+{
+	ListCell *relationIdCell = NULL;
+	List *workerNodeList = ActivePrimaryNodeList();
+	const char *lockModeText = LockModeToLockModeText(lockMode);
+
+	/*
+	 * We want to acquire locks in the same order accross the nodes.
+	 * Although relation ids may change, their ordering will not.
+	 */
+	relationIdList = SortList(relationIdList, CompareOids);
+	workerNodeList = SortList(workerNodeList, CompareWorkerNodes);
+
+	BeginOrContinueCoordinatedTransaction();
+
+	foreach(relationIdCell, relationIdList)
+	{
+		Oid relationId = lfirst_oid(relationIdCell);
+
+		/*
+		 * We only acquire distributed lock on relation if
+		 * the relation is sync'ed between mx nodes.
+		 */
+		if (ShouldSyncTableMetadata(relationId))
+		{
+			char *qualifiedRelationName = generate_qualified_relation_name(relationId);
+			StringInfo lockRelationCommand = makeStringInfo();
+			ListCell *workerNodeCell = NULL;
+
+			appendStringInfo(lockRelationCommand, LOCK_RELATION_IF_EXISTS,
+							 qualifiedRelationName, lockModeText);
+
+			foreach(workerNodeCell, workerNodeList)
+			{
+				WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
+				char *nodeName = workerNode->workerName;
+				int nodePort = workerNode->workerPort;
+
+				/* if local node is one of the targets, acquire the lock locally */
+				if (workerNode->groupId == GetLocalGroupId())
+				{
+					LockRelationOid(relationId, lockMode);
+					continue;
+				}
+
+				SendCommandToWorker(nodeName, nodePort, lockRelationCommand->data);
+			}
 		}
 	}
 }
