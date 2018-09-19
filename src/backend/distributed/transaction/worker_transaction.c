@@ -89,7 +89,21 @@ SendCommandToFirstWorker(char *command)
 void
 SendCommandToWorkers(TargetWorkerSet targetWorkerSet, char *command)
 {
-	SendCommandToWorkersParams(targetWorkerSet, command, 0, NULL, NULL);
+	char *userName = CitusExtensionOwnerName();
+
+	SendCommandToWorkersParams(targetWorkerSet, command, userName, 0, NULL, NULL);
+}
+
+
+/*
+ * SendCommandToWorkers sends a command to all workers in parallel.
+ * Commands are committed on the workers when the local transaction
+ * commits. The connections are made as the current user.
+ */
+void
+SendCommandToWorkersAsCurrentUser(TargetWorkerSet targetWorkerSet, char *command)
+{
+	SendCommandToWorkersParams(targetWorkerSet, command, NULL, 0, NULL, NULL);
 }
 
 
@@ -154,15 +168,14 @@ SendBareCommandListToWorkers(TargetWorkerSet targetWorkerSet, List *commandList)
  * respectively.
  */
 void
-SendCommandToWorkersParams(TargetWorkerSet targetWorkerSet, char *command,
-						   int parameterCount, const Oid *parameterTypes,
-						   const char *const *parameterValues)
+SendCommandToWorkersParams(TargetWorkerSet targetWorkerSet, char *command, char *userName,
+						   int parameterCount, const Oid *parameterTypes, const
+						   char *const *parameterValues)
 {
 	List *connectionList = NIL;
 	ListCell *connectionCell = NULL;
 	List *workerNodeList = ActivePrimaryNodeList();
 	ListCell *workerNodeCell = NULL;
-	char *nodeUser = CitusExtensionOwnerName();
 
 	BeginOrContinueCoordinatedTransaction();
 	CoordinatedTransactionUse2PC();
@@ -189,7 +202,7 @@ SendCommandToWorkersParams(TargetWorkerSet targetWorkerSet, char *command,
 		}
 
 		connection = StartNodeUserDatabaseConnection(connectionFlags, nodeName, nodePort,
-													 nodeUser, NULL);
+													 userName, NULL);
 
 		MarkRemoteTransactionCritical(connection);
 

@@ -268,12 +268,11 @@ master_drop_sequences(PG_FUNCTION_ARGS)
 	Datum sequenceText = 0;
 	bool isNull = false;
 	StringInfo dropSeqCommand = makeStringInfo();
-	bool coordinator = IsCoordinator();
 
 	CheckCitusVersion(ERROR);
 
 	/* do nothing if DDL propagation is switched off or this is not the coordinator */
-	if (!EnableDDLPropagation || !coordinator)
+	if (!EnableDDLPropagation || !IsCoordinator())
 	{
 		PG_RETURN_VOID();
 	}
@@ -306,8 +305,8 @@ master_drop_sequences(PG_FUNCTION_ARGS)
 	{
 		appendStringInfoString(dropSeqCommand, " CASCADE");
 
-		SendCommandToWorkers(WORKERS_WITH_METADATA, DISABLE_DDL_PROPAGATION);
-		SendCommandToWorkers(WORKERS_WITH_METADATA, dropSeqCommand->data);
+		SendCommandToWorkersAsCurrentUser(WORKERS_WITH_METADATA, DISABLE_DDL_PROPAGATION);
+		SendCommandToWorkersAsCurrentUser(WORKERS_WITH_METADATA, dropSeqCommand->data);
 	}
 
 	PG_RETURN_VOID();
