@@ -159,7 +159,6 @@ SELECT * FROM test_table ORDER BY 1, 2;
 (1 row)
 
 -- delete is commited but insert is rolled back
--- there is a bug #2371 on that preventing rollback
 CREATE PROCEDURE test_procedure_rollback(tt_id int, tt_org_id int) LANGUAGE PLPGSQL AS $$
 BEGIN
 	DELETE FROM test_table;
@@ -228,6 +227,55 @@ SELECT * FROM test_table ORDER BY 1, 2;
 ----+--------
   1 |      1
 (1 row)
+
+TRUNCATE test_table;
+-- nested procedure calls should roll back normally
+CREATE OR REPLACE PROCEDURE test_procedure_rollback(tt_id int, tt_org_id int) LANGUAGE PLPGSQL AS $$
+BEGIN
+    INSERT INTO test_table VALUES (tt_id+12, tt_org_id+12);
+    ROLLBACK;
+END;
+$$;
+ERROR:  syntax error at or near "PROCEDURE"
+LINE 1: CREATE OR REPLACE PROCEDURE test_procedure_rollback(tt_id in...
+                          ^
+CREATE OR REPLACE PROCEDURE test_procedure_rollback_2(tt_id int, tt_org_id int) LANGUAGE PLPGSQL AS $$
+BEGIN
+    INSERT INTO test_table VALUES (tt_id+2, tt_org_id+1);
+    ROLLBACK;
+END;
+$$;
+ERROR:  syntax error at or near "PROCEDURE"
+LINE 1: CREATE OR REPLACE PROCEDURE test_procedure_rollback_2(tt_id ...
+                          ^
+CREATE OR REPLACE PROCEDURE test_procedure(tt_id int, tt_org_id int) LANGUAGE PLPGSQL AS $$
+BEGIN
+    CALL test_procedure_rollback(tt_id, tt_org_id);
+    CALL test_procedure_rollback_2(tt_id, tt_org_id);
+    INSERT INTO test_table VALUES (tt_id+100, tt_org_id+100);
+    ROLLBACK;
+END;
+$$;
+ERROR:  syntax error at or near "PROCEDURE"
+LINE 1: CREATE OR REPLACE PROCEDURE test_procedure(tt_id int, tt_org...
+                          ^
+SELECT * from test_table;
+ id | org_id 
+----+--------
+(0 rows)
+
+call test_procedure(1,1);
+ERROR:  syntax error at or near "call"
+LINE 1: call test_procedure(1,1);
+        ^
+call test_procedure(20, 20);
+ERROR:  syntax error at or near "call"
+LINE 1: call test_procedure(20, 20);
+        ^
+SELECT * from test_table;
+ id | org_id 
+----+--------
+(0 rows)
 
 DROP SCHEMA procedure_schema CASCADE;
 NOTICE:  drop cascades to table test_table

@@ -80,6 +80,9 @@ bool AllModificationsCommutative = false;
 /* we've deprecated this flag, keeping here for some time not to break existing users */
 bool EnableDeadlockPrevention = true;
 
+/* number of nested stored procedure call levels we are currently in */
+int StoredProcedureLevel = 0;
+
 /* functions needed during run phase */
 static void AcquireMetadataLocks(List *taskList);
 static ShardPlacementAccess * CreatePlacementAccess(ShardPlacement *placement,
@@ -613,7 +616,8 @@ RouterSequentialModifyExecScan(CustomScanState *node)
 	 * customers already use functions that touch multiple shards from within
 	 * a function, so we'll ignore functions for now.
 	 */
-	if (IsTransactionBlock() || multipleTasks || taskListRequires2PC)
+	if (IsTransactionBlock() || multipleTasks || taskListRequires2PC ||
+		StoredProcedureLevel > 0)
 	{
 		BeginOrContinueCoordinatedTransaction();
 

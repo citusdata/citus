@@ -296,6 +296,37 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		return;
 	}
 
+#if (PG_VERSION_NUM >= 110000)
+	if (IsA(parsetree, CallStmt))
+	{
+		/*
+		 * Stored procedures are a bit strange in the sense that some statements
+		 * are not in a transaction block, but can be rolled back. We need to
+		 * make sure we send all statements in a transaction block. The
+		 * StoredProcedureLevel variable signals this to the router executor
+		 * and indicates how deep in the call stack we are in case of nested
+		 * stored procedures.
+		 */
+		StoredProcedureLevel += 1;
+
+		PG_TRY();
+		{
+			standard_ProcessUtility(pstmt, queryString, context,
+									params, queryEnv, dest, completionTag);
+
+			StoredProcedureLevel -= 1;
+		}
+		PG_CATCH();
+		{
+			StoredProcedureLevel -= 1;
+			PG_RE_THROW();
+		}
+		PG_END_TRY();
+
+		return;
+	}
+#endif
+
 	/*
 	 * TRANSMIT used to be separate command, but to avoid patching the grammar
 	 * it's no overlaid onto COPY, but with FORMAT = 'transmit' instead of the
