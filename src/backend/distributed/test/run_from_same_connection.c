@@ -142,11 +142,11 @@ run_commands_on_session_level_connection_to_node(PG_FUNCTION_ARGS)
 			 "start_session_level_connection_to_node must be called first to open a session level connection");
 	}
 
-	ExecuteCriticalRemoteCommand(connection, queryString);
-
 	appendStringInfo(processStringInfo, ALTER_CURRENT_PROCESS_ID, MyProcPid);
 	appendStringInfo(workerProcessStringInfo, ALTER_CURRENT_WORKER_PROCESS_ID,
 					 GetRemoteProcessId(connection));
+
+	ExecuteCriticalRemoteCommand(connection, queryString);
 
 	/*
 	 * Since we cannot run `ALTER SYSTEM` command within a transaction, we are
