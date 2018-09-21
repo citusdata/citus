@@ -33,6 +33,7 @@
 #include "distributed/multi_join_order.h"
 #include "distributed/multi_logical_planner.h"
 #include "distributed/multi_logical_optimizer.h"
+#include "distributed/multi_partitioning_utils.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_router_planner.h"
 #include "distributed/multi_server_executor.h"
@@ -473,6 +474,33 @@ ExtractSelectRangeTableEntry(Query *query)
 
 
 /*
+ * ModifyQueryResultRelationId returns the result relation's Oid
+ * for the given modification query.
+ *
+ * The function errors out if the input query is not a
+ * modify query (e.g., INSERT, UPDATE or DELETE). So, this
+ * function is not expected to be called on SELECT queries.
+ */
+Oid
+ModifyQueryResultRelationId(Query *query)
+{
+	RangeTblEntry *resultRte = NULL;
+
+	/* only modify queries have result relations */
+	if (!IsModifyCommand(query))
+	{
+		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+						errmsg("input query is not a modification query")));
+	}
+
+	resultRte = ExtractInsertRangeTableEntry(query);
+	Assert(OidIsValid(resultRte->relid));
+
+	return resultRte->relid;
+}
+
+
+/*
  * ExtractInsertRangeTableEntry returns the INSERT'ed table's range table entry.
  * Note that the function expects and asserts that the input query be
  * an INSERT...SELECT query.
@@ -588,7 +616,9 @@ ModifyQuerySupported(Query *queryTree, Query *originalQuery, bool multiShardQuer
 
 		if (rangeTableEntry->rtekind == RTE_RELATION)
 		{
-			if (!IsDistributedTable(rangeTableEntry->relid))
+			Oid relationId = rangeTableEntry->relid;
+
+			if (!IsDistributedTable(relationId))
 			{
 				StringInfo errorMessage = makeStringInfo();
 				char *relationName = get_rel_name(rangeTableEntry->relid);

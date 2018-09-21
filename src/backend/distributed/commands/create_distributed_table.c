@@ -743,14 +743,6 @@ EnsureRelationCanBeDistributed(Oid relationId, Var *distributionColumn,
 								   "for hash-distributed tables")));
 		}
 
-		/* we currently don't support  partitioned tables for replication factor > 1 */
-		if (ShardReplicationFactor > 1)
-		{
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("distributing partitioned tables with replication "
-								   "factor greater than 1 is not supported")));
-		}
-
 		/* we don't support distributing tables with multi-level partitioning */
 		if (PartitionTable(relationId))
 		{

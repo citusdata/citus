@@ -163,7 +163,7 @@ extern Datum master_copy_shard_placement(PG_FUNCTION_ARGS);
 
 /* function declarations for shard copy functinality */
 extern List * CopyShardCommandList(ShardInterval *shardInterval, char *sourceNodeName,
-								   int32 sourceNodePort);
+								   int32 sourceNodePort, bool includeData);
 extern List * CopyShardForeignConstraintCommandList(ShardInterval *shardInterval);
 extern void CopyShardForeignConstraintCommandListGrouped(ShardInterval *shardInterval,
 														 List **

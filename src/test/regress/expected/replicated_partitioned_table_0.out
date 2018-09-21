@@ -1,0 +1,299 @@
+--
+-- Distributed Partitioned Table Tests
+--
+SET citus.next_shard_id TO 1760000;
+CREATE SCHEMA partitioned_table_replicated;
+SET search_path TO partitioned_table_replicated;
+SET citus.shard_count TO 4;
+SET citus.shard_replication_factor TO 2;
+-- print major version number for version-specific tests
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int AS server_version;
+ server_version 
+----------------
+             10
+(1 row)
+
+CREATE TABLE collections (
+	key bigint,
+	ts timestamptz,
+	collection_id integer,
+	value numeric 
+) PARTITION BY LIST ( collection_id );
+CREATE TABLE collections_1 
+	PARTITION OF collections (key, ts, collection_id, value)
+	FOR VALUES IN ( 1 );
+CREATE TABLE collections_2 
+	PARTITION OF collections (key, ts, collection_id, value)
+	FOR VALUES IN ( 2 );
+-- load some data data
+INSERT INTO collections (key, ts, collection_id, value) VALUES (1, '2009-01-01', 1, 1);
+INSERT INTO collections (key, ts, collection_id, value) VALUES (2, '2009-01-01', 1, 2);
+INSERT INTO collections (key, ts, collection_id, value) VALUES (3, '2009-01-01', 2, 1);
+INSERT INTO collections (key, ts, collection_id, value) VALUES (4, '2009-01-01', 2, 2);
+-- in the first case, we'll distributed the
+-- already existing partitioninong hierarcy
+SELECT create_distributed_table('collections', 'key');
+NOTICE:  Copying data from local table...
+NOTICE:  Copying data from local table...
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+-- now create partition of a already distributed table
+CREATE TABLE collections_3 PARTITION OF collections FOR VALUES IN ( 3 );
+-- now attaching non distributed table to a distributed table
+CREATE TABLE collections_4 AS SELECT * FROM collections LIMIT 0;
+-- load some data
+INSERT INTO collections_4 SELECT i, '2009-01-01', 4, i FROM generate_series (0, 10) i; 
+ALTER TABLE collections ATTACH PARTITION collections_4 FOR VALUES IN ( 4 );
+NOTICE:  Copying data from local table...
+-- finally attach a distributed table to a distributed table
+CREATE TABLE collections_5 AS SELECT * FROM collections LIMIT 0;
+SELECT create_distributed_table('collections_5', 'key');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+-- load some data
+INSERT INTO collections_5 SELECT i, '2009-01-01', 5, i FROM generate_series (0, 10) i; 
+ALTER TABLE collections ATTACH PARTITION collections_5 FOR VALUES IN ( 5 );
+-- make sure that we've all the placements
+SELECT 
+	logicalrelid, count(*) as placement_count
+FROM 
+	pg_dist_shard, pg_dist_shard_placement
+WHERE 
+	logicalrelid::text LIKE '%collections%' AND 
+	pg_dist_shard.shardid = pg_dist_shard_placement.shardid
+GROUP BY
+	logicalrelid
+ORDER BY
+	1,2;
+ logicalrelid  | placement_count 
+---------------+-----------------
+ collections   |               8
+ collections_1 |               8
+ collections_2 |               8
+ collections_3 |               8
+ collections_4 |               8
+ collections_5 |               8
+(6 rows)
+
+-- and, make sure that all tables are colocated
+SELECT 
+	count(DISTINCT colocationid) 
+FROM 
+	pg_dist_partition 
+WHERE 
+	logicalrelid::text LIKE '%collections%';
+ count 
+-------
+     1
+(1 row)
+
+-- make sure that any kind of modification is disallowed on partitions
+-- given that replication factor > 1
+INSERT INTO collections_4 (key, ts, collection_id, value) VALUES (4, '2009-01-01', 2, 2);
+ERROR:  modifications on partitions when replication factor is greater than 1 is not supported
+HINT:  Run the query on the parent table "collections" instead.
+-- single shard update/delete not allowed
+UPDATE collections_1 SET ts = now() WHERE key = 1;
+ERROR:  modifications on partitions when replication factor is greater than 1 is not supported
+HINT:  Run the query on the parent table "collections" instead.
+DELETE FROM collections_1 WHERE ts = now() AND key = 1;
+ERROR:  modifications on partitions when replication factor is greater than 1 is not supported
+HINT:  Run the query on the parent table "collections" instead.
+-- multi shard update/delete are not allowed
+UPDATE collections_1 SET ts = now();
+ERROR:  modifications on partitions when replication factor is greater than 1 is not supported
+HINT:  Run the query on the parent table "collections" instead.
+DELETE FROM collections_1 WHERE ts = now();
+ERROR:  modifications on partitions when replication factor is greater than 1 is not supported
+HINT:  Run the query on the parent table "collections" instead.
+-- insert..select pushdown
+INSERT INTO collections_1 SELECT * FROM collections_1;
+ERROR:  modifications on partitions when replication factor is greater than 1 is not supported
+HINT:  Run the query on the parent table "collections" instead.
+-- insert..select via coordinator
+INSERT INTO collections_1 SELECT * FROM collections_1 OFFSET 0;
+ERROR:  modifications on partitions when replication factor is greater than 1 is not supported
+HINT:  Run the query on the parent table "collections" instead.
+-- COPY is not allowed
+COPY collections_1 FROM STDIN;
+ERROR:  modifications on partitions when replication factor is greater than 1 is not supported
+HINT:  Run the query on the parent table "collections" instead.
+\.
+invalid command \.
+-- DDLs are not allowed 
+CREATE INDEX index_on_partition ON collections_1(key);
+ERROR:  modifications on partitions when replication factor is greater than 1 is not supported
+HINT:  Run the query on the parent table "collections" instead.
+-- EXPLAIN with modifications is not allowed as well
+UPDATE collections_1 SET ts = now() WHERE key = 1;
+ERROR:  modifications on partitions when replication factor is greater than 1 is not supported
+HINT:  Run the query on the parent table "collections" instead.
+-- TRUNCATE is also not allowed
+TRUNCATE collections_1;
+ERROR:  modifications on partitions when replication factor is greater than 1 is not supported
+HINT:  Run the query on the parent table "collections" instead.
+TRUNCATE collections, collections_1;
+ERROR:  modifications on partitions when replication factor is greater than 1 is not supported
+HINT:  Run the query on the parent table "collections" instead.
+-- modifying CTEs are also not allowed
+WITH collections_5_cte AS 
+(
+	DELETE FROM collections_5 RETURNING *
+)
+SELECT * FROM collections_5_cte;
+ERROR:  modifications on partitions when replication factor is greater than 1 is not supported
+HINT:  Run the query on the parent table "collections" instead.
+-- foreign key creation is disallowed due to replication factor > 1
+CREATE TABLE fkey_test (key bigint PRIMARY KEY);
+SELECT create_distributed_table('fkey_test', 'key');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+ALTER TABLE
+	collections_5 
+ADD CONSTRAINT 
+	fkey_delete FOREIGN KEY(key) 
+REFERENCES 
+	fkey_test(key) ON DELETE CASCADE;
+ERROR:  cannot create foreign key constraint
+DETAIL:  Citus Community Edition currently supports foreign key constraints only for "citus.shard_replication_factor = 1".
+HINT:  Please change "citus.shard_replication_factor to 1". To learn more about using foreign keys with other replication factors, please contact us at https://citusdata.com/about/contact_us.
+-- we should be able to attach and detach partitions
+-- given that those DDLs are on the parent table
+CREATE TABLE collections_6
+	PARTITION OF collections (key, ts, collection_id, value)
+	FOR VALUES IN ( 6 );
+ALTER TABLE collections DETACH PARTITION collections_6;
+ALTER TABLE collections ATTACH PARTITION collections_6 FOR VALUES IN ( 6 );
+-- read queries works just fine
+SELECT count(*) FROM collections_1 WHERE key = 1;
+ count 
+-------
+     1
+(1 row)
+
+SELECT count(*) FROM collections_1 WHERE key != 1;
+ count 
+-------
+     1
+(1 row)
+
+-- rollups SELECT'ing from partitions should work just fine
+CREATE TABLE collections_agg (
+	key bigint,
+	sum_value numeric
+);
+SELECT create_distributed_table('collections_agg', 'key');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+-- pushdown roll-up
+INSERT INTO collections_agg SELECT key, sum(key) FROM collections_1 GROUP BY key;
+-- coordinator roll-up
+INSERT INTO collections_agg SELECT collection_id, sum(key) FROM collections_1 GROUP BY collection_id;
+-- now make sure that repair functionality works fine
+-- create a table and create its distribution metadata
+CREATE TABLE customer_engagements (id integer, event_id int) PARTITION BY LIST ( event_id );
+CREATE TABLE customer_engagements_1 
+	PARTITION OF customer_engagements
+	FOR VALUES IN ( 1 );
+CREATE TABLE customer_engagements_2
+	PARTITION OF customer_engagements
+	FOR VALUES IN ( 2 );
+-- add some indexes
+CREATE INDEX ON customer_engagements (id);
+ERROR:  cannot create index on partitioned table "customer_engagements"
+CREATE INDEX ON customer_engagements (event_id);
+ERROR:  cannot create index on partitioned table "customer_engagements"
+CREATE INDEX ON customer_engagements (id, event_id);
+ERROR:  cannot create index on partitioned table "customer_engagements"
+-- distribute the table
+-- create a single shard on the first worker
+SET citus.shard_count TO 1;
+SET citus.shard_replication_factor TO 2;
+SELECT create_distributed_table('customer_engagements', 'id', 'hash');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+-- ingest some data for the tests
+INSERT INTO customer_engagements VALUES (1, 1);
+INSERT INTO customer_engagements VALUES (2, 1);
+INSERT INTO customer_engagements VALUES (1, 2);
+INSERT INTO customer_engagements VALUES (2, 2);
+-- the following queries does the following:
+-- (i)    create a new shard
+-- (ii)   mark the second shard placements as unhealthy
+-- (iii)  do basic checks i.e., only allow copy from healthy placement to unhealthy ones 
+-- (iv)   do a successful master_copy_shard_placement from the first placement to the second
+-- (v)    mark the first placement as unhealthy and execute a query that is routed to the second placement
+SELECT groupid AS worker_2_group FROM pg_dist_node WHERE nodeport=:worker_2_port \gset
+SELECT groupid AS worker_1_group FROM pg_dist_node WHERE nodeport=:worker_1_port \gset
+-- get the newshardid
+SELECT shardid as newshardid FROM pg_dist_shard WHERE logicalrelid = 'customer_engagements'::regclass
+\gset
+-- now, update the second placement as unhealthy
+UPDATE pg_dist_placement SET shardstate = 3 WHERE shardid = :newshardid
+  AND groupid = :worker_2_group;
+-- cannot repair a shard after a modification (transaction still open during repair)
+BEGIN;
+INSERT INTO customer_engagements VALUES (1, 1);
+SELECT master_copy_shard_placement(:newshardid, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
+ERROR:  cannot open new connections after the first modification command within a transaction
+ROLLBACK;
+-- modifications after reparing a shard are fine (will use new metadata)
+BEGIN;
+SELECT master_copy_shard_placement(:newshardid, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
+ master_copy_shard_placement 
+-----------------------------
+ 
+(1 row)
+
+ALTER TABLE customer_engagements ADD COLUMN value float DEFAULT 1.0;
+SELECT * FROM customer_engagements ORDER BY 1,2,3;
+ id | event_id | value 
+----+----------+-------
+  1 |        1 |     1
+  1 |        2 |     1
+  2 |        1 |     1
+  2 |        2 |     1
+(4 rows)
+
+ROLLBACK;
+BEGIN;
+SELECT master_copy_shard_placement(:newshardid, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
+ master_copy_shard_placement 
+-----------------------------
+ 
+(1 row)
+
+INSERT INTO customer_engagements VALUES (1, 1);
+SELECT count(*) FROM customer_engagements;
+ count 
+-------
+     5
+(1 row)
+
+ROLLBACK;
+-- TRUNCATE is allowed on the parent table
+-- try it just before dropping the table
+TRUNCATE collections;
+SET search_path TO public;
+DROP SCHEMA partitioned_table_replicated CASCADE;
+NOTICE:  drop cascades to 4 other objects
+DETAIL:  drop cascades to table partitioned_table_replicated.collections
+drop cascades to table partitioned_table_replicated.fkey_test
+drop cascades to table partitioned_table_replicated.collections_agg
+drop cascades to table partitioned_table_replicated.customer_engagements

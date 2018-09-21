@@ -1,0 +1,358 @@
+--
+-- Distributed Partitioned Table Tests
+--
+SET citus.next_shard_id TO 1760000;
+CREATE SCHEMA partitioned_table_replicated;
+SET search_path TO partitioned_table_replicated;
+SET citus.shard_count TO 4;
+SET citus.shard_replication_factor TO 2;
+-- print major version number for version-specific tests
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int AS server_version;
+ server_version 
+----------------
+              9
+(1 row)
+
+CREATE TABLE collections (
+	key bigint,
+	ts timestamptz,
+	collection_id integer,
+	value numeric 
+) PARTITION BY LIST ( collection_id );
+ERROR:  syntax error at or near "PARTITION"
+LINE 6: ) PARTITION BY LIST ( collection_id );
+          ^
+CREATE TABLE collections_1 
+	PARTITION OF collections (key, ts, collection_id, value)
+	FOR VALUES IN ( 1 );
+ERROR:  syntax error at or near "PARTITION"
+LINE 2:  PARTITION OF collections (key, ts, collection_id, value)
+         ^
+CREATE TABLE collections_2 
+	PARTITION OF collections (key, ts, collection_id, value)
+	FOR VALUES IN ( 2 );
+ERROR:  syntax error at or near "PARTITION"
+LINE 2:  PARTITION OF collections (key, ts, collection_id, value)
+         ^
+-- load some data data
+INSERT INTO collections (key, ts, collection_id, value) VALUES (1, '2009-01-01', 1, 1);
+ERROR:  relation "collections" does not exist
+LINE 1: INSERT INTO collections (key, ts, collection_id, value) VALU...
+                    ^
+INSERT INTO collections (key, ts, collection_id, value) VALUES (2, '2009-01-01', 1, 2);
+ERROR:  relation "collections" does not exist
+LINE 1: INSERT INTO collections (key, ts, collection_id, value) VALU...
+                    ^
+INSERT INTO collections (key, ts, collection_id, value) VALUES (3, '2009-01-01', 2, 1);
+ERROR:  relation "collections" does not exist
+LINE 1: INSERT INTO collections (key, ts, collection_id, value) VALU...
+                    ^
+INSERT INTO collections (key, ts, collection_id, value) VALUES (4, '2009-01-01', 2, 2);
+ERROR:  relation "collections" does not exist
+LINE 1: INSERT INTO collections (key, ts, collection_id, value) VALU...
+                    ^
+-- in the first case, we'll distributed the
+-- already existing partitioninong hierarcy
+SELECT create_distributed_table('collections', 'key');
+ERROR:  relation "collections" does not exist
+LINE 1: SELECT create_distributed_table('collections', 'key');
+                                        ^
+-- now create partition of a already distributed table
+CREATE TABLE collections_3 PARTITION OF collections FOR VALUES IN ( 3 );
+ERROR:  syntax error at or near "PARTITION"
+LINE 1: CREATE TABLE collections_3 PARTITION OF collections FOR VALU...
+                                   ^
+-- now attaching non distributed table to a distributed table
+CREATE TABLE collections_4 AS SELECT * FROM collections LIMIT 0;
+ERROR:  relation "collections" does not exist
+LINE 1: CREATE TABLE collections_4 AS SELECT * FROM collections LIMI...
+                                                    ^
+-- load some data
+INSERT INTO collections_4 SELECT i, '2009-01-01', 4, i FROM generate_series (0, 10) i; 
+ERROR:  relation "collections_4" does not exist
+LINE 1: INSERT INTO collections_4 SELECT i, '2009-01-01', 4, i FROM ...
+                    ^
+ALTER TABLE collections ATTACH PARTITION collections_4 FOR VALUES IN ( 4 );
+ERROR:  syntax error at or near "ATTACH"
+LINE 1: ALTER TABLE collections ATTACH PARTITION collections_4 FOR V...
+                                ^
+-- finally attach a distributed table to a distributed table
+CREATE TABLE collections_5 AS SELECT * FROM collections LIMIT 0;
+ERROR:  relation "collections" does not exist
+LINE 1: CREATE TABLE collections_5 AS SELECT * FROM collections LIMI...
+                                                    ^
+SELECT create_distributed_table('collections_5', 'key');
+ERROR:  relation "collections_5" does not exist
+LINE 1: SELECT create_distributed_table('collections_5', 'key');
+                                        ^
+-- load some data
+INSERT INTO collections_5 SELECT i, '2009-01-01', 5, i FROM generate_series (0, 10) i; 
+ERROR:  relation "collections_5" does not exist
+LINE 1: INSERT INTO collections_5 SELECT i, '2009-01-01', 5, i FROM ...
+                    ^
+ALTER TABLE collections ATTACH PARTITION collections_5 FOR VALUES IN ( 5 );
+ERROR:  syntax error at or near "ATTACH"
+LINE 1: ALTER TABLE collections ATTACH PARTITION collections_5 FOR V...
+                                ^
+-- make sure that we've all the placements
+SELECT 
+	logicalrelid, count(*) as placement_count
+FROM 
+	pg_dist_shard, pg_dist_shard_placement
+WHERE 
+	logicalrelid::text LIKE '%collections%' AND 
+	pg_dist_shard.shardid = pg_dist_shard_placement.shardid
+GROUP BY
+	logicalrelid
+ORDER BY
+	1,2;
+ logicalrelid | placement_count 
+--------------+-----------------
+(0 rows)
+
+-- and, make sure that all tables are colocated
+SELECT 
+	count(DISTINCT colocationid) 
+FROM 
+	pg_dist_partition 
+WHERE 
+	logicalrelid::text LIKE '%collections%';
+ count 
+-------
+     0
+(1 row)
+
+-- make sure that any kind of modification is disallowed on partitions
+-- given that replication factor > 1
+INSERT INTO collections_4 (key, ts, collection_id, value) VALUES (4, '2009-01-01', 2, 2);
+ERROR:  relation "collections_4" does not exist
+LINE 1: INSERT INTO collections_4 (key, ts, collection_id, value) VA...
+                    ^
+-- single shard update/delete not allowed
+UPDATE collections_1 SET ts = now() WHERE key = 1;
+ERROR:  relation "collections_1" does not exist
+LINE 1: UPDATE collections_1 SET ts = now() WHERE key = 1;
+               ^
+DELETE FROM collections_1 WHERE ts = now() AND key = 1;
+ERROR:  relation "collections_1" does not exist
+LINE 1: DELETE FROM collections_1 WHERE ts = now() AND key = 1;
+                    ^
+-- multi shard update/delete are not allowed
+UPDATE collections_1 SET ts = now();
+ERROR:  relation "collections_1" does not exist
+LINE 1: UPDATE collections_1 SET ts = now();
+               ^
+DELETE FROM collections_1 WHERE ts = now();
+ERROR:  relation "collections_1" does not exist
+LINE 1: DELETE FROM collections_1 WHERE ts = now();
+                    ^
+-- insert..select pushdown
+INSERT INTO collections_1 SELECT * FROM collections_1;
+ERROR:  relation "collections_1" does not exist
+LINE 1: INSERT INTO collections_1 SELECT * FROM collections_1;
+                    ^
+-- insert..select via coordinator
+INSERT INTO collections_1 SELECT * FROM collections_1 OFFSET 0;
+ERROR:  relation "collections_1" does not exist
+LINE 1: INSERT INTO collections_1 SELECT * FROM collections_1 OFFSET...
+                    ^
+-- COPY is not allowed
+COPY collections_1 FROM STDIN;
+ERROR:  relation "collections_1" does not exist
+\.
+invalid command \.
+-- DDLs are not allowed 
+CREATE INDEX index_on_partition ON collections_1(key);
+ERROR:  relation "collections_1" does not exist
+-- EXPLAIN with modifications is not allowed as well
+UPDATE collections_1 SET ts = now() WHERE key = 1;
+ERROR:  relation "collections_1" does not exist
+LINE 1: UPDATE collections_1 SET ts = now() WHERE key = 1;
+               ^
+-- TRUNCATE is also not allowed
+TRUNCATE collections_1;
+ERROR:  relation "collections_1" does not exist
+TRUNCATE collections, collections_1;
+ERROR:  relation "collections" does not exist
+-- modifying CTEs are also not allowed
+WITH collections_5_cte AS 
+(
+	DELETE FROM collections_5 RETURNING *
+)
+SELECT * FROM collections_5_cte;
+ERROR:  relation "collections_5" does not exist
+LINE 3:  DELETE FROM collections_5 RETURNING *
+                     ^
+-- foreign key creation is disallowed due to replication factor > 1
+CREATE TABLE fkey_test (key bigint PRIMARY KEY);
+SELECT create_distributed_table('fkey_test', 'key');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+ALTER TABLE
+	collections_5 
+ADD CONSTRAINT 
+	fkey_delete FOREIGN KEY(key) 
+REFERENCES 
+	fkey_test(key) ON DELETE CASCADE;
+ERROR:  relation "collections_5" does not exist
+-- we should be able to attach and detach partitions
+-- given that those DDLs are on the parent table
+CREATE TABLE collections_6
+	PARTITION OF collections (key, ts, collection_id, value)
+	FOR VALUES IN ( 6 );
+ERROR:  syntax error at or near "PARTITION"
+LINE 2:  PARTITION OF collections (key, ts, collection_id, value)
+         ^
+ALTER TABLE collections DETACH PARTITION collections_6;
+ERROR:  syntax error at or near "DETACH"
+LINE 1: ALTER TABLE collections DETACH PARTITION collections_6;
+                                ^
+ALTER TABLE collections ATTACH PARTITION collections_6 FOR VALUES IN ( 6 );
+ERROR:  syntax error at or near "ATTACH"
+LINE 1: ALTER TABLE collections ATTACH PARTITION collections_6 FOR V...
+                                ^
+-- read queries works just fine
+SELECT count(*) FROM collections_1 WHERE key = 1;
+ERROR:  relation "collections_1" does not exist
+LINE 1: SELECT count(*) FROM collections_1 WHERE key = 1;
+                             ^
+SELECT count(*) FROM collections_1 WHERE key != 1;
+ERROR:  relation "collections_1" does not exist
+LINE 1: SELECT count(*) FROM collections_1 WHERE key != 1;
+                             ^
+-- rollups SELECT'ing from partitions should work just fine
+CREATE TABLE collections_agg (
+	key bigint,
+	sum_value numeric
+);
+SELECT create_distributed_table('collections_agg', 'key');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+-- pushdown roll-up
+INSERT INTO collections_agg SELECT key, sum(key) FROM collections_1 GROUP BY key;
+ERROR:  relation "collections_1" does not exist
+LINE 1: ...RT INTO collections_agg SELECT key, sum(key) FROM collection...
+                                                             ^
+-- coordinator roll-up
+INSERT INTO collections_agg SELECT collection_id, sum(key) FROM collections_1 GROUP BY collection_id;
+ERROR:  relation "collections_1" does not exist
+LINE 1: ...llections_agg SELECT collection_id, sum(key) FROM collection...
+                                                             ^
+-- now make sure that repair functionality works fine
+-- create a table and create its distribution metadata
+CREATE TABLE customer_engagements (id integer, event_id int) PARTITION BY LIST ( event_id );
+ERROR:  syntax error at or near "PARTITION"
+LINE 1: ...E customer_engagements (id integer, event_id int) PARTITION ...
+                                                             ^
+CREATE TABLE customer_engagements_1 
+	PARTITION OF customer_engagements
+	FOR VALUES IN ( 1 );
+ERROR:  syntax error at or near "PARTITION"
+LINE 2:  PARTITION OF customer_engagements
+         ^
+CREATE TABLE customer_engagements_2
+	PARTITION OF customer_engagements
+	FOR VALUES IN ( 2 );
+ERROR:  syntax error at or near "PARTITION"
+LINE 2:  PARTITION OF customer_engagements
+         ^
+-- add some indexes
+CREATE INDEX ON customer_engagements (id);
+ERROR:  relation "customer_engagements" does not exist
+CREATE INDEX ON customer_engagements (event_id);
+ERROR:  relation "customer_engagements" does not exist
+CREATE INDEX ON customer_engagements (id, event_id);
+ERROR:  relation "customer_engagements" does not exist
+-- distribute the table
+-- create a single shard on the first worker
+SET citus.shard_count TO 1;
+SET citus.shard_replication_factor TO 2;
+SELECT create_distributed_table('customer_engagements', 'id', 'hash');
+ERROR:  relation "customer_engagements" does not exist
+LINE 1: SELECT create_distributed_table('customer_engagements', 'id'...
+                                        ^
+-- ingest some data for the tests
+INSERT INTO customer_engagements VALUES (1, 1);
+ERROR:  relation "customer_engagements" does not exist
+LINE 1: INSERT INTO customer_engagements VALUES (1, 1);
+                    ^
+INSERT INTO customer_engagements VALUES (2, 1);
+ERROR:  relation "customer_engagements" does not exist
+LINE 1: INSERT INTO customer_engagements VALUES (2, 1);
+                    ^
+INSERT INTO customer_engagements VALUES (1, 2);
+ERROR:  relation "customer_engagements" does not exist
+LINE 1: INSERT INTO customer_engagements VALUES (1, 2);
+                    ^
+INSERT INTO customer_engagements VALUES (2, 2);
+ERROR:  relation "customer_engagements" does not exist
+LINE 1: INSERT INTO customer_engagements VALUES (2, 2);
+                    ^
+-- the following queries does the following:
+-- (i)    create a new shard
+-- (ii)   mark the second shard placements as unhealthy
+-- (iii)  do basic checks i.e., only allow copy from healthy placement to unhealthy ones 
+-- (iv)   do a successful master_copy_shard_placement from the first placement to the second
+-- (v)    mark the first placement as unhealthy and execute a query that is routed to the second placement
+SELECT groupid AS worker_2_group FROM pg_dist_node WHERE nodeport=:worker_2_port \gset
+SELECT groupid AS worker_1_group FROM pg_dist_node WHERE nodeport=:worker_1_port \gset
+-- get the newshardid
+SELECT shardid as newshardid FROM pg_dist_shard WHERE logicalrelid = 'customer_engagements'::regclass
+\gset
+ERROR:  relation "customer_engagements" does not exist
+LINE 1: ...ewshardid FROM pg_dist_shard WHERE logicalrelid = 'customer_...
+                                                             ^
+-- now, update the second placement as unhealthy
+UPDATE pg_dist_placement SET shardstate = 3 WHERE shardid = :newshardid
+  AND groupid = :worker_2_group;
+ERROR:  syntax error at or near ":"
+LINE 1: ...dist_placement SET shardstate = 3 WHERE shardid = :newshardi...
+                                                             ^
+-- cannot repair a shard after a modification (transaction still open during repair)
+BEGIN;
+INSERT INTO customer_engagements VALUES (1, 1);
+ERROR:  relation "customer_engagements" does not exist
+LINE 1: INSERT INTO customer_engagements VALUES (1, 1);
+                    ^
+SELECT master_copy_shard_placement(:newshardid, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
+ERROR:  syntax error at or near ":"
+LINE 1: SELECT master_copy_shard_placement(:newshardid, 'localhost',...
+                                           ^
+ROLLBACK;
+-- modifications after reparing a shard are fine (will use new metadata)
+BEGIN;
+SELECT master_copy_shard_placement(:newshardid, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
+ERROR:  syntax error at or near ":"
+LINE 1: SELECT master_copy_shard_placement(:newshardid, 'localhost',...
+                                           ^
+ALTER TABLE customer_engagements ADD COLUMN value float DEFAULT 1.0;
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+SELECT * FROM customer_engagements ORDER BY 1,2,3;
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+ROLLBACK;
+BEGIN;
+SELECT master_copy_shard_placement(:newshardid, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
+ERROR:  syntax error at or near ":"
+LINE 1: SELECT master_copy_shard_placement(:newshardid, 'localhost',...
+                                           ^
+INSERT INTO customer_engagements VALUES (1, 1);
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+SELECT count(*) FROM customer_engagements;
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+ROLLBACK;
+-- TRUNCATE is allowed on the parent table
+-- try it just before dropping the table
+TRUNCATE collections;
+ERROR:  relation "collections" does not exist
+SET search_path TO public;
+DROP SCHEMA partitioned_table_replicated CASCADE;
+NOTICE:  drop cascades to 2 other objects
+DETAIL:  drop cascades to table partitioned_table_replicated.fkey_test
+drop cascades to table partitioned_table_replicated.collections_agg

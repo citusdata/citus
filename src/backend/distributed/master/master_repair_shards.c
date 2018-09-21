@@ -25,6 +25,7 @@
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
+#include "distributed/multi_partitioning_utils.h"
 #include "distributed/multi_router_executor.h"
 #include "distributed/resource_lock.h"
 #include "distributed/worker_manager.h"
@@ -50,6 +51,9 @@ static char LookupShardTransferMode(Oid shardReplicationModeOid);
 static void RepairShardPlacement(int64 shardId, char *sourceNodeName,
 								 int32 sourceNodePort, char *targetNodeName,
 								 int32 targetNodePort);
+static List * CopyPartitionShardsCommandList(ShardInterval *shardInterval,
+											 char *sourceNodeName,
+											 int32 sourceNodePort);
 static void EnsureShardCanBeRepaired(int64 shardId, char *sourceNodeName,
 									 int32 sourceNodePort, char *targetNodeName,
 									 int32 targetNodePort);
@@ -219,6 +223,8 @@ RepairShardPlacement(int64 shardId, char *sourceNodeName, int32 sourceNodePort,
 	char relationKind = get_rel_relkind(distributedTableId);
 	char *tableOwner = TableOwner(shardInterval->relationId);
 	bool missingOk = false;
+	bool includeData = false;
+	bool partitionedTable = false;
 
 	List *ddlCommandList = NIL;
 	List *foreignConstraintCommandList = NIL;
@@ -236,6 +242,18 @@ RepairShardPlacement(int64 shardId, char *sourceNodeName, int32 sourceNodePort,
 								  "shards backed by foreign tables is "
 								  "not supported.", relationName)));
 	}
+
+	/*
+	 * Let's not allow repairing partitions to prevent any edge cases.
+	 * We're already not allowing any kind of modifications on the partitions
+	 * so their placements are not likely to to be marked as INVALID. The only
+	 * possible case to mark placement of a partition as invalid is
+	 * "ALTER TABLE parent_table DETACH PARTITION partition_table". But,
+	 * given that the table would become a regular distributed table if the
+	 * command succeeds, we're OK since the regular distributed tables can
+	 * be repaired later on.
+	 */
+	EnsurePartitionTableNotReplicated(distributedTableId);
 
 	/*
 	 * We take a lock on the referenced table if there is a foreign constraint
@@ -260,10 +278,46 @@ RepairShardPlacement(int64 shardId, char *sourceNodeName, int32 sourceNodePort,
 	EnsureShardCanBeRepaired(shardId, sourceNodeName, sourceNodePort, targetNodeName,
 							 targetNodePort);
 
+	/*
+	 * If the shard belongs to a partitioned table, we need to load the data after
+	 * creating the partitions and the partitioning hierarcy.
+	 */
+	partitionedTable = PartitionedTableNoLock(distributedTableId);
+	includeData = !partitionedTable;
+
 	/* we generate necessary commands to recreate the shard in target node */
-	ddlCommandList = CopyShardCommandList(shardInterval, sourceNodeName, sourceNodePort);
+	ddlCommandList =
+		CopyShardCommandList(shardInterval, sourceNodeName, sourceNodePort, includeData);
 	foreignConstraintCommandList = CopyShardForeignConstraintCommandList(shardInterval);
 	ddlCommandList = list_concat(ddlCommandList, foreignConstraintCommandList);
+
+	/*
+	 * CopyShardCommandList() drops the table which cascades to partitions if the
+	 * table is a partitioned table. This means that we need to create both parent
+	 * table and its partitions.
+	 *
+	 * We also skipped copying the data, so include it here.
+	 */
+	if (partitionedTable)
+	{
+		List *partitionCommandList = NIL;
+
+		char *shardName = ConstructQualifiedShardName(shardInterval);
+		StringInfo copyShardDataCommand = makeStringInfo();
+
+		partitionCommandList =
+			CopyPartitionShardsCommandList(shardInterval, sourceNodeName, sourceNodePort);
+		ddlCommandList = list_concat(ddlCommandList, partitionCommandList);
+
+		/* finally copy the data as well */
+		appendStringInfo(copyShardDataCommand, WORKER_APPEND_TABLE_TO_SHARD,
+						 quote_literal_cstr(shardName), /* table to append */
+						 quote_literal_cstr(shardName), /* remote table name */
+						 quote_literal_cstr(sourceNodeName), /* remote host */
+						 sourceNodePort); /* remote port */
+		ddlCommandList = lappend(ddlCommandList, copyShardDataCommand->data);
+	}
+
 	SendCommandListToWorkerInSingleTransaction(targetNodeName, targetNodePort, tableOwner,
 											   ddlCommandList);
 
@@ -272,6 +326,49 @@ RepairShardPlacement(int64 shardId, char *sourceNodeName, int32 sourceNodePort,
 	placement = SearchShardPlacementInList(placementList, targetNodeName, targetNodePort,
 										   missingOk);
 	UpdateShardPlacementState(placement->placementId, FILE_FINALIZED);
+}
+
+
+/*
+ * CopyPartitionShardsCommandList gets a shardInterval which is a shard that
+ * belongs to partitioned table (this is asserted).
+ *
+ * The function returns a list of commands which re-creates all the partitions
+ * of the input shardInterval.
+ */
+static List *
+CopyPartitionShardsCommandList(ShardInterval *shardInterval, char *sourceNodeName,
+							   int32 sourceNodePort)
+{
+	Oid distributedTableId = shardInterval->relationId;
+	List *partitionList = NIL;
+	ListCell *partitionOidCell = NULL;
+	List *ddlCommandList = NIL;
+
+	Assert(PartitionedTableNoLock(distributedTableId));
+
+	partitionList = PartitionList(distributedTableId);
+	foreach(partitionOidCell, partitionList)
+	{
+		Oid partitionOid = lfirst_oid(partitionOidCell);
+		uint64 partitionShardId =
+			ColocatedShardIdInRelation(partitionOid, shardInterval->shardIndex);
+		ShardInterval *partitionShardInterval = LoadShardInterval(partitionShardId);
+		bool includeData = false;
+		List *copyCommandList = NIL;
+		char *attachPartitionCommand = NULL;
+
+		copyCommandList =
+			CopyShardCommandList(partitionShardInterval, sourceNodeName, sourceNodePort,
+								 includeData);
+		ddlCommandList = list_concat(ddlCommandList, copyCommandList);
+
+		attachPartitionCommand =
+			GenerateAttachShardPartitionCommand(partitionShardInterval);
+		ddlCommandList = lappend(ddlCommandList, attachPartitionCommand);
+	}
+
+	return ddlCommandList;
 }
 
 
@@ -350,11 +447,12 @@ SearchShardPlacementInList(List *shardPlacementList, char *nodeName, uint32 node
 
 /*
  * CopyShardCommandList generates command list to copy the given shard placement
- * from the source node to the target node.
+ * from the source node to the target node. Caller could optionally skip copying
+ * the data by the flag includeDataCopy.
  */
 List *
-CopyShardCommandList(ShardInterval *shardInterval,
-					 char *sourceNodeName, int32 sourceNodePort)
+CopyShardCommandList(ShardInterval *shardInterval, char *sourceNodeName,
+					 int32 sourceNodePort, bool includeDataCopy)
 {
 	int64 shardId = shardInterval->shardId;
 	char *shardName = ConstructQualifiedShardName(shardInterval);
@@ -371,14 +469,21 @@ CopyShardCommandList(ShardInterval *shardInterval,
 	copyShardToNodeCommandsList = list_concat(copyShardToNodeCommandsList,
 											  tableRecreationCommandList);
 
-	appendStringInfo(copyShardDataCommand, WORKER_APPEND_TABLE_TO_SHARD,
-					 quote_literal_cstr(shardName), /* table to append */
-					 quote_literal_cstr(shardName), /* remote table name */
-					 quote_literal_cstr(sourceNodeName), /* remote host */
-					 sourceNodePort); /* remote port */
+	/*
+	 * The caller doesn't want to include the COPY command, perhaps using
+	 * logical replication to copy the data.
+	 */
+	if (includeDataCopy)
+	{
+		appendStringInfo(copyShardDataCommand, WORKER_APPEND_TABLE_TO_SHARD,
+						 quote_literal_cstr(shardName), /* table to append */
+						 quote_literal_cstr(shardName), /* remote table name */
+						 quote_literal_cstr(sourceNodeName), /* remote host */
+						 sourceNodePort); /* remote port */
 
-	copyShardToNodeCommandsList = lappend(copyShardToNodeCommandsList,
-										  copyShardDataCommand->data);
+		copyShardToNodeCommandsList = lappend(copyShardToNodeCommandsList,
+											  copyShardDataCommand->data);
+	}
 
 	indexCommandList = GetTableIndexAndConstraintCommands(relationId);
 	indexCommandList = WorkerApplyShardDDLCommandList(indexCommandList, shardId);

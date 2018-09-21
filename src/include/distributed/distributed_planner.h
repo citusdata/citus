@@ -96,6 +96,7 @@ extern void multi_join_restriction_hook(PlannerInfo *root,
 extern bool IsModifyCommand(Query *query);
 extern bool IsUpdateOrDelete(struct DistributedPlan *distributedPlan);
 extern bool IsModifyDistributedPlan(struct DistributedPlan *distributedPlan);
+extern void EnsurePartitionTableNotReplicated(Oid relationId);
 extern bool IsMultiTaskPlan(struct DistributedPlan *distributedPlan);
 extern bool IsMultiShardModifyPlan(struct DistributedPlan *distributedPlan);
 extern RangeTblEntry * RemoteScanRangeTableEntry(List *columnNameList);
