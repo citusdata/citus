@@ -17,6 +17,8 @@
 #include "c.h"
 #include "miscadmin.h"
 
+#include "access/xact.h"
+#include "catalog/namespace.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/listutils.h"
 #include "distributed/master_metadata_utility.h"
@@ -31,7 +33,38 @@
 #include "distributed/resource_lock.h"
 #include "distributed/shardinterval_utils.h"
 #include "distributed/worker_protocol.h"
+#include "distributed/version_compat.h"
 #include "storage/lmgr.h"
+#include "utils/builtins.h"
+#if (PG_VERSION_NUM >= 100000)
+#include "utils/varlena.h"
+#endif
+
+
+/* static definition and declarations */
+struct LockModeToStringType
+{
+	LOCKMODE lockMode;
+	const char *name;
+};
+
+/*
+ * list of lock mode mappings, number of items need to be kept in sync
+ * with lock_mode_to_string_map_count.
+ */
+static const struct LockModeToStringType lockmode_to_string_map[] = {
+	{ NoLock, "NoLock" },
+	{ AccessShareLock, "ACCESS SHARE" },
+	{ RowShareLock, "ROW SHARE" },
+	{ RowExclusiveLock, "ROW EXCLUSIVE" },
+	{ ShareUpdateExclusiveLock, "SHARE UPDATE EXCLUSIVE" },
+	{ ShareLock, "SHARE" },
+	{ ShareRowExclusiveLock, "SHARE ROW EXCLUSIVE" },
+	{ ExclusiveLock, "EXCLUSIVE" },
+	{ AccessExclusiveLock, "ACCESS EXCLUSIVE" }
+};
+static const int lock_mode_to_string_map_count = sizeof(lockmode_to_string_map) /
+												 sizeof(lockmode_to_string_map[0]);
 
 
 /* local function forward declarations */
@@ -45,6 +78,7 @@ static bool IsFirstWorkerNode();
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(lock_shard_metadata);
 PG_FUNCTION_INFO_V1(lock_shard_resources);
+PG_FUNCTION_INFO_V1(lock_relation_if_exists);
 
 
 /*
@@ -70,7 +104,7 @@ lock_shard_metadata(PG_FUNCTION_ARGS)
 		ereport(ERROR, (errmsg("no locks specified")));
 	}
 
-	/* we don't want random users to block writes */
+    /* we don't want random users to block writes */
 	EnsureSuperUser();
 
 	shardIdCount = ArrayObjectCount(shardIdArrayObject);
@@ -110,7 +144,7 @@ lock_shard_resources(PG_FUNCTION_ARGS)
 		ereport(ERROR, (errmsg("no locks specified")));
 	}
 
-	/* we don't want random users to block writes */
+    /* we don't want random users to block writes */
 	EnsureSuperUser();
 
 	shardIdCount = ArrayObjectCount(shardIdArrayObject);
@@ -438,7 +472,7 @@ LockShardListMetadata(List *shardIntervalList, LOCKMODE lockMode)
 {
 	ListCell *shardIntervalCell = NULL;
 
-	/* lock shards in order of shard id to prevent deadlock */
+    /* lock shards in order of shard id to prevent deadlock */
 	shardIntervalList = SortList(shardIntervalList, CompareShardIntervalsById);
 
 	foreach(shardIntervalCell, shardIntervalList)
@@ -460,7 +494,7 @@ LockShardsInPlacementListMetadata(List *shardPlacementList, LOCKMODE lockMode)
 {
 	ListCell *shardPlacementCell = NULL;
 
-	/* lock shards in order of shard id to prevent deadlock */
+    /* lock shards in order of shard id to prevent deadlock */
 	shardPlacementList =
 		SortList(shardPlacementList, CompareShardPlacementsByShardId);
 
@@ -516,7 +550,7 @@ LockShardListResources(List *shardIntervalList, LOCKMODE lockMode)
 {
 	ListCell *shardIntervalCell = NULL;
 
-	/* lock shards in order of shard id to prevent deadlock */
+    /* lock shards in order of shard id to prevent deadlock */
 	shardIntervalList = SortList(shardIntervalList, CompareShardIntervalsById);
 
 	foreach(shardIntervalCell, shardIntervalList)
@@ -538,7 +572,7 @@ LockRelationShardResources(List *relationShardList, LOCKMODE lockMode)
 {
 	ListCell *relationShardCell = NULL;
 
-	/* lock shards in a consistent order to prevent deadlock */
+    /* lock shards in a consistent order to prevent deadlock */
 	relationShardList = SortList(relationShardList, CompareRelationShards);
 
 	foreach(relationShardCell, relationShardList)
@@ -604,11 +638,11 @@ LockPartitionsInRelationList(List *relationIdList, LOCKMODE lockmode)
 void
 LockPartitionRelations(Oid relationId, LOCKMODE lockMode)
 {
-	/*
-	 * PartitionList function generates partition list in the same order
-	 * as PostgreSQL. Therefore we do not need to sort it before acquiring
-	 * locks.
-	 */
+    /*
+     * PartitionList function generates partition list in the same order
+     * as PostgreSQL. Therefore we do not need to sort it before acquiring
+     * locks.
+     */
 	List *partitionList = PartitionList(relationId);
 	ListCell *partitionCell = NULL;
 
@@ -617,4 +651,116 @@ LockPartitionRelations(Oid relationId, LOCKMODE lockMode)
 		Oid partitionRelationId = lfirst_oid(partitionCell);
 		LockRelationOid(partitionRelationId, lockMode);
 	}
+}
+
+
+/*
+ * LockModeTextToLockMode gets a lockMode name and returns its corresponding LOCKMODE.
+ * The function errors out if the input lock mode isn't defined in the PostgreSQL's
+ * explicit locking table.
+ */
+LOCKMODE
+LockModeTextToLockMode(const char *lockModeName)
+{
+	LOCKMODE lockMode = -1;
+
+	int lockIndex = 0;
+	for (lockIndex = 0; lockIndex < lock_mode_to_string_map_count; lockIndex++)
+	{
+		const struct LockModeToStringType *lockMap = lockmode_to_string_map + lockIndex;
+		if (pg_strncasecmp(lockMap->name, lockModeName, NAMEDATALEN) == 0)
+		{
+			lockMode = lockMap->lockMode;
+			break;
+		}
+	}
+
+    /* we could not find the lock mode we are looking for */
+	if (lockMode == -1)
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_LOCK_NOT_AVAILABLE),
+				 errmsg("unknown lock mode: %s", lockModeName)));
+	}
+
+	return lockMode;
+}
+
+
+/*
+ * LockModeToLockModeText gets a lockMode enum and returns its corresponding text
+ * representation.
+ * The function errors out if the input lock mode isn't defined in the PostgreSQL's
+ * explicit locking table.
+ */
+const char *
+LockModeToLockModeText(LOCKMODE lockMode)
+{
+	const char *lockModeText = NULL;
+
+	int lockIndex = 0;
+	for (lockIndex = 0; lockIndex < lock_mode_to_string_map_count; lockIndex++)
+	{
+		const struct LockModeToStringType *lockMap = lockmode_to_string_map + lockIndex;
+		if (lockMode == lockMap->lockMode)
+		{
+			lockModeText = lockMap->name;
+			break;
+		}
+	}
+
+    /* we could not find the lock mode we are looking for */
+	if (lockModeText == NULL)
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_LOCK_NOT_AVAILABLE),
+				 errmsg("unknown lock mode enum: %d", (int) lockMode)));
+	}
+
+	return lockModeText;
+}
+
+
+/*
+ * lock_relation_if_exists gets a relation name and lock mode
+ * and returns true if the relation exists and can be locked with
+ * the given lock mode. If the relation doesn't exists, the function
+ * return false.
+ *
+ * The relation name should be qualified with the schema name.
+ *
+ * The function errors out of the lockmode isn't defined in the PostgreSQL's
+ * explicit locking table.
+ */
+Datum
+lock_relation_if_exists(PG_FUNCTION_ARGS)
+{
+	text *relationName = PG_GETARG_TEXT_P(0);
+	text *lockModeText = PG_GETARG_TEXT_P(1);
+	Oid relationId = InvalidOid;
+	char *lockModeCString = text_to_cstring(lockModeText);
+	List *relationNameList = NIL;
+	RangeVar *relation = NULL;
+	LOCKMODE lockMode = NoLock;
+
+    /* ensure that we're in a transaction block */
+	RequireTransactionBlock(true, "lock_relation_if_exists");
+
+	relationId = ResolveRelationId(relationName, true);
+	if (!OidIsValid(relationId))
+	{
+		PG_RETURN_BOOL(false);
+	}
+
+    /* get the lock mode */
+	lockMode = LockModeTextToLockMode(lockModeCString);
+
+    /* resolve relationId from passed in schema and relation name */
+	relationNameList = textToQualifiedNameList(relationName);
+	relation = makeRangeVarFromNameList(relationNameList);
+
+    /* lock the relation with the lock mode */
+	RangeVarGetRelid(relation, lockMode, false);
+
+	PG_RETURN_BOOL(true);
 }
