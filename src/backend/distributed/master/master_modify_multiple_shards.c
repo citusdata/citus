@@ -61,7 +61,6 @@
 
 static List * ModifyMultipleShardsTaskList(Query *query, List *shardIntervalList, TaskType
 										   taskType);
-static bool ShouldExecuteTruncateStmtSequential(TruncateStmt *command);
 
 
 PG_FUNCTION_INFO_V1(master_modify_multiple_shards);
@@ -144,11 +143,6 @@ master_modify_multiple_shards(PG_FUNCTION_ARGS)
 		}
 
 		EnsureTablePermissions(relationId, ACL_TRUNCATE);
-
-		if (ShouldExecuteTruncateStmtSequential(truncateStatement))
-		{
-			SetLocalMultiShardModifyModeToSequential();
-		}
 	}
 	else
 	{
@@ -257,35 +251,4 @@ ModifyMultipleShardsTaskList(Query *query, List *shardIntervalList, TaskType tas
 	}
 
 	return taskList;
-}
-
-
-/*
- * ShouldExecuteTruncateStmtSequential decides if the TRUNCATE stmt needs
- * to run sequential. If so, it calls SetLocalMultiShardModifyModeToSequential().
- *
- * If a reference table which has a foreign key from a distributed table is truncated
- * we need to execute the command sequentially to avoid self-deadlock.
- */
-static bool
-ShouldExecuteTruncateStmtSequential(TruncateStmt *command)
-{
-	List *relationList = command->relations;
-	ListCell *relationCell = NULL;
-	bool failOK = false;
-
-	foreach(relationCell, relationList)
-	{
-		RangeVar *rangeVar = (RangeVar *) lfirst(relationCell);
-		Oid relationId = RangeVarGetRelid(rangeVar, NoLock, failOK);
-
-		if (IsDistributedTable(relationId) &&
-			PartitionMethod(relationId) == DISTRIBUTE_BY_NONE &&
-			TableReferenced(relationId))
-		{
-			return true;
-		}
-	}
-
-	return false;
 }

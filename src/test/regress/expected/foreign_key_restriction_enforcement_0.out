@@ -457,6 +457,8 @@ BEGIN;
 (1 row)
 
 	TRUNCATE referece_table CASCADE;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  Reference relation "referece_table" is modified, which might lead to data inconsistencies or distributed deadlocks via parallel accesses to hash distributed relations due to foreign keys. Any parallel modification to those hash distributed relations in the same transaction can only be executed in sequential query execution mode
 NOTICE:  truncate cascades to table "on_update_fkey_table"
 ERROR:  cannot execute DDL on reference relation "referece_table" because there was a parallel SELECT access to distributed relation "on_update_fkey_table" in the same transaction
 HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
@@ -470,6 +472,8 @@ BEGIN;
 (1 row)
 
 	TRUNCATE referece_table CASCADE;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  Reference relation "referece_table" is modified, which might lead to data inconsistencies or distributed deadlocks via parallel accesses to hash distributed relations due to foreign keys. Any parallel modification to those hash distributed relations in the same transaction can only be executed in sequential query execution mode
 NOTICE:  truncate cascades to table "on_update_fkey_table"
 DEBUG:  truncate cascades to table "on_update_fkey_table_2380002"
 DETAIL:  NOTICE from localhost:57638

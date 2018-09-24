@@ -152,6 +152,7 @@ static void ErrorIfUnsupportedSeqStmt(CreateSeqStmt *createSeqStmt);
 static void ErrorIfDistributedAlterSeqOwnedBy(AlterSeqStmt *alterSeqStmt);
 static void ErrorIfUnsupportedTruncateStmt(TruncateStmt *truncateStatement);
 static void ProcessTruncateStatement(TruncateStmt *truncateStatement);
+static void ExecuteTruncateStmtSequentialIfNecessary(TruncateStmt *command);
 static void EnsurePartitionTableNotReplicatedForTruncate(TruncateStmt *truncateStatement);
 static void LockTruncatedRelationMetadataInWorkers(TruncateStmt *truncateStatement);
 static void AcquireDistributedLockOnRelations(List *relationIdList, LOCKMODE lockMode);
@@ -2940,7 +2941,52 @@ static void
 ProcessTruncateStatement(TruncateStmt *truncateStatement)
 {
 	EnsurePartitionTableNotReplicatedForTruncate(truncateStatement);
+	ExecuteTruncateStmtSequentialIfNecessary(truncateStatement);
 	LockTruncatedRelationMetadataInWorkers(truncateStatement);
+}
+
+
+/*
+ * ExecuteTruncateStmtSequentialIfNecessary decides if the TRUNCATE stmt needs
+ * to run sequential. If so, it calls SetLocalMultiShardModifyModeToSequential().
+ *
+ * If a reference table which has a foreign key from a distributed table is truncated
+ * we need to execute the command sequentially to avoid self-deadlock.
+ */
+static void
+ExecuteTruncateStmtSequentialIfNecessary(TruncateStmt *command)
+{
+	List *relationList = command->relations;
+	ListCell *relationCell = NULL;
+	bool failOK = false;
+
+	foreach(relationCell, relationList)
+	{
+		RangeVar *rangeVar = (RangeVar *) lfirst(relationCell);
+		Oid relationId = RangeVarGetRelid(rangeVar, NoLock, failOK);
+
+		if (IsDistributedTable(relationId) &&
+			PartitionMethod(relationId) == DISTRIBUTE_BY_NONE &&
+			TableReferenced(relationId))
+		{
+			char *relationName = get_rel_name(relationId);
+
+			ereport(DEBUG1, (errmsg("switching to sequential query execution mode"),
+							 errdetail(
+								 "Reference relation \"%s\" is modified, which might lead "
+								 "to data inconsistencies or distributed deadlocks via "
+								 "parallel accesses to hash distributed relations due to "
+								 "foreign keys. Any parallel modification to "
+								 "those hash distributed relations in the same "
+								 "transaction can only be executed in sequential query "
+								 "execution mode", relationName)));
+
+			SetLocalMultiShardModifyModeToSequential();
+
+			/* nothing to do more */
+			return;
+		}
+	}
 }
 
 
