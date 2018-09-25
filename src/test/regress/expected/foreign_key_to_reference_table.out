@@ -1885,6 +1885,27 @@ CONTEXT:  while executing command on localhost:57638
 INSERT INTO referenced_table VALUES(5,5);
 -- should succeed since both of the foreign constraints are positive
 INSERT INTO referencing_table VALUES (0, 5);
+-- TRUNCATE should work in any way
+TRUNCATE referencing_table, referenced_table;
+TRUNCATE referenced_table, referencing_table;
+BEGIN;
+  TRUNCATE referencing_table, referenced_table;
+  ALTER TABLE referencing_table ADD COLUMN x INT;
+  SELECT * FROM referencing_table;
+ id | value_1 | x 
+----+---------+---
+(0 rows)
+
+ROLLBACK;
+BEGIN;
+  TRUNCATE referenced_table, referencing_table;
+  ALTER TABLE referencing_table ADD COLUMN x INT;
+  SELECT * FROM referencing_table;
+ id | value_1 | x 
+----+---------+---
+(0 rows)
+
+ROLLBACK;
 DROP TABLE referenced_table CASCADE;
 NOTICE:  drop cascades to constraint fkey_to_ref on table referencing_table_4
 DROP TABLE referencing_table;

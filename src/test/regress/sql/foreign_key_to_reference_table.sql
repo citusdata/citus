@@ -949,6 +949,22 @@ INSERT INTO referenced_table VALUES(5,5);
 -- should succeed since both of the foreign constraints are positive
 INSERT INTO referencing_table VALUES (0, 5);
 
+-- TRUNCATE should work in any way
+TRUNCATE referencing_table, referenced_table;
+TRUNCATE referenced_table, referencing_table;
+
+BEGIN;
+  TRUNCATE referencing_table, referenced_table;
+  ALTER TABLE referencing_table ADD COLUMN x INT;
+  SELECT * FROM referencing_table;
+ROLLBACK;
+
+BEGIN;
+  TRUNCATE referenced_table, referencing_table;
+  ALTER TABLE referencing_table ADD COLUMN x INT;
+  SELECT * FROM referencing_table;
+ROLLBACK;
+
 DROP TABLE referenced_table CASCADE;
 DROP TABLE referencing_table;
 

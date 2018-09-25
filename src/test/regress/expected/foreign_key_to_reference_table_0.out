@@ -1904,6 +1904,27 @@ INSERT INTO referencing_table VALUES (0, 5);
 ERROR:  relation "referencing_table" does not exist
 LINE 1: INSERT INTO referencing_table VALUES (0, 5);
                     ^
+-- TRUNCATE should work in any way
+TRUNCATE referencing_table, referenced_table;
+ERROR:  relation "referencing_table" does not exist
+TRUNCATE referenced_table, referencing_table;
+ERROR:  relation "referencing_table" does not exist
+BEGIN;
+  TRUNCATE referencing_table, referenced_table;
+ERROR:  relation "referencing_table" does not exist
+  ALTER TABLE referencing_table ADD COLUMN x INT;
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+  SELECT * FROM referencing_table;
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+ROLLBACK;
+BEGIN;
+  TRUNCATE referenced_table, referencing_table;
+ERROR:  relation "referencing_table" does not exist
+  ALTER TABLE referencing_table ADD COLUMN x INT;
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+  SELECT * FROM referencing_table;
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+ROLLBACK;
 DROP TABLE referenced_table CASCADE;
 DROP TABLE referencing_table;
 ERROR:  table "referencing_table" does not exist
