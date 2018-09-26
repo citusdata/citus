@@ -704,15 +704,75 @@ NOTICE:  Copying data from local table...
 
 ALTER TABLE partitioning_test ADD CONSTRAINT partitioning_reference_fkey FOREIGN KEY (id) REFERENCES partitioning_test_reference(id) ON DELETE CASCADE;
 ERROR:  relation "partitioning_test" does not exist
+CREATE TABLE partitioning_test_foreign_key(id int PRIMARY KEY, value int);
+SELECT create_distributed_table('partitioning_test_foreign_key', 'id');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+INSERT INTO partitioning_test_foreign_key SELECT * FROM partitioning_test_reference;
+ALTER TABLE partitioning_hash_test ADD CONSTRAINT partitioning_reference_fk_test FOREIGN KEY (id) REFERENCES partitioning_test_foreign_key(id) ON DELETE CASCADE;
+ERROR:  relation "partitioning_hash_test" does not exist
+-- check foreign keys on partitions
+SELECT
+	table_name, constraint_name, constraint_type FROm information_schema.table_constraints
+WHERE
+	table_name LIKE 'partitioning_hash_test%' AND
+	constraint_type = 'FOREIGN KEY'
+ORDER BY
+	1,2;
+ table_name | constraint_name | constraint_type 
+------------+-----------------+-----------------
+(0 rows)
+
+-- check foreign keys on partition shards
+-- there is some text ordering issue regarding table name
+-- forcing integer sort by extracting shardid
+CREATE TYPE foreign_key_details AS (table_name text, constraint_name text, constraint_type text);
+SELECT right(table_name, 7)::int as shardid, * FROM (
+	SELECT (json_populate_record(NULL::foreign_key_details,
+	json_array_elements_text(result::json)::json )).*
+	FROM run_command_on_workers($$
+		SELECT
+			COALESCE(json_agg(row_to_json(q)), '[]'::json) 
+		FROM (
+			SELECT 
+				table_name, constraint_name, constraint_type
+			FROM information_schema.table_constraints
+			WHERE
+				table_name LIKE 'partitioning_hash_test%' AND
+				constraint_type = 'FOREIGN KEY'
+			ORDER BY 1, 2, 3
+			) q
+		$$) ) w
+ORDER BY 1, 2, 3, 4;
+ shardid | table_name | constraint_name | constraint_type 
+---------+------------+-----------------+-----------------
+(0 rows)
+
+DROP TYPE  foreign_key_details;
+-- set replication factor back to 1 since it gots reset
+-- after connection re-establishment
+SET citus.shard_replication_factor TO 1;
 SELECT * FROM partitioning_test WHERE id = 11 or id = 12;
 ERROR:  relation "partitioning_test" does not exist
 LINE 1: SELECT * FROM partitioning_test WHERE id = 11 or id = 12;
                       ^
 DELETE FROM partitioning_test_reference WHERE id = 11 or id = 12;
+SELECT * FROM partitioning_hash_test ORDER BY 1, 2;
+ERROR:  relation "partitioning_hash_test" does not exist
+LINE 1: SELECT * FROM partitioning_hash_test ORDER BY 1, 2;
+                      ^
+DELETE FROM partitioning_test_foreign_key WHERE id = 2 OR id = 9;
 -- see data is deleted from referencing table
 SELECT * FROM partitioning_test WHERE id = 11 or id = 12;
 ERROR:  relation "partitioning_test" does not exist
 LINE 1: SELECT * FROM partitioning_test WHERE id = 11 or id = 12;
+                      ^
+SELECT * FROM partitioning_hash_test ORDER BY 1, 2;
+ERROR:  relation "partitioning_hash_test" does not exist
+LINE 1: SELECT * FROM partitioning_hash_test ORDER BY 1, 2;
                       ^
 --
 -- Transaction tests
@@ -857,11 +917,12 @@ ERROR:  table "partitioning_test" does not exist
 DROP TABLE partitioning_test_reference;
 -- dropping the parent should CASCADE to the children as well
 SELECT table_name FROM information_schema.tables WHERE table_name LIKE 'partitioning_test%' ORDER BY 1;
-       table_name       
-------------------------
+          table_name           
+-------------------------------
  partitioning_test_2012
  partitioning_test_2013
-(2 rows)
+ partitioning_test_foreign_key
+(3 rows)
 
 -- test distributing partitioned table colocated with non-partitioned table
 CREATE TABLE partitioned_users_table (user_id int, time timestamp, value_1 int, value_2 int, value_3 float, value_4 bigint) PARTITION BY RANGE (time);
@@ -1569,7 +1630,8 @@ DROP TABLE IF EXISTS
 	partitioning_hash_test,
 	partitioning_hash_join_test,
 	partitioning_test_failure,
-	non_distributed_partitioned_table;
+	non_distributed_partitioned_table,
+	partitioning_test_foreign_key;
 NOTICE:  table "partitioning_hash_test" does not exist, skipping
 NOTICE:  table "partitioning_hash_join_test" does not exist, skipping
 NOTICE:  table "partitioning_test_failure" does not exist, skipping

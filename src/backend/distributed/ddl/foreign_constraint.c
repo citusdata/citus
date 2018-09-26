@@ -493,7 +493,13 @@ GetTableForeignConstraintCommands(Oid relationId)
 	{
 		Form_pg_constraint constraintForm = (Form_pg_constraint) GETSTRUCT(heapTuple);
 
-		if (constraintForm->contype == CONSTRAINT_FOREIGN)
+#if (PG_VERSION_NUM >= 110000)
+		bool inheritedConstraint = OidIsValid(constraintForm->conparentid);
+#else
+		bool inheritedConstraint = false;
+#endif
+
+		if (!inheritedConstraint && constraintForm->contype == CONSTRAINT_FOREIGN)
 		{
 			Oid constraintId = get_relation_constraint_oid(relationId,
 														   constraintForm->conname.data,

@@ -451,10 +451,58 @@ SELECT create_reference_table('partitioning_test_reference');
 
 ALTER TABLE partitioning_test ADD CONSTRAINT partitioning_reference_fkey FOREIGN KEY (id) REFERENCES partitioning_test_reference(id) ON DELETE CASCADE;
 
+CREATE TABLE partitioning_test_foreign_key(id int PRIMARY KEY, value int);
+SELECT create_distributed_table('partitioning_test_foreign_key', 'id');
+INSERT INTO partitioning_test_foreign_key SELECT * FROM partitioning_test_reference;
+
+ALTER TABLE partitioning_hash_test ADD CONSTRAINT partitioning_reference_fk_test FOREIGN KEY (id) REFERENCES partitioning_test_foreign_key(id) ON DELETE CASCADE;
+
+-- check foreign keys on partitions
+SELECT
+	table_name, constraint_name, constraint_type FROm information_schema.table_constraints
+WHERE
+	table_name LIKE 'partitioning_hash_test%' AND
+	constraint_type = 'FOREIGN KEY'
+ORDER BY
+	1,2;
+
+-- check foreign keys on partition shards
+-- there is some text ordering issue regarding table name
+-- forcing integer sort by extracting shardid
+CREATE TYPE foreign_key_details AS (table_name text, constraint_name text, constraint_type text);
+SELECT right(table_name, 7)::int as shardid, * FROM (
+	SELECT (json_populate_record(NULL::foreign_key_details,
+	json_array_elements_text(result::json)::json )).*
+	FROM run_command_on_workers($$
+		SELECT
+			COALESCE(json_agg(row_to_json(q)), '[]'::json) 
+		FROM (
+			SELECT 
+				table_name, constraint_name, constraint_type
+			FROM information_schema.table_constraints
+			WHERE
+				table_name LIKE 'partitioning_hash_test%' AND
+				constraint_type = 'FOREIGN KEY'
+			ORDER BY 1, 2, 3
+			) q
+		$$) ) w
+ORDER BY 1, 2, 3, 4;
+
+DROP TYPE  foreign_key_details;
+
+-- set replication factor back to 1 since it gots reset
+-- after connection re-establishment
+SET citus.shard_replication_factor TO 1;
+
 SELECT * FROM partitioning_test WHERE id = 11 or id = 12;
 DELETE FROM partitioning_test_reference WHERE id = 11 or id = 12;
+
+SELECT * FROM partitioning_hash_test ORDER BY 1, 2;
+DELETE FROM partitioning_test_foreign_key WHERE id = 2 OR id = 9;
 -- see data is deleted from referencing table
 SELECT * FROM partitioning_test WHERE id = 11 or id = 12;
+SELECT * FROM partitioning_hash_test ORDER BY 1, 2;
+
 
 --
 -- Transaction tests
@@ -1077,5 +1125,5 @@ DROP TABLE IF EXISTS
 	partitioning_hash_test,
 	partitioning_hash_join_test,
 	partitioning_test_failure,
-	non_distributed_partitioned_table;
-
+	non_distributed_partitioned_table,
+	partitioning_test_foreign_key;
