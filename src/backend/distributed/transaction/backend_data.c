@@ -65,6 +65,7 @@ typedef struct BackendManagementShmemData
 static void StoreAllActiveTransactions(Tuplestorestate *tupleStore, TupleDesc
 									   tupleDescriptor);
 static void CheckReturnSetInfo(ReturnSetInfo *returnSetInfo);
+
 static shmem_startup_hook_type prev_shmem_startup_hook = NULL;
 static BackendManagementShmemData *backendManagementShmemData = NULL;
 static BackendData *MyBackendData = NULL;
@@ -123,6 +124,10 @@ assign_distributed_transaction_id(PG_FUNCTION_ARGS)
 	MyBackendData->transactionId.transactionNumber = PG_GETARG_INT64(1);
 	MyBackendData->transactionId.timestamp = PG_GETARG_TIMESTAMPTZ(2);
 	MyBackendData->transactionId.transactionOriginator = false;
+
+	MyBackendData->citusBackend.initiatorNodeIdentifier =
+		MyBackendData->transactionId.initiatorNodeIdentifier;
+	MyBackendData->citusBackend.transactionOriginator = false;
 
 	SpinLockRelease(&MyBackendData->mutex);
 
@@ -399,8 +404,8 @@ StoreAllActiveTransactions(Tuplestorestate *tupleStore, TupleDesc tupleDescripto
 
 		SpinLockAcquire(&currentBackend->mutex);
 
-		/* we're only interested in active backends */
-		if (currentBackend->transactionId.transactionNumber == 0)
+		/* we're only interested in backends initiated by Citus */
+		if (currentBackend->citusBackend.initiatorNodeIdentifier < 0)
 		{
 			SpinLockRelease(&currentBackend->mutex);
 			continue;
@@ -408,13 +413,17 @@ StoreAllActiveTransactions(Tuplestorestate *tupleStore, TupleDesc tupleDescripto
 
 		values[0] = ObjectIdGetDatum(currentBackend->databaseId);
 		values[1] = Int32GetDatum(ProcGlobal->allProcs[backendIndex].pid);
-		values[2] = Int32GetDatum(currentBackend->transactionId.initiatorNodeIdentifier);
+		values[2] = Int32GetDatum(currentBackend->citusBackend.initiatorNodeIdentifier);
 
 		/*
 		 * We prefer to use worker_query instead of transactionOriginator in the user facing
 		 * functions since its more intuitive. Thus, we negate the result before returning.
+		 *
+		 * We prefer to use citusBackend's transactionOriginator field over transactionId's
+		 * field with the same name. The reason is that it also covers backends that are not
+		 * inside a distributed transaction.
 		 */
-		coordinatorOriginatedQuery = currentBackend->transactionId.transactionOriginator;
+		coordinatorOriginatedQuery = currentBackend->citusBackend.transactionOriginator;
 		values[3] = !coordinatorOriginatedQuery;
 
 		values[4] = UInt64GetDatum(currentBackend->transactionId.transactionNumber);
@@ -544,9 +553,14 @@ BackendManagementShmemInit(void)
 		 * starts its execution. Note that we initialize TotalProcs (e.g., not
 		 * MaxBackends) since some of the blocking processes could be prepared
 		 * transactions, which aren't covered by MaxBackends.
+		 *
+		 * We also initiate initiatorNodeIdentifier to -1, which can never be
+		 * used as a node id.
 		 */
 		for (backendIndex = 0; backendIndex < TotalProcs; ++backendIndex)
 		{
+			backendManagementShmemData->backends[backendIndex].citusBackend.
+			initiatorNodeIdentifier = -1;
 			SpinLockInit(&backendManagementShmemData->backends[backendIndex].mutex);
 		}
 	}
@@ -633,6 +647,9 @@ UnSetDistributedTransactionId(void)
 		MyBackendData->transactionId.transactionNumber = 0;
 		MyBackendData->transactionId.timestamp = 0;
 
+		MyBackendData->citusBackend.initiatorNodeIdentifier = -1;
+		MyBackendData->citusBackend.transactionOriginator = false;
+
 		SpinLockRelease(&MyBackendData->mutex);
 	}
 }
@@ -702,7 +719,7 @@ GetCurrentDistributedTransactionId(void)
  * processId fields.
  *
  * This function should only be called on BeginCoordinatedTransaction(). Any other
- * callers is very likely to break the distributed transction management.
+ * callers is very likely to break the distributed transaction management.
  */
 void
 AssignDistributedTransactionId(void)
@@ -720,9 +737,27 @@ AssignDistributedTransactionId(void)
 
 	MyBackendData->transactionId.initiatorNodeIdentifier = localGroupId;
 	MyBackendData->transactionId.transactionOriginator = true;
-	MyBackendData->transactionId.transactionNumber =
-		nextTransactionNumber;
+	MyBackendData->transactionId.transactionNumber = nextTransactionNumber;
 	MyBackendData->transactionId.timestamp = currentTimestamp;
+
+	MyBackendData->citusBackend.initiatorNodeIdentifier = localGroupId;
+	MyBackendData->citusBackend.transactionOriginator = true;
+
+	SpinLockRelease(&MyBackendData->mutex);
+}
+
+
+/*
+ * MarkCitusInitiatedCoordinatorBackend sets that coordinator backend is
+ * initiated by Citus.
+ */
+void
+MarkCitusInitiatedCoordinatorBackend(void)
+{
+	SpinLockAcquire(&MyBackendData->mutex);
+
+	MyBackendData->citusBackend.initiatorNodeIdentifier = GetLocalGroupId();
+	MyBackendData->citusBackend.transactionOriginator = true;
 
 	SpinLockRelease(&MyBackendData->mutex);
 }

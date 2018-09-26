@@ -50,6 +50,11 @@ step "s1-get-current-transaction-id"
 	SELECT row(initiator_node_identifier, transaction_number) FROM  get_current_transaction_id();
 }
 
+step "s1-get-all-transactions"
+{
+	SELECT initiator_node_identifier, transaction_number, transaction_stamp FROM get_current_transaction_id() ORDER BY 1,2,3;
+}
+
 session "s2"
 
 step "s2-begin"
@@ -77,10 +82,15 @@ step "s2-get-first-worker-active-transactions"
 {
 		SELECT * FROM run_command_on_workers('SELECT row(initiator_node_identifier, transaction_number)
 												FROM	 
-											  get_all_active_transactions();
+											  get_current_transaction_id();
 											') 
 		WHERE nodeport = 57637;
 ;
+}
+
+step "s2-get-all-transactions"
+{
+	SELECT initiator_node_identifier, transaction_number, transaction_stamp FROM get_current_transaction_id() ORDER BY 1,2,3;
 }
 
 session "s3"
@@ -100,15 +110,13 @@ step "s3-commit"
     COMMIT;
 }
 
-session "s4"
-
-step "s4-get-all-transactions"
+step "s3-get-all-transactions"
 {
-	SELECT initiator_node_identifier, transaction_number, transaction_stamp FROM get_all_active_transactions() ORDER BY 1,2,3;
+	SELECT initiator_node_identifier, transaction_number, transaction_stamp FROM get_current_transaction_id() ORDER BY 1,2,3;
 }
 
 # show that we could get all distributed transaction ids from seperate sessions
-permutation "s1-begin" "s1-assign-transaction-id" "s4-get-all-transactions" "s2-begin" "s2-assign-transaction-id" "s4-get-all-transactions" "s3-begin" "s3-assign-transaction-id" "s4-get-all-transactions" "s1-commit" "s4-get-all-transactions" "s2-commit" "s4-get-all-transactions" "s3-commit" "s4-get-all-transactions"
+permutation "s1-begin" "s1-assign-transaction-id" "s1-get-all-transactions" "s2-begin" "s2-assign-transaction-id" "s2-get-all-transactions" "s3-begin" "s3-assign-transaction-id" "s3-get-all-transactions" "s1-commit" "s2-commit" "s3-commit"
 
 
 # now show that distributed transaction id on the coordinator

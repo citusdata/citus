@@ -154,12 +154,48 @@
 		pg_stat_activity.query, \
 		pg_stat_activity.backend_type \
 	FROM \
-		get_all_active_transactions() AS dist_txs(database_id, process_id, initiator_node_identifier, worker_query, transaction_number, transaction_stamp), \
 		pg_stat_activity \
+		INNER JOIN \
+		get_all_active_transactions() AS dist_txs(database_id, process_id, initiator_node_identifier, worker_query, transaction_number, transaction_stamp) \
+		ON pg_stat_activity.pid = dist_txs.process_id \
 	WHERE \
-		pg_stat_activity.pid = dist_txs.process_id \
-			AND \
-		dist_txs.worker_query = %s; "
+		dist_txs.worker_query = false;"
+
+	#define CITUS_WORKER_STAT_ACTIVITY_QUERY \
+	"\
+	SELECT \
+		dist_txs.initiator_node_identifier, \
+		dist_txs.transaction_number, \
+		dist_txs.transaction_stamp, \
+		pg_stat_activity.datid, \
+		pg_stat_activity.datname, \
+		pg_stat_activity.pid, \
+		pg_stat_activity.usesysid, \
+		pg_stat_activity.usename, \
+		pg_stat_activity.application_name, \
+		pg_stat_activity.client_addr, \
+		pg_stat_activity.client_hostname, \
+		pg_stat_activity.client_port, \
+		pg_stat_activity.backend_start, \
+		pg_stat_activity.xact_start, \
+		pg_stat_activity.query_start, \
+		pg_stat_activity.state_change, \
+		pg_stat_activity.wait_event_type, \
+		pg_stat_activity.wait_event, \
+		pg_stat_activity.state, \
+		pg_stat_activity.backend_xid, \
+		pg_stat_activity.backend_xmin, \
+		pg_stat_activity.query, \
+		pg_stat_activity.backend_type \
+	FROM \
+		pg_stat_activity \
+		LEFT JOIN \
+		get_all_active_transactions() AS dist_txs(database_id, process_id, initiator_node_identifier, worker_query, transaction_number, transaction_stamp) \
+		ON pg_stat_activity.pid = dist_txs.process_id \
+	WHERE \
+		pg_stat_activity.application_name = 'citus' \
+		AND \
+		pg_stat_activity.query NOT ILIKE '%stat_activity%';"
 #else
 	#define CITUS_DIST_STAT_ACTIVITY_QUERY \
 	"\
@@ -188,12 +224,48 @@
 		pg_stat_activity.query, \
 		null \
 	FROM \
-		get_all_active_transactions() AS dist_txs(database_id, process_id, initiator_node_identifier, worker_query, transaction_number, transaction_stamp), \
 		pg_stat_activity \
+		INNER JOIN \
+		get_all_active_transactions() AS dist_txs(database_id, process_id, initiator_node_identifier, worker_query, transaction_number, transaction_stamp) \
+		ON pg_stat_activity.pid = dist_txs.process_id \
 	WHERE \
-		pg_stat_activity.pid = dist_txs.process_id \
-			AND \
-		dist_txs.worker_query = %s; "
+		dist_txs.worker_query = false;"
+
+	#define CITUS_WORKER_STAT_ACTIVITY_QUERY \
+	"\
+	SELECT \
+		dist_txs.initiator_node_identifier, \
+		dist_txs.transaction_number, \
+		dist_txs.transaction_stamp, \
+		pg_stat_activity.datid, \
+		pg_stat_activity.datname, \
+		pg_stat_activity.pid, \
+		pg_stat_activity.usesysid, \
+		pg_stat_activity.usename, \
+		pg_stat_activity.application_name, \
+		pg_stat_activity.client_addr, \
+		pg_stat_activity.client_hostname, \
+		pg_stat_activity.client_port, \
+		pg_stat_activity.backend_start, \
+		pg_stat_activity.xact_start, \
+		pg_stat_activity.query_start, \
+		pg_stat_activity.state_change, \
+		pg_stat_activity.wait_event_type, \
+		pg_stat_activity.wait_event, \
+		pg_stat_activity.state, \
+		pg_stat_activity.backend_xid, \
+		pg_stat_activity.backend_xmin, \
+		pg_stat_activity.query, \
+		null \
+	FROM \
+		pg_stat_activity \
+		LEFT JOIN \
+		get_all_active_transactions() AS dist_txs(database_id, process_id, initiator_node_identifier, worker_query, transaction_number, transaction_stamp) \
+		ON pg_stat_activity.pid = dist_txs.process_id \
+	WHERE \
+		pg_stat_activity.application_name = 'citus' \
+		AND \
+		pg_stat_activity.query NOT ILIKE '%stat_activity%';"
 
 #endif
 
@@ -232,7 +304,7 @@ typedef struct CitusDistStat
 
 
 /* local forward declarations */
-static List * CitusDistStatActivity(const char *statQuery);
+static List * CitusStatActivity(const char *statQuery);
 static void ReturnCitusDistStats(List *citusStatsList, FunctionCallInfo fcinfo);
 static CitusDistStat * ParseCitusDistStat(PGresult *result, int64 rowIndex);
 
@@ -273,17 +345,10 @@ Datum
 citus_dist_stat_activity(PG_FUNCTION_ARGS)
 {
 	List *citusDistStatStatements = NIL;
-	StringInfo citusDistStatQuery = NULL;
-	const char *workerQuery = "false";
 
 	CheckCitusVersion(ERROR);
 
-	/* set the workerQuery to false in the query */
-	citusDistStatQuery = makeStringInfo();
-	appendStringInfo(citusDistStatQuery, CITUS_DIST_STAT_ACTIVITY_QUERY,
-					 workerQuery);
-
-	citusDistStatStatements = CitusDistStatActivity(citusDistStatQuery->data);
+	citusDistStatStatements = CitusStatActivity(CITUS_DIST_STAT_ACTIVITY_QUERY);
 
 	ReturnCitusDistStats(citusDistStatStatements, fcinfo);
 
@@ -300,17 +365,10 @@ Datum
 citus_worker_stat_activity(PG_FUNCTION_ARGS)
 {
 	List *citusWorkerStatStatements = NIL;
-	StringInfo cituWorkerStatQuery = NULL;
-	const char *workerQuery = "true";
 
 	CheckCitusVersion(ERROR);
 
-	/* set the workerQuery to true in the query */
-	cituWorkerStatQuery = makeStringInfo();
-	appendStringInfo(cituWorkerStatQuery, CITUS_DIST_STAT_ACTIVITY_QUERY,
-					 workerQuery);
-
-	citusWorkerStatStatements = CitusDistStatActivity(cituWorkerStatQuery->data);
+	citusWorkerStatStatements = CitusStatActivity(CITUS_WORKER_STAT_ACTIVITY_QUERY);
 
 	ReturnCitusDistStats(citusWorkerStatStatements, fcinfo);
 
@@ -319,7 +377,7 @@ citus_worker_stat_activity(PG_FUNCTION_ARGS)
 
 
 /*
- * CitusDistStatActivity gets the stats query, connects to each node in the
+ * CitusStatActivity gets the stats query, connects to each node in the
  * cluster, executes the query and parses the results. The function returns
  * list of CitusDistStat struct for further processing.
  *
@@ -330,7 +388,7 @@ citus_worker_stat_activity(PG_FUNCTION_ARGS)
  * executed on the coordinator given that there is not metadata information about that.
  */
 static List *
-CitusDistStatActivity(const char *statQuery)
+CitusStatActivity(const char *statQuery)
 {
 	List *citusStatsList = NIL;
 
@@ -521,9 +579,14 @@ ParseCitusDistStat(PGresult *result, int64 rowIndex)
 	 *   - If the initiator_node_identifier belongs to the coordinator and
 	 *     we're executing the function on a worker node, manually mark it
 	 *     as "coordinator_host" given that we cannot know the host and port
+	 *   - If the initiator_node_identifier doesn't equal to zero, we know that
+	 *     it is a worker query initiated outside of a distributed
+	 *     transaction. However, we cannot know which node has initiated
+	 *     the worker query.
 	 */
-	initiator_node_identifier = ParseIntField(result, rowIndex, 0);
-	if (initiator_node_identifier != 0)
+	initiator_node_identifier =
+		PQgetisnull(result, rowIndex, 0) ? -1 : ParseIntField(result, rowIndex, 0);
+	if (initiator_node_identifier > 0)
 	{
 		bool nodeExists = false;
 
@@ -540,13 +603,14 @@ ParseCitusDistStat(PGresult *result, int64 rowIndex)
 		citusDistStat->master_query_host_name = cstring_to_text(coordinator_host_name);
 		citusDistStat->master_query_host_port = PostPortNumber;
 	}
+	else if (initiator_node_identifier == 0)
+	{
+		citusDistStat->master_query_host_name = cstring_to_text(coordinator_host_name);
+		citusDistStat->master_query_host_port = 0;
+	}
 	else
 	{
-		/*
-		 * We could only get here if the function is called from metadata workers and
-		 * the query is initiated from the coordinator.
-		 */
-		citusDistStat->master_query_host_name = cstring_to_text(coordinator_host_name);
+		citusDistStat->master_query_host_name = NULL;
 		citusDistStat->master_query_host_port = 0;
 	}
 
@@ -686,9 +750,13 @@ HeapTupleToCitusDistStat(HeapTuple result, TupleDesc rowDescriptor)
 	 *   - If the initiator_node_identifier belongs to the coordinator and
 	 *     we're executing the function on a worker node, manually mark it
 	 *     as "coordinator_host" given that we cannot know the host and port
+	 *   - If the initiator_node_identifier doesn't equal to zero, we know that
+	 *     it is a worker query initiated outside of a distributed
+	 *     transaction. However, we cannot know which node has initiated
+	 *     the worker query.
 	 */
 	initiator_node_identifier = ParseIntFieldFromHeapTuple(result, rowDescriptor, 1);
-	if (initiator_node_identifier != 0)
+	if (initiator_node_identifier > 0)
 	{
 		bool nodeExists = false;
 
@@ -705,13 +773,14 @@ HeapTupleToCitusDistStat(HeapTuple result, TupleDesc rowDescriptor)
 		citusDistStat->master_query_host_name = cstring_to_text(coordinator_host_name);
 		citusDistStat->master_query_host_port = PostPortNumber;
 	}
+	else if (initiator_node_identifier == 0)
+	{
+		citusDistStat->master_query_host_name = cstring_to_text(coordinator_host_name);
+		citusDistStat->master_query_host_port = 0;
+	}
 	else
 	{
-		/*
-		 * We could only get here if the function is called from metadata workers and
-		 * the query is initiated from the coordinator.
-		 */
-		citusDistStat->master_query_host_name = cstring_to_text(coordinator_host_name);
+		citusDistStat->master_query_host_name = NULL;
 		citusDistStat->master_query_host_port = 0;
 	}
 

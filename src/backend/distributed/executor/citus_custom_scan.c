@@ -12,6 +12,7 @@
 #include "miscadmin.h"
 
 #include "commands/copy.h"
+#include "distributed/backend_data.h"
 #include "distributed/citus_custom_scan.h"
 #include "distributed/insert_select_executor.h"
 #include "distributed/insert_select_planner.h"
@@ -250,12 +251,13 @@ DelayedErrorCreateScan(CustomScan *scan)
 
 
 /*
- * CitusSelectBeginScan is an empty function for BeginCustomScan callback.
+ * CitusSelectBeginScan sets the coordinator backend initiated by Citus for queries using
+ * that function as the BeginCustomScan callback.
  */
 static void
 CitusSelectBeginScan(CustomScanState *node, EState *estate, int eflags)
 {
-	/* just an empty function */
+	MarkCitusInitiatedCoordinatorBackend();
 }
 
 
