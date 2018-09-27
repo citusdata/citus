@@ -32,6 +32,7 @@
 #include "distributed/foreign_key_relationship.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/multi_executor.h"
 #include "distributed/multi_logical_optimizer.h"
 #include "distributed/pg_dist_local_group.h"
 #include "distributed/pg_dist_node_metadata.h"
@@ -233,7 +234,7 @@ PG_FUNCTION_INFO_V1(poolinfo_valid);
 void
 EnsureModificationsCanRun(void)
 {
-	if (RecoveryInProgress())
+	if (RecoveryInProgress() && !WritableStandbyCoordinator)
 	{
 		ereport(ERROR, (errmsg("writing to worker nodes is not currently allowed"),
 						errdetail("the database is in recovery mode")));
