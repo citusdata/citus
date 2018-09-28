@@ -717,6 +717,76 @@ NOTICE:  Copying data from local table...
 (1 row)
 
 ALTER TABLE partitioning_test ADD CONSTRAINT partitioning_reference_fkey FOREIGN KEY (id) REFERENCES partitioning_test_reference(id) ON DELETE CASCADE;
+CREATE TABLE partitioning_test_foreign_key(id int PRIMARY KEY, value int);
+SELECT create_distributed_table('partitioning_test_foreign_key', 'id');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+INSERT INTO partitioning_test_foreign_key SELECT * FROM partitioning_test_reference;
+ALTER TABLE partitioning_hash_test ADD CONSTRAINT partitioning_reference_fk_test FOREIGN KEY (id) REFERENCES partitioning_test_foreign_key(id) ON DELETE CASCADE;
+-- check foreign keys on partitions
+SELECT
+	table_name, constraint_name, constraint_type FROm information_schema.table_constraints
+WHERE
+	table_name LIKE 'partitioning_hash_test%' AND
+	constraint_type = 'FOREIGN KEY'
+ORDER BY
+	1,2;
+        table_name        |        constraint_name         | constraint_type 
+--------------------------+--------------------------------+-----------------
+ partitioning_hash_test   | partitioning_reference_fk_test | FOREIGN KEY
+ partitioning_hash_test_0 | partitioning_reference_fk_test | FOREIGN KEY
+ partitioning_hash_test_1 | partitioning_reference_fk_test | FOREIGN KEY
+ partitioning_hash_test_2 | partitioning_reference_fk_test | FOREIGN KEY
+(4 rows)
+
+-- check foreign keys on partition shards
+-- there is some text ordering issue regarding table name
+-- forcing integer sort by extracting shardid
+CREATE TYPE foreign_key_details AS (table_name text, constraint_name text, constraint_type text);
+SELECT right(table_name, 7)::int as shardid, * FROM (
+	SELECT (json_populate_record(NULL::foreign_key_details,
+	json_array_elements_text(result::json)::json )).*
+	FROM run_command_on_workers($$
+		SELECT
+			COALESCE(json_agg(row_to_json(q)), '[]'::json) 
+		FROM (
+			SELECT 
+				table_name, constraint_name, constraint_type
+			FROM information_schema.table_constraints
+			WHERE
+				table_name LIKE 'partitioning_hash_test%' AND
+				constraint_type = 'FOREIGN KEY'
+			ORDER BY 1, 2, 3
+			) q
+		$$) ) w
+ORDER BY 1, 2, 3, 4;
+ shardid |            table_name            |            constraint_name             | constraint_type 
+---------+----------------------------------+----------------------------------------+-----------------
+ 1660012 | partitioning_hash_test_1660012   | partitioning_reference_fk_test_1660012 | FOREIGN KEY
+ 1660013 | partitioning_hash_test_1660013   | partitioning_reference_fk_test_1660013 | FOREIGN KEY
+ 1660014 | partitioning_hash_test_1660014   | partitioning_reference_fk_test_1660014 | FOREIGN KEY
+ 1660015 | partitioning_hash_test_1660015   | partitioning_reference_fk_test_1660015 | FOREIGN KEY
+ 1660016 | partitioning_hash_test_0_1660016 | partitioning_reference_fk_test_1660012 | FOREIGN KEY
+ 1660017 | partitioning_hash_test_0_1660017 | partitioning_reference_fk_test_1660013 | FOREIGN KEY
+ 1660018 | partitioning_hash_test_0_1660018 | partitioning_reference_fk_test_1660014 | FOREIGN KEY
+ 1660019 | partitioning_hash_test_0_1660019 | partitioning_reference_fk_test_1660015 | FOREIGN KEY
+ 1660020 | partitioning_hash_test_1_1660020 | partitioning_reference_fk_test_1660012 | FOREIGN KEY
+ 1660021 | partitioning_hash_test_1_1660021 | partitioning_reference_fk_test_1660013 | FOREIGN KEY
+ 1660022 | partitioning_hash_test_1_1660022 | partitioning_reference_fk_test_1660014 | FOREIGN KEY
+ 1660023 | partitioning_hash_test_1_1660023 | partitioning_reference_fk_test_1660015 | FOREIGN KEY
+ 1660032 | partitioning_hash_test_2_1660032 | partitioning_reference_fk_test_1660012 | FOREIGN KEY
+ 1660033 | partitioning_hash_test_2_1660033 | partitioning_reference_fk_test_1660013 | FOREIGN KEY
+ 1660034 | partitioning_hash_test_2_1660034 | partitioning_reference_fk_test_1660014 | FOREIGN KEY
+ 1660035 | partitioning_hash_test_2_1660035 | partitioning_reference_fk_test_1660015 | FOREIGN KEY
+(16 rows)
+
+DROP TYPE  foreign_key_details;
+-- set replication factor back to 1 since it gots reset
+-- after connection re-establishment
+SET citus.shard_replication_factor TO 1;
 SELECT * FROM partitioning_test WHERE id = 11 or id = 12;
  id |    time    | new_column 
 ----+------------+------------
@@ -727,11 +797,32 @@ SELECT * FROM partitioning_test WHERE id = 11 or id = 12;
 (4 rows)
 
 DELETE FROM partitioning_test_reference WHERE id = 11 or id = 12;
+SELECT * FROM partitioning_hash_test ORDER BY 1, 2;
+ id | subid 
+----+-------
+  1 |     2
+  2 |    13
+  3 |     7
+  4 |     4
+  8 |     5
+  9 |    12
+(6 rows)
+
+DELETE FROM partitioning_test_foreign_key WHERE id = 2 OR id = 9;
 -- see data is deleted from referencing table
 SELECT * FROM partitioning_test WHERE id = 11 or id = 12;
  id | time | new_column 
 ----+------+------------
 (0 rows)
+
+SELECT * FROM partitioning_hash_test ORDER BY 1, 2;
+ id | subid 
+----+-------
+  1 |     2
+  3 |     7
+  4 |     4
+  8 |     5
+(4 rows)
 
 --
 -- Transaction tests
@@ -887,11 +978,12 @@ DROP TABLE partitioning_test;
 DROP TABLE partitioning_test_reference;
 -- dropping the parent should CASCADE to the children as well
 SELECT table_name FROM information_schema.tables WHERE table_name LIKE 'partitioning_test%' ORDER BY 1;
-        table_name         
----------------------------
+          table_name           
+-------------------------------
  partitioning_test_2009
  partitioning_test_failure
-(2 rows)
+ partitioning_test_foreign_key
+(3 rows)
 
 -- test distributing partitioned table colocated with non-partitioned table
 CREATE TABLE partitioned_users_table (user_id int, time timestamp, value_1 int, value_2 int, value_3 float, value_4 bigint) PARTITION BY RANGE (time);
@@ -1135,7 +1227,7 @@ INSERT INTO multi_column_partitioning VALUES(1, 1);
 INSERT INTO multi_column_partitioning_0_0_10_0 VALUES(5, -5);
 -- test INSERT to multi-column partitioned table where no suitable partition exists
 INSERT INTO multi_column_partitioning VALUES(10, 1);
-ERROR:  no partition of relation "multi_column_partitioning_1660097" found for row
+ERROR:  no partition of relation "multi_column_partitioning_1660101" found for row
 DETAIL:  Partition key of the failing row contains (c1, c2) = (10, 1).
 CONTEXT:  while executing command on localhost:57637
 -- test with MINVALUE/MAXVALUE
@@ -1145,7 +1237,7 @@ INSERT INTO multi_column_partitioning VALUES(11, -11);
 INSERT INTO multi_column_partitioning_10_max_20_min VALUES(19, -19);
 -- test INSERT to multi-column partitioned table where no suitable partition exists
 INSERT INTO multi_column_partitioning VALUES(20, -20);
-ERROR:  no partition of relation "multi_column_partitioning_1660097" found for row
+ERROR:  no partition of relation "multi_column_partitioning_1660101" found for row
 DETAIL:  Partition key of the failing row contains (c1, c2) = (20, -20).
 CONTEXT:  while executing command on localhost:57637
 -- see data is loaded to multi-column partitioned table
@@ -1490,9 +1582,9 @@ SELECT * FROM partitioning_hash_test JOIN partitioning_hash_join_test USING (id,
                ->  Sort  (cost=563.15..580.10 rows=6780 width=8)
                      Sort Key: partitioning_hash_join_test.id, partitioning_hash_join_test.subid
                      ->  Append  (cost=0.00..131.70 rows=6780 width=8)
-                           ->  Seq Scan on partitioning_hash_join_test_0_1660129 partitioning_hash_join_test  (cost=0.00..32.60 rows=2260 width=8)
-                           ->  Seq Scan on partitioning_hash_join_test_1_1660133 partitioning_hash_join_test_1  (cost=0.00..32.60 rows=2260 width=8)
-                           ->  Seq Scan on partitioning_hash_join_test_2_1660137 partitioning_hash_join_test_2  (cost=0.00..32.60 rows=2260 width=8)
+                           ->  Seq Scan on partitioning_hash_join_test_0_1660133 partitioning_hash_join_test  (cost=0.00..32.60 rows=2260 width=8)
+                           ->  Seq Scan on partitioning_hash_join_test_1_1660137 partitioning_hash_join_test_1  (cost=0.00..32.60 rows=2260 width=8)
+                           ->  Seq Scan on partitioning_hash_join_test_2_1660141 partitioning_hash_join_test_2  (cost=0.00..32.60 rows=2260 width=8)
 (18 rows)
 
 -- set partition-wise join on
@@ -1524,7 +1616,7 @@ SELECT * FROM partitioning_hash_test JOIN partitioning_hash_join_test USING (id,
          ->  Append  (cost=1.02..367.91 rows=130 width=8)
                ->  Hash Join  (cost=1.02..50.59 rows=1 width=8)
                      Hash Cond: ((partitioning_hash_join_test.id = partitioning_hash_test.id) AND (partitioning_hash_join_test.subid = partitioning_hash_test.subid))
-                     ->  Seq Scan on partitioning_hash_join_test_0_1660129 partitioning_hash_join_test  (cost=0.00..32.60 rows=2260 width=8)
+                     ->  Seq Scan on partitioning_hash_join_test_0_1660133 partitioning_hash_join_test  (cost=0.00..32.60 rows=2260 width=8)
                      ->  Hash  (cost=1.01..1.01 rows=1 width=8)
                            ->  Seq Scan on partitioning_hash_test_0_1660016 partitioning_hash_test  (cost=0.00..1.01 rows=1 width=8)
                ->  Merge Join  (cost=158.66..266.09 rows=128 width=8)
@@ -1532,10 +1624,10 @@ SELECT * FROM partitioning_hash_test JOIN partitioning_hash_join_test USING (id,
                      ->  Index Only Scan using partitioning_hash_test_1_1660020_pkey on partitioning_hash_test_1_1660020 partitioning_hash_test_1  (cost=0.15..78.06 rows=2260 width=8)
                      ->  Sort  (cost=158.51..164.16 rows=2260 width=8)
                            Sort Key: partitioning_hash_join_test_1.id, partitioning_hash_join_test_1.subid
-                           ->  Seq Scan on partitioning_hash_join_test_1_1660133 partitioning_hash_join_test_1  (cost=0.00..32.60 rows=2260 width=8)
+                           ->  Seq Scan on partitioning_hash_join_test_1_1660137 partitioning_hash_join_test_1  (cost=0.00..32.60 rows=2260 width=8)
                ->  Hash Join  (cost=1.02..50.59 rows=1 width=8)
                      Hash Cond: ((partitioning_hash_join_test_2.id = partitioning_hash_test_2.id) AND (partitioning_hash_join_test_2.subid = partitioning_hash_test_2.subid))
-                     ->  Seq Scan on partitioning_hash_join_test_2_1660137 partitioning_hash_join_test_2  (cost=0.00..32.60 rows=2260 width=8)
+                     ->  Seq Scan on partitioning_hash_join_test_2_1660141 partitioning_hash_join_test_2  (cost=0.00..32.60 rows=2260 width=8)
                      ->  Hash  (cost=1.01..1.01 rows=1 width=8)
                            ->  Seq Scan on partitioning_hash_test_2_1660032 partitioning_hash_test_2  (cost=0.00..1.01 rows=1 width=8)
 (22 rows)
@@ -1562,9 +1654,9 @@ SELECT * FROM partitioning_hash_test JOIN partitioning_hash_join_test USING (id)
                ->  Sort  (cost=563.15..580.10 rows=6780 width=8)
                      Sort Key: partitioning_hash_join_test.id
                      ->  Append  (cost=0.00..131.70 rows=6780 width=8)
-                           ->  Seq Scan on partitioning_hash_join_test_0_1660129 partitioning_hash_join_test  (cost=0.00..32.60 rows=2260 width=8)
-                           ->  Seq Scan on partitioning_hash_join_test_1_1660133 partitioning_hash_join_test_1  (cost=0.00..32.60 rows=2260 width=8)
-                           ->  Seq Scan on partitioning_hash_join_test_2_1660137 partitioning_hash_join_test_2  (cost=0.00..32.60 rows=2260 width=8)
+                           ->  Seq Scan on partitioning_hash_join_test_0_1660133 partitioning_hash_join_test  (cost=0.00..32.60 rows=2260 width=8)
+                           ->  Seq Scan on partitioning_hash_join_test_1_1660137 partitioning_hash_join_test_1  (cost=0.00..32.60 rows=2260 width=8)
+                           ->  Seq Scan on partitioning_hash_join_test_2_1660141 partitioning_hash_join_test_2  (cost=0.00..32.60 rows=2260 width=8)
 (18 rows)
 
 -- reset partition-wise join
@@ -1732,4 +1824,5 @@ DROP TABLE IF EXISTS
 	partitioning_hash_test,
 	partitioning_hash_join_test,
 	partitioning_test_failure,
-	non_distributed_partitioned_table;
+	non_distributed_partitioned_table,
+	partitioning_test_foreign_key;
