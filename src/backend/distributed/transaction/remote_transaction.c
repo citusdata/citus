@@ -528,8 +528,22 @@ FinishRemoteTransactionPrepare(struct MultiConnection *connection)
 		transaction->transactionState = REMOTE_TRANS_PREPARED;
 	}
 
-	result = GetRemoteCommandResult(connection, raiseErrors);
-	Assert(!result);
+	PQclear(result);
+
+	/*
+	 * Try to consume results of PREPARE TRANSACTION command. If we don't
+	 * succeed, rollback the transaction. Note that we've not committed on
+	 * any node yet, and we're not sure about the state of the worker node.
+	 * So rollbacking seems to be the safest action if the worker is
+	 * in a state where it can actually rollback.
+	 */
+	if (!ClearResults(connection, raiseErrors))
+	{
+		ereport(ERROR, (errmsg("failed to prepare transaction '%s' on host %s:%d",
+							   transaction->preparedName, connection->hostname,
+							   connection->port),
+						errhint("Try re-running the command.")));
+	}
 }
 
 
