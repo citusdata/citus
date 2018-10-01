@@ -1,0 +1,43 @@
+-- print whether we're using version > 10 to make version-specific tests clear
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int > 10 AS version_above_ten;
+
+SELECT citus.mitmproxy('conn.allow()');
+
+SET citus.shard_count = 1;
+SET citus.shard_replication_factor = 2; -- one shard per worker
+SET citus.multi_shard_commit_protocol TO '1pc';
+
+CREATE TABLE vacuum_test (key int, value int);
+SELECT create_distributed_table('vacuum_test', 'key');
+
+SELECT citus.clear_network_traffic();
+
+SELECT citus.mitmproxy('conn.onQuery(query="^VACUUM").kill()');
+VACUUM vacuum_test;
+
+SELECT citus.mitmproxy('conn.onQuery(query="^ANALYZE").kill()');
+ANALYZE vacuum_test;
+
+SELECT citus.mitmproxy('conn.onQuery(query="^COMMIT").kill()');
+ANALYZE vacuum_test;
+
+-- ANALYZE transactions being critical is an open question, see #2430
+UPDATE pg_dist_shard_placement SET shardstate = 1
+WHERE shardid IN (
+  SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'vacuum_test'::regclass
+);
+
+SELECT citus.mitmproxy('conn.allow()');
+
+CREATE TABLE other_vacuum_test (key int, value int);
+SELECT create_distributed_table('other_vacuum_test', 'key');
+
+SELECT citus.mitmproxy('conn.onQuery(query="^VACUUM.*other").kill()');
+
+VACUUM vacuum_test, other_vacuum_test;
+
+-- ==== Clean up, we're done here ====
+
+SELECT citus.mitmproxy('conn.allow()');
+DROP TABLE vacuum_test, other_vacuum_test;
