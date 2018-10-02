@@ -281,12 +281,32 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 
 		case XACT_EVENT_PREPARE:
 		{
+			/*
+			 * This callback is only relevant for worker queries since
+			 * distributed queries cannot be executed with 2PC, see
+			 * XACT_EVENT_PRE_PREPARE.
+			 *
+			 * We should remove the intermediate results before unsetting the
+			 * distributed transaction id. That is necessary, otherwise Citus
+			 * would try to remove a non-existing folder and leak some of the
+			 * existing folders that are associated with distributed transaction
+			 * ids on the worker nodes.
+			 */
+			RemoveIntermediateResultsDirectory();
+
 			UnSetDistributedTransactionId();
 			break;
 		}
 
 		case XACT_EVENT_PRE_COMMIT:
 		{
+			/*
+			 * If the distributed query involves 2PC, we already removed
+			 * the intermediate result directory on XACT_EVENT_PREPARE. However,
+			 * if not, we should remove it here on the COMMIT. Since
+			 * RemoveIntermediateResultsDirectory() is idempotent, we're safe
+			 * to call it here again even if the transaction involves 2PC.
+			 */
 			RemoveIntermediateResultsDirectory();
 
 			/* nothing further to do if there's no managed remote xacts */

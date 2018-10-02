@@ -34,6 +34,13 @@ test: multi_create_table_constraints multi_master_protocol multi_load_data multi
 test: multi_behavioral_analytics_basics multi_behavioral_analytics_single_shard_queries multi_insert_select_non_pushable_queries multi_insert_select
 test: multi_insert_select_window multi_shard_update_delete window_functions dml_recursive recursive_dml_with_different_planners_executors
 
+# ---------
+# at the end of the regression tests regaring recursively planned modifications
+# ensure that we don't leak any intermediate results
+# This test should not run in parallel with any other tests
+# ---------
+test: ensure_no_intermediate_data_leak
+
 # ----------
 # Tests for partitioning support
 # ----------
@@ -260,3 +267,4 @@ test: multi_cache_invalidation
 # multi_task_string_size tests task string size checks
 # ---------
 test: multi_task_string_size
+
