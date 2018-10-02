@@ -26,14 +26,33 @@
 
 
 /*
+ * CitusInitiatedBackend keeps some information about the backends that are
+ * initiated by Citus.
+ */
+typedef struct CitusInitiatedBackend
+{
+	int initiatorNodeIdentifier;
+	bool transactionOriginator;
+} CitusInitiatedBackend;
+
+
+/*
  * Each backend's active distributed transaction information is tracked via
  * BackendData in shared memory.
+ *
+ * DistributedTransactionId already has the same fields that CitusInitiatedBackend
+ * has. However, we prefer to keep them seperate since CitusInitiatedBackend is a
+ * broader concept which covers the backends that are not initiated via a distributed
+ * transaction as well. In other words, we could have backends that
+ * CitusInitiatedBackend is set but DistributedTransactionId is not set such as an
+ * "INSERT" query which is not inside a transaction block.
  */
 typedef struct BackendData
 {
 	Oid databaseId;
 	slock_t mutex;
 	bool cancelledDueToDeadlock;
+	CitusInitiatedBackend citusBackend;
 	DistributedTransactionId transactionId;
 } BackendData;
 
@@ -44,6 +63,7 @@ extern void LockBackendSharedMemory(LWLockMode lockMode);
 extern void UnlockBackendSharedMemory(void);
 extern void UnSetDistributedTransactionId(void);
 extern void AssignDistributedTransactionId(void);
+extern void MarkCitusInitiatedCoordinatorBackend(void);
 extern void GetBackendDataForProc(PGPROC *proc, BackendData *result);
 extern void CancelTransactionDueToDeadlock(PGPROC *proc);
 extern bool MyBackendGotCancelledDueToDeadlock(void);

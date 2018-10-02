@@ -26,6 +26,7 @@
 #include "access/tupdesc.h"
 #include "access/xact.h"
 #include "catalog/pg_type.h"
+#include "distributed/backend_data.h"
 #include "distributed/citus_clauses.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/connection_management.h"
@@ -471,6 +472,8 @@ RequiresConsistentSnapshot(Task *task)
  *
  * The function also checks the validity of the given custom scan node and
  * gets locks on the shards involved in the task list of the distributed plan.
+ *
+ * It also sets the backend as initiated by Citus.
  */
 void
 CitusModifyBeginScan(CustomScanState *node, EState *estate, int eflags)
@@ -480,6 +483,8 @@ CitusModifyBeginScan(CustomScanState *node, EState *estate, int eflags)
 	Job *workerJob = NULL;
 	Query *jobQuery = NULL;
 	List *taskList = NIL;
+
+	MarkCitusInitiatedCoordinatorBackend();
 
 	/*
 	 * We must not change the distributed plan since it may be reused across multiple

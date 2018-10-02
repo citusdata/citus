@@ -1,6 +1,6 @@
-Parsed test spec with 4 sessions
+Parsed test spec with 3 sessions
 
-starting permutation: s1-begin s1-assign-transaction-id s4-get-all-transactions s2-begin s2-assign-transaction-id s4-get-all-transactions s3-begin s3-assign-transaction-id s4-get-all-transactions s1-commit s4-get-all-transactions s2-commit s4-get-all-transactions s3-commit s4-get-all-transactions
+starting permutation: s1-begin s1-assign-transaction-id s1-get-all-transactions s2-begin s2-assign-transaction-id s2-get-all-transactions s3-begin s3-assign-transaction-id s3-get-all-transactions s1-commit s2-commit s3-commit
 step s1-begin: 
     BEGIN;
 
@@ -10,8 +10,8 @@ step s1-assign-transaction-id:
 assign_distributed_transaction_id
 
                
-step s4-get-all-transactions: 
-	SELECT initiator_node_identifier, transaction_number, transaction_stamp FROM get_all_active_transactions() ORDER BY 1,2,3;
+step s1-get-all-transactions: 
+	SELECT initiator_node_identifier, transaction_number, transaction_stamp FROM get_current_transaction_id() ORDER BY 1,2,3;
 
 initiator_node_identifiertransaction_numbertransaction_stamp
 
@@ -25,12 +25,11 @@ step s2-assign-transaction-id:
 assign_distributed_transaction_id
 
                
-step s4-get-all-transactions: 
-	SELECT initiator_node_identifier, transaction_number, transaction_stamp FROM get_all_active_transactions() ORDER BY 1,2,3;
+step s2-get-all-transactions: 
+	SELECT initiator_node_identifier, transaction_number, transaction_stamp FROM get_current_transaction_id() ORDER BY 1,2,3;
 
 initiator_node_identifiertransaction_numbertransaction_stamp
 
-1              1              Wed Dec 31 16:00:00 2014 PST
 2              2              Thu Jan 01 16:00:00 2015 PST
 step s3-begin: 
     BEGIN;
@@ -41,40 +40,20 @@ step s3-assign-transaction-id:
 assign_distributed_transaction_id
 
                
-step s4-get-all-transactions: 
-	SELECT initiator_node_identifier, transaction_number, transaction_stamp FROM get_all_active_transactions() ORDER BY 1,2,3;
+step s3-get-all-transactions: 
+	SELECT initiator_node_identifier, transaction_number, transaction_stamp FROM get_current_transaction_id() ORDER BY 1,2,3;
 
 initiator_node_identifiertransaction_numbertransaction_stamp
 
-1              1              Wed Dec 31 16:00:00 2014 PST
-2              2              Thu Jan 01 16:00:00 2015 PST
 3              3              Fri Jan 02 16:00:00 2015 PST
 step s1-commit: 
     COMMIT;
 
-step s4-get-all-transactions: 
-	SELECT initiator_node_identifier, transaction_number, transaction_stamp FROM get_all_active_transactions() ORDER BY 1,2,3;
-
-initiator_node_identifiertransaction_numbertransaction_stamp
-
-2              2              Thu Jan 01 16:00:00 2015 PST
-3              3              Fri Jan 02 16:00:00 2015 PST
 step s2-commit: 
     COMMIT;
 
-step s4-get-all-transactions: 
-	SELECT initiator_node_identifier, transaction_number, transaction_stamp FROM get_all_active_transactions() ORDER BY 1,2,3;
-
-initiator_node_identifiertransaction_numbertransaction_stamp
-
-3              3              Fri Jan 02 16:00:00 2015 PST
 step s3-commit: 
     COMMIT;
-
-step s4-get-all-transactions: 
-	SELECT initiator_node_identifier, transaction_number, transaction_stamp FROM get_all_active_transactions() ORDER BY 1,2,3;
-
-initiator_node_identifiertransaction_numbertransaction_stamp
 
 
 starting permutation: s1-create-table s1-begin s1-insert s1-get-current-transaction-id s2-get-first-worker-active-transactions s1-commit
@@ -102,14 +81,14 @@ row
 step s2-get-first-worker-active-transactions: 
 		SELECT * FROM run_command_on_workers('SELECT row(initiator_node_identifier, transaction_number)
 												FROM	 
-											  get_all_active_transactions();
+											  get_current_transaction_id();
 											') 
 		WHERE nodeport = 57637;
 ;
 
 nodename       nodeport       success        result         
 
-localhost      57637          t              (0,299)        
+localhost      57637          t              (0,0)          
 step s1-commit: 
     COMMIT;
 
