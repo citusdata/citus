@@ -22,3 +22,4 @@ test: failure_cte_subquery
 test: failure_insert_select_via_coordinator
 test: failure_multi_dml
 test: failure_vacuum
+test: failure_single_select
