@@ -40,8 +40,7 @@ FROM
 	  WHERE foo.user_id = cte.user_id;
 
 -- kill at the second copy (pull)
-SELECT citus.mitmproxy('conn.allow()');
-SELECT citus.mitmproxy('conn.onQuery(query="SELECT user_id FROM").kill()');
+SELECT citus.mitmproxy('conn.onQuery(query="SELECT user_id FROM cte_failure.events_table_102250").kill()');
 
 WITH cte AS (
 	WITH local_cte AS (
@@ -68,7 +67,6 @@ FROM
 	  WHERE foo.user_id = cte.user_id;
 	  
 -- kill at the third copy (pull)
-SELECT citus.mitmproxy('conn.allow()');
 SELECT citus.mitmproxy('conn.onQuery(query="SELECT DISTINCT users_table.user").kill()');
 
 WITH cte AS (
@@ -96,7 +94,6 @@ FROM
 	  WHERE foo.user_id = cte.user_id;
 
 -- cancel at the first copy (push)
-SELECT citus.mitmproxy('conn.allow()');
 SELECT citus.mitmproxy('conn.onQuery(query="^COPY").cancel(' || :pid || ')');
 
 WITH cte AS (
@@ -124,7 +121,6 @@ FROM
 	  WHERE foo.user_id = cte.user_id;
 
 -- cancel at the second copy (pull)
-SELECT citus.mitmproxy('conn.allow()');
 SELECT citus.mitmproxy('conn.onQuery(query="SELECT user_id FROM").cancel(' || :pid || ')');
 
 WITH cte AS (
@@ -152,7 +148,6 @@ FROM
 	  WHERE foo.user_id = cte.user_id;
 
 -- cancel at the third copy (pull)
-SELECT citus.mitmproxy('conn.allow()');
 SELECT citus.mitmproxy('conn.onQuery(query="SELECT DISTINCT users_table.user").cancel(' || :pid || ')');
 
 WITH cte AS (
@@ -191,7 +186,6 @@ SELECT * FROM users_table ORDER BY 1, 2;
 WITH cte_delete as (DELETE FROM users_table WHERE user_name in ('A', 'D') RETURNING *)
 INSERT INTO users_table SELECT * FROM cte_delete;
 -- verify contents are the same
-SELECT citus.mitmproxy('conn.allow()');
 SELECT * FROM users_table ORDER BY 1, 2;
 
 -- kill connection during deletion
@@ -230,7 +224,14 @@ INSERT INTO users_table SELECT * FROM cte_delete;
 SELECT citus.mitmproxy('conn.allow()');
 SELECT * FROM users_table ORDER BY 1, 2;
 
+-- test sequential delete/insert
+SELECT citus.mitmproxy('conn.onQuery(query="^DELETE FROM").kill()');
+BEGIN;
+SET LOCAL citus.multi_shard_modify_mode = 'sequential';
+WITH cte_delete as (DELETE FROM users_table WHERE user_name in ('A', 'D') RETURNING *)
+INSERT INTO users_table SELECT * FROM cte_delete;
+END;
+
 RESET SEARCH_PATH;
+SELECT citus.mitmproxy('conn.allow()');
 DROP SCHEMA cte_failure CASCADE;
-
-

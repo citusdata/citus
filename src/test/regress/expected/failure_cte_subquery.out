@@ -51,15 +51,9 @@ FROM
 ERROR:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
-CONTEXT:  while executing command on localhost:57640
+CONTEXT:  while executing command on localhost:9060
 -- kill at the second copy (pull)
-SELECT citus.mitmproxy('conn.allow()');
- mitmproxy 
------------
- 
-(1 row)
-
-SELECT citus.mitmproxy('conn.onQuery(query="SELECT user_id FROM").kill()');
+SELECT citus.mitmproxy('conn.onQuery(query="SELECT user_id FROM cte_failure.events_table_102250").kill()');
  mitmproxy 
 -----------
  
@@ -91,15 +85,9 @@ FROM
 WARNING:  could not consume data from worker node
 WARNING:  could not consume data from worker node
 WARNING:  could not consume data from worker node
-ERROR:  failed to execute task 2
+ERROR:  failed to execute task 1
 	  
 -- kill at the third copy (pull)
-SELECT citus.mitmproxy('conn.allow()');
- mitmproxy 
------------
- 
-(1 row)
-
 SELECT citus.mitmproxy('conn.onQuery(query="SELECT DISTINCT users_table.user").kill()');
  mitmproxy 
 -----------
@@ -131,14 +119,8 @@ FROM
 	  WHERE foo.user_id = cte.user_id;
 WARNING:  could not consume data from worker node
 WARNING:  could not consume data from worker node
-ERROR:  failed to execute task 2
+ERROR:  failed to execute task 1
 -- cancel at the first copy (push)
-SELECT citus.mitmproxy('conn.allow()');
- mitmproxy 
------------
- 
-(1 row)
-
 SELECT citus.mitmproxy('conn.onQuery(query="^COPY").cancel(' || :pid || ')');
  mitmproxy 
 -----------
@@ -170,12 +152,6 @@ FROM
 	  WHERE foo.user_id = cte.user_id;
 ERROR:  canceling statement due to user request
 -- cancel at the second copy (pull)
-SELECT citus.mitmproxy('conn.allow()');
- mitmproxy 
------------
- 
-(1 row)
-
 SELECT citus.mitmproxy('conn.onQuery(query="SELECT user_id FROM").cancel(' || :pid || ')');
  mitmproxy 
 -----------
@@ -207,12 +183,6 @@ FROM
 	  WHERE foo.user_id = cte.user_id;
 ERROR:  canceling statement due to user request
 -- cancel at the third copy (pull)
-SELECT citus.mitmproxy('conn.allow()');
- mitmproxy 
------------
- 
-(1 row)
-
 SELECT citus.mitmproxy('conn.onQuery(query="SELECT DISTINCT users_table.user").cancel(' || :pid || ')');
  mitmproxy 
 -----------
@@ -267,12 +237,6 @@ SELECT * FROM users_table ORDER BY 1, 2;
 WITH cte_delete as (DELETE FROM users_table WHERE user_name in ('A', 'D') RETURNING *)
 INSERT INTO users_table SELECT * FROM cte_delete;
 -- verify contents are the same
-SELECT citus.mitmproxy('conn.allow()');
- mitmproxy 
------------
- 
-(1 row)
-
 SELECT * FROM users_table ORDER BY 1, 2;
  user_id | user_name 
 ---------+-----------
@@ -295,7 +259,7 @@ INSERT INTO users_table SELECT * FROM cte_delete;
 ERROR:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
-CONTEXT:  while executing command on localhost:57640
+CONTEXT:  while executing command on localhost:9060
 -- verify contents are the same
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
@@ -325,7 +289,7 @@ INSERT INTO users_table SELECT * FROM cte_delete;
 ERROR:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
-CONTEXT:  while executing command on localhost:57640
+CONTEXT:  while executing command on localhost:9060
 -- verify contents are the same
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
@@ -397,7 +361,29 @@ SELECT * FROM users_table ORDER BY 1, 2;
        5 | E
 (5 rows)
 
+-- test sequential delete/insert
+SELECT citus.mitmproxy('conn.onQuery(query="^DELETE FROM").kill()');
+ mitmproxy 
+-----------
+ 
+(1 row)
+
+BEGIN;
+SET LOCAL citus.multi_shard_modify_mode = 'sequential';
+WITH cte_delete as (DELETE FROM users_table WHERE user_name in ('A', 'D') RETURNING *)
+INSERT INTO users_table SELECT * FROM cte_delete;
+ERROR:  server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+CONTEXT:  while executing command on localhost:9060
+END;
 RESET SEARCH_PATH;
+SELECT citus.mitmproxy('conn.allow()');
+ mitmproxy 
+-----------
+ 
+(1 row)
+
 DROP SCHEMA cte_failure CASCADE;
 NOTICE:  drop cascades to 3 other objects
 DETAIL:  drop cascades to table cte_failure.users_table
