@@ -90,6 +90,12 @@ SELECT * FROM the_table ORDER BY a;
 -- we should still disallow writes to local tables
 INSERT INTO local VALUES (1, 1);
 ERROR:  cannot execute INSERT in a read-only transaction
+INSERT INTO local SELECT a, b FROM the_table;
+ERROR:  cannot INSERT rows from a distributed query into a local table
+HINT:  Consider using CREATE TEMPORARY TABLE tmp AS SELECT ... and inserting from the temporary table.
+-- we shouldn't be able to create local tables
+CREATE TEMP TABLE local_copy_of_the_table AS SELECT * FROM the_table;
+ERROR:  cannot execute CREATE TABLE AS in a read-only transaction
 \c "port=9070 dbname=regression options='-c\ citus.use_secondary_nodes=always\ -c\ citus.cluster_name=second-cluster'"
 -- separate follower formations currently cannot do writes
 SET citus.writable_standby_coordinator TO on;

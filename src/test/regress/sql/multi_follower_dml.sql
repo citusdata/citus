@@ -64,6 +64,10 @@ SELECT * FROM the_table ORDER BY a;
 
 -- we should still disallow writes to local tables
 INSERT INTO local VALUES (1, 1);
+INSERT INTO local SELECT a, b FROM the_table;
+
+-- we shouldn't be able to create local tables
+CREATE TEMP TABLE local_copy_of_the_table AS SELECT * FROM the_table;
 
 \c "port=9070 dbname=regression options='-c\ citus.use_secondary_nodes=always\ -c\ citus.cluster_name=second-cluster'"
 
