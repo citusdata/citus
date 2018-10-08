@@ -583,7 +583,7 @@ DistributionDeleteCommand(char *schemaName, char *tableName)
 	distributedRelationName = quote_qualified_identifier(schemaName, tableName);
 
 	appendStringInfo(deleteDistributionCommand,
-					 "SELECT worker_drop_distributed_table(%s::regclass)",
+					 "SELECT worker_drop_distributed_table(%s)",
 					 quote_literal_cstr(distributedRelationName));
 
 	return deleteDistributionCommand->data;

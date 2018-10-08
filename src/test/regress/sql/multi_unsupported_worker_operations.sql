@@ -156,7 +156,7 @@ SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_2_port;
 SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
 SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_2_port;
 \c - - - :worker_2_port
-SELECT worker_drop_distributed_table(logicalrelid) FROM pg_dist_partition;
+SELECT worker_drop_distributed_table(logicalrelid::regclass::text) FROM pg_dist_partition;
 DELETE FROM pg_dist_node;
 \c - - - :worker_1_port
 
@@ -215,7 +215,7 @@ DROP TABLE mx_table_2;
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
 \c - - - :worker_1_port
 DELETE FROM pg_dist_node;
-SELECT worker_drop_distributed_table(logicalrelid) FROM pg_dist_partition;
+SELECT worker_drop_distributed_table(logicalrelid::regclass::text) FROM pg_dist_partition;
 \c - - - :master_port
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART :last_colocation_id;
 
