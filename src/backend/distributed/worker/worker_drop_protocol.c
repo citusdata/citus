@@ -21,8 +21,10 @@
 #include "distributed/citus_ruleutils.h"
 #include "distributed/distribution_column.h"
 #include "distributed/master_metadata_utility.h"
+#include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "foreign/foreign.h"
+#include "utils/builtins.h"
 #include "utils/fmgroids.h"
 
 
@@ -45,8 +47,8 @@ PG_FUNCTION_INFO_V1(worker_drop_distributed_table);
 Datum
 worker_drop_distributed_table(PG_FUNCTION_ARGS)
 {
-	Datum relationIdDatum = PG_GETARG_OID(0);
-	Oid relationId = DatumGetObjectId(relationIdDatum);
+	text *relationName = PG_GETARG_TEXT_P(0);
+	Oid relationId = ResolveRelationId(relationName, true);
 
 	ObjectAddress distributedTableObject = { InvalidOid, InvalidOid, 0 };
 	Relation distributedRelation = NULL;
@@ -56,6 +58,13 @@ worker_drop_distributed_table(PG_FUNCTION_ARGS)
 
 	CheckCitusVersion(ERROR);
 	EnsureSuperUser();
+
+	if (!OidIsValid(relationId))
+	{
+		ereport(NOTICE, (errmsg("relation %s does not exist, skipping",
+								text_to_cstring(relationName))));
+		PG_RETURN_VOID();
+	}
 
 	shardList = LoadShardList(relationId);
 

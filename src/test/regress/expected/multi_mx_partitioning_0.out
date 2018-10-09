@@ -237,3 +237,34 @@ ERROR:  table "partitioning_test_2010" does not exist
 DROP TABLE partitioning_test;
 ERROR:  table "partitioning_test" does not exist
 DROP TABLE IF EXISTS partitioning_test_2013;
+-- test schema drop with partitioned tables
+SET citus.replication_model TO 'streaming';
+SET citus.shard_replication_factor TO 1;
+CREATE SCHEMA partition_test;
+SET SEARCH_PATH TO partition_test;
+CREATE TABLE partition_parent_table(a int, b int, c int) PARTITION BY RANGE (b);
+ERROR:  syntax error at or near "PARTITION"
+LINE 1: ...TABLE partition_parent_table(a int, b int, c int) PARTITION ...
+                                                             ^
+SELECT create_distributed_table('partition_parent_table', 'a');
+ERROR:  relation "partition_parent_table" does not exist
+LINE 1: SELECT create_distributed_table('partition_parent_table', 'a...
+                                        ^
+CREATE TABLE partition_0 PARTITION OF partition_parent_table FOR VALUES FROM (1) TO (10);
+ERROR:  syntax error at or near "PARTITION"
+LINE 1: CREATE TABLE partition_0 PARTITION OF partition_parent_table...
+                                 ^
+CREATE TABLE partition_1 PARTITION OF partition_parent_table FOR VALUES FROM (10) TO (20);
+ERROR:  syntax error at or near "PARTITION"
+LINE 1: CREATE TABLE partition_1 PARTITION OF partition_parent_table...
+                                 ^
+CREATE TABLE partition_2 PARTITION OF partition_parent_table FOR VALUES FROM (20) TO (30);
+ERROR:  syntax error at or near "PARTITION"
+LINE 1: CREATE TABLE partition_2 PARTITION OF partition_parent_table...
+                                 ^
+CREATE TABLE partition_3 PARTITION OF partition_parent_table FOR VALUES FROM (30) TO (40);
+ERROR:  syntax error at or near "PARTITION"
+LINE 1: CREATE TABLE partition_3 PARTITION OF partition_parent_table...
+                                 ^
+DROP SCHEMA partition_test CASCADE;
+RESET SEARCH_PATH;

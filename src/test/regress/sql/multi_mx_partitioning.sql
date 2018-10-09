@@ -173,3 +173,20 @@ DROP TABLE partitioning_test_2010;
 -- make sure we can drop partitioned table
 DROP TABLE partitioning_test;
 DROP TABLE IF EXISTS partitioning_test_2013;
+
+-- test schema drop with partitioned tables
+SET citus.replication_model TO 'streaming';
+SET citus.shard_replication_factor TO 1;
+CREATE SCHEMA partition_test;
+SET SEARCH_PATH TO partition_test;
+
+CREATE TABLE partition_parent_table(a int, b int, c int) PARTITION BY RANGE (b);
+SELECT create_distributed_table('partition_parent_table', 'a');
+CREATE TABLE partition_0 PARTITION OF partition_parent_table FOR VALUES FROM (1) TO (10);
+CREATE TABLE partition_1 PARTITION OF partition_parent_table FOR VALUES FROM (10) TO (20);
+CREATE TABLE partition_2 PARTITION OF partition_parent_table FOR VALUES FROM (20) TO (30);
+CREATE TABLE partition_3 PARTITION OF partition_parent_table FOR VALUES FROM (30) TO (40);
+
+DROP SCHEMA partition_test CASCADE;
+RESET SEARCH_PATH;
+
