@@ -1092,7 +1092,7 @@ InsertPartitionColumnMatchesSelect(Query *query, RangeTblEntry *insertRte,
 		{
 			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 								 "cannot perform distributed INSERT INTO ... SELECT "
-								 "becuase the partition columns in the source table "
+								 "because the partition columns in the source table "
 								 "and subquery do not match",
 								 "The target table's partition column should correspond "
 								 "to a partition column in the subquery.",

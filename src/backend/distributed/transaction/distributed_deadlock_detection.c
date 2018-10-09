@@ -611,7 +611,7 @@ LogCancellingBackend(TransactionNode *transactionNode)
 
 	appendStringInfo(logMessage, "Cancelling the following backend "
 								 "to resolve distributed deadlock "
-								 "(transaction numner = " UINT64_FORMAT ", pid = %d)",
+								 "(transaction number = " UINT64_FORMAT ", pid = %d)",
 					 transactionNode->transactionId.transactionNumber,
 					 transactionNode->initiatorProc->pid);
 
