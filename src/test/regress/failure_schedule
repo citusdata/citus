@@ -24,3 +24,4 @@ test: failure_multi_dml
 test: failure_vacuum
 test: failure_single_select
 test: failure_ref_tables
+test: failure_real_time_select
