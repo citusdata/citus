@@ -1114,7 +1114,7 @@ INSERT INTO raw_events_second
             (user_id)
 SELECT value_1
 FROM   raw_events_first;
-DEBUG:  cannot perform distributed INSERT INTO ... SELECT becuase the partition columns in the source table and subquery do not match
+DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
 DETAIL:  The target table's partition column should correspond to a partition column in the subquery.
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 ERROR:  the partition column of table public.raw_events_second cannot be NULL
@@ -1166,7 +1166,7 @@ SELECT SUM(value_3),
 FROM   raw_events_first
 GROUP  BY user_id,
           value_2;
-DEBUG:  cannot perform distributed INSERT INTO ... SELECT becuase the partition columns in the source table and subquery do not match
+DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
 DETAIL:  The target table's partition column should correspond to a partition column in the subquery.
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 ERROR:  the partition column of table public.agg_events cannot be NULL
@@ -1176,7 +1176,7 @@ SELECT
   user_id
 FROM
   reference_table;
-DEBUG:  cannot perform distributed INSERT INTO ... SELECT becuase the partition columns in the source table and subquery do not match
+DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
 DETAIL:  The target table's partition column should correspond to a partition column in the subquery.
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 DEBUG:  Creating router plan

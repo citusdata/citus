@@ -1173,7 +1173,7 @@ FROM
 	colocated_table_test_2, reference_table_test
 WHERE
 	colocated_table_test_2.value_4 = reference_table_test.value_4;
-DEBUG:  cannot perform distributed INSERT INTO ... SELECT becuase the partition columns in the source table and subquery do not match
+DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
 DETAIL:  The target table's partition column should correspond to a partition column in the subquery.
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 RESET client_min_messages;
