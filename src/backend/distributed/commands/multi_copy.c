@@ -55,13 +55,17 @@
 #include "access/htup_details.h"
 #include "access/htup.h"
 #include "access/sdir.h"
+#include "access/sysattr.h"
+#include "access/xact.h"
 #include "catalog/namespace.h"
 #include "catalog/pg_type.h"
 #include "commands/copy.h"
 #include "commands/defrem.h"
+#include "distributed/commands/multi_copy.h"
+#include "distributed/commands/utility_hook.h"
+#include "distributed/intermediate_results.h"
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
-#include "distributed/multi_copy.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_router_planner.h"
@@ -73,7 +77,9 @@
 #include "distributed/resource_lock.h"
 #include "distributed/shard_pruning.h"
 #include "distributed/version_compat.h"
+#include "distributed/worker_protocol.h"
 #include "executor/executor.h"
+#include "foreign/foreign.h"
 #include "libpq/pqformat.h"
 #include "nodes/makefuncs.h"
 #include "tsearch/ts_locale.h"
@@ -133,6 +139,13 @@ static CopyCoercionData * ColumnCoercionPaths(TupleDesc destTupleDescriptor,
 static FmgrInfo * TypeOutputFunctions(uint32 columnCount, Oid *typeIdArray,
 									  bool binaryFormat);
 static Datum CoerceColumnValue(Datum inputValue, CopyCoercionData *coercionPath);
+static void CreateLocalTable(RangeVar *relation, char *nodeName, int32 nodePort);
+static void CheckCopyPermissions(CopyStmt *copyStatement);
+static List * CopyGetAttnums(TupleDesc tupDesc, Relation rel, List *attnamelist);
+static bool IsCopyResultStmt(CopyStmt *copyStatement);
+static bool IsCopyFromWorker(CopyStmt *copyStatement);
+static NodeAddress * MasterNodeAddress(CopyStmt *copyStatement);
+static void CitusCopyFrom(CopyStmt *copyStatement, char *completionTag);
 
 /* Private functions copied and adapted from copy.c in PostgreSQL */
 static void CopySendData(CopyOutState outputState, const void *databuf, int datasize);
@@ -161,7 +174,7 @@ PG_FUNCTION_INFO_V1(citus_text_send_as_jsonb);
  * statement to related subfunctions based on where the copy command is run
  * and the partition method of the distributed table.
  */
-void
+static void
 CitusCopyFrom(CopyStmt *copyStatement, char *completionTag)
 {
 	bool isCopyFromWorker = false;
@@ -200,7 +213,7 @@ CitusCopyFrom(CopyStmt *copyStatement, char *completionTag)
 		Oid relationId = RangeVarGetRelid(copyStatement->relation, NoLock, false);
 		char partitionMethod = PartitionMethod(relationId);
 
-		/* disallow modifications to a partition table which have rep. factpr > 1 */
+		/* disallow modifications to a partition table which have rep. factor > 1 */
 		EnsurePartitionTableNotReplicated(relationId);
 
 		if (partitionMethod == DISTRIBUTE_BY_HASH || partitionMethod ==
@@ -226,7 +239,7 @@ CitusCopyFrom(CopyStmt *copyStatement, char *completionTag)
 /*
  * IsCopyFromWorker checks if the given copy statement has the master host option.
  */
-bool
+static bool
 IsCopyFromWorker(CopyStmt *copyStatement)
 {
 	ListCell *optionCell = NULL;
@@ -680,7 +693,7 @@ CopyToNewShards(CopyStmt *copyStatement, char *completionTag, Oid relationId)
  * it. Note that if the master_port is not provided, we use 5432 as the default
  * port.
  */
-NodeAddress *
+static NodeAddress *
 MasterNodeAddress(CopyStmt *copyStatement)
 {
 	NodeAddress *masterNodeAddress = (NodeAddress *) palloc0(sizeof(NodeAddress));
@@ -2422,4 +2435,415 @@ CitusCopyDestReceiverDestroy(DestReceiver *destReceiver)
 	}
 
 	pfree(copyDest);
+}
+
+
+/*
+ * IsCopyResultStmt determines whether the given copy statement is a
+ * COPY "resultkey" FROM STDIN WITH (format result) statement, which is used
+ * to copy query results from the coordinator into workers.
+ */
+static bool
+IsCopyResultStmt(CopyStmt *copyStatement)
+{
+	ListCell *optionCell = NULL;
+	bool hasFormatReceive = false;
+
+	/* extract WITH (...) options from the COPY statement */
+	foreach(optionCell, copyStatement->options)
+	{
+		DefElem *defel = (DefElem *) lfirst(optionCell);
+
+		if (strncmp(defel->defname, "format", NAMEDATALEN) == 0 &&
+			strncmp(defGetString(defel), "result", NAMEDATALEN) == 0)
+		{
+			hasFormatReceive = true;
+			break;
+		}
+	}
+
+	return hasFormatReceive;
+}
+
+
+/*
+ * ProcessCopyStmt handles Citus specific concerns for COPY like supporting
+ * COPYing from distributed tables and preventing unsupported actions. The
+ * function returns a modified COPY statement to be executed, or NULL if no
+ * further processing is needed.
+ *
+ * commandMustRunAsOwner is an output parameter used to communicate to the caller whether
+ * the copy statement should be executed using elevated privileges. If
+ * ProcessCopyStmt that is required, a call to CheckCopyPermissions will take
+ * care of verifying the current user's permissions before ProcessCopyStmt
+ * returns.
+ */
+Node *
+ProcessCopyStmt(CopyStmt *copyStatement, char *completionTag, bool *commandMustRunAsOwner)
+{
+	*commandMustRunAsOwner = false; /* make sure variable is initialized */
+
+	/*
+	 * Handle special COPY "resultid" FROM STDIN WITH (format result) commands
+	 * for sending intermediate results to workers.
+	 */
+	if (IsCopyResultStmt(copyStatement))
+	{
+		const char *resultId = copyStatement->relation->relname;
+
+		ReceiveQueryResultViaCopy(resultId);
+
+		return NULL;
+	}
+
+	/*
+	 * We check whether a distributed relation is affected. For that, we need to open the
+	 * relation. To prevent race conditions with later lookups, lock the table, and modify
+	 * the rangevar to include the schema.
+	 */
+	if (copyStatement->relation != NULL)
+	{
+		bool isDistributedRelation = false;
+		bool isCopyFromWorker = IsCopyFromWorker(copyStatement);
+
+		if (isCopyFromWorker)
+		{
+			RangeVar *relation = copyStatement->relation;
+			NodeAddress *masterNodeAddress = MasterNodeAddress(copyStatement);
+			char *nodeName = masterNodeAddress->nodeName;
+			int32 nodePort = masterNodeAddress->nodePort;
+
+			CreateLocalTable(relation, nodeName, nodePort);
+
+			/*
+			 * We expect copy from worker to be on a distributed table; otherwise,
+			 * it fails in CitusCopyFrom() while checking the partition method.
+			 */
+			isDistributedRelation = true;
+		}
+		else
+		{
+			bool isFrom = copyStatement->is_from;
+			Relation copiedRelation = NULL;
+			char *schemaName = NULL;
+			MemoryContext relationContext = NULL;
+
+			/* consider using RangeVarGetRelidExtended to check perms before locking */
+			copiedRelation = heap_openrv(copyStatement->relation,
+										 isFrom ? RowExclusiveLock : AccessShareLock);
+
+			isDistributedRelation = IsDistributedTable(RelationGetRelid(copiedRelation));
+
+			/* ensure future lookups hit the same relation */
+			schemaName = get_namespace_name(RelationGetNamespace(copiedRelation));
+
+			/* ensure we copy string into proper context */
+			relationContext = GetMemoryChunkContext(copyStatement->relation);
+			schemaName = MemoryContextStrdup(relationContext, schemaName);
+			copyStatement->relation->schemaname = schemaName;
+
+			heap_close(copiedRelation, NoLock);
+		}
+
+		if (isDistributedRelation)
+		{
+			if (copyStatement->is_from)
+			{
+				/* check permissions, we're bypassing postgres' normal checks */
+				if (!isCopyFromWorker)
+				{
+					CheckCopyPermissions(copyStatement);
+				}
+
+				CitusCopyFrom(copyStatement, completionTag);
+				return NULL;
+			}
+			else if (!copyStatement->is_from)
+			{
+				/*
+				 * The copy code only handles SELECTs in COPY ... TO on master tables,
+				 * as that can be done non-invasively. To handle COPY master_rel TO
+				 * the copy statement is replaced by a generated select statement.
+				 */
+				ColumnRef *allColumns = makeNode(ColumnRef);
+				SelectStmt *selectStmt = makeNode(SelectStmt);
+				ResTarget *selectTarget = makeNode(ResTarget);
+
+				allColumns->fields = list_make1(makeNode(A_Star));
+				allColumns->location = -1;
+
+				selectTarget->name = NULL;
+				selectTarget->indirection = NIL;
+				selectTarget->val = (Node *) allColumns;
+				selectTarget->location = -1;
+
+				selectStmt->targetList = list_make1(selectTarget);
+				selectStmt->fromClause = list_make1(copyObject(copyStatement->relation));
+
+				/* replace original statement */
+				copyStatement = copyObject(copyStatement);
+				copyStatement->relation = NULL;
+				copyStatement->query = (Node *) selectStmt;
+			}
+		}
+	}
+
+
+	if (copyStatement->filename != NULL && !copyStatement->is_program)
+	{
+		const char *filename = copyStatement->filename;
+
+		if (CacheDirectoryElement(filename))
+		{
+			/*
+			 * Only superusers are allowed to copy from a file, so we have to
+			 * become superuser to execute copies to/from files used by citus'
+			 * query execution.
+			 *
+			 * XXX: This is a decidedly suboptimal solution, as that means
+			 * that triggers, input functions, etc. run with elevated
+			 * privileges.  But this is better than not being able to run
+			 * queries as normal user.
+			 */
+			*commandMustRunAsOwner = true;
+
+			/*
+			 * Have to manually check permissions here as the COPY is will be
+			 * run as a superuser.
+			 */
+			if (copyStatement->relation != NULL)
+			{
+				CheckCopyPermissions(copyStatement);
+			}
+
+			/*
+			 * Check if we have a "COPY (query) TO filename". If we do, copy
+			 * doesn't accept relative file paths. However, SQL tasks that get
+			 * assigned to worker nodes have relative paths. We therefore
+			 * convert relative paths to absolute ones here.
+			 */
+			if (copyStatement->relation == NULL &&
+				!copyStatement->is_from &&
+				!is_absolute_path(filename))
+			{
+				copyStatement->filename = make_absolute_path(filename);
+			}
+		}
+	}
+
+
+	return (Node *) copyStatement;
+}
+
+
+/*
+ * CreateLocalTable gets DDL commands from the remote node for the given
+ * relation. Then, it creates the local relation as temporary and on commit drop.
+ */
+static void
+CreateLocalTable(RangeVar *relation, char *nodeName, int32 nodePort)
+{
+	List *ddlCommandList = NIL;
+	ListCell *ddlCommandCell = NULL;
+
+	char *relationName = relation->relname;
+	char *schemaName = relation->schemaname;
+	char *qualifiedRelationName = quote_qualified_identifier(schemaName, relationName);
+
+	/*
+	 * The warning message created in TableDDLCommandList() is descriptive
+	 * enough; therefore, we just throw an error which says that we could not
+	 * run the copy operation.
+	 */
+	ddlCommandList = TableDDLCommandList(nodeName, nodePort, qualifiedRelationName);
+	if (ddlCommandList == NIL)
+	{
+		ereport(ERROR, (errmsg("could not run copy from the worker node")));
+	}
+
+	/* apply DDL commands against the local database */
+	foreach(ddlCommandCell, ddlCommandList)
+	{
+		StringInfo ddlCommand = (StringInfo) lfirst(ddlCommandCell);
+		Node *ddlCommandNode = ParseTreeNode(ddlCommand->data);
+		bool applyDDLCommand = false;
+
+		if (IsA(ddlCommandNode, CreateStmt) ||
+			IsA(ddlCommandNode, CreateForeignTableStmt))
+		{
+			CreateStmt *createStatement = (CreateStmt *) ddlCommandNode;
+
+			/* create the local relation as temporary and on commit drop */
+			createStatement->relation->relpersistence = RELPERSISTENCE_TEMP;
+			createStatement->oncommit = ONCOMMIT_DROP;
+
+			/* temporarily strip schema name */
+			createStatement->relation->schemaname = NULL;
+
+			applyDDLCommand = true;
+		}
+		else if (IsA(ddlCommandNode, CreateForeignServerStmt))
+		{
+			CreateForeignServerStmt *createServerStmt =
+				(CreateForeignServerStmt *) ddlCommandNode;
+			if (GetForeignServerByName(createServerStmt->servername, true) == NULL)
+			{
+				/* create server if not exists */
+				applyDDLCommand = true;
+			}
+		}
+		else if ((IsA(ddlCommandNode, CreateExtensionStmt)))
+		{
+			applyDDLCommand = true;
+		}
+		else if ((IsA(ddlCommandNode, CreateSeqStmt)))
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("cannot copy to table with serial column from worker"),
+							errhint("Connect to the master node to COPY to tables which "
+									"use serial column types.")));
+		}
+
+		/* run only a selected set of DDL commands */
+		if (applyDDLCommand)
+		{
+			CitusProcessUtility(ddlCommandNode, CreateCommandTag(ddlCommandNode),
+								PROCESS_UTILITY_TOPLEVEL, NULL, None_Receiver, NULL);
+
+			CommandCounterIncrement();
+		}
+	}
+}
+
+
+/*
+ * Check whether the current user has the permission to execute a COPY
+ * statement, raise ERROR if not. In some cases we have to do this separately
+ * from postgres' copy.c, because we have to execute the copy with elevated
+ * privileges.
+ *
+ * Copied from postgres, where it's part of DoCopy().
+ */
+static void
+CheckCopyPermissions(CopyStmt *copyStatement)
+{
+	/* *INDENT-OFF* */
+	bool		is_from = copyStatement->is_from;
+	Relation	rel;
+	Oid			relid;
+	List	   *range_table = NIL;
+	TupleDesc	tupDesc;
+	AclMode		required_access = (is_from ? ACL_INSERT : ACL_SELECT);
+	List	   *attnums;
+	ListCell   *cur;
+	RangeTblEntry *rte;
+
+	rel = heap_openrv(copyStatement->relation,
+	                  is_from ? RowExclusiveLock : AccessShareLock);
+
+	relid = RelationGetRelid(rel);
+
+	rte = makeNode(RangeTblEntry);
+	rte->rtekind = RTE_RELATION;
+	rte->relid = relid;
+	rte->relkind = rel->rd_rel->relkind;
+	rte->requiredPerms = required_access;
+	range_table = list_make1(rte);
+
+	tupDesc = RelationGetDescr(rel);
+
+	attnums = CopyGetAttnums(tupDesc, rel, copyStatement->attlist);
+	foreach(cur, attnums)
+	{
+		int			attno = lfirst_int(cur) - FirstLowInvalidHeapAttributeNumber;
+
+		if (is_from)
+		{
+			rte->insertedCols = bms_add_member(rte->insertedCols, attno);
+		}
+		else
+		{
+			rte->selectedCols = bms_add_member(rte->selectedCols, attno);
+		}
+	}
+
+	ExecCheckRTPerms(range_table, true);
+
+	/* TODO: Perform RLS checks once supported */
+
+	heap_close(rel, NoLock);
+	/* *INDENT-ON* */
+}
+
+
+/* Helper for CheckCopyPermissions(), copied from postgres */
+static List *
+CopyGetAttnums(TupleDesc tupDesc, Relation rel, List *attnamelist)
+{
+	/* *INDENT-OFF* */
+	List	   *attnums = NIL;
+
+	if (attnamelist == NIL)
+	{
+		/* Generate default column list */
+		int			attr_count = tupDesc->natts;
+		int			i;
+
+		for (i = 0; i < attr_count; i++)
+		{
+			if (TupleDescAttr(tupDesc, i)->attisdropped)
+				continue;
+			attnums = lappend_int(attnums, i + 1);
+		}
+	}
+	else
+	{
+		/* Validate the user-supplied list and extract attnums */
+		ListCell   *l;
+
+		foreach(l, attnamelist)
+		{
+			char	   *name = strVal(lfirst(l));
+			int			attnum;
+			int			i;
+
+			/* Lookup column name */
+			attnum = InvalidAttrNumber;
+			for (i = 0; i < tupDesc->natts; i++)
+			{
+				Form_pg_attribute att = TupleDescAttr(tupDesc, i);
+
+				if (att->attisdropped)
+					continue;
+				if (namestrcmp(&(att->attname), name) == 0)
+				{
+					attnum = att->attnum;
+					break;
+				}
+			}
+			if (attnum == InvalidAttrNumber)
+			{
+				if (rel != NULL)
+					ereport(ERROR,
+					        (errcode(ERRCODE_UNDEFINED_COLUMN),
+							        errmsg("column \"%s\" of relation \"%s\" does not exist",
+							               name, RelationGetRelationName(rel))));
+				else
+					ereport(ERROR,
+					        (errcode(ERRCODE_UNDEFINED_COLUMN),
+							        errmsg("column \"%s\" does not exist",
+							               name)));
+			}
+			/* Check for duplicates */
+			if (list_member_int(attnums, attnum))
+				ereport(ERROR,
+				        (errcode(ERRCODE_DUPLICATE_COLUMN),
+						        errmsg("column \"%s\" specified more than once",
+						               name)));
+			attnums = lappend_int(attnums, attnum);
+		}
+	}
+
+	return attnums;
+	/* *INDENT-ON* */
 }

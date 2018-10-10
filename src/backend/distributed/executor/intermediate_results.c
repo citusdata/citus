@@ -18,11 +18,11 @@
 
 #include "catalog/pg_enum.h"
 #include "commands/copy.h"
+#include "distributed/commands/multi_copy.h"
 #include "distributed/connection_management.h"
 #include "distributed/intermediate_results.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/metadata_cache.h"
-#include "distributed/multi_copy.h"
 #include "distributed/multi_executor.h"
 #include "distributed/remote_commands.h"
 #include "distributed/transmit.h"

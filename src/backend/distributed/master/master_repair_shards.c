@@ -19,8 +19,8 @@
 
 #include "catalog/pg_class.h"
 #include "distributed/colocation_utils.h"
+#include "distributed/commands.h"
 #include "distributed/connection_management.h"
-#include "distributed/foreign_constraint.h"
 #include "distributed/listutils.h"
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"

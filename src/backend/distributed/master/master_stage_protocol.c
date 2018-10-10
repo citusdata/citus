@@ -29,9 +29,9 @@
 #endif
 #include "distributed/citus_ruleutils.h"
 #include "distributed/colocation_utils.h"
+#include "distributed/commands.h"
 #include "distributed/connection_management.h"
 #include "distributed/distributed_planner.h"
-#include "distributed/foreign_constraint.h"
 #include "distributed/multi_client_executor.h"
 #include "distributed/multi_router_executor.h"
 #include "distributed/master_metadata_utility.h"

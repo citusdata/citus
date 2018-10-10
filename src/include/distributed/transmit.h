@@ -11,7 +11,10 @@
 #ifndef TRANSMIT_H
 #define TRANSMIT_H
 
+#include "c.h"
+
 #include "lib/stringinfo.h"
+#include "nodes/parsenodes.h"
 #include "storage/fd.h"
 
 
@@ -22,6 +25,10 @@ extern File FileOpenForTransmit(const char *filename, int fileFlags, int fileMod
 
 /* Function declaration local to commands and worker modules */
 extern void FreeStringInfo(StringInfo stringInfo);
+
+/* Local functions forward declarations for Transmit statement */
+extern bool IsTransmitStmt(Node *parsetree);
+extern void VerifyTransmitStmt(CopyStmt *copyStatement);
 
 
 #endif   /* TRANSMIT_H */

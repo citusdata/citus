@@ -5,16 +5,28 @@ EXTENSION = citus
 MODULE_big = citus
 
 OBJS = src/backend/distributed/shared_library_init.o \
+     src/backend/distributed/commands/cluster.o \
      src/backend/distributed/commands/create_distributed_table.o \
      src/backend/distributed/commands/drop_distributed_table.o \
+     src/backend/distributed/commands/extension.o \
+     src/backend/distributed/commands/foreign_constraint.o \
+     src/backend/distributed/commands/grant.o \
+     src/backend/distributed/commands/index.o \
      src/backend/distributed/commands/multi_copy.o \
+     src/backend/distributed/commands/policy.o \
+     src/backend/distributed/commands/rename.o \
+     src/backend/distributed/commands/schema.o \
+     src/backend/distributed/commands/sequence.o \
+     src/backend/distributed/commands/subscription.o \
+     src/backend/distributed/commands/table.o \
      src/backend/distributed/commands/transmit.o \
+     src/backend/distributed/commands/truncate.o \
+     src/backend/distributed/commands/utility_hook.o \
+     src/backend/distributed/commands/vacuum.o \
      src/backend/distributed/connection/connection_configuration.o \
      src/backend/distributed/connection/connection_management.o \
      src/backend/distributed/connection/placement_connection.o \
      src/backend/distributed/connection/remote_commands.o \
-     src/backend/distributed/ddl/foreign_constraint.o \
-     src/backend/distributed/ddl/policy.o \
      src/backend/distributed/executor/citus_custom_scan.o \
      src/backend/distributed/executor/insert_select_executor.o \
      src/backend/distributed/executor/intermediate_results.o \
@@ -24,7 +36,6 @@ OBJS = src/backend/distributed/shared_library_init.o \
      src/backend/distributed/executor/multi_router_executor.o \
      src/backend/distributed/executor/multi_server_executor.o \
      src/backend/distributed/executor/multi_task_tracker_executor.o \
-     src/backend/distributed/executor/multi_utility.o \
      src/backend/distributed/executor/query_stats.o \
      src/backend/distributed/executor/subplan_execution.o \
      src/backend/distributed/master/citus_create_restore_point.o \
