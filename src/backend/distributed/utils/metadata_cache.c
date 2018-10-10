@@ -860,11 +860,21 @@ LookupDistTableCacheEntry(Oid relationId)
 	memset(((char *) cacheEntry) + sizeof(Oid), 0,
 		   sizeof(DistTableCacheEntry) - sizeof(Oid));
 
+	/*
+	 * We disable interrupts while creating the cache entry because loading
+	 * shard metadata can take a while, and if statement_timeout is too low,
+	 * this will get canceled on each call and we won't be able to run any
+	 * queries on the table.
+	 */
+	HOLD_INTERRUPTS();
+
 	/* actually fill out entry */
 	BuildDistTableCacheEntry(cacheEntry);
 
 	/* and finally mark as valid */
 	cacheEntry->isValid = true;
+
+	RESUME_INTERRUPTS();
 
 	return cacheEntry;
 }
@@ -1170,6 +1180,13 @@ BuildCachedShardList(DistTableCacheEntry *cacheEntry)
 		}
 	}
 
+	/*
+	 * We set these here, so ResetDistTableCacheEntry() can see what has been
+	 * entered into DistShardCacheHash even if the following loop is interrupted
+	 * by throwing errors, etc.
+	 */
+	cacheEntry->sortedShardIntervalArray = sortedShardIntervalArray;
+	cacheEntry->shardIntervalArrayLength = 0;
 
 	/* maintain shardId->(table,ShardInterval) cache */
 	for (shardIndex = 0; shardIndex < shardIntervalArrayLength; shardIndex++)
@@ -1186,6 +1203,7 @@ BuildCachedShardList(DistTableCacheEntry *cacheEntry)
 
 		shardEntry = hash_search(DistShardCacheHash, &shardInterval->shardId, HASH_ENTER,
 								 &foundInCache);
+		cacheEntry->shardIntervalArrayLength++;
 		if (foundInCache)
 		{
 			ereport(ERROR, (errmsg("cached metadata for shard " UINT64_FORMAT
@@ -1222,8 +1240,6 @@ BuildCachedShardList(DistTableCacheEntry *cacheEntry)
 		shardInterval->shardIndex = shardIndex;
 	}
 
-	cacheEntry->shardIntervalArrayLength = shardIntervalArrayLength;
-	cacheEntry->sortedShardIntervalArray = sortedShardIntervalArray;
 	cacheEntry->shardColumnCompareFunction = shardColumnCompareFunction;
 	cacheEntry->shardIntervalCompareFunction = shardIntervalCompareFunction;
 }
