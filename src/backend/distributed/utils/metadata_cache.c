@@ -1203,7 +1203,6 @@ BuildCachedShardList(DistTableCacheEntry *cacheEntry)
 
 		shardEntry = hash_search(DistShardCacheHash, &shardInterval->shardId, HASH_ENTER,
 								 &foundInCache);
-		cacheEntry->shardIntervalArrayLength++;
 		if (foundInCache)
 		{
 			ereport(ERROR, (errmsg("cached metadata for shard " UINT64_FORMAT
@@ -1211,6 +1210,13 @@ BuildCachedShardList(DistTableCacheEntry *cacheEntry)
 								   shardInterval->shardId),
 							errhint("Reconnect and try again.")));
 		}
+
+		/*
+		 * We should increment this only after we are sure this hasn't already
+		 * been assigned to any other relations. ResetDistTableCacheEntry()
+		 * depends on this.
+		 */
+		cacheEntry->shardIntervalArrayLength++;
 
 		shardEntry->shardIndex = shardIndex;
 		shardEntry->tableEntry = cacheEntry;
@@ -2950,7 +2956,10 @@ ResetDistTableCacheEntry(DistTableCacheEntry *cacheEntry)
 		bool foundInCache = false;
 
 		/* delete the shard's placements */
-		pfree(placementArray);
+		if (placementArray != NULL)
+		{
+			pfree(placementArray);
+		}
 
 		/* delete per-shard cache-entry */
 		hash_search(DistShardCacheHash, &shardInterval->shardId, HASH_REMOVE,
