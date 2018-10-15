@@ -47,7 +47,7 @@ why we ask this as well as instructions for how to proceed, see the
        sudo apt-key add -
   sudo apt-get update
 
-  sudo apt-get install -y postgresql-server-dev-9.6 postgresql-9.6 \
+  sudo apt-get install -y postgresql-server-dev-10 postgresql-10 \
                           libedit-dev libselinux1-dev libxslt-dev  \
                           libpam0g-dev git flex make libssl-dev    \
                           libkrb5-dev
@@ -67,7 +67,7 @@ why we ask this as well as instructions for how to proceed, see the
 
 #### Red Hat-based Linux (RHEL, CentOS, Fedora)
 
-1. Find the PostgreSQL 9.6 RPM URL for your repo at [yum.postgresql.org](http://yum.postgresql.org/repopackages.php#pg96)
+1. Find the PostgreSQL 10 RPM URL for your repo at [yum.postgresql.org](http://yum.postgresql.org/repopackages.php#pg96)
 2. Register its contents with Yum:
 
   ```bash
