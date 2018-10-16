@@ -67,7 +67,7 @@ why we ask this as well as instructions for how to proceed, see the
 
 #### Red Hat-based Linux (RHEL, CentOS, Fedora)
 
-1. Find the PostgreSQL 10 RPM URL for your repo at [yum.postgresql.org](http://yum.postgresql.org/repopackages.php#pg96)
+1. Find the PostgreSQL 10 RPM URL for your repo at [yum.postgresql.org](http://yum.postgresql.org/repopackages.php#pg10)
 2. Register its contents with Yum:
 
   ```bash
