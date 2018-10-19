@@ -21,8 +21,6 @@ matrix:
     - env: PGVERSION=9.6
     - env: PGVERSION=10
     - env: PGVERSION=11
-  allow_failures:	
-    - env: PGVERSION=11
 before_install:
   - git clone -b v0.7.9 --depth 1 https://github.com/citusdata/tools.git
   - sudo make -C tools install
