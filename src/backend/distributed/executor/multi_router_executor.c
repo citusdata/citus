@@ -1352,6 +1352,13 @@ ExecuteModifyTasks(List *taskList, bool expectResults, ParamListInfo paramListIn
 	}
 
 	/*
+	 * Assign the distributed transaction id before trying to acquire the
+	 * executor advisory locks. This is useful to show this backend in citus
+	 * lock graphs (e.g., dump_global_wait_edges() and citus_lock_waits).
+	 */
+	BeginOrContinueCoordinatedTransaction();
+
+	/*
 	 * Ensure that there are no concurrent modifications on the same
 	 * shards. In general, for DDL commands, we already obtained the
 	 * appropriate locks in ProcessUtility. However, we still prefer to
@@ -1361,8 +1368,6 @@ ExecuteModifyTasks(List *taskList, bool expectResults, ParamListInfo paramListIn
 	 * tables.
 	 */
 	AcquireExecutorMultiShardLocks(taskList);
-
-	BeginOrContinueCoordinatedTransaction();
 
 	if (MultiShardCommitProtocol == COMMIT_PROTOCOL_2PC ||
 		firstTask->replicationModel == REPLICATION_MODEL_2PC)
