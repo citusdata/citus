@@ -146,3 +146,7 @@ FETCH ABSOLUTE 5 FROM noHoldCursor;
 FETCH BACKWARD noHoldCursor;
 COMMIT;
 FETCH ABSOLUTE 5 FROM noHoldCursor;
+
+-- Test we don't throw an error for DROP IF EXISTS
+DROP DATABASE IF EXISTS not_existing_database;
+DROP TABLE IF EXISTS not_existing_table;
