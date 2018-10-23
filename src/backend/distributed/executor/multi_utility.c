@@ -549,11 +549,15 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 	 */
 	if (IsA(parsetree, DropdbStmt))
 	{
+		const bool missingOK = true;
 		DropdbStmt *dropDbStatement = (DropdbStmt *) parsetree;
 		char *dbname = dropDbStatement->dbname;
-		Oid databaseOid = get_database_oid(dbname, false);
+		Oid databaseOid = get_database_oid(dbname, missingOK);
 
-		StopMaintenanceDaemon(databaseOid);
+		if (OidIsValid(databaseOid))
+		{
+			StopMaintenanceDaemon(databaseOid);
+		}
 	}
 
 	/* set user if needed and go ahead and run local utility using standard hook */

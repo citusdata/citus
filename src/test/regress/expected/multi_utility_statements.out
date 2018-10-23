@@ -268,3 +268,10 @@ FETCH BACKWARD noHoldCursor;
 COMMIT;
 FETCH ABSOLUTE 5 FROM noHoldCursor;
 ERROR:  cursor "noholdcursor" does not exist
+-- Test we don't throw an error for DROP IF EXISTS
+DROP DATABASE IF EXISTS not_existing_database;
+NOTICE:  database "not_existing_database" does not exist, skipping
+DROP TABLE IF EXISTS not_existing_table;
+NOTICE:  table "not_existing_table" does not exist, skipping
+DROP SCHEMA IF EXISTS not_existing_schema;
+NOTICE:  schema "not_existing_schema" does not exist, skipping
