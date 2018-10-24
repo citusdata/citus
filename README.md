@@ -127,10 +127,6 @@ developing the Citus extension itself and our code quality guidelines.
 Citus is deployed in production by many customers, ranging from
 technology start-ups to large enterprises. Here are some examples:
 
-* [CloudFlare](https://www.cloudflare.com/) uses Citus to provide
-real-time analytics on 100 TBs of data from over 4 million customer
-websites. [Case
-Study](https://blog.cloudflare.com/scaling-out-postgresql-for-cloudflare-analytics-using-citusdb/)
 * [MixRank](https://mixrank.com/) uses Citus to efficiently collect
 and analyze vast amounts of data to allow inside B2B sales teams
 to find new customers. [Case
