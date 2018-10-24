@@ -120,12 +120,22 @@ step "s1-stop-connection"
 	SELECT stop_session_level_connection_to_node();
 }
 
+step "s1-update-on-the-coordinator"
+{
+	UPDATE tt1 SET value_1 = 4;
+}
+
 step "s1-commit"
 {
 	COMMIT;
 }
 
 session "s2"
+
+step "s2-begin"
+{
+	COMMIT;
+}
 
 step "s2-start-session-level-connection"
 {
@@ -172,6 +182,11 @@ step "s2-stop-connection"
 	SELECT stop_session_level_connection_to_node();
 }
 
+step "s2-update-on-the-coordinator"
+{
+	UPDATE tt1 SET value_1 = 4;
+}
+
 step "s2-commit-worker"
 {
     SELECT run_commands_on_session_level_connection_to_node('COMMIT');
@@ -182,6 +197,33 @@ session "s3"
 step "s3-select-distributed-waiting-queries"
 {
 	SELECT blocked_statement, current_statement_in_blocking_process, waiting_node_name, blocking_node_name, waiting_node_port, blocking_node_port FROM citus_lock_waits;
+}
+
+# session s1 and s4 executes the commands on the same worker node
+session "s4"
+
+step "s4-start-session-level-connection"
+{
+	SELECT start_session_level_connection_to_node('localhost', 57637);
+}
+
+step "s4-begin-on-worker"
+{
+	SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+}
+
+step "s4-update-dist-table"
+{
+	SELECT run_commands_on_session_level_connection_to_node('UPDATE tt1 SET value_1 = 5');
+}
+
+step "s4-stop-connection"
+{
+	SELECT stop_session_level_connection_to_node();
+}
+step "s4-commit-worker"
+{
+    SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 }
 
 permutation "s1-begin" "s1-update-ref-table-from-coordinator" "s2-start-session-level-connection" "s2-begin-on-worker" "s2-update-ref-table" "s3-select-distributed-waiting-queries" "s1-commit" "s2-commit-worker" "s2-stop-connection"
@@ -195,3 +237,9 @@ permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-copy-to
 permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-copy-to-ref-table" "s2-start-session-level-connection" "s2-begin-on-worker" "s2-copy-to-ref-table" "s3-select-distributed-waiting-queries" "s1-commit-worker" "s2-commit-worker" "s1-stop-connection" "s2-stop-connection"
 permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-select-for-update" "s2-start-session-level-connection" "s2-begin-on-worker" "s2-update-ref-table" "s3-select-distributed-waiting-queries" "s1-commit-worker" "s2-commit-worker" "s1-stop-connection" "s2-stop-connection"
 permutation "s2-start-session-level-connection" "s2-begin-on-worker" "s2-insert-into-ref-table" "s1-begin" "s1-alter-table" "s3-select-distributed-waiting-queries" "s2-commit-worker" "s1-commit" "s2-stop-connection"
+
+# make sure that multi-shard modification queries
+# show up in the waiting processes even if they are
+# blocked on the same node
+permutation "s1-begin" "s1-update-on-the-coordinator" "s2-update-on-the-coordinator" "s3-select-distributed-waiting-queries" "s1-commit"
+permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-update-dist-table" "s4-start-session-level-connection" "s4-begin-on-worker" "s4-update-dist-table" "s3-select-distributed-waiting-queries" "s1-commit-worker" "s4-commit-worker" "s1-stop-connection" "s4-stop-connection"
