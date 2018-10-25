@@ -1563,22 +1563,30 @@ HasUnresolvedExternParamsWalker(Node *expression, ParamListInfo boundParams)
 		/* check whether parameter is available (and valid) */
 		if (boundParams && paramId > 0 && paramId <= boundParams->numParams)
 		{
-			ParamExternData *externParam = &boundParams->params[paramId - 1];
-			Oid paramType = externParam->ptype;
+			ParamExternData *externParam = NULL;
+			Oid paramType = InvalidOid;
 
 			/* give hook a chance in case parameter is dynamic */
-			if (!OidIsValid(paramType) && boundParams->paramFetch != NULL)
+			if (boundParams->paramFetch != NULL)
 			{
 #if (PG_VERSION_NUM >= 110000)
 				ParamExternData externParamPlaceholder;
 				externParam = (*boundParams->paramFetch)(boundParams, paramId, false,
 														 &externParamPlaceholder);
 #else
-				(*boundParams->paramFetch)(boundParams, paramId);
+				externParam = &boundParams->params[paramId - 1];
+				if (!OidIsValid(externParam->ptype))
+				{
+					(*boundParams->paramFetch)(boundParams, paramId);
+				}
 #endif
-				paramType = externParam->ptype;
+			}
+			else
+			{
+				externParam = &boundParams->params[paramId - 1];
 			}
 
+			paramType = externParam->ptype;
 			if (OidIsValid(paramType))
 			{
 				return false;
