@@ -67,6 +67,31 @@ UPDATE pg_dist_shard_placement SET shardstate = 1
 WHERE shardid IN (
   SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'vacuum_test'::regclass
 );
+-- the same tests with cancel
+SELECT citus.mitmproxy('conn.onQuery(query="^VACUUM").cancel(' ||  pg_backend_pid() || ')');
+ mitmproxy 
+-----------
+ 
+(1 row)
+
+VACUUM vacuum_test;
+ERROR:  canceling statement due to user request
+SELECT citus.mitmproxy('conn.onQuery(query="^ANALYZE").cancel(' ||  pg_backend_pid() || ')');
+ mitmproxy 
+-----------
+ 
+(1 row)
+
+ANALYZE vacuum_test;
+ERROR:  canceling statement due to user request
+-- cancel during COMMIT should be ignored
+SELECT citus.mitmproxy('conn.onQuery(query="^COMMIT").cancel(' ||  pg_backend_pid() || ')');
+ mitmproxy 
+-----------
+ 
+(1 row)
+
+ANALYZE vacuum_test;
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
 -----------
@@ -91,6 +116,14 @@ ERROR:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
 CONTEXT:  while executing command on localhost:9060
+SELECT citus.mitmproxy('conn.onQuery(query="^VACUUM.*other").cancel(' ||  pg_backend_pid() || ')');
+ mitmproxy 
+-----------
+ 
+(1 row)
+
+VACUUM vacuum_test, other_vacuum_test;
+ERROR:  canceling statement due to user request
 -- ==== Clean up, we're done here ====
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 

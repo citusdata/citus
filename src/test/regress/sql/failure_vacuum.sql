@@ -28,12 +28,27 @@ WHERE shardid IN (
   SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'vacuum_test'::regclass
 );
 
+-- the same tests with cancel
+SELECT citus.mitmproxy('conn.onQuery(query="^VACUUM").cancel(' ||  pg_backend_pid() || ')');
+VACUUM vacuum_test;
+
+SELECT citus.mitmproxy('conn.onQuery(query="^ANALYZE").cancel(' ||  pg_backend_pid() || ')');
+ANALYZE vacuum_test;
+
+-- cancel during COMMIT should be ignored
+SELECT citus.mitmproxy('conn.onQuery(query="^COMMIT").cancel(' ||  pg_backend_pid() || ')');
+ANALYZE vacuum_test;
+
 SELECT citus.mitmproxy('conn.allow()');
 
 CREATE TABLE other_vacuum_test (key int, value int);
 SELECT create_distributed_table('other_vacuum_test', 'key');
 
 SELECT citus.mitmproxy('conn.onQuery(query="^VACUUM.*other").kill()');
+
+VACUUM vacuum_test, other_vacuum_test;
+
+SELECT citus.mitmproxy('conn.onQuery(query="^VACUUM.*other").cancel(' ||  pg_backend_pid() || ')');
 
 VACUUM vacuum_test, other_vacuum_test;
 
