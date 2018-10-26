@@ -27,3 +27,4 @@ test: failure_ref_tables
 test: failure_real_time_select
 test: failure_insert_select_pushdown
 test: failure_single_mod
+test: failure_savepoints
