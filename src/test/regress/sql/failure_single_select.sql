@@ -31,6 +31,41 @@ WHERE shardid IN (
 );
 TRUNCATE select_test;
 
+-- now the same tests with query cancellation
+
+-- put data in shard for which mitm node is first placement
+INSERT INTO select_test VALUES (2, 'test data');
+
+SELECT citus.mitmproxy('conn.onQuery(query="^SELECT").cancel(' ||  pg_backend_pid() || ')');
+SELECT * FROM select_test WHERE key = 2;
+SELECT * FROM select_test WHERE key = 2;
+
+-- cancel after first SELECT; txn should fail and nothing should be marked as invalid
+SELECT citus.mitmproxy('conn.onQuery(query="^SELECT").cancel(' ||  pg_backend_pid() || ')');
+
+BEGIN;
+INSERT INTO select_test VALUES (2, 'more data');
+SELECT * FROM select_test WHERE key = 2;
+COMMIT;
+
+-- show that all placements are OK
+SELECT DISTINCT shardstate FROM  pg_dist_shard_placement
+WHERE shardid IN (
+  SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'select_test'::regclass
+);
+TRUNCATE select_test;
+
+-- cancel the second query
+-- error after second SELECT; txn should fail
+SELECT citus.mitmproxy('conn.onQuery(query="^SELECT").after(1).cancel(' ||  pg_backend_pid() || ')');
+
+BEGIN;
+INSERT INTO select_test VALUES (2, 'more data');
+SELECT * FROM select_test WHERE key = 2;
+INSERT INTO select_test VALUES (2, 'even more data');
+SELECT * FROM select_test WHERE key = 2;
+COMMIT;
+
 -- error after second SELECT; txn should work (though placement marked bad)
 SELECT citus.mitmproxy('conn.onQuery(query="^SELECT").after(1).reset()');
 
@@ -55,6 +90,11 @@ SELECT create_distributed_table('select_test', 'key');
 INSERT INTO select_test VALUES (1, 'test data');
 
 SELECT citus.mitmproxy('conn.onQuery(query="^SELECT").after(1).kill()');
+SELECT * FROM select_test WHERE key = 1;
+SELECT * FROM select_test WHERE key = 1;
+
+-- now the same test with query cancellation
+SELECT citus.mitmproxy('conn.onQuery(query="^SELECT").after(1).cancel(' ||  pg_backend_pid() || ')');
 SELECT * FROM select_test WHERE key = 1;
 SELECT * FROM select_test WHERE key = 1;
 
