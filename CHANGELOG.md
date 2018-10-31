@@ -1,3 +1,49 @@
+### citus v8.0.0 (October 31, 2018) ###
+
+* Adds support for PostgreSQL 11
+
+* Adds support for applying DML operations on reference tables from MX nodes
+
+* Adds distributed locking to truncated MX tables
+
+* Adds support for running TRUNCATE command from MX worker nodes
+
+* Adds views to provide insight about the distributed transactions
+
+* Adds support for TABLESAMPLE in router queries
+
+* Adds support for INCLUDE option in index creation
+
+* Adds option to allow simple DML commands from hot standby
+
+* Adds support for partitioned tables with replication factor > 1
+
+* Prevents a deadlock on concurrent DROP TABLE and SELECT on Citus MX
+
+* Fixes a bug that prevents recovering wrong transactions in MX
+
+* Fixes a bug to prevent wrong memory accesses on Citus MX under very high load
+
+* Fixes a bug in MX mode, calling DROP SCHEMA with existing partitioned table
+
+* Fixes a bug that could cause modifying CTEs to select wrong execution mode
+
+* Fixes a bug preventing rollback in CREATE PROCEDURE
+
+* Fixes a bug on not being able to drop index on a partitioned table
+
+* Fixes a bug on TRUNCATE when there is a foreign key to a reference table
+
+* Fixes a performance issue in prepared INSERT..SELECT
+
+* Fixes a bug which causes errors on DROP DATABASE IF EXISTS
+
+* Fixes a bug to remove intermediate result directory in pull-push execution
+
+* Improves query pushdown planning performance
+
+* Evaluate functions anywhere in query
+
 ### citus v7.5.1 (August 28, 2018) ###
 
 * Improves query pushdown planning performance
