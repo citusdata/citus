@@ -1529,7 +1529,7 @@ TupleToWorkerNode(TupleDesc tupleDescriptor, HeapTuple heapTuple)
 	char *nodeRack = NULL;
 
 	Assert(!HeapTupleHasNulls(heapTuple));
-	
+
 	/*
 	 * We use heap_deform_tuple() instead of heap_getattr() to expand tuple
 	 * to contain missing values when ALTER TABLE ADD COLUMN happens.
