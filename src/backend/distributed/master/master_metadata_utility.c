@@ -827,30 +827,28 @@ static GroupShardPlacement *
 TupleToGroupShardPlacement(TupleDesc tupleDescriptor, HeapTuple heapTuple)
 {
 	GroupShardPlacement *shardPlacement = NULL;
-	bool isNull = false;
+	bool isNullArray[Natts_pg_dist_placement];
+	Datum datumArray[Natts_pg_dist_placement];
 
-	Datum placementId = heap_getattr(heapTuple, Anum_pg_dist_placement_placementid,
-									 tupleDescriptor, &isNull);
-	Datum shardId = heap_getattr(heapTuple, Anum_pg_dist_placement_shardid,
-								 tupleDescriptor, &isNull);
-	Datum shardLength = heap_getattr(heapTuple, Anum_pg_dist_placement_shardlength,
-									 tupleDescriptor, &isNull);
-	Datum shardState = heap_getattr(heapTuple, Anum_pg_dist_placement_shardstate,
-									tupleDescriptor, &isNull);
-	Datum groupId = heap_getattr(heapTuple, Anum_pg_dist_placement_groupid,
-								 tupleDescriptor, &isNull);
 	if (HeapTupleHeaderGetNatts(heapTuple->t_data) != Natts_pg_dist_placement ||
 		HeapTupleHasNulls(heapTuple))
 	{
 		ereport(ERROR, (errmsg("unexpected null in pg_dist_placement tuple")));
 	}
 
+	heap_deform_tuple(heapTuple, tupleDescriptor, datumArray, isNullArray);
+
 	shardPlacement = CitusMakeNode(GroupShardPlacement);
-	shardPlacement->placementId = DatumGetInt64(placementId);
-	shardPlacement->shardId = DatumGetInt64(shardId);
-	shardPlacement->shardLength = DatumGetInt64(shardLength);
-	shardPlacement->shardState = DatumGetUInt32(shardState);
-	shardPlacement->groupId = DatumGetUInt32(groupId);
+	shardPlacement->placementId = DatumGetInt64(
+		datumArray[Anum_pg_dist_placement_placementid - 1]);
+	shardPlacement->shardId = DatumGetInt64(
+		datumArray[Anum_pg_dist_placement_shardid - 1]);
+	shardPlacement->shardLength = DatumGetInt64(
+		datumArray[Anum_pg_dist_placement_shardlength - 1]);
+	shardPlacement->shardState = DatumGetUInt32(
+		datumArray[Anum_pg_dist_placement_shardstate - 1]);
+	shardPlacement->groupId = DatumGetUInt32(
+		datumArray[Anum_pg_dist_placement_groupid - 1]);
 
 	return shardPlacement;
 }

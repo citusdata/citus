@@ -889,13 +889,13 @@ BuildDistTableCacheEntry(DistTableCacheEntry *cacheEntry)
 {
 	HeapTuple distPartitionTuple = NULL;
 	Relation pgDistPartition = NULL;
-	Form_pg_dist_partition partitionForm = NULL;
 	Datum partitionKeyDatum = 0;
 	Datum replicationModelDatum = 0;
 	MemoryContext oldContext = NULL;
 	TupleDesc tupleDescriptor = NULL;
-	bool isNull = false;
 	bool partitionKeyIsNull = false;
+	Datum datumArray[Natts_pg_dist_partition];
+	bool isNullArray[Natts_pg_dist_partition];
 
 	pgDistPartition = heap_open(DistPartitionRelationId(), AccessShareLock);
 	distPartitionTuple =
@@ -912,14 +912,11 @@ BuildDistTableCacheEntry(DistTableCacheEntry *cacheEntry)
 	cacheEntry->isDistributedTable = true;
 
 	tupleDescriptor = RelationGetDescr(pgDistPartition);
-	partitionForm = (Form_pg_dist_partition) GETSTRUCT(distPartitionTuple);
+	heap_deform_tuple(distPartitionTuple, tupleDescriptor, datumArray, isNullArray);
 
-	cacheEntry->partitionMethod = partitionForm->partmethod;
-
-	partitionKeyDatum = heap_getattr(distPartitionTuple,
-									 Anum_pg_dist_partition_partkey,
-									 tupleDescriptor,
-									 &partitionKeyIsNull);
+	cacheEntry->partitionMethod = datumArray[Anum_pg_dist_partition_partmethod - 1];
+	partitionKeyDatum = datumArray[Anum_pg_dist_partition_partkey - 1];
+	partitionKeyIsNull = isNullArray[Anum_pg_dist_partition_partkey - 1];
 
 	/* note that for reference tables partitionKeyisNull is true */
 	if (!partitionKeyIsNull)
@@ -944,20 +941,14 @@ BuildDistTableCacheEntry(DistTableCacheEntry *cacheEntry)
 		cacheEntry->partitionKeyString = NULL;
 	}
 
-	cacheEntry->colocationId = heap_getattr(distPartitionTuple,
-											Anum_pg_dist_partition_colocationid,
-											tupleDescriptor,
-											&isNull);
-	if (isNull)
+	cacheEntry->colocationId = datumArray[Anum_pg_dist_partition_colocationid - 1];
+	if (isNullArray[Anum_pg_dist_partition_colocationid - 1])
 	{
 		cacheEntry->colocationId = INVALID_COLOCATION_ID;
 	}
 
-	replicationModelDatum = heap_getattr(distPartitionTuple,
-										 Anum_pg_dist_partition_repmodel,
-										 tupleDescriptor,
-										 &isNull);
-	if (isNull)
+	replicationModelDatum = datumArray[Anum_pg_dist_partition_repmodel - 1];
+	if (isNullArray[Anum_pg_dist_partition_repmodel - 1])
 	{
 		/*
 		 * repmodel is NOT NULL but before ALTER EXTENSION citus UPGRADE the column
@@ -3437,26 +3428,17 @@ TupleToShardInterval(HeapTuple heapTuple, TupleDesc tupleDescriptor, Oid interva
 					 int32 intervalTypeMod)
 {
 	ShardInterval *shardInterval = NULL;
-	bool isNull = false;
 	bool minValueNull = false;
 	bool maxValueNull = false;
 	Oid inputFunctionId = InvalidOid;
 	Oid typeIoParam = InvalidOid;
-	Datum relationIdDatum = heap_getattr(heapTuple, Anum_pg_dist_shard_logicalrelid,
-										 tupleDescriptor, &isNull);
-	Datum shardIdDatum = heap_getattr(heapTuple, Anum_pg_dist_shard_shardid,
-									  tupleDescriptor, &isNull);
-	Datum storageTypeDatum = heap_getattr(heapTuple, Anum_pg_dist_shard_shardstorage,
-										  tupleDescriptor, &isNull);
-
-	Datum minValueTextDatum = heap_getattr(heapTuple, Anum_pg_dist_shard_shardminvalue,
-										   tupleDescriptor, &minValueNull);
-	Datum maxValueTextDatum = heap_getattr(heapTuple, Anum_pg_dist_shard_shardmaxvalue,
-										   tupleDescriptor, &maxValueNull);
-
-	Oid relationId = DatumGetObjectId(relationIdDatum);
-	int64 shardId = DatumGetInt64(shardIdDatum);
-	char storageType = DatumGetChar(storageTypeDatum);
+	Datum datumArray[Natts_pg_dist_shard];
+	bool isNullArray[Natts_pg_dist_shard];
+	Datum minValueTextDatum = 0;
+	Datum maxValueTextDatum = 0;
+	Oid relationId = InvalidOid;
+	int64 shardId = InvalidOid;
+	char storageType = InvalidOid;
 	Datum minValue = 0;
 	Datum maxValue = 0;
 	bool minValueExists = false;
@@ -3465,6 +3447,17 @@ TupleToShardInterval(HeapTuple heapTuple, TupleDesc tupleDescriptor, Oid interva
 	bool intervalByVal = false;
 	char intervalAlign = '0';
 	char intervalDelim = '0';
+
+	heap_deform_tuple(heapTuple, tupleDescriptor, datumArray, isNullArray);
+
+	relationId = DatumGetObjectId(datumArray[Anum_pg_dist_shard_logicalrelid - 1]);
+	shardId = DatumGetInt64(datumArray[Anum_pg_dist_shard_shardid - 1]);
+	storageType = DatumGetChar(datumArray[Anum_pg_dist_shard_shardstorage - 1]);
+	minValueTextDatum = datumArray[Anum_pg_dist_shard_shardminvalue - 1];
+	maxValueTextDatum = datumArray[Anum_pg_dist_shard_shardmaxvalue - 1];
+
+	minValueNull = isNullArray[Anum_pg_dist_shard_shardminvalue - 1];
+	maxValueNull = isNullArray[Anum_pg_dist_shard_shardmaxvalue - 1];
 
 	if (!minValueNull && !maxValueNull)
 	{

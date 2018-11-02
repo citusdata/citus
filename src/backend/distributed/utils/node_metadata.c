@@ -1523,41 +1523,30 @@ static WorkerNode *
 TupleToWorkerNode(TupleDesc tupleDescriptor, HeapTuple heapTuple)
 {
 	WorkerNode *workerNode = NULL;
-	bool isNull = false;
-
-	Datum nodeId = heap_getattr(heapTuple, Anum_pg_dist_node_nodeid,
-								tupleDescriptor, &isNull);
-	Datum groupId = heap_getattr(heapTuple, Anum_pg_dist_node_groupid,
-								 tupleDescriptor, &isNull);
-	Datum nodeName = heap_getattr(heapTuple, Anum_pg_dist_node_nodename,
-								  tupleDescriptor, &isNull);
-	Datum nodePort = heap_getattr(heapTuple, Anum_pg_dist_node_nodeport,
-								  tupleDescriptor, &isNull);
-	Datum nodeRack = heap_getattr(heapTuple, Anum_pg_dist_node_noderack,
-								  tupleDescriptor, &isNull);
-	Datum hasMetadata = heap_getattr(heapTuple, Anum_pg_dist_node_hasmetadata,
-									 tupleDescriptor, &isNull);
-	Datum isActive = heap_getattr(heapTuple, Anum_pg_dist_node_isactive,
-								  tupleDescriptor, &isNull);
-	Datum nodeRole = heap_getattr(heapTuple, Anum_pg_dist_node_noderole,
-								  tupleDescriptor, &isNull);
-	Datum nodeCluster = heap_getattr(heapTuple, Anum_pg_dist_node_nodecluster,
-									 tupleDescriptor, &isNull);
+	Datum datumArray[Natts_pg_dist_node];
+	bool isNullArray[Natts_pg_dist_node];
+	char *nodeName = NULL;
+	char *nodeRack = NULL;
 
 	Assert(!HeapTupleHasNulls(heapTuple));
+	heap_deform_tuple(heapTuple, tupleDescriptor, datumArray, isNullArray);
+
+	nodeName = DatumGetCString(datumArray[Anum_pg_dist_node_nodename - 1]);
+	nodeRack = DatumGetCString(datumArray[Anum_pg_dist_node_noderack - 1]);
 
 	workerNode = (WorkerNode *) palloc0(sizeof(WorkerNode));
-	workerNode->nodeId = DatumGetUInt32(nodeId);
-	workerNode->workerPort = DatumGetUInt32(nodePort);
-	workerNode->groupId = DatumGetUInt32(groupId);
+	workerNode->nodeId = DatumGetUInt32(datumArray[Anum_pg_dist_node_nodeid - 1]);
+	workerNode->workerPort = DatumGetUInt32(datumArray[Anum_pg_dist_node_nodeport - 1]);
+	workerNode->groupId = DatumGetUInt32(datumArray[Anum_pg_dist_node_groupid - 1]);
 	strlcpy(workerNode->workerName, TextDatumGetCString(nodeName), WORKER_LENGTH);
 	strlcpy(workerNode->workerRack, TextDatumGetCString(nodeRack), WORKER_LENGTH);
-	workerNode->hasMetadata = DatumGetBool(hasMetadata);
-	workerNode->isActive = DatumGetBool(isActive);
-	workerNode->nodeRole = DatumGetObjectId(nodeRole);
+	workerNode->hasMetadata = DatumGetBool(datumArray[Anum_pg_dist_node_hasmetadata - 1]);
+	workerNode->isActive = DatumGetBool(datumArray[Anum_pg_dist_node_isactive - 1]);
+	workerNode->nodeRole = DatumGetObjectId(datumArray[Anum_pg_dist_node_noderole - 1]);
 
 	{
-		Name nodeClusterName = DatumGetName(nodeCluster);
+		Name nodeClusterName = DatumGetName(datumArray[Anum_pg_dist_node_nodecluster -
+													   1]);
 		char *nodeClusterString = NameStr(*nodeClusterName);
 
 		/*
