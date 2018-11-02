@@ -165,6 +165,14 @@ WHERE pgd.refclassid = 'pg_extension'::regclass AND
 	  pge.extname    = 'citus' AND
 	  pgio.schema    NOT IN ('pg_catalog', 'citus', 'test');
 
+-- if the output of following query changes, we might need to change
+-- some heap_getattr() calls to heap_deform_tuple(). This errors out in
+-- postgres versions before 11.
+SELECT attrelid::regclass, attname, atthasmissing, attmissingval
+FROM pg_attribute
+WHERE atthasmissing
+ORDER BY attrelid, attname;
+
 -- see incompatible version errors out
 RESET citus.enable_version_checks;
 DROP EXTENSION citus;
