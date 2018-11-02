@@ -53,6 +53,7 @@
 #include "postmaster/postmaster.h"
 #include "optimizer/planner.h"
 #include "optimizer/paths.h"
+#include "tcop/tcopprot.h"
 #include "utils/guc.h"
 #include "utils/guc_tables.h"
 
@@ -63,6 +64,7 @@ static char *CitusVersion = CITUS_VERSION;
 
 void _PG_init(void);
 
+static void ResizeStackToMaximumDepth(void);
 static void multi_log_hook(ErrorData *edata);
 static void CreateRequiredDirectories(void);
 static void RegisterCitusConfigVariables(void);
@@ -167,6 +169,8 @@ _PG_init(void)
 								"shared_preload_libraries.")));
 	}
 
+	ResizeStackToMaximumDepth();
+
 	/*
 	 * Extend the database directory structure before continuing with
 	 * initialization - one of the later steps might require them to exist.
@@ -228,6 +232,35 @@ _PG_init(void)
 		SetConfigOption("allow_system_table_mods", "true", PGC_POSTMASTER,
 						PGC_S_OVERRIDE);
 	}
+}
+
+
+/*
+ * Stack size increase during high memory load may cause unexpected crashes.
+ * With this alloca call, we are increasing stack size explicitly, so that if
+ * it is not possible to increase stack size, we will get an OOM error instead
+ * of a crash.
+ *
+ * This function is called on backend startup. The allocated memory will
+ * automatically be released at the end of the function's scope. However, we'd
+ * have already expanded the stack and it wouldn't shrink back. So, in a sense,
+ * per backend we're securing max_stack_depth kB's of memory on the stack upfront.
+ *
+ * Not all the backends require max_stack_depth kB's on the stack, so we might end
+ * up with unnecessary allocations. However, the default value is 2MB, which seems
+ * an acceptable trade-off. Also, allocating memory upfront may perform better
+ * under some circumstances.
+ */
+static void
+ResizeStackToMaximumDepth(void)
+{
+#ifndef WIN32
+	volatile char *stack_resizer = NULL;
+	long max_stack_depth_bytes = max_stack_depth * 1024L;
+
+	stack_resizer = alloca(max_stack_depth_bytes);
+	stack_resizer[max_stack_depth_bytes - 1] = 0;
+#endif
 }
 
 
