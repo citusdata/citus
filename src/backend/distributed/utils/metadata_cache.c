@@ -3448,6 +3448,10 @@ TupleToShardInterval(HeapTuple heapTuple, TupleDesc tupleDescriptor, Oid interva
 	char intervalAlign = '0';
 	char intervalDelim = '0';
 
+	/*
+	 * We use heap_deform_tuple() instead of heap_getattr() to expand tuple
+	 * to contain missing values when ALTER TABLE ADD COLUMN happens.
+	 */
 	heap_deform_tuple(heapTuple, tupleDescriptor, datumArray, isNullArray);
 
 	relationId = DatumGetObjectId(datumArray[Anum_pg_dist_shard_logicalrelid - 1]);

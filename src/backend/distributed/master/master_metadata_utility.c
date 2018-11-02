@@ -836,6 +836,10 @@ TupleToGroupShardPlacement(TupleDesc tupleDescriptor, HeapTuple heapTuple)
 		ereport(ERROR, (errmsg("unexpected null in pg_dist_placement tuple")));
 	}
 
+	/*
+	 * We use heap_deform_tuple() instead of heap_getattr() to expand tuple
+	 * to contain missing values when ALTER TABLE ADD COLUMN happens.
+	 */
 	heap_deform_tuple(heapTuple, tupleDescriptor, datumArray, isNullArray);
 
 	shardPlacement = CitusMakeNode(GroupShardPlacement);
