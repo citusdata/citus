@@ -1,5 +1,3 @@
-CREATE EXTENSION citus;
-ERROR:  extension "citus" already exists
 -- if the output of following query changes, we might need to change
 -- some heap_getattr() calls to heap_deform_tuple(). This errors out in
 -- postgres versions before 11.
@@ -14,5 +12,3 @@ ORDER BY attrelid, attname;
  pg_dist_node | nodecluster | t             | {default}
  pg_dist_node | noderole    | t             | {primary}
 (4 rows)
-
-DROP EXTENSION citus;

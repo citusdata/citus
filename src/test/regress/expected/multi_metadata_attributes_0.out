@@ -1,5 +1,3 @@
-CREATE EXTENSION citus;
-ERROR:  extension "citus" already exists
 -- if the output of following query changes, we might need to change
 -- some heap_getattr() calls to heap_deform_tuple(). This errors out in
 -- postgres versions before 11.
@@ -10,4 +8,3 @@ ORDER BY attrelid, attname;
 ERROR:  column "atthasmissing" does not exist
 LINE 1: SELECT attrelid::regclass, attname, atthasmissing, attmissin...
                                             ^
-DROP EXTENSION citus;
