@@ -12,3 +12,4 @@ ORDER BY attrelid, attname;
  pg_dist_node | nodecluster | t             | {default}
  pg_dist_node | noderole    | t             | {primary}
 (4 rows)
+
