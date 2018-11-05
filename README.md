@@ -129,18 +129,22 @@ technology start-ups to large enterprises. Here are some examples:
 
 * [MixRank](https://mixrank.com/) uses Citus to efficiently collect
 and analyze vast amounts of data to allow inside B2B sales teams
-to find new customers. [Case
-Study](https://www.citusdata.com/solutions/case-studies/mixrank-case-study)
+to find new customers. [User Story](https://www.citusdata.com/solutions/case-studies/mixrank-case-study)
 * [Neustar](https://www.neustar.biz/) builds and maintains scalable
 ad-tech infrastructure that counts billions of events per day using
 Citus and HyperLogLog.
 * [Agari](https://www.agari.com/) uses Citus to secure more than
-85 percent of U.S. consumer emails on two 6-8 TB clusters. [Case
-Study](https://www.citusdata.com/solutions/case-studies/agari-case-study)
+85 percent of U.S. consumer emails on two 6-8 TB clusters. [User
+Story](https://www.citusdata.com/solutions/case-studies/agari-case-study)
 * [Heap](https://heapanalytics.com/) uses Citus to run dynamic
 funnel, segmentation, and cohort queries across billions of users
-and tens of billions of events. [Watch
-Video](https://www.youtube.com/watch?v=NVl9_6J1G60&list=PLixnExCn6lRpP10ZlpJwx6AuU3XIgNWpL)
+and tens of billions of events. [Watch Video](https://www.youtube.com/watch?v=NVl9_6J1G60&list=PLixnExCn6lRpP10ZlpJwx6AuU3XIgNWpL)
+* [Pex](https://pex.com/) uses Citus to ingest 30B data points per day and analyze that data in real-time. They use a 20+ node cluster on Google Cloud. [User Story](https://www.citusdata.com/customers/pex)
+* [Algolia](https://www.algolia.com/) uses Citus to provide real-time analytics for over 1B searches per day. For faster insights, they also use TopN and HLL extensions. [User Story](https://www.citusdata.com/customers/algolia)
+* [Copper (formerly ProsperWorks)](https://copper.com/) powers a cloud CRM service with Citus. [User Story](https://www.citusdata.com/customers/copper)
+
+
+You can read more user stories about how they employ Citus to scale Postgres for both multi-tenant SaaS applications as well as real-time analytics dashboards [here](https://www.citusdata.com/customers/).
 
 ___
 
