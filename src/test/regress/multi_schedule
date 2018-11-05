@@ -15,6 +15,7 @@
 # ---
 # Tests around schema changes, these are run first, so there's no preexisting objects.
 # ---
+test: multi_metadata_attributes
 test: multi_extension
 test: multi_703_upgrade
 test: multi_cluster_management

@@ -7,6 +7,7 @@
 -- not done yet.
 SET citus.next_shard_id TO 580000;
 ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 580000;
+ERROR:  relation "pg_catalog.pg_dist_jobid_seq" does not exist
 CREATE SCHEMA test;
 CREATE OR REPLACE FUNCTION test.maintenance_worker(p_dbname text DEFAULT current_database())
     RETURNS pg_stat_activity
@@ -34,7 +35,7 @@ SELECT datname,
 FROM test.maintenance_worker();
   datname   | ?column? | ?column? 
 ------------+----------+----------
- regression | t        | t
+ regression | t        | 
 (1 row)
 
 -- ensure no objects were created outside pg_catalog
@@ -53,6 +54,7 @@ WHERE pgd.refclassid = 'pg_extension'::regclass AND
 
 -- DROP EXTENSION pre-created by the regression suite
 DROP EXTENSION citus;
+ERROR:  extension "citus" does not exist
 \c
 SET citus.enable_version_checks TO 'false';
 -- Create extension in oldest version
@@ -171,21 +173,6 @@ WHERE pgd.refclassid = 'pg_extension'::regclass AND
 -------
      0
 (1 row)
-
--- if the output of following query changes, we might need to change
--- some heap_getattr() calls to heap_deform_tuple(). This errors out in
--- postgres versions before 11.
-SELECT attrelid::regclass, attname, atthasmissing, attmissingval
-FROM pg_attribute
-WHERE atthasmissing
-ORDER BY attrelid, attname;
-   attrelid   |   attname   | atthasmissing | attmissingval 
---------------+-------------+---------------+---------------
- pg_dist_node | hasmetadata | t             | {f}
- pg_dist_node | isactive    | t             | {t}
- pg_dist_node | nodecluster | t             | {default}
- pg_dist_node | noderole    | t             | {primary}
-(4 rows)
 
 -- see incompatible version errors out
 RESET citus.enable_version_checks;
