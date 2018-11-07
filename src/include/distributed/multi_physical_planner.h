@@ -350,6 +350,7 @@ extern List * QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 
 /* function declarations for managing jobs */
 extern uint64 UniqueJobId(void);
+extern List * LeftRotateList(List *list, uint32 rotateCount);
 
 
 #endif   /* MULTI_PHYSICAL_PLANNER_H */
