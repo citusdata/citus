@@ -41,13 +41,13 @@ install:
   # download and install HLL and TopN manually, as custom builds won't satisfy deps
   # only install if performing non-11 build
   - |
-    if [ "${PGVERSION}" != "11" ]; then
-      apt-get download "postgresql-${PGVERSION}-hll=2.10.2.citus-1"
+    if [ "${PGVERSION}" != "12" ]; then
+      apt-get download "postgresql-${PGVERSION}-hll=2.12.citus-1"
       sudo dpkg --force-confold --force-confdef --force-all -i *hll*.deb
     fi
   - |
-    if [ "${PGVERSION}" != "11" ]; then
-      apt-get download "postgresql-${PGVERSION}-topn=2.1.0"
+    if [ "${PGVERSION}" != "12" ]; then
+      apt-get download "postgresql-${PGVERSION}-topn=2.2.0"
       sudo dpkg --force-confold --force-confdef --force-all -i *topn*.deb
     fi
 before_script: citus_indent --quiet --check
