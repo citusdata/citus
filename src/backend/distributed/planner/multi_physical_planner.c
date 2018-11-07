@@ -114,7 +114,6 @@ static AttrNumber NewColumnId(Index originalTableId, AttrNumber originalColumnId
 static Job * JobForRangeTable(List *jobList, RangeTblEntry *rangeTableEntry);
 static Job * JobForTableIdList(List *jobList, List *searchedTableIdList);
 static List * ChildNodeList(MultiNode *multiNode);
-static uint64 UniqueJobId(void);
 static Job * BuildJob(Query *jobQuery, List *dependedJobList);
 static MapMergeJob * BuildMapMergeJob(Query *jobQuery, List *dependedJobList,
 									  Var *partitionKey, PartitionType partitionType,
@@ -1757,7 +1756,7 @@ ChildNodeList(MultiNode *multiNode)
  * When citus.enable_unique_job_ids is off then only the local counter is
  * included to get repeatable results.
  */
-static uint64
+uint64
 UniqueJobId(void)
 {
 	static uint32 jobIdCounter = 0;

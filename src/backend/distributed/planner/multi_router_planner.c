@@ -148,11 +148,13 @@ static List * get_all_actual_clauses(List *restrictinfo_list);
 static int CompareInsertValuesByShardId(const void *leftElement,
 										const void *rightElement);
 static uint64 GetInitialShardId(List *relationShardList);
-static List * SingleShardSelectTaskList(Query *query, List *relationShardList,
-										List *placementList, uint64 shardId);
+static List * SingleShardSelectTaskList(Query *query, uint64 jobId,
+										List *relationShardList, List *placementList,
+										uint64 shardId);
 static bool RowLocksOnRelations(Node *node, List **rtiLockList);
-static List * SingleShardModifyTaskList(Query *query, List *relationShardList,
-										List *placementList, uint64 shardId);
+static List * SingleShardModifyTaskList(Query *query, uint64 jobId,
+										List *relationShardList, List *placementList,
+										uint64 shardId);
 
 
 /*
@@ -1388,7 +1390,7 @@ CreateJob(Query *query)
 	Job *job = NULL;
 
 	job = CitusMakeNode(Job);
-	job->jobId = INVALID_JOB_ID;
+	job->jobId = UniqueJobId();
 	job->jobQuery = query;
 	job->taskList = NIL;
 	job->dependedJobList = NIL;
@@ -1625,12 +1627,13 @@ RouterJob(Query *originalQuery, PlannerRestrictionContext *plannerRestrictionCon
 
 	if (originalQuery->commandType == CMD_SELECT)
 	{
-		job->taskList = SingleShardSelectTaskList(originalQuery, relationShardList,
-												  placementList, shardId);
+		job->taskList = SingleShardSelectTaskList(originalQuery, job->jobId,
+												  relationShardList, placementList,
+												  shardId);
 	}
 	else if (isMultiShardModifyQuery)
 	{
-		job->taskList = QueryPushdownSqlTaskList(originalQuery, 0,
+		job->taskList = QueryPushdownSqlTaskList(originalQuery, job->jobId,
 												 plannerRestrictionContext->
 												 relationRestrictionContext,
 												 relationShardList, MODIFY_TASK,
@@ -1638,11 +1641,15 @@ RouterJob(Query *originalQuery, PlannerRestrictionContext *plannerRestrictionCon
 	}
 	else
 	{
-		job->taskList = SingleShardModifyTaskList(originalQuery, relationShardList,
-												  placementList, shardId);
+		job->taskList = SingleShardModifyTaskList(originalQuery, job->jobId,
+												  relationShardList, placementList,
+												  shardId);
 	}
 
 	job->requiresMasterEvaluation = requiresMasterEvaluation;
+
+	AssignAnchorShardTaskList(job->taskList);
+
 	return job;
 }
 
@@ -1652,7 +1659,8 @@ RouterJob(Query *originalQuery, PlannerRestrictionContext *plannerRestrictionCon
  * and returns it as a list.
  */
 static List *
-SingleShardSelectTaskList(Query *query, List *relationShardList, List *placementList,
+SingleShardSelectTaskList(Query *query, uint64 jobId, List *relationShardList,
+						  List *placementList,
 						  uint64 shardId)
 {
 	Task *task = CreateTask(ROUTER_TASK);
@@ -1664,6 +1672,7 @@ SingleShardSelectTaskList(Query *query, List *relationShardList, List *placement
 
 	task->queryString = queryString->data;
 	task->anchorShardId = shardId;
+	task->jobId = jobId;
 	task->taskPlacementList = placementList;
 	task->relationShardList = relationShardList;
 	task->relationRowLockList = relationRowLockList;
@@ -1718,8 +1727,8 @@ RowLocksOnRelations(Node *node, List **relationRowLockList)
  * and returns it as a list.
  */
 static List *
-SingleShardModifyTaskList(Query *query, List *relationShardList, List *placementList,
-						  uint64 shardId)
+SingleShardModifyTaskList(Query *query, uint64 jobId, List *relationShardList,
+						  List *placementList, uint64 shardId)
 {
 	Task *task = CreateTask(MODIFY_TASK);
 	StringInfo queryString = makeStringInfo();
@@ -1746,6 +1755,7 @@ SingleShardModifyTaskList(Query *query, List *relationShardList, List *placement
 
 	task->queryString = queryString->data;
 	task->anchorShardId = shardId;
+	task->jobId = jobId;
 	task->taskPlacementList = placementList;
 	task->relationShardList = relationShardList;
 	task->replicationModel = modificationTableCacheEntry->replicationModel;
