@@ -135,14 +135,92 @@ SELECT master_get_active_worker_nodes();
 -- try to disable a node which does not exist and see that an error is thrown
 SELECT master_disable_node('localhost.noexist', 2345);
 ERROR:  node at "localhost.noexist:2345" does not exist
--- try to disable a node via non-super user
 CREATE USER non_super_user;
 NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
 HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
-\c - non_super_user - :master_port
-SELECT master_disable_node('localhost', :worker_1_port);
-ERROR:  operation is not allowed
-HINT:  Run the command with a superuser.
+CREATE USER node_metadata_user;
+NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
+HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
+GRANT EXECUTE ON FUNCTION master_activate_node(text,int) TO node_metadata_user;
+GRANT EXECUTE ON FUNCTION master_add_inactive_node(text,int,int,noderole,name) TO node_metadata_user;
+GRANT EXECUTE ON FUNCTION master_add_node(text,int,int,noderole,name) TO node_metadata_user;
+GRANT EXECUTE ON FUNCTION master_add_secondary_node(text,int,text,int,name) TO node_metadata_user;
+GRANT EXECUTE ON FUNCTION master_disable_node(text,int) TO node_metadata_user;
+GRANT EXECUTE ON FUNCTION master_remove_node(text,int) TO node_metadata_user;
+GRANT EXECUTE ON FUNCTION master_update_node(int,text,int) TO node_metadata_user;
+-- try to manipulate node metadata via non-super user
+SET ROLE non_super_user;
+SELECT 1 FROM master_initialize_node_metadata();
+ERROR:  permission denied for function master_initialize_node_metadata
+SELECT 1 FROM master_add_inactive_node('localhost', :worker_2_port + 1);
+ERROR:  permission denied for function master_add_inactive_node
+SELECT 1 FROM master_activate_node('localhost', :worker_2_port + 1);
+ERROR:  permission denied for function master_activate_node
+SELECT 1 FROM master_disable_node('localhost', :worker_2_port + 1);
+ERROR:  permission denied for function master_disable_node
+SELECT 1 FROM master_remove_node('localhost', :worker_2_port + 1);
+ERROR:  permission denied for function master_remove_node
+SELECT 1 FROM master_add_node('localhost', :worker_2_port + 1);
+ERROR:  permission denied for function master_add_node
+SELECT 1 FROM master_add_secondary_node('localhost', :worker_2_port + 2, 'localhost', :worker_2_port);
+ERROR:  permission denied for function master_add_secondary_node
+SELECT master_update_node(nodeid, 'localhost', :worker_2_port + 3) FROM pg_dist_node WHERE nodeport = :worker_2_port;
+ERROR:  permission denied for function master_update_node
+-- try to manipulate node metadata via privileged user
+SET ROLE node_metadata_user;
+BEGIN;
+SELECT 1 FROM master_add_inactive_node('localhost', :worker_2_port + 1);
+ ?column? 
+----------
+        1
+(1 row)
+
+SELECT 1 FROM master_activate_node('localhost', :worker_2_port + 1);
+ ?column? 
+----------
+        1
+(1 row)
+
+SELECT 1 FROM master_disable_node('localhost', :worker_2_port + 1);
+ ?column? 
+----------
+        1
+(1 row)
+
+SELECT 1 FROM master_remove_node('localhost', :worker_2_port + 1);
+ ?column? 
+----------
+        1
+(1 row)
+
+SELECT 1 FROM master_add_node('localhost', :worker_2_port + 1);
+ ?column? 
+----------
+        1
+(1 row)
+
+SELECT 1 FROM master_add_secondary_node('localhost', :worker_2_port + 2, 'localhost', :worker_2_port);
+ ?column? 
+----------
+        1
+(1 row)
+
+SELECT master_update_node(nodeid, 'localhost', :worker_2_port + 3) FROM pg_dist_node WHERE nodeport = :worker_2_port;
+ master_update_node 
+--------------------
+ 
+(1 row)
+
+SELECT nodename, nodeport, noderole FROM pg_dist_node ORDER BY nodeport;
+ nodename  | nodeport | noderole  
+-----------+----------+-----------
+ localhost |    57637 | primary
+ localhost |    57639 | primary
+ localhost |    57640 | secondary
+ localhost |    57641 | primary
+(4 rows)
+
+ABORT;
 \c - postgres - :master_port
 SELECT master_get_active_worker_nodes();
  master_get_active_worker_nodes 
@@ -291,16 +369,16 @@ SELECT count(1) FROM pg_dist_node;
 SELECT
 	master_add_node('localhost', :worker_1_port),
 	master_add_node('localhost', :worker_2_port);
-                  master_add_node                  |                  master_add_node                  
----------------------------------------------------+---------------------------------------------------
- (8,7,localhost,57637,default,f,t,primary,default) | (9,8,localhost,57638,default,f,t,primary,default)
+                  master_add_node                   |                   master_add_node                   
+----------------------------------------------------+-----------------------------------------------------
+ (11,9,localhost,57637,default,f,t,primary,default) | (12,10,localhost,57638,default,f,t,primary,default)
 (1 row)
 
 SELECT * FROM pg_dist_node ORDER BY nodeid;
  nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole | nodecluster 
 --------+---------+-----------+----------+----------+-------------+----------+----------+-------------
-      8 |       7 | localhost |    57637 | default  | f           | t        | primary  | default
-      9 |       8 | localhost |    57638 | default  | f           | t        | primary  | default
+     11 |       9 | localhost |    57637 | default  | f           | t        | primary  | default
+     12 |      10 | localhost |    57638 | default  | f           | t        | primary  | default
 (2 rows)
 
 -- check that mixed add/remove node commands work fine inside transaction
@@ -454,7 +532,7 @@ ERROR:  primaries must be added to the default cluster
 -- check that you can't add more than one primary to a group
 SELECT groupid AS worker_1_group FROM pg_dist_node WHERE nodeport = :worker_1_port \gset
 SELECT master_add_node('localhost', 9999, groupid => :worker_1_group, noderole => 'primary');
-ERROR:  group 12 already has a primary node
+ERROR:  group 14 already has a primary node
 -- check that you can add secondaries and unavailable nodes to a group
 SELECT groupid AS worker_2_group FROM pg_dist_node WHERE nodeport = :worker_2_port \gset
 SELECT 1 FROM master_add_node('localhost', 9998, groupid => :worker_1_group, noderole => 'secondary');
@@ -480,13 +558,13 @@ SELECT 1 FROM master_add_inactive_node('localhost', 9996, groupid => :worker_2_g
 SELECT master_add_inactive_node('localhost', 9999, groupid => :worker_2_group, nodecluster => 'olap', noderole => 'secondary');
              master_add_inactive_node              
 ---------------------------------------------------
- (19,14,localhost,9999,default,f,f,secondary,olap)
+ (22,16,localhost,9999,default,f,f,secondary,olap)
 (1 row)
 
 SELECT master_activate_node('localhost', 9999);
                master_activate_node                
 ---------------------------------------------------
- (19,14,localhost,9999,default,f,t,secondary,olap)
+ (22,16,localhost,9999,default,f,t,secondary,olap)
 (1 row)
 
 SELECT master_disable_node('localhost', 9999);
@@ -514,17 +592,17 @@ CONTEXT:  PL/pgSQL function citus.pg_dist_node_trigger_func() line 18 at RAISE
 INSERT INTO pg_dist_node (nodename, nodeport, groupid, noderole, nodecluster)
   VALUES ('localhost', 5000, 1000, 'primary', 'olap');
 ERROR:  new row for relation "pg_dist_node" violates check constraint "primaries_are_only_allowed_in_the_default_cluster"
-DETAIL:  Failing row contains (17, 1000, localhost, 5000, default, f, t, primary, olap).
+DETAIL:  Failing row contains (19, 1000, localhost, 5000, default, f, t, primary, olap).
 UPDATE pg_dist_node SET nodecluster = 'olap'
   WHERE nodeport = :worker_1_port;
 ERROR:  new row for relation "pg_dist_node" violates check constraint "primaries_are_only_allowed_in_the_default_cluster"
-DETAIL:  Failing row contains (13, 12, localhost, 57637, default, f, t, primary, olap).
+DETAIL:  Failing row contains (16, 14, localhost, 57637, default, f, t, primary, olap).
 -- check that you /can/ add a secondary node to a non-default cluster
 SELECT groupid AS worker_2_group FROM pg_dist_node WHERE nodeport = :worker_2_port \gset
 SELECT master_add_node('localhost', 8888, groupid => :worker_1_group, noderole => 'secondary', nodecluster=> 'olap');
                   master_add_node                  
 ---------------------------------------------------
- (20,12,localhost,8888,default,f,t,secondary,olap)
+ (23,14,localhost,8888,default,f,t,secondary,olap)
 (1 row)
 
 -- check that super-long cluster names are truncated
@@ -537,13 +615,13 @@ SELECT master_add_node('localhost', 8887, groupid => :worker_1_group, noderole =
 );
                                                master_add_node                                                
 --------------------------------------------------------------------------------------------------------------
- (21,12,localhost,8887,default,f,t,secondary,thisisasixtyfourcharacterstringrepeatedfourtimestomake256chars.)
+ (24,14,localhost,8887,default,f,t,secondary,thisisasixtyfourcharacterstringrepeatedfourtimestomake256chars.)
 (1 row)
 
 SELECT * FROM pg_dist_node WHERE nodeport=8887;
  nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole  |                           nodecluster                           
 --------+---------+-----------+----------+----------+-------------+----------+-----------+-----------------------------------------------------------------
-     21 |      12 | localhost |     8887 | default  | f           | t        | secondary | thisisasixtyfourcharacterstringrepeatedfourtimestomake256chars.
+     24 |      14 | localhost |     8887 | default  | f           | t        | secondary | thisisasixtyfourcharacterstringrepeatedfourtimestomake256chars.
 (1 row)
 
 -- don't remove the secondary and unavailable nodes, check that no commands are sent to
@@ -552,13 +630,13 @@ SELECT * FROM pg_dist_node WHERE nodeport=8887;
 SELECT master_add_secondary_node('localhost', 9995, 'localhost', :worker_1_port);
               master_add_secondary_node               
 ------------------------------------------------------
- (22,12,localhost,9995,default,f,t,secondary,default)
+ (25,14,localhost,9995,default,f,t,secondary,default)
 (1 row)
 
 SELECT master_add_secondary_node('localhost', 9994, primaryname => 'localhost', primaryport => :worker_2_port);
               master_add_secondary_node               
 ------------------------------------------------------
- (23,14,localhost,9994,default,f,t,secondary,default)
+ (26,16,localhost,9994,default,f,t,secondary,default)
 (1 row)
 
 SELECT master_add_secondary_node('localhost', 9993, 'localhost', 2000);
@@ -566,7 +644,7 @@ ERROR:  node at "localhost:2000" does not exist
 SELECT master_add_secondary_node('localhost', 9992, 'localhost', :worker_1_port, nodecluster => 'second-cluster');
                   master_add_secondary_node                  
 -------------------------------------------------------------
- (24,12,localhost,9992,default,f,t,secondary,second-cluster)
+ (27,14,localhost,9992,default,f,t,secondary,second-cluster)
 (1 row)
 
 SELECT nodeid AS worker_1_node FROM pg_dist_node WHERE nodeport=:worker_1_port \gset
@@ -586,7 +664,7 @@ SELECT master_update_node(:worker_1_node, 'somehost', 9000);
 SELECT * FROM pg_dist_node WHERE nodeid = :worker_1_node;
  nodeid | groupid | nodename | nodeport | noderack | hasmetadata | isactive | noderole | nodecluster 
 --------+---------+----------+----------+----------+-------------+----------+----------+-------------
-     13 |      12 | somehost |     9000 | default  | f           | t        | primary  | default
+     16 |      14 | somehost |     9000 | default  | f           | t        | primary  | default
 (1 row)
 
 -- cleanup
@@ -599,6 +677,6 @@ SELECT master_update_node(:worker_1_node, 'localhost', :worker_1_port);
 SELECT * FROM pg_dist_node WHERE nodeid = :worker_1_node;
  nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole | nodecluster 
 --------+---------+-----------+----------+----------+-------------+----------+----------+-------------
-     13 |      12 | localhost |    57637 | default  | f           | t        | primary  | default
+     16 |      14 | localhost |    57637 | default  | f           | t        | primary  | default
 (1 row)
 

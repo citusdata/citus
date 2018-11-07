@@ -257,7 +257,6 @@ master_disable_node(PG_FUNCTION_ARGS)
 	CheckCitusVersion(ERROR);
 
 	EnsureCoordinator();
-	EnsureSuperUser();
 
 	/* take an exclusive lock on pg_dist_node to serialize pg_dist_node changes */
 	LockRelationOid(DistNodeRelationId(), ExclusiveLock);
@@ -305,7 +304,6 @@ master_activate_node(PG_FUNCTION_ARGS)
 	CheckCitusVersion(ERROR);
 
 	EnsureCoordinator();
-	EnsureSuperUser();
 
 	nodeRecord = ActivateNode(nodeNameString, nodePort);
 
@@ -838,7 +836,6 @@ RemoveNodeFromCluster(char *nodeName, int32 nodePort)
 	uint32 deletedNodeId = INVALID_PLACEMENT_ID;
 
 	EnsureCoordinator();
-	EnsureSuperUser();
 
 	/* take an exclusive lock on pg_dist_node to serialize pg_dist_node changes */
 	LockRelationOid(DistNodeRelationId(), ExclusiveLock);
@@ -943,7 +940,6 @@ AddNodeMetadata(char *nodeName, int32 nodePort, int32 groupId, char *nodeRack,
 	uint32 primariesWithMetadata = 0;
 
 	EnsureCoordinator();
-	EnsureSuperUser();
 
 	*nodeAlreadyExists = false;
 
