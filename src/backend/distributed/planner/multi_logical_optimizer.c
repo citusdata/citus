@@ -19,7 +19,6 @@
 #include "access/htup_details.h"
 #include "access/nbtree.h"
 #include "catalog/indexing.h"
-#include "catalog/namespace.h"
 #include "catalog/pg_aggregate.h"
 #include "catalog/pg_am.h"
 #include "catalog/pg_proc.h"
@@ -29,6 +28,7 @@
 #include "distributed/citus_ruleutils.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/extended_op_node_utils.h"
+#include "distributed/function_utils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_logical_optimizer.h"
 #include "distributed/multi_logical_planner.h"
@@ -45,12 +45,8 @@
 #include "parser/parse_coerce.h"
 #include "parser/parse_oper.h"
 #include "parser/parsetree.h"
-#include "utils/builtins.h"
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
-#if (PG_VERSION_NUM >= 100000)
-#include "utils/regproc.h"
-#endif
 #include "utils/rel.h"
 #include "utils/syscache.h"
 #include "utils/tqual.h"
@@ -2987,44 +2983,6 @@ AggregateFunctionOid(const char *functionName, Oid inputType)
 	systable_endscan(scanDescriptor);
 	heap_close(procRelation, AccessShareLock);
 
-	return functionOid;
-}
-
-
-/*
- * FunctionOid looks for a function that has the given name and the given number
- * of arguments, and returns the corresponding function's oid.
- */
-Oid
-FunctionOid(const char *schemaName, const char *functionName, int argumentCount)
-{
-	FuncCandidateList functionList = NULL;
-	Oid functionOid = InvalidOid;
-
-	char *qualifiedFunctionName = quote_qualified_identifier(schemaName, functionName);
-	List *qualifiedFunctionNameList = stringToQualifiedNameList(qualifiedFunctionName);
-	List *argumentList = NIL;
-	const bool findVariadics = false;
-	const bool findDefaults = false;
-	const bool missingOK = true;
-
-	functionList = FuncnameGetCandidates(qualifiedFunctionNameList, argumentCount,
-										 argumentList, findVariadics,
-										 findDefaults, missingOK);
-
-	if (functionList == NULL)
-	{
-		ereport(ERROR, (errcode(ERRCODE_UNDEFINED_FUNCTION),
-						errmsg("function \"%s\" does not exist", functionName)));
-	}
-	else if (functionList->next != NULL)
-	{
-		ereport(ERROR, (errcode(ERRCODE_AMBIGUOUS_FUNCTION),
-						errmsg("more than one function named \"%s\"", functionName)));
-	}
-
-	/* get function oid from function list's head */
-	functionOid = functionList->oid;
 	return functionOid;
 }
 

@@ -95,6 +95,7 @@ OBJS = src/backend/distributed/shared_library_init.o \
      src/backend/distributed/utils/distribution_column.o \
      src/backend/distributed/utils/errormessage.o \
      src/backend/distributed/utils/foreign_key_relationship.o \
+     src/backend/distributed/utils/function_utils.o \
      src/backend/distributed/utils/hash_helpers.o \
      src/backend/distributed/utils/listutils.o \
      src/backend/distributed/utils/maintenanced.o \
