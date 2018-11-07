@@ -155,6 +155,9 @@ static bool RowLocksOnRelations(Node *node, List **rtiLockList);
 static List * SingleShardModifyTaskList(Query *query, uint64 jobId,
 										List *relationShardList, List *placementList,
 										uint64 shardId);
+static void ReorderTaskPlacementsByTaskAssignmentPolicy(Job *job, TaskAssignmentPolicyType
+														taskAssignmentPolicy);
+static List * RoundRobinList(List *list, uint64 seed);
 
 
 /*
@@ -1648,9 +1651,35 @@ RouterJob(Query *originalQuery, PlannerRestrictionContext *plannerRestrictionCon
 
 	job->requiresMasterEvaluation = requiresMasterEvaluation;
 
-	AssignAnchorShardTaskList(job->taskList);
+	ReorderTaskPlacementsByTaskAssignmentPolicy(job, TaskAssignmentPolicy);
 
 	return job;
+}
+
+
+static void
+ReorderTaskPlacementsByTaskAssignmentPolicy(Job *job, TaskAssignmentPolicyType
+											taskAssignmentPolicy)
+{
+	ListCell *taskCell = NULL;
+
+	if (taskAssignmentPolicy == TASK_ASSIGNMENT_ROUND_ROBIN)
+	{
+		foreach(taskCell, job->taskList)
+		{
+			Task *task = (Task *) lfirst(taskCell);
+			task->taskPlacementList = RoundRobinList(task->taskPlacementList,
+													 task->jobId);
+		}
+	}
+}
+
+
+static List *
+RoundRobinList(List *list, uint64 seed)
+{
+	uint32 rotate = seed % list_length(list);
+	return LeftRotateList(list, rotate);
 }
 
 

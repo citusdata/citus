@@ -178,7 +178,6 @@ static List * ReorderAndAssignTaskList(List *taskList,
 static int CompareTasksByShardId(const void *leftElement, const void *rightElement);
 static List * ActiveShardPlacementLists(List *taskList);
 static List * ActivePlacementList(List *placementList);
-static List * LeftRotateList(List *list, uint32 rotateCount);
 static List * FindDependedMergeTaskList(Task *sqlTask);
 static List * AssignDualHashTaskList(List *taskList);
 static int CompareTasksByTaskId(const void *leftElement, const void *rightElement);
@@ -5311,7 +5310,7 @@ ActivePlacementList(List *placementList)
  * repeatedly moves the list's first element to the end of the list, and
  * then returns the newly rotated list.
  */
-static List *
+List *
 LeftRotateList(List *list, uint32 rotateCount)
 {
 	List *rotatedList = list_copy(list);
