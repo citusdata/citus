@@ -11,9 +11,8 @@
 #include "miscadmin.h"
 #include "pgstat.h"
 
-#include "distributed/multi_logical_optimizer.h"
+#include "distributed/function_utils.h"
 #include "distributed/multi_progress.h"
-#include "nodes/execnodes.h"
 #include "storage/dsm.h"
 #include "utils/builtins.h"
 
@@ -23,8 +22,6 @@ static uint64 currentProgressDSMHandle = DSM_HANDLE_INVALID;
 
 static ProgressMonitorData * MonitorDataFromDSMHandle(dsm_handle dsmHandle,
 													  dsm_segment **attachedSegment);
-static ReturnSetInfo * FunctionCallGetTupleStore1(PGFunction function, Oid functionId,
-												  Datum argument);
 
 
 /*
@@ -246,30 +243,4 @@ DetachFromDSMSegments(List *dsmSegmentList)
 
 		dsm_detach(dsmSegment);
 	}
-}
-
-
-/*
- * FunctionCallGetTupleStore1 calls the given set-returning PGFunction with the given
- * argument and returns the ResultSetInfo filled by the called function.
- */
-static ReturnSetInfo *
-FunctionCallGetTupleStore1(PGFunction function, Oid functionId, Datum argument)
-{
-	FunctionCallInfoData fcinfo;
-	FmgrInfo flinfo;
-	ReturnSetInfo *rsinfo = makeNode(ReturnSetInfo);
-	EState *estate = CreateExecutorState();
-	rsinfo->econtext = GetPerTupleExprContext(estate);
-	rsinfo->allowedModes = SFRM_Materialize;
-
-	fmgr_info(functionId, &flinfo);
-	InitFunctionCallInfoData(fcinfo, &flinfo, 1, InvalidOid, NULL, (Node *) rsinfo);
-
-	fcinfo.arg[0] = argument;
-	fcinfo.argnull[0] = false;
-
-	(*function)(&fcinfo);
-
-	return rsinfo;
 }

@@ -136,10 +136,6 @@ extern void MultiLogicalPlanOptimize(MultiTreeRoot *multiTree);
 /* Function declaration for getting partition method for the given relation */
 extern char PartitionMethod(Oid relationId);
 
-/* Function declaration for getting oid for the given function name */
-extern Oid FunctionOid(const char *schemaName, const char *functionName,
-					   int argumentCount);
-
 /* Function declaration for helper functions in subquery pushdown */
 extern bool GroupedByColumn(List *groupClauseList, List *targetList, Var *column);
 extern List * SubqueryMultiTableList(MultiNode *multiNode);
