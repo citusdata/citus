@@ -176,3 +176,84 @@ RESET client_min_messages;
 DEBUG:  StartTransactionCommand
 DEBUG:  ProcessUtility
 COMMIT;
+-- Check how task_assignment_policy impact planning decisions for reference tables
+-- We rely on the node:ports displayed in the explain plan
+RESET citus.explain_distributed_queries;
+CREATE TABLE task_assignment_reference_table (test_id  integer);
+SELECT create_reference_table('task_assignment_reference_table');
+ create_reference_table 
+------------------------
+ 
+(1 row)
+
+SET citus.task_assignment_policy TO 'greedy';
+EXPLAIN SELECT * FROM task_assignment_reference_table;
+                                                              QUERY PLAN                                                              
+--------------------------------------------------------------------------------------------------------------------------------------
+ Custom Scan (Citus Router)  (cost=0.00..0.00 rows=0 width=0)
+   Task Count: 1
+   Tasks Shown: All
+   ->  Task
+         Node: host=localhost port=57638 dbname=regression
+         ->  Seq Scan on task_assignment_reference_table_880000 task_assignment_reference_table  (cost=0.00..35.50 rows=2550 width=4)
+(6 rows)
+
+EXPLAIN SELECT * FROM task_assignment_reference_table;
+                                                              QUERY PLAN                                                              
+--------------------------------------------------------------------------------------------------------------------------------------
+ Custom Scan (Citus Router)  (cost=0.00..0.00 rows=0 width=0)
+   Task Count: 1
+   Tasks Shown: All
+   ->  Task
+         Node: host=localhost port=57638 dbname=regression
+         ->  Seq Scan on task_assignment_reference_table_880000 task_assignment_reference_table  (cost=0.00..35.50 rows=2550 width=4)
+(6 rows)
+
+SET citus.task_assignment_policy TO 'first-replica';
+EXPLAIN SELECT * FROM task_assignment_reference_table;
+                                                              QUERY PLAN                                                              
+--------------------------------------------------------------------------------------------------------------------------------------
+ Custom Scan (Citus Router)  (cost=0.00..0.00 rows=0 width=0)
+   Task Count: 1
+   Tasks Shown: All
+   ->  Task
+         Node: host=localhost port=57638 dbname=regression
+         ->  Seq Scan on task_assignment_reference_table_880000 task_assignment_reference_table  (cost=0.00..35.50 rows=2550 width=4)
+(6 rows)
+
+EXPLAIN SELECT * FROM task_assignment_reference_table;
+                                                              QUERY PLAN                                                              
+--------------------------------------------------------------------------------------------------------------------------------------
+ Custom Scan (Citus Router)  (cost=0.00..0.00 rows=0 width=0)
+   Task Count: 1
+   Tasks Shown: All
+   ->  Task
+         Node: host=localhost port=57638 dbname=regression
+         ->  Seq Scan on task_assignment_reference_table_880000 task_assignment_reference_table  (cost=0.00..35.50 rows=2550 width=4)
+(6 rows)
+
+SET citus.task_assignment_policy TO 'round-robin';
+EXPLAIN SELECT * FROM task_assignment_reference_table;
+                                                              QUERY PLAN                                                              
+--------------------------------------------------------------------------------------------------------------------------------------
+ Custom Scan (Citus Router)  (cost=0.00..0.00 rows=0 width=0)
+   Task Count: 1
+   Tasks Shown: All
+   ->  Task
+         Node: host=localhost port=57638 dbname=regression
+         ->  Seq Scan on task_assignment_reference_table_880000 task_assignment_reference_table  (cost=0.00..35.50 rows=2550 width=4)
+(6 rows)
+
+EXPLAIN SELECT * FROM task_assignment_reference_table;
+                                                              QUERY PLAN                                                              
+--------------------------------------------------------------------------------------------------------------------------------------
+ Custom Scan (Citus Router)  (cost=0.00..0.00 rows=0 width=0)
+   Task Count: 1
+   Tasks Shown: All
+   ->  Task
+         Node: host=localhost port=57637 dbname=regression
+         ->  Seq Scan on task_assignment_reference_table_880000 task_assignment_reference_table  (cost=0.00..35.50 rows=2550 width=4)
+(6 rows)
+
+RESET citus.task_assignment_policy;
+DROP TABLE task_assignment_reference_table;
