@@ -1658,11 +1658,19 @@ RouterJob(Query *originalQuery, PlannerRestrictionContext *plannerRestrictionCon
 	}
 
 	job->requiresMasterEvaluation = requiresMasterEvaluation;
-
 	return job;
 }
 
 
+/*
+ * ReorderTaskPlacementsByTaskAssignmentPolicy applies selective reordering for supported
+ * TaskAssignmentPolicyTypes.
+ *
+ * Supported Types
+ * - TASK_ASSIGNMENT_ROUND_ROBIN round robin schedule queries among placements
+ *
+ * By default it does not reorder the task list, implying a first-replica strategy.
+ */
 static void
 ReorderTaskPlacementsByTaskAssignmentPolicy(Job *job, TaskAssignmentPolicyType
 											taskAssignmentPolicy)
