@@ -157,7 +157,6 @@ static List * SingleShardModifyTaskList(Query *query, uint64 jobId,
 										uint64 shardId);
 static void ReorderTaskPlacementsByTaskAssignmentPolicy(Job *job, TaskAssignmentPolicyType
 														taskAssignmentPolicy);
-static List * RoundRobinList(List *list, uint64 seed);
 
 
 /*
@@ -1633,6 +1632,15 @@ RouterJob(Query *originalQuery, PlannerRestrictionContext *plannerRestrictionCon
 		job->taskList = SingleShardSelectTaskList(originalQuery, job->jobId,
 												  relationShardList, placementList,
 												  shardId);
+
+		/*
+		 * Queries to reference tables, or distributed tables with multiple replica's have
+		 * their task placements reordered according to the configured
+		 * task_assignment_policy. This is only applicable to select queries as the modify
+		 * queries will be reordered to _always_ use the first-replica policy during
+		 * execution.
+		 */
+		ReorderTaskPlacementsByTaskAssignmentPolicy(job, TaskAssignmentPolicy);
 	}
 	else if (isMultiShardModifyQuery)
 	{
@@ -1651,8 +1659,6 @@ RouterJob(Query *originalQuery, PlannerRestrictionContext *plannerRestrictionCon
 
 	job->requiresMasterEvaluation = requiresMasterEvaluation;
 
-	ReorderTaskPlacementsByTaskAssignmentPolicy(job, TaskAssignmentPolicy);
-
 	return job;
 }
 
@@ -1661,25 +1667,10 @@ static void
 ReorderTaskPlacementsByTaskAssignmentPolicy(Job *job, TaskAssignmentPolicyType
 											taskAssignmentPolicy)
 {
-	ListCell *taskCell = NULL;
-
 	if (taskAssignmentPolicy == TASK_ASSIGNMENT_ROUND_ROBIN)
 	{
-		foreach(taskCell, job->taskList)
-		{
-			Task *task = (Task *) lfirst(taskCell);
-			task->taskPlacementList = RoundRobinList(task->taskPlacementList,
-													 task->jobId);
-		}
+		job->taskList = RoundRobinAssignTaskList(job->taskList);
 	}
-}
-
-
-static List *
-RoundRobinList(List *list, uint64 seed)
-{
-	uint32 rotate = seed % list_length(list);
-	return LeftRotateList(list, rotate);
 }
 
 

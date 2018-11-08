@@ -171,13 +171,13 @@ static bool HasMergeTaskDependencies(List *sqlTaskList);
 static List * GreedyAssignTaskList(List *taskList);
 static Task * GreedyAssignTask(WorkerNode *workerNode, List *taskList,
 							   List *activeShardPlacementLists);
-static List * RoundRobinAssignTaskList(List *taskList);
 static List * RoundRobinReorder(Task *task, List *placementList);
 static List * ReorderAndAssignTaskList(List *taskList,
 									   List * (*reorderFunction)(Task *, List *));
 static int CompareTasksByShardId(const void *leftElement, const void *rightElement);
 static List * ActiveShardPlacementLists(List *taskList);
 static List * ActivePlacementList(List *placementList);
+static List * LeftRotateList(List *list, uint32 rotateCount);
 static List * FindDependedMergeTaskList(Task *sqlTask);
 static List * AssignDualHashTaskList(List *taskList);
 static int CompareTasksByTaskId(const void *leftElement, const void *rightElement);
@@ -5097,7 +5097,7 @@ FirstReplicaAssignTaskList(List *taskList)
  * by the number of active shard placements, and ensure that we rotate between
  * these placements across subsequent queries.
  */
-static List *
+List *
 RoundRobinAssignTaskList(List *taskList)
 {
 	taskList = ReorderAndAssignTaskList(taskList, RoundRobinReorder);
@@ -5310,7 +5310,7 @@ ActivePlacementList(List *placementList)
  * repeatedly moves the list's first element to the end of the list, and
  * then returns the newly rotated list.
  */
-List *
+static List *
 LeftRotateList(List *list, uint32 rotateCount)
 {
 	List *rotatedList = list_copy(list);
