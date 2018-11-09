@@ -103,16 +103,16 @@ CREATE TABLE task_assignment_reference_table (test_id  integer);
 SELECT create_reference_table('task_assignment_reference_table');
 
 SET citus.task_assignment_policy TO 'greedy';
-EXPLAIN SELECT * FROM task_assignment_reference_table;
-EXPLAIN SELECT * FROM task_assignment_reference_table;
+EXPLAIN (COSTS FALSE) SELECT * FROM task_assignment_reference_table;
+EXPLAIN (COSTS FALSE) SELECT * FROM task_assignment_reference_table;
 
 SET citus.task_assignment_policy TO 'first-replica';
-EXPLAIN SELECT * FROM task_assignment_reference_table;
-EXPLAIN SELECT * FROM task_assignment_reference_table;
+EXPLAIN (COSTS FALSE) SELECT * FROM task_assignment_reference_table;
+EXPLAIN (COSTS FALSE) SELECT * FROM task_assignment_reference_table;
 
 SET citus.task_assignment_policy TO 'round-robin';
-EXPLAIN SELECT * FROM task_assignment_reference_table;
-EXPLAIN SELECT * FROM task_assignment_reference_table;
+EXPLAIN (COSTS FALSE) SELECT * FROM task_assignment_reference_table;
+EXPLAIN (COSTS FALSE) SELECT * FROM task_assignment_reference_table;
 
 RESET citus.task_assignment_policy;
 
