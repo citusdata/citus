@@ -17,22 +17,11 @@ SELECT create_distributed_table('test_table','id');
 -- Populate data to the table
 INSERT INTO test_table VALUES(1,1,1),(1,2,2),(2,1,1),(2,2,2),(3,1,1),(3,2,2);
 
--- Create a function to make sure that queries returning the same result 
-CREATE FUNCTION raise_failed_execution(query text) RETURNS void AS $$
-BEGIN
-	EXECUTE query;
-	EXCEPTION WHEN OTHERS THEN
-	IF SQLERRM LIKE 'failed to execute task%' THEN
-		RAISE 'Task failed to execute';
-	END IF;
-END;
-$$LANGUAGE plpgsql;
-
 -- Kill when the first COPY command arrived, since we have a single placement 
 -- it is expected to error out.
 SET client_min_messages TO ERROR;
 SELECT citus.mitmproxy('conn.onQuery(query="^COPY").kill()');
-SELECT raise_failed_execution('SELECT count(*) FROM test_table');
+SELECT public.raise_failed_execution('SELECT count(*) FROM test_table');
 SET client_min_messages TO DEFAULT;
 
 -- Kill the connection with a CTE
@@ -46,7 +35,7 @@ WHERE test_table.id = results.id;
 -- killing connection after first successful query should break.
 SET client_min_messages TO ERROR;
 SELECT citus.mitmproxy('conn.onQuery(query="^COPY").after(1).kill()');
-SELECT raise_failed_execution('WITH
+SELECT public.raise_failed_execution('WITH
 			results AS (SELECT * FROM test_table)
 			SELECT * FROM test_table, results
 			WHERE test_table.id = results.id');

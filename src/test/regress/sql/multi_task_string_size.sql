@@ -220,9 +220,11 @@ SET citus.max_task_string_size TO 20000;
 -- error message may vary between executions
 -- hiding warning and error message
 -- no output means the query has failed
-SET client_min_messages to FATAL;
+SET client_min_messages to ERROR;
 
+SELECT raise_failed_execution('
 SELECT u.* FROM wide_table u JOIN wide_table v ON (u.long_column_002 = v.long_column_003);
+');
 
 -- following will succeed since it fetches few columns
 SELECT u.long_column_001, u.long_column_002, u.long_column_003 FROM wide_table u JOIN wide_table v ON (u.long_column_002 = v.long_column_003);

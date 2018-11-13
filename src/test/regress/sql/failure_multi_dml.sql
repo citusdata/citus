@@ -65,19 +65,23 @@ SELECT * FROM dml_test ORDER BY id ASC;
 -- fail at PREPARE TRANSACTION
 SELECT citus.mitmproxy('conn.onQuery(query="^PREPARE TRANSACTION").kill()');
 
--- hide the error message (it has the PID)...
+-- this transaction block will be sent to the coordinator as a remote command to hide the
+-- error message that is caused during commit.
 -- we'll test for the txn side-effects to ensure it didn't run
-SET client_min_messages TO FATAL;
-
+SELECT master_run_on_worker(
+    ARRAY['localhost']::text[],
+    ARRAY[:master_port]::int[],
+    ARRAY['
 BEGIN;
 DELETE FROM dml_test WHERE id = 1;
 DELETE FROM dml_test WHERE id = 2;
-INSERT INTO dml_test VALUES (5, 'Epsilon');
-UPDATE dml_test SET name = 'alpha' WHERE id = 1;
-UPDATE dml_test SET name = 'gamma' WHERE id = 3;
+INSERT INTO dml_test VALUES (5, ''Epsilon'');
+UPDATE dml_test SET name = ''alpha'' WHERE id = 1;
+UPDATE dml_test SET name = ''gamma'' WHERE id = 3;
 COMMIT;
-
-SET client_min_messages TO DEFAULT;
+    '],
+    false
+);
 
 SELECT citus.mitmproxy('conn.allow()');
 SELECT shardid FROM pg_dist_shard_placement WHERE shardstate = 3;
