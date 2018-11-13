@@ -9,3 +9,6 @@
 # Regression test output
 /regression.diffs
 /regression.out
+
+# Failure test side effets
+/proxy.output
