@@ -81,3 +81,14 @@ WHERE cc.constraint_schema = ccu.constraint_schema AND
 ORDER BY cc.constraint_name ASC;
 $desc_views$
 );
+
+-- Create a function to make sure that queries returning the same result
+CREATE FUNCTION raise_failed_execution(query text) RETURNS void AS $$
+BEGIN
+	EXECUTE query;
+	EXCEPTION WHEN OTHERS THEN
+	IF SQLERRM LIKE 'failed to execute task%' THEN
+		RAISE 'Task failed to execute';
+	END IF;
+END;
+$$LANGUAGE plpgsql;
