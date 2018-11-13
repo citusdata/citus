@@ -175,7 +175,24 @@ SELECT count(*) FROM pg_dist_transaction;
 SELECT count(*) FROM pg_tables WHERE tablename = 'should_abort';
 SELECT count(*) FROM pg_tables WHERE tablename = 'should_commit';
 
--- Resume ordinary recovery
 \c - - - :master_port
+
+CREATE USER no_access_mx;
+SELECT run_command_on_workers($$CREATE USER no_access_mx;$$);
+
+SET ROLE no_access_mx;
+DROP TABLE distributed_mx_table;
+SELECT master_remove_distributed_table_metadata_from_workers('distributed_mx_table'::regclass, 'public', 'distributed_mx_table');
+SELECT master_drop_all_shards('distributed_mx_table'::regclass, 'public', 'distributed_mx_table');
+SELECT master_remove_partition_metadata('distributed_mx_table'::regclass, 'public', 'distributed_mx_table');
+
+\c - no_access_mx - :worker_1_port
+DROP TABLE distributed_mx_table;
+SELECT master_remove_distributed_table_metadata_from_workers('distributed_mx_table'::regclass, 'public', 'distributed_mx_table');
+SELECT master_drop_all_shards('distributed_mx_table'::regclass, 'public', 'distributed_mx_table');
+SELECT master_remove_partition_metadata('distributed_mx_table'::regclass, 'public', 'distributed_mx_table');
+
+-- Resume ordinary recovery
+\c - postgres - :master_port
 ALTER SYSTEM RESET citus.recover_2pc_interval;
 SELECT pg_reload_conf();

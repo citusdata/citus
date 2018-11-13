@@ -287,8 +287,39 @@ SELECT count(*) FROM pg_tables WHERE tablename = 'should_commit';
      1
 (1 row)
 
--- Resume ordinary recovery
 \c - - - :master_port
+CREATE USER no_access_mx;
+NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
+HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
+SELECT run_command_on_workers($$CREATE USER no_access_mx;$$);
+      run_command_on_workers       
+-----------------------------------
+ (localhost,57637,t,"CREATE ROLE")
+ (localhost,57638,t,"CREATE ROLE")
+(2 rows)
+
+SET ROLE no_access_mx;
+DROP TABLE distributed_mx_table;
+ERROR:  must be owner of table distributed_mx_table
+SELECT master_remove_distributed_table_metadata_from_workers('distributed_mx_table'::regclass, 'public', 'distributed_mx_table');
+ERROR:  must be owner of table distributed_mx_table
+SELECT master_drop_all_shards('distributed_mx_table'::regclass, 'public', 'distributed_mx_table');
+ERROR:  must be owner of table distributed_mx_table
+SELECT master_remove_partition_metadata('distributed_mx_table'::regclass, 'public', 'distributed_mx_table');
+ERROR:  must be owner of table distributed_mx_table
+\c - no_access_mx - :worker_1_port
+DROP TABLE distributed_mx_table;
+ERROR:  must be owner of table distributed_mx_table
+SELECT master_remove_distributed_table_metadata_from_workers('distributed_mx_table'::regclass, 'public', 'distributed_mx_table');
+ERROR:  must be owner of table distributed_mx_table
+SELECT master_drop_all_shards('distributed_mx_table'::regclass, 'public', 'distributed_mx_table');
+ERROR:  operation is not allowed on this node
+HINT:  Connect to the coordinator and run it again.
+SELECT master_remove_partition_metadata('distributed_mx_table'::regclass, 'public', 'distributed_mx_table');
+ERROR:  operation is not allowed on this node
+HINT:  Connect to the coordinator and run it again.
+-- Resume ordinary recovery
+\c - postgres - :master_port
 ALTER SYSTEM RESET citus.recover_2pc_interval;
 SELECT pg_reload_conf();
  pg_reload_conf 
