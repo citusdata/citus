@@ -7,12 +7,25 @@ SELECT pg_reload_conf();
  t
 (1 row)
 
+-- pg 10 and pg 11 has different error messages for acl checks
+-- so catch them and print only one type of error message to prevent
+-- multiple output test files
+CREATE OR REPLACE FUNCTION raise_failed_aclcheck(query text) RETURNS void AS $$
+BEGIN
+    EXECUTE query;
+    EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM LIKE 'must be owner of%' THEN
+        RAISE 'must be owner of the object';
+    END IF;
+END;
+$$LANGUAGE plpgsql;
 -- get rid of the previously created entries in pg_dist_transaction
 -- for the sake of getting consistent results in this test file
 TRUNCATE pg_dist_transaction;
 CREATE TABLE distributed_mx_table (
     key text primary key,
-    value jsonb
+    value jsonb,
+    some_val bigserial
 );
 CREATE INDEX ON distributed_mx_table USING GIN (value);
 SET citus.shard_replication_factor TO 1;
@@ -47,11 +60,12 @@ SELECT count(*) FROM pg_dist_transaction;
 
 \c - - - :worker_1_port
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='distributed_mx_table'::regclass;
- Column | Type  | Modifiers 
---------+-------+-----------
- key    | text  | not null
- value  | jsonb | 
-(2 rows)
+  Column  |  Type  |                                Modifiers                                
+----------+--------+-------------------------------------------------------------------------
+ key      | text   | not null
+ value    | jsonb  | 
+ some_val | bigint | not null default nextval('distributed_mx_table_some_val_seq'::regclass)
+(3 rows)
 
 SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
     relid = 'distributed_mx_table_pkey'::regclass;
@@ -83,11 +97,12 @@ WHERE logicalrelid = 'distributed_mx_table'::regclass;
 
 \c - - - :worker_2_port
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='distributed_mx_table'::regclass;
- Column | Type  | Modifiers 
---------+-------+-----------
- key    | text  | not null
- value  | jsonb | 
-(2 rows)
+  Column  |  Type  |                                Modifiers                                
+----------+--------+-------------------------------------------------------------------------
+ key      | text   | not null
+ value    | jsonb  | 
+ some_val | bigint | not null default nextval('distributed_mx_table_some_val_seq'::regclass)
+(3 rows)
 
 SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
     relid = 'distributed_mx_table_pkey'::regclass;
@@ -299,25 +314,120 @@ SELECT run_command_on_workers($$CREATE USER no_access_mx;$$);
 (2 rows)
 
 SET ROLE no_access_mx;
-DROP TABLE distributed_mx_table;
-ERROR:  must be owner of table distributed_mx_table
-SELECT master_remove_distributed_table_metadata_from_workers('distributed_mx_table'::regclass, 'public', 'distributed_mx_table');
-ERROR:  must be owner of table distributed_mx_table
-SELECT master_drop_all_shards('distributed_mx_table'::regclass, 'public', 'distributed_mx_table');
-ERROR:  must be owner of table distributed_mx_table
-SELECT master_remove_partition_metadata('distributed_mx_table'::regclass, 'public', 'distributed_mx_table');
-ERROR:  must be owner of table distributed_mx_table
+SELECT raise_failed_aclcheck($$ 
+    DROP TABLE distributed_mx_table;
+$$);
+ERROR:  must be owner of the object
+CONTEXT:  PL/pgSQL function raise_failed_aclcheck(text) line 6 at RAISE
+SELECT raise_failed_aclcheck($$ 
+    SELECT master_remove_distributed_table_metadata_from_workers('distributed_mx_table'::regclass, 'public', 'distributed_mx_table');
+ $$);
+ERROR:  must be owner of the object
+CONTEXT:  PL/pgSQL function raise_failed_aclcheck(text) line 6 at RAISE
+SELECT raise_failed_aclcheck($$ 
+    SELECT master_drop_all_shards('distributed_mx_table'::regclass, 'public', 'distributed_mx_table');
+$$);
+ERROR:  must be owner of the object
+CONTEXT:  PL/pgSQL function raise_failed_aclcheck(text) line 6 at RAISE
+SELECT raise_failed_aclcheck($$ 
+    SELECT master_remove_partition_metadata('distributed_mx_table'::regclass, 'public', 'distributed_mx_table');
+$$);
+ERROR:  must be owner of the object
+CONTEXT:  PL/pgSQL function raise_failed_aclcheck(text) line 6 at RAISE
+SELECT raise_failed_aclcheck($$ 
+    SELECT master_drop_sequences(ARRAY['public.distributed_mx_table_some_val_seq']);
+$$);
+ERROR:  must be owner of the object
+CONTEXT:  PL/pgSQL function raise_failed_aclcheck(text) line 6 at RAISE
+SELECT raise_failed_aclcheck($$ 
+    SELECT master_drop_sequences(ARRAY['distributed_mx_table_some_val_seq']);
+$$);
+ERROR:  must be owner of the object
+CONTEXT:  PL/pgSQL function raise_failed_aclcheck(text) line 6 at RAISE
+SELECT master_drop_sequences(ARRAY['non_existing_schema.distributed_mx_table_some_val_seq']);
+ master_drop_sequences 
+-----------------------
+ 
+(1 row)
+
+SELECT master_drop_sequences(ARRAY['']);
+ERROR:  invalid name syntax
+SELECT master_drop_sequences(ARRAY['public.']);
+ERROR:  invalid name syntax
+SELECT master_drop_sequences(ARRAY['public.distributed_mx_table_some_val_seq_not_existing']);
+ master_drop_sequences 
+-----------------------
+ 
+(1 row)
+
+-- make sure that we can drop unrelated tables/sequences
+CREATE TABLE unrelated_table(key serial);
+DROP TABLE unrelated_table;
+-- doesn't error out but it has no effect, so no need to error out
+SELECT master_drop_sequences(NULL);
+ master_drop_sequences 
+-----------------------
+ 
+(1 row)
+
+\c - postgres - :master_port
+-- finally make sure that the sequence remains
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='distributed_mx_table'::regclass;
+  Column  |  Type  |                                Modifiers                                
+----------+--------+-------------------------------------------------------------------------
+ key      | text   | not null
+ value    | jsonb  | 
+ some_val | bigint | not null default nextval('distributed_mx_table_some_val_seq'::regclass)
+(3 rows)
+
 \c - no_access_mx - :worker_1_port
-DROP TABLE distributed_mx_table;
-ERROR:  must be owner of table distributed_mx_table
-SELECT master_remove_distributed_table_metadata_from_workers('distributed_mx_table'::regclass, 'public', 'distributed_mx_table');
-ERROR:  must be owner of table distributed_mx_table
+-- see the comment in the top of the file
+CREATE OR REPLACE FUNCTION raise_failed_aclcheck(query text) RETURNS void AS $$
+BEGIN
+    EXECUTE query;
+    EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM LIKE 'must be owner of%' THEN
+        RAISE 'must be owner of the object';
+    END IF;
+END;
+$$LANGUAGE plpgsql;
+SELECT raise_failed_aclcheck($$ 
+    DROP TABLE distributed_mx_table;
+$$);
+ERROR:  must be owner of the object
+CONTEXT:  PL/pgSQL function raise_failed_aclcheck(text) line 6 at RAISE
+SELECT raise_failed_aclcheck($$ 
+    SELECT master_remove_distributed_table_metadata_from_workers('distributed_mx_table'::regclass, 'public', 'distributed_mx_table');
+ $$);
+ERROR:  must be owner of the object
+CONTEXT:  PL/pgSQL function raise_failed_aclcheck(text) line 6 at RAISE
+SELECT raise_failed_aclcheck($$ 
+    SELECT master_drop_sequences(ARRAY['public.distributed_mx_table_some_val_seq']);
+$$);
+ raise_failed_aclcheck 
+-----------------------
+ 
+(1 row)
+
 SELECT master_drop_all_shards('distributed_mx_table'::regclass, 'public', 'distributed_mx_table');
 ERROR:  operation is not allowed on this node
 HINT:  Connect to the coordinator and run it again.
 SELECT master_remove_partition_metadata('distributed_mx_table'::regclass, 'public', 'distributed_mx_table');
 ERROR:  operation is not allowed on this node
 HINT:  Connect to the coordinator and run it again.
+-- make sure that we can drop unrelated tables/sequences
+CREATE TABLE unrelated_table(key serial);
+DROP TABLE unrelated_table;
+\c - postgres - :worker_1_port
+-- finally make sure that the sequence remains
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='distributed_mx_table'::regclass;
+  Column  |  Type  |                                Modifiers                                
+----------+--------+-------------------------------------------------------------------------
+ key      | text   | not null
+ value    | jsonb  | 
+ some_val | bigint | not null default nextval('distributed_mx_table_some_val_seq'::regclass)
+(3 rows)
+
 -- Resume ordinary recovery
 \c - postgres - :master_port
 ALTER SYSTEM RESET citus.recover_2pc_interval;

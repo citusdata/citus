@@ -67,6 +67,8 @@ struct QueryEnvironment; /* forward-declare to appease compiler */
 #define ACLCHECK_OBJECT_TABLE ACL_KIND_CLASS
 #define ACLCHECK_OBJECT_SCHEMA ACL_KIND_NAMESPACE
 #define ACLCHECK_OBJECT_INDEX ACL_KIND_CLASS
+#define ACLCHECK_OBJECT_SEQUENCE ACL_KIND_CLASS
+
 
 static inline int
 BasicOpenFilePerm(FileName fileName, int fileFlags, int fileMode)
@@ -158,6 +160,8 @@ canonicalize_qual_compat(Expr *qual, bool is_check)
 #define ACLCHECK_OBJECT_TABLE OBJECT_TABLE
 #define ACLCHECK_OBJECT_SCHEMA OBJECT_SCHEMA
 #define ACLCHECK_OBJECT_INDEX OBJECT_INDEX
+#define ACLCHECK_OBJECT_SEQUENCE OBJECT_SEQUENCE
+
 
 #define ConstraintRelidIndexId ConstraintRelidTypidNameIndexId
 
