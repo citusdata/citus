@@ -1308,3 +1308,43 @@ simple_quote_literal(StringInfo buf, const char *val)
 	}
 	appendStringInfoChar(buf, '\'');
 }
+
+
+/*
+ * RoleSpecString resolves the role specification to its string form that is suitable for transport to a worker node.
+ * This function resolves the following identifiers from the current context so they are safe to transfer.
+ *
+ * CURRENT_USER - resolved to the user name of the current role being used
+ * SESSION_USER - resolved to the user name of the user that opened the session
+ */
+const char *
+RoleSpecString(RoleSpec *spec)
+{
+	switch (spec->roletype)
+	{
+		case ROLESPEC_CSTRING:
+		{
+			return quote_identifier(spec->rolename);
+		}
+
+		case ROLESPEC_CURRENT_USER:
+		{
+			return quote_identifier(GetUserNameFromId(GetUserId(), false));
+		}
+
+		case ROLESPEC_SESSION_USER:
+		{
+			return quote_identifier(GetUserNameFromId(GetSessionUserId(), false));
+		}
+
+		case ROLESPEC_PUBLIC:
+		{
+			return "PUBLIC";
+		}
+
+		default:
+		{
+			elog(ERROR, "unexpected role type %d", spec->roletype);
+		}
+	}
+}

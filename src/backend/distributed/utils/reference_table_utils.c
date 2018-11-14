@@ -16,7 +16,7 @@
 #include "access/htup_details.h"
 #include "access/genam.h"
 #include "distributed/colocation_utils.h"
-#include "distributed/foreign_constraint.h"
+#include "distributed/commands.h"
 #include "distributed/listutils.h"
 #include "distributed/master_protocol.h"
 #include "distributed/master_metadata_utility.h"

@@ -24,11 +24,16 @@
 
 #endif
 
+#if (PG_VERSION_NUM < 100000)
+struct QueryEnvironment; /* forward-declare to appease compiler */
+#endif
+
 #if (PG_VERSION_NUM >= 90600 && PG_VERSION_NUM < 110000)
 
 #include "access/hash.h"
 #include "storage/fd.h"
 #include "optimizer/prep.h"
+#include "postmaster/bgworker.h"
 #include "utils/memutils.h"
 
 /* PostgreSQL 11 splits hash procs into "standard" and "extended" */

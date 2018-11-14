@@ -11,10 +11,10 @@
 #include "postgres.h"
 #include "miscadmin.h"
 
+#include "distributed/commands/utility_hook.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_sync.h"
-#include "distributed/multi_utility.h"
 #include "distributed/worker_transaction.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
@@ -112,7 +112,7 @@ master_remove_distributed_table_metadata_from_workers(PG_FUNCTION_ARGS)
 
 /*
  * MasterRemoveDistributedTableMetadataFromWorkers drops the table and removes
- * all the metadata beloning the distributed table in the worker nodes
+ * all the metadata belonging the distributed table in the worker nodes
  * with metadata. The function doesn't drop the tables that are
  * the shards on the workers.
  *

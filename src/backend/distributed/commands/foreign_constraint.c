@@ -20,7 +20,7 @@
 #endif
 #include "catalog/pg_type.h"
 #include "distributed/colocation_utils.h"
-#include "distributed/foreign_constraint.h"
+#include "distributed/commands.h"
 #include "distributed/master_protocol.h"
 #include "distributed/multi_join_order.h"
 #include "distributed/version_compat.h"

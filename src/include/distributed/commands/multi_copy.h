@@ -128,9 +128,8 @@ extern void AppendCopyRowData(Datum *valueArray, bool *isNullArray,
 extern void AppendCopyBinaryHeaders(CopyOutState headerOutputState);
 extern void AppendCopyBinaryFooters(CopyOutState footerOutputState);
 extern void EndRemoteCopy(int64 shardId, List *connectionList, bool stopOnFailure);
-extern void CitusCopyFrom(CopyStmt *copyStatement, char *completionTag);
-extern bool IsCopyFromWorker(CopyStmt *copyStatement);
-extern NodeAddress * MasterNodeAddress(CopyStmt *copyStatement);
+extern Node * ProcessCopyStmt(CopyStmt *copyStatement, char *completionTag,
+							  bool *commandMustRunAsOwner);
 
 
 #endif /* MULTI_COPY_H */

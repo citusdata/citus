@@ -33,7 +33,7 @@
 #include "catalog/pg_type.h"
 #include "commands/copy.h"
 #include "commands/defrem.h"
-#include "distributed/multi_copy.h"
+#include "distributed/commands/multi_copy.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/resource_lock.h"
 #include "distributed/transmit.h"

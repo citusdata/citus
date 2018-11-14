@@ -10,9 +10,9 @@
 
 #include "postgres.h"
 
+#include "distributed/commands/multi_copy.h"
 #include "distributed/insert_select_executor.h"
 #include "distributed/insert_select_planner.h"
-#include "distributed/multi_copy.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/multi_physical_planner.h"
