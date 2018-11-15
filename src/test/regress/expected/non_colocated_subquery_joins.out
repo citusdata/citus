@@ -166,7 +166,11 @@ DEBUG:  cannot use real time executor with repartition jobs
 DEBUG:  generating subplan 16_1 for subquery SELECT users_table.user_id, events_table.event_type FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.value_2) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4])))
 DEBUG:  generating subplan 16_2 for subquery SELECT event_type FROM public.events_table WHERE (user_id OPERATOR(pg_catalog.<) 4)
 DEBUG:  Plan 16 query after replacing subqueries and CTEs: SELECT foo.user_id FROM (SELECT intermediate_result.user_id, intermediate_result.event_type FROM read_intermediate_result('16_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, event_type integer)) foo, (SELECT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[5, 6, 7, 8])))) bar WHERE ((foo.user_id OPERATOR(pg_catalog.=) bar.user_id) AND (foo.event_type OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.event_type FROM read_intermediate_result('16_2'::text, 'binary'::citus_copy_format) intermediate_result(event_type integer))))
-ERROR:  cannot pushdown the subquery
+ valid 
+-------
+ t
+(1 row)
+
 -- The inner subqueries and the subquery in WHERE are non-located joins
 SELECT true AS valid FROM explain_json_2($$
     SELECT foo_top.*, events_table.user_id FROM
@@ -857,8 +861,6 @@ DEBUG:  Plan 91 query after replacing subqueries and CTEs: SELECT count(*) AS co
 (1 row)
 
 -- a combination of subqueries in FROM and WHERE clauses
--- we actually recursively plan non colocated subqueries
--- pretty accurate, however, we hit our join checks, which seems too restrictive
 SELECT true AS valid FROM explain_json_2($$
 
     SELECT
@@ -889,7 +891,11 @@ DEBUG:  generating subplan 93_1 for subquery SELECT value_1, value_2 FROM public
 DEBUG:  generating subplan 93_2 for subquery SELECT value_1 FROM public.users_table WHERE (value_2 OPERATOR(pg_catalog.<) 1)
 DEBUG:  generating subplan 93_3 for subquery SELECT value_2 FROM public.users_table WHERE (value_1 OPERATOR(pg_catalog.<) 2)
 DEBUG:  Plan 93 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (((SELECT users_table.user_id FROM public.users_table) foo JOIN (SELECT users_table.user_id FROM public.users_table WHERE (users_table.user_id OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4])) UNION SELECT users_table.user_id FROM public.users_table WHERE (users_table.user_id OPERATOR(pg_catalog.=) ANY (ARRAY[5, 6, 7, 8]))) a ON ((a.user_id OPERATOR(pg_catalog.=) foo.user_id))) JOIN (SELECT intermediate_result.value_1, intermediate_result.value_2 FROM read_intermediate_result('93_1'::text, 'binary'::citus_copy_format) intermediate_result(value_1 integer, value_2 integer)) bar ON ((foo.user_id OPERATOR(pg_catalog.=) bar.value_1))) WHERE ((bar.value_2 OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.value_1 FROM read_intermediate_result('93_2'::text, 'binary'::citus_copy_format) intermediate_result(value_1 integer))) AND (bar.value_1 OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.value_2 FROM read_intermediate_result('93_3'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer))) AND (foo.user_id OPERATOR(pg_catalog.=) ANY (SELECT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2]))))))
-ERROR:  cannot pushdown the subquery
+ valid 
+-------
+ t
+(1 row)
+
 -- make sure that we don't pick the refeence table as 
 -- the anchor
 SELECT true AS valid FROM explain_json_2($$

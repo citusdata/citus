@@ -62,6 +62,7 @@ bool SubqueryPushdown = false; /* is subquery pushdown enabled */
 static bool JoinTreeContainsSubqueryWalker(Node *joinTreeNode, void *context);
 static bool IsFunctionRTE(Node *node);
 static bool IsNodeQuery(Node *node);
+static bool IsOuterJoinExpr(Node *node);
 static bool WindowPartitionOnDistributionColumn(Query *query);
 static DeferredErrorMessage * DeferErrorIfFromClauseRecurs(Query *queryTree);
 static DeferredErrorMessage * DeferredErrorIfUnsupportedRecurringTuplesJoin(
@@ -82,6 +83,8 @@ static void UpdateVarMappingsForExtendedOpNode(List *columnList,
 											   List *subqueryTargetEntryList);
 static MultiTable * MultiSubqueryPushdownTable(Query *subquery);
 static List * CreateSubqueryTargetEntryList(List *columnList);
+static bool RelationInfoContainsOnlyRecurringTuples(PlannerInfo *plannerInfo,
+													RelOptInfo *relationInfo);
 
 
 /*
@@ -121,6 +124,15 @@ ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery)
 	 * does not know how to handle them.
 	 */
 	if (FindNodeCheck((Node *) originalQuery, IsFunctionRTE))
+	{
+		return true;
+	}
+
+	/*
+	 * We handle outer joins as subqueries, since the join order planner
+	 * does not know how to handle them.
+	 */
+	if (FindNodeCheck((Node *) originalQuery->jointree, IsOuterJoinExpr))
 	{
 		return true;
 	}
@@ -248,6 +260,33 @@ IsNodeQuery(Node *node)
 	}
 
 	return IsA(node, Query);
+}
+
+
+/*
+ * IsOuterJoinExpr returns whether the given node is an outer join expression.
+ */
+static bool
+IsOuterJoinExpr(Node *node)
+{
+	bool isOuterJoin = false;
+
+	if (node == NULL)
+	{
+		return false;
+	}
+
+	if (IsA(node, JoinExpr))
+	{
+		JoinExpr *joinExpr = (JoinExpr *) node;
+		JoinType joinType = joinExpr->jointype;
+		if (IS_OUTER_JOIN(joinType))
+		{
+			isOuterJoin = true;
+		}
+	}
+
+	return isOuterJoin;
 }
 
 
@@ -641,6 +680,17 @@ DeferredErrorIfUnsupportedRecurringTuplesJoin(
 
 		if (joinType == JOIN_SEMI || joinType == JOIN_ANTI || joinType == JOIN_LEFT)
 		{
+			/*
+			 * If there are only recurring tuples on the inner side of a join then
+			 * we can push it down, regardless of whether the outer side is
+			 * recurring or not. Otherwise, we check the outer side for recurring
+			 * tuples.
+			 */
+			if (RelationInfoContainsOnlyRecurringTuples(plannerInfo, innerrel))
+			{
+				continue;
+			}
+
 			if (ShouldRecurseForRecurringTuplesJoinChecks(outerrel) &&
 				RelationInfoContainsRecurringTuples(plannerInfo, outerrel, &recurType))
 			{
@@ -1161,6 +1211,33 @@ ShouldRecurseForRecurringTuplesJoinChecks(RelOptInfo *relOptInfo)
 	}
 
 	return shouldRecurse;
+}
+
+
+/*
+ * RelationInfoContainsOnlyRecurringTuples returns false if any of the relations in
+ * a RelOptInfo is not recurring.
+ */
+static bool
+RelationInfoContainsOnlyRecurringTuples(PlannerInfo *plannerInfo,
+										RelOptInfo *relationInfo)
+{
+	RecurringTuplesType recurType;
+	Relids relids = bms_copy(relationInfo->relids);
+	int relationId = -1;
+
+	while ((relationId = bms_first_member(relids)) >= 0)
+	{
+		RangeTblEntry *rangeTableEntry = plannerInfo->simple_rte_array[relationId];
+
+		/* relationInfo has this range table entry */
+		if (!IsRecurringRTE(rangeTableEntry, &recurType))
+		{
+			return false;
+		}
+	}
+
+	return true;
 }
 
 

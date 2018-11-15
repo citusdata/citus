@@ -198,8 +198,7 @@ ORDER BY 2 DESC, 1 DESC
 LIMIT 3;
 
 
--- should error out since reference table exist on the left side 
--- of the left lateral join
+-- reference tables in a subquery in the WHERE clause are ok
 SELECT user_id, value_2 FROM users_table WHERE
   value_1 > 1 AND value_1 < 3
   AND value_2 >= 5
@@ -256,6 +255,69 @@ SELECT user_id, value_2 FROM users_table WHERE
 		    event_type IN (5, 6)
 		  ORDER BY time
 		) e5 ON true
+		group by e1.user_id
+		HAVING sum(submit_card_info) > 0
+)
+ORDER BY 1, 2;
+
+-- reference table LEFT JOIN distributed table in WHERE is still not ok
+SELECT user_id, value_2 FROM users_table WHERE
+  value_1 > 1 AND value_1 < 3
+  AND value_2 >= 5
+  AND user_id IN
+  (
+		SELECT
+		  e1.user_id
+		FROM (
+		  -- Get the first time each user viewed the homepage.
+		  SELECT
+		    user_id,
+		    1 AS view_homepage,
+		    min(time) AS view_homepage_time
+		  FROM events_reference_table
+		     WHERE
+		     event_type IN (1, 2)
+		  GROUP BY user_id
+		) e1 LEFT JOIN LATERAL (
+		  SELECT
+		    user_id,
+		    1 AS use_demo,
+		    time AS use_demo_time
+		  FROM events_table
+		  WHERE
+		    user_id = e1.user_id AND
+		       event_type IN (2, 3)
+		  ORDER BY time
+		) e2 ON true LEFT JOIN LATERAL (
+		  SELECT
+		    user_id,
+		    1 AS enter_credit_card,
+		    time AS enter_credit_card_time
+		  FROM  events_reference_table
+		  WHERE
+		    user_id = e2.user_id AND
+		    event_type IN (3, 4)
+		  ORDER BY time
+		) e3 ON true LEFT JOIN LATERAL (
+		  SELECT
+		    1 AS submit_card_info,
+		    user_id,
+		    time AS enter_credit_card_time
+		  FROM  events_reference_table
+		  WHERE
+		    user_id = e3.user_id AND
+		    event_type IN (4, 5)
+		  ORDER BY time
+		) e4 ON true LEFT JOIN LATERAL (
+		  SELECT
+		    1 AS see_bought_screen
+		  FROM  events_reference_table
+		  WHERE
+		    user_id = e4.user_id AND
+		    event_type IN (5, 6)
+		  ORDER BY time
+		) e5 ON true
+
 		group by e1.user_id
 		HAVING sum(submit_card_info) > 0
 )

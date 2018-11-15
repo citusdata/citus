@@ -91,7 +91,6 @@ SELECT
 	min(l_custkey), max(l_custkey)
 FROM
 	multi_outer_join_left a LEFT JOIN multi_outer_join_third b ON (l_custkey = t_custkey);
-LOG:  join order: [ "multi_outer_join_left" ][ local partition join "multi_outer_join_third" ]
  min | max 
 -----+-----
      |    
@@ -108,13 +107,11 @@ SELECT
 	min(l_custkey), max(l_custkey)
 FROM
 	multi_outer_join_left a LEFT JOIN multi_outer_join_third b ON (l_custkey = t_custkey);
-ERROR:  cannot run outer join query if join is not on the partition column
-DETAIL:  Outer joins requiring repartitioning are not supported.
+ERROR:  shard counts of co-located tables do not match
 SELECT
 	min(t_custkey), max(t_custkey)
 FROM
 	multi_outer_join_third a LEFT JOIN multi_outer_join_right_reference b ON (r_custkey = t_custkey);
-LOG:  join order: [ "multi_outer_join_third" ][ reference join "multi_outer_join_right_reference" ]
  min | max 
 -----+-----
      |    
@@ -128,7 +125,6 @@ SELECT
 	min(l_custkey), max(l_custkey)
 FROM
 	multi_outer_join_left a LEFT JOIN multi_outer_join_right_reference b ON (l_custkey = r_custkey);
-LOG:  join order: [ "multi_outer_join_left" ][ reference join "multi_outer_join_right_reference" ]
  min | max 
 -----+-----
    1 |  20
@@ -139,7 +135,6 @@ SELECT
 	count(*)
 FROM
 	multi_outer_join_left a LEFT JOIN multi_outer_join_right_reference b ON (l_nationkey = r_nationkey);
-LOG:  join order: [ "multi_outer_join_left" ][ reference join "multi_outer_join_right_reference" ]
  count 
 -------
     28
@@ -152,7 +147,6 @@ FROM
 	multi_outer_join_left a LEFT JOIN multi_outer_join_right_reference b ON (l_custkey = r_custkey)
 WHERE
 	r_custkey IS NULL;
-LOG:  join order: [ "multi_outer_join_left" ][ reference join "multi_outer_join_right_reference" ]
  min | max 
 -----+-----
   16 |  20
@@ -165,7 +159,6 @@ FROM
 	multi_outer_join_left a LEFT JOIN multi_outer_join_right_reference b ON (l_custkey = r_custkey)
 WHERE
 	r_custkey IS NULL OR r_custkey = 5;
-LOG:  join order: [ "multi_outer_join_left" ][ reference join "multi_outer_join_right_reference" ]
  min | max 
 -----+-----
    5 |  20
@@ -179,7 +172,6 @@ FROM
 	multi_outer_join_left a LEFT JOIN multi_outer_join_right_reference b ON (l_custkey = r_custkey)
 WHERE
 	r_custkey = 5 or r_custkey > 15;
-LOG:  join order: [ "multi_outer_join_left" ][ reference join "multi_outer_join_right_reference" ]
  min | max 
 -----+-----
    5 |   5
@@ -191,7 +183,6 @@ SELECT
 FROM
 	multi_outer_join_left a LEFT JOIN multi_outer_join_right_reference b
 	ON (l_custkey = r_custkey AND r_custkey = 5);
-LOG:  join order: [ "multi_outer_join_left" ][ reference join "multi_outer_join_right_reference" ]
  count | count 
 -------+-------
     20 |     1
@@ -203,7 +194,6 @@ SELECT
 FROM
 	multi_outer_join_left a LEFT JOIN multi_outer_join_right_reference b
 	ON (l_custkey = r_custkey AND r_custkey = -1 /* nonexistant */);
-LOG:  join order: [ "multi_outer_join_left" ][ reference join "multi_outer_join_right_reference" ]
  count | count 
 -------+-------
     20 |     0
@@ -215,7 +205,6 @@ SELECT
 FROM
 	multi_outer_join_left a LEFT JOIN multi_outer_join_right_reference b
 	ON (l_custkey = r_custkey AND l_custkey = -1 /* nonexistant */);
-LOG:  join order: [ "multi_outer_join_left" ][ reference join "multi_outer_join_right_reference" ]
  count | count 
 -------+-------
     20 |     0
@@ -226,14 +215,12 @@ SELECT
 	min(r_custkey), max(r_custkey)
 FROM
 	multi_outer_join_left a RIGHT JOIN multi_outer_join_right b ON (l_custkey = r_custkey);
-ERROR:  cannot run outer join query if join is not on the partition column
-DETAIL:  Outer joins requiring repartitioning are not supported.
+ERROR:  shard counts of co-located tables do not match
 -- Reverse right join should be same as left join
 SELECT
 	min(l_custkey), max(l_custkey)
 FROM
 	multi_outer_join_right_reference a RIGHT JOIN multi_outer_join_left b ON (l_custkey = r_custkey);
-LOG:  join order: [ "multi_outer_join_left" ][ reference join "multi_outer_join_right_reference" ]
  min | max 
 -----+-----
    1 |  20
@@ -246,8 +233,11 @@ SELECT
 	min(l_custkey), max(l_custkey)
 FROM
 	multi_outer_join_left a LEFT JOIN multi_outer_join_right b ON (l_custkey = r_custkey);
-ERROR:  cannot run outer join query if join is not on the partition column
-DETAIL:  Outer joins requiring repartitioning are not supported.
+ min | max 
+-----+-----
+   1 |  20
+(1 row)
+
 -- empty tables
 SELECT * FROM master_apply_delete_command('DELETE FROM multi_outer_join_left');
  master_apply_delete_command 
@@ -272,7 +262,6 @@ SELECT
 	min(l_custkey), max(l_custkey)
 FROM
 	multi_outer_join_left a LEFT JOIN multi_outer_join_right b ON (l_custkey = r_custkey);
-LOG:  join order: [ "multi_outer_join_left" ][ local partition join "multi_outer_join_right" ]
  min | max 
 -----+-----
   11 |  30
@@ -283,8 +272,7 @@ SELECT
 	count(*)
 FROM
 	multi_outer_join_left a LEFT JOIN multi_outer_join_right b ON (l_nationkey = r_nationkey);
-ERROR:  cannot run outer join query if join is not on the partition column
-DETAIL:  Outer joins requiring repartitioning are not supported.
+ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
 -- Anti-join should return customers for which there is no row in the right table
 SELECT
 	min(l_custkey), max(l_custkey)
@@ -292,7 +280,6 @@ FROM
 	multi_outer_join_left a LEFT JOIN multi_outer_join_right b ON (l_custkey = r_custkey)
 WHERE
 	r_custkey IS NULL;
-LOG:  join order: [ "multi_outer_join_left" ][ local partition join "multi_outer_join_right" ]
  min | max 
 -----+-----
   23 |  29
@@ -305,7 +292,6 @@ FROM
 	multi_outer_join_left a LEFT JOIN multi_outer_join_right b ON (l_custkey = r_custkey)
 WHERE
 	r_custkey IS NULL OR r_custkey = 15;
-LOG:  join order: [ "multi_outer_join_left" ][ local partition join "multi_outer_join_right" ]
  min | max 
 -----+-----
   23 |  29
@@ -319,7 +305,6 @@ FROM
 	multi_outer_join_left a LEFT JOIN multi_outer_join_right b ON (l_custkey = r_custkey)
 WHERE
 	r_custkey = 21 or r_custkey < 10;
-LOG:  join order: [ "multi_outer_join_left" ][ local partition join "multi_outer_join_right" ]
  min | max 
 -----+-----
   21 |  21
@@ -331,7 +316,6 @@ SELECT
 FROM
 	multi_outer_join_left a LEFT JOIN multi_outer_join_right b
 	ON (l_custkey = r_custkey AND r_custkey = 21);
-LOG:  join order: [ "multi_outer_join_left" ][ local partition join "multi_outer_join_right" ]
  count | count 
 -------+-------
     17 |     1
@@ -342,7 +326,6 @@ SELECT
 	min(r_custkey), max(r_custkey)
 FROM
 	multi_outer_join_left a RIGHT JOIN multi_outer_join_right b ON (l_custkey = r_custkey);
-LOG:  join order: [ "multi_outer_join_right" ][ local partition join "multi_outer_join_left" ]
  min | max 
 -----+-----
   11 |  30
@@ -353,32 +336,43 @@ SELECT
 	min(l_custkey), max(l_custkey)
 FROM
 	multi_outer_join_right a RIGHT JOIN multi_outer_join_left b ON (l_custkey = r_custkey);
-LOG:  join order: [ "multi_outer_join_left" ][ local partition join "multi_outer_join_right" ]
  min | max 
 -----+-----
   11 |  30
 (1 row)
 
--- complex query tree should error out
+-- Mix of outer joins on partition column
 SELECT
-	*
+	l1.l_custkey
 FROM
 	multi_outer_join_left l1
 	LEFT JOIN multi_outer_join_right r1 ON (l1.l_custkey = r1.r_custkey)
 	LEFT JOIN multi_outer_join_right r2 ON (l1.l_custkey  = r2.r_custkey)
-	RIGHT JOIN multi_outer_join_left l2 ON (r2.r_custkey = l2.l_custkey);
-ERROR:  could not run distributed query with complex join orders
--- add an anti-join, this should also error out
+	RIGHT JOIN multi_outer_join_left l2 ON (r2.r_custkey = l2.l_custkey)
+ORDER BY 1
+LIMIT 1;
+ l_custkey 
+-----------
+        11
+(1 row)
+
+-- add an anti-join
 SELECT
-	*
+	l1.l_custkey
 FROM
 	multi_outer_join_left l1
 	LEFT JOIN multi_outer_join_right r1 ON (l1.l_custkey = r1.r_custkey)
 	LEFT JOIN multi_outer_join_right r2 ON (l1.l_custkey  = r2.r_custkey)
 	RIGHT JOIN multi_outer_join_left l2 ON (r2.r_custkey = l2.l_custkey)
 WHERE
-	r1.r_custkey is NULL;
-ERROR:  could not run distributed query with complex join orders
+	r1.r_custkey is NULL
+ORDER BY 1
+LIMIT 1;
+ l_custkey 
+-----------
+          
+(1 row)
+
 -- Three way join 2-2-1 (local + broadcast join) should work
 SELECT
 	l_custkey, r_custkey, t_custkey
@@ -386,7 +380,6 @@ FROM
 	multi_outer_join_left l1
 	LEFT JOIN multi_outer_join_right r1 ON (l1.l_custkey = r1.r_custkey)
 	LEFT JOIN multi_outer_join_third_reference t1 ON (r1.r_custkey  = t1.t_custkey);
-LOG:  join order: [ "multi_outer_join_left" ][ local partition join "multi_outer_join_right" ][ reference join "multi_outer_join_third_reference" ]
  l_custkey | r_custkey | t_custkey 
 -----------+-----------+-----------
         11 |        11 |        11
@@ -415,7 +408,8 @@ FROM
 	multi_outer_join_left l1
 	LEFT JOIN multi_outer_join_right r1 ON (l1.l_custkey = r1.r_custkey)
 	RIGHT JOIN multi_outer_join_third_reference t1 ON (r1.r_custkey  = t1.t_custkey);
-ERROR:  could not run distributed query with complex join orders
+ERROR:  cannot pushdown the subquery
+DETAIL:  There exist a reference table in the outer part of the outer join
 -- Right join with single shard left most table should work
 SELECT
 	t_custkey, r_custkey, l_custkey
@@ -423,7 +417,6 @@ FROM
 	multi_outer_join_third_reference t1
 	RIGHT JOIN multi_outer_join_right r1 ON (t1.t_custkey = r1.r_custkey)
 	LEFT JOIN multi_outer_join_left l1 ON (r1.r_custkey  = l1.l_custkey);
-LOG:  join order: [ "multi_outer_join_right" ][ reference join "multi_outer_join_third_reference" ][ local partition join "multi_outer_join_left" ]
  t_custkey | r_custkey | l_custkey 
 -----------+-----------+-----------
         11 |        11 |        11
@@ -454,7 +447,6 @@ FROM
 	LEFT JOIN multi_outer_join_left l1 ON (r1.r_custkey  = l1.l_custkey)
 WHERE
 	l_custkey is NULL;
-LOG:  join order: [ "multi_outer_join_right" ][ reference join "multi_outer_join_third_reference" ][ local partition join "multi_outer_join_left" ]
  t_custkey | r_custkey | l_custkey 
 -----------+-----------+-----------
         13 |        13 |          
@@ -462,21 +454,41 @@ LOG:  join order: [ "multi_outer_join_right" ][ reference join "multi_outer_join
         19 |        19 |          
 (3 rows)
 
--- Cascading right join with single shard left most table should error out
+-- Cascading right join with single shard left most table
 SELECT
 	t_custkey, r_custkey, l_custkey
 FROM
 	multi_outer_join_third_reference t1
 	RIGHT JOIN multi_outer_join_right r1 ON (t1.t_custkey = r1.r_custkey)
-	RIGHT JOIN multi_outer_join_left l1 ON (r1.r_custkey  = l1.l_custkey);
-ERROR:  could not run distributed query with complex join orders
+	RIGHT JOIN multi_outer_join_left l1 ON (r1.r_custkey  = l1.l_custkey)
+ORDER BY 1,2,3;
+ t_custkey | r_custkey | l_custkey 
+-----------+-----------+-----------
+        11 |        11 |        11
+        12 |        12 |        12
+        14 |        14 |        14
+        16 |        16 |        16
+        17 |        17 |        17
+        18 |        18 |        18
+        20 |        20 |        20
+        21 |        21 |        21
+        22 |        22 |        22
+        24 |        24 |        24
+        26 |        26 |        26
+        27 |        27 |        27
+        28 |        28 |        28
+        30 |        30 |        30
+           |           |        23
+           |           |        25
+           |           |        29
+(17 rows)
+
 -- full outer join should work with 1-1 matched shards
 SELECT
 	l_custkey, r_custkey
 FROM
 	multi_outer_join_left l1
 	FULL JOIN multi_outer_join_right r1 ON (l1.l_custkey = r1.r_custkey);
-LOG:  join order: [ "multi_outer_join_left" ][ local partition join "multi_outer_join_right" ]
  l_custkey | r_custkey 
 -----------+-----------
         11 |        11
@@ -509,7 +521,6 @@ FROM
 	FULL JOIN multi_outer_join_right r1 ON (l1.l_custkey = r1.r_custkey)
 WHERE 
 	r_custkey is NULL;
-LOG:  join order: [ "multi_outer_join_left" ][ local partition join "multi_outer_join_right" ]
  l_custkey | r_custkey 
 -----------+-----------
         23 |          
@@ -525,7 +536,6 @@ FROM
 	FULL JOIN multi_outer_join_right r1 ON (l1.l_custkey = r1.r_custkey)
 WHERE 
 	l_custkey is NULL;
-LOG:  join order: [ "multi_outer_join_left" ][ local partition join "multi_outer_join_right" ]
  l_custkey | r_custkey 
 -----------+-----------
            |        15
@@ -541,7 +551,6 @@ FROM
 	FULL JOIN multi_outer_join_right r1 ON (l1.l_custkey = r1.r_custkey)
 WHERE 
 	l_custkey is NULL or r_custkey is NULL;
-LOG:  join order: [ "multi_outer_join_left" ][ local partition join "multi_outer_join_right" ]
  l_custkey | r_custkey 
 -----------+-----------
            |        15
@@ -558,8 +567,7 @@ SELECT
 FROM
 	multi_outer_join_left l1
 	FULL JOIN multi_outer_join_third t1 ON (l1.l_custkey = t1.t_custkey);
-ERROR:  cannot run outer join query if join is not on the partition column
-DETAIL:  Outer joins requiring repartitioning are not supported.
+ERROR:  shard counts of co-located tables do not match
 -- inner join  + single shard left join should work
 SELECT
 	l_custkey, r_custkey, t_custkey
@@ -567,7 +575,6 @@ FROM
 	multi_outer_join_left l1
 	INNER JOIN multi_outer_join_right r1 ON (l1.l_custkey = r1.r_custkey)
 	LEFT JOIN multi_outer_join_third_reference t1 ON (r1.r_custkey  = t1.t_custkey);
-LOG:  join order: [ "multi_outer_join_left" ][ local partition join "multi_outer_join_right" ][ reference join "multi_outer_join_third_reference" ]
  l_custkey | r_custkey | t_custkey 
 -----------+-----------+-----------
         11 |        11 |        11
@@ -593,7 +600,6 @@ FROM
 	multi_outer_join_left l1
 	INNER JOIN multi_outer_join_third_reference t1 ON (l1.l_custkey = t1.t_custkey)
 	LEFT JOIN multi_outer_join_right r1 ON (l1.l_custkey  = r1.r_custkey);
-LOG:  join order: [ "multi_outer_join_left" ][ reference join "multi_outer_join_third_reference" ][ local partition join "multi_outer_join_right" ]
  l_custkey | t_custkey | r_custkey 
 -----------+-----------+-----------
         11 |        11 |        11
@@ -615,23 +621,43 @@ LOG:  join order: [ "multi_outer_join_left" ][ reference join "multi_outer_join_
         30 |        30 |        30
 (17 rows)
 
--- inner (local) join  + 2 shards left (dual partition) join should error out
+-- inner (local) join  + 2 shards left (dual partition) join
 SELECT
 	t_custkey, l_custkey, r_custkey
 FROM
 	multi_outer_join_third_reference t1
 	INNER JOIN multi_outer_join_left l1 ON (l1.l_custkey = t1.t_custkey)
-	LEFT JOIN multi_outer_join_right r1 ON (l1.l_custkey  = r1.r_custkey);
-ERROR:  cannot run outer join query if join is not on the partition column
-DETAIL:  Outer joins requiring repartitioning are not supported.
--- inner (local) join  + 2 shards left (dual partition) join should error out
+	LEFT JOIN multi_outer_join_right r1 ON (l1.l_custkey  = r1.r_custkey)
+ORDER BY
+    t_custkey, l_custkey, r_custkey;
+ t_custkey | l_custkey | r_custkey 
+-----------+-----------+-----------
+        11 |        11 |        11
+        12 |        12 |        12
+        14 |        14 |        14
+        16 |        16 |        16
+        17 |        17 |        17
+        18 |        18 |        18
+        20 |        20 |        20
+        21 |        21 |        21
+        22 |        22 |        22
+        23 |        23 |          
+        24 |        24 |        24
+        25 |        25 |          
+        26 |        26 |        26
+        27 |        27 |        27
+        28 |        28 |        28
+        29 |        29 |          
+        30 |        30 |        30
+(17 rows)
+
+-- inner (local) join  + 2 shards left (dual partition) join
 SELECT
 	l_custkey, t_custkey, r_custkey
 FROM
 	multi_outer_join_left l1
 	INNER JOIN multi_outer_join_third_reference t1 ON (l1.l_custkey = t1.t_custkey)
 	LEFT JOIN multi_outer_join_right r1 ON (l1.l_custkey  = r1.r_custkey);
-LOG:  join order: [ "multi_outer_join_left" ][ reference join "multi_outer_join_third_reference" ][ local partition join "multi_outer_join_right" ]
  l_custkey | t_custkey | r_custkey 
 -----------+-----------+-----------
         11 |        11 |        11
@@ -662,7 +688,6 @@ FROM
 	LEFT JOIN multi_outer_join_right r1 ON (l1.l_custkey  = r1.r_custkey)
 WHERE
 	r_custkey is NULL;
-LOG:  join order: [ "multi_outer_join_left" ][ reference join "multi_outer_join_third_reference" ][ local partition join "multi_outer_join_right" ]
  l_custkey | t_custkey | r_custkey 
 -----------+-----------+-----------
         23 |        23 |          
@@ -678,7 +703,6 @@ FROM
 	LEFT OUTER JOIN multi_outer_join_left l1 ON (l1.l_custkey = r1.r_custkey)) AS
     test(c_custkey, c_nationkey)
     INNER JOIN multi_outer_join_third_reference t1 ON (test.c_custkey = t1.t_custkey);
-LOG:  join order: [ "multi_outer_join_right" ][ local partition join "multi_outer_join_left" ][ reference join "multi_outer_join_third_reference" ]
  t_custkey 
 -----------
         11
@@ -700,7 +724,7 @@ LOG:  join order: [ "multi_outer_join_right" ][ local partition join "multi_oute
         30
 (17 rows)
 
--- flattened out subqueries with outer joins are not supported
+-- Outer joins with subqueries on distribution column
 SELECT
   l1.l_custkey,
   count(*) as cnt
@@ -717,8 +741,26 @@ LEFT JOIN (
 GROUP BY l1.l_custkey
 ORDER BY cnt DESC, l1.l_custkey DESC
 LIMIT 20;
-ERROR:  cannot perform distributed planning on this query
-DETAIL:  Subqueries in outer joins are not supported
+ l_custkey | cnt 
+-----------+-----
+        30 |   1
+        29 |   1
+        28 |   1
+        27 |   1
+        25 |   1
+        24 |   1
+        23 |   1
+        22 |   1
+        21 |   1
+        20 |   1
+        18 |   1
+        17 |   1
+        16 |   1
+        14 |   1
+        12 |   1
+        11 |   1
+(16 rows)
+
 -- Add a shard to the left table that overlaps with multiple shards in the right
 \copy multi_outer_join_left FROM '@abs_srcdir@/data/customer.1.data' with delimiter '|'
 -- All outer joins should error out
@@ -726,20 +768,20 @@ SELECT
 	min(l_custkey), max(l_custkey)
 FROM
 	multi_outer_join_left a LEFT JOIN multi_outer_join_right b ON (l_custkey = r_custkey);
-ERROR:  cannot run outer join query if join is not on the partition column
-DETAIL:  Outer joins requiring repartitioning are not supported.
+ERROR:  cannot push down this subquery
+DETAIL:  Currently append partitioned relations with overlapping shard intervals are not supported
 SELECT
 	min(l_custkey), max(l_custkey)
 FROM
 	multi_outer_join_left a RIGHT JOIN multi_outer_join_right b ON (l_custkey = r_custkey);
-ERROR:  cannot run outer join query if join is not on the partition column
-DETAIL:  Outer joins requiring repartitioning are not supported.
+ERROR:  cannot push down this subquery
+DETAIL:  Currently append partitioned relations with overlapping shard intervals are not supported
 SELECT
 	min(l_custkey), max(l_custkey)
 FROM
 	multi_outer_join_left a FULL JOIN multi_outer_join_right b ON (l_custkey = r_custkey);
-ERROR:  cannot run outer join query if join is not on the partition column
-DETAIL:  Outer joins requiring repartitioning are not supported.
+ERROR:  cannot push down this subquery
+DETAIL:  Currently append partitioned relations with overlapping shard intervals are not supported
 SELECT 
 	t_custkey
 FROM   
@@ -747,8 +789,8 @@ FROM
 	LEFT OUTER JOIN multi_outer_join_left l1 ON (l1.l_custkey = r1.r_custkey)) AS
     test(c_custkey, c_nationkey)
     INNER JOIN multi_outer_join_third t1 ON (test.c_custkey = t1.t_custkey);
-ERROR:  cannot run outer join query if join is not on the partition column
-DETAIL:  Outer joins requiring repartitioning are not supported.
+ERROR:  cannot push down this subquery
+DETAIL:  Currently append partitioned relations with overlapping shard intervals are not supported
 -- simple test to ensure anti-joins work with hash-partitioned tables
 CREATE TABLE left_values(val int);
 SET citus.shard_count to 16;
@@ -775,7 +817,6 @@ FROM
     LEFT JOIN right_values AS r ON l.val = r.val
 WHERE
     r.val IS NULL;
-LOG:  join order: [ "left_values" ][ local partition join "right_values" ]
  val | val 
 -----+-----
    1 |    

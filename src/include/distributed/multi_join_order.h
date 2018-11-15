@@ -80,7 +80,6 @@ extern bool EnableSingleHashRepartitioning;
 
 
 /* Function declaration for determining table join orders */
-extern List * FixedJoinOrderList(FromExpr *fromExpr, List *tableEntryList);
 extern List * JoinExprList(FromExpr *fromExpr);
 extern List * JoinOrderList(List *rangeTableEntryList, List *joinClauseList);
 extern List * ApplicableJoinClauses(List *leftTableIdList, uint32 rightTableId,
