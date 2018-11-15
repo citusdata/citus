@@ -148,11 +148,15 @@ static List * get_all_actual_clauses(List *restrictinfo_list);
 static int CompareInsertValuesByShardId(const void *leftElement,
 										const void *rightElement);
 static uint64 GetInitialShardId(List *relationShardList);
-static List * SingleShardSelectTaskList(Query *query, List *relationShardList,
-										List *placementList, uint64 shardId);
+static List * SingleShardSelectTaskList(Query *query, uint64 jobId,
+										List *relationShardList, List *placementList,
+										uint64 shardId);
 static bool RowLocksOnRelations(Node *node, List **rtiLockList);
-static List * SingleShardModifyTaskList(Query *query, List *relationShardList,
-										List *placementList, uint64 shardId);
+static List * SingleShardModifyTaskList(Query *query, uint64 jobId,
+										List *relationShardList, List *placementList,
+										uint64 shardId);
+static void ReorderTaskPlacementsByTaskAssignmentPolicy(Job *job, TaskAssignmentPolicyType
+														taskAssignmentPolicy);
 
 
 /*
@@ -1388,7 +1392,7 @@ CreateJob(Query *query)
 	Job *job = NULL;
 
 	job = CitusMakeNode(Job);
-	job->jobId = INVALID_JOB_ID;
+	job->jobId = UniqueJobId();
 	job->jobQuery = query;
 	job->taskList = NIL;
 	job->dependedJobList = NIL;
@@ -1625,12 +1629,22 @@ RouterJob(Query *originalQuery, PlannerRestrictionContext *plannerRestrictionCon
 
 	if (originalQuery->commandType == CMD_SELECT)
 	{
-		job->taskList = SingleShardSelectTaskList(originalQuery, relationShardList,
-												  placementList, shardId);
+		job->taskList = SingleShardSelectTaskList(originalQuery, job->jobId,
+												  relationShardList, placementList,
+												  shardId);
+
+		/*
+		 * Queries to reference tables, or distributed tables with multiple replica's have
+		 * their task placements reordered according to the configured
+		 * task_assignment_policy. This is only applicable to select queries as the modify
+		 * queries will be reordered to _always_ use the first-replica policy during
+		 * execution.
+		 */
+		ReorderTaskPlacementsByTaskAssignmentPolicy(job, TaskAssignmentPolicy);
 	}
 	else if (isMultiShardModifyQuery)
 	{
-		job->taskList = QueryPushdownSqlTaskList(originalQuery, 0,
+		job->taskList = QueryPushdownSqlTaskList(originalQuery, job->jobId,
 												 plannerRestrictionContext->
 												 relationRestrictionContext,
 												 relationShardList, MODIFY_TASK,
@@ -1638,8 +1652,9 @@ RouterJob(Query *originalQuery, PlannerRestrictionContext *plannerRestrictionCon
 	}
 	else
 	{
-		job->taskList = SingleShardModifyTaskList(originalQuery, relationShardList,
-												  placementList, shardId);
+		job->taskList = SingleShardModifyTaskList(originalQuery, job->jobId,
+												  relationShardList, placementList,
+												  shardId);
 	}
 
 	job->requiresMasterEvaluation = requiresMasterEvaluation;
@@ -1648,11 +1663,32 @@ RouterJob(Query *originalQuery, PlannerRestrictionContext *plannerRestrictionCon
 
 
 /*
+ * ReorderTaskPlacementsByTaskAssignmentPolicy applies selective reordering for supported
+ * TaskAssignmentPolicyTypes.
+ *
+ * Supported Types
+ * - TASK_ASSIGNMENT_ROUND_ROBIN round robin schedule queries among placements
+ *
+ * By default it does not reorder the task list, implying a first-replica strategy.
+ */
+static void
+ReorderTaskPlacementsByTaskAssignmentPolicy(Job *job, TaskAssignmentPolicyType
+											taskAssignmentPolicy)
+{
+	if (taskAssignmentPolicy == TASK_ASSIGNMENT_ROUND_ROBIN)
+	{
+		job->taskList = RoundRobinAssignTaskList(job->taskList);
+	}
+}
+
+
+/*
  * SingleShardSelectTaskList generates a task for single shard select query
  * and returns it as a list.
  */
 static List *
-SingleShardSelectTaskList(Query *query, List *relationShardList, List *placementList,
+SingleShardSelectTaskList(Query *query, uint64 jobId, List *relationShardList,
+						  List *placementList,
 						  uint64 shardId)
 {
 	Task *task = CreateTask(ROUTER_TASK);
@@ -1664,6 +1700,7 @@ SingleShardSelectTaskList(Query *query, List *relationShardList, List *placement
 
 	task->queryString = queryString->data;
 	task->anchorShardId = shardId;
+	task->jobId = jobId;
 	task->taskPlacementList = placementList;
 	task->relationShardList = relationShardList;
 	task->relationRowLockList = relationRowLockList;
@@ -1718,8 +1755,8 @@ RowLocksOnRelations(Node *node, List **relationRowLockList)
  * and returns it as a list.
  */
 static List *
-SingleShardModifyTaskList(Query *query, List *relationShardList, List *placementList,
-						  uint64 shardId)
+SingleShardModifyTaskList(Query *query, uint64 jobId, List *relationShardList,
+						  List *placementList, uint64 shardId)
 {
 	Task *task = CreateTask(MODIFY_TASK);
 	StringInfo queryString = makeStringInfo();
@@ -1746,6 +1783,7 @@ SingleShardModifyTaskList(Query *query, List *relationShardList, List *placement
 
 	task->queryString = queryString->data;
 	task->anchorShardId = shardId;
+	task->jobId = jobId;
 	task->taskPlacementList = placementList;
 	task->relationShardList = relationShardList;
 	task->replicationModel = modificationTableCacheEntry->replicationModel;

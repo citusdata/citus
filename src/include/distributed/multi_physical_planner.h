@@ -340,6 +340,7 @@ extern bool TaskListMember(const List *taskList, const Task *task);
 extern List * TaskListDifference(const List *list1, const List *list2);
 extern List * AssignAnchorShardTaskList(List *taskList);
 extern List * FirstReplicaAssignTaskList(List *taskList);
+extern List * RoundRobinAssignTaskList(List *taskList);
 
 /* function declaration for creating Task */
 extern List * QueryPushdownSqlTaskList(Query *query, uint64 jobId,
@@ -347,6 +348,9 @@ extern List * QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 									   relationRestrictionContext,
 									   List *prunedRelationShardList, TaskType taskType,
 									   bool modifyRequiresMasterEvaluation);
+
+/* function declarations for managing jobs */
+extern uint64 UniqueJobId(void);
 
 
 #endif   /* MULTI_PHYSICAL_PLANNER_H */

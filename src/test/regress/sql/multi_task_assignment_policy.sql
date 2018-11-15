@@ -94,3 +94,28 @@ RESET citus.task_assignment_policy;
 RESET client_min_messages;
 
 COMMIT;
+
+BEGIN;
+
+SET LOCAL client_min_messages TO DEBUG3;
+SET LOCAL citus.explain_distributed_queries TO off;
+
+-- Check how task_assignment_policy impact planning decisions for reference tables
+
+CREATE TABLE task_assignment_reference_table (test_id  integer);
+SELECT create_reference_table('task_assignment_reference_table');
+
+SET LOCAL citus.task_assignment_policy TO 'greedy';
+EXPLAIN (COSTS FALSE) SELECT * FROM task_assignment_reference_table;
+EXPLAIN (COSTS FALSE) SELECT * FROM task_assignment_reference_table;
+
+SET LOCAL citus.task_assignment_policy TO 'first-replica';
+EXPLAIN (COSTS FALSE) SELECT * FROM task_assignment_reference_table;
+EXPLAIN (COSTS FALSE) SELECT * FROM task_assignment_reference_table;
+
+-- here we expect debug output showing two different hosts for subsequent queries
+SET LOCAL citus.task_assignment_policy TO 'round-robin';
+EXPLAIN (COSTS FALSE) SELECT * FROM task_assignment_reference_table;
+EXPLAIN (COSTS FALSE) SELECT * FROM task_assignment_reference_table;
+
+ROLLBACK;

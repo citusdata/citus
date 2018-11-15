@@ -176,3 +176,114 @@ RESET client_min_messages;
 DEBUG:  StartTransactionCommand
 DEBUG:  ProcessUtility
 COMMIT;
+BEGIN;
+SET LOCAL client_min_messages TO DEBUG3;
+DEBUG:  CommitTransactionCommand
+SET LOCAL citus.explain_distributed_queries TO off;
+DEBUG:  StartTransactionCommand
+DEBUG:  ProcessUtility
+DEBUG:  CommitTransactionCommand
+-- Check how task_assignment_policy impact planning decisions for reference tables
+CREATE TABLE task_assignment_reference_table (test_id  integer);
+DEBUG:  StartTransactionCommand
+DEBUG:  ProcessUtility
+DEBUG:  CommitTransactionCommand
+SELECT create_reference_table('task_assignment_reference_table');
+DEBUG:  StartTransactionCommand
+DEBUG:  CommitTransactionCommand
+ create_reference_table 
+------------------------
+ 
+(1 row)
+
+SET LOCAL citus.task_assignment_policy TO 'greedy';
+DEBUG:  StartTransactionCommand
+DEBUG:  ProcessUtility
+DEBUG:  CommitTransactionCommand
+EXPLAIN (COSTS FALSE) SELECT * FROM task_assignment_reference_table;
+DEBUG:  StartTransactionCommand
+DEBUG:  ProcessUtility
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+DEBUG:  CommitTransactionCommand
+                          QUERY PLAN                          
+--------------------------------------------------------------
+ Custom Scan (Citus Router)
+   explain statements for distributed queries are not enabled
+(2 rows)
+
+EXPLAIN (COSTS FALSE) SELECT * FROM task_assignment_reference_table;
+DEBUG:  StartTransactionCommand
+DEBUG:  ProcessUtility
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+DEBUG:  CommitTransactionCommand
+                          QUERY PLAN                          
+--------------------------------------------------------------
+ Custom Scan (Citus Router)
+   explain statements for distributed queries are not enabled
+(2 rows)
+
+SET LOCAL citus.task_assignment_policy TO 'first-replica';
+DEBUG:  StartTransactionCommand
+DEBUG:  ProcessUtility
+DEBUG:  CommitTransactionCommand
+EXPLAIN (COSTS FALSE) SELECT * FROM task_assignment_reference_table;
+DEBUG:  StartTransactionCommand
+DEBUG:  ProcessUtility
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+DEBUG:  CommitTransactionCommand
+                          QUERY PLAN                          
+--------------------------------------------------------------
+ Custom Scan (Citus Router)
+   explain statements for distributed queries are not enabled
+(2 rows)
+
+EXPLAIN (COSTS FALSE) SELECT * FROM task_assignment_reference_table;
+DEBUG:  StartTransactionCommand
+DEBUG:  ProcessUtility
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+DEBUG:  CommitTransactionCommand
+                          QUERY PLAN                          
+--------------------------------------------------------------
+ Custom Scan (Citus Router)
+   explain statements for distributed queries are not enabled
+(2 rows)
+
+-- here we expect debug output showing two different hosts for subsequent queries
+SET LOCAL citus.task_assignment_policy TO 'round-robin';
+DEBUG:  StartTransactionCommand
+DEBUG:  ProcessUtility
+DEBUG:  CommitTransactionCommand
+EXPLAIN (COSTS FALSE) SELECT * FROM task_assignment_reference_table;
+DEBUG:  StartTransactionCommand
+DEBUG:  ProcessUtility
+DEBUG:  assigned task 0 to node localhost:57637
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+DEBUG:  CommitTransactionCommand
+                          QUERY PLAN                          
+--------------------------------------------------------------
+ Custom Scan (Citus Router)
+   explain statements for distributed queries are not enabled
+(2 rows)
+
+EXPLAIN (COSTS FALSE) SELECT * FROM task_assignment_reference_table;
+DEBUG:  StartTransactionCommand
+DEBUG:  ProcessUtility
+DEBUG:  assigned task 0 to node localhost:57638
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+DEBUG:  CommitTransactionCommand
+                          QUERY PLAN                          
+--------------------------------------------------------------
+ Custom Scan (Citus Router)
+   explain statements for distributed queries are not enabled
+(2 rows)
+
+ROLLBACK;
+DEBUG:  StartTransactionCommand
+DEBUG:  ProcessUtility
+DEBUG:  CommitTransactionCommand
