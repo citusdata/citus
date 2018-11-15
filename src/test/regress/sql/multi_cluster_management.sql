@@ -57,10 +57,40 @@ SELECT master_get_active_worker_nodes();
 -- try to disable a node which does not exist and see that an error is thrown
 SELECT master_disable_node('localhost.noexist', 2345);
 
--- try to disable a node via non-super user
 CREATE USER non_super_user;
-\c - non_super_user - :master_port
-SELECT master_disable_node('localhost', :worker_1_port);
+CREATE USER node_metadata_user;
+GRANT EXECUTE ON FUNCTION master_activate_node(text,int) TO node_metadata_user;
+GRANT EXECUTE ON FUNCTION master_add_inactive_node(text,int,int,noderole,name) TO node_metadata_user;
+GRANT EXECUTE ON FUNCTION master_add_node(text,int,int,noderole,name) TO node_metadata_user;
+GRANT EXECUTE ON FUNCTION master_add_secondary_node(text,int,text,int,name) TO node_metadata_user;
+GRANT EXECUTE ON FUNCTION master_disable_node(text,int) TO node_metadata_user;
+GRANT EXECUTE ON FUNCTION master_remove_node(text,int) TO node_metadata_user;
+GRANT EXECUTE ON FUNCTION master_update_node(int,text,int) TO node_metadata_user;
+
+-- try to manipulate node metadata via non-super user
+SET ROLE non_super_user;
+SELECT 1 FROM master_initialize_node_metadata();
+SELECT 1 FROM master_add_inactive_node('localhost', :worker_2_port + 1);
+SELECT 1 FROM master_activate_node('localhost', :worker_2_port + 1);
+SELECT 1 FROM master_disable_node('localhost', :worker_2_port + 1);
+SELECT 1 FROM master_remove_node('localhost', :worker_2_port + 1);
+SELECT 1 FROM master_add_node('localhost', :worker_2_port + 1);
+SELECT 1 FROM master_add_secondary_node('localhost', :worker_2_port + 2, 'localhost', :worker_2_port);
+SELECT master_update_node(nodeid, 'localhost', :worker_2_port + 3) FROM pg_dist_node WHERE nodeport = :worker_2_port;
+
+-- try to manipulate node metadata via privileged user
+SET ROLE node_metadata_user;
+BEGIN;
+SELECT 1 FROM master_add_inactive_node('localhost', :worker_2_port + 1);
+SELECT 1 FROM master_activate_node('localhost', :worker_2_port + 1);
+SELECT 1 FROM master_disable_node('localhost', :worker_2_port + 1);
+SELECT 1 FROM master_remove_node('localhost', :worker_2_port + 1);
+SELECT 1 FROM master_add_node('localhost', :worker_2_port + 1);
+SELECT 1 FROM master_add_secondary_node('localhost', :worker_2_port + 2, 'localhost', :worker_2_port);
+SELECT master_update_node(nodeid, 'localhost', :worker_2_port + 3) FROM pg_dist_node WHERE nodeport = :worker_2_port;
+SELECT nodename, nodeport, noderole FROM pg_dist_node ORDER BY nodeport;
+ABORT;
+
 \c - postgres - :master_port
 SELECT master_get_active_worker_nodes();
 

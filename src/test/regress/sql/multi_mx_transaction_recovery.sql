@@ -26,25 +26,25 @@ SELECT * FROM pg_dist_local_group;
 
 BEGIN;
 CREATE TABLE table_should_abort (value int);
-PREPARE TRANSACTION 'citus_12_should_abort';
+PREPARE TRANSACTION 'citus_14_should_abort';
 
 BEGIN;
 CREATE TABLE table_should_commit (value int);
-PREPARE TRANSACTION 'citus_12_should_commit';
+PREPARE TRANSACTION 'citus_14_should_commit';
 
 BEGIN;
 CREATE TABLE should_be_sorted_into_middle (value int);
-PREPARE TRANSACTION 'citus_12_should_be_sorted_into_middle';
+PREPARE TRANSACTION 'citus_14_should_be_sorted_into_middle';
 
--- this node (e.g., node id 12) should not touch
+-- this node (e.g., node id 14) should not touch
 -- transactions with different nodeIds in the gid
 BEGIN;
 CREATE TABLE table_should_do_nothing (value int);
 PREPARE TRANSACTION 'citus_122_should_do_nothing';
 
 -- Add "fake" pg_dist_transaction records and run recovery
-INSERT INTO pg_dist_transaction VALUES (12, 'citus_12_should_commit');
-INSERT INTO pg_dist_transaction VALUES (12, 'citus_12_should_be_forgotten');
+INSERT INTO pg_dist_transaction VALUES (14, 'citus_14_should_commit');
+INSERT INTO pg_dist_transaction VALUES (14, 'citus_14_should_be_forgotten');
 INSERT INTO pg_dist_transaction VALUES (122, 'citus_122_should_do_nothing');
 
 SELECT recover_prepared_transactions();
