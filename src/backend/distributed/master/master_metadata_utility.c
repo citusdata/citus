@@ -1347,6 +1347,21 @@ EnsureTableOwner(Oid relationId)
 
 
 /*
+ * Check that the current user has owner rights to sequenceRelationId, error out if
+ * not. Superusers are regarded as owners.
+ */
+void
+EnsureSequenceOwner(Oid sequenceOid)
+{
+	if (!pg_class_ownercheck(sequenceOid, GetUserId()))
+	{
+		aclcheck_error(ACLCHECK_NOT_OWNER, ACLCHECK_OBJECT_SEQUENCE,
+					   get_rel_name(sequenceOid));
+	}
+}
+
+
+/*
  * EnsureSuperUser check that the current user is a superuser and errors out if not.
  */
 void

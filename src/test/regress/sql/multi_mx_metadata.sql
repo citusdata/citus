@@ -4,13 +4,27 @@
 ALTER SYSTEM SET citus.recover_2pc_interval TO -1;
 SELECT pg_reload_conf();
 
+-- pg 10 and pg 11 has different error messages for acl checks
+-- so catch them and print only one type of error message to prevent
+-- multiple output test files
+CREATE OR REPLACE FUNCTION raise_failed_aclcheck(query text) RETURNS void AS $$
+BEGIN
+    EXECUTE query;
+    EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM LIKE 'must be owner of%' THEN
+        RAISE 'must be owner of the object';
+    END IF;
+END;
+$$LANGUAGE plpgsql;
+
 -- get rid of the previously created entries in pg_dist_transaction
 -- for the sake of getting consistent results in this test file
 TRUNCATE pg_dist_transaction;
 
 CREATE TABLE distributed_mx_table (
     key text primary key,
-    value jsonb
+    value jsonb,
+    some_val bigserial
 );
 CREATE INDEX ON distributed_mx_table USING GIN (value);
 
@@ -175,7 +189,89 @@ SELECT count(*) FROM pg_dist_transaction;
 SELECT count(*) FROM pg_tables WHERE tablename = 'should_abort';
 SELECT count(*) FROM pg_tables WHERE tablename = 'should_commit';
 
--- Resume ordinary recovery
 \c - - - :master_port
+
+CREATE USER no_access_mx;
+SELECT run_command_on_workers($$CREATE USER no_access_mx;$$);
+
+SET ROLE no_access_mx;
+
+SELECT raise_failed_aclcheck($$ 
+    DROP TABLE distributed_mx_table;
+$$);
+
+SELECT raise_failed_aclcheck($$ 
+    SELECT master_remove_distributed_table_metadata_from_workers('distributed_mx_table'::regclass, 'public', 'distributed_mx_table');
+ $$);
+
+SELECT raise_failed_aclcheck($$ 
+    SELECT master_drop_all_shards('distributed_mx_table'::regclass, 'public', 'distributed_mx_table');
+$$);
+SELECT raise_failed_aclcheck($$ 
+    SELECT master_remove_partition_metadata('distributed_mx_table'::regclass, 'public', 'distributed_mx_table');
+$$);
+SELECT raise_failed_aclcheck($$ 
+    SELECT master_drop_sequences(ARRAY['public.distributed_mx_table_some_val_seq']);
+$$);
+SELECT raise_failed_aclcheck($$ 
+    SELECT master_drop_sequences(ARRAY['distributed_mx_table_some_val_seq']);
+$$);
+
+SELECT master_drop_sequences(ARRAY['non_existing_schema.distributed_mx_table_some_val_seq']);
+SELECT master_drop_sequences(ARRAY['']);
+SELECT master_drop_sequences(ARRAY['public.']);
+SELECT master_drop_sequences(ARRAY['public.distributed_mx_table_some_val_seq_not_existing']);
+
+-- make sure that we can drop unrelated tables/sequences
+CREATE TABLE unrelated_table(key serial);
+DROP TABLE unrelated_table;
+
+-- doesn't error out but it has no effect, so no need to error out
+SELECT master_drop_sequences(NULL);
+
+\c - postgres - :master_port
+
+-- finally make sure that the sequence remains
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='distributed_mx_table'::regclass;
+
+\c - no_access_mx - :worker_1_port
+
+-- see the comment in the top of the file
+CREATE OR REPLACE FUNCTION raise_failed_aclcheck(query text) RETURNS void AS $$
+BEGIN
+    EXECUTE query;
+    EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM LIKE 'must be owner of%' THEN
+        RAISE 'must be owner of the object';
+    END IF;
+END;
+$$LANGUAGE plpgsql;
+
+SELECT raise_failed_aclcheck($$ 
+    DROP TABLE distributed_mx_table;
+$$);
+
+SELECT raise_failed_aclcheck($$ 
+    SELECT master_remove_distributed_table_metadata_from_workers('distributed_mx_table'::regclass, 'public', 'distributed_mx_table');
+ $$);
+
+SELECT raise_failed_aclcheck($$ 
+    SELECT master_drop_sequences(ARRAY['public.distributed_mx_table_some_val_seq']);
+$$);
+
+SELECT master_drop_all_shards('distributed_mx_table'::regclass, 'public', 'distributed_mx_table');
+SELECT master_remove_partition_metadata('distributed_mx_table'::regclass, 'public', 'distributed_mx_table');
+
+-- make sure that we can drop unrelated tables/sequences
+CREATE TABLE unrelated_table(key serial);
+DROP TABLE unrelated_table;
+
+\c - postgres - :worker_1_port
+
+-- finally make sure that the sequence remains
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='distributed_mx_table'::regclass;
+
+-- Resume ordinary recovery
+\c - postgres - :master_port
 ALTER SYSTEM RESET citus.recover_2pc_interval;
 SELECT pg_reload_conf();

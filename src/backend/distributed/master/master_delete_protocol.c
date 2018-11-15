@@ -58,6 +58,9 @@
 #include "utils/elog.h"
 #include "utils/errcodes.h"
 #include "utils/lsyscache.h"
+#if (PG_VERSION_NUM >= 100000)
+#include "utils/varlena.h"
+#endif
 
 
 /* Local functions forward declarations */
@@ -265,27 +268,49 @@ master_drop_sequences(PG_FUNCTION_ARGS)
 {
 	ArrayType *sequenceNamesArray = PG_GETARG_ARRAYTYPE_P(0);
 	ArrayIterator sequenceIterator = NULL;
-	Datum sequenceText = 0;
+	Datum sequenceNameDatum = 0;
 	bool isNull = false;
 	StringInfo dropSeqCommand = makeStringInfo();
-	bool coordinator = IsCoordinator();
 
 	CheckCitusVersion(ERROR);
 
-	/* do nothing if DDL propagation is switched off or this is not the coordinator */
-	if (!EnableDDLPropagation || !coordinator)
+	/*
+	 * Do nothing if DDL propagation is switched off or we're not on
+	 * the coordinator. Here we prefer to not error out on the workers
+	 * because this function is called on every dropped sequence and
+	 * we don't want to mess up the sequences that are not associated
+	 * with distributed tables.
+	 */
+	if (!EnableDDLPropagation || !IsCoordinator())
 	{
 		PG_RETURN_VOID();
 	}
 
 	/* iterate over sequence names to build single command to DROP them all */
 	sequenceIterator = array_create_iterator(sequenceNamesArray, 0, NULL);
-	while (array_iterate(sequenceIterator, &sequenceText, &isNull))
+	while (array_iterate(sequenceIterator, &sequenceNameDatum, &isNull))
 	{
+		text *sequenceNameText = NULL;
+		Oid sequenceOid = InvalidOid;
+
 		if (isNull)
 		{
 			ereport(ERROR, (errmsg("unexpected NULL sequence name"),
 							errcode(ERRCODE_INVALID_PARAMETER_VALUE)));
+		}
+
+		sequenceNameText = DatumGetTextP(sequenceNameDatum);
+		sequenceOid = ResolveRelationId(sequenceNameText, true);
+		if (OidIsValid(sequenceOid))
+		{
+			/*
+			 * This case (e.g., OID is valid) could only happen when a user manually calls
+			 * the UDF. So, ensure that the user has right to drop the sequence.
+			 *
+			 * In case the UDF is called via the DROP trigger, the OID wouldn't be valid since
+			 * the trigger is called after DROP happens.
+			 */
+			EnsureSequenceOwner(sequenceOid);
 		}
 
 		/* append command portion if we haven't added any sequence names yet */
@@ -299,7 +324,7 @@ master_drop_sequences(PG_FUNCTION_ARGS)
 			appendStringInfoChar(dropSeqCommand, ',');
 		}
 
-		appendStringInfo(dropSeqCommand, " %s", TextDatumGetCString(sequenceText));
+		appendStringInfo(dropSeqCommand, " %s", TextDatumGetCString(sequenceNameText));
 	}
 
 	if (dropSeqCommand->len != 0)

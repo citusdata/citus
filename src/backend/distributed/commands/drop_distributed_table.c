@@ -104,6 +104,8 @@ master_remove_distributed_table_metadata_from_workers(PG_FUNCTION_ARGS)
 
 	CheckCitusVersion(ERROR);
 
+	CheckTableSchemaNameForDrop(relationId, &schemaName, &tableName);
+
 	MasterRemoveDistributedTableMetadataFromWorkers(relationId, schemaName, tableName);
 
 	PG_RETURN_VOID();
