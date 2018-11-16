@@ -165,6 +165,17 @@ SELECT count(*) FROM test a JOIN test b ON (a.val = b.val) WHERE a.id = 1 AND b.
 COPY "postgresql.conf" TO STDOUT WITH (format transmit);
 ERROR:  operation is not allowed
 HINT:  Run the command with a superuser.
+-- should not be allowed to take aggressive locks on table
+BEGIN;
+SELECT lock_relation_if_exists('test', 'ACCESS SHARE');
+ lock_relation_if_exists 
+-------------------------
+ t
+(1 row)
+
+SELECT lock_relation_if_exists('test', 'EXCLUSIVE');
+ERROR:  permission denied for table test
+ABORT;
 SET citus.task_executor_type TO 'real-time';
 -- check no permission
 SET ROLE no_access;
