@@ -21,6 +21,13 @@ SELECT create_distributed_table('test', 'id');
  
 (1 row)
 
+CREATE TABLE test_coloc (id integer, val integer);
+SELECT create_distributed_table('test_coloc', 'id', colocate_with := 'none');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
 SET citus.shard_count TO 1;
 CREATE TABLE singleshard (id integer, val integer);
 SELECT create_distributed_table('singleshard', 'id');
@@ -234,6 +241,9 @@ ERROR:  permission denied for function citus_stat_statements_reset
 -- should not be allowed to upgrade to reference table
 SELECT upgrade_to_reference_table('singleshard');
 ERROR:  must be owner of table singleshard
+-- should not be allowed to co-located tables
+SELECT mark_tables_colocated('test', ARRAY['test_coloc'::regclass]);
+ERROR:  must be owner of table test
 -- table owner should be the same on the shards, even when distributing the table as superuser
 SET ROLE full_access;
 CREATE TABLE my_table (id integer, val integer);
@@ -251,9 +261,7 @@ SELECT result FROM run_command_on_workers($$SELECT tableowner FROM pg_tables WHE
  full_access
 (2 rows)
 
-DROP TABLE my_table;
-DROP TABLE test;
-DROP TABLE singleshard;
+DROP TABLE my_table, singleshard, test, test_coloc;
 DROP USER full_access;
 DROP USER read_access;
 DROP USER no_access;

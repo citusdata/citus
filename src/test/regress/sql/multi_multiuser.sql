@@ -16,6 +16,9 @@ SET citus.shard_replication_factor TO 1;
 CREATE TABLE test (id integer, val integer);
 SELECT create_distributed_table('test', 'id');
 
+CREATE TABLE test_coloc (id integer, val integer);
+SELECT create_distributed_table('test_coloc', 'id', colocate_with := 'none');
+
 SET citus.shard_count TO 1;
 CREATE TABLE singleshard (id integer, val integer);
 SELECT create_distributed_table('singleshard', 'id');
@@ -151,6 +154,9 @@ SELECT * FROM citus_stat_statements_reset();
 -- should not be allowed to upgrade to reference table
 SELECT upgrade_to_reference_table('singleshard');
 
+-- should not be allowed to co-located tables
+SELECT mark_tables_colocated('test', ARRAY['test_coloc'::regclass]);
+
 -- table owner should be the same on the shards, even when distributing the table as superuser
 SET ROLE full_access;
 CREATE TABLE my_table (id integer, val integer);
@@ -158,9 +164,7 @@ RESET ROLE;
 SELECT create_distributed_table('my_table', 'id');
 SELECT result FROM run_command_on_workers($$SELECT tableowner FROM pg_tables WHERE tablename LIKE 'my_table_%' LIMIT 1$$);
 
-DROP TABLE my_table;
-DROP TABLE test;
-DROP TABLE singleshard;
+DROP TABLE my_table, singleshard, test, test_coloc;
 DROP USER full_access;
 DROP USER read_access;
 DROP USER no_access;
