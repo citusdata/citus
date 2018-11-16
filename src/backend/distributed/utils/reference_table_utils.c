@@ -60,8 +60,9 @@ upgrade_to_reference_table(PG_FUNCTION_ARGS)
 	uint64 shardId = INVALID_SHARD_ID;
 	DistTableCacheEntry *tableEntry = NULL;
 
-	EnsureCoordinator();
 	CheckCitusVersion(ERROR);
+	EnsureCoordinator();
+	EnsureTableOwner(relationId);
 
 	if (!IsDistributedTable(relationId))
 	{

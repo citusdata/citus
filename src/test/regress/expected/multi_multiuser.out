@@ -21,6 +21,14 @@ SELECT create_distributed_table('test', 'id');
  
 (1 row)
 
+SET citus.shard_count TO 1;
+CREATE TABLE singleshard (id integer, val integer);
+SELECT create_distributed_table('singleshard', 'id');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
 -- turn off propagation to avoid Enterprise processing the following section
 SET citus.enable_ddl_propagation TO off;
 CREATE USER full_access;
@@ -212,6 +220,9 @@ ERROR:  permission denied for table test
 ABORT;
 SELECT * FROM citus_stat_statements_reset();
 ERROR:  permission denied for function citus_stat_statements_reset
+-- should not be allowed to upgrade to reference table
+SELECT upgrade_to_reference_table('singleshard');
+ERROR:  must be owner of table singleshard
 -- table owner should be the same on the shards, even when distributing the table as superuser
 SET ROLE full_access;
 CREATE TABLE my_table (id integer, val integer);
@@ -231,6 +242,7 @@ SELECT result FROM run_command_on_workers($$SELECT tableowner FROM pg_tables WHE
 
 DROP TABLE my_table;
 DROP TABLE test;
+DROP TABLE singleshard;
 DROP USER full_access;
 DROP USER read_access;
 DROP USER no_access;

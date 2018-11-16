@@ -16,6 +16,10 @@ SET citus.shard_replication_factor TO 1;
 CREATE TABLE test (id integer, val integer);
 SELECT create_distributed_table('test', 'id');
 
+SET citus.shard_count TO 1;
+CREATE TABLE singleshard (id integer, val integer);
+SELECT create_distributed_table('singleshard', 'id');
+
 -- turn off propagation to avoid Enterprise processing the following section
 SET citus.enable_ddl_propagation TO off;
 
@@ -138,6 +142,9 @@ ABORT;
 
 SELECT * FROM citus_stat_statements_reset();
 
+-- should not be allowed to upgrade to reference table
+SELECT upgrade_to_reference_table('singleshard');
+
 -- table owner should be the same on the shards, even when distributing the table as superuser
 SET ROLE full_access;
 CREATE TABLE my_table (id integer, val integer);
@@ -147,6 +154,7 @@ SELECT result FROM run_command_on_workers($$SELECT tableowner FROM pg_tables WHE
 
 DROP TABLE my_table;
 DROP TABLE test;
+DROP TABLE singleshard;
 DROP USER full_access;
 DROP USER read_access;
 DROP USER no_access;
