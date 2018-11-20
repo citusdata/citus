@@ -19,6 +19,7 @@
 
 #include "access/xact.h"
 #include "catalog/namespace.h"
+#include "commands/tablecmds.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/listutils.h"
 #include "distributed/master_metadata_utility.h"
@@ -36,6 +37,7 @@
 #include "distributed/version_compat.h"
 #include "storage/lmgr.h"
 #include "utils/builtins.h"
+#include "utils/lsyscache.h"
 #if (PG_VERSION_NUM >= 100000)
 #include "utils/varlena.h"
 #endif
@@ -73,6 +75,9 @@ static void LockShardListResources(List *shardIntervalList, LOCKMODE lockMode);
 static void LockShardListResourcesOnFirstWorker(LOCKMODE lockmode,
 												List *shardIntervalList);
 static bool IsFirstWorkerNode();
+static void CitusRangeVarCallbackForLockTable(const RangeVar *rangeVar, Oid relationId,
+											  Oid oldRelationId, void *arg);
+static AclResult CitusLockTableAclCheck(Oid relationId, LOCKMODE lockmode, Oid userId);
 
 
 /* exports for SQL callable functions */
@@ -742,15 +747,10 @@ lock_relation_if_exists(PG_FUNCTION_ARGS)
 	List *relationNameList = NIL;
 	RangeVar *relation = NULL;
 	LOCKMODE lockMode = NoLock;
+	bool relationExists = false;
 
     /* ensure that we're in a transaction block */
 	RequireTransactionBlock(true, "lock_relation_if_exists");
-
-	relationId = ResolveRelationId(relationName, true);
-	if (!OidIsValid(relationId))
-	{
-		PG_RETURN_BOOL(false);
-	}
 
     /* get the lock mode */
 	lockMode = LockModeTextToLockMode(lockModeCString);
@@ -760,7 +760,85 @@ lock_relation_if_exists(PG_FUNCTION_ARGS)
 	relation = makeRangeVarFromNameList(relationNameList);
 
     /* lock the relation with the lock mode */
-	RangeVarGetRelid(relation, lockMode, false);
+	relationId = RangeVarGetRelidInternal(relation, lockMode, RVR_MISSING_OK,
+										  CitusRangeVarCallbackForLockTable,
+										  (void *) &lockMode);
+	relationExists = OidIsValid(relationId);
 
-	PG_RETURN_BOOL(true);
+	PG_RETURN_BOOL(relationExists);
+}
+
+
+/*
+ * CitusRangeVarCallbackForLockTable is a callback for RangeVarGetRelidExtended used
+ * to check whether the user has permission to lock a table in a particular mode.
+ *
+ * This function is a copy of RangeVarCallbackForLockTable in lockcmds.c adapted to
+ * Citus code style.
+ */
+static void
+CitusRangeVarCallbackForLockTable(const RangeVar *rangeVar, Oid relationId,
+								  Oid oldRelationId, void *arg)
+{
+	LOCKMODE lockmode = *(LOCKMODE *) arg;
+	AclResult aclResult;
+
+	if (!OidIsValid(relationId))
+	{
+        /* table doesn't exist, so no permissions check */
+		return;
+	}
+
+    /* we only allow tables and views to be locked */
+	if (!RegularTable(relationId))
+	{
+		ereport(ERROR, (errcode(ERRCODE_WRONG_OBJECT_TYPE),
+						errmsg("\"%s\" is not a table", rangeVar->relname)));
+	}
+
+    /* check permissions */
+	aclResult = CitusLockTableAclCheck(relationId, lockmode, GetUserId());
+	if (aclResult != ACLCHECK_OK)
+	{
+#if (PG_VERSION_NUM >= 110000)
+		aclcheck_error(aclResult, get_relkind_objtype(get_rel_relkind(relationId)),
+					   rangeVar->relname);
+#else
+
+		aclcheck_error(aclResult, ACL_KIND_CLASS, rangeVar->relname);
+#endif
+	}
+}
+
+
+/*
+ * CitusLockTableAclCheck checks whether a user has permission to lock a relation
+ * in the given lock mode.
+ *
+ * This function is a copy of LockTableAclCheck in lockcmds.c adapted to Citus
+ * code style.
+ */
+static AclResult
+CitusLockTableAclCheck(Oid relationId, LOCKMODE lockmode, Oid userId)
+{
+	AclResult aclResult;
+	AclMode aclMask;
+
+    /* verify adequate privilege */
+	if (lockmode == AccessShareLock)
+	{
+		aclMask = ACL_SELECT;
+	}
+	else if (lockmode == RowExclusiveLock)
+	{
+		aclMask = ACL_INSERT | ACL_UPDATE | ACL_DELETE | ACL_TRUNCATE;
+	}
+	else
+	{
+		aclMask = ACL_UPDATE | ACL_DELETE | ACL_TRUNCATE;
+	}
+
+	aclResult = pg_class_aclcheck(relationId, userId, aclMask);
+
+	return aclResult;
 }

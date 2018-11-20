@@ -21,6 +21,21 @@ SELECT create_distributed_table('test', 'id');
  
 (1 row)
 
+CREATE TABLE test_coloc (id integer, val integer);
+SELECT create_distributed_table('test_coloc', 'id', colocate_with := 'none');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+SET citus.shard_count TO 1;
+CREATE TABLE singleshard (id integer, val integer);
+SELECT create_distributed_table('singleshard', 'id');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
 -- turn off propagation to avoid Enterprise processing the following section
 SET citus.enable_ddl_propagation TO off;
 CREATE USER full_access;
@@ -157,6 +172,17 @@ SELECT count(*) FROM test a JOIN test b ON (a.val = b.val) WHERE a.id = 1 AND b.
 COPY "postgresql.conf" TO STDOUT WITH (format transmit);
 ERROR:  operation is not allowed
 HINT:  Run the command with a superuser.
+-- should not be allowed to take aggressive locks on table
+BEGIN;
+SELECT lock_relation_if_exists('test', 'ACCESS SHARE');
+ lock_relation_if_exists 
+-------------------------
+ t
+(1 row)
+
+SELECT lock_relation_if_exists('test', 'EXCLUSIVE');
+ERROR:  permission denied for table test
+ABORT;
 SET citus.task_executor_type TO 'real-time';
 -- check no permission
 SET ROLE no_access;
@@ -212,6 +238,12 @@ ERROR:  permission denied for table test
 ABORT;
 SELECT * FROM citus_stat_statements_reset();
 ERROR:  permission denied for function citus_stat_statements_reset
+-- should not be allowed to upgrade to reference table
+SELECT upgrade_to_reference_table('singleshard');
+ERROR:  must be owner of table singleshard
+-- should not be allowed to co-located tables
+SELECT mark_tables_colocated('test', ARRAY['test_coloc'::regclass]);
+ERROR:  must be owner of table test
 -- table owner should be the same on the shards, even when distributing the table as superuser
 SET ROLE full_access;
 CREATE TABLE my_table (id integer, val integer);
@@ -229,8 +261,7 @@ SELECT result FROM run_command_on_workers($$SELECT tableowner FROM pg_tables WHE
  full_access
 (2 rows)
 
-DROP TABLE my_table;
-DROP TABLE test;
+DROP TABLE my_table, singleshard, test, test_coloc;
 DROP USER full_access;
 DROP USER read_access;
 DROP USER no_access;

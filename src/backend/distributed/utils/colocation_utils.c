@@ -78,14 +78,18 @@ mark_tables_colocated(PG_FUNCTION_ARGS)
 							   "operation")));
 	}
 
-	EnsureCoordinator();
 	CheckCitusVersion(ERROR);
+	EnsureCoordinator();
+	EnsureTableOwner(sourceRelationId);
 
 	relationIdDatumArray = DeconstructArrayObject(relationIdArrayObject);
 
 	for (relationIndex = 0; relationIndex < relationCount; relationIndex++)
 	{
 		Oid nextRelationOid = DatumGetObjectId(relationIdDatumArray[relationIndex]);
+
+		/* we require that the user either owns all tables or is superuser */
+		EnsureTableOwner(nextRelationOid);
 
 		MarkTablesColocated(sourceRelationId, nextRelationOid);
 	}

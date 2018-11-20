@@ -16,6 +16,13 @@ SET citus.shard_replication_factor TO 1;
 CREATE TABLE test (id integer, val integer);
 SELECT create_distributed_table('test', 'id');
 
+CREATE TABLE test_coloc (id integer, val integer);
+SELECT create_distributed_table('test_coloc', 'id', colocate_with := 'none');
+
+SET citus.shard_count TO 1;
+CREATE TABLE singleshard (id integer, val integer);
+SELECT create_distributed_table('singleshard', 'id');
+
 -- turn off propagation to avoid Enterprise processing the following section
 SET citus.enable_ddl_propagation TO off;
 
@@ -102,6 +109,12 @@ SELECT count(*) FROM test a JOIN test b ON (a.val = b.val) WHERE a.id = 1 AND b.
 -- should not be able to transmit directly
 COPY "postgresql.conf" TO STDOUT WITH (format transmit);
 
+-- should not be allowed to take aggressive locks on table
+BEGIN;
+SELECT lock_relation_if_exists('test', 'ACCESS SHARE');
+SELECT lock_relation_if_exists('test', 'EXCLUSIVE');
+ABORT;
+
 SET citus.task_executor_type TO 'real-time';
 
 -- check no permission
@@ -138,6 +151,12 @@ ABORT;
 
 SELECT * FROM citus_stat_statements_reset();
 
+-- should not be allowed to upgrade to reference table
+SELECT upgrade_to_reference_table('singleshard');
+
+-- should not be allowed to co-located tables
+SELECT mark_tables_colocated('test', ARRAY['test_coloc'::regclass]);
+
 -- table owner should be the same on the shards, even when distributing the table as superuser
 SET ROLE full_access;
 CREATE TABLE my_table (id integer, val integer);
@@ -145,8 +164,7 @@ RESET ROLE;
 SELECT create_distributed_table('my_table', 'id');
 SELECT result FROM run_command_on_workers($$SELECT tableowner FROM pg_tables WHERE tablename LIKE 'my_table_%' LIMIT 1$$);
 
-DROP TABLE my_table;
-DROP TABLE test;
+DROP TABLE my_table, singleshard, test, test_coloc;
 DROP USER full_access;
 DROP USER read_access;
 DROP USER no_access;
