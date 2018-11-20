@@ -487,7 +487,7 @@ CreateShardsOnWorkers(Oid distributedRelationId, List *shardPlacements,
 					  bool useExclusiveConnection, bool colocatedShard)
 {
 	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(distributedRelationId);
-	char *placementOwner = TableOwner(distributedRelationId);
+
 	bool includeSequenceDefaults = false;
 	List *ddlCommandList = GetTableDDLEvents(distributedRelationId,
 											 includeSequenceDefaults);
@@ -562,12 +562,12 @@ CreateShardsOnWorkers(Oid distributedRelationId, List *shardPlacements,
 														relationShardList);
 
 			connection = GetPlacementListConnection(connectionFlags, placementAccessList,
-													placementOwner);
+													NULL);
 		}
 		else
 		{
 			connection = GetPlacementConnection(connectionFlags, shardPlacement,
-												placementOwner);
+												NULL);
 		}
 
 		if (useExclusiveConnection)
