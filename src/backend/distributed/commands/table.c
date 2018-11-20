@@ -1060,11 +1060,13 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 			case AT_EnableTrigAll:
 			case AT_DisableTrigAll:
 			case AT_ReplicaIdentity:
+			case AT_ValidateConstraint:
 			{
 				/*
 				 * We will not perform any special check for ALTER TABLE DROP CONSTRAINT
 				 * , ALTER TABLE .. ALTER COLUMN .. SET NOT NULL and ALTER TABLE ENABLE/
-				 * DISABLE TRIGGER ALL, ALTER TABLE .. REPLICA IDENTITY ..
+				 * DISABLE TRIGGER ALL, ALTER TABLE .. REPLICA IDENTITY .., ALTER TABLE
+				 * .. VALIDATE CONSTRAINT ..
 				 */
 				break;
 			}
@@ -1083,7 +1085,7 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						 errmsg("alter table command is currently unsupported"),
 						 errdetail("Only ADD|DROP COLUMN, SET|DROP NOT NULL, "
-								   "SET|DROP DEFAULT, ADD|DROP CONSTRAINT, "
+								   "SET|DROP DEFAULT, ADD|DROP|VALIDATE CONSTRAINT, "
 								   "SET (), RESET (), "
 								   "ATTACH|DETACH PARTITION and TYPE subcommands "
 								   "are supported.")));
