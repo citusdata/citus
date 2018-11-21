@@ -222,17 +222,28 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 	if (IsTransmitStmt(parsetree))
 	{
 		CopyStmt *copyStatement = (CopyStmt *) parsetree;
+		char *userName = TransmitStatementUser(copyStatement);
+		bool missingOK = false;
+		StringInfo transmitPath = makeStringInfo();
 
 		VerifyTransmitStmt(copyStatement);
 
 		/* ->relation->relname is the target file in our overloaded COPY */
+		appendStringInfoString(transmitPath, copyStatement->relation->relname);
+
+		if (userName != NULL)
+		{
+			Oid userId = get_role_oid(userName, missingOK);
+			appendStringInfo(transmitPath, ".%d", userId);
+		}
+
 		if (copyStatement->is_from)
 		{
-			RedirectCopyDataToRegularFile(copyStatement->relation->relname);
+			RedirectCopyDataToRegularFile(transmitPath->data);
 		}
 		else
 		{
-			SendRegularFile(copyStatement->relation->relname);
+			SendRegularFile(transmitPath->data);
 		}
 
 		/* Don't execute the faux copy statement */

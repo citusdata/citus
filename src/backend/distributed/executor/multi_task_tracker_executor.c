@@ -2590,9 +2590,11 @@ ManageTransmitTracker(TaskTracker *transmitTracker)
 		int32 connectionId = transmitTracker->connectionId;
 		StringInfo jobDirectoryName = JobDirectoryName(transmitState->jobId);
 		StringInfo taskFilename = TaskFilename(jobDirectoryName, transmitState->taskId);
+		char *userName = CurrentUserName();
 
 		StringInfo fileTransmitQuery = makeStringInfo();
-		appendStringInfo(fileTransmitQuery, TRANSMIT_REGULAR_COMMAND, taskFilename->data);
+		appendStringInfo(fileTransmitQuery, TRANSMIT_WITH_USER_COMMAND,
+						 taskFilename->data, quote_literal_cstr(userName));
 
 		fileTransmitStarted = MultiClientSendQuery(connectionId, fileTransmitQuery->data);
 		if (fileTransmitStarted)

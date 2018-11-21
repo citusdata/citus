@@ -28,6 +28,7 @@ extern void FreeStringInfo(StringInfo stringInfo);
 
 /* Local functions forward declarations for Transmit statement */
 extern bool IsTransmitStmt(Node *parsetree);
+extern char * TransmitStatementUser(CopyStmt *copyStatement);
 extern void VerifyTransmitStmt(CopyStmt *copyStatement);
 
 
