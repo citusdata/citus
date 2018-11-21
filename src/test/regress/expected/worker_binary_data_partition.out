@@ -12,6 +12,11 @@
 \set Table_Part_00 binary_data_table_part_00
 \set Table_Part_01 binary_data_table_part_01
 \set Table_Part_02 binary_data_table_part_02
+SELECT usesysid AS userid FROM pg_user WHERE usename = current_user \gset
+\set File_Basedir  base/pgsql_job_cache
+\set Table_File_00 :File_Basedir/job_:JobId/task_:TaskId/p_00000.:userid
+\set Table_File_01 :File_Basedir/job_:JobId/task_:TaskId/p_00001.:userid
+\set Table_File_02 :File_Basedir/job_:JobId/task_:TaskId/p_00002.:userid
 -- Create table with special characters
 CREATE TABLE :Table_Name(textcolumn text, binarycolumn bytea);
 COPY :Table_Name FROM stdin;
@@ -47,9 +52,9 @@ SELECT worker_range_partition_table(:JobId, :TaskId, :Select_Query_Text,
 CREATE TABLE :Table_Part_00 ( LIKE :Table_Name );
 CREATE TABLE :Table_Part_01 ( LIKE :Table_Name );
 CREATE TABLE :Table_Part_02 ( LIKE :Table_Name );
-COPY :Table_Part_00 FROM 'base/pgsql_job_cache/job_201010/task_101105/p_00000';
-COPY :Table_Part_01 FROM 'base/pgsql_job_cache/job_201010/task_101105/p_00001';
-COPY :Table_Part_02 FROM 'base/pgsql_job_cache/job_201010/task_101105/p_00002';
+COPY :Table_Part_00 FROM :'Table_File_00';
+COPY :Table_Part_01 FROM :'Table_File_01';
+COPY :Table_Part_02 FROM :'Table_File_02';
 -- The union of the three partitions should have as many rows as original table
 SELECT COUNT(*) AS total_row_count FROM (
        SELECT * FROM :Table_Part_00 UNION ALL

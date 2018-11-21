@@ -12,11 +12,12 @@
 \set Table_Part_01 lineitem_range_part_01
 \set Table_Part_02 lineitem_range_part_02
 \set Table_Part_03 lineitem_range_part_03
+SELECT usesysid AS userid FROM pg_user WHERE usename = current_user \gset
 \set File_Basedir  base/pgsql_job_cache
-\set Table_File_00 :File_Basedir/job_:JobId/task_:TaskId/p_00000
-\set Table_File_01 :File_Basedir/job_:JobId/task_:TaskId/p_00001
-\set Table_File_02 :File_Basedir/job_:JobId/task_:TaskId/p_00002
-\set Table_File_03 :File_Basedir/job_:JobId/task_:TaskId/p_00003
+\set Table_File_00 :File_Basedir/job_:JobId/task_:TaskId/p_00000.:userid
+\set Table_File_01 :File_Basedir/job_:JobId/task_:TaskId/p_00001.:userid
+\set Table_File_02 :File_Basedir/job_:JobId/task_:TaskId/p_00002.:userid
+\set Table_File_03 :File_Basedir/job_:JobId/task_:TaskId/p_00003.:userid
 -- Run select query, and apply range partitioning on query results
 SELECT worker_range_partition_table(:JobId, :TaskId, :Select_Query_Text,
        				    :Partition_Column_Text, :Partition_Column_Type,
