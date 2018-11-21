@@ -1,12 +1,5 @@
 SET citus.next_shard_id TO 610000;
 -- ===================================================================
--- create test functions
--- ===================================================================
-CREATE FUNCTION table_ddl_command_array(regclass)
-	RETURNS text[]
-	AS 'citus'
-	LANGUAGE C STRICT;
--- ===================================================================
 -- test ddl command generation functionality
 -- ===================================================================
 -- first make sure a simple table works
@@ -15,10 +8,10 @@ CREATE TABLE simple_table (
 	last_name text,
 	id bigint
 );
-SELECT table_ddl_command_array('simple_table');
-                              table_ddl_command_array                              
------------------------------------------------------------------------------------
- {"CREATE TABLE public.simple_table (first_name text, last_name text, id bigint)"}
+SELECT master_get_table_ddl_events('simple_table');
+                          master_get_table_ddl_events                          
+-------------------------------------------------------------------------------
+ CREATE TABLE public.simple_table (first_name text, last_name text, id bigint)
 (1 row)
 
 -- ensure not-null constraints are propagated
@@ -26,19 +19,20 @@ CREATE TABLE not_null_table (
 	city text,
 	id bigint not null
 );
-SELECT table_ddl_command_array('not_null_table');
-                        table_ddl_command_array                         
-------------------------------------------------------------------------
- {"CREATE TABLE public.not_null_table (city text, id bigint NOT NULL)"}
+SELECT master_get_table_ddl_events('not_null_table');
+                    master_get_table_ddl_events                     
+--------------------------------------------------------------------
+ CREATE TABLE public.not_null_table (city text, id bigint NOT NULL)
 (1 row)
 
 -- ensure tables not in search path are schema-prefixed
 CREATE SCHEMA not_in_path CREATE TABLE simple_table (id bigint);
-SELECT table_ddl_command_array('not_in_path.simple_table');
-                                                table_ddl_command_array                                                 
-------------------------------------------------------------------------------------------------------------------------
- {"CREATE SCHEMA IF NOT EXISTS not_in_path AUTHORIZATION postgres","CREATE TABLE not_in_path.simple_table (id bigint)"}
-(1 row)
+SELECT master_get_table_ddl_events('not_in_path.simple_table');
+                  master_get_table_ddl_events                   
+----------------------------------------------------------------
+ CREATE SCHEMA IF NOT EXISTS not_in_path AUTHORIZATION postgres
+ CREATE TABLE not_in_path.simple_table (id bigint)
+(2 rows)
 
 -- even more complex constraints should be preserved...
 CREATE TABLE column_constraint_table (
@@ -46,10 +40,10 @@ CREATE TABLE column_constraint_table (
 	last_name text,
 	age int CONSTRAINT non_negative_age CHECK (age >= 0)
 );
-SELECT table_ddl_command_array('column_constraint_table');
-                                                           table_ddl_command_array                                                            
-----------------------------------------------------------------------------------------------------------------------------------------------
- {"CREATE TABLE public.column_constraint_table (first_name text, last_name text, age integer, CONSTRAINT non_negative_age CHECK (age >= 0))"}
+SELECT master_get_table_ddl_events('column_constraint_table');
+                                                       master_get_table_ddl_events                                                        
+------------------------------------------------------------------------------------------------------------------------------------------
+ CREATE TABLE public.column_constraint_table (first_name text, last_name text, age integer, CONSTRAINT non_negative_age CHECK (age >= 0))
 (1 row)
 
 -- including table constraints
@@ -59,10 +53,10 @@ CREATE TABLE table_constraint_table (
 	max_bid decimal not null,
 	CONSTRAINT bids_ordered CHECK (min_bid > max_bid)
 );
-SELECT table_ddl_command_array('table_constraint_table');
-                                                                          table_ddl_command_array                                                                           
-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- {"CREATE TABLE public.table_constraint_table (bid_item_id bigint, min_bid numeric NOT NULL, max_bid numeric NOT NULL, CONSTRAINT bids_ordered CHECK (min_bid > max_bid))"}
+SELECT master_get_table_ddl_events('table_constraint_table');
+                                                                      master_get_table_ddl_events                                                                       
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ CREATE TABLE public.table_constraint_table (bid_item_id bigint, min_bid numeric NOT NULL, max_bid numeric NOT NULL, CONSTRAINT bids_ordered CHECK (min_bid > max_bid))
 (1 row)
 
 -- default values are supported
@@ -70,10 +64,10 @@ CREATE TABLE default_value_table (
 	name text,
 	price decimal default 0.00
 );
-SELECT table_ddl_command_array('default_value_table');
-                               table_ddl_command_array                               
--------------------------------------------------------------------------------------
- {"CREATE TABLE public.default_value_table (name text, price numeric DEFAULT 0.00)"}
+SELECT master_get_table_ddl_events('default_value_table');
+                           master_get_table_ddl_events                           
+---------------------------------------------------------------------------------
+ CREATE TABLE public.default_value_table (name text, price numeric DEFAULT 0.00)
 (1 row)
 
 -- of course primary keys work...
@@ -82,22 +76,24 @@ CREATE TABLE pkey_table (
 	last_name text,
 	id bigint PRIMARY KEY
 );
-SELECT table_ddl_command_array('pkey_table');
-                                                                         table_ddl_command_array                                                                          
---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- {"CREATE TABLE public.pkey_table (first_name text, last_name text, id bigint NOT NULL)","ALTER TABLE public.pkey_table ADD CONSTRAINT pkey_table_pkey PRIMARY KEY (id)"}
-(1 row)
+SELECT master_get_table_ddl_events('pkey_table');
+                             master_get_table_ddl_events                              
+--------------------------------------------------------------------------------------
+ CREATE TABLE public.pkey_table (first_name text, last_name text, id bigint NOT NULL)
+ ALTER TABLE public.pkey_table ADD CONSTRAINT pkey_table_pkey PRIMARY KEY (id)
+(2 rows)
 
 -- as do unique indexes...
 CREATE TABLE unique_table (
 	user_id bigint not null,
 	username text UNIQUE not null
 );
-SELECT table_ddl_command_array('unique_table');
-                                                                               table_ddl_command_array                                                                               
--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- {"CREATE TABLE public.unique_table (user_id bigint NOT NULL, username text NOT NULL)","ALTER TABLE public.unique_table ADD CONSTRAINT unique_table_username_key UNIQUE (username)"}
-(1 row)
+SELECT master_get_table_ddl_events('unique_table');
+                                master_get_table_ddl_events                                 
+--------------------------------------------------------------------------------------------
+ CREATE TABLE public.unique_table (user_id bigint NOT NULL, username text NOT NULL)
+ ALTER TABLE public.unique_table ADD CONSTRAINT unique_table_username_key UNIQUE (username)
+(2 rows)
 
 -- and indexes used for clustering
 CREATE TABLE clustered_table (
@@ -106,11 +102,13 @@ CREATE TABLE clustered_table (
 );
 CREATE INDEX clustered_time_idx ON clustered_table (received_at);
 CLUSTER clustered_table USING clustered_time_idx;
-SELECT table_ddl_command_array('clustered_table');
-                                                                                                                                    table_ddl_command_array                                                                                                                                    
------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- {"CREATE TABLE public.clustered_table (data json NOT NULL, received_at timestamp without time zone NOT NULL)","CREATE INDEX clustered_time_idx ON public.clustered_table USING btree (received_at) TABLESPACE pg_default","ALTER TABLE public.clustered_table CLUSTER ON clustered_time_idx"}
-(1 row)
+SELECT master_get_table_ddl_events('clustered_table');
+                                        master_get_table_ddl_events                                         
+------------------------------------------------------------------------------------------------------------
+ CREATE TABLE public.clustered_table (data json NOT NULL, received_at timestamp without time zone NOT NULL)
+ CREATE INDEX clustered_time_idx ON public.clustered_table USING btree (received_at) TABLESPACE pg_default
+ ALTER TABLE public.clustered_table CLUSTER ON clustered_time_idx
+(3 rows)
 
 -- fiddly things like storage type and statistics also work
 CREATE TABLE fiddly_table (
@@ -125,27 +123,29 @@ ALTER TABLE fiddly_table
 	ALTER ip_addr SET STORAGE EXTENDED,
 	ALTER traceroute SET STORAGE EXTERNAL,
 	ALTER ip_addr SET STATISTICS 500;
-SELECT table_ddl_command_array('fiddly_table');
-                                                                                                                                                                                         table_ddl_command_array                                                                                                                                                                                         
----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- {"CREATE TABLE public.fiddly_table (hostname character(255) NOT NULL, os character(255) NOT NULL, ip_addr inet NOT NULL, traceroute text NOT NULL)","ALTER TABLE ONLY public.fiddly_table ALTER COLUMN hostname SET STORAGE PLAIN, ALTER COLUMN os SET STORAGE MAIN, ALTER COLUMN ip_addr SET STORAGE EXTENDED, ALTER COLUMN ip_addr SET STATISTICS 500, ALTER COLUMN traceroute SET STORAGE EXTERNAL"}
-(1 row)
+SELECT master_get_table_ddl_events('fiddly_table');
+                                                                                                           master_get_table_ddl_events                                                                                                            
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ CREATE TABLE public.fiddly_table (hostname character(255) NOT NULL, os character(255) NOT NULL, ip_addr inet NOT NULL, traceroute text NOT NULL)
+ ALTER TABLE ONLY public.fiddly_table ALTER COLUMN hostname SET STORAGE PLAIN, ALTER COLUMN os SET STORAGE MAIN, ALTER COLUMN ip_addr SET STORAGE EXTENDED, ALTER COLUMN ip_addr SET STATISTICS 500, ALTER COLUMN traceroute SET STORAGE EXTERNAL
+(2 rows)
 
 -- test foreign tables using fake FDW
 CREATE FOREIGN TABLE foreign_table (
 	id bigint not null,
 	full_name text not null default ''
 ) SERVER fake_fdw_server OPTIONS (encoding 'utf-8', compression 'true');
-SELECT table_ddl_command_array('foreign_table');
+SELECT master_get_table_ddl_events('foreign_table');
 NOTICE:  foreign-data wrapper "fake_fdw" does not have an extension defined
-                                                                                                             table_ddl_command_array                                                                                                              
---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- {"CREATE SERVER fake_fdw_server FOREIGN DATA WRAPPER fake_fdw","CREATE FOREIGN TABLE public.foreign_table (id bigint NOT NULL, full_name text DEFAULT ''::text NOT NULL) SERVER fake_fdw_server OPTIONS (encoding 'utf-8', compression 'true')"}
-(1 row)
+                                                                          master_get_table_ddl_events                                                                           
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ CREATE SERVER fake_fdw_server FOREIGN DATA WRAPPER fake_fdw
+ CREATE FOREIGN TABLE public.foreign_table (id bigint NOT NULL, full_name text DEFAULT ''::text NOT NULL) SERVER fake_fdw_server OPTIONS (encoding 'utf-8', compression 'true')
+(2 rows)
 
 -- propagating views is not supported
 CREATE VIEW local_view AS SELECT * FROM simple_table;
-SELECT table_ddl_command_array('local_view');
+SELECT master_get_table_ddl_events('local_view');
 ERROR:  local_view is not a regular, foreign or partitioned table
 -- clean up
 DROP VIEW IF EXISTS local_view;

@@ -1,16 +1,6 @@
 
 SET citus.next_shard_id TO 610000;
 
-
--- ===================================================================
--- create test functions
--- ===================================================================
-
-CREATE FUNCTION table_ddl_command_array(regclass)
-	RETURNS text[]
-	AS 'citus'
-	LANGUAGE C STRICT;
-
 -- ===================================================================
 -- test ddl command generation functionality
 -- ===================================================================
@@ -22,7 +12,7 @@ CREATE TABLE simple_table (
 	id bigint
 );
 
-SELECT table_ddl_command_array('simple_table');
+SELECT master_get_table_ddl_events('simple_table');
 
 -- ensure not-null constraints are propagated
 CREATE TABLE not_null_table (
@@ -30,12 +20,12 @@ CREATE TABLE not_null_table (
 	id bigint not null
 );
 
-SELECT table_ddl_command_array('not_null_table');
+SELECT master_get_table_ddl_events('not_null_table');
 
 -- ensure tables not in search path are schema-prefixed
 CREATE SCHEMA not_in_path CREATE TABLE simple_table (id bigint);
 
-SELECT table_ddl_command_array('not_in_path.simple_table');
+SELECT master_get_table_ddl_events('not_in_path.simple_table');
 
 -- even more complex constraints should be preserved...
 CREATE TABLE column_constraint_table (
@@ -44,7 +34,7 @@ CREATE TABLE column_constraint_table (
 	age int CONSTRAINT non_negative_age CHECK (age >= 0)
 );
 
-SELECT table_ddl_command_array('column_constraint_table');
+SELECT master_get_table_ddl_events('column_constraint_table');
 
 -- including table constraints
 CREATE TABLE table_constraint_table (
@@ -54,7 +44,7 @@ CREATE TABLE table_constraint_table (
 	CONSTRAINT bids_ordered CHECK (min_bid > max_bid)
 );
 
-SELECT table_ddl_command_array('table_constraint_table');
+SELECT master_get_table_ddl_events('table_constraint_table');
 
 -- default values are supported
 CREATE TABLE default_value_table (
@@ -62,7 +52,7 @@ CREATE TABLE default_value_table (
 	price decimal default 0.00
 );
 
-SELECT table_ddl_command_array('default_value_table');
+SELECT master_get_table_ddl_events('default_value_table');
 
 -- of course primary keys work...
 CREATE TABLE pkey_table (
@@ -71,7 +61,7 @@ CREATE TABLE pkey_table (
 	id bigint PRIMARY KEY
 );
 
-SELECT table_ddl_command_array('pkey_table');
+SELECT master_get_table_ddl_events('pkey_table');
 
 -- as do unique indexes...
 CREATE TABLE unique_table (
@@ -79,7 +69,7 @@ CREATE TABLE unique_table (
 	username text UNIQUE not null
 );
 
-SELECT table_ddl_command_array('unique_table');
+SELECT master_get_table_ddl_events('unique_table');
 
 -- and indexes used for clustering
 CREATE TABLE clustered_table (
@@ -91,7 +81,7 @@ CREATE INDEX clustered_time_idx ON clustered_table (received_at);
 
 CLUSTER clustered_table USING clustered_time_idx;
 
-SELECT table_ddl_command_array('clustered_table');
+SELECT master_get_table_ddl_events('clustered_table');
 
 -- fiddly things like storage type and statistics also work
 CREATE TABLE fiddly_table (
@@ -108,7 +98,7 @@ ALTER TABLE fiddly_table
 	ALTER traceroute SET STORAGE EXTERNAL,
 	ALTER ip_addr SET STATISTICS 500;
 
-SELECT table_ddl_command_array('fiddly_table');
+SELECT master_get_table_ddl_events('fiddly_table');
 
 -- test foreign tables using fake FDW
 CREATE FOREIGN TABLE foreign_table (
@@ -116,12 +106,12 @@ CREATE FOREIGN TABLE foreign_table (
 	full_name text not null default ''
 ) SERVER fake_fdw_server OPTIONS (encoding 'utf-8', compression 'true');
 
-SELECT table_ddl_command_array('foreign_table');
+SELECT master_get_table_ddl_events('foreign_table');
 
 -- propagating views is not supported
 CREATE VIEW local_view AS SELECT * FROM simple_table;
 
-SELECT table_ddl_command_array('local_view');
+SELECT master_get_table_ddl_events('local_view');
 
 -- clean up
 DROP VIEW IF EXISTS local_view;
