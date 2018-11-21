@@ -103,6 +103,7 @@ OBJS = src/backend/distributed/shared_library_init.o \
      src/backend/distributed/utils/citus_version.o \
      src/backend/distributed/utils/colocation_utils.o \
      src/backend/distributed/utils/distribution_column.o \
+     src/backend/distributed/utils/enable_ssl.o \
      src/backend/distributed/utils/errormessage.o \
      src/backend/distributed/utils/foreign_key_relationship.o \
      src/backend/distributed/utils/function_utils.o \

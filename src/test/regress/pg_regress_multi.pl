@@ -326,6 +326,13 @@ if ($useMitmproxy)
   # make tests reproducible by never trying to negotiate ssl
   push(@pgOptions, '-c', "citus.node_conninfo=sslmode=disable");
 }
+elsif ($followercluster)
+{
+  # follower clusters don't work well when automatically generating certificates as the
+  # followers do not execute the extension creation sql scripts that trigger the creation
+  # of certificates
+  push(@pgOptions, '-c', "citus.node_conninfo=sslmode=prefer");
+}
 
 if ($useMitmproxy)
 {
@@ -634,7 +641,7 @@ END
     # At the end of a run, replace redirected binary with original again
     if ($valgrind)
     {
-	revert_replace_postgres();
+        revert_replace_postgres();
     }
 }
 
@@ -710,7 +717,7 @@ if ($followercluster)
         {
           system("tail", ("-n20", catfile("tmp_check", "follower.$port", "log", "postmaster.log")));
           die "Could not start follower server";
-	}
+        }
     }
 }
 

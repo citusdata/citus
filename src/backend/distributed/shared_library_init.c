@@ -1018,8 +1018,12 @@ RegisterCitusConfigVariables(void)
 		gettext_noop("Sets parameters used for outbound connections."),
 		NULL,
 		&NodeConninfo,
+#ifdef USE_SSL
+		"sslmode=require",
+#else
 		"sslmode=prefer",
-		PGC_POSTMASTER,
+#endif
+		PGC_SIGHUP,
 		GUC_SUPERUSER_ONLY,
 		NodeConninfoGucCheckHook,
 		NodeConninfoGucAssignHook,
