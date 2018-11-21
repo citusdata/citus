@@ -301,6 +301,27 @@ GetConnParams(ConnectionHashKey *key, char ***keywords, char ***values,
 
 
 /*
+ * GetConnParam finds the keyword in the configured connection parameters and returns its
+ * value.
+ */
+const char *
+GetConnParam(const char *keyword)
+{
+	int i = 0;
+
+	for (i = 0; i < ConnParams.size; i++)
+	{
+		if (strcmp(keyword, ConnParams.keywords[i]) == 0)
+		{
+			return ConnParams.values[i];
+		}
+	}
+
+	return NULL;
+}
+
+
+/*
  * CalculateMaxSize simply counts the number of elements returned by
  * PQconnDefaults, including the final NULL. This helps us know how space would
  * be used if a connection utilizes every known libpq parameter.
