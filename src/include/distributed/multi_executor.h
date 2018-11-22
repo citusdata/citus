@@ -36,6 +36,7 @@ extern TupleTableSlot * ReturnTupleFromTuplestore(CitusScanState *scanState);
 extern void LoadTuplesIntoTupleStore(CitusScanState *citusScanState, Job *workerJob);
 extern void ReadFileIntoTupleStore(char *fileName, char *copyFormat, TupleDesc
 								   tupleDescriptor, Tuplestorestate *tupstore);
+extern Query * ParseQueryString(const char *queryString);
 extern void ExecuteQueryStringIntoDestReceiver(const char *queryString, ParamListInfo
 											   params,
 											   DestReceiver *dest);

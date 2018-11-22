@@ -128,9 +128,6 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 					 char *completionTag)
 {
 	Node *parsetree = pstmt->utilityStmt;
-	bool commandMustRunAsOwner = false;
-	Oid savedUserId = InvalidOid;
-	int savedSecurityContext = 0;
 	List *ddlJobs = NIL;
 	bool checkExtensionVersion = false;
 
@@ -248,8 +245,7 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		MemoryContext previousContext;
 
 		parsetree = copyObject(parsetree);
-		parsetree = ProcessCopyStmt((CopyStmt *) parsetree, completionTag,
-									&commandMustRunAsOwner);
+		parsetree = ProcessCopyStmt((CopyStmt *) parsetree, completionTag, queryString);
 
 		previousContext = MemoryContextSwitchTo(planContext);
 		parsetree = copyObject(parsetree);
@@ -450,13 +446,6 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		}
 	}
 
-	/* set user if needed and go ahead and run local utility using standard hook */
-	if (commandMustRunAsOwner)
-	{
-		GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
-		SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);
-	}
-
 #if (PG_VERSION_NUM >= 100000)
 	pstmt->utilityStmt = parsetree;
 	standard_ProcessUtility(pstmt, queryString, context,
@@ -493,11 +482,6 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 	if (ddlJobs != NIL)
 	{
 		PostProcessUtility(parsetree);
-	}
-
-	if (commandMustRunAsOwner)
-	{
-		SetUserIdAndSecContext(savedUserId, savedSecurityContext);
 	}
 
 	/*

@@ -1622,28 +1622,28 @@ TrackerQueueSqlTask(TaskTracker *taskTracker, Task *task)
 	StringInfo taskAssignmentQuery = NULL;
 
 	/*
-	 * We first wrap a copy out command around the original query string. This
-	 * allows for the query's results to persist on the worker node after the
-	 * query completes and for the executor to later use this persisted data.
+	 * We first wrap the original query string in a worker_execute_sql_task
+	 * call. This allows for the query's results to persist on the worker node
+	 * after the query completes and for the executor to later fetch this
+	 * persisted data using COPY ... (format 'transmit')
 	 */
-	StringInfo jobDirectoryName = JobDirectoryName(task->jobId);
-	StringInfo taskFilename = TaskFilename(jobDirectoryName, task->taskId);
 
-	StringInfo copyQueryString = makeStringInfo();
+	StringInfo sqlTaskQueryString = makeStringInfo();
+	char *escapedTaskQueryString = quote_literal_cstr(task->queryString);
 
 	if (BinaryMasterCopyFormat)
 	{
-		appendStringInfo(copyQueryString, COPY_QUERY_TO_FILE_BINARY,
-						 task->queryString, taskFilename->data);
+		appendStringInfo(sqlTaskQueryString, EXECUTE_SQL_TASK_TO_FILE_BINARY,
+						 task->jobId, task->taskId, escapedTaskQueryString);
 	}
 	else
 	{
-		appendStringInfo(copyQueryString, COPY_QUERY_TO_FILE_TEXT,
-						 task->queryString, taskFilename->data);
+		appendStringInfo(sqlTaskQueryString, EXECUTE_SQL_TASK_TO_FILE_TEXT,
+						 task->jobId, task->taskId, escapedTaskQueryString);
 	}
 
 	/* wrap a task assignment query outside the copy out query */
-	taskAssignmentQuery = TaskAssignmentQuery(task, copyQueryString->data);
+	taskAssignmentQuery = TaskAssignmentQuery(task, sqlTaskQueryString->data);
 
 	taskState = TaskStateHashEnter(taskStateHash, task->jobId, task->taskId);
 	taskState->status = TASK_CLIENT_SIDE_QUEUED;
