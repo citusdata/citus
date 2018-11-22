@@ -60,6 +60,37 @@ static void TaskFileDestReceiverShutdown(DestReceiver *destReceiver);
 static void TaskFileDestReceiverDestroy(DestReceiver *destReceiver);
 
 
+/* exports for SQL callable functions */
+PG_FUNCTION_INFO_V1(worker_execute_sql_task);
+
+
+/*
+ * worker_execute_sql_task executes a query and writes the results to
+ * a file according to the usual task naming scheme.
+ */
+Datum
+worker_execute_sql_task(PG_FUNCTION_ARGS)
+{
+	uint64 jobId = PG_GETARG_INT64(0);
+	uint32 taskId = PG_GETARG_UINT32(1);
+	text *queryText = PG_GETARG_TEXT_P(2);
+	char *queryString = text_to_cstring(queryText);
+	bool binaryCopyFormat = PG_GETARG_BOOL(3);
+
+	int64 tuplesSent = 0;
+	Query *query = NULL;
+
+	/* job directory is created prior to scheduling the task */
+	StringInfo jobDirectoryName = JobDirectoryName(jobId);
+	StringInfo taskFilename = TaskFilename(jobDirectoryName, taskId);
+
+	query = ParseQueryString(queryString);
+	tuplesSent = WorkerExecuteSqlTask(query, taskFilename->data, binaryCopyFormat);
+
+	PG_RETURN_INT64(tuplesSent);
+}
+
+
 /*
  * WorkerExecuteSqlTask executes an already-parsed query and writes the result
  * to the given task file.
