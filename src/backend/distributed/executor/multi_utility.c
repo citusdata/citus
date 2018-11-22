@@ -112,10 +112,11 @@ static bool IsCitusExtensionStmt(Node *parsetree);
 static bool IsTransmitStmt(Node *parsetree);
 static void VerifyTransmitStmt(CopyStmt *copyStatement);
 static bool IsCopyResultStmt(CopyStmt *copyStatement);
+static bool CopyStatementHasFormat(CopyStmt *copyStatement, char *formatName);
 
 /* Local functions forward declarations for processing distributed table commands */
 static Node * ProcessCopyStmt(CopyStmt *copyStatement, char *completionTag,
-							  bool *commandMustRunAsOwner);
+							  const char *queryString);
 static void ProcessCreateTableStmtPartitionOf(CreateStmt *createStatement);
 static void ProcessAlterTableStmtAttachPartition(AlterTableStmt *alterTableStatement);
 static List * PlanIndexStmt(IndexStmt *createIndexStatement,
@@ -164,7 +165,6 @@ static List * InterShardDDLTaskList(Oid leftRelationId, Oid rightRelationId,
 									const char *commandString);
 static void RangeVarCallbackForDropIndex(const RangeVar *rel, Oid relOid, Oid oldRelOid,
 										 void *arg);
-static void CheckCopyPermissions(CopyStmt *copyStatement);
 static List * CopyGetAttnums(TupleDesc tupDesc, Relation rel, List *attnamelist);
 static void PostProcessUtility(Node *parsetree);
 static List * CollectGrantTableIdList(GrantStmt *grantStmt);
@@ -245,9 +245,6 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 					 char *completionTag)
 {
 	Node *parsetree = pstmt->utilityStmt;
-	bool commandMustRunAsOwner = false;
-	Oid savedUserId = InvalidOid;
-	int savedSecurityContext = 0;
 	List *ddlJobs = NIL;
 	bool checkExtensionVersion = false;
 
@@ -326,7 +323,7 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 
 		parsetree = copyObject(parsetree);
 		parsetree = ProcessCopyStmt((CopyStmt *) parsetree, completionTag,
-									&commandMustRunAsOwner);
+									queryString);
 
 		previousContext = MemoryContextSwitchTo(planContext);
 		parsetree = copyObject(parsetree);
@@ -512,13 +509,6 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		StopMaintenanceDaemon(databaseOid);
 	}
 
-	/* set user if needed and go ahead and run local utility using standard hook */
-	if (commandMustRunAsOwner)
-	{
-		GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
-		SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);
-	}
-
 #if (PG_VERSION_NUM >= 100000)
 	pstmt->utilityStmt = parsetree;
 	standard_ProcessUtility(pstmt, queryString, context,
@@ -555,11 +545,6 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 	if (ddlJobs != NIL)
 	{
 		PostProcessUtility(parsetree);
-	}
-
-	if (commandMustRunAsOwner)
-	{
-		SetUserIdAndSecContext(savedUserId, savedSecurityContext);
 	}
 
 	/*
@@ -924,8 +909,19 @@ VerifyTransmitStmt(CopyStmt *copyStatement)
 static bool
 IsCopyResultStmt(CopyStmt *copyStatement)
 {
+	return CopyStatementHasFormat(copyStatement, "result");
+}
+
+
+/*
+ * CopyStatementHasFormat checks whether the COPY statement has the given
+ * format.
+ */
+static bool
+CopyStatementHasFormat(CopyStmt *copyStatement, char *formatName)
+{
 	ListCell *optionCell = NULL;
-	bool hasFormatReceive = false;
+	bool hasFormat = false;
 
 	/* extract WITH (...) options from the COPY statement */
 	foreach(optionCell, copyStatement->options)
@@ -933,14 +929,14 @@ IsCopyResultStmt(CopyStmt *copyStatement)
 		DefElem *defel = (DefElem *) lfirst(optionCell);
 
 		if (strncmp(defel->defname, "format", NAMEDATALEN) == 0 &&
-			strncmp(defGetString(defel), "result", NAMEDATALEN) == 0)
+			strncmp(defGetString(defel), formatName, NAMEDATALEN) == 0)
 		{
-			hasFormatReceive = true;
+			hasFormat = true;
 			break;
 		}
 	}
 
-	return hasFormatReceive;
+	return hasFormat;
 }
 
 
@@ -949,18 +945,10 @@ IsCopyResultStmt(CopyStmt *copyStatement)
  * COPYing from distributed tables and preventing unsupported actions. The
  * function returns a modified COPY statement to be executed, or NULL if no
  * further processing is needed.
- *
- * commandMustRunAsOwner is an output parameter used to communicate to the caller whether
- * the copy statement should be executed using elevated privileges. If
- * ProcessCopyStmt that is required, a call to CheckCopyPermissions will take
- * care of verifying the current user's permissions before ProcessCopyStmt
- * returns.
  */
 static Node *
-ProcessCopyStmt(CopyStmt *copyStatement, char *completionTag, bool *commandMustRunAsOwner)
+ProcessCopyStmt(CopyStmt *copyStatement, char *completionTag, const char *queryString)
 {
-	*commandMustRunAsOwner = false; /* make sure variable is initialized */
-
 	/*
 	 * Handle special COPY "resultid" FROM STDIN WITH (format result) commands
 	 * for sending intermediate results to workers.
@@ -1066,49 +1054,47 @@ ProcessCopyStmt(CopyStmt *copyStatement, char *completionTag, bool *commandMustR
 		}
 	}
 
-
 	if (copyStatement->filename != NULL && !copyStatement->is_program)
 	{
-		const char *filename = copyStatement->filename;
+		char *filename = copyStatement->filename;
 
-		if (CacheDirectoryElement(filename))
+		/*
+		 * We execute COPY commands issued by the task-tracker executor here
+		 * because we're not normally allowed to write to a file as a regular
+		 * user and we don't want to execute the query as superuser.
+		 */
+		if (CacheDirectoryElement(filename) && copyStatement->query != NULL &&
+			!copyStatement->is_from && !is_absolute_path(filename))
 		{
-			/*
-			 * Only superusers are allowed to copy from a file, so we have to
-			 * become superuser to execute copies to/from files used by citus'
-			 * query execution.
-			 *
-			 * XXX: This is a decidedly suboptimal solution, as that means
-			 * that triggers, input functions, etc. run with elevated
-			 * privileges.  But this is better than not being able to run
-			 * queries as normal user.
-			 */
-			*commandMustRunAsOwner = true;
+			bool binaryCopyFormat = CopyStatementHasFormat(copyStatement, "binary");
+			int64 tuplesSent = 0;
+			Query *query = NULL;
+			Node *queryNode = copyStatement->query;
+			List *queryTreeList = NIL;
 
-			/*
-			 * Have to manually check permissions here as the COPY is will be
-			 * run as a superuser.
-			 */
-			if (copyStatement->relation != NULL)
+#if (PG_VERSION_NUM >= 100000)
+			RawStmt *rawStmt = makeNode(RawStmt);
+			rawStmt->stmt = queryNode;
+
+			queryTreeList = pg_analyze_and_rewrite(rawStmt, queryString, NULL, 0, NULL);
+#else
+			queryTreeList = pg_analyze_and_rewrite(queryNode, queryString, NULL, 0);
+#endif
+
+			if (list_length(queryTreeList) != 1)
 			{
-				CheckCopyPermissions(copyStatement);
+				ereport(ERROR, (errmsg("can only execute a single query")));
 			}
 
-			/*
-			 * Check if we have a "COPY (query) TO filename". If we do, copy
-			 * doesn't accept relative file paths. However, SQL tasks that get
-			 * assigned to worker nodes have relative paths. We therefore
-			 * convert relative paths to absolute ones here.
-			 */
-			if (copyStatement->relation == NULL &&
-				!copyStatement->is_from &&
-				!is_absolute_path(filename))
-			{
-				copyStatement->filename = make_absolute_path(filename);
-			}
+			query = (Query *) linitial(queryTreeList);
+			tuplesSent = WorkerExecuteSqlTask(query, filename, binaryCopyFormat);
+
+			snprintf(completionTag, COMPLETION_TAG_BUFSIZE,
+					 "COPY " UINT64_FORMAT, tuplesSent);
+
+			return NULL;
 		}
 	}
-
 
 	return (Node *) copyStatement;
 }
@@ -3536,7 +3522,7 @@ RangeVarCallbackForDropIndex(const RangeVar *rel, Oid relOid, Oid oldRelOid, voi
  *
  * Copied from postgres, where it's part of DoCopy().
  */
-static void
+void
 CheckCopyPermissions(CopyStmt *copyStatement)
 {
 	/* *INDENT-OFF* */

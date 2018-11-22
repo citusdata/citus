@@ -31,6 +31,7 @@
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_client_executor.h"
+#include "distributed/multi_copy.h"
 #include "distributed/multi_logical_optimizer.h"
 #include "distributed/multi_server_executor.h"
 #include "distributed/multi_utility.h"
@@ -748,6 +749,8 @@ worker_append_table_to_shard(PG_FUNCTION_ARGS)
 	uint64 shardId = INVALID_SHARD_ID;
 	bool received = false;
 	StringInfo queryString = NULL;
+	Oid savedUserId = InvalidOid;
+	int savedSecurityContext = 0;
 
 	CheckCitusVersion(ERROR);
 
@@ -793,8 +796,17 @@ worker_append_table_to_shard(PG_FUNCTION_ARGS)
 	appendStringInfo(queryString, COPY_IN_COMMAND, shardQualifiedName,
 					 localFilePath->data);
 
+	/* make sure we are allowed to execute the COPY command */
+	CheckCopyPermissions(localCopyCommand);
+
+	/* need superuser to copy from files */
+	GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
+	SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);
+
 	CitusProcessUtility((Node *) localCopyCommand, queryString->data,
 						PROCESS_UTILITY_TOPLEVEL, NULL, None_Receiver, NULL);
+
+	SetUserIdAndSecContext(savedUserId, savedSecurityContext);
 
 	/* finally delete the temporary file we created */
 	CitusDeleteFile(localFilePath->data);

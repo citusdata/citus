@@ -131,6 +131,7 @@ extern void EndRemoteCopy(int64 shardId, List *connectionList, bool stopOnFailur
 extern void CitusCopyFrom(CopyStmt *copyStatement, char *completionTag);
 extern bool IsCopyFromWorker(CopyStmt *copyStatement);
 extern NodeAddress * MasterNodeAddress(CopyStmt *copyStatement);
+extern void CheckCopyPermissions(CopyStmt *copyStatement);
 
 
 #endif /* MULTI_COPY_H */
