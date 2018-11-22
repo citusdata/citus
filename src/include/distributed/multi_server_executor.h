@@ -26,8 +26,10 @@
 /* copy out query results */
 #define COPY_QUERY_TO_STDOUT_TEXT "COPY (%s) TO STDOUT"
 #define COPY_QUERY_TO_STDOUT_BINARY "COPY (%s) TO STDOUT WITH (FORMAT binary)"
-#define COPY_QUERY_TO_FILE_TEXT "COPY (%s) TO '%s'"
-#define COPY_QUERY_TO_FILE_BINARY "COPY (%s) TO '%s' WITH (FORMAT binary)"
+#define EXECUTE_SQL_TASK_TO_FILE_BINARY \
+	"SELECT worker_execute_sql_task("UINT64_FORMAT ", %u, %s, true)"
+#define EXECUTE_SQL_TASK_TO_FILE_TEXT \
+	"SELECT worker_execute_sql_task("UINT64_FORMAT ", %u, %s, false)"
 
 /* Task tracker executor related defines */
 #define TASK_ASSIGNMENT_QUERY "SELECT task_tracker_assign_task \
