@@ -1347,6 +1347,21 @@ EnsureTableOwner(Oid relationId)
 
 
 /*
+ * Check that the current user has owner rights to the schema, error out if
+ * not. Superusers are regarded as owners.
+ */
+void
+EnsureSchemaOwner(Oid schemaId)
+{
+	if (!pg_namespace_ownercheck(schemaId, GetUserId()))
+	{
+		aclcheck_error(ACLCHECK_NOT_OWNER, ACLCHECK_OBJECT_TABLE,
+					   get_namespace_name(schemaId));
+	}
+}
+
+
+/*
  * Check that the current user has owner rights to sequenceRelationId, error out if
  * not. Superusers are regarded as owners.
  */
