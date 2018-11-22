@@ -103,6 +103,12 @@ worker_merge_files_into_table(PG_FUNCTION_ARGS)
 		resetStringInfo(jobSchemaName);
 		appendStringInfoString(jobSchemaName, "public");
 	}
+	else
+	{
+		Oid schemaId = get_namespace_oid(jobSchemaName->data, false);
+
+		EnsureSchemaOwner(schemaId);
+	}
 
 	/* create the task table and copy files into the table */
 	columnNameList = ArrayObjectToCStringList(columnNameObject);
@@ -171,6 +177,12 @@ worker_merge_files_and_run_query(PG_FUNCTION_ARGS)
 	{
 		resetStringInfo(jobSchemaName);
 		appendStringInfoString(jobSchemaName, "public");
+	}
+	else
+	{
+		Oid schemaId = get_namespace_oid(jobSchemaName->data, false);
+
+		EnsureSchemaOwner(schemaId);
 	}
 
 	appendStringInfo(setSearchPathString, SET_SEARCH_PATH_COMMAND, jobSchemaName->data);
