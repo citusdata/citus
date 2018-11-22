@@ -136,7 +136,7 @@ task_tracker_task_status(PG_FUNCTION_ARGS)
 
 	WorkerTask *workerTask = NULL;
 	uint32 taskStatus = 0;
-
+	char *userName = CurrentUserName();
 	bool taskTrackerRunning = false;
 
 	CheckCitusVersion(ERROR);
@@ -148,7 +148,8 @@ task_tracker_task_status(PG_FUNCTION_ARGS)
 		LWLockAcquire(&WorkerTasksSharedState->taskHashLock, LW_SHARED);
 
 		workerTask = WorkerTasksHashFind(jobId, taskId);
-		if (workerTask == NULL)
+		if (workerTask == NULL ||
+			(!superuser() && strncmp(userName, workerTask->userName, NAMEDATALEN) != 0))
 		{
 			ereport(ERROR, (errmsg("could not find the worker task"),
 							errdetail("Task jobId: " UINT64_FORMAT " and taskId: %u",
