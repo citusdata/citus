@@ -338,6 +338,18 @@ void
 ExecuteQueryStringIntoDestReceiver(const char *queryString, ParamListInfo params,
 								   DestReceiver *dest)
 {
+	Query *query = ParseQueryString(queryString);
+
+	ExecuteQueryIntoDestReceiver(query, params, dest);
+}
+
+
+/*
+ * ParseQuery parses query string and returns a Query struct.
+ */
+Query *
+ParseQueryString(const char *queryString)
+{
 	Query *query = NULL;
 
 #if (PG_VERSION_NUM >= 100000)
@@ -355,7 +367,7 @@ ExecuteQueryStringIntoDestReceiver(const char *queryString, ParamListInfo params
 
 	query = (Query *) linitial(queryTreeList);
 
-	ExecuteQueryIntoDestReceiver(query, params, dest);
+	return query;
 }
 
 

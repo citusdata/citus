@@ -128,6 +128,7 @@ OBJS = src/backend/distributed/shared_library_init.o \
      src/backend/distributed/worker/worker_file_access_protocol.o \
      src/backend/distributed/worker/worker_merge_protocol.o \
      src/backend/distributed/worker/worker_partition_protocol.o \
+     src/backend/distributed/worker/worker_sql_task_protocol.o \
      src/backend/distributed/worker/worker_truncate_trigger_protocol.o \
      $(WIN32RES)
 
