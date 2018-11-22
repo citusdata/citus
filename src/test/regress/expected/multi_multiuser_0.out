@@ -130,6 +130,13 @@ SET citus.task_executor_type TO 'real-time';
 COPY "postgresql.conf" TO STDOUT WITH (format transmit);
 ERROR:  operation is not allowed
 HINT:  Run the command with a superuser.
+-- create a task that other users should not be able to inspect
+SELECT task_tracker_assign_task(1, 1, 'SELECT 1');
+ task_tracker_assign_task 
+--------------------------
+ 
+(1 row)
+
 -- check read permission
 SET ROLE read_access;
 EXECUTE prepare_insert(1);
@@ -172,6 +179,14 @@ SELECT count(*) FROM test a JOIN test b ON (a.val = b.val) WHERE a.id = 1 AND b.
 COPY "postgresql.conf" TO STDOUT WITH (format transmit);
 ERROR:  operation is not allowed
 HINT:  Run the command with a superuser.
+-- should not be able to access tasks or jobs belonging to a different user
+SELECT task_tracker_task_status(1, 1);
+ERROR:  could not find the worker task
+DETAIL:  Task jobId: 1 and taskId: 1
+SELECT task_tracker_assign_task(1, 2, 'SELECT 1');
+ERROR:  must be owner of schema pg_merge_job_0001
+SELECT task_tracker_cleanup_job(1);
+ERROR:  must be owner of schema pg_merge_job_0001
 -- should not be allowed to take aggressive locks on table
 BEGIN;
 SELECT lock_relation_if_exists('test', 'ACCESS SHARE');
@@ -260,6 +275,12 @@ SELECT result FROM run_command_on_workers($$SELECT tableowner FROM pg_tables WHE
  full_access
  full_access
 (2 rows)
+
+SELECT task_tracker_cleanup_job(1);
+ task_tracker_cleanup_job 
+--------------------------
+ 
+(1 row)
 
 DROP TABLE my_table, singleshard, test, test_coloc;
 DROP USER full_access;

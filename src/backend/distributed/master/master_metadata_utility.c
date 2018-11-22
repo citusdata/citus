@@ -1355,7 +1355,7 @@ EnsureSchemaOwner(Oid schemaId)
 {
 	if (!pg_namespace_ownercheck(schemaId, GetUserId()))
 	{
-		aclcheck_error(ACLCHECK_NOT_OWNER, ACLCHECK_OBJECT_TABLE,
+		aclcheck_error(ACLCHECK_NOT_OWNER, ACLCHECK_OBJECT_SCHEMA,
 					   get_namespace_name(schemaId));
 	}
 }
