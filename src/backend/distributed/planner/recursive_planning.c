@@ -78,6 +78,7 @@
 #include "nodes/relation.h"
 #include "utils/builtins.h"
 #include "utils/guc.h"
+#include "utils/lsyscache.h"
 #include "../../../include/distributed/query_pushdown_planning.h"
 
 
@@ -154,6 +155,8 @@ static bool ShouldRecursivelyPlanSetOperation(Query *query,
 static void RecursivelyPlanSetOperations(Query *query, Node *node,
 										 RecursivePlanningContext *context);
 static bool IsLocalTableRTE(Node *node);
+static void RecursivelyPlanRTERelation(RangeTblEntry *relationRte,
+									   RecursivePlanningContext *planningContext);
 static void RecursivelyPlanSubquery(Query *subquery,
 									RecursivePlanningContext *planningContext);
 static DistributedSubPlan * CreateDistributedSubPlan(uint32 subPlanId,
@@ -474,20 +477,25 @@ RecursivelyPlanNonColocatedJoinWalker(Node *joinNode,
 		RangeTblEntry *rte = rt_fetch(rangeTableIndex, rangeTableList);
 		Query *subquery = NULL;
 
-		/* we're only interested in subqueries for now */
-		if (rte->rtekind != RTE_SUBQUERY)
+		if (rte->rtekind == RTE_RELATION)
 		{
-			return;
+			subquery = WrapRteRelationIntoSubquery(rte);
+			if (!SubqueryColocated(subquery, colocatedJoinChecker))
+			{
+				RecursivelyPlanRTERelation(rte, recursivePlanningContext);
+			}
 		}
-
-		/*
-		 * If the subquery is not colocated with the anchor subquery,
-		 * recursively plan it.
-		 */
-		subquery = rte->subquery;
-		if (!SubqueryColocated(subquery, colocatedJoinChecker))
+		else if (rte->rtekind == RTE_SUBQUERY)
 		{
-			RecursivelyPlanSubquery(subquery, recursivePlanningContext);
+			/*
+			 * If the subquery is not colocated with the anchor subquery,
+			 * recursively plan it.
+			 */
+			subquery = rte->subquery;
+			if (!SubqueryColocated(subquery, colocatedJoinChecker))
+			{
+				RecursivelyPlanSubquery(subquery, recursivePlanningContext);
+			}
 		}
 	}
 	else
@@ -1060,6 +1068,44 @@ IsLocalTableRTE(Node *node)
 
 	/* local table found */
 	return true;
+}
+
+
+/*
+ * RecursivelyPlanRTERelation wraps the relation with a subquery
+ * (e.g., users_table becomes (SELECT * FROM users_table) as users_table).
+ *
+ * Later, the subquery is recursively planned via RecursivelyPlanSubquery().
+ */
+static void
+RecursivelyPlanRTERelation(RangeTblEntry *relationRte,
+						   RecursivePlanningContext *planningContext)
+{
+	Query *subquery = WrapRteRelationIntoSubquery(relationRte);
+	RangeTblEntry *wrappedSubqueryEntry = makeNode(RangeTblEntry);
+	ListCell *columnListCell = NULL;
+	List *colNames = NIL;
+	char *relationName = get_rel_name(relationRte->relid);
+
+	wrappedSubqueryEntry->rtekind = RTE_SUBQUERY;
+	wrappedSubqueryEntry->subquery = copyObject(subquery);
+
+	foreach(columnListCell, subquery->targetList)
+	{
+		TargetEntry *tle = (TargetEntry *) lfirst(columnListCell);
+
+		colNames =
+			lappend(colNames, makeString(pstrdup(tle->resname)));
+	}
+
+	wrappedSubqueryEntry->eref = makeAlias(pstrdup(relationName), copyObject(colNames));
+	wrappedSubqueryEntry->alias = makeAlias(pstrdup(relationName), copyObject(colNames));
+
+	wrappedSubqueryEntry->inFromCl = true;
+
+	memcpy(relationRte, wrappedSubqueryEntry, sizeof(RangeTblEntry));
+
+	RecursivelyPlanSubquery(wrappedSubqueryEntry->subquery, planningContext);
 }
 
 
