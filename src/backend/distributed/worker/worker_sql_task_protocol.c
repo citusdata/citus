@@ -82,7 +82,7 @@ worker_execute_sql_task(PG_FUNCTION_ARGS)
 
 	/* job directory is created prior to scheduling the task */
 	StringInfo jobDirectoryName = JobDirectoryName(jobId);
-	StringInfo taskFilename = TaskFilename(jobDirectoryName, taskId);
+	StringInfo taskFilename = UserTaskFilename(jobDirectoryName, taskId);
 
 	query = ParseQueryString(queryString);
 	tuplesSent = WorkerExecuteSqlTask(query, taskFilename->data, binaryCopyFormat);

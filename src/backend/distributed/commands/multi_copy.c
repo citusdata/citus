@@ -2609,6 +2609,7 @@ ProcessCopyStmt(CopyStmt *copyStatement, char *completionTag, const char *queryS
 			Query *query = NULL;
 			Node *queryNode = copyStatement->query;
 			List *queryTreeList = NIL;
+			StringInfo userFilePath = makeStringInfo();
 
 #if (PG_VERSION_NUM >= 100000)
 			RawStmt *rawStmt = makeNode(RawStmt);
@@ -2625,6 +2626,14 @@ ProcessCopyStmt(CopyStmt *copyStatement, char *completionTag, const char *queryS
 			}
 
 			query = (Query *) linitial(queryTreeList);
+
+			/*
+			 * Add a user ID suffix to prevent other users from reading/writing
+			 * the same file. We do this consistently in all functions that interact
+			 * with task files.
+			 */
+			appendStringInfo(userFilePath, "%s.%u", filename, GetUserId());
+
 			tuplesSent = WorkerExecuteSqlTask(query, filename, binaryCopyFormat);
 
 			snprintf(completionTag, COMPLETION_TAG_BUFSIZE,

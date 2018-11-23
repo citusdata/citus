@@ -108,7 +108,7 @@ worker_fetch_partition_file(PG_FUNCTION_ARGS)
 
 	/* local filename is <jobId>/<upstreamTaskId>/<partitionTaskId> */
 	StringInfo taskDirectoryName = TaskDirectoryName(jobId, upstreamTaskId);
-	StringInfo taskFilename = TaskFilename(taskDirectoryName, partitionTaskId);
+	StringInfo taskFilename = UserTaskFilename(taskDirectoryName, partitionTaskId);
 
 	/*
 	 * If we are the first function to fetch a file for the upstream task, the
@@ -154,7 +154,7 @@ worker_fetch_query_results_file(PG_FUNCTION_ARGS)
 
 	/* local filename is <jobId>/<upstreamTaskId>/<queryTaskId> */
 	StringInfo taskDirectoryName = TaskDirectoryName(jobId, upstreamTaskId);
-	StringInfo taskFilename = TaskFilename(taskDirectoryName, queryTaskId);
+	StringInfo taskFilename = UserTaskFilename(taskDirectoryName, queryTaskId);
 
 	/*
 	 * If we are the first function to fetch a file for the upstream task, the
@@ -192,6 +192,21 @@ TaskFilename(StringInfo directoryName, uint32 taskId)
 
 
 /*
+ * UserTaskFilename returns a full file path for a task file including the
+ * current user ID as a suffix.
+ */
+StringInfo
+UserTaskFilename(StringInfo directoryName, uint32 taskId)
+{
+	StringInfo taskFilename = TaskFilename(directoryName, taskId);
+
+	appendStringInfo(taskFilename, ".%u", GetUserId());
+
+	return taskFilename;
+}
+
+
+/*
  * FetchRegularFileAsSuperUser copies a file from a remote node in an idempotent
  * manner. It connects to the remote node as superuser to give file access.
  * Callers must make sure that the file names are sanitized.
@@ -203,6 +218,7 @@ FetchRegularFileAsSuperUser(const char *nodeName, uint32 nodePort,
 	char *nodeUser = NULL;
 	StringInfo attemptFilename = NULL;
 	StringInfo transmitCommand = NULL;
+	char *userName = CurrentUserName();
 	uint32 randomId = (uint32) random();
 	bool received = false;
 	int renamed = 0;
@@ -217,7 +233,8 @@ FetchRegularFileAsSuperUser(const char *nodeName, uint32 nodePort,
 					 MIN_TASK_FILENAME_WIDTH, randomId, ATTEMPT_FILE_SUFFIX);
 
 	transmitCommand = makeStringInfo();
-	appendStringInfo(transmitCommand, TRANSMIT_REGULAR_COMMAND, remoteFilename->data);
+	appendStringInfo(transmitCommand, TRANSMIT_WITH_USER_COMMAND, remoteFilename->data,
+					 quote_literal_cstr(userName));
 
 	/* connect as superuser to give file access */
 	nodeUser = CitusExtensionOwnerName();

@@ -16,6 +16,7 @@
 
 #include "postgres.h"
 #include "funcapi.h"
+#include "miscadmin.h"
 #include "pgstat.h"
 
 #include <arpa/inet.h>
@@ -80,6 +81,7 @@ static void OutputBinaryFooters(FileOutputStream *partitionFileArray, uint32 fil
 static uint32 RangePartitionId(Datum partitionValue, const void *context);
 static uint32 HashPartitionId(Datum partitionValue, const void *context);
 static uint32 HashPartitionIdViaDeprecatedAPI(Datum partitionValue, const void *context);
+static StringInfo UserPartitionFilename(StringInfo directoryName, uint32 partitionId);
 static bool FileIsLink(char *filename, struct stat filestat);
 
 
@@ -509,7 +511,7 @@ OpenPartitionFiles(StringInfo directoryName, uint32 fileCount)
 
 	for (fileIndex = 0; fileIndex < fileCount; fileIndex++)
 	{
-		StringInfo filePath = PartitionFilename(directoryName, fileIndex);
+		StringInfo filePath = UserPartitionFilename(directoryName, fileIndex);
 
 		fileDescriptor = PathNameOpenFilePerm(filePath->data, fileFlags, fileMode);
 		if (fileDescriptor < 0)
@@ -606,7 +608,14 @@ TaskDirectoryName(uint64 jobId, uint32 taskId)
 }
 
 
-/* Constructs a standardized partition file path for given directory and id. */
+/*
+ * PartitionFilename returns a partition file path for given directory and id
+ * which is suitable for use in worker_fetch_partition_file and tranmsit.
+ *
+ * It excludes the user ID part at the end of the filename, since that is
+ * added by worker_fetch_partition_file itself based on the current user.
+ * For the full path use UserPartitionFilename.
+ */
 StringInfo
 PartitionFilename(StringInfo directoryName, uint32 partitionId)
 {
@@ -614,6 +623,21 @@ PartitionFilename(StringInfo directoryName, uint32 partitionId)
 	appendStringInfo(partitionFilename, "%s/%s%0*u",
 					 directoryName->data,
 					 PARTITION_FILE_PREFIX, MIN_PARTITION_FILENAME_WIDTH, partitionId);
+
+	return partitionFilename;
+}
+
+
+/*
+ * UserPartitionFilename returns the path of a partition file for the given
+ * partition ID and the current user.
+ */
+static StringInfo
+UserPartitionFilename(StringInfo directoryName, uint32 partitionId)
+{
+	StringInfo partitionFilename = PartitionFilename(directoryName, partitionId);
+
+	appendStringInfo(partitionFilename, ".%u", GetUserId());
 
 	return partitionFilename;
 }

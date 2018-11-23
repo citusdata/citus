@@ -14,6 +14,13 @@
 \set TablePart01 lineitem_partition_task_part_01
 \set TablePart02 lineitem_partition_task_part_02
 
+SELECT usesysid AS userid FROM pg_user WHERE usename = current_user \gset
+
+\set File_Basedir  base/pgsql_job_cache
+\set Table_File_00 :File_Basedir/job_:JobId/task_:PartitionTaskId/p_00000.:userid
+\set Table_File_01 :File_Basedir/job_:JobId/task_:PartitionTaskId/p_00001.:userid
+\set Table_File_02 :File_Basedir/job_:JobId/task_:PartitionTaskId/p_00002.:userid
+
 -- We assign a partition task and wait for it to complete. Note that we hardcode
 -- the partition function call string, including the job and task identifiers,
 -- into the argument in the task assignment function. This hardcoding is
@@ -29,9 +36,9 @@ SELECT pg_sleep(4.0);
 
 SELECT task_tracker_task_status(:JobId, :PartitionTaskId);
 
-COPY :TablePart00 FROM 'base/pgsql_job_cache/job_401010/task_801106/p_00000';
-COPY :TablePart01 FROM 'base/pgsql_job_cache/job_401010/task_801106/p_00001';
-COPY :TablePart02 FROM 'base/pgsql_job_cache/job_401010/task_801106/p_00002';
+COPY :TablePart00 FROM :'Table_File_00';
+COPY :TablePart01 FROM :'Table_File_01';
+COPY :TablePart02 FROM :'Table_File_02';
 
 SELECT COUNT(*) FROM :TablePart00;
 SELECT COUNT(*) FROM :TablePart02;

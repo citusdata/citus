@@ -360,6 +360,32 @@ IsTransmitStmt(Node *parsetree)
 
 
 /*
+ * TransmitStatementUser extracts the user attribute from a
+ * COPY ... (format 'transmit', user '...') statement.
+ */
+char *
+TransmitStatementUser(CopyStmt *copyStatement)
+{
+	ListCell *optionCell = NULL;
+	char *userName = NULL;
+
+	AssertArg(IsTransmitStmt((Node *) copyStatement));
+
+	foreach(optionCell, copyStatement->options)
+	{
+		DefElem *defel = (DefElem *) lfirst(optionCell);
+
+		if (strncmp(defel->defname, "user", NAMEDATALEN) == 0)
+		{
+			userName = defGetString(defel);
+		}
+	}
+
+	return userName;
+}
+
+
+/*
  * VerifyTransmitStmt checks that the passed in command is a valid transmit
  * statement. Raise ERROR if not.
  *

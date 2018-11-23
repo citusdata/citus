@@ -17,6 +17,13 @@
 \set Range_Table_Part_01 supplier_range_part_01
 \set Range_Table_Part_02 supplier_range_part_02
 
+SELECT usesysid AS userid FROM pg_user WHERE usename = current_user \gset
+
+\set File_Basedir  base/pgsql_job_cache
+\set Range_Table_File_00 :File_Basedir/job_:JobId/task_:Range_TaskId/p_00000.:userid
+\set Range_Table_File_01 :File_Basedir/job_:JobId/task_:Range_TaskId/p_00001.:userid
+\set Range_Table_File_02 :File_Basedir/job_:JobId/task_:Range_TaskId/p_00002.:userid
+
 -- Run select query, and apply range partitioning on query results. Note that
 -- one of the split point values is 0, We are checking here that the partition
 -- function doesn't treat 0 as null, and that range repartitioning correctly
@@ -28,9 +35,9 @@ SELECT worker_range_partition_table(:JobId, :Range_TaskId, :Select_Query_Text,
 
 -- Copy partitioned data files into tables for testing purposes
 
-COPY :Range_Table_Part_00 FROM 'base/pgsql_job_cache/job_201010/task_101106/p_00000';
-COPY :Range_Table_Part_01 FROM 'base/pgsql_job_cache/job_201010/task_101106/p_00001';
-COPY :Range_Table_Part_02 FROM 'base/pgsql_job_cache/job_201010/task_101106/p_00002';
+COPY :Range_Table_Part_00 FROM :'Range_Table_File_00';
+COPY :Range_Table_Part_01 FROM :'Range_Table_File_01';
+COPY :Range_Table_Part_02 FROM :'Range_Table_File_02';
 
 SELECT COUNT(*) FROM :Range_Table_Part_00;
 SELECT COUNT(*) FROM :Range_Table_Part_02;
@@ -76,15 +83,20 @@ SELECT COUNT(*) AS diff_rhs_02 FROM (
 \set Hash_Table_Part_01 supplier_hash_part_01
 \set Hash_Table_Part_02 supplier_hash_part_02
 
+\set File_Basedir  base/pgsql_job_cache
+\set Hash_Table_File_00 :File_Basedir/job_:JobId/task_:Hash_TaskId/p_00000.:userid
+\set Hash_Table_File_01 :File_Basedir/job_:JobId/task_:Hash_TaskId/p_00001.:userid
+\set Hash_Table_File_02 :File_Basedir/job_:JobId/task_:Hash_TaskId/p_00002.:userid
+
 -- Run select query, and apply hash partitioning on query results
 
 SELECT worker_hash_partition_table(:JobId, :Hash_TaskId, :Select_Query_Text,
        				   :Partition_Column_Text, :Partition_Column_Type,
 				   ARRAY[-2147483648, -1073741824, 0, 1073741824]::int4[]);
 
-COPY :Hash_Table_Part_00 FROM 'base/pgsql_job_cache/job_201010/task_101107/p_00000';
-COPY :Hash_Table_Part_01 FROM 'base/pgsql_job_cache/job_201010/task_101107/p_00001';
-COPY :Hash_Table_Part_02 FROM 'base/pgsql_job_cache/job_201010/task_101107/p_00002';
+COPY :Hash_Table_Part_00 FROM :'Hash_Table_File_00';
+COPY :Hash_Table_Part_01 FROM :'Hash_Table_File_01';
+COPY :Hash_Table_Part_02 FROM :'Hash_Table_File_02';
 
 SELECT COUNT(*) FROM :Hash_Table_Part_00;
 SELECT COUNT(*) FROM :Hash_Table_Part_02;
