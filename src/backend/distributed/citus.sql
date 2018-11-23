@@ -219,28 +219,6 @@ COMMENT ON FUNCTION worker_fetch_partition_file(bigint, integer, integer, intege
                                                 integer)
     IS 'fetch partition file from remote node';
 
-CREATE FUNCTION worker_fetch_query_results_file(bigint, integer, integer, text, integer)
-    RETURNS void
-    LANGUAGE C STRICT
-    AS 'MODULE_PATHNAME', $$worker_fetch_query_results_file$$;
-COMMENT ON FUNCTION worker_fetch_query_results_file(bigint, integer, integer, text,
-                                                    integer)
-    IS 'fetch query results file from remote node';
-
-CREATE FUNCTION worker_fetch_foreign_file(text, bigint, text[], integer[])
-    RETURNS void
-    LANGUAGE C STRICT
-    AS 'MODULE_PATHNAME', $$worker_fetch_foreign_file$$;
-COMMENT ON FUNCTION worker_fetch_foreign_file(text, bigint, text[], integer[])
-    IS 'fetch foreign file from remote node and apply file';
-
-CREATE FUNCTION worker_fetch_regular_table(text, bigint, text[], integer[])
-    RETURNS void
-    LANGUAGE C STRICT
-    AS 'MODULE_PATHNAME', $$worker_fetch_regular_table$$;
-COMMENT ON FUNCTION worker_fetch_regular_table(text, bigint, text[], integer[])
-    IS 'fetch PostgreSQL table from remote node';
-
 CREATE FUNCTION worker_range_partition_table(bigint, integer, text, text, oid, anyarray)
     RETURNS void
     LANGUAGE C STRICT
@@ -277,20 +255,6 @@ CREATE FUNCTION worker_cleanup_job_schema_cache()
     AS 'MODULE_PATHNAME', $$worker_cleanup_job_schema_cache$$;
 COMMENT ON FUNCTION worker_cleanup_job_schema_cache()
     IS 'cleanup all job schemas in current database';
-
-CREATE FUNCTION worker_foreign_file_path(text)
-    RETURNS text
-    LANGUAGE C STRICT
-    AS 'MODULE_PATHNAME', $$worker_foreign_file_path$$;
-COMMENT ON FUNCTION worker_foreign_file_path(text)
-    IS 'get a foreign table''s local file path';
-
-CREATE FUNCTION worker_find_block_local_path(bigint, text[])
-    RETURNS text
-    LANGUAGE C STRICT
-    AS 'MODULE_PATHNAME', $$worker_find_block_local_path$$;
-COMMENT ON FUNCTION worker_find_block_local_path(bigint, text[])
-    IS 'find an HDFS block''s local file path';
 
 CREATE FUNCTION worker_apply_shard_ddl_command(bigint, text)
     RETURNS void

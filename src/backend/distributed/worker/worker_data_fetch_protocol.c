@@ -71,7 +71,6 @@ static void SetDefElemArg(AlterSeqStmt *statement, const char *name, Node *arg);
 
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(worker_fetch_partition_file);
-PG_FUNCTION_INFO_V1(worker_fetch_query_results_file);
 PG_FUNCTION_INFO_V1(worker_apply_shard_ddl_command);
 PG_FUNCTION_INFO_V1(worker_apply_inter_shard_ddl_command);
 PG_FUNCTION_INFO_V1(worker_apply_sequence_command);
@@ -81,6 +80,7 @@ PG_FUNCTION_INFO_V1(worker_append_table_to_shard);
  * Following UDFs are stub functions, you can check their comments for more
  * detail.
  */
+PG_FUNCTION_INFO_V1(worker_fetch_query_results_file);
 PG_FUNCTION_INFO_V1(worker_fetch_regular_table);
 PG_FUNCTION_INFO_V1(worker_fetch_foreign_file);
 PG_FUNCTION_INFO_V1(master_expire_table_cache);
@@ -109,52 +109,6 @@ worker_fetch_partition_file(PG_FUNCTION_ARGS)
 	/* local filename is <jobId>/<upstreamTaskId>/<partitionTaskId> */
 	StringInfo taskDirectoryName = TaskDirectoryName(jobId, upstreamTaskId);
 	StringInfo taskFilename = UserTaskFilename(taskDirectoryName, partitionTaskId);
-
-	/*
-	 * If we are the first function to fetch a file for the upstream task, the
-	 * task directory does not exist. We then lock and create the directory.
-	 */
-	bool taskDirectoryExists = DirectoryExists(taskDirectoryName);
-
-	CheckCitusVersion(ERROR);
-
-	if (!taskDirectoryExists)
-	{
-		InitTaskDirectory(jobId, upstreamTaskId);
-	}
-
-	nodeName = text_to_cstring(nodeNameText);
-
-	/* we've made sure the file names are sanitized, safe to fetch as superuser */
-	FetchRegularFileAsSuperUser(nodeName, nodePort, remoteFilename, taskFilename);
-
-	PG_RETURN_VOID();
-}
-
-
-/*
- * worker_fetch_query_results_file fetches a query results file from the remote
- * node. The function assumes an upstream compute task depends on this query
- * results file, and therefore directly fetches the file into the upstream
- * task's directory.
- */
-Datum
-worker_fetch_query_results_file(PG_FUNCTION_ARGS)
-{
-	uint64 jobId = PG_GETARG_INT64(0);
-	uint32 queryTaskId = PG_GETARG_UINT32(1);
-	uint32 upstreamTaskId = PG_GETARG_UINT32(2);
-	text *nodeNameText = PG_GETARG_TEXT_P(3);
-	uint32 nodePort = PG_GETARG_UINT32(4);
-	char *nodeName = NULL;
-
-	/* remote filename is <jobId>/<queryTaskId> */
-	StringInfo remoteDirectoryName = JobDirectoryName(jobId);
-	StringInfo remoteFilename = TaskFilename(remoteDirectoryName, queryTaskId);
-
-	/* local filename is <jobId>/<upstreamTaskId>/<queryTaskId> */
-	StringInfo taskDirectoryName = TaskDirectoryName(jobId, upstreamTaskId);
-	StringInfo taskFilename = UserTaskFilename(taskDirectoryName, queryTaskId);
 
 	/*
 	 * If we are the first function to fetch a file for the upstream task, the
@@ -1004,6 +958,20 @@ SetDefElemArg(AlterSeqStmt *statement, const char *name, Node *arg)
 #endif
 
 	statement->options = lappend(statement->options, defElem);
+}
+
+
+/*
+ * worker_fetch_query_results_file is a stub UDF to allow the function object
+ * to be re-created during upgrades. We should keep this around until we drop
+ * support for Postgres 11, since Postgres 11 is the highest version for which
+ * this object may have been created.
+ */
+Datum
+worker_fetch_query_results_file(PG_FUNCTION_ARGS)
+{
+	ereport(DEBUG2, (errmsg("this function is deprecated and no longer is used")));
+	PG_RETURN_VOID();
 }
 
 
