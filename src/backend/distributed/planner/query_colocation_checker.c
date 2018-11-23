@@ -31,10 +31,10 @@
 #include "parser/parse_relation.h"
 #include "optimizer/planner.h"
 #include "optimizer/prep.h"
+#include "utils/rel.h"
 
 
 static RangeTblEntry * AnchorRte(Query *subquery);
-static Query * WrapRteRelationIntoSubquery(RangeTblEntry *rteRelation);
 static List * UnionRelationRestrictionLists(List *firstRelationList,
 											List *secondRelationList);
 
@@ -238,14 +238,16 @@ SubqueryColocated(Query *subquery, ColocatedJoinChecker *checker)
  * projections. The returned query should be used cautiosly and it is mostly
  * designed for generating a stub query.
  */
-static Query *
+Query *
 WrapRteRelationIntoSubquery(RangeTblEntry *rteRelation)
 {
 	Query *subquery = makeNode(Query);
 	RangeTblRef *newRangeTableRef = makeNode(RangeTblRef);
 	RangeTblEntry *newRangeTableEntry = NULL;
-	Var *targetColumn = NULL;
-	TargetEntry *targetEntry = NULL;
+
+	Relation relation = NULL;
+	int attributeNumber = 0;
+	int numberOfAttributes = 0;
 
 	subquery->commandType = CMD_SELECT;
 
@@ -258,14 +260,25 @@ WrapRteRelationIntoSubquery(RangeTblEntry *rteRelation)
 	newRangeTableRef->rtindex = 1;
 	subquery->jointree = makeFromExpr(list_make1(newRangeTableRef), NULL);
 
-	/* Need the whole row as a junk var */
-	targetColumn = makeWholeRowVar(newRangeTableEntry, newRangeTableRef->rtindex, 0,
-								   false);
+	relation = relation_open(rteRelation->relid, AccessShareLock);
 
-	/* create a dummy target entry */
-	targetEntry = makeTargetEntry((Expr *) targetColumn, 1, "wholerow", true);
+	numberOfAttributes = RelationGetNumberOfAttributes(relation);
 
-	subquery->targetList = lappend(subquery->targetList, targetEntry);
+	for (attributeNumber = 1; attributeNumber <= numberOfAttributes; attributeNumber++)
+	{
+		Form_pg_attribute attributeTuple = TupleDescAttr(relation->rd_att,
+														 attributeNumber - 1);
+		Var *targetColumn =
+			makeVar(1, attributeNumber, attributeTuple->atttypid,
+					attributeTuple->atttypmod, attributeTuple->attcollation, 0);
+		TargetEntry *targetEntry =
+			makeTargetEntry((Expr *) targetColumn, attributeNumber,
+							strdup(attributeTuple->attname.data), false);
+
+		subquery->targetList = lappend(subquery->targetList, targetEntry);
+	}
+
+	relation_close(relation, NoLock);
 
 	return subquery;
 }
