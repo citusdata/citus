@@ -27,7 +27,9 @@ SELECT
           relid::regclass::text,
           refd_relid::regclass::text
         FROM
-          table_fkey_cols 
+          table_fkey_cols
+        WHERE
+          "schema" = 'fkey_reference_table'
       )
       d $$ )).RESULT::json )::json )).* ;
 

@@ -19,7 +19,8 @@ SELECT rc.constraint_name AS "name",
        kcu.column_name AS "column_name",
        uc_kcu.column_name AS "refd_column_name",
        format('%I.%I', kcu.table_schema, kcu.table_name)::regclass::oid AS relid,
-       format('%I.%I', uc_kcu.table_schema, uc_kcu.table_name)::regclass::oid AS refd_relid
+       format('%I.%I', uc_kcu.table_schema, uc_kcu.table_name)::regclass::oid AS refd_relid,
+       rc.constraint_schema AS "schema"
 FROM information_schema.referential_constraints rc,
      information_schema.key_column_usage kcu,
      information_schema.key_column_usage uc_kcu
