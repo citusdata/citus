@@ -100,6 +100,17 @@ worker_merge_files_into_table(PG_FUNCTION_ARGS)
 	schemaExists = JobSchemaExists(jobSchemaName);
 	if (!schemaExists)
 	{
+		/*
+		 * For testing purposes, we allow merging into a table in the public schema,
+		 * but only when running as superuser.
+		 */
+
+		if (!superuser())
+		{
+			ereport(ERROR, (errmsg("job schema does not exist"),
+							errdetail("must be superuser to use public schema")));
+		}
+
 		resetStringInfo(jobSchemaName);
 		appendStringInfoString(jobSchemaName, "public");
 	}
