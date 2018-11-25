@@ -42,4 +42,7 @@ extern bool EquivalenceListContainsRelationsEquality(List *attributeEquivalenceL
 													 RelationRestrictionContext *
 													 restrictionContext);
 
+List * GetRestrictInfoListForRelation(RangeTblEntry *rte,
+									  PlannerRestrictionContext *plannerRestrictionContext);
+
 #endif /* RELATION_RESTRICTION_EQUIVALENCE_H */
