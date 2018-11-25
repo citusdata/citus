@@ -76,6 +76,7 @@
 #include "nodes/pg_list.h"
 #include "nodes/primnodes.h"
 #include "nodes/relation.h"
+#include "optimizer/clauses.h"
 #include "utils/builtins.h"
 #include "utils/guc.h"
 #include "utils/lsyscache.h"
@@ -478,6 +479,7 @@ RecursivelyPlanNonColocatedJoinWalker(Node *joinNode,
 		if (rte->rtekind == RTE_RELATION)
 		{
 			subquery = WrapRteRelationIntoSubquery(rte);
+
 			if (!SubqueryColocated(subquery, colocatedJoinChecker))
 			{
 				RecursivelyPlanRTERelation(rte, recursivePlanningContext);
@@ -1090,15 +1092,24 @@ IsLocalTableRTE(Node *node)
  * (e.g., users_table becomes (SELECT * FROM users_table) as users_table).
  *
  * Later, the subquery is recursively planned via RecursivelyPlanSubquery().
+ *
+ * The function pushes down all the restriction appering on the table to the
+ * subquery in order to restrict the total amount of data that'd be pulled and
+ * pushed back.
  */
 static void
 RecursivelyPlanRTERelation(RangeTblEntry *relationRte,
 						   RecursivePlanningContext *planningContext)
 {
+	PlannerRestrictionContext *plannerRestrictionContext =
+		planningContext->plannerRestrictionContext;
+	List *restrictionExprListOnTable =
+		GetRestrictInfoListForRelation(relationRte, plannerRestrictionContext);
+
 	Query *subquery = WrapRteRelationIntoSubquery(relationRte);
 	RangeTblEntry *wrappedSubqueryEntry = makeNode(RangeTblEntry);
 	ListCell *columnListCell = NULL;
-	List *colNames = NIL;
+	List *columnNames = NIL;
 	char *relationName = get_rel_name(relationRte->relid);
 
 	wrappedSubqueryEntry->rtekind = RTE_SUBQUERY;
@@ -1108,17 +1119,23 @@ RecursivelyPlanRTERelation(RangeTblEntry *relationRte,
 	{
 		TargetEntry *tle = (TargetEntry *) lfirst(columnListCell);
 
-		colNames =
-			lappend(colNames, makeString(pstrdup(tle->resname)));
+		columnNames = lappend(columnNames, makeString(pstrdup(tle->resname)));
 	}
 
-	wrappedSubqueryEntry->eref = makeAlias(pstrdup(relationName), copyObject(colNames));
-	wrappedSubqueryEntry->alias = makeAlias(pstrdup(relationName), copyObject(colNames));
+	wrappedSubqueryEntry->eref =
+		makeAlias(pstrdup(relationName), copyObject(columnNames));
+	wrappedSubqueryEntry->alias =
+		makeAlias(pstrdup(relationName), copyObject(columnNames));
 
 	wrappedSubqueryEntry->inFromCl = true;
 
+	wrappedSubqueryEntry->subquery->jointree->quals =
+		(Node *) make_ands_explicit(restrictionExprListOnTable);
+
+	/* replace RTE_RELATION with the corresponding RTE_SUBQUERY */
 	memcpy(relationRte, wrappedSubqueryEntry, sizeof(RangeTblEntry));
 
+	/* simply call the main logic for recursive query planning */
 	RecursivelyPlanSubquery(wrappedSubqueryEntry->subquery, planningContext);
 }
 
