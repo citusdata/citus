@@ -22,6 +22,9 @@
 #include "nodes/relation.h"
 #include "parser/parsetree.h"
 #include "optimizer/pathnode.h"
+#include "optimizer/var.h"
+#include "optimizer/paths.h"
+
 
 static uint32 attributeEquivalenceId = 1;
 
@@ -141,6 +144,7 @@ static Relids QueryRteIdentities(Query *queryTree);
 static bool JoinRestrictionListExistsInContext(JoinRestriction *joinRestrictionInput,
 											   JoinRestrictionContext *
 											   joinRestrictionContext);
+static bool IsParam(Node *node);
 
 
 /*
@@ -1974,6 +1978,97 @@ JoinRestrictionListExistsInContext(JoinRestriction *joinRestrictionInput,
 		{
 			return true;
 		}
+	}
+
+	return false;
+}
+
+
+/*
+ * GetRestrictInfoListForRelation gets a range table entry and planner restriction context.
+ * The function returns a list of expressions that appear in the restriction context for
+ * only the given relation. And, all the varnos are set to 1 since the returned list can
+ * only be used with a single range table in a query.
+ */
+List *
+GetRestrictInfoListForRelation(RangeTblEntry *rangeTblEntry,
+							   PlannerRestrictionContext *plannerRestrictionContext)
+{
+	int rteIdentity = GetRTEIdentity(rangeTblEntry);
+	RelationRestrictionContext *relationRestrictionContext =
+		plannerRestrictionContext->relationRestrictionContext;
+
+	Relids queryRteIdentities = bms_make_singleton(rteIdentity);
+	RelationRestrictionContext *filteredRelationRestrictionContext =
+		FilterRelationRestrictionContext(relationRestrictionContext, queryRteIdentities);
+	List *filteredRelationRestrictionList =
+		filteredRelationRestrictionContext->relationRestrictionList;
+	RelationRestriction *relationRestriction =
+		(RelationRestriction *) linitial(filteredRelationRestrictionList);
+
+	RelOptInfo *relOptInfo = relationRestriction->relOptInfo;
+	List *baseRestrictInfo = relOptInfo->baserestrictinfo;
+	ListCell *restrictCell = NULL;
+
+	List *restrictExprList = NIL;
+
+	foreach(restrictCell, baseRestrictInfo)
+	{
+		RestrictInfo *restrictInfo = (RestrictInfo *) lfirst(restrictCell);
+		Expr *restrictionClause = restrictInfo->clause;
+		List *varClauses = NIL;
+		ListCell *varClauseCell = NULL;
+		Relids varnos = NULL;
+
+		Expr *copyOfRestrictClause = NULL;
+
+		/* we cannot process Params beacuse they are not known at this point */
+		if (FindNodeCheck((Node *) restrictionClause, IsParam))
+		{
+			continue;
+		}
+
+		/*
+		 * If the restriction involves multiple tables, we cannot add it to
+		 * input relation's expression list.
+		 */
+		varnos = pull_varnos((Node *) restrictionClause);
+		if (bms_num_members(varnos) != 1)
+		{
+			continue;
+		}
+
+		/*
+		 * We're going to add this restriction expression to a subquery
+		 * which consists of only one relation in its jointree. Thus,
+		 * simply set the varnos accordingly.
+		 */
+		copyOfRestrictClause = (Expr *) copyObject((Node *) restrictionClause);
+		varClauses = pull_var_clause_default((Node *) copyOfRestrictClause);
+		foreach(varClauseCell, varClauses)
+		{
+			Var *column = (Var *) lfirst(varClauseCell);
+
+			column->varno = 1;
+			column->varnoold = 1;
+		}
+
+		restrictExprList = lappend(restrictExprList, copyOfRestrictClause);
+	}
+
+	return restrictExprList;
+}
+
+
+/*
+ * IsParam determines whether the given node is a param.
+ */
+static bool
+IsParam(Node *node)
+{
+	if (IsA(node, Param))
+	{
+		return true;
 	}
 
 	return false;
