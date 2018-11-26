@@ -55,6 +55,13 @@ step "s1-update_all_value_1"
 	UPDATE users_test_table SET value_1 = 3;
 }
 
+step "s1-update_even_concurrently"
+{
+	SET citus.enable_deadlock_prevention TO off;
+	UPDATE users_test_table SET value_1 = 3 WHERE user_id % 2 = 0;
+	SET citus.enable_deadlock_prevention TO on;
+}
+
 step "s1-update_value_1_of_1_or_3_to_5"
 {
 	UPDATE users_test_table SET value_1 = 5 WHERE user_id = 1 or user_id = 3;
@@ -107,6 +114,13 @@ step "s2-update_all_value_1"
 	UPDATE users_test_table SET value_1 = 6;
 }
 
+step "s2-update_odd_concurrently"
+{
+	SET citus.enable_deadlock_prevention = off;
+	UPDATE users_test_table SET value_1 = 3 WHERE user_id % 2 = 1;
+	SET citus.enable_deadlock_prevention TO on;
+}
+
 step "s2-update_value_1_of_1_or_3_to_8"
 {
 	UPDATE users_test_table SET value_1 = 8 WHERE user_id = 1 or user_id = 3;
@@ -125,10 +139,19 @@ step "s2-commit"
 # test with parallel connections
 permutation "s1-begin" "s1-update_all_value_1" "s2-begin" "s2-select" "s1-commit" "s2-select" "s2-commit"
 permutation "s1-begin" "s1-update_all_value_1" "s2-begin" "s2-update_all_value_1" "s1-commit" "s2-commit"
+
+# test without deadlock prevention (first does not conflict, second does)
+permutation "s1-begin" "s1-update_even_concurrently" "s2-begin" "s2-update_odd_concurrently" "s1-commit" "s2-commit"
+permutation "s1-begin" "s1-update_even_concurrently" "s2-begin" "s2-update_value_1_of_4_or_6_to_4" "s1-commit" "s2-commit"
+
+# test with shard pruning (should not conflict)
 permutation "s1-begin" "s1-update_value_1_of_1_or_3_to_5" "s2-begin" "s2-update_value_1_of_4_or_6_to_4" "s1-commit" "s2-commit" "s2-select" 
 permutation "s1-begin" "s1-update_value_1_of_1_or_3_to_5" "s2-begin" "s2-update_value_1_of_1_or_3_to_8" "s1-commit" "s2-commit" "s2-select" 
+
+# test with inserts
 permutation "s1-begin" "s1-update_all_value_1" "s2-begin" "s2-insert-to-table" "s1-commit" "s2-commit" "s2-select" 
 permutation "s1-begin" "s1-update_all_value_1" "s2-begin" "s2-insert-into-select" "s1-commit" "s2-commit" "s2-select"
+
 # multi-shard update affecting the same rows
 permutation "s1-begin" "s2-begin" "s1-update_value_1_of_1_or_3_to_5" "s2-update_value_1_of_1_or_3_to_8" "s1-commit" "s2-commit"
 # multi-shard update affecting the different rows

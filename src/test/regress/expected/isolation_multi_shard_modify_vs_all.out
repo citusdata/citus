@@ -62,6 +62,53 @@ step s2-commit:
 	COMMIT;
 
 
+starting permutation: s1-begin s1-update_even_concurrently s2-begin s2-update_odd_concurrently s1-commit s2-commit
+step s1-begin: 
+    BEGIN;
+
+step s1-update_even_concurrently: 
+	SET citus.enable_deadlock_prevention TO off;
+	UPDATE users_test_table SET value_1 = 3 WHERE user_id % 2 = 0;
+	SET citus.enable_deadlock_prevention TO on;
+
+step s2-begin: 
+	BEGIN;
+
+step s2-update_odd_concurrently: 
+	SET citus.enable_deadlock_prevention = off;
+	UPDATE users_test_table SET value_1 = 3 WHERE user_id % 2 = 1;
+	SET citus.enable_deadlock_prevention TO on;
+
+step s1-commit: 
+    COMMIT;
+
+step s2-commit: 
+	COMMIT;
+
+
+starting permutation: s1-begin s1-update_even_concurrently s2-begin s2-update_value_1_of_4_or_6_to_4 s1-commit s2-commit
+step s1-begin: 
+    BEGIN;
+
+step s1-update_even_concurrently: 
+	SET citus.enable_deadlock_prevention TO off;
+	UPDATE users_test_table SET value_1 = 3 WHERE user_id % 2 = 0;
+	SET citus.enable_deadlock_prevention TO on;
+
+step s2-begin: 
+	BEGIN;
+
+step s2-update_value_1_of_4_or_6_to_4: 
+	UPDATE users_test_table SET value_1 = 4 WHERE user_id = 4 or user_id = 6;
+ <waiting ...>
+step s1-commit: 
+    COMMIT;
+
+step s2-update_value_1_of_4_or_6_to_4: <... completed>
+step s2-commit: 
+	COMMIT;
+
+
 starting permutation: s1-begin s1-update_value_1_of_1_or_3_to_5 s2-begin s2-update_value_1_of_4_or_6_to_4 s1-commit s2-commit s2-select
 step s1-begin: 
     BEGIN;

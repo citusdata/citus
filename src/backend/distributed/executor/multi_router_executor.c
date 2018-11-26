@@ -369,9 +369,21 @@ AcquireExecutorMultiShardLocks(List *taskList)
 			 * In either case, ShareUpdateExclusive has the desired effect, since
 			 * it conflicts with itself and ExclusiveLock (taken by non-commutative
 			 * writes).
+			 *
+			 * However, some users find this too restrictive, so we allow them to
+			 * reduce to a RowExclusiveLock when citus.enable_deadlock_prevention
+			 * is enabled, which lets multi-shard modifications run in parallel as
+			 * long as they all disable the GUC.
 			 */
 
-			lockMode = ShareUpdateExclusiveLock;
+			if (EnableDeadlockPrevention)
+			{
+				lockMode = ShareUpdateExclusiveLock;
+			}
+			else
+			{
+				lockMode = RowExclusiveLock;
+			}
 		}
 		else
 		{
