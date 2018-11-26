@@ -113,7 +113,11 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 
 					AppendShardIdToConstraintName(command, shardId);
 				}
-				if (command->subtype == AT_DropConstraint)
+				else if (command->subtype == AT_DropConstraint)
+				{
+					AppendShardIdToConstraintName(command, shardId);
+				}
+				else if (command->subtype == AT_ValidateConstraint)
 				{
 					AppendShardIdToConstraintName(command, shardId);
 				}
@@ -598,7 +602,8 @@ AppendShardIdToConstraintName(AlterTableCmd *command, uint64 shardId)
 		char **constraintName = &(constraint->conname);
 		AppendShardIdToName(constraintName, shardId);
 	}
-	else if (command->subtype == AT_DropConstraint)
+	else if (command->subtype == AT_DropConstraint ||
+			 command->subtype == AT_ValidateConstraint)
 	{
 		char **constraintName = &(command->name);
 		AppendShardIdToName(constraintName, shardId);

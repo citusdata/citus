@@ -1,6 +1,8 @@
 --
 -- FOREIGN_KEY_TO_REFERENCE_TABLE
 --
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int > 9 AS version_above_nine;
 
 CREATE SCHEMA fkey_reference_table;
 SET search_path TO 'fkey_reference_table';
@@ -25,7 +27,9 @@ SELECT
           relid::regclass::text,
           refd_relid::regclass::text
         FROM
-          table_fkey_cols 
+          table_fkey_cols
+        WHERE
+          "schema" = 'fkey_reference_table'
       )
       d $$ )).RESULT::json )::json )).* ;
 
@@ -358,27 +362,6 @@ ALTER TABLE referencing_table ADD CONSTRAINT fkey_ref FOREIGN KEY (ref_id) REFER
 
 INSERT INTO referenced_table SELECT x, x FROM generate_series(0,1000) AS f(x);
 INSERT INTO referencing_table SELECT x,(random()*1000)::int FROM generate_series(0,1000) AS f(x);
-
-DROP TABLE referenced_table CASCADE;
-DROP TABLE referencing_table CASCADE;
-
--- In the following test, we show that Citus currently does not support 
--- VALIDATE command.
-CREATE TABLE referenced_table(test_column int, test_column2 int, PRIMARY KEY(test_column));
-CREATE TABLE referencing_table(id int, ref_id int DEFAULT -1);
-SELECT create_reference_table('referenced_table');
-SELECT create_distributed_table('referencing_table', 'id');
-ALTER TABLE referencing_table ADD CONSTRAINT fkey_ref FOREIGN KEY (ref_id) REFERENCES referenced_table(test_column) ON DELETE SET DEFAULT NOT VALID;
-
--- Even if the foreign constraint is added with "NOT VALID",
--- we make sure that it is still applied to the upcoming inserts.
-INSERT INTO referenced_table SELECT x, x FROM generate_series(0,1000) AS f(x);
-INSERT INTO referencing_table SELECT x, x FROM generate_series(0,1000) AS f(x);
--- we expect this to fail because of the foreign constraint.
-INSERT INTO referencing_table SELECT x, x FROM generate_series(1000,1001) AS f(x);
-
--- currently not supported
-ALTER TABLE referencing_table VALIDATE CONSTRAINT fkey_ref;
 
 DROP TABLE referenced_table CASCADE;
 DROP TABLE referencing_table CASCADE;
