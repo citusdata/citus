@@ -64,7 +64,6 @@
 bool ExplainDistributedQueries = true;
 bool ExplainAllTasks = false;
 
-
 /* Result for a single remote EXPLAIN command */
 typedef struct RemoteExplainPlan
 {
@@ -105,6 +104,249 @@ static void ExplainJSONLineEnding(ExplainState *es);
 static void ExplainYAMLLineStarting(ExplainState *es);
 #endif
 
+static void
+CitusExplainOnePlan(PlannedStmt *plannedstmt, IntoClause *into, ExplainState *es,
+			   const char *queryString, ParamListInfo params,
+			   QueryEnvironment *queryEnv, const instr_time *planduration);
+static double
+elapsed_time(instr_time *starttime);
+
+static bool IsDistributedModifyPlan(PlannedStmt *plannedstmt);
+
+
+static void
+CitusExplainOnePlan(PlannedStmt *plannedstmt, IntoClause *into, ExplainState *es,
+			   const char *queryString, ParamListInfo params,
+			   QueryEnvironment *queryEnv, const instr_time *planduration)
+{
+	DestReceiver *dest;
+	QueryDesc  *queryDesc;
+	instr_time	starttime;
+	double		totaltime = 0;
+	int			eflags;
+	int			instrument_option = 0;
+
+	bool isDistributedModifyPlan = false;
+
+	Assert(plannedstmt->commandType != CMD_UTILITY);
+
+	isDistributedModifyPlan = IsDistributedModifyPlan(plannedstmt);
+
+	elog(WARNING, "CitusExplainOnePlan : isDistributedModifyPlan %d",  (int) (isDistributedModifyPlan));
+
+
+	if (es->analyze && es->timing)
+		instrument_option |= INSTRUMENT_TIMER;
+	else if (es->analyze)
+		instrument_option |= INSTRUMENT_ROWS;
+
+	if (es->buffers)
+		instrument_option |= INSTRUMENT_BUFFERS;
+
+	/*
+	 * We always collect timing for the entire statement, even when node-level
+	 * timing is off, so we don't look at es->timing here.  (We could skip
+	 * this if !es->summary, but it's hardly worth the complication.)
+	 */
+	INSTR_TIME_SET_CURRENT(starttime);
+
+	/*
+	 * Use a snapshot with an updated command ID to ensure this query sees
+	 * results of any previously executed queries.
+	 */
+	PushCopiedSnapshot(GetActiveSnapshot());
+	UpdateActiveSnapshotCommandId();
+
+	/*
+	 * Normally we discard the query's output, but if explaining CREATE TABLE
+	 * AS, we'd better use the appropriate tuple receiver.
+	 */
+	if (into)
+		dest = CreateIntoRelDestReceiver(into);
+	else
+		dest = None_Receiver;
+
+	/* Create a QueryDesc for the query */
+	queryDesc = CreateQueryDesc(plannedstmt, queryString,
+								GetActiveSnapshot(), InvalidSnapshot,
+								dest, params, queryEnv, instrument_option);
+
+	/* Select execution options */
+	if (es->analyze)
+		eflags = 0;				/* default run-to-completion flags */
+	else
+		eflags = EXEC_FLAG_EXPLAIN_ONLY;
+	if (into)
+		eflags |= GetIntoRelEFlags(into);
+
+	/* call ExecutorStart to prepare the plan for execution */
+	ExecutorStart(queryDesc, eflags);
+
+	/* Execute the plan for statistics if asked for */
+	if (es->analyze && !isDistributedModifyPlan)
+	{
+		ScanDirection dir;
+
+		/* EXPLAIN ANALYZE CREATE TABLE AS WITH NO DATA is weird */
+		if (into && into->skipData)
+			dir = NoMovementScanDirection;
+		else
+			dir = ForwardScanDirection;
+
+		/* run the plan */
+		ExecutorRun(queryDesc, dir, 0L, true);
+
+		/* run cleanup too */
+		ExecutorFinish(queryDesc);
+
+		/* We can't run ExecutorEnd 'till we're done printing the stats... */
+		totaltime += elapsed_time(&starttime);
+	}
+
+	ExplainOpenGroup("Query", NULL, true, es);
+
+	/* Create textual dump of plan tree */
+	ExplainPrintPlan(es, queryDesc);
+
+	if (es->summary && planduration)
+	{
+		double		plantime = INSTR_TIME_GET_DOUBLE(*planduration);
+
+		ExplainPropertyFloat("Planning Time", "ms", 1000.0 * plantime, 3, es);
+	}
+
+	/* Print info about runtime of triggers */
+	if (es->analyze)
+		ExplainPrintTriggers(es, queryDesc);
+
+	/*
+	 * Print info about JITing. Tied to es->costs because we don't want to
+	 * display this in regression tests, as it'd cause output differences
+	 * depending on build options.  Might want to separate that out from COSTS
+	 * at a later stage.
+	 */
+	if (es->costs)
+		ExplainPrintJITSummary(es, queryDesc);
+
+	/*
+	 * Close down the query and free resources.  Include time for this in the
+	 * total execution time (although it should be pretty minimal).
+	 */
+	INSTR_TIME_SET_CURRENT(starttime);
+
+	if (es->analyze && isDistributedModifyPlan)
+	{
+		ScanDirection dir;
+
+		elog(WARNING, "post process modify command");
+		/* EXPLAIN ANALYZE CREATE TABLE AS WITH NO DATA is weird */
+		if (into && into->skipData)
+			dir = NoMovementScanDirection;
+		else
+			dir = ForwardScanDirection;
+
+		/* run the plan */
+		ExecutorRun(queryDesc, dir, 0L, true);
+
+		/* run cleanup too */
+		ExecutorFinish(queryDesc);
+
+		/* We can't run ExecutorEnd 'till we're done printing the stats... */
+		totaltime += elapsed_time(&starttime);
+	}
+
+	ExecutorEnd(queryDesc);
+
+	FreeQueryDesc(queryDesc);
+
+	PopActiveSnapshot();
+
+	/* We need a CCI just in case query expanded to multiple plans */
+	if (es->analyze)
+		CommandCounterIncrement();
+
+	totaltime += elapsed_time(&starttime);
+
+	/*
+	 * We only report execution time if we actually ran the query (that is,
+	 * the user specified ANALYZE), and if summary reporting is enabled (the
+	 * user can set SUMMARY OFF to not have the timing information included in
+	 * the output).  By default, ANALYZE sets SUMMARY to true.
+	 */
+	if (es->summary && es->analyze)
+		ExplainPropertyFloat("Execution Time", "ms", 1000.0 * totaltime, 3,
+							 es);
+
+	ExplainCloseGroup("Query", NULL, true, es);
+}
+
+/* Compute elapsed time in seconds since given timestamp */
+static double
+elapsed_time(instr_time *starttime)
+{
+	instr_time	endtime;
+
+	INSTR_TIME_SET_CURRENT(endtime);
+	INSTR_TIME_SUBTRACT(endtime, *starttime);
+	return INSTR_TIME_GET_DOUBLE(endtime);
+}
+
+static bool IsDistributedModifyPlan(PlannedStmt *plannedstmt)
+{
+	CustomScan *customScan = NULL;
+	List *planNodeList = NIL;
+	Node *distributedPlanNode = NULL;
+
+	Assert(plannedstmt != NULL);
+	if (!IsA(plannedstmt->planTree, CustomScan))
+	{
+		return false;
+	}
+
+	customScan = (CustomScan *) plannedstmt->planTree;
+
+	planNodeList = customScan->custom_private;
+
+	Assert(list_length(planNodeList) > 0);
+
+	distributedPlanNode = (Node *) linitial(planNodeList);
+
+	if (!CitusIsA(distributedPlanNode, DistributedPlan))
+	{
+		return false;
+	}
+
+	return IsModifyDistributedPlan((DistributedPlan *) distributedPlanNode);
+}
+
+
+void CitusExplainOneHook(Query *query,
+										   int cursorOptions,
+										   IntoClause *into,
+										   ExplainState *es,
+										   const char *queryString,
+										   ParamListInfo params,
+										   QueryEnvironment *queryEnv)
+{
+	elog(WARNING, "WHATS UP");
+	{
+	PlannedStmt *plan;
+	instr_time	planstart,
+				planduration;
+
+	INSTR_TIME_SET_CURRENT(planstart);
+
+	/* plan the query */
+	plan = pg_plan_query(query, cursorOptions, params);
+
+	INSTR_TIME_SET_CURRENT(planduration);
+	INSTR_TIME_SUBTRACT(planduration, planstart);
+
+	/* run it (if needed) and produce output */
+	CitusExplainOnePlan(plan, into, es, queryString, params, queryEnv,
+				   &planduration);
+	}
+}
 
 /*
  * CitusExplainScan is a custom scan explain callback function which is used to

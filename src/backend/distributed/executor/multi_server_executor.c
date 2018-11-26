@@ -197,6 +197,7 @@ InitTaskExecution(Task *task, TaskExecStatus initialTaskExecStatus)
 
 	TaskExecution *taskExecution = CitusMakeNode(TaskExecution);
 
+	elog(WARNING, "InitTaskExecution");
 	taskExecution->jobId = task->jobId;
 	taskExecution->taskId = task->taskId;
 	taskExecution->nodeCount = nodeCount;

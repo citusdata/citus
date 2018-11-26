@@ -484,6 +484,8 @@ CitusModifyBeginScan(CustomScanState *node, EState *estate, int eflags)
 	Query *jobQuery = NULL;
 	List *taskList = NIL;
 
+	elog(WARNING, "CitusModifyBeginScan (instrument = %d)" , estate->es_instrument);
+
 	MarkCitusInitiatedCoordinatorBackend();
 
 	/*
@@ -558,6 +560,14 @@ RouterModifyExecScan(CustomScanState *node)
 {
 	CitusScanState *scanState = (CitusScanState *) node;
 	TupleTableSlot *resultSlot = NULL;
+
+	elog(WARNING, "RouterModifyExecScan");
+	elog(WARNING, "Instrument %d", (int) (node->ss.ps.instrument));
+
+	//if (node->ss.ps.instrument != NULL)
+	//{
+	//	scanState->finishedRemoteScan = true;
+	//}
 
 	if (!scanState->finishedRemoteScan)
 	{

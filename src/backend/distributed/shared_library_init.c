@@ -217,6 +217,9 @@ _PG_init(void)
 	/* register hook for error messages */
 	emit_log_hook = multi_log_hook;
 
+	/* register explain hook */
+	ExplainOneQuery_hook = CitusExplainOneHook;
+
 	InitializeMaintenanceDaemon();
 
 	/* organize that task tracker is started once server is up */
