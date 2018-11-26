@@ -90,6 +90,9 @@ SET citus.task_executor_type TO 'real-time';
 -- should not be able to transmit directly
 COPY "postgresql.conf" TO STDOUT WITH (format transmit);
 
+-- create a task that other users should not be able to inspect
+SELECT task_tracker_assign_task(1, 1, 'SELECT 1');
+
 -- check read permission
 SET ROLE read_access;
 
@@ -108,6 +111,11 @@ SELECT count(*) FROM test a JOIN test b ON (a.val = b.val) WHERE a.id = 1 AND b.
 
 -- should not be able to transmit directly
 COPY "postgresql.conf" TO STDOUT WITH (format transmit);
+
+-- should not be able to access tasks or jobs belonging to a different user
+SELECT task_tracker_task_status(1, 1);
+SELECT task_tracker_assign_task(1, 2, 'SELECT 1');
+SELECT task_tracker_cleanup_job(1);
 
 -- should not be allowed to take aggressive locks on table
 BEGIN;
@@ -164,6 +172,7 @@ RESET ROLE;
 SELECT create_distributed_table('my_table', 'id');
 SELECT result FROM run_command_on_workers($$SELECT tableowner FROM pg_tables WHERE tablename LIKE 'my_table_%' LIMIT 1$$);
 
+SELECT task_tracker_cleanup_job(1);
 DROP TABLE my_table, singleshard, test, test_coloc;
 DROP USER full_access;
 DROP USER read_access;

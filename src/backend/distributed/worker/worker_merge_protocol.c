@@ -100,8 +100,25 @@ worker_merge_files_into_table(PG_FUNCTION_ARGS)
 	schemaExists = JobSchemaExists(jobSchemaName);
 	if (!schemaExists)
 	{
+		/*
+		 * For testing purposes, we allow merging into a table in the public schema,
+		 * but only when running as superuser.
+		 */
+
+		if (!superuser())
+		{
+			ereport(ERROR, (errmsg("job schema does not exist"),
+							errdetail("must be superuser to use public schema")));
+		}
+
 		resetStringInfo(jobSchemaName);
 		appendStringInfoString(jobSchemaName, "public");
+	}
+	else
+	{
+		Oid schemaId = get_namespace_oid(jobSchemaName->data, false);
+
+		EnsureSchemaOwner(schemaId);
 	}
 
 	/* create the task table and copy files into the table */
@@ -171,6 +188,12 @@ worker_merge_files_and_run_query(PG_FUNCTION_ARGS)
 	{
 		resetStringInfo(jobSchemaName);
 		appendStringInfoString(jobSchemaName, "public");
+	}
+	else
+	{
+		Oid schemaId = get_namespace_oid(jobSchemaName->data, false);
+
+		EnsureSchemaOwner(schemaId);
 	}
 
 	appendStringInfo(setSearchPathString, SET_SEARCH_PATH_COMMAND, jobSchemaName->data);

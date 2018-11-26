@@ -19,7 +19,10 @@
 
 #include <time.h>
 
+#include "access/htup_details.h"
 #include "access/xact.h"
+#include "catalog/pg_namespace.h"
+#include "catalog/namespace.h"
 #include "commands/dbcommands.h"
 #include "commands/schemacmds.h"
 #include "commands/trigger.h"
@@ -33,6 +36,8 @@
 #include "storage/lwlock.h"
 #include "storage/pmsignal.h"
 #include "utils/builtins.h"
+#include "utils/syscache.h"
+#include "utils/lsyscache.h"
 
 
 /* Local functions forward declarations */
@@ -105,6 +110,10 @@ task_tracker_assign_task(PG_FUNCTION_ARGS)
 	}
 	else
 	{
+		Oid schemaId = get_namespace_oid(jobSchemaName->data, false);
+
+		EnsureSchemaOwner(schemaId);
+
 		UnlockJobResource(jobId, AccessExclusiveLock);
 	}
 
@@ -136,7 +145,7 @@ task_tracker_task_status(PG_FUNCTION_ARGS)
 
 	WorkerTask *workerTask = NULL;
 	uint32 taskStatus = 0;
-
+	char *userName = CurrentUserName();
 	bool taskTrackerRunning = false;
 
 	CheckCitusVersion(ERROR);
@@ -148,7 +157,8 @@ task_tracker_task_status(PG_FUNCTION_ARGS)
 		LWLockAcquire(&WorkerTasksSharedState->taskHashLock, LW_SHARED);
 
 		workerTask = WorkerTasksHashFind(jobId, taskId);
-		if (workerTask == NULL)
+		if (workerTask == NULL ||
+			(!superuser() && strncmp(userName, workerTask->userName, NAMEDATALEN) != 0))
 		{
 			ereport(ERROR, (errmsg("could not find the worker task"),
 							errdetail("Task jobId: " UINT64_FORMAT " and taskId: %u",
@@ -178,12 +188,29 @@ task_tracker_cleanup_job(PG_FUNCTION_ARGS)
 {
 	uint64 jobId = PG_GETARG_INT64(0);
 
+	bool schemaExists = false;
 	HASH_SEQ_STATUS status;
 	WorkerTask *currentTask = NULL;
 	StringInfo jobDirectoryName = NULL;
 	StringInfo jobSchemaName = NULL;
 
 	CheckCitusVersion(ERROR);
+
+	jobSchemaName = JobSchemaName(jobId);
+
+	/*
+	 * We'll keep this lock for a while, but that's ok because nothing
+	 * else should be happening on this job.
+	 */
+	LockJobResource(jobId, AccessExclusiveLock);
+
+	schemaExists = JobSchemaExists(jobSchemaName);
+	if (schemaExists)
+	{
+		Oid schemaId = get_namespace_oid(jobSchemaName->data, false);
+
+		EnsureSchemaOwner(schemaId);
+	}
 
 	/*
 	 * We first clean up any open connections, and remove tasks belonging to
@@ -215,8 +242,6 @@ task_tracker_cleanup_job(PG_FUNCTION_ARGS)
 	jobDirectoryName = JobDirectoryName(jobId);
 	CitusRemoveDirectory(jobDirectoryName);
 
-	LockJobResource(jobId, AccessExclusiveLock);
-	jobSchemaName = JobSchemaName(jobId);
 	RemoveJobSchema(jobSchemaName);
 	UnlockJobResource(jobId, AccessExclusiveLock);
 
