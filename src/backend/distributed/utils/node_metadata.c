@@ -62,7 +62,6 @@ static void SetNodeState(char *nodeName, int32 nodePort, bool isActive);
 static HeapTuple GetNodeTuple(char *nodeName, int32 nodePort);
 static Datum GenerateNodeTuple(WorkerNode *workerNode);
 static int32 GetNextGroupId(void);
-static uint32 GetMaxGroupId(void);
 static int GetNextNodeId(void);
 static void InsertNodeRow(int nodeid, char *nodename, int32 nodeport, uint32 groupId,
 						  char *nodeRack, bool hasMetadata, bool isActive, Oid nodeRole,
@@ -965,15 +964,6 @@ AddNodeMetadata(char *nodeName, int32 nodePort, int32 groupId, char *nodeRack,
 	{
 		groupId = GetNextGroupId();
 	}
-	else
-	{
-		uint32 maxGroupId = GetMaxGroupId();
-
-		if (groupId > maxGroupId)
-		{
-			ereport(ERROR, (errmsg("you cannot add a node to a non-existing group")));
-		}
-	}
 
 	/* if nodeRole hasn't been added yet there's a constraint for one-node-per-group */
 	if (nodeRole != InvalidOid && nodeRole == PrimaryNodeRoleId())
@@ -1179,34 +1169,6 @@ GetNextGroupId()
 	groupId = DatumGetUInt32(groupIdDatum);
 
 	return groupId;
-}
-
-
-/*
- * GetMaxGroupId iterates over the worker node hash, and returns the maximum
- * group id from the table.
- */
-static uint32
-GetMaxGroupId()
-{
-	uint32 maxGroupId = 0;
-	WorkerNode *workerNode = NULL;
-	HTAB *workerNodeHash = GetWorkerNodeHash();
-	HASH_SEQ_STATUS status;
-
-	hash_seq_init(&status, workerNodeHash);
-
-	while ((workerNode = hash_seq_search(&status)) != NULL)
-	{
-		uint32 workerNodeGroupId = workerNode->groupId;
-
-		if (workerNodeGroupId > maxGroupId)
-		{
-			maxGroupId = workerNodeGroupId;
-		}
-	}
-
-	return maxGroupId;
 }
 
 
