@@ -20,7 +20,7 @@ JOIN
   (SELECT value_1,
           random()
    FROM users_table) AS u3 USING (value_1);
-DEBUG:  generating subplan 1_1 for subquery SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.users_table u2 WHERE true
+DEBUG:  generating subplan 1_1 for subquery SELECT NULL::integer AS user_id, NULL::timestamp without time zone AS "time", value_1, NULL::integer AS value_2, NULL::double precision AS value_3, NULL::bigint AS value_4 FROM public.users_table u2 WHERE true
 DEBUG:  generating subplan 1_2 for subquery SELECT value_1, random() AS random FROM public.users_table
 DEBUG:  Plan 1 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((public.users_table u1 JOIN (SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.value_1, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('1_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, value_1 integer, value_2 integer, value_3 double precision, value_4 bigint)) users_table(user_id, "time", value_1, value_2, value_3, value_4) USING (value_1)) JOIN (SELECT intermediate_result.value_1, intermediate_result.random FROM read_intermediate_result('1_2'::text, 'binary'::citus_copy_format) intermediate_result(value_1 integer, random double precision)) u3 USING (value_1))
  count 
@@ -37,7 +37,7 @@ JOIN
           random()
    FROM users_table) AS u3 USING (value_1)
 WHERE u2.value_1 > ANY(ARRAY[2, 1, 6]);
-DEBUG:  generating subplan 4_1 for subquery SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.users_table u2 WHERE (value_1 OPERATOR(pg_catalog.>) ANY ('{2,1,6}'::integer[]))
+DEBUG:  generating subplan 4_1 for subquery SELECT NULL::integer AS user_id, NULL::timestamp without time zone AS "time", value_1, NULL::integer AS value_2, NULL::double precision AS value_3, NULL::bigint AS value_4 FROM public.users_table u2 WHERE (value_1 OPERATOR(pg_catalog.>) ANY ('{2,1,6}'::integer[]))
 DEBUG:  generating subplan 4_2 for subquery SELECT value_1, random() AS random FROM public.users_table
 DEBUG:  Plan 4 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((public.users_table u1 JOIN (SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.value_1, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('4_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, value_1 integer, value_2 integer, value_3 double precision, value_4 bigint)) users_table(user_id, "time", value_1, value_2, value_3, value_4) USING (value_1)) JOIN (SELECT intermediate_result.value_1, intermediate_result.random FROM read_intermediate_result('4_2'::text, 'binary'::citus_copy_format) intermediate_result(value_1 integer, random double precision)) u3 USING (value_1)) WHERE (users_table.value_1 OPERATOR(pg_catalog.>) ANY (ARRAY[2, 1, 6]))
  count 
@@ -54,7 +54,7 @@ JOIN
           random()
    FROM users_table) AS u3 USING (value_1)
 WHERE  ARRAY[u2.value_1, u2.value_2] @> (ARRAY[2, 3]);
-DEBUG:  generating subplan 7_1 for subquery SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.users_table u2 WHERE (ARRAY[value_1, value_2] OPERATOR(pg_catalog.@>) '{2,3}'::integer[])
+DEBUG:  generating subplan 7_1 for subquery SELECT NULL::integer AS user_id, NULL::timestamp without time zone AS "time", value_1, value_2, NULL::double precision AS value_3, NULL::bigint AS value_4 FROM public.users_table u2 WHERE (ARRAY[value_1, value_2] OPERATOR(pg_catalog.@>) '{2,3}'::integer[])
 DEBUG:  generating subplan 7_2 for subquery SELECT value_1, random() AS random FROM public.users_table
 DEBUG:  Plan 7 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((public.users_table u1 JOIN (SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.value_1, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('7_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, value_1 integer, value_2 integer, value_3 double precision, value_4 bigint)) users_table(user_id, "time", value_1, value_2, value_3, value_4) USING (value_1)) JOIN (SELECT intermediate_result.value_1, intermediate_result.random FROM read_intermediate_result('7_2'::text, 'binary'::citus_copy_format) intermediate_result(value_1 integer, random double precision)) u3 USING (value_1)) WHERE (ARRAY[users_table.value_1, users_table.value_2] OPERATOR(pg_catalog.@>) ARRAY[2, 3])
  count 
@@ -71,7 +71,7 @@ JOIN
           random()
    FROM users_table) AS u3 USING (value_1)
 WHERE  ARRAY[u2.value_1, u1.user_id] @> (ARRAY[2, 3]);
-DEBUG:  generating subplan 10_1 for subquery SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.users_table u2 WHERE true
+DEBUG:  generating subplan 10_1 for subquery SELECT NULL::integer AS user_id, NULL::timestamp without time zone AS "time", value_1, NULL::integer AS value_2, NULL::double precision AS value_3, NULL::bigint AS value_4 FROM public.users_table u2 WHERE true
 DEBUG:  generating subplan 10_2 for subquery SELECT value_1, random() AS random FROM public.users_table
 DEBUG:  Plan 10 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((public.users_table u1 JOIN (SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.value_1, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('10_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, value_1 integer, value_2 integer, value_3 double precision, value_4 bigint)) users_table(user_id, "time", value_1, value_2, value_3, value_4) USING (value_1)) JOIN (SELECT intermediate_result.value_1, intermediate_result.random FROM read_intermediate_result('10_2'::text, 'binary'::citus_copy_format) intermediate_result(value_1 integer, random double precision)) u3 USING (value_1)) WHERE (ARRAY[users_table.value_1, u1.user_id] OPERATOR(pg_catalog.@>) ARRAY[2, 3])
  count 
@@ -88,7 +88,7 @@ JOIN
           random()
    FROM users_table) AS u3 USING (value_1)
 WHERE (u2.value_1/2.0 > 2)::int::bool::text::bool;
-DEBUG:  generating subplan 13_1 for subquery SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.users_table u2 WHERE (((((((value_1)::numeric OPERATOR(pg_catalog./) 2.0) OPERATOR(pg_catalog.>) '2'::numeric))::integer)::boolean)::text)::boolean
+DEBUG:  generating subplan 13_1 for subquery SELECT NULL::integer AS user_id, NULL::timestamp without time zone AS "time", value_1, NULL::integer AS value_2, NULL::double precision AS value_3, NULL::bigint AS value_4 FROM public.users_table u2 WHERE (((((((value_1)::numeric OPERATOR(pg_catalog./) 2.0) OPERATOR(pg_catalog.>) '2'::numeric))::integer)::boolean)::text)::boolean
 DEBUG:  generating subplan 13_2 for subquery SELECT value_1, random() AS random FROM public.users_table
 DEBUG:  Plan 13 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((public.users_table u1 JOIN (SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.value_1, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('13_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, value_1 integer, value_2 integer, value_3 double precision, value_4 bigint)) users_table(user_id, "time", value_1, value_2, value_3, value_4) USING (value_1)) JOIN (SELECT intermediate_result.value_1, intermediate_result.random FROM read_intermediate_result('13_2'::text, 'binary'::citus_copy_format) intermediate_result(value_1 integer, random double precision)) u3 USING (value_1)) WHERE (((((((users_table.value_1)::numeric OPERATOR(pg_catalog./) 2.0) OPERATOR(pg_catalog.>) (2)::numeric))::integer)::boolean)::text)::boolean
  count 
@@ -105,7 +105,7 @@ JOIN
           random()
    FROM users_table) AS u3 USING (value_1)
 WHERE (CASE WHEN u2.value_1 > 3 THEN u2.value_1 > 2 ELSE false END);
-DEBUG:  generating subplan 16_1 for subquery SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.users_table u2 WHERE CASE WHEN (value_1 OPERATOR(pg_catalog.>) 3) THEN (value_1 OPERATOR(pg_catalog.>) 2) ELSE false END
+DEBUG:  generating subplan 16_1 for subquery SELECT NULL::integer AS user_id, NULL::timestamp without time zone AS "time", value_1, NULL::integer AS value_2, NULL::double precision AS value_3, NULL::bigint AS value_4 FROM public.users_table u2 WHERE CASE WHEN (value_1 OPERATOR(pg_catalog.>) 3) THEN (value_1 OPERATOR(pg_catalog.>) 2) ELSE false END
 DEBUG:  generating subplan 16_2 for subquery SELECT value_1, random() AS random FROM public.users_table
 DEBUG:  Plan 16 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((public.users_table u1 JOIN (SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.value_1, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('16_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, value_1 integer, value_2 integer, value_3 double precision, value_4 bigint)) users_table(user_id, "time", value_1, value_2, value_3, value_4) USING (value_1)) JOIN (SELECT intermediate_result.value_1, intermediate_result.random FROM read_intermediate_result('16_2'::text, 'binary'::citus_copy_format) intermediate_result(value_1 integer, random double precision)) u3 USING (value_1)) WHERE CASE WHEN (users_table.value_1 OPERATOR(pg_catalog.>) 3) THEN (users_table.value_1 OPERATOR(pg_catalog.>) 2) ELSE false END
  count 
@@ -122,7 +122,7 @@ JOIN
           random()
    FROM users_table) AS u3 USING (value_1)
 WHERE (CASE WHEN u1.value_1 > 4000 THEN u2.value_1 / 100 > 1 ELSE false END);
-DEBUG:  generating subplan 19_1 for subquery SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.users_table u2 WHERE true
+DEBUG:  generating subplan 19_1 for subquery SELECT NULL::integer AS user_id, NULL::timestamp without time zone AS "time", value_1, NULL::integer AS value_2, NULL::double precision AS value_3, NULL::bigint AS value_4 FROM public.users_table u2 WHERE true
 DEBUG:  generating subplan 19_2 for subquery SELECT value_1, random() AS random FROM public.users_table
 DEBUG:  Plan 19 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((public.users_table u1 JOIN (SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.value_1, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('19_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, value_1 integer, value_2 integer, value_3 double precision, value_4 bigint)) users_table(user_id, "time", value_1, value_2, value_3, value_4) USING (value_1)) JOIN (SELECT intermediate_result.value_1, intermediate_result.random FROM read_intermediate_result('19_2'::text, 'binary'::citus_copy_format) intermediate_result(value_1 integer, random double precision)) u3 USING (value_1)) WHERE CASE WHEN (u1.value_1 OPERATOR(pg_catalog.>) 4000) THEN ((users_table.value_1 OPERATOR(pg_catalog./) 100) OPERATOR(pg_catalog.>) 1) ELSE false END
  count 
@@ -139,7 +139,7 @@ JOIN
           random()
    FROM users_table) AS u3 USING (value_1)
 WHERE COALESCE((u2.user_id/5.0)::int::bool, false);
-DEBUG:  generating subplan 22_1 for subquery SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.users_table u2 WHERE COALESCE(((((user_id)::numeric OPERATOR(pg_catalog./) 5.0))::integer)::boolean, false)
+DEBUG:  generating subplan 22_1 for subquery SELECT user_id, NULL::timestamp without time zone AS "time", value_1, NULL::integer AS value_2, NULL::double precision AS value_3, NULL::bigint AS value_4 FROM public.users_table u2 WHERE COALESCE(((((user_id)::numeric OPERATOR(pg_catalog./) 5.0))::integer)::boolean, false)
 DEBUG:  generating subplan 22_2 for subquery SELECT value_1, random() AS random FROM public.users_table
 DEBUG:  Plan 22 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((public.users_table u1 JOIN (SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.value_1, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('22_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, value_1 integer, value_2 integer, value_3 double precision, value_4 bigint)) users_table(user_id, "time", value_1, value_2, value_3, value_4) USING (value_1)) JOIN (SELECT intermediate_result.value_1, intermediate_result.random FROM read_intermediate_result('22_2'::text, 'binary'::citus_copy_format) intermediate_result(value_1 integer, random double precision)) u3 USING (value_1)) WHERE COALESCE(((((users_table.user_id)::numeric OPERATOR(pg_catalog./) 5.0))::integer)::boolean, false)
  count 
@@ -156,7 +156,7 @@ JOIN
           random()
    FROM users_table) AS u3 USING (value_1)
 WHERE NULLIF((u2.value_2/5.0)::int::bool, false);
-DEBUG:  generating subplan 25_1 for subquery SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.users_table u2 WHERE NULLIF(((((value_2)::numeric OPERATOR(pg_catalog./) 5.0))::integer)::boolean, false)
+DEBUG:  generating subplan 25_1 for subquery SELECT NULL::integer AS user_id, NULL::timestamp without time zone AS "time", value_1, value_2, NULL::double precision AS value_3, NULL::bigint AS value_4 FROM public.users_table u2 WHERE NULLIF(((((value_2)::numeric OPERATOR(pg_catalog./) 5.0))::integer)::boolean, false)
 DEBUG:  generating subplan 25_2 for subquery SELECT value_1, random() AS random FROM public.users_table
 DEBUG:  Plan 25 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((public.users_table u1 JOIN (SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.value_1, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('25_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, value_1 integer, value_2 integer, value_3 double precision, value_4 bigint)) users_table(user_id, "time", value_1, value_2, value_3, value_4) USING (value_1)) JOIN (SELECT intermediate_result.value_1, intermediate_result.random FROM read_intermediate_result('25_2'::text, 'binary'::citus_copy_format) intermediate_result(value_1 integer, random double precision)) u3 USING (value_1)) WHERE NULLIF(((((users_table.value_2)::numeric OPERATOR(pg_catalog./) 5.0))::integer)::boolean, false)
  count 
@@ -173,7 +173,7 @@ JOIN
           random()
    FROM users_table) AS u3 USING (value_1)
 WHERE u2.value_3 IS NOT NULL;
-DEBUG:  generating subplan 28_1 for subquery SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.users_table u2 WHERE (value_3 IS NOT NULL)
+DEBUG:  generating subplan 28_1 for subquery SELECT NULL::integer AS user_id, NULL::timestamp without time zone AS "time", value_1, NULL::integer AS value_2, value_3, NULL::bigint AS value_4 FROM public.users_table u2 WHERE (value_3 IS NOT NULL)
 DEBUG:  generating subplan 28_2 for subquery SELECT value_1, random() AS random FROM public.users_table
 DEBUG:  Plan 28 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((public.users_table u1 JOIN (SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.value_1, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('28_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, value_1 integer, value_2 integer, value_3 double precision, value_4 bigint)) users_table(user_id, "time", value_1, value_2, value_3, value_4) USING (value_1)) JOIN (SELECT intermediate_result.value_1, intermediate_result.random FROM read_intermediate_result('28_2'::text, 'binary'::citus_copy_format) intermediate_result(value_1 integer, random double precision)) u3 USING (value_1)) WHERE (users_table.value_3 IS NOT NULL)
  count 
@@ -190,7 +190,7 @@ JOIN
           random()
    FROM users_table) AS u3 USING (value_1)
 WHERE isfinite(u2.time);
-DEBUG:  generating subplan 31_1 for subquery SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.users_table u2 WHERE isfinite("time")
+DEBUG:  generating subplan 31_1 for subquery SELECT NULL::integer AS user_id, "time", value_1, NULL::integer AS value_2, NULL::double precision AS value_3, NULL::bigint AS value_4 FROM public.users_table u2 WHERE isfinite("time")
 DEBUG:  generating subplan 31_2 for subquery SELECT value_1, random() AS random FROM public.users_table
 DEBUG:  Plan 31 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((public.users_table u1 JOIN (SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.value_1, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('31_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, value_1 integer, value_2 integer, value_3 double precision, value_4 bigint)) users_table(user_id, "time", value_1, value_2, value_3, value_4) USING (value_1)) JOIN (SELECT intermediate_result.value_1, intermediate_result.random FROM read_intermediate_result('31_2'::text, 'binary'::citus_copy_format) intermediate_result(value_1 integer, random double precision)) u3 USING (value_1)) WHERE isfinite(users_table."time")
  count 
@@ -207,7 +207,7 @@ JOIN
           random()
    FROM users_table) AS u3 USING (value_1)
 WHERE int4smaller(u2.value_1, u1.value_1) = 55;
-DEBUG:  generating subplan 34_1 for subquery SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.users_table u2 WHERE true
+DEBUG:  generating subplan 34_1 for subquery SELECT NULL::integer AS user_id, NULL::timestamp without time zone AS "time", value_1, NULL::integer AS value_2, NULL::double precision AS value_3, NULL::bigint AS value_4 FROM public.users_table u2 WHERE true
 DEBUG:  generating subplan 34_2 for subquery SELECT value_1, random() AS random FROM public.users_table
 DEBUG:  Plan 34 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((public.users_table u1 JOIN (SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.value_1, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('34_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, value_1 integer, value_2 integer, value_3 double precision, value_4 bigint)) users_table(user_id, "time", value_1, value_2, value_3, value_4) USING (value_1)) JOIN (SELECT intermediate_result.value_1, intermediate_result.random FROM read_intermediate_result('34_2'::text, 'binary'::citus_copy_format) intermediate_result(value_1 integer, random double precision)) u3 USING (value_1)) WHERE (int4smaller(users_table.value_1, u1.value_1) OPERATOR(pg_catalog.=) 55)
  count 
@@ -224,7 +224,7 @@ JOIN
           random()
    FROM users_table) AS u3 USING (value_1)
 WHERE int4smaller(u2.value_1, u2.value_2) = u2.value_1;
-DEBUG:  generating subplan 37_1 for subquery SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.users_table u2 WHERE (value_1 OPERATOR(pg_catalog.=) int4smaller(value_1, value_2))
+DEBUG:  generating subplan 37_1 for subquery SELECT NULL::integer AS user_id, NULL::timestamp without time zone AS "time", value_1, value_2, NULL::double precision AS value_3, NULL::bigint AS value_4 FROM public.users_table u2 WHERE (value_1 OPERATOR(pg_catalog.=) int4smaller(value_1, value_2))
 DEBUG:  generating subplan 37_2 for subquery SELECT value_1, random() AS random FROM public.users_table
 DEBUG:  Plan 37 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((public.users_table u1 JOIN (SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.value_1, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('37_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, value_1 integer, value_2 integer, value_3 double precision, value_4 bigint)) users_table(user_id, "time", value_1, value_2, value_3, value_4) USING (value_1)) JOIN (SELECT intermediate_result.value_1, intermediate_result.random FROM read_intermediate_result('37_2'::text, 'binary'::citus_copy_format) intermediate_result(value_1 integer, random double precision)) u3 USING (value_1)) WHERE (int4smaller(users_table.value_1, users_table.value_2) OPERATOR(pg_catalog.=) users_table.value_1)
  count 
@@ -241,7 +241,7 @@ JOIN
           random()
    FROM users_table) AS u3 USING (value_1)
 WHERE row(u2.value_1, 2, 3) > row(u2.value_2, 2, 3);
-DEBUG:  generating subplan 40_1 for subquery SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.users_table u2 WHERE (ROW(value_1, 2, 3) OPERATOR(pg_catalog.>) ROW(value_2, 2, 3))
+DEBUG:  generating subplan 40_1 for subquery SELECT NULL::integer AS user_id, NULL::timestamp without time zone AS "time", value_1, value_2, NULL::double precision AS value_3, NULL::bigint AS value_4 FROM public.users_table u2 WHERE (ROW(value_1, 2, 3) OPERATOR(pg_catalog.>) ROW(value_2, 2, 3))
 DEBUG:  generating subplan 40_2 for subquery SELECT value_1, random() AS random FROM public.users_table
 DEBUG:  Plan 40 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((public.users_table u1 JOIN (SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.value_1, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('40_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, value_1 integer, value_2 integer, value_3 double precision, value_4 bigint)) users_table(user_id, "time", value_1, value_2, value_3, value_4) USING (value_1)) JOIN (SELECT intermediate_result.value_1, intermediate_result.random FROM read_intermediate_result('40_2'::text, 'binary'::citus_copy_format) intermediate_result(value_1 integer, random double precision)) u3 USING (value_1)) WHERE (ROW(users_table.value_1, 2, 3) OPERATOR(pg_catalog.>) ROW(users_table.value_2, 2, 3))
  count 
@@ -285,7 +285,7 @@ WHERE u2.value_1 >
     (SELECT avg(user_id)
      FROM events_table);
 DEBUG:  generating subplan 46_1 for subquery SELECT avg(user_id) AS avg FROM public.events_table
-DEBUG:  generating subplan 46_2 for subquery SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.users_table u2 WHERE true
+DEBUG:  generating subplan 46_2 for subquery SELECT NULL::integer AS user_id, NULL::timestamp without time zone AS "time", value_1, NULL::integer AS value_2, NULL::double precision AS value_3, NULL::bigint AS value_4 FROM public.users_table u2 WHERE true
 DEBUG:  generating subplan 46_3 for subquery SELECT value_1, random() AS random FROM public.users_table
 DEBUG:  Plan 46 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((public.users_table u1 JOIN (SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.value_1, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('46_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, value_1 integer, value_2 integer, value_3 double precision, value_4 bigint)) users_table(user_id, "time", value_1, value_2, value_3, value_4) USING (value_1)) JOIN (SELECT intermediate_result.value_1, intermediate_result.random FROM read_intermediate_result('46_3'::text, 'binary'::citus_copy_format) intermediate_result(value_1 integer, random double precision)) u3 USING (value_1)) WHERE ((users_table.value_1)::numeric OPERATOR(pg_catalog.>) (SELECT intermediate_result.avg FROM read_intermediate_result('46_1'::text, 'binary'::citus_copy_format) intermediate_result(avg numeric)))
  count 
@@ -303,7 +303,7 @@ JOIN
    FROM users_table) AS u3 USING (value_1)
 WHERE u2.value_1 >
     (SELECT 5);
-DEBUG:  generating subplan 50_1 for subquery SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.users_table u2 WHERE true
+DEBUG:  generating subplan 50_1 for subquery SELECT NULL::integer AS user_id, NULL::timestamp without time zone AS "time", value_1, NULL::integer AS value_2, NULL::double precision AS value_3, NULL::bigint AS value_4 FROM public.users_table u2 WHERE true
 DEBUG:  generating subplan 50_2 for subquery SELECT value_1, random() AS random FROM public.users_table
 DEBUG:  Plan 50 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((public.users_table u1 JOIN (SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.value_1, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('50_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, value_1 integer, value_2 integer, value_3 double precision, value_4 bigint)) users_table(user_id, "time", value_1, value_2, value_3, value_4) USING (value_1)) JOIN (SELECT intermediate_result.value_1, intermediate_result.random FROM read_intermediate_result('50_2'::text, 'binary'::citus_copy_format) intermediate_result(value_1 integer, random double precision)) u3 USING (value_1)) WHERE (users_table.value_1 OPERATOR(pg_catalog.>) (SELECT 5))
  count 
@@ -320,7 +320,7 @@ JOIN
           random()
    FROM users_table) AS u3 USING (value_1)
 WHERE  u2.value_1 *  u1.user_id > 25;
-DEBUG:  generating subplan 53_1 for subquery SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.users_table u2 WHERE true
+DEBUG:  generating subplan 53_1 for subquery SELECT NULL::integer AS user_id, NULL::timestamp without time zone AS "time", value_1, NULL::integer AS value_2, NULL::double precision AS value_3, NULL::bigint AS value_4 FROM public.users_table u2 WHERE true
 DEBUG:  generating subplan 53_2 for subquery SELECT value_1, random() AS random FROM public.users_table
 DEBUG:  Plan 53 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((public.users_table u1 JOIN (SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.value_1, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('53_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, value_1 integer, value_2 integer, value_3 double precision, value_4 bigint)) users_table(user_id, "time", value_1, value_2, value_3, value_4) USING (value_1)) JOIN (SELECT intermediate_result.value_1, intermediate_result.random FROM read_intermediate_result('53_2'::text, 'binary'::citus_copy_format) intermediate_result(value_1 integer, random double precision)) u3 USING (value_1)) WHERE ((users_table.value_1 OPERATOR(pg_catalog.*) u1.user_id) OPERATOR(pg_catalog.>) 25)
  count 
@@ -339,7 +339,7 @@ JOIN
           random()
    FROM users_table) AS u3 USING (value_1)
 WHERE  u1.value_1 = 3;
-DEBUG:  generating subplan 56_1 for subquery SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.users_table u2 WHERE (value_1 OPERATOR(pg_catalog.=) 3)
+DEBUG:  generating subplan 56_1 for subquery SELECT NULL::integer AS user_id, NULL::timestamp without time zone AS "time", value_1, NULL::integer AS value_2, NULL::double precision AS value_3, NULL::bigint AS value_4 FROM public.users_table u2 WHERE (value_1 OPERATOR(pg_catalog.=) 3)
 DEBUG:  generating subplan 56_2 for subquery SELECT value_1, random() AS random FROM public.users_table
 DEBUG:  Plan 56 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((public.users_table u1 JOIN (SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.value_1, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('56_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, value_1 integer, value_2 integer, value_3 double precision, value_4 bigint)) users_table(user_id, "time", value_1, value_2, value_3, value_4) USING (value_1)) JOIN (SELECT intermediate_result.value_1, intermediate_result.random FROM read_intermediate_result('56_2'::text, 'binary'::citus_copy_format) intermediate_result(value_1 integer, random double precision)) u3 USING (value_1)) WHERE (u1.value_1 OPERATOR(pg_catalog.=) 3)
  count 
@@ -356,7 +356,7 @@ JOIN
           random()
    FROM users_table) AS u3 USING (value_1)
 WHERE  u1.value_1 > 3;
-DEBUG:  generating subplan 59_1 for subquery SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.users_table u2 WHERE true
+DEBUG:  generating subplan 59_1 for subquery SELECT NULL::integer AS user_id, NULL::timestamp without time zone AS "time", value_1, NULL::integer AS value_2, NULL::double precision AS value_3, NULL::bigint AS value_4 FROM public.users_table u2 WHERE true
 DEBUG:  generating subplan 59_2 for subquery SELECT value_1, random() AS random FROM public.users_table
 DEBUG:  Plan 59 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((public.users_table u1 JOIN (SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.value_1, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('59_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, value_1 integer, value_2 integer, value_3 double precision, value_4 bigint)) users_table(user_id, "time", value_1, value_2, value_3, value_4) USING (value_1)) JOIN (SELECT intermediate_result.value_1, intermediate_result.random FROM read_intermediate_result('59_2'::text, 'binary'::citus_copy_format) intermediate_result(value_1 integer, random double precision)) u3 USING (value_1)) WHERE (u1.value_1 OPERATOR(pg_catalog.>) 3)
  count 
@@ -374,7 +374,7 @@ JOIN
           random()
    FROM users_table) AS u3 USING (value_1)
 WHERE  u1.value_2 = 3;
-DEBUG:  generating subplan 62_1 for subquery SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.users_table u2 WHERE true
+DEBUG:  generating subplan 62_1 for subquery SELECT NULL::integer AS user_id, NULL::timestamp without time zone AS "time", value_1, NULL::integer AS value_2, NULL::double precision AS value_3, NULL::bigint AS value_4 FROM public.users_table u2 WHERE true
 DEBUG:  generating subplan 62_2 for subquery SELECT value_1, random() AS random FROM public.users_table
 DEBUG:  Plan 62 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((public.users_table u1 JOIN (SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.value_1, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('62_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, value_1 integer, value_2 integer, value_3 double precision, value_4 bigint)) users_table(user_id, "time", value_1, value_2, value_3, value_4) USING (value_1)) JOIN (SELECT intermediate_result.value_1, intermediate_result.random FROM read_intermediate_result('62_2'::text, 'binary'::citus_copy_format) intermediate_result(value_1 integer, random double precision)) u3 USING (value_1)) WHERE (u1.value_2 OPERATOR(pg_catalog.=) 3)
  count 
@@ -391,7 +391,7 @@ JOIN
           random()
    FROM users_table) AS u3 USING (value_1)
 WHERE u2.value_1 > 4 OR u2.value_4 = 4;
-DEBUG:  generating subplan 65_1 for subquery SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.users_table u2 WHERE ((value_1 OPERATOR(pg_catalog.>) 4) OR (value_4 OPERATOR(pg_catalog.=) 4))
+DEBUG:  generating subplan 65_1 for subquery SELECT NULL::integer AS user_id, NULL::timestamp without time zone AS "time", value_1, NULL::integer AS value_2, NULL::double precision AS value_3, value_4 FROM public.users_table u2 WHERE ((value_1 OPERATOR(pg_catalog.>) 4) OR (value_4 OPERATOR(pg_catalog.=) 4))
 DEBUG:  generating subplan 65_2 for subquery SELECT value_1, random() AS random FROM public.users_table
 DEBUG:  Plan 65 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((public.users_table u1 JOIN (SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.value_1, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('65_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, value_1 integer, value_2 integer, value_3 double precision, value_4 bigint)) users_table(user_id, "time", value_1, value_2, value_3, value_4) USING (value_1)) JOIN (SELECT intermediate_result.value_1, intermediate_result.random FROM read_intermediate_result('65_2'::text, 'binary'::citus_copy_format) intermediate_result(value_1 integer, random double precision)) u3 USING (value_1)) WHERE ((users_table.value_1 OPERATOR(pg_catalog.>) 4) OR (users_table.value_4 OPERATOR(pg_catalog.=) 4))
  count 
@@ -408,7 +408,7 @@ JOIN
           random()
    FROM users_table) AS u3 USING (value_1)
 WHERE u2.value_1 > 2 and u2.value_4 IS NULL;
-DEBUG:  generating subplan 68_1 for subquery SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.users_table u2 WHERE ((value_1 OPERATOR(pg_catalog.>) 2) AND (value_4 IS NULL))
+DEBUG:  generating subplan 68_1 for subquery SELECT NULL::integer AS user_id, NULL::timestamp without time zone AS "time", value_1, NULL::integer AS value_2, NULL::double precision AS value_3, value_4 FROM public.users_table u2 WHERE ((value_1 OPERATOR(pg_catalog.>) 2) AND (value_4 IS NULL))
 DEBUG:  generating subplan 68_2 for subquery SELECT value_1, random() AS random FROM public.users_table
 DEBUG:  Plan 68 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((public.users_table u1 JOIN (SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.value_1, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('68_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, value_1 integer, value_2 integer, value_3 double precision, value_4 bigint)) users_table(user_id, "time", value_1, value_2, value_3, value_4) USING (value_1)) JOIN (SELECT intermediate_result.value_1, intermediate_result.random FROM read_intermediate_result('68_2'::text, 'binary'::citus_copy_format) intermediate_result(value_1 integer, random double precision)) u3 USING (value_1)) WHERE ((users_table.value_1 OPERATOR(pg_catalog.>) 2) AND (users_table.value_4 IS NULL))
  count 
@@ -426,7 +426,7 @@ JOIN
           random()
    FROM users_table) AS u3 USING (value_1)
 WHERE (u2.value_1 > 2 OR u2.value_4 IS NULL) AND (u2.user_id > 4 OR u1.user_id > 3);
-DEBUG:  generating subplan 71_1 for subquery SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.users_table u2 WHERE ((value_1 OPERATOR(pg_catalog.>) 2) OR (value_4 IS NULL))
+DEBUG:  generating subplan 71_1 for subquery SELECT user_id, NULL::timestamp without time zone AS "time", value_1, NULL::integer AS value_2, NULL::double precision AS value_3, value_4 FROM public.users_table u2 WHERE ((value_1 OPERATOR(pg_catalog.>) 2) OR (value_4 IS NULL))
 DEBUG:  generating subplan 71_2 for subquery SELECT value_1, random() AS random FROM public.users_table
 DEBUG:  Plan 71 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((public.users_table u1 JOIN (SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.value_1, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('71_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, value_1 integer, value_2 integer, value_3 double precision, value_4 bigint)) users_table(user_id, "time", value_1, value_2, value_3, value_4) USING (value_1)) JOIN (SELECT intermediate_result.value_1, intermediate_result.random FROM read_intermediate_result('71_2'::text, 'binary'::citus_copy_format) intermediate_result(value_1 integer, random double precision)) u3 USING (value_1)) WHERE (((users_table.value_1 OPERATOR(pg_catalog.>) 2) OR (users_table.value_4 IS NULL)) AND ((users_table.user_id OPERATOR(pg_catalog.>) 4) OR (u1.user_id OPERATOR(pg_catalog.>) 3)))
  count 
@@ -443,7 +443,7 @@ JOIN
           random()
    FROM users_table) AS u3 USING (value_1)
 WHERE (u2.value_1 > 2 OR u2.value_4 IS NULL) OR (u2.user_id > 4 AND u1.user_id > 3);
-DEBUG:  generating subplan 74_1 for subquery SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.users_table u2 WHERE ((value_1 OPERATOR(pg_catalog.>) 2) OR (value_4 IS NULL) OR (user_id OPERATOR(pg_catalog.>) 4))
+DEBUG:  generating subplan 74_1 for subquery SELECT user_id, NULL::timestamp without time zone AS "time", value_1, NULL::integer AS value_2, NULL::double precision AS value_3, value_4 FROM public.users_table u2 WHERE ((value_1 OPERATOR(pg_catalog.>) 2) OR (value_4 IS NULL) OR (user_id OPERATOR(pg_catalog.>) 4))
 DEBUG:  generating subplan 74_2 for subquery SELECT value_1, random() AS random FROM public.users_table
 DEBUG:  Plan 74 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((public.users_table u1 JOIN (SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.value_1, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('74_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, value_1 integer, value_2 integer, value_3 double precision, value_4 bigint)) users_table(user_id, "time", value_1, value_2, value_3, value_4) USING (value_1)) JOIN (SELECT intermediate_result.value_1, intermediate_result.random FROM read_intermediate_result('74_2'::text, 'binary'::citus_copy_format) intermediate_result(value_1 integer, random double precision)) u3 USING (value_1)) WHERE ((users_table.value_1 OPERATOR(pg_catalog.>) 2) OR (users_table.value_4 IS NULL) OR ((users_table.user_id OPERATOR(pg_catalog.>) 4) AND (u1.user_id OPERATOR(pg_catalog.>) 3)))
  count 
@@ -460,7 +460,7 @@ JOIN
           random()
    FROM users_table) AS u3 USING (value_1)
 WHERE (u2.value_1 > 2 OR u1.value_4 IS NULL) AND (u2.user_id > 4 AND u1.user_id > 3);
-DEBUG:  generating subplan 77_1 for subquery SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.users_table u2 WHERE (user_id OPERATOR(pg_catalog.>) 4)
+DEBUG:  generating subplan 77_1 for subquery SELECT user_id, NULL::timestamp without time zone AS "time", value_1, NULL::integer AS value_2, NULL::double precision AS value_3, NULL::bigint AS value_4 FROM public.users_table u2 WHERE (user_id OPERATOR(pg_catalog.>) 4)
 DEBUG:  generating subplan 77_2 for subquery SELECT value_1, random() AS random FROM public.users_table
 DEBUG:  Plan 77 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((public.users_table u1 JOIN (SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.value_1, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('77_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, value_1 integer, value_2 integer, value_3 double precision, value_4 bigint)) users_table(user_id, "time", value_1, value_2, value_3, value_4) USING (value_1)) JOIN (SELECT intermediate_result.value_1, intermediate_result.random FROM read_intermediate_result('77_2'::text, 'binary'::citus_copy_format) intermediate_result(value_1 integer, random double precision)) u3 USING (value_1)) WHERE (((users_table.value_1 OPERATOR(pg_catalog.>) 2) OR (u1.value_4 IS NULL)) AND ((users_table.user_id OPERATOR(pg_catalog.>) 4) AND (u1.user_id OPERATOR(pg_catalog.>) 3)))
  count 
@@ -477,7 +477,7 @@ JOIN
           random()
    FROM users_table) AS u3 USING (value_1)
 WHERE (u2.value_1 > 2 OR u1.value_4 IS NULL) AND (u2.user_id > 4 OR u1.user_id > 3);
-DEBUG:  generating subplan 80_1 for subquery SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.users_table u2 WHERE true
+DEBUG:  generating subplan 80_1 for subquery SELECT user_id, NULL::timestamp without time zone AS "time", value_1, NULL::integer AS value_2, NULL::double precision AS value_3, NULL::bigint AS value_4 FROM public.users_table u2 WHERE true
 DEBUG:  generating subplan 80_2 for subquery SELECT value_1, random() AS random FROM public.users_table
 DEBUG:  Plan 80 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((public.users_table u1 JOIN (SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.value_1, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('80_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, value_1 integer, value_2 integer, value_3 double precision, value_4 bigint)) users_table(user_id, "time", value_1, value_2, value_3, value_4) USING (value_1)) JOIN (SELECT intermediate_result.value_1, intermediate_result.random FROM read_intermediate_result('80_2'::text, 'binary'::citus_copy_format) intermediate_result(value_1 integer, random double precision)) u3 USING (value_1)) WHERE (((users_table.value_1 OPERATOR(pg_catalog.>) 2) OR (u1.value_4 IS NULL)) AND ((users_table.user_id OPERATOR(pg_catalog.>) 4) OR (u1.user_id OPERATOR(pg_catalog.>) 3)))
  count 
@@ -495,7 +495,7 @@ JOIN
           random()
    FROM users_table) AS u3 USING (value_1)
 WHERE (u2.value_1 > 2 OR u1.value_4 IS NULL) AND (u2.user_id = 10000 * random() OR u1.user_id > 3);
-DEBUG:  generating subplan 83_1 for subquery SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.users_table u2 WHERE true
+DEBUG:  generating subplan 83_1 for subquery SELECT user_id, NULL::timestamp without time zone AS "time", value_1, NULL::integer AS value_2, NULL::double precision AS value_3, NULL::bigint AS value_4 FROM public.users_table u2 WHERE true
 DEBUG:  generating subplan 83_2 for subquery SELECT value_1, random() AS random FROM public.users_table
 DEBUG:  Plan 83 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((public.users_table u1 JOIN (SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.value_1, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('83_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, value_1 integer, value_2 integer, value_3 double precision, value_4 bigint)) users_table(user_id, "time", value_1, value_2, value_3, value_4) USING (value_1)) JOIN (SELECT intermediate_result.value_1, intermediate_result.random FROM read_intermediate_result('83_2'::text, 'binary'::citus_copy_format) intermediate_result(value_1 integer, random double precision)) u3 USING (value_1)) WHERE (((users_table.value_1 OPERATOR(pg_catalog.>) 2) OR (u1.value_4 IS NULL)) AND (((users_table.user_id)::double precision OPERATOR(pg_catalog.=) ((10000)::double precision OPERATOR(pg_catalog.*) random())) OR (u1.user_id OPERATOR(pg_catalog.>) 3)))
  count 
@@ -512,7 +512,7 @@ JOIN
           random()
    FROM users_table) AS u3 USING (value_1)
 WHERE (u2.value_1 > 2 AND false);
-DEBUG:  generating subplan 86_1 for subquery SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.users_table u2 WHERE true
+DEBUG:  generating subplan 86_1 for subquery SELECT NULL::integer AS user_id, NULL::timestamp without time zone AS "time", value_1, NULL::integer AS value_2, NULL::double precision AS value_3, NULL::bigint AS value_4 FROM public.users_table u2 WHERE true
 DEBUG:  generating subplan 86_2 for subquery SELECT value_1, random() AS random FROM public.users_table
 DEBUG:  Plan 86 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((public.users_table u1 JOIN (SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.value_1, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('86_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, value_1 integer, value_2 integer, value_3 double precision, value_4 bigint)) users_table(user_id, "time", value_1, value_2, value_3, value_4) USING (value_1)) JOIN (SELECT intermediate_result.value_1, intermediate_result.random FROM read_intermediate_result('86_2'::text, 'binary'::citus_copy_format) intermediate_result(value_1 integer, random double precision)) u3 USING (value_1)) WHERE ((users_table.value_1 OPERATOR(pg_catalog.>) 2) AND false)
  count 
@@ -531,6 +531,6 @@ JOIN LATERAL
    WHERE u2.value_2 = 15) AS u3 USING (value_1)
 WHERE (u2.value_1 > 2
        AND FALSE);
-DEBUG:  generating subplan 89_1 for subquery SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.users_table u2 WHERE true
+DEBUG:  generating subplan 89_1 for subquery SELECT NULL::integer AS user_id, NULL::timestamp without time zone AS "time", value_1, value_2, NULL::double precision AS value_3, NULL::bigint AS value_4 FROM public.users_table u2 WHERE true
 DEBUG:  Plan 89 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((public.users_table u1 JOIN (SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.value_1, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('89_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, value_1 integer, value_2 integer, value_3 double precision, value_4 bigint)) users_table(user_id, "time", value_1, value_2, value_3, value_4) USING (value_1)) JOIN LATERAL (SELECT users_table_1.value_1, random() AS random FROM public.users_table users_table_1 WHERE (users_table.value_2 OPERATOR(pg_catalog.=) 15)) u3 USING (value_1)) WHERE ((users_table.value_1 OPERATOR(pg_catalog.>) 2) AND false)
 ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator

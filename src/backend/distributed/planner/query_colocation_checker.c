@@ -71,7 +71,7 @@ CreateColocatedJoinChecker(Query *subquery, PlannerRestrictionContext *restricti
 		 * functions (i.e., FilterPlannerRestrictionForQuery()) rely on queries
 		 * not relations.
 		 */
-		anchorSubquery = WrapRteRelationIntoSubquery(anchorRangeTblEntry);
+		anchorSubquery = WrapRteRelationIntoSubquery(anchorRangeTblEntry, NIL);
 	}
 	else if (anchorRangeTblEntry->rtekind == RTE_SUBQUERY)
 	{
@@ -237,9 +237,19 @@ SubqueryColocated(Query *subquery, ColocatedJoinChecker *checker)
  * Note that the query returned by this function does not contain any filters or
  * projections. The returned query should be used cautiosly and it is mostly
  * designed for generating a stub query.
+ *
+ * The function also gets requiredAttrNumbersForRelation. The attributes that are
+ * not inside the list are added as NULL to the target list. We prefer to do this
+ * over not including the entries at all in the target list. The reason is that
+ * if any other part of the query refers to a varatto of the relation, we should
+ * continue to serve the target entry from the same position in the target list of
+ * the subquery.
+ *
+ * If the requiredAttrNumbersForRelation is NIL, all entries are added as NULL.
  */
 Query *
-WrapRteRelationIntoSubquery(RangeTblEntry *rteRelation)
+WrapRteRelationIntoSubquery(RangeTblEntry *rteRelation,
+							List *requiredAttrNumbersForRelation)
 {
 	Query *subquery = makeNode(Query);
 	RangeTblRef *newRangeTableRef = makeNode(RangeTblRef);
@@ -266,14 +276,26 @@ WrapRteRelationIntoSubquery(RangeTblEntry *rteRelation)
 
 	for (attributeNumber = 1; attributeNumber <= numberOfAttributes; attributeNumber++)
 	{
-		Form_pg_attribute attributeTuple = TupleDescAttr(relation->rd_att,
-														 attributeNumber - 1);
+		Form_pg_attribute attributeTuple =
+			TupleDescAttr(relation->rd_att, attributeNumber - 1);
 		Var *targetColumn =
 			makeVar(1, attributeNumber, attributeTuple->atttypid,
 					attributeTuple->atttypmod, attributeTuple->attcollation, 0);
-		TargetEntry *targetEntry =
-			makeTargetEntry((Expr *) targetColumn, attributeNumber,
-							strdup(attributeTuple->attname.data), false);
+		TargetEntry *targetEntry = targetEntry =
+									   makeTargetEntry((Expr *) targetColumn,
+													   attributeNumber,
+													   strdup(
+														   attributeTuple->attname.data),
+													   false);
+
+		if (!(requiredAttrNumbersForRelation &&
+			  list_member_int(requiredAttrNumbersForRelation, attributeNumber)))
+		{
+			targetEntry->expr =
+				(Expr *) makeNullConst(attributeTuple->atttypid,
+									   attributeTuple->atttypmod,
+									   attributeTuple->attcollation);
+		}
 
 		subquery->targetList = lappend(subquery->targetList, targetEntry);
 	}
