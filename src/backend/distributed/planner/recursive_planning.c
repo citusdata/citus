@@ -79,6 +79,7 @@
 #include "nodes/primnodes.h"
 #include "nodes/relation.h"
 #include "optimizer/clauses.h"
+#include "optimizer/var.h"
 #include "utils/builtins.h"
 #include "utils/guc.h"
 #include "utils/lsyscache.h"
@@ -160,6 +161,8 @@ static void RecursivelyPlanSetOperations(Query *query, Node *node,
 static bool IsLocalTableRTE(Node *node);
 static void RecursivelyPlanRTERelation(RangeTblEntry *relationRte,
 									   RecursivePlanningContext *planningContext);
+static List * RequiredAttrNumbersForRelation(RangeTblEntry *relationRte,
+											 RecursivePlanningContext *planningContext);
 static void RecursivelyPlanSubquery(Query *subquery,
 									RecursivePlanningContext *planningContext);
 static DistributedSubPlan * CreateDistributedSubPlan(uint32 subPlanId,
@@ -485,7 +488,7 @@ RecursivelyPlanNonColocatedJoinWalker(Node *joinNode,
 
 		if (rte->rtekind == RTE_RELATION)
 		{
-			subquery = WrapRteRelationIntoSubquery(rte);
+			subquery = WrapRteRelationIntoSubquery(rte, NIL);
 
 			if (!SubqueryColocated(subquery, colocatedJoinChecker))
 			{
@@ -1112,15 +1115,18 @@ RecursivelyPlanRTERelation(RangeTblEntry *relationRte,
 		planningContext->plannerRestrictionContext;
 	List *restrictionExprListOnTable =
 		GetRestrictInfoListForRelation(relationRte, plannerRestrictionContext);
+	List *requiredAttrNumbersForRelation =
+		RequiredAttrNumbersForRelation(relationRte, planningContext);
 
-	Query *subquery = WrapRteRelationIntoSubquery(relationRte);
+	Query *subquery =
+		WrapRteRelationIntoSubquery(relationRte, requiredAttrNumbersForRelation);
 	RangeTblEntry *wrappedSubqueryEntry = makeNode(RangeTblEntry);
 	ListCell *columnListCell = NULL;
 	List *columnNames = NIL;
 	char *relationName = get_rel_name(relationRte->relid);
 
 	wrappedSubqueryEntry->rtekind = RTE_SUBQUERY;
-	wrappedSubqueryEntry->subquery = copyObject(subquery);
+	wrappedSubqueryEntry->subquery = subquery;
 
 	foreach(columnListCell, subquery->targetList)
 	{
@@ -1144,6 +1150,54 @@ RecursivelyPlanRTERelation(RangeTblEntry *relationRte,
 
 	/* simply call the main logic for recursive query planning */
 	RecursivelyPlanSubquery(wrappedSubqueryEntry->subquery, planningContext);
+}
+
+
+/*
+ * RequiredAttrNumbersForRelation returns the required attribute numbers for
+ * the input RTE relation in order for the planning to succeed.
+ *
+ * The function could be optimized by not adding the columns that only appear
+ * WHERE clause as a filter (e.g., not a join clause).
+ */
+static List *
+RequiredAttrNumbersForRelation(RangeTblEntry *relationRte,
+							   RecursivePlanningContext *planningContext)
+{
+	PlannerRestrictionContext *plannerRestrictionContext =
+		planningContext->plannerRestrictionContext;
+	PlannerRestrictionContext *filteredPlannerRestrictionContext =
+		FilterPlannerRestrictionForQuery(plannerRestrictionContext,
+										 WrapRteRelationIntoSubquery(relationRte, NIL));
+
+	RelationRestrictionContext *relationRestrictionContext =
+		filteredPlannerRestrictionContext->relationRestrictionContext;
+	List *filteredRelationRestrictionList =
+		relationRestrictionContext->relationRestrictionList;
+	RelationRestriction *relationRestriction =
+		(RelationRestriction *) linitial(filteredRelationRestrictionList);
+
+	PlannerInfo *plannerInfo = relationRestriction->plannerInfo;
+	Query *queryToProcess = plannerInfo->parse;
+	int rteIndex = relationRestriction->index;
+
+	List *allVarsInQuery = pull_vars_of_level((Node *) queryToProcess, 0);
+	ListCell *varCell = NULL;
+
+	List *requiredAttrNumbers = NIL;
+
+	foreach(varCell, allVarsInQuery)
+	{
+		Var *var = (Var *) lfirst(varCell);
+
+		if (var->varno == rteIndex)
+		{
+			requiredAttrNumbers = list_append_unique_int(requiredAttrNumbers,
+														 var->varattno);
+		}
+	}
+
+	return requiredAttrNumbers;
 }
 
 
