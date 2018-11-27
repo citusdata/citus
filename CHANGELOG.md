@@ -1,3 +1,5 @@
+### citus v7.5.3 (November 27, 2018) ###
+
 ### citus v7.5.2 (November 14, 2018) ###
 
 * Fixes inconsistent metadata error when shard metadata caching get interrupted
