@@ -114,6 +114,7 @@ static double elapsed_time(instr_time *starttime);
 
 static bool IsDistributedModifyPlan(PlannedStmt *plannedstmt);
 
+#if (PG_VERSION_NUM >= 110000)
 /* *INDENT-OFF* */
 static void
 CitusExplainOnePlan(PlannedStmt *plannedstmt, IntoClause *into, ExplainState *es,
@@ -276,6 +277,183 @@ CitusExplainOnePlan(PlannedStmt *plannedstmt, IntoClause *into, ExplainState *es
 
 	ExplainCloseGroup("Query", NULL, true, es);
 }
+#else
+/* *INDENT-OFF* */
+/*
+ * CitusExplainOnePlan -
+ *		given a planned query, execute it if needed, and then print
+ *		EXPLAIN output
+ *
+ * "into" is NULL unless we are explaining the contents of a CreateTableAsStmt,
+ * in which case executing the query should result in creating that table.
+ *
+ * This is exported because it's called back from prepare.c in the
+ * EXPLAIN EXECUTE case, and because an index advisor plugin would need
+ * to call it.
+ */
+void
+CitusExplainOnePlan(PlannedStmt *plannedstmt, IntoClause *into, ExplainState *es,
+			   const char *queryString, ParamListInfo params,
+			   QueryEnvironment *queryEnv, const instr_time *planduration)
+{
+	DestReceiver *dest;
+	QueryDesc  *queryDesc;
+	instr_time	starttime;
+	double		totaltime = 0;
+	int			eflags;
+	int			instrument_option = 0;
+	bool isDistributedModifyPlan = false;
+
+	Assert(plannedstmt->commandType != CMD_UTILITY);
+
+	isDistributedModifyPlan = IsDistributedModifyPlan(plannedstmt);
+
+	if (es->analyze && es->timing)
+		instrument_option |= INSTRUMENT_TIMER;
+	else if (es->analyze)
+		instrument_option |= INSTRUMENT_ROWS;
+
+	if (es->buffers)
+		instrument_option |= INSTRUMENT_BUFFERS;
+
+	/*
+	 * We always collect timing for the entire statement, even when node-level
+	 * timing is off, so we don't look at es->timing here.  (We could skip
+	 * this if !es->summary, but it's hardly worth the complication.)
+	 */
+	INSTR_TIME_SET_CURRENT(starttime);
+
+	/*
+	 * Use a snapshot with an updated command ID to ensure this query sees
+	 * results of any previously executed queries.
+	 */
+	PushCopiedSnapshot(GetActiveSnapshot());
+	UpdateActiveSnapshotCommandId();
+
+	/*
+	 * Normally we discard the query's output, but if explaining CREATE TABLE
+	 * AS, we'd better use the appropriate tuple receiver.
+	 */
+	if (into)
+		dest = CreateIntoRelDestReceiver(into);
+	else
+		dest = None_Receiver;
+
+	/* Create a QueryDesc for the query */
+	queryDesc = CreateQueryDesc(plannedstmt, queryString,
+								GetActiveSnapshot(), InvalidSnapshot,
+								dest, params, queryEnv, instrument_option);
+
+	/* Select execution options */
+	if (es->analyze)
+		eflags = 0;				/* default run-to-completion flags */
+	else
+		eflags = EXEC_FLAG_EXPLAIN_ONLY;
+	if (into)
+		eflags |= GetIntoRelEFlags(into);
+
+	/* call ExecutorStart to prepare the plan for execution */
+	ExecutorStart(queryDesc, eflags);
+
+	/* Execute the plan for statistics if asked for */
+	if (es->analyze && !isDistributedModifyPlan)
+	{
+		ScanDirection dir;
+
+		/* EXPLAIN ANALYZE CREATE TABLE AS WITH NO DATA is weird */
+		if (into && into->skipData)
+			dir = NoMovementScanDirection;
+		else
+			dir = ForwardScanDirection;
+
+		/* run the plan */
+		ExecutorRun(queryDesc, dir, 0L, true);
+
+		/* run cleanup too */
+		ExecutorFinish(queryDesc);
+
+		/* We can't run ExecutorEnd 'till we're done printing the stats... */
+		totaltime += elapsed_time(&starttime);
+	}
+
+	ExplainOpenGroup("Query", NULL, true, es);
+
+	/* Create textual dump of plan tree */
+	ExplainPrintPlan(es, queryDesc);
+
+	if (es->summary && planduration)
+	{
+		double		plantime = INSTR_TIME_GET_DOUBLE(*planduration);
+
+		if (es->format == EXPLAIN_FORMAT_TEXT)
+			appendStringInfo(es->str, "Planning time: %.3f ms\n",
+							 1000.0 * plantime);
+		else
+			ExplainPropertyFloat("Planning Time", 1000.0 * plantime, 3, es);
+	}
+
+	/* Print info about runtime of triggers */
+	if (es->analyze)
+		ExplainPrintTriggers(es, queryDesc);
+
+	/*
+	 * Close down the query and free resources.  Include time for this in the
+	 * total execution time (although it should be pretty minimal).
+	 */
+	INSTR_TIME_SET_CURRENT(starttime);
+
+	/* Execute the plan for statistics if asked for */
+	if (es->analyze && isDistributedModifyPlan)
+	{
+		ScanDirection dir;
+
+		/* EXPLAIN ANALYZE CREATE TABLE AS WITH NO DATA is weird */
+		if (into && into->skipData)
+			dir = NoMovementScanDirection;
+		else
+			dir = ForwardScanDirection;
+
+		/* run the plan */
+		ExecutorRun(queryDesc, dir, 0L, true);
+
+		/* run cleanup too */
+		ExecutorFinish(queryDesc);
+
+		/* We can't run ExecutorEnd 'till we're done printing the stats... */
+		totaltime += elapsed_time(&starttime);
+	}
+
+	ExecutorEnd(queryDesc);
+
+	FreeQueryDesc(queryDesc);
+
+	PopActiveSnapshot();
+
+	/* We need a CCI just in case query expanded to multiple plans */
+	if (es->analyze)
+		CommandCounterIncrement();
+
+	totaltime += elapsed_time(&starttime);
+
+	/*
+	 * We only report execution time if we actually ran the query (that is,
+	 * the user specified ANALYZE), and if summary reporting is enabled (the
+	 * user can set SUMMARY OFF to not have the timing information included in
+	 * the output).  By default, ANALYZE sets SUMMARY to true.
+	 */
+	if (es->summary && es->analyze)
+	{
+		if (es->format == EXPLAIN_FORMAT_TEXT)
+			appendStringInfo(es->str, "Execution time: %.3f ms\n",
+							 1000.0 * totaltime);
+		else
+			ExplainPropertyFloat("Execution Time", 1000.0 * totaltime,
+								 3, es);
+	}
+
+	ExplainCloseGroup("Query", NULL, true, es);
+}
+#endif
 
 
 /* *INDENT-OFF* */
