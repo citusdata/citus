@@ -155,7 +155,7 @@ ALTER EXTENSION citus UPDATE TO '8.0-8';
 SHOW citus.version;
  citus.version 
 ---------------
- 8.0.0
+ 8.0.1
 (1 row)
 
 -- ensure no objects were created outside pg_catalog
