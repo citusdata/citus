@@ -109,6 +109,9 @@ PREPARE prepare_select AS SELECT count(*) FROM test;
 -- not allowed to read absolute paths, even as superuser
 COPY "/etc/passwd" TO STDOUT WITH (format transmit);
 ERROR:  absolute path not allowed
+-- not allowed to read paths outside pgsql_job_cache, even as superuser
+COPY "postgresql.conf" TO STDOUT WITH (format transmit);
+ERROR:  path must be in the pgsql_job_cache directory
 -- check full permission
 SET ROLE full_access;
 EXECUTE prepare_insert(1);

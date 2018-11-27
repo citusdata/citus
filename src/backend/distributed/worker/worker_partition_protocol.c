@@ -643,7 +643,12 @@ CacheDirectoryElement(const char *filename)
 	appendStringInfo(directoryPath, "base/%s/", PG_JOB_CACHE_DIR);
 
 	directoryPathFound = strstr(filename, directoryPath->data);
-	if (directoryPathFound != NULL)
+
+	/*
+	 * If directoryPath occurs at the beginning of the filename, then the
+	 * pointers should now be equal.
+	 */
+	if (directoryPathFound == filename)
 	{
 		directoryElement = true;
 	}
