@@ -64,6 +64,7 @@
 bool ExplainDistributedQueries = true;
 bool ExplainAllTasks = false;
 
+
 /* Result for a single remote EXPLAIN command */
 typedef struct RemoteExplainPlan
 {
@@ -104,20 +105,20 @@ static void ExplainJSONLineEnding(ExplainState *es);
 static void ExplainYAMLLineStarting(ExplainState *es);
 #endif
 
-static void
-CitusExplainOnePlan(PlannedStmt *plannedstmt, IntoClause *into, ExplainState *es,
-			   const char *queryString, ParamListInfo params,
-			   QueryEnvironment *queryEnv, const instr_time *planduration);
-static double
-elapsed_time(instr_time *starttime);
+static void CitusExplainOnePlan(PlannedStmt *plannedstmt, IntoClause *into,
+								ExplainState *es,
+								const char *queryString, ParamListInfo params,
+								QueryEnvironment *queryEnv, const
+								instr_time *planduration);
+static double elapsed_time(instr_time *starttime);
 
 static bool IsDistributedModifyPlan(PlannedStmt *plannedstmt);
 
-
+/* *INDENT-OFF* */
 static void
 CitusExplainOnePlan(PlannedStmt *plannedstmt, IntoClause *into, ExplainState *es,
-			   const char *queryString, ParamListInfo params,
-			   QueryEnvironment *queryEnv, const instr_time *planduration)
+					const char *queryString, ParamListInfo params,
+					QueryEnvironment *queryEnv, const instr_time *planduration)
 {
 	DestReceiver *dest;
 	QueryDesc  *queryDesc;
@@ -125,15 +126,11 @@ CitusExplainOnePlan(PlannedStmt *plannedstmt, IntoClause *into, ExplainState *es
 	double		totaltime = 0;
 	int			eflags;
 	int			instrument_option = 0;
-
 	bool isDistributedModifyPlan = false;
 
 	Assert(plannedstmt->commandType != CMD_UTILITY);
 
 	isDistributedModifyPlan = IsDistributedModifyPlan(plannedstmt);
-
-	elog(WARNING, "CitusExplainOnePlan : isDistributedModifyPlan %d",  (int) (isDistributedModifyPlan));
-
 
 	if (es->analyze && es->timing)
 		instrument_option |= INSTRUMENT_TIMER;
@@ -280,6 +277,8 @@ CitusExplainOnePlan(PlannedStmt *plannedstmt, IntoClause *into, ExplainState *es
 	ExplainCloseGroup("Query", NULL, true, es);
 }
 
+
+/* *INDENT-OFF* */
 /* Compute elapsed time in seconds since given timestamp */
 static double
 elapsed_time(instr_time *starttime)
@@ -291,7 +290,9 @@ elapsed_time(instr_time *starttime)
 	return INSTR_TIME_GET_DOUBLE(endtime);
 }
 
-static bool IsDistributedModifyPlan(PlannedStmt *plannedstmt)
+
+static bool
+IsDistributedModifyPlan(PlannedStmt *plannedstmt)
 {
 	CustomScan *customScan = NULL;
 	List *planNodeList = NIL;
@@ -320,19 +321,18 @@ static bool IsDistributedModifyPlan(PlannedStmt *plannedstmt)
 }
 
 
-void CitusExplainOneHook(Query *query,
-										   int cursorOptions,
-										   IntoClause *into,
-										   ExplainState *es,
-										   const char *queryString,
-										   ParamListInfo params,
-										   QueryEnvironment *queryEnv)
+void
+CitusExplainOneHook(Query *query,
+					int cursorOptions,
+					IntoClause *into,
+					ExplainState *es,
+					const char *queryString,
+					ParamListInfo params,
+					QueryEnvironment *queryEnv)
 {
-	elog(WARNING, "WHATS UP");
-	{
 	PlannedStmt *plan;
-	instr_time	planstart,
-				planduration;
+	instr_time planstart,
+			   planduration;
 
 	INSTR_TIME_SET_CURRENT(planstart);
 
@@ -344,9 +344,9 @@ void CitusExplainOneHook(Query *query,
 
 	/* run it (if needed) and produce output */
 	CitusExplainOnePlan(plan, into, es, queryString, params, queryEnv,
-				   &planduration);
-	}
+						&planduration);
 }
+
 
 /*
  * CitusExplainScan is a custom scan explain callback function which is used to

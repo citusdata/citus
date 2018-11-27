@@ -104,7 +104,6 @@ MultiRealTimeExecute(Job *job)
 	workerNodeList = ActiveReadableNodeList();
 	workerHash = WorkerHash(workerHashName, workerNodeList);
 
-	elog(WARNING, "MultiRealTimeExecute");
 	if (IsTransactionBlock() && SelectOpensTransactionBlock)
 	{
 		BeginOrContinueCoordinatedTransaction();

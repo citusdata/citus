@@ -62,7 +62,6 @@ CitusExecutorStart(QueryDesc *queryDesc, int eflags)
 {
 	PlannedStmt *plannedStmt = queryDesc->plannedstmt;
 
-	elog(WARNING, "Executor Start");
 	/*
 	 * We cannot modify XactReadOnly on Windows because it is not
 	 * declared with PGDLLIMPORT.
@@ -353,7 +352,6 @@ ParseQueryString(const char *queryString)
 {
 	Query *query = NULL;
 
-
 #if (PG_VERSION_NUM >= 100000)
 	RawStmt *rawStmt = (RawStmt *) ParseTreeRawStmt(queryString);
 	List *queryTreeList = pg_analyze_and_rewrite(rawStmt, queryString, NULL, 0, NULL);
@@ -361,8 +359,6 @@ ParseQueryString(const char *queryString)
 	Node *queryTreeNode = ParseTreeNode(queryString);
 	List *queryTreeList = pg_analyze_and_rewrite(queryTreeNode, queryString, NULL, 0);
 #endif
-
-	elog(WARNING, "ExecuteQueryStringIntoDestReceiver");
 
 	if (list_length(queryTreeList) != 1)
 	{

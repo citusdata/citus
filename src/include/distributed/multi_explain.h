@@ -17,11 +17,11 @@ extern bool ExplainDistributedQueries;
 extern bool ExplainAllTasks;
 
 extern void CitusExplainOneHook(Query *query,
-										   int cursorOptions,
-										   IntoClause *into,
-										   ExplainState *es,
-										   const char *queryString,
-										   ParamListInfo params,
-										   QueryEnvironment *queryEnv);
+								int cursorOptions,
+								IntoClause *into,
+								ExplainState *es,
+								const char *queryString,
+								ParamListInfo params,
+								QueryEnvironment *queryEnv);
 
 #endif /* MULTI_EXPLAIN_H */
