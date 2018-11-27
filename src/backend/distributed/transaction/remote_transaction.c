@@ -24,6 +24,7 @@
 #include "distributed/transaction_management.h"
 #include "distributed/transaction_recovery.h"
 #include "distributed/worker_manager.h"
+#include "utils/builtins.h"
 #include "utils/hsearch.h"
 
 
@@ -1321,21 +1322,79 @@ Assign2PCIdentifier(MultiConnection *connection)
  * format ParsePreparedTransactionName returns false, and true otherwise.
  */
 bool
-ParsePreparedTransactionName(char *preparedTransactionName, int *groupId, int *procId,
-							 uint64 *transactionNumber, uint32 *connectionNumber)
+ParsePreparedTransactionName(char *preparedTransactionName,
+							 int *groupId, int *procId,
+							 uint64 *transactionNumber,
+							 uint32 *connectionNumber)
 {
-	const int expectedFieldCount = 4;
-	int parsedFieldCount = 0;
-	bool nameValid = false;
+	char *currentCharPointer = preparedTransactionName;
 
-	parsedFieldCount = sscanf(preparedTransactionName, PREPARED_TRANSACTION_NAME_FORMAT,
-							  groupId, procId, transactionNumber, connectionNumber);
-	if (parsedFieldCount == expectedFieldCount)
+	currentCharPointer = strchr(currentCharPointer, '_');
+	if (currentCharPointer == NULL)
 	{
-		nameValid = true;
+		return false;
 	}
 
-	return nameValid;
+	/* step ahead of the current '_' character */
+	++currentCharPointer;
+
+	*groupId = strtol(currentCharPointer, NULL, 10);
+
+	if ((*groupId == 0 && errno == EINVAL) ||
+		(*groupId == INT_MAX && errno == ERANGE))
+	{
+		return false;
+	}
+
+	currentCharPointer = strchr(currentCharPointer, '_');
+	if (currentCharPointer == NULL)
+	{
+		return false;
+	}
+
+	/* step ahead of the current '_' character */
+	++currentCharPointer;
+
+	*procId = strtol(currentCharPointer, NULL, 10);
+	if ((*procId == 0 && errno == EINVAL) ||
+		(*procId == INT_MAX && errno == ERANGE))
+	{
+		return false;
+	}
+
+	currentCharPointer = strchr(currentCharPointer, '_');
+	if (currentCharPointer == NULL)
+	{
+		return false;
+	}
+
+	/* step ahead of the current '_' character */
+	++currentCharPointer;
+
+	*transactionNumber = pg_strtouint64(currentCharPointer, NULL, 10);
+	if ((*transactionNumber == 0 && errno != 0) ||
+		(*transactionNumber == ULLONG_MAX && errno == ERANGE))
+	{
+		return false;
+	}
+
+	currentCharPointer = strchr(currentCharPointer, '_');
+	if (currentCharPointer == NULL)
+	{
+		return false;
+	}
+
+	/* step ahead of the current '_' character */
+	++currentCharPointer;
+
+	*connectionNumber = strtoul(currentCharPointer, NULL, 10);
+	if ((*connectionNumber == 0 && errno == EINVAL) ||
+		(*connectionNumber == UINT_MAX && errno == ERANGE))
+	{
+		return false;
+	}
+
+	return true;
 }
 
 

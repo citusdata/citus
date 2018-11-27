@@ -692,12 +692,12 @@ void
 AppendShardIdToName(char **name, uint64 shardId)
 {
 	char extendedName[NAMEDATALEN];
-	uint32 extendedNameLength = 0;
 	int nameLength = strlen(*name);
 	char shardIdAndSeparator[NAMEDATALEN];
 	int shardIdAndSeparatorLength;
 	uint32 longNameHash = 0;
 	int multiByteClipLength = 0;
+	int neededBytes = 0;
 
 	if (nameLength >= NAMEDATALEN)
 	{
@@ -756,11 +756,20 @@ AppendShardIdToName(char **name, uint64 shardId)
 				 SHARD_NAME_SEPARATOR, longNameHash,
 				 shardIdAndSeparator);
 	}
-	extendedNameLength = strlen(extendedName) + 1;
-	Assert(extendedNameLength <= NAMEDATALEN);
 
-	(*name) = (char *) repalloc((*name), extendedNameLength);
-	snprintf((*name), extendedNameLength, "%s", extendedName);
+	(*name) = (char *) repalloc((*name), NAMEDATALEN);
+	neededBytes = snprintf((*name), NAMEDATALEN, "%s", extendedName);
+	if (neededBytes < 0)
+	{
+		ereport(ERROR, (errcode(ERRCODE_OUT_OF_MEMORY),
+						errmsg("out of memory: %s", strerror(errno))));
+	}
+	else if (neededBytes >= NAMEDATALEN)
+	{
+		ereport(ERROR, (errcode(ERRCODE_STRING_DATA_RIGHT_TRUNCATION),
+						errmsg("new name %s would be truncated at %d characters",
+							   extendedName, NAMEDATALEN)));
+	}
 }
 
 
