@@ -638,7 +638,7 @@ SELECT true AS valid FROM explain_json_2($$
     FROM
         (users_table u1 JOIN users_table u2 using(value_1)) a JOIN (SELECT value_1, random() FROM users_table) as u3 USING (value_1); 
 $$);
-DEBUG:  generating subplan 66_1 for subquery SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.users_table u2 WHERE true
+DEBUG:  generating subplan 66_1 for subquery SELECT NULL::integer AS user_id, NULL::timestamp without time zone AS "time", value_1, NULL::integer AS value_2, NULL::double precision AS value_3, NULL::bigint AS value_4 FROM public.users_table u2 WHERE true
 DEBUG:  generating subplan 66_2 for subquery SELECT value_1, random() AS random FROM public.users_table
 DEBUG:  Plan 66 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((public.users_table u1 JOIN (SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.value_1, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('66_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, value_1 integer, value_2 integer, value_3 double precision, value_4 bigint)) users_table(user_id, "time", value_1, value_2, value_3, value_4) USING (value_1)) a(value_1, user_id, "time", value_2, value_3, value_4, user_id_1, time_1, value_2_1, value_3_1, value_4_1) JOIN (SELECT intermediate_result.value_1, intermediate_result.random FROM read_intermediate_result('66_2'::text, 'binary'::citus_copy_format) intermediate_result(value_1 integer, random double precision)) u3 USING (value_1))
  valid 
