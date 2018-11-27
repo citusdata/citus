@@ -115,6 +115,7 @@ static double elapsed_time(instr_time *starttime);
 static bool IsDistributedModifyPlan(PlannedStmt *plannedstmt);
 
 #if (PG_VERSION_NUM >= 110000)
+
 /* *INDENT-OFF* */
 static void
 CitusExplainOnePlan(PlannedStmt *plannedstmt, IntoClause *into, ExplainState *es,
