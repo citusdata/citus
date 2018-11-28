@@ -171,7 +171,9 @@ static bool ContainsReferencesToOuterQueryWalker(Node *node,
 												 VarLevelsUpWalkerContext *context);
 static Query * BuildSubPlanResultQuery(Query *subquery, List *columnAliasList,
 									   uint64 planId, uint32 subPlanId);
-
+static RangeTblEntry * GetRTEContatiningRteIdentities(Query *queryTree,
+													  List *rteIdentities);
+static List * GetAllRTEIdentitiesForRTE(RangeTblEntry *rangeTblEntry);
 
 /*
  * GenerateSubplansForSubqueriesAndCTEs is a wrapper around RecursivelyPlanSubqueriesAndCTEs.
@@ -179,13 +181,18 @@ static Query * BuildSubPlanResultQuery(Query *subquery, List *columnAliasList,
  * generated, see RecursivelyPlanSubqueriesAndCTEs().
  *
  * Note that the input originalQuery query is modified if any subplans are generated.
+ * The function could optionally get list of previous subPlans and continue adding
+ * subplans to the same list.
  */
 List *
 GenerateSubplansForSubqueriesAndCTEs(uint64 planId, Query *originalQuery,
-									 PlannerRestrictionContext *plannerRestrictionContext)
+									 PlannerRestrictionContext *plannerRestrictionContext,
+									 List *previousSubPlanList)
 {
 	RecursivePlanningContext context;
 	DeferredErrorMessage *error = NULL;
+
+	int previousSubPlanCount = list_length(previousSubPlanList);
 
 	/*
 	 * Plan subqueries and CTEs that cannot be pushed down by recursively
@@ -193,7 +200,7 @@ GenerateSubplansForSubqueriesAndCTEs(uint64 planId, Query *originalQuery,
 	 */
 	context.level = 0;
 	context.planId = planId;
-	context.subPlanList = NIL;
+	context.subPlanList = previousSubPlanList;
 	context.plannerRestrictionContext = plannerRestrictionContext;
 
 	/*
@@ -217,8 +224,9 @@ GenerateSubplansForSubqueriesAndCTEs(uint64 planId, Query *originalQuery,
 		RaiseDeferredError(error, ERROR);
 	}
 
-	if (context.subPlanList && (log_min_messages <= DEBUG1 || client_min_messages <=
-								DEBUG1))
+	if (context.subPlanList &&
+		list_length(context.subPlanList) > previousSubPlanCount &&
+		(log_min_messages <= DEBUG1 || client_min_messages <= DEBUG1))
 	{
 		StringInfo subPlanString = makeStringInfo();
 		pg_get_query_def(originalQuery, subPlanString);
@@ -229,6 +237,76 @@ GenerateSubplansForSubqueriesAndCTEs(uint64 planId, Query *originalQuery,
 	}
 
 	return context.subPlanList;
+}
+
+
+/*
+ * GetRTEContatiningRteIdentities gets a query tree and list of rte identities.
+ * The function returns a rangeTblEntry from the given query tree which has
+ * all the input rteIdentities.
+ */
+static RangeTblEntry *
+GetRTEContatiningRteIdentities(Query *queryTree, List *rteIdentities)
+{
+	List *rangeTableList = NIL;
+	ListCell *rangeTableCell = NULL;
+
+	/* extract range table entries for simple relations only */
+	ExtractRangeTableEntryWalker((Node *) queryTree, &rangeTableList);
+
+	foreach(rangeTableCell, rangeTableList)
+	{
+		RangeTblEntry *rangeTableEntry = (RangeTblEntry *) lfirst(rangeTableCell);
+		List *allRteIdentities = GetAllRTEIdentitiesForRTE(rangeTableEntry);
+		List *intersectionOfRteIdentities =
+			list_intersection_int(allRteIdentities, rteIdentities);
+
+		if (list_length(intersectionOfRteIdentities) == list_length(rteIdentities))
+		{
+			return rangeTableEntry;
+		}
+	}
+
+	return NULL;
+}
+
+
+/*
+ * GetAllRTEIdentitiesForRTE gets a rangeTblEntry and returns a list
+ * that consists of all the rte identities that the range table entry
+ * has.
+ *
+ * If the input rangeTblEntry is a relation, it simply returns a list
+ * with a single element. If the input is a subquery, the function
+ * recursively calls itself.
+ */
+static List *
+GetAllRTEIdentitiesForRTE(RangeTblEntry *rangeTblEntry)
+{
+	List *allRteIdentities = NIL;
+
+	if (rangeTblEntry->rtekind == RTE_RELATION)
+	{
+		allRteIdentities = list_make1_int(GetRTEIdentity(rangeTblEntry));
+	}
+	else if (rangeTblEntry->rtekind == RTE_SUBQUERY)
+	{
+		List *rangeTableList = NIL;
+		ListCell *rangeTableCell = NULL;
+
+		ExtractRangeTableEntryWalker((Node *) rangeTblEntry->subquery, &rangeTableList);
+
+		foreach(rangeTableCell, rangeTableList)
+		{
+			RangeTblEntry *rangeTableEntry = (RangeTblEntry *) lfirst(rangeTableCell);
+
+			List *rteIdentities = GetAllRTEIdentitiesForRTE(rangeTableEntry);
+
+			allRteIdentities = list_concat_unique_int(allRteIdentities, rteIdentities);
+		}
+	}
+
+	return allRteIdentities;
 }
 
 
@@ -250,6 +328,7 @@ static DeferredErrorMessage *
 RecursivelyPlanSubqueriesAndCTEs(Query *query, RecursivePlanningContext *context)
 {
 	DeferredErrorMessage *error = NULL;
+	List *innerRteIdentitiesToPlan = 0;
 
 	error = RecursivelyPlanCTEs(query, context);
 	if (error != NULL)
@@ -308,6 +387,33 @@ RecursivelyPlanSubqueriesAndCTEs(Query *query, RecursivePlanningContext *context
 	if (ShouldRecursivelyPlanNonColocatedSubqueries(query, context))
 	{
 		RecursivelyPlanNonColocatedSubqueries(query, context);
+	}
+
+	/*
+	 * If outer joins are going to faild due to recurring tuples, we could still
+	 * be able to generate recursive plans for relations or subqueries that are in
+	 * the inner part of the outer join.
+	 */
+	error =
+		DeferredErrorIfUnsupportedRecurringTuplesJoin(context->plannerRestrictionContext,
+													  &innerRteIdentitiesToPlan);
+	if (error && innerRteIdentitiesToPlan)
+	{
+		RangeTblEntry *rangeTbleEntry =
+			GetRTEContatiningRteIdentities(query, innerRteIdentitiesToPlan);
+
+		if (rangeTbleEntry && rangeTbleEntry->rtekind == RTE_RELATION)
+		{
+			RecursivelyPlanRTERelation(rangeTbleEntry, context);
+		}
+		else if (rangeTbleEntry && rangeTbleEntry->rtekind == RTE_SUBQUERY)
+		{
+			RecursivelyPlanSubquery(rangeTbleEntry->subquery, context);
+		}
+		else
+		{
+			/* we do not know recursively plan other things yet */
+		}
 	}
 
 	return NULL;

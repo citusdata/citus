@@ -64,14 +64,13 @@ static bool IsFunctionRTE(Node *node);
 static bool IsNodeQuery(Node *node);
 static bool WindowPartitionOnDistributionColumn(Query *query);
 static DeferredErrorMessage * DeferErrorIfFromClauseRecurs(Query *queryTree);
-static DeferredErrorMessage * DeferredErrorIfUnsupportedRecurringTuplesJoin(
-	PlannerRestrictionContext *plannerRestrictionContext);
 static DeferredErrorMessage * DeferErrorIfUnsupportedTableCombination(Query *queryTree);
 static bool ExtractSetOperationStatmentWalker(Node *node, List **setOperationList);
 static bool ShouldRecurseForRecurringTuplesJoinChecks(RelOptInfo *relOptInfo);
 static bool RelationInfoContainsRecurringTuples(PlannerInfo *plannerInfo,
 												RelOptInfo *relationInfo,
 												RecurringTuplesType *recurType);
+static List * RTEIdentitiesInRelOpt(PlannerInfo *plannerInfo, RelOptInfo *relationInfo);
 static bool IsRecurringRTE(RangeTblEntry *rangeTableEntry,
 						   RecurringTuplesType *recurType);
 static bool IsRecurringRangeTable(List *rangeTable, RecurringTuplesType *recurType);
@@ -435,6 +434,7 @@ DeferErrorIfUnsupportedSubqueryPushdown(Query *originalQuery,
 	ListCell *subqueryCell = NULL;
 	List *subqueryList = NIL;
 	DeferredErrorMessage *error = NULL;
+	List *innerRteIdentitiesToPlan;
 
 	if (originalQuery->limitCount != NULL)
 	{
@@ -477,7 +477,8 @@ DeferErrorIfUnsupportedSubqueryPushdown(Query *originalQuery,
 	}
 
 	/* we shouldn't allow reference tables in the outer part of outer joins */
-	error = DeferredErrorIfUnsupportedRecurringTuplesJoin(plannerRestrictionContext);
+	error = DeferredErrorIfUnsupportedRecurringTuplesJoin(plannerRestrictionContext,
+														  &innerRteIdentitiesToPlan);
 	if (error)
 	{
 		return error;
@@ -621,14 +622,16 @@ DeferErrorIfFromClauseRecurs(Query *queryTree)
  * definitely have duplicate rows. Beside, reference tables can not be used
  * with full outer joins because of the same reason.
  */
-static DeferredErrorMessage *
+DeferredErrorMessage *
 DeferredErrorIfUnsupportedRecurringTuplesJoin(
-	PlannerRestrictionContext *plannerRestrictionContext)
+	PlannerRestrictionContext *plannerRestrictionContext, List **innerRteIdentitiesToPlan)
 {
 	List *joinRestrictionList =
 		plannerRestrictionContext->joinRestrictionContext->joinRestrictionList;
 	ListCell *joinRestrictionCell = NULL;
 	RecurringTuplesType recurType = RECURRING_TUPLES_INVALID;
+
+	*innerRteIdentitiesToPlan = NULL;
 
 	foreach(joinRestrictionCell, joinRestrictionList)
 	{
@@ -644,6 +647,12 @@ DeferredErrorIfUnsupportedRecurringTuplesJoin(
 			if (ShouldRecurseForRecurringTuplesJoinChecks(outerrel) &&
 				RelationInfoContainsRecurringTuples(plannerInfo, outerrel, &recurType))
 			{
+				/*
+				 * Report to the caller the rte identities that appear in the
+				 * inner relation so that those might be planned separately.
+				 */
+				*innerRteIdentitiesToPlan = RTEIdentitiesInRelOpt(plannerInfo, innerrel);
+
 				break;
 			}
 		}
@@ -1184,6 +1193,32 @@ RelationInfoContainsRecurringTuples(PlannerInfo *plannerInfo, RelOptInfo *relati
 	}
 
 	return false;
+}
+
+
+/*
+ * RTEIdentitiesInRelOpt gets a PlannerInfo and RelOptInfo. The function
+ * returns a list that consists of RTEIdentities of the relations that
+ * appear in the RelOptInfo.
+ */
+static List *
+RTEIdentitiesInRelOpt(PlannerInfo *plannerInfo, RelOptInfo *relationInfo)
+{
+	Relids relids = bms_copy(relationInfo->relids);
+	int rteIndex = -1;
+	List *rteIdentityList = NIL;
+
+	while ((rteIndex = bms_first_member(relids)) >= 0)
+	{
+		RangeTblEntry *rangeTableEntry = plannerInfo->simple_rte_array[rteIndex];
+		if (rangeTableEntry->rtekind == RTE_RELATION)
+		{
+			rteIdentityList = lappend_int(rteIdentityList, GetRTEIdentity(
+											  rangeTableEntry));
+		}
+	}
+
+	return rteIdentityList;
 }
 
 
