@@ -1,3 +1,23 @@
+### citus v8.0.1 (November 27, 2018) ###
+
+* Execute SQL tasks using worker_execute_sql_task UDF when using task-tracker
+
+### citus v7.5.3 (November 27, 2018) ###
+
+* Execute SQL tasks using worker_execute_sql_task UDF when using task-tracker
+
+### citus v7.5.2 (November 14, 2018) ###
+
+* Fixes inconsistent metadata error when shard metadata caching get interrupted
+
+* Fixes a bug that could cause memory leak
+
+* Fixes a bug that prevents recovering wrong transactions in MX
+
+* Fixes a bug to prevent wrong memory accesses on Citus MX under very high load
+
+* Fixes crashes caused by stack size increase under high memory load
+
 ### citus v8.0.0 (October 31, 2018) ###
 
 * Adds support for PostgreSQL 11
