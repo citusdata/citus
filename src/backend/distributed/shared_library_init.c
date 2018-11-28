@@ -565,15 +565,17 @@ RegisterCitusConfigVariables(void)
 
 	DefineCustomBoolVariable(
 		"citus.enable_deadlock_prevention",
-		gettext_noop("Prevents transactions from expanding to multiple nodes"),
-		gettext_noop("When enabled, consecutive DML statements that write to "
-					 "shards on different nodes are prevented to avoid creating "
-					 "undetectable distributed deadlocks when performed "
-					 "concurrently."),
+		gettext_noop("Avoids deadlocks by preventing concurrent multi-shard commands"),
+		gettext_noop("Multi-shard modifications such as UPDATE, DELETE, and "
+					 "INSERT...SELECT are typically executed in parallel. If multiple "
+					 "such commands run concurrently and affect the same rows, then "
+					 "they are likely to deadlock. When enabled, this flag prevents "
+					 "multi-shard modifications from running concurrently when they "
+					 "affect the same shards in order to prevent deadlocks."),
 		&EnableDeadlockPrevention,
 		true,
 		PGC_USERSET,
-		GUC_NO_SHOW_ALL,
+		0,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
