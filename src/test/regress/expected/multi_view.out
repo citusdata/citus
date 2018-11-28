@@ -875,7 +875,7 @@ EXPLAIN (COSTS FALSE) SELECT et.* FROM recent_10_users JOIN events_table et USIN
    ->  Sort
          Sort Key: remote_scan."time" DESC
          ->  Custom Scan (Citus Real-Time)
-               ->  Distributed Subplan 96_1
+               ->  Distributed Subplan 97_1
                      ->  Limit
                            ->  Sort
                                  Sort Key: max((max(remote_scan.lastseen))) DESC

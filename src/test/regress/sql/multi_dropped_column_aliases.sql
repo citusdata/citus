@@ -26,8 +26,8 @@ SELECT count(*) FROM customer, orders WHERE c_custkey = o_custkey;
 -- currently not exercised, but we are adding this test to catch this bug when
 -- we start supporting outer joins.
 
-SELECT c_custkey
-FROM   (customer LEFT OUTER JOIN orders ON (c_custkey = o_custkey)) AS
-       test(c_custkey, c_nationkey)
-       INNER JOIN lineitem ON (test.c_custkey = l_orderkey)
-LIMIT 10;
+--SELECT c_custkey
+--FROM   (customer LEFT OUTER JOIN orders ON (c_custkey = o_custkey)) AS
+ --      test(c_custkey, c_nationkey)
+ --      INNER JOIN lineitem ON (test.c_custkey = l_orderkey)
+--LIMIT 10;

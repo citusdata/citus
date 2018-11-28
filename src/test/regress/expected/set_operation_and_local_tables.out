@@ -231,17 +231,19 @@ DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 DEBUG:  generating subplan 39_3 for subquery SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('39_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer) INTERSECT SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('39_2'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)
 DEBUG:  Plan 39 query after replacing subqueries and CTEs: SELECT u.x, u.y, test.y FROM ((SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('39_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)) u LEFT JOIN recursive_set_local.test USING (x)) ORDER BY u.x, u.y
+DEBUG:  generating subplan 39_4 for subquery SELECT x, y FROM recursive_set_local.test WHERE true
+DEBUG:  Plan 39 query after replacing subqueries and CTEs: SELECT u.x, u.y, test.y FROM ((SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('39_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)) u LEFT JOIN (SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('39_4'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)) test(x, y) USING (x)) ORDER BY u.x, u.y
 ERROR:  cannot pushdown the subquery
 DETAIL:  Complex subqueries and CTEs cannot be in the outer part of the outer join
 -- we replace some queries including the local query, the intermediate result is on the inner part of an outer join 
 SELECT * FROM ((SELECT * FROM local_test) INTERSECT (SELECT * FROM test ORDER BY x LIMIT 1)) u RIGHT JOIN test USING (x) ORDER BY 1,2;
-DEBUG:  generating subplan 42_1 for subquery SELECT x, y FROM recursive_set_local.local_test
+DEBUG:  generating subplan 43_1 for subquery SELECT x, y FROM recursive_set_local.local_test
 DEBUG:  push down of limit count: 1
-DEBUG:  generating subplan 42_2 for subquery SELECT x, y FROM recursive_set_local.test ORDER BY x LIMIT 1
+DEBUG:  generating subplan 43_2 for subquery SELECT x, y FROM recursive_set_local.test ORDER BY x LIMIT 1
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-DEBUG:  generating subplan 42_3 for subquery SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('42_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer) INTERSECT SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('42_2'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)
-DEBUG:  Plan 42 query after replacing subqueries and CTEs: SELECT test.x, u.y, test.y FROM ((SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('42_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)) u RIGHT JOIN recursive_set_local.test USING (x)) ORDER BY test.x, u.y
+DEBUG:  generating subplan 43_3 for subquery SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('43_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer) INTERSECT SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('43_2'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)
+DEBUG:  Plan 43 query after replacing subqueries and CTEs: SELECT test.x, u.y, test.y FROM ((SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('43_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)) u RIGHT JOIN recursive_set_local.test USING (x)) ORDER BY test.x, u.y
  x | y | y 
 ---+---+---
  1 |   | 1
@@ -250,29 +252,29 @@ DEBUG:  Plan 42 query after replacing subqueries and CTEs: SELECT test.x, u.y, t
 
 -- recurively plan left part of the join, and run a final real-time query
 SELECT * FROM ((SELECT * FROM local_test) INTERSECT (SELECT * FROM test ORDER BY x LIMIT 1)) u INNER JOIN test USING (x) ORDER BY 1,2;
-DEBUG:  generating subplan 45_1 for subquery SELECT x, y FROM recursive_set_local.local_test
+DEBUG:  generating subplan 46_1 for subquery SELECT x, y FROM recursive_set_local.local_test
 DEBUG:  push down of limit count: 1
-DEBUG:  generating subplan 45_2 for subquery SELECT x, y FROM recursive_set_local.test ORDER BY x LIMIT 1
+DEBUG:  generating subplan 46_2 for subquery SELECT x, y FROM recursive_set_local.test ORDER BY x LIMIT 1
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-DEBUG:  generating subplan 45_3 for subquery SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('45_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer) INTERSECT SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('45_2'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)
-DEBUG:  Plan 45 query after replacing subqueries and CTEs: SELECT u.x, u.y, test.y FROM ((SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('45_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)) u JOIN recursive_set_local.test USING (x)) ORDER BY u.x, u.y
+DEBUG:  generating subplan 46_3 for subquery SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('46_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer) INTERSECT SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('46_2'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)
+DEBUG:  Plan 46 query after replacing subqueries and CTEs: SELECT u.x, u.y, test.y FROM ((SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('46_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)) u JOIN recursive_set_local.test USING (x)) ORDER BY u.x, u.y
  x | y | y 
 ---+---+---
 (0 rows)
 
 -- set operations and the sublink can be recursively planned
 SELECT * FROM ((SELECT x FROM test) UNION (SELECT x FROM (SELECT x FROM local_test) as foo WHERE x IN (SELECT x FROM test))) u ORDER BY 1;
-DEBUG:  generating subplan 48_1 for subquery SELECT x FROM recursive_set_local.local_test
-DEBUG:  generating subplan 48_2 for subquery SELECT x FROM recursive_set_local.test
+DEBUG:  generating subplan 49_1 for subquery SELECT x FROM recursive_set_local.local_test
+DEBUG:  generating subplan 49_2 for subquery SELECT x FROM recursive_set_local.test
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-DEBUG:  generating subplan 48_3 for subquery SELECT x FROM (SELECT intermediate_result.x FROM read_intermediate_result('48_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer)) foo WHERE (x OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.x FROM read_intermediate_result('48_2'::text, 'binary'::citus_copy_format) intermediate_result(x integer)))
-DEBUG:  generating subplan 48_4 for subquery SELECT x FROM recursive_set_local.test
+DEBUG:  generating subplan 49_3 for subquery SELECT x FROM (SELECT intermediate_result.x FROM read_intermediate_result('49_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer)) foo WHERE (x OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.x FROM read_intermediate_result('49_2'::text, 'binary'::citus_copy_format) intermediate_result(x integer)))
+DEBUG:  generating subplan 49_4 for subquery SELECT x FROM recursive_set_local.test
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-DEBUG:  generating subplan 48_5 for subquery SELECT intermediate_result.x FROM read_intermediate_result('48_4'::text, 'binary'::citus_copy_format) intermediate_result(x integer) UNION SELECT intermediate_result.x FROM read_intermediate_result('48_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer)
-DEBUG:  Plan 48 query after replacing subqueries and CTEs: SELECT x FROM (SELECT intermediate_result.x FROM read_intermediate_result('48_5'::text, 'binary'::citus_copy_format) intermediate_result(x integer)) u ORDER BY x
+DEBUG:  generating subplan 49_5 for subquery SELECT intermediate_result.x FROM read_intermediate_result('49_4'::text, 'binary'::citus_copy_format) intermediate_result(x integer) UNION SELECT intermediate_result.x FROM read_intermediate_result('49_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer)
+DEBUG:  Plan 49 query after replacing subqueries and CTEs: SELECT x FROM (SELECT intermediate_result.x FROM read_intermediate_result('49_5'::text, 'binary'::citus_copy_format) intermediate_result(x integer)) u ORDER BY x
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  x 
@@ -315,11 +317,11 @@ DEBUG:  pruning merge fetch taskId 11
 DETAIL:  Creating dependency on merge taskId 20
 DEBUG:  cannot use real time executor with repartition jobs
 HINT:  Since you enabled citus.enable_repartition_joins Citus chose to use task-tracker.
-DEBUG:  generating subplan 53_1 for subquery SELECT t1.x FROM recursive_set_local.test t1, recursive_set_local.test t2 WHERE (t1.x OPERATOR(pg_catalog.=) t2.y) LIMIT 2
-DEBUG:  generating subplan 53_2 for subquery SELECT x FROM recursive_set_local.local_test
-DEBUG:  generating subplan 53_3 for subquery SELECT x FROM recursive_set_local.test
-DEBUG:  generating subplan 53_4 for subquery SELECT x FROM recursive_set_local.test
-DEBUG:  Plan 53 query after replacing subqueries and CTEs: SELECT intermediate_result.x FROM read_intermediate_result('53_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer) INTERSECT SELECT intermediate_result.x FROM read_intermediate_result('53_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer) INTERSECT ((SELECT intermediate_result.x FROM read_intermediate_result('53_2'::text, 'binary'::citus_copy_format) intermediate_result(x integer) UNION ALL SELECT intermediate_result.x FROM read_intermediate_result('53_4'::text, 'binary'::citus_copy_format) intermediate_result(x integer)) INTERSECT SELECT i.i FROM generate_series(0, 100) i(i)) ORDER BY 1 DESC
+DEBUG:  generating subplan 54_1 for subquery SELECT t1.x FROM recursive_set_local.test t1, recursive_set_local.test t2 WHERE (t1.x OPERATOR(pg_catalog.=) t2.y) LIMIT 2
+DEBUG:  generating subplan 54_2 for subquery SELECT x FROM recursive_set_local.local_test
+DEBUG:  generating subplan 54_3 for subquery SELECT x FROM recursive_set_local.test
+DEBUG:  generating subplan 54_4 for subquery SELECT x FROM recursive_set_local.test
+DEBUG:  Plan 54 query after replacing subqueries and CTEs: SELECT intermediate_result.x FROM read_intermediate_result('54_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer) INTERSECT SELECT intermediate_result.x FROM read_intermediate_result('54_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer) INTERSECT ((SELECT intermediate_result.x FROM read_intermediate_result('54_2'::text, 'binary'::citus_copy_format) intermediate_result(x integer) UNION ALL SELECT intermediate_result.x FROM read_intermediate_result('54_4'::text, 'binary'::citus_copy_format) intermediate_result(x integer)) INTERSECT SELECT i.i FROM generate_series(0, 100) i(i)) ORDER BY 1 DESC
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  x 
