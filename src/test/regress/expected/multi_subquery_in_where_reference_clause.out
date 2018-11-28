@@ -46,8 +46,10 @@ LIMIT 3;
 ---------
 (0 rows)
 
--- subqueries in WHERE with NOT EXISTS operator, should not work since 
--- there is a correlated subquery in WHERE clause
+SET client_min_messages TO DEBUG1;
+-- although the subquery in WHERE with NOT EXISTS operator (e.g., semi-join)
+-- is correlated with the reference table, since events_table can be 
+-- recursively planned the whole query becomes a router query
 SELECT 
   user_id
 FROM 
@@ -62,10 +64,16 @@ WHERE
           users_reference_table.user_id = events_table.user_id
       )
 LIMIT 3;
-ERROR:  cannot pushdown the subquery
-DETAIL:  Reference tables are not allowed in FROM clause when the query has subqueries in WHERE clause and it references a column from another query
--- immutable functions are also treated as reference tables, query should not
--- work since there is a correlated subquery in the WHERE clause
+DEBUG:  generating subplan 3_1 for subquery SELECT user_id, NULL::timestamp without time zone AS "time", NULL::integer AS event_type, NULL::integer AS value_2, NULL::double precision AS value_3, NULL::bigint AS value_4 FROM public.events_table WHERE true
+DEBUG:  Plan 3 query after replacing subqueries and CTEs: SELECT user_id FROM public.users_reference_table WHERE (NOT (EXISTS (SELECT events_table.value_2 FROM (SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.event_type, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('3_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, event_type integer, value_2 integer, value_3 double precision, value_4 bigint)) events_table(user_id, "time", event_type, value_2, value_3, value_4) WHERE (users_reference_table.user_id OPERATOR(pg_catalog.=) events_table.user_id)))) LIMIT 3
+ user_id 
+---------
+(0 rows)
+
+-- immutable functions are also treated as reference tables thus
+-- although the subquery in WHERE with NOT EXISTS operator (e.g., semi-join)
+-- is correlated with the immutable function, since events_table can be 
+-- recursively planned the whole query becomes a router query
 SELECT
   user_id
 FROM
@@ -79,11 +87,21 @@ WHERE
        WHERE
           users_reference_table.user_id = events_table.user_id
       )
+ORDER BY 1
 LIMIT 3;
-ERROR:  cannot pushdown the subquery
-DETAIL:  Functions are not allowed in FROM clause when the query has subqueries in WHERE clause and it references a column from another query
--- subqueries without FROM are also treated as reference tables, query should not
--- work since there is a correlated subquery in the WHERE clause
+DEBUG:  generating subplan 5_1 for subquery SELECT user_id, NULL::timestamp without time zone AS "time", NULL::integer AS event_type, NULL::integer AS value_2, NULL::double precision AS value_3, NULL::bigint AS value_4 FROM public.events_table WHERE true
+DEBUG:  Plan 5 query after replacing subqueries and CTEs: SELECT user_id FROM (SELECT series.user_id FROM generate_series(1, 10) series(user_id)) users_reference_table WHERE (NOT (EXISTS (SELECT events_table.value_2 FROM (SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.event_type, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('5_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, event_type integer, value_2 integer, value_3 double precision, value_4 bigint)) events_table(user_id, "time", event_type, value_2, value_3, value_4) WHERE (users_reference_table.user_id OPERATOR(pg_catalog.=) events_table.user_id)))) ORDER BY user_id LIMIT 3
+ user_id 
+---------
+       7
+       8
+       9
+(3 rows)
+
+-- subqueries without FROM are also treated as reference tables thus
+-- although the subquery in WHERE with NOT EXISTS operator (e.g., semi-join)
+-- is correlated with the subquery, since events_table can be 
+-- recursively planned the whole query becomes a router query
 SELECT
   user_id
 FROM
@@ -98,8 +116,13 @@ WHERE
           users_reference_table.user_id = events_table.user_id
       )
 LIMIT 3;
-ERROR:  cannot pushdown the subquery
-DETAIL:  Subqueries without FROM are not allowed in FROM clause when the outer query has subqueries in WHERE clause and it references a column from another query
+DEBUG:  generating subplan 7_1 for subquery SELECT user_id, NULL::timestamp without time zone AS "time", NULL::integer AS event_type, NULL::integer AS value_2, NULL::double precision AS value_3, NULL::bigint AS value_4 FROM public.events_table WHERE true
+DEBUG:  Plan 7 query after replacing subqueries and CTEs: SELECT user_id FROM (SELECT 5 AS user_id) users_reference_table WHERE (NOT (EXISTS (SELECT events_table.value_2 FROM (SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.event_type, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('7_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, event_type integer, value_2 integer, value_3 double precision, value_4 bigint)) events_table(user_id, "time", event_type, value_2, value_3, value_4) WHERE (users_reference_table.user_id OPERATOR(pg_catalog.=) events_table.user_id)))) LIMIT 3
+ user_id 
+---------
+(0 rows)
+
+RESET client_min_messages;
 -- join with distributed table prevents FROM from recurring
 SELECT
   DISTINCT user_id
@@ -166,7 +189,7 @@ WHERE
 ORDER BY user_id
 LIMIT 3;
 ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+DETAIL:  Complex subqueries and CTEs are not allowed in the FROM clause when the query has subqueries in the WHERE clause and it references a column from another query
 -- subqueries in WHERE with IN operator without equality
 SELECT 
   users_table.user_id, count(*)
@@ -425,8 +448,8 @@ FROM
 WHERE user_id 
   NOT IN
 (SELECT users_table.value_2 FROM users_table JOIN users_reference_table as u2 ON users_table.value_2 = u2.value_2);
-DEBUG:  generating subplan 16_1 for subquery SELECT users_table.value_2 FROM (public.users_table JOIN public.users_reference_table u2 ON ((users_table.value_2 OPERATOR(pg_catalog.=) u2.value_2)))
-DEBUG:  Plan 16 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM public.users_reference_table WHERE (NOT (user_id OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.value_2 FROM read_intermediate_result('16_1'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer))))
+DEBUG:  generating subplan 20_1 for subquery SELECT users_table.value_2 FROM (public.users_table JOIN public.users_reference_table u2 ON ((users_table.value_2 OPERATOR(pg_catalog.=) u2.value_2)))
+DEBUG:  Plan 20 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM public.users_reference_table WHERE (NOT (user_id OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.value_2 FROM read_intermediate_result('20_1'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer))))
  count 
 -------
     10
@@ -441,8 +464,8 @@ FROM
     (SELECT users_table.value_2
      FROM users_table
      JOIN users_reference_table AS u2 ON users_table.value_2 = u2.value_2);
-DEBUG:  generating subplan 18_1 for subquery SELECT users_table.value_2 FROM (public.users_table JOIN public.users_reference_table u2 ON ((users_table.value_2 OPERATOR(pg_catalog.=) u2.value_2)))
-DEBUG:  Plan 18 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT users_reference_table.user_id, random() AS random FROM public.users_reference_table) vals WHERE (NOT (user_id OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.value_2 FROM read_intermediate_result('18_1'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer))))
+DEBUG:  generating subplan 22_1 for subquery SELECT users_table.value_2 FROM (public.users_table JOIN public.users_reference_table u2 ON ((users_table.value_2 OPERATOR(pg_catalog.=) u2.value_2)))
+DEBUG:  Plan 22 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT users_reference_table.user_id, random() AS random FROM public.users_reference_table) vals WHERE (NOT (user_id OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.value_2 FROM read_intermediate_result('22_1'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer))))
  count 
 -------
     10

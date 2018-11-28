@@ -43,20 +43,29 @@ SELECT subquery_1.user_id FROM
   ON user_buy_test_table.user_id > users_ref_test_table.id) subquery_1
 ORDER BY 1;
 
--- Shouldn't work, reference table at the outer side is not allowed
+SET client_min_messages TO DEBUG;
+
+-- Should work because we can recursively plan the distributed relation on the
+-- inner part of the outer join
 SELECT * FROM
-  (SELECT random() FROM users_ref_test_table LEFT JOIN user_buy_test_table
-  ON users_ref_test_table.id = user_buy_test_table.user_id) subquery_1;
+  (SELECT users_ref_test_table.id FROM users_ref_test_table LEFT JOIN user_buy_test_table
+  ON users_ref_test_table.id = user_buy_test_table.user_id) subquery_1 ORDER BY 1 DESC;
+RESET client_min_messages;
 
 -- Should work, reference table at the inner side is allowed
 SELECT count(*) FROM
   (SELECT random() FROM users_ref_test_table RIGHT JOIN user_buy_test_table
   ON user_buy_test_table.user_id = users_ref_test_table.id) subquery_1;
 
--- Shouldn't work, reference table at the outer side is not allowed
-SELECT * FROM
+SET client_min_messages TO DEBUG;
+
+-- Should work because we can recursively plan the distributed relation on the
+-- inner part of the outer join
+SELECT count(*) FROM
   (SELECT random() FROM user_buy_test_table RIGHT JOIN users_ref_test_table
   ON user_buy_test_table.user_id = users_ref_test_table.id) subquery_1;
+RESET client_min_messages;
+
 
 -- Equi join test with reference table on non-partition keys
 SELECT count(*) FROM
@@ -151,13 +160,17 @@ SELECT count(*) FROM
 SELECT count(*) FROM user_buy_test_table LEFT JOIN (SELECT * FROM generate_series(1,10) id) users_ref_test_table
 ON user_buy_test_table.item_id = users_ref_test_table.id;
 
--- table function cannot be the outer relationship in an outer join
+SET client_min_messages TO DEBUG;
+-- table function can be the outer relationship in an outer join
+-- since the inner side is recursively planned
 SELECT count(*) FROM
   (SELECT random() FROM user_buy_test_table RIGHT JOIN generate_series(1,10) AS users_ref_test_table(id)
   ON user_buy_test_table.item_id > users_ref_test_table.id) subquery_1;
 
 SELECT count(*) FROM user_buy_test_table RIGHT JOIN (SELECT * FROM generate_series(1,10) id) users_ref_test_table
 ON user_buy_test_table.item_id = users_ref_test_table.id;
+
+RESET client_min_messages;
 
 -- volatile functions can be used as table expressions through recursive planning
 SET client_min_messages TO DEBUG;
@@ -193,9 +206,14 @@ ON user_buy_test_table.item_id = users_ref_test_table.id;
 SELECT count(*) FROM user_buy_test_table LEFT JOIN (SELECT 5 AS id) users_ref_test_table
 ON user_buy_test_table.item_id = users_ref_test_table.id;
 
--- subquery without FROM cannot be the outer relationship in an outer join
+SET client_min_messages TO DEBUG1;
+
+-- subquery without FROM can be the outer relationship in an outer join
+-- since the inner part can be recursively planned
 SELECT count(*) FROM user_buy_test_table RIGHT JOIN (SELECT 5 AS id) users_ref_test_table
 ON user_buy_test_table.item_id = users_ref_test_table.id;
+
+RESET client_min_messages;
 
 -- can perform a union with subquery without FROM
 SELECT count(*) FROM
@@ -216,8 +234,12 @@ FROM
   ) as foo
   GROUP BY user_id ORDER BY 2 DESC LIMIT 10;
 
--- should not be able to pushdown since reference table is in the
--- direct outer part of the left join
+
+SET client_min_messages TO DEBUG1;
+
+-- although the inner part of an outer join with reference table is 
+-- recursively planned, we still hit the agressive outer join checks 
+-- (recurring tuple Left Join recurring tuple) errors
 SELECT
   user_id, sum(value_1)
 FROM
@@ -229,13 +251,17 @@ FROM
   ) as foo
   GROUP BY user_id ORDER BY 2 DESC LIMIT 10;
 
--- should not be able to pushdown since reference table is in the
--- direct outer part of the left join wrapped into a subquery
+-- should be able to pushdown since reference table is in the
+-- direct outer part of the left join is recursively planned
+-- and the final query becomes a router query
 SELECT
-    *
+   users_table.time, users_table.value_2
 FROM
     (SELECT *, random() FROM events_reference_table) as ref_all LEFT JOIN users_table
-    ON (users_table.user_id = ref_all.value_2);
+    ON (users_table.user_id = ref_all.value_2)
+ORDER BY 1, 2 DESC LIMIT 6;
+
+RESET client_min_messages;
 
 -- should not be able to pushdown since reference table is in the
 -- outer part of the left join
@@ -543,8 +569,9 @@ count(*) AS cnt, "generated_group_field"
     cnt DESC, generated_group_field ASC
   LIMIT 10;
 
-  -- RIGHT JOINs used with INNER JOINs should error out since reference table exist in the
--- right side of the RIGHT JOIN.
+  -- RIGHT JOINs used with INNER JOINs should work out since reference table exist in the
+-- right side of the RIGHT JOIN and the inner subquery is recursively planned
+SET client_min_messages TO DEBUG1;
 SELECT
 count(*) AS cnt, "generated_group_field"
  FROM
@@ -581,6 +608,8 @@ count(*) AS cnt, "generated_group_field"
   ORDER BY
     cnt DESC, generated_group_field ASC
   LIMIT 10;
+
+RESET client_min_messages;
 
 -- right join where the inner part of the join includes a reference table
 -- joined with hash partitioned table using non-equi join
@@ -902,14 +931,15 @@ INNER JOIN
 GROUP BY types
 ORDER BY types;
 
+SET client_min_messages TO DEBUG1;
+
 -- just a sanity check that we don't allow this if the reference table is on the
--- left part of the left join
+-- left part of the left join, we can still recursively plan the inner side
 SELECT count(*) FROM
   (SELECT random() FROM users_ref_test_table LEFT JOIN user_buy_test_table
   ON user_buy_test_table.item_id > users_ref_test_table.id) subquery_1;
 
 -- we do allow non equi join among subqueries via recursive planning
-SET client_min_messages TO DEBUG1;
 SELECT count(*) FROM
   (SELECT user_buy_test_table.user_id, random() FROM user_buy_test_table LEFT JOIN users_ref_test_table
   ON user_buy_test_table.item_id > users_ref_test_table.id) subquery_1,
