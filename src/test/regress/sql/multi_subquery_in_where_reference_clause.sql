@@ -38,8 +38,12 @@ GROUP BY user_id
 ORDER BY user_id
 LIMIT 3;
 
--- subqueries in WHERE with NOT EXISTS operator, should not work since 
--- there is a correlated subquery in WHERE clause
+
+SET client_min_messages TO DEBUG1;
+
+-- although the subquery in WHERE with NOT EXISTS operator (e.g., semi-join)
+-- is correlated with the reference table, since events_table can be 
+-- recursively planned the whole query becomes a router query
 SELECT 
   user_id
 FROM 
@@ -55,8 +59,10 @@ WHERE
       )
 LIMIT 3;
 
--- immutable functions are also treated as reference tables, query should not
--- work since there is a correlated subquery in the WHERE clause
+-- immutable functions are also treated as reference tables thus
+-- although the subquery in WHERE with NOT EXISTS operator (e.g., semi-join)
+-- is correlated with the immutable function, since events_table can be 
+-- recursively planned the whole query becomes a router query
 SELECT
   user_id
 FROM
@@ -70,10 +76,13 @@ WHERE
        WHERE
           users_reference_table.user_id = events_table.user_id
       )
+ORDER BY 1
 LIMIT 3;
 
--- subqueries without FROM are also treated as reference tables, query should not
--- work since there is a correlated subquery in the WHERE clause
+-- subqueries without FROM are also treated as reference tables thus
+-- although the subquery in WHERE with NOT EXISTS operator (e.g., semi-join)
+-- is correlated with the subquery, since events_table can be 
+-- recursively planned the whole query becomes a router query
 SELECT
   user_id
 FROM
@@ -88,6 +97,8 @@ WHERE
           users_reference_table.user_id = events_table.user_id
       )
 LIMIT 3;
+
+RESET client_min_messages;
 
 -- join with distributed table prevents FROM from recurring
 SELECT
