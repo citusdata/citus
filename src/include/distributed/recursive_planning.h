@@ -20,7 +20,8 @@
 
 extern List * GenerateSubplansForSubqueriesAndCTEs(uint64 planId, Query *originalQuery,
 												   PlannerRestrictionContext *
-												   plannerRestrictionContext);
+												   plannerRestrictionContext,
+												   List *previousSubPlanList);
 extern char * GenerateResultId(uint64 planId, uint32 subPlanId);
 extern Query * BuildSubPlanResultQuery(List *targetEntryList, List *columnAliasList,
 									   char *resultId);

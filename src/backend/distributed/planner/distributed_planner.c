@@ -61,7 +61,8 @@ static DistributedPlan * CreateDistributedPlan(uint64 planId, Query *originalQue
 											   Query *query, ParamListInfo boundParams,
 											   bool hasUnresolvedParams,
 											   PlannerRestrictionContext *
-											   plannerRestrictionContext);
+											   plannerRestrictionContext,
+											   List *previousSubPlanList);
 static DeferredErrorMessage * DeferErrorIfPartitionTableNotSingleReplicated(Oid
 																			relationId);
 
@@ -507,7 +508,8 @@ CreateDistributedPlannedStmt(uint64 planId, PlannedStmt *localPlan, Query *origi
 
 	distributedPlan =
 		CreateDistributedPlan(planId, originalQuery, query, boundParams,
-							  hasUnresolvedParams, plannerRestrictionContext);
+							  hasUnresolvedParams, plannerRestrictionContext,
+							  NIL);
 
 	/*
 	 * If no plan was generated, prepare a generic error to be emitted.
@@ -585,7 +587,8 @@ CreateDistributedPlannedStmt(uint64 planId, PlannedStmt *localPlan, Query *origi
 static DistributedPlan *
 CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamListInfo
 					  boundParams, bool hasUnresolvedParams,
-					  PlannerRestrictionContext *plannerRestrictionContext)
+					  PlannerRestrictionContext *plannerRestrictionContext,
+					  List *previousSubPlanList)
 {
 	DistributedPlan *distributedPlan = NULL;
 	MultiTreeRoot *logicalPlan = NULL;
@@ -693,7 +696,8 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 	 * calling the planner and return the resulting plans to subPlanList.
 	 */
 	subPlanList = GenerateSubplansForSubqueriesAndCTEs(planId, originalQuery,
-													   plannerRestrictionContext);
+													   plannerRestrictionContext,
+													   previousSubPlanList);
 
 	/*
 	 * If subqueries were recursively planned then we need to replan the query
@@ -708,7 +712,7 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 	 * the CTEs are referenced then there are no subplans, but we still want
 	 * to retry the router planner.
 	 */
-	if (list_length(subPlanList) > 0 || hasCtes)
+	if (list_length(subPlanList) > list_length(previousSubPlanList) || hasCtes)
 	{
 		Query *newQuery = copyObject(originalQuery);
 		bool setPartitionedTablesInherited = false;
@@ -739,7 +743,8 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 
 		/* recurse into CreateDistributedPlan with subqueries/CTEs replaced */
 		distributedPlan = CreateDistributedPlan(planId, originalQuery, query, NULL, false,
-												plannerRestrictionContext);
+												plannerRestrictionContext, subPlanList);
+
 		distributedPlan->subPlanList = subPlanList;
 
 		return distributedPlan;
