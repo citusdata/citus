@@ -148,7 +148,8 @@ SELECT master_get_table_ddl_events('date_partition_2007_100');
                       master_get_table_ddl_events                      
 -----------------------------------------------------------------------
  CREATE TABLE public.date_partition_2007_100 (id integer, "time" date)
-(1 row)
+ ALTER TABLE public.date_partition_2007_100 OWNER TO postgres
+(2 rows)
 
 -- now break the partitioning hierarcy
 SELECT worker_apply_inter_shard_ddl_command(referencing_shard:=100, referencing_schema_name:='public', 

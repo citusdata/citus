@@ -1438,7 +1438,8 @@ SELECT master_get_table_ddl_events('reference_schema.reference_table_ddl');
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
  CREATE SCHEMA IF NOT EXISTS reference_schema AUTHORIZATION postgres
  CREATE TABLE reference_schema.reference_table_ddl (value_2 double precision DEFAULT 25.0, value_3 text NOT NULL, value_4 timestamp without time zone, value_5 double precision)
-(2 rows)
+ ALTER TABLE reference_schema.reference_table_ddl OWNER TO postgres
+(3 rows)
 
 -- in reality, we wouldn't need to repair any reference table shard placements
 -- however, the test could be relevant for other purposes

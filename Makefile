@@ -77,7 +77,6 @@ OBJS = src/backend/distributed/shared_library_init.o \
      src/backend/distributed/test/distribution_metadata.o \
      src/backend/distributed/test/fake_fdw.o \
      src/backend/distributed/test/foreign_key_relationship_query.o \
-     src/backend/distributed/test/generate_ddl_commands.o \
      src/backend/distributed/test/metadata_sync.o \
      src/backend/distributed/test/partitioning_utils.o \
      src/backend/distributed/test/progress_utils.o \
