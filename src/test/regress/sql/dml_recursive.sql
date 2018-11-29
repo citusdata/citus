@@ -217,6 +217,10 @@ INSERT INTO
 	second_distributed_table (tenant_id, dept) 
 VALUES ('3', (SELECT 3));
 
+-- ensure that EXPLAIN outputs are consistent
+VACUUM ANALYZE distributed_table;
+VACUUM ANALYZE second_distributed_table;
+
 -- DML with an unreferenced SELECT CTE
 WITH cte_1 AS (
     WITH cte_2 AS (
@@ -233,6 +237,10 @@ UPDATE distributed_table
 SET dept = 5
 FROM cte_1
 WHERE distributed_table.tenant_id < cte_1.tenant_id;
+
+-- ensure that EXPLAIN outputs are consistent
+VACUUM ANALYZE distributed_table;
+VACUUM ANALYZE second_distributed_table;
 
 WITH cte_1 AS (
     WITH cte_2 AS (

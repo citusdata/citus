@@ -275,6 +275,9 @@ DEBUG:  subqueries are not supported within INSERT queries
 HINT:  Try rewriting your queries with 'INSERT INTO ... SELECT' syntax.
 ERROR:  subqueries are not supported within INSERT queries
 HINT:  Try rewriting your queries with 'INSERT INTO ... SELECT' syntax.
+-- ensure that EXPLAIN outputs are consistent
+VACUUM ANALYZE distributed_table;
+VACUUM ANALYZE second_distributed_table;
 -- DML with an unreferenced SELECT CTE
 WITH cte_1 AS (
     WITH cte_2 AS (
@@ -295,6 +298,9 @@ DEBUG:  common table expressions are not supported in distributed modifications
 DEBUG:  generating subplan 20_1 for CTE cte_1: WITH cte_2 AS (SELECT second_distributed_table.tenant_id AS cte2_id FROM recursive_dml_queries.second_distributed_table WHERE (second_distributed_table.dept OPERATOR(pg_catalog.>=) 2)) UPDATE recursive_dml_queries.distributed_table SET dept = 10 RETURNING tenant_id, dept, info
 DEBUG:  common table expressions are not supported in distributed modifications
 DEBUG:  Plan 20 query after replacing subqueries and CTEs: UPDATE recursive_dml_queries.distributed_table SET dept = 5 FROM (SELECT intermediate_result.tenant_id, intermediate_result.dept, intermediate_result.info FROM read_intermediate_result('20_1'::text, 'binary'::citus_copy_format) intermediate_result(tenant_id text, dept integer, info jsonb)) cte_1 WHERE (distributed_table.tenant_id OPERATOR(pg_catalog.<) cte_1.tenant_id)
+-- ensure that EXPLAIN outputs are consistent
+VACUUM ANALYZE distributed_table;
+VACUUM ANALYZE second_distributed_table;
 WITH cte_1 AS (
     WITH cte_2 AS (
         SELECT tenant_id as cte2_id 
