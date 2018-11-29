@@ -56,6 +56,11 @@ step "s2-rollback"
 	ROLLBACK;
 }
 
+step "s2-sleep"
+{
+	SELECT pg_sleep(0.2);
+}
+
 step "s2-view-dist"
 {
 	SELECT query, query_hostname, query_hostport, master_query_host_name, master_query_host_port, state, wait_event_type, wait_event, usename, datname FROM citus_dist_stat_activity ORDER BY query DESC;
@@ -79,8 +84,9 @@ step "s3-view-worker"
 	SELECT query, query_hostname, query_hostport, master_query_host_name, master_query_host_port, state, wait_event_type, wait_event, usename, datname FROM citus_worker_stat_activity ORDER BY query DESC;
 }
 
-
-permutation "s1-begin" "s2-begin" "s3-begin" "s1-alter-table" "s2-view-dist" "s3-view-worker" "s2-rollback" "s1-commit" "s3-rollback"
-permutation "s1-begin" "s2-begin" "s3-begin" "s1-insert" "s2-view-dist" "s3-view-worker" "s2-rollback" "s1-commit" "s3-rollback"
-permutation "s1-begin" "s2-begin" "s3-begin" "s1-select" "s2-view-dist" "s3-view-worker" "s2-rollback" "s1-commit" "s3-rollback"
-permutation "s1-begin" "s2-begin" "s3-begin" "s1-select-router" "s2-view-dist" "s3-view-worker" "s2-rollback" "s1-commit" "s3-rollback"
+# we prefer to sleep before "s2-view-dist" so that we can ensure
+# the "wait_event" in the output doesn't change randomly (e.g., NULL to CliendRead etc.)
+permutation "s1-begin" "s2-begin" "s3-begin" "s1-alter-table" "s2-sleep" "s2-view-dist" "s3-view-worker" "s2-rollback" "s1-commit" "s3-rollback"
+permutation "s1-begin" "s2-begin" "s3-begin" "s1-insert" "s2-sleep" "s2-view-dist" "s3-view-worker" "s2-rollback" "s1-commit" "s3-rollback"
+permutation "s1-begin" "s2-begin" "s3-begin" "s1-select" "s2-sleep" "s2-view-dist" "s3-view-worker" "s2-rollback" "s1-commit" "s3-rollback"
+permutation "s1-begin" "s2-begin" "s3-begin" "s1-select-router" "s2-sleep" "s2-view-dist" "s3-view-worker" "s2-rollback" "s1-commit" "s3-rollback"
