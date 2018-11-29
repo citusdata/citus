@@ -994,6 +994,9 @@ CREATE TABLE partitioning_hash_join_test_2 PARTITION OF partitioning_hash_join_t
 
 SELECT create_distributed_table('partitioning_hash_join_test', 'id');
 
+-- ensure that EXPLAIN outputs are consistent
+VACUUM ANALYZE partitioning_hash_join_test;
+
 -- see the query plan without partition-wise join
 EXPLAIN
 SELECT * FROM partitioning_hash_test JOIN partitioning_hash_join_test USING (id, subid);
