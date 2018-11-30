@@ -180,7 +180,6 @@ static List * ActivePlacementList(List *placementList);
 static List * LeftRotateList(List *list, uint32 rotateCount);
 static List * FindDependedMergeTaskList(Task *sqlTask);
 static List * AssignDualHashTaskList(List *taskList);
-static int CompareTasksByTaskId(const void *leftElement, const void *rightElement);
 static void AssignDataFetchDependencies(List *taskList);
 static uint32 TaskListHighestTaskId(List *taskList);
 static List * MapTaskList(MapMergeJob *mapMergeJob, List *filterTaskList);
@@ -5417,7 +5416,7 @@ AssignDualHashTaskList(List *taskList)
 
 
 /* Helper function to compare two tasks by their taskId. */
-static int
+int
 CompareTasksByTaskId(const void *leftElement, const void *rightElement)
 {
 	const Task *leftTask = *((const Task **) leftElement);

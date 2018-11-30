@@ -62,10 +62,10 @@ EXPLAIN (COSTS FALSE)
                      Task Count: 2
                      Tasks Shown: One of 2
                      ->  Task
-                           Node: host=localhost port=57637 dbname=regression
+                           Node: host=localhost port=57638 dbname=regression
                            ->  HashAggregate
                                  Group Key: l_orderkey
-                                 ->  Seq Scan on lineitem_290001 lineitem
+                                 ->  Seq Scan on lineitem_290000 lineitem
 (14 rows)
 
 -- and don't push down when not grouped by partition column

@@ -50,10 +50,10 @@ Sort
               Task Count: 2
               Tasks Shown: One of 2
               ->  Task
-                    Node: host=localhost port=57637 dbname=regression
+                    Node: host=localhost port=57638 dbname=regression
                     ->  HashAggregate
                           Group Key: l_quantity
-                          ->  Seq Scan on lineitem_290001 lineitem
+                          ->  Seq Scan on lineitem_290000 lineitem
 -- Test disable hash aggregate
 SET enable_hashagg TO off;
 EXPLAIN (COSTS FALSE, FORMAT TEXT)
@@ -69,10 +69,10 @@ Sort
                     Task Count: 2
                     Tasks Shown: One of 2
                     ->  Task
-                          Node: host=localhost port=57637 dbname=regression
+                          Node: host=localhost port=57638 dbname=regression
                           ->  HashAggregate
                                 Group Key: l_quantity
-                                ->  Seq Scan on lineitem_290001 lineitem
+                                ->  Seq Scan on lineitem_290000 lineitem
 SET enable_hashagg TO on;
 -- Test JSON format
 EXPLAIN (COSTS FALSE, FORMAT JSON)
@@ -104,7 +104,7 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
                   "Tasks Shown": "One of 2",
                   "Tasks": [
                     {
-                      "Node": "host=localhost port=57637 dbname=regression",
+                      "Node": "host=localhost port=57638 dbname=regression",
                       "Remote Plan": [
                         [
                           {
@@ -119,7 +119,7 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
                                   "Node Type": "Seq Scan",
                                   "Parent Relationship": "Outer",
                                   "Parallel Aware": false,
-                                  "Relation Name": "lineitem_290001",
+                                  "Relation Name": "lineitem_290000",
                                   "Alias": "lineitem"
                                 }
                               ]
@@ -179,7 +179,7 @@ EXPLAIN (COSTS FALSE, FORMAT XML)
                   <Tasks-Shown>One of 2</Tasks-Shown>
                   <Tasks>
                     <Task>
-                      <Node>host=localhost port=57637 dbname=regression</Node>
+                      <Node>host=localhost port=57638 dbname=regression</Node>
                       <Remote-Plan>
                         <explain xmlns="http://www.postgresql.org/2009/explain">
                           <Query>
@@ -196,7 +196,7 @@ EXPLAIN (COSTS FALSE, FORMAT XML)
                                   <Node-Type>Seq Scan</Node-Type>
                                   <Parent-Relationship>Outer</Parent-Relationship>
                                   <Parallel-Aware>false</Parallel-Aware>
-                                  <Relation-Name>lineitem_290001</Relation-Name>
+                                  <Relation-Name>lineitem_290000</Relation-Name>
                                   <Alias>lineitem</Alias>
                                 </Plan>
                               </Plans>
@@ -248,7 +248,7 @@ EXPLAIN (COSTS FALSE, FORMAT YAML)
                 Task Count: 2
                 Tasks Shown: "One of 2"
                 Tasks: 
-                  - Node: "host=localhost port=57637 dbname=regression"
+                  - Node: "host=localhost port=57638 dbname=regression"
                     Remote Plan: 
                       - Plan: 
                           Node Type: "Aggregate"
@@ -261,7 +261,7 @@ EXPLAIN (COSTS FALSE, FORMAT YAML)
                             - Node Type: "Seq Scan"
                               Parent Relationship: "Outer"
                               Parallel Aware: false
-                              Relation Name: "lineitem_290001"
+                              Relation Name: "lineitem_290000"
                               Alias: "lineitem"
 
 -- Test Text format
@@ -276,10 +276,10 @@ Sort
               Task Count: 2
               Tasks Shown: One of 2
               ->  Task
-                    Node: host=localhost port=57637 dbname=regression
+                    Node: host=localhost port=57638 dbname=regression
                     ->  HashAggregate
                           Group Key: l_quantity
-                          ->  Seq Scan on lineitem_290001 lineitem
+                          ->  Seq Scan on lineitem_290000 lineitem
 -- Test verbose
 EXPLAIN (COSTS FALSE, VERBOSE TRUE)
 	SELECT sum(l_quantity) / avg(l_quantity) FROM lineitem;
@@ -290,10 +290,10 @@ Aggregate
         Task Count: 2
         Tasks Shown: One of 2
         ->  Task
-              Node: host=localhost port=57637 dbname=regression
+              Node: host=localhost port=57638 dbname=regression
               ->  Aggregate
                     Output: sum(l_quantity), sum(l_quantity), count(l_quantity)
-                    ->  Seq Scan on public.lineitem_290001 lineitem
+                    ->  Seq Scan on public.lineitem_290000 lineitem
                           Output: l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment
 -- Test join
 EXPLAIN (COSTS FALSE)
@@ -307,16 +307,16 @@ Limit
               Task Count: 2
               Tasks Shown: One of 2
               ->  Task
-                    Node: host=localhost port=57637 dbname=regression
+                    Node: host=localhost port=57638 dbname=regression
                     ->  Limit
                           ->  Sort
                                 Sort Key: lineitem.l_quantity
                                 ->  Hash Join
                                       Hash Cond: (lineitem.l_orderkey = orders.o_orderkey)
-                                      ->  Seq Scan on lineitem_290001 lineitem
+                                      ->  Seq Scan on lineitem_290000 lineitem
                                             Filter: (l_quantity < 5.0)
                                       ->  Hash
-                                            ->  Seq Scan on orders_290003 orders
+                                            ->  Seq Scan on orders_290002 orders
 -- Test insert
 EXPLAIN (COSTS FALSE)
 	INSERT INTO lineitem VALUES (1,0), (2, 0), (3, 0), (4, 0);
@@ -393,8 +393,8 @@ Custom Scan (Citus Real-Time)
   Task Count: 2
   Tasks Shown: One of 2
   ->  Task
-        Node: host=localhost port=57637 dbname=regression
-        ->  Seq Scan on lineitem_290001 lineitem
+        Node: host=localhost port=57638 dbname=regression
+        ->  Seq Scan on lineitem_290000 lineitem
 -- Test having
 EXPLAIN (COSTS FALSE, VERBOSE TRUE)
 	SELECT sum(l_quantity) / avg(l_quantity) FROM lineitem
@@ -407,10 +407,10 @@ Aggregate
         Task Count: 2
         Tasks Shown: One of 2
         ->  Task
-              Node: host=localhost port=57637 dbname=regression
+              Node: host=localhost port=57638 dbname=regression
               ->  Aggregate
                     Output: sum(l_quantity), sum(l_quantity), count(l_quantity), sum(l_quantity)
-                    ->  Seq Scan on public.lineitem_290001 lineitem
+                    ->  Seq Scan on public.lineitem_290000 lineitem
                           Output: l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment
 -- Test having without aggregate
 EXPLAIN (COSTS FALSE, VERBOSE TRUE)
@@ -426,11 +426,11 @@ HashAggregate
         Task Count: 2
         Tasks Shown: One of 2
         ->  Task
-              Node: host=localhost port=57637 dbname=regression
+              Node: host=localhost port=57638 dbname=regression
               ->  HashAggregate
                     Output: l_quantity, l_quantity
                     Group Key: lineitem.l_quantity
-                    ->  Seq Scan on public.lineitem_290001 lineitem
+                    ->  Seq Scan on public.lineitem_290000 lineitem
                           Output: l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment
 -- Subquery pushdown tests with explain
 EXPLAIN (COSTS OFF)
@@ -1036,9 +1036,9 @@ Aggregate
         Task Count: 2
         Tasks Shown: One of 2
         ->  Task
-              Node: host=localhost port=57637 dbname=regression
+              Node: host=localhost port=57638 dbname=regression
               ->  Aggregate
-                    ->  Seq Scan on lineitem_290001 lineitem
+                    ->  Seq Scan on lineitem_290000 lineitem
 -- ensure EXPLAIN EXECUTE doesn't crash
 PREPARE task_tracker_query AS
 	SELECT avg(l_linenumber) FROM lineitem WHERE l_orderkey > 9030;
@@ -1102,9 +1102,9 @@ Custom Scan (Citus INSERT ... SELECT via coordinator)
               Task Count: 4
               Tasks Shown: One of 4
               ->  Task
-                    Node: host=localhost port=57637 dbname=regression
+                    Node: host=localhost port=57638 dbname=regression
                     ->  Limit
-                          ->  Seq Scan on orders_hash_part_360046 orders_hash_part
+                          ->  Seq Scan on orders_hash_part_360045 orders_hash_part
 SELECT true AS valid FROM explain_json($$
   INSERT INTO lineitem_hash_part (l_orderkey)
   SELECT o_orderkey FROM orders_hash_part LIMIT 3;
@@ -1119,9 +1119,9 @@ Custom Scan (Citus INSERT ... SELECT via coordinator)
               Task Count: 4
               Tasks Shown: One of 4
               ->  Task
-                    Node: host=localhost port=57637 dbname=regression
+                    Node: host=localhost port=57638 dbname=regression
                     ->  Limit
-                          ->  Seq Scan on orders_hash_part_360046 orders_hash_part
+                          ->  Seq Scan on orders_hash_part_360045 orders_hash_part
 EXPLAIN (COSTS OFF)
 INSERT INTO lineitem_hash_part (l_orderkey)
 SELECT s FROM generate_series(1,5) s;

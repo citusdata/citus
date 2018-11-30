@@ -75,19 +75,19 @@ DEBUG:  join prunable for intervals [8997,14947] and [1,5986]
          Task Count: 2
          Tasks Shown: All
          ->  Task
-               Node: host=localhost port=57637 dbname=regression
-               ->  Aggregate
-                     ->  Merge Join
-                           Merge Cond: (orders.o_orderkey = lineitem.l_orderkey)
-                           ->  Index Only Scan using orders_pkey_290003 on orders_290003 orders
-                           ->  Index Only Scan using lineitem_pkey_290001 on lineitem_290001 lineitem
-         ->  Task
                Node: host=localhost port=57638 dbname=regression
                ->  Aggregate
                      ->  Merge Join
                            Merge Cond: (orders.o_orderkey = lineitem.l_orderkey)
                            ->  Index Only Scan using orders_pkey_290002 on orders_290002 orders
                            ->  Index Only Scan using lineitem_pkey_290000 on lineitem_290000 lineitem
+         ->  Task
+               Node: host=localhost port=57637 dbname=regression
+               ->  Aggregate
+                     ->  Merge Join
+                           Merge Cond: (orders.o_orderkey = lineitem.l_orderkey)
+                           ->  Index Only Scan using orders_pkey_290003 on orders_290003 orders
+                           ->  Index Only Scan using lineitem_pkey_290001 on lineitem_290001 lineitem
 (18 rows)
 
 -- Now set the minimum value for a shard to null. Then check that we don't apply
@@ -173,12 +173,12 @@ LOG:  join order: [ "lineitem" ]
    Task Count: 2
    Tasks Shown: All
    ->  Task
-         Node: host=localhost port=57637 dbname=regression
-         ->  Index Scan using lineitem_pkey_290001 on lineitem_290001 lineitem
-               Index Cond: (l_orderkey = 9030)
-   ->  Task
          Node: host=localhost port=57638 dbname=regression
          ->  Index Scan using lineitem_pkey_290000 on lineitem_290000 lineitem
+               Index Cond: (l_orderkey = 9030)
+   ->  Task
+         Node: host=localhost port=57637 dbname=regression
+         ->  Index Scan using lineitem_pkey_290001 on lineitem_290001 lineitem
                Index Cond: (l_orderkey = 9030)
 (11 rows)
 
