@@ -139,6 +139,7 @@ SELECT pg_table_is_visible('test_table_1130000'::regclass);
 SET search_path TO 'mx_hide_shard_names';
 SET citus.shard_count TO 4;
 SET citus.shard_replication_factor TO 1;
+SET citus.next_shard_id TO 1131000;
 SET citus.replication_model TO 'streaming';
 -- not existing shard ids appended to the distributed table name
 CREATE TABLE test_table_102008(id int, time date);
@@ -156,12 +157,12 @@ SET search_path TO 'mx_hide_shard_names';
 -- name already exists :)
 CREATE TABLE test_table_2_1130000(id int, time date);
 SELECT * FROM citus_shards_on_worker ORDER BY 2;
-       Schema        |           Name           | Type  |  Owner   
----------------------+--------------------------+-------+----------
- mx_hide_shard_names | test_table_102008_102012 | table | postgres
- mx_hide_shard_names | test_table_102008_102014 | table | postgres
- mx_hide_shard_names | test_table_1130000       | table | postgres
- mx_hide_shard_names | test_table_1130002       | table | postgres
+       Schema        |           Name            | Type  |  Owner   
+---------------------+---------------------------+-------+----------
+ mx_hide_shard_names | test_table_102008_1131000 | table | postgres
+ mx_hide_shard_names | test_table_102008_1131002 | table | postgres
+ mx_hide_shard_names | test_table_1130000        | table | postgres
+ mx_hide_shard_names | test_table_1130002        | table | postgres
 (4 rows)
 
 \d
@@ -179,6 +180,7 @@ CREATE SCHEMA mx_hide_shard_names_2;
 SET search_path TO 'mx_hide_shard_names_2';
 SET citus.shard_count TO 4;
 SET citus.shard_replication_factor TO 1;
+SET citus.next_shard_id TO 1132000;
 SET citus.replication_model TO 'streaming';
 CREATE TABLE test_table(id int, time date);
 SELECT create_distributed_table('test_table', 'id');
@@ -191,12 +193,12 @@ CREATE INDEX test_index ON mx_hide_shard_names_2.test_table(id);
 \c - - - :worker_1_port
 SET search_path TO 'mx_hide_shard_names';
 SELECT * FROM citus_shards_on_worker ORDER BY 2;
-       Schema        |           Name           | Type  |  Owner   
----------------------+--------------------------+-------+----------
- mx_hide_shard_names | test_table_102008_102012 | table | postgres
- mx_hide_shard_names | test_table_102008_102014 | table | postgres
- mx_hide_shard_names | test_table_1130000       | table | postgres
- mx_hide_shard_names | test_table_1130002       | table | postgres
+       Schema        |           Name            | Type  |  Owner   
+---------------------+---------------------------+-------+----------
+ mx_hide_shard_names | test_table_102008_1131000 | table | postgres
+ mx_hide_shard_names | test_table_102008_1131002 | table | postgres
+ mx_hide_shard_names | test_table_1130000        | table | postgres
+ mx_hide_shard_names | test_table_1130002        | table | postgres
 (4 rows)
 
 SELECT * FROM citus_shard_indexes_on_worker ORDER BY 2;
@@ -208,17 +210,17 @@ SELECT * FROM citus_shard_indexes_on_worker ORDER BY 2;
 
 SET search_path TO 'mx_hide_shard_names_2';
 SELECT * FROM citus_shards_on_worker ORDER BY 2;
-        Schema         |       Name        | Type  |  Owner   
------------------------+-------------------+-------+----------
- mx_hide_shard_names_2 | test_table_102016 | table | postgres
- mx_hide_shard_names_2 | test_table_102018 | table | postgres
+        Schema         |        Name        | Type  |  Owner   
+-----------------------+--------------------+-------+----------
+ mx_hide_shard_names_2 | test_table_1132000 | table | postgres
+ mx_hide_shard_names_2 | test_table_1132002 | table | postgres
 (2 rows)
 
 SELECT * FROM citus_shard_indexes_on_worker ORDER BY 2;
-        Schema         |       Name        | Type  |  Owner   |       Table       
------------------------+-------------------+-------+----------+-------------------
- mx_hide_shard_names_2 | test_index_102016 | index | postgres | test_table_102016
- mx_hide_shard_names_2 | test_index_102018 | index | postgres | test_table_102018
+        Schema         |        Name        | Type  |  Owner   |       Table        
+-----------------------+--------------------+-------+----------+--------------------
+ mx_hide_shard_names_2 | test_index_1132000 | index | postgres | test_table_1132000
+ mx_hide_shard_names_2 | test_index_1132002 | index | postgres | test_table_1132002
 (2 rows)
 
 SET search_path TO 'mx_hide_shard_names_2, mx_hide_shard_names';
@@ -239,6 +241,7 @@ SET citus.shard_replication_factor TO 1;
 SET citus.replication_model TO 'streaming';
 CREATE SCHEMA mx_hide_shard_names_3;
 SET search_path TO 'mx_hide_shard_names_3';
+SET citus.next_shard_id TO 1133000;
 -- Verify that a table name > 56 characters handled properly.
 CREATE TABLE too_long_12345678901234567890123456789012345678901234567890 (
         col1 integer not null,
@@ -254,8 +257,8 @@ SET search_path TO 'mx_hide_shard_names_3';
 SELECT * FROM citus_shards_on_worker ORDER BY 2;
         Schema         |                              Name                               | Type  |  Owner   
 -----------------------+-----------------------------------------------------------------+-------+----------
- mx_hide_shard_names_3 | too_long_12345678901234567890123456789012345678_e0119164_102020 | table | postgres
- mx_hide_shard_names_3 | too_long_12345678901234567890123456789012345678_e0119164_102022 | table | postgres
+ mx_hide_shard_names_3 | too_long_1234567890123456789012345678901234567_e0119164_1133000 | table | postgres
+ mx_hide_shard_names_3 | too_long_1234567890123456789012345678901234567_e0119164_1133002 | table | postgres
 (2 rows)
 
 \d
@@ -272,6 +275,7 @@ SET citus.shard_replication_factor TO 1;
 SET citus.replication_model TO 'streaming';
 CREATE SCHEMA "CiTuS.TeeN";
 SET search_path TO "CiTuS.TeeN";
+SET citus.next_shard_id TO 1134000;
 CREATE TABLE "TeeNTabLE.1!?!"(id int, "TeNANt_Id" int);
 CREATE INDEX "MyTenantIndex" ON  "CiTuS.TeeN"."TeeNTabLE.1!?!"("TeNANt_Id");
 -- create distributed table with weird names
@@ -284,17 +288,17 @@ SELECT create_distributed_table('"CiTuS.TeeN"."TeeNTabLE.1!?!"', 'TeNANt_Id');
 \c - - - :worker_1_port
 SET search_path TO "CiTuS.TeeN";
 SELECT * FROM citus_shards_on_worker ORDER BY 2;
-   Schema   |         Name          | Type  |  Owner   
-------------+-----------------------+-------+----------
- CiTuS.TeeN | TeeNTabLE.1!?!_102024 | table | postgres
- CiTuS.TeeN | TeeNTabLE.1!?!_102026 | table | postgres
+   Schema   |          Name          | Type  |  Owner   
+------------+------------------------+-------+----------
+ CiTuS.TeeN | TeeNTabLE.1!?!_1134000 | table | postgres
+ CiTuS.TeeN | TeeNTabLE.1!?!_1134002 | table | postgres
 (2 rows)
 
 SELECT * FROM citus_shard_indexes_on_worker ORDER BY 2;
-   Schema   |         Name         | Type  |  Owner   |         Table         
-------------+----------------------+-------+----------+-----------------------
- CiTuS.TeeN | MyTenantIndex_102024 | index | postgres | TeeNTabLE.1!?!_102024
- CiTuS.TeeN | MyTenantIndex_102026 | index | postgres | TeeNTabLE.1!?!_102026
+   Schema   |         Name          | Type  |  Owner   |         Table          
+------------+-----------------------+-------+----------+------------------------
+ CiTuS.TeeN | MyTenantIndex_1134000 | index | postgres | TeeNTabLE.1!?!_1134000
+ CiTuS.TeeN | MyTenantIndex_1134002 | index | postgres | TeeNTabLE.1!?!_1134002
 (2 rows)
 
 \d

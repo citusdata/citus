@@ -467,18 +467,18 @@ FROM pg_dist_partition NATURAL JOIN shard_counts
 ORDER BY colocationid, logicalrelid;
                       logicalrelid                      | colocationid | shard_count | partmethod | repmodel 
 --------------------------------------------------------+--------------+-------------+------------+----------
- citus_mx_test_schema_join_1.nation_hash                |            3 |           4 | h          | s
- citus_mx_test_schema_join_1.nation_hash_2              |            3 |           4 | h          | s
- citus_mx_test_schema_join_2.nation_hash                |            3 |           4 | h          | s
- citus_mx_test_schema.nation_hash_collation_search_path |            3 |           4 | h          | s
- citus_mx_test_schema.nation_hash_composite_types       |            3 |           4 | h          | s
- mx_ddl_table                                           |            3 |           4 | h          | s
- app_analytics_events_mx                                |            3 |           4 | h          | s
- company_employees_mx                                   |            3 |           4 | h          | s
- customer_mx                                            |            4 |           1 | n          | t
- nation_mx                                              |            4 |           1 | n          | t
- part_mx                                                |            4 |           1 | n          | t
- supplier_mx                                            |            4 |           1 | n          | t
+ citus_mx_test_schema_join_1.nation_hash                |            5 |           4 | h          | s
+ citus_mx_test_schema_join_1.nation_hash_2              |            5 |           4 | h          | s
+ citus_mx_test_schema_join_2.nation_hash                |            5 |           4 | h          | s
+ citus_mx_test_schema.nation_hash_collation_search_path |            5 |           4 | h          | s
+ citus_mx_test_schema.nation_hash_composite_types       |            5 |           4 | h          | s
+ mx_ddl_table                                           |            5 |           4 | h          | s
+ app_analytics_events_mx                                |            5 |           4 | h          | s
+ company_employees_mx                                   |            5 |           4 | h          | s
+ customer_mx                                            |            6 |           1 | n          | t
+ nation_mx                                              |            6 |           1 | n          | t
+ part_mx                                                |            6 |           1 | n          | t
+ supplier_mx                                            |            6 |           1 | n          | t
  nation_hash                                            |      1390000 |          16 | h          | s
  citus_mx_test_schema.nation_hash                       |      1390000 |          16 | h          | s
  lineitem_mx                                            |      1390001 |          16 | h          | s

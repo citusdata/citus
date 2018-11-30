@@ -83,6 +83,7 @@ SELECT pg_table_is_visible('test_table_1130000'::regclass);
 SET search_path TO 'mx_hide_shard_names';
 SET citus.shard_count TO 4;
 SET citus.shard_replication_factor TO 1;
+SET citus.next_shard_id TO 1131000;
 
 SET citus.replication_model TO 'streaming';
 
@@ -109,6 +110,7 @@ CREATE SCHEMA mx_hide_shard_names_2;
 SET search_path TO 'mx_hide_shard_names_2';
 SET citus.shard_count TO 4;
 SET citus.shard_replication_factor TO 1;
+SET citus.next_shard_id TO 1132000;
 
 SET citus.replication_model TO 'streaming';
 CREATE TABLE test_table(id int, time date);
@@ -136,6 +138,7 @@ SET citus.replication_model TO 'streaming';
 
 CREATE SCHEMA mx_hide_shard_names_3;
 SET search_path TO 'mx_hide_shard_names_3';
+SET citus.next_shard_id TO 1133000;
 
 -- Verify that a table name > 56 characters handled properly.
 CREATE TABLE too_long_12345678901234567890123456789012345678901234567890 (
@@ -160,6 +163,7 @@ SET citus.replication_model TO 'streaming';
 
 CREATE SCHEMA "CiTuS.TeeN";
 SET search_path TO "CiTuS.TeeN";
+SET citus.next_shard_id TO 1134000;
 
 CREATE TABLE "TeeNTabLE.1!?!"(id int, "TeNANt_Id" int);
 
