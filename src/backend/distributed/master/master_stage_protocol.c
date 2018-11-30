@@ -151,7 +151,7 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 
 	/* if enough live groups, add an extra candidate node as backup */
 	{
-		uint32 primaryNodeCount = ActivePrimaryNodeCount();
+		uint32 primaryNodeCount = list_length(ActivePrimaryDataNodeList());
 
 		attemptableNodeCount = ShardReplicationFactor;
 		if (primaryNodeCount > ShardReplicationFactor)
@@ -171,7 +171,7 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 		}
 		else if (ShardPlacementPolicy == SHARD_PLACEMENT_ROUND_ROBIN)
 		{
-			List *workerNodeList = ActivePrimaryNodeList();
+			List *workerNodeList = ActivePrimaryDataNodeList();
 			candidateNode = WorkerGetRoundRobinCandidateNode(workerNodeList, shardId,
 															 candidateNodeIndex);
 		}

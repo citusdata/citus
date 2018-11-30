@@ -132,7 +132,7 @@ ReplicateAllReferenceTablesToNode(char *nodeName, int nodePort)
 	List *referenceShardIntervalList = NIL;
 	ListCell *referenceTableCell = NULL;
 	ListCell *referenceShardIntervalCell = NULL;
-	List *workerNodeList = ActivePrimaryNodeList();
+	List *workerNodeList = ActivePrimaryDataNodeList();
 	uint32 workerCount = 0;
 	Oid firstReferenceTableId = InvalidOid;
 	uint32 referenceTableColocationId = INVALID_COLOCATION_ID;
@@ -251,7 +251,7 @@ ReplicateShardToAllWorkers(ShardInterval *shardInterval)
 	/* prevent concurrent pg_dist_node changes */
 	LockRelationOid(DistNodeRelationId(), RowShareLock);
 
-	workerNodeList = ActivePrimaryNodeList();
+	workerNodeList = ActivePrimaryDataNodeList();
 
 	/*
 	 * We will iterate over all worker nodes and if healthy placement is not exist at
@@ -386,7 +386,7 @@ uint32
 CreateReferenceTableColocationId()
 {
 	uint32 colocationId = INVALID_COLOCATION_ID;
-	List *workerNodeList = ActivePrimaryNodeList();
+	List *workerNodeList = ActivePrimaryDataNodeList();
 	int shardCount = 1;
 	int replicationFactor = list_length(workerNodeList);
 	Oid distributionColumnType = InvalidOid;

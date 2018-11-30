@@ -351,6 +351,37 @@ ActivePrimaryNodeList(void)
 
 
 /*
+ * ActivePrimaryDataNodeList returns a list of all active, primary worker nodes
+ * that can store data.
+ */
+List *
+ActivePrimaryDataNodeList(void)
+{
+	List *workerNodeList = NIL;
+	WorkerNode *workerNode = NULL;
+	HTAB *workerNodeHash = GetWorkerNodeHash();
+	HASH_SEQ_STATUS status;
+
+	EnsureModificationsCanRun();
+
+	hash_seq_init(&status, workerNodeHash);
+
+	while ((workerNode = hash_seq_search(&status)) != NULL)
+	{
+		if (workerNode->isActive && WorkerNodeIsPrimary(workerNode) &&
+			workerNode->isDataNode)
+		{
+			WorkerNode *workerNodeCopy = palloc0(sizeof(WorkerNode));
+			memcpy(workerNodeCopy, workerNode, sizeof(WorkerNode));
+			workerNodeList = lappend(workerNodeList, workerNodeCopy);
+		}
+	}
+
+	return workerNodeList;
+}
+
+
+/*
  * ActiveReadableNodeList returns a list of all nodes in workerNodeHash we can read from.
  */
 List *

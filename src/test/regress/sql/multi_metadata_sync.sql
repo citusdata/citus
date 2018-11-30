@@ -69,7 +69,7 @@ SELECT count(*) FROM pg_dist_node WHERE hasmetadata=true;
 
 -- Ensure it works when run on a secondary node
 SELECT groupid AS worker_1_group FROM pg_dist_node WHERE nodeport = :worker_1_port \gset
-SELECT master_add_node('localhost', 8888, groupid => :worker_1_group, noderole => 'secondary');
+SELECT 1 FROM master_add_node('localhost', 8888, groupid => :worker_1_group, noderole => 'secondary');
 SELECT start_metadata_sync_to_node('localhost', 8888);
 SELECT hasmetadata FROM pg_dist_node WHERE nodeport = 8888;
 SELECT stop_metadata_sync_to_node('localhost', 8888);
@@ -520,7 +520,7 @@ SET citus.replication_model TO 'streaming';
 SELECT create_distributed_table('mx_table', 'a');
 
 \c - postgres - :master_port
-SELECT master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
 
 \c - mx_user - :worker_1_port
@@ -634,7 +634,7 @@ FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement
 WHERE logicalrelid='mx_ref'::regclass;
 
 \c - - - :master_port
-SELECT master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 
 SELECT shardid, nodename, nodeport 
 FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement

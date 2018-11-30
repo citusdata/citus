@@ -9,7 +9,8 @@ ORDER BY attrelid, attname;
 --------------+-------------+---------------+---------------
  pg_dist_node | hasmetadata | t             | {f}
  pg_dist_node | isactive    | t             | {t}
+ pg_dist_node | isdatanode  | t             | {t}
  pg_dist_node | nodecluster | t             | {default}
  pg_dist_node | noderole    | t             | {primary}
-(4 rows)
+(5 rows)
 

@@ -36,6 +36,7 @@ SET citus.shard_count TO 16;
 SET citus.shard_replication_factor TO 1;
 
 SELECT isactive FROM master_activate_node('localhost', :worker_2_port);
+
 CREATE TABLE cluster_management_test (col_1 text, col_2 int);
 SELECT create_distributed_table('cluster_management_test', 'col_1', 'hash');
 
@@ -289,8 +290,26 @@ SELECT master_update_node(:worker_1_node, 'localhost', :worker_2_port);
 -- master_update_node moves a node
 SELECT master_update_node(:worker_1_node, 'somehost', 9000);
 
-SELECT * FROM pg_dist_node WHERE nodeid = :worker_1_node;
+SELECT nodename, nodeport FROM pg_dist_node WHERE nodeid = :worker_1_node;
 
 -- cleanup
 SELECT master_update_node(:worker_1_node, 'localhost', :worker_1_port);
-SELECT * FROM pg_dist_node WHERE nodeid = :worker_1_node;
+SELECT nodename, nodeport FROM pg_dist_node WHERE nodeid = :worker_1_node;
+
+-- setting isdatanode to false means that there should not be any shards on the node
+UPDATE pg_dist_node SET isdatanode = false WHERE nodeport = :worker_2_port;
+CREATE TABLE test_dist (x int, y int);
+CREATE TABLE test_ref (a int, b int);
+SELECT create_distributed_table('test_dist', 'x');
+SELECT create_reference_table('test_ref');
+
+SELECT nodeport, count(*)
+FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
+WHERE logicalrelid = 'test_dist'::regclass GROUP BY nodeport;
+
+SELECT nodeport, count(*)
+FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
+WHERE logicalrelid = 'test_ref'::regclass GROUP BY nodeport;
+
+DROP TABLE test_dist, test_ref;
+UPDATE pg_dist_node SET isdatanode = true;

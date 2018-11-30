@@ -446,7 +446,7 @@ ActivateNode(char *nodeName, int nodePort)
 
 	workerNode = FindWorkerNodeAnyCluster(nodeName, nodePort);
 
-	if (WorkerNodeIsPrimary(workerNode))
+	if (WorkerNodeIsPrimary(workerNode) && workerNode->isDataNode)
 	{
 		ReplicateAllReferenceTablesToNode(nodeName, nodePort);
 	}
@@ -869,7 +869,7 @@ RemoveNodeFromCluster(char *nodeName, int32 nodePort)
 	 * column for colocation group of reference tables so that replication factor will
 	 * be equal to worker count.
 	 */
-	if (WorkerNodeIsPrimary(workerNode))
+	if (workerNode->isDataNode && WorkerNodeIsPrimary(workerNode))
 	{
 		referenceTableList = ReferenceTableOidList();
 		if (list_length(referenceTableList) != 0)
@@ -877,7 +877,7 @@ RemoveNodeFromCluster(char *nodeName, int32 nodePort)
 			Oid firstReferenceTableId = linitial_oid(referenceTableList);
 			uint32 referenceTableColocationId = TableColocationId(firstReferenceTableId);
 
-			List *workerNodeList = ActivePrimaryNodeList();
+			List *workerNodeList = ActivePrimaryDataNodeList();
 			int workerCount = list_length(workerNodeList);
 
 			UpdateColocationGroupReplicationFactor(referenceTableColocationId,
@@ -1124,6 +1124,7 @@ GenerateNodeTuple(WorkerNode *workerNode)
 	values[Anum_pg_dist_node_isactive - 1] = BoolGetDatum(workerNode->isActive);
 	values[Anum_pg_dist_node_noderole - 1] = ObjectIdGetDatum(workerNode->nodeRole);
 	values[Anum_pg_dist_node_nodecluster - 1] = nodeClusterNameDatum;
+	values[Anum_pg_dist_node_isdatanode - 1] = BoolGetDatum(workerNode->isDataNode);
 
 	pgDistNode = heap_open(DistNodeRelationId(), AccessShareLock);
 
@@ -1257,6 +1258,7 @@ InsertNodeRow(int nodeid, char *nodeName, int32 nodePort, uint32 groupId, char *
 	values[Anum_pg_dist_node_isactive - 1] = BoolGetDatum(isActive);
 	values[Anum_pg_dist_node_noderole - 1] = ObjectIdGetDatum(nodeRole);
 	values[Anum_pg_dist_node_nodecluster - 1] = nodeClusterNameDatum;
+	values[Anum_pg_dist_node_isdatanode - 1] = BoolGetDatum(true);
 
 	pgDistNode = heap_open(DistNodeRelationId(), RowExclusiveLock);
 
@@ -1456,6 +1458,7 @@ ParseWorkerNodeFileAndRename()
 		workerNode->workerPort = nodePort;
 		workerNode->hasMetadata = false;
 		workerNode->isActive = true;
+		workerNode->isDataNode = true;
 
 		workerNodeList = lappend(workerNodeList, workerNode);
 	}
@@ -1506,6 +1509,7 @@ TupleToWorkerNode(TupleDesc tupleDescriptor, HeapTuple heapTuple)
 	workerNode->hasMetadata = DatumGetBool(datumArray[Anum_pg_dist_node_hasmetadata - 1]);
 	workerNode->isActive = DatumGetBool(datumArray[Anum_pg_dist_node_isactive - 1]);
 	workerNode->nodeRole = DatumGetObjectId(datumArray[Anum_pg_dist_node_noderole - 1]);
+	workerNode->isDataNode = DatumGetBool(datumArray[Anum_pg_dist_node_isdatanode - 1]);
 
 	{
 		Name nodeClusterName = DatumGetName(datumArray[Anum_pg_dist_node_nodecluster -

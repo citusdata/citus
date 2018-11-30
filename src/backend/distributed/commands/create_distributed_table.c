@@ -276,7 +276,7 @@ create_reference_table(PG_FUNCTION_ARGS)
 	 */
 	EnsureRelationKindSupported(relationId);
 
-	workerNodeList = ActivePrimaryNodeList();
+	workerNodeList = ActivePrimaryDataNodeList();
 	workerCount = list_length(workerNodeList);
 
 	/* if there are no workers, error out */
@@ -286,7 +286,7 @@ create_reference_table(PG_FUNCTION_ARGS)
 
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 						errmsg("cannot create reference table \"%s\"", relationName),
-						errdetail("There are no active worker nodes.")));
+						errdetail("There are no active data nodes.")));
 	}
 
 	CreateDistributedTable(relationId, distributionColumn, DISTRIBUTE_BY_NONE,
@@ -825,7 +825,7 @@ EnsureTableCanBeColocatedWith(Oid relationId, char replicationModel,
 static void
 EnsureSchemaExistsOnAllNodes(Oid relationId)
 {
-	List *workerNodeList = ActivePrimaryNodeList();
+	List *workerNodeList = ActivePrimaryDataNodeList();
 	ListCell *workerNodeCell = NULL;
 	StringInfo applySchemaCreationDDL = makeStringInfo();
 
