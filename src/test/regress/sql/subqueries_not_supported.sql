@@ -149,6 +149,13 @@ WHERE
     )
 ;
 
+
+-- We do not support GROUPING SETS in subqueries
+-- This also includes ROLLUP or CUBE clauses
+SELECT * FROM (SELECT user_id, value_1 FROM users_table GROUP BY GROUPING SETS ((user_id), (value_1))) s;
+SELECT * FROM (SELECT user_id, value_1 FROM users_table GROUP BY ROLLUP (user_id, value_1)) s;
+SELECT * FROM (SELECT user_id, value_1 FROM users_table GROUP BY CUBE (user_id, value_1)) s;
+
 SET client_min_messages TO DEFAULT;
 
 DROP SCHEMA not_supported CASCADE;

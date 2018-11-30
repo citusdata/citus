@@ -157,6 +157,17 @@ WHERE
 ;
 ERROR:  cannot push down this subquery
 DETAIL:  Having qual without group by on partition column is currently unsupported when a subquery references a column from another query
+-- We do not support GROUPING SETS in subqueries
+-- This also includes ROLLUP or CUBE clauses
+SELECT * FROM (SELECT user_id, value_1 FROM users_table GROUP BY GROUPING SETS ((user_id), (value_1))) s;
+ERROR:  could not run distributed query with GROUPING SETS, CUBE, or ROLLUP
+HINT:  Consider using an equality filter on the distributed table's partition column.
+SELECT * FROM (SELECT user_id, value_1 FROM users_table GROUP BY ROLLUP (user_id, value_1)) s;
+ERROR:  could not run distributed query with GROUPING SETS, CUBE, or ROLLUP
+HINT:  Consider using an equality filter on the distributed table's partition column.
+SELECT * FROM (SELECT user_id, value_1 FROM users_table GROUP BY CUBE (user_id, value_1)) s;
+ERROR:  could not run distributed query with GROUPING SETS, CUBE, or ROLLUP
+HINT:  Consider using an equality filter on the distributed table's partition column.
 SET client_min_messages TO DEFAULT;
 DROP SCHEMA not_supported CASCADE;
 NOTICE:  drop cascades to table users_table_local

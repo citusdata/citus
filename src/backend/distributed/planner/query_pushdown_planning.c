@@ -807,6 +807,14 @@ DeferErrorIfCannotPushdownSubquery(Query *subqueryTree, bool outerMostQueryHasLi
 		}
 	}
 
+	/* grouping sets are not allowed in subqueries*/
+	if (subqueryTree->groupingSets)
+	{
+		preconditionsSatisfied = false;
+		errorDetail = "could not run distributed query with GROUPING SETS, CUBE, "
+					  "or ROLLUP";
+	}
+
 	/*
 	 * We support window functions when the window function
 	 * is partitioned on distribution column.
