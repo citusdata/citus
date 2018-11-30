@@ -1542,8 +1542,49 @@ SELECT create_distributed_table('partitioning_hash_join_test', 'id');
 ERROR:  relation "partitioning_hash_join_test" does not exist
 LINE 1: SELECT create_distributed_table('partitioning_hash_join_test...
                                         ^
--- see the query plan without partition-wise join
-EXPLAIN
+SELECT success FROM run_command_on_workers('alter system set enable_mergejoin to off');
+ success 
+---------
+ t
+ t
+(2 rows)
+
+SELECT success FROM run_command_on_workers('alter system set enable_nestloop to off');
+ success 
+---------
+ t
+ t
+(2 rows)
+
+SELECT success FROM run_command_on_workers('alter system set enable_indexscan to off');
+ success 
+---------
+ t
+ t
+(2 rows)
+
+SELECT success FROM run_command_on_workers('alter system set enable_indexonlyscan to off');
+ success 
+---------
+ t
+ t
+(2 rows)
+
+SELECT success FROM run_command_on_workers('alter system set enable_partitionwise_join to off');
+ success 
+---------
+ f
+ f
+(2 rows)
+
+SELECT success FROM run_command_on_workers('select pg_reload_conf()');
+ success 
+---------
+ t
+ t
+(2 rows)
+
+EXPLAIN (COSTS OFF)
 SELECT * FROM partitioning_hash_test JOIN partitioning_hash_join_test USING (id, subid);
 ERROR:  relation "partitioning_hash_test" does not exist
 LINE 2: SELECT * FROM partitioning_hash_test JOIN partitioning_hash_...
@@ -1565,8 +1606,7 @@ SELECT success FROM run_command_on_workers('select pg_reload_conf()');
 
 SET enable_partitionwise_join TO on;
 ERROR:  unrecognized configuration parameter "enable_partitionwise_join"
--- see the new query plan
-EXPLAIN
+EXPLAIN (COSTS OFF)
 SELECT * FROM partitioning_hash_test JOIN partitioning_hash_join_test USING (id, subid);
 ERROR:  relation "partitioning_hash_test" does not exist
 LINE 2: SELECT * FROM partitioning_hash_test JOIN partitioning_hash_...
@@ -1574,17 +1614,45 @@ LINE 2: SELECT * FROM partitioning_hash_test JOIN partitioning_hash_...
 -- note that partition-wise joins only work when partition key is in the join
 -- following join does not have that, therefore join will not be pushed down to
 -- partitions
-EXPLAIN
+EXPLAIN (COSTS OFF)
 SELECT * FROM partitioning_hash_test JOIN partitioning_hash_join_test USING (id);
 ERROR:  relation "partitioning_hash_test" does not exist
 LINE 2: SELECT * FROM partitioning_hash_test JOIN partitioning_hash_...
                       ^
 -- reset partition-wise join
-SELECT success FROM run_command_on_workers('reset enable_partitionwise_join');
+SELECT success FROM run_command_on_workers('alter system reset enable_partitionwise_join');
  success 
 ---------
  f
  f
+(2 rows)
+
+SELECT success FROM run_command_on_workers('alter system reset enable_mergejoin');
+ success 
+---------
+ t
+ t
+(2 rows)
+
+SELECT success FROM run_command_on_workers('alter system reset enable_nestloop');
+ success 
+---------
+ t
+ t
+(2 rows)
+
+SELECT success FROM run_command_on_workers('alter system reset enable_indexscan');
+ success 
+---------
+ t
+ t
+(2 rows)
+
+SELECT success FROM run_command_on_workers('alter system reset enable_indexonlyscan');
+ success 
+---------
+ t
+ t
 (2 rows)
 
 SELECT success FROM run_command_on_workers('select pg_reload_conf()');

@@ -1562,29 +1562,70 @@ SELECT create_distributed_table('partitioning_hash_join_test', 'id');
  
 (1 row)
 
--- see the query plan without partition-wise join
-EXPLAIN
+SELECT success FROM run_command_on_workers('alter system set enable_mergejoin to off');
+ success 
+---------
+ t
+ t
+(2 rows)
+
+SELECT success FROM run_command_on_workers('alter system set enable_nestloop to off');
+ success 
+---------
+ t
+ t
+(2 rows)
+
+SELECT success FROM run_command_on_workers('alter system set enable_indexscan to off');
+ success 
+---------
+ t
+ t
+(2 rows)
+
+SELECT success FROM run_command_on_workers('alter system set enable_indexonlyscan to off');
+ success 
+---------
+ t
+ t
+(2 rows)
+
+SELECT success FROM run_command_on_workers('alter system set enable_partitionwise_join to off');
+ success 
+---------
+ t
+ t
+(2 rows)
+
+SELECT success FROM run_command_on_workers('select pg_reload_conf()');
+ success 
+---------
+ t
+ t
+(2 rows)
+
+EXPLAIN (COSTS OFF)
 SELECT * FROM partitioning_hash_test JOIN partitioning_hash_join_test USING (id, subid);
-                                                                                       QUERY PLAN                                                                                       
-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- Custom Scan (Citus Real-Time)  (cost=0.00..0.00 rows=0 width=0)
+                                                                                QUERY PLAN                                                                                
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Custom Scan (Citus Real-Time)
    Task Count: 4
    Tasks Shown: One of 4
    ->  Task
          Node: host=localhost port=57637 dbname=regression
-         ->  Merge Join  (cost=563.58..752.73 rows=383 width=8)
-               Merge Cond: ((partitioning_hash_test.id = partitioning_hash_join_test.id) AND (partitioning_hash_test.subid = partitioning_hash_join_test.subid))
-               ->  Merge Append  (cost=0.43..123.59 rows=2262 width=8)
-                     Sort Key: partitioning_hash_test.id, partitioning_hash_test.subid
-                     ->  Index Only Scan using partitioning_hash_test_0_1660016_pkey on partitioning_hash_test_0_1660016 partitioning_hash_test  (cost=0.12..8.14 rows=1 width=8)
-                     ->  Index Only Scan using partitioning_hash_test_1_1660020_pkey on partitioning_hash_test_1_1660020 partitioning_hash_test_1  (cost=0.15..78.06 rows=2260 width=8)
-                     ->  Index Only Scan using partitioning_hash_test_2_1660032_pkey on partitioning_hash_test_2_1660032 partitioning_hash_test_2  (cost=0.12..8.14 rows=1 width=8)
-               ->  Sort  (cost=563.15..580.10 rows=6780 width=8)
-                     Sort Key: partitioning_hash_join_test.id, partitioning_hash_join_test.subid
-                     ->  Append  (cost=0.00..131.70 rows=6780 width=8)
-                           ->  Seq Scan on partitioning_hash_join_test_0_1660133 partitioning_hash_join_test  (cost=0.00..32.60 rows=2260 width=8)
-                           ->  Seq Scan on partitioning_hash_join_test_1_1660137 partitioning_hash_join_test_1  (cost=0.00..32.60 rows=2260 width=8)
-                           ->  Seq Scan on partitioning_hash_join_test_2_1660141 partitioning_hash_join_test_2  (cost=0.00..32.60 rows=2260 width=8)
+         ->  Gather
+               Workers Planned: 2
+               ->  Parallel Hash Join
+                     Hash Cond: ((partitioning_hash_join_test.id = partitioning_hash_test_1.id) AND (partitioning_hash_join_test.subid = partitioning_hash_test_1.subid))
+                     ->  Parallel Append
+                           ->  Parallel Seq Scan on partitioning_hash_join_test_0_1660133 partitioning_hash_join_test
+                           ->  Parallel Seq Scan on partitioning_hash_join_test_1_1660137 partitioning_hash_join_test_1
+                           ->  Parallel Seq Scan on partitioning_hash_join_test_2_1660141 partitioning_hash_join_test_2
+                     ->  Parallel Hash
+                           ->  Parallel Append
+                                 ->  Parallel Seq Scan on partitioning_hash_test_1_1660020 partitioning_hash_test_1
+                                 ->  Parallel Seq Scan on partitioning_hash_test_0_1660016 partitioning_hash_test
+                                 ->  Parallel Seq Scan on partitioning_hash_test_2_1660032 partitioning_hash_test_2
 (18 rows)
 
 -- set partition-wise join on
@@ -1603,64 +1644,88 @@ SELECT success FROM run_command_on_workers('select pg_reload_conf()');
 (2 rows)
 
 SET enable_partitionwise_join TO on;
--- see the new query plan
-EXPLAIN
+EXPLAIN (COSTS OFF)
 SELECT * FROM partitioning_hash_test JOIN partitioning_hash_join_test USING (id, subid);
-                                                                                       QUERY PLAN                                                                                       
-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- Custom Scan (Citus Real-Time)  (cost=0.00..0.00 rows=0 width=0)
+                                                                                  QUERY PLAN                                                                                  
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Custom Scan (Citus Real-Time)
    Task Count: 4
    Tasks Shown: One of 4
    ->  Task
          Node: host=localhost port=57637 dbname=regression
-         ->  Append  (cost=1.02..367.91 rows=130 width=8)
-               ->  Hash Join  (cost=1.02..50.59 rows=1 width=8)
+         ->  Append
+               ->  Hash Join
                      Hash Cond: ((partitioning_hash_join_test.id = partitioning_hash_test.id) AND (partitioning_hash_join_test.subid = partitioning_hash_test.subid))
-                     ->  Seq Scan on partitioning_hash_join_test_0_1660133 partitioning_hash_join_test  (cost=0.00..32.60 rows=2260 width=8)
-                     ->  Hash  (cost=1.01..1.01 rows=1 width=8)
-                           ->  Seq Scan on partitioning_hash_test_0_1660016 partitioning_hash_test  (cost=0.00..1.01 rows=1 width=8)
-               ->  Merge Join  (cost=158.66..266.09 rows=128 width=8)
-                     Merge Cond: ((partitioning_hash_test_1.id = partitioning_hash_join_test_1.id) AND (partitioning_hash_test_1.subid = partitioning_hash_join_test_1.subid))
-                     ->  Index Only Scan using partitioning_hash_test_1_1660020_pkey on partitioning_hash_test_1_1660020 partitioning_hash_test_1  (cost=0.15..78.06 rows=2260 width=8)
-                     ->  Sort  (cost=158.51..164.16 rows=2260 width=8)
-                           Sort Key: partitioning_hash_join_test_1.id, partitioning_hash_join_test_1.subid
-                           ->  Seq Scan on partitioning_hash_join_test_1_1660137 partitioning_hash_join_test_1  (cost=0.00..32.60 rows=2260 width=8)
-               ->  Hash Join  (cost=1.02..50.59 rows=1 width=8)
+                     ->  Seq Scan on partitioning_hash_join_test_0_1660133 partitioning_hash_join_test
+                     ->  Hash
+                           ->  Seq Scan on partitioning_hash_test_0_1660016 partitioning_hash_test
+               ->  Hash Join
+                     Hash Cond: ((partitioning_hash_test_1.id = partitioning_hash_join_test_1.id) AND (partitioning_hash_test_1.subid = partitioning_hash_join_test_1.subid))
+                     ->  Seq Scan on partitioning_hash_test_1_1660020 partitioning_hash_test_1
+                     ->  Hash
+                           ->  Seq Scan on partitioning_hash_join_test_1_1660137 partitioning_hash_join_test_1
+               ->  Hash Join
                      Hash Cond: ((partitioning_hash_join_test_2.id = partitioning_hash_test_2.id) AND (partitioning_hash_join_test_2.subid = partitioning_hash_test_2.subid))
-                     ->  Seq Scan on partitioning_hash_join_test_2_1660141 partitioning_hash_join_test_2  (cost=0.00..32.60 rows=2260 width=8)
-                     ->  Hash  (cost=1.01..1.01 rows=1 width=8)
-                           ->  Seq Scan on partitioning_hash_test_2_1660032 partitioning_hash_test_2  (cost=0.00..1.01 rows=1 width=8)
-(22 rows)
+                     ->  Seq Scan on partitioning_hash_join_test_2_1660141 partitioning_hash_join_test_2
+                     ->  Hash
+                           ->  Seq Scan on partitioning_hash_test_2_1660032 partitioning_hash_test_2
+(21 rows)
 
 -- note that partition-wise joins only work when partition key is in the join
 -- following join does not have that, therefore join will not be pushed down to
 -- partitions
-EXPLAIN
+EXPLAIN (COSTS OFF)
 SELECT * FROM partitioning_hash_test JOIN partitioning_hash_join_test USING (id);
-                                                                                       QUERY PLAN                                                                                       
-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- Custom Scan (Citus Real-Time)  (cost=0.00..0.00 rows=0 width=0)
+                                               QUERY PLAN                                                
+---------------------------------------------------------------------------------------------------------
+ Custom Scan (Citus Real-Time)
    Task Count: 4
    Tasks Shown: One of 4
    ->  Task
          Node: host=localhost port=57637 dbname=regression
-         ->  Merge Join  (cost=563.58..1842.63 rows=76682 width=12)
-               Merge Cond: (partitioning_hash_test.id = partitioning_hash_join_test.id)
-               ->  Merge Append  (cost=0.43..123.59 rows=2262 width=8)
-                     Sort Key: partitioning_hash_test.id
-                     ->  Index Only Scan using partitioning_hash_test_0_1660016_pkey on partitioning_hash_test_0_1660016 partitioning_hash_test  (cost=0.12..8.14 rows=1 width=8)
-                     ->  Index Only Scan using partitioning_hash_test_1_1660020_pkey on partitioning_hash_test_1_1660020 partitioning_hash_test_1  (cost=0.15..78.06 rows=2260 width=8)
-                     ->  Index Only Scan using partitioning_hash_test_2_1660032_pkey on partitioning_hash_test_2_1660032 partitioning_hash_test_2  (cost=0.12..8.14 rows=1 width=8)
-               ->  Sort  (cost=563.15..580.10 rows=6780 width=8)
-                     Sort Key: partitioning_hash_join_test.id
-                     ->  Append  (cost=0.00..131.70 rows=6780 width=8)
-                           ->  Seq Scan on partitioning_hash_join_test_0_1660133 partitioning_hash_join_test  (cost=0.00..32.60 rows=2260 width=8)
-                           ->  Seq Scan on partitioning_hash_join_test_1_1660137 partitioning_hash_join_test_1  (cost=0.00..32.60 rows=2260 width=8)
-                           ->  Seq Scan on partitioning_hash_join_test_2_1660141 partitioning_hash_join_test_2  (cost=0.00..32.60 rows=2260 width=8)
-(18 rows)
+         ->  Hash Join
+               Hash Cond: (partitioning_hash_join_test.id = partitioning_hash_test.id)
+               ->  Append
+                     ->  Seq Scan on partitioning_hash_join_test_0_1660133 partitioning_hash_join_test
+                     ->  Seq Scan on partitioning_hash_join_test_1_1660137 partitioning_hash_join_test_1
+                     ->  Seq Scan on partitioning_hash_join_test_2_1660141 partitioning_hash_join_test_2
+               ->  Hash
+                     ->  Append
+                           ->  Seq Scan on partitioning_hash_test_0_1660016 partitioning_hash_test
+                           ->  Seq Scan on partitioning_hash_test_1_1660020 partitioning_hash_test_1
+                           ->  Seq Scan on partitioning_hash_test_2_1660032 partitioning_hash_test_2
+(16 rows)
 
 -- reset partition-wise join
-SELECT success FROM run_command_on_workers('reset enable_partitionwise_join');
+SELECT success FROM run_command_on_workers('alter system reset enable_partitionwise_join');
+ success 
+---------
+ t
+ t
+(2 rows)
+
+SELECT success FROM run_command_on_workers('alter system reset enable_mergejoin');
+ success 
+---------
+ t
+ t
+(2 rows)
+
+SELECT success FROM run_command_on_workers('alter system reset enable_nestloop');
+ success 
+---------
+ t
+ t
+(2 rows)
+
+SELECT success FROM run_command_on_workers('alter system reset enable_indexscan');
+ success 
+---------
+ t
+ t
+(2 rows)
+
+SELECT success FROM run_command_on_workers('alter system reset enable_indexonlyscan');
  success 
 ---------
  t
