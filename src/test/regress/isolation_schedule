@@ -44,6 +44,7 @@ test: isolation_drop_vs_all
 test: isolation_ddl_vs_all
 test: isolation_citus_dist_activity
 test: isolation_validate_vs_insert
+test: isolation_insert_select_conflict
 
 # MX tests
 test: isolation_reference_on_mx

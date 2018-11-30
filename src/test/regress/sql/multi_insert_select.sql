@@ -1732,12 +1732,12 @@ FROM
 
 SELECT user_id, value_1 FROM raw_events_first ORDER BY user_id, value_1;
 
--- ON CONFLICT is unsupported
+-- ON CONFLICT is supported
 INSERT INTO raw_events_first (user_id, value_1)
 SELECT s, nextval('insert_select_test_seq') FROM generate_series(1, 5) s
 ON CONFLICT DO NOTHING;
 
--- RETURNING is unsupported
+-- RETURNING is supported
 INSERT INTO raw_events_first (user_id, value_1)
 SELECT s, nextval('insert_select_test_seq') FROM generate_series(1, 5) s
 RETURNING *;

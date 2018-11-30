@@ -1,0 +1,538 @@
+CREATE SCHEMA on_conflict;
+SET search_path TO on_conflict, public;
+SET citus.next_shard_id TO 1900000;
+SET citus.shard_replication_factor TO 1;
+CREATE TABLE target_table(col_1 int primary key, col_2 int);
+SELECT create_distributed_table('target_table','col_1');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+INSERT INTO target_table VALUES(1,2),(2,3),(3,4),(4,5),(5,6);
+CREATE TABLE source_table_1(col_1 int primary key, col_2 int, col_3 int);
+SELECT create_distributed_table('source_table_1','col_1');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+INSERT INTO source_table_1 VALUES(1,1,1),(2,2,2),(3,3,3),(4,4,4),(5,5,5);
+CREATE TABLE source_table_2(col_1 int, col_2 int, col_3 int);
+SELECT create_distributed_table('source_table_2','col_1');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+INSERT INTO source_table_2 VALUES(6,6,6),(7,7,7),(8,8,8),(9,9,9),(10,10,10);
+SET client_min_messages to debug1;
+-- Generate series directly on the coordinator and on conflict do nothing
+INSERT INTO target_table (col_1, col_2) 
+SELECT 
+	s, s 
+FROM 
+	generate_series(1,10) s 
+ON CONFLICT DO NOTHING;
+DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+-- Generate series directly on the coordinator and on conflict update the target table
+INSERT INTO target_table (col_1, col_2) 
+SELECT s, s 
+FROM 
+	generate_series(1,10) s 
+ON CONFLICT(col_1) DO UPDATE SET col_2 = EXCLUDED.col_2 + 1;
+DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+-- Since partition columns do not match, pull the data to the coordinator
+-- and do not change conflicted values
+INSERT INTO target_table
+SELECT 
+	col_2, col_3 
+FROM
+	source_table_1
+ON CONFLICT DO NOTHING;
+DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
+DETAIL:  The target table's partition column should correspond to a partition column in the subquery.
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+-- Since partition columns do not match, pull the data to the coordinator
+-- and update the non-partition column. Query is wrapped by CTE to return
+-- ordered result.
+WITH inserted_table AS (
+	INSERT INTO target_table
+	SELECT 
+		col_2, col_3 
+	FROM
+		source_table_1
+	ON CONFLICT(col_1) DO UPDATE SET col_2 = EXCLUDED.col_2 RETURNING *
+) SELECT * FROM inserted_table ORDER BY 1;
+DEBUG:  data-modifying statements are not supported in the WITH clauses of distributed queries
+DEBUG:  generating subplan 8_1 for CTE inserted_table: INSERT INTO on_conflict.target_table (col_1, col_2) SELECT col_2, col_3 FROM on_conflict.source_table_1 ON CONFLICT(col_1) DO UPDATE SET col_2 = excluded.col_2 RETURNING target_table.col_1, target_table.col_2
+DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
+DETAIL:  The target table's partition column should correspond to a partition column in the subquery.
+DEBUG:  Plan 8 query after replacing subqueries and CTEs: SELECT col_1, col_2 FROM (SELECT intermediate_result.col_1, intermediate_result.col_2 FROM read_intermediate_result('8_1'::text, 'binary'::citus_copy_format) intermediate_result(col_1 integer, col_2 integer)) inserted_table ORDER BY col_1
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+ col_1 | col_2 
+-------+-------
+     1 |     1
+     2 |     2
+     3 |     3
+     4 |     4
+     5 |     5
+(5 rows)
+
+-- Subquery should be recursively planned due to the limit and do nothing on conflict
+INSERT INTO target_table
+SELECT 
+	col_1, col_2
+FROM (
+	SELECT 
+		col_1, col_2, col_3 
+	FROM
+		source_table_1
+	LIMIT 5
+) as foo
+ON CONFLICT DO NOTHING;
+DEBUG:  LIMIT clauses are not allowed in distributed INSERT ... SELECT queries
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+DEBUG:  push down of limit count: 5
+DEBUG:  generating subplan 12_1 for subquery SELECT col_1, col_2, col_3 FROM on_conflict.source_table_1 LIMIT 5
+DEBUG:  Plan 12 query after replacing subqueries and CTEs: SELECT col_1, col_2 FROM (SELECT intermediate_result.col_1, intermediate_result.col_2, intermediate_result.col_3 FROM read_intermediate_result('12_1'::text, 'binary'::citus_copy_format) intermediate_result(col_1 integer, col_2 integer, col_3 integer)) foo
+-- Subquery should be recursively planned due to the limit and update on conflict
+-- Query is wrapped by CTE to return ordered result.
+WITH inserted_table AS (
+	INSERT INTO target_table
+	SELECT 
+		col_1, col_2
+	FROM (
+		SELECT 
+			col_1, col_2, col_3 
+		FROM
+			source_table_1
+		LIMIT 5
+	) as foo
+	ON CONFLICT(col_1) DO UPDATE SET col_2 = EXCLUDED.col_2 RETURNING *
+) SELECT * FROM inserted_table ORDER BY 1;
+DEBUG:  data-modifying statements are not supported in the WITH clauses of distributed queries
+DEBUG:  generating subplan 14_1 for CTE inserted_table: INSERT INTO on_conflict.target_table (col_1, col_2) SELECT col_1, col_2 FROM (SELECT source_table_1.col_1, source_table_1.col_2, source_table_1.col_3 FROM on_conflict.source_table_1 LIMIT 5) foo ON CONFLICT(col_1) DO UPDATE SET col_2 = excluded.col_2 RETURNING target_table.col_1, target_table.col_2
+DEBUG:  LIMIT clauses are not allowed in distributed INSERT ... SELECT queries
+DEBUG:  Plan 14 query after replacing subqueries and CTEs: SELECT col_1, col_2 FROM (SELECT intermediate_result.col_1, intermediate_result.col_2 FROM read_intermediate_result('14_1'::text, 'binary'::citus_copy_format) intermediate_result(col_1 integer, col_2 integer)) inserted_table ORDER BY col_1
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+DEBUG:  push down of limit count: 5
+DEBUG:  generating subplan 16_1 for subquery SELECT col_1, col_2, col_3 FROM on_conflict.source_table_1 LIMIT 5
+DEBUG:  Plan 16 query after replacing subqueries and CTEs: SELECT col_1, col_2 FROM (SELECT intermediate_result.col_1, intermediate_result.col_2, intermediate_result.col_3 FROM read_intermediate_result('16_1'::text, 'binary'::citus_copy_format) intermediate_result(col_1 integer, col_2 integer, col_3 integer)) foo
+ col_1 | col_2 
+-------+-------
+     1 |     1
+     2 |     2
+     3 |     3
+     4 |     4
+     5 |     5
+(5 rows)
+
+-- Test with multiple subqueries. Query is wrapped by CTE to return ordered result.
+WITH inserted_table AS (
+	INSERT INTO target_table
+	SELECT 
+		col_1, col_2
+	FROM (
+		(SELECT 
+			col_1, col_2, col_3 
+		FROM
+			source_table_1
+		LIMIT 5)
+		UNION
+		(SELECT
+			col_1, col_2, col_3
+		FROM
+			source_table_2
+		LIMIT 5)
+	) as foo
+	ON CONFLICT(col_1) DO UPDATE SET col_2 = 0 RETURNING *
+) SELECT * FROM inserted_table ORDER BY 1;
+DEBUG:  data-modifying statements are not supported in the WITH clauses of distributed queries
+DEBUG:  generating subplan 18_1 for CTE inserted_table: INSERT INTO on_conflict.target_table (col_1, col_2) SELECT col_1, col_2 FROM ((SELECT source_table_1.col_1, source_table_1.col_2, source_table_1.col_3 FROM on_conflict.source_table_1 LIMIT 5) UNION (SELECT source_table_2.col_1, source_table_2.col_2, source_table_2.col_3 FROM on_conflict.source_table_2 LIMIT 5)) foo ON CONFLICT(col_1) DO UPDATE SET col_2 = 0 RETURNING target_table.col_1, target_table.col_2
+DEBUG:  Set operations are not allowed in distributed INSERT ... SELECT queries
+DEBUG:  Plan 18 query after replacing subqueries and CTEs: SELECT col_1, col_2 FROM (SELECT intermediate_result.col_1, intermediate_result.col_2 FROM read_intermediate_result('18_1'::text, 'binary'::citus_copy_format) intermediate_result(col_1 integer, col_2 integer)) inserted_table ORDER BY col_1
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+DEBUG:  push down of limit count: 5
+DEBUG:  generating subplan 20_1 for subquery SELECT col_1, col_2, col_3 FROM on_conflict.source_table_1 LIMIT 5
+DEBUG:  push down of limit count: 5
+DEBUG:  generating subplan 20_2 for subquery SELECT col_1, col_2, col_3 FROM on_conflict.source_table_2 LIMIT 5
+DEBUG:  generating subplan 20_3 for subquery SELECT intermediate_result.col_1, intermediate_result.col_2, intermediate_result.col_3 FROM read_intermediate_result('20_1'::text, 'binary'::citus_copy_format) intermediate_result(col_1 integer, col_2 integer, col_3 integer) UNION SELECT intermediate_result.col_1, intermediate_result.col_2, intermediate_result.col_3 FROM read_intermediate_result('20_2'::text, 'binary'::citus_copy_format) intermediate_result(col_1 integer, col_2 integer, col_3 integer)
+DEBUG:  Plan 20 query after replacing subqueries and CTEs: SELECT col_1, col_2 FROM (SELECT intermediate_result.col_1, intermediate_result.col_2, intermediate_result.col_3 FROM read_intermediate_result('20_3'::text, 'binary'::citus_copy_format) intermediate_result(col_1 integer, col_2 integer, col_3 integer)) foo
+ col_1 | col_2 
+-------+-------
+     1 |     0
+     2 |     0
+     3 |     0
+     4 |     0
+     5 |     0
+     6 |     0
+     7 |     0
+     8 |     0
+     9 |     0
+    10 |     0
+(10 rows)
+
+-- Get the select part from cte and do nothing on conflict
+WITH cte AS(
+	SELECT col_1, col_2 FROM source_table_1
+)
+INSERT INTO target_table SELECT * FROM cte ON CONFLICT DO NOTHING;
+DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+DEBUG:  generating subplan 25_1 for CTE cte: SELECT col_1, col_2 FROM on_conflict.source_table_1
+DEBUG:  Plan 25 query after replacing subqueries and CTEs: SELECT col_1, col_2 FROM (SELECT cte.col_1, cte.col_2 FROM (SELECT intermediate_result.col_1, intermediate_result.col_2 FROM read_intermediate_result('25_1'::text, 'binary'::citus_copy_format) intermediate_result(col_1 integer, col_2 integer)) cte) citus_insert_select_subquery
+-- Get the select part from cte and update on conflict
+WITH cte AS(
+	SELECT col_1, col_2 FROM source_table_1
+)
+INSERT INTO target_table SELECT * FROM cte ON CONFLICT(col_1) DO UPDATE SET col_2 = EXCLUDED.col_2 + 1;
+DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+DEBUG:  generating subplan 28_1 for CTE cte: SELECT col_1, col_2 FROM on_conflict.source_table_1
+DEBUG:  Plan 28 query after replacing subqueries and CTEs: SELECT col_1, col_2 FROM (SELECT cte.col_1, cte.col_2 FROM (SELECT intermediate_result.col_1, intermediate_result.col_2 FROM read_intermediate_result('28_1'::text, 'binary'::citus_copy_format) intermediate_result(col_1 integer, col_2 integer)) cte) citus_insert_select_subquery
+SELECT * FROM target_table ORDER BY 1;
+ col_1 | col_2 
+-------+-------
+     1 |     2
+     2 |     3
+     3 |     4
+     4 |     5
+     5 |     6
+     6 |     0
+     7 |     0
+     8 |     0
+     9 |     0
+    10 |     0
+(10 rows)
+
+-- Test with multiple CTEs
+WITH cte AS(
+	SELECT col_1, col_2 FROM source_table_1
+), cte_2 AS(
+	SELECT col_1, col_2 FROM source_table_2
+)
+INSERT INTO target_table ((SELECT * FROM cte) UNION (SELECT * FROM cte_2)) ON CONFLICT(col_1) DO UPDATE SET col_2 = EXCLUDED.col_2 + 1;
+DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+DEBUG:  generating subplan 32_1 for CTE cte: SELECT col_1, col_2 FROM on_conflict.source_table_1
+DEBUG:  generating subplan 32_2 for CTE cte_2: SELECT col_1, col_2 FROM on_conflict.source_table_2
+DEBUG:  generating subplan 32_3 for subquery SELECT cte.col_1, cte.col_2 FROM (SELECT intermediate_result.col_1, intermediate_result.col_2 FROM read_intermediate_result('32_1'::text, 'binary'::citus_copy_format) intermediate_result(col_1 integer, col_2 integer)) cte UNION SELECT cte_2.col_1, cte_2.col_2 FROM (SELECT intermediate_result.col_1, intermediate_result.col_2 FROM read_intermediate_result('32_2'::text, 'binary'::citus_copy_format) intermediate_result(col_1 integer, col_2 integer)) cte_2
+DEBUG:  Plan 32 query after replacing subqueries and CTEs: SELECT col_1, col_2 FROM (SELECT intermediate_result.col_1, intermediate_result.col_2 FROM read_intermediate_result('32_3'::text, 'binary'::citus_copy_format) intermediate_result(col_1 integer, col_2 integer)) citus_insert_select_subquery
+SELECT * FROM target_table ORDER BY 1;
+ col_1 | col_2 
+-------+-------
+     1 |     2
+     2 |     3
+     3 |     4
+     4 |     5
+     5 |     6
+     6 |     7
+     7 |     8
+     8 |     9
+     9 |    10
+    10 |    11
+(10 rows)
+
+WITH inserted_table AS (
+	WITH cte AS(
+		SELECT col_1, col_2, col_3 FROM source_table_1
+	), cte_2 AS(
+		SELECT col_1, col_2 FROM cte
+	)
+	INSERT INTO target_table SELECT * FROM cte_2 ON CONFLICT(col_1) DO UPDATE SET col_2 = EXCLUDED.col_2 + 1 RETURNING *
+) SELECT * FROM inserted_table ORDER BY 1;
+DEBUG:  data-modifying statements are not supported in the WITH clauses of distributed queries
+DEBUG:  generating subplan 37_1 for CTE inserted_table: WITH cte AS (SELECT source_table_1.col_1, source_table_1.col_2, source_table_1.col_3 FROM on_conflict.source_table_1), cte_2 AS (SELECT cte.col_1, cte.col_2 FROM cte) INSERT INTO on_conflict.target_table (col_1, col_2) SELECT col_1, col_2 FROM cte_2 ON CONFLICT(col_1) DO UPDATE SET col_2 = (excluded.col_2 OPERATOR(pg_catalog.+) 1) RETURNING target_table.col_1, target_table.col_2
+DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
+DEBUG:  Plan 37 query after replacing subqueries and CTEs: SELECT col_1, col_2 FROM (SELECT intermediate_result.col_1, intermediate_result.col_2 FROM read_intermediate_result('37_1'::text, 'binary'::citus_copy_format) intermediate_result(col_1 integer, col_2 integer)) inserted_table ORDER BY col_1
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+DEBUG:  generating subplan 39_1 for CTE cte: SELECT col_1, col_2, col_3 FROM on_conflict.source_table_1
+DEBUG:  generating subplan 39_2 for CTE cte_2: SELECT col_1, col_2 FROM (SELECT intermediate_result.col_1, intermediate_result.col_2, intermediate_result.col_3 FROM read_intermediate_result('39_1'::text, 'binary'::citus_copy_format) intermediate_result(col_1 integer, col_2 integer, col_3 integer)) cte
+DEBUG:  Plan 39 query after replacing subqueries and CTEs: SELECT col_1, col_2 FROM (SELECT cte_2.col_1, cte_2.col_2 FROM (SELECT intermediate_result.col_1, intermediate_result.col_2 FROM read_intermediate_result('39_2'::text, 'binary'::citus_copy_format) intermediate_result(col_1 integer, col_2 integer)) cte_2) citus_insert_select_subquery
+ col_1 | col_2 
+-------+-------
+     1 |     2
+     2 |     3
+     3 |     4
+     4 |     5
+     5 |     6
+(5 rows)
+
+WITH cte AS (
+	WITH basic AS (
+		SELECT col_1, col_2 FROM source_table_1
+	)
+	INSERT INTO target_table (SELECT * FROM basic) ON CONFLICT DO NOTHING RETURNING *
+)
+UPDATE target_table SET col_2 = 4 WHERE col_1 IN (SELECT col_1 FROM cte);
+DEBUG:  common table expressions are not supported in distributed modifications
+DEBUG:  generating subplan 42_1 for CTE cte: WITH basic AS (SELECT source_table_1.col_1, source_table_1.col_2 FROM on_conflict.source_table_1) INSERT INTO on_conflict.target_table (col_1, col_2) SELECT col_1, col_2 FROM basic ON CONFLICT DO NOTHING RETURNING target_table.col_1, target_table.col_2
+DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
+DEBUG:  Plan 42 query after replacing subqueries and CTEs: UPDATE on_conflict.target_table SET col_2 = 4 WHERE (col_1 OPERATOR(pg_catalog.=) ANY (SELECT cte.col_1 FROM (SELECT intermediate_result.col_1, intermediate_result.col_2 FROM read_intermediate_result('42_1'::text, 'binary'::citus_copy_format) intermediate_result(col_1 integer, col_2 integer)) cte))
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+DEBUG:  generating subplan 44_1 for CTE basic: SELECT col_1, col_2 FROM on_conflict.source_table_1
+DEBUG:  Plan 44 query after replacing subqueries and CTEs: SELECT col_1, col_2 FROM (SELECT basic.col_1, basic.col_2 FROM (SELECT intermediate_result.col_1, intermediate_result.col_2 FROM read_intermediate_result('44_1'::text, 'binary'::citus_copy_format) intermediate_result(col_1 integer, col_2 integer)) basic) citus_insert_select_subquery
+RESET client_min_messages;
+-- Following query is not supported since error checks of the subquery pushdown planner
+-- and insert select planner have not been unified. It should work after unifying them.
+WITH cte AS (
+	SELECT 
+		col_1, col_2
+   	FROM 
+   		source_table_1
+) 
+INSERT INTO target_table 
+SELECT 
+	source_table_1.col_1,
+	source_table_1.col_2
+FROM cte, source_table_1
+WHERE cte.col_1 = source_table_1.col_1 ON CONFLICT DO NOTHING;
+ERROR:  cannot perform distributed planning for the given modification
+DETAIL:  Select query cannot be pushed down to the worker.
+-- Tests with foreign key to reference table
+CREATE TABLE test_ref_table (key int PRIMARY KEY);
+SELECT create_reference_table('test_ref_table');
+ create_reference_table 
+------------------------
+ 
+(1 row)
+
+INSERT INTO test_ref_table VALUES (1),(2),(3),(4),(5),(6),(7),(8),(9),(10);
+ALTER TABLE target_table ADD CONSTRAINT fkey FOREIGN KEY (col_1) REFERENCES test_ref_table(key) ON DELETE CASCADE;
+-- Since we try to apply DML command after modification on test_ref_table which
+-- has foreign key from target_table, following two queries are not supported.
+BEGIN;
+	TRUNCATE test_ref_table CASCADE;
+NOTICE:  truncate cascades to table "target_table"
+	INSERT INTO 
+		target_table  
+	SELECT 
+		col_2,
+		col_1
+	FROM source_table_1 ON CONFLICT (col_1) DO UPDATE SET col_2 = 55 RETURNING *;
+ERROR:  cannot execute parallel COPY on relation "target_table" after DDL command on reference relation "test_ref_table" because there is a foreign key between them and "test_ref_table" has been modified in this transaction
+DETAIL:  COPY to a distributed table uses a separate set of connections which will not be able to see the uncommitted changes to the reference table.
+HINT:  Perform the COPY in a separate transaction.
+ROLLBACK;
+BEGIN;
+	DELETE FROM test_ref_table;
+	INSERT INTO 
+		target_table
+	SELECT 
+		col_2, 
+		col_1 
+	FROM source_table_1 ON CONFLICT (col_1) DO UPDATE SET col_2 = 55 RETURNING *;
+ERROR:  cannot execute parallel COPY on relation "target_table" after DML command on reference relation "test_ref_table" because there is a foreign key between them and "test_ref_table" has been modified in this transaction
+DETAIL:  COPY to a distributed table uses a separate set of connections which will not be able to see the uncommitted changes to the reference table.
+HINT:  Perform the COPY in a separate transaction.
+ROLLBACK;
+-- Following two queries are supported since we no not modify but only select from
+-- the target_table after modification on test_ref_table.
+BEGIN;
+	TRUNCATE test_ref_table CASCADE;
+NOTICE:  truncate cascades to table "target_table"
+	INSERT INTO 
+ 		source_table_1
+	SELECT 
+		col_2,
+		col_1 
+	FROM target_table ON CONFLICT (col_1) DO UPDATE SET col_2 = 55 RETURNING *;
+ col_1 | col_2 | col_3 
+-------+-------+-------
+(0 rows)
+
+ROLLBACK;
+BEGIN;
+	DELETE FROM test_ref_table;
+	INSERT INTO 
+ 		source_table_1
+	SELECT 
+ 		col_2,
+ 		col_1
+ 	FROM target_table ON CONFLICT (col_1) DO UPDATE SET col_2 = 55 RETURNING *;
+ col_1 | col_2 | col_3 
+-------+-------+-------
+(0 rows)
+
+ROLLBACK;
+-- INSERT .. SELECT with different column types
+CREATE TABLE source_table_3(col_1 numeric, col_2 numeric, col_3 numeric);
+SELECT create_distributed_table('source_table_3','col_1');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+INSERT INTO source_table_3 VALUES(1,11,1),(2,22,2),(3,33,3),(4,44,4),(5,55,5);
+CREATE TABLE source_table_4(id int, arr_val text[]);
+SELECT create_distributed_table('source_table_4','id');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+INSERT INTO source_table_4 VALUES(1, '{"abc","cde","efg"}'), (2, '{"xyz","tvu"}');
+CREATE TABLE target_table_2(id int primary key, arr_val char(10)[]);
+SELECT create_distributed_table('target_table_2','id');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+INSERT INTO target_table_2 VALUES(1, '{"abc","def","gyx"}');
+SET client_min_messages to debug1;
+INSERT INTO target_table
+SELECT 
+	col_1, col_2 
+FROM
+	source_table_3
+ON CONFLICT(col_1) DO UPDATE SET col_2 = EXCLUDED.col_2;
+DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
+DETAIL:  The data type of the target table's partition column should exactly match the data type of the corresponding simple column reference in the subquery.
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+SELECT * FROM target_table ORDER BY 1;
+ col_1 | col_2 
+-------+-------
+     1 |    11
+     2 |    22
+     3 |    33
+     4 |    44
+     5 |    55
+     6 |     7
+     7 |     8
+     8 |     9
+     9 |    10
+    10 |    11
+(10 rows)
+
+INSERT INTO target_table_2
+SELECT 
+	* 
+FROM
+	source_table_4
+ON CONFLICT DO NOTHING;
+SELECT * FROM target_table_2 ORDER BY 1;
+ id |                 arr_val                  
+----+------------------------------------------
+  1 | {"abc       ","def       ","gyx       "}
+  2 | {"xyz       ","tvu       "}
+(2 rows)
+
+RESET client_min_messages;
+-- Test with shard_replication_factor = 2
+SET citus.shard_replication_factor to 2;
+DROP TABLE target_table, source_table_1, source_table_2;
+CREATE TABLE target_table(col_1 int primary key, col_2 int);
+SELECT create_distributed_table('target_table','col_1');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+INSERT INTO target_table VALUES(1,2),(2,3),(3,4),(4,5),(5,6);
+CREATE TABLE source_table_1(col_1 int, col_2 int, col_3 int);
+SELECT create_distributed_table('source_table_1','col_1');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+INSERT INTO source_table_1 VALUES(1,1,1),(2,2,2),(3,3,3),(4,4,4),(5,5,5);
+CREATE TABLE source_table_2(col_1 int, col_2 int, col_3 int);
+SELECT create_distributed_table('source_table_2','col_1');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+INSERT INTO source_table_2 VALUES(6,6,6),(7,7,7),(8,8,8),(9,9,9),(10,10,10);
+SET client_min_messages to debug1;
+-- Generate series directly on the coordinator and on conflict do nothing
+INSERT INTO target_table (col_1, col_2) 
+SELECT 
+	s, s 
+FROM 
+	generate_series(1,10) s 
+ON CONFLICT DO NOTHING;
+DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+-- Test with multiple subqueries
+INSERT INTO target_table
+SELECT 
+	col_1, col_2
+FROM (
+	(SELECT 
+		col_1, col_2, col_3 
+	FROM
+		source_table_1
+	LIMIT 5)
+	UNION
+	(SELECT
+		col_1, col_2, col_3
+	FROM
+		source_table_2
+	LIMIT 5)
+) as foo
+ON CONFLICT(col_1) DO UPDATE SET col_2 = 0;
+DEBUG:  Set operations are not allowed in distributed INSERT ... SELECT queries
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+DEBUG:  push down of limit count: 5
+DEBUG:  generating subplan 71_1 for subquery SELECT col_1, col_2, col_3 FROM on_conflict.source_table_1 LIMIT 5
+DEBUG:  push down of limit count: 5
+DEBUG:  generating subplan 71_2 for subquery SELECT col_1, col_2, col_3 FROM on_conflict.source_table_2 LIMIT 5
+DEBUG:  generating subplan 71_3 for subquery SELECT intermediate_result.col_1, intermediate_result.col_2, intermediate_result.col_3 FROM read_intermediate_result('71_1'::text, 'binary'::citus_copy_format) intermediate_result(col_1 integer, col_2 integer, col_3 integer) UNION SELECT intermediate_result.col_1, intermediate_result.col_2, intermediate_result.col_3 FROM read_intermediate_result('71_2'::text, 'binary'::citus_copy_format) intermediate_result(col_1 integer, col_2 integer, col_3 integer)
+DEBUG:  Plan 71 query after replacing subqueries and CTEs: SELECT col_1, col_2 FROM (SELECT intermediate_result.col_1, intermediate_result.col_2, intermediate_result.col_3 FROM read_intermediate_result('71_3'::text, 'binary'::citus_copy_format) intermediate_result(col_1 integer, col_2 integer, col_3 integer)) foo
+SELECT * FROM target_table ORDER BY 1;
+ col_1 | col_2 
+-------+-------
+     1 |     0
+     2 |     0
+     3 |     0
+     4 |     0
+     5 |     0
+     6 |     0
+     7 |     0
+     8 |     0
+     9 |     0
+    10 |     0
+(10 rows)
+
+WITH cte AS(
+	SELECT col_1, col_2, col_3 FROM source_table_1
+), cte_2 AS(
+	SELECT col_1, col_2 FROM cte
+)
+INSERT INTO target_table SELECT * FROM cte_2 ON CONFLICT(col_1) DO UPDATE SET col_2 = EXCLUDED.col_2 + 1;
+DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+DEBUG:  generating subplan 77_1 for CTE cte: SELECT col_1, col_2, col_3 FROM on_conflict.source_table_1
+DEBUG:  generating subplan 77_2 for CTE cte_2: SELECT col_1, col_2 FROM (SELECT intermediate_result.col_1, intermediate_result.col_2, intermediate_result.col_3 FROM read_intermediate_result('77_1'::text, 'binary'::citus_copy_format) intermediate_result(col_1 integer, col_2 integer, col_3 integer)) cte
+DEBUG:  Plan 77 query after replacing subqueries and CTEs: SELECT col_1, col_2 FROM (SELECT cte_2.col_1, cte_2.col_2 FROM (SELECT intermediate_result.col_1, intermediate_result.col_2 FROM read_intermediate_result('77_2'::text, 'binary'::citus_copy_format) intermediate_result(col_1 integer, col_2 integer)) cte_2) citus_insert_select_subquery
+SELECT * FROM target_table ORDER BY 1;
+ col_1 | col_2 
+-------+-------
+     1 |     2
+     2 |     3
+     3 |     4
+     4 |     5
+     5 |     6
+     6 |     0
+     7 |     0
+     8 |     0
+     9 |     0
+    10 |     0
+(10 rows)
+
+RESET client_min_messages;
+DROP SCHEMA on_conflict CASCADE;
+NOTICE:  drop cascades to 7 other objects
+DETAIL:  drop cascades to table test_ref_table
+drop cascades to table source_table_3
+drop cascades to table source_table_4
+drop cascades to table target_table_2
+drop cascades to table target_table
+drop cascades to table source_table_1
+drop cascades to table source_table_2

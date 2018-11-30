@@ -162,8 +162,6 @@ static bool CteReferenceListWalker(Node *node, CteReferenceWalkerContext *contex
 static bool ContainsReferencesToOuterQuery(Query *query);
 static bool ContainsReferencesToOuterQueryWalker(Node *node,
 												 VarLevelsUpWalkerContext *context);
-static Query * BuildSubPlanResultQuery(Query *subquery, List *columnAliasList,
-									   uint64 planId, uint32 subPlanId);
 
 
 /*
@@ -686,6 +684,8 @@ RecursivelyPlanCTEs(Query *query, RecursivePlanningContext *planningContext)
 		Query *subquery = (Query *) cte->ctequery;
 		uint64 planId = planningContext->planId;
 		uint32 subPlanId = 0;
+		char *resultId = NULL;
+		List *cteTargetList = NIL;
 		Query *resultQuery = NULL;
 		DistributedSubPlan *subPlan = NULL;
 		ListCell *rteCell = NULL;
@@ -725,9 +725,23 @@ RecursivelyPlanCTEs(Query *query, RecursivePlanningContext *planningContext)
 		subPlan = CreateDistributedSubPlan(subPlanId, subquery);
 		planningContext->subPlanList = lappend(planningContext->subPlanList, subPlan);
 
+		/* build the result_id parameter for the call to read_intermediate_result */
+		resultId = GenerateResultId(planId, subPlanId);
+
+		if (subquery->returningList)
+		{
+			/* modifying CTE with returning */
+			cteTargetList = subquery->returningList;
+		}
+		else
+		{
+			/* regular SELECT CTE */
+			cteTargetList = subquery->targetList;
+		}
+
 		/* replace references to the CTE with a subquery that reads results */
-		resultQuery = BuildSubPlanResultQuery(subquery, cte->aliascolnames, planId,
-											  subPlanId);
+		resultQuery = BuildSubPlanResultQuery(cteTargetList, cte->aliascolnames,
+											  resultId);
 
 		foreach(rteCell, context.cteReferenceList)
 		{
@@ -1080,7 +1094,7 @@ RecursivelyPlanSubquery(Query *subquery, RecursivePlanningContext *planningConte
 	DistributedSubPlan *subPlan = NULL;
 	uint64 planId = planningContext->planId;
 	int subPlanId = 0;
-
+	char *resultId = NULL;
 	Query *resultQuery = NULL;
 	Query *debugQuery = NULL;
 
@@ -1109,11 +1123,14 @@ RecursivelyPlanSubquery(Query *subquery, RecursivePlanningContext *planningConte
 	subPlan = CreateDistributedSubPlan(subPlanId, subquery);
 	planningContext->subPlanList = lappend(planningContext->subPlanList, subPlan);
 
+	/* build the result_id parameter for the call to read_intermediate_result */
+	resultId = GenerateResultId(planId, subPlanId);
+
 	/*
 	 * BuildSubPlanResultQuery() can optionally use provided column aliases.
 	 * We do not need to send additional alias list for subqueries.
 	 */
-	resultQuery = BuildSubPlanResultQuery(subquery, NIL, planId, subPlanId);
+	resultQuery = BuildSubPlanResultQuery(subquery->targetList, NIL, resultId);
 
 	if (log_min_messages <= DEBUG1 || client_min_messages <= DEBUG1)
 	{
@@ -1294,21 +1311,19 @@ ContainsReferencesToOuterQueryWalker(Node *node, VarLevelsUpWalkerContext *conte
  * SELECT
  *   <target list>
  * FROM
- *   read_intermediate_result('<planId>_<subPlanId>', '<copy format'>)
+ *   read_intermediate_result('<resultId>', '<copy format'>)
  *   AS res (<column definition list>);
  *
- * The target list and column definition list are derived from the given subquery
- * and columm name alias list.
+ * The caller can optionally supply a columnAliasList, which is useful for
+ * CTEs that have column aliases.
  *
  * If any of the types in the target list cannot be used in the binary copy format,
  * then the copy format 'text' is used, otherwise 'binary' is used.
  */
-static Query *
-BuildSubPlanResultQuery(Query *subquery, List *columnAliasList, uint64 planId,
-						uint32 subPlanId)
+Query *
+BuildSubPlanResultQuery(List *targetEntryList, List *columnAliasList, char *resultId)
 {
 	Query *resultQuery = NULL;
-	char *resultIdString = NULL;
 	Const *resultIdConst = NULL;
 	Const *resultFormatConst = NULL;
 	FuncExpr *funcExpr = NULL;
@@ -1327,16 +1342,6 @@ BuildSubPlanResultQuery(Query *subquery, List *columnAliasList, uint64 planId,
 	bool useBinaryCopyFormat = true;
 	Oid copyFormatId = BinaryCopyFormatId();
 	int columnAliasCount = list_length(columnAliasList);
-
-	List *targetEntryList = NIL;
-	if (subquery->returningList)
-	{
-		targetEntryList = subquery->returningList;
-	}
-	else
-	{
-		targetEntryList = subquery->targetList;
-	}
 
 	/* build the target list and column definition list */
 	foreach(targetEntryCell, targetEntryList)
@@ -1403,14 +1408,11 @@ BuildSubPlanResultQuery(Query *subquery, List *columnAliasList, uint64 planId,
 		columnNumber++;
 	}
 
-	/* build the result_id parameter for the call to read_intermediate_result */
-	resultIdString = GenerateResultId(planId, subPlanId);
-
 	resultIdConst = makeNode(Const);
 	resultIdConst->consttype = TEXTOID;
 	resultIdConst->consttypmod = -1;
 	resultIdConst->constlen = -1;
-	resultIdConst->constvalue = CStringGetTextDatum(resultIdString);
+	resultIdConst->constvalue = CStringGetTextDatum(resultId);
 	resultIdConst->constbyval = false;
 	resultIdConst->constisnull = false;
 	resultIdConst->location = -1;

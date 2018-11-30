@@ -129,26 +129,6 @@ WITH cte AS (
 UPDATE modify_table SET val=-1 WHERE val IN (SELECT * FROM cte);
 
 
-WITH cte AS (
-	WITH basic AS (
-		SELECT value_2 FROM users_table WHERE user_id IN (1, 2, 3)
-	)
-	INSERT INTO modify_table (SELECT * FROM basic) RETURNING *
-)
-UPDATE modify_table SET val=-2 WHERE id IN (SELECT id FROM cte);
-
-
-WITH cte AS (
-	WITH basic AS (
-		SELECT * FROM events_table WHERE event_type = 5
-	),
-	basic_2 AS (
-		SELECT user_id FROM users_table
-	)
-	INSERT INTO modify_table (SELECT user_id FROM events_table) RETURNING *
-)
-SELECT * FROM cte;
-
 WITH user_data AS (
 	SELECT user_id, value_2 FROM users_table
 )
