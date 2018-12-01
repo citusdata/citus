@@ -392,6 +392,7 @@ BuildLocalWaitGraph(void)
 	WaitGraph *waitGraph = NULL;
 	int curBackend = 0;
 	PROCStack remaining;
+	int totalProcs = TotalProcCount();
 
 	/*
 	 * Try hard to avoid allocations while holding lock. Thus we pre-allocate
@@ -401,12 +402,12 @@ BuildLocalWaitGraph(void)
 	 */
 	waitGraph = (WaitGraph *) palloc0(sizeof(WaitGraph));
 	waitGraph->localNodeId = GetLocalGroupId();
-	waitGraph->allocatedSize = TotalProcs * 3;
+	waitGraph->allocatedSize = totalProcs * 3;
 	waitGraph->edgeCount = 0;
 	waitGraph->edges = (WaitEdge *) palloc(waitGraph->allocatedSize * sizeof(WaitEdge));
 
-	remaining.procs = (PGPROC **) palloc(sizeof(PGPROC *) * TotalProcs);
-	remaining.procAdded = (bool *) palloc0(sizeof(bool *) * TotalProcs);
+	remaining.procs = (PGPROC **) palloc(sizeof(PGPROC *) * totalProcs);
+	remaining.procAdded = (bool *) palloc0(sizeof(bool *) * totalProcs);
 	remaining.procCount = 0;
 
 	LockLockData();
@@ -419,7 +420,7 @@ BuildLocalWaitGraph(void)
 	 */
 
 	/* build list of starting procs */
-	for (curBackend = 0; curBackend < TotalProcs; curBackend++)
+	for (curBackend = 0; curBackend < totalProcs; curBackend++)
 	{
 		PGPROC *currentProc = &ProcGlobal->allProcs[curBackend];
 		BackendData currentBackendData;
@@ -765,7 +766,7 @@ AddProcToVisit(PROCStack *remaining, PGPROC *proc)
 		return;
 	}
 
-	Assert(remaining->procCount < TotalProcs);
+	Assert(remaining->procCount < TotalProcCount());
 
 	remaining->procs[remaining->procCount++] = proc;
 	remaining->procAdded[proc->pgprocno] = true;

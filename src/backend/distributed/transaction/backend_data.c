@@ -23,6 +23,7 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/transaction_identifier.h"
 #include "nodes/execnodes.h"
+#include "postmaster/autovacuum.h" /* to access autovacuum_max_workers */
 #include "storage/ipc.h"
 #include "storage/lwlock.h"
 #include "storage/proc.h"
@@ -327,6 +328,7 @@ BackendManagementShmemInit(void)
 	if (!alreadyInitialized)
 	{
 		int backendIndex = 0;
+		int totalProcs = 0;
 		char *trancheName = "Backend Management Tranche";
 
 #if (PG_VERSION_NUM >= 100000)
@@ -369,7 +371,8 @@ BackendManagementShmemInit(void)
 		 * MaxBackends) since some of the blocking processes could be prepared
 		 * transactions, which aren't covered by MaxBackends.
 		 */
-		for (backendIndex = 0; backendIndex < TotalProcs; ++backendIndex)
+		totalProcs = TotalProcCount();
+		for (backendIndex = 0; backendIndex < totalProcs; ++backendIndex)
 		{
 			SpinLockInit(&backendManagementShmemData->backends[backendIndex].mutex);
 		}
@@ -392,11 +395,59 @@ static size_t
 BackendManagementShmemSize(void)
 {
 	Size size = 0;
+	int totalProcs = TotalProcCount();
 
 	size = add_size(size, sizeof(BackendManagementShmemData));
-	size = add_size(size, mul_size(sizeof(BackendData), TotalProcs));
+	size = add_size(size, mul_size(sizeof(BackendData), totalProcs));
 
 	return size;
+}
+
+
+/*
+ * TotalProcCount returns the total processes that could run via the current
+ * postgres server. See the details in the function comments.
+ *
+ * There is one thing we should warn the readers. Citus enforces to be loaded
+ * as the first extension in shared_preload_libraries. However, if any other
+ * extension overrides MaxConnections, autovacuum_max_workers or
+ * max_worker_processes, our reasoning in this function may not work as expected.
+ * Given that it is not a usual pattern for extension, we consider Citus' behaviour
+ * good enough for now.
+ */
+int
+TotalProcCount(void)
+{
+	int maxBackends = 0;
+	int totalProcs = 0;
+
+#ifdef WIN32
+
+	/* autovacuum_max_workers is not PGDLLIMPORT, so use a high estimate for windows */
+	int estimatedMaxAutovacuumWorkers = 30;
+	maxBackends =
+		MaxConnections + estimatedMaxAutovacuumWorkers + 1 + max_worker_processes;
+#else
+
+	/*
+	 * We're simply imitating Postgrsql's InitializeMaxBackends(). Given that all
+	 * the items used here PGC_POSTMASTER, should be safe to access them
+	 * anytime during the execution even before InitializeMaxBackends() is called.
+	 */
+	maxBackends = MaxConnections + autovacuum_max_workers + 1 + max_worker_processes;
+#endif
+
+	/*
+	 * We prefer to maintain space for auxiliary procs or preperad transactions in
+	 * the backend space because they could be blocking processes and our current
+	 * implementation of distributed deadlock detection could process them
+	 * as a regular backend. In the future, we could consider chaning deadlock
+	 * detection algorithm to ignore auxiliary procs or preperad transactions and
+	 * save same space.
+	 */
+	totalProcs = maxBackends + NUM_AUXILIARY_PROCS + max_prepared_xacts;
+
+	return totalProcs;
 }
 
 

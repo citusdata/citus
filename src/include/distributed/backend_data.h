@@ -22,9 +22,6 @@
 #include "storage/s_lock.h"
 
 
-#define TotalProcs (MaxBackends + NUM_AUXILIARY_PROCS + max_prepared_xacts)
-
-
 /*
  * Each backend's active distributed transaction information is tracked via
  * BackendData in shared memory.
@@ -39,6 +36,7 @@ typedef struct BackendData
 
 
 extern void InitializeBackendManagement(void);
+extern int TotalProcCount(void);
 extern void InitializeBackendData(void);
 extern void LockBackendSharedMemory(LWLockMode lockMode);
 extern void UnlockBackendSharedMemory(void);
