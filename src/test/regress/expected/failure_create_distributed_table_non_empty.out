@@ -15,7 +15,7 @@ SET citus.shard_count to 4;
 CREATE TABLE test_table(id int, value_1 int);
 INSERT INTO test_table VALUES (1,1),(2,2),(3,3),(4,4);
 -- in the first test, kill the first connection we sent from the coordinator
-SELECT citus.mitmproxy('conn.kill()');
+SELECT citus.mitmproxy('conn.killall()');
  mitmproxy 
 -----------
  
@@ -570,7 +570,7 @@ DROP TABLE test_table;
 CREATE TABLE test_table(id int, value_1 int);
 INSERT INTO test_table VALUES (1,1),(2,2),(3,3),(4,4);
 SET citus.multi_shard_commit_protocol TO '1pc';
-SELECT citus.mitmproxy('conn.kill()');
+SELECT citus.mitmproxy('conn.killall()');
  mitmproxy 
 -----------
  

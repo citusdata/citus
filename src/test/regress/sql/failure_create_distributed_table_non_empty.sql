@@ -14,7 +14,7 @@ CREATE TABLE test_table(id int, value_1 int);
 INSERT INTO test_table VALUES (1,1),(2,2),(3,3),(4,4);
 
 -- in the first test, kill the first connection we sent from the coordinator
-SELECT citus.mitmproxy('conn.kill()');
+SELECT citus.mitmproxy('conn.killall()');
 SELECT create_distributed_table('test_table', 'id');
 SELECT count(*) FROM pg_dist_shard WHERE logicalrelid='create_distributed_table_non_empty_failure.test_table'::regclass;
 
@@ -198,7 +198,7 @@ CREATE TABLE test_table(id int, value_1 int);
 INSERT INTO test_table VALUES (1,1),(2,2),(3,3),(4,4);
 SET citus.multi_shard_commit_protocol TO '1pc';
 
-SELECT citus.mitmproxy('conn.kill()');
+SELECT citus.mitmproxy('conn.killall()');
 SELECT create_distributed_table('test_table', 'id');
 SELECT citus.mitmproxy('conn.allow()');
 SELECT count(*) FROM pg_dist_shard WHERE logicalrelid='create_distributed_table_non_empty_failure.test_table'::regclass;

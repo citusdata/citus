@@ -28,7 +28,7 @@ CREATE VIEW unhealthy_shard_count AS
 	ON pdsp.shardid=pds.shardid 
 	WHERE logicalrelid='copy_distributed_table.test_table'::regclass AND shardstate != 1;
 -- Just kill the connection after sending the first query to the worker.
-SELECT citus.mitmproxy('conn.kill()');
+SELECT citus.mitmproxy('conn.killall()');
  mitmproxy 
 -----------
  
@@ -268,7 +268,7 @@ SELECT create_distributed_table('test_table_2','id');
  
 (1 row)
 
-SELECT citus.mitmproxy('conn.kill()');
+SELECT citus.mitmproxy('conn.killall()');
  mitmproxy 
 -----------
  

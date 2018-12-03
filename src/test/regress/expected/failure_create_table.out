@@ -13,7 +13,7 @@ SET citus.shard_replication_factor TO 1;
 SET citus.shard_count to 4;
 CREATE TABLE test_table(id int, value_1 int);
 -- Kill connection before sending query to the worker 
-SELECT citus.mitmproxy('conn.kill()');
+SELECT citus.mitmproxy('conn.killall()');
  mitmproxy 
 -----------
  
@@ -335,7 +335,7 @@ SELECT run_command_on_workers($$SELECT count(*) FROM information_schema.tables W
 DROP TABLE temp_table;
 -- Test inside transaction
 -- Kill connection before sending query to the worker 
-SELECT citus.mitmproxy('conn.kill()');
+SELECT citus.mitmproxy('conn.killall()');
  mitmproxy 
 -----------
  
@@ -442,7 +442,7 @@ CREATE TABLE test_table(id int, value_1 int);
 -- Test inside transaction and with 1PC
 SET citus.multi_shard_commit_protocol TO "1pc";
 -- Kill connection before sending query to the worker with 1pc.
-SELECT citus.mitmproxy('conn.kill()');
+SELECT citus.mitmproxy('conn.killall()');
  mitmproxy 
 -----------
  
@@ -588,7 +588,7 @@ SELECT master_create_distributed_table('test_table_2', 'id', 'hash');
 (1 row)
 
 -- Kill connection before sending query to the worker 
-SELECT citus.mitmproxy('conn.kill()');
+SELECT citus.mitmproxy('conn.killall()');
  mitmproxy 
 -----------
  

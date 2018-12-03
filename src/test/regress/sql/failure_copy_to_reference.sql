@@ -23,7 +23,7 @@ CREATE VIEW unhealthy_shard_count AS
 
 -- in the first test, kill just in the first 
 -- response we get from the worker
-SELECT citus.mitmproxy('conn.kill()');
+SELECT citus.mitmproxy('conn.killall()');
 \copy test_table FROM STDIN DELIMITER ','
 1,2
 2,3
