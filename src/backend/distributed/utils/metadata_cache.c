@@ -1223,9 +1223,8 @@ BuildCachedShardList(DistTableCacheEntry *cacheEntry)
 		{
 			GroupShardPlacement *srcPlacement =
 				(GroupShardPlacement *) lfirst(placementCell);
-			GroupShardPlacement *dstPlacement = &placementArray[placementOffset];
 
-			memcpy(dstPlacement, srcPlacement, sizeof(GroupShardPlacement));
+			placementArray[placementOffset] = *srcPlacement;
 			placementOffset++;
 		}
 		MemoryContextSwitchTo(oldContext);
