@@ -689,7 +689,7 @@ FindOrCreatePlacementEntry(ShardPlacement *placement)
 			ColocatedPlacementsHashKey key;
 			ColocatedPlacementsHashEntry *colocatedEntry = NULL;
 
-			strcpy(key.nodeName, placement->nodeName);
+			strlcpy(key.nodeName, placement->nodeName, MAX_NODE_LENGTH);
 			key.nodePort = placement->nodePort;
 			key.colocationGroupId = placement->colocationGroupId;
 			key.representativeValue = placement->representativeValue;

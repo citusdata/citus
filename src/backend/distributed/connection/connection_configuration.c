@@ -260,15 +260,37 @@ GetConnParams(ConnectionHashKey *key, char ***keywords, char ***values,
 	/* auth keywords will begin after global and runtime ones are appended */
 	Index authParamsIdx = ConnParams.size + lengthof(runtimeKeywords);
 
+	int paramIndex = 0;
+	int runtimeParamIndex = 0;
+
+	if (ConnParams.size + lengthof(runtimeKeywords) > ConnParams.maxSize)
+	{
+		/* unexpected, intended as developers rather than users */
+		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+						errmsg("too many connParams entries")));
+	}
+
 	pg_ltoa(key->port, nodePortString); /* populate node port string with port */
 
 	/* first step: copy global parameters to beginning of array */
-	memcpy(connKeywords, ConnParams.keywords, ConnParams.size * sizeof(char *));
-	memcpy(connValues, ConnParams.values, ConnParams.size * sizeof(char *));
+	for (paramIndex = 0; paramIndex < ConnParams.size; paramIndex++)
+	{
+		/* copy the keyword&value pointers to the new array */
+		connKeywords[paramIndex] = ConnParams.keywords[paramIndex];
+		connValues[paramIndex] = ConnParams.values[paramIndex];
+	}
 
 	/* second step: begin at end of global params and copy runtime ones */
-	memcpy(&connKeywords[ConnParams.size], runtimeKeywords, sizeof(runtimeKeywords));
-	memcpy(&connValues[ConnParams.size], runtimeValues, sizeof(runtimeValues));
+	for (runtimeParamIndex = 0;
+		 runtimeParamIndex < lengthof(runtimeKeywords);
+		 runtimeParamIndex++)
+	{
+		/* copy the keyword&value pointers to the new array */
+		connKeywords[ConnParams.size + runtimeParamIndex] =
+			(char *) runtimeKeywords[runtimeParamIndex];
+		connValues[ConnParams.size + runtimeParamIndex] =
+			(char *) runtimeValues[runtimeParamIndex];
+	}
 
 	/* final step: add terminal NULL, required by libpq */
 	connKeywords[authParamsIdx] = connValues[authParamsIdx] = NULL;
