@@ -420,6 +420,12 @@ VerifyTransmitStmt(CopyStmt *copyStatement)
 				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
 				 (errmsg("path must be in or below the current directory"))));
 	}
+	else if (!CacheDirectoryElement(fileName))
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+				 (errmsg("path must be in the pgsql_job_cache directory"))));
+	}
 
 	if (copyStatement->filename != NULL)
 	{

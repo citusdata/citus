@@ -87,6 +87,9 @@ PREPARE prepare_select AS SELECT count(*) FROM test;
 -- not allowed to read absolute paths, even as superuser
 COPY "/etc/passwd" TO STDOUT WITH (format transmit);
 
+-- not allowed to read paths outside pgsql_job_cache, even as superuser
+COPY "postgresql.conf" TO STDOUT WITH (format transmit);
+
 -- check full permission
 SET ROLE full_access;
 
