@@ -13,6 +13,9 @@
 
 #include "postgres.h"
 
+#include "commands/extension.h"
+#include "distributed/citus_ruleutils.h"
+#include "distributed/function_utils.h"
 #include "distributed/multi_logical_optimizer.h"
 #include "distributed/multi_master_planner.h"
 #include "distributed/multi_physical_planner.h"
@@ -21,15 +24,18 @@
 #include "distributed/worker_protocol.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
+#include "nodes/print.h"
 #include "optimizer/clauses.h"
 #include "optimizer/cost.h"
 #include "optimizer/planmain.h"
 #include "optimizer/tlist.h"
 #include "optimizer/var.h"
 #include "utils/builtins.h"
+#include "utils/guc.h"
 #include "utils/memutils.h"
 #include "utils/rel.h"
 #include "utils/syscache.h"
+#include "utils/lsyscache.h"
 
 
 static List * MasterTargetList(List *workerTargetList);
@@ -37,6 +43,8 @@ static PlannedStmt * BuildSelectStatement(Query *masterQuery, List *masterTarget
 										  CustomScan *remoteScan);
 static Agg * BuildAggregatePlan(Query *masterQuery, Plan *subPlan);
 static bool HasDistinctAggregate(Query *masterQuery);
+static bool UseGroupAggregateWithHLL(Query *masterQuery);
+static bool QueryContainsAggregateWithHLL(Query *query);
 static Plan * BuildDistinctPlan(Query *masterQuery, Plan *subPlan);
 static List * PrepareTargetListForNextPlan(List *targetList);
 
@@ -313,8 +321,12 @@ BuildAggregatePlan(Query *masterQuery, Plan *subPlan)
 		 * in group and order by with aggregate operations.
 		 * see nodeAgg.c:build_pertrans_for_aggref(). In that case we use
 		 * sorted agg strategy, otherwise we use hash strategy.
+		 *
+		 * If the master query contains hll aggregate functions and the client set
+		 * hll.force_groupagg to on, then we choose to use group aggregation.
 		 */
-		if (!enable_hashagg || !groupingIsHashable || hasDistinctAggregate)
+		if (!enable_hashagg || !groupingIsHashable || hasDistinctAggregate ||
+			UseGroupAggregateWithHLL(masterQuery))
 		{
 			char *messageHint = NULL;
 			if (!enable_hashagg && groupingIsHashable)
@@ -382,6 +394,71 @@ HasDistinctAggregate(Query *masterQuery)
 		{
 			Aggref *aggref = (Aggref *) columnNode;
 			if (aggref->aggdistinct != NIL)
+			{
+				return true;
+			}
+		}
+	}
+
+	return false;
+}
+
+
+/*
+ * UseGroupAggregateWithHLL first checks whether the HLL extension is loaded, if
+ * it is not then simply return false. Otherwise, checks whether the client set
+ * the hll.force_groupagg to on. If it is enabled and the master query contains
+ * hll aggregate function, it returns true.
+ */
+static bool
+UseGroupAggregateWithHLL(Query *masterQuery)
+{
+	Oid hllId = get_extension_oid(HLL_EXTENSION_NAME, true);
+	const char *gucStrValue = NULL;
+
+	/* If HLL extension is not loaded, return false */
+	if (!OidIsValid(hllId))
+	{
+		return false;
+	}
+
+	/* If HLL is loaded but related GUC is not set, return false */
+	gucStrValue = GetConfigOption(HLL_FORCE_GROUPAGG_GUC_NAME, true, false);
+	if (gucStrValue == NULL || strcmp(gucStrValue, "off") == 0)
+	{
+		return false;
+	}
+
+	return QueryContainsAggregateWithHLL(masterQuery);
+}
+
+
+/*
+ * QueryContainsAggregateWithHLL returns true if the query has an hll aggregate
+ * function in it's target list.
+ */
+static bool
+QueryContainsAggregateWithHLL(Query *query)
+{
+	List *varList = NIL;
+	ListCell *varCell = NULL;
+
+	varList = pull_var_clause((Node *) query->targetList, PVC_INCLUDE_AGGREGATES);
+	foreach(varCell, varList)
+	{
+		Var *var = (Var *) lfirst(varCell);
+		if (nodeTag(var) == T_Aggref)
+		{
+			Aggref *aggref = (Aggref *) var;
+			int argCount = list_length(aggref->args);
+			Oid hllId = get_extension_oid(HLL_EXTENSION_NAME, false);
+			Oid hllSchemaOid = get_extension_schema(hllId);
+			const char *hllSchemaName = get_namespace_name(hllSchemaOid);
+			Oid addFunctionId = FunctionOid(hllSchemaName, HLL_ADD_AGGREGATE_NAME,
+											argCount);
+			Oid unionFunctionId = FunctionOid(hllSchemaName, HLL_UNION_AGGREGATE_NAME, 1);
+
+			if (aggref->aggfnoid == addFunctionId || aggref->aggfnoid == unionFunctionId)
 			{
 				return true;
 			}

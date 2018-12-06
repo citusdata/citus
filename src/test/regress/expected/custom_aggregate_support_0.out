@@ -107,6 +107,92 @@ WINDOW two_days AS (ORDER BY day ASC ROWS 1 PRECEDING);
 ERROR:  relation "daily_uniques" does not exist
 LINE 2: FROM daily_uniques
              ^
+-- Test disabling hash_agg on coordinator query
+SET citus.explain_all_tasks to true;
+SET hll.force_groupagg to OFF;
+EXPLAIN(COSTS OFF)
+SELECT
+  day, hll_union_agg(unique_users)
+FROM
+  daily_uniques
+GROUP BY(1);
+ERROR:  relation "daily_uniques" does not exist
+LINE 5:   daily_uniques
+          ^
+SET hll.force_groupagg to ON;
+EXPLAIN(COSTS OFF)
+SELECT
+  day, hll_union_agg(unique_users)
+FROM
+  daily_uniques
+GROUP BY(1);
+ERROR:  relation "daily_uniques" does not exist
+LINE 5:   daily_uniques
+          ^
+-- Test disabling hash_agg with operator on coordinator query
+SET hll.force_groupagg to OFF;
+EXPLAIN(COSTS OFF)
+SELECT
+  day, hll_union_agg(unique_users) || hll_union_agg(unique_users)
+FROM
+  daily_uniques
+GROUP BY(1);
+ERROR:  relation "daily_uniques" does not exist
+LINE 5:   daily_uniques
+          ^
+SET hll.force_groupagg to ON;
+EXPLAIN(COSTS OFF)
+SELECT
+  day, hll_union_agg(unique_users) || hll_union_agg(unique_users)
+FROM
+  daily_uniques
+GROUP BY(1);
+ERROR:  relation "daily_uniques" does not exist
+LINE 5:   daily_uniques
+          ^
+-- Test disabling hash_agg with expression on coordinator query
+SET hll.force_groupagg to OFF;
+EXPLAIN(COSTS OFF)
+SELECT
+  day, hll_cardinality(hll_union_agg(unique_users))
+FROM
+  daily_uniques
+GROUP BY(1);
+ERROR:  relation "daily_uniques" does not exist
+LINE 5:   daily_uniques
+          ^
+SET hll.force_groupagg to ON;
+EXPLAIN(COSTS OFF)
+SELECT
+  day, hll_cardinality(hll_union_agg(unique_users))
+FROM
+  daily_uniques
+GROUP BY(1);
+ERROR:  relation "daily_uniques" does not exist
+LINE 5:   daily_uniques
+          ^
+-- Test disabling hash_agg with having
+SET hll.force_groupagg to OFF;
+EXPLAIN(COSTS OFF)
+SELECT
+  day, hll_cardinality(hll_union_agg(unique_users))
+FROM
+  daily_uniques
+GROUP BY(1);
+ERROR:  relation "daily_uniques" does not exist
+LINE 5:   daily_uniques
+          ^
+SET hll.force_groupagg to ON;
+EXPLAIN(COSTS OFF)
+SELECT
+  day, hll_cardinality(hll_union_agg(unique_users))
+FROM
+  daily_uniques
+GROUP BY(1)
+HAVING hll_cardinality(hll_union_agg(unique_users)) > 1;
+ERROR:  relation "daily_uniques" does not exist
+LINE 5:   daily_uniques
+          ^
 DROP TABLE raw_table;
 DROP TABLE daily_uniques;
 ERROR:  table "daily_uniques" does not exist
