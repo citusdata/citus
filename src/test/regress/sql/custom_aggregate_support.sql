@@ -76,6 +76,76 @@ SELECT day, (hll_cardinality(hll_union_agg(unique_users) OVER two_days)) - hll_c
 FROM daily_uniques
 WINDOW two_days AS (ORDER BY day ASC ROWS 1 PRECEDING);
 
+-- Test disabling hash_agg on coordinator query
+SET citus.explain_all_tasks to true;
+SET hll.force_groupagg to OFF;
+EXPLAIN(COSTS OFF)
+SELECT
+  day, hll_union_agg(unique_users)
+FROM
+  daily_uniques
+GROUP BY(1);
+
+SET hll.force_groupagg to ON;
+EXPLAIN(COSTS OFF)
+SELECT
+  day, hll_union_agg(unique_users)
+FROM
+  daily_uniques
+GROUP BY(1);
+
+-- Test disabling hash_agg with operator on coordinator query
+SET hll.force_groupagg to OFF;
+EXPLAIN(COSTS OFF)
+SELECT
+  day, hll_union_agg(unique_users) || hll_union_agg(unique_users)
+FROM
+  daily_uniques
+GROUP BY(1);
+
+SET hll.force_groupagg to ON;
+EXPLAIN(COSTS OFF)
+SELECT
+  day, hll_union_agg(unique_users) || hll_union_agg(unique_users)
+FROM
+  daily_uniques
+GROUP BY(1);
+
+-- Test disabling hash_agg with expression on coordinator query
+SET hll.force_groupagg to OFF;
+EXPLAIN(COSTS OFF)
+SELECT
+  day, hll_cardinality(hll_union_agg(unique_users))
+FROM
+  daily_uniques
+GROUP BY(1);
+
+SET hll.force_groupagg to ON;
+EXPLAIN(COSTS OFF)
+SELECT
+  day, hll_cardinality(hll_union_agg(unique_users))
+FROM
+  daily_uniques
+GROUP BY(1);
+
+-- Test disabling hash_agg with having
+SET hll.force_groupagg to OFF;
+EXPLAIN(COSTS OFF)
+SELECT
+  day, hll_cardinality(hll_union_agg(unique_users))
+FROM
+  daily_uniques
+GROUP BY(1);
+
+SET hll.force_groupagg to ON;
+EXPLAIN(COSTS OFF)
+SELECT
+  day, hll_cardinality(hll_union_agg(unique_users))
+FROM
+  daily_uniques
+GROUP BY(1)
+HAVING hll_cardinality(hll_union_agg(unique_users)) > 1;
+
 DROP TABLE raw_table;
 DROP TABLE daily_uniques;
 

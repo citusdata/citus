@@ -299,6 +299,14 @@ if (-e $pg_stat_statements_control)
 {
 	$sharedPreloadLibraries .= ',pg_stat_statements'; 
 }
+
+# check if hll extension is installed
+# if it is add it to shared preload libraries
+my $hll_control = catfile($sharedir, "extension", "hll.control");
+if (-e $hll_control)
+{
+  $sharedPreloadLibraries .= ',hll';
+}
 push(@pgOptions, '-c', "shared_preload_libraries=${sharedPreloadLibraries}");
 
 push(@pgOptions, '-c', "wal_level=logical");
