@@ -14,5 +14,7 @@
 /* Function declaration for getting oid for the given function name */
 extern Oid FunctionOid(const char *schemaName, const char *functionName,
 					   int argumentCount);
+extern Oid FunctionOidExtended(const char *schemaName, const char *functionName, int
+							   argumentCount, bool missingOK);
 extern ReturnSetInfo * FunctionCallGetTupleStore1(PGFunction function, Oid functionId,
 												  Datum argument);
