@@ -454,8 +454,14 @@ QueryContainsAggregateWithHLL(Query *query)
 			Oid hllId = get_extension_oid(HLL_EXTENSION_NAME, false);
 			Oid hllSchemaOid = get_extension_schema(hllId);
 			const char *hllSchemaName = get_namespace_name(hllSchemaOid);
-			Oid addFunctionId = FunctionOid(hllSchemaName, HLL_ADD_AGGREGATE_NAME,
-											argCount);
+
+			/*
+			 * If the obtained oid is InvalidOid for addFunctionId, that means
+			 * we don't have an hll_add_agg function with the given argument count.
+			 * So, we don't need to double check whether the obtained id is valid.
+			 */
+			Oid addFunctionId = FunctionOidExtended(hllSchemaName, HLL_ADD_AGGREGATE_NAME,
+													argCount, true);
 			Oid unionFunctionId = FunctionOid(hllSchemaName, HLL_UNION_AGGREGATE_NAME, 1);
 
 			if (aggref->aggfnoid == addFunctionId || aggref->aggfnoid == unionFunctionId)
