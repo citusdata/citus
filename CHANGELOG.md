@@ -1,3 +1,7 @@
+### citus v7.5.4 (December 11, 2018) ###
+
+* Fixes a bug that could cause maintenance daemon panic
+
 ### citus v7.5.3 (November 27, 2018) ###
 
 * Execute SQL tasks using worker_execute_sql_task UDF when using task-tracker
