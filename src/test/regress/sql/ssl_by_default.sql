@@ -33,3 +33,8 @@ $$);
 SELECT run_command_on_workers($$
     SELECT ssl FROM pg_stat_ssl WHERE pid = pg_backend_pid();
 $$);
+
+SHOW ssl_ciphers;
+SELECT run_command_on_workers($$
+    SHOW ssl_ciphers;
+$$);
