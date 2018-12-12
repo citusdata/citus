@@ -1,3 +1,5 @@
+### citus v7.5.4 (December 12, 2018) ###
+
 ### citus v7.5.4 (December 11, 2018) ###
 
 * Fixes a bug that could cause maintenance daemon panic
