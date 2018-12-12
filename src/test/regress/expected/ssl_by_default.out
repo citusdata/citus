@@ -61,3 +61,18 @@ $$);
  (localhost,57638,t,t)
 (2 rows)
 
+SHOW ssl_ciphers;
+        ssl_ciphers         
+----------------------------
+ TLSv1.2+HIGH:!aNULL:!eNULL
+(1 row)
+
+SELECT run_command_on_workers($$
+    SHOW ssl_ciphers;
+$$);
+             run_command_on_workers             
+------------------------------------------------
+ (localhost,57637,t,TLSv1.2+HIGH:!aNULL:!eNULL)
+ (localhost,57638,t,TLSv1.2+HIGH:!aNULL:!eNULL)
+(2 rows)
+

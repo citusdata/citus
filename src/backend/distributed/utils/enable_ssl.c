@@ -35,6 +35,11 @@
 #define CITUS_AUTO_SSL_COMMON_NAME "citus-auto-ssl"
 #define X509_SUBJECT_COMMON_NAME "CN"
 
+#define POSTGRES_DEFAULT_SSL_CIPHERS "HIGH:MEDIUM:+3DES:!aNULL"
+#define CITUS_DEFAULT_SSL_CIPHERS "TLSv1.2+HIGH:!aNULL:!eNULL"
+#define SET_CITUS_SSL_CIPHERS_QUERY \
+	"ALTER SYSTEM SET ssl_ciphers TO '" CITUS_DEFAULT_SSL_CIPHERS "';"
+
 
 /* forward declaration of helper functions */
 static void GloballyReloadConfig(void);
@@ -79,6 +84,16 @@ citus_setup_ssl(PG_FUNCTION_ARGS)
 		/* execute the alter system statement to enable ssl on within postgres */
 		enableSSLParseTree = ParseTreeNode(ENABLE_SSL_QUERY);
 		AlterSystemSetConfigFile((AlterSystemStmt *) enableSSLParseTree);
+
+		if (strcmp(SSLCipherSuites, POSTGRES_DEFAULT_SSL_CIPHERS) == 0)
+		{
+			/*
+			 * postgres default cipher suite is configured, these allow TSL 1 and TLS 1.1,
+			 * citus will upgrade to TLS1.2+HIGH and above.
+			 */
+			Node *citusSSLCiphersParseTree = ParseTreeNode(SET_CITUS_SSL_CIPHERS_QUERY);
+			AlterSystemSetConfigFile((AlterSystemStmt *) citusSSLCiphersParseTree);
+		}
 
 		/*
 		 * ssl=on requires that a key and certificate are present, since we have
