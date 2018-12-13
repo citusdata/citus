@@ -1,3 +1,13 @@
+### citus v8.0.2 (December 13, 2018) ###
+
+* Fixes a bug that could cause maintenance daemon panic
+
+* Fixes crashes caused by stack size increase under high memory load
+
+### citus v7.5.4 (December 11, 2018) ###
+
+* Fixes a bug that could cause maintenance daemon panic
+
 ### citus v8.0.1 (November 27, 2018) ###
 
 * Execute SQL tasks using worker_execute_sql_task UDF when using task-tracker
@@ -134,7 +144,7 @@
 
 * Removes broadcast join logic
 
-* Deprecates `large_table_shard_count` and `master_expire_table_cache()`  
+* Deprecates `large_table_shard_count` and `master_expire_table_cache()`
 
 * Modifies master_update_node to lock write on shards hosted by node over update
 
