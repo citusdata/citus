@@ -1,3 +1,9 @@
+### citus v8.0.2 (December 13, 2018) ###
+
+* Fixes a bug that could cause maintenance daemon panic
+
+* Fixes crashes caused by stack size increase under high memory load
+
 ### citus v7.5.4 (December 11, 2018) ###
 
 * Fixes a bug that could cause maintenance daemon panic
