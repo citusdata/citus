@@ -21,8 +21,6 @@
 #include "libpq/hba.h"
 #if (PG_VERSION_NUM >= 100000)
 #include "common/ip.h"
-#else
-#include "libpq/ip.h"
 #endif
 #include "libpq/libpq-be.h"
 #include "postmaster/postmaster.h"

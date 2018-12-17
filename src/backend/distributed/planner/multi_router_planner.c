@@ -1297,9 +1297,6 @@ TargetEntryChangesValue(TargetEntry *targetEntry, Var *column, FromExpr *joinTre
 #if (PG_VERSION_NUM >= 100000)
 		predicateIsImplied = predicate_implied_by(list_make1(equalityExpr),
 												  restrictClauseList, false);
-#else
-		predicateIsImplied = predicate_implied_by(list_make1(equalityExpr),
-												  restrictClauseList);
 #endif
 		if (predicateIsImplied)
 		{

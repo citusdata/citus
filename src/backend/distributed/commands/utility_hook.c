@@ -103,8 +103,6 @@ CitusProcessUtility(Node *node, const char *queryString, ProcessUtilityContext c
 
 	ProcessUtility(plannedStmt, queryString, context, params, NULL, dest,
 				   completionTag);
-#else
-	ProcessUtility(node, queryString, context, params, dest, completionTag);
 #endif
 }
 
@@ -142,9 +140,6 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 #if (PG_VERSION_NUM >= 100000)
 		standard_ProcessUtility(pstmt, queryString, context,
 								params, queryEnv, dest, completionTag);
-#else
-		standard_ProcessUtility(parsetree, queryString, context,
-								params, dest, completionTag);
 #endif
 
 		return;
@@ -166,9 +161,6 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 #if (PG_VERSION_NUM >= 100000)
 		standard_ProcessUtility(pstmt, queryString, context,
 								params, queryEnv, dest, completionTag);
-#else
-		standard_ProcessUtility(parsetree, queryString, context,
-								params, dest, completionTag);
 #endif
 
 		return;
@@ -461,9 +453,6 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 	pstmt->utilityStmt = parsetree;
 	standard_ProcessUtility(pstmt, queryString, context,
 							params, queryEnv, dest, completionTag);
-#else
-	standard_ProcessUtility(parsetree, queryString, context,
-							params, dest, completionTag);
 #endif
 
 

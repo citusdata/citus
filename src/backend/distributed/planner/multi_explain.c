@@ -92,9 +92,6 @@ static void ExplainOneQuery(Query *query, int cursorOptions,
 							IntoClause *into, ExplainState *es,
 							const char *queryString, ParamListInfo params,
 							QueryEnvironment *queryEnv);
-#else
-static void ExplainOneQuery(Query *query, IntoClause *into, ExplainState *es,
-							const char *queryString, ParamListInfo params);
 #endif
 #if (PG_VERSION_NUM < 110000)
 static void ExplainOpenGroup(const char *objtype, const char *labelname,
@@ -167,8 +164,6 @@ CoordinatorInsertSelectExplainScan(CustomScanState *node, List *ancestors,
 	/* explain the inner SELECT query */
 #if (PG_VERSION_NUM >= 100000)
 	ExplainOneQuery(query, 0, into, es, queryString, params, NULL);
-#else
-	ExplainOneQuery(query, into, es, queryString, params);
 #endif
 
 	ExplainCloseGroup("Select Query", "Select Query", false, es);
@@ -213,8 +208,6 @@ ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es)
 
 #if (PG_VERSION_NUM >= 100000)
 		ExplainOnePlan(plan, into, es, queryString, params, NULL, &planduration);
-#else
-		ExplainOnePlan(plan, into, es, queryString, params, &planduration);
 #endif
 
 		if (es->format == EXPLAIN_FORMAT_TEXT)
@@ -659,9 +652,6 @@ ExplainOneQuery(Query *query, int cursorOptions,
 				IntoClause *into, ExplainState *es,
 				const char *queryString, ParamListInfo params,
 				QueryEnvironment *queryEnv)
-#else
-ExplainOneQuery(Query *query, IntoClause *into, ExplainState *es,
-				const char *queryString, ParamListInfo params)
 #endif
 {
 	/* if an advisor plugin is present, let it manage things */
@@ -672,8 +662,6 @@ ExplainOneQuery(Query *query, IntoClause *into, ExplainState *es,
 #elif (PG_VERSION_NUM >= 100000)
 		(*ExplainOneQuery_hook) (query, cursorOptions, into, es,
 								 queryString, params);
-#else
-		(*ExplainOneQuery_hook) (query, into, es, queryString, params);
 #endif
 	else
 	{
@@ -686,8 +674,6 @@ ExplainOneQuery(Query *query, IntoClause *into, ExplainState *es,
 		/* plan the query */
 #if (PG_VERSION_NUM >= 100000)
 		plan = pg_plan_query(query, cursorOptions, params);
-#else
-		plan = pg_plan_query(query, into ? 0 : CURSOR_OPT_PARALLEL_OK, params);
 #endif
 
 		INSTR_TIME_SET_CURRENT(planduration);
@@ -697,8 +683,6 @@ ExplainOneQuery(Query *query, IntoClause *into, ExplainState *es,
 #if (PG_VERSION_NUM >= 100000)
 		ExplainOnePlan(plan, into, es, queryString, params, queryEnv,
 					   &planduration);
-#else
-		ExplainOnePlan(plan, into, es, queryString, params, &planduration);
 #endif
 	}
 }

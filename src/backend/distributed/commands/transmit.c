@@ -60,8 +60,6 @@ RedirectCopyDataToRegularFile(const char *filename)
 #if (PG_VERSION_NUM >= 100000)
 			int appended = FileWrite(fileDesc, copyData->data, copyData->len,
 									 PG_WAIT_IO);
-#else
-			int appended = FileWrite(fileDesc, copyData->data, copyData->len);
 #endif
 
 			if (appended != copyData->len)
@@ -109,8 +107,6 @@ SendRegularFile(const char *filename)
 
 #if (PG_VERSION_NUM >= 100000)
 	readBytes = FileRead(fileDesc, fileBuffer->data, fileBufferSize, PG_WAIT_IO);
-#else
-	readBytes = FileRead(fileDesc, fileBuffer->data, fileBufferSize);
 #endif
 
 	while (readBytes > 0)
@@ -123,8 +119,6 @@ SendRegularFile(const char *filename)
 #if (PG_VERSION_NUM >= 100000)
 		readBytes = FileRead(fileDesc, fileBuffer->data, fileBufferSize,
 							 PG_WAIT_IO);
-#else
-		readBytes = FileRead(fileDesc, fileBuffer->data, fileBufferSize);
 #endif
 	}
 

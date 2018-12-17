@@ -313,25 +313,6 @@ ReportResultError(MultiConnection *connection, PGresult *result, int elevel)
 }
 
 
-/* *INDENT-OFF* */
-#if (PG_VERSION_NUM < 100000)
-
-/*
- * Make copy of string with all trailing newline characters removed.
- */
-char *
-pchomp(const char *in)
-{
-	size_t		n;
-
-	n = strlen(in);
-	while (n > 0 && in[n - 1] == '\n')
-		n--;
-	return pnstrdup(in, n);
-}
-
-#endif
-
 /* *INDENT-ON* */
 
 
@@ -714,8 +695,6 @@ FinishConnectionIO(MultiConnection *connection, bool raiseInterrupts)
 
 #if (PG_VERSION_NUM >= 100000)
 		rc = WaitLatchOrSocket(MyLatch, waitFlags, socket, 0, PG_WAIT_EXTENSION);
-#else
-		rc = WaitLatchOrSocket(MyLatch, waitFlags, socket, 0);
 #endif
 
 		if (rc & WL_POSTMASTER_DEATH)
@@ -827,9 +806,6 @@ WaitForAllConnections(List *connectionList, bool raiseInterrupts)
 #if (PG_VERSION_NUM >= 100000)
 			eventCount = WaitEventSetWait(waitEventSet, timeout, events,
 										  pendingConnectionCount, WAIT_EVENT_CLIENT_READ);
-#else
-			eventCount = WaitEventSetWait(waitEventSet, timeout, events,
-										  pendingConnectionCount);
 #endif
 
 			/* process I/O events */

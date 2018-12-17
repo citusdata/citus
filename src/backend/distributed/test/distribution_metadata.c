@@ -274,8 +274,6 @@ relation_count_in_query(PG_FUNCTION_ARGS)
 #if (PG_VERSION_NUM >= 100000)
 		queryTreeList = pg_analyze_and_rewrite((RawStmt *) parsetree, queryStringChar,
 											   NULL, 0, NULL);
-#else
-		queryTreeList = pg_analyze_and_rewrite(parsetree, queryStringChar, NULL, 0);
 #endif
 
 		foreach(queryTreeCell, queryTreeList)

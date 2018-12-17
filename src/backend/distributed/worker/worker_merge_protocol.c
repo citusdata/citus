@@ -381,8 +381,6 @@ RemoveJobSchema(StringInfo schemaName)
 						PERFORM_DELETION_QUIETLY |
 						PERFORM_DELETION_SKIP_ORIGINAL |
 						PERFORM_DELETION_SKIP_EXTENSIONS);
-#else
-		deleteWhatDependsOn(&schemaObject, false);
 #endif
 
 		CommandCounterIncrement();
@@ -426,8 +424,6 @@ CreateTaskTable(StringInfo schemaName, StringInfo relationName,
 #if (PG_VERSION_NUM >= 100000)
 	relationObject = DefineRelation(createStatement, RELKIND_RELATION, InvalidOid, NULL,
 									NULL);
-#else
-	relationObject = DefineRelation(createStatement, RELKIND_RELATION, InvalidOid, NULL);
 #endif
 	relationId = relationObject.objectId;
 
@@ -575,8 +571,6 @@ CopyTaskFilesFromDirectory(StringInfo schemaName, StringInfo relationName,
 #if (PG_VERSION_NUM >= 100000)
 			DefElem *copyOption = makeDefElem("format", (Node *) makeString("binary"),
 											  -1);
-#else
-			DefElem *copyOption = makeDefElem("format", (Node *) makeString("binary"));
 #endif
 			copyStatement->options = list_make1(copyOption);
 		}
@@ -590,8 +584,6 @@ CopyTaskFilesFromDirectory(StringInfo schemaName, StringInfo relationName,
 
 			free_parsestate(pstate);
 		}
-#else
-		DoCopy(copyStatement, queryString, &copiedRowCount);
 #endif
 		copiedRowTotal += copiedRowCount;
 		CommandCounterIncrement();

@@ -414,8 +414,6 @@ WriteToLocalFile(StringInfo copyData, File fileDesc)
 {
 #if (PG_VERSION_NUM >= 100000)
 	int bytesWritten = FileWrite(fileDesc, copyData->data, copyData->len, PG_WAIT_IO);
-#else
-	int bytesWritten = FileWrite(fileDesc, copyData->data, copyData->len);
 #endif
 	if (bytesWritten < 0)
 	{

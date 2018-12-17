@@ -150,9 +150,6 @@ GetSchemaNameFromDropObject(ListCell *dropSchemaCell)
 #if (PG_VERSION_NUM >= 100000)
 	Value *schemaValue = (Value *) lfirst(dropSchemaCell);
 	schemaString = strVal(schemaValue);
-#else
-	List *schemaNameList = (List *) lfirst(dropSchemaCell);
-	schemaString = NameListToString(schemaNameList);
 #endif
 
 	return schemaString;

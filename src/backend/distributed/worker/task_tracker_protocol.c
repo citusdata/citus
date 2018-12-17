@@ -350,9 +350,6 @@ CreateJobSchema(StringInfo schemaName)
 #if (PG_VERSION_NUM >= 100000)
 	createSchemaStmt->authrole = &currentUserRole;
 	CreateSchemaCommand(createSchemaStmt, queryString, -1, -1);
-#else
-	createSchemaStmt->authrole = (Node *) &currentUserRole;
-	CreateSchemaCommand(createSchemaStmt, queryString);
 #endif
 
 	CommandCounterIncrement();

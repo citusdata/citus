@@ -115,8 +115,6 @@ master_apply_delete_command(PG_FUNCTION_ARGS)
 #if (PG_VERSION_NUM >= 100000)
 	RawStmt *rawStmt = (RawStmt *) ParseTreeRawStmt(queryString);
 	queryTreeNode = rawStmt->stmt;
-#else
-	queryTreeNode = ParseTreeNode(queryString);
 #endif
 
 	EnsureCoordinator();
@@ -154,8 +152,6 @@ master_apply_delete_command(PG_FUNCTION_ARGS)
 
 #if (PG_VERSION_NUM >= 100000)
 	queryTreeList = pg_analyze_and_rewrite(rawStmt, queryString, NULL, 0, NULL);
-#else
-	queryTreeList = pg_analyze_and_rewrite(queryTreeNode, queryString, NULL, 0);
 #endif
 	deleteQuery = (Query *) linitial(queryTreeList);
 	CheckTableCount(deleteQuery);
@@ -595,8 +591,6 @@ ShardsMatchingDeleteCriteria(Oid relationId, List *shardIntervalList,
 
 #if (PG_VERSION_NUM >= 100000)
 			dropShard = predicate_implied_by(deleteCriteriaList, restrictInfoList, false);
-#else
-			dropShard = predicate_implied_by(deleteCriteriaList, restrictInfoList);
 #endif
 			if (dropShard)
 			{

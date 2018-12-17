@@ -877,9 +877,6 @@ AlterSequenceMinMax(Oid sequenceId, char *schemaName, char *sequenceName)
 #if (PG_VERSION_NUM >= 100000)
 	int64 sequenceMaxValue = sequenceData->seqmax;
 	int64 sequenceMinValue = sequenceData->seqmin;
-#else
-	int64 sequenceMaxValue = sequenceData->max_value;
-	int64 sequenceMinValue = sequenceData->min_value;
 #endif
 
 
@@ -953,8 +950,6 @@ SetDefElemArg(AlterSeqStmt *statement, const char *name, Node *arg)
 
 #if (PG_VERSION_NUM >= 100000)
 	defElem = makeDefElem((char *) name, arg, -1);
-#else
-	defElem = makeDefElem((char *) name, arg);
 #endif
 
 	statement->options = lappend(statement->options, defElem);

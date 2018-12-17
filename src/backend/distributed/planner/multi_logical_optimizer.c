@@ -1956,8 +1956,6 @@ MasterAverageExpression(Oid sumAggregateType, Oid countAggregateType,
 #if (PG_VERSION_NUM >= 100000)
 	opExpr = make_op(NULL, operatorNameList, (Node *) firstSum, (Node *) secondSum, NULL,
 					 -1);
-#else
-	opExpr = make_op(NULL, operatorNameList, (Node *) firstSum, (Node *) secondSum, -1);
 #endif
 
 	return opExpr;

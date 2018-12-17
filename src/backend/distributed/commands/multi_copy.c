@@ -432,12 +432,6 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 							  NULL,
 							  copyStatement->attlist,
 							  copyStatement->options);
-#else
-	copyState = BeginCopyFrom(copiedDistributedRelation,
-							  copyStatement->filename,
-							  copyStatement->is_program,
-							  copyStatement->attlist,
-							  copyStatement->options);
 #endif
 
 	/* set up callback to identify error line number */
@@ -539,12 +533,6 @@ CopyToNewShards(CopyStmt *copyStatement, char *completionTag, Oid relationId)
 										copyStatement->filename,
 										copyStatement->is_program,
 										NULL,
-										copyStatement->attlist,
-										copyStatement->options);
-#else
-	CopyState copyState = BeginCopyFrom(distributedRelation,
-										copyStatement->filename,
-										copyStatement->is_program,
 										copyStatement->attlist,
 										copyStatement->options);
 #endif
@@ -2234,8 +2222,6 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
 
 		#if (PG_VERSION_NUM >= 100000)
 		formatResultOption = makeDefElem("format", (Node *) makeString("result"), -1);
-		#else
-		formatResultOption = makeDefElem("format", (Node *) makeString("result"));
 		#endif
 		copyStatement->options = list_make1(formatResultOption);
 	}
@@ -2644,8 +2630,6 @@ ProcessCopyStmt(CopyStmt *copyStatement, char *completionTag, const char *queryS
 			rawStmt->stmt = queryNode;
 
 			queryTreeList = pg_analyze_and_rewrite(rawStmt, queryString, NULL, 0, NULL);
-#else
-			queryTreeList = pg_analyze_and_rewrite(queryNode, queryString, NULL, 0);
 #endif
 
 			if (list_length(queryTreeList) != 1)

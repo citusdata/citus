@@ -95,8 +95,6 @@ master_modify_multiple_shards(PG_FUNCTION_ARGS)
 #if (PG_VERSION_NUM >= 100000)
 	RawStmt *rawStmt = (RawStmt *) ParseTreeRawStmt(queryString);
 	queryTreeNode = rawStmt->stmt;
-#else
-	queryTreeNode = ParseTreeNode(queryString);
 #endif
 
 	CheckCitusVersion(ERROR);
@@ -154,8 +152,6 @@ master_modify_multiple_shards(PG_FUNCTION_ARGS)
 
 #if (PG_VERSION_NUM >= 100000)
 	queryTreeList = pg_analyze_and_rewrite(rawStmt, queryString, NULL, 0, NULL);
-#else
-	queryTreeList = pg_analyze_and_rewrite(queryTreeNode, queryString, NULL, 0);
 #endif
 	modifyQuery = (Query *) linitial(queryTreeList);
 

@@ -205,8 +205,6 @@ _PG_init(void)
 	/* register utility hook */
 #if (PG_VERSION_NUM >= 100000)
 	ProcessUtility_hook = multi_ProcessUtility;
-#else
-	ProcessUtility_hook = multi_ProcessUtility9x;
 #endif
 
 	/* register for planner hook */

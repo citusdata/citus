@@ -1196,8 +1196,6 @@ RegularTable(Oid relationId)
 
 #if (PG_VERSION_NUM >= 100000)
 	if (relationKind == RELKIND_RELATION || relationKind == RELKIND_PARTITIONED_TABLE)
-#else
-	if (relationKind == RELKIND_RELATION)
 #endif
 	{
 		return true;
