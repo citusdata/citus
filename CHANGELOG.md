@@ -18,7 +18,7 @@
 
 * Disallows GROUPING SET clauses in subqueries
 
-* Do not restrict user-defined group ID in node addition functions
+* Removes restriction on user-defined group ID in node addition functions
 
 * Relaxes multi-shard modify locks when enable_deadlock_prevention is disabled
 
