@@ -28,23 +28,6 @@ DROP TABLE index_test;
 
 
 CREATE TABLE index_test(id int, value_1 int, value_2 int);
-SELECT create_distributed_table('index_test', 'id');
-
--- kill the connection at the second create command is issued
-SELECT citus.mitmproxy('conn.onQuery(query="CREATE").after(1).kill()');
-
-CREATE INDEX CONCURRENTLY idx_index_test ON index_test(id, value_1);
-
-SELECT citus.mitmproxy('conn.allow()');
-
--- verify only one index is created
-SELECT * FROM run_command_on_workers($$SELECT count(*) FROM pg_indexes WHERE indexname LIKE 'idx_index_test%' $$)
-WHERE nodeport = :worker_2_proxy_port;
-
-DROP TABLE index_test;
-
-
-CREATE TABLE index_test(id int, value_1 int, value_2 int);
 SELECT create_reference_table('index_test');
 
 -- kill the connection when create command is issued
