@@ -30,9 +30,7 @@
 
 * Improves permission checks in cluster management functions
 
-* Cleans up UDFs and revokes unnecessary permissions
-
-* Fixes permission checks in lesser-known UDFs
+* Cleans up UDFs and fixes permission checks
 
 * Fixes crashes caused by stack size increase under high memory load
 
