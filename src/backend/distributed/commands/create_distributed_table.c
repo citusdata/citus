@@ -132,6 +132,7 @@ master_create_distributed_table(PG_FUNCTION_ARGS)
 
 	CheckCitusVersion(ERROR);
 	EnsureCoordinator();
+	EnsureTableOwner(relationId);
 
 	/*
 	 * Lock target relation with an exclusive lock - there's no way to make
@@ -197,6 +198,8 @@ create_distributed_table(PG_FUNCTION_ARGS)
 	distributionMethodOid = PG_GETARG_OID(2);
 	colocateWithTableNameText = PG_GETARG_TEXT_P(3);
 
+	EnsureTableOwner(relationId);
+
 	/*
 	 * Lock target relation with an exclusive lock - there's no way to make
 	 * sense of this table until we've committed, and we don't want multiple
@@ -253,6 +256,7 @@ create_reference_table(PG_FUNCTION_ARGS)
 
 	EnsureCoordinator();
 	CheckCitusVersion(ERROR);
+	EnsureTableOwner(relationId);
 
 	/*
 	 * Ensure schema exists on each worker node. We can not run this function
@@ -638,7 +642,6 @@ EnsureRelationCanBeDistributed(Oid relationId, Var *distributionColumn,
 	char *relationName = NULL;
 	Oid parentRelationId = InvalidOid;
 
-	EnsureTableOwner(relationId);
 	EnsureTableNotDistributed(relationId);
 	EnsureLocalTableEmptyIfNecessary(relationId, distributionMethod, viaDeprecatedAPI);
 	EnsureReplicationSettings(InvalidOid, replicationModel);
