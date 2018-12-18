@@ -270,16 +270,12 @@ ReadFileIntoTupleStore(char *fileName, char *copyFormat, TupleDesc tupleDescript
 	DefElem *copyOption = NULL;
 	List *copyOptions = NIL;
 
-#if (PG_VERSION_NUM >= 100000)
 	int location = -1; /* "unknown" token location */
 	copyOption = makeDefElem("format", (Node *) makeString(copyFormat), location);
-#endif
 	copyOptions = lappend(copyOptions, copyOption);
 
-#if (PG_VERSION_NUM >= 100000)
 	copyState = BeginCopyFrom(NULL, stubRelation, fileName, false, NULL,
 							  NULL, copyOptions);
-#endif
 
 	while (true)
 	{
@@ -346,11 +342,8 @@ Query *
 ParseQueryString(const char *queryString)
 {
 	Query *query = NULL;
-
-#if (PG_VERSION_NUM >= 100000)
 	RawStmt *rawStmt = (RawStmt *) ParseTreeRawStmt(queryString);
 	List *queryTreeList = pg_analyze_and_rewrite(rawStmt, queryString, NULL, 0, NULL);
-#endif
 
 	if (list_length(queryTreeList) != 1)
 	{
@@ -408,9 +401,7 @@ ExecutePlanIntoDestReceiver(PlannedStmt *queryPlan, ParamListInfo params,
 					  NULL);
 
 	PortalStart(portal, params, eflags, GetActiveSnapshot());
-#if (PG_VERSION_NUM >= 100000)
 	PortalRun(portal, count, false, true, dest, dest, NULL);
-#endif
 	PortalDrop(portal, false);
 }
 

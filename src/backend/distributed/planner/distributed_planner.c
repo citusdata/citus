@@ -337,7 +337,6 @@ AdjustPartitioningForDistributedPlanning(Query *queryTree,
 		{
 			rangeTableEntry->inh = setPartitionedTablesInherited;
 
-#if (PG_VERSION_NUM >= 100000)
 			if (setPartitionedTablesInherited)
 			{
 				rangeTableEntry->relkind = RELKIND_PARTITIONED_TABLE;
@@ -346,7 +345,6 @@ AdjustPartitioningForDistributedPlanning(Query *queryTree,
 			{
 				rangeTableEntry->relkind = RELKIND_RELATION;
 			}
-#endif
 		}
 	}
 }

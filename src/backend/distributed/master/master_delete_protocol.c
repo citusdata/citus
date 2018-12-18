@@ -58,9 +58,7 @@
 #include "utils/elog.h"
 #include "utils/errcodes.h"
 #include "utils/lsyscache.h"
-#if (PG_VERSION_NUM >= 100000)
 #include "utils/varlena.h"
-#endif
 
 
 /* Local functions forward declarations */
@@ -112,10 +110,8 @@ master_apply_delete_command(PG_FUNCTION_ARGS)
 	LOCKMODE lockMode = 0;
 	char partitionMethod = 0;
 	bool failOK = false;
-#if (PG_VERSION_NUM >= 100000)
 	RawStmt *rawStmt = (RawStmt *) ParseTreeRawStmt(queryString);
 	queryTreeNode = rawStmt->stmt;
-#endif
 
 	EnsureCoordinator();
 	CheckCitusVersion(ERROR);
@@ -150,9 +146,7 @@ master_apply_delete_command(PG_FUNCTION_ARGS)
 	CheckDistributedTable(relationId);
 	EnsureTablePermissions(relationId, ACL_DELETE);
 
-#if (PG_VERSION_NUM >= 100000)
 	queryTreeList = pg_analyze_and_rewrite(rawStmt, queryString, NULL, 0, NULL);
-#endif
 	deleteQuery = (Query *) linitial(queryTreeList);
 	CheckTableCount(deleteQuery);
 
@@ -589,9 +583,7 @@ ShardsMatchingDeleteCriteria(Oid relationId, List *shardIntervalList,
 			restrictInfoList = lappend(restrictInfoList, lessThanRestrictInfo);
 			restrictInfoList = lappend(restrictInfoList, greaterThanRestrictInfo);
 
-#if (PG_VERSION_NUM >= 100000)
 			dropShard = predicate_implied_by(deleteCriteriaList, restrictInfoList, false);
-#endif
 			if (dropShard)
 			{
 				dropShardIntervalList = lappend(dropShardIntervalList, shardInterval);

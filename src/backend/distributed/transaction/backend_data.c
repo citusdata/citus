@@ -46,9 +46,7 @@
 typedef struct BackendManagementShmemData
 {
 	int trancheId;
-#if (PG_VERSION_NUM >= 100000)
 	NamedLWLockTranche namedLockTranche;
-#endif
 	LWLock lock;
 
 	/*
@@ -552,23 +550,18 @@ BackendManagementShmemInit(void)
 		int totalProcs = 0;
 		char *trancheName = "Backend Management Tranche";
 
-#if (PG_VERSION_NUM >= 100000)
 		NamedLWLockTranche *namedLockTranche =
 			&backendManagementShmemData->namedLockTranche;
-
-#endif
 
 		/* start by zeroing out all the memory */
 		memset(backendManagementShmemData, 0,
 			   BackendManagementShmemSize());
 
-#if (PG_VERSION_NUM >= 100000)
 		namedLockTranche->trancheId = LWLockNewTrancheId();
 
 		LWLockRegisterTranche(namedLockTranche->trancheId, trancheName);
 		LWLockInitialize(&backendManagementShmemData->lock,
 						 namedLockTranche->trancheId);
-#endif
 
 		/* start the distributed transaction ids from 1 */
 		pg_atomic_init_u64(&backendManagementShmemData->nextTransactionNumber, 1);

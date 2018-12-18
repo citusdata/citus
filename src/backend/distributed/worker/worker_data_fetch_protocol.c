@@ -48,10 +48,8 @@
 #include "tcop/utility.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
-#if (PG_VERSION_NUM >= 100000)
 #include "utils/regproc.h"
 #include "utils/varlena.h"
-#endif
 
 
 /* Local functions forward declarations */
@@ -660,9 +658,7 @@ ParseTreeNode(const char *ddlCommand)
 {
 	Node *parseTreeNode = ParseTreeRawStmt(ddlCommand);
 
-#if (PG_VERSION_NUM >= 100000)
 	parseTreeNode = ((RawStmt *) parseTreeNode)->stmt;
-#endif
 
 	return parseTreeNode;
 }
@@ -874,10 +870,8 @@ AlterSequenceMinMax(Oid sequenceId, char *schemaName, char *sequenceName)
 	Form_pg_sequence sequenceData = pg_get_sequencedef(sequenceId);
 	int64 startValue = 0;
 	int64 maxValue = 0;
-#if (PG_VERSION_NUM >= 100000)
 	int64 sequenceMaxValue = sequenceData->seqmax;
 	int64 sequenceMinValue = sequenceData->seqmin;
-#endif
 
 
 	/* calculate min/max values that the sequence can generate in this worker */
@@ -948,9 +942,7 @@ SetDefElemArg(AlterSeqStmt *statement, const char *name, Node *arg)
 		}
 	}
 
-#if (PG_VERSION_NUM >= 100000)
 	defElem = makeDefElem((char *) name, arg, -1);
-#endif
 
 	statement->options = lappend(statement->options, defElem);
 }

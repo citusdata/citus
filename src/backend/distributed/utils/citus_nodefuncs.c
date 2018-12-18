@@ -302,10 +302,8 @@ GetRangeTblKind(RangeTblEntry *rte)
 	switch (rte->rtekind)
 	{
 		/* directly rtekind if it's not possibly an extended RTE */
-#if (PG_VERSION_NUM >= 100000)
 		case RTE_TABLEFUNC:
 		case RTE_NAMEDTUPLESTORE:
-#endif
 		case RTE_RELATION:
 		case RTE_SUBQUERY:
 		case RTE_JOIN:

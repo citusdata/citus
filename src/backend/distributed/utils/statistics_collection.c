@@ -13,10 +13,7 @@
 #include "citus_version.h"
 #include "fmgr.h"
 #include "utils/uuid.h"
-
-#if PG_VERSION_NUM >= 100000
 #include "utils/backend_random.h"
-#endif
 
 bool EnableStatisticsCollection = true; /* send basic usage statistics to Citus */
 
@@ -48,10 +45,7 @@ typedef struct utsname
 #include "utils/builtins.h"
 #include "utils/json.h"
 #include "utils/jsonb.h"
-
-#if PG_VERSION_NUM >= 100000
 #include "utils/fmgrprotos.h"
-#endif
 
 static size_t StatisticsCallback(char *contents, size_t size, size_t count,
 								 void *userData);
@@ -605,15 +599,12 @@ citus_server_id(PG_FUNCTION_ARGS)
 {
 	uint8 *buf = (uint8 *) palloc(UUID_LEN);
 
-#if PG_VERSION_NUM >= 100000
-
 	/*
 	 * If pg_backend_random() fails, fall-back to using random(). In previous
 	 * versions of postgres we don't have pg_backend_random(), so use it by
 	 * default in that case.
 	 */
 	if (!pg_backend_random((char *) buf, UUID_LEN))
-#endif
 	{
 		int bufIdx = 0;
 		for (bufIdx = 0; bufIdx < UUID_LEN; bufIdx++)

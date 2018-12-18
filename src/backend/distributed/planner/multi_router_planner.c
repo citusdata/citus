@@ -142,9 +142,7 @@ static bool MultiRouterPlannableQuery(Query *query,
 static DeferredErrorMessage * ErrorIfQueryHasModifyingCTE(Query *queryTree);
 static RangeTblEntry * GetUpdateOrDeleteRTE(Query *query);
 static bool SelectsFromDistributedTable(List *rangeTableList, Query *query);
-#if (PG_VERSION_NUM >= 100000)
 static List * get_all_actual_clauses(List *restrictinfo_list);
-#endif
 static int CompareInsertValuesByShardId(const void *leftElement,
 										const void *rightElement);
 static uint64 GetInitialShardId(List *relationShardList);
@@ -1294,10 +1292,8 @@ TargetEntryChangesValue(TargetEntry *targetEntry, Var *column, FromExpr *joinTre
 		rightConst->constisnull = newValue->constisnull;
 		rightConst->constbyval = newValue->constbyval;
 
-#if (PG_VERSION_NUM >= 100000)
 		predicateIsImplied = predicate_implied_by(list_make1(equalityExpr),
 												  restrictClauseList, false);
-#endif
 		if (predicateIsImplied)
 		{
 			/* target entry of the form SET col = <x> WHERE col = <x> AND ... */
@@ -2515,13 +2511,10 @@ NormalizeMultiRowInsertTargetList(Query *query)
 		valuesListCell->data.ptr_value = (void *) expandedValuesList;
 	}
 
-#if (PG_VERSION_NUM >= 100000)
-
 	/* reset coltypes, coltypmods, colcollations and rebuild them below */
 	valuesRTE->coltypes = NIL;
 	valuesRTE->coltypmods = NIL;
 	valuesRTE->colcollations = NIL;
-#endif
 
 	foreach(targetEntryCell, query->targetList)
 	{
@@ -2541,11 +2534,9 @@ NormalizeMultiRowInsertTargetList(Query *query)
 		targetTypmod = exprTypmod(targetExprNode);
 		targetColl = exprCollation(targetExprNode);
 
-#if (PG_VERSION_NUM >= 100000)
 		valuesRTE->coltypes = lappend_oid(valuesRTE->coltypes, targetType);
 		valuesRTE->coltypmods = lappend_int(valuesRTE->coltypmods, targetTypmod);
 		valuesRTE->colcollations = lappend_oid(valuesRTE->colcollations, targetColl);
-#endif
 
 		if (IsA(targetExprNode, Var))
 		{
@@ -2993,8 +2984,6 @@ ErrorIfQueryHasModifyingCTE(Query *queryTree)
 }
 
 
-#if (PG_VERSION_NUM >= 100000)
-
 /*
  * get_all_actual_clauses
  *
@@ -3019,9 +3008,6 @@ get_all_actual_clauses(List *restrictinfo_list)
 	}
 	return result;
 }
-
-
-#endif
 
 
 /*

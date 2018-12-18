@@ -147,10 +147,8 @@ GetSchemaNameFromDropObject(ListCell *dropSchemaCell)
 {
 	char *schemaString = NULL;
 
-#if (PG_VERSION_NUM >= 100000)
 	Value *schemaValue = (Value *) lfirst(dropSchemaCell);
 	schemaString = strVal(schemaValue);
-#endif
 
 	return schemaString;
 }

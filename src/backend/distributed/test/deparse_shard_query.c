@@ -52,10 +52,8 @@ deparse_shard_query_test(PG_FUNCTION_ARGS)
 		ListCell *queryTreeCell = NULL;
 		List *queryTreeList = NIL;
 
-#if (PG_VERSION_NUM >= 100000)
 		queryTreeList = pg_analyze_and_rewrite((RawStmt *) parsetree, queryStringChar,
 											   NULL, 0, NULL);
-#endif
 
 		foreach(queryTreeCell, queryTreeList)
 		{

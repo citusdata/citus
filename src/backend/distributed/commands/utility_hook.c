@@ -67,28 +67,6 @@ static void PostProcessUtility(Node *parsetree);
 
 
 /*
- * multi_ProcessUtility9x is the 9.x-compatible wrapper for Citus' main utility
- * hook. It simply adapts the old-style hook to call into the new-style (10+)
- * hook, which is what now houses all actual logic.
- */
-void
-multi_ProcessUtility9x(Node *parsetree,
-					   const char *queryString,
-					   ProcessUtilityContext context,
-					   ParamListInfo params,
-					   DestReceiver *dest,
-					   char *completionTag)
-{
-	PlannedStmt *plannedStmt = makeNode(PlannedStmt);
-	plannedStmt->commandType = CMD_UTILITY;
-	plannedStmt->utilityStmt = parsetree;
-
-	multi_ProcessUtility(plannedStmt, queryString, context, params, NULL, dest,
-						 completionTag);
-}
-
-
-/*
  * CitusProcessUtility is a version-aware wrapper of ProcessUtility to account
  * for argument differences between the 9.x and 10+ PostgreSQL versions.
  */
@@ -96,14 +74,12 @@ void
 CitusProcessUtility(Node *node, const char *queryString, ProcessUtilityContext context,
 					ParamListInfo params, DestReceiver *dest, char *completionTag)
 {
-#if (PG_VERSION_NUM >= 100000)
 	PlannedStmt *plannedStmt = makeNode(PlannedStmt);
 	plannedStmt->commandType = CMD_UTILITY;
 	plannedStmt->utilityStmt = node;
 
 	ProcessUtility(plannedStmt, queryString, context, params, NULL, dest,
 				   completionTag);
-#endif
 }
 
 
@@ -137,10 +113,8 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		 * that state. Since we never need to intercept transaction statements,
 		 * skip our checks and immediately fall into standard_ProcessUtility.
 		 */
-#if (PG_VERSION_NUM >= 100000)
 		standard_ProcessUtility(pstmt, queryString, context,
 								params, queryEnv, dest, completionTag);
-#endif
 
 		return;
 	}
@@ -158,23 +132,18 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		 * Ensure that utility commands do not behave any differently until CREATE
 		 * EXTENSION is invoked.
 		 */
-#if (PG_VERSION_NUM >= 100000)
 		standard_ProcessUtility(pstmt, queryString, context,
 								params, queryEnv, dest, completionTag);
-#endif
 
 		return;
 	}
 
-#if (PG_VERSION_NUM >= 100000)
 	if (IsA(parsetree, CreateSubscriptionStmt))
 	{
 		CreateSubscriptionStmt *createSubStmt = (CreateSubscriptionStmt *) parsetree;
 
 		parsetree = ProcessCreateSubscriptionStmt(createSubStmt);
 	}
-#endif
-
 #if (PG_VERSION_NUM >= 110000)
 	if (IsA(parsetree, CallStmt))
 	{
@@ -449,12 +418,9 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		}
 	}
 
-#if (PG_VERSION_NUM >= 100000)
 	pstmt->utilityStmt = parsetree;
 	standard_ProcessUtility(pstmt, queryString, context,
 							params, queryEnv, dest, completionTag);
-#endif
-
 
 	/*
 	 * We only process CREATE TABLE ... PARTITION OF commands in the function below

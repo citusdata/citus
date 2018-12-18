@@ -1953,10 +1953,8 @@ MasterAverageExpression(Oid sumAggregateType, Oid countAggregateType,
 	 * will convert the types of the aggregates if necessary.
 	 */
 	operatorNameList = list_make1(makeString(DIVISION_OPER_NAME));
-#if (PG_VERSION_NUM >= 100000)
 	opExpr = make_op(NULL, operatorNameList, (Node *) firstSum, (Node *) secondSum, NULL,
 					 -1);
-#endif
 
 	return opExpr;
 }

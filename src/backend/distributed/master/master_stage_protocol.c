@@ -24,9 +24,7 @@
 #include "commands/tablecmds.h"
 #include "catalog/indexing.h"
 #include "catalog/namespace.h"
-#if (PG_VERSION_NUM >= 100000)
 #include "catalog/partition.h"
-#endif
 #include "distributed/citus_ruleutils.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/commands.h"

@@ -36,9 +36,7 @@
 #include "storage/spin.h"
 #include "storage/s_lock.h"
 #include "utils/builtins.h"
-#if PG_VERSION_NUM >= 100000
 #include "utils/fmgrprotos.h"
-#endif
 #include "utils/inet.h"
 #include "utils/timestamp.h"
 
@@ -125,78 +123,75 @@
  * Also, backend_type introduced with pg 10+ so we have null in the previous verions.
  */
 
-#if PG_VERSION_NUM >= 100000
-
-	#define CITUS_DIST_STAT_ACTIVITY_QUERY \
+#define CITUS_DIST_STAT_ACTIVITY_QUERY \
 	"\
-	SELECT \
-		dist_txs.initiator_node_identifier, \
-		dist_txs.transaction_number, \
-		dist_txs.transaction_stamp, \
-		pg_stat_activity.datid, \
-		pg_stat_activity.datname, \
-		pg_stat_activity.pid, \
-		pg_stat_activity.usesysid, \
-		pg_stat_activity.usename, \
-		pg_stat_activity.application_name, \
-		pg_stat_activity.client_addr, \
-		pg_stat_activity.client_hostname, \
-		pg_stat_activity.client_port, \
-		pg_stat_activity.backend_start, \
-		pg_stat_activity.xact_start, \
-		pg_stat_activity.query_start, \
-		pg_stat_activity.state_change, \
-		pg_stat_activity.wait_event_type, \
-		pg_stat_activity.wait_event, \
-		pg_stat_activity.state, \
-		pg_stat_activity.backend_xid, \
-		pg_stat_activity.backend_xmin, \
-		pg_stat_activity.query, \
-		pg_stat_activity.backend_type \
-	FROM \
-		pg_stat_activity \
-		INNER JOIN \
-		get_all_active_transactions() AS dist_txs(database_id, process_id, initiator_node_identifier, worker_query, transaction_number, transaction_stamp) \
-		ON pg_stat_activity.pid = dist_txs.process_id \
-	WHERE \
-		dist_txs.worker_query = false;"
+SELECT \
+	dist_txs.initiator_node_identifier, \
+	dist_txs.transaction_number, \
+	dist_txs.transaction_stamp, \
+	pg_stat_activity.datid, \
+	pg_stat_activity.datname, \
+	pg_stat_activity.pid, \
+	pg_stat_activity.usesysid, \
+	pg_stat_activity.usename, \
+	pg_stat_activity.application_name, \
+	pg_stat_activity.client_addr, \
+	pg_stat_activity.client_hostname, \
+	pg_stat_activity.client_port, \
+	pg_stat_activity.backend_start, \
+	pg_stat_activity.xact_start, \
+	pg_stat_activity.query_start, \
+	pg_stat_activity.state_change, \
+	pg_stat_activity.wait_event_type, \
+	pg_stat_activity.wait_event, \
+	pg_stat_activity.state, \
+	pg_stat_activity.backend_xid, \
+	pg_stat_activity.backend_xmin, \
+	pg_stat_activity.query, \
+	pg_stat_activity.backend_type \
+FROM \
+	pg_stat_activity \
+	INNER JOIN \
+	get_all_active_transactions() AS dist_txs(database_id, process_id, initiator_node_identifier, worker_query, transaction_number, transaction_stamp) \
+	ON pg_stat_activity.pid = dist_txs.process_id \
+WHERE \
+	dist_txs.worker_query = false;"
 
-	#define CITUS_WORKER_STAT_ACTIVITY_QUERY \
+#define CITUS_WORKER_STAT_ACTIVITY_QUERY \
 	"\
-	SELECT \
-		dist_txs.initiator_node_identifier, \
-		dist_txs.transaction_number, \
-		dist_txs.transaction_stamp, \
-		pg_stat_activity.datid, \
-		pg_stat_activity.datname, \
-		pg_stat_activity.pid, \
-		pg_stat_activity.usesysid, \
-		pg_stat_activity.usename, \
-		pg_stat_activity.application_name, \
-		pg_stat_activity.client_addr, \
-		pg_stat_activity.client_hostname, \
-		pg_stat_activity.client_port, \
-		pg_stat_activity.backend_start, \
-		pg_stat_activity.xact_start, \
-		pg_stat_activity.query_start, \
-		pg_stat_activity.state_change, \
-		pg_stat_activity.wait_event_type, \
-		pg_stat_activity.wait_event, \
-		pg_stat_activity.state, \
-		pg_stat_activity.backend_xid, \
-		pg_stat_activity.backend_xmin, \
-		pg_stat_activity.query, \
-		pg_stat_activity.backend_type \
-	FROM \
-		pg_stat_activity \
-		LEFT JOIN \
-		get_all_active_transactions() AS dist_txs(database_id, process_id, initiator_node_identifier, worker_query, transaction_number, transaction_stamp) \
-		ON pg_stat_activity.pid = dist_txs.process_id \
-	WHERE \
-		pg_stat_activity.application_name = 'citus' \
-		AND \
-		pg_stat_activity.query NOT ILIKE '%stat_activity%';"
-#endif
+SELECT \
+	dist_txs.initiator_node_identifier, \
+	dist_txs.transaction_number, \
+	dist_txs.transaction_stamp, \
+	pg_stat_activity.datid, \
+	pg_stat_activity.datname, \
+	pg_stat_activity.pid, \
+	pg_stat_activity.usesysid, \
+	pg_stat_activity.usename, \
+	pg_stat_activity.application_name, \
+	pg_stat_activity.client_addr, \
+	pg_stat_activity.client_hostname, \
+	pg_stat_activity.client_port, \
+	pg_stat_activity.backend_start, \
+	pg_stat_activity.xact_start, \
+	pg_stat_activity.query_start, \
+	pg_stat_activity.state_change, \
+	pg_stat_activity.wait_event_type, \
+	pg_stat_activity.wait_event, \
+	pg_stat_activity.state, \
+	pg_stat_activity.backend_xid, \
+	pg_stat_activity.backend_xmin, \
+	pg_stat_activity.query, \
+	pg_stat_activity.backend_type \
+FROM \
+	pg_stat_activity \
+	LEFT JOIN \
+	get_all_active_transactions() AS dist_txs(database_id, process_id, initiator_node_identifier, worker_query, transaction_number, transaction_stamp) \
+	ON pg_stat_activity.pid = dist_txs.process_id \
+WHERE \
+	pg_stat_activity.application_name = 'citus' \
+	AND \
+	pg_stat_activity.query NOT ILIKE '%stat_activity%';"
 
 typedef struct CitusDistStat
 {

@@ -87,12 +87,10 @@ static void ExplainTaskPlacement(ShardPlacement *taskPlacement, List *explainOut
 static StringInfo BuildRemoteExplainQuery(char *queryString, ExplainState *es);
 
 /* Static Explain functions copied from explain.c */
-#if (PG_VERSION_NUM >= 100000)
 static void ExplainOneQuery(Query *query, int cursorOptions,
 							IntoClause *into, ExplainState *es,
 							const char *queryString, ParamListInfo params,
 							QueryEnvironment *queryEnv);
-#endif
 #if (PG_VERSION_NUM < 110000)
 static void ExplainOpenGroup(const char *objtype, const char *labelname,
 							 bool labeled, ExplainState *es);
@@ -162,9 +160,7 @@ CoordinatorInsertSelectExplainScan(CustomScanState *node, List *ancestors,
 	ExplainOpenGroup("Select Query", "Select Query", false, es);
 
 	/* explain the inner SELECT query */
-#if (PG_VERSION_NUM >= 100000)
 	ExplainOneQuery(query, 0, into, es, queryString, params, NULL);
-#endif
 
 	ExplainCloseGroup("Select Query", "Select Query", false, es);
 }
@@ -206,9 +202,7 @@ ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es)
 		INSTR_TIME_SET_CURRENT(planduration);
 		INSTR_TIME_SUBTRACT(planduration, planduration);
 
-#if (PG_VERSION_NUM >= 100000)
 		ExplainOnePlan(plan, into, es, queryString, params, NULL, &planduration);
-#endif
 
 		if (es->format == EXPLAIN_FORMAT_TEXT)
 		{
@@ -647,12 +641,10 @@ BuildRemoteExplainQuery(char *queryString, ExplainState *es)
  * "into" is NULL unless we are explaining the contents of a CreateTableAsStmt.
  */
 static void
-#if (PG_VERSION_NUM >= 100000)
 ExplainOneQuery(Query *query, int cursorOptions,
 				IntoClause *into, ExplainState *es,
 				const char *queryString, ParamListInfo params,
 				QueryEnvironment *queryEnv)
-#endif
 {
 	/* if an advisor plugin is present, let it manage things */
 	if (ExplainOneQuery_hook)
@@ -672,18 +664,14 @@ ExplainOneQuery(Query *query, int cursorOptions,
 		INSTR_TIME_SET_CURRENT(planstart);
 
 		/* plan the query */
-#if (PG_VERSION_NUM >= 100000)
 		plan = pg_plan_query(query, cursorOptions, params);
-#endif
 
 		INSTR_TIME_SET_CURRENT(planduration);
 		INSTR_TIME_SUBTRACT(planduration, planstart);
 
 		/* run it (if needed) and produce output */
-#if (PG_VERSION_NUM >= 100000)
 		ExplainOnePlan(plan, into, es, queryString, params, queryEnv,
 					   &planduration);
-#endif
 	}
 }
 

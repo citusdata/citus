@@ -1194,9 +1194,7 @@ RegularTable(Oid relationId)
 {
 	char relationKind = get_rel_relkind(relationId);
 
-#if (PG_VERSION_NUM >= 100000)
 	if (relationKind == RELKIND_RELATION || relationKind == RELKIND_PARTITIONED_TABLE)
-#endif
 	{
 		return true;
 	}
@@ -1389,7 +1387,6 @@ TupleDescColumnNameList(TupleDesc tupleDescriptor)
 static bool
 RelationUsesIdentityColumns(TupleDesc relationDesc)
 {
-#if (PG_VERSION_NUM >= 100000)
 	int attributeIndex = 0;
 
 	for (attributeIndex = 0; attributeIndex < relationDesc->natts; attributeIndex++)
@@ -1401,7 +1398,6 @@ RelationUsesIdentityColumns(TupleDesc relationDesc)
 			return true;
 		}
 	}
-#endif
 
 	return false;
 }

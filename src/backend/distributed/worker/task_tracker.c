@@ -588,12 +588,10 @@ TaskTrackerShmemInit(void)
 
 	if (!alreadyInitialized)
 	{
-#if (PG_VERSION_NUM >= 100000)
 		WorkerTasksSharedState->taskHashTrancheId = LWLockNewTrancheId();
 		WorkerTasksSharedState->taskHashTrancheName = "Worker Task Hash Tranche";
 		LWLockRegisterTranche(WorkerTasksSharedState->taskHashTrancheId,
 							  WorkerTasksSharedState->taskHashTrancheName);
-#endif
 
 		LWLockInitialize(&WorkerTasksSharedState->taskHashLock,
 						 WorkerTasksSharedState->taskHashTrancheId);

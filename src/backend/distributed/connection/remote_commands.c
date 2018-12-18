@@ -693,10 +693,7 @@ FinishConnectionIO(MultiConnection *connection, bool raiseInterrupts)
 			return true;
 		}
 
-#if (PG_VERSION_NUM >= 100000)
 		rc = WaitLatchOrSocket(MyLatch, waitFlags, socket, 0, PG_WAIT_EXTENSION);
-#endif
-
 		if (rc & WL_POSTMASTER_DEATH)
 		{
 			ereport(ERROR, (errmsg("postmaster was shut down, exiting")));
@@ -803,10 +800,8 @@ WaitForAllConnections(List *connectionList, bool raiseInterrupts)
 			}
 
 			/* wait for I/O events */
-#if (PG_VERSION_NUM >= 100000)
 			eventCount = WaitEventSetWait(waitEventSet, timeout, events,
 										  pendingConnectionCount, WAIT_EVENT_CLIENT_READ);
-#endif
 
 			/* process I/O events */
 			for (; eventIndex < eventCount; eventIndex++)

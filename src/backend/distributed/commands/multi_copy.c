@@ -424,7 +424,6 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 	}
 
 	/* initialize copy state to read from COPY data source */
-#if (PG_VERSION_NUM >= 100000)
 	copyState = BeginCopyFrom(NULL,
 							  copiedDistributedRelation,
 							  copyStatement->filename,
@@ -432,7 +431,6 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 							  NULL,
 							  copyStatement->attlist,
 							  copyStatement->options);
-#endif
 
 	/* set up callback to identify error line number */
 	errorCallback.callback = CopyFromErrorCallback;
@@ -527,7 +525,6 @@ CopyToNewShards(CopyStmt *copyStatement, char *completionTag, Oid relationId)
 		(ShardConnections *) palloc0(sizeof(ShardConnections));
 
 	/* initialize copy state to read from COPY data source */
-#if (PG_VERSION_NUM >= 100000)
 	CopyState copyState = BeginCopyFrom(NULL,
 										distributedRelation,
 										copyStatement->filename,
@@ -535,7 +532,6 @@ CopyToNewShards(CopyStmt *copyStatement, char *completionTag, Oid relationId)
 										NULL,
 										copyStatement->attlist,
 										copyStatement->options);
-#endif
 
 	CopyOutState copyOutState = (CopyOutState) palloc0(sizeof(CopyOutStateData));
 	copyOutState->delim = (char *) delimiterCharacter;
@@ -2220,9 +2216,7 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
 		copyStatement->relation = makeRangeVar(NULL, copyDest->intermediateResultIdPrefix,
 											   -1);
 
-		#if (PG_VERSION_NUM >= 100000)
 		formatResultOption = makeDefElem("format", (Node *) makeString("result"), -1);
-		#endif
 		copyStatement->options = list_make1(formatResultOption);
 	}
 	else
@@ -2625,12 +2619,10 @@ ProcessCopyStmt(CopyStmt *copyStatement, char *completionTag, const char *queryS
 			List *queryTreeList = NIL;
 			StringInfo userFilePath = makeStringInfo();
 
-#if (PG_VERSION_NUM >= 100000)
 			RawStmt *rawStmt = makeNode(RawStmt);
 			rawStmt->stmt = queryNode;
 
 			queryTreeList = pg_analyze_and_rewrite(rawStmt, queryString, NULL, 0, NULL);
-#endif
 
 			if (list_length(queryTreeList) != 1)
 			{

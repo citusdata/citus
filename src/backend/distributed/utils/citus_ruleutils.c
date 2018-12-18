@@ -204,12 +204,10 @@ pg_get_sequencedef_string(Oid sequenceRelationId)
 	/* build our DDL command */
 	qualifiedSequenceName = generate_relation_name(sequenceRelationId, NIL);
 
-#if (PG_VERSION_NUM >= 100000)
 	sequenceDef = psprintf(CREATE_SEQUENCE_COMMAND, qualifiedSequenceName,
 						   pgSequenceForm->seqincrement, pgSequenceForm->seqmin,
 						   pgSequenceForm->seqmax, pgSequenceForm->seqstart,
 						   pgSequenceForm->seqcycle ? "" : "NO ");
-#endif
 
 	return sequenceDef;
 }
@@ -225,7 +223,6 @@ pg_get_sequencedef(Oid sequenceRelationId)
 	Form_pg_sequence pgSequenceForm = NULL;
 	HeapTuple heapTuple = NULL;
 
-#if (PG_VERSION_NUM >= 100000)
 	heapTuple = SearchSysCache1(SEQRELID, sequenceRelationId);
 	if (!HeapTupleIsValid(heapTuple))
 	{
@@ -235,7 +232,6 @@ pg_get_sequencedef(Oid sequenceRelationId)
 	pgSequenceForm = (Form_pg_sequence) GETSTRUCT(heapTuple);
 
 	ReleaseSysCache(heapTuple);
-#endif
 
 	return pgSequenceForm;
 }
@@ -438,13 +434,11 @@ pg_get_tableschemadef_string(Oid tableRelationId, bool includeSequenceDefaults)
 		appendStringInfo(&buffer, " SERVER %s", quote_identifier(serverName));
 		AppendOptionListToString(&buffer, foreignTable->options);
 	}
-#if (PG_VERSION_NUM >= 100000)
 	else if (relationKind == RELKIND_PARTITIONED_TABLE)
 	{
 		char *partitioningInformation = GeneratePartitioningInformation(tableRelationId);
 		appendStringInfo(&buffer, " PARTITION BY %s ", partitioningInformation);
 	}
-#endif
 
 	/*
 	 * Add any reloptions (storage parameters) defined on the table in a WITH
