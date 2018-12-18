@@ -598,7 +598,7 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 
 		PG_TRY();
 		{
-			ExecuteModifyTasksSequentiallyWithoutResults(ddlJob->taskList, CMD_UTILITY);
+			ExecuteModifyTasksWithoutResults(ddlJob->taskList);
 
 			if (shouldSyncMetadata)
 			{
