@@ -3,6 +3,7 @@
 -- 
 CREATE SCHEMA create_distributed_table_non_empty_failure;
 SET search_path TO 'create_distributed_table_non_empty_failure';
+SET citus.next_shard_id TO 11000000;
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
 -----------
@@ -219,7 +220,7 @@ SELECT citus.mitmproxy('conn.onCommandComplete(command="COPY").kill()');
 
 SELECT create_distributed_table('test_table', 'id');
 NOTICE:  Copying data from local table...
-ERROR:  failed to COPY to shard 102052 on localhost:9060
+ERROR:  failed to COPY to shard 11000016 on localhost:9060
 SELECT count(*) FROM pg_dist_shard WHERE logicalrelid='create_distributed_table_non_empty_failure.test_table'::regclass;
  count 
 -------
@@ -738,7 +739,7 @@ SELECT citus.mitmproxy('conn.onCommandComplete(command="COPY").kill()');
 (1 row)
 
 SELECT create_distributed_table('test_table', 'id');
-ERROR:  failed to COPY to shard 102132 on localhost:9060
+ERROR:  failed to COPY to shard 11000096 on localhost:9060
 SELECT count(*) FROM pg_dist_shard WHERE logicalrelid='create_distributed_table_non_empty_failure.test_table'::regclass;
  count 
 -------

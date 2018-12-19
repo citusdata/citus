@@ -5,6 +5,8 @@
 CREATE SCHEMA failure_reference_table;
 SET search_path TO 'failure_reference_table';
 
+SET citus.next_shard_id TO 10000000;
+
 SELECT citus.mitmproxy('conn.allow()');
 
 CREATE TABLE ref_table(id int);
@@ -68,7 +70,7 @@ SELECT recover_prepared_transactions();
 SELECT citus.mitmproxy('conn.onCommandComplete(command="COMMIT PREPARED").kill()');
 SELECT create_reference_table('ref_table');
 
-SELECT * FROM pg_dist_shard_placement ORDER BY shardid, nodeport;
+SELECT shardid, nodeport, shardstate FROM pg_dist_shard_placement ORDER BY shardid, nodeport;
 SET client_min_messages TO NOTICE;
 
 SELECT citus.mitmproxy('conn.allow()');

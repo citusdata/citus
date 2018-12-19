@@ -3,6 +3,7 @@
 --
 CREATE SCHEMA failure_reference_table;
 SET search_path TO 'failure_reference_table';
+SET citus.next_shard_id TO 10000000;
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
 -----------
@@ -105,7 +106,7 @@ SELECT citus.mitmproxy('conn.onCommandComplete(command="COPY 3").kill()');
 
 SELECT create_reference_table('ref_table');
 NOTICE:  Copying data from local table...
-ERROR:  failed to COPY to shard 102030 on localhost:9060
+ERROR:  failed to COPY to shard 10000004 on localhost:9060
 SELECT count(*) FROM pg_dist_shard_placement;
  count 
 -------
@@ -166,11 +167,11 @@ SELECT create_reference_table('ref_table');
  
 (1 row)
 
-SELECT * FROM pg_dist_shard_placement ORDER BY shardid, nodeport;
- shardid | shardstate | shardlength | nodename  | nodeport | placementid 
----------+------------+-------------+-----------+----------+-------------
-  102033 |          1 |           0 | localhost |     9060 |         123
-  102033 |          1 |           0 | localhost |    57637 |         124
+SELECT shardid, nodeport, shardstate FROM pg_dist_shard_placement ORDER BY shardid, nodeport;
+ shardid  | nodeport | shardstate 
+----------+----------+------------
+ 10000007 |     9060 |          1
+ 10000007 |    57637 |          1
 (2 rows)
 
 SET client_min_messages TO NOTICE;

@@ -4,6 +4,8 @@
 CREATE SCHEMA create_distributed_table_non_empty_failure;
 SET search_path TO 'create_distributed_table_non_empty_failure';
 
+SET citus.next_shard_id TO 11000000;
+
 SELECT citus.mitmproxy('conn.allow()');
 
 -- we'll start with replication factor 1 and 2pc
