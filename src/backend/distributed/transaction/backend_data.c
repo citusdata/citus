@@ -15,6 +15,7 @@
 
 #include "funcapi.h"
 #include "access/htup_details.h"
+#include "catalog/pg_authid.h"
 #include "catalog/pg_type.h"
 #include "datatype/timestamp.h"
 #include "distributed/backend_data.h"
@@ -94,6 +95,8 @@ PG_FUNCTION_INFO_V1(get_all_active_transactions);
 Datum
 assign_distributed_transaction_id(PG_FUNCTION_ARGS)
 {
+	Oid userId = GetUserId();
+
 	CheckCitusVersion(ERROR);
 
 	/* MyBackendData should always be avaliable, just out of paranoia */
@@ -120,6 +123,7 @@ assign_distributed_transaction_id(PG_FUNCTION_ARGS)
 	}
 
 	MyBackendData->databaseId = MyDatabaseId;
+	MyBackendData->userId = userId;
 
 	MyBackendData->transactionId.initiatorNodeIdentifier = PG_GETARG_INT32(0);
 	MyBackendData->transactionId.transactionNumber = PG_GETARG_INT64(1);
@@ -385,6 +389,8 @@ StoreAllActiveTransactions(Tuplestorestate *tupleStore, TupleDesc tupleDescripto
 
 	Datum values[ACTIVE_TRANSACTION_COLUMN_COUNT];
 	bool isNulls[ACTIVE_TRANSACTION_COLUMN_COUNT];
+	bool showAllTransactions = superuser();
+	const Oid userId = GetUserId();
 
 	/*
 	 * We don't want to initialize memory while spinlock is held so we
@@ -393,6 +399,11 @@ StoreAllActiveTransactions(Tuplestorestate *tupleStore, TupleDesc tupleDescripto
 	 */
 	memset(values, 0, sizeof(values));
 	memset(isNulls, false, sizeof(isNulls));
+
+	if (is_member_of_role(userId, DEFAULT_ROLE_MONITOR))
+	{
+		showAllTransactions = true;
+	}
 
 	/* we're reading all distributed transactions, prevent new backends */
 	LockBackendSharedMemory(LW_SHARED);
@@ -407,6 +418,16 @@ StoreAllActiveTransactions(Tuplestorestate *tupleStore, TupleDesc tupleDescripto
 
 		/* we're only interested in backends initiated by Citus */
 		if (currentBackend->citusBackend.initiatorNodeIdentifier < 0)
+		{
+			SpinLockRelease(&currentBackend->mutex);
+			continue;
+		}
+
+		/*
+		 * Unless the user has a role that allows seeing all transactions (superuser,
+		 * pg_monitor), skip over transactions belonging to other users.
+		 */
+		if (!showAllTransactions && currentBackend->userId != userId)
 		{
 			SpinLockRelease(&currentBackend->mutex);
 			continue;
@@ -693,6 +714,7 @@ UnSetDistributedTransactionId(void)
 		SpinLockAcquire(&MyBackendData->mutex);
 
 		MyBackendData->databaseId = 0;
+		MyBackendData->userId = 0;
 		MyBackendData->transactionId.initiatorNodeIdentifier = 0;
 		MyBackendData->transactionId.transactionOriginator = false;
 		MyBackendData->transactionId.transactionNumber = 0;
@@ -781,10 +803,12 @@ AssignDistributedTransactionId(void)
 	uint64 nextTransactionNumber = pg_atomic_fetch_add_u64(transactionNumberSequence, 1);
 	int localGroupId = GetLocalGroupId();
 	TimestampTz currentTimestamp = GetCurrentTimestamp();
+	Oid userId = GetUserId();
 
 	SpinLockAcquire(&MyBackendData->mutex);
 
 	MyBackendData->databaseId = MyDatabaseId;
+	MyBackendData->userId = userId;
 
 	MyBackendData->transactionId.initiatorNodeIdentifier = localGroupId;
 	MyBackendData->transactionId.transactionOriginator = true;
