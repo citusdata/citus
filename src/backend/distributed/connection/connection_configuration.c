@@ -100,7 +100,12 @@ ResetConnParams()
 void
 AddConnParam(const char *keyword, const char *value)
 {
-	Assert((ConnParams.size + 1) < ConnParams.maxSize);
+	if (ConnParams.size + 1 >= ConnParams.maxSize)
+	{
+		/* we expect developers to see that error messages */
+		ereport(ERROR, (errcode(ERRCODE_INSUFFICIENT_RESOURCES),
+						errmsg("ConnParams arrays bound check failed")));
+	}
 
 	ConnParams.keywords[ConnParams.size] = strdup(keyword);
 	ConnParams.values[ConnParams.size] = strdup(value);
@@ -263,7 +268,7 @@ GetConnParams(ConnectionHashKey *key, char ***keywords, char ***values,
 	int paramIndex = 0;
 	int runtimeParamIndex = 0;
 
-	if (ConnParams.size + lengthof(runtimeKeywords) > ConnParams.maxSize)
+	if (ConnParams.size + lengthof(runtimeKeywords) >= ConnParams.maxSize)
 	{
 		/* unexpected, intended as developers rather than users */
 		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
