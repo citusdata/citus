@@ -47,6 +47,7 @@ typedef struct CitusInitiatedBackend
 typedef struct BackendData
 {
 	Oid databaseId;
+	Oid userId;
 	slock_t mutex;
 	bool cancelledDueToDeadlock;
 	CitusInitiatedBackend citusBackend;
