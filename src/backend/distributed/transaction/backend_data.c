@@ -829,9 +829,15 @@ AssignDistributedTransactionId(void)
 void
 MarkCitusInitiatedCoordinatorBackend(void)
 {
+	/*
+	 * GetLocalGroupId may throw exception which can cause leaving spin lock
+	 * unreleased. Calling GetLocalGroupId function before the lock to avoid this.
+	 */
+	int localGroupId = GetLocalGroupId();
+
 	SpinLockAcquire(&MyBackendData->mutex);
 
-	MyBackendData->citusBackend.initiatorNodeIdentifier = GetLocalGroupId();
+	MyBackendData->citusBackend.initiatorNodeIdentifier = localGroupId;
 	MyBackendData->citusBackend.transactionOriginator = true;
 
 	SpinLockRelease(&MyBackendData->mutex);
