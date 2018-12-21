@@ -116,11 +116,7 @@ if (defined $libdir)
     $ENV{LD_LIBRARY_PATH} = "$libdir:".($ENV{LD_LIBRARY_PATH} || '');
     $ENV{DYLD_LIBRARY_PATH} = "$libdir:".($ENV{DYLD_LIBRARY_PATH} || '');
     $ENV{LIBPATH} = "$libdir:".($ENV{LIBPATH} || '');
-    if ($usingWindows) {
-        $ENV{PATH} = "$libdir;".($ENV{PATH} || '');
-    } else {
-        $ENV{PATH} = "$libdir:".($ENV{PATH} || '');
-    }
+    $ENV{PATH} = "$libdir:".($ENV{PATH} || '');
 }
 
 # Put $bindir to the end of PATH. We want to prefer system binaries by
@@ -128,12 +124,9 @@ if (defined $libdir)
 # want to find binaries if they're not in PATH.
 if (defined $bindir)
 {
-    if ($usingWindows) {
-        $ENV{PATH} = ($ENV{PATH} || '').";$bindir";
-    } else {
-        $ENV{PATH} = ($ENV{PATH} || '').":$bindir";
-    }
+    $ENV{PATH} = ($ENV{PATH} || '').":$bindir";
 }
+
 
 # Most people are used to unified diffs these days, rather than the
 # context diffs pg_regress defaults to.  Change default to avoid
@@ -460,21 +453,23 @@ if ($usingWindows)
 {
 	print $fh "--variable=dev_null=\"/nul\" ";
 	print $fh "--variable=temp_dir=\"%TEMP%\" ";
+	print $fh "--variable=psql=\"".catfile($bindir, "psql")."\" ";
 }
 else
 {
 	print $fh "--variable=dev_null=\"/dev/null\" ";	
 	print $fh "--variable=temp_dir=\"/tmp/\" ";
+	print $fh "--variable=psql=\"psql\" ";
 }
 
 
 if ($usingWindows)
 {
-	print $fh " %*\n"; # pass on the commandline arguments
+	print $fh "%*\n"; # pass on the commandline arguments
 }
 else
 {
-	print $fh " \"\$@\"\n"; # pass on the commandline arguments
+	print $fh "\"\$@\"\n"; # pass on the commandline arguments
 }
 close $fh;
 
@@ -525,12 +520,6 @@ else
 	}
 }
 
-if ($usingWindows)
-{
-	# takeown returns a failing result code no matter what happens, so skip the check
-	system("takeown /f data");
-	system("icacls data /grant \%userdomain\%\\\%username\%:F");
-}
 
 # Routine to shutdown servers at failure/exit
 sub ShutdownServers()
