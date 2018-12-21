@@ -25,6 +25,7 @@ win32ver.rc
 *.exe
 lib*dll.def
 lib*.pc
+*.bc
 
 # Local excludes in root directory
 /config.log
