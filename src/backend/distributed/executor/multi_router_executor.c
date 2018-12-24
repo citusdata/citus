@@ -1267,8 +1267,7 @@ ExecuteModifyTasksWithoutResults(List *taskList)
  * ExecuteModifyTasksSequentiallyWithoutResults basically calls ExecuteSingleModifyTask in
  * a loop in order to simulate sequential execution of a list of tasks. Useful
  * in cases where issuing commands in parallel before waiting for results could
- * result in deadlocks (such as CREATE INDEX CONCURRENTLY or foreign key creation to
- * reference tables).
+ * result in deadlocks (such as foreign key creation to reference tables).
  *
  * The function returns the affectedTupleCount if applicable. Otherwise, the function
  * returns 0.
