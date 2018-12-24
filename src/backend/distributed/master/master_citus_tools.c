@@ -229,28 +229,37 @@ ExecuteCommandsInParallelAndStoreResults(StringInfo *nodeNameArray, int *nodePor
 		palloc0(commmandCount * sizeof(MultiConnection *));
 	int finishedCount = 0;
 
-	/* establish connections */
+	/* start connections asynchronously */
 	for (commandIndex = 0; commandIndex < commmandCount; commandIndex++)
 	{
 		char *nodeName = nodeNameArray[commandIndex]->data;
 		int nodePort = nodePortArray[commandIndex];
 		int connectionFlags = FORCE_NEW_CONNECTION;
-		MultiConnection *connection =
-			GetNodeConnection(connectionFlags, nodeName, nodePort);
-		StringInfo queryResultString = resultStringArray[commandIndex];
+		connectionArray[commandIndex] =
+			StartNodeConnection(connectionFlags, nodeName, nodePort);
+	}
 
-		statusArray[commandIndex] = true;
+	/* establish connections */
+	for (commandIndex = 0; commandIndex < commmandCount; commandIndex++)
+	{
+		MultiConnection *connection = connectionArray[commandIndex];
+		StringInfo queryResultString = resultStringArray[commandIndex];
+		char *nodeName = nodeNameArray[commandIndex]->data;
+		int nodePort = nodePortArray[commandIndex];
+
+		FinishConnectionEstablishment(connection);
 
 		if (PQstatus(connection->pgConn) != CONNECTION_OK)
 		{
 			appendStringInfo(queryResultString, "failed to connect to %s:%d", nodeName,
 							 (int) nodePort);
 			statusArray[commandIndex] = false;
+			connectionArray[commandIndex] = NULL;
 			finishedCount++;
 		}
 		else
 		{
-			connectionArray[commandIndex] = connection;
+			statusArray[commandIndex] = true;
 		}
 	}
 
