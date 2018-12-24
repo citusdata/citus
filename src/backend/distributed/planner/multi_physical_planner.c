@@ -691,6 +691,18 @@ BuildJobQuery(MultiNode *multiNode, List *dependedJobList)
 		}
 	}
 
+	/* set correct column attributes for having columns */
+	if (updateColumnAttributes)
+	{
+		columnCell = NULL;
+		columnList = pull_var_clause_default((Node *) havingQual);
+		foreach(columnCell, columnList)
+		{
+			Var *column = (Var *) lfirst(columnCell);
+			UpdateColumnAttributes(column, rangeTableList, dependedJobList);
+		}
+	}
+
 	/*
 	 * Build the From/Where construct. We keep the where-clause list implicitly
 	 * AND'd, since both partition and join pruning depends on the clauses being
