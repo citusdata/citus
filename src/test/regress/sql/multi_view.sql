@@ -220,8 +220,8 @@ SELECT * FROM
 		ORDER BY 2 DESC, 1) s1
 ORDER BY 2 DESC, 1;
 
--- non-partition key joins are not supported inside subquery
--- since the join with a table
+-- non-partition key joins are supported inside subquery
+-- via pull-push execution
 SELECT * FROM
 	(SELECT ru.user_id, count(*) 
 		FROM recent_users ru 

@@ -428,8 +428,8 @@ ORDER BY 2 DESC, 1;
        5 |    14
 (3 rows)
 
--- non-partition key joins are not supported inside subquery
--- since the join with a table
+-- non-partition key joins are supported inside subquery
+-- via pull-push execution
 SELECT * FROM
 	(SELECT ru.user_id, count(*) 
 		FROM recent_users ru 
@@ -438,7 +438,13 @@ SELECT * FROM
 		GROUP BY ru.user_id
 		ORDER BY 2 DESC, 1) s1
 ORDER BY 2 DESC, 1;
-ERROR:  bogus varno: 3
+ user_id | count 
+---------+-------
+       1 |    24
+       3 |    23
+       5 |     7
+(3 rows)
+
 -- join between views
 -- recent users who has an event in recent events
 SELECT ru.user_id FROM recent_users ru JOIN recent_events re USING(user_id) GROUP BY ru.user_id ORDER BY ru.user_id;
@@ -533,7 +539,8 @@ SELECT * FROM
 		ON(ru.user_id = et.event_type)
 	) s1
 ORDER BY 2 DESC, 1;
-ERROR:  bogus varno: 3
+ERROR:  cannot pushdown the subquery
+DETAIL:  Complex subqueries and CTEs cannot be in the outer part of the outer join
 -- create a select only view
 CREATE VIEW selected_users AS SELECT * FROM users_table WHERE value_1 >= 1 and value_1 <3;
 CREATE VIEW recent_selected_users AS SELECT su.* FROM selected_users su JOIN recent_users ru USING(user_id);
@@ -863,7 +870,7 @@ EXPLAIN (COSTS FALSE) SELECT et.* FROM recent_10_users JOIN events_table et USIN
    ->  Sort
          Sort Key: remote_scan."time" DESC
          ->  Custom Scan (Citus Real-Time)
-               ->  Distributed Subplan 95_1
+               ->  Distributed Subplan 96_1
                      ->  Limit
                            ->  Sort
                                  Sort Key: max((max(remote_scan.lastseen))) DESC
