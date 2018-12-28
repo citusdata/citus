@@ -50,6 +50,7 @@
  */
 
 #include "postgres.h"
+#include "funcapi.h"
 
 #include "catalog/pg_type.h"
 #include "catalog/pg_class.h"
@@ -162,7 +163,9 @@ static bool CteReferenceListWalker(Node *node, CteReferenceWalkerContext *contex
 static bool ContainsReferencesToOuterQuery(Query *query);
 static bool ContainsReferencesToOuterQueryWalker(Node *node,
 												 VarLevelsUpWalkerContext *context);
-
+static void WrapFunctionsInQuery(Query *query);
+static void TransformFunctionRTE(RangeTblEntry *rangeTblEntry);
+static bool ShouldTransformRTE(RangeTblEntry *rangeTableEntry);
 
 /*
  * GenerateSubplansForSubqueriesAndCTEs is a wrapper around RecursivelyPlanSubqueriesAndCTEs.
@@ -262,6 +265,9 @@ RecursivelyPlanSubqueriesAndCTEs(Query *query, RecursivePlanningContext *context
 		 */
 		return NULL;
 	}
+
+	/* make sure function calls in joins are executed in the coordinator */
+	WrapFunctionsInQuery(query);
 
 	/* descend into subqueries */
 	query_tree_walker(query, RecursivelyPlanSubqueryWalker, context, 0);
@@ -1302,6 +1308,186 @@ ContainsReferencesToOuterQueryWalker(Node *node, VarLevelsUpWalkerContext *conte
 
 	return expression_tree_walker(node, ContainsReferencesToOuterQueryWalker,
 								  context);
+}
+
+
+/*
+ * WrapFunctionsInQuery iterates over all the immediate Range Table Entries
+ * of a query and wraps the functions inside (SELECT * FROM fnc() f) subqueries.
+ *
+ * We currently wrap only those functions that return a single value. If a
+ * function returns records or a table we leave it as it is
+ * */
+static void
+WrapFunctionsInQuery(Query *query)
+{
+	List *rangeTableList = query->rtable;
+	ListCell *rangeTableCell = NULL;
+
+	/* there needs to be at least two RTEs for a join operation */
+	if (list_length(rangeTableList) < 2)
+	{
+		return;
+	}
+
+	foreach(rangeTableCell, rangeTableList)
+	{
+		RangeTblEntry *rangeTableEntry = (RangeTblEntry *) lfirst(rangeTableCell);
+
+		if (ShouldTransformRTE(rangeTableEntry))
+		{
+			TransformFunctionRTE(rangeTableEntry);
+		}
+	}
+}
+
+
+/*
+ * TransformFunctionRTE wraps a given function RangeTableEntry
+ * inside a (SELECT * from function() f) subquery.
+ *
+ * The said RangeTableEntry is modified and now points to the new subquery.
+ * */
+static void
+TransformFunctionRTE(RangeTblEntry *rangeTblEntry)
+{
+	Query *subquery = makeNode(Query);
+	RangeTblRef *newRangeTableRef = makeNode(RangeTblRef);
+	RangeTblEntry *newRangeTableEntry = NULL;
+	Var *targetColumn = NULL;
+	TargetEntry *targetEntry = NULL;
+	RangeTblFunction *rangeTblFunction = NULL;
+	int targetColumnIndex = 0;
+	TupleDesc tupleDesc = NULL;
+
+	rangeTblFunction = linitial(rangeTblEntry->functions);
+
+	subquery->commandType = CMD_SELECT;
+
+	/* copy the input rangeTblEntry to prevent cycles */
+	newRangeTableEntry = copyObject(rangeTblEntry);
+
+	/* set the FROM expression to the subquery */
+	subquery->rtable = list_make1(newRangeTableEntry);
+	newRangeTableRef->rtindex = 1;
+	subquery->jointree = makeFromExpr(list_make1(newRangeTableRef), NULL);
+
+	/* Determine the result type of the function.
+	 *
+	 * If function return type is not composite or rowtype can't be determined,
+	 * tupleDesc is set to null here
+	 */
+	tupleDesc = (TupleDesc) get_expr_result_tupdesc(rangeTblFunction->funcexpr,
+													true);
+
+	/* if tupleDesc is not null, we iterate over all the attributes and
+	 * create targetEntries*/
+	if (tupleDesc)
+	{
+		for (targetColumnIndex = 0; targetColumnIndex < tupleDesc->natts;
+			 targetColumnIndex++)
+		{
+			FormData_pg_attribute *attribute = TupleDescAttr(tupleDesc,
+															 targetColumnIndex);
+			Oid columnType = attribute->atttypid;
+			char *columnName = attribute->attname.data;
+
+			/*
+			 * The indexing of attributes and TupleDesc and varattno differ
+			 *
+			 * varattno=0 corresponds to whole row
+			 * varattno=1 corrensponds to first column that is stored in tupDesc->attrs[0] */
+			targetColumn = makeVar(1, targetColumnIndex + 1, columnType, -1, InvalidOid,
+								   0);
+			targetEntry = makeTargetEntry((Expr *) targetColumn, targetColumnIndex + 1,
+										  columnName,
+										  false);
+			subquery->targetList = lappend(subquery->targetList, targetEntry);
+		}
+	}
+	/*
+	 * If tupleDesc is NULL we have several cases:
+	 *
+	 * 1. The function returns a record but the attributes can not be
+	 * determined before running the query. In this case the column names and
+	 * types must be defined explicitly in the query
+	 *
+	 * 2. The function returns a non-composite type
+	 * */
+	else
+	{
+		/* create target entries for all columns returned by the function */
+		List *functionColumnNames = NULL;
+		ListCell *functionColumnName = NULL;
+
+		functionColumnNames = rangeTblEntry->eref->colnames;
+		foreach(functionColumnName, functionColumnNames)
+		{
+			char *columnName = strVal(lfirst(functionColumnName));
+			Oid columnType = InvalidOid;
+
+			/* use explicitly defined types in the query if they are available */
+			if (list_length(rangeTblFunction->funccoltypes) > 0)
+			{
+				columnType = list_nth_oid(rangeTblFunction->funccoltypes,
+										  targetColumnIndex);
+			}
+			/* use the types in the function definition otherwise */
+			else
+			{
+				FuncExpr *funcExpr = (FuncExpr *) rangeTblFunction->funcexpr;
+				columnType = funcExpr->funcresulttype;
+			}
+
+			targetColumn = makeVar(1, targetColumnIndex + 1, columnType, -1,
+								   InvalidOid, 0);
+			targetEntry = makeTargetEntry((Expr *) targetColumn,
+										  targetColumnIndex + 1, columnName,
+										  false);
+			subquery->targetList = lappend(subquery->targetList, targetEntry);
+
+			targetColumnIndex++;
+		}
+	}
+
+	/* replace the function with the constructed subquery */
+	rangeTblEntry->rtekind = RTE_SUBQUERY;
+	rangeTblEntry->subquery = subquery;
+}
+
+
+/*
+ * ShouldTransformRTE determines whether a given RTE should bne wrapped in a
+ * subquery.
+ *
+ * Not all functions can be wrapped in a subquery for now. As we support more
+ * functions to be used in joins, the constraints here will be relaxed.
+ * */
+static bool
+ShouldTransformRTE(RangeTblEntry *rangeTableEntry)
+{
+	/* wrap only function rtes */
+	if (rangeTableEntry->rtekind != RTE_FUNCTION)
+	{
+		return false;
+	}
+
+	/*
+	 * TODO: remove this check once lateral joins are supported
+	 * We do not support lateral joins on functions for now, as referencing
+	 * columns of an outer query is quite tricky */
+	if (rangeTableEntry->lateral)
+	{
+		return false;
+	}
+
+	/* We do not want to wrap read-intermediate-result function calls */
+	if (ContainsReadIntermediateResultFunction(linitial(rangeTableEntry->functions)))
+	{
+		return false;
+	}
+
+	return true;
 }
 
 
