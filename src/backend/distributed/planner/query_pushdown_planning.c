@@ -53,6 +53,11 @@ typedef enum RecurringTuplesType
 	RECURRING_TUPLES_RESULT_FUNCTION
 } RecurringTuplesType;
 
+typedef struct
+{
+	PlannerRestrictionContext *plannerRestrictionContext;
+	RecurringTuplesType recurringTupleType;
+} HasRecurringTuplesContext;
 
 /* Config variable managed via guc.c */
 bool SubqueryPushdown = false; /* is subquery pushdown enabled */
@@ -75,8 +80,15 @@ static bool RelationInfoContainsRecurringTuples(PlannerInfo *plannerInfo,
 												RecurringTuplesType *recurType);
 static bool IsRecurringRTE(RangeTblEntry *rangeTableEntry,
 						   RecurringTuplesType *recurType);
-static bool IsRecurringRangeTable(List *rangeTable, RecurringTuplesType *recurType);
-static bool HasRecurringTuples(Node *node, RecurringTuplesType *recurType);
+static bool IsRecurringRangeTable(List *rangeTable,
+								  HasRecurringTuplesContext *hasRecurringTuplesContext);
+static void DetermineReferenceTableJoinRelation(PlannerInfo *plannerInfo, int
+												sourceRTEIdentity,
+												RelOptInfo *relinfo,
+												bool *hasReferenceTable,
+												bool *hasDistributedTable);
+static bool HasRecurringTuples(Node *node,
+							   HasRecurringTuplesContext *hasRecurringTuplesContext);
 static MultiNode * SubqueryPushdownMultiNodeTree(Query *queryTree);
 static void FlattenJoinVars(List *columnList, Query *queryTree);
 static void UpdateVarMappingsForExtendedOpNode(List *columnList,
@@ -535,7 +547,7 @@ DeferErrorIfUnsupportedSubqueryPushdown(Query *originalQuery,
 	foreach(subqueryCell, subqueryList)
 	{
 		Query *subquery = lfirst(subqueryCell);
-		error = DeferErrorIfCannotPushdownSubquery(subquery,
+		error = DeferErrorIfCannotPushdownSubquery(subquery, plannerRestrictionContext,
 												   outerMostQueryHasLimit);
 		if (error)
 		{
@@ -565,6 +577,10 @@ DeferErrorIfUnsupportedSubqueryPushdown(Query *originalQuery,
 static DeferredErrorMessage *
 DeferErrorIfFromClauseRecurs(Query *queryTree)
 {
+	HasRecurringTuplesContext hasRecurringTuplesContext = {
+		NULL,
+		RECURRING_TUPLES_INVALID
+	};
 	RecurringTuplesType recurType = RECURRING_TUPLES_INVALID;
 
 	if (!queryTree->hasSubLinks)
@@ -594,8 +610,9 @@ DeferErrorIfFromClauseRecurs(Query *queryTree)
 	 * Try to figure out which type of recurring tuples we have to produce a
 	 * relevant error message. If there are several we'll pick the first one.
 	 */
-	IsRecurringRangeTable(queryTree->rtable, &recurType);
+	IsRecurringRangeTable(queryTree->rtable, &hasRecurringTuplesContext);
 
+	recurType = hasRecurringTuplesContext.recurringTupleType;
 	if (recurType == RECURRING_TUPLES_REFERENCE_TABLE)
 	{
 		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
@@ -765,7 +782,8 @@ DeferredErrorIfUnsupportedRecurringTuplesJoin(
  * features of underlying tables.
  */
 DeferredErrorMessage *
-DeferErrorIfCannotPushdownSubquery(Query *subqueryTree, bool outerMostQueryHasLimit)
+DeferErrorIfCannotPushdownSubquery(Query *subqueryTree, PlannerRestrictionContext *
+								   plannerRestrictionContext, bool outerMostQueryHasLimit)
 {
 	bool preconditionsSatisfied = true;
 	char *errorDetail = NULL;
@@ -814,7 +832,8 @@ DeferErrorIfCannotPushdownSubquery(Query *subqueryTree, bool outerMostQueryHasLi
 
 	if (subqueryTree->setOperations)
 	{
-		deferredError = DeferErrorIfUnsupportedUnionQuery(subqueryTree);
+		deferredError = DeferErrorIfUnsupportedUnionQuery(subqueryTree,
+														  plannerRestrictionContext);
 		if (deferredError)
 		{
 			return deferredError;
@@ -1036,11 +1055,16 @@ DeferErrorIfUnsupportedTableCombination(Query *queryTree)
  * The function also errors out for set operations INTERSECT and EXCEPT.
  */
 DeferredErrorMessage *
-DeferErrorIfUnsupportedUnionQuery(Query *subqueryTree)
+DeferErrorIfUnsupportedUnionQuery(Query *subqueryTree, PlannerRestrictionContext *
+								  plannerRestrictionContext)
 {
 	List *setOperationStatementList = NIL;
 	ListCell *setOperationStatmentCell = NULL;
 	RecurringTuplesType recurType = RECURRING_TUPLES_INVALID;
+	HasRecurringTuplesContext hasRecurringTuplesContext = {
+		plannerRestrictionContext,
+		RECURRING_TUPLES_INVALID
+	};
 
 	ExtractSetOperationStatmentWalker((Node *) subqueryTree->setOperations,
 									  &setOperationStatementList);
@@ -1052,6 +1076,7 @@ DeferErrorIfUnsupportedUnionQuery(Query *subqueryTree)
 		Node *rightArg = setOperation->rarg;
 		int leftArgRTI = 0;
 		int rightArgRTI = 0;
+		hasRecurringTuplesContext.recurringTupleType = RECURRING_TUPLES_INVALID;
 
 		if (setOperation->op != SETOP_UNION)
 		{
@@ -1066,7 +1091,7 @@ DeferErrorIfUnsupportedUnionQuery(Query *subqueryTree)
 			leftArgRTI = ((RangeTblRef *) leftArg)->rtindex;
 			leftArgSubquery = (Node *) rt_fetch(leftArgRTI,
 												subqueryTree->rtable)->subquery;
-			if (HasRecurringTuples(leftArgSubquery, &recurType))
+			if (HasRecurringTuples(leftArgSubquery, &hasRecurringTuplesContext))
 			{
 				break;
 			}
@@ -1078,13 +1103,14 @@ DeferErrorIfUnsupportedUnionQuery(Query *subqueryTree)
 			rightArgRTI = ((RangeTblRef *) rightArg)->rtindex;
 			rightArgSubquery = (Node *) rt_fetch(rightArgRTI,
 												 subqueryTree->rtable)->subquery;
-			if (HasRecurringTuples(rightArgSubquery, &recurType))
+			if (HasRecurringTuples(rightArgSubquery, &hasRecurringTuplesContext))
 			{
 				break;
 			}
 		}
 	}
 
+	recurType = hasRecurringTuplesContext.recurringTupleType;
 	if (recurType == RECURRING_TUPLES_REFERENCE_TABLE)
 	{
 		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
@@ -1280,7 +1306,15 @@ RelationInfoContainsRecurringTuples(PlannerInfo *plannerInfo, RelOptInfo *relati
 static bool
 IsRecurringRTE(RangeTblEntry *rangeTableEntry, RecurringTuplesType *recurType)
 {
-	return IsRecurringRangeTable(list_make1(rangeTableEntry), recurType);
+	HasRecurringTuplesContext hasRecurringTuplesContext = { NULL, *recurType };
+	bool isRecurringRangeTable = false;
+
+	isRecurringRangeTable = IsRecurringRangeTable(list_make1(rangeTableEntry),
+												  &hasRecurringTuplesContext);
+
+	*recurType = hasRecurringTuplesContext.recurringTupleType;
+
+	return isRecurringRangeTable;
 }
 
 
@@ -1290,9 +1324,10 @@ IsRecurringRTE(RangeTblEntry *rangeTableEntry, RecurringTuplesType *recurType)
  * shards.
  */
 static bool
-IsRecurringRangeTable(List *rangeTable, RecurringTuplesType *recurType)
+IsRecurringRangeTable(List *rangeTable,
+					  HasRecurringTuplesContext *hasRecurringTuplesContext)
 {
-	return range_table_walker(rangeTable, HasRecurringTuples, recurType,
+	return range_table_walker(rangeTable, HasRecurringTuples, hasRecurringTuplesContext,
 							  QTW_EXAMINE_RTES);
 }
 
@@ -1300,10 +1335,14 @@ IsRecurringRangeTable(List *rangeTable, RecurringTuplesType *recurType)
 /*
  * HasRecurringTuples returns whether any part of the expression will generate
  * the same set of tuples in every query on shards when executing a distributed
- * query.
+ * query. Caller is expected to provide PlannerRestrictionContext within
+ * hasRecurringTuplesContext. However, it is an optional parameter. Only used
+ * to check whether a reference table is involved in a join with a distributed
+ * table. In the case of an outer join, reference table is expected to be in the
+ * inner part of the join.
  */
 static bool
-HasRecurringTuples(Node *node, RecurringTuplesType *recurType)
+HasRecurringTuples(Node *node, HasRecurringTuplesContext *hasRecurringTuplesContext)
 {
 	if (node == NULL)
 	{
@@ -1317,15 +1356,98 @@ HasRecurringTuples(Node *node, RecurringTuplesType *recurType)
 		if (rangeTableEntry->rtekind == RTE_RELATION)
 		{
 			Oid relationId = rangeTableEntry->relid;
+			int rteIdentity = GetRTEIdentity(rangeTableEntry);
+
 			if (IsDistributedTable(relationId) &&
 				PartitionMethod(relationId) == DISTRIBUTE_BY_NONE)
 			{
-				*recurType = RECURRING_TUPLES_REFERENCE_TABLE;
+				List *joinRestrictionList = NIL;
+				ListCell *joinRestrictionCell = NULL;
+
+				PlannerRestrictionContext *plannerRestrictionContext =
+					hasRecurringTuplesContext->plannerRestrictionContext;
+				if (plannerRestrictionContext != NULL)
+				{
+					JoinRestrictionContext *joinRestrictionContext =
+						plannerRestrictionContext->joinRestrictionContext;
+					if (joinRestrictionContext != NULL)
+					{
+						joinRestrictionList = joinRestrictionContext->joinRestrictionList;
+					}
+				}
+
+				foreach(joinRestrictionCell, joinRestrictionList)
+				{
+					JoinRestriction *joinRestriction = (JoinRestriction *) lfirst(
+						joinRestrictionCell);
+					JoinType joinType = joinRestriction->joinType;
+					bool hasInnerReferenceTable = false;
+					bool hasOuterReferenceTable = false;
+					bool hasInnerDistributedTable = false;
+					bool hasOuterDistributedTable = false;
+
+					DetermineReferenceTableJoinRelation(
+						joinRestriction->plannerInfo, rteIdentity,
+						joinRestriction->innerrel, &hasInnerReferenceTable,
+						&hasInnerDistributedTable);
+
+					DetermineReferenceTableJoinRelation(
+						joinRestriction->plannerInfo, rteIdentity,
+						joinRestriction->outerrel, &hasOuterReferenceTable,
+						&hasOuterDistributedTable);
+
+					if (!hasInnerReferenceTable && !hasOuterReferenceTable)
+					{
+						continue;
+					}
+
+					if (IS_OUTER_JOIN(joinType))
+					{
+						if (joinType == JOIN_LEFT || joinType == JOIN_RIGHT)
+						{
+							/*
+							 * A reference table may participate in outer joins if
+							 * - joined with a distributed table and
+							 * - it is the inner table
+							 */
+							if (hasInnerReferenceTable && hasOuterDistributedTable)
+							{
+								return false;
+							}
+							hasRecurringTuplesContext->recurringTupleType =
+								RECURRING_TUPLES_REFERENCE_TABLE;
+							return true;
+						}
+						else
+						{
+							hasRecurringTuplesContext->recurringTupleType =
+								RECURRING_TUPLES_REFERENCE_TABLE;
+							return true;
+						}
+					}
+					else
+					{
+						/*
+						 * A reference table may participate in inner joins if joined with
+						 * a distributed table. Therefore tuples do not recur across
+						 * different shards if target list contains the distribution key.
+						 * This check is performed elsewhere during query planning.
+						 */
+						Assert(joinType == JOIN_INNER);
+						Assert(hasInnerReferenceTable || hasOuterReferenceTable);
+						if (hasInnerDistributedTable || hasOuterDistributedTable)
+						{
+							return false;
+						}
+					}
+				}
 
 				/*
 				 * Tuples from reference tables will recur in every query on shards
 				 * that includes it.
 				 */
+				hasRecurringTuplesContext->recurringTupleType =
+					RECURRING_TUPLES_REFERENCE_TABLE;
 				return true;
 			}
 		}
@@ -1336,11 +1458,12 @@ HasRecurringTuples(Node *node, RecurringTuplesType *recurType)
 			if (list_length(functionList) == 1 &&
 				ContainsReadIntermediateResultFunction((Node *) functionList))
 			{
-				*recurType = RECURRING_TUPLES_RESULT_FUNCTION;
+				hasRecurringTuplesContext->recurringTupleType =
+					RECURRING_TUPLES_RESULT_FUNCTION;
 			}
 			else
 			{
-				*recurType = RECURRING_TUPLES_FUNCTION;
+				hasRecurringTuplesContext->recurringTupleType = RECURRING_TUPLES_FUNCTION;
 			}
 
 			/*
@@ -1358,7 +1481,8 @@ HasRecurringTuples(Node *node, RecurringTuplesType *recurType)
 
 		if (query->rtable == NIL)
 		{
-			*recurType = RECURRING_TUPLES_EMPTY_JOIN_TREE;
+			hasRecurringTuplesContext->recurringTupleType =
+				RECURRING_TUPLES_EMPTY_JOIN_TREE;
 
 			/*
 			 * Queries with empty join trees will recur in every query on shards
@@ -1368,10 +1492,55 @@ HasRecurringTuples(Node *node, RecurringTuplesType *recurType)
 		}
 
 		return query_tree_walker((Query *) node, HasRecurringTuples,
-								 recurType, QTW_EXAMINE_RTES);
+								 hasRecurringTuplesContext, QTW_EXAMINE_RTES);
 	}
 
-	return expression_tree_walker(node, HasRecurringTuples, recurType);
+	return expression_tree_walker(node, HasRecurringTuples, hasRecurringTuplesContext);
+}
+
+
+/*
+ * DetermineReferenceTableJoinRelation checks if the provided relinfo belongs
+ * to the range table entry identified by sourceRTEIdentity. The functions
+ * assumes that sourceRTEIdentity belongs to a reference table. It sets 2 flags
+ * upon completion
+ * 1 - hasReferenceTable : provided RelOptInfo belongs to a reference table
+ *     we are looking for
+ * 2 - hasDistributedTable : provided RelOptInfo does not belongs to a reference
+ *     table we are looking for, but it is for a non-reference distributed table
+ *
+ * These values are later used by caller to determine if the reference table is
+ * involved in a join with a non-reference distributed table.
+ */
+static void
+DetermineReferenceTableJoinRelation(PlannerInfo *plannerInfo, int sourceRTEIdentity,
+									RelOptInfo *relinfo,
+									bool *hasReferenceTable, bool *hasDistributedTable)
+{
+	Relids relids = bms_copy(relinfo->relids);
+	int relationIndex = -1;
+	while ((relationIndex = bms_first_member(relids)) >= 0)
+	{
+		RangeTblEntry *rte = plannerInfo->simple_rte_array[relationIndex];
+		int rteIdentity = -1;
+		if (rte->rtekind != RTE_RELATION)
+		{
+			continue;
+		}
+		rteIdentity = GetRTEIdentity(rte);
+
+		/* this relation is the one we are looking for */
+		if (rteIdentity == sourceRTEIdentity)
+		{
+			Assert(PartitionMethod(rte->relid) == DISTRIBUTE_BY_NONE);
+			*hasReferenceTable = true;
+		}
+		else if (IsDistributedTable(rte->relid) &&
+				 PartitionMethod(rte->relid) != DISTRIBUTE_BY_NONE)
+		{
+			*hasDistributedTable = true;
+		}
+	}
 }
 
 

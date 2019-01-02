@@ -865,7 +865,9 @@ ShouldRecursivelyPlanSubquery(Query *subquery, RecursivePlanningContext *context
 		 * do not contain any other local tables.
 		 */
 	}
-	else if (DeferErrorIfCannotPushdownSubquery(subquery, false) == NULL)
+	else if (DeferErrorIfCannotPushdownSubquery(subquery,
+												context->plannerRestrictionContext,
+												false) == NULL)
 	{
 		/*
 		 * We should do one more check for the distribution key equality.
@@ -971,7 +973,11 @@ ShouldRecursivelyPlanSetOperation(Query *query, RecursivePlanningContext *contex
 		return true;
 	}
 
-	if (DeferErrorIfUnsupportedUnionQuery(query) != NULL)
+
+	filteredRestrictionContext =
+		FilterPlannerRestrictionForQuery(context->plannerRestrictionContext, query);
+
+	if (DeferErrorIfUnsupportedUnionQuery(query, filteredRestrictionContext) != NULL)
 	{
 		/*
 		 * If at least one leaf query in the union is recurring, then all
@@ -980,8 +986,7 @@ ShouldRecursivelyPlanSetOperation(Query *query, RecursivePlanningContext *contex
 		return true;
 	}
 
-	filteredRestrictionContext =
-		FilterPlannerRestrictionForQuery(context->plannerRestrictionContext, query);
+
 	if (!SafeToPushdownUnionSubquery(filteredRestrictionContext))
 	{
 		/*

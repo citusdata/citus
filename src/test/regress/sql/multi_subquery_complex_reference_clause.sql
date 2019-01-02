@@ -178,6 +178,59 @@ SELECT count(*) FROM
    UNION ALL
    SELECT id FROM generate_series(1,10) AS users_ref_test_table(id)) subquery_1;
 
+-- can perform a union involving reference table if it is joined with
+-- a non-reference distributed table.
+SELECT user_id, item_id FROM
+	(SELECT user_id, item_id
+		FROM user_buy_test_table nonref
+			JOIN
+			users_ref_test_table ref
+			ON  nonref.item_id = ref.id
+		WHERE nonref.item_id != 3
+	UNION
+	(SELECT user_id, item_id FROM user_buy_test_table where item_id = 4)
+	) a
+ORDER BY 1, 2;
+
+-- union all is also supported if a reference table is joined
+-- with a non-reference distributed table
+SELECT user_id, item_id FROM
+	(SELECT user_id, item_id
+		FROM user_buy_test_table nonref
+			JOIN
+			users_ref_test_table ref
+			ON  nonref.item_id = ref.id
+		WHERE nonref.item_id != 3
+	UNION ALL
+	(SELECT user_id, item_id FROM user_buy_test_table where item_id = 4)
+	) a
+ORDER BY 1, 2;
+
+-- needs to pull data to coordinator when distribution key
+-- is not on the target list
+SELECT item_id FROM
+	(SELECT item_id
+		FROM user_buy_test_table nonref
+			JOIN
+			users_ref_test_table ref
+			ON  nonref.item_id = ref.id
+		WHERE nonref.item_id != 3
+	UNION ALL
+	(SELECT item_id FROM user_buy_test_table where item_id = 4)
+	) a
+ORDER BY 1;
+
+-- needs to pull data to coordinator when subquery on a reference table
+-- is union'ed with a subquery on a distributed table. 
+SELECT user_id FROM
+	(SELECT id user_id
+		FROM users_ref_test_table ref
+		WHERE ref.id != 3
+	UNION
+	(SELECT user_id FROM user_buy_test_table where item_id = 4)
+	) a
+ORDER BY 1;
+
 RESET client_min_messages;
 
 -- subquery without FROM can be the inner relationship in a join
