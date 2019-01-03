@@ -106,6 +106,8 @@ static RangeTblEntry * DerivedRangeTableEntry(MultiNode *multiNode, List *column
 											  List *tableIdList);
 static List * DerivedColumnNameList(uint32 columnCount, uint64 generatingJobId);
 static Query * BuildSubqueryJobQuery(MultiNode *multiNode);
+static void UpdateAllColumnAttributes(Node *columnContainer, List *rangeTableList,
+									  List *dependedJobList);
 static void UpdateColumnAttributes(Var *column, List *rangeTableList,
 								   List *dependedJobList);
 static Index NewTableId(Index originalTableId, List *rangeTableList);
@@ -582,10 +584,8 @@ BuildJobQuery(MultiNode *multiNode, List *dependedJobList)
 	List *sortClauseList = NIL;
 	List *groupClauseList = NIL;
 	List *selectClauseList = NIL;
-	List *columnList = NIL;
 	Node *limitCount = NULL;
 	Node *limitOffset = NULL;
-	ListCell *columnCell = NULL;
 	FromExpr *joinTree = NULL;
 	Node *joinRoot = NULL;
 	Node *havingQual = NULL;
@@ -653,13 +653,7 @@ BuildJobQuery(MultiNode *multiNode, List *dependedJobList)
 	/* update the column attributes for target entries */
 	if (updateColumnAttributes)
 	{
-		ListCell *columnCell = NULL;
-		List *columnList = pull_var_clause_default((Node *) targetList);
-		foreach(columnCell, columnList)
-		{
-			Var *column = (Var *) lfirst(columnCell);
-			UpdateColumnAttributes(column, rangeTableList, dependedJobList);
-		}
+		UpdateAllColumnAttributes((Node *) targetList, rangeTableList, dependedJobList);
 	}
 
 	/* extract limit count/offset and sort clauses */
@@ -679,28 +673,12 @@ BuildJobQuery(MultiNode *multiNode, List *dependedJobList)
 	/* build the where clause list using select predicates */
 	selectClauseList = QuerySelectClauseList(multiNode);
 
-	/* set correct column attributes for select columns */
+	/* set correct column attributes for select and having clauses */
 	if (updateColumnAttributes)
 	{
-		columnCell = NULL;
-		columnList = pull_var_clause_default((Node *) selectClauseList);
-		foreach(columnCell, columnList)
-		{
-			Var *column = (Var *) lfirst(columnCell);
-			UpdateColumnAttributes(column, rangeTableList, dependedJobList);
-		}
-	}
-
-	/* set correct column attributes for having columns */
-	if (updateColumnAttributes)
-	{
-		columnCell = NULL;
-		columnList = pull_var_clause_default((Node *) havingQual);
-		foreach(columnCell, columnList)
-		{
-			Var *column = (Var *) lfirst(columnCell);
-			UpdateColumnAttributes(column, rangeTableList, dependedJobList);
-		}
+		UpdateAllColumnAttributes((Node *) selectClauseList, rangeTableList,
+								  dependedJobList);
+		UpdateAllColumnAttributes(havingQual, rangeTableList, dependedJobList);
 	}
 
 	/*
@@ -1538,6 +1516,25 @@ BuildSubqueryJobQuery(MultiNode *multiNode)
 	jobQuery->windowClause = windowClause;
 
 	return jobQuery;
+}
+
+
+/*
+ * UpdateAllColumnAttributes extracts column references from provided columnContainer
+ * and calls UpdateColumnAttributes to updates the column's range table reference (varno) and
+ * column attribute number for the range table (varattno).
+ */
+static void
+UpdateAllColumnAttributes(Node *columnContainer, List *rangeTableList,
+						  List *dependedJobList)
+{
+	ListCell *columnCell = NULL;
+	List *columnList = pull_var_clause_default(columnContainer);
+	foreach(columnCell, columnList)
+	{
+		Var *column = (Var *) lfirst(columnCell);
+		UpdateColumnAttributes(column, rangeTableList, dependedJobList);
+	}
 }
 
 
