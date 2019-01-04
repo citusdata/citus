@@ -5,8 +5,8 @@
 -- the ALTER TABLE ... ADD CONSTRAINT ... command.
 
 SET citus.shard_count TO 32;
-SET citus.next_shard_id TO 1450000;
-SET citus.next_placement_id TO 1450000;
+ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1450000;
+ALTER SEQUENCE pg_catalog.pg_dist_placement_placementid_seq RESTART 1450000;
 
 -- Check "PRIMARY KEY CONSTRAINT"
 CREATE TABLE products (
