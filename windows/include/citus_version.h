@@ -11,13 +11,13 @@
 #define CITUS_MAJORVERSION "8.1"
 
 /* Citus version as a string */
-#define CITUS_VERSION "8.1.0"
+#define CITUS_VERSION "8.1.1"
 
 /* Citus version as a number */
 #define CITUS_VERSION_NUM 80100
 
 /* A string containing the version number, platform, and C compiler */
-#define CITUS_VERSION_STR "Citus 8.1.0 on x86_64-windows, compiled by Visual Studio"
+#define CITUS_VERSION_STR "Citus 8.1.1 on x86_64-windows, compiled by Visual Studio"
 
 /* Define to 1 if you have the `curl' library (-lcurl). */
 #define HAVE_LIBCURL 0
