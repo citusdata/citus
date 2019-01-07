@@ -1,3 +1,9 @@
+### citus v8.1.1 (January 7, 2019) ###
+
+* Fixes maintenance daemon panic due to unreleased spinlock
+
+* Fixes an issue with having clause when used with complex joins
+
 ### citus v8.1.0 (December 17, 2018) ###
 
 * Turns on ssl by default for new installations of citus
