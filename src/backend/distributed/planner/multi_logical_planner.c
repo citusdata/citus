@@ -68,9 +68,6 @@ static bool FullCompositeFieldList(List *compositeFieldList);
 static bool HasUnsupportedJoinWalker(Node *node, void *context);
 static bool ErrorHintRequired(const char *errorHint, Query *queryTree);
 static bool HasTablesample(Query *queryTree);
-static bool HasOuterJoin(Query *queryTree);
-static bool HasOuterJoinWalker(Node *node, void *maxJoinLevel);
-static bool HasComplexJoinOrder(Query *queryTree);
 static bool HasComplexRangeTableType(Query *queryTree);
 static bool IsReadIntermediateResultFunction(Node *node);
 static bool ExtractFromExpressionWalker(Node *node,
@@ -717,8 +714,6 @@ MultiNodeTree(Query *queryTree)
 	}
 	else
 	{
-		bool hasOuterJoin = false;
-
 		/*
 		 * We calculate the join order using the list of tables in the query and
 		 * the join clauses between them. Note that this function owns the table
@@ -734,17 +729,8 @@ MultiNodeTree(Query *queryTree)
 		/* add collect nodes on top of the multi table nodes */
 		collectTableList = AddMultiCollectNodes(tableNodeList);
 
-		hasOuterJoin = HasOuterJoin(queryTree);
-		if (hasOuterJoin)
-		{
-			/* use the user-defined join order when there are outer joins */
-			joinOrderList = FixedJoinOrderList(queryTree->jointree, tableEntryList);
-		}
-		else
-		{
-			/* find best join order for commutative inner joins */
-			joinOrderList = JoinOrderList(tableEntryList, joinClauseList);
-		}
+		/* find best join order for commutative inner joins */
+		joinOrderList = JoinOrderList(tableEntryList, joinClauseList);
 
 		/* build join tree using the join order and collected tables */
 		joinTreeNode = MultiJoinTree(joinOrderList, collectTableList, joinClauseList);
@@ -824,7 +810,6 @@ DeferErrorIfQueryNotSupported(Query *queryTree)
 	char *errorMessage = NULL;
 	bool hasTablesample = false;
 	bool hasUnsupportedJoin = false;
-	bool hasComplexJoinOrder = false;
 	bool hasComplexRangeTableType = false;
 	bool preconditionsSatisfied = true;
 	StringInfo errorInfo = NULL;
@@ -909,14 +894,6 @@ DeferErrorIfQueryNotSupported(Query *queryTree)
 		preconditionsSatisfied = false;
 		errorMessage = "could not run distributed query with join types other than "
 					   "INNER or OUTER JOINS";
-		errorHint = joinHint;
-	}
-
-	hasComplexJoinOrder = HasComplexJoinOrder(queryTree);
-	if (hasComplexJoinOrder)
-	{
-		preconditionsSatisfied = false;
-		errorMessage = "could not run distributed query with complex join orders";
 		errorHint = joinHint;
 	}
 
@@ -1131,76 +1108,6 @@ DeferErrorIfUnsupportedSubqueryRepartition(Query *subqueryTree)
 
 	/* recursively continue to the inner subqueries */
 	return DeferErrorIfUnsupportedSubqueryRepartition(innerSubquery);
-}
-
-
-/*
- * HasOuterJoin returns true if query has a outer join.
- */
-static bool
-HasOuterJoin(Query *queryTree)
-{
-	bool hasOuterJoin = HasOuterJoinWalker((Node *) queryTree->jointree, NULL);
-
-	return hasOuterJoin;
-}
-
-
-/*
- * HasOuterJoinWalker returns true if the query has an outer join. The context
- * parameter should be NULL.
- */
-static bool
-HasOuterJoinWalker(Node *node, void *context)
-{
-	bool hasOuterJoin = false;
-	if (node == NULL)
-	{
-		return false;
-	}
-
-	if (IsA(node, JoinExpr))
-	{
-		JoinExpr *joinExpr = (JoinExpr *) node;
-		JoinType joinType = joinExpr->jointype;
-		if (IS_OUTER_JOIN(joinType))
-		{
-			hasOuterJoin = true;
-		}
-	}
-
-	if (!hasOuterJoin)
-	{
-		hasOuterJoin = expression_tree_walker(node, HasOuterJoinWalker, NULL);
-	}
-
-	return hasOuterJoin;
-}
-
-
-/*
- * HasComplexJoinOrder returns true if join tree is not a left-handed tree i.e.
- * it has a join expression in at least one right argument.
- */
-static bool
-HasComplexJoinOrder(Query *queryTree)
-{
-	bool hasComplexJoinOrder = false;
-	List *joinList = NIL;
-	ListCell *joinCell = NULL;
-
-	joinList = JoinExprList(queryTree->jointree);
-	foreach(joinCell, joinList)
-	{
-		JoinExpr *joinExpr = lfirst(joinCell);
-		if (IsA(joinExpr->rarg, JoinExpr))
-		{
-			hasComplexJoinOrder = true;
-			break;
-		}
-	}
-
-	return hasComplexJoinOrder;
 }
 
 

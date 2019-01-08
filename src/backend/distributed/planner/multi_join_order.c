@@ -48,8 +48,6 @@ static RuleEvalFunction RuleEvalFunctionArray[JOIN_RULE_LAST] = { 0 }; /* join r
 
 
 /* Local functions forward declarations */
-static JoinOrderNode * CreateFirstJoinOrderNode(FromExpr *fromExpr,
-												List *tableEntryList);
 static bool JoinExprListWalker(Node *node, List **joinList);
 static bool ExtractLeftMostRangeTableIndex(Node *node, int *rangeTableIndex);
 static List * JoinOrderForTable(TableEntry *firstTable, List *tableEntryList,
@@ -61,7 +59,6 @@ static List * LatestLargeDataTransfer(List *candidateJoinOrders);
 static void PrintJoinOrderList(List *joinOrder);
 static uint32 LargeDataTransferLocation(List *joinOrder);
 static List * TableEntryListDifference(List *lhsTableList, List *rhsTableList);
-static TableEntry * FindTableEntry(List *tableEntryList, uint32 tableId);
 
 /* Local functions forward declarations for join evaluations */
 static JoinOrderNode * EvaluateJoinRules(List *joinedTableList,
@@ -93,152 +90,6 @@ static JoinOrderNode * MakeJoinOrderNode(TableEntry *tableEntry, JoinRuleType
 										 joinRuleType, Var *partitionColumn,
 										 char partitionMethod,
 										 TableEntry *anchorTable);
-
-
-/*
- * FixedJoinOrderList returns a list of join order nodes for the query in the order
- * specified by the user. This is used to handle join trees that contain OUTER joins.
- * The regular JoinOrderList currently assumes that all joins are inner-joins and can
- * thus be arbitrarily reordered, which is not the case for OUTER joins. At some point
- * we should merge these two functions.
- */
-List *
-FixedJoinOrderList(FromExpr *fromExpr, List *tableEntryList)
-{
-	List *joinList = NIL;
-	ListCell *joinCell = NULL;
-	List *joinWhereClauseList = NIL;
-	List *joinOrderList = NIL;
-	List *joinedTableList = NIL;
-	JoinOrderNode *firstJoinNode = NULL;
-	JoinOrderNode *currentJoinNode = NULL;
-	ListCell *tableEntryCell = NULL;
-
-	foreach(tableEntryCell, tableEntryList)
-	{
-		TableEntry *rangeTableEntry = (TableEntry *) lfirst(tableEntryCell);
-		Oid relationId = rangeTableEntry->relationId;
-		DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(relationId);
-
-		if (cacheEntry->partitionMethod != DISTRIBUTE_BY_NONE &&
-			cacheEntry->hasUninitializedShardInterval)
-		{
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("cannot perform distributed planning on this query"),
-							errdetail("Shards of relations in outer join queries must "
-									  "have shard min/max values.")));
-		}
-	}
-
-	/* get the FROM section as a flattened list of JoinExpr nodes */
-	joinList = JoinExprList(fromExpr);
-
-	/* get the join clauses in the WHERE section for implicit joins */
-	joinWhereClauseList = JoinClauseList((List *) fromExpr->quals);
-
-	/* create join node for the first table */
-	firstJoinNode = CreateFirstJoinOrderNode(fromExpr, tableEntryList);
-
-	/* add first node to the join order */
-	joinOrderList = list_make1(firstJoinNode);
-	joinedTableList = list_make1(firstJoinNode->tableEntry);
-	currentJoinNode = firstJoinNode;
-
-	foreach(joinCell, joinList)
-	{
-		JoinExpr *joinExpr = (JoinExpr *) lfirst(joinCell);
-		List *onClauseList = list_copy((List *) joinExpr->quals);
-		List *joinClauseList = list_copy((List *) joinExpr->quals);
-		JoinType joinType = joinExpr->jointype;
-		RangeTblRef *nextRangeTableRef = NULL;
-		TableEntry *nextTable = NULL;
-		JoinOrderNode *nextJoinNode = NULL;
-		Node *rightArg = joinExpr->rarg;
-
-		/* get the table on the right hand side of the join */
-		if (IsA(rightArg, RangeTblRef))
-		{
-			nextRangeTableRef = (RangeTblRef *) rightArg;
-		}
-		else
-		{
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("cannot perform distributed planning on this query"),
-							errdetail("Subqueries in outer joins are not supported")));
-		}
-
-		nextTable = FindTableEntry(tableEntryList, nextRangeTableRef->rtindex);
-
-		if (joinType == JOIN_INNER)
-		{
-			/* also consider WHERE clauses for INNER joins */
-			joinClauseList = list_concat(joinClauseList, joinWhereClauseList);
-		}
-
-		/* find the best join rule type */
-		nextJoinNode = EvaluateJoinRules(joinedTableList, currentJoinNode,
-										 nextTable, joinClauseList, joinType);
-
-		if (nextJoinNode->joinRuleType >= SINGLE_HASH_PARTITION_JOIN)
-		{
-			/* re-partitioning for OUTER joins is not implemented */
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("cannot run outer join query if join is not on the "
-								   "partition column"),
-							errdetail("Outer joins requiring repartitioning are not "
-									  "supported.")));
-		}
-
-		if (joinType != JOIN_INNER)
-		{
-			/* preserve non-join clauses for OUTER joins */
-			nextJoinNode->joinClauseList = onClauseList;
-		}
-
-		/* add next node to the join order */
-		joinOrderList = lappend(joinOrderList, nextJoinNode);
-		joinedTableList = lappend(joinedTableList, nextTable);
-		currentJoinNode = nextJoinNode;
-	}
-
-	if (LogMultiJoinOrder)
-	{
-		PrintJoinOrderList(joinOrderList);
-	}
-
-	return joinOrderList;
-}
-
-
-/*
- * CreateFirstJoinOrderNode creates the join order node for the left-most table in the
- * join tree.
- */
-static JoinOrderNode *
-CreateFirstJoinOrderNode(FromExpr *fromExpr, List *tableEntryList)
-{
-	JoinOrderNode *firstJoinNode = NULL;
-	TableEntry *firstTable = NULL;
-	JoinRuleType firstJoinRule = JOIN_RULE_INVALID_FIRST;
-	Var *firstPartitionColumn = NULL;
-	char firstPartitionMethod = '\0';
-	int rangeTableIndex = 0;
-
-	ExtractLeftMostRangeTableIndex((Node *) fromExpr, &rangeTableIndex);
-
-	firstTable = FindTableEntry(tableEntryList, rangeTableIndex);
-
-	firstPartitionColumn = PartitionColumn(firstTable->relationId,
-										   firstTable->rangeTableId);
-	firstPartitionMethod = PartitionMethod(firstTable->relationId);
-
-	firstJoinNode = MakeJoinOrderNode(firstTable, firstJoinRule,
-									  firstPartitionColumn,
-									  firstPartitionMethod,
-									  firstTable);
-
-	return firstJoinNode;
-}
 
 
 /*
@@ -274,6 +125,8 @@ JoinExprList(FromExpr *fromExpr)
 			newJoinExpr->jointype = JOIN_INNER;
 			newJoinExpr->rarg = (Node *) nextRangeTableRef;
 			newJoinExpr->quals = NULL;
+
+			joinList = lappend(joinList, newJoinExpr);
 		}
 
 		JoinExprListWalker(nextNode, &joinList);
@@ -753,27 +606,6 @@ TableEntryListDifference(List *lhsTableList, List *rhsTableList)
 	}
 
 	return tableListDifference;
-}
-
-
-/*
- * Finds the table entry in tableEntryList with the given range table id.
- */
-static TableEntry *
-FindTableEntry(List *tableEntryList, uint32 tableId)
-{
-	ListCell *tableEntryCell = NULL;
-
-	foreach(tableEntryCell, tableEntryList)
-	{
-		TableEntry *tableEntry = (TableEntry *) lfirst(tableEntryCell);
-		if (tableEntry->rangeTableId == tableId)
-		{
-			return tableEntry;
-		}
-	}
-
-	return NULL;
 }
 
 

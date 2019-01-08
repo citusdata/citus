@@ -59,5 +59,4 @@ FROM   (customer LEFT OUTER JOIN orders ON (c_custkey = o_custkey)) AS
        test(c_custkey, c_nationkey)
        INNER JOIN lineitem ON (test.c_custkey = l_orderkey)
 LIMIT 10;
-ERROR:  cannot run outer join query if join is not on the partition column
-DETAIL:  Outer joins requiring repartitioning are not supported.
+ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator

@@ -3483,7 +3483,6 @@ JoinSequenceArray(List *rangeTableFragmentsList, Query *jobQuery, List *depended
 	foreach(joinExprCell, joinExprList)
 	{
 		JoinExpr *joinExpr = (JoinExpr *) lfirst(joinExprCell);
-		JoinType joinType = joinExpr->jointype;
 		RangeTblRef *rightTableRef = (RangeTblRef *) joinExpr->rarg;
 		JoinSequenceNode *nextJoinSequenceNode = NULL;
 		uint32 nextRangeTableId = rightTableRef->rtindex;
@@ -3549,44 +3548,6 @@ JoinSequenceArray(List *rangeTableFragmentsList, Query *jobQuery, List *depended
 			if (leftColumn->vartype != rightColumn->vartype)
 			{
 				continue;
-			}
-
-			/*
-			 * Check if this is a broadcast outer join, meaning the inner table has only
-			 * 1 shard.
-			 *
-			 * Broadcast outer join is a special case. In a left join, we want to join
-			 * every fragment on the left with the one fragment on the right to ensure
-			 * that all results from the left are included. As an optimization, we could
-			 * perform these joins with any empty set instead of an actual fragment, but
-			 * in any case they must not be pruned.
-			 */
-			if (IS_OUTER_JOIN(joinType))
-			{
-				int innerRangeTableId = 0;
-				List *tableFragments = NIL;
-				int fragmentCount = 0;
-
-				if (joinType == JOIN_RIGHT)
-				{
-					innerRangeTableId = existingRangeTableId;
-				}
-				else
-				{
-					/*
-					 * Note: For a full join the logical planner ensures a 1-1 mapping,
-					 * thus it is sufficient to check one side.
-					 */
-					innerRangeTableId = nextRangeTableId;
-				}
-
-				tableFragments = FindRangeTableFragmentsList(rangeTableFragmentsList,
-															 innerRangeTableId);
-				fragmentCount = list_length(tableFragments);
-				if (fragmentCount == 1)
-				{
-					continue;
-				}
 			}
 
 			leftPartitioned = PartitionedOnColumn(leftColumn, rangeTableList,

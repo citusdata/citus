@@ -262,25 +262,29 @@ FROM
 	multi_outer_join_right a RIGHT JOIN multi_outer_join_left b ON (l_custkey = r_custkey);
 
 
--- complex query tree should error out
+-- Mix of outer joins on partition column
 SELECT
-	*
+	l1.l_custkey
 FROM
 	multi_outer_join_left l1
 	LEFT JOIN multi_outer_join_right r1 ON (l1.l_custkey = r1.r_custkey)
 	LEFT JOIN multi_outer_join_right r2 ON (l1.l_custkey  = r2.r_custkey)
-	RIGHT JOIN multi_outer_join_left l2 ON (r2.r_custkey = l2.l_custkey);
+	RIGHT JOIN multi_outer_join_left l2 ON (r2.r_custkey = l2.l_custkey)
+ORDER BY 1
+LIMIT 1;
 
--- add an anti-join, this should also error out
+-- add an anti-join
 SELECT
-	*
+	l1.l_custkey
 FROM
 	multi_outer_join_left l1
 	LEFT JOIN multi_outer_join_right r1 ON (l1.l_custkey = r1.r_custkey)
 	LEFT JOIN multi_outer_join_right r2 ON (l1.l_custkey  = r2.r_custkey)
 	RIGHT JOIN multi_outer_join_left l2 ON (r2.r_custkey = l2.l_custkey)
 WHERE
-	r1.r_custkey is NULL;
+	r1.r_custkey is NULL
+ORDER BY 1
+LIMIT 1;
 
 -- Three way join 2-2-1 (local + broadcast join) should work
 SELECT
@@ -316,13 +320,14 @@ FROM
 WHERE
 	l_custkey is NULL;
 
--- Cascading right join with single shard left most table should error out
+-- Cascading right join with single shard left most table
 SELECT
 	t_custkey, r_custkey, l_custkey
 FROM
 	multi_outer_join_third_reference t1
 	RIGHT JOIN multi_outer_join_right r1 ON (t1.t_custkey = r1.r_custkey)
-	RIGHT JOIN multi_outer_join_left l1 ON (r1.r_custkey  = l1.l_custkey);
+	RIGHT JOIN multi_outer_join_left l1 ON (r1.r_custkey  = l1.l_custkey)
+ORDER BY 1,2,3;
 
 -- full outer join should work with 1-1 matched shards
 SELECT
@@ -381,15 +386,17 @@ FROM
 	INNER JOIN multi_outer_join_third_reference t1 ON (l1.l_custkey = t1.t_custkey)
 	LEFT JOIN multi_outer_join_right r1 ON (l1.l_custkey  = r1.r_custkey);
 
--- inner (local) join  + 2 shards left (dual partition) join should error out
+-- inner (local) join  + 2 shards left (dual partition) join
 SELECT
 	t_custkey, l_custkey, r_custkey
 FROM
 	multi_outer_join_third_reference t1
 	INNER JOIN multi_outer_join_left l1 ON (l1.l_custkey = t1.t_custkey)
-	LEFT JOIN multi_outer_join_right r1 ON (l1.l_custkey  = r1.r_custkey);
+	LEFT JOIN multi_outer_join_right r1 ON (l1.l_custkey  = r1.r_custkey)
+ORDER BY
+    t_custkey, l_custkey, r_custkey;
 
--- inner (local) join  + 2 shards left (dual partition) join should error out
+-- inner (local) join  + 2 shards left (dual partition) join
 SELECT
 	l_custkey, t_custkey, r_custkey
 FROM
@@ -416,7 +423,7 @@ FROM
     test(c_custkey, c_nationkey)
     INNER JOIN multi_outer_join_third_reference t1 ON (test.c_custkey = t1.t_custkey);
 
--- flattened out subqueries with outer joins are not supported
+-- Outer joins with subqueries on distribution column
 SELECT
   l1.l_custkey,
   count(*) as cnt

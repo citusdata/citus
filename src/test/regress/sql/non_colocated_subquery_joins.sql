@@ -650,8 +650,6 @@ SELECT true AS valid FROM explain_json_2($$
 $$);
 
 -- a combination of subqueries in FROM and WHERE clauses
--- we actually recursively plan non colocated subqueries
--- pretty accurate, however, we hit our join checks, which seems too restrictive
 SELECT true AS valid FROM explain_json_2($$
 
     SELECT
