@@ -281,6 +281,8 @@ push(@pgOptions, '-c', "listen_addresses=${host}");
 # not required, and we don't necessarily have access to the default directory
 push(@pgOptions, '-c', "unix_socket_directories=");
 push(@pgOptions, '-c', "fsync=off");
+push(@pgOptions, '-c', "synchronous_commit=off");
+push(@pgOptions, '-c', "full_page_writes=off");
 
 my $sharedPreloadLibraries = "citus";
 

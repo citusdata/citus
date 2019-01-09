@@ -162,7 +162,8 @@ RUN set -ex; \
 		libssl-dev \
 		libkrb5-dev \
 		libicu-dev \
-		libcurl4-openssl-dev; \
+		libcurl4-openssl-dev \
+		ssh; \
 	\
 	rm -rf /var/lib/apt/lists/*; \
 	\
@@ -184,3 +185,11 @@ RUN set -eux; \
 RUN mkdir -p /var/run/postgresql && chown -R postgres:postgres /var/run/postgresql && chmod 2777 /var/run/postgresql
 
 ENV PATH $PATH:/usr/lib/postgresql/$PG_MAJOR/bin
+
+RUN apt-get update; \
+	apt-get install -y --no-install-recommends sudo; \
+	rm -rf /var/lib/apt/lists/*; \
+	echo '%sudo ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers; \
+	usermod -aG sudo postgres
+
+USER postgres

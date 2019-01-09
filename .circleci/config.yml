@@ -7,13 +7,65 @@ jobs:
       - checkout
       - run:
           name: Configure
-          command: mkdir build && cd build && ../citus/configure PG_CONFIG=/usr/lib/postgresql/11/bin/pg_config
+          command: ./configure PG_CONFIG=/usr/lib/postgresql/11/bin/pg_config
       - run:
           name: Compile
           command: make --jobs=$(nproc)
+      - persist_to_workspace:
+          root: .
+          # Must be relative path from root
+          paths:
+            - .
+  check-multi:
+    docker:
+      - image: jasonmp85/citus-builder:latest
+    steps:
+      - attach_workspace:
+          # Must be absolute path or relative path from working_directory
+          at: .
       - run:
           name: Install
-          command: make install --jobs=$(nproc)
+          command: sudo make install --jobs=$(nproc)
       - run:
           name: Test
           command: make -C src/test/regress check-multi
+  check-tt-van-mx:
+    docker:
+      - image: jasonmp85/citus-builder:latest
+    steps:
+      - attach_workspace:
+          # Must be absolute path or relative path from working_directory
+          at: .
+      - run:
+          name: Install
+          command: sudo make install --jobs=$(nproc)
+      - run:
+          name: Test
+          command: make -C src/test/regress check-multi-task-tracker-extra check-vanilla check-multi-mx
+  check-iso-work-fol:
+    docker:
+      - image: jasonmp85/citus-builder:latest
+    steps:
+      - attach_workspace:
+          # Must be absolute path or relative path from working_directory
+          at: .
+      - run:
+          name: Install
+          command: sudo make install --jobs=$(nproc)
+      - run:
+          name: Test
+          command: make -C src/test/regress check-isolation check-worker check-follower-cluster
+workflows:
+  version: 2
+  build_and_test:
+    jobs:
+      - build
+      - check-multi:
+          requires:
+            - build
+      - check-tt-van-mx:
+          requires:
+            - build
+      - check-iso-work-fol:
+          requires:
+            - build
