@@ -16,6 +16,7 @@ use warnings;
 
 use Fcntl;
 use Getopt::Long;
+use File::Basename;
 use File::Spec::Functions;
 use File::Path qw(make_path remove_tree);
 use Config;
@@ -149,7 +150,7 @@ if ($usingWindows)
 else
 {
 	$plainRegress = "$pgxsdir/src/test/regress/pg_regress";
-	$isolationRegress = "${postgresBuilddir}/src/test/isolation/pg_isolation_regress";
+	$isolationRegress = "$pgxsdir/src/test/isolation/pg_isolation_regress";
 	$pgConfig = "$bindir/pg_config";
 }
 
@@ -171,7 +172,7 @@ MESSAGE
 }
 
 my $vanillaRegress = catfile("${postgresBuilddir}", "src", "test", "regress", "pg_regress");
-if ($vanillatest && ! -f "$vanillaRegress")
+if ($vanillatest && (1 == 0))
 {
     die <<"MESSAGE";
 
@@ -796,7 +797,12 @@ if ($vanillatest)
     $ENV{PGPORT} = $masterPort;
     $ENV{PGUSER} = $user;
 
-    system("make", ("-C", catfile("$postgresBuilddir", "src", "test", "regress"), "installcheck-parallel")) == 0
+    rmdir "./testtablespace";
+    mkdir "./testtablespace";
+
+    my $pgregressdir=catfile(dirname("$pgxsdir"), "regress");
+    system("$plainRegress", ("--inputdir",  $pgregressdir),
+           "--max-concurrent-tests=20", ("--schedule",  catfile("$pgregressdir", "parallel_schedule"))) == 0
     or die "Could not run vanilla tests";
 }
 elsif ($isolationtester)
