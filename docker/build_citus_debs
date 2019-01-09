@@ -1,0 +1,126 @@
+#!/bin/bash
+
+set -e
+set -u
+
+# See https://git.postgresql.org/gitweb/?p=pgapt.git for scripts used
+# as guidance in writing this script. In particular, read most of the
+# one named 'generate-pgdg-source', which is invoked by the Jenkins
+# instance at https://pgdgbuild.dus.dg-i.net in order to produce the
+# source packages subsequently used to produce PGDG binary releases.
+
+cd "${HOME}"
+
+# top-level project name used for subdirs, tarball, etc.
+PROJECT_NAME=citus-postgresql
+
+echo "Beginning package build for ${PROJECT_NAME}..." >&2
+
+distribution=$(lsb_release -cs)
+echo "  Detected distribution '${distribution}'..." >&2
+
+# do everything in a subdirectory to avoid clutter in current directory
+rm -rf workdir && mkdir workdir && cd workdir
+
+# just ask configure for the version (i.e. '10.4') of the software
+SW_VERSION=$(apt-cache showsrc postgresql-11 | sed -rn 's/^Version: ([^-]+)-.*$/\1/p')
+
+echo "  Detected software version ${SW_VERSION}..." >&2
+
+echo "Searching for latest build files..." >&2
+
+apt-get source postgresql-11
+
+# this is the debian package name (e.g. 'postgresql-10')
+PACKAGE="postgresql-11"
+
+# we'll be interacting a lot with debian files so push into the project directory
+cd "${PACKAGE}-${SW_VERSION}"
+
+echo "Configuring build of package '${PACKAGE}'..." >&2
+
+# get latest package version for the detected software version (e.g. 10.4-2)
+BASE_VERSION=$(dpkg-parsechangelog -SVersion)
+
+# add the git commit to the version, if available
+if [ "${GIT_COMMIT:-}" ] ; then
+  SHORT_REVISION=$(echo $GIT_COMMIT | cut -c 1-7)
+  SUFFIX="~0.git${SHORT_REVISION}"
+else
+  SUFFIX=""
+fi
+
+# add an msdata designator to the version, to set it apart from pgdg
+# just reuse the same date as the previous release
+VERSION_STRING="$BASE_VERSION$SUFFIX${DOT:-.}citus"
+DATE=$(dpkg-parsechangelog -SDate)
+
+echo "  Using version string '${VERSION_STRING}'..." >&2
+
+# make minor tweaks and note them in the changelog
+TWEAK=()
+
+# The TWEAK pattern from generate-pgdg-source is only OK for modifications
+# to the debian folder. For source modifications we need quilt/patches/dch/etc.
+# TODO: Switch to using patches and quilt
+
+echo "  Applying citus-specific build tweaks..." >&2
+
+sed -i '/^install:/ s/$/ install-tests/' src/test/regress/GNUmakefile
+echo 'usr/lib/postgresql/*/lib/regress/*' >> debian/postgresql-server-dev-11.install
+TWEAK+=("Add PostgreSQL's test suite to installed files")
+
+sed -i 's/file ||/{file#"$(srcdir)"} ||/' src/test/regress/GNUmakefile
+TWEAK+=("Fix bug with test installation during vpath builds")
+
+echo 'usr/lib/postgresql/*/lib/regress.so' >> debian/postgresql-server-dev-11.install
+sed -i '/record catversion in a file/ {
+	r /home/builder/remove-so.mk
+	N
+}' debian/rules
+TWEAK+=("Add regress.so to server dev files for use in PostgreSQL's suite")
+
+sed -i '/^install: | all$/ {
+  r /home/builder/install-isolation.mk
+  d
+  }' src/test/isolation/Makefile
+TWEAK+=("Add PostgreSQL's isolation tester to installed files")
+
+echo "  Updating changelog..." >&2
+
+# apart from the changes to say 'msdata' rather than 'pgdg', this section is
+# mostly copied as-is from the script mentioned in the header; trying to under-
+# stand all the input redirection is likely not worthwhile unless something
+# really breaks, in which case check whether the upstream script has fixes.
+cat > debian/changelog.tmp <<EOT
+$PACKAGE ($VERSION_STRING) $distribution-citus; urgency=medium
+
+  * Rebuild for $distribution-citus.
+EOT
+if [ "${TWEAK:-}" ]; then
+  echo "  * Changes applied by build_citus_debs:" >> debian/changelog.tmp
+  for tweak in "${TWEAK[@]}"; do
+    echo "    + $tweak" >> debian/changelog.tmp
+  done
+else
+  echo "  * No source changes." >> debian/changelog.tmp
+fi
+cat - debian/changelog >> debian/changelog.tmp <<EOT
+
+ -- citus autobuilder <jason@citusdata.com>  $DATE
+
+EOT
+mv debian/changelog.tmp debian/changelog
+sed -ne '1,/^ --/p' debian/changelog
+
+echo "Beginning build..." >&2
+
+# actually build our packages!
+DEB_BUILD_OPTIONS="nocheck parallel=$(nproc)" debuild -uc -us -b
+
+echo "Success!" >&2
+
+# output to directory
+cd "${HOME}"
+mkdir debs
+cp workdir/*.deb debs/
