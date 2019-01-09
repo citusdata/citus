@@ -1,3 +1,9 @@
+### citus v8.0.3 (January 9, 2019) ###
+
+* Fixes maintenance daemon panic due to unreleased spinlock
+
+* Fixes an issue with having clause when used with complex joins
+
 ### citus v8.1.1 (January 7, 2019) ###
 
 * Fixes maintenance daemon panic due to unreleased spinlock
