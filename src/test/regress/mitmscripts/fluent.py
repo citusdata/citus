@@ -125,6 +125,10 @@ class ActionsMixin:
         self.next = CancelHandler(self.root, pid)
         return self.next
 
+    def delay(self, timeMs):
+        self.next = DelayHandler(self.root, timeMs)
+        return self.next
+
 class AcceptHandler(Handler):
     def __init__(self, root):
         super().__init__(root)
@@ -179,6 +183,15 @@ class CancelHandler(Handler):
         os.kill(self.pid, signal.SIGINT)
         # give the signal a chance to be received before we let the packet through
         time.sleep(0.1)
+        return 'done'
+
+class DelayHandler(Handler):
+    'Delay a packet by sleeping before deciding what to do'
+    def __init__(self, root, timeMs):
+        super().__init__(root)
+        self.timeMs = timeMs
+    def _handle(self, flow, message):
+        time.sleep(self.timeMs/1000.0)
         return 'done'
 
 class Contains(Handler, ActionsMixin, FilterableMixin):

@@ -294,6 +294,11 @@ get_global_active_transactions(PG_FUNCTION_ARGS)
 		int64 rowCount = 0;
 		int64 colCount = 0;
 
+		if (PQstatus(connection->pgConn) != CONNECTION_OK)
+		{
+			continue;
+		}
+
 		result = GetRemoteCommandResult(connection, raiseInterrupts);
 		if (!IsResponseOK(result))
 		{
