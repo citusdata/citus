@@ -686,8 +686,16 @@ WHERE user_id IN
     (SELECT DISTINCT e2.user_id
      FROM users_reference_copy_table
      LEFT JOIN users_test_table e2 ON (e2.user_id = users_reference_copy_table.value_1)) RETURNING *;
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+ user_id | value_1 | value_2 | value_3 
+---------+---------+---------+---------
+       5 |       4 |       1 |       0
+       5 |       4 |       1 |       0
+       5 |       4 |       1 |       0
+      16 |       4 |         |       0
+       6 |       4 |      11 |       0
+       6 |       4 |      15 |       0
+(6 rows)
+
 -- Volatile functions are also not supported
 UPDATE users_test_table
 SET    value_2 = 5

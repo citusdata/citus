@@ -59,4 +59,10 @@ FROM   (customer LEFT OUTER JOIN orders ON (c_custkey = o_custkey)) AS
        test(c_custkey, c_nationkey)
        INNER JOIN lineitem ON (test.c_custkey = l_orderkey)
 LIMIT 10;
-ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
+WARNING:  invalid reference to FROM-clause entry for table "customer"
+HINT:  There is an entry for table "customer", but it cannot be referenced from this part of the query.
+CONTEXT:  while executing command on localhost:57638
+WARNING:  invalid reference to FROM-clause entry for table "customer"
+HINT:  There is an entry for table "customer", but it cannot be referenced from this part of the query.
+CONTEXT:  while executing command on localhost:57637
+ERROR:  failed to execute task 1

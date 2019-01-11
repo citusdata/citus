@@ -514,8 +514,8 @@ FROM
 WHERE user_id 
   NOT IN
 (SELECT users_table.value_2 FROM users_table JOIN users_reference_table as u2 ON users_table.value_2 = u2.value_2);
-DEBUG:  generating subplan 20_1 for subquery SELECT users_table.value_2 FROM (public.users_table JOIN public.users_reference_table u2 ON ((users_table.value_2 OPERATOR(pg_catalog.=) u2.value_2)))
-DEBUG:  Plan 20 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM public.users_reference_table WHERE (NOT (user_id OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.value_2 FROM read_intermediate_result('20_1'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer))))
+DEBUG:  generating subplan 22_1 for subquery SELECT users_table.value_2 FROM (public.users_table JOIN public.users_reference_table u2 ON ((users_table.value_2 OPERATOR(pg_catalog.=) u2.value_2)))
+DEBUG:  Plan 22 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM public.users_reference_table WHERE (NOT (user_id OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.value_2 FROM read_intermediate_result('22_1'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer))))
  count 
 -------
     10
@@ -530,8 +530,8 @@ FROM
     (SELECT users_table.value_2
      FROM users_table
      JOIN users_reference_table AS u2 ON users_table.value_2 = u2.value_2);
-DEBUG:  generating subplan 22_1 for subquery SELECT users_table.value_2 FROM (public.users_table JOIN public.users_reference_table u2 ON ((users_table.value_2 OPERATOR(pg_catalog.=) u2.value_2)))
-DEBUG:  Plan 22 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT users_reference_table.user_id, random() AS random FROM public.users_reference_table) vals WHERE (NOT (user_id OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.value_2 FROM read_intermediate_result('22_1'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer))))
+DEBUG:  generating subplan 24_1 for subquery SELECT users_table.value_2 FROM (public.users_table JOIN public.users_reference_table u2 ON ((users_table.value_2 OPERATOR(pg_catalog.=) u2.value_2)))
+DEBUG:  Plan 24 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT users_reference_table.user_id, random() AS random FROM public.users_reference_table) vals WHERE (NOT (user_id OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.value_2 FROM read_intermediate_result('24_1'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer))))
  count 
 -------
     10
