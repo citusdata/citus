@@ -7,7 +7,6 @@ DROP FUNCTION IF EXISTS worker_foreign_file_path(text);
 DROP FUNCTION IF EXISTS worker_find_block_local_path(bigint,text[]);
 DROP FUNCTION IF EXISTS worker_fetch_query_results_file(bigint,integer,integer,text,integer);
 DROP FUNCTION IF EXISTS master_drop_distributed_table_metadata(regclass,text,text);
-REVOKE ALL ON FUNCTION create_insert_proxy_for_table(regclass,regclass) FROM PUBLIC;
 
 -- Testing functions
 REVOKE ALL ON FUNCTION citus_blocking_pids(integer) FROM PUBLIC;
