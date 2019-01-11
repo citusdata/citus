@@ -34,6 +34,7 @@
 #include "nodes/makefuncs.h"
 #include "parser/parsetree.h"
 #include "storage/lmgr.h"
+#include "tcop/dest.h"
 #include "tcop/pquery.h"
 #include "tcop/utility.h"
 #include "utils/snapmgr.h"
@@ -105,6 +106,19 @@ void
 CitusExecutorRun(QueryDesc *queryDesc,
 				 ScanDirection direction, uint64 count, bool execute_once)
 {
+	DestReceiver *dest = queryDesc->dest;
+	int originalLevel = FunctionCallLevel;
+
+	if (dest->mydest == DestSPI)
+	{
+		/*
+		 * If the query runs via SPI, we assume we're in a function call
+		 * and we should treat statements as part of a bigger transaction.
+		 * We reset this counter to 0 in the abort handler.
+		 */
+		FunctionCallLevel++;
+	}
+
 	/*
 	 * Disable execution of ALTER TABLE constraint validation queries. These
 	 * constraints will be validated in worker nodes, so running these queries
@@ -122,7 +136,6 @@ CitusExecutorRun(QueryDesc *queryDesc,
 	if (AlterTableConstraintCheck(queryDesc))
 	{
 		EState *estate = queryDesc->estate;
-		DestReceiver *dest = queryDesc->dest;
 
 		estate->es_processed = 0;
 		estate->es_lastoid = InvalidOid;
@@ -134,6 +147,16 @@ CitusExecutorRun(QueryDesc *queryDesc,
 	else
 	{
 		standard_ExecutorRun(queryDesc, direction, count, execute_once);
+	}
+
+	if (dest->mydest == DestSPI)
+	{
+		/*
+		 * Restore the original value. It is not sufficient to decrease
+		 * the value because exceptions might cause us to go back a few
+		 * levels at once.
+		 */
+		FunctionCallLevel = originalLevel;
 	}
 }
 

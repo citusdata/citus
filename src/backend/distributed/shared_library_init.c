@@ -573,6 +573,21 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
+		"citus.function_opens_transaction_block",
+		gettext_noop("Open transaction blocks for function calls"),
+		gettext_noop("When enabled, Citus will always send a BEGIN to workers when "
+					 "running distributed queres in a function. When disabled, the "
+					 "queries may be committed immediately after the statemnent "
+					 "completes. Disabling this flag is dangerous, it is only provided "
+					 "for backwards compatibility with pre-8.2 behaviour."),
+		&FunctionOpensTransactionBlock,
+		true,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
+
+	DefineCustomBoolVariable(
 		"citus.enable_deadlock_prevention",
 		gettext_noop("Avoids deadlocks by preventing concurrent multi-shard commands"),
 		gettext_noop("Multi-shard modifications such as UPDATE, DELETE, and "
