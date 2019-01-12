@@ -1,0 +1,36 @@
+#!/bin/bash
+
+# make bash behave
+set -euxo pipefail
+IFS=$'\n\t'
+
+codename=stretch
+pg_version=11
+
+# explicitly set user/group IDs
+groupadd -r builder --gid=999
+useradd -mg builder --uid=999 --shell=/bin/bash builder
+
+# import key and keep apt-key from issuing warnings
+curl -sf https://www.postgresql.org/media/keys/ACCC4CF8.asc | \
+APT_KEY_DONT_WARN_ON_DANGEROUS_USAGE=1 apt-key add -
+
+mv /tmp/docker-dpkg.cfg /etc/dpkg/dpkg.cfg.d/docker
+
+echo "Writing /etc/apt/sources.list.d/pgdg.list..." >&2
+
+cat > /etc/apt/sources.list.d/pgdg.list <<EOF
+deb     http://deb.debian.org/debian ${codename}-backports main
+deb-src http://apt.postgresql.org/pub/repos/apt/ ${codename}-pgdg main ${pg_version}
+EOF
+
+echo "Running apt-get update..." >&2
+apt-get update
+
+echo "Installing tools for building Debian packages..." >&2
+apt-get install -y --no-install-recommends \
+  devscripts \
+  fakeroot \
+  lintian
+
+apt-get build-dep -y postgresql-${pg_version}

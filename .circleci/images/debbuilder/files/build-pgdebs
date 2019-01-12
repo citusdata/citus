@@ -1,0 +1,112 @@
+#!/bin/bash
+
+# make bash behave
+set -euxo pipefail
+IFS=$'\n\t'
+
+codename=stretch
+pg_version=11
+citus_pkg_rev=1
+
+# See https://git.postgresql.org/gitweb/?p=pgapt.git for scripts used
+# as guidance in writing this script. In particular, read most of the
+# one named 'generate-pgdg-source', which is invoked by the Jenkins
+# instance at https://pgdgbuild.dus.dg-i.net in order to produce the
+# source packages subsequently used to produce PGDG binary releases.
+
+package="postgresql-${pg_version}"
+echo "Beginning custom build of '${package}' package..." >&2
+
+echo "  Using distribution '${codename}'..." >&2
+
+# do everything in a subdirectory to avoid clutter in current directory
+mkdir workdir && cd workdir
+
+# get the version components
+orig_version=$(apt-cache showsrc "${package}" | sed -rn 's/^Version: *([^ ]+)$/\1/p')
+upstream_ver=${orig_version%-*}
+full_deb_rev=${orig_version##*-}
+bare_deb_rev=${full_deb_rev%%.*}
+
+echo "  Detected original version ${orig_version}..." >&2
+
+echo "Downloading latest build files and source..." >&2
+
+apt-get source "${package}"
+
+# we'll be interacting a lot with debian files so push into the project directory
+cd "${package}-${upstream_ver}"
+
+echo "Configuring build of package '${package}'..." >&2
+
+# add an citus designator to the version, to set it apart from pgdg
+version_string="${upstream_ver}-${bare_deb_rev}.citus+${citus_pkg_rev}"
+
+echo "  Using version string '${version_string}'..." >&2
+
+# make minor tweaks and note them in the changelog
+tweak=()
+
+# The tweak pattern from generate-pgdg-source is only OK for modifications
+# to the debian folder. For source modifications we need quilt/patches/dch/etc.
+# TODO: Switch to using patches and quilt
+
+echo "  Applying citus-specific build tweaks..." >&2
+
+sed -i '/^install:/ s/$/ install-tests/' src/test/regress/GNUmakefile
+echo 'usr/lib/postgresql/*/lib/regress/*' >> \
+     "debian/postgresql-server-dev-${pg_version}.install"
+tweak+=("Add PostgreSQL's test suite to installed files")
+
+# shellcheck disable=2016
+sed -i 's/file ||/{file#"$(srcdir)"} ||/' src/test/regress/GNUmakefile
+tweak+=("Fix bug with test installation during vpath builds")
+
+echo 'usr/lib/postgresql/*/lib/regress.so' >> \
+     "debian/postgresql-server-dev-${pg_version}.install"
+sed -i '/record catversion in a file/ {
+  r /home/builder/remove-so.mk
+  N
+}' debian/rules
+tweak+=("Add regress.so to server dev files for use in PostgreSQL's suite")
+
+sed -i '/^install: | all$/ {
+  r /home/builder/install-isolation.mk
+  d
+}' src/test/isolation/Makefile
+tweak+=("Add PostgreSQL's isolation tester to installed files")
+
+echo "  Updating changelog..." >&2
+
+# apart from the changes to say 'citus' rather than 'pgdg', this section is
+# mostly copied as-is from the script mentioned in the header; trying to under-
+# stand all the input redirection is likely not worthwhile unless something
+# really breaks, in which case check whether the upstream script has fixes.
+cat > debian/changelog.tmp <<EOT
+$package ($version_string) ${codename}-citus; urgency=medium
+
+  * Rebuild for ${codename}-citus.
+EOT
+if [ "${tweak:-}" ]; then
+  echo "  * Changes applied by build-pgdebs:" >> debian/changelog.tmp
+  for tweak in "${tweak[@]}"; do
+    echo "    + $tweak" >> debian/changelog.tmp
+  done
+else
+  echo "  * No source changes." >> debian/changelog.tmp
+fi
+cat - debian/changelog >> debian/changelog.tmp <<EOT
+
+ -- citus autobuilder <jason@citusdata.com>  $(date -R)
+
+EOT
+mv debian/changelog.tmp debian/changelog
+sed -ne '1,/^ --/p' debian/changelog
+
+echo "Beginning build..." >&2
+
+# actually build our packages!
+njobs=`expr "$(nproc)" - 1`
+DEB_BUILD_OPTIONS="nocheck parallel=${njobs}" debuild -uc -us -b
+
+echo "Success!" >&2
