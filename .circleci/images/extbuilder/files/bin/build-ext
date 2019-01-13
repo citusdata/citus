@@ -20,7 +20,6 @@ basedir="$(pwd)"
 srcdir="${basedir}/src"
 
 # get the project and clear out the git repo (reduce workspace size
-git clone "https://github.com/${CIRCLE_PROJECT_USERNAME}/${project}.git" "${srcdir}"
 rm -rf "${srcdir}/.git"
 
 build_ext() {
@@ -35,7 +34,7 @@ build_ext() {
   "${srcdir}/configure" PG_CONFIG="/usr/lib/postgresql/${pg_major}/bin/pg_config"
   
   installdir="${builddir}/install"
-  make -j7 && mkdir -p "${installdir}" && make DESTDIR="${installdir}" install
+  make -j$(nproc) && mkdir -p "${installdir}" && make DESTDIR="${installdir}" install
 
   cd "${installdir}" && find . -type f -print > "${builddir}/files.lst"
   tar cvf "${basedir}/install-${pg_major}.tar" `cat ${builddir}/files.lst`

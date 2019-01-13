@@ -3,25 +3,17 @@ jobs:
   build:
     docker:
       - image: jasonmp85/citus-extbuilder:0.0.1
+    working_directory: ~
     steps:
-      - checkout
+      - checkout:
+          path: src
       - run:
-          name: Who am I?
-          command: whoami
-      - run:
-          name: Where am I?
-          command: pwd
-      - run:
-          name: What is here?
-          command: ls
-      - run:
-          name: Where should I work?
-          command: echo "${CIRCLE_WORKING_DIRECTORY}"
-      # - persist_to_workspace:
-      #     root: .
-      #     # Must be relative path from root
-      #     paths:
-      #       - .
+          name: Configure, Build, and Install
+          command: build-ext
+      - persist_to_workspace:
+          root: .
+          paths:
+            - .
   # check-multi:
   #   docker:
   #     - image: jasonmp85/citus-builder:latest
