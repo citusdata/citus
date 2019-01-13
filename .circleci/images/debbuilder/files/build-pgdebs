@@ -73,13 +73,13 @@ build_deb() {
   echo 'usr/lib/postgresql/*/lib/regress.so' >> \
        "debian/postgresql-server-dev-${pg_major}.install"
   sed -i '/record catversion in a file/ {
-    r /home/builder/remove-so.mk
+    r /home/circleci/remove-so.mk
     N
   }' debian/rules
   tweak+=("Add regress.so to server dev files for use in PostgreSQL's suite")
 
   sed -i '/^install: | all$/ {
-    r /home/builder/install-isolation.mk
+    r /home/circleci/install-isolation.mk
     d
   }' src/test/isolation/Makefile
   tweak+=("Add PostgreSQL's isolation tester to installed files")

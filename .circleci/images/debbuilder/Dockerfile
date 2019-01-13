@@ -6,7 +6,7 @@ COPY files /tmp
 
 RUN /tmp/install-builddeps $PG_MAJORS && rm /tmp/install-builddeps
 
-USER builder
+USER circleci
 
 RUN /tmp/build-pgdebs $PG_MAJORS
 

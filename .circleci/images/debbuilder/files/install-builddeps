@@ -8,8 +8,8 @@ codename=stretch
 pg_majors=( "${@}" )
 
 # explicitly set user/group IDs
-groupadd -r builder --gid=999
-useradd -mg builder --uid=999 --shell=/bin/bash builder
+groupadd -r circleci --gid=1729
+useradd -mg circleci --uid=1729 --shell=/bin/bash circleci
 
 # import key and keep apt-key from issuing warnings
 curl -sf https://www.postgresql.org/media/keys/ACCC4CF8.asc | \
