@@ -6,6 +6,6 @@ COPY files /tmp
 
 RUN /tmp/install-testdeps
 
-COPY --chown=builder:builder workspace /home/builder/workspace
+COPY --chown=circleci:circleci workspace /home/circleci/workspace
 
 ENTRYPOINT ["/tmp/test-ext"]

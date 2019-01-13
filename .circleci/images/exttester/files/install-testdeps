@@ -5,8 +5,8 @@ set -euxo pipefail
 IFS=$'\n\t'
 
 # explicitly set user/group IDs
-groupadd -r builder --gid=1729
-useradd -mg builder --uid=1729 --shell=/bin/bash builder
+groupadd -r circleci --gid=1729
+useradd -mg circleci --uid=1729 --shell=/bin/bash circleci
 
 echo "Running apt-get update..." >&2
 apt-get update
