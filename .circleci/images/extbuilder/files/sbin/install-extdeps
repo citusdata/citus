@@ -1,0 +1,43 @@
+#!/bin/bash
+
+# make bash behave
+set -euxo pipefail
+IFS=$'\n\t'
+
+# this script needs root to install packages
+if [[ $EUID -ne 0 ]]; then
+   echo "This script must be run as root" 
+   exit 1
+fi
+
+# supported PostgreSQL releases
+pg_majors=( 9.6 10 11 )
+
+# get codename from release file
+. /etc/os-release
+codename=${VERSION#*(}
+codename=${codename%)*}
+
+# explicitly set user/group IDs
+echo "Adding circleci user..." >&2
+groupadd -r circleci --gid=1729
+useradd -mg circleci --uid=1729 --shell=/bin/bash circleci
+
+# import key and keep apt-key from issuing warnings
+echo "Importing PGDG key..." >&2
+curl -sf https://www.postgresql.org/media/keys/ACCC4CF8.asc | \
+APT_KEY_DONT_WARN_ON_DANGEROUS_USAGE=1 apt-key add -
+
+# add pgdg repo to sources
+echo "Writing /etc/apt/sources.list.d/pgdg.list..." >&2
+echo "deb http://apt.postgresql.org/pub/repos/apt/ ${codename}-pgdg main" > \
+     /etc/apt/sources.list.d/pgdg.list
+
+# build list of needed server dev packages
+echo "Installing server-dev packages..." >&2
+sd_pkgs=( "${pg_majors[@]/#/postgresql-server-dev-}" )
+apt-get update && apt-get install -y --no-install-recommends "${sd_pkgs[@]}"
+
+# keep that image size small!
+echo "Cleaning up..." >&2
+rm -rf /var/lib/apt/lists/*
