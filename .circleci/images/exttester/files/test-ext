@@ -1,0 +1,9 @@
+#!/bin/bash
+
+# make bash behave
+set -euxo pipefail
+IFS=$'\n\t'
+
+cd / && tar xfv "/home/builder/workspace/install-${PG_MAJOR}.tar"
+
+exec gosu builder make -C "/home/builder/workspace/build-${PG_MAJOR}/src/test/regress" check-multi

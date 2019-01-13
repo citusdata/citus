@@ -5,7 +5,7 @@ set -euxo pipefail
 IFS=$'\n\t'
 
 codename=stretch
-pg_version=11
+pg_majors=( "${@}" )
 
 # explicitly set user/group IDs
 groupadd -r builder --gid=999
@@ -19,9 +19,11 @@ mv /tmp/docker-dpkg.cfg /etc/dpkg/dpkg.cfg.d/docker
 
 echo "Writing /etc/apt/sources.list.d/pgdg.list..." >&2
 
+# TODO: in a future Debian release, backports will become unnecessary (we need clang-6.0)
 cat > /etc/apt/sources.list.d/pgdg.list <<EOF
-deb     http://deb.debian.org/debian ${codename}-backports main
-deb-src http://apt.postgresql.org/pub/repos/apt/ ${codename}-pgdg main ${pg_version}
+deb     http://deb.debian.org/debian ${codename}-backports                main
+deb-src http://apt.postgresql.org/pub/repos/apt/ ${codename}-pgdg         main
+deb-src http://apt.postgresql.org/pub/repos/apt/ ${codename}-pgdg-testing 12
 EOF
 
 echo "Running apt-get update..." >&2
@@ -33,4 +35,5 @@ apt-get install -y --no-install-recommends \
   fakeroot \
   lintian
 
-apt-get build-dep -y postgresql-${pg_version}
+pg_pkgs=( "${pg_majors[@]/#/postgresql-}" )
+apt-get build-dep -y "${pg_pkgs[@]}"

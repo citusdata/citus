@@ -1,0 +1,15 @@
+#!/bin/bash
+
+# make bash behave
+set -euxo pipefail
+IFS=$'\n\t'
+
+# explicitly set user/group IDs
+groupadd -r builder --gid=1729
+useradd -mg builder --uid=1729 --shell=/bin/bash builder
+
+echo "Running apt-get update..." >&2
+apt-get update
+
+echo "Installing tools for testing PostgreSQL extensions..." >&2
+apt-get install -y --no-install-recommends make postgresql-common perl libcurl3 "postgresql-server-dev-${PG_MAJOR}"

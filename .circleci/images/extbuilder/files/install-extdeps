@@ -5,7 +5,7 @@ set -euxo pipefail
 IFS=$'\n\t'
 
 codename=stretch
-pg_version=11
+pg_majors=( "${@}" )
 
 # explicitly set user/group IDs
 groupadd -r builder --gid=999
@@ -22,7 +22,8 @@ apt-get update && apt-get install -y --no-install-recommends apt-transport-https
 echo "Writing /etc/apt/sources.list.d/pgdg.list..." >&2
 
 cat > /etc/apt/sources.list.d/pgdg.list <<EOF
-deb http://apt.postgresql.org/pub/repos/apt/ ${codename}-pgdg main ${pg_version}
+deb http://apt.postgresql.org/pub/repos/apt/ ${codename}-pgdg         main
+deb http://apt.postgresql.org/pub/repos/apt/ ${codename}-pgdg-testing 12
 EOF
 
 pkg_cloud_token='04c79f17bf82c6ee482ca210687bf542ecbd9dcbc0de671c'
@@ -30,8 +31,17 @@ pkg_cloud_url="https://${pkg_cloud_token}:@packagecloud.io/install/repositories/
 
 curl -sf "${pkg_cloud_url}" | unique_id=extbuilder bash
 
+cat > /etc/apt/preferences.d/postgresql.pref <<EOF
+Package: *
+Pin: release n=${codename}-pgdg-testing
+Pin-Priority: 600
+EOF
+
 cat > /etc/apt/preferences.d/citusdata_circlecipoc.pref <<EOF
 Package: postgresql-server-dev-*
 Pin: release o=packagecloud.io/citusdata/circlecipoc
-Pin-Priority: 600
+Pin-Priority: 700
 EOF
+
+sd_pkgs=( "${pg_majors[@]/#/postgresql-server-dev-}" )
+apt-get install -y --no-install-recommends "${sd_pkgs[@]}"

@@ -1,9 +1,11 @@
 FROM buildpack-deps:stretch
 
-COPY files/ /tmp
+ARG PG_MAJORS
 
-RUN /tmp/install-extdeps
+COPY files /tmp
+
+RUN /tmp/install-extdeps $PG_MAJORS && rm /tmp/install-extdeps
 
 USER builder
 
-WORKDIR /home/builder
+RUN /tmp/build-ext $PG_MAJORS
