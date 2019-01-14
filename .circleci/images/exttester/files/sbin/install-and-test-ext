@@ -12,4 +12,4 @@ fi
 
 cd / && tar xfv "${CIRCLE_WORKING_DIRECTORY}/install-${PG_MAJOR}.tar"
 
-exec gosu circleci make -C "${CIRCLE_WORKING_DIRECTORY}/build-${PG_MAJOR}/src/test/regress" "${1}"
+exec gosu circleci make -C "${CIRCLE_WORKING_DIRECTORY}/build-${PG_MAJOR}/src/test/regress" "${@}"

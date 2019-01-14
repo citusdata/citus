@@ -2,74 +2,61 @@ version: 2
 jobs:
   build:
     docker:
-      - image: jasonmp85/citus-extbuilder:0.0.1
+      - {image: 'jasonmp85/citus-extbuilder:0.0.1'}
     steps:
-      - checkout:
-          path: src
-      - run:
-          name: Configure, Build, and Install
-          command: build-ext
-      - persist_to_workspace:
-          root: .
-          paths:
-            - .
-  test-10:
+      - {checkout: {path: src}}
+      - {run: {name: 'Configure, Build, and Install', command: build-ext}}
+      - {persist_to_workspace: {root: ., paths: [.]}}
+  test-10/check-multi:
     docker:
-      - image: jasonmp85/citus-exttester-10:0.0.1
+      - {image: 'jasonmp85/citus-exttester-10:0.0.1'}
     working_directory: /home/circleci/project
     steps:
-      - attach_workspace:
-          at: .
-      - run:
-          name: Who here
-          command: pwd && ls
-      - run:
-          name: Install and Test
-          command: install-and-test-ext check-multi
-  # check-multi:
-  #   docker:
-  #     - image: jasonmp85/citus-builder:latest
-  #   steps:
-  #     - attach_workspace:
-  #         # Must be absolute path or relative path from working_directory
-  #         at: .
-  #     - run:
-  #         name: Install
-  #         command: sudo make install --jobs=$(nproc)
-  #     - run:
-  #         name: Test
-  #         command: make -C src/test/regress check-multi
-  # check-tt-van-mx:
-  #   docker:
-  #     - image: jasonmp85/citus-builder:latest
-  #   steps:
-  #     - attach_workspace:
-  #         # Must be absolute path or relative path from working_directory
-  #         at: .
-  #     - run:
-  #         name: Install
-  #         command: sudo make install --jobs=$(nproc)
-  #     - run:
-  #         name: Test
-  #         command: make -C src/test/regress check-multi-task-tracker-extra check-vanilla check-multi-mx
-  # check-iso-work-fol:
-  #   docker:
-  #     - image: jasonmp85/citus-builder:latest
-  #   steps:
-  #     - attach_workspace:
-  #         # Must be absolute path or relative path from working_directory
-  #         at: .
-  #     - run:
-  #         name: Install
-  #         command: sudo make install --jobs=$(nproc)
-  #     - run:
-  #         name: Test
-  #         command: make -C src/test/regress check-isolation check-worker check-follower-cluster
+      - {attach_workspace: {at: .}}
+      - {run: {name: 'Install and Test (check-multi)', command: 'install-and-test-ext check-multi'}}
+  test-10/check-tt-van-mx:
+    docker:
+      - {image: 'jasonmp85/citus-exttester-10:0.0.1'}
+    working_directory: /home/circleci/project
+    steps:
+      - {attach_workspace: {at: .}}
+      - {run: {name: 'Install and Test (check-tt-van-mx)', command: 'install-and-test-ext check-multi-task-tracker-extra check-vanilla check-multi-mx'}}
+  test-10/check-iso-work-fol:
+    docker:
+      - {image: 'jasonmp85/citus-exttester-10:0.0.1'}
+    working_directory: /home/circleci/project
+    steps:
+      - {attach_workspace: {at: .}}
+      - {run: {name: 'Install and Test (check-iso-work-fol)', command: 'install-and-test-ext check-isolation check-worker check-follower-cluster'}}
+  test-11/check-multi:
+    docker:
+      - {image: 'jasonmp85/citus-exttester-11:0.0.1'}
+    working_directory: /home/circleci/project
+    steps:
+      - {attach_workspace: {at: .}}
+      - {run: {name: 'Install and Test (check-multi)', command: 'install-and-test-ext check-multi'}}
+  test-11/check-tt-van-mx:
+    docker:
+      - {image: 'jasonmp85/citus-exttester-11:0.0.1'}
+    working_directory: /home/circleci/project
+    steps:
+      - {attach_workspace: {at: .}}
+      - {run: {name: 'Install and Test (check-tt-van-mx)', command: 'install-and-test-ext check-multi-task-tracker-extra check-vanilla check-multi-mx'}}
+  test-11/check-iso-work-fol:
+    docker:
+      - {image: 'jasonmp85/citus-exttester-11:0.0.1'}
+    working_directory: /home/circleci/project
+    steps:
+      - {attach_workspace: {at: .}}
+      - {run: {name: 'Install and Test (check-iso-work-fol)', command: 'install-and-test-ext check-isolation check-worker check-follower-cluster'}}
 workflows:
   version: 2
   build_and_test:
     jobs:
       - build
-      - test-10:
-          requires:
-            - build
+      - {test-10/check-multi: {requires: [build]}}
+      - {test-10/check-tt-van-mx: {requires: [build]}}
+      - {test-10/check-iso-work-fol: {requires: [build]}}
+      - {test-11/check-multi: {requires: [build]}}
+      - {test-11/check-tt-van-mx: {requires: [build]}}
+      - {test-11/check-iso-work-fol: {requires: [build]}}
