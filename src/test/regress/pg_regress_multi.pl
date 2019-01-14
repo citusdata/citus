@@ -283,6 +283,7 @@ push(@pgOptions, '-c', "unix_socket_directories=");
 push(@pgOptions, '-c', "fsync=off");
 push(@pgOptions, '-c', "synchronous_commit=off");
 push(@pgOptions, '-c', "full_page_writes=off");
+push(@pgOptions, '-c', "bgwriter_lru_maxpages=0");
 
 my $sharedPreloadLibraries = "citus";
 
@@ -804,7 +805,7 @@ if ($vanillatest)
 
     my $pgregressdir=catfile(dirname("$pgxsdir"), "regress");
     system("$plainRegress", ("--inputdir",  $pgregressdir),
-           "--max-concurrent-tests=20", ("--schedule",  catfile("$pgregressdir", "parallel_schedule"))) == 0
+           ("--schedule",  catfile("$pgregressdir", "parallel_schedule"))) == 0
     or die "Could not run vanilla tests";
 }
 elsif ($isolationtester)

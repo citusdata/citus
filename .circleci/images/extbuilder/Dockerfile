@@ -11,5 +11,3 @@ RUN set -ex; \
 
 USER circleci
 WORKDIR /home/circleci
-
-ENTRYPOINT [ "/usr/local/bin/build-ext" ]

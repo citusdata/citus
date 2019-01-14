@@ -12,4 +12,7 @@ RUN /tmp/build-pgdebs $PG_MAJORS
 
 SHELL [ "/bin/bash", "-c"]
 
-RUN cd $HOME && mkdir debs && cp postgresql-*/postgresql-server-dev-*.deb debs
+RUN cd $HOME && \
+	mkdir debs && \
+	cp postgresql-*/postgresql-server-dev-*.deb debs && \
+	rm -rf debs/*dbgsym*.deb

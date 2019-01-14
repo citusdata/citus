@@ -73,16 +73,19 @@ build_deb() {
   echo 'usr/lib/postgresql/*/lib/regress.so' >> \
        "debian/postgresql-server-dev-${pg_major}.install"
   sed -i '/record catversion in a file/ {
-    r /home/circleci/remove-so.mk
+    r /tmp/remove-so.mk
     N
   }' debian/rules
   tweak+=("Add regress.so to server dev files for use in PostgreSQL's suite")
 
   sed -i '/^install: | all$/ {
-    r /home/circleci/install-isolation.mk
+    r /tmp/install-isolation.mk
     d
   }' src/test/isolation/Makefile
   tweak+=("Add PostgreSQL's isolation tester to installed files")
+
+  sed '/^Package: postgresql-server-dev-/,/^Breaks:$/ {/\(clang\|llvm\)/d}' debian/control
+  tweak+=("Remove llvm-dev and clang from server-dev dependencies")
 
   echo "  Updating changelog..." >&2
 

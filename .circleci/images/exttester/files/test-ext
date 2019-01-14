@@ -1,9 +1,0 @@
-#!/bin/bash
-
-# make bash behave
-set -euxo pipefail
-IFS=$'\n\t'
-
-cd / && tar xfv "/home/circleci/workspace/install-${PG_MAJOR}.tar"
-
-exec gosu circleci make -C "/home/circleci/workspace/build-${PG_MAJOR}/src/test/regress" check-multi

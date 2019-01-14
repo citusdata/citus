@@ -9,5 +9,3 @@ RUN set -ex; \
 	install-testdeps
 
 WORKDIR /home/circleci
-
-ENTRYPOINT ["/usr/local/sbin/test-ext"]

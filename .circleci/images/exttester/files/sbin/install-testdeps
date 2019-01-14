@@ -34,14 +34,7 @@ Pin-Priority: 700
 EOF
 
 echo "Installing tools for testing PostgreSQL extensions..." >&2
-apt-get install -y --no-install-recommends make postgresql-common perl libcurl3 libc6 postgresql-common libpq-dev
-
-# handle server-dev specifically to avoid huge clang/llvm packages
-cd /tmp
-apt-get download "postgresql-server-dev-${PG_MAJOR}"
-deb_prefix="postgresql-server-dev-${PG_MAJOR}_${PG_MAJOR}"
-dpkg --ignore-depends=clang-6.0,llvm-6.0-dev -i "${deb_prefix}"*.deb
-rm -rf "/tmp/${deb_prefix}"*.deb
+apt-get update && apt-get install -y --no-install-recommends make postgresql-common perl libcurl3 "postgresql-server-dev-${PG_MAJOR}"
 
 # keep that image size small!
 echo "Cleaning up..." >&2
