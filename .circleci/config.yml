@@ -14,7 +14,8 @@ jobs:
     steps:
       - {attach_workspace: {at: .}}
       - {run: {name: 'Install and Test (check-multi)', command: 'install-and-test-ext check-multi'}}
-      - {store_artifacts: {path: '/home/circleci/project/build-10/src/test/regress/test_times.log'}}
+      - {run: {name: 'Format Results', command: 'cd /home/circleci/project/build-10/src/test/regress && format-results check-multi'}}
+      - {store_test_results: {path: '/home/circleci/project/build-10/src/test/regress/test-results.xml'}}
   test-10/check-tt-van-mx:
     docker:
       - {image: 'jasonmp85/citus-exttester-10:0.0.1'}
@@ -22,15 +23,17 @@ jobs:
     steps:
       - {attach_workspace: {at: .}}
       - {run: {name: 'Install and Test (check-tt-van-mx)', command: 'install-and-test-ext check-multi-task-tracker-extra check-vanilla check-multi-mx'}}
-      - {store_artifacts: {path: '/home/circleci/project/build-10/src/test/regress/test_times.log'}}
+      - {run: {name: 'Format Results', command: 'cd /home/circleci/project/build-10/src/test/regress && format-results 10/check-tt-van-mx'}}
+      - {store_test_results: {path: '/home/circleci/project/build-10/src/test/regress/test-results.xml'}}
   test-10/check-iso-work-fol:
     docker:
       - {image: 'jasonmp85/citus-exttester-10:0.0.1'}
     working_directory: /home/circleci/project
     steps:
       - {attach_workspace: {at: .}}
-      - {run: {name: 'Install and Test (check-iso-work-fol)', command: 'install-and-test-ext check-isolation check-worker check-follower-cluster'}}
-      - {store_artifacts: {path: '/home/circleci/project/build-10/src/test/regress/test_times.log'}}
+      - {run: {name: 'Install and Test (check-iso-work-fol)', command: 'install-and-test-ext check-isolation check-worker'}}
+      - {run: {name: 'Format Results', command: 'cd /home/circleci/project/build-10/src/test/regress && format-results 10/check-iso-work-fol'}}
+      - {store_test_results: {path: '/home/circleci/project/build-10/src/test/regress/test-results.xml'}}
   test-11/check-multi:
     docker:
       - {image: 'jasonmp85/citus-exttester-11:0.0.1'}
@@ -38,7 +41,8 @@ jobs:
     steps:
       - {attach_workspace: {at: .}}
       - {run: {name: 'Install and Test (check-multi)', command: 'install-and-test-ext check-multi'}}
-      - {store_artifacts: {path: '/home/circleci/project/build-11/src/test/regress/test_times.log'}}
+      - {run: {name: 'Format Results', command: 'cd /home/circleci/project/build-11/src/test/regress && format-results 11/check-multi'}}
+      - {store_test_results: {path: '/home/circleci/project/build-11/src/test/regress/test-results.xml'}}
   test-11/check-tt-van-mx:
     docker:
       - {image: 'jasonmp85/citus-exttester-11:0.0.1'}
@@ -46,15 +50,17 @@ jobs:
     steps:
       - {attach_workspace: {at: .}}
       - {run: {name: 'Install and Test (check-tt-van-mx)', command: 'install-and-test-ext check-multi-task-tracker-extra check-vanilla check-multi-mx'}}
-      - {store_artifacts: {path: '/home/circleci/project/build-11/src/test/regress/test_times.log'}}
+      - {run: {name: 'Format Results', command: 'cd /home/circleci/project/build-11/src/test/regress && format-results 11/check-tt-van-mx'}}
+      - {store_test_results: {path: '/home/circleci/project/build-11/src/test/regress/test-results.xml'}}
   test-11/check-iso-work-fol:
     docker:
       - {image: 'jasonmp85/citus-exttester-11:0.0.1'}
     working_directory: /home/circleci/project
     steps:
       - {attach_workspace: {at: .}}
-      - {run: {name: 'Install and Test (check-iso-work-fol)', command: 'install-and-test-ext check-isolation check-worker check-follower-cluster'}}
-      - {store_artifacts: {path: '/home/circleci/project/build-11/src/test/regress/test_times.log'}}
+      - {run: {name: 'Install and Test (check-iso-work-fol)', command: 'install-and-test-ext check-isolation check-worker'}}
+      - {run: {name: 'Format Results', command: 'cd /home/circleci/project/build-11/src/test/regress && format-results 11/check-iso-work-fol'}}
+      - {store_test_results: {path: '/home/circleci/project/build-11/src/test/regress/test-results.xml'}}
 workflows:
   version: 2
   build_and_test:
