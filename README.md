@@ -6,7 +6,7 @@
 
 ### What is Citus?
 
-* **Open-source** PostgreSQL extension (not a fork)
+* **Open-source** PostgreSQL extension (not a fork, well kind of)
 * **Scalable** across multiple machines through sharding and replication
 * **Distributed** engine for query parallelization
 * **Database** designed to scale multi-tenant applications
