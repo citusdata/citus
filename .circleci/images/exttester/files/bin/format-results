@@ -1,0 +1,17 @@
+#!/bin/bash
+
+# make bash behave
+set -euxo pipefail
+IFS=$'\n\t'
+
+sed -i 's/\/pg_regress//' test_times.log
+sed -i '/\//!d' test_times.log
+total_time=$(awk '{SUM += $NF} END {printf "%.4f", SUM}' test_times.log)
+test_count=$(wc -l < test_times.log | tr -d ' ')
+
+cat > test-results.xml <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite time="${total_time}" skipped="0" failures="0" errors="0" name="${1}" tests="${test_count}">
+$(awk '{ printf "  <testcase time=\"%.4f\" file=\"%s\" name=\"%s\"/>\n", $2, $1, $1 }' test_times.log)
+</testsuite>
+EOF
