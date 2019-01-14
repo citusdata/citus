@@ -1,0 +1,41 @@
+#!/bin/bash
+
+# make bash behave
+set -euxo pipefail
+IFS=$'\n\t'
+
+# this script needs root to install packages
+if [[ $EUID -ne 0 ]]; then
+   echo "This script must be run as root" 
+   exit 1
+fi
+
+# explicitly set user/group IDs
+groupadd -r circleci --gid=1729
+useradd -mg circleci --uid=1729 --shell=/bin/bash circleci
+
+echo "Running apt-get update..." >&2
+apt-get update
+apt-get install -y --no-install-recommends \
+  apt-transport-https \
+  ca-certificates \
+  curl \
+  debian-archive-keyring
+
+pkg_cloud_token='04c79f17bf82c6ee482ca210687bf542ecbd9dcbc0de671c'
+pkg_cloud_url="https://${pkg_cloud_token}:@packagecloud.io/install/repositories/citusdata/circlecipoc/script.deb.sh"
+
+curl -sf "${pkg_cloud_url}" | unique_id=exttester bash
+
+cat > /etc/apt/preferences.d/citusdata_circlecipoc.pref <<EOF
+Package: postgresql-server-dev-*
+Pin: release o=packagecloud.io/citusdata/circlecipoc
+Pin-Priority: 700
+EOF
+
+echo "Installing tools for testing PostgreSQL extensions..." >&2
+apt-get update && apt-get install -y --no-install-recommends make postgresql-common perl libcurl3 "postgresql-server-dev-${PG_MAJOR}"
+
+# keep that image size small!
+echo "Cleaning up..." >&2
+rm -rf /var/lib/apt/lists/*

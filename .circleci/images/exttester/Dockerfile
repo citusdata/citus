@@ -4,8 +4,10 @@ FROM postgres:$PG_MAJOR
 
 COPY files /tmp
 
-RUN /tmp/install-testdeps
+RUN set -ex; \
+	ln -s /tmp/sbin/* /usr/local/sbin/; \
+	install-testdeps
 
-COPY --chown=circleci:circleci workspace /home/circleci/workspace
+WORKDIR /home/circleci
 
-ENTRYPOINT ["/tmp/test-ext"]
+ENTRYPOINT ["/usr/local/sbin/test-ext"]

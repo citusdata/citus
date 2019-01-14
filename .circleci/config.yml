@@ -3,7 +3,6 @@ jobs:
   build:
     docker:
       - image: jasonmp85/citus-extbuilder:0.0.1
-    working_directory: ~
     steps:
       - checkout:
           path: src
@@ -14,6 +13,19 @@ jobs:
           root: .
           paths:
             - .
+  test-10:
+    docker:
+      - image: jasonmp85/citus-exttester-10:0.0.1
+    working_directory: /home/circleci/project
+    steps:
+      - attach_workspace:
+          at: .
+      - run:
+          name: Who here
+          command: pwd && ls
+      - run:
+          name: Install and Test
+          command: install-and-test-ext check-multi
   # check-multi:
   #   docker:
   #     - image: jasonmp85/citus-builder:latest
@@ -58,12 +70,6 @@ workflows:
   build_and_test:
     jobs:
       - build
-      # - check-multi:
-      #     requires:
-      #       - build
-      # - check-tt-van-mx:
-      #     requires:
-      #       - build
-      # - check-iso-work-fol:
-      #     requires:
-      #       - build
+      - test-10:
+          requires:
+            - build
