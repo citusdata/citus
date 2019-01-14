@@ -84,7 +84,7 @@ build_deb() {
   }' src/test/isolation/Makefile
   tweak+=("Add PostgreSQL's isolation tester to installed files")
 
-  sed '/^Package: postgresql-server-dev-/,/^Breaks:$/ {/\(clang\|llvm\)/d}' debian/control
+  sed -i '/^Package: postgresql-server-dev-/,/^Breaks:$/ {/\(clang\|llvm\)/d}' debian/control
   tweak+=("Remove llvm-dev and clang from server-dev dependencies")
 
   echo "  Updating changelog..." >&2
