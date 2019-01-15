@@ -90,24 +90,40 @@ SELECT count(*) FROM
   ON user_buy_test_table.user_id > users_ref_test_table.id AND users_ref_test_table.k_no > 44 AND user_buy_test_table.user_id > 44) subquery_2
 WHERE subquery_1.user_id = subquery_2.user_id ;
 
-  -- Should be able to push down since reference tables are inner joined
-  -- with hash distributed tables, the results of those joins are the parts of
-  -- an outer join
-SELECT subquery_2.id FROM
-  (SELECT tt1.user_id, random() FROM user_buy_test_table AS tt1 JOIN users_return_test_table as tt2
-    ON tt1.user_id = tt2.user_id) subquery_1
-  RIGHT JOIN
-  (SELECT tt1.user_id, ref.id, random() FROM user_buy_test_table as tt1 JOIN users_ref_test_table as ref
-   ON tt1.user_id = ref.id) subquery_2 ON subquery_1.user_id = subquery_2.user_id ORDER BY 1 DESC LIMIT 5;
+-- Should be able to push down since reference tables are inner joined
+-- with hash distributed tables, the results of those joins are the parts of
+-- an outer join
+SELECT subquery_2.id
+	FROM
+		(SELECT tt1.user_id, random()
+  			FROM user_buy_test_table AS tt1
+  			JOIN users_return_test_table as tt2
+    		ON tt1.user_id = tt2.user_id) subquery_1
+  	RIGHT JOIN
+  		(SELECT tt1.user_id, ref.id, random()
+  			FROM user_buy_test_table as tt1
+  			JOIN users_ref_test_table as ref
+   			ON tt1.user_id = ref.id) subquery_2
+   	ON subquery_1.user_id = subquery_2.user_id
+	ORDER BY 1 DESC LIMIT 5;
 
--- the same query as the above, but this Citus fails to pushdown the query
--- since the outer part of the right join doesn't include any joins
-SELECT * FROM
-  (SELECT tt1.user_id, random() FROM user_buy_test_table AS tt1 JOIN users_return_test_table as tt2
-    ON tt1.user_id = tt2.user_id) subquery_1
-  RIGHT JOIN
-  (SELECT *, random() FROM (SELECT tt1.user_id, random() FROM user_buy_test_table as tt1 JOIN users_ref_test_table as ref
-   ON tt1.user_id = ref.id) subquery_2_inner) subquery_2 ON subquery_1.user_id = subquery_2.user_id;
+-- almost the same query as the above, but reference table join wrapped with
+-- another subquery
+SELECT subquery_1.user_id
+	FROM
+		(SELECT tt1.user_id, random()
+			FROM user_buy_test_table AS tt1
+			JOIN users_return_test_table as tt2
+    		ON tt1.user_id = tt2.user_id) subquery_1
+  	RIGHT JOIN
+  		(SELECT *, random()
+  			FROM
+  				(SELECT tt1.user_id, random()
+  					FROM user_buy_test_table as tt1
+  					JOIN users_ref_test_table as ref
+   					ON tt1.user_id = ref.id) subquery_2_inner) subquery_2
+   	ON subquery_1.user_id = subquery_2.user_id
+	ORDER BY 1;
 
 -- should be able to pushdown since reference table is in the
 -- inner part of the left join
@@ -198,10 +214,79 @@ SELECT count(*) FROM user_buy_test_table RIGHT JOIN (SELECT 5 AS id) users_ref_t
 ON user_buy_test_table.item_id = users_ref_test_table.id;
 
 -- can perform a union with subquery without FROM
+-- with pulling data to coordinator
+SET client_min_messages TO DEBUG;
 SELECT count(*) FROM
   (SELECT user_id FROM user_buy_test_table
    UNION ALL
    SELECT id FROM (SELECT 5 AS id) users_ref_test_table) subquery_1;
+ 
+-- union involving reference table and distributed table subqueries
+-- is supported with pulling data to coordinator
+SELECT * FROM
+	(SELECT id FROM users_ref_test_table
+	 UNION
+	 SELECT user_id FROM user_buy_test_table) sub
+ORDER BY 1 DESC;
+
+-- same query but inner query has wrapped into another subquery
+SELECT * FROM
+	(SELECT id, random() * 0 FROM (SELECT id FROM users_ref_test_table) sub1
+	 UNION
+	 SELECT user_id, random() * 0 FROM (SELECT user_id FROM user_buy_test_table) sub2) sub
+ORDER BY 1 DESC;
+
+-- query can be pushed down when a reference table inside union query is
+-- joined with a distributed table
+SELECT * FROM
+	(SELECT user_id FROM users_ref_test_table ref JOIN  user_buy_test_table dis
+		on (ref.id = dis.user_id)
+	 UNION
+	 SELECT user_id FROM user_buy_test_table) sub
+ORDER BY 1 DESC;
+
+-- same query with inner query wrapped with a subquery
+SELECT * FROM
+	(SELECT user_id, random() * 0 FROM (SELECT dis.user_id FROM users_ref_test_table ref join user_buy_test_table dis
+		on (ref.id = dis.user_id)) sub1
+	 UNION
+	 SELECT user_id, random() * 0 FROM (SELECT user_id FROM user_buy_test_table) sub2) sub
+ORDER BY 1 DESC;
+
+SELECT * FROM
+	(SELECT user_id FROM users_ref_test_table ref JOIN  user_buy_test_table dis
+		on (ref.id = dis.user_id) WHERE id in (SELECT user_id from user_buy_test_table)
+	 UNION
+	 SELECT user_id FROM user_buy_test_table) sub
+ORDER BY 1 DESC;
+
+SELECT * FROM
+	(SELECT user_id FROM users_ref_test_table ref JOIN  user_buy_test_table dis
+		on (ref.id = dis.user_id)
+	 UNION
+	 SELECT user_id FROM user_buy_test_table WHERE user_id in (select id from users_ref_test_table)) sub
+ORDER BY 1 DESC;
+
+-- query can be pushed down when a reference table inside union query is
+-- joined with a distributed table. outer join is also supported
+-- if reference table is in the inner part
+SELECT * FROM
+	(SELECT user_id FROM users_ref_test_table ref RIGHT JOIN  user_buy_test_table dis
+		on (ref.id = dis.user_id)
+	 UNION
+	 SELECT user_id FROM user_buy_test_table) sub
+ORDER BY 1 DESC;
+
+-- query can be pushed down when a reference table inside union query is
+-- joined with a distributed table. reference table cannot be at
+-- the outer part.
+SELECT * FROM
+	(SELECT user_id FROM users_ref_test_table ref LEFT JOIN  user_buy_test_table dis
+		on (ref.id = dis.user_id)
+	 UNION
+	 SELECT user_id FROM user_buy_test_table) sub
+ORDER BY 1 DESC;
+RESET client_min_messages;
 
 -- should be able to pushdown since reference table is in the
 -- inner part of the left join
@@ -291,7 +376,7 @@ SELECT * FROM
               user_id > 2 and value_2 = 1) as foo_in ON (event_val_2 = user_id)) as foo LEFT JOIN
            (SELECT user_id as user_user_id FROM users_table) as fooo ON (user_id = user_user_id)) as bar;
 
--- we could even suuport the following where the subquery
+-- we could even support the following where the subquery
 -- on the outer part of the left join contains a reference table
 SELECT max(events_all.cnt), events_all.usr_id
 FROM
@@ -301,17 +386,16 @@ FROM
    INNER JOIN users_table ON (users_table.user_id = events_reference_table.user_id) GROUP BY users_table.user_id) AS events_all
 LEFT JOIN events_table ON (events_all.usr_id = events_table.user_id) GROUP BY 2 ORDER BY 1 DESC, 2 DESC LIMIT 5;
 
--- but, we fail to pushdown the following query where join that reference table appears
--- wrapped into a subquery
+-- we still support the query when the join involving reference table is wrapped with a subquery
 SELECT max(events_all.cnt),
        events_all.usr_id
-       FROM(
-SELECT *, random() FROM
-                (SELECT users_table.user_id AS usr_id, count(*) AS cnt
-                 FROM events_reference_table
-                 INNER JOIN users_table ON (users_table.user_id = events_reference_table.user_id)
-                 GROUP BY users_table.user_id) AS events_all_inner) AS events_all
-LEFT JOIN events_table ON (events_all.usr_id = events_table.user_id)
+	FROM (SELECT *, random()
+			FROM (SELECT users_table.user_id AS usr_id, count(*) AS cnt
+					FROM events_reference_table
+					INNER JOIN users_table ON (users_table.user_id = events_reference_table.user_id)
+					GROUP BY users_table.user_id) AS events_all_inner
+          ) AS events_all
+	LEFT JOIN events_table ON (events_all.usr_id = events_table.user_id)
 GROUP BY 2
 ORDER BY 1 DESC,
          2 DESC
