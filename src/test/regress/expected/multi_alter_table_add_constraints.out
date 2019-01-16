@@ -4,8 +4,8 @@
 -- Test checks whether constraints of distributed tables can be adjusted using
 -- the ALTER TABLE ... ADD CONSTRAINT ... command.
 SET citus.shard_count TO 32;
-SET citus.next_shard_id TO 1450000;
-SET citus.next_placement_id TO 1450000;
+ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1450000;
+ALTER SEQUENCE pg_catalog.pg_dist_placement_placementid_seq RESTART 1450000;
 -- Check "PRIMARY KEY CONSTRAINT"
 CREATE TABLE products (
     product_no integer,
@@ -511,10 +511,10 @@ SELECT (run_command_on_workers($$
     $$)).*
 ORDER BY 
     1,2,3,4;
- nodename  | nodeport | success |       result        
------------+----------+---------+---------------------
- localhost |    57637 | t       | alter_pk_idx_220035
- localhost |    57638 | t       | alter_pk_idx_220035
+ nodename  | nodeport | success |        result        
+-----------+----------+---------+----------------------
+ localhost |    57637 | t       | alter_pk_idx_1450234
+ localhost |    57638 | t       | alter_pk_idx_1450234
 (2 rows)
 
 CREATE SCHEMA sc2;
@@ -542,10 +542,10 @@ SELECT (run_command_on_workers($$
     $$)).*
 ORDER BY 
     1,2,3,4;
- nodename  | nodeport | success |       result        
------------+----------+---------+---------------------
- localhost |    57637 | t       | alter_pk_idx_220037
- localhost |    57638 | t       | alter_pk_idx_220037
+ nodename  | nodeport | success |        result        
+-----------+----------+---------+----------------------
+ localhost |    57637 | t       | alter_pk_idx_1450236
+ localhost |    57638 | t       | alter_pk_idx_1450236
 (2 rows)
 
 -- We are running almost the same test with a slight change on the constraint name because if the constraint has a different name than the index, Postgres renames the index.
@@ -577,10 +577,10 @@ SELECT (run_command_on_workers($$
     $$)).*
 ORDER BY 
     1,2,3,4;
- nodename  | nodeport | success |       result        
------------+----------+---------+---------------------
- localhost |    57637 | t       | a_constraint_220039
- localhost |    57638 | t       | a_constraint_220039
+ nodename  | nodeport | success |        result        
+-----------+----------+---------+----------------------
+ localhost |    57637 | t       | a_constraint_1450238
+ localhost |    57638 | t       | a_constraint_1450238
 (2 rows)
 
 ALTER TABLE alter_add_prim_key DROP CONSTRAINT a_constraint;
