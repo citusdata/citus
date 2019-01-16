@@ -123,8 +123,8 @@ ProcessDropTableStmt(DropStmt *dropTableStatement)
  * CreateDistributedTable will attach it to its parent table automatically after
  * distributing it.
  *
- * This function does nothing if PostgreSQL's version is less then 10 and given
- * CreateStmt is not a CREATE TABLE ... PARTITION OF command.
+ * This function does nothing if the provided CreateStmt is not a CREATE TABLE ...
+ * PARTITION OF command.
  */
 void
 ProcessCreateTableStmtPartitionOf(CreateStmt *createStatement)
@@ -186,8 +186,8 @@ ProcessCreateTableStmtPartitionOf(CreateStmt *createStatement)
  * operation will be performed via propagating this ALTER TABLE ... ATTACH
  * PARTITION command to workers.
  *
- * This function does nothing if PostgreSQL's version is less then 10 and given
- * CreateStmt is not a ALTER TABLE ... ATTACH PARTITION OF command.
+ * This function does nothing if the provided CreateStmt is not an ALTER TABLE ...
+ * ATTACH PARTITION OF command.
  */
 void
 ProcessAlterTableStmtAttachPartition(AlterTableStmt *alterTableStatement)

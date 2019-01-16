@@ -119,8 +119,6 @@
  * We get the query_host_name and query_host_port while opening the connection to
  * the node. We also replace initiator_node_identifier with initiator_node_host
  * and initiator_node_port. Thus, they are not in the query below.
- *
- * Also, backend_type introduced with pg 10+ so we have null in the previous verions.
  */
 
 #define CITUS_DIST_STAT_ACTIVITY_QUERY \

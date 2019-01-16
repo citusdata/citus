@@ -67,8 +67,8 @@ static void PostProcessUtility(Node *parsetree);
 
 
 /*
- * CitusProcessUtility is a version-aware wrapper of ProcessUtility to account
- * for argument differences between the 9.x and 10+ PostgreSQL versions.
+ * CitusProcessUtility is a convenience method to create a PlannedStmt out of pieces of a
+ * utility statement before invoking ProcessUtility.
  */
 void
 CitusProcessUtility(Node *node, const char *queryString, ProcessUtilityContext context,

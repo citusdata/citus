@@ -782,10 +782,7 @@ WaitForAllConnections(List *connectionList, bool raiseInterrupts)
 			int pendingConnectionCount = totalConnectionCount -
 										 pendingConnectionsStartIndex;
 
-			/*
-			 * We cannot disable wait events as of postgres 9.6, so we rebuild the
-			 * WaitEventSet whenever connections are ready.
-			 */
+			/* rebuild the WaitEventSet whenever connections are ready */
 			if (rebuildWaitEventSet)
 			{
 				if (waitEventSet != NULL)

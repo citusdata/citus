@@ -1187,7 +1187,7 @@ CreateTruncateTrigger(Oid relationId)
 
 /*
  * RegularTable function returns true if given table's relation kind is RELKIND_RELATION
- * (or RELKIND_PARTITIONED_TABLE for PG >= 10), otherwise it returns false.
+ * or RELKIND_PARTITIONED_TABLE otherwise it returns false.
  */
 bool
 RegularTable(Oid relationId)
@@ -1382,7 +1382,7 @@ TupleDescColumnNameList(TupleDesc tupleDescriptor)
 
 /*
  * RelationUsesIdentityColumns returns whether a given relation uses the SQL
- * GENERATED ... AS IDENTITY features supported as of PostgreSQL 10.
+ * GENERATED ... AS IDENTITY features introduced as of PostgreSQL 10.
  */
 static bool
 RelationUsesIdentityColumns(TupleDesc relationDesc)
