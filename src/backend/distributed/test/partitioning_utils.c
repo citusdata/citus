@@ -37,9 +37,7 @@ generate_alter_table_detach_partition_command(PG_FUNCTION_ARGS)
 {
 	char *command = "";
 
-#if (PG_VERSION_NUM >= 100000)
 	command = GenerateDetachPartitionCommand(PG_GETARG_OID(0));
-#endif
 
 	PG_RETURN_TEXT_P(cstring_to_text(command));
 }
@@ -53,9 +51,7 @@ generate_alter_table_attach_partition_command(PG_FUNCTION_ARGS)
 {
 	char *command = "";
 
-#if (PG_VERSION_NUM >= 100000)
 	command = GenerateAlterTableAttachPartitionCommand(PG_GETARG_OID(0));
-#endif
 
 	PG_RETURN_TEXT_P(cstring_to_text(command));
 }
@@ -69,9 +65,7 @@ generate_partition_information(PG_FUNCTION_ARGS)
 {
 	char *command = "";
 
-#if (PG_VERSION_NUM >= 100000)
 	command = GeneratePartitioningInformation(PG_GETARG_OID(0));
-#endif
 
 	PG_RETURN_TEXT_P(cstring_to_text(command));
 }
@@ -85,7 +79,6 @@ print_partitions(PG_FUNCTION_ARGS)
 {
 	StringInfo resultRelationNames = makeStringInfo();
 
-#if (PG_VERSION_NUM >= 100000)
 	List *partitionList = PartitionList(PG_GETARG_OID(0));
 	ListCell *partitionOidCell = NULL;
 
@@ -103,7 +96,6 @@ print_partitions(PG_FUNCTION_ARGS)
 
 		appendStringInfoString(resultRelationNames, get_rel_name(partitionOid));
 	}
-#endif
 
 	PG_RETURN_TEXT_P(cstring_to_text(resultRelationNames->data));
 }

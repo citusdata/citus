@@ -123,13 +123,12 @@ ProcessDropTableStmt(DropStmt *dropTableStatement)
  * CreateDistributedTable will attach it to its parent table automatically after
  * distributing it.
  *
- * This function does nothing if PostgreSQL's version is less then 10 and given
- * CreateStmt is not a CREATE TABLE ... PARTITION OF command.
+ * This function does nothing if the provided CreateStmt is not a CREATE TABLE ...
+ * PARTITION OF command.
  */
 void
 ProcessCreateTableStmtPartitionOf(CreateStmt *createStatement)
 {
-#if (PG_VERSION_NUM >= 100000)
 	if (createStatement->inhRelations != NIL && createStatement->partbound != NULL)
 	{
 		RangeVar *parentRelation = linitial(createStatement->inhRelations);
@@ -161,7 +160,6 @@ ProcessCreateTableStmtPartitionOf(CreateStmt *createStatement)
 								   viaDeprecatedAPI);
 		}
 	}
-#endif
 }
 
 
@@ -188,13 +186,12 @@ ProcessCreateTableStmtPartitionOf(CreateStmt *createStatement)
  * operation will be performed via propagating this ALTER TABLE ... ATTACH
  * PARTITION command to workers.
  *
- * This function does nothing if PostgreSQL's version is less then 10 and given
- * CreateStmt is not a ALTER TABLE ... ATTACH PARTITION OF command.
+ * This function does nothing if the provided CreateStmt is not an ALTER TABLE ...
+ * ATTACH PARTITION OF command.
  */
 void
 ProcessAlterTableStmtAttachPartition(AlterTableStmt *alterTableStatement)
 {
-#if (PG_VERSION_NUM >= 100000)
 	List *commandList = alterTableStatement->cmds;
 	ListCell *commandCell = NULL;
 
@@ -240,7 +237,6 @@ ProcessAlterTableStmtAttachPartition(AlterTableStmt *alterTableStatement)
 			}
 		}
 	}
-#endif
 }
 
 
@@ -383,7 +379,6 @@ PlanAlterTableStmt(AlterTableStmt *alterTableStatement, const char *alterTableCo
 				}
 			}
 		}
-#if (PG_VERSION_NUM >= 100000)
 		else if (alterTableType == AT_AttachPartition)
 		{
 			PartitionCmd *partitionCommand = (PartitionCmd *) command->def;
@@ -418,7 +413,7 @@ PlanAlterTableStmt(AlterTableStmt *alterTableStatement, const char *alterTableCo
 
 			rightRelationId = RangeVarGetRelid(partitionCommand->name, NoLock, false);
 		}
-#endif
+
 		executeSequentially |= SetupExecutionModeForAlterTable(leftRelationId,
 															   command);
 	}
@@ -990,7 +985,6 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 				break;
 			}
 
-#if (PG_VERSION_NUM >= 100000)
 			case AT_AttachPartition:
 			{
 				Oid relationId = AlterTableLookupRelation(alterTableStatement,
@@ -1037,7 +1031,6 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 				break;
 			}
 
-#endif
 			case AT_DropConstraint:
 			{
 				LOCKMODE lockmode = AlterTableGetLockLevel(alterTableStatement->cmds);

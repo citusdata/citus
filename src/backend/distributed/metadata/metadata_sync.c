@@ -918,11 +918,7 @@ List *
 SequenceDDLCommandsForTable(Oid relationId)
 {
 	List *sequenceDDLList = NIL;
-#if (PG_VERSION_NUM >= 100000)
 	List *ownedSequences = getOwnedSequences(relationId, InvalidAttrNumber);
-#else
-	List *ownedSequences = getOwnedSequences(relationId);
-#endif
 	ListCell *listCell;
 	char *ownerName = TableOwner(relationId);
 
@@ -1008,7 +1004,6 @@ EnsureSupportedSequenceColumnType(Oid sequenceOid)
 	bool hasMetadataWorkers = HasMetadataWorkers();
 
 	/* call sequenceIsOwned in order to get the tableId and columnId */
-#if (PG_VERSION_NUM >= 100000)
 	bool sequenceOwned = sequenceIsOwned(sequenceOid, DEPENDENCY_AUTO, &tableId,
 										 &columnId);
 	if (!sequenceOwned)
@@ -1018,9 +1013,6 @@ EnsureSupportedSequenceColumnType(Oid sequenceOid)
 	}
 
 	Assert(sequenceOwned);
-#else
-	sequenceIsOwned(sequenceOid, &tableId, &columnId);
-#endif
 
 	shouldSyncMetadata = ShouldSyncTableMetadata(tableId);
 

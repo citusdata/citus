@@ -26,9 +26,6 @@
 #include "utils/relcache.h"
 
 
-/* Local functions forward declarations for helper functions */
-static char * GetSchemaNameFromDropObject(ListCell *dropSchemaCell);
-
 /*
  * ProcessDropSchemaStmt invalidates the foreign key cache if any table created
  * under dropped schema involved in any foreign key relationship.
@@ -52,7 +49,9 @@ ProcessDropSchemaStmt(DropStmt *dropStatement)
 
 	foreach(dropSchemaCell, dropStatement->objects)
 	{
-		char *schemaString = GetSchemaNameFromDropObject(dropSchemaCell);
+		Value *schemaValue = (Value *) lfirst(dropSchemaCell);
+		char *schemaString = strVal(schemaValue);
+
 		Oid namespaceOid = get_namespace_oid(schemaString, true);
 
 		if (namespaceOid == InvalidOid)
@@ -134,26 +133,4 @@ PlanAlterObjectSchemaStmt(AlterObjectSchemaStmt *alterObjectSchemaStmt,
 							  "change schemas of affected objects.")));
 
 	return NIL;
-}
-
-
-/*
- * GetSchemaNameFromDropObject gets the name of the drop schema from given
- * list cell. This function is defined due to API change between PG 9.6 and
- * PG 10.
- */
-static char *
-GetSchemaNameFromDropObject(ListCell *dropSchemaCell)
-{
-	char *schemaString = NULL;
-
-#if (PG_VERSION_NUM >= 100000)
-	Value *schemaValue = (Value *) lfirst(dropSchemaCell);
-	schemaString = strVal(schemaValue);
-#else
-	List *schemaNameList = (List *) lfirst(dropSchemaCell);
-	schemaString = NameListToString(schemaNameList);
-#endif
-
-	return schemaString;
 }

@@ -375,15 +375,11 @@ RemoveJobSchema(StringInfo schemaName)
 		 * can suppress notice messages that are typically displayed during
 		 * cascading deletes.
 		 */
-#if (PG_VERSION_NUM >= 100000)
 		performDeletion(&schemaObject, DROP_CASCADE,
 						PERFORM_DELETION_INTERNAL |
 						PERFORM_DELETION_QUIETLY |
 						PERFORM_DELETION_SKIP_ORIGINAL |
 						PERFORM_DELETION_SKIP_EXTENSIONS);
-#else
-		deleteWhatDependsOn(&schemaObject, false);
-#endif
 
 		CommandCounterIncrement();
 
@@ -423,12 +419,8 @@ CreateTaskTable(StringInfo schemaName, StringInfo relationName,
 
 	createStatement = CreateStatement(relation, columnDefinitionList);
 
-#if (PG_VERSION_NUM >= 100000)
 	relationObject = DefineRelation(createStatement, RELKIND_RELATION, InvalidOid, NULL,
 									NULL);
-#else
-	relationObject = DefineRelation(createStatement, RELKIND_RELATION, InvalidOid, NULL);
-#endif
 	relationId = relationObject.objectId;
 
 	Assert(relationId != InvalidOid);
@@ -572,16 +564,11 @@ CopyTaskFilesFromDirectory(StringInfo schemaName, StringInfo relationName,
 		copyStatement = CopyStatement(relation, fullFilename->data);
 		if (BinaryWorkerCopyFormat)
 		{
-#if (PG_VERSION_NUM >= 100000)
 			DefElem *copyOption = makeDefElem("format", (Node *) makeString("binary"),
 											  -1);
-#else
-			DefElem *copyOption = makeDefElem("format", (Node *) makeString("binary"));
-#endif
 			copyStatement->options = list_make1(copyOption);
 		}
 
-#if (PG_VERSION_NUM >= 100000)
 		{
 			ParseState *pstate = make_parsestate(NULL);
 			pstate->p_sourcetext = queryString;
@@ -590,9 +577,7 @@ CopyTaskFilesFromDirectory(StringInfo schemaName, StringInfo relationName,
 
 			free_parsestate(pstate);
 		}
-#else
-		DoCopy(copyStatement, queryString, &copiedRowCount);
-#endif
+
 		copiedRowTotal += copiedRowCount;
 		CommandCounterIncrement();
 	}

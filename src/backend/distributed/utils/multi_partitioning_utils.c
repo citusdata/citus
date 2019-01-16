@@ -10,9 +10,7 @@
 #include "access/heapam.h"
 #include "access/htup_details.h"
 #include "catalog/indexing.h"
-#if (PG_VERSION_NUM >= 100000)
 #include "catalog/partition.h"
-#endif
 #include "catalog/pg_class.h"
 #include "catalog/pg_inherits.h"
 #if (PG_VERSION_NUM < 110000)
@@ -33,9 +31,7 @@
 #include "utils/syscache.h"
 
 
-#if (PG_VERSION_NUM >= 100000)
 static char * PartitionBound(Oid partitionId);
-#endif
 
 
 /*
@@ -47,12 +43,10 @@ PartitionedTable(Oid relationId)
 	Relation rel = heap_open(relationId, AccessShareLock);
 	bool partitionedTable = false;
 
-#if (PG_VERSION_NUM >= 100000)
 	if (rel->rd_rel->relkind == RELKIND_PARTITIONED_TABLE)
 	{
 		partitionedTable = true;
 	}
-#endif
 
 	/* keep the lock */
 	heap_close(rel, NoLock);
@@ -78,12 +72,10 @@ PartitionedTableNoLock(Oid relationId)
 		return false;
 	}
 
-#if (PG_VERSION_NUM >= 100000)
 	if (rel->rd_rel->relkind == RELKIND_PARTITIONED_TABLE)
 	{
 		partitionedTable = true;
 	}
-#endif
 
 	/* keep the lock */
 	heap_close(rel, NoLock);
@@ -101,9 +93,7 @@ PartitionTable(Oid relationId)
 	Relation rel = heap_open(relationId, AccessShareLock);
 	bool partitionTable = false;
 
-#if (PG_VERSION_NUM >= 100000)
 	partitionTable = rel->rd_rel->relispartition;
-#endif
 
 	/* keep the lock */
 	heap_close(rel, NoLock);
@@ -129,9 +119,7 @@ PartitionTableNoLock(Oid relationId)
 		return false;
 	}
 
-#if (PG_VERSION_NUM >= 100000)
 	partitionTable = rel->rd_rel->relispartition;
-#endif
 
 	/* keep the lock */
 	heap_close(rel, NoLock);
@@ -237,9 +225,7 @@ PartitionParentOid(Oid partitionOid)
 {
 	Oid partitionParentOid = InvalidOid;
 
-#if (PG_VERSION_NUM >= 100000)
 	partitionParentOid = get_partition_parent(partitionOid);
-#endif
 
 	return partitionParentOid;
 }
@@ -255,7 +241,6 @@ PartitionList(Oid parentRelationId)
 	Relation rel = heap_open(parentRelationId, AccessShareLock);
 	List *partitionList = NIL;
 
-#if (PG_VERSION_NUM >= 100000)
 	int partitionIndex = 0;
 	int partitionCount = 0;
 
@@ -274,7 +259,6 @@ PartitionList(Oid parentRelationId)
 		partitionList =
 			lappend_oid(partitionList, rel->rd_partdesc->oids[partitionIndex]);
 	}
-#endif
 
 	/* keep the lock */
 	heap_close(rel, NoLock);
@@ -291,8 +275,6 @@ char *
 GenerateDetachPartitionCommand(Oid partitionTableId)
 {
 	StringInfo detachPartitionCommand = makeStringInfo();
-
-#if (PG_VERSION_NUM >= 100000)
 	Oid parentId = InvalidOid;
 	char *tableQualifiedName = NULL;
 	char *parentTableQualifiedName = NULL;
@@ -311,7 +293,6 @@ GenerateDetachPartitionCommand(Oid partitionTableId)
 	appendStringInfo(detachPartitionCommand,
 					 "ALTER TABLE IF EXISTS %s DETACH PARTITION %s;",
 					 parentTableQualifiedName, tableQualifiedName);
-#endif
 
 	return detachPartitionCommand->data;
 }
@@ -325,8 +306,6 @@ char *
 GeneratePartitioningInformation(Oid parentTableId)
 {
 	char *partitionBoundCString = "";
-
-#if (PG_VERSION_NUM >= 100000)
 	Datum partitionBoundDatum = 0;
 
 	if (!PartitionedTable(parentTableId))
@@ -340,7 +319,6 @@ GeneratePartitioningInformation(Oid parentTableId)
 											  ObjectIdGetDatum(parentTableId));
 
 	partitionBoundCString = TextDatumGetCString(partitionBoundDatum);
-#endif
 
 	return partitionBoundCString;
 }
@@ -398,8 +376,6 @@ char *
 GenerateAlterTableAttachPartitionCommand(Oid partitionTableId)
 {
 	StringInfo createPartitionCommand = makeStringInfo();
-
-#if (PG_VERSION_NUM >= 100000)
 	char *partitionBoundCString = NULL;
 
 	Oid parentId = InvalidOid;
@@ -422,13 +398,10 @@ GenerateAlterTableAttachPartitionCommand(Oid partitionTableId)
 	appendStringInfo(createPartitionCommand, "ALTER TABLE %s ATTACH PARTITION %s %s;",
 					 parentTableQualifiedName, tableQualifiedName,
 					 partitionBoundCString);
-#endif
 
 	return createPartitionCommand->data;
 }
 
-
-#if (PG_VERSION_NUM >= 100000)
 
 /*
  * This function heaviliy inspired from RelationBuildPartitionDesc()
@@ -479,6 +452,3 @@ PartitionBound(Oid partitionId)
 
 	return partitionBoundString;
 }
-
-
-#endif

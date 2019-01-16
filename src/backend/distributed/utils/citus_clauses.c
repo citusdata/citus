@@ -189,11 +189,7 @@ citus_evaluate_expr(Expr *expr, Oid result_type, int32 result_typmod,
 	/*
 	 * And evaluate it.
 	 */
-#if (PG_VERSION_NUM >= 100000)
 	const_val = ExecEvalExprSwitchContext(exprstate, econtext, &const_is_null);
-#else
-	const_val = ExecEvalExprSwitchContext(exprstate, econtext, &const_is_null, NULL);
-#endif
 
 	/* Get info needed about result datatype */
 	get_typlenbyval(result_type, &resultTypLen, &resultTypByVal);
@@ -259,13 +255,11 @@ CitusIsVolatileFunction(Node *node)
 		return true;
 	}
 
-#if (PG_VERSION_NUM >= 100000)
 	if (IsA(node, NextValueExpr))
 	{
 		/* NextValueExpr is volatile */
 		return true;
 	}
-#endif
 
 	return false;
 }
@@ -302,7 +296,6 @@ CitusIsMutableFunction(Node *node)
 		return true;
 	}
 
-#if (PG_VERSION_NUM >= 100000)
 	if (IsA(node, SQLValueFunction))
 	{
 		/* all variants of SQLValueFunction are stable */
@@ -314,7 +307,6 @@ CitusIsMutableFunction(Node *node)
 		/* NextValueExpr is volatile */
 		return true;
 	}
-#endif
 
 	return false;
 }

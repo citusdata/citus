@@ -92,12 +92,8 @@ master_modify_multiple_shards(PG_FUNCTION_ARGS)
 	CmdType operation = CMD_UNKNOWN;
 	TaskType taskType = TASK_TYPE_INVALID_FIRST;
 	bool truncateOperation = false;
-#if (PG_VERSION_NUM >= 100000)
 	RawStmt *rawStmt = (RawStmt *) ParseTreeRawStmt(queryString);
 	queryTreeNode = rawStmt->stmt;
-#else
-	queryTreeNode = ParseTreeNode(queryString);
-#endif
 
 	CheckCitusVersion(ERROR);
 
@@ -152,11 +148,7 @@ master_modify_multiple_shards(PG_FUNCTION_ARGS)
 
 	CheckDistributedTable(relationId);
 
-#if (PG_VERSION_NUM >= 100000)
 	queryTreeList = pg_analyze_and_rewrite(rawStmt, queryString, NULL, 0, NULL);
-#else
-	queryTreeList = pg_analyze_and_rewrite(queryTreeNode, queryString, NULL, 0);
-#endif
 	modifyQuery = (Query *) linitial(queryTreeList);
 
 	operation = modifyQuery->commandType;

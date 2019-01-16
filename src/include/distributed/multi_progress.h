@@ -17,13 +17,6 @@
 #include "nodes/pg_list.h"
 
 
-#if (PG_VERSION_NUM < 100000)
-
-/* define symbols that are undefined in PostgreSQL <= 9.6 */
-#define DSM_HANDLE_INVALID 0
-extern Datum pg_stat_get_progress_info(PG_FUNCTION_ARGS);
-#endif
-
 typedef struct ProgressMonitorData
 {
 	uint64 processId;

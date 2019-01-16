@@ -547,7 +547,6 @@ RelayEventExtendNamesForInterShardCommands(Node *parseTree, uint64 leftShardId,
 						}
 					}
 				}
-#if (PG_VERSION_NUM >= 100000)
 				else if (command->subtype == AT_AttachPartition ||
 						 command->subtype == AT_DetachPartition)
 				{
@@ -556,7 +555,6 @@ RelayEventExtendNamesForInterShardCommands(Node *parseTree, uint64 leftShardId,
 					referencedTableName = &(partitionCommand->name->relname);
 					relationSchemaName = &(partitionCommand->name->schemaname);
 				}
-#endif
 				else
 				{
 					continue;

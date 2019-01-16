@@ -16,19 +16,7 @@
 #include "catalog/namespace.h"
 #include "nodes/parsenodes.h"
 
-#if (PG_VERSION_NUM >= 90600 && PG_VERSION_NUM < 90700)
-
-/* Backports from PostgreSQL 10 */
-/* Accessor for the i'th attribute of tupdesc. */
-#define TupleDescAttr(tupdesc, i) ((tupdesc)->attrs[(i)])
-
-#endif
-
-#if (PG_VERSION_NUM < 100000)
-struct QueryEnvironment; /* forward-declare to appease compiler */
-#endif
-
-#if (PG_VERSION_NUM >= 90600 && PG_VERSION_NUM < 110000)
+#if (PG_VERSION_NUM >= 100000 && PG_VERSION_NUM < 110000)
 
 #include "access/hash.h"
 #include "storage/fd.h"

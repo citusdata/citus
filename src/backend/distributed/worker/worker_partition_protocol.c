@@ -853,12 +853,8 @@ FileOutputStreamFlush(FileOutputStream file)
 	int written = 0;
 
 	errno = 0;
-#if (PG_VERSION_NUM >= 100000)
 	written = FileWrite(file.fileDescriptor, fileBuffer->data, fileBuffer->len,
 						PG_WAIT_IO);
-#else
-	written = FileWrite(file.fileDescriptor, fileBuffer->data, fileBuffer->len);
-#endif
 	if (written != fileBuffer->len)
 	{
 		ereport(ERROR, (errcode_for_file_access(),

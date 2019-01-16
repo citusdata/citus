@@ -204,17 +204,10 @@ pg_get_sequencedef_string(Oid sequenceRelationId)
 	/* build our DDL command */
 	qualifiedSequenceName = generate_relation_name(sequenceRelationId, NIL);
 
-#if (PG_VERSION_NUM >= 100000)
 	sequenceDef = psprintf(CREATE_SEQUENCE_COMMAND, qualifiedSequenceName,
 						   pgSequenceForm->seqincrement, pgSequenceForm->seqmin,
 						   pgSequenceForm->seqmax, pgSequenceForm->seqstart,
 						   pgSequenceForm->seqcycle ? "" : "NO ");
-#else
-	sequenceDef = psprintf(CREATE_SEQUENCE_COMMAND, qualifiedSequenceName,
-						   pgSequenceForm->increment_by, pgSequenceForm->min_value,
-						   pgSequenceForm->max_value, pgSequenceForm->start_value,
-						   pgSequenceForm->is_cycled ? "" : "NO ");
-#endif
 
 	return sequenceDef;
 }
@@ -230,7 +223,6 @@ pg_get_sequencedef(Oid sequenceRelationId)
 	Form_pg_sequence pgSequenceForm = NULL;
 	HeapTuple heapTuple = NULL;
 
-#if (PG_VERSION_NUM >= 100000)
 	heapTuple = SearchSysCache1(SEQRELID, sequenceRelationId);
 	if (!HeapTupleIsValid(heapTuple))
 	{
@@ -240,38 +232,6 @@ pg_get_sequencedef(Oid sequenceRelationId)
 	pgSequenceForm = (Form_pg_sequence) GETSTRUCT(heapTuple);
 
 	ReleaseSysCache(heapTuple);
-#else
-	SysScanDesc scanDescriptor = NULL;
-	Relation sequenceRel = NULL;
-	AclResult permissionCheck = ACLCHECK_NO_PRIV;
-
-	/* open and lock sequence */
-	sequenceRel = heap_open(sequenceRelationId, AccessShareLock);
-
-	/* check permissions to read sequence attributes */
-	permissionCheck = pg_class_aclcheck(sequenceRelationId, GetUserId(),
-										ACL_SELECT | ACL_USAGE);
-	if (permissionCheck != ACLCHECK_OK)
-	{
-		ereport(ERROR, (errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
-						errmsg("permission denied for sequence %s",
-							   RelationGetRelationName(sequenceRel))));
-	}
-
-	/* retrieve attributes from first tuple */
-	scanDescriptor = systable_beginscan(sequenceRel, InvalidOid, false, NULL, 0, NULL);
-	heapTuple = systable_getnext(scanDescriptor);
-	if (!HeapTupleIsValid(heapTuple))
-	{
-		ereport(ERROR, (errmsg("could not find specified sequence")));
-	}
-
-	pgSequenceForm = (Form_pg_sequence) GETSTRUCT(heapTuple);
-
-	systable_endscan(scanDescriptor);
-
-	heap_close(sequenceRel, AccessShareLock);
-#endif
 
 	return pgSequenceForm;
 }
@@ -474,13 +434,11 @@ pg_get_tableschemadef_string(Oid tableRelationId, bool includeSequenceDefaults)
 		appendStringInfo(&buffer, " SERVER %s", quote_identifier(serverName));
 		AppendOptionListToString(&buffer, foreignTable->options);
 	}
-#if (PG_VERSION_NUM >= 100000)
 	else if (relationKind == RELKIND_PARTITIONED_TABLE)
 	{
 		char *partitioningInformation = GeneratePartitioningInformation(tableRelationId);
 		appendStringInfo(&buffer, " PARTITION BY %s ", partitioningInformation);
 	}
-#endif
 
 	/*
 	 * Add any reloptions (storage parameters) defined on the table in a WITH

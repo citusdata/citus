@@ -38,9 +38,7 @@
 #include "storage/lmgr.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
-#if (PG_VERSION_NUM >= 100000)
 #include "utils/varlena.h"
-#endif
 
 
 /* static definition and declarations */

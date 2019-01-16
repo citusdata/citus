@@ -39,9 +39,6 @@ extern void multi_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
 								 ProcessUtilityContext context, ParamListInfo params,
 								 struct QueryEnvironment *queryEnv, DestReceiver *dest,
 								 char *completionTag);
-extern void multi_ProcessUtility9x(Node *parsetree, const char *queryString,
-								   ProcessUtilityContext context, ParamListInfo params,
-								   DestReceiver *dest, char *completionTag);
 extern void CitusProcessUtility(Node *node, const char *queryString,
 								ProcessUtilityContext context, ParamListInfo params,
 								DestReceiver *dest, char *completionTag);
