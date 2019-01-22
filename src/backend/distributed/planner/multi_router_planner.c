@@ -1630,10 +1630,15 @@ RouterJob(Query *originalQuery, PlannerRestrictionContext *plannerRestrictionCon
 		 * Queries to reference tables, or distributed tables with multiple replica's have
 		 * their task placements reordered according to the configured
 		 * task_assignment_policy. This is only applicable to select queries as the modify
-		 * queries will be reordered to _always_ use the first-replica policy during
-		 * execution.
+		 * queries will _always_ be executed on all placements.
+		 *
+		 * We also ignore queries that are targeting only intermediate results (e.g., no
+		 * valid anchorShardId).
 		 */
-		ReorderTaskPlacementsByTaskAssignmentPolicy(job, TaskAssignmentPolicy);
+		if (shardId != INVALID_SHARD_ID)
+		{
+			ReorderTaskPlacementsByTaskAssignmentPolicy(job, TaskAssignmentPolicy);
+		}
 	}
 	else if (isMultiShardModifyQuery)
 	{
