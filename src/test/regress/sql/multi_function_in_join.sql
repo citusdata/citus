@@ -6,8 +6,8 @@
 -- that we wrap those functions inside (SELECT * FROM fnc()) sub queries.
 --
 -- We do not yet support those functions that:
---  - return records
---  - return tables
+--  - have lateral joins
+--  - have WITH ORDINALITY clause
 --  - are user-defined and immutable
 
 CREATE SCHEMA functions_in_joins;
@@ -132,12 +132,14 @@ SELECT public.raise_failed_execution($cmd$
 SELECT * FROM table1 JOIN the_answer_to_life() the_answer ON (id = the_answer)
 $cmd$);
 
--- WITH ORDINALITY clause forcing the result type to be RECORD/RECORDs
+-- WITH ORDINALITY clause
+SELECT public.raise_failed_execution($cmd$
 SELECT *
 FROM table1
        JOIN next_k_integers(10,5) WITH ORDINALITY next_integers
          ON (id = next_integers.result)
 ORDER BY id ASC;
+$cmd$);
 
 RESET client_min_messages;
 DROP SCHEMA functions_in_joins CASCADE;

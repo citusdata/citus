@@ -139,7 +139,7 @@ canonicalize_qual_compat(Expr *qual, bool is_check)
  * A convenient wrapper around get_expr_result_type() that is added on PG11
  *
  * Note that this function ignores the second parameter and behaves
- * slightly differently.
+ * slightly differently than the PG11 version.
  *
  * 1. The original function throws errors if noError flag is not set, we ignore
  * this flag here and return NULL in that case
