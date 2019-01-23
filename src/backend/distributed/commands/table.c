@@ -1185,6 +1185,26 @@ SetupExecutionModeForAlterTable(Oid relationId, AlterTableCmd *command)
 			{
 				executeSequentially = true;
 			}
+
+			/*
+			 * Postgres performs additional selects when creating constraints
+			 * on partitioned tables. We need to set execution mode to
+			 * sequential for the select query so that ddl connections
+			 * we open does not fail due to previous select.
+			 */
+			if (executeSequentially && PartitionedTable(relationId))
+			{
+				SetLocalMultiShardModifyModeToSequential();
+			}
+		}
+	}
+	else if (alterTableType == AT_DetachPartition)
+	{
+		/* check if there are foreign constraints to reference tables */
+		if (HasForeignKeyToReferenceTable(relationId))
+		{
+			executeSequentially = true;
+			SetLocalMultiShardModifyModeToSequential();
 		}
 	}
 
