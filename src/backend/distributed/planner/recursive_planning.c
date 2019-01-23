@@ -67,6 +67,7 @@
 #include "distributed/query_colocation_checker.h"
 #include "distributed/recursive_planning.h"
 #include "distributed/relation_restriction_equivalence.h"
+#include "distributed/version_compat.h"
 #include "lib/stringinfo.h"
 #include "optimizer/planner.h"
 #include "optimizer/prep.h"
