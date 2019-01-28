@@ -119,3 +119,18 @@ EXPLAIN (COSTS FALSE) SELECT * FROM task_assignment_reference_table;
 EXPLAIN (COSTS FALSE) SELECT * FROM task_assignment_reference_table;
 
 ROLLBACK;
+
+
+
+-- we should be able to use round-robin with router queries that 
+-- only contains intermediate results
+BEGIN;
+CREATE TABLE task_assignment_test_table_2 (test_id integer);
+SELECT create_distributed_table('task_assignment_test_table_2', 'test_id');
+
+WITH q1 AS (SELECT * FROM task_assignment_test_table_2) SELECT * FROM q1;
+SET LOCAL citus.task_assignment_policy TO 'round-robin';
+WITH q1 AS (SELECT * FROM task_assignment_test_table_2) SELECT * FROM q1;
+ROLLBACK;
+
+

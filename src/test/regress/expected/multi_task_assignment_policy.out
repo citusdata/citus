@@ -212,3 +212,25 @@ DEBUG:  Plan is router executable
 (2 rows)
 
 ROLLBACK;
+-- we should be able to use round-robin with router queries that 
+-- only contains intermediate results
+BEGIN;
+CREATE TABLE task_assignment_test_table_2 (test_id integer);
+SELECT create_distributed_table('task_assignment_test_table_2', 'test_id');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+WITH q1 AS (SELECT * FROM task_assignment_test_table_2) SELECT * FROM q1;
+ test_id 
+---------
+(0 rows)
+
+SET LOCAL citus.task_assignment_policy TO 'round-robin';
+WITH q1 AS (SELECT * FROM task_assignment_test_table_2) SELECT * FROM q1;
+ test_id 
+---------
+(0 rows)
+
+ROLLBACK;
