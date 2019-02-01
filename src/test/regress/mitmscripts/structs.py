@@ -8,6 +8,9 @@ import construct.lib as cl
 
 import re
 
+# For all possible message formats see:
+# https://www.postgresql.org/docs/current/protocol-message-formats.html
+
 class MessageMeta(type):
     def __init__(cls, name, bases, namespace):
         '''
@@ -292,6 +295,121 @@ class BackendKeyData(BackendMessage):
     def print(message):
         # Both of these should be censored, for reproducible regression test output
         return "BackendKeyData(XXX)"
+
+class NoticeResponse(BackendMessage):
+    key = 'N'
+    struct = Struct(
+        "notices" / GreedyRange(
+            Struct(
+                "key" / Enum(Byte,
+                             severity=ord('S'),
+                             _severity_not_localized=ord('V'),
+                             _sql_state=ord('C'),
+                             message=ord('M'),
+                             detail=ord('D'),
+                             hint=ord('H'),
+                             _position=ord('P'),
+                             _internal_position=ord('p'),
+                             _internal_query=ord('q'),
+                             _where=ord('W'),
+                             schema_name=ord('s'),
+                             table_name=ord('t'),
+                             column_name=ord('c'),
+                             data_type_name=ord('d'),
+                             constraint_name=ord('n'),
+                             _file_name=ord('F'),
+                             _line_no=ord('L'),
+                             _routine_name=ord('R')
+                             ),
+                "value" / CString("ASCII")
+            )
+        )
+    )
+
+    def print(message):
+        return "NoticeResponse({})".format(", ".join(
+            "{}={}".format(response.key, response.value)
+            for response in message.notices
+            if not response.key.startswith('_')
+        ))
+
+class Parse(FrontendMessage):
+    key = 'P'
+    struct = Struct(
+        "name" / CString("ASCII"),
+        "query" / CString("ASCII"),
+        "_parametercount" / Int16ub,
+        "parameters" / Array(
+            this._parametercount,
+            Int32ub
+        )
+    )
+
+class ParseComplete(BackendMessage):
+    key = '1'
+    struct = Struct()
+
+class Bind(FrontendMessage):
+    key = 'B'
+    struct = Struct(
+        "destination_portal" / CString("ASCII"),
+        "prepared_statement" / CString("ASCII"),
+        "_parameter_format_code_count" / Int16ub,
+        "parameter_format_codes" / Array(this._parameter_format_code_count,
+                                         Int16ub),
+        "_parameter_value_count" / Int16ub,
+        "parameter_values" / Array(
+            this._parameter_value_count,
+            Struct(
+                "length" / Int32ub,
+                "value" / Bytes(this.length)
+            )
+        ),
+        "result_column_format_count" / Int16ub,
+        "result_column_format_codes" / Array(this.result_column_format_count,
+                                             Int16ub)
+    )
+
+class BindComplete(BackendMessage):
+    key = '2'
+    struct = Struct()
+
+class NoData(BackendMessage):
+    key = 'n'
+    struct = Struct()
+
+class Describe(FrontendMessage):
+    key = 'D'
+    struct = Struct(
+        "type" / Enum(Byte,
+                      prepared_statement=ord('S'),
+                      portal=ord('P')
+                      ),
+        "name" / CString("ASCII")
+    )
+
+    def print(message):
+        return "Describe({}={})".format(
+            message.type,
+            message.name or "<unnamed>"
+        )
+
+class Execute(FrontendMessage):
+    key = 'E'
+    struct = Struct(
+        "name" / CString("ASCII"),
+        "max_rows_to_return" / Int32ub
+    )
+
+    def print(message):
+        return "Execute({}, max_rows_to_return={})".format(
+            message.name or "<unnamed>",
+            message.max_rows_to_return
+        )
+
+class Sync(FrontendMessage):
+    key = 'S'
+    struct = Struct()
 
 frontend_switch = Switch(
     this.type,
