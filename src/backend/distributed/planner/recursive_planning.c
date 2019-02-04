@@ -1314,10 +1314,12 @@ ContainsReferencesToOuterQueryWalker(Node *node, VarLevelsUpWalkerContext *conte
 
 /*
  * WrapFunctionsInSubqueries iterates over all the immediate Range Table Entries
- * of a query and wraps the functions inside (SELECT * FROM fnc() f) subqueries.
+ * of a query and wraps the functions inside (SELECT * FROM fnc() f)
+ * subqueries, so that those functions will be executed on the coordinator if
+ * necessary.
  *
- * We currently wrap only those functions that return a single value. If a
- * function returns records or a table we leave it as it is
+ * We wrap all the functions that are used in joins except the ones that are
+ * laterally joined or have WITH ORDINALITY clauses.
  * */
 static void
 WrapFunctionsInSubqueries(Query *query)
@@ -1325,12 +1327,25 @@ WrapFunctionsInSubqueries(Query *query)
 	List *rangeTableList = query->rtable;
 	ListCell *rangeTableCell = NULL;
 
-	/* there needs to be at least two RTEs for a join operation */
+	/*
+	 * If we have only one function call in a query without any joins, we can
+	 * easily decide where to execute it.
+	 *
+	 * If there are some subqueries and/or functions that are joined with a
+	 * function, it is not trivial to decide whether we should run this
+	 * function in the coordinator or in workers and therefore we may need to
+	 * wrap some of those functions in subqueries.
+	 *
+	 * If we have only one RTE, we leave the parsed query tree as it is. This
+	 * also makes sure we do not wrap an already wrapped function call
+	 * because we know that there will always be 1 RTE in a wrapped function.
+	 * */
 	if (list_length(rangeTableList) < 2)
 	{
 		return;
 	}
 
+	/* iterate over all RTEs and wrap them if necessary */
 	foreach(rangeTableCell, rangeTableList)
 	{
 		RangeTblEntry *rangeTableEntry = (RangeTblEntry *) lfirst(rangeTableCell);
@@ -1407,12 +1422,14 @@ TransformFunctionRTE(RangeTblEntry *rangeTblEntry)
 			 * The indexing of attributes and TupleDesc and varattno differ
 			 *
 			 * varattno=0 corresponds to whole row
-			 * varattno=1 corresponds to first column that is stored in tupDesc->attrs[0] */
+			 * varattno=1 corresponds to first column that is stored in tupDesc->attrs[0]
+			 *
+			 * That's why we need to add one to the targetColumnIndex
+			 * */
 			targetColumn = makeVar(1, targetColumnIndex + 1, columnType, -1, InvalidOid,
 								   0);
 			targetEntry = makeTargetEntry((Expr *) targetColumn, targetColumnIndex + 1,
-										  columnName,
-										  false);
+										  columnName, false);
 			subquery->targetList = lappend(subquery->targetList, targetEntry);
 		}
 	}
