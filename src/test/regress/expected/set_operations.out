@@ -509,7 +509,7 @@ DEBUG:  generating subplan 100_2 for subquery SELECT x, y FROM recursive_union.t
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 DEBUG:  generating subplan 100_3 for subquery SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('100_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer) EXCEPT SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('100_2'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)
-DEBUG:  Plan 100 query after replacing subqueries and CTEs: SELECT u.x, u.y FROM ((SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('100_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)) u JOIN generate_series(1, 10) x(x) USING (x)) ORDER BY u.x, u.y
+DEBUG:  Plan 100 query after replacing subqueries and CTEs: SELECT u.x, u.y FROM ((SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('100_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)) u JOIN (SELECT x_1.x FROM generate_series(1, 10) x_1(x)) x USING (x)) ORDER BY u.x, u.y
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  x | y 
