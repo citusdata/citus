@@ -1,4 +1,8 @@
 SET citus.next_shard_id TO 850000;
+-- many of the tests in this file is intended for testing non-fast-path
+-- router planner, so we're explicitly disabling it in this file. 
+-- We've bunch of other tests that triggers fast-path-router 
+SET citus.enable_fast_path_router_planner TO false;
 -- ===================================================================
 -- test end-to-end query functionality
 -- ===================================================================
@@ -590,6 +594,54 @@ DETAIL:  distribution column value: 1
 (5 rows)
 
 SELECT * FROM articles TABLESAMPLE BERNOULLI (100) WHERE author_id = 1 ORDER BY id;
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+DETAIL:  distribution column value: 1
+ id | author_id |    title     | word_count 
+----+-----------+--------------+------------
+  1 |         1 | arsenous     |       9572
+ 11 |         1 | alamo        |       1347
+ 21 |         1 | arcading     |       5890
+ 31 |         1 | athwartships |       7271
+ 41 |         1 | aznavour     |      11814
+(5 rows)
+
+-- test tablesample with fast path as well
+SET citus.enable_fast_path_router_planner TO true;
+SELECT * FROM articles TABLESAMPLE SYSTEM (0) WHERE author_id = 1;
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+DETAIL:  distribution column value: 1
+ id | author_id | title | word_count 
+----+-----------+-------+------------
+(0 rows)
+
+SELECT * FROM articles TABLESAMPLE BERNOULLI (0) WHERE author_id = 1;
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+DETAIL:  distribution column value: 1
+ id | author_id | title | word_count 
+----+-----------+-------+------------
+(0 rows)
+
+SELECT * FROM articles TABLESAMPLE SYSTEM (100) WHERE author_id = 1 ORDER BY id;
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+DETAIL:  distribution column value: 1
+ id | author_id |    title     | word_count 
+----+-----------+--------------+------------
+  1 |         1 | arsenous     |       9572
+ 11 |         1 | alamo        |       1347
+ 21 |         1 | arcading     |       5890
+ 31 |         1 | athwartships |       7271
+ 41 |         1 | aznavour     |      11814
+(5 rows)
+
+SELECT * FROM articles TABLESAMPLE BERNOULLI (100) WHERE author_id = 1 ORDER BY id;
+DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 DETAIL:  distribution column value: 1

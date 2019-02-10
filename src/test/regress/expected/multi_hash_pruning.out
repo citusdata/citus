@@ -5,6 +5,10 @@
 SET citus.next_shard_id TO 630000;
 SET citus.shard_count to 4;
 SET citus.shard_replication_factor to 1;
+-- many of the tests in this file is intended for testing non-fast-path
+-- router planner, so we're explicitly disabling it in this file. 
+-- We've bunch of other tests that triggers fast-path-router 
+SET citus.enable_fast_path_router_planner TO false;
 -- Create a table partitioned on integer column and update partition type to
 -- hash. Then load data into this table and update shard min max values with
 -- hashed ones. Hash value of 1, 2, 3  and 4 are consecutively -1905060026,

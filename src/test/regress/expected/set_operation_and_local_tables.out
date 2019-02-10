@@ -139,6 +139,7 @@ FROM
 	WHERE test.y = foo.x;
 DEBUG:  generating subplan 19_1 for CTE cte_1: SELECT x FROM recursive_set_local.test
 DEBUG:  generating subplan 19_2 for CTE cte_1: SELECT a FROM recursive_set_local.ref
+DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 DEBUG:  generating subplan 19_3 for subquery SELECT x FROM recursive_set_local.local_test
@@ -165,6 +166,7 @@ FROM
 	WHERE ref.a = foo.x;
 DEBUG:  generating subplan 23_1 for CTE cte_1: SELECT x FROM recursive_set_local.test
 DEBUG:  generating subplan 23_2 for CTE cte_1: SELECT a FROM recursive_set_local.ref
+DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 DEBUG:  generating subplan 23_3 for subquery SELECT x FROM recursive_set_local.local_test

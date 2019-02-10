@@ -2005,13 +2005,11 @@ BuildJobTreeTaskList(Job *jobTree, PlannerRestrictionContext *plannerRestriction
 		if (job->subqueryPushdown)
 		{
 			bool isMultiShardQuery = false;
-			List *prunedRelationShardList = TargetShardIntervalsForQuery(job->jobQuery,
-																		 plannerRestrictionContext
-																		 ->
-																		 relationRestrictionContext,
-																		 &
-																		 isMultiShardQuery,
-																		 NULL);
+			List *prunedRelationShardList =
+				TargetShardIntervalsForRestrictInfo(plannerRestrictionContext->
+													relationRestrictionContext,
+													&isMultiShardQuery, NULL);
+
 			sqlTaskList = QueryPushdownSqlTaskList(job->jobQuery, job->jobId,
 												   plannerRestrictionContext->
 												   relationRestrictionContext,

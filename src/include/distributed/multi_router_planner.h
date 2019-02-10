@@ -25,6 +25,7 @@
 #define CITUS_TABLE_ALIAS "citus_table_alias"
 
 extern bool EnableRouterExecution;
+extern bool EnableFastPathRouterPlanner;
 
 extern DistributedPlan * CreateRouterPlan(Query *originalQuery, Query *query,
 										  PlannerRestrictionContext *
@@ -42,10 +43,10 @@ extern DeferredErrorMessage * PlanRouterQuery(Query *originalQuery,
 											  Const **partitionValueConst);
 extern List * RouterInsertTaskList(Query *query, DeferredErrorMessage **planningError);
 extern Const * ExtractInsertPartitionKeyValue(Query *query);
-extern List * TargetShardIntervalsForQuery(Query *query,
-										   RelationRestrictionContext *restrictionContext,
-										   bool *multiShardQuery,
-										   Const **partitionValueConst);
+extern List * TargetShardIntervalsForRestrictInfo(RelationRestrictionContext *
+												  restrictionContext,
+												  bool *multiShardQuery,
+												  Const **partitionValueConst);
 extern List * WorkersContainingAllShards(List *prunedShardIntervalsList);
 extern List * IntersectPlacementList(List *lhsPlacementList, List *rhsPlacementList);
 extern DeferredErrorMessage * ModifyQuerySupported(Query *queryTree, Query *originalQuery,
@@ -68,5 +69,13 @@ extern void AddShardIntervalRestrictionToSelect(Query *subqery,
 extern bool UpdateOrDeleteQuery(Query *query);
 extern List * WorkersContainingAllShards(List *prunedShardIntervalsList);
 
+/*
+ * FastPathPlanner is a subset of router planner, that's why we prefer to
+ * keep the external function here.
+ */extern PlannedStmt * GeneratePlaceHolderPlannedStmt(Query *parse);
+
+extern PlannedStmt * FastPathPlanner(Query *originalQuery, Query *parse, ParamListInfo
+									 boundParams);
+extern bool FastPathRouterQuery(Query *query);
 
 #endif /* MULTI_ROUTER_PLANNER_H */
