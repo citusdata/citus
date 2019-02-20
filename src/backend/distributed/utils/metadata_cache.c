@@ -160,7 +160,7 @@ static int WorkerNodeCount = 0;
 static bool workerNodeHashValid = false;
 
 /* default value is -1, for coordinator it's 0 and for worker nodes > 0 */
-static int LocalGroupId = -1;
+static int32 LocalGroupId = -1;
 
 /* built first time through in InitializePartitionCache */
 static ScanKeyData DistPartitionScanKey[1];
@@ -2801,7 +2801,7 @@ RegisterWorkerNodeCacheCallbacks(void)
  * that pg_dist_local_node_group has exactly one row and has at least one column.
  * Otherwise, the function errors out.
  */
-int
+int32
 GetLocalGroupId(void)
 {
 	SysScanDesc scanDescriptor = NULL;
@@ -2809,7 +2809,7 @@ GetLocalGroupId(void)
 	int scanKeyCount = 0;
 	HeapTuple heapTuple = NULL;
 	TupleDesc tupleDescriptor = NULL;
-	Oid groupId = InvalidOid;
+	int32 groupId = 0;
 	Relation pgDistLocalGroupId = NULL;
 	Oid localGroupTableOid = InvalidOid;
 

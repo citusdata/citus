@@ -127,7 +127,7 @@ extern bool NodeGroupHasShardPlacements(uint32 groupId,
 extern List * FinalizedShardPlacementList(uint64 shardId);
 extern ShardPlacement * FinalizedShardPlacement(uint64 shardId, bool missingOk);
 extern List * BuildShardPlacementList(ShardInterval *shardInterval);
-extern List * AllShardPlacementsOnNodeGroup(int32 groupId);
+extern List * AllShardPlacementsOnNodeGroup(uint32 groupId);
 extern List * GroupShardPlacementsForTableOnGroup(Oid relationId, uint32 groupId);
 
 /* Function declarations to modify shard and shard placement data */

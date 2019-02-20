@@ -779,7 +779,7 @@ BuildShardPlacementList(ShardInterval *shardInterval)
  * representation, and returns the converted shard placements in a new list.
  */
 List *
-AllShardPlacementsOnNodeGroup(int32 groupId)
+AllShardPlacementsOnNodeGroup(uint32 groupId)
 {
 	List *shardPlacementList = NIL;
 	Relation pgPlacement = NULL;
@@ -792,7 +792,7 @@ AllShardPlacementsOnNodeGroup(int32 groupId)
 	pgPlacement = heap_open(DistPlacementRelationId(), AccessShareLock);
 
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_placement_groupid,
-				BTEqualStrategyNumber, F_INT4EQ, Int32GetDatum(groupId));
+				BTEqualStrategyNumber, F_INT4EQ, UInt32GetDatum(groupId));
 
 	scanDescriptor = systable_beginscan(pgPlacement,
 										DistPlacementGroupidIndexId(), indexOK,
@@ -941,7 +941,7 @@ InsertShardPlacementRow(uint64 shardId, uint64 placementId,
 	values[Anum_pg_dist_placement_shardid - 1] = Int64GetDatum(shardId);
 	values[Anum_pg_dist_placement_shardstate - 1] = CharGetDatum(shardState);
 	values[Anum_pg_dist_placement_shardlength - 1] = Int64GetDatum(shardLength);
-	values[Anum_pg_dist_placement_groupid - 1] = Int64GetDatum(groupId);
+	values[Anum_pg_dist_placement_groupid - 1] = UInt32GetDatum(groupId);
 
 	/* open shard placement relation and insert new tuple */
 	pgDistPlacement = heap_open(DistPlacementRelationId(), RowExclusiveLock);

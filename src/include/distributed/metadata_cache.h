@@ -97,7 +97,7 @@ extern ShardPlacement * FindShardPlacementOnGroup(uint32 groupId, uint64 shardId
 extern GroupShardPlacement * LoadGroupShardPlacement(uint64 shardId, uint64 placementId);
 extern ShardPlacement * LoadShardPlacement(uint64 shardId, uint64 placementId);
 extern DistTableCacheEntry * DistributedTableCacheEntry(Oid distributedRelationId);
-extern int GetLocalGroupId(void);
+extern int32 GetLocalGroupId(void);
 extern List * DistTableOidList(void);
 extern Oid LookupShardRelation(int64 shardId, bool missing_ok);
 extern List * ShardPlacementList(uint64 shardId);
