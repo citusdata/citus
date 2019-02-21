@@ -993,3 +993,14 @@ ActiveDistributedTransactionNumbers(void)
 
 	return activeTransactionNumberList;
 }
+
+
+/*
+ * GetMyProcLocalTransactionId() is a wrapper for
+ * getting lxid of MyProc.
+ */
+LocalTransactionId
+GetMyProcLocalTransactionId(void)
+{
+	return MyProc->lxid;
+}

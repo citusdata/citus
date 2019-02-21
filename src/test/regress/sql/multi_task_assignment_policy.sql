@@ -9,6 +9,28 @@ SET citus.next_shard_id TO 880000;
 SHOW server_version \gset
 SELECT substring(:'server_version', '\d+')::int > 9 AS version_above_nine;
 
+-- the function simply parses the results and returns 'shardId@worker'
+-- for all the explain task outputs
+CREATE OR REPLACE FUNCTION parse_explain_output(in qry text, in table_name text, out r text) 
+RETURNS SETOF TEXT AS $$
+DECLARE
+       portOfTheTask text;
+       shardOfTheTask text;
+begin
+  for r in execute qry loop
+       IF r LIKE '%port%' THEN
+       portOfTheTask = substring(r, '([0-9]{1,10})');
+    END IF;
+
+    IF r LIKE '%' || table_name || '%' THEN
+       shardOfTheTask = substring(r, '([0-9]{1,10})');
+       return QUERY SELECT  shardOfTheTask || '@' || portOfTheTask ;
+    END IF;
+
+  end loop;
+  return;
+end; $$ language plpgsql;
+
 
 SET citus.explain_distributed_queries TO off;
 
@@ -80,20 +102,12 @@ EXPLAIN SELECT count(*) FROM task_assignment_test_table;
 
 EXPLAIN SELECT count(*) FROM task_assignment_test_table;
 
--- Finally test the round-robin task assignment policy
-
-SET citus.task_assignment_policy TO 'round-robin';
-
-EXPLAIN SELECT count(*) FROM task_assignment_test_table;
-
-EXPLAIN SELECT count(*) FROM task_assignment_test_table;
-
-EXPLAIN SELECT count(*) FROM task_assignment_test_table;
-
-RESET citus.task_assignment_policy;
-RESET client_min_messages;
-
 COMMIT;
+
+
+
+CREATE TABLE task_assignment_reference_table (test_id  integer);
+SELECT create_reference_table('task_assignment_reference_table');
 
 BEGIN;
 
@@ -101,10 +115,6 @@ SET LOCAL client_min_messages TO DEBUG3;
 SET LOCAL citus.explain_distributed_queries TO off;
 
 -- Check how task_assignment_policy impact planning decisions for reference tables
-
-CREATE TABLE task_assignment_reference_table (test_id  integer);
-SELECT create_reference_table('task_assignment_reference_table');
-
 SET LOCAL citus.task_assignment_policy TO 'greedy';
 EXPLAIN (COSTS FALSE) SELECT * FROM task_assignment_reference_table;
 EXPLAIN (COSTS FALSE) SELECT * FROM task_assignment_reference_table;
@@ -113,14 +123,99 @@ SET LOCAL citus.task_assignment_policy TO 'first-replica';
 EXPLAIN (COSTS FALSE) SELECT * FROM task_assignment_reference_table;
 EXPLAIN (COSTS FALSE) SELECT * FROM task_assignment_reference_table;
 
--- here we expect debug output showing two different hosts for subsequent queries
-SET LOCAL citus.task_assignment_policy TO 'round-robin';
-EXPLAIN (COSTS FALSE) SELECT * FROM task_assignment_reference_table;
-EXPLAIN (COSTS FALSE) SELECT * FROM task_assignment_reference_table;
-
 ROLLBACK;
 
+RESET client_min_messages;
 
+
+-- Now, lets test round-robin policy
+-- round-robin policy relies on PostgreSQL's local transactionId, 
+-- which might change and we don't have any control over it.
+-- the important thing that we look for is that round-robin policy 
+-- should give the same output for executions in the same transaction 
+-- and different output for executions that are not insdie the
+-- same transaction. To ensure that, we define a helper function
+BEGIN;
+
+SET LOCAL citus.explain_distributed_queries TO on;
+
+CREATE TEMPORARY TABLE explain_outputs (value text);
+SET LOCAL citus.task_assignment_policy TO 'round-robin';
+
+INSERT INTO explain_outputs 
+       SELECT parse_explain_output('EXPLAIN SELECT count(*) FROM task_assignment_reference_table;', 'task_assignment_reference_table');
+INSERT INTO explain_outputs 
+       SELECT parse_explain_output('EXPLAIN SELECT count(*) FROM task_assignment_reference_table;', 'task_assignment_reference_table');
+
+-- given that we're in the same transaction, the count should be 1
+SELECT count(DISTINCT value) FROM explain_outputs;
+
+DROP TABLE explain_outputs;
+COMMIT;
+
+-- now test round-robin policy outside
+-- a transaction, we should see the assignements
+-- change on every execution
+CREATE TEMPORARY TABLE explain_outputs (value text);
+
+SET citus.task_assignment_policy TO 'round-robin';
+SET citus.explain_distributed_queries TO ON;
+
+INSERT INTO explain_outputs 
+       SELECT parse_explain_output('EXPLAIN SELECT count(*) FROM task_assignment_reference_table;', 'task_assignment_reference_table');
+INSERT INTO explain_outputs 
+       SELECT parse_explain_output('EXPLAIN SELECT count(*) FROM task_assignment_reference_table;', 'task_assignment_reference_table');
+
+-- given that we're in the same transaction, the count should be 2
+-- since there are two different worker nodes
+SELECT count(DISTINCT value) FROM explain_outputs;
+TRUNCATE explain_outputs;
+
+-- same test with a distributed table
+-- we keep this test because as of this commit, the code
+-- paths for reference tables and distributed tables are 
+-- not the same
+SET citus.shard_replication_factor TO 2;
+
+CREATE TABLE task_assignment_replicated_hash (test_id  integer);
+SELECT create_distributed_table('task_assignment_replicated_hash', 'test_id');
+
+BEGIN;
+
+SET LOCAL citus.explain_distributed_queries TO on;
+SET LOCAL citus.task_assignment_policy TO 'round-robin';
+
+INSERT INTO explain_outputs 
+       SELECT parse_explain_output('EXPLAIN SELECT count(*) FROM task_assignment_replicated_hash;', 'task_assignment_replicated_hash');
+INSERT INTO explain_outputs 
+       SELECT parse_explain_output('EXPLAIN SELECT count(*) FROM task_assignment_replicated_hash;', 'task_assignment_replicated_hash');
+
+-- given that we're in the same transaction, the count should be 1
+SELECT count(DISTINCT value) FROM explain_outputs;
+
+DROP TABLE explain_outputs;
+COMMIT;
+
+-- now test round-robin policy outside
+-- a transaction, we should see the assignements
+-- change on every execution
+CREATE TEMPORARY TABLE explain_outputs (value text);
+
+SET citus.task_assignment_policy TO 'round-robin';
+SET citus.explain_distributed_queries TO ON;
+
+INSERT INTO explain_outputs 
+       SELECT parse_explain_output('EXPLAIN SELECT count(*) FROM task_assignment_replicated_hash;', 'task_assignment_replicated_hash');
+INSERT INTO explain_outputs 
+       SELECT parse_explain_output('EXPLAIN SELECT count(*) FROM task_assignment_replicated_hash;', 'task_assignment_replicated_hash');
+
+-- given that we're in the same transaction, the count should be 2
+-- since there are two different worker nodes
+SELECT count(DISTINCT value) FROM explain_outputs;
+
+
+RESET citus.task_assignment_policy;
+RESET client_min_messages;
 
 -- we should be able to use round-robin with router queries that 
 -- only contains intermediate results
@@ -133,4 +228,4 @@ SET LOCAL citus.task_assignment_policy TO 'round-robin';
 WITH q1 AS (SELECT * FROM task_assignment_test_table_2) SELECT * FROM q1;
 ROLLBACK;
 
-
+DROP TABLE task_assignment_replicated_hash, task_assignment_reference_table;
