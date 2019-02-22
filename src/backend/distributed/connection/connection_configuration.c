@@ -280,9 +280,14 @@ GetConnParams(ConnectionHashKey *key, char ***keywords, char ***values,
 	/* first step: copy global parameters to beginning of array */
 	for (paramIndex = 0; paramIndex < ConnParams.size; paramIndex++)
 	{
-		/* copy the keyword&value pointers to the new array */
-		connKeywords[paramIndex] = ConnParams.keywords[paramIndex];
-		connValues[paramIndex] = ConnParams.values[paramIndex];
+		/*
+		 * Copy the keyword&value strings to the new array since they might
+		 * be free()-d when settings are reloaded.
+		 */
+		connKeywords[paramIndex] =
+			MemoryContextStrdup(context, ConnParams.keywords[paramIndex]);
+		connValues[paramIndex] =
+			MemoryContextStrdup(context, ConnParams.values[paramIndex]);
 	}
 
 	/* second step: begin at end of global params and copy runtime ones */
