@@ -64,7 +64,6 @@ static DistributedPlan * CreateDistributedPlan(uint64 planId, Query *originalQue
 											   plannerRestrictionContext);
 static DeferredErrorMessage * DeferErrorIfPartitionTableNotSingleReplicated(Oid
 																			relationId);
-static Node * ResolveExternalParams(Node *inputNode, ParamListInfo boundParams);
 
 static void AssignRTEIdentities(Query *queryTree);
 static void AssignRTEIdentity(RangeTblEntry *rangeTableEntry, int rteIdentifier);
@@ -147,11 +146,22 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 	PG_TRY();
 	{
 		/*
-		 * First call into standard planner. This is required because the Citus
-		 * planner relies on parse tree transformations made by postgres' planner.
+		 * For trivial queries, we're skipping the standard_planner() in
+		 * order to eliminate its overhead.
+		 *
+		 * Otherwise, call into standard planner. This is required because the Citus
+		 * planner relies on both the restriction information per table and parse tree
+		 * transformations made by postgres' planner.
 		 */
 
-		result = standard_planner(parse, cursorOptions, boundParams);
+		if (needsDistributedPlanning && FastPathRouterQuery(originalQuery))
+		{
+			result = FastPathPlanner(originalQuery, parse, boundParams);
+		}
+		else
+		{
+			result = standard_planner(parse, cursorOptions, boundParams);
+		}
 
 		if (needsDistributedPlanning)
 		{
@@ -831,7 +841,7 @@ DeferErrorIfPartitionTableNotSingleReplicated(Oid relationId)
  * Note that this function is inspired by eval_const_expr() on Postgres.
  * We cannot use that function because it requires access to PlannerInfo.
  */
-static Node *
+Node *
 ResolveExternalParams(Node *inputNode, ParamListInfo boundParams)
 {
 	/* consider resolving external parameters only when boundParams exists */

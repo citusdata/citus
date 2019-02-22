@@ -153,6 +153,7 @@ SELECT create_reference_table('task_assignment_reference_table');
 
 SET LOCAL citus.task_assignment_policy TO 'greedy';
 EXPLAIN (COSTS FALSE) SELECT * FROM task_assignment_reference_table;
+DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
                           QUERY PLAN                          
@@ -162,6 +163,7 @@ DEBUG:  Plan is router executable
 (2 rows)
 
 EXPLAIN (COSTS FALSE) SELECT * FROM task_assignment_reference_table;
+DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
                           QUERY PLAN                          
@@ -172,6 +174,7 @@ DEBUG:  Plan is router executable
 
 SET LOCAL citus.task_assignment_policy TO 'first-replica';
 EXPLAIN (COSTS FALSE) SELECT * FROM task_assignment_reference_table;
+DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
                           QUERY PLAN                          
@@ -181,6 +184,7 @@ DEBUG:  Plan is router executable
 (2 rows)
 
 EXPLAIN (COSTS FALSE) SELECT * FROM task_assignment_reference_table;
+DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
                           QUERY PLAN                          
@@ -192,6 +196,7 @@ DEBUG:  Plan is router executable
 -- here we expect debug output showing two different hosts for subsequent queries
 SET LOCAL citus.task_assignment_policy TO 'round-robin';
 EXPLAIN (COSTS FALSE) SELECT * FROM task_assignment_reference_table;
+DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  assigned task 0 to node localhost:57637
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
@@ -202,6 +207,7 @@ DEBUG:  Plan is router executable
 (2 rows)
 
 EXPLAIN (COSTS FALSE) SELECT * FROM task_assignment_reference_table;
+DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  assigned task 0 to node localhost:57638
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
