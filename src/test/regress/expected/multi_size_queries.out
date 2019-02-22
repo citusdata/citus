@@ -125,5 +125,46 @@ ALTER TABLE supplier ALTER COLUMN s_suppkey SET NOT NULL;
 select citus_table_size('supplier');
 ERROR:  citus size functions cannot be called in transaction blocks which contain multi-shard data modifications
 END;
+show citus.node_conninfo;
+ citus.node_conninfo 
+---------------------
+ sslmode=require
+(1 row)
+
+ALTER SYSTEM SET citus.node_conninfo = 'sslmode=require';
+SELECT pg_reload_conf();
+ pg_reload_conf 
+----------------
+ t
+(1 row)
+
+-- make sure that any invalidation to the connection info
+-- wouldn't prevent future commands to fail
+SELECT citus_total_relation_size('customer_copy_hash');
+ citus_total_relation_size 
+---------------------------
+                   2646016
+(1 row)
+
+SELECT pg_reload_conf();
+ pg_reload_conf 
+----------------
+ t
+(1 row)
+
+SELECT citus_total_relation_size('customer_copy_hash');
+ citus_total_relation_size 
+---------------------------
+                   2646016
+(1 row)
+
+-- reset back to the original node_conninfo
+ALTER SYSTEM RESET citus.node_conninfo;
+SELECT pg_reload_conf();
+ pg_reload_conf 
+----------------
+ t
+(1 row)
+
 DROP INDEX index_1;
 DROP INDEX index_2;
