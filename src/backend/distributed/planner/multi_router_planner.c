@@ -137,8 +137,7 @@ static void NormalizeMultiRowInsertTargetList(Query *query);
 static List * BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError);
 static List * GroupInsertValuesByShardId(List *insertValuesList);
 static List * ExtractInsertValuesList(Query *query, Var *partitionColumn);
-static bool MultiRouterPlannableQuery(Query *query,
-									  RelationRestrictionContext *restrictionContext);
+static bool MultiRouterPlannableQuery(Query *query);
 static DeferredErrorMessage * ErrorIfQueryHasModifyingCTE(Query *queryTree);
 static RangeTblEntry * GetUpdateOrDeleteRTE(Query *query);
 static bool SelectsFromDistributedTable(List *rangeTableList, Query *query);
@@ -169,8 +168,7 @@ DistributedPlan *
 CreateRouterPlan(Query *originalQuery, Query *query,
 				 PlannerRestrictionContext *plannerRestrictionContext)
 {
-	if (MultiRouterPlannableQuery(query,
-								  plannerRestrictionContext->relationRestrictionContext))
+	if (MultiRouterPlannableQuery(query))
 	{
 		return CreateSingleTaskRouterPlan(originalQuery, query,
 										  plannerRestrictionContext);
@@ -2133,7 +2131,7 @@ TargetShardIntervalForFastPathQuery(Query *query, Const **partitionValueConst,
 		*isMultiShardQuery = true;
 	}
 	else if (list_length(prunedShardIntervalList) == 1 &&
-			 queryPartitionValueConst != NULL)
+			 partitionValueConst != NULL)
 	{
 		/* set the outgoing partition column value if requested */
 		*partitionValueConst = queryPartitionValueConst;
@@ -2910,10 +2908,11 @@ ExtractInsertPartitionKeyValue(Query *query)
  * flag to false.
  */
 static bool
-MultiRouterPlannableQuery(Query *query, RelationRestrictionContext *restrictionContext)
+MultiRouterPlannableQuery(Query *query)
 {
 	CmdType commandType = query->commandType;
-	ListCell *relationRestrictionContextCell = NULL;
+	List *rangeTableRelationList = NIL;
+	ListCell *rangeTableRelationCell = NULL;
 
 	if (commandType == CMD_INSERT || commandType == CMD_UPDATE ||
 		commandType == CMD_DELETE)
@@ -2928,11 +2927,10 @@ MultiRouterPlannableQuery(Query *query, RelationRestrictionContext *restrictionC
 		return false;
 	}
 
-	foreach(relationRestrictionContextCell, restrictionContext->relationRestrictionList)
+	ExtractRangeTableRelationWalker((Node *) query, &rangeTableRelationList);
+	foreach(rangeTableRelationCell, rangeTableRelationList)
 	{
-		RelationRestriction *relationRestriction =
-			(RelationRestriction *) lfirst(relationRestrictionContextCell);
-		RangeTblEntry *rte = relationRestriction->rte;
+		RangeTblEntry *rte = (RangeTblEntry *) lfirst(rangeTableRelationCell);
 		if (rte->rtekind == RTE_RELATION)
 		{
 			/* only hash partitioned tables are supported */

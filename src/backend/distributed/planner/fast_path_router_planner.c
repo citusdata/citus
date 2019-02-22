@@ -209,17 +209,6 @@ FastPathRouterQuery(Query *query)
 		return false;
 	}
 
-	/*
-	 * hasForUpdate is tricky because Citus does support only when
-	 * replication = 1 or reference tables.
-	 */
-	if (query->hasForUpdate &&
-		!(cacheEntry->partitionMethod == DISTRIBUTE_BY_NONE ||
-		  SingleReplicatedTable(distributedTableId)))
-	{
-		return false;
-	}
-
 	/* WHERE clause should not be empty for distributed tables */
 	if (joinTree == NULL ||
 		(cacheEntry->partitionMethod != DISTRIBUTE_BY_NONE && joinTree->quals == NULL))
