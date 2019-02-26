@@ -53,7 +53,7 @@ extern int64 ExecuteModifyTasksSequentiallyWithoutResults(List *taskList,
 
 /* helper functions */
 extern bool TaskListRequires2PC(List *taskList);
-extern List * BuildPlacementSelectList(uint32 groupId, List *relationShardList);
-extern List * BuildPlacementDDLList(uint32 groupId, List *relationShardList);
+extern List * BuildPlacementSelectList(int32 groupId, List *relationShardList);
+extern List * BuildPlacementDDLList(int32 groupId, List *relationShardList);
 
 #endif /* MULTI_ROUTER_EXECUTOR_H_ */

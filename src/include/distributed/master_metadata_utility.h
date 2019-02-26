@@ -79,7 +79,7 @@ typedef struct GroupShardPlacement
 	uint64 shardId;
 	uint64 shardLength;
 	RelayFileState shardState;
-	uint32 groupId;
+	int32 groupId;
 } GroupShardPlacement;
 
 
@@ -94,7 +94,7 @@ typedef struct ShardPlacement
 	uint64 shardId;
 	uint64 shardLength;
 	RelayFileState shardState;
-	uint32 groupId;
+	int32 groupId;
 
 	/* the rest of the fields aren't from pg_dist_placement */
 	char *nodeName;
@@ -122,13 +122,13 @@ extern void CopyShardInterval(ShardInterval *srcInterval, ShardInterval *destInt
 extern void CopyShardPlacement(ShardPlacement *srcPlacement,
 							   ShardPlacement *destPlacement);
 extern uint64 ShardLength(uint64 shardId);
-extern bool NodeGroupHasShardPlacements(uint32 groupId,
+extern bool NodeGroupHasShardPlacements(int32 groupId,
 										bool onlyConsiderActivePlacements);
 extern List * FinalizedShardPlacementList(uint64 shardId);
 extern ShardPlacement * FinalizedShardPlacement(uint64 shardId, bool missingOk);
 extern List * BuildShardPlacementList(ShardInterval *shardInterval);
-extern List * AllShardPlacementsOnNodeGroup(uint32 groupId);
-extern List * GroupShardPlacementsForTableOnGroup(Oid relationId, uint32 groupId);
+extern List * AllShardPlacementsOnNodeGroup(int32 groupId);
+extern List * GroupShardPlacementsForTableOnGroup(Oid relationId, int32 groupId);
 
 /* Function declarations to modify shard and shard placement data */
 extern void InsertShardRow(Oid relationId, uint64 shardId, char storageType,
@@ -136,7 +136,7 @@ extern void InsertShardRow(Oid relationId, uint64 shardId, char storageType,
 extern void DeleteShardRow(uint64 shardId);
 extern uint64 InsertShardPlacementRow(uint64 shardId, uint64 placementId,
 									  char shardState, uint64 shardLength,
-									  uint32 groupId);
+									  int32 groupId);
 extern void InsertIntoPgDistPartition(Oid relationId, char distributionMethod,
 									  Var *distributionColumn, uint32 colocationId,
 									  char replicationModel);

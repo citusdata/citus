@@ -249,7 +249,7 @@ DistributedTableSizeOnWorker(WorkerNode *workerNode, Oid relationId, char *sizeQ
  * on the group.
  */
 List *
-GroupShardPlacementsForTableOnGroup(Oid relationId, uint32 groupId)
+GroupShardPlacementsForTableOnGroup(Oid relationId, int32 groupId)
 {
 	DistTableCacheEntry *distTableCacheEntry = DistributedTableCacheEntry(relationId);
 	List *resultList = NIL;
@@ -633,7 +633,7 @@ ShardLength(uint64 shardId)
  * NodeGroupHasShardPlacements returns whether any active shards are placed on the group
  */
 bool
-NodeGroupHasShardPlacements(uint32 groupId, bool onlyConsiderActivePlacements)
+NodeGroupHasShardPlacements(int32 groupId, bool onlyConsiderActivePlacements)
 {
 	const int scanKeyCount = (onlyConsiderActivePlacements ? 2 : 1);
 	const bool indexOK = false;
@@ -648,7 +648,7 @@ NodeGroupHasShardPlacements(uint32 groupId, bool onlyConsiderActivePlacements)
 									 AccessShareLock);
 
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_placement_groupid,
-				BTEqualStrategyNumber, F_INT4EQ, UInt32GetDatum(groupId));
+				BTEqualStrategyNumber, F_INT4EQ, Int32GetDatum(groupId));
 	if (onlyConsiderActivePlacements)
 	{
 		ScanKeyInit(&scanKey[1], Anum_pg_dist_placement_shardstate,
@@ -779,7 +779,7 @@ BuildShardPlacementList(ShardInterval *shardInterval)
  * representation, and returns the converted shard placements in a new list.
  */
 List *
-AllShardPlacementsOnNodeGroup(uint32 groupId)
+AllShardPlacementsOnNodeGroup(int32 groupId)
 {
 	List *shardPlacementList = NIL;
 	Relation pgPlacement = NULL;
@@ -792,7 +792,7 @@ AllShardPlacementsOnNodeGroup(uint32 groupId)
 	pgPlacement = heap_open(DistPlacementRelationId(), AccessShareLock);
 
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_placement_groupid,
-				BTEqualStrategyNumber, F_INT4EQ, UInt32GetDatum(groupId));
+				BTEqualStrategyNumber, F_INT4EQ, Int32GetDatum(groupId));
 
 	scanDescriptor = systable_beginscan(pgPlacement,
 										DistPlacementGroupidIndexId(), indexOK,
@@ -851,7 +851,7 @@ TupleToGroupShardPlacement(TupleDesc tupleDescriptor, HeapTuple heapTuple)
 		datumArray[Anum_pg_dist_placement_shardlength - 1]);
 	shardPlacement->shardState = DatumGetUInt32(
 		datumArray[Anum_pg_dist_placement_shardstate - 1]);
-	shardPlacement->groupId = DatumGetUInt32(
+	shardPlacement->groupId = DatumGetInt32(
 		datumArray[Anum_pg_dist_placement_groupid - 1]);
 
 	return shardPlacement;
@@ -921,7 +921,7 @@ InsertShardRow(Oid relationId, uint64 shardId, char storageType,
 uint64
 InsertShardPlacementRow(uint64 shardId, uint64 placementId,
 						char shardState, uint64 shardLength,
-						uint32 groupId)
+						int32 groupId)
 {
 	Relation pgDistPlacement = NULL;
 	TupleDesc tupleDescriptor = NULL;
@@ -941,7 +941,7 @@ InsertShardPlacementRow(uint64 shardId, uint64 placementId,
 	values[Anum_pg_dist_placement_shardid - 1] = Int64GetDatum(shardId);
 	values[Anum_pg_dist_placement_shardstate - 1] = CharGetDatum(shardState);
 	values[Anum_pg_dist_placement_shardlength - 1] = Int64GetDatum(shardLength);
-	values[Anum_pg_dist_placement_groupid - 1] = UInt32GetDatum(groupId);
+	values[Anum_pg_dist_placement_groupid - 1] = Int32GetDatum(groupId);
 
 	/* open shard placement relation and insert new tuple */
 	pgDistPlacement = heap_open(DistPlacementRelationId(), RowExclusiveLock);

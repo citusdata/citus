@@ -14,7 +14,7 @@
 
 extern uint32 CreateReferenceTableColocationId(void);
 extern void ReplicateAllReferenceTablesToNode(char *nodeName, int nodePort);
-extern void DeleteAllReferenceTablePlacementsFromNodeGroup(uint32 groupId);
+extern void DeleteAllReferenceTablePlacementsFromNodeGroup(int32 groupId);
 extern List * ReferenceTableOidList(void);
 extern int CompareOids(const void *leftElement, const void *rightElement);
 

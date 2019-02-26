@@ -51,7 +51,7 @@
 #include "utils/tqual.h"
 
 
-static char * LocalGroupIdUpdateCommand(uint32 groupId);
+static char * LocalGroupIdUpdateCommand(int32 groupId);
 static void MarkNodeHasMetadata(char *nodeName, int32 nodePort, bool hasMetadata);
 static List * SequenceDDLCommandsForTable(Oid relationId);
 static void EnsureSupportedSequenceColumnType(Oid sequenceOid);
@@ -824,7 +824,7 @@ ColocationIdUpdateCommand(Oid relationId, uint32 colocationId)
  */
 char *
 PlacementUpsertCommand(uint64 shardId, uint64 placementId, int shardState,
-					   uint64 shardLength, uint32 groupId)
+					   uint64 shardLength, int32 groupId)
 {
 	StringInfo command = makeStringInfo();
 
@@ -840,7 +840,7 @@ PlacementUpsertCommand(uint64 shardId, uint64 placementId, int shardState,
  * of a worker and returns the command in a string.
  */
 static char *
-LocalGroupIdUpdateCommand(uint32 groupId)
+LocalGroupIdUpdateCommand(int32 groupId)
 {
 	StringInfo updateCommand = makeStringInfo();
 
