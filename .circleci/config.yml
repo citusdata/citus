@@ -1,4 +1,6 @@
-version: 2.0
+version: 2.1
+orbs:
+  codecov: codecov/codecov@1.0.4
 
 jobs:
   build:
@@ -15,6 +17,7 @@ jobs:
     steps:
       - {attach_workspace: {at: .}}
       - {run: {name: 'Install and Test (check-multi)', command: 'install-and-test-ext check-multi'}}
+      - {codecov/upload: {flags: 'test_10,multi'}}
   test-10_check-tt-van-mx:
     docker:
       - {image: 'citusdata/exttester-10:latest'}
@@ -22,6 +25,7 @@ jobs:
     steps:
       - {attach_workspace: {at: .}}
       - {run: {name: 'Install and Test (check-tt-van-mx)', command: 'install-and-test-ext check-multi-task-tracker-extra check-vanilla check-multi-mx'}}
+      - {codecov/upload: {flags: 'test_10,tracker,vanilla,mx'}}
   test-10_check-iso-work-fol:
     docker:
       - {image: 'citusdata/exttester-10:latest'}
@@ -29,6 +33,7 @@ jobs:
     steps:
       - {attach_workspace: {at: .}}
       - {run: {name: 'Install and Test (check-iso-work-fol)', command: 'install-and-test-ext check-isolation check-worker check-follower-cluster'}}
+      - {codecov/upload: {flags: 'test_10,isolation,worker,follower'}}
   test-10_check-failure:
     docker:
       - {image: 'citusdata/failtester-10:latest'}
@@ -43,6 +48,7 @@ jobs:
     steps:
       - {attach_workspace: {at: .}}
       - {run: {name: 'Install and Test (check-multi)', command: 'install-and-test-ext check-multi'}}
+      - {codecov/upload: {flags: 'test_11,multi'}}
   test-11_check-tt-van-mx:
     docker:
       - {image: 'citusdata/exttester-11:latest'}
@@ -50,6 +56,7 @@ jobs:
     steps:
       - {attach_workspace: {at: .}}
       - {run: {name: 'Install and Test (check-tt-van-mx)', command: 'install-and-test-ext check-multi-task-tracker-extra check-vanilla check-multi-mx'}}
+      - {codecov/upload: {flags: 'test_11,tracker,vanilla,mx'}}
   test-11_check-iso-work-fol:
     docker:
       - {image: 'citusdata/exttester-11:latest'}
@@ -57,6 +64,7 @@ jobs:
     steps:
       - {attach_workspace: {at: .}}
       - {run: {name: 'Install and Test (check-iso-work-fol)', command: 'install-and-test-ext check-isolation check-worker check-follower-cluster'}}
+      - {codecov/upload: {flags: 'test_11,isolation,worker,follower'}}
   test-11_check-failure:
     docker:
       - {image: 'citusdata/failtester-11:latest'}
