@@ -10,6 +10,12 @@ jobs:
       - checkout
       - {run: {name: 'Configure, Build, and Install', command: build-ext}}
       - {persist_to_workspace: {root: ., paths: [.]}}
+  check-style:
+    docker:
+      - {image: 'citusdata/stylechecker:latest'}
+    steps:
+      - checkout
+      - {run: {name: 'Check Style', command: citus_indent --check}}
   test-10_check-multi:
     docker:
       - {image: 'citusdata/exttester-10:latest'}
@@ -77,6 +83,7 @@ workflows:
   build_and_test:
     jobs:
       - build
+      - check-style
 
       - {test-10_check-multi: {requires: [build]}}
       - {test-10_check-tt-van-mx: {requires: [build]}}
