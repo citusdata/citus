@@ -16,6 +16,7 @@ use warnings;
 
 use Fcntl;
 use Getopt::Long;
+use File::Basename;
 use File::Spec::Functions;
 use File::Path qw(make_path remove_tree);
 use Config;
@@ -151,6 +152,11 @@ else
 	$plainRegress = "$pgxsdir/src/test/regress/pg_regress";
 	$isolationRegress = "${postgresBuilddir}/src/test/isolation/pg_isolation_regress";
 	$pgConfig = "$bindir/pg_config";
+
+	if (-x "$pgxsdir/src/test/isolation/pg_isolation_regress")
+	{
+		$isolationRegress = "$pgxsdir/src/test/isolation/pg_isolation_regress";
+	}
 }
 
 if ($isolationtester && ! -f "$isolationRegress")
@@ -171,7 +177,9 @@ MESSAGE
 }
 
 my $vanillaRegress = catfile("${postgresBuilddir}", "src", "test", "regress", "pg_regress");
-if ($vanillatest && ! -f "$vanillaRegress")
+my $vanillaSchedule = catfile(dirname("${pgxsdir}"), "regress", "parallel_schedule");
+
+if ($vanillatest && ! (-f "$vanillaRegress" or -f "$vanillaSchedule"))
 {
     die <<"MESSAGE";
 
@@ -796,8 +804,21 @@ if ($vanillatest)
     $ENV{PGPORT} = $masterPort;
     $ENV{PGUSER} = $user;
 
-    system("make", ("-C", catfile("$postgresBuilddir", "src", "test", "regress"), "installcheck-parallel")) == 0
-    or die "Could not run vanilla tests";
+	if (-f "$vanillaSchedule")
+	{
+	    rmdir "./testtablespace";
+	    mkdir "./testtablespace";
+
+	    my $pgregressdir=catfile(dirname("$pgxsdir"), "regress");
+	    system("$plainRegress", ("--inputdir",  $pgregressdir),
+	           ("--schedule",  catfile("$pgregressdir", "parallel_schedule"))) == 0
+		or die "Could not run vanilla tests";
+	}
+	else
+	{
+	    system("make", ("-C", catfile("$postgresBuilddir", "src", "test", "regress"), "installcheck-parallel")) == 0
+		or die "Could not run vanilla tests";
+	}
 }
 elsif ($isolationtester)
 {
