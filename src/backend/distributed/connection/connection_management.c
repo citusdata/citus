@@ -702,6 +702,8 @@ StartConnectionEstablishment(ConnectionHashKey *key)
 	bool found = false;
 	MultiConnection *connection = NULL;
 	ConnParamsHashEntry *entry = NULL;
+	char **keywords = NULL;
+	char **values = NULL;
 
 	connection = MemoryContextAllocZero(ConnectionContext, sizeof(MultiConnection));
 	connection->internalConnectionContext =
@@ -723,9 +725,11 @@ StartConnectionEstablishment(ConnectionHashKey *key)
 	strlcpy(connection->database, key->database, NAMEDATALEN);
 	strlcpy(connection->user, key->user, NAMEDATALEN);
 
+	CopyConnectionParams(connection->internalConnectionContext, &keywords, &values,
+						 entry->keywords, entry->values);
 
-	connection->pgConn = PQconnectStartParams((const char **) entry->keywords,
-											  (const char **) entry->values,
+	connection->pgConn = PQconnectStartParams((const char **) keywords,
+											  (const char **) values,
 											  false);
 	connection->connectionStart = GetCurrentTimestamp();
 

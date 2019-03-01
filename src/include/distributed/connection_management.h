@@ -145,6 +145,10 @@ extern void InitializeConnectionManagement(void);
 
 extern void InitConnParams(void);
 extern void ResetConnParams(void);
+extern void CopyConnectionParams(MemoryContext context, char ***outputKeywords,
+								 char ***outputValues, char **inputKeywords,
+								 char **inputValues);
+extern void DeallocateConnectionParamHash(void);
 extern void AddConnParam(const char *keyword, const char *value);
 extern void GetConnParams(ConnectionHashKey *key, char ***keywords, char ***values,
 						  MemoryContext context);

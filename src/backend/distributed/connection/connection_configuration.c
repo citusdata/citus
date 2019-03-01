@@ -11,6 +11,7 @@
 #include "postgres.h"
 
 #include "distributed/connection_management.h"
+#include "distributed/hash_helpers.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/worker_manager.h"
 #include "distributed/task_tracker.h"
@@ -112,6 +113,68 @@ AddConnParam(const char *keyword, const char *value)
 	ConnParams.size++;
 
 	ConnParams.keywords[ConnParams.size] = ConnParams.values[ConnParams.size] = NULL;
+}
+
+
+/*
+ * CopyConnectionParams copies input keywords/values into output keywords/values. All
+ * memory allocations happen in the given context.
+ */
+void
+CopyConnectionParams(MemoryContext context, char ***outputKeywords, char ***outputValues,
+					 char **inputKeywords, char **inputValues)
+{
+	int parameterIndex = 0;
+
+	char **connKeywords =
+		MemoryContextAllocZero(context, ConnParams.maxSize * sizeof(char *));
+	char **connValues =
+		MemoryContextAllocZero(context, ConnParams.maxSize * sizeof(char *));
+
+	while (inputKeywords[parameterIndex] != NULL)
+	{
+		connKeywords[parameterIndex] =
+			MemoryContextStrdup(context, inputKeywords[parameterIndex]);
+		connValues[parameterIndex] =
+			MemoryContextStrdup(context, inputValues[parameterIndex]);
+
+		++parameterIndex;
+	}
+
+	*outputKeywords = connKeywords;
+	*outputValues = connValues;
+}
+
+
+/*
+ * DeallocateConnectionParamHash goes over the ConnParamsHash and deallocates
+ * all parameters and values. Finally, all of the entries in the hash table is
+ * deleted.
+ */
+void
+DeallocateConnectionParamHash(void)
+{
+	ConnParamsHashEntry *entry = NULL;
+	HASH_SEQ_STATUS status;
+	hash_seq_init(&status, ConnParamsHash);
+
+	while ((entry = (ConnParamsHashEntry *) hash_seq_search(&status)) != NULL)
+	{
+		int paramIndex = 0;
+
+		while (entry->keywords[paramIndex] != NULL)
+		{
+			pfree(entry->keywords[paramIndex]);
+			pfree(entry->values[paramIndex]);
+
+			++paramIndex;
+		}
+
+		pfree(entry->keywords);
+		pfree(entry->values);
+	}
+
+	hash_delete_all(ConnParamsHash);
 }
 
 
