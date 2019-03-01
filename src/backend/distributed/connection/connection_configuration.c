@@ -222,15 +222,16 @@ CheckConninfo(const char *conninfo, const char **whitelist,
  * GetConnParams uses the provided key to determine libpq parameters needed to
  * establish a connection using that key. The keywords and values are placed in
  * the like-named out parameters. All parameter strings are allocated in the
- * context provided by the caller, to save the caller needing to copy strings
- * into an appropriate context later.
+ * context provided by the caller. Still, the caller needs to copy strings
+ * into an appropriate context since on any invalidation, the values allocated
+ * in this context is freed.
  */
 void
 GetConnParams(ConnectionHashKey *key, char ***keywords, char ***values,
 			  MemoryContext context)
 {
 	/* make space for the port as a string: sign, 10 digits, NUL */
-	char *nodePortString = MemoryContextAlloc(context, 12 * sizeof(char *));
+	char *nodePortString = palloc(12 * sizeof(char *));
 
 	/*
 	 * This function has three sections:
@@ -246,11 +247,8 @@ GetConnParams(ConnectionHashKey *key, char ***keywords, char ***values,
 		"host", "port", "dbname", "user", "client_encoding"
 	};
 	const char *runtimeValues[] = {
-		MemoryContextStrdup(context, key->hostname),
-		nodePortString,
-		MemoryContextStrdup(context, key->database),
-		MemoryContextStrdup(context, key->user),
-		GetDatabaseEncodingName()
+		key->hostname, nodePortString, key->database,
+		key->user, GetDatabaseEncodingName()
 	};
 
 	/*
@@ -277,6 +275,7 @@ GetConnParams(ConnectionHashKey *key, char ***keywords, char ***values,
 
 	pg_ltoa(key->port, nodePortString); /* populate node port string with port */
 
+
 	/* first step: copy global parameters to beginning of array */
 	for (paramIndex = 0; paramIndex < ConnParams.size; paramIndex++)
 	{
@@ -297,9 +296,9 @@ GetConnParams(ConnectionHashKey *key, char ***keywords, char ***values,
 	{
 		/* copy the keyword&value pointers to the new array */
 		connKeywords[ConnParams.size + runtimeParamIndex] =
-			(char *) runtimeKeywords[runtimeParamIndex];
+			MemoryContextStrdup(context, runtimeKeywords[runtimeParamIndex]);
 		connValues[ConnParams.size + runtimeParamIndex] =
-			(char *) runtimeValues[runtimeParamIndex];
+			MemoryContextStrdup(context, runtimeValues[runtimeParamIndex]);
 	}
 
 	/* final step: add terminal NULL, required by libpq */
@@ -307,6 +306,9 @@ GetConnParams(ConnectionHashKey *key, char ***keywords, char ***values,
 
 	*keywords = connKeywords;
 	*values = connValues;
+
+	/* we've already copied this to related context */
+	pfree(nodePortString);
 }
 
 
