@@ -40,6 +40,7 @@ HTAB *ConnParamsHash = NULL;
 MemoryContext ConnectionContext = NULL;
 
 static uint32 ConnectionHashHash(const void *key, Size keysize);
+static void FreeConnection(MultiConnection *connection);
 static int ConnectionHashCompare(const void *a, const void *b, Size keysize);
 static MultiConnection * StartConnectionEstablishment(ConnectionHashKey *key);
 static void AfterXactHostConnectionHandling(ConnectionHashEntry *entry, bool isCommit);
@@ -394,12 +395,24 @@ CloseConnection(MultiConnection *connection)
 		CloseShardPlacementAssociation(connection);
 
 		/* we leave the per-host entry alive */
-		pfree(connection);
+		FreeConnection(connection);
 	}
 	else
 	{
 		ereport(ERROR, (errmsg("closing untracked connection")));
 	}
+}
+
+
+/*
+ * FreeConnection is a wrapper to de-allocated all the memory allocated
+ * per MultiConnection.
+ */
+static void
+FreeConnection(MultiConnection *connection)
+{
+	MemoryContextDelete(connection->internalConnectionContext);
+	pfree(connection);
 }
 
 
@@ -690,6 +703,11 @@ StartConnectionEstablishment(ConnectionHashKey *key)
 	MultiConnection *connection = NULL;
 	ConnParamsHashEntry *entry = NULL;
 
+	connection = MemoryContextAllocZero(ConnectionContext, sizeof(MultiConnection));
+	connection->internalConnectionContext =
+		AllocSetContextCreate(ConnectionContext, "per connection context",
+							  ALLOCSET_DEFAULT_SIZES);
+
 	/* search our cache for precomputed connection settings */
 	entry = hash_search(ConnParamsHash, key, HASH_ENTER, &found);
 	if (!found || !entry->isValid)
@@ -699,8 +717,6 @@ StartConnectionEstablishment(ConnectionHashKey *key)
 
 		entry->isValid = true;
 	}
-
-	connection = MemoryContextAllocZero(ConnectionContext, sizeof(MultiConnection));
 
 	strlcpy(connection->hostname, key->hostname, MAX_NODE_LENGTH);
 	connection->port = key->port;
@@ -764,7 +780,7 @@ AfterXactHostConnectionHandling(ConnectionHashEntry *entry, bool isCommit)
 			/* unlink from list */
 			dlist_delete(iter.cur);
 
-			pfree(connection);
+			FreeConnection(connection);
 		}
 		else
 		{
