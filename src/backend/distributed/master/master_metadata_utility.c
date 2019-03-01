@@ -237,6 +237,7 @@ DistributedTableSizeOnWorker(WorkerNode *workerNode, Oid relationId, char *sizeQ
 	tableSizeString = tableSizeStringInfo->data;
 	tableSize = atol(tableSizeString);
 
+	PQclear(result);
 	ClearResults(connection, raiseErrors);
 
 	return tableSize;

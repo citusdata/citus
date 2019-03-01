@@ -563,6 +563,7 @@ TableDDLCommandList(const char *nodeName, uint32 nodePort, const char *tableName
 	ExecuteOptionalRemoteCommand(connection, queryString->data, &result);
 	ddlCommandList = ReadFirstColumnAsText(result);
 
+	PQclear(result);
 	ForgetResults(connection);
 	CloseConnection(connection);
 
