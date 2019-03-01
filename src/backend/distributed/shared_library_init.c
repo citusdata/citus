@@ -1206,6 +1206,9 @@ NodeConninfoGucAssignHook(const char *newval, void *extra)
 		AddConnParam(option->keyword, option->val);
 	}
 
+	/* notify that we've changed the parameters */
+	connectionParamHashValid = false;
+
 	PQconninfoFree(optionArray);
 }
 

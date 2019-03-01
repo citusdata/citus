@@ -120,7 +120,6 @@ typedef struct ConnectionHashEntry
 typedef struct ConnParamsHashEntry
 {
 	ConnectionHashKey key;
-	bool isValid;
 	char **keywords;
 	char **values;
 } ConnParamsHashEntry;
@@ -135,6 +134,7 @@ extern char *NodeConninfo;
 /* the hash table */
 extern HTAB *ConnectionHash;
 extern HTAB *ConnParamsHash;
+extern bool connectionParamHashValid;
 
 /* context for all connection and transaction related memory */
 extern struct MemoryContextData *ConnectionContext;

@@ -36,6 +36,7 @@
 
 int NodeConnectionTimeout = 5000;
 HTAB *ConnectionHash = NULL;
+bool connectionParamHashValid = true;
 HTAB *ConnParamsHash = NULL;
 MemoryContext ConnectionContext = NULL;
 
@@ -705,6 +706,14 @@ StartConnectionEstablishment(ConnectionHashKey *key)
 	char **keywords = NULL;
 	char **values = NULL;
 
+	/* if any invalidation happened, reload the configuration */
+	if (!connectionParamHashValid)
+	{
+		DeallocateConnectionParamHash();
+
+		connectionParamHashValid = true;
+	}
+
 	connection = MemoryContextAllocZero(ConnectionContext, sizeof(MultiConnection));
 	connection->internalConnectionContext =
 		AllocSetContextCreate(ConnectionContext, "per connection context",
@@ -712,12 +721,10 @@ StartConnectionEstablishment(ConnectionHashKey *key)
 
 	/* search our cache for precomputed connection settings */
 	entry = hash_search(ConnParamsHash, key, HASH_ENTER, &found);
-	if (!found || !entry->isValid)
+	if (!found)
 	{
 		/* if they're not found, compute them from GUC, runtime, etc. */
 		GetConnParams(key, &entry->keywords, &entry->values, ConnectionContext);
-
-		entry->isValid = true;
 	}
 
 	strlcpy(connection->hostname, key->hostname, MAX_NODE_LENGTH);
