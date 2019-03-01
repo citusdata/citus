@@ -36,6 +36,7 @@
 
 int NodeConnectionTimeout = 5000;
 HTAB *ConnectionHash = NULL;
+bool connectionParamHashValid = true;
 HTAB *ConnParamsHash = NULL;
 MemoryContext ConnectionContext = NULL;
 
@@ -690,23 +691,28 @@ StartConnectionEstablishment(ConnectionHashKey *key)
 	MultiConnection *connection = NULL;
 	ConnParamsHashEntry *entry = NULL;
 
-	/* search our cache for precomputed connection settings */
-	entry = hash_search(ConnParamsHash, key, HASH_ENTER, &found);
-	if (!found || !entry->isValid)
+	/* if any invalidation happened, reload the configuration */
+	if (!connectionParamHashValid)
 	{
-		/* if they're not found, compute them from GUC, runtime, etc. */
-		GetConnParams(key, &entry->keywords, &entry->values, ConnectionContext);
+		DeallocateConnectionParamHash();
 
-		entry->isValid = true;
+		connectionParamHashValid = true;
 	}
 
 	connection = MemoryContextAllocZero(ConnectionContext, sizeof(MultiConnection));
+
+	/* search our cache for precomputed connection settings */
+	entry = hash_search(ConnParamsHash, key, HASH_ENTER, &found);
+	if (!found)
+	{
+		/* if they're not found, compute them from GUC, runtime, etc. */
+		GetConnParams(key, &entry->keywords, &entry->values, ConnectionContext);
+	}
 
 	strlcpy(connection->hostname, key->hostname, MAX_NODE_LENGTH);
 	connection->port = key->port;
 	strlcpy(connection->database, key->database, NAMEDATALEN);
 	strlcpy(connection->user, key->user, NAMEDATALEN);
-
 
 	connection->pgConn = PQconnectStartParams((const char **) entry->keywords,
 											  (const char **) entry->values,
