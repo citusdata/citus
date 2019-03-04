@@ -368,7 +368,7 @@ CreateTask(uint64 jobId, uint32 taskId, char *taskCallString)
 {
 	WorkerTask *workerTask = NULL;
 	uint32 assignmentTime = 0;
-	char *databaseName = get_database_name(MyDatabaseId);
+	char *databaseName = CurrentDatabaseName();
 	char *userName = CurrentUserName();
 
 	/* increase task priority for cleanup tasks */

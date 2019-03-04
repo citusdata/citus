@@ -24,6 +24,7 @@
 #include "catalog/pg_namespace.h"
 #include "catalog/pg_type.h"
 #include "citus_version.h"
+#include "commands/dbcommands.h"
 #include "commands/extension.h"
 #include "commands/trigger.h"
 #include "distributed/colocation_utils.h"
@@ -137,6 +138,8 @@ typedef struct MetadataCacheData
 	Oid unavailableNodeRoleId;
 	Oid pgTableIsVisibleFuncId;
 	Oid citusTableIsVisibleFuncId;
+	bool databaseNameValid;
+	char databaseName[NAMEDATALEN];
 } MetadataCacheData;
 
 
@@ -2099,6 +2102,33 @@ CitusTableVisibleFuncId(void)
 	}
 
 	return MetadataCache.citusTableIsVisibleFuncId;
+}
+
+
+/*
+ * CurrentDatabaseName gets the name of the current database and caches
+ * the result.
+ *
+ * Given that the database name cannot be changed when there is at least
+ * one session connected to it, we do not need to implement any invalidation
+ * mechanism.
+ */
+char *
+CurrentDatabaseName(void)
+{
+	if (!MetadataCache.databaseNameValid)
+	{
+		char *databaseName = get_database_name(MyDatabaseId);
+		if (databaseName == NULL)
+		{
+			return NULL;
+		}
+
+		strlcpy(MetadataCache.databaseName, databaseName, NAMEDATALEN);
+		MetadataCache.databaseNameValid = true;
+	}
+
+	return MetadataCache.databaseName;
 }
 
 
