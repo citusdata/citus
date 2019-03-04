@@ -41,7 +41,6 @@ HTAB *ConnParamsHash = NULL;
 MemoryContext ConnectionContext = NULL;
 
 static uint32 ConnectionHashHash(const void *key, Size keysize);
-static void FreeConnection(MultiConnection *connection);
 static int ConnectionHashCompare(const void *a, const void *b, Size keysize);
 static MultiConnection * StartConnectionEstablishment(ConnectionHashKey *key);
 static void AfterXactHostConnectionHandling(ConnectionHashEntry *entry, bool isCommit);
@@ -396,24 +395,12 @@ CloseConnection(MultiConnection *connection)
 		CloseShardPlacementAssociation(connection);
 
 		/* we leave the per-host entry alive */
-		FreeConnection(connection);
+		pfree(connection);
 	}
 	else
 	{
 		ereport(ERROR, (errmsg("closing untracked connection")));
 	}
-}
-
-
-/*
- * FreeConnection is a wrapper to de-allocated all the memory allocated
- * per MultiConnection.
- */
-static void
-FreeConnection(MultiConnection *connection)
-{
-	MemoryContextDelete(connection->internalConnectionContext);
-	pfree(connection);
 }
 
 
@@ -703,8 +690,6 @@ StartConnectionEstablishment(ConnectionHashKey *key)
 	bool found = false;
 	MultiConnection *connection = NULL;
 	ConnParamsHashEntry *entry = NULL;
-	char **keywords = NULL;
-	char **values = NULL;
 
 	/* if any invalidation happened, reload the configuration */
 	if (!connectionParamHashValid)
@@ -715,9 +700,6 @@ StartConnectionEstablishment(ConnectionHashKey *key)
 	}
 
 	connection = MemoryContextAllocZero(ConnectionContext, sizeof(MultiConnection));
-	connection->internalConnectionContext =
-		AllocSetContextCreate(ConnectionContext, "per connection context",
-							  ALLOCSET_DEFAULT_SIZES);
 
 	/* search our cache for precomputed connection settings */
 	entry = hash_search(ConnParamsHash, key, HASH_ENTER, &found);
@@ -732,11 +714,8 @@ StartConnectionEstablishment(ConnectionHashKey *key)
 	strlcpy(connection->database, key->database, NAMEDATALEN);
 	strlcpy(connection->user, key->user, NAMEDATALEN);
 
-	CopyConnectionParams(connection->internalConnectionContext, &keywords, &values,
-						 entry->keywords, entry->values);
-
-	connection->pgConn = PQconnectStartParams((const char **) keywords,
-											  (const char **) values,
+	connection->pgConn = PQconnectStartParams((const char **) entry->keywords,
+											  (const char **) entry->values,
 											  false);
 	connection->connectionStart = GetCurrentTimestamp();
 
@@ -791,7 +770,7 @@ AfterXactHostConnectionHandling(ConnectionHashEntry *entry, bool isCommit)
 			/* unlink from list */
 			dlist_delete(iter.cur);
 
-			FreeConnection(connection);
+			pfree(connection);
 		}
 		else
 		{

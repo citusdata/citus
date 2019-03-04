@@ -117,36 +117,6 @@ AddConnParam(const char *keyword, const char *value)
 
 
 /*
- * CopyConnectionParams copies input keywords/values into output keywords/values. All
- * memory allocations happen in the given context.
- */
-void
-CopyConnectionParams(MemoryContext context, char ***outputKeywords, char ***outputValues,
-					 char **inputKeywords, char **inputValues)
-{
-	int parameterIndex = 0;
-
-	char **connKeywords =
-		MemoryContextAllocZero(context, ConnParams.maxSize * sizeof(char *));
-	char **connValues =
-		MemoryContextAllocZero(context, ConnParams.maxSize * sizeof(char *));
-
-	while (inputKeywords[parameterIndex] != NULL)
-	{
-		connKeywords[parameterIndex] =
-			MemoryContextStrdup(context, inputKeywords[parameterIndex]);
-		connValues[parameterIndex] =
-			MemoryContextStrdup(context, inputValues[parameterIndex]);
-
-		++parameterIndex;
-	}
-
-	*outputKeywords = connKeywords;
-	*outputValues = connValues;
-}
-
-
-/*
  * DeallocateConnectionParamHash goes over the ConnParamsHash and deallocates
  * all parameters and values. Finally, all of the entries in the hash table is
  * deleted.

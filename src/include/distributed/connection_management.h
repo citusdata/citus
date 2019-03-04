@@ -85,9 +85,6 @@ typedef struct MultiConnection
 
 	/* number of bytes sent to PQputCopyData() since last flush */
 	uint64 copyBytesWrittenSinceLastFlush;
-
-	/* connection parameters are stored here */
-	MemoryContext internalConnectionContext;
 } MultiConnection;
 
 
