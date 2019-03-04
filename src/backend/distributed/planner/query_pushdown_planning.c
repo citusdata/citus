@@ -1505,6 +1505,7 @@ SubqueryPushdownMultiNodeTree(Query *queryTree)
 	pushedDownQuery->rtable = copyObject(queryTree->rtable);
 	pushedDownQuery->setOperations = copyObject(queryTree->setOperations);
 	pushedDownQuery->querySource = queryTree->querySource;
+	pushedDownQuery->hasSubLinks = queryTree->hasSubLinks;
 
 	subqueryNode = MultiSubqueryPushdownTable(pushedDownQuery);
 

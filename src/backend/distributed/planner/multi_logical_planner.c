@@ -2026,9 +2026,30 @@ ExtractRangeTableEntryWalker(Node *node, List **rangeTableList)
 	}
 	else if (IsA(node, Query))
 	{
-		walkIsComplete = query_tree_walker((Query *) node,
-										   ExtractRangeTableEntryWalker,
-										   rangeTableList, QTW_EXAMINE_RTES);
+		Query *query = (Query *) node;
+
+		/*
+		 * Since we're only interested in range table entries, we only descend
+		 * into all parts of the query when it is necessary. Otherwise, it is
+		 * sufficient to descend into range table list since its the only part
+		 * of the query that could contain range table entries.
+		 */
+		if (query->hasSubLinks || query->cteList || query->setOperations)
+		{
+			/* descend into all parts of the query */
+			walkIsComplete = query_tree_walker((Query *) node,
+											   ExtractRangeTableEntryWalker,
+											   rangeTableList,
+											   QTW_EXAMINE_RTES);
+		}
+		else
+		{
+			/* descend only into RTEs */
+			walkIsComplete = range_table_walker(query->rtable,
+												ExtractRangeTableEntryWalker,
+												rangeTableList,
+												QTW_EXAMINE_RTES);
+		}
 	}
 	else
 	{
