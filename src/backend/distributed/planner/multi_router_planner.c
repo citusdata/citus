@@ -1543,16 +1543,18 @@ CreateTask(TaskType taskType)
  * ExtractFirstDistributedTableId takes a given query, and finds the relationId
  * for the first distributed table in that query. If the function cannot find a
  * distributed table, it returns InvalidOid.
+ *
+ * We only use this function for modifications and fast path queries, which
+ * should have the first distributed table in the top-level rtable.
  */
 Oid
 ExtractFirstDistributedTableId(Query *query)
 {
-	List *rangeTableList = NIL;
+	List *rangeTableList = query->rtable;
 	ListCell *rangeTableCell = NULL;
 	Oid distributedTableId = InvalidOid;
 
-	/* extract range table entries */
-	ExtractRangeTableEntryWalker((Node *) query, &rangeTableList);
+	Assert(IsModifyCommand(query) || FastPathRouterQuery(query));
 
 	foreach(rangeTableCell, rangeTableList)
 	{
