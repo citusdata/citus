@@ -1,15 +1,15 @@
 /*-------------------------------------------------------------------------
  *
- * ruleutils_10.c
+ * ruleutils_11.c
  *	  Functions to convert stored expressions/querytrees back to
  *	  source text
  *
- * Portions Copyright (c) 1996-2017, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2018, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
  * IDENTIFICATION
- *	  src/backend/distributed/utils/ruleutils_10.c
+ *	  src/backend/distributed/utils/ruleutils_11.c
  *
  * This needs to be closely in sync with the core code.
  *-------------------------------------------------------------------------
