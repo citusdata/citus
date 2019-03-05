@@ -41,7 +41,7 @@ typedef struct WorkerNode
 	uint32 nodeId;                      /* node's unique id, key of the hash table */
 	uint32 workerPort;                  /* node's port */
 	char workerName[WORKER_LENGTH];     /* node's name */
-	uint32 groupId;                     /* node's groupId; same for the nodes that are in the same group */
+	int32 groupId;                      /* node's groupId; same for the nodes that are in the same group */
 	char workerRack[WORKER_LENGTH];     /* node's network location */
 	bool hasMetadata;                   /* node gets metadata changes */
 	bool isActive;                      /* node's state */
@@ -72,7 +72,7 @@ extern WorkerNode * FindWorkerNodeAnyCluster(char *nodeName, int32 nodePort);
 extern List * ReadWorkerNodes(bool includeNodesFromOtherClusters);
 extern void EnsureCoordinator(void);
 extern uint32 GroupForNode(char *nodeName, int32 nodePorT);
-extern WorkerNode * PrimaryNodeForGroup(uint32 groupId, bool *groupContainsNodes);
+extern WorkerNode * PrimaryNodeForGroup(int32 groupId, bool *groupContainsNodes);
 extern bool WorkerNodeIsPrimary(WorkerNode *worker);
 extern bool WorkerNodeIsSecondary(WorkerNode *worker);
 extern bool WorkerNodeIsReadable(WorkerNode *worker);

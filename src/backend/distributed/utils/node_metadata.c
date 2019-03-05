@@ -63,7 +63,7 @@ static HeapTuple GetNodeTuple(char *nodeName, int32 nodePort);
 static Datum GenerateNodeTuple(WorkerNode *workerNode);
 static int32 GetNextGroupId(void);
 static int GetNextNodeId(void);
-static void InsertNodeRow(int nodeid, char *nodename, int32 nodeport, uint32 groupId,
+static void InsertNodeRow(int nodeid, char *nodename, int32 nodeport, int32 groupId,
 						  char *nodeRack, bool hasMetadata, bool isActive, Oid nodeRole,
 						  char *nodeCluster);
 static void DeleteNodeRow(char *nodename, int32 nodeport);
@@ -395,7 +395,7 @@ WorkerNodeIsReadable(WorkerNode *workerNode)
  * it will set the bool groupContainsNodes references to true.
  */
 WorkerNode *
-PrimaryNodeForGroup(uint32 groupId, bool *groupContainsNodes)
+PrimaryNodeForGroup(int32 groupId, bool *groupContainsNodes)
 {
 	WorkerNode *workerNode = NULL;
 	HASH_SEQ_STATUS status;
@@ -405,7 +405,7 @@ PrimaryNodeForGroup(uint32 groupId, bool *groupContainsNodes)
 
 	while ((workerNode = hash_seq_search(&status)) != NULL)
 	{
-		uint32 workerNodeGroupId = workerNode->groupId;
+		int32 workerNodeGroupId = workerNode->groupId;
 		if (workerNodeGroupId != groupId)
 		{
 			continue;
@@ -1116,7 +1116,7 @@ GenerateNodeTuple(WorkerNode *workerNode)
 	memset(isNulls, false, sizeof(isNulls));
 
 	values[Anum_pg_dist_node_nodeid - 1] = UInt32GetDatum(workerNode->nodeId);
-	values[Anum_pg_dist_node_groupid - 1] = UInt32GetDatum(workerNode->groupId);
+	values[Anum_pg_dist_node_groupid - 1] = Int32GetDatum(workerNode->groupId);
 	values[Anum_pg_dist_node_nodename - 1] = CStringGetTextDatum(workerNode->workerName);
 	values[Anum_pg_dist_node_nodeport - 1] = UInt32GetDatum(workerNode->workerPort);
 	values[Anum_pg_dist_node_noderack - 1] = CStringGetTextDatum(workerNode->workerRack);
@@ -1166,7 +1166,7 @@ GetNextGroupId()
 
 	SetUserIdAndSecContext(savedUserId, savedSecurityContext);
 
-	groupId = DatumGetUInt32(groupIdDatum);
+	groupId = DatumGetInt32(groupIdDatum);
 
 	return groupId;
 }
@@ -1232,7 +1232,7 @@ EnsureCoordinator(void)
  * an existing group. If you don't it's possible for the metadata to become inconsistent.
  */
 static void
-InsertNodeRow(int nodeid, char *nodeName, int32 nodePort, uint32 groupId, char *nodeRack,
+InsertNodeRow(int nodeid, char *nodeName, int32 nodePort, int32 groupId, char *nodeRack,
 			  bool hasMetadata, bool isActive, Oid nodeRole, char *nodeCluster)
 {
 	Relation pgDistNode = NULL;
@@ -1249,7 +1249,7 @@ InsertNodeRow(int nodeid, char *nodeName, int32 nodePort, uint32 groupId, char *
 	memset(isNulls, false, sizeof(isNulls));
 
 	values[Anum_pg_dist_node_nodeid - 1] = UInt32GetDatum(nodeid);
-	values[Anum_pg_dist_node_groupid - 1] = UInt32GetDatum(groupId);
+	values[Anum_pg_dist_node_groupid - 1] = Int32GetDatum(groupId);
 	values[Anum_pg_dist_node_nodename - 1] = CStringGetTextDatum(nodeName);
 	values[Anum_pg_dist_node_nodeport - 1] = UInt32GetDatum(nodePort);
 	values[Anum_pg_dist_node_noderack - 1] = CStringGetTextDatum(nodeRack);
@@ -1500,7 +1500,7 @@ TupleToWorkerNode(TupleDesc tupleDescriptor, HeapTuple heapTuple)
 	workerNode = (WorkerNode *) palloc0(sizeof(WorkerNode));
 	workerNode->nodeId = DatumGetUInt32(datumArray[Anum_pg_dist_node_nodeid - 1]);
 	workerNode->workerPort = DatumGetUInt32(datumArray[Anum_pg_dist_node_nodeport - 1]);
-	workerNode->groupId = DatumGetUInt32(datumArray[Anum_pg_dist_node_groupid - 1]);
+	workerNode->groupId = DatumGetInt32(datumArray[Anum_pg_dist_node_groupid - 1]);
 	strlcpy(workerNode->workerName, TextDatumGetCString(nodeName), WORKER_LENGTH);
 	strlcpy(workerNode->workerRack, TextDatumGetCString(nodeRack), WORKER_LENGTH);
 	workerNode->hasMetadata = DatumGetBool(datumArray[Anum_pg_dist_node_hasmetadata - 1]);

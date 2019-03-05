@@ -78,7 +78,7 @@ recover_prepared_transactions(PG_FUNCTION_ARGS)
  * prepared transaction should be committed.
  */
 void
-LogTransactionRecord(int groupId, char *transactionName)
+LogTransactionRecord(int32 groupId, char *transactionName)
 {
 	Relation pgDistTransaction = NULL;
 	TupleDesc tupleDescriptor = NULL;
@@ -141,7 +141,7 @@ RecoverWorkerTransactions(WorkerNode *workerNode)
 {
 	int recoveredTransactionCount = 0;
 
-	int groupId = workerNode->groupId;
+	int32 groupId = workerNode->groupId;
 	char *nodeName = workerNode->workerName;
 	int nodePort = workerNode->workerPort;
 
@@ -461,7 +461,7 @@ PendingWorkerTransactionList(MultiConnection *connection)
 static bool
 IsTransactionInProgress(HTAB *activeTransactionNumberSet, char *preparedTransactionName)
 {
-	int groupId = 0;
+	int32 groupId = 0;
 	int procId = 0;
 	uint32 connectionNumber = 0;
 	uint64 transactionNumber = 0;

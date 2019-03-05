@@ -306,7 +306,7 @@ ReplicateShardToNode(ShardInterval *shardInterval, char *nodeName, int nodePort)
 	if (targetPlacement == NULL || targetPlacement->shardState != FILE_FINALIZED)
 	{
 		uint64 placementId = 0;
-		uint32 groupId = 0;
+		int32 groupId = 0;
 
 		ereport(NOTICE, (errmsg("Replicating reference table \"%s\" to the node %s:%d",
 								get_rel_name(shardInterval->relationId), nodeName,
@@ -410,7 +410,7 @@ CreateReferenceTableColocationId()
  * group of reference tables. It is caller's responsibility to do that if it is necessary.
  */
 void
-DeleteAllReferenceTablePlacementsFromNodeGroup(uint32 groupId)
+DeleteAllReferenceTablePlacementsFromNodeGroup(int32 groupId)
 {
 	List *referenceTableList = ReferenceTableOidList();
 	List *referenceShardIntervalList = NIL;

@@ -160,7 +160,7 @@ static int WorkerNodeCount = 0;
 static bool workerNodeHashValid = false;
 
 /* default value is -1, for coordinator it's 0 and for worker nodes > 0 */
-static int LocalGroupId = -1;
+static int32 LocalGroupId = -1;
 
 /* built first time through in InitializePartitionCache */
 static ScanKeyData DistPartitionScanKey[1];
@@ -210,7 +210,7 @@ static ShardInterval * TupleToShardInterval(HeapTuple heapTuple,
 static void CachedRelationLookup(const char *relationName, Oid *cachedOid);
 static ShardPlacement * ResolveGroupShardPlacement(
 	GroupShardPlacement *groupShardPlacement, ShardCacheEntry *shardEntry);
-static WorkerNode * LookupNodeForGroup(uint32 groupid);
+static WorkerNode * LookupNodeForGroup(int32 groupId);
 static Oid LookupEnumValueId(Oid typeId, char *valueName);
 static void InvalidateEntireDistCache(void);
 
@@ -474,7 +474,7 @@ LoadShardPlacement(uint64 shardId, uint64 placementId)
  * on the group.
  */
 ShardPlacement *
-FindShardPlacementOnGroup(uint32 groupId, uint64 shardId)
+FindShardPlacementOnGroup(int32 groupId, uint64 shardId)
 {
 	ShardCacheEntry *shardEntry = NULL;
 	DistTableCacheEntry *tableEntry = NULL;
@@ -516,7 +516,7 @@ ResolveGroupShardPlacement(GroupShardPlacement *groupShardPlacement,
 	ShardInterval *shardInterval = tableEntry->sortedShardIntervalArray[shardIndex];
 
 	ShardPlacement *shardPlacement = CitusMakeNode(ShardPlacement);
-	uint32 groupId = groupShardPlacement->groupId;
+	int32 groupId = groupShardPlacement->groupId;
 	WorkerNode *workerNode = LookupNodeForGroup(groupId);
 
 	/* copy everything into shardPlacement but preserve the header */
@@ -583,7 +583,7 @@ LookupNodeByNodeId(uint32 nodeId)
  * appropriate error message.
  */
 static WorkerNode *
-LookupNodeForGroup(uint32 groupId)
+LookupNodeForGroup(int32 groupId)
 {
 	bool foundAnyNodes = false;
 	int workerNodeIndex = 0;
@@ -593,7 +593,7 @@ LookupNodeForGroup(uint32 groupId)
 	for (workerNodeIndex = 0; workerNodeIndex < WorkerNodeCount; workerNodeIndex++)
 	{
 		WorkerNode *workerNode = WorkerNodeArray[workerNodeIndex];
-		uint32 workerNodeGroupId = workerNode->groupId;
+		int32 workerNodeGroupId = workerNode->groupId;
 		if (workerNodeGroupId != groupId)
 		{
 			continue;
@@ -609,7 +609,7 @@ LookupNodeForGroup(uint32 groupId)
 
 	if (!foundAnyNodes)
 	{
-		ereport(ERROR, (errmsg("there is a shard placement in node group %u but "
+		ereport(ERROR, (errmsg("there is a shard placement in node group %d but "
 							   "there are no nodes in that group", groupId)));
 	}
 
@@ -617,13 +617,13 @@ LookupNodeForGroup(uint32 groupId)
 	{
 		case USE_SECONDARY_NODES_NEVER:
 		{
-			ereport(ERROR, (errmsg("node group %u does not have a primary node",
+			ereport(ERROR, (errmsg("node group %d does not have a primary node",
 								   groupId)));
 		}
 
 		case USE_SECONDARY_NODES_ALWAYS:
 		{
-			ereport(ERROR, (errmsg("node group %u does not have a secondary node",
+			ereport(ERROR, (errmsg("node group %d does not have a secondary node",
 								   groupId)));
 		}
 
@@ -2801,7 +2801,7 @@ RegisterWorkerNodeCacheCallbacks(void)
  * that pg_dist_local_node_group has exactly one row and has at least one column.
  * Otherwise, the function errors out.
  */
-int
+int32
 GetLocalGroupId(void)
 {
 	SysScanDesc scanDescriptor = NULL;
@@ -2809,7 +2809,7 @@ GetLocalGroupId(void)
 	int scanKeyCount = 0;
 	HeapTuple heapTuple = NULL;
 	TupleDesc tupleDescriptor = NULL;
-	Oid groupId = InvalidOid;
+	int32 groupId = 0;
 	Relation pgDistLocalGroupId = NULL;
 	Oid localGroupTableOid = InvalidOid;
 
@@ -2846,7 +2846,7 @@ GetLocalGroupId(void)
 										  Anum_pg_dist_local_groupid,
 										  tupleDescriptor, &isNull);
 
-		groupId = DatumGetUInt32(groupIdDatum);
+		groupId = DatumGetInt32(groupIdDatum);
 	}
 	else
 	{

@@ -92,7 +92,7 @@ static int64 ExecuteSingleModifyTask(CitusScanState *scanState, Task *task, CmdT
 									 operation, bool alwaysThrowErrorOnFailure, bool
 									 expectResults);
 static void ExecuteSingleSelectTask(CitusScanState *scanState, Task *task);
-static List * BuildPlacementAccessList(uint32 groupId, List *relationShardList,
+static List * BuildPlacementAccessList(int32 groupId, List *relationShardList,
 									   ShardPlacementAccessType accessType);
 static List * GetModifyConnections(Task *task, bool markCritical);
 static int64 ExecuteModifyTasks(List *taskList, bool expectResults,
@@ -890,7 +890,7 @@ ExecuteSingleSelectTask(CitusScanState *scanState, Task *task)
  * (e.g. in case of a broadcast join) then the shard is skipped.
  */
 List *
-BuildPlacementSelectList(uint32 groupId, List *relationShardList)
+BuildPlacementSelectList(int32 groupId, List *relationShardList)
 {
 	return BuildPlacementAccessList(groupId, relationShardList, PLACEMENT_ACCESS_SELECT);
 }
@@ -900,7 +900,7 @@ BuildPlacementSelectList(uint32 groupId, List *relationShardList)
  * BuildPlacementDDLList is a warpper around BuildPlacementAccessList() for DDL access.
  */
 List *
-BuildPlacementDDLList(uint32 groupId, List *relationShardList)
+BuildPlacementDDLList(int32 groupId, List *relationShardList)
 {
 	return BuildPlacementAccessList(groupId, relationShardList, PLACEMENT_ACCESS_DDL);
 }
@@ -911,7 +911,7 @@ BuildPlacementDDLList(uint32 groupId, List *relationShardList)
  * relationShardList and the access type.
  */
 static List *
-BuildPlacementAccessList(uint32 groupId, List *relationShardList,
+BuildPlacementAccessList(int32 groupId, List *relationShardList,
 						 ShardPlacementAccessType accessType)
 {
 	ListCell *relationShardCell = NULL;
