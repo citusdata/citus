@@ -137,8 +137,7 @@ static void NormalizeMultiRowInsertTargetList(Query *query);
 static List * BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError);
 static List * GroupInsertValuesByShardId(List *insertValuesList);
 static List * ExtractInsertValuesList(Query *query, Var *partitionColumn);
-static bool MultiRouterPlannableQuery(Query *query,
-									  RelationRestrictionContext *restrictionContext);
+static bool MultiRouterPlannableQuery(Query *query);
 static DeferredErrorMessage * ErrorIfQueryHasModifyingCTE(Query *queryTree);
 static RangeTblEntry * GetUpdateOrDeleteRTE(Query *query);
 static bool SelectsFromDistributedTable(List *rangeTableList, Query *query);
@@ -146,6 +145,9 @@ static List * get_all_actual_clauses(List *restrictinfo_list);
 static int CompareInsertValuesByShardId(const void *leftElement,
 										const void *rightElement);
 static uint64 GetInitialShardId(List *relationShardList);
+static List * TargetShardIntervalForFastPathQuery(Query *query,
+												  Const **partitionValueConst,
+												  bool *isMultiShardQuery);
 static List * SingleShardSelectTaskList(Query *query, uint64 jobId,
 										List *relationShardList, List *placementList,
 										uint64 shardId);
@@ -166,8 +168,7 @@ DistributedPlan *
 CreateRouterPlan(Query *originalQuery, Query *query,
 				 PlannerRestrictionContext *plannerRestrictionContext)
 {
-	if (MultiRouterPlannableQuery(query,
-								  plannerRestrictionContext->relationRestrictionContext))
+	if (MultiRouterPlannableQuery(query))
 	{
 		return CreateSingleTaskRouterPlan(originalQuery, query,
 										  plannerRestrictionContext);
@@ -1886,11 +1887,46 @@ PlanRouterQuery(Query *originalQuery,
 
 	*placementList = NIL;
 
-	prunedRelationShardList = TargetShardIntervalsForQuery(originalQuery,
-														   plannerRestrictionContext->
-														   relationRestrictionContext,
-														   &isMultiShardQuery,
-														   partitionValueConst);
+	/*
+	 * When FastPathRouterQuery() returns true, we know that standard_planner() has
+	 * not been called. Thus, restriction information is not avaliable and we do the
+	 * shard pruning based on the distribution column in the quals of the query.
+	 */
+	if (FastPathRouterQuery(originalQuery))
+	{
+		List *shardIntervalList =
+			TargetShardIntervalForFastPathQuery(originalQuery, partitionValueConst,
+												&isMultiShardQuery);
+
+		/*
+		 * This could only happen when there is a parameter on the distribution key.
+		 * We defer error here, later the planner is forced to use a generic plan
+		 * by assigning arbitrarily high cost to the plan.
+		 */
+		if (UpdateOrDeleteQuery(originalQuery) && isMultiShardQuery)
+		{
+			planningError = DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+										  "Router planner cannot handle multi-shard "
+										  "modify queries", NULL, NULL);
+			return planningError;
+		}
+
+		prunedRelationShardList = list_make1(shardIntervalList);
+
+		if (!isMultiShardQuery)
+		{
+			ereport(DEBUG2, (errmsg("Distributed planning for a fast-path router "
+									"query")));
+		}
+	}
+	else
+	{
+		prunedRelationShardList =
+			TargetShardIntervalsForRestrictInfo(plannerRestrictionContext->
+												relationRestrictionContext,
+												&isMultiShardQuery,
+												partitionValueConst);
+	}
 
 	if (isMultiShardQuery)
 	{
@@ -2065,19 +2101,59 @@ GetInitialShardId(List *relationShardList)
 
 
 /*
- * TargetShardIntervalsForQuery performs shard pruning for all referenced relations
- * in the query and returns list of shards per relation. Shard pruning is done based
- * on provided restriction context per relation. The function sets multiShardQuery
- * to true if any of the relations pruned down to more than one active shard. It
- * also records pruned shard intervals in relation restriction context to be used
- * later on. Some queries may have contradiction clauses like 'and false' or
- * 'and 1=0', such queries are treated as if all of the shards of joining
- * relations are pruned out.
+ * TargetShardIntervalForFastPathQuery gets a query which is in
+ * the form defined by FastPathRouterQuery() and returns exactly
+ * one shard interval (see FastPathRouterQuery() for the detail).
+ *
+ * Also set the outgoing partition column value if requested via
+ * partitionValueConst
+ */
+static List *
+TargetShardIntervalForFastPathQuery(Query *query, Const **partitionValueConst,
+									bool *isMultiShardQuery)
+{
+	Const *queryPartitionValueConst = NULL;
+
+	Oid relationId = ExtractFirstDistributedTableId(query);
+	Node *quals = query->jointree->quals;
+
+	int relationIndex = 1;
+
+	List *prunedShardIntervalList =
+		PruneShards(relationId, relationIndex, make_ands_implicit((Expr *) quals),
+					&queryPartitionValueConst);
+
+	/* we're only expecting single shard from a single table */
+	Assert(FastPathRouterQuery(query));
+
+	if (list_length(prunedShardIntervalList) > 1)
+	{
+		*isMultiShardQuery = true;
+	}
+	else if (list_length(prunedShardIntervalList) == 1 &&
+			 partitionValueConst != NULL)
+	{
+		/* set the outgoing partition column value if requested */
+		*partitionValueConst = queryPartitionValueConst;
+	}
+
+	return prunedShardIntervalList;
+}
+
+
+/*
+ * TargetShardIntervalsForRestrictInfo performs shard pruning for all referenced
+ * relations in the relation restriction context and returns list of shards per
+ * relation. Shard pruning is done based on provided restriction context per relation.
+ * The function sets multiShardQuery to true if any of the relations pruned down to
+ * more than one active shard. It also records pruned shard intervals in relation
+ * restriction context to be used later on. Some queries may have contradiction
+ * clauses like 'and false' or 'and 1=0', such queries are treated as if all of
+ * the shards of joining relations are pruned out.
  */
 List *
-TargetShardIntervalsForQuery(Query *query,
-							 RelationRestrictionContext *restrictionContext,
-							 bool *multiShardQuery, Const **partitionValueConst)
+TargetShardIntervalsForRestrictInfo(RelationRestrictionContext *restrictionContext,
+									bool *multiShardQuery, Const **partitionValueConst)
 {
 	List *prunedRelationShardList = NIL;
 	ListCell *restrictionCell = NULL;
@@ -2832,10 +2908,11 @@ ExtractInsertPartitionKeyValue(Query *query)
  * flag to false.
  */
 static bool
-MultiRouterPlannableQuery(Query *query, RelationRestrictionContext *restrictionContext)
+MultiRouterPlannableQuery(Query *query)
 {
 	CmdType commandType = query->commandType;
-	ListCell *relationRestrictionContextCell = NULL;
+	List *rangeTableRelationList = NIL;
+	ListCell *rangeTableRelationCell = NULL;
 
 	if (commandType == CMD_INSERT || commandType == CMD_UPDATE ||
 		commandType == CMD_DELETE)
@@ -2850,11 +2927,10 @@ MultiRouterPlannableQuery(Query *query, RelationRestrictionContext *restrictionC
 		return false;
 	}
 
-	foreach(relationRestrictionContextCell, restrictionContext->relationRestrictionList)
+	ExtractRangeTableRelationWalker((Node *) query, &rangeTableRelationList);
+	foreach(rangeTableRelationCell, rangeTableRelationList)
 	{
-		RelationRestriction *relationRestriction =
-			(RelationRestriction *) lfirst(relationRestrictionContextCell);
-		RangeTblEntry *rte = relationRestriction->rte;
+		RangeTblEntry *rte = (RangeTblEntry *) lfirst(rangeTableRelationCell);
 		if (rte->rtekind == RTE_RELATION)
 		{
 			/* only hash partitioned tables are supported */

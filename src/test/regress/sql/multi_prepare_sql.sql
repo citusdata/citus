@@ -2,6 +2,11 @@
 -- MULTI_PREPARE_SQL
 --
 
+-- many of the tests in this file is intended for testing non-fast-path
+-- router planner, so we're explicitly disabling it in this file. 
+-- We've bunch of other tests that triggers fast-path-router 
+SET citus.enable_fast_path_router_planner TO false;
+
 -- Tests covering PREPARE statements. Many of the queries are
 -- taken from other regression test files and converted into
 -- prepared statements.

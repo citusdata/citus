@@ -70,6 +70,11 @@ INSERT INTO articles_single_shard_hash_mx VALUES (50, 10, 'anjanette', 19519);
 
 -- single-shard tests
 
+-- many of the tests in this file is intended for testing non-fast-path
+-- router planner, so we're explicitly disabling it in this file. 
+-- We've bunch of other tests that triggers fast-path-router 
+SET citus.enable_fast_path_router_planner TO false;
+
 -- test simple select for a single row
 SELECT * FROM articles_hash_mx WHERE author_id = 10 AND id = 50;
 

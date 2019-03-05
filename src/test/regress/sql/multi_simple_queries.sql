@@ -1,6 +1,10 @@
 
 SET citus.next_shard_id TO 850000;
 
+-- many of the tests in this file is intended for testing non-fast-path
+-- router planner, so we're explicitly disabling it in this file. 
+-- We've bunch of other tests that triggers fast-path-router 
+SET citus.enable_fast_path_router_planner TO false;
 
 -- ===================================================================
 -- test end-to-end query functionality
@@ -301,5 +305,13 @@ SELECT * FROM articles TABLESAMPLE SYSTEM (0) WHERE author_id = 1;
 SELECT * FROM articles TABLESAMPLE BERNOULLI (0) WHERE author_id = 1;
 SELECT * FROM articles TABLESAMPLE SYSTEM (100) WHERE author_id = 1 ORDER BY id;
 SELECT * FROM articles TABLESAMPLE BERNOULLI (100) WHERE author_id = 1 ORDER BY id;
+
+-- test tablesample with fast path as well
+SET citus.enable_fast_path_router_planner TO true;
+SELECT * FROM articles TABLESAMPLE SYSTEM (0) WHERE author_id = 1;
+SELECT * FROM articles TABLESAMPLE BERNOULLI (0) WHERE author_id = 1;
+SELECT * FROM articles TABLESAMPLE SYSTEM (100) WHERE author_id = 1 ORDER BY id;
+SELECT * FROM articles TABLESAMPLE BERNOULLI (100) WHERE author_id = 1 ORDER BY id;
+
 
 SET client_min_messages to 'NOTICE';

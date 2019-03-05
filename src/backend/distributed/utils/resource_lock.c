@@ -107,7 +107,7 @@ lock_shard_metadata(PG_FUNCTION_ARGS)
 		ereport(ERROR, (errmsg("no locks specified")));
 	}
 
-    /* we don't want random users to block writes */
+	/* we don't want random users to block writes */
 	EnsureSuperUser();
 
 	shardIdCount = ArrayObjectCount(shardIdArrayObject);
@@ -147,7 +147,7 @@ lock_shard_resources(PG_FUNCTION_ARGS)
 		ereport(ERROR, (errmsg("no locks specified")));
 	}
 
-    /* we don't want random users to block writes */
+	/* we don't want random users to block writes */
 	EnsureSuperUser();
 
 	shardIdCount = ArrayObjectCount(shardIdArrayObject);
@@ -475,7 +475,7 @@ LockShardListMetadata(List *shardIntervalList, LOCKMODE lockMode)
 {
 	ListCell *shardIntervalCell = NULL;
 
-    /* lock shards in order of shard id to prevent deadlock */
+	/* lock shards in order of shard id to prevent deadlock */
 	shardIntervalList = SortList(shardIntervalList, CompareShardIntervalsById);
 
 	foreach(shardIntervalCell, shardIntervalList)
@@ -497,7 +497,7 @@ LockShardsInPlacementListMetadata(List *shardPlacementList, LOCKMODE lockMode)
 {
 	ListCell *shardPlacementCell = NULL;
 
-    /* lock shards in order of shard id to prevent deadlock */
+	/* lock shards in order of shard id to prevent deadlock */
 	shardPlacementList =
 		SortList(shardPlacementList, CompareShardPlacementsByShardId);
 
@@ -553,7 +553,7 @@ LockShardListResources(List *shardIntervalList, LOCKMODE lockMode)
 {
 	ListCell *shardIntervalCell = NULL;
 
-    /* lock shards in order of shard id to prevent deadlock */
+	/* lock shards in order of shard id to prevent deadlock */
 	shardIntervalList = SortList(shardIntervalList, CompareShardIntervalsById);
 
 	foreach(shardIntervalCell, shardIntervalList)
@@ -575,7 +575,7 @@ LockRelationShardResources(List *relationShardList, LOCKMODE lockMode)
 {
 	ListCell *relationShardCell = NULL;
 
-    /* lock shards in a consistent order to prevent deadlock */
+	/* lock shards in a consistent order to prevent deadlock */
 	relationShardList = SortList(relationShardList, CompareRelationShards);
 
 	foreach(relationShardCell, relationShardList)
@@ -641,11 +641,11 @@ LockPartitionsInRelationList(List *relationIdList, LOCKMODE lockmode)
 void
 LockPartitionRelations(Oid relationId, LOCKMODE lockMode)
 {
-    /*
-     * PartitionList function generates partition list in the same order
-     * as PostgreSQL. Therefore we do not need to sort it before acquiring
-     * locks.
-     */
+	/*
+	 * PartitionList function generates partition list in the same order
+	 * as PostgreSQL. Therefore we do not need to sort it before acquiring
+	 * locks.
+	 */
 	List *partitionList = PartitionList(relationId);
 	ListCell *partitionCell = NULL;
 
@@ -678,7 +678,7 @@ LockModeTextToLockMode(const char *lockModeName)
 		}
 	}
 
-    /* we could not find the lock mode we are looking for */
+	/* we could not find the lock mode we are looking for */
 	if (lockMode == -1)
 	{
 		ereport(ERROR,
@@ -712,7 +712,7 @@ LockModeToLockModeText(LOCKMODE lockMode)
 		}
 	}
 
-    /* we could not find the lock mode we are looking for */
+	/* we could not find the lock mode we are looking for */
 	if (lockModeText == NULL)
 	{
 		ereport(ERROR,
@@ -747,17 +747,17 @@ lock_relation_if_exists(PG_FUNCTION_ARGS)
 	LOCKMODE lockMode = NoLock;
 	bool relationExists = false;
 
-    /* ensure that we're in a transaction block */
+	/* ensure that we're in a transaction block */
 	RequireTransactionBlock(true, "lock_relation_if_exists");
 
-    /* get the lock mode */
+	/* get the lock mode */
 	lockMode = LockModeTextToLockMode(lockModeCString);
 
-    /* resolve relationId from passed in schema and relation name */
+	/* resolve relationId from passed in schema and relation name */
 	relationNameList = textToQualifiedNameList(relationName);
 	relation = makeRangeVarFromNameList(relationNameList);
 
-    /* lock the relation with the lock mode */
+	/* lock the relation with the lock mode */
 	relationId = RangeVarGetRelidInternal(relation, lockMode, RVR_MISSING_OK,
 										  CitusRangeVarCallbackForLockTable,
 										  (void *) &lockMode);
@@ -783,18 +783,18 @@ CitusRangeVarCallbackForLockTable(const RangeVar *rangeVar, Oid relationId,
 
 	if (!OidIsValid(relationId))
 	{
-        /* table doesn't exist, so no permissions check */
+		/* table doesn't exist, so no permissions check */
 		return;
 	}
 
-    /* we only allow tables and views to be locked */
+	/* we only allow tables and views to be locked */
 	if (!RegularTable(relationId))
 	{
 		ereport(ERROR, (errcode(ERRCODE_WRONG_OBJECT_TYPE),
 						errmsg("\"%s\" is not a table", rangeVar->relname)));
 	}
 
-    /* check permissions */
+	/* check permissions */
 	aclResult = CitusLockTableAclCheck(relationId, lockmode, GetUserId());
 	if (aclResult != ACLCHECK_OK)
 	{
@@ -822,7 +822,7 @@ CitusLockTableAclCheck(Oid relationId, LOCKMODE lockmode, Oid userId)
 	AclResult aclResult;
 	AclMode aclMask;
 
-    /* verify adequate privilege */
+	/* verify adequate privilege */
 	if (lockmode == AccessShareLock)
 	{
 		aclMask = ACL_SELECT;
