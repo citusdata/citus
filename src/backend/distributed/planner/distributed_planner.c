@@ -97,6 +97,7 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 	Query *originalQuery = NULL;
 	PlannerRestrictionContext *plannerRestrictionContext = NULL;
 	bool setPartitionedTablesInherited = false;
+	bool fastPathRouterQuery = false;
 
 	if (cursorOptions & CURSOR_OPT_FORCE_DISTRIBUTED)
 	{
@@ -105,13 +106,15 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 
 	if (needsDistributedPlanning)
 	{
+		fastPathRouterQuery = FastPathRouterQuery(parse);
+
 		/*
 		 * Inserting into a local table needs to go through the regular postgres
 		 * planner/executor, but the SELECT needs to go through Citus. We currently
 		 * don't have a way of doing both things and therefore error out, but do
 		 * have a handy tip for users.
 		 */
-		if (InsertSelectIntoLocalTable(parse))
+		if (!fastPathRouterQuery && InsertSelectIntoLocalTable(parse))
 		{
 			ereport(ERROR, (errmsg("cannot INSERT rows from a distributed query into a "
 								   "local table"),
@@ -126,12 +129,24 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 		 * set, which doesn't break our goals, but, prevents us keeping an extra copy
 		 * of the query tree. Note that we copy the query tree once we're sure it's a
 		 * distributed query.
+		 *
+		 * Fast path router queries don't need RTE identities or partitioning adjustments
+		 * because they're only relevant when planning relies on restrict information.
 		 */
-		AssignRTEIdentities(parse);
-		originalQuery = copyObject(parse);
+		if (!fastPathRouterQuery)
+		{
+			AssignRTEIdentities(parse);
+			originalQuery = copyObject(parse);
 
-		setPartitionedTablesInherited = false;
-		AdjustPartitioningForDistributedPlanning(parse, setPartitionedTablesInherited);
+			setPartitionedTablesInherited = false;
+			AdjustPartitioningForDistributedPlanning(parse,
+													 setPartitionedTablesInherited);
+		}
+		else
+		{
+			/* we only need to copy the parse tree */
+			originalQuery = copyObject(parse);
+		}
 	}
 
 	/*
@@ -154,7 +169,7 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 		 * transformations made by postgres' planner.
 		 */
 
-		if (needsDistributedPlanning && FastPathRouterQuery(originalQuery))
+		if (needsDistributedPlanning && fastPathRouterQuery)
 		{
 			result = FastPathPlanner(originalQuery, parse, boundParams);
 		}
@@ -170,9 +185,12 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 			result = CreateDistributedPlannedStmt(planId, result, originalQuery, parse,
 												  boundParams, plannerRestrictionContext);
 
-			setPartitionedTablesInherited = true;
-			AdjustPartitioningForDistributedPlanning(parse,
-													 setPartitionedTablesInherited);
+			if (!fastPathRouterQuery)
+			{
+				setPartitionedTablesInherited = true;
+				AdjustPartitioningForDistributedPlanning(parse,
+														 setPartitionedTablesInherited);
+			}
 		}
 	}
 	PG_CATCH();
