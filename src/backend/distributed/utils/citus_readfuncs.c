@@ -315,6 +315,7 @@ ReadShardPlacement(READFUNC_ARGS)
 	READ_INT_FIELD(groupId);
 	READ_STRING_FIELD(nodeName);
 	READ_UINT_FIELD(nodePort);
+	READ_INT_FIELD(nodeId);
 	/* so we can deal with 0 */
 	READ_INT_FIELD(partitionMethod);
 	READ_UINT_FIELD(colocationGroupId);

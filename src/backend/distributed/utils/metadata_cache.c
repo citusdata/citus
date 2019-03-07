@@ -526,6 +526,7 @@ ResolveGroupShardPlacement(GroupShardPlacement *groupShardPlacement,
 
 	shardPlacement->nodeName = pstrdup(workerNode->workerName);
 	shardPlacement->nodePort = workerNode->workerPort;
+	shardPlacement->nodeId = workerNode->nodeId;
 
 	/* fill in remaining fields */
 	Assert(tableEntry->partitionMethod != 0);

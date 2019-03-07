@@ -2027,6 +2027,7 @@ PlanRouterQuery(Query *originalQuery,
 				(ShardPlacement *) CitusMakeNode(ShardPlacement);
 			dummyPlacement->nodeName = workerNode->workerName;
 			dummyPlacement->nodePort = workerNode->workerPort;
+			dummyPlacement->nodeId = workerNode->nodeId;
 			dummyPlacement->groupId = workerNode->groupId;
 
 			workerList = lappend(workerList, dummyPlacement);
