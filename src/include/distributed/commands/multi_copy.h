@@ -25,14 +25,28 @@
 
 
 /*
+ * CitusCopyDest indicates the source or destination of a COPY command.
+ */
+typedef enum CitusCopyDest
+{
+	COPY_FILE,                  /* to/from file (or a piped program) */
+	COPY_OLD_FE,                /* to/from frontend (2.0 protocol) */
+	COPY_NEW_FE,                /* to/from frontend (3.0 protocol) */
+	COPY_CALLBACK               /* to/from callback function */
+} CitusCopyDest;
+
+
+/*
  * A smaller version of copy.c's CopyStateData, trimmed to the elements
  * necessary to copy out results. While it'd be a bit nicer to share code,
  * it'd require changing core postgres code.
  */
 typedef struct CopyOutStateData
 {
+	CitusCopyDest copy_dest;    /* type of copy source/destination */
 	StringInfo fe_msgbuf;       /* used for all dests during COPY TO, only for
 	                             * dest == COPY_NEW_FE in COPY FROM */
+	List *attnumlist;           /* integer list of attnums to copy */
 	int file_encoding;          /* file or remote side's character encoding */
 	bool need_transcoding;              /* file encoding diff from server? */
 	bool binary;                /* binary format? */

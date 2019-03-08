@@ -14,6 +14,7 @@
 # Regression test output
 /regression.diffs
 /regression.out
+/test_times.log
 
 # Regression test timing
 /test_times.log

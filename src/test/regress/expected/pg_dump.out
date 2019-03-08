@@ -1,0 +1,97 @@
+CREATE TEMPORARY TABLE output (line text);
+CREATE SCHEMA dumper;
+SET search_path TO 'dumper';
+SET citus.next_shard_id TO 2900000;
+SET citus.shard_replication_factor TO 1;
+CREATE TABLE data (
+	key int,
+	value text
+);
+SELECT create_distributed_table('data', 'key');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+COPY data FROM STDIN WITH (format csv, delimiter '|', escape '\');
+-- duplicate the data using pg_dump
+\COPY output FROM PROGRAM 'pg_dump --quote-all-identifiers -h localhost -p 57636 -U postgres -d regression -t dumper.data --data-only | psql -tAX -h localhost -p 57636 -U postgres -d regression'
+-- data should now appear twice
+COPY data TO STDOUT;
+1	{this:is,json:1}
+1	{this:is,json:1}
+3	{{}:\t}
+4	{}
+3	{{}:\t}
+4	{}
+2	{$":9}
+2	{$":9}
+-- go crazy with names
+CREATE TABLE "weird.table" (
+	"key," int primary key,
+	"data.jsonb" jsonb,
+	"?empty(" text default ''
+);
+SELECT create_distributed_table('"weird.table"', 'key,');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE INDEX "weird.json_idx" ON "weird.table" USING GIN ("data.jsonb" jsonb_path_ops);
+COPY "weird.table" ("key,", "data.jsonb") FROM STDIN WITH (format 'text');
+-- fast table dump with many options
+COPY dumper."weird.table" ("data.jsonb", "?empty(")TO STDOUT WITH (format csv, force_quote ("?empty("), null 'null', delimiter '?', quote '_', header 1);
+data.jsonb?_?empty(_
+{"weird": {"table": "{:"}}?__
+_{"?\"": []}_?__
+-- do a full pg_dump of the schema, use some weird quote/escape/delimiter characters to capture the full line
+\COPY output FROM PROGRAM 'pg_dump -f results/pg_dump.tmp -h localhost -p 57636 -U postgres -d regression -n dumper --quote-all-identifiers' WITH (format csv, delimiter '|', escape '^', quote '^')
+-- drop the schema
+DROP SCHEMA dumper CASCADE;
+NOTICE:  drop cascades to 2 other objects
+DETAIL:  drop cascades to table data
+drop cascades to table "weird.table"
+-- recreate the schema
+\COPY (SELECT line FROM output WHERE line IS NOT NULL) TO PROGRAM 'psql -qtAX -h localhost -p 57636 -U postgres -d regression -f results/pg_dump.tmp' WITH (format csv, delimiter '|', escape '^', quote '^')
+
+-- redistribute the schema
+SELECT create_distributed_table('data', 'key');
+NOTICE:  Copying data from local table...
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table('"weird.table"', 'key,');
+NOTICE:  Copying data from local table...
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- check the table contents
+COPY data (value) TO STDOUT WITH (format csv, force_quote *);
+"{this:is,json:1}"
+"{this:is,json:1}"
+"{{}:	}"
+"{}"
+"{{}:	}"
+"{}"
+"{$"":9}"
+"{$"":9}"
+COPY dumper."weird.table" ("data.jsonb", "?empty(") TO STDOUT WITH (format csv, force_quote ("?empty("), null 'null', header true);
+data.jsonb,?empty(
+"{""weird"": {""table"": ""{:""}}",""
+"{""?\"""": []}",""
+SELECT indexname FROM pg_indexes WHERE tablename = 'weird.table' ORDER BY indexname;
+    indexname
+---------------------------------------------------------------------
+ weird.json_idx
+ weird.table_pkey
+(2 rows)
+
+DROP SCHEMA dumper CASCADE;
+NOTICE:  drop cascades to 2 other objects
+DETAIL:  drop cascades to table data
+drop cascades to table "weird.table"
