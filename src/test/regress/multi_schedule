@@ -184,7 +184,7 @@ test: multi_transaction_recovery
 # multi_copy creates hash and range-partitioned tables and performs COPY
 # multi_router_planner creates hash partitioned tables.
 # ---------
-test: multi_copy fast_path_router_modify
+test: multi_copy fast_path_router_modify pg_dump
 test: multi_router_planner multi_router_planner_fast_path
 
 # ----------
