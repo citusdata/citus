@@ -29,6 +29,7 @@
 #include "catalog/pg_type.h"
 #include "commands/defrem.h"
 #include "commands/sequence.h"
+#include "distributed/backend_data.h"
 #include "distributed/listutils.h"
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/citus_nodes.h"
@@ -2005,13 +2006,11 @@ BuildJobTreeTaskList(Job *jobTree, PlannerRestrictionContext *plannerRestriction
 		if (job->subqueryPushdown)
 		{
 			bool isMultiShardQuery = false;
-			List *prunedRelationShardList = TargetShardIntervalsForQuery(job->jobQuery,
-																		 plannerRestrictionContext
-																		 ->
-																		 relationRestrictionContext,
-																		 &
-																		 isMultiShardQuery,
-																		 NULL);
+			List *prunedRelationShardList =
+				TargetShardIntervalsForRestrictInfo(plannerRestrictionContext->
+													relationRestrictionContext,
+													&isMultiShardQuery, NULL);
+
 			sqlTaskList = QueryPushdownSqlTaskList(job->jobQuery, job->jobId,
 												   plannerRestrictionContext->
 												   relationRestrictionContext,
@@ -5078,14 +5077,24 @@ RoundRobinAssignTaskList(List *taskList)
 /*
  * RoundRobinReorder implements the core of the round-robin assignment policy.
  * It takes a task and placement list and rotates a copy of the placement list
- * based on the task's jobId. The rotated copy is returned.
+ * based on the latest stable transaction id provided by PostgreSQL.
+ *
+ * We prefer to use transactionId as the seed for the rotation to use the replicas
+ * in the same worker node within the same transaction. This becomes more important
+ * when we're reading from (the same or multiple) reference tables within a
+ * transaction. With this approach, we can prevent reads to expand the worker nodes
+ * that participate in a distributed transaction.
+ *
+ * Note that we prefer PostgreSQL's transactionId over distributed transactionId that
+ * Citus generates since the distributed transactionId is generated during the execution
+ * where as task-assignment happens duing the planning.
  */
 static List *
 RoundRobinReorder(Task *task, List *placementList)
 {
-	uint64 jobId = task->jobId;
+	TransactionId transactionId = GetMyProcLocalTransactionId();
 	uint32 activePlacementCount = list_length(placementList);
-	uint32 roundRobinIndex = (jobId % activePlacementCount);
+	uint32 roundRobinIndex = (transactionId % activePlacementCount);
 
 	placementList = LeftRotateList(placementList, roundRobinIndex);
 

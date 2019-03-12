@@ -7134,6 +7134,12 @@ get_from_clause_item(Node *jtnode, Query *query, deparse_context *context)
 			/* Else print column aliases as needed */
 			get_column_alias_list(colinfo, context);
 		}
+		/* check if column's are given aliases in distributed tables */
+		else if (colinfo->parentUsing != NIL)
+		{
+			Assert(colinfo->printaliases);
+			get_column_alias_list(colinfo, context);
+		}
 
 		/* Tablesample clause must go after any alias */
 		if ((rteKind == CITUS_RTE_RELATION || rteKind == CITUS_RTE_SHARD) &&

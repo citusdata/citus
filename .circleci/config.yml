@@ -1,0 +1,96 @@
+version: 2.1
+orbs:
+  codecov: codecov/codecov@1.0.4
+
+jobs:
+  build:
+    docker:
+      - {image: 'citusdata/extbuilder:latest'}
+    steps:
+      - checkout
+      - {run: {name: 'Configure, Build, and Install', command: build-ext}}
+      - {persist_to_workspace: {root: ., paths: [.]}}
+  check-style:
+    docker:
+      - {image: 'citusdata/stylechecker:latest'}
+    steps:
+      - checkout
+      - {run: {name: 'Check Style', command: citus_indent --check}}
+  test-10_check-multi:
+    docker:
+      - {image: 'citusdata/exttester-10:latest'}
+    working_directory: /home/circleci/project
+    steps:
+      - {attach_workspace: {at: .}}
+      - {run: {name: 'Install and Test (check-multi)', command: 'install-and-test-ext check-multi'}}
+      - {codecov/upload: {flags: 'test_10,multi'}}
+  test-10_check-tt-van-mx:
+    docker:
+      - {image: 'citusdata/exttester-10:latest'}
+    working_directory: /home/circleci/project
+    steps:
+      - {attach_workspace: {at: .}}
+      - {run: {name: 'Install and Test (check-tt-van-mx)', command: 'install-and-test-ext check-multi-task-tracker-extra check-vanilla check-multi-mx'}}
+      - {codecov/upload: {flags: 'test_10,tracker,vanilla,mx'}}
+  test-10_check-iso-work-fol:
+    docker:
+      - {image: 'citusdata/exttester-10:latest'}
+    working_directory: /home/circleci/project
+    steps:
+      - {attach_workspace: {at: .}}
+      - {run: {name: 'Install and Test (check-iso-work-fol)', command: 'install-and-test-ext check-isolation check-worker check-follower-cluster'}}
+      - {codecov/upload: {flags: 'test_10,isolation,worker,follower'}}
+  test-10_check-failure:
+    docker:
+      - {image: 'citusdata/failtester-10:latest'}
+    working_directory: /home/circleci/project
+    steps:
+      - {attach_workspace: {at: .}}
+      - {run: {name: 'Install and Test (check-failure)', command: 'install-and-test-ext check-failure'}}
+  test-11_check-multi:
+    docker:
+      - {image: 'citusdata/exttester-11:latest'}
+    working_directory: /home/circleci/project
+    steps:
+      - {attach_workspace: {at: .}}
+      - {run: {name: 'Install and Test (check-multi)', command: 'install-and-test-ext check-multi'}}
+      - {codecov/upload: {flags: 'test_11,multi'}}
+  test-11_check-tt-van-mx:
+    docker:
+      - {image: 'citusdata/exttester-11:latest'}
+    working_directory: /home/circleci/project
+    steps:
+      - {attach_workspace: {at: .}}
+      - {run: {name: 'Install and Test (check-tt-van-mx)', command: 'install-and-test-ext check-multi-task-tracker-extra check-vanilla check-multi-mx'}}
+      - {codecov/upload: {flags: 'test_11,tracker,vanilla,mx'}}
+  test-11_check-iso-work-fol:
+    docker:
+      - {image: 'citusdata/exttester-11:latest'}
+    working_directory: /home/circleci/project
+    steps:
+      - {attach_workspace: {at: .}}
+      - {run: {name: 'Install and Test (check-iso-work-fol)', command: 'install-and-test-ext check-isolation check-worker check-follower-cluster'}}
+      - {codecov/upload: {flags: 'test_11,isolation,worker,follower'}}
+  test-11_check-failure:
+    docker:
+      - {image: 'citusdata/failtester-11:latest'}
+    working_directory: /home/circleci/project
+    steps:
+      - {attach_workspace: {at: .}}
+      - {run: {name: 'Install and Test (check-failure)', command: 'install-and-test-ext check-failure'}}
+workflows:
+  version: 2
+  build_and_test:
+    jobs:
+      - build
+      - check-style
+
+      - {test-10_check-multi: {requires: [build]}}
+      - {test-10_check-tt-van-mx: {requires: [build]}}
+      - {test-10_check-iso-work-fol: {requires: [build]}}
+      - {test-10_check-failure: {requires: [build]}}
+
+      - {test-11_check-multi: {requires: [build]}}
+      - {test-11_check-tt-van-mx: {requires: [build]}}
+      - {test-11_check-iso-work-fol: {requires: [build]}}
+      - {test-11_check-failure: {requires: [build]}}

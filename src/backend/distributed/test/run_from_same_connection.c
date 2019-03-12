@@ -196,6 +196,7 @@ GetRemoteProcessId(MultiConnection *connection)
 	StringInfo queryStringInfo = makeStringInfo();
 	PGresult *result = NULL;
 	int64 rowCount = 0;
+	int64 resultValue = 0;
 
 	appendStringInfo(queryStringInfo, GET_PROCESS_ID);
 
@@ -208,7 +209,10 @@ GetRemoteProcessId(MultiConnection *connection)
 		PG_RETURN_VOID();
 	}
 
+	resultValue = ParseIntField(result, 0, 0);
+
+	PQclear(result);
 	ClearResults(connection, false);
 
-	return ParseIntField(result, 0, 0);
+	return resultValue;
 }

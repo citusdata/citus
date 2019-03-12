@@ -81,7 +81,7 @@ typedef struct RemoteTransaction
 
 
 /* utility functions for dealing with remote transactions */
-extern bool ParsePreparedTransactionName(char *preparedTransactionName, int *groupId,
+extern bool ParsePreparedTransactionName(char *preparedTransactionName, int32 *groupId,
 										 int *procId, uint64 *transactionNumber,
 										 uint32 *connectionNumber);
 

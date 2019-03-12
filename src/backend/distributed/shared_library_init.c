@@ -412,6 +412,16 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
+		"citus.enable_fast_path_router_planner",
+		gettext_noop("Enables fast path router planner"),
+		NULL,
+		&EnableFastPathRouterPlanner,
+		true,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
 		"citus.override_table_visibility",
 		gettext_noop("Enables replacing occurencens of pg_catalog.pg_table_visible() "
 					 "with pg_catalog.citus_table_visible()"),

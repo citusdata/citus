@@ -23,6 +23,7 @@
 #include "optimizer/prep.h"
 #include "postmaster/bgworker.h"
 #include "utils/memutils.h"
+#include "funcapi.h"
 
 /* PostgreSQL 11 splits hash procs into "standard" and "extended" */
 #define HASHSTANDARD_PROC HASHPROC
@@ -131,6 +132,33 @@ static inline Expr *
 canonicalize_qual_compat(Expr *qual, bool is_check)
 {
 	return canonicalize_qual(qual);
+}
+
+
+/*
+ * A convenient wrapper around get_expr_result_type() that is added on PG11
+ *
+ * Note that this function ignores the second parameter and behaves
+ * slightly differently than the PG11 version.
+ *
+ * 1. The original function throws errors if noError flag is not set, we ignore
+ * this flag here and return NULL in that case
+ * 2. TYPEFUNC_COMPOSITE_DOMAIN is introduced in PG11, and references to this
+ * macro is removed
+ * */
+static inline TupleDesc
+get_expr_result_tupdesc(Node *expr, bool noError)
+{
+	TupleDesc tupleDesc;
+	TypeFuncClass functypclass;
+
+	functypclass = get_expr_result_type(expr, NULL, &tupleDesc);
+
+	if (functypclass == TYPEFUNC_COMPOSITE)
+	{
+		return tupleDesc;
+	}
+	return NULL;
 }
 
 

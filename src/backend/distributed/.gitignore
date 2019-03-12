@@ -8,8 +8,3 @@
 /regression.out
 /results/
 /tmp_check*
-
-# ignore latest install file
-citus--?.?.sql
-citus--?.?-*.sql
-!citus--?.?-*--?.?-*.sql

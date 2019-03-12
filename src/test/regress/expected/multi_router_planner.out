@@ -2,6 +2,10 @@ SET citus.next_shard_id TO 840000;
 -- ===================================================================
 -- test router planner functionality for single shard select queries
 -- ===================================================================
+-- all the tests in this file is intended for testing non-fast-path
+-- router planner, so we're disabling it in this file. We've bunch of
+-- other tests that triggers fast-path-router planner
+SET citus.enable_fast_path_router_planner TO false;
 CREATE TABLE articles_hash (
 	id bigint NOT NULL,
 	author_id bigint NOT NULL,

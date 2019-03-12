@@ -1,0 +1,362 @@
+CREATE SCHEMA fast_path_router_modify;
+SET search_path TO fast_path_router_modify;
+SET citus.next_shard_id TO 1840000;
+-- all the tests in this file is intended for testing fast-path
+-- router planner, so we're explicitly enabling itin this file. 
+-- We've bunch of other tests that triggers non-fast-path-router 
+-- planner (note this is already true by default)
+SET citus.enable_fast_path_router_planner TO true;
+SET citus.shard_replication_factor TO 1;
+CREATE TABLE modify_fast_path(key int, value_1 int, value_2 text);
+SELECT create_distributed_table('modify_fast_path', 'key');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+SET citus.shard_replication_factor TO 2;
+CREATE TABLE modify_fast_path_replication_2(key int, value_1 int, value_2 text);
+SELECT create_distributed_table('modify_fast_path_replication_2', 'key');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+CREATE TABLE modify_fast_path_reference(key int, value_1 int, value_2 text);
+SELECT create_reference_table('modify_fast_path_reference');
+ create_reference_table 
+------------------------
+ 
+(1 row)
+
+-- show the output
+SET client_min_messages TO DEBUG;
+-- very simple queries goes through fast-path planning
+DELETE FROM modify_fast_path WHERE key = 1;
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+DETAIL:  distribution column value: 1
+UPDATE modify_fast_path SET value_1 = 1 WHERE key = 1;
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+DETAIL:  distribution column value: 1
+UPDATE modify_fast_path SET value_1 = value_1 + 1 WHERE key = 1;
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+DETAIL:  distribution column value: 1
+UPDATE modify_fast_path SET value_1 = value_1 + value_2::int WHERE key = 1;
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+DETAIL:  distribution column value: 1
+DELETE FROM modify_fast_path WHERE value_1 = 15 AND (key = 1 AND value_2 = 'citus');
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+DETAIL:  distribution column value: 1
+DELETE FROM modify_fast_path WHERE key = 1 and FALSE;
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+-- UPDATE may include complex target entries
+UPDATE modify_fast_path SET value_1 = value_1 + 12 * value_1 WHERE key = 1;
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+DETAIL:  distribution column value: 1
+UPDATE modify_fast_path SET value_1 = abs(-19) WHERE key = 1;
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+DETAIL:  distribution column value: 1
+-- cannot go through fast-path because there are multiple keys
+DELETE FROM modify_fast_path WHERE key = 1 AND key = 2;
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+DELETE FROM modify_fast_path WHERE key = 1 AND (key = 2 AND value_1 = 15);
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+-- cannot go through fast-path because key is not on the top level
+DELETE FROM modify_fast_path WHERE value_1 = 15 OR (key = 1 AND value_2 = 'citus');
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+DELETE FROM modify_fast_path WHERE value_1 = 15 AND (key = 1 OR value_2 = 'citus');
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+DETAIL:  distribution column value: 1
+-- goes through fast-path planning even if the key is updated to the same value
+UPDATE modify_fast_path SET key = 1 WHERE key = 1;
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+DETAIL:  distribution column value: 1
+UPDATE modify_fast_path SET key = 1::float WHERE key = 1;
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+DETAIL:  distribution column value: 1
+-- cannot support if key changes
+UPDATE modify_fast_path SET key = 2 WHERE key = 1;
+DEBUG:  modifying the partition value of rows is not allowed
+ERROR:  modifying the partition value of rows is not allowed
+UPDATE modify_fast_path SET key = 2::numeric WHERE key = 1;
+DEBUG:  modifying the partition value of rows is not allowed
+ERROR:  modifying the partition value of rows is not allowed
+-- returning is not supported via fast-path
+DELETE FROM modify_fast_path WHERE key = 1 RETURNING *;
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+DETAIL:  distribution column value: 1
+ key | value_1 | value_2 
+-----+---------+---------
+(0 rows)
+
+-- modifying ctes are not supported via fast-path
+WITH t1 AS (DELETE FROM modify_fast_path WHERE key = 1), t2 AS  (SELECT * FROM modify_fast_path) SELECT * FROM t2;
+DEBUG:  data-modifying statements are not supported in the WITH clauses of distributed queries
+DEBUG:  generating subplan 18_1 for CTE t1: DELETE FROM fast_path_router_modify.modify_fast_path WHERE (key OPERATOR(pg_catalog.=) 1)
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+DETAIL:  distribution column value: 1
+DEBUG:  generating subplan 18_2 for CTE t2: SELECT key, value_1, value_2 FROM fast_path_router_modify.modify_fast_path
+DEBUG:  Plan 18 query after replacing subqueries and CTEs: SELECT key, value_1, value_2 FROM (SELECT intermediate_result.key, intermediate_result.value_1, intermediate_result.value_2 FROM read_intermediate_result('18_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value_1 integer, value_2 text)) t2
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ key | value_1 | value_2 
+-----+---------+---------
+(0 rows)
+
+-- for update/share is supported via fast-path when replication factor = 1 or reference table
+SELECT * FROM modify_fast_path WHERE key = 1 FOR UPDATE;
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+DETAIL:  distribution column value: 1
+ key | value_1 | value_2 
+-----+---------+---------
+(0 rows)
+
+SELECT * FROM modify_fast_path WHERE key = 1 FOR SHARE;
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+DETAIL:  distribution column value: 1
+ key | value_1 | value_2 
+-----+---------+---------
+(0 rows)
+
+SELECT * FROM modify_fast_path_reference WHERE key = 1 FOR UPDATE;
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ key | value_1 | value_2 
+-----+---------+---------
+(0 rows)
+
+SELECT * FROM modify_fast_path_reference WHERE key = 1 FOR SHARE;
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ key | value_1 | value_2 
+-----+---------+---------
+(0 rows)
+
+-- for update/share is not supported via fast-path wen replication factor > 1
+SELECT * FROM modify_fast_path_replication_2 WHERE key = 1 FOR UPDATE;
+ERROR:  could not run distributed query with FOR UPDATE/SHARE commands
+HINT:  Consider using an equality filter on the distributed table's partition column.
+SELECT * FROM modify_fast_path_replication_2 WHERE key = 1 FOR SHARE;
+ERROR:  could not run distributed query with FOR UPDATE/SHARE commands
+HINT:  Consider using an equality filter on the distributed table's partition column.
+-- very simple queries on reference tables goes through fast-path planning
+DELETE FROM modify_fast_path_reference WHERE key = 1;
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+UPDATE modify_fast_path_reference SET value_1 = 1 WHERE key = 1;
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+UPDATE modify_fast_path_reference SET value_1 = value_1 + 1 WHERE key = 1;
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+UPDATE modify_fast_path_reference SET value_1 = value_1 + value_2::int WHERE key = 1;
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+-- joins are not supported via fast-path
+UPDATE modify_fast_path 
+	SET value_1 = 1 
+	FROM modify_fast_path_reference 
+	WHERE 
+		modify_fast_path.key = modify_fast_path_reference.key AND 
+		modify_fast_path.key  = 1 AND 
+		modify_fast_path_reference.key = 1;
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+DETAIL:  distribution column value: 1
+PREPARE p1 (int, int, int) AS
+	UPDATE modify_fast_path SET value_1 = value_1 + $1 WHERE key = $2 AND value_1 = $3;
+EXECUTE p1(1,1,1);
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+DETAIL:  distribution column value: 1
+EXECUTE p1(2,2,2);
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+DETAIL:  distribution column value: 2
+EXECUTE p1(3,3,3);
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+DETAIL:  distribution column value: 3
+EXECUTE p1(4,4,4);
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+DETAIL:  distribution column value: 4
+EXECUTE p1(5,5,5);
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+DETAIL:  distribution column value: 5
+EXECUTE p1(6,6,6);
+DEBUG:  Router planner cannot handle multi-shard modify queries
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+DETAIL:  distribution column value: 6
+CREATE FUNCTION modify_fast_path_plpsql(int, int) RETURNS void as $$
+BEGIN
+	DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2;
+END;
+$$ LANGUAGE plpgsql;
+SELECT modify_fast_path_plpsql(1,1);
+DEBUG:  Distributed planning for a fast-path router query
+CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
+PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
+DEBUG:  Creating router plan
+CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
+PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
+DEBUG:  Plan is router executable
+DETAIL:  distribution column value: 1
+CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
+PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
+ modify_fast_path_plpsql 
+-------------------------
+ 
+(1 row)
+
+SELECT modify_fast_path_plpsql(2,2);
+DEBUG:  Distributed planning for a fast-path router query
+CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
+PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
+DEBUG:  Creating router plan
+CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
+PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
+DEBUG:  Plan is router executable
+DETAIL:  distribution column value: 2
+CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
+PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
+ modify_fast_path_plpsql 
+-------------------------
+ 
+(1 row)
+
+SELECT modify_fast_path_plpsql(3,3);
+DEBUG:  Distributed planning for a fast-path router query
+CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
+PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
+DEBUG:  Creating router plan
+CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
+PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
+DEBUG:  Plan is router executable
+DETAIL:  distribution column value: 3
+CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
+PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
+ modify_fast_path_plpsql 
+-------------------------
+ 
+(1 row)
+
+SELECT modify_fast_path_plpsql(4,4);
+DEBUG:  Distributed planning for a fast-path router query
+CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
+PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
+DEBUG:  Creating router plan
+CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
+PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
+DEBUG:  Plan is router executable
+DETAIL:  distribution column value: 4
+CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
+PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
+ modify_fast_path_plpsql 
+-------------------------
+ 
+(1 row)
+
+SELECT modify_fast_path_plpsql(5,5);
+DEBUG:  Distributed planning for a fast-path router query
+CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
+PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
+DEBUG:  Creating router plan
+CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
+PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
+DEBUG:  Plan is router executable
+DETAIL:  distribution column value: 5
+CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
+PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
+ modify_fast_path_plpsql 
+-------------------------
+ 
+(1 row)
+
+SELECT modify_fast_path_plpsql(6,6);
+DEBUG:  Router planner cannot handle multi-shard modify queries
+CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
+PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
+DEBUG:  Distributed planning for a fast-path router query
+CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
+PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
+DEBUG:  Creating router plan
+CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
+PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
+DEBUG:  Plan is router executable
+DETAIL:  distribution column value: 6
+CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
+PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
+ modify_fast_path_plpsql 
+-------------------------
+ 
+(1 row)
+
+SELECT modify_fast_path_plpsql(6,6);
+DEBUG:  Distributed planning for a fast-path router query
+CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
+PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
+DEBUG:  Creating router plan
+CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
+PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
+DEBUG:  Plan is router executable
+DETAIL:  distribution column value: 6
+CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
+PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
+ modify_fast_path_plpsql 
+-------------------------
+ 
+(1 row)
+
+RESET client_min_messages;
+DROP SCHEMA fast_path_router_modify CASCADE;
+NOTICE:  drop cascades to 4 other objects
+DETAIL:  drop cascades to table modify_fast_path
+drop cascades to table modify_fast_path_replication_2
+drop cascades to table modify_fast_path_reference
+drop cascades to function modify_fast_path_plpsql(integer,integer)

@@ -1323,7 +1323,7 @@ Assign2PCIdentifier(MultiConnection *connection)
  */
 bool
 ParsePreparedTransactionName(char *preparedTransactionName,
-							 int *groupId, int *procId,
+							 int32 *groupId, int *procId,
 							 uint64 *transactionNumber,
 							 uint32 *connectionNumber)
 {
