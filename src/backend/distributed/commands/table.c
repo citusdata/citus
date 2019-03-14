@@ -1198,7 +1198,7 @@ SetupExecutionModeForAlterTable(Oid relationId, AlterTableCmd *command)
 			}
 		}
 	}
-	else if (alterTableType == AT_DetachPartition)
+	else if (alterTableType == AT_DetachPartition || alterTableType == AT_AttachPartition)
 	{
 		/* check if there are foreign constraints to reference tables */
 		if (HasForeignKeyToReferenceTable(relationId))
