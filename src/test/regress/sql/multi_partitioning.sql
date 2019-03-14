@@ -1127,6 +1127,58 @@ GROUP BY
 ORDER BY
 	1,2;
 
+
+-- test we don't deadlock when attaching and detaching partitions from partitioned
+-- tables with foreign keys
+CREATE TABLE reference_table(id int PRIMARY KEY);
+SELECT create_reference_table('reference_table');
+
+CREATE TABLE reference_table_2(id int PRIMARY KEY);
+SELECT create_reference_table('reference_table_2');
+
+CREATE TABLE partitioning_test(id int, time date) PARTITION BY RANGE (time);
+CREATE TABLE partitioning_test_2008 PARTITION OF partitioning_test FOR VALUES FROM ('2008-01-01') TO ('2009-01-01');
+CREATE TABLE partitioning_test_2009 (LIKE partitioning_test);
+CREATE TABLE partitioning_test_2010 (LIKE partitioning_test);
+CREATE TABLE partitioning_test_2011 (LIKE partitioning_test);
+
+-- distributing partitioning_test will also distribute partitioning_test_2008
+SELECT create_distributed_table('partitioning_test', 'id');
+SELECT create_distributed_table('partitioning_test_2009', 'id');
+SELECT create_distributed_table('partitioning_test_2010', 'id');
+SELECT create_distributed_table('partitioning_test_2011', 'id');
+
+ALTER TABLE partitioning_test ADD CONSTRAINT partitioning_reference_fkey
+    FOREIGN KEY (id) REFERENCES reference_table(id) ON DELETE CASCADE;
+ALTER TABLE partitioning_test_2009 ADD CONSTRAINT partitioning_reference_fkey_2009
+    FOREIGN KEY (id) REFERENCES reference_table(id) ON DELETE CASCADE;
+
+INSERT INTO partitioning_test_2010 VALUES (1, '2010-02-01');
+-- This should fail because of foreign key constraint violation
+ALTER TABLE partitioning_test ATTACH PARTITION partitioning_test_2010
+      FOR VALUES FROM ('2010-01-01') TO ('2011-01-01');
+-- Truncate, so attaching again won't fail
+TRUNCATE partitioning_test_2010;
+
+-- Attach a table which already has the same constraint
+ALTER TABLE partitioning_test ATTACH PARTITION partitioning_test_2009
+      FOR VALUES FROM ('2009-01-01') TO ('2010-01-01');
+-- Attach a table which doesn't have the constraint
+ALTER TABLE partitioning_test ATTACH PARTITION partitioning_test_2010
+      FOR VALUES FROM ('2010-01-01') TO ('2011-01-01');
+-- Attach a table which has a different constraint
+ALTER TABLE partitioning_test ATTACH PARTITION partitioning_test_2011
+      FOR VALUES FROM ('2011-01-01') TO ('2012-01-01');
+
+ALTER TABLE partitioning_test DETACH PARTITION partitioning_test_2008;
+ALTER TABLE partitioning_test DETACH PARTITION partitioning_test_2009;
+ALTER TABLE partitioning_test DETACH PARTITION partitioning_test_2010;
+ALTER TABLE partitioning_test DETACH PARTITION partitioning_test_2011;
+
+DROP TABLE partitioning_test, partitioning_test_2008, partitioning_test_2009,
+           partitioning_test_2010, partitioning_test_2011,
+           reference_table, reference_table_2;
+
 DROP SCHEMA partitioning_schema CASCADE;
 RESET SEARCH_PATH;
 DROP TABLE IF EXISTS

@@ -45,5 +45,6 @@ extern void CitusProcessUtility(Node *node, const char *queryString,
 extern void MarkInvalidateForeignKeyGraph(void);
 extern void InvalidateForeignKeyGraphForDDL(void);
 extern List * DDLTaskList(Oid relationId, const char *commandString);
+extern bool AlterTableInProgress(void);
 
 #endif /* MULTI_UTILITY_H */

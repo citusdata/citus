@@ -17,6 +17,7 @@
 #include "catalog/namespace.h"
 #include "distributed/citus_custom_scan.h"
 #include "distributed/commands/multi_copy.h"
+#include "distributed/commands/utility_hook.h"
 #include "distributed/insert_select_executor.h"
 #include "distributed/insert_select_planner.h"
 #include "distributed/multi_executor.h"
@@ -51,7 +52,7 @@ bool WritableStandbyCoordinator = false;
 static bool IsCitusPlan(Plan *plan);
 static bool IsCitusCustomScan(Plan *plan);
 static Relation StubRelation(TupleDesc tupleDescriptor);
-
+static bool AlterTableConstraintCheck(QueryDesc *queryDesc);
 
 /*
  * CitusExecutorStart is the ExecutorStart_hook that gets called when
@@ -92,6 +93,47 @@ CitusExecutorStart(QueryDesc *queryDesc, int eflags)
 #endif
 	{
 		standard_ExecutorStart(queryDesc, eflags);
+	}
+}
+
+
+/*
+ * CitusExecutorRun is the ExecutorRun_hook that gets called when postgres
+ * executes a query.
+ */
+void
+CitusExecutorRun(QueryDesc *queryDesc,
+				 ScanDirection direction, uint64 count, bool execute_once)
+{
+	/*
+	 * Disable execution of ALTER TABLE constraint validation queries. These
+	 * constraints will be validated in worker nodes, so running these queries
+	 * from the coordinator would be redundant.
+	 *
+	 * For example, ALTER TABLE ... ATTACH PARTITION checks that the new
+	 * partition doesn't violate constraints of the parent table, which
+	 * might involve running some SELECT queries.
+	 *
+	 * Ideally we'd completely skip these checks in the coordinator, but we don't
+	 * have any means to tell postgres to skip the checks. So the best we can do is
+	 * to not execute the queries and return an empty result set, as if this table has
+	 * no rows, so no constraints will be violated.
+	 */
+	if (AlterTableConstraintCheck(queryDesc))
+	{
+		EState *estate = queryDesc->estate;
+		DestReceiver *dest = queryDesc->dest;
+
+		estate->es_processed = 0;
+		estate->es_lastoid = InvalidOid;
+
+		/* start and shutdown tuple receiver to simulate empty result */
+		dest->rStartup(queryDesc->dest, CMD_SELECT, queryDesc->tupDesc);
+		dest->rShutdown(dest);
+	}
+	else
+	{
+		standard_ExecutorRun(queryDesc, direction, count, execute_once);
 	}
 }
 
@@ -417,4 +459,42 @@ SetLocalMultiShardModifyModeToSequential()
 	set_config_option("citus.multi_shard_modify_mode", "sequential",
 					  (superuser() ? PGC_SUSET : PGC_USERSET), PGC_S_SESSION,
 					  GUC_ACTION_LOCAL, true, 0, false);
+}
+
+
+/*
+ * AlterTableConstraintCheck returns if the given query is an ALTER TABLE
+ * constraint check query.
+ *
+ * Postgres uses SPI to execute these queries. To see examples of how these
+ * constraint check queries look like, see RI_Initial_Check() and RI_Fkey_check().
+ */
+static bool
+AlterTableConstraintCheck(QueryDesc *queryDesc)
+{
+	if (!AlterTableInProgress())
+	{
+		return false;
+	}
+
+	/*
+	 * These queries are one or more SELECT queries, where postgres checks
+	 * their results either for NULL values or existence of a row at all.
+	 */
+	if (queryDesc->plannedstmt->commandType != CMD_SELECT)
+	{
+		return false;
+	}
+
+	/*
+	 * While an ALTER TABLE is in progress, we might do SELECTs on some
+	 * catalog tables too. For example, when dropping a column, citus_drop_trigger()
+	 * runs some SELECTs on catalog tables. These are not constraint check queries.
+	 */
+	if (!IsCitusPlan(queryDesc->plannedstmt->planTree))
+	{
+		return false;
+	}
+
+	return true;
 }
