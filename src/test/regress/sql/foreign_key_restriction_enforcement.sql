@@ -303,7 +303,6 @@ BEGIN;
 ROLLBACK;
 
 -- case 5.4: Parallel UPDATE on distributed table follow by a related DDL on reference table
--- FIXME: Can we do better?
 BEGIN;
 	UPDATE on_update_fkey_table SET value_1 = 16 WHERE value_1 = 15;
 	ALTER TABLE referece_table ALTER COLUMN id SET DATA TYPE smallint;

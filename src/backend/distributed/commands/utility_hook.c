@@ -57,6 +57,7 @@
 
 bool EnableDDLPropagation = true; /* ddl propagation is enabled */
 static bool shouldInvalidateForeignKeyGraph = false;
+static int activeAlterTables = 0;
 
 
 /* Local functions forward declarations for helper functions */
@@ -459,13 +460,37 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 
 #if (PG_VERSION_NUM >= 100000)
 	pstmt->utilityStmt = parsetree;
-	standard_ProcessUtility(pstmt, queryString, context,
-							params, queryEnv, dest, completionTag);
+
+	PG_TRY();
+	{
+		if (IsA(parsetree, AlterTableStmt))
+		{
+			activeAlterTables++;
+		}
+
+		standard_ProcessUtility(pstmt, queryString, context,
+								params, queryEnv, dest, completionTag);
 #else
 	standard_ProcessUtility(parsetree, queryString, context,
 							params, dest, completionTag);
 #endif
 
+
+		if (IsA(parsetree, AlterTableStmt))
+		{
+			activeAlterTables--;
+		}
+	}
+	PG_CATCH();
+	{
+		if (IsA(parsetree, AlterTableStmt))
+		{
+			activeAlterTables--;
+		}
+
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
 
 	/*
 	 * We only process CREATE TABLE ... PARTITION OF commands in the function below
@@ -793,4 +818,15 @@ DDLTaskList(Oid relationId, const char *commandString)
 	}
 
 	return taskList;
+}
+
+
+/*
+ * AlterTableInProgress returns true if we're processing an ALTER TABLE command
+ * right now.
+ */
+bool
+AlterTableInProgress(void)
+{
+	return activeAlterTables > 0;
 }
