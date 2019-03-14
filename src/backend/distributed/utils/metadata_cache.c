@@ -2702,7 +2702,7 @@ InitializeWorkerNodeCache(void)
 	 * searched by the nodename and nodeport in every physical plan creation.
 	 */
 	memset(&info, 0, sizeof(info));
-	info.keysize = +sizeof(uint32) + WORKER_LENGTH + sizeof(uint32);
+	info.keysize = sizeof(uint32) + WORKER_LENGTH + sizeof(uint32);
 	info.entrysize = sizeof(WorkerNode);
 	info.hcxt = CacheMemoryContext;
 	info.hash = WorkerNodeHashCode;
