@@ -1093,7 +1093,7 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
  * for two things for practial purpose for not doing the same checks
  * twice:
  *     (a) For any command, decide and return whether we should
- *         run the command in sequntial mode
+ *         run the command in sequential mode
  *     (b) For commands in a transaction block, set the transaction local
  *         multi-shard modify mode to sequential when necessary
  *
@@ -1185,26 +1185,14 @@ SetupExecutionModeForAlterTable(Oid relationId, AlterTableCmd *command)
 			{
 				executeSequentially = true;
 			}
-
-			/*
-			 * Postgres performs additional selects when creating constraints
-			 * on partitioned tables. We need to set execution mode to
-			 * sequential for the select query so that ddl connections
-			 * we open does not fail due to previous select.
-			 */
-			if (executeSequentially && PartitionedTable(relationId))
-			{
-				SetLocalMultiShardModifyModeToSequential();
-			}
 		}
 	}
-	else if (alterTableType == AT_DetachPartition)
+	else if (alterTableType == AT_DetachPartition || alterTableType == AT_AttachPartition)
 	{
 		/* check if there are foreign constraints to reference tables */
 		if (HasForeignKeyToReferenceTable(relationId))
 		{
 			executeSequentially = true;
-			SetLocalMultiShardModifyModeToSequential();
 		}
 	}
 

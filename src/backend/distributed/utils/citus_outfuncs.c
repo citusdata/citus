@@ -402,7 +402,7 @@ OutShardPlacement(OUTFUNC_ARGS)
 	WRITE_UINT64_FIELD(shardId);
 	WRITE_UINT64_FIELD(shardLength);
 	WRITE_ENUM_FIELD(shardState, RelayFileState);
-	WRITE_UINT_FIELD(groupId);
+	WRITE_INT_FIELD(groupId);
 	WRITE_STRING_FIELD(nodeName);
 	WRITE_UINT_FIELD(nodePort);
 	/* so we can deal with 0 */
@@ -422,7 +422,7 @@ OutGroupShardPlacement(OUTFUNC_ARGS)
 	WRITE_UINT64_FIELD(shardId);
 	WRITE_UINT64_FIELD(shardLength);
 	WRITE_ENUM_FIELD(shardState, RelayFileState);
-	WRITE_UINT_FIELD(groupId);
+	WRITE_INT_FIELD(groupId);
 }
 
 

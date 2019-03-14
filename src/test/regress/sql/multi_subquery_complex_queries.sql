@@ -2400,3 +2400,31 @@ FROM
   USING (user_id)
 GROUP BY a.user_id
 ORDER BY 1;
+
+-- queries where column aliases are used
+-- the query is not very complex. join is given an alias with aliases
+-- for each output column
+SELECT k1 
+FROM (
+	SELECT k1, random()
+	FROM (users_table JOIN events_table USING (user_id)) k (k1, k2, k3)) l
+ORDER BY k1
+LIMIT 5;
+
+SELECT DISTINCT k1 
+FROM (
+	SELECT k1, random()
+	FROM (users_table JOIN events_table USING (user_id)) k (k1, k2, k3)) l
+ORDER BY k1
+LIMIT 5;
+
+SELECT x1, x3, value_2
+FROM (users_table u FULL JOIN events_table e ON (u.user_id = e.user_id)) k(x1, x2, x3, x4, x5)
+ORDER BY 1, 2, 3
+LIMIT 5;
+
+SELECT x1, x3, value_2
+FROM (users_table u FULL JOIN events_table e USING (user_id)) k(x1, x2, x3, x4, x5)
+ORDER BY 1, 2, 3
+LIMIT 5;
+

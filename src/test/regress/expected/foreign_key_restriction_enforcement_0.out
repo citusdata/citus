@@ -511,14 +511,14 @@ ERROR:  cannot execute DDL on reference relation "referece_table" because there 
 HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
 ROLLBACK;
 -- case 5.4: Parallel UPDATE on distributed table follow by a related DDL on reference table
--- FIXME: Can we do better?
 BEGIN;
 	UPDATE on_update_fkey_table SET value_1 = 16 WHERE value_1 = 15;
 	ALTER TABLE referece_table ALTER COLUMN id SET DATA TYPE smallint;
 DEBUG:  rewriting table "referece_table"
 DEBUG:  building index "referece_table_pkey" on table "referece_table" serially
 DEBUG:  validating foreign key constraint "fkey"
-ERROR:  cannot perform DDL on placement 2380001, which has been read over multiple connections
+ERROR:  cannot execute DDL on reference relation "referece_table" because there was a parallel DML access to distributed relation "on_update_fkey_table" in the same transaction
+HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
 ROLLBACK;
 -- case 6:1: Unrelated parallel DDL on distributed table followed by SELECT on ref. table
 BEGIN;

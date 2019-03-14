@@ -766,7 +766,7 @@ UpdateShardStatistics(int64 shardId)
 	{
 		ShardPlacement *placement = (ShardPlacement *) lfirst(shardPlacementCell);
 		uint64 placementId = placement->placementId;
-		uint32 groupId = placement->groupId;
+		int32 groupId = placement->groupId;
 
 		DeleteShardPlacementRow(placementId);
 		InsertShardPlacementRow(shardId, placementId, FILE_FINALIZED, shardSize,
