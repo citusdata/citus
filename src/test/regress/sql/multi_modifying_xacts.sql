@@ -1157,4 +1157,25 @@ SELECT * FROM users JOIN usergroups ON (user_group = gid) WHERE id = 2;
 SELECT * FROM users JOIN usergroups ON (user_group = gid) WHERE id = 4;
 END;
 
+-- make sure functions that throw an error roll back propertly
+CREATE FUNCTION insert_abort()
+RETURNS bool
+AS $BODY$
+BEGIN
+  INSERT INTO labs VALUES (1001, 'Abort Labs');
+  UPDATE labs SET name = 'Rollback Labs' WHERE id = 1001;
+  RAISE 'do not insert';
+END;
+$BODY$ LANGUAGE plpgsql;
+
+SELECT insert_abort();
+SELECT name FROM labs WHERE id = 1001;
+
+-- if function_opens_transaction-block is disabled the insert commits immediately
+SET citus.function_opens_transaction_block TO off;
+SELECT insert_abort();
+SELECT name FROM labs WHERE id = 1001;
+RESET citus.function_opens_transaction_block;
+
+DROP FUNCTION insert_abort();
 DROP TABLE items, users, itemgroups, usergroups, researchers, labs;

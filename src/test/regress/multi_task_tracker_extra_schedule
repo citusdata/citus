@@ -86,7 +86,6 @@ test: multi_repair_shards
 test: multi_modifications
 test: multi_upsert
 test: multi_simple_queries
-test: multi_create_insert_proxy
 test: multi_data_types
 test: multi_utilities
 

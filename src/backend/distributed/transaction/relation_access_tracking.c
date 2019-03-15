@@ -625,17 +625,17 @@ GetRelationAccessMode(Oid relationId, ShardPlacementAccessType accessType)
  * ShouldRecordRelationAccess returns true when we should keep track
  * of the relation accesses.
  *
- * In many cases, we'd only need IsTransactionBlock(), however, for some cases such as
- * CTEs, where Citus uses the same connections accross multiple queries, we should
- * still record the relation accesses even not inside an explicit transaction block.
- * Thus, keeping track of the relation accesses inside coordinated transactions is
- * also required.
+ * In many cases, we'd only need IsMultiStatementTransaction(), however, for some
+ * cases such as CTEs, where Citus uses the same connections accross multiple queries,
+ * we should still record the relation accesses even not inside an explicit transaction
+ * block. Thus, keeping track of the relation accesses inside coordinated transactions
+ * is also required.
  */
 bool
 ShouldRecordRelationAccess()
 {
 	if (EnforceForeignKeyRestrictions &&
-		(IsTransactionBlock() || InCoordinatedTransaction()))
+		(IsMultiStatementTransaction() || InCoordinatedTransaction()))
 	{
 		return true;
 	}

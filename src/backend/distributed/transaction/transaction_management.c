@@ -59,6 +59,13 @@ MemoryContext CommitContext = NULL;
  */
 bool CoordinatedTransactionUses2PC = false;
 
+/* if disabled, distributed statements in a function may run as separate transactions */
+bool FunctionOpensTransactionBlock = true;
+
+/* stack depth of UDF calls */
+int FunctionCallLevel = 0;
+
+
 /* transaction management functions */
 static void CoordinatedTransactionCallback(XactEvent event, void *arg);
 static void CoordinatedSubTransactionCallback(SubXactEvent event, SubTransactionId subId,
@@ -258,6 +265,7 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			XactModificationLevel = XACT_MODIFICATION_NONE;
 			dlist_init(&InProgressTransactions);
 			CoordinatedTransactionUses2PC = false;
+			FunctionCallLevel = 0;
 
 			/*
 			 * We should reset SubPlanLevel in case a transaction is aborted,
@@ -544,4 +552,35 @@ SwallowErrors(void (*func)())
 		MemoryContextSwitchTo(savedContext);
 	}
 	PG_END_TRY();
+}
+
+
+/*
+ * IsMultiStatementTransaction determines whether the current statement is
+ * part of a bigger multi-statement transaction. This is the case when the
+ * statement is wrapped in a transaction block (comes after BEGIN), or it
+ * is called from a stored procedure or function.
+ */
+bool
+IsMultiStatementTransaction(void)
+{
+	if (IsTransactionBlock())
+	{
+		/* in a BEGIN...END block */
+		return true;
+	}
+	else if (StoredProcedureLevel > 0)
+	{
+		/* in (a transaction within) a stored procedure */
+		return true;
+	}
+	else if (FunctionCallLevel > 0 && FunctionOpensTransactionBlock)
+	{
+		/* in a language-handler function call, open a transaction if configured to do so */
+		return true;
+	}
+	else
+	{
+		return false;
+	}
 }
