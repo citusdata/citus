@@ -25,6 +25,7 @@
 #include "distributed/query_colocation_checker.h"
 #include "distributed/pg_dist_partition.h"
 #include "distributed/relation_restriction_equivalence.h"
+#include "distributed/multi_logical_planner.h" /* only to access utility functions */
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
 #include "parser/parsetree.h"
@@ -193,6 +194,18 @@ SubqueryColocated(Query *subquery, ColocatedJoinChecker *checker)
 	List *unionedRelationRestrictionList = NULL;
 	RelationRestrictionContext *unionedRelationRestrictionContext = NULL;
 	PlannerRestrictionContext *unionedPlannerRestrictionContext = NULL;
+
+	/*
+	 * There are no relations in the input subquery, such as a subquery
+	 * that consist of only intermediate results or without FROM
+	 * clause.
+	 */
+	if (list_length(filteredRestrictionList) == 0)
+	{
+		Assert(!QueryContainsDistributedTableRTE(subquery));
+
+		return true;
+	}
 
 	/*
 	 * We merge the relation restrictions of the input subquery and the anchor

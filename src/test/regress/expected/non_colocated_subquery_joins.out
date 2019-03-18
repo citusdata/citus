@@ -916,6 +916,128 @@ DEBUG:  Plan 97 query after replacing subqueries and CTEs: SELECT count(*) AS co
  t
 (1 row)
 
+-- make sure to skip calling recursive planning over and over again
+-- for already recursively planned subqueries
+SET client_min_messages TO DEBUG2;
+SELECT *
+FROM
+  (SELECT *
+   FROM users_table
+   OFFSET 0) AS users_table
+JOIN LATERAL
+  (SELECT *
+   FROM
+     (SELECT *
+      FROM events_table
+      WHERE user_id = users_table.user_id) AS bar
+   LEFT JOIN users_table u2 ON u2.user_id = bar.value_2) AS foo ON TRUE;
+DEBUG:  generating subplan 99_1 for subquery SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.users_table OFFSET 0
+DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
+DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
+DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
+DEBUG:  Plan 99 query after replacing subqueries and CTEs: SELECT users_table.user_id, users_table."time", users_table.value_1, users_table.value_2, users_table.value_3, users_table.value_4, foo.user_id, foo."time", foo.event_type, foo.value_2, foo.value_3, foo.value_4, foo.user_id_1 AS user_id, foo.time_1 AS "time", foo.value_1, foo.value_2_1 AS value_2, foo.value_3_1 AS value_3, foo.value_4_1 AS value_4 FROM ((SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.value_1, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('99_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, value_1 integer, value_2 integer, value_3 double precision, value_4 bigint)) users_table JOIN LATERAL (SELECT bar.user_id, bar."time", bar.event_type, bar.value_2, bar.value_3, bar.value_4, u2.user_id, u2."time", u2.value_1, u2.value_2, u2.value_3, u2.value_4 FROM ((SELECT events_table.user_id, events_table."time", events_table.event_type, events_table.value_2, events_table.value_3, events_table.value_4 FROM public.events_table WHERE (events_table.user_id OPERATOR(pg_catalog.=) users_table.user_id)) bar LEFT JOIN public.users_table u2 ON ((u2.user_id OPERATOR(pg_catalog.=) bar.value_2)))) foo(user_id, "time", event_type, value_2, value_3, value_4, user_id_1, time_1, value_1, value_2_1, value_3_1, value_4_1) ON (true))
+DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
+DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
+DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
+ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
+-- similar to the above, make sure that we skip recursive plannig when
+-- the subquery doesn't have any tables
+SELECT true AS valid FROM explain_json_2($$
+SELECT *
+FROM
+  (SELECT 1 AS user_id) AS users_table
+JOIN LATERAL
+  (SELECT *
+   FROM
+     (SELECT *
+      FROM events_table
+      WHERE user_id = users_table.user_id) AS bar
+   LEFT JOIN users_table u2 ON u2.user_id = bar.value_2) AS foo ON TRUE
+$$);
+DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
+DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
+DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
+ERROR:  cannot perform distributed planning on this query
+-- similar to the above, make sure that we skip recursive plannig when
+-- the subquery contains only intermediate results
+SELECT *
+FROM
+  (
+   SELECT * FROM(
+       SELECT *
+       FROM users_table
+       EXCEPT
+       SELECT *
+       FROM users_table
+       WHERE value_1 > 2
+       ) AS users_table_union
+   ) AS users_table_limited
+JOIN LATERAL
+  (SELECT *
+   FROM
+     (SELECT *
+      FROM 
+          (SELECT *
+       FROM events_table WHERE value_3 > 4
+       INTERSECT
+       SELECT *
+       FROM events_table
+       WHERE value_2 > 2
+       ) AS events_table
+      WHERE user_id = users_table_limited.user_id) AS bar
+        LEFT JOIN users_table u2 ON u2.user_id = bar.value_2) AS foo ON TRUE;
+DEBUG:  generating subplan 102_1 for subquery SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.users_table
+DEBUG:  generating subplan 102_2 for subquery SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.users_table WHERE (value_1 OPERATOR(pg_catalog.>) 2)
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+DEBUG:  generating subplan 102_3 for subquery SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.value_1, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('102_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, value_1 integer, value_2 integer, value_3 double precision, value_4 bigint) EXCEPT SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.value_1, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('102_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, value_1 integer, value_2 integer, value_3 double precision, value_4 bigint)
+DEBUG:  generating subplan 102_4 for subquery SELECT user_id, "time", event_type, value_2, value_3, value_4 FROM public.events_table WHERE (value_3 OPERATOR(pg_catalog.>) (4)::double precision)
+DEBUG:  generating subplan 102_5 for subquery SELECT user_id, "time", event_type, value_2, value_3, value_4 FROM public.events_table WHERE (value_2 OPERATOR(pg_catalog.>) 2)
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+DEBUG:  generating subplan 102_6 for subquery SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.event_type, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('102_4'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, event_type integer, value_2 integer, value_3 double precision, value_4 bigint) INTERSECT SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.event_type, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('102_5'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, event_type integer, value_2 integer, value_3 double precision, value_4 bigint)
+DEBUG:  Plan 102 query after replacing subqueries and CTEs: SELECT users_table_limited.user_id, users_table_limited."time", users_table_limited.value_1, users_table_limited.value_2, users_table_limited.value_3, users_table_limited.value_4, foo.user_id, foo."time", foo.event_type, foo.value_2, foo.value_3, foo.value_4, foo.user_id_1 AS user_id, foo.time_1 AS "time", foo.value_1, foo.value_2_1 AS value_2, foo.value_3_1 AS value_3, foo.value_4_1 AS value_4 FROM ((SELECT users_table_union.user_id, users_table_union."time", users_table_union.value_1, users_table_union.value_2, users_table_union.value_3, users_table_union.value_4 FROM (SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.value_1, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('102_3'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, value_1 integer, value_2 integer, value_3 double precision, value_4 bigint)) users_table_union) users_table_limited JOIN LATERAL (SELECT bar.user_id, bar."time", bar.event_type, bar.value_2, bar.value_3, bar.value_4, u2.user_id, u2."time", u2.value_1, u2.value_2, u2.value_3, u2.value_4 FROM ((SELECT events_table.user_id, events_table."time", events_table.event_type, events_table.value_2, events_table.value_3, events_table.value_4 FROM (SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.event_type, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('102_6'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, event_type integer, value_2 integer, value_3 double precision, value_4 bigint)) events_table WHERE (events_table.user_id OPERATOR(pg_catalog.=) users_table_limited.user_id)) bar LEFT JOIN public.users_table u2 ON ((u2.user_id OPERATOR(pg_catalog.=) bar.value_2)))) foo(user_id, "time", event_type, value_2, value_3, value_4, user_id_1, time_1, value_1, value_2_1, value_3_1, value_4_1) ON (true))
+ERROR:  cannot pushdown the subquery
+-- similar to the above, but this time there are multiple
+-- non-colocated subquery joins one of them contains lateral
+-- join
+SELECT count(*) FROM events_table WHERE user_id NOT IN
+(
+    SELECT users_table_limited.user_id
+    FROM
+      (SELECT *
+       FROM users_table
+       EXCEPT
+       SELECT *
+       FROM users_table
+       WHERE value_1 > 2
+       ) AS users_table_limited
+    JOIN LATERAL
+      (SELECT *
+       FROM
+         (SELECT *
+          FROM 
+              (SELECT *
+           FROM events_table WHERE value_3 > 4
+           INTERSECT
+           SELECT *
+           FROM events_table
+           WHERE value_2 > 2
+           ) AS events_table
+          WHERE user_id = users_table_limited.user_id) AS bar
+            LEFT JOIN users_table u2 ON u2.user_id = bar.value_2) AS foo ON TRUE
+  );
+DEBUG:  generating subplan 109_1 for subquery SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.users_table
+DEBUG:  generating subplan 109_2 for subquery SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.users_table WHERE (value_1 OPERATOR(pg_catalog.>) 2)
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+DEBUG:  generating subplan 109_3 for subquery SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.value_1, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('109_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, value_1 integer, value_2 integer, value_3 double precision, value_4 bigint) EXCEPT SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.value_1, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('109_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, value_1 integer, value_2 integer, value_3 double precision, value_4 bigint)
+DEBUG:  generating subplan 109_4 for subquery SELECT user_id, "time", event_type, value_2, value_3, value_4 FROM public.events_table WHERE (value_3 OPERATOR(pg_catalog.>) (4)::double precision)
+DEBUG:  generating subplan 109_5 for subquery SELECT user_id, "time", event_type, value_2, value_3, value_4 FROM public.events_table WHERE (value_2 OPERATOR(pg_catalog.>) 2)
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+DEBUG:  generating subplan 109_6 for subquery SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.event_type, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('109_4'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, event_type integer, value_2 integer, value_3 double precision, value_4 bigint) INTERSECT SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.event_type, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('109_5'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, event_type integer, value_2 integer, value_3 double precision, value_4 bigint)
+ERROR:  cannot pushdown the subquery
 RESET client_min_messages;
 DROP FUNCTION explain_json_2(text);
 SET search_path TO 'public';

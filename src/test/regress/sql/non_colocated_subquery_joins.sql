@@ -691,6 +691,97 @@ SELECT true AS valid FROM explain_json_2($$
       AND foo.user_id = bar.value_2;
 $$);
 
+-- make sure to skip calling recursive planning over and over again
+-- for already recursively planned subqueries
+SET client_min_messages TO DEBUG2;
+SELECT *
+FROM
+  (SELECT *
+   FROM users_table
+   OFFSET 0) AS users_table
+JOIN LATERAL
+  (SELECT *
+   FROM
+     (SELECT *
+      FROM events_table
+      WHERE user_id = users_table.user_id) AS bar
+   LEFT JOIN users_table u2 ON u2.user_id = bar.value_2) AS foo ON TRUE;
+
+-- similar to the above, make sure that we skip recursive plannig when
+-- the subquery doesn't have any tables
+SELECT true AS valid FROM explain_json_2($$
+SELECT *
+FROM
+  (SELECT 1 AS user_id) AS users_table
+JOIN LATERAL
+  (SELECT *
+   FROM
+     (SELECT *
+      FROM events_table
+      WHERE user_id = users_table.user_id) AS bar
+   LEFT JOIN users_table u2 ON u2.user_id = bar.value_2) AS foo ON TRUE
+$$);
+
+-- similar to the above, make sure that we skip recursive plannig when
+-- the subquery contains only intermediate results
+SELECT *
+FROM
+  (
+   SELECT * FROM(
+       SELECT *
+       FROM users_table
+       EXCEPT
+       SELECT *
+       FROM users_table
+       WHERE value_1 > 2
+       ) AS users_table_union
+   ) AS users_table_limited
+JOIN LATERAL
+  (SELECT *
+   FROM
+     (SELECT *
+      FROM 
+          (SELECT *
+       FROM events_table WHERE value_3 > 4
+       INTERSECT
+       SELECT *
+       FROM events_table
+       WHERE value_2 > 2
+       ) AS events_table
+      WHERE user_id = users_table_limited.user_id) AS bar
+        LEFT JOIN users_table u2 ON u2.user_id = bar.value_2) AS foo ON TRUE;
+
+-- similar to the above, but this time there are multiple
+-- non-colocated subquery joins one of them contains lateral
+-- join
+SELECT count(*) FROM events_table WHERE user_id NOT IN
+(
+    SELECT users_table_limited.user_id
+    FROM
+      (SELECT *
+       FROM users_table
+       EXCEPT
+       SELECT *
+       FROM users_table
+       WHERE value_1 > 2
+       ) AS users_table_limited
+    JOIN LATERAL
+      (SELECT *
+       FROM
+         (SELECT *
+          FROM 
+              (SELECT *
+           FROM events_table WHERE value_3 > 4
+           INTERSECT
+           SELECT *
+           FROM events_table
+           WHERE value_2 > 2
+           ) AS events_table
+          WHERE user_id = users_table_limited.user_id) AS bar
+            LEFT JOIN users_table u2 ON u2.user_id = bar.value_2) AS foo ON TRUE
+  );
+
+
 RESET client_min_messages;
 DROP FUNCTION explain_json_2(text);
 
