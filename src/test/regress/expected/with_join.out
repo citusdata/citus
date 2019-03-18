@@ -266,6 +266,84 @@ LIMIT
           1 |        
 (2 rows)
 
+-- some more tests for more complex outer-joins
+-- with reference tables
+CREATE TABLE distributed_1 (col1 int, col2 int, distrib_col int);
+CREATE TABLE distributed_2 (col1 int, col2 int, distrib_col int);
+CREATE TABLE reference_1 (col1 int, col2 int);
+CREATE TABLE reference_2(col1 int, col2 int);
+SELECT create_distributed_table('distributed_1','distrib_col');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+SELECT create_distributed_table('distributed_2','distrib_col');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+SELECT create_reference_table('reference_1');
+ create_reference_table 
+------------------------
+ 
+(1 row)
+
+SELECT create_reference_table('reference_2');
+ create_reference_table 
+------------------------
+ 
+(1 row)
+
+INSERT INTO distributed_1 SELECT i, i, i FROM generate_series(0,100) i;
+INSERT INTO distributed_2 SELECT i%2, i%2, i%2 FROM generate_series(0,100) i;
+INSERT INTO reference_1 SELECT i%3, i%3 FROM generate_series(0,100) i;
+INSERT INTO reference_2 SELECT i%4, i%4 FROM generate_series(0,100) i;
+select count(*) from distributed_1 AS d1
+LEFT JOIN reference_1 AS r1 ON d1.col2=r1.col2
+LEFT JOIN reference_2 AS r2 ON r2.col1 = r1.col1
+join (select distrib_col,count(*) from distributed_2 group by distrib_col) d2 ON d2.distrib_col=d1.distrib_col;
+ count 
+-------
+  1734
+(1 row)
+
+with d2 AS (select distrib_col,count(*) from distributed_2 group by distrib_col)
+select count(*) from distributed_1 AS d1
+LEFT JOIN reference_1 AS r1 ON d1.col2=r1.col2
+LEFT JOIN reference_2 AS r2 ON r2.col1 = r1.col1
+join d2 ON d2.distrib_col=d1.distrib_col;
+ count 
+-------
+  1734
+(1 row)
+
+with d2 AS (select distrib_col,col1 from distributed_2)
+select count(*) from distributed_1 AS d1
+LEFT JOIN reference_1 AS r1 ON d1.col2=r1.col2
+LEFT JOIN reference_2 AS r2 ON r2.col1 = r1.col1
+join d2 ON d2.distrib_col=d1.distrib_col;
+ count 
+-------
+ 87584
+(1 row)
+
+with cte_1 AS (select col1 from reference_1)
+select count(*) from distributed_1 AS d1
+LEFT JOIN reference_1 AS r1 ON d1.col2=r1.col2
+LEFT JOIN reference_2 AS r2 ON r2.col1 = r1.col1
+join cte_1 ON cte_1.col1=d1.distrib_col;
+ count 
+-------
+ 86181
+(1 row)
+
 RESET client_min_messages;
 DROP SCHEMA with_join CASCADE;
-NOTICE:  drop cascades to table reference_table
+NOTICE:  drop cascades to 5 other objects
+DETAIL:  drop cascades to table reference_table
+drop cascades to table distributed_1
+drop cascades to table distributed_2
+drop cascades to table reference_1
+drop cascades to table reference_2
