@@ -77,15 +77,26 @@ void
 ResetConnParams()
 {
 	Index paramIdx = 0;
-
 	for (paramIdx = 0; paramIdx < ConnParams.size; paramIdx++)
 	{
-		/* FIXME: People still have references to these! */
 		free((void *) ConnParams.keywords[paramIdx]);
 		free((void *) ConnParams.values[paramIdx]);
 
 		ConnParams.keywords[paramIdx] = ConnParams.values[paramIdx] = NULL;
 	}
+
+	if (ConnParamsHash != NULL)
+	{
+		ConnParamsHashEntry *entry = NULL;
+		HASH_SEQ_STATUS status;
+
+		hash_seq_init(&status, ConnParamsHash);
+		while ((entry = (ConnParamsHashEntry *) hash_seq_search(&status)) != NULL)
+		{
+			entry->isValid = false;
+		}
+	}
+
 
 	ConnParams.size = 0;
 
