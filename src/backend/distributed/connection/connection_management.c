@@ -694,8 +694,30 @@ StartConnectionEstablishment(ConnectionHashKey *key)
 	entry = hash_search(ConnParamsHash, key, HASH_ENTER, &found);
 	if (!found || !entry->isValid)
 	{
-		/* if they're not found, compute them from GUC, runtime, etc. */
-		GetConnParams(key, &entry->keywords, &entry->values, ConnectionContext);
+		if (found && !entry->isValid)
+		{
+			char **keyword = &entry->keywords[entry->nonGlobalParamStart];
+			char **value = &entry->values[entry->nonGlobalParamStart];
+
+			while (*keyword != NULL)
+			{
+				pfree(*keyword);
+				keyword++;
+			}
+
+			while (*value != NULL)
+			{
+				pfree(*value);
+				value++;
+			}
+
+			pfree(entry->keywords);
+			pfree(entry->values);
+		}
+
+		/* if not found or not valid, compute them from GUC, runtime, etc. */
+		GetConnParams(key, &entry->keywords, &entry->values, &entry->nonGlobalParamStart,
+					  ConnectionContext);
 
 		entry->isValid = true;
 	}
