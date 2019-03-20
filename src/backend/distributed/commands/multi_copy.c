@@ -1051,6 +1051,13 @@ RemoteFinalizedShardPlacementList(uint64 shardId)
 			shardPlacement->nodeName = nodeName;
 			shardPlacement->nodePort = nodePort;
 
+			/*
+			 * We cannot know the nodeId, but it is not necessary at this point either.
+			 * This is only used to to look up the connection for a group of co-located
+			 * placements, but append-distributed tables are never co-located.
+			 */
+			shardPlacement->nodeId = -1;
+
 			finalizedPlacementList = lappend(finalizedPlacementList, shardPlacement);
 		}
 	}

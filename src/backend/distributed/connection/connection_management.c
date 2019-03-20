@@ -251,7 +251,7 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port, 
 	}
 	else
 	{
-		strlcpy(key.database, get_database_name(MyDatabaseId), NAMEDATALEN);
+		strlcpy(key.database, CurrentDatabaseName(), NAMEDATALEN);
 	}
 
 	if (CurrentCoordinatedTransactionState == COORD_TRANS_NONE)

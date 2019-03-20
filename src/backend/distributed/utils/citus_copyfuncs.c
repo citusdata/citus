@@ -200,6 +200,7 @@ CopyNodeShardPlacement(COPYFUNC_ARGS)
 	COPY_SCALAR_FIELD(groupId);
 	COPY_STRING_FIELD(nodeName);
 	COPY_SCALAR_FIELD(nodePort);
+	COPY_SCALAR_FIELD(nodeId);
 	COPY_SCALAR_FIELD(partitionMethod);
 	COPY_SCALAR_FIELD(colocationGroupId);
 	COPY_SCALAR_FIELD(representativeValue);

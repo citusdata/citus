@@ -51,7 +51,7 @@ static uint64 NextPlanId = 1;
 
 
 /* local function forward declarations */
-static bool NeedsDistributedPlanningWalker(Node *node, void *context);
+static bool ListContainsDistributedTableRTE(List *rangeTableList);
 static PlannedStmt * CreateDistributedPlannedStmt(uint64 planId, PlannedStmt *localPlan,
 												  Query *originalQuery, Query *query,
 												  ParamListInfo boundParams,
@@ -65,9 +65,9 @@ static DistributedPlan * CreateDistributedPlan(uint64 planId, Query *originalQue
 static DeferredErrorMessage * DeferErrorIfPartitionTableNotSingleReplicated(Oid
 																			relationId);
 
-static void AssignRTEIdentities(Query *queryTree);
+static void AssignRTEIdentities(List *rangeTableList);
 static void AssignRTEIdentity(RangeTblEntry *rangeTableEntry, int rteIdentifier);
-static void AdjustPartitioningForDistributedPlanning(Query *parse,
+static void AdjustPartitioningForDistributedPlanning(List *rangeTableList,
 													 bool setPartitionedTablesInherited);
 static PlannedStmt * FinalizePlan(PlannedStmt *localPlan,
 								  DistributedPlan *distributedPlan);
@@ -93,14 +93,22 @@ PlannedStmt *
 distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 {
 	PlannedStmt *result = NULL;
-	bool needsDistributedPlanning = NeedsDistributedPlanning(parse);
+	bool needsDistributedPlanning = false;
 	Query *originalQuery = NULL;
 	PlannerRestrictionContext *plannerRestrictionContext = NULL;
 	bool setPartitionedTablesInherited = false;
+	List *rangeTableList = ExtractRangeTableEntryList(parse);
 
 	if (cursorOptions & CURSOR_OPT_FORCE_DISTRIBUTED)
 	{
+		/* this cursor flag could only be set when Citus has been loaded */
+		Assert(CitusHasBeenLoaded());
+
 		needsDistributedPlanning = true;
+	}
+	else if (CitusHasBeenLoaded())
+	{
+		needsDistributedPlanning = ListContainsDistributedTableRTE(rangeTableList);
 	}
 
 	if (needsDistributedPlanning)
@@ -127,11 +135,12 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 		 * of the query tree. Note that we copy the query tree once we're sure it's a
 		 * distributed query.
 		 */
-		AssignRTEIdentities(parse);
+		AssignRTEIdentities(rangeTableList);
 		originalQuery = copyObject(parse);
 
 		setPartitionedTablesInherited = false;
-		AdjustPartitioningForDistributedPlanning(parse, setPartitionedTablesInherited);
+		AdjustPartitioningForDistributedPlanning(rangeTableList,
+												 setPartitionedTablesInherited);
 	}
 
 	/*
@@ -171,7 +180,7 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 												  boundParams, plannerRestrictionContext);
 
 			setPartitionedTablesInherited = true;
-			AdjustPartitioningForDistributedPlanning(parse,
+			AdjustPartitioningForDistributedPlanning(rangeTableList,
 													 setPartitionedTablesInherited);
 		}
 	}
@@ -206,6 +215,22 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 
 
 /*
+ * ExtractRangeTableEntryList is a wrapper around ExtractRangeTableEntryWalker.
+ * The function traverses the input query and returns all the range table
+ * entries that are in the query tree.
+ */
+List *
+ExtractRangeTableEntryList(Query *query)
+{
+	List *rangeTblList = NIL;
+
+	ExtractRangeTableEntryWalker((Node *) query, &rangeTblList);
+
+	return rangeTblList;
+}
+
+
+/*
  * NeedsDistributedPlanning returns true if the Citus extension is loaded and
  * the query contains a distributed table.
  *
@@ -216,61 +241,52 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 bool
 NeedsDistributedPlanning(Query *query)
 {
+	List *allRTEs = NIL;
 	CmdType commandType = query->commandType;
-	if (commandType != CMD_SELECT && commandType != CMD_INSERT &&
-		commandType != CMD_UPDATE && commandType != CMD_DELETE)
-	{
-		return false;
-	}
 
 	if (!CitusHasBeenLoaded())
 	{
 		return false;
 	}
 
-	if (!NeedsDistributedPlanningWalker((Node *) query, NULL))
+	if (commandType != CMD_SELECT && commandType != CMD_INSERT &&
+		commandType != CMD_UPDATE && commandType != CMD_DELETE)
 	{
 		return false;
 	}
 
-	return true;
+	ExtractRangeTableEntryWalker((Node *) query, &allRTEs);
+
+	return ListContainsDistributedTableRTE(allRTEs);
 }
 
 
 /*
- * NeedsDistributedPlanningWalker checks if the query contains any distributed
- * tables.
+ * ListContainsDistributedTableRTE gets a list of range table entries
+ * and returns true if there is at least one distributed relation range
+ * table entry in the list.
  */
 static bool
-NeedsDistributedPlanningWalker(Node *node, void *context)
+ListContainsDistributedTableRTE(List *rangeTableList)
 {
-	if (node == NULL)
-	{
-		return false;
-	}
+	ListCell *rangeTableCell = NULL;
 
-	if (IsA(node, Query))
+	foreach(rangeTableCell, rangeTableList)
 	{
-		Query *query = (Query *) node;
-		ListCell *rangeTableCell = NULL;
+		RangeTblEntry *rangeTableEntry = (RangeTblEntry *) lfirst(rangeTableCell);
 
-		foreach(rangeTableCell, query->rtable)
+		if (rangeTableEntry->rtekind != RTE_RELATION)
 		{
-			RangeTblEntry *rangeTableEntry = (RangeTblEntry *) lfirst(rangeTableCell);
-
-			Oid relationId = rangeTableEntry->relid;
-			if (IsDistributedTable(relationId))
-			{
-				return true;
-			}
+			continue;
 		}
 
-		return query_tree_walker(query, NeedsDistributedPlanningWalker, NULL, 0);
+		if (IsDistributedTable(rangeTableEntry->relid))
+		{
+			return true;
+		}
 	}
-	else
-	{
-		return expression_tree_walker(node, NeedsDistributedPlanningWalker, NULL);
-	}
+
+	return false;
 }
 
 
@@ -283,14 +299,10 @@ NeedsDistributedPlanningWalker(Node *node, void *context)
  * our logic.
  */
 static void
-AssignRTEIdentities(Query *queryTree)
+AssignRTEIdentities(List *rangeTableList)
 {
-	List *rangeTableList = NIL;
 	ListCell *rangeTableCell = NULL;
 	int rteIdentifier = 1;
-
-	/* extract range table entries for simple relations only */
-	ExtractRangeTableEntryWalker((Node *) queryTree, &rangeTableList);
 
 	foreach(rangeTableCell, rangeTableList)
 	{
@@ -325,14 +337,10 @@ AssignRTEIdentities(Query *queryTree)
  * our logic.
  */
 static void
-AdjustPartitioningForDistributedPlanning(Query *queryTree,
+AdjustPartitioningForDistributedPlanning(List *rangeTableList,
 										 bool setPartitionedTablesInherited)
 {
-	List *rangeTableList = NIL;
 	ListCell *rangeTableCell = NULL;
-
-	/* extract range table entries for simple relations only */
-	ExtractRangeTableEntryWalker((Node *) queryTree, &rangeTableList);
 
 	foreach(rangeTableCell, rangeTableList)
 	{
@@ -344,7 +352,8 @@ AdjustPartitioningForDistributedPlanning(Query *queryTree,
 		 * we set each distributed partitioned table's inh flag to appropriate
 		 * value before and after dropping to the standart_planner.
 		 */
-		if (IsDistributedTable(rangeTableEntry->relid) &&
+		if (rangeTableEntry->rtekind == RTE_RELATION &&
+			IsDistributedTable(rangeTableEntry->relid) &&
 			PartitionedTable(rangeTableEntry->relid))
 		{
 			rangeTableEntry->inh = setPartitionedTablesInherited;
@@ -724,7 +733,8 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 		 * distributed_planner, but on a copy of the original query, so we need
 		 * to do it again here.
 		 */
-		AdjustPartitioningForDistributedPlanning(newQuery, setPartitionedTablesInherited);
+		AdjustPartitioningForDistributedPlanning(ExtractRangeTableEntryList(newQuery),
+												 setPartitionedTablesInherited);
 
 		/*
 		 * Some relations may have been removed from the query, but we can skip

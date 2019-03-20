@@ -507,7 +507,7 @@ ExplainTaskPlacement(ShardPlacement *taskPlacement, List *explainOutputList,
 	StringInfo nodeAddress = makeStringInfo();
 	char *nodeName = taskPlacement->nodeName;
 	uint32 nodePort = taskPlacement->nodePort;
-	char *nodeDatabase = get_database_name(MyDatabaseId);
+	char *nodeDatabase = CurrentDatabaseName();
 	ListCell *explainOutputCell = NULL;
 	int rowIndex = 0;
 

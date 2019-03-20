@@ -405,6 +405,7 @@ OutShardPlacement(OUTFUNC_ARGS)
 	WRITE_INT_FIELD(groupId);
 	WRITE_STRING_FIELD(nodeName);
 	WRITE_UINT_FIELD(nodePort);
+	WRITE_INT_FIELD(nodeId);
 	/* so we can deal with 0 */
 	WRITE_INT_FIELD(partitionMethod);
 	WRITE_UINT_FIELD(colocationGroupId);

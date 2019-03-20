@@ -133,8 +133,7 @@ static HTAB *ConnectionPlacementHash;
 typedef struct ColocatedPlacementsHashKey
 {
 	/* to identify host - database can't differ */
-	char nodeName[MAX_NODE_LENGTH];
-	uint32 nodePort;
+	int nodeId;
 
 	/* colocation group, or invalid */
 	uint32 colocationGroupId;
@@ -689,8 +688,7 @@ FindOrCreatePlacementEntry(ShardPlacement *placement)
 			ColocatedPlacementsHashKey key;
 			ColocatedPlacementsHashEntry *colocatedEntry = NULL;
 
-			strlcpy(key.nodeName, placement->nodeName, MAX_NODE_LENGTH);
-			key.nodePort = placement->nodePort;
+			key.nodeId = placement->nodeId;
 			key.colocationGroupId = placement->colocationGroupId;
 			key.representativeValue = placement->representativeValue;
 
@@ -1149,8 +1147,7 @@ ColocatedPlacementsHashHash(const void *key, Size keysize)
 	ColocatedPlacementsHashKey *entry = (ColocatedPlacementsHashKey *) key;
 	uint32 hash = 0;
 
-	hash = string_hash(entry->nodeName, NAMEDATALEN);
-	hash = hash_combine(hash, hash_uint32(entry->nodePort));
+	hash = hash_uint32(entry->nodeId);
 	hash = hash_combine(hash, hash_uint32(entry->colocationGroupId));
 	hash = hash_combine(hash, hash_uint32(entry->representativeValue));
 
@@ -1164,8 +1161,7 @@ ColocatedPlacementsHashCompare(const void *a, const void *b, Size keysize)
 	ColocatedPlacementsHashKey *ca = (ColocatedPlacementsHashKey *) a;
 	ColocatedPlacementsHashKey *cb = (ColocatedPlacementsHashKey *) b;
 
-	if (strncmp(ca->nodeName, cb->nodeName, MAX_NODE_LENGTH) != 0 ||
-		ca->nodePort != cb->nodePort ||
+	if (ca->nodeId != cb->nodeId ||
 		ca->colocationGroupId != cb->colocationGroupId ||
 		ca->representativeValue != cb->representativeValue)
 	{

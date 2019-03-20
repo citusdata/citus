@@ -420,25 +420,12 @@ CompareShardPlacementsByNode(const void *leftElement, const void *rightElement)
 	const ShardPlacement *leftPlacement = *((const ShardPlacement **) leftElement);
 	const ShardPlacement *rightPlacement = *((const ShardPlacement **) rightElement);
 
-	char *leftNodeName = leftPlacement->nodeName;
-	char *rightNodeName = rightPlacement->nodeName;
-
-	uint32 leftNodePort = leftPlacement->nodePort;
-	uint32 rightNodePort = rightPlacement->nodePort;
-
-	/* first compare node names */
-	int nodeNameCompare = strncmp(leftNodeName, rightNodeName, WORKER_LENGTH);
-	if (nodeNameCompare != 0)
-	{
-		return nodeNameCompare;
-	}
-
 	/* if node names are same, check node ports */
-	if (leftNodePort < rightNodePort)
+	if (leftPlacement->nodeId < rightPlacement->nodeId)
 	{
 		return -1;
 	}
-	else if (leftNodePort > rightNodePort)
+	else if (leftPlacement->nodeId > rightPlacement->nodeId)
 	{
 		return 1;
 	}

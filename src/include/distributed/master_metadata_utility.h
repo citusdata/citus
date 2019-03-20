@@ -99,6 +99,7 @@ typedef struct ShardPlacement
 	/* the rest of the fields aren't from pg_dist_placement */
 	char *nodeName;
 	uint32 nodePort;
+	int nodeId;
 	char partitionMethod;
 	uint32 colocationGroupId;
 	uint32 representativeValue;

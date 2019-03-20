@@ -2552,8 +2552,7 @@ CoPlacedShardIntervals(ShardInterval *firstInterval, ShardInterval *secondInterv
 		ShardPlacement *secondShardPlacement = (ShardPlacement *) lfirst(
 			secondShardPlacementCell);
 
-		if (strcmp(firstShardPlacement->nodeName, secondShardPlacement->nodeName) != 0 ||
-			firstShardPlacement->nodePort != secondShardPlacement->nodePort)
+		if (firstShardPlacement->nodeId != secondShardPlacement->nodeId)
 		{
 			return false;
 		}
@@ -5375,6 +5374,7 @@ AssignDualHashTaskList(List *taskList)
 			ShardPlacement *taskPlacement = CitusMakeNode(ShardPlacement);
 			taskPlacement->nodeName = pstrdup(workerNode->workerName);
 			taskPlacement->nodePort = workerNode->workerPort;
+			taskPlacement->nodeId = workerNode->nodeId;
 
 			taskPlacementList = lappend(taskPlacementList, taskPlacement);
 		}
