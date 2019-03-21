@@ -42,6 +42,7 @@ MemoryContext ConnectionContext = NULL;
 static uint32 ConnectionHashHash(const void *key, Size keysize);
 static int ConnectionHashCompare(const void *a, const void *b, Size keysize);
 static MultiConnection * StartConnectionEstablishment(ConnectionHashKey *key);
+static void FreeConnParamsHashEntryFields(ConnParamsHashEntry *entry);
 static void AfterXactHostConnectionHandling(ConnectionHashEntry *entry, bool isCommit);
 static void DefaultCitusNoticeProcessor(void *arg, const char *message);
 static MultiConnection * FindAvailableConnection(dlist_head *connections, uint32 flags);
@@ -88,6 +89,26 @@ InitializeConnectionManagement(void)
 
 	ConnParamsHash = hash_create("citus connparams cache (host,port,user,database)",
 								 64, &connParamsInfo, hashFlags);
+}
+
+
+/*
+ * InvalidateConnParamsHashEntries sets every hash entry's isValid flag to false.
+ */
+void
+InvalidateConnParamsHashEntries(void)
+{
+	if (ConnParamsHash != NULL)
+	{
+		ConnParamsHashEntry *entry = NULL;
+		HASH_SEQ_STATUS status;
+
+		hash_seq_init(&status, ConnParamsHash);
+		while ((entry = (ConnParamsHashEntry *) hash_seq_search(&status)) != NULL)
+		{
+			entry->isValid = false;
+		}
+	}
 }
 
 
@@ -694,8 +715,15 @@ StartConnectionEstablishment(ConnectionHashKey *key)
 	entry = hash_search(ConnParamsHash, key, HASH_ENTER, &found);
 	if (!found || !entry->isValid)
 	{
-		/* if they're not found, compute them from GUC, runtime, etc. */
-		GetConnParams(key, &entry->keywords, &entry->values, ConnectionContext);
+		/* avoid leaking memory in the keys and values arrays */
+		if (found && !entry->isValid)
+		{
+			FreeConnParamsHashEntryFields(entry);
+		}
+
+		/* if not found or not valid, compute them from GUC, runtime, etc. */
+		GetConnParams(key, &entry->keywords, &entry->values, &entry->runtimeParamStart,
+					  ConnectionContext);
 
 		entry->isValid = true;
 	}
@@ -723,6 +751,34 @@ StartConnectionEstablishment(ConnectionHashKey *key)
 	SetCitusNoticeProcessor(connection);
 
 	return connection;
+}
+
+
+/*
+ * FreeConnParamsHashEntryFields frees any dynamically allocated memory reachable
+ * from the fields of the provided ConnParamsHashEntry. This includes all runtime
+ * libpq keywords and values, as well as the actual arrays storing them.
+ */
+static void
+FreeConnParamsHashEntryFields(ConnParamsHashEntry *entry)
+{
+	char **keyword = &entry->keywords[entry->runtimeParamStart];
+	char **value = &entry->values[entry->runtimeParamStart];
+
+	while (*keyword != NULL)
+	{
+		pfree(*keyword);
+		keyword++;
+	}
+
+	while (*value != NULL)
+	{
+		pfree(*value);
+		value++;
+	}
+
+	pfree(entry->keywords);
+	pfree(entry->values);
 }
 
 

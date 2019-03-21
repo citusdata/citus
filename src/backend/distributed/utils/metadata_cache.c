@@ -3178,15 +3178,7 @@ CreateDistTableCache(void)
 void
 InvalidateMetadataSystemCache(void)
 {
-	ConnParamsHashEntry *entry = NULL;
-	HASH_SEQ_STATUS status;
-
-	hash_seq_init(&status, ConnParamsHash);
-
-	while ((entry = (ConnParamsHashEntry *) hash_seq_search(&status)) != NULL)
-	{
-		entry->isValid = false;
-	}
+	InvalidateConnParamsHashEntries();
 
 	memset(&MetadataCache, 0, sizeof(MetadataCache));
 	workerNodeHashValid = false;

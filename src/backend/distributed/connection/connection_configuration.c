@@ -77,7 +77,6 @@ void
 ResetConnParams()
 {
 	Index paramIdx = 0;
-
 	for (paramIdx = 0; paramIdx < ConnParams.size; paramIdx++)
 	{
 		free((void *) ConnParams.keywords[paramIdx]);
@@ -88,21 +87,22 @@ ResetConnParams()
 
 	ConnParams.size = 0;
 
+	InvalidateConnParamsHashEntries();
+
 	AddConnParam("fallback_application_name", "citus");
 }
 
 
 /*
  * AddConnParam adds a parameter setting to the global libpq settings according
- * to the provided keyword and value. Under assert-enabled builds, array bounds
- * checking is performed.
+ * to the provided keyword and value.
  */
 void
 AddConnParam(const char *keyword, const char *value)
 {
 	if (ConnParams.size + 1 >= ConnParams.maxSize)
 	{
-		/* we expect developers to see that error messages */
+		/* hopefully this error is only seen by developers */
 		ereport(ERROR, (errcode(ERRCODE_INSUFFICIENT_RESOURCES),
 						errmsg("ConnParams arrays bound check failed")));
 	}
@@ -227,7 +227,7 @@ CheckConninfo(const char *conninfo, const char **whitelist,
  */
 void
 GetConnParams(ConnectionHashKey *key, char ***keywords, char ***values,
-			  MemoryContext context)
+			  Index *runtimeParamStart, MemoryContext context)
 {
 	/* make space for the port as a string: sign, 10 digits, NUL */
 	char *nodePortString = MemoryContextAlloc(context, 12 * sizeof(char *));
@@ -241,16 +241,24 @@ GetConnParams(ConnectionHashKey *key, char ***keywords, char ***values,
 	 * The global parameters have already been assigned from a GUC, so begin by
 	 * calculating the key-specific parameters (basically just the fields of
 	 * the key and the active database encoding).
+	 *
+	 * We allocate everything in the provided context so as to facilitate using
+	 * pfree on all runtime parameters when connections using these entries are
+	 * invalidated during config reloads.
 	 */
 	const char *runtimeKeywords[] = {
-		"host", "port", "dbname", "user", "client_encoding"
+		MemoryContextStrdup(context, "host"),
+		MemoryContextStrdup(context, "port"),
+		MemoryContextStrdup(context, "dbname"),
+		MemoryContextStrdup(context, "user"),
+		MemoryContextStrdup(context, "client_encoding")
 	};
 	const char *runtimeValues[] = {
 		MemoryContextStrdup(context, key->hostname),
 		nodePortString,
 		MemoryContextStrdup(context, key->database),
 		MemoryContextStrdup(context, key->user),
-		GetDatabaseEncodingName()
+		MemoryContextStrdup(context, GetDatabaseEncodingName())
 	};
 
 	/*
@@ -265,12 +273,12 @@ GetConnParams(ConnectionHashKey *key, char ***keywords, char ***values,
 	/* auth keywords will begin after global and runtime ones are appended */
 	Index authParamsIdx = ConnParams.size + lengthof(runtimeKeywords);
 
-	int paramIndex = 0;
-	int runtimeParamIndex = 0;
+	Index paramIndex = 0;
+	Index runtimeParamIndex = 0;
 
 	if (ConnParams.size + lengthof(runtimeKeywords) >= ConnParams.maxSize)
 	{
-		/* unexpected, intended as developers rather than users */
+		/* hopefully this error is only seen by developers */
 		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 						errmsg("too many connParams entries")));
 	}
@@ -284,6 +292,9 @@ GetConnParams(ConnectionHashKey *key, char ***keywords, char ***values,
 		connKeywords[paramIndex] = ConnParams.keywords[paramIndex];
 		connValues[paramIndex] = ConnParams.values[paramIndex];
 	}
+
+	/* remember where global/GUC params end and runtime ones start */
+	*runtimeParamStart = ConnParams.size;
 
 	/* second step: begin at end of global params and copy runtime ones */
 	for (runtimeParamIndex = 0;
@@ -312,7 +323,7 @@ GetConnParams(ConnectionHashKey *key, char ***keywords, char ***values,
 const char *
 GetConnParam(const char *keyword)
 {
-	int i = 0;
+	Index i = 0;
 
 	for (i = 0; i < ConnParams.size; i++)
 	{
