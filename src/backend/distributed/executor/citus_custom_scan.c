@@ -301,13 +301,20 @@ CitusEndScan(CustomScanState *node)
 
 
 /*
- * CitusReScan is just a place holder for rescan callback. Currently, we don't
- * support rescan given that there is not any way to reach this code path.
+ * CitusReScan is not normally called, except in certain cases of
+ * DECLARE .. CURSOR WITH HOLD ..
  */
 static void
 CitusReScan(CustomScanState *node)
 {
-	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					errmsg("rescan is unsupported"),
-					errdetail("We don't expect this code path to be executed.")));
+	CitusScanState *scanState = (CitusScanState *) node;
+	EState *executorState = scanState->customScanState.ss.ps.state;
+	ParamListInfo paramListInfo = executorState->es_param_list_info;
+
+	if (paramListInfo != NULL)
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("Cursors for queries on distributed tables with "
+							   "parameters are currently unsupported")));
+	}
 }
