@@ -65,5 +65,19 @@ ALTER TABLE supplier ALTER COLUMN s_suppkey SET NOT NULL;
 select citus_table_size('supplier');
 END;
 
+show citus.node_conninfo;
+ALTER SYSTEM SET citus.node_conninfo = 'sslmode=require';
+SELECT pg_reload_conf();
+
+-- make sure that any invalidation to the connection info
+-- wouldn't prevent future commands to fail
+SELECT citus_total_relation_size('customer_copy_hash');
+SELECT pg_reload_conf();
+SELECT citus_total_relation_size('customer_copy_hash');
+
+-- reset back to the original node_conninfo
+ALTER SYSTEM RESET citus.node_conninfo;
+SELECT pg_reload_conf();
+
 DROP INDEX index_1;
 DROP INDEX index_2;

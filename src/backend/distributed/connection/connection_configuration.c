@@ -85,20 +85,9 @@ ResetConnParams()
 		ConnParams.keywords[paramIdx] = ConnParams.values[paramIdx] = NULL;
 	}
 
-	if (ConnParamsHash != NULL)
-	{
-		ConnParamsHashEntry *entry = NULL;
-		HASH_SEQ_STATUS status;
-
-		hash_seq_init(&status, ConnParamsHash);
-		while ((entry = (ConnParamsHashEntry *) hash_seq_search(&status)) != NULL)
-		{
-			entry->isValid = false;
-		}
-	}
-
-
 	ConnParams.size = 0;
+
+	InvalidateConnParamsHashEntries();
 
 	AddConnParam("fallback_application_name", "citus");
 }
@@ -238,7 +227,7 @@ CheckConninfo(const char *conninfo, const char **whitelist,
  */
 void
 GetConnParams(ConnectionHashKey *key, char ***keywords, char ***values,
-			  Index *nonGlobalParamStart, MemoryContext context)
+			  Index *runtimeParamStart, MemoryContext context)
 {
 	/* make space for the port as a string: sign, 10 digits, NUL */
 	char *nodePortString = MemoryContextAlloc(context, 12 * sizeof(char *));
@@ -304,6 +293,9 @@ GetConnParams(ConnectionHashKey *key, char ***keywords, char ***values,
 		connValues[paramIndex] = ConnParams.values[paramIndex];
 	}
 
+	/* remember where global/GUC params end and runtime ones start */
+	*runtimeParamStart = ConnParams.size;
+
 	/* second step: begin at end of global params and copy runtime ones */
 	for (runtimeParamIndex = 0;
 		 runtimeParamIndex < lengthof(runtimeKeywords);
@@ -321,7 +313,6 @@ GetConnParams(ConnectionHashKey *key, char ***keywords, char ***values,
 
 	*keywords = connKeywords;
 	*values = connValues;
-	*nonGlobalParamStart = ConnParams.size;
 }
 
 

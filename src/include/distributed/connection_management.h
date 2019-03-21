@@ -118,7 +118,7 @@ typedef struct ConnParamsHashEntry
 {
 	ConnectionHashKey key;
 	bool isValid;
-	Index nonGlobalParamStart;
+	Index runtimeParamStart;
 	char **keywords;
 	char **values;
 } ConnParamsHashEntry;
@@ -143,9 +143,10 @@ extern void InitializeConnectionManagement(void);
 
 extern void InitConnParams(void);
 extern void ResetConnParams(void);
+extern void InvalidateConnParamsHashEntries(void);
 extern void AddConnParam(const char *keyword, const char *value);
 extern void GetConnParams(ConnectionHashKey *key, char ***keywords, char ***values,
-						  Index *nonGlobalParamStart, MemoryContext context);
+						  Index *runtimeParamStart, MemoryContext context);
 extern const char * GetConnParam(const char *keyword);
 extern bool CheckConninfo(const char *conninfo, const char **whitelist,
 						  Size whitelistLength, char **errmsg);

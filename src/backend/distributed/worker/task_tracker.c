@@ -861,15 +861,7 @@ ManageWorkerTasksHash(HTAB *WorkerTasksHash)
 
 	if (!WorkerTasksSharedState->conninfosValid)
 	{
-		ConnParamsHashEntry *entry = NULL;
-		HASH_SEQ_STATUS status;
-
-		hash_seq_init(&status, ConnParamsHash);
-
-		while ((entry = (ConnParamsHashEntry *) hash_seq_search(&status)) != NULL)
-		{
-			entry->isValid = false;
-		}
+		InvalidateConnParamsHashEntries();
 	}
 
 	/* schedule new tasks if we have any */
