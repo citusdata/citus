@@ -11,6 +11,7 @@
 #include "postgres.h"
 
 #include "distributed/connection_management.h"
+#include "distributed/memutils.h"
 #include "distributed/worker_protocol.h"
 #include "libpq/libpq.h"
 #include "miscadmin.h"
@@ -48,8 +49,6 @@ static void GloballyReloadConfig(void);
 #ifdef USE_SSL
 
 /* forward declaration of functions used when compiled with ssl */
-static void EnsureReleaseOpenSSLResource(MemoryContextCallbackFunction callback,
-										 void *arg);
 static bool ShouldUseAutoSSL(void);
 static bool CreateCertificatesWhenNeeded(void);
 static EVP_PKEY * GeneratePrivateKey(void);
@@ -183,20 +182,6 @@ GloballyReloadConfig()
 
 #ifdef USE_SSL
 
-/*
- * EnsureReleaseOpenSSLResource registers the openssl allocated resource to be freed when the
- * current memory context is reset.
- */
-static void
-EnsureReleaseOpenSSLResource(MemoryContextCallbackFunction callback, void *arg)
-{
-	MemoryContextCallback *cb = MemoryContextAllocZero(CurrentMemoryContext,
-													   sizeof(MemoryContextCallback));
-	cb->func = callback;
-	cb->arg = arg;
-	MemoryContextRegisterResetCallback(CurrentMemoryContext, cb);
-}
-
 
 /*
  * ShouldUseAutoSSL checks if citus should enable ssl based on the connection settings it
@@ -258,8 +243,8 @@ CreateCertificatesWhenNeeded()
 									"correctly.")));
 		return false;
 	}
-	EnsureReleaseOpenSSLResource((MemoryContextCallbackFunction) (&SSL_CTX_free),
-								 sslContext);
+	EnsureReleaseResource((MemoryContextCallbackFunction) (&SSL_CTX_free),
+						  sslContext);
 
 	/*
 	 * check if we can load the certificate, when we can we assume the certificates are in
@@ -315,11 +300,11 @@ GeneratePrivateKey()
 	{
 		ereport(ERROR, (errmsg("unable to allocate space for private key")));
 	}
-	EnsureReleaseOpenSSLResource((MemoryContextCallbackFunction) (&EVP_PKEY_free),
-								 privateKey);
+	EnsureReleaseResource((MemoryContextCallbackFunction) (&EVP_PKEY_free),
+						  privateKey);
 
 	exponent = BN_new();
-	EnsureReleaseOpenSSLResource((MemoryContextCallbackFunction) (&BN_free), exponent);
+	EnsureReleaseResource((MemoryContextCallbackFunction) (&BN_free), exponent);
 
 	/* load the exponent to use for the generation of the key */
 	success = BN_set_word(exponent, RSA_F4);
@@ -361,8 +346,8 @@ CreateCertificate(EVP_PKEY *privateKey)
 	{
 		ereport(ERROR, (errmsg("unable to allocate space for the x509 certificate")));
 	}
-	EnsureReleaseOpenSSLResource((MemoryContextCallbackFunction) (&X509_free),
-								 certificate);
+	EnsureReleaseResource((MemoryContextCallbackFunction) (&X509_free),
+						  certificate);
 
 	/* Set the serial number. */
 	ASN1_INTEGER_set(X509_get_serialNumber(certificate), 1);

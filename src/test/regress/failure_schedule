@@ -30,3 +30,4 @@ test: failure_single_mod
 test: failure_savepoints
 test: failure_multi_row_insert
 test: failure_mx_metadata_sync
+test: failure_connection_establishment
