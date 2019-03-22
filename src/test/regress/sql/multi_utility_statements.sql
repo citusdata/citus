@@ -122,8 +122,58 @@ COMMIT;
 SELECT customer_key, c_name, c_address 
        FROM customer_few ORDER BY customer_key LIMIT 5;
 
--- Test DECLARE CURSOR statements
+-- Test DECLARE CURSOR .. WITH HOLD without parameters that calls ReScan on the top-level CustomScan
+CREATE TABLE cursor_me (x int, y int);
+SELECT create_distributed_table('cursor_me', 'x');
+INSERT INTO cursor_me SELECT s/10, s FROM generate_series(1, 100) s;
 
+DECLARE holdCursor CURSOR WITH HOLD FOR
+		SELECT * FROM cursor_me WHERE x = 1 ORDER BY y;
+
+FETCH NEXT FROM holdCursor;
+FETCH FORWARD 3 FROM holdCursor;
+FETCH LAST FROM holdCursor;
+FETCH BACKWARD 3 FROM holdCursor;
+FETCH FORWARD 3 FROM holdCursor;
+
+CLOSE holdCursor;
+
+-- Test DECLARE CURSOR .. WITH HOLD with parameter
+CREATE OR REPLACE FUNCTION declares_cursor(p int)
+RETURNS void AS $$
+	DECLARE c CURSOR WITH HOLD FOR SELECT * FROM cursor_me WHERE x = $1;
+$$ LANGUAGE SQL;
+
+SELECT declares_cursor(5);
+
+CREATE OR REPLACE FUNCTION cursor_plpgsql(p int)
+RETURNS SETOF int AS $$                                                                                                                                                            
+DECLARE
+  val int;
+  my_cursor CURSOR (a INTEGER) FOR SELECT y FROM cursor_me WHERE x = $1 ORDER BY y;
+BEGIN
+   -- Open the cursor
+   OPEN my_cursor(p);
+
+   LOOP
+      FETCH my_cursor INTO val;
+      EXIT WHEN NOT FOUND;
+
+      RETURN NEXT val;
+   END LOOP;
+
+   -- Close the cursor
+   CLOSE my_cursor;
+END; $$
+LANGUAGE plpgsql;
+
+SELECT cursor_plpgsql(4);
+
+DROP FUNCTION declares_cursor(int);
+DROP FUNCTION cursor_plpgsql(int);
+DROP TABLE cursor_me;
+
+-- Test DECLARE CURSOR statement with SCROLL
 DECLARE holdCursor SCROLL CURSOR WITH HOLD FOR
         SELECT l_orderkey, l_linenumber, l_quantity, l_discount
         FROM lineitem 
