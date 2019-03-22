@@ -5,12 +5,14 @@ run_command_on_workers
 
 (localhost,57637,t,"GRANT ROLE")
 (localhost,57638,t,"GRANT ROLE")
+s1: WARNING:  not propagating GRANT command to worker nodes
 step s1-grant:
  GRANT ALL ON test_table TO test_user_1;
  SELECT bool_and(success) FROM run_command_on_placements('test_table', 'GRANT ALL ON TABLE %s TO test_user_1');
  GRANT ALL ON test_table TO test_user_2;
  SELECT bool_and(success) FROM run_command_on_placements('test_table', 'GRANT ALL ON TABLE %s TO test_user_2');
 
+s1: WARNING:  not propagating GRANT command to worker nodes
 bool_and
 
 t
