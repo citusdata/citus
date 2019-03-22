@@ -10,5 +10,8 @@
 /regression.diffs
 /regression.out
 
+# Regression test timing
+/test_times.log
+
 # Failure test side effets
 /proxy.output
