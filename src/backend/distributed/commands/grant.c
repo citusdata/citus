@@ -44,33 +44,33 @@ PreprocessGrantStmt(Node *node, const char *queryString)
 #else
 			case ACL_OBJECT_DATABASE:
 #endif
-			{
-				showPropagationWarning = true;
-				break;
-			}
+				{
+					showPropagationWarning = true;
+					break;
+				}
 
 #if (PG_VERSION_NUM >= 110000)
 			case OBJECT_TABLE:
 #else
 			case ACL_OBJECT_RELATION:
 #endif
-			{
-				ListCell *rangeVarCell = NULL;
-
-				foreach(rangeVarCell, grantStmt->objects)
 				{
-					RangeVar *rangeVar = (RangeVar *) lfirst(rangeVarCell);
+					ListCell *rangeVarCell = NULL;
 
-					Oid relationId = RangeVarGetRelid(rangeVar, NoLock, false);
-					if (OidIsValid(relationId) && IsDistributedTable(relationId))
+					foreach(rangeVarCell, grantStmt->objects)
 					{
-						showPropagationWarning = true;
-						break;
-					}
-				}
+						RangeVar *rangeVar = (RangeVar *) lfirst(rangeVarCell);
 
-				break;
-			}
+						Oid relationId = RangeVarGetRelid(rangeVar, NoLock, false);
+						if (OidIsValid(relationId) && IsDistributedTable(relationId))
+						{
+							showPropagationWarning = true;
+							break;
+						}
+					}
+
+					break;
+				}
 
 			/* no need to warn when object is sequence, domain, function, etc. */
 			default:
