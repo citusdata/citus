@@ -38,14 +38,22 @@ PreprocessGrantStmt(Node *node, const char *queryString)
 	{
 		switch (grantStmt->objtype)
 		{
+#if (PG_VERSION_NUM >= 110000)
 			case OBJECT_SCHEMA:
 			case OBJECT_DATABASE:
+#else
+			case ACL_OBJECT_DATABASE:
+#endif
 			{
 				showPropagationWarning = true;
 				break;
 			}
 
+#if (PG_VERSION_NUM >= 110000)
 			case OBJECT_TABLE:
+#else
+			case ACL_OBJECT_RELATION:
+#endif
 			{
 				ListCell *rangeVarCell = NULL;
 
