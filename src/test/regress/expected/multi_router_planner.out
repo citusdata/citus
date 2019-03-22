@@ -2408,6 +2408,7 @@ CREATE USER router_user;
 NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
 HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
 GRANT INSERT ON ALL TABLES IN SCHEMA public TO router_user;
+WARNING:  not propagating GRANT command to worker nodes
 \c - router_user - :master_port
 -- first test that it is marked invalid inside a transaction block
 -- we will fail to connect to worker 2, since the user does not exist

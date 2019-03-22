@@ -689,6 +689,7 @@ CREATE USER try_drop_table WITH LOGIN;
 NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
 HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
 GRANT ALL ON SCHEMA public TO try_drop_table;
+WARNING:  not propagating GRANT command to worker nodes
 SELECT run_command_on_workers('CREATE USER try_drop_table WITH LOGIN');
       run_command_on_workers
 ---------------------------------------------------------------------

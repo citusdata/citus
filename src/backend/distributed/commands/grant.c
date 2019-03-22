@@ -13,14 +13,21 @@
 #include "catalog/namespace.h"
 #include "distributed/commands.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/master_protocol.h"
 
 
 /* placeholder for PreprocessGrantStmt */
 List *
 PreprocessGrantStmt(Node *node, const char *queryString)
 {
+	GrantStmt *grantStmt = castNode(GrantStmt, node);
 	bool showPropagationWarning = false;
 
+	/* don't emit warnings in worker nodes */
+	if (!IsCoordinator())
+	{
+		return NIL;
+	}
 
 	if (grantStmt->targtype == ACL_TARGET_ALL_IN_SCHEMA)
 	{

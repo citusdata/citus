@@ -1240,6 +1240,9 @@ PL/pgSQL function run_command_on_coordinator_and_workers(text) line 3 at EXECUTE
 (1 row)
 
 SELECT run_command_on_coordinator_and_workers('GRANT ALL ON DATABASE postgres to "test-user"');
+WARNING:  not propagating GRANT command to worker nodes
+CONTEXT:  SQL statement "GRANT ALL ON DATABASE postgres to "test-user""
+PL/pgSQL function run_command_on_coordinator_and_workers(text) line 3 at EXECUTE
  run_command_on_coordinator_and_workers
 ---------------------------------------------------------------------
 
