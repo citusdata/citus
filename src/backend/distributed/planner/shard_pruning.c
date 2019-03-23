@@ -63,6 +63,7 @@
 #include "nodes/nodeFuncs.h"
 #include "nodes/makefuncs.h"
 #include "optimizer/clauses.h"
+#include "optimizer/planner.h"
 #include "parser/parse_coerce.h"
 #include "utils/arrayaccess.h"
 #include "utils/catcache.h"
@@ -172,6 +173,8 @@ static bool PrunableExpressionsWalker(Node *originalNode, ClauseWalkerContext *c
 static void AddPartitionKeyRestrictionToInstance(ClauseWalkerContext *context,
 												 OpExpr *opClause, Var *varClause,
 												 Const *constantClause);
+static Const * TransformPartitionRestrictionValue(Var *partitionColumn,
+												  Node *restrictionValue);
 static void AddSAOPartitionKeyRestrictionToInstance(ClauseWalkerContext *context,
 													ScalarArrayOpExpr *
 													arrayOperatorExpression);
@@ -723,6 +726,18 @@ AddPartitionKeyRestrictionToInstance(ClauseWalkerContext *context, OpExpr *opCla
 	ListCell *btreeInterpretationCell = NULL;
 	bool matchedOp = false;
 
+	/* we want our restriction value in terms of the type of the partition column */
+	constantClause = TransformPartitionRestrictionValue(partitionColumn,
+														(Node *) constantClause);
+	if (constantClause == NULL)
+	{
+		/* couldn't coerce the value, so we note this as a restriction we don't grok */
+		prune->otherRestrictions = lappend(prune->otherRestrictions, opClause);
+
+		return;
+	}
+
+	/* at this point, we'd better be able to pass binary Datums to comparison functions */
 	Assert(IsBinaryCoercible(constantClause->consttype, partitionColumn->vartype));
 
 	btreeInterpretationList =
@@ -838,6 +853,45 @@ AddPartitionKeyRestrictionToInstance(ClauseWalkerContext *context, OpExpr *opCla
 	{
 		prune->hasValidConstraint = true;
 	}
+}
+
+
+/*
+ * Sometimes PostgreSQL chooses to try to wrap our Var in a coercion rather
+ * than the Const; to deal with this, we strip the coercions from both and
+ * manually coerce the Const into the type of our partition column. It is
+ * conceivable that in some instances, this may not be possible; in those cases
+ * we will simply fail to prune partitions based on this clause.
+ */
+static Const *
+TransformPartitionRestrictionValue(Var *partitionColumn, Node *restrictionValue)
+{
+	Node *transformedValue = coerce_to_target_type(NULL, restrictionValue,
+												   exprType(restrictionValue),
+												   partitionColumn->vartype,
+												   partitionColumn->vartypmod,
+												   COERCION_ASSIGNMENT,
+												   COERCE_IMPLICIT_CAST, -1);
+
+	/* if NULL, no implicit coercion is possible between the types */
+	if (transformedValue == NULL)
+	{
+		return NULL;
+	}
+
+	/* if still not a constant, evaluate coercion */
+	if (!IsA(transformedValue, Const))
+	{
+		transformedValue = (Node *) expression_planner((Expr *) transformedValue);
+	}
+
+	/* if still not a constant, no immutable coercion matched */
+	if (!IsA(transformedValue, Const))
+	{
+		return NULL;
+	}
+
+	return (Const *) transformedValue;
 }
 
 
