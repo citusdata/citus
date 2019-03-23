@@ -63,6 +63,7 @@
 #include "nodes/nodeFuncs.h"
 #include "nodes/makefuncs.h"
 #include "optimizer/clauses.h"
+#include "parser/parse_coerce.h"
 #include "utils/arrayaccess.h"
 #include "utils/catcache.h"
 #include "utils/lsyscache.h"
@@ -715,12 +716,14 @@ AddNewConjuction(ClauseWalkerContext *context, OpExpr *op)
  */
 static void
 AddPartitionKeyRestrictionToInstance(ClauseWalkerContext *context, OpExpr *opClause,
-									 Var *varClause, Const *constantClause)
+									 Var *partitionColumn, Const *constantClause)
 {
 	PruningInstance *prune = context->currentPruningInstance;
 	List *btreeInterpretationList = NULL;
 	ListCell *btreeInterpretationCell = NULL;
 	bool matchedOp = false;
+
+	Assert(IsBinaryCoercible(constantClause->consttype, partitionColumn->vartype));
 
 	btreeInterpretationList =
 		get_op_btree_interpretation(opClause->opno);
@@ -837,6 +840,9 @@ AddHashRestrictionToInstance(ClauseWalkerContext *context, OpExpr *opClause,
 	PruningInstance *prune = context->currentPruningInstance;
 	List *btreeInterpretationList = NULL;
 	ListCell *btreeInterpretationCell = NULL;
+
+	/* be paranoid */
+	Assert(IsBinaryCoercible(constantClause->consttype, INT4OID));
 
 	btreeInterpretationList =
 		get_op_btree_interpretation(opClause->opno);
