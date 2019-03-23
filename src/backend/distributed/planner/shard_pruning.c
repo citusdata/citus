@@ -534,8 +534,7 @@ PrunableExpressionsWalker(Node *node, ClauseWalkerContext *context)
 
 		if (!prune->addedToPruningInstances)
 		{
-			context->pruningInstances = lappend(context->pruningInstances,
-												prune);
+			context->pruningInstances = lappend(context->pruningInstances, prune);
 			prune->addedToPruningInstances = true;
 		}
 
@@ -565,8 +564,8 @@ PrunableExpressionsWalker(Node *node, ClauseWalkerContext *context)
 			 * Found a restriction on the partition column itself. Update the
 			 * current constraint with the new information.
 			 */
-			AddPartitionKeyRestrictionToInstance(context,
-												 opClause, varClause, constantClause);
+			AddPartitionKeyRestrictionToInstance(context, opClause, varClause,
+												 constantClause);
 		}
 		else if (constantClause && varClause &&
 				 varClause->varattno == RESERVED_HASHED_COLUMN_ID)
@@ -597,8 +596,7 @@ PrunableExpressionsWalker(Node *node, ClauseWalkerContext *context)
 		 */
 		if (!prune->addedToPruningInstances)
 		{
-			context->pruningInstances = lappend(context->pruningInstances,
-												prune);
+			context->pruningInstances = lappend(context->pruningInstances, prune);
 			prune->addedToPruningInstances = true;
 		}
 
@@ -740,8 +738,7 @@ AddPartitionKeyRestrictionToInstance(ClauseWalkerContext *context, OpExpr *opCla
 	/* at this point, we'd better be able to pass binary Datums to comparison functions */
 	Assert(IsBinaryCoercible(constantClause->consttype, partitionColumn->vartype));
 
-	btreeInterpretationList =
-		get_op_btree_interpretation(opClause->opno);
+	btreeInterpretationList = get_op_btree_interpretation(opClause->opno);
 	foreach(btreeInterpretationCell, btreeInterpretationList)
 	{
 		OpBtreeInterpretation *btreeInterpretation =
@@ -846,8 +843,7 @@ AddPartitionKeyRestrictionToInstance(ClauseWalkerContext *context, OpExpr *opCla
 
 	if (!matchedOp)
 	{
-		prune->otherRestrictions =
-			lappend(prune->otherRestrictions, opClause);
+		prune->otherRestrictions = lappend(prune->otherRestrictions, opClause);
 	}
 	else
 	{
