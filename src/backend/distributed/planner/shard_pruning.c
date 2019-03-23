@@ -806,6 +806,19 @@ AddPartitionKeyRestrictionToInstance(ClauseWalkerContext *context, OpExpr *opCla
 
 			case ROWCOMPARE_NE:
 			{
+				/*
+				 * This case should only arise when ALL list elements have this
+				 * "strategy" number set. Skipping to the end of the list might
+				 * protect us if that assumption is violated, and an Assert can
+				 * notify us if it ever is...
+				 */
+
+				/* should see this value immediately */
+				Assert(btreeInterpretationCell == btreeInterpretationList->head);
+
+				/* stop processing early, would only see unsupported nodes anyhow */
+				btreeInterpretationCell = btreeInterpretationList->tail;
+
 				/* TODO: could add support for this, if we feel like it */
 				matchedOp = false;
 				break;
