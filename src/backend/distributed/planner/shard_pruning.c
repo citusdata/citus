@@ -174,7 +174,7 @@ static void AddPartitionKeyRestrictionToInstance(ClauseWalkerContext *context,
 												 OpExpr *opClause, Var *varClause,
 												 Const *constantClause);
 static Const * TransformPartitionRestrictionValue(Var *partitionColumn,
-												  Node *restrictionValue);
+												  Const *restrictionValue);
 static void AddSAOPartitionKeyRestrictionToInstance(ClauseWalkerContext *context,
 													ScalarArrayOpExpr *
 													arrayOperatorExpression);
@@ -724,15 +724,19 @@ AddPartitionKeyRestrictionToInstance(ClauseWalkerContext *context, OpExpr *opCla
 	ListCell *btreeInterpretationCell = NULL;
 	bool matchedOp = false;
 
-	/* we want our restriction value in terms of the type of the partition column */
-	constantClause = TransformPartitionRestrictionValue(partitionColumn,
-														(Node *) constantClause);
-	if (constantClause == NULL)
+	/* only have extra work to do if const isn't same type as partition column */
+	if (constantClause->consttype != partitionColumn->vartype)
 	{
-		/* couldn't coerce the value, so we note this as a restriction we don't grok */
-		prune->otherRestrictions = lappend(prune->otherRestrictions, opClause);
+		/* we want our restriction value in terms of the type of the partition column */
+		constantClause = TransformPartitionRestrictionValue(partitionColumn,
+															constantClause);
+		if (constantClause == NULL)
+		{
+			/* couldn't coerce value, so we note this as a restriction we don't grok */
+			prune->otherRestrictions = lappend(prune->otherRestrictions, opClause);
 
-		return;
+			return;
+		}
 	}
 
 	/* at this point, we'd better be able to pass binary Datums to comparison functions */
@@ -860,10 +864,10 @@ AddPartitionKeyRestrictionToInstance(ClauseWalkerContext *context, OpExpr *opCla
  * we will simply fail to prune partitions based on this clause.
  */
 static Const *
-TransformPartitionRestrictionValue(Var *partitionColumn, Node *restrictionValue)
+TransformPartitionRestrictionValue(Var *partitionColumn, Const *restrictionValue)
 {
-	Node *transformedValue = coerce_to_target_type(NULL, restrictionValue,
-												   exprType(restrictionValue),
+	Node *transformedValue = coerce_to_target_type(NULL, (Node *) restrictionValue,
+												   restrictionValue->consttype,
 												   partitionColumn->vartype,
 												   partitionColumn->vartypmod,
 												   COERCION_ASSIGNMENT,
