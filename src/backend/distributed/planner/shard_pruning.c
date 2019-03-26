@@ -63,6 +63,8 @@
 #include "nodes/nodeFuncs.h"
 #include "nodes/makefuncs.h"
 #include "optimizer/clauses.h"
+#include "optimizer/planner.h"
+#include "parser/parse_coerce.h"
 #include "utils/arrayaccess.h"
 #include "utils/catcache.h"
 #include "utils/lsyscache.h"
@@ -171,6 +173,8 @@ static bool PrunableExpressionsWalker(Node *originalNode, ClauseWalkerContext *c
 static void AddPartitionKeyRestrictionToInstance(ClauseWalkerContext *context,
 												 OpExpr *opClause, Var *varClause,
 												 Const *constantClause);
+static Const * TransformPartitionRestrictionValue(Var *partitionColumn,
+												  Const *restrictionValue);
 static void AddSAOPartitionKeyRestrictionToInstance(ClauseWalkerContext *context,
 													ScalarArrayOpExpr *
 													arrayOperatorExpression);
@@ -530,8 +534,7 @@ PrunableExpressionsWalker(Node *node, ClauseWalkerContext *context)
 
 		if (!prune->addedToPruningInstances)
 		{
-			context->pruningInstances = lappend(context->pruningInstances,
-												prune);
+			context->pruningInstances = lappend(context->pruningInstances, prune);
 			prune->addedToPruningInstances = true;
 		}
 
@@ -561,8 +564,8 @@ PrunableExpressionsWalker(Node *node, ClauseWalkerContext *context)
 			 * Found a restriction on the partition column itself. Update the
 			 * current constraint with the new information.
 			 */
-			AddPartitionKeyRestrictionToInstance(context,
-												 opClause, varClause, constantClause);
+			AddPartitionKeyRestrictionToInstance(context, opClause, varClause,
+												 constantClause);
 		}
 		else if (constantClause && varClause &&
 				 varClause->varattno == RESERVED_HASHED_COLUMN_ID)
@@ -593,8 +596,7 @@ PrunableExpressionsWalker(Node *node, ClauseWalkerContext *context)
 		 */
 		if (!prune->addedToPruningInstances)
 		{
-			context->pruningInstances = lappend(context->pruningInstances,
-												prune);
+			context->pruningInstances = lappend(context->pruningInstances, prune);
 			prune->addedToPruningInstances = true;
 		}
 
@@ -715,15 +717,32 @@ AddNewConjuction(ClauseWalkerContext *context, OpExpr *op)
  */
 static void
 AddPartitionKeyRestrictionToInstance(ClauseWalkerContext *context, OpExpr *opClause,
-									 Var *varClause, Const *constantClause)
+									 Var *partitionColumn, Const *constantClause)
 {
 	PruningInstance *prune = context->currentPruningInstance;
 	List *btreeInterpretationList = NULL;
 	ListCell *btreeInterpretationCell = NULL;
 	bool matchedOp = false;
 
-	btreeInterpretationList =
-		get_op_btree_interpretation(opClause->opno);
+	/* only have extra work to do if const isn't same type as partition column */
+	if (constantClause->consttype != partitionColumn->vartype)
+	{
+		/* we want our restriction value in terms of the type of the partition column */
+		constantClause = TransformPartitionRestrictionValue(partitionColumn,
+															constantClause);
+		if (constantClause == NULL)
+		{
+			/* couldn't coerce value, so we note this as a restriction we don't grok */
+			prune->otherRestrictions = lappend(prune->otherRestrictions, opClause);
+
+			return;
+		}
+	}
+
+	/* at this point, we'd better be able to pass binary Datums to comparison functions */
+	Assert(IsBinaryCoercible(constantClause->consttype, partitionColumn->vartype));
+
+	btreeInterpretationList = get_op_btree_interpretation(opClause->opno);
 	foreach(btreeInterpretationCell, btreeInterpretationList)
 	{
 		OpBtreeInterpretation *btreeInterpretation =
@@ -803,6 +822,19 @@ AddPartitionKeyRestrictionToInstance(ClauseWalkerContext *context, OpExpr *opCla
 
 			case ROWCOMPARE_NE:
 			{
+				/*
+				 * This case should only arise when ALL list elements have this
+				 * "strategy" number set. Skipping to the end of the list might
+				 * protect us if that assumption is violated, and an Assert can
+				 * notify us if it ever is...
+				 */
+
+				/* should see this value immediately */
+				Assert(btreeInterpretationCell == btreeInterpretationList->head);
+
+				/* stop processing early, would only see unsupported nodes anyhow */
+				btreeInterpretationCell = btreeInterpretationList->tail;
+
 				/* TODO: could add support for this, if we feel like it */
 				matchedOp = false;
 				break;
@@ -815,13 +847,51 @@ AddPartitionKeyRestrictionToInstance(ClauseWalkerContext *context, OpExpr *opCla
 
 	if (!matchedOp)
 	{
-		prune->otherRestrictions =
-			lappend(prune->otherRestrictions, opClause);
+		prune->otherRestrictions = lappend(prune->otherRestrictions, opClause);
 	}
 	else
 	{
 		prune->hasValidConstraint = true;
 	}
+}
+
+
+/*
+ * Sometimes PostgreSQL chooses to try to wrap our Var in a coercion rather
+ * than the Const; to deal with this, we strip the coercions from both and
+ * manually coerce the Const into the type of our partition column. It is
+ * conceivable that in some instances, this may not be possible; in those cases
+ * we will simply fail to prune partitions based on this clause.
+ */
+static Const *
+TransformPartitionRestrictionValue(Var *partitionColumn, Const *restrictionValue)
+{
+	Node *transformedValue = coerce_to_target_type(NULL, (Node *) restrictionValue,
+												   restrictionValue->consttype,
+												   partitionColumn->vartype,
+												   partitionColumn->vartypmod,
+												   COERCION_ASSIGNMENT,
+												   COERCE_IMPLICIT_CAST, -1);
+
+	/* if NULL, no implicit coercion is possible between the types */
+	if (transformedValue == NULL)
+	{
+		return NULL;
+	}
+
+	/* if still not a constant, evaluate coercion */
+	if (!IsA(transformedValue, Const))
+	{
+		transformedValue = (Node *) expression_planner((Expr *) transformedValue);
+	}
+
+	/* if still not a constant, no immutable coercion matched */
+	if (!IsA(transformedValue, Const))
+	{
+		return NULL;
+	}
+
+	return (Const *) transformedValue;
 }
 
 
@@ -837,6 +907,9 @@ AddHashRestrictionToInstance(ClauseWalkerContext *context, OpExpr *opClause,
 	PruningInstance *prune = context->currentPruningInstance;
 	List *btreeInterpretationList = NULL;
 	ListCell *btreeInterpretationCell = NULL;
+
+	/* be paranoid */
+	Assert(IsBinaryCoercible(constantClause->consttype, INT4OID));
 
 	btreeInterpretationList =
 		get_op_btree_interpretation(opClause->opno);

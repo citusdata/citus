@@ -119,3 +119,35 @@ SELECT print_sorted_shard_intervals('pruning_range');
 -- all shard placements are uninitialized
 UPDATE pg_dist_shard set shardminvalue = NULL, shardmaxvalue = NULL WHERE shardid = 103077;
 SELECT print_sorted_shard_intervals('pruning_range');
+
+-- ===================================================================
+-- test pruning using values whose types are coerced
+-- ===================================================================
+
+CREATE TABLE coerce_hash (
+	id bigint NOT NULL,
+	value text NOT NULL
+);
+SELECT create_distributed_table('coerce_hash', 'id');
+
+INSERT INTO coerce_hash VALUES (1, 'test value');
+
+-- All three of the following should return the same results...
+
+-- SELECT with same type as partition column
+SELECT * FROM coerce_hash WHERE id = 1::bigint;
+
+-- SELECT with similar type to partition column
+SELECT * FROM coerce_hash WHERE id = 1;
+
+-- SELECT with numeric type (original impetus for this change)
+
+-- PostgreSQL will cast id to numeric rather than 1.0 to bigint...
+-- We used to blindly pass the RHS' Datum to our comparison func.,
+-- resulting in inaccurate pruning. An Assert now verifies type-
+-- compatibility; the following would crash the server in an Assert-
+-- before the underlying issue was addressed. It looks like a boring
+-- test now, but if the old behavior is restored, it should crash again.
+SELECT * FROM coerce_hash WHERE id = 1.0;
+
+SELECT * FROM coerce_hash WHERE id = 1.0::numeric;
