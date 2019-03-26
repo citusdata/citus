@@ -2749,3 +2749,151 @@ LIMIT 5;
   1 |  1 |       2
 (5 rows)
 
+SELECT c_custkey
+FROM  (users_table LEFT OUTER JOIN events_table ON (users_table.user_id = events_table.user_id)) AS test(c_custkey, c_nationkey)
+	INNER JOIN users_table as u2 ON (test.c_custkey = u2.user_id)
+ORDER BY 1 DESC
+LIMIT 10;
+ c_custkey 
+-----------
+         6
+         6
+         6
+         6
+         6
+         6
+         6
+         6
+         6
+         6
+(10 rows)
+
+SELECT c_custkey, date_trunc('minute', max(c_nationkey))
+FROM  (users_table LEFT OUTER JOIN events_table ON (users_table.user_id = events_table.user_id)) AS test(c_custkey, c_nationkey)
+	INNER JOIN users_table as u2 ON (test.c_custkey = u2.user_id)
+GROUP BY 1
+ORDER BY 2, 1
+LIMIT 10;
+ c_custkey |        date_trunc        
+-----------+--------------------------
+         2 | Thu Nov 23 13:52:00 2017
+         6 | Thu Nov 23 14:43:00 2017
+         4 | Thu Nov 23 15:32:00 2017
+         5 | Thu Nov 23 16:48:00 2017
+         3 | Thu Nov 23 17:18:00 2017
+         1 | Thu Nov 23 17:30:00 2017
+(6 rows)
+
+SELECT c_custkey, date_trunc('minute', max(c_nationkey))
+FROM  (users_table LEFT OUTER JOIN events_table ON (users_table.user_id = events_table.user_id)) AS test(c_custkey, c_nationkey)
+	INNER JOIN users_table as u2 ON (test.c_custkey = u2.user_id)
+GROUP BY 1
+HAVING extract(minute from max(c_nationkey))  >= 45
+ORDER BY 2, 1
+LIMIT 10;
+ c_custkey |        date_trunc        
+-----------+--------------------------
+         2 | Thu Nov 23 13:52:00 2017
+         5 | Thu Nov 23 16:48:00 2017
+(2 rows)
+
+SELECT user_id
+FROM (users_table JOIN events_table USING (user_id)) AS test(user_id, c_nationkey)
+	FULL JOIN users_table AS u2 USING (user_id)
+ORDER BY 1 DESC
+LIMIT 10;
+ user_id 
+---------
+       6
+       6
+       6
+       6
+       6
+       6
+       6
+       6
+       6
+       6
+(10 rows)
+
+-- nested joins
+SELECT bar, value_3_table.value_3
+FROM ((users_table
+      JOIN (events_table INNER JOIN users_reference_table foo ON (events_table.user_id = foo.value_2)) AS deeper_join(user_id_deep)  
+     	ON (users_table.user_id = deeper_join.user_id_deep)) AS test(c_custkey, c_nationkey)
+		LEFT JOIN users_table AS u2 ON (test.c_custkey = u2.user_id)) outer_test(bar,foo)
+	JOIN LATERAL (SELECT value_3 FROM events_table WHERE user_id = bar) as value_3_table ON true
+GROUP BY 1,2
+ORDER BY 2 DESC, 1 DESC
+LIMIT 10;
+ bar | value_3 
+-----+---------
+   3 |       5
+   2 |       5
+   1 |       5
+   5 |       4
+   4 |       4
+   3 |       4
+   2 |       4
+   1 |       4
+   5 |       3
+   4 |       3
+(10 rows)
+
+-- lateral joins
+SELECT bar,
+       value_3_table.value_3
+FROM ((users_table
+       JOIN (events_table
+             INNER JOIN users_reference_table foo ON (events_table.user_id = foo.value_2)) AS deeper_join(user_id_deep) ON (users_table.user_id = deeper_join.user_id_deep)) AS test(c_custkey, c_nationkey)
+      LEFT JOIN users_table AS u2 ON (test.c_custkey = u2.user_id)) outer_test(bar, foo)
+JOIN LATERAL
+  (SELECT value_3
+   FROM events_table
+   WHERE user_id = bar) AS value_3_table ON TRUE
+GROUP BY 1, 2
+ORDER BY 2 DESC, 1 DESC
+LIMIT 10;
+ bar | value_3 
+-----+---------
+   3 |       5
+   2 |       5
+   1 |       5
+   5 |       4
+   4 |       4
+   3 |       4
+   2 |       4
+   1 |       4
+   5 |       3
+   4 |       3
+(10 rows)
+
+--Joins inside subqueries are the sources of the values in the target list:
+SELECT bar, foo.value_3, c_custkey, test_2.time_2 FROM
+(
+	SELECT bar, value_3_table.value_3, random()
+	FROM ((users_table
+	      JOIN (events_table INNER JOIN users_reference_table foo ON (events_table.user_id = foo.value_2)) AS deeper_join(user_id_deep)  
+	     	ON (users_table.user_id = deeper_join.user_id_deep)) AS test(c_custkey, c_nationkey)
+			LEFT JOIN users_table AS u2 ON (test.c_custkey = u2.user_id)) outer_test(bar,foo)
+		JOIN LATERAL (SELECT value_3 FROM events_table WHERE user_id = bar) as value_3_table ON true
+	GROUP BY 1,2
+) as foo, (users_table
+	      JOIN (events_table INNER JOIN users_reference_table foo ON (events_table.user_id = foo.value_2)) AS deeper_join_2(user_id_deep)  
+	     	ON (users_table.user_id = deeper_join_2.user_id_deep)) AS test_2(c_custkey, time_2) WHERE foo.bar = test_2.c_custkey
+ORDER BY 2 DESC, 1 DESC, 3 DESC, 4 DESC
+LIMIT 10;
+ bar | value_3 | c_custkey |             time_2              
+-----+---------+-----------+---------------------------------
+   3 |       5 |         3 | Thu Nov 23 17:18:51.048758 2017
+   3 |       5 |         3 | Thu Nov 23 17:18:51.048758 2017
+   3 |       5 |         3 | Thu Nov 23 17:18:51.048758 2017
+   3 |       5 |         3 | Thu Nov 23 17:18:51.048758 2017
+   3 |       5 |         3 | Thu Nov 23 17:18:51.048758 2017
+   3 |       5 |         3 | Thu Nov 23 17:18:51.048758 2017
+   3 |       5 |         3 | Thu Nov 23 17:18:51.048758 2017
+   3 |       5 |         3 | Thu Nov 23 17:18:51.048758 2017
+   3 |       5 |         3 | Thu Nov 23 17:18:51.048758 2017
+   3 |       5 |         3 | Thu Nov 23 17:18:51.048758 2017
+(10 rows)
+

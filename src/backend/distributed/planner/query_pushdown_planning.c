@@ -80,6 +80,7 @@ static bool IsRecurringRangeTable(List *rangeTable, RecurringTuplesType *recurTy
 static bool HasRecurringTuples(Node *node, RecurringTuplesType *recurType);
 static MultiNode * SubqueryPushdownMultiNodeTree(Query *queryTree);
 static List * FlattenJoinVars(List *columnList, Query *queryTree);
+static Node * FlattenJoinVarsMutator(Node *node, Query *queryTree);
 static void UpdateVarMappingsForExtendedOpNode(List *columnList,
 											   List *flattenedColumnList,
 											   List *subqueryTargetEntryList);
@@ -1582,52 +1583,71 @@ SubqueryPushdownMultiNodeTree(Query *queryTree)
 static List *
 FlattenJoinVars(List *columnList, Query *queryTree)
 {
-	ListCell *columnCell = NULL;
-	List *rteList = queryTree->rtable;
 	List *flattenedExprList = NIL;
 
+	ListCell *columnCell = NULL;
 	foreach(columnCell, columnList)
 	{
-		Var *column = (Var *) lfirst(columnCell);
-		RangeTblEntry *columnRte = NULL;
-		PlannerInfo *root = NULL;
-
-		Assert(IsA(column, Var));
-
-		/*
-		 * if join does not have an alias, it is copied over join rte.
-		 * There is no need to find the JoinExpr to check whether it has
-		 * an alias defined.
-		 *
-		 * We use the planner's flatten_join_alias_vars routine to do
-		 * the flattening; it wants a PlannerInfo root node, which
-		 * fortunately can be mostly dummy.
-		 */
-		columnRte = rt_fetch(column->varno, rteList);
-		if (columnRte->rtekind == RTE_JOIN && columnRte->alias == NULL)
-		{
-			Node *normalizedNode = NULL;
-
-			if (root == NULL)
-			{
-				root = makeNode(PlannerInfo);
-				root->parse = (queryTree);
-				root->planner_cxt = CurrentMemoryContext;
-				root->hasJoinRTEs = true;
-			}
-
-			normalizedNode = strip_implicit_coercions(flatten_join_alias_vars(root,
-																			  (Node *)
-																			  column));
-			flattenedExprList = lappend(flattenedExprList, copyObject(normalizedNode));
-		}
-		else
-		{
-			flattenedExprList = lappend(flattenedExprList, copyObject(column));
-		}
+		Node *column = strip_implicit_coercions(
+			FlattenJoinVarsMutator((Node *) lfirst(columnCell), queryTree));
+		flattenedExprList = lappend(flattenedExprList, copyObject(column));
 	}
 
 	return flattenedExprList;
+}
+
+
+/*
+ * FlattenJoinVarsMutator flattens a single column var as outlined in the caller
+ * function (FlattenJoinVars). It iterates the join tree to find the
+ * lowest Var it can go. This is usually the relation range table var. However
+ * if a join operation is given an alias, iteration stops at that level since the
+ * query can not reference the inner RTE by name if the join is given an alias.
+ */
+static Node *
+FlattenJoinVarsMutator(Node *node, Query *queryTree)
+{
+	if (node == NULL)
+	{
+		return NULL;
+	}
+
+	if (IsA(node, Var))
+	{
+		Var *column = (Var *) node;
+		RangeTblEntry *rte = rt_fetch(column->varno, queryTree->rtable);
+		if (rte->rtekind == RTE_JOIN)
+		{
+			Node *newColumn = NULL;
+
+			/*
+			 * if join has an alias, it is copied over join RTE. We should
+			 * reference this RTE.
+			 */
+			if (rte->alias != NULL)
+			{
+				return (Node *) column;
+			}
+
+			/* join RTE does not have and alias defined at this level, deeper look is needed */
+			Assert(column->varattno > 0);
+			newColumn = (Node *) list_nth(rte->joinaliasvars, column->varattno - 1);
+			Assert(newColumn != NULL);
+
+			/*
+			 * Ideally we should use expression_tree_mutator here. But it does not call
+			 * mutate function for Vars, thus we make a recursive call to make sure
+			 * not to miss Vars in nested joins.
+			 */
+			return FlattenJoinVarsMutator(newColumn, queryTree);
+		}
+		else
+		{
+			return node;
+		}
+	}
+
+	return expression_tree_mutator(node, FlattenJoinVarsMutator, (void *) queryTree);
 }
 
 
@@ -1733,13 +1753,12 @@ UpdateColumnToMatchingTargetEntry(Var *column, Node *flattenedExpr, List *target
 		else if (IsA(targetEntry->expr, CoalesceExpr))
 		{
 			/*
-			 * flatten_join_alias_vars() flattens full oter joins' columns that is
+			 * FlattenJoinVars() flattens full oter joins' columns that is
 			 * in the USING part into COALESCE(left_col, right_col)
 			 */
-			CoalesceExpr *targetCoalesceExpr = (CoalesceExpr *) targetEntry->expr;
 
 			if (IsA(flattenedExpr, CoalesceExpr) && equal(flattenedExpr,
-														  targetCoalesceExpr))
+														  targetEntry->expr))
 			{
 				Oid expressionType = exprType(flattenedExpr);
 				int32 expressionTypmod = exprTypmod(flattenedExpr);
