@@ -53,7 +53,8 @@ typedef enum MultiConnectionState
 	MULTI_CONNECTION_CONNECTING,
 	MULTI_CONNECTION_CONNECTED,
 	MULTI_CONNECTION_WAIT_RETRY,
-	MULTI_CONNECTION_FAILED
+	MULTI_CONNECTION_FAILED,
+	MULTI_CONNECTION_LOST
 } MultiConnectionState;
 
 /* declaring this directly above makes uncrustify go crazy */
