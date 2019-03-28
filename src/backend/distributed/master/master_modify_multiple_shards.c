@@ -91,3 +91,22 @@ master_modify_multiple_shards(PG_FUNCTION_ARGS)
 
 	PG_RETURN_INT32(0);
 }
+
+
+/*
+ * ModifyMultipleShardsTaskList builds a list of tasks to execute a query on a
+ * given list of shards.
+ */
+static List *
+ModifyMultipleShardsTaskList(Query *query, List *shardIntervalList, TaskType taskType)
+{
+	List *taskList = NIL;
+	ListCell *shardIntervalCell = NULL;
+	uint64 jobId = INVALID_JOB_ID;
+	int taskId = 1;
+>>>>>>> 951ab699... Latest changes
+
+	ExecuteQueryStringIntoDestReceiver(queryString, NULL, None_Receiver);
+
+	PG_RETURN_INT32(0);
+}

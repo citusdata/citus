@@ -25,6 +25,7 @@
 #include "distributed/multi_router_executor.h"
 #include "distributed/multi_server_executor.h"
 #include "distributed/placement_connection.h"
+#include "distributed/relation_access_tracking.h"
 #include "distributed/remote_commands.h"
 #include "distributed/resource_lock.h"
 #include "distributed/subplan_execution.h"
@@ -111,6 +112,9 @@ typedef struct WorkerPool
 	/* all sessions on the worker that are part of the current execution */
 	List *sessionList;
 
+	/* number of connections that were established */
+	int activeConnectionCount;
+
 	/*
 	 * Keep track of how many connections are ready for execution, in
 	 * order to (efficiently) know whether more connections to the worker
@@ -120,9 +124,6 @@ typedef struct WorkerPool
 
 	/* number of failed connections */
 	int failedConnectionCount;
-
-	/* number of failed connection attempts */
-	int failedConnectionAttempts;
 
 	/*
 	 * Placement executions destined for worker node, but not assigned to any
@@ -210,12 +211,14 @@ typedef struct ShardCommandExecution
 	struct TaskPlacementExecution **placementExecutions;
 	int placementExecutionCount;
 
+	/* whether we expect results to come back */
+	bool expectResults;
+
 	/*
 	 * RETURNING results from other shard placements can be ignored
 	 * after we got results from the first placements.
 	 */
 	bool gotResults;
-
 } ShardCommandExecution;
 
 /*
@@ -277,8 +280,9 @@ static void StartDistributedExecution(DistributedExecution *execution);
 static void RunDistributedExecution(DistributedExecution *execution);
 static void FinishDistributedExecution(DistributedExecution *execution);
 
+static bool DistributedStatementRequiresRollback(DistributedPlan *distributedPlan);
 static void AssignTasksToConnections(DistributedExecution *execution);
-static PlacementExecutionOrder ExecutionOrderForTask(Job *job, Task *task);
+static PlacementExecutionOrder ExecutionOrderForTask(CmdType operation, Task *task);
 static WorkerPool * FindOrCreateWorkerPool(DistributedExecution *execution,
 										   WorkerNode *workerNode);
 static WorkerSession * FindOrCreateWorkerSession(WorkerPool *workerPool,
@@ -323,6 +327,7 @@ CitusExecScan(CustomScanState *node)
 		EState *executorState = scanState->customScanState.ss.ps.state;
 		bool randomAccess = true;
 		bool interTransactions = false;
+		int targetPoolSize = 4;
 
 		/* we are taking locks on partitions of partitioned tables */
 		LockPartitionsInRelationList(distributedPlan->relationIdList, AccessShareLock);
@@ -332,19 +337,26 @@ CitusExecScan(CustomScanState *node)
 		scanState->tuplestorestate =
 			tuplestore_begin_heap(randomAccess, interTransactions, work_mem);
 
-		execution = CreateDistributedExecution(distributedPlan, scanState, 4);
+		if (MultiShardConnectionType == SEQUENTIAL_CONNECTION)
+		{
+			targetPoolSize = 1;
+		}
+
+		execution = CreateDistributedExecution(distributedPlan, scanState,
+											   targetPoolSize);
 
 		StartDistributedExecution(execution);
 		RunDistributedExecution(execution);
 
-		executorState->es_processed = execution->rowCount;
+		if (distributedPlan->operation != CMD_SELECT)
+		{
+			executorState->es_processed = execution->rowCount;
+
+			/* prevent copying shards in same transaction */
+			XactModificationLevel = XACT_MODIFICATION_DATA;
+		}
 
 		FinishDistributedExecution(execution);
-
-		if (IsTransactionBlock() || distributedPlan->operation != CMD_SELECT)
-		{
-			BeginOrContinueCoordinatedTransaction();
-		}
 
 		scanState->finishedRemoteScan = true;
 	}
@@ -352,6 +364,32 @@ CitusExecScan(CustomScanState *node)
 	resultSlot = ReturnTupleFromTuplestore(scanState);
 
 	return resultSlot;
+}
+
+
+void
+ExecuteTaskList(CmdType operation, List *taskList)
+{
+	DistributedPlan *distributedPlan = NULL;
+	int targetPoolSize = 4;
+	DistributedExecution *execution = NULL;
+
+	distributedPlan = CitusMakeNode(DistributedPlan);
+	distributedPlan->operation = operation;
+	distributedPlan->workerJob = CitusMakeNode(Job);
+	distributedPlan->workerJob->taskList = taskList;
+
+	if (MultiShardConnectionType == SEQUENTIAL_CONNECTION)
+	{
+		targetPoolSize = 1;
+	}
+
+	execution = CreateDistributedExecution(distributedPlan, NULL,
+										   targetPoolSize);
+
+	StartDistributedExecution(execution);
+	RunDistributedExecution(execution);
+	FinishDistributedExecution(execution);
 }
 
 
@@ -367,16 +405,11 @@ CreateDistributedExecution(DistributedPlan *distributedPlan,
 	Job *job = distributedPlan->workerJob;
 	List *taskList = job->taskList;
 
-	/* TODO: move to nicer place, add other conditions */
-	if (IsTransactionBlock() || distributedPlan->operation != CMD_SELECT)
-	{
-		BeginOrContinueCoordinatedTransaction();
-	}
-
-
 	execution = (DistributedExecution *) palloc0(sizeof(DistributedExecution));
 	execution->plan = distributedPlan;
 	execution->scanState = scanState;
+	execution->executionStats =
+		(DistributedExecutionStats *) palloc0(sizeof(DistributedExecutionStats));
 
 	execution->workerList = NIL;
 	execution->sessionList = NIL;
@@ -387,7 +420,6 @@ CreateDistributedExecution(DistributedPlan *distributedPlan,
 	execution->rowCount = 0;
 
 	execution->raiseInterrupts = true;
-	execution->isTransaction = InCoordinatedTransaction();
 
 	return execution;
 }
@@ -401,7 +433,68 @@ CreateDistributedExecution(DistributedPlan *distributedPlan,
 void
 StartDistributedExecution(DistributedExecution *execution)
 {
+	if (MultiShardCommitProtocol != COMMIT_PROTOCOL_BARE)
+	{
+		DistributedPlan *distributedPlan = execution->plan;
+		if (DistributedStatementRequiresRollback(distributedPlan))
+		{
+			Job *job = distributedPlan->workerJob;
+			List *taskList = job->taskList;
+
+			BeginOrContinueCoordinatedTransaction();
+
+			if (TaskListRequires2PC(taskList))
+			{
+				CoordinatedTransactionUse2PC();
+			}
+		}
+	}
+
+	execution->isTransaction = InCoordinatedTransaction();
+
 	AssignTasksToConnections(execution);
+}
+
+
+static bool
+DistributedStatementRequiresRollback(DistributedPlan *distributedPlan)
+{
+	Job *job = distributedPlan->workerJob;
+	List *taskList = job->taskList;
+	Task *task = NULL;
+
+	if (MultiShardCommitProtocol == COMMIT_PROTOCOL_BARE)
+	{
+		return false;
+	}
+
+	if (distributedPlan->operation == CMD_SELECT)
+	{
+		return SelectOpensTransactionBlock && IsTransactionBlock();
+	}
+
+	if (taskList == NIL)
+	{
+		return false;
+	}
+
+	if (IsTransactionBlock())
+	{
+		return true;
+	}
+
+	if (list_length(taskList) > 1)
+	{
+		return true;
+	}
+
+	task = (Task *) linitial(taskList);
+	if (list_length(task->taskPlacementList) > 1)
+	{
+		return true;
+	}
+
+	return false;
 }
 
 
@@ -413,6 +506,7 @@ StartDistributedExecution(DistributedExecution *execution)
 void
 FinishDistributedExecution(DistributedExecution *execution)
 {
+	DistributedPlan *distributedPlan = execution->plan;
 	ListCell *sessionCell = NULL;
 
 	/* always trigger wait event set in the first round */
@@ -420,8 +514,8 @@ FinishDistributedExecution(DistributedExecution *execution)
 	{
 		WorkerSession *session = lfirst(sessionCell);
 		MultiConnection *connection = session->connection;
-    	RemoteTransaction *transaction = &(connection->remoteTransaction);
-	    RemoteTransactionState transactionState = transaction->transactionState;
+		RemoteTransaction *transaction = &(connection->remoteTransaction);
+		RemoteTransactionState transactionState = transaction->transactionState;
 
 		UnclaimConnection(connection);
 
@@ -436,6 +530,14 @@ FinishDistributedExecution(DistributedExecution *execution)
 		}
 
 		/* TODO: can we be in SENT_COMMAND? */
+	}
+
+	UnsetCitusNoticeLevel();
+
+	if (distributedPlan->operation != CMD_SELECT)
+	{
+		/* prevent copying shards in same transaction */
+		XactModificationLevel = XACT_MODIFICATION_DATA;
 	}
 }
 
@@ -454,6 +556,7 @@ AssignTasksToConnections(DistributedExecution *execution)
 	List *taskList = job->taskList;
 	ListCell *taskCell = NULL;
 	ListCell *sessionCell = NULL;
+	CmdType operation = distributedPlan->operation;
 
 	foreach(taskCell, taskList)
 	{
@@ -471,10 +574,13 @@ AssignTasksToConnections(DistributedExecution *execution)
 			(ShardCommandExecution *) palloc0(sizeof(ShardCommandExecution));
 		shardCommandExecution->task = task;
 		shardCommandExecution->job = job;
-		shardCommandExecution->executionOrder = ExecutionOrderForTask(job, task);
-		shardCommandExecution->placementExecutions = (TaskPlacementExecution **)
-			palloc0(placementExecutionCount * sizeof(TaskPlacementExecution *));
+		shardCommandExecution->executionOrder = ExecutionOrderForTask(operation, task);
+		shardCommandExecution->placementExecutions =
+			(TaskPlacementExecution **) palloc0(placementExecutionCount *
+												sizeof(TaskPlacementExecution *));
 		shardCommandExecution->placementExecutionCount = placementExecutionCount;
+		shardCommandExecution->expectResults = distributedPlan->hasReturning ||
+											   distributedPlan->operation == CMD_SELECT;
 
 		foreach(taskPlacementCell, task->taskPlacementList)
 		{
@@ -604,7 +710,7 @@ AssignTasksToConnections(DistributedExecution *execution)
 	 *
 	 * We need to do this after assigning tasks to connections because the same
 	 * connection may be be returned multiple times by GetPlacementListConnectionIfCached.
-	 */ 
+	 */
 	foreach(sessionCell, execution->sessionList)
 	{
 		WorkerSession *session = lfirst(sessionCell);
@@ -619,7 +725,7 @@ AssignTasksToConnections(DistributedExecution *execution)
  * ExecutionOrderForTask gives the appropriate execution order for a task.
  */
 static PlacementExecutionOrder
-ExecutionOrderForTask(Job *job, Task *task)
+ExecutionOrderForTask(CmdType operation, Task *task)
 {
 	switch (task->taskType)
 	{
@@ -631,9 +737,7 @@ ExecutionOrderForTask(Job *job, Task *task)
 
 		case MODIFY_TASK:
 		{
-			Query *query = job->jobQuery;
-
-			if (query->commandType == CMD_INSERT && !task->upsertQuery)
+			if (operation == CMD_INSERT && !task->upsertQuery)
 			{
 				return EXECUTION_ORDER_SEQUENTIAL;
 			}
@@ -770,6 +874,7 @@ RunDistributedExecution(DistributedExecution *execution)
 			eventCount = WaitEventSetWait(waitEventSet, timeout, events,
 										  connectionCount + 2);
 #endif
+
 			/* process I/O events */
 			for (; eventIndex < eventCount; eventIndex++)
 			{
@@ -841,13 +946,20 @@ ManageWorkerPool(WorkerPool *workerPool)
 	DistributedExecution *execution = workerPool->distributedExecution;
 	WorkerNode *workerNode = workerPool->node;
 	int targetPoolSize = execution->targetPoolSize;
-	int currentConnectionCount = 0;
+	int currentConnectionCount = list_length(workerPool->sessionList);
+	int activeConnectionCount = workerPool->activeConnectionCount;
+	int failedConnectionCount = workerPool->failedConnectionCount;
 	int idleConnectionCount = workerPool->idleConnectionCount;
 	int readyTaskCount = workerPool->readyTaskCount;
 	int newConnectionCount = 0;
 	int connectionIndex = 0;
 
-	currentConnectionCount = list_length(workerPool->sessionList);
+	if (failedConnectionCount >= 1)
+	{
+		/* connection pool failed */
+		return;
+	}
+
 	if (currentConnectionCount >= targetPoolSize)
 	{
 		/* already reached the minimal pool size */
@@ -865,7 +977,7 @@ ManageWorkerPool(WorkerPool *workerPool)
 	 * than the target pool size.
 	 */
 	newConnectionCount = Min(readyTaskCount - idleConnectionCount, targetPoolSize) -
-						 currentConnectionCount;
+						 activeConnectionCount;
 
 	elog(DEBUG4, "opening %d new connections to %s:%d", newConnectionCount,
 		 workerNode->workerName, workerNode->workerPort);
@@ -873,6 +985,8 @@ ManageWorkerPool(WorkerPool *workerPool)
 	for (connectionIndex = 0; connectionIndex < newConnectionCount; connectionIndex++)
 	{
 		MultiConnection *connection = NULL;
+
+		/* experimental: just to see the perf benefits of caching connections */
 		int connectionFlags = SESSION_LIFESPAN;
 
 		/* open a new connection to the worker */
@@ -934,6 +1048,11 @@ ConnectionStateMachine(WorkerSession *session)
 				ConnStatusType status = PQstatus(connection->pgConn);
 				if (status == CONNECTION_OK)
 				{
+					elog(DEBUG4, "established connection to %s:%d", connection->hostname,
+						 connection->port);
+
+					workerPool->activeConnectionCount++;
+
 					connection->connectionState = MULTI_CONNECTION_CONNECTED;
 					break;
 				}
@@ -961,6 +1080,11 @@ ConnectionStateMachine(WorkerSession *session)
 				}
 				else
 				{
+					elog(DEBUG4, "established connection to %s:%d", connection->hostname,
+						 connection->port);
+
+					workerPool->activeConnectionCount++;
+
 					connection->waitFlags = WL_SOCKET_WRITEABLE;
 					connection->connectionState = MULTI_CONNECTION_CONNECTED;
 					break;
@@ -976,30 +1100,49 @@ ConnectionStateMachine(WorkerSession *session)
 				break;
 			}
 
+			case MULTI_CONNECTION_LOST:
+			{
+				/* managed to connect, but connection was lost */
+				workerPool->activeConnectionCount--;
+
+				connection->connectionState = MULTI_CONNECTION_FAILED;
+				break;
+			}
+
 			case MULTI_CONNECTION_FAILED:
 			{
+				/* connection failed or was lost */
+				int totalConnectionCount = list_length(workerPool->sessionList);
+
+				workerPool->failedConnectionCount++;
+
+				/* if the connection executed a critical command it should fail */
 				MarkRemoteTransactionFailed(connection, false);
 
-				/* a task has failed */
+				/* mark all assigned placement executions as failed */
+				WorkerSessionFailed(session);
+
+				if (workerPool->failedConnectionCount >= totalConnectionCount)
+				{
+					/*
+					 * All current connection attempts have failed.
+					 * Mark all unassigned placement executions as failed.
+					 *
+					 * We do not currently retry if the first connection
+					 * attempt fails.
+					 */
+					WorkerPoolFailed(workerPool);
+				}
+
 				if (execution->failed)
 				{
+					/* a task has failed due to this connection failure */
 					ReportConnectionError(connection, ERROR);
 				}
 				else
 				{
+					/* can continue with the remaining nodes */
 					ReportConnectionError(connection, WARNING);
-				}
-
-				WorkerSessionFailed(session);
-
-				workerPool->failedConnectionCount++;
-
-				/* try next placement for all tasks on worker */
-				/* TODO: what if we have some healthy connections? */
-				/* TODO: setting */
-				if (workerPool->failedConnectionCount == 2)
-				{
-					WorkerPoolFailed(workerPool);
 				}
 
 				/* remove the connection */
@@ -1100,6 +1243,12 @@ TransactionStateMachine(WorkerSession *session)
 					TaskPlacementExecution *placementExecution = session->currentTask;
 					bool succeeded = true;
 
+					/*
+					 * Once we finished a task on a connection, we no longer
+					 * allow that connection to fail.
+					 */
+					MarkRemoteTransactionCritical(connection);
+
 					session->currentTask = NULL;
 
 					PlacementExecutionDone(placementExecution, succeeded);
@@ -1145,7 +1294,13 @@ TransactionStateMachine(WorkerSession *session)
 				TaskPlacementExecution *placementExecution = session->currentTask;
 				ShardCommandExecution *shardCommandExecution =
 					placementExecution->shardCommandExecution;
-				bool storeRows = !shardCommandExecution->gotResults;
+				bool storeRows = shardCommandExecution->expectResults;
+
+				if (shardCommandExecution->gotResults)
+				{
+					/* already received results from another replica */
+					storeRows = false;
+				}
 
 				fetchDone = ReceiveResults(session, storeRows);
 				if (!fetchDone)
@@ -1181,7 +1336,7 @@ CheckConnectionReady(MultiConnection *connection)
 	ConnStatusType status = PQstatus(connection->pgConn);
 	if (status == CONNECTION_BAD)
 	{
-		connection->connectionState = MULTI_CONNECTION_FAILED;
+		connection->connectionState = MULTI_CONNECTION_LOST;
 		return false;
 	}
 
@@ -1189,7 +1344,7 @@ CheckConnectionReady(MultiConnection *connection)
 	sendStatus = PQflush(connection->pgConn);
 	if (sendStatus == -1)
 	{
-		connection->connectionState = MULTI_CONNECTION_FAILED;
+		connection->connectionState = MULTI_CONNECTION_LOST;
 		return false;
 	}
 	else if (sendStatus == 1)
@@ -1202,7 +1357,7 @@ CheckConnectionReady(MultiConnection *connection)
 	/* if reading fails, there's not much we can do */
 	if (PQconsumeInput(connection->pgConn) == 0)
 	{
-		connection->connectionState = MULTI_CONNECTION_FAILED;
+		connection->connectionState = MULTI_CONNECTION_LOST;
 		return false;
 	}
 
@@ -1291,9 +1446,7 @@ StartPlacementExecutionOnSession(TaskPlacementExecution *placementExecution,
 	WorkerPool *workerPool = session->workerPool;
 	DistributedExecution *execution = workerPool->distributedExecution;
 	CitusScanState *scanState = execution->scanState;
-	ParamListInfo paramListInfo =
-		scanState->customScanState.ss.ps.state->es_param_list_info;
-
+	ParamListInfo paramListInfo = NULL;
 	MultiConnection *connection = session->connection;
 	ShardCommandExecution *shardCommandExecution =
 		placementExecution->shardCommandExecution;
@@ -1303,6 +1456,11 @@ StartPlacementExecutionOnSession(TaskPlacementExecution *placementExecution,
 	char *queryString = task->queryString;
 	int querySent = 0;
 	int singleRowMode = 0;
+
+	if (scanState != NULL)
+	{
+		paramListInfo = scanState->customScanState.ss.ps.state->es_param_list_info;
+	}
 
 	/*
 	 * Make sure that subsequent commands on the same placement
@@ -1319,8 +1477,7 @@ StartPlacementExecutionOnSession(TaskPlacementExecution *placementExecution,
 		Oid *parameterTypes = NULL;
 		const char **parameterValues = NULL;
 
-		/* force evaluation of bound params */
-		paramListInfo = copyParamList(paramListInfo);
+		//paramListInfo = copyParamList(paramListInfo);
 
 		ExtractParametersFromParamListInfo(paramListInfo, &parameterTypes,
 										   &parameterValues);
@@ -1335,14 +1492,14 @@ StartPlacementExecutionOnSession(TaskPlacementExecution *placementExecution,
 
 	if (querySent == 0)
 	{
-		connection->connectionState = MULTI_CONNECTION_FAILED;
+		connection->connectionState = MULTI_CONNECTION_LOST;
 		return false;
 	}
 
 	singleRowMode = PQsetSingleRowMode(connection->pgConn);
 	if (singleRowMode == 0)
 	{
-		connection->connectionState = MULTI_CONNECTION_FAILED;
+		connection->connectionState = MULTI_CONNECTION_LOST;
 		return false;
 	}
 
@@ -1411,11 +1568,10 @@ ReceiveResults(WorkerSession *session, bool storeRows)
 	DistributedExecution *execution = workerPool->distributedExecution;
 	DistributedExecutionStats *executionStats = execution->executionStats;
 	CitusScanState *scanState = execution->scanState;
-	TupleDesc tupleDescriptor =
-		scanState->customScanState.ss.ps.ps_ResultTupleSlot->tts_tupleDescriptor;
-	AttInMetadata *attributeInputMetadata = TupleDescGetAttInMetadata(tupleDescriptor);
-	uint32 expectedColumnCount = tupleDescriptor->natts;
-	char **columnArray = (char **) palloc0(expectedColumnCount * sizeof(char *));
+	TupleDesc tupleDescriptor = NULL;
+	AttInMetadata *attributeInputMetadata = NULL;
+	uint32 expectedColumnCount = 0;
+	char **columnArray = NULL;
 	Tuplestorestate *tupleStore = NULL;
 
 	MemoryContext ioContext = AllocSetContextCreate(CurrentMemoryContext,
@@ -1423,8 +1579,15 @@ ReceiveResults(WorkerSession *session, bool storeRows)
 													ALLOCSET_DEFAULT_MINSIZE,
 													ALLOCSET_DEFAULT_INITSIZE,
 													ALLOCSET_DEFAULT_MAXSIZE);
-
-	tupleStore = scanState->tuplestorestate;
+	if (scanState != NULL)
+	{
+		tupleDescriptor =
+			scanState->customScanState.ss.ps.ps_ResultTupleSlot->tts_tupleDescriptor;
+		attributeInputMetadata = TupleDescGetAttInMetadata(tupleDescriptor);
+		expectedColumnCount = tupleDescriptor->natts;
+		tupleStore = scanState->tuplestorestate;
+		columnArray = (char **) palloc0(expectedColumnCount * sizeof(char *));
+	}
 
 	while (!PQisBusy(connection->pgConn))
 	{
@@ -1525,6 +1688,11 @@ ReceiveResults(WorkerSession *session, bool storeRows)
 		}
 
 		PQclear(result);
+
+		if (executionStats != NULL && CheckIfSizeLimitIsExceeded(executionStats))
+		{
+			ErrorSizeLimitIsExceeded();
+		}
 	}
 
 	return false;
@@ -1565,7 +1733,7 @@ WorkerPoolFailed(WorkerPool *workerPool)
 		WorkerSessionFailed(session);
 	}
 
-	/* no more tasks to do after the pool failed */
+	/* we do not want more connections in this pool */
 	workerPool->readyTaskCount = 0;
 }
 
@@ -1577,8 +1745,15 @@ WorkerPoolFailed(WorkerPool *workerPool)
 static void
 WorkerSessionFailed(WorkerSession *session)
 {
+	TaskPlacementExecution *placementExecution = session->currentTask;
 	bool succeeded = false;
 	dlist_iter iter;
+
+	if (placementExecution != NULL)
+	{
+		/* connection failed while a task was active */
+		PlacementExecutionDone(placementExecution, succeeded);
+	}
 
 	dlist_foreach(iter, &session->pendingTaskQueue)
 	{
@@ -1612,10 +1787,6 @@ PlacementExecutionDone(TaskPlacementExecution *placementExecution, bool succeede
 	ShardCommandExecution *shardCommandExecution = NULL;
 	TaskExecutionState executionState;
 	PlacementExecutionOrder executionOrder;
-	int placementExecutionCount = 0;
-
-	TaskPlacementExecutionState currentPlacementExecutionState =
-		placementExecution->executionState;
 
 	/* mark the placement execution as finished */
 	if (succeeded)
@@ -1628,8 +1799,8 @@ PlacementExecutionDone(TaskPlacementExecution *placementExecution, bool succeede
 	}
 
 	shardCommandExecution = placementExecution->shardCommandExecution;
-	executionOrder = shardCommandExecution->executionOrder;
 
+	/* determine the outcome of the overall task */
 	executionState = GetTaskExecutionState(shardCommandExecution);
 	if (executionState == TASK_EXECUTION_FINISHED)
 	{
@@ -1644,22 +1815,19 @@ PlacementExecutionDone(TaskPlacementExecution *placementExecution, bool succeede
 		return;
 	}
 
-	placementExecutionCount = shardCommandExecution->placementExecutionCount;
-
 	/*
 	 * If the query needs to be executed on any or all placements in order
 	 * and there is a placement left, then make that placement ready-to-start
 	 * by adding it to the appropriate queue.
 	 */
-	if ((executionOrder == EXECUTION_ORDER_ANY ||
-		 executionOrder == EXECUTION_ORDER_SEQUENTIAL) &&
-		currentPlacementExecutionState == PLACEMENT_EXECUTION_RUNNING)
+	executionOrder = shardCommandExecution->executionOrder;
+	if ((executionOrder == EXECUTION_ORDER_ANY && !succeeded) ||
+		executionOrder == EXECUTION_ORDER_SEQUENTIAL)
 	{
 		TaskPlacementExecution *nextPlacementExecution = NULL;
 
 		/* find a placement execution that is not yet marked as failed */
-		do
-		{
+		do {
 			int nextPlacementExecutionIndex =
 				placementExecution->placementExecutionIndex + 1;
 
@@ -1675,8 +1843,7 @@ PlacementExecutionDone(TaskPlacementExecution *placementExecution, bool succeede
 				/* move the placement execution to the ready queue */
 				PlacementExecutionReady(nextPlacementExecution);
 			}
-		}
-		while (nextPlacementExecution->executionState == PLACEMENT_EXECUTION_FAILED);
+		} while (nextPlacementExecution->executionState == PLACEMENT_EXECUTION_FAILED);
 	}
 }
 
@@ -1709,9 +1876,9 @@ PlacementExecutionReady(TaskPlacementExecution *placementExecution)
 			transactionState == REMOTE_TRANS_STARTED)
 		{
 			/*
- 			 * If the connection is idle, wake it up by checking whether
- 			 * the connection is writeable.
- 			 */
+			 * If the connection is idle, wake it up by checking whether
+			 * the connection is writeable.
+			 */
 			connection->waitFlags = WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE;
 		}
 	}
@@ -1759,9 +1926,9 @@ static TaskExecutionState
 GetTaskExecutionState(ShardCommandExecution *shardCommandExecution)
 {
 	PlacementExecutionOrder executionOrder = shardCommandExecution->executionOrder;
-	int doneTaskCount = 0;
-	int failedTaskCount = 0;
-	int taskCount = 0;
+	int donePlacementCount = 0;
+	int failedPlacementCount = 0;
+	int placementCount = 0;
 	int placementExecutionIndex = 0;
 	int placementExecutionCount = shardCommandExecution->placementExecutionCount;
 
@@ -1773,25 +1940,25 @@ GetTaskExecutionState(ShardCommandExecution *shardCommandExecution)
 
 		if (executionState == PLACEMENT_EXECUTION_FINISHED)
 		{
-			doneTaskCount++;
+			donePlacementCount++;
 		}
 		else if (executionState == PLACEMENT_EXECUTION_FAILED)
 		{
-			failedTaskCount++;
+			failedPlacementCount++;
 		}
 
-		taskCount++;
+		placementCount++;
 	}
 
-	if (failedTaskCount == taskCount)
+	if (failedPlacementCount == placementCount)
 	{
 		return TASK_EXECUTION_FAILED;
 	}
-	else if (executionOrder == EXECUTION_ORDER_ANY && doneTaskCount > 0)
+	else if (executionOrder == EXECUTION_ORDER_ANY && donePlacementCount > 0)
 	{
 		return TASK_EXECUTION_FINISHED;
 	}
-	else if (doneTaskCount + failedTaskCount == taskCount)
+	else if (donePlacementCount + failedPlacementCount == placementCount)
 	{
 		return TASK_EXECUTION_FINISHED;
 	}
