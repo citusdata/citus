@@ -818,7 +818,7 @@ TaskListRequires2PC(List *taskList)
 	 * Can't we always rely on anchorShardId?
 	 */
 	anchorShardId = task->anchorShardId;
-	if (ReferenceTableShardId(anchorShardId))
+	if (anchorShardId != INVALID_SHARD_ID && ReferenceTableShardId(anchorShardId))
 	{
 		return true;
 	}

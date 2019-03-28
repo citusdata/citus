@@ -92,7 +92,7 @@ ProcessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand)
 			vacuumColumnList = VacuumColumnList(vacuumStmt, relationIndex);
 			taskList = VacuumTaskList(relationId, vacuumStmt->options, vacuumColumnList);
 
-			ExecuteModifyTasksWithoutResults(taskList);
+			ExecuteTaskList(CMD_UTILITY, taskList);
 
 			executedVacuumCount++;
 		}
