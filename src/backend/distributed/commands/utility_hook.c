@@ -559,15 +559,7 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 			SendCommandToWorkers(WORKERS_WITH_METADATA, (char *) ddlJob->commandString);
 		}
 
-		if (MultiShardConnectionType == SEQUENTIAL_CONNECTION ||
-			ddlJob->executeSequentially)
-		{
-			ExecuteModifyTasksSequentiallyWithoutResults(ddlJob->taskList, CMD_UTILITY);
-		}
-		else
-		{
-			ExecuteModifyTasksWithoutResults(ddlJob->taskList);
-		}
+		ExecuteTaskList(CMD_UTILITY, ddlJob->taskList);
 	}
 	else
 	{
@@ -578,7 +570,7 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 
 		PG_TRY();
 		{
-			ExecuteModifyTasksWithoutResults(ddlJob->taskList);
+			ExecuteTaskList(CMD_UTILITY, ddlJob->taskList);
 
 			if (shouldSyncMetadata)
 			{
