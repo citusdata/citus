@@ -1,3 +1,49 @@
+### citus v8.2.0 (March 28, 2019) ###
+
+* Removes support and code for PostgreSQL 9.6
+
+* Enable more outer joins with reference tables
+
+* Execute CREATE INDEX CONCURRENTLY in parallel
+
+* Treat functions as transaction blocks
+
+* Add support for column aliases on join clauses
+
+* Skip standard_planner() for trivial queries
+
+* Added support for function calls in joins
+
+* Round-robin task assignment policy relies on local transaction id
+
+* Relax subquery union pushdown restrictions for reference tables
+
+* Speed-up run_command_on_shards()
+
+* Address some memory issues in connection config
+
+* Restrict visibility of get_*_active_transactions functions to pg_monitor
+
+* Don't do redundant ALTER TABLE consistency checks at coordinator
+
+* Queries with only intermediate results do not rely on task assignment policy
+
+* Finish connection establishment in parallel for multiple connections
+
+* Fixes a bug related to pruning shards using a coerced value
+
+* Fix an issue with some DECLARE .. CURSOR WITH HOLD commands
+
+* Fixes a bug that could lead to infinite recursion during recursive planning
+
+* Fixes a bug that could prevent planning full outer joins with using clause
+
+* Fixes a bug that could lead to memory leak on `citus_relation_size`
+
+* Fixes a problem that could cause segmentation fault with recursive planning
+
+* Switch CI solution to CircleCI
+
 ### citus v8.0.3 (January 9, 2019) ###
 
 * Fixes maintenance daemon panic due to unreleased spinlock
