@@ -347,7 +347,7 @@ StartPlacementListConnection(uint32 flags, List *placementAccessList,
 /*
  * AssignPlacementListToConnection assigns a set of shard placement accesses to a
  * given connection, meaning that connection must be used for all (conflicting)
- * accesses of the same shard placements to make sure reads see writes and to 
+ * accesses of the same shard placements to make sure reads see writes and to
  * make sure we don't take conflicting locks.
  */
 void
