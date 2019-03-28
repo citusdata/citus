@@ -190,15 +190,7 @@ master_modify_multiple_shards(PG_FUNCTION_ARGS)
 	taskList =
 		ModifyMultipleShardsTaskList(modifyQuery, prunedShardIntervalList, taskType);
 
-	if (MultiShardConnectionType == SEQUENTIAL_CONNECTION)
-	{
-		affectedTupleCount =
-			ExecuteModifyTasksSequentiallyWithoutResults(taskList, operation);
-	}
-	else
-	{
-		affectedTupleCount = ExecuteModifyTasksWithoutResults(taskList);
-	}
+	ExecuteTaskList(operation, taskList);
 
 	PG_RETURN_INT32(affectedTupleCount);
 }
