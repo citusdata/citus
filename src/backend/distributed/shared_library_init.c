@@ -52,6 +52,7 @@
 #include "distributed/worker_manager.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/worker_shard_visibility.h"
+#include "port/atomics.h"
 #include "postmaster/postmaster.h"
 #include "optimizer/planner.h"
 #include "optimizer/paths.h"
@@ -265,7 +266,24 @@ ResizeStackToMaximumDepth(void)
 	long max_stack_depth_bytes = max_stack_depth * 1024L;
 
 	stack_resizer = alloca(max_stack_depth_bytes);
+
+	/*
+	 * Different architectures might have different directions while
+	 * growing the stack. So, touch both ends.
+	 */
+	stack_resizer[0] = 0;
 	stack_resizer[max_stack_depth_bytes - 1] = 0;
+
+	/*
+	 * Passing the address to external function also prevents the function
+	 * from being optimized away, and the debug elog can also help with
+	 * diagnosis if needed.
+	 */
+	elog(DEBUG5, "entry stack is at %p, increased to %p, the top and bottom values of "
+				 "the stack is %d and %d", &stack_resizer[0],
+		 &stack_resizer[max_stack_depth_bytes - 1],
+		 stack_resizer[max_stack_depth_bytes - 1], stack_resizer[0]);
+
 #endif
 }
 
