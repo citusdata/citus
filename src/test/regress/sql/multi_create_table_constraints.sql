@@ -230,6 +230,22 @@ SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
 SELECT "Constraint", "Definition" FROM table_checks WHERE relid='public.check_example_365056'::regclass;
 \c - - - :master_port
 
+-- Index-based constraints are created with shard-extended names, but others
+-- (e.g. expression-based table CHECK constraints) do _not_ have shardids in
+-- their object names, _at least originally as designed_. At some point, we
+-- mistakenly started extending _all_ constraint names, but _only_ for ALTER
+-- TABLE ... ADD CONSTRAINT commands (yes, even non-index constraints). So now
+-- the _same_ constraint definition could result in a non-extended name if made
+-- using CREATE TABLE and another name if made using AT ... ADD CONSTRAINT. So
+-- DROP CONSTRAINT started erroring because _it_ was also changed to always do
+-- shard-id extension. We've fixed that by looking for the non-extended name
+-- first and using it for DROP or VALIDATE commands that could be targeting it.
+
+-- As for the actual test: drop a constraint created by CREATE TABLE ... CHECK,
+-- which per the above description would have been created with a non-extended
+-- object name, but previously would have failed DROP as DROP does extension.
+ALTER TABLE check_example DROP CONSTRAINT check_example_other_col_check;
+
 -- drop unnecessary tables
 DROP TABLE pk_on_non_part_col, uq_on_non_part_col CASCADE;
 DROP TABLE pk_on_part_col, uq_part_col, uq_two_columns CASCADE;
