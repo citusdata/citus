@@ -230,6 +230,9 @@ SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
 SELECT "Constraint", "Definition" FROM table_checks WHERE relid='public.check_example_365056'::regclass;
 \c - - - :master_port
 
+-- try dropping a CHECK constraint that was created without explicit name
+ALTER TABLE check_example DROP CONSTRAINT check_example_other_col_check;
+
 -- drop unnecessary tables
 DROP TABLE pk_on_non_part_col, uq_on_non_part_col CASCADE;
 DROP TABLE pk_on_part_col, uq_part_col, uq_two_columns CASCADE;
