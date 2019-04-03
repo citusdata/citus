@@ -1,3 +1,11 @@
+### citus v8.1.2 (April 03, 2019) ###
+
+* Don't do redundant ALTER TABLE consistency checks at coordinator
+
+* Fixes a bug that prevents stack size to be adjusted
+
+* Fix an issue with some DECLARE .. CURSOR WITH HOLD commands
+
 ### citus v8.1.1 (January 7, 2019) ###
 
 * Fixes maintenance daemon panic due to unreleased spinlock
