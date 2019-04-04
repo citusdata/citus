@@ -79,6 +79,7 @@ static void CheckNodeIsDumpable(Node *node);
 static Node * CheckNodeCopyAndSerialization(Node *node);
 static void AdjustReadIntermediateResultCost(RangeTblEntry *rangeTableEntry,
 											 RelOptInfo *relOptInfo);
+static List * OuterPlanParamsList(PlannerInfo *root);
 static List * CopyPlanParamList(List *originalPlanParamList);
 static PlannerRestrictionContext * CreateAndPushPlannerRestrictionContext(void);
 static PlannerRestrictionContext * CurrentPlannerRestrictionContext(void);
@@ -1299,15 +1300,10 @@ multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo, Index
 	relationRestriction->relOptInfo = relOptInfo;
 	relationRestriction->distributedRelation = distributedTable;
 	relationRestriction->plannerInfo = root;
-	relationRestriction->parentPlannerInfo = root->parent_root;
 	relationRestriction->prunedShardIntervalList = NIL;
 
 	/* see comments on GetVarFromAssignedParam() */
-	if (relationRestriction->parentPlannerInfo)
-	{
-		relationRestriction->parentPlannerParamList =
-			CopyPlanParamList(root->parent_root->plan_params);
-	}
+	relationRestriction->outerPlanParamsList = OuterPlanParamsList(root);
 
 	relationRestrictionContext = plannerRestrictionContext->relationRestrictionContext;
 	relationRestrictionContext->hasDistributedRelation |= distributedTable;
@@ -1459,6 +1455,36 @@ AdjustReadIntermediateResultCost(RangeTblEntry *rangeTableEntry, RelOptInfo *rel
 	path = (Path *) linitial(pathList);
 	path->rows = rowCountEstimate;
 	path->total_cost = rowCountEstimate * rowCost + ioCost;
+}
+
+
+/*
+ * OuterPlanParamsList creates a list of RootPlanParams for outer nodes of the
+ * given root. The first item in the list corresponds to parent_root, and the
+ * last item corresponds to the outer most node.
+ */
+static List *
+OuterPlanParamsList(PlannerInfo *root)
+{
+	List *planParamsList = NIL;
+	PlannerInfo *outerNodeRoot = NULL;
+
+	for (outerNodeRoot = root->parent_root; outerNodeRoot != NULL;
+		 outerNodeRoot = outerNodeRoot->parent_root)
+	{
+		RootPlanParams *rootPlanParams = palloc0(sizeof(RootPlanParams));
+		rootPlanParams->root = outerNodeRoot;
+
+		/*
+		 * TODO: In SearchPlannerParamList() we are only interested in Var plan
+		 * params, consider copying just them here.
+		 */
+		rootPlanParams->plan_params = CopyPlanParamList(outerNodeRoot->plan_params);
+
+		planParamsList = lappend(planParamsList, rootPlanParams);
+	}
+
+	return planParamsList;
 }
 
 

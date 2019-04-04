@@ -1839,6 +1839,33 @@ FROM
   ) AS temp;
 
 
+-- Test the case when a subquery has a lateral reference to two levels upper
+SELECT
+ b.user_id, b.value_2, b.cnt
+FROM (
+ SELECT
+   user_id,
+   value_2
+ FROM events_table
+ WHERE events_table.user_id BETWEEN 2 AND 5
+) a,
+LATERAL (
+ SELECT
+   user_id, value_2, count(*) as cnt
+ FROM (
+   SELECT
+     value_2, time, user_id
+   FROM events_table
+   WHERE user_id BETWEEN 2 AND 5
+     AND events_table.user_id = a.user_id
+     AND events_table.value_2 = a.value_2
+   ORDER BY time DESC
+ ) events
+ GROUP BY user_id, value_2
+) b
+ORDER BY user_id, value_2, cnt
+LIMIT 1;
+
 
 DROP FUNCTION test_join_function_2(integer, integer);
 

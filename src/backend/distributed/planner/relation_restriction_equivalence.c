@@ -98,8 +98,9 @@ static void AddRteRelationToAttributeEquivalenceClass(AttributeEquivalenceClass 
 													  attrEquivalenceClass,
 													  RangeTblEntry *rangeTableEntry,
 													  Var *varToBeAdded);
-static Var * GetVarFromAssignedParam(List *parentPlannerParamList,
-									 Param *plannerParam);
+static Var * GetVarFromAssignedParam(List *outerPlanParamsList, Param *plannerParam,
+									 PlannerInfo **rootContainingVar);
+static Var * SearchPlannerParamList(List *plannerParamList, Param *plannerParam);
 static List * GenerateAttributeEquivalencesForJoinRestrictions(JoinRestrictionContext
 															   *joinRestrictionContext);
 static bool AttributeClassContainsAttributeClassMember(AttributeEquivalenceClassMember *
@@ -737,15 +738,15 @@ AttributeEquivalenceClassForEquivalenceClass(EquivalenceClass *plannerEqClass,
 
 		if (IsA(strippedEquivalenceExpr, Param))
 		{
-			List *parentParamList = relationRestriction->parentPlannerParamList;
+			PlannerInfo *outerNodeRoot = NULL;
 			Param *equivalenceParam = (Param *) strippedEquivalenceExpr;
 
-			expressionVar = GetVarFromAssignedParam(parentParamList,
-													equivalenceParam);
+			expressionVar =
+				GetVarFromAssignedParam(relationRestriction->outerPlanParamsList,
+										equivalenceParam, &outerNodeRoot);
 			if (expressionVar)
 			{
-				AddToAttributeEquivalenceClass(&attributeEquivalance,
-											   relationRestriction->parentPlannerInfo,
+				AddToAttributeEquivalenceClass(&attributeEquivalance, outerNodeRoot,
 											   expressionVar);
 			}
 		}
@@ -766,7 +767,7 @@ AttributeEquivalenceClassForEquivalenceClass(EquivalenceClass *plannerEqClass,
  * plannerParam if its kind is PARAM_EXEC.
  *
  * If the paramkind is not equal to PARAM_EXEC the function returns NULL. Similarly,
- * if there is no var that the given param is assigned to, the function returns NULL.
+ * if there is no Var corresponding to the given param is, the function returns NULL.
  *
  * Rationale behind this function:
  *
@@ -775,26 +776,26 @@ AttributeEquivalenceClassForEquivalenceClass(EquivalenceClass *plannerEqClass,
  *   the RTE_RELATIONs which actually belong to lateral vars from the other query
  *   levels.
  *
- *   We're also keeping track of the RTE_RELATION's parent_root's
- *   plan_param list which is expected to hold the parameters that are required
+ *   We're also keeping track of the RTE_RELATION's outer nodes'
+ *   plan_params lists which is expected to hold the parameters that are required
  *   for its lower level queries as it is documented:
  *
  *        plan_params contains the expressions that this query level needs to
  *        make available to a lower query level that is currently being planned.
  *
- *   This function is a helper function to iterate through the parent query's
+ *   This function is a helper function to iterate through the outer node's query's
  *   plan_params and looks for the param that the equivalence member has. The
  *   comparison is done via the "paramid" field. Finally, if the found parameter's
  *   item is a Var, we conclude that Postgres standard_planner replaced the Var
  *   with the Param on assign_param_for_var() function
- *   @src/backend/optimizer//plan/subselect.c.
- *
+ *   @src/backend/optimizer/plan/subselect.c.
  */
 static Var *
-GetVarFromAssignedParam(List *parentPlannerParamList, Param *plannerParam)
+GetVarFromAssignedParam(List *outerPlanParamsList, Param *plannerParam,
+						PlannerInfo **rootContainingVar)
 {
 	Var *assignedVar = NULL;
-	ListCell *plannerParameterCell = NULL;
+	ListCell *rootPlanParamsCell = NULL;
 
 	Assert(plannerParam != NULL);
 
@@ -804,7 +805,35 @@ GetVarFromAssignedParam(List *parentPlannerParamList, Param *plannerParam)
 		return NULL;
 	}
 
-	foreach(plannerParameterCell, parentPlannerParamList)
+	foreach(rootPlanParamsCell, outerPlanParamsList)
+	{
+		RootPlanParams *outerPlanParams = lfirst(rootPlanParamsCell);
+
+		assignedVar = SearchPlannerParamList(outerPlanParams->plan_params,
+											 plannerParam);
+		if (assignedVar != NULL)
+		{
+			*rootContainingVar = outerPlanParams->root;
+			break;
+		}
+	}
+
+	return assignedVar;
+}
+
+
+/*
+ * SearchPlannerParamList searches in plannerParamList and returns the Var that
+ * corresponds to the given plannerParam. If there is no Var corresponding to the
+ * given param is, the function returns NULL.
+ */
+static Var *
+SearchPlannerParamList(List *plannerParamList, Param *plannerParam)
+{
+	Var *assignedVar = NULL;
+	ListCell *plannerParameterCell = NULL;
+
+	foreach(plannerParameterCell, plannerParamList)
 	{
 		PlannerParamItem *plannerParamItem =
 			(PlannerParamItem *) lfirst(plannerParameterCell);
@@ -814,7 +843,7 @@ GetVarFromAssignedParam(List *parentPlannerParamList, Param *plannerParam)
 			continue;
 		}
 
-		/* TODO: Should we consider PlaceHolderVar?? */
+		/* TODO: Should we consider PlaceHolderVar? */
 		if (!IsA(plannerParamItem->item, Var))
 		{
 			continue;
