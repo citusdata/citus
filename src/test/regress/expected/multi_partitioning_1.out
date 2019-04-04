@@ -1691,8 +1691,121 @@ ORDER BY
 ERROR:  relation "partitioning_schema.schema-test" does not exist
 LINE 6:     logicalrelid IN ('partitioning_schema."schema-test"'::re...
                              ^
+-- test we don't deadlock when attaching and detaching partitions from partitioned
+-- tables with foreign keys
+CREATE TABLE reference_table(id int PRIMARY KEY);
+SELECT create_reference_table('reference_table');
+ create_reference_table 
+------------------------
+ 
+(1 row)
+
+CREATE TABLE reference_table_2(id int PRIMARY KEY);
+SELECT create_reference_table('reference_table_2');
+ create_reference_table 
+------------------------
+ 
+(1 row)
+
+CREATE TABLE partitioning_test(id int, time date) PARTITION BY RANGE (time);
+ERROR:  syntax error at or near "PARTITION"
+LINE 1: CREATE TABLE partitioning_test(id int, time date) PARTITION ...
+                                                          ^
+CREATE TABLE partitioning_test_2008 PARTITION OF partitioning_test FOR VALUES FROM ('2008-01-01') TO ('2009-01-01');
+ERROR:  syntax error at or near "PARTITION"
+LINE 1: CREATE TABLE partitioning_test_2008 PARTITION OF partitionin...
+                                            ^
+CREATE TABLE partitioning_test_2009 (LIKE partitioning_test);
+ERROR:  relation "partitioning_test" does not exist
+LINE 1: CREATE TABLE partitioning_test_2009 (LIKE partitioning_test)...
+                                                  ^
+CREATE TABLE partitioning_test_2010 (LIKE partitioning_test);
+ERROR:  relation "partitioning_test" does not exist
+LINE 1: CREATE TABLE partitioning_test_2010 (LIKE partitioning_test)...
+                                                  ^
+CREATE TABLE partitioning_test_2011 (LIKE partitioning_test);
+ERROR:  relation "partitioning_test" does not exist
+LINE 1: CREATE TABLE partitioning_test_2011 (LIKE partitioning_test)...
+                                                  ^
+-- distributing partitioning_test will also distribute partitioning_test_2008
+SELECT create_distributed_table('partitioning_test', 'id');
+ERROR:  relation "partitioning_test" does not exist
+LINE 1: SELECT create_distributed_table('partitioning_test', 'id');
+                                        ^
+SELECT create_distributed_table('partitioning_test_2009', 'id');
+ERROR:  relation "partitioning_test_2009" does not exist
+LINE 1: SELECT create_distributed_table('partitioning_test_2009', 'i...
+                                        ^
+SELECT create_distributed_table('partitioning_test_2010', 'id');
+ERROR:  relation "partitioning_test_2010" does not exist
+LINE 1: SELECT create_distributed_table('partitioning_test_2010', 'i...
+                                        ^
+SELECT create_distributed_table('partitioning_test_2011', 'id');
+ERROR:  relation "partitioning_test_2011" does not exist
+LINE 1: SELECT create_distributed_table('partitioning_test_2011', 'i...
+                                        ^
+ALTER TABLE partitioning_test ADD CONSTRAINT partitioning_reference_fkey
+    FOREIGN KEY (id) REFERENCES reference_table(id) ON DELETE CASCADE;
+ERROR:  relation "partitioning_test" does not exist
+ALTER TABLE partitioning_test_2009 ADD CONSTRAINT partitioning_reference_fkey_2009
+    FOREIGN KEY (id) REFERENCES reference_table(id) ON DELETE CASCADE;
+ERROR:  relation "partitioning_test_2009" does not exist
+INSERT INTO partitioning_test_2010 VALUES (1, '2010-02-01');
+ERROR:  relation "partitioning_test_2010" does not exist
+LINE 1: INSERT INTO partitioning_test_2010 VALUES (1, '2010-02-01');
+                    ^
+-- This should fail because of foreign key constraint violation
+ALTER TABLE partitioning_test ATTACH PARTITION partitioning_test_2010
+      FOR VALUES FROM ('2010-01-01') TO ('2011-01-01');
+ERROR:  syntax error at or near "ATTACH"
+LINE 1: ALTER TABLE partitioning_test ATTACH PARTITION partitioning_...
+                                      ^
+-- Truncate, so attaching again won't fail
+TRUNCATE partitioning_test_2010;
+ERROR:  relation "partitioning_test_2010" does not exist
+-- Attach a table which already has the same constraint
+ALTER TABLE partitioning_test ATTACH PARTITION partitioning_test_2009
+      FOR VALUES FROM ('2009-01-01') TO ('2010-01-01');
+ERROR:  syntax error at or near "ATTACH"
+LINE 1: ALTER TABLE partitioning_test ATTACH PARTITION partitioning_...
+                                      ^
+-- Attach a table which doesn't have the constraint
+ALTER TABLE partitioning_test ATTACH PARTITION partitioning_test_2010
+      FOR VALUES FROM ('2010-01-01') TO ('2011-01-01');
+ERROR:  syntax error at or near "ATTACH"
+LINE 1: ALTER TABLE partitioning_test ATTACH PARTITION partitioning_...
+                                      ^
+-- Attach a table which has a different constraint
+ALTER TABLE partitioning_test ATTACH PARTITION partitioning_test_2011
+      FOR VALUES FROM ('2011-01-01') TO ('2012-01-01');
+ERROR:  syntax error at or near "ATTACH"
+LINE 1: ALTER TABLE partitioning_test ATTACH PARTITION partitioning_...
+                                      ^
+ALTER TABLE partitioning_test DETACH PARTITION partitioning_test_2008;
+ERROR:  syntax error at or near "DETACH"
+LINE 1: ALTER TABLE partitioning_test DETACH PARTITION partitioning_...
+                                      ^
+ALTER TABLE partitioning_test DETACH PARTITION partitioning_test_2009;
+ERROR:  syntax error at or near "DETACH"
+LINE 1: ALTER TABLE partitioning_test DETACH PARTITION partitioning_...
+                                      ^
+ALTER TABLE partitioning_test DETACH PARTITION partitioning_test_2010;
+ERROR:  syntax error at or near "DETACH"
+LINE 1: ALTER TABLE partitioning_test DETACH PARTITION partitioning_...
+                                      ^
+ALTER TABLE partitioning_test DETACH PARTITION partitioning_test_2011;
+ERROR:  syntax error at or near "DETACH"
+LINE 1: ALTER TABLE partitioning_test DETACH PARTITION partitioning_...
+                                      ^
+DROP TABLE partitioning_test, partitioning_test_2008, partitioning_test_2009,
+           partitioning_test_2010, partitioning_test_2011,
+           reference_table, reference_table_2;
+ERROR:  table "partitioning_test" does not exist
 DROP SCHEMA partitioning_schema CASCADE;
-NOTICE:  drop cascades to table "schema-test_2009"
+NOTICE:  drop cascades to 3 other objects
+DETAIL:  drop cascades to table "schema-test_2009"
+drop cascades to table reference_table
+drop cascades to table reference_table_2
 RESET SEARCH_PATH;
 DROP TABLE IF EXISTS
 	partitioning_hash_test,

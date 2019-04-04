@@ -1,0 +1,373 @@
+--
+-- MULTI_UTILITY_STATEMENTS
+--
+-- Check that we can run utility statements with embedded SELECT statements on
+-- distributed tables. Currently we only support CREATE TABLE AS (SELECT..),
+-- DECLARE CURSOR, and COPY ... TO statements.
+SET citus.next_shard_id TO 1000000;
+CREATE TEMP TABLE lineitem_pricing_summary AS 
+(
+     SELECT
+	l_returnflag,
+	l_linestatus,
+	sum(l_quantity) as sum_qty,
+	sum(l_extendedprice) as sum_base_price,
+	sum(l_extendedprice * (1 - l_discount)) as sum_disc_price,
+	sum(l_extendedprice * (1 - l_discount) * (1 + l_tax)) as sum_charge,
+	avg(l_quantity) as avg_qty,
+	avg(l_extendedprice) as avg_price,
+	avg(l_discount) as avg_disc,
+	count(*) as count_order
+    FROM
+	lineitem
+    WHERE
+	l_shipdate <= date '1998-12-01' - interval '90 days'
+    GROUP BY
+	l_returnflag,
+	l_linestatus
+    ORDER BY
+	l_returnflag,
+	l_linestatus
+);
+SELECT * FROM lineitem_pricing_summary ORDER BY l_returnflag, l_linestatus;
+ l_returnflag | l_linestatus |  sum_qty  | sum_base_price | sum_disc_price |    sum_charge    |       avg_qty       |     avg_price      |        avg_disc        | count_order 
+--------------+--------------+-----------+----------------+----------------+------------------+---------------------+--------------------+------------------------+-------------
+ A            | F            |  75465.00 |   113619873.63 | 107841287.0728 | 112171153.245923 | 25.6334918478260870 | 38593.707075407609 | 0.05055027173913043478 |        2944
+ N            | F            |   2022.00 |     3102551.45 |   2952540.7118 |   3072642.770652 | 26.6052631578947368 | 40823.045394736842 | 0.05263157894736842105 |          76
+ N            | O            | 149778.00 |   224706948.16 | 213634857.6854 | 222134071.929801 | 25.4594594594594595 | 38195.979629440762 | 0.04939486656467788543 |        5883
+ R            | F            |  73156.00 |   108937979.73 | 103516623.6698 | 107743533.784328 | 25.2175112030334367 | 37551.871675284385 | 0.04983798690106859704 |        2901
+(4 rows)
+
+-- Test we can handle joins
+CREATE TABLE shipping_priority AS 
+(
+    SELECT
+	l_orderkey,
+	sum(l_extendedprice * (1 - l_discount)) as revenue,
+	o_orderdate,
+	o_shippriority
+    FROM
+	customer,
+	orders,
+	lineitem
+    WHERE
+	c_mktsegment = 'BUILDING'
+	AND c_custkey = o_custkey
+	AND l_orderkey = o_orderkey
+	AND o_orderdate < date '1995-03-15'
+	AND l_shipdate > date '1995-03-15'
+    GROUP BY
+	l_orderkey,
+	o_orderdate,
+	o_shippriority
+    ORDER BY
+	revenue DESC,
+	o_orderdate
+);
+SELECT * FROM shipping_priority;
+ l_orderkey |   revenue   | o_orderdate | o_shippriority 
+------------+-------------+-------------+----------------
+       1637 | 268170.6408 | 02-08-1995  |              0
+       9696 | 252014.5497 | 02-20-1995  |              0
+      10916 | 242749.1996 | 03-11-1995  |              0
+        450 | 221012.3165 | 03-05-1995  |              0
+       5347 | 198353.7942 | 02-22-1995  |              0
+      10691 | 112800.1020 | 03-14-1995  |              0
+        386 | 104975.2484 | 01-25-1995  |              0
+       5765 |  88222.7556 | 12-15-1994  |              0
+       4707 |  88143.7774 | 02-27-1995  |              0
+       5312 |  83750.7028 | 02-24-1995  |              0
+       5728 |  70101.6400 | 12-11-1994  |              0
+        577 |  57986.6224 | 12-19-1994  |              0
+      12706 |  16636.6368 | 11-21-1994  |              0
+       3844 |   8851.3200 | 12-29-1994  |              0
+      11073 |   7433.6295 | 12-02-1994  |              0
+      13924 |   3111.4970 | 12-20-1994  |              0
+(16 rows)
+
+DROP TABLE shipping_priority;
+-- Check COPY against distributed tables works both when specifying a
+-- query as the source, and when directly naming a table.
+COPY (
+    SELECT
+	l_orderkey,
+	sum(l_extendedprice * (1 - l_discount)) as revenue,
+	o_orderdate,
+	o_shippriority
+    FROM
+	customer,
+	orders,
+	lineitem
+    WHERE
+	c_mktsegment = 'BUILDING'
+	AND c_custkey = o_custkey
+	AND l_orderkey = o_orderkey
+	AND o_orderdate < date '1995-03-15'
+	AND l_shipdate > date '1995-03-15'
+    GROUP BY
+	l_orderkey,
+	o_orderdate,
+	o_shippriority
+    ORDER BY
+	revenue DESC,
+	o_orderdate
+) TO stdout;
+1637	268170.6408	02-08-1995	0
+9696	252014.5497	02-20-1995	0
+10916	242749.1996	03-11-1995	0
+450	221012.3165	03-05-1995	0
+5347	198353.7942	02-22-1995	0
+10691	112800.1020	03-14-1995	0
+386	104975.2484	01-25-1995	0
+5765	88222.7556	12-15-1994	0
+4707	88143.7774	02-27-1995	0
+5312	83750.7028	02-24-1995	0
+5728	70101.6400	12-11-1994	0
+577	57986.6224	12-19-1994	0
+12706	16636.6368	11-21-1994	0
+3844	8851.3200	12-29-1994	0
+11073	7433.6295	12-02-1994	0
+13924	3111.4970	12-20-1994	0
+-- check copying to file
+-- (quiet off to force number of copied records to be displayed)
+\set QUIET off
+COPY nation TO :'dev_null';
+COPY 25
+\set QUIET on
+-- stdout
+COPY nation TO STDOUT;
+0	ALGERIA                  	0	 haggle. carefully final deposits detect slyly agai
+1	ARGENTINA                	1	al foxes promise slyly according to the regular accounts. bold requests alon
+2	BRAZIL                   	1	y alongside of the pending deposits. carefully special packages are about the ironic forges. slyly special 
+3	CANADA                   	1	eas hang ironic, silent packages. slyly regular packages are furiously over the tithes. fluffily bold
+4	EGYPT                    	4	y above the carefully unusual theodolites. final dugouts are quickly across the furiously regular d
+5	ETHIOPIA                 	0	ven packages wake quickly. regu
+6	FRANCE                   	3	refully final requests. regular, ironi
+7	GERMANY                  	3	l platelets. regular accounts x-ray: unusual, regular acco
+8	INDIA                    	2	ss excuses cajole slyly across the packages. deposits print aroun
+9	INDONESIA                	2	 slyly express asymptotes. regular deposits haggle slyly. carefully ironic hockey players sleep blithely. carefull
+10	IRAN                     	4	efully alongside of the slyly final dependencies. 
+11	IRAQ                     	4	nic deposits boost atop the quickly final requests? quickly regula
+12	JAPAN                    	2	ously. final, express gifts cajole a
+13	JORDAN                   	4	ic deposits are blithely about the carefully regular pa
+14	KENYA                    	0	 pending excuses haggle furiously deposits. pending, express pinto beans wake fluffily past t
+15	MOROCCO                  	0	rns. blithely bold courts among the closely regular packages use furiously bold platelets?
+16	MOZAMBIQUE               	0	s. ironic, unusual asymptotes wake blithely r
+17	PERU                     	1	platelets. blithely pending dependencies use fluffily across the even pinto beans. carefully silent accoun
+18	CHINA                    	2	c dependencies. furiously express notornis sleep slyly regular accounts. ideas sleep. depos
+19	ROMANIA                  	3	ular asymptotes are about the furious multipliers. express dependencies nag above the ironically ironic account
+20	SAUDI ARABIA             	4	ts. silent requests haggle. closely express packages sleep across the blithely
+21	VIETNAM                  	2	hely enticingly express accounts. even, final 
+22	RUSSIA                   	3	 requests against the platelets use never according to the quickly regular pint
+23	UNITED KINGDOM           	3	eans boost carefully special requests. accounts are. carefull
+24	UNITED STATES            	1	y final packages. slow foxes cajole quickly. quickly silent platelets breach ironic accounts. unusual pinto be
+-- ensure individual cols can be copied out, too
+COPY nation(n_name) TO STDOUT;
+ALGERIA                  
+ARGENTINA                
+BRAZIL                   
+CANADA                   
+EGYPT                    
+ETHIOPIA                 
+FRANCE                   
+GERMANY                  
+INDIA                    
+INDONESIA                
+IRAN                     
+IRAQ                     
+JAPAN                    
+JORDAN                   
+KENYA                    
+MOROCCO                  
+MOZAMBIQUE               
+PERU                     
+CHINA                    
+ROMANIA                  
+SAUDI ARABIA             
+VIETNAM                  
+RUSSIA                   
+UNITED KINGDOM           
+UNITED STATES            
+-- Test that we can create on-commit drop tables, and also test creating with
+-- oids, along with changing column names
+BEGIN;
+CREATE TEMP TABLE customer_few (customer_key) WITH (OIDS) ON COMMIT DROP AS 
+    (SELECT * FROM customer WHERE c_nationkey = 1 ORDER BY c_custkey LIMIT 10);
+SELECT customer_key, c_name, c_address 
+       FROM customer_few ORDER BY customer_key LIMIT 5;
+ customer_key |       c_name       |                c_address                
+--------------+--------------------+-----------------------------------------
+            3 | Customer#000000003 | MG9kdTD2WBHm
+           14 | Customer#000000014 | KXkletMlL2JQEA 
+           30 | Customer#000000030 | nJDsELGAavU63Jl0c5NKsKfL8rIJQQkQnYL2QJY
+           59 | Customer#000000059 | zLOCP0wh92OtBihgspOGl4
+          106 | Customer#000000106 | xGCOEAUjUNG
+(5 rows)
+
+COMMIT;
+SELECT customer_key, c_name, c_address 
+       FROM customer_few ORDER BY customer_key LIMIT 5;
+ERROR:  relation "customer_few" does not exist
+LINE 2:        FROM customer_few ORDER BY customer_key LIMIT 5;
+                    ^
+-- Test DECLARE CURSOR .. WITH HOLD without parameters that calls ReScan on the top-level CustomScan
+CREATE TABLE cursor_me (x int, y int);
+SELECT create_distributed_table('cursor_me', 'x');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+INSERT INTO cursor_me SELECT s/10, s FROM generate_series(1, 100) s;
+DECLARE holdCursor CURSOR WITH HOLD FOR
+		SELECT * FROM cursor_me WHERE x = 1 ORDER BY y;
+FETCH NEXT FROM holdCursor;
+ x | y  
+---+----
+ 1 | 10
+(1 row)
+
+FETCH FORWARD 3 FROM holdCursor;
+ x | y  
+---+----
+ 1 | 11
+ 1 | 12
+ 1 | 13
+(3 rows)
+
+FETCH LAST FROM holdCursor;
+ x | y  
+---+----
+ 1 | 19
+(1 row)
+
+FETCH BACKWARD 3 FROM holdCursor;
+ x | y  
+---+----
+ 1 | 18
+ 1 | 17
+ 1 | 16
+(3 rows)
+
+FETCH FORWARD 3 FROM holdCursor;
+ x | y  
+---+----
+ 1 | 17
+ 1 | 18
+ 1 | 19
+(3 rows)
+
+CLOSE holdCursor;
+-- Test DECLARE CURSOR .. WITH HOLD with parameter
+CREATE OR REPLACE FUNCTION declares_cursor(p int)
+RETURNS void AS $$
+	DECLARE c CURSOR WITH HOLD FOR SELECT * FROM cursor_me WHERE x = $1;
+$$ LANGUAGE SQL;
+SELECT declares_cursor(5);
+ERROR:  could not create distributed plan
+DETAIL:  Possibly this is caused by the use of parameters in SQL functions, which is not supported in Citus.
+HINT:  Consider using PL/pgSQL functions instead.
+CONTEXT:  SQL function "declares_cursor" statement 1
+CREATE OR REPLACE FUNCTION cursor_plpgsql(p int)
+RETURNS SETOF int AS $$                                                                                                                                                            
+DECLARE
+  val int;
+  my_cursor CURSOR (a INTEGER) FOR SELECT y FROM cursor_me WHERE x = $1 ORDER BY y;
+BEGIN
+   -- Open the cursor
+   OPEN my_cursor(p);
+
+   LOOP
+      FETCH my_cursor INTO val;
+      EXIT WHEN NOT FOUND;
+
+      RETURN NEXT val;
+   END LOOP;
+
+   -- Close the cursor
+   CLOSE my_cursor;
+END; $$
+LANGUAGE plpgsql;
+SELECT cursor_plpgsql(4);
+ cursor_plpgsql 
+----------------
+             40
+             41
+             42
+             43
+             44
+             45
+             46
+             47
+             48
+             49
+(10 rows)
+
+DROP FUNCTION declares_cursor(int);
+DROP FUNCTION cursor_plpgsql(int);
+DROP TABLE cursor_me;
+-- Test DECLARE CURSOR statement with SCROLL
+DECLARE holdCursor SCROLL CURSOR WITH HOLD FOR
+        SELECT l_orderkey, l_linenumber, l_quantity, l_discount
+        FROM lineitem 
+        ORDER BY l_orderkey, l_linenumber;
+FETCH NEXT FROM holdCursor;
+ l_orderkey | l_linenumber | l_quantity | l_discount 
+------------+--------------+------------+------------
+          1 |            1 |      17.00 |       0.04
+(1 row)
+
+FETCH FORWARD 5 FROM holdCursor;
+ l_orderkey | l_linenumber | l_quantity | l_discount 
+------------+--------------+------------+------------
+          1 |            2 |      36.00 |       0.09
+          1 |            3 |       8.00 |       0.10
+          1 |            4 |      28.00 |       0.09
+          1 |            5 |      24.00 |       0.10
+          1 |            6 |      32.00 |       0.07
+(5 rows)
+
+FETCH LAST FROM holdCursor;
+ l_orderkey | l_linenumber | l_quantity | l_discount 
+------------+--------------+------------+------------
+      14947 |            2 |      29.00 |       0.04
+(1 row)
+
+FETCH BACKWARD 5 FROM holdCursor;
+ l_orderkey | l_linenumber | l_quantity | l_discount 
+------------+--------------+------------+------------
+      14947 |            1 |      14.00 |       0.09
+      14946 |            2 |      37.00 |       0.01
+      14946 |            1 |      38.00 |       0.00
+      14945 |            6 |      37.00 |       0.05
+      14945 |            5 |      44.00 |       0.08
+(5 rows)
+
+-- Test WITHOUT HOLD cursors inside transactions
+BEGIN;
+DECLARE noHoldCursor SCROLL CURSOR FOR
+        SELECT l_orderkey, l_linenumber, l_quantity, l_discount
+        FROM lineitem
+        ORDER BY l_orderkey, l_linenumber;
+FETCH ABSOLUTE 5 FROM noHoldCursor;
+ l_orderkey | l_linenumber | l_quantity | l_discount 
+------------+--------------+------------+------------
+          1 |            5 |      24.00 |       0.10
+(1 row)
+
+FETCH BACKWARD noHoldCursor;
+ l_orderkey | l_linenumber | l_quantity | l_discount 
+------------+--------------+------------+------------
+          1 |            4 |      28.00 |       0.09
+(1 row)
+
+COMMIT;
+FETCH ABSOLUTE 5 FROM noHoldCursor;
+ERROR:  cursor "noholdcursor" does not exist
+-- Test we don't throw an error for DROP IF EXISTS
+DROP DATABASE IF EXISTS not_existing_database;
+NOTICE:  database "not_existing_database" does not exist, skipping
+DROP TABLE IF EXISTS not_existing_table;
+NOTICE:  table "not_existing_table" does not exist, skipping
+DROP SCHEMA IF EXISTS not_existing_schema;
+NOTICE:  schema "not_existing_schema" does not exist, skipping

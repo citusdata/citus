@@ -458,7 +458,6 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		}
 	}
 
-#if (PG_VERSION_NUM >= 100000)
 	pstmt->utilityStmt = parsetree;
 
 	PG_TRY();
@@ -468,13 +467,13 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 			activeAlterTables++;
 		}
 
+#if (PG_VERSION_NUM >= 100000)
 		standard_ProcessUtility(pstmt, queryString, context,
 								params, queryEnv, dest, completionTag);
 #else
-	standard_ProcessUtility(parsetree, queryString, context,
-							params, dest, completionTag);
+		standard_ProcessUtility(parsetree, queryString, context,
+								params, dest, completionTag);
 #endif
-
 
 		if (IsA(parsetree, AlterTableStmt))
 		{

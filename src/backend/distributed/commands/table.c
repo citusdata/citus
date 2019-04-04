@@ -1194,6 +1194,7 @@ SetupExecutionModeForAlterTable(Oid relationId, AlterTableCmd *command)
 			}
 		}
 	}
+	#if (PG_VERSION_NUM >= 100000)
 	else if (alterTableType == AT_DetachPartition || alterTableType == AT_AttachPartition)
 	{
 		/* check if there are foreign constraints to reference tables */
@@ -1202,6 +1203,7 @@ SetupExecutionModeForAlterTable(Oid relationId, AlterTableCmd *command)
 			executeSequentially = true;
 		}
 	}
+	#endif
 
 	/*
 	 * If there has already been a parallel query executed, the sequential mode

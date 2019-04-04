@@ -32,8 +32,13 @@ extern bool WritableStandbyCoordinator;
 
 
 extern void CitusExecutorStart(QueryDesc *queryDesc, int eflags);
-extern void CitusExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint64 count,
-							 bool execute_once);
+extern void
+#if (PG_VERSION_NUM >= 100000)
+CitusExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint64 count,
+				 bool execute_once);
+#else
+CitusExecutorRun(QueryDesc * queryDesc, ScanDirection direction, uint64 count);
+#endif
 extern TupleTableSlot * ReturnTupleFromTuplestore(CitusScanState *scanState);
 extern void LoadTuplesIntoTupleStore(CitusScanState *citusScanState, Job *workerJob);
 extern void ReadFileIntoTupleStore(char *fileName, char *copyFormat, TupleDesc

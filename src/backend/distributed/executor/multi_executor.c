@@ -102,8 +102,13 @@ CitusExecutorStart(QueryDesc *queryDesc, int eflags)
  * executes a query.
  */
 void
+#if (PG_VERSION_NUM >= 100000)
 CitusExecutorRun(QueryDesc *queryDesc,
 				 ScanDirection direction, uint64 count, bool execute_once)
+#else
+CitusExecutorRun(QueryDesc * queryDesc,
+				 ScanDirection direction, uint64 count)
+#endif
 {
 	/*
 	 * Disable execution of ALTER TABLE constraint validation queries. These
@@ -133,7 +138,11 @@ CitusExecutorRun(QueryDesc *queryDesc,
 	}
 	else
 	{
+		#if (PG_VERSION_NUM >= 100000)
 		standard_ExecutorRun(queryDesc, direction, count, execute_once);
+		#else
+		standard_ExecutorRun(queryDesc, direction, count);
+		#endif
 	}
 }
 
