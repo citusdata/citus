@@ -2086,7 +2086,7 @@ FROM
     value_3 DESC
    LIMIT 10) "some_users"
 ORDER BY
-  value_3 DESC 
+  value_3 DESC, user_id DESC 
 LIMIT 10;
  user_id | value_3 
 ---------+---------
@@ -2139,7 +2139,7 @@ FROM
       users.value_2 > 2
      LIMIT 1
     ) "some_users_data" ON TRUE
-ORDER BY value_3 DESC
+ORDER BY value_3 DESC, user_id DESC
 LIMIT 10;
  user_id | value_3 
 ---------+---------
@@ -2646,7 +2646,7 @@ FROM
   ) AS b
   USING (user_id)
 GROUP BY user_id
-ORDER BY 1;
+ORDER BY 1, 2;
  user_id |      subquery_avg      
 ---------+------------------------
        1 |     2.3333333333333333
@@ -2681,7 +2681,7 @@ FROM
   ) AS b
   USING (user_id)
 GROUP BY a.user_id
-ORDER BY 1;
+ORDER BY 1, 2;
  user_id |      subquery_avg      
 ---------+------------------------
        1 |     2.3333333333333333

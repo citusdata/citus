@@ -9,6 +9,10 @@ SET citus.next_placement_id TO 13300000;
 SET citus.shard_count = 4;
 SET citus.shard_replication_factor = 2;
 
+-- order of execution might change in parallel executions
+-- and the error details might contain the worker node
+-- so be less verbose with \set VERBOSITY TERSE when necessary
+
 CREATE TABLE raw_events_first (user_id int, time timestamp, value_1 int, value_2 int, value_3 float, value_4 bigint, UNIQUE(user_id, value_1));
 SELECT create_distributed_table('raw_events_first', 'user_id');
 
@@ -57,7 +61,9 @@ WHERE
    raw_events_first.user_id = raw_events_second.user_id;
 
 -- see that we get unique vialitons
+\set VERBOSITY TERSE
 INSERT INTO raw_events_second  SELECT * FROM raw_events_first;
+\set VERBOSITY DEFAULT
 
 -- stable functions should be allowed
 INSERT INTO raw_events_second (user_id, time)
@@ -115,7 +121,6 @@ FROM
 WHERE
   user_id = 0;
 
-\set VERBOSITY default
 
 -- add one more row
 INSERT INTO raw_events_first (user_id, time) VALUES
@@ -180,6 +185,7 @@ WHERE
 RETURNING *;
 
 -- hits two shards
+\set VERBOSITY TERSE
 INSERT INTO raw_events_second (user_id, value_1, value_3) 
 SELECT 
    user_id, value_1, value_3
@@ -188,7 +194,6 @@ FROM
 WHERE
    user_id = 9 OR user_id = 16 
 RETURNING *;
-
 
 -- now do some aggregations
 INSERT INTO agg_events 
@@ -241,6 +246,8 @@ FROM   (SELECT SUM(raw_events_second.value_4) AS v4,
         WHERE  raw_events_first.user_id = raw_events_second.user_id 
         GROUP  BY raw_events_second.user_id) AS foo
 ORDER  BY id;
+
+\set VERBOSITY DEFAULT
 
 -- join between subqueries
 INSERT INTO agg_events
@@ -1516,7 +1523,7 @@ FROM   (SELECT f1.key
         WHERE  f1.key = f2.key 
         GROUP  BY 1) AS foo; 
 
-SELECT * FROM insert_select_varchar_test;
+SELECT * FROM insert_select_varchar_test ORDER BY 1 DESC, 2 DESC;
 
 -- some tests with DEFAULT columns and constant values
 -- this test is mostly importantly intended for deparsing the query correctly
@@ -2014,7 +2021,7 @@ FROM (
 ) AS ftop
 LIMIT 5;
 
-SELECT * FROM coerce_agg;
+SELECT * FROM coerce_agg ORDER BY 1 DESC, 2 DESC;
 
 TRUNCATE coerce_agg;
 
@@ -2028,7 +2035,7 @@ FROM (
 ) AS ftop
 LIMIT 5;
 
-SELECT * FROM coerce_agg;
+SELECT * FROM coerce_agg ORDER BY 1 DESC, 2 DESC;
 
 TRUNCATE coerce_agg;
 TRUNCATE coerce_events;
@@ -2054,7 +2061,7 @@ FROM (
   FROM coerce_events
 ) AS ftop
 LIMIT 5;
-SELECT * FROM coerce_agg;
+SELECT * FROM coerce_agg ORDER BY 1 DESC, 2 DESC;
 
 TRUNCATE coerce_agg;
 TRUNCATE coerce_events;
@@ -2065,6 +2072,9 @@ ALTER TABLE coerce_agg ALTER COLUMN value_1_agg TYPE integer USING NULL;
 ALTER TABLE coerce_agg ADD CONSTRAINT small_number CHECK (value_1_agg < 5);
 
 INSERT INTO coerce_events (user_id, value_1) VALUES (1, 1), (10, 10);
+
+\set VERBOSITY TERSE
+
 INSERT INTO coerce_agg(user_id, value_1_agg)
 SELECT *
 FROM (
@@ -2072,7 +2082,9 @@ FROM (
   FROM coerce_events
 ) AS ftop;
 
-SELECT * FROM coerce_agg;
+\set VERBOSITY DEFAULT
+
+SELECT * FROM coerce_agg ORDER BY 1 DESC, 2 DESC;
 
 -- integer[3] -> text[3]
 TRUNCATE coerce_events;
@@ -2088,7 +2100,7 @@ FROM (
 ) AS ftop
 LIMIT 5;
 
-SELECT * FROM coerce_agg;
+SELECT * FROM coerce_agg ORDER BY 1 DESC, 2 DESC;
 
 -- INSERT..SELECT + prepared statements + recursive planning
 BEGIN;

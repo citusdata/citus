@@ -28,10 +28,10 @@ UPDATE pg_dist_node SET noderole = 'secondary';
 INSERT INTO dest_table (a, b) VALUES (1, 2);
 
 -- router selects are allowed
-SELECT a FROM dest_table WHERE a = 1;
+SELECT a FROM dest_table WHERE a = 1 ORDER BY 1;
 
 -- real-time selects are also allowed
-SELECT a FROM dest_table;
+SELECT a FROM dest_table ORDER BY 1;
 
 -- subqueries are also allowed
 SET client_min_messages TO DEBUG1;
@@ -48,7 +48,7 @@ FROM
 	     	source_table.a = dest_table.a AND 
 	     dest_table.b IN (1,2,3,4)
 	     ) SELECT * FROM cte ORDER BY 1 DESC LIMIT 5
-     ) as foo;
+     ) as foo ORDER BY 1;
 SET client_min_messages TO DEFAULT;
 
 -- insert into is definitely not allowed

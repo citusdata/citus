@@ -1,6 +1,9 @@
 SET citus.shard_count TO 32;
 SET citus.next_shard_id TO 750000;
 SET citus.next_placement_id TO 750000;
+-- some failure messages that comes from the worker nodes
+-- might change due to parallel exectuions, so supress those
+-- using \set VERBOSITY terse
 -- ===================================================================
 -- test end-to-end modification functionality
 -- ===================================================================
@@ -154,25 +157,20 @@ SET client_min_messages TO ERROR;
 INSERT INTO limit_orders VALUES (NULL, 'T', 975234, DEFAULT);
 ERROR:  cannot perform an INSERT with NULL in the partition column
 -- INSERT violating column constraint
+\set VERBOSITY terse
 INSERT INTO limit_orders VALUES (18811, 'BUD', 14962, '2014-04-05 08:32:16', 'sell',
 								 -5.00);
 ERROR:  new row for relation "limit_orders_750000" violates check constraint "limit_orders_limit_price_check"
-DETAIL:  Failing row contains (18811, BUD, 14962, 2014-04-05 08:32:16, sell, -5.00).
-CONTEXT:  while executing command on localhost:57638
 -- INSERT violating primary key constraint
 INSERT INTO limit_orders VALUES (32743, 'LUV', 5994, '2001-04-16 03:37:28', 'buy', 0.58);
 ERROR:  duplicate key value violates unique constraint "limit_orders_pkey_750001"
-DETAIL:  Key (id)=(32743) already exists.
-CONTEXT:  while executing command on localhost:57637
 -- INSERT violating primary key constraint, with RETURNING specified.
 INSERT INTO limit_orders VALUES (32743, 'LUV', 5994, '2001-04-16 03:37:28', 'buy', 0.58) RETURNING *;
 ERROR:  duplicate key value violates unique constraint "limit_orders_pkey_750001"
-DETAIL:  Key (id)=(32743) already exists.
-CONTEXT:  while executing command on localhost:57637
 -- INSERT, with RETURNING specified, failing with a non-constraint error
 INSERT INTO limit_orders VALUES (34153, 'LEE', 5994, '2001-04-16 03:37:28', 'buy', 0.58) RETURNING id / 0;
 ERROR:  division by zero
-CONTEXT:  while executing command on localhost:57638
+\set VERBOSITY DEFAULT
 SET client_min_messages TO DEFAULT;
 -- commands with non-constant partition values are supported
 INSERT INTO limit_orders VALUES (random() * 100, 'ORCL', 152, '2011-08-25 11:50:45',
@@ -279,10 +277,11 @@ ERROR:  relation bidders is not distributed
 WITH new_orders AS (INSERT INTO limit_orders VALUES (411, 'FLO', 12, '2017-07-02 16:32:15', 'buy', 66))
 DELETE FROM limit_orders WHERE id < 0;
 -- we have to be careful that modifying CTEs are part of the transaction and can thus roll back
+\set VERBOSITY terse
 WITH new_orders AS (INSERT INTO limit_orders VALUES (412, 'FLO', 12, '2017-07-02 16:32:15', 'buy', 66))
 DELETE FROM limit_orders RETURNING id / 0;
 ERROR:  division by zero
-CONTEXT:  while executing command on localhost:57637
+\set VERBOSITY default
 SELECT * FROM limit_orders WHERE id = 412;
  id | symbol | bidder_id | placed_at | kind | limit_price 
 ----+--------+-----------+-----------+------+-------------
@@ -335,11 +334,10 @@ UPDATE limit_orders SET (kind, limit_price) = ('buy', 999) WHERE id = 246 RETURN
 (1 row)
 
 -- Test that on unique contraint violations, we fail fast
+\set VERBOSITY terse
 INSERT INTO limit_orders VALUES (275, 'ADR', 140, '2007-07-02 16:32:15', 'sell', 43.67);
 INSERT INTO limit_orders VALUES (275, 'ADR', 140, '2007-07-02 16:32:15', 'sell', 43.67);
 ERROR:  duplicate key value violates unique constraint "limit_orders_pkey_750001"
-DETAIL:  Key (id)=(275) already exists.
-CONTEXT:  while executing command on localhost:57637
 -- Test that shards which miss a modification are marked unhealthy
 -- First: Connect to the second worker node
 \c - - - :worker_2_port
@@ -348,9 +346,9 @@ ALTER TABLE limit_orders_750000 RENAME TO renamed_orders;
 -- Third: Connect back to master node
 \c - - - :master_port
 -- Fourth: Perform an INSERT on the remaining node
+\set VERBOSITY terse
 INSERT INTO limit_orders VALUES (276, 'ADR', 140, '2007-07-02 16:32:15', 'sell', 43.67);
 WARNING:  relation "public.limit_orders_750000" does not exist
-CONTEXT:  while executing command on localhost:57638
 -- Last: Verify the insert worked but the deleted placement is now unhealthy
 SELECT count(*) FROM limit_orders WHERE id = 276;
  count 
@@ -379,9 +377,10 @@ ALTER TABLE limit_orders_750000 RENAME TO renamed_orders;
 -- Third: Connect back to master node
 \c - - - :master_port
 -- Fourth: Perform an INSERT on the remaining node
+\set VERBOSITY terse
 INSERT INTO limit_orders VALUES (276, 'ADR', 140, '2007-07-02 16:32:15', 'sell', 43.67);
 ERROR:  relation "public.limit_orders_750000" does not exist
-CONTEXT:  while executing command on localhost:57637
+\set VERBOSITY DEFAULT
 -- Last: Verify worker is still healthy
 SELECT count(*)
 FROM   pg_dist_shard_placement AS sp,
@@ -479,10 +478,10 @@ SELECT array_of_values FROM limit_orders WHERE id = 246;
 -- STRICT functions work as expected
 CREATE FUNCTION temp_strict_func(integer,integer) RETURNS integer AS
 'SELECT COALESCE($1, 2) + COALESCE($1, 3);' LANGUAGE SQL STABLE STRICT;
+\set VERBOSITY terse
 UPDATE limit_orders SET bidder_id = temp_strict_func(1, null) WHERE id = 246;
 ERROR:  null value in column "bidder_id" violates not-null constraint
-DETAIL:  Failing row contains (246, GM, null, 2007-07-02 16:32:15, buy, 999, {1,2}).
-CONTEXT:  while executing command on localhost:57637
+\set VERBOSITY default
 SELECT array_of_values FROM limit_orders WHERE id = 246;
  array_of_values 
 -----------------

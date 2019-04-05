@@ -2,6 +2,9 @@ SET citus.shard_count TO 32;
 SET citus.next_shard_id TO 750000;
 SET citus.next_placement_id TO 750000;
 
+-- some failure messages that comes from the worker nodes
+-- might change due to parallel exectuions, so supress those
+-- using \set VERBOSITY terse
 
 -- ===================================================================
 -- test end-to-end modification functionality
@@ -119,6 +122,7 @@ SET client_min_messages TO ERROR;
 INSERT INTO limit_orders VALUES (NULL, 'T', 975234, DEFAULT);
 
 -- INSERT violating column constraint
+\set VERBOSITY terse
 INSERT INTO limit_orders VALUES (18811, 'BUD', 14962, '2014-04-05 08:32:16', 'sell',
 								 -5.00);
 -- INSERT violating primary key constraint
@@ -130,7 +134,7 @@ INSERT INTO limit_orders VALUES (32743, 'LUV', 5994, '2001-04-16 03:37:28', 'buy
 -- INSERT, with RETURNING specified, failing with a non-constraint error
 INSERT INTO limit_orders VALUES (34153, 'LEE', 5994, '2001-04-16 03:37:28', 'buy', 0.58) RETURNING id / 0;
 
-
+\set VERBOSITY DEFAULT
 SET client_min_messages TO DEFAULT;
 
 -- commands with non-constant partition values are supported
@@ -202,8 +206,10 @@ WITH new_orders AS (INSERT INTO limit_orders VALUES (411, 'FLO', 12, '2017-07-02
 DELETE FROM limit_orders WHERE id < 0;
 
 -- we have to be careful that modifying CTEs are part of the transaction and can thus roll back
+\set VERBOSITY terse
 WITH new_orders AS (INSERT INTO limit_orders VALUES (412, 'FLO', 12, '2017-07-02 16:32:15', 'buy', 66))
 DELETE FROM limit_orders RETURNING id / 0;
+\set VERBOSITY default
 SELECT * FROM limit_orders WHERE id = 412;
 
 INSERT INTO limit_orders VALUES (246, 'TSLA', 162, '2007-07-02 16:32:15', 'sell', 20.69);
@@ -230,6 +236,7 @@ SELECT kind, limit_price FROM limit_orders WHERE id = 246;
 UPDATE limit_orders SET (kind, limit_price) = ('buy', 999) WHERE id = 246 RETURNING *;
 
 -- Test that on unique contraint violations, we fail fast
+\set VERBOSITY terse
 INSERT INTO limit_orders VALUES (275, 'ADR', 140, '2007-07-02 16:32:15', 'sell', 43.67);
 INSERT INTO limit_orders VALUES (275, 'ADR', 140, '2007-07-02 16:32:15', 'sell', 43.67);
 
@@ -245,6 +252,7 @@ ALTER TABLE limit_orders_750000 RENAME TO renamed_orders;
 \c - - - :master_port
 
 -- Fourth: Perform an INSERT on the remaining node
+\set VERBOSITY terse
 INSERT INTO limit_orders VALUES (276, 'ADR', 140, '2007-07-02 16:32:15', 'sell', 43.67);
 
 -- Last: Verify the insert worked but the deleted placement is now unhealthy
@@ -271,7 +279,9 @@ ALTER TABLE limit_orders_750000 RENAME TO renamed_orders;
 \c - - - :master_port
 
 -- Fourth: Perform an INSERT on the remaining node
+\set VERBOSITY terse
 INSERT INTO limit_orders VALUES (276, 'ADR', 140, '2007-07-02 16:32:15', 'sell', 43.67);
+\set VERBOSITY DEFAULT
 
 -- Last: Verify worker is still healthy
 SELECT count(*)
@@ -366,7 +376,10 @@ SELECT array_of_values FROM limit_orders WHERE id = 246;
 -- STRICT functions work as expected
 CREATE FUNCTION temp_strict_func(integer,integer) RETURNS integer AS
 'SELECT COALESCE($1, 2) + COALESCE($1, 3);' LANGUAGE SQL STABLE STRICT;
+
+\set VERBOSITY terse
 UPDATE limit_orders SET bidder_id = temp_strict_func(1, null) WHERE id = 246;
+\set VERBOSITY default
 
 SELECT array_of_values FROM limit_orders WHERE id = 246;
 

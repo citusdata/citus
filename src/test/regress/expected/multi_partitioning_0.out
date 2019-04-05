@@ -444,14 +444,14 @@ ERROR:  no partition of relation "partitioning_test_1660003" found for row
 DETAIL:  Partition key of the failing row contains ("time") = (2015-04-02).
 CONTEXT:  while executing command on localhost:57638
 -- see they are inserted into default partition
-SELECT * FROM partitioning_test WHERE id > 20;
+SELECT * FROM partitioning_test WHERE id > 20 ORDER BY 1, 2;
  id | time 
 ----+------
 (0 rows)
 
-SELECT * FROM partitioning_test_default;
+SELECT * FROM partitioning_test_default ORDER BY 1, 2;
 ERROR:  relation "partitioning_test_default" does not exist
-LINE 1: SELECT * FROM partitioning_test_default;
+LINE 1: SELECT * FROM partitioning_test_default ORDER BY 1, 2;
                       ^
 -- create a new partition (will fail)
 CREATE TABLE partitioning_test_2014 PARTITION OF partitioning_test FOR VALUES FROM ('2014-01-01') TO ('2015-01-01');
@@ -470,14 +470,14 @@ LINE 1: ...ing_test ATTACH PARTITION partitioning_test_default DEFAULT;
                                                                ^
 END;
 -- see data is in the table, but some moved out from default partition
-SELECT * FROM partitioning_test WHERE id > 20;
+SELECT * FROM partitioning_test WHERE id > 20 ORDER BY 1, 2;
  id | time 
 ----+------
 (0 rows)
 
-SELECT * FROM partitioning_test_default;
+SELECT * FROM partitioning_test_default ORDER BY 1, 2;
 ERROR:  relation "partitioning_test_default" does not exist
-LINE 1: SELECT * FROM partitioning_test_default;
+LINE 1: SELECT * FROM partitioning_test_default ORDER BY 1, 2;
                       ^
 -- test master_modify_multiple_shards
 -- master_modify_multiple_shards on partitioned table

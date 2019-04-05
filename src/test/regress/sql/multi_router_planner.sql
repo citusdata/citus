@@ -330,7 +330,8 @@ SELECT *
 -- handled by real-time executor
 SELECT *
 	FROM articles_hash
-	WHERE author_id = 1 OR author_id = 18;
+	WHERE author_id = 1 OR author_id = 18
+ORDER BY 4 DESC, 3 DESC, 2 DESC, 1 DESC;
 
 -- rename the output columns
 SELECT id as article_id, word_count * id as random_value

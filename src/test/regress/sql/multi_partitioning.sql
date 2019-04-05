@@ -290,8 +290,8 @@ INSERT INTO partitioning_test VALUES(21, '2014-02-02');
 INSERT INTO partitioning_test VALUES(22, '2015-04-02');
 
 -- see they are inserted into default partition
-SELECT * FROM partitioning_test WHERE id > 20;
-SELECT * FROM partitioning_test_default;
+SELECT * FROM partitioning_test WHERE id > 20 ORDER BY 1, 2;
+SELECT * FROM partitioning_test_default ORDER BY 1, 2;
 
 -- create a new partition (will fail)
 CREATE TABLE partitioning_test_2014 PARTITION OF partitioning_test FOR VALUES FROM ('2014-01-01') TO ('2015-01-01');
@@ -305,8 +305,8 @@ ALTER TABLE partitioning_test ATTACH PARTITION partitioning_test_default DEFAULT
 END;
 
 -- see data is in the table, but some moved out from default partition
-SELECT * FROM partitioning_test WHERE id > 20;
-SELECT * FROM partitioning_test_default;
+SELECT * FROM partitioning_test WHERE id > 20 ORDER BY 1, 2;
+SELECT * FROM partitioning_test_default ORDER BY 1, 2;
 
 -- test master_modify_multiple_shards
 -- master_modify_multiple_shards on partitioned table

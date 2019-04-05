@@ -488,29 +488,30 @@ SELECT
 	l_custkey, r_custkey
 FROM
 	multi_outer_join_left l1
-	FULL JOIN multi_outer_join_right r1 ON (l1.l_custkey = r1.r_custkey);
+	FULL JOIN multi_outer_join_right r1 ON (l1.l_custkey = r1.r_custkey)
+ORDER BY 1 DESC, 2 DESC;
  l_custkey | r_custkey 
 -----------+-----------
-        11 |        11
-        12 |        12
-        14 |        14
-        16 |        16
-        17 |        17
-        18 |        18
-        20 |        20
+           |        19
            |        15
            |        13
-           |        19
-        21 |        21
-        22 |        22
-        23 |          
-        24 |        24
-        25 |          
-        26 |        26
-        27 |        27
-        28 |        28
-        29 |          
         30 |        30
+        29 |          
+        28 |        28
+        27 |        27
+        26 |        26
+        25 |          
+        24 |        24
+        23 |          
+        22 |        22
+        21 |        21
+        20 |        20
+        18 |        18
+        17 |        17
+        16 |        16
+        14 |        14
+        12 |        12
+        11 |        11
 (20 rows)
 
 -- full outer join + anti (right) should work with 1-1 matched shards
@@ -520,12 +521,13 @@ FROM
 	multi_outer_join_left l1
 	FULL JOIN multi_outer_join_right r1 ON (l1.l_custkey = r1.r_custkey)
 WHERE 
-	r_custkey is NULL;
+	r_custkey is NULL
+ORDER BY 1 DESC, 2 DESC;
  l_custkey | r_custkey 
 -----------+-----------
-        23 |          
-        25 |          
         29 |          
+        25 |          
+        23 |          
 (3 rows)
 
 -- full outer join + anti (left) should work with 1-1 matched shards
@@ -535,12 +537,13 @@ FROM
 	multi_outer_join_left l1
 	FULL JOIN multi_outer_join_right r1 ON (l1.l_custkey = r1.r_custkey)
 WHERE 
-	l_custkey is NULL;
+	l_custkey is NULL
+ORDER BY 1 DESC, 2 DESC;
  l_custkey | r_custkey 
 -----------+-----------
+           |        19
            |        15
            |        13
-           |        19
 (3 rows)
 
 -- full outer join + anti (both) should work with 1-1 matched shards
@@ -550,15 +553,16 @@ FROM
 	multi_outer_join_left l1
 	FULL JOIN multi_outer_join_right r1 ON (l1.l_custkey = r1.r_custkey)
 WHERE 
-	l_custkey is NULL or r_custkey is NULL;
+	l_custkey is NULL or r_custkey is NULL
+ORDER BY 1 DESC, 2 DESC;
  l_custkey | r_custkey 
 -----------+-----------
+           |        19
            |        15
            |        13
-           |        19
-        23 |          
-        25 |          
         29 |          
+        25 |          
+        23 |          
 (6 rows)
 
 -- full outer join should error out for mismatched shards
@@ -566,7 +570,8 @@ SELECT
 	l_custkey, t_custkey
 FROM
 	multi_outer_join_left l1
-	FULL JOIN multi_outer_join_third t1 ON (l1.l_custkey = t1.t_custkey);
+	FULL JOIN multi_outer_join_third t1 ON (l1.l_custkey = t1.t_custkey)
+ORDER BY 1 DESC, 2 DESC;
 ERROR:  shard counts of co-located tables do not match
 -- inner join  + single shard left join should work
 SELECT
@@ -574,23 +579,24 @@ SELECT
 FROM
 	multi_outer_join_left l1
 	INNER JOIN multi_outer_join_right r1 ON (l1.l_custkey = r1.r_custkey)
-	LEFT JOIN multi_outer_join_third_reference t1 ON (r1.r_custkey  = t1.t_custkey);
+	LEFT JOIN multi_outer_join_third_reference t1 ON (r1.r_custkey  = t1.t_custkey)
+ORDER BY 1 DESC, 2 DESC, 3 DESC;
  l_custkey | r_custkey | t_custkey 
 -----------+-----------+-----------
-        11 |        11 |        11
-        12 |        12 |        12
-        14 |        14 |        14
-        16 |        16 |        16
-        17 |        17 |        17
-        18 |        18 |        18
-        20 |        20 |        20
-        21 |        21 |        21
-        22 |        22 |        22
-        24 |        24 |        24
-        26 |        26 |        26
-        27 |        27 |        27
-        28 |        28 |        28
         30 |        30 |        30
+        28 |        28 |        28
+        27 |        27 |        27
+        26 |        26 |        26
+        24 |        24 |        24
+        22 |        22 |        22
+        21 |        21 |        21
+        20 |        20 |        20
+        18 |        18 |        18
+        17 |        17 |        17
+        16 |        16 |        16
+        14 |        14 |        14
+        12 |        12 |        12
+        11 |        11 |        11
 (14 rows)
 
 -- inner (broadcast) join  + 2 shards left (local) join should work
@@ -599,26 +605,27 @@ SELECT
 FROM
 	multi_outer_join_left l1
 	INNER JOIN multi_outer_join_third_reference t1 ON (l1.l_custkey = t1.t_custkey)
-	LEFT JOIN multi_outer_join_right r1 ON (l1.l_custkey  = r1.r_custkey);
+	LEFT JOIN multi_outer_join_right r1 ON (l1.l_custkey  = r1.r_custkey)
+ORDER BY 1 DESC, 2 DESC, 3 DESC;
  l_custkey | t_custkey | r_custkey 
 -----------+-----------+-----------
-        11 |        11 |        11
-        12 |        12 |        12
-        14 |        14 |        14
-        16 |        16 |        16
-        17 |        17 |        17
-        18 |        18 |        18
-        20 |        20 |        20
-        21 |        21 |        21
-        22 |        22 |        22
-        23 |        23 |          
-        24 |        24 |        24
-        25 |        25 |          
-        26 |        26 |        26
-        27 |        27 |        27
-        28 |        28 |        28
-        29 |        29 |          
         30 |        30 |        30
+        29 |        29 |          
+        28 |        28 |        28
+        27 |        27 |        27
+        26 |        26 |        26
+        25 |        25 |          
+        24 |        24 |        24
+        23 |        23 |          
+        22 |        22 |        22
+        21 |        21 |        21
+        20 |        20 |        20
+        18 |        18 |        18
+        17 |        17 |        17
+        16 |        16 |        16
+        14 |        14 |        14
+        12 |        12 |        12
+        11 |        11 |        11
 (17 rows)
 
 -- inner (local) join  + 2 shards left (dual partition) join
@@ -657,26 +664,27 @@ SELECT
 FROM
 	multi_outer_join_left l1
 	INNER JOIN multi_outer_join_third_reference t1 ON (l1.l_custkey = t1.t_custkey)
-	LEFT JOIN multi_outer_join_right r1 ON (l1.l_custkey  = r1.r_custkey);
+	LEFT JOIN multi_outer_join_right r1 ON (l1.l_custkey  = r1.r_custkey)
+ORDER BY 1 DESC, 2 DESC, 3 DESC;
  l_custkey | t_custkey | r_custkey 
 -----------+-----------+-----------
-        11 |        11 |        11
-        12 |        12 |        12
-        14 |        14 |        14
-        16 |        16 |        16
-        17 |        17 |        17
-        18 |        18 |        18
-        20 |        20 |        20
-        21 |        21 |        21
-        22 |        22 |        22
-        23 |        23 |          
-        24 |        24 |        24
-        25 |        25 |          
-        26 |        26 |        26
-        27 |        27 |        27
-        28 |        28 |        28
-        29 |        29 |          
         30 |        30 |        30
+        29 |        29 |          
+        28 |        28 |        28
+        27 |        27 |        27
+        26 |        26 |        26
+        25 |        25 |          
+        24 |        24 |        24
+        23 |        23 |          
+        22 |        22 |        22
+        21 |        21 |        21
+        20 |        20 |        20
+        18 |        18 |        18
+        17 |        17 |        17
+        16 |        16 |        16
+        14 |        14 |        14
+        12 |        12 |        12
+        11 |        11 |        11
 (17 rows)
 
 -- inner (broadcast) join  + 2 shards left (local) + anti join should work
@@ -687,12 +695,13 @@ FROM
 	INNER JOIN multi_outer_join_third_reference t1 ON (l1.l_custkey = t1.t_custkey)
 	LEFT JOIN multi_outer_join_right r1 ON (l1.l_custkey  = r1.r_custkey)
 WHERE
-	r_custkey is NULL;
+	r_custkey is NULL
+ORDER BY 1 DESC, 2 DESC, 3 DESC;
  l_custkey | t_custkey | r_custkey 
 -----------+-----------+-----------
-        23 |        23 |          
-        25 |        25 |          
         29 |        29 |          
+        25 |        25 |          
+        23 |        23 |          
 (3 rows)
 
 -- Test joinExpr aliases by performing an outer-join. 
@@ -702,26 +711,27 @@ FROM
 	(multi_outer_join_right r1 
 	LEFT OUTER JOIN multi_outer_join_left l1 ON (l1.l_custkey = r1.r_custkey)) AS
     test(c_custkey, c_nationkey)
-    INNER JOIN multi_outer_join_third_reference t1 ON (test.c_custkey = t1.t_custkey);
+    INNER JOIN multi_outer_join_third_reference t1 ON (test.c_custkey = t1.t_custkey)
+ORDER BY 1 DESC;
  t_custkey 
 -----------
-        11
-        12
-        13
-        14
-        15
-        16
-        17
-        18
-        19
-        20
-        21
-        22
-        24
-        26
-        27
-        28
         30
+        28
+        27
+        26
+        24
+        22
+        21
+        20
+        19
+        18
+        17
+        16
+        15
+        14
+        13
+        12
+        11
 (17 rows)
 
 -- Outer joins with subqueries on distribution column
@@ -816,10 +826,11 @@ FROM
     left_values AS l
     LEFT JOIN right_values AS r ON l.val = r.val
 WHERE
-    r.val IS NULL;
+    r.val IS NULL
+ORDER BY 1 DESC, 2 DESC;
  val | val 
 -----+-----
-   1 |    
    5 |    
+   1 |    
 (2 rows)
 

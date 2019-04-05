@@ -58,7 +58,9 @@ SELECT name FROM researchers WHERE lab_id = 1 AND id = 1;
 
 -- trigger a unique constraint violation
 BEGIN;
+\set VERBOSITY TERSE
 UPDATE researchers SET name = 'John Backus' WHERE id = 1 AND lab_id = 1;
+\set VERBOSITY DEFAULT
 ABORT;
 
 -- creating savepoints should work...
