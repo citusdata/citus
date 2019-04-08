@@ -1825,6 +1825,8 @@ PlacementExecutionDone(TaskPlacementExecution *placementExecution, bool succeede
 		executionOrder == EXECUTION_ORDER_SEQUENTIAL)
 	{
 		TaskPlacementExecution *nextPlacementExecution = NULL;
+		int placementExecutionCount PG_USED_FOR_ASSERTS_ONLY =
+			shardCommandExecution->placementExecutionCount;
 
 		/* find a placement execution that is not yet marked as failed */
 		do {
