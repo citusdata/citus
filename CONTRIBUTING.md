@@ -94,7 +94,7 @@ why we ask this as well as instructions for how to proceed, see the
 
 ### Following our coding conventions
 
-Travis will automatically reject any PRs which do not follow our coding conventions, it
+CircleCI will automatically reject any PRs which do not follow our coding conventions, it
 won't even run tests! The easiest way to ensure your PR adheres to those conventions is
 to use the [citus_indent](https://github.com/citusdata/tools/tree/develop/uncrustify)
 tool.

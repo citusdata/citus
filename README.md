@@ -1,6 +1,5 @@
 ![Citus Banner](/github-banner.png)
 
-[![Build Status](https://travis-ci.org/citusdata/citus.svg?branch=master)](https://travis-ci.org/citusdata/citus)
 [![Slack Status](http://slack.citusdata.com/badge.svg)](https://slack.citusdata.com)
 [![Latest Docs](https://img.shields.io/badge/docs-latest-brightgreen.svg)](https://docs.citusdata.com/)
 
