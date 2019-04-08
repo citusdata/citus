@@ -53,7 +53,7 @@ ALTER TABLE name_lengths ADD EXCLUDE (int_col_1234567890123456789012345678901234
 ALTER TABLE name_lengths ADD CHECK (date_col_12345678901234567890123456789012345678901234567890 > '2014-01-01'::date);
 
 \c - - - :worker_1_port
-SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.name_lengths_225002'::regclass;
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.name_lengths_225002'::regclass ORDER BY 1 DESC, 2 DESC;
 \c - - - :master_port
 
 -- Placeholders for unsupported add constraints with EXPLICIT names that are too long
@@ -62,12 +62,15 @@ ALTER TABLE name_lengths ADD CONSTRAINT nl_exclude_12345678901234567890123456789
 ALTER TABLE name_lengths ADD CONSTRAINT nl_checky_12345678901234567890123456789012345678901234567890 CHECK (date_col_12345678901234567890123456789012345678901234567890 >= '2014-01-01'::date);
 
 \c - - - :worker_1_port
-SELECT "Constraint", "Definition" FROM table_checks WHERE relid='public.name_lengths_225002'::regclass;
+SELECT "Constraint", "Definition" FROM table_checks WHERE relid='public.name_lengths_225002'::regclass ORDER BY 1 DESC, 2 DESC;
 \c - - - :master_port
 
 -- Placeholders for RENAME operations
+\set VERBOSITY TERSE
 ALTER TABLE name_lengths RENAME TO name_len_12345678901234567890123456789012345678901234567890;
 ALTER TABLE name_lengths RENAME CONSTRAINT unique_12345678901234567890123456789012345678901234567890 TO unique2_12345678901234567890123456789012345678901234567890;
+
+\set VERBOSITY DEFAULT
 
 -- Verify that CREATE INDEX on already distributed table has proper shard names.
 
@@ -75,7 +78,7 @@ CREATE INDEX tmp_idx_12345678901234567890123456789012345678901234567890 ON name_
 
 \c - - - :worker_1_port
 SELECT "relname", "Column", "Type", "Definition" FROM index_attrs WHERE
-    relname LIKE 'tmp_idx_%';
+    relname LIKE 'tmp_idx_%' ORDER BY 1 DESC, 2 DESC, 3 DESC, 4 DESC;
 \c - - - :master_port
 
 -- Verify that a new index name > 63 characters is auto-truncated
@@ -84,7 +87,7 @@ CREATE INDEX tmp_idx_12345678901234567890123456789012345678901234567890123456789
 
 \c - - - :worker_1_port
 SELECT "relname", "Column", "Type", "Definition" FROM index_attrs WHERE
-    relname LIKE 'tmp_idx_%';
+    relname LIKE 'tmp_idx_%' ORDER BY 1 DESC, 2 DESC, 3 DESC, 4 DESC;
 \c - - - :master_port
 
 SET citus.shard_count TO 2;
@@ -108,14 +111,14 @@ CREATE TABLE sneaky_name_lengths (
         );
 
 \di public.sneaky_name_lengths*
-SELECT "Constraint", "Definition" FROM table_checks WHERE relid='public.sneaky_name_lengths'::regclass;
+SELECT "Constraint", "Definition" FROM table_checks WHERE relid='public.sneaky_name_lengths'::regclass ORDER BY 1 DESC, 2 DESC;
 
 SELECT master_create_distributed_table('sneaky_name_lengths', 'int_col_123456789012345678901234567890123456789012345678901234', 'hash');
 SELECT master_create_worker_shards('sneaky_name_lengths', '2', '2');
 
 \c - - - :worker_1_port
 \di public.sneaky*225006
-SELECT "Constraint", "Definition" FROM table_checks WHERE relid='public.sneaky_name_lengths_225006'::regclass;
+SELECT "Constraint", "Definition" FROM table_checks WHERE relid='public.sneaky_name_lengths_225006'::regclass ORDER BY 1 DESC, 2 DESC;
 \c - - - :master_port
 
 SET citus.shard_count TO 2;

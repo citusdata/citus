@@ -436,14 +436,14 @@ Partitions: partitioning_test_2009 FOR VALUES FROM ('01-01-2009') TO ('01-01-201
 INSERT INTO partitioning_test VALUES(21, '2014-02-02');
 INSERT INTO partitioning_test VALUES(22, '2015-04-02');
 -- see they are inserted into default partition
-SELECT * FROM partitioning_test WHERE id > 20;
+SELECT * FROM partitioning_test WHERE id > 20 ORDER BY 1, 2;
  id |    time    
 ----+------------
  21 | 02-02-2014
  22 | 04-02-2015
 (2 rows)
 
-SELECT * FROM partitioning_test_default;
+SELECT * FROM partitioning_test_default ORDER BY 1, 2;
  id |    time    
 ----+------------
  21 | 02-02-2014
@@ -462,14 +462,14 @@ DELETE FROM partitioning_test_default WHERE time >= '2014-01-01' AND time < '201
 ALTER TABLE partitioning_test ATTACH PARTITION partitioning_test_default DEFAULT;
 END;
 -- see data is in the table, but some moved out from default partition
-SELECT * FROM partitioning_test WHERE id > 20;
+SELECT * FROM partitioning_test WHERE id > 20 ORDER BY 1, 2;
  id |    time    
 ----+------------
  21 | 02-02-2014
  22 | 04-02-2015
 (2 rows)
 
-SELECT * FROM partitioning_test_default;
+SELECT * FROM partitioning_test_default ORDER BY 1, 2;
  id |    time    
 ----+------------
  22 | 04-02-2015

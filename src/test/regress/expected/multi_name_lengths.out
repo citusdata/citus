@@ -81,14 +81,14 @@ ERROR:  cannot create constraint without a name on a distributed table
 ALTER TABLE name_lengths ADD CHECK (date_col_12345678901234567890123456789012345678901234567890 > '2014-01-01'::date);
 ERROR:  cannot create constraint without a name on a distributed table
 \c - - - :worker_1_port
-SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.name_lengths_225002'::regclass;
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.name_lengths_225002'::regclass ORDER BY 1 DESC, 2 DESC;
                             Column                            |       Type       | Modifiers 
 --------------------------------------------------------------+------------------+-----------
- col1                                                         | integer          | not null
- col2                                                         | integer          | not null
+ int_col_12345678901234567890123456789012345678901234567890   | integer          | default 1
  float_col_12345678901234567890123456789012345678901234567890 | double precision | 
  date_col_12345678901234567890123456789012345678901234567890  | date             | 
- int_col_12345678901234567890123456789012345678901234567890   | integer          | default 1
+ col2                                                         | integer          | not null
+ col1                                                         | integer          | not null
 (5 rows)
 
 \c - - - :master_port
@@ -101,7 +101,7 @@ ERROR:  cannot create constraint on "name_lengths"
 DETAIL:  Distributed relations cannot have UNIQUE, EXCLUDE, or PRIMARY KEY constraints that do not include the partition column (with an equality operator if EXCLUDE).
 ALTER TABLE name_lengths ADD CONSTRAINT nl_checky_12345678901234567890123456789012345678901234567890 CHECK (date_col_12345678901234567890123456789012345678901234567890 >= '2014-01-01'::date);
 \c - - - :worker_1_port
-SELECT "Constraint", "Definition" FROM table_checks WHERE relid='public.name_lengths_225002'::regclass;
+SELECT "Constraint", "Definition" FROM table_checks WHERE relid='public.name_lengths_225002'::regclass ORDER BY 1 DESC, 2 DESC;
                            Constraint                            |                                        Definition                                         
 -----------------------------------------------------------------+-------------------------------------------------------------------------------------------
  nl_checky_1234567890123456789012345678901234567_b16df46d_225002 | CHECK (date_col_12345678901234567890123456789012345678901234567890 >= '01-01-2014'::date)
@@ -109,16 +109,17 @@ SELECT "Constraint", "Definition" FROM table_checks WHERE relid='public.name_len
 
 \c - - - :master_port
 -- Placeholders for RENAME operations
+\set VERBOSITY TERSE
 ALTER TABLE name_lengths RENAME TO name_len_12345678901234567890123456789012345678901234567890;
 ERROR:  shard name name_len_12345678901234567890123456789012345678_fcd8ab6f_225002 exceeds 63 characters
-CONTEXT:  while executing command on localhost:57638
 ALTER TABLE name_lengths RENAME CONSTRAINT unique_12345678901234567890123456789012345678901234567890 TO unique2_12345678901234567890123456789012345678901234567890;
 ERROR:  renaming constraints belonging to distributed tables is currently unsupported
+\set VERBOSITY DEFAULT
 -- Verify that CREATE INDEX on already distributed table has proper shard names.
 CREATE INDEX tmp_idx_12345678901234567890123456789012345678901234567890 ON name_lengths(col2);
 \c - - - :worker_1_port
 SELECT "relname", "Column", "Type", "Definition" FROM index_attrs WHERE
-    relname LIKE 'tmp_idx_%';
+    relname LIKE 'tmp_idx_%' ORDER BY 1 DESC, 2 DESC, 3 DESC, 4 DESC;
                              relname                             | Column |  Type   | Definition 
 -----------------------------------------------------------------+--------+---------+------------
  tmp_idx_123456789012345678901234567890123456789_5e470afa_225003 | col2   | integer | col2
@@ -132,7 +133,7 @@ CREATE INDEX tmp_idx_12345678901234567890123456789012345678901234567890123456789
 NOTICE:  identifier "tmp_idx_123456789012345678901234567890123456789012345678901234567890" will be truncated to "tmp_idx_1234567890123456789012345678901234567890123456789012345"
 \c - - - :worker_1_port
 SELECT "relname", "Column", "Type", "Definition" FROM index_attrs WHERE
-    relname LIKE 'tmp_idx_%';
+    relname LIKE 'tmp_idx_%' ORDER BY 1 DESC, 2 DESC, 3 DESC, 4 DESC;
                              relname                             | Column |  Type   | Definition 
 -----------------------------------------------------------------+--------+---------+------------
  tmp_idx_123456789012345678901234567890123456789_5e470afa_225003 | col2   | integer | col2
@@ -171,7 +172,7 @@ CREATE TABLE sneaky_name_lengths (
  public | sneaky_name_lengths_int_col_1234567890123456789012345678901_key | index | postgres | sneaky_name_lengths
 (1 row)
 
-SELECT "Constraint", "Definition" FROM table_checks WHERE relid='public.sneaky_name_lengths'::regclass;
+SELECT "Constraint", "Definition" FROM table_checks WHERE relid='public.sneaky_name_lengths'::regclass ORDER BY 1 DESC, 2 DESC;
                         Constraint                         |                                  Definition                                  
 -----------------------------------------------------------+------------------------------------------------------------------------------
  checky_12345678901234567890123456789012345678901234567890 | CHECK (int_col_123456789012345678901234567890123456789012345678901234 > 100)
@@ -197,7 +198,7 @@ SELECT master_create_worker_shards('sneaky_name_lengths', '2', '2');
  public | sneaky_name_lengths_int_col_1234567890123456789_6402d2cd_225006 | index | postgres | sneaky_name_lengths_225006
 (1 row)
 
-SELECT "Constraint", "Definition" FROM table_checks WHERE relid='public.sneaky_name_lengths_225006'::regclass;
+SELECT "Constraint", "Definition" FROM table_checks WHERE relid='public.sneaky_name_lengths_225006'::regclass ORDER BY 1 DESC, 2 DESC;
                         Constraint                         |                                  Definition                                  
 -----------------------------------------------------------+------------------------------------------------------------------------------
  checky_12345678901234567890123456789012345678901234567890 | CHECK (int_col_123456789012345678901234567890123456789012345678901234 > 100)

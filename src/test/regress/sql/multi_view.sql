@@ -182,7 +182,7 @@ CREATE VIEW recent_users AS
 	SELECT user_id, max(time) as lastseen FROM users_table
 	GROUP BY user_id
 	HAVING max(time) > '2017-11-23 16:20:33.264457'::timestamp order by 2 DESC; 
-SELECT * FROM recent_users;
+SELECT * FROM recent_users ORDER BY 2 DESC, 1 DESC;
 
 -- create a view for recent_events
 CREATE VIEW recent_events AS

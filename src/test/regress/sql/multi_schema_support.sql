@@ -307,14 +307,14 @@ SET search_path TO public;
 SELECT master_modify_multiple_shards('UPDATE test_schema_support.nation_hash SET n_regionkey = n_regionkey + 1');
 
 --verify master_modify_multiple_shards
-SELECT * FROM test_schema_support.nation_hash;
+SELECT * FROM test_schema_support.nation_hash ORDER BY 1,2,3,4;
 
 --test with search_path is set
 SET search_path TO test_schema_support;
 SELECT master_modify_multiple_shards('UPDATE nation_hash SET n_regionkey = n_regionkey + 1');
 
 --verify master_modify_multiple_shards
-SELECT * FROM nation_hash;
+SELECT * FROM nation_hash ORDER BY 1,2,3,4;
 
 
 --test COLLATION with schema
@@ -350,7 +350,7 @@ SELECT master_create_worker_shards('test_schema_support.nation_hash_collation', 
 5|ETHIOPIA|0|ven packages wake quickly. regu
 \.
 
-SELECT * FROM test_schema_support.nation_hash_collation;
+SELECT * FROM test_schema_support.nation_hash_collation ORDER BY 1,2,3,4;
 SELECT n_comment FROM test_schema_support.nation_hash_collation ORDER BY n_comment COLLATE test_schema_support.english;
 
 --test with search_path is set

@@ -1890,7 +1890,7 @@ FROM
     value_3 DESC
    LIMIT 10) "some_users"
 ORDER BY
-  value_3 DESC 
+  value_3 DESC, user_id DESC 
 LIMIT 10;
 
 -- longer nested lateral join wth top level join
@@ -1931,7 +1931,7 @@ FROM
       users.value_2 > 2
      LIMIT 1
     ) "some_users_data" ON TRUE
-ORDER BY value_3 DESC
+ORDER BY value_3 DESC, user_id DESC
 LIMIT 10;
 
 SET citus.subquery_pushdown to OFF;
@@ -2371,7 +2371,7 @@ FROM
   ) AS b
   USING (user_id)
 GROUP BY user_id
-ORDER BY 1;
+ORDER BY 1, 2;
 
 -- see the comment for the above query
 SELECT a.user_id, avg(b.value_2) as subquery_avg
@@ -2399,7 +2399,7 @@ FROM
   ) AS b
   USING (user_id)
 GROUP BY a.user_id
-ORDER BY 1;
+ORDER BY 1, 2;
 
 -- queries where column aliases are used
 -- the query is not very complex. join is given an alias with aliases

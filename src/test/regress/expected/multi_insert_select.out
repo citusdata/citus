@@ -6,6 +6,9 @@ SET citus.next_placement_id TO 13300000;
 -- create co-located tables
 SET citus.shard_count = 4;
 SET citus.shard_replication_factor = 2;
+-- order of execution might change in parallel executions
+-- and the error details might contain the worker node
+-- so be less verbose with \set VERBOSITY TERSE when necessary
 CREATE TABLE raw_events_first (user_id int, time timestamp, value_1 int, value_2 int, value_3 float, value_4 bigint, UNIQUE(user_id, value_1));
 SELECT create_distributed_table('raw_events_first', 'user_id');
  create_distributed_table 
@@ -84,10 +87,10 @@ WHERE
 (6 rows)
 
 -- see that we get unique vialitons
+\set VERBOSITY TERSE
 INSERT INTO raw_events_second  SELECT * FROM raw_events_first;
 ERROR:  duplicate key value violates unique constraint "raw_events_second_user_id_value_1_key_13300004"
-DETAIL:  Key (user_id, value_1)=(1, 10) already exists.
-CONTEXT:  while executing command on localhost:57638
+\set VERBOSITY DEFAULT
 -- stable functions should be allowed
 INSERT INTO raw_events_second (user_id, time)
 SELECT
@@ -140,7 +143,6 @@ WHERE
   user_id = 0;
 WARNING:  function public.evaluate_on_master(integer) does not exist
 ERROR:  function public.evaluate_on_master(integer) does not exist
-\set VERBOSITY default
 -- add one more row
 INSERT INTO raw_events_first (user_id, time) VALUES
                          (7, now());
@@ -221,6 +223,7 @@ DEBUG:  Plan is router executable
 (1 row)
 
 -- hits two shards
+\set VERBOSITY TERSE
 INSERT INTO raw_events_second (user_id, value_1, value_3) 
 SELECT 
    user_id, value_1, value_3
@@ -235,8 +238,6 @@ DEBUG:  Skipping target shard interval 13300006 since SELECT query for it pruned
 DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300007 AS citus_table_alias (user_id, value_1, value_3) SELECT user_id, value_1, value_3 FROM public.raw_events_first_13300003 raw_events_first WHERE (((user_id OPERATOR(pg_catalog.=) 9) OR (user_id OPERATOR(pg_catalog.=) 16)) AND ((worker_hash(user_id) OPERATOR(pg_catalog.>=) 1073741824) AND (worker_hash(user_id) OPERATOR(pg_catalog.<=) 2147483647))) RETURNING citus_table_alias.user_id, citus_table_alias."time", citus_table_alias.value_1, citus_table_alias.value_2, citus_table_alias.value_3, citus_table_alias.value_4
 DEBUG:  Plan is router executable
 ERROR:  duplicate key value violates unique constraint "raw_events_second_user_id_value_1_key_13300007"
-DETAIL:  Key (user_id, value_1)=(9, 90) already exists.
-CONTEXT:  while executing command on localhost:57637
 -- now do some aggregations
 INSERT INTO agg_events 
 SELECT
@@ -265,8 +266,6 @@ DEBUG:  distributed statement: INSERT INTO public.agg_events_13300010 AS citus_t
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_table_alias (user_id, value_1_agg, value_3_agg, value_4_agg) SELECT user_id, sum(value_1) AS sum, sum(value_3) AS sum, count(value_4) AS count FROM public.raw_events_first_13300003 raw_events_first WHERE ((worker_hash(user_id) OPERATOR(pg_catalog.>=) 1073741824) AND (worker_hash(user_id) OPERATOR(pg_catalog.<=) 2147483647)) GROUP BY value_2, user_id RETURNING citus_table_alias.user_id, citus_table_alias.value_1_agg, citus_table_alias.value_2_agg, citus_table_alias.value_3_agg, citus_table_alias.value_4_agg, citus_table_alias.agg_time
 DEBUG:  Plan is router executable
 ERROR:  duplicate key value violates unique constraint "agg_events_user_id_value_1_agg_key_13300008"
-DETAIL:  Key (user_id, value_1_agg)=(1, 10) already exists.
-CONTEXT:  while executing command on localhost:57637
 -- some subquery tests
 INSERT INTO agg_events 
             (value_1_agg, 
@@ -286,8 +285,6 @@ DEBUG:  distributed statement: INSERT INTO public.agg_events_13300010 AS citus_t
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_table_alias (user_id, value_1_agg) SELECT id, sum(value_1) AS sum FROM (SELECT raw_events_second.user_id AS id, raw_events_second.value_1 FROM public.raw_events_first_13300003 raw_events_first, public.raw_events_second_13300007 raw_events_second WHERE (raw_events_first.user_id OPERATOR(pg_catalog.=) raw_events_second.user_id)) foo WHERE ((worker_hash(id) OPERATOR(pg_catalog.>=) 1073741824) AND (worker_hash(id) OPERATOR(pg_catalog.<=) 2147483647)) GROUP BY id ORDER BY id
 DEBUG:  Plan is router executable
 ERROR:  duplicate key value violates unique constraint "agg_events_user_id_value_1_agg_key_13300008"
-DETAIL:  Key (user_id, value_1_agg)=(1, 10) already exists.
-CONTEXT:  while executing command on localhost:57637
 -- subquery one more level depth 
 INSERT INTO agg_events 
             (value_4_agg, 
@@ -310,8 +307,7 @@ DEBUG:  distributed statement: INSERT INTO public.agg_events_13300010 AS citus_t
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_table_alias (user_id, value_1_agg, value_4_agg) SELECT id, v1, v4 FROM (SELECT sum(raw_events_second.value_4) AS v4, sum(raw_events_first.value_1) AS v1, raw_events_second.user_id AS id FROM public.raw_events_first_13300003 raw_events_first, public.raw_events_second_13300007 raw_events_second WHERE (raw_events_first.user_id OPERATOR(pg_catalog.=) raw_events_second.user_id) GROUP BY raw_events_second.user_id) foo WHERE ((worker_hash(id) OPERATOR(pg_catalog.>=) 1073741824) AND (worker_hash(id) OPERATOR(pg_catalog.<=) 2147483647)) ORDER BY id
 DEBUG:  Plan is router executable
 ERROR:  duplicate key value violates unique constraint "agg_events_user_id_value_1_agg_key_13300008"
-DETAIL:  Key (user_id, value_1_agg)=(1, 10) already exists.
-CONTEXT:  while executing command on localhost:57637
+\set VERBOSITY DEFAULT
 -- join between subqueries
 INSERT INTO agg_events
             (user_id)
@@ -1885,11 +1881,11 @@ FROM   (SELECT f1.key
                AS f2 
         WHERE  f1.key = f2.key 
         GROUP  BY 1) AS foo; 
-SELECT * FROM insert_select_varchar_test;
+SELECT * FROM insert_select_varchar_test ORDER BY 1 DESC, 2 DESC;
   key   | value 
 --------+-------
- test_2 |    30
  test_2 |   100
+ test_2 |    30
  test_1 |    10
 (3 rows)
 
@@ -2640,15 +2636,15 @@ FROM (
   FROM coerce_events
 ) AS ftop
 LIMIT 5;
-SELECT * FROM coerce_agg;
+SELECT * FROM coerce_agg ORDER BY 1 DESC, 2 DESC;
  user_id | value_1_agg 
 ---------+-------------
       10 | 10
-       1 | 1
-       1 | 1
       10 | 10
        2 | 2
        2 | 2
+       1 | 1
+       1 | 1
 (6 rows)
 
 TRUNCATE coerce_agg;
@@ -2662,7 +2658,7 @@ FROM (
 ) AS ftop
 LIMIT 5;
 ERROR:  value too long for type character(1)
-SELECT * FROM coerce_agg;
+SELECT * FROM coerce_agg ORDER BY 1 DESC, 2 DESC;
  user_id | value_1_agg 
 ---------+-------------
 (0 rows)
@@ -2690,11 +2686,11 @@ FROM (
   FROM coerce_events
 ) AS ftop
 LIMIT 5;
-SELECT * FROM coerce_agg;
+SELECT * FROM coerce_agg ORDER BY 1 DESC, 2 DESC;
  user_id | value_1_agg 
 ---------+-------------
-       1 | a    
        2 | b    
+       1 | a    
 (2 rows)
 
 TRUNCATE coerce_agg;
@@ -2704,6 +2700,7 @@ ALTER TABLE coerce_events ALTER COLUMN value_1 TYPE integer USING NULL;
 ALTER TABLE coerce_agg ALTER COLUMN value_1_agg TYPE integer USING NULL;
 ALTER TABLE coerce_agg ADD CONSTRAINT small_number CHECK (value_1_agg < 5);
 INSERT INTO coerce_events (user_id, value_1) VALUES (1, 1), (10, 10);
+\set VERBOSITY TERSE
 INSERT INTO coerce_agg(user_id, value_1_agg)
 SELECT *
 FROM (
@@ -2711,9 +2708,8 @@ FROM (
   FROM coerce_events
 ) AS ftop;
 ERROR:  new row for relation "coerce_agg_13300060" violates check constraint "small_number_13300060"
-DETAIL:  Failing row contains (10, 10).
-CONTEXT:  while executing command on localhost:57637
-SELECT * FROM coerce_agg;
+\set VERBOSITY DEFAULT
+SELECT * FROM coerce_agg ORDER BY 1 DESC, 2 DESC;
  user_id | value_1_agg 
 ---------+-------------
 (0 rows)
@@ -2731,11 +2727,11 @@ FROM (
   FROM coerce_events
 ) AS ftop
 LIMIT 5;
-SELECT * FROM coerce_agg;
+SELECT * FROM coerce_agg ORDER BY 1 DESC, 2 DESC;
  user_id | value_1_agg 
 ---------+-------------
-       1 | {1,1,1}
        2 | {2,2,2}
+       1 | {1,1,1}
 (2 rows)
 
 -- INSERT..SELECT + prepared statements + recursive planning
