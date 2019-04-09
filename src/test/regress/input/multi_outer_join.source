@@ -292,7 +292,8 @@ SELECT
 FROM
 	multi_outer_join_left l1
 	LEFT JOIN multi_outer_join_right r1 ON (l1.l_custkey = r1.r_custkey)
-	LEFT JOIN multi_outer_join_third_reference t1 ON (r1.r_custkey  = t1.t_custkey);
+	LEFT JOIN multi_outer_join_third_reference t1 ON (r1.r_custkey  = t1.t_custkey)
+ORDER BY l_custkey, r_custkey, t_custkey;
 
 -- Right join with single shard right most table should error out
 SELECT
@@ -300,7 +301,8 @@ SELECT
 FROM
 	multi_outer_join_left l1
 	LEFT JOIN multi_outer_join_right r1 ON (l1.l_custkey = r1.r_custkey)
-	RIGHT JOIN multi_outer_join_third_reference t1 ON (r1.r_custkey  = t1.t_custkey);
+	RIGHT JOIN multi_outer_join_third_reference t1 ON (r1.r_custkey  = t1.t_custkey)
+ORDER BY l_custkey, r_custkey, t_custkey;
 
 -- Right join with single shard left most table should work
 SELECT
@@ -308,7 +310,8 @@ SELECT
 FROM
 	multi_outer_join_third_reference t1
 	RIGHT JOIN multi_outer_join_right r1 ON (t1.t_custkey = r1.r_custkey)
-	LEFT JOIN multi_outer_join_left l1 ON (r1.r_custkey  = l1.l_custkey);
+	LEFT JOIN multi_outer_join_left l1 ON (r1.r_custkey  = l1.l_custkey)
+ORDER BY t_custkey, r_custkey, l_custkey;
 
 -- Make it anti-join, should display values with l_custkey is null
 SELECT
@@ -318,7 +321,8 @@ FROM
 	RIGHT JOIN multi_outer_join_right r1 ON (t1.t_custkey = r1.r_custkey)
 	LEFT JOIN multi_outer_join_left l1 ON (r1.r_custkey  = l1.l_custkey)
 WHERE
-	l_custkey is NULL;
+	l_custkey is NULL
+ORDER BY t_custkey, r_custkey, l_custkey;
 
 -- Cascading right join with single shard left most table
 SELECT

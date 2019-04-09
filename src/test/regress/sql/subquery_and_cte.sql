@@ -112,7 +112,8 @@ FROM
 	     	users_table.user_id = events_table.user_id AND 
 	     event_type IN (1,2,3,4)
 	     ) SELECT * FROM cte ORDER BY 1 DESC
-     ) as foo;
+     ) as foo
+ORDER BY 1 DESC;
 
 
 -- CTEs inside a subquery and the final query becomes a
@@ -141,7 +142,8 @@ FROM
 	     event_type IN (1,2,3,4)
 	    
      ) as bar  
-WHERE foo.user_id = bar.user_id;
+WHERE foo.user_id = bar.user_id
+ORDER BY 1 DESC;
 
 -- CTEs inside a deeper subquery
 -- and also the subquery that contains the CTE is replaced
@@ -314,7 +316,8 @@ FROM
 	     event_type IN (1,2,3,4)
 	    
      ) as bar  
-WHERE foo.user_id = bar.user_id;
+WHERE foo.user_id = bar.user_id
+ORDER BY 1 DESC;
 
 -- We error-out when there's an error in execution of the query. By repeating it
 -- multiple times, we increase the chance of this test failing before PR #1903.

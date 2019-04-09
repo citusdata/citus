@@ -159,9 +159,10 @@ FROM
 	     	users_table.user_id = events_table.user_id AND 
 	     event_type IN (1,2,3,4)
 	     ) SELECT * FROM cte ORDER BY 1 DESC
-     ) as foo;
+     ) as foo
+ORDER BY 1 DESC;
 DEBUG:  generating subplan 18_1 for CTE cte: SELECT DISTINCT users_table.user_id FROM subquery_and_ctes.users_table, subquery_and_ctes.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4])))
-DEBUG:  Plan 18 query after replacing subqueries and CTEs: SELECT user_id FROM (SELECT cte.user_id FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('18_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) cte ORDER BY cte.user_id DESC) foo
+DEBUG:  Plan 18 query after replacing subqueries and CTEs: SELECT user_id FROM (SELECT cte.user_id FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('18_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) cte ORDER BY cte.user_id DESC) foo ORDER BY user_id DESC
  user_id 
 ---------
        6
@@ -198,17 +199,18 @@ FROM
 	     event_type IN (1,2,3,4)
 	    
      ) as bar  
-WHERE foo.user_id = bar.user_id;
+WHERE foo.user_id = bar.user_id
+ORDER BY 1 DESC;
 DEBUG:  generating subplan 20_1 for CTE cte: SELECT DISTINCT users_table.user_id FROM subquery_and_ctes.users_table, subquery_and_ctes.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4])))
-DEBUG:  Plan 20 query after replacing subqueries and CTEs: SELECT bar.user_id FROM (SELECT cte.user_id FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('20_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) cte ORDER BY cte.user_id DESC) foo, (SELECT DISTINCT users_table.user_id FROM subquery_and_ctes.users_table, subquery_and_ctes.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4])))) bar WHERE (foo.user_id OPERATOR(pg_catalog.=) bar.user_id)
+DEBUG:  Plan 20 query after replacing subqueries and CTEs: SELECT bar.user_id FROM (SELECT cte.user_id FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('20_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) cte ORDER BY cte.user_id DESC) foo, (SELECT DISTINCT users_table.user_id FROM subquery_and_ctes.users_table, subquery_and_ctes.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4])))) bar WHERE (foo.user_id OPERATOR(pg_catalog.=) bar.user_id) ORDER BY bar.user_id DESC
  user_id 
 ---------
-       1
+       6
        5
        4
        3
-       6
        2
+       1
 (6 rows)
 
 -- CTEs inside a deeper subquery
@@ -439,7 +441,8 @@ FROM
 	     event_type IN (1,2,3,4)
 	    
      ) as bar  
-WHERE foo.user_id = bar.user_id;
+WHERE foo.user_id = bar.user_id
+ORDER BY 1 DESC;
 ERROR:  recursive CTEs are not supported in distributed queries
 -- We error-out when there's an error in execution of the query. By repeating it
 -- multiple times, we increase the chance of this test failing before PR #1903.

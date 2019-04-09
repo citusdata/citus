@@ -90,7 +90,7 @@ INSERT INTO users_test_table (user_id, value_3) VALUES(16,1), (20,16), (7,1), (2
 SET citus.multi_shard_modify_mode to sequential;
 UPDATE users_test_table SET value_3 = 1;
 END;
-SELECT COUNT()SUM(value_3) FROM users_test_table;
+SELECT SUM(value_3) FROM users_test_table;
 
 SET citus.multi_shard_modify_mode to 'sequential';
 -- Run multiple multi shard updates (with sequential executor)
@@ -147,7 +147,7 @@ SELECT * FROM master_append_table_to_shard(1440010, 'append_stage_table', 'local
 SELECT master_create_empty_shard('test_append_table') AS new_shard_id;
 SELECT * FROM master_append_table_to_shard(1440011, 'append_stage_table_2', 'localhost', :master_port);
 UPDATE test_append_table SET col_2 = 5;
-SELECT * FROM test_append_table;
+SELECT * FROM test_append_table ORDER BY 1 DESC, 2 DESC;
 
 DROP TABLE append_stage_table;
 DROP TABLE append_stage_table_2;
@@ -163,7 +163,7 @@ INSERT INTO tt1 VALUES (1,11), (3,15), (5,17), (6,19), (8,17), (2,12);
 SELECT create_distributed_table('tt1','id');
 UPDATE tt1 SET col_2 = 13;
 DELETE FROM tt1 WHERE id = 1 or id = 3 or id = 5;
-SELECT * FROM tt1;
+SELECT * FROM tt1 ORDER BY 1 DESC, 2 DESC;
 
 -- Partitioned distributed table within transaction
 INSERT INTO tt1 VALUES(4,6);
@@ -628,9 +628,11 @@ WHERE  users_test_table.user_id = events_test_table_2.user_id;
 
 -- Should error out due to multiple row return from subquery, but we can not get this information within 
 -- subquery pushdown planner. This query will be sent to worker with recursive planner.
+\set VERBOSITY terse
 DELETE FROM users_test_table
 WHERE  users_test_table.user_id = (SELECT user_id
                                    FROM   events_test_table);
+\set VERBOSITY default
 
 -- Cursors are not supported
 BEGIN;
@@ -640,7 +642,7 @@ UPDATE users_test_table SET value_2 = 5 WHERE CURRENT OF test_cursor;
 ROLLBACK;
 
 -- Stable functions are supported
-SELECT * FROM test_table_1;
+SELECT * FROM test_table_1 ORDER BY 1 DESC, 2 DESC, 3 DESC;
 UPDATE test_table_1 SET col_3 = 3 WHERE date_col < now();
 SELECT * FROM test_table_1;
 DELETE FROM test_table_1 WHERE date_col < current_timestamp;

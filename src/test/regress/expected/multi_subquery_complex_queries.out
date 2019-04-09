@@ -1373,7 +1373,7 @@ FROM
       lastseen DESC
    LIMIT 10) "some_users"
 ORDER BY 
-  user_id DESC
+  user_id DESC, lastseen DESC
 LIMIT 10;
  user_id |            lastseen             
 ---------+---------------------------------
@@ -1497,7 +1497,7 @@ FROM
     lastseen DESC
    LIMIT 10) "some_users"
 ORDER BY 
-  user_id DESC
+  user_id DESC, lastseen DESC
 LIMIT 10;
 DEBUG:  generating subplan 53_1 for subquery SELECT user_id FROM public.users_table users WHERE ((user_id OPERATOR(pg_catalog.>) 1) AND (user_id OPERATOR(pg_catalog.<) 4) AND (value_2 OPERATOR(pg_catalog.>) 3))
 DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
@@ -1557,7 +1557,7 @@ FROM
     lastseen DESC
    LIMIT 10) "some_users"
 ORDER BY 
-  user_id DESC
+  user_id DESC, lastseen DESC
 LIMIT 10;
 DEBUG:  generating subplan 56_1 for subquery SELECT user_id, value_1 FROM public.users_table users WHERE ((user_id OPERATOR(pg_catalog.>) 1) AND (user_id OPERATOR(pg_catalog.<) 4) AND (value_2 OPERATOR(pg_catalog.>) 3))
 ERROR:  cannot push down this subquery
@@ -1615,7 +1615,7 @@ FROM
     lastseen DESC
    LIMIT 10) "some_users"
 ORDER BY 
-  user_id DESC
+  user_id DESC, lastseen DESC
 LIMIT 10;
 ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
 -- not pushdownable since lower LATERAL JOIN is not on the partition key
@@ -1671,7 +1671,7 @@ FROM
     lastseen DESC
    LIMIT 10) "some_users"
 ORDER BY 
-  user_id DESC
+  user_id DESC, lastseen DESC
 LIMIT 10;
 ERROR:  cannot push down this subquery
 DETAIL:  Limit in subquery is currently unsupported when a subquery references a column from another query
@@ -1977,19 +1977,19 @@ FROM
     value_3 DESC
 LIMIT 10) "some_users"
 ORDER BY 
-  value_3 DESC 
+  value_3 DESC, user_id ASC
 LIMIT 10;
  user_id | value_3 
 ---------+---------
-       3 |       5
-       3 |       5
-       3 |       5
-       3 |       5
-       3 |       5
        2 |       5
        2 |       5
        2 |       5
        2 |       5
+       3 |       5
+       3 |       5
+       3 |       5
+       3 |       5
+       3 |       5
 (9 rows)
 
 -- nested lateral join at top most level

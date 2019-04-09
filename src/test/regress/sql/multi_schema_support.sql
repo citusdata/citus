@@ -373,7 +373,7 @@ SELECT master_create_worker_shards('nation_hash_collation_search_path', 4, 2);
 5|ETHIOPIA|0|ven packages wake quickly. regu
 \.
 
-SELECT * FROM nation_hash_collation_search_path;
+SELECT * FROM nation_hash_collation_search_path ORDER BY 1 DESC, 2 DESC, 3 DESC, 4 DESC;
 SELECT n_comment FROM nation_hash_collation_search_path ORDER BY n_comment COLLATE english;
 
 --test composite types with schema

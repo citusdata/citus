@@ -106,10 +106,12 @@ INSERT INTO users_test_table (user_id, value_3) VALUES(16,1), (20,16), (7,1), (2
 SET citus.multi_shard_modify_mode to sequential;
 UPDATE users_test_table SET value_3 = 1;
 END;
-SELECT COUNT()SUM(value_3) FROM users_test_table;
-ERROR:  syntax error at or near "("
-LINE 1: SELECT COUNT()SUM(value_3) FROM users_test_table;
-                         ^
+SELECT SUM(value_3) FROM users_test_table;
+ sum 
+-----
+  16
+(1 row)
+
 SET citus.multi_shard_modify_mode to 'sequential';
 -- Run multiple multi shard updates (with sequential executor)
 BEGIN;
@@ -205,15 +207,15 @@ SELECT * FROM master_append_table_to_shard(1440011, 'append_stage_table_2', 'loc
 (1 row)
 
 UPDATE test_append_table SET col_2 = 5;
-SELECT * FROM test_append_table;
+SELECT * FROM test_append_table ORDER BY 1 DESC, 2 DESC;
  id | col_2 
 ----+-------
-  8 |     5
-  9 |     5
  10 |     5
-  1 |     5
-  3 |     5
+  9 |     5
+  8 |     5
   5 |     5
+  3 |     5
+  1 |     5
 (6 rows)
 
 DROP TABLE append_stage_table;
@@ -235,7 +237,7 @@ NOTICE:  Copying data from local table...
 
 UPDATE tt1 SET col_2 = 13;
 DELETE FROM tt1 WHERE id = 1 or id = 3 or id = 5;
-SELECT * FROM tt1;
+SELECT * FROM tt1 ORDER BY 1 DESC, 2 DESC;
  id | col_2 
 ----+-------
   8 |    13
@@ -743,11 +745,12 @@ ERROR:  cannot push down this subquery
 DETAIL:  Shards of relations in subquery need to have 1-to-1 shard partitioning
 -- Should error out due to multiple row return from subquery, but we can not get this information within 
 -- subquery pushdown planner. This query will be sent to worker with recursive planner.
+\set VERBOSITY terse
 DELETE FROM users_test_table
 WHERE  users_test_table.user_id = (SELECT user_id
                                    FROM   events_test_table);
 ERROR:  more than one row returned by a subquery used as an expression
-CONTEXT:  while executing command on localhost:57637
+\set VERBOSITY default
 -- Cursors are not supported
 BEGIN;
 DECLARE test_cursor CURSOR FOR SELECT * FROM users_test_table ORDER BY user_id;
@@ -761,12 +764,12 @@ UPDATE users_test_table SET value_2 = 5 WHERE CURRENT OF test_cursor;
 ERROR:  cannot run DML queries with cursors
 ROLLBACK;
 -- Stable functions are supported
-SELECT * FROM test_table_1;
+SELECT * FROM test_table_1 ORDER BY 1 DESC, 2 DESC, 3 DESC;
  id |           date_col           | col_3 
 ----+------------------------------+-------
-  1 | Sat Apr 05 08:32:12 2014 PDT |     5
   3 | Mon Jan 12 08:35:19 2111 PST |     9
   2 | Sun Feb 01 08:31:16 2015 PST |     7
+  1 | Sat Apr 05 08:32:12 2014 PDT |     5
 (3 rows)
 
 UPDATE test_table_1 SET col_3 = 3 WHERE date_col < now();
