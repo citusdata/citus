@@ -379,7 +379,8 @@ SELECT
 FROM
 	multi_outer_join_left l1
 	LEFT JOIN multi_outer_join_right r1 ON (l1.l_custkey = r1.r_custkey)
-	LEFT JOIN multi_outer_join_third_reference t1 ON (r1.r_custkey  = t1.t_custkey);
+	LEFT JOIN multi_outer_join_third_reference t1 ON (r1.r_custkey  = t1.t_custkey)
+ORDER BY l_custkey, r_custkey, t_custkey;
  l_custkey | r_custkey | t_custkey 
 -----------+-----------+-----------
         11 |        11 |        11
@@ -407,7 +408,8 @@ SELECT
 FROM
 	multi_outer_join_left l1
 	LEFT JOIN multi_outer_join_right r1 ON (l1.l_custkey = r1.r_custkey)
-	RIGHT JOIN multi_outer_join_third_reference t1 ON (r1.r_custkey  = t1.t_custkey);
+	RIGHT JOIN multi_outer_join_third_reference t1 ON (r1.r_custkey  = t1.t_custkey)
+ORDER BY l_custkey, r_custkey, t_custkey;
 ERROR:  cannot pushdown the subquery
 DETAIL:  There exist a reference table in the outer part of the outer join
 -- Right join with single shard left most table should work
@@ -416,7 +418,8 @@ SELECT
 FROM
 	multi_outer_join_third_reference t1
 	RIGHT JOIN multi_outer_join_right r1 ON (t1.t_custkey = r1.r_custkey)
-	LEFT JOIN multi_outer_join_left l1 ON (r1.r_custkey  = l1.l_custkey);
+	LEFT JOIN multi_outer_join_left l1 ON (r1.r_custkey  = l1.l_custkey)
+ORDER BY t_custkey, r_custkey, l_custkey;
  t_custkey | r_custkey | l_custkey 
 -----------+-----------+-----------
         11 |        11 |        11
@@ -446,7 +449,8 @@ FROM
 	RIGHT JOIN multi_outer_join_right r1 ON (t1.t_custkey = r1.r_custkey)
 	LEFT JOIN multi_outer_join_left l1 ON (r1.r_custkey  = l1.l_custkey)
 WHERE
-	l_custkey is NULL;
+	l_custkey is NULL
+ORDER BY t_custkey, r_custkey, l_custkey;
  t_custkey | r_custkey | l_custkey 
 -----------+-----------+-----------
         13 |        13 |          
