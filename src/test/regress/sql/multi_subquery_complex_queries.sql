@@ -1258,7 +1258,7 @@ FROM
       lastseen DESC
    LIMIT 10) "some_users"
 ORDER BY 
-  user_id DESC
+  user_id DESC, lastseen DESC
 LIMIT 10;
 
 --
@@ -1366,7 +1366,7 @@ FROM
     lastseen DESC
    LIMIT 10) "some_users"
 ORDER BY 
-  user_id DESC
+  user_id DESC, lastseen DESC
 LIMIT 10;
 
 
@@ -1424,7 +1424,7 @@ FROM
     lastseen DESC
    LIMIT 10) "some_users"
 ORDER BY 
-  user_id DESC
+  user_id DESC, lastseen DESC
 LIMIT 10;
 
 
@@ -1482,7 +1482,7 @@ FROM
     lastseen DESC
    LIMIT 10) "some_users"
 ORDER BY 
-  user_id DESC
+  user_id DESC, lastseen DESC
 LIMIT 10;
 
 -- not pushdownable since lower LATERAL JOIN is not on the partition key
@@ -1538,7 +1538,7 @@ FROM
     lastseen DESC
    LIMIT 10) "some_users"
 ORDER BY 
-  user_id DESC
+  user_id DESC, lastseen DESC
 LIMIT 10;
 
 -- NESTED INNER JOINs
@@ -1805,7 +1805,7 @@ FROM
     value_3 DESC
 LIMIT 10) "some_users"
 ORDER BY 
-  value_3 DESC 
+  value_3 DESC, user_id ASC
 LIMIT 10;
 
 -- nested lateral join at top most level
