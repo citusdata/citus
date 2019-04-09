@@ -58,7 +58,9 @@ SELECT
 FROM
    raw_events_first, raw_events_second 
 WHERE
-   raw_events_first.user_id = raw_events_second.user_id;
+   raw_events_first.user_id = raw_events_second.user_id
+ORDER BY 
+  user_id DESC;
 
 -- see that we get unique vialitons
 \set VERBOSITY TERSE

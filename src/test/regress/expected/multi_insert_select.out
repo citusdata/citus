@@ -75,15 +75,17 @@ SELECT
 FROM
    raw_events_first, raw_events_second 
 WHERE
-   raw_events_first.user_id = raw_events_second.user_id;
+   raw_events_first.user_id = raw_events_second.user_id
+ORDER BY 
+  user_id DESC;
  user_id 
 ---------
-       3
-       4
-       1
-       5
-       2
        6
+       5
+       4
+       3
+       2
+       1
 (6 rows)
 
 -- see that we get unique vialitons
