@@ -229,7 +229,7 @@ SELECT * FROM
 	    WINDOW my_win AS (PARTITION BY user_id ORDER BY time DESC)
 	    ORDER BY rnk DESC
 		) as foo_inner
-
+     ORDER BY user_id DESC
 	   LIMIT 4
 	) as foo
 	ORDER BY
