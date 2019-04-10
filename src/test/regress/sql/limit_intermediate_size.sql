@@ -1,7 +1,7 @@
 SET citus.enable_repartition_joins to ON;
 
 
-SET citus.max_intermediate_result_size TO 3;
+SET citus.max_intermediate_result_size TO 2;
 -- should fail because the copy size is ~4kB for each cte
 WITH cte AS 
 (
@@ -39,24 +39,24 @@ LIMIT 10;
 
 
 -- router queries should be able to get limitted too
-SET citus.max_intermediate_result_size TO 3;
+SET citus.max_intermediate_result_size TO 2;
 -- this should pass, since we fetch small portions in each subplan
 with cte as (select * from users_table where user_id=1),
 cte2 as (select * from users_table where user_id=2),
 cte3 as (select * from users_table where user_id=3),
 cte4 as (select * from users_table where user_id=4),
 cte5 as (select * from users_table where user_id=5)
-SELECT * FROM (
-(select * from cte)
+SELECT sum(c) FROM (
+(select count(*) as c from cte)
 UNION
-(select * from cte2)
+(select count(*) as c from cte2)
 UNION
-(select * from cte3)
+(select count(*) as c from cte3)
 UNION
-(select * from cte4)
+(select count(*) as c from cte4)
 UNION
-(select * from cte5)
-)a ORDER BY 1,2,3,4,5 LIMIT 10;
+(select count(*) as c from cte5)
+) as foo;
 
 
 -- if we fetch the same amount of data at once, it should fail
@@ -115,6 +115,7 @@ SELECT * FROM cte;
 
 
 -- this will fail in real_time_executor
+SET citus.max_intermediate_result_size TO 2;
 WITH cte AS (
 	WITH cte2 AS (
 		SELECT * FROM users_table WHERE user_id IN (1, 2)
