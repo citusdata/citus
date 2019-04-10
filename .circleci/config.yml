@@ -18,15 +18,23 @@ jobs:
       - {run: {name: 'Check Style', command: citus_indent --check}}
   test-10_check-multi:
     docker:
-      - {image: 'citusdata/exttester-10:latest'}
+      - {image: 'citusdata/exttester-10:reporting'}
     working_directory: /home/circleci/project
     steps:
       - {attach_workspace: {at: .}}
-      - {run: {name: 'Install and Test (check-multi)', command: 'install-and-test-ext check-multi'}}
+      - {run: {name: 'Install and Test (check-multi)', command: 'install-and-test-ext check-worker'}}
+      - run:
+          name: 'Generate test reports'
+          command: |
+            cd build-${PG_MAJOR}/src/test/regress
+            generate-test-reports regress
+            mkdir -p /tmp/test-reports/pg_regress
+            cp regress/*.xml /tmp/test-reports/pg_regress
+      - {store_test_results: {path: '/tmp/test-reports'}}
       - {codecov/upload: {flags: 'test_10,multi'}}
   test-10_check-tt-van-mx:
     docker:
-      - {image: 'citusdata/exttester-10:latest'}
+      - {image: 'citusdata/exttester-10:reporting'}
     working_directory: /home/circleci/project
     steps:
       - {attach_workspace: {at: .}}
@@ -34,7 +42,7 @@ jobs:
       - {codecov/upload: {flags: 'test_10,tracker,vanilla,mx'}}
   test-10_check-iso-work-fol:
     docker:
-      - {image: 'citusdata/exttester-10:latest'}
+      - {image: 'citusdata/exttester-10:reporting'}
     working_directory: /home/circleci/project
     steps:
       - {attach_workspace: {at: .}}
@@ -42,7 +50,7 @@ jobs:
       - {codecov/upload: {flags: 'test_10,isolation,worker'}}
   test-10_check-fol:
     docker:
-      - {image: 'citusdata/exttester-10:latest'}
+      - {image: 'citusdata/exttester-10:reporting'}
     working_directory: /home/circleci/project
     steps:
       - {attach_workspace: {at: .}}
@@ -66,15 +74,23 @@ jobs:
       - {run: {name: 'Install and Test (check-failure)', command: 'install-and-test-ext check-failure'}}
   test-11_check-multi:
     docker:
-      - {image: 'citusdata/exttester-11:latest'}
+      - {image: 'citusdata/exttester-11:reporting'}
     working_directory: /home/circleci/project
     steps:
       - {attach_workspace: {at: .}}
-      - {run: {name: 'Install and Test (check-multi)', command: 'install-and-test-ext check-multi'}}
+      - {run: {name: 'Install and Test (check-multi)', command: 'install-and-test-ext check-worker'}}
+      - run:
+          name: 'Generate test reports'
+          command: |
+            cd build-${PG_MAJOR}/src/test/regress
+            generate-test-reports regress
+            mkdir -p /tmp/test-reports/pg_regress
+            cp regress/*.xml /tmp/test-reports/pg_regress
+      - {store_test_results: {path: '/tmp/test-reports'}}
       - {codecov/upload: {flags: 'test_11,multi'}}
   test-11_check-tt-van-mx:
     docker:
-      - {image: 'citusdata/exttester-11:latest'}
+      - {image: 'citusdata/exttester-11:reporting'}
     working_directory: /home/circleci/project
     steps:
       - {attach_workspace: {at: .}}
@@ -82,7 +98,7 @@ jobs:
       - {codecov/upload: {flags: 'test_11,tracker,vanilla,mx'}}
   test-11_check-iso-work-fol:
     docker:
-      - {image: 'citusdata/exttester-11:latest'}
+      - {image: 'citusdata/exttester-11:reporting'}
     working_directory: /home/circleci/project
     steps:
       - {attach_workspace: {at: .}}
@@ -90,7 +106,7 @@ jobs:
       - {codecov/upload: {flags: 'test_11,isolation,worker'}}
   test-11_check-fol:
     docker:
-      - {image: 'citusdata/exttester-11:latest'}
+      - {image: 'citusdata/exttester-11:reporting'}
     working_directory: /home/circleci/project
     steps:
       - {attach_workspace: {at: .}}
@@ -120,13 +136,13 @@ workflows:
       - check-style
 
       - {test-10_check-multi: {requires: [build]}}
-      - {test-10_check-tt-van-mx: {requires: [build]}}
-      - {test-10_check-iso-work-fol: {requires: [build]}}
-      - {test-10_check-fol: {requires: [build]}}
-      - {test-10_check-failure: {requires: [build]}}
-
       - {test-11_check-multi: {requires: [build]}}
-      - {test-11_check-tt-van-mx: {requires: [build]}}
-      - {test-11_check-iso-work-fol: {requires: [build]}}
-      - {test-11_check-fol: {requires: [build]}}
-      - {test-11_check-failure: {requires: [build]}}
+      # - {test-10_check-tt-van-mx: {requires: [build]}}
+      # - {test-10_check-iso-work-fol: {requires: [build]}}
+      # - {test-10_check-fol: {requires: [build]}}
+      # - {test-10_check-failure: {requires: [build]}}
+      #
+      # - {test-11_check-tt-van-mx: {requires: [build]}}
+      # - {test-11_check-iso-work-fol: {requires: [build]}}
+      # - {test-11_check-fol: {requires: [build]}}
+      # - {test-11_check-failure: {requires: [build]}}
