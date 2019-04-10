@@ -19,8 +19,9 @@ use Getopt::Long;
 use File::Basename;
 use File::Spec::Functions;
 use File::Path qw(make_path remove_tree);
+use Time::HiRes qw(time);
 use Config;
-use POSIX qw( WNOHANG mkfifo );
+use POSIX qw( WNOHANG mkfifo strftime );
 use Cwd 'abs_path';
 
 my $regressdir = (File::Spec->splitpath(__FILE__))[1];
@@ -138,7 +139,7 @@ if (defined $bindir)
 # a bit more context to make it easier to locate failed test sections.
 #
 # Also, ignore whitespace, without this the diffs on windows are unreadable
-$ENV{PG_REGRESS_DIFF_OPTS} = '-dU10 -w';
+$ENV{PG_REGRESS_DIFF_OPTS} = '-dU3 -w';
 
 my $plainRegress = "";
 my $isolationRegress = "";
@@ -816,7 +817,31 @@ else
 # Append remaining ARGV arguments to pg_regress arguments
 push(@arguments, @ARGV);
 
+my $suitedir = "regress/$suitename";
+if (! -e $suitedir)
+{
+  make_path($suitedir) or die "could not create $suitedir directory";
+  $ENV{SUITEDIR} = $suitedir;
+}
+
+system(catfile($bindir, 'psql'),
+       ('-AXtq', '-F', "\t", '-h', $host, '-p', $masterPort, '-U', $user, '-d', 'postgres',
+        '-o', "$suitedir/properties.txt",
+        '-c', "SELECT name, setting FROM pg_settings WHERE source <> 'default'",
+        '-c', "SELECT 'version', version()")) == 0 or die 'could not dump PostgreSQL settings';
+
+# copy STDOUT to another filehandle
+open (my $OLDOUT, '>&', STDOUT);
+open (my $OLDERR, '>&', STDERR);
+
+# redirect STDOUT to log.txt
+open (STDOUT, '|-', "tee $suitedir/out.txt");
+open (STDERR, '|-', "tee $suitedir/err.txt");
+
+my $status = 0;
 my $startTime = time();
+
+print 'began ' . strftime('%Y-%m-%dT%H:%M:%S', gmtime($startTime)) . "\n";
 
 # Finally run the tests
 if ($vanillatest)
@@ -831,26 +856,22 @@ if ($vanillatest)
 	    mkdir "./testtablespace";
 
 	    my $pgregressdir=catfile(dirname("$pgxsdir"), "regress");
-	    system("$plainRegress", ("--inputdir",  $pgregressdir),
-	           ("--schedule",  catfile("$pgregressdir", "parallel_schedule"))) == 0
-		or die "Could not run vanilla tests";
+	    $status = system("$plainRegress", ("--inputdir",  $pgregressdir),
+	                     ("--schedule",  catfile("$pgregressdir", "parallel_schedule")));
 	}
 	else
 	{
-	    system("make", ("-C", catfile("$postgresBuilddir", "src", "test", "regress"), "installcheck-parallel")) == 0
-		or die "Could not run vanilla tests";
+	    $status = system("make", ("-C", catfile("$postgresBuilddir", "src", "test", "regress"), "installcheck-parallel"));
 	}
 }
 elsif ($isolationtester)
 {
     push(@arguments, "--dbname=regression");
-    system("$isolationRegress", @arguments) == 0
-      or die "Could not run isolation tests";
+    $status = system("$isolationRegress", @arguments);
 }
 else
 {
-    system("$plainRegress", @arguments) == 0
-	or die "Could not run regression tests";
+    $status = system("$plainRegress", @arguments);
 }
 
 my $endTime = time();

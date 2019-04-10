@@ -18,11 +18,14 @@ test: worker_range_partition worker_range_partition_complex
 test: worker_hash_partition worker_hash_partition_complex
 test: worker_merge_range_files worker_merge_hash_files
 test: worker_binary_data_partition worker_null_data_partition
+
+ignore: worker_check_invalid_arguments
 test: worker_check_invalid_arguments
 
 # ----------
 # All task tracker tests use the following tables
 # ----------
+ignore: task_tracker_create_table
 test: task_tracker_create_table
 test: task_tracker_assign_task task_tracker_partition_task
 test: task_tracker_cleanup_job
