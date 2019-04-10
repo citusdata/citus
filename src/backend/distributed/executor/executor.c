@@ -91,8 +91,16 @@ typedef struct DistributedExecution
 	/* indicates whether distributed execution has failed */
 	bool failed;
 
-	/* total number of rows received from shard commands */
-	uint64 rowCount;
+	/*
+	 * For SELECT commands or INSERT/UPDATE/DELETE commands with RETURNING,
+	 * the total number of rows received from the workers. For
+	 * INSERT/UPDATE/DELETE commands without RETURNING, the total number of
+	 * tuples modified.
+	 *
+	 * Note that for replicated tables (e.g., reference tables), we only consider
+	 * a single replica's rows that are processed.
+	 */
+	uint64 rowsProcessed;
 
 	/* statistics on distributed execution */
 	DistributedExecutionStats *executionStats;
@@ -350,7 +358,7 @@ CitusExecScan(CustomScanState *node)
 
 		if (distributedPlan->operation != CMD_SELECT)
 		{
-			executorState->es_processed = execution->rowCount;
+			executorState->es_processed = execution->rowsProcessed;
 
 			/* prevent copying shards in same transaction */
 			XactModificationLevel = XACT_MODIFICATION_DATA;
@@ -367,7 +375,7 @@ CitusExecScan(CustomScanState *node)
 }
 
 
-void
+uint64
 ExecuteTaskList(CmdType operation, List *taskList)
 {
 	DistributedPlan *distributedPlan = NULL;
@@ -390,6 +398,8 @@ ExecuteTaskList(CmdType operation, List *taskList)
 	StartDistributedExecution(execution);
 	RunDistributedExecution(execution);
 	FinishDistributedExecution(execution);
+
+	return execution->rowsProcessed;
 }
 
 
@@ -417,7 +427,7 @@ CreateDistributedExecution(DistributedPlan *distributedPlan,
 
 	execution->totalTaskCount = list_length(taskList);
 	execution->unfinishedTaskCount = list_length(taskList);
-	execution->rowCount = 0;
+	execution->rowsProcessed = 0;
 
 	execution->raiseInterrupts = true;
 
@@ -1593,7 +1603,7 @@ ReceiveResults(WorkerSession *session, bool storeRows)
 	{
 		uint32 rowIndex = 0;
 		uint32 columnIndex = 0;
-		uint32 rowCount = 0;
+		uint32 rowsProcessed = 0;
 		uint32 columnCount = 0;
 		ExecStatusType resultStatus = 0;
 
@@ -1609,19 +1619,25 @@ ReceiveResults(WorkerSession *session, bool storeRows)
 		{
 			char *currentAffectedTupleString = PQcmdTuples(result);
 			int64 currentAffectedTupleCount = 0;
+			ShardCommandExecution *shardCommandExecution =
+				session->currentTask->shardCommandExecution;
 
-			if (*currentAffectedTupleString != '\0')
+			/* if there are multiple replicas, make sure to consider only one */
+			if (!shardCommandExecution->gotResults && *currentAffectedTupleString != '\0')
 			{
 				scanint8(currentAffectedTupleString, false, &currentAffectedTupleCount);
 				Assert(currentAffectedTupleCount >= 0);
+
+				execution->rowsProcessed += currentAffectedTupleCount;
 			}
 
-			execution->rowCount += currentAffectedTupleCount;
+			/* no more results */
 			return true;
 		}
 		if (resultStatus == PGRES_TUPLES_OK)
 		{
-			execution->rowCount += PQntuples(result);
+			/* we've already consumed all the tuples, no more results */
+			Assert (PQntuples(result) == 0);
 			return true;
 		}
 		else if (resultStatus != PGRES_SINGLE_TUPLE)
@@ -1631,12 +1647,15 @@ ReceiveResults(WorkerSession *session, bool storeRows)
 		}
 		else if (!storeRows)
 		{
-			/* already receieved rows from executing on another shard placement */
+			/*
+			 * Already receieved rows from executing on another shard placement or
+			 * doesn't need at all (e.g., DDL).
+			 */
 			PQclear(result);
 			continue;
 		}
 
-		rowCount = PQntuples(result);
+		rowsProcessed = PQntuples(result);
 		columnCount = PQnfields(result);
 
 		if (columnCount != expectedColumnCount)
@@ -1646,7 +1665,7 @@ ReceiveResults(WorkerSession *session, bool storeRows)
 								   columnCount, expectedColumnCount)));
 		}
 
-		for (rowIndex = 0; rowIndex < rowCount; rowIndex++)
+		for (rowIndex = 0; rowIndex < rowsProcessed; rowIndex++)
 		{
 			HeapTuple heapTuple = NULL;
 			MemoryContext oldContext = NULL;
@@ -1684,7 +1703,7 @@ ReceiveResults(WorkerSession *session, bool storeRows)
 			tuplestore_puttuple(tupleStore, heapTuple);
 			MemoryContextReset(ioContext);
 
-			execution->rowCount++;
+			execution->rowsProcessed++;
 		}
 
 		PQclear(result);
