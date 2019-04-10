@@ -47,56 +47,56 @@ check-full: check-multi check-multi-mx check-multi-task-tracker-extra check-work
 # using pg_regress_multi_check unnecessarily starts up multiple nodes, which isn't needed
 # for check-worker. But that's harmless besides a few cycles.
 check-worker: all
-	$(pg_regress_multi_check) --load-extension=citus \
-	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/worker_schedule $(EXTRA_TESTS)
+	$(pg_regress_multi_check) --load-extension=citus --schedule=$(citus_abs_srcdir)/worker_schedule \
+	-- $(MULTI_REGRESS_OPTS) $(EXTRA_TESTS)
 
 # check-base only sets up a testing environment so you can specify all your tests using EXTRA_TESTS
 check-base: all
-	$(pg_regress_multi_check) --load-extension=citus \
-	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/base_schedule $(EXTRA_TESTS)
+	$(pg_regress_multi_check) --load-extension=citus --schedule=$(citus_abs_srcdir)/base_schedule \
+	-- $(MULTI_REGRESS_OPTS) $(EXTRA_TESTS)
 
 check-base-vg: all
-	$(pg_regress_multi_check) --load-extension=citus \
+	$(pg_regress_multi_check) --load-extension=citus --schedule=$(citus_abs_srcdir)/base_schedule \
 	--valgrind --pg_ctl-timeout=360 --connection-timeout=500000 --valgrind-path=valgrind --valgrind-log-file=$(VALGRIND_LOG_FILE) \
-	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/base_schedule $(EXTRA_TESTS)
+	-- $(MULTI_REGRESS_OPTS) $(EXTRA_TESTS)
 
 check-multi: all tempinstall-main
-	$(pg_regress_multi_check) --load-extension=citus \
-	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_schedule $(EXTRA_TESTS)
+	$(pg_regress_multi_check) --load-extension=citus --schedule=$(citus_abs_srcdir)/multi_schedule \
+	-- $(MULTI_REGRESS_OPTS) $(EXTRA_TESTS)
 
 check-multi-vg: all tempinstall-main
-	$(pg_regress_multi_check) --load-extension=citus --valgrind \
+	$(pg_regress_multi_check) --load-extension=citus --valgrind --schedule=$(citus_abs_srcdir)/multi_schedule \
 	--pg_ctl-timeout=360 --connection-timeout=500000 --valgrind-path=valgrind --valgrind-log-file=$(VALGRIND_LOG_FILE) \
-	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_schedule $(EXTRA_TESTS)
+	-- $(MULTI_REGRESS_OPTS) $(EXTRA_TESTS)
 
 check-isolation: all tempinstall-main
-	$(pg_regress_multi_check) --load-extension=citus --isolationtester \
-	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/isolation_schedule $(EXTRA_TESTS)
+	$(pg_regress_multi_check) --load-extension=citus --isolationtester --schedule=$(citus_abs_srcdir)/isolation_schedule \
+	-- $(MULTI_REGRESS_OPTS) $(EXTRA_TESTS)
 
 check-vanilla: all tempinstall-main
 	$(pg_regress_multi_check) --load-extension=citus --vanillatest
 
 check-multi-mx: all tempinstall-main
-	$(pg_regress_multi_check) --load-extension=citus \
-	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_mx_schedule $(EXTRA_TESTS)
+	$(pg_regress_multi_check) --load-extension=citus --schedule=$(citus_abs_srcdir)/multi_mx_schedule \
+	-- $(MULTI_REGRESS_OPTS) $(EXTRA_TESTS)
 
 check-multi-task-tracker-extra: all tempinstall-main
-	$(pg_regress_multi_check) --load-extension=citus \
+	$(pg_regress_multi_check) --load-extension=citus --schedule=$(citus_abs_srcdir)/multi_task_tracker_extra_schedule \
 	--server-option=citus.task_executor_type=task-tracker \
-	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_task_tracker_extra_schedule $(EXTRA_TESTS)
+	-- $(MULTI_REGRESS_OPTS) $(EXTRA_TESTS)
 
 check-follower-cluster: all
-	$(pg_regress_multi_check) --load-extension=citus --follower-cluster \
-	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_follower_schedule $(EXTRA_TESTS)
+	$(pg_regress_multi_check) --load-extension=citus --follower-cluster --schedule=$(citus_abs_srcdir)/multi_follower_schedule \
+	-- $(MULTI_REGRESS_OPTS) $(EXTRA_TESTS)
 
 check-failure: all
-	$(pg_regress_multi_check) --load-extension=citus --mitmproxy \
-	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/failure_schedule $(EXTRA_TESTS)
+	$(pg_regress_multi_check) --load-extension=citus --mitmproxy --schedule=$(citus_abs_srcdir)/failure_schedule \
+	-- $(MULTI_REGRESS_OPTS) $(EXTRA_TESTS)
 
 check-failure-base: all
-	$(pg_regress_multi_check) --load-extension=citus --mitmproxy \
-	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/failure_base_schedule $(EXTRA_TESTS)
+	$(pg_regress_multi_check) --load-extension=citus --mitmproxy --schedule=$(citus_abs_srcdir)/failure_base_schedule \
+	-- $(MULTI_REGRESS_OPTS) $(EXTRA_TESTS)
 
 clean distclean maintainer-clean:
 	rm -f $(output_files) $(input_files)
-	rm -rf tmp_check/
+	rm -rf tmp_check/ regress/

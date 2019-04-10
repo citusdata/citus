@@ -36,6 +36,7 @@ sub Usage()
     print "  --isolationtester   	Run isolationtester tests instead of plain tests\n";
     print "  --vanillatest       	Run postgres tests with citus loaded as shared preload library\n";
     print "  --bindir            	Path to postgres binary directory\n";
+    print "  --schedule           Use test ordering schedule from FILE\n";
     print "  --libdir            	Path to postgres library directory\n";
     print "  --postgres-builddir 	Path to postgres build directory\n";
     print "  --postgres-srcdir   	Path to postgres build directory\n";
@@ -56,6 +57,7 @@ my $isolationtester = 0;
 my $vanillatest = 0;
 my $followercluster = 0;
 my $bindir = "";
+my $schedule = "";
 my $libdir = undef;
 my $pgxsdir = "";
 my $postgresBuilddir = "";
@@ -90,6 +92,7 @@ GetOptions(
     'vanillatest' => \$vanillatest,
     'follower-cluster' => \$followercluster,
     'bindir=s' => \$bindir,
+    'schedule=s' => \$schedule,
     'libdir=s' => \$libdir,
     'pgxsdir=s' => \$pgxsdir,
     'postgres-builddir=s' => \$postgresBuilddir,
@@ -793,6 +796,23 @@ for my $extension (@extensions)
     push(@arguments, "--load-extension=$extension");
 }
 
+my $suitename = '';
+if ($schedule)
+{
+  $suitename = basename($schedule);
+  push(@arguments, "--schedule=$schedule");
+
+  $suitename =~ s/_schedule$//;
+}
+elsif($vanillatest)
+{
+  $suitename='vanilla';
+}
+else
+{
+  die 'could not determine suite name';
+}
+
 # Append remaining ARGV arguments to pg_regress arguments
 push(@arguments, @ARGV);
 
@@ -835,6 +855,19 @@ else
 
 my $endTime = time();
 
-print "Finished in ". ($endTime - $startTime)." seconds. \n";
+print 'ended ' . strftime('%Y-%m-%dT%H:%M:%S', gmtime($endTime)) . "\n";
 
-exit 0;
+print 'elapsed ' . ($endTime - $startTime) . "\n";
+
+open (STDOUT, '>&', $OLDOUT);
+open (STDERR, '>&', $OLDERR);
+
+rename 'timing.txt', "$suitedir/timing.txt";
+
+if (-e 'regression.diffs')
+{
+  rename 'regression.diffs', "$suitedir/results.patch";
+  unlink 'regression.out';
+}
+
+exit $status;
