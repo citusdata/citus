@@ -856,21 +856,25 @@ if ($vanillatest)
 	    mkdir "./testtablespace";
 
 	    my $pgregressdir=catfile(dirname("$pgxsdir"), "regress");
+      print 'inputdir ' . $pgregressdir . "\n";
 	    $status = system("$plainRegress", ("--inputdir",  $pgregressdir),
 	                     ("--schedule",  catfile("$pgregressdir", "parallel_schedule")));
 	}
 	else
 	{
+      print 'inputdir ' . $regressdir . "\n";
 	    $status = system("make", ("-C", catfile("$postgresBuilddir", "src", "test", "regress"), "installcheck-parallel"));
 	}
 }
 elsif ($isolationtester)
 {
+    print 'inputdir ' . $regressdir . "\n";
     push(@arguments, "--dbname=regression");
     $status = system("$isolationRegress", @arguments);
 }
 else
 {
+    print 'inputdir ' . $regressdir . "\n";
     $status = system("$plainRegress", @arguments);
 }
 
