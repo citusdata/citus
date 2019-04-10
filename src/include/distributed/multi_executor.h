@@ -34,7 +34,7 @@ extern bool WritableStandbyCoordinator;
 extern void CitusExecutorStart(QueryDesc *queryDesc, int eflags);
 extern void CitusExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint64 count,
 							 bool execute_once);
-extern void ExecuteTaskList(CmdType operation, List *taskList);
+extern uint64 ExecuteTaskList(CmdType operation, List *taskList);
 extern TupleTableSlot * CitusExecScan(CustomScanState *node);
 extern TupleTableSlot * ReturnTupleFromTuplestore(CitusScanState *scanState);
 extern void LoadTuplesIntoTupleStore(CitusScanState *citusScanState, Job *workerJob);
