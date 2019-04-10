@@ -38,5 +38,4 @@ SELECT pg_sleep(1.0);
 SELECT task_tracker_task_status(:JobId, :CompletedTaskId);
 SELECT task_tracker_task_status(:JobId, :RunningTaskId);
 
-SELECT isdir FROM pg_stat_file('base/pgsql_job_cache/job_401010/task_801107');
-SELECT isdir FROM pg_stat_file('base/pgsql_job_cache/job_401010');
+SELECT pg_terminate_backend(pg_backend_pid());

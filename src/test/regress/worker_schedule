@@ -19,7 +19,6 @@ test: worker_hash_partition worker_hash_partition_complex
 test: worker_merge_range_files worker_merge_hash_files
 test: worker_binary_data_partition worker_null_data_partition
 
-ignore: worker_check_invalid_arguments
 test: worker_check_invalid_arguments
 
 # ----------

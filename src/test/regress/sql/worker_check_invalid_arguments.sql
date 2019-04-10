@@ -14,6 +14,8 @@ SET citus.next_shard_id TO 1100000;
 \set Partition_Count 2
 \set Select_Query_Text '\'SELECT * FROM simple_binary_data_table\''
 
+-- first error
+
 \set Bad_Partition_Column_Name '\'badcolumnname\''
 \set Bad_Partition_Column_Type 20
 \set Bad_Select_Query_Text '\'SELECT * FROM bad_table_name\''
@@ -55,6 +57,8 @@ SELECT worker_range_partition_table(:JobId, :TaskId, :Select_Query_Text,
 SELECT worker_hash_partition_table(:JobId, :TaskId, :Select_Query_Text,
        				    :Partition_Column_Name, :Bad_Partition_Column_Type,
 				    ARRAY[-2147483648, -1073741824, 0, 1073741824]::int4[]);
+
+-- second error
 
 -- Now, partition table data using valid arguments
 

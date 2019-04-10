@@ -2,6 +2,7 @@
 -- TASK_TRACKER_CREATE_TABLE
 --
 
+-- error
 
 SET citus.next_shard_id TO 1070000;
 
