@@ -27,7 +27,7 @@ jobs:
           name: 'Generate test reports'
           command: |
             cd build-${PG_MAJOR}/src/test/regress
-            generate-test-reports regress
+            PROJECT_ROOT="${CIRCLE_WORKING_DIRECTORY}" generate-test-reports regress
             mkdir -p /tmp/test-reports/pg_regress
             cp regress/*.xml /tmp/test-reports/pg_regress
       - {store_test_results: {path: '/tmp/test-reports'}}
@@ -83,7 +83,7 @@ jobs:
           name: 'Generate test reports'
           command: |
             cd build-${PG_MAJOR}/src/test/regress
-            generate-test-reports regress
+            PROJECT_ROOT="${CIRCLE_WORKING_DIRECTORY}" generate-test-reports regress
             mkdir -p /tmp/test-reports/pg_regress
             cp regress/*.xml /tmp/test-reports/pg_regress
       - {store_test_results: {path: '/tmp/test-reports'}}
