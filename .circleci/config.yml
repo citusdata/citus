@@ -8,7 +8,11 @@ jobs:
       - {image: 'citusdata/extbuilder:latest'}
     steps:
       - checkout
-      - {run: {name: 'Configure, Build, and Install', command: build-ext}}
+      - run:
+          name: 'Configure, Build, and Install'
+          command: |
+            export CFLAGS='-Werror -ggdb -Og'
+            build-ext
       - {persist_to_workspace: {root: ., paths: [.]}}
   check-style:
     docker:
@@ -22,7 +26,12 @@ jobs:
     working_directory: /home/circleci/project
     steps:
       - {attach_workspace: {at: .}}
-      - {run: {name: 'Install and Test (check-multi)', command: 'install-and-test-ext check-worker'}}
+      - run:
+          name: 'Install and Test (check-multi)'
+          command: |
+            apt-get update && apt-get install gdb
+            ulimit -c unlimited
+            install-and-test-ext check-worker
       - run:
           name: 'Generate test reports'
           command: |
@@ -136,7 +145,7 @@ workflows:
       - check-style
 
       - {test-10_check-multi: {requires: [build]}}
-      - {test-11_check-multi: {requires: [build]}}
+      # - {test-11_check-multi: {requires: [build]}}
       # - {test-10_check-tt-van-mx: {requires: [build]}}
       # - {test-10_check-iso-work-fol: {requires: [build]}}
       # - {test-10_check-fol: {requires: [build]}}
