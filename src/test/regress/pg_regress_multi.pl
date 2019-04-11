@@ -139,7 +139,7 @@ if (defined $bindir)
 # a bit more context to make it easier to locate failed test sections.
 #
 # Also, ignore whitespace, without this the diffs on windows are unreadable
-$ENV{PG_REGRESS_DIFF_OPTS} = '-dU3 -w --speed-large-files -F\'^-- *[^ ]\'';
+$ENV{PG_REGRESS_DIFF_OPTS} = '-dU3 -w --speed-large-files -F\'^-- +[^ ]\'';
 
 my $plainRegress = "";
 my $isolationRegress = "";
@@ -292,6 +292,31 @@ push(@pgOptions, '-c', "listen_addresses=${host}");
 # not required, and we don't necessarily have access to the default directory
 push(@pgOptions, '-c', "unix_socket_directories=");
 push(@pgOptions, '-c', "fsync=off");
+
+# these are set by pg_regress; we should set them, too
+push(@pgOptions, '-c', 'log_autovacuum_min_duration=0');
+push(@pgOptions, '-c', 'log_checkpoints=on');
+push(@pgOptions, '-c', 'log_line_prefix=\'%m [%p] %q%a \'');
+push(@pgOptions, '-c', 'log_lock_waits=on');
+push(@pgOptions, '-c', 'log_temp_files=128kB');
+
+# not carrying this over from pg_regress, as we set it ourselves
+# push(@pgOptions, '-c', "max_prepared_transactions = 2");
+
+# CircleCI options set for PostgreSQL images
+# see github.com/circleci/postgres-docker
+push(@pgOptions, '-c', 'datestyle=iso,mdy');
+push(@pgOptions, '-c', 'default_text_search_config=pg_catalog.english');
+push(@pgOptions, '-c', 'dynamic_shared_memory_type=posix');
+push(@pgOptions, '-c', 'lc_messages=en_US.utf8');
+push(@pgOptions, '-c', 'lc_monetary=en_US.utf8');
+push(@pgOptions, '-c', 'lc_numeric=en_US.utf8');
+push(@pgOptions, '-c', 'lc_time=en_US.utf8');
+push(@pgOptions, '-c', 'log_timezone=UTC');
+push(@pgOptions, '-c', 'max_connections=300');
+push(@pgOptions, '-c', 'shared_buffers=80MB');
+push(@pgOptions, '-c', 'timezone=UTC');
+
 
 my $sharedPreloadLibraries = "citus";
 

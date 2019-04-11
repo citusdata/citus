@@ -29,7 +29,7 @@ jobs:
       - run:
           name: 'Install and Test (check-multi)'
           command: |
-            apt-get update && apt-get install gdb
+            apt-get update && apt-get -y --no-install-recommends install gdb
             ulimit -c unlimited
             install-and-test-ext check-worker
       - run:
