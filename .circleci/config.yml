@@ -29,9 +29,14 @@ jobs:
       - run:
           name: 'Install and Test (check-multi)'
           command: |
-            apt-get update && apt-get -y --no-install-recommends install gdb
             ulimit -c unlimited
             install-and-test-ext check-worker
+      - run:
+          name: 'Produce backtrace'
+          command: |
+            apt-get update
+            apt-get install -y --no-install-recommends postgresql-10-dbgsym gdb libc-dbg
+            cd build-${PG_MAJOR}/src/test/regress/tmp_check/master/data
       - run:
           name: 'Generate test reports'
           command: |

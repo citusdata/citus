@@ -317,6 +317,8 @@ push(@pgOptions, '-c', 'max_connections=300');
 push(@pgOptions, '-c', 'shared_buffers=80MB');
 push(@pgOptions, '-c', 'timezone=UTC');
 
+# want at least one line for each connection, to tie application name to pid
+push(@pgOptions, '-c', 'log_connections=on');
 
 my $sharedPreloadLibraries = "citus";
 
