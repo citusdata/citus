@@ -5271,7 +5271,7 @@ ActivePlacementList(List *placementList)
 
 		/* check if the worker node for this shard placement is active */
 		workerNode = FindWorkerNode(placement->nodeName, placement->nodePort);
-		if (workerNode != NULL)
+		if (workerNode != NULL && workerNode->isActive)
 		{
 			activePlacementList = lappend(activePlacementList, placement);
 		}
