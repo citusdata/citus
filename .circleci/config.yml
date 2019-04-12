@@ -5,14 +5,10 @@ orbs:
 jobs:
   build:
     docker:
-      - {image: 'citusdata/extbuilder:latest'}
+      - {image: 'citusdata/extbuilder:debug'}
     steps:
       - checkout
-      - run:
-          name: 'Configure, Build, and Install'
-          command: |
-            export CFLAGS='-Werror -ggdb -Og'
-            build-ext
+      - {run: {name: 'Configure, Build, and Install', command: build-ext}}
       - {persist_to_workspace: {root: ., paths: [.]}}
   check-style:
     docker:
@@ -28,23 +24,7 @@ jobs:
       - {attach_workspace: {at: .}}
       - run:
           name: 'Install and Test (check-multi)'
-          command: |
-            ulimit -c unlimited
-            install-and-test-ext check-worker
-      - run:
-          name: 'Produce backtrace'
-          command: |
-            apt-get update
-            apt-get install -y --no-install-recommends postgresql-10-dbgsym gdb libc-dbg
-            cd build-${PG_MAJOR}/src/test/regress/tmp_check/master/data
-      - run:
-          name: 'Generate test reports'
-          command: |
-            cd build-${PG_MAJOR}/src/test/regress
-            PROJECT_ROOT="${CIRCLE_WORKING_DIRECTORY}" generate-test-reports regress
-            mkdir -p /tmp/test-reports/pg_regress
-            cp regress/*.xml /tmp/test-reports/pg_regress
-      - {store_test_results: {path: '/tmp/test-reports'}}
+          command: 'install-and-test-ext check-worker'
       - {codecov/upload: {flags: 'test_10,multi'}}
   test-10_check-tt-van-mx:
     docker:
