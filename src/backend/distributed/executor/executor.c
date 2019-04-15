@@ -156,6 +156,9 @@ struct TaskPlacementExecution;
  */
 typedef struct WorkerSession
 {
+	/* only useful for debugging */
+	uint64 sessionId;
+
 	/* worker pool of which this session is part */
 	WorkerPool *workerPool;
 
@@ -170,6 +173,12 @@ typedef struct WorkerSession
 
 	/* task the worker should work on or NULL */
 	struct TaskPlacementExecution *currentTask;
+
+	/*
+	 * The number of commands sent to the worker over the session. Excludes
+	 * distributed transaction related commands such as BEGIN/COMMIT etc.
+	 */
+	uint64 commandsSent;
 } WorkerSession;
 
 
@@ -280,6 +289,10 @@ typedef struct TaskPlacementExecution
 } TaskPlacementExecution;
 
 
+/* GUC, determining whether Citus opens 1 connection per task */
+bool ForceMaxQueryParallelization = false;
+
+
 /* local functions */
 static DistributedExecution * CreateDistributedExecution(DistributedPlan *distributedPlan,
 														 CitusScanState *scanState,
@@ -290,6 +303,9 @@ static void FinishDistributedExecution(DistributedExecution *execution);
 
 static bool DistributedStatementRequiresRollback(DistributedPlan *distributedPlan);
 static void AssignTasksToConnections(DistributedExecution *execution);
+static bool ShouldForceOpeningConnection(TaskPlacementExecutionState
+										 placementExecutionState,
+										 PlacementExecutionOrder placementExecutionOrder);
 static PlacementExecutionOrder ExecutionOrderForTask(CmdType operation, Task *task);
 static WorkerPool * FindOrCreateWorkerPool(DistributedExecution *execution,
 										   WorkerNode *workerNode);
@@ -348,6 +364,14 @@ CitusExecScan(CustomScanState *node)
 		if (MultiShardConnectionType == SEQUENTIAL_CONNECTION)
 		{
 			targetPoolSize = 1;
+		}
+		else if (ForceMaxQueryParallelization)
+		{
+			Job *job = distributedPlan->workerJob;
+			List *taskList = job->taskList;
+
+			/* we might at most have the length of tasks pool size */
+			targetPoolSize = list_length(taskList);
 		}
 
 		execution = CreateDistributedExecution(distributedPlan, scanState,
@@ -531,6 +555,9 @@ FinishDistributedExecution(DistributedExecution *execution)
 		RemoteTransaction *transaction = &(connection->remoteTransaction);
 		RemoteTransactionState transactionState = transaction->transactionState;
 
+		elog(DEBUG4, "Total number of commands sent over the session %ld: %ld",
+			 session->sessionId, session->commandsSent);
+
 		UnclaimConnection(connection);
 
 		if (connection->connectionState == MULTI_CONNECTION_CONNECTING)
@@ -641,6 +668,26 @@ AssignTasksToConnections(DistributedExecution *execution)
 			connection = GetPlacementListConnectionIfCached(connectionFlags,
 															placementAccessList,
 															NULL);
+
+			/*
+			 * If there is no cached connection that we have to use and we're instructed
+			 * to force max query parallelization, we try to do it here.
+			 *
+			 * In the end, this is the user's choice and we should try to open all the necessary
+			 * connections. Doing it here the code a lot so we prefer to do it.
+			 */
+			if (connection == NULL &&
+				ShouldForceOpeningConnection(placementExecution->executionState,
+											 shardCommandExecution->executionOrder))
+			{
+				int connectionFlags = CONNECTION_PER_PLACEMENT;
+
+				/* ConnectionStateMachine will finish the connection establishment */
+				connection =
+					StartPlacementListConnection(connectionFlags, placementAccessList,
+												 NULL);
+			}
+
 			if (connection != NULL)
 			{
 				RemoteTransaction *transaction = &(connection->remoteTransaction);
@@ -669,12 +716,6 @@ AssignTasksToConnections(DistributedExecution *execution)
 					dlist_push_tail(&session->pendingTaskQueue,
 									&placementExecution->sessionPendingQueueNode);
 				}
-
-				/*
-				 * Not all parts of the code set connection state. For now we set
-				 * it explicitly here.
-				 */
-				connection->connectionState = MULTI_CONNECTION_CONNECTED;
 
 				/* always poll the connection in the first round */
 				connection->waitFlags = WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE;
@@ -732,6 +773,45 @@ AssignTasksToConnections(DistributedExecution *execution)
 
 		ClaimConnectionExclusively(connection);
 	}
+}
+
+
+/*
+ * ShouldForceOpeningConnection returns true if we're instructed to
+ * open a new connection and there is no other factors that prevents
+ * us doing so.
+ */
+static bool
+ShouldForceOpeningConnection(TaskPlacementExecutionState placementExecutionState,
+							 PlacementExecutionOrder placementExecutionOrder)
+{
+	/* if we're not instructed to do so, do not even attempt to open decide */
+	if (!ForceMaxQueryParallelization)
+	{
+		return false;
+	}
+
+	/* we favor sequetial mode over ForceMaxQueryParallelization */
+	if (MultiShardConnectionType == SEQUENTIAL_CONNECTION)
+	{
+		return false;
+	}
+
+	/*
+	 * Placements that are ready to execute is very likely to succeed
+	 * and deferring this decision would probably save opening this
+	 * connection, so defer the decision.
+	 *
+	 * Note that modifications/DDLs are never EXECUTION_ORDER_ANY, so this only
+	 * applies for SELECTs.
+	 */
+	if (placementExecutionState != PLACEMENT_EXECUTION_READY &&
+		placementExecutionOrder == EXECUTION_ORDER_ANY)
+	{
+		return false;
+	}
+
+	return true;
 }
 
 
@@ -821,6 +901,7 @@ FindOrCreateWorkerSession(WorkerPool *workerPool, MultiConnection *connection)
 	DistributedExecution *execution = workerPool->distributedExecution;
 	WorkerSession *session = NULL;
 	ListCell *sessionCell = NULL;
+	static uint64 sessionId = 1;
 
 	foreach(sessionCell, workerPool->sessionList)
 	{
@@ -833,8 +914,10 @@ FindOrCreateWorkerSession(WorkerPool *workerPool, MultiConnection *connection)
 	}
 
 	session = (WorkerSession *) palloc0(sizeof(WorkerSession));
+	session->sessionId = sessionId++;
 	session->connection = connection;
 	session->workerPool = workerPool;
+	session->commandsSent = 0;
 	dlist_init(&session->pendingTaskQueue);
 	dlist_init(&session->readyTaskQueue);
 
@@ -1055,6 +1138,13 @@ ConnectionStateMachine(WorkerSession *session)
 
 		switch (currentState)
 		{
+			case MULTI_CONNECTION_INITIAL:
+			{
+				/* simply iterate the state machine */
+				connection->connectionState = MULTI_CONNECTION_CONNECTING;
+				break;
+			}
+
 			case MULTI_CONNECTION_CONNECTING:
 			{
 				PostgresPollingStatusType pollMode;
@@ -1266,6 +1356,9 @@ TransactionStateMachine(WorkerSession *session)
 					session->currentTask = NULL;
 
 					PlacementExecutionDone(placementExecution, succeeded);
+
+					/* one more command is sent over the session */
+					session->commandsSent++;
 				}
 
 				/* connection is ready to use for executing commands */
@@ -1496,7 +1589,6 @@ StartPlacementExecutionOnSession(TaskPlacementExecution *placementExecution,
 
 		ExtractParametersFromParamListInfo(paramListInfo, &parameterTypes,
 										   &parameterValues);
-
 		querySent = SendRemoteCommandParams(connection, queryString, parameterCount,
 											parameterTypes, parameterValues);
 	}
@@ -1604,6 +1696,7 @@ ReceiveResults(WorkerSession *session, bool storeRows)
 		columnArray = (char **) palloc0(expectedColumnCount * sizeof(char *));
 	}
 
+
 	while (!PQisBusy(connection->pgConn))
 	{
 		uint32 rowIndex = 0;
@@ -1642,7 +1735,7 @@ ReceiveResults(WorkerSession *session, bool storeRows)
 		if (resultStatus == PGRES_TUPLES_OK)
 		{
 			/* we've already consumed all the tuples, no more results */
-			Assert (PQntuples(result) == 0);
+			Assert(PQntuples(result) == 0);
 			return true;
 		}
 		else if (resultStatus != PGRES_SINGLE_TUPLE)
@@ -1849,13 +1942,22 @@ PlacementExecutionDone(TaskPlacementExecution *placementExecution, bool succeede
 		executionOrder == EXECUTION_ORDER_SEQUENTIAL)
 	{
 		TaskPlacementExecution *nextPlacementExecution = NULL;
-		int placementExecutionCount PG_USED_FOR_ASSERTS_ONLY =
-			shardCommandExecution->placementExecutionCount;
+		int placementExecutionCount = shardCommandExecution->placementExecutionCount;
 
 		/* find a placement execution that is not yet marked as failed */
 		do {
 			int nextPlacementExecutionIndex =
 				placementExecution->placementExecutionIndex + 1;
+
+			if (nextPlacementExecutionIndex == placementExecutionCount)
+			{
+				/*
+				 * TODO: We should not need to reset nextPlacementExecutionIndex.
+				 * However, we're currently not handling failed worker pools
+				 * and sessions very well. Thus, reset the execution index.
+				 */
+				nextPlacementExecutionIndex = 0;
+			}
 
 			/* if all tasks failed then we should already have errored out */
 			Assert(nextPlacementExecutionIndex < placementExecutionCount);
