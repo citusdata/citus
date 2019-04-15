@@ -753,6 +753,17 @@ FinishConnectionListEstablishment(List *multiConnectionList)
 					uint32 eventMask = MultiConnectionStateEventMask(connectionState);
 					ModifyWaitEvent(waitEventSet, event->pos, eventMask, NULL);
 				}
+
+				/*
+				 * The state has changed to connected, update the connection's
+				 * state as well.
+				 */
+				if (connectionState->phase == MULTI_CONNECTION_PHASE_CONNECTED)
+				{
+					MultiConnection *connection = connectionState->connection;
+
+					connection->connectionState = MULTI_CONNECTION_CONNECTED;
+				}
 			}
 		}
 
