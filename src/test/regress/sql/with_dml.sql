@@ -82,6 +82,11 @@ INSERT INTO distributed_table
 -- not a very meaningful query
 -- but has two modifying CTEs along with another
 -- modify statement
+
+-- We need to force 1 connection per placement
+-- otherwise the coordinator insert select fails
+-- since COPY cannot be executed
+SET citus.force_max_query_parallelization TO on;
 WITH copy_to_other_table AS (
     INSERT INTO distributed_table 
         SELECT *
@@ -105,6 +110,8 @@ INSERT INTO second_distributed_table
         EXCEPT 
         SELECT *
             FROM copy_to_other_table;
+
+SET citus.force_max_query_parallelization TO off;
 
 -- CTE inside the UPDATE statement
 UPDATE 
