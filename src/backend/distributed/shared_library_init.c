@@ -613,6 +613,21 @@ RegisterCitusConfigVariables(void)
 		GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
+	DefineCustomBoolVariable(
+		"citus.force_max_query_parallelization",
+		gettext_noop("Open as many connections as possible to maximize query "
+					 "parallelization"),
+		gettext_noop("When enabled, Citus will force the executor to use "
+					 "as many connections as possible while executing a "
+					 "parallel distributed query. If not enabled, the executor"
+					 "might choose to use less connections to optimize overall "
+					 "query execution throughput. Internally, setting this true "
+					 "will end up with using one connection per task."),
+		&ForceMaxQueryParallelization,
+		false,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
 		"citus.enable_deadlock_prevention",
