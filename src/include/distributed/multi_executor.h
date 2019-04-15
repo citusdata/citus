@@ -32,6 +32,7 @@ extern int MultiShardConnectionType;
 
 
 extern bool WritableStandbyCoordinator;
+extern bool ForceMaxQueryParallelization;
 
 
 extern void CitusExecutorStart(QueryDesc *queryDesc, int eflags);
