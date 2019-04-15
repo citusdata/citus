@@ -4,6 +4,12 @@
 -- Note: this test should not be executed in parallel with
 -- other tests since we're relying on disabling 2PC recovery 
 --
+-- We're also setting force_max_query_parallelization throughout
+-- the tests because the test file has the assumption that
+-- each placement is accessed with a seperate connection
+SET citus.force_max_query_parallelization TO on;
+
+
 CREATE SCHEMA test_seq_ddl;
 SET search_path TO 'test_seq_ddl';
 SET citus.next_shard_id TO 16000;
