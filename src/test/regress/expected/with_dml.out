@@ -106,6 +106,10 @@ DEBUG:  Plan 16 query after replacing subqueries and CTEs: SELECT tenant_id FROM
 -- not a very meaningful query
 -- but has two modifying CTEs along with another
 -- modify statement
+-- We need to force 1 connection per placement
+-- otherwise the coordinator insert select fails
+-- since COPY cannot be executed
+SET citus.force_max_query_parallelization TO on;
 WITH copy_to_other_table AS (
     INSERT INTO distributed_table 
         SELECT *
@@ -136,6 +140,7 @@ DEBUG:  generating subplan 20_1 for CTE copy_to_other_table: INSERT INTO with_dm
 DEBUG:  generating subplan 20_2 for CTE main_table_deleted: DELETE FROM with_dml.distributed_table WHERE ((dept OPERATOR(pg_catalog.<) 10) AND (NOT (EXISTS (SELECT 1 FROM with_dml.second_distributed_table WHERE ((second_distributed_table.dept OPERATOR(pg_catalog.=) 1) AND (second_distributed_table.tenant_id OPERATOR(pg_catalog.=) distributed_table.tenant_id)))))) RETURNING tenant_id, dept
 DEBUG:  generating subplan 20_3 for subquery SELECT main_table_deleted.tenant_id, main_table_deleted.dept FROM (SELECT intermediate_result.tenant_id, intermediate_result.dept FROM read_intermediate_result('20_2'::text, 'binary'::citus_copy_format) intermediate_result(tenant_id text, dept integer)) main_table_deleted EXCEPT SELECT copy_to_other_table.tenant_id, copy_to_other_table.dept FROM (SELECT intermediate_result.tenant_id, intermediate_result.dept FROM read_intermediate_result('20_1'::text, 'binary'::citus_copy_format) intermediate_result(tenant_id text, dept integer)) copy_to_other_table
 DEBUG:  Plan 20 query after replacing subqueries and CTEs: SELECT tenant_id, dept FROM (SELECT intermediate_result.tenant_id, intermediate_result.dept FROM read_intermediate_result('20_3'::text, 'binary'::citus_copy_format) intermediate_result(tenant_id text, dept integer)) citus_insert_select_subquery
+SET citus.force_max_query_parallelization TO off;
 -- CTE inside the UPDATE statement
 UPDATE 
 	second_distributed_table 
