@@ -51,7 +51,6 @@
 #include "utils/relcache.h"
 
 /* Local functions forward declarations */
-static void AppendShardIdToConstraintName(AlterTableCmd *command, uint64 shardId);
 static bool UpdateWholeRowColumnReferencesWalker(Node *node, uint64 *shardId);
 
 /* exports for SQL callable functions */
@@ -85,6 +84,7 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 			 */
 
 			AlterTableStmt *alterTableStmt = (AlterTableStmt *) parseTree;
+			Oid relationId = InvalidOid;
 			char **relationName = &(alterTableStmt->relation->relname);
 			char **relationSchemaName = &(alterTableStmt->relation->schemaname);
 
@@ -104,6 +104,7 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 				if (command->subtype == AT_AddConstraint)
 				{
 					Constraint *constraint = (Constraint *) command->def;
+					char **constraintName = &(constraint->conname);
 
 					if (constraint->contype == CONSTR_PRIMARY && constraint->indexname)
 					{
@@ -111,15 +112,30 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 						AppendShardIdToName(indexName, shardId);
 					}
 
-					AppendShardIdToConstraintName(command, shardId);
+					AppendShardIdToName(constraintName, shardId);
 				}
-				else if (command->subtype == AT_DropConstraint)
+				else if (command->subtype == AT_DropConstraint ||
+						 command->subtype == AT_ValidateConstraint)
 				{
-					AppendShardIdToConstraintName(command, shardId);
-				}
-				else if (command->subtype == AT_ValidateConstraint)
-				{
-					AppendShardIdToConstraintName(command, shardId);
+					char **constraintName = &(command->name);
+					Oid constraintOid = InvalidOid;
+					const bool constraintMissingOk = true;
+
+					if (!OidIsValid(relationId))
+					{
+						const bool rvMissingOk = false;
+						relationId = RangeVarGetRelid(alterTableStmt->relation,
+													  AccessShareLock,
+													  rvMissingOk);
+					}
+
+					constraintOid = get_relation_constraint_oid(relationId,
+																command->name,
+																constraintMissingOk);
+					if (!OidIsValid(constraintOid))
+					{
+						AppendShardIdToName(constraintName, shardId);
+					}
 				}
 				else if (command->subtype == AT_ClusterOn)
 				{
@@ -581,30 +597,6 @@ RelayEventExtendNamesForInterShardCommands(Node *parseTree, uint64 leftShardId,
 							  errdetail("Statement type: %u", (uint32) nodeType)));
 			break;
 		}
-	}
-}
-
-
-/*
- * AppendShardIdToConstraintName extends given constraint name with given
- * shardId. Note that we only extend constraint names if they correspond to
- * indexes, and the caller should verify that index correspondence before
- * calling this function.
- */
-static void
-AppendShardIdToConstraintName(AlterTableCmd *command, uint64 shardId)
-{
-	if (command->subtype == AT_AddConstraint)
-	{
-		Constraint *constraint = (Constraint *) command->def;
-		char **constraintName = &(constraint->conname);
-		AppendShardIdToName(constraintName, shardId);
-	}
-	else if (command->subtype == AT_DropConstraint ||
-			 command->subtype == AT_ValidateConstraint)
-	{
-		char **constraintName = &(command->name);
-		AppendShardIdToName(constraintName, shardId);
 	}
 }
 

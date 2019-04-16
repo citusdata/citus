@@ -367,6 +367,13 @@ ALTER TABLE products ADD PRIMARY KEY(product_no);
 ALTER TABLE products ADD CHECK(product_no <> 0);
 ALTER TABLE products ADD EXCLUDE USING btree (product_no with =);
 
+-- ... with names, we can add/drop the constraints just fine
+ALTER TABLE products ADD CONSTRAINT nonzero_product_no CHECK(product_no <> 0);
+ALTER TABLE products ADD CONSTRAINT uniq_product_no EXCLUDE USING btree (product_no with =);
+
+ALTER TABLE products DROP CONSTRAINT nonzero_product_no;
+ALTER TABLE products DROP CONSTRAINT uniq_product_no;
+
 DROP TABLE products;
 
 
