@@ -814,8 +814,8 @@ BaseRangeTableList(MultiNode *multiNode)
 
 	while (pendingNodeList != NIL)
 	{
-		MultiNode *multiNode = (MultiNode *) linitial(pendingNodeList);
-		CitusNodeTag nodeType = CitusNodeTag(multiNode);
+		MultiNode *currMultiNode = (MultiNode *) linitial(pendingNodeList);
+		CitusNodeTag nodeType = CitusNodeTag(currMultiNode);
 		pendingNodeList = list_delete_first(pendingNodeList);
 
 		if (nodeType == T_MultiTable)
@@ -824,7 +824,7 @@ BaseRangeTableList(MultiNode *multiNode)
 			 * We represent subqueries as MultiTables, and so for base table
 			 * entries we skip the subquery ones.
 			 */
-			MultiTable *multiTable = (MultiTable *) multiNode;
+			MultiTable *multiTable = (MultiTable *) currMultiNode;
 			if (multiTable->relationId != SUBQUERY_RELATION_ID &&
 				multiTable->relationId != SUBQUERY_PUSHDOWN_RELATION_ID)
 			{
@@ -843,7 +843,7 @@ BaseRangeTableList(MultiNode *multiNode)
 		/* do not visit nodes that belong to remote queries */
 		if (nodeType != T_MultiCollect)
 		{
-			List *childNodeList = ChildNodeList(multiNode);
+			List *childNodeList = ChildNodeList(currMultiNode);
 			pendingNodeList = list_concat(pendingNodeList, childNodeList);
 		}
 	}
@@ -963,21 +963,21 @@ QueryGroupClauseList(MultiNode *multiNode)
 
 	while (pendingNodeList != NIL)
 	{
-		MultiNode *multiNode = (MultiNode *) linitial(pendingNodeList);
-		CitusNodeTag nodeType = CitusNodeTag(multiNode);
+		MultiNode *currMultiNode = (MultiNode *) linitial(pendingNodeList);
+		CitusNodeTag nodeType = CitusNodeTag(currMultiNode);
 		pendingNodeList = list_delete_first(pendingNodeList);
 
 		/* extract the group clause list from the extended operator */
 		if (nodeType == T_MultiExtendedOp)
 		{
-			MultiExtendedOp *extendedOpNode = (MultiExtendedOp *) multiNode;
+			MultiExtendedOp *extendedOpNode = (MultiExtendedOp *) currMultiNode;
 			groupClauseList = extendedOpNode->groupClauseList;
 		}
 
 		/* add children only if this node isn't a multi collect and multi table */
 		if (nodeType != T_MultiCollect && nodeType != T_MultiTable)
 		{
-			List *childNodeList = ChildNodeList(multiNode);
+			List *childNodeList = ChildNodeList(currMultiNode);
 			pendingNodeList = list_concat(pendingNodeList, childNodeList);
 		}
 	}
@@ -1000,14 +1000,14 @@ QuerySelectClauseList(MultiNode *multiNode)
 
 	while (pendingNodeList != NIL)
 	{
-		MultiNode *multiNode = (MultiNode *) linitial(pendingNodeList);
-		CitusNodeTag nodeType = CitusNodeTag(multiNode);
+		MultiNode *currMultiNode = (MultiNode *) linitial(pendingNodeList);
+		CitusNodeTag nodeType = CitusNodeTag(currMultiNode);
 		pendingNodeList = list_delete_first(pendingNodeList);
 
 		/* extract select clauses from the multi select node */
 		if (nodeType == T_MultiSelect)
 		{
-			MultiSelect *selectNode = (MultiSelect *) multiNode;
+			MultiSelect *selectNode = (MultiSelect *) currMultiNode;
 			List *clauseList = copyObject(selectNode->selectClauseList);
 			selectClauseList = list_concat(selectClauseList, clauseList);
 		}
@@ -1015,7 +1015,7 @@ QuerySelectClauseList(MultiNode *multiNode)
 		/* add children only if this node isn't a multi collect */
 		if (nodeType != T_MultiCollect)
 		{
-			List *childNodeList = ChildNodeList(multiNode);
+			List *childNodeList = ChildNodeList(currMultiNode);
 			pendingNodeList = list_concat(pendingNodeList, childNodeList);
 		}
 	}
@@ -1038,14 +1038,14 @@ QueryJoinClauseList(MultiNode *multiNode)
 
 	while (pendingNodeList != NIL)
 	{
-		MultiNode *multiNode = (MultiNode *) linitial(pendingNodeList);
-		CitusNodeTag nodeType = CitusNodeTag(multiNode);
+		MultiNode *currMultiNode = (MultiNode *) linitial(pendingNodeList);
+		CitusNodeTag nodeType = CitusNodeTag(currMultiNode);
 		pendingNodeList = list_delete_first(pendingNodeList);
 
 		/* extract join clauses from the multi join node */
 		if (nodeType == T_MultiJoin)
 		{
-			MultiJoin *joinNode = (MultiJoin *) multiNode;
+			MultiJoin *joinNode = (MultiJoin *) currMultiNode;
 			List *clauseList = copyObject(joinNode->joinClauseList);
 			joinClauseList = list_concat(joinClauseList, clauseList);
 		}
@@ -1053,7 +1053,7 @@ QueryJoinClauseList(MultiNode *multiNode)
 		/* add this node's children only if the node isn't a multi collect */
 		if (nodeType != T_MultiCollect)
 		{
-			List *childNodeList = ChildNodeList(multiNode);
+			List *childNodeList = ChildNodeList(currMultiNode);
 			pendingNodeList = list_concat(pendingNodeList, childNodeList);
 		}
 	}
@@ -1726,8 +1726,8 @@ static List *
 ChildNodeList(MultiNode *multiNode)
 {
 	List *childNodeList = NIL;
-	bool unaryNode = UnaryOperator(multiNode);
-	bool binaryNode = BinaryOperator(multiNode);
+	bool isUnaryNode = UnaryOperator(multiNode);
+	bool isBinaryNode = BinaryOperator(multiNode);
 
 	/* relation table nodes don't have any children */
 	if (CitusIsA(multiNode, MultiTable))
@@ -1739,12 +1739,12 @@ ChildNodeList(MultiNode *multiNode)
 		}
 	}
 
-	if (unaryNode)
+	if (isUnaryNode)
 	{
 		MultiUnaryNode *unaryNode = (MultiUnaryNode *) multiNode;
 		childNodeList = list_make1(unaryNode->childNode);
 	}
-	else if (binaryNode)
+	else if (isBinaryNode)
 	{
 		MultiBinaryNode *binaryNode = (MultiBinaryNode *) multiNode;
 		childNodeList = list_make2(binaryNode->leftChildNode,

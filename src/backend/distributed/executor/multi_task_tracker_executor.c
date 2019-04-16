@@ -235,7 +235,6 @@ MultiTaskTrackerExecute(Job *job)
 		double acceptableHealthyTrackerCount = 0.0;
 
 		/* first, loop around all tasks and manage them */
-		ListCell *taskAndExecutionCell = NULL;
 		foreach(taskAndExecutionCell, taskAndExecutionList)
 		{
 			Task *task = (Task *) lfirst(taskAndExecutionCell);
@@ -259,7 +258,6 @@ MultiTaskTrackerExecute(Job *job)
 			if (taskExecutionStatus == EXEC_TASK_TRACKER_FAILED)
 			{
 				List *taskList = NIL;
-				TaskTracker *transmitTracker = NULL;
 
 				/* mark task tracker as failed, in case it isn't marked already */
 				execTaskTracker->trackerFailureCount = MAX_TRACKER_FAILURE_COUNT;
@@ -343,7 +341,6 @@ MultiTaskTrackerExecute(Job *job)
 			if (transmitExecutionStatus == EXEC_TRANSMIT_TRACKER_FAILED)
 			{
 				List *taskList = NIL;
-				TaskTracker *taskTracker = NULL;
 
 				taskTracker = ResolveTaskTracker(taskTrackerHash,
 												 task, taskExecution);
@@ -2358,7 +2355,7 @@ AssignQueuedTasks(TaskTracker *taskTracker)
 
 		foreach(taskCell, tasksToAssignList)
 		{
-			TrackerTaskState *taskState = (TrackerTaskState *) lfirst(taskCell);
+			taskState = (TrackerTaskState *) lfirst(taskCell);
 			BatchQueryStatus queryStatus = CLIENT_INVALID_BATCH_QUERY;
 
 			if (!batchSuccess)
@@ -2663,14 +2660,14 @@ JobIdList(Job *job)
 		uint64 *jobIdPointer = (uint64 *) palloc0(sizeof(uint64));
 		List *jobChildrenList = NIL;
 
-		Job *job = (Job *) linitial(jobQueue);
+		Job *currJob = (Job *) linitial(jobQueue);
 		jobQueue = list_delete_first(jobQueue);
 
-		(*jobIdPointer) = job->jobId;
+		(*jobIdPointer) = currJob->jobId;
 		jobIdList = lappend(jobIdList, jobIdPointer);
 
 		/* prevent dependedJobList being modified on list_concat() call */
-		jobChildrenList = list_copy(job->dependedJobList);
+		jobChildrenList = list_copy(currJob->dependedJobList);
 		if (jobChildrenList != NIL)
 		{
 			jobQueue = list_concat(jobQueue, jobChildrenList);
@@ -2907,7 +2904,7 @@ TrackerHashCleanupJob(HTAB *taskTrackerHash, Task *jobCleanupTask)
 
 		foreach(activeTaskTrackerCell, activeTackTrackerList)
 		{
-			TaskTracker *taskTracker = (TaskTracker *) lfirst(activeTaskTrackerCell);
+			taskTracker = (TaskTracker *) lfirst(activeTaskTrackerCell);
 			int32 connectionId = taskTracker->connectionId;
 			const char *nodeName = taskTracker->workerName;
 			uint32 nodePort = taskTracker->workerPort;

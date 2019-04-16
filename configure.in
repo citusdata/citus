@@ -163,6 +163,7 @@ CITUSAC_PROG_CC_CFLAGS_OPT([-Wendif-labels])
 CITUSAC_PROG_CC_CFLAGS_OPT([-Wmissing-format-attribute])
 CITUSAC_PROG_CC_CFLAGS_OPT([-Wmissing-declarations])
 CITUSAC_PROG_CC_CFLAGS_OPT([-Wmissing-prototypes])
+CITUSAC_PROG_CC_CFLAGS_OPT([-Wshadow])
 CITUSAC_PROG_CC_CFLAGS_OPT([-Werror=vla])  # visual studio does not support these
 
 #

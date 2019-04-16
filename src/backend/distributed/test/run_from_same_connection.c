@@ -40,7 +40,7 @@
 
 
 static bool allowNonIdleRemoteTransactionOnXactHandling = false;
-static MultiConnection *connection = NULL;
+static MultiConnection *singleConnection = NULL;
 
 
 /*
@@ -51,7 +51,7 @@ int IsolationTestSessionRemoteProcessID = -1;
 int IsolationTestSessionProcessID = -1;
 
 
-static int64 GetRemoteProcessId(MultiConnection *connection);
+static int64 GetRemoteProcessId(void);
 
 /* declarations for dynamic loading */
 PG_FUNCTION_INFO_V1(start_session_level_connection_to_node);
@@ -88,8 +88,9 @@ start_session_level_connection_to_node(PG_FUNCTION_ARGS)
 
 	CheckCitusVersion(ERROR);
 
-	if (connection != NULL && (strcmp(connection->hostname, nodeNameString) != 0 ||
-							   connection->port != nodePort))
+	if (singleConnection != NULL && (strcmp(singleConnection->hostname,
+											nodeNameString) != 0 ||
+									 singleConnection->port != nodePort))
 	{
 		elog(ERROR,
 			 "can not connect different worker nodes from the same session using start_session_level_connection_to_node");
@@ -99,13 +100,13 @@ start_session_level_connection_to_node(PG_FUNCTION_ARGS)
 	 * In order to keep connection open even with an open transaction,
 	 * allowSessionLifeSpanWithOpenTransaction is set to true.
 	 */
-	if (connection == NULL)
+	if (singleConnection == NULL)
 	{
-		connection = GetNodeConnection(SESSION_LIFESPAN, nodeNameString, nodePort);
+		singleConnection = GetNodeConnection(SESSION_LIFESPAN, nodeNameString, nodePort);
 		allowNonIdleRemoteTransactionOnXactHandling = true;
 	}
 
-	if (PQstatus(connection->pgConn) != CONNECTION_OK)
+	if (PQstatus(singleConnection->pgConn) != CONNECTION_OK)
 	{
 		elog(ERROR, "failed to connect to %s:%d", nodeNameString, (int) nodePort);
 	}
@@ -136,7 +137,7 @@ run_commands_on_session_level_connection_to_node(PG_FUNCTION_ARGS)
 														 PostPortNumber);
 	Oid pgReloadConfOid = InvalidOid;
 
-	if (!connection)
+	if (!singleConnection)
 	{
 		elog(ERROR,
 			 "start_session_level_connection_to_node must be called first to open a session level connection");
@@ -144,9 +145,9 @@ run_commands_on_session_level_connection_to_node(PG_FUNCTION_ARGS)
 
 	appendStringInfo(processStringInfo, ALTER_CURRENT_PROCESS_ID, MyProcPid);
 	appendStringInfo(workerProcessStringInfo, ALTER_CURRENT_WORKER_PROCESS_ID,
-					 GetRemoteProcessId(connection));
+					 GetRemoteProcessId());
 
-	ExecuteCriticalRemoteCommand(connection, queryString);
+	ExecuteCriticalRemoteCommand(singleConnection, queryString);
 
 	/*
 	 * Since we cannot run `ALTER SYSTEM` command within a transaction, we are
@@ -176,10 +177,10 @@ stop_session_level_connection_to_node(PG_FUNCTION_ARGS)
 {
 	allowNonIdleRemoteTransactionOnXactHandling = false;
 
-	if (connection != NULL)
+	if (singleConnection != NULL)
 	{
-		CloseConnection(connection);
-		connection = NULL;
+		CloseConnection(singleConnection);
+		singleConnection = NULL;
 	}
 
 	PG_RETURN_VOID();
@@ -191,7 +192,7 @@ stop_session_level_connection_to_node(PG_FUNCTION_ARGS)
  * by the connection.
  */
 static int64
-GetRemoteProcessId(MultiConnection *connection)
+GetRemoteProcessId()
 {
 	StringInfo queryStringInfo = makeStringInfo();
 	PGresult *result = NULL;
@@ -200,7 +201,7 @@ GetRemoteProcessId(MultiConnection *connection)
 
 	appendStringInfo(queryStringInfo, GET_PROCESS_ID);
 
-	ExecuteOptionalRemoteCommand(connection, queryStringInfo->data, &result);
+	ExecuteOptionalRemoteCommand(singleConnection, queryStringInfo->data, &result);
 
 	rowCount = PQntuples(result);
 
@@ -212,7 +213,7 @@ GetRemoteProcessId(MultiConnection *connection)
 	resultValue = ParseIntField(result, 0, 0);
 
 	PQclear(result);
-	ClearResults(connection, false);
+	ClearResults(singleConnection, false);
 
 	return resultValue;
 }

@@ -16,9 +16,9 @@
  * ApplyLogRedaction is only supported in Citus Enterprise
  */
 char *
-ApplyLogRedaction(const char *text)
+ApplyLogRedaction(const char *logText)
 {
-	return (char *) text;
+	return (char *) logText;
 }
 
 

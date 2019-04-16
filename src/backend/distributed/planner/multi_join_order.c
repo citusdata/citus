@@ -939,9 +939,8 @@ SinglePartitionJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 	/* evaluate re-partitioning the current table only if the rule didn't apply above */
 	if (nextJoinNode == NULL && candidatePartitionMethod != DISTRIBUTE_BY_NONE)
 	{
-		OpExpr *joinClause = SinglePartitionJoinClause(candidatePartitionColumn,
-													   applicableJoinClauses);
-
+		joinClause = SinglePartitionJoinClause(candidatePartitionColumn,
+											   applicableJoinClauses);
 		if (joinClause != NULL)
 		{
 			if (candidatePartitionMethod == DISTRIBUTE_BY_HASH)

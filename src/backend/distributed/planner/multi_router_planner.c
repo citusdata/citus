@@ -2416,10 +2416,10 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 			DISTRIBUTE_BY_RANGE)
 		{
 			Datum partitionValue = partitionValueConst->constvalue;
-			DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(
-				distributedTableId);
-			ShardInterval *shardInterval = FindShardInterval(partitionValue, cacheEntry);
+			ShardInterval *shardInterval = NULL;
 
+			cacheEntry = DistributedTableCacheEntry(distributedTableId);
+			shardInterval = FindShardInterval(partitionValue, cacheEntry);
 			if (shardInterval != NULL)
 			{
 				prunedShardList = list_make1(shardInterval);

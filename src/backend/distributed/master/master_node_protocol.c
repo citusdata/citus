@@ -471,7 +471,6 @@ master_get_active_worker_nodes(PG_FUNCTION_ARGS)
 	{
 		MemoryContext oldContext = NULL;
 		List *workerNodeList = NIL;
-		uint32 workerNodeCount = 0;
 		TupleDesc tupleDescriptor = NULL;
 		bool hasOid = false;
 
