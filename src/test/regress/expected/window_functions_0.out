@@ -422,7 +422,7 @@ FROM
 WHERE
 	user_id > 2 AND user_id < 6
 ORDER BY
-	user_id, value_1;
+	user_id, value_1, 3, 4;
 ERROR:  syntax error at or near "EXCLUDE"
 LINE 5: ...ANGE BETWEEN  UNBOUNDED PRECEDING AND CURRENT ROW EXCLUDE CU...
                                                              ^
@@ -440,7 +440,7 @@ WINDOW
 	range_window as (PARTITION BY user_id ORDER BY value_1 RANGE BETWEEN  1 PRECEDING AND 1 FOLLOWING),
 	range_window_exclude as (PARTITION BY user_id ORDER BY value_1 RANGE BETWEEN  1 PRECEDING AND 1 FOLLOWING EXCLUDE CURRENT ROW)
 ORDER BY
-	user_id, value_1;
+	user_id, value_1, 3, 4;
 ERROR:  RANGE PRECEDING is only supported with UNBOUNDED
 LINE 11: ..._window as (PARTITION BY user_id ORDER BY value_1 RANGE BETW...
                                                               ^
@@ -458,7 +458,7 @@ WINDOW
 	row_window as (PARTITION BY user_id ORDER BY value_1 ROWS BETWEEN  1 PRECEDING AND 1 FOLLOWING),
 	row_window_exclude as (PARTITION BY user_id ORDER BY value_1 ROWS BETWEEN  1 PRECEDING AND 1 FOLLOWING EXCLUDE CURRENT ROW)
 ORDER BY
-	user_id, value_1;
+	user_id, value_1, 3, 4;
 ERROR:  syntax error at or near "EXCLUDE"
 LINE 12: ...value_1 ROWS BETWEEN  1 PRECEDING AND 1 FOLLOWING EXCLUDE CU...
                                                               ^
