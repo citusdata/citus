@@ -1487,7 +1487,8 @@ StartPlacementExecutionOnSession(TaskPlacementExecution *placementExecution,
 		Oid *parameterTypes = NULL;
 		const char **parameterValues = NULL;
 
-		//paramListInfo = copyParamList(paramListInfo);
+		/* force evaluation of bound params */
+		paramListInfo = copyParamList(paramListInfo);
 
 		ExtractParametersFromParamListInfo(paramListInfo, &parameterTypes,
 										   &parameterValues);
