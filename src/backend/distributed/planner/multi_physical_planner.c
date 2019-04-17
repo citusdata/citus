@@ -5213,6 +5213,12 @@ ActiveShardPlacementLists(List *taskList)
 
 		/* filter out shard placements that reside in inactive nodes */
 		List *activeShardPlacementList = ActivePlacementList(shardPlacementList);
+		if (activeShardPlacementList == NIL)
+		{
+			ereport(ERROR,
+					(errmsg("no active placements were found for shard " UINT64_FORMAT,
+							anchorShardId)));
+		}
 
 		/* sort shard placements by their creation time */
 		activeShardPlacementList = SortList(activeShardPlacementList,
