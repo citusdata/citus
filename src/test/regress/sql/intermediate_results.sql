@@ -38,11 +38,16 @@ JOIN (SELECT * FROM read_intermediate_result('squares', 'binary') AS res (x int,
 ORDER BY x;
 END;
 
+-- don't print the worker port
+\set VERBOSITY terse
+
 -- files should now be cleaned up
 SELECT x, x2
 FROM interesting_squares JOIN (SELECT * FROM read_intermediate_result('squares', 'binary') AS res (x text, x2 int)) squares ON (x = interested_in)
 WHERE user_id = 'jon'
 ORDER BY x;
+
+\set VERBOSITY DEFAULT
 
 -- try to read the file as text, will fail because of binary encoding
 BEGIN;
