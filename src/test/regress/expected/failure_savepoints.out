@@ -38,6 +38,10 @@ CONTEXT:  while executing command on localhost:9060
 WARNING:  connection not open
 CONTEXT:  while executing command on localhost:9060
 DELETE FROM artists WHERE id=4;
+WARNING:  could not issue cancel request
+DETAIL:  Client error: PQcancel() -- no cancel object supplied
+WARNING:  connection not open
+CONTEXT:  while executing command on localhost:9060
 WARNING:  connection not open
 CONTEXT:  while executing command on localhost:9060
 WARNING:  connection error: localhost:9060
@@ -195,6 +199,8 @@ INSERT INTO artists VALUES (7, 'Emily Carr');
 ROLLBACK TO SAVEPOINT s1;
 WARNING:  connection not open
 WARNING:  connection not open
+WARNING:  could not issue cancel request
+WARNING:  connection not open
 COMMIT;
 ERROR:  could not make changes to shard 100950 on any node
 SELECT * FROM artists WHERE id=6;
@@ -230,6 +236,8 @@ WARNING:  connection not open
 WARNING:  connection not open
 INSERT INTO researchers VALUES (8, 4, 'Alonzo Church');
 ROLLBACK TO s1;
+WARNING:  could not issue cancel request
+WARNING:  connection not open
 WARNING:  connection not open
 WARNING:  connection error: localhost:9060
 WARNING:  connection not open

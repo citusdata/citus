@@ -105,6 +105,17 @@ SAVEPOINT s3;
 ROLLBACK TO SAVEPOINT s3;
 COMMIT;
 
+-- Recover from multi-shard modify errors
+BEGIN;
+INSERT INTO artists VALUES (8, 'Uncle Yaakov');
+SAVEPOINT s1;
+UPDATE artists SET name = NULL;
+ROLLBACK TO s1;
+INSERT INTO artists VALUES (9, 'Anna Schaeffer');
+COMMIT;
+
+SELECT * FROM artists ORDER BY id;
+
 -- ===================================================================
 -- Tests for replication factor > 1
 -- ===================================================================
@@ -216,3 +227,4 @@ SELECT * FROM researchers WHERE lab_id=10;
 -- Clean-up
 DROP TABLE artists;
 DROP TABLE researchers;
+

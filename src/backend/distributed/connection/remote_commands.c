@@ -1008,3 +1008,26 @@ BuildWaitEventSet(MultiConnection **allConnections, int totalConnectionCount,
 
 	return waitEventSet;
 }
+
+
+/*
+ * MultiClientCancel sends a cancelation request on the given connection. Return
+ * value indicates whether the cancelation request was sent successfully.
+ */
+bool
+SendCancelationRequest(MultiConnection *connection)
+{
+	char errorBuffer[ERROR_BUFFER_SIZE] = { 0 };
+	PGcancel *cancelObject = PQgetCancel(connection->pgConn);
+
+	bool cancelSent = PQcancel(cancelObject, errorBuffer, sizeof(errorBuffer));
+	if (!cancelSent)
+	{
+		ereport(WARNING, (errmsg("could not issue cancel request"),
+						  errdetail("Client error: %s", errorBuffer)));
+	}
+
+	PQfreeCancel(cancelObject);
+
+	return cancelSent;
+}

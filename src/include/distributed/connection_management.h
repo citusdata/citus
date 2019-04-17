@@ -21,6 +21,9 @@
 /* maximum (textual) lengths of hostname and port */
 #define MAX_NODE_LENGTH 255 /* includes 0 byte */
 
+/* used for libpq commands that get an error buffer. Postgres docs recommend 256. */
+#define ERROR_BUFFER_SIZE 256
+
 /* default notice level */
 #define DEFAULT_CITUS_NOTICE_LEVEL DEBUG1
 

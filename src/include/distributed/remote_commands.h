@@ -57,5 +57,6 @@ extern bool PutRemoteCopyEnd(MultiConnection *connection, const char *errormsg);
 /* waiting for multiple command results */
 extern void WaitForAllConnections(List *connectionList, bool raiseInterrupts);
 
+extern bool SendCancelationRequest(MultiConnection *connection);
 
 #endif /* REMOTE_COMMAND_H */

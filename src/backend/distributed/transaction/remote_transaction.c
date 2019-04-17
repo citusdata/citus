@@ -1068,6 +1068,12 @@ CoordinatedRemoteTransactionsSavepointRollback(SubTransactionId subId)
 		MultiConnection *connection = dlist_container(MultiConnection, transactionNode,
 													  iter.cur);
 		RemoteTransaction *transaction = &connection->remoteTransaction;
+
+		/* cancel any ongoing queries before issuing rollback */
+		ClearResultsIfReady(connection);
+		SendCancelationRequest(connection);
+		ForgetResults(connection);
+
 		if (transaction->transactionFailed)
 		{
 			if (transaction->lastSuccessfulSubXact <= subId)

@@ -129,6 +129,28 @@ ERROR:  current transaction is aborted, commands ignored until end of transactio
 ROLLBACK TO SAVEPOINT s3;
 ERROR:  no such savepoint
 COMMIT;
+-- Recover from multi-shard modify errors
+BEGIN;
+INSERT INTO artists VALUES (8, 'Uncle Yaakov');
+SAVEPOINT s1;
+UPDATE artists SET name = NULL;
+ERROR:  null value in column "name" violates not-null constraint
+ROLLBACK TO s1;
+INSERT INTO artists VALUES (9, 'Anna Schaeffer');
+COMMIT;
+SELECT * FROM artists ORDER BY id;
+ id |       name       
+----+------------------
+  1 | Pablo Picasso
+  2 | Vincent van Gogh
+  3 | Claude Monet
+  4 | William Kurelek
+  5 | Jacob Kahn
+  6 | Emily Carr
+  8 | Uncle Yaakov
+  9 | Anna Schaeffer
+(8 rows)
+
 -- ===================================================================
 -- Tests for replication factor > 1
 -- ===================================================================

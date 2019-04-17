@@ -1574,6 +1574,7 @@ ExecuteModifyTasks(List *taskList, bool expectResults, ParamListInfo paramListIn
 			queryOK = SendQueryInSingleRowMode(connection, queryString, paramListInfo);
 			if (!queryOK)
 			{
+				UnclaimAllShardConnections(shardConnectionHash);
 				ReportConnectionError(connection, ERROR);
 			}
 		}
@@ -1616,28 +1617,38 @@ ExecuteModifyTasks(List *taskList, bool expectResults, ParamListInfo paramListIn
 				SetCitusNoticeLevel(INFO);
 			}
 
-			/*
-			 * If caller is interested, store query results the first time
-			 * through. The output of the query's execution on other shards is
-			 * discarded if we run there (because it's a modification query).
-			 */
-			if (placementIndex == 0 && expectResults)
+			PG_TRY();
 			{
-				Assert(scanState != NULL);
+				/*
+				 * If caller is interested, store query results the first time
+				 * through. The output of the query's execution on other shards is
+				 * discarded if we run there (because it's a modification query).
+				 */
+				if (placementIndex == 0 && expectResults)
+				{
+					Assert(scanState != NULL);
 
-				queryOK = StoreQueryResult(scanState, connection,
-										   alwaysThrowErrorOnFailure,
-										   &currentAffectedTupleCount, NULL);
+					queryOK = StoreQueryResult(scanState, connection,
+											   alwaysThrowErrorOnFailure,
+											   &currentAffectedTupleCount, NULL);
+				}
+				else
+				{
+					queryOK = ConsumeQueryResult(connection, alwaysThrowErrorOnFailure,
+												 &currentAffectedTupleCount);
+				}
 			}
-			else
+			PG_CATCH();
 			{
-				queryOK = ConsumeQueryResult(connection, alwaysThrowErrorOnFailure,
-											 &currentAffectedTupleCount);
+				UnclaimAllShardConnections(shardConnectionHash);
+				PG_RE_THROW();
 			}
+			PG_END_TRY();
 
 			/* We error out if the worker fails to return a result for the query. */
 			if (!queryOK)
 			{
+				UnclaimAllShardConnections(shardConnectionHash);
 				ReportConnectionError(connection, ERROR);
 			}
 
