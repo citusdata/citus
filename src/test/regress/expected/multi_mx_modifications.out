@@ -32,11 +32,11 @@ SELECT COUNT(*) FROM limit_orders_mx WHERE id = 32745;
 (1 row)
 
 -- and see all the inserted rows
-SELECT * FROM limit_orders_mx;
+SELECT * FROM limit_orders_mx ORDER BY 1;
   id   | symbol | bidder_id |        placed_at         | kind | limit_price 
 -------+--------+-----------+--------------------------+------+-------------
- 32744 | AAPL   |      9580 | Tue Oct 19 10:23:54 2004 | buy  |       20.69
  32743 | AAPL   |      9580 | Tue Oct 19 10:23:54 2004 | buy  |       20.69
+ 32744 | AAPL   |      9580 | Tue Oct 19 10:23:54 2004 | buy  |       20.69
  32745 | AAPL   |      9580 | Tue Oct 19 10:23:54 2004 | buy  |       20.69
 (3 rows)
 
