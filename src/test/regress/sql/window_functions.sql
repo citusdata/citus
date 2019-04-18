@@ -239,7 +239,7 @@ FROM
 WHERE
 	user_id > 2 AND user_id < 6
 ORDER BY
-	user_id, value_1;
+	user_id, value_1, 3, 4;
 
 -- test <offset> preceding and <offset> following on RANGE window
 SELECT
@@ -255,7 +255,7 @@ WINDOW
 	range_window as (PARTITION BY user_id ORDER BY value_1 RANGE BETWEEN  1 PRECEDING AND 1 FOLLOWING),
 	range_window_exclude as (PARTITION BY user_id ORDER BY value_1 RANGE BETWEEN  1 PRECEDING AND 1 FOLLOWING EXCLUDE CURRENT ROW)
 ORDER BY
-	user_id, value_1;
+	user_id, value_1, 3, 4;
 
 -- test <offset> preceding and <offset> following on ROW window
 SELECT
@@ -271,7 +271,7 @@ WINDOW
 	row_window as (PARTITION BY user_id ORDER BY value_1 ROWS BETWEEN  1 PRECEDING AND 1 FOLLOWING),
 	row_window_exclude as (PARTITION BY user_id ORDER BY value_1 ROWS BETWEEN  1 PRECEDING AND 1 FOLLOWING EXCLUDE CURRENT ROW)
 ORDER BY
-	user_id, value_1;
+	user_id, value_1, 3, 4;
 
 -- some tests with GROUP BY, HAVING and LIMIT
 SELECT 

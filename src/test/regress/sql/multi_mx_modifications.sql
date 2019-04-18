@@ -24,7 +24,7 @@ INSERT INTO limit_orders_mx VALUES (32745, 'AAPL', 9580, '2004-10-19 10:23:54', 
 SELECT COUNT(*) FROM limit_orders_mx WHERE id = 32745;
 
 -- and see all the inserted rows
-SELECT * FROM limit_orders_mx;
+SELECT * FROM limit_orders_mx ORDER BY 1;
 
 -- basic single-row INSERT with RETURNING
 INSERT INTO limit_orders_mx VALUES (32746, 'AAPL', 9580, '2004-10-19 10:23:54', 'buy', 20.69) RETURNING *;
