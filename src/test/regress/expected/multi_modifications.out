@@ -200,9 +200,9 @@ INSERT INTO limit_orders VALUES (22037, 'GOOG', 5634, now(), 'buy', 0.50),
 RETURNING id;
   id   
 -------
+ 22037
  22038
  22039
- 22037
 (3 rows)
 
 SELECT COUNT(*) FROM limit_orders WHERE id BETWEEN 22037 AND 22039;
@@ -656,8 +656,8 @@ INSERT INTO app_analytics_events (app_id, name)
 VALUES (104, 'Wayz'), (105, 'Mynt') RETURNING *;
  id | app_id | name 
 ----+--------+------
-  5 |    105 | Mynt
   4 |    104 | Wayz
+  5 |    105 | Mynt
 (2 rows)
 
 INSERT INTO app_analytics_events (id, name)
@@ -688,8 +688,8 @@ EXECUTE prep('version-2');
 EXECUTE prep('version-3');
  id  | app_id |    name     
 -----+--------+-------------
- 400 |        | version-3.2
    9 |        | version-3.1
+ 400 |        | version-3.2
 (2 rows)
 
 EXECUTE prep('version-4');
@@ -702,15 +702,15 @@ EXECUTE prep('version-4');
 EXECUTE prep('version-5');
  id  | app_id |    name     
 -----+--------+-------------
- 400 |        | version-5.2
   11 |        | version-5.1
+ 400 |        | version-5.2
 (2 rows)
 
 EXECUTE prep('version-6');
  id  | app_id |    name     
 -----+--------+-------------
- 400 |        | version-6.2
   12 |        | version-6.1
+ 400 |        | version-6.2
 (2 rows)
 
 SELECT * FROM app_analytics_events ORDER BY id, name;
@@ -744,8 +744,8 @@ INSERT INTO app_analytics_events (name)
 VALUES ('Wayz'), ('Mynt') RETURNING *;
  id | name 
 ----+------
- 14 | Mynt
  13 | Wayz
+ 14 | Mynt
 (2 rows)
 
 SELECT * FROM app_analytics_events ORDER BY id;

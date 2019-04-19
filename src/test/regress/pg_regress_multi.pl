@@ -317,6 +317,7 @@ push(@pgOptions, '-c', "citus.shard_count=4");
 push(@pgOptions, '-c', "citus.shard_max_size=1500kB");
 push(@pgOptions, '-c', "citus.max_running_tasks_per_node=4");
 push(@pgOptions, '-c', "citus.expire_cached_shards=on");
+push(@pgOptions, '-c', "citus.sort_returning=on");
 push(@pgOptions, '-c', "citus.task_tracker_delay=10ms");
 push(@pgOptions, '-c', "citus.remote_task_check_interval=1ms");
 push(@pgOptions, '-c', "citus.shard_replication_factor=2");
