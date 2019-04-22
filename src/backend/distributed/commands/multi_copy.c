@@ -154,6 +154,8 @@ static void CopySendInt32(CopyOutState outputState, int32 val);
 static void CopySendInt16(CopyOutState outputState, int16 val);
 static void CopyAttributeOutText(CopyOutState outputState, char *string);
 static inline void CopyFlushOutput(CopyOutState outputState, char *start, char *pointer);
+static bool CitusSendTupleToPlacements(TupleTableSlot *slot,
+									   CitusCopyDestReceiver *copyDest);
 
 /* CitusCopyDestReceiver functions */
 static void CitusCopyDestReceiverStartup(DestReceiver *copyDest, int operation,
@@ -2251,8 +2253,33 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
 static bool
 CitusCopyDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
 {
+	bool result = false;
 	CitusCopyDestReceiver *copyDest = (CitusCopyDestReceiver *) dest;
 
+	PG_TRY();
+	{
+		result = CitusSendTupleToPlacements(slot, copyDest);
+	}
+	PG_CATCH();
+	{
+		HTAB *shardConnectionHash = copyDest->shardConnectionHash;
+		UnclaimAllShardConnections(shardConnectionHash);
+
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
+
+	return result;
+}
+
+
+/*
+ * CitusSendTupleToPlacements sends the given TupleTableSlot to the appropriate
+ * shard placement(s).
+ */
+static bool
+CitusSendTupleToPlacements(TupleTableSlot *slot, CitusCopyDestReceiver *copyDest)
+{
 	int partitionColumnIndex = copyDest->partitionColumnIndex;
 	TupleDesc tupleDescriptor = copyDest->tupleDescriptor;
 	CopyStmt *copyStatement = copyDest->copyStatement;
@@ -2409,21 +2436,37 @@ CitusCopyDestReceiverShutdown(DestReceiver *destReceiver)
 	Relation distributedRelation = copyDest->distributedRelation;
 
 	shardConnectionsList = ShardConnectionList(shardConnectionHash);
-	foreach(shardConnectionsCell, shardConnectionsList)
+
+	PG_TRY();
 	{
-		ShardConnections *shardConnections = (ShardConnections *) lfirst(
-			shardConnectionsCell);
-
-		/* send copy binary footers to all shard placements */
-		if (copyOutState->binary)
+		foreach(shardConnectionsCell, shardConnectionsList)
 		{
-			SendCopyBinaryFooters(copyOutState, shardConnections->shardId,
-								  shardConnections->connectionList);
-		}
+			ShardConnections *shardConnections = (ShardConnections *) lfirst(
+				shardConnectionsCell);
 
-		/* close the COPY input on all shard placements */
-		EndRemoteCopy(shardConnections->shardId, shardConnections->connectionList, true);
+			/* send copy binary footers to all shard placements */
+			if (copyOutState->binary)
+			{
+				SendCopyBinaryFooters(copyOutState, shardConnections->shardId,
+									  shardConnections->connectionList);
+			}
+
+			/* close the COPY input on all shard placements */
+			EndRemoteCopy(shardConnections->shardId, shardConnections->connectionList,
+						  true);
+		}
 	}
+	PG_CATCH();
+	{
+		/*
+		 * We might be able to recover from errors with ROLLBACK TO SAVEPOINT,
+		 * so unclaim the connections before throwing errors.
+		 */
+		UnclaimAllShardConnections(shardConnectionHash);
+
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
 
 	heap_close(distributedRelation, NoLock);
 }

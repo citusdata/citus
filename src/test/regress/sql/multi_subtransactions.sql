@@ -107,14 +107,51 @@ COMMIT;
 
 -- Recover from multi-shard modify errors
 BEGIN;
-INSERT INTO artists VALUES (8, 'Uncle Yaakov');
+INSERT INTO artists VALUES (8, 'Sogand');
 SAVEPOINT s1;
 UPDATE artists SET name = NULL;
 ROLLBACK TO s1;
-INSERT INTO artists VALUES (9, 'Anna Schaeffer');
+INSERT INTO artists VALUES (9, 'Mohsen Namjoo');
 COMMIT;
 
-SELECT * FROM artists ORDER BY id;
+SELECT * FROM artists WHERE id IN (7, 8, 9) ORDER BY id;
+
+-- Recover from multi-shard copy shutdown failure.
+-- Constraint check for non-partition columns happen only at copy shutdown.
+BEGIN;
+DELETE FROM artists;
+SAVEPOINT s1;
+INSERT INTO artists SELECT i, NULL FROM generate_series(1, 5) i;
+ROLLBACK TO s1;
+INSERT INTO artists VALUES (10, 'Mahmoud Farshchian');
+COMMIT;
+
+SELECT * FROM artists WHERE id IN (9, 10) ORDER BY id;
+
+-- Recover from multi-shard copy send failure.
+-- Constraint check for partition column happens at copy send.
+BEGIN;
+DELETE FROM artists;
+SAVEPOINT s1;
+INSERT INTO artists SELECT NULL, NULL FROM generate_series(1, 5) i;
+ROLLBACK TO s1;
+INSERT INTO artists VALUES (11, 'Egon Schiele');
+COMMIT;
+
+SELECT * FROM artists WHERE id IN (10, 11) ORDER BY id;
+
+-- Recover from multi-shard copy startup failure.
+-- Check for existence of a value for partition columnn happens at copy startup.
+BEGIN;
+DELETE FROM artists;
+SAVEPOINT s1;
+INSERT INTO artists(name) SELECT 'a' FROM generate_series(1, 5) i;
+ROLLBACK TO s1;
+INSERT INTO artists VALUES (12, 'Marc Chagall');
+COMMIT;
+
+SELECT * FROM artists WHERE id IN (11, 12) ORDER BY id;
+
 
 -- ===================================================================
 -- Tests for replication factor > 1

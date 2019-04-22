@@ -1070,9 +1070,10 @@ CoordinatedRemoteTransactionsSavepointRollback(SubTransactionId subId)
 		RemoteTransaction *transaction = &connection->remoteTransaction;
 
 		/* cancel any ongoing queries before issuing rollback */
-		ClearResultsIfReady(connection);
 		SendCancelationRequest(connection);
-		ForgetResults(connection);
+
+		/* clear results, but don't show cancelation warning messages from workers. */
+		ClearResultsDiscardWarnings(connection, raiseInterrupts);
 
 		if (transaction->transactionFailed)
 		{
