@@ -112,9 +112,7 @@ CopyNodeDistributedPlan(COPYFUNC_ARGS)
 	COPY_SCALAR_FIELD(queryId);
 	COPY_NODE_FIELD(relationIdList);
 
-	COPY_NODE_FIELD(insertSelectSubquery);
-	COPY_NODE_FIELD(insertTargetList);
-	COPY_SCALAR_FIELD(targetRelationId);
+	COPY_NODE_FIELD(insertSelectQuery);
 	COPY_STRING_FIELD(intermediateResultIdPrefix);
 
 	COPY_NODE_FIELD(subPlanList);

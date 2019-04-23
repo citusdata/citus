@@ -188,8 +188,6 @@ static ConnectionPlacementHashEntry * FindOrCreatePlacementEntry(
 	ShardPlacement *placement);
 static bool CanUseExistingConnection(uint32 flags, const char *userName,
 									 ConnectionReference *placementConnection);
-static bool ConnectionAccessedDifferentPlacement(MultiConnection *connection,
-												 ShardPlacement *placement);
 static void AssociatePlacementWithShard(ConnectionPlacementHashEntry *placementEntry,
 										ShardPlacement *placement);
 static bool CheckShardPlacements(ConnectionShardHashEntry *shardEntry);
@@ -829,7 +827,7 @@ CanUseExistingConnection(uint32 flags, const char *userName,
  * placement in the same colocation group with a different representative value,
  * meaning it's not strictly colocated.
  */
-static bool
+bool
 ConnectionAccessedDifferentPlacement(MultiConnection *connection,
 									 ShardPlacement *placement)
 {

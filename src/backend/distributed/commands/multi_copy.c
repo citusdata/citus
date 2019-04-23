@@ -836,7 +836,21 @@ OpenCopyConnections(CopyStmt *copyStatement, ShardConnections *shardConnections,
 			connectionFlags |= CONNECTION_PER_PLACEMENT;
 		}
 
-		connection = GetPlacementConnection(connectionFlags, placement, nodeUser);
+		if (IsCopyResultStmt(copyStatement))
+		{
+			/*
+			 * Intermediate results can be read over any connection. We do
+			 * not associate the connection with a particular placement even
+			 * if the result itself is destined to be merged into a particular
+			 * placement.
+			 */
+			connection = GetNodeConnection(connectionFlags, placement->nodeName,
+										   placement->nodePort);
+		}
+		else
+		{
+			connection = GetPlacementConnection(connectionFlags, placement, nodeUser);
+		}
 
 		if (PQstatus(connection->pgConn) != CONNECTION_OK)
 		{

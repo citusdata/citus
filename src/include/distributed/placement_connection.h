@@ -70,5 +70,7 @@ extern void ResetShardPlacementAssociation(struct MultiConnection *connection);
 extern void InitPlacementConnectionManagement(void);
 
 extern bool ConnectionUsedForAnyPlacements(MultiConnection *connection);
+extern bool ConnectionAccessedDifferentPlacement(MultiConnection *connection,
+												 ShardPlacement *placement);
 
 #endif /* PLACEMENT_CONNECTION_H */

@@ -18,6 +18,7 @@
 
 
 extern TupleTableSlot * CoordinatorInsertSelectExecScan(CustomScanState *node);
+extern Query * BuildSelectForInsertSelect(Query *insertSelectQuery);
 
 
 #endif /* INSERT_SELECT_EXECUTOR_H */
