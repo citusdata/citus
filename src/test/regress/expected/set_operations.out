@@ -858,13 +858,13 @@ SELECT * FROM set_view_pushdown ORDER BY 1 DESC;
 
 -- this should be recursively planned
 CREATE VIEW set_view_recursive_second AS SELECT u.x, test.y FROM ((SELECT x, y FROM test) UNION (SELECT 1, 1 FROM test)) u JOIN test USING (x) ORDER BY 1,2;
-SELECT * FROM set_view_recursive_second;
+SELECT * FROM set_view_recursive_second ORDER BY 1,2;
 DEBUG:  generating subplan 175_1 for subquery SELECT x, y FROM recursive_union.test
 DEBUG:  generating subplan 175_2 for subquery SELECT 1, 1 FROM recursive_union.test
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 DEBUG:  generating subplan 175_3 for subquery SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('175_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer) UNION SELECT intermediate_result."?column?", intermediate_result."?column?_1" AS "?column?" FROM read_intermediate_result('175_2'::text, 'binary'::citus_copy_format) intermediate_result("?column?" integer, "?column?_1" integer)
-DEBUG:  Plan 175 query after replacing subqueries and CTEs: SELECT x, y FROM (SELECT u.x, test.y FROM ((SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('175_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)) u JOIN recursive_union.test USING (x)) ORDER BY u.x, test.y) set_view_recursive_second
+DEBUG:  Plan 175 query after replacing subqueries and CTEs: SELECT x, y FROM (SELECT u.x, test.y FROM ((SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('175_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)) u JOIN recursive_union.test USING (x)) ORDER BY u.x, test.y) set_view_recursive_second ORDER BY x, y
  x | y 
 ---+---
  1 | 1
