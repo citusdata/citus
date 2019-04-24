@@ -93,6 +93,7 @@ master_modify_multiple_shards(PG_FUNCTION_ARGS)
 	TaskType taskType = TASK_TYPE_INVALID_FIRST;
 	bool truncateOperation = false;
 	RawStmt *rawStmt = (RawStmt *) ParseTreeRawStmt(queryString);
+	int targetPoolSize = DEFAULT_POOL_SIZE;
 	queryTreeNode = rawStmt->stmt;
 
 	CheckCitusVersion(ERROR);
@@ -190,7 +191,7 @@ master_modify_multiple_shards(PG_FUNCTION_ARGS)
 	taskList =
 		ModifyMultipleShardsTaskList(modifyQuery, prunedShardIntervalList, taskType);
 
-	affectedTupleCount = ExecuteTaskList(operation, taskList);
+	affectedTupleCount = ExecuteTaskList(operation, taskList, targetPoolSize);
 
 	PG_RETURN_INT32(affectedTupleCount);
 }
