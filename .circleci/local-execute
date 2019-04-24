@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+
+# make bash behave
+set -euxo pipefail
+IFS=$'\n\t'
+
+CIRCLE_PROJECT_REPONAME=citus
+CIRCLE_WORKFLOW=build
+CIRCLE_JOB=test-10_check-multi
+
+volume_name="circleci_${CIRCLE_PROJECT_REPONAME}_${CIRCLE_WORKFLOW}_local_workspace"
+
+# docker volume rm -f "${volume_name}" > /dev/null 2>&1
+# docker volume create "${volume_name}" > /dev/null 2>&1
+#
+# circleci local execute \
+#   -c .circleci/build/processed-config.yml \
+#   -v "${volume_name}:/tmp/_circleci_local_workspace" \
+#   --job="${CIRCLE_JOB}" \
+#   -e CIRCLE_PROJECT_REPONAME="${CIRCLE_PROJECT_REPONAME}"
+
+volume_name="circleci_${CIRCLE_PROJECT_REPONAME}_${CIRCLE_JOB}_local_workspace"
+
+circleci local execute \
+  -c .circleci/build/processed-config.yml \
+  -v "${volume_name}:/home/circleci/project" \
+  --job="${CIRCLE_JOB}" \
+  -e CIRCLE_PROJECT_REPONAME="${CIRCLE_PROJECT_REPONAME}"

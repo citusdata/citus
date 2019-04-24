@@ -1,0 +1,238 @@
+# Orb 'codecov/codecov@1.0.4' resolved to 'codecov/codecov@1.0.4'
+version: 2
+jobs:
+  build:
+    docker:
+    - image: citusdata/extbuilder:debug
+    steps:
+    - checkout
+    - {run: {name: 'Configure, Build, and Install', command: build-ext}}
+    - run:
+        name: Persisting to Workspace
+        command: |
+          cd ~/project && cp -av . /tmp/_circleci_local_workspace
+    - run:
+        name: Wait for Shell Sessions
+        command: |
+          set +x
+          container_id=$(basename "$(cat /proc/1/cpuset)")
+
+          echo "You can now run shells on this container:"
+          printf "\t\$ docker exec -it %s %s\n\n" "${container_id:0:12}" "$0"
+          echo "This box will stay up for 5h0m0s, or until 10m0s passes without output."
+
+          lockfile='/tmp/_circleci_local_shells'
+          touch "${lockfile}"
+
+          numdots=0
+          while [ -e "${lockfile}" ]; do
+            numspaces=$((4 - numdots))
+            printf "\rWaiting for shell connections"
+            printf '.%.0s' $(seq 0 $numdots)
+            printf ' %.0s' $(seq 0 $numspaces)
+
+            numdots=$(((numdots + 1) % 4))
+            sleep 1
+          done
+  check-style:
+    docker:
+    - image: citusdata/stylechecker:latest
+    steps:
+    - checkout
+    - run:
+        name: Check Style
+        command: citus_indent --check
+  test-10_check-multi:
+    docker:
+    - image: citusdata/exttester-10:reporting
+    working_directory: /home/circleci/project
+    steps:
+    - attach_workspace:
+        at: .
+    - run:
+        name: Install and Test (check-multi)
+        command: install-and-test-ext check-worker
+    - run:
+        name: Wait for Shell Sessions
+        command: |
+          set +x
+          container_id=$(basename "$(cat /proc/1/cpuset)")
+
+          echo "You can now run shells on this container:"
+          printf "\t\$ docker exec -it %s %s\n\n" "${container_id:0:12}" "$0"
+          echo "This box will stay up for 5h0m0s, or until 10m0s passes without output."
+
+          lockfile='/tmp/_circleci_local_shells'
+          touch "${lockfile}"
+
+          numdots=0
+          while [ -e "${lockfile}" ]; do
+            numspaces=$((4 - numdots))
+            printf "\rWaiting for shell connections"
+            printf '.%.0s' $(seq 0 $numdots)
+            printf ' %.0s' $(seq 0 $numspaces)
+
+            numdots=$(((numdots + 1) % 4))
+            sleep 1
+          done
+    - run:
+        name: Upload Coverage Results
+        command: |
+          bash <(curl -s https://codecov.io/bash) \
+            -n ${CIRCLE_BUILD_NUM} \
+            -t ${CODECOV_TOKEN} \
+            -y .codecov.yml \
+             -F test_10,multi  \
+workflows:
+  version: 2
+  build_and_test:
+    jobs:
+    - build
+    - check-style
+    - test-10_check-multi:
+        requires:
+        - build
+
+# Original config.yml file:
+# version: 2.1
+# orbs:
+#   codecov: codecov/codecov@1.0.4
+#
+# jobs:
+#   build:
+#     docker:
+#       - {image: 'citusdata/extbuilder:debug'}
+#     steps:
+#       - checkout
+#       - {run: {name: 'Configure, Build, and Install', command: build-ext}}
+#       - {persist_to_workspace: {root: ., paths: [.]}}
+#   check-style:
+#     docker:
+#       - {image: 'citusdata/stylechecker:latest'}
+#     steps:
+#       - checkout
+#       - {run: {name: 'Check Style', command: citus_indent --check}}
+#   test-10_check-multi:
+#     docker:
+#       - {image: 'citusdata/exttester-10:reporting'}
+#     working_directory: /home/circleci/project
+#     steps:
+#       - {attach_workspace: {at: .}}
+#       - run:
+#           name: 'Install and Test (check-multi)'
+#           command: 'install-and-test-ext check-worker'
+#       - {codecov/upload: {flags: 'test_10,multi'}}
+#   test-10_check-tt-van-mx:
+#     docker:
+#       - {image: 'citusdata/exttester-10:reporting'}
+#     working_directory: /home/circleci/project
+#     steps:
+#       - {attach_workspace: {at: .}}
+#       - {run: {name: 'Install and Test (check-tt-van-mx)', command: 'install-and-test-ext check-multi-task-tracker-extra check-vanilla check-multi-mx'}}
+#       - {codecov/upload: {flags: 'test_10,tracker,vanilla,mx'}}
+#   test-10_check-iso-work-fol:
+#     docker:
+#       - {image: 'citusdata/exttester-10:reporting'}
+#     working_directory: /home/circleci/project
+#     steps:
+#       - {attach_workspace: {at: .}}
+#       - {run: {name: 'Install and Test (check-iso-work-fol)', command: 'install-and-test-ext check-isolation check-worker'}}
+#       - {codecov/upload: {flags: 'test_10,isolation,worker'}}
+#   test-10_check-fol:
+#     docker:
+#       - {image: 'citusdata/exttester-10:reporting'}
+#     working_directory: /home/circleci/project
+#     steps:
+#       - {attach_workspace: {at: .}}
+#       - run:
+#           name: 'Enable core dumps'
+#           command: 'ulimit -c unlimited'
+#       - {run: {name: 'Install and Test (fol)', command: 'install-and-test-ext check-follower-cluster'}}
+#       - run:
+#           command: |
+#             mkdir -p /tmp/core_dumps
+#             cp core.* /tmp/core_dumps
+#           when: on_fail
+#       - {codecov/upload: {flags: 'follower'}}
+#       - {store_artifacts: {path: '/tmp/core_dumps'}}
+#   test-10_check-failure:
+#     docker:
+#       - {image: 'citusdata/failtester-10:latest'}
+#     working_directory: /home/circleci/project
+#     steps:
+#       - {attach_workspace: {at: .}}
+#       - {run: {name: 'Install and Test (check-failure)', command: 'install-and-test-ext check-failure'}}
+#   test-11_check-multi:
+#     docker:
+#       - {image: 'citusdata/exttester-11:reporting'}
+#     working_directory: /home/circleci/project
+#     steps:
+#       - {attach_workspace: {at: .}}
+#       - {run: {name: 'Install and Test (check-multi)', command: 'install-and-test-ext check-worker'}}
+#       - run:
+#           name: 'Generate test reports'
+#           command: |
+#             cd build-${PG_MAJOR}/src/test/regress
+#             PROJECT_ROOT=\"${CIRCLE_WORKING_DIRECTORY}\" generate-test-reports regress
+#             mkdir -p /tmp/test-reports/pg_regress
+#             cp regress/*.xml /tmp/test-reports/pg_regress
+#       - {store_test_results: {path: '/tmp/test-reports'}}
+#       - {codecov/upload: {flags: 'test_11,multi'}}
+#   test-11_check-tt-van-mx:
+#     docker:
+#       - {image: 'citusdata/exttester-11:reporting'}
+#     working_directory: /home/circleci/project
+#     steps:
+#       - {attach_workspace: {at: .}}
+#       - {run: {name: 'Install and Test (check-tt-van-mx)', command: 'install-and-test-ext check-multi-task-tracker-extra check-vanilla check-multi-mx'}}
+#       - {codecov/upload: {flags: 'test_11,tracker,vanilla,mx'}}
+#   test-11_check-iso-work-fol:
+#     docker:
+#       - {image: 'citusdata/exttester-11:reporting'}
+#     working_directory: /home/circleci/project
+#     steps:
+#       - {attach_workspace: {at: .}}
+#       - {run: {name: 'Install and Test (check-iso-work-fol)', command: 'install-and-test-ext check-isolation check-worker'}}
+#       - {codecov/upload: {flags: 'test_11,isolation,worker'}}
+#   test-11_check-fol:
+#     docker:
+#       - {image: 'citusdata/exttester-11:reporting'}
+#     working_directory: /home/circleci/project
+#     steps:
+#       - {attach_workspace: {at: .}}
+#       - run:
+#           name: 'Enable core dumps'
+#           command: 'ulimit -c unlimited'
+#       - {run: {name: 'Install and Test (fol)', command: 'install-and-test-ext check-follower-cluster'}}
+#       - run:
+#           command: |
+#             mkdir -p /tmp/core_dumps
+#             cp core.* /tmp/core_dumps
+#           when: on_fail
+#       - {codecov/upload: {flags: 'follower'}}
+#       - {store_artifacts: {path: '/tmp/core_dumps'}}
+#   test-11_check-failure:
+#     docker:
+#       - {image: 'citusdata/failtester-11:latest'}
+#     working_directory: /home/circleci/project
+#     steps:
+#       - {attach_workspace: {at: .}}
+#       - {run: {name: 'Install and Test (check-failure)', command: 'install-and-test-ext check-failure'}}
+# workflows:
+#   version: 2
+#   build_and_test:
+#     jobs:
+#       - build
+#       - check-style
+#
+#       - {test-10_check-multi: {requires: [build]}}
+#       # - {test-11_check-multi: {requires: [build]}}
+#       # - {test-10_check-tt-van-mx: {requires: [build]}}
+#       # - {test-10_check-iso-work-fol: {requires: [build]}}
+#       # - {test-10_check-fol: {requires: [build]}}
+#       # - {test-10_check-failure: {requires: [build]}}
+#       #
+#       # - {test-11_check-tt-van-mx: {requires: [build]}}
+#       # - {test-11_check-iso-work-fol: {requires: [build]}}
+#       # - {test-11_check-fol: {requires: [build]}}
+#       # - {test-11_check-failure: {requires: [build]}}
