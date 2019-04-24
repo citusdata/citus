@@ -335,7 +335,7 @@ CitusExecScan(CustomScanState *node)
 		EState *executorState = scanState->customScanState.ss.ps.state;
 		bool randomAccess = true;
 		bool interTransactions = false;
-		int targetPoolSize = 4;
+		int targetPoolSize = DEFAULT_POOL_SIZE;
 
 		/* we are taking locks on partitions of partitioned tables */
 		LockPartitionsInRelationList(distributedPlan->relationIdList, AccessShareLock);
@@ -381,10 +381,9 @@ CitusExecScan(CustomScanState *node)
 
 
 uint64
-ExecuteTaskList(CmdType operation, List *taskList)
+ExecuteTaskList(CmdType operation, List *taskList, int targetPoolSize)
 {
 	DistributedPlan *distributedPlan = NULL;
-	int targetPoolSize = 4;
 	DistributedExecution *execution = NULL;
 
 	distributedPlan = CitusMakeNode(DistributedPlan);
