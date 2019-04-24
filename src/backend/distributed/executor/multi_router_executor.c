@@ -827,6 +827,15 @@ TaskListRequires2PC(List *taskList)
 		return true;
 	}
 
+	if (task->taskType == DDL_TASK)
+	{
+		if (MultiShardCommitProtocol == COMMIT_PROTOCOL_2PC ||
+			task->replicationModel == REPLICATION_MODEL_2PC)
+		{
+			return true;
+		}
+	}
+
 	return false;
 }
 
