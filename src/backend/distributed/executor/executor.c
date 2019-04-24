@@ -366,6 +366,11 @@ CitusExecScan(CustomScanState *node)
 
 		FinishDistributedExecution(execution);
 
+		if (SortReturning && distributedPlan->hasReturning)
+		{
+			SortTupleStore(scanState);
+		}
+
 		scanState->finishedRemoteScan = true;
 	}
 
