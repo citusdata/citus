@@ -164,7 +164,7 @@ SELECT * FROM set_view_pushdown ORDER BY 1 DESC;
 
 -- this should be recursively planned
 CREATE VIEW set_view_recursive_second AS SELECT u.x, test.y FROM ((SELECT x, y FROM test) UNION (SELECT 1, 1 FROM test)) u JOIN test USING (x) ORDER BY 1,2;
-SELECT * FROM set_view_recursive_second;
+SELECT * FROM set_view_recursive_second ORDER BY 1,2;
 
 -- this should create lots of recursive calls since both views and set operations lead to recursive plans :) 
 ((SELECT x FROM set_view_recursive_second) INTERSECT (SELECT * FROM set_view_recursive)) EXCEPT (SELECT * FROM set_view_pushdown);
