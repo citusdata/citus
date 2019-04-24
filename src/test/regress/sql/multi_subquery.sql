@@ -100,7 +100,7 @@ FROM
 		FROM
 			lineitem_subquery
 		ORDER BY
-			l_quantity
+			l_orderkey, l_quantity
 		LIMIT 10
 		) lineitem_quantities
 	JOIN LATERAL
@@ -123,7 +123,7 @@ FROM
 		FROM
 			lineitem_subquery
 		ORDER BY
-			l_quantity
+			l_orderkey, l_quantity
 		LIMIT 10
 		) lineitem_quantities
 	JOIN LATERAL
