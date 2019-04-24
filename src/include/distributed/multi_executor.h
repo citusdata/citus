@@ -18,6 +18,9 @@
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_server_executor.h"
 
+/* we'll make this configurable, just a temporary global variable */
+#define DEFAULT_POOL_SIZE 4
+
 
 /* managed via guc.c */
 typedef enum
@@ -34,7 +37,7 @@ extern bool WritableStandbyCoordinator;
 extern void CitusExecutorStart(QueryDesc *queryDesc, int eflags);
 extern void CitusExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint64 count,
 							 bool execute_once);
-extern uint64 ExecuteTaskList(CmdType operation, List *taskList);
+extern uint64 ExecuteTaskList(CmdType operation, List *taskList, int targetPoolSize);
 extern TupleTableSlot * CitusExecScan(CustomScanState *node);
 extern TupleTableSlot * ReturnTupleFromTuplestore(CitusScanState *scanState);
 extern void LoadTuplesIntoTupleStore(CitusScanState *citusScanState, Job *workerJob);
