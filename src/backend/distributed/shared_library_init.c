@@ -679,6 +679,20 @@ RegisterCitusConfigVariables(void)
 		GUC_UNIT_KB,
 		NULL, NULL, NULL);
 
+	DefineCustomBoolVariable(
+		"citus.sort_returning",
+		gettext_noop("Sorts the RETURNING clause to get consistent test output"),
+		gettext_noop("This feature is not intended for users. It is developed "
+					 "to get consistent regression test outputs. When enabled, "
+					 "the RETURNING clause returns the tuples sorted. The sort "
+					 "is done for all the entries, starting from the first one."
+					 "Finally, the sorting is done in ASC order."),
+		&SortReturning,
+		false,
+		PGC_SUSET,
+		GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
 	DefineCustomIntVariable(
 		"citus.max_intermediate_result_size",
 		gettext_noop("Sets the maximum size of the intermediate results in KB for "

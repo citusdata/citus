@@ -35,6 +35,7 @@ typedef struct XactShardConnSet
 /* Config variables managed via guc.c */
 extern bool AllModificationsCommutative;
 extern bool EnableDeadlockPrevention;
+extern bool SortReturning;
 
 
 extern void CitusModifyBeginScan(CustomScanState *node, EState *estate, int eflags);
