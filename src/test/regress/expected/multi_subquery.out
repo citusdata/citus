@@ -134,7 +134,7 @@ FROM
 		FROM
 			lineitem_subquery
 		ORDER BY
-			l_quantity
+			l_orderkey, l_quantity
 		LIMIT 10
 		) lineitem_quantities
 	JOIN LATERAL
@@ -144,9 +144,9 @@ FROM
 			orders_subquery
 		WHERE
 			lineitem_quantities.l_orderkey = o_orderkey) orders_price ON true;
-           avg           
--------------------------
- 129027.1270000000000000
+          avg           
+------------------------
+ 17470.0940725222668915
 (1 row)
 
 -- Limit is only supported when subquery_pushdown is set
@@ -161,7 +161,7 @@ FROM
 		FROM
 			lineitem_subquery
 		ORDER BY
-			l_quantity
+			l_orderkey, l_quantity
 		LIMIT 10
 		) lineitem_quantities
 	JOIN LATERAL
