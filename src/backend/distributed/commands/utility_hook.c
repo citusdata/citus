@@ -56,6 +56,7 @@
 
 
 bool EnableDDLPropagation = true; /* ddl propagation is enabled */
+PropSetCmdBehavior PropagateSetCommands = PROPSETCMD_NONE; /* SET prop off */
 static bool shouldInvalidateForeignKeyGraph = false;
 static int activeAlterTables = 0;
 
@@ -175,6 +176,24 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		return;
 	}
 #endif
+
+	/* process SET LOCAL stmts of whitelisted GUCs in multi-stmt xacts */
+	if (IsA(parsetree, VariableSetStmt))
+	{
+		VariableSetStmt *setStmt = (VariableSetStmt *) parsetree;
+		bool propagateSetVar = (PropagateSetCommands == PROPSETCMD_LOCAL &&
+								setStmt->is_local);
+		bool setVarIsValid = SetCommandTargetIsValid(setStmt);
+
+		/* at present, we only implement the NONE and LOCAL behaviors */
+		AssertState(PropagateSetCommands == PROPSETCMD_NONE ||
+					PropagateSetCommands == PROPSETCMD_LOCAL);
+
+		if (propagateSetVar && setVarIsValid && IsMultiStatementTransaction())
+		{
+			ProcessVariableSetStmt(setStmt, queryString);
+		}
+	}
 
 	/*
 	 * TRANSMIT used to be separate command, but to avoid patching the grammar

@@ -93,16 +93,31 @@ StartRemoteTransactionBegin(struct MultiConnection *connection)
 					 distributedTransactionId->transactionNumber,
 					 timestamp);
 
-	/* append in-progress savepoints for this transaction */
-	activeSubXacts = ActiveSubXacts();
+	/* append context for in-progress SAVEPOINTs for this transaction */
+	activeSubXacts = ActiveSubXactContexts();
 	transaction->lastSuccessfulSubXact = TopSubTransactionId;
 	transaction->lastQueuedSubXact = TopSubTransactionId;
 	foreach(subIdCell, activeSubXacts)
 	{
-		SubTransactionId subId = lfirst_int(subIdCell);
+		SubXactContext *subXactState = lfirst(subIdCell);
+
+		/* append SET LOCAL state from when SAVEPOINT was encountered... */
+		if (subXactState->setLocalCmds != NULL)
+		{
+			appendStringInfoString(beginAndSetDistributedTransactionId,
+								   subXactState->setLocalCmds->data);
+		}
+
+		/* ... then append SAVEPOINT to enter this subxact */
 		appendStringInfo(beginAndSetDistributedTransactionId,
-						 "SAVEPOINT savepoint_%u;", subId);
-		transaction->lastQueuedSubXact = subId;
+						 "SAVEPOINT savepoint_%u;", subXactState->subId);
+		transaction->lastQueuedSubXact = subXactState->subId;
+	}
+
+	/* we've pushed into deepest subxact: apply in-progress SET context */
+	if (activeSetStmts != NULL)
+	{
+		appendStringInfoString(beginAndSetDistributedTransactionId, activeSetStmts->data);
 	}
 
 	if (!SendRemoteCommand(connection, beginAndSetDistributedTransactionId->data))

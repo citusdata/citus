@@ -46,8 +46,20 @@ XactModificationType XactModificationLevel = XACT_MODIFICATION_NONE;
 /* list of connections that are part of the current coordinated transaction */
 dlist_head InProgressTransactions = DLIST_STATIC_INIT(InProgressTransactions);
 
-/* stack of active sub-transactions */
-static List *activeSubXacts = NIL;
+/*
+ * activeSetStmts keeps track of SET LOCAL statements executed within the current
+ * subxact and will be set to NULL when pushing into new subxact or ending top xact.
+ */
+StringInfo activeSetStmts;
+
+/*
+ * Though a list, we treat this as a stack, pushing on subxact contexts whenever
+ * e.g. a SAVEPOINT is executed (though this is actually performed by providing
+ * PostgreSQL with a sub-xact callback). At present, the context of a subxact
+ * includes a subxact identifier as well as any SET LOCAL statements propagated
+ * to workers during the sub-transaction.
+ */
+static List *activeSubXactContexts = NIL;
 
 /* some pre-allocated memory so we don't need to call malloc() during callbacks */
 MemoryContext CommitContext = NULL;
@@ -213,6 +225,7 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			CurrentCoordinatedTransactionState = COORD_TRANS_NONE;
 			XactModificationLevel = XACT_MODIFICATION_NONE;
 			dlist_init(&InProgressTransactions);
+			activeSetStmts = NULL;
 			CoordinatedTransactionUses2PC = false;
 
 			UnSetDistributedTransactionId();
@@ -265,6 +278,7 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			CurrentCoordinatedTransactionState = COORD_TRANS_NONE;
 			XactModificationLevel = XACT_MODIFICATION_NONE;
 			dlist_init(&InProgressTransactions);
+			activeSetStmts = NULL;
 			CoordinatedTransactionUses2PC = false;
 			FunctionCallLevel = 0;
 
@@ -484,7 +498,16 @@ static void
 PushSubXact(SubTransactionId subId)
 {
 	MemoryContext old_context = MemoryContextSwitchTo(CurTransactionContext);
-	activeSubXacts = lcons_int(subId, activeSubXacts);
+
+	/* save provided subId as well as propagated SET LOCAL stmts */
+	SubXactContext *state = palloc(sizeof(SubXactContext));
+	state->subId = subId;
+	state->setLocalCmds = activeSetStmts;
+
+	/* append to list and reset active set stmts for upcoming sub-xact */
+	activeSubXactContexts = lcons(state, activeSubXactContexts);
+	activeSetStmts = makeStringInfo();
+
 	MemoryContextSwitchTo(old_context);
 }
 
@@ -494,8 +517,17 @@ static void
 PopSubXact(SubTransactionId subId)
 {
 	MemoryContext old_context = MemoryContextSwitchTo(CurTransactionContext);
-	Assert(linitial_int(activeSubXacts) == subId);
-	activeSubXacts = list_delete_first(activeSubXacts);
+	SubXactContext *state = linitial(activeSubXactContexts);
+
+	/*
+	 * the previous activeSetStmts is already invalid because it's in the now-
+	 * aborted subxact (what we're popping), so no need to free before assign-
+	 * ing with the setLocalCmds of the popped context
+	 */
+	Assert(state->subId == subId);
+	activeSetStmts = state->setLocalCmds;
+	activeSubXactContexts = list_delete_first(activeSubXactContexts);
+
 	MemoryContextSwitchTo(old_context);
 }
 
@@ -504,20 +536,41 @@ PopSubXact(SubTransactionId subId)
 List *
 ActiveSubXacts(void)
 {
-	ListCell *subIdCell = NULL;
+	ListCell *subXactCell = NULL;
 	List *activeSubXactsReversed = NIL;
 
 	/*
-	 * activeSubXacts is in reversed temporal order, so we reverse it to get it
+	 * activeSubXactContexts is in reversed temporal order, so we reverse it to get it
 	 * in temporal order.
 	 */
-	foreach(subIdCell, activeSubXacts)
+	foreach(subXactCell, activeSubXactContexts)
 	{
-		SubTransactionId subId = lfirst_int(subIdCell);
-		activeSubXactsReversed = lcons_int(subId, activeSubXactsReversed);
+		SubXactContext *state = lfirst(subXactCell);
+		activeSubXactsReversed = lcons_int(state->subId, activeSubXactsReversed);
 	}
 
 	return activeSubXactsReversed;
+}
+
+
+/* ActiveSubXactContexts returns the list of active sub-xact context in temporal order. */
+List *
+ActiveSubXactContexts(void)
+{
+	ListCell *subXactCell = NULL;
+	List *reversedSubXactStates = NIL;
+
+	/*
+	 * activeSubXactContexts is in reversed temporal order, so we reverse it to get it
+	 * in temporal order.
+	 */
+	foreach(subXactCell, activeSubXactContexts)
+	{
+		SubXactContext *state = lfirst(subXactCell);
+		reversedSubXactStates = lcons(state, reversedSubXactStates);
+	}
+
+	return reversedSubXactStates;
 }
 
 

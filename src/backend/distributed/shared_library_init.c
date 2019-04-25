@@ -21,6 +21,7 @@
 #include "executor/executor.h"
 #include "distributed/backend_data.h"
 #include "distributed/citus_nodefuncs.h"
+#include "distributed/commands.h"
 #include "distributed/commands/multi_copy.h"
 #include "distributed/commands/utility_hook.h"
 #include "distributed/connection_management.h"
@@ -59,6 +60,7 @@
 #include "tcop/tcopprot.h"
 #include "utils/guc.h"
 #include "utils/guc_tables.h"
+#include "utils/varlena.h"
 
 /* marks shared object as one loadable by the postgres version compiled against */
 PG_MODULE_MAGIC;
@@ -86,6 +88,13 @@ static int CitusSSLMode = 0;
 
 /* *INDENT-OFF* */
 /* GUC enum definitions */
+static const struct config_enum_entry propagate_set_commands_options[] = {
+	{"none", PROPSETCMD_NONE, false},
+	{"local", PROPSETCMD_LOCAL, false},
+	{NULL, 0, false}
+};
+
+
 static const struct config_enum_entry task_assignment_policy_options[] = {
 	{ "greedy", TASK_ASSIGNMENT_GREEDY, false },
 	{ "first-replica", TASK_ASSIGNMENT_FIRST_REPLICA, false },
@@ -626,6 +635,17 @@ RegisterCitusConfigVariables(void)
 		NULL,
 		&EnableDDLPropagation,
 		true,
+		PGC_USERSET,
+		0,
+		NULL, NULL, NULL);
+
+	DefineCustomEnumVariable(
+		"citus.propagate_set_commands",
+		gettext_noop("Sets which SET commands are propagated to workers."),
+		NULL,
+		&PropagateSetCommands,
+		PROPSETCMD_NONE,
+		propagate_set_commands_options,
 		PGC_USERSET,
 		0,
 		NULL, NULL, NULL);

@@ -213,6 +213,59 @@ BEGIN;
 SELECT id, pg_advisory_lock(15) FROM test_table;
 ROLLBACK;
 
+-- test propagation of SET LOCAL
+-- gonna need a non-superuser as we'll use RLS to test GUC propagation
+CREATE USER rls_user;
+GRANT ALL ON SCHEMA multi_real_time_transaction TO rls_user;
+GRANT ALL ON ALL TABLES IN SCHEMA multi_real_time_transaction TO rls_user;
+
+SELECT run_command_on_workers('CREATE USER rls_user');
+SELECT run_command_on_workers('GRANT ALL ON SCHEMA multi_real_time_transaction TO rls_user');
+SELECT run_command_on_workers('GRANT ALL ON ALL TABLES IN SCHEMA multi_real_time_transaction TO rls_user');
+
+-- create trigger on one worker to reject access if GUC not
+\c - - - :worker_1_port
+SET search_path = 'multi_real_time_transaction';
+
+ALTER TABLE test_table_1610000 ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY hide_by_default ON test_table_1610000 TO PUBLIC
+    USING (COALESCE(current_setting('app.show_rows', TRUE)::bool, FALSE));
+
+\c - - - :master_port
+SET ROLE rls_user;
+SET search_path = 'multi_real_time_transaction';
+
+-- shouldn't see all rows because of RLS
+SELECT COUNT(*) FROM test_table;
+
+BEGIN;
+-- without enabling SET LOCAL prop, still won't work
+SET LOCAL app.show_rows TO TRUE;
+SELECT COUNT(*) FROM test_table;
+
+SET LOCAL citus.propagate_set_commands TO 'local';
+
+-- now we should be good to go
+SET LOCAL app.show_rows TO TRUE;
+SELECT COUNT(*) FROM test_table;
+
+SAVEPOINT disable_rls;
+SET LOCAL app.show_rows TO FALSE;
+SELECT COUNT(*) FROM test_table;
+
+ROLLBACK TO SAVEPOINT disable_rls;
+SELECT COUNT(*) FROM test_table;
+
+SAVEPOINT disable_rls_for_real;
+SET LOCAL app.show_rows TO FALSE;
+RELEASE SAVEPOINT disable_rls_for_real;
+
+SELECT COUNT(*) FROM test_table;
+COMMIT;
+
+RESET ROLE;
+
 -- sequential real-time queries should be successfully executed
 -- since the queries are sent over the same connection
 BEGIN;
