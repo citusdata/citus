@@ -31,12 +31,10 @@ extern void AllocateRelationAccessHash(void);
 extern void ResetRelationAccessHash(void);
 extern void AssociatePlacementAccessWithRelation(ShardPlacement *placement,
 												 ShardPlacementAccessType accessType);
+extern void RecordParallelRelationAccessForTaskList(List *taskList);
 extern void RecordParallelSelectAccess(Oid relationId);
-extern void RecordRelationParallelSelectAccessForTask(Task *task);
-extern void RecordRelationParallelModifyAccessForTask(Task *task);
 extern void RecordParallelModifyAccess(Oid relationId);
 extern void RecordParallelDDLAccess(Oid relationId);
-extern void RecordRelationParallelDDLAccessForTask(Task *task);
 extern RelationAccessMode GetRelationDDLAccessMode(Oid relationId);
 extern RelationAccessMode GetRelationDMLAccessMode(Oid relationId);
 extern RelationAccessMode GetRelationSelectAccessMode(Oid relationId);

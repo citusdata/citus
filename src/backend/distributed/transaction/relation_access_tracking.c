@@ -85,6 +85,9 @@ static HTAB *RelationAccessHash;
 static void RecordRelationAccess(Oid relationId, ShardPlacementAccessType accessType);
 static void RecordPlacementAccessToCache(Oid relationId,
 										 ShardPlacementAccessType accessType);
+static void RecordRelationParallelSelectAccessForTask(Task *task);
+static void RecordRelationParallelModifyAccessForTask(Task *task);
+static void RecordRelationParallelDDLAccessForTask(Task *task);
 static RelationAccessMode GetRelationAccessMode(Oid relationId,
 												ShardPlacementAccessType accessType);
 static void RecordParallelRelationAccess(Oid relationId, ShardPlacementAccessType
@@ -282,10 +285,71 @@ RecordPlacementAccessToCache(Oid relationId, ShardPlacementAccessType accessType
 
 
 /*
+ * RecordParallelRelationAccessForTaskList gets a task list and records
+ * the necessary parallel relation accesses for the task list.
+ *
+ * This function is used to enforce foreign keys from distributed
+ * tables to reference tables.
+ */
+void
+RecordParallelRelationAccessForTaskList(List *taskList)
+{
+	Task *firstTask = NULL;
+
+	if (MultiShardConnectionType == SEQUENTIAL_CONNECTION)
+	{
+		/* sequential mode prevents parallel access */
+		return;
+	}
+
+	if (list_length(taskList) < 2)
+	{
+		/* single shard task doesn't mean parallel access in our definition */
+		return;
+	}
+
+	/*
+	 * Since all the tasks in a task list is expected to operate on the same
+	 * distributed table(s), we only need to process the first task.
+	 */
+	firstTask = linitial(taskList);
+
+	if (firstTask->taskType == SQL_TASK)
+	{
+		RecordRelationParallelSelectAccessForTask(firstTask);
+	}
+	else if (firstTask->taskType == MODIFY_TASK)
+	{
+		if (firstTask->rowValuesLists != NIL)
+		{
+			/*
+			 * We always run multi-row INSERTs in a sequential
+			 * mode (hard-coded). Thus, we do not mark as parallel
+			 * access even if the prerequisites hold.
+			 */
+		}
+		else
+		{
+			/*
+			 * We prefer to mark with all remaining multi-shard modifications
+			 * with both modify and select accesses.
+			 */
+			RecordRelationParallelModifyAccessForTask(firstTask);
+			RecordRelationParallelSelectAccessForTask(firstTask);
+		}
+	}
+	else
+	{
+		RecordRelationParallelDDLAccessForTask(firstTask);
+	}
+}
+
+
+/*
  * RecordRelationParallelSelectAccessForTask goes over all the relations
  * in the relationShardList and records the select access per each table.
  */
-void
+static void
 RecordRelationParallelSelectAccessForTask(Task *task)
 {
 	List *relationShardList = NIL;
@@ -327,7 +391,7 @@ RecordRelationParallelSelectAccessForTask(Task *task)
  * where as the subqueries inside the modify query is recorded with select
  * access.
  */
-void
+static void
 RecordRelationParallelModifyAccessForTask(Task *task)
 {
 	List *relationShardList = NULL;
@@ -374,7 +438,7 @@ RecordRelationParallelModifyAccessForTask(Task *task)
  * DDL commands such as foreign key creation. The function also records
  * the relation that anchorShardId belongs to.
  */
-void
+static void
 RecordRelationParallelDDLAccessForTask(Task *task)
 {
 	List *relationShardList = task->relationShardList;
