@@ -1,6 +1,10 @@
 -- Tests for prepared transaction recovery
 SET citus.next_shard_id TO 1220000;
 
+-- enforce 1 connection per placement since
+-- the tests are prepared for that
+SET citus.force_max_query_parallelization TO ON;
+
 -- Disable auto-recovery for the initial tests
 ALTER SYSTEM SET citus.recover_2pc_interval TO -1;
 SELECT pg_reload_conf();
@@ -24,6 +28,7 @@ CREATE TABLE should_be_sorted_into_middle (value int);
 PREPARE TRANSACTION 'citus_0_should_be_sorted_into_middle';
 
 \c - - - :master_port
+SET citus.force_max_query_parallelization TO ON;
 -- Add "fake" pg_dist_transaction records and run recovery
 INSERT INTO pg_dist_transaction VALUES (1, 'citus_0_should_commit');
 INSERT INTO pg_dist_transaction VALUES (1, 'citus_0_should_be_forgotten');
@@ -37,6 +42,7 @@ SELECT count(*) FROM pg_tables WHERE tablename = 'should_abort';
 SELECT count(*) FROM pg_tables WHERE tablename = 'should_commit';
 
 \c - - - :master_port
+SET citus.force_max_query_parallelization TO ON;
 SET citus.shard_replication_factor TO 2;
 SET citus.shard_count TO 2;
 SET citus.multi_shard_commit_protocol TO '2pc';
