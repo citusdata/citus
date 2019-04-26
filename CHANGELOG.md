@@ -1,3 +1,15 @@
+### citus v8.2.1 (April 03, 2019) ###
+
+* Fixes a bug that prevents stack size to be adjusted
+
+### citus v8.1.2 (April 03, 2019) ###
+
+* Don't do redundant ALTER TABLE consistency checks at coordinator
+
+* Fixes a bug that prevents stack size to be adjusted
+
+* Fix an issue with some DECLARE .. CURSOR WITH HOLD commands
+
 ### citus v8.2.0 (March 28, 2019) ###
 
 * Removes support and code for PostgreSQL 9.6
