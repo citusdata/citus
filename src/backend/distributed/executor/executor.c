@@ -471,14 +471,14 @@ CreateDistributedExecution(DistributedPlan *distributedPlan,
 void
 StartDistributedExecution(DistributedExecution *execution)
 {
+	DistributedPlan *distributedPlan = execution->plan;
+	Job *job = distributedPlan->workerJob;
+	List *taskList = job->taskList;
+
 	if (MultiShardCommitProtocol != COMMIT_PROTOCOL_BARE)
 	{
-		DistributedPlan *distributedPlan = execution->plan;
 		if (DistributedStatementRequiresRollback(distributedPlan))
 		{
-			Job *job = distributedPlan->workerJob;
-			List *taskList = job->taskList;
-
 			BeginOrContinueCoordinatedTransaction();
 
 			if (TaskListRequires2PC(taskList))
@@ -489,6 +489,21 @@ StartDistributedExecution(DistributedExecution *execution)
 	}
 
 	execution->isTransaction = InCoordinatedTransaction();
+
+	/*
+	 * We should not record parallel access if the target pool size is less than 2.
+	 * The reason is that we define parallel access as at least two connections
+	 * accessing established to worker node.
+	 *
+	 * It is not ideal to have this check here, it'd have been better if we simply passed
+	 * DistributedExecution directly to the RecordParallelAccess*() function. However,
+	 * since we have two other executors that rely on the function, we had to only pass
+	 * the tasklist to have a common API.
+	 */
+	if (execution->targetPoolSize > 1)
+	{
+		RecordParallelRelationAccessForTaskList(taskList);
+	}
 
 	AssignTasksToConnections(execution);
 }
@@ -1664,15 +1679,43 @@ PlacementAccessListForTask(Task *task, ShardPlacement *taskPlacement)
 		accessType = PLACEMENT_ACCESS_SELECT;
 	}
 
-	placementAccessList = BuildPlacementSelectList(taskPlacement->groupId,
-												   relationShardList);
-
 	if (addAnchorAccess)
 	{
 		ShardPlacementAccess *placementAccess =
 			CreatePlacementAccess(taskPlacement, accessType);
 
 		placementAccessList = lappend(placementAccessList, placementAccess);
+	}
+
+	/*
+	 * We've already added anchor shardId's placement access to the list. Now,
+	 * add the other placements in the relationShardList.
+	 */
+	if (accessType == PLACEMENT_ACCESS_DDL)
+	{
+		/*
+		 * All relations appearing inter-shard DDL commands should be marked
+		 * with DDL access.
+		 */
+		List *relationShardAccessList =
+			BuildPlacementDDLList(taskPlacement->groupId, relationShardList);
+
+		placementAccessList = list_concat(placementAccessList, relationShardAccessList);
+	}
+	else
+	{
+		/*
+		 * In case of SELECTs or DML's, we add SELECT placement accesses to the
+		 * elements in relationShardList. For SELECT queries, it is trivial, since
+		 * the query is literally accesses the relationShardList in the same query.
+		 *
+		 * For DMLs, create placement accesses for placements that appear in a
+		 * subselect.
+		 */
+		List *relationShardAccessList =
+			BuildPlacementSelectList(taskPlacement->groupId, relationShardList);
+
+		placementAccessList = list_concat(placementAccessList, relationShardAccessList);
 	}
 
 	return placementAccessList;
