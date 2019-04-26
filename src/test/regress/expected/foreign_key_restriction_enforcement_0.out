@@ -546,7 +546,7 @@ ROLLBACK;
 BEGIN;
 	ALTER TABLE on_update_fkey_table ADD COLUMN X int;
 	UPDATE referece_table SET id = 160 WHERE id = 15;
-ERROR:  cannot execute SELECT on reference relation "referece_table" because there was a parallel DDL access to distributed relation "on_update_fkey_table" in the same transaction
+ERROR:  cannot execute DML on reference relation "referece_table" because there was a parallel DDL access to distributed relation "on_update_fkey_table" in the same transaction
 HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
 ROLLBACK;
 -- case 6:5: Unrelated parallel DDL on distributed table followed by unrelated DDL on ref. table
