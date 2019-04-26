@@ -451,6 +451,9 @@ AssignPlacementListToConnection(List *placementAccessList, MultiConnection *conn
 		{
 			placementConnection->hadDML = true;
 		}
+
+		/* record the relation access mapping */
+		AssociatePlacementAccessWithRelation(placement, accessType);
 	}
 }
 
