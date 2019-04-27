@@ -57,9 +57,6 @@ static uint32 FileBufferSizeInBytes = 0; /* file buffer size to init later */
 
 
 /* Local functions forward declarations */
-static ShardInterval ** SyntheticShardIntervalArrayForShardMinValues(
-	Datum *shardMinValues,
-	int shardCount);
 static StringInfo InitTaskAttemptDirectory(uint64 jobId, uint32 taskId);
 static uint32 FileBufferSize(int partitionBufferSizeInKB, uint32 fileCount);
 static FileOutputStream * OpenPartitionFiles(StringInfo directoryName, uint32 fileCount);
@@ -259,7 +256,7 @@ worker_hash_partition_table(PG_FUNCTION_ARGS)
  * The function only fills the min/max values of shard the intervals. Thus, should
  * not be used for general purpose operations.
  */
-static ShardInterval **
+ShardInterval **
 SyntheticShardIntervalArrayForShardMinValues(Datum *shardMinValues, int shardCount)
 {
 	int shardIndex = 0;

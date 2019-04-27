@@ -1475,6 +1475,12 @@ AdjustReadIntermediateResultCost(RangeTblEntry *rangeTableEntry, RelOptInfo *rel
 		return;
 	}
 
+	if (resultIdConst->consttype != TEXTOID)
+	{
+		/* currently only handles a single result */
+		return;
+	}
+
 	resultIdDatum = resultIdConst->constvalue;
 	resultId = TextDatumGetCString(resultIdDatum);
 

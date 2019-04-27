@@ -2764,7 +2764,14 @@ ProcessCopyStmt(CopyStmt *copyStatement, char *completionTag, const char *queryS
 	{
 		const char *resultId = copyStatement->relation->relname;
 
-		ReceiveQueryResultViaCopy(resultId);
+		if (copyStatement->is_from)
+		{
+			ReceiveQueryResultViaCopy(resultId);
+		}
+		else
+		{
+			SendQueryResultViaCopy(resultId);
+		}
 
 		return NULL;
 	}

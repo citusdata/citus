@@ -95,9 +95,12 @@ typedef struct HashPartitionContext
  */
 typedef struct FileOutputStream
 {
+	File fileDescriptor;
 	FileCompat fileCompat;
 	StringInfo fileBuffer;
 	StringInfo filePath;
+	uint32 bufferSize;
+	int64 bytesWritten;
 } FileOutputStream;
 
 
@@ -129,7 +132,9 @@ extern List * TableDDLCommandList(const char *nodeName, uint32 nodePort,
 								  const char *tableName);
 extern int64 WorkerExecuteSqlTask(Query *query, char *taskFilename,
 								  bool binaryCopyFormat);
-
+extern ShardInterval ** SyntheticShardIntervalArrayForShardMinValues(
+	Datum *shardMinValues,
+	int shardCount);
 
 /* Function declarations shared with the master planner */
 extern StringInfo TaskFilename(StringInfo directoryName, uint32 taskId);
