@@ -50,6 +50,8 @@ static int CompareShardPlacementsByNode(const void *leftElement,
 static void UpdateRelationColocationGroup(Oid distributedRelationId, uint32 colocationId);
 static List * ColocationGroupTableList(Oid colocationId);
 static void DeleteColocationGroup(uint32 colocationId);
+static void LoadPartitioningSchemeForRelationId(PartitioningScheme *partitioningScheme,
+												Oid relationId);
 
 
 /* exports for SQL callable functions */
@@ -1035,4 +1037,112 @@ DeleteColocationGroup(uint32 colocationId)
 
 	systable_endscan(scanDescriptor);
 	heap_close(pgDistColocation, RowExclusiveLock);
+}
+
+
+/*
+ * GetPartitioningSchemeForColocationId returns the sharding scheme for a given
+ * co-location ID or NULL if there is no table for the co-location ID.
+ */
+PartitioningScheme *
+GetPartitioningSchemeForColocationId(int colocationId)
+{
+	Oid relationId = ColocatedTableId(colocationId);
+	if (relationId == InvalidOid)
+	{
+		/* no distributed table exists for this co-location ID */
+		return NULL;
+	}
+
+	PartitioningScheme *partitioningScheme = (PartitioningScheme *) palloc0(
+		sizeof(PartitioningScheme));
+
+	LoadPartitioningSchemeForRelationId(partitioningScheme, relationId);
+
+	return partitioningScheme;
+}
+
+
+static void
+LoadPartitioningSchemeForRelationId(PartitioningScheme *partitioningScheme, Oid
+									relationId)
+{
+	int shardIndex = 0;
+
+	DistTableCacheEntry *distTableCacheEntry = DistributedTableCacheEntry(relationId);
+	int shardCount = distTableCacheEntry->shardIntervalArrayLength;
+
+	if (shardCount == 0)
+	{
+		/* table does not have shards */
+		return;
+	}
+
+	partitioningScheme->partitionCount = shardCount;
+	partitioningScheme->ranges = (DatumRange *) palloc(shardCount * sizeof(DatumRange));
+
+	for (shardIndex = 0; shardIndex < shardCount; shardIndex++)
+	{
+		ShardInterval *shardInterval =
+			distTableCacheEntry->sortedShardIntervalArray[shardIndex];
+
+		partitioningScheme->ranges[shardIndex].minValue = shardInterval->minValue;
+		partitioningScheme->ranges[shardIndex].maxValue = shardInterval->maxValue;
+
+		partitioningScheme->valueTypeId = shardInterval->valueTypeId;
+		partitioningScheme->valueTypeLen = shardInterval->valueTypeLen;
+		partitioningScheme->valueByVal = shardInterval->valueByVal;
+	}
+}
+
+
+DistributionScheme *
+GetDistributionSchemeForColocationId(int colocationId)
+{
+	Oid relationId = ColocatedTableId(colocationId);
+	if (relationId == InvalidOid)
+	{
+		/* no distributed table exists for this co-location ID */
+		return NULL;
+	}
+
+	return GetDistributionSchemeForRelationId(relationId);
+}
+
+
+DistributionScheme *
+GetDistributionSchemeForRelationId(Oid relationId)
+{
+	int shardIndex = 0;
+
+	DistTableCacheEntry *distTableCacheEntry = DistributedTableCacheEntry(relationId);
+	int shardCount = distTableCacheEntry->shardIntervalArrayLength;
+
+	DistributionScheme *distributionScheme = (DistributionScheme *) palloc0(
+		sizeof(DistributionScheme));
+	distributionScheme->colocationId = distTableCacheEntry->colocationId;
+	distributionScheme->groupIds = (int **) palloc0(sizeof(int *) * shardCount);
+
+	LoadPartitioningSchemeForRelationId(&distributionScheme->partitioning, relationId);
+
+	for (shardIndex = 0; shardIndex < shardCount; shardIndex++)
+	{
+		GroupShardPlacement *placementArray =
+			distTableCacheEntry->arrayOfPlacementArrays[shardIndex];
+		int placementCount =
+			distTableCacheEntry->arrayOfPlacementArrayLengths[shardIndex];
+		int placementIndex = 0;
+
+		distributionScheme->groupIds[shardIndex] =
+			(int *) palloc0(sizeof(int) * (placementCount + 1));
+
+		for (placementIndex = 0; placementIndex < placementCount; placementIndex++)
+		{
+			GroupShardPlacement *placement = &placementArray[placementIndex];
+
+			distributionScheme->groupIds[shardIndex][placementIndex] = placement->groupId;
+		}
+	}
+
+	return distributionScheme;
 }

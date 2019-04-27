@@ -183,8 +183,8 @@ CitusModifyBeginScan(CustomScanState *node, EState *estate, int eflags)
 	 * executions of a prepared statement. Instead we create a deep copy that we only
 	 * use for the current execution.
 	 */
-	DistributedPlan *distributedPlan = scanState->distributedPlan = copyObject(
-		scanState->distributedPlan);
+	DistributedPlan *distributedPlan = copyObject(scanState->distributedPlan);
+	scanState->distributedPlan = distributedPlan;
 
 	Job *workerJob = distributedPlan->workerJob;
 	Query *jobQuery = workerJob->jobQuery;

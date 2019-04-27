@@ -234,7 +234,7 @@ citus_evaluate_expr(Expr *expr, Oid result_type, int32 result_typmod,
 static bool
 CitusIsVolatileFunctionIdChecker(Oid func_id, void *context)
 {
-	if (func_id == CitusReadIntermediateResultFuncId())
+	if (IsReadIntermediateResultFunctionId(func_id))
 	{
 		return false;
 	}
@@ -273,7 +273,7 @@ CitusIsVolatileFunction(Node *node)
 static bool
 CitusIsMutableFunctionIdChecker(Oid func_id, void *context)
 {
-	if (func_id == CitusReadIntermediateResultFuncId())
+	if (IsReadIntermediateResultFunctionId(func_id))
 	{
 		return false;
 	}

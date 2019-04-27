@@ -410,7 +410,7 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 		case XACT_EVENT_PARALLEL_PRE_COMMIT:
 		case XACT_EVENT_PRE_PREPARE:
 		{
-			if (CurrentCoordinatedTransactionState > COORD_TRANS_NONE)
+			if (InCoordinatedTransaction())
 			{
 				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 								errmsg("cannot use 2PC in transactions involving "

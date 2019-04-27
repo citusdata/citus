@@ -12,6 +12,7 @@
 #include "miscadmin.h"
 
 #include "distributed/citus_ruleutils.h"
+#include "distributed/colocation_utils.h"
 #include "distributed/commands/multi_copy.h"
 #include "distributed/distributed_execution_locks.h"
 #include "distributed/insert_select_executor.h"
@@ -23,8 +24,10 @@
 #include "distributed/multi_router_planner.h"
 #include "distributed/distributed_planner.h"
 #include "distributed/recursive_planning.h"
+#include "distributed/redistribution.h"
 #include "distributed/relation_access_tracking.h"
 #include "distributed/resource_lock.h"
+#include "distributed/subplan_execution.h"
 #include "distributed/transaction_management.h"
 #include "executor/executor.h"
 #include "nodes/execnodes.h"
@@ -51,14 +54,19 @@ static TupleTableSlot * CoordinatorInsertSelectExecScanInternal(CustomScanState 
 static Query * WrapSubquery(Query *subquery);
 static List * TwoPhaseInsertSelectTaskList(Oid targetRelationId, Query *insertSelectQuery,
 										   char *resultIdPrefix);
-static void ExecuteSelectIntoRelation(Oid targetRelationId, List *insertTargetList,
-									  Query *selectQuery, EState *executorState);
-static HTAB * ExecuteSelectIntoColocatedIntermediateResults(Oid targetRelationId,
-															List *insertTargetList,
-															Query *selectQuery,
-															EState *executorState,
-															char *
-															intermediateResultIdPrefix);
+static bool IsRedistributablePlan(PlannedStmt *selectPlan);
+static bool IsSupportedRedistributionTarget(Oid targetRelationId);
+static List * RedistributedInsertSelectTaskList(Query *insertSelectQuery,
+												RedistributedQueryResult *
+												redistributionResult);
+static void AddInsertSelectCasts(List *targetList, TupleDesc destTupleDescriptor);
+static void ExecutePlanIntoRelation(Oid targetRelationId, List *insertTargetList,
+									PlannedStmt *selectPlan, EState *executorState);
+static HTAB * ExecutePlanIntoColocatedIntermediateResults(Oid targetRelationId,
+														  List *insertTargetList,
+														  PlannedStmt *selectPlan,
+														  EState *executorState,
+														  char *intermediateResultIdPrefix);
 static List * BuildColumnNameListFromTargetList(Oid targetRelationId,
 												List *insertTargetList);
 static int PartitionColumnIndexFromColumnList(Oid relationId, List *columnNameList);
@@ -104,7 +112,8 @@ CoordinatorInsertSelectExecScanInternal(CustomScanState *node)
 
 	if (!scanState->finishedRemoteScan)
 	{
-		EState *executorState = ScanStateGetExecutorState(scanState);
+		EState *executorState = scanState->customScanState.ss.ps.state;
+		ParamListInfo paramListInfo = executorState->es_param_list_info;
 		DistributedPlan *distributedPlan = scanState->distributedPlan;
 		Query *insertSelectQuery = copyObject(distributedPlan->insertSelectQuery);
 		List *insertTargetList = insertSelectQuery->targetList;
@@ -116,7 +125,6 @@ CoordinatorInsertSelectExecScanInternal(CustomScanState *node)
 		HTAB *shardStateHash = NULL;
 
 		ereport(DEBUG1, (errmsg("Collecting INSERT ... SELECT results on coordinator")));
-
 
 		/*
 		 * INSERT .. SELECT via coordinator consists of two steps, a SELECT is
@@ -134,6 +142,18 @@ CoordinatorInsertSelectExecScanInternal(CustomScanState *node)
 		ReorderInsertSelectTargetLists(insertSelectQuery, insertRte, selectRte);
 
 		/*
+		 * Make a copy of the query, since pg_plan_query may scribble on it and we
+		 * want it to be replanned every time if it is stored in a prepared
+		 * statement.
+		 */
+		selectQuery = copyObject(selectQuery);
+
+		/* plan the subquery, this may be another distributed query */
+		int cursorOptions = CURSOR_OPT_PARALLEL_OK;
+		PlannedStmt *selectPlan = pg_plan_query(selectQuery, cursorOptions,
+												paramListInfo);
+
+		/*
 		 * If we are dealing with partitioned table, we also need to lock its
 		 * partitions. Here we only lock targetRelation, we acquire necessary
 		 * locks on selected tables during execution of those select queries.
@@ -143,7 +163,51 @@ CoordinatorInsertSelectExecScanInternal(CustomScanState *node)
 			LockPartitionRelations(targetRelationId, RowExclusiveLock);
 		}
 
-		if (insertSelectQuery->onConflict || hasReturning)
+		if (IsRedistributablePlan(selectPlan) &&
+			IsSupportedRedistributionTarget(targetRelationId))
+		{
+			DistributedPlan *distSelectPlan =
+				GetDistributedPlan((CustomScan *) selectPlan->planTree);
+			bool isForWrites = true;
+			TupleDesc tupleDescriptor = ScanStateGetTupleDescriptor(scanState);
+			bool randomAccess = true;
+			bool interTransactions = false;
+
+			ExecuteSubPlans(distSelectPlan);
+
+			char *distResultPrefix = "replace_this";
+
+			List *columnNameList = BuildColumnNameListFromTargetList(targetRelationId,
+																	 insertTargetList);
+			int distributionColumnIndex = PartitionColumnIndexFromColumnList(
+				targetRelationId,
+				columnNameList);
+
+
+			DistributionScheme *targetDistribution = GetDistributionSchemeForRelationId(
+				targetRelationId);
+
+			RedistributedQueryResult *result = RedistributeDistributedPlanResult(
+				distResultPrefix,
+				distSelectPlan,
+				distributionColumnIndex,
+				targetDistribution,
+				isForWrites);
+
+			List *taskList = RedistributedInsertSelectTaskList(insertSelectQuery, result);
+
+			scanState->tuplestorestate =
+				tuplestore_begin_heap(randomAccess, interTransactions, work_mem);
+
+			int64 rowsInserted = ExecuteTaskListExtended(ROW_MODIFY_COMMUTATIVE, taskList,
+														 tupleDescriptor,
+														 scanState->tuplestorestate,
+														 hasReturning,
+														 MaxAdaptiveExecutorPoolSize);
+
+			executorState->es_processed = rowsInserted;
+		}
+		else if (insertSelectQuery->onConflict || hasReturning)
 		{
 			/*
 			 * If we also have a workerJob that means there is a second step
@@ -155,10 +219,10 @@ CoordinatorInsertSelectExecScanInternal(CustomScanState *node)
 			ListCell *taskCell = NULL;
 			List *prunedTaskList = NIL;
 
-			shardStateHash = ExecuteSelectIntoColocatedIntermediateResults(
+			shardStateHash = ExecutePlanIntoColocatedIntermediateResults(
 				targetRelationId,
 				insertTargetList,
-				selectQuery,
+				selectPlan,
 				executorState,
 				intermediateResultIdPrefix);
 
@@ -208,8 +272,8 @@ CoordinatorInsertSelectExecScanInternal(CustomScanState *node)
 		}
 		else
 		{
-			ExecuteSelectIntoRelation(targetRelationId, insertTargetList, selectQuery,
-									  executorState);
+			ExecutePlanIntoRelation(targetRelationId, insertTargetList, selectPlan,
+									executorState);
 		}
 
 		scanState->finishedRemoteScan = true;
@@ -316,6 +380,184 @@ WrapSubquery(Query *subquery)
 }
 
 
+static bool
+IsRedistributablePlan(PlannedStmt *selectPlan)
+{
+	Plan *planTree = selectPlan->planTree;
+
+	if (!IsA(planTree, CustomScan))
+	{
+		return false;
+	}
+
+	DistributedPlan *distributedPlan = GetDistributedPlan((CustomScan *) planTree);
+	if (distributedPlan == NULL)
+	{
+		return false;
+	}
+
+	/* TODO: additional checks */
+
+	return true;
+}
+
+
+/*
+ * IsSupportedRedistributionTarget determines whether re-partitioning into the
+ * given target relation is supported.
+ */
+static bool
+IsSupportedRedistributionTarget(Oid targetRelationId)
+{
+	DistTableCacheEntry *tableEntry = DistributedTableCacheEntry(targetRelationId);
+
+	if (tableEntry->partitionMethod != DISTRIBUTE_BY_HASH)
+	{
+		/* only hash-distributed tables are currently supported */
+		return false;
+	}
+
+	if (tableEntry->replicationModel != REPLICATION_MODEL_STREAMING)
+	{
+		/* only single-replica tables are currently supported */
+		return false;
+	}
+
+	return true;
+}
+
+
+/*
+ *
+ */
+static List *
+RedistributedInsertSelectTaskList(Query *insertSelectQuery,
+								  RedistributedQueryResult *redistributionResult)
+{
+	List *taskList = NIL;
+
+	/*
+	 * Make a copy of the INSERT ... SELECT. We'll repeatedly replace the
+	 * subquery of insertResultQuery for different intermediate results and
+	 * then deparse it.
+	 */
+	Query *insertResultQuery = copyObject(insertSelectQuery);
+	RangeTblEntry *insertRte = ExtractResultRelationRTE(insertResultQuery);
+	RangeTblEntry *selectRte = ExtractSelectRangeTableEntry(insertResultQuery);
+	List *selectTargetList = selectRte->subquery->targetList;
+	Oid targetRelationId = insertRte->relid;
+	DistTableCacheEntry *targetCacheEntry = DistributedTableCacheEntry(targetRelationId);
+
+	int shardCount = targetCacheEntry->shardIntervalArrayLength;
+	int shardOffset = 0;
+	uint32 taskIdIndex = 1;
+	uint64 jobId = INVALID_JOB_ID;
+	char *resultIdPrefix = redistributionResult->resultPrefix;
+
+
+	Relation distributedRelation = heap_open(targetRelationId, RowExclusiveLock);
+	TupleDesc destTupleDescriptor = RelationGetDescr(distributedRelation);
+
+	/*
+	 * If the type of insert column and target table's column type is
+	 * different from each other. Cast insert column't type to target
+	 * table's column
+	 */
+	AddInsertSelectCasts(insertSelectQuery->targetList, destTupleDescriptor);
+
+	for (shardOffset = 0; shardOffset < shardCount; shardOffset++)
+	{
+		ShardInterval *targetShardInterval =
+			targetCacheEntry->sortedShardIntervalArray[shardOffset];
+		ReassembledFragmentSet *fragmentSet =
+			&(redistributionResult->reassembledFragmentSets[shardOffset]);
+		uint64 shardId = targetShardInterval->shardId;
+		StringInfo queryString = makeStringInfo();
+
+		if (list_length(fragmentSet->fragments) == 0)
+		{
+			continue;
+		}
+
+		/* generate the query on the intermediate result */
+		Query *fragmentSetQuery = ReadReassembledFragmentSetQuery(resultIdPrefix,
+																  selectTargetList,
+																  fragmentSet);
+
+		/* put the intermediate result query in the INSERT..SELECT */
+		selectRte->subquery = fragmentSetQuery;
+
+		/* setting an alias simplifies deparsing of RETURNING */
+		if (insertRte->alias == NULL)
+		{
+			Alias *alias = makeAlias(CITUS_TABLE_ALIAS, NIL);
+			insertRte->alias = alias;
+		}
+
+		/*
+		 * Generate a query string for the query that inserts into a shard and reads
+		 * from an intermediate result.
+		 *
+		 * Since CTEs have already been converted to intermediate results, they need
+		 * to removed from the query. Otherwise, worker queries include both
+		 * intermediate results and CTEs in the query.
+		 */
+		insertResultQuery->cteList = NIL;
+		deparse_shard_query(insertResultQuery, targetRelationId, shardId, queryString);
+		ereport(DEBUG2, (errmsg("distributed statement: %s", queryString->data)));
+
+		LockShardDistributionMetadata(shardId, ShareLock);
+		List *insertShardPlacementList = FinalizedShardPlacementList(shardId);
+
+		RelationShard *relationShard = CitusMakeNode(RelationShard);
+		relationShard->relationId = targetShardInterval->relationId;
+		relationShard->shardId = targetShardInterval->shardId;
+
+		Task *modifyTask = CreateBasicTask(jobId, taskIdIndex, MODIFY_TASK,
+										   queryString->data);
+		modifyTask->anchorShardId = shardId;
+		modifyTask->taskPlacementList = insertShardPlacementList;
+		modifyTask->relationShardList = list_make1(relationShard);
+		modifyTask->replicationModel = targetCacheEntry->replicationModel;
+
+		taskList = lappend(taskList, modifyTask);
+
+		taskIdIndex++;
+	}
+
+	heap_close(distributedRelation, NoLock);
+
+	return taskList;
+}
+
+
+static void
+AddInsertSelectCasts(List *targetList, TupleDesc destTupleDescriptor)
+{
+	ListCell *targetEntryCell = NULL;
+
+	foreach(targetEntryCell, targetList)
+	{
+		TargetEntry *targetEntry = (TargetEntry *) lfirst(targetEntryCell);
+		Var *insertColumn = (Var *) targetEntry->expr;
+		Form_pg_attribute attr = TupleDescAttr(destTupleDescriptor, targetEntry->resno -
+											   1);
+
+		if (insertColumn->vartype != attr->atttypid)
+		{
+			CoerceViaIO *coerceExpr = makeNode(CoerceViaIO);
+			coerceExpr->arg = (Expr *) copyObject(insertColumn);
+			coerceExpr->resulttype = attr->atttypid;
+			coerceExpr->resultcollid = attr->attcollation;
+			coerceExpr->coerceformat = COERCE_IMPLICIT_CAST;
+			coerceExpr->location = -1;
+
+			targetEntry->expr = (Expr *) coerceExpr;
+		}
+	}
+}
+
+
 /*
  * TwoPhaseInsertSelectTaskList generates a list of tasks for a query that
  * inserts into a target relation and selects from a set of co-located
@@ -335,13 +577,12 @@ TwoPhaseInsertSelectTaskList(Oid targetRelationId, Query *insertSelectQuery,
 	Query *insertResultQuery = copyObject(insertSelectQuery);
 	RangeTblEntry *insertRte = ExtractResultRelationRTE(insertResultQuery);
 	RangeTblEntry *selectRte = ExtractSelectRangeTableEntry(insertResultQuery);
-
 	DistTableCacheEntry *targetCacheEntry = DistributedTableCacheEntry(targetRelationId);
 	int shardCount = targetCacheEntry->shardIntervalArrayLength;
+	int shardOffset = 0;
 	uint32 taskIdIndex = 1;
 	uint64 jobId = INVALID_JOB_ID;
 
-	ListCell *targetEntryCell = NULL;
 
 	Relation distributedRelation = heap_open(targetRelationId, RowExclusiveLock);
 	TupleDesc destTupleDescriptor = RelationGetDescr(distributedRelation);
@@ -351,27 +592,9 @@ TwoPhaseInsertSelectTaskList(Oid targetRelationId, Query *insertSelectQuery,
 	 * different from each other. Cast insert column't type to target
 	 * table's column
 	 */
-	foreach(targetEntryCell, insertSelectQuery->targetList)
-	{
-		TargetEntry *targetEntry = (TargetEntry *) lfirst(targetEntryCell);
-		Var *insertColumn = (Var *) targetEntry->expr;
-		Form_pg_attribute attr = TupleDescAttr(destTupleDescriptor, targetEntry->resno -
-											   1);
+	AddInsertSelectCasts(insertSelectQuery->targetList, destTupleDescriptor);
 
-		if (insertColumn->vartype != attr->atttypid)
-		{
-			CoerceViaIO *coerceExpr = makeNode(CoerceViaIO);
-			coerceExpr->arg = (Expr *) copyObject(insertColumn);
-			coerceExpr->resulttype = attr->atttypid;
-			coerceExpr->resultcollid = attr->attcollation;
-			coerceExpr->coerceformat = COERCE_IMPLICIT_CAST;
-			coerceExpr->location = -1;
-
-			targetEntry->expr = (Expr *) coerceExpr;
-		}
-	}
-
-	for (int shardOffset = 0; shardOffset < shardCount; shardOffset++)
+	for (shardOffset = 0; shardOffset < shardCount; shardOffset++)
 	{
 		ShardInterval *targetShardInterval =
 			targetCacheEntry->sortedShardIntervalArray[shardOffset];
@@ -437,17 +660,18 @@ TwoPhaseInsertSelectTaskList(Oid targetRelationId, Query *insertSelectQuery,
 
 
 /*
- * ExecuteSelectIntoColocatedIntermediateResults executes the given select query
+ * ExecutePlanIntoColocatedIntermediateResults executes the given PlannedStmt
  * and inserts tuples into a set of intermediate results that are colocated with
  * the target table for further processing of ON CONFLICT or RETURNING. It also
  * returns the hash of shard states that were used to insert tuplesinto the target
  * relation.
  */
 static HTAB *
-ExecuteSelectIntoColocatedIntermediateResults(Oid targetRelationId,
-											  List *insertTargetList,
-											  Query *selectQuery, EState *executorState,
-											  char *intermediateResultIdPrefix)
+ExecutePlanIntoColocatedIntermediateResults(Oid targetRelationId,
+											List *insertTargetList,
+											PlannedStmt *selectPlan,
+											EState *executorState,
+											char *intermediateResultIdPrefix)
 {
 	ParamListInfo paramListInfo = executorState->es_param_list_info;
 	bool stopOnFailure = false;
@@ -472,14 +696,7 @@ ExecuteSelectIntoColocatedIntermediateResults(Oid targetRelationId,
 																  stopOnFailure,
 																  intermediateResultIdPrefix);
 
-	/*
-	 * Make a copy of the query, since ExecuteQueryIntoDestReceiver may scribble on it
-	 * and we want it to be replanned every time if it is stored in a prepared
-	 * statement.
-	 */
-	Query *queryCopy = copyObject(selectQuery);
-
-	ExecuteQueryIntoDestReceiver(queryCopy, paramListInfo, (DestReceiver *) copyDest);
+	ExecutePlanIntoDestReceiver(selectPlan, paramListInfo, (DestReceiver *) copyDest);
 
 	executorState->es_processed = copyDest->tuplesSent;
 
@@ -490,13 +707,13 @@ ExecuteSelectIntoColocatedIntermediateResults(Oid targetRelationId,
 
 
 /*
- * ExecuteSelectIntoRelation executes given SELECT query and inserts the
+ * ExecutePlanIntoRelation executes the given plan and inserts the
  * results into the target relation, which is assumed to be a distributed
  * table.
  */
 static void
-ExecuteSelectIntoRelation(Oid targetRelationId, List *insertTargetList,
-						  Query *selectQuery, EState *executorState)
+ExecutePlanIntoRelation(Oid targetRelationId, List *insertTargetList,
+						PlannedStmt *selectPlan, EState *executorState)
 {
 	ParamListInfo paramListInfo = executorState->es_param_list_info;
 	bool stopOnFailure = false;
@@ -520,14 +737,7 @@ ExecuteSelectIntoRelation(Oid targetRelationId, List *insertTargetList,
 																  executorState,
 																  stopOnFailure, NULL);
 
-	/*
-	 * Make a copy of the query, since ExecuteQueryIntoDestReceiver may scribble on it
-	 * and we want it to be replanned every time if it is stored in a prepared
-	 * statement.
-	 */
-	Query *queryCopy = copyObject(selectQuery);
-
-	ExecuteQueryIntoDestReceiver(queryCopy, paramListInfo, (DestReceiver *) copyDest);
+	ExecutePlanIntoDestReceiver(selectPlan, paramListInfo, (DestReceiver *) copyDest);
 
 	executorState->es_processed = copyDest->tuplesSent;
 
