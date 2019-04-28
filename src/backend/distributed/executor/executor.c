@@ -562,7 +562,7 @@ FinishDistributedExecution(DistributedExecution *execution)
 
 		if (connection->connectionState == MULTI_CONNECTION_CONNECTING)
 		{
-			ShutdownConnection(connection);
+			CloseConnection(connection);
 		}
 		else if (transactionState == REMOTE_TRANS_CLEARING_RESULTS)
 		{
