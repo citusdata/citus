@@ -1640,6 +1640,10 @@ ExecuteModifyTasks(List *taskList, bool expectResults, ParamListInfo paramListIn
 			}
 			PG_CATCH();
 			{
+				/*
+				 * We might be able to recover from errors with ROLLBACK TO SAVEPOINT,
+				 * so unclaim the connections before throwing errors.
+				 */
 				UnclaimAllShardConnections(shardConnectionHash);
 				PG_RE_THROW();
 			}

@@ -152,6 +152,55 @@ COMMIT;
 
 SELECT * FROM artists WHERE id IN (11, 12) ORDER BY id;
 
+-- Recover from multi-shard CTE modify failures
+create table t1(a int, b int);
+create table t2(a int, b int CHECK(b > 0));
+
+ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1190000;
+
+select create_distributed_table('t1', 'a'),
+       create_distributed_table('t2', 'a');
+
+begin;
+insert into t2 select i, i+1 from generate_series(1, 3) i;
+with r AS (
+    update t2 set b = b + 1
+    returning *
+) insert into t1 select * from r;
+savepoint s1;
+with r AS (
+    update t1 set b = b - 10
+    returning *
+) insert into t2 select * from r;
+rollback to savepoint s1;
+savepoint s2;
+with r AS (
+    update t2 set b = b - 10
+    returning *
+) insert into t1 select * from r;
+rollback to savepoint s2;
+savepoint s3;
+with r AS (
+    insert into t2 select i, i+1 from generate_series(-10,-5) i
+    returning *
+) insert into t1 select * from r;
+rollback to savepoint s3;
+savepoint s4;
+with r AS (
+    insert into t1 select i, i+1 from generate_series(-10,-5) i
+    returning *
+) insert into t2 select * from r;
+rollback to savepoint s4;
+with r AS (
+    update t2 set b = b + 1
+    returning *
+) insert into t1 select * from r;
+commit;
+
+select * from t2 order by a, b;
+select * from t1 order by a, b;
+
+drop table t1, t2;
 
 -- ===================================================================
 -- Tests for replication factor > 1

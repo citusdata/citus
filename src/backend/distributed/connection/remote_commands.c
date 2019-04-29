@@ -1038,8 +1038,8 @@ BuildWaitEventSet(MultiConnection **allConnections, int totalConnectionCount,
 
 
 /*
- * MultiClientCancel sends a cancelation request on the given connection. Return
- * value indicates whether the cancelation request was sent successfully.
+ * SendCancelationRequest sends a cancelation request on the given connection.
+ * Return value indicates whether the cancelation request was sent successfully.
  */
 bool
 SendCancelationRequest(MultiConnection *connection)

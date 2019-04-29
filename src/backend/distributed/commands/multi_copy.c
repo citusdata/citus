@@ -2262,6 +2262,10 @@ CitusCopyDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
 	}
 	PG_CATCH();
 	{
+		/*
+		 * We might be able to recover from errors with ROLLBACK TO SAVEPOINT,
+		 * so unclaim the connections before throwing errors.
+		 */
 		HTAB *shardConnectionHash = copyDest->shardConnectionHash;
 		UnclaimAllShardConnections(shardConnectionHash);
 
