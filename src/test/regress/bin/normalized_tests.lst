@@ -1,0 +1,4 @@
+# List of tests whose output we want to normalize, one per line
+multi_alter_table_add_constraints
+multi_alter_table_statements
+foreign_key_to_reference_table

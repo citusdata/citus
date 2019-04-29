@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+
+# Our custom diff tool which normalizes result and expected files before
+# doing the actual diff. Rules for normalization are in normalize.sed. See
+# the comments there for more information.
+#
+# We only normalize tests listed in normalized_tests.lst. We use the bare
+# diff for other tests.
+#
+# Note that src/test/regress/Makefile adds this directory to $PATH so
+# pg_regress uses this diff tool instead of the system diff tool.
+
+file1="${@:(-2):1}"
+file2="${@:(-1):1}"
+test=$(basename $file1 .out)
+args=${@:1:$#-2}
+BASEDIR=$(dirname "$0")
+
+# whereis searches for standard unix places before $PATH. So select the first
+# entry as the original diff tool.
+DIFF=$(whereis diff | sed "s/diff://g" | awk '{print $1}')
+if [ -z "$DIFF" ]
+then
+    DIFF=/usr/bin/diff
+fi
+
+grep -q "^$test$" $BASEDIR/normalized_tests.lst
+grep_result=$?
+
+if [ "$grep_result" -eq "0" ]
+then
+    sed -Ef $BASEDIR/normalize.sed < $file1 > $file1.modified
+    sed -Ef $BASEDIR/normalize.sed < $file2 > $file2.modified
+
+    $DIFF $args $file1.modified $file2.modified
+    exitcode=$?
+
+    rm -rf $file1.modified $file2.modified
+else
+    # if test is not in normalized_tests.lst, just diff without normalizing.
+    $DIFF $args $file1 $file2
+    exitcode=$?
+fi
+
+exit $exitcode
