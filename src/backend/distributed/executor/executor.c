@@ -560,8 +560,13 @@ FinishDistributedExecution(DistributedExecution *execution)
 
 		UnclaimConnection(connection);
 
-		if (connection->connectionState == MULTI_CONNECTION_CONNECTING)
+		if (connection->connectionState == MULTI_CONNECTION_CONNECTING ||
+			connection->connectionState == MULTI_CONNECTION_FAILED)
 		{
+			/*
+			 * We want the MultiConnection go away and not used in
+			 * the subsequent executions.
+			 */
 			CloseConnection(connection);
 		}
 		else if (transactionState == REMOTE_TRANS_CLEARING_RESULTS)
