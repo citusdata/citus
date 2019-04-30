@@ -696,7 +696,6 @@ EnsureRelationCanBeDistributed(Oid relationId, Var *distributionColumn,
 	/* partitions cannot be distributed if their parent is not distributed */
 	if (PartitionTable(relationId) && !IsDistributedTable(parentRelationId))
 	{
-		char *relationName = get_rel_name(relationId);
 		char *parentRelationName = get_rel_name(parentRelationId);
 
 		ereport(ERROR, (errmsg("cannot distribute relation \"%s\" which is partition of "
@@ -734,8 +733,6 @@ EnsureRelationCanBeDistributed(Oid relationId, Var *distributionColumn,
 		/* we don't support distributing tables with multi-level partitioning */
 		if (PartitionTable(relationId))
 		{
-			char *relationName = get_rel_name(relationId);
-			Oid parentRelationId = PartitionParentOid(relationId);
 			char *parentRelationName = get_rel_name(parentRelationId);
 
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),

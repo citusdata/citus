@@ -445,8 +445,8 @@ SingleReplicatedTable(Oid relationId)
 		foreach(shardIntervalCell, shardIntervalList)
 		{
 			uint64 *shardIdPointer = (uint64 *) lfirst(shardIntervalCell);
-			uint64 shardId = (*shardIdPointer);
-			List *shardPlacementList = ShardPlacementList(shardId);
+			shardId = (*shardIdPointer);
+			shardPlacementList = ShardPlacementList(shardId);
 
 			if (list_length(shardPlacementList) != 1)
 			{

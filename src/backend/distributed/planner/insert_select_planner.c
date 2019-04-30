@@ -378,8 +378,6 @@ DistributedInsertSelectSupported(Query *queryTree, RangeTblEntry *insertRte,
 	}
 	else
 	{
-		DeferredErrorMessage *error = NULL;
-
 		/* ensure that INSERT's partition column comes from SELECT's partition column */
 		error = InsertPartitionColumnMatchesSelect(queryTree, insertRte, subqueryRte,
 												   &selectPartitionColumnTableId);

@@ -667,13 +667,13 @@ FindPlacementListConnection(int flags, List *placementAccessList, const char *us
 static ConnectionPlacementHashEntry *
 FindOrCreatePlacementEntry(ShardPlacement *placement)
 {
-	ConnectionPlacementHashKey key;
+	ConnectionPlacementHashKey connKey;
 	ConnectionPlacementHashEntry *placementEntry = NULL;
 	bool found = false;
 
-	key.placementId = placement->placementId;
+	connKey.placementId = placement->placementId;
 
-	placementEntry = hash_search(ConnectionPlacementHash, &key, HASH_ENTER, &found);
+	placementEntry = hash_search(ConnectionPlacementHash, &connKey, HASH_ENTER, &found);
 	if (!found)
 	{
 		/* no connection has been chosen for this placement */
@@ -685,15 +685,15 @@ FindOrCreatePlacementEntry(ShardPlacement *placement)
 		if (placement->partitionMethod == DISTRIBUTE_BY_HASH ||
 			placement->partitionMethod == DISTRIBUTE_BY_NONE)
 		{
-			ColocatedPlacementsHashKey key;
+			ColocatedPlacementsHashKey coloKey;
 			ColocatedPlacementsHashEntry *colocatedEntry = NULL;
 
-			key.nodeId = placement->nodeId;
-			key.colocationGroupId = placement->colocationGroupId;
-			key.representativeValue = placement->representativeValue;
+			coloKey.nodeId = placement->nodeId;
+			coloKey.colocationGroupId = placement->colocationGroupId;
+			coloKey.representativeValue = placement->representativeValue;
 
 			/* look for a connection assigned to co-located placements */
-			colocatedEntry = hash_search(ColocatedPlacementsHash, &key, HASH_ENTER,
+			colocatedEntry = hash_search(ColocatedPlacementsHash, &coloKey, HASH_ENTER,
 										 &found);
 			if (!found)
 			{
@@ -857,10 +857,10 @@ AssociatePlacementWithShard(ConnectionPlacementHashEntry *placementEntry,
 	 */
 	dlist_foreach(placementIter, &shardEntry->placementConnections)
 	{
-		ConnectionPlacementHashEntry *placementEntry =
+		ConnectionPlacementHashEntry *currPlacementEntry =
 			dlist_container(ConnectionPlacementHashEntry, shardNode, placementIter.cur);
 
-		if (placementEntry->key.placementId == placement->placementId)
+		if (currPlacementEntry->key.placementId == placement->placementId)
 		{
 			return;
 		}

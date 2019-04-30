@@ -4239,23 +4239,23 @@ HasOrderByHllType(List *sortClauseList, List *targetList)
  * of distinct clause.
  */
 bool
-IsGroupBySubsetOfDistinct(List *groupClause, List *distinctClause)
+IsGroupBySubsetOfDistinct(List *groupClauses, List *distinctClauses)
 {
 	ListCell *distinctCell = NULL;
 	ListCell *groupCell = NULL;
 
 	/* There must be a group clause */
-	if (list_length(groupClause) == 0)
+	if (list_length(groupClauses) == 0)
 	{
 		return false;
 	}
 
-	foreach(groupCell, groupClause)
+	foreach(groupCell, groupClauses)
 	{
 		SortGroupClause *groupClause = (SortGroupClause *) lfirst(groupCell);
 		bool isFound = false;
 
-		foreach(distinctCell, distinctClause)
+		foreach(distinctCell, distinctClauses)
 		{
 			SortGroupClause *distinctClause = (SortGroupClause *) lfirst(distinctCell);
 

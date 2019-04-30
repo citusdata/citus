@@ -42,7 +42,7 @@ static bool HeapTupleOfForeignConstraintIncludesColumn(HeapTuple heapTuple, Oid
  * of them is a foreign key referencing to a reference table.
  */
 bool
-ConstraintIsAForeignKeyToReferenceTable(char *constraintName, Oid relationId)
+ConstraintIsAForeignKeyToReferenceTable(char *constraintNameInput, Oid relationId)
 {
 	Relation pgConstraint = NULL;
 	SysScanDesc scanDescriptor = NULL;
@@ -66,7 +66,7 @@ ConstraintIsAForeignKeyToReferenceTable(char *constraintName, Oid relationId)
 		Form_pg_constraint constraintForm = (Form_pg_constraint) GETSTRUCT(heapTuple);
 		char *constraintName = (constraintForm->conname).data;
 
-		if (strncmp(constraintName, constraintName, NAMEDATALEN) != 0 ||
+		if (strncmp(constraintNameInput, constraintName, NAMEDATALEN) != 0 ||
 			constraintForm->conrelid != relationId)
 		{
 			heapTuple = systable_getnext(scanDescriptor);

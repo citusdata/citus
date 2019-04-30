@@ -133,8 +133,8 @@ MultiRealTimeExecute(Job *job)
 		uint32 completedTaskCount = 0;
 
 		/* loop around all tasks and manage them */
-		ListCell *taskCell = NULL;
-		ListCell *taskExecutionCell = NULL;
+		taskCell = NULL;
+		taskExecutionCell = NULL;
 
 		MultiClientResetWaitInfo(waitInfo);
 
