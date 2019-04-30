@@ -2279,18 +2279,18 @@ SELECT * FROM mv_articles_hash_empty;
 
 CREATE MATERIALIZED VIEW mv_articles_hash_data AS
 	SELECT * FROM articles_hash WHERE author_id in (1,2);
-SELECT * FROM mv_articles_hash_data;
+SELECT * FROM mv_articles_hash_data ORDER BY 1, 2, 3, 4;
  id | author_id |    title     | word_count 
 ----+-----------+--------------+------------
   1 |         1 | arsenous     |       9572
- 11 |         1 | alamo        |       1347
- 21 |         1 | arcading     |       5890
- 31 |         1 | athwartships |       7271
- 41 |         1 | aznavour     |      11814
   2 |         2 | abducing     |      13642
+ 11 |         1 | alamo        |       1347
  12 |         2 | archiblast   |      18185
+ 21 |         1 | arcading     |       5890
  22 |         2 | antipope     |       2728
+ 31 |         1 | athwartships |       7271
  32 |         2 | amazon       |      11342
+ 41 |         1 | aznavour     |      11814
  42 |         2 | ausable      |      15885
 (10 rows)
 
