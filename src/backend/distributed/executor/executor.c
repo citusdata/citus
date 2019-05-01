@@ -1256,6 +1256,17 @@ ConnectionStateMachine(WorkerSession *session)
 
 				/* remove the connection */
 				UnclaimConnection(connection);
+
+				/*
+				 * We forcefully close the underlying libpq connection because
+				 * we don't want any subsequent execution (either subPlan executions
+				 * or new command executions within a transaction block) use the
+				 * connection.
+				 *
+				 * However, we prefer to keep the MultiConnection around until
+				 * the end of FinishDistributedExecution() to simplify the code.
+				 * Thus, we prefer ShutdownConnection() over CloseConnection().
+				 */
 				ShutdownConnection(connection);
 
 				/* remove connection from wait event set */
