@@ -27,6 +27,7 @@ extern bool LogRemoteCommands;
 extern bool IsResponseOK(struct pg_result *result);
 extern void ForgetResults(MultiConnection *connection);
 extern bool ClearResults(MultiConnection *connection, bool raiseErrors);
+extern bool ClearResultsDiscardWarnings(MultiConnection *connection, bool raiseErrors);
 extern bool ClearResultsIfReady(MultiConnection *connection);
 extern bool SqlStateMatchesCategory(char *sqlStateString, int category);
 
@@ -57,5 +58,6 @@ extern bool PutRemoteCopyEnd(MultiConnection *connection, const char *errormsg);
 /* waiting for multiple command results */
 extern void WaitForAllConnections(List *connectionList, bool raiseInterrupts);
 
+extern bool SendCancelationRequest(MultiConnection *connection);
 
 #endif /* REMOTE_COMMAND_H */

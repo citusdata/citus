@@ -129,6 +129,140 @@ ERROR:  current transaction is aborted, commands ignored until end of transactio
 ROLLBACK TO SAVEPOINT s3;
 ERROR:  no such savepoint
 COMMIT;
+-- Recover from multi-shard modify errors
+BEGIN;
+INSERT INTO artists VALUES (8, 'Sogand');
+SAVEPOINT s1;
+UPDATE artists SET name = NULL;
+ERROR:  null value in column "name" violates not-null constraint
+ROLLBACK TO s1;
+INSERT INTO artists VALUES (9, 'Mohsen Namjoo');
+COMMIT;
+SELECT * FROM artists WHERE id IN (7, 8, 9) ORDER BY id;
+ id |     name      
+----+---------------
+  8 | Sogand
+  9 | Mohsen Namjoo
+(2 rows)
+
+-- Recover from multi-shard copy shutdown failure.
+-- Constraint check for non-partition columns happen only at copy shutdown.
+BEGIN;
+DELETE FROM artists;
+SAVEPOINT s1;
+INSERT INTO artists SELECT i, NULL FROM generate_series(1, 5) i;
+ERROR:  null value in column "name" violates not-null constraint
+ROLLBACK TO s1;
+INSERT INTO artists VALUES (10, 'Mahmoud Farshchian');
+COMMIT;
+SELECT * FROM artists WHERE id IN (9, 10) ORDER BY id;
+ id |        name        
+----+--------------------
+ 10 | Mahmoud Farshchian
+(1 row)
+
+-- Recover from multi-shard copy send failure.
+-- Constraint check for partition column happens at copy send.
+BEGIN;
+DELETE FROM artists;
+SAVEPOINT s1;
+INSERT INTO artists SELECT NULL, NULL FROM generate_series(1, 5) i;
+ERROR:  the partition column of table public.artists cannot be NULL
+ROLLBACK TO s1;
+INSERT INTO artists VALUES (11, 'Egon Schiele');
+COMMIT;
+SELECT * FROM artists WHERE id IN (10, 11) ORDER BY id;
+ id |     name     
+----+--------------
+ 11 | Egon Schiele
+(1 row)
+
+-- Recover from multi-shard copy startup failure.
+-- Check for existence of a value for partition columnn happens at copy startup.
+BEGIN;
+DELETE FROM artists;
+SAVEPOINT s1;
+INSERT INTO artists(name) SELECT 'a' FROM generate_series(1, 5) i;
+ERROR:  the partition column of table public.artists should have a value
+ROLLBACK TO s1;
+INSERT INTO artists VALUES (12, 'Marc Chagall');
+COMMIT;
+SELECT * FROM artists WHERE id IN (11, 12) ORDER BY id;
+ id |     name     
+----+--------------
+ 12 | Marc Chagall
+(1 row)
+
+-- Recover from multi-shard CTE modify failures
+create table t1(a int, b int);
+create table t2(a int, b int CHECK(b > 0));
+ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1190000;
+select create_distributed_table('t1', 'a'),
+       create_distributed_table('t2', 'a');
+ create_distributed_table | create_distributed_table 
+--------------------------+--------------------------
+                          | 
+(1 row)
+
+begin;
+insert into t2 select i, i+1 from generate_series(1, 3) i;
+with r AS (
+    update t2 set b = b + 1
+    returning *
+) insert into t1 select * from r;
+savepoint s1;
+with r AS (
+    update t1 set b = b - 10
+    returning *
+) insert into t2 select * from r;
+ERROR:  new row for relation "t2_1190005" violates check constraint "t2_b_check"
+rollback to savepoint s1;
+savepoint s2;
+with r AS (
+    update t2 set b = b - 10
+    returning *
+) insert into t1 select * from r;
+ERROR:  new row for relation "t2_1190004" violates check constraint "t2_b_check"
+rollback to savepoint s2;
+savepoint s3;
+with r AS (
+    insert into t2 select i, i+1 from generate_series(-10,-5) i
+    returning *
+) insert into t1 select * from r;
+ERROR:  new row for relation "t2_1190004" violates check constraint "t2_b_check"
+rollback to savepoint s3;
+savepoint s4;
+with r AS (
+    insert into t1 select i, i+1 from generate_series(-10,-5) i
+    returning *
+) insert into t2 select * from r;
+ERROR:  new row for relation "t2_1190005" violates check constraint "t2_b_check"
+rollback to savepoint s4;
+with r AS (
+    update t2 set b = b + 1
+    returning *
+) insert into t1 select * from r;
+commit;
+select * from t2 order by a, b;
+ a | b 
+---+---
+ 1 | 4
+ 2 | 5
+ 3 | 6
+(3 rows)
+
+select * from t1 order by a, b;
+ a | b 
+---+---
+ 1 | 3
+ 1 | 4
+ 2 | 4
+ 2 | 5
+ 3 | 5
+ 3 | 6
+(6 rows)
+
+drop table t1, t2;
 -- ===================================================================
 -- Tests for replication factor > 1
 -- ===================================================================

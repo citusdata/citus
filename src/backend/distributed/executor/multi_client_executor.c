@@ -443,27 +443,13 @@ bool
 MultiClientCancel(int32 connectionId)
 {
 	MultiConnection *connection = NULL;
-	PGcancel *cancelObject = NULL;
-	int cancelSent = 0;
 	bool canceled = true;
-	char errorBuffer[STRING_BUFFER_SIZE];
 
 	Assert(connectionId != INVALID_CONNECTION_ID);
 	connection = ClientConnectionArray[connectionId];
 	Assert(connection != NULL);
 
-	cancelObject = PQgetCancel(connection->pgConn);
-
-	cancelSent = PQcancel(cancelObject, errorBuffer, sizeof(errorBuffer));
-	if (cancelSent == 0)
-	{
-		ereport(WARNING, (errmsg("could not issue cancel request"),
-						  errdetail("Client error: %s", errorBuffer)));
-
-		canceled = false;
-	}
-
-	PQfreeCancel(cancelObject);
+	canceled = SendCancelationRequest(connection);
 
 	return canceled;
 }

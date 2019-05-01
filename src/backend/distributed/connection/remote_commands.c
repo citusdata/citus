@@ -29,6 +29,8 @@
 bool LogRemoteCommands = false;
 
 
+static bool ClearResultsInternal(MultiConnection *connection, bool raiseErrors,
+								 bool discardWarnings);
 static bool FinishConnectionIO(MultiConnection *connection, bool raiseInterrupts);
 static WaitEventSet * BuildWaitEventSet(MultiConnection **allConnections,
 										int totalConnectionCount,
@@ -71,7 +73,7 @@ ForgetResults(MultiConnection *connection)
 
 
 /*
- * ClearResults clears a connection from pending activity,
+ * ClearResultsInternal clears a connection from pending activity,
  * returns true if all pending commands return success. It raises
  * error if raiseErrors flag is set, any command fails and transaction
  * is marked critical.
@@ -81,6 +83,27 @@ ForgetResults(MultiConnection *connection)
  */
 bool
 ClearResults(MultiConnection *connection, bool raiseErrors)
+{
+	return ClearResultsInternal(connection, raiseErrors, false);
+}
+
+
+/*
+ * ClearResultsDiscardWarnings does the same thing as ClearResults, but doesn't
+ * emit warnings.
+ */
+bool
+ClearResultsDiscardWarnings(MultiConnection *connection, bool raiseErrors)
+{
+	return ClearResultsInternal(connection, raiseErrors, true);
+}
+
+
+/*
+ * ClearResultsInternal is used by ClearResults and ClearResultsDiscardWarnings.
+ */
+static bool
+ClearResultsInternal(MultiConnection *connection, bool raiseErrors, bool discardWarnings)
 {
 	bool success = true;
 
@@ -103,7 +126,11 @@ ClearResults(MultiConnection *connection, bool raiseErrors)
 
 		if (!IsResponseOK(result))
 		{
-			ReportResultError(connection, result, WARNING);
+			if (!discardWarnings)
+			{
+				ReportResultError(connection, result, WARNING);
+			}
+
 			MarkRemoteTransactionFailed(connection, raiseErrors);
 
 			success = false;
@@ -1007,4 +1034,27 @@ BuildWaitEventSet(MultiConnection **allConnections, int totalConnectionCount,
 	AddWaitEventToSet(waitEventSet, WL_LATCH_SET, PGINVALID_SOCKET, MyLatch, NULL);
 
 	return waitEventSet;
+}
+
+
+/*
+ * SendCancelationRequest sends a cancelation request on the given connection.
+ * Return value indicates whether the cancelation request was sent successfully.
+ */
+bool
+SendCancelationRequest(MultiConnection *connection)
+{
+	char errorBuffer[ERROR_BUFFER_SIZE] = { 0 };
+	PGcancel *cancelObject = PQgetCancel(connection->pgConn);
+
+	bool cancelSent = PQcancel(cancelObject, errorBuffer, sizeof(errorBuffer));
+	if (!cancelSent)
+	{
+		ereport(WARNING, (errmsg("could not issue cancel request"),
+						  errdetail("Client error: %s", errorBuffer)));
+	}
+
+	PQfreeCancel(cancelObject);
+
+	return cancelSent;
 }
