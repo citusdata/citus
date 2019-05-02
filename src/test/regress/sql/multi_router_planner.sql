@@ -1039,7 +1039,7 @@ SELECT * FROM mv_articles_hash_empty;
 
 CREATE MATERIALIZED VIEW mv_articles_hash_data AS
 	SELECT * FROM articles_hash WHERE author_id in (1,2);
-SELECT * FROM mv_articles_hash_data;
+SELECT * FROM mv_articles_hash_data ORDER BY 1, 2, 3, 4;
 
 -- router planner/executor is now enabled for task-tracker executor
 SET citus.task_executor_type to 'task-tracker';

@@ -12,27 +12,35 @@ SELECT
 FROM 
 	(
 		SELECT users_table.user_id FROM users_table, 
-							(
-								SELECT 
-									avg(event_type) as avg_val
-								FROM
-									(SELECT event_type, users_table.user_id FROM users_table, 
-															(SELECT user_id, event_type FROM events_table WHERE value_2 < 3 ORDER BY 1, 2 OFFSET 3) as foo
-															WHERE foo.user_id = users_table.user_id
-															) bar, users_table WHERE bar.user_id = users_table.user_id GROUP BY users_table.value_1
-							) as baz
-									WHERE baz.avg_val < users_table.user_id
-								    LIMIT 3
+		(
+			SELECT 
+				avg(event_type) as avg_val
+			FROM
+				(SELECT 	
+					event_type, users_table.user_id 
+				 FROM 
+				 	users_table, (SELECT user_id, event_type FROM events_table WHERE value_2 < 3 ORDER BY 1, 2 OFFSET 3) as foo
+				 WHERE 
+				 	foo.user_id = users_table.user_id) bar, users_table 
+			WHERE 
+				bar.user_id = users_table.user_id 
+		GROUP BY 
+			users_table.value_1
+		) as baz
+		WHERE 
+			baz.avg_val < users_table.user_id
+		ORDER BY 1
+		LIMIT 3
 	) as sub1
 	ORDER BY 1 DESC;
 DEBUG:  generating subplan 1_1 for subquery SELECT user_id, event_type FROM public.events_table WHERE (value_2 OPERATOR(pg_catalog.<) 3) ORDER BY user_id, event_type OFFSET 3
 DEBUG:  generating subplan 1_2 for subquery SELECT avg(bar.event_type) AS avg_val FROM (SELECT foo.event_type, users_table_1.user_id FROM public.users_table users_table_1, (SELECT intermediate_result.user_id, intermediate_result.event_type FROM read_intermediate_result('1_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, event_type integer)) foo WHERE (foo.user_id OPERATOR(pg_catalog.=) users_table_1.user_id)) bar, public.users_table WHERE (bar.user_id OPERATOR(pg_catalog.=) users_table.user_id) GROUP BY users_table.value_1
 DEBUG:  push down of limit count: 3
-DEBUG:  generating subplan 1_3 for subquery SELECT users_table.user_id FROM public.users_table, (SELECT intermediate_result.avg_val FROM read_intermediate_result('1_2'::text, 'binary'::citus_copy_format) intermediate_result(avg_val numeric)) baz WHERE (baz.avg_val OPERATOR(pg_catalog.<) (users_table.user_id)::numeric) LIMIT 3
+DEBUG:  generating subplan 1_3 for subquery SELECT users_table.user_id FROM public.users_table, (SELECT intermediate_result.avg_val FROM read_intermediate_result('1_2'::text, 'binary'::citus_copy_format) intermediate_result(avg_val numeric)) baz WHERE (baz.avg_val OPERATOR(pg_catalog.<) (users_table.user_id)::numeric) ORDER BY users_table.user_id LIMIT 3
 DEBUG:  Plan 1 query after replacing subqueries and CTEs: SELECT DISTINCT user_id FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('1_3'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) sub1 ORDER BY user_id DESC
  user_id 
 ---------
-       5
+       3
 (1 row)
 
 -- subquery in FROM -> FROM -> WHERE ->  WHERE should be replaced due to CTE
