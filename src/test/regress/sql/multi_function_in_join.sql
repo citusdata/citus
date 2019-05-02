@@ -108,7 +108,7 @@ begin
 end;
 $$ language plpgsql;
 
-SELECT * FROM table1 JOIN max_and_min() m ON (m.maximum = data OR m.minimum = data);
+SELECT * FROM table1 JOIN max_and_min() m ON (m.maximum = data OR m.minimum = data) ORDER BY 1,2,3,4;
 
 -- The following tests will fail as we do not support  all joins on
 -- all kinds of functions
