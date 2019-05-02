@@ -36,6 +36,8 @@
 #include "utils/snapmgr.h"
 
 
+static char * GetForceMaxQueryParallelization(void);
+static void SetLocalMaxQueryParallelization(char *value);
 static void ExecuteSelectIntoRelation(Oid targetRelationId, List *insertTargetList,
 									  Query *selectQuery, EState *executorState);
 static HTAB * ExecuteSelectIntoColocatedIntermediateResults(Oid targetRelationId,
@@ -70,8 +72,24 @@ CoordinatorInsertSelectExecScan(CustomScanState *node)
 		Oid targetRelationId = distributedPlan->targetRelationId;
 		char *intermediateResultIdPrefix = distributedPlan->intermediateResultIdPrefix;
 		HTAB *shardConnectionsHash = NULL;
+		char *valueOfForceMaxQueryParallelization = NULL;
 
 		ereport(DEBUG1, (errmsg("Collecting INSERT ... SELECT results on coordinator")));
+
+		/*
+		 * Modifying CTEs before INSERT .. SELECT have to be executed using one connection
+		 * per placement. Otherwise, the COPY into the relation would fail. Thus, we enforce
+		 * that.
+		 *
+		 * Save the value of the GUC before updating its value so that we can re-set
+		 * after the execution.
+		 */
+		if (selectQuery->hasModifyingCTE)
+		{
+			valueOfForceMaxQueryParallelization = GetForceMaxQueryParallelization();
+
+			SetLocalMaxQueryParallelization("on");
+		}
 
 		/*
 		 * If we are dealing with partitioned table, we also need to lock its
@@ -82,7 +100,6 @@ CoordinatorInsertSelectExecScan(CustomScanState *node)
 		{
 			LockPartitionRelations(targetRelationId, RowExclusiveLock);
 		}
-
 
 		if (distributedPlan->workerJob != NULL)
 		{
@@ -138,6 +155,12 @@ CoordinatorInsertSelectExecScan(CustomScanState *node)
 									  executorState);
 		}
 
+		/* update the value to the previous value if we've updated it */
+		if (valueOfForceMaxQueryParallelization != NULL)
+		{
+			SetLocalMaxQueryParallelization(valueOfForceMaxQueryParallelization);
+		}
+
 		scanState->finishedRemoteScan = true;
 	}
 
@@ -145,6 +168,39 @@ CoordinatorInsertSelectExecScan(CustomScanState *node)
 
 	return resultSlot;
 }
+
+
+/*
+ * SetLocalMaxQueryParallelization sets citus.force_max_query_parallelization
+ * to the given value.
+ */
+static void
+SetLocalMaxQueryParallelization(char *value)
+{
+	set_config_option("citus.force_max_query_parallelization", value,
+					  (PGC_USERSET), PGC_S_SESSION,
+					  GUC_ACTION_SET, true, 0, false);
+}
+
+
+/*
+ * GetForceMaxQueryParallelization returns the current value of
+ * citus.force_max_query_parallelization.
+ */
+static char *
+GetForceMaxQueryParallelization()
+{
+	const char *gucStrValue =
+		GetConfigOption("citus.force_max_query_parallelization", true, false);
+
+	if (gucStrValue == NULL)
+	{
+		return pstrdup("off");
+	}
+
+	return pstrdup(gucStrValue);
+}
+
 
 
 /*
