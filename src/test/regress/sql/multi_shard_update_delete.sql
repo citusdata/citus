@@ -644,9 +644,9 @@ ROLLBACK;
 -- Stable functions are supported
 SELECT * FROM test_table_1 ORDER BY 1 DESC, 2 DESC, 3 DESC;
 UPDATE test_table_1 SET col_3 = 3 WHERE date_col < now();
-SELECT * FROM test_table_1;
+SELECT * FROM test_table_1 ORDER BY 1 DESC, 2 DESC, 3 DESC;
 DELETE FROM test_table_1 WHERE date_col < current_timestamp;
-SELECT * FROM test_table_1;
+SELECT * FROM test_table_1 ORDER BY 1 DESC, 2 DESC, 3 DESC;
 
 DROP TABLE test_table_1;
 
