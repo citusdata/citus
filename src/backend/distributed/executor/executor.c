@@ -1799,6 +1799,12 @@ ReceiveResults(WorkerSession *session, bool storeRows)
 		}
 		else if (resultStatus != PGRES_SINGLE_TUPLE)
 		{
+			/*
+			 * We can still recover from error using ROLLBACK TO SAVEPOINT,
+			 * unclaim all connections to allow that.
+			 */
+			FinishDistributedExecution(execution);
+
 			/* query failures are always hard errors */
 			ReportResultError(connection, result, ERROR);
 		}
