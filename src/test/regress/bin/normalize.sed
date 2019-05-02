@@ -15,3 +15,7 @@ s/shard [0-9]+/shard xxxxx/g
 # the generated plan
 s/"(fkey_ref_|referenced_table_|referencing_table_)[0-9]+"/"\1xxxxxxx"/g
 s/\(id\)=\([0-9]+\)/(id)=(X)/g
+
+# shard table names for multi_subtransactions
+s/"t2_[0-9]+"/"t2_xxxxxxx"/g
+
