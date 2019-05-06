@@ -38,7 +38,7 @@ The fastest way to get up and running is to deploy Citus in the cloud. You can a
 
 #### Hyperscale (Citus) on Azure Database for PostgreSQL
 
-Hyperscale (Citus) is a deployment option on Azure Database for PostgreSQL, a fully-managed database as a service. Hyperscale (Citus) employs the Citus open source extension so you can scale out across multiple nodes. To get started with Hyperscale (Citus), [learn more] (https://www.citusdata.com/product/hyperscale-citus/) on the Citus website or use the [Hyperscale (Citus) Quickstart](https://docs.microsoft.com/en-us/azure/postgresql/quickstart-create-hyperscale-portal) in the Azure docs.
+Hyperscale (Citus) is a deployment option on Azure Database for PostgreSQL, a fully-managed database as a service. Hyperscale (Citus) employs the Citus open source extension so you can scale out across multiple nodes. To get started with Hyperscale (Citus), [learn more](https://www.citusdata.com/product/hyperscale-citus/) on the Citus website or use the [Hyperscale (Citus) Quickstart](https://docs.microsoft.com/en-us/azure/postgresql/quickstart-create-hyperscale-portal) in the Azure docs.
 
 #### Citus Cloud
 
