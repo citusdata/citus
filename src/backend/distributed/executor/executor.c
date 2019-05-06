@@ -57,10 +57,21 @@ typedef struct DistributedExecution
 	List *sessionList;
 
 	/*
-	 * Flag to indiciate that the number of connections has changed
-	 * and the WaitEventSet needs to be rebuilt.
+	 * Flag to indiciate that the set of connections we are interested
+	 * in has changed and waitEventSet needs to be rebuilt.
 	 */
-	bool rebuildWaitEventSet;
+	bool connectionSetChanged;
+
+	/*
+	 * Flag to indiciate that the set of wait events we are interested
+	 * in might have changed and waitEventSet needs to be updated.
+	 * 
+	 * Note that we set this flag whenever we assign a value to waitFlags,
+	 * but we don't check that the waitFlags is actually different from the
+	 * previous value. So we might have some false positives for this flag,
+	 * which is OK, because in this case ModifyWaitEvent() is noop.
+	 */
+	bool waitFlagsChanged;
 
 	/*
 	 * The number of connections we aim to open per worker.
@@ -314,6 +325,7 @@ static WorkerSession * FindOrCreateWorkerSession(WorkerPool *workerPool,
 												 MultiConnection *connection);
 static void ManageWorkerPool(WorkerPool *workerPool);
 static WaitEventSet * BuildWaitEventSet(List *sessionList);
+static void UpdateWaitEventSetFlags(WaitEventSet *waitEventSet, List *sessionList);
 static TaskPlacementExecution * PopPlacementExecution(WorkerSession *session);
 static TaskPlacementExecution * PopAssignedPlacementExecution(WorkerSession *session);
 static TaskPlacementExecution * PopUnassignedPlacementExecution(WorkerPool *workerPool);
@@ -459,6 +471,9 @@ CreateDistributedExecution(DistributedPlan *distributedPlan,
 	execution->rowsProcessed = 0;
 
 	execution->raiseInterrupts = true;
+
+	execution->connectionSetChanged = false;
+	execution->waitFlagsChanged = false;
 
 	return execution;
 }
@@ -718,7 +733,7 @@ AssignTasksToConnections(DistributedExecution *execution)
 				ShouldForceOpeningConnection(placementExecution->executionState,
 											 shardCommandExecution->executionOrder))
 			{
-				int connectionFlags = CONNECTION_PER_PLACEMENT;
+				connectionFlags = CONNECTION_PER_PLACEMENT;
 
 				/* ConnectionStateMachine will finish the connection establishment */
 				connection =
@@ -757,6 +772,7 @@ AssignTasksToConnections(DistributedExecution *execution)
 
 				/* always poll the connection in the first round */
 				connection->waitFlags = WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE;
+				execution->waitFlagsChanged = true;
 
 				/* keep track of how many connections are ready */
 				transaction = &(connection->remoteTransaction);
@@ -974,12 +990,12 @@ FindOrCreateWorkerSession(WorkerPool *workerPool, MultiConnection *connection)
 void
 RunDistributedExecution(DistributedExecution *execution)
 {
-	WaitEventSet *waitEventSet = NULL;
 	int workerCount = list_length(execution->workerList);
 
 	/* allocate events for the maximum number of connections to avoid realloc */
 	WaitEvent *events = palloc0(execution->totalTaskCount * workerCount *
 								sizeof(WaitEvent));
+	WaitEventSet *waitEventSet = BuildWaitEventSet(execution->sessionList);
 
 	PG_TRY();
 	{
@@ -999,7 +1015,18 @@ RunDistributedExecution(DistributedExecution *execution)
 				ManageWorkerPool(workerPool);
 			}
 
-			waitEventSet = BuildWaitEventSet(execution->sessionList);
+			if (execution->connectionSetChanged)
+			{
+				FreeWaitEventSet(waitEventSet);
+				waitEventSet = BuildWaitEventSet(execution->sessionList);
+				execution->connectionSetChanged = false;
+				execution->waitFlagsChanged = false;
+			}
+			else if (execution->waitFlagsChanged)
+			{
+				UpdateWaitEventSetFlags(waitEventSet, execution->sessionList);
+				execution->waitFlagsChanged = false;
+			}
 
 			/* wait for I/O events */
 #if (PG_VERSION_NUM >= 100000)
@@ -1049,11 +1076,10 @@ RunDistributedExecution(DistributedExecution *execution)
 
 				ConnectionStateMachine(session);
 			}
-
-			FreeWaitEventSet(waitEventSet);
 		}
 
 		pfree(events);
+		FreeWaitEventSet(waitEventSet);
 	}
 	PG_CATCH();
 	{
@@ -1063,13 +1089,8 @@ RunDistributedExecution(DistributedExecution *execution)
 		 */
 		UnclaimAllSessionConnections(execution->sessionList);
 
-		/* make sure the epoll file descriptor is always closed */
-		if (waitEventSet != NULL)
-		{
-			FreeWaitEventSet(waitEventSet);
-		}
-
 		pfree(events);
+		FreeWaitEventSet(waitEventSet);
 
 		PG_RE_THROW();
 	}
@@ -1161,6 +1182,11 @@ ManageWorkerPool(WorkerPool *workerPool)
 		/* create a session for the connection */
 		FindOrCreateWorkerSession(workerPool, connection);
 	}
+
+	if (newConnectionCount > 0)
+	{
+		execution->connectionSetChanged = true;
+	}
 }
 
 
@@ -1214,17 +1240,14 @@ ConnectionStateMachine(WorkerSession *session)
 				if (pollMode == PGRES_POLLING_FAILED)
 				{
 					connection->connectionState = MULTI_CONNECTION_FAILED;
-					break;
 				}
 				else if (pollMode == PGRES_POLLING_READING)
 				{
 					connection->waitFlags = WL_SOCKET_READABLE;
-					break;
 				}
 				else if (pollMode == PGRES_POLLING_WRITING)
 				{
 					connection->waitFlags = WL_SOCKET_WRITEABLE;
-					break;
 				}
 				else
 				{
@@ -1235,8 +1258,9 @@ ConnectionStateMachine(WorkerSession *session)
 
 					connection->waitFlags = WL_SOCKET_WRITEABLE;
 					connection->connectionState = MULTI_CONNECTION_CONNECTED;
-					break;
 				}
+
+				execution->waitFlagsChanged = true;
 
 				break;
 			}
@@ -1309,7 +1333,7 @@ ConnectionStateMachine(WorkerSession *session)
 				ShutdownConnection(connection);
 
 				/* remove connection from wait event set */
-				execution->rebuildWaitEventSet = true;
+				execution->connectionSetChanged = true;
 				break;
 			}
 
@@ -1374,6 +1398,7 @@ TransactionStateMachine(WorkerSession *session)
 				}
 
 				connection->waitFlags = WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE;
+				execution->waitFlagsChanged = true;
 				break;
 			}
 
@@ -1421,6 +1446,7 @@ TransactionStateMachine(WorkerSession *session)
 
 				/* connection needs to be writeable to send next command */
 				connection->waitFlags = WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE;
+				execution->waitFlagsChanged = true;
 
 				if (execution->isTransaction)
 				{
@@ -1442,6 +1468,7 @@ TransactionStateMachine(WorkerSession *session)
 				{
 					/* no tasks are ready to be executed at the moment */
 					connection->waitFlags = WL_SOCKET_READABLE;
+					execution->waitFlagsChanged = true;
 					break;
 				}
 
@@ -2066,6 +2093,9 @@ PlacementExecutionDone(TaskPlacementExecution *placementExecution, bool succeede
 static void
 PlacementExecutionReady(TaskPlacementExecution *placementExecution)
 {
+	WorkerPool *workerPool = placementExecution->workerPool;
+	DistributedExecution *distributedExecution = workerPool->distributedExecution;
+
 	if (placementExecution->assignedSession != NULL)
 	{
 		WorkerSession *session = placementExecution->assignedSession;
@@ -2091,11 +2121,11 @@ PlacementExecutionReady(TaskPlacementExecution *placementExecution)
 			 * the connection is writeable.
 			 */
 			connection->waitFlags = WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE;
+			distributedExecution->waitFlagsChanged = true;
 		}
 	}
 	else
 	{
-		WorkerPool *workerPool = placementExecution->workerPool;
 		ListCell *sessionCell = NULL;
 
 		if (placementExecution->executionState == PLACEMENT_EXECUTION_NOT_READY)
@@ -2122,6 +2152,7 @@ PlacementExecutionReady(TaskPlacementExecution *placementExecution)
 				transactionState == REMOTE_TRANS_STARTED)
 			{
 				connection->waitFlags = WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE;
+				distributedExecution->waitFlagsChanged = true;
 				break;
 			}
 		}
@@ -2228,4 +2259,45 @@ BuildWaitEventSet(List *sessionList)
 	AddWaitEventToSet(waitEventSet, WL_LATCH_SET, PGINVALID_SOCKET, MyLatch, NULL);
 
 	return waitEventSet;
+}
+
+
+/*
+ * UpdateWaitEventSetFlags modifies the given waitEventSet with the wait flags
+ * for connections in the sessionList.
+ */
+static void
+UpdateWaitEventSetFlags(WaitEventSet *waitEventSet, List *sessionList)
+{
+	int connectionIndex = 0;
+	ListCell *sessionCell = NULL;
+
+	foreach(sessionCell, sessionList)
+	{
+		WorkerSession *session = lfirst(sessionCell);
+		MultiConnection *connection = session->connection;
+		int socket = 0;
+
+		if (connection->pgConn == NULL)
+		{
+			/* connection died earlier in the transaction */
+			continue;
+		}
+
+		if (connection->waitFlags == 0)
+		{
+			/* not currently waiting for this connection */
+			continue;
+		}
+
+		socket = PQsocket(connection->pgConn);
+		if (socket == -1)
+		{
+			/* connection was closed */
+			continue;
+		}
+
+		ModifyWaitEvent(waitEventSet, connectionIndex, connection->waitFlags, NULL);
+		connectionIndex++;
+	}
 }
