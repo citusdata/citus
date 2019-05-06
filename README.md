@@ -135,10 +135,10 @@ and has more than 700B events in their Citus database cluster. [Watch Video](htt
 * [Pex](https://pex.com/) uses Citus to ingest 80B data points per day and analyze that data in real-time. They use a 20+ node cluster on Google Cloud. [User Story](https://www.citusdata.com/customers/pex)
 * [MixRank](https://mixrank.com/) uses Citus to efficiently collect
 and analyze vast amounts of data to allow inside B2B sales teams
-to find new customers. [User Story](https://www.citusdata.com/solutions/case-studies/mixrank-case-study)
+to find new customers. [User Story](https://www.citusdata.com/customers/mixrank)
 * [Agari](https://www.agari.com/) uses Citus to secure more than
 85 percent of U.S. consumer emails on two 6-8 TB clusters. [User
-Story](https://www.citusdata.com/solutions/case-studies/agari-case-study)
+Story](https://www.citusdata.com/customers/agari)
 * [Copper (formerly ProsperWorks)](https://copper.com/) powers a cloud CRM service with Citus. [User Story](https://www.citusdata.com/customers/copper)
 
 
