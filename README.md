@@ -6,40 +6,43 @@
 ### What is Citus?
 
 * **Open-source** PostgreSQL extension (not a fork)
-* **Scalable** across multiple machines through sharding and replication
+* **Built to scale out** across multiple nodes
 * **Distributed** engine for query parallelization
-* **Database** designed to scale multi-tenant applications
+* **Database** designed to scale out multi-tenant applications, real-time analytics dashboards, and high-throughput transactional workloads
 
-Citus is a distributed database that scales across commodity servers using transparent
-sharding and replication. Citus extends the underlying database rather than forking it,
-giving developers and enterprises the power and familiarity of a relational database. As
-an extension, Citus supports new PostgreSQL releases, and allows you to benefit from new
-features while maintaining compatibility with existing PostgreSQL tools.
+Citus is an open source extension to Postgres that distributes your data and your queries across multiple nodes. Because Citus is an extension to Postgres, and not a fork, Citus gives developers and enterprises a scale-out database while keeping the power and familiarity of a relational database. As an extension, Citus supports new PostgreSQL releases, and allows you to benefit from new features while maintaining compatibility with existing PostgreSQL tools.
 
-Citus serves many use cases. Two common ones are:
+Citus serves many use cases. Three common ones are:
 
-1. [Multi-tenant database](https://www.citusdata.com/blog/2016/10/03/designing-your-saas-database-for-high-scalability):
+1. [Multi-tenant & SaaS applications](https://www.citusdata.com/blog/2016/10/03/designing-your-saas-database-for-high-scalability):
 Most B2B applications already have the notion of a tenant /
 customer / account built into their data model. Citus allows you to scale out your
 transactional relational database to 100K+ tenants with minimal changes to your
 application.
 
-2. [Real-time analytics](https://www.citusdata.com/blog/2017/01/27/getting-started-with-github-events-data):
+2. [Real-time analytics](https://www.citusdata.com/blog/2017/12/27/real-time-analytics-dashboards-with-citus/):
 Citus enables ingesting large volumes of data and running
 analytical queries on that data in human real-time. Example applications include analytic
-dashboards with subsecond response times and exploratory queries on unfolding events.
+dashboards with sub-second response times and exploratory queries on unfolding events.
+
+3. High-throughput transactional workloads:
+By distributing your workload across a database cluster, Citus ensures low latency and high performance even with a large number of concurrent users and high volumes of transactions.
 
 To learn more, visit [citusdata.com](https://www.citusdata.com) and join
-the [mailing list](https://groups.google.com/forum/#!forum/citus-users) to
+the [Citus slack](https://slack.citusdata.com/) to
 stay on top of the latest developments.
 
 ### Getting started with Citus
 
-The fastest way to get up and running is to create a Citus Cloud account. You can also setup a local Citus cluster with Docker.
+The fastest way to get up and running is to deploy Citus in the cloud. You can also setup a local Citus database cluster with Docker.
+
+#### Hyperscale (Citus) on Azure Database for PostgreSQL
+
+Hyperscale (Citus) is a deployment option on Azure Database for PostgreSQL, a fully-managed database as a service. Hyperscale (Citus) employs the Citus open source extension so you can scale out across multiple nodes. To get started with Hyperscale (Citus), [learn more] (https://www.citusdata.com/product/hyperscale-citus/) on the Citus website or use the [Hyperscale (Citus) Quickstart](https://docs.microsoft.com/en-us/azure/postgresql/quickstart-create-hyperscale-portal) in the Azure docs.
 
 #### Citus Cloud
 
-Citus Cloud runs on top of AWS as a fully managed database as a service and has development plans available for getting started. You can provision a Citus Cloud account at [https://console.citusdata.com](https://console.citusdata.com/users/sign_up) and get started with just a few clicks.
+Citus Cloud runs on top of AWS as a fully managed database as a service. You can provision a Citus Cloud account at [https://console.citusdata.com](https://console.citusdata.com/users/sign_up) and get started with just a few clicks.
 
 #### Local Citus Cluster
 
@@ -92,12 +95,6 @@ If you're looking to get started locally, you can follow the following steps to 
   a more comprehensive reference.</td>
 </tr>
 <tr>
-  <td>Google Groups</td>
-  <td>The <a
-  href="https://groups.google.com/forum/#!forum/citus-users">Citus Google
-  Group</a> is our place for detailed questions and discussions.</td>
-</tr>
-<tr>
   <td>Slack</td>
   <td>Chat with us in our community <a
   href="https://slack.citusdata.com">Slack channel</a>.</td>
@@ -113,6 +110,11 @@ If you're looking to get started locally, you can follow the following steps to 
   <td>Follow <a href="https://twitter.com/citusdata">@citusdata</a>
   for general updates and PostgreSQL scaling tips.</td>
 </tr>
+<tr>
+  <td>Citus Blog</td>
+  <td>Read our <a href="https://www.citusdata.com/blog/">Citus Data Blog</a>
+  for posts on Postgres, Citus, and scaling your database.</td>
+</tr>
 </table>
 
 ### Contributing
@@ -126,20 +128,17 @@ developing the Citus extension itself and our code quality guidelines.
 Citus is deployed in production by many customers, ranging from
 technology start-ups to large enterprises. Here are some examples:
 
+* [Algolia](https://www.algolia.com/) uses Citus to provide real-time analytics for over 1B searches per day. For faster insights, they also use TopN and HLL extensions. [User Story](https://www.citusdata.com/customers/algolia)
+* [Heap](https://heapanalytics.com/) uses Citus to run dynamic
+funnel, segmentation, and cohort queries across billions of users
+and has more than 700B events in their Citus database cluster. [Watch Video](https://www.youtube.com/watch?v=NVl9_6J1G60&list=PLixnExCn6lRpP10ZlpJwx6AuU3XIgNWpL)
+* [Pex](https://pex.com/) uses Citus to ingest 80B data points per day and analyze that data in real-time. They use a 20+ node cluster on Google Cloud. [User Story](https://www.citusdata.com/customers/pex)
 * [MixRank](https://mixrank.com/) uses Citus to efficiently collect
 and analyze vast amounts of data to allow inside B2B sales teams
 to find new customers. [User Story](https://www.citusdata.com/solutions/case-studies/mixrank-case-study)
-* [Neustar](https://www.neustar.biz/) builds and maintains scalable
-ad-tech infrastructure that counts billions of events per day using
-Citus and HyperLogLog.
 * [Agari](https://www.agari.com/) uses Citus to secure more than
 85 percent of U.S. consumer emails on two 6-8 TB clusters. [User
 Story](https://www.citusdata.com/solutions/case-studies/agari-case-study)
-* [Heap](https://heapanalytics.com/) uses Citus to run dynamic
-funnel, segmentation, and cohort queries across billions of users
-and tens of billions of events. [Watch Video](https://www.youtube.com/watch?v=NVl9_6J1G60&list=PLixnExCn6lRpP10ZlpJwx6AuU3XIgNWpL)
-* [Pex](https://pex.com/) uses Citus to ingest 30B data points per day and analyze that data in real-time. They use a 20+ node cluster on Google Cloud. [User Story](https://www.citusdata.com/customers/pex)
-* [Algolia](https://www.algolia.com/) uses Citus to provide real-time analytics for over 1B searches per day. For faster insights, they also use TopN and HLL extensions. [User Story](https://www.citusdata.com/customers/algolia)
 * [Copper (formerly ProsperWorks)](https://copper.com/) powers a cloud CRM service with Citus. [User Story](https://www.citusdata.com/customers/copper)
 
 
@@ -147,7 +146,7 @@ You can read more user stories about how they employ Citus to scale Postgres for
 
 ___
 
-Copyright © 2012–2017 Citus Data, Inc.
+Copyright © 2012–2019 Citus Data, Inc.
 
 [faq]: https://www.citusdata.com/frequently-asked-questions
 [tutorial]: https://docs.citusdata.com/en/stable/tutorials/multi-tenant-tutorial.html
