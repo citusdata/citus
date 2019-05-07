@@ -144,7 +144,7 @@ static bool SelectsFromDistributedTable(List *rangeTableList, Query *query);
 static List * get_all_actual_clauses(List *restrictinfo_list);
 static int CompareInsertValuesByShardId(const void *leftElement,
 										const void *rightElement);
-static uint64 GetInitialShardId(List *relationShardList);
+static uint64 GetAnchorShardId(List *relationShardList);
 static List * TargetShardIntervalForFastPathQuery(Query *query,
 												  Const **partitionValueConst,
 												  bool *isMultiShardQuery);
@@ -2004,7 +2004,7 @@ PlanRouterQuery(Query *originalQuery,
 	}
 
 	/* we need anchor shard id for select queries with router planner */
-	shardId = GetInitialShardId(prunedRelationShardList);
+	shardId = GetAnchorShardId(prunedRelationShardList);
 
 	/*
 	 * Determine the worker that has all shard placements if a shard placement found.
@@ -2076,13 +2076,20 @@ PlanRouterQuery(Query *originalQuery,
 
 
 /*
- * GetInitialShardId returns the initial shard id given relation shard list. If
- * there is no relation shard exist in the list returns INAVLID_SHARD_ID.
+ * GetAnchorShardId returns the anchor shard id given relation shard list.
+ * The desired anchor shard is found as follows:
+ *
+ * - Return the first distributed table shard id in the relationShardList if
+ * there is any.
+ * - Return a random reference table shard id if all the shards belong to
+ * reference tables
+ * - Return INVALID_SHARD_ID on empty lists
  */
 static uint64
-GetInitialShardId(List *relationShardList)
+GetAnchorShardId(List *relationShardList)
 {
 	ListCell *prunedRelationShardListCell = NULL;
+	uint64 referenceShardId = INVALID_SHARD_ID;
 
 	foreach(prunedRelationShardListCell, relationShardList)
 	{
@@ -2096,10 +2103,18 @@ GetInitialShardId(List *relationShardList)
 		}
 
 		shardInterval = linitial(prunedShardList);
-		return shardInterval->shardId;
+
+		if (ReferenceTableShardId(shardInterval->shardId))
+		{
+			referenceShardId = shardInterval->shardId;
+		}
+		else
+		{
+			return shardInterval->shardId;
+		}
 	}
 
-	return INVALID_SHARD_ID;
+	return referenceShardId;
 }
 
 

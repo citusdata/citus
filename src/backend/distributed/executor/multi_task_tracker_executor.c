@@ -2355,8 +2355,9 @@ AssignQueuedTasks(TaskTracker *taskTracker)
 
 		foreach(taskCell, tasksToAssignList)
 		{
-			taskState = (TrackerTaskState *) lfirst(taskCell);
 			BatchQueryStatus queryStatus = CLIENT_INVALID_BATCH_QUERY;
+
+			taskState = (TrackerTaskState *) lfirst(taskCell);
 
 			if (!batchSuccess)
 			{
@@ -2904,12 +2905,17 @@ TrackerHashCleanupJob(HTAB *taskTrackerHash, Task *jobCleanupTask)
 
 		foreach(activeTaskTrackerCell, activeTackTrackerList)
 		{
-			taskTracker = (TaskTracker *) lfirst(activeTaskTrackerCell);
-			int32 connectionId = taskTracker->connectionId;
-			const char *nodeName = taskTracker->workerName;
-			uint32 nodePort = taskTracker->workerPort;
+			int32 connectionId = 0;
+			char *nodeName = NULL;
+			uint32 nodePort = 0;
+			ResultStatus resultStatus = CLIENT_INVALID_RESULT_STATUS;
 
-			ResultStatus resultStatus = MultiClientResultStatus(connectionId);
+			taskTracker = (TaskTracker *) lfirst(activeTaskTrackerCell);
+			connectionId = taskTracker->connectionId;
+			nodeName = taskTracker->workerName;
+			nodePort = taskTracker->workerPort;
+
+			resultStatus = MultiClientResultStatus(connectionId);
 			if (resultStatus == CLIENT_RESULT_READY)
 			{
 				QueryStatus queryStatus = MultiClientQueryStatus(connectionId);
