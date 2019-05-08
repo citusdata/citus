@@ -303,6 +303,7 @@ static void FinishDistributedExecution(DistributedExecution *execution);
 
 static bool DistributedStatementRequiresRollback(DistributedPlan *distributedPlan);
 static void AssignTasksToConnections(DistributedExecution *execution);
+static void UnclaimAllSessionConnections(List *sessionList);
 static bool ShouldForceOpeningConnection(TaskPlacementExecutionState
 										 placementExecutionState,
 										 PlacementExecutionOrder placementExecutionOrder);
@@ -602,6 +603,23 @@ FinishDistributedExecution(DistributedExecution *execution)
 	}
 }
 
+
+/*
+ * UnclaimAllSessionConnections unclaims all of the connections for the given
+ * sessionList.
+ */
+static void
+UnclaimAllSessionConnections(List *sessionList)
+{
+	ListCell *sessionCell = NULL;
+	foreach(sessionCell, sessionList)
+	{
+		WorkerSession *session = lfirst(sessionCell);
+		MultiConnection *connection = session->connection;
+
+		UnclaimConnection(connection);
+	}
+}
 
 /*
  * AssignTasksToConnections goes through the list of tasks to determine whether any
@@ -1039,6 +1057,12 @@ RunDistributedExecution(DistributedExecution *execution)
 	}
 	PG_CATCH();
 	{
+		/*
+		 * We can still recover from error using ROLLBACK TO SAVEPOINT,
+		 * unclaim all connections to allow that.
+		 */
+		UnclaimAllSessionConnections(execution->sessionList);
+
 		/* make sure the epoll file descriptor is always closed */
 		if (waitEventSet != NULL)
 		{
@@ -1799,12 +1823,6 @@ ReceiveResults(WorkerSession *session, bool storeRows)
 		}
 		else if (resultStatus != PGRES_SINGLE_TUPLE)
 		{
-			/*
-			 * We can still recover from error using ROLLBACK TO SAVEPOINT,
-			 * unclaim all connections to allow that.
-			 */
-			FinishDistributedExecution(execution);
-
 			/* query failures are always hard errors */
 			ReportResultError(connection, result, ERROR);
 		}
