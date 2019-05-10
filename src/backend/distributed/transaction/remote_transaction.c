@@ -111,6 +111,8 @@ StartRemoteTransactionBegin(struct MultiConnection *connection)
 
 		HandleRemoteTransactionConnectionError(connection, raiseErrors);
 	}
+
+	transaction->beginSent = true;
 }
 
 
