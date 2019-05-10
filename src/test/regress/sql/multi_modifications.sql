@@ -252,18 +252,26 @@ ALTER TABLE limit_orders_750000 RENAME TO renamed_orders;
 \c - - - :master_port
 
 -- Fourth: Perform an INSERT on the remaining node
+-- the whole transaction should fail
 \set VERBOSITY terse
 INSERT INTO limit_orders VALUES (276, 'ADR', 140, '2007-07-02 16:32:15', 'sell', 43.67);
 
--- Last: Verify the insert worked but the deleted placement is now unhealthy
+-- set the shard name back
+\c - - - :worker_2_port
+
+-- Second: Move aside limit_orders shard on the second worker node
+ALTER TABLE renamed_orders RENAME TO limit_orders_750000;
+
+-- Connect back to master node
+\c - - - :master_port
+
+-- Verify the insert failed and both placements are healthy
 SELECT count(*) FROM limit_orders WHERE id = 276;
 
 SELECT count(*)
 FROM   pg_dist_shard_placement AS sp,
 	   pg_dist_shard           AS s
 WHERE  sp.shardid = s.shardid
-AND    sp.nodename = 'localhost'
-AND    sp.nodeport = :worker_2_port
 AND    sp.shardstate = 3
 AND    s.logicalrelid = 'limit_orders'::regclass;
 
