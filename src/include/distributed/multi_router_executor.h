@@ -57,6 +57,7 @@ extern ShardPlacementAccess * CreatePlacementAccess(ShardPlacement *placement,
 extern ShardPlacementAccess * CreatePlacementAccess(ShardPlacement *placement,
 													ShardPlacementAccessType accessType);
 extern bool TaskListRequires2PC(List *taskList);
+extern bool ReadOnlyTask(TaskType taskType);
 extern List * BuildPlacementSelectList(int32 groupId, List *relationShardList);
 extern List * BuildPlacementDDLList(int32 groupId, List *relationShardList);
 extern void ExtractParametersFromParamListInfo(ParamListInfo paramListInfo,
