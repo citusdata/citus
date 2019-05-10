@@ -83,6 +83,9 @@ typedef struct RemoteTransaction
 
 	/* 2PC transaction name currently associated with connection */
 	char preparedName[NAMEDATALEN];
+
+	/* set when BEGIN is sent over the connection */
+	bool beginSent;
 } RemoteTransaction;
 
 
