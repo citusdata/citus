@@ -776,7 +776,8 @@ TaskListRequires2PC(List *taskList)
 	}
 
 	multipleTasks = list_length(taskList) > 1;
-	if (multipleTasks && MultiShardCommitProtocol == COMMIT_PROTOCOL_2PC)
+	if (!ReadOnlyTask(task->taskType) &&
+		multipleTasks && MultiShardCommitProtocol == COMMIT_PROTOCOL_2PC)
 	{
 		return true;
 	}
@@ -788,6 +789,27 @@ TaskListRequires2PC(List *taskList)
 		{
 			return true;
 		}
+	}
+
+	return false;
+}
+
+
+/*
+ * ReadOnlyTask returns true if the input task does a read-only operation
+ * on the database.
+ */
+bool
+ReadOnlyTask(TaskType taskType)
+{
+	if (taskType == ROUTER_TASK || taskType == SQL_TASK)
+	{
+		/*
+		 * TODO: We currently do not execute modifying CTEs via ROUTER_TASK/SQL_TASK.
+		 * When we implement it, we should either not use the mentioned task types for
+		 * modifying CTEs detect them here.
+		 */
+		return true;
 	}
 
 	return false;
