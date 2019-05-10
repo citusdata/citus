@@ -597,7 +597,7 @@ DistributedStatementRequiresRollback(DistributedPlan *distributedPlan)
 		return false;
 	}
 
-	if (IsTransactionBlock())
+	if (IsMultiStatementTransaction())
 	{
 		return true;
 	}
@@ -610,7 +610,24 @@ DistributedStatementRequiresRollback(DistributedPlan *distributedPlan)
 	task = (Task *) linitial(taskList);
 	if (list_length(task->taskPlacementList) > 1)
 	{
-		return true;
+		/*
+		 * Some tasks don't set replicationModel thus we only
+		 * rely on the anchorShardId, not replicationModel.
+		 *
+		 * TODO: Do we ever need replicationModel in the Task structure?
+		 * Can't we always rely on anchorShardId?
+		 */
+		uint64 anchorShardId = task->anchorShardId;
+		if (anchorShardId != INVALID_SHARD_ID && ReferenceTableShardId(anchorShardId))
+		{
+			return true;
+		}
+
+		/*
+		 * Single DML/DDL tasks with replicated tables (non-reference)
+		 * should not require BEGIN/COMMIT/ROLLBACK.
+		 */
+		return false;
 	}
 
 	return false;
