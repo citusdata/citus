@@ -448,7 +448,7 @@ RemoteFileDestReceiverShutdown(DestReceiver *destReceiver)
 	}
 
 	/* close the COPY input */
-	EndRemoteCopy(0, connectionList, true);
+	EndRemoteCopy(0, connectionList);
 
 	if (resultDest->writeLocalFile)
 	{

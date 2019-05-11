@@ -131,7 +131,7 @@ extern void AppendCopyRowData(Datum *valueArray, bool *isNullArray,
 							  CopyCoercionData *columnCoercionPaths);
 extern void AppendCopyBinaryHeaders(CopyOutState headerOutputState);
 extern void AppendCopyBinaryFooters(CopyOutState footerOutputState);
-extern void EndRemoteCopy(int64 shardId, List *connectionList, bool stopOnFailure);
+extern void EndRemoteCopy(int64 shardId, List *connectionList);
 extern Node * ProcessCopyStmt(CopyStmt *copyStatement, char *completionTag,
 							  const char *queryString);
 extern void CheckCopyPermissions(CopyStmt *copyStatement);

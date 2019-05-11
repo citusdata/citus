@@ -631,7 +631,7 @@ CopyToNewShards(CopyStmt *copyStatement, char *completionTag, Oid relationId)
 									  shardConnections->connectionList);
 			}
 
-			EndRemoteCopy(currentShardId, shardConnections->connectionList, true);
+			EndRemoteCopy(currentShardId, shardConnections->connectionList);
 			MasterUpdateShardStatistics(shardConnections->shardId);
 
 			copiedDataSizeInBytes = 0;
@@ -655,7 +655,7 @@ CopyToNewShards(CopyStmt *copyStatement, char *completionTag, Oid relationId)
 			SendCopyBinaryFooters(copyOutState, currentShardId,
 								  shardConnections->connectionList);
 		}
-		EndRemoteCopy(currentShardId, shardConnections->connectionList, true);
+		EndRemoteCopy(currentShardId, shardConnections->connectionList);
 		MasterUpdateShardStatistics(shardConnections->shardId);
 	}
 
@@ -1194,11 +1194,10 @@ SendCopyDataToPlacement(StringInfo dataBuffer, int64 shardId, MultiConnection *c
 
 /*
  * EndRemoteCopy ends the COPY input on all connections, and unclaims connections.
- * If stopOnFailure is true, then EndRemoteCopy reports an error on failure,
- * otherwise it reports a warning or continues.
+ * This reports an error on failure.
  */
 void
-EndRemoteCopy(int64 shardId, List *connectionList, bool stopOnFailure)
+EndRemoteCopy(int64 shardId, List *connectionList)
 {
 	ListCell *connectionCell = NULL;
 
@@ -1211,21 +1210,14 @@ EndRemoteCopy(int64 shardId, List *connectionList, bool stopOnFailure)
 		/* end the COPY input */
 		if (!PutRemoteCopyEnd(connection, NULL))
 		{
-			if (!stopOnFailure)
-			{
-				continue;
-			}
-
 			ereport(ERROR, (errcode(ERRCODE_IO_ERROR),
 							errmsg("failed to COPY to shard " INT64_FORMAT " on %s:%d",
 								   shardId, connection->hostname, connection->port)));
-
-			continue;
 		}
 
 		/* check whether there were any COPY errors */
 		result = GetRemoteCommandResult(connection, raiseInterrupts);
-		if (PQresultStatus(result) != PGRES_COMMAND_OK && stopOnFailure)
+		if (PQresultStatus(result) != PGRES_COMMAND_OK)
 		{
 			ReportCopyError(connection, result);
 		}
@@ -2456,8 +2448,7 @@ CitusCopyDestReceiverShutdown(DestReceiver *destReceiver)
 			}
 
 			/* close the COPY input on all shard placements */
-			EndRemoteCopy(shardConnections->shardId, shardConnections->connectionList,
-						  true);
+			EndRemoteCopy(shardConnections->shardId, shardConnections->connectionList);
 		}
 	}
 	PG_CATCH();
