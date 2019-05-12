@@ -6,23 +6,28 @@ IFS=$'\n\t'
 
 CIRCLE_PROJECT_REPONAME=citus
 CIRCLE_WORKFLOW=build
-CIRCLE_JOB=test-10_check-multi
+CIRCLE_JOB=build
 
-volume_name="circleci_${CIRCLE_PROJECT_REPONAME}_${CIRCLE_WORKFLOW}_local_workspace"
-
-# docker volume rm -f "${volume_name}" > /dev/null 2>&1
-# docker volume create "${volume_name}" > /dev/null 2>&1
+# build_volume="circleci_${CIRCLE_PROJECT_REPONAME}_${CIRCLE_WORKFLOW}_${CIRCLE_JOB}_local_workspace"
+#
+# docker volume rm -f "${build_volume}" > /dev/null 2>&1
+# docker volume create "${build_volume}" > /dev/null 2>&1
 #
 # circleci local execute \
 #   -c .circleci/build/processed-config.yml \
-#   -v "${volume_name}:/tmp/_circleci_local_workspace" \
+#   -v "${build_volume}:/tmp/_circleci_local_workspace" \
 #   --job="${CIRCLE_JOB}" \
 #   -e CIRCLE_PROJECT_REPONAME="${CIRCLE_PROJECT_REPONAME}"
-
-volume_name="circleci_${CIRCLE_PROJECT_REPONAME}_${CIRCLE_JOB}_local_workspace"
+#
+#
+CIRCLE_JOB=test-10_check-multi
+test_volume="circleci_${CIRCLE_PROJECT_REPONAME}_${CIRCLE_WORKFLOW}_${CIRCLE_JOB}_local_workspace"
+#
+# .circleci/docker_clone_volume.sh "${build_volume}" "${test_volume}"
 
 circleci local execute \
   -c .circleci/build/processed-config.yml \
-  -v "${volume_name}:/home/circleci/project" \
+  -v "${test_volume}:/home/circleci/project" \
+  -v '/Users/japeter/Documents/Code/the-process/circleci/images/exttester/files:/home/circleci/the-process' \
   --job="${CIRCLE_JOB}" \
   -e CIRCLE_PROJECT_REPONAME="${CIRCLE_PROJECT_REPONAME}"

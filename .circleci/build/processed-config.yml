@@ -11,29 +11,6 @@ jobs:
         name: Persisting to Workspace
         command: |
           cd ~/project && cp -av . /tmp/_circleci_local_workspace
-    - run:
-        name: Wait for Shell Sessions
-        command: |
-          set +x
-          container_id=$(basename "$(cat /proc/1/cpuset)")
-
-          echo "You can now run shells on this container:"
-          printf "\t\$ docker exec -it %s %s\n\n" "${container_id:0:12}" "$0"
-          echo "This box will stay up for 5h0m0s, or until 10m0s passes without output."
-
-          lockfile='/tmp/_circleci_local_shells'
-          touch "${lockfile}"
-
-          numdots=0
-          while [ -e "${lockfile}" ]; do
-            numspaces=$((4 - numdots))
-            printf "\rWaiting for shell connections"
-            printf '.%.0s' $(seq 0 $numdots)
-            printf ' %.0s' $(seq 0 $numspaces)
-
-            numdots=$(((numdots + 1) % 4))
-            sleep 1
-          done
   check-style:
     docker:
     - image: citusdata/stylechecker:latest
@@ -75,14 +52,6 @@ jobs:
             numdots=$(((numdots + 1) % 4))
             sleep 1
           done
-    - run:
-        name: Upload Coverage Results
-        command: |
-          bash <(curl -s https://codecov.io/bash) \
-            -n ${CIRCLE_BUILD_NUM} \
-            -t ${CODECOV_TOKEN} \
-            -y .codecov.yml \
-             -F test_10,multi  \
 workflows:
   version: 2
   build_and_test:
