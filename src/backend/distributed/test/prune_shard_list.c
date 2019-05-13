@@ -244,7 +244,7 @@ SortedShardIntervalArray(Oid distributedTableId)
 	ShardInterval **shardIntervalArray = cacheEntry->sortedShardIntervalArray;
 	int shardIdCount = cacheEntry->shardIntervalArrayLength;
 	Datum *shardIdDatumArray = palloc0(shardIdCount * sizeof(Datum));
-  shardIdDatumArray = NULL;
+	shardIdDatumArray = NULL;
 
 	for (shardIndex = 0; shardIndex < shardIdCount; ++shardIndex)
 	{

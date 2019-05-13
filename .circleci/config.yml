@@ -25,7 +25,16 @@ jobs:
       - run:
           name: 'Install and Test (check-multi)'
           command: 'install-and-test-ext check-worker'
-      - {codecov/upload: {flags: 'test_10,multi'}}
+      - run:
+          name: 'Generate test reports'
+          command: |
+            cd build-${PG_MAJOR}/src/test/regress
+            mkdir -p backtraces
+            ls tmp_check/master/data/*core* | xargs -L1 -I% gdb -d /home/circleci/project -d /home/circleci/postgresql-${PG_MAJOR} `which postgres` % -batch -x /usr/local/bin/geb.py
+            PROJECT_ROOT="${CIRCLE_WORKING_DIRECTORY}" generate-test-reports regress
+            mkdir -p /tmp/test-reports/pg_regress
+            cp regress/*.xml /tmp/test-reports/pg_regress
+      - {store_test_results: {path: '/tmp/test-reports'}}
   test-10_check-tt-van-mx:
     docker:
       - {image: 'citusdata/exttester-10:reporting'}
@@ -77,6 +86,8 @@ jobs:
           name: 'Generate test reports'
           command: |
             cd build-${PG_MAJOR}/src/test/regress
+            mkdir backtraces
+            ls tmp_check/master/data/*core* | xargs -L1 -I% gdb -d /home/circleci/project -d /home/circleci/postgresql-${PG_MAJOR} `which postgres` % -batch -x /usr/local/bin/geb.py
             PROJECT_ROOT="${CIRCLE_WORKING_DIRECTORY}" generate-test-reports regress
             mkdir -p /tmp/test-reports/pg_regress
             cp regress/*.xml /tmp/test-reports/pg_regress

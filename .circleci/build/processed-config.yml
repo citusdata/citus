@@ -30,6 +30,15 @@ jobs:
         name: Install and Test (check-multi)
         command: install-and-test-ext check-worker
     - run:
+        name: 'Generate test reports'
+        command: |
+          cd build-${PG_MAJOR}/src/test/regress
+          mkdir -p backtraces
+          ls tmp_check/master/data/*core* | xargs -L1 -I% gdb -d /home/circleci/project -d /home/circleci/postgresql-${PG_MAJOR} `which postgres` % -batch -x /usr/local/bin/geb.py
+          PROJECT_ROOT="${CIRCLE_WORKING_DIRECTORY}" generate-test-reports regress
+          mkdir -p /tmp/test-reports/pg_regress
+          cp regress/*.xml /tmp/test-reports/pg_regress
+    - run:
         name: Wait for Shell Sessions
         command: |
           set +x

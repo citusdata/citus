@@ -197,7 +197,7 @@ create_distributed_table(PG_FUNCTION_ARGS)
 	distributionColumnText = PG_GETARG_TEXT_P(1);
 	distributionMethodOid = PG_GETARG_OID(2);
 	colocateWithTableNameText = PG_GETARG_TEXT_P(3);
-  distributionColumnText = NULL;
+	distributionColumnText = NULL;
 
 	EnsureTableOwner(relationId);
 

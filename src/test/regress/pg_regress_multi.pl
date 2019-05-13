@@ -139,7 +139,7 @@ if (defined $bindir)
 # a bit more context to make it easier to locate failed test sections.
 #
 # Also, ignore whitespace, without this the diffs on windows are unreadable
-$ENV{PG_REGRESS_DIFF_OPTS} = '-dU3 -w --speed-large-files -F\'^-- +[^ ]\'';
+$ENV{PG_REGRESS_DIFF_OPTS} = '-dU3 -w';
 
 my $plainRegress = "";
 my $isolationRegress = "";

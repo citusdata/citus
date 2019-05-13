@@ -8,7 +8,7 @@ CIRCLE_PROJECT_REPONAME=citus
 CIRCLE_WORKFLOW=build
 CIRCLE_JOB=build
 
-# build_volume="circleci_${CIRCLE_PROJECT_REPONAME}_${CIRCLE_WORKFLOW}_${CIRCLE_JOB}_local_workspace"
+build_volume="circleci_${CIRCLE_PROJECT_REPONAME}_${CIRCLE_WORKFLOW}_${CIRCLE_JOB}_local_workspace"
 #
 # docker volume rm -f "${build_volume}" > /dev/null 2>&1
 # docker volume create "${build_volume}" > /dev/null 2>&1
@@ -22,8 +22,9 @@ CIRCLE_JOB=build
 #
 CIRCLE_JOB=test-10_check-multi
 test_volume="circleci_${CIRCLE_PROJECT_REPONAME}_${CIRCLE_WORKFLOW}_${CIRCLE_JOB}_local_workspace"
-#
-# .circleci/docker_clone_volume.sh "${build_volume}" "${test_volume}"
+
+docker volume rm -f "${test_volume}" > /dev/null 2>&1
+.circleci/docker_clone_volume.sh "${build_volume}" "${test_volume}"
 
 circleci local execute \
   -c .circleci/build/processed-config.yml \
