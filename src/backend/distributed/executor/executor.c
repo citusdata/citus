@@ -119,6 +119,9 @@ typedef struct DistributedExecution
 	/* indicates whether distributed execution has failed */
 	bool failed;
 
+	/* set to true when we prefer to bail out early */
+	bool errorOnAnyFailure;
+
 	/*
 	 * For SELECT commands or INSERT/UPDATE/DELETE commands with RETURNING,
 	 * the total number of rows received from the workers. For
@@ -359,6 +362,7 @@ static void WorkerSessionFailed(WorkerSession *session);
 static void WorkerPoolFailed(WorkerPool *workerPool);
 static void PlacementExecutionDone(TaskPlacementExecution *placementExecution,
 								   bool succeeded);
+static bool ShouldMarkPlacementsInvalidOnFailure(DistributedExecution *execution);
 static void PlacementExecutionReady(TaskPlacementExecution *placementExecution);
 static TaskExecutionState GetTaskExecutionState(
 	ShardCommandExecution *shardCommandExecution);
@@ -549,7 +553,15 @@ StartDistributedExecution(DistributedExecution *execution)
 
 			if (TaskListRequires2PC(taskList))
 			{
+				/*
+				 * Although using two phase commit protocol is an independent decision than
+				 * failing on any error, we prefer to couple them. Our motivation is that
+				 * the failures are rare, and we prefer to avoid marking placements invalid
+				 * in case of failures.
+				 */
 				CoordinatedTransactionUse2PC();
+
+				execution->errorOnAnyFailure = true;
 			}
 		}
 	}
@@ -1380,7 +1392,7 @@ ConnectionStateMachine(WorkerSession *session)
 					WorkerPoolFailed(workerPool);
 				}
 
-				if (execution->failed)
+				if (execution->failed || execution->errorOnAnyFailure)
 				{
 					/* a task has failed due to this connection failure */
 					ReportConnectionError(connection, ERROR);
@@ -2083,6 +2095,20 @@ PlacementExecutionDone(TaskPlacementExecution *placementExecution, bool succeede
 	}
 	else
 	{
+		if (ShouldMarkPlacementsInvalidOnFailure(execution))
+		{
+			ShardPlacement *shardPlacement = placementExecution->shardPlacement;
+
+			/*
+			 * We only set shard state if its current state is FILE_FINALIZED, which
+			 * prevents overwriting shard state if it is already set at somewhere else.
+			 */
+			if (shardPlacement->shardState == FILE_FINALIZED)
+			{
+				UpdateShardPlacementState(shardPlacement->placementId, FILE_INACTIVE);
+			}
+		}
+
 		placementExecution->executionState = PLACEMENT_EXECUTION_FAILED;
 	}
 
@@ -2144,6 +2170,30 @@ PlacementExecutionDone(TaskPlacementExecution *placementExecution, bool succeede
 			}
 		} while (nextPlacementExecution->executionState == PLACEMENT_EXECUTION_FAILED);
 	}
+}
+
+
+/*
+ * ShouldMarkPlacementsInvalidOnFailures returns true if the failure
+ * should trigger marking placements invalid.
+ */
+static bool
+ShouldMarkPlacementsInvalidOnFailure(DistributedExecution *execution)
+{
+	DistributedPlan *distributedPlan = execution->plan;
+	CmdType operation = distributedPlan->operation;
+
+	if (operation == CMD_SELECT || execution->errorOnAnyFailure)
+	{
+		/*
+		 * Failures on SELECTs should never lead to invalid placement.
+		 * Failures that lead throwing error, no need to mark any placement
+		 * invalid.
+		 */
+		return false;
+	}
+
+	return true;
 }
 
 
