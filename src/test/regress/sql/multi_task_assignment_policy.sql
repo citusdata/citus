@@ -133,7 +133,7 @@ RESET client_min_messages;
 -- which might change and we don't have any control over it.
 -- the important thing that we look for is that round-robin policy 
 -- should give the same output for executions in the same transaction 
--- and different output for executions that are not insdie the
+-- and different output for executions that are not inside the
 -- same transaction. To ensure that, we define a helper function
 BEGIN;
 
@@ -149,15 +149,12 @@ INSERT INTO explain_outputs
 
 -- given that we're in the same transaction, the count should be 1
 SELECT count(DISTINCT value) FROM explain_outputs;
-
-DROP TABLE explain_outputs;
+TRUNCATE explain_outputs;
 COMMIT;
 
 -- now test round-robin policy outside
--- a transaction, we should see the assignements
+-- a transaction, we should see the assignments
 -- change on every execution
-CREATE TEMPORARY TABLE explain_outputs (value text);
-
 SET citus.task_assignment_policy TO 'round-robin';
 SET citus.explain_distributed_queries TO ON;
 
@@ -192,15 +189,12 @@ INSERT INTO explain_outputs
 
 -- given that we're in the same transaction, the count should be 1
 SELECT count(DISTINCT value) FROM explain_outputs;
-
-DROP TABLE explain_outputs;
+TRUNCATE explain_outputs;
 COMMIT;
 
 -- now test round-robin policy outside
--- a transaction, we should see the assignements
+-- a transaction, we should see the assignments
 -- change on every execution
-CREATE TEMPORARY TABLE explain_outputs (value text);
-
 SET citus.task_assignment_policy TO 'round-robin';
 SET citus.explain_distributed_queries TO ON;
 
@@ -212,7 +206,35 @@ INSERT INTO explain_outputs
 -- given that we're in the same transaction, the count should be 2
 -- since there are two different worker nodes
 SELECT count(DISTINCT value) FROM explain_outputs;
+TRUNCATE explain_outputs;
 
+-- test that the round robin policy detects the anchor shard correctly
+-- we should not pick a reference table shard as the anchor shard when joining with a distributed table
+SET citus.shard_replication_factor TO 1;
+
+CREATE TABLE task_assignment_nonreplicated_hash (test_id  integer, ref_id integer);
+SELECT create_distributed_table('task_assignment_nonreplicated_hash', 'test_id');
+
+-- run the query two times to make sure that it hits the correct worker every time
+INSERT INTO explain_outputs
+SELECT parse_explain_output($cmd$
+EXPLAIN SELECT *
+FROM (SELECT * FROM task_assignment_nonreplicated_hash WHERE test_id = 3) AS dist
+       LEFT JOIN task_assignment_reference_table ref
+                 ON dist.ref_id = ref.test_id
+$cmd$, 'task_assignment_nonreplicated_hash');
+
+INSERT INTO explain_outputs
+SELECT parse_explain_output($cmd$
+EXPLAIN SELECT *
+FROM (SELECT * FROM task_assignment_nonreplicated_hash WHERE test_id = 3) AS dist
+       LEFT JOIN task_assignment_reference_table ref
+                 ON dist.ref_id = ref.test_id
+$cmd$, 'task_assignment_nonreplicated_hash');
+
+-- The count should be 1 since the shard exists in only one worker node
+SELECT count(DISTINCT value) FROM explain_outputs;
+TRUNCATE explain_outputs;
 
 RESET citus.task_assignment_policy;
 RESET client_min_messages;
@@ -228,4 +250,5 @@ SET LOCAL citus.task_assignment_policy TO 'round-robin';
 WITH q1 AS (SELECT * FROM task_assignment_test_table_2) SELECT * FROM q1;
 ROLLBACK;
 
-DROP TABLE task_assignment_replicated_hash, task_assignment_reference_table;
+DROP TABLE task_assignment_replicated_hash, task_assignment_nonreplicated_hash,
+  task_assignment_reference_table, explain_outputs;
