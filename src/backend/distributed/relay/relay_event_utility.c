@@ -421,7 +421,8 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 			RenameStmt *renameStmt = (RenameStmt *) parseTree;
 			ObjectType objectType = renameStmt->renameType;
 
-			if (objectType == OBJECT_TABLE || objectType == OBJECT_INDEX)
+			if (objectType == OBJECT_TABLE || objectType == OBJECT_INDEX ||
+				objectType == OBJECT_FOREIGN_TABLE)
 			{
 				char **oldRelationName = &(renameStmt->relation->relname);
 				char **newRelationName = &(renameStmt->newname);

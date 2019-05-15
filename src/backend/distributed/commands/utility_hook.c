@@ -291,6 +291,7 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		{
 			AlterTableStmt *alterTableStmt = (AlterTableStmt *) parsetree;
 			if (alterTableStmt->relkind == OBJECT_TABLE ||
+				alterTableStmt->relkind == OBJECT_FOREIGN_TABLE ||
 				alterTableStmt->relkind == OBJECT_INDEX)
 			{
 				ddlJobs = PlanAlterTableStmt(alterTableStmt, queryString);
@@ -366,7 +367,8 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		if (IsA(parsetree, AlterTableStmt))
 		{
 			AlterTableStmt *alterTableStmt = (AlterTableStmt *) parsetree;
-			if (alterTableStmt->relkind == OBJECT_TABLE)
+			if (alterTableStmt->relkind == OBJECT_TABLE ||
+				alterTableStmt->relkind == OBJECT_FOREIGN_TABLE)
 			{
 				ErrorIfAlterDropsPartitionColumn(alterTableStmt);
 

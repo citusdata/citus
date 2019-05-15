@@ -524,12 +524,14 @@ IsAlterTableRenameStmt(RenameStmt *renameStmt)
 {
 	bool isAlterTableRenameStmt = false;
 
-	if (renameStmt->renameType == OBJECT_TABLE)
+	if (renameStmt->renameType == OBJECT_TABLE ||
+		renameStmt->renameType == OBJECT_FOREIGN_TABLE)
 	{
 		isAlterTableRenameStmt = true;
 	}
 	else if (renameStmt->renameType == OBJECT_COLUMN &&
-			 renameStmt->relationType == OBJECT_TABLE)
+		(renameStmt->relationType == OBJECT_TABLE ||
+			renameStmt->relationType == OBJECT_FOREIGN_TABLE))
 	{
 		isAlterTableRenameStmt = true;
 	}

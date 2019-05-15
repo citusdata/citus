@@ -66,6 +66,7 @@ PlanRenameStmt(RenameStmt *renameStmt, const char *renameCommand)
 	switch (renameStmt->renameType)
 	{
 		case OBJECT_TABLE:
+		case OBJECT_FOREIGN_TABLE:
 		case OBJECT_COLUMN:
 		case OBJECT_TABCONSTRAINT:
 		case OBJECT_POLICY:
