@@ -108,6 +108,14 @@ CREATE FOREIGN TABLE foreign_table (
 
 SELECT master_get_table_ddl_events('foreign_table');
 
+SELECT create_distributed_table('foreign_table', 'id');
+ALTER FOREIGN TABLE foreign_table rename to renamed_foreign_table;
+ALTER FOREIGN TABLE renamed_foreign_table rename full_name to rename_name;
+ALTER FOREIGN TABLE renamed_foreign_table alter rename_name type char(8);
+\c - - - :worker_1_port
+\d renamed_foreign_table_*
+\c - - - :master_port
+
 -- propagating views is not supported
 CREATE VIEW local_view AS SELECT * FROM simple_table;
 
@@ -115,7 +123,7 @@ SELECT master_get_table_ddl_events('local_view');
 
 -- clean up
 DROP VIEW IF EXISTS local_view;
-DROP FOREIGN TABLE IF EXISTS foreign_table;
+DROP FOREIGN TABLE IF EXISTS renamed_foreign_table;
 DROP TABLE IF EXISTS simple_table, not_null_table, column_constraint_table,
 					 table_constraint_table, default_value_table, pkey_table,
 					 unique_table, clustered_table, fiddly_table;
