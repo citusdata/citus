@@ -135,7 +135,7 @@ ProgressMonitorList(uint64 commandTypeMagicNumber, List **attachedDSMSegments)
 	const int dsmHandleIndex = 1 + 1 + 3;
 
 	/*
-	 * Currently, Postgres' progress logging mechanism supports only the VACUUM,
+	 * Currently, Postgres' progress logging mechanism supports only the VACUUM
 	 * operations. Therefore, we identify ourselves as a VACUUM command but only fill
 	 * a couple of the available fields. Therefore the commands that use Citus' progress
 	 * monitoring API will appear in pg_stat_progress_vacuum output.

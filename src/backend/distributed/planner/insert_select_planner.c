@@ -1127,7 +1127,7 @@ InsertPartitionColumnMatchesSelect(Query *query, RangeTblEntry *insertRte,
 
 
 /*
- * CreatteCoordinatorInsertSelectPlan creates a query plan for a SELECT into a
+ * CreateCoordinatorInsertSelectPlan creates a query plan for a SELECT into a
  * distributed table. The query plan can also be executed on a worker in MX.
  */
 static DistributedPlan *
@@ -1330,7 +1330,7 @@ WrapSubquery(Query *subquery)
 
 
 /*
- * TwoPhaseInsertSelectTaskList generates a list of task for a query that
+ * TwoPhaseInsertSelectTaskList generates a list of tasks for a query that
  * inserts into a target relation and selects from a set of co-located
  * intermediate results.
  */

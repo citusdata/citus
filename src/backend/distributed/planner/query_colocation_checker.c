@@ -6,7 +6,7 @@
  *
  * The main logic behind non colocated subquery joins is that we pick
  * an anchor range table entry and check for distribution key equality
- * of any  other subqueries in the given query. If for a given subquery,
+ * of any other subqueries in the given query. If for a given subquery,
  * we cannot find distribution key equality with the anchor rte, we
  * recursively plan that subquery.
  *
@@ -131,7 +131,7 @@ AnchorRte(Query *subquery)
 		RangeTblEntry *currentRte = rt_fetch(currentRTEIndex, subquery->rtable);
 
 		/*
-		 * We always prefer distributed releations if we can find any. The
+		 * We always prefer distributed relations if we can find any. The
 		 * reason is that Citus is currently able to recursively plan
 		 * subqueries, but not relations.
 		 *
