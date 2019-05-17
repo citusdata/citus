@@ -3,7 +3,7 @@
 The commands module is modeled after `backend/commands` from the postgres repository and
 contains the logic for Citus on how to run these commands on distributed objects. Even
 though the structure of the directory has some resemblence to its postgres relative, files
-here are somewhat more finegrained. This is due to the nature of citus commands that are
+here are somewhat more fine-grained. This is due to the nature of citus commands that are
 heavily focused on distributed tables. Instead of having all commands in `tablecmds.c`
 they are often moved to files that are named after the command.
 
