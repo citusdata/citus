@@ -63,7 +63,7 @@ typedef struct
 
 	/*
 	 * Comparator for partition interval type (different from
-	 * shardValueCompareFunction if hash-partitioned), NULL if
+	 * shardColumnCompareFunction if hash-partitioned), NULL if
 	 * DISTRIBUTE_BY_NONE.
 	 */
 	FmgrInfo *shardIntervalCompareFunction;
