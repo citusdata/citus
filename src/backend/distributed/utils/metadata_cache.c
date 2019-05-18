@@ -167,7 +167,7 @@ static bool workerNodeHashValid = false;
 /* default value is -1, for coordinator it's 0 and for worker nodes > 0 */
 static int32 LocalGroupId = -1;
 
-/* built first time through in InitializePartitionCache */
+/* built first time through in InitializeDistTableCache */
 static ScanKeyData DistPartitionScanKey[1];
 static ScanKeyData DistShardScanKey[1];
 

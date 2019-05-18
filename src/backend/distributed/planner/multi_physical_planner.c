@@ -3452,7 +3452,6 @@ JoinSequenceArray(List *rangeTableFragmentsList, Query *jobQuery, List *depended
 	uint32 rangeTableCount = (uint32) list_length(rangeTableList);
 	uint32 sequenceNodeSize = sizeof(JoinSequenceNode);
 	uint32 joinedTableCount = 0;
-	List *joinedTableList = NIL;
 	List *joinExprList = NIL;
 	ListCell *joinExprCell = NULL;
 	uint32 firstRangeTableId = 1;
@@ -3574,7 +3573,6 @@ JoinSequenceArray(List *rangeTableFragmentsList, Query *jobQuery, List *depended
 			nextJoinSequenceNode->joiningRangeTableId = NON_PRUNABLE_JOIN;
 		}
 
-		joinedTableList = lappend_int(joinedTableList, nextRangeTableId);
 		joinedTableCount++;
 	}
 
