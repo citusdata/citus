@@ -167,7 +167,7 @@ RecoverWorkerTransactions(WorkerNode *workerNode)
 	MemoryContext oldContext = NULL;
 	bool recoveryFailed = false;
 
-	int connectionFlags = SESSION_LIFESPAN;
+	int connectionFlags = 0;
 	MultiConnection *connection = GetNodeConnection(connectionFlags, nodeName, nodePort);
 	if (connection->pgConn == NULL || PQstatus(connection->pgConn) != CONNECTION_OK)
 	{

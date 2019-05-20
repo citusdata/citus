@@ -746,6 +746,20 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
+		"citus.max_cached_conns_per_worker",
+		gettext_noop("Sets the maximum number of connections to cache per worker."),
+		gettext_noop("Each backend opens connections to the workers to query the "
+					 "shards. At the end of the transaction, the configurated number "
+					 "of connections is kept open to speed up subsequent commands. "
+					 "Increasing this value will reduce the latency of multi-shard "
+					 "queries, but increases overhead on the workers"),
+		&MaxCachedConnectionsPerWorker,
+		1, 0, INT_MAX,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
+	DefineCustomIntVariable(
 		"citus.max_assign_task_batch_size",
 		gettext_noop("Sets the maximum number of tasks to assign per round."),
 		gettext_noop("The master node synchronously assigns tasks to workers in "
