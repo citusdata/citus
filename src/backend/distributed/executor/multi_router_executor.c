@@ -822,7 +822,8 @@ TaskListRequires2PC(List *taskList)
 	}
 
 	multipleTasks = list_length(taskList) > 1;
-	if (multipleTasks && MultiShardCommitProtocol == COMMIT_PROTOCOL_2PC)
+	if (task->taskType != SQL_TASK &&
+		multipleTasks && MultiShardCommitProtocol == COMMIT_PROTOCOL_2PC)
 	{
 		return true;
 	}
