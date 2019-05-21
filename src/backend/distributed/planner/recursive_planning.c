@@ -65,6 +65,7 @@
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_server_executor.h"
 #include "distributed/query_colocation_checker.h"
+#include "distributed/query_pushdown_planning.h"
 #include "distributed/recursive_planning.h"
 #include "distributed/relation_restriction_equivalence.h"
 #include "distributed/version_compat.h"
@@ -80,7 +81,6 @@
 #include "nodes/relation.h"
 #include "utils/builtins.h"
 #include "utils/guc.h"
-#include "../../../include/distributed/query_pushdown_planning.h"
 
 
 /*
