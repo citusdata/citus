@@ -1420,6 +1420,19 @@ ConnectionStateMachine(WorkerSession *session)
 
 				/* remove connection from wait event set */
 				execution->connectionSetChanged = true;
+
+				/*
+				 * Reset the transaction state machine since CloseConnection()
+				 * relies on it and even if we're not inside a distributed transaction
+				 * we set the transaction state (e.g., REMOTE_TRANS_SENT_COMMAND).
+				 */
+				if (!execution->isTransaction)
+				{
+					connection->remoteTransaction.transactionState =
+						REMOTE_TRANS_INVALID;
+				}
+
+
 				break;
 			}
 
