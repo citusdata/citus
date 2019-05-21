@@ -392,7 +392,7 @@ ALTER TABLE referencing_table DROP CONSTRAINT test_constraint;
 -- test MATCH SIMPLE
 ALTER TABLE referencing_table ADD CONSTRAINT test_constraint FOREIGN KEY(ref_id, id) REFERENCES referenced_table(id, test_column) MATCH SIMPLE;
 INSERT INTO referencing_table VALUES(null, 2);
-SELECT * FROM referencing_table;
+SELECT * FROM referencing_table ORDER BY 1,2;
 DELETE FROM referencing_table WHERE ref_id = 2;
 ALTER TABLE referencing_table DROP CONSTRAINT test_constraint;
 
