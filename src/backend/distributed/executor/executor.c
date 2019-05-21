@@ -29,6 +29,7 @@
 #include "distributed/remote_commands.h"
 #include "distributed/resource_lock.h"
 #include "distributed/subplan_execution.h"
+#include "distributed/transaction_management.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/version_compat.h"
 #include "lib/ilist.h"
@@ -355,6 +356,7 @@ static bool StartPlacementExecutionOnSession(TaskPlacementExecution *placementEx
 											 WorkerSession *session);
 static List * PlacementAccessListForTask(Task *task, ShardPlacement *taskPlacement);
 static void ConnectionStateMachine(WorkerSession *session);
+static void Use2PCIfParticipatingNodesExpanded(WorkerSession *session);
 static void TransactionStateMachine(WorkerSession *session);
 static bool CheckConnectionReady(MultiConnection *connection);
 static bool ReceiveResults(WorkerSession *session, bool storeRows);
@@ -1353,6 +1355,9 @@ ConnectionStateMachine(WorkerSession *session)
 
 			case MULTI_CONNECTION_CONNECTED:
 			{
+				/* if we're expanding the nodes in a transaction, use 2PC */
+				Use2PCIfParticipatingNodesExpanded(session);
+
 				/* connection is ready, run the transaction state machine */
 				TransactionStateMachine(session);
 				break;
@@ -1442,6 +1447,40 @@ ConnectionStateMachine(WorkerSession *session)
 			}
 		}
 	} while (connection->connectionState != currentState);
+}
+
+
+/*
+ * Use2PCIfParticipatingNodesExpanded ensures that the execution uses
+ * 2PC if the transaction is expanded to access a new worker node.
+ */
+static void
+Use2PCIfParticipatingNodesExpanded(WorkerSession *session)
+{
+	DistributedExecution *execution = NULL;
+
+	if (DoesCoordinatedTransactionUse2PC() ||
+		MultiShardCommitProtocol != COMMIT_PROTOCOL_2PC)
+	{
+		/* already using or doesn't require 2PC */
+		return;
+	}
+
+	/*
+	 * If we're expanding the set nodes that participate in the distributed
+	 * transaction, conform to MultiShardCommitProtocol.
+	 */
+	execution = session->workerPool->distributedExecution;
+	if (execution->isTransaction &&
+		XactModificationLevel == XACT_MODIFICATION_DATA)
+	{
+		MultiConnection *connection = session->connection;
+		RemoteTransaction *transaction = &connection->remoteTransaction;
+		if (transaction->transactionState == REMOTE_TRANS_INVALID)
+		{
+			CoordinatedTransactionUse2PC();
+		}
+	}
 }
 
 

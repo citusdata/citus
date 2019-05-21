@@ -138,6 +138,17 @@ CoordinatedTransactionUse2PC(void)
 }
 
 
+/*
+ * DoesCoordinatedTransactionUse2PC is a wrapper for getting
+ * the current value of CoordinatedTransactionUses2PC externally.
+ */
+bool
+DoesCoordinatedTransactionUse2PC(void)
+{
+	return CoordinatedTransactionUses2PC;
+}
+
+
 void
 InitializeTransactionManagement(void)
 {
