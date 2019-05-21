@@ -29,15 +29,9 @@
 #include "catalog/namespace.h"
 #include "catalog/pg_class.h"
 #include "catalog/pg_constraint.h"
-
-#if PG_VERSION_NUM < 110000
-
-/* pg_constraint_fn.h is gone in postgres 11,
- * get_relation_constraint_oid is merged into pg_constraint.h then
- */
+#if (PG_VERSION_NUM < 110000)
 #include "catalog/pg_constraint_fn.h"
 #endif
-
 #include "distributed/commands.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/relay_utility.h"
