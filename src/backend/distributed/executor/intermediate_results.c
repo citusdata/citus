@@ -215,7 +215,8 @@ CreateRemoteFileDestReceiver(char *resultId, EState *executorState,
 
 /*
  * RemoteFileDestReceiverStartup implements the rStartup interface of
- * RemoteFileDestReceiver. It opens the relation
+ * RemoteFileDestReceiver. It opens connections to the nodes in initialNodeList,
+ * and sends the COPY command on all connections.
  */
 static void
 RemoteFileDestReceiverStartup(DestReceiver *dest, int operation,

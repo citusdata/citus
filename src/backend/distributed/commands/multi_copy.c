@@ -2074,7 +2074,8 @@ CreateCitusCopyDestReceiver(Oid tableId, List *columnNameList, int partitionColu
 
 /*
  * CitusCopyDestReceiverStartup implements the rStartup interface of
- * CitusCopyDestReceiver. It opens the relation
+ * CitusCopyDestReceiver. It opens the relation, acquires necessary
+ * locks, and initializes the state required for doing the copy.
  */
 static void
 CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
