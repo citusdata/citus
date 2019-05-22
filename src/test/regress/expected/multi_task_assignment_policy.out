@@ -19,17 +19,16 @@ DECLARE
        shardOfTheTask text;
 begin
   for r in execute qry loop
-       IF r LIKE '%port%' THEN
-       portOfTheTask = substring(r, '([0-9]{1,10})');
+    IF r LIKE '%port%' THEN
+      portOfTheTask = substring(r, '([0-9]{1,10})');
     END IF;
 
     IF r LIKE '%' || table_name || '%' THEN
-       shardOfTheTask = substring(r, '([0-9]{1,10})');
-       return QUERY SELECT  shardOfTheTask || '@' || portOfTheTask ;
+      shardOfTheTask = substring(r, '([0-9]{5,10})');
     END IF;
 
   end loop;
-  return;
+  return QUERY SELECT shardOfTheTask || '@' || portOfTheTask;
 end; $$ language plpgsql;
 SET citus.explain_distributed_queries TO off;
 -- Check that our policies for assigning tasks to worker nodes run as expected.
@@ -300,11 +299,8 @@ SELECT count(DISTINCT value) FROM explain_outputs;
 (1 row)
 
 TRUNCATE explain_outputs;
-RESET citus.task_assignment_policy;
-RESET client_min_messages;
--- we should be able to use round-robin with router queries that 
+-- We should be able to use round-robin with router queries that
 -- only contains intermediate results
-BEGIN;
 CREATE TABLE task_assignment_test_table_2 (test_id integer);
 SELECT create_distributed_table('task_assignment_test_table_2', 'test_id');
  create_distributed_table 
@@ -312,17 +308,26 @@ SELECT create_distributed_table('task_assignment_test_table_2', 'test_id');
  
 (1 row)
 
-WITH q1 AS (SELECT * FROM task_assignment_test_table_2) SELECT * FROM q1;
- test_id 
----------
-(0 rows)
+SET citus.task_assignment_policy TO 'round-robin';
+-- Run the query two times to make sure that it hits two different workers
+-- on consecutive runs
+INSERT INTO explain_outputs
+SELECT parse_explain_output($cmd$
+EXPLAIN WITH q1 AS (SELECT * FROM task_assignment_test_table_2) SELECT * FROM q1
+$cmd$, 'task_assignment_test_table_2');
+INSERT INTO explain_outputs
+SELECT parse_explain_output($cmd$
+EXPLAIN WITH q1 AS (SELECT * FROM task_assignment_test_table_2) SELECT * FROM q1
+$cmd$, 'task_assignment_test_table_2');
+-- The count should be 2 since the intermediate results are processed on
+-- different workers
+SELECT count(DISTINCT value) FROM explain_outputs;
+ count 
+-------
+     2
+(1 row)
 
-SET LOCAL citus.task_assignment_policy TO 'round-robin';
-WITH q1 AS (SELECT * FROM task_assignment_test_table_2) SELECT * FROM q1;
- test_id 
----------
-(0 rows)
-
-ROLLBACK;
+RESET citus.task_assignment_policy;
+RESET client_min_messages;
 DROP TABLE task_assignment_replicated_hash, task_assignment_nonreplicated_hash,
-  task_assignment_reference_table, explain_outputs;
+  task_assignment_reference_table, task_assignment_test_table_2, explain_outputs;
