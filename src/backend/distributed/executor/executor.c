@@ -565,6 +565,20 @@ StartDistributedExecution(DistributedExecution *execution)
 
 				execution->errorOnAnyFailure = true;
 			}
+			else if (MultiShardCommitProtocol != COMMIT_PROTOCOL_2PC &&
+					 list_length(taskList) > 1)
+			{
+				Task *initialTask = (Task *) linitial(taskList);
+
+				if (ModifyTask(initialTask->taskType))
+				{
+					/*
+					 * Even if we're not using 2PC, we prefer to error out
+					 * on any failures during multi shard modifications/DDLs.
+					 */
+					execution->errorOnAnyFailure = true;
+				}
+			}
 		}
 	}
 

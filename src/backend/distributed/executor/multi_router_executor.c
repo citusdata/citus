@@ -822,7 +822,7 @@ TaskListRequires2PC(List *taskList)
 	}
 
 	multipleTasks = list_length(taskList) > 1;
-	if (task->taskType != SQL_TASK &&
+	if (ModifyTask(task->taskType) &&
 		multipleTasks && MultiShardCommitProtocol == COMMIT_PROTOCOL_2PC)
 	{
 		return true;
@@ -835,6 +835,23 @@ TaskListRequires2PC(List *taskList)
 		{
 			return true;
 		}
+	}
+
+	return false;
+}
+
+
+/*
+ * ModifyTask returns true if the input task type modifies the
+ * database such as DML, DDL and Vacuum Analyze.
+ */
+bool
+ModifyTask(TaskType taskType)
+{
+	if (taskType == MODIFY_TASK || taskType == DDL_TASK ||
+		taskType == VACUUM_ANALYZE_TASK)
+	{
+		return true;
 	}
 
 	return false;
