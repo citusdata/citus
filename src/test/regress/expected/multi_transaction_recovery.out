@@ -224,7 +224,10 @@ SELECT recover_prepared_transactions();
 (1 row)
 
 -- Create a single-replica table to enable 2PC in multi-statement transactions
+SET citus.shard_replication_factor TO 1;
 CREATE TABLE test_recovery_single (LIKE test_recovery);
+-- creating distributed table should write 2 transaction recovery records
+-- one connection/transaction per node
 SELECT create_distributed_table('test_recovery_single', 'x');
  create_distributed_table 
 --------------------------
@@ -232,6 +235,8 @@ SELECT create_distributed_table('test_recovery_single', 'x');
 (1 row)
 
 -- Multi-statement transactions should write 2 transaction recovery records
+-- since the transaction block expands the nodes that participate in the
+-- distributed transaction
 BEGIN;
 INSERT INTO test_recovery_single VALUES ('hello-0');
 INSERT INTO test_recovery_single VALUES ('hello-2');
@@ -239,7 +244,7 @@ COMMIT;
 SELECT count(*) FROM pg_dist_transaction;
  count 
 -------
-     2
+     4
 (1 row)
 
 -- Test whether auto-recovery runs
