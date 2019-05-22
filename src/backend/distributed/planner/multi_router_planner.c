@@ -155,8 +155,10 @@ static bool RowLocksOnRelations(Node *node, List **rtiLockList);
 static List * SingleShardModifyTaskList(Query *query, uint64 jobId,
 										List *relationShardList, List *placementList,
 										uint64 shardId);
-static void ReorderTaskPlacementsByTaskAssignmentPolicy(Job *job, TaskAssignmentPolicyType
-														taskAssignmentPolicy);
+static void ReorderTaskPlacementsByTaskAssignmentPolicy(Job *job,
+														TaskAssignmentPolicyType
+														taskAssignmentPolicy,
+														List *placementList);
 
 
 /*
@@ -1640,7 +1642,8 @@ RouterJob(Query *originalQuery, PlannerRestrictionContext *plannerRestrictionCon
 		 */
 		if (shardId != INVALID_SHARD_ID)
 		{
-			ReorderTaskPlacementsByTaskAssignmentPolicy(job, TaskAssignmentPolicy);
+			ReorderTaskPlacementsByTaskAssignmentPolicy(job, TaskAssignmentPolicy,
+														placementList);
 		}
 	}
 	else if (isMultiShardModifyQuery)
@@ -1673,12 +1676,31 @@ RouterJob(Query *originalQuery, PlannerRestrictionContext *plannerRestrictionCon
  * By default it does not reorder the task list, implying a first-replica strategy.
  */
 static void
-ReorderTaskPlacementsByTaskAssignmentPolicy(Job *job, TaskAssignmentPolicyType
-											taskAssignmentPolicy)
+ReorderTaskPlacementsByTaskAssignmentPolicy(Job *job,
+											TaskAssignmentPolicyType taskAssignmentPolicy,
+											List *placementList)
 {
 	if (taskAssignmentPolicy == TASK_ASSIGNMENT_ROUND_ROBIN)
 	{
-		job->taskList = RoundRobinAssignTaskList(job->taskList);
+		Task *task = NULL;
+		List *reorderedPlacementList = NIL;
+		ShardPlacement *primaryPlacement = NULL;
+
+		/*
+		 * We hit a single shard on router plans, and there should be only
+		 * one task in the task list
+		 */
+		Assert(list_length(job->taskList) == 1);
+		task = (Task *) linitial(job->taskList);
+
+		/* reorder the placement list */
+		reorderedPlacementList = RoundRobinReorder(task, placementList);
+		task->taskPlacementList = reorderedPlacementList;
+
+		primaryPlacement = (ShardPlacement *) linitial(reorderedPlacementList);
+		ereport(DEBUG3, (errmsg("assigned task %u to node %s:%u", task->taskId,
+								primaryPlacement->nodeName,
+								primaryPlacement->nodePort)));
 	}
 }
 

@@ -174,7 +174,6 @@ static bool HasMergeTaskDependencies(List *sqlTaskList);
 static List * GreedyAssignTaskList(List *taskList);
 static Task * GreedyAssignTask(WorkerNode *workerNode, List *taskList,
 							   List *activeShardPlacementLists);
-static List * RoundRobinReorder(Task *task, List *placementList);
 static List * ReorderAndAssignTaskList(List *taskList,
 									   List * (*reorderFunction)(Task *, List *));
 static int CompareTasksByShardId(const void *leftElement, const void *rightElement);
@@ -5088,7 +5087,7 @@ RoundRobinAssignTaskList(List *taskList)
  * Citus generates since the distributed transactionId is generated during the execution
  * where as task-assignment happens duing the planning.
  */
-static List *
+List *
 RoundRobinReorder(Task *task, List *placementList)
 {
 	TransactionId transactionId = GetMyProcLocalTransactionId();
