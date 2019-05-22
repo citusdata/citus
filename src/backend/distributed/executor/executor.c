@@ -74,6 +74,18 @@ typedef struct DistributedExecution
 	bool waitFlagsChanged;
 
 	/*
+	 * WaitEventSet used for waiting for I/O events.
+	 *
+	 * This could also be local to RunDistributedExecution(), but in that case
+	 * we had to mark it as "volatile" to avoid PG_TRY()/PG_CATCH() issues, and
+	 * cast it to non-volatile when doing WaitEventSetFree(). We thought that
+	 * would make code a bit harder to read than making this non-local, so we
+	 * move it here. See comments for PG_TRY() in postgres/src/include/elog.h
+	 * and "man 3 siglongjmp" for more context.
+	 */
+	WaitEventSet *waitEventSet;
+
+	/*
 	 * The number of connections we aim to open per worker.
 	 *
 	 * If there are no more tasks to assigned, the actual number may be lower.
@@ -996,12 +1008,14 @@ RunDistributedExecution(DistributedExecution *execution)
 	int maxWaitEventCount = execution->totalTaskCount * workerCount + 2;
 
 	/* allocate events for the maximum number of connections to avoid realloc */
-	WaitEvent *events = palloc0(maxWaitEventCount * sizeof(WaitEvent));
-	WaitEventSet *waitEventSet = BuildWaitEventSet(execution->sessionList);
+	WaitEvent *events = palloc0(execution->totalTaskCount * workerCount *
+								sizeof(WaitEvent));
 
 	PG_TRY();
 	{
 		bool cancellationReceived = false;
+
+		execution->waitEventSet = BuildWaitEventSet(execution->sessionList);
 
 		while (execution->unfinishedTaskCount > 0 && !cancellationReceived)
 		{
@@ -1019,14 +1033,14 @@ RunDistributedExecution(DistributedExecution *execution)
 
 			if (execution->connectionSetChanged)
 			{
-				FreeWaitEventSet(waitEventSet);
-				waitEventSet = BuildWaitEventSet(execution->sessionList);
+				FreeWaitEventSet(execution->waitEventSet);
+				execution->waitEventSet = BuildWaitEventSet(execution->sessionList);
 				execution->connectionSetChanged = false;
 				execution->waitFlagsChanged = false;
 			}
 			else if (execution->waitFlagsChanged)
 			{
-				UpdateWaitEventSetFlags(waitEventSet, execution->sessionList);
+				UpdateWaitEventSetFlags(execution->waitEventSet, execution->sessionList);
 				execution->waitFlagsChanged = false;
 			}
 
@@ -1035,10 +1049,10 @@ RunDistributedExecution(DistributedExecution *execution)
 
 			/* wait for I/O events */
 #if (PG_VERSION_NUM >= 100000)
-			eventCount = WaitEventSetWait(waitEventSet, timeout, events,
+			eventCount = WaitEventSetWait(execution->waitEventSet, timeout, events,
 										  connectionCount + 2, WAIT_EVENT_CLIENT_READ);
 #else
-			eventCount = WaitEventSetWait(waitEventSet, timeout, events,
+			eventCount = WaitEventSetWait(execution->waitEventSet, timeout, events,
 										  connectionCount + 2);
 #endif
 
@@ -1084,7 +1098,7 @@ RunDistributedExecution(DistributedExecution *execution)
 		}
 
 		pfree(events);
-		FreeWaitEventSet(waitEventSet);
+		FreeWaitEventSet(execution->waitEventSet);
 	}
 	PG_CATCH();
 	{
@@ -1095,7 +1109,7 @@ RunDistributedExecution(DistributedExecution *execution)
 		UnclaimAllSessionConnections(execution->sessionList);
 
 		pfree(events);
-		FreeWaitEventSet(waitEventSet);
+		FreeWaitEventSet(execution->waitEventSet);
 
 		PG_RE_THROW();
 	}
