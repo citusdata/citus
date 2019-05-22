@@ -397,15 +397,10 @@ SELECT * FROM nation_hash  WHERE n_nationkey OPERATOR(===) 1;
            1 | ARGENTINA                 |           1 | al foxes promise slyly according to the regular accounts. bold requests alon
 (1 row)
 
--- test with master_modify_multiple_shards
+-- test with multi-shard DML
 SET search_path TO public;
-SELECT master_modify_multiple_shards('UPDATE test_schema_support.nation_hash SET n_regionkey = n_regionkey + 1');
- master_modify_multiple_shards 
--------------------------------
-                             8
-(1 row)
-
---verify master_modify_multiple_shards
+UPDATE test_schema_support.nation_hash SET n_regionkey = n_regionkey + 1;
+--verify modification
 SELECT * FROM test_schema_support.nation_hash ORDER BY 1,2,3,4;
  n_nationkey |          n_name           | n_regionkey |                                                  n_comment                                                  
 -------------+---------------------------+-------------+-------------------------------------------------------------------------------------------------------------
@@ -421,13 +416,8 @@ SELECT * FROM test_schema_support.nation_hash ORDER BY 1,2,3,4;
 
 --test with search_path is set
 SET search_path TO test_schema_support;
-SELECT master_modify_multiple_shards('UPDATE nation_hash SET n_regionkey = n_regionkey + 1');
- master_modify_multiple_shards 
--------------------------------
-                             8
-(1 row)
-
---verify master_modify_multiple_shards
+UPDATE nation_hash SET n_regionkey = n_regionkey + 1;
+--verify modification
 SELECT * FROM nation_hash ORDER BY 1,2,3,4;
  n_nationkey |          n_name           | n_regionkey |                                                  n_comment                                                  
 -------------+---------------------------+-------------+-------------------------------------------------------------------------------------------------------------

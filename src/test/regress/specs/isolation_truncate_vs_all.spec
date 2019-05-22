@@ -33,7 +33,7 @@ step "s1-ddl-add-column" { ALTER TABLE truncate_append ADD new_column int DEFAUL
 step "s1-ddl-drop-column" { ALTER TABLE truncate_append DROP new_column; }
 step "s1-ddl-rename-column" { ALTER TABLE truncate_append RENAME data TO new_column; }
 step "s1-table-size" { SELECT citus_total_relation_size('truncate_append'); }
-step "s1-master-modify-multiple-shards" { SELECT master_modify_multiple_shards('DELETE FROM truncate_append;'); }
+step "s1-master-modify-multiple-shards" { DELETE FROM truncate_append; }
 step "s1-master-apply-delete-command" { SELECT master_apply_delete_command('DELETE FROM truncate_append WHERE id <= 4;'); }
 step "s1-master-drop-all-shards" { SELECT master_drop_all_shards('truncate_append'::regclass, 'public', 'truncate_append'); }
 step "s1-create-non-distributed-table" { CREATE TABLE truncate_append(id integer, data text); }
@@ -55,7 +55,7 @@ step "s2-ddl-add-column" { ALTER TABLE truncate_append ADD new_column int DEFAUL
 step "s2-ddl-drop-column" { ALTER TABLE truncate_append DROP new_column; }
 step "s2-ddl-rename-column" { ALTER TABLE truncate_append RENAME data TO new_column; }
 step "s2-table-size" { SELECT citus_total_relation_size('truncate_append'); }
-step "s2-master-modify-multiple-shards" { SELECT master_modify_multiple_shards('DELETE FROM truncate_append;'); }
+step "s2-master-modify-multiple-shards" { DELETE FROM truncate_append; }
 step "s2-master-apply-delete-command" { SELECT master_apply_delete_command('DELETE FROM truncate_append WHERE id <= 4;'); }
 step "s2-master-drop-all-shards" { SELECT master_drop_all_shards('truncate_append'::regclass, 'public', 'truncate_append'); }
 step "s2-create-non-distributed-table" { CREATE TABLE truncate_append(id integer, data text); }

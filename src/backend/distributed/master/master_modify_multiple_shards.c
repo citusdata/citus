@@ -59,188 +59,35 @@
 #include "utils/memutils.h"
 
 
-static List * ModifyMultipleShardsTaskList(Query *query, List *shardIntervalList, TaskType
-										   taskType);
-
-
 PG_FUNCTION_INFO_V1(master_modify_multiple_shards);
 
 
 /*
  * master_modify_multiple_shards takes in a DELETE or UPDATE query string and
- * pushes the query to shards. It finds shards that match the criteria defined
- * in the delete command, generates the same delete query string for each of the
- * found shards with distributed table name replaced with the shard name and
- * sends the queries to the workers. It uses one-phase or two-phase commit
- * transactions depending on citus.copy_transaction_manager value.
+ * executes it. This is mainly provided for backwards compatibility, users
+ * should use regular UPDATE and DELETE commands.
  */
 Datum
 master_modify_multiple_shards(PG_FUNCTION_ARGS)
 {
 	text *queryText = PG_GETARG_TEXT_P(0);
 	char *queryString = text_to_cstring(queryText);
-	List *queryTreeList = NIL;
-	Oid relationId = InvalidOid;
-	Index tableId = 1;
-	Query *modifyQuery = NULL;
-	Node *queryTreeNode;
-	List *restrictClauseList = NIL;
-	bool failOK = false;
-	List *prunedShardIntervalList = NIL;
-	List *taskList = NIL;
-	int32 affectedTupleCount = 0;
-	CmdType operation = CMD_UNKNOWN;
-	TaskType taskType = TASK_TYPE_INVALID_FIRST;
-	bool truncateOperation = false;
 	RawStmt *rawStmt = (RawStmt *) ParseTreeRawStmt(queryString);
-	queryTreeNode = rawStmt->stmt;
+	Node *queryTreeNode = rawStmt->stmt;
 
 	CheckCitusVersion(ERROR);
 
-	truncateOperation = IsA(queryTreeNode, TruncateStmt);
-	if (!truncateOperation)
+	if (!IsA(queryTreeNode, DeleteStmt) && !IsA(queryTreeNode, UpdateStmt))
 	{
-		EnsureCoordinator();
-	}
-
-	if (IsA(queryTreeNode, DeleteStmt))
-	{
-		DeleteStmt *deleteStatement = (DeleteStmt *) queryTreeNode;
-		relationId = RangeVarGetRelid(deleteStatement->relation, NoLock, failOK);
-		EnsureTablePermissions(relationId, ACL_DELETE);
-	}
-	else if (IsA(queryTreeNode, UpdateStmt))
-	{
-		UpdateStmt *updateStatement = (UpdateStmt *) queryTreeNode;
-		relationId = RangeVarGetRelid(updateStatement->relation, NoLock, failOK);
-		EnsureTablePermissions(relationId, ACL_UPDATE);
-	}
-	else if (IsA(queryTreeNode, TruncateStmt))
-	{
-		TruncateStmt *truncateStatement = (TruncateStmt *) queryTreeNode;
-		List *relationList = truncateStatement->relations;
-		RangeVar *rangeVar = NULL;
-
-		if (list_length(relationList) != 1)
-		{
-			ereport(ERROR,
-					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					 errmsg("master_modify_multiple_shards() can truncate only "
-							"one table")));
-		}
-
-		rangeVar = (RangeVar *) linitial(relationList);
-		relationId = RangeVarGetRelid(rangeVar, NoLock, failOK);
-		if (rangeVar->schemaname == NULL)
-		{
-			Oid schemaOid = get_rel_namespace(relationId);
-			char *schemaName = get_namespace_name(schemaOid);
-			rangeVar->schemaname = schemaName;
-		}
-
-		EnsureTablePermissions(relationId, ACL_TRUNCATE);
-	}
-	else
-	{
-		ereport(ERROR, (errmsg("query \"%s\" is not a delete, update, or truncate "
+		ereport(ERROR, (errmsg("query \"%s\" is not a delete or update "
 							   "statement", ApplyLogRedaction(queryString))));
 	}
 
-	CheckDistributedTable(relationId);
+	ereport(WARNING, (errmsg("master_modify_multiple_shards is deprecated and will be "
+							 "removed in a future release."),
+					  errhint("Run the command directly")));
 
-	queryTreeList = pg_analyze_and_rewrite(rawStmt, queryString, NULL, 0, NULL);
-	modifyQuery = (Query *) linitial(queryTreeList);
+	ExecuteQueryStringIntoDestReceiver(queryString, NULL, None_Receiver);
 
-	operation = modifyQuery->commandType;
-	if (operation != CMD_UTILITY)
-	{
-		bool multiShardQuery = true;
-		DeferredErrorMessage *error =
-			ModifyQuerySupported(modifyQuery, modifyQuery, multiShardQuery, NULL);
-
-		if (error)
-		{
-			RaiseDeferredError(error, ERROR);
-		}
-
-		taskType = MODIFY_TASK;
-	}
-	else
-	{
-		taskType = DDL_TASK;
-	}
-
-	/* reject queries with a returning list */
-	if (list_length(modifyQuery->returningList) > 0)
-	{
-		ereport(ERROR,
-				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg("master_modify_multiple_shards() does not support RETURNING")));
-	}
-
-	ExecuteMasterEvaluableFunctions(modifyQuery, NULL);
-
-	restrictClauseList = WhereClauseList(modifyQuery->jointree);
-
-	prunedShardIntervalList =
-		PruneShards(relationId, tableId, restrictClauseList, NULL);
-
-	CHECK_FOR_INTERRUPTS();
-
-	taskList =
-		ModifyMultipleShardsTaskList(modifyQuery, prunedShardIntervalList, taskType);
-
-	if (MultiShardConnectionType == SEQUENTIAL_CONNECTION)
-	{
-		affectedTupleCount =
-			ExecuteModifyTasksSequentiallyWithoutResults(taskList, operation);
-	}
-	else
-	{
-		affectedTupleCount = ExecuteModifyTasksWithoutResults(taskList);
-	}
-
-	PG_RETURN_INT32(affectedTupleCount);
-}
-
-
-/*
- * ModifyMultipleShardsTaskList builds a list of tasks to execute a query on a
- * given list of shards.
- */
-static List *
-ModifyMultipleShardsTaskList(Query *query, List *shardIntervalList, TaskType taskType)
-{
-	List *taskList = NIL;
-	ListCell *shardIntervalCell = NULL;
-	uint64 jobId = INVALID_JOB_ID;
-	int taskId = 1;
-
-	/* lock metadata before getting placement lists */
-	LockShardListMetadata(shardIntervalList, ShareLock);
-
-	foreach(shardIntervalCell, shardIntervalList)
-	{
-		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
-		Oid relationId = shardInterval->relationId;
-		uint64 shardId = shardInterval->shardId;
-		StringInfo shardQueryString = makeStringInfo();
-		Task *task = NULL;
-
-		deparse_shard_query(query, relationId, shardId, shardQueryString);
-
-		task = CitusMakeNode(Task);
-		task->jobId = jobId;
-		task->taskId = taskId++;
-		task->taskType = taskType;
-		task->queryString = shardQueryString->data;
-		task->dependedTaskList = NULL;
-		task->replicationModel = REPLICATION_MODEL_INVALID;
-		task->anchorShardId = shardId;
-		task->taskPlacementList = FinalizedShardPlacementList(shardId);
-
-		taskList = lappend(taskList, task);
-	}
-
-	return taskList;
+	PG_RETURN_INT32(0);
 }

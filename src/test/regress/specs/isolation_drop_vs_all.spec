@@ -32,7 +32,6 @@ step "s1-ddl-add-column" { ALTER TABLE drop_hash ADD new_column int DEFAULT 0; }
 step "s1-ddl-drop-column" { ALTER TABLE drop_hash DROP new_column; }
 step "s1-ddl-rename-column" { ALTER TABLE drop_hash RENAME data TO new_column; }
 step "s1-table-size" { SELECT citus_total_relation_size('drop_hash'); }
-step "s1-master-modify-multiple-shards" { SELECT master_modify_multiple_shards('DROP FROM drop_hash;'); }
 step "s1-create-non-distributed-table" { CREATE TABLE drop_hash(id integer, data text); COPY drop_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV; }
 step "s1-distribute-table" { SELECT create_distributed_table('drop_hash', 'id'); }
 step "s1-select-count" { SELECT COUNT(*) FROM drop_hash; }
@@ -51,7 +50,6 @@ step "s2-ddl-add-column" { ALTER TABLE drop_hash ADD new_column int DEFAULT 0; }
 step "s2-ddl-drop-column" { ALTER TABLE drop_hash DROP new_column; }
 step "s2-ddl-rename-column" { ALTER TABLE drop_hash RENAME data TO new_column; }
 step "s2-table-size" { SELECT citus_total_relation_size('drop_hash'); }
-step "s2-master-modify-multiple-shards" { SELECT master_modify_multiple_shards('DROP FROM drop_hash;'); }
 step "s2-create-non-distributed-table" { CREATE TABLE drop_hash(id integer, data text); COPY drop_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV; }
 step "s2-distribute-table" { SELECT create_distributed_table('drop_hash', 'id'); }
 step "s2-select" { SELECT * FROM drop_hash ORDER BY 1, 2; }
@@ -68,7 +66,6 @@ permutation "s1-initialize" "s1-begin" "s2-begin" "s1-drop" "s2-ddl-add-column" 
 permutation "s1-initialize" "s1-ddl-add-column" "s1-begin" "s2-begin" "s1-drop" "s2-ddl-drop-column" "s1-commit" "s2-commit" "s1-select-count" "s1-show-columns"
 permutation "s1-initialize" "s1-begin" "s2-begin" "s1-drop" "s2-ddl-rename-column" "s1-commit" "s2-commit" "s1-select-count" "s1-show-columns"
 permutation "s1-initialize" "s1-begin" "s2-begin" "s1-drop" "s2-table-size" "s1-commit" "s2-commit" "s1-select-count"
-permutation "s1-initialize" "s1-begin" "s2-begin" "s1-drop" "s2-master-modify-multiple-shards" "s1-commit" "s2-commit" "s1-select-count"
 permutation "s1-drop" "s1-create-non-distributed-table" "s1-initialize" "s1-begin" "s2-begin" "s1-drop" "s2-distribute-table" "s1-commit" "s2-commit" "s1-select-count"
 
 # permutations - DROP second
@@ -78,5 +75,4 @@ permutation "s1-initialize" "s1-begin" "s2-begin" "s1-ddl-add-column" "s2-drop" 
 permutation "s1-initialize" "s1-ddl-add-column" "s1-begin" "s2-begin" "s1-ddl-drop-column" "s2-drop" "s1-commit" "s2-commit" "s1-select-count" "s1-show-columns"
 permutation "s1-initialize" "s1-begin" "s2-begin" "s1-ddl-rename-column" "s2-drop" "s1-commit" "s2-commit" "s1-select-count" "s1-show-columns"
 permutation "s1-initialize" "s1-begin" "s2-begin" "s1-table-size" "s2-drop" "s1-commit" "s2-commit" "s1-select-count"
-permutation "s1-initialize" "s1-begin" "s2-begin" "s1-master-modify-multiple-shards" "s2-drop" "s1-commit" "s2-commit" "s1-select-count"
 permutation "s1-drop" "s1-create-non-distributed-table" "s1-initialize" "s1-begin" "s2-begin" "s1-distribute-table" "s2-drop" "s1-commit" "s2-commit" "s1-select-count"

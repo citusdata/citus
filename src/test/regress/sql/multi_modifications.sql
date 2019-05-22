@@ -701,13 +701,6 @@ UPDATE reference_summary_table SET average_value = average_query.average FROM (
 	) average_query
 WHERE id = 1;
 
--- test master_modify_multiple_shards() with subqueries and expect to fail
-SELECT master_modify_multiple_shards('
-	UPDATE summary_table SET average_value = average_query.average FROM (
-		SELECT avg(value) AS average FROM raw_table WHERE id = 1
-		) average_query
-	WHERE id = 1');
-
 -- test connection API via using COPY
 
 -- COPY on SELECT part

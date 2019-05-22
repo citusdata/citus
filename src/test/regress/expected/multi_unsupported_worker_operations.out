@@ -139,31 +139,6 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.mx_tabl
 (3 rows)
 
 \d mx_test_index
--- master_modify_multiple_shards
-SELECT master_modify_multiple_shards('UPDATE mx_table SET col_2=''none''');
-ERROR:  operation is not allowed on this node
-HINT:  Connect to the coordinator and run it again.
-SELECT count(*) FROM mx_table WHERE col_2='none';
- count 
--------
-     0
-(1 row)
-
-SELECT count(*) FROM mx_table WHERE col_2!='none';
- count 
--------
-     5
-(1 row)
-
-SELECT master_modify_multiple_shards('DELETE FROM mx_table');
-ERROR:  operation is not allowed on this node
-HINT:  Connect to the coordinator and run it again.
-SELECT count(*) FROM mx_table;
- count 
--------
-     5
-(1 row)
-
 -- master_drop_all_shards
 SELECT master_drop_all_shards('mx_table'::regclass, 'public', 'mx_table');
 ERROR:  operation is not allowed on this node

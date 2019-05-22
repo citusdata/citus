@@ -35,7 +35,7 @@ step "s1-ddl-add-column" { ALTER TABLE update_hash ADD new_column int DEFAULT 0;
 step "s1-ddl-drop-column" { ALTER TABLE update_hash DROP new_column; }
 step "s1-ddl-rename-column" { ALTER TABLE update_hash RENAME data TO new_column; }
 step "s1-table-size" { SELECT citus_total_relation_size('update_hash'); }
-step "s1-master-modify-multiple-shards" { SELECT master_modify_multiple_shards('DELETE FROM update_hash;'); }
+step "s1-master-modify-multiple-shards" { DELETE FROM update_hash; }
 step "s1-create-non-distributed-table" { CREATE TABLE update_hash(id integer, data text); COPY update_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV; }
 step "s1-distribute-table" { SELECT create_distributed_table('update_hash', 'id'); }
 step "s1-select-count" { SELECT COUNT(*) FROM update_hash; }
@@ -57,7 +57,7 @@ step "s2-ddl-add-column" { ALTER TABLE update_hash ADD new_column int DEFAULT 0;
 step "s2-ddl-drop-column" { ALTER TABLE update_hash DROP new_column; }
 step "s2-ddl-rename-column" { ALTER TABLE update_hash RENAME data TO new_column; }
 step "s2-table-size" { SELECT citus_total_relation_size('update_hash'); }
-step "s2-master-modify-multiple-shards" { SELECT master_modify_multiple_shards('DELETE FROM update_hash;'); }
+step "s2-master-modify-multiple-shards" { DELETE FROM update_hash; }
 step "s2-distribute-table" { SELECT create_distributed_table('update_hash', 'id'); }
 step "s2-commit" { COMMIT; }
 

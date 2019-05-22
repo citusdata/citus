@@ -228,19 +228,7 @@ ERROR:  hash partitioned table has overlapping shards
 UPDATE pg_dist_shard SET shardminvalue = '-2147483648' WHERE shardid = 1260006;
 UPDATE pg_dist_shard SET shardmaxvalue = '-1073741825' WHERE shardid = 1260006;
 -- empty tables
-SELECT master_modify_multiple_shards('DELETE FROM multi_outer_join_left_hash');
- master_modify_multiple_shards 
--------------------------------
-                            20
-(1 row)
-
-SELECT master_modify_multiple_shards('DELETE FROM multi_outer_join_right_hash');
- master_modify_multiple_shards 
--------------------------------
-                            45
-(1 row)
-
-DELETE FROM multi_outer_join_right_reference;
+TRUNCATE multi_outer_join_left_hash, multi_outer_join_right_hash, multi_outer_join_right_reference;
 -- reload shards with 1-1 matching
 \copy multi_outer_join_left_hash FROM '@abs_srcdir@/data/customer-1-15.data' with delimiter '|'
 \copy multi_outer_join_left_hash FROM '@abs_srcdir@/data/customer-21-30.data' with delimiter '|'

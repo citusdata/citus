@@ -308,21 +308,20 @@ END;
 SELECT * FROM partitioning_test WHERE id > 20 ORDER BY 1, 2;
 SELECT * FROM partitioning_test_default ORDER BY 1, 2;
 
--- test master_modify_multiple_shards
--- master_modify_multiple_shards on partitioned table
-SELECT master_modify_multiple_shards('UPDATE partitioning_test SET time = time + INTERVAL ''1 day''');
+-- multi-shard UPDATE on partitioned table
+UPDATE partitioning_test SET time = time + INTERVAL '1 day';
 
 -- see rows are UPDATED
 SELECT * FROM partitioning_test ORDER BY 1;
 
--- master_modify_multiple_shards on partition directly
-SELECT master_modify_multiple_shards('UPDATE partitioning_test_2009 SET time = time + INTERVAL ''1 day''');
+-- multi-shard UPDATE on partition directly
+UPDATE partitioning_test_2009 SET time = time + INTERVAL '1 day';
 
 -- see rows are UPDATED
 SELECT * FROM partitioning_test_2009 ORDER BY 1;
 
--- test master_modify_multiple_shards which fails in workers (updated value is outside of partition bounds)
-SELECT master_modify_multiple_shards('UPDATE partitioning_test_2009 SET time = time + INTERVAL ''6 month''');
+-- test multi-shard UPDATE which fails in workers (updated value is outside of partition bounds)
+UPDATE partitioning_test_2009 SET time = time + INTERVAL '6 month';
 
 --
 -- DDL in distributed partitioned tables
@@ -907,9 +906,9 @@ INSERT INTO partitioning_locks SELECT * FROM partitioning_locks_for_select LIMIT
 SELECT relation::regclass, locktype, mode FROM pg_locks WHERE relation::regclass::text LIKE 'partitioning_locks%' AND pid = pg_backend_pid() ORDER BY 1, 2, 3;
 COMMIT;
 
--- test locks on master_modify_multiple_shards
+-- test locks on multi-shard UPDATE
 BEGIN;
-SELECT master_modify_multiple_shards('UPDATE partitioning_locks SET time = ''2009-03-01''');
+UPDATE partitioning_locks SET time = '2009-03-01';
 SELECT relation::regclass, locktype, mode FROM pg_locks WHERE relation::regclass::text LIKE 'partitioning_locks%' AND pid = pg_backend_pid() ORDER BY 1, 2, 3;
 COMMIT;
 
@@ -925,9 +924,9 @@ TRUNCATE partitioning_locks;
 SELECT relation::regclass, locktype, mode FROM pg_locks WHERE relation::regclass::text LIKE 'partitioning_locks%' AND pid = pg_backend_pid() ORDER BY 1, 2, 3;
 COMMIT;
 
--- test shard resource locks with master_modify_multiple_shards
+-- test shard resource locks with multi-shard UPDATE
 BEGIN;
-SELECT master_modify_multiple_shards('UPDATE partitioning_locks_2009 SET time = ''2009-03-01''');
+UPDATE partitioning_locks_2009 SET time = '2009-03-01';
 
 -- see the locks on parent table
 SELECT

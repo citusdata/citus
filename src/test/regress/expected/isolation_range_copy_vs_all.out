@@ -306,10 +306,7 @@ create_distributed_table
 step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5 && echo 6, g, 6 && echo 7, h, 7 && echo 8, i, 8 && echo 9, j, 9' WITH CSV;
-step s2-master-modify-multiple-shards: SELECT master_modify_multiple_shards('DELETE FROM range_copy;');
-master_modify_multiple_shards
-
-5              
+step s2-master-modify-multiple-shards: DELETE FROM range_copy;
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM range_copy;
 count          
@@ -644,10 +641,7 @@ create_distributed_table
                
 step s1-initialize: COPY range_copy FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
-step s1-master-modify-multiple-shards: SELECT master_modify_multiple_shards('DELETE FROM range_copy;');
-master_modify_multiple_shards
-
-5              
+step s1-master-modify-multiple-shards: DELETE FROM range_copy;
 step s2-copy: COPY range_copy FROM PROGRAM 'echo 5, f, 5 && echo 6, g, 6 && echo 7, h, 7 && echo 8, i, 8 && echo 9, j, 9' WITH CSV;
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM range_copy;

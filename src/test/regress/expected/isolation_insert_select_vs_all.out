@@ -288,10 +288,7 @@ step s1-initialize:
 
 step s1-begin: BEGIN;
 step s1-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM select_of_insert_select_hash ORDER BY 1, 2 LIMIT 5;;
-step s2-master-modify-multiple-shards-on-inserted: SELECT master_modify_multiple_shards('DELETE FROM insert_of_insert_select_hash;');
-master_modify_multiple_shards
-
-10             
+step s2-master-modify-multiple-shards-on-inserted: DELETE FROM insert_of_insert_select_hash;
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_of_insert_select_hash;
 count          
@@ -607,10 +604,7 @@ step s1-initialize:
 
 step s1-begin: BEGIN;
 step s1-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM select_of_insert_select_hash ORDER BY 1, 2 LIMIT 5;;
-step s2-master-modify-multiple-shards-on-selected: SELECT master_modify_multiple_shards('DELETE FROM select_of_insert_select_hash;');
-master_modify_multiple_shards
-
-10             
+step s2-master-modify-multiple-shards-on-selected: DELETE FROM select_of_insert_select_hash;
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_of_insert_select_hash;
 count          
@@ -903,10 +897,7 @@ step s1-initialize:
 	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
-step s1-master-modify-multiple-shards-on-inserted: SELECT master_modify_multiple_shards('DELETE FROM insert_of_insert_select_hash;');
-master_modify_multiple_shards
-
-10             
+step s1-master-modify-multiple-shards-on-inserted: DELETE FROM insert_of_insert_select_hash;
 step s2-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM select_of_insert_select_hash ORDER BY 1, 2 LIMIT 5;
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_of_insert_select_hash;
@@ -1200,10 +1191,7 @@ step s1-initialize:
 	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
-step s1-master-modify-multiple-shards-on-selected: SELECT master_modify_multiple_shards('DELETE FROM select_of_insert_select_hash;');
-master_modify_multiple_shards
-
-10             
+step s1-master-modify-multiple-shards-on-selected: DELETE FROM select_of_insert_select_hash;
 step s2-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM select_of_insert_select_hash ORDER BY 1, 2 LIMIT 5;
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_of_insert_select_hash;

@@ -440,12 +440,7 @@ SELECT * FROM prepare_table ORDER BY key, value;
   18 |   180
 (36 rows)
 
-SELECT master_modify_multiple_shards('DELETE FROM prepare_table WHERE value >= 70');
- master_modify_multiple_shards 
--------------------------------
-                            12
-(1 row)
-
+DELETE FROM prepare_table WHERE value >= 70;
 -- check router executor select
 PREPARE prepared_router_partition_column_select(int) AS
 	SELECT

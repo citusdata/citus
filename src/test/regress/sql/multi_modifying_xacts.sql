@@ -358,7 +358,7 @@ ROLLBACK;
 -- multi-shard operations can co-exist with DDL in a transactional way
 BEGIN;
 ALTER TABLE labs ADD COLUMN motto text;
-SELECT master_modify_multiple_shards('DELETE FROM labs');
+DELETE FROM labs;
 ALTER TABLE labs ADD COLUMN score float;
 ROLLBACK;
 
@@ -1136,7 +1136,7 @@ END;
 
 -- make sure we can see cascading deletes
 BEGIN;
-SELECT master_modify_multiple_shards('DELETE FROM users');
+DELETE FROM users;
 SELECT user_id FROM items JOIN itemgroups ON (item_group = gid) WHERE user_id = 1;
 SELECT user_id FROM items JOIN itemgroups ON (item_group = gid) WHERE user_id = 6;
 END;

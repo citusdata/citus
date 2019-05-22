@@ -18,15 +18,19 @@ COPY multi_shard_modify_test (t_key, t_name, t_value) FROM STDIN WITH (FORMAT 'c
 -- Verify that master_modify_multiple_shards can be rolled back
 BEGIN;
 SELECT master_modify_multiple_shards('DELETE FROM multi_shard_modify_test WHERE t_key > 10 AND t_key <= 13');
+WARNING:  master_modify_multiple_shards is deprecated and will be removed in a future release.
+HINT:  Run the command directly
  master_modify_multiple_shards 
 -------------------------------
-                             3
+                             0
 (1 row)
 
 SELECT master_modify_multiple_shards('DELETE FROM multi_shard_modify_test WHERE t_key = 202');
+WARNING:  master_modify_multiple_shards is deprecated and will be removed in a future release.
+HINT:  Run the command directly
  master_modify_multiple_shards 
 -------------------------------
-                             1
+                             0
 (1 row)
 
 ROLLBACK;
@@ -36,33 +40,38 @@ SELECT count(*) FROM multi_shard_modify_test;
     27
 (1 row)
 
--- Check that master_modify_multiple_shards cannot be called with non-distributed tables
-CREATE TEMPORARY TABLE temporary_nondistributed_table (col_1 integer,col_2 text);
-INSERT INTO temporary_nondistributed_table VALUES (37, 'eren'), (31, 'onder');
-SELECT master_modify_multiple_shards('DELETE FROM temporary_nondistributed_table WHERE col_1 = 37');
-ERROR:  relation "temporary_nondistributed_table" is not a distributed table
 -- commands with volatile functions in their quals
 SELECT master_modify_multiple_shards('DELETE FROM multi_shard_modify_test WHERE t_key = (random() * 1000)');
+WARNING:  master_modify_multiple_shards is deprecated and will be removed in a future release.
+HINT:  Run the command directly
 ERROR:  functions used in the WHERE clause of modification queries on distributed tables must not be VOLATILE
 SELECT master_modify_multiple_shards('DELETE FROM multi_shard_modify_test WHERE t_value = (random() * 1000)');
+WARNING:  master_modify_multiple_shards is deprecated and will be removed in a future release.
+HINT:  Run the command directly
 ERROR:  functions used in the WHERE clause of modification queries on distributed tables must not be VOLATILE
 -- commands with immutable functions in their quals
 SELECT master_modify_multiple_shards('DELETE FROM multi_shard_modify_test WHERE t_key = abs(-3)');
+WARNING:  master_modify_multiple_shards is deprecated and will be removed in a future release.
+HINT:  Run the command directly
  master_modify_multiple_shards 
 -------------------------------
-                             1
+                             0
 (1 row)
 
 -- DELETE with expression in WHERE clause
 SELECT master_modify_multiple_shards('DELETE FROM multi_shard_modify_test WHERE t_key = (3*18-40)');
+WARNING:  master_modify_multiple_shards is deprecated and will be removed in a future release.
+HINT:  Run the command directly
  master_modify_multiple_shards 
 -------------------------------
-                             1
+                             0
 (1 row)
 
 -- commands with a USING a non distributed table error out
 CREATE TABLE temp_nations(name text, key integer);
 SELECT master_modify_multiple_shards('DELETE FROM multi_shard_modify_test USING temp_nations WHERE multi_shard_modify_test.t_value = temp_nations.key AND temp_nations.name = ''foobar'' ');
+WARNING:  master_modify_multiple_shards is deprecated and will be removed in a future release.
+HINT:  Run the command directly
 ERROR:  relation temp_nations is not distributed
 -- commands with a USING clause are unsupported
 SELECT create_distributed_table('temp_nations', 'name', 'hash');
@@ -72,14 +81,23 @@ SELECT create_distributed_table('temp_nations', 'name', 'hash');
 (1 row)
 
 SELECT master_modify_multiple_shards('DELETE FROM multi_shard_modify_test USING temp_nations WHERE multi_shard_modify_test.t_value = temp_nations.key AND temp_nations.name = ''foobar'' ');
-ERROR:  cannot run multi shard modify query with master_modify_multiple_shards when the query involves subquery or join
-DETAIL:  Execute the query without using master_modify_multiple_shards()
+WARNING:  master_modify_multiple_shards is deprecated and will be removed in a future release.
+HINT:  Run the command directly
+ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
 -- commands with a RETURNING clause are unsupported
 SELECT master_modify_multiple_shards('DELETE FROM multi_shard_modify_test WHERE t_key = 3 RETURNING *');
-ERROR:  master_modify_multiple_shards() does not support RETURNING
+WARNING:  master_modify_multiple_shards is deprecated and will be removed in a future release.
+HINT:  Run the command directly
+ master_modify_multiple_shards 
+-------------------------------
+                             0
+(1 row)
+
 -- commands containing a CTE are unsupported
 SELECT master_modify_multiple_shards('WITH deleted_stuff AS (INSERT INTO multi_shard_modify_test DEFAULT VALUES RETURNING *) DELETE FROM multi_shard_modify_test');
-ERROR:  common table expressions are not supported in distributed modifications
+WARNING:  master_modify_multiple_shards is deprecated and will be removed in a future release.
+HINT:  Run the command directly
+ERROR:  cannot perform an INSERT without a partition column value
 -- Check that we can successfully delete from multiple shards with 1PC
 SET citus.multi_shard_commit_protocol TO '1pc';
 SELECT count(*) FROM multi_shard_modify_test;
@@ -89,9 +107,11 @@ SELECT count(*) FROM multi_shard_modify_test;
 (1 row)
 
 SELECT master_modify_multiple_shards('DELETE FROM multi_shard_modify_test WHERE t_key > 200');
+WARNING:  master_modify_multiple_shards is deprecated and will be removed in a future release.
+HINT:  Run the command directly
  master_modify_multiple_shards 
 -------------------------------
-                             2
+                             0
 (1 row)
 
 SELECT count(*) FROM multi_shard_modify_test;
@@ -103,9 +123,11 @@ SELECT count(*) FROM multi_shard_modify_test;
 -- Check that we can successfully delete from multiple shards with 2PC
 SET citus.multi_shard_commit_protocol TO '2pc';
 SELECT master_modify_multiple_shards('DELETE FROM multi_shard_modify_test WHERE t_key > 100');
+WARNING:  master_modify_multiple_shards is deprecated and will be removed in a future release.
+HINT:  Run the command directly
  master_modify_multiple_shards 
 -------------------------------
-                             2
+                             0
 (1 row)
 
 SELECT count(*) FROM multi_shard_modify_test;
@@ -117,24 +139,34 @@ SELECT count(*) FROM multi_shard_modify_test;
 -- Check that shard pruning works
 SET client_min_messages TO DEBUG2;
 SELECT master_modify_multiple_shards('DELETE FROM multi_shard_modify_test WHERE t_key = 15');
+WARNING:  master_modify_multiple_shards is deprecated and will be removed in a future release.
+HINT:  Run the command directly
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+DETAIL:  distribution column value: 15
  master_modify_multiple_shards 
 -------------------------------
-                             1
+                             0
 (1 row)
 
 SET client_min_messages TO NOTICE;
 -- Check that master_modify_multiple_shards works without partition keys
 SELECT master_modify_multiple_shards('DELETE FROM multi_shard_modify_test WHERE t_name LIKE ''barce%'' ');
+WARNING:  master_modify_multiple_shards is deprecated and will be removed in a future release.
+HINT:  Run the command directly
  master_modify_multiple_shards 
 -------------------------------
-                             1
+                             0
 (1 row)
 
 -- Simple, Single Shard Update
 SELECT master_modify_multiple_shards('UPDATE multi_shard_modify_test SET t_name=''warsaw'' WHERE t_key=17');
+WARNING:  master_modify_multiple_shards is deprecated and will be removed in a future release.
+HINT:  Run the command directly
  master_modify_multiple_shards 
 -------------------------------
-                             1
+                             0
 (1 row)
 
 SELECT t_name FROM multi_shard_modify_test WHERE t_key=17;
@@ -145,9 +177,11 @@ SELECT t_name FROM multi_shard_modify_test WHERE t_key=17;
 
 -- Simple, Multi Shard Update
 SELECT master_modify_multiple_shards('UPDATE multi_shard_modify_test SET t_name=''???'' WHERE t_key>30 AND t_key<35');
+WARNING:  master_modify_multiple_shards is deprecated and will be removed in a future release.
+HINT:  Run the command directly
  master_modify_multiple_shards 
 -------------------------------
-                             4
+                             0
 (1 row)
 
 SELECT t_name FROM multi_shard_modify_test WHERE t_key>30 AND t_key<35;
@@ -161,9 +195,11 @@ SELECT t_name FROM multi_shard_modify_test WHERE t_key>30 AND t_key<35;
 
 -- expression UPDATE
 SELECT master_modify_multiple_shards('UPDATE multi_shard_modify_test SET t_value=8*37 WHERE t_key>30 AND t_key<35');
+WARNING:  master_modify_multiple_shards is deprecated and will be removed in a future release.
+HINT:  Run the command directly
  master_modify_multiple_shards 
 -------------------------------
-                             4
+                             0
 (1 row)
 
 SELECT t_value FROM multi_shard_modify_test WHERE t_key>30 AND t_key<35;
@@ -177,9 +213,11 @@ SELECT t_value FROM multi_shard_modify_test WHERE t_key>30 AND t_key<35;
 
 -- multi-column UPDATE
 SELECT master_modify_multiple_shards('UPDATE multi_shard_modify_test SET t_name=''somename'', t_value=333 WHERE t_key>30 AND t_key<35');
+WARNING:  master_modify_multiple_shards is deprecated and will be removed in a future release.
+HINT:  Run the command directly
  master_modify_multiple_shards 
 -------------------------------
-                             4
+                             0
 (1 row)
 
 SELECT t_name, t_value FROM multi_shard_modify_test WHERE t_key>30 AND t_key<35;
@@ -193,9 +231,11 @@ SELECT t_name, t_value FROM multi_shard_modify_test WHERE t_key>30 AND t_key<35;
 
 -- commands with no constraints on the partition key are supported
 SELECT master_modify_multiple_shards('UPDATE multi_shard_modify_test SET t_name=''nice city'' WHERE t_value < 0');
+WARNING:  master_modify_multiple_shards is deprecated and will be removed in a future release.
+HINT:  Run the command directly
  master_modify_multiple_shards 
 -------------------------------
-                             2
+                             0
 (1 row)
 
 SELECT t_name FROM multi_shard_modify_test WHERE t_value < 0;
@@ -207,22 +247,39 @@ SELECT t_name FROM multi_shard_modify_test WHERE t_value < 0;
 
 -- attempting to change the partition key is unsupported
 SELECT master_modify_multiple_shards('UPDATE multi_shard_modify_test SET t_key=3000 WHERE t_key < 10 ');
+WARNING:  master_modify_multiple_shards is deprecated and will be removed in a future release.
+HINT:  Run the command directly
 ERROR:  modifying the partition value of rows is not allowed
--- UPDATEs with a FROM clause are unsupported
+-- UPDATEs with a FROM clause are supported
 SELECT master_modify_multiple_shards('UPDATE multi_shard_modify_test SET t_name = ''FAIL'' FROM temp_nations WHERE multi_shard_modify_test.t_key = 3 AND multi_shard_modify_test.t_value = temp_nations.key AND temp_nations.name = ''dummy'' ');
-ERROR:  cannot run multi shard modify query with master_modify_multiple_shards when the query involves subquery or join
-DETAIL:  Execute the query without using master_modify_multiple_shards()
--- commands with a RETURNING clause are unsupported
-SELECT master_modify_multiple_shards('UPDATE multi_shard_modify_test SET t_name=''FAIL'' WHERE t_key=4 RETURNING *');
-ERROR:  master_modify_multiple_shards() does not support RETURNING
--- commands containing a CTE are unsupported
-SELECT master_modify_multiple_shards('WITH t AS (INSERT INTO multi_shard_modify_test DEFAULT VALUES RETURNING *) UPDATE multi_shard_modify_test SET t_name = ''FAIL'' ');
-ERROR:  common table expressions are not supported in distributed modifications
--- updates referencing just a var are supported
-SELECT master_modify_multiple_shards('UPDATE multi_shard_modify_test SET t_value=t_key WHERE t_key = 10');
+WARNING:  master_modify_multiple_shards is deprecated and will be removed in a future release.
+HINT:  Run the command directly
  master_modify_multiple_shards 
 -------------------------------
-                             1
+                             0
+(1 row)
+
+-- commands with a RETURNING clause are unsupported
+SELECT master_modify_multiple_shards('UPDATE multi_shard_modify_test SET t_name=''FAIL'' WHERE t_key=4 RETURNING *');
+WARNING:  master_modify_multiple_shards is deprecated and will be removed in a future release.
+HINT:  Run the command directly
+ master_modify_multiple_shards 
+-------------------------------
+                             0
+(1 row)
+
+-- commands containing a CTE are unsupported
+SELECT master_modify_multiple_shards('WITH t AS (INSERT INTO multi_shard_modify_test DEFAULT VALUES RETURNING *) UPDATE multi_shard_modify_test SET t_name = ''FAIL'' ');
+WARNING:  master_modify_multiple_shards is deprecated and will be removed in a future release.
+HINT:  Run the command directly
+ERROR:  cannot perform an INSERT without a partition column value
+-- updates referencing just a var are supported
+SELECT master_modify_multiple_shards('UPDATE multi_shard_modify_test SET t_value=t_key WHERE t_key = 10');
+WARNING:  master_modify_multiple_shards is deprecated and will be removed in a future release.
+HINT:  Run the command directly
+ master_modify_multiple_shards 
+-------------------------------
+                             0
 (1 row)
 
 SELECT t_value FROM multi_shard_modify_test WHERE t_key=10;
@@ -233,9 +290,11 @@ SELECT t_value FROM multi_shard_modify_test WHERE t_key=10;
 
 -- updates referencing a column are supported
 SELECT master_modify_multiple_shards('UPDATE multi_shard_modify_test SET t_value = t_value + 37 WHERE t_key = 10');
+WARNING:  master_modify_multiple_shards is deprecated and will be removed in a future release.
+HINT:  Run the command directly
  master_modify_multiple_shards 
 -------------------------------
-                             1
+                             0
 (1 row)
 
 SELECT t_value FROM multi_shard_modify_test WHERE t_key=10;
@@ -247,16 +306,20 @@ SELECT t_value FROM multi_shard_modify_test WHERE t_key=10;
 CREATE FUNCTION temp_stable_func() RETURNS integer AS 'SELECT 10;' LANGUAGE SQL STABLE;
 -- updates referencing non-IMMUTABLE functions are unsupported
 SELECT master_modify_multiple_shards('UPDATE multi_shard_modify_test SET t_name = ''FAIL!'' WHERE t_key = temp_stable_func()');
+WARNING:  master_modify_multiple_shards is deprecated and will be removed in a future release.
+HINT:  Run the command directly
  master_modify_multiple_shards 
 -------------------------------
-                             1
+                             0
 (1 row)
 
 -- updates referencing IMMUTABLE functions in SET section are supported
 SELECT master_modify_multiple_shards('UPDATE multi_shard_modify_test SET t_value = abs(-78) WHERE t_key = 10');
+WARNING:  master_modify_multiple_shards is deprecated and will be removed in a future release.
+HINT:  Run the command directly
  master_modify_multiple_shards 
 -------------------------------
-                             1
+                             0
 (1 row)
 
 SELECT t_value FROM multi_shard_modify_test WHERE t_key=10;
@@ -267,19 +330,25 @@ SELECT t_value FROM multi_shard_modify_test WHERE t_key=10;
 
 -- updates referencing STABLE functions in SET section are supported
 SELECT master_modify_multiple_shards('UPDATE multi_shard_modify_test SET t_value = temp_stable_func() * 2 WHERE t_key = 10');
+WARNING:  master_modify_multiple_shards is deprecated and will be removed in a future release.
+HINT:  Run the command directly
  master_modify_multiple_shards 
 -------------------------------
-                             1
+                             0
 (1 row)
 
 -- updates referencing VOLATILE functions in SET section are not supported
 SELECT master_modify_multiple_shards('UPDATE multi_shard_modify_test SET t_value = random() WHERE t_key = 10');
+WARNING:  master_modify_multiple_shards is deprecated and will be removed in a future release.
+HINT:  Run the command directly
 ERROR:  functions used in UPDATE queries on distributed tables must not be VOLATILE
 -- commands with stable functions in their quals are allowed
 SELECT master_modify_multiple_shards('DELETE FROM multi_shard_modify_test WHERE t_key = temp_stable_func()');
+WARNING:  master_modify_multiple_shards is deprecated and will be removed in a future release.
+HINT:  Run the command directly
  master_modify_multiple_shards 
 -------------------------------
-                             1
+                             0
 (1 row)
 
 SET citus.next_shard_id TO 102046;

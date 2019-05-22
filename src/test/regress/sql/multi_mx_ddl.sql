@@ -13,7 +13,7 @@ ALTER TABLE mx_ddl_table ADD COLUMN version INTEGER;
 -- SET DEFAULT
 ALTER TABLE mx_ddl_table ALTER COLUMN version SET DEFAULT 1; 
 
-SELECT master_modify_multiple_shards('UPDATE mx_ddl_table SET version=0.1 WHERE version IS NULL');
+UPDATE mx_ddl_table SET version=0.1 WHERE version IS NULL;
 
 -- SET NOT NULL
 ALTER TABLE mx_ddl_table ALTER COLUMN version SET NOT NULL;

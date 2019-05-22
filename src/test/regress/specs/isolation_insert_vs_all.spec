@@ -33,7 +33,7 @@ step "s1-ddl-add-column" { ALTER TABLE insert_hash ADD new_column int DEFAULT 0;
 step "s1-ddl-drop-column" { ALTER TABLE insert_hash DROP new_column; }
 step "s1-ddl-rename-column" { ALTER TABLE insert_hash RENAME data TO new_column; }
 step "s1-table-size" { SELECT citus_total_relation_size('insert_hash'); }
-step "s1-master-modify-multiple-shards" { SELECT master_modify_multiple_shards('DELETE FROM insert_hash;'); }
+step "s1-master-modify-multiple-shards" { DELETE FROM insert_hash; }
 step "s1-create-non-distributed-table" { CREATE TABLE insert_hash(id integer, data text); COPY insert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV; }
 step "s1-distribute-table" { SELECT create_distributed_table('insert_hash', 'id'); }
 step "s1-select-count" { SELECT COUNT(*) FROM insert_hash; }
@@ -57,7 +57,7 @@ step "s2-ddl-add-column" { ALTER TABLE insert_hash ADD new_column int DEFAULT 0;
 step "s2-ddl-drop-column" { ALTER TABLE insert_hash DROP new_column; }
 step "s2-ddl-rename-column" { ALTER TABLE insert_hash RENAME data TO new_column; }
 step "s2-table-size" { SELECT citus_total_relation_size('insert_hash'); }
-step "s2-master-modify-multiple-shards" { SELECT master_modify_multiple_shards('DELETE FROM insert_hash;'); }
+step "s2-master-modify-multiple-shards" { DELETE FROM insert_hash; }
 step "s2-distribute-table" { SELECT create_distributed_table('insert_hash', 'id'); }
 
 # permutations - INSERT vs INSERT
