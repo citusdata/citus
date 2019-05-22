@@ -798,6 +798,12 @@ CREATE TABLE "CiTUS.TEEN2"."CAPITAL_TABLE"(i int, j int);
 SELECT create_distributed_table('"CiTuS.TeeN"."TeeNTabLE.1!?!"', 'TeNANt_Id');
 SELECT create_distributed_table('"CiTUS.TEEN2"."CAPITAL_TABLE"', 'i');
 
+-- truncate tables with weird names
+INSERT INTO "CiTuS.TeeN"."TeeNTabLE.1!?!" VALUES(1, 1);
+INSERT INTO "CiTUS.TEEN2"."CAPITAL_TABLE" VALUES(0, 1);
+TRUNCATE "CiTuS.TeeN"."TeeNTabLE.1!?!", "CiTUS.TEEN2"."CAPITAL_TABLE";
+SELECT count(*) FROM "CiTUS.TEEN2"."CAPITAL_TABLE";
+
 -- insert into table with weird names
 INSERT INTO "CiTuS.TeeN"."TeeNTabLE.1!?!" VALUES(1, 1),(1, 0),(0, 1),(2, 3),(3, 2),(4, 4);
 INSERT INTO "CiTUS.TEEN2"."CAPITAL_TABLE" VALUES(0, 1),(1, 0),(2, 1),(4, 3),(3, 2),(4, 4);

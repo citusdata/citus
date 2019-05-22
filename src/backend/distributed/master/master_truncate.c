@@ -19,10 +19,15 @@
 #include "distributed/master_metadata_utility.h"
 #include "distributed/master_protocol.h"
 #include "distributed/multi_join_order.h"
+#include "distributed/multi_router_executor.h"
 #include "distributed/pg_dist_partition.h"
+#include "distributed/resource_lock.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
+
+
+static List * TruncateTaskList(Oid relationId);
 
 
 /* exports for SQL callable functions */
@@ -39,9 +44,6 @@ citus_truncate_trigger(PG_FUNCTION_ARGS)
 	TriggerData *triggerData = NULL;
 	Relation truncatedRelation = NULL;
 	Oid relationId = InvalidOid;
-	char *relationName = NULL;
-	Oid schemaId = InvalidOid;
-	char *schemaName = NULL;
 	char partitionMethod = 0;
 
 	if (!CALLED_AS_TRIGGER(fcinfo))
@@ -53,9 +55,6 @@ citus_truncate_trigger(PG_FUNCTION_ARGS)
 	triggerData = (TriggerData *) fcinfo->context;
 	truncatedRelation = triggerData->tg_relation;
 	relationId = RelationGetRelid(truncatedRelation);
-	relationName = get_rel_name(relationId);
-	schemaId = get_rel_namespace(relationId);
-	schemaName = get_namespace_name(schemaId);
 	partitionMethod = PartitionMethod(relationId);
 
 	if (!EnableDDLPropagation)
@@ -65,6 +64,10 @@ citus_truncate_trigger(PG_FUNCTION_ARGS)
 
 	if (partitionMethod == DISTRIBUTE_BY_APPEND)
 	{
+		Oid schemaId = get_rel_namespace(relationId);
+		char *schemaName = get_namespace_name(schemaId);
+		char *relationName = get_rel_name(relationId);
+
 		DirectFunctionCall3(master_drop_all_shards,
 							ObjectIdGetDatum(relationId),
 							CStringGetTextDatum(relationName),
@@ -72,15 +75,68 @@ citus_truncate_trigger(PG_FUNCTION_ARGS)
 	}
 	else
 	{
-		StringInfo truncateStatement = makeStringInfo();
-		char *qualifiedTableName = quote_qualified_identifier(schemaName, relationName);
+		List *taskList = TruncateTaskList(relationId);
 
-		appendStringInfo(truncateStatement, "TRUNCATE TABLE %s CASCADE",
-						 qualifiedTableName);
-
-		DirectFunctionCall1(master_modify_multiple_shards,
-							CStringGetTextDatum(truncateStatement->data));
+		if (MultiShardConnectionType == SEQUENTIAL_CONNECTION)
+		{
+			ExecuteModifyTasksSequentiallyWithoutResults(taskList, CMD_UTILITY);
+		}
+		else
+		{
+			ExecuteModifyTasksWithoutResults(taskList);
+		}
 	}
 
 	PG_RETURN_DATUM(PointerGetDatum(NULL));
+}
+
+
+/*
+ * TruncateTaskList returns a list of tasks to execute a TRUNCATE on a
+ * distributed table. This is handled separately from other DDL commands
+ * because we handle it via the TRUNCATE trigger, which is called whenever
+ * a truncate cascades.
+ */
+static List *
+TruncateTaskList(Oid relationId)
+{
+	List *shardIntervalList = LoadShardIntervalList(relationId);
+	ListCell *shardIntervalCell = NULL;
+	List *taskList = NIL;
+	int taskId = 1;
+
+	Oid schemaId = get_rel_namespace(relationId);
+	char *schemaName = get_namespace_name(schemaId);
+	char *relationName = get_rel_name(relationId);
+
+	/* lock metadata before getting placement lists */
+	LockShardListMetadata(shardIntervalList, ShareLock);
+
+	foreach(shardIntervalCell, shardIntervalList)
+	{
+		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
+		uint64 shardId = shardInterval->shardId;
+		StringInfo shardQueryString = makeStringInfo();
+		Task *task = NULL;
+		char *shardName = pstrdup(relationName);
+
+		AppendShardIdToName(&shardName, shardId);
+
+		appendStringInfo(shardQueryString, "TRUNCATE TABLE %s CASCADE",
+						 quote_qualified_identifier(schemaName, shardName));
+
+		task = CitusMakeNode(Task);
+		task->jobId = INVALID_JOB_ID;
+		task->taskId = taskId++;
+		task->taskType = DDL_TASK;
+		task->queryString = shardQueryString->data;
+		task->dependedTaskList = NULL;
+		task->replicationModel = REPLICATION_MODEL_INVALID;
+		task->anchorShardId = shardId;
+		task->taskPlacementList = FinalizedShardPlacementList(shardId);
+
+		taskList = lappend(taskList, task);
+	}
+
+	return taskList;
 }

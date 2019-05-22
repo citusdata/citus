@@ -4,6 +4,8 @@
 
 
 SET citus.next_shard_id TO 1210000;
+CREATE SCHEMA multi_truncate;
+SET search_path TO multi_truncate;
 
 --
 -- truncate for append distribution
@@ -220,4 +222,4 @@ DELETE FROM pg_dist_partition WHERE logicalrelid = 'test_local_truncate'::regcla
 -- Ensure local data is not truncated
 SELECT * FROM test_local_truncate;
 
-DROP TABLE test_local_truncate;
+DROP SCHEMA multi_truncate CASCADE;
