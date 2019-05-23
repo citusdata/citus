@@ -100,8 +100,6 @@ static List * BuildPlacementAccessList(int32 groupId, List *relationShardList,
 static List * GetModifyConnections(Task *task, bool markCritical);
 static int64 ExecuteModifyTasks(List *taskList, bool expectResults,
 								ParamListInfo paramListInfo, CitusScanState *scanState);
-static void AcquireExecutorShardLock(Task *task, CmdType commandType);
-static void AcquireExecutorMultiShardLocks(List *taskList);
 static bool RequiresConsistentSnapshot(Task *task);
 static void RouterMultiModifyExecScan(CustomScanState *node);
 static void RouterSequentialModifyExecScan(CustomScanState *node);
@@ -154,7 +152,7 @@ AcquireMetadataLocks(List *taskList)
  * to communicate that the application is only generating commutative
  * UPDATE/DELETE/UPSERT commands and exclusive locks are unnecessary.
  */
-static void
+void
 AcquireExecutorShardLock(Task *task, CmdType commandType)
 {
 	LOCKMODE lockMode = NoLock;
@@ -346,7 +344,7 @@ AcquireExecutorShardLock(Task *task, CmdType commandType)
  * RowExclusiveLock, which is normally obtained by single-shard, commutative
  * writes.
  */
-static void
+void
 AcquireExecutorMultiShardLocks(List *taskList)
 {
 	ListCell *taskCell = NULL;
