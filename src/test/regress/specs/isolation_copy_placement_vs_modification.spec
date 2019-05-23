@@ -21,6 +21,7 @@ session "s1"
 step "s1-begin"
 {
     BEGIN;
+	SET LOCAL citus.select_opens_transaction_block TO off;
 }
 
 # since test_copy_placement_vs_modification has rep > 1 simple select query doesn't hit all placements
