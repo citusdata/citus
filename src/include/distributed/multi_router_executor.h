@@ -54,6 +54,8 @@ extern ShardPlacementAccess * CreatePlacementAccess(ShardPlacement *placement,
 													ShardPlacementAccessType accessType);
 
 /* helper functions */
+extern void AcquireExecutorShardLock(Task *task, CmdType commandType);
+extern void AcquireExecutorMultiShardLocks(List *taskList);
 extern ShardPlacementAccess * CreatePlacementAccess(ShardPlacement *placement,
 													ShardPlacementAccessType accessType);
 extern bool TaskListRequires2PC(List *taskList);
