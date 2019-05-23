@@ -19,3 +19,5 @@ s/\(id\)=\([0-9]+\)/(id)=(X)/g
 # shard table names for multi_subtransactions
 s/"t2_[0-9]+"/"t2_xxxxxxx"/g
 
+# normalize pkey constraints in multi_insert_select.sql
+s/"(raw_events_second_user_id_value_1_key_|agg_events_user_id_value_1_agg_key_)[0-9]+"/"\1xxxxxxx"/g
