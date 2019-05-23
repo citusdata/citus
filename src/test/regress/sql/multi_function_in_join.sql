@@ -112,34 +112,36 @@ SELECT * FROM table1 JOIN max_and_min() m ON (m.maximum = data OR m.minimum = da
 
 -- The following tests will fail as we do not support  all joins on
 -- all kinds of functions
+-- In other words, we cannot recursively plan the functions and hence 
+-- the query fails on the workers
 SET client_min_messages TO ERROR;
+\set VERBOSITY terse
 
 -- function joins in CTE results can create lateral joins that are not supported
-SELECT public.raise_failed_execution($cmd$
 WITH one_row AS (
     SELECT * FROM table1 WHERE id=52
     )
 SELECT table1.id, table1.data
 FROM one_row, table1, next_k_integers(one_row.id, 5) next_five_ids
 WHERE table1.id = next_five_ids;
-$cmd$);
-
 
 -- a user-defined immutable function
 CREATE OR REPLACE FUNCTION the_answer_to_life()
   RETURNS INTEGER IMMUTABLE AS 'SELECT 42' LANGUAGE SQL;
-SELECT public.raise_failed_execution($cmd$
-SELECT * FROM table1 JOIN the_answer_to_life() the_answer ON (id = the_answer)
-$cmd$);
+
+SELECT * FROM table1 JOIN the_answer_to_life() the_answer ON (id = the_answer);
+
+SELECT *
+FROM table1
+       JOIN next_k_integers(10,5) WITH ORDINALITY next_integers
+         ON (id = next_integers.result);
 
 -- WITH ORDINALITY clause
-SELECT public.raise_failed_execution($cmd$
 SELECT *
 FROM table1
        JOIN next_k_integers(10,5) WITH ORDINALITY next_integers
          ON (id = next_integers.result)
 ORDER BY id ASC;
-$cmd$);
 
 RESET client_min_messages;
 DROP SCHEMA functions_in_joins CASCADE;
