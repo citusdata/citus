@@ -50,6 +50,8 @@ extern int64 ExecuteModifyTasksSequentiallyWithoutResults(List *taskList,
 														  CmdType operation);
 
 /* helper functions */
+extern void AcquireExecutorShardLock(Task *task, CmdType commandType);
+extern void AcquireExecutorMultiShardLocks(List *taskList);
 extern ShardPlacementAccess * CreatePlacementAccess(ShardPlacement *placement,
 													ShardPlacementAccessType accessType);
 extern bool TaskListRequires2PC(List *taskList);
