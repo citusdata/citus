@@ -9,6 +9,7 @@ step s1-insert:
 
 step s1-begin: 
     BEGIN;
+	SET LOCAL citus.select_opens_transaction_block TO off;
 
 step s1-select: 
 	SELECT count(*) FROM test_copy_placement_vs_modification WHERE x = 5;
@@ -62,6 +63,7 @@ step s1-insert:
 
 step s1-begin: 
     BEGIN;
+	SET LOCAL citus.select_opens_transaction_block TO off;
 
 step s1-select: 
 	SELECT count(*) FROM test_copy_placement_vs_modification WHERE x = 5;
@@ -112,6 +114,7 @@ step s1-load-cache:
 
 step s1-begin: 
     BEGIN;
+	SET LOCAL citus.select_opens_transaction_block TO off;
 
 step s1-select: 
 	SELECT count(*) FROM test_copy_placement_vs_modification WHERE x = 5;
@@ -162,6 +165,7 @@ step s1-load-cache:
 
 step s1-begin: 
     BEGIN;
+	SET LOCAL citus.select_opens_transaction_block TO off;
 
 step s1-select: 
 	SELECT count(*) FROM test_copy_placement_vs_modification WHERE x = 5;
@@ -212,6 +216,7 @@ step s1-load-cache:
 
 step s1-begin: 
     BEGIN;
+	SET LOCAL citus.select_opens_transaction_block TO off;
 
 step s1-select: 
 	SELECT count(*) FROM test_copy_placement_vs_modification WHERE x = 5;
@@ -262,6 +267,7 @@ step s1-insert:
 
 step s1-begin: 
     BEGIN;
+	SET LOCAL citus.select_opens_transaction_block TO off;
 
 step s1-select: 
 	SELECT count(*) FROM test_copy_placement_vs_modification WHERE x = 5;
@@ -312,6 +318,7 @@ step s1-insert:
 
 step s1-begin: 
     BEGIN;
+	SET LOCAL citus.select_opens_transaction_block TO off;
 
 step s1-select: 
 	SELECT count(*) FROM test_copy_placement_vs_modification WHERE x = 5;
@@ -359,6 +366,7 @@ nodeport       success        result
 starting permutation: s1-begin s1-select s2-set-placement-inactive s2-begin s2-repair-placement s1-insert s2-commit s1-commit s2-print-content
 step s1-begin: 
     BEGIN;
+	SET LOCAL citus.select_opens_transaction_block TO off;
 
 step s1-select: 
 	SELECT count(*) FROM test_copy_placement_vs_modification WHERE x = 5;
@@ -406,6 +414,7 @@ nodeport       success        result
 starting permutation: s1-begin s1-select s2-set-placement-inactive s2-begin s2-repair-placement s1-copy s2-commit s1-commit s2-print-content
 step s1-begin: 
     BEGIN;
+	SET LOCAL citus.select_opens_transaction_block TO off;
 
 step s1-select: 
 	SELECT count(*) FROM test_copy_placement_vs_modification WHERE x = 5;
@@ -453,6 +462,7 @@ nodeport       success        result
 starting permutation: s1-begin s1-select s2-set-placement-inactive s2-begin s2-repair-placement s1-ddl s2-commit s1-commit s2-print-index-count
 step s1-begin: 
     BEGIN;
+	SET LOCAL citus.select_opens_transaction_block TO off;
 
 step s1-select: 
 	SELECT count(*) FROM test_copy_placement_vs_modification WHERE x = 5;
