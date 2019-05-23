@@ -182,48 +182,36 @@ DEBUG:  Plan 14 query after replacing subqueries and CTEs: SELECT table1.id, tab
 
 -- The following tests will fail as we do not support  all joins on
 -- all kinds of functions
+-- In other words, we cannot recursively plan the functions and hence 
+-- the query fails on the workers
 SET client_min_messages TO ERROR;
+\set VERBOSITY terse
 -- function joins in CTE results can create lateral joins that are not supported
-SELECT public.raise_failed_execution($cmd$
 WITH one_row AS (
     SELECT * FROM table1 WHERE id=52
     )
 SELECT table1.id, table1.data
 FROM one_row, table1, next_k_integers(one_row.id, 5) next_five_ids
 WHERE table1.id = next_five_ids;
-$cmd$);
-ERROR:  Task failed to execute
-CONTEXT:  PL/pgSQL function public.raise_failed_execution(text) line 6 at RAISE
+ERROR:  function functions_in_joins.next_k_integers(integer, integer) does not exist
 -- a user-defined immutable function
 CREATE OR REPLACE FUNCTION the_answer_to_life()
   RETURNS INTEGER IMMUTABLE AS 'SELECT 42' LANGUAGE SQL;
-SELECT public.raise_failed_execution($cmd$
-SELECT * FROM table1 JOIN the_answer_to_life() the_answer ON (id = the_answer)
-$cmd$);
-ERROR:  Task failed to execute
-CONTEXT:  PL/pgSQL function public.raise_failed_execution(text) line 6 at RAISE
+SELECT * FROM table1 JOIN the_answer_to_life() the_answer ON (id = the_answer);
+ERROR:  function functions_in_joins.the_answer_to_life() does not exist
+SELECT *
+FROM table1
+       JOIN next_k_integers(10,5) WITH ORDINALITY next_integers
+         ON (id = next_integers.result);
+ERROR:  function functions_in_joins.next_k_integers(integer, integer) does not exist
 -- WITH ORDINALITY clause
-SELECT public.raise_failed_execution($cmd$
 SELECT *
 FROM table1
        JOIN next_k_integers(10,5) WITH ORDINALITY next_integers
          ON (id = next_integers.result)
 ORDER BY id ASC;
-$cmd$);
-ERROR:  Task failed to execute
-CONTEXT:  PL/pgSQL function public.raise_failed_execution(text) line 6 at RAISE
+ERROR:  function functions_in_joins.next_k_integers(integer, integer) does not exist
 RESET client_min_messages;
 DROP SCHEMA functions_in_joins CASCADE;
 NOTICE:  drop cascades to 11 other objects
-DETAIL:  drop cascades to table table1
-drop cascades to sequence numbers
-drop cascades to function add(integer,integer)
-drop cascades to function increment(integer)
-drop cascades to function next_k_integers(integer,integer)
-drop cascades to function get_set_of_records()
-drop cascades to function dup(integer)
-drop cascades to function the_minimum_id()
-drop cascades to type min_and_max
-drop cascades to function max_and_min()
-drop cascades to function the_answer_to_life()
 SET search_path TO DEFAULT;
