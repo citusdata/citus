@@ -1368,8 +1368,8 @@ INSERT INTO raw_events_first SELECT * FROM raw_events_second WHERE user_id = 100
 ROLLBACK;
 
 -- Altering a reference table and then performing an INSERT ... SELECT which
--- joins with the reference table is not allowed, since the INSERT ... SELECT
--- would read from the reference table over others connections than the ones
+-- joins with the reference table is allowed, since the INSERT ... SELECT
+-- would read from the reference table over the same connections with the ones
 -- that performed the parallel DDL.
 BEGIN;
 ALTER TABLE reference_table ADD COLUMN z int;
