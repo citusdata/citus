@@ -1310,9 +1310,8 @@ DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 DETAIL:  distribution column value: 1
-WARNING:  relation "fast_path_router_select.articles_hash" does not exist
+ERROR:  relation "fast_path_router_select.articles_hash" does not exist
 CONTEXT:  while executing command on localhost:57637
-ERROR:  could not receive query results
 -- temporarily turn off debug messages before dropping the function
 SET client_min_messages TO 'NOTICE';
 DROP FUNCTION someDummyFunction(regclass);
