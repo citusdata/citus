@@ -76,7 +76,7 @@ DEBUG:  generating subplan 9_2 for CTE ids_inserted: INSERT INTO with_transactio
 DEBUG:  Plan 9 query after replacing subqueries and CTEs: UPDATE with_transactions.raw_table SET created_at = 'Sat Feb 10 20:00:00 2001 PST'::timestamp with time zone WHERE ((tenant_id OPERATOR(pg_catalog.=) ANY (SELECT ids_inserted.tenant_id FROM (SELECT intermediate_result.tenant_id FROM read_intermediate_result('9_2'::text, 'binary'::citus_copy_format) intermediate_result(tenant_id integer)) ids_inserted)) AND (tenant_id OPERATOR(pg_catalog.<) (SELECT distinct_count.count FROM (SELECT intermediate_result.count FROM read_intermediate_result('9_1'::text, 'binary'::citus_copy_format) intermediate_result(count bigint)) distinct_count)))
 	TRUNCATE second_raw_table;
 COMMIT;
--- sequential insert followed by parallel update causes execution issues
+-- sequential insert followed by parallel update works just fine
 WITH ids_inserted AS
 (
   INSERT INTO raw_table VALUES (11, 1000, now()), (12, 1000, now()), (13, 1000, now()) RETURNING tenant_id 
@@ -85,18 +85,17 @@ UPDATE raw_table SET created_at = '2001-02-10 20:00:00' WHERE tenant_id IN (SELE
 DEBUG:  common table expressions are not supported in distributed modifications
 DEBUG:  generating subplan 12_1 for CTE ids_inserted: INSERT INTO with_transactions.raw_table (tenant_id, income, created_at) VALUES (11,1000,now()), (12,1000,now()), (13,1000,now()) RETURNING raw_table.tenant_id
 DEBUG:  Plan 12 query after replacing subqueries and CTEs: UPDATE with_transactions.raw_table SET created_at = 'Sat Feb 10 20:00:00 2001 PST'::timestamp with time zone WHERE (tenant_id OPERATOR(pg_catalog.=) ANY (SELECT ids_inserted.tenant_id FROM (SELECT intermediate_result.tenant_id FROM read_intermediate_result('12_1'::text, 'binary'::citus_copy_format) intermediate_result(tenant_id integer)) ids_inserted))
-ERROR:  cannot establish a new connection for placement 800007, since DML has been executed on a connection that is in use
 -- make sure that everything committed
 SELECT count(*) FROM raw_table;
  count 
 -------
-   102
+   105
 (1 row)
 
 SELECT count(*) FROM raw_table WHERE created_at = '2001-02-10 20:00:00';
  count 
 -------
-     1
+     4
 (1 row)
 
 SELECT count(*) FROM second_raw_table;
