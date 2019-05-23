@@ -58,7 +58,7 @@ BEGIN;
 	TRUNCATE second_raw_table;
 COMMIT;
 
--- sequential insert followed by parallel update causes execution issues
+-- sequential insert followed by parallel update works just fine
 WITH ids_inserted AS
 (
   INSERT INTO raw_table VALUES (11, 1000, now()), (12, 1000, now()), (13, 1000, now()) RETURNING tenant_id 
