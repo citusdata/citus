@@ -85,9 +85,7 @@ SELECT x, x2
 FROM interesting_squares JOIN (SELECT * FROM read_intermediate_result('squares', 'binary') AS res (x text, x2 int)) squares ON (x = interested_in)
 WHERE user_id = 'jon'
 ORDER BY x;
-WARNING:  result "squares" does not exist
-WARNING:  result "squares" does not exist
-ERROR:  could not receive query results
+ERROR:  result "squares" does not exist
 \set VERBOSITY DEFAULT
 -- try to read the file as text, will fail because of binary encoding
 BEGIN;
