@@ -361,6 +361,7 @@ static void FinishDistributedExecution(DistributedExecution *execution);
 static void CleanUpSessions(DistributedExecution *execution);
 
 static void LockPartitionsForDistributedPlan(DistributedPlan *distributedPlan);
+static void AcquireExecutorShardLocks(DistributedExecution *execution);
 static bool DistributedExecutionModifiesDatabase(DistributedExecution *execution);
 static bool DistributedPlanModifiesDatabase(DistributedPlan *plan);
 static bool TaskListModifiesDatabase(CmdType operation, List *taskList);
@@ -632,6 +633,9 @@ StartDistributedExecution(DistributedExecution *execution)
 	{
 		RecordParallelRelationAccessForTaskList(taskList);
 	}
+
+	/* prevent unsafe concurrent modifications */
+	AcquireExecutorShardLocks(execution);
 }
 
 
@@ -772,6 +776,57 @@ LockPartitionsForDistributedPlan(DistributedPlan *distributedPlan)
 	 * have a stronger lock this doesn't do any harm.
 	 */
 	LockPartitionsInRelationList(distributedPlan->relationIdList, AccessShareLock);
+}
+
+
+/*
+ * AcquireExecutorShardLocks acquires advisory lock on shard IDs to prevent
+ * unsafe concurrent modifications of shards.
+ *
+ * We prevent concurrent modifications of shards in two cases:
+ * 1. Any non-commutative writes to a replicated table
+ * 2. Multi-shard writes that are executed in parallel
+ *
+ * The first case ensures we do not apply updates in different orders on
+ * different replicas (e.g. of a reference table), which could lead the
+ * replicas to diverge.
+ *
+ * The second case prevents deadlocks due to out-of-order execution.
+ *
+ * We do not take executor shard locks for utility commands such as
+ * TRUNCATE because the table locks already prevent concurrent access.
+ */
+static void
+AcquireExecutorShardLocks(DistributedExecution *execution)
+{
+	CmdType operation = execution->operation;
+	List *taskList = execution->tasksToExecute;
+
+	if (!(operation == CMD_INSERT || operation == CMD_UPDATE || operation == CMD_DELETE))
+	{
+		/* executor locks only apply to DML commands */
+		return;
+	}
+
+	/*
+	 * When executing in sequential mode or only executing a single task, we
+	 * do not need multi-shard locks.
+	 */
+	if (list_length(taskList) == 1 || ShouldRunTasksSequentially(taskList))
+	{
+		ListCell *taskCell = NULL;
+
+		foreach(taskCell, taskList)
+		{
+			Task *task = (Task *) lfirst(taskCell);
+
+			AcquireExecutorShardLock(task, operation);
+		}
+	}
+	else if (list_length(taskList) > 1)
+	{
+		AcquireExecutorMultiShardLocks(taskList);
+	}
 }
 
 
