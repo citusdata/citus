@@ -96,7 +96,7 @@ step "s2-change_connection_mode_to_sequential"
 
 step "s2-select" 
 {
-	SELECT * FROM users_test_table ORDER BY value_2;
+	SELECT * FROM users_test_table ORDER BY value_2, value_3;
 }
 
 step "s2-insert-to-table"
