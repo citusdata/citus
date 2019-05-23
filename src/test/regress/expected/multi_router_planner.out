@@ -1907,13 +1907,8 @@ SELECT author_id FROM articles_append
 		author_id
 	LIMIT 1;
 DEBUG:  push down of limit count: 1
-WARNING:  relation "public.articles_append" does not exist
+ERROR:  relation "public.articles_append" does not exist
 CONTEXT:  while executing command on localhost:57638
-WARNING:  relation "public.articles_append" does not exist
-CONTEXT:  while executing command on localhost:57638
-WARNING:  relation "public.articles_append" does not exist
-CONTEXT:  while executing command on localhost:57638
-ERROR:  failed to execute task 1
 -- same query with where false but evaluation left to worker
 SELECT author_id FROM articles_append
 	WHERE 
@@ -1922,13 +1917,8 @@ SELECT author_id FROM articles_append
 		author_id
 	LIMIT 1;
 DEBUG:  push down of limit count: 1
-WARNING:  relation "public.articles_append" does not exist
+ERROR:  relation "public.articles_append" does not exist
 CONTEXT:  while executing command on localhost:57638
-WARNING:  relation "public.articles_append" does not exist
-CONTEXT:  while executing command on localhost:57638
-WARNING:  relation "public.articles_append" does not exist
-CONTEXT:  while executing command on localhost:57638
-ERROR:  failed to execute task 1
 -- same query on router planner with where false but evaluation left to worker
 SELECT author_id FROM articles_single_shard_hash
 	WHERE 
@@ -1938,9 +1928,8 @@ SELECT author_id FROM articles_single_shard_hash
 	LIMIT 1;
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-WARNING:  relation "public.articles_single_shard_hash" does not exist
+ERROR:  relation "public.articles_single_shard_hash" does not exist
 CONTEXT:  while executing command on localhost:57637
-ERROR:  could not receive query results
 SELECT author_id FROM articles_hash
 	WHERE 
 		author_id = 1
@@ -1951,9 +1940,8 @@ SELECT author_id FROM articles_hash
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 DETAIL:  distribution column value: 1
-WARNING:  relation "public.articles_hash" does not exist
+ERROR:  relation "public.articles_hash" does not exist
 CONTEXT:  while executing command on localhost:57637
-ERROR:  could not receive query results
 -- create a dummy function to be used in filtering
 CREATE OR REPLACE FUNCTION someDummyFunction(regclass)
     RETURNS text AS
@@ -1989,9 +1977,8 @@ SELECT * FROM articles_hash
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 DETAIL:  distribution column value: 1
-WARNING:  relation "public.articles_hash" does not exist
+ERROR:  relation "public.articles_hash" does not exist
 CONTEXT:  while executing command on localhost:57637
-ERROR:  could not receive query results
 -- temporarily turn off debug messages before dropping the function
 SET client_min_messages TO 'NOTICE';
 DROP FUNCTION someDummyFunction(regclass);
