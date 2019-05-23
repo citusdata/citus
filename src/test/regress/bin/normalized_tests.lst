@@ -8,3 +8,6 @@ foreign_key_restriction_enforcement
 multi_insert_select
 multi_insert_select_conflict
 multi_subtransactions
+multi_modifying_xacts
+multi_insert_select
+
