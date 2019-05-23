@@ -4,3 +4,6 @@ multi_alter_table_statements
 foreign_key_to_reference_table
 failure_savepoints
 multi_subtransactions
+multi_modifying_xacts
+multi_insert_select
+
