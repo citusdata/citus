@@ -345,7 +345,7 @@ FOR i IN 1..3 LOOP
 			GROUP BY
 				user_id, cte.value_2);
 	EXCEPTION WHEN OTHERS THEN
-		IF SQLERRM LIKE 'failed to execute task%' THEN
+		IF SQLERRM LIKE 'more than one row returned by a subquery%%' THEN
 			errors_received := errors_received + 1;
 		END IF;
 	END;
