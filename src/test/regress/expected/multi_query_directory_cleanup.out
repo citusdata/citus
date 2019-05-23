@@ -215,55 +215,18 @@ FETCH 1 FROM c_19;
 (1 row)
 
 SELECT * FROM pg_ls_dir('base/pgsql_job_cache') f ORDER BY f;
-        f        
------------------
- master_job_0007
- master_job_0008
- master_job_0009
- master_job_0010
- master_job_0011
- master_job_0012
- master_job_0013
- master_job_0014
- master_job_0015
- master_job_0016
- master_job_0017
- master_job_0018
- master_job_0019
- master_job_0020
- master_job_0021
- master_job_0022
- master_job_0023
- master_job_0024
- master_job_0025
- master_job_0026
-(20 rows)
+ f 
+---
+(0 rows)
 
 -- close first, 17th (first after re-alloc) and last cursor.
 CLOSE c_00;
 CLOSE c_16;
 CLOSE c_19;
 SELECT * FROM pg_ls_dir('base/pgsql_job_cache') f ORDER BY f;
-        f        
------------------
- master_job_0008
- master_job_0009
- master_job_0010
- master_job_0011
- master_job_0012
- master_job_0013
- master_job_0014
- master_job_0015
- master_job_0016
- master_job_0017
- master_job_0018
- master_job_0019
- master_job_0020
- master_job_0021
- master_job_0022
- master_job_0024
- master_job_0025
-(17 rows)
+ f 
+---
+(0 rows)
 
 ROLLBACK;
 SELECT pg_ls_dir('base/pgsql_job_cache');
