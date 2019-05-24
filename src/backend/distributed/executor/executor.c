@@ -992,9 +992,11 @@ RunDistributedExecution(DistributedExecution *execution)
 {
 	int workerCount = list_length(execution->workerList);
 
+	/* additional 2 is for postmaster and latch */
+	int maxWaitEventCount = execution->totalTaskCount * workerCount + 2;
+
 	/* allocate events for the maximum number of connections to avoid realloc */
-	WaitEvent *events = palloc0(execution->totalTaskCount * workerCount *
-								sizeof(WaitEvent));
+	WaitEvent *events = palloc0(maxWaitEventCount * sizeof(WaitEvent));
 	WaitEventSet *waitEventSet = BuildWaitEventSet(execution->sessionList);
 
 	PG_TRY();
@@ -1027,6 +1029,9 @@ RunDistributedExecution(DistributedExecution *execution)
 				UpdateWaitEventSetFlags(waitEventSet, execution->sessionList);
 				execution->waitFlagsChanged = false;
 			}
+
+			/* we should always have more (or equal) waitEvents */
+			Assert (maxWaitEventCount >= connectionCount + 2);
 
 			/* wait for I/O events */
 #if (PG_VERSION_NUM >= 100000)
