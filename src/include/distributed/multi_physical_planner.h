@@ -351,7 +351,7 @@ extern List * TaskListDifference(const List *list1, const List *list2);
 extern List * AssignAnchorShardTaskList(List *taskList);
 extern List * FirstReplicaAssignTaskList(List *taskList);
 extern List * RoundRobinAssignTaskList(List *taskList);
-extern List * RoundRobinPerTransactionAssignTaskList(List *taskList);
+extern List * RoundRobinReorder(Task *task, List *placementList);
 extern int CompareTasksByTaskId(const void *leftElement, const void *rightElement);
 
 /* function declaration for creating Task */
