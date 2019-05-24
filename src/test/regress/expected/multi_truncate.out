@@ -2,6 +2,8 @@
 -- MULTI_TRUNCATE
 --
 SET citus.next_shard_id TO 1210000;
+CREATE SCHEMA multi_truncate;
+SET search_path TO multi_truncate;
 --
 -- truncate for append distribution
 -- expect all shards to be dropped
@@ -362,4 +364,5 @@ SELECT * FROM test_local_truncate;
  1 | 2
 (1 row)
 
-DROP TABLE test_local_truncate;
+DROP SCHEMA multi_truncate CASCADE;
+NOTICE:  drop cascades to table test_local_truncate
