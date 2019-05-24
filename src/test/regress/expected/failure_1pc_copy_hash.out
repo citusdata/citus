@@ -8,6 +8,7 @@ SET citus.shard_count = 1;
 SET citus.shard_replication_factor = 2; -- one shard per worker
 SET citus.multi_shard_commit_protocol TO '1pc';
 SET citus.next_shard_id TO 100400;
+SET citus.max_cached_conns_per_worker TO 0;
 ALTER SEQUENCE pg_catalog.pg_dist_placement_placementid_seq RESTART 100;
 CREATE TABLE copy_test (key int, value int);
 SELECT create_distributed_table('copy_test', 'key');
@@ -212,10 +213,12 @@ SELECT citus.mitmproxy('conn.killall()');
 (1 row)
 
 COPY copy_test FROM PROGRAM 'echo 0, 0 && echo 1, 1 && echo 2, 4 && echo 3, 9' WITH CSV;
-WARNING:  connection not open
-CONTEXT:  while executing command on localhost:9060
-COPY copy_test, line 1: "0, 0"
-ERROR:  failure on connection marked as essential: localhost:9060
+WARNING:  connection error: localhost:9060
+DETAIL:  server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+CONTEXT:  COPY copy_test, line 1: "0, 0"
+ERROR:  could not connect to any active placements
 CONTEXT:  COPY copy_test, line 1: "0, 0"
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
