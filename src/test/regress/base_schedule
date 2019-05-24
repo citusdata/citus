@@ -2,6 +2,6 @@
 # Only run few basic tests to set up a testing environment
 # ----------
 test: multi_cluster_management
-test: multi_test_helpers
+test: multi_test_helpers multi_create_fdw
 test: multi_create_table multi_behavioral_analytics_create_table
 test: multi_load_data
