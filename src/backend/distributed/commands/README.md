@@ -2,8 +2,8 @@
 
 The commands module is modeled after `backend/commands` from the postgres repository and
 contains the logic for Citus on how to run these commands on distributed objects. Even
-though the structure of the directory has some resemblence to its postgres relative files
-here are somewhat more finegrained. This is due to the nature of citus commands that are
+though the structure of the directory has some resemblence to its postgres relative, files
+here are somewhat more fine-grained. This is due to the nature of citus commands that are
 heavily focused on distributed tables. Instead of having all commands in `tablecmds.c`
 they are often moved to files that are named after the command.
 
@@ -12,7 +12,7 @@ they are often moved to files that are named after the command.
 | `create_distributed_table.c` | Implementation of UDF's for creating distributed tables |
 | `drop_distributed_table.c`   | Implementation for dropping metadata for partitions of distributed tables |
 | `extension.c`                | Implementation of `CREATE EXTENSION` commands for citus specific checks |
-| `foreign_constraint.c`       | Implementation of and helper functions for foreign key constraints |
+| `foreign_constraint.c`       | Implementation of helper functions for foreign key constraints |
 | `grant.c`                    | Placeholder for code granting users access to relations, implemented as enterprise feature |
 | `index.c`                    | Implementation of commands specific to indices on distributed tables |
 | `multi_copy.c`               | Implementation of `COPY` command. There are multiple different copy modes which are described in detail below |

@@ -1,7 +1,7 @@
 Automated Failure testing
 =========================
 
-Automated Failure Testing works by inserting a network proxy (mitmproxy) between the Citus coordinator and one of the workers (connections to the other worker are left unchanged). The proxy is configurable, and sits on a fifo waiting for commands. When it receives a command over the fifo it reconfigures itself and sends back response. Regression tests which use automated failure testing communicate with mitmproxy by running special UDFs which talk to said fifo. The tests send commands such as "fail any connection which contain the string `COMMIT`" and then run SQL queries and assert that thecoordinator has reasonable behavior when the specified failures occur.
+Automated Failure Testing works by inserting a network proxy (mitmproxy) between the Citus coordinator and one of the workers (connections to the other worker are left unchanged). The proxy is configurable, and sits on a fifo waiting for commands. When it receives a command over the fifo it reconfigures itself and sends back response. Regression tests which use automated failure testing communicate with mitmproxy by running special UDFs which talk to said fifo. The tests send commands such as "fail any connection which contain the string `COMMIT`" and then run SQL queries and assert that the coordinator has reasonable behavior when the specified failures occur.
 
 **Table of Contents**
 

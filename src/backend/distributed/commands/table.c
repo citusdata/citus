@@ -1090,7 +1090,7 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 
 /*
  * SetupExecutionModeForAlterTable is the function that is responsible
- * for two things for practial purpose for not doing the same checks
+ * for two things for practical purpose for not doing the same checks
  * twice:
  *     (a) For any command, decide and return whether we should
  *         run the command in sequential mode
