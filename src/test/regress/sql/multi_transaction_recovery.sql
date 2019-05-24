@@ -70,18 +70,6 @@ SELECT count(*) FROM pg_dist_transaction;
 SELECT recover_prepared_transactions();
 SELECT count(*) FROM pg_dist_transaction;
 
--- Committed master_modify_multiple_shards should write 4 transaction recovery records
-BEGIN;
-SELECT master_modify_multiple_shards($$UPDATE test_recovery SET y = 'world'$$); 
-ROLLBACK;
-SELECT count(*) FROM pg_dist_transaction;
-
-SELECT master_modify_multiple_shards($$UPDATE test_recovery SET y = 'world'$$);
-
-SELECT count(*) FROM pg_dist_transaction;
-SELECT recover_prepared_transactions();
-SELECT count(*) FROM pg_dist_transaction;
-
 -- Aborted INSERT..SELECT should not write transaction recovery records
 BEGIN;
 INSERT INTO test_recovery SELECT x, 'earth' FROM test_recovery;

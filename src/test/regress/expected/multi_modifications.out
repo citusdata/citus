@@ -1088,14 +1088,6 @@ UPDATE reference_summary_table SET average_value = average_query.average FROM (
 	) average_query
 WHERE id = 1;
 ERROR:  cannot perform select on a distributed table and modify a reference table
--- test master_modify_multiple_shards() with subqueries and expect to fail
-SELECT master_modify_multiple_shards('
-	UPDATE summary_table SET average_value = average_query.average FROM (
-		SELECT avg(value) AS average FROM raw_table WHERE id = 1
-		) average_query
-	WHERE id = 1');
-ERROR:  cannot run multi shard modify query with master_modify_multiple_shards when the query involves subquery or join
-DETAIL:  Execute the query without using master_modify_multiple_shards()
 -- test connection API via using COPY
 -- COPY on SELECT part
 BEGIN;

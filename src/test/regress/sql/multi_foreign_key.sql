@@ -135,7 +135,7 @@ SELECT * FROM referenced_table;
 -- multi shard cascading delete
 INSERT INTO referenced_table VALUES(2, 2);
 INSERT INTO referencing_table VALUES(2, 2);
-SELECT master_modify_multiple_shards('DELETE FROM referenced_table');
+DELETE FROM referenced_table;
 SELECT * FROM referencing_table;
 
 -- multi shard cascading delete with alter table
@@ -143,7 +143,7 @@ INSERT INTO referenced_table VALUES(3, 3);
 INSERT INTO referencing_table VALUES(3, 3);
 BEGIN;
 ALTER TABLE referencing_table ADD COLUMN x int DEFAULT 0;
-SELECT master_modify_multiple_shards('DELETE FROM referenced_table');
+DELETE FROM referenced_table;
 COMMIT;
 
 DROP TABLE referencing_table;

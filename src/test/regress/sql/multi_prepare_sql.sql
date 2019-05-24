@@ -278,7 +278,7 @@ EXECUTE prepared_non_partition_parameter_insert(60);
 -- check inserted values
 SELECT * FROM prepare_table ORDER BY key, value;
 
-SELECT master_modify_multiple_shards('DELETE FROM prepare_table WHERE value >= 70');
+DELETE FROM prepare_table WHERE value >= 70;
 
 -- check router executor select
 PREPARE prepared_router_partition_column_select(int) AS

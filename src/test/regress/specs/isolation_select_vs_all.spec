@@ -39,7 +39,7 @@ step "s1-ddl-add-column" { ALTER TABLE select_append ADD new_column int DEFAULT 
 step "s1-ddl-drop-column" { ALTER TABLE select_append DROP new_column; }
 step "s1-ddl-rename-column" { ALTER TABLE select_append RENAME data TO new_column; }
 step "s1-table-size" { SELECT citus_total_relation_size('select_append'); }
-step "s1-master-modify-multiple-shards" { SELECT master_modify_multiple_shards('DELETE FROM select_append;'); }
+step "s1-master-modify-multiple-shards" { DELETE FROM select_append; }
 step "s1-master-apply-delete-command" { SELECT master_apply_delete_command('DELETE FROM select_append WHERE id <= 4;'); }
 step "s1-master-drop-all-shards" { SELECT master_drop_all_shards('select_append'::regclass, 'public', 'append_copy'); }
 step "s1-create-non-distributed-table" { CREATE TABLE select_append(id integer, data text, int_data int); }
@@ -71,7 +71,7 @@ step "s2-ddl-add-column" { ALTER TABLE select_append ADD new_column int DEFAULT 
 step "s2-ddl-drop-column" { ALTER TABLE select_append DROP new_column; }
 step "s2-ddl-rename-column" { ALTER TABLE select_append RENAME data TO new_column; }
 step "s2-table-size" { SELECT citus_total_relation_size('select_append'); }
-step "s2-master-modify-multiple-shards" { SELECT master_modify_multiple_shards('DELETE FROM select_append;'); }
+step "s2-master-modify-multiple-shards" { DELETE FROM select_append; }
 step "s2-master-apply-delete-command" { SELECT master_apply_delete_command('DELETE FROM select_append WHERE id <= 4;'); }
 step "s2-master-drop-all-shards" { SELECT master_drop_all_shards('select_append'::regclass, 'public', 'append_copy'); }
 step "s2-distribute-table" { SELECT create_distributed_table('select_append', 'id', 'append'); }

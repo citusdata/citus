@@ -889,12 +889,6 @@ SELECT master_apply_delete_command('DELETE FROM reference_schema.reference_table
 -- cannot add shards
 SELECT master_create_empty_shard('reference_schema.reference_table_ddl');
 
--- master_modify_multiple_shards works, but, does it make sense to use at all?
-INSERT INTO reference_schema.reference_table_ddl (value_2, value_3) VALUES (7, 'aa');
-SELECT master_modify_multiple_shards('DELETE FROM reference_schema.reference_table_ddl WHERE value_2 = 7');
-INSERT INTO reference_schema.reference_table_ddl (value_2, value_3) VALUES (7, 'bb');
-SELECT master_modify_multiple_shards('DELETE FROM reference_schema.reference_table_ddl');
-
 -- get/update the statistics
 SELECT part_storage_type, part_key, part_replica_count, part_max_size,
            part_placement_policy
@@ -999,12 +993,6 @@ BEGIN;
 UPDATE reference_table_test SET value_1 = 10 WHERE value_1 = 2;
 COMMIT;
 SELECT * FROM reference_table_test;
-
--- DML+master_modify_multiple_shards is allowed
-BEGIN;
-INSERT INTO reference_table_test VALUES (2, 2.0, '2', '2016-12-02');
-SELECT master_modify_multiple_shards('DELETE FROM colocated_table_test');
-ROLLBACK;
 
 -- DDL+DML is allowed
 BEGIN;

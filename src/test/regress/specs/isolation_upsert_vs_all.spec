@@ -36,7 +36,7 @@ step "s1-ddl-add-column" { ALTER TABLE upsert_hash ADD new_column int DEFAULT 0;
 step "s1-ddl-drop-column" { ALTER TABLE upsert_hash DROP new_column; }
 step "s1-ddl-rename-column" { ALTER TABLE upsert_hash RENAME data TO new_column; }
 step "s1-table-size" { SELECT citus_total_relation_size('upsert_hash'); }
-step "s1-master-modify-multiple-shards" { SELECT master_modify_multiple_shards('DELETE FROM upsert_hash;'); }
+step "s1-master-modify-multiple-shards" { DELETE FROM upsert_hash; }
 step "s1-create-non-distributed-table" { CREATE TABLE upsert_hash(id integer PRIMARY KEY, data text); }
 step "s1-distribute-table" { SELECT create_distributed_table('upsert_hash', 'id'); }
 step "s1-select-count" { SELECT COUNT(*) FROM upsert_hash; }
@@ -59,7 +59,7 @@ step "s2-ddl-add-column" { ALTER TABLE upsert_hash ADD new_column int DEFAULT 0;
 step "s2-ddl-drop-column" { ALTER TABLE upsert_hash DROP new_column; }
 step "s2-ddl-rename-column" { ALTER TABLE upsert_hash RENAME data TO new_column; }
 step "s2-table-size" { SELECT citus_total_relation_size('upsert_hash'); }
-step "s2-master-modify-multiple-shards" { SELECT master_modify_multiple_shards('DELETE FROM upsert_hash;'); }
+step "s2-master-modify-multiple-shards" { DELETE FROM upsert_hash; }
 step "s2-distribute-table" { SELECT create_distributed_table('upsert_hash', 'id'); }
 step "s2-commit" { COMMIT; }
 

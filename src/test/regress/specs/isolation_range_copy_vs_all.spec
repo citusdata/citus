@@ -42,7 +42,7 @@ step "s1-ddl-drop-column" { ALTER TABLE range_copy DROP new_column; }
 step "s1-ddl-rename-column" { ALTER TABLE range_copy RENAME data TO new_column; }
 step "s1-ddl-unique-constraint" { ALTER TABLE range_copy ADD CONSTRAINT range_copy_unique UNIQUE(id); }
 step "s1-table-size" { SELECT citus_total_relation_size('range_copy'); }
-step "s1-master-modify-multiple-shards" { SELECT master_modify_multiple_shards('DELETE FROM range_copy;'); }
+step "s1-master-modify-multiple-shards" { DELETE FROM range_copy; }
 step "s1-master-apply-delete-command" { SELECT master_apply_delete_command('DELETE FROM range_copy WHERE id <= 4;'); }
 step "s1-master-drop-all-shards" { SELECT master_drop_all_shards('range_copy'::regclass, 'public', 'range_copy'); }
 step "s1-create-non-distributed-table" { CREATE TABLE range_copy(id integer, data text, int_data int); }
@@ -77,7 +77,7 @@ step "s2-ddl-add-column" { ALTER TABLE range_copy ADD new_column int DEFAULT 0; 
 step "s2-ddl-drop-column" { ALTER TABLE range_copy DROP new_column; }
 step "s2-ddl-rename-column" { ALTER TABLE range_copy RENAME data TO new_column; }
 step "s2-table-size" { SELECT citus_total_relation_size('range_copy'); }
-step "s2-master-modify-multiple-shards" { SELECT master_modify_multiple_shards('DELETE FROM range_copy;'); }
+step "s2-master-modify-multiple-shards" { DELETE FROM range_copy; }
 step "s2-master-apply-delete-command" { SELECT master_apply_delete_command('DELETE FROM range_copy WHERE id <= 4;'); }
 step "s2-master-drop-all-shards" { SELECT master_drop_all_shards('range_copy'::regclass, 'public', 'range_copy'); }
 step "s2-distribute-table" { SELECT create_distributed_table('range_copy', 'id', 'range'); }

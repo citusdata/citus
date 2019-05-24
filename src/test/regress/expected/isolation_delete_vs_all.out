@@ -230,29 +230,6 @@ restore_isolation_tester_func
 
                
 
-starting permutation: s1-initialize s1-begin s2-begin s1-delete s2-master-modify-multiple-shards s1-commit s2-commit s1-select-count
-create_distributed_table
-
-               
-step s1-initialize: COPY delete_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-step s1-begin: BEGIN;
-step s2-begin: BEGIN;
-step s1-delete: DELETE FROM delete_hash WHERE id = 4;
-step s2-master-modify-multiple-shards: SELECT master_modify_multiple_shards('DELETE FROM delete_hash;'); <waiting ...>
-step s1-commit: COMMIT;
-step s2-master-modify-multiple-shards: <... completed>
-master_modify_multiple_shards
-
-4              
-step s2-commit: COMMIT;
-step s1-select-count: SELECT COUNT(*) FROM delete_hash;
-count          
-
-0              
-restore_isolation_tester_func
-
-               
-
 starting permutation: s1-drop s1-create-non-distributed-table s1-initialize s1-begin s2-begin s1-delete s2-distribute-table s1-commit s2-commit s1-select-count
 create_distributed_table
 
@@ -462,29 +439,6 @@ step s1-select-count: SELECT COUNT(*) FROM delete_hash;
 count          
 
 4              
-restore_isolation_tester_func
-
-               
-
-starting permutation: s1-initialize s1-begin s2-begin s1-master-modify-multiple-shards s2-delete s1-commit s2-commit s1-select-count
-create_distributed_table
-
-               
-step s1-initialize: COPY delete_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-step s1-begin: BEGIN;
-step s2-begin: BEGIN;
-step s1-master-modify-multiple-shards: SELECT master_modify_multiple_shards('DELETE FROM delete_hash;');
-master_modify_multiple_shards
-
-5              
-step s2-delete: DELETE FROM delete_hash WHERE id = 4; <waiting ...>
-step s1-commit: COMMIT;
-step s2-delete: <... completed>
-step s2-commit: COMMIT;
-step s1-select-count: SELECT COUNT(*) FROM delete_hash;
-count          
-
-0              
 restore_isolation_tester_func
 
                

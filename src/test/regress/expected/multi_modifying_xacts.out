@@ -457,12 +457,7 @@ ROLLBACK;
 -- multi-shard operations can co-exist with DDL in a transactional way
 BEGIN;
 ALTER TABLE labs ADD COLUMN motto text;
-SELECT master_modify_multiple_shards('DELETE FROM labs');
- master_modify_multiple_shards 
--------------------------------
-                             8
-(1 row)
-
+DELETE FROM labs;
 ALTER TABLE labs ADD COLUMN score float;
 ROLLBACK;
 -- should have rolled everything back
@@ -1540,12 +1535,7 @@ ERROR:  cannot perform query with placements that were modified over multiple co
 END;
 -- make sure we can see cascading deletes
 BEGIN;
-SELECT master_modify_multiple_shards('DELETE FROM users');
- master_modify_multiple_shards 
--------------------------------
-                             2
-(1 row)
-
+DELETE FROM users;
 SELECT user_id FROM items JOIN itemgroups ON (item_group = gid) WHERE user_id = 1;
  user_id 
 ---------

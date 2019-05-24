@@ -475,14 +475,8 @@ SELECT * FROM partitioning_test_default ORDER BY 1, 2;
  22 | 04-02-2015
 (1 row)
 
--- test master_modify_multiple_shards
--- master_modify_multiple_shards on partitioned table
-SELECT master_modify_multiple_shards('UPDATE partitioning_test SET time = time + INTERVAL ''1 day''');
- master_modify_multiple_shards 
--------------------------------
-                            26
-(1 row)
-
+-- multi-shard UPDATE on partitioned table
+UPDATE partitioning_test SET time = time + INTERVAL '1 day';
 -- see rows are UPDATED
 SELECT * FROM partitioning_test ORDER BY 1;
  id |    time    
@@ -515,13 +509,8 @@ SELECT * FROM partitioning_test ORDER BY 1;
  22 | 04-03-2015
 (26 rows)
 
--- master_modify_multiple_shards on partition directly
-SELECT master_modify_multiple_shards('UPDATE partitioning_test_2009 SET time = time + INTERVAL ''1 day''');
- master_modify_multiple_shards 
--------------------------------
-                             6
-(1 row)
-
+-- multi-shard UPDATE on partition directly
+UPDATE partitioning_test_2009 SET time = time + INTERVAL '1 day';
 -- see rows are UPDATED
 SELECT * FROM partitioning_test_2009 ORDER BY 1;
  id |    time    
@@ -534,8 +523,8 @@ SELECT * FROM partitioning_test_2009 ORDER BY 1;
  19 | 02-04-2009
 (6 rows)
 
--- test master_modify_multiple_shards which fails in workers (updated value is outside of partition bounds)
-SELECT master_modify_multiple_shards('UPDATE partitioning_test_2009 SET time = time + INTERVAL ''6 month''');
+-- test multi-shard UPDATE which fails in workers (updated value is outside of partition bounds)
+UPDATE partitioning_test_2009 SET time = time + INTERVAL '6 month';
 ERROR:  new row for relation "partitioning_test_2009_1660005" violates partition constraint
 DETAIL:  Failing row contains (3, 2010-03-11).
 CONTEXT:  while executing command on localhost:57638
@@ -1396,22 +1385,19 @@ SELECT relation::regclass, locktype, mode FROM pg_locks WHERE relation::regclass
 (5 rows)
 
 COMMIT;
--- test locks on master_modify_multiple_shards
+-- test locks on multi-shard UPDATE
 BEGIN;
-SELECT master_modify_multiple_shards('UPDATE partitioning_locks SET time = ''2009-03-01''');
- master_modify_multiple_shards 
--------------------------------
-                             0
-(1 row)
-
+UPDATE partitioning_locks SET time = '2009-03-01';
 SELECT relation::regclass, locktype, mode FROM pg_locks WHERE relation::regclass::text LIKE 'partitioning_locks%' AND pid = pg_backend_pid() ORDER BY 1, 2, 3;
         relation         | locktype |       mode       
 -------------------------+----------+------------------
  partitioning_locks      | relation | AccessShareLock
  partitioning_locks      | relation | RowExclusiveLock
+ partitioning_locks_2009 | relation | AccessShareLock
  partitioning_locks_2009 | relation | RowExclusiveLock
+ partitioning_locks_2010 | relation | AccessShareLock
  partitioning_locks_2010 | relation | RowExclusiveLock
-(4 rows)
+(6 rows)
 
 COMMIT;
 -- test locks on DDL
@@ -1444,14 +1430,9 @@ SELECT relation::regclass, locktype, mode FROM pg_locks WHERE relation::regclass
 (8 rows)
 
 COMMIT;
--- test shard resource locks with master_modify_multiple_shards
+-- test shard resource locks with multi-shard UPDATE
 BEGIN;
-SELECT master_modify_multiple_shards('UPDATE partitioning_locks_2009 SET time = ''2009-03-01''');
- master_modify_multiple_shards 
--------------------------------
-                             0
-(1 row)
-
+UPDATE partitioning_locks_2009 SET time = '2009-03-01';
 -- see the locks on parent table
 SELECT
     logicalrelid,

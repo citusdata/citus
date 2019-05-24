@@ -53,11 +53,6 @@ ROLLBACK;
 
 SELECT count(*) FROM multi_shard_modify_test;
 
--- Check that master_modify_multiple_shards cannot be called with non-distributed tables
-CREATE TEMPORARY TABLE temporary_nondistributed_table (col_1 integer,col_2 text);
-INSERT INTO temporary_nondistributed_table VALUES (37, 'eren'), (31, 'onder');
-SELECT master_modify_multiple_shards('DELETE FROM temporary_nondistributed_table WHERE col_1 = 37');
-
 -- commands with volatile functions in their quals
 SELECT master_modify_multiple_shards('DELETE FROM multi_shard_modify_test WHERE t_key = (random() * 1000)');
 SELECT master_modify_multiple_shards('DELETE FROM multi_shard_modify_test WHERE t_value = (random() * 1000)');
@@ -125,7 +120,7 @@ SELECT t_name FROM multi_shard_modify_test WHERE t_value < 0;
 -- attempting to change the partition key is unsupported
 SELECT master_modify_multiple_shards('UPDATE multi_shard_modify_test SET t_key=3000 WHERE t_key < 10 ');
 
--- UPDATEs with a FROM clause are unsupported
+-- UPDATEs with a FROM clause are supported
 SELECT master_modify_multiple_shards('UPDATE multi_shard_modify_test SET t_name = ''FAIL'' FROM temp_nations WHERE multi_shard_modify_test.t_key = 3 AND multi_shard_modify_test.t_value = temp_nations.key AND temp_nations.name = ''dummy'' ');
 
 -- commands with a RETURNING clause are unsupported

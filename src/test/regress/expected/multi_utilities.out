@@ -71,12 +71,12 @@ EXECUTE sharded_query;
 SELECT master_apply_delete_command('DELETE FROM sharded_table WHERE id > 0');
 ERROR:  cannot delete from hash distributed table with this command
 DETAIL:  Delete statements on hash-partitioned tables are not supported with master_apply_delete_command.
-HINT:  Use master_modify_multiple_shards command instead.
+HINT:  Use the DELETE command instead.
 -- drop all shards
 SELECT master_apply_delete_command('DELETE FROM sharded_table');
 ERROR:  cannot delete from hash distributed table with this command
 DETAIL:  Delete statements on hash-partitioned tables are not supported with master_apply_delete_command.
-HINT:  Use master_modify_multiple_shards command instead.
+HINT:  Use the DELETE command instead.
 -- lock shard metadata: take some share locks and exclusive locks
 BEGIN;
 SELECT lock_shard_metadata(5, ARRAY[999001, 999002, 999002]);

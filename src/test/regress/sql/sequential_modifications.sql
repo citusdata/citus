@@ -207,13 +207,13 @@ SELECT create_distributed_table('multi_shard_modify_test', 't_key');
 -- with parallel modification mode, we should see #shards records
 SET citus.multi_shard_modify_mode TO 'parallel';
 SELECT recover_prepared_transactions();
-SELECT master_modify_multiple_shards('DELETE FROM multi_shard_modify_test');
+DELETE FROM multi_shard_modify_test;
 SELECT distributed_2PCs_are_equal_to_placement_count();
 
 -- with sequential modification mode, we should see #primary worker records
 SET citus.multi_shard_modify_mode TO 'sequential';
 SELECT recover_prepared_transactions();
-SELECT master_modify_multiple_shards('DELETE FROM multi_shard_modify_test');
+DELETE FROM multi_shard_modify_test;
 SELECT distributed_2PCs_are_equal_to_worker_count();
 
 -- one more realistic test with sequential inserts and truncate in the same tx
@@ -267,7 +267,7 @@ BEGIN;
     SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
     SELECT create_distributed_table('test_seq_multi_shard_update', 'a');
     INSERT INTO test_seq_multi_shard_update VALUES (0, 0), (1, 0), (2, 0), (3, 0), (4, 0);
-    SELECT master_modify_multiple_shards('DELETE FROM test_seq_multi_shard_update WHERE b < 2');
+    DELETE FROM test_seq_multi_shard_update WHERE b < 2;
 COMMIT;
 SELECT distributed_2PCs_are_equal_to_worker_count();
 DROP TABLE test_seq_multi_shard_update;

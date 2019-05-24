@@ -302,18 +302,18 @@ SET search_path TO test_schema_support;
 SELECT * FROM nation_hash  WHERE n_nationkey OPERATOR(===) 1;
 
 
--- test with master_modify_multiple_shards
+-- test with multi-shard DML
 SET search_path TO public;
-SELECT master_modify_multiple_shards('UPDATE test_schema_support.nation_hash SET n_regionkey = n_regionkey + 1');
+UPDATE test_schema_support.nation_hash SET n_regionkey = n_regionkey + 1;
 
---verify master_modify_multiple_shards
+--verify modification
 SELECT * FROM test_schema_support.nation_hash ORDER BY 1,2,3,4;
 
 --test with search_path is set
 SET search_path TO test_schema_support;
-SELECT master_modify_multiple_shards('UPDATE nation_hash SET n_regionkey = n_regionkey + 1');
+UPDATE nation_hash SET n_regionkey = n_regionkey + 1;
 
---verify master_modify_multiple_shards
+--verify modification
 SELECT * FROM nation_hash ORDER BY 1,2,3,4;
 
 

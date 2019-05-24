@@ -42,7 +42,7 @@ step "s1-ddl-drop-column" { ALTER TABLE reference_copy DROP new_column; }
 step "s1-ddl-rename-column" { ALTER TABLE reference_copy RENAME data TO new_column; }
 step "s1-ddl-unique-constraint" { ALTER TABLE reference_copy ADD CONSTRAINT reference_copy_unique UNIQUE(id); }
 step "s1-table-size" { SELECT citus_total_relation_size('reference_copy'); }
-step "s1-master-modify-multiple-shards" { SELECT master_modify_multiple_shards('DELETE FROM reference_copy;'); }
+step "s1-master-modify-multiple-shards" { DELETE FROM reference_copy; }
 step "s1-master-apply-delete-command" { SELECT master_apply_delete_command('DELETE FROM reference_copy WHERE id <= 4;'); }
 step "s1-create-non-distributed-table" { CREATE TABLE reference_copy(id integer, data text, int_data int); COPY reference_copy FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV; }
 step "s1-distribute-table" { SELECT create_reference_table('reference_copy'); }
@@ -75,7 +75,7 @@ step "s2-ddl-add-column" { ALTER TABLE reference_copy ADD new_column int DEFAULT
 step "s2-ddl-drop-column" { ALTER TABLE reference_copy DROP new_column; }
 step "s2-ddl-rename-column" { ALTER TABLE reference_copy RENAME data TO new_column; }
 step "s2-table-size" { SELECT citus_total_relation_size('reference_copy'); }
-step "s2-master-modify-multiple-shards" { SELECT master_modify_multiple_shards('DELETE FROM reference_copy;'); }
+step "s2-master-modify-multiple-shards" { DELETE FROM reference_copy; }
 step "s2-master-apply-delete-command" { SELECT master_apply_delete_command('DELETE FROM reference_copy WHERE id <= 4;'); }
 step "s2-master-drop-all-shards" { SELECT master_drop_all_shards('reference_copy'::regclass, 'public', 'reference_copy'); }
 step "s2-create-non-distributed-table" { CREATE TABLE reference_copy(id integer, data text, int_data int); COPY reference_copy FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV; }

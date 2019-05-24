@@ -381,12 +381,7 @@ SELECT recover_prepared_transactions();
                              0
 (1 row)
 
-SELECT master_modify_multiple_shards('DELETE FROM multi_shard_modify_test');
- master_modify_multiple_shards 
--------------------------------
-                             0
-(1 row)
-
+DELETE FROM multi_shard_modify_test;
 SELECT distributed_2PCs_are_equal_to_placement_count();
  distributed_2pcs_are_equal_to_placement_count 
 -----------------------------------------------
@@ -401,12 +396,7 @@ SELECT recover_prepared_transactions();
                              0
 (1 row)
 
-SELECT master_modify_multiple_shards('DELETE FROM multi_shard_modify_test');
- master_modify_multiple_shards 
--------------------------------
-                             0
-(1 row)
-
+DELETE FROM multi_shard_modify_test;
 SELECT distributed_2PCs_are_equal_to_worker_count();
  distributed_2pcs_are_equal_to_worker_count 
 --------------------------------------------
@@ -509,12 +499,7 @@ BEGIN;
 (1 row)
 
     INSERT INTO test_seq_multi_shard_update VALUES (0, 0), (1, 0), (2, 0), (3, 0), (4, 0);
-    SELECT master_modify_multiple_shards('DELETE FROM test_seq_multi_shard_update WHERE b < 2');
- master_modify_multiple_shards 
--------------------------------
-                             5
-(1 row)
-
+    DELETE FROM test_seq_multi_shard_update WHERE b < 2;
 COMMIT;
 SELECT distributed_2PCs_are_equal_to_worker_count();
  distributed_2pcs_are_equal_to_worker_count 

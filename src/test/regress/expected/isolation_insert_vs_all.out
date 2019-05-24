@@ -272,10 +272,7 @@ create_distributed_table
 step s1-initialize: COPY insert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s1-insert: INSERT INTO insert_hash VALUES(7, 'k');
-step s2-master-modify-multiple-shards: SELECT master_modify_multiple_shards('DELETE FROM insert_hash;');
-master_modify_multiple_shards
-
-5              
+step s2-master-modify-multiple-shards: DELETE FROM insert_hash;
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM insert_hash;
 count          
@@ -498,10 +495,7 @@ create_distributed_table
                
 step s1-initialize: COPY insert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
-step s1-master-modify-multiple-shards: SELECT master_modify_multiple_shards('DELETE FROM insert_hash;');
-master_modify_multiple_shards
-
-5              
+step s1-master-modify-multiple-shards: DELETE FROM insert_hash;
 step s2-insert: INSERT INTO insert_hash VALUES(7, 'k');
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM insert_hash;
@@ -745,10 +739,7 @@ create_distributed_table
 step s1-initialize: COPY insert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s1-insert-multi-row: INSERT INTO insert_hash VALUES(7, 'k'), (8, 'l'), (9, 'm');
-step s2-master-modify-multiple-shards: SELECT master_modify_multiple_shards('DELETE FROM insert_hash;');
-master_modify_multiple_shards
-
-5              
+step s2-master-modify-multiple-shards: DELETE FROM insert_hash;
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM insert_hash;
 count          
@@ -971,10 +962,7 @@ create_distributed_table
                
 step s1-initialize: COPY insert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
-step s1-master-modify-multiple-shards: SELECT master_modify_multiple_shards('DELETE FROM insert_hash;');
-master_modify_multiple_shards
-
-5              
+step s1-master-modify-multiple-shards: DELETE FROM insert_hash;
 step s2-insert-multi-row: INSERT INTO insert_hash VALUES(7, 'k'), (8, 'l'), (9, 'm');
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM insert_hash;

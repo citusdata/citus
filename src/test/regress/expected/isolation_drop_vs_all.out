@@ -182,24 +182,6 @@ restore_isolation_tester_func
 
                
 
-starting permutation: s1-initialize s1-begin s2-begin s1-drop s2-master-modify-multiple-shards s1-commit s2-commit s1-select-count
-create_distributed_table
-
-               
-step s1-initialize: COPY drop_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-step s1-begin: BEGIN;
-step s2-begin: BEGIN;
-step s1-drop: DROP TABLE drop_hash;
-step s2-master-modify-multiple-shards: SELECT master_modify_multiple_shards('DROP FROM drop_hash;');
-ERROR:  syntax error at or near "FROM"
-step s1-commit: COMMIT;
-step s2-commit: COMMIT;
-step s1-select-count: SELECT COUNT(*) FROM drop_hash;
-ERROR:  relation "drop_hash" does not exist
-restore_isolation_tester_func
-
-               
-
 starting permutation: s1-drop s1-create-non-distributed-table s1-initialize s1-begin s2-begin s1-drop s2-distribute-table s1-commit s2-commit s1-select-count
 create_distributed_table
 
@@ -349,24 +331,6 @@ step s1-table-size: SELECT citus_total_relation_size('drop_hash');
 citus_total_relation_size
 
 57344          
-step s2-drop: DROP TABLE drop_hash;
-step s1-commit: COMMIT;
-step s2-commit: COMMIT;
-step s1-select-count: SELECT COUNT(*) FROM drop_hash;
-ERROR:  relation "drop_hash" does not exist
-restore_isolation_tester_func
-
-               
-
-starting permutation: s1-initialize s1-begin s2-begin s1-master-modify-multiple-shards s2-drop s1-commit s2-commit s1-select-count
-create_distributed_table
-
-               
-step s1-initialize: COPY drop_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-step s1-begin: BEGIN;
-step s2-begin: BEGIN;
-step s1-master-modify-multiple-shards: SELECT master_modify_multiple_shards('DROP FROM drop_hash;');
-ERROR:  syntax error at or near "FROM"
 step s2-drop: DROP TABLE drop_hash;
 step s1-commit: COMMIT;
 step s2-commit: COMMIT;

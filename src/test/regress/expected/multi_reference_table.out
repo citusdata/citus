@@ -1398,21 +1398,6 @@ DETAIL:  Delete statements on reference tables are not supported.
 SELECT master_create_empty_shard('reference_schema.reference_table_ddl');
 ERROR:  relation "reference_schema.reference_table_ddl" is a reference table
 DETAIL:  We currently don't support creating shards on reference tables
--- master_modify_multiple_shards works, but, does it make sense to use at all?
-INSERT INTO reference_schema.reference_table_ddl (value_2, value_3) VALUES (7, 'aa');
-SELECT master_modify_multiple_shards('DELETE FROM reference_schema.reference_table_ddl WHERE value_2 = 7');
- master_modify_multiple_shards 
--------------------------------
-                             1
-(1 row)
-
-INSERT INTO reference_schema.reference_table_ddl (value_2, value_3) VALUES (7, 'bb');
-SELECT master_modify_multiple_shards('DELETE FROM reference_schema.reference_table_ddl');
- master_modify_multiple_shards 
--------------------------------
-                             1
-(1 row)
-
 -- get/update the statistics
 SELECT part_storage_type, part_key, part_replica_count, part_max_size,
            part_placement_policy
@@ -1426,7 +1411,7 @@ SELECT shardid AS a_shard_id  FROM pg_dist_shard WHERE logicalrelid = 'reference
 SELECT master_update_shard_statistics(:a_shard_id);
  master_update_shard_statistics 
 --------------------------------
-                          16384
+                           8192
 (1 row)
 
 CREATE TABLE append_reference_tmp_table (id INT);
@@ -1607,16 +1592,6 @@ SELECT * FROM reference_table_test;
       10 |       2 | 2       | Fri Dec 02 00:00:00 2016
 (1 row)
 
--- DML+master_modify_multiple_shards is allowed
-BEGIN;
-INSERT INTO reference_table_test VALUES (2, 2.0, '2', '2016-12-02');
-SELECT master_modify_multiple_shards('DELETE FROM colocated_table_test');
- master_modify_multiple_shards 
--------------------------------
-                             9
-(1 row)
-
-ROLLBACK;
 -- DDL+DML is allowed
 BEGIN;
 ALTER TABLE reference_table_test ADD COLUMN value_dummy INT;

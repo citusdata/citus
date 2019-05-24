@@ -162,7 +162,7 @@ master_apply_delete_command(PG_FUNCTION_ARGS)
 							   "command"),
 						errdetail("Delete statements on hash-partitioned tables "
 								  "are not supported with master_apply_delete_command."),
-						errhint("Use master_modify_multiple_shards command instead.")));
+						errhint("Use the DELETE command instead.")));
 	}
 	else if (partitionMethod == DISTRIBUTE_BY_NONE)
 	{
