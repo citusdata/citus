@@ -862,6 +862,30 @@ ConnectionAccessedDifferentPlacement(MultiConnection *connection,
 
 
 /*
+ * ConnectionModifiedPlacement returns true if any DML or DDL is executed over
+ * the connection on any placement/table.
+ */
+bool
+ConnectionModifiedPlacement(MultiConnection *connection)
+{
+	dlist_iter placementIter;
+
+	dlist_foreach(placementIter, &connection->referencedPlacements)
+	{
+		ConnectionReference *connectionReference =
+			dlist_container(ConnectionReference, connectionNode, placementIter.cur);
+
+		if (connectionReference->hadDDL || connectionReference->hadDML)
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+
+/*
  * ConnectionUsedForAnyPlacements returns true if the connection
  * has not been associated with any placement.
  */

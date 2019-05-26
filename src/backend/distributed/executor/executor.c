@@ -357,7 +357,7 @@ static bool StartPlacementExecutionOnSession(TaskPlacementExecution *placementEx
 											 WorkerSession *session);
 static List * PlacementAccessListForTask(Task *task, ShardPlacement *taskPlacement);
 static void ConnectionStateMachine(WorkerSession *session);
-static void Use2PCIfParticipatingNodesExpanded(WorkerSession *session);
+static bool TransactionModifiedDistributedTable();
 static void TransactionStateMachine(WorkerSession *session);
 static bool CheckConnectionReady(MultiConnection *connection);
 static bool ReceiveResults(WorkerSession *session, bool storeRows);
@@ -426,9 +426,6 @@ CitusExecScan(CustomScanState *node)
 		if (distributedPlan->operation != CMD_SELECT)
 		{
 			executorState->es_processed = execution->rowsProcessed;
-
-			/* prevent copying shards in same transaction */
-			XactModificationLevel = XACT_MODIFICATION_DATA;
 		}
 
 		FinishDistributedExecution(execution);
@@ -748,7 +745,12 @@ FinishDistributedExecution(DistributedExecution *execution)
 
 	UnsetCitusNoticeLevel();
 
-	if (distributedPlan->operation != CMD_SELECT)
+	/*
+	 * We need to explicitly check for isTransaction due to
+	 * citus.function_opens_transaction_block flag. When set to false, the flag
+	 * leads to edge cases, so we prevent it here.
+	 */
+	if (distributedPlan->operation != CMD_SELECT && execution->isTransaction)
 	{
 		/* prevent copying shards in same transaction */
 		XactModificationLevel = XACT_MODIFICATION_DATA;
@@ -1412,7 +1414,18 @@ ConnectionStateMachine(WorkerSession *session)
 			case MULTI_CONNECTION_CONNECTED:
 			{
 				/* if we're expanding the nodes in a transaction, use 2PC */
-				Use2PCIfParticipatingNodesExpanded(session);
+				if (MultiShardCommitProtocol == COMMIT_PROTOCOL_2PC &&
+					TransactionModifiedDistributedTable() &&
+					DistributedPlanModifiesDatabase(execution->plan) &&
+					!ConnectionModifiedPlacement(session->connection))
+				{
+					/*
+					 * We already did a modification, but not on the connection that we
+					 * just opened, which means we're now going to make modifications
+					 * over multiple connections. Activate 2PC!
+					 */
+					CoordinatedTransactionUse2PC();
+				}
 
 				/* connection is ready, run the transaction state machine */
 				TransactionStateMachine(session);
@@ -1487,7 +1500,7 @@ ConnectionStateMachine(WorkerSession *session)
 				 * relies on it and even if we're not inside a distributed transaction
 				 * we set the transaction state (e.g., REMOTE_TRANS_SENT_COMMAND).
 				 */
-				if (!execution->isTransaction)
+				if (!connection->remoteTransaction.beginSent)
 				{
 					connection->remoteTransaction.transactionState =
 						REMOTE_TRANS_INVALID;
@@ -1507,36 +1520,14 @@ ConnectionStateMachine(WorkerSession *session)
 
 
 /*
- * Use2PCIfParticipatingNodesExpanded ensures that the execution uses
- * 2PC if the transaction is expanded to access a new worker node.
+ * TransactionModifiedDistributedTable() returns true if the current transaction already
+ * executed a command which modified the at least one distributed table in the current
+ * transaction.
  */
-static void
-Use2PCIfParticipatingNodesExpanded(WorkerSession *session)
+static bool
+TransactionModifiedDistributedTable()
 {
-	DistributedExecution *execution = NULL;
-
-	if (DoesCoordinatedTransactionUse2PC() ||
-		MultiShardCommitProtocol != COMMIT_PROTOCOL_2PC)
-	{
-		/* already using or doesn't require 2PC */
-		return;
-	}
-
-	/*
-	 * If we're expanding the set nodes that participate in the distributed
-	 * transaction, conform to MultiShardCommitProtocol.
-	 */
-	execution = session->workerPool->distributedExecution;
-	if (execution->isTransaction &&
-		XactModificationLevel == XACT_MODIFICATION_DATA)
-	{
-		MultiConnection *connection = session->connection;
-		RemoteTransaction *transaction = &connection->remoteTransaction;
-		if (transaction->transactionState == REMOTE_TRANS_INVALID)
-		{
-			CoordinatedTransactionUse2PC();
-		}
-	}
+	return XactModificationLevel == XACT_MODIFICATION_DATA;
 }
 
 
@@ -1572,6 +1563,8 @@ TransactionStateMachine(WorkerSession *session)
 					StartRemoteTransactionBegin(connection);
 
 					transaction->transactionState = REMOTE_TRANS_CLEARING_RESULTS;
+
+					transaction->beginSent = true;
 				}
 				else
 				{
