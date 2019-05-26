@@ -335,6 +335,7 @@ static void StartDistributedExecution(DistributedExecution *execution);
 static void RunDistributedExecution(DistributedExecution *execution);
 static void FinishDistributedExecution(DistributedExecution *execution);
 
+static bool DistributedPlanModifiesDatabase(DistributedPlan *plan);
 static bool DistributedStatementRequiresRollback(DistributedPlan *distributedPlan);
 static void AssignTasksToConnections(DistributedExecution *execution);
 static void UnclaimAllSessionConnections(List *sessionList);
@@ -566,18 +567,14 @@ StartDistributedExecution(DistributedExecution *execution)
 				execution->errorOnAnyFailure = true;
 			}
 			else if (MultiShardCommitProtocol != COMMIT_PROTOCOL_2PC &&
-					 list_length(taskList) > 1)
+					 list_length(taskList) > 1 &&
+					 DistributedPlanModifiesDatabase(distributedPlan))
 			{
-				Task *initialTask = (Task *) linitial(taskList);
-
-				if (ModifyTask(initialTask->taskType))
-				{
-					/*
-					 * Even if we're not using 2PC, we prefer to error out
-					 * on any failures during multi shard modifications/DDLs.
-					 */
-					execution->errorOnAnyFailure = true;
-				}
+				/*
+				 * Even if we're not using 2PC, we prefer to error out
+				 * on any failures during multi shard modifications/DDLs.
+				 */
+				execution->errorOnAnyFailure = true;
 			}
 		}
 	}
@@ -600,6 +597,51 @@ StartDistributedExecution(DistributedExecution *execution)
 	}
 
 	AssignTasksToConnections(execution);
+}
+
+
+/*
+ *  DistributedPlanModifiesDatabase returns true if the plan modifies the data
+ *  or the schema.
+ */
+static bool
+DistributedPlanModifiesDatabase(DistributedPlan *plan)
+{
+	CmdType operation = plan->operation;
+	List *taskList = NIL;
+	Task *firstTask = NULL;
+
+	if (operation == CMD_INSERT || operation == CMD_UPDATE || operation == CMD_DELETE)
+	{
+		return true;
+	}
+
+	/*
+	 * If we cannot decide by only checking the operation, we should look closer
+	 * to the tasks.
+	 */
+	taskList = plan->workerJob->taskList;
+	if (list_length(taskList) < 1)
+	{
+		/* does this ever possible? */
+		return false;
+	}
+
+	firstTask = (Task *) linitial(taskList);
+	if (firstTask->taskType == DDL_TASK || firstTask->taskType == MODIFY_TASK)
+	{
+		return true;
+	}
+	else if (firstTask->taskType == ROUTER_TASK || firstTask->taskType == SQL_TASK)
+	{
+		/*
+		 * TODO: We currently do not execute modifying CTEs via ROUTER_TASK/SQL_TASK.
+		 * When we implement it, we should either not use the mentioned task types for
+		 * modifying CTEs detect them here.
+		 */
+	}
+
+	return false;
 }
 
 
@@ -2247,12 +2289,13 @@ static bool
 ShouldMarkPlacementsInvalidOnFailure(DistributedExecution *execution)
 {
 	DistributedPlan *distributedPlan = execution->plan;
-	CmdType operation = distributedPlan->operation;
 
-	if (operation == CMD_SELECT || execution->errorOnAnyFailure)
+	if (!DistributedPlanModifiesDatabase(distributedPlan) || execution->errorOnAnyFailure)
 	{
 		/*
-		 * Failures on SELECTs should never lead to invalid placement.
+		 * Failures that do not modify the database (e.g., mainly SELECTs) should
+		 * never lead to invalid placement.
+		 *
 		 * Failures that lead throwing error, no need to mark any placement
 		 * invalid.
 		 */

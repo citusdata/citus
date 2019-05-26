@@ -105,6 +105,7 @@ static void AcquireExecutorMultiShardLocks(List *taskList);
 static bool RequiresConsistentSnapshot(Task *task);
 static void RouterMultiModifyExecScan(CustomScanState *node);
 static void RouterSequentialModifyExecScan(CustomScanState *node);
+static bool ModifyTask(TaskType taskType);
 static bool SendQueryInSingleRowMode(MultiConnection *connection, char *query,
 									 ParamListInfo paramListInfo);
 static bool StoreQueryResult(CitusScanState *scanState, MultiConnection *connection, bool
@@ -845,11 +846,10 @@ TaskListRequires2PC(List *taskList)
  * ModifyTask returns true if the input task type modifies the
  * database such as DML, DDL and Vacuum Analyze.
  */
-bool
+static bool
 ModifyTask(TaskType taskType)
 {
-	if (taskType == MODIFY_TASK || taskType == DDL_TASK ||
-		taskType == VACUUM_ANALYZE_TASK)
+	if (taskType == MODIFY_TASK || taskType == DDL_TASK)
 	{
 		return true;
 	}
