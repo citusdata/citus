@@ -357,7 +357,7 @@ static bool StartPlacementExecutionOnSession(TaskPlacementExecution *placementEx
 											 WorkerSession *session);
 static List * PlacementAccessListForTask(Task *task, ShardPlacement *taskPlacement);
 static void ConnectionStateMachine(WorkerSession *session);
-static bool TransactionModifiedDistributedTable();
+static bool TransactionModifiedDistributedTable(DistributedExecution *execution);
 static void TransactionStateMachine(WorkerSession *session);
 static bool CheckConnectionReady(MultiConnection *connection);
 static bool ReceiveResults(WorkerSession *session, bool storeRows);
@@ -426,6 +426,9 @@ CitusExecScan(CustomScanState *node)
 		if (distributedPlan->operation != CMD_SELECT)
 		{
 			executorState->es_processed = execution->rowsProcessed;
+
+			/* prevent copying shards in same transaction */
+			XactModificationLevel = XACT_MODIFICATION_DATA;
 		}
 
 		FinishDistributedExecution(execution);
@@ -745,12 +748,7 @@ FinishDistributedExecution(DistributedExecution *execution)
 
 	UnsetCitusNoticeLevel();
 
-	/*
-	 * We need to explicitly check for isTransaction due to
-	 * citus.function_opens_transaction_block flag. When set to false, the flag
-	 * leads to edge cases, so we prevent it here.
-	 */
-	if (distributedPlan->operation != CMD_SELECT && execution->isTransaction)
+	if (distributedPlan->operation != CMD_SELECT)
 	{
 		/* prevent copying shards in same transaction */
 		XactModificationLevel = XACT_MODIFICATION_DATA;
@@ -1415,7 +1413,7 @@ ConnectionStateMachine(WorkerSession *session)
 			{
 				/* if we're expanding the nodes in a transaction, use 2PC */
 				if (MultiShardCommitProtocol == COMMIT_PROTOCOL_2PC &&
-					TransactionModifiedDistributedTable() &&
+					TransactionModifiedDistributedTable(execution) &&
 					DistributedPlanModifiesDatabase(execution->plan) &&
 					!ConnectionModifiedPlacement(session->connection))
 				{
@@ -1520,14 +1518,20 @@ ConnectionStateMachine(WorkerSession *session)
 
 
 /*
- * TransactionModifiedDistributedTable() returns true if the current transaction already
+ * TransactionModifiedDistributedTable returns true if the current transaction already
  * executed a command which modified the at least one distributed table in the current
  * transaction.
  */
 static bool
-TransactionModifiedDistributedTable()
+TransactionModifiedDistributedTable(DistributedExecution *execution)
 {
-	return XactModificationLevel == XACT_MODIFICATION_DATA;
+	/*
+	 * We need to explicitly check for isTransaction due to
+	 * citus.function_opens_transaction_block flag. When set to false, we
+	 * should not be pretending that we're in a coordinated transaction even
+	 * if XACT_MODIFICATION_DATA is set. That's why we implemented this workaround.
+	 */
+	return execution->isTransaction && XactModificationLevel == XACT_MODIFICATION_DATA;
 }
 
 
