@@ -96,8 +96,14 @@ typedef struct DistributedExecution
 	/* total number of tasks to execute */
 	int totalTaskCount;
 
-	/* number of tasks that still need to be executed */
-	int unfinishedTaskCount;
+	/* number of tasks that have been executed */
+	int finishedTaskCount;
+
+	/* number of tasks that have been scheduled for execution */
+	int scheduledTaskCount;
+
+	/* list of tasks that haven't been scheduled for execution yet */
+	List *unscheduledTaskList;
 
 	/*
 	 * Flag to indicate whether throwing errors on cancellation is
@@ -321,15 +327,12 @@ static DistributedExecution * CreateDistributedExecution(DistributedPlan *distri
 														 CitusScanState *scanState,
 														 int targetPoolSize);
 static void StartDistributedExecution(DistributedExecution *execution);
-static void RunDistributedExecution(DistributedExecution *execution);
-static bool ShouldRunTasksSequentially(DistributedExecution *execution);
-static DistributedPlan * CreateSingleTaskDistributedPlan(Task *task,
-														 DistributedPlan *originalPlan);
-static void SequentialRunDistributedExecution(DistributedExecution *execution);
+static void RunDistributedExecution(DistributedExecution *execution, bool sequentialExecution);
+static bool ShouldRunTasksSequentially(List *taskList);
 static void FinishDistributedExecution(DistributedExecution *execution);
-
+static void ScheduleTasks(DistributedExecution *execution, bool sequentialExecution);
 static bool DistributedStatementRequiresRollback(DistributedPlan *distributedPlan);
-static void AssignTasksToConnections(DistributedExecution *execution);
+static void AssignTasksToConnections(DistributedExecution *execution, List *taskList);
 static void UnclaimAllSessionConnections(List *sessionList);
 static bool ShouldForceOpeningConnection(TaskPlacementExecutionState
 										 placementExecutionState,
@@ -381,6 +384,9 @@ CitusExecScan(CustomScanState *node)
 		bool randomAccess = true;
 		bool interTransactions = false;
 		int targetPoolSize = DEFAULT_POOL_SIZE;
+		Job *job = distributedPlan->workerJob;
+		List *taskList = job->taskList;
+		bool sequentialExecution = ShouldRunTasksSequentially(taskList);
 
 		/* we are taking locks on partitions of partitioned tables */
 		LockPartitionsInRelationList(distributedPlan->relationIdList, AccessShareLock);
@@ -390,15 +396,12 @@ CitusExecScan(CustomScanState *node)
 		scanState->tuplestorestate =
 			tuplestore_begin_heap(randomAccess, interTransactions, work_mem);
 
-		if (MultiShardConnectionType == SEQUENTIAL_CONNECTION)
+		if (MultiShardConnectionType == SEQUENTIAL_CONNECTION || sequentialExecution)
 		{
 			targetPoolSize = 1;
 		}
 		else if (ForceMaxQueryParallelization)
 		{
-			Job *job = distributedPlan->workerJob;
-			List *taskList = job->taskList;
-
 			/* we might at most have the length of tasks pool size */
 			targetPoolSize = list_length(taskList);
 		}
@@ -408,14 +411,7 @@ CitusExecScan(CustomScanState *node)
 
 		StartDistributedExecution(execution);
 
-		if (ShouldRunTasksSequentially(execution))
-		{
-			SequentialRunDistributedExecution(execution);
-		}
-		else
-		{
-			RunDistributedExecution(execution);
-		}
+		RunDistributedExecution(execution, sequentialExecution);
 
 		if (distributedPlan->operation != CMD_SELECT)
 		{
@@ -446,13 +442,14 @@ ExecuteTaskList(CmdType operation, List *taskList, int targetPoolSize)
 {
 	DistributedPlan *distributedPlan = NULL;
 	DistributedExecution *execution = NULL;
+	bool sequential = ShouldRunTasksSequentially(taskList);
 
 	distributedPlan = CitusMakeNode(DistributedPlan);
 	distributedPlan->operation = operation;
 	distributedPlan->workerJob = CitusMakeNode(Job);
 	distributedPlan->workerJob->taskList = taskList;
 
-	if (MultiShardConnectionType == SEQUENTIAL_CONNECTION)
+	if (MultiShardConnectionType == SEQUENTIAL_CONNECTION || sequential)
 	{
 		targetPoolSize = 1;
 	}
@@ -461,7 +458,7 @@ ExecuteTaskList(CmdType operation, List *taskList, int targetPoolSize)
 										   targetPoolSize);
 
 	StartDistributedExecution(execution);
-	RunDistributedExecution(execution);
+	RunDistributedExecution(execution, sequential);
 	FinishDistributedExecution(execution);
 
 	return execution->rowsProcessed;
@@ -491,7 +488,9 @@ CreateDistributedExecution(DistributedPlan *distributedPlan,
 	execution->targetPoolSize = targetPoolSize;
 
 	execution->totalTaskCount = list_length(taskList);
-	execution->unfinishedTaskCount = list_length(taskList);
+	execution->finishedTaskCount = 0;
+	execution->scheduledTaskCount = 0;
+	execution->unscheduledTaskList = taskList;
 	execution->rowsProcessed = 0;
 
 	execution->raiseInterrupts = true;
@@ -666,11 +665,10 @@ UnclaimAllSessionConnections(List *sessionList)
  * the task placement executions to the assigned task queue of the connection.
  */
 static void
-AssignTasksToConnections(DistributedExecution *execution)
+AssignTasksToConnections(DistributedExecution *execution, List *taskList)
 {
 	DistributedPlan *distributedPlan = execution->plan;
 	Job *job = distributedPlan->workerJob;
-	List *taskList = job->taskList;
 	ListCell *taskCell = NULL;
 	ListCell *sessionCell = NULL;
 	CmdType operation = distributedPlan->operation;
@@ -1019,11 +1017,8 @@ FindOrCreateWorkerSession(WorkerPool *workerPool, MultiConnection *connection)
  * a distributed deadlock when the upserts touch the same rows.
  */
 static bool
-ShouldRunTasksSequentially(DistributedExecution *execution)
+ShouldRunTasksSequentially(List *taskList)
 {
-	DistributedPlan *plan = execution->plan;
-	Job *workerJob = plan->workerJob;
-	List *taskList = workerJob->taskList;
 	Task *initialTask = NULL;
 
 	if (list_length(taskList) < 2)
@@ -1045,124 +1040,18 @@ ShouldRunTasksSequentially(DistributedExecution *execution)
 
 
 /*
- * SequentialRunDistributedExecution gets a distributed execution and
- * executes each individual task in the exection sequentially, one
- * task at a time. See related function ShouldRunTasksSequentially()
- * for more detail on the definition of SequentialRun.
- */
-static void
-SequentialRunDistributedExecution(DistributedExecution *execution)
-{
-	DistributedPlan *distributedPlan = execution->plan;
-	Job *job = distributedPlan->workerJob;
-	List *taskList = job->taskList;
-
-	int unfinishedTaskCount = execution->unfinishedTaskCount;
-	int taskIndex = 0;
-
-	Assert(list_length(taskList) == unfinishedTaskCount);
-
-	for (taskIndex = 0; taskIndex < unfinishedTaskCount; ++taskIndex)
-	{
-		DistributedExecution *singleTaskExecution = palloc0(sizeof(DistributedExecution));
-
-		Task *taskToExecute = (Task *) list_nth(taskList, taskIndex);
-		DistributedPlan *singleTaskDistributedPlan =
-			CreateSingleTaskDistributedPlan(taskToExecute, distributedPlan);
-
-		/*
-		 * Use some fields as the same which are safe to and required to
-		 * share across single task executions.
-		 */
-		singleTaskExecution->raiseInterrupts = execution->raiseInterrupts;
-		singleTaskExecution->isTransaction = execution->isTransaction;
-		singleTaskExecution->executionStats = execution->executionStats;
-		singleTaskExecution->scanState = execution->scanState;
-
-		/* we only expect to use a single connection for a single task */
-		singleTaskExecution->targetPoolSize = 1;
-		singleTaskExecution->unfinishedTaskCount = 1;
-		singleTaskExecution->totalTaskCount = 1;
-
-		/* RunDistributedExecution() will set the sessions, be explict here */
-		singleTaskExecution->sessionList = NIL;
-		singleTaskExecution->waitEventSet = NULL;
-
-		/* we're going to execute a single task only */
-		singleTaskExecution->plan = singleTaskDistributedPlan;
-
-		/*
-		 * StartDistributedExecution is common for all the executions (including
-		 * the parent execution) and so we don't need to re-call it for each
-		 * individual singleTaskExecution execution here.
-		 */
-
-		/* simply call the regular execution function */
-		RunDistributedExecution(singleTaskExecution);
-
-		/* remember the total number of rows processed */
-		execution->rowsProcessed += singleTaskExecution->rowsProcessed;
-
-		FinishDistributedExecution(singleTaskExecution);
-	}
-}
-
-
-/*
- * CreateSingleTaskDistributedPlan gets a task and a distributed plan. The
- * function returns a newly allocated distributed plan where the new plan
- * contains only the task that is provided to the function along with
- * some of the necessary fields set.
- */
-static DistributedPlan *
-CreateSingleTaskDistributedPlan(Task *task, DistributedPlan *originalPlan)
-{
-	DistributedPlan *singleTaskPlan = palloc0(sizeof(DistributedPlan));
-
-	/* only copy the necessary parts for a single task execution */
-	singleTaskPlan->workerJob = copyObject(originalPlan->workerJob);
-	singleTaskPlan->workerJob->taskList = list_make1(task);
-
-	singleTaskPlan->operation = originalPlan->operation;
-	singleTaskPlan->hasReturning = originalPlan->hasReturning;
-	singleTaskPlan->targetRelationId = originalPlan->targetRelationId;
-
-	/* shallow copy of relationIdList is good enough */
-	singleTaskPlan->relationIdList = list_copy(originalPlan->relationIdList);
-
-	/*
-	 * We explicitly assert the fields to be NULL because we implemented the single task
-	 * plans for a restricted set of operations (see ShouldRunTasksSequentially()).
-	 * So, we don't expect other plans go through this code, unless implemented properly.
-	 */
-	Assert (singleTaskPlan->operation == CMD_INSERT);
-	Assert (singleTaskPlan->subPlanList == NIL);
-	Assert (singleTaskPlan->insertSelectSubquery == NULL);
-	Assert (singleTaskPlan->insertTargetList == NIL);
-	Assert (singleTaskPlan->intermediateResultIdPrefix == NULL);
-	Assert (singleTaskPlan->masterQuery == NULL);
-	Assert (list_length(originalPlan->workerJob->taskList) > 1);
-
-	return singleTaskPlan;
-}
-
-
-
-/*
  * RunDistributedExecution runs a distributed execution to completion. It
  * creates a wait event set to listen for events on any of the connections
  * and runs the connection state machine when a connection has an event.
  */
 void
-RunDistributedExecution(DistributedExecution *execution)
+RunDistributedExecution(DistributedExecution *execution, bool sequentialExecution)
 {
-	int workerCount = 0;
 	int maxWaitEventCount = 0;
+	int workerCount = 0;
 	WaitEvent *events = NULL;
 
-	AssignTasksToConnections(execution);
-
-	workerCount = list_length(execution->workerList);
+	workerCount = ActivePrimaryNodeCount();
 
 	/* additional 2 is for postmaster and latch */
 	maxWaitEventCount = execution->totalTaskCount * workerCount + 2;
@@ -1176,13 +1065,19 @@ RunDistributedExecution(DistributedExecution *execution)
 
 		execution->waitEventSet = BuildWaitEventSet(execution->sessionList);
 
-		while (execution->unfinishedTaskCount > 0 && !cancellationReceived)
+		while (execution->finishedTaskCount != execution->totalTaskCount &&
+			   !cancellationReceived)
 		{
 			long timeout = 1000;
 			int connectionCount = list_length(execution->sessionList);
 			int eventCount = 0;
 			int eventIndex = 0;
 			ListCell *workerCell = NULL;
+
+			if (execution->finishedTaskCount == execution->scheduledTaskCount)
+			{
+				ScheduleTasks(execution, sequentialExecution);
+			}
 
 			foreach(workerCell, execution->workerList)
 			{
@@ -1273,6 +1168,63 @@ RunDistributedExecution(DistributedExecution *execution)
 		PG_RE_THROW();
 	}
 	PG_END_TRY();
+}
+
+
+/*
+ * ScheduleTasks decides which tasks should be next executed and assigns them
+ * connections.
+ */
+static void
+ScheduleTasks(DistributedExecution *execution, bool sequentialExecution)
+{
+	List *taskListToSchedule = NIL;
+	ListCell *sessionCell = NULL;
+
+	/* first reset distributed execution's state from possibly previous scheduled tasks */
+	foreach(sessionCell, execution->sessionList)
+	{
+		WorkerSession *session = lfirst(sessionCell);
+		MultiConnection *connection = session->connection;
+		RemoteTransaction *transaction = &(connection->remoteTransaction);
+		RemoteTransactionState transactionState = transaction->transactionState;
+
+		UnclaimConnection(connection);
+
+		if (connection->connectionState == MULTI_CONNECTION_CONNECTING ||
+			connection->connectionState == MULTI_CONNECTION_FAILED)
+		{
+			/*
+			 * We want the MultiConnection go away and not used in
+			 * the subsequent executions.
+			 */
+			CloseConnection(connection);
+		}
+		else if (transactionState == REMOTE_TRANS_CLEARING_RESULTS)
+		{
+			/* TODO: should we keep this in the state machine? or cancel? */
+			ClearResults(connection, false);
+		}
+	}
+
+	execution->workerList = NIL;
+	execution->sessionList = NIL;
+
+	/* ... and then assign tasks to connections */
+	if (sequentialExecution)
+	{
+		taskListToSchedule = list_make1(linitial(execution->unscheduledTaskList));
+		execution->unscheduledTaskList = list_delete_first(execution->unscheduledTaskList);
+	}
+	else
+	{
+		taskListToSchedule = execution->unscheduledTaskList;
+		execution->unscheduledTaskList = NIL;
+	}
+
+	AssignTasksToConnections(execution, taskListToSchedule);
+	execution->scheduledTaskCount += list_length(taskListToSchedule);
+	execution->connectionSetChanged = true;
 }
 
 
@@ -2209,13 +2161,13 @@ PlacementExecutionDone(TaskPlacementExecution *placementExecution, bool succeede
 	executionState = GetTaskExecutionState(shardCommandExecution);
 	if (executionState == TASK_EXECUTION_FINISHED)
 	{
-		execution->unfinishedTaskCount--;
+		execution->finishedTaskCount++;
 		return;
 	}
 
 	if (executionState == TASK_EXECUTION_FAILED)
 	{
-		execution->unfinishedTaskCount--;
+		execution->finishedTaskCount++;
 		execution->failed = true;
 		return;
 	}
