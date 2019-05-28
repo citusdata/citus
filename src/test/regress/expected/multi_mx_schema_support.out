@@ -159,15 +159,15 @@ SELECT * FROM nation_hash  WHERE n_nationkey OPERATOR(===) 1;
            1 | ARGENTINA                 |           1 | al foxes promise slyly according to the regular accounts. bold requests alon
 (1 row)
 
-SELECT * FROM citus_mx_test_schema.nation_hash_collation_search_path;
+SELECT * FROM citus_mx_test_schema.nation_hash_collation_search_path ORDER BY 1;
  n_nationkey |          n_name           | n_regionkey |                                                  n_comment                                                  
 -------------+---------------------------+-------------+-------------------------------------------------------------------------------------------------------------
-           1 | ARGENTINA                 |           1 | al foxes promise slyly according to the regular accounts. bold requests alon
-           5 | ETHIOPIA                  |           0 | ven packages wake quickly. regu
            0 | ALGERIA                   |           0 | haggle. carefully final deposits detect slyly agai
+           1 | ARGENTINA                 |           1 | al foxes promise slyly according to the regular accounts. bold requests alon
+           2 | BRAZIL                    |           1 | y alongside of the pending deposits. carefully special packages are about the ironic forges. slyly special 
            3 | CANADA                    |           1 | eas hang ironic, silent packages. slyly regular packages are furiously over the tithes. fluffily bold
            4 | EGYPT                     |           4 | y above the carefully unusual theodolites. final dugouts are quickly across the furiously regular d
-           2 | BRAZIL                    |           1 | y alongside of the pending deposits. carefully special packages are about the ironic forges. slyly special 
+           5 | ETHIOPIA                  |           0 | ven packages wake quickly. regu
 (6 rows)
 
 SELECT n_comment FROM citus_mx_test_schema.nation_hash_collation_search_path ORDER BY n_comment COLLATE citus_mx_test_schema.english;

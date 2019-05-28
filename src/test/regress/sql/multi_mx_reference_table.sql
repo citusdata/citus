@@ -476,35 +476,41 @@ SELECT
 FROM 
 	reference_table_test, colocated_table_test
 WHERE 
-	colocated_table_test.value_1 = reference_table_test.value_1;
+	colocated_table_test.value_1 = reference_table_test.value_1
+ORDER BY 1;
 
 SELECT 
 	colocated_table_test.value_2
 FROM 
 	reference_table_test, colocated_table_test 
 WHERE 
-	colocated_table_test.value_2 = reference_table_test.value_2;
+	colocated_table_test.value_2 = reference_table_test.value_2
+ORDER BY 1;
 
 SELECT 
 	colocated_table_test.value_2
 FROM 
 	colocated_table_test, reference_table_test
 WHERE 
-	reference_table_test.value_1 = colocated_table_test.value_1;
+	reference_table_test.value_1 = colocated_table_test.value_1
+ORDER BY 1;
+
 
 SELECT 
 	colocated_table_test.value_2 
 FROM 
 	reference_table_test, colocated_table_test, colocated_table_test_2
 WHERE 
-	colocated_table_test.value_2 = reference_table_test.value_2;
+	colocated_table_test.value_2 = reference_table_test.value_2
+ORDER BY 1;
 
 SELECT 
 	colocated_table_test.value_2 
 FROM 
 	reference_table_test, colocated_table_test, colocated_table_test_2
 WHERE 
-	colocated_table_test.value_1 = colocated_table_test_2.value_1 AND colocated_table_test.value_2 = reference_table_test.value_2;
+	colocated_table_test.value_1 = colocated_table_test_2.value_1 AND colocated_table_test.value_2 = reference_table_test.value_2
+ORDER BY 1;
 
 SET citus.task_executor_type to "task-tracker";
 SELECT 
@@ -512,14 +518,16 @@ SELECT
 FROM 
 	reference_table_test, colocated_table_test, colocated_table_test_2
 WHERE 
-	colocated_table_test.value_2 = colocated_table_test_2.value_2 AND colocated_table_test.value_2 = reference_table_test.value_2;
+	colocated_table_test.value_2 = colocated_table_test_2.value_2 AND colocated_table_test.value_2 = reference_table_test.value_2
+ORDER BY 1;
 
 SELECT 
 	reference_table_test.value_2 
 FROM 
 	reference_table_test, colocated_table_test, colocated_table_test_2
 WHERE 
-	colocated_table_test.value_1 = reference_table_test.value_1 AND colocated_table_test_2.value_1 = reference_table_test.value_1;
+	colocated_table_test.value_1 = reference_table_test.value_1 AND colocated_table_test_2.value_1 = reference_table_test.value_1
+ORDER BY 1;
 
 
 SET client_min_messages TO NOTICE;

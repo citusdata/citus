@@ -844,24 +844,25 @@ HINT:  Set citus.enable_repartition_joins to on to enable repartitioning
 -- handled by real-time executor
 SELECT *
 	FROM articles_hash_mx
-	WHERE author_id >= 1 AND author_id <= 3;
+	WHERE author_id >= 1 AND author_id <= 3
+ORDER BY 1,2,3,4;
  id | author_id |    title     | word_count 
 ----+-----------+--------------+------------
   1 |         1 | arsenous     |       9572
+  2 |         2 | abducing     |      13642
   3 |         3 | asternal     |      10480
  11 |         1 | alamo        |       1347
+ 12 |         2 | archiblast   |      18185
  13 |         3 | aseyev       |       2255
  21 |         1 | arcading     |       5890
+ 22 |         2 | antipope     |       2728
  23 |         3 | abhorring    |       6799
  31 |         1 | athwartships |       7271
+ 32 |         2 | amazon       |      11342
  33 |         3 | autochrome   |       8180
  41 |         1 | aznavour     |      11814
- 43 |         3 | affixal      |      12723
-  2 |         2 | abducing     |      13642
- 12 |         2 | archiblast   |      18185
- 22 |         2 | antipope     |       2728
- 32 |         2 | amazon       |      11342
  42 |         2 | ausable      |      15885
+ 43 |         3 | affixal      |      12723
 (15 rows)
 
 SET citus.task_executor_type TO 'real-time';

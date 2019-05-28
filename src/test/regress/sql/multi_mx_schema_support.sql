@@ -86,7 +86,7 @@ SET search_path TO citus_mx_test_schema;
 SELECT * FROM nation_hash  WHERE n_nationkey OPERATOR(===) 1;
 
 
-SELECT * FROM citus_mx_test_schema.nation_hash_collation_search_path;
+SELECT * FROM citus_mx_test_schema.nation_hash_collation_search_path ORDER BY 1;
 SELECT n_comment FROM citus_mx_test_schema.nation_hash_collation_search_path ORDER BY n_comment COLLATE citus_mx_test_schema.english;
 
 SET search_path  TO citus_mx_test_schema;

@@ -354,7 +354,8 @@ SELECT * FROM
               users_table as "users"
             WHERE
               user_id > 2 and value_2 = 1) as foo_in ON (event_val_2 = user_id)) as foo LEFT JOIN
-           (SELECT user_id as user_user_id FROM users_table) as fooo ON (user_id = user_user_id)) as bar;
+           (SELECT user_id as user_user_id FROM users_table) as fooo ON (user_id = user_user_id)) as bar
+ORDER BY 1;
 
 -- the same query but this time reference table is in the outer part of the query
 SELECT * FROM
