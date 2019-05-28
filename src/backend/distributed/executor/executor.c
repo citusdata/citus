@@ -1411,20 +1411,6 @@ ConnectionStateMachine(WorkerSession *session)
 
 			case MULTI_CONNECTION_CONNECTED:
 			{
-				/* if we're expanding the nodes in a transaction, use 2PC */
-				if (MultiShardCommitProtocol == COMMIT_PROTOCOL_2PC &&
-					TransactionModifiedDistributedTable(execution) &&
-					DistributedPlanModifiesDatabase(execution->plan) &&
-					!ConnectionModifiedPlacement(session->connection))
-				{
-					/*
-					 * We already did a modification, but not on the connection that we
-					 * just opened, which means we're now going to make modifications
-					 * over multiple connections. Activate 2PC!
-					 */
-					CoordinatedTransactionUse2PC();
-				}
-
 				/* connection is ready, run the transaction state machine */
 				TransactionStateMachine(session);
 				break;
