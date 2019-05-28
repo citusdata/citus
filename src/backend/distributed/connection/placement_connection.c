@@ -870,6 +870,18 @@ ConnectionModifiedPlacement(MultiConnection *connection)
 {
 	dlist_iter placementIter;
 
+	if (connection->remoteTransaction.transactionState == REMOTE_TRANS_INVALID)
+	{
+		/*
+		 * When StartPlacementListConnection() is called, we set the
+		 * hadDDL/hadDML even before the actual command is sent to
+		 * remote nodes. And, if this function is called at that
+		 * point, we should not assume that the connection has already
+		 * done any modifications.
+		 */
+		return false;
+	}
+
 	dlist_foreach(placementIter, &connection->referencedPlacements)
 	{
 		ConnectionReference *connectionReference =
