@@ -379,7 +379,8 @@ SELECT *
 -- handled by real-time executor
 SELECT *
 	FROM articles_hash_mx
-	WHERE author_id >= 1 AND author_id <= 3;
+	WHERE author_id >= 1 AND author_id <= 3
+ORDER BY 1,2,3,4;
 
 SET citus.task_executor_type TO 'real-time';
 
