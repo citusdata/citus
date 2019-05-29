@@ -28,20 +28,20 @@ SELECT citus.mitmproxy('conn.onQuery(query="^SELECT").kill()');
 (1 row)
 
 SELECT * FROM select_test WHERE key = 2;
-WARNING:  server closed the connection unexpectedly
+WARNING:  connection error: localhost:9060
+DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
-CONTEXT:  while executing command on localhost:9060
  key |   value   
 -----+-----------
    2 | test data
 (1 row)
 
 SELECT * FROM select_test WHERE key = 2;
-WARNING:  server closed the connection unexpectedly
+WARNING:  connection error: localhost:9060
+DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
-CONTEXT:  while executing command on localhost:9060
  key |   value   
 -----+-----------
    2 | test data
@@ -57,10 +57,10 @@ SELECT citus.mitmproxy('conn.onQuery(query="^SELECT").kill()');
 BEGIN;
 INSERT INTO select_test VALUES (2, 'more data');
 SELECT * FROM select_test WHERE key = 2;
-WARNING:  server closed the connection unexpectedly
+WARNING:  connection error: localhost:9060
+DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
-CONTEXT:  while executing command on localhost:9060
  key |   value   
 -----+-----------
    2 | test data
@@ -69,6 +69,10 @@ CONTEXT:  while executing command on localhost:9060
 
 INSERT INTO select_test VALUES (2, 'even more data');
 SELECT * FROM select_test WHERE key = 2;
+WARNING:  connection error: localhost:9060
+DETAIL:  server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
  key |     value      
 -----+----------------
    2 | test data
@@ -77,12 +81,6 @@ SELECT * FROM select_test WHERE key = 2;
 (3 rows)
 
 COMMIT;
-WARNING:  connection not open
-CONTEXT:  while executing command on localhost:9060
-WARNING:  connection not open
-CONTEXT:  while executing command on localhost:9060
-WARNING:  connection not open
-CONTEXT:  while executing command on localhost:9060
 -- some clean up
 UPDATE pg_dist_shard_placement SET shardstate = 1
 WHERE shardid IN (
@@ -162,10 +160,10 @@ SELECT * FROM select_test WHERE key = 2;
 
 INSERT INTO select_test VALUES (2, 'even more data');
 SELECT * FROM select_test WHERE key = 2;
-WARNING:  server closed the connection unexpectedly
+WARNING:  connection error: localhost:9060
+DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
-CONTEXT:  while executing command on localhost:9060
  key |     value      
 -----+----------------
    2 | more data
@@ -173,12 +171,6 @@ CONTEXT:  while executing command on localhost:9060
 (2 rows)
 
 COMMIT;
-WARNING:  connection not open
-CONTEXT:  while executing command on localhost:9060
-WARNING:  connection not open
-CONTEXT:  while executing command on localhost:9060
-WARNING:  connection not open
-CONTEXT:  while executing command on localhost:9060
 SELECT citus.mitmproxy('conn.onQuery(query="^SELECT").after(2).kill()');
  mitmproxy 
 -----------
@@ -223,11 +215,10 @@ SELECT * FROM select_test WHERE key = 1;
 (1 row)
 
 SELECT * FROM select_test WHERE key = 1;
-WARNING:  server closed the connection unexpectedly
+ERROR:  connection error: localhost:9060
+DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
-CONTEXT:  while executing command on localhost:9060
-ERROR:  could not receive query results
 -- now the same test with query cancellation
 SELECT citus.mitmproxy('conn.onQuery(query="^SELECT").after(1).cancel(' ||  pg_backend_pid() || ')');
  mitmproxy 

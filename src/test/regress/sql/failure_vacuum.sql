@@ -23,6 +23,10 @@ SELECT citus.mitmproxy('conn.onQuery(query="^COMMIT").kill()');
 ANALYZE vacuum_test;
 
 -- ANALYZE transactions being critical is an open question, see #2430
+-- show that we marked as INVALID on COMMIT FAILURE
+SELECT shardid, shardstate FROM pg_dist_shard_placement where shardstate != 1 AND 
+shardid in ( SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'vacuum_test'::regclass);
+
 UPDATE pg_dist_shard_placement SET shardstate = 1
 WHERE shardid IN (
   SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'vacuum_test'::regclass
