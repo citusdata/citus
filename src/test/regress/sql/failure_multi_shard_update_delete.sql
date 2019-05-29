@@ -8,6 +8,9 @@ SET citus.shard_count TO 4;
 SET citus.next_shard_id TO 201000;
 SET citus.shard_replication_factor TO 1;
 
+-- do not cache any connections
+SET citus.max_cached_conns_per_worker TO 0;
+
 SELECT citus.mitmproxy('conn.allow()');
 
 CREATE TABLE t1(a int PRIMARY KEY, b int, c int);
