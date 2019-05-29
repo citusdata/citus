@@ -27,10 +27,10 @@ SELECT citus.mitmproxy('conn.onQuery(query="^INSERT").kill()');
 (1 row)
 
 INSERT INTO mod_test VALUES (2, 6);
-WARNING:  server closed the connection unexpectedly
+WARNING:  connection error: localhost:9060
+DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
-CONTEXT:  while executing command on localhost:9060
 SELECT COUNT(*) FROM mod_test WHERE key=2;
  count 
 -------
@@ -63,10 +63,10 @@ SELECT citus.mitmproxy('conn.onQuery(query="^UPDATE").kill()');
 (1 row)
 
 UPDATE mod_test SET value='ok' WHERE key=2 RETURNING key;
-WARNING:  server closed the connection unexpectedly
+WARNING:  connection error: localhost:9060
+DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
-CONTEXT:  while executing command on localhost:9060
  key 
 -----
    2
@@ -102,17 +102,11 @@ INSERT INTO mod_test VALUES (2, 6);
 INSERT INTO mod_test VALUES (2, 7);
 DELETE FROM mod_test WHERE key=2 AND value = '7';
 UPDATE mod_test SET value='ok' WHERE key=2;
-WARNING:  server closed the connection unexpectedly
+WARNING:  connection error: localhost:9060
+DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
-CONTEXT:  while executing command on localhost:9060
 COMMIT;
-WARNING:  connection not open
-CONTEXT:  while executing command on localhost:9060
-WARNING:  connection not open
-CONTEXT:  while executing command on localhost:9060
-WARNING:  connection not open
-CONTEXT:  while executing command on localhost:9060
 SELECT COUNT(*) FROM mod_test WHERE key=2;
  count 
 -------
