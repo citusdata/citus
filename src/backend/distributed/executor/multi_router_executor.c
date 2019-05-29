@@ -924,7 +924,7 @@ ExecuteSingleSelectTask(CitusScanState *scanState, Task *task)
 		bool queryOK = false;
 		bool dontFailOnError = false;
 		int64 currentAffectedTupleCount = 0;
-		int connectionFlags = SESSION_LIFESPAN;
+		int connectionFlags = 0;
 		List *placementAccessList = NIL;
 		MultiConnection *connection = NULL;
 
@@ -1262,7 +1262,7 @@ GetModifyConnections(Task *task, bool markCritical)
 	foreach(taskPlacementCell, taskPlacementList)
 	{
 		ShardPlacement *taskPlacement = (ShardPlacement *) lfirst(taskPlacementCell);
-		int connectionFlags = SESSION_LIFESPAN;
+		int connectionFlags = 0;
 		MultiConnection *multiConnection = NULL;
 		List *placementAccessList = NIL;
 		ShardPlacementAccess *placementModification = NULL;

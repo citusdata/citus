@@ -7,11 +7,20 @@ create_distributed_table
 step s1-begin: 
     BEGIN;
 
+    -- we don't want to see any entries related to 2PC recovery
+    SET citus.max_cached_conns_per_worker TO 0;
+
 step s2-begin: 
 	BEGIN;
+        
+        -- we don't want to see any entries related to 2PC recovery
+        SET citus.max_cached_conns_per_worker TO 0;
 
 step s3-begin: 
 	BEGIN;
+
+        -- we don't want to see any entries related to 2PC recovery
+        SET citus.max_cached_conns_per_worker TO 0;
 
 step s1-alter-table: 
     ALTER TABLE test_table ADD COLUMN x INT;
@@ -67,11 +76,20 @@ create_distributed_table
 step s1-begin: 
     BEGIN;
 
+    -- we don't want to see any entries related to 2PC recovery
+    SET citus.max_cached_conns_per_worker TO 0;
+
 step s2-begin: 
 	BEGIN;
+        
+        -- we don't want to see any entries related to 2PC recovery
+        SET citus.max_cached_conns_per_worker TO 0;
 
 step s3-begin: 
 	BEGIN;
+
+        -- we don't want to see any entries related to 2PC recovery
+        SET citus.max_cached_conns_per_worker TO 0;
 
 step s1-insert: 
  	INSERT INTO test_table VALUES (100, 100);
@@ -116,11 +134,20 @@ create_distributed_table
 step s1-begin: 
     BEGIN;
 
+    -- we don't want to see any entries related to 2PC recovery
+    SET citus.max_cached_conns_per_worker TO 0;
+
 step s2-begin: 
 	BEGIN;
+        
+        -- we don't want to see any entries related to 2PC recovery
+        SET citus.max_cached_conns_per_worker TO 0;
 
 step s3-begin: 
 	BEGIN;
+
+        -- we don't want to see any entries related to 2PC recovery
+        SET citus.max_cached_conns_per_worker TO 0;
 
 step s1-select: 
    SELECT count(*) FROM test_table;
@@ -171,11 +198,20 @@ create_distributed_table
 step s1-begin: 
     BEGIN;
 
+    -- we don't want to see any entries related to 2PC recovery
+    SET citus.max_cached_conns_per_worker TO 0;
+
 step s2-begin: 
 	BEGIN;
+        
+        -- we don't want to see any entries related to 2PC recovery
+        SET citus.max_cached_conns_per_worker TO 0;
 
 step s3-begin: 
 	BEGIN;
+
+        -- we don't want to see any entries related to 2PC recovery
+        SET citus.max_cached_conns_per_worker TO 0;
 
 step s1-select-router: 
    SELECT count(*) FROM test_table WHERE column1 = 55;
@@ -206,7 +242,6 @@ query          query_hostname query_hostport master_query_host_namemaster_query_
 SELECT gid FROM pg_prepared_xacts WHERE gid LIKE 'citus\_0\_%'localhost      57638                         0              idle           Client         ClientRead     postgres       regression     
 SELECT gid FROM pg_prepared_xacts WHERE gid LIKE 'citus\_0\_%'localhost      57637                         0              idle           Client         ClientRead     postgres       regression     
 SELECT count(*) AS count FROM public.test_table_105951 test_table WHERE (column1 OPERATOR(pg_catalog.=) 55)localhost      57638                         0              idle           Client         ClientRead     postgres       regression     
-COMMIT         localhost      57637                         0              idle           Client         ClientRead     postgres       regression     
 step s2-rollback: 
 	ROLLBACK;
 

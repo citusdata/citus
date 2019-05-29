@@ -32,6 +32,8 @@
 
 
 int NodeConnectionTimeout = 5000;
+int MaxCachedConnectionsPerWorker = 1;
+
 HTAB *ConnectionHash = NULL;
 HTAB *ConnParamsHash = NULL;
 MemoryContext ConnectionContext = NULL;
@@ -253,7 +255,6 @@ GetNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port, co
  *
  * If user or database are NULL, the current session's defaults are used. The
  * following flags influence connection establishment behaviour:
- * - SESSION_LIFESPAN - the connection should persist after transaction end
  * - FORCE_NEW_CONNECTION - a new connection is required
  *
  * The returned connection has only been initiated, not fully
@@ -322,11 +323,6 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port, 
 		connection = FindAvailableConnection(entry->connections, flags);
 		if (connection)
 		{
-			if (flags & SESSION_LIFESPAN)
-			{
-				connection->sessionLifespan = true;
-			}
-
 			return connection;
 		}
 	}
@@ -339,11 +335,6 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port, 
 
 	dlist_push_tail(entry->connections, &connection->connectionNode);
 	ResetShardPlacementAssociation(connection);
-
-	if (flags & SESSION_LIFESPAN)
-	{
-		connection->sessionLifespan = true;
-	}
 
 	return connection;
 }
@@ -374,8 +365,9 @@ FindAvailableConnection(dlist_head *connections, uint32 flags)
 
 
 /*
- * CloseNodeConnectionsAfterTransaction sets the sessionLifespan flag of the connections
- * to a particular node as false. This is mainly used when a worker leaves the cluster.
+ * CloseNodeConnectionsAfterTransaction sets the forceClose flag of the connections
+ * to a particular node as true such that the connections are no longer cached. This
+ * is mainly used when a worker leaves the cluster.
  */
 void
 CloseNodeConnectionsAfterTransaction(char *nodeName, int nodePort)
@@ -400,7 +392,7 @@ CloseNodeConnectionsAfterTransaction(char *nodeName, int nodePort)
 			MultiConnection *connection =
 				dlist_container(MultiConnection, connectionNode, iter.cur);
 
-			connection->sessionLifespan = false;
+			connection->forceCloseAtTransactionEnd = true;
 		}
 	}
 }
@@ -1002,6 +994,7 @@ static void
 AfterXactHostConnectionHandling(ConnectionHashEntry *entry, bool isCommit)
 {
 	dlist_mutable_iter iter;
+	int cachedConnectionCount = 0;
 
 	dlist_foreach_modify(iter, entry->connections)
 	{
@@ -1023,7 +1016,8 @@ AfterXactHostConnectionHandling(ConnectionHashEntry *entry, bool isCommit)
 		/*
 		 * Preserve session lifespan connections if they are still healthy.
 		 */
-		if (!connection->sessionLifespan ||
+		if (cachedConnectionCount >= MaxCachedConnectionsPerWorker ||
+			connection->forceCloseAtTransactionEnd ||
 			PQstatus(connection->pgConn) != CONNECTION_OK ||
 			!RemoteTransactionIdle(connection))
 		{
@@ -1044,6 +1038,8 @@ AfterXactHostConnectionHandling(ConnectionHashEntry *entry, bool isCommit)
 			connection->copyBytesWrittenSinceLastFlush = 0;
 
 			UnclaimConnection(connection);
+
+			cachedConnectionCount++;
 		}
 	}
 }

@@ -35,10 +35,7 @@ SELECT citus.mitmproxy('conn.kill()');
 (1 row)
 
 \copy test_table FROM STDIN DELIMITER ','
-ERROR:  connection error: localhost:9060
-DETAIL:  server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
+ERROR:  failure on connection marked as essential: localhost:9060
 CONTEXT:  COPY test_table, line 1: "1,2"
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 

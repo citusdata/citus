@@ -39,15 +39,12 @@ enum MultiConnectionMode
 	/* force establishment of a new connection */
 	FORCE_NEW_CONNECTION = 1 << 0,
 
-	/* mark returned connection as having session lifespan */
-	SESSION_LIFESPAN = 1 << 1,
+	FOR_DDL = 1 << 1,
 
-	FOR_DDL = 1 << 2,
-
-	FOR_DML = 1 << 3,
+	FOR_DML = 1 << 2,
 
 	/* open a connection per (co-located set of) placement(s) */
-	CONNECTION_PER_PLACEMENT = 1 << 4
+	CONNECTION_PER_PLACEMENT = 1 << 3
 };
 
 
@@ -65,8 +62,8 @@ typedef struct MultiConnection
 	/* underlying libpq connection */
 	struct pg_conn *pgConn;
 
-	/* is the connection intended to be kept after transaction end */
-	bool sessionLifespan;
+	/* force the connection to be closed at the end of the transaction */
+	bool forceCloseAtTransactionEnd;
 
 	/* is the connection currently in use, and shouldn't be used by anything else */
 	bool claimedExclusively;
@@ -129,6 +126,9 @@ typedef struct ConnParamsHashEntry
 
 /* maximum duration to wait for connection */
 extern int NodeConnectionTimeout;
+
+/* maximum number of connections to cache per worker per session */
+extern int MaxCachedConnectionsPerWorker;
 
 /* parameters used for outbound connections */
 extern char *NodeConninfo;

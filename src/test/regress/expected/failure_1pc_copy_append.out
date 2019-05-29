@@ -50,11 +50,9 @@ SELECT citus.dump_network_traffic();
  (0,worker,"[""RowDescription(fieldcount=2,fields=['F(name=min,tableoid=0,colattrnum=0,typoid=23,typlen=4,typmod=-1,format_code=0)', 'F(name=max,tableoid=0,colattrnum=0,typoid=23,typlen=4,typmod=-1,format_code=0)'])"", 'DataRow(columncount=2,columns=[""C(length=0,value=b\\'\\')"", ""C(length=1,value=b\\'0\\')""])', 'CommandComplete(command=SELECT 1)', 'ReadyForQuery(state=in_transaction_block)']")
  (0,coordinator,"['Query(query=COMMIT)']")
  (0,worker,"['CommandComplete(command=COMMIT)', 'ReadyForQuery(state=idle)']")
- (1,coordinator,"[initial message]")
- (1,worker,"['AuthenticationOk()', 'ParameterStatus(application_name=citus)', 'ParameterStatus(client_encoding=UTF8)', 'ParameterStatus(DateStyle=ISO, MDY)', 'ParameterStatus(integer_datetimes=on)', 'ParameterStatus(IntervalStyle=postgres)', 'ParameterStatus(is_superuser=on)', 'ParameterStatus(server_encoding=UTF8)', 'ParameterStatus(server_version=XXX)', 'ParameterStatus(session_authorization=postgres)', 'ParameterStatus(standard_conforming_strings=on)', 'ParameterStatus(TimeZone=XXX)', 'BackendKeyData(XXX)', 'ReadyForQuery(state=idle)']")
- (1,coordinator,"['Query(query=COPY (SELECT count(1) AS count FROM copy_test_100400 copy_test WHERE true) TO STDOUT)']")
- (1,worker,"[""CopyOutResponse(format=0,columncount=1,columns=['Anonymous(format=0)'])"", ""CopyData(data=b'4\\\\n')"", 'CopyDone()', 'CommandComplete(command=COPY 1)', 'ReadyForQuery(state=idle)']")
-(22 rows)
+ (0,coordinator,"['Query(query=COPY (SELECT count(1) AS count FROM copy_test_100400 copy_test WHERE true) TO STDOUT)']")
+ (0,worker,"[""CopyOutResponse(format=0,columncount=1,columns=['Anonymous(format=0)'])"", ""CopyData(data=b'4\\\\n')"", 'CopyDone()', 'CommandComplete(command=COPY 1)', 'ReadyForQuery(state=idle)']")
+(20 rows)
 
 ---- all of the following tests test behavior with 2 shard placements ----
 SHOW citus.shard_replication_factor;

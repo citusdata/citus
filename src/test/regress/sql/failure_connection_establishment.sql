@@ -12,6 +12,7 @@ CREATE SCHEMA fail_connect;
 SET search_path TO 'fail_connect';
 
 SET citus.shard_count TO 4;
+SET citus.max_cached_conns_per_worker TO 0;
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1450000;
 ALTER SEQUENCE pg_catalog.pg_dist_placement_placementid_seq RESTART 1450000;
 
