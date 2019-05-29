@@ -44,10 +44,10 @@ SELECT citus.mitmproxy('conn.onQuery(query="^INSERT INTO insert_select_pushdown"
 (1 row)
 
 INSERT INTO events_summary SELECT user_id, event_id, count(*) FROM events_table GROUP BY 1,2;
-ERROR:  server closed the connection unexpectedly
+ERROR:  connection error: localhost:9060
+DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
-CONTEXT:  while executing command on localhost:9060
 --verify nothing is modified
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
@@ -98,10 +98,10 @@ SELECT citus.mitmproxy('conn.onQuery(query="^INSERT INTO insert_select_pushdown"
 (1 row)
 
 INSERT INTO events_table SELECT * FROM events_table;
-ERROR:  server closed the connection unexpectedly
+ERROR:  connection error: localhost:9060
+DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
-CONTEXT:  while executing command on localhost:9060
 --verify nothing is modified
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
