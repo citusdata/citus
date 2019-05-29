@@ -120,6 +120,18 @@ INSERT INTO test_recovery_single VALUES ('hello-2');
 COMMIT;
 SELECT count(*) FROM pg_dist_transaction;
 
+SELECT recover_prepared_transactions();
+
+-- the same test with citus.force_max_query_parallelization=off
+-- should be fine as well
+SET citus.force_max_query_parallelization TO OFF;
+BEGIN;
+INSERT INTO test_recovery_single VALUES ('hello-0');
+INSERT INTO test_recovery_single VALUES ('hello-2');
+COMMIT;
+SELECT count(*) FROM pg_dist_transaction;
+
+
 -- Test whether auto-recovery runs
 ALTER SYSTEM SET citus.recover_2pc_interval TO 10;
 SELECT pg_reload_conf();
