@@ -1,5 +1,8 @@
 SELECT citus.mitmproxy('conn.allow()');
 
+-- do not cache any connections
+SET citus.max_cached_conns_per_worker TO 0;
+
 SET citus.shard_count = 1;
 SET citus.shard_replication_factor = 2; -- one shard per worker
 SET citus.multi_shard_commit_protocol TO '1pc';
