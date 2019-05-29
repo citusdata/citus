@@ -1168,7 +1168,7 @@ ManageWorkerPool(WorkerPool *workerPool)
 		MultiConnection *connection = NULL;
 
 		/* experimental: just to see the perf benefits of caching connections */
-		int connectionFlags = SESSION_LIFESPAN;
+		int connectionFlags = 0;
 
 		/* open a new connection to the worker */
 		connection = StartNodeUserDatabaseConnection(connectionFlags,
