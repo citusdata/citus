@@ -105,7 +105,6 @@ static void AcquireExecutorMultiShardLocks(List *taskList);
 static bool RequiresConsistentSnapshot(Task *task);
 static void RouterMultiModifyExecScan(CustomScanState *node);
 static void RouterSequentialModifyExecScan(CustomScanState *node);
-static bool ModifyTask(TaskType taskType);
 static bool SendQueryInSingleRowMode(MultiConnection *connection, char *query,
 									 ParamListInfo paramListInfo);
 static bool StoreQueryResult(CitusScanState *scanState, MultiConnection *connection, bool
@@ -823,7 +822,7 @@ TaskListRequires2PC(List *taskList)
 	}
 
 	multipleTasks = list_length(taskList) > 1;
-	if (ModifyTask(task->taskType) &&
+	if (!ReadOnlyTask(task->taskType) &&
 		multipleTasks && MultiShardCommitProtocol == COMMIT_PROTOCOL_2PC)
 	{
 		return true;
@@ -843,13 +842,13 @@ TaskListRequires2PC(List *taskList)
 
 
 /*
- * ModifyTask returns true if the input task type modifies the
- * database such as DML, DDL and Vacuum Analyze.
+ * ReadOnlyTask returns true if the input task does a read-only operation
+ * on the database.
  */
-static bool
-ModifyTask(TaskType taskType)
+bool
+ReadOnlyTask(TaskType taskType)
 {
-	if (taskType == MODIFY_TASK || taskType == DDL_TASK)
+	if (taskType == ROUTER_TASK || taskType == SQL_TASK)
 	{
 		return true;
 	}
