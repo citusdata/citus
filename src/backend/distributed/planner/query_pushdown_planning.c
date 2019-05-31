@@ -143,6 +143,19 @@ ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery)
 	}
 
 	/*
+	 * Original query may not have an outer join while rewritten query does.
+	 * We should push down in this case.
+	 * An example of this is https://github.com/citusdata/citus/issues/2739
+	 * where postgres pulls-up the outer-join in the subquery.
+	 */
+	if (FindNodeCheck((Node *) rewrittenQuery->jointree, IsOuterJoinExpr))
+	{
+		/* Assert what _should_ be only situation this occurs in. */
+		Assert(JoinTreeContainsSubquery(originalQuery));
+		return true;
+	}
+
+	/*
 	 * Some unsupported join clauses in logical planner
 	 * may be supported by subquery pushdown planner.
 	 */

@@ -314,6 +314,17 @@ SELECT DISTINCT ON (t1.user_id) t1.user_id, t2.value_1, t2.value_2, t2.value_3
  ORDER BY 1 DESC, 2 DESC, 3 DESC, 4 DESC 
  LIMIT 5;
 
+-- outer joins as subqueries should work
+-- https://github.com/citusdata/citus/issues/2739
+SELECT user_id, value_1, event_type
+FROM (
+	SELECT a.user_id, a.value_1, b.event_type
+	FROM users_table a
+	LEFT JOIN events_table b ON a.user_id = b.user_id
+) lo
+ORDER BY 1, 2, 3
+LIMIT 5;
+
 -- inner joins on reference tables with functions works
 SELECT DISTINCT ON (t1.user_id) t1.user_id, t2.value_1, t2.value_2, t2.value_3
 FROM events_table t1
