@@ -1489,7 +1489,7 @@ ManageWorkerPool(WorkerPool *workerPool)
 		 * Ensure that subsequent calls to StartNodeUserDatabaseConnection get a
 		 * different connection.
 		 */
-		connection->claimedExclusively = true;
+		ClaimConnectionExclusively(connection);
 
 		/* create a session for the connection */
 		session = FindOrCreateWorkerSession(workerPool, connection);

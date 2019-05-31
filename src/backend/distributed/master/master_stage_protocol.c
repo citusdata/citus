@@ -61,6 +61,9 @@
 static bool WorkerShardStats(ShardPlacement *placement, Oid relationId,
 							 char *shardName, uint64 *shardSize,
 							 text **shardMinValue, text **shardMaxValue);
+static List * WorkerCreateShardCommandList(Oid relationId, int shardIndex,
+										   uint64 shardId, List *ddlCommandList,
+				  						   List *foreignConstraintCommandList);
 
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(master_create_empty_shard);
@@ -484,70 +487,39 @@ void
 CreateShardsOnWorkers(Oid distributedRelationId, List *shardPlacements,
 					  bool useExclusiveConnection, bool colocatedShard)
 {
-	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(distributedRelationId);
-
 	bool includeSequenceDefaults = false;
 	List *ddlCommandList = GetTableDDLEvents(distributedRelationId,
 											 includeSequenceDefaults);
 	List *foreignConstraintCommandList = GetTableForeignConstraintCommands(
 		distributedRelationId);
-	List *claimedConnectionList = NIL;
-	ListCell *connectionCell = NULL;
 	ListCell *shardPlacementCell = NULL;
-	int connectionFlags = FOR_DDL;
+	int poolSize = DEFAULT_POOL_SIZE;
+
+	List *taskList = NIL;
+	int taskId = 1;
 	bool partitionTable = PartitionTable(distributedRelationId);
-
-	if (useExclusiveConnection)
-	{
-		connectionFlags |= CONNECTION_PER_PLACEMENT;
-	}
-
-
-	BeginOrContinueCoordinatedTransaction();
-
-	if (MultiShardCommitProtocol == COMMIT_PROTOCOL_2PC ||
-		cacheEntry->replicationModel == REPLICATION_MODEL_2PC)
-	{
-		CoordinatedTransactionUse2PC();
-	}
-
-	/* mark parallel relation accesses before opening connections */
-	if (ShouldRecordRelationAccess() && useExclusiveConnection)
-	{
-		RecordParallelDDLAccess(distributedRelationId);
-
-		/* we should mark the parent as well */
-		if (partitionTable)
-		{
-			Oid parentRelationId = PartitionParentOid(distributedRelationId);
-			RecordParallelDDLAccess(parentRelationId);
-		}
-	}
 
 	foreach(shardPlacementCell, shardPlacements)
 	{
 		ShardPlacement *shardPlacement = (ShardPlacement *) lfirst(shardPlacementCell);
+		Task *task = NULL;
 		uint64 shardId = shardPlacement->shardId;
 		ShardInterval *shardInterval = LoadShardInterval(shardId);
-		MultiConnection *connection = NULL;
 		int shardIndex = -1;
+		List *commands = NIL;
+		ListCell *commandCell = NULL;
+		StringInfo commandsString = makeStringInfo();
+		List *relationShardList = NIL;
 
 		if (colocatedShard)
 		{
 			shardIndex = ShardIndex(shardInterval);
 		}
 
-		/*
-		 * For partitions, make sure that we mark the parent table relation access
-		 * with DDL. This is only important for parallel relation access in transaction
-		 * blocks, thus check useExclusiveConnection and transaction block as well.
-		 */
-		if (ShouldRecordRelationAccess() && useExclusiveConnection && partitionTable)
+		if (partitionTable)
 		{
 			RelationShard *parentRelationShard = CitusMakeNode(RelationShard);
 			RelationShard *partitionRelationShard = CitusMakeNode(RelationShard);
-			List *relationShardList = NIL;
-			List *placementAccessList = NIL;
 
 			parentRelationShard->relationId = PartitionParentOid(distributedRelationId);
 			parentRelationShard->shardId =
@@ -556,41 +528,35 @@ CreateShardsOnWorkers(Oid distributedRelationId, List *shardPlacements,
 			partitionRelationShard->shardId = shardId;
 
 			relationShardList = list_make2(parentRelationShard, partitionRelationShard);
-			placementAccessList = BuildPlacementDDLList(shardPlacement->groupId,
-														relationShardList);
-
-			connection = GetPlacementListConnection(connectionFlags, placementAccessList,
-													NULL);
 		}
-		else
+
+		commands = WorkerCreateShardCommandList(distributedRelationId, shardIndex,
+												shardId, ddlCommandList,
+												foreignConstraintCommandList);
+		foreach(commandCell, commands)
 		{
-			connection = GetPlacementConnection(connectionFlags, shardPlacement,
-												NULL);
+			const char *command = lfirst(commandCell);
+			appendStringInfoString(commandsString, command);
+			appendStringInfoString(commandsString, ";");
 		}
 
-		if (useExclusiveConnection)
-		{
-			ClaimConnectionExclusively(connection);
-			claimedConnectionList = lappend(claimedConnectionList, connection);
-		}
+		task = CitusMakeNode(Task);
+		task->jobId = INVALID_JOB_ID;
+		task->taskId = taskId++;
+		task->taskType = DDL_TASK;
+		task->queryString = commandsString->data;
+		task->replicationModel = REPLICATION_MODEL_INVALID;
+		task->dependedTaskList = NULL;
+		task->anchorShardId = shardId;
+		task->relationShardList = relationShardList;
+		task->taskPlacementList = list_make1(shardPlacement);
 
-		RemoteTransactionBeginIfNecessary(connection);
-		MarkRemoteTransactionCritical(connection);
-
-		WorkerCreateShard(distributedRelationId, shardIndex, shardId,
-						  ddlCommandList, foreignConstraintCommandList, connection);
+		taskList = lappend(taskList, task);
 	}
 
-	/*
-	 * We need to unclaim all connections to make them usable again for the copy
-	 * command, otherwise copy going to open new connections to placements and
-	 * can not see uncommitted changes.
-	 */
-	foreach(connectionCell, claimedConnectionList)
-	{
-		MultiConnection *connection = (MultiConnection *) lfirst(connectionCell);
-		UnclaimConnection(connection);
-	}
+	poolSize = InCoordinatedTransaction() ? DEFAULT_POOL_SIZE : 1;
+
+	ExecuteTaskList(CMD_UTILITY, taskList, poolSize);
 }
 
 
@@ -603,6 +569,23 @@ void
 WorkerCreateShard(Oid relationId, int shardIndex, uint64 shardId, List *ddlCommandList,
 				  List *foreignConstraintCommandList, MultiConnection *connection)
 {
+	ListCell *commandCell = NULL;
+	List *commandList =
+		WorkerCreateShardCommandList(relationId, shardIndex, shardId, ddlCommandList,
+									 foreignConstraintCommandList);
+	
+	foreach(commandCell, commandList)
+	{
+		const char *command = lfirst(commandCell);
+		ExecuteCriticalRemoteCommand(connection, command);
+	}
+}
+
+static List *
+WorkerCreateShardCommandList(Oid relationId, int shardIndex, uint64 shardId, List *ddlCommandList,
+				  			 List *foreignConstraintCommandList)
+{
+	List *commandList = NIL;
 	Oid schemaId = get_rel_namespace(relationId);
 	char *schemaName = get_namespace_name(schemaId);
 	char *escapedSchemaName = quote_literal_cstr(schemaName);
@@ -627,7 +610,7 @@ WorkerCreateShard(Oid relationId, int shardIndex, uint64 shardId, List *ddlComma
 							 escapedDDLCommand);
 		}
 
-		ExecuteCriticalRemoteCommand(connection, applyDDLCommand->data);
+		commandList = lappend(commandList, applyDDLCommand->data);
 	}
 
 	foreach(foreignConstraintCommandCell, foreignConstraintCommandList)
@@ -683,8 +666,7 @@ WorkerCreateShard(Oid relationId, int shardIndex, uint64 shardId, List *ddlComma
 						 WORKER_APPLY_INTER_SHARD_DDL_COMMAND, shardId, escapedSchemaName,
 						 referencedShardId, escapedReferencedSchemaName, escapedCommand);
 
-
-		ExecuteCriticalRemoteCommand(connection, applyForeignConstraintCommand->data);
+		commandList = lappend(commandList, applyForeignConstraintCommand->data);
 	}
 
 	/*
@@ -695,8 +677,11 @@ WorkerCreateShard(Oid relationId, int shardIndex, uint64 shardId, List *ddlComma
 	{
 		ShardInterval *shardInterval = LoadShardInterval(shardId);
 		char *attachPartitionCommand = GenerateAttachShardPartitionCommand(shardInterval);
-		ExecuteCriticalRemoteCommand(connection, attachPartitionCommand);
+		
+		commandList = lappend(commandList, attachPartitionCommand);
 	}
+
+	return commandList;
 }
 
 
