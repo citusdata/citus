@@ -67,7 +67,6 @@ typedef struct MultiConnectionPollState
 static bool MultiConnectionStatePoll(MultiConnectionPollState *connectionState);
 static WaitEventSet * WaitEventSetFromMultiConnectionStates(List *connections,
 															int *waitCount);
-static long DeadlineTimestampTzToTimeout(TimestampTz deadline);
 static void CloseNotReadyMultiConnectionStates(List *connectionStates);
 static uint32 MultiConnectionStateEventMask(MultiConnectionPollState *connectionState);
 
@@ -803,7 +802,7 @@ FinishConnectionListEstablishment(List *multiConnectionList)
  * before the deadline provided as an argument will be reached. The outcome can be used to
  * pass to the Wait of an EventSet to make sure it returns after the timeout has passed.
  */
-static long
+long
 DeadlineTimestampTzToTimeout(TimestampTz deadline)
 {
 	long secs = 0;
