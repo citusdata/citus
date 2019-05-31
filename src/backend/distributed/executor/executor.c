@@ -2229,7 +2229,7 @@ PlacementExecutionDone(TaskPlacementExecution *placementExecution, bool succeede
 
 	/* determine the outcome of the overall task */
 	executionState = GetTaskExecutionState(shardCommandExecution);
-	if (executionState == TASK_EXECUTION_FINISHED)
+	if (succeeded && executionState == TASK_EXECUTION_FINISHED)
 	{
 		execution->unfinishedTaskCount--;
 		return;
