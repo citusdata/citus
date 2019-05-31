@@ -755,8 +755,6 @@ AssignTasksToConnections(DistributedExecution *execution)
 
 			if (connection != NULL)
 			{
-				RemoteTransaction *transaction = &(connection->remoteTransaction);
-
 				/*
 				 * Note: We may get the same connection for multiple task placements.
 				 * FindOrCreateWorkerSession ensures that we only have one session per
@@ -785,13 +783,6 @@ AssignTasksToConnections(DistributedExecution *execution)
 				/* always poll the connection in the first round */
 				connection->waitFlags = WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE;
 				execution->waitFlagsChanged = true;
-
-				/* keep track of how many connections are ready */
-				transaction = &(connection->remoteTransaction);
-				if (transaction->transactionState == REMOTE_TRANS_STARTED)
-				{
-					workerPool->idleConnectionCount++;
-				}
 			}
 			else
 			{
@@ -987,6 +978,13 @@ FindOrCreateWorkerSession(WorkerPool *workerPool, MultiConnection *connection)
 	dlist_init(&session->pendingTaskQueue);
 	dlist_init(&session->readyTaskQueue);
 
+	/* keep track of how many connections are ready */
+	if (connection->connectionState == MULTI_CONNECTION_CONNECTED)
+	{
+		workerPool->activeConnectionCount++;
+		workerPool->idleConnectionCount++;
+	}
+
 	workerPool->sessionList = lappend(workerPool->sessionList, session);
 	execution->sessionList = lappend(execution->sessionList, session);
 
@@ -1135,6 +1133,12 @@ ManageWorkerPool(WorkerPool *workerPool)
 	int newConnectionCount = 0;
 	int connectionIndex = 0;
 
+	/* we should always have more (or equal) active connections than idle connections */
+	Assert (activeConnectionCount >= idleConnectionCount);
+
+	/* we should never have less than 0 connections ever */
+	Assert (activeConnectionCount >= 0 && idleConnectionCount >= 0);
+
 	if (failedConnectionCount >= 1)
 	{
 		/* connection pool failed */
@@ -1192,12 +1196,6 @@ ManageWorkerPool(WorkerPool *workerPool)
 		/* always poll the connection in the first round */
 		connection->waitFlags = WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE;
 
-		/* keep track of how many connections are ready */
-		if (connection->remoteTransaction.transactionState == REMOTE_TRANS_STARTED)
-		{
-			workerPool->idleConnectionCount++;
-		}
-
 		/* create a session for the connection */
 		FindOrCreateWorkerSession(workerPool, connection);
 	}
@@ -1245,6 +1243,7 @@ ConnectionStateMachine(WorkerSession *session)
 						 connection->port);
 
 					workerPool->activeConnectionCount++;
+					workerPool->idleConnectionCount++;
 
 					connection->connectionState = MULTI_CONNECTION_CONNECTED;
 					break;
@@ -1274,6 +1273,7 @@ ConnectionStateMachine(WorkerSession *session)
 						 connection->port);
 
 					workerPool->activeConnectionCount++;
+					workerPool->idleConnectionCount++;
 
 					connection->waitFlags = WL_SOCKET_WRITEABLE;
 					connection->connectionState = MULTI_CONNECTION_CONNECTED;
@@ -1402,9 +1402,6 @@ TransactionStateMachine(WorkerSession *session)
 				{
 					TaskPlacementExecution *placementExecution = NULL;
 
-					/* connection is currently idle */
-					workerPool->idleConnectionCount++;
-
 					placementExecution = PopPlacementExecution(session);
 					if (placementExecution == NULL)
 					{
@@ -1458,10 +1455,10 @@ TransactionStateMachine(WorkerSession *session)
 
 					/* one more command is sent over the session */
 					session->commandsSent++;
-				}
 
-				/* connection is ready to use for executing commands */
-				workerPool->idleConnectionCount++;
+					/* connection is ready to use for executing commands */
+					workerPool->idleConnectionCount++;
+				}
 
 				/* connection needs to be writeable to send next command */
 				connection->waitFlags = WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE;
