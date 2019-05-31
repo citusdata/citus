@@ -178,6 +178,18 @@ typedef struct WorkerPool
 	 */
 	dlist_head readyTaskQueue;
 	int readyTaskCount;
+
+	/*
+	 * We keep this for enforcing the connection timeouts. In our definition, a pool
+	 * starts when the first connection establishment starts.
+	 */
+	TimestampTz poolStartTime;
+
+	/*
+	 * This is only set in WorkerPoolFailed() function. Once a pool fails, we do not
+	 * use it anymore.
+	 */
+	bool failed;
 } WorkerPool;
 
 struct TaskPlacementExecution;
@@ -351,6 +363,7 @@ static WorkerPool * FindOrCreateWorkerPool(DistributedExecution *execution,
 static WorkerSession * FindOrCreateWorkerSession(WorkerPool *workerPool,
 												 MultiConnection *connection);
 static void ManageWorkerPool(WorkerPool *workerPool);
+static void CheckConnectionTimeout(WorkerPool *workerPool);
 static WaitEventSet * BuildWaitEventSet(List *sessionList);
 static TaskPlacementExecution * PopPlacementExecution(WorkerSession *session);
 static TaskPlacementExecution * PopAssignedPlacementExecution(WorkerSession *session);
@@ -925,8 +938,8 @@ AssignTasksToConnections(DistributedExecution *execution)
 				 * FindOrCreateWorkerSession ensures that we only have one session per
 				 * connection.
 				 */
-				WorkerSession *session = FindOrCreateWorkerSession(workerPool,
-																   connection);
+				WorkerSession *session =
+					FindOrCreateWorkerSession(workerPool, connection);
 
 				elog(DEBUG4, "%s:%d has an assigned task", connection->hostname,
 					 connection->port);
@@ -963,6 +976,7 @@ AssignTasksToConnections(DistributedExecution *execution)
 					/* task is ready to execute on any session */
 					dlist_push_tail(&workerPool->readyTaskQueue,
 									&placementExecution->workerReadyQueueNode);
+
 					workerPool->readyTaskCount++;
 				}
 				else
@@ -1107,6 +1121,7 @@ FindOrCreateWorkerPool(DistributedExecution *execution, WorkerNode *workerNode)
 
 	workerPool = (WorkerPool *) palloc0(sizeof(WorkerPool));
 	workerPool->node = workerNode;
+	workerPool->poolStartTime = 0;
 	workerPool->distributedExecution = execution;
 	dlist_init(&workerPool->pendingTaskQueue);
 	dlist_init(&workerPool->readyTaskQueue);
@@ -1155,6 +1170,15 @@ FindOrCreateWorkerSession(WorkerPool *workerPool, MultiConnection *connection)
 		workerPool->idleConnectionCount++;
 	}
 
+	/*
+	 * Record the first connection establishment time to the pool. We need this
+	 * to enforce NodeConnectionTimeout.
+	 */
+	if (list_length(workerPool->sessionList) == 0)
+	{
+		workerPool->poolStartTime = GetCurrentTimestamp();
+	}
+
 	workerPool->sessionList = lappend(workerPool->sessionList, session);
 	execution->sessionList = lappend(execution->sessionList, session);
 
@@ -1170,6 +1194,8 @@ FindOrCreateWorkerSession(WorkerPool *workerPool, MultiConnection *connection)
 void
 RunDistributedExecution(DistributedExecution *execution)
 {
+	const TimestampTz deadline = TimestampTzPlusMilliseconds(GetCurrentTimestamp(),
+															 NodeConnectionTimeout);
 	int workerCount = list_length(execution->workerList);
 
 	/* additional 2 is for postmaster and latch */
@@ -1186,7 +1212,7 @@ RunDistributedExecution(DistributedExecution *execution)
 
 		while (execution->unfinishedTaskCount > 0 && !cancellationReceived)
 		{
-			long timeout = 1000;
+			long timeout = DeadlineTimestampTzToTimeout(deadline);
 			int connectionCount = list_length(execution->sessionList);
 			int eventCount = 0;
 			int eventIndex = 0;
@@ -1289,7 +1315,7 @@ ManageWorkerPool(WorkerPool *workerPool)
 	DistributedExecution *execution = workerPool->distributedExecution;
 	WorkerNode *workerNode = workerPool->node;
 	int targetPoolSize = execution->targetPoolSize;
-	int currentConnectionCount = list_length(workerPool->sessionList);
+	int initiatedConnectionCount = list_length(workerPool->sessionList);
 	int activeConnectionCount = workerPool->activeConnectionCount;
 	int failedConnectionCount = workerPool->failedConnectionCount;
 	int idleConnectionCount = workerPool->idleConnectionCount;
@@ -1300,8 +1326,14 @@ ManageWorkerPool(WorkerPool *workerPool)
 	/* we should always have more (or equal) active connections than idle connections */
 	Assert(activeConnectionCount >= idleConnectionCount);
 
+	/* we should always have more (or equal) initiated connections than active connections */
+	Assert (initiatedConnectionCount >= activeConnectionCount);
+
 	/* we should never have less than 0 connections ever */
 	Assert(activeConnectionCount >= 0 && idleConnectionCount >= 0);
+
+	/* we might fail the execution or warn the user about connection timeouts */
+	CheckConnectionTimeout(workerPool);
 
 	if (failedConnectionCount >= 1)
 	{
@@ -1309,13 +1341,13 @@ ManageWorkerPool(WorkerPool *workerPool)
 		return;
 	}
 
-	if (currentConnectionCount >= targetPoolSize)
+	if (initiatedConnectionCount >= targetPoolSize)
 	{
 		/* already reached the minimal pool size */
 		return;
 	}
 
-	if (readyTaskCount - idleConnectionCount <= currentConnectionCount)
+	if (readyTaskCount - idleConnectionCount <= initiatedConnectionCount)
 	{
 		/* after assigning tasks to idle connections we don't need more connections */
 		return;
@@ -1368,6 +1400,78 @@ ManageWorkerPool(WorkerPool *workerPool)
 	if (newConnectionCount > 0)
 	{
 		execution->connectionSetChanged = true;
+	}
+}
+
+
+/*
+ * CheckConnectionTimeout makes sure that the execution enforces the connection
+ * establishment timeout defined by the user (NodeConnectionTimeout).
+ *
+ * The rule is that if a worker pool has already initiated connection establishment
+ * and has not succeeded to finish establishments that are necessary to execute tasks,
+ * take an action. For the types of actions, see the comments in the function.
+ *
+ * Enforcing the timeout per pool (over per session) helps the execution to continue
+ * even if we can establish a single connection as we expect to have target pool size
+ * number of connections. In the end, the executor is capable of using one connection
+ * to execute multiple tasks.
+ */
+static void
+CheckConnectionTimeout(WorkerPool *workerPool)
+{
+	DistributedExecution *execution = workerPool->distributedExecution;
+	TimestampTz poolStartTime = workerPool->poolStartTime;
+	TimestampTz now = GetCurrentTimestamp();
+
+	int initiatedConnectionCount = list_length(workerPool->sessionList);
+	int activeConnectionCount = workerPool->activeConnectionCount;
+	int requiredActiveConnectionCount = 1;
+
+	if (initiatedConnectionCount == 0)
+	{
+		/* no connection has been planned for the pool yet */
+		Assert(poolStartTime == 0);
+		return;
+	}
+
+	/*
+	 * This is a special case where we assign tasks to sessions even before
+	 * the connections are established. So, make sure to apply similar
+	 * restrictions. In this case, make sure that we get all the connections
+	 * established.
+	 */
+	if (ForceMaxQueryParallelization)
+	{
+		requiredActiveConnectionCount = initiatedConnectionCount;
+	}
+
+	/*
+	 * The enforcement is not always erroring out. For example, if a SELECT task
+	 * has two different placements, we'd warn the user, fail the pool and continue
+	 * with the next placement.
+	 *
+	 * !workerPool->failed is only useful to prevent emitting WARNINGs over and over
+	 * for failed pools where failed pools have 0 ready tasks.
+	 */
+	if (activeConnectionCount < requiredActiveConnectionCount && !workerPool->failed &&
+		TimestampDifferenceExceeds(poolStartTime, now, NodeConnectionTimeout))
+	{
+		int logLevel = WARNING;
+
+		/*
+		 * First fail the pool and create an opportunity to execute tasks
+		 * over other pools when tasks have more than one placement to execute.
+		 */
+		WorkerPoolFailed(workerPool);
+
+		logLevel = execution->errorOnAnyFailure || execution->failed ? ERROR : WARNING;
+
+		ereport(logLevel, (errcode(ERRCODE_CONNECTION_FAILURE),
+						   errmsg("could not establish any connections to the node "
+								  "%s:%d after %u ms", workerPool->node->workerName,
+								  workerPool->node->workerPort,
+								  NodeConnectionTimeout)));
 	}
 }
 
@@ -2238,6 +2342,9 @@ WorkerPoolFailed(WorkerPool *workerPool)
 	dlist_iter iter;
 	ListCell *sessionCell = NULL;
 
+	/* a pool cannot fail multiple times */
+	Assert (!workerPool->failed);
+
 	dlist_foreach(iter, &workerPool->pendingTaskQueue)
 	{
 		TaskPlacementExecution *placementExecution =
@@ -2263,6 +2370,37 @@ WorkerPoolFailed(WorkerPool *workerPool)
 
 	/* we do not want more connections in this pool */
 	workerPool->readyTaskCount = 0;
+	workerPool->failed = true;
+
+	/*
+	 * The reason is that when replication factor is > 1 and we are performing
+	 * a SELECT, then we only establish connections for the specific placements
+	 * that we will read from. However, when a worker pool fails, we will need
+	 * to establish multiple new connection to other workers and the query
+	 * can only succeed if all those connections are established.
+	 */
+	if (ForceMaxQueryParallelization)
+	{
+		ListCell *workerCell = NULL;
+		List *workerList = workerPool->distributedExecution->workerList;
+
+		foreach(workerCell, workerList)
+		{
+			WorkerPool *pool = (WorkerPool *) lfirst(workerCell);
+
+			/* failed pools or pools without any connection attempts ignored */
+			if (pool->failed || pool->poolStartTime == 0)
+			{
+				continue;
+			}
+
+			/*
+			 * This should give another NodeConnectionTimeout until all
+			 * the necessary connections are established.
+			 */
+			pool->poolStartTime = GetCurrentTimestamp();
+		}
+	}
 }
 
 
