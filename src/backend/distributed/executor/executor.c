@@ -1229,7 +1229,7 @@ ManageWorkerPool(WorkerPool *workerPool)
 		 * Ensure that subsequent calls to StartNodeUserDatabaseConnection get a
 		 * different connection.
 		 */
-		connection->claimedExclusively = true;
+		ClaimConnectionExclusively(connection);
 
 		/* always poll the connection in the first round */
 		connection->waitFlags = WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE;
