@@ -128,8 +128,8 @@ CoordinatorInsertSelectExecScan(CustomScanState *node)
 
 			if (prunedTaskList != NIL)
 			{
-				ExecuteMultipleTasks(scanState, prunedTaskList, isModificationQuery,
-									 hasReturning);
+				ExecuteTaskListExtended(CMD_INSERT, prunedTaskList, scanState,
+									    hasReturning, DEFAULT_POOL_SIZE);
 			}
 		}
 		else
