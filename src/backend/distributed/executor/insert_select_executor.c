@@ -128,6 +128,9 @@ CoordinatorInsertSelectExecScan(CustomScanState *node)
 
 			if (prunedTaskList != NIL)
 			{
+
+				if (DEFAULT_POOL_SIZE == 0)
+				{
 				if (MultiShardConnectionType == SEQUENTIAL_CONNECTION)
 				{
 					ExecuteModifyTasksSequentially(scanState, prunedTaskList,
@@ -138,7 +141,16 @@ CoordinatorInsertSelectExecScan(CustomScanState *node)
 					ExecuteMultipleTasks(scanState, prunedTaskList, isModificationQuery,
 										 hasReturning);
 				}
+				}
 
+				else
+				{
+
+					ExecuteTaskListExtended(CMD_INSERT, prunedTaskList, scanState,
+										    hasReturning, DEFAULT_POOL_SIZE);
+				}
+
+				
 				if (SortReturning && hasReturning)
 				{
 					SortTupleStore(scanState);
