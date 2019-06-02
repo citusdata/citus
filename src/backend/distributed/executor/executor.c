@@ -429,8 +429,25 @@ CitusExecScan(CustomScanState *node)
 }
 
 
+/*
+ * ExecuteTaskList is a proxy to ExecuteTaskListExtended() with defaults
+ * for some of the arguments.
+ */
 uint64
 ExecuteTaskList(CmdType operation, List *taskList, int targetPoolSize)
+{
+	return ExecuteTaskListExtended(operation, taskList, NULL, false, targetPoolSize);
+}
+
+
+/*
+ * ExecuteTaskListExtended sets up the execution for given task list and
+ * runs it.
+ */
+uint64
+ExecuteTaskListExtended(CmdType operation, List *taskList,
+						ScanState *scanState, bool hasReturning,
+						int targetPoolSize)
 {
 	DistributedPlan *distributedPlan = NULL;
 	DistributedExecution *execution = NULL;
@@ -1818,6 +1835,15 @@ ReceiveResults(WorkerSession *session, bool storeRows)
 			scanState->customScanState.ss.ps.ps_ResultTupleSlot->tts_tupleDescriptor;
 		attributeInputMetadata = TupleDescGetAttInMetadata(tupleDescriptor);
 		expectedColumnCount = tupleDescriptor->natts;
+	
+		if (scanState->tuplestorestate == NULL)
+		{
+			bool randomAccess = true;
+			bool interTransactions = false;
+			scanState->tuplestorestate =
+				tuplestore_begin_heap(randomAccess, interTransactions, work_mem);
+		}
+	
 		tupleStore = scanState->tuplestorestate;
 		columnArray = (char **) palloc0(expectedColumnCount * sizeof(char *));
 	}
