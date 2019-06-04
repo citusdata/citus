@@ -1,0 +1,273 @@
+--
+-- MULTI_QUERY_DIRECTORY_CLEANUP
+--
+-- We execute sub-queries on worker nodes, and copy query results to a directory
+-- on the master node for final processing. When the query completes or fails,
+-- the resource owner should automatically clean up these intermediate query
+-- result files.
+SET citus.next_shard_id TO 810000;
+SET citus.enable_unique_job_ids TO off;
+BEGIN;
+-- pg_ls_dir() displays jobids. We explicitly set the jobId sequence
+-- here so that the regression output becomes independent of the
+-- number of jobs executed prior to running this test.
+SELECT sum(l_extendedprice * l_discount) as revenue FROM lineitem;
+    revenue    
+---------------
+ 22770844.7654
+(1 row)
+
+SELECT sum(l_extendedprice * l_discount) as revenue FROM lineitem;
+    revenue    
+---------------
+ 22770844.7654
+(1 row)
+
+SELECT sum(l_extendedprice * l_discount) as revenue FROM lineitem;
+    revenue    
+---------------
+ 22770844.7654
+(1 row)
+
+SELECT pg_ls_dir('base/pgsql_job_cache');
+ pg_ls_dir 
+-----------
+(0 rows)
+
+COMMIT;
+SELECT pg_ls_dir('base/pgsql_job_cache');
+ pg_ls_dir 
+-----------
+(0 rows)
+
+BEGIN;
+SELECT sum(l_extendedprice * l_discount) as revenue FROM lineitem;
+    revenue    
+---------------
+ 22770844.7654
+(1 row)
+
+SELECT sum(l_extendedprice * l_discount) as revenue FROM lineitem;
+    revenue    
+---------------
+ 22770844.7654
+(1 row)
+
+SELECT sum(l_extendedprice * l_discount) as revenue FROM lineitem;
+    revenue    
+---------------
+ 22770844.7654
+(1 row)
+
+SELECT pg_ls_dir('base/pgsql_job_cache');
+ pg_ls_dir 
+-----------
+(0 rows)
+
+ROLLBACK;
+SELECT pg_ls_dir('base/pgsql_job_cache');
+ pg_ls_dir 
+-----------
+(0 rows)
+
+-- Test that multiple job directories are all cleaned up correctly,
+-- both individually (by closing a cursor) and in bulk when ending a
+-- transaction.
+BEGIN;
+DECLARE c_00 CURSOR FOR SELECT sum(l_extendedprice * l_discount) as revenue FROM lineitem;
+FETCH 1 FROM c_00;
+    revenue    
+---------------
+ 22770844.7654
+(1 row)
+
+DECLARE c_01 CURSOR FOR SELECT sum(l_extendedprice * l_discount) as revenue FROM lineitem;
+FETCH 1 FROM c_01;
+    revenue    
+---------------
+ 22770844.7654
+(1 row)
+
+DECLARE c_02 CURSOR FOR SELECT sum(l_extendedprice * l_discount) as revenue FROM lineitem;
+FETCH 1 FROM c_02;
+    revenue    
+---------------
+ 22770844.7654
+(1 row)
+
+DECLARE c_03 CURSOR FOR SELECT sum(l_extendedprice * l_discount) as revenue FROM lineitem;
+FETCH 1 FROM c_03;
+    revenue    
+---------------
+ 22770844.7654
+(1 row)
+
+DECLARE c_04 CURSOR FOR SELECT sum(l_extendedprice * l_discount) as revenue FROM lineitem;
+FETCH 1 FROM c_04;
+    revenue    
+---------------
+ 22770844.7654
+(1 row)
+
+DECLARE c_05 CURSOR FOR SELECT sum(l_extendedprice * l_discount) as revenue FROM lineitem;
+FETCH 1 FROM c_05;
+    revenue    
+---------------
+ 22770844.7654
+(1 row)
+
+DECLARE c_06 CURSOR FOR SELECT sum(l_extendedprice * l_discount) as revenue FROM lineitem;
+FETCH 1 FROM c_06;
+    revenue    
+---------------
+ 22770844.7654
+(1 row)
+
+DECLARE c_07 CURSOR FOR SELECT sum(l_extendedprice * l_discount) as revenue FROM lineitem;
+FETCH 1 FROM c_07;
+    revenue    
+---------------
+ 22770844.7654
+(1 row)
+
+DECLARE c_08 CURSOR FOR SELECT sum(l_extendedprice * l_discount) as revenue FROM lineitem;
+FETCH 1 FROM c_08;
+    revenue    
+---------------
+ 22770844.7654
+(1 row)
+
+DECLARE c_09 CURSOR FOR SELECT sum(l_extendedprice * l_discount) as revenue FROM lineitem;
+FETCH 1 FROM c_09;
+    revenue    
+---------------
+ 22770844.7654
+(1 row)
+
+DECLARE c_10 CURSOR FOR SELECT sum(l_extendedprice * l_discount) as revenue FROM lineitem;
+FETCH 1 FROM c_10;
+    revenue    
+---------------
+ 22770844.7654
+(1 row)
+
+DECLARE c_11 CURSOR FOR SELECT sum(l_extendedprice * l_discount) as revenue FROM lineitem;
+FETCH 1 FROM c_11;
+    revenue    
+---------------
+ 22770844.7654
+(1 row)
+
+DECLARE c_12 CURSOR FOR SELECT sum(l_extendedprice * l_discount) as revenue FROM lineitem;
+FETCH 1 FROM c_12;
+    revenue    
+---------------
+ 22770844.7654
+(1 row)
+
+DECLARE c_13 CURSOR FOR SELECT sum(l_extendedprice * l_discount) as revenue FROM lineitem;
+FETCH 1 FROM c_13;
+    revenue    
+---------------
+ 22770844.7654
+(1 row)
+
+DECLARE c_14 CURSOR FOR SELECT sum(l_extendedprice * l_discount) as revenue FROM lineitem;
+FETCH 1 FROM c_14;
+    revenue    
+---------------
+ 22770844.7654
+(1 row)
+
+DECLARE c_15 CURSOR FOR SELECT sum(l_extendedprice * l_discount) as revenue FROM lineitem;
+FETCH 1 FROM c_15;
+    revenue    
+---------------
+ 22770844.7654
+(1 row)
+
+DECLARE c_16 CURSOR FOR SELECT sum(l_extendedprice * l_discount) as revenue FROM lineitem;
+FETCH 1 FROM c_16;
+    revenue    
+---------------
+ 22770844.7654
+(1 row)
+
+DECLARE c_17 CURSOR FOR SELECT sum(l_extendedprice * l_discount) as revenue FROM lineitem;
+FETCH 1 FROM c_17;
+    revenue    
+---------------
+ 22770844.7654
+(1 row)
+
+DECLARE c_18 CURSOR FOR SELECT sum(l_extendedprice * l_discount) as revenue FROM lineitem;
+FETCH 1 FROM c_18;
+    revenue    
+---------------
+ 22770844.7654
+(1 row)
+
+DECLARE c_19 CURSOR FOR SELECT sum(l_extendedprice * l_discount) as revenue FROM lineitem;
+FETCH 1 FROM c_19;
+    revenue    
+---------------
+ 22770844.7654
+(1 row)
+
+SELECT * FROM pg_ls_dir('base/pgsql_job_cache') f ORDER BY f;
+        f        
+-----------------
+ master_job_0007
+ master_job_0008
+ master_job_0009
+ master_job_0010
+ master_job_0011
+ master_job_0012
+ master_job_0013
+ master_job_0014
+ master_job_0015
+ master_job_0016
+ master_job_0017
+ master_job_0018
+ master_job_0019
+ master_job_0020
+ master_job_0021
+ master_job_0022
+ master_job_0023
+ master_job_0024
+ master_job_0025
+ master_job_0026
+(20 rows)
+
+-- close first, 17th (first after re-alloc) and last cursor.
+CLOSE c_00;
+CLOSE c_16;
+CLOSE c_19;
+SELECT * FROM pg_ls_dir('base/pgsql_job_cache') f ORDER BY f;
+        f        
+-----------------
+ master_job_0008
+ master_job_0009
+ master_job_0010
+ master_job_0011
+ master_job_0012
+ master_job_0013
+ master_job_0014
+ master_job_0015
+ master_job_0016
+ master_job_0017
+ master_job_0018
+ master_job_0019
+ master_job_0020
+ master_job_0021
+ master_job_0022
+ master_job_0024
+ master_job_0025
+(17 rows)
+
+ROLLBACK;
+SELECT pg_ls_dir('base/pgsql_job_cache');
+ pg_ls_dir 
+-----------
+(0 rows)
+
