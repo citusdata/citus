@@ -37,5 +37,6 @@ extern CustomScanMethods DelayedErrorCustomScanMethods;
 extern void RegisterCitusCustomScanMethods(void);
 extern void CitusExplainScan(CustomScanState *node, List *ancestors, struct
 							 ExplainState *es);
+extern TupleDesc ScanStateGetTupleDescriptor(CitusScanState *scanState);
 
 #endif /* CITUS_CUSTOM_SCAN_H */

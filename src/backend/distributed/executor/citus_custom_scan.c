@@ -318,3 +318,14 @@ CitusReScan(CustomScanState *node)
 							   "parameters are currently unsupported")));
 	}
 }
+
+
+/*
+ * ScanStateGetTupleDescriptor returns the tuple descriptor for the given
+ * scan state.
+ */
+extern TupleDesc
+ScanStateGetTupleDescriptor(CitusScanState *scanState)
+{
+	return scanState->customScanState.ss.ps.ps_ResultTupleSlot->tts_tupleDescriptor;
+}

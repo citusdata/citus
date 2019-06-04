@@ -624,8 +624,7 @@ RouterModifyExecScan(CustomScanState *node)
 static void
 SortTupleStore(CitusScanState *scanState)
 {
-	TupleDesc tupleDescriptor =
-		scanState->customScanState.ss.ps.ps_ResultTupleSlot->tts_tupleDescriptor;
+	TupleDesc tupleDescriptor = ScanStateGetTupleDescriptor(scanState);
 	Tuplestorestate *tupleStore = scanState->tuplestorestate;
 
 	List *targetList = scanState->customScanState.ss.ps.plan->targetlist;
@@ -1815,8 +1814,7 @@ StoreQueryResult(CitusScanState *scanState, MultiConnection *connection,
 				 bool alwaysThrowErrorOnFailure, int64 *rows,
 				 DistributedExecutionStats *executionStats)
 {
-	TupleDesc tupleDescriptor =
-		scanState->customScanState.ss.ps.ps_ResultTupleSlot->tts_tupleDescriptor;
+	TupleDesc tupleDescriptor = ScanStateGetTupleDescriptor(scanState);
 	AttInMetadata *attributeInputMetadata = TupleDescGetAttInMetadata(tupleDescriptor);
 	List *targetList = scanState->customScanState.ss.ps.plan->targetlist;
 	uint32 expectedColumnCount = ExecCleanTargetListLength(targetList);

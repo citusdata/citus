@@ -279,7 +279,7 @@ LoadTuplesIntoTupleStore(CitusScanState *citusScanState, Job *workerJob)
 	bool interTransactions = false;
 	char *copyFormat = "text";
 
-	tupleDescriptor = customScanState.ss.ps.ps_ResultTupleSlot->tts_tupleDescriptor;
+	tupleDescriptor = ScanStateGetTupleDescriptor(citusScanState);
 
 	Assert(citusScanState->tuplestorestate == NULL);
 	citusScanState->tuplestorestate =
