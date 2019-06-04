@@ -9,6 +9,7 @@
  */
 
 #include "postgres.h"
+#include "miscadmin.h"
 
 #include "distributed/commands/multi_copy.h"
 #include "distributed/insert_select_executor.h"
@@ -98,7 +99,6 @@ CoordinatorInsertSelectExecScan(CustomScanState *node)
 			List *taskList = workerJob->taskList;
 			List *prunedTaskList = NIL;
 			bool hasReturning = distributedPlan->hasReturning;
-			bool isModificationQuery = true;
 
 			shardConnectionsHash = ExecuteSelectIntoColocatedIntermediateResults(
 				targetRelationId,
@@ -128,7 +128,16 @@ CoordinatorInsertSelectExecScan(CustomScanState *node)
 
 			if (prunedTaskList != NIL)
 			{
-				ExecuteTaskListExtended(CMD_INSERT, prunedTaskList, scanState,
+				TupleDesc tupleDescriptor = ScanStateGetTupleDescriptor(scanState);
+				bool randomAccess = true;
+				bool interTransactions = false;
+
+				Assert(scanState->tuplestorestate == NULL);
+				scanState->tuplestorestate =
+					tuplestore_begin_heap(randomAccess, interTransactions, work_mem);
+
+				ExecuteTaskListExtended(CMD_INSERT, prunedTaskList,
+										tupleDescriptor, scanState->tuplestorestate,
 									    hasReturning, DEFAULT_POOL_SIZE);
 			}
 		}
