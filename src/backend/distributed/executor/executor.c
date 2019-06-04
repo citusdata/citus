@@ -71,7 +71,7 @@ typedef struct DistributedExecution
 	/*
 	 * Flag to indiciate that the set of wait events we are interested
 	 * in might have changed and waitEventSet needs to be updated.
-	 * 
+	 *
 	 * Note that we set this flag whenever we assign a value to waitFlags,
 	 * but we don't check that the waitFlags is actually different from the
 	 * previous value. So we might have some false positives for this flag,
@@ -359,6 +359,7 @@ static bool StartPlacementExecutionOnSession(TaskPlacementExecution *placementEx
 											 WorkerSession *session);
 static List * PlacementAccessListForTask(Task *task, ShardPlacement *taskPlacement);
 static void ConnectionStateMachine(WorkerSession *session);
+static void Activate2PCIfModifyingTransactionExpandsToNewNode(WorkerSession *session);
 static bool TransactionModifiedDistributedTable(DistributedExecution *execution);
 static void TransactionStateMachine(WorkerSession *session);
 static bool CheckConnectionReady(MultiConnection *connection);
@@ -777,6 +778,7 @@ UnclaimAllSessionConnections(List *sessionList)
 	}
 }
 
+
 /*
  * AssignTasksToConnections goes through the list of tasks to determine whether any
  * task placements need to be assigned to particular connections because of preceding
@@ -810,12 +812,14 @@ AssignTasksToConnections(DistributedExecution *execution)
 		shardCommandExecution->task = task;
 		shardCommandExecution->job = job;
 		shardCommandExecution->executionOrder = ExecutionOrderForTask(operation, task);
+		shardCommandExecution->executionState = TASK_EXECUTION_NOT_FINISHED;
 		shardCommandExecution->placementExecutions =
 			(TaskPlacementExecution **) palloc0(placementExecutionCount *
 												sizeof(TaskPlacementExecution *));
 		shardCommandExecution->placementExecutionCount = placementExecutionCount;
 		shardCommandExecution->expectResults = distributedPlan->hasReturning ||
 											   distributedPlan->operation == CMD_SELECT;
+
 
 		foreach(taskPlacementCell, task->taskPlacementList)
 		{
@@ -1171,7 +1175,7 @@ RunDistributedExecution(DistributedExecution *execution)
 			}
 
 			/* we should always have more (or equal) waitEvents */
-			Assert (maxWaitEventCount >= connectionCount + 2);
+			Assert(maxWaitEventCount >= connectionCount + 2);
 
 			/* wait for I/O events */
 #if (PG_VERSION_NUM >= 100000)
@@ -1415,18 +1419,7 @@ ConnectionStateMachine(WorkerSession *session)
 			case MULTI_CONNECTION_CONNECTED:
 			{
 				/* if we're expanding the nodes in a transaction, use 2PC */
-				if (MultiShardCommitProtocol == COMMIT_PROTOCOL_2PC &&
-					TransactionModifiedDistributedTable(execution) &&
-					DistributedPlanModifiesDatabase(execution->plan) &&
-					!ConnectionModifiedPlacement(session->connection))
-				{
-					/*
-					 * We already did a modification, but not on the connection that we
-					 * just opened, which means we're now going to make modifications
-					 * over multiple connections. Activate 2PC!
-					 */
-					CoordinatedTransactionUse2PC();
-				}
+				Activate2PCIfModifyingTransactionExpandsToNewNode(session);
 
 				/* connection is ready, run the transaction state machine */
 				TransactionStateMachine(session);
@@ -1507,7 +1500,6 @@ ConnectionStateMachine(WorkerSession *session)
 						REMOTE_TRANS_INVALID;
 				}
 
-
 				break;
 			}
 
@@ -1517,6 +1509,66 @@ ConnectionStateMachine(WorkerSession *session)
 			}
 		}
 	} while (connection->connectionState != currentState);
+}
+
+
+/*
+ * Activate2PCIfModifyingTransactionExpandsToNewNode sets the coordinated
+ * transaction to use 2PC under the following circumstances:
+ *     - We're already in a transaction block
+ *     - At least one of the previous commands in the transaction block
+ *       made a modification, which have not set 2PC itself because it
+ *       was a single shard command
+ *     - The input "session" is used for a distributed execution which
+ *       modifies the database. However, the session (and hence the
+ *       connection) is established to a different worker than the ones
+ *       that is used previously in the transaction.
+ *
+ *  To give an example,
+ *      BEGIN;
+ *          -- assume that the following INSERT goes to worker-A
+ *          -- also note that this single command does not activate
+ *          -- 2PC itself since it is a single shard mofication
+ *          INSERT INTO distributed_table (dist_key) VALUES (1);
+ *
+ *          -- do one more single shard UPDATE hitting the same
+ *          shard (or worker node in general)
+ *          -- this wouldn't activate 2PC, since we're operating on the
+ *          -- same worker node that we've modified earlier
+ *          -- so the executor would use the same connection
+ *			UPDATE distributed_table SET value = 10 WHERE dist_key = 1;
+ *
+ *          -- now, do one more INSERT, which goes to worker-B
+ *          -- At this point, this function would activate 2PC
+ *          -- since we're now expanding to a new node
+ *          -- for example, if this command were a SELECT, we wouldn't
+ *          -- activate 2PC since we're only interested in modifications/DDLs
+ *          INSERT INTO distributed_table (dist_key) VALUES (2);
+ */
+static void
+Activate2PCIfModifyingTransactionExpandsToNewNode(WorkerSession *session)
+{
+	DistributedExecution *execution = NULL;
+
+	if (MultiShardCommitProtocol != COMMIT_PROTOCOL_2PC ||
+		DoesCoordinatedTransactionUse2PC())
+	{
+		/* we don't need 2PC or we're already using 2PC, so no need to continue */
+		return;
+	}
+
+	execution = session->workerPool->distributedExecution;
+	if (TransactionModifiedDistributedTable(execution) &&
+		DistributedPlanModifiesDatabase(execution->plan) &&
+		!ConnectionModifiedPlacement(session->connection))
+	{
+		/*
+		 * We already did a modification, but not on the connection that we
+		 * just opened, which means we're now going to make modifications
+		 * over multiple connections. Activate 2PC!
+		 */
+		CoordinatedTransactionUse2PC();
+	}
 }
 
 
@@ -2192,7 +2244,8 @@ PlacementExecutionDone(TaskPlacementExecution *placementExecution, bool succeede
 {
 	WorkerPool *workerPool = placementExecution->workerPool;
 	DistributedExecution *execution = workerPool->distributedExecution;
-	ShardCommandExecution *shardCommandExecution = placementExecution->shardCommandExecution;
+	ShardCommandExecution *shardCommandExecution =
+		placementExecution->shardCommandExecution;
 	TaskExecutionState executionState = shardCommandExecution->executionState;
 	PlacementExecutionOrder executionOrder;
 

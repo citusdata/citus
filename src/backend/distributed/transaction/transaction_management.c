@@ -138,6 +138,17 @@ CoordinatedTransactionUse2PC(void)
 }
 
 
+/*
+ * DoesCoordinatedTransactionUse2PC simply returns
+ * CoordinatedTransactionUses2PC.
+ */
+bool
+DoesCoordinatedTransactionUse2PC(void)
+{
+	return CoordinatedTransactionUses2PC;
+}
+
+
 void
 InitializeTransactionManagement(void)
 {
