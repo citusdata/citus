@@ -734,7 +734,7 @@ RouterSequentialModifyExecScan(CustomScanState *node)
 	List *taskList = workerJob->taskList;
 	ListCell *taskCell = NULL;
 	bool multipleTasks = list_length(taskList) > 1;
-	EState *executorState = scanState->customScanState.ss.ps.state;
+	EState *executorState = ScanStateGetExecutorState(scanState);
 	bool taskListRequires2PC = TaskListRequires2PC(taskList);
 	bool alwaysThrowErrorOnFailure = false;
 	CmdType operation = scanState->distributedPlan->operation;
@@ -905,8 +905,8 @@ RouterSelectExecScan(CustomScanState *node)
 static void
 ExecuteSingleSelectTask(CitusScanState *scanState, Task *task)
 {
-	ParamListInfo paramListInfo =
-		scanState->customScanState.ss.ps.state->es_param_list_info;
+	EState *executorState = ScanStateGetExecutorState(scanState);
+	ParamListInfo paramListInfo = executorState->es_param_list_info;
 	List *taskPlacementList = task->taskPlacementList;
 	ListCell *taskPlacementCell = NULL;
 	char *queryString = task->queryString;
@@ -1104,7 +1104,7 @@ ExecuteSingleModifyTask(CitusScanState *scanState, Task *task, CmdType operation
 
 	if (scanState)
 	{
-		executorState = scanState->customScanState.ss.ps.state;
+		executorState = ScanStateGetExecutorState(scanState);
 		paramListInfo = executorState->es_param_list_info;
 	}
 
@@ -1350,7 +1350,7 @@ void
 ExecuteMultipleTasks(CitusScanState *scanState, List *taskList,
 					 bool isModificationQuery, bool expectResults)
 {
-	EState *executorState = scanState->customScanState.ss.ps.state;
+	EState *executorState = ScanStateGetExecutorState(scanState);
 	ParamListInfo paramListInfo = executorState->es_param_list_info;
 	int64 affectedTupleCount = -1;
 

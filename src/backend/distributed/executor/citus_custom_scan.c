@@ -308,7 +308,7 @@ static void
 CitusReScan(CustomScanState *node)
 {
 	CitusScanState *scanState = (CitusScanState *) node;
-	EState *executorState = scanState->customScanState.ss.ps.state;
+	EState *executorState = ScanStateGetExecutorState(scanState);
 	ParamListInfo paramListInfo = executorState->es_param_list_info;
 
 	if (paramListInfo != NULL)
@@ -324,8 +324,19 @@ CitusReScan(CustomScanState *node)
  * ScanStateGetTupleDescriptor returns the tuple descriptor for the given
  * scan state.
  */
-extern TupleDesc
+TupleDesc
 ScanStateGetTupleDescriptor(CitusScanState *scanState)
 {
 	return scanState->customScanState.ss.ps.ps_ResultTupleSlot->tts_tupleDescriptor;
+}
+
+
+/*
+ * ScanStateGetExecutorState returns the executor state for the given scan
+ * state.
+ */
+EState *
+ScanStateGetExecutorState(CitusScanState *scanState)
+{
+	return scanState->customScanState.ss.ps.state;
 }

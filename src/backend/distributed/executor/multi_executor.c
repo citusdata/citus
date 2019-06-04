@@ -237,6 +237,7 @@ ReturnTupleFromTuplestore(CitusScanState *scanState)
 {
 	Tuplestorestate *tupleStore = scanState->tuplestorestate;
 	TupleTableSlot *resultSlot = NULL;
+	EState *executorState = NULL;
 	ScanDirection scanDirection = NoMovementScanDirection;
 	bool forwardScanDirection = true;
 
@@ -245,7 +246,8 @@ ReturnTupleFromTuplestore(CitusScanState *scanState)
 		return NULL;
 	}
 
-	scanDirection = scanState->customScanState.ss.ps.state->es_direction;
+	executorState = ScanStateGetExecutorState(scanState);
+	scanDirection = executorState->es_direction;
 	Assert(ScanDirectionIsValid(scanDirection));
 
 	if (ScanDirectionIsBackward(scanDirection))
