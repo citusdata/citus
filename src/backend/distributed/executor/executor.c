@@ -47,8 +47,13 @@ typedef struct DistributedExecution
 	/* distributed query plan */
 	DistributedPlan *plan;
 
-	/* custom scan state */
-	CitusScanState *scanState;
+	/* Parameters for parameterized plans. Can be NULL. */
+	ParamListInfo paramListInfo;
+
+	/* Tuple descriptor and destination for result. Can be NULL. */
+	TupleDesc tupleDescriptor;
+	Tuplestorestate *tupleStore;
+
 
 	/* list of workers involved in the execution */
 	List *workerList;
@@ -318,7 +323,9 @@ bool ForceMaxQueryParallelization = false;
 
 /* local functions */
 static DistributedExecution * CreateDistributedExecution(DistributedPlan *distributedPlan,
-														 CitusScanState *scanState,
+						   								 ParamListInfo paramListInfo,
+														 TupleDesc tupleDescriptor,
+														 Tuplestorestate *tupleStore,
 														 int targetPoolSize);
 static void StartDistributedExecution(DistributedExecution *execution);
 static void RunDistributedExecution(DistributedExecution *execution);
@@ -373,7 +380,10 @@ CitusExecScan(CustomScanState *node)
 	{
 		DistributedPlan *distributedPlan = scanState->distributedPlan;
 		DistributedExecution *execution = NULL;
-		EState *executorState = scanState->customScanState.ss.ps.state;
+		EState *executorState = ScanStateGetExecutorState(scanState);
+		ParamListInfo paramListInfo = executorState->es_param_list_info;
+		Tuplestorestate *tupleStore = NULL;
+		TupleDesc tupleDescriptor = ScanStateGetTupleDescriptor(scanState);
 		bool randomAccess = true;
 		bool interTransactions = false;
 		int targetPoolSize = DEFAULT_POOL_SIZE;
@@ -385,6 +395,7 @@ CitusExecScan(CustomScanState *node)
 
 		scanState->tuplestorestate =
 			tuplestore_begin_heap(randomAccess, interTransactions, work_mem);
+		tupleStore = scanState->tuplestorestate;
 
 		if (MultiShardConnectionType == SEQUENTIAL_CONNECTION)
 		{
@@ -399,8 +410,8 @@ CitusExecScan(CustomScanState *node)
 			targetPoolSize = list_length(taskList);
 		}
 
-		execution = CreateDistributedExecution(distributedPlan, scanState,
-											   targetPoolSize);
+		execution = CreateDistributedExecution(distributedPlan, paramListInfo,
+											   tupleDescriptor, tupleStore, targetPoolSize);
 
 		StartDistributedExecution(execution);
 		RunDistributedExecution(execution);
@@ -436,7 +447,11 @@ CitusExecScan(CustomScanState *node)
 uint64
 ExecuteTaskList(CmdType operation, List *taskList, int targetPoolSize)
 {
-	return ExecuteTaskListExtended(operation, taskList, NULL, false, targetPoolSize);
+	TupleDesc tupleDescriptor = NULL;
+	Tuplestorestate *tupleStore = NULL;
+	bool hasReturning = false;
+	return ExecuteTaskListExtended(operation, taskList, tupleDescriptor,
+								   tupleStore, hasReturning, targetPoolSize);
 }
 
 
@@ -446,23 +461,26 @@ ExecuteTaskList(CmdType operation, List *taskList, int targetPoolSize)
  */
 uint64
 ExecuteTaskListExtended(CmdType operation, List *taskList,
-						ScanState *scanState, bool hasReturning,
-						int targetPoolSize)
+						TupleDesc tupleDescriptor, Tuplestorestate *tupleStore, 
+						bool hasReturning, int targetPoolSize)
 {
 	DistributedPlan *distributedPlan = NULL;
 	DistributedExecution *execution = NULL;
+	ParamListInfo paramListInfo = NULL;
 
 	distributedPlan = CitusMakeNode(DistributedPlan);
 	distributedPlan->operation = operation;
 	distributedPlan->workerJob = CitusMakeNode(Job);
 	distributedPlan->workerJob->taskList = taskList;
+	distributedPlan->hasReturning = hasReturning;
 
 	if (MultiShardConnectionType == SEQUENTIAL_CONNECTION)
 	{
 		targetPoolSize = 1;
 	}
 
-	execution = CreateDistributedExecution(distributedPlan, NULL,
+	execution = CreateDistributedExecution(distributedPlan, paramListInfo,
+										   tupleDescriptor, tupleStore,
 										   targetPoolSize);
 
 	StartDistributedExecution(execution);
@@ -479,7 +497,8 @@ ExecuteTaskListExtended(CmdType operation, List *taskList,
  */
 DistributedExecution *
 CreateDistributedExecution(DistributedPlan *distributedPlan,
-						   CitusScanState *scanState, int targetPoolSize)
+						   ParamListInfo paramListInfo, TupleDesc tupleDescriptor,
+						   Tuplestorestate *tupleStore, int targetPoolSize)
 {
 	DistributedExecution *execution = NULL;
 	Job *job = distributedPlan->workerJob;
@@ -487,9 +506,11 @@ CreateDistributedExecution(DistributedPlan *distributedPlan,
 
 	execution = (DistributedExecution *) palloc0(sizeof(DistributedExecution));
 	execution->plan = distributedPlan;
-	execution->scanState = scanState;
 	execution->executionStats =
 		(DistributedExecutionStats *) palloc0(sizeof(DistributedExecutionStats));
+	execution->paramListInfo = paramListInfo;
+	execution->tupleDescriptor = tupleDescriptor;
+	execution->tupleStore = tupleStore;
 
 	execution->workerList = NIL;
 	execution->sessionList = NIL;
@@ -1667,8 +1688,7 @@ StartPlacementExecutionOnSession(TaskPlacementExecution *placementExecution,
 {
 	WorkerPool *workerPool = session->workerPool;
 	DistributedExecution *execution = workerPool->distributedExecution;
-	CitusScanState *scanState = execution->scanState;
-	ParamListInfo paramListInfo = NULL;
+	ParamListInfo paramListInfo = execution->paramListInfo;
 	MultiConnection *connection = session->connection;
 	ShardCommandExecution *shardCommandExecution =
 		placementExecution->shardCommandExecution;
@@ -1678,11 +1698,6 @@ StartPlacementExecutionOnSession(TaskPlacementExecution *placementExecution,
 	char *queryString = task->queryString;
 	int querySent = 0;
 	int singleRowMode = 0;
-
-	if (scanState != NULL)
-	{
-		paramListInfo = scanState->customScanState.ss.ps.state->es_param_list_info;
-	}
 
 	/*
 	 * Make sure that subsequent commands on the same placement
@@ -1817,34 +1832,21 @@ ReceiveResults(WorkerSession *session, bool storeRows)
 	WorkerPool *workerPool = session->workerPool;
 	DistributedExecution *execution = workerPool->distributedExecution;
 	DistributedExecutionStats *executionStats = execution->executionStats;
-	CitusScanState *scanState = execution->scanState;
-	TupleDesc tupleDescriptor = NULL;
+	TupleDesc tupleDescriptor = execution->tupleDescriptor;
 	AttInMetadata *attributeInputMetadata = NULL;
 	uint32 expectedColumnCount = 0;
 	char **columnArray = NULL;
-	Tuplestorestate *tupleStore = NULL;
+	Tuplestorestate *tupleStore = execution->tupleStore;
 
 	MemoryContext ioContext = AllocSetContextCreate(CurrentMemoryContext,
 													"ReceiveResults",
 													ALLOCSET_DEFAULT_MINSIZE,
 													ALLOCSET_DEFAULT_INITSIZE,
 													ALLOCSET_DEFAULT_MAXSIZE);
-	if (scanState != NULL)
+	if (tupleDescriptor != NULL)
 	{
-		tupleDescriptor =
-			scanState->customScanState.ss.ps.ps_ResultTupleSlot->tts_tupleDescriptor;
 		attributeInputMetadata = TupleDescGetAttInMetadata(tupleDescriptor);
 		expectedColumnCount = tupleDescriptor->natts;
-	
-		if (scanState->tuplestorestate == NULL)
-		{
-			bool randomAccess = true;
-			bool interTransactions = false;
-			scanState->tuplestorestate =
-				tuplestore_begin_heap(randomAccess, interTransactions, work_mem);
-		}
-	
-		tupleStore = scanState->tuplestorestate;
 		columnArray = (char **) palloc0(expectedColumnCount * sizeof(char *));
 	}
 
