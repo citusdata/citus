@@ -32,6 +32,18 @@ typedef struct RelationRestrictionContext
 	List *relationRestrictionList;
 } RelationRestrictionContext;
 
+
+typedef struct RootPlanParams
+{
+	PlannerInfo *root;
+
+	/*
+	 * Copy of root->plan_params. root->plan_params is not preserved in
+	 * relation_restriction_equivalence, so we need to create a copy.
+	 */
+	List *plan_params;
+} RootPlanParams;
+
 typedef struct RelationRestriction
 {
 	Index index;
@@ -40,9 +52,10 @@ typedef struct RelationRestriction
 	RangeTblEntry *rte;
 	RelOptInfo *relOptInfo;
 	PlannerInfo *plannerInfo;
-	PlannerInfo *parentPlannerInfo;
-	List *parentPlannerParamList;
 	List *prunedShardIntervalList;
+
+	/* list of RootPlanParams for all outer nodes */
+	List *outerPlanParamsList;
 } RelationRestriction;
 
 typedef struct JoinRestrictionContext
