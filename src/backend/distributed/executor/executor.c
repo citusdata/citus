@@ -582,7 +582,7 @@ StartDistributedExecution(DistributedExecution *execution)
 	{
 		/*
 		 * We prefer to error on any failures for CREATE INDEX
-		 * CONCURRENTLY or VACUUM//VACUUM ANALYZE.
+		 * CONCURRENTLY or VACUUM//VACUUM ANALYZE (e.g., COMMIT_PROTOCOL_BARE).
 		 */
 		execution->errorOnAnyFailure = true;
 	}
@@ -636,20 +636,8 @@ DistributedPlanModifiesDatabase(DistributedPlan *plan)
 	}
 
 	firstTask = (Task *) linitial(taskList);
-	if (!ReadOnlyTask(firstTask->taskType))
-	{
-		return true;
-	}
-	else
-	{
-		/*
-		 * TODO: We currently do not execute modifying CTEs via ROUTER_TASK/SQL_TASK.
-		 * When we implement it, we should either not use the mentioned task types for
-		 * modifying CTEs detect them here.
-		 */
-	}
 
-	return false;
+	return !ReadOnlyTask(firstTask->taskType);
 }
 
 
@@ -685,6 +673,12 @@ DistributedStatementRequiresRollback(DistributedPlan *distributedPlan)
 		return true;
 	}
 
+	/*
+	 * Checking the first task's placement list is not sufficient for all purposes since
+	 * for append/range distributed tables we might have unequal number of placements for
+	 * shards. However, it is safe to do here, because we're searching for a reference
+	 * table. All other cases return false for this purpose.
+	 */
 	task = (Task *) linitial(taskList);
 	if (list_length(task->taskPlacementList) > 1)
 	{
@@ -1139,8 +1133,7 @@ RunDistributedExecution(DistributedExecution *execution)
 	int maxWaitEventCount = execution->totalTaskCount * workerCount + 2;
 
 	/* allocate events for the maximum number of connections to avoid realloc */
-	WaitEvent *events = palloc0(execution->totalTaskCount * workerCount *
-								sizeof(WaitEvent));
+	WaitEvent *events = palloc0(maxWaitEventCount * sizeof(WaitEvent));
 
 	PG_TRY();
 	{
@@ -2235,7 +2228,7 @@ PlacementExecutionDone(TaskPlacementExecution *placementExecution, bool succeede
 		return;
 	}
 
-	if (executionState == TASK_EXECUTION_FAILED)
+	if (!succeeded && executionState == TASK_EXECUTION_FAILED)
 	{
 		execution->unfinishedTaskCount--;
 		execution->failed = true;
