@@ -8,6 +8,8 @@
 #include "miscadmin.h"
 #include "funcapi.h"
 
+#include <unistd.h>
+
 
 #include "access/genam.h"
 #include "access/heapam.h"
@@ -52,6 +54,9 @@ int GroupSize = 1;
 /* config variable managed via guc.c */
 char *CurrentCluster = "default";
 
+/* forward declaration of background worker entrypoint */
+extern void LockAcquireHelperMain(Datum main_arg);
+
 /* local function forward declarations */
 static Datum ActivateNode(char *nodeName, int nodePort);
 static void RemoveNodeFromCluster(char *nodeName, int32 nodePort);
@@ -70,6 +75,7 @@ static void DeleteNodeRow(char *nodename, int32 nodeport);
 static List * ParseWorkerNodeFileAndRename(void);
 static WorkerNode * TupleToWorkerNode(TupleDesc tupleDescriptor, HeapTuple heapTuple);
 static void UpdateNodeLocation(int32 nodeId, char *newNodeName, int32 newNodePort);
+static BackgroundWorkerHandle * StartLockAcquireHelperBackgroundWorker(int backendToHelp);
 
 /* declarations for dynamic loading */
 PG_FUNCTION_INFO_V1(master_add_node);
@@ -470,10 +476,22 @@ master_update_node(PG_FUNCTION_ARGS)
 	text *newNodeName = PG_GETARG_TEXT_P(1);
 	int32 newNodePort = PG_GETARG_INT32(2);
 
+	/*
+	 * force is used when an update needs to happen regardless of conflicting locks. This
+	 * feature is important to force the update during a failover due to failure, eg. by
+	 * a highavailability system such as pg_auto_failover. The strategy is a to start a
+	 * background worker that actively cancels backends holding conflicting locks with
+	 * this backend.
+	 *
+	 * Defaults to false
+	 */
+	bool force = PG_GETARG_BOOL(3);
+
 	char *newNodeNameString = text_to_cstring(newNodeName);
 	WorkerNode *workerNode = NULL;
 	WorkerNode *workerNodeWithSameAddress = NULL;
 	List *placementList = NIL;
+	BackgroundWorkerHandle *handle = NULL;
 
 	CheckCitusVersion(ERROR);
 
@@ -524,13 +542,81 @@ master_update_node(PG_FUNCTION_ARGS)
 	 */
 	if (WorkerNodeIsPrimary(workerNode))
 	{
+		/*
+		 * before acquiring the locks check if we want a background worker to help us to
+		 * aggressively obtain the locks.
+		 */
+		if (force)
+		{
+			handle = StartLockAcquireHelperBackgroundWorker(MyProcPid);
+			ereport(NOTICE, (errmsg("force the update to the node")));
+		}
+
 		placementList = AllShardPlacementsOnNodeGroup(workerNode->groupId);
 		LockShardsInPlacementListMetadata(placementList, AccessExclusiveLock);
 	}
 
 	UpdateNodeLocation(nodeId, newNodeNameString, newNodePort);
 
+	if (handle != NULL)
+	{
+		/*
+		 * TODO see if we can stop the background worker in a more friendly way that does
+		 * not print scary log lines
+		 */
+		TerminateBackgroundWorker(handle);
+	}
+
 	PG_RETURN_VOID();
+}
+
+
+static BackgroundWorkerHandle *
+StartLockAcquireHelperBackgroundWorker(int backendToHelp)
+{
+	BackgroundWorkerHandle *handle = NULL;
+
+	BackgroundWorker worker = { 0 };
+	snprintf(worker.bgw_name, BGW_MAXLEN,
+			 "Citus Lock Acquire Helper: backend %d",
+			 backendToHelp);
+	snprintf(worker.bgw_type, BGW_MAXLEN, "citus_lock_aqcuire");
+
+	/* TODO verify we need both */
+	worker.bgw_flags = BGWORKER_SHMEM_ACCESS | BGWORKER_BACKEND_DATABASE_CONNECTION;
+	worker.bgw_start_time = BgWorkerStart_RecoveryFinished;
+	worker.bgw_restart_time = BGW_NEVER_RESTART;
+
+	snprintf(worker.bgw_library_name, BGW_MAXLEN, "citus");
+	snprintf(worker.bgw_function_name, BGW_MAXLEN, "LockAcquireHelperMain");
+	worker.bgw_main_arg = Int32GetDatum(backendToHelp);
+	worker.bgw_notify_pid = 0;
+
+	if (!RegisterDynamicBackgroundWorker(&worker, &handle))
+	{
+		ereport(ERROR, (errmsg("could not start lock acquiring background worker to "
+							   "force the update"),
+						errhint("Increasing max_worker_processes might help.")));
+	}
+
+	return handle;
+}
+
+
+/*
+ * LockAcquireHelperMain runs in a dynamic background worker to help master_update_node to
+ * acquire its locks.
+ */
+void
+LockAcquireHelperMain(Datum main_arg)
+{
+	int backendPid = DatumGetInt32(main_arg);
+
+	BackgroundWorkerUnblockSignals();
+
+	elog(LOG, "lock acquiring backend started for backend %d", backendPid);
+	sleep(10);
+	elog(LOG, "lock acquiring backend finished for backend %d", backendPid);
 }
 
 
