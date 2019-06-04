@@ -268,6 +268,8 @@ typedef struct ShardCommandExecution
 	 * after we got results from the first placements.
 	 */
 	bool gotResults;
+
+	TaskExecutionState executionState;
 } ShardCommandExecution;
 
 /*
@@ -2190,8 +2192,8 @@ PlacementExecutionDone(TaskPlacementExecution *placementExecution, bool succeede
 {
 	WorkerPool *workerPool = placementExecution->workerPool;
 	DistributedExecution *execution = workerPool->distributedExecution;
-	ShardCommandExecution *shardCommandExecution = NULL;
-	TaskExecutionState executionState;
+	ShardCommandExecution *shardCommandExecution = placementExecution->shardCommandExecution;
+	TaskExecutionState executionState = shardCommandExecution->executionState;
 	PlacementExecutionOrder executionOrder;
 
 	/* mark the placement execution as finished */
@@ -2218,20 +2220,34 @@ PlacementExecutionDone(TaskPlacementExecution *placementExecution, bool succeede
 		placementExecution->executionState = PLACEMENT_EXECUTION_FAILED;
 	}
 
-	shardCommandExecution = placementExecution->shardCommandExecution;
 
-	/* determine the outcome of the overall task */
-	executionState = GetTaskExecutionState(shardCommandExecution);
-	if (executionState == TASK_EXECUTION_FINISHED)
+	/*
+	 * Update unfinishedTaskCount only when state changes from not finished to
+	 * finished or failed state.
+	 */
+	if (executionState == TASK_EXECUTION_NOT_FINISHED)
 	{
-		execution->unfinishedTaskCount--;
-		return;
+		TaskExecutionState newExecutionState =
+			GetTaskExecutionState(shardCommandExecution);
+		if (newExecutionState == TASK_EXECUTION_FINISHED)
+		{
+			execution->unfinishedTaskCount--;
+			return;
+		}
+
+		if (newExecutionState == TASK_EXECUTION_FAILED)
+		{
+			execution->unfinishedTaskCount--;
+			execution->failed = true;
+			return;
+		}
 	}
-
-	if (executionState == TASK_EXECUTION_FAILED)
+	else
 	{
-		execution->unfinishedTaskCount--;
-		execution->failed = true;
+		/*
+		 * Task execution has already been finished, no need to continue the
+		 * next placement.
+		 */
 		return;
 	}
 
@@ -2394,6 +2410,13 @@ GetTaskExecutionState(ShardCommandExecution *shardCommandExecution)
 	int placementCount = 0;
 	int placementExecutionIndex = 0;
 	int placementExecutionCount = shardCommandExecution->placementExecutionCount;
+	TaskExecutionState currentTaskExecutionState = shardCommandExecution->executionState;
+
+	if (currentTaskExecutionState != TASK_EXECUTION_NOT_FINISHED)
+	{
+		/* we've already calculated the state, simply return it */
+		return currentTaskExecutionState;
+	}
 
 	for (; placementExecutionIndex < placementExecutionCount; placementExecutionIndex++)
 	{
@@ -2415,20 +2438,24 @@ GetTaskExecutionState(ShardCommandExecution *shardCommandExecution)
 
 	if (failedPlacementCount == placementCount)
 	{
-		return TASK_EXECUTION_FAILED;
+		currentTaskExecutionState = TASK_EXECUTION_FAILED;
 	}
 	else if (executionOrder == EXECUTION_ORDER_ANY && donePlacementCount > 0)
 	{
-		return TASK_EXECUTION_FINISHED;
+		currentTaskExecutionState = TASK_EXECUTION_FINISHED;
 	}
 	else if (donePlacementCount + failedPlacementCount == placementCount)
 	{
-		return TASK_EXECUTION_FINISHED;
+		currentTaskExecutionState = TASK_EXECUTION_FINISHED;
 	}
 	else
 	{
-		return TASK_EXECUTION_NOT_FINISHED;
+		currentTaskExecutionState = TASK_EXECUTION_NOT_FINISHED;
 	}
+
+	shardCommandExecution->executionState = currentTaskExecutionState;
+
+	return shardCommandExecution->executionState;
 }
 
 
