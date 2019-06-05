@@ -22,6 +22,7 @@
 #include "catalog/indexing.h"
 #include "catalog/namespace.h"
 #include "commands/sequence.h"
+#include "distributed/citus_acquire_lock.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/connection_management.h"
 #include "distributed/master_protocol.h"
@@ -54,9 +55,6 @@ int GroupSize = 1;
 /* config variable managed via guc.c */
 char *CurrentCluster = "default";
 
-/* forward declaration of background worker entrypoint */
-extern void LockAcquireHelperMain(Datum main_arg);
-
 /* local function forward declarations */
 static Datum ActivateNode(char *nodeName, int nodePort);
 static void RemoveNodeFromCluster(char *nodeName, int32 nodePort);
@@ -75,7 +73,6 @@ static void DeleteNodeRow(char *nodename, int32 nodeport);
 static List * ParseWorkerNodeFileAndRename(void);
 static WorkerNode * TupleToWorkerNode(TupleDesc tupleDescriptor, HeapTuple heapTuple);
 static void UpdateNodeLocation(int32 nodeId, char *newNodeName, int32 newNodePort);
-static BackgroundWorkerHandle * StartLockAcquireHelperBackgroundWorker(int backendToHelp);
 
 /* declarations for dynamic loading */
 PG_FUNCTION_INFO_V1(master_add_node);
@@ -561,62 +558,13 @@ master_update_node(PG_FUNCTION_ARGS)
 	if (handle != NULL)
 	{
 		/*
-		 * TODO see if we can stop the background worker in a more friendly way that does
-		 * not print scary log lines
+		 * this will be called on memory context cleanup as well, if the worker has been
+		 * terminated already this will be a noop
 		 */
 		TerminateBackgroundWorker(handle);
 	}
 
 	PG_RETURN_VOID();
-}
-
-
-static BackgroundWorkerHandle *
-StartLockAcquireHelperBackgroundWorker(int backendToHelp)
-{
-	BackgroundWorkerHandle *handle = NULL;
-
-	BackgroundWorker worker = { 0 };
-	snprintf(worker.bgw_name, BGW_MAXLEN,
-			 "Citus Lock Acquire Helper: backend %d",
-			 backendToHelp);
-	snprintf(worker.bgw_type, BGW_MAXLEN, "citus_lock_aqcuire");
-
-	/* TODO verify we need both */
-	worker.bgw_flags = BGWORKER_SHMEM_ACCESS | BGWORKER_BACKEND_DATABASE_CONNECTION;
-	worker.bgw_start_time = BgWorkerStart_RecoveryFinished;
-	worker.bgw_restart_time = BGW_NEVER_RESTART;
-
-	snprintf(worker.bgw_library_name, BGW_MAXLEN, "citus");
-	snprintf(worker.bgw_function_name, BGW_MAXLEN, "LockAcquireHelperMain");
-	worker.bgw_main_arg = Int32GetDatum(backendToHelp);
-	worker.bgw_notify_pid = 0;
-
-	if (!RegisterDynamicBackgroundWorker(&worker, &handle))
-	{
-		ereport(ERROR, (errmsg("could not start lock acquiring background worker to "
-							   "force the update"),
-						errhint("Increasing max_worker_processes might help.")));
-	}
-
-	return handle;
-}
-
-
-/*
- * LockAcquireHelperMain runs in a dynamic background worker to help master_update_node to
- * acquire its locks.
- */
-void
-LockAcquireHelperMain(Datum main_arg)
-{
-	int backendPid = DatumGetInt32(main_arg);
-
-	BackgroundWorkerUnblockSignals();
-
-	elog(LOG, "lock acquiring backend started for backend %d", backendPid);
-	sleep(10);
-	elog(LOG, "lock acquiring backend finished for backend %d", backendPid);
 }
 
 
