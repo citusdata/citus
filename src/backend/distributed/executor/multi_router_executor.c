@@ -624,8 +624,7 @@ RouterModifyExecScan(CustomScanState *node)
 static void
 SortTupleStore(CitusScanState *scanState)
 {
-	TupleDesc tupleDescriptor =
-		scanState->customScanState.ss.ps.ps_ResultTupleSlot->tts_tupleDescriptor;
+	TupleDesc tupleDescriptor = ScanStateGetTupleDescriptor(scanState);
 	Tuplestorestate *tupleStore = scanState->tuplestorestate;
 
 	List *targetList = scanState->customScanState.ss.ps.plan->targetlist;
@@ -735,7 +734,7 @@ RouterSequentialModifyExecScan(CustomScanState *node)
 	List *taskList = workerJob->taskList;
 	ListCell *taskCell = NULL;
 	bool multipleTasks = list_length(taskList) > 1;
-	EState *executorState = scanState->customScanState.ss.ps.state;
+	EState *executorState = ScanStateGetExecutorState(scanState);
 	bool taskListRequires2PC = TaskListRequires2PC(taskList);
 	bool alwaysThrowErrorOnFailure = false;
 	CmdType operation = scanState->distributedPlan->operation;
@@ -906,8 +905,8 @@ RouterSelectExecScan(CustomScanState *node)
 static void
 ExecuteSingleSelectTask(CitusScanState *scanState, Task *task)
 {
-	ParamListInfo paramListInfo =
-		scanState->customScanState.ss.ps.state->es_param_list_info;
+	EState *executorState = ScanStateGetExecutorState(scanState);
+	ParamListInfo paramListInfo = executorState->es_param_list_info;
 	List *taskPlacementList = task->taskPlacementList;
 	ListCell *taskPlacementCell = NULL;
 	char *queryString = task->queryString;
@@ -1105,7 +1104,7 @@ ExecuteSingleModifyTask(CitusScanState *scanState, Task *task, CmdType operation
 
 	if (scanState)
 	{
-		executorState = scanState->customScanState.ss.ps.state;
+		executorState = ScanStateGetExecutorState(scanState);
 		paramListInfo = executorState->es_param_list_info;
 	}
 
@@ -1351,7 +1350,7 @@ void
 ExecuteMultipleTasks(CitusScanState *scanState, List *taskList,
 					 bool isModificationQuery, bool expectResults)
 {
-	EState *executorState = scanState->customScanState.ss.ps.state;
+	EState *executorState = ScanStateGetExecutorState(scanState);
 	ParamListInfo paramListInfo = executorState->es_param_list_info;
 	int64 affectedTupleCount = -1;
 
@@ -1815,8 +1814,7 @@ StoreQueryResult(CitusScanState *scanState, MultiConnection *connection,
 				 bool alwaysThrowErrorOnFailure, int64 *rows,
 				 DistributedExecutionStats *executionStats)
 {
-	TupleDesc tupleDescriptor =
-		scanState->customScanState.ss.ps.ps_ResultTupleSlot->tts_tupleDescriptor;
+	TupleDesc tupleDescriptor = ScanStateGetTupleDescriptor(scanState);
 	AttInMetadata *attributeInputMetadata = TupleDescGetAttInMetadata(tupleDescriptor);
 	List *targetList = scanState->customScanState.ss.ps.plan->targetlist;
 	uint32 expectedColumnCount = ExecCleanTargetListLength(targetList);

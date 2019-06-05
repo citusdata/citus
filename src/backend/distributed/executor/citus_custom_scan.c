@@ -308,7 +308,7 @@ static void
 CitusReScan(CustomScanState *node)
 {
 	CitusScanState *scanState = (CitusScanState *) node;
-	EState *executorState = scanState->customScanState.ss.ps.state;
+	EState *executorState = ScanStateGetExecutorState(scanState);
 	ParamListInfo paramListInfo = executorState->es_param_list_info;
 
 	if (paramListInfo != NULL)
@@ -317,4 +317,26 @@ CitusReScan(CustomScanState *node)
 						errmsg("Cursors for queries on distributed tables with "
 							   "parameters are currently unsupported")));
 	}
+}
+
+
+/*
+ * ScanStateGetTupleDescriptor returns the tuple descriptor for the given
+ * scan state.
+ */
+TupleDesc
+ScanStateGetTupleDescriptor(CitusScanState *scanState)
+{
+	return scanState->customScanState.ss.ps.ps_ResultTupleSlot->tts_tupleDescriptor;
+}
+
+
+/*
+ * ScanStateGetExecutorState returns the executor state for the given scan
+ * state.
+ */
+EState *
+ScanStateGetExecutorState(CitusScanState *scanState)
+{
+	return scanState->customScanState.ss.ps.state;
 }

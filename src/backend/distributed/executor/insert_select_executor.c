@@ -63,7 +63,7 @@ CoordinatorInsertSelectExecScan(CustomScanState *node)
 
 	if (!scanState->finishedRemoteScan)
 	{
-		EState *executorState = scanState->customScanState.ss.ps.state;
+		EState *executorState = ScanStateGetExecutorState(scanState);
 		DistributedPlan *distributedPlan = scanState->distributedPlan;
 		Query *selectQuery = distributedPlan->insertSelectSubquery;
 		List *insertTargetList = distributedPlan->insertTargetList;
