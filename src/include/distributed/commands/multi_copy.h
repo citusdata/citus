@@ -13,6 +13,7 @@
 #define MULTI_COPY_H
 
 
+#include "distributed/connection_management.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/metadata_cache.h"
 #include "nodes/execnodes.h"
@@ -96,6 +97,15 @@ typedef struct CitusCopyDestReceiver
 	HTAB *shardConnectionHash;
 	bool stopOnFailure;
 
+	/* cached data to be sent to shards */
+	HTAB *shardCopyDataHash;
+
+	/*
+	 * Do the copy by sending task lists to the executor instead of executing
+	 * the copy in multi_copy.c
+	 */
+	bool useExecutor;
+
 	/* state on how to copy out data types */
 	CopyOutState copyOutState;
 	FmgrInfo *columnOutputFunctions;
@@ -136,6 +146,14 @@ extern Node * ProcessCopyStmt(CopyStmt *copyStatement, char *completionTag,
 							  const char *queryString);
 extern void CheckCopyPermissions(CopyStmt *copyStatement);
 extern bool IsCopyResultStmt(CopyStmt *copyStatement);
-
+extern void SendShardCopyCommand(MultiConnection *connection,
+								 CitusCopyDestReceiver *copyDest, uint64 shardId);
+extern void SendCopyHeadersAndData(MultiConnection *connection,
+								   CitusCopyDestReceiver *copyDest,
+								   uint64 shardId, StringInfo copyData);
+extern void ExecuteCopyTask(MultiConnection *connection, CitusCopyDestReceiver *copyDest,
+							uint64 shardId, StringInfo copyData);
+extern void FinishCopy(MultiConnection *connection, CitusCopyDestReceiver *copyDest,
+					   uint64 shardId);
 
 #endif /* MULTI_COPY_H */

@@ -66,6 +66,7 @@
 #include "distributed/intermediate_results.h"
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/multi_executor.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_router_planner.h"
@@ -95,6 +96,14 @@ static const char BinarySignature[11] = "PGCOPY\n\377\r\n\0";
 
 /* use a global connection to the master node in order to skip passing it around */
 static MultiConnection *masterConnection = NULL;
+
+
+typedef struct ShardCopyData
+{
+	int64 shardId;
+	StringInfo data;
+	List *placementList;
+} ShardCopyData;
 
 
 /* Local functions forward declarations */
@@ -145,6 +154,11 @@ static bool CopyStatementHasFormat(CopyStmt *copyStatement, char *formatName);
 static bool IsCopyFromWorker(CopyStmt *copyStatement);
 static NodeAddress * MasterNodeAddress(CopyStmt *copyStatement);
 static void CitusCopyFrom(CopyStmt *copyStatement, char *completionTag);
+static HTAB * CreateShardCopyDataHash(MemoryContext memoryContext);
+static ShardCopyData * GetShardCopyData(HTAB *shardCopyDataHash, int64 shardId);
+static List * ShardCopyDataList(HTAB *shardCopyDataHash);
+static Task * CreateCopyTask(CitusCopyDestReceiver *copyDest, ShardCopyData *shardData, int taskId);
+static void FlushCopyBuffersAboveThreshold(CitusCopyDestReceiver *copyDest, int threshold);
 
 /* Private functions copied and adapted from copy.c in PostgreSQL */
 static void CopySendData(CopyOutState outputState, const void *databuf, int datasize);
@@ -2180,6 +2194,16 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
 	copyDest->copyOutState = copyOutState;
 	copyDest->multiShardCopy = false;
 
+	if (GetRelationDMLAccessMode(tableId) != RELATION_NOT_ACCESSED ||
+		GetRelationDDLAccessMode(tableId) != RELATION_NOT_ACCESSED)
+	{
+		copyDest->useExecutor = true;
+	}
+	else
+	{
+		copyDest->useExecutor = false;
+	}
+
 	/* prepare functions to call on received tuples */
 	{
 		TupleDesc destTupleDescriptor = distributedRelation->rd_att;
@@ -2237,6 +2261,7 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
 	copyDest->copyStatement = copyStatement;
 
 	copyDest->shardConnectionHash = CreateShardConnectionHash(TopTransactionContext);
+	copyDest->shardCopyDataHash = CreateShardCopyDataHash(TopTransactionContext);
 }
 
 
@@ -2283,6 +2308,7 @@ CitusSendTupleToPlacements(TupleTableSlot *slot, CitusCopyDestReceiver *copyDest
 	CopyStmt *copyStatement = copyDest->copyStatement;
 
 	HTAB *shardConnectionHash = copyDest->shardConnectionHash;
+	HTAB *shardCopyDataHash = copyDest->shardCopyDataHash;
 	CopyOutState copyOutState = copyDest->copyOutState;
 	FmgrInfo *columnOutputFunctions = copyDest->columnOutputFunctions;
 	CopyCoercionData *columnCoercionPaths = copyDest->columnCoercionPaths;
@@ -2311,46 +2337,73 @@ CitusSendTupleToPlacements(TupleTableSlot *slot, CitusCopyDestReceiver *copyDest
 	/* connections hash is kept in memory context */
 	MemoryContextSwitchTo(copyDest->memoryContext);
 
-	/* get existing connections to the shard placements, if any */
+	/*
+	 * Get existing connections to the shard placements, if any.
+	 * 
+	 * When useExecutor is true, we don't care about the shard connections here,
+	 * it is handled in executor.c. But anyway we create an entry in shardConnectionsHash
+	 * since insert_select_executor.c uses it to decide which shards have been modified.
+	 */
 	shardConnections = GetShardHashConnections(shardConnectionHash, shardId,
 											   &shardConnectionsFound);
-	if (!shardConnectionsFound)
+	if (copyDest->useExecutor)
 	{
-		/*
-		 * Keep track of multi shard accesses before opening connection
-		 * the second shard.
-		 */
-		if (!copyDest->multiShardCopy && hash_get_num_entries(shardConnectionHash) == 2)
+		StringInfo copyBuffer = NULL;
+		ShardCopyData *shardCopyData = NULL;
+
+		shardCopyData = GetShardCopyData(shardCopyDataHash, shardId);
+
+		resetStringInfo(copyOutState->fe_msgbuf);
+		AppendCopyRowData(columnValues, columnNulls, tupleDescriptor,
+						copyOutState, columnOutputFunctions, columnCoercionPaths);
+
+		copyBuffer = copyOutState->fe_msgbuf;
+		appendBinaryStringInfo(shardCopyData->data, copyBuffer->data, copyBuffer->len);
+
+		if (shardCopyData->data->len > 8 * 1024 * 1024)
 		{
-			Oid relationId = copyDest->distributedRelationId;
-
-			/* mark as multi shard to skip doing the same thing over and over */
-			copyDest->multiShardCopy = true;
-
-			/* error out of conflicting COPY */
-			CheckConflictingParallelCopyAccesses(relationId);
-
-			/* when we see multiple shard connections, we mark COPY as parallel modify */
-			RecordParallelModifyAccess(relationId);
-		}
-
-		/* open connections and initiate COPY on shard placements */
-		OpenCopyConnections(copyStatement, shardConnections, stopOnFailure,
-							copyOutState->binary);
-
-		/* send copy binary headers to shard placements */
-		if (copyOutState->binary)
-		{
-			SendCopyBinaryHeaders(copyOutState, shardId,
-								  shardConnections->connectionList);
+			FlushCopyBuffersAboveThreshold(copyDest, 4 * 1024 * 1024);
 		}
 	}
+	else if (!copyDest->useExecutor)
+	{
+		if (!shardConnectionsFound)
+		{
+			/*
+			* Keep track of multi shard accesses before opening connection
+			* the second shard.
+			*/
+			if (!copyDest->multiShardCopy && hash_get_num_entries(shardConnectionHash) == 2)
+			{
+				Oid relationId = copyDest->distributedRelationId;
 
-	/* replicate row to shard placements */
-	resetStringInfo(copyOutState->fe_msgbuf);
-	AppendCopyRowData(columnValues, columnNulls, tupleDescriptor,
-					  copyOutState, columnOutputFunctions, columnCoercionPaths);
-	SendCopyDataToAll(copyOutState->fe_msgbuf, shardId, shardConnections->connectionList);
+				/* mark as multi shard to skip doing the same thing over and over */
+				copyDest->multiShardCopy = true;
+
+				/* error out of conflicting COPY */
+				CheckConflictingParallelCopyAccesses(relationId);
+
+				/* when we see multiple shard connections, we mark COPY as parallel modify */
+				RecordParallelModifyAccess(relationId);
+			}
+
+			/* open connections and initiate COPY on shard placements */
+			OpenCopyConnections(copyStatement, shardConnections, stopOnFailure,
+								copyOutState->binary);
+			/* send copy binary headers to shard placements */
+			if (copyOutState->binary)
+			{
+				SendCopyBinaryHeaders(copyOutState, shardId,
+									shardConnections->connectionList);
+			}
+		}
+
+		/* replicate row to shard placements */
+		resetStringInfo(copyOutState->fe_msgbuf);
+		AppendCopyRowData(columnValues, columnNulls, tupleDescriptor,
+						copyOutState, columnOutputFunctions, columnCoercionPaths);
+		SendCopyDataToAll(copyOutState->fe_msgbuf, shardId, shardConnections->connectionList);
+	}
 
 	MemoryContextSwitchTo(oldContext);
 
@@ -2446,6 +2499,15 @@ CitusCopyDestReceiverShutdown(DestReceiver *destReceiver)
 	CopyOutState copyOutState = copyDest->copyOutState;
 	Relation distributedRelation = copyDest->distributedRelation;
 
+	if (copyDest->useExecutor)
+	{
+		int threshold = 0;
+		FlushCopyBuffersAboveThreshold(copyDest, threshold);
+		heap_close(distributedRelation, NoLock);
+
+		return;
+	}
+
 	shardConnectionsList = ShardConnectionList(shardConnectionHash);
 
 	PG_TRY();
@@ -2479,6 +2541,84 @@ CitusCopyDestReceiverShutdown(DestReceiver *destReceiver)
 	PG_END_TRY();
 
 	heap_close(distributedRelation, NoLock);
+}
+
+
+/*
+ * FlushCopyBuffersAboveThreshold creates tasks for all shards which
+ * have copy data above the given threshold and sends them to the
+ * executor.
+ */
+static void
+FlushCopyBuffersAboveThreshold(CitusCopyDestReceiver *copyDest, int threshold)
+{
+	List *taskList = NIL;
+
+	HTAB *shardCopyDataHash = copyDest->shardCopyDataHash;
+	List *shardDataList = NIL;
+	ListCell *shardDataCell = NULL;
+	int taskId = 1;
+	const int poolSize = DEFAULT_POOL_SIZE;
+	shardDataList = ShardCopyDataList(shardCopyDataHash);
+
+	foreach(shardDataCell, shardDataList)
+	{
+		ShardCopyData *shardData = (ShardCopyData *) lfirst(shardDataCell);
+		Task *task = NULL;
+
+		if (shardData->data->len <= threshold)
+		{
+			continue;
+		}
+
+		task = CreateCopyTask(copyDest, shardData, taskId++);
+		taskList = lappend(taskList, task);
+	}
+
+	ExecuteTaskList(CMD_UTILITY, taskList, poolSize);
+
+	foreach(shardDataCell, shardDataList)
+	{
+		ShardCopyData *shardData = (ShardCopyData *) lfirst(shardDataCell);
+
+		if (shardData->data->len <= threshold)
+		{
+			continue;
+		}
+
+		resetStringInfo(shardData->data);
+	}
+
+}
+
+
+/*
+ * CreateCopyTask creates a copy task for the given shard copy data.
+ */
+static Task *
+CreateCopyTask(CitusCopyDestReceiver *copyDest, ShardCopyData *shardData, int taskId)
+{
+	Task *task = NULL;
+	uint64 shardId = shardData->shardId;
+
+	RelationShard *relationShard = CitusMakeNode(RelationShard);
+	relationShard->relationId = copyDest->distributedRelationId;
+	relationShard->shardId  = shardId;
+	
+	task = CitusMakeNode(Task);
+	task->jobId = INVALID_JOB_ID;
+	task->taskId = taskId;
+	task->taskType = MODIFY_TASK;
+	task->copyTask = true;
+	task->copyReceiver = copyDest;
+	task->copyData = shardData->data;
+	task->replicationModel = REPLICATION_MODEL_INVALID;
+	task->dependedTaskList = NULL;
+	task->anchorShardId = shardId;
+	task->relationShardList = list_make1(relationShard);
+	task->taskPlacementList = shardData->placementList;
+
+	return task;
 }
 
 
@@ -2922,4 +3062,143 @@ CopyGetAttnums(TupleDesc tupDesc, Relation rel, List *attnamelist)
 
 	return attnums;
 	/* *INDENT-ON* */
+}
+
+
+/*
+ * SendShardCopyCommand constructs and sends the COPY ... FROM command for the given
+ * shardId over the given connection.
+ */
+void
+SendShardCopyCommand(MultiConnection *connection, CitusCopyDestReceiver *copyDest,
+					 uint64 shardId)
+{
+	CopyStmt *copyStatement = copyDest->copyStatement;
+	CopyOutState copyOutState = copyDest->copyOutState;
+	StringInfo copyCommand = NULL;
+
+	copyCommand = ConstructCopyStatement(copyStatement, shardId, copyOutState->binary);
+	if (!SendRemoteCommand(connection, copyCommand->data))
+	{
+		ReportConnectionError(connection, ERROR);
+	}
+}
+
+
+/*
+ * SendCopyHeadersAndData sends binary headers (if necessary), and puts COPY data
+ * on line.
+ */
+void
+SendCopyHeadersAndData(MultiConnection *connection, CitusCopyDestReceiver *copyDest,
+					   uint64 shardId, StringInfo copyData)
+{
+	CopyOutState copyOutState = copyDest->copyOutState;
+	
+	if (copyOutState->binary)
+	{
+		SendCopyBinaryHeaders(copyOutState, shardId, list_make1(connection));
+	}
+
+	SendCopyDataToPlacement(copyData, shardId, connection);
+}
+
+/*
+ * FinishCopy sends binary footers (if necessary), and finishes the COPY command
+ * on the given connetion.
+ */
+void
+FinishCopy(MultiConnection *connection, CitusCopyDestReceiver *copyDest, uint64 shardId)
+{
+	CopyOutState copyOutState = copyDest->copyOutState;
+
+	if (copyOutState->binary)
+	{
+		SendCopyBinaryFooters(copyOutState, shardId, list_make1(connection));
+	}
+
+	if (!PutRemoteCopyEnd(connection, NULL))
+	{
+		ereport(ERROR, (errcode(ERRCODE_IO_ERROR),
+							errmsg("failed to COPY to shard " INT64_FORMAT " on %s:%d",
+								   shardId, connection->hostname, connection->port)));
+	}
+}
+
+
+/*
+ * CreateShardCopyDataHash constructs a hash table which maps from shard
+ * identifier to a ShardCopyData struct, passing the provided MemoryContext to
+ * hash_create for hash allocations.
+ */
+static HTAB *
+CreateShardCopyDataHash(MemoryContext memoryContext)
+{
+	HTAB *shardCopyDataHash = NULL;
+	int hashFlags = 0;
+	HASHCTL info;
+
+	memset(&info, 0, sizeof(info));
+	info.keysize = sizeof(int64);
+	info.entrysize = sizeof(ShardCopyData);
+	info.hcxt = memoryContext;
+	hashFlags = (HASH_ELEM | HASH_CONTEXT | HASH_BLOBS);
+
+	shardCopyDataHash = hash_create("Shard Data Hash", 128, &info, hashFlags);
+
+	return shardCopyDataHash;
+}
+
+
+/*
+ * GetShardCopyData finds existing connections for a shard in the
+ * provided hash. If not found, then a ShardCopyData structure with empty
+ * data and placementList is returned.
+ */
+static ShardCopyData *
+GetShardCopyData(HTAB *shardCopyDataHash, int64 shardId)
+{
+	ShardCopyData *shardCopyData = NULL;
+	bool found = false;
+
+	shardCopyData = (ShardCopyData *) hash_search(shardCopyDataHash, &shardId,
+												  HASH_ENTER, &found);
+	if (!found)
+	{
+		shardCopyData->shardId = shardId;
+		shardCopyData->data = makeStringInfo();
+		enlargeStringInfo(shardCopyData->data, 8 * 1024 * 1024);
+		shardCopyData->placementList = MasterShardPlacementList(shardId);
+	}
+
+	return shardCopyData;
+}
+
+
+/*
+ * ShardCopyDataList returns the list of ShardCopyDatas in shardCopyDataHash.
+ */
+static List *
+ShardCopyDataList(HTAB *shardCopyDataHash)
+{
+	List *shardDataList = NIL;
+	HASH_SEQ_STATUS status;
+	ShardCopyData *shardData = NULL;
+
+	if (shardCopyDataHash == NULL)
+	{
+		return NIL;
+	}
+
+	hash_seq_init(&status, shardCopyDataHash);
+
+	shardData = (ShardCopyData *) hash_seq_search(&status);
+	while (shardData != NULL)
+	{
+		shardDataList = lappend(shardDataList, shardData);
+
+		shardData = (ShardCopyData *) hash_seq_search(&status);
+	}
+
+	return shardDataList;
 }

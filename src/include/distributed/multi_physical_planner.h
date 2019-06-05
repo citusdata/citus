@@ -167,6 +167,8 @@ typedef struct MapMergeJob
  */
 typedef struct TaskExecution TaskExecution;
 
+typedef struct CitusCopyDestReceiver CitusCopyDestReceiver;
+
 typedef struct Task
 {
 	CitusNode type;
@@ -185,6 +187,10 @@ typedef struct Task
 	TaskExecution *taskExecution;  /* used by task tracker executor */
 	bool upsertQuery;              /* only applies to modify tasks */
 	char replicationModel;         /* only applies to modify tasks */
+
+	bool copyTask;
+	CitusCopyDestReceiver *copyReceiver;
+	StringInfo copyData;
 
 	List *relationRowLockList;
 	bool modifyWithSubquery;

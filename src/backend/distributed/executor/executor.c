@@ -17,6 +17,7 @@
 #include "access/xact.h"
 #include "commands/dbcommands.h"
 #include "distributed/citus_custom_scan.h"
+#include "distributed/commands/multi_copy.h"
 #include "distributed/connection_management.h"
 #include "distributed/multi_client_executor.h"
 #include "distributed/multi_executor.h"
@@ -294,6 +295,9 @@ typedef struct TaskPlacementExecution
 	/* state of the execution of the command on the placement */
 	TaskPlacementExecutionState executionState;
 
+	/* if this is a copy task, whether PQputCopyEnd has been called */
+	bool copyEndSent;
+
 	/* worker pool on which the placement needs to be executed */
 	WorkerPool *workerPool;
 
@@ -362,6 +366,7 @@ static void PlacementExecutionDone(TaskPlacementExecution *placementExecution,
 static void PlacementExecutionReady(TaskPlacementExecution *placementExecution);
 static TaskExecutionState GetTaskExecutionState(
 	ShardCommandExecution *shardCommandExecution);
+static bool CopyTaskSession(WorkerSession *session);
 
 
 /*
@@ -747,6 +752,7 @@ AssignTasksToConnections(DistributedExecution *execution)
 			placementExecution->shardPlacement = taskPlacement;
 			placementExecution->workerPool = workerPool;
 			placementExecution->placementExecutionIndex = placementExecutionIndex;
+			placementExecution->copyEndSent = false;
 
 			if (placementExecutionReady)
 			{
@@ -1461,6 +1467,23 @@ TransactionStateMachine(WorkerSession *session)
 			{
 				PGresult *result = NULL;
 
+				if (CopyTaskSession(session))
+				{
+					Assert(session->currentTask != NULL);
+
+					if (!session->currentTask->copyEndSent)
+					{
+						ShardCommandExecution *shardCommandExecution =
+							session->currentTask->shardCommandExecution;
+						CitusCopyDestReceiver *copyReceiver =
+							shardCommandExecution->task->copyReceiver;
+						uint64 shardId = shardCommandExecution->task->anchorShardId;
+						
+						FinishCopy(connection, copyReceiver, shardId);
+						session->currentTask->copyEndSent = true;
+					}
+				}
+
 				result = PQgetResult(connection->pgConn);
 				if (result != NULL)
 				{
@@ -1537,6 +1560,7 @@ TransactionStateMachine(WorkerSession *session)
 				TaskPlacementExecution *placementExecution = session->currentTask;
 				ShardCommandExecution *shardCommandExecution =
 					placementExecution->shardCommandExecution;
+				bool copyTask = shardCommandExecution->task->copyTask;
 				bool storeRows = shardCommandExecution->expectResults;
 
 				if (shardCommandExecution->gotResults)
@@ -1549,6 +1573,15 @@ TransactionStateMachine(WorkerSession *session)
 				if (!fetchDone)
 				{
 					break;
+				}
+
+				if (copyTask)
+				{
+					StringInfo copyData = shardCommandExecution->task->copyData;
+					CitusCopyDestReceiver *copyReceiver =
+						shardCommandExecution->task->copyReceiver;
+					uint64 shardId = shardCommandExecution->task->anchorShardId;
+					SendCopyHeadersAndData(connection, copyReceiver, shardId, copyData);
 				}
 
 				shardCommandExecution->gotResults = true;
@@ -1708,7 +1741,14 @@ StartPlacementExecutionOnSession(TaskPlacementExecution *placementExecution,
 	/* connection is going to be in use */
 	workerPool->idleConnectionCount--;
 
-	if (paramListInfo != NULL)
+
+	if (task->copyTask)
+	{
+		uint64 shardId = taskPlacement->shardId;
+		SendShardCopyCommand(connection, task->copyReceiver, shardId);
+		querySent = true;
+	}
+	else if (paramListInfo != NULL)
 	{
 		int parameterCount = paramListInfo->numParams;
 		Oid *parameterTypes = NULL;
@@ -1733,11 +1773,14 @@ StartPlacementExecutionOnSession(TaskPlacementExecution *placementExecution,
 		return false;
 	}
 
-	singleRowMode = PQsetSingleRowMode(connection->pgConn);
-	if (singleRowMode == 0)
+	if (!task->copyTask)
 	{
-		connection->connectionState = MULTI_CONNECTION_LOST;
-		return false;
+		singleRowMode = PQsetSingleRowMode(connection->pgConn);
+		if (singleRowMode == 0)
+		{
+			connection->connectionState = MULTI_CONNECTION_LOST;
+			return false;
+		}
 	}
 
 	session->currentTask = placementExecution;
@@ -1858,6 +1901,9 @@ ReceiveResults(WorkerSession *session, bool storeRows)
 		uint32 rowsProcessed = 0;
 		uint32 columnCount = 0;
 		ExecStatusType resultStatus = 0;
+		ShardCommandExecution *shardCommandExecution =
+			session->currentTask->shardCommandExecution;
+		bool copyTask = shardCommandExecution->task->copyTask;
 
 		PGresult *result = PQgetResult(connection->pgConn);
 		if (result == NULL)
@@ -1867,12 +1913,19 @@ ReceiveResults(WorkerSession *session, bool storeRows)
 		}
 
 		resultStatus = PQresultStatus(result);
-		if (resultStatus == PGRES_COMMAND_OK)
+		if (copyTask)
+		{
+			if (resultStatus != PGRES_COPY_IN)
+			{
+				ReportResultError(connection, result, ERROR);
+			}
+
+			return true;
+		}
+		else if (resultStatus == PGRES_COMMAND_OK)
 		{
 			char *currentAffectedTupleString = PQcmdTuples(result);
 			int64 currentAffectedTupleCount = 0;
-			ShardCommandExecution *shardCommandExecution =
-				session->currentTask->shardCommandExecution;
 
 			/* if there are multiple replicas, make sure to consider only one */
 			if (!shardCommandExecution->gotResults && *currentAffectedTupleString != '\0')
@@ -2344,4 +2397,25 @@ UpdateWaitEventSetFlags(WaitEventSet *waitEventSet, List *sessionList)
 		ModifyWaitEvent(waitEventSet, connectionIndex, connection->waitFlags, NULL);
 		connectionIndex++;
 	}
+}
+
+
+/*
+ * CopyTaskSession returns if the given session is executing a
+ * copy task.
+ */
+static bool
+CopyTaskSession(WorkerSession *session)
+{
+	bool copyTask = false;
+
+	if (session->currentTask != NULL)
+	{
+		TaskPlacementExecution *placementExecution = session->currentTask;
+		ShardCommandExecution *shardCommandExecution =
+			placementExecution->shardCommandExecution;
+		copyTask = shardCommandExecution->task->copyTask;
+	}
+
+	return copyTask;
 }
