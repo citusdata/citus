@@ -38,6 +38,9 @@ extern bool ForceMaxQueryParallelization;
 extern void CitusExecutorStart(QueryDesc *queryDesc, int eflags);
 extern void CitusExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint64 count,
 							 bool execute_once);
+extern uint64 ExecuteTaskListExtended(CmdType operation, List *taskList,
+									  TupleDesc tupleDescriptor, Tuplestorestate *tupleStore,
+									  bool hasReturning, int targetPoolSize);
 extern uint64 ExecuteTaskList(CmdType operation, List *taskList, int targetPoolSize);
 extern TupleTableSlot * CitusExecScan(CustomScanState *node);
 extern TupleTableSlot * ReturnTupleFromTuplestore(CitusScanState *scanState);
