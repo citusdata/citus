@@ -370,8 +370,8 @@ static void PlacementExecutionDone(TaskPlacementExecution *placementExecution,
 								   bool succeeded);
 static bool ShouldMarkPlacementsInvalidOnFailure(DistributedExecution *execution);
 static void PlacementExecutionReady(TaskPlacementExecution *placementExecution);
-static TaskExecutionState GetTaskExecutionState(ShardCommandExecution *
-												shardCommandExecution);
+static TaskExecutionState TaskExecutionStateMachine(ShardCommandExecution *
+													shardCommandExecution);
 
 
 /*
@@ -2281,7 +2281,7 @@ PlacementExecutionDone(TaskPlacementExecution *placementExecution, bool succeede
 	if (executionState == TASK_EXECUTION_NOT_FINISHED)
 	{
 		TaskExecutionState newExecutionState =
-			GetTaskExecutionState(shardCommandExecution);
+			TaskExecutionStateMachine(shardCommandExecution);
 		if (newExecutionState == TASK_EXECUTION_FINISHED)
 		{
 			execution->unfinishedTaskCount--;
@@ -2455,7 +2455,7 @@ PlacementExecutionReady(TaskPlacementExecution *placementExecution)
  * finished or failed according to its execution order.
  */
 static TaskExecutionState
-GetTaskExecutionState(ShardCommandExecution *shardCommandExecution)
+TaskExecutionStateMachine(ShardCommandExecution *shardCommandExecution)
 {
 	PlacementExecutionOrder executionOrder = shardCommandExecution->executionOrder;
 	int donePlacementCount = 0;
