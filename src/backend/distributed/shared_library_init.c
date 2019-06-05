@@ -1073,13 +1073,13 @@ RegisterCitusConfigVariables(void)
 					 "and operating system name. This configuration value controls "
 					 "whether these reports are sent."),
 		&EnableStatisticsCollection,
-#ifdef HAVE_LIBCURL
+#if defined(HAVE_LIBCURL) && defined(ENABLE_CITUS_STATISTICS_COLLECTION)
 		true,
 #else
 		false,
 #endif
 		PGC_SIGHUP,
-		GUC_SUPERUSER_ONLY | GUC_NO_SHOW_ALL,
+		GUC_SUPERUSER_ONLY,
 		&StatisticsCollectionGucCheckHook,
 		NULL, NULL);
 
