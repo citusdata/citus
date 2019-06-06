@@ -29,6 +29,7 @@
 #include "utils/snapmgr.h"
 
 #include "distributed/citus_acquire_lock.h"
+#include "distributed/version_compat.h"
 
 /* forward declaration of background worker entrypoint */
 extern void LockAcquireHelperMain(Datum main_arg);
@@ -69,7 +70,9 @@ StartLockAcquireHelperBackgroundWorker(int backendToHelp)
 	snprintf(worker.bgw_name, BGW_MAXLEN,
 			 "Citus Lock Acquire Helper: %d/%u",
 			 backendToHelp, MyDatabaseId);
+#if PG_VERSION_NUM >= 110000
 	snprintf(worker.bgw_type, BGW_MAXLEN, "citus_lock_aqcuire");
+#endif
 
 	/* TODO verify we need both */
 	worker.bgw_flags = BGWORKER_SHMEM_ACCESS | BGWORKER_BACKEND_DATABASE_CONNECTION;
