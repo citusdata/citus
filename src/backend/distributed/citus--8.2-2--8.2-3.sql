@@ -20,4 +20,6 @@ COMMENT ON FUNCTION master_update_node(node_id int,
                                        force bool)
   IS 'change the location of a node';
 
+REVOKE ALL ON FUNCTION master_update_node(int,text,int,bool) FROM PUBLIC;
+
 RESET search_path;
