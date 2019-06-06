@@ -2217,10 +2217,10 @@ DEBUG:  Collecting INSERT ... SELECT results on coordinator
  user_id | time | value_1 | value_2 | value_3 | value_4 
 ---------+------+---------+---------+---------+---------
        1 |      |      11 |         |         |        
-       5 |      |      15 |         |         |        
+       2 |      |      12 |         |         |        
        3 |      |      13 |         |         |        
        4 |      |      14 |         |         |        
-       2 |      |      12 |         |         |        
+       5 |      |      15 |         |         |        
 (5 rows)
 
 RESET client_min_messages;
