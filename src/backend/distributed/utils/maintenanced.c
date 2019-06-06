@@ -33,7 +33,6 @@
 #include "distributed/maintenanced.h"
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
-#include "distributed/statistics_collection.h"
 #include "distributed/transaction_recovery.h"
 #include "distributed/version_compat.h"
 #include "nodes/makefuncs.h"
@@ -220,9 +219,6 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 {
 	Oid databaseOid = DatumGetObjectId(main_arg);
 	MaintenanceDaemonDBData *myDbData = NULL;
-	TimestampTz nextStatsCollectionTime USED_WITH_LIBCURL_ONLY =
-		TimestampTzPlusMilliseconds(GetCurrentTimestamp(), 60 * 1000);
-	bool retryStatsCollection USED_WITH_LIBCURL_ONLY = false;
 	ErrorContextCallback errorCallback;
 	TimestampTz lastRecoveryTime = 0;
 
@@ -302,68 +298,6 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 		 * timeout indicates, it's ok to lower it to that value.  Expensive
 		 * tasks should do their own time math about whether to re-run checks.
 		 */
-
-#ifdef HAVE_LIBCURL
-		if (EnableStatisticsCollection &&
-			GetCurrentTimestamp() >= nextStatsCollectionTime)
-		{
-			bool statsCollectionSuccess = false;
-			InvalidateMetadataSystemCache();
-			StartTransactionCommand();
-
-			/*
-			 * Lock the extension such that it cannot be dropped or created
-			 * concurrently. Skip statistics collection if citus extension is
-			 * not accessible.
-			 *
-			 * Similarly, we skip statistics collection if there exists any
-			 * version mismatch or the extension is not fully created yet.
-			 */
-			if (!LockCitusExtension())
-			{
-				ereport(DEBUG1, (errmsg("could not lock the citus extension, "
-										"skipping statistics collection")));
-			}
-			else if (CheckCitusVersion(DEBUG1) && CitusHasBeenLoaded())
-			{
-				FlushDistTableCache();
-				WarnIfSyncDNS();
-				statsCollectionSuccess = CollectBasicUsageStatistics();
-				if (statsCollectionSuccess)
-				{
-					/*
-					 * Checking for updates only when collecting statistics succeeds,
-					 * so we don't log update messages twice when we retry statistics
-					 * collection in a minute.
-					 */
-					CheckForUpdates();
-				}
-			}
-
-			/*
-			 * If statistics collection was successful the next collection is
-			 * 24-hours later. Also, if this was a retry attempt we don't do
-			 * any more retries until 24-hours later, so we limit number of
-			 * retries to one.
-			 */
-			if (statsCollectionSuccess || retryStatsCollection)
-			{
-				nextStatsCollectionTime =
-					TimestampTzPlusMilliseconds(GetCurrentTimestamp(),
-												STATS_COLLECTION_TIMEOUT_MILLIS);
-				retryStatsCollection = false;
-			}
-			else
-			{
-				nextStatsCollectionTime =
-					TimestampTzPlusMilliseconds(GetCurrentTimestamp(),
-												STATS_COLLECTION_RETRY_TIMEOUT_MILLIS);
-				retryStatsCollection = true;
-			}
-
-			CommitTransactionCommand();
-		}
-#endif
 
 		/*
 		 * If enabled, run 2PC recovery on primary nodes (where !RecoveryInProgress()),

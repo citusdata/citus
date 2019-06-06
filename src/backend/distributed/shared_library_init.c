@@ -44,7 +44,6 @@
 #include "distributed/query_stats.h"
 #include "distributed/remote_commands.h"
 #include "distributed/shared_library_init.h"
-#include "distributed/statistics_collection.h"
 #include "distributed/subplan_execution.h"
 #include "distributed/task_tracker.h"
 #include "distributed/transaction_management.h"
@@ -59,6 +58,7 @@
 #include "tcop/tcopprot.h"
 #include "utils/guc.h"
 #include "utils/guc_tables.h"
+#include "utils/uuid.h"
 
 /* marks shared object as one loadable by the postgres version compiled against */
 PG_MODULE_MAGIC;
@@ -76,8 +76,6 @@ static bool ErrorIfNotASuitableDeadlockFactor(double *newval, void **extra,
 static void NormalizeWorkerListPath(void);
 static bool NodeConninfoGucCheckHook(char **newval, void **extra, GucSource source);
 static void NodeConninfoGucAssignHook(const char *newval, void *extra);
-static bool StatisticsCollectionGucCheckHook(bool *newval, void **extra, GucSource
-											 source);
 
 /* static variable to hold value of deprecated GUC variable */
 static bool ExpireCachedShards = false;
@@ -1065,24 +1063,6 @@ RegisterCitusConfigVariables(void)
 		0,
 		NULL, NULL, NULL);
 
-	DefineCustomBoolVariable(
-		"citus.enable_statistics_collection",
-		gettext_noop("Enables sending basic usage statistics to Citus."),
-		gettext_noop("Citus uploads daily anonymous usage reports containing "
-					 "rounded node count, shard size, distributed table count, "
-					 "and operating system name. This configuration value controls "
-					 "whether these reports are sent."),
-		&EnableStatisticsCollection,
-#if defined(HAVE_LIBCURL) && defined(ENABLE_CITUS_STATISTICS_COLLECTION)
-		true,
-#else
-		false,
-#endif
-		PGC_SIGHUP,
-		GUC_SUPERUSER_ONLY,
-		&StatisticsCollectionGucCheckHook,
-		NULL, NULL);
-
 	DefineCustomStringVariable(
 		"citus.node_conninfo",
 		gettext_noop("Sets parameters used for outbound connections."),
@@ -1274,23 +1254,15 @@ NodeConninfoGucAssignHook(const char *newval, void *extra)
 }
 
 
-static bool
-StatisticsCollectionGucCheckHook(bool *newval, void **extra, GucSource source)
+/*
+ * citus_server_id was removed in 8.2-3, but we need its symbol to be defined
+ * in citus.so because installation script at some point does CREATE FUNCTION
+ * for it, although it is dropped later.
+ */
+PG_FUNCTION_INFO_V1(citus_server_id);
+Datum
+citus_server_id(PG_FUNCTION_ARGS)
 {
-#ifdef HAVE_LIBCURL
-	return true;
-#else
-
-	/* if libcurl is not installed, only accept false */
-	if (*newval)
-	{
-		GUC_check_errcode(ERRCODE_FEATURE_NOT_SUPPORTED);
-		GUC_check_errdetail("Citus was compiled without libcurl support.");
-		return false;
-	}
-	else
-	{
-		return true;
-	}
-#endif
+	uint8 *buf = (uint8 *) palloc0(UUID_LEN);
+	PG_RETURN_UUID_P((pg_uuid_t *) buf);
 }
