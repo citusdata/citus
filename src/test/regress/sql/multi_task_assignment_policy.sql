@@ -261,5 +261,43 @@ SELECT count(DISTINCT value) FROM explain_outputs;
 RESET citus.task_assignment_policy;
 RESET client_min_messages;
 
+--  make sure we set the right anchor shardid for task
+-- citus/issues/2749 , anchor_shardId should be assigned as dis_table'shardid 
+SET citus.shard_replication_factor TO 1;
+SET citus.replication_model TO streaming;
+CREATE TABLE reference_table (id bigint, value bigint);
+SELECT create_reference_table('reference_table');
+
+CREATE TABLE dis_table (
+        id bigint,
+        min_value numeric,
+        average_value numeric,
+        count int,
+        uniques int);
+
+SELECT create_distributed_table('dis_table', 'id');
+
+INSERT INTO reference_table VALUES (1, 100);
+INSERT INTO dis_table VALUES (1);
+
+--- thish should be ok, query will send to one worker
+UPDATE dis_table SET average_value = average_query.average FROM (
+        SELECT avg(value) AS average FROM reference_table WHERE id = 1
+) average_query
+WHERE id = 1;
+
+--- this also should be ok
+UPDATE reference_table SET value = average_query.average FROM (
+        SELECT avg(value) AS average FROM reference_table WHERE id = 1
+) average_query
+WHERE id = 1;
+
+--- this current not ok
+UPDATE reference_table SET value = average_query.average FROM (
+        SELECT average_value AS average FROM dis_table WHERE id = 1
+) average_query
+WHERE id = 1;
+
 DROP TABLE task_assignment_replicated_hash, task_assignment_nonreplicated_hash,
-  task_assignment_reference_table, task_assignment_test_table_2, explain_outputs;
+  task_assignment_reference_table, task_assignment_test_table_2, explain_outputs,
+  dis_table,reference_table ;
