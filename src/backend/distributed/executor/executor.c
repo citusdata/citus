@@ -1622,8 +1622,6 @@ TransactionStateMachine(WorkerSession *session)
 					StartRemoteTransactionBegin(connection);
 
 					transaction->transactionState = REMOTE_TRANS_CLEARING_RESULTS;
-
-					transaction->beginSent = true;
 				}
 				else
 				{
@@ -2349,7 +2347,7 @@ PlacementExecutionDone(TaskPlacementExecution *placementExecution, bool succeede
 
 
 /*
- * ShouldMarkPlacementsInvalidOnFailures returns true if the failure
+ * ShouldMarkPlacementsInvalidOnFailure returns true if the failure
  * should trigger marking placements invalid.
  */
 static bool
@@ -2451,8 +2449,10 @@ PlacementExecutionReady(TaskPlacementExecution *placementExecution)
 
 
 /*
- * GetTaskExecutionState returns whether a shard command execution
- * finished or failed according to its execution order.
+ * TaskExecutionStateMachine returns whether a shard command execution
+ * finished or failed according to its execution order. If the task is
+ * already finished, simply return the state. Else, calculate the state
+ * and return it.
  */
 static TaskExecutionState
 TaskExecutionStateMachine(ShardCommandExecution *shardCommandExecution)
