@@ -483,6 +483,7 @@ master_update_node(PG_FUNCTION_ARGS)
 	 * Defaults to false
 	 */
 	bool force = PG_GETARG_BOOL(3);
+	int32 lock_cooldown = PG_GETARG_INT32(4);
 
 	char *newNodeNameString = text_to_cstring(newNodeName);
 	WorkerNode *workerNode = NULL;
@@ -545,7 +546,7 @@ master_update_node(PG_FUNCTION_ARGS)
 		 */
 		if (force)
 		{
-			handle = StartLockAcquireHelperBackgroundWorker(MyProcPid);
+			handle = StartLockAcquireHelperBackgroundWorker(MyProcPid, lock_cooldown);
 			ereport(NOTICE, (errmsg("force the update to the node")));
 		}
 

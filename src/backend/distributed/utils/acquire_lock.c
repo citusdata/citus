@@ -45,6 +45,7 @@ static void EnsureStopLockAcquireHelper(void *arg);
 typedef struct LockAcquireHelperArgs
 {
 	Oid DatabaseId;
+	int32 lock_cooldown;
 } LockAcquireHelperArgs;
 
 static bool got_sigterm = false;
@@ -58,7 +59,7 @@ static bool got_sigterm = false;
  * returned on the first possible moment the help is no longer required.
  */
 BackgroundWorkerHandle *
-StartLockAcquireHelperBackgroundWorker(int backendToHelp)
+StartLockAcquireHelperBackgroundWorker(int backendToHelp, int32 lock_cooldown)
 {
 	BackgroundWorkerHandle *handle = NULL;
 	LockAcquireHelperArgs args;
@@ -68,6 +69,7 @@ StartLockAcquireHelperBackgroundWorker(int backendToHelp)
 
 	/* collect the extra arguments required for the background worker */
 	args.DatabaseId = MyDatabaseId;
+	args.lock_cooldown = lock_cooldown;
 
 	/* construct the background worker and start it */
 	snprintf(worker.bgw_name, BGW_MAXLEN,
@@ -185,7 +187,7 @@ LockAcquireHelperMain(Datum main_arg)
 	/*
 	 * TODO add cooldown period before canceling backends
 	 */
-	sleep(1);
+	sleep(args->lock_cooldown / 1000);
 
 	/* connecting to the database */
 	BackgroundWorkerInitializeConnectionByOid(args->DatabaseId, InvalidOid, 0);
