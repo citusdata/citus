@@ -186,16 +186,17 @@ LockAcquireHelperMain(Datum main_arg)
 	/* connecting to the database */
 	BackgroundWorkerInitializeConnectionByOid(args->DatabaseId, InvalidOid, 0);
 
+	/* TODO explain sql below */
 	initStringInfo(&sql);
 	appendStringInfo(&sql,
-					 "SELECT pg_terminate_backend(conflicting.pid) FROM\n"
-					 "  pg_locks AS blocked,\n"
-					 "  pg_locks AS conflicting\n"
-					 "WHERE conflicting.database = blocked.database\n"
-					 "  AND conflicting.objid = blocked.objid\n"
-					 "  AND conflicting.granted = true\n"
-					 "  AND blocked.granted = false\n"
-					 "  AND blocked.pid = %d;",
+					 "SELECT pg_terminate_backend(conflicting.pid)\n"
+					 "  FROM pg_locks AS blocked\n"
+					 "       JOIN pg_locks AS conflicting\n"
+					 "         ON (conflicting.database = blocked.database\n"
+					 "             AND conflicting.objid = blocked.objid)\n"
+					 " WHERE conflicting.granted = true\n"
+					 "   AND blocked.granted = false\n"
+					 "   AND blocked.pid = %d;",
 					 backendPid);
 
 	while (ShouldAcquireLock(100))
