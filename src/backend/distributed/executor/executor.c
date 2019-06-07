@@ -339,6 +339,7 @@ static void FinishDistributedExecution(DistributedExecution *execution);
 
 static bool DistributedPlanModifiesDatabase(DistributedPlan *plan);
 static bool DistributedStatementRequiresRollback(DistributedPlan *distributedPlan);
+static void LockPartitionsForDistributedPlan(DistributedPlan *distributedPlan);
 static void AssignTasksToConnections(DistributedExecution *execution);
 static void UnclaimAllSessionConnections(List *sessionList);
 static bool ShouldForceOpeningConnection(TaskPlacementExecutionState
@@ -400,8 +401,12 @@ CitusExecScan(CustomScanState *node)
 		bool interTransactions = false;
 		int targetPoolSize = DEFAULT_POOL_SIZE;
 
-		/* we are taking locks on partitions of partitioned tables */
-		LockPartitionsInRelationList(distributedPlan->relationIdList, AccessShareLock);
+		/*
+		 * PostgreSQL takes locks on all partitions in the executor. It's not entirely
+		 * clear why this is necessary (instead of locking the parent during DDL), but
+		 * We do the same for consistency.
+		 */
+		LockPartitionsForDistributedPlan(distributedPlan);
 
 		ExecuteSubPlans(distributedPlan);
 
@@ -709,6 +714,30 @@ DistributedStatementRequiresRollback(DistributedPlan *distributedPlan)
 	}
 
 	return false;
+}
+
+
+/*
+ * LockPartitionsForDistributedPlan ensures commands take locks on all partitions
+ * of a distributed table that appears in the query. We do this primarily out of
+ * consistency with PostgreSQL locking.
+ */
+static void
+LockPartitionsForDistributedPlan(DistributedPlan *distributedPlan)
+{
+	if (DistributedPlanModifiesDatabase(distributedPlan))
+	{
+		Oid targetRelationId = distributedPlan->targetRelationId;
+
+		LockPartitionsInRelationList(list_make1_oid(targetRelationId), RowExclusiveLock);
+	}
+
+	/*
+	 * Lock partitions of tables that appear in a SELECT or subquery. In the
+	 * DML case this also includes the target relation, but since we already
+	 * have a stronger lock this doesn't do any harm.
+	 */
+	LockPartitionsInRelationList(distributedPlan->relationIdList, AccessShareLock);
 }
 
 
