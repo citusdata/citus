@@ -147,7 +147,7 @@ GRANT EXECUTE ON FUNCTION master_add_node(text,int,int,noderole,name) TO node_me
 GRANT EXECUTE ON FUNCTION master_add_secondary_node(text,int,text,int,name) TO node_metadata_user;
 GRANT EXECUTE ON FUNCTION master_disable_node(text,int) TO node_metadata_user;
 GRANT EXECUTE ON FUNCTION master_remove_node(text,int) TO node_metadata_user;
-GRANT EXECUTE ON FUNCTION master_update_node(int,text,int,bool) TO node_metadata_user;
+GRANT EXECUTE ON FUNCTION master_update_node(int,text,int,bool,int) TO node_metadata_user;
 -- try to manipulate node metadata via non-super user
 SET ROLE non_super_user;
 SELECT 1 FROM master_initialize_node_metadata();
