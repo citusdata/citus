@@ -256,7 +256,7 @@ typedef struct DistributedPlan
 	/* target list of an INSERT ... SELECT via the coordinator */
 	List *insertTargetList;
 
-	/* target relation of an INSERT ... SELECT via the coordinator */
+	/* target relation of a modification */
 	Oid targetRelationId;
 
 	/*
