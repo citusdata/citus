@@ -40,6 +40,7 @@ extern void LockAcquireHelperMain(Datum main_arg);
 /* forward declaration of helper functions */
 static void lock_acquire_helper_sigterm(SIGNAL_ARGS);
 static void EnsureStopLockAcquireHelper(void *arg);
+static long DeadlineTimestampTzToTimeout(TimestampTz deadline);
 
 /* LockAcquireHelperArgs contains extra arguments to be used to start the worker */
 typedef struct LockAcquireHelperArgs
@@ -176,7 +177,10 @@ LockAcquireHelperMain(Datum main_arg)
 	int backendPid = DatumGetInt32(main_arg);
 	StringInfoData sql;
 	LockAcquireHelperArgs *args = (LockAcquireHelperArgs *) MyBgworkerEntry->bgw_extra;
-
+	long timeout = 0;
+	const TimestampTz connectionStart = GetCurrentTimestamp();
+	const TimestampTz deadline = TimestampTzPlusMilliseconds(connectionStart,
+															 args->lock_cooldown);
 
 	pqsignal(SIGTERM, lock_acquire_helper_sigterm);
 
@@ -185,9 +189,14 @@ LockAcquireHelperMain(Datum main_arg)
 	elog(LOG, "lock acquiring backend started for backend %d", backendPid);
 
 	/*
-	 * TODO add cooldown period before canceling backends
+	 * this loop waits till the deadline is reached (eg. lock_cooldown has passed) OR we
+	 * no longer need to acquire the lock due to the termination of this backend.
+	 * Only after the timeout the code will continue with the section that will acquire
+	 * the lock.
 	 */
-	sleep(args->lock_cooldown / 1000);
+	do {
+		timeout = DeadlineTimestampTzToTimeout(deadline);
+	} while (timeout > 0 && ShouldAcquireLock(timeout));
 
 	/* connecting to the database */
 	BackgroundWorkerInitializeConnectionByOid(args->DatabaseId, InvalidOid, 0);
@@ -244,4 +253,19 @@ LockAcquireHelperMain(Datum main_arg)
 
 	/* safely got to the end, exit without problem */
 	proc_exit(0);
+}
+
+
+/*
+ * DeadlineTimestampTzToTimeout returns the numer of miliseconds that still need to elapse
+ * before the deadline provided as an argument will be reached. The outcome can be used to
+ * pass to the Wait of an EventSet to make sure it returns after the timeout has passed.
+ */
+static long
+DeadlineTimestampTzToTimeout(TimestampTz deadline)
+{
+	long secs = 0;
+	int msecs = 0;
+	TimestampDifference(GetCurrentTimestamp(), deadline, &secs, &msecs);
+	return secs * 1000 + msecs / 1000;
 }
