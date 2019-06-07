@@ -18,7 +18,10 @@
  */
 
 
+#include <unistd.h>
+
 #include "postgres.h"
+
 
 #include "access/xact.h"
 #include "executor/spi.h"
@@ -182,6 +185,7 @@ LockAcquireHelperMain(Datum main_arg)
 	/*
 	 * TODO add cooldown period before canceling backends
 	 */
+	sleep(1);
 
 	/* connecting to the database */
 	BackgroundWorkerInitializeConnectionByOid(args->DatabaseId, InvalidOid, 0);
