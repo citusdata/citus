@@ -1418,9 +1418,6 @@ ConnectionStateMachine(WorkerSession *session)
 
 			case MULTI_CONNECTION_CONNECTED:
 			{
-				/* if we're expanding the nodes in a transaction, use 2PC */
-				Activate2PCIfModifyingTransactionExpandsToNewNode(session);
-
 				/* connection is ready, run the transaction state machine */
 				TransactionStateMachine(session);
 				break;
@@ -1618,6 +1615,9 @@ TransactionStateMachine(WorkerSession *session)
 			{
 				if (execution->isTransaction)
 				{
+					/* if we're expanding the nodes in a transaction, use 2PC */
+					Activate2PCIfModifyingTransactionExpandsToNewNode(session);
+
 					/* need to open a transaction block first */
 					StartRemoteTransactionBegin(connection);
 
