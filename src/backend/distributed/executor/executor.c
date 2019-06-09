@@ -167,6 +167,9 @@ typedef struct WorkerPool
 	 */
 	int idleConnectionCount;
 
+	/* number of connections that did not send a command */
+	int unusedConnectionCount;
+
 	/* number of failed connections */
 	int failedConnectionCount;
 
@@ -364,9 +367,7 @@ static bool TaskListModifiesDatabase(CmdType operation, List *taskList);
 static bool DistributedExecutionRequiresRollback(DistributedExecution *execution);
 static void AssignTasksToConnections(DistributedExecution *execution);
 static void UnclaimAllSessionConnections(List *sessionList);
-static bool ShouldForceOpeningConnection(TaskPlacementExecutionState
-										 placementExecutionState,
-										 PlacementExecutionOrder placementExecutionOrder);
+static bool UseConnectionPerPlacement(void);
 static PlacementExecutionOrder ExecutionOrderForTask(CmdType operation, Task *task);
 static WorkerPool * FindOrCreateWorkerPool(DistributedExecution *execution,
 										   WorkerNode *workerNode);
@@ -443,11 +444,6 @@ CitusExecScan(CustomScanState *node)
 		if (MultiShardConnectionType == SEQUENTIAL_CONNECTION)
 		{
 			targetPoolSize = 1;
-		}
-		else if (ForceMaxQueryParallelization)
-		{
-			/* we might at most have the length of tasks pool size */
-			targetPoolSize = list_length(taskList);
 		}
 
 		execution = CreateDistributedExecution(distributedPlan->operation, taskList,
@@ -949,26 +945,6 @@ AssignTasksToConnections(DistributedExecution *execution)
 			connection = GetPlacementListConnectionIfCached(connectionFlags,
 															placementAccessList,
 															NULL);
-
-			/*
-			 * If there is no cached connection that we have to use and we're instructed
-			 * to force max query parallelization, we try to do it here.
-			 *
-			 * In the end, this is the user's choice and we should try to open all the necessary
-			 * connections. Doing it here the code a lot so we prefer to do it.
-			 */
-			if (connection == NULL &&
-				ShouldForceOpeningConnection(placementExecution->executionState,
-											 shardCommandExecution->executionOrder))
-			{
-				connectionFlags = CONNECTION_PER_PLACEMENT;
-
-				/* ConnectionStateMachine will finish the connection establishment */
-				connection =
-					StartPlacementListConnection(connectionFlags, placementAccessList,
-												 NULL);
-			}
-
 			if (connection != NULL)
 			{
 				/*
@@ -1056,41 +1032,15 @@ AssignTasksToConnections(DistributedExecution *execution)
 
 
 /*
- * ShouldForceOpeningConnection returns true if we're instructed to
- * open a new connection and there is no other factors that prevents
- * us doing so.
+ * UseConnectionPerPlacement returns whether we should use a separate connection
+ * per placement even if another connection is idle. We mostly use this in testing
+ * scenarios.
  */
 static bool
-ShouldForceOpeningConnection(TaskPlacementExecutionState placementExecutionState,
-							 PlacementExecutionOrder placementExecutionOrder)
+UseConnectionPerPlacement(void)
 {
-	/* if we're not instructed to do so, do not even attempt to open decide */
-	if (!ForceMaxQueryParallelization)
-	{
-		return false;
-	}
-
-	/* we favor sequetial mode over ForceMaxQueryParallelization */
-	if (MultiShardConnectionType == SEQUENTIAL_CONNECTION)
-	{
-		return false;
-	}
-
-	/*
-	 * Placements that are ready to execute is very likely to succeed
-	 * and deferring this decision would probably save opening this
-	 * connection, so defer the decision.
-	 *
-	 * Note that modifications/DDLs are never EXECUTION_ORDER_ANY, so this only
-	 * applies for SELECTs.
-	 */
-	if (placementExecutionState != PLACEMENT_EXECUTION_READY &&
-		placementExecutionOrder == EXECUTION_ORDER_ANY)
-	{
-		return false;
-	}
-
-	return true;
+	return ForceMaxQueryParallelization &&
+		   MultiShardConnectionType != SEQUENTIAL_CONNECTION;
 }
 
 
@@ -1207,6 +1157,8 @@ FindOrCreateWorkerSession(WorkerPool *workerPool, MultiConnection *connection)
 		workerPool->activeConnectionCount++;
 		workerPool->idleConnectionCount++;
 	}
+
+	workerPool->unusedConnectionCount++;
 
 	/*
 	 * Record the first connection establishment time to the pool. We need this
@@ -1463,24 +1415,44 @@ ManageWorkerPool(WorkerPool *workerPool)
 		return;
 	}
 
-	if (initiatedConnectionCount >= targetPoolSize)
+	if (UseConnectionPerPlacement())
 	{
-		/* already reached the minimal pool size */
-		return;
+		int unusedConnectionCount = workerPool->unusedConnectionCount;
+
+		/*
+		 * If force_max_query_parallelization is enabled then we ignore pool size
+		 * and idle connections. Instead, we open new connections as long as there
+		 * are more tasks than unused connections.
+		 */
+
+		newConnectionCount = Max(readyTaskCount - unusedConnectionCount, 0);
+	}
+	else
+	{
+		if (initiatedConnectionCount >= targetPoolSize)
+		{
+			/* already reached the minimal pool size */
+			return;
+		}
+
+		if (readyTaskCount - idleConnectionCount <= initiatedConnectionCount)
+		{
+			/* after assigning tasks to idle connections we don't need more connections */
+			return;
+		}
+
+		/*
+		 * Open enough connections to handle all tasks that are ready, but no more
+		 * than the target pool size.
+		 */
+		newConnectionCount = Min(readyTaskCount - idleConnectionCount, targetPoolSize) -
+							 activeConnectionCount;
 	}
 
-	if (readyTaskCount - idleConnectionCount <= initiatedConnectionCount)
+	if (newConnectionCount == 0)
 	{
-		/* after assigning tasks to idle connections we don't need more connections */
 		return;
 	}
-
-	/*
-	 * Open enough connections to handle all tasks that are ready, but no more
-	 * than the target pool size.
-	 */
-	newConnectionCount = Min(readyTaskCount - idleConnectionCount, targetPoolSize) -
-						 activeConnectionCount;
 
 	elog(DEBUG4, "opening %d new connections to %s:%d", newConnectionCount,
 		 workerNode->workerName, workerNode->workerPort);
@@ -1563,7 +1535,7 @@ CheckConnectionTimeout(WorkerPool *workerPool)
 	 * restrictions. In this case, make sure that we get all the connections
 	 * established.
 	 */
-	if (ForceMaxQueryParallelization)
+	if (UseConnectionPerPlacement())
 	{
 		requiredActiveConnectionCount = initiatedConnectionCount;
 	}
@@ -1940,9 +1912,6 @@ TransactionStateMachine(WorkerSession *session)
 
 					PlacementExecutionDone(placementExecution, succeeded);
 
-					/* one more command is sent over the session */
-					session->commandsSent++;
-
 					/* connection is ready to use for executing commands */
 					workerPool->idleConnectionCount++;
 				}
@@ -2111,6 +2080,15 @@ PopPlacementExecution(WorkerSession *session)
 	placementExecution = PopAssignedPlacementExecution(session);
 	if (placementExecution == NULL)
 	{
+		if (session->commandsSent > 0 && UseConnectionPerPlacement())
+		{
+			/*
+			 * Only send one command per connection if force_max_query_parallelisation
+			 * is enabled, unless it's an assigned placement execution.
+			 */
+			return NULL;
+		}
+
 		/* no more assigned tasks, pick an unassigned task */
 		placementExecution = PopUnassignedPlacementExecution(workerPool);
 	}
@@ -2187,6 +2165,15 @@ StartPlacementExecutionOnSession(TaskPlacementExecution *placementExecution,
 	 * use the same connection.
 	 */
 	AssignPlacementListToConnection(placementAccessList, connection);
+
+	/* one more command is sent over the session */
+	session->commandsSent++;
+
+	if (session->commandsSent == 1)
+	{
+		/* first time we send a command, consider the connection used (not unused) */
+		workerPool->unusedConnectionCount--;
+	}
 
 	/* connection is going to be in use */
 	workerPool->idleConnectionCount--;
@@ -2501,7 +2488,7 @@ WorkerPoolFailed(WorkerPool *workerPool)
 	 * to establish multiple new connection to other workers and the query
 	 * can only succeed if all those connections are established.
 	 */
-	if (ForceMaxQueryParallelization)
+	if (UseConnectionPerPlacement())
 	{
 		ListCell *workerCell = NULL;
 		List *workerList = workerPool->distributedExecution->workerList;
