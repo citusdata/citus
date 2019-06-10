@@ -70,7 +70,7 @@ CoordinatorInsertSelectExecScan(CustomScanState *node)
 		List *insertTargetList = distributedPlan->insertTargetList;
 		Oid targetRelationId = distributedPlan->targetRelationId;
 		char *intermediateResultIdPrefix = distributedPlan->intermediateResultIdPrefix;
-		HTAB *shardConnectionsHash = NULL;
+		HTAB *shardStateHash = NULL;
 
 		ereport(DEBUG1, (errmsg("Collecting INSERT ... SELECT results on coordinator")));
 
@@ -100,7 +100,7 @@ CoordinatorInsertSelectExecScan(CustomScanState *node)
 			List *prunedTaskList = NIL;
 			bool hasReturning = distributedPlan->hasReturning;
 
-			shardConnectionsHash = ExecuteSelectIntoColocatedIntermediateResults(
+			shardStateHash = ExecuteSelectIntoColocatedIntermediateResults(
 				targetRelationId,
 				insertTargetList,
 				selectQuery,
@@ -119,7 +119,7 @@ CoordinatorInsertSelectExecScan(CustomScanState *node)
 				uint64 shardId = task->anchorShardId;
 				bool shardModified = false;
 
-				hash_search(shardConnectionsHash, &shardId, HASH_FIND, &shardModified);
+				hash_search(shardStateHash, &shardId, HASH_FIND, &shardModified);
 				if (shardModified)
 				{
 					prunedTaskList = lappend(prunedTaskList, task);
@@ -165,7 +165,7 @@ CoordinatorInsertSelectExecScan(CustomScanState *node)
  * ExecuteSelectIntoColocatedIntermediateResults executes the given select query
  * and inserts tuples into a set of intermediate results that are colocated with
  * the target table for further processing of ON CONFLICT or RETURNING. It also
- * returns the hash of connections that were used to insert tuplesinto the target
+ * returns the hash of shard states that were used to insert tuplesinto the target
  * relation.
  */
 static HTAB *
@@ -212,7 +212,7 @@ ExecuteSelectIntoColocatedIntermediateResults(Oid targetRelationId,
 
 	XactModificationLevel = XACT_MODIFICATION_DATA;
 
-	return copyDest->shardConnectionHash;
+	return copyDest->shardStateHash;
 }
 
 

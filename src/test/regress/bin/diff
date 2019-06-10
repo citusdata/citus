@@ -12,7 +12,10 @@
 
 file1="${@:(-2):1}"
 file2="${@:(-1):1}"
-test=$(basename $file1 .out)
+# $file1 is the expected file, which can have _0 suffix, so we use results file
+# as the test name. Passing it through sed to remove _0 in case in future order
+# of args are swapped.
+test=$(basename $file2 .out | sed "s/_0//")
 args=${@:1:$#-2}
 BASEDIR=$(dirname "$0")
 

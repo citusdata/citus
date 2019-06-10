@@ -932,10 +932,8 @@ COPY numbers_hash_other FROM STDIN WITH (FORMAT 'csv');
 WARNING:  connection error: localhost:57637
 DETAIL:  FATAL:  role "test_user" is not permitted to log in
 CONTEXT:  COPY numbers_hash_other, line 1: "1,1"
-WARNING:  connection error: localhost:57637
+ERROR:  connection error: localhost:57637
 DETAIL:  FATAL:  role "test_user" is not permitted to log in
-CONTEXT:  COPY numbers_hash_other, line 1: "1,1"
-ERROR:  could not connect to any active placements
 CONTEXT:  COPY numbers_hash_other, line 1: "1,1"
 -- verify shards for numbers_hash_other are still valid
 -- since copy has failed altogether

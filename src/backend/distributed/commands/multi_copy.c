@@ -70,6 +70,7 @@
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_router_planner.h"
 #include "distributed/multi_shard_transaction.h"
+#include "distributed/multi_executor.h"
 #include "distributed/placement_connection.h"
 #include "distributed/relation_access_tracking.h"
 #include "distributed/remote_commands.h"
@@ -95,6 +96,80 @@ static const char BinarySignature[11] = "PGCOPY\n\377\r\n\0";
 
 /* use a global connection to the master node in order to skip passing it around */
 static MultiConnection *masterConnection = NULL;
+
+/* data size threshold to switch over the active placement for a connection */
+#define COPY_SWITCH_OVER_THRESHOLD (4 * 1024 * 1024)
+
+typedef struct CopyShardState CopyShardState;
+typedef struct CopyPlacementState CopyPlacementState;
+
+/*
+ * Multiple shard placements can share one connection. Each connection has one
+ * of those placements as the activePlacementState, and others in the
+ * bufferedPlacementList. When a tuple arrives, when we want to send a tuple
+ * to a CopyPlacementState, we check if it is the active one in its
+ * connectionState, and in this case we directly put data on wire. Otherwise,
+ * we buffer it so we can put it on wire later, when copy ends or a switch-over
+ * happens. See CitusSendTupleToPlacements() for more details.
+ *
+ * This is done so we are compatible with executor.c. If a previous command
+ * in the current transaction has been executed using executor.c, then
+ * CopyGetPlacementConnection() might return the same connection for multiple
+ * placements. We support that case by the buffering mechanism described above.
+ *
+ * If no previous command in the current transaction has used executor.c, then
+ * CopyGetPlacementConnection() returns one connection per placement and no
+ * buffering happens and we put the copy data directly on connection.
+ */
+typedef struct CopyConnectionState
+{
+	/* Used as hash key. Equal to PQsocket(connection->pgConn). */
+	int socket;
+
+	MultiConnection *connection;
+
+	/*
+	 * Placement for which we have an active COPY going on over connection.
+	 * Can be NULL.
+	 */
+	CopyPlacementState *activePlacementState;
+
+	/*
+	 * Other placements that we are buffering data for. Later when a switch-over
+	 * happens, we remove an item from this list and set it to activePlacementState.
+	 * In this case, old activePlacementState isn't NULL, is added to this list.
+	 */
+	dlist_head bufferedPlacementList;
+} CopyConnectionState;
+
+
+struct CopyPlacementState
+{
+	/* Connection state to which the placemement is assigned to. */
+	CopyConnectionState *connectionState;
+
+	/* State of shard to which the placement belongs to. */
+	CopyShardState *shardState;
+
+	/*
+	 * Buffered COPY data. When the placement is activePlacementState of
+	 * some connection, this is empty. Because in that case we directly
+	 * send the data over connection.
+	 */
+	StringInfo data;
+
+	/* List node for CopyConnectionState->bufferedPlacementList. */
+	dlist_node bufferedPlacementNode;
+};
+
+struct CopyShardState
+{
+	/* Used as hash key. */
+	uint64 shardId;
+
+	/* List of CopyPlacementStates for all active placements of the shard. */
+	List *placementStateList;
+};
 
 
 /* Local functions forward declarations */
@@ -145,6 +220,28 @@ static bool CopyStatementHasFormat(CopyStmt *copyStatement, char *formatName);
 static bool IsCopyFromWorker(CopyStmt *copyStatement);
 static NodeAddress * MasterNodeAddress(CopyStmt *copyStatement);
 static void CitusCopyFrom(CopyStmt *copyStatement, char *completionTag);
+static HTAB * CreateConnectionStateHash(MemoryContext memoryContext);
+static HTAB * CreateShardStateHash(MemoryContext memoryContext);
+static CopyConnectionState * GetConnectionState(HTAB *connectionStateHash,
+												MultiConnection *connection);
+static CopyShardState * GetShardState(uint64 shardId, HTAB *shardStateHash,
+									  HTAB *connectionStateHash, bool stopOnFailure,
+									  bool *found);
+static MultiConnection * CopyGetPlacementConnection(ShardPlacement *placement,
+													HTAB *connectionStateHash,
+													bool stopOnFailure);
+static MultiConnection * GetWorkerConnectionIfCached(const char *nodeName, int nodePort,
+													 HTAB *connectionStateHash);
+static List * ConnectionStateList(HTAB *connectionStateHash);
+static void InitializeCopyShardState(CopyShardState *shardState,
+									 HTAB *connectionStateHash,
+									 uint64 shardId, bool stopOnFailure);
+static void StartPlacementStateCopyCommand(CopyPlacementState *placementState,
+										   CopyStmt *copyStatement,
+										   CopyOutState copyOutState);
+static void EndPlacementStateCopyCommand(CopyPlacementState *placementState,
+										 CopyOutState copyOutState);
+static void UnclaimCopyConnections(List *connectionStateList);
 
 /* Private functions copied and adapted from copy.c in PostgreSQL */
 static void CopySendData(CopyOutState outputState, const void *databuf, int datasize);
@@ -2236,7 +2333,8 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
 	copyStatement->filename = NULL;
 	copyDest->copyStatement = copyStatement;
 
-	copyDest->shardConnectionHash = CreateShardConnectionHash(TopTransactionContext);
+	copyDest->shardStateHash = CreateShardStateHash(TopTransactionContext);
+	copyDest->connectionStateHash = CreateConnectionStateHash(TopTransactionContext);
 }
 
 
@@ -2261,8 +2359,8 @@ CitusCopyDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
 		 * We might be able to recover from errors with ROLLBACK TO SAVEPOINT,
 		 * so unclaim the connections before throwing errors.
 		 */
-		HTAB *shardConnectionHash = copyDest->shardConnectionHash;
-		UnclaimAllShardConnections(shardConnectionHash);
+		List *connectionStateList = ConnectionStateList(copyDest->connectionStateHash);
+		UnclaimCopyConnections(connectionStateList);
 
 		PG_RE_THROW();
 	}
@@ -2282,10 +2380,12 @@ CitusSendTupleToPlacements(TupleTableSlot *slot, CitusCopyDestReceiver *copyDest
 	TupleDesc tupleDescriptor = copyDest->tupleDescriptor;
 	CopyStmt *copyStatement = copyDest->copyStatement;
 
-	HTAB *shardConnectionHash = copyDest->shardConnectionHash;
+	CopyShardState *shardState = NULL;
 	CopyOutState copyOutState = copyDest->copyOutState;
 	FmgrInfo *columnOutputFunctions = copyDest->columnOutputFunctions;
 	CopyCoercionData *columnCoercionPaths = copyDest->columnCoercionPaths;
+	ListCell *placementStateCell = NULL;
+	bool found = false;
 
 	bool stopOnFailure = copyDest->stopOnFailure;
 
@@ -2293,9 +2393,6 @@ CitusSendTupleToPlacements(TupleTableSlot *slot, CitusCopyDestReceiver *copyDest
 	bool *columnNulls = NULL;
 
 	int64 shardId = 0;
-
-	bool shardConnectionsFound = false;
-	ShardConnections *shardConnections = NULL;
 
 	EState *executorState = copyDest->executorState;
 	MemoryContext executorTupleContext = GetPerTupleMemoryContext(executorState);
@@ -2311,46 +2408,84 @@ CitusSendTupleToPlacements(TupleTableSlot *slot, CitusCopyDestReceiver *copyDest
 	/* connections hash is kept in memory context */
 	MemoryContextSwitchTo(copyDest->memoryContext);
 
-	/* get existing connections to the shard placements, if any */
-	shardConnections = GetShardHashConnections(shardConnectionHash, shardId,
-											   &shardConnectionsFound);
-	if (!shardConnectionsFound)
+	shardState = GetShardState(shardId, copyDest->shardStateHash,
+							   copyDest->connectionStateHash, stopOnFailure, &found);
+	if (!found && !copyDest->multiShardCopy &&
+		hash_get_num_entries(copyDest->shardStateHash) == 2)
 	{
-		/*
-		 * Keep track of multi shard accesses before opening connection
-		 * the second shard.
-		 */
-		if (!copyDest->multiShardCopy && hash_get_num_entries(shardConnectionHash) == 2)
+		Oid relationId = copyDest->distributedRelationId;
+
+		/* mark as multi shard to skip doing the same thing over and over */
+		copyDest->multiShardCopy = true;
+
+		/* error out of conflicting COPY */
+		CheckConflictingParallelCopyAccesses(relationId);
+
+		if (MultiShardConnectionType != SEQUENTIAL_CONNECTION)
 		{
-			Oid relationId = copyDest->distributedRelationId;
-
-			/* mark as multi shard to skip doing the same thing over and over */
-			copyDest->multiShardCopy = true;
-
-			/* error out of conflicting COPY */
-			CheckConflictingParallelCopyAccesses(relationId);
-
 			/* when we see multiple shard connections, we mark COPY as parallel modify */
 			RecordParallelModifyAccess(relationId);
 		}
-
-		/* open connections and initiate COPY on shard placements */
-		OpenCopyConnections(copyStatement, shardConnections, stopOnFailure,
-							copyOutState->binary);
-
-		/* send copy binary headers to shard placements */
-		if (copyOutState->binary)
-		{
-			SendCopyBinaryHeaders(copyOutState, shardId,
-								  shardConnections->connectionList);
-		}
 	}
 
-	/* replicate row to shard placements */
-	resetStringInfo(copyOutState->fe_msgbuf);
-	AppendCopyRowData(columnValues, columnNulls, tupleDescriptor,
-					  copyOutState, columnOutputFunctions, columnCoercionPaths);
-	SendCopyDataToAll(copyOutState->fe_msgbuf, shardId, shardConnections->connectionList);
+	foreach(placementStateCell, shardState->placementStateList)
+	{
+		CopyPlacementState *placementState = lfirst(placementStateCell);
+		CopyConnectionState *connectionState = placementState->connectionState;
+		bool switchOver = false;
+
+		if (placementState != connectionState->activePlacementState)
+		{
+			if (placementState->data->len > COPY_SWITCH_OVER_THRESHOLD ||
+				connectionState->activePlacementState == NULL)
+			{
+				switchOver = true;
+			}
+			else
+			{
+				/* buffer data */
+				StringInfo copyBuffer;
+				copyBuffer = copyOutState->fe_msgbuf;
+				resetStringInfo(copyBuffer);
+				AppendCopyRowData(columnValues, columnNulls, tupleDescriptor,
+								  copyOutState, columnOutputFunctions,
+								  columnCoercionPaths);
+				appendBinaryStringInfo(placementState->data, copyBuffer->data,
+									   copyBuffer->len);
+			}
+		}
+
+		if (switchOver)
+		{
+			if (connectionState->activePlacementState != NULL)
+			{
+				EndPlacementStateCopyCommand(connectionState->activePlacementState,
+											 copyOutState);
+				dlist_push_head(&connectionState->bufferedPlacementList,
+								&connectionState->activePlacementState->
+								bufferedPlacementNode);
+			}
+			StartPlacementStateCopyCommand(placementState, copyStatement,
+										   copyOutState);
+			dlist_delete(&placementState->bufferedPlacementNode);
+			connectionState->activePlacementState = placementState;
+
+			/* send buffered data */
+			SendCopyDataToPlacement(placementState->data, shardId,
+									connectionState->connection);
+			resetStringInfo(placementState->data);
+		}
+
+		if (placementState == connectionState->activePlacementState)
+		{
+			/* no need to buffer, put data directly on line */
+			resetStringInfo(copyOutState->fe_msgbuf);
+			AppendCopyRowData(columnValues, columnNulls, tupleDescriptor,
+							  copyOutState, columnOutputFunctions, columnCoercionPaths);
+			SendCopyDataToPlacement(copyOutState->fe_msgbuf, shardId,
+									connectionState->connection);
+		}
+	}
 
 	MemoryContextSwitchTo(oldContext);
 
@@ -2440,30 +2575,42 @@ CitusCopyDestReceiverShutdown(DestReceiver *destReceiver)
 {
 	CitusCopyDestReceiver *copyDest = (CitusCopyDestReceiver *) destReceiver;
 
-	HTAB *shardConnectionHash = copyDest->shardConnectionHash;
-	List *shardConnectionsList = NIL;
-	ListCell *shardConnectionsCell = NULL;
+	HTAB *connectionStateHash = copyDest->connectionStateHash;
+	List *connectionStateList = NIL;
+	ListCell *connectionStateCell = NULL;
 	CopyOutState copyOutState = copyDest->copyOutState;
+	CopyStmt *copyStatement = copyDest->copyStatement;
 	Relation distributedRelation = copyDest->distributedRelation;
 
-	shardConnectionsList = ShardConnectionList(shardConnectionHash);
+	connectionStateList = ConnectionStateList(connectionStateHash);
 
 	PG_TRY();
 	{
-		foreach(shardConnectionsCell, shardConnectionsList)
+		foreach(connectionStateCell, connectionStateList)
 		{
-			ShardConnections *shardConnections = (ShardConnections *) lfirst(
-				shardConnectionsCell);
+			CopyConnectionState *connectionState =
+				(CopyConnectionState *) lfirst(connectionStateCell);
+			dlist_iter iter;
 
-			/* send copy binary footers to all shard placements */
-			if (copyOutState->binary)
+			CopyPlacementState *activePlacementState =
+				connectionState->activePlacementState;
+			if (activePlacementState != NULL)
 			{
-				SendCopyBinaryFooters(copyOutState, shardConnections->shardId,
-									  shardConnections->connectionList);
+				EndPlacementStateCopyCommand(activePlacementState, copyOutState);
 			}
 
-			/* close the COPY input on all shard placements */
-			EndRemoteCopy(shardConnections->shardId, shardConnections->connectionList);
+			dlist_foreach(iter, &connectionState->bufferedPlacementList)
+			{
+				CopyPlacementState *placementState =
+					dlist_container(CopyPlacementState, bufferedPlacementNode, iter.cur);
+				uint64 shardId = placementState->shardState->shardId;
+
+				StartPlacementStateCopyCommand(placementState, copyStatement,
+											   copyOutState);
+				SendCopyDataToPlacement(placementState->data, shardId,
+										connectionState->connection);
+				EndPlacementStateCopyCommand(placementState, copyOutState);
+			}
 		}
 	}
 	PG_CATCH();
@@ -2472,7 +2619,7 @@ CitusCopyDestReceiverShutdown(DestReceiver *destReceiver)
 		 * We might be able to recover from errors with ROLLBACK TO SAVEPOINT,
 		 * so unclaim the connections before throwing errors.
 		 */
-		UnclaimAllShardConnections(shardConnectionHash);
+		UnclaimCopyConnections(connectionStateList);
 
 		PG_RE_THROW();
 	}
@@ -2922,4 +3069,381 @@ CopyGetAttnums(TupleDesc tupDesc, Relation rel, List *attnamelist)
 
 	return attnums;
 	/* *INDENT-ON* */
+}
+
+
+/*
+ * CreateConnectionStateHash constructs a hash table which maps from socket
+ * number to CopyConnectionState, passing the provided MemoryContext to
+ * hash_create for hash allocations.
+ */
+static HTAB *
+CreateConnectionStateHash(MemoryContext memoryContext)
+{
+	HTAB *connectionStateHash = NULL;
+	int hashFlags = 0;
+	HASHCTL info;
+
+	memset(&info, 0, sizeof(info));
+	info.keysize = sizeof(int);
+	info.entrysize = sizeof(CopyConnectionState);
+	info.hcxt = memoryContext;
+	hashFlags = (HASH_ELEM | HASH_CONTEXT | HASH_BLOBS);
+
+	connectionStateHash = hash_create("Copy Connection State Hash", 128, &info,
+									  hashFlags);
+
+	return connectionStateHash;
+}
+
+
+/*
+ * CreateShardStateHash constructs a hash table which maps from shard
+ * identifier to CopyShardState, passing the provided MemoryContext to
+ * hash_create for hash allocations.
+ */
+static HTAB *
+CreateShardStateHash(MemoryContext memoryContext)
+{
+	HTAB *shardStateHash = NULL;
+	int hashFlags = 0;
+	HASHCTL info;
+
+	memset(&info, 0, sizeof(info));
+	info.keysize = sizeof(uint64);
+	info.entrysize = sizeof(CopyShardState);
+	info.hcxt = memoryContext;
+	hashFlags = (HASH_ELEM | HASH_CONTEXT | HASH_BLOBS);
+
+	shardStateHash = hash_create("Copy Shard State Hash", 128, &info, hashFlags);
+
+	return shardStateHash;
+}
+
+
+/*
+ * GetConnectionState finds existing CopyConnectionState for a connection in the
+ * provided hash. If not found, then a default structure is returned.
+ */
+static CopyConnectionState *
+GetConnectionState(HTAB *connectionStateHash, MultiConnection *connection)
+{
+	CopyConnectionState *connectionState = NULL;
+	bool found = false;
+	int socket = PQsocket(connection->pgConn);
+
+	connectionState = (CopyConnectionState *) hash_search(connectionStateHash, &socket,
+														  HASH_ENTER, &found);
+	if (!found)
+	{
+		connectionState->socket = socket;
+		connectionState->connection = connection;
+		connectionState->activePlacementState = NULL;
+		dlist_init(&connectionState->bufferedPlacementList);
+	}
+
+	return connectionState;
+}
+
+
+/*
+ * ConnectionStateList returns all CopyConnectionState structures in
+ * the given hash.
+ */
+static List *
+ConnectionStateList(HTAB *connectionStateHash)
+{
+	List *connectionStateList = NIL;
+	HASH_SEQ_STATUS status;
+	CopyConnectionState *connectionState = NULL;
+
+	if (connectionStateHash == NULL)
+	{
+		return NIL;
+	}
+
+	hash_seq_init(&status, connectionStateHash);
+
+	connectionState = (CopyConnectionState *) hash_seq_search(&status);
+	while (connectionState != NULL)
+	{
+		connectionStateList = lappend(connectionStateList, connectionState);
+
+		connectionState = (CopyConnectionState *) hash_seq_search(&status);
+	}
+
+	return connectionStateList;
+}
+
+
+/*
+ * GetShardState finds existing CopyShardState for a shard in the provided
+ * hash. If not found, then a new shard state is returned with all related
+ * CopyPlacementStates initialized.
+ */
+static CopyShardState *
+GetShardState(uint64 shardId, HTAB *shardStateHash,
+			  HTAB *connectionStateHash, bool stopOnFailure, bool *found)
+{
+	CopyShardState *shardState = NULL;
+
+	shardState = (CopyShardState *) hash_search(shardStateHash, &shardId,
+												HASH_ENTER, found);
+	if (!*found)
+	{
+		InitializeCopyShardState(shardState, connectionStateHash,
+								 shardId, stopOnFailure);
+	}
+
+	return shardState;
+}
+
+
+/*
+ * InitializeCopyShardState initializes the given shardState. It finds all
+ * placements for the given shardId, assignes connections to them, and
+ * adds them to shardState->placementStateList.
+ */
+static void
+InitializeCopyShardState(CopyShardState *shardState,
+						 HTAB *connectionStateHash, uint64 shardId,
+						 bool stopOnFailure)
+{
+	List *finalizedPlacementList = NIL;
+	ListCell *placementCell = NULL;
+	bool failedPlacementCount = 0;
+
+	MemoryContext localContext =
+		AllocSetContextCreateExtended(CurrentMemoryContext,
+									  "InitializeCopyShardState",
+									  ALLOCSET_DEFAULT_MINSIZE,
+									  ALLOCSET_DEFAULT_INITSIZE,
+									  ALLOCSET_DEFAULT_MAXSIZE);
+
+	/* release finalized placement list at the end of this function */
+	MemoryContext oldContext = MemoryContextSwitchTo(localContext);
+
+	finalizedPlacementList = MasterShardPlacementList(shardId);
+
+	MemoryContextSwitchTo(oldContext);
+
+	shardState->shardId = shardId;
+	shardState->placementStateList = NIL;
+
+	foreach(placementCell, finalizedPlacementList)
+	{
+		ShardPlacement *placement = (ShardPlacement *) lfirst(placementCell);
+		CopyConnectionState *connectionState = NULL;
+		CopyPlacementState *placementState = NULL;
+		
+		MultiConnection *connection =
+			CopyGetPlacementConnection(placement, connectionStateHash, stopOnFailure);
+		if (connection == NULL)
+		{
+			failedPlacementCount++;
+			continue;
+		}
+
+		connectionState = GetConnectionState(connectionStateHash, connection);
+		placementState = palloc0(sizeof(CopyPlacementState));
+		placementState->shardState = shardState;
+		placementState->data = makeStringInfo();
+		placementState->connectionState = connectionState;
+		dlist_push_head(&connectionState->bufferedPlacementList,
+						&placementState->bufferedPlacementNode);
+		shardState->placementStateList = lappend(shardState->placementStateList,
+												 placementState);
+	}
+
+	/* if all placements failed, error out */
+	if (failedPlacementCount == list_length(finalizedPlacementList))
+	{
+		ereport(ERROR, (errmsg("could not connect to any active placements")));
+	}
+
+	/*
+	 * If stopOnFailure is true, we just error out and code execution should
+	 * never reach to this point. This is the case for reference tables and
+	 * copy from worker nodes.
+	 */
+	Assert(!stopOnFailure || failedPlacementCount == 0);
+
+	MemoryContextReset(localContext);
+}
+
+
+/*
+ * CopyGetPlacementConnection assigns a connection to the given placement. If
+ * a connection has already been assigned the placement in the current transaction
+ * then it reuses the connection. Otherwise, it requests a connection for placement.
+ */
+static MultiConnection *
+CopyGetPlacementConnection(ShardPlacement *placement, HTAB *connectionStateHash,
+						   bool stopOnFailure)
+{
+	MultiConnection *connection = NULL;
+	uint32 connectionFlags = FOR_DML;
+	char *nodeUser = CurrentUserName();
+	ShardPlacementAccess *placementAccess = NULL;
+
+	/*
+	 * Determine whether the task has to be assigned to a particular connection
+	 * due to a preceding access to the placement in the same transaction.
+	 */
+	placementAccess = CreatePlacementAccess(placement, PLACEMENT_ACCESS_DML);
+	connection = GetPlacementListConnectionIfCached(connectionFlags,
+													list_make1(placementAccess),
+													NULL);
+	if (connection != NULL)
+	{
+		return connection;
+	}
+
+	/* if execution mode set to sequential, reuse worker connection if available */
+	if (MultiShardConnectionType == SEQUENTIAL_CONNECTION)
+	{
+		connection = GetWorkerConnectionIfCached(placement->nodeName,
+												 placement->nodePort,
+												 connectionStateHash);
+		if (connection != NULL)
+		{
+			return connection;
+		}
+	}
+
+	/*
+	 * For placements that haven't been assigned a connection by a previous command
+	 * in the current transaction, we use a separate connection per placement for
+	 * hash-distributed tables in order to get the maximum performance.
+	 */
+	if (placement->partitionMethod == DISTRIBUTE_BY_HASH)
+	{
+		connectionFlags |= CONNECTION_PER_PLACEMENT;
+	}
+
+	connection = GetPlacementConnection(connectionFlags, placement, nodeUser);
+
+	if (PQstatus(connection->pgConn) != CONNECTION_OK)
+	{
+		if (stopOnFailure)
+		{
+			ReportConnectionError(connection, ERROR);
+		}
+		else
+		{
+			const bool raiseErrors = true;
+
+			HandleRemoteTransactionConnectionError(connection, raiseErrors);
+
+			return NULL;
+		}
+	}
+
+	/*
+	 * Errors are supposed to cause immediate aborts (i.e. we don't
+	 * want to/can't invalidate placements), mark the connection as
+	 * critical so later errors cause failures.
+	 */
+	MarkRemoteTransactionCritical(connection);
+	ClaimConnectionExclusively(connection);
+	RemoteTransactionBeginIfNecessary(connection);
+
+	return connection;
+}
+
+
+/*
+ * GetWorkerConnectionIfCached finds a connection for the given hostname/port from
+ * the given connectionStateHash. If not found, it returns NULL.
+ */
+static MultiConnection *
+GetWorkerConnectionIfCached(const char *nodeName, int nodePort, HTAB *connectionStateHash)
+{
+	List *connectionStateList = ConnectionStateList(connectionStateHash);
+	ListCell *connectionStateCell = NULL;
+
+	foreach(connectionStateCell, connectionStateList)
+	{
+		CopyConnectionState *connectionState = lfirst(connectionStateCell);
+		MultiConnection *connection = connectionState->connection;
+		if (connection->port == nodePort && strcmp(connection->hostname, nodeName) == 0)
+		{
+			return connection;
+		}
+	}
+
+	return NULL;;
+}
+
+
+/*
+ * StartPlacementStateCopyCommand sends the COPY for the given placement. It also
+ * sends binary headers if this is a binary COPY.
+ */
+static void
+StartPlacementStateCopyCommand(CopyPlacementState *placementState,
+							   CopyStmt *copyStatement, CopyOutState copyOutState)
+{
+	StringInfo copyCommand = NULL;
+	PGresult *result = NULL;
+	MultiConnection *connection = placementState->connectionState->connection;
+	uint64 shardId = placementState->shardState->shardId;
+	bool raiseInterrupts = true;
+	bool binaryCopy = copyOutState->binary;
+
+	copyCommand = ConstructCopyStatement(copyStatement, shardId, binaryCopy);
+
+	if (!SendRemoteCommand(connection, copyCommand->data))
+	{
+		ReportConnectionError(connection, ERROR);
+	}
+	result = GetRemoteCommandResult(connection, raiseInterrupts);
+	if (PQresultStatus(result) != PGRES_COPY_IN)
+	{
+		ReportResultError(connection, result, ERROR);
+	}
+	PQclear(result);
+
+	if (binaryCopy)
+	{
+		SendCopyBinaryHeaders(copyOutState, shardId, list_make1(connection));
+	}
+}
+
+
+/*
+ * EndPlacementStateCopyCommand ends the COPY for the given placement. It also
+ * sends binary footers if this is a binary COPY.
+ */
+static void
+EndPlacementStateCopyCommand(CopyPlacementState *placementState,
+							 CopyOutState copyOutState)
+{
+	MultiConnection *connection = placementState->connectionState->connection;
+	uint64 shardId = placementState->shardState->shardId;
+	bool binaryCopy = copyOutState->binary;
+
+	/* send footers and end copy command */
+	if (binaryCopy)
+	{
+		SendCopyBinaryFooters(copyOutState, shardId, list_make1(connection));
+	}
+
+	EndRemoteCopy(shardId, list_make1(connection));
+}
+
+
+/*
+ * UnclaimCopyConnections unclaims all the connections used for COPY.
+ */
+static void
+UnclaimCopyConnections(List *connectionStateList)
+{
+	ListCell *connectionStateCell = NULL;
+
+	foreach(connectionStateCell, connectionStateList)
+	{
+		CopyConnectionState *connectionState = lfirst(connectionStateCell);
+		UnclaimConnection(connectionState->connection);
+	}
 }

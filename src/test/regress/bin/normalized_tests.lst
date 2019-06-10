@@ -2,7 +2,8 @@
 multi_alter_table_add_constraints
 multi_alter_table_statements
 foreign_key_to_reference_table
+foreign_key_restriction_enforcement
 multi_subtransactions
 multi_modifying_xacts
 multi_insert_select
-
+multi_insert_select_conflict

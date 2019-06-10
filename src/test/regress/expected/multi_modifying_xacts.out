@@ -217,20 +217,16 @@ BEGIN;
 INSERT INTO labs VALUES (6, 'Bell Labs');
 \copy labs from stdin delimiter ','
 COMMIT;
--- COPY cannot be performed if multiple shards were modified over the same connection
+-- COPY can be performed if multiple shards were modified over the same connection
 BEGIN;
 INSERT INTO researchers VALUES (2, 1, 'Knuth Donald');
 INSERT INTO researchers VALUES (10, 6, 'Lamport Leslie');
 \copy researchers from stdin delimiter ','
-ERROR:  cannot establish a new connection for placement 1200003, since DML has been executed on a connection that is in use
-CONTEXT:  COPY researchers, line 2: "10,6,Lesport Lampie"
 ROLLBACK;
--- COPY cannot be performed after a multi-row INSERT that uses one connection
+-- COPY can be performed after a multi-row INSERT that uses one connection
 BEGIN;
 INSERT INTO researchers VALUES (2, 1, 'Knuth Donald'), (10, 6, 'Lamport Leslie');
 \copy researchers from stdin delimiter ','
-ERROR:  cannot establish a new connection for placement 1200003, since DML has been executed on a connection that is in use
-CONTEXT:  COPY researchers, line 2: "10,6,Lesport Lampie"
 ROLLBACK;
 -- after a COPY you can modify multiple shards, since they'll use different connections
 BEGIN;
@@ -1418,13 +1414,12 @@ SELECT user_id FROM items ORDER BY user_id;
        6
 (2 rows)
 
--- should not be able to open multiple connections per node after INSERTing over one connection
+-- should be able to open multiple connections per node after INSERTing over one connection
 BEGIN;
 INSERT INTO users VALUES (2, 'burak');
 INSERT INTO users VALUES (3, 'burak');
 \COPY items FROM STDIN WITH CSV
-ERROR:  cannot establish a new connection for placement 1200042, since DML has been executed on a connection that is in use
-END;
+ROLLBACK;
 -- perform parallel DDL after a co-located table has been read over 1 connection
 BEGIN;
 SELECT id FROM users WHERE id = 1;
