@@ -2285,7 +2285,7 @@ WorkerSessionFailed(WorkerSession *session)
 
 	dlist_foreach(iter, &session->pendingTaskQueue)
 	{
-		TaskPlacementExecution *placementExecution =
+		placementExecution =
 			dlist_container(TaskPlacementExecution, sessionPendingQueueNode, iter.cur);
 
 		PlacementExecutionDone(placementExecution, succeeded);
@@ -2293,7 +2293,7 @@ WorkerSessionFailed(WorkerSession *session)
 
 	dlist_foreach(iter, &session->readyTaskQueue)
 	{
-		TaskPlacementExecution *placementExecution =
+		placementExecution =
 			dlist_container(TaskPlacementExecution, sessionReadyQueueNode, iter.cur);
 
 		PlacementExecutionDone(placementExecution, succeeded);
@@ -2315,7 +2315,6 @@ PlacementExecutionDone(TaskPlacementExecution *placementExecution, bool succeede
 	ShardCommandExecution *shardCommandExecution =
 		placementExecution->shardCommandExecution;
 	TaskExecutionState executionState = shardCommandExecution->executionState;
-	PlacementExecutionOrder executionOrder = EXECUTION_ORDER_ANY;
 	TaskExecutionState newExecutionState = TASK_EXECUTION_NOT_FINISHED;
 
 	/* mark the placement execution as finished */
