@@ -935,7 +935,8 @@ CONTEXT:  COPY numbers_hash_other, line 1: "1,1"
 WARNING:  connection error: localhost:57637
 DETAIL:  FATAL:  role "test_user" is not permitted to log in
 CONTEXT:  COPY numbers_hash_other, line 1: "1,1"
-ERROR:  could not connect to any active placements
+ERROR:  connection error: localhost:57637
+DETAIL:  FATAL:  role "test_user" is not permitted to log in
 CONTEXT:  COPY numbers_hash_other, line 1: "1,1"
 -- verify shards for numbers_hash_other are still valid
 -- since copy has failed altogether
@@ -1089,6 +1090,26 @@ NOTICE:  Copying data from local table...
  create_distributed_table 
 --------------------------
  
+(1 row)
+
+ABORT;
+-- trigger switch-over when using single connection per worker
+BEGIN;
+SET citus.shard_count TO 3;
+SET citus.multi_shard_modify_mode TO 'sequential';
+CREATE UNLOGGED TABLE trigger_switchover(a int, b int, c int, d int, e int, f int, g int, h int);
+SELECT create_distributed_table('trigger_switchover','a');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+INSERT INTO trigger_switchover
+  SELECT s AS a, s AS b, s AS c, s AS d, s AS e, s AS f, s AS g, s AS h FROM generate_series(1,250000) s;
+SELECT count(*) FROM trigger_switchover;
+ count  
+--------
+ 250000
 (1 row)
 
 ABORT;

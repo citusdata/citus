@@ -579,8 +579,6 @@ BEGIN;
 (1 row)
 
     \COPY test_seq_copy FROM STDIN DELIMITER AS ',';
-ERROR:  cannot establish a new connection for placement 16073, since DDL has been executed on a connection that is in use
-CONTEXT:  COPY test_seq_copy, line 2: "2,2"
 ROLLBACK;
 SELECT distributed_2PCs_are_equal_to_worker_count();
  distributed_2pcs_are_equal_to_worker_count 

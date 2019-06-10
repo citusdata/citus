@@ -813,6 +813,17 @@ SELECT 1 AS a, s AS b, s AS c, s AS d, s AS e, s AS f, s AS g, s AS h FROM gener
 SELECT create_distributed_table('trigger_flush','a');
 ABORT;
 
+-- trigger switch-over when using single connection per worker
+BEGIN;
+SET citus.shard_count TO 3;
+SET citus.multi_shard_modify_mode TO 'sequential';
+CREATE UNLOGGED TABLE trigger_switchover(a int, b int, c int, d int, e int, f int, g int, h int);
+SELECT create_distributed_table('trigger_switchover','a');
+INSERT INTO trigger_switchover
+  SELECT s AS a, s AS b, s AS c, s AS d, s AS e, s AS f, s AS g, s AS h FROM generate_series(1,250000) s;
+SELECT count(*) FROM trigger_switchover;
+ABORT;
+
 -- copy into a table with a JSONB column
 CREATE TABLE copy_jsonb (key text, value jsonb, extra jsonb default '["default"]'::jsonb);
 SELECT create_distributed_table('copy_jsonb', 'key', colocate_with => 'none');

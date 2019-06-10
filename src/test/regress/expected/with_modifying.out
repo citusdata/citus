@@ -193,9 +193,8 @@ WITH cte AS (
 	SELECT user_id, value_2 FROM users_table WHERE value_2 IN (1, 2)
 )
 INSERT INTO modify_table (SELECT (SELECT value_2 FROM cte GROUP BY value_2));
-WARNING:  more than one row returned by a subquery used as an expression
+ERROR:  more than one row returned by a subquery used as an expression
 CONTEXT:  while executing command on localhost:57638
-ERROR:  could not receive query results
 -- CTEs prior to any other modification should error out
 WITH cte AS (
 	SELECT value_2 FROM users_table WHERE user_id IN (1, 2, 3)

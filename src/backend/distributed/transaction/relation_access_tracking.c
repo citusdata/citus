@@ -884,50 +884,6 @@ CheckConflictingParallelRelationAccesses(Oid relationId, ShardPlacementAccessTyp
 
 
 /*
- * CheckConflictingParallelCopyAccesses is mostly a wrapper around
- * HoldsConflictingLockWithReferencedRelations().  We're only interested in parallel
- * accesses to distributed tables that refers reference tables via foreign constraint.
- * Since COPY cannot be used in sequential mode, we're erroring out.
- */
-void
-CheckConflictingParallelCopyAccesses(Oid relationId)
-{
-	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(relationId);
-	Oid conflictingReferencingRelationId = InvalidOid;
-	ShardPlacementAccessType conflictingAccessType = PLACEMENT_ACCESS_SELECT;
-
-	if (!(cacheEntry->partitionMethod == DISTRIBUTE_BY_HASH &&
-		  cacheEntry->referencedRelationsViaForeignKey != NIL))
-	{
-		return;
-	}
-
-
-	if (HoldsConflictingLockWithReferencedRelations(relationId, PLACEMENT_ACCESS_DML,
-													&conflictingReferencingRelationId,
-													&conflictingAccessType))
-	{
-		char *relationName = get_rel_name(relationId);
-		char *conflictingRelationName = get_rel_name(conflictingReferencingRelationId);
-
-		char *conflictingAccessTypeText =
-			PlacementAccessTypeToText(conflictingAccessType);
-
-		ereport(ERROR, (errmsg("cannot execute parallel COPY on relation \"%s\" "
-							   "after %s command on reference relation "
-							   "\"%s\" because there is a foreign key between "
-							   "them and \"%s\" has been modified in this transaction",
-							   relationName, conflictingAccessTypeText,
-							   conflictingRelationName, conflictingRelationName),
-						errdetail("COPY to a distributed table uses a separate set of "
-								  "connections which will not be able to see the "
-								  "uncommitted changes to the reference table."),
-						errhint("Perform the COPY in a separate transaction.")));
-	}
-}
-
-
-/*
  * HoldsConflictingLockWithReferencedRelations returns true if the input relationId is a
  * hash distributed table and it holds any conflicting locks with the reference tables that
  * the distributed table has a foreign key to the reference table.
