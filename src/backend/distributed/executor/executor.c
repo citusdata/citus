@@ -1665,6 +1665,12 @@ ConnectionStateMachine(WorkerSession *session)
 				/* managed to connect, but connection was lost */
 				workerPool->activeConnectionCount--;
 
+				if (session->currentTask == NULL)
+				{
+					/* this was an idle connection */
+					workerPool->idleConnectionCount--;
+				}
+
 				connection->connectionState = MULTI_CONNECTION_FAILED;
 				break;
 			}
