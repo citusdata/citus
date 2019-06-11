@@ -121,16 +121,23 @@ CitusExplainScan(CustomScanState *node, List *ancestors, struct ExplainState *es
 		return;
 	}
 
-	ExplainOpenGroup("Distributed Query", "Distributed Query", true, es);
-
-	if (distributedPlan->subPlanList != NIL)
+	if (distributedPlan->insertSelectSubquery == NULL)
 	{
-		ExplainSubPlans(distributedPlan, es);
+		ExplainOpenGroup("Distributed Query", "Distributed Query", true, es);
+
+		if (distributedPlan->subPlanList != NIL)
+		{
+			ExplainSubPlans(distributedPlan, es);
+		}
+
+		ExplainJob(distributedPlan->workerJob, es);
+
+		ExplainCloseGroup("Distributed Query", "Distributed Query", true, es);
 	}
-
-	ExplainJob(distributedPlan->workerJob, es);
-
-	ExplainCloseGroup("Distributed Query", "Distributed Query", true, es);
+	else
+	{
+		CoordinatorInsertSelectExplainScan(node, ancestors, es);
+	}
 }
 
 

@@ -64,88 +64,7 @@ CoordinatorInsertSelectExecScan(CustomScanState *node)
 
 	if (!scanState->finishedRemoteScan)
 	{
-		EState *executorState = ScanStateGetExecutorState(scanState);
-		DistributedPlan *distributedPlan = scanState->distributedPlan;
-		Query *selectQuery = distributedPlan->insertSelectSubquery;
-		List *insertTargetList = distributedPlan->insertTargetList;
-		Oid targetRelationId = distributedPlan->targetRelationId;
-		char *intermediateResultIdPrefix = distributedPlan->intermediateResultIdPrefix;
-		HTAB *shardConnectionsHash = NULL;
-
-		ereport(DEBUG1, (errmsg("Collecting INSERT ... SELECT results on coordinator")));
-
-		/*
-		 * If we are dealing with partitioned table, we also need to lock its
-		 * partitions. Here we only lock targetRelation, we acquire necessary
-		 * locks on selected tables during execution of those select queries.
-		 */
-		if (PartitionedTable(targetRelationId))
-		{
-			LockPartitionRelations(targetRelationId, RowExclusiveLock);
-		}
-
-
-		if (distributedPlan->workerJob != NULL)
-		{
-			/*
-			 * If we also have a workerJob that means there is a second step
-			 * to the INSERT...SELECT. This happens when there is a RETURNING
-			 * or ON CONFLICT clause which is implemented as a separate
-			 * distributed INSERT...SELECT from a set of intermediate results
-			 * to the target relation.
-			 */
-			Job *workerJob = distributedPlan->workerJob;
-			ListCell *taskCell = NULL;
-			List *taskList = workerJob->taskList;
-			List *prunedTaskList = NIL;
-			bool hasReturning = distributedPlan->hasReturning;
-
-			shardConnectionsHash = ExecuteSelectIntoColocatedIntermediateResults(
-				targetRelationId,
-				insertTargetList,
-				selectQuery,
-				executorState,
-				intermediateResultIdPrefix);
-
-			/*
-			 * We cannot actually execute INSERT...SELECT tasks that read from
-			 * intermediate results that weren't created because no rows were
-			 * written to them. Prune those tasks out by only including tasks
-			 * on shards with connections.
-			 */
-			foreach(taskCell, taskList)
-			{
-				Task *task = (Task *) lfirst(taskCell);
-				uint64 shardId = task->anchorShardId;
-				bool shardModified = false;
-
-				hash_search(shardConnectionsHash, &shardId, HASH_FIND, &shardModified);
-				if (shardModified)
-				{
-					prunedTaskList = lappend(prunedTaskList, task);
-				}
-			}
-
-			if (prunedTaskList != NIL)
-			{
-				TupleDesc tupleDescriptor = ScanStateGetTupleDescriptor(scanState);
-				bool randomAccess = true;
-				bool interTransactions = false;
-
-				Assert(scanState->tuplestorestate == NULL);
-				scanState->tuplestorestate =
-					tuplestore_begin_heap(randomAccess, interTransactions, work_mem);
-
-				ExecuteTaskListExtended(CMD_INSERT, prunedTaskList,
-										tupleDescriptor, scanState->tuplestorestate,
-									    hasReturning, DEFAULT_POOL_SIZE);
-			}
-		}
-		else
-		{
-			ExecuteSelectIntoRelation(targetRelationId, insertTargetList, selectQuery,
-									  executorState);
-		}
+		CoordinatorInsertSelectExec(scanState);
 
 		scanState->finishedRemoteScan = true;
 	}
@@ -153,6 +72,99 @@ CoordinatorInsertSelectExecScan(CustomScanState *node)
 	resultSlot = ReturnTupleFromTuplestore(scanState);
 
 	return resultSlot;
+}
+
+
+/*
+ * CoordinatorInsertSelectExec is called via CitusExecScan on the
+ * first call of CitusExecScan. The function executes the distributed
+ * plan and fills the tupleStore of the input scanScate.
+ */
+void
+CoordinatorInsertSelectExec(CitusScanState *scanState)
+{
+	EState *executorState = ScanStateGetExecutorState(scanState);
+	DistributedPlan *distributedPlan = scanState->distributedPlan;
+	Query *selectQuery = distributedPlan->insertSelectSubquery;
+	List *insertTargetList = distributedPlan->insertTargetList;
+	Oid targetRelationId = distributedPlan->targetRelationId;
+	char *intermediateResultIdPrefix = distributedPlan->intermediateResultIdPrefix;
+	HTAB *shardConnectionsHash = NULL;
+
+	ereport(DEBUG1, (errmsg("Collecting INSERT ... SELECT results on coordinator")));
+
+	/*
+	 * If we are dealing with partitioned table, we also need to lock its
+	 * partitions. Here we only lock targetRelation, we acquire necessary
+	 * locks on selected tables during execution of those select queries.
+	 */
+	if (PartitionedTable(targetRelationId))
+	{
+		LockPartitionRelations(targetRelationId, RowExclusiveLock);
+	}
+
+
+	if (distributedPlan->workerJob != NULL)
+	{
+		/*
+		 * If we also have a workerJob that means there is a second step
+		 * to the INSERT...SELECT. This happens when there is a RETURNING
+		 * or ON CONFLICT clause which is implemented as a separate
+		 * distributed INSERT...SELECT from a set of intermediate results
+		 * to the target relation.
+		 */
+		Job *workerJob = distributedPlan->workerJob;
+		ListCell *taskCell = NULL;
+		List *taskList = workerJob->taskList;
+		List *prunedTaskList = NIL;
+		bool hasReturning = distributedPlan->hasReturning;
+
+		shardConnectionsHash = ExecuteSelectIntoColocatedIntermediateResults(
+			targetRelationId,
+			insertTargetList,
+			selectQuery,
+			executorState,
+			intermediateResultIdPrefix);
+
+		/*
+		 * We cannot actually execute INSERT...SELECT tasks that read from
+		 * intermediate results that weren't created because no rows were
+		 * written to them. Prune those tasks out by only including tasks
+		 * on shards with connections.
+		 */
+		foreach(taskCell, taskList)
+		{
+			Task *task = (Task *) lfirst(taskCell);
+			uint64 shardId = task->anchorShardId;
+			bool shardModified = false;
+
+			hash_search(shardConnectionsHash, &shardId, HASH_FIND, &shardModified);
+			if (shardModified)
+			{
+				prunedTaskList = lappend(prunedTaskList, task);
+			}
+		}
+
+		if (prunedTaskList != NIL)
+		{
+			TupleDesc tupleDescriptor = ScanStateGetTupleDescriptor(scanState);
+			bool randomAccess = true;
+			bool interTransactions = false;
+
+			Assert(scanState->tuplestorestate == NULL);
+			scanState->tuplestorestate =
+				tuplestore_begin_heap(randomAccess, interTransactions, work_mem);
+
+			ExecuteTaskListExtended(CMD_INSERT, prunedTaskList,
+									tupleDescriptor, scanState->tuplestorestate,
+									hasReturning, DEFAULT_POOL_SIZE);
+		}
+	}
+	else
+	{
+		ExecuteSelectIntoRelation(targetRelationId, insertTargetList, selectQuery,
+								  executorState);
+	}
 }
 
 

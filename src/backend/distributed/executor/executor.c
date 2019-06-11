@@ -70,7 +70,7 @@ typedef struct DistributedExecution
 	/*
 	 * Flag to indiciate that the set of wait events we are interested
 	 * in might have changed and waitEventSet needs to be updated.
-	 * 
+	 *
 	 * Note that we set this flag whenever we assign a value to waitFlags,
 	 * but we don't check that the waitFlags is actually different from the
 	 * previous value. So we might have some false positives for this flag,
@@ -323,7 +323,7 @@ bool ForceMaxQueryParallelization = false;
 
 /* local functions */
 static DistributedExecution * CreateDistributedExecution(DistributedPlan *distributedPlan,
-						   								 ParamListInfo paramListInfo,
+														 ParamListInfo paramListInfo,
 														 TupleDesc tupleDescriptor,
 														 Tuplestorestate *tupleStore,
 														 int targetPoolSize);
@@ -366,8 +366,8 @@ static TaskExecutionState GetTaskExecutionState(
 
 /*
  * UnifiedExecutorExecScan is called via CitusExecScan on the
- * first call of CitusExecScan. The function fills the tupleStore
- * of the input scanScate.
+ * first call of CitusExecScan. The function executes the distributed
+ * plan and fills the tupleStore of the input scanScate.
  */
 void
 UnifiedExecutorExecScan(CitusScanState *scanState)
@@ -424,10 +424,7 @@ UnifiedExecutorExecScan(CitusScanState *scanState)
 	{
 		SortTupleStore(scanState);
 	}
-
-
 }
-
 
 
 /*
@@ -451,7 +448,7 @@ ExecuteTaskList(CmdType operation, List *taskList, int targetPoolSize)
  */
 uint64
 ExecuteTaskListExtended(CmdType operation, List *taskList,
-						TupleDesc tupleDescriptor, Tuplestorestate *tupleStore, 
+						TupleDesc tupleDescriptor, Tuplestorestate *tupleStore,
 						bool hasReturning, int targetPoolSize)
 {
 	DistributedPlan *distributedPlan = NULL;
@@ -675,6 +672,7 @@ UnclaimAllSessionConnections(List *sessionList)
 		UnclaimConnection(connection);
 	}
 }
+
 
 /*
  * AssignTasksToConnections goes through the list of tasks to determine whether any
@@ -1071,7 +1069,7 @@ RunDistributedExecution(DistributedExecution *execution)
 			}
 
 			/* we should always have more (or equal) waitEvents */
-			Assert (maxWaitEventCount >= connectionCount + 2);
+			Assert(maxWaitEventCount >= connectionCount + 2);
 
 			/* wait for I/O events */
 #if (PG_VERSION_NUM >= 100000)
@@ -1162,10 +1160,10 @@ ManageWorkerPool(WorkerPool *workerPool)
 	int connectionIndex = 0;
 
 	/* we should always have more (or equal) active connections than idle connections */
-	Assert (activeConnectionCount >= idleConnectionCount);
+	Assert(activeConnectionCount >= idleConnectionCount);
 
 	/* we should never have less than 0 connections ever */
-	Assert (activeConnectionCount >= 0 && idleConnectionCount >= 0);
+	Assert(activeConnectionCount >= 0 && idleConnectionCount >= 0);
 
 	if (failedConnectionCount >= 1)
 	{

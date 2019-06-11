@@ -28,7 +28,7 @@
 #include "utils/lsyscache.h"
 
 int RemoteTaskCheckInterval = 100; /* per cycle sleep interval in millisecs */
-int TaskExecutorType = MULTI_EXECUTOR_REAL_TIME; /* distributed executor type */
+int TaskExecutorType = MULTI_EXECUTOR_UNIFIED; /* distributed executor type */
 bool BinaryMasterCopyFormat = false; /* copy data from workers in binary format */
 bool EnableRepartitionJoins = false;
 
@@ -43,6 +43,7 @@ bool EnableRepartitionJoins = false;
 MultiExecutorType
 JobExecutorType(DistributedPlan *distributedPlan)
 {
+	bool unifiedExecutorEnabled = true;
 	Job *job = distributedPlan->workerJob;
 	List *workerNodeList = NIL;
 	int workerNodeCount = 0;
@@ -50,6 +51,13 @@ JobExecutorType(DistributedPlan *distributedPlan)
 	double tasksPerNode = 0.;
 	MultiExecutorType executorType = TaskExecutorType;
 	bool routerExecutablePlan = distributedPlan->routerExecutable;
+
+	/* when task-tracker is explicitly picked, do not use unified executor */
+	if (executorType == MULTI_EXECUTOR_TASK_TRACKER &&
+		distributedPlan->operation == CMD_SELECT)
+	{
+		unifiedExecutorEnabled = false;
+	}
 
 	/* check if can switch to router executor */
 	if (routerExecutablePlan)
@@ -74,12 +82,14 @@ JobExecutorType(DistributedPlan *distributedPlan)
 				ereport(DEBUG2, (errmsg("Plan is router executable")));
 			}
 		}
-		return MULTI_EXECUTOR_ROUTER;
+
+		return unifiedExecutorEnabled ? MULTI_EXECUTOR_UNIFIED : MULTI_EXECUTOR_ROUTER;
 	}
 
 	if (distributedPlan->insertSelectSubquery != NULL)
 	{
-		return MULTI_EXECUTOR_COORDINATOR_INSERT_SELECT;
+		return unifiedExecutorEnabled ? MULTI_EXECUTOR_UNIFIED :
+			   MULTI_EXECUTOR_COORDINATOR_INSERT_SELECT;
 	}
 
 	Assert(distributedPlan->operation == CMD_SELECT);
@@ -89,7 +99,7 @@ JobExecutorType(DistributedPlan *distributedPlan)
 	taskCount = list_length(job->taskList);
 	tasksPerNode = taskCount / ((double) workerNodeCount);
 
-	if (executorType == MULTI_EXECUTOR_REAL_TIME)
+	if (executorType == MULTI_EXECUTOR_REAL_TIME || unifiedExecutorEnabled)
 	{
 		double reasonableConnectionCount = 0;
 		int dependedJobCount = 0;
@@ -110,7 +120,7 @@ JobExecutorType(DistributedPlan *distributedPlan)
 		 * but we still issue this warning because it degrades performance.
 		 */
 		reasonableConnectionCount = MaxMasterConnectionCount();
-		if (taskCount >= reasonableConnectionCount)
+		if (taskCount >= reasonableConnectionCount && !unifiedExecutorEnabled)
 		{
 			ereport(WARNING, (errmsg("this query uses more file descriptors than the "
 									 "configured max_files_per_process limit"),
@@ -137,20 +147,21 @@ JobExecutorType(DistributedPlan *distributedPlan)
 								 "cannot use real time executor with repartition jobs"),
 							 errhint("Since you enabled citus.enable_repartition_joins "
 									 "Citus chose to use task-tracker.")));
+
 			return MULTI_EXECUTOR_TASK_TRACKER;
 		}
 	}
 	else
 	{
 		/* if we have more tasks per node than what can be tracked, warn the user */
-		if (tasksPerNode >= MaxTrackedTasksPerNode)
+		if (tasksPerNode >= MaxTrackedTasksPerNode && !unifiedExecutorEnabled)
 		{
 			ereport(WARNING, (errmsg("this query assigns more tasks per node than the "
 									 "configured max_tracked_tasks_per_node limit")));
 		}
 	}
 
-	return executorType;
+	return unifiedExecutorEnabled ? MULTI_EXECUTOR_UNIFIED : executorType;
 }
 
 

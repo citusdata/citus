@@ -100,6 +100,7 @@ static const struct config_enum_entry replication_model_options[] = {
 };
 
 static const struct config_enum_entry task_executor_type_options[] = {
+	{ "unified", MULTI_EXECUTOR_UNIFIED, false },
 	{ "real-time", MULTI_EXECUTOR_REAL_TIME, false },
 	{ "task-tracker", MULTI_EXECUTOR_TASK_TRACKER, false },
 	{ NULL, 0, false }
@@ -923,7 +924,7 @@ RegisterCitusConfigVariables(void)
 					 "queries that touch thousands of shards and/or that involve table "
 					 "repartitioning."),
 		&TaskExecutorType,
-		MULTI_EXECUTOR_REAL_TIME,
+		MULTI_EXECUTOR_UNIFIED,
 		task_executor_type_options,
 		PGC_USERSET,
 		0,

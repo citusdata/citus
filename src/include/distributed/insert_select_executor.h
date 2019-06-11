@@ -15,9 +15,11 @@
 
 
 #include "executor/execdesc.h"
+#include "distributed/citus_custom_scan.h"
 
 
 extern TupleTableSlot * CoordinatorInsertSelectExecScan(CustomScanState *node);
+extern void CoordinatorInsertSelectExec(CitusScanState *scanState);
 
 
 #endif /* INSERT_SELECT_EXECUTOR_H */

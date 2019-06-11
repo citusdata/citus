@@ -29,6 +29,7 @@
 
 
 /* functions for creating executor scan nodes */
+static void CitusBeginScan(CustomScanState *node, EState *estate, int eflags);
 static TupleTableSlot * CitusExecScan(CustomScanState *node);
 
 /* functions for creating custom scan nodes */
@@ -82,13 +83,13 @@ CustomScanMethods DelayedErrorCustomScanMethods = {
  */
 
 static CustomExecMethods UnifiedExecutorCustomExecMethods = {
-		.CustomName = "ExecutorScan",
-		.BeginCustomScan = CitusSelectBeginScan,
-		.ExecCustomScan = CitusExecScan,
-		.EndCustomScan = CitusEndScan,
-		.ReScanCustomScan = CitusReScan,
-		.ExplainCustomScan = CitusExplainScan
-	};
+	.CustomName = "ExecutorScan",
+	.BeginCustomScan = CitusBeginScan,
+	.ExecCustomScan = CitusExecScan,
+	.EndCustomScan = CitusEndScan,
+	.ReScanCustomScan = CitusReScan,
+	.ExplainCustomScan = CitusExplainScan
+};
 
 static CustomExecMethods RealTimeCustomExecMethods = {
 	.CustomName = "RealTimeScan",
@@ -150,6 +151,32 @@ RegisterCitusCustomScanMethods(void)
 	RegisterCustomScanMethods(&DelayedErrorCustomScanMethods);
 }
 
+
+/*
+ * CitusBeginScan sets the coordinator backend initiated by Citus for queries using
+ * that function as the BeginCustomScan callback. The function also handles
+ */
+static void
+CitusBeginScan(CustomScanState *node, EState *estate, int eflags)
+{
+	CitusScanState *scanState = NULL;
+	DistributedPlan *distributedPlan = NULL;
+
+	MarkCitusInitiatedCoordinatorBackend();
+
+	scanState = (CitusScanState *) node;
+	distributedPlan = scanState->distributedPlan;
+	if (distributedPlan->operation == CMD_SELECT ||
+		distributedPlan->insertSelectSubquery != NULL)
+	{
+		/* no more action required */
+		return;
+	}
+
+	CitusModifyBeginScan(node, estate, eflags);
+}
+
+
 /*
  * CitusExecScan is called when a tuple is pulled from a custom scan.
  * On the first call, it executes the distributed query and writes the
@@ -164,7 +191,20 @@ CitusExecScan(CustomScanState *node)
 
 	if (!scanState->finishedRemoteScan)
 	{
-		UnifiedExecutorExecScan(scanState);
+		DistributedPlan *distributedPlan = scanState->distributedPlan;
+
+		/*
+		 * CoordinatorInsertSelectExec could also use unified executor, but
+		 * via a lower level API, see the function for the details.
+		 */
+		if (distributedPlan->insertSelectSubquery == NULL)
+		{
+			UnifiedExecutorExecScan(scanState);
+		}
+		else
+		{
+			CoordinatorInsertSelectExec(scanState);
+		}
 
 		scanState->finishedRemoteScan = true;
 	}
@@ -183,7 +223,7 @@ UnifiedExecutorCreateScan(CustomScan *scan)
 {
 	CitusScanState *scanState = palloc0(sizeof(CitusScanState));
 
-	scanState->executorType = MULTI_UNIFIED_EXECUTOR;
+	scanState->executorType = MULTI_EXECUTOR_UNIFIED;
 	scanState->customScanState.ss.ps.type = T_CustomScanState;
 	scanState->distributedPlan = GetDistributedPlan(scan);
 
