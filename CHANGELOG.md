@@ -1,3 +1,7 @@
+### citus v8.2.2 (June 11, 2019) ###
+
+* Fixes a bug in outer joins wrapped in subqueries
+
 ### citus v8.2.1 (April 03, 2019) ###
 
 * Fixes a bug that prevents stack size to be adjusted
