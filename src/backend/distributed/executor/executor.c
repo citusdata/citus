@@ -368,6 +368,8 @@ static void WorkerSessionFailed(WorkerSession *session);
 static void WorkerPoolFailed(WorkerPool *workerPool);
 static void PlacementExecutionDone(TaskPlacementExecution *placementExecution,
 								   bool succeeded);
+static void MovePlacementExecutionToReady(TaskPlacementExecution *placementExecution,
+										  bool succeeded);
 static bool ShouldMarkPlacementsInvalidOnFailure(DistributedExecution *execution);
 static void PlacementExecutionReady(TaskPlacementExecution *placementExecution);
 static TaskExecutionState TaskExecutionStateMachine(ShardCommandExecution *
@@ -2304,50 +2306,58 @@ PlacementExecutionDone(TaskPlacementExecution *placementExecution, bool succeede
 	}
 	else
 	{
-		/*
-		 * If the query needs to be executed on any or all placements in order
-		 * and there is a placement left, then make that placement ready-to-start
-		 * by adding it to the appropriate queue.
-		 */
-		executionOrder = shardCommandExecution->executionOrder;
-		if ((executionOrder == EXECUTION_ORDER_ANY && !succeeded) ||
-			executionOrder == EXECUTION_ORDER_SEQUENTIAL)
-		{
-			TaskPlacementExecution *nextPlacementExecution = NULL;
-			int placementExecutionCount = shardCommandExecution->placementExecutionCount;
+		MovePlacementExecutionToReady(placementExecution, succeeded);
+	}
+}
 
-			/* find a placement execution that is not yet marked as failed */
-			do {
-				int nextPlacementExecutionIndex =
-					placementExecution->placementExecutionIndex + 1;
 
-				if (nextPlacementExecutionIndex == placementExecutionCount)
-				{
-					/*
-					 * TODO: We should not need to reset nextPlacementExecutionIndex.
-					 * However, we're currently not handling failed worker pools
-					 * and sessions very well. Thus, reset the execution index.
-					 */
-					nextPlacementExecutionIndex = 0;
-				}
+/*
+ * MovePlacementExecutionsToReady is triggered if the query needs to be
+ * executed on any or all placements in order and there is a placement on
+ * which the execution has not happened yet. If so make that placement
+ * ready-to-start by adding it to the appropriate queue.
+ */
+static void
+MovePlacementExecutionToReady(TaskPlacementExecution *placementExecution, bool succeeded)
+{
+	ShardCommandExecution *shardCommandExecution =
+		placementExecution->shardCommandExecution;
+	PlacementExecutionOrder executionOrder = shardCommandExecution->executionOrder;
 
-				/* if all tasks failed then we should already have errored out */
-				Assert(nextPlacementExecutionIndex < placementExecutionCount);
+	if ((executionOrder == EXECUTION_ORDER_ANY && !succeeded) ||
+		executionOrder == EXECUTION_ORDER_SEQUENTIAL)
+	{
+		TaskPlacementExecution *nextPlacementExecution = NULL;
+		int placementExecutionCount = shardCommandExecution->placementExecutionCount;
 
-				/* get the next placement in the planning order */
-				nextPlacementExecution =
-					shardCommandExecution->placementExecutions[nextPlacementExecutionIndex
-					];
+		/* find a placement execution that is not yet marked as failed */
+		do {
+			int nextPlacementExecutionIndex =
+				placementExecution->placementExecutionIndex + 1;
 
-				if (nextPlacementExecution->executionState ==
-					PLACEMENT_EXECUTION_NOT_READY)
-				{
-					/* move the placement execution to the ready queue */
-					PlacementExecutionReady(nextPlacementExecution);
-				}
-			} while (nextPlacementExecution->executionState ==
-					 PLACEMENT_EXECUTION_FAILED);
-		}
+			if (nextPlacementExecutionIndex == placementExecutionCount)
+			{
+				/*
+				 * TODO: We should not need to reset nextPlacementExecutionIndex.
+				 * However, we're currently not handling failed worker pools
+				 * and sessions very well. Thus, reset the execution index.
+				 */
+				nextPlacementExecutionIndex = 0;
+			}
+
+			/* if all tasks failed then we should already have errored out */
+			Assert(nextPlacementExecutionIndex < placementExecutionCount);
+
+			/* get the next placement in the planning order */
+			nextPlacementExecution =
+				shardCommandExecution->placementExecutions[nextPlacementExecutionIndex];
+
+			if (nextPlacementExecution->executionState == PLACEMENT_EXECUTION_NOT_READY)
+			{
+				/* move the placement execution to the ready queue */
+				PlacementExecutionReady(nextPlacementExecution);
+			}
+		} while (nextPlacementExecution->executionState == PLACEMENT_EXECUTION_FAILED);
 	}
 }
 
