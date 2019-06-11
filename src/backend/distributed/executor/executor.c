@@ -329,7 +329,7 @@ bool ForceMaxQueryParallelization = false;
 
 /* local functions */
 static DistributedExecution * CreateDistributedExecution(DistributedPlan *distributedPlan,
-						   								 ParamListInfo paramListInfo,
+														 ParamListInfo paramListInfo,
 														 TupleDesc tupleDescriptor,
 														 Tuplestorestate *tupleStore,
 														 int targetPoolSize);
@@ -421,7 +421,8 @@ CitusExecScan(CustomScanState *node)
 		}
 
 		execution = CreateDistributedExecution(distributedPlan, paramListInfo,
-											   tupleDescriptor, tupleStore, targetPoolSize);
+											   tupleDescriptor, tupleStore,
+											   targetPoolSize);
 
 		StartDistributedExecution(execution);
 		RunDistributedExecution(execution);
@@ -471,7 +472,7 @@ ExecuteTaskList(CmdType operation, List *taskList, int targetPoolSize)
  */
 uint64
 ExecuteTaskListExtended(CmdType operation, List *taskList,
-						TupleDesc tupleDescriptor, Tuplestorestate *tupleStore, 
+						TupleDesc tupleDescriptor, Tuplestorestate *tupleStore,
 						bool hasReturning, int targetPoolSize)
 {
 	DistributedPlan *distributedPlan = NULL;
@@ -1266,10 +1267,10 @@ ManageWorkerPool(WorkerPool *workerPool)
 	int connectionIndex = 0;
 
 	/* we should always have more (or equal) active connections than idle connections */
-	Assert (activeConnectionCount >= idleConnectionCount);
+	Assert(activeConnectionCount >= idleConnectionCount);
 
 	/* we should never have less than 0 connections ever */
-	Assert (activeConnectionCount >= 0 && idleConnectionCount >= 0);
+	Assert(activeConnectionCount >= 0 && idleConnectionCount >= 0);
 
 	if (failedConnectionCount >= 1)
 	{
@@ -1547,10 +1548,9 @@ Activate2PCIfModifyingTransactionExpandsToNewNode(WorkerSession *session)
 {
 	DistributedExecution *execution = NULL;
 
-	if (MultiShardCommitProtocol != COMMIT_PROTOCOL_2PC ||
-		DoesCoordinatedTransactionUse2PC())
+	if (MultiShardCommitProtocol != COMMIT_PROTOCOL_2PC)
 	{
-		/* we don't need 2PC or we're already using 2PC, so no need to continue */
+		/* we don't need 2PC, so no need to continue */
 		return;
 	}
 
@@ -2245,7 +2245,8 @@ PlacementExecutionDone(TaskPlacementExecution *placementExecution, bool succeede
 	ShardCommandExecution *shardCommandExecution =
 		placementExecution->shardCommandExecution;
 	TaskExecutionState executionState = shardCommandExecution->executionState;
-	PlacementExecutionOrder executionOrder;
+	PlacementExecutionOrder executionOrder = EXECUTION_ORDER_ANY;
+	TaskExecutionState newExecutionState = TASK_EXECUTION_NOT_FINISHED;
 
 	/* mark the placement execution as finished */
 	if (succeeded)
@@ -2271,29 +2272,7 @@ PlacementExecutionDone(TaskPlacementExecution *placementExecution, bool succeede
 		placementExecution->executionState = PLACEMENT_EXECUTION_FAILED;
 	}
 
-
-	/*
-	 * Update unfinishedTaskCount only when state changes from not finished to
-	 * finished or failed state.
-	 */
-	if (executionState == TASK_EXECUTION_NOT_FINISHED)
-	{
-		TaskExecutionState newExecutionState =
-			TaskExecutionStateMachine(shardCommandExecution);
-		if (newExecutionState == TASK_EXECUTION_FINISHED)
-		{
-			execution->unfinishedTaskCount--;
-			return;
-		}
-
-		if (newExecutionState == TASK_EXECUTION_FAILED)
-		{
-			execution->unfinishedTaskCount--;
-			execution->failed = true;
-			return;
-		}
-	}
-	else
+	if (executionState != TASK_EXECUTION_NOT_FINISHED)
 	{
 		/*
 		 * Task execution has already been finished, no need to continue the
@@ -2303,45 +2282,67 @@ PlacementExecutionDone(TaskPlacementExecution *placementExecution, bool succeede
 	}
 
 	/*
-	 * If the query needs to be executed on any or all placements in order
-	 * and there is a placement left, then make that placement ready-to-start
-	 * by adding it to the appropriate queue.
+	 * Update unfinishedTaskCount only when state changes from not finished to
+	 * finished or failed state.
 	 */
-	executionOrder = shardCommandExecution->executionOrder;
-	if ((executionOrder == EXECUTION_ORDER_ANY && !succeeded) ||
-		executionOrder == EXECUTION_ORDER_SEQUENTIAL)
+	newExecutionState = TaskExecutionStateMachine(shardCommandExecution);
+	if (newExecutionState == TASK_EXECUTION_FINISHED)
 	{
-		TaskPlacementExecution *nextPlacementExecution = NULL;
-		int placementExecutionCount = shardCommandExecution->placementExecutionCount;
+		execution->unfinishedTaskCount--;
+		return;
+	}
+	else if (newExecutionState == TASK_EXECUTION_FAILED)
+	{
+		execution->unfinishedTaskCount--;
+		execution->failed = true;
+		return;
+	}
+	else
+	{
+		/*
+		 * If the query needs to be executed on any or all placements in order
+		 * and there is a placement left, then make that placement ready-to-start
+		 * by adding it to the appropriate queue.
+		 */
+		executionOrder = shardCommandExecution->executionOrder;
+		if ((executionOrder == EXECUTION_ORDER_ANY && !succeeded) ||
+			executionOrder == EXECUTION_ORDER_SEQUENTIAL)
+		{
+			TaskPlacementExecution *nextPlacementExecution = NULL;
+			int placementExecutionCount = shardCommandExecution->placementExecutionCount;
 
-		/* find a placement execution that is not yet marked as failed */
-		do {
-			int nextPlacementExecutionIndex =
-				placementExecution->placementExecutionIndex + 1;
+			/* find a placement execution that is not yet marked as failed */
+			do {
+				int nextPlacementExecutionIndex =
+					placementExecution->placementExecutionIndex + 1;
 
-			if (nextPlacementExecutionIndex == placementExecutionCount)
-			{
-				/*
-				 * TODO: We should not need to reset nextPlacementExecutionIndex.
-				 * However, we're currently not handling failed worker pools
-				 * and sessions very well. Thus, reset the execution index.
-				 */
-				nextPlacementExecutionIndex = 0;
-			}
+				if (nextPlacementExecutionIndex == placementExecutionCount)
+				{
+					/*
+					 * TODO: We should not need to reset nextPlacementExecutionIndex.
+					 * However, we're currently not handling failed worker pools
+					 * and sessions very well. Thus, reset the execution index.
+					 */
+					nextPlacementExecutionIndex = 0;
+				}
 
-			/* if all tasks failed then we should already have errored out */
-			Assert(nextPlacementExecutionIndex < placementExecutionCount);
+				/* if all tasks failed then we should already have errored out */
+				Assert(nextPlacementExecutionIndex < placementExecutionCount);
 
-			/* get the next placement in the planning order */
-			nextPlacementExecution =
-				shardCommandExecution->placementExecutions[nextPlacementExecutionIndex];
+				/* get the next placement in the planning order */
+				nextPlacementExecution =
+					shardCommandExecution->placementExecutions[nextPlacementExecutionIndex
+					];
 
-			if (nextPlacementExecution->executionState == PLACEMENT_EXECUTION_NOT_READY)
-			{
-				/* move the placement execution to the ready queue */
-				PlacementExecutionReady(nextPlacementExecution);
-			}
-		} while (nextPlacementExecution->executionState == PLACEMENT_EXECUTION_FAILED);
+				if (nextPlacementExecution->executionState ==
+					PLACEMENT_EXECUTION_NOT_READY)
+				{
+					/* move the placement execution to the ready queue */
+					PlacementExecutionReady(nextPlacementExecution);
+				}
+			} while (nextPlacementExecution->executionState ==
+					 PLACEMENT_EXECUTION_FAILED);
+		}
 	}
 }
 

@@ -94,7 +94,6 @@ extern void BeginOrContinueCoordinatedTransaction(void);
 extern bool InCoordinatedTransaction(void);
 extern void CoordinatedTransactionUse2PC(void);
 extern bool IsMultiStatementTransaction(void);
-extern bool DoesCoordinatedTransactionUse2PC(void);
 
 /* initialization function(s) */
 extern void InitializeTransactionManagement(void);
