@@ -2,6 +2,7 @@ setup
 {
     SET citus.shard_replication_factor TO 1;
     SET citus.shard_count TO 4;
+    SET citus.force_max_query_parallelization TO on;
     -- we don't want to see any entries related to 2PC recovery
     SET citus.max_cached_conns_per_worker TO 0;
     CREATE TABLE test_table(column1 int, column2 int);
