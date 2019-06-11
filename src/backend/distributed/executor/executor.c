@@ -2294,6 +2294,11 @@ PlacementExecutionDone(TaskPlacementExecution *placementExecution, bool succeede
 	else if (newExecutionState == TASK_EXECUTION_FAILED)
 	{
 		execution->unfinishedTaskCount--;
+
+		/*
+		 * Even if a single task execution fails, there is no way to
+		 * successfully finish the execution.
+		 */
 		execution->failed = true;
 		return;
 	}
