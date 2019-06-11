@@ -365,79 +365,69 @@ static TaskExecutionState GetTaskExecutionState(
 
 
 /*
- * CitusExecScan is called when a tuple is pulled from a custom scan.
- * On the first call, it executes the distributed query and writes the
- * results to a tuple store. The postgres executor calls this function
- * repeatedly to read tuples from the tuple store.
+ * UnifiedExecutorExecScan is called via CitusExecScan on the
+ * first call of CitusExecScan. The function fills the tupleStore
+ * of the input scanScate.
  */
-TupleTableSlot *
-CitusExecScan(CustomScanState *node)
+void
+UnifiedExecutorExecScan(CitusScanState *scanState)
 {
-	CitusScanState *scanState = (CitusScanState *) node;
-	TupleTableSlot *resultSlot = NULL;
+	DistributedPlan *distributedPlan = scanState->distributedPlan;
+	DistributedExecution *execution = NULL;
+	EState *executorState = ScanStateGetExecutorState(scanState);
+	ParamListInfo paramListInfo = executorState->es_param_list_info;
+	Tuplestorestate *tupleStore = NULL;
+	TupleDesc tupleDescriptor = ScanStateGetTupleDescriptor(scanState);
+	bool randomAccess = true;
+	bool interTransactions = false;
+	int targetPoolSize = DEFAULT_POOL_SIZE;
 
-	if (!scanState->finishedRemoteScan)
+	/* we are taking locks on partitions of partitioned tables */
+	LockPartitionsInRelationList(distributedPlan->relationIdList, AccessShareLock);
+
+	ExecuteSubPlans(distributedPlan);
+
+	scanState->tuplestorestate =
+		tuplestore_begin_heap(randomAccess, interTransactions, work_mem);
+	tupleStore = scanState->tuplestorestate;
+
+	if (MultiShardConnectionType == SEQUENTIAL_CONNECTION)
 	{
-		DistributedPlan *distributedPlan = scanState->distributedPlan;
-		DistributedExecution *execution = NULL;
-		EState *executorState = ScanStateGetExecutorState(scanState);
-		ParamListInfo paramListInfo = executorState->es_param_list_info;
-		Tuplestorestate *tupleStore = NULL;
-		TupleDesc tupleDescriptor = ScanStateGetTupleDescriptor(scanState);
-		bool randomAccess = true;
-		bool interTransactions = false;
-		int targetPoolSize = DEFAULT_POOL_SIZE;
+		targetPoolSize = 1;
+	}
+	else if (ForceMaxQueryParallelization)
+	{
+		Job *job = distributedPlan->workerJob;
+		List *taskList = job->taskList;
 
-		/* we are taking locks on partitions of partitioned tables */
-		LockPartitionsInRelationList(distributedPlan->relationIdList, AccessShareLock);
-
-		ExecuteSubPlans(distributedPlan);
-
-		scanState->tuplestorestate =
-			tuplestore_begin_heap(randomAccess, interTransactions, work_mem);
-		tupleStore = scanState->tuplestorestate;
-
-		if (MultiShardConnectionType == SEQUENTIAL_CONNECTION)
-		{
-			targetPoolSize = 1;
-		}
-		else if (ForceMaxQueryParallelization)
-		{
-			Job *job = distributedPlan->workerJob;
-			List *taskList = job->taskList;
-
-			/* we might at most have the length of tasks pool size */
-			targetPoolSize = list_length(taskList);
-		}
-
-		execution = CreateDistributedExecution(distributedPlan, paramListInfo,
-											   tupleDescriptor, tupleStore, targetPoolSize);
-
-		StartDistributedExecution(execution);
-		RunDistributedExecution(execution);
-
-		if (distributedPlan->operation != CMD_SELECT)
-		{
-			executorState->es_processed = execution->rowsProcessed;
-
-			/* prevent copying shards in same transaction */
-			XactModificationLevel = XACT_MODIFICATION_DATA;
-		}
-
-		FinishDistributedExecution(execution);
-
-		if (SortReturning && distributedPlan->hasReturning)
-		{
-			SortTupleStore(scanState);
-		}
-
-		scanState->finishedRemoteScan = true;
+		/* we might at most have the length of tasks pool size */
+		targetPoolSize = list_length(taskList);
 	}
 
-	resultSlot = ReturnTupleFromTuplestore(scanState);
+	execution = CreateDistributedExecution(distributedPlan, paramListInfo,
+										   tupleDescriptor, tupleStore, targetPoolSize);
 
-	return resultSlot;
+	StartDistributedExecution(execution);
+	RunDistributedExecution(execution);
+
+	if (distributedPlan->operation != CMD_SELECT)
+	{
+		executorState->es_processed = execution->rowsProcessed;
+
+		/* prevent copying shards in same transaction */
+		XactModificationLevel = XACT_MODIFICATION_DATA;
+	}
+
+	FinishDistributedExecution(execution);
+
+	if (SortReturning && distributedPlan->hasReturning)
+	{
+		SortTupleStore(scanState);
+	}
+
+
 }
+
 
 
 /*

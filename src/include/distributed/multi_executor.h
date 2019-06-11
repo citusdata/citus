@@ -42,7 +42,7 @@ extern uint64 ExecuteTaskListExtended(CmdType operation, List *taskList,
 									  TupleDesc tupleDescriptor, Tuplestorestate *tupleStore,
 									  bool hasReturning, int targetPoolSize);
 extern uint64 ExecuteTaskList(CmdType operation, List *taskList, int targetPoolSize);
-extern TupleTableSlot * CitusExecScan(CustomScanState *node);
+extern void UnifiedExecutorExecScan(CitusScanState *scanState);
 extern TupleTableSlot * ReturnTupleFromTuplestore(CitusScanState *scanState);
 extern void LoadTuplesIntoTupleStore(CitusScanState *citusScanState, Job *workerJob);
 extern void ReadFileIntoTupleStore(char *fileName, char *copyFormat, TupleDesc

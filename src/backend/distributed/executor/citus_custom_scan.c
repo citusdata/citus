@@ -28,7 +28,11 @@
 #include "utils/rel.h"
 
 
+/* functions for creating executor scan nodes */
+static TupleTableSlot * CitusExecScan(CustomScanState *node);
+
 /* functions for creating custom scan nodes */
+static Node * UnifiedExecutorCreateScan(CustomScan *scan);
 static Node * RealTimeCreateScan(CustomScan *scan);
 static Node * TaskTrackerCreateScan(CustomScan *scan);
 static Node * RouterCreateScan(CustomScan *scan);
@@ -42,6 +46,11 @@ static void CitusReScan(CustomScanState *node);
 
 
 /* create custom scan methods for all executors */
+CustomScanMethods UnifiedExecutorCreateScanMethods = {
+	"Citus Unified",
+	UnifiedExecutorCreateScan
+};
+
 CustomScanMethods RealTimeCustomScanMethods = {
 	"Citus Real-Time",
 	RealTimeCreateScan
@@ -71,6 +80,16 @@ CustomScanMethods DelayedErrorCustomScanMethods = {
 /*
  * Define executor methods for the different executor types.
  */
+
+static CustomExecMethods UnifiedExecutorCustomExecMethods = {
+		.CustomName = "ExecutorScan",
+		.BeginCustomScan = CitusSelectBeginScan,
+		.ExecCustomScan = CitusExecScan,
+		.EndCustomScan = CitusEndScan,
+		.ReScanCustomScan = CitusReScan,
+		.ExplainCustomScan = CitusExplainScan
+	};
+
 static CustomExecMethods RealTimeCustomExecMethods = {
 	.CustomName = "RealTimeScan",
 	.BeginCustomScan = CitusSelectBeginScan,
@@ -123,11 +142,54 @@ static CustomExecMethods CoordinatorInsertSelectCustomExecMethods = {
 void
 RegisterCitusCustomScanMethods(void)
 {
+	RegisterCustomScanMethods(&UnifiedExecutorCreateScanMethods);
 	RegisterCustomScanMethods(&RealTimeCustomScanMethods);
 	RegisterCustomScanMethods(&TaskTrackerCustomScanMethods);
 	RegisterCustomScanMethods(&RouterCustomScanMethods);
 	RegisterCustomScanMethods(&CoordinatorInsertSelectCustomScanMethods);
 	RegisterCustomScanMethods(&DelayedErrorCustomScanMethods);
+}
+
+/*
+ * CitusExecScan is called when a tuple is pulled from a custom scan.
+ * On the first call, it executes the distributed query and writes the
+ * results to a tuple store. The postgres executor calls this function
+ * repeatedly to read tuples from the tuple store.
+ */
+static TupleTableSlot *
+CitusExecScan(CustomScanState *node)
+{
+	CitusScanState *scanState = (CitusScanState *) node;
+	TupleTableSlot *resultSlot = NULL;
+
+	if (!scanState->finishedRemoteScan)
+	{
+		UnifiedExecutorExecScan(scanState);
+
+		scanState->finishedRemoteScan = true;
+	}
+
+	resultSlot = ReturnTupleFromTuplestore(scanState);
+
+	return resultSlot;
+}
+
+
+/*
+ * UnifiedExecutorCreateScan creates the scan state for the unified executor.
+ */
+static Node *
+UnifiedExecutorCreateScan(CustomScan *scan)
+{
+	CitusScanState *scanState = palloc0(sizeof(CitusScanState));
+
+	scanState->executorType = MULTI_UNIFIED_EXECUTOR;
+	scanState->customScanState.ss.ps.type = T_CustomScanState;
+	scanState->distributedPlan = GetDistributedPlan(scan);
+
+	scanState->customScanState.methods = &UnifiedExecutorCustomExecMethods;
+
+	return (Node *) scanState;
 }
 
 
