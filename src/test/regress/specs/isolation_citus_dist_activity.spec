@@ -2,8 +2,9 @@ setup
 {
     SET citus.shard_replication_factor TO 1;
     SET citus.shard_count TO 4;
-    -- we don't want to see any entries related to 2PC recovery
-    SET citus.max_cached_conns_per_worker TO 0;
+    SET citus.force_max_query_parallelization TO on;
+    -- cache the connections to get more consistent output 
+    SET citus.max_cached_conns_per_worker TO 4;
     CREATE TABLE test_table(column1 int, column2 int);
     SELECT create_distributed_table('test_table', 'column1');
 }
@@ -18,9 +19,6 @@ session "s1"
 step "s1-begin"
 {
     BEGIN;
-
-    -- we don't want to see any entries related to 2PC recovery
-    SET citus.max_cached_conns_per_worker TO 0;
 }
 
 step "s1-alter-table"
@@ -53,9 +51,6 @@ session "s2"
 step "s2-begin"
 {
 	BEGIN;
-        
-        -- we don't want to see any entries related to 2PC recovery
-        SET citus.max_cached_conns_per_worker TO 0;
 }
 
 step "s2-rollback"
@@ -79,9 +74,6 @@ session "s3"
 step "s3-begin"
 {
 	BEGIN;
-
-        -- we don't want to see any entries related to 2PC recovery
-        SET citus.max_cached_conns_per_worker TO 0;
 }
 
 step "s3-rollback"
@@ -91,7 +83,7 @@ step "s3-rollback"
 
 step "s3-view-worker"
 {
-	SELECT query, query_hostname, query_hostport, master_query_host_name, master_query_host_port, state, wait_event_type, wait_event, usename, datname FROM citus_worker_stat_activity ORDER BY query DESC;
+	SELECT query, query_hostname, query_hostport, master_query_host_name, master_query_host_port, state, wait_event_type, wait_event, usename, datname FROM citus_worker_stat_activity WHERE query NOT ILIKE '%pg_prepared_xacts%' and query NOT ILIKE '%COMMIT%' ORDER BY query DESC;
 }
 
 # we prefer to sleep before "s2-view-dist" so that we can ensure

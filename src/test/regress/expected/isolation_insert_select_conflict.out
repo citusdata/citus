@@ -24,10 +24,10 @@ step s1-insert-into-select-conflict-update:
 col_1          col_2          
 
 1              1              
-5              5              
+2              2              
 3              3              
 4              4              
-2              2              
+5              5              
 step s2-begin: 
 	BEGIN;
 
@@ -121,10 +121,10 @@ step s2-insert-into-select-conflict-update: <... completed>
 col_1          col_2          
 
 1              1              
-5              5              
+2              2              
 3              3              
 4              4              
-2              2              
+5              5              
 step s2-commit: 
 	COMMIT;
 
@@ -153,10 +153,10 @@ step s1-insert-into-select-conflict-update:
 col_1          col_2          
 
 1              1              
-5              5              
+2              2              
 3              3              
 4              4              
-2              2              
+5              5              
 step s2-begin: 
 	BEGIN;
 
@@ -180,10 +180,10 @@ step s2-insert-into-select-conflict-update: <... completed>
 col_1          col_2          
 
 1              1              
-5              5              
+2              2              
 3              3              
 4              4              
-2              2              
+5              5              
 step s2-commit: 
 	COMMIT;
 
@@ -212,10 +212,10 @@ step s1-insert-into-select-conflict-update:
 col_1          col_2          
 
 1              1              
-5              5              
+2              2              
 3              3              
 4              4              
-2              2              
+5              5              
 step s2-begin: 
 	BEGIN;
 
@@ -264,10 +264,10 @@ step s1-insert-into-select-conflict-update-replication-factor-2:
 col_1          col_2          col_3          
 
 1              1                             
-5              5                             
+2              2                             
 3              3                             
 4              4                             
-2              2                             
+5              5                             
 step s2-begin-replication-factor-2: 
 	SET citus.shard_replication_factor to 2;
 	BEGIN;
@@ -292,10 +292,10 @@ step s2-insert-into-select-conflict-update-replication-factor-2: <... completed>
 col_1          col_2          col_3          
 
 1              1                             
-5              5                             
+2              2                             
 3              3                             
 4              4                             
-2              2                             
+5              5                             
 step s2-commit: 
 	COMMIT;
 
