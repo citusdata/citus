@@ -18,9 +18,6 @@
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_server_executor.h"
 
-/* we'll make this configurable, just a temporary global variable */
-#define DEFAULT_POOL_SIZE 4
-
 
 /* managed via guc.c */
 typedef enum
@@ -33,6 +30,7 @@ extern int MultiShardConnectionType;
 
 extern bool WritableStandbyCoordinator;
 extern bool ForceMaxQueryParallelization;
+extern int MaxPoolSize;
 
 
 extern void CitusExecutorStart(QueryDesc *queryDesc, int eflags);

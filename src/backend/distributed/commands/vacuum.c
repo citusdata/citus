@@ -74,7 +74,7 @@ ProcessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand)
 		{
 			List *vacuumColumnList = NIL;
 			List *taskList = NIL;
-			int targetPoolSize = DEFAULT_POOL_SIZE;
+			int targetPoolSize = MaxPoolSize;
 
 			/*
 			 * VACUUM commands cannot run inside a transaction block, so we use

@@ -319,6 +319,7 @@ typedef struct TaskPlacementExecution
 
 /* GUC, determining whether Citus opens 1 connection per task */
 bool ForceMaxQueryParallelization = false;
+int MaxPoolSize = 4;
 
 
 /* local functions */
@@ -380,7 +381,7 @@ UnifiedExecutorExecScan(CitusScanState *scanState)
 	TupleDesc tupleDescriptor = ScanStateGetTupleDescriptor(scanState);
 	bool randomAccess = true;
 	bool interTransactions = false;
-	int targetPoolSize = DEFAULT_POOL_SIZE;
+	int targetPoolSize = MaxPoolSize;
 
 	/* we are taking locks on partitions of partitioned tables */
 	LockPartitionsInRelationList(distributedPlan->relationIdList, AccessShareLock);
@@ -437,6 +438,7 @@ ExecuteTaskList(CmdType operation, List *taskList, int targetPoolSize)
 	TupleDesc tupleDescriptor = NULL;
 	Tuplestorestate *tupleStore = NULL;
 	bool hasReturning = false;
+
 	return ExecuteTaskListExtended(operation, taskList, tupleDescriptor,
 								   tupleStore, hasReturning, targetPoolSize);
 }

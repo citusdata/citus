@@ -20,6 +20,7 @@
 #include <unistd.h>
 
 #include "distributed/multi_client_executor.h"
+#include "distributed/multi_executor.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_resowner.h"
 #include "distributed/multi_server_executor.h"
@@ -55,6 +56,10 @@ JobExecutorType(DistributedPlan *distributedPlan)
 	/* when task-tracker is explicitly picked, do not use unified executor */
 	if (executorType == MULTI_EXECUTOR_TASK_TRACKER &&
 		distributedPlan->operation == CMD_SELECT)
+	{
+		unifiedExecutorEnabled = false;
+	}
+	else if (MaxPoolSize == 0)
 	{
 		unifiedExecutorEnabled = false;
 	}
@@ -161,7 +166,12 @@ JobExecutorType(DistributedPlan *distributedPlan)
 		}
 	}
 
-	return unifiedExecutorEnabled ? MULTI_EXECUTOR_UNIFIED : executorType;
+	if (executorType == MULTI_EXECUTOR_TASK_TRACKER)
+	{
+		return MULTI_EXECUTOR_TASK_TRACKER;
+	}
+
+	return unifiedExecutorEnabled ? MULTI_EXECUTOR_UNIFIED : MULTI_EXECUTOR_REAL_TIME;
 }
 
 

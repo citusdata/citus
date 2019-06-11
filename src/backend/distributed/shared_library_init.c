@@ -721,6 +721,18 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
+		"citus.max_pool_size",
+		gettext_noop("Sets the maximum number of connections used per distributed query "
+					 "for each worker node."),
+		gettext_noop("TODO: Start writing some good texts around this"),
+		&MaxPoolSize,
+		4, 0, INT_MAX,
+		PGC_USERSET,
+		0,
+		NULL, NULL, NULL);
+
+
+	DefineCustomIntVariable(
 		"citus.max_worker_nodes_tracked",
 		gettext_noop("Sets the maximum number of worker nodes that are tracked."),
 		gettext_noop("Worker nodes' network locations, their membership and "

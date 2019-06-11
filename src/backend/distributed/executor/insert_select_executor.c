@@ -157,7 +157,7 @@ CoordinatorInsertSelectExec(CitusScanState *scanState)
 
 			ExecuteTaskListExtended(CMD_INSERT, prunedTaskList,
 									tupleDescriptor, scanState->tuplestorestate,
-									hasReturning, DEFAULT_POOL_SIZE);
+									hasReturning, MaxPoolSize);
 		}
 	}
 	else

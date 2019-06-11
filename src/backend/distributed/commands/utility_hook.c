@@ -537,7 +537,7 @@ static void
 ExecuteDistributedDDLJob(DDLJob *ddlJob)
 {
 	bool shouldSyncMetadata = ShouldSyncTableMetadata(ddlJob->targetRelationId);
-	int targetPoolSize = ddlJob->executeSequentially ? 1 : DEFAULT_POOL_SIZE;
+	int targetPoolSize = ddlJob->executeSequentially ? 1 : MaxPoolSize;
 
 	EnsureCoordinator();
 	EnsurePartitionTableNotReplicated(ddlJob->targetRelationId);
