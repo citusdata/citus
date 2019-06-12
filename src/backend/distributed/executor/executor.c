@@ -919,6 +919,12 @@ AssignTasksToConnections(DistributedExecution *execution)
 				/* always poll the connection in the first round */
 				connection->waitFlags = WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE;
 				execution->waitFlagsChanged = true;
+
+				/*
+				 * If the connections are already avaliable, make sure to activate
+				 * 2PC when necessary.
+				  */
+				Activate2PCIfModifyingTransactionExpandsToNewNode(session);
 			}
 			else
 			{

@@ -232,6 +232,68 @@ SELECT count(*) FROM pg_dist_transaction;
      2
 (1 row)
 
+SELECT recover_prepared_transactions();
+ recover_prepared_transactions 
+-------------------------------
+                             0
+(1 row)
+
+-- slightly more complicated test with citus.force_max_query_parallelization=off
+-- should be fine as well
+SET citus.force_max_query_parallelization TO OFF;
+BEGIN;
+SELECT count(*) FROM test_recovery_single WHERE x = 'hello-0';
+ count 
+-------
+     2
+(1 row)
+
+SELECT count(*) FROM test_recovery_single WHERE x = 'hello-2';
+ count 
+-------
+     2
+(1 row)
+
+INSERT INTO test_recovery_single VALUES ('hello-0');
+INSERT INTO test_recovery_single VALUES ('hello-2');
+COMMIT;
+SELECT count(*) FROM pg_dist_transaction;
+ count 
+-------
+     2
+(1 row)
+
+SELECT recover_prepared_transactions();
+ recover_prepared_transactions 
+-------------------------------
+                             0
+(1 row)
+
+-- the same test as the above with citus.force_max_query_parallelization=on
+-- should be fine as well
+SET citus.force_max_query_parallelization TO ON;
+BEGIN;
+SELECT count(*) FROM test_recovery_single WHERE x = 'hello-0';
+ count 
+-------
+     3
+(1 row)
+
+SELECT count(*) FROM test_recovery_single WHERE x = 'hello-2';
+ count 
+-------
+     3
+(1 row)
+
+INSERT INTO test_recovery_single VALUES ('hello-0');
+INSERT INTO test_recovery_single VALUES ('hello-2');
+COMMIT;
+SELECT count(*) FROM pg_dist_transaction;
+ count 
+-------
+     2
+(1 row)
+
 -- Test whether auto-recovery runs
 ALTER SYSTEM SET citus.recover_2pc_interval TO 10;
 SELECT pg_reload_conf();
