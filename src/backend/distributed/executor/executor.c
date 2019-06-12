@@ -368,7 +368,7 @@ static void WorkerSessionFailed(WorkerSession *session);
 static void WorkerPoolFailed(WorkerPool *workerPool);
 static void PlacementExecutionDone(TaskPlacementExecution *placementExecution,
 								   bool succeeded);
-static void MovePlacementExecutionToReady(TaskPlacementExecution *placementExecution,
+static void ScheduleNextPlacementExecution(TaskPlacementExecution *placementExecution,
 										  bool succeeded);
 static bool ShouldMarkPlacementsInvalidOnFailure(DistributedExecution *execution);
 static void PlacementExecutionReady(TaskPlacementExecution *placementExecution);
@@ -2312,19 +2312,19 @@ PlacementExecutionDone(TaskPlacementExecution *placementExecution, bool succeede
 	}
 	else
 	{
-		MovePlacementExecutionToReady(placementExecution, succeeded);
+		ScheduleNextPlacementExecution(placementExecution, succeeded);
 	}
 }
 
 
 /*
- * MovePlacementExecutionsToReady is triggered if the query needs to be
+ * ScheduleNextPlacementExecution is triggered if the query needs to be
  * executed on any or all placements in order and there is a placement on
  * which the execution has not happened yet. If so make that placement
  * ready-to-start by adding it to the appropriate queue.
  */
 static void
-MovePlacementExecutionToReady(TaskPlacementExecution *placementExecution, bool succeeded)
+ScheduleNextPlacementExecution(TaskPlacementExecution *placementExecution, bool succeeded)
 {
 	ShardCommandExecution *shardCommandExecution =
 		placementExecution->shardCommandExecution;
