@@ -351,7 +351,6 @@ static WorkerSession * FindOrCreateWorkerSession(WorkerPool *workerPool,
 												 MultiConnection *connection);
 static void ManageWorkerPool(WorkerPool *workerPool);
 static WaitEventSet * BuildWaitEventSet(List *sessionList);
-static void UpdateWaitEventSetFlags(WaitEventSet *waitEventSet, List *sessionList);
 static TaskPlacementExecution * PopPlacementExecution(WorkerSession *session);
 static TaskPlacementExecution * PopAssignedPlacementExecution(WorkerSession *session);
 static TaskPlacementExecution * PopUnassignedPlacementExecution(WorkerPool *workerPool);
@@ -362,14 +361,15 @@ static void ConnectionStateMachine(WorkerSession *session);
 static void Activate2PCIfModifyingTransactionExpandsToNewNode(WorkerSession *session);
 static bool TransactionModifiedDistributedTable(DistributedExecution *execution);
 static void TransactionStateMachine(WorkerSession *session);
-static bool CheckConnectionReady(MultiConnection *connection);
+static void UpdateConnectionWaitFlags(WorkerSession *session, int waitFlags);
+static bool CheckConnectionReady(WorkerSession *session);
 static bool ReceiveResults(WorkerSession *session, bool storeRows);
 static void WorkerSessionFailed(WorkerSession *session);
 static void WorkerPoolFailed(WorkerPool *workerPool);
 static void PlacementExecutionDone(TaskPlacementExecution *placementExecution,
 								   bool succeeded);
 static void ScheduleNextPlacementExecution(TaskPlacementExecution *placementExecution,
-										  bool succeeded);
+										   bool succeeded);
 static bool ShouldMarkPlacementsInvalidOnFailure(DistributedExecution *execution);
 static void PlacementExecutionReady(TaskPlacementExecution *placementExecution);
 static TaskExecutionState TaskExecutionStateMachine(ShardCommandExecution *
@@ -917,13 +917,12 @@ AssignTasksToConnections(DistributedExecution *execution)
 				}
 
 				/* always poll the connection in the first round */
-				connection->waitFlags = WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE;
-				execution->waitFlagsChanged = true;
+				UpdateConnectionWaitFlags(session,
+										  WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE);
 
-				/*
-				 * If the connections are already avaliable, make sure to activate
+				/* If the connections are already avaliable, make sure to activate
 				 * 2PC when necessary.
-				  */
+				 */
 				Activate2PCIfModifyingTransactionExpandsToNewNode(session);
 			}
 			else
@@ -1170,16 +1169,11 @@ RunDistributedExecution(DistributedExecution *execution)
 				ManageWorkerPool(workerPool);
 			}
 
-			if (execution->connectionSetChanged)
+			if (execution->connectionSetChanged || execution->waitFlagsChanged)
 			{
 				FreeWaitEventSet(execution->waitEventSet);
 				execution->waitEventSet = BuildWaitEventSet(execution->sessionList);
 				execution->connectionSetChanged = false;
-				execution->waitFlagsChanged = false;
-			}
-			else if (execution->waitFlagsChanged)
-			{
-				UpdateWaitEventSetFlags(execution->waitEventSet, execution->sessionList);
 				execution->waitFlagsChanged = false;
 			}
 
@@ -1311,6 +1305,7 @@ ManageWorkerPool(WorkerPool *workerPool)
 	for (connectionIndex = 0; connectionIndex < newConnectionCount; connectionIndex++)
 	{
 		MultiConnection *connection = NULL;
+		WorkerSession *session = NULL;
 
 		/* experimental: just to see the perf benefits of caching connections */
 		int connectionFlags = 0;
@@ -1334,11 +1329,11 @@ ManageWorkerPool(WorkerPool *workerPool)
 		 */
 		connection->claimedExclusively = true;
 
-		/* always poll the connection in the first round */
-		connection->waitFlags = WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE;
-
 		/* create a session for the connection */
-		FindOrCreateWorkerSession(workerPool, connection);
+		session = FindOrCreateWorkerSession(workerPool, connection);
+
+		/* always poll the connection in the first round */
+		UpdateConnectionWaitFlags(session, WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE);
 	}
 
 	if (newConnectionCount > 0)
@@ -1402,11 +1397,11 @@ ConnectionStateMachine(WorkerSession *session)
 				}
 				else if (pollMode == PGRES_POLLING_READING)
 				{
-					connection->waitFlags = WL_SOCKET_READABLE;
+					UpdateConnectionWaitFlags(session, WL_SOCKET_READABLE);
 				}
 				else if (pollMode == PGRES_POLLING_WRITING)
 				{
-					connection->waitFlags = WL_SOCKET_WRITEABLE;
+					UpdateConnectionWaitFlags(session, WL_SOCKET_WRITEABLE);
 				}
 				else
 				{
@@ -1416,11 +1411,10 @@ ConnectionStateMachine(WorkerSession *session)
 					workerPool->activeConnectionCount++;
 					workerPool->idleConnectionCount++;
 
-					connection->waitFlags = WL_SOCKET_WRITEABLE;
+					UpdateConnectionWaitFlags(session, WL_SOCKET_WRITEABLE);
+
 					connection->connectionState = MULTI_CONNECTION_CONNECTED;
 				}
-
-				execution->waitFlagsChanged = true;
 
 				break;
 			}
@@ -1611,7 +1605,7 @@ TransactionStateMachine(WorkerSession *session)
 	do {
 		currentState = transaction->transactionState;
 
-		if (!CheckConnectionReady(connection))
+		if (!CheckConnectionReady(session))
 		{
 			/* connection is busy, no state transitions to make */
 			break;
@@ -1651,8 +1645,8 @@ TransactionStateMachine(WorkerSession *session)
 					transaction->transactionState = REMOTE_TRANS_SENT_COMMAND;
 				}
 
-				connection->waitFlags = WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE;
-				execution->waitFlagsChanged = true;
+				UpdateConnectionWaitFlags(session,
+										  WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE);
 				break;
 			}
 
@@ -1699,8 +1693,8 @@ TransactionStateMachine(WorkerSession *session)
 				}
 
 				/* connection needs to be writeable to send next command */
-				connection->waitFlags = WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE;
-				execution->waitFlagsChanged = true;
+				UpdateConnectionWaitFlags(session,
+										  WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE);
 
 				if (execution->isTransaction)
 				{
@@ -1721,8 +1715,7 @@ TransactionStateMachine(WorkerSession *session)
 				if (placementExecution == NULL)
 				{
 					/* no tasks are ready to be executed at the moment */
-					connection->waitFlags = WL_SOCKET_READABLE;
-					execution->waitFlagsChanged = true;
+					UpdateConnectionWaitFlags(session, WL_SOCKET_READABLE);
 					break;
 				}
 
@@ -1762,8 +1755,36 @@ TransactionStateMachine(WorkerSession *session)
 			}
 		}
 	}
+
 	/* iterate in case we can perform multiple transitions at once */
 	while (transaction->transactionState != currentState);
+}
+
+
+/*
+ * UpdateConnectionWaitFlags is a wrapper around setting waitFlags of the connection.
+ *
+ * This function might further improved in a sense that to use use ModifyWaitEvent on
+ * waitFlag changes as opposed to what we do now: always rebuild the wait event sets.
+ * Our initial benchmarks didn't show any significant performance improvements, but
+ * good to keep in mind the potential improvements.
+ */
+static void
+UpdateConnectionWaitFlags(WorkerSession *session, int waitFlags)
+{
+	MultiConnection *connection = session->connection;
+	DistributedExecution *execution = session->workerPool->distributedExecution;
+
+	/* do not take any actions if the flags not changed */
+	if (connection->waitFlags == waitFlags)
+	{
+		return;
+	}
+
+	connection->waitFlags = waitFlags;
+
+	/* without signalling the execution, the flag changes won't be reflected */
+	execution->waitFlagsChanged = true;
 }
 
 
@@ -1772,9 +1793,10 @@ TransactionStateMachine(WorkerSession *session)
  * read or write, or false if it still has bytes to send/receive.
  */
 static bool
-CheckConnectionReady(MultiConnection *connection)
+CheckConnectionReady(WorkerSession *session)
 {
 	int sendStatus = 0;
+	MultiConnection *connection = session->connection;
 
 	ConnStatusType status = PQstatus(connection->pgConn);
 	if (status == CONNECTION_BAD)
@@ -1792,8 +1814,11 @@ CheckConnectionReady(MultiConnection *connection)
 	}
 	else if (sendStatus == 1)
 	{
+		int waitFlags = session->connection->waitFlags;
+
 		/* more data to send, wait for socket to become writable */
-		connection->waitFlags |= WL_SOCKET_WRITEABLE;
+		UpdateConnectionWaitFlags(session, waitFlags | WL_SOCKET_WRITEABLE);
+
 		return false;
 	}
 
@@ -1806,8 +1831,11 @@ CheckConnectionReady(MultiConnection *connection)
 
 	if (PQisBusy(connection->pgConn))
 	{
+		int waitFlags = session->connection->waitFlags;
+
 		/* did not get a full result, wait for socket to become readable */
-		connection->waitFlags |= WL_SOCKET_READABLE;
+		UpdateConnectionWaitFlags(session, waitFlags | WL_SOCKET_READABLE);
+
 		return false;
 	}
 
@@ -2406,7 +2434,6 @@ static void
 PlacementExecutionReady(TaskPlacementExecution *placementExecution)
 {
 	WorkerPool *workerPool = placementExecution->workerPool;
-	DistributedExecution *distributedExecution = workerPool->distributedExecution;
 
 	if (placementExecution->assignedSession != NULL)
 	{
@@ -2432,8 +2459,7 @@ PlacementExecutionReady(TaskPlacementExecution *placementExecution)
 			 * If the connection is idle, wake it up by checking whether
 			 * the connection is writeable.
 			 */
-			connection->waitFlags = WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE;
-			distributedExecution->waitFlagsChanged = true;
+			UpdateConnectionWaitFlags(session, WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE);
 		}
 	}
 	else
@@ -2463,8 +2489,9 @@ PlacementExecutionReady(TaskPlacementExecution *placementExecution)
 			if (transactionState == REMOTE_TRANS_INVALID ||
 				transactionState == REMOTE_TRANS_STARTED)
 			{
-				connection->waitFlags = WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE;
-				distributedExecution->waitFlagsChanged = true;
+				UpdateConnectionWaitFlags(session,
+										  WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE);
+
 				break;
 			}
 		}
@@ -2587,45 +2614,4 @@ BuildWaitEventSet(List *sessionList)
 	AddWaitEventToSet(waitEventSet, WL_LATCH_SET, PGINVALID_SOCKET, MyLatch, NULL);
 
 	return waitEventSet;
-}
-
-
-/*
- * UpdateWaitEventSetFlags modifies the given waitEventSet with the wait flags
- * for connections in the sessionList.
- */
-static void
-UpdateWaitEventSetFlags(WaitEventSet *waitEventSet, List *sessionList)
-{
-	int connectionIndex = 0;
-	ListCell *sessionCell = NULL;
-
-	foreach(sessionCell, sessionList)
-	{
-		WorkerSession *session = lfirst(sessionCell);
-		MultiConnection *connection = session->connection;
-		int socket = 0;
-
-		if (connection->pgConn == NULL)
-		{
-			/* connection died earlier in the transaction */
-			continue;
-		}
-
-		if (connection->waitFlags == 0)
-		{
-			/* not currently waiting for this connection */
-			continue;
-		}
-
-		socket = PQsocket(connection->pgConn);
-		if (socket == -1)
-		{
-			/* connection was closed */
-			continue;
-		}
-
-		ModifyWaitEvent(waitEventSet, connectionIndex, connection->waitFlags, NULL);
-		connectionIndex++;
-	}
 }
