@@ -1632,7 +1632,12 @@ TransactionStateMachine(WorkerSession *session)
 					placementExecution = PopPlacementExecution(session);
 					if (placementExecution == NULL)
 					{
-						/* no tasks are ready to be executed at the moment */
+						/*
+						 * No tasks are ready to be executed at the moment. But we
+						 * still mark the socket readable to get any notices if exists.
+						 */
+						UpdateConnectionWaitFlags(session, WL_SOCKET_READABLE);
+
 						break;
 					}
 
