@@ -29,6 +29,7 @@
 #include "distributed/remote_commands.h"
 #include "distributed/resource_lock.h"
 #include "distributed/subplan_execution.h"
+#include "distributed/transaction_management.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/version_compat.h"
 #include "lib/ilist.h"
@@ -70,7 +71,7 @@ typedef struct DistributedExecution
 	/*
 	 * Flag to indiciate that the set of wait events we are interested
 	 * in might have changed and waitEventSet needs to be updated.
-	 * 
+	 *
 	 * Note that we set this flag whenever we assign a value to waitFlags,
 	 * but we don't check that the waitFlags is actually different from the
 	 * previous value. So we might have some false positives for this flag,
@@ -118,6 +119,9 @@ typedef struct DistributedExecution
 
 	/* indicates whether distributed execution has failed */
 	bool failed;
+
+	/* set to true when we prefer to bail out early */
+	bool errorOnAnyFailure;
 
 	/*
 	 * For SELECT commands or INSERT/UPDATE/DELETE commands with RETURNING,
@@ -264,6 +268,8 @@ typedef struct ShardCommandExecution
 	 * after we got results from the first placements.
 	 */
 	bool gotResults;
+
+	TaskExecutionState executionState;
 } ShardCommandExecution;
 
 /*
@@ -323,7 +329,7 @@ bool ForceMaxQueryParallelization = false;
 
 /* local functions */
 static DistributedExecution * CreateDistributedExecution(DistributedPlan *distributedPlan,
-						   								 ParamListInfo paramListInfo,
+														 ParamListInfo paramListInfo,
 														 TupleDesc tupleDescriptor,
 														 Tuplestorestate *tupleStore,
 														 int targetPoolSize);
@@ -331,6 +337,7 @@ static void StartDistributedExecution(DistributedExecution *execution);
 static void RunDistributedExecution(DistributedExecution *execution);
 static void FinishDistributedExecution(DistributedExecution *execution);
 
+static bool DistributedPlanModifiesDatabase(DistributedPlan *plan);
 static bool DistributedStatementRequiresRollback(DistributedPlan *distributedPlan);
 static void AssignTasksToConnections(DistributedExecution *execution);
 static void UnclaimAllSessionConnections(List *sessionList);
@@ -344,7 +351,6 @@ static WorkerSession * FindOrCreateWorkerSession(WorkerPool *workerPool,
 												 MultiConnection *connection);
 static void ManageWorkerPool(WorkerPool *workerPool);
 static WaitEventSet * BuildWaitEventSet(List *sessionList);
-static void UpdateWaitEventSetFlags(WaitEventSet *waitEventSet, List *sessionList);
 static TaskPlacementExecution * PopPlacementExecution(WorkerSession *session);
 static TaskPlacementExecution * PopAssignedPlacementExecution(WorkerSession *session);
 static TaskPlacementExecution * PopUnassignedPlacementExecution(WorkerPool *workerPool);
@@ -352,16 +358,22 @@ static bool StartPlacementExecutionOnSession(TaskPlacementExecution *placementEx
 											 WorkerSession *session);
 static List * PlacementAccessListForTask(Task *task, ShardPlacement *taskPlacement);
 static void ConnectionStateMachine(WorkerSession *session);
+static void Activate2PCIfModifyingTransactionExpandsToNewNode(WorkerSession *session);
+static bool TransactionModifiedDistributedTable(DistributedExecution *execution);
 static void TransactionStateMachine(WorkerSession *session);
-static bool CheckConnectionReady(MultiConnection *connection);
+static void UpdateConnectionWaitFlags(WorkerSession *session, int waitFlags);
+static bool CheckConnectionReady(WorkerSession *session);
 static bool ReceiveResults(WorkerSession *session, bool storeRows);
 static void WorkerSessionFailed(WorkerSession *session);
 static void WorkerPoolFailed(WorkerPool *workerPool);
 static void PlacementExecutionDone(TaskPlacementExecution *placementExecution,
 								   bool succeeded);
+static void ScheduleNextPlacementExecution(TaskPlacementExecution *placementExecution,
+										   bool succeeded);
+static bool ShouldMarkPlacementsInvalidOnFailure(DistributedExecution *execution);
 static void PlacementExecutionReady(TaskPlacementExecution *placementExecution);
-static TaskExecutionState GetTaskExecutionState(
-	ShardCommandExecution *shardCommandExecution);
+static TaskExecutionState TaskExecutionStateMachine(ShardCommandExecution *
+													shardCommandExecution);
 
 
 /*
@@ -411,7 +423,8 @@ CitusExecScan(CustomScanState *node)
 		}
 
 		execution = CreateDistributedExecution(distributedPlan, paramListInfo,
-											   tupleDescriptor, tupleStore, targetPoolSize);
+											   tupleDescriptor, tupleStore,
+											   targetPoolSize);
 
 		StartDistributedExecution(execution);
 		RunDistributedExecution(execution);
@@ -461,7 +474,7 @@ ExecuteTaskList(CmdType operation, List *taskList, int targetPoolSize)
  */
 uint64
 ExecuteTaskListExtended(CmdType operation, List *taskList,
-						TupleDesc tupleDescriptor, Tuplestorestate *tupleStore, 
+						TupleDesc tupleDescriptor, Tuplestorestate *tupleStore,
 						bool hasReturning, int targetPoolSize)
 {
 	DistributedPlan *distributedPlan = NULL;
@@ -549,9 +562,35 @@ StartDistributedExecution(DistributedExecution *execution)
 
 			if (TaskListRequires2PC(taskList))
 			{
+				/*
+				 * Although using two phase commit protocol is an independent decision than
+				 * failing on any error, we prefer to couple them. Our motivation is that
+				 * the failures are rare, and we prefer to avoid marking placements invalid
+				 * in case of failures.
+				 */
 				CoordinatedTransactionUse2PC();
+
+				execution->errorOnAnyFailure = true;
+			}
+			else if (MultiShardCommitProtocol != COMMIT_PROTOCOL_2PC &&
+					 list_length(taskList) > 1 &&
+					 DistributedPlanModifiesDatabase(distributedPlan))
+			{
+				/*
+				 * Even if we're not using 2PC, we prefer to error out
+				 * on any failures during multi shard modifications/DDLs.
+				 */
+				execution->errorOnAnyFailure = true;
 			}
 		}
+	}
+	else
+	{
+		/*
+		 * We prefer to error on any failures for CREATE INDEX
+		 * CONCURRENTLY or VACUUM//VACUUM ANALYZE (e.g., COMMIT_PROTOCOL_BARE).
+		 */
+		execution->errorOnAnyFailure = true;
 	}
 
 	execution->isTransaction = InCoordinatedTransaction();
@@ -572,6 +611,39 @@ StartDistributedExecution(DistributedExecution *execution)
 	}
 
 	AssignTasksToConnections(execution);
+}
+
+
+/*
+ *  DistributedPlanModifiesDatabase returns true if the plan modifies the data
+ *  or the schema.
+ */
+static bool
+DistributedPlanModifiesDatabase(DistributedPlan *plan)
+{
+	CmdType operation = plan->operation;
+	List *taskList = NIL;
+	Task *firstTask = NULL;
+
+	if (operation == CMD_INSERT || operation == CMD_UPDATE || operation == CMD_DELETE)
+	{
+		return true;
+	}
+
+	/*
+	 * If we cannot decide by only checking the operation, we should look closer
+	 * to the tasks.
+	 */
+	taskList = plan->workerJob->taskList;
+	if (list_length(taskList) < 1)
+	{
+		/* does this ever possible? */
+		return false;
+	}
+
+	firstTask = (Task *) linitial(taskList);
+
+	return !ReadOnlyTask(firstTask->taskType);
 }
 
 
@@ -597,7 +669,7 @@ DistributedStatementRequiresRollback(DistributedPlan *distributedPlan)
 		return false;
 	}
 
-	if (IsTransactionBlock())
+	if (IsMultiStatementTransaction())
 	{
 		return true;
 	}
@@ -607,10 +679,33 @@ DistributedStatementRequiresRollback(DistributedPlan *distributedPlan)
 		return true;
 	}
 
+	/*
+	 * Checking the first task's placement list is not sufficient for all purposes since
+	 * for append/range distributed tables we might have unequal number of placements for
+	 * shards. However, it is safe to do here, because we're searching for a reference
+	 * table. All other cases return false for this purpose.
+	 */
 	task = (Task *) linitial(taskList);
 	if (list_length(task->taskPlacementList) > 1)
 	{
-		return true;
+		/*
+		 * Some tasks don't set replicationModel thus we only
+		 * rely on the anchorShardId, not replicationModel.
+		 *
+		 * TODO: Do we ever need replicationModel in the Task structure?
+		 * Can't we always rely on anchorShardId?
+		 */
+		uint64 anchorShardId = task->anchorShardId;
+		if (anchorShardId != INVALID_SHARD_ID && ReferenceTableShardId(anchorShardId))
+		{
+			return true;
+		}
+
+		/*
+		 * Single DML/DDL tasks with replicated tables (non-reference)
+		 * should not require BEGIN/COMMIT/ROLLBACK.
+		 */
+		return false;
 	}
 
 	return false;
@@ -686,6 +781,7 @@ UnclaimAllSessionConnections(List *sessionList)
 	}
 }
 
+
 /*
  * AssignTasksToConnections goes through the list of tasks to determine whether any
  * task placements need to be assigned to particular connections because of preceding
@@ -719,12 +815,14 @@ AssignTasksToConnections(DistributedExecution *execution)
 		shardCommandExecution->task = task;
 		shardCommandExecution->job = job;
 		shardCommandExecution->executionOrder = ExecutionOrderForTask(operation, task);
+		shardCommandExecution->executionState = TASK_EXECUTION_NOT_FINISHED;
 		shardCommandExecution->placementExecutions =
 			(TaskPlacementExecution **) palloc0(placementExecutionCount *
 												sizeof(TaskPlacementExecution *));
 		shardCommandExecution->placementExecutionCount = placementExecutionCount;
 		shardCommandExecution->expectResults = distributedPlan->hasReturning ||
 											   distributedPlan->operation == CMD_SELECT;
+
 
 		foreach(taskPlacementCell, task->taskPlacementList)
 		{
@@ -819,8 +917,13 @@ AssignTasksToConnections(DistributedExecution *execution)
 				}
 
 				/* always poll the connection in the first round */
-				connection->waitFlags = WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE;
-				execution->waitFlagsChanged = true;
+				UpdateConnectionWaitFlags(session,
+										  WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE);
+
+				/* If the connections are already avaliable, make sure to activate
+				 * 2PC when necessary.
+				 */
+				Activate2PCIfModifyingTransactionExpandsToNewNode(session);
 			}
 			else
 			{
@@ -1044,8 +1147,7 @@ RunDistributedExecution(DistributedExecution *execution)
 	int maxWaitEventCount = execution->totalTaskCount * workerCount + 2;
 
 	/* allocate events for the maximum number of connections to avoid realloc */
-	WaitEvent *events = palloc0(execution->totalTaskCount * workerCount *
-								sizeof(WaitEvent));
+	WaitEvent *events = palloc0(maxWaitEventCount * sizeof(WaitEvent));
 
 	PG_TRY();
 	{
@@ -1067,21 +1169,16 @@ RunDistributedExecution(DistributedExecution *execution)
 				ManageWorkerPool(workerPool);
 			}
 
-			if (execution->connectionSetChanged)
+			if (execution->connectionSetChanged || execution->waitFlagsChanged)
 			{
 				FreeWaitEventSet(execution->waitEventSet);
 				execution->waitEventSet = BuildWaitEventSet(execution->sessionList);
 				execution->connectionSetChanged = false;
 				execution->waitFlagsChanged = false;
 			}
-			else if (execution->waitFlagsChanged)
-			{
-				UpdateWaitEventSetFlags(execution->waitEventSet, execution->sessionList);
-				execution->waitFlagsChanged = false;
-			}
 
 			/* we should always have more (or equal) waitEvents */
-			Assert (maxWaitEventCount >= connectionCount + 2);
+			Assert(maxWaitEventCount >= connectionCount + 2);
 
 			/* wait for I/O events */
 #if (PG_VERSION_NUM >= 100000)
@@ -1172,10 +1269,10 @@ ManageWorkerPool(WorkerPool *workerPool)
 	int connectionIndex = 0;
 
 	/* we should always have more (or equal) active connections than idle connections */
-	Assert (activeConnectionCount >= idleConnectionCount);
+	Assert(activeConnectionCount >= idleConnectionCount);
 
 	/* we should never have less than 0 connections ever */
-	Assert (activeConnectionCount >= 0 && idleConnectionCount >= 0);
+	Assert(activeConnectionCount >= 0 && idleConnectionCount >= 0);
 
 	if (failedConnectionCount >= 1)
 	{
@@ -1208,6 +1305,7 @@ ManageWorkerPool(WorkerPool *workerPool)
 	for (connectionIndex = 0; connectionIndex < newConnectionCount; connectionIndex++)
 	{
 		MultiConnection *connection = NULL;
+		WorkerSession *session = NULL;
 
 		/* experimental: just to see the perf benefits of caching connections */
 		int connectionFlags = 0;
@@ -1231,11 +1329,11 @@ ManageWorkerPool(WorkerPool *workerPool)
 		 */
 		connection->claimedExclusively = true;
 
-		/* always poll the connection in the first round */
-		connection->waitFlags = WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE;
-
 		/* create a session for the connection */
-		FindOrCreateWorkerSession(workerPool, connection);
+		session = FindOrCreateWorkerSession(workerPool, connection);
+
+		/* always poll the connection in the first round */
+		UpdateConnectionWaitFlags(session, WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE);
 	}
 
 	if (newConnectionCount > 0)
@@ -1299,11 +1397,11 @@ ConnectionStateMachine(WorkerSession *session)
 				}
 				else if (pollMode == PGRES_POLLING_READING)
 				{
-					connection->waitFlags = WL_SOCKET_READABLE;
+					UpdateConnectionWaitFlags(session, WL_SOCKET_READABLE);
 				}
 				else if (pollMode == PGRES_POLLING_WRITING)
 				{
-					connection->waitFlags = WL_SOCKET_WRITEABLE;
+					UpdateConnectionWaitFlags(session, WL_SOCKET_WRITEABLE);
 				}
 				else
 				{
@@ -1313,11 +1411,10 @@ ConnectionStateMachine(WorkerSession *session)
 					workerPool->activeConnectionCount++;
 					workerPool->idleConnectionCount++;
 
-					connection->waitFlags = WL_SOCKET_WRITEABLE;
+					UpdateConnectionWaitFlags(session, WL_SOCKET_WRITEABLE);
+
 					connection->connectionState = MULTI_CONNECTION_CONNECTED;
 				}
-
-				execution->waitFlagsChanged = true;
 
 				break;
 			}
@@ -1363,7 +1460,7 @@ ConnectionStateMachine(WorkerSession *session)
 					WorkerPoolFailed(workerPool);
 				}
 
-				if (execution->failed)
+				if (execution->failed || execution->errorOnAnyFailure)
 				{
 					/* a task has failed due to this connection failure */
 					ReportConnectionError(connection, ERROR);
@@ -1391,6 +1488,18 @@ ConnectionStateMachine(WorkerSession *session)
 
 				/* remove connection from wait event set */
 				execution->connectionSetChanged = true;
+
+				/*
+				 * Reset the transaction state machine since CloseConnection()
+				 * relies on it and even if we're not inside a distributed transaction
+				 * we set the transaction state (e.g., REMOTE_TRANS_SENT_COMMAND).
+				 */
+				if (!connection->remoteTransaction.beginSent)
+				{
+					connection->remoteTransaction.transactionState =
+						REMOTE_TRANS_INVALID;
+				}
+
 				break;
 			}
 
@@ -1400,6 +1509,83 @@ ConnectionStateMachine(WorkerSession *session)
 			}
 		}
 	} while (connection->connectionState != currentState);
+}
+
+
+/*
+ * Activate2PCIfModifyingTransactionExpandsToNewNode sets the coordinated
+ * transaction to use 2PC under the following circumstances:
+ *     - We're already in a transaction block
+ *     - At least one of the previous commands in the transaction block
+ *       made a modification, which have not set 2PC itself because it
+ *       was a single shard command
+ *     - The input "session" is used for a distributed execution which
+ *       modifies the database. However, the session (and hence the
+ *       connection) is established to a different worker than the ones
+ *       that is used previously in the transaction.
+ *
+ *  To give an example,
+ *      BEGIN;
+ *          -- assume that the following INSERT goes to worker-A
+ *          -- also note that this single command does not activate
+ *          -- 2PC itself since it is a single shard mofication
+ *          INSERT INTO distributed_table (dist_key) VALUES (1);
+ *
+ *          -- do one more single shard UPDATE hitting the same
+ *          shard (or worker node in general)
+ *          -- this wouldn't activate 2PC, since we're operating on the
+ *          -- same worker node that we've modified earlier
+ *          -- so the executor would use the same connection
+ *			UPDATE distributed_table SET value = 10 WHERE dist_key = 1;
+ *
+ *          -- now, do one more INSERT, which goes to worker-B
+ *          -- At this point, this function would activate 2PC
+ *          -- since we're now expanding to a new node
+ *          -- for example, if this command were a SELECT, we wouldn't
+ *          -- activate 2PC since we're only interested in modifications/DDLs
+ *          INSERT INTO distributed_table (dist_key) VALUES (2);
+ */
+static void
+Activate2PCIfModifyingTransactionExpandsToNewNode(WorkerSession *session)
+{
+	DistributedExecution *execution = NULL;
+
+	if (MultiShardCommitProtocol != COMMIT_PROTOCOL_2PC)
+	{
+		/* we don't need 2PC, so no need to continue */
+		return;
+	}
+
+	execution = session->workerPool->distributedExecution;
+	if (TransactionModifiedDistributedTable(execution) &&
+		DistributedPlanModifiesDatabase(execution->plan) &&
+		!ConnectionModifiedPlacement(session->connection))
+	{
+		/*
+		 * We already did a modification, but not on the connection that we
+		 * just opened, which means we're now going to make modifications
+		 * over multiple connections. Activate 2PC!
+		 */
+		CoordinatedTransactionUse2PC();
+	}
+}
+
+
+/*
+ * TransactionModifiedDistributedTable returns true if the current transaction already
+ * executed a command which modified at least one distributed table in the current
+ * transaction.
+ */
+static bool
+TransactionModifiedDistributedTable(DistributedExecution *execution)
+{
+	/*
+	 * We need to explicitly check for isTransaction due to
+	 * citus.function_opens_transaction_block flag. When set to false, we
+	 * should not be pretending that we're in a coordinated transaction even
+	 * if XACT_MODIFICATION_DATA is set. That's why we implemented this workaround.
+	 */
+	return execution->isTransaction && XactModificationLevel == XACT_MODIFICATION_DATA;
 }
 
 
@@ -1419,7 +1605,7 @@ TransactionStateMachine(WorkerSession *session)
 	do {
 		currentState = transaction->transactionState;
 
-		if (!CheckConnectionReady(connection))
+		if (!CheckConnectionReady(session))
 		{
 			/* connection is busy, no state transitions to make */
 			break;
@@ -1431,6 +1617,9 @@ TransactionStateMachine(WorkerSession *session)
 			{
 				if (execution->isTransaction)
 				{
+					/* if we're expanding the nodes in a transaction, use 2PC */
+					Activate2PCIfModifyingTransactionExpandsToNewNode(session);
+
 					/* need to open a transaction block first */
 					StartRemoteTransactionBegin(connection);
 
@@ -1443,7 +1632,12 @@ TransactionStateMachine(WorkerSession *session)
 					placementExecution = PopPlacementExecution(session);
 					if (placementExecution == NULL)
 					{
-						/* no tasks are ready to be executed at the moment */
+						/*
+						 * No tasks are ready to be executed at the moment. But we
+						 * still mark the socket readable to get any notices if exists.
+						 */
+						UpdateConnectionWaitFlags(session, WL_SOCKET_READABLE);
+
 						break;
 					}
 
@@ -1451,8 +1645,8 @@ TransactionStateMachine(WorkerSession *session)
 					transaction->transactionState = REMOTE_TRANS_SENT_COMMAND;
 				}
 
-				connection->waitFlags = WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE;
-				execution->waitFlagsChanged = true;
+				UpdateConnectionWaitFlags(session,
+										  WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE);
 				break;
 			}
 
@@ -1499,8 +1693,8 @@ TransactionStateMachine(WorkerSession *session)
 				}
 
 				/* connection needs to be writeable to send next command */
-				connection->waitFlags = WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE;
-				execution->waitFlagsChanged = true;
+				UpdateConnectionWaitFlags(session,
+										  WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE);
 
 				if (execution->isTransaction)
 				{
@@ -1521,8 +1715,7 @@ TransactionStateMachine(WorkerSession *session)
 				if (placementExecution == NULL)
 				{
 					/* no tasks are ready to be executed at the moment */
-					connection->waitFlags = WL_SOCKET_READABLE;
-					execution->waitFlagsChanged = true;
+					UpdateConnectionWaitFlags(session, WL_SOCKET_READABLE);
 					break;
 				}
 
@@ -1562,8 +1755,36 @@ TransactionStateMachine(WorkerSession *session)
 			}
 		}
 	}
+
 	/* iterate in case we can perform multiple transitions at once */
 	while (transaction->transactionState != currentState);
+}
+
+
+/*
+ * UpdateConnectionWaitFlags is a wrapper around setting waitFlags of the connection.
+ *
+ * This function might further improved in a sense that to use use ModifyWaitEvent on
+ * waitFlag changes as opposed to what we do now: always rebuild the wait event sets.
+ * Our initial benchmarks didn't show any significant performance improvements, but
+ * good to keep in mind the potential improvements.
+ */
+static void
+UpdateConnectionWaitFlags(WorkerSession *session, int waitFlags)
+{
+	MultiConnection *connection = session->connection;
+	DistributedExecution *execution = session->workerPool->distributedExecution;
+
+	/* do not take any actions if the flags not changed */
+	if (connection->waitFlags == waitFlags)
+	{
+		return;
+	}
+
+	connection->waitFlags = waitFlags;
+
+	/* without signalling the execution, the flag changes won't be reflected */
+	execution->waitFlagsChanged = true;
 }
 
 
@@ -1572,9 +1793,10 @@ TransactionStateMachine(WorkerSession *session)
  * read or write, or false if it still has bytes to send/receive.
  */
 static bool
-CheckConnectionReady(MultiConnection *connection)
+CheckConnectionReady(WorkerSession *session)
 {
 	int sendStatus = 0;
+	MultiConnection *connection = session->connection;
 
 	ConnStatusType status = PQstatus(connection->pgConn);
 	if (status == CONNECTION_BAD)
@@ -1592,8 +1814,11 @@ CheckConnectionReady(MultiConnection *connection)
 	}
 	else if (sendStatus == 1)
 	{
+		int waitFlags = session->connection->waitFlags;
+
 		/* more data to send, wait for socket to become writable */
-		connection->waitFlags |= WL_SOCKET_WRITEABLE;
+		UpdateConnectionWaitFlags(session, waitFlags | WL_SOCKET_WRITEABLE);
+
 		return false;
 	}
 
@@ -1606,8 +1831,11 @@ CheckConnectionReady(MultiConnection *connection)
 
 	if (PQisBusy(connection->pgConn))
 	{
+		int waitFlags = session->connection->waitFlags;
+
 		/* did not get a full result, wait for socket to become readable */
-		connection->waitFlags |= WL_SOCKET_READABLE;
+		UpdateConnectionWaitFlags(session, waitFlags | WL_SOCKET_READABLE);
+
 		return false;
 	}
 
@@ -2055,9 +2283,11 @@ PlacementExecutionDone(TaskPlacementExecution *placementExecution, bool succeede
 {
 	WorkerPool *workerPool = placementExecution->workerPool;
 	DistributedExecution *execution = workerPool->distributedExecution;
-	ShardCommandExecution *shardCommandExecution = NULL;
-	TaskExecutionState executionState;
-	PlacementExecutionOrder executionOrder;
+	ShardCommandExecution *shardCommandExecution =
+		placementExecution->shardCommandExecution;
+	TaskExecutionState executionState = shardCommandExecution->executionState;
+	PlacementExecutionOrder executionOrder = EXECUTION_ORDER_ANY;
+	TaskExecutionState newExecutionState = TASK_EXECUTION_NOT_FINISHED;
 
 	/* mark the placement execution as finished */
 	if (succeeded)
@@ -2066,32 +2296,73 @@ PlacementExecutionDone(TaskPlacementExecution *placementExecution, bool succeede
 	}
 	else
 	{
+		if (ShouldMarkPlacementsInvalidOnFailure(execution))
+		{
+			ShardPlacement *shardPlacement = placementExecution->shardPlacement;
+
+			/*
+			 * We only set shard state if its current state is FILE_FINALIZED, which
+			 * prevents overwriting shard state if it is already set at somewhere else.
+			 */
+			if (shardPlacement->shardState == FILE_FINALIZED)
+			{
+				UpdateShardPlacementState(shardPlacement->placementId, FILE_INACTIVE);
+			}
+		}
+
 		placementExecution->executionState = PLACEMENT_EXECUTION_FAILED;
 	}
 
-	shardCommandExecution = placementExecution->shardCommandExecution;
-
-	/* determine the outcome of the overall task */
-	executionState = GetTaskExecutionState(shardCommandExecution);
-	if (executionState == TASK_EXECUTION_FINISHED)
+	if (executionState != TASK_EXECUTION_NOT_FINISHED)
 	{
-		execution->unfinishedTaskCount--;
-		return;
-	}
-
-	if (executionState == TASK_EXECUTION_FAILED)
-	{
-		execution->unfinishedTaskCount--;
-		execution->failed = true;
+		/*
+		 * Task execution has already been finished, no need to continue the
+		 * next placement.
+		 */
 		return;
 	}
 
 	/*
-	 * If the query needs to be executed on any or all placements in order
-	 * and there is a placement left, then make that placement ready-to-start
-	 * by adding it to the appropriate queue.
+	 * Update unfinishedTaskCount only when state changes from not finished to
+	 * finished or failed state.
 	 */
-	executionOrder = shardCommandExecution->executionOrder;
+	newExecutionState = TaskExecutionStateMachine(shardCommandExecution);
+	if (newExecutionState == TASK_EXECUTION_FINISHED)
+	{
+		execution->unfinishedTaskCount--;
+		return;
+	}
+	else if (newExecutionState == TASK_EXECUTION_FAILED)
+	{
+		execution->unfinishedTaskCount--;
+
+		/*
+		 * Even if a single task execution fails, there is no way to
+		 * successfully finish the execution.
+		 */
+		execution->failed = true;
+		return;
+	}
+	else
+	{
+		ScheduleNextPlacementExecution(placementExecution, succeeded);
+	}
+}
+
+
+/*
+ * ScheduleNextPlacementExecution is triggered if the query needs to be
+ * executed on any or all placements in order and there is a placement on
+ * which the execution has not happened yet. If so make that placement
+ * ready-to-start by adding it to the appropriate queue.
+ */
+static void
+ScheduleNextPlacementExecution(TaskPlacementExecution *placementExecution, bool succeeded)
+{
+	ShardCommandExecution *shardCommandExecution =
+		placementExecution->shardCommandExecution;
+	PlacementExecutionOrder executionOrder = shardCommandExecution->executionOrder;
+
 	if ((executionOrder == EXECUTION_ORDER_ANY && !succeeded) ||
 		executionOrder == EXECUTION_ORDER_SEQUENTIAL)
 	{
@@ -2131,6 +2402,31 @@ PlacementExecutionDone(TaskPlacementExecution *placementExecution, bool succeede
 
 
 /*
+ * ShouldMarkPlacementsInvalidOnFailure returns true if the failure
+ * should trigger marking placements invalid.
+ */
+static bool
+ShouldMarkPlacementsInvalidOnFailure(DistributedExecution *execution)
+{
+	DistributedPlan *distributedPlan = execution->plan;
+
+	if (!DistributedPlanModifiesDatabase(distributedPlan) || execution->errorOnAnyFailure)
+	{
+		/*
+		 * Failures that do not modify the database (e.g., mainly SELECTs) should
+		 * never lead to invalid placement.
+		 *
+		 * Failures that lead throwing error, no need to mark any placement
+		 * invalid.
+		 */
+		return false;
+	}
+
+	return true;
+}
+
+
+/*
  * PlacementExecutionReady adds a placement execution to the ready queue when
  * its dependent placement executions have finished.
  */
@@ -2138,7 +2434,6 @@ static void
 PlacementExecutionReady(TaskPlacementExecution *placementExecution)
 {
 	WorkerPool *workerPool = placementExecution->workerPool;
-	DistributedExecution *distributedExecution = workerPool->distributedExecution;
 
 	if (placementExecution->assignedSession != NULL)
 	{
@@ -2164,8 +2459,7 @@ PlacementExecutionReady(TaskPlacementExecution *placementExecution)
 			 * If the connection is idle, wake it up by checking whether
 			 * the connection is writeable.
 			 */
-			connection->waitFlags = WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE;
-			distributedExecution->waitFlagsChanged = true;
+			UpdateConnectionWaitFlags(session, WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE);
 		}
 	}
 	else
@@ -2195,21 +2489,27 @@ PlacementExecutionReady(TaskPlacementExecution *placementExecution)
 			if (transactionState == REMOTE_TRANS_INVALID ||
 				transactionState == REMOTE_TRANS_STARTED)
 			{
-				connection->waitFlags = WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE;
-				distributedExecution->waitFlagsChanged = true;
+				UpdateConnectionWaitFlags(session,
+										  WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE);
+
 				break;
 			}
 		}
 	}
+
+	/* update the state to ready for further processing */
+	placementExecution->executionState = PLACEMENT_EXECUTION_READY;
 }
 
 
 /*
- * GetTaskExecutionState returns whether a shard command execution
- * finished or failed according to its execution order.
+ * TaskExecutionStateMachine returns whether a shard command execution
+ * finished or failed according to its execution order. If the task is
+ * already finished, simply return the state. Else, calculate the state
+ * and return it.
  */
 static TaskExecutionState
-GetTaskExecutionState(ShardCommandExecution *shardCommandExecution)
+TaskExecutionStateMachine(ShardCommandExecution *shardCommandExecution)
 {
 	PlacementExecutionOrder executionOrder = shardCommandExecution->executionOrder;
 	int donePlacementCount = 0;
@@ -2217,6 +2517,13 @@ GetTaskExecutionState(ShardCommandExecution *shardCommandExecution)
 	int placementCount = 0;
 	int placementExecutionIndex = 0;
 	int placementExecutionCount = shardCommandExecution->placementExecutionCount;
+	TaskExecutionState currentTaskExecutionState = shardCommandExecution->executionState;
+
+	if (currentTaskExecutionState != TASK_EXECUTION_NOT_FINISHED)
+	{
+		/* we've already calculated the state, simply return it */
+		return currentTaskExecutionState;
+	}
 
 	for (; placementExecutionIndex < placementExecutionCount; placementExecutionIndex++)
 	{
@@ -2238,20 +2545,24 @@ GetTaskExecutionState(ShardCommandExecution *shardCommandExecution)
 
 	if (failedPlacementCount == placementCount)
 	{
-		return TASK_EXECUTION_FAILED;
+		currentTaskExecutionState = TASK_EXECUTION_FAILED;
 	}
 	else if (executionOrder == EXECUTION_ORDER_ANY && donePlacementCount > 0)
 	{
-		return TASK_EXECUTION_FINISHED;
+		currentTaskExecutionState = TASK_EXECUTION_FINISHED;
 	}
 	else if (donePlacementCount + failedPlacementCount == placementCount)
 	{
-		return TASK_EXECUTION_FINISHED;
+		currentTaskExecutionState = TASK_EXECUTION_FINISHED;
 	}
 	else
 	{
-		return TASK_EXECUTION_NOT_FINISHED;
+		currentTaskExecutionState = TASK_EXECUTION_NOT_FINISHED;
 	}
+
+	shardCommandExecution->executionState = currentTaskExecutionState;
+
+	return shardCommandExecution->executionState;
 }
 
 
@@ -2303,45 +2614,4 @@ BuildWaitEventSet(List *sessionList)
 	AddWaitEventToSet(waitEventSet, WL_LATCH_SET, PGINVALID_SOCKET, MyLatch, NULL);
 
 	return waitEventSet;
-}
-
-
-/*
- * UpdateWaitEventSetFlags modifies the given waitEventSet with the wait flags
- * for connections in the sessionList.
- */
-static void
-UpdateWaitEventSetFlags(WaitEventSet *waitEventSet, List *sessionList)
-{
-	int connectionIndex = 0;
-	ListCell *sessionCell = NULL;
-
-	foreach(sessionCell, sessionList)
-	{
-		WorkerSession *session = lfirst(sessionCell);
-		MultiConnection *connection = session->connection;
-		int socket = 0;
-
-		if (connection->pgConn == NULL)
-		{
-			/* connection died earlier in the transaction */
-			continue;
-		}
-
-		if (connection->waitFlags == 0)
-		{
-			/* not currently waiting for this connection */
-			continue;
-		}
-
-		socket = PQsocket(connection->pgConn);
-		if (socket == -1)
-		{
-			/* connection was closed */
-			continue;
-		}
-
-		ModifyWaitEvent(waitEventSet, connectionIndex, connection->waitFlags, NULL);
-		connectionIndex++;
-	}
 }
