@@ -21,6 +21,7 @@ test: multi_cluster_management
 test: multi_test_helpers
 test: multi_table_ddl
 test: multi_name_lengths
+test: multi_name_resolution
 test: multi_metadata_access
 test: multi_metadata_attributes
 
