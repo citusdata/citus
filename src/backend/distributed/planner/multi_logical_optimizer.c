@@ -1508,8 +1508,28 @@ MasterAggregateExpression(Aggref *originalAggregate,
 	const Index columnLevelsUp = 0;  /* normal column */
 	const AttrNumber argumentId = 1; /* our aggregates have single arguments */
 	AggClauseCosts aggregateCosts;
+	HeapTuple aggTuple;
+	Form_pg_aggregate aggform;
+	Oid combinefn;
+	Oid serialfn = InvalidOid;
+	Oid deserialfn = InvalidOid;
 
-	if (aggregateType == AGGREGATE_COUNT && originalAggregate->aggdistinct &&
+	aggTuple = SearchSysCache1(AGGFNOID,
+								ObjectIdGetDatum(originalAggregate->aggfnoid));
+	if (!HeapTupleIsValid(aggTuple))
+		elog(ERROR, "cache lookup failed for aggregate %u",
+				originalAggregate->aggfnoid);
+	aggform = (Form_pg_aggregate) GETSTRUCT(aggTuple);
+
+	/* planner recorded transition state type in the Aggref itself */
+	combinefn = aggform->aggcombinefn;
+
+	if (combinefn != InvalidOid) {
+		if (originalAggregate->aggtranstype == INTERNALOID) {
+			serialfn = aggform->aggserialfn;
+			deserialfn = aggform->aggdeserialfn;
+		}
+	} else if (aggregateType == AGGREGATE_COUNT && originalAggregate->aggdistinct &&
 		CountDistinctErrorRate == DISABLE_DISTINCT_APPROXIMATION &&
 		walkerContext->pullDistinctColumns)
 	{
