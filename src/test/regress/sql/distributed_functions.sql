@@ -251,14 +251,14 @@ SELECT run_command_on_workers($$
 SELECT row(usename, nspname, proname)
 FROM pg_proc
 JOIN pg_user ON (usesysid = proowner)
-JOIN pg_namespace ON (pg_namespace.oid = pronamespace)
+JOIN pg_namespace ON (pg_namespace.oid = pronamespace and nspname = 'function_tests')
 WHERE proname = 'add';
 $$);
 SELECT run_command_on_workers($$
 SELECT row(usename, nspname, proname)
 FROM pg_proc
 JOIN pg_user ON (usesysid = proowner)
-JOIN pg_namespace ON (pg_namespace.oid = pronamespace)
+JOIN pg_namespace ON (pg_namespace.oid = pronamespace and nspname = 'function_tests')
 WHERE proname = 'sum2';
 $$);
 
