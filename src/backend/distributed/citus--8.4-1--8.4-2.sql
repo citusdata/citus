@@ -40,7 +40,6 @@ CREATE AGGREGATE worker_partial_agg(oid, ...) (
 	STYPE = internal,
 	SFUNC = worker_partial_agg_sfunc,
 	FINALFUNC = worker_partial_agg_ffunc,
-	FINALFUNC_EXTRA,
 	COMBINEFUNC = stypebox_combine,
 	SERIALFUNC = stypebox_serialize,
 	DESERIALFUNC = stypebox_deserialize,
