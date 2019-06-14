@@ -647,7 +647,6 @@ static bool
 DistributedExecutionModifiesDatabase(DistributedExecution *execution)
 {
 	return TaskListModifiesDatabase(execution->operation, execution->tasksToExecute);
-
 }
 
 
@@ -1310,8 +1309,6 @@ void
 RunDistributedExecution(DistributedExecution *execution)
 {
 	TimestampTz deadline = 0;
-	int workerCount = 0;
-	int maxWaitEventCount = 0;
 	WaitEvent *events = NULL;
 
 	deadline =
@@ -1319,24 +1316,19 @@ RunDistributedExecution(DistributedExecution *execution)
 
 	AssignTasksToConnections(execution);
 
-	workerCount = list_length(execution->workerList);
-
-	/* additional 2 is for postmaster and latch */
-	maxWaitEventCount = execution->totalTaskCount * workerCount + 2;
-
-	/* allocate events for the maximum number of connections to avoid realloc */
-	events = palloc0(maxWaitEventCount * sizeof(WaitEvent));
-
 	PG_TRY();
 	{
 		bool cancellationReceived = false;
 
+		/* additional 2 is for postmaster and latch */
+		int eventSetSize = list_length(execution->sessionList) + 2;
+
 		execution->waitEventSet = BuildWaitEventSet(execution->sessionList);
+		events = palloc0(eventSetSize * sizeof(WaitEvent));
 
 		while (execution->unfinishedTaskCount > 0 && !cancellationReceived)
 		{
 			long timeout = DeadlineTimestampTzToTimeout(deadline);
-			int connectionCount = list_length(execution->sessionList);
 			int eventCount = 0;
 			int eventIndex = 0;
 			ListCell *workerCell = NULL;
@@ -1350,7 +1342,23 @@ RunDistributedExecution(DistributedExecution *execution)
 			if (execution->connectionSetChanged || execution->waitFlagsChanged)
 			{
 				FreeWaitEventSet(execution->waitEventSet);
+
 				execution->waitEventSet = BuildWaitEventSet(execution->sessionList);
+
+				if (execution->connectionSetChanged)
+				{
+					/*
+					 * The execution might take a while, so explicitly free at this point
+					 * because we don't need anymore.
+					  */
+					pfree(events);
+
+					/* recalculate (and allocate) since the sessions have changed */
+					eventSetSize = list_length(execution->sessionList) + 2;
+
+					events = palloc0(eventSetSize * sizeof(WaitEvent));
+				}
+
 				execution->connectionSetChanged = false;
 				execution->waitFlagsChanged = false;
 			}
@@ -1358,10 +1366,10 @@ RunDistributedExecution(DistributedExecution *execution)
 			/* wait for I/O events */
 #if (PG_VERSION_NUM >= 100000)
 			eventCount = WaitEventSetWait(execution->waitEventSet, timeout, events,
-										  connectionCount + 2, WAIT_EVENT_CLIENT_READ);
+										  eventSetSize, WAIT_EVENT_CLIENT_READ);
 #else
 			eventCount = WaitEventSetWait(execution->waitEventSet, timeout, events,
-										  connectionCount + 2);
+										  eventSetSize);
 #endif
 
 			/* process I/O events */
@@ -1418,7 +1426,6 @@ RunDistributedExecution(DistributedExecution *execution)
 		 */
 		UnclaimAllSessionConnections(execution->sessionList);
 
-		pfree(events);
 		FreeWaitEventSet(execution->waitEventSet);
 
 		PG_RE_THROW();
@@ -2861,11 +2868,13 @@ static WaitEventSet *
 BuildWaitEventSet(List *sessionList)
 {
 	WaitEventSet *waitEventSet = NULL;
-	int connectionCount = list_length(sessionList);
 	ListCell *sessionCell = NULL;
 
-	/* allocate# connections + 2 for the signal latch and postmaster death */
-	waitEventSet = CreateWaitEventSet(CurrentMemoryContext, connectionCount + 2);
+	/* additional 2 is for postmaster and latch */
+	int eventSetSize = list_length(sessionList) + 2;
+
+	waitEventSet =
+		CreateWaitEventSet(CurrentMemoryContext, eventSetSize);
 
 	foreach(sessionCell, sessionList)
 	{
@@ -2901,3 +2910,4 @@ BuildWaitEventSet(List *sessionList)
 
 	return waitEventSet;
 }
+
