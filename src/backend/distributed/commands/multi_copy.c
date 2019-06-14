@@ -3235,7 +3235,7 @@ InitializeCopyShardState(CopyShardState *shardState,
 		ShardPlacement *placement = (ShardPlacement *) lfirst(placementCell);
 		CopyConnectionState *connectionState = NULL;
 		CopyPlacementState *placementState = NULL;
-		
+
 		MultiConnection *connection =
 			CopyGetPlacementConnection(placement, connectionStateHash, stopOnFailure);
 		if (connection == NULL)
@@ -3372,7 +3372,7 @@ GetWorkerConnectionIfCached(const char *nodeName, int nodePort, HTAB *connection
 		}
 	}
 
-	return NULL;;
+	return NULL;
 }
 
 

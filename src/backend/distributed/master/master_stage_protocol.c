@@ -63,7 +63,7 @@ static bool WorkerShardStats(ShardPlacement *placement, Oid relationId,
 							 text **shardMinValue, text **shardMaxValue);
 static List * WorkerCreateShardCommandList(Oid relationId, int shardIndex,
 										   uint64 shardId, List *ddlCommandList,
-				  						   List *foreignConstraintCommandList);
+										   List *foreignConstraintCommandList);
 
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(master_create_empty_shard);
@@ -573,7 +573,7 @@ WorkerCreateShard(Oid relationId, int shardIndex, uint64 shardId, List *ddlComma
 	List *commandList =
 		WorkerCreateShardCommandList(relationId, shardIndex, shardId, ddlCommandList,
 									 foreignConstraintCommandList);
-	
+
 	foreach(commandCell, commandList)
 	{
 		const char *command = lfirst(commandCell);
@@ -581,9 +581,11 @@ WorkerCreateShard(Oid relationId, int shardIndex, uint64 shardId, List *ddlComma
 	}
 }
 
+
 static List *
-WorkerCreateShardCommandList(Oid relationId, int shardIndex, uint64 shardId, List *ddlCommandList,
-				  			 List *foreignConstraintCommandList)
+WorkerCreateShardCommandList(Oid relationId, int shardIndex, uint64 shardId,
+							 List *ddlCommandList,
+							 List *foreignConstraintCommandList)
 {
 	List *commandList = NIL;
 	Oid schemaId = get_rel_namespace(relationId);
@@ -677,7 +679,7 @@ WorkerCreateShardCommandList(Oid relationId, int shardIndex, uint64 shardId, Lis
 	{
 		ShardInterval *shardInterval = LoadShardInterval(shardId);
 		char *attachPartitionCommand = GenerateAttachShardPartitionCommand(shardInterval);
-		
+
 		commandList = lappend(commandList, attachPartitionCommand);
 	}
 
