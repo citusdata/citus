@@ -1,37 +1,37 @@
-CREATE FUNCTION stype_serialize(internal, oid, ...)serial
+CREATE FUNCTION stype_serialize(internal, oid, ...)
 RETURNS internal
 AS 'MODULE_PATHNAME'
 LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
 
-CREATE FUNCTION stype_deserialize(internal, oid, ...)serial
+CREATE FUNCTION stype_deserialize(internal, oid, ...)
 RETURNS internal
 AS 'MODULE_PATHNAME'
 LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
 
-CREATE FUNCTION stype_combine(internal, oid, ...)serial
+CREATE FUNCTION stype_combine(internal, oid, ...)
 RETURNS internal
 AS 'MODULE_PATHNAME'
-LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
+LANGUAGE C PARALLEL SAFE;
 
 CREATE FUNCTION worker_partial_agg_sfunc(internal, oid, ...)
 RETURNS internal
 AS 'MODULE_PATHNAME'
-LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
+LANGUAGE C PARALLEL SAFE;
 
 CREATE FUNCTION worker_partial_agg_ffunc(internal, oid, ...)
 RETURNS internal
 AS 'MODULE_PATHNAME'
-LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
+LANGUAGE C PARALLEL SAFE;
 
 CREATE FUNCTION coord_combine_agg_sfunc(internal, oid, ...)
 RETURNS internal
 AS 'MODULE_PATHNAME'
-LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
+LANGUAGE C PARALLEL SAFE;
 
 CREATE FUNCTION coord_combine_agg_ffunc(internal, oid, ...)
 RETURNS internal
 AS 'MODULE_PATHNAME'
-LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
+LANGUAGE C PARALLEL SAFE;
 
 -- select worker_partial_agg(agg, ...)
 -- equivalent to
