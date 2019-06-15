@@ -12,6 +12,7 @@
 #ifndef COLOCATION_UTILS_H_
 #define COLOCATION_UTILS_H_
 
+#include "distributed/sharding.h"
 #include "distributed/shardinterval_utils.h"
 #include "nodes/pg_list.h"
 
@@ -33,5 +34,7 @@ extern void CheckReplicationModel(Oid sourceRelationId, Oid targetRelationId);
 extern void CheckDistributionColumnType(Oid sourceRelationId, Oid targetRelationId);
 
 extern void DeleteColocationGroupIfNoTablesBelong(uint32 colocationId);
+extern PartitioningScheme * GetPartitioningSchemeForColocationId(int colocationId);
+extern DistributionScheme * GetDistributionSchemeForColocationId(int colocationId);
 
 #endif /* COLOCATION_UTILS_H_ */

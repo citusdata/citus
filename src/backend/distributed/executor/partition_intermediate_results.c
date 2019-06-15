@@ -107,16 +107,16 @@ static void PartitionedResultDestReceiverDestroy(DestReceiver *destReceiver);
 
 
 /* exports for SQL callable functions */
-PG_FUNCTION_INFO_V1(create_hash_partitioned_intermediate_result);
+PG_FUNCTION_INFO_V1(worker_predistribute_query_result);
 
 
 /*
- * create_hash_partitioned_intermediate_result executes a query and writes the results
+ * worker_predistribute_query_result executes a query and writes the results
  * into a set of local files according to the partition scheme and the partition
  * column.
  */
 Datum
-create_hash_partitioned_intermediate_result(PG_FUNCTION_ARGS)
+worker_predistribute_query_result(PG_FUNCTION_ARGS)
 {
 	ReturnSetInfo *resultInfo = (ReturnSetInfo *) fcinfo->resultinfo;
 
@@ -173,7 +173,7 @@ create_hash_partitioned_intermediate_result(PG_FUNCTION_ARGS)
 	 * Intermediate results will be stored in a directory that is derived
 	 * from the distributed transaction ID.
 	 */
-	BeginOrContinueCoordinatedTransaction();
+	//BeginOrContinueCoordinatedTransaction();
 
 	/* parse the query */
 	query = ParseQueryString(queryString);
@@ -236,14 +236,16 @@ create_hash_partitioned_intermediate_result(PG_FUNCTION_ARGS)
 	{
 		FileOutputStream *partitionFile = &resultDest->partitionFiles[partitionIndex];
 		int64 bytesWritten = partitionFile->bytesWritten;
-		Datum values[2];
-		bool nulls[2];
+		int64 recordsWritten = partitionFile->recordsWritten;
+		Datum values[3];
+		bool nulls[3];
 
 		memset(values, 0, sizeof(values));
 		memset(nulls, 0, sizeof(nulls));
 
 		values[0] = Int32GetDatum(partitionIndex);
-		values[1] = UInt64GetDatum(bytesWritten);
+		values[1] = UInt64GetDatum(recordsWritten);
+		values[2] = UInt64GetDatum(bytesWritten);
 
 		tuplestore_putvalues(tupleStore, returnTupleDesc, values, nulls);
 	}
@@ -434,6 +436,7 @@ PartitionedResultDestReceiverStartup(DestReceiver *dest, int operation,
 		partitionFileArray[partitionIndex].filePath = filePathStringInfo;
 		partitionFileArray[partitionIndex].bufferSize = fileBufferSize;
 		partitionFileArray[partitionIndex].bytesWritten = 0L;
+		partitionFileArray[partitionIndex].recordsWritten = 0L;
 	}
 }
 
@@ -505,6 +508,7 @@ PartitionedResultDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
 	/* append row to the file */
 	FileOutputStreamWrite(partitionFile, copyOutState->fe_msgbuf);
 
+	partitionFile->recordsWritten++;
 	resultDest->tuplesSent++;
 
 	MemoryContextSwitchTo(oldContext);

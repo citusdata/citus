@@ -363,6 +363,10 @@ extern bool ShardIntervalsOverlap(ShardInterval *firstInterval,
 extern bool CoPartitionedTables(Oid firstRelationId, Oid secondRelationId);
 extern ShardInterval ** GenerateSyntheticShardIntervalArray(int partitionCount);
 extern RowModifyLevel RowModifyLevelForQuery(Query *query);
+extern ArrayType * SplitPointObject(ShardInterval **shardIntervalArray,
+									uint32 shardIntervalCount);
+extern StringInfo SplitPointArrayString(ArrayType *splitPointObject,
+										Oid columnType, int32 columnTypeMod);
 
 
 /* function declarations for Task and Task list operations */

@@ -59,6 +59,7 @@
 #include "distributed/commands/multi_copy.h"
 #include "distributed/distributed_planner.h"
 #include "distributed/errormessage.h"
+#include "distributed/intermediate_results.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_logical_planner.h"
 #include "distributed/multi_router_planner.h"
@@ -1571,8 +1572,80 @@ ShouldTransformRTE(RangeTblEntry *rangeTableEntry)
 Query *
 BuildSubPlanResultQuery(List *targetEntryList, List *columnAliasList, char *resultId)
 {
-	Query *resultQuery = NULL;
 	Const *resultIdConst = NULL;
+
+	resultIdConst = makeNode(Const);
+	resultIdConst->consttype = TEXTOID;
+	resultIdConst->consttypmod = -1;
+	resultIdConst->constlen = -1;
+	resultIdConst->constvalue = CStringGetTextDatum(resultId);
+	resultIdConst->constbyval = false;
+	resultIdConst->constisnull = false;
+	resultIdConst->location = -1;
+
+	return BuildReadIntermediateResultsQuery(targetEntryList, columnAliasList,
+											 resultIdConst);
+}
+
+
+/*
+ * BuildSubPlanResultQuery returns a query of the form:
+ *
+ * SELECT
+ *   <target list>
+ * FROM
+ *   read_intermediate_result(ARRAY[<resultNames>], '<copy format'>)
+ *   AS res (<column definition list>);
+ *
+ * The caller can optionally supply a columnAliasList, which is useful for
+ * CTEs that have column aliases.
+ *
+ * If any of the types in the target list cannot be used in the binary copy format,
+ * then the copy format 'text' is used, otherwise 'binary' is used.
+ */
+Query *
+BuildReadIntermediateResultsArrayQuery(List *targetEntryList, List *columnAliasList,
+									   List *resultNames)
+{
+	Const *resultIdConst = NULL;
+
+	resultIdConst = makeNode(Const);
+	resultIdConst->consttype = TEXTARRAYOID;
+	resultIdConst->consttypmod = -1;
+	resultIdConst->constlen = -1;
+	resultIdConst->constvalue = PointerGetDatum(strlist_to_textarray(resultNames));
+	resultIdConst->constbyval = false;
+	resultIdConst->constisnull = false;
+	resultIdConst->location = -1;
+
+	return BuildReadIntermediateResultsQuery(targetEntryList, columnAliasList,
+											 resultIdConst);
+}
+
+
+/*
+ * BuildReadIntermediateResultsQuery returns a query of the form:
+ *
+ * SELECT
+ *   <target list>
+ * FROM
+ *   read_intermediate_result(<resultIdConst>, '<copy format'>)
+ *   AS res (<column definition list>);
+ *
+ * The caller can optionally supply a columnAliasList, which is useful for
+ * replacing CTEs that have column aliases.
+ *
+ * If any of the types in the target list cannot be used in the binary copy format,
+ * then the copy format 'text' is used, otherwise 'binary' is used.
+ *
+ * The resultIdConst can be supplied by the caller to allow both single files
+ * and arrays of files.
+ */
+Query *
+BuildReadIntermediateResultsQuery(List *targetEntryList, List *columnAliasList,
+								  Const *resultIdConst)
+{
+	Query *resultQuery = NULL;
 	Const *resultFormatConst = NULL;
 	FuncExpr *funcExpr = NULL;
 	Alias *funcAlias = NULL;
@@ -1655,15 +1728,6 @@ BuildSubPlanResultQuery(List *targetEntryList, List *columnAliasList, char *resu
 
 		columnNumber++;
 	}
-
-	resultIdConst = makeNode(Const);
-	resultIdConst->consttype = TEXTOID;
-	resultIdConst->consttypmod = -1;
-	resultIdConst->constlen = -1;
-	resultIdConst->constvalue = CStringGetTextDatum(resultId);
-	resultIdConst->constbyval = false;
-	resultIdConst->constisnull = false;
-	resultIdConst->location = -1;
 
 	/* build the citus_copy_format parameter for the call to read_intermediate_result */
 	if (!useBinaryCopyFormat)

@@ -761,76 +761,31 @@ read_intermediate_result(PG_FUNCTION_ARGS)
 Datum
 read_intermediate_result_array(PG_FUNCTION_ARGS)
 {
-	ReturnSetInfo *rsinfo = (ReturnSetInfo *) fcinfo->resultinfo;
-
 	ArrayType *resultIdObject = PG_GETARG_ARRAYTYPE_P(0);
-	Datum *resultIdArray = DeconstructArrayObject(resultIdObject);
-	int32 resultCount = ArrayObjectCount(resultIdObject);
 	Datum copyFormatOidDatum = PG_GETARG_DATUM(1);
+
+	Datum *resultIdArray = NULL;
+	int32 resultCount = 0;
+	int resultIndex = 0;
+
 	Datum copyFormatLabelDatum = DirectFunctionCall1(enum_out, copyFormatOidDatum);
 	char *copyFormatLabel = DatumGetCString(copyFormatLabelDatum);
 
-	int resultIndex = 0;
-
 	Tuplestorestate *tupstore = NULL;
 	TupleDesc tupleDescriptor = NULL;
-	MemoryContext oldcontext = NULL;
 
 	CheckCitusVersion(ERROR);
 
-	/* check to see if query supports us returning a tuplestore */
-	if (rsinfo == NULL || !IsA(rsinfo, ReturnSetInfo))
+	tupstore = SetupTuplestore(fcinfo, &tupleDescriptor);
+
+	resultCount = ArrayGetNItems(ARR_NDIM(resultIdObject), ARR_DIMS(resultIdObject));
+	if (resultCount == 0)
 	{
-		ereport(ERROR,
-				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg(
-					 "set-valued function called in context that cannot accept a set")));
+		tuplestore_donestoring(tupstore);
+		PG_RETURN_VOID();
 	}
 
-	if (!(rsinfo->allowedModes & SFRM_Materialize))
-	{
-		ereport(ERROR,
-				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg(
-					 "materialize mode required, but it is not allowed in this context")));
-	}
-
-	/* get a tuple descriptor for our result type */
-	switch (get_call_result_type(fcinfo, NULL, &tupleDescriptor))
-	{
-		case TYPEFUNC_COMPOSITE:
-		{
-			/* success */
-			break;
-		}
-
-		case TYPEFUNC_RECORD:
-		{
-			/* failed to determine actual type of RECORD */
-			ereport(ERROR,
-					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					 errmsg("function returning record called in context "
-							"that cannot accept type record")));
-			break;
-		}
-
-		default:
-		{
-			/* result type isn't composite */
-			elog(ERROR, "return type must be a row type");
-			break;
-		}
-	}
-
-	tupleDescriptor = CreateTupleDescCopy(tupleDescriptor);
-
-	oldcontext = MemoryContextSwitchTo(rsinfo->econtext->ecxt_per_query_memory);
-
-	tupstore = tuplestore_begin_heap(true, false, work_mem);
-	rsinfo->returnMode = SFRM_Materialize;
-	rsinfo->setResult = tupstore;
-	rsinfo->setDesc = tupleDescriptor;
-	MemoryContextSwitchTo(oldcontext);
+	resultIdArray = DeconstructArrayObject(resultIdObject);
 
 	for (resultIndex = 0; resultIndex < resultCount; resultIndex++)
 	{
@@ -883,11 +838,13 @@ fetch_intermediate_results(PG_FUNCTION_ARGS)
 		PG_RETURN_INT64(0);
 	}
 
-	if (!InCoordinatedTransaction())
+	if (!IsMultiStatementTransaction())
 	{
 		ereport(ERROR, (errmsg("fetch_intermediate_results can only be used in a "
 							   "distributed transaction")));
 	}
+
+	CurrentCoordinatedTransactionState = COORD_TRANS_STARTED;
 
 	connection = GetNodeConnection(connectionFlags, remoteHost, remotePort);
 

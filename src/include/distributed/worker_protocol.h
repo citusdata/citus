@@ -101,6 +101,7 @@ typedef struct FileOutputStream
 	StringInfo filePath;
 	uint32 bufferSize;
 	int64 bytesWritten;
+	int64 recordsWritten;
 } FileOutputStream;
 
 

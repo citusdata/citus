@@ -15,6 +15,7 @@
 #include "fmgr.h"
 
 #include "distributed/commands/multi_copy.h"
+#include "distributed/sharding.h"
 #include "nodes/execnodes.h"
 #include "nodes/pg_list.h"
 #include "tcop/dest.h"
@@ -31,6 +32,11 @@ extern void SendQueryResultViaCopy(const char *resultId);
 extern void ReceiveQueryResultViaCopy(const char *resultId);
 extern void RemoveIntermediateResultsDirectory(void);
 extern int64 IntermediateResultSize(char *resultId);
-
+extern Query * BuildReadIntermediateResultsQuery(List *targetEntryList,
+												 List *columnAliasList,
+												 Const *resultIdConst);
+extern Query * BuildReadIntermediateResultsArrayQuery(List *targetEntryList,
+													  List *columnAliasList,
+													  List *resultNames);
 
 #endif /* INTERMEDIATE_RESULTS_H */
