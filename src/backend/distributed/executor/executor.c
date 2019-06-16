@@ -366,6 +366,7 @@ static bool DistributedExecutionModifiesDatabase(DistributedExecution *execution
 static bool DistributedPlanModifiesDatabase(DistributedPlan *plan);
 static bool TaskListModifiesDatabase(CmdType operation, List *taskList);
 static bool DistributedExecutionRequiresRollback(DistributedExecution *execution);
+static bool SelectForUpdateOnReferenceTable(CmdType operation, List *taskList);
 static void AssignTasksToConnections(DistributedExecution *execution);
 static void UnclaimAllSessionConnections(List *sessionList);
 static bool UseConnectionPerPlacement(void);
@@ -694,6 +695,7 @@ TaskListModifiesDatabase(CmdType operation, List *taskList)
 static bool
 DistributedExecutionRequiresRollback(DistributedExecution *execution)
 {
+	CmdType operation = execution->operation;
 	List *taskList = execution->tasksToExecute;
 	Task *task = NULL;
 
@@ -702,7 +704,7 @@ DistributedExecutionRequiresRollback(DistributedExecution *execution)
 		return false;
 	}
 
-	if (execution->operation == CMD_SELECT)
+	if (operation == CMD_SELECT)
 	{
 		return SelectOpensTransactionBlock && IsTransactionBlock();
 	}
@@ -756,6 +758,43 @@ DistributedExecutionRequiresRollback(DistributedExecution *execution)
 
 
 /*
+ * SelectForUpdateOnReferenceTable returns true if the input task
+ * that contains FOR UPDATE clause that locks any reference tables.
+ */
+static bool
+SelectForUpdateOnReferenceTable(CmdType operation, List *taskList)
+{
+	Task *task = NULL;
+	ListCell *rtiLockCell = NULL;
+
+	if (operation != CMD_SELECT)
+	{
+		return false;
+	}
+
+	if (list_length(taskList) != 1)
+	{
+		/* we currently do not support SELECT FOR UPDATE on multi task queries */
+		return false;
+	}
+
+	task = (Task *) linitial(taskList);
+	foreach(rtiLockCell, task->relationRowLockList)
+	{
+		RelationRowLock *relationRowLock = (RelationRowLock *) lfirst(rtiLockCell);
+		Oid relationId = relationRowLock->relationId;
+
+		if (PartitionMethod(relationId) == DISTRIBUTE_BY_NONE)
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+
+/*
  * LockPartitionsForDistributedPlan ensures commands take locks on all partitions
  * of a distributed table that appears in the query. We do this primarily out of
  * consistency with PostgreSQL locking.
@@ -802,9 +841,13 @@ AcquireExecutorShardLocks(DistributedExecution *execution)
 	CmdType operation = execution->operation;
 	List *taskList = execution->tasksToExecute;
 
-	if (!(operation == CMD_INSERT || operation == CMD_UPDATE || operation == CMD_DELETE))
+	if (!(operation == CMD_INSERT || operation == CMD_UPDATE || operation == CMD_DELETE ||
+		  SelectForUpdateOnReferenceTable(operation, taskList)))
 	{
-		/* executor locks only apply to DML commands */
+		/*
+		 * Executor locks only apply to DML commands and SELECT FOR UPDATE queries
+		 * touching reference tables.
+		 */
 		return;
 	}
 
