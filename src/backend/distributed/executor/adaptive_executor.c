@@ -1393,6 +1393,7 @@ FindOrCreateWorkerPool(DistributedExecution *execution, WorkerNode *workerNode)
 {
 	WorkerPool *workerPool = NULL;
 	ListCell *workerCell = NULL;
+	int nodeConnectionCount = 0;
 
 	foreach(workerCell, execution->workerList)
 	{
@@ -1408,7 +1409,12 @@ FindOrCreateWorkerPool(DistributedExecution *execution, WorkerNode *workerNode)
 	workerPool->node = workerNode;
 	workerPool->poolStartTime = 0;
 	workerPool->distributedExecution = execution;
-	workerPool->maxNewConnectionsPerCycle = 1;
+
+	/* "open" connections aggressively when there are cached connections */
+	nodeConnectionCount = NodeConnectionCount(workerNode->workerName,
+											  workerNode->workerPort);
+	workerPool->maxNewConnectionsPerCycle = Max(1, nodeConnectionCount);
+
 	dlist_init(&workerPool->pendingTaskQueue);
 	dlist_init(&workerPool->readyTaskQueue);
 
