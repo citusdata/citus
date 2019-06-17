@@ -334,6 +334,12 @@ typedef struct WorkerPool
 	/* indicates whether to check for the connection timeout */
 	bool checkForPoolTimeout;
 
+	/* last time we opened a connection */
+	TimestampTz lastConnectionOpenTime;
+
+	/* maximum number of connections we are allowed to open at once */
+	uint32 maxNewConnectionsPerCycle;
+
 	/*
 	 * This is only set in WorkerPoolFailed() function. Once a pool fails, we do not
 	 * use it anymore.
@@ -493,6 +499,9 @@ typedef struct TaskPlacementExecution
 bool ForceMaxQueryParallelization = false;
 int MaxAdaptiveExecutorPoolSize = 4;
 
+/* GUC, number of ms to wait between opening connections to the same worker */
+int ExecutorSlowStartInterval = 10;
+
 
 /* local functions */
 static DistributedExecution * CreateDistributedExecution(CmdType operation,
@@ -527,6 +536,7 @@ static WorkerSession * FindOrCreateWorkerSession(WorkerPool *workerPool,
 												 MultiConnection *connection);
 static void ManageWorkerPool(WorkerPool *workerPool);
 static void CheckConnectionTimeout(WorkerPool *workerPool);
+static int UsableConnectionCount(WorkerPool *workerPool);
 static long NextEventTimeout(DistributedExecution *execution);
 static long MillisecondsBetweenTimestamps(TimestampTz startTime, TimestampTz endTime);
 static WaitEventSet * BuildWaitEventSet(List *sessionList);
@@ -1398,6 +1408,7 @@ FindOrCreateWorkerPool(DistributedExecution *execution, WorkerNode *workerNode)
 	workerPool->node = workerNode;
 	workerPool->poolStartTime = 0;
 	workerPool->distributedExecution = execution;
+	workerPool->maxNewConnectionsPerCycle = 1;
 	dlist_init(&workerPool->pendingTaskQueue);
 	dlist_init(&workerPool->readyTaskQueue);
 
@@ -1682,9 +1693,11 @@ ManageWorkerPool(WorkerPool *workerPool)
 	WorkerNode *workerNode = workerPool->node;
 	int targetPoolSize = execution->targetPoolSize;
 	int initiatedConnectionCount = list_length(workerPool->sessionList);
-	int activeConnectionCount = workerPool->activeConnectionCount;
+	int activeConnectionCount PG_USED_FOR_ASSERTS_ONLY =
+		workerPool->activeConnectionCount;
+	int idleConnectionCount PG_USED_FOR_ASSERTS_ONLY =
+		workerPool->idleConnectionCount;
 	int failedConnectionCount = workerPool->failedConnectionCount;
-	int idleConnectionCount = workerPool->idleConnectionCount;
 	int readyTaskCount = workerPool->readyTaskCount;
 	int newConnectionCount = 0;
 	int connectionIndex = 0;
@@ -1730,12 +1743,8 @@ ManageWorkerPool(WorkerPool *workerPool)
 		/* cannot open more than targetPoolSize connections */
 		int maxNewConnectionCount = targetPoolSize - initiatedConnectionCount;
 
-		/* connections that are still establishing will soon be available for tasks */
-		int establishingConnectionCount =
-			initiatedConnectionCount - activeConnectionCount - failedConnectionCount;
-
 		/* total number of connections that are (almost) available for tasks */
-		int usableConnectionCount = idleConnectionCount + establishingConnectionCount;
+		int usableConnectionCount = UsableConnectionCount(workerPool);
 
 		/*
 		 * Number of additional connections we would need to run all ready tasks in
@@ -1748,6 +1757,26 @@ ManageWorkerPool(WorkerPool *workerPool)
 		 * than the target pool size.
 		 */
 		newConnectionCount = Min(newConnectionsForReadyTasks, maxNewConnectionCount);
+
+		if (newConnectionCount > 0 && ExecutorSlowStartInterval > 0)
+		{
+			TimestampTz now = GetCurrentTimestamp();
+
+			if (TimestampDifferenceExceeds(workerPool->lastConnectionOpenTime, now,
+										   ExecutorSlowStartInterval))
+			{
+				newConnectionCount = Min(newConnectionCount,
+										 workerPool->maxNewConnectionsPerCycle);
+
+				/* increase the open rate every cycle (like TCP slow start) */
+				workerPool->maxNewConnectionsPerCycle += 1;
+			}
+			else
+			{
+				/* wait a bit until opening more connections */
+				return;
+			}
+		}
 	}
 
 	if (newConnectionCount <= 0)
@@ -1792,10 +1821,8 @@ ManageWorkerPool(WorkerPool *workerPool)
 		UpdateConnectionWaitFlags(session, WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE);
 	}
 
-	if (newConnectionCount > 0)
-	{
-		execution->connectionSetChanged = true;
-	}
+	workerPool->lastConnectionOpenTime = GetCurrentTimestamp();
+	execution->connectionSetChanged = true;
 }
 
 
@@ -1875,6 +1902,29 @@ CheckConnectionTimeout(WorkerPool *workerPool)
 			workerPool->checkForPoolTimeout = false;
 		}
 	}
+}
+
+
+/*
+ * UsableConnectionCount returns the number of connections in the worker pool
+ * that are (soon to be) usable for sending commands, this includes both idle
+ * connections and connections that are still establishing.
+ */
+static int
+UsableConnectionCount(WorkerPool *workerPool)
+{
+	int initiatedConnectionCount = list_length(workerPool->sessionList);
+	int activeConnectionCount = workerPool->activeConnectionCount;
+	int failedConnectionCount = workerPool->failedConnectionCount;
+	int idleConnectionCount = workerPool->idleConnectionCount;
+
+	/* connections that are still establishing will soon be available for tasks */
+	int establishingConnectionCount =
+		initiatedConnectionCount - activeConnectionCount - failedConnectionCount;
+
+	int usableConnectionCount = idleConnectionCount + establishingConnectionCount;
+
+	return usableConnectionCount;
 }
 
 
