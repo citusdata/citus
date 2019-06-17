@@ -1510,9 +1510,9 @@ MasterAggregateExpression(Aggref *originalAggregate,
 	AggClauseCosts aggregateCosts;
 	HeapTuple aggTuple;
 	Form_pg_aggregate aggform;
-	Oid combinefn;
-	Oid serialfn = InvalidOid;
-	Oid deserialfn = InvalidOid;
+	Oid combine;
+	Oid serial = InvalidOid;
+	Oid deserial = InvalidOid;
 
 	aggTuple = SearchSysCache1(AGGFNOID,
 								ObjectIdGetDatum(originalAggregate->aggfnoid));
@@ -1520,15 +1520,15 @@ MasterAggregateExpression(Aggref *originalAggregate,
 		elog(ERROR, "cache lookup failed for aggregate %u",
 				originalAggregate->aggfnoid);
 	aggform = (Form_pg_aggregate) GETSTRUCT(aggTuple);
+	combine = aggform->aggcombinefn;
+	if (IsValidOid(combine) && originalAggregate->aggtranstype == INTERNALOID) {
+		serial = aggform->aggserialfn;
+		deserial = aggform->aggdeserialfn;
+	}
+	ReleaseSysCache(aggTuple);
 
-	/* planner recorded transition state type in the Aggref itself */
-	combinefn = aggform->aggcombinefn;
+	if (IsValidOid(combine)) {
 
-	if (combinefn != InvalidOid) {
-		if (originalAggregate->aggtranstype == INTERNALOID) {
-			serialfn = aggform->aggserialfn;
-			deserialfn = aggform->aggdeserialfn;
-		}
 	} else if (aggregateType == AGGREGATE_COUNT && originalAggregate->aggdistinct &&
 		CountDistinctErrorRate == DISABLE_DISTINCT_APPROXIMATION &&
 		walkerContext->pullDistinctColumns)
