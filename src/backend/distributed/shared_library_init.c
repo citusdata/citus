@@ -804,7 +804,7 @@ RegisterCitusConfigVariables(void)
 		&MaxCachedConnectionsPerWorker,
 		1, 0, INT_MAX,
 		PGC_USERSET,
-		GUC_NO_SHOW_ALL,
+		0,
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
