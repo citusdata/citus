@@ -630,6 +630,22 @@ RegisterCitusConfigVariables(void)
 		GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
+	DefineCustomIntVariable(
+		"citus.executor_slow_start_interval",
+		gettext_noop("Time to wait between opening connections to the same worker node"),
+		gettext_noop("When the individual tasks of a multi-shard query take very "
+					 "little time, they can often be finished over a single (often "
+					 "already cached) connection. To avoid redundantly opening "
+					 "additional connections, the executor waits between connection "
+					 "attempts for the configured number of milliseconds. At the end "
+					 "of the interval, it increases the number of connections it is "
+					 "allowed to open next time."),
+		&ExecutorSlowStartInterval,
+		10, 0, INT_MAX,
+		PGC_USERSET,
+		GUC_UNIT_MS | GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
 	DefineCustomBoolVariable(
 		"citus.enable_deadlock_prevention",
 		gettext_noop("Avoids deadlocks by preventing concurrent multi-shard commands"),
