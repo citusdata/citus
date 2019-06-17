@@ -12,7 +12,12 @@
 
 file1="${@:(-2):1}"
 file2="${@:(-1):1}"
-test=$(basename $file1 .out)
+# pg_regress passes the expected file as the first argument ($file1 above),
+# and results file as the second argument ($file2 above). We take the base
+# filename of the expected file as the test name. We can have multiple
+# expected files for a single test with _0, _1, ... suffixes.
+# So for the test name, we also strip the additional suffix.
+test=$(basename $file1 .out | sed -E "s/_[0-9]+$//")
 args=${@:1:$#-2}
 BASEDIR=$(dirname "$0")
 
