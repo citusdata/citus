@@ -186,7 +186,8 @@ LockAcquireHelperMain(Datum main_arg)
 
 	BackgroundWorkerUnblockSignals();
 
-	elog(LOG, "lock acquiring backend started for backend %d", backendPid);
+	elog(LOG, "lock acquiring backend started for backend %d (cooldown %dms)", backendPid,
+		 args->lock_cooldown);
 
 	/*
 	 * this loop waits till the deadline is reached (eg. lock_cooldown has passed) OR we
@@ -204,7 +205,9 @@ LockAcquireHelperMain(Datum main_arg)
 	/* TODO explain sql below */
 	initStringInfo(&sql);
 	appendStringInfo(&sql,
-					 "SELECT pg_terminate_backend(conflicting.pid)\n"
+					 "SELECT \n"
+					 "    DISTINCT conflicting.pid,\n"
+					 "    pg_terminate_backend(conflicting.pid)\n"
 					 "  FROM pg_locks AS blocked\n"
 					 "       JOIN pg_locks AS conflicting\n"
 					 "         ON (conflicting.database = blocked.database\n"
@@ -216,7 +219,8 @@ LockAcquireHelperMain(Datum main_arg)
 
 	while (ShouldAcquireLock(100))
 	{
-		int ret;
+		int i = 0;
+		int ret = 0;
 
 		elog(LOG, "canceling competing backends for backend %d", backendPid);
 
@@ -231,12 +235,40 @@ LockAcquireHelperMain(Datum main_arg)
 
 		ret = SPI_execute(sql.data, false, 0);
 
-		if (ret != SPI_OK_SELECT)
+		if (ret == SPI_OK_SELECT)
+		{
+			for (i = 0; i < SPI_processed; i++)
+			{
+				/* TODO count the number of backends canceled and log about it */
+
+				int terminatedPid = 0;
+				bool isTerminated = false;
+				bool isnull = false;
+
+				terminatedPid = DatumGetInt32(SPI_getbinval(SPI_tuptable->vals[0],
+															SPI_tuptable->tupdesc,
+															1, &isnull));
+
+				isTerminated = DatumGetBool(SPI_getbinval(SPI_tuptable->vals[0],
+														  SPI_tuptable->tupdesc,
+														  2, &isnull));
+
+				if (isTerminated)
+				{
+					elog(WARNING, "terminated conflicting backend %d", terminatedPid);
+				}
+				else
+				{
+					elog(INFO,
+						 "attempt to terminate conflicting backend %d was unsuccessful",
+						 terminatedPid);
+				}
+			}
+		}
+		else
 		{
 			elog(FATAL, "cannot cancel competing backends for backend %d", backendPid);
 		}
-
-		/* TODO count the number of backends canceled and log about it */
 
 		/*
 		 * And finish our transaction.
