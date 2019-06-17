@@ -39,6 +39,8 @@ extern char * pchomp(const char *in);
 extern void LogRemoteCommand(MultiConnection *connection, const char *command);
 
 /* wrappers around libpq functions, with command logging support */
+extern void ExecuteCriticalRemoteCommandList(MultiConnection *connection,
+											 List *commandList);
 extern void ExecuteCriticalRemoteCommand(MultiConnection *connection,
 										 const char *command);
 extern int ExecuteOptionalRemoteCommand(MultiConnection *connection,

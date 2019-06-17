@@ -364,6 +364,24 @@ LogRemoteCommand(MultiConnection *connection, const char *command)
 
 
 /*
+ * ExecuteCriticalRemoteCommandList calls ExecuteCriticalRemoteCommand for every
+ * command in the commandList.
+ */
+void
+ExecuteCriticalRemoteCommandList(MultiConnection *connection, List *commandList)
+{
+	ListCell *commandCell = NULL;
+
+	foreach(commandCell, commandList)
+	{
+		char *command = (char *) lfirst(commandCell);
+
+		ExecuteCriticalRemoteCommand(connection, command);
+	}
+}
+
+
+/*
  * ExecuteCriticalRemoteCommand executes a remote command that is critical
  * to the transaction. If the command fails then the transaction aborts.
  */
