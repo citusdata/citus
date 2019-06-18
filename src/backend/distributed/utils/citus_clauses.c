@@ -83,6 +83,8 @@ PartiallyEvaluateExpression(Node *expression, PlanState *planState)
 			}
 		}
 
+		/* fallthrough */
+
 		case T_FuncExpr:
 		case T_OpExpr:
 		case T_DistinctExpr:

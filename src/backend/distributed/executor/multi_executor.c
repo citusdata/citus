@@ -273,7 +273,6 @@ ReturnTupleFromTuplestore(CitusScanState *scanState)
 void
 LoadTuplesIntoTupleStore(CitusScanState *citusScanState, Job *workerJob)
 {
-	CustomScanState customScanState = citusScanState->customScanState;
 	List *workerTaskList = workerJob->taskList;
 	TupleDesc tupleDescriptor = NULL;
 	ListCell *workerTaskCell = NULL;

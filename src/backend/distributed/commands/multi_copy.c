@@ -1288,6 +1288,7 @@ ConversionPathForTypes(Oid inputType, Oid destType, CopyCoercionData *result)
 		case COERCION_PATH_NONE:
 		{
 			ereport(ERROR, (errmsg("cannot cast %d to %d", inputType, destType)));
+			return;
 		}
 
 		case COERCION_PATH_ARRAYCOERCE:
@@ -1308,9 +1309,9 @@ ConversionPathForTypes(Oid inputType, Oid destType, CopyCoercionData *result)
 				ereport(ERROR, (errmsg("can not run query which uses an implicit coercion"
 									   " between array types")));
 			}
-
-			/* fallthrough */
 		}
+
+		/* fallthrough */
 
 		case COERCION_PATH_COERCEVIAIO:
 		{
