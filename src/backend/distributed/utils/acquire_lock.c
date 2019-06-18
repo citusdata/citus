@@ -146,6 +146,14 @@ lock_acquire_helper_sigterm(SIGNAL_ARGS)
 }
 
 
+/*
+ * ShouldAcquireLock tests if our backend should still proceed with acquiring the lock,
+ * and thus keep terminating conflicting backends. This function returns true until a
+ * SIGTERM, background worker termination signal, has been received.
+ *
+ * The function blocks for at most sleepms when called. During operation without being
+ * terminated this is the time between invocations to the backend termination logic.
+ */
 static bool
 ShouldAcquireLock(long sleepms)
 {

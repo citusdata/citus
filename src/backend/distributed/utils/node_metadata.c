@@ -8,8 +8,6 @@
 #include "miscadmin.h"
 #include "funcapi.h"
 
-#include <unistd.h>
-
 
 #include "access/genam.h"
 #include "access/heapam.h"
