@@ -697,21 +697,35 @@ DistributedExecutionRequiresRollback(DistributedExecution *execution)
 {
 	CmdType operation = execution->operation;
 	List *taskList = execution->tasksToExecute;
+	int taskCount = list_length(taskList);
 	Task *task = NULL;
+	bool selectForUpdate = false;
 
 	if (MultiShardCommitProtocol == COMMIT_PROTOCOL_BARE)
 	{
 		return false;
 	}
 
-	if (operation == CMD_SELECT)
-	{
-		return SelectOpensTransactionBlock && IsTransactionBlock();
-	}
-
-	if (taskList == NIL)
+	if (taskCount == 0)
 	{
 		return false;
+	}
+
+	task = (Task *) linitial(taskList);
+
+	selectForUpdate = task->relationRowLockList != NIL;
+	if (selectForUpdate)
+	{
+		/*
+		 * Do not check SelectOpensTransactionBlock, always open transaction block
+		 * if SELECT FOR UPDATE is executed inside a distributed transaction.
+		 */
+		return IsTransactionBlock();
+	}
+
+	if (ReadOnlyTask(task->taskType))
+	{
+		return SelectOpensTransactionBlock && IsTransactionBlock();
 	}
 
 	if (IsMultiStatementTransaction())
