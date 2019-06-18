@@ -456,15 +456,7 @@ ShutdownConnection(MultiConnection *connection)
 	if (PQstatus(connection->pgConn) == CONNECTION_OK &&
 		PQtransactionStatus(connection->pgConn) == PQTRANS_ACTIVE)
 	{
-		char errorMessage[ERROR_BUFFER_SIZE] = { 0 };
-		PGcancel *cancel = PQgetCancel(connection->pgConn);
-
-		if (!PQcancel(cancel, errorMessage, sizeof(errorMessage)))
-		{
-			ereport(WARNING, (errmsg("could not cancel connection: %s",
-									 errorMessage)));
-		}
-		PQfreeCancel(cancel);
+		SendCancelationRequest(connection);
 	}
 	PQfinish(connection->pgConn);
 	connection->pgConn = NULL;
