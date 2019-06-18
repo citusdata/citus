@@ -5,7 +5,7 @@ orbs:
 jobs:
   build:
     docker:
-      - {image: 'citusdata/extbuilder:latest'}
+      - {image: 'citusdata/extbuilder:werror'}
     steps:
       - checkout
       - {run: {name: 'Configure, Build, and Install', command: build-ext}}
