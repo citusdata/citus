@@ -234,7 +234,7 @@ PG_FUNCTION_INFO_V1(poolinfo_valid);
 
 /*
  * EnsureModificationsCanRun checks if the current node is in recovery mode or
- * citus.use_secondary_nodes is 'alwaus'. If either is true the function errors out.
+ * citus.use_secondary_nodes is 'always'. If either is true the function errors out.
  */
 void
 EnsureModificationsCanRun(void)
