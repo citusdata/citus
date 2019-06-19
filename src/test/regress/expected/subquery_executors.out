@@ -16,8 +16,10 @@ FROM
 	SELECT user_id FROM users_table
 ) as bar
 WHERE foo.value_2 = bar.user_id; 
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan 2_1 for subquery SELECT value_2 FROM public.users_table WHERE (user_id OPERATOR(pg_catalog.=) 15) OFFSET 0
 DEBUG:  Plan 2 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.value_2 FROM read_intermediate_result('2_1'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer)) foo, (SELECT users_table.user_id FROM public.users_table) bar WHERE (foo.value_2 OPERATOR(pg_catalog.=) bar.user_id)
+DEBUG:  Router planner cannot handle multi-shard select queries
  count 
 -------
      0
@@ -35,6 +37,8 @@ FROM
 	SELECT user_id FROM users_table
 ) as bar
 WHERE foo.counter = bar.user_id; 
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan 4_1 for subquery SELECT user_id FROM public.users_table
 DEBUG:  Plan 4 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT users_table.user_id, sum(users_table.value_2) OVER (PARTITION BY users_table.user_id) AS counter FROM public.users_table WHERE (users_table.user_id OPERATOR(pg_catalog.=) 15)) foo, (SELECT intermediate_result.user_id FROM read_intermediate_result('4_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) bar WHERE (foo.counter OPERATOR(pg_catalog.=) bar.user_id)
  count 
@@ -53,8 +57,11 @@ FROM
 	SELECT user_id FROM users_table
 ) as bar
 WHERE foo.value_2 = bar.user_id; 
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan 6_1 for subquery SELECT value_2 FROM public.users_table WHERE (user_id OPERATOR(pg_catalog.<>) 15) OFFSET 0
 DEBUG:  Plan 6 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.value_2 FROM read_intermediate_result('6_1'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer)) foo, (SELECT users_table.user_id FROM public.users_table) bar WHERE (foo.value_2 OPERATOR(pg_catalog.=) bar.user_id)
+DEBUG:  Router planner cannot handle multi-shard select queries
  count 
 -------
   1612
@@ -72,10 +79,13 @@ FROM
 	SELECT user_id FROM users_table
 ) as bar
 WHERE foo.value_2 = bar.user_id; 
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  cannot use real time executor with repartition jobs
 HINT:  Since you enabled citus.enable_repartition_joins Citus chose to use task-tracker.
 DEBUG:  generating subplan 8_1 for subquery SELECT DISTINCT users_table.value_2 FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.value_2) AND (users_table.user_id OPERATOR(pg_catalog.<) 2))
 DEBUG:  Plan 8 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.value_2 FROM read_intermediate_result('8_1'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer)) foo, (SELECT users_table.user_id FROM public.users_table) bar WHERE (foo.value_2 OPERATOR(pg_catalog.=) bar.user_id)
+DEBUG:  Router planner cannot handle multi-shard select queries
  count 
 -------
     58
@@ -98,8 +108,11 @@ FROM
 	SELECT user_id FROM users_table_local WHERE user_id = 2
 ) baw
 WHERE foo.value_2 = bar.user_id AND baz.value_2 = bar.user_id AND bar.user_id = baw.user_id; 
+DEBUG:  Local tables cannot be used in distributed queries.
 DEBUG:  generating subplan 10_1 for subquery SELECT value_2 FROM public.users_table WHERE (user_id OPERATOR(pg_catalog.=) 15) OFFSET 0
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan 10_2 for subquery SELECT user_id FROM public.users_table OFFSET 0
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  cannot use real time executor with repartition jobs
 HINT:  Since you enabled citus.enable_repartition_joins Citus chose to use task-tracker.
 DEBUG:  generating subplan 10_3 for subquery SELECT DISTINCT users_table.value_2 FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.value_2) AND (users_table.user_id OPERATOR(pg_catalog.<) 2))
@@ -122,6 +135,7 @@ FROM
 	SELECT user_id FROM users_table  WHERE user_id = 2 OFFSET 0
 ) as bar
 WHERE foo.value_2 = bar.user_id; 
+DEBUG:  cannot run command which targets multiple shards
 DEBUG:  generating subplan 14_1 for subquery SELECT value_2 FROM public.users_table WHERE (user_id OPERATOR(pg_catalog.=) 1) OFFSET 0
 DEBUG:  generating subplan 14_2 for subquery SELECT user_id FROM public.users_table WHERE (user_id OPERATOR(pg_catalog.=) 2) OFFSET 0
 DEBUG:  Plan 14 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.value_2 FROM read_intermediate_result('14_1'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer)) foo, (SELECT intermediate_result.user_id FROM read_intermediate_result('14_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) bar WHERE (foo.value_2 OPERATOR(pg_catalog.=) bar.user_id)
@@ -141,8 +155,10 @@ FROM
 	SELECT user_id FROM users_table  WHERE user_id != 2
 ) as bar
 WHERE foo.value_2 = bar.user_id; 
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan 17_1 for subquery SELECT value_2 FROM public.users_table WHERE (user_id OPERATOR(pg_catalog.=) 1) OFFSET 0
 DEBUG:  Plan 17 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.value_2 FROM read_intermediate_result('17_1'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer)) foo, (SELECT users_table.user_id FROM public.users_table WHERE (users_table.user_id OPERATOR(pg_catalog.<>) 2)) bar WHERE (foo.value_2 OPERATOR(pg_catalog.=) bar.user_id)
+DEBUG:  Router planner cannot handle multi-shard select queries
  count 
 -------
    103

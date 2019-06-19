@@ -447,6 +447,7 @@ DEBUG:  Plan is router executable
 SELECT *
 	FROM articles
 	WHERE author_id = 1 OR author_id = 18;
+DEBUG:  Router planner cannot handle multi-shard select queries
  id | author_id |    title     | word_count 
 ----+-----------+--------------+------------
   1 |         1 | arsenous     |       9572
@@ -573,6 +574,7 @@ DETAIL:  distribution column value: 2
 SELECT *
 	FROM articles a, articles b
 	WHERE a.id = b.id  AND a.author_id = 1;
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  join prunable for task partitionId 0 and 1
 DEBUG:  join prunable for task partitionId 0 and 2
 DEBUG:  join prunable for task partitionId 0 and 3
@@ -614,6 +616,7 @@ SELECT count(*) FROM (
                   xmin IS NOT NULL OR
                   xmax IS NOT NULL
 ) x;
+DEBUG:  Router planner cannot handle multi-shard select queries
  count 
 -------
     50

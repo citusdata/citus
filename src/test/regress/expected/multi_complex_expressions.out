@@ -416,19 +416,24 @@ SET client_min_messages TO DEBUG1;
 -- No Group-By -> Push Down
 CREATE TEMP TABLE temp_limit_test_1 AS
 SELECT o_custkey FROM orders LIMIT 10 OFFSET 15;
+DEBUG:  Unsupported partition method.
 DEBUG:  push down of limit count: 25
 -- GROUP BY without ORDER BY -> No push-down
 CREATE TEMP TABLE temp_limit_test_2 AS
 SELECT o_custkey FROM orders GROUP BY o_custkey LIMIT 10 OFFSET 15;
+DEBUG:  Unsupported partition method.
 -- GROUP BY and ORDER BY non-aggregate -> push-down
 CREATE TEMP TABLE temp_limit_test_3 AS
 SELECT o_custkey FROM orders GROUP BY o_custkey ORDER BY o_custkey LIMIT 10 OFFSET 15;
+DEBUG:  Unsupported partition method.
 DEBUG:  push down of limit count: 25
 -- GROUP BY and ORDER BY aggregate -> No push-down
 CREATE TEMP TABLE temp_limit_test_4 AS
 SELECT o_custkey, COUNT(*) AS ccnt FROM orders GROUP BY o_custkey ORDER BY ccnt DESC LIMIT 10 OFFSET 15;
+DEBUG:  Unsupported partition method.
 -- OFFSET without LIMIT
 SELECT o_custkey FROM orders ORDER BY o_custkey OFFSET 2980;
+DEBUG:  Unsupported partition method.
  o_custkey 
 -----------
       1498
@@ -449,6 +454,7 @@ WHERE
 	li.l_quantity > 25
 ORDER BY 1, 2, 3
 LIMIT 10 OFFSET 20;
+DEBUG:  Unsupported partition method.
 DEBUG:  push down of limit count: 30
  l_partkey | o_custkey | l_quantity 
 -----------+-----------+------------

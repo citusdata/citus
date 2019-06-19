@@ -655,21 +655,18 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 
 		distributedPlan = CreateRouterPlan(originalQuery, query,
 										   plannerRestrictionContext);
-		if (distributedPlan != NULL)
+		if (distributedPlan->planningError == NULL)
 		{
-			if (distributedPlan->planningError == NULL)
-			{
-				/* successfully created a router plan */
-				return distributedPlan;
-			}
-			else
-			{
-				/*
-				 * For debugging it's useful to display why query was not
-				 * router plannable.
-				 */
-				RaiseDeferredError(distributedPlan->planningError, DEBUG1);
-			}
+			/* successfully created a router plan */
+			return distributedPlan;
+		}
+		else
+		{
+			/*
+			 * For debugging it's useful to display why query was not
+			 * router plannable.
+			 */
+			RaiseDeferredError(distributedPlan->planningError, DEBUG1);
 		}
 	}
 

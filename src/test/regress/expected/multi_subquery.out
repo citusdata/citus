@@ -42,6 +42,8 @@ FROM
 		lineitem_subquery
 	GROUP BY
 		l_suppkey) AS order_counts;
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan 2_1 for subquery SELECT l_suppkey, count(*) AS order_count FROM public.lineitem_subquery GROUP BY l_suppkey
 DEBUG:  Plan 2 query after replacing subqueries and CTEs: SELECT avg(order_count) AS avg FROM (SELECT intermediate_result.l_suppkey, intermediate_result.order_count FROM read_intermediate_result('2_1'::text, 'binary'::citus_copy_format) intermediate_result(l_suppkey integer, order_count bigint)) order_counts
         avg         
@@ -61,6 +63,8 @@ FROM
 		orders_subquery
 	GROUP BY
 		l_orderkey) AS unit_prices;
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  Router planner cannot handle multi-shard select queries
 ERROR:  cannot perform distributed planning on this query
 DETAIL:  Cartesian products are currently unsupported
 RESET client_min_messages;
@@ -80,6 +84,8 @@ SELECT count(*) FROM
    (SELECT l_orderkey FROM lineitem_subquery) UNION ALL
    (SELECT 1::bigint)
 ) b;
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan 7_1 for subquery SELECT l_orderkey FROM public.lineitem_subquery
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
@@ -98,7 +104,10 @@ SELECT count(*) FROM
    (SELECT l_orderkey FROM lineitem_subquery) UNION
    (SELECT l_partkey FROM lineitem_subquery)
 ) b;
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan 10_1 for subquery SELECT l_orderkey FROM public.lineitem_subquery
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan 10_2 for subquery SELECT l_partkey FROM public.lineitem_subquery
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
@@ -117,6 +126,7 @@ SELECT count(*) FROM
    (SELECT l_orderkey FROM lineitem_subquery) UNION
    (SELECT l_orderkey FROM lineitem_subquery)
 ) b;
+DEBUG:  Router planner cannot handle multi-shard select queries
  count 
 -------
   2985
@@ -826,6 +836,7 @@ SET client_min_messages TO DEBUG2;
 SELECT * FROM
 	(SELECT count(*) FROM subquery_pruning_varchar_test_table WHERE a = 'onder' GROUP BY a)
 AS foo;
+DEBUG:  Router planner not enabled.
  count 
 -------
 (0 rows)
@@ -833,6 +844,7 @@ AS foo;
 SELECT * FROM
 	(SELECT count(*) FROM subquery_pruning_varchar_test_table WHERE 'eren' = a GROUP BY a)
 AS foo;
+DEBUG:  Router planner not enabled.
  count 
 -------
 (0 rows)

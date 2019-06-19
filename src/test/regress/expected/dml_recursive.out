@@ -53,6 +53,7 @@ WHERE
 RETURNING
 	reference_table.name;
 DEBUG:  only reference tables may be queried when targeting a reference table with multi shard UPDATE/DELETE queries with multiple tables 
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan 4_1 for subquery SELECT avg((tenant_id)::integer) AS avg_tenant_id FROM recursive_dml_queries.second_distributed_table
 DEBUG:  Plan 4 query after replacing subqueries and CTEs: UPDATE recursive_dml_queries.reference_table SET name = ('new_'::text OPERATOR(pg_catalog.||) reference_table.name) FROM (SELECT intermediate_result.avg_tenant_id FROM read_intermediate_result('4_1'::text, 'binary'::citus_copy_format) intermediate_result(avg_tenant_id numeric)) foo WHERE (((foo.avg_tenant_id)::integer)::text OPERATOR(pg_catalog.=) reference_table.id) RETURNING reference_table.name
     name     
@@ -87,6 +88,7 @@ WHERE
 RETURNING
 	second_distributed_table.tenant_id, second_distributed_table.dept;
 DEBUG:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan 6_1 for subquery SELECT DISTINCT ON (tenant_id) tenant_id, max(dept) AS max_dept FROM (SELECT second_distributed_table.dept, second_distributed_table.tenant_id FROM recursive_dml_queries.second_distributed_table, recursive_dml_queries.distributed_table WHERE (distributed_table.tenant_id OPERATOR(pg_catalog.=) second_distributed_table.tenant_id)) foo_inner GROUP BY tenant_id ORDER BY tenant_id DESC
 DEBUG:  Plan 6 query after replacing subqueries and CTEs: UPDATE recursive_dml_queries.second_distributed_table SET dept = (foo.max_dept OPERATOR(pg_catalog.*) 2) FROM (SELECT intermediate_result.tenant_id, intermediate_result.max_dept FROM read_intermediate_result('6_1'::text, 'binary'::citus_copy_format) intermediate_result(tenant_id text, max_dept integer)) foo WHERE ((foo.tenant_id OPERATOR(pg_catalog.<>) second_distributed_table.tenant_id) AND (second_distributed_table.dept OPERATOR(pg_catalog.=) 2)) RETURNING second_distributed_table.tenant_id, second_distributed_table.dept
  tenant_id | dept 
@@ -138,7 +140,9 @@ WHERE
 	foo.tenant_id != second_distributed_table.tenant_id 
 	AND second_distributed_table.dept IN (3);
 DEBUG:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan 8_1 for subquery SELECT second_distributed_table.tenant_id FROM recursive_dml_queries.second_distributed_table, recursive_dml_queries.distributed_table WHERE ((distributed_table.tenant_id OPERATOR(pg_catalog.=) second_distributed_table.tenant_id) AND (second_distributed_table.dept OPERATOR(pg_catalog.=) ANY (ARRAY[4, 5])))
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan 8_2 for subquery SELECT DISTINCT foo_inner_1.tenant_id FROM (SELECT second_distributed_table.dept, second_distributed_table.tenant_id FROM recursive_dml_queries.second_distributed_table, recursive_dml_queries.distributed_table WHERE ((distributed_table.tenant_id OPERATOR(pg_catalog.=) second_distributed_table.tenant_id) AND (second_distributed_table.dept OPERATOR(pg_catalog.=) ANY (ARRAY[3, 4])))) foo_inner_1, (SELECT intermediate_result.tenant_id FROM read_intermediate_result('8_1'::text, 'binary'::citus_copy_format) intermediate_result(tenant_id text)) foo_inner_2 WHERE (foo_inner_1.tenant_id OPERATOR(pg_catalog.<>) foo_inner_2.tenant_id)
 DEBUG:  Plan 8 query after replacing subqueries and CTEs: UPDATE recursive_dml_queries.second_distributed_table SET dept = ((foo.tenant_id)::integer OPERATOR(pg_catalog./) 4) FROM (SELECT intermediate_result.tenant_id FROM read_intermediate_result('8_2'::text, 'binary'::citus_copy_format) intermediate_result(tenant_id text)) foo WHERE ((foo.tenant_id OPERATOR(pg_catalog.<>) second_distributed_table.tenant_id) AND (second_distributed_table.dept OPERATOR(pg_catalog.=) 3))
 -- we currently do not allow local tables in modification queries
@@ -182,6 +186,7 @@ WHERE
 RETURNING
 	distributed_table.*;
 DEBUG:  relation tenant_ids is not distributed
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan 12_1 for subquery SELECT avg((tenant_id)::integer) AS avg_tenant_id FROM (SELECT distributed_table.tenant_id, reference_table.name FROM recursive_dml_queries.distributed_table, recursive_dml_queries.reference_table WHERE ((distributed_table.dept)::text OPERATOR(pg_catalog.=) reference_table.id) ORDER BY reference_table.name DESC, distributed_table.tenant_id DESC) tenant_ids
 DEBUG:  Plan 12 query after replacing subqueries and CTEs: UPDATE recursive_dml_queries.distributed_table SET dept = (foo.avg_tenant_id)::integer FROM (SELECT intermediate_result.avg_tenant_id FROM read_intermediate_result('12_1'::text, 'binary'::citus_copy_format) intermediate_result(avg_tenant_id numeric)) foo WHERE (((foo.avg_tenant_id)::integer)::text OPERATOR(pg_catalog.=) distributed_table.tenant_id) RETURNING distributed_table.tenant_id, distributed_table.dept, distributed_table.info
  tenant_id | dept |          info          
@@ -224,6 +229,7 @@ FROM
 	) as foo
 RETURNING *;
 DEBUG:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
+DEBUG:  Router planner cannot handle multi-shard select queries
 ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
 -- again a corrolated subquery
 -- this time distribution key eq. exists
@@ -255,6 +261,7 @@ FROM
 	) as foo WHERE second_distributed_table.tenant_id = foo.tenant_id
 RETURNING *;
 DEBUG:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
+DEBUG:  Router planner cannot handle multi-shard select queries
 ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
 -- we don't support subquerues/CTEs inside VALUES
 INSERT INTO 

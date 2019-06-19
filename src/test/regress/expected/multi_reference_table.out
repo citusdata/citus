@@ -1013,6 +1013,7 @@ FROM
 	reference_table_test, colocated_table_test
 WHERE 
 	colocated_table_test.value_1 = reference_table_test.value_1;
+DEBUG:  Router planner cannot handle multi-shard select queries
 LOG:  join order: [ "colocated_table_test" ][ reference join "reference_table_test" ]
  value_1 
 ---------
@@ -1026,6 +1027,7 @@ FROM
 	reference_table_test, colocated_table_test 
 WHERE 
 	colocated_table_test.value_2 = reference_table_test.value_2;
+DEBUG:  Router planner cannot handle multi-shard select queries
 LOG:  join order: [ "colocated_table_test" ][ reference join "reference_table_test" ]
  value_2 
 ---------
@@ -1039,6 +1041,7 @@ FROM
 	colocated_table_test, reference_table_test
 WHERE 
 	reference_table_test.value_1 = colocated_table_test.value_1;
+DEBUG:  Router planner cannot handle multi-shard select queries
 LOG:  join order: [ "colocated_table_test" ][ reference join "reference_table_test" ]
  value_2 
 ---------
@@ -1052,6 +1055,7 @@ FROM
 	reference_table_test, colocated_table_test, colocated_table_test_2
 WHERE 
 	colocated_table_test.value_2 = reference_table_test.value_2;
+DEBUG:  Router planner cannot handle multi-shard select queries
 LOG:  join order: [ "colocated_table_test" ][ reference join "reference_table_test" ][ cartesian product "colocated_table_test_2" ]
 ERROR:  cannot perform distributed planning on this query
 DETAIL:  Cartesian products are currently unsupported
@@ -1061,6 +1065,7 @@ FROM
 	reference_table_test, colocated_table_test, colocated_table_test_2
 WHERE 
 	colocated_table_test.value_1 = colocated_table_test_2.value_1 AND colocated_table_test.value_2 = reference_table_test.value_2;
+DEBUG:  Router planner cannot handle multi-shard select queries
 LOG:  join order: [ "colocated_table_test" ][ reference join "reference_table_test" ][ local partition join "colocated_table_test_2" ]
  value_2 
 ---------
@@ -1075,6 +1080,7 @@ FROM
 	reference_table_test, colocated_table_test, colocated_table_test_2
 WHERE 
 	colocated_table_test.value_2 = colocated_table_test_2.value_2 AND colocated_table_test.value_2 = reference_table_test.value_2;
+DEBUG:  Router planner cannot handle multi-shard select queries
 LOG:  join order: [ "colocated_table_test" ][ reference join "reference_table_test" ][ dual partition join "colocated_table_test_2" ]
  value_2 
 ---------
@@ -1088,6 +1094,7 @@ FROM
 	reference_table_test, colocated_table_test, colocated_table_test_2
 WHERE 
 	colocated_table_test.value_1 = reference_table_test.value_1 AND colocated_table_test_2.value_1 = reference_table_test.value_1;
+DEBUG:  Router planner cannot handle multi-shard select queries
 LOG:  join order: [ "colocated_table_test" ][ reference join "reference_table_test" ][ dual partition join "colocated_table_test_2" ]
  value_2 
 ---------
@@ -1111,6 +1118,7 @@ WHERE
 	colocated_table_test.value_1 = colocated_table_test_2.value_1;
 DEBUG:  only reference tables may be queried when targeting a reference table with distributed INSERT ... SELECT
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
+DEBUG:  Router planner cannot handle multi-shard select queries
 -- should go via coordinator, same as the above
 INSERT INTO
 	reference_table_test (value_1)
@@ -1122,6 +1130,7 @@ WHERE
 	colocated_table_test.value_1 = reference_table_test.value_1;
 DEBUG:  only reference tables may be queried when targeting a reference table with distributed INSERT ... SELECT
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
+DEBUG:  Router planner cannot handle multi-shard select queries
 -- safe to push down even lack of equality between partition column and column of reference table
 INSERT INTO
 	colocated_table_test (value_1, value_2)
@@ -1165,6 +1174,7 @@ WHERE
 DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
 DETAIL:  The data type of the target table's partition column should exactly match the data type of the corresponding simple column reference in the subquery.
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
+DEBUG:  Router planner cannot handle multi-shard select queries
 INSERT INTO
 	colocated_table_test (value_1, value_2)
 SELECT
@@ -1176,6 +1186,7 @@ WHERE
 DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
 DETAIL:  The target table's partition column should correspond to a partition column in the subquery.
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
+DEBUG:  Router planner cannot handle multi-shard select queries
 RESET client_min_messages;
 -- some tests for mark_tables_colocated
 -- should error out

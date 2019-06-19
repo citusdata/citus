@@ -40,6 +40,7 @@ GROUP BY
 	l_partkey, o_orderkey
 ORDER BY
 	l_partkey, o_orderkey;
+DEBUG:  Unsupported partition method.
 DEBUG:  join prunable for intervals [1,5986] and [8997,14947]
 DEBUG:  join prunable for intervals [8997,14947] and [1,5986]
 DEBUG:  generated sql query for task 1
@@ -131,6 +132,7 @@ GROUP BY
 	l_partkey, o_orderkey
 ORDER BY
 	l_partkey, o_orderkey;
+DEBUG:  Unsupported partition method.
 DEBUG:  generated sql query for task 1
 DETAIL:  query string: "SELECT l_partkey, l_suppkey FROM lineitem_290000 lineitem WHERE (l_quantity OPERATOR(pg_catalog.<) 5.0)"
 DEBUG:  generated sql query for task 2

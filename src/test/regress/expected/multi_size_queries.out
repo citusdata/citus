@@ -128,7 +128,7 @@ END;
 show citus.node_conninfo;
  citus.node_conninfo 
 ---------------------
- sslmode=require
+ sslmode=prefer
 (1 row)
 
 ALTER SYSTEM SET citus.node_conninfo = 'sslmode=require';
@@ -167,4 +167,6 @@ SELECT pg_reload_conf();
 (1 row)
 
 DROP INDEX index_1;
+ERROR:  connection error: localhost:57637
+DETAIL:  sslmode value "require" invalid when SSL support is not compiled in
 DROP INDEX index_2;

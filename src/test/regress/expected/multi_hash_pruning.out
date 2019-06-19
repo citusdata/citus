@@ -33,6 +33,7 @@ SET client_min_messages TO DEBUG2;
 -- Check that we can prune shards for simple cases, boolean expressions and
 -- immutable functions.
 SELECT count(*) FROM orders_hash_partitioned;
+DEBUG:  Router planner cannot handle multi-shard select queries
  count 
 -------
      0
@@ -96,30 +97,35 @@ DETAIL:  distribution column value: 1
 -- disable router planning
 SET citus.enable_router_execution TO 'false';
 SELECT count(*) FROM orders_hash_partitioned;
+DEBUG:  Router planner not enabled.
  count 
 -------
      0
 (1 row)
 
 SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = 1;
+DEBUG:  Router planner not enabled.
  count 
 -------
      0
 (1 row)
 
 SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = 2;
+DEBUG:  Router planner not enabled.
  count 
 -------
      0
 (1 row)
 
 SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = 3;
+DEBUG:  Router planner not enabled.
  count 
 -------
      0
 (1 row)
 
 SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = 4;
+DEBUG:  Router planner not enabled.
  count 
 -------
      0
@@ -127,12 +133,14 @@ SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = 4;
 
 SELECT count(*) FROM orders_hash_partitioned
 	WHERE o_orderkey = 1 AND o_clerk = 'aaa';
+DEBUG:  Router planner not enabled.
  count 
 -------
      0
 (1 row)
 
 SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = abs(-1);
+DEBUG:  Router planner not enabled.
  count 
 -------
      0
@@ -140,18 +148,21 @@ SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = abs(-1);
 
 SET citus.enable_router_execution TO DEFAULT;
 SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey is NULL;
+DEBUG:  Router planner cannot handle multi-shard select queries
  count 
 -------
      0
 (1 row)
 
 SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey is not NULL;
+DEBUG:  Router planner cannot handle multi-shard select queries
  count 
 -------
      0
 (1 row)
 
 SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey > 2;
+DEBUG:  Router planner cannot handle multi-shard select queries
  count 
 -------
      0
@@ -159,6 +170,7 @@ SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey > 2;
 
 SELECT count(*) FROM orders_hash_partitioned
 	WHERE o_orderkey = 1 OR o_orderkey = 2;
+DEBUG:  Router planner cannot handle multi-shard select queries
  count 
 -------
      0
@@ -166,6 +178,7 @@ SELECT count(*) FROM orders_hash_partitioned
 
 SELECT count(*) FROM orders_hash_partitioned
 	WHERE o_orderkey = 1 OR o_clerk = 'aaa';
+DEBUG:  Router planner cannot handle multi-shard select queries
  count 
 -------
      0
@@ -173,6 +186,7 @@ SELECT count(*) FROM orders_hash_partitioned
 
 SELECT count(*) FROM orders_hash_partitioned
 	WHERE o_orderkey = 1 OR (o_orderkey = 3 AND o_clerk = 'aaa');
+DEBUG:  Router planner cannot handle multi-shard select queries
  count 
 -------
      0
@@ -180,6 +194,7 @@ SELECT count(*) FROM orders_hash_partitioned
 
 SELECT count(*) FROM orders_hash_partitioned
 	WHERE o_orderkey = 1 OR o_orderkey is NULL;
+DEBUG:  Router planner cannot handle multi-shard select queries
  count 
 -------
      0
@@ -301,6 +316,7 @@ SET client_min_messages TO DEBUG2;
 -- equality operator
 SELECT count(*) FROM orders_hash_partitioned
 	WHERE o_orderkey < ALL ('{1,2,3}');
+DEBUG:  Router planner cannot handle multi-shard select queries
  count 
 -------
      0
@@ -310,6 +326,7 @@ SELECT count(*) FROM orders_hash_partitioned
 -- columns are used with ANY/IN/ALL
 SELECT count(*) FROM orders_hash_partitioned
 	WHERE o_orderkey = 1 OR o_totalprice IN (2, 5);
+DEBUG:  Router planner cannot handle multi-shard select queries
  count 
 -------
      0
@@ -317,6 +334,7 @@ SELECT count(*) FROM orders_hash_partitioned
 
 -- Check that we cannot prune for mutable functions.
 SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = random();
+DEBUG:  Router planner cannot handle multi-shard select queries
  count 
 -------
      0
@@ -324,6 +342,7 @@ SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = random();
 
 SELECT count(*) FROM orders_hash_partitioned
 	WHERE o_orderkey = random() OR o_orderkey = 1;
+DEBUG:  Router planner cannot handle multi-shard select queries
  count 
 -------
      0
@@ -343,6 +362,7 @@ DETAIL:  distribution column value: 1
 SELECT count(*)
 	FROM orders_hash_partitioned orders1, orders_hash_partitioned orders2
 	WHERE orders1.o_orderkey = orders2.o_orderkey;
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [-1073741824,-1]
 DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [0,1073741823]
 DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [1073741824,2147483647]

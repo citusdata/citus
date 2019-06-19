@@ -108,10 +108,11 @@ bool EnableRouterExecution = true;
 
 
 /* planner functions forward declarations */
-static DistributedPlan * CreateSingleTaskRouterPlan(Query *originalQuery,
-													Query *query,
-													PlannerRestrictionContext *
-													plannerRestrictionContext);
+static void CreateSingleTaskRouterPlan(DistributedPlan *distributedPlan,
+									   Query *originalQuery,
+									   Query *query,
+									   PlannerRestrictionContext *
+									   plannerRestrictionContext);
 static bool IsTidColumn(Node *node);
 static DeferredErrorMessage * MultiShardModifyQuerySupported(Query *originalQuery,
 															 PlannerRestrictionContext *
@@ -137,7 +138,8 @@ static void NormalizeMultiRowInsertTargetList(Query *query);
 static List * BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError);
 static List * GroupInsertValuesByShardId(List *insertValuesList);
 static List * ExtractInsertValuesList(Query *query, Var *partitionColumn);
-static bool MultiRouterPlannableQuery(Query *query);
+static void MultiRouterPlannableQuery(DistributedPlan *distributedPlan,
+									  Query *query);
 static DeferredErrorMessage * ErrorIfQueryHasModifyingCTE(Query *queryTree);
 static RangeTblEntry * GetUpdateOrDeleteRTE(Query *query);
 static bool SelectsFromDistributedTable(List *rangeTableList, Query *query);
@@ -170,17 +172,21 @@ DistributedPlan *
 CreateRouterPlan(Query *originalQuery, Query *query,
 				 PlannerRestrictionContext *plannerRestrictionContext)
 {
-	if (MultiRouterPlannableQuery(query))
+	DistributedPlan *distributedPlan = CitusMakeNode(DistributedPlan);
+
+	MultiRouterPlannableQuery(distributedPlan, query);
+
+	if (distributedPlan->planningError == NULL)
 	{
-		return CreateSingleTaskRouterPlan(originalQuery, query,
-										  plannerRestrictionContext);
+		distributedPlan->planningError = ErrorIfQueryHasModifyingCTE(query);
+		if (distributedPlan->planningError == NULL)
+		{
+			CreateSingleTaskRouterPlan(distributedPlan, originalQuery, query,
+									   plannerRestrictionContext);
+		}
 	}
 
-	/*
-	 * TODO: Instead have MultiRouterPlannableQuery set an error describing
-	 * why router cannot support the query.
-	 */
-	return NULL;
+	return distributedPlan;
 }
 
 
@@ -245,30 +251,23 @@ CreateModifyPlan(Query *originalQuery, Query *query,
  * are router plannable by default. If query is not router plannable then either NULL is
  * returned, or the returned plan has planningError set to a description of the problem.
  */
-static DistributedPlan *
-CreateSingleTaskRouterPlan(Query *originalQuery, Query *query,
+static void
+CreateSingleTaskRouterPlan(DistributedPlan *distributedPlan, Query *originalQuery,
+						   Query *query,
 						   PlannerRestrictionContext *plannerRestrictionContext)
 {
 	Job *job = NULL;
-	DistributedPlan *distributedPlan = CitusMakeNode(DistributedPlan);
 
 	distributedPlan->operation = query->commandType;
-
-	/* FIXME: this should probably rather be inlined into CreateRouterPlan */
-	distributedPlan->planningError = ErrorIfQueryHasModifyingCTE(query);
-	if (distributedPlan->planningError)
-	{
-		return distributedPlan;
-	}
 
 	/* we cannot have multi shard update/delete query via this code path */
 	job = RouterJob(originalQuery, plannerRestrictionContext,
 					&distributedPlan->planningError);
 
-	if (distributedPlan->planningError)
+	if (distributedPlan->planningError != NULL)
 	{
 		/* query cannot be handled by this planner */
-		return NULL;
+		return;
 	}
 
 	ereport(DEBUG2, (errmsg("Creating router plan")));
@@ -277,8 +276,6 @@ CreateSingleTaskRouterPlan(Query *originalQuery, Query *query,
 	distributedPlan->masterQuery = NULL;
 	distributedPlan->routerExecutable = true;
 	distributedPlan->hasReturning = false;
-
-	return distributedPlan;
 }
 
 
@@ -603,7 +600,7 @@ ModifyQuerySupported(Query *queryTree, Query *originalQuery, bool multiShardQuer
 		}
 	}
 
-	/* reject queries which include CommonTableExpr */
+	/* reject queries which include CommonTableExpr which aren't routable */
 	if (queryTree->cteList != NIL)
 	{
 		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
@@ -1961,9 +1958,9 @@ PlanRouterQuery(Query *originalQuery,
 		 */
 		if (commandType == CMD_SELECT)
 		{
-			planningError = DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-										  NULL, NULL, NULL);
-			return planningError;
+			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+								 "Router planner cannot handle multi-shard select queries",
+								 NULL, NULL);
 		}
 
 		Assert(UpdateOrDeleteQuery(originalQuery));
@@ -2941,14 +2938,15 @@ ExtractInsertPartitionKeyValue(Query *query)
 
 
 /*
- * MultiRouterPlannableQuery returns true if given query can be router plannable.
+ * MultiRouterPlannableQuery checks if given query can be router plannable,
+ * setting distributedPlan->planningError if not.
  * The query is router plannable if it is a modify query, or if its is a select
  * query issued on a hash partitioned distributed table. Router plannable checks
  * for select queries can be turned off by setting citus.enable_router_execution
  * flag to false.
  */
-static bool
-MultiRouterPlannableQuery(Query *query)
+static void
+MultiRouterPlannableQuery(DistributedPlan *distributedPlan, Query *query)
 {
 	CmdType commandType = query->commandType;
 	List *rangeTableRelationList = NIL;
@@ -2957,14 +2955,17 @@ MultiRouterPlannableQuery(Query *query)
 	if (commandType == CMD_INSERT || commandType == CMD_UPDATE ||
 		commandType == CMD_DELETE)
 	{
-		return true;
+		return;
 	}
 
 	Assert(commandType == CMD_SELECT);
 
 	if (!EnableRouterExecution)
 	{
-		return false;
+		distributedPlan->planningError = DeferredError(ERRCODE_SUCCESSFUL_COMPLETION,
+													   "Router planner not enabled.",
+													   NULL, NULL);
+		return;
 	}
 
 	ExtractRangeTableRelationWalker((Node *) query, &rangeTableRelationList);
@@ -2980,14 +2981,22 @@ MultiRouterPlannableQuery(Query *query)
 			if (!IsDistributedTable(distributedTableId))
 			{
 				/* local tables cannot be read from workers */
-				return false;
+				distributedPlan->planningError = DeferredError(
+					ERRCODE_FEATURE_NOT_SUPPORTED,
+					"Local tables cannot be used in distributed queries.",
+					NULL, NULL);
+				return;
 			}
 
 			partitionMethod = PartitionMethod(distributedTableId);
 			if (!(partitionMethod == DISTRIBUTE_BY_HASH || partitionMethod ==
 				  DISTRIBUTE_BY_NONE || partitionMethod == DISTRIBUTE_BY_RANGE))
 			{
-				return false;
+				distributedPlan->planningError = DeferredError(
+					ERRCODE_FEATURE_NOT_SUPPORTED,
+					"Unsupported partition method.",
+					NULL, NULL);
+				return;
 			}
 
 			/*
@@ -3002,13 +3011,14 @@ MultiRouterPlannableQuery(Query *query)
 
 				if (tableReplicationFactor > 1 && partitionMethod != DISTRIBUTE_BY_NONE)
 				{
-					return false;
+					distributedPlan->planningError = DeferredError(
+						ERRCODE_FEATURE_NOT_SUPPORTED,
+						"Table replication factor > 1 not supported for non-reference tables.",
+						NULL, NULL);
 				}
 			}
 		}
 	}
-
-	return true;
 }
 
 

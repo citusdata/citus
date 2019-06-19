@@ -72,6 +72,7 @@ SET client_min_messages TO DEBUG2;
 -- The following query checks that we can correctly handle self-joins
 EXPLAIN SELECT l1.l_quantity FROM lineitem l1, lineitem l2
 	WHERE l1.l_orderkey = l2.l_orderkey AND l1.l_quantity > 5;
+DEBUG:  Unsupported partition method.
 LOG:  join order: [ "lineitem" ][ local partition join "lineitem" ]
 DEBUG:  join prunable for intervals [1,5986] and [8997,14947]
 DEBUG:  join prunable for intervals [8997,14947] and [1,5986]

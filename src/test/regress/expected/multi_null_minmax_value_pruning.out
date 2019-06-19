@@ -36,6 +36,7 @@ SELECT shardminvalue, shardmaxvalue from pg_dist_shard WHERE shardid = 290001;
 -- Adding l_orderkey = 1 to make the query not router executable
 EXPLAIN (COSTS FALSE)
 SELECT l_orderkey, l_linenumber, l_shipdate FROM lineitem WHERE l_orderkey = 9030 or l_orderkey = 1;
+DEBUG:  Unsupported partition method.
 LOG:  join order: [ "lineitem" ]
                               QUERY PLAN                               
 -----------------------------------------------------------------------
@@ -65,6 +66,7 @@ LOG:  join order: [ "lineitem" ]
 EXPLAIN (COSTS FALSE)
 SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 	WHERE l_orderkey = o_orderkey;
+DEBUG:  Unsupported partition method.
 LOG:  join order: [ "lineitem" ][ local partition join "orders" ]
 DEBUG:  join prunable for intervals [1,5986] and [8997,14947]
 DEBUG:  join prunable for intervals [8997,14947] and [1,5986]
@@ -98,6 +100,7 @@ DEBUG:  join prunable for intervals [8997,14947] and [1,5986]
 UPDATE pg_dist_shard SET shardminvalue = NULL WHERE shardid = 290000;
 EXPLAIN (COSTS FALSE)
 SELECT l_orderkey, l_linenumber, l_shipdate FROM lineitem WHERE l_orderkey = 9030;
+DEBUG:  Unsupported partition method.
 LOG:  join order: [ "lineitem" ]
                                   QUERY PLAN                                   
 -------------------------------------------------------------------------------
@@ -117,6 +120,7 @@ LOG:  join order: [ "lineitem" ]
 EXPLAIN (COSTS FALSE)
 SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 	WHERE l_partkey = o_custkey;
+DEBUG:  Unsupported partition method.
 LOG:  join order: [ "lineitem" ][ dual partition join "orders" ]
 DEBUG:  join prunable for task partitionId 0 and 1
 DEBUG:  join prunable for task partitionId 0 and 2
@@ -168,6 +172,7 @@ HINT:  Since you enabled citus.enable_repartition_joins Citus chose to use task-
 UPDATE pg_dist_shard SET shardmaxvalue = NULL WHERE shardid = 290001;
 EXPLAIN (COSTS FALSE)
 SELECT l_orderkey, l_linenumber, l_shipdate FROM lineitem WHERE l_orderkey = 9030;
+DEBUG:  Unsupported partition method.
 LOG:  join order: [ "lineitem" ]
                                   QUERY PLAN                                   
 -------------------------------------------------------------------------------
@@ -187,6 +192,7 @@ LOG:  join order: [ "lineitem" ]
 EXPLAIN (COSTS FALSE)
 SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 	WHERE l_partkey = o_custkey;
+DEBUG:  Unsupported partition method.
 LOG:  join order: [ "lineitem" ][ dual partition join "orders" ]
 DEBUG:  join prunable for task partitionId 0 and 1
 DEBUG:  join prunable for task partitionId 0 and 2
@@ -238,6 +244,7 @@ HINT:  Since you enabled citus.enable_repartition_joins Citus chose to use task-
 UPDATE pg_dist_shard SET shardminvalue = '0' WHERE shardid = 290000;
 EXPLAIN (COSTS FALSE)
 SELECT l_orderkey, l_linenumber, l_shipdate FROM lineitem WHERE l_orderkey = 9030;
+DEBUG:  Unsupported partition method.
 LOG:  join order: [ "lineitem" ]
 DEBUG:  Plan is router executable
                                   QUERY PLAN                                   
@@ -254,6 +261,7 @@ DEBUG:  Plan is router executable
 EXPLAIN (COSTS FALSE)
 SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 	WHERE l_partkey = o_custkey;
+DEBUG:  Unsupported partition method.
 LOG:  join order: [ "lineitem" ][ dual partition join "orders" ]
 DEBUG:  join prunable for task partitionId 0 and 1
 DEBUG:  join prunable for task partitionId 0 and 2

@@ -55,6 +55,7 @@ ON CONFLICT DO NOTHING;
 DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
 DETAIL:  The target table's partition column should correspond to a partition column in the subquery.
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
+DEBUG:  Router planner cannot handle multi-shard select queries
 -- Since partition columns do not match, pull the data to the coordinator
 -- and update the non-partition column. Query is wrapped by CTE to return
 -- ordered result.
@@ -72,6 +73,7 @@ DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition 
 DETAIL:  The target table's partition column should correspond to a partition column in the subquery.
 DEBUG:  Plan 8 query after replacing subqueries and CTEs: SELECT col_1, col_2 FROM (SELECT intermediate_result.col_1, intermediate_result.col_2 FROM read_intermediate_result('8_1'::text, 'binary'::citus_copy_format) intermediate_result(col_1 integer, col_2 integer)) inserted_table ORDER BY col_1
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
+DEBUG:  Router planner cannot handle multi-shard select queries
  col_1 | col_2 
 -------+-------
      1 |     1
@@ -95,6 +97,8 @@ FROM (
 ON CONFLICT DO NOTHING;
 DEBUG:  LIMIT clauses are not allowed in distributed INSERT ... SELECT queries
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  push down of limit count: 5
 DEBUG:  generating subplan 12_1 for subquery SELECT col_1, col_2, col_3 FROM on_conflict.source_table_1 LIMIT 5
 DEBUG:  Plan 12 query after replacing subqueries and CTEs: SELECT col_1, col_2 FROM (SELECT intermediate_result.col_1, intermediate_result.col_2, intermediate_result.col_3 FROM read_intermediate_result('12_1'::text, 'binary'::citus_copy_format) intermediate_result(col_1 integer, col_2 integer, col_3 integer)) foo
@@ -118,6 +122,8 @@ DEBUG:  generating subplan 14_1 for CTE inserted_table: INSERT INTO on_conflict.
 DEBUG:  LIMIT clauses are not allowed in distributed INSERT ... SELECT queries
 DEBUG:  Plan 14 query after replacing subqueries and CTEs: SELECT col_1, col_2 FROM (SELECT intermediate_result.col_1, intermediate_result.col_2 FROM read_intermediate_result('14_1'::text, 'binary'::citus_copy_format) intermediate_result(col_1 integer, col_2 integer)) inserted_table ORDER BY col_1
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  push down of limit count: 5
 DEBUG:  generating subplan 16_1 for subquery SELECT col_1, col_2, col_3 FROM on_conflict.source_table_1 LIMIT 5
 DEBUG:  Plan 16 query after replacing subqueries and CTEs: SELECT col_1, col_2 FROM (SELECT intermediate_result.col_1, intermediate_result.col_2, intermediate_result.col_3 FROM read_intermediate_result('16_1'::text, 'binary'::citus_copy_format) intermediate_result(col_1 integer, col_2 integer, col_3 integer)) foo
@@ -155,8 +161,11 @@ DEBUG:  generating subplan 18_1 for CTE inserted_table: INSERT INTO on_conflict.
 DEBUG:  Set operations are not allowed in distributed INSERT ... SELECT queries
 DEBUG:  Plan 18 query after replacing subqueries and CTEs: SELECT col_1, col_2 FROM (SELECT intermediate_result.col_1, intermediate_result.col_2 FROM read_intermediate_result('18_1'::text, 'binary'::citus_copy_format) intermediate_result(col_1 integer, col_2 integer)) inserted_table ORDER BY col_1
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  push down of limit count: 5
 DEBUG:  generating subplan 20_1 for subquery SELECT col_1, col_2, col_3 FROM on_conflict.source_table_1 LIMIT 5
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  push down of limit count: 5
 DEBUG:  generating subplan 20_2 for subquery SELECT col_1, col_2, col_3 FROM on_conflict.source_table_2 LIMIT 5
 DEBUG:  generating subplan 20_3 for subquery SELECT intermediate_result.col_1, intermediate_result.col_2, intermediate_result.col_3 FROM read_intermediate_result('20_1'::text, 'binary'::citus_copy_format) intermediate_result(col_1 integer, col_2 integer, col_3 integer) UNION SELECT intermediate_result.col_1, intermediate_result.col_2, intermediate_result.col_3 FROM read_intermediate_result('20_2'::text, 'binary'::citus_copy_format) intermediate_result(col_1 integer, col_2 integer, col_3 integer)
@@ -182,7 +191,9 @@ WITH cte AS(
 INSERT INTO target_table SELECT * FROM cte ON CONFLICT DO NOTHING;
 DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan 25_1 for CTE cte: SELECT col_1, col_2 FROM on_conflict.source_table_1
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  Plan 25 query after replacing subqueries and CTEs: SELECT col_1, col_2 FROM (SELECT cte.col_1, cte.col_2 FROM (SELECT intermediate_result.col_1, intermediate_result.col_2 FROM read_intermediate_result('25_1'::text, 'binary'::citus_copy_format) intermediate_result(col_1 integer, col_2 integer)) cte) citus_insert_select_subquery
 -- Get the select part from cte and update on conflict
 WITH cte AS(
@@ -191,9 +202,12 @@ WITH cte AS(
 INSERT INTO target_table SELECT * FROM cte ON CONFLICT(col_1) DO UPDATE SET col_2 = EXCLUDED.col_2 + 1;
 DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan 28_1 for CTE cte: SELECT col_1, col_2 FROM on_conflict.source_table_1
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  Plan 28 query after replacing subqueries and CTEs: SELECT col_1, col_2 FROM (SELECT cte.col_1, cte.col_2 FROM (SELECT intermediate_result.col_1, intermediate_result.col_2 FROM read_intermediate_result('28_1'::text, 'binary'::citus_copy_format) intermediate_result(col_1 integer, col_2 integer)) cte) citus_insert_select_subquery
 SELECT * FROM target_table ORDER BY 1;
+DEBUG:  Router planner cannot handle multi-shard select queries
  col_1 | col_2 
 -------+-------
      1 |     2
@@ -217,11 +231,15 @@ WITH cte AS(
 INSERT INTO target_table ((SELECT * FROM cte) UNION (SELECT * FROM cte_2)) ON CONFLICT(col_1) DO UPDATE SET col_2 = EXCLUDED.col_2 + 1;
 DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan 32_1 for CTE cte: SELECT col_1, col_2 FROM on_conflict.source_table_1
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan 32_2 for CTE cte_2: SELECT col_1, col_2 FROM on_conflict.source_table_2
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan 32_3 for subquery SELECT cte.col_1, cte.col_2 FROM (SELECT intermediate_result.col_1, intermediate_result.col_2 FROM read_intermediate_result('32_1'::text, 'binary'::citus_copy_format) intermediate_result(col_1 integer, col_2 integer)) cte UNION SELECT cte_2.col_1, cte_2.col_2 FROM (SELECT intermediate_result.col_1, intermediate_result.col_2 FROM read_intermediate_result('32_2'::text, 'binary'::citus_copy_format) intermediate_result(col_1 integer, col_2 integer)) cte_2
 DEBUG:  Plan 32 query after replacing subqueries and CTEs: SELECT col_1, col_2 FROM (SELECT intermediate_result.col_1, intermediate_result.col_2 FROM read_intermediate_result('32_3'::text, 'binary'::citus_copy_format) intermediate_result(col_1 integer, col_2 integer)) citus_insert_select_subquery
 SELECT * FROM target_table ORDER BY 1;
+DEBUG:  Router planner cannot handle multi-shard select queries
  col_1 | col_2 
 -------+-------
      1 |     2
@@ -249,7 +267,9 @@ DEBUG:  generating subplan 37_1 for CTE inserted_table: WITH cte AS (SELECT sour
 DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
 DEBUG:  Plan 37 query after replacing subqueries and CTEs: SELECT col_1, col_2 FROM (SELECT intermediate_result.col_1, intermediate_result.col_2 FROM read_intermediate_result('37_1'::text, 'binary'::citus_copy_format) intermediate_result(col_1 integer, col_2 integer)) inserted_table ORDER BY col_1
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan 39_1 for CTE cte: SELECT col_1, col_2, col_3 FROM on_conflict.source_table_1
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan 39_2 for CTE cte_2: SELECT col_1, col_2 FROM (SELECT intermediate_result.col_1, intermediate_result.col_2, intermediate_result.col_3 FROM read_intermediate_result('39_1'::text, 'binary'::citus_copy_format) intermediate_result(col_1 integer, col_2 integer, col_3 integer)) cte
 DEBUG:  Plan 39 query after replacing subqueries and CTEs: SELECT col_1, col_2 FROM (SELECT cte_2.col_1, cte_2.col_2 FROM (SELECT intermediate_result.col_1, intermediate_result.col_2 FROM read_intermediate_result('39_2'::text, 'binary'::citus_copy_format) intermediate_result(col_1 integer, col_2 integer)) cte_2) citus_insert_select_subquery
  col_1 | col_2 
@@ -273,7 +293,9 @@ DEBUG:  generating subplan 42_1 for CTE cte: WITH basic AS (SELECT source_table_
 DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
 DEBUG:  Plan 42 query after replacing subqueries and CTEs: UPDATE on_conflict.target_table SET col_2 = 4 WHERE (col_1 OPERATOR(pg_catalog.=) ANY (SELECT cte.col_1 FROM (SELECT intermediate_result.col_1, intermediate_result.col_2 FROM read_intermediate_result('42_1'::text, 'binary'::citus_copy_format) intermediate_result(col_1 integer, col_2 integer)) cte))
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan 44_1 for CTE basic: SELECT col_1, col_2 FROM on_conflict.source_table_1
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  Plan 44 query after replacing subqueries and CTEs: SELECT col_1, col_2 FROM (SELECT basic.col_1, basic.col_2 FROM (SELECT intermediate_result.col_1, intermediate_result.col_2 FROM read_intermediate_result('44_1'::text, 'binary'::citus_copy_format) intermediate_result(col_1 integer, col_2 integer)) basic) citus_insert_select_subquery
 RESET client_min_messages;
 -- Following query is not supported since error checks of the subquery pushdown planner
@@ -397,7 +419,9 @@ ON CONFLICT(col_1) DO UPDATE SET col_2 = EXCLUDED.col_2;
 DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
 DETAIL:  The data type of the target table's partition column should exactly match the data type of the corresponding simple column reference in the subquery.
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
+DEBUG:  Router planner cannot handle multi-shard select queries
 SELECT * FROM target_table ORDER BY 1;
+DEBUG:  Router planner cannot handle multi-shard select queries
  col_1 | col_2 
 -------+-------
      1 |    11
@@ -419,6 +443,7 @@ FROM
 	source_table_4
 ON CONFLICT DO NOTHING;
 SELECT * FROM target_table_2 ORDER BY 1;
+DEBUG:  Router planner cannot handle multi-shard select queries
  id |                 arr_val                  
 ----+------------------------------------------
   1 | {"abc       ","def       ","gyx       "}
@@ -483,13 +508,17 @@ FROM (
 ON CONFLICT(col_1) DO UPDATE SET col_2 = 0;
 DEBUG:  Set operations are not allowed in distributed INSERT ... SELECT queries
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  push down of limit count: 5
 DEBUG:  generating subplan 71_1 for subquery SELECT col_1, col_2, col_3 FROM on_conflict.source_table_1 LIMIT 5
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  push down of limit count: 5
 DEBUG:  generating subplan 71_2 for subquery SELECT col_1, col_2, col_3 FROM on_conflict.source_table_2 LIMIT 5
 DEBUG:  generating subplan 71_3 for subquery SELECT intermediate_result.col_1, intermediate_result.col_2, intermediate_result.col_3 FROM read_intermediate_result('71_1'::text, 'binary'::citus_copy_format) intermediate_result(col_1 integer, col_2 integer, col_3 integer) UNION SELECT intermediate_result.col_1, intermediate_result.col_2, intermediate_result.col_3 FROM read_intermediate_result('71_2'::text, 'binary'::citus_copy_format) intermediate_result(col_1 integer, col_2 integer, col_3 integer)
 DEBUG:  Plan 71 query after replacing subqueries and CTEs: SELECT col_1, col_2 FROM (SELECT intermediate_result.col_1, intermediate_result.col_2, intermediate_result.col_3 FROM read_intermediate_result('71_3'::text, 'binary'::citus_copy_format) intermediate_result(col_1 integer, col_2 integer, col_3 integer)) foo
 SELECT * FROM target_table ORDER BY 1;
+DEBUG:  Router planner cannot handle multi-shard select queries
  col_1 | col_2 
 -------+-------
      1 |     0
@@ -512,10 +541,13 @@ WITH cte AS(
 INSERT INTO target_table SELECT * FROM cte_2 ON CONFLICT(col_1) DO UPDATE SET col_2 = EXCLUDED.col_2 + 1;
 DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan 77_1 for CTE cte: SELECT col_1, col_2, col_3 FROM on_conflict.source_table_1
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan 77_2 for CTE cte_2: SELECT col_1, col_2 FROM (SELECT intermediate_result.col_1, intermediate_result.col_2, intermediate_result.col_3 FROM read_intermediate_result('77_1'::text, 'binary'::citus_copy_format) intermediate_result(col_1 integer, col_2 integer, col_3 integer)) cte
 DEBUG:  Plan 77 query after replacing subqueries and CTEs: SELECT col_1, col_2 FROM (SELECT cte_2.col_1, cte_2.col_2 FROM (SELECT intermediate_result.col_1, intermediate_result.col_2 FROM read_intermediate_result('77_2'::text, 'binary'::citus_copy_format) intermediate_result(col_1 integer, col_2 integer)) cte_2) citus_insert_select_subquery
 SELECT * FROM target_table ORDER BY 1;
+DEBUG:  Router planner cannot handle multi-shard select queries
  col_1 | col_2 
 -------+-------
      1 |     2

@@ -37,6 +37,8 @@ FROM
      LIMIT 5
      ) as foo
     ORDER BY 1 DESC;
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  push down of limit count: 5
 DEBUG:  generating subplan 3_1 for subquery SELECT DISTINCT id FROM subquery_and_partitioning.partitioning_test LIMIT 5
 DEBUG:  Plan 3 query after replacing subqueries and CTEs: SELECT id FROM (SELECT intermediate_result.id FROM read_intermediate_result('3_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) foo ORDER BY id DESC
@@ -66,8 +68,11 @@ FROM
      ) as bar
 	WHERE foo.id = date_part('day', bar.time)
 	ORDER BY 2 DESC, 1;
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  push down of limit count: 5
 DEBUG:  generating subplan 5_1 for subquery SELECT DISTINCT id FROM subquery_and_partitioning.partitioning_test LIMIT 5
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  push down of limit count: 5
 DEBUG:  generating subplan 5_2 for subquery SELECT DISTINCT "time" FROM subquery_and_partitioning.partitioning_test LIMIT 5
 DEBUG:  Plan 5 query after replacing subqueries and CTEs: SELECT foo.id, bar."time" FROM (SELECT intermediate_result.id FROM read_intermediate_result('5_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) foo, (SELECT intermediate_result."time" FROM read_intermediate_result('5_2'::text, 'binary'::citus_copy_format) intermediate_result("time" date)) bar WHERE ((foo.id)::double precision OPERATOR(pg_catalog.=) date_part('day'::text, bar."time")) ORDER BY bar."time" DESC, foo.id
@@ -96,9 +101,12 @@ FROM
 	WHERE  date_part('day', foo.time) = bar.id
 	ORDER BY 2 DESC, 1 DESC
 	LIMIT 3;
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  push down of limit count: 5
 DEBUG:  generating subplan 8_1 for subquery SELECT DISTINCT "time" FROM subquery_and_partitioning.partitioning_test ORDER BY "time" DESC LIMIT 5
 DEBUG:  Plan 8 query after replacing subqueries and CTEs: SELECT foo."time", bar.id FROM (SELECT intermediate_result."time" FROM read_intermediate_result('8_1'::text, 'binary'::citus_copy_format) intermediate_result("time" date)) foo, (SELECT DISTINCT partitioning_test.id FROM subquery_and_partitioning.partitioning_test) bar WHERE (date_part('day'::text, foo."time") OPERATOR(pg_catalog.=) (bar.id)::double precision) ORDER BY bar.id DESC, foo."time" DESC LIMIT 3
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  push down of limit count: 3
     time    | id 
 ------------+----
@@ -126,9 +134,12 @@ FROM
 	WHERE  date_part('day', foo.time) = bar.id AND partitioning_test.id = bar.id
 	ORDER BY 2 DESC, 1 DESC
 	LIMIT 3;
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  push down of limit count: 5
 DEBUG:  generating subplan 10_1 for subquery SELECT DISTINCT "time" FROM subquery_and_partitioning.partitioning_test ORDER BY "time" DESC LIMIT 5
 DEBUG:  Plan 10 query after replacing subqueries and CTEs: SELECT foo."time", bar.id, partitioning_test.id, partitioning_test.value_1, partitioning_test."time" FROM (SELECT intermediate_result."time" FROM read_intermediate_result('10_1'::text, 'binary'::citus_copy_format) intermediate_result("time" date)) foo, (SELECT DISTINCT partitioning_test_1.id FROM subquery_and_partitioning.partitioning_test partitioning_test_1) bar, subquery_and_partitioning.partitioning_test WHERE ((date_part('day'::text, foo."time") OPERATOR(pg_catalog.=) (bar.id)::double precision) AND (partitioning_test.id OPERATOR(pg_catalog.=) bar.id)) ORDER BY bar.id DESC, foo."time" DESC LIMIT 3
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  push down of limit count: 3
     time    | id | id | value_1 |    time    
 ------------+----+----+---------+------------
@@ -140,8 +151,11 @@ SELECT DISTINCT id
 FROM partitioning_test
 WHERE 
 	id IN (SELECT DISTINCT date_part('day', time) FROM partitioning_test);
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan 12_1 for subquery SELECT DISTINCT date_part('day'::text, "time") AS date_part FROM subquery_and_partitioning.partitioning_test
 DEBUG:  Plan 12 query after replacing subqueries and CTEs: SELECT DISTINCT id FROM subquery_and_partitioning.partitioning_test WHERE ((id)::double precision OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.date_part FROM read_intermediate_result('12_1'::text, 'binary'::citus_copy_format) intermediate_result(date_part double precision)))
+DEBUG:  Router planner cannot handle multi-shard select queries
  id 
 ----
   3
@@ -159,10 +173,13 @@ FROM
 	SELECT user_id FROM users_table
 ) as bar
 WHERE foo.value_1 = bar.user_id; 
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  cannot use real time executor with repartition jobs
 HINT:  Since you enabled citus.enable_repartition_joins Citus chose to use task-tracker.
 DEBUG:  generating subplan 14_1 for subquery SELECT DISTINCT p1.value_1 FROM subquery_and_partitioning.partitioning_test p1, subquery_and_partitioning.partitioning_test p2 WHERE (p1.id OPERATOR(pg_catalog.=) p2.value_1)
 DEBUG:  Plan 14 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.value_1 FROM read_intermediate_result('14_1'::text, 'binary'::citus_copy_format) intermediate_result(value_1 integer)) foo, (SELECT users_table.user_id FROM public.users_table) bar WHERE (foo.value_1 OPERATOR(pg_catalog.=) bar.user_id)
+DEBUG:  Router planner cannot handle multi-shard select queries
  count 
 -------
     47
@@ -209,18 +226,26 @@ FROM
 SELECT * FROM subquery_and_ctes
 ORDER BY 3 DESC, 1 DESC, 2 DESC, 4 DESC
 LIMIT 5;
+DEBUG:  Local tables cannot be used in distributed queries.
 DEBUG:  generating subplan 16_1 for CTE cte: WITH local_cte AS (SELECT users_table_local.user_id, users_table_local."time", users_table_local.value_1, users_table_local.value_2, users_table_local.value_3, users_table_local.value_4 FROM subquery_and_partitioning.users_table_local), dist_cte AS (SELECT events_table.user_id FROM public.events_table, (SELECT DISTINCT partitioning_test.value_1 FROM subquery_and_partitioning.partitioning_test OFFSET 0) foo WHERE ((events_table.user_id OPERATOR(pg_catalog.=) foo.value_1) AND (events_table.user_id OPERATOR(pg_catalog.=) ANY (SELECT DISTINCT users_table.value_1 FROM public.users_table ORDER BY users_table.value_1 LIMIT 3)))) SELECT dist_cte.user_id FROM (local_cte JOIN dist_cte ON ((dist_cte.user_id OPERATOR(pg_catalog.=) local_cte.user_id)))
+DEBUG:  Local tables cannot be used in distributed queries.
 DEBUG:  generating subplan 17_1 for CTE local_cte: SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM subquery_and_partitioning.users_table_local
 DEBUG:  generating subplan 17_2 for CTE dist_cte: SELECT events_table.user_id FROM public.events_table, (SELECT DISTINCT partitioning_test.value_1 FROM subquery_and_partitioning.partitioning_test OFFSET 0) foo WHERE ((events_table.user_id OPERATOR(pg_catalog.=) foo.value_1) AND (events_table.user_id OPERATOR(pg_catalog.=) ANY (SELECT DISTINCT users_table.value_1 FROM public.users_table ORDER BY users_table.value_1 LIMIT 3)))
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  push down of limit count: 3
 DEBUG:  generating subplan 18_1 for subquery SELECT DISTINCT value_1 FROM public.users_table ORDER BY value_1 LIMIT 3
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan 18_2 for subquery SELECT DISTINCT value_1 FROM subquery_and_partitioning.partitioning_test OFFSET 0
 DEBUG:  Plan 18 query after replacing subqueries and CTEs: SELECT events_table.user_id FROM public.events_table, (SELECT intermediate_result.value_1 FROM read_intermediate_result('18_2'::text, 'binary'::citus_copy_format) intermediate_result(value_1 integer)) foo WHERE ((events_table.user_id OPERATOR(pg_catalog.=) foo.value_1) AND (events_table.user_id OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.value_1 FROM read_intermediate_result('18_1'::text, 'binary'::citus_copy_format) intermediate_result(value_1 integer))))
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  Plan 17 query after replacing subqueries and CTEs: SELECT dist_cte.user_id FROM ((SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.value_1, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('17_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, value_1 integer, value_2 integer, value_3 double precision, value_4 bigint)) local_cte JOIN (SELECT intermediate_result.user_id FROM read_intermediate_result('17_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) dist_cte ON ((dist_cte.user_id OPERATOR(pg_catalog.=) local_cte.user_id)))
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  push down of limit count: 5
 DEBUG:  generating subplan 16_2 for subquery SELECT DISTINCT events_table.user_id FROM subquery_and_partitioning.partitioning_test, public.events_table WHERE ((events_table.user_id OPERATOR(pg_catalog.=) partitioning_test.id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4]))) ORDER BY events_table.user_id DESC LIMIT 5
 DEBUG:  generating subplan 16_3 for subquery SELECT count(*) AS cnt FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('16_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) cte, (SELECT intermediate_result.user_id FROM read_intermediate_result('16_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) foo WHERE (foo.user_id OPERATOR(pg_catalog.=) cte.user_id)
 DEBUG:  Plan 16 query after replacing subqueries and CTEs: SELECT cnt, user_id, "time", value_1, value_2, value_3, value_4 FROM (SELECT foo.cnt, users_table.user_id, users_table."time", users_table.value_1, users_table.value_2, users_table.value_3, users_table.value_4 FROM (SELECT intermediate_result.cnt FROM read_intermediate_result('16_3'::text, 'binary'::citus_copy_format) intermediate_result(cnt bigint)) foo, public.users_table WHERE (foo.cnt OPERATOR(pg_catalog.>) users_table.value_2)) subquery_and_ctes ORDER BY "time" DESC, cnt DESC, user_id DESC, value_1 DESC LIMIT 5
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  push down of limit count: 5
  cnt | user_id |              time               | value_1 | value_2 | value_3 | value_4 
 -----+---------+---------------------------------+---------+---------+---------+---------
@@ -271,11 +296,18 @@ FROM
 		) as level_6, users_table WHERE users_table.user_id = level_6.min
 	GROUP BY users_table.value_1
 	) as bar;
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan 23_1 for subquery SELECT count(*) AS cnt, value_1 FROM subquery_and_partitioning.partitioning_test GROUP BY value_1
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan 23_2 for subquery SELECT avg(events_table.event_type) AS avg FROM (SELECT level_1.cnt FROM (SELECT intermediate_result.cnt, intermediate_result.value_1 FROM read_intermediate_result('23_1'::text, 'binary'::citus_copy_format) intermediate_result(cnt bigint, value_1 integer)) level_1, public.users_table WHERE (users_table.user_id OPERATOR(pg_catalog.=) level_1.cnt)) level_2, public.events_table WHERE (events_table.user_id OPERATOR(pg_catalog.=) level_2.cnt) GROUP BY level_2.cnt
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan 23_3 for subquery SELECT max(users_table.value_1) AS mx_val_1 FROM (SELECT intermediate_result.avg FROM read_intermediate_result('23_2'::text, 'binary'::citus_copy_format) intermediate_result(avg numeric)) level_3, public.users_table WHERE ((users_table.user_id)::numeric OPERATOR(pg_catalog.=) level_3.avg) GROUP BY level_3.avg
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan 23_4 for subquery SELECT avg(events_table.event_type) AS avg_ev_type FROM (SELECT intermediate_result.mx_val_1 FROM read_intermediate_result('23_3'::text, 'binary'::citus_copy_format) intermediate_result(mx_val_1 integer)) level_4, public.events_table WHERE (level_4.mx_val_1 OPERATOR(pg_catalog.=) events_table.user_id) GROUP BY level_4.mx_val_1
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan 23_5 for subquery SELECT min(partitioning_test.value_1) AS min FROM (SELECT intermediate_result.avg_ev_type FROM read_intermediate_result('23_4'::text, 'binary'::citus_copy_format) intermediate_result(avg_ev_type numeric)) level_5, subquery_and_partitioning.partitioning_test WHERE (level_5.avg_ev_type OPERATOR(pg_catalog.=) (partitioning_test.id)::numeric) GROUP BY level_5.avg_ev_type
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan 23_6 for subquery SELECT avg(level_6.min) AS avg FROM (SELECT intermediate_result.min FROM read_intermediate_result('23_5'::text, 'binary'::citus_copy_format) intermediate_result(min integer)) level_6, public.users_table WHERE (users_table.user_id OPERATOR(pg_catalog.=) level_6.min) GROUP BY users_table.value_1
 DEBUG:  Plan 23 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.avg FROM read_intermediate_result('23_6'::text, 'binary'::citus_copy_format) intermediate_result(avg numeric)) bar
  count 

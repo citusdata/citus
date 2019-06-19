@@ -15,6 +15,7 @@ FROM
 	orders, customer_append
 WHERE
 	o_custkey = c_custkey;
+DEBUG:  Unsupported partition method.
 DEBUG:  join prunable for intervals [1,1000] and [1001,2000]
 DEBUG:  join prunable for intervals [1,1000] and [6001,7000]
 DEBUG:  join prunable for intervals [1001,2000] and [1,1000]
@@ -44,6 +45,7 @@ FROM
 	orders, customer_append
 WHERE
 	o_custkey = c_custkey;
+DEBUG:  Unsupported partition method.
 DEBUG:  join prunable for intervals [1,1000] and [1001,2000]
 DEBUG:  join prunable for intervals [1,1000] and [6001,7000]
 DEBUG:  join prunable for intervals [1001,2000] and [1,1000]
@@ -71,6 +73,7 @@ FROM
 WHERE
 	o_custkey = c_custkey AND
 	o_orderkey < 0;
+DEBUG:  Unsupported partition method.
                             QUERY PLAN                             
 -------------------------------------------------------------------
  Aggregate
@@ -89,6 +92,7 @@ FROM
 WHERE
 	o_custkey = c_custkey AND
 	o_orderkey < 0;
+DEBUG:  Unsupported partition method.
  count 
 -------
      0
@@ -104,6 +108,7 @@ FROM
 WHERE
 	o_custkey = c_custkey AND
 	c_custkey < 0;
+DEBUG:  Unsupported partition method.
                             QUERY PLAN                             
 -------------------------------------------------------------------
  Aggregate
@@ -122,6 +127,7 @@ FROM
 WHERE
 	o_custkey = c_custkey AND
 	c_custkey < 0;
+DEBUG:  Unsupported partition method.
  count 
 -------
      0
@@ -137,6 +143,7 @@ FROM
 	lineitem, customer_append
 WHERE
 	l_partkey = c_nationkey;
+DEBUG:  Unsupported partition method.
 DEBUG:  join prunable for task partitionId 0 and 1
 DEBUG:  join prunable for task partitionId 0 and 2
 DEBUG:  join prunable for task partitionId 0 and 3
@@ -185,6 +192,7 @@ FROM
 	lineitem, customer_append
 WHERE
 	l_partkey = c_nationkey;
+DEBUG:  Unsupported partition method.
 DEBUG:  join prunable for task partitionId 0 and 1
 DEBUG:  join prunable for task partitionId 0 and 2
 DEBUG:  join prunable for task partitionId 0 and 3
@@ -228,6 +236,7 @@ FROM
 WHERE
 	l_partkey = c_nationkey AND
 	l_orderkey < 0;
+DEBUG:  Unsupported partition method.
                             QUERY PLAN                             
 -------------------------------------------------------------------
  Aggregate
@@ -249,6 +258,7 @@ FROM
 WHERE
 	l_partkey = c_nationkey AND
 	l_orderkey < 0;
+DEBUG:  Unsupported partition method.
  count 
 -------
      0
@@ -262,6 +272,7 @@ FROM
 	orders INNER JOIN customer_append ON (o_custkey = c_custkey)
 WHERE
 	false;
+DEBUG:  Unsupported partition method.
                          QUERY PLAN                          
 -------------------------------------------------------------
  Custom Scan (Citus Task-Tracker)
@@ -279,6 +290,7 @@ FROM
 	orders INNER JOIN customer_append ON (o_custkey = c_custkey)
 WHERE
 	false;
+DEBUG:  Unsupported partition method.
  o_orderkey 
 ------------
 (0 rows)
@@ -290,6 +302,7 @@ FROM
 	orders INNER JOIN customer_append ON (o_custkey = c_custkey)
 WHERE
 	1=0 AND c_custkey < 0;
+DEBUG:  Unsupported partition method.
                          QUERY PLAN                          
 -------------------------------------------------------------
  Custom Scan (Citus Task-Tracker)
@@ -305,6 +318,7 @@ SELECT
 	o_orderkey
 FROM
 	orders INNER JOIN customer_append ON (o_custkey = c_custkey AND false);
+DEBUG:  Unsupported partition method.
             QUERY PLAN            
 ----------------------------------
  Custom Scan (Citus Task-Tracker)
@@ -319,6 +333,7 @@ FROM
 	orders, customer_append
 WHERE
 	o_custkey = c_custkey AND false;
+DEBUG:  Unsupported partition method.
             QUERY PLAN            
 ----------------------------------
  Custom Scan (Citus Task-Tracker)
