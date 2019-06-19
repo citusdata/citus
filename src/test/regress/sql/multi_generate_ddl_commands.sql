@@ -22,11 +22,6 @@ CREATE TABLE not_null_table (
 
 SELECT master_get_table_ddl_events('not_null_table');
 
--- ensure tables not in search path are schema-prefixed
-CREATE SCHEMA not_in_path CREATE TABLE simple_table (id bigint);
-
-SELECT master_get_table_ddl_events('not_in_path.simple_table');
-
 -- even more complex constraints should be preserved...
 CREATE TABLE column_constraint_table (
 	first_name text,

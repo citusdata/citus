@@ -233,6 +233,15 @@ RepairShardPlacement(int64 shardId, char *sourceNodeName, int32 sourceNodePort,
 
 	EnsureTableOwner(distributedTableId);
 
+	/*
+	 * Ensure schema exists on the target worker node. We can not run this
+	 * function transactionally, since we may create shards over separate
+	 * sessions and shard creation depends on the schema being present and
+	 * visible from all sessions.
+	 */
+	EnsureSchemaExistsOnNode(distributedTableId, targetNodeName,
+							 targetNodePort);
+
 	if (relationKind == RELKIND_FOREIGN_TABLE)
 	{
 		char *relationName = get_rel_name(distributedTableId);

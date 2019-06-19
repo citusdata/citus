@@ -18,8 +18,12 @@
 #include "catalog/namespace.h"
 #include "catalog/pg_class.h"
 #include "distributed/commands.h"
+#include <distributed/connection_management.h>
 #include "distributed/commands/utility_hook.h"
 #include "distributed/metadata_cache.h"
+#include <distributed/metadata_sync.h>
+#include <distributed/remote_commands.h>
+#include <distributed/remote_commands.h>
 #include "nodes/parsenodes.h"
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
@@ -133,4 +137,54 @@ PlanAlterObjectSchemaStmt(AlterObjectSchemaStmt *alterObjectSchemaStmt,
 							  "change schemas of affected objects.")));
 
 	return NIL;
+}
+
+
+/*
+ * EnsureSchemaExistsOnAllNodes connects to all nodes with citus extension user
+ * and creates the schema of the given relationId. The function errors out if the
+ * command cannot be executed in any of the worker nodes.
+ */
+void
+EnsureSchemaExistsOnAllNodes(Oid relationId)
+{
+	List *workerNodeList = ActivePrimaryNodeList();
+	ListCell *workerNodeCell = NULL;
+
+	foreach(workerNodeCell, workerNodeList)
+	{
+		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
+		char *nodeName = workerNode->workerName;
+		uint32 nodePort = workerNode->workerPort;
+
+		EnsureSchemaExistsOnNode(relationId, nodeName, nodePort);
+	}
+}
+
+
+/*
+ * EnsureSchemaExistsOnNode connects to one node with citus extension user
+ * and creates the schema of the given relationId. The function errors out if the
+ * command cannot be executed in the node.
+ */
+void
+EnsureSchemaExistsOnNode(Oid relationId, char *nodeName, int32 nodePort)
+{
+	uint64 connectionFlag = FORCE_NEW_CONNECTION;
+	MultiConnection *connection = NULL;
+
+	/* if the schema creation command is not provided, create it */
+	Oid schemaId = get_rel_namespace(relationId);
+	char *schemaCreationDDL = CreateSchemaDDLCommand(schemaId);
+
+	/* if the relation lives in public namespace, no need to perform any queries in workers */
+	if (schemaCreationDDL == NULL)
+	{
+		return;
+	}
+
+	connection = GetNodeUserDatabaseConnection(connectionFlag, nodeName,
+											   nodePort, CitusExtensionOwnerName(), NULL);
+
+	ExecuteCriticalRemoteCommand(connection, schemaCreationDDL);
 }

@@ -120,7 +120,6 @@ SELECT citus.mitmproxy('conn.onQuery(query="CREATE SCHEMA").kill()');
 (1 row)
 
 SELECT master_activate_node('localhost', :worker_2_proxy_port);
-NOTICE:  Replicating reference table "user_table" to the node localhost:9060
 ERROR:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.

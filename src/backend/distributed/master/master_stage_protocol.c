@@ -99,6 +99,14 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 	EnsureTablePermissions(relationId, ACL_INSERT);
 	CheckDistributedTable(relationId);
 
+	/*
+	 * Ensure schema exists on each worker node. We can not run this function
+	 * transactionally, since we may create shards over separate sessions and
+	 * shard creation depends on the schema being present and visible from all
+	 * sessions.
+	 */
+	EnsureSchemaExistsOnAllNodes(relationId);
+
 	/* don't allow the table to be dropped */
 	LockRelationOid(relationId, AccessShareLock);
 

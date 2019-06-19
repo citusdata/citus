@@ -378,7 +378,7 @@ INSERT INTO full_access_user_schema.t1 VALUES (1),(2),(3);
 -- creating the table should fail with a failure on the worker machine since the user is
 -- not allowed to create a table
 SELECT create_distributed_table('full_access_user_schema.t1', 'id');
-ERROR:  permission denied for database regression
+ERROR:  permission denied for schema full_access_user_schema
 CONTEXT:  while executing command on localhost:57638
 RESET ROLE;
 -- now we distribute the table as super user

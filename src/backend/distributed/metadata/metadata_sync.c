@@ -292,6 +292,14 @@ MetadataCreateCommands(void)
 		List *ddlCommandList = GetTableDDLEvents(relationId, includeSequenceDefaults);
 		char *tableOwnerResetCommand = TableOwnerResetCommand(relationId);
 
+		/*
+		 * Ensure schema exists on each worker node. We can not run this function
+		 * transactionally, since we may create shards over separate sessions and
+		 * shard creation depends on the schema being present and visible from all
+		 * sessions.
+		 */
+		EnsureSchemaExistsOnAllNodes(relationId);
+
 		metadataSnapshotCommandList = list_concat(metadataSnapshotCommandList,
 												  workerSequenceDDLCommands);
 		metadataSnapshotCommandList = list_concat(metadataSnapshotCommandList,
@@ -929,20 +937,11 @@ SequenceDDLCommandsForTable(Oid relationId)
 		char *escapedSequenceDef = quote_literal_cstr(sequenceDef);
 		StringInfo wrappedSequenceDef = makeStringInfo();
 		StringInfo sequenceGrantStmt = makeStringInfo();
-		Oid schemaId = InvalidOid;
-		char *createSchemaCommand = NULL;
 		char *sequenceName = generate_qualified_relation_name(sequenceOid);
 
 		EnsureSupportedSequenceColumnType(sequenceOid);
 
 		/* create schema if needed */
-		schemaId = get_rel_namespace(sequenceOid);
-		createSchemaCommand = CreateSchemaDDLCommand(schemaId);
-		if (createSchemaCommand != NULL)
-		{
-			sequenceDDLList = lappend(sequenceDDLList, createSchemaCommand);
-		}
-
 		appendStringInfo(wrappedSequenceDef,
 						 WORKER_APPLY_SEQUENCE_COMMAND,
 						 escapedSequenceDef);

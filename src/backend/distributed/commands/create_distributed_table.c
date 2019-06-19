@@ -88,7 +88,6 @@ static void EnsureRelationCanBeDistributed(Oid relationId, Var *distributionColu
 static void EnsureTableCanBeColocatedWith(Oid relationId, char replicationModel,
 										  Oid distributionColumnType,
 										  Oid sourceRelationId);
-static void EnsureSchemaExistsOnAllNodes(Oid relationId);
 static void EnsureLocalTableEmpty(Oid relationId);
 static void EnsureTableNotDistributed(Oid relationId);
 static char LookupDistributionMethod(Oid distributionMethodOid);
@@ -133,6 +132,14 @@ master_create_distributed_table(PG_FUNCTION_ARGS)
 	CheckCitusVersion(ERROR);
 	EnsureCoordinator();
 	EnsureTableOwner(relationId);
+
+	/*
+	 * Ensure schema exists on each worker node. We can not run this function
+	 * transactionally, since we may create shards over separate sessions and
+	 * shard creation depends on the schema being present and visible from all
+	 * sessions.
+	 */
+	EnsureSchemaExistsOnAllNodes(relationId);
 
 	/*
 	 * Lock target relation with an exclusive lock - there's no way to make
@@ -199,6 +206,14 @@ create_distributed_table(PG_FUNCTION_ARGS)
 	colocateWithTableNameText = PG_GETARG_TEXT_P(3);
 
 	EnsureTableOwner(relationId);
+
+	/*
+	 * Ensure schema exists on each worker node. We can not run this function
+	 * transactionally, since we may create shards over separate sessions and
+	 * shard creation depends on the schema being present and visible from all
+	 * sessions.
+	 */
+	EnsureSchemaExistsOnAllNodes(relationId);
 
 	/*
 	 * Lock target relation with an exclusive lock - there's no way to make
@@ -468,14 +483,6 @@ CreateHashDistributedTableShards(Oid relationId, Oid colocatedTableId,
 								 bool localTableEmpty)
 {
 	bool useExclusiveConnection = false;
-
-	/*
-	 * Ensure schema exists on each worker node. We can not run this function
-	 * transactionally, since we may create shards over separate sessions and
-	 * shard creation depends on the schema being present and visible from all
-	 * sessions.
-	 */
-	EnsureSchemaExistsOnAllNodes(relationId);
 
 	/*
 	 * Decide whether to use exclusive connections per placement or not. Note that
@@ -800,43 +807,6 @@ EnsureTableCanBeColocatedWith(Oid relationId, char replicationModel,
 						errdetail("Distribution column types don't match for "
 								  "%s and %s.", sourceRelationName,
 								  relationName)));
-	}
-}
-
-
-/*
- * EnsureSchemaExistsOnAllNodes connects to all nodes with citus extension user
- * and creates the schema of the given relationId. The function errors out if the
- * command cannot be executed in any of the worker nodes.
- */
-static void
-EnsureSchemaExistsOnAllNodes(Oid relationId)
-{
-	List *workerNodeList = ActivePrimaryNodeList();
-	ListCell *workerNodeCell = NULL;
-	StringInfo applySchemaCreationDDL = makeStringInfo();
-
-	Oid schemaId = get_rel_namespace(relationId);
-	const char *createSchemaDDL = CreateSchemaDDLCommand(schemaId);
-	uint64 connectionFlag = FORCE_NEW_CONNECTION;
-
-	if (createSchemaDDL == NULL)
-	{
-		return;
-	}
-
-	appendStringInfo(applySchemaCreationDDL, "%s", createSchemaDDL);
-
-	foreach(workerNodeCell, workerNodeList)
-	{
-		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
-		char *nodeName = workerNode->workerName;
-		uint32 nodePort = workerNode->workerPort;
-		MultiConnection *connection =
-			GetNodeUserDatabaseConnection(connectionFlag, nodeName, nodePort, NULL,
-										  NULL);
-
-		ExecuteCriticalRemoteCommand(connection, applySchemaCreationDDL->data);
 	}
 }
 
