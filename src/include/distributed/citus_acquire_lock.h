@@ -8,8 +8,8 @@
  *-------------------------------------------------------------------------
  */
 
-#ifndef CITUS_CITUS_ACQUIRE_LOCK_H
-#define CITUS_CITUS_ACQUIRE_LOCK_H
+#ifndef CITUS_ACQUIRE_LOCK_H
+#define CITUS_ACQUIRE_LOCK_H
 
 
 #include "postmaster/bgworker.h"
@@ -17,4 +17,4 @@
 BackgroundWorkerHandle * StartLockAcquireHelperBackgroundWorker(int backendToHelp,
 																int32 lock_cooldown);
 
-#endif /*CITUS_CITUS_ACQUIRE_LOCK_H */
+#endif /* CITUS_ACQUIRE_LOCK_H */

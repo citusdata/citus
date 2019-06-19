@@ -532,6 +532,12 @@ master_update_node(PG_FUNCTION_ARGS)
 	 * - This function blocks until all previous queries have finished. This
 	 *   means that long-running queries will prevent failover.
 	 *
+	 *   In case of node failure said long-running queries will fail in the end
+	 *   anyway as they will be unable to commit successfully on the failed
+	 *   machine. To cause quick failure of these queries use force => true
+	 *   during the invocation of master_update_node to terminate conflicting
+	 *   backends proactively.
+	 *
 	 * It might be worth blocking reads to a secondary for the same reasons,
 	 * though we currently only query secondaries on follower clusters
 	 * where these locks will have no effect.
@@ -545,7 +551,6 @@ master_update_node(PG_FUNCTION_ARGS)
 		if (force)
 		{
 			handle = StartLockAcquireHelperBackgroundWorker(MyProcPid, lock_cooldown);
-			ereport(NOTICE, (errmsg("force the update to the node")));
 		}
 
 		placementList = AllShardPlacementsOnNodeGroup(workerNode->groupId);

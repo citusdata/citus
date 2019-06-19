@@ -227,8 +227,8 @@ LockAcquireHelperMain(Datum main_arg)
 
 	while (ShouldAcquireLock(100))
 	{
-		int i = 0;
-		int ret = 0;
+		int row = 0;
+		int spiStatus = 0;
 
 		elog(LOG, "canceling competing backends for backend %d", backendPid);
 
@@ -241,11 +241,11 @@ LockAcquireHelperMain(Datum main_arg)
 		PushActiveSnapshot(GetTransactionSnapshot());
 		pgstat_report_activity(STATE_RUNNING, sql.data);
 
-		ret = SPI_execute(sql.data, false, 0);
+		spiStatus = SPI_execute(sql.data, false, 0);
 
-		if (ret == SPI_OK_SELECT)
+		if (spiStatus == SPI_OK_SELECT)
 		{
-			for (i = 0; i < SPI_processed; i++)
+			for (row = 0; row < SPI_processed; row++)
 			{
 				/* TODO count the number of backends canceled and log about it */
 
