@@ -33,11 +33,11 @@ SELECT * FROM artists WHERE id IN (4, 5);
 SELECT citus.mitmproxy('conn.onQuery(query="^RELEASE").kill()');
 
 BEGIN;
-INSERT INTO artists VALUES (5, 'Asher Lev');
+UPDATE artists SET name='a';
 SAVEPOINT s1;
 DELETE FROM artists WHERE id=4;
 RELEASE SAVEPOINT s1;
-COMMIT;
+ROLLBACK;
 
 SELECT * FROM artists WHERE id IN (4, 5);
 

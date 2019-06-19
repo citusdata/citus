@@ -15,3 +15,6 @@ s/shard [0-9]+/shard xxxxx/g
 # the generated plan
 s/"(fkey_ref_|referenced_table_|referencing_table_)[0-9]+"/"\1xxxxxxx"/g
 s/\(id\)=\([0-9]+\)/(id)=(X)/g
+
+# Savepoint error messages changed between postgres 10 and 11.
+s/savepoint ".*" does not exist/no such savepoint/g
