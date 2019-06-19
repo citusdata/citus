@@ -1063,9 +1063,16 @@ bool
 SendCancelationRequest(MultiConnection *connection)
 {
 	char errorBuffer[ERROR_BUFFER_SIZE] = { 0 };
-	PGcancel *cancelObject = PQgetCancel(connection->pgConn);
+	bool cancelSent = false;
 
-	bool cancelSent = PQcancel(cancelObject, errorBuffer, sizeof(errorBuffer));
+	PGcancel *cancelObject = PQgetCancel(connection->pgConn);
+	if (cancelObject == NULL)
+	{
+		/* this can happen if connection is invalid */
+		return false;
+	}
+
+	cancelSent = PQcancel(cancelObject, errorBuffer, sizeof(errorBuffer));
 	if (!cancelSent)
 	{
 		ereport(WARNING, (errmsg("could not issue cancel request"),

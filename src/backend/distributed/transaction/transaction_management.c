@@ -396,6 +396,16 @@ CoordinatedSubTransactionCallback(SubXactEvent event, SubTransactionId subId,
 {
 	switch (event)
 	{
+		/*
+		 * Our subtransaction stack should be consistent with postgres' internal
+		 * transaction stack. In case of subxact begin, postgres calls our
+		 * callback after it has pushed the transaction into stack, so we have to
+		 * do the same even if worker commands fail, so we PushSubXact() first.
+		 * In case of subxact commit, callback is called before pushing subxact to
+		 * the postgres transaction stack, so we call PopSubXact() after making sure
+		 * worker commands didn't fail. Otherwise, Postgres would roll back that
+		 * would cause us to call PopSubXact again.
+		 */
 		case SUBXACT_EVENT_START_SUB:
 		{
 			PushSubXact(subId);
@@ -408,21 +418,21 @@ CoordinatedSubTransactionCallback(SubXactEvent event, SubTransactionId subId,
 
 		case SUBXACT_EVENT_COMMIT_SUB:
 		{
-			PopSubXact(subId);
 			if (InCoordinatedTransaction())
 			{
 				CoordinatedRemoteTransactionsSavepointRelease(subId);
 			}
+			PopSubXact(subId);
 			break;
 		}
 
 		case SUBXACT_EVENT_ABORT_SUB:
 		{
-			PopSubXact(subId);
 			if (InCoordinatedTransaction())
 			{
 				CoordinatedRemoteTransactionsSavepointRollback(subId);
 			}
+			PopSubXact(subId);
 
 			UnsetCitusNoticeLevel();
 			break;
