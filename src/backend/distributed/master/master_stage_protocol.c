@@ -553,11 +553,7 @@ CreateShardsOnWorkers(Oid distributedRelationId, List *shardPlacements,
 		{
 			List *placementAccessList = NIL;
 
-			/* we only need to calculate this once per shardInterval, not placement */
-			if (relationShardList == NIL)
-			{
-				relationShardList = RelationShardListForShardCreate(shardInterval);
-			}
+			relationShardList = RelationShardListForShardCreate(shardInterval);
 
 			placementAccessList = BuildPlacementDDLList(shardPlacement->groupId,
 														relationShardList);
@@ -617,6 +613,7 @@ RelationShardListForShardCreate(ShardInterval *shardInterval)
 	List *allForeignKeyRelations =
 		list_concat_unique_oid(referencedRelationList, referencingRelationList);
 	int shardIndex = -1;
+	ListCell *fkeyRelationIdCell = NULL;
 
 	/* record the placement access of the shard itself */
 	relationShard = CitusMakeNode(RelationShard);
@@ -630,59 +627,59 @@ RelationShardListForShardCreate(ShardInterval *shardInterval)
 		shardIndex = ShardIndex(shardInterval);
 	}
 
-	/* all foregin constraint relations */
-	if (allForeignKeyRelations != NIL)
+
+	/* all foregin key constraint relations */
+	foreach(fkeyRelationIdCell, allForeignKeyRelations)
 	{
-		ListCell *relationIdCell = NULL;
+		Oid fkeyRelationid = lfirst_oid(fkeyRelationIdCell);
+		RelationShard *fkeyRelationShard = NULL;
+		uint64 fkeyShardId = INVALID_SHARD_ID;
 
-		foreach(relationIdCell, allForeignKeyRelations)
+		if (!IsDistributedTable(fkeyRelationid))
 		{
-			Oid fkeyRelationid = lfirst_oid(relationIdCell);
-			RelationShard *fkeyRelationShard = NULL;
-			uint64 fkeyShardId = INVALID_SHARD_ID;
-
-			if (!IsDistributedTable(fkeyRelationid))
-			{
-				/* we're not interested in local tables */
-				continue;
-			}
-
-			if (PartitionMethod(fkeyRelationid) == DISTRIBUTE_BY_NONE)
-			{
-				fkeyShardId = GetFirstShardId(fkeyRelationid);
-			}
-			else if (cacheEntry->partitionMethod == DISTRIBUTE_BY_HASH &&
-					 PartitionMethod(fkeyRelationid) == DISTRIBUTE_BY_HASH)
-			{
-				/* hash distributed tables should be colocated to have fkey */
-				Assert(TableColocationId(fkeyRelationid) == cacheEntry->colocationId);
-
-				fkeyShardId =
-					ColocatedShardIdInRelation(fkeyRelationid, shardIndex);
-			}
-			else
-			{
-				/*
-				 * We currently do not support foreign keys from/to local tables or
-				 * non-colocated tables when creating shards. Also note that shard
-				 * creation via shard moves doesn't happen in a transaction block,
-				 * so not relevant here.
-				 */
-				continue;
-			}
-
-			fkeyRelationShard = CitusMakeNode(RelationShard);
-			fkeyRelationShard->relationId = fkeyRelationid;
-			fkeyRelationShard->shardId = fkeyShardId;
-
-			relationShardList = lappend(relationShardList, fkeyRelationShard);
+			/* we're not interested in local tables */
+			continue;
 		}
+
+		if (PartitionMethod(fkeyRelationid) == DISTRIBUTE_BY_NONE)
+		{
+			fkeyShardId = GetFirstShardId(fkeyRelationid);
+		}
+		else if (cacheEntry->partitionMethod == DISTRIBUTE_BY_HASH &&
+				 PartitionMethod(fkeyRelationid) == DISTRIBUTE_BY_HASH)
+		{
+			/* hash distributed tables should be colocated to have fkey */
+			Assert(TableColocationId(fkeyRelationid) == cacheEntry->colocationId);
+
+			fkeyShardId =
+				ColocatedShardIdInRelation(fkeyRelationid, shardIndex);
+		}
+		else
+		{
+			/*
+			 * We currently do not support foreign keys from/to local tables or
+			 * non-colocated tables when creating shards. Also note that shard
+			 * creation via shard moves doesn't happen in a transaction block,
+			 * so not relevant here.
+			 */
+			continue;
+		}
+
+		fkeyRelationShard = CitusMakeNode(RelationShard);
+		fkeyRelationShard->relationId = fkeyRelationid;
+		fkeyRelationShard->shardId = fkeyShardId;
+
+		relationShardList = lappend(relationShardList, fkeyRelationShard);
 	}
+
 
 	/* if  partitioned table, make sure to record the parent table */
 	if (PartitionTable(relationId))
 	{
 		RelationShard *parentRelationShard = CitusMakeNode(RelationShard);
+
+		/* partitioned tables are always co-located */
+		Assert(shardIndex != -1);
 
 		parentRelationShard->relationId = PartitionParentOid(relationId);
 		parentRelationShard->shardId =
@@ -697,7 +694,7 @@ RelationShardListForShardCreate(ShardInterval *shardInterval)
 
 /*
  * WorkerCreateShardCommandList returns a list of DDL commands for the given
- * shardId  to create the shard on the worker node.
+ * shardId to create the shard on the worker node.
  */
 List *
 WorkerCreateShardCommandList(Oid relationId, int shardIndex, uint64 shardId,
