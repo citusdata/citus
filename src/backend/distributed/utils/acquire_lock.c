@@ -24,6 +24,7 @@
 
 
 #include "access/xact.h"
+#include "catalog/pg_type.h"
 #include "executor/spi.h"
 #include "miscadmin.h"
 #include "pgstat.h"
@@ -196,6 +197,11 @@ LockAcquireHelperMain(Datum main_arg)
 	const TimestampTz deadline = TimestampTzPlusMilliseconds(connectionStart,
 															 args->lock_cooldown);
 
+	/* parameters for sql query to be executed */
+	const int paramCount = 1;
+	Oid paramTypes[1] = { INT4OID };
+	Datum paramValues[1];
+
 	pqsignal(SIGTERM, lock_acquire_helper_sigterm);
 
 	BackgroundWorkerUnblockSignals();
@@ -228,8 +234,8 @@ LockAcquireHelperMain(Datum main_arg)
 					 "             AND conflicting.objid = blocked.objid)\n"
 					 " WHERE conflicting.granted = true\n"
 					 "   AND blocked.granted = false\n"
-					 "   AND blocked.pid = %d;",
-					 backendPid);
+					 "   AND blocked.pid = $1;");
+	paramValues[0] = Int32GetDatum(backendPid);
 
 	while (ShouldAcquireLock(100))
 	{
@@ -247,7 +253,8 @@ LockAcquireHelperMain(Datum main_arg)
 		PushActiveSnapshot(GetTransactionSnapshot());
 		pgstat_report_activity(STATE_RUNNING, sql.data);
 
-		spiStatus = SPI_execute(sql.data, false, 0);
+		spiStatus = SPI_execute_with_args(sql.data, paramCount, paramTypes, paramValues,
+										  NULL, false, 0);
 
 		if (spiStatus == SPI_OK_SELECT)
 		{
