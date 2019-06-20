@@ -1721,7 +1721,7 @@ BEGIN;
 ALTER TABLE reference_table ADD COLUMN z int;
 INSERT INTO raw_events_first (user_id)
 SELECT user_id FROM raw_events_second JOIN reference_table USING (user_id);
-ERROR:  cannot establish a new connection for placement 13300025, since DDL has been executed on a connection that is in use
+ERROR:  cannot establish a new connection for placement 13300024, since DDL has been executed on a connection that is in use
 ROLLBACK;
 -- the same test with sequential DDL should work fine
 BEGIN;
@@ -2219,10 +2219,10 @@ DEBUG:  Collecting INSERT ... SELECT results on coordinator
  user_id | time | value_1 | value_2 | value_3 | value_4 
 ---------+------+---------+---------+---------+---------
        1 |      |      11 |         |         |        
-       5 |      |      15 |         |         |        
+       2 |      |      12 |         |         |        
        3 |      |      13 |         |         |        
        4 |      |      14 |         |         |        
-       2 |      |      12 |         |         |        
+       5 |      |      15 |         |         |        
 (5 rows)
 
 RESET client_min_messages;

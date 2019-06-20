@@ -433,6 +433,36 @@ StartPlacementListConnection(uint32 flags, List *placementAccessList,
 
 
 /*
+ * GetConnectionIfPlacementAccessedInXact returns the connection over which
+ * the placement has been access in the transaction. If not found, returns
+ * NULL.
+ */
+MultiConnection *
+GetConnectionIfPlacementAccessedInXact(int flags, List *placementAccessList,
+									   const char *userName)
+{
+	MultiConnection *connection = NULL;
+	char *freeUserName = NULL;
+	List *placementEntryList = NIL;
+
+	if (userName == NULL)
+	{
+		userName = freeUserName = CurrentUserName();
+	}
+
+	connection = FindPlacementListConnection(flags, placementAccessList,
+											 userName, &placementEntryList);
+
+	if (freeUserName != NULL)
+	{
+		pfree(freeUserName);
+	}
+
+	return connection;
+}
+
+
+/*
  * FindPlacementListConnection determines whether there is a connection that must
  * be used to perform the given placement accesses.
  *

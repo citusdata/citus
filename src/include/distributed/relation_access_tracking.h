@@ -39,7 +39,6 @@ extern RelationAccessMode GetRelationDDLAccessMode(Oid relationId);
 extern RelationAccessMode GetRelationDMLAccessMode(Oid relationId);
 extern RelationAccessMode GetRelationSelectAccessMode(Oid relationId);
 extern bool ShouldRecordRelationAccess(void);
-extern void CheckConflictingParallelCopyAccesses(Oid relationId);
 extern bool ParallelQueryExecutedInTransaction(void);
 
 

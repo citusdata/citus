@@ -165,8 +165,6 @@ SELECT create_reference_table('test_ref_table');
 INSERT INTO test_ref_table VALUES (1),(2),(3),(4),(5),(6),(7),(8),(9),(10);
 ALTER TABLE target_table ADD CONSTRAINT fkey FOREIGN KEY (col_1) REFERENCES test_ref_table(key) ON DELETE CASCADE;
 
--- Since we try to apply DML command after modification on test_ref_table which
--- has foreign key from target_table, following two queries are not supported.
 BEGIN;
 	TRUNCATE test_ref_table CASCADE;
 	INSERT INTO 
@@ -178,13 +176,13 @@ BEGIN;
 ROLLBACK;
 
 BEGIN;
-	DELETE FROM test_ref_table;
+	DELETE FROM test_ref_table WHERE key > 10;
 	INSERT INTO 
 		target_table
 	SELECT 
 		col_2, 
 		col_1 
-	FROM source_table_1 ON CONFLICT (col_1) DO UPDATE SET col_2 = 55 RETURNING *;
+	FROM source_table_1 ON CONFLICT (col_1) DO UPDATE SET col_2 = 1 RETURNING *;
 ROLLBACK;
 
 -- Following two queries are supported since we no not modify but only select from
