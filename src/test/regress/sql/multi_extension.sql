@@ -362,7 +362,16 @@ RENAME TO dummy_assign_function;
 SET citus.shard_replication_factor to 1;
 -- create_distributed_table command should fail
 CREATE TABLE t1(a int, b int);
-SELECT create_distributed_table('t1', 'a');
+SET client_min_messages TO ERROR;
+DO $$
+BEGIN
+        BEGIN
+                SELECT create_distributed_table('t1', 'a');
+        EXCEPTION WHEN OTHERS THEN
+                RAISE 'create distributed table failed';
+        END;
+END;
+$$;
 
 \c regression
 \c - - - :worker_1_port

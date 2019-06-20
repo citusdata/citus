@@ -47,15 +47,18 @@ SET citus.shard_replication_factor TO 2;
 SET citus.shard_count TO 2;
 SET citus.multi_shard_commit_protocol TO '2pc';
 
--- create_distributed_table should add 2 recovery records (1 connection per node)
+-- create_distributed_table may behave differently if shards
+-- created via the executor or not, so not checking its value
+-- may result multiple test outputs, so instead just make sure that
+-- there are at least 2 entries
 CREATE TABLE test_recovery (x text);
 SELECT create_distributed_table('test_recovery', 'x');
-SELECT count(*) FROM pg_dist_transaction;
+SELECT count(*) >= 2 FROM pg_dist_transaction;
 
 -- create_reference_table should add another 2 recovery records
 CREATE TABLE test_recovery_ref (x text);
 SELECT create_reference_table('test_recovery_ref');
-SELECT count(*) FROM pg_dist_transaction;
+SELECT count(*) >= 4 FROM pg_dist_transaction;
 
 SELECT recover_prepared_transactions();
 

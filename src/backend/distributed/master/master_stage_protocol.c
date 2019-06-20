@@ -30,6 +30,7 @@
 #include "distributed/commands.h"
 #include "distributed/connection_management.h"
 #include "distributed/distributed_planner.h"
+#include "distributed/listutils.h"
 #include "distributed/multi_client_executor.h"
 #include "distributed/multi_router_executor.h"
 #include "distributed/master_metadata_utility.h"
@@ -58,6 +59,14 @@
 
 
 /* Local functions forward declarations */
+static void CreateShardsOnWorkersViaExecutor(Oid distributedRelationId,
+											 List *shardPlacements,
+											 bool useExclusiveConnection, bool
+											 colocatedShard);
+static void CreateShardsOnWorkersViaCommands(Oid distributedRelationId,
+											 List *shardPlacements,
+											 bool useExclusiveConnection, bool
+											 colocatedShard);
 static List * RelationShardListForShardCreate(ShardInterval *shardInterval);
 static bool WorkerShardStats(ShardPlacement *placement, Oid relationId,
 							 char *shardName, uint64 *shardSize,
@@ -480,14 +489,93 @@ InsertShardPlacementRows(Oid relationId, int64 shardId, List *workerNodeList,
 
 /*
  * CreateShardsOnWorkers creates shards on worker nodes given the shard placements
- * as a parameter. Function opens connections in transactional way. If the caller
- * needs an exclusive connection (in case of distributing local table with data
- * on it) or creating shards in a transaction, per placement connection is opened
- * for each placement.
+ * as a parameter. Function branches into two: either use the executor or execute the
+ * commands one by one.
  */
 void
 CreateShardsOnWorkers(Oid distributedRelationId, List *shardPlacements,
 					  bool useExclusiveConnection, bool colocatedShard)
+{
+	if (DEFAULT_POOL_SIZE > 0)
+	{
+		CreateShardsOnWorkersViaExecutor(distributedRelationId, shardPlacements,
+										 useExclusiveConnection, colocatedShard);
+	}
+	else
+	{
+		CreateShardsOnWorkersViaCommands(distributedRelationId, shardPlacements,
+										 useExclusiveConnection, colocatedShard);
+	}
+}
+
+
+/*
+ * CreateShardsOnWorkersViaExecutor creates the shards via the executor. This means
+ * that it can adopt the number of connections required to create the shards.
+ */
+static void
+CreateShardsOnWorkersViaExecutor(Oid distributedRelationId, List *shardPlacements, bool
+								 useExclusiveConnection, bool colocatedShard)
+{
+	bool includeSequenceDefaults = false;
+	List *ddlCommandList = GetTableDDLEvents(distributedRelationId,
+											 includeSequenceDefaults);
+	List *foreignConstraintCommandList =
+		GetTableForeignConstraintCommands(distributedRelationId);
+	ListCell *shardPlacementCell = NULL;
+
+	int taskId = 1;
+	List *taskList = NIL;
+
+	int poolSize = useExclusiveConnection ? DEFAULT_POOL_SIZE : 1;
+
+	foreach(shardPlacementCell, shardPlacements)
+	{
+		ShardPlacement *shardPlacement = (ShardPlacement *) lfirst(shardPlacementCell);
+		uint64 shardId = shardPlacement->shardId;
+		ShardInterval *shardInterval = LoadShardInterval(shardId);
+		int shardIndex = -1;
+		List *commandList = NIL;
+		Task *task = NULL;
+		List *relationShardList = RelationShardListForShardCreate(shardInterval);
+
+		if (colocatedShard)
+		{
+			shardIndex = ShardIndex(shardInterval);
+		}
+
+		commandList = WorkerCreateShardCommandList(distributedRelationId, shardIndex,
+												   shardId, ddlCommandList,
+												   foreignConstraintCommandList);
+
+		task = CitusMakeNode(Task);
+		task->jobId = INVALID_JOB_ID;
+		task->taskId = taskId++;
+		task->taskType = DDL_TASK;
+		task->queryString = StringJoin(commandList, ';');
+		task->replicationModel = REPLICATION_MODEL_INVALID;
+		task->dependedTaskList = NIL;
+		task->anchorShardId = shardId;
+		task->relationShardList = relationShardList;
+		task->taskPlacementList = list_make1(shardPlacement);
+
+		taskList = lappend(taskList, task);
+	}
+
+	ExecuteTaskList(CMD_UTILITY, taskList, poolSize);
+}
+
+
+/*
+ * CreateShardsOnWorkersViaCommands creates shards on worker nodes given the shard
+ * placements as a parameter. Function opens connections in transactional way. If the
+ * caller needs an exclusive connection (in case of distributing local table with data
+ * on it) or creating shards in a transaction, per placement connection is opened
+ * for each placement.
+ */
+static void
+CreateShardsOnWorkersViaCommands(Oid distributedRelationId, List *shardPlacements,
+								 bool useExclusiveConnection, bool colocatedShard)
 {
 	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(distributedRelationId);
 
