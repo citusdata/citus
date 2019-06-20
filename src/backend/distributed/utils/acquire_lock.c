@@ -66,6 +66,7 @@ StartLockAcquireHelperBackgroundWorker(int backendToHelp, int32 lock_cooldown)
 	BackgroundWorkerHandle *handle = NULL;
 	LockAcquireHelperArgs args;
 	BackgroundWorker worker;
+	MemoryContextCallback *workerCleanup = NULL;
 	memset(&args, 0, sizeof(args));
 	memset(&worker, 0, sizeof(worker));
 
@@ -105,12 +106,11 @@ StartLockAcquireHelperBackgroundWorker(int backendToHelp, int32 lock_cooldown)
 						errhint("Increasing max_worker_processes might help.")));
 	}
 
+	workerCleanup = palloc0(sizeof(MemoryContextCallback));
+	workerCleanup->func = EnsureStopLockAcquireHelper;
+	workerCleanup->arg = handle;
 
-	MemoryContextCallback *cb = palloc0(sizeof(MemoryContextCallback));
-	cb->func = EnsureStopLockAcquireHelper;
-	cb->arg = handle;
-
-	MemoryContextRegisterResetCallback(CurrentMemoryContext, cb);
+	MemoryContextRegisterResetCallback(CurrentMemoryContext, workerCleanup);
 
 	return handle;
 }
