@@ -1394,12 +1394,10 @@ SELECT relation::regclass, locktype, mode FROM pg_locks WHERE relation::regclass
  partitioning_locks      | relation | AccessExclusiveLock
  partitioning_locks      | relation | AccessShareLock
  partitioning_locks_2009 | relation | AccessExclusiveLock
- partitioning_locks_2009 | relation | AccessShareLock
  partitioning_locks_2009 | relation | ShareLock
  partitioning_locks_2010 | relation | AccessExclusiveLock
- partitioning_locks_2010 | relation | AccessShareLock
  partitioning_locks_2010 | relation | ShareLock
-(8 rows)
+(6 rows)
 
 COMMIT;
 -- test shard resource locks with multi-shard UPDATE
@@ -1453,21 +1451,13 @@ WHERE
     pid = pg_backend_pid()
 ORDER BY
     1, 2, 3;
-      logicalrelid       | locktype |           mode           
--------------------------+----------+--------------------------
- partitioning_locks      | advisory | ShareUpdateExclusiveLock
- partitioning_locks      | advisory | ShareUpdateExclusiveLock
- partitioning_locks      | advisory | ShareUpdateExclusiveLock
- partitioning_locks      | advisory | ShareUpdateExclusiveLock
+      logicalrelid       | locktype |   mode    
+-------------------------+----------+-----------
  partitioning_locks_2009 | advisory | ShareLock
  partitioning_locks_2009 | advisory | ShareLock
  partitioning_locks_2009 | advisory | ShareLock
  partitioning_locks_2009 | advisory | ShareLock
- partitioning_locks_2009 | advisory | ShareUpdateExclusiveLock
- partitioning_locks_2009 | advisory | ShareUpdateExclusiveLock
- partitioning_locks_2009 | advisory | ShareUpdateExclusiveLock
- partitioning_locks_2009 | advisory | ShareUpdateExclusiveLock
-(12 rows)
+(4 rows)
 
 COMMIT;
 -- test shard resource locks with INSERT/SELECT

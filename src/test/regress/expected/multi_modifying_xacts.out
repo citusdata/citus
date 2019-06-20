@@ -377,10 +377,9 @@ DELETE FROM researchers WHERE lab_id = 6;
 \copy researchers FROM STDIN delimiter ','
 COMMIT;
 WARNING:  illegal value
-WARNING:  failed to commit transaction on localhost:57638
-WARNING:  failed to commit transaction on localhost:57637
-WARNING:  illegal value
 WARNING:  failed to commit critical transaction on localhost:57638, metadata is likely out of sync
+WARNING:  illegal value
+WARNING:  failed to commit critical transaction on localhost:57637, metadata is likely out of sync
 WARNING:  could not commit transaction for shard 1200001 on any active node
 ERROR:  could not commit transaction on any active node
 \unset VERBOSITY
