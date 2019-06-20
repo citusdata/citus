@@ -159,6 +159,12 @@ ShouldAcquireLock(long sleepms)
 {
 	int rc;
 
+	/* early escape in case we already got the signal to stop acquiring the lock */
+	if (got_sigterm)
+	{
+		return false;
+	}
+
 	rc = WaitLatch(MyLatch, WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH,
 				   sleepms * 1L, PG_WAIT_EXTENSION);
 	ResetLatch(MyLatch);
