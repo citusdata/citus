@@ -222,7 +222,15 @@ LockAcquireHelperMain(Datum main_arg)
 	/* connecting to the database */
 	BackgroundWorkerInitializeConnectionByOid(args->DatabaseId, InvalidOid, 0);
 
-	/* TODO explain sql below */
+	/*
+	 * The query below does a self join on pg_locks to find backends that are granted a
+	 * lock our target backend (backendPid) is waiting for. Once it found such a backend
+	 * it terminates the backend with pg_terminate_pid.
+	 *
+	 * The result is are rows of pid,bool indicating backend that is terminated and the
+	 * success of the termination. These will be logged accordingly below for an
+	 * administrator to correlate in the logs with the termination message.
+	 */
 	initStringInfo(&sql);
 	appendStringInfo(&sql,
 					 "SELECT \n"
@@ -260,8 +268,6 @@ LockAcquireHelperMain(Datum main_arg)
 		{
 			for (row = 0; row < SPI_processed; row++)
 			{
-				/* TODO count the number of backends canceled and log about it */
-
 				int terminatedPid = 0;
 				bool isTerminated = false;
 				bool isnull = false;
