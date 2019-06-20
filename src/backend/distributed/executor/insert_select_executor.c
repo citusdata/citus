@@ -154,13 +154,7 @@ CoordinatorInsertSelectExecScan(CustomScanState *node)
 					ExecuteTaskListExtended(CMD_INSERT, prunedTaskList,
 											tupleDescriptor, scanState->tuplestorestate,
 											hasReturning, DEFAULT_POOL_SIZE);
-
-					if (SortReturning && hasReturning)
-					{
-						SortTupleStore(scanState);
-					}
 				}
-
 
 				if (SortReturning && hasReturning)
 				{
