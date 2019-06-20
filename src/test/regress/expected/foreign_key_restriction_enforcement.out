@@ -51,7 +51,6 @@ BEGIN;
 (1 row)
 
 	SELECT count(*) FROM on_update_fkey_table;
-DEBUG:  Router planner cannot handle multi-shard select queries
  count 
 -------
   1001
@@ -127,8 +126,6 @@ BEGIN;
 DEBUG:  rewriting table "on_update_fkey_table"
 DEBUG:  building index "on_update_fkey_table_pkey" on table "on_update_fkey_table" serially
 DEBUG:  validating foreign key constraint "fkey"
-DEBUG:  Router planner cannot handle multi-shard select queries
-CONTEXT:  SQL statement "SELECT fk."value_1" FROM ONLY "test_fkey_to_ref_in_tx"."on_update_fkey_table" fk LEFT OUTER JOIN ONLY "test_fkey_to_ref_in_tx"."referece_table" pk ON ( pk."id" OPERATOR(pg_catalog.=) fk."value_1") WHERE pk."id" IS NULL AND (fk."value_1" IS NOT NULL)"
 ROLLBACK;
 -- case 1.6: SELECT to a reference table is followed by an unrelated DDL
 BEGIN;	
@@ -159,7 +156,6 @@ ROLLBACK;
 -- the foreign key column after a parallel query has been executed
 BEGIN;	
 	SELECT count(*) FROM unrelated_dist_table;
-DEBUG:  Router planner cannot handle multi-shard select queries
  count 
 -------
   1001
@@ -180,7 +176,6 @@ ROLLBACK;
 -- the foreign key column, and a parallel query has already been executed
 BEGIN;	
 	SELECT count(*) FROM unrelated_dist_table;
-DEBUG:  Router planner cannot handle multi-shard select queries
  count 
 -------
   1001
@@ -213,14 +208,12 @@ BEGIN;
 DEBUG:  switching to sequential query execution mode
 DETAIL:  Reference relation "referece_table" is modified, which might lead to data inconsistencies or distributed deadlocks via parallel accesses to hash distributed relations due to foreign keys. Any parallel modification to those hash distributed relations in the same transaction can only be executed in sequential query execution mode
 	SELECT count(*) FROM on_update_fkey_table WHERE value_1 = 99;
-DEBUG:  Router planner cannot handle multi-shard select queries
  count 
 -------
      0
 (1 row)
 
 	SELECT count(*) FROM on_update_fkey_table WHERE value_1 = 101;
-DEBUG:  Router planner cannot handle multi-shard select queries
  count 
 -------
     10
@@ -283,8 +276,6 @@ DETAIL:  Reference relation "referece_table" is modified, which might lead to da
 DEBUG:  rewriting table "on_update_fkey_table"
 DEBUG:  building index "on_update_fkey_table_pkey" on table "on_update_fkey_table" serially
 DEBUG:  validating foreign key constraint "fkey"
-DEBUG:  Router planner cannot handle multi-shard select queries
-CONTEXT:  SQL statement "SELECT fk."value_1" FROM ONLY "test_fkey_to_ref_in_tx"."on_update_fkey_table" fk LEFT OUTER JOIN ONLY "test_fkey_to_ref_in_tx"."referece_table" pk ON ( pk."id" OPERATOR(pg_catalog.=) fk."value_1") WHERE pk."id" IS NULL AND (fk."value_1" IS NOT NULL)"
 ROLLBACK;
 -- case 2.6: UPDATE to a reference table is followed by an unrelated DDL
 BEGIN;
@@ -314,7 +305,6 @@ BEGIN;
 DEBUG:  switching to sequential query execution mode
 DETAIL:  Reference relation "referece_table" is modified, which might lead to data inconsistencies or distributed deadlocks via parallel accesses to hash distributed relations due to foreign keys. Any parallel modification to those hash distributed relations in the same transaction can only be executed in sequential query execution mode
 	SELECT count(*) FROM on_update_fkey_table;
-DEBUG:  Router planner cannot handle multi-shard select queries
  count 
 -------
   1001
@@ -325,7 +315,6 @@ ROLLBACK;
 BEGIN;
 	ALTER TABLE referece_table ALTER COLUMN id SET DATA TYPE int;
 	SELECT count(*) FROM on_update_fkey_table;
-DEBUG:  Router planner cannot handle multi-shard select queries
  count 
 -------
   1001
@@ -355,8 +344,6 @@ BEGIN;
 DEBUG:  rewriting table "referece_table"
 DEBUG:  building index "referece_table_pkey" on table "referece_table" serially
 DEBUG:  validating foreign key constraint "fkey"
-DEBUG:  Router planner cannot handle multi-shard select queries
-CONTEXT:  SQL statement "SELECT fk."value_1" FROM ONLY "test_fkey_to_ref_in_tx"."on_update_fkey_table" fk LEFT OUTER JOIN ONLY "test_fkey_to_ref_in_tx"."referece_table" pk ON ( pk."id" OPERATOR(pg_catalog.=) fk."value_1") WHERE pk."id" IS NULL AND (fk."value_1" IS NOT NULL)"
 	CREATE INDEX fkey_test_index_1 ON on_update_fkey_table(value_1);
 DEBUG:  building index "fkey_test_index_1" on table "on_update_fkey_table" serially
 ROLLBACK;
@@ -366,14 +353,10 @@ BEGIN;
 DEBUG:  rewriting table "referece_table"
 DEBUG:  building index "referece_table_pkey" on table "referece_table" serially
 DEBUG:  validating foreign key constraint "fkey"
-DEBUG:  Router planner cannot handle multi-shard select queries
-CONTEXT:  SQL statement "SELECT fk."value_1" FROM ONLY "test_fkey_to_ref_in_tx"."on_update_fkey_table" fk LEFT OUTER JOIN ONLY "test_fkey_to_ref_in_tx"."referece_table" pk ON ( pk."id" OPERATOR(pg_catalog.=) fk."value_1") WHERE pk."id" IS NULL AND (fk."value_1" IS NOT NULL)"
 	ALTER TABLE on_update_fkey_table ALTER COLUMN value_1 SET DATA TYPE smallint;
 DEBUG:  rewriting table "on_update_fkey_table"
 DEBUG:  building index "on_update_fkey_table_pkey" on table "on_update_fkey_table" serially
 DEBUG:  validating foreign key constraint "fkey"
-DEBUG:  Router planner cannot handle multi-shard select queries
-CONTEXT:  SQL statement "SELECT fk."value_1" FROM ONLY "test_fkey_to_ref_in_tx"."on_update_fkey_table" fk LEFT OUTER JOIN ONLY "test_fkey_to_ref_in_tx"."referece_table" pk ON ( pk."id" OPERATOR(pg_catalog.=) fk."value_1") WHERE pk."id" IS NULL AND (fk."value_1" IS NOT NULL)"
 ROLLBACK;
 -- case 3.7: DDL to a reference table is followed by COPY
 BEGIN;
@@ -396,8 +379,6 @@ BEGIN;
 DEBUG:  rewriting table "referece_table"
 DEBUG:  building index "referece_table_pkey" on table "referece_table" serially
 DEBUG:  validating foreign key constraint "fkey"
-DEBUG:  Router planner cannot handle multi-shard select queries
-CONTEXT:  SQL statement "SELECT fk."value_1" FROM ONLY "test_fkey_to_ref_in_tx"."on_update_fkey_table" fk LEFT OUTER JOIN ONLY "test_fkey_to_ref_in_tx"."referece_table" pk ON ( pk."id" OPERATOR(pg_catalog.=) fk."value_1") WHERE pk."id" IS NULL AND (fk."value_1" IS NOT NULL)"
 	TRUNCATE on_update_fkey_table;
 DEBUG:  building index "on_update_fkey_table_pkey" on table "on_update_fkey_table" serially
 ROLLBACK;
@@ -407,7 +388,6 @@ ROLLBACK;
 -- case 4.1: SELECT to a dist table is follwed by a SELECT to a reference table
 BEGIN;
 	SELECT count(*) FROM on_update_fkey_table WHERE value_1 = 99;
-DEBUG:  Router planner cannot handle multi-shard select queries
  count 
 -------
     10
@@ -423,7 +403,6 @@ ROLLBACK;
 -- case 4.2: SELECT to a dist table is follwed by a DML to a reference table
 BEGIN;
 	SELECT count(*) FROM on_update_fkey_table WHERE value_1 = 99;
-DEBUG:  Router planner cannot handle multi-shard select queries
  count 
 -------
     10
@@ -437,7 +416,6 @@ ROLLBACK;
 -- case 4.3: SELECT to a dist table is follwed by an unrelated DDL to a reference table
 BEGIN;
 	SELECT count(*) FROM on_update_fkey_table WHERE value_1 = 99;
-DEBUG:  Router planner cannot handle multi-shard select queries
  count 
 -------
     10
@@ -450,7 +428,6 @@ ROLLBACK;
 -- case 4.4: SELECT to a dist table is follwed by a DDL to a reference table
 BEGIN;
 	SELECT count(*) FROM on_update_fkey_table WHERE value_1 = 99;
-DEBUG:  Router planner cannot handle multi-shard select queries
  count 
 -------
     10
@@ -460,15 +437,12 @@ DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  rewriting table "referece_table"
 DEBUG:  building index "referece_table_pkey" on table "referece_table" serially
 DEBUG:  validating foreign key constraint "fkey"
-DEBUG:  Router planner cannot handle multi-shard select queries
-CONTEXT:  SQL statement "SELECT fk."value_1" FROM ONLY "test_fkey_to_ref_in_tx"."on_update_fkey_table" fk LEFT OUTER JOIN ONLY "test_fkey_to_ref_in_tx"."referece_table" pk ON ( pk."id" OPERATOR(pg_catalog.=) fk."value_1") WHERE pk."id" IS NULL AND (fk."value_1" IS NOT NULL)"
 ERROR:  cannot execute DDL on reference relation "referece_table" because there was a parallel SELECT access to distributed relation "on_update_fkey_table" in the same transaction
 HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
 ROLLBACK;
 -- case 4.5: SELECT to a dist table is follwed by a TRUNCATE
 BEGIN;
 	SELECT count(*) FROM on_update_fkey_table WHERE value_1 = 99;
-DEBUG:  Router planner cannot handle multi-shard select queries
  count 
 -------
     10
@@ -535,8 +509,6 @@ BEGIN;
 DEBUG:  rewriting table "referece_table"
 DEBUG:  building index "referece_table_pkey" on table "referece_table" serially
 DEBUG:  validating foreign key constraint "fkey"
-DEBUG:  Router planner cannot handle multi-shard select queries
-CONTEXT:  SQL statement "SELECT fk."value_1" FROM ONLY "test_fkey_to_ref_in_tx"."on_update_fkey_table" fk LEFT OUTER JOIN ONLY "test_fkey_to_ref_in_tx"."referece_table" pk ON ( pk."id" OPERATOR(pg_catalog.=) fk."value_1") WHERE pk."id" IS NULL AND (fk."value_1" IS NOT NULL)"
 ERROR:  cannot execute DDL on reference relation "referece_table" because there was a parallel DML access to distributed relation "on_update_fkey_table" in the same transaction
 HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
 ROLLBACK;
@@ -553,8 +525,6 @@ BEGIN;
 DEBUG:  rewriting table "on_update_fkey_table"
 DEBUG:  building index "on_update_fkey_table_pkey" on table "on_update_fkey_table" serially
 DEBUG:  validating foreign key constraint "fkey"
-DEBUG:  Router planner cannot handle multi-shard select queries
-CONTEXT:  SQL statement "SELECT fk."value_1" FROM ONLY "test_fkey_to_ref_in_tx"."on_update_fkey_table" fk LEFT OUTER JOIN ONLY "test_fkey_to_ref_in_tx"."referece_table" pk ON ( pk."id" OPERATOR(pg_catalog.=) fk."value_1") WHERE pk."id" IS NULL AND (fk."value_1" IS NOT NULL)"
 	UPDATE referece_table SET id = 160 WHERE id = 15;
 ROLLBACK;
 -- case 6:3: Unrelated parallel DDL on distributed table followed by UPDATE on ref. table
@@ -988,7 +958,6 @@ ROLLBACK;
 -- setting the mode to sequential should fail
 BEGIN;
 	SELECT count(*) FROM on_update_fkey_table;
-DEBUG:  Router planner cannot handle multi-shard select queries
  count 
 -------
   1001
@@ -1154,7 +1123,6 @@ DEBUG:  building index "i1" on table "test_table_1" serially
 	ALTER TABLE test_table_2 ADD CONSTRAINT check_val CHECK (id > 0);
 DEBUG:  verifying table "test_table_2"
 	SELECT count(*) FROM test_table_2;
-DEBUG:  Router planner cannot handle multi-shard select queries
  count 
 -------
      0
@@ -1231,7 +1199,6 @@ DEBUG:  Collecting INSERT ... SELECT results on coordinator
 -- see https://github.com/citusdata/citus_docs/issues/664 for the discussion
 WITH t1 AS (DELETE FROM reference_table RETURNING id) 
 	DELETE FROM distributed_table USING t1 WHERE value_1 = t1.id RETURNING *;
-DEBUG:  common table expressions are not supported in distributed modifications
 DEBUG:  generating subplan 92_1 for CTE t1: DELETE FROM test_fkey_to_ref_in_tx.reference_table RETURNING id
 DEBUG:  Plan 92 query after replacing subqueries and CTEs: DELETE FROM test_fkey_to_ref_in_tx.distributed_table USING (SELECT intermediate_result.id FROM read_intermediate_result('92_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) t1 WHERE (distributed_table.value_1 OPERATOR(pg_catalog.=) t1.id) RETURNING distributed_table.id, distributed_table.value_1, t1.id
 DEBUG:  switching to sequential query execution mode
@@ -1253,10 +1220,8 @@ DEBUG:  Collecting INSERT ... SELECT results on coordinator
 -- see https://github.com/citusdata/citus_docs/issues/664 for the discussion
 WITH t1 AS (DELETE FROM reference_table RETURNING id) 
 	SELECT count(*) FROM distributed_table, t1 WHERE  value_1 = t1.id;
-DEBUG:  data-modifying statements are not supported in the WITH clauses of distributed queries
 DEBUG:  generating subplan 96_1 for CTE t1: DELETE FROM test_fkey_to_ref_in_tx.reference_table RETURNING id
 DEBUG:  Plan 96 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM test_fkey_to_ref_in_tx.distributed_table, (SELECT intermediate_result.id FROM read_intermediate_result('96_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) t1 WHERE (distributed_table.value_1 OPERATOR(pg_catalog.=) t1.id)
-DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  switching to sequential query execution mode
 DETAIL:  Reference relation "reference_table" is modified, which might lead to data inconsistencies or distributed deadlocks via parallel accesses to hash distributed relations due to foreign keys. Any parallel modification to those hash distributed relations in the same transaction can only be executed in sequential query execution mode
  count 
@@ -1269,18 +1234,15 @@ DETAIL:  Reference relation "reference_table" is modified, which might lead to d
 WITH t1 AS (DELETE FROM distributed_table RETURNING id),
 	t2 AS (DELETE FROM reference_table RETURNING id)
 	SELECT count(*) FROM distributed_table, t1, t2 WHERE  value_1 = t1.id AND value_1 = t2.id;
-DEBUG:  data-modifying statements are not supported in the WITH clauses of distributed queries
 DEBUG:  generating subplan 98_1 for CTE t1: DELETE FROM test_fkey_to_ref_in_tx.distributed_table RETURNING id
 DEBUG:  generating subplan 98_2 for CTE t2: DELETE FROM test_fkey_to_ref_in_tx.reference_table RETURNING id
 DEBUG:  Plan 98 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM test_fkey_to_ref_in_tx.distributed_table, (SELECT intermediate_result.id FROM read_intermediate_result('98_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) t1, (SELECT intermediate_result.id FROM read_intermediate_result('98_2'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) t2 WHERE ((distributed_table.value_1 OPERATOR(pg_catalog.=) t1.id) AND (distributed_table.value_1 OPERATOR(pg_catalog.=) t2.id))
-DEBUG:  Router planner cannot handle multi-shard select queries
 ERROR:  cannot execute DML on reference relation "reference_table" because there was a parallel DML access to distributed relation "distributed_table" in the same transaction
 HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
 -- similarly this should fail since we first access to a distributed
 -- table via t1, and then access to the reference table in the main query
 WITH t1 AS (DELETE FROM distributed_table RETURNING id)
 	DELETE FROM reference_table RETURNING id;
-DEBUG:  common table expressions are not supported in distributed modifications
 DEBUG:  generating subplan 101_1 for CTE t1: DELETE FROM test_fkey_to_ref_in_tx.distributed_table RETURNING id
 DEBUG:  Plan 101 query after replacing subqueries and CTEs: DELETE FROM test_fkey_to_ref_in_tx.reference_table RETURNING id
 ERROR:  cannot execute DML on reference relation "reference_table" because there was a parallel DML access to distributed relation "distributed_table" in the same transaction
@@ -1293,11 +1255,9 @@ BEGIN;
 	WITH t1 AS (DELETE FROM distributed_table RETURNING id),
 		t2 AS (DELETE FROM reference_table RETURNING id)
 		SELECT count(*) FROM distributed_table, t1, t2 WHERE  value_1 = t1.id AND value_1 = t2.id;
-DEBUG:  data-modifying statements are not supported in the WITH clauses of distributed queries
 DEBUG:  generating subplan 103_1 for CTE t1: DELETE FROM test_fkey_to_ref_in_tx.distributed_table RETURNING id
 DEBUG:  generating subplan 103_2 for CTE t2: DELETE FROM test_fkey_to_ref_in_tx.reference_table RETURNING id
 DEBUG:  Plan 103 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM test_fkey_to_ref_in_tx.distributed_table, (SELECT intermediate_result.id FROM read_intermediate_result('103_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) t1, (SELECT intermediate_result.id FROM read_intermediate_result('103_2'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) t2 WHERE ((distributed_table.value_1 OPERATOR(pg_catalog.=) t1.id) AND (distributed_table.value_1 OPERATOR(pg_catalog.=) t2.id))
-DEBUG:  Router planner cannot handle multi-shard select queries
  count 
 -------
      0
@@ -1309,7 +1269,6 @@ BEGIN;
 	SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
 	WITH t1 AS (DELETE FROM distributed_table RETURNING id)
 		DELETE FROM reference_table RETURNING id;
-DEBUG:  common table expressions are not supported in distributed modifications
 DEBUG:  generating subplan 106_1 for CTE t1: DELETE FROM test_fkey_to_ref_in_tx.distributed_table RETURNING id
 DEBUG:  Plan 106 query after replacing subqueries and CTEs: DELETE FROM test_fkey_to_ref_in_tx.reference_table RETURNING id
  id 

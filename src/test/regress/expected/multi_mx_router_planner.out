@@ -196,6 +196,7 @@ DETAIL:  distribution column value: 1
 -- query is a single shard query but can't do shard pruning,
 -- not router-plannable due to <= and IN
 SELECT * FROM articles_hash_mx WHERE author_id <= 1; 
+DEBUG:  Router planner cannot handle multi-shard select queries
  id | author_id |    title     | word_count 
 ----+-----------+--------------+------------
   1 |         1 | arsenous     |       9572
@@ -281,6 +282,7 @@ DEBUG:  Plan is router executable
 WITH id_author AS ( SELECT id, author_id FROM articles_hash_mx WHERE author_id = 1),
 id_title AS (SELECT id, title from articles_hash_mx WHERE author_id = 2)
 SELECT * FROM id_author, id_title WHERE id_author.id = id_title.id;
+DEBUG:  cannot run command which targets multiple shards
 DEBUG:  generating subplan 66_1 for CTE id_author: SELECT id, author_id FROM public.articles_hash_mx WHERE (author_id OPERATOR(pg_catalog.=) 1)
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
@@ -363,6 +365,7 @@ WITH RECURSIVE hierarchy as (
 			ON (h.employee_id = ce.manager_id AND
 				h.company_id = ce.company_id))
 SELECT * FROM hierarchy WHERE LEVEL <= 2;
+DEBUG:  Router planner cannot handle multi-shard select queries
 ERROR:  recursive CTEs are not supported in distributed queries
 -- logically wrong query, query involves different shards
 -- from the same table, but still router plannable due to
@@ -378,6 +381,7 @@ WITH RECURSIVE hierarchy as (
 				h.company_id = ce.company_id AND
 				ce.company_id = 2))
 SELECT * FROM hierarchy WHERE LEVEL <= 2;
+DEBUG:  cannot run command which targets multiple shards
 ERROR:  recursive CTEs are not supported in distributed queries
 -- grouping sets are supported on single shard
 SELECT
@@ -417,6 +421,7 @@ SELECT
 	WHERE author_id = 1 or author_id = 2
 	GROUP BY GROUPING SETS ((id),(subtitle))
 	ORDER BY id, subtitle;
+DEBUG:  Router planner cannot handle multi-shard select queries
 ERROR:  could not run distributed query with GROUPING SETS, CUBE, or ROLLUP
 HINT:  Consider using an equality filter on the distributed table's partition column.
 -- queries which involve functions in FROM clause are supported if it goes to a single worker.
@@ -452,6 +457,7 @@ DEBUG:  Plan is router executable
 
 -- they are supported via (sub)query pushdown if multiple workers are involved
 SELECT * FROM articles_hash_mx, position('om' in 'Thomas') WHERE author_id = 1 or author_id = 2 ORDER BY 4 DESC, 1 DESC, 2 DESC LIMIT 5;
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  push down of limit count: 5
  id | author_id |   title    | word_count | position 
 ----+-----------+------------+------------+----------
@@ -466,8 +472,11 @@ DEBUG:  push down of limit count: 5
 SELECT articles_hash_mx.id,test.word_count
 FROM articles_hash_mx, (SELECT id, word_count FROM articles_hash_mx) AS test WHERE test.id = articles_hash_mx.id
 ORDER BY test.word_count DESC, articles_hash_mx.id LIMIT 5;
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan 85_1 for subquery SELECT id, word_count FROM public.articles_hash_mx
 DEBUG:  Plan 85 query after replacing subqueries and CTEs: SELECT articles_hash_mx.id, test.word_count FROM public.articles_hash_mx, (SELECT intermediate_result.id, intermediate_result.word_count FROM read_intermediate_result('85_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, word_count integer)) test WHERE (test.id OPERATOR(pg_catalog.=) articles_hash_mx.id) ORDER BY test.word_count DESC, articles_hash_mx.id LIMIT 5
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  push down of limit count: 5
  id | word_count 
 ----+------------
@@ -482,6 +491,8 @@ SELECT articles_hash_mx.id,test.word_count
 FROM articles_hash_mx, (SELECT id, word_count FROM articles_hash_mx) AS test 
 WHERE test.id = articles_hash_mx.id and articles_hash_mx.author_id = 1
 ORDER BY articles_hash_mx.id;
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan 87_1 for subquery SELECT id, word_count FROM public.articles_hash_mx
 DEBUG:  Plan 87 query after replacing subqueries and CTEs: SELECT articles_hash_mx.id, test.word_count FROM public.articles_hash_mx, (SELECT intermediate_result.id, intermediate_result.word_count FROM read_intermediate_result('87_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, word_count integer)) test WHERE ((test.id OPERATOR(pg_catalog.=) articles_hash_mx.id) AND (articles_hash_mx.author_id OPERATOR(pg_catalog.=) 1)) ORDER BY articles_hash_mx.id
 DEBUG:  Creating router plan
@@ -499,6 +510,7 @@ DETAIL:  distribution column value: 1
 -- subqueries are not supported in SELECT clause
 SELECT a.title AS name, (SELECT a2.id FROM articles_single_shard_hash_mx a2 WHERE a.id = a2.id  LIMIT 1)
 						 AS special_price FROM articles_hash_mx a;
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
 ERROR:  could not run distributed query with subquery outside the FROM and WHERE clauses
 HINT:  Consider using an equality filter on the distributed table's partition column.
@@ -538,6 +550,7 @@ DEBUG:  Plan is router executable
 SELECT *
 	FROM articles_hash_mx
 	WHERE author_id = 1 OR author_id = 18;
+DEBUG:  Router planner cannot handle multi-shard select queries
  id | author_id |    title     | word_count 
 ----+-----------+--------------+------------
   1 |         1 | arsenous     |       9572
@@ -604,6 +617,7 @@ SELECT a.author_id as first_author, b.word_count as second_word_count
 	WHERE a.author_id = 2 and a.author_id = b.author_id
 	LIMIT 3;
 DEBUG:  Found no worker with all shard placements
+DEBUG:  found no worker with all shard placements
 DEBUG:  generating subplan 96_1 for CTE single_shard: SELECT id, author_id, title, word_count FROM public.articles_single_shard_hash_mx
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
@@ -801,6 +815,7 @@ SET client_min_messages TO DEBUG1;
 UNION
 (SELECT * FROM articles_hash_mx WHERE author_id = 2)
 ORDER BY 1,2;
+DEBUG:  cannot run command which targets multiple shards
 DEBUG:  generating subplan 110_1 for subquery SELECT id, author_id, title, word_count FROM public.articles_hash_mx WHERE (author_id OPERATOR(pg_catalog.=) 1)
 DEBUG:  generating subplan 110_2 for subquery SELECT id, author_id, title, word_count FROM public.articles_hash_mx WHERE (author_id OPERATOR(pg_catalog.=) 2)
 DEBUG:  Plan 110 query after replacing subqueries and CTEs: SELECT intermediate_result.id, intermediate_result.author_id, intermediate_result.title, intermediate_result.word_count FROM read_intermediate_result('110_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, author_id bigint, title character varying(20), word_count integer) UNION SELECT intermediate_result.id, intermediate_result.author_id, intermediate_result.title, intermediate_result.word_count FROM read_intermediate_result('110_2'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, author_id bigint, title character varying(20), word_count integer) ORDER BY 1, 2
@@ -824,6 +839,7 @@ SELECT * FROM (
 	(SELECT * FROM articles_hash_mx WHERE author_id = 2)) uu
 ORDER BY 1, 2
 LIMIT 5;
+DEBUG:  cannot run command which targets multiple shards
 DEBUG:  push down of limit count: 5
  id | author_id |   title    | word_count 
 ----+-----------+------------+------------
@@ -838,6 +854,7 @@ DEBUG:  push down of limit count: 5
 SELECT *
 	FROM articles_hash_mx a, articles_hash_mx b
 	WHERE a.id = b.id  AND a.author_id = 1;
+DEBUG:  Router planner cannot handle multi-shard select queries
 ERROR:  the query contains a join that requires repartitioning
 HINT:  Set citus.enable_repartition_joins to on to enable repartitioning
 -- queries which hit more than 1 shards are not router plannable or executable
@@ -846,6 +863,7 @@ SELECT *
 	FROM articles_hash_mx
 	WHERE author_id >= 1 AND author_id <= 3
 ORDER BY 1,2,3,4;
+DEBUG:  Router planner cannot handle multi-shard select queries
  id | author_id |    title     | word_count 
 ----+-----------+--------------+------------
   1 |         1 | arsenous     |       9572
@@ -889,6 +907,7 @@ DETAIL:  distribution column value: 1
 SELECT *
 	FROM articles_hash_mx
 	WHERE author_id = 1 or id = 1;
+DEBUG:  Router planner cannot handle multi-shard select queries
  id | author_id |    title     | word_count 
 ----+-----------+--------------+------------
   1 |         1 | arsenous     |       9572
@@ -927,6 +946,7 @@ DETAIL:  distribution column value: 1
 SELECT *
 	FROM articles_hash_mx
 	WHERE author_id = (random()::int  * 0 + 1);
+DEBUG:  Router planner cannot handle multi-shard select queries
  id | author_id |    title     | word_count 
 ----+-----------+--------------+------------
   1 |         1 | arsenous     |       9572
@@ -940,6 +960,7 @@ SELECT *
 SELECT *
 	FROM articles_hash_mx
 	WHERE author_id = 1 or id = 1;
+DEBUG:  Router planner cannot handle multi-shard select queries
  id | author_id |    title     | word_count 
 ----+-----------+--------------+------------
   1 |         1 | arsenous     |       9572
@@ -970,6 +991,7 @@ DETAIL:  distribution column value: 1
 SELECT *
 	FROM articles_hash_mx
 	WHERE 1 = abs(author_id);
+DEBUG:  Router planner cannot handle multi-shard select queries
  id | author_id |    title     | word_count 
 ----+-----------+--------------+------------
   1 |         1 | arsenous     |       9572
@@ -983,6 +1005,7 @@ SELECT *
 SELECT *
 	FROM articles_hash_mx
 	WHERE author_id = abs(author_id - 2);
+DEBUG:  Router planner cannot handle multi-shard select queries
  id | author_id |    title     | word_count 
 ----+-----------+--------------+------------
   1 |         1 | arsenous     |       9572
@@ -1008,6 +1031,7 @@ DETAIL:  distribution column value: 1
 SELECT *
 	FROM articles_hash_mx
 	WHERE (author_id = 1) is true;
+DEBUG:  Router planner cannot handle multi-shard select queries
  id | author_id |    title     | word_count 
 ----+-----------+--------------+------------
   1 |         1 | arsenous     |       9572
@@ -1183,11 +1207,13 @@ DETAIL:  distribution column value: 1
 SELECT id, MIN(id) over (order by word_count)
 	FROM articles_hash_mx
 	WHERE author_id = 1 or author_id = 2;
+DEBUG:  Router planner cannot handle multi-shard select queries
 ERROR:  could not run distributed query because the window function that is used cannot be pushed down
 HINT:  Window functions are supported in two ways. Either add an equality filter on the distributed tables' partition column or use the window functions with a PARTITION BY clause containing the distribution column
 SELECT LAG(title, 1) over (ORDER BY word_count) prev, title, word_count 
 	FROM articles_hash_mx
 	WHERE author_id = 5 or author_id = 2;
+DEBUG:  Router planner cannot handle multi-shard select queries
 ERROR:  could not run distributed query because the window function that is used cannot be pushed down
 HINT:  Window functions are supported in two ways. Either add an equality filter on the distributed tables' partition column or use the window functions with a PARTITION BY clause containing the distribution column
 -- complex query hitting a single shard 	
@@ -1227,6 +1253,7 @@ SELECT
  	GROUP BY
 		author_id
 	ORDER BY c;
+DEBUG:  Router planner cannot handle multi-shard select queries
  c 
 ---
  4
@@ -1329,6 +1356,7 @@ DETAIL:  distribution column value: 1
 SELECT count(*), count(*) FILTER (WHERE id < 3)
 	FROM articles_hash_mx
 	WHERE author_id = 1 or author_id = 2;
+DEBUG:  Router planner cannot handle multi-shard select queries
  count | count 
 -------+-------
     10 |     2
@@ -1449,6 +1477,7 @@ DROP MATERIALIZED VIEW mv_articles_hash_mx;
 SET client_min_messages to 'DEBUG2';
 CREATE MATERIALIZED VIEW mv_articles_hash_mx_error AS
 	SELECT * FROM articles_hash_mx WHERE author_id in (1,2);
+DEBUG:  Router planner cannot handle multi-shard select queries
 	
 -- router planner/executor is disabled for task-tracker executor
 -- following query is router plannable, but router planner is disabled

@@ -17,7 +17,6 @@ SET client_min_messages TO DEBUG1;
 SELECT count(*) count_quantity, l_quantity FROM lineitem WHERE l_quantity < 32.0
 	GROUP BY l_quantity
 	ORDER BY count_quantity ASC, l_quantity ASC;
-DEBUG:  Unsupported partition method.
  count_quantity | l_quantity 
 ----------------+------------
             219 |      13.00
@@ -56,7 +55,6 @@ DEBUG:  Unsupported partition method.
 SELECT count(*) count_quantity, l_quantity FROM lineitem WHERE l_quantity < 32.0
 	GROUP BY l_quantity
 	ORDER BY count_quantity DESC, l_quantity DESC;
-DEBUG:  Unsupported partition method.
  count_quantity | l_quantity 
 ----------------+------------
             273 |      28.00
@@ -95,7 +93,6 @@ DEBUG:  Unsupported partition method.
 SELECT count(*) count_quantity, l_quantity FROM lineitem WHERE l_quantity < 32.0
 	GROUP BY l_quantity
 	ORDER BY count_quantity ASC, l_quantity ASC LIMIT 5;
-DEBUG:  Unsupported partition method.
  count_quantity | l_quantity 
 ----------------+------------
             219 |      13.00
@@ -108,7 +105,6 @@ DEBUG:  Unsupported partition method.
 SELECT count(*) count_quantity, l_quantity FROM lineitem WHERE l_quantity < 32.0
 	GROUP BY l_quantity
 	ORDER BY count_quantity ASC, l_quantity ASC LIMIT 10;
-DEBUG:  Unsupported partition method.
  count_quantity | l_quantity 
 ----------------+------------
             219 |      13.00
@@ -126,7 +122,6 @@ DEBUG:  Unsupported partition method.
 SELECT count(*) count_quantity, l_quantity FROM lineitem WHERE l_quantity < 32.0
 	GROUP BY l_quantity
 	ORDER BY count_quantity DESC, l_quantity DESC LIMIT 10;
-DEBUG:  Unsupported partition method.
  count_quantity | l_quantity 
 ----------------+------------
             273 |      28.00
@@ -144,14 +139,12 @@ DEBUG:  Unsupported partition method.
 -- Check that we can handle limits for simple sort clauses. We order by columns
 -- in the first two tests, and then by a simple expression in the last test.
 SELECT min(l_orderkey) FROM  lineitem;
-DEBUG:  Unsupported partition method.
  min 
 -----
    1
 (1 row)
 
 SELECT l_orderkey FROM lineitem ORDER BY l_orderkey ASC LIMIT 1;
-DEBUG:  Unsupported partition method.
 DEBUG:  push down of limit count: 1
  l_orderkey 
 ------------
@@ -159,14 +152,12 @@ DEBUG:  push down of limit count: 1
 (1 row)
 
 SELECT max(l_orderkey) FROM lineitem;
-DEBUG:  Unsupported partition method.
   max  
 -------
  14947
 (1 row)
 
 SELECT l_orderkey FROM lineitem ORDER BY l_orderkey DESC LIMIT 1;
-DEBUG:  Unsupported partition method.
 DEBUG:  push down of limit count: 1
  l_orderkey 
 ------------
@@ -174,7 +165,6 @@ DEBUG:  push down of limit count: 1
 (1 row)
 
 SELECT * FROM lineitem ORDER BY l_orderkey DESC, l_linenumber DESC LIMIT 3;
-DEBUG:  Unsupported partition method.
 DEBUG:  push down of limit count: 3
  l_orderkey | l_partkey | l_suppkey | l_linenumber | l_quantity | l_extendedprice | l_discount | l_tax | l_returnflag | l_linestatus | l_shipdate | l_commitdate | l_receiptdate |      l_shipinstruct       | l_shipmode |            l_comment            
 ------------+-----------+-----------+--------------+------------+-----------------+------------+-------+--------------+--------------+------------+--------------+---------------+---------------------------+------------+---------------------------------
@@ -184,7 +174,6 @@ DEBUG:  push down of limit count: 3
 (3 rows)
 
 SELECT max(extract(epoch from l_shipdate)) FROM lineitem;
-DEBUG:  Unsupported partition method.
     max    
 -----------
  912124800
@@ -192,7 +181,6 @@ DEBUG:  Unsupported partition method.
 
 SELECT * FROM lineitem
 	ORDER BY extract(epoch from l_shipdate) DESC, l_orderkey DESC LIMIT 3;
-DEBUG:  Unsupported partition method.
 DEBUG:  push down of limit count: 3
  l_orderkey | l_partkey | l_suppkey | l_linenumber | l_quantity | l_extendedprice | l_discount | l_tax | l_returnflag | l_linestatus | l_shipdate | l_commitdate | l_receiptdate |      l_shipinstruct       | l_shipmode |              l_comment               
 ------------+-----------+-----------+--------------+------------+-----------------+------------+-------+--------------+--------------+------------+--------------+---------------+---------------------------+------------+--------------------------------------
@@ -207,7 +195,6 @@ DEBUG:  push down of limit count: 3
 SELECT l_quantity, l_discount, avg(l_partkey) FROM lineitem
 	GROUP BY l_quantity, l_discount
 	ORDER BY l_quantity LIMIT 1;
-DEBUG:  Unsupported partition method.
 DEBUG:  push down of limit count: 1
  l_quantity | l_discount |        avg         
 ------------+------------+--------------------
@@ -218,7 +205,6 @@ DEBUG:  push down of limit count: 1
 SELECT l_quantity, l_discount, avg(l_partkey) FROM lineitem
 	GROUP BY l_quantity, l_discount
 	ORDER BY l_quantity, l_discount LIMIT 1;
-DEBUG:  Unsupported partition method.
 DEBUG:  push down of limit count: 1
  l_quantity | l_discount |        avg         
 ------------+------------+--------------------
@@ -231,7 +217,6 @@ SELECT l_orderkey, count(DISTINCT l_partkey)
 	FROM lineitem_hash
 	GROUP BY l_orderkey
 	ORDER BY 2 DESC, 1 DESC LIMIT 5;
-DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  push down of limit count: 5
  l_orderkey | count 
 ------------+-------
@@ -246,7 +231,6 @@ SELECT l_orderkey
 	FROM lineitem_hash
 	GROUP BY l_orderkey
 	ORDER BY l_orderkey LIMIT 5;
-DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  push down of limit count: 5
  l_orderkey 
 ------------
@@ -262,7 +246,6 @@ SELECT max(l_orderkey)
 	FROM lineitem_hash
 	GROUP BY l_linestatus
 	ORDER BY 1 DESC LIMIT 2;
-DEBUG:  Router planner cannot handle multi-shard select queries
   max  
 -------
  14947
@@ -274,7 +257,6 @@ SELECT l_orderkey, max(l_shipdate)
 	FROM lineitem
 	GROUP BY l_orderkey
 	ORDER BY 2 DESC, 1 LIMIT 5;
-DEBUG:  Unsupported partition method.
  l_orderkey |    max     
 ------------+------------
        4678 | 11-27-1998
@@ -290,7 +272,6 @@ SELECT
 	FROM lineitem_hash
 	GROUP BY l_linestatus, l_orderkey
 	ORDER BY 3 DESC, 1, 2 LIMIT 5;
-DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  push down of limit count: 5
  l_linestatus | l_orderkey |    max     
 --------------+------------+------------
@@ -307,7 +288,6 @@ SELECT
 	FROM lineitem_hash
 	GROUP BY l_linestatus, l_shipmode
 	ORDER BY 3 DESC, 1, 2 LIMIT 5;
-DEBUG:  Router planner cannot handle multi-shard select queries
  l_linestatus | l_shipmode |    max     
 --------------+------------+------------
  O            | AIR        | 11-27-1998
@@ -324,7 +304,6 @@ SELECT
 	GROUP BY l_orderkey, l_linenumber
 	ORDER BY l_orderkey, l_linenumber
 	LIMIT 5;
-DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  push down of limit count: 5
  l_orderkey | l_linenumber 
 ------------+--------------
@@ -342,7 +321,6 @@ SELECT
 	GROUP BY l_orderkey, l_linenumber
 	ORDER BY l_linenumber, l_orderkey
 	LIMIT 5;
-DEBUG:  Router planner cannot handle multi-shard select queries
  l_orderkey | l_linenumber 
 ------------+--------------
           1 |            1
@@ -361,7 +339,6 @@ SELECT
 	GROUP BY l_orderkey, l_linenumber
 	ORDER BY l_linenumber, l_orderkey
 	LIMIT 5;
-DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  push down of limit count: 5
  l_orderkey | l_linenumber 
 ------------+--------------
@@ -382,7 +359,6 @@ SELECT
 	GROUP BY l_orderkey, (1+1), l_linenumber
 	ORDER BY l_linenumber, (1+1), l_orderkey
 	LIMIT 5;
-DEBUG:  Router planner cannot handle multi-shard select queries
  l_orderkey | l_linenumber 
 ------------+--------------
           1 |            1
@@ -401,7 +377,6 @@ SELECT
 	GROUP BY l_orderkey, l_linenumber
 	ORDER BY l_linenumber, l_orderkey
 	LIMIT 5;
-DEBUG:  Router planner cannot handle multi-shard select queries
  l_orderkey | l_linenumber 
 ------------+--------------
           1 |            1
@@ -420,7 +395,6 @@ SELECT
 	GROUP BY l_orderkey + 1
 	ORDER BY l_orderkey + 1
 	LIMIT 5;
-DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  push down of limit count: 5
  ?column? 
 ----------
@@ -440,7 +414,6 @@ SELECT
 	GROUP BY l_orderkey + 1
 	ORDER BY l_orderkey + 1 , 2
 	LIMIT 5;
-DEBUG:  Router planner cannot handle multi-shard select queries
  ?column? | count 
 ----------+-------
         2 |     6
@@ -458,7 +431,6 @@ SELECT
 	GROUP BY l_orderkey
 	ORDER BY l_orderkey , 2
 	LIMIT 5;
-DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  push down of limit count: 5
  l_orderkey | count 
 ------------+-------
@@ -477,7 +449,6 @@ SELECT
 	GROUP BY l_orderkey
 	ORDER BY 2 DESC, 1
 	LIMIT 2;
-DEBUG:  Router planner cannot handle multi-shard select queries
  l_orderkey | count 
 ------------+-------
           7 |     7
@@ -491,7 +462,6 @@ SELECT
 	GROUP BY l_orderkey
 	ORDER BY l_orderkey , 2
 	LIMIT 5;
-DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  push down of limit count: 5
  l_orderkey | rank 
 ------------+------
@@ -512,7 +482,6 @@ SELECT
 	GROUP BY l_orderkey
 	ORDER BY l_orderkey , 3, 2
 	LIMIT 5;
-DEBUG:  Router planner cannot handle multi-shard select queries
  l_orderkey | count | rank 
 ------------+-------+------
           1 |     6 |    1
@@ -529,7 +498,6 @@ SELECT
 	GROUP BY l_orderkey, l_linenumber
 	ORDER BY l_orderkey , count(*) OVER (partition by l_orderkey), count(*), l_linenumber
 	LIMIT 5;
-DEBUG:  Router planner cannot handle multi-shard select queries
  l_orderkey | l_linenumber | count | count 
 ------------+--------------+-------+-------
           1 |            1 |     1 |     6
@@ -546,7 +514,6 @@ SELECT
 	GROUP BY l_orderkey
 	ORDER BY 2 DESC, 1 
 	LIMIT 5;
-DEBUG:  Router planner cannot handle multi-shard select queries
  l_orderkey | rank 
 ------------+------
           1 |    1

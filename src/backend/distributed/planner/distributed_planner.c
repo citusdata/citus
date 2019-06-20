@@ -641,7 +641,7 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 		}
 		else
 		{
-			RaiseDeferredError(distributedPlan->planningError, DEBUG1);
+			RaiseDeferredError(distributedPlan->planningError, DEBUG2);
 		}
 	}
 	else
@@ -666,7 +666,7 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 			 * For debugging it's useful to display why query was not
 			 * router plannable.
 			 */
-			RaiseDeferredError(distributedPlan->planningError, DEBUG1);
+			RaiseDeferredError(distributedPlan->planningError, DEBUG2);
 		}
 	}
 

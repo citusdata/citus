@@ -1934,7 +1934,7 @@ SELECT author_id FROM articles_append
 	ORDER BY
 		author_id
 	LIMIT 1;
-DEBUG:  Unsupported partition method.
+DEBUG:  Router planner does not support append-partitioned tables.
 DEBUG:  push down of limit count: 1
 WARNING:  relation "public.articles_append" does not exist
 CONTEXT:  while executing command on localhost:57638
@@ -1950,7 +1950,7 @@ SELECT author_id FROM articles_append
 	ORDER BY
 		author_id
 	LIMIT 1;
-DEBUG:  Unsupported partition method.
+DEBUG:  Router planner does not support append-partitioned tables.
 DEBUG:  push down of limit count: 1
 WARNING:  relation "public.articles_append" does not exist
 CONTEXT:  while executing command on localhost:57638

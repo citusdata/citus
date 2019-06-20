@@ -168,11 +168,11 @@ DEBUG:  Plan is router executable
 
 -- for update/share is not supported via fast-path wen replication factor > 1
 SELECT * FROM modify_fast_path_replication_2 WHERE key = 1 FOR UPDATE;
-DEBUG:  Table replication factor > 1 not supported for non-reference tables.
+DEBUG:  SELECT FOR UPDATE with table replication factor > 1 not supported for non-reference tables.
 ERROR:  could not run distributed query with FOR UPDATE/SHARE commands
 HINT:  Consider using an equality filter on the distributed table's partition column.
 SELECT * FROM modify_fast_path_replication_2 WHERE key = 1 FOR SHARE;
-DEBUG:  Table replication factor > 1 not supported for non-reference tables.
+DEBUG:  SELECT FOR UPDATE with table replication factor > 1 not supported for non-reference tables.
 ERROR:  could not run distributed query with FOR UPDATE/SHARE commands
 HINT:  Consider using an equality filter on the distributed table's partition column.
 -- very simple queries on reference tables goes through fast-path planning

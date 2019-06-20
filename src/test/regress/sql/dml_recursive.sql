@@ -208,7 +208,7 @@ FROM
 	) as foo WHERE second_distributed_table.tenant_id = foo.tenant_id
 RETURNING *;
 
--- we don't support subquerues/CTEs inside VALUES
+-- we don't support subqueries/CTEs inside VALUES
 INSERT INTO 
 	second_distributed_table (tenant_id, dept) 
 VALUES ('3', (WITH  vals AS (SELECT 3) select * from vals));

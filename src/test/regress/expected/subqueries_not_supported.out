@@ -5,7 +5,6 @@ CREATE SCHEMA not_supported;
 SET search_path TO not_supported, public;
 SET client_min_messages TO DEBUG1;
 CREATE TABLE users_table_local AS SELECT * FROM users_table;
-DEBUG:  Router planner cannot handle multi-shard select queries
 -- we don't support subqueries with local tables when they are not leaf queries
 SELECT 
 	* 
@@ -17,8 +16,6 @@ FROM
 			users_table_local, (SELECT user_id FROM events_table) as evs
 		WHERE users_table_local.user_id = evs.user_id
 	) as foo;
-DEBUG:  Local tables cannot be used in distributed queries.
-DEBUG:  Local tables cannot be used in distributed queries.
 ERROR:  relation users_table_local is not distributed
 RESET client_min_messages;
 -- we don't support subqueries with local tables when they are not leaf queries
@@ -47,12 +44,8 @@ FROM
 (
 	SELECT avg(DISTINCT value_1), random() FROM users_table GROUP BY value_2 OFFSET 3
 ) as foo;
-DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan 4_1 for subquery SELECT avg(DISTINCT value_1) AS avg, random() AS random FROM public.users_table GROUP BY user_id OFFSET 3
-DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan 4_2 for subquery SELECT count(DISTINCT value_1) AS count, random() AS random FROM public.users_table GROUP BY value_2 OFFSET 3
-DEBUG:  Router planner cannot handle multi-shard select queries
 ERROR:  cannot compute aggregate (distinct)
 DETAIL:  table partitioning is unsuitable for aggregate (distinct)
 -- we don't support array_aggs with ORDER BYs
@@ -68,8 +61,6 @@ FROM
 		GROUP BY users_table.user_id 
 		LIMIT 5
 	) as foo;
-DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  Router planner cannot handle multi-shard select queries
 ERROR:  array_agg with order by is unsupported
 -- we don't support recursive subqueries when router executor is disabled
 SET citus.enable_router_execution TO false;
@@ -86,12 +77,9 @@ FROM
      ORDER BY 1 DESC LIMIT 5
      ) as foo
     ORDER BY 1 DESC;
-DEBUG:  Router planner not enabled.
-DEBUG:  Router planner not enabled.
 DEBUG:  push down of limit count: 5
 DEBUG:  generating subplan 10_1 for subquery SELECT DISTINCT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4]))) ORDER BY users_table.user_id DESC LIMIT 5
 DEBUG:  Plan 10 query after replacing subqueries and CTEs: SELECT user_id FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('10_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) foo ORDER BY user_id DESC
-DEBUG:  Router planner not enabled.
 ERROR:  cannot handle complex subqueries when the router executor is disabled
 SET citus.enable_router_execution TO true;
 -- window functions are not allowed if they're not partitioned on the distribution column
@@ -113,8 +101,6 @@ ORDER BY
   3 DESC, 1 DESC, 2 DESC
 LIMIT
   10) as foo;
-DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  Router planner cannot handle multi-shard select queries
 ERROR:  could not run distributed query because the window function that is used cannot be pushed down
 HINT:  Window functions are supported in two ways. Either add an equality filter on the distributed tables' partition column or use the window functions with a PARTITION BY clause containing the distribution column
 -- OUTER JOINs where the outer part is recursively planned and not the other way 
@@ -126,12 +112,9 @@ FROM
     LEFT JOIN
     	(SELECT users_table.value_2 FROM users_table, events_table WHERE users_table.user_id = events_table.user_id AND event_type IN (5,6,7,8)) as bar
 	ON(foo.value_2 = bar.value_2);
-DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  push down of limit count: 5
 DEBUG:  generating subplan 14_1 for subquery SELECT users_table.value_2 FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4]))) LIMIT 5
 DEBUG:  Plan 14 query after replacing subqueries and CTEs: SELECT foo.value_2 FROM ((SELECT intermediate_result.value_2 FROM read_intermediate_result('14_1'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer)) foo LEFT JOIN (SELECT users_table.value_2 FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[5, 6, 7, 8])))) bar ON ((foo.value_2 OPERATOR(pg_catalog.=) bar.value_2)))
-DEBUG:  Router planner cannot handle multi-shard select queries
 ERROR:  cannot pushdown the subquery
 DETAIL:  Complex subqueries and CTEs cannot be in the outer part of the outer join
 -- Aggregates in subquery without partition column can be planned recursively
@@ -151,7 +134,6 @@ WHERE
             users_table.user_id = events_table.user_id 
     )
 ;
-DEBUG:  Router planner cannot handle multi-shard select queries
 ERROR:  cannot push down this subquery
 DETAIL:  Aggregates without group by are currently unsupported when a subquery references a column from another query
 -- Having qual without group by on partition column can be planned recursively
@@ -173,24 +155,17 @@ WHERE
             MIN(value_2) > 2 
     )
 ;
-DEBUG:  Router planner cannot handle multi-shard select queries
 ERROR:  cannot push down this subquery
 DETAIL:  Having qual without group by on partition column is currently unsupported when a subquery references a column from another query
 -- We do not support GROUPING SETS in subqueries
 -- This also includes ROLLUP or CUBE clauses
 SELECT * FROM (SELECT user_id, value_1 FROM users_table GROUP BY GROUPING SETS ((user_id), (value_1))) s;
-DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  Router planner cannot handle multi-shard select queries
 ERROR:  could not run distributed query with GROUPING SETS, CUBE, or ROLLUP
 HINT:  Consider using an equality filter on the distributed table's partition column.
 SELECT * FROM (SELECT user_id, value_1 FROM users_table GROUP BY ROLLUP (user_id, value_1)) s;
-DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  Router planner cannot handle multi-shard select queries
 ERROR:  could not run distributed query with GROUPING SETS, CUBE, or ROLLUP
 HINT:  Consider using an equality filter on the distributed table's partition column.
 SELECT * FROM (SELECT user_id, value_1 FROM users_table GROUP BY CUBE (user_id, value_1)) s;
-DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  Router planner cannot handle multi-shard select queries
 ERROR:  could not run distributed query with GROUPING SETS, CUBE, or ROLLUP
 HINT:  Consider using an equality filter on the distributed table's partition column.
 SET client_min_messages TO DEFAULT;

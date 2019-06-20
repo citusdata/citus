@@ -25,7 +25,6 @@ SET client_min_messages to DEBUG1;
 -- Since we both have same amount of shards and they are colocated on the same node
 -- local join logic will be triggered.
 SELECT count(*) FROM test_table_1, test_table_2 WHERE test_table_1.id = test_table_2.id;
-DEBUG:  Unsupported partition method.
 LOG:  join order: [ "test_table_1" ][ local partition join "test_table_2" ]
  count 
 -------
@@ -42,7 +41,6 @@ SET citus.shard_replication_factor to 1;
 -- for interval [8,10] repartition join logic will be triggered.
 SET citus.enable_repartition_joins to ON;
 SELECT count(*) FROM test_table_1, test_table_2 WHERE test_table_1.id = test_table_2.id;
-DEBUG:  Unsupported partition method.
 LOG:  join order: [ "test_table_1" ][ single range partition join "test_table_2" ]
 DEBUG:  cannot use real time executor with repartition jobs
 HINT:  Since you enabled citus.enable_repartition_joins Citus chose to use task-tracker.
