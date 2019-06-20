@@ -128,8 +128,6 @@ CoordinatorInsertSelectExecScan(CustomScanState *node)
 
 			if (prunedTaskList != NIL)
 			{
-<<<<<<< HEAD
-
 				if (DEFAULT_POOL_SIZE == 0)
 				{
 				if (MultiShardConnectionType == SEQUENTIAL_CONNECTION)
@@ -139,7 +137,7 @@ CoordinatorInsertSelectExecScan(CustomScanState *node)
 				}
 				else
 				{
-					ExecuteMultipleTasks(scanState, prunedTaskList, isModificationQuery,
+					ExecuteMultipleTasks(scanState, prunedTaskList, true,
 										 hasReturning);
 				}
 				}
