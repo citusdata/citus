@@ -458,29 +458,6 @@ AssignPlacementListToConnection(List *placementAccessList, MultiConnection *conn
 }
 
 
-MultiConnection *
-GetPlacementListConnectionIfCached(int flags, List *placementAccessList,
-								   const char *userName)
-{
-	MultiConnection *connection = NULL;
-	char *freeUserName = NULL;
-
-	if (userName == NULL)
-	{
-		userName = freeUserName = CurrentUserName();
-	}
-
-	connection = FindPlacementListConnection(flags, placementAccessList, userName);
-
-	if (freeUserName != NULL)
-	{
-		pfree(freeUserName);
-	}
-
-	return connection;
-}
-
-
 /*
  * GetConnectionIfPlacementAccessedInXact returns the connection over which
  * the placement has been access in the transaction. If not found, returns
@@ -492,7 +469,6 @@ GetConnectionIfPlacementAccessedInXact(int flags, List *placementAccessList,
 {
 	MultiConnection *connection = NULL;
 	char *freeUserName = NULL;
-	List *placementEntryList = NIL;
 
 	if (userName == NULL)
 	{
@@ -500,7 +476,7 @@ GetConnectionIfPlacementAccessedInXact(int flags, List *placementAccessList,
 	}
 
 	connection = FindPlacementListConnection(flags, placementAccessList,
-											 userName, &placementEntryList);
+											 userName);
 
 	if (freeUserName != NULL)
 	{
