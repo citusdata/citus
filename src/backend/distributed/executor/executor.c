@@ -1729,6 +1729,9 @@ ConnectionStateMachine(WorkerSession *session)
 					workerPool->activeConnectionCount++;
 					workerPool->idleConnectionCount++;
 
+					UpdateConnectionWaitFlags(session,
+											  WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE);
+
 					connection->connectionState = MULTI_CONNECTION_CONNECTED;
 					break;
 				}
@@ -1759,7 +1762,8 @@ ConnectionStateMachine(WorkerSession *session)
 					workerPool->activeConnectionCount++;
 					workerPool->idleConnectionCount++;
 
-					UpdateConnectionWaitFlags(session, WL_SOCKET_WRITEABLE);
+					UpdateConnectionWaitFlags(session,
+											  WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE);
 
 					connection->connectionState = MULTI_CONNECTION_CONNECTED;
 				}
@@ -2020,7 +2024,10 @@ TransactionStateMachine(WorkerSession *session)
 
 					PQclear(result);
 
-					/* keep consuming results */
+					/* wake up WaitEventSetWait */
+					UpdateConnectionWaitFlags(session,
+											  WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE);
+
 					break;
 				}
 
@@ -2148,6 +2155,8 @@ CheckConnectionReady(WorkerSession *session)
 {
 	int sendStatus = 0;
 	MultiConnection *connection = session->connection;
+	int waitFlags = WL_SOCKET_READABLE;
+	bool connectionReady = false;
 
 	ConnStatusType status = PQstatus(connection->pgConn);
 	if (status == CONNECTION_BAD)
@@ -2165,12 +2174,8 @@ CheckConnectionReady(WorkerSession *session)
 	}
 	else if (sendStatus == 1)
 	{
-		int waitFlags = session->connection->waitFlags;
-
 		/* more data to send, wait for socket to become writable */
-		UpdateConnectionWaitFlags(session, waitFlags | WL_SOCKET_WRITEABLE);
-
-		return false;
+		waitFlags = waitFlags | WL_SOCKET_WRITEABLE;
 	}
 
 	/* if reading fails, there's not much we can do */
@@ -2180,17 +2185,14 @@ CheckConnectionReady(WorkerSession *session)
 		return false;
 	}
 
-	if (PQisBusy(connection->pgConn))
+	if (!PQisBusy(connection->pgConn))
 	{
-		int waitFlags = session->connection->waitFlags;
-
-		/* did not get a full result, wait for socket to become readable */
-		UpdateConnectionWaitFlags(session, waitFlags | WL_SOCKET_READABLE);
-
-		return false;
+		connectionReady = true;
 	}
 
-	return true;
+	UpdateConnectionWaitFlags(session, waitFlags);
+
+	return connectionReady;
 }
 
 
