@@ -89,7 +89,6 @@ extern int FunctionCallLevel;
 /*
  * Coordinated transaction management.
  */
-extern void BeginCoordinatedTransaction(void);
 extern void BeginOrContinueCoordinatedTransaction(void);
 extern bool InCoordinatedTransaction(void);
 extern void CoordinatedTransactionUse2PC(void);
