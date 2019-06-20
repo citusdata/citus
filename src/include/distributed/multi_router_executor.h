@@ -45,9 +45,13 @@ extern TupleTableSlot * RouterModifyExecScan(CustomScanState *node);
 extern void ExecuteMultipleTasks(CitusScanState *scanState, List *taskList,
 								 bool isModificationQuery, bool expectResults);
 
+int64 ExecuteModifyTasksSequentially(CitusScanState *scanState, List *taskList,
+									 CmdType operation, bool hasReturning);
 extern int64 ExecuteModifyTasksWithoutResults(List *taskList);
 extern int64 ExecuteModifyTasksSequentiallyWithoutResults(List *taskList,
 														  CmdType operation);
+extern ShardPlacementAccess * CreatePlacementAccess(ShardPlacement *placement,
+													ShardPlacementAccessType accessType);
 
 /* helper functions */
 extern bool TaskListRequires2PC(List *taskList);
