@@ -1052,7 +1052,7 @@ AssignTasksToConnections(DistributedExecution *execution)
 			 * Determine whether the task has to be assigned to a particular connection
 			 * due to a preceding access to the placement in the same transaction.
 			 */
-			connection = GetPlacementListConnectionIfCached(connectionFlags,
+			connection = GetConnectionIfPlacementAccessedInXact(connectionFlags,
 															placementAccessList,
 															NULL);
 			if (connection != NULL)
