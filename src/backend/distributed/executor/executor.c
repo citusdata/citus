@@ -1547,27 +1547,30 @@ ManageWorkerPool(WorkerPool *workerPool)
 	}
 	else
 	{
-		if (initiatedConnectionCount >= targetPoolSize)
-		{
-			/* already reached the minimal pool size */
-			return;
-		}
+		/* cannot open more than targetPoolSize connections */
+		int maxNewConnectionCount = targetPoolSize - initiatedConnectionCount;
 
-		if (readyTaskCount - idleConnectionCount <= initiatedConnectionCount)
-		{
-			/* after assigning tasks to idle connections we don't need more connections */
-			return;
-		}
+		/* connections that are still establishing will soon be available for tasks */
+		int establishingConnectionCount =
+			initiatedConnectionCount - activeConnectionCount - failedConnectionCount;
+
+		/* total number of connections that are (almost) available for tasks */
+		int usableConnectionCount = idleConnectionCount + establishingConnectionCount;
+
+		/*
+		 * Number of additional connections we would need to run all ready tasks in
+		 * parallel.
+		 */
+		int newConnectionsForReadyTasks = readyTaskCount - usableConnectionCount;
 
 		/*
 		 * Open enough connections to handle all tasks that are ready, but no more
 		 * than the target pool size.
 		 */
-		newConnectionCount = Min(readyTaskCount - idleConnectionCount, targetPoolSize) -
-							 activeConnectionCount;
+		newConnectionCount = Min(newConnectionsForReadyTasks, maxNewConnectionCount);
 	}
 
-	if (newConnectionCount == 0)
+	if (newConnectionCount <= 0)
 	{
 		return;
 	}
