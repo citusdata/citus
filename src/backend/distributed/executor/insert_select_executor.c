@@ -130,40 +130,38 @@ CoordinatorInsertSelectExecScan(CustomScanState *node)
 			{
 				if (DEFAULT_POOL_SIZE == 0)
 				{
-				if (MultiShardConnectionType == SEQUENTIAL_CONNECTION)
-				{
-					ExecuteModifyTasksSequentially(scanState, prunedTaskList,
-												   CMD_INSERT, hasReturning);
+					if (MultiShardConnectionType == SEQUENTIAL_CONNECTION)
+					{
+						ExecuteModifyTasksSequentially(scanState, prunedTaskList,
+													   CMD_INSERT, hasReturning);
+					}
+					else
+					{
+						ExecuteMultipleTasks(scanState, prunedTaskList, true,
+											 hasReturning);
+					}
 				}
 				else
 				{
-					ExecuteMultipleTasks(scanState, prunedTaskList, true,
-										 hasReturning);
-				}
-				}
+					TupleDesc tupleDescriptor = ScanStateGetTupleDescriptor(scanState);
+					bool randomAccess = true;
+					bool interTransactions = false;
 
-				else
-				{
+					Assert(scanState->tuplestorestate == NULL);
+					scanState->tuplestorestate =
+						tuplestore_begin_heap(randomAccess, interTransactions, work_mem);
 
-				TupleDesc tupleDescriptor = ScanStateGetTupleDescriptor(scanState);
-				bool randomAccess = true;
-				bool interTransactions = false;
+					ExecuteTaskListExtended(CMD_INSERT, prunedTaskList,
+											tupleDescriptor, scanState->tuplestorestate,
+											hasReturning, DEFAULT_POOL_SIZE);
 
-				Assert(scanState->tuplestorestate == NULL);
-				scanState->tuplestorestate =
-					tuplestore_begin_heap(randomAccess, interTransactions, work_mem);
-
-				ExecuteTaskListExtended(CMD_INSERT, prunedTaskList,
-										tupleDescriptor, scanState->tuplestorestate,
-										hasReturning, DEFAULT_POOL_SIZE);
-
-				if (SortReturning && hasReturning)
-				{
-					SortTupleStore(scanState);
-				}
+					if (SortReturning && hasReturning)
+					{
+						SortTupleStore(scanState);
+					}
 				}
 
-				
+
 				if (SortReturning && hasReturning)
 				{
 					SortTupleStore(scanState);
