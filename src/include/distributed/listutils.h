@@ -27,5 +27,6 @@ extern void ** PointerArrayFromList(List *pointerList);
 extern ArrayType * DatumArrayToArrayType(Datum *datumArray, int datumCount,
 										 Oid datumTypeId);
 extern HTAB * ListToHashSet(List *pointerList, Size keySize, bool isStringList);
+extern char * StringJoin(List *stringList, char delimiter);
 
 #endif /* CITUS_LISTUTILS_H */
