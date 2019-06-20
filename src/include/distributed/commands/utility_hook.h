@@ -16,8 +16,16 @@
 #include "utils/relcache.h"
 #include "tcop/utility.h"
 
+typedef enum
+{
+	PROPSETCMD_INVALID = -1,
+	PROPSETCMD_NONE, /* do not propagate SET commands */
+	PROPSETCMD_LOCAL, /* propagate SET LOCAL commands */
+	PROPSETCMD_SESSION, /* propagate SET commands, but not SET LOCAL ones */
+	PROPSETCMD_ALL /* propagate all SET commands */
+} PropSetCmdBehavior;
+extern PropSetCmdBehavior PropagateSetCommands;
 extern bool EnableDDLPropagation;
-
 
 /*
  * A DDLJob encapsulates the remote tasks and commands needed to process all or

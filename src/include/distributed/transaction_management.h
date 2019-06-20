@@ -10,6 +10,7 @@
 #define TRANSACTION_MANAGMENT_H
 
 #include "lib/ilist.h"
+#include "lib/stringinfo.h"
 #include "nodes/pg_list.h"
 
 /* describes what kind of modifications have occurred in the current transaction */
@@ -53,6 +54,13 @@ typedef enum
 	COMMIT_PROTOCOL_2PC = 2
 } CommitProtocolType;
 
+/* Enumeration to keep track of context within nested sub-transactions */
+typedef struct SubXactContext
+{
+	SubTransactionId subId;
+	StringInfo setLocalCmds;
+} SubXactContext;
+
 /*
  * GUC that determines whether a SELECT in a transaction block should also run in
  * a transaction block on the worker.
@@ -85,11 +93,12 @@ extern int StoredProcedureLevel;
 /* number of nested function call levels we are currently in */
 extern int FunctionCallLevel;
 
+/* SET LOCAL statements active in the current (sub-)transaction. */
+extern StringInfo activeSetStmts;
 
 /*
  * Coordinated transaction management.
  */
-extern void BeginCoordinatedTransaction(void);
 extern void BeginOrContinueCoordinatedTransaction(void);
 extern bool InCoordinatedTransaction(void);
 extern void CoordinatedTransactionUse2PC(void);
@@ -100,6 +109,7 @@ extern void InitializeTransactionManagement(void);
 
 /* other functions */
 extern List * ActiveSubXacts(void);
+extern List * ActiveSubXactContexts(void);
 
 
 #endif /*  TRANSACTION_MANAGMENT_H */
