@@ -92,9 +92,16 @@ typedef struct CitusCopyDestReceiver
 	/* template for COPY statement to send to workers */
 	CopyStmt *copyStatement;
 
-	/* cached shard metadata for pruning */
-	HTAB *shardConnectionHash;
 	bool stopOnFailure;
+
+	/*
+	 * shardId to CopyShardState map. Also used in insert_select_executor.c for
+	 * task pruning.
+	 */
+	HTAB *shardStateHash;
+
+	/* socket to CopyConnectionState map */
+	HTAB *connectionStateHash;
 
 	/* state on how to copy out data types */
 	CopyOutState copyOutState;

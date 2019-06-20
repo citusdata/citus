@@ -179,7 +179,7 @@ INSERT INTO labs VALUES (6, 'Bell Labs');
 \.
 COMMIT;
 
--- COPY cannot be performed if multiple shards were modified over the same connection
+-- COPY can be performed if multiple shards were modified over the same connection
 BEGIN;
 INSERT INTO researchers VALUES (2, 1, 'Knuth Donald');
 INSERT INTO researchers VALUES (10, 6, 'Lamport Leslie');
@@ -189,7 +189,7 @@ INSERT INTO researchers VALUES (10, 6, 'Lamport Leslie');
 \.
 ROLLBACK;
 
--- COPY cannot be performed after a multi-row INSERT that uses one connection
+-- COPY can be performed after a multi-row INSERT that uses one connection
 BEGIN;
 INSERT INTO researchers VALUES (2, 1, 'Knuth Donald'), (10, 6, 'Lamport Leslie');
 \copy researchers from stdin delimiter ','
@@ -1064,7 +1064,7 @@ END;
 
 SELECT user_id FROM items ORDER BY user_id;
 
--- should not be able to open multiple connections per node after INSERTing over one connection
+-- should be able to open multiple connections per node after INSERTing over one connection
 BEGIN;
 INSERT INTO users VALUES (2, 'burak');
 INSERT INTO users VALUES (3, 'burak');
@@ -1072,7 +1072,7 @@ INSERT INTO users VALUES (3, 'burak');
 2,item-2,0
 3,item-3,0
 \.
-END;
+ROLLBACK;
 
 -- cannot perform parallel DDL after a co-located table has been read over 1 connection
 BEGIN;

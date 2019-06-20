@@ -103,7 +103,6 @@ static int64 ExecuteModifyTasks(List *taskList, bool expectResults,
 static void AcquireExecutorShardLock(Task *task, CmdType commandType);
 static void AcquireExecutorMultiShardLocks(List *taskList);
 static bool RequiresConsistentSnapshot(Task *task);
-static void SortTupleStore(CitusScanState *scanState);
 static void RouterMultiModifyExecScan(CustomScanState *node);
 static void RouterSequentialModifyExecScan(CustomScanState *node);
 static void ExtractParametersFromParamListInfo(ParamListInfo paramListInfo,
@@ -619,7 +618,7 @@ RouterModifyExecScan(CustomScanState *node)
  *
  * The sorting is done in ASC order.
  */
-static void
+void
 SortTupleStore(CitusScanState *scanState)
 {
 	TupleDesc tupleDescriptor = ScanStateGetTupleDescriptor(scanState);

@@ -290,10 +290,6 @@ BEGIN;
 DEBUG:  switching to sequential query execution mode
 DETAIL:  Reference relation "referece_table" is modified, which might lead to data inconsistencies or distributed deadlocks via parallel accesses to hash distributed relations due to foreign keys. Any parallel modification to those hash distributed relations in the same transaction can only be executed in sequential query execution mode
 	COPY on_update_fkey_table FROM STDIN WITH CSV;
-ERROR:  cannot execute parallel COPY on relation "on_update_fkey_table" after DML command on reference relation "referece_table" because there is a foreign key between them and "referece_table" has been modified in this transaction
-DETAIL:  COPY to a distributed table uses a separate set of connections which will not be able to see the uncommitted changes to the reference table.
-HINT:  Perform the COPY in a separate transaction.
-CONTEXT:  COPY on_update_fkey_table, line 2: "1002,99"
 ROLLBACK;
 -- case 2.8: UPDATE to a reference table is followed by TRUNCATE
 BEGIN;
@@ -368,10 +364,6 @@ BEGIN;
 DEBUG:  switching to sequential query execution mode
 DETAIL:  Reference relation "referece_table" is modified, which might lead to data inconsistencies or distributed deadlocks via parallel accesses to hash distributed relations due to foreign keys. Any parallel modification to those hash distributed relations in the same transaction can only be executed in sequential query execution mode
 	COPY on_update_fkey_table FROM STDIN WITH CSV;
-ERROR:  cannot execute parallel COPY on relation "on_update_fkey_table" after DDL command on reference relation "referece_table" because there is a foreign key between them and "referece_table" has been modified in this transaction
-DETAIL:  COPY to a distributed table uses a separate set of connections which will not be able to see the uncommitted changes to the reference table.
-HINT:  Perform the COPY in a separate transaction.
-CONTEXT:  COPY on_update_fkey_table, line 2: "1002,99"
 ROLLBACK;
 -- case 3.8: DDL to a reference table is followed by TRUNCATE
 BEGIN;
