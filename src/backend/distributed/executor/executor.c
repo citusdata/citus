@@ -695,7 +695,6 @@ TaskListModifiesDatabase(CmdType operation, List *taskList)
 static bool
 DistributedExecutionRequiresRollback(DistributedExecution *execution)
 {
-	CmdType operation = execution->operation;
 	List *taskList = execution->tasksToExecute;
 	int taskCount = list_length(taskList);
 	Task *task = NULL;
