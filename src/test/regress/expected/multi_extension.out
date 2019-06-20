@@ -387,12 +387,18 @@ RENAME TO dummy_assign_function;
 SET citus.shard_replication_factor to 1;
 -- create_distributed_table command should fail
 CREATE TABLE t1(a int, b int);
-SELECT create_distributed_table('t1', 'a');
-WARNING:  function assign_distributed_transaction_id(integer, integer, unknown) does not exist
-HINT:  No function matches the given name and argument types. You might need to add explicit type casts.
-CONTEXT:  while executing command on localhost:57637
-ERROR:  connection error: localhost:57637
-DETAIL:  another command is already in progress
+SET client_min_messages TO ERROR;
+DO $$
+BEGIN
+        BEGIN
+                SELECT create_distributed_table('t1', 'a');
+        EXCEPTION WHEN OTHERS THEN
+                RAISE 'create distributed table failed';
+        END;
+END;
+$$;
+ERROR:  create distributed table failed
+CONTEXT:  PL/pgSQL function inline_code_block line 6 at RAISE
 \c regression
 \c - - - :worker_1_port
 DROP DATABASE another;
