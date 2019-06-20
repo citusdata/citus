@@ -1053,8 +1053,8 @@ AssignTasksToConnections(DistributedExecution *execution)
 			 * due to a preceding access to the placement in the same transaction.
 			 */
 			connection = GetConnectionIfPlacementAccessedInXact(connectionFlags,
-															placementAccessList,
-															NULL);
+																placementAccessList,
+																NULL);
 			if (connection != NULL)
 			{
 				/*
@@ -1413,7 +1413,7 @@ RunDistributedExecution(DistributedExecution *execution)
 					/*
 					 * The execution might take a while, so explicitly free at this point
 					 * because we don't need anymore.
-					  */
+					 */
 					pfree(events);
 
 					/* recalculate (and allocate) since the sessions have changed */
@@ -1519,7 +1519,7 @@ ManageWorkerPool(WorkerPool *workerPool)
 	Assert(activeConnectionCount >= idleConnectionCount);
 
 	/* we should always have more (or equal) initiated connections than active connections */
-	Assert (initiatedConnectionCount >= activeConnectionCount);
+	Assert(initiatedConnectionCount >= activeConnectionCount);
 
 	/* we should never have less than 0 connections ever */
 	Assert(activeConnectionCount >= 0 && idleConnectionCount >= 0);
@@ -2576,7 +2576,7 @@ WorkerPoolFailed(WorkerPool *workerPool)
 	ListCell *sessionCell = NULL;
 
 	/* a pool cannot fail multiple times */
-	Assert (!workerPool->failed);
+	Assert(!workerPool->failed);
 
 	dlist_foreach(iter, &workerPool->pendingTaskQueue)
 	{
@@ -3014,4 +3014,3 @@ BuildWaitEventSet(List *sessionList)
 
 	return waitEventSet;
 }
-
