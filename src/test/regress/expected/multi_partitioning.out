@@ -1479,7 +1479,7 @@ WHERE
     pid = pg_backend_pid()
 ORDER BY
     1, 2, 3;
-      logicalrelid       | locktype |   mode           
+      logicalrelid       | locktype |   mode    
 -------------------------+----------+-----------
  partitioning_locks_2009 | advisory | ShareLock
  partitioning_locks_2009 | advisory | ShareLock

@@ -248,20 +248,15 @@ SELECT master_create_distributed_table('company_employees', 'company_id', 'hash'
  
 (1 row)
 
+-- do not print notices from workers since the order is not deterministic
+SET client_min_messages TO DEFAULT;
 SELECT master_create_worker_shards('company_employees', 4, 1);
-DEBUG:  schema "fast_path_router_select" already exists, skipping
-DETAIL:  NOTICE from localhost:57637
-DEBUG:  schema "fast_path_router_select" already exists, skipping
-DETAIL:  NOTICE from localhost:57638
-DEBUG:  schema "fast_path_router_select" already exists, skipping
-DETAIL:  NOTICE from localhost:57637
-DEBUG:  schema "fast_path_router_select" already exists, skipping
-DETAIL:  NOTICE from localhost:57638
  master_create_worker_shards 
 -----------------------------
  
 (1 row)
 
+SET client_min_messages TO 'DEBUG2';
 INSERT INTO company_employees values(1, 1, 0);
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
