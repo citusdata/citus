@@ -229,12 +229,16 @@ void
 GetConnParams(ConnectionHashKey *key, char ***keywords, char ***values,
 			  Index *runtimeParamStart, MemoryContext context)
 {
-	/* make space for the port as a string: sign, 10 digits, NUL */
-	char *nodePortString = MemoryContextAlloc(context, 12 * sizeof(char *));
+	/*
+	 * make space for the port as a string: sign, 10 digits, NUL. We keep it on the stack
+	 * till we can later copy it to the right context. By having the declaration here
+	 * already we can add a pointer to the runtimeValues.
+	 */
+	char nodePortString[12] = "";
 
 	/*
 	 * This function has three sections:
-	 *   - Initialize the keywords and values with copies of global parameters
+	 *   - Initialize the keywords and values (to be copied later) of global parameters
 	 *   - Append user/host-specific parameters calculated from the given key
 	 *   - (Enterprise-only) append user/host-specific authentication params
 	 *
@@ -247,28 +251,34 @@ GetConnParams(ConnectionHashKey *key, char ***keywords, char ***values,
 	 * invalidated during config reloads.
 	 */
 	const char *runtimeKeywords[] = {
-		MemoryContextStrdup(context, "host"),
-		MemoryContextStrdup(context, "port"),
-		MemoryContextStrdup(context, "dbname"),
-		MemoryContextStrdup(context, "user"),
-		MemoryContextStrdup(context, "client_encoding")
+		"host",
+		"port",
+		"dbname",
+		"user",
+		"client_encoding"
 	};
 	const char *runtimeValues[] = {
-		MemoryContextStrdup(context, key->hostname),
+		key->hostname,
 		nodePortString,
-		MemoryContextStrdup(context, key->database),
-		MemoryContextStrdup(context, key->user),
-		MemoryContextStrdup(context, GetDatabaseEncodingName())
+		key->database,
+		key->user,
+		GetDatabaseEncodingName()
 	};
 
 	/*
-	 * Declare local params for readability; we'll assign to outparams at end.
+	 * Declare local params for readability;
+	 *
+	 * assignment is done directly to not loose the pointers if any of the later
+	 * allocations cause an error. FreeConnParamsHashEntryFields knows about the
+	 * possibility of half initialized keywords or values and correctly reclaims them when
+	 * the cache is reused.
+	 *
 	 * Need to zero enough space for all possible libpq parameters.
 	 */
-	char **connKeywords = MemoryContextAllocZero(context, ConnParams.maxSize *
-												 sizeof(char *));
-	char **connValues = MemoryContextAllocZero(context, ConnParams.maxSize *
-											   sizeof(char *));
+	char **connKeywords = *keywords = MemoryContextAllocZero(context, ConnParams.maxSize *
+															 sizeof(char *));
+	char **connValues = *values = MemoryContextAllocZero(context, ConnParams.maxSize *
+														 sizeof(char *));
 
 	/* auth keywords will begin after global and runtime ones are appended */
 	Index authParamsIdx = ConnParams.size + lengthof(runtimeKeywords);
@@ -293,26 +303,27 @@ GetConnParams(ConnectionHashKey *key, char ***keywords, char ***values,
 		connValues[paramIndex] = ConnParams.values[paramIndex];
 	}
 
-	/* remember where global/GUC params end and runtime ones start */
+	/*
+	 * remember where global/GUC params end and runtime ones start, all entries after this
+	 * point should be allocated in context and will be freed upon
+	 * FreeConnParamsHashEntryFields
+	 */
 	*runtimeParamStart = ConnParams.size;
 
-	/* second step: begin at end of global params and copy runtime ones */
+	/* second step: begin after global params and copy runtime params into our context */
 	for (runtimeParamIndex = 0;
 		 runtimeParamIndex < lengthof(runtimeKeywords);
 		 runtimeParamIndex++)
 	{
-		/* copy the keyword&value pointers to the new array */
+		/* copy the keyword & value into our context and append to the new array */
 		connKeywords[ConnParams.size + runtimeParamIndex] =
-			(char *) runtimeKeywords[runtimeParamIndex];
+			MemoryContextStrdup(context, runtimeKeywords[runtimeParamIndex]);
 		connValues[ConnParams.size + runtimeParamIndex] =
-			(char *) runtimeValues[runtimeParamIndex];
+			MemoryContextStrdup(context, runtimeValues[runtimeParamIndex]);
 	}
 
 	/* final step: add terminal NULL, required by libpq */
 	connKeywords[authParamsIdx] = connValues[authParamsIdx] = NULL;
-
-	*keywords = connKeywords;
-	*values = connValues;
 }
 
 
