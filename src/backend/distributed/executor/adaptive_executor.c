@@ -1952,6 +1952,7 @@ NextEventTimeout(DistributedExecution *execution)
 	foreach(workerCell, execution->workerList)
 	{
 		WorkerPool *workerPool = (WorkerPool *) lfirst(workerCell);
+		int initiatedConnectionCount = 0;
 
 		if (workerPool->failed)
 		{
@@ -1976,6 +1977,26 @@ NextEventTimeout(DistributedExecution *execution)
 			if (timeUntilConnectionTimeoutMs < eventTimeout)
 			{
 				eventTimeout = timeUntilConnectionTimeoutMs;
+			}
+		}
+
+		initiatedConnectionCount = list_length(workerPool->sessionList);
+
+		/*
+		 * If there are connections to open we wait at most up to the end of the
+		 * current slow start interval.
+		 */
+		if (workerPool->readyTaskCount > UsableConnectionCount(workerPool) &&
+			initiatedConnectionCount < execution->targetPoolSize)
+		{
+			long timeSinceLastConnectMs =
+				MillisecondsBetweenTimestamps(workerPool->lastConnectionOpenTime, now);
+			long timeUntilSlowStartInterval =
+				ExecutorSlowStartInterval - timeSinceLastConnectMs;
+
+			if (timeUntilSlowStartInterval < eventTimeout)
+			{
+				eventTimeout = timeUntilSlowStartInterval;
 			}
 		}
 	}
