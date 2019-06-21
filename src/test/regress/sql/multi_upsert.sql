@@ -31,7 +31,7 @@ INSERT INTO upsert_test (part_key, other_col) VALUES (1, 1)
 	ON CONFLICT (part_key) DO UPDATE SET other_col = 2,  third_col = 4;
 
 -- see the results
-SELECT * FROM upsert_test;
+SELECT * FROM upsert_test ORDER BY part_key ASC;
 
 -- do a multi-row DO NOTHING insert
 INSERT INTO upsert_test (part_key, other_col) VALUES (1, 1), (2, 2)
