@@ -966,7 +966,7 @@ FreeConnParamsHashEntryFields(ConnParamsHashEntry *entry)
 	 * GetConnParams the keywords or values might not have been initialized completely.
 	 * We check if they have been initialized before freeing them.
 	 *
-	 * We only recursively free the lists starting at the index pointed to by
+	 * We only iteratively free the lists starting at the index pointed to by
 	 * entry->runtimeParamStart as all entries before are settings that are managed
 	 * separately.
 	 */

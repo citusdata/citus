@@ -270,7 +270,7 @@ GetConnParams(ConnectionHashKey *key, char ***keywords, char ***values,
 	 *
 	 * assignment is done directly to not loose the pointers if any of the later
 	 * allocations cause an error. FreeConnParamsHashEntryFields knows about the
-	 * possibility of half initialized keywords of values and correctly reclaims them when
+	 * possibility of half initialized keywords or values and correctly reclaims them when
 	 * the cache is reused.
 	 *
 	 * Need to zero enough space for all possible libpq parameters.
@@ -305,7 +305,7 @@ GetConnParams(ConnectionHashKey *key, char ***keywords, char ***values,
 
 	/*
 	 * remember where global/GUC params end and runtime ones start, all entries after this
-	 * point should be allocated in context and will be freed uppon
+	 * point should be allocated in context and will be freed upon
 	 * FreeConnParamsHashEntryFields
 	 */
 	*runtimeParamStart = ConnParams.size;
