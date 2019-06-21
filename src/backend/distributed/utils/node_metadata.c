@@ -20,6 +20,7 @@
 #include "catalog/indexing.h"
 #include "catalog/namespace.h"
 #include "commands/sequence.h"
+#include "distributed/citus_acquire_lock.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/connection_management.h"
 #include "distributed/master_protocol.h"
@@ -470,10 +471,23 @@ master_update_node(PG_FUNCTION_ARGS)
 	text *newNodeName = PG_GETARG_TEXT_P(1);
 	int32 newNodePort = PG_GETARG_INT32(2);
 
+	/*
+	 * force is used when an update needs to happen regardless of conflicting locks. This
+	 * feature is important to force the update during a failover due to failure, eg. by
+	 * a highavailability system such as pg_auto_failover. The strategy is a to start a
+	 * background worker that actively cancels backends holding conflicting locks with
+	 * this backend.
+	 *
+	 * Defaults to false
+	 */
+	bool force = PG_GETARG_BOOL(3);
+	int32 lock_cooldown = PG_GETARG_INT32(4);
+
 	char *newNodeNameString = text_to_cstring(newNodeName);
 	WorkerNode *workerNode = NULL;
 	WorkerNode *workerNodeWithSameAddress = NULL;
 	List *placementList = NIL;
+	BackgroundWorkerHandle *handle = NULL;
 
 	CheckCitusVersion(ERROR);
 
@@ -518,17 +532,41 @@ master_update_node(PG_FUNCTION_ARGS)
 	 * - This function blocks until all previous queries have finished. This
 	 *   means that long-running queries will prevent failover.
 	 *
+	 *   In case of node failure said long-running queries will fail in the end
+	 *   anyway as they will be unable to commit successfully on the failed
+	 *   machine. To cause quick failure of these queries use force => true
+	 *   during the invocation of master_update_node to terminate conflicting
+	 *   backends proactively.
+	 *
 	 * It might be worth blocking reads to a secondary for the same reasons,
 	 * though we currently only query secondaries on follower clusters
 	 * where these locks will have no effect.
 	 */
 	if (WorkerNodeIsPrimary(workerNode))
 	{
+		/*
+		 * before acquiring the locks check if we want a background worker to help us to
+		 * aggressively obtain the locks.
+		 */
+		if (force)
+		{
+			handle = StartLockAcquireHelperBackgroundWorker(MyProcPid, lock_cooldown);
+		}
+
 		placementList = AllShardPlacementsOnNodeGroup(workerNode->groupId);
 		LockShardsInPlacementListMetadata(placementList, AccessExclusiveLock);
 	}
 
 	UpdateNodeLocation(nodeId, newNodeNameString, newNodePort);
+
+	if (handle != NULL)
+	{
+		/*
+		 * this will be called on memory context cleanup as well, if the worker has been
+		 * terminated already this will be a noop
+		 */
+		TerminateBackgroundWorker(handle);
+	}
 
 	PG_RETURN_VOID();
 }
