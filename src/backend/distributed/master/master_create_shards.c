@@ -30,6 +30,7 @@
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_join_order.h"
+#include "distributed/multi_executor.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/pg_dist_partition.h"
 #include "distributed/pg_dist_shard.h"
@@ -169,8 +170,14 @@ CreateShardsWithRoundRobinPolicy(Oid distributedTableId, int32 shardCount,
 	workerNodeList = ActivePrimaryNodeList();
 	workerNodeList = SortList(workerNodeList, CompareWorkerNodes);
 
-	/* make sure we don't process cancel signals until all shards are created */
-	HOLD_INTERRUPTS();
+	/*
+	 * Make sure we don't process cancel signals until all shards
+	 * are created if the executor is not enabled.
+	 */
+	if (DEFAULT_POOL_SIZE == 0)
+	{
+		HOLD_INTERRUPTS();
+	}
 
 	workerNodeCount = list_length(workerNodeList);
 	if (replicationFactor > workerNodeCount)
@@ -237,13 +244,17 @@ CreateShardsWithRoundRobinPolicy(Oid distributedTableId, int32 shardCount,
 	CreateShardsOnWorkers(distributedTableId, insertedShardPlacements,
 						  useExclusiveConnections, colocatedShard);
 
-	if (QueryCancelPending)
+	if (DEFAULT_POOL_SIZE == 0)
 	{
-		ereport(WARNING, (errmsg("cancel requests are ignored during shard creation")));
-		QueryCancelPending = false;
-	}
+		if (QueryCancelPending)
+		{
+			ereport(WARNING, (errmsg(
+								  "cancel requests are ignored during shard creation")));
+			QueryCancelPending = false;
+		}
 
-	RESUME_INTERRUPTS();
+		RESUME_INTERRUPTS();
+	}
 }
 
 
