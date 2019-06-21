@@ -193,6 +193,9 @@ typedef struct WorkerPool
 	 */
 	TimestampTz poolStartTime;
 
+	/* indicates whether to check for the connection timeout */
+	bool checkForPoolTimeout;
+
 	/*
 	 * This is only set in WorkerPoolFailed() function. Once a pool fails, we do not
 	 * use it anymore.
@@ -377,6 +380,8 @@ static WorkerSession * FindOrCreateWorkerSession(WorkerPool *workerPool,
 												 MultiConnection *connection);
 static void ManageWorkerPool(WorkerPool *workerPool);
 static void CheckConnectionTimeout(WorkerPool *workerPool);
+static long NextEventTimeout(DistributedExecution *execution);
+static long MillisecondsBetweenTimestamps(TimestampTz startTime, TimestampTz endTime);
 static WaitEventSet * BuildWaitEventSet(List *sessionList);
 static TaskPlacementExecution * PopPlacementExecution(WorkerSession *session);
 static TaskPlacementExecution * PopAssignedPlacementExecution(WorkerSession *session);
@@ -1277,6 +1282,7 @@ FindOrCreateWorkerSession(WorkerPool *workerPool, MultiConnection *connection)
 	if (list_length(workerPool->sessionList) == 0)
 	{
 		workerPool->poolStartTime = GetCurrentTimestamp();
+		workerPool->checkForPoolTimeout = true;
 	}
 
 	workerPool->sessionList = lappend(workerPool->sessionList, session);
@@ -1371,11 +1377,7 @@ SequentialRunDistributedExecution(DistributedExecution *execution)
 void
 RunDistributedExecution(DistributedExecution *execution)
 {
-	TimestampTz deadline = 0;
 	WaitEvent *events = NULL;
-
-	deadline =
-		TimestampTzPlusMilliseconds(GetCurrentTimestamp(), NodeConnectionTimeout);
 
 	AssignTasksToConnections(execution);
 
@@ -1391,10 +1393,10 @@ RunDistributedExecution(DistributedExecution *execution)
 
 		while (execution->unfinishedTaskCount > 0 && !cancellationReceived)
 		{
-			long timeout = DeadlineTimestampTzToTimeout(deadline);
 			int eventCount = 0;
 			int eventIndex = 0;
 			ListCell *workerCell = NULL;
+			long timeout = NextEventTimeout(execution);
 
 			foreach(workerCell, execution->workerList)
 			{
@@ -1524,12 +1526,18 @@ ManageWorkerPool(WorkerPool *workerPool)
 	/* we should never have less than 0 connections ever */
 	Assert(activeConnectionCount >= 0 && idleConnectionCount >= 0);
 
+	if (workerPool->failed)
+	{
+		/* connection pool failed */
+		return;
+	}
+
 	/* we might fail the execution or warn the user about connection timeouts */
 	CheckConnectionTimeout(workerPool);
 
 	if (failedConnectionCount >= 1)
 	{
-		/* connection pool failed */
+		/* do not attempt to open more connections after one failed */
 		return;
 	}
 
@@ -1661,33 +1669,107 @@ CheckConnectionTimeout(WorkerPool *workerPool)
 		requiredActiveConnectionCount = initiatedConnectionCount;
 	}
 
-	/*
-	 * The enforcement is not always erroring out. For example, if a SELECT task
-	 * has two different placements, we'd warn the user, fail the pool and continue
-	 * with the next placement.
-	 *
-	 * !workerPool->failed is only useful to prevent emitting WARNINGs over and over
-	 * for failed pools where failed pools have 0 ready tasks.
-	 */
-	if (activeConnectionCount < requiredActiveConnectionCount && !workerPool->failed &&
-		TimestampDifferenceExceeds(poolStartTime, now, NodeConnectionTimeout))
+	if (TimestampDifferenceExceeds(poolStartTime, now, NodeConnectionTimeout))
 	{
-		int logLevel = WARNING;
+		if (activeConnectionCount < requiredActiveConnectionCount)
+		{
+			int logLevel = WARNING;
 
-		/*
-		 * First fail the pool and create an opportunity to execute tasks
-		 * over other pools when tasks have more than one placement to execute.
-		 */
-		WorkerPoolFailed(workerPool);
+			/*
+			 * First fail the pool and create an opportunity to execute tasks
+			 * over other pools when tasks have more than one placement to execute.
+			 */
+			WorkerPoolFailed(workerPool);
 
-		logLevel = execution->errorOnAnyFailure || execution->failed ? ERROR : WARNING;
+			/*
+			 * The enforcement is not always erroring out. For example, if a SELECT task
+			 * has two different placements, we'd warn the user, fail the pool and continue
+			 * with the next placement.
+			 */
+			if (execution->errorOnAnyFailure || execution->failed)
+			{
+				logLevel = ERROR;
+			}
 
-		ereport(logLevel, (errcode(ERRCODE_CONNECTION_FAILURE),
-						   errmsg("could not establish any connections to the node "
-								  "%s:%d after %u ms", workerPool->node->workerName,
-								  workerPool->node->workerPort,
-								  NodeConnectionTimeout)));
+			ereport(logLevel, (errcode(ERRCODE_CONNECTION_FAILURE),
+							   errmsg("could not establish any connections to the node "
+									  "%s:%d after %u ms", workerPool->node->workerName,
+									  workerPool->node->workerPort,
+									  NodeConnectionTimeout)));
+		}
+		else
+		{
+			/* stop interrupting WaitEventSetWait for timeouts */
+			workerPool->checkForPoolTimeout = false;
+		}
 	}
+}
+
+
+/*
+ * NextEventTimeout finds the earliest time at which we need to interrupt
+ * WaitEventSetWait because of a timeout and returns the number of milliseconds
+ * until that event with a minimum of 1ms and a maximum of 1000ms.
+ *
+ * This code may be sensitive to clock jumps, but only has the effect of waking
+ * up WaitEventSetWait slightly earlier to later.
+ */
+static long
+NextEventTimeout(DistributedExecution *execution)
+{
+	ListCell *workerCell = NULL;
+	TimestampTz now = GetCurrentTimestamp();
+	long eventTimeout = 1000; /* milliseconds */
+
+	foreach(workerCell, execution->workerList)
+	{
+		WorkerPool *workerPool = (WorkerPool *) lfirst(workerCell);
+
+		if (workerPool->failed)
+		{
+			/* worker pool may have already timed out */
+			continue;
+		}
+
+		if (workerPool->poolStartTime != 0 && workerPool->checkForPoolTimeout)
+		{
+			long timeSincePoolStartMs =
+				MillisecondsBetweenTimestamps(workerPool->poolStartTime, now);
+
+			/*
+			 * This could go into the negative if the connection timeout just passed.
+			 * In that case we want to wake up as soon as possible. Once the timeout
+			 * has been processed, checkForPoolTimeout will be false so we will skip
+			 * this check.
+			 */
+			long timeUntilConnectionTimeoutMs =
+				NodeConnectionTimeout - timeSincePoolStartMs;
+
+			if (timeUntilConnectionTimeoutMs < eventTimeout)
+			{
+				eventTimeout = timeUntilConnectionTimeoutMs;
+			}
+		}
+	}
+
+	return Max(1, eventTimeout);
+}
+
+
+/*
+ * MillisecondsBetweenTimestamps is a helper to get the number of milliseconds
+ * between timestamps when it is expected to be small enough to fit in a
+ * long.
+ */
+static long
+MillisecondsBetweenTimestamps(TimestampTz startTime, TimestampTz endTime)
+{
+	long secs = 0;
+	int micros = 0;
+
+	TimestampDifference(startTime, endTime, &secs, &micros);
+
+	return secs * 1000 + micros / 1000;
 }
 
 
@@ -1818,6 +1900,10 @@ ConnectionStateMachine(WorkerSession *session)
 					WorkerPoolFailed(workerPool);
 				}
 
+				/*
+				 * The execution may have failed as a result of WorkerSessionFailed
+				 * or WorkerPoolFailed.
+				 */
 				if (execution->failed || execution->errorOnAnyFailure)
 				{
 					/* a task has failed due to this connection failure */
@@ -2637,6 +2723,7 @@ WorkerPoolFailed(WorkerPool *workerPool)
 			 * the necessary connections are established.
 			 */
 			pool->poolStartTime = GetCurrentTimestamp();
+			pool->checkForPoolTimeout = true;
 		}
 	}
 }
