@@ -1,3 +1,7 @@
+-- We have different output files for the executor. This is because
+-- we don't mark transactions with ANALYZE as critical anymore, and
+-- get WARNINGs instead of ERRORs.
+
 -- print whether we're using version > 10 to make version-specific tests clear
 SHOW server_version \gset
 SELECT substring(:'server_version', '\d+')::int > 10 AS version_above_ten;
