@@ -958,23 +958,42 @@ StartConnectionEstablishment(ConnectionHashKey *key)
 static void
 FreeConnParamsHashEntryFields(ConnParamsHashEntry *entry)
 {
-	char **keyword = &entry->keywords[entry->runtimeParamStart];
-	char **value = &entry->values[entry->runtimeParamStart];
+	char **keyword = NULL;
+	char **value = NULL;
 
-	while (*keyword != NULL)
+	/*
+	 * if there was a memory error during the initialization of ConnParamHashEntry in
+	 * GetConnParams the keywords or values might not have been initialized completely.
+	 * We check if they have been initialized before freeing them.
+	 *
+	 * We only recursively free the lists starting at the index pointed to by
+	 * entry->runtimeParamStart as all entries before are settings that are managed
+	 * separately.
+	 */
+
+	if (entry->keywords != NULL)
 	{
-		pfree(*keyword);
-		keyword++;
+		keyword = &entry->keywords[entry->runtimeParamStart];
+		while (*keyword != NULL)
+		{
+			pfree(*keyword);
+			keyword++;
+		}
+		pfree(entry->keywords);
+		entry->keywords = NULL;
 	}
 
-	while (*value != NULL)
+	if (entry->values != NULL)
 	{
-		pfree(*value);
-		value++;
+		value = &entry->values[entry->runtimeParamStart];
+		while (*value != NULL)
+		{
+			pfree(*value);
+			value++;
+		}
+		pfree(entry->values);
+		entry->values = NULL;
 	}
-
-	pfree(entry->keywords);
-	pfree(entry->values);
 }
 
 
