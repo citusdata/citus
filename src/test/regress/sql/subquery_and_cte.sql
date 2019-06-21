@@ -3,8 +3,11 @@
 -- ===================================================================
 SET search_path TO subquery_and_ctes;
 
-
 CREATE TABLE users_table_local AS SELECT * FROM users_table;
+
+CREATE TABLE dist_table (id int, value int);
+SELECT create_distributed_table('dist_table', 'id', colocate_with => 'users_table');
+INSERT INTO dist_table (id, value) VALUES(1, 2),(2, 3),(3,4);
 
 SET client_min_messages TO DEBUG1;
 
@@ -17,7 +20,7 @@ WITH cte AS (
 	dist_cte AS (
 		SELECT user_id FROM events_table
 	)
-	SELECT dist_cte.user_id FROM local_cte join dist_cte on dist_cte.user_id=local_cte.user_id
+	SELECT dist_cte.user_id FROM local_cte JOIN dist_cte ON dist_cte.user_id=local_cte.user_id
 )
 SELECT 
 	count(*) 
@@ -34,6 +37,53 @@ FROM
      ) as foo 
 	  WHERE foo.user_id = cte.user_id;
 
+-- CTEs are colocated, route entire query
+WITH cte1 AS (
+   SELECT * FROM users_table WHERE user_id = 1
+), cte2 AS (
+   SELECT * FROM events_table WHERE user_id = 1
+)
+SELECT cte1.user_id, cte1.value_1, cte2.user_id, cte2.event_type
+FROM cte1, cte2
+ORDER BY cte1.user_id, cte1.value_1, cte2.user_id, cte2.event_type
+LIMIT 5;
+
+-- CTEs aren't colocated, CTEs become intermediate results
+WITH cte1 AS (
+   SELECT * FROM users_table WHERE user_id = 1
+), cte2 AS (
+   SELECT * FROM events_table WHERE user_id = 6
+)
+SELECT cte1.user_id, cte1.value_1, cte2.user_id, cte2.user_id
+FROM cte1, cte2
+ORDER BY cte1.user_id, cte1.value_1, cte2.user_id, cte2.event_type
+LIMIT 5;
+
+-- users_table & dist_table are colocated, route entire query
+WITH cte1 AS (
+   SELECT * FROM users_table WHERE user_id = 1
+)
+UPDATE dist_table dt SET value = cte1.value_1
+FROM cte1 WHERE cte1.user_id = dt.id AND dt.id = 1;
+
+-- users_table & events_table & dist_table are colocated, route entire query
+WITH cte1 AS (
+   SELECT * FROM users_table WHERE user_id = 1
+), cte2 AS (
+   SELECT * FROM events_table WHERE user_id = 1
+)
+UPDATE dist_table dt SET value = cte1.value_1 + cte2.event_type
+FROM cte1, cte2 WHERE cte1.user_id = dt.id AND dt.id = 1;
+
+-- all relations are not colocated, CTEs become intermediate results
+WITH cte1 AS (
+   SELECT * FROM users_table WHERE user_id = 1
+), cte2 AS (
+   SELECT * FROM events_table WHERE user_id = 6
+)
+UPDATE dist_table dt SET value = cte1.value_1 + cte2.event_type
+FROM cte1, cte2 WHERE cte1.user_id = dt.id AND dt.id = 1;
+
 -- CTEs are recursively planned, and subquery foo is also recursively planned
 -- final plan becomes a real-time plan since we also have events_table in the 
 -- range table entries 
@@ -44,7 +94,7 @@ WITH cte AS (
 	dist_cte AS (
 		SELECT user_id FROM events_table
 	)
-	SELECT dist_cte.user_id FROM local_cte join dist_cte on dist_cte.user_id=local_cte.user_id
+	SELECT dist_cte.user_id FROM local_cte JOIN dist_cte ON dist_cte.user_id=local_cte.user_id
 )
 SELECT 
 	count(*) 
@@ -71,7 +121,7 @@ WITH cte AS (
 	dist_cte AS (
 		SELECT user_id FROM events_table
 	)
-	SELECT dist_cte.user_id FROM local_cte join dist_cte on dist_cte.user_id=local_cte.user_id
+	SELECT dist_cte.user_id FROM local_cte JOIN dist_cte ON dist_cte.user_id=local_cte.user_id
 )
 SELECT DISTINCT cte.user_id
 FROM users_table, cte
@@ -89,7 +139,7 @@ WITH cte AS (
 	dist_cte AS (
 		SELECT user_id FROM events_table
 	)
-	SELECT dist_cte.user_id FROM local_cte join dist_cte on dist_cte.user_id=local_cte.user_id
+	SELECT dist_cte.user_id FROM local_cte JOIN dist_cte ON dist_cte.user_id=local_cte.user_id
 )
 SELECT DISTINCT cte.user_id
 FROM cte
@@ -201,7 +251,7 @@ SELECT * FROM
 		dist_cte AS (
 			SELECT user_id FROM events_table
 		)
-		SELECT dist_cte.user_id FROM local_cte join dist_cte on dist_cte.user_id=local_cte.user_id
+		SELECT dist_cte.user_id FROM local_cte JOIN dist_cte ON dist_cte.user_id=local_cte.user_id
 	)
 	SELECT DISTINCT cte.user_id
 	FROM users_table, cte
@@ -233,7 +283,7 @@ WITH cte AS (
 			events_table.user_id = foo.value_2 AND
 			events_table.user_id IN (SELECT DISTINCT value_1 FROM users_table ORDER BY 1 LIMIT 3)
 	)
-	SELECT dist_cte.user_id FROM local_cte join dist_cte on dist_cte.user_id=local_cte.user_id
+	SELECT dist_cte.user_id FROM local_cte JOIN dist_cte ON dist_cte.user_id=local_cte.user_id
 )
 SELECT 
 	count(*) 
@@ -270,7 +320,7 @@ FROM
 			events_table.user_id = foo.value_2 AND
 			events_table.user_id IN (SELECT DISTINCT value_1 FROM users_table ORDER BY 1 LIMIT 3)
 	)
-	SELECT dist_cte.user_id FROM local_cte join dist_cte on dist_cte.user_id=local_cte.user_id
+	SELECT dist_cte.user_id FROM local_cte JOIN dist_cte ON dist_cte.user_id=local_cte.user_id
 )
 SELECT 
 	count(*)  as cnt

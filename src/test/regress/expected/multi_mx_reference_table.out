@@ -766,7 +766,6 @@ FROM
 WHERE 
 	colocated_table_test.value_1 = reference_table_test.value_1
 ORDER BY 1;
-DEBUG:  Router planner cannot handle multi-shard select queries
 LOG:  join order: [ "colocated_table_test" ][ reference join "reference_table_test" ]
  value_1 
 ---------
@@ -781,7 +780,6 @@ FROM
 WHERE 
 	colocated_table_test.value_2 = reference_table_test.value_2
 ORDER BY 1;
-DEBUG:  Router planner cannot handle multi-shard select queries
 LOG:  join order: [ "colocated_table_test" ][ reference join "reference_table_test" ]
  value_2 
 ---------
@@ -796,7 +794,6 @@ FROM
 WHERE 
 	reference_table_test.value_1 = colocated_table_test.value_1
 ORDER BY 1;
-DEBUG:  Router planner cannot handle multi-shard select queries
 LOG:  join order: [ "colocated_table_test" ][ reference join "reference_table_test" ]
  value_2 
 ---------
@@ -811,7 +808,6 @@ FROM
 WHERE 
 	colocated_table_test.value_2 = reference_table_test.value_2
 ORDER BY 1;
-DEBUG:  Router planner cannot handle multi-shard select queries
 LOG:  join order: [ "colocated_table_test" ][ reference join "reference_table_test" ][ cartesian product "colocated_table_test_2" ]
 ERROR:  cannot perform distributed planning on this query
 DETAIL:  Cartesian products are currently unsupported
@@ -822,7 +818,6 @@ FROM
 WHERE 
 	colocated_table_test.value_1 = colocated_table_test_2.value_1 AND colocated_table_test.value_2 = reference_table_test.value_2
 ORDER BY 1;
-DEBUG:  Router planner cannot handle multi-shard select queries
 LOG:  join order: [ "colocated_table_test" ][ reference join "reference_table_test" ][ local partition join "colocated_table_test_2" ]
  value_2 
 ---------
@@ -838,7 +833,6 @@ FROM
 WHERE 
 	colocated_table_test.value_2 = colocated_table_test_2.value_2 AND colocated_table_test.value_2 = reference_table_test.value_2
 ORDER BY 1;
-DEBUG:  Router planner cannot handle multi-shard select queries
 LOG:  join order: [ "colocated_table_test" ][ reference join "reference_table_test" ][ dual partition join "colocated_table_test_2" ]
  value_2 
 ---------
@@ -853,7 +847,6 @@ FROM
 WHERE 
 	colocated_table_test.value_1 = reference_table_test.value_1 AND colocated_table_test_2.value_1 = reference_table_test.value_1
 ORDER BY 1;
-DEBUG:  Router planner cannot handle multi-shard select queries
 LOG:  join order: [ "colocated_table_test" ][ reference join "reference_table_test" ][ dual partition join "colocated_table_test_2" ]
  value_2 
 ---------

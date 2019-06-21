@@ -815,7 +815,6 @@ SET client_min_messages TO DEBUG1;
 UNION
 (SELECT * FROM articles_hash_mx WHERE author_id = 2)
 ORDER BY 1,2;
-DEBUG:  cannot run command which targets multiple shards
 DEBUG:  generating subplan 110_1 for subquery SELECT id, author_id, title, word_count FROM public.articles_hash_mx WHERE (author_id OPERATOR(pg_catalog.=) 1)
 DEBUG:  generating subplan 110_2 for subquery SELECT id, author_id, title, word_count FROM public.articles_hash_mx WHERE (author_id OPERATOR(pg_catalog.=) 2)
 DEBUG:  Plan 110 query after replacing subqueries and CTEs: SELECT intermediate_result.id, intermediate_result.author_id, intermediate_result.title, intermediate_result.word_count FROM read_intermediate_result('110_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, author_id bigint, title character varying(20), word_count integer) UNION SELECT intermediate_result.id, intermediate_result.author_id, intermediate_result.title, intermediate_result.word_count FROM read_intermediate_result('110_2'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, author_id bigint, title character varying(20), word_count integer) ORDER BY 1, 2
@@ -839,7 +838,6 @@ SELECT * FROM (
 	(SELECT * FROM articles_hash_mx WHERE author_id = 2)) uu
 ORDER BY 1, 2
 LIMIT 5;
-DEBUG:  cannot run command which targets multiple shards
 DEBUG:  push down of limit count: 5
  id | author_id |   title    | word_count 
 ----+-----------+------------+------------
@@ -854,7 +852,6 @@ DEBUG:  push down of limit count: 5
 SELECT *
 	FROM articles_hash_mx a, articles_hash_mx b
 	WHERE a.id = b.id  AND a.author_id = 1;
-DEBUG:  Router planner cannot handle multi-shard select queries
 ERROR:  the query contains a join that requires repartitioning
 HINT:  Set citus.enable_repartition_joins to on to enable repartitioning
 -- queries which hit more than 1 shards are not router plannable or executable
@@ -863,7 +860,6 @@ SELECT *
 	FROM articles_hash_mx
 	WHERE author_id >= 1 AND author_id <= 3
 ORDER BY 1,2,3,4;
-DEBUG:  Router planner cannot handle multi-shard select queries
  id | author_id |    title     | word_count 
 ----+-----------+--------------+------------
   1 |         1 | arsenous     |       9572

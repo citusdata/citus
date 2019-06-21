@@ -7,7 +7,7 @@ SHOW server_version \gset
 SELECT substring(:'server_version', '\d+')::int > 10 AS version_above_ten;
  version_above_ten 
 -------------------
- t
+ f
 (1 row)
 
 CREATE SCHEMA test_fkey_to_ref_in_tx;
@@ -124,7 +124,7 @@ BEGIN;
 
 	ALTER TABLE on_update_fkey_table ALTER COLUMN value_1 SET DATA TYPE bigint;
 DEBUG:  rewriting table "on_update_fkey_table"
-DEBUG:  building index "on_update_fkey_table_pkey" on table "on_update_fkey_table" serially
+DEBUG:  building index "on_update_fkey_table_pkey" on table "on_update_fkey_table"
 DEBUG:  validating foreign key constraint "fkey"
 ROLLBACK;
 -- case 1.6: SELECT to a reference table is followed by an unrelated DDL
@@ -274,7 +274,7 @@ DEBUG:  switching to sequential query execution mode
 DETAIL:  Reference relation "referece_table" is modified, which might lead to data inconsistencies or distributed deadlocks via parallel accesses to hash distributed relations due to foreign keys. Any parallel modification to those hash distributed relations in the same transaction can only be executed in sequential query execution mode
 	ALTER TABLE on_update_fkey_table ALTER COLUMN value_1 SET DATA TYPE bigint;
 DEBUG:  rewriting table "on_update_fkey_table"
-DEBUG:  building index "on_update_fkey_table_pkey" on table "on_update_fkey_table" serially
+DEBUG:  building index "on_update_fkey_table_pkey" on table "on_update_fkey_table"
 DEBUG:  validating foreign key constraint "fkey"
 ROLLBACK;
 -- case 2.6: UPDATE to a reference table is followed by an unrelated DDL
@@ -297,7 +297,7 @@ BEGIN;
 DEBUG:  switching to sequential query execution mode
 DETAIL:  Reference relation "referece_table" is modified, which might lead to data inconsistencies or distributed deadlocks via parallel accesses to hash distributed relations due to foreign keys. Any parallel modification to those hash distributed relations in the same transaction can only be executed in sequential query execution mode
 	TRUNCATE on_update_fkey_table;
-DEBUG:  building index "on_update_fkey_table_pkey" on table "on_update_fkey_table" serially
+DEBUG:  building index "on_update_fkey_table_pkey" on table "on_update_fkey_table"
 ROLLBACK;
 -- case 3.1: an unrelated DDL to a reference table is followed by a real-time SELECT
 BEGIN;
@@ -342,20 +342,20 @@ ROLLBACK;
 BEGIN;
 	ALTER TABLE referece_table ALTER COLUMN id SET DATA TYPE smallint;
 DEBUG:  rewriting table "referece_table"
-DEBUG:  building index "referece_table_pkey" on table "referece_table" serially
+DEBUG:  building index "referece_table_pkey" on table "referece_table"
 DEBUG:  validating foreign key constraint "fkey"
 	CREATE INDEX fkey_test_index_1 ON on_update_fkey_table(value_1);
-DEBUG:  building index "fkey_test_index_1" on table "on_update_fkey_table" serially
+DEBUG:  building index "fkey_test_index_1" on table "on_update_fkey_table"
 ROLLBACK;
 -- case 4.6: DDL to reference table followed by a DDL to dist table, both touching fkey columns
 BEGIN;
 	ALTER TABLE referece_table ALTER COLUMN id SET DATA TYPE smallint;
 DEBUG:  rewriting table "referece_table"
-DEBUG:  building index "referece_table_pkey" on table "referece_table" serially
+DEBUG:  building index "referece_table_pkey" on table "referece_table"
 DEBUG:  validating foreign key constraint "fkey"
 	ALTER TABLE on_update_fkey_table ALTER COLUMN value_1 SET DATA TYPE smallint;
 DEBUG:  rewriting table "on_update_fkey_table"
-DEBUG:  building index "on_update_fkey_table_pkey" on table "on_update_fkey_table" serially
+DEBUG:  building index "on_update_fkey_table_pkey" on table "on_update_fkey_table"
 DEBUG:  validating foreign key constraint "fkey"
 ROLLBACK;
 -- case 3.7: DDL to a reference table is followed by COPY
@@ -371,16 +371,16 @@ BEGIN;
 DEBUG:  switching to sequential query execution mode
 DETAIL:  Reference relation "referece_table" is modified, which might lead to data inconsistencies or distributed deadlocks via parallel accesses to hash distributed relations due to foreign keys. Any parallel modification to those hash distributed relations in the same transaction can only be executed in sequential query execution mode
 	TRUNCATE on_update_fkey_table;
-DEBUG:  building index "on_update_fkey_table_pkey" on table "on_update_fkey_table" serially
+DEBUG:  building index "on_update_fkey_table_pkey" on table "on_update_fkey_table"
 ROLLBACK;
 -- case 3.9: DDL to a reference table is followed by TRUNCATE
 BEGIN;
 	ALTER TABLE referece_table ALTER COLUMN id SET DATA TYPE smallint;
 DEBUG:  rewriting table "referece_table"
-DEBUG:  building index "referece_table_pkey" on table "referece_table" serially
+DEBUG:  building index "referece_table_pkey" on table "referece_table"
 DEBUG:  validating foreign key constraint "fkey"
 	TRUNCATE on_update_fkey_table;
-DEBUG:  building index "on_update_fkey_table_pkey" on table "on_update_fkey_table" serially
+DEBUG:  building index "on_update_fkey_table_pkey" on table "on_update_fkey_table"
 ROLLBACK;
 -----
 --- Now, start testing the other way araound
@@ -435,7 +435,7 @@ BEGIN;
 
 	ALTER TABLE referece_table ALTER COLUMN id SET DATA TYPE smallint;
 DEBUG:  rewriting table "referece_table"
-DEBUG:  building index "referece_table_pkey" on table "referece_table" serially
+DEBUG:  building index "referece_table_pkey" on table "referece_table"
 DEBUG:  validating foreign key constraint "fkey"
 ERROR:  cannot execute DDL on reference relation "referece_table" because there was a parallel SELECT access to distributed relation "on_update_fkey_table" in the same transaction
 HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
@@ -475,8 +475,8 @@ DEBUG:  truncate cascades to table "on_update_fkey_table_2380001"
 DETAIL:  NOTICE from localhost:57637
 DEBUG:  truncate cascades to table "on_update_fkey_table_2380003"
 DETAIL:  NOTICE from localhost:57637
-DEBUG:  building index "referece_table_pkey" on table "referece_table" serially
-DEBUG:  building index "on_update_fkey_table_pkey" on table "on_update_fkey_table" serially
+DEBUG:  building index "referece_table_pkey" on table "referece_table"
+DEBUG:  building index "on_update_fkey_table_pkey" on table "on_update_fkey_table"
 ROLLBACK;
 -- case 5.1: Parallel UPDATE on distributed table follow by a SELECT
 BEGIN;
@@ -507,7 +507,7 @@ BEGIN;
 	UPDATE on_update_fkey_table SET value_1 = 16 WHERE value_1 = 15;
 	ALTER TABLE referece_table ALTER COLUMN id SET DATA TYPE smallint;
 DEBUG:  rewriting table "referece_table"
-DEBUG:  building index "referece_table_pkey" on table "referece_table" serially
+DEBUG:  building index "referece_table_pkey" on table "referece_table"
 DEBUG:  validating foreign key constraint "fkey"
 ERROR:  cannot execute DDL on reference relation "referece_table" because there was a parallel DML access to distributed relation "on_update_fkey_table" in the same transaction
 HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
@@ -523,7 +523,7 @@ ROLLBACK;
 BEGIN;
 	ALTER TABLE on_update_fkey_table ALTER COLUMN value_1 SET DATA TYPE smallint;
 DEBUG:  rewriting table "on_update_fkey_table"
-DEBUG:  building index "on_update_fkey_table_pkey" on table "on_update_fkey_table" serially
+DEBUG:  building index "on_update_fkey_table_pkey" on table "on_update_fkey_table"
 DEBUG:  validating foreign key constraint "fkey"
 	UPDATE referece_table SET id = 160 WHERE id = 15;
 ROLLBACK;
@@ -590,7 +590,7 @@ ROLLBACK;
 BEGIN;
 	CREATE TABLE test_table_1(id int PRIMARY KEY);
 DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "test_table_1_pkey" for table "test_table_1"
-DEBUG:  building index "test_table_1_pkey" on table "test_table_1" serially
+DEBUG:  building index "test_table_1_pkey" on table "test_table_1"
 	SELECT create_reference_table('test_table_1');
 DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
 DETAIL:  NOTICE from localhost:57638
@@ -607,7 +607,7 @@ DETAIL:  NOTICE from localhost:57638
 
 	CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int, FOREIGN KEY(value_1) REFERENCES test_table_1(id));
 DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "test_table_2_pkey" for table "test_table_2"
-DEBUG:  building index "test_table_2_pkey" on table "test_table_2" serially
+DEBUG:  building index "test_table_2_pkey" on table "test_table_2"
 	SELECT create_distributed_table('test_table_2', 'id');
 DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
 DETAIL:  NOTICE from localhost:57638
@@ -635,7 +635,7 @@ ROLLBACK;
 BEGIN;
 	CREATE TABLE test_table_1(id int PRIMARY KEY);
 DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "test_table_1_pkey" for table "test_table_1"
-DEBUG:  building index "test_table_1_pkey" on table "test_table_1" serially
+DEBUG:  building index "test_table_1_pkey" on table "test_table_1"
 	SELECT create_reference_table('test_table_1'); 
 DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
 DETAIL:  NOTICE from localhost:57638
@@ -652,7 +652,7 @@ DETAIL:  NOTICE from localhost:57638
 
 	CREATE TABLE tt4(id int PRIMARY KEY, value_1 int, FOREIGN KEY(id) REFERENCES tt4(id));
 DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "tt4_pkey" for table "tt4"
-DEBUG:  building index "tt4_pkey" on table "tt4" serially
+DEBUG:  building index "tt4_pkey" on table "tt4"
 	SELECT create_distributed_table('tt4', 'id');
 DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
 DETAIL:  NOTICE from localhost:57638
@@ -673,7 +673,7 @@ DETAIL:  NOTICE from localhost:57638
 
 	CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int, FOREIGN KEY(value_1) REFERENCES test_table_1(id), FOREIGN KEY(id) REFERENCES tt4(id));
 DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "test_table_2_pkey" for table "test_table_2"
-DEBUG:  building index "test_table_2_pkey" on table "test_table_2" serially
+DEBUG:  building index "test_table_2_pkey" on table "test_table_2"
 	SELECT create_distributed_table('test_table_2', 'id');
 DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
 DETAIL:  NOTICE from localhost:57638
@@ -694,7 +694,7 @@ BEGIN;
 	SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
 	CREATE TABLE test_table_1(id int PRIMARY KEY);
 DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "test_table_1_pkey" for table "test_table_1"
-DEBUG:  building index "test_table_1_pkey" on table "test_table_1" serially
+DEBUG:  building index "test_table_1_pkey" on table "test_table_1"
 	SELECT create_reference_table('test_table_1'); 
 DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
 DETAIL:  NOTICE from localhost:57638
@@ -711,7 +711,7 @@ DETAIL:  NOTICE from localhost:57638
 
 	CREATE TABLE tt4(id int PRIMARY KEY, value_1 int, FOREIGN KEY(id) REFERENCES tt4(id));
 DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "tt4_pkey" for table "tt4"
-DEBUG:  building index "tt4_pkey" on table "tt4" serially
+DEBUG:  building index "tt4_pkey" on table "tt4"
 	SELECT create_distributed_table('tt4', 'id');
 DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
 DETAIL:  NOTICE from localhost:57638
@@ -732,7 +732,7 @@ DETAIL:  NOTICE from localhost:57638
 
 	CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int, FOREIGN KEY(value_1) REFERENCES test_table_1(id), FOREIGN KEY(id) REFERENCES tt4(id));
 DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "test_table_2_pkey" for table "test_table_2"
-DEBUG:  building index "test_table_2_pkey" on table "test_table_2" serially
+DEBUG:  building index "test_table_2_pkey" on table "test_table_2"
 	SELECT create_distributed_table('test_table_2', 'id');
 DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
 DETAIL:  NOTICE from localhost:57638
@@ -762,7 +762,7 @@ BEGIN;
 	
 	CREATE TABLE test_table_1(id int PRIMARY KEY);
 DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "test_table_1_pkey" for table "test_table_1"
-DEBUG:  building index "test_table_1_pkey" on table "test_table_1" serially
+DEBUG:  building index "test_table_1_pkey" on table "test_table_1"
 	SELECT create_reference_table('test_table_1');
 DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
 DETAIL:  NOTICE from localhost:57638
@@ -779,7 +779,7 @@ DETAIL:  NOTICE from localhost:57638
 
 	CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int);
 DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "test_table_2_pkey" for table "test_table_2"
-DEBUG:  building index "test_table_2_pkey" on table "test_table_2" serially
+DEBUG:  building index "test_table_2_pkey" on table "test_table_2"
 	SELECT create_distributed_table('test_table_2', 'id');
 DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
 DETAIL:  NOTICE from localhost:57638
@@ -814,7 +814,7 @@ BEGIN;
 	SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
 	CREATE TABLE test_table_1(id int PRIMARY KEY);
 DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "test_table_1_pkey" for table "test_table_1"
-DEBUG:  building index "test_table_1_pkey" on table "test_table_1" serially
+DEBUG:  building index "test_table_1_pkey" on table "test_table_1"
 	SELECT create_reference_table('test_table_1');
 DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
 DETAIL:  NOTICE from localhost:57638
@@ -831,7 +831,7 @@ DETAIL:  NOTICE from localhost:57638
 
 	CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int);
 DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "test_table_2_pkey" for table "test_table_2"
-DEBUG:  building index "test_table_2_pkey" on table "test_table_2" serially
+DEBUG:  building index "test_table_2_pkey" on table "test_table_2"
 	SELECT create_distributed_table('test_table_2', 'id');
 DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
 DETAIL:  NOTICE from localhost:57638
@@ -861,7 +861,7 @@ COMMIT;
 BEGIN;
 	CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int);
 DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "test_table_2_pkey" for table "test_table_2"
-DEBUG:  building index "test_table_2_pkey" on table "test_table_2" serially
+DEBUG:  building index "test_table_2_pkey" on table "test_table_2"
 	SELECT create_distributed_table('test_table_2', 'id');
 DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
 DETAIL:  NOTICE from localhost:57638
@@ -882,7 +882,7 @@ DETAIL:  NOTICE from localhost:57638
 
 	CREATE TABLE test_table_1(id int PRIMARY KEY);
 DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "test_table_1_pkey" for table "test_table_1"
-DEBUG:  building index "test_table_1_pkey" on table "test_table_1" serially
+DEBUG:  building index "test_table_1_pkey" on table "test_table_1"
 	SELECT create_reference_table('test_table_1');
 DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
 DETAIL:  NOTICE from localhost:57638
@@ -912,7 +912,7 @@ BEGIN;
 	SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
 	CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int);
 DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "test_table_2_pkey" for table "test_table_2"
-DEBUG:  building index "test_table_2_pkey" on table "test_table_2" serially
+DEBUG:  building index "test_table_2_pkey" on table "test_table_2"
 	SELECT create_distributed_table('test_table_2', 'id');
 DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
 DETAIL:  NOTICE from localhost:57638
@@ -933,7 +933,7 @@ DETAIL:  NOTICE from localhost:57638
 
 	CREATE TABLE test_table_1(id int PRIMARY KEY);
 DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "test_table_1_pkey" for table "test_table_1"
-DEBUG:  building index "test_table_1_pkey" on table "test_table_1" serially
+DEBUG:  building index "test_table_1_pkey" on table "test_table_1"
 	SELECT create_reference_table('test_table_1');
 DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
 DETAIL:  NOTICE from localhost:57638
@@ -966,7 +966,7 @@ BEGIN;
 	SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
 	CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int);
 DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "test_table_2_pkey" for table "test_table_2"
-DEBUG:  building index "test_table_2_pkey" on table "test_table_2" serially
+DEBUG:  building index "test_table_2_pkey" on table "test_table_2"
 	SELECT create_distributed_table('test_table_2', 'id');
 DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
 DETAIL:  NOTICE from localhost:57638
@@ -993,11 +993,11 @@ BEGIN;
 	
 	CREATE TABLE test_table_1(id int PRIMARY KEY);
 DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "test_table_1_pkey" for table "test_table_1"
-DEBUG:  building index "test_table_1_pkey" on table "test_table_1" serially
+DEBUG:  building index "test_table_1_pkey" on table "test_table_1"
 	INSERT INTO test_table_1 SELECT i FROM generate_series(0,100) i;
 	CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int, FOREIGN KEY(value_1) REFERENCES test_table_1(id));
 DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "test_table_2_pkey" for table "test_table_2"
-DEBUG:  building index "test_table_2_pkey" on table "test_table_2" serially
+DEBUG:  building index "test_table_2_pkey" on table "test_table_2"
 	INSERT INTO test_table_2 SELECT i, i FROM generate_series(0,100) i;
 	SELECT create_reference_table('test_table_1');
 DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
@@ -1037,11 +1037,11 @@ BEGIN;
 	SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
 	CREATE TABLE test_table_1(id int PRIMARY KEY);
 DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "test_table_1_pkey" for table "test_table_1"
-DEBUG:  building index "test_table_1_pkey" on table "test_table_1" serially
+DEBUG:  building index "test_table_1_pkey" on table "test_table_1"
 	INSERT INTO test_table_1 SELECT i FROM generate_series(0,100) i;
 	CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int, FOREIGN KEY(value_1) REFERENCES test_table_1(id));
 DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "test_table_2_pkey" for table "test_table_2"
-DEBUG:  building index "test_table_2_pkey" on table "test_table_2" serially
+DEBUG:  building index "test_table_2_pkey" on table "test_table_2"
 	INSERT INTO test_table_2 SELECT i, i FROM generate_series(0,100) i;
 	SELECT create_reference_table('test_table_1');
 DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
@@ -1079,10 +1079,10 @@ BEGIN;
 	
 	CREATE TABLE test_table_1(id int PRIMARY KEY);
 DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "test_table_1_pkey" for table "test_table_1"
-DEBUG:  building index "test_table_1_pkey" on table "test_table_1" serially
+DEBUG:  building index "test_table_1_pkey" on table "test_table_1"
 	CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int, FOREIGN KEY(value_1) REFERENCES test_table_1(id));
 DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "test_table_2_pkey" for table "test_table_2"
-DEBUG:  building index "test_table_2_pkey" on table "test_table_2" serially
+DEBUG:  building index "test_table_2_pkey" on table "test_table_2"
 	SELECT create_reference_table('test_table_1');
 DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
 DETAIL:  NOTICE from localhost:57638
@@ -1119,7 +1119,7 @@ DETAIL:  NOTICE from localhost:57638
 
 	-- and maybe some other test
 	CREATE INDEX i1 ON test_table_1(id);
-DEBUG:  building index "i1" on table "test_table_1" serially
+DEBUG:  building index "i1" on table "test_table_1"
 	ALTER TABLE test_table_2 ADD CONSTRAINT check_val CHECK (id > 0);
 DEBUG:  verifying table "test_table_2"
 	SELECT count(*) FROM test_table_2;
@@ -1143,7 +1143,7 @@ COMMIT;
 -- set the mode to sequential for the next operations
 CREATE TABLE reference_table(id int PRIMARY KEY);
 DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "reference_table_pkey" for table "reference_table"
-DEBUG:  building index "reference_table_pkey" on table "reference_table" serially
+DEBUG:  building index "reference_table_pkey" on table "reference_table"
 SELECT create_reference_table('reference_table');
 DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
 DETAIL:  NOTICE from localhost:57638
@@ -1160,7 +1160,7 @@ DETAIL:  NOTICE from localhost:57638
 
 CREATE TABLE distributed_table(id int PRIMARY KEY, value_1 int);
 DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "distributed_table_pkey" for table "distributed_table"
-DEBUG:  building index "distributed_table_pkey" on table "distributed_table" serially
+DEBUG:  building index "distributed_table_pkey" on table "distributed_table"
 SELECT create_distributed_table('distributed_table', 'id');
 DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
 DETAIL:  NOTICE from localhost:57638
@@ -1199,7 +1199,6 @@ DEBUG:  Collecting INSERT ... SELECT results on coordinator
 -- see https://github.com/citusdata/citus_docs/issues/664 for the discussion
 WITH t1 AS (DELETE FROM reference_table RETURNING id) 
 	DELETE FROM distributed_table USING t1 WHERE value_1 = t1.id RETURNING *;
-DEBUG:  common table expressions are not supported in distributed modifications
 DEBUG:  generating subplan 92_1 for CTE t1: DELETE FROM test_fkey_to_ref_in_tx.reference_table RETURNING id
 DEBUG:  Plan 92 query after replacing subqueries and CTEs: DELETE FROM test_fkey_to_ref_in_tx.distributed_table USING (SELECT intermediate_result.id FROM read_intermediate_result('92_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) t1 WHERE (distributed_table.value_1 OPERATOR(pg_catalog.=) t1.id) RETURNING distributed_table.id, distributed_table.value_1, t1.id
 DEBUG:  switching to sequential query execution mode
@@ -1221,7 +1220,6 @@ DEBUG:  Collecting INSERT ... SELECT results on coordinator
 -- see https://github.com/citusdata/citus_docs/issues/664 for the discussion
 WITH t1 AS (DELETE FROM reference_table RETURNING id) 
 	SELECT count(*) FROM distributed_table, t1 WHERE  value_1 = t1.id;
-DEBUG:  data-modifying statements are not supported in the WITH clauses of distributed queries
 DEBUG:  generating subplan 96_1 for CTE t1: DELETE FROM test_fkey_to_ref_in_tx.reference_table RETURNING id
 DEBUG:  Plan 96 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM test_fkey_to_ref_in_tx.distributed_table, (SELECT intermediate_result.id FROM read_intermediate_result('96_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) t1 WHERE (distributed_table.value_1 OPERATOR(pg_catalog.=) t1.id)
 DEBUG:  switching to sequential query execution mode
@@ -1236,7 +1234,6 @@ DETAIL:  Reference relation "reference_table" is modified, which might lead to d
 WITH t1 AS (DELETE FROM distributed_table RETURNING id),
 	t2 AS (DELETE FROM reference_table RETURNING id)
 	SELECT count(*) FROM distributed_table, t1, t2 WHERE  value_1 = t1.id AND value_1 = t2.id;
-DEBUG:  data-modifying statements are not supported in the WITH clauses of distributed queries
 DEBUG:  generating subplan 98_1 for CTE t1: DELETE FROM test_fkey_to_ref_in_tx.distributed_table RETURNING id
 DEBUG:  generating subplan 98_2 for CTE t2: DELETE FROM test_fkey_to_ref_in_tx.reference_table RETURNING id
 DEBUG:  Plan 98 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM test_fkey_to_ref_in_tx.distributed_table, (SELECT intermediate_result.id FROM read_intermediate_result('98_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) t1, (SELECT intermediate_result.id FROM read_intermediate_result('98_2'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) t2 WHERE ((distributed_table.value_1 OPERATOR(pg_catalog.=) t1.id) AND (distributed_table.value_1 OPERATOR(pg_catalog.=) t2.id))
@@ -1246,7 +1243,6 @@ HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_m
 -- table via t1, and then access to the reference table in the main query
 WITH t1 AS (DELETE FROM distributed_table RETURNING id)
 	DELETE FROM reference_table RETURNING id;
-DEBUG:  common table expressions are not supported in distributed modifications
 DEBUG:  generating subplan 101_1 for CTE t1: DELETE FROM test_fkey_to_ref_in_tx.distributed_table RETURNING id
 DEBUG:  Plan 101 query after replacing subqueries and CTEs: DELETE FROM test_fkey_to_ref_in_tx.reference_table RETURNING id
 ERROR:  cannot execute DML on reference relation "reference_table" because there was a parallel DML access to distributed relation "distributed_table" in the same transaction
@@ -1259,7 +1255,6 @@ BEGIN;
 	WITH t1 AS (DELETE FROM distributed_table RETURNING id),
 		t2 AS (DELETE FROM reference_table RETURNING id)
 		SELECT count(*) FROM distributed_table, t1, t2 WHERE  value_1 = t1.id AND value_1 = t2.id;
-DEBUG:  data-modifying statements are not supported in the WITH clauses of distributed queries
 DEBUG:  generating subplan 103_1 for CTE t1: DELETE FROM test_fkey_to_ref_in_tx.distributed_table RETURNING id
 DEBUG:  generating subplan 103_2 for CTE t2: DELETE FROM test_fkey_to_ref_in_tx.reference_table RETURNING id
 DEBUG:  Plan 103 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM test_fkey_to_ref_in_tx.distributed_table, (SELECT intermediate_result.id FROM read_intermediate_result('103_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) t1, (SELECT intermediate_result.id FROM read_intermediate_result('103_2'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) t2 WHERE ((distributed_table.value_1 OPERATOR(pg_catalog.=) t1.id) AND (distributed_table.value_1 OPERATOR(pg_catalog.=) t2.id))
@@ -1274,7 +1269,6 @@ BEGIN;
 	SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
 	WITH t1 AS (DELETE FROM distributed_table RETURNING id)
 		DELETE FROM reference_table RETURNING id;
-DEBUG:  common table expressions are not supported in distributed modifications
 DEBUG:  generating subplan 106_1 for CTE t1: DELETE FROM test_fkey_to_ref_in_tx.distributed_table RETURNING id
 DEBUG:  Plan 106 query after replacing subqueries and CTEs: DELETE FROM test_fkey_to_ref_in_tx.reference_table RETURNING id
  id 
