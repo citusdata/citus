@@ -131,5 +131,6 @@ SELECT get_global_active_transactions();
 
 
 SELECT citus.mitmproxy('conn.allow()');
+SET citus.node_connection_timeout TO DEFAULT;
 DROP SCHEMA fail_connect CASCADE;
 SET search_path TO default;

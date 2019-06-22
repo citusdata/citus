@@ -491,6 +491,7 @@ typedef struct TaskPlacementExecution
 
 /* GUC, determining whether Citus opens 1 connection per task */
 bool ForceMaxQueryParallelization = false;
+int MaxAdaptiveExecutorPoolSize = 4;
 
 
 /* local functions */
@@ -555,84 +556,108 @@ static TaskExecutionState TaskExecutionStateMachine(ShardCommandExecution *
 
 
 /*
- * CitusExecScan is called when a tuple is pulled from a custom scan.
- * On the first call, it executes the distributed query and writes the
- * results to a tuple store. The postgres executor calls this function
- * repeatedly to read tuples from the tuple store.
+ * AdaptiveExecutor is called via CitusExecScan on the
+ * first call of CitusExecScan. The function fills the tupleStore
+ * of the input scanScate.
  */
 TupleTableSlot *
-CitusExecScan(CustomScanState *node)
+AdaptiveExecutor(CustomScanState *node)
 {
 	CitusScanState *scanState = (CitusScanState *) node;
 	TupleTableSlot *resultSlot = NULL;
 
-	if (!scanState->finishedRemoteScan)
+	DistributedPlan *distributedPlan = scanState->distributedPlan;
+	DistributedExecution *execution = NULL;
+	EState *executorState = ScanStateGetExecutorState(scanState);
+	ParamListInfo paramListInfo = executorState->es_param_list_info;
+	Tuplestorestate *tupleStore = NULL;
+	TupleDesc tupleDescriptor = ScanStateGetTupleDescriptor(scanState);
+	bool randomAccess = true;
+	bool interTransactions = false;
+	int targetPoolSize = MaxAdaptiveExecutorPoolSize;
+
+	Job *job = distributedPlan->workerJob;
+	List *taskList = job->taskList;
+
+	/* we should only call this once before the scan finished */
+	Assert(!scanState->finishedRemoteScan);
+
+	/*
+	 * PostgreSQL takes locks on all partitions in the executor. It's not entirely
+	 * clear why this is necessary (instead of locking the parent during DDL), but
+	 * We do the same for consistency.
+	 */
+	LockPartitionsForDistributedPlan(distributedPlan);
+
+	ExecuteSubPlans(distributedPlan);
+
+	scanState->tuplestorestate =
+		tuplestore_begin_heap(randomAccess, interTransactions, work_mem);
+	tupleStore = scanState->tuplestorestate;
+
+	if (MultiShardConnectionType == SEQUENTIAL_CONNECTION)
 	{
-		DistributedPlan *distributedPlan = scanState->distributedPlan;
-		DistributedExecution *execution = NULL;
-		EState *executorState = ScanStateGetExecutorState(scanState);
-		ParamListInfo paramListInfo = executorState->es_param_list_info;
-		Tuplestorestate *tupleStore = NULL;
-		TupleDesc tupleDescriptor = ScanStateGetTupleDescriptor(scanState);
-		bool randomAccess = true;
-		bool interTransactions = false;
-		int targetPoolSize = DEFAULT_POOL_SIZE;
+		targetPoolSize = 1;
+	}
 
-		Job *job = distributedPlan->workerJob;
-		List *taskList = job->taskList;
+	execution = CreateDistributedExecution(distributedPlan->operation, taskList,
+										   distributedPlan->hasReturning,
+										   paramListInfo, tupleDescriptor,
+										   tupleStore, targetPoolSize);
 
-		/*
-		 * PostgreSQL takes locks on all partitions in the executor. It's not entirely
-		 * clear why this is necessary (instead of locking the parent during DDL), but
-		 * We do the same for consistency.
-		 */
-		LockPartitionsForDistributedPlan(distributedPlan);
+	StartDistributedExecution(execution);
 
-		ExecuteSubPlans(distributedPlan);
+	if (ShouldRunTasksSequentially(execution->tasksToExecute))
+	{
+		SequentialRunDistributedExecution(execution);
+	}
+	else
+	{
+		RunDistributedExecution(execution);
+	}
 
-		scanState->tuplestorestate =
-			tuplestore_begin_heap(randomAccess, interTransactions, work_mem);
-		tupleStore = scanState->tuplestorestate;
+	if (distributedPlan->operation != CMD_SELECT)
+	{
+		executorState->es_processed = execution->rowsProcessed;
+	}
 
-		if (MultiShardConnectionType == SEQUENTIAL_CONNECTION)
+	FinishDistributedExecution(execution);
+
+	if (SortReturning && distributedPlan->hasReturning)
+	{
+		SortTupleStore(scanState);
+	}
+
+	return resultSlot;
+}
+
+
+/*
+ * ExecuteUtilityTaskListWithoutResults is a wrapper around executing task
+ * list for utility commands. If the adaptive executor is enabled, the function
+ * executes the task list via the adaptive executor. Else, the function goes
+ * through router executor.
+ */
+void
+ExecuteUtilityTaskListWithoutResults(List *taskList, int targetPoolSize,
+									 bool forceSequentialExecution)
+{
+	if (MaxAdaptiveExecutorPoolSize > 0)
+	{
+		ExecuteTaskList(CMD_UTILITY, taskList, targetPoolSize);
+	}
+	else
+	{
+		if (MultiShardConnectionType == SEQUENTIAL_CONNECTION ||
+			forceSequentialExecution)
 		{
-			targetPoolSize = 1;
-		}
-
-		execution = CreateDistributedExecution(distributedPlan->operation, taskList,
-											   distributedPlan->hasReturning,
-											   paramListInfo, tupleDescriptor,
-											   tupleStore, targetPoolSize);
-
-		StartDistributedExecution(execution);
-
-		if (ShouldRunTasksSequentially(execution->tasksToExecute))
-		{
-			SequentialRunDistributedExecution(execution);
+			ExecuteModifyTasksSequentiallyWithoutResults(taskList, CMD_UTILITY);
 		}
 		else
 		{
-			RunDistributedExecution(execution);
+			ExecuteModifyTasksWithoutResults(taskList);
 		}
-
-		if (distributedPlan->operation != CMD_SELECT)
-		{
-			executorState->es_processed = execution->rowsProcessed;
-		}
-
-		FinishDistributedExecution(execution);
-
-		if (SortReturning && distributedPlan->hasReturning)
-		{
-			SortTupleStore(scanState);
-		}
-
-		scanState->finishedRemoteScan = true;
 	}
-
-	resultSlot = ReturnTupleFromTuplestore(scanState);
-
-	return resultSlot;
 }
 
 
@@ -646,6 +671,7 @@ ExecuteTaskList(CmdType operation, List *taskList, int targetPoolSize)
 	TupleDesc tupleDescriptor = NULL;
 	Tuplestorestate *tupleStore = NULL;
 	bool hasReturning = false;
+
 	return ExecuteTaskListExtended(operation, taskList, tupleDescriptor,
 								   tupleStore, hasReturning, targetPoolSize);
 }

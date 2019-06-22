@@ -128,7 +128,7 @@ CoordinatorInsertSelectExecScan(CustomScanState *node)
 
 			if (prunedTaskList != NIL)
 			{
-				if (DEFAULT_POOL_SIZE == 0)
+				if (MaxAdaptiveExecutorPoolSize == 0)
 				{
 					if (MultiShardConnectionType == SEQUENTIAL_CONNECTION)
 					{
@@ -153,7 +153,7 @@ CoordinatorInsertSelectExecScan(CustomScanState *node)
 
 					ExecuteTaskListExtended(CMD_INSERT, prunedTaskList,
 											tupleDescriptor, scanState->tuplestorestate,
-											hasReturning, DEFAULT_POOL_SIZE);
+											hasReturning, MaxAdaptiveExecutorPoolSize);
 				}
 
 				if (SortReturning && hasReturning)

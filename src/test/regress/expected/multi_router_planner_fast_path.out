@@ -1294,19 +1294,35 @@ BEGIN
     RETURN md5($1::text);
 END;
 $$ LANGUAGE 'plpgsql' IMMUTABLE;
+-- we execute the query within a function to consolidate the error messages
+-- between different executors
+CREATE FUNCTION raise_failed_execution_f_router(query text) RETURNS void AS $$
+BEGIN
+        EXECUTE query;
+        EXCEPTION WHEN OTHERS THEN
+        IF SQLERRM LIKE '%failed to execute task%' THEN
+                RAISE 'Task failed to execute';
+        ELSIF SQLERRM LIKE '%does not exist%' THEN
+          RAISE 'Task failed to execute';
+        ELSIF SQLERRM LIKE '%could not receive query results%' THEN
+          	RAISE 'Task failed to execute';
+        END IF;
+END;
+$$LANGUAGE plpgsql;
+SET client_min_messages TO ERROR;
+\set VERBOSITY terse
 -- fast path router plannable, but errors 
-SELECT * FROM articles_hash
-	WHERE
-		someDummyFunction('articles_hash') = md5('articles_hash') AND author_id = 1
-	ORDER BY
-		author_id, id
-	LIMIT 5;
-DEBUG:  Distributed planning for a fast-path router query
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 1
-ERROR:  relation "fast_path_router_select.articles_hash" does not exist
-CONTEXT:  while executing command on localhost:57637
+SELECT raise_failed_execution_f_router($$
+	SELECT * FROM articles_hash
+		WHERE
+			someDummyFunction('articles_hash') = md5('articles_hash') AND author_id = 1
+		ORDER BY
+			author_id, id
+		LIMIT 5;
+$$);
+ERROR:  Task failed to execute
+\set VERBOSITY DEFAULT
+SET client_min_messages TO DEFAULT;
 -- temporarily turn off debug messages before dropping the function
 SET client_min_messages TO 'NOTICE';
 DROP FUNCTION someDummyFunction(regclass);
@@ -2191,8 +2207,9 @@ DROP TABLE articles_append;
 DROP TABLE collections_list;
 RESET search_path;
 DROP SCHEMA fast_path_router_select CASCADE;
-NOTICE:  drop cascades to 4 other objects
+NOTICE:  drop cascades to 5 other objects
 DETAIL:  drop cascades to table fast_path_router_select.articles_hash
+drop cascades to function fast_path_router_select.raise_failed_execution_f_router(text)
 drop cascades to function fast_path_router_select.author_articles_max_id(integer)
 drop cascades to function fast_path_router_select.author_articles_id_word_count(integer)
 drop cascades to view fast_path_router_select.test_view

@@ -842,36 +842,63 @@ SET citus.shard_replication_factor TO 1;
 SELECT master_create_empty_shard('articles_append') AS shard_id \gset
 UPDATE pg_dist_shard SET shardmaxvalue = 100, shardminvalue=1 WHERE shardid = :shard_id;
 
-SELECT author_id FROM articles_append
-	WHERE 
-		substring('articles_append'::regclass::text, 1, 5) = 'hello'
-	ORDER BY
-		author_id
-	LIMIT 1;
+-- we execute the query within a function to consolidate the error messages
+-- between different executors
+CREATE FUNCTION raise_failed_execution_router(query text) RETURNS void AS $$
+BEGIN
+        EXECUTE query;
+        EXCEPTION WHEN OTHERS THEN
+        IF SQLERRM LIKE '%failed to execute task%' THEN
+                RAISE 'Task failed to execute';
+        ELSIF SQLERRM LIKE '%does not exist%' THEN
+          RAISE 'Task failed to execute';
+        ELSIF SQLERRM LIKE '%could not receive query results%' THEN
+          	RAISE 'Task failed to execute';
+        END IF;
+END;
+$$LANGUAGE plpgsql;
+
+SET client_min_messages TO ERROR;
+\set VERBOSITY terse
+
+SELECT raise_failed_execution_router($$
+	SELECT author_id FROM articles_append
+		WHERE 
+			substring('articles_append'::regclass::text, 1, 5) = 'hello'
+		ORDER BY
+			author_id
+		LIMIT 1;
+$$);
 
 -- same query with where false but evaluation left to worker
-SELECT author_id FROM articles_append
-	WHERE 
-		substring('articles_append'::regclass::text, 1, 4) = 'hello'
-	ORDER BY
-		author_id
-	LIMIT 1;
+SELECT raise_failed_execution_router($$
+	SELECT author_id FROM articles_append
+		WHERE 
+			substring('articles_append'::regclass::text, 1, 4) = 'hello'
+		ORDER BY
+			author_id
+		LIMIT 1;
+$$);
 
 -- same query on router planner with where false but evaluation left to worker
-SELECT author_id FROM articles_single_shard_hash
-	WHERE 
-		substring('articles_single_shard_hash'::regclass::text, 1, 4) = 'hello'
-	ORDER BY
-		author_id
-	LIMIT 1;
+SELECT raise_failed_execution_router($$
+	SELECT author_id FROM articles_single_shard_hash
+		WHERE 
+			substring('articles_single_shard_hash'::regclass::text, 1, 4) = 'hello'
+		ORDER BY
+			author_id
+		LIMIT 1;
+$$);
 
-SELECT author_id FROM articles_hash
-	WHERE 
-		author_id = 1
-		AND substring('articles_hash'::regclass::text, 1, 5) = 'hello'
-	ORDER BY
-		author_id
-	LIMIT 1;
+SELECT raise_failed_execution_router($$
+	SELECT author_id FROM articles_hash
+		WHERE 
+			author_id = 1
+			AND substring('articles_hash'::regclass::text, 1, 5) = 'hello'
+		ORDER BY
+			author_id
+		LIMIT 1;
+$$);
 
 -- create a dummy function to be used in filtering
 CREATE OR REPLACE FUNCTION someDummyFunction(regclass)
@@ -891,12 +918,16 @@ SELECT * FROM articles_hash
 	LIMIT 5;
 
 -- router plannable, errors
-SELECT * FROM articles_hash
-	WHERE
-		someDummyFunction('articles_hash') = md5('articles_hash') AND author_id = 1
-	ORDER BY
-		author_id, id
-	LIMIT 5;
+SELECT raise_failed_execution_router($$
+	SELECT * FROM articles_hash
+		WHERE
+			someDummyFunction('articles_hash') = md5('articles_hash') AND author_id = 1
+		ORDER BY
+			author_id, id
+		LIMIT 5;
+$$);
+
+\set VERBOSITY DEFAULT
 
 -- temporarily turn off debug messages before dropping the function
 SET client_min_messages TO 'NOTICE';

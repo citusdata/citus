@@ -29,6 +29,7 @@
 
 
 /* functions for creating custom scan nodes */
+static Node * AdaptiveExecutorCreateScan(CustomScan *scan);
 static Node * RealTimeCreateScan(CustomScan *scan);
 static Node * TaskTrackerCreateScan(CustomScan *scan);
 static Node * RouterCreateScan(CustomScan *scan);
@@ -36,12 +37,17 @@ static Node * CoordinatorInsertSelectCreateScan(CustomScan *scan);
 static Node * DelayedErrorCreateScan(CustomScan *scan);
 
 /* functions that are common to different scans */
-static void CitusSelectBeginScan(CustomScanState *node, EState *estate, int eflags);
+static void CitusBeginScan(CustomScanState *node, EState *estate, int eflags);
 static void CitusEndScan(CustomScanState *node);
 static void CitusReScan(CustomScanState *node);
 
 
 /* create custom scan methods for all executors */
+CustomScanMethods AdaptiveExecutorCustomScanMethods = {
+	"Citus Adaptive",
+	AdaptiveExecutorCreateScan
+};
+
 CustomScanMethods RealTimeCustomScanMethods = {
 	"Citus Real-Time",
 	RealTimeCreateScan
@@ -71,10 +77,19 @@ CustomScanMethods DelayedErrorCustomScanMethods = {
 /*
  * Define executor methods for the different executor types.
  */
+static CustomExecMethods AdaptiveExecutorCustomExecMethods = {
+	.CustomName = "AdaptiveExecutorScan",
+	.BeginCustomScan = CitusBeginScan,
+	.ExecCustomScan = CitusExecScan,
+	.EndCustomScan = CitusEndScan,
+	.ReScanCustomScan = CitusReScan,
+	.ExplainCustomScan = CitusExplainScan
+};
+
 static CustomExecMethods RealTimeCustomExecMethods = {
 	.CustomName = "RealTimeScan",
-	.BeginCustomScan = CitusSelectBeginScan,
-	.ExecCustomScan = CitusExecScan,
+	.BeginCustomScan = CitusBeginScan,
+	.ExecCustomScan = RealTimeExecScan,
 	.EndCustomScan = CitusEndScan,
 	.ReScanCustomScan = CitusReScan,
 	.ExplainCustomScan = CitusExplainScan
@@ -82,7 +97,7 @@ static CustomExecMethods RealTimeCustomExecMethods = {
 
 static CustomExecMethods TaskTrackerCustomExecMethods = {
 	.CustomName = "TaskTrackerScan",
-	.BeginCustomScan = CitusSelectBeginScan,
+	.BeginCustomScan = CitusBeginScan,
 	.ExecCustomScan = TaskTrackerExecScan,
 	.EndCustomScan = CitusEndScan,
 	.ReScanCustomScan = CitusReScan,
@@ -91,8 +106,8 @@ static CustomExecMethods TaskTrackerCustomExecMethods = {
 
 static CustomExecMethods RouterModifyCustomExecMethods = {
 	.CustomName = "RouterModifyScan",
-	.BeginCustomScan = CitusModifyBeginScan,
-	.ExecCustomScan = CitusExecScan,
+	.BeginCustomScan = CitusBeginScan,
+	.ExecCustomScan = RouterModifyExecScan,
 	.EndCustomScan = CitusEndScan,
 	.ReScanCustomScan = CitusReScan,
 	.ExplainCustomScan = CitusExplainScan
@@ -100,8 +115,8 @@ static CustomExecMethods RouterModifyCustomExecMethods = {
 
 static CustomExecMethods RouterSelectCustomExecMethods = {
 	.CustomName = "RouterSelectScan",
-	.BeginCustomScan = CitusSelectBeginScan,
-	.ExecCustomScan = CitusExecScan,
+	.BeginCustomScan = CitusBeginScan,
+	.ExecCustomScan = RouterSelectExecScan,
 	.EndCustomScan = CitusEndScan,
 	.ReScanCustomScan = CitusReScan,
 	.ExplainCustomScan = CitusExplainScan
@@ -109,7 +124,7 @@ static CustomExecMethods RouterSelectCustomExecMethods = {
 
 static CustomExecMethods CoordinatorInsertSelectCustomExecMethods = {
 	.CustomName = "CoordinatorInsertSelectScan",
-	.BeginCustomScan = CitusSelectBeginScan,
+	.BeginCustomScan = CitusBeginScan,
 	.ExecCustomScan = CoordinatorInsertSelectExecScan,
 	.EndCustomScan = CitusEndScan,
 	.ReScanCustomScan = CitusReScan,
@@ -123,11 +138,82 @@ static CustomExecMethods CoordinatorInsertSelectCustomExecMethods = {
 void
 RegisterCitusCustomScanMethods(void)
 {
+	RegisterCustomScanMethods(&AdaptiveExecutorCustomScanMethods);
 	RegisterCustomScanMethods(&RealTimeCustomScanMethods);
 	RegisterCustomScanMethods(&TaskTrackerCustomScanMethods);
 	RegisterCustomScanMethods(&RouterCustomScanMethods);
 	RegisterCustomScanMethods(&CoordinatorInsertSelectCustomScanMethods);
 	RegisterCustomScanMethods(&DelayedErrorCustomScanMethods);
+}
+
+
+/*
+ * CitusBeginScan sets the coordinator backend initiated by Citus for queries using
+ * that function as the BeginCustomScan callback.
+ *
+ * The function also handles modification scan actions.
+ */
+static void
+CitusBeginScan(CustomScanState *node, EState *estate, int eflags)
+{
+	CitusScanState *scanState = NULL;
+	DistributedPlan *distributedPlan = NULL;
+
+	MarkCitusInitiatedCoordinatorBackend();
+
+	scanState = (CitusScanState *) node;
+	distributedPlan = scanState->distributedPlan;
+	if (distributedPlan->operation == CMD_SELECT ||
+		distributedPlan->insertSelectSubquery != NULL)
+	{
+		/* no more action required */
+		return;
+	}
+
+	CitusModifyBeginScan(node, estate, eflags);
+}
+
+
+/*
+ * CitusExecScan is called when a tuple is pulled from a custom scan.
+ * On the first call, it executes the distributed query and writes the
+ * results to a tuple store. The postgres executor calls this function
+ * repeatedly to read tuples from the tuple store.
+ */
+TupleTableSlot *
+CitusExecScan(CustomScanState *node)
+{
+	CitusScanState *scanState = (CitusScanState *) node;
+	TupleTableSlot *resultSlot = NULL;
+
+	if (!scanState->finishedRemoteScan)
+	{
+		AdaptiveExecutor(node);
+
+		scanState->finishedRemoteScan = true;
+	}
+
+	resultSlot = ReturnTupleFromTuplestore(scanState);
+
+	return resultSlot;
+}
+
+
+/*
+ * AdaptiveExecutorCreateScan creates the scan state for the adaptive executor.
+ */
+static Node *
+AdaptiveExecutorCreateScan(CustomScan *scan)
+{
+	CitusScanState *scanState = palloc0(sizeof(CitusScanState));
+
+	scanState->executorType = MULTI_ADAPTIVE_EXECUTOR;
+	scanState->customScanState.ss.ps.type = T_CustomScanState;
+	scanState->distributedPlan = GetDistributedPlan(scan);
+
+	scanState->customScanState.methods = &AdaptiveExecutorCustomExecMethods;
+
+	return (Node *) scanState;
 }
 
 
@@ -247,17 +333,6 @@ DelayedErrorCreateScan(CustomScan *scan)
 	RaiseDeferredError(distributedPlan->planningError, ERROR);
 
 	return NULL;
-}
-
-
-/*
- * CitusSelectBeginScan sets the coordinator backend initiated by Citus for queries using
- * that function as the BeginCustomScan callback.
- */
-static void
-CitusSelectBeginScan(CustomScanState *node, EState *estate, int eflags)
-{
-	MarkCitusInitiatedCoordinatorBackend();
 }
 
 

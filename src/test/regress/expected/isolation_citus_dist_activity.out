@@ -7,32 +7,23 @@ create_distributed_table
 step s1-begin: 
     BEGIN;
 
-    -- we don't want to see any entries related to 2PC recovery
-    SET citus.max_cached_conns_per_worker TO 0;
-
 step s2-begin: 
 	BEGIN;
-        
-        -- we don't want to see any entries related to 2PC recovery
-        SET citus.max_cached_conns_per_worker TO 0;
 
 step s3-begin: 
 	BEGIN;
-
-        -- we don't want to see any entries related to 2PC recovery
-        SET citus.max_cached_conns_per_worker TO 0;
 
 step s1-alter-table: 
     ALTER TABLE test_table ADD COLUMN x INT;
 
 step s2-sleep: 
-	SELECT pg_sleep(0.2);
+	SELECT pg_sleep(0.5);
 
 pg_sleep       
 
                
 step s2-view-dist: 
-	SELECT query, query_hostname, query_hostport, master_query_host_name, master_query_host_port, state, wait_event_type, wait_event, usename, datname FROM citus_dist_stat_activity ORDER BY query DESC;
+	SELECT query, query_hostname, query_hostport, master_query_host_name, master_query_host_port, state, wait_event_type, wait_event, usename, datname FROM citus_dist_stat_activity WHERE query NOT ILIKE '%pg_prepared_xacts%' AND query NOT ILIKE '%COMMIT%' ORDER BY query DESC;
 	
 
 query          query_hostname query_hostport master_query_host_namemaster_query_host_portstate          wait_event_typewait_event     usename        datname        
@@ -41,24 +32,22 @@ query          query_hostname query_hostport master_query_host_namemaster_query_
     ALTER TABLE test_table ADD COLUMN x INT;
 coordinator_host57636          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression     
 step s3-view-worker: 
-	SELECT query, query_hostname, query_hostport, master_query_host_name, master_query_host_port, state, wait_event_type, wait_event, usename, datname FROM citus_worker_stat_activity ORDER BY query DESC;
+	SELECT query, query_hostname, query_hostport, master_query_host_name, master_query_host_port, state, wait_event_type, wait_event, usename, datname FROM citus_worker_stat_activity WHERE query NOT ILIKE '%pg_prepared_xacts%' AND query NOT ILIKE '%COMMIT%' ORDER BY query DESC;
 
 query          query_hostname query_hostport master_query_host_namemaster_query_host_portstate          wait_event_typewait_event     usename        datname        
 
-SELECT worker_apply_shard_ddl_command (105949, 'public', '
+SELECT worker_apply_shard_ddl_command (102081, 'public', '
     ALTER TABLE test_table ADD COLUMN x INT;
 ')localhost      57638          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression     
-SELECT worker_apply_shard_ddl_command (105948, 'public', '
+SELECT worker_apply_shard_ddl_command (102080, 'public', '
     ALTER TABLE test_table ADD COLUMN x INT;
 ')localhost      57637          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression     
-SELECT worker_apply_shard_ddl_command (105947, 'public', '
+SELECT worker_apply_shard_ddl_command (102079, 'public', '
     ALTER TABLE test_table ADD COLUMN x INT;
 ')localhost      57638          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression     
-SELECT worker_apply_shard_ddl_command (105946, 'public', '
+SELECT worker_apply_shard_ddl_command (102078, 'public', '
     ALTER TABLE test_table ADD COLUMN x INT;
 ')localhost      57637          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression     
-SELECT gid FROM pg_prepared_xacts WHERE gid LIKE 'citus\_0\_%'localhost      57638                         0              idle           Client         ClientRead     postgres       regression     
-SELECT gid FROM pg_prepared_xacts WHERE gid LIKE 'citus\_0\_%'localhost      57637                         0              idle           Client         ClientRead     postgres       regression     
 step s2-rollback: 
 	ROLLBACK;
 
@@ -76,32 +65,23 @@ create_distributed_table
 step s1-begin: 
     BEGIN;
 
-    -- we don't want to see any entries related to 2PC recovery
-    SET citus.max_cached_conns_per_worker TO 0;
-
 step s2-begin: 
 	BEGIN;
-        
-        -- we don't want to see any entries related to 2PC recovery
-        SET citus.max_cached_conns_per_worker TO 0;
 
 step s3-begin: 
 	BEGIN;
-
-        -- we don't want to see any entries related to 2PC recovery
-        SET citus.max_cached_conns_per_worker TO 0;
 
 step s1-insert: 
  	INSERT INTO test_table VALUES (100, 100);
 
 step s2-sleep: 
-	SELECT pg_sleep(0.2);
+	SELECT pg_sleep(0.5);
 
 pg_sleep       
 
                
 step s2-view-dist: 
-	SELECT query, query_hostname, query_hostport, master_query_host_name, master_query_host_port, state, wait_event_type, wait_event, usename, datname FROM citus_dist_stat_activity ORDER BY query DESC;
+	SELECT query, query_hostname, query_hostport, master_query_host_name, master_query_host_port, state, wait_event_type, wait_event, usename, datname FROM citus_dist_stat_activity WHERE query NOT ILIKE '%pg_prepared_xacts%' AND query NOT ILIKE '%COMMIT%' ORDER BY query DESC;
 	
 
 query          query_hostname query_hostport master_query_host_namemaster_query_host_portstate          wait_event_typewait_event     usename        datname        
@@ -110,13 +90,11 @@ query          query_hostname query_hostport master_query_host_namemaster_query_
  	INSERT INTO test_table VALUES (100, 100);
 coordinator_host57636          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression     
 step s3-view-worker: 
-	SELECT query, query_hostname, query_hostport, master_query_host_name, master_query_host_port, state, wait_event_type, wait_event, usename, datname FROM citus_worker_stat_activity ORDER BY query DESC;
+	SELECT query, query_hostname, query_hostport, master_query_host_name, master_query_host_port, state, wait_event_type, wait_event, usename, datname FROM citus_worker_stat_activity WHERE query NOT ILIKE '%pg_prepared_xacts%' AND query NOT ILIKE '%COMMIT%' ORDER BY query DESC;
 
 query          query_hostname query_hostport master_query_host_namemaster_query_host_portstate          wait_event_typewait_event     usename        datname        
 
-SELECT gid FROM pg_prepared_xacts WHERE gid LIKE 'citus\_0\_%'localhost      57638                         0              idle           Client         ClientRead     postgres       regression     
-SELECT gid FROM pg_prepared_xacts WHERE gid LIKE 'citus\_0\_%'localhost      57637                         0              idle           Client         ClientRead     postgres       regression     
-INSERT INTO public.test_table_105952 (column1, column2) VALUES (100, 100)localhost      57637          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression     
+INSERT INTO public.test_table_102084 (column1, column2) VALUES (100, 100)localhost      57637          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression     
 step s2-rollback: 
 	ROLLBACK;
 
@@ -134,20 +112,11 @@ create_distributed_table
 step s1-begin: 
     BEGIN;
 
-    -- we don't want to see any entries related to 2PC recovery
-    SET citus.max_cached_conns_per_worker TO 0;
-
 step s2-begin: 
 	BEGIN;
-        
-        -- we don't want to see any entries related to 2PC recovery
-        SET citus.max_cached_conns_per_worker TO 0;
 
 step s3-begin: 
 	BEGIN;
-
-        -- we don't want to see any entries related to 2PC recovery
-        SET citus.max_cached_conns_per_worker TO 0;
 
 step s1-select: 
    SELECT count(*) FROM test_table;
@@ -156,13 +125,13 @@ count
 
 0              
 step s2-sleep: 
-	SELECT pg_sleep(0.2);
+	SELECT pg_sleep(0.5);
 
 pg_sleep       
 
                
 step s2-view-dist: 
-	SELECT query, query_hostname, query_hostport, master_query_host_name, master_query_host_port, state, wait_event_type, wait_event, usename, datname FROM citus_dist_stat_activity ORDER BY query DESC;
+	SELECT query, query_hostname, query_hostport, master_query_host_name, master_query_host_port, state, wait_event_type, wait_event, usename, datname FROM citus_dist_stat_activity WHERE query NOT ILIKE '%pg_prepared_xacts%' AND query NOT ILIKE '%COMMIT%' ORDER BY query DESC;
 	
 
 query          query_hostname query_hostport master_query_host_namemaster_query_host_portstate          wait_event_typewait_event     usename        datname        
@@ -171,16 +140,14 @@ query          query_hostname query_hostport master_query_host_namemaster_query_
    SELECT count(*) FROM test_table;
 coordinator_host57636          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression     
 step s3-view-worker: 
-	SELECT query, query_hostname, query_hostport, master_query_host_name, master_query_host_port, state, wait_event_type, wait_event, usename, datname FROM citus_worker_stat_activity ORDER BY query DESC;
+	SELECT query, query_hostname, query_hostport, master_query_host_name, master_query_host_port, state, wait_event_type, wait_event, usename, datname FROM citus_worker_stat_activity WHERE query NOT ILIKE '%pg_prepared_xacts%' AND query NOT ILIKE '%COMMIT%' ORDER BY query DESC;
 
 query          query_hostname query_hostport master_query_host_namemaster_query_host_portstate          wait_event_typewait_event     usename        datname        
 
-SELECT gid FROM pg_prepared_xacts WHERE gid LIKE 'citus\_0\_%'localhost      57638                         0              idle           Client         ClientRead     postgres       regression     
-SELECT gid FROM pg_prepared_xacts WHERE gid LIKE 'citus\_0\_%'localhost      57637                         0              idle           Client         ClientRead     postgres       regression     
-SELECT count(*) AS count FROM test_table_105957 test_table WHERE truelocalhost      57638          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression     
-SELECT count(*) AS count FROM test_table_105956 test_table WHERE truelocalhost      57637          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression     
-SELECT count(*) AS count FROM test_table_105955 test_table WHERE truelocalhost      57638          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression     
-SELECT count(*) AS count FROM test_table_105954 test_table WHERE truelocalhost      57637          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression     
+COPY (SELECT count(*) AS count FROM test_table_102089 test_table WHERE true) TO STDOUTlocalhost      57638          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression     
+COPY (SELECT count(*) AS count FROM test_table_102088 test_table WHERE true) TO STDOUTlocalhost      57637          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression     
+COPY (SELECT count(*) AS count FROM test_table_102087 test_table WHERE true) TO STDOUTlocalhost      57638          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression     
+COPY (SELECT count(*) AS count FROM test_table_102086 test_table WHERE true) TO STDOUTlocalhost      57637          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression     
 step s2-rollback: 
 	ROLLBACK;
 
@@ -198,20 +165,11 @@ create_distributed_table
 step s1-begin: 
     BEGIN;
 
-    -- we don't want to see any entries related to 2PC recovery
-    SET citus.max_cached_conns_per_worker TO 0;
-
 step s2-begin: 
 	BEGIN;
-        
-        -- we don't want to see any entries related to 2PC recovery
-        SET citus.max_cached_conns_per_worker TO 0;
 
 step s3-begin: 
 	BEGIN;
-
-        -- we don't want to see any entries related to 2PC recovery
-        SET citus.max_cached_conns_per_worker TO 0;
 
 step s1-select-router: 
    SELECT count(*) FROM test_table WHERE column1 = 55;
@@ -220,13 +178,13 @@ count
 
 0              
 step s2-sleep: 
-	SELECT pg_sleep(0.2);
+	SELECT pg_sleep(0.5);
 
 pg_sleep       
 
                
 step s2-view-dist: 
-	SELECT query, query_hostname, query_hostport, master_query_host_name, master_query_host_port, state, wait_event_type, wait_event, usename, datname FROM citus_dist_stat_activity ORDER BY query DESC;
+	SELECT query, query_hostname, query_hostport, master_query_host_name, master_query_host_port, state, wait_event_type, wait_event, usename, datname FROM citus_dist_stat_activity WHERE query NOT ILIKE '%pg_prepared_xacts%' AND query NOT ILIKE '%COMMIT%' ORDER BY query DESC;
 	
 
 query          query_hostname query_hostport master_query_host_namemaster_query_host_portstate          wait_event_typewait_event     usename        datname        
@@ -235,13 +193,11 @@ query          query_hostname query_hostport master_query_host_namemaster_query_
    SELECT count(*) FROM test_table WHERE column1 = 55;
 coordinator_host57636          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression     
 step s3-view-worker: 
-	SELECT query, query_hostname, query_hostport, master_query_host_name, master_query_host_port, state, wait_event_type, wait_event, usename, datname FROM citus_worker_stat_activity ORDER BY query DESC;
+	SELECT query, query_hostname, query_hostport, master_query_host_name, master_query_host_port, state, wait_event_type, wait_event, usename, datname FROM citus_worker_stat_activity WHERE query NOT ILIKE '%pg_prepared_xacts%' AND query NOT ILIKE '%COMMIT%' ORDER BY query DESC;
 
 query          query_hostname query_hostport master_query_host_namemaster_query_host_portstate          wait_event_typewait_event     usename        datname        
 
-SELECT gid FROM pg_prepared_xacts WHERE gid LIKE 'citus\_0\_%'localhost      57638                         0              idle           Client         ClientRead     postgres       regression     
-SELECT gid FROM pg_prepared_xacts WHERE gid LIKE 'citus\_0\_%'localhost      57637                         0              idle           Client         ClientRead     postgres       regression     
-SELECT count(*) AS count FROM public.test_table_105959 test_table WHERE (column1 OPERATOR(pg_catalog.=) 55)localhost      57638          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression     
+SELECT count(*) AS count FROM public.test_table_102091 test_table WHERE (column1 OPERATOR(pg_catalog.=) 55)localhost      57638                         0              idle           Client         ClientRead     postgres       regression     
 step s2-rollback: 
 	ROLLBACK;
 

@@ -109,7 +109,7 @@ SELECT run_command_on_workers($$SELECT count(*) FROM information_schema.tables W
 (2 rows)
 
 -- Now, kill the connection after sending create table command with worker_apply_shard_ddl_command UDF
-SELECT citus.mitmproxy('conn.onQuery(query="^SELECT worker_apply_shard_ddl_command").after(2).kill()');
+SELECT citus.mitmproxy('conn.onQuery(query="SELECT worker_apply_shard_ddl_command").after(1).kill()');
  mitmproxy 
 -----------
  
@@ -143,7 +143,7 @@ SELECT run_command_on_workers($$SELECT count(*) FROM information_schema.tables W
 -- with worker_apply_shard_ddl_command UDF.
 BEGIN;
     SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
-    SELECT citus.mitmproxy('conn.onQuery(query="^SELECT worker_apply_shard_ddl_command").after(2).kill()');
+    SELECT citus.mitmproxy('conn.onQuery(query="SELECT worker_apply_shard_ddl_command").after(1).kill()');
  mitmproxy 
 -----------
  
@@ -402,7 +402,8 @@ SELECT run_command_on_workers($$SELECT count(*) FROM information_schema.tables W
 
 -- Now, cancel the connection while creating the transaction on
 -- workers. Note that, cancel requests will be ignored during
--- shard creation again in transaction.
+-- shard creation again in transaction if we're not relying on the
+-- executor. So, we'll have two output files
 SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED").cancel(' || pg_backend_pid() || ')');
  mitmproxy 
 -----------
@@ -418,6 +419,12 @@ WARNING:  cancel requests are ignored during shard creation
 (1 row)
 
 COMMIT;
+SELECT recover_prepared_transactions();
+ recover_prepared_transactions 
+-------------------------------
+                             1
+(1 row)
+
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
 -----------
@@ -542,7 +549,7 @@ SELECT run_command_on_workers($$SELECT count(*) FROM information_schema.tables W
 
 -- Now, cancel the connection while creating transactions on
 -- workers with 1pc. Note that, cancel requests will be ignored during
--- shard creation.
+-- shard creation unless the executor is used. So, we'll have two output files
 SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED").cancel(' || pg_backend_pid() || ')');
  mitmproxy 
 -----------
@@ -558,6 +565,12 @@ WARNING:  cancel requests are ignored during shard creation
 (1 row)
 
 COMMIT;
+SELECT recover_prepared_transactions();
+ recover_prepared_transactions 
+-------------------------------
+                             0
+(1 row)
+
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
 -----------
@@ -666,7 +679,7 @@ ERROR:  canceling statement due to user request
 SELECT recover_prepared_transactions();
  recover_prepared_transactions 
 -------------------------------
-                             2
+                             1
 (1 row)
 
 SELECT citus.mitmproxy('conn.allow()');
