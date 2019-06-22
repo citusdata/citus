@@ -109,12 +109,34 @@ cte_2 AS (
 INSERT INTO modify_table (SELECT cte_1.user_id FROM cte_1 join cte_2 on cte_1.value_2=cte_2.value_2);
 
 
--- even if this is an INSERT...SELECT, the CTE is under SELECT
-WITH cte AS (
-	SELECT user_id, value_2 FROM users_table WHERE value_2 IN (1, 2)
-)
-INSERT INTO modify_table (SELECT (SELECT value_2 FROM cte GROUP BY value_2));
+-- we execute the query within a function to consolidate the error messages
+-- between different executors
+CREATE FUNCTION raise_failed_execution_cte(query text) RETURNS void AS $$
+BEGIN
+        EXECUTE query;
+        EXCEPTION WHEN OTHERS THEN
+        IF SQLERRM LIKE '%more than one row returned by a subquery used as an expression%' THEN
+                RAISE 'Task failed to execute';
+        ELSIF SQLERRM LIKE '%could not receive query results%' THEN
+          RAISE 'Task failed to execute';
+        END IF;
+END;
+$$LANGUAGE plpgsql;
 
+SET client_min_messages TO ERROR;
+\set VERBOSITY terse
+
+-- even if this is an INSERT...SELECT, the CTE is under SELECT
+-- function joins in CTE results can create lateral joins that are not supported
+SELECT raise_failed_execution_cte($$
+	WITH cte AS (
+		SELECT user_id, value_2 FROM users_table WHERE value_2 IN (1, 2)
+	)
+	INSERT INTO modify_table (SELECT (SELECT value_2 FROM cte GROUP BY value_2));
+$$);
+
+SET client_min_messages TO DEFAULT;
+\set VERBOSITY DEFAULT
 
 -- CTEs prior to any other modification should error out
 WITH cte AS (

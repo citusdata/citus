@@ -82,7 +82,7 @@ step "s2-get-first-worker-active-transactions"
 {
 		SELECT * FROM run_command_on_workers('SELECT row(initiator_node_identifier, transaction_number)
 												FROM	 
-											  get_current_transaction_id();
+											  get_all_active_transactions();
 											') 
 		WHERE nodeport = 57637;
 ;

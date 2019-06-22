@@ -8,8 +8,7 @@ setup
 
     SET citus.shard_replication_factor TO 1;
     SET citus.shard_count TO 4;
-    -- we don't want to see any entries related to 2PC recovery
-    SET citus.max_cached_conns_per_worker TO 0;
+
     CREATE TABLE test_table(column1 int, column2 int);
     SELECT create_distributed_table('test_table', 'column1');
 }
@@ -24,9 +23,6 @@ session "s1"
 step "s1-begin"
 {
     BEGIN;
-
-    -- we don't want to see any entries related to 2PC recovery
-    SET citus.max_cached_conns_per_worker TO 0;
 }
 
 step "s1-alter-table"
@@ -59,9 +55,6 @@ session "s2"
 step "s2-begin"
 {
 	BEGIN;
-        
-        -- we don't want to see any entries related to 2PC recovery
-        SET citus.max_cached_conns_per_worker TO 0;
 }
 
 step "s2-rollback"
@@ -71,12 +64,12 @@ step "s2-rollback"
 
 step "s2-sleep"
 {
-	SELECT pg_sleep(0.2);
+	SELECT pg_sleep(0.5);
 }
 
 step "s2-view-dist"
 {
-	SELECT query, query_hostname, query_hostport, master_query_host_name, master_query_host_port, state, wait_event_type, wait_event, usename, datname FROM citus_dist_stat_activity ORDER BY query DESC;
+	SELECT query, query_hostname, query_hostport, master_query_host_name, master_query_host_port, state, wait_event_type, wait_event, usename, datname FROM citus_dist_stat_activity WHERE query NOT ILIKE '%pg_prepared_xacts%' AND query NOT ILIKE '%COMMIT%' ORDER BY query DESC;
 	
 }
 
@@ -85,9 +78,6 @@ session "s3"
 step "s3-begin"
 {
 	BEGIN;
-
-        -- we don't want to see any entries related to 2PC recovery
-        SET citus.max_cached_conns_per_worker TO 0;
 }
 
 step "s3-rollback"
@@ -97,7 +87,7 @@ step "s3-rollback"
 
 step "s3-view-worker"
 {
-	SELECT query, query_hostname, query_hostport, master_query_host_name, master_query_host_port, state, wait_event_type, wait_event, usename, datname FROM citus_worker_stat_activity ORDER BY query DESC;
+	SELECT query, query_hostname, query_hostport, master_query_host_name, master_query_host_port, state, wait_event_type, wait_event, usename, datname FROM citus_worker_stat_activity WHERE query NOT ILIKE '%pg_prepared_xacts%' AND query NOT ILIKE '%COMMIT%' ORDER BY query DESC;
 }
 
 # we prefer to sleep before "s2-view-dist" so that we can ensure

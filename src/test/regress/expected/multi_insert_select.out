@@ -143,6 +143,7 @@ FROM
   raw_events_first
 WHERE
   user_id = 0;
+WARNING:  function public.evaluate_on_master(integer) does not exist
 ERROR:  function public.evaluate_on_master(integer) does not exist
 -- add one more row
 INSERT INTO raw_events_first (user_id, time) VALUES
@@ -1747,6 +1748,7 @@ BEGIN;
 ALTER TABLE reference_table ADD COLUMN z int;
 INSERT INTO raw_events_first (user_id)
 SELECT user_id FROM raw_events_second JOIN reference_table USING (user_id);
+ERROR:  cannot establish a new connection for placement 13300025, since DDL has been executed on a connection that is in use
 ROLLBACK;
 -- the same test with sequential DDL should work fine
 BEGIN;
