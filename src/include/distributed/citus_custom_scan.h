@@ -27,6 +27,7 @@ typedef struct CitusScanState
 
 
 /* custom scan methods for all executors */
+extern CustomScanMethods AdaptiveExecutorCustomScanMethods;
 extern CustomScanMethods RealTimeCustomScanMethods;
 extern CustomScanMethods TaskTrackerCustomScanMethods;
 extern CustomScanMethods RouterCustomScanMethods;

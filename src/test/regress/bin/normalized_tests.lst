@@ -12,3 +12,20 @@ multi_subtransactions
 multi_modifying_xacts
 multi_insert_select
 
+# the following tests' output are
+# normalized for EXPLAIN outputs
+# where the executor name is wiped out
+multi_join_order_tpch_small
+multi_join_pruning
+multi_orderby_limit_pushdown
+multi_partition_pruning
+multi_select_distinct
+multi_subquery_window_functions
+multi_task_assignment_policy
+multi_view
+multi_explain
+multi_null_minmax_value_pruning
+window_functions
+multi_having_pushdown
+multi_partitioning
+multi_mx_explain
