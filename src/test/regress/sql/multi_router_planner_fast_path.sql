@@ -540,14 +540,37 @@ BEGIN
 END;
 $$ LANGUAGE 'plpgsql' IMMUTABLE;
 
+-- we execute the query within a function to consolidate the error messages
+-- between different executors
+CREATE FUNCTION raise_failed_execution_f_router(query text) RETURNS void AS $$
+BEGIN
+        EXECUTE query;
+        EXCEPTION WHEN OTHERS THEN
+        IF SQLERRM LIKE '%failed to execute task%' THEN
+                RAISE 'Task failed to execute';
+        ELSIF SQLERRM LIKE '%does not exist%' THEN
+          RAISE 'Task failed to execute';
+        ELSIF SQLERRM LIKE '%could not receive query results%' THEN
+          	RAISE 'Task failed to execute';
+        END IF;
+END;
+$$LANGUAGE plpgsql;
+
+SET client_min_messages TO ERROR;
+\set VERBOSITY terse
 
 -- fast path router plannable, but errors 
-SELECT * FROM articles_hash
-	WHERE
-		someDummyFunction('articles_hash') = md5('articles_hash') AND author_id = 1
-	ORDER BY
-		author_id, id
-	LIMIT 5;
+SELECT raise_failed_execution_f_router($$
+	SELECT * FROM articles_hash
+		WHERE
+			someDummyFunction('articles_hash') = md5('articles_hash') AND author_id = 1
+		ORDER BY
+			author_id, id
+		LIMIT 5;
+$$);
+
+\set VERBOSITY DEFAULT
+SET client_min_messages TO DEFAULT;
 
 -- temporarily turn off debug messages before dropping the function
 SET client_min_messages TO 'NOTICE';

@@ -53,11 +53,11 @@ SELECT * FROM pg_dist_shard s, pg_dist_shard_placement p
   WHERE (s.shardid = p.shardid) AND s.logicalrelid = 'copy_test'::regclass
   ORDER BY placementid;
 
-SELECT citus.mitmproxy('conn.onQuery(query="^SELECT").kill()');
+SELECT citus.mitmproxy('conn.onQuery(query="SELECT|COPY").kill()');
 SELECT count(1) FROM copy_test;
 
 ---- cancel the connection when we send the data ----
-SELECT citus.mitmproxy('conn.onQuery(query="^SELECT").cancel(' ||  pg_backend_pid() || ')');
+SELECT citus.mitmproxy('conn.onQuery(query="SELECT|COPY").cancel(' ||  pg_backend_pid() || ')');
 COPY copy_test FROM PROGRAM 'echo 0, 0 && echo 1, 1 && echo 2, 4 && echo 3, 9' WITH CSV;
 SELECT * FROM pg_dist_shard s, pg_dist_shard_placement p
   WHERE (s.shardid = p.shardid) AND s.logicalrelid = 'copy_test'::regclass

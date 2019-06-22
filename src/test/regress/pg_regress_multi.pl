@@ -73,6 +73,7 @@ my $valgrindPath = "valgrind";
 my $valgrindLogFile = "valgrind_test_log.txt";
 my $pgCtlTimeout = undef;
 my $connectionTimeout = 5000;
+my $maxPoolSize = -1;
 my $useMitmproxy = 0;
 my $mitmFifoPath = catfile("tmp_check", "mitmproxy.fifo");
 
@@ -102,6 +103,7 @@ GetOptions(
     'valgrind-log-file=s' => \$valgrindLogFile,
     'pg_ctl-timeout=s' => \$pgCtlTimeout,
     'connection-timeout=s' => \$connectionTimeout,
+    'max_pool_size=s' => \$maxPoolSize,
     'mitmproxy' => \$useMitmproxy,
     'help' => sub { Usage() });
 
@@ -352,6 +354,11 @@ if ($followercluster)
   push(@pgOptions, '-c', "max_wal_senders=10");
   push(@pgOptions, '-c', "hot_standby=on");
   push(@pgOptions, '-c', "wal_level=replica");
+}
+
+if ($maxPoolSize == 0)
+{
+  push(@pgOptions, '-c', "citus.max_pool_size=0");
 }
 
 # disable automatic distributed deadlock detection during the isolation testing

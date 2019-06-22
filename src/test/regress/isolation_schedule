@@ -9,14 +9,22 @@ test: isolation_master_update_node
 # isolation_cluster_management such that tests
 # that come later can be parallelized
 test: isolation_cluster_management
+
+# the following tests depend on the distributed
+# transactionId, so should not be parallelized
+# and no tests should be added before these
+test: isolation_distributed_transaction_id 
+test: isolation_dump_global_wait_edges
+test: isolation_citus_dist_activity
+
+
 test: isolation_dml_vs_repair isolation_copy_placement_vs_copy_placement
 
 test: isolation_concurrent_dml isolation_data_migration
 test: isolation_drop_shards isolation_copy_placement_vs_modification
 test: isolation_insert_vs_vacuum isolation_transaction_recovery
-test: isolation_distributed_transaction_id isolation_progress_monitoring
+test: isolation_progress_monitoring
 test: isolation_dump_local_wait_edges
-test: isolation_dump_global_wait_edges
 
 test: isolation_replace_wait_function
 test: isolation_distributed_deadlock_detection
@@ -43,7 +51,6 @@ test: isolation_delete_vs_all
 test: isolation_truncate_vs_all
 test: isolation_drop_vs_all
 test: isolation_ddl_vs_all
-test: isolation_citus_dist_activity
 test: isolation_get_all_active_transactions
 test: isolation_validate_vs_insert
 test: isolation_insert_select_conflict

@@ -70,10 +70,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL R
 (1 row)
 
 ALTER TABLE test_table ADD COLUMN new_column INT;
-ERROR:  connection error: localhost:9060
-DETAIL:  server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
+ERROR:  failure on connection marked as essential: localhost:9060
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
   array_agg  
 -------------
@@ -103,10 +100,10 @@ SELECT citus.mitmproxy('conn.onQuery(query="worker_apply_shard_ddl_command").kil
 (1 row)
 
 ALTER TABLE test_table ADD COLUMN new_column INT;
-ERROR:  connection error: localhost:9060
-DETAIL:  server closed the connection unexpectedly
+ERROR:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
+CONTEXT:  while executing command on localhost:9060
 -- show that we've never commited the changes
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
   array_agg  
@@ -382,10 +379,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL R
 (1 row)
 
 ALTER TABLE test_table DROP COLUMN new_column;
-ERROR:  connection error: localhost:9060
-DETAIL:  server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
+ERROR:  failure on connection marked as essential: localhost:9060
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
        array_agg        
 ------------------------
@@ -415,10 +409,10 @@ SELECT citus.mitmproxy('conn.onQuery(query="worker_apply_shard_ddl_command").kil
 (1 row)
 
 ALTER TABLE test_table DROP COLUMN new_column;
-ERROR:  connection error: localhost:9060
-DETAIL:  server closed the connection unexpectedly
+ERROR:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
+CONTEXT:  while executing command on localhost:9060
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
        array_agg        
 ------------------------
@@ -753,10 +747,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL R
 (1 row)
 
 ALTER TABLE test_table ADD COLUMN new_column INT;
-ERROR:  connection error: localhost:9060
-DETAIL:  server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
+ERROR:  failure on connection marked as essential: localhost:9060
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
   array_agg  
 -------------
@@ -786,10 +777,10 @@ SELECT citus.mitmproxy('conn.onQuery(query="worker_apply_shard_ddl_command").kil
 (1 row)
 
 ALTER TABLE test_table ADD COLUMN new_column INT;
-ERROR:  connection error: localhost:9060
-DETAIL:  server closed the connection unexpectedly
+ERROR:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
+CONTEXT:  while executing command on localhost:9060
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
   array_agg  
 -------------
@@ -1047,10 +1038,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL R
 (1 row)
 
 ALTER TABLE test_table ADD COLUMN new_column INT;
-ERROR:  connection error: localhost:9060
-DETAIL:  server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
+ERROR:  failure on connection marked as essential: localhost:9060
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
   array_agg  
 -------------
@@ -1080,10 +1068,10 @@ SELECT citus.mitmproxy('conn.onQuery(query="worker_apply_shard_ddl_command").kil
 (1 row)
 
 ALTER TABLE test_table ADD COLUMN new_column INT;
-ERROR:  connection error: localhost:9060
-DETAIL:  server closed the connection unexpectedly
+ERROR:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
+CONTEXT:  while executing command on localhost:9060
 -- kill as soon as the coordinator after it sends worker_apply_shard_ddl_command 2nd time
 SELECT citus.mitmproxy('conn.onQuery(query="worker_apply_shard_ddl_command").after(2).kill()');
  mitmproxy 
@@ -1092,10 +1080,10 @@ SELECT citus.mitmproxy('conn.onQuery(query="worker_apply_shard_ddl_command").aft
 (1 row)
 
 ALTER TABLE test_table ADD COLUMN new_column INT;
-ERROR:  connection error: localhost:9060
-DETAIL:  server closed the connection unexpectedly
+ERROR:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
+CONTEXT:  while executing command on localhost:9060
 -- cancel as soon as the coordinator after it sends worker_apply_shard_ddl_command 2nd time
 SELECT citus.mitmproxy('conn.onQuery(query="worker_apply_shard_ddl_command").after(2).cancel(' ||  pg_backend_pid() || ')');
  mitmproxy 

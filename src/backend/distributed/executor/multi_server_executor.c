@@ -20,6 +20,7 @@
 #include <unistd.h>
 
 #include "distributed/multi_client_executor.h"
+#include "distributed/multi_executor.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_resowner.h"
 #include "distributed/multi_server_executor.h"
@@ -28,7 +29,7 @@
 #include "utils/lsyscache.h"
 
 int RemoteTaskCheckInterval = 100; /* per cycle sleep interval in millisecs */
-int TaskExecutorType = MULTI_EXECUTOR_REAL_TIME; /* distributed executor type */
+int TaskExecutorType = MULTI_ADAPTIVE_EXECUTOR; /* distributed executor type */
 bool BinaryMasterCopyFormat = false; /* copy data from workers in binary format */
 bool EnableRepartitionJoins = false;
 
@@ -50,6 +51,20 @@ JobExecutorType(DistributedPlan *distributedPlan)
 	double tasksPerNode = 0.;
 	MultiExecutorType executorType = TaskExecutorType;
 	bool routerExecutablePlan = distributedPlan->routerExecutable;
+	bool adaptiveExecutorEnabled = MaxAdaptiveExecutorPoolSize > 0;
+
+	/* favor MaxPoolSize over TaskExecutorType */
+	if (!adaptiveExecutorEnabled && TaskExecutorType == MULTI_ADAPTIVE_EXECUTOR)
+	{
+		executorType = MULTI_EXECUTOR_REAL_TIME;
+	}
+
+	/* when task-tracker is explicitly picked, do not use adaptive executor */
+	if (executorType == MULTI_EXECUTOR_TASK_TRACKER &&
+		distributedPlan->operation == CMD_SELECT)
+	{
+		adaptiveExecutorEnabled = false;
+	}
 
 	/* check if can switch to router executor */
 	if (routerExecutablePlan)
@@ -74,11 +89,19 @@ JobExecutorType(DistributedPlan *distributedPlan)
 				ereport(DEBUG2, (errmsg("Plan is router executable")));
 			}
 		}
-		return MULTI_EXECUTOR_ROUTER;
+
+		/* always prever adaptive executor when enabled */
+		return adaptiveExecutorEnabled ? MULTI_ADAPTIVE_EXECUTOR : MULTI_EXECUTOR_ROUTER;
 	}
 
 	if (distributedPlan->insertSelectSubquery != NULL)
 	{
+		/*
+		 * Even if adaptiveExecutorEnabled, we go through
+		 * MULTI_EXECUTOR_COORDINATOR_INSERT_SELECT because
+		 * the executor already knows how to handle adaptive
+		 * executor when necessary.
+		 */
 		return MULTI_EXECUTOR_COORDINATOR_INSERT_SELECT;
 	}
 
@@ -89,13 +112,13 @@ JobExecutorType(DistributedPlan *distributedPlan)
 	taskCount = list_length(job->taskList);
 	tasksPerNode = taskCount / ((double) workerNodeCount);
 
-	if (executorType == MULTI_EXECUTOR_REAL_TIME)
+	if (adaptiveExecutorEnabled || executorType == MULTI_EXECUTOR_REAL_TIME)
 	{
 		double reasonableConnectionCount = 0;
 		int dependedJobCount = 0;
 
 		/* if we need to open too many connections per worker, warn the user */
-		if (tasksPerNode >= MaxConnections)
+		if (tasksPerNode >= MaxConnections && !adaptiveExecutorEnabled)
 		{
 			ereport(WARNING, (errmsg("this query uses more connections than the "
 									 "configured max_connections limit"),
@@ -110,7 +133,7 @@ JobExecutorType(DistributedPlan *distributedPlan)
 		 * but we still issue this warning because it degrades performance.
 		 */
 		reasonableConnectionCount = MaxMasterConnectionCount();
-		if (taskCount >= reasonableConnectionCount)
+		if (taskCount >= reasonableConnectionCount && !adaptiveExecutorEnabled)
 		{
 			ereport(WARNING, (errmsg("this query uses more file descriptors than the "
 									 "configured max_files_per_process limit"),
@@ -150,7 +173,8 @@ JobExecutorType(DistributedPlan *distributedPlan)
 		}
 	}
 
-	return executorType;
+	/* always prever adaptive executor when enabled */
+	return adaptiveExecutorEnabled ? MULTI_ADAPTIVE_EXECUTOR : executorType;
 }
 
 

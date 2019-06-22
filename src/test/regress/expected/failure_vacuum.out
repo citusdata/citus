@@ -66,6 +66,14 @@ WARNING:  failed to commit critical transaction on localhost:9060, metadata is l
 WARNING:  connection not open
 CONTEXT:  while executing command on localhost:9060
 -- ANALYZE transactions being critical is an open question, see #2430
+-- show that we marked as INVALID on COMMIT FAILURE
+SELECT shardid, shardstate FROM pg_dist_shard_placement where shardstate != 1 AND 
+shardid in ( SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'vacuum_test'::regclass);
+ shardid | shardstate 
+---------+------------
+  102097 |          3
+(1 row)
+
 UPDATE pg_dist_shard_placement SET shardstate = 1
 WHERE shardid IN (
   SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'vacuum_test'::regclass

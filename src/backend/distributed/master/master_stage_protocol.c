@@ -496,7 +496,7 @@ void
 CreateShardsOnWorkers(Oid distributedRelationId, List *shardPlacements,
 					  bool useExclusiveConnection, bool colocatedShard)
 {
-	if (DEFAULT_POOL_SIZE > 0)
+	if (MaxAdaptiveExecutorPoolSize > 0)
 	{
 		CreateShardsOnWorkersViaExecutor(distributedRelationId, shardPlacements,
 										 useExclusiveConnection, colocatedShard);
@@ -527,7 +527,7 @@ CreateShardsOnWorkersViaExecutor(Oid distributedRelationId, List *shardPlacement
 	int taskId = 1;
 	List *taskList = NIL;
 
-	int poolSize = useExclusiveConnection ? DEFAULT_POOL_SIZE : 1;
+	int poolSize = useExclusiveConnection ? MaxAdaptiveExecutorPoolSize : 1;
 
 	foreach(shardPlacementCell, shardPlacements)
 	{

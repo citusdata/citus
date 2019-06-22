@@ -204,7 +204,7 @@ EXPLAIN (COSTS FALSE)
    ->  HashAggregate
          Group Key: remote_scan.l_orderkey
          Filter: (COALESCE((pg_catalog.sum(remote_scan.worker_column_3))::bigint, '0'::bigint) > 5)
-         ->  Custom Scan (Citus Real-Time)
+         ->  Custom Scan (Citus Adaptive)
                Task Count: 4
                Tasks Shown: One of 4
                ->  Task
@@ -234,7 +234,7 @@ EXPLAIN (COSTS FALSE)
          Filter: (COALESCE((pg_catalog.sum(remote_scan.worker_column_3))::bigint, '0'::bigint) > 5)
          ->  Sort
                Sort Key: remote_scan.l_orderkey
-               ->  Custom Scan (Citus Real-Time)
+               ->  Custom Scan (Citus Adaptive)
                      Task Count: 4
                      Tasks Shown: One of 4
                      ->  Task
@@ -278,7 +278,7 @@ EXPLAIN (COSTS FALSE)
          Group Key: COALESCE((pg_catalog.sum(remote_scan.count))::bigint, '0'::bigint)
          ->  HashAggregate
                Group Key: remote_scan.worker_column_2, remote_scan.worker_column_3
-               ->  Custom Scan (Citus Real-Time)
+               ->  Custom Scan (Citus Adaptive)
                      Task Count: 4
                      Tasks Shown: One of 4
                      ->  Task
@@ -307,7 +307,7 @@ EXPLAIN (COSTS FALSE)
                      Group Key: remote_scan.worker_column_2, remote_scan.worker_column_3
                      ->  Sort
                            Sort Key: remote_scan.worker_column_2, remote_scan.worker_column_3
-                           ->  Custom Scan (Citus Real-Time)
+                           ->  Custom Scan (Citus Adaptive)
                                  Task Count: 4
                                  Tasks Shown: One of 4
                                  ->  Task
@@ -356,7 +356,7 @@ EXPLAIN (COSTS FALSE)
                Group Key: remote_scan.l_suppkey, COALESCE((pg_catalog.sum(remote_scan.count))::bigint, '0'::bigint)
                ->  HashAggregate
                      Group Key: remote_scan.l_suppkey, remote_scan.worker_column_3
-                     ->  Custom Scan (Citus Real-Time)
+                     ->  Custom Scan (Citus Adaptive)
                            Task Count: 4
                            Tasks Shown: One of 4
                            ->  Task
@@ -387,7 +387,7 @@ EXPLAIN (COSTS FALSE)
                            Group Key: remote_scan.l_suppkey, remote_scan.worker_column_3
                            ->  Sort
                                  Sort Key: remote_scan.l_suppkey, remote_scan.worker_column_3
-                                 ->  Custom Scan (Citus Real-Time)
+                                 ->  Custom Scan (Citus Adaptive)
                                        Task Count: 4
                                        Tasks Shown: One of 4
                                        ->  Task
@@ -437,7 +437,7 @@ EXPLAIN (COSTS FALSE)
                Group Key: remote_scan.l_suppkey, (pg_catalog.sum(remote_scan.avg) / pg_catalog.sum(remote_scan.avg_1))
                ->  HashAggregate
                      Group Key: remote_scan.l_suppkey, remote_scan.worker_column_4
-                     ->  Custom Scan (Citus Real-Time)
+                     ->  Custom Scan (Citus Adaptive)
                            Task Count: 4
                            Tasks Shown: One of 4
                            ->  Task
@@ -495,7 +495,7 @@ EXPLAIN (COSTS FALSE)
                Sort Key: remote_scan.worker_column_4, (pg_catalog.sum(((pg_catalog.sum(remote_scan.avg) / pg_catalog.sum(remote_scan.avg_1)))) / pg_catalog.sum(remote_scan.worker_column_3))
                ->  HashAggregate
                      Group Key: remote_scan.worker_column_3, remote_scan.worker_column_4
-                     ->  Custom Scan (Citus Real-Time)
+                     ->  Custom Scan (Citus Adaptive)
                            Task Count: 4
                            Tasks Shown: One of 4
                            ->  Task
@@ -524,7 +524,7 @@ EXPLAIN (COSTS FALSE)
                      Group Key: remote_scan.worker_column_3, remote_scan.worker_column_4
                      ->  Sort
                            Sort Key: remote_scan.worker_column_3, remote_scan.worker_column_4
-                           ->  Custom Scan (Citus Real-Time)
+                           ->  Custom Scan (Citus Adaptive)
                                  Task Count: 4
                                  Tasks Shown: One of 4
                                  ->  Task
@@ -572,7 +572,7 @@ EXPLAIN (COSTS FALSE)
                Group Key: (sum(remote_scan.avg) / (pg_catalog.sum(remote_scan.avg_1))::double precision)
                ->  HashAggregate
                      Group Key: remote_scan.worker_column_3, remote_scan.worker_column_4
-                     ->  Custom Scan (Citus Real-Time)
+                     ->  Custom Scan (Citus Adaptive)
                            Task Count: 4
                            Tasks Shown: One of 4
                            ->  Task
@@ -631,7 +631,7 @@ EXPLAIN (COSTS FALSE)
                Group Key: ((pg_catalog.sum(remote_scan.dis))::bigint + COALESCE((pg_catalog.sum(remote_scan.dis_1))::bigint, '0'::bigint))
                ->  HashAggregate
                      Group Key: remote_scan.worker_column_3, remote_scan.worker_column_4
-                     ->  Custom Scan (Citus Real-Time)
+                     ->  Custom Scan (Citus Adaptive)
                            Task Count: 4
                            Tasks Shown: One of 4
                            ->  Task
@@ -691,7 +691,7 @@ EXPLAIN (COSTS FALSE)
          Sort Key: remote_scan.l_orderkey, remote_scan.l_partkey
          ->  HashAggregate
                Group Key: remote_scan.l_orderkey, remote_scan.l_partkey, remote_scan.l_suppkey, remote_scan.l_linenumber, remote_scan.l_quantity, remote_scan.l_extendedprice, remote_scan.l_discount, remote_scan.l_tax, remote_scan.l_returnflag, remote_scan.l_linestatus, remote_scan.l_shipdate, remote_scan.l_commitdate, remote_scan.l_receiptdate, remote_scan.l_shipinstruct, remote_scan.l_shipmode, remote_scan.l_comment
-               ->  Custom Scan (Citus Real-Time)
+               ->  Custom Scan (Citus Adaptive)
                      Task Count: 4
                      Tasks Shown: One of 4
                      ->  Task
@@ -723,7 +723,7 @@ EXPLAIN (COSTS FALSE)
                Group Key: remote_scan.l_orderkey, remote_scan.l_partkey, remote_scan.l_suppkey, remote_scan.l_linenumber, remote_scan.l_quantity, remote_scan.l_extendedprice, remote_scan.l_discount, remote_scan.l_tax, remote_scan.l_returnflag, remote_scan.l_linestatus, remote_scan.l_shipdate, remote_scan.l_commitdate, remote_scan.l_receiptdate, remote_scan.l_shipinstruct, remote_scan.l_shipmode, remote_scan.l_comment
                ->  Sort
                      Sort Key: remote_scan.l_orderkey, remote_scan.l_partkey, remote_scan.l_suppkey, remote_scan.l_linenumber, remote_scan.l_quantity, remote_scan.l_extendedprice, remote_scan.l_discount, remote_scan.l_tax, remote_scan.l_returnflag, remote_scan.l_linestatus, remote_scan.l_shipdate, remote_scan.l_commitdate, remote_scan.l_receiptdate, remote_scan.l_shipinstruct, remote_scan.l_shipmode, remote_scan.l_comment
-                     ->  Custom Scan (Citus Real-Time)
+                     ->  Custom Scan (Citus Adaptive)
                            Task Count: 4
                            Tasks Shown: One of 4
                            ->  Task
@@ -789,7 +789,7 @@ EXPLAIN (COSTS FALSE)
          Group Key: COALESCE((pg_catalog.sum(remote_scan.count))::bigint, '0'::bigint), COALESCE((pg_catalog.sum(remote_scan.count_1))::bigint, '0'::bigint)
          ->  HashAggregate
                Group Key: remote_scan.worker_column_3
-               ->  Custom Scan (Citus Real-Time)
+               ->  Custom Scan (Citus Adaptive)
                      Task Count: 4
                      Tasks Shown: One of 4
                      ->  Task
@@ -820,7 +820,7 @@ EXPLAIN (COSTS FALSE)
                      Group Key: remote_scan.worker_column_3
                      ->  Sort
                            Sort Key: remote_scan.worker_column_3
-                           ->  Custom Scan (Citus Real-Time)
+                           ->  Custom Scan (Citus Adaptive)
                                  Task Count: 4
                                  Tasks Shown: One of 4
                                  ->  Task
@@ -863,7 +863,7 @@ EXPLAIN (COSTS FALSE)
          Group Key: ceil(((COALESCE((pg_catalog.sum(remote_scan.count))::bigint, '0'::bigint) / 2))::double precision)
          ->  HashAggregate
                Group Key: remote_scan.worker_column_2
-               ->  Custom Scan (Citus Real-Time)
+               ->  Custom Scan (Citus Adaptive)
                      Task Count: 4
                      Tasks Shown: One of 4
                      ->  Task
@@ -891,7 +891,7 @@ EXPLAIN (COSTS FALSE)
                      Group Key: remote_scan.worker_column_2
                      ->  Sort
                            Sort Key: remote_scan.worker_column_2
-                           ->  Custom Scan (Citus Real-Time)
+                           ->  Custom Scan (Citus Adaptive)
                                  Task Count: 4
                                  Tasks Shown: One of 4
                                  ->  Task
@@ -920,7 +920,7 @@ EXPLAIN (COSTS FALSE)
                Group Key: array_length(array_cat_agg(remote_scan.array_length), 1), array_cat_agg(remote_scan.array_agg)
                ->  HashAggregate
                      Group Key: remote_scan.worker_column_3
-                     ->  Custom Scan (Citus Real-Time)
+                     ->  Custom Scan (Citus Adaptive)
                            Task Count: 4
                            Tasks Shown: One of 4
                            ->  Task
@@ -952,7 +952,7 @@ EXPLAIN (COSTS FALSE)
                            Group Key: remote_scan.worker_column_3
                            ->  Sort
                                  Sort Key: remote_scan.worker_column_3
-                                 ->  Custom Scan (Citus Real-Time)
+                                 ->  Custom Scan (Citus Adaptive)
                                        Task Count: 4
                                        Tasks Shown: One of 4
                                        ->  Task
@@ -1003,7 +1003,7 @@ EXPLAIN (COSTS FALSE)
    ->  HashAggregate
          Group Key: remote_scan.l_partkey
          Filter: (COALESCE((pg_catalog.sum(remote_scan.worker_column_3))::bigint, '0'::bigint) > 2)
-         ->  Custom Scan (Citus Real-Time)
+         ->  Custom Scan (Citus Adaptive)
                Task Count: 4
                Tasks Shown: One of 4
                ->  Task
@@ -1075,7 +1075,7 @@ EXPLAIN (COSTS FALSE)
    Sort Key: remote_scan.l_partkey, remote_scan.l_suppkey
    ->  HashAggregate
          Group Key: remote_scan.l_partkey, remote_scan.l_suppkey
-         ->  Custom Scan (Citus Real-Time)
+         ->  Custom Scan (Citus Adaptive)
                Task Count: 4
                Tasks Shown: One of 4
                ->  Task
@@ -1117,7 +1117,7 @@ EXPLAIN (COSTS FALSE)
  Unique
    ->  Sort
          Sort Key: remote_scan.l_orderkey
-         ->  Custom Scan (Citus Real-Time)
+         ->  Custom Scan (Citus Adaptive)
                Task Count: 4
                Tasks Shown: One of 4
                ->  Task
@@ -1172,7 +1172,7 @@ EXPLAIN (COSTS FALSE)
    ->  Unique
          ->  Sort
                Sort Key: remote_scan.l_partkey, remote_scan.l_orderkey
-               ->  Custom Scan (Citus Real-Time)
+               ->  Custom Scan (Citus Adaptive)
                      Task Count: 4
                      Tasks Shown: One of 4
                      ->  Task
@@ -1216,7 +1216,7 @@ $Q$);
  Unique
    ->  Sort
          Sort Key: remote_scan.o_custkey, remote_scan.l_orderkey
-         ->  Custom Scan (Citus Real-Time)
+         ->  Custom Scan (Citus Adaptive)
                Task Count: 4
 (5 rows)
 
@@ -1228,12 +1228,12 @@ EXPLAIN (COSTS FALSE)
 		FROM lineitem_hash_part JOIN orders_hash_part ON (l_orderkey = o_orderkey) 
 		WHERE o_custkey < 15;
 $Q$);
-             coordinator_plan              
--------------------------------------------
+             coordinator_plan             
+------------------------------------------
  Unique
    ->  Sort
          Sort Key: remote_scan.o_custkey
-         ->  Custom Scan (Citus Real-Time)
+         ->  Custom Scan (Citus Adaptive)
                Task Count: 4
 (5 rows)
 
@@ -1294,7 +1294,7 @@ $Q$);
  Unique
    ->  Sort
          Sort Key: remote_scan.o_custkey, remote_scan.l_orderkey
-         ->  Custom Scan (Citus Real-Time)
+         ->  Custom Scan (Citus Adaptive)
                Task Count: 4
 (5 rows)
 
@@ -1372,7 +1372,7 @@ EXPLAIN (COSTS FALSE)
          Sort Key: remote_scan.l_orderkey, remote_scan.l_partkey
          ->  HashAggregate
                Group Key: remote_scan.l_orderkey, remote_scan.l_partkey
-               ->  Custom Scan (Citus Real-Time)
+               ->  Custom Scan (Citus Adaptive)
                      Task Count: 4
                      Tasks Shown: One of 4
                      ->  Task
@@ -1423,7 +1423,7 @@ EXPLAIN (COSTS FALSE)
          Sort Key: remote_scan.l_orderkey, remote_scan.cnt
          ->  HashAggregate
                Group Key: remote_scan.l_orderkey, remote_scan.cnt
-               ->  Custom Scan (Citus Real-Time)
+               ->  Custom Scan (Citus Adaptive)
                      Task Count: 4
                      Tasks Shown: One of 4
                      ->  Task
@@ -1477,7 +1477,7 @@ EXPLAIN (COSTS FALSE)
    ->  Unique
          ->  Sort
                Sort Key: remote_scan.l_orderkey, remote_scan.l_partkey
-               ->  Custom Scan (Citus Real-Time)
+               ->  Custom Scan (Citus Adaptive)
                      Task Count: 4
                      Tasks Shown: One of 4
                      ->  Task
@@ -1529,7 +1529,7 @@ EXPLAIN (COSTS FALSE)
    ->  Unique
          ->  Sort
                Sort Key: remote_scan.l_partkey, remote_scan.l_orderkey
-               ->  Custom Scan (Citus Real-Time)
+               ->  Custom Scan (Citus Adaptive)
                      Task Count: 4
                      Tasks Shown: One of 4
                      ->  Task

@@ -347,6 +347,8 @@ FOR i IN 1..3 LOOP
 	EXCEPTION WHEN OTHERS THEN
 		IF SQLERRM LIKE 'more than one row returned by a subquery%%' THEN
 			errors_received := errors_received + 1;
+		ELSIF SQLERRM LIKE 'failed to execute task%' THEN
+			errors_received := errors_received + 1;
 		END IF;
 	END;
 END LOOP;

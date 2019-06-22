@@ -33,3 +33,10 @@ s/\(col_1\)=\([0-9]+\)/(col_1)=(X)/g
 
 # normalize pkey constraints in multi_insert_select.sql
 s/"(raw_events_second_user_id_value_1_key_|agg_events_user_id_value_1_agg_key_)[0-9]+"/"\1xxxxxxx"/g
+
+# normalize explain outputs, basically wipeout the executor name from the output
+s/.*Custom Scan \(Citus.*/Custom Scan \(Citus\)/g
+s/.*-------------.*/---------------------------------------------------------------------/g
+s/.* QUERY PLAN .*/                              QUERY PLAN                              /g
+s/.*Custom Plan Provider.*Citus.*/              \"Custom Plan Provider\": \"Citus\",     /g
+s/.*Custom-Plan-Provide.*/\<Custom-Plan-Provider\>Citus Unified\<\/Custom-Plan-Provider\>     /g
