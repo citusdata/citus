@@ -1250,7 +1250,7 @@ GetModifyConnections(Task *task, bool markCritical)
 
 		/* create placement access for the placement that we're modifying */
 		placementModification = CreatePlacementAccess(taskPlacement, accessType);
-		placementAccessList = lappend(placementAccessList, placementModification);
+		placementAccessList = lcons(placementModification, placementAccessList);
 
 		/* get an appropriate connection for the DML statement */
 		multiConnection = GetPlacementListConnection(connectionFlags, placementAccessList,
