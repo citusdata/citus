@@ -1184,6 +1184,8 @@ EXPLAIN (COSTS FALSE)
                                              ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
 (14 rows)
 
+-- encourage consistent plans
+ANALYZE lineitem_hash_part, orders_hash_part;
 -- distinct on with joins
 -- each customer's first order key
 SELECT DISTINCT ON (o_custkey) o_custkey, l_orderkey

@@ -404,6 +404,9 @@ EXPLAIN (COSTS FALSE)
 		ORDER BY 1,2
 		LIMIT 20;
 
+-- encourage consistent plans
+ANALYZE lineitem_hash_part, orders_hash_part;
+
 -- distinct on with joins
 -- each customer's first order key
 SELECT DISTINCT ON (o_custkey) o_custkey, l_orderkey
