@@ -411,18 +411,22 @@ SELECT DISTINCT ON (o_custkey) o_custkey, l_orderkey
 	WHERE o_custkey < 15
 	ORDER BY 1,2;
 
+SELECT coordinator_plan($Q$
 EXPLAIN (COSTS FALSE)
 	SELECT DISTINCT ON (o_custkey) o_custkey, l_orderkey
 		FROM lineitem_hash_part JOIN orders_hash_part ON (l_orderkey = o_orderkey) 
 		WHERE o_custkey < 15
 		ORDER BY 1,2;
+$Q$);
 
 -- explain without order by
 -- notice master plan has order by on distinct on column
+SELECT coordinator_plan($Q$
 EXPLAIN (COSTS FALSE)
 	SELECT DISTINCT ON (o_custkey) o_custkey, l_orderkey
 		FROM lineitem_hash_part JOIN orders_hash_part ON (l_orderkey = o_orderkey) 
 		WHERE o_custkey < 15;
+$Q$);
 
 -- each customer's each order's first l_partkey
 SELECT DISTINCT ON (o_custkey, l_orderkey) o_custkey, l_orderkey, l_linenumber, l_partkey
@@ -431,10 +435,12 @@ SELECT DISTINCT ON (o_custkey, l_orderkey) o_custkey, l_orderkey, l_linenumber, 
 	ORDER BY 1,2,3;
 
 -- explain without order by
+SELECT coordinator_plan($Q$
 EXPLAIN (COSTS FALSE)
 	SELECT DISTINCT ON (o_custkey, l_orderkey) o_custkey, l_orderkey, l_linenumber, l_partkey
 		FROM lineitem_hash_part JOIN orders_hash_part ON (l_orderkey = o_orderkey) 
 		WHERE o_custkey < 20;
+$Q$);
 
 -- each customer's each order's last l_partkey
 SELECT DISTINCT ON (o_custkey, l_orderkey) o_custkey, l_orderkey, l_linenumber, l_partkey

@@ -118,3 +118,17 @@ BEGIN
 	END IF;
 END;
 $$LANGUAGE plpgsql;
+
+-- Create a function to ignore worker plans in explain output
+CREATE OR REPLACE FUNCTION coordinator_plan(explain_commmand text, out query_plan text)
+RETURNS SETOF TEXT AS $$
+BEGIN
+  FOR query_plan IN execute explain_commmand LOOP
+    RETURN next;
+    IF query_plan LIKE '%Task Count:%'
+    THEN
+        RETURN;
+    END IF;
+  END LOOP;
+  RETURN;
+END; $$ language plpgsql;
