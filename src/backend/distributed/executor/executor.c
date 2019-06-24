@@ -1,6 +1,119 @@
 /*-------------------------------------------------------------------------
  *
- * executor.c
+ * adaptive_executor.c
+ *
+ * The adaptive executor executes a list of tasks (queries on shards) over
+ * a connection pool per worker node. The results of the queries, if any,
+ * are written to a tuple store.
+ *
+ * The concepts in the executor are modelled in a set of structs:
+ *
+ * - DistributedExecution:
+ *     Execution of a Task list over a set of WorkerPools.
+ * - WorkerPool
+ *     Pool of WorkerSessions for the same worker which opportunistically
+ *     executes "unassigned" tasks from a queue.
+ * - WorkerSession:
+ *     Connection to a worker that is used to execute "assigned" tasks
+ *     from a queue and may execute unasssigned tasks from the WorkerPool.
+ * - ShardCommandExecution:
+ *     Execution of a Task across a list of placements.
+ * - TaskPlacementExecution:
+ *     Execution of a Task on a specific placement.
+ *     Used in the WorkerPool and WorkerSession queues.
+ *
+ * Every connection pool (WorkerPool) and every connection (WorkerSession)
+ * have a queue of tasks that are ready to execute (readyTaskQueue) and a
+ * queue/set of pending tasks that may become ready later in the execution
+ * (pendingTaskQueue). The tasks are wrapped in a ShardCommandExecution,
+ * which keeps track of the state of execution and is referenced from a
+ * TaskPlacementExecution, which is the data structure that is actually
+ * added to the queues and describes the state of the execution of a task
+ * on a particular worker node.
+ *
+ * When the task list is part of a bigger distributed transaction, the
+ * shards that are accessed or modified by the task may have already been
+ * accessed earlier in the transaction. We need to make sure we use the
+ * same connection since it may hold relevant locks or have uncommitted
+ * writes. In that case we "assign" the task to a connection by adding
+ * it to the task queue of specific connection (in
+ * AssignTasksToConnections). Otherwise we consider the task unassigned
+ * and add it to the task queue of a worker pool, which means that it
+ * can be executed over any connection in the pool.
+ *
+ * A task may be executed on multiple placements in case of a reference
+ * table or a replicated distributed table. Depending on the type of
+ * task, it may not be ready to be executed on a worker node immediately.
+ * For instance, INSERTs on a reference table are executed serially across
+ * placements to avoid deadlocks when concurrent INSERTs take conflicting
+ * locks. At the beginning, only the "first" placement is ready to execute
+ * and therefore added to the readyTaskQueue in the pool or connection.
+ * The remaining placements are added to the pendingTaskQueue. Once
+ * execution on the first placement is done the second placement moves
+ * from pendingTaskQueue to readyTaskQueue. The same approach is used to
+ * fail over read-only tasks to another placement.
+ *
+ * Once all the tasks are added to a queue, the main loop in
+ * RunDistributedExecution repeatedly does the following:
+ *
+ * For each pool:
+ * - ManageWorkPool evaluates whether to open additional connections
+ *   based on the number unassigned tasks that are ready to execute
+ *   and the targetPoolSize of the execution.
+ *
+ * Poll all connections:
+ * - We use a WaitEventSet that contains all (non-failed) connections
+ *   and is rebuilt whenever the set of active connections or any of
+ *   their wait flags change.
+ *
+ *   We almost always check for WL_SOCKET_READABLE because a session
+ *   can emit notices at any time during execution, but it will only
+ *   wake up WaitEventSetWait when there are actual bytes to read.
+ *
+ *   We check for WL_SOCKET_WRITEABLE just after sending bytes in case
+ *   there is not enough space in the TCP buffer. Since a socket is
+ *   almost always writable we also use WL_SOCKET_WRITEABLE as a
+ *   mechanism to wake up WaitEventSetWait for non-I/O events, e.g.
+ *   when a task moves from pending to ready.
+ *
+ * For each connection that is ready:
+ * - ConnectionStateMachine handles connection establishment and failure
+ *   as well as command execution via TransactionStateMachine.
+ *
+ * When a connection is ready to execute a new task, it first checks its
+ * own readyTaskQueue and otherwise takes a task from the worker pool's
+ * readyTaskQueue (on a first-come-first-serve basis).
+ *
+ * In cases where the tasks finish quickly (e.g. <1ms), a single
+ * connection will often be sufficient to finish all tasks. It is
+ * therefore not necessary that all connections are established
+ * successfully or open a transaction (which may be blocked by an
+ * intermediate pgbouncer in transaction pooling mode). It is therefore
+ * essential that we take a task from the queue only after opening a
+ * transaction block.
+ *
+ * When a command on a worker finishes or the connection is lost, we call
+ * PlacementExecutionDone, which then updates the state of the task
+ * based on whether we need to run it on other placements. When a
+ * connection fails or all connections to a worker fail, we also call
+ * PlacementExecutionDone for all queued tasks to try the next placement
+ * and, if necessary, mark shard placements as inactive. If a task fails
+ * to execute on all placements, the execution fails and the distributed
+ * transaction rolls back.
+ *
+ * For multi-row INSERTs, tasks are executed sequentially by
+ * SequentialRunDistributedExecution instead of in parallel, which allows
+ * a high degree of concurrency without high risk of deadlocks.
+ * Conversely, multi-row UPDATE/DELETE/DDL commands take aggressive locks
+ * which forbids concurrency, but allows parallelism without high risk
+ * of deadlocks. Note that this is unrelated to SEQUENTIAL_CONNECTION,
+ * which indicates that we should use at most one connection per node, but
+ * can run tasks in parallel across nodes. This is used when there are
+ * writes to a reference table that has foreign keys from a distributed
+ * table.
+ *
+ * Execution finishes when all tasks are done, the query errors out, or
+ * the user cancels the query.
  *
  *-------------------------------------------------------------------------
  */
@@ -145,6 +258,31 @@ typedef struct DistributedExecution
 
 /*
  * WorkerPool represents a pool of sessions on the same worker.
+ *
+ * A WorkerPool has two queues containing the TaskPlacementExecutions that need
+ * to be executed on the worker.
+ *
+ * TaskPlacementExecutions that are ready to execute are in readyTaskQueue.
+ * TaskPlacementExecutions that may need to be executed once execution on
+ * another worker finishes or fails are in pendingTaskQueue.
+ *
+ * In TransactionStateMachine, the sessions opportunistically take
+ * TaskPlacementExecutions from the readyQueue when they are ready and have no
+ * assigned tasks.
+ *
+ * We track connection timeouts per WorkerPool. When the first connection is
+ * established we set the poolStartTime and if no connection can be established
+ * before NodeConnectionTime, the WorkerPool fails. There is some specialised
+ * logic in case citus.force_max_query_parallelization is enabled because we
+ * may fail to establish a connection per placement after already establishing
+ * some connections earlier in the execution.
+ *
+ * A WorkerPool fails if all connection attempts failed or all connections
+ * are lost. In that case, all TaskPlacementExecutions in the queues are
+ * marked as failed in PlacementExecutionDone, which typically causes the
+ * task and therefore the distributed execution to fail. In case of a
+ * replicated table or a SELECT on a reference table, the remaining placements
+ * will be tried by moving them from a pendingTaskQueue to a readyTaskQueue.
  */
 typedef struct WorkerPool
 {
@@ -207,7 +345,15 @@ struct TaskPlacementExecution;
 
 /*
  * WorkerSession represents a session on a worker that can execute tasks
- * (sequentially).
+ * (sequentially) and is part of a WorkerPool.
+ *
+ * Each WorkerSession has two queues containing TaskPlacementExecutions that
+ * need to be executed within this particular session because the session
+ * accessed the same or co-located placements earlier in the transaction.
+ *
+ * TaskPlacementExecutions that are ready to execute are in readyTaskQueue.
+ * TaskPlacementExecutions that may need to be executed once execution on
+ * another worker finishes or fails are in pendingTaskQueue.
  */
 typedef struct WorkerSession
 {
