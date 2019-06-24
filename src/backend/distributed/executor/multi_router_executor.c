@@ -272,7 +272,7 @@ AcquireExecutorShardLock(Task *task, CmdType commandType)
 	 * must be conflict with each other modify command. By getting ExlcusiveLock
 	 * we guarantee that. Note that, getting ExlusiveLock does not mimic the
 	 * behaviour of Postgres exactly. Getting row lock with FOR NO KEY UPDATE and
-	 * FOR KEY SHARE do not conflicts in Postgres, yet they block each other in
+	 * FOR KEY SHARE do not conflict in Postgres, yet they block each other in
 	 * our implementation. Since FOR SHARE and FOR KEY SHARE does not conflict
 	 * with each other but conflicts with modify commands, we get ShareLock for
 	 * them.

@@ -612,6 +612,13 @@ ModifyQuerySupported(Query *queryTree, Query *originalQuery, bool multiShardQuer
 									 NULL, NULL);
 			}
 
+			if (cteQuery->hasForUpdate)
+			{
+				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+									 "Router planner doesn't support SELECT FOR UPDATE in common table expressions.",
+									 NULL, NULL);
+			}
+
 			cteError = MultiRouterPlannableQuery(cteQuery);
 			if (cteError)
 			{
