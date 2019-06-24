@@ -1204,58 +1204,38 @@ SELECT DISTINCT ON (o_custkey) o_custkey, l_orderkey
         14 |      11011
 (10 rows)
 
+SELECT coordinator_plan($Q$
 EXPLAIN (COSTS FALSE)
 	SELECT DISTINCT ON (o_custkey) o_custkey, l_orderkey
 		FROM lineitem_hash_part JOIN orders_hash_part ON (l_orderkey = o_orderkey) 
 		WHERE o_custkey < 15
 		ORDER BY 1,2;
-                                                   QUERY PLAN                                                   
-----------------------------------------------------------------------------------------------------------------
+$Q$);
+                        coordinator_plan                         
+-----------------------------------------------------------------
  Unique
    ->  Sort
          Sort Key: remote_scan.o_custkey, remote_scan.l_orderkey
          ->  Custom Scan (Citus Real-Time)
                Task Count: 4
-               Tasks Shown: One of 4
-               ->  Task
-                     Node: host=localhost port=57637 dbname=regression
-                     ->  Unique
-                           ->  Sort
-                                 Sort Key: orders_hash_part.o_custkey, lineitem_hash_part.l_orderkey
-                                 ->  Hash Join
-                                       Hash Cond: (lineitem_hash_part.l_orderkey = orders_hash_part.o_orderkey)
-                                       ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
-                                       ->  Hash
-                                             ->  Seq Scan on orders_hash_part_360045 orders_hash_part
-                                                   Filter: (o_custkey < 15)
-(17 rows)
+(5 rows)
 
 -- explain without order by
 -- notice master plan has order by on distinct on column
+SELECT coordinator_plan($Q$
 EXPLAIN (COSTS FALSE)
 	SELECT DISTINCT ON (o_custkey) o_custkey, l_orderkey
 		FROM lineitem_hash_part JOIN orders_hash_part ON (l_orderkey = o_orderkey) 
 		WHERE o_custkey < 15;
-                                                   QUERY PLAN                                                   
-----------------------------------------------------------------------------------------------------------------
+$Q$);
+             coordinator_plan              
+-------------------------------------------
  Unique
    ->  Sort
          Sort Key: remote_scan.o_custkey
          ->  Custom Scan (Citus Real-Time)
                Task Count: 4
-               Tasks Shown: One of 4
-               ->  Task
-                     Node: host=localhost port=57637 dbname=regression
-                     ->  Unique
-                           ->  Sort
-                                 Sort Key: orders_hash_part.o_custkey
-                                 ->  Hash Join
-                                       Hash Cond: (lineitem_hash_part.l_orderkey = orders_hash_part.o_orderkey)
-                                       ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
-                                       ->  Hash
-                                             ->  Seq Scan on orders_hash_part_360045 orders_hash_part
-                                                   Filter: (o_custkey < 15)
-(17 rows)
+(5 rows)
 
 -- each customer's each order's first l_partkey
 SELECT DISTINCT ON (o_custkey, l_orderkey) o_custkey, l_orderkey, l_linenumber, l_partkey
@@ -1303,30 +1283,20 @@ SELECT DISTINCT ON (o_custkey, l_orderkey) o_custkey, l_orderkey, l_linenumber, 
 (36 rows)
 
 -- explain without order by
+SELECT coordinator_plan($Q$
 EXPLAIN (COSTS FALSE)
 	SELECT DISTINCT ON (o_custkey, l_orderkey) o_custkey, l_orderkey, l_linenumber, l_partkey
 		FROM lineitem_hash_part JOIN orders_hash_part ON (l_orderkey = o_orderkey) 
 		WHERE o_custkey < 20;
-                                                   QUERY PLAN                                                   
-----------------------------------------------------------------------------------------------------------------
+$Q$);
+                        coordinator_plan                         
+-----------------------------------------------------------------
  Unique
    ->  Sort
          Sort Key: remote_scan.o_custkey, remote_scan.l_orderkey
          ->  Custom Scan (Citus Real-Time)
                Task Count: 4
-               Tasks Shown: One of 4
-               ->  Task
-                     Node: host=localhost port=57637 dbname=regression
-                     ->  Unique
-                           ->  Sort
-                                 Sort Key: orders_hash_part.o_custkey, lineitem_hash_part.l_orderkey
-                                 ->  Hash Join
-                                       Hash Cond: (lineitem_hash_part.l_orderkey = orders_hash_part.o_orderkey)
-                                       ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
-                                       ->  Hash
-                                             ->  Seq Scan on orders_hash_part_360045 orders_hash_part
-                                                   Filter: (o_custkey < 20)
-(17 rows)
+(5 rows)
 
 -- each customer's each order's last l_partkey
 SELECT DISTINCT ON (o_custkey, l_orderkey) o_custkey, l_orderkey, l_linenumber, l_partkey
