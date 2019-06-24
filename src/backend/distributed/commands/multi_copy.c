@@ -124,13 +124,13 @@ typedef struct CopyPlacementState CopyPlacementState;
  * later, when copy ends or a switch-over happens. See CitusSendTupleToPlacements()
  * for more details.
  *
- * This is done so we are compatible with executor.c. If a previous command
- * in the current transaction has been executed using executor.c, then
+ * This is done so we are compatible with adaptive_executor. If a previous command
+ * in the current transaction has been executed using adaptive_executor.c, then
  * CopyGetPlacementConnection() might return the same connection for multiple
  * placements. We support that case by the buffering mechanism described above.
  *
- * If no previous command in the current transaction has used executor.c, then
- * CopyGetPlacementConnection() returns one connection per placement and no
+ * If no previous command in the current transaction has used adaptive_executor.c,
+ * then CopyGetPlacementConnection() returns one connection per placement and no
  * buffering happens and we put the copy data directly on connection.
  */
 typedef struct CopyConnectionState
