@@ -2925,6 +2925,7 @@ PlacementExecutionDone(TaskPlacementExecution *placementExecution, bool succeede
 		placementExecution->shardCommandExecution;
 	TaskExecutionState executionState = shardCommandExecution->executionState;
 	TaskExecutionState newExecutionState = TASK_EXECUTION_NOT_FINISHED;
+	bool failedPlacementExecutionIsOnPendingQueue = false;
 
 	/* mark the placement execution as finished */
 	if (succeeded)
@@ -2945,6 +2946,17 @@ PlacementExecutionDone(TaskPlacementExecution *placementExecution, bool succeede
 			{
 				UpdateShardPlacementState(shardPlacement->placementId, FILE_INACTIVE);
 			}
+		}
+
+		if (placementExecution->executionState == PLACEMENT_EXECUTION_NOT_READY)
+		{
+			/*
+			 * If the placement is in NOT_READY state, it means that the placement
+			 * execution is assigned to the pending queue of a failed pool or
+			 * session. So, we should not schedule the next placement execution based
+			 * on this failure.
+			 */
+			failedPlacementExecutionIsOnPendingQueue = true;
 		}
 
 		placementExecution->executionState = PLACEMENT_EXECUTION_FAILED;
@@ -2980,7 +2992,7 @@ PlacementExecutionDone(TaskPlacementExecution *placementExecution, bool succeede
 		execution->failed = true;
 		return;
 	}
-	else
+	else if (!failedPlacementExecutionIsOnPendingQueue)
 	{
 		ScheduleNextPlacementExecution(placementExecution, succeeded);
 	}
@@ -3004,22 +3016,13 @@ ScheduleNextPlacementExecution(TaskPlacementExecution *placementExecution, bool 
 		executionOrder == EXECUTION_ORDER_SEQUENTIAL)
 	{
 		TaskPlacementExecution *nextPlacementExecution = NULL;
-		int placementExecutionCount = shardCommandExecution->placementExecutionCount;
+		int placementExecutionCount PG_USED_FOR_ASSERTS_ONLY =
+			shardCommandExecution->placementExecutionCount;
 
 		/* find a placement execution that is not yet marked as failed */
 		do {
 			int nextPlacementExecutionIndex =
 				placementExecution->placementExecutionIndex + 1;
-
-			if (nextPlacementExecutionIndex == placementExecutionCount)
-			{
-				/*
-				 * TODO: We should not need to reset nextPlacementExecutionIndex.
-				 * However, we're currently not handling failed worker pools
-				 * and sessions very well. Thus, reset the execution index.
-				 */
-				nextPlacementExecutionIndex = 0;
-			}
 
 			/* if all tasks failed then we should already have errored out */
 			Assert(nextPlacementExecutionIndex < placementExecutionCount);
