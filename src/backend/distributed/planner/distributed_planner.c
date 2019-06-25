@@ -982,7 +982,7 @@ FinalizePlan(PlannedStmt *localPlan, DistributedPlan *distributedPlan)
 
 	switch (executorType)
 	{
-		case MULTI_ADAPTIVE_EXECUTOR:
+		case MULTI_EXECUTOR_ADAPTIVE:
 		{
 			customScan->methods = &AdaptiveExecutorCustomScanMethods;
 			break;

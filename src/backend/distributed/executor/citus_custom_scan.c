@@ -207,7 +207,7 @@ AdaptiveExecutorCreateScan(CustomScan *scan)
 {
 	CitusScanState *scanState = palloc0(sizeof(CitusScanState));
 
-	scanState->executorType = MULTI_ADAPTIVE_EXECUTOR;
+	scanState->executorType = MULTI_EXECUTOR_ADAPTIVE;
 	scanState->customScanState.ss.ps.type = T_CustomScanState;
 	scanState->distributedPlan = GetDistributedPlan(scan);
 

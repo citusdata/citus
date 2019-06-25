@@ -174,7 +174,7 @@ CreateShardsWithRoundRobinPolicy(Oid distributedTableId, int32 shardCount,
 	 * Make sure we don't process cancel signals until all shards
 	 * are created if the executor is not enabled.
 	 */
-	if (MaxAdaptiveExecutorPoolSize == 0)
+	if (TaskExecutorType != MULTI_EXECUTOR_ADAPTIVE)
 	{
 		HOLD_INTERRUPTS();
 	}
@@ -244,7 +244,7 @@ CreateShardsWithRoundRobinPolicy(Oid distributedTableId, int32 shardCount,
 	CreateShardsOnWorkers(distributedTableId, insertedShardPlacements,
 						  useExclusiveConnections, colocatedShard);
 
-	if (MaxAdaptiveExecutorPoolSize == 0)
+	if (TaskExecutorType != MULTI_EXECUTOR_ADAPTIVE)
 	{
 		if (QueryCancelPending)
 		{

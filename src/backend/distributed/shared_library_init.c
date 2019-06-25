@@ -109,7 +109,7 @@ static const struct config_enum_entry replication_model_options[] = {
 };
 
 static const struct config_enum_entry task_executor_type_options[] = {
-	{ "adaptive", MULTI_ADAPTIVE_EXECUTOR, false },
+	{ "adaptive", MULTI_EXECUTOR_ADAPTIVE, false },
 	{ "real-time", MULTI_EXECUTOR_REAL_TIME, false },
 	{ "task-tracker", MULTI_EXECUTOR_TASK_TRACKER, false },
 	{ NULL, 0, false }
@@ -747,7 +747,7 @@ RegisterCitusConfigVariables(void)
 					 "disabled"),
 		gettext_noop("See src/backend/executor/README for the details"),
 		&MaxAdaptiveExecutorPoolSize,
-		4, 0, INT_MAX,
+		4, 1, INT_MAX,
 		PGC_USERSET,
 		0,
 		NULL, NULL, NULL);
@@ -956,7 +956,7 @@ RegisterCitusConfigVariables(void)
 					 "queries that touch thousands of shards and/or that involve table "
 					 "repartitioning."),
 		&TaskExecutorType,
-		MULTI_ADAPTIVE_EXECUTOR,
+		MULTI_EXECUTOR_ADAPTIVE,
 		task_executor_type_options,
 		PGC_USERSET,
 		0,
