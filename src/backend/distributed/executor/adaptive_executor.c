@@ -2680,11 +2680,13 @@ PlacementAccessListForTask(Task *task, ShardPlacement *taskPlacement)
 
 /*
  * ReceiveResults reads the result of a command or query and writes returned
- * rows to the tuple store of the scan state.
+ * rows to the tuple store of the scan state. It returns whether fetching results
+ * were done. On failure, it throws an error.
  */
 static bool
 ReceiveResults(WorkerSession *session, bool storeRows)
 {
+	bool fetchDone = false;
 	MultiConnection *connection = session->connection;
 	WorkerPool *workerPool = session->workerPool;
 	DistributedExecution *execution = workerPool->distributedExecution;
@@ -2719,8 +2721,9 @@ ReceiveResults(WorkerSession *session, bool storeRows)
 		PGresult *result = PQgetResult(connection->pgConn);
 		if (result == NULL)
 		{
-			/* no more results */
-			return true;
+			/* no more results, break out of loop and free allocated memory */
+			fetchDone = true;
+			break;
 		}
 
 		resultStatus = PQresultStatus(result);
@@ -2740,14 +2743,23 @@ ReceiveResults(WorkerSession *session, bool storeRows)
 				execution->rowsProcessed += currentAffectedTupleCount;
 			}
 
-			/* no more results */
-			return true;
+			PQclear(result);
+
+			/* no more results, break out of loop and free allocated memory */
+			fetchDone = true;
+			break;
 		}
-		if (resultStatus == PGRES_TUPLES_OK)
+		else if (resultStatus == PGRES_TUPLES_OK)
 		{
-			/* we've already consumed all the tuples, no more results */
+			/*
+			 * We've already consumed all the tuples, no more results. Break out
+			 * of loop and free allocated memory before returning.
+			 */
 			Assert(PQntuples(result) == 0);
-			return true;
+			PQclear(result);
+
+			fetchDone = true;
+			break;
 		}
 		else if (resultStatus != PGRES_SINGLE_TUPLE)
 		{
@@ -2823,7 +2835,14 @@ ReceiveResults(WorkerSession *session, bool storeRows)
 		}
 	}
 
-	return false;
+	if (columnArray != NULL)
+	{
+		pfree(columnArray);
+	}
+
+	MemoryContextDelete(ioContext);
+
+	return fetchDone;
 }
 
 
