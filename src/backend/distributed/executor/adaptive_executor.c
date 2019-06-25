@@ -642,7 +642,7 @@ void
 ExecuteUtilityTaskListWithoutResults(List *taskList, int targetPoolSize,
 									 bool forceSequentialExecution)
 {
-	if (MaxAdaptiveExecutorPoolSize > 0)
+	if (TaskExecutorType == MULTI_EXECUTOR_ADAPTIVE)
 	{
 		ExecuteTaskList(CMD_UTILITY, taskList, targetPoolSize);
 	}
