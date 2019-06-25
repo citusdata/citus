@@ -26,7 +26,7 @@ step "s1-insert-1"
   INSERT INTO test_locking (a) VALUES (1);
 }
 
-step "s1-finish"
+step "s1-commit"
 {
   COMMIT;
 }
@@ -39,9 +39,9 @@ step "s2-insert"
   INSERT INTO test_locking (a) VALUES (1);
 }
 
-step "s2-finish"
+step "s2-commit"
 {
   COMMIT;
 }
 
-permutation "s1-insert-1" "s2-insert" "s1-finish" "s2-finish"
+permutation "s1-insert-1" "s2-insert" "s1-commit" "s2-commit"
