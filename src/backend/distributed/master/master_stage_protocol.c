@@ -504,7 +504,7 @@ void
 CreateShardsOnWorkers(Oid distributedRelationId, List *shardPlacements,
 					  bool useExclusiveConnection, bool colocatedShard)
 {
-	if (MaxAdaptiveExecutorPoolSize > 0)
+	if (TaskExecutorType == MULTI_EXECUTOR_ADAPTIVE)
 	{
 		CreateShardsOnWorkersViaExecutor(distributedRelationId, shardPlacements,
 										 useExclusiveConnection, colocatedShard);

@@ -128,7 +128,7 @@ CoordinatorInsertSelectExecScan(CustomScanState *node)
 
 			if (prunedTaskList != NIL)
 			{
-				if (MaxAdaptiveExecutorPoolSize == 0)
+				if (TaskExecutorType != MULTI_EXECUTOR_ADAPTIVE)
 				{
 					if (MultiShardConnectionType == SEQUENTIAL_CONNECTION)
 					{
