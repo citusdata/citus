@@ -377,9 +377,9 @@ DELETE FROM researchers WHERE lab_id = 6;
 \copy researchers FROM STDIN delimiter ','
 COMMIT;
 WARNING:  illegal value
-WARNING:  failed to commit critical transaction on localhost:57638, metadata is likely out of sync
+WARNING:  failed to commit transaction on localhost:57638
 WARNING:  illegal value
-WARNING:  failed to commit critical transaction on localhost:57637, metadata is likely out of sync
+WARNING:  failed to commit transaction on localhost:57637
 WARNING:  could not commit transaction for shard 1200001 on any active node
 ERROR:  could not commit transaction on any active node
 \unset VERBOSITY
@@ -433,6 +433,7 @@ SELECT lab_id FROM researchers WHERE lab_id = 2 AND id = 0;
 (0 rows)
 
 ALTER TABLE researchers ADD COLUMN motto text;
+ERROR:  cannot perform a parallel DDL command because multiple placements have been accessed over the same connection
 ROLLBACK;
 -- can perform sequential DDL once a connection is used for multiple shards
 BEGIN;
@@ -527,13 +528,14 @@ FOR EACH ROW EXECUTE PROCEDURE reject_bad();
 BEGIN;
 INSERT INTO objects VALUES (1, 'apple');
 INSERT INTO objects VALUES (2, 'BAD');
-ERROR:  illegal value
+WARNING:  illegal value
 COMMIT;
 -- so the data should noy be persisted
 SELECT * FROM objects WHERE id = 2;
  id | name 
 ----+------
-(0 rows)
+  2 | BAD
+(1 row)
 
 SELECT * FROM labs WHERE id = 7;
  id | name 
@@ -551,7 +553,7 @@ AND    sp.shardstate = 3
 AND    s.logicalrelid = 'objects'::regclass;
  count 
 -------
-     0
+     1
 (1 row)
 
 DELETE FROM objects;
@@ -575,11 +577,9 @@ FOR EACH ROW EXECUTE PROCEDURE reject_bad();
 BEGIN;
 INSERT INTO objects VALUES (1, 'apple');
 INSERT INTO objects VALUES (2, 'BAD');
-ERROR:  illegal value
 INSERT INTO labs VALUES (8, 'Aperture Science');
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
 INSERT INTO labs VALUES (2, 'BAD');
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
+ERROR:  illegal value
 COMMIT;
 -- data should NOT be persisted
 SELECT * FROM objects WHERE id = 1;
@@ -602,7 +602,7 @@ AND    (s.logicalrelid = 'objects'::regclass OR
 	    s.logicalrelid = 'labs'::regclass);
  count 
 -------
-     3
+     2
 (1 row)
 
 -- what if the failures happen at COMMIT time?
@@ -619,8 +619,6 @@ INSERT INTO objects VALUES (1, 'apple');
 INSERT INTO objects VALUES (2, 'BAD');
 INSERT INTO labs VALUES (9, 'Umbrella Corporation');
 COMMIT;
-WARNING:  illegal value
-WARNING:  failed to commit critical transaction on localhost:57638, metadata is likely out of sync
 -- data should be persisted
 SELECT * FROM objects WHERE id = 2;
  id | name 
@@ -663,9 +661,9 @@ INSERT INTO labs VALUES (8, 'Aperture Science');
 INSERT INTO labs VALUES (9, 'BAD');
 COMMIT;
 WARNING:  illegal value
-WARNING:  failed to commit critical transaction on localhost:57637, metadata is likely out of sync
+WARNING:  failed to commit transaction on localhost:57637
 WARNING:  illegal value
-WARNING:  failed to commit critical transaction on localhost:57638, metadata is likely out of sync
+WARNING:  failed to commit transaction on localhost:57638
 WARNING:  could not commit transaction for shard 1200002 on any active node
 WARNING:  could not commit transaction for shard 1200003 on any active node
 ERROR:  could not commit transaction on any active node
@@ -704,7 +702,7 @@ INSERT INTO labs VALUES (8, 'Aperture Science');
 INSERT INTO labs VALUES (9, 'BAD');
 COMMIT;
 WARNING:  illegal value
-WARNING:  failed to commit critical transaction on localhost:57637, metadata is likely out of sync
+WARNING:  failed to commit transaction on localhost:57637
 WARNING:  could not commit transaction for shard 1200002 on any active node
 \set VERBOSITY default
 -- data to objects should be persisted, but labs should not...
@@ -1308,7 +1306,8 @@ ALTER USER test_user RENAME TO test_user_new;
 \c - test_user - :master_port
 -- fails on all shard placements
 INSERT INTO numbers_hash_failure_test VALUES (2,2);
-ERROR:  connection error: localhost:57638
+WARNING:  connection error: localhost:57638
+ERROR:  could not modify any active placements
 -- connect back to the master with the proper user to continue the tests 
 \c - :default_user - :master_port
 SET citus.next_shard_id TO 1200020;
@@ -1435,6 +1434,7 @@ SELECT id FROM users WHERE id = 6;
 (1 row)
 
 ALTER TABLE items ADD COLUMN last_update timestamptz;
+ERROR:  cannot perform a parallel DDL command because multiple placements have been accessed over the same connection
 ROLLBACK;
 -- can perform sequential DDL after a co-located table has been read over 1 connection
 BEGIN;

@@ -44,7 +44,8 @@ SELECT citus.mitmproxy('conn.delay(500)');
 (1 row)
 
 ALTER TABLE products ADD CONSTRAINT p_key PRIMARY KEY(product_no);
-ERROR:  could not establish any connections to the node localhost:9060 after 400 ms
+WARNING:  could not establish connection after 400 ms
+ERROR:  connection error: localhost:9060
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
 -----------
@@ -169,7 +170,7 @@ SELECT citus.mitmproxy('conn.delay(500)');
 (1 row)
 
 SELECT count(*) FROM single_replicatated;
-ERROR:  could not establish any connections to the node localhost:9060 after 400 ms
+ERROR:  failed to execute task 1
 SET citus.force_max_query_parallelization TO OFF;
 -- one similar test, but this time on modification queries
 -- to see that connection establishement failures could
@@ -235,6 +236,7 @@ SELECT citus.mitmproxy('conn.allow()');
  
 (1 row)
 
+SET citus.node_connection_timeout TO DEFAULT;
 DROP SCHEMA fail_connect CASCADE;
 NOTICE:  drop cascades to 3 other objects
 DETAIL:  drop cascades to table products

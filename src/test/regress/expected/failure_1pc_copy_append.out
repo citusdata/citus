@@ -52,8 +52,8 @@ SELECT citus.dump_network_traffic();
  (0,worker,"[""RowDescription(fieldcount=2,fields=['F(name=min,tableoid=0,colattrnum=0,typoid=23,typlen=4,typmod=-1,format_code=0)', 'F(name=max,tableoid=0,colattrnum=0,typoid=23,typlen=4,typmod=-1,format_code=0)'])"", 'DataRow(columncount=2,columns=[""C(length=0,value=b\\'\\')"", ""C(length=1,value=b\\'0\\')""])', 'CommandComplete(command=SELECT 1)', 'ReadyForQuery(state=in_transaction_block)']")
  (0,coordinator,"['Query(query=COMMIT)']")
  (0,worker,"['CommandComplete(command=COMMIT)', 'ReadyForQuery(state=idle)']")
- (0,coordinator,"['Query(query=SELECT count(1) AS count FROM copy_test_100400 copy_test WHERE true)']")
- (0,worker,"[""RowDescription(fieldcount=1,fields=['F(name=count,tableoid=0,colattrnum=0,typoid=20,typlen=8,typmod=-1,format_code=0)'])"", 'DataRow(columncount=1,columns=[""C(length=0,value=b\\'\\')""])', 'CommandComplete(command=SELECT 1)', 'ReadyForQuery(state=idle)']")
+ (0,coordinator,"['Query(query=COPY (SELECT count(1) AS count FROM copy_test_100400 copy_test WHERE true) TO STDOUT)']")
+ (0,worker,"[""CopyOutResponse(format=0,columncount=1,columns=['Anonymous(format=0)'])"", ""CopyData(data=b'4\\\\n')"", 'CopyDone()', 'CommandComplete(command=COPY 1)', 'ReadyForQuery(state=idle)']")
 (20 rows)
 
 ---- all of the following tests test behavior with 2 shard placements ----
@@ -161,24 +161,21 @@ SELECT * FROM pg_dist_shard s, pg_dist_shard_placement p
  copy_test    |  100400 | t            | 0             | 3             |  100400 |          1 |        8192 | localhost |     9060 |         101
 (2 rows)
 
-SELECT citus.mitmproxy('conn.onQuery(query="^SELECT").kill()');
+SELECT citus.mitmproxy('conn.onQuery(query="SELECT|COPY").kill()');
  mitmproxy 
 -----------
  
 (1 row)
 
 SELECT count(1) FROM copy_test;
-WARNING:  connection error: localhost:9060
-DETAIL:  server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
+WARNING:  could not consume data from worker node
  count 
 -------
      4
 (1 row)
 
 ---- cancel the connection when we send the data ----
-SELECT citus.mitmproxy('conn.onQuery(query="^SELECT").cancel(' ||  pg_backend_pid() || ')');
+SELECT citus.mitmproxy('conn.onQuery(query="SELECT|COPY").cancel(' ||  pg_backend_pid() || ')');
  mitmproxy 
 -----------
  

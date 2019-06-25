@@ -109,6 +109,7 @@ static const struct config_enum_entry replication_model_options[] = {
 };
 
 static const struct config_enum_entry task_executor_type_options[] = {
+	{ "adaptive", MULTI_ADAPTIVE_EXECUTOR, false },
 	{ "real-time", MULTI_EXECUTOR_REAL_TIME, false },
 	{ "task-tracker", MULTI_EXECUTOR_TASK_TRACKER, false },
 	{ NULL, 0, false }
@@ -740,6 +741,18 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
+		"citus.max_adaptive_executor_pool_size",
+		gettext_noop("Sets the maximum number of connections used per distributed query "
+					 "for each worker node. If set to zero, adaptive executor is "
+					 "disabled"),
+		gettext_noop("See src/backend/executor/README for the details"),
+		&MaxAdaptiveExecutorPoolSize,
+		4, 0, INT_MAX,
+		PGC_USERSET,
+		0,
+		NULL, NULL, NULL);
+
+	DefineCustomIntVariable(
 		"citus.max_worker_nodes_tracked",
 		gettext_noop("Sets the maximum number of worker nodes that are tracked."),
 		gettext_noop("Worker nodes' network locations, their membership and "
@@ -943,7 +956,7 @@ RegisterCitusConfigVariables(void)
 					 "queries that touch thousands of shards and/or that involve table "
 					 "repartitioning."),
 		&TaskExecutorType,
-		MULTI_EXECUTOR_REAL_TIME,
+		MULTI_ADAPTIVE_EXECUTOR,
 		task_executor_type_options,
 		PGC_USERSET,
 		0,
