@@ -66,17 +66,17 @@ check-multi: all tempinstall-main
 
 check-multi-non-adaptive: all tempinstall-main
 	$(pg_regress_multi_check) --load-extension=citus \
-	--max_pool_size=0 \
+	--max_adaptive_executor_pool_size=0 \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_schedule $(EXTRA_TESTS)
 
 check-failure-non-adaptive: all tempinstall-main
 	$(pg_regress_multi_check) --load-extension=citus --mitmproxy \
-	--max_pool_size=0 \
+	--max_adaptive_executor_pool_size=0 \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/failure_schedule $(EXTRA_TESTS)
 
 check-isolation-non-adaptive: all tempinstall-main
 	$(pg_regress_multi_check) --load-extension=citus --isolationtester \
-	--max_pool_size=0 \
+	--max_adaptive_executor_pool_size=0 \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/isolation_schedule $(EXTRA_TESTS)
 
 check-multi-vg: all tempinstall-main
