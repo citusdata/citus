@@ -879,6 +879,12 @@ TaskListModifiesDatabase(CmdType operation, List *taskList)
 }
 
 
+/*
+ * DistributedExecutionRequiresRollback returns true if the distributed
+ * execution should start a CoordinatedTransaction. In other words, if the
+ * function returns true, the execution sends BEGIN; to every connection
+ * involved in the distributed execution.
+ */
 static bool
 DistributedExecutionRequiresRollback(DistributedExecution *execution)
 {
@@ -1252,8 +1258,8 @@ AssignTasksToConnections(DistributedExecution *execution)
 				WorkerSession *session =
 					FindOrCreateWorkerSession(workerPool, connection);
 
-				elog(DEBUG4, "%s:%d has an assigned task", connection->hostname,
-					 connection->port);
+				elog(DEBUG4, "Session %ld (%s:%d) has an assigned task",
+					 session->sessionId, connection->hostname, connection->port);
 
 				placementExecution->assignedSession = session;
 
@@ -1379,7 +1385,7 @@ ExecutionOrderForTask(CmdType operation, Task *task)
 		case MERGE_FETCH_TASK:
 		default:
 		{
-			elog(ERROR, "unsupported task type %d in unified executor", task->taskType);
+			elog(ERROR, "unsupported task type %d in adaptive executor", task->taskType);
 		}
 	}
 }
@@ -2054,8 +2060,8 @@ ConnectionStateMachine(WorkerSession *session)
 				ConnStatusType status = PQstatus(connection->pgConn);
 				if (status == CONNECTION_OK)
 				{
-					elog(DEBUG4, "established connection to %s:%d", connection->hostname,
-						 connection->port);
+					elog(DEBUG4, "established connection to %s:%d for session %ld",
+						 connection->hostname, connection->port, session->sessionId);
 
 					workerPool->activeConnectionCount++;
 					workerPool->idleConnectionCount++;
@@ -2087,8 +2093,8 @@ ConnectionStateMachine(WorkerSession *session)
 				}
 				else
 				{
-					elog(DEBUG4, "established connection to %s:%d", connection->hostname,
-						 connection->port);
+					elog(DEBUG4, "established connection to %s:%d for session %ld",
+						 connection->hostname, connection->port, session->sessionId);
 
 					workerPool->activeConnectionCount++;
 					workerPool->idleConnectionCount++;
@@ -2607,6 +2613,17 @@ PopUnassignedPlacementExecution(WorkerPool *workerPool)
 }
 
 
+/*
+ * StartPlacementExecutionOnSession gets a TaskPlacementExecition and
+ * WorkerSession, the task's query is sent to the worker via the session.
+ *
+ * The function does some bookkeeping such as associating the placement
+ * accesses with the connection and updating session's local variables. For
+ * details read the comments in the function.
+ *
+ * The function returns true if the query is successfully sent over the
+ * connection, otherwise false.
+ */
 static bool
 StartPlacementExecutionOnSession(TaskPlacementExecution *placementExecution,
 								 WorkerSession *session)
