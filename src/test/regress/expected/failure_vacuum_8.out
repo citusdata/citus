@@ -66,7 +66,7 @@ SELECT shardid, shardstate FROM pg_dist_shard_placement where shardstate != 1 AN
 shardid in ( SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'vacuum_test'::regclass);
  shardid | shardstate 
 ---------+------------
-  102097 |          3
+  102093 |          3
 (1 row)
 
 UPDATE pg_dist_shard_placement SET shardstate = 1
