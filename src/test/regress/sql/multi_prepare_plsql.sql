@@ -176,7 +176,7 @@ SELECT plpgsql_test_2();
 
 -- run the tests which do not require re-partition
 -- with real-time executor
-SET citus.task_executor_type TO 'real-time';
+RESET citus.task_executor_type;
 
 -- now, run PL/pgsql functions
 SELECT plpgsql_test_1();
@@ -420,7 +420,7 @@ SELECT task_tracker_partition_column_select(4);
 SELECT task_tracker_partition_column_select(5);
 SELECT task_tracker_partition_column_select(6);
 
-SET citus.task_executor_type TO 'real-time';
+RESET citus.task_executor_type;
 
 -- check updates
 CREATE FUNCTION partition_parameter_update(int, int) RETURNS void as $$

@@ -109,7 +109,7 @@ SELECT count(*) FROM test a JOIN test b ON (a.val = b.val) WHERE a.id = 1 AND b.
 -- should not be able to transmit directly
 COPY "postgresql.conf" TO STDOUT WITH (format transmit);
 
-SET citus.task_executor_type TO 'real-time';
+RESET citus.task_executor_type;
 
 -- should not be able to transmit directly
 COPY "postgresql.conf" TO STDOUT WITH (format transmit);
@@ -147,7 +147,7 @@ SELECT lock_relation_if_exists('test', 'ACCESS SHARE');
 SELECT lock_relation_if_exists('test', 'EXCLUSIVE');
 ABORT;
 
-SET citus.task_executor_type TO 'real-time';
+RESET citus.task_executor_type;
 
 -- check no permission
 SET ROLE no_access;
@@ -168,7 +168,7 @@ SELECT count(*) FROM test a JOIN test b ON (a.val = b.val) WHERE a.id = 1 AND b.
 -- should not be able to transmit directly
 COPY "postgresql.conf" TO STDOUT WITH (format transmit);
 
-SET citus.task_executor_type TO 'real-time';
+RESET citus.task_executor_type;
 
 -- should be able to use intermediate results as any user
 BEGIN;

@@ -67,7 +67,7 @@ INSERT INTO articles_hash VALUES (1,  1, 'arsenous', 9572), (2,  2, 'abducing', 
 								 (44,  4, 'anteport', 16793),(45,  5, 'afrasia', 864),(46,  6, 'atlanta', 17702),(47,  7, 'abeyance', 1772),
 								 (48,  8, 'alkylic', 18610),(49,  9, 'anyone', 2681),(50, 10, 'anjanette', 19519);
 
-SET citus.task_executor_type TO 'real-time';
+RESET citus.task_executor_type;
 SET client_min_messages TO 'DEBUG2';
 
 -- test simple select for a single row

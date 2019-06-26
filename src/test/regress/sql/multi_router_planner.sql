@@ -107,7 +107,7 @@ INSERT INTO articles_hash VALUES (50, 10, 'anjanette', 19519);
 
 
 
-SET citus.task_executor_type TO 'real-time';
+RESET citus.task_executor_type;
 SET client_min_messages TO 'DEBUG2';
 
 -- insert a single row for the test
@@ -476,7 +476,7 @@ SELECT *
 	WHERE author_id >= 1 AND author_id <= 3
 ORDER BY 1,2,3,4;
 
-SET citus.task_executor_type TO 'real-time';
+RESET citus.task_executor_type;
 
 -- Test various filtering options for router plannable check
 SET client_min_messages to 'DEBUG2';

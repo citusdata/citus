@@ -16,7 +16,7 @@ SET client_min_messages TO DEBUG2;
 SET citus.explain_all_tasks TO on;
 -- to avoid differing explain output - executor doesn't matter,
 -- because were testing pruning here.
-SET citus.task_executor_type TO 'real-time';
+RESET citus.task_executor_type;
 
 -- Change configuration to treat lineitem and orders tables as large
 

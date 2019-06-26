@@ -10,7 +10,7 @@ INSERT INTO tab (a, b) VALUES (1, 2);
 
 \c - - - :follower_master_port
 
-SET citus.task_executor_type TO 'real-time';
+RESET citus.task_executor_type;
 SELECT * FROM tab;
 SET citus.task_executor_type TO 'task-tracker';
 SELECT * FROM tab;
