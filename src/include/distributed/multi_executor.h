@@ -31,6 +31,7 @@ extern int MultiShardConnectionType;
 extern bool WritableStandbyCoordinator;
 extern bool ForceMaxQueryParallelization;
 extern int MaxAdaptiveExecutorPoolSize;
+extern int ExecutorSlowStartInterval;
 
 
 extern void CitusExecutorStart(QueryDesc *queryDesc, int eflags);
