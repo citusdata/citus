@@ -152,7 +152,7 @@ SELECT count(*) FROM test a JOIN test b ON (a.val = b.val) WHERE a.id = 1 AND b.
 COPY "postgresql.conf" TO STDOUT WITH (format transmit);
 ERROR:  operation is not allowed
 HINT:  Run the command with a superuser.
-SET citus.task_executor_type TO 'real-time';
+RESET citus.task_executor_type;
 -- should not be able to transmit directly
 COPY "postgresql.conf" TO STDOUT WITH (format transmit);
 ERROR:  operation is not allowed
@@ -225,7 +225,7 @@ SELECT lock_relation_if_exists('test', 'ACCESS SHARE');
 SELECT lock_relation_if_exists('test', 'EXCLUSIVE');
 ERROR:  permission denied for table test
 ABORT;
-SET citus.task_executor_type TO 'real-time';
+RESET citus.task_executor_type;
 -- check no permission
 SET ROLE no_access;
 EXECUTE prepare_insert(1);
@@ -248,7 +248,7 @@ ERROR:  permission denied for table test
 COPY "postgresql.conf" TO STDOUT WITH (format transmit);
 ERROR:  operation is not allowed
 HINT:  Run the command with a superuser.
-SET citus.task_executor_type TO 'real-time';
+RESET citus.task_executor_type;
 -- should be able to use intermediate results as any user
 BEGIN;
 SELECT create_intermediate_result('topten', 'SELECT s FROM generate_series(1,10) s');

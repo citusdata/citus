@@ -43,3 +43,4 @@ s/.*-------------.*/------------------------------------------------------------
 s/.* QUERY PLAN .*/                              QUERY PLAN                              /g
 s/.*Custom Plan Provider.*Citus.*/              \"Custom Plan Provider\": \"Citus\",     /g
 s/.*Custom-Plan-Provide.*/\<Custom-Plan-Provider\>Citus Unified\<\/Custom-Plan-Provider\>     /g
+s/ +$//g

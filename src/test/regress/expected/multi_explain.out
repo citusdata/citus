@@ -11,7 +11,7 @@ SELECT substring(:'server_version', '\d+')::int > 9 AS version_above_nine;
 (1 row)
 
 \a\t
-SET citus.task_executor_type TO 'real-time';
+RESET citus.task_executor_type;
 SET citus.explain_distributed_queries TO on;
 -- Function that parses explain output as JSON
 CREATE FUNCTION explain_json(query text)
@@ -1052,7 +1052,7 @@ Aggregate
               ->  Aggregate
                     ->  Seq Scan on lineitem_290001 lineitem
                           Filter: (l_orderkey > 9030)
-SET citus.task_executor_type TO 'real-time';
+RESET citus.task_executor_type;
 PREPARE router_executor_query AS SELECT l_quantity FROM lineitem WHERE l_orderkey = 5;
 EXPLAIN EXECUTE router_executor_query;
 Custom Scan (Citus Router)  (cost=0.00..0.00 rows=0 width=0)

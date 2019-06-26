@@ -16,7 +16,7 @@ SET client_min_messages TO DEBUG2;
 SET citus.explain_all_tasks TO on;
 -- to avoid differing explain output - executor doesn't matter,
 -- because were testing pruning here.
-SET citus.task_executor_type TO 'real-time';
+RESET citus.task_executor_type;
 -- Change configuration to treat lineitem and orders tables as large
 SET citus.log_multi_join_order to true;
 SET citus.enable_repartition_joins to ON;
@@ -39,7 +39,7 @@ SELECT l_orderkey, l_linenumber, l_shipdate FROM lineitem WHERE l_orderkey = 903
 LOG:  join order: [ "lineitem" ]
                               QUERY PLAN                               
 -----------------------------------------------------------------------
- Custom Scan (Citus Real-Time)
+ Custom Scan (Citus Adaptive)
    Task Count: 2
    Tasks Shown: All
    ->  Task
@@ -71,7 +71,7 @@ DEBUG:  join prunable for intervals [8997,14947] and [1,5986]
                                    QUERY PLAN                                   
 --------------------------------------------------------------------------------
  Aggregate
-   ->  Custom Scan (Citus Real-Time)
+   ->  Custom Scan (Citus Adaptive)
          Task Count: 2
          Tasks Shown: All
          ->  Task
@@ -101,7 +101,7 @@ SELECT l_orderkey, l_linenumber, l_shipdate FROM lineitem WHERE l_orderkey = 903
 LOG:  join order: [ "lineitem" ]
                                   QUERY PLAN                                   
 -------------------------------------------------------------------------------
- Custom Scan (Citus Real-Time)
+ Custom Scan (Citus Adaptive)
    Task Count: 2
    Tasks Shown: All
    ->  Task
@@ -171,7 +171,7 @@ SELECT l_orderkey, l_linenumber, l_shipdate FROM lineitem WHERE l_orderkey = 903
 LOG:  join order: [ "lineitem" ]
                                   QUERY PLAN                                   
 -------------------------------------------------------------------------------
- Custom Scan (Citus Real-Time)
+ Custom Scan (Citus Adaptive)
    Task Count: 2
    Tasks Shown: All
    ->  Task
@@ -242,7 +242,7 @@ LOG:  join order: [ "lineitem" ]
 DEBUG:  Plan is router executable
                                   QUERY PLAN                                   
 -------------------------------------------------------------------------------
- Custom Scan (Citus Router)
+ Custom Scan (Citus Adaptive)
    Task Count: 1
    Tasks Shown: All
    ->  Task
