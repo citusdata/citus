@@ -323,6 +323,9 @@ push(@pgOptions, '-c', "citus.remote_task_check_interval=1ms");
 push(@pgOptions, '-c', "citus.shard_replication_factor=2");
 push(@pgOptions, '-c', "citus.node_connection_timeout=${connectionTimeout}");
 
+# we disable slow start by default to encourage parallelism within tests
+push(@pgOptions, '-c', "citus.executor_slow_start_interval=0ms");
+
 if ($useMitmproxy)
 {
   # make tests reproducible by never trying to negotiate ssl
