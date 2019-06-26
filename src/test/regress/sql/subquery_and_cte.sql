@@ -9,6 +9,10 @@ CREATE TABLE dist_table (id int, value int);
 SELECT create_distributed_table('dist_table', 'id', colocate_with => 'users_table');
 INSERT INTO dist_table (id, value) VALUES(1, 2),(2, 3),(3,4);
 
+CREATE FUNCTION func() RETURNS TABLE (id int, value int) AS $$
+	SELECT 1, 2
+$$ LANGUAGE SQL;
+
 SET client_min_messages TO DEBUG1;
 
 -- CTEs are recursively planned, and subquery foo is also recursively planned
@@ -83,6 +87,11 @@ WITH cte1 AS (
 )
 UPDATE dist_table dt SET value = cte1.value_1 + cte2.event_type
 FROM cte1, cte2 WHERE cte1.user_id = dt.id AND dt.id = 1;
+
+-- volatile function calls should not be routed
+WITH cte1 AS (SELECT id, value FROM func())
+UPDATE dist_table dt SET value = cte1.value
+FROM cte1 WHERE dt.id = 1;
 
 -- CTEs are recursively planned, and subquery foo is also recursively planned
 -- final plan becomes a real-time plan since we also have events_table in the 
