@@ -88,7 +88,7 @@ INSERT INTO append_partitioned VALUES (414123, 'AAPL', 9580, '2004-10-19 10:23:5
 									   20.69);
 -- ensure the values are where we put them and query to ensure they are properly pruned
 SET client_min_messages TO 'DEBUG2';
-SET citus.task_executor_type TO 'real-time';
+RESET citus.task_executor_type;
 SELECT * FROM range_partitioned WHERE id = 32743;
 SELECT * FROM append_partitioned WHERE id = 414123;
 SET client_min_messages TO DEFAULT;
