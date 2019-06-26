@@ -615,7 +615,16 @@ ModifyQuerySupported(Query *queryTree, Query *originalQuery, bool multiShardQuer
 			if (cteQuery->hasForUpdate)
 			{
 				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-									 "Router planner doesn't support SELECT FOR UPDATE in common table expressions.",
+									 "Router planner doesn't support SELECT FOR UPDATE"
+									 " in common table expressions.",
+									 NULL, NULL);
+			}
+
+			if (FindNodeCheck((Node *) cteQuery, CitusIsVolatileFunction))
+			{
+				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+									 "Router planner doesn't support VOLATILE functions"
+									 " in common table expressions.",
 									 NULL, NULL);
 			}
 
