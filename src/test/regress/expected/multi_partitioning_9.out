@@ -1302,7 +1302,7 @@ SELECT relation::regclass, locktype, mode FROM pg_locks WHERE relation::regclass
 (3 rows)
 
 COMMIT;
-SET citus.task_executor_type TO 'real-time';
+RESET citus.task_executor_type;
 -- test locks on INSERT
 BEGIN;
 INSERT INTO partitioning_locks VALUES(1, 1, '2009-01-01');
@@ -1579,7 +1579,7 @@ EXPLAIN (COSTS OFF)
 SELECT * FROM partitioning_hash_test JOIN partitioning_hash_join_test USING (id, subid);
                                                                                 QUERY PLAN                                                                                
 --------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- Custom Scan (Citus Real-Time)
+ Custom Scan (Citus Adaptive)
    Task Count: 4
    Tasks Shown: One of 4
    ->  Task
@@ -1619,7 +1619,7 @@ EXPLAIN (COSTS OFF)
 SELECT * FROM partitioning_hash_test JOIN partitioning_hash_join_test USING (id, subid);
                                                                                   QUERY PLAN                                                                                  
 ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- Custom Scan (Citus Real-Time)
+ Custom Scan (Citus Adaptive)
    Task Count: 4
    Tasks Shown: One of 4
    ->  Task
@@ -1649,7 +1649,7 @@ EXPLAIN (COSTS OFF)
 SELECT * FROM partitioning_hash_test JOIN partitioning_hash_join_test USING (id);
                                                QUERY PLAN                                                
 ---------------------------------------------------------------------------------------------------------
- Custom Scan (Citus Real-Time)
+ Custom Scan (Citus Adaptive)
    Task Count: 4
    Tasks Shown: One of 4
    ->  Task

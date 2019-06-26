@@ -396,7 +396,7 @@ LIMIT 10 OFFSET 20;
       1453 |                 5
 (10 rows)
 
-SET citus.task_executor_type TO 'real-time';
+RESET citus.task_executor_type;
 SET client_min_messages TO DEBUG1;
 -- Ensure that we push down LIMIT and OFFSET properly
 -- No Group-By -> Push Down
