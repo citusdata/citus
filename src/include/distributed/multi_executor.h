@@ -59,6 +59,7 @@ extern void ExecuteQueryIntoDestReceiver(Query *query, ParamListInfo params,
 extern void ExecutePlanIntoDestReceiver(PlannedStmt *queryPlan, ParamListInfo params,
 										DestReceiver *dest);
 extern void SetLocalMultiShardModifyModeToSequential(void);
+extern void SetLocalForceMaxQueryParallelization(void);
 extern void SortTupleStore(CitusScanState *scanState);
 
 

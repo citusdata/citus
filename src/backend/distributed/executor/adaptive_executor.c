@@ -3394,3 +3394,17 @@ BuildWaitEventSet(List *sessionList)
 
 	return waitEventSet;
 }
+
+
+/*
+ * SetLocalForceMaxQueryParallelization simply a C interface for
+ * setting the following:
+ *      SET LOCAL citus.multi_shard_modify_mode TO on;
+ */
+void
+SetLocalForceMaxQueryParallelization(void)
+{
+	set_config_option("citus.force_max_query_parallelization", "on",
+					  (superuser() ? PGC_SUSET : PGC_USERSET), PGC_S_SESSION,
+					  GUC_ACTION_LOCAL, true, 0, false);
+}
