@@ -1999,7 +1999,6 @@ SELECT * FROM articles_hash
 	ORDER BY
 		author_id, id
 	LIMIT 5;
-DEBUG:  Router planner cannot handle multi-shard select queries
  id | author_id |    title     | word_count 
 ----+-----------+--------------+------------
   1 |         1 | arsenous     |       9572
