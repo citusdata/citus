@@ -618,9 +618,7 @@ GetTableCreationCommands(Oid relationId, bool includeSequenceDefaults)
 	char tableType = 0;
 	char *tableSchemaDef = NULL;
 	char *tableColumnOptionsDef = NULL;
-	char *createSchemaCommand = NULL;
 	char *tableOwnerDef = NULL;
-	Oid schemaId = InvalidOid;
 
 	/*
 	 * Set search_path to NIL so that all objects outside of pg_catalog will be
@@ -644,14 +642,6 @@ GetTableCreationCommands(Oid relationId, bool includeSequenceDefaults)
 			tableDDLEventList = lappend(tableDDLEventList, extensionDef);
 		}
 		tableDDLEventList = lappend(tableDDLEventList, serverDef);
-	}
-
-	/* create schema if the table is not in the default namespace (public) */
-	schemaId = get_rel_namespace(relationId);
-	createSchemaCommand = CreateSchemaDDLCommand(schemaId);
-	if (createSchemaCommand != NULL)
-	{
-		tableDDLEventList = lappend(tableDDLEventList, createSchemaCommand);
 	}
 
 	/* fetch table schema and column option definitions */

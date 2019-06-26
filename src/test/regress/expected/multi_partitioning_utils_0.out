@@ -219,9 +219,6 @@ SELECT generate_partition_information('partition_parent_schema.parent_table');
 
 -- we should be able to drop and re-create the partitioned table using the command that Citus generate
 SELECT drop_and_recreate_partitioned_table('partition_parent_schema.parent_table');
-NOTICE:  schema "partition_parent_schema" already exists, skipping
-CONTEXT:  SQL statement "CREATE SCHEMA IF NOT EXISTS partition_parent_schema AUTHORIZATION postgres"
-PL/pgSQL function drop_and_recreate_partitioned_table(regclass) line 15 at EXECUTE
  drop_and_recreate_partitioned_table 
 -------------------------------------
  

@@ -75,6 +75,14 @@ master_create_worker_shards(PG_FUNCTION_ARGS)
 	EnsureCoordinator();
 	CheckCitusVersion(ERROR);
 
+	/*
+	 * Ensure schema exists on each worker node. We can not run this function
+	 * transactionally, since we may create shards over separate sessions and
+	 * shard creation depends on the schema being present and visible from all
+	 * sessions.
+	 */
+	EnsureSchemaExistsOnAllNodes(distributedTableId);
+
 	CreateShardsWithRoundRobinPolicy(distributedTableId, shardCount, replicationFactor,
 									 useExclusiveConnections);
 
