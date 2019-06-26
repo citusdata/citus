@@ -5,9 +5,14 @@ foreign_key_to_reference_table
 failure_copy_on_hash
 failure_savepoints
 foreign_key_restriction_enforcement
+failure_real_time_select
+failure_vacuum
+isolation_citus_dist_activity
 multi_insert_select
 multi_insert_select_conflict
+multi_multiuser
 multi_name_lengths
+multi_partition_pruning
 multi_subtransactions
 multi_modifying_xacts
 multi_insert_select
