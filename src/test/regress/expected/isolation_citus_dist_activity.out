@@ -1,9 +1,13 @@
 Parsed test spec with 3 sessions
 
-starting permutation: s1-begin s2-begin s3-begin s1-alter-table s2-sleep s2-view-dist s3-view-worker s2-rollback s1-commit s3-rollback
+starting permutation: s1-cache-connections s1-begin s2-begin s3-begin s1-alter-table s2-sleep s2-view-dist s3-view-worker s2-rollback s1-commit s3-rollback
 create_distributed_table
 
                
+step s1-cache-connections: 
+    SET citus.max_cached_conns_per_worker TO 4;
+    UPDATE test_table SET column2 = 0;
+
 step s1-begin: 
     BEGIN;
 
@@ -58,10 +62,14 @@ step s3-rollback:
 	ROLLBACK;
 
 
-starting permutation: s1-begin s2-begin s3-begin s1-insert s2-sleep s2-view-dist s3-view-worker s2-rollback s1-commit s3-rollback
+starting permutation: s1-cache-connections s1-begin s2-begin s3-begin s1-insert s2-sleep s2-view-dist s3-view-worker s2-rollback s1-commit s3-rollback
 create_distributed_table
 
                
+step s1-cache-connections: 
+    SET citus.max_cached_conns_per_worker TO 4;
+    UPDATE test_table SET column2 = 0;
+
 step s1-begin: 
     BEGIN;
 
@@ -105,9 +113,13 @@ step s3-rollback:
 	ROLLBACK;
 
 
-starting permutation: s1-begin s2-begin s3-begin s1-select s2-sleep s2-view-dist s3-view-worker s2-rollback s1-commit s3-rollback
+starting permutation: s1-cache-connections s1-begin s2-begin s3-begin s1-select s2-sleep s2-view-dist s3-view-worker s2-rollback s1-commit s3-rollback
 create_distributed_table
 
+
+step s1-cache-connections: 
+    SET citus.max_cached_conns_per_worker TO 4;
+    UPDATE test_table SET column2 = 0;
                
 step s1-begin: 
     BEGIN;
@@ -158,10 +170,14 @@ step s3-rollback:
 	ROLLBACK;
 
 
-starting permutation: s1-begin s2-begin s3-begin s1-select-router s2-sleep s2-view-dist s3-view-worker s2-rollback s1-commit s3-rollback
+starting permutation: s1-cache-connections s1-begin s2-begin s3-begin s1-select-router s2-sleep s2-view-dist s3-view-worker s2-rollback s1-commit s3-rollback
 create_distributed_table
 
                
+step s1-cache-connections: 
+    SET citus.max_cached_conns_per_worker TO 4;
+    UPDATE test_table SET column2 = 0;
+
 step s1-begin: 
     BEGIN;
 
