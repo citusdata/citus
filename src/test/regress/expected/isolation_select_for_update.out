@@ -374,3 +374,28 @@ step s2-finish:
 restore_isolation_tester_func
 
                
+
+starting permutation: s1-begin s1-update-rt-with-cte-select-from-rt s2-begin s2-update-rt s1-finish s2-finish
+step s1-begin: 
+	BEGIN;
+
+step s1-update-rt-with-cte-select-from-rt: 
+	WITH foo AS (SELECT * FROM ref_table FOR UPDATE)
+	UPDATE ref_table SET val_1 = 4 FROM foo WHERE ref_table.id = foo.id;
+
+step s2-begin: 
+	BEGIN;
+
+step s2-update-rt: 
+	UPDATE ref_table SET val_1 = 5 WHERE id = 1;
+ <waiting ...>
+step s1-finish: 
+	COMMIT;
+
+step s2-update-rt: <... completed>
+step s2-finish: 
+	COMMIT;
+
+restore_isolation_tester_func
+
+               

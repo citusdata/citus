@@ -8,6 +8,7 @@ SET citus.explain_distributed_queries TO off;
 SET client_min_messages TO DEBUG2;
 SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 	WHERE l_orderkey = o_orderkey;
+DEBUG:  Router planner does not support append-partitioned tables.
 DEBUG:  join prunable for intervals [1,5986] and [8997,14947]
 DEBUG:  join prunable for intervals [8997,14947] and [1,5986]
   sum  |        avg         
@@ -17,6 +18,7 @@ DEBUG:  join prunable for intervals [8997,14947] and [1,5986]
 
 SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 	WHERE l_orderkey = o_orderkey AND l_orderkey > 9030;
+DEBUG:  Router planner does not support append-partitioned tables.
 DEBUG:  join prunable for intervals [8997,14947] and [1,5986]
   sum  |        avg         
 -------+--------------------
@@ -27,6 +29,7 @@ DEBUG:  join prunable for intervals [8997,14947] and [1,5986]
 -- works as expected in this case.
 SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 	WHERE l_orderkey = o_orderkey AND l_orderkey > 20000;
+DEBUG:  Router planner does not support append-partitioned tables.
  sum | avg 
 -----+-----
      |    
@@ -37,6 +40,7 @@ SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 -- out all the shards, and leave us with an empty task list.
 SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 	WHERE l_orderkey = o_orderkey AND l_orderkey > 6000 AND o_orderkey < 6000;
+DEBUG:  Router planner does not support append-partitioned tables.
  sum | avg 
 -----+-----
      |    
@@ -45,6 +49,7 @@ SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 -- Make sure that we can handle filters without a column
 SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 	WHERE l_orderkey = o_orderkey AND false;
+DEBUG:  Router planner does not support append-partitioned tables.
  sum | avg 
 -----+-----
      |    
@@ -53,6 +58,7 @@ SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 SELECT sum(l_linenumber), avg(l_linenumber)
     FROM lineitem INNER JOIN orders ON (l_orderkey = o_orderkey)
 	WHERE false;
+DEBUG:  Router planner does not support append-partitioned tables.
  sum | avg 
 -----+-----
      |    
@@ -65,6 +71,7 @@ SELECT sum(l_linenumber), avg(l_linenumber)
 EXPLAIN SELECT count(*)
 	FROM array_partitioned_table table1, array_partitioned_table table2
 	WHERE table1.array_column = table2.array_column;
+DEBUG:  Router planner does not support append-partitioned tables.
 DEBUG:  join prunable for intervals [{},{AZZXSP27F21T6,AZZXSP27F21T6}] and [{BA1000U2AMO4ZGX,BZZXSP27F21T6},{CA1000U2AMO4ZGX,CZZXSP27F21T6}]
 DEBUG:  join prunable for intervals [{BA1000U2AMO4ZGX,BZZXSP27F21T6},{CA1000U2AMO4ZGX,CZZXSP27F21T6}] and [{},{AZZXSP27F21T6,AZZXSP27F21T6}]
                               QUERY PLAN                               
@@ -77,6 +84,7 @@ DEBUG:  join prunable for intervals [{BA1000U2AMO4ZGX,BZZXSP27F21T6},{CA1000U2AM
 EXPLAIN SELECT count(*)
 	FROM composite_partitioned_table table1, composite_partitioned_table table2
 	WHERE table1.composite_column = table2.composite_column;
+DEBUG:  Router planner does not support append-partitioned tables.
 DEBUG:  join prunable for intervals [(a,3,b),(b,4,c)] and [(c,5,d),(d,6,e)]
 DEBUG:  join prunable for intervals [(c,5,d),(d,6,e)] and [(a,3,b),(b,4,c)]
                               QUERY PLAN                               
@@ -90,6 +98,7 @@ DEBUG:  join prunable for intervals [(c,5,d),(d,6,e)] and [(a,3,b),(b,4,c)]
 EXPLAIN SELECT count(*)
 	FROM varchar_partitioned_table table1, varchar_partitioned_table table2
 	WHERE table1.varchar_column = table2.varchar_column;
+DEBUG:  Router planner does not support append-partitioned tables.
 DEBUG:  join prunable for intervals [AA1000U2AMO4ZGX,AZZXSP27F21T6] and [BA1000U2AMO4ZGX,BZZXSP27F21T6]
 DEBUG:  join prunable for intervals [BA1000U2AMO4ZGX,BZZXSP27F21T6] and [AA1000U2AMO4ZGX,AZZXSP27F21T6]
                               QUERY PLAN                               

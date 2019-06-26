@@ -37,6 +37,7 @@ lib*.pc
 /autom4te.cache
 /Makefile.global
 /src/Makefile.custom
+/compile_commands.json
 
 # temporary files vim creates
 *.swp

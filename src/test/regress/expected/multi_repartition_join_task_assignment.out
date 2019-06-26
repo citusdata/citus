@@ -25,6 +25,7 @@ FROM
 	orders, customer_append
 WHERE
 	o_custkey = c_custkey;
+DEBUG:  Router planner does not support append-partitioned tables.
 DEBUG:  assigned task 2 to node localhost:57637
 DEBUG:  assigned task 1 to node localhost:57638
 DEBUG:  join prunable for intervals [1,1000] and [1001,2000]
@@ -58,6 +59,7 @@ FROM
 WHERE
 	o_custkey = c_custkey AND
 	o_orderkey = l_orderkey;
+DEBUG:  Router planner does not support append-partitioned tables.
 DEBUG:  assigned task 2 to node localhost:57637
 DEBUG:  assigned task 3 to node localhost:57638
 DEBUG:  assigned task 1 to node localhost:57637
@@ -82,6 +84,7 @@ FROM
 	lineitem, customer_append
 WHERE
 	l_partkey = c_nationkey;
+DEBUG:  Router planner does not support append-partitioned tables.
 DEBUG:  assigned task 2 to node localhost:57637
 DEBUG:  assigned task 1 to node localhost:57638
 DEBUG:  assigned task 2 to node localhost:57637

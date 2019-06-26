@@ -123,6 +123,7 @@ DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 DETAIL:  distribution column value: 1
 DEBUG:  generating subplan 18_2 for CTE t2: SELECT key, value_1, value_2 FROM fast_path_router_modify.modify_fast_path
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  Plan 18 query after replacing subqueries and CTEs: SELECT key, value_1, value_2 FROM (SELECT intermediate_result.key, intermediate_result.value_1, intermediate_result.value_2 FROM read_intermediate_result('18_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value_1 integer, value_2 text)) t2
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
@@ -167,9 +168,11 @@ DEBUG:  Plan is router executable
 
 -- for update/share is not supported via fast-path wen replication factor > 1
 SELECT * FROM modify_fast_path_replication_2 WHERE key = 1 FOR UPDATE;
+DEBUG:  SELECT FOR UPDATE with table replication factor > 1 not supported for non-reference tables.
 ERROR:  could not run distributed query with FOR UPDATE/SHARE commands
 HINT:  Consider using an equality filter on the distributed table's partition column.
 SELECT * FROM modify_fast_path_replication_2 WHERE key = 1 FOR SHARE;
+DEBUG:  SELECT FOR UPDATE with table replication factor > 1 not supported for non-reference tables.
 ERROR:  could not run distributed query with FOR UPDATE/SHARE commands
 HINT:  Consider using an equality filter on the distributed table's partition column.
 -- very simple queries on reference tables goes through fast-path planning

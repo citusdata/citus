@@ -281,8 +281,10 @@ SET client_min_messages TO DEBUG;
 SELECT count(*) FROM
   (SELECT random() FROM user_buy_test_table JOIN random() AS users_ref_test_table(id)
   ON user_buy_test_table.item_id > users_ref_test_table.id) subquery_1;
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan 30_1 for subquery SELECT id FROM random() users_ref_test_table(id)
 DEBUG:  Plan 30 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT random() AS random FROM (public.user_buy_test_table JOIN (SELECT intermediate_result.id FROM read_intermediate_result('30_1'::text, 'binary'::citus_copy_format) intermediate_result(id double precision)) users_ref_test_table(id) ON (((user_buy_test_table.item_id)::double precision OPERATOR(pg_catalog.>) users_ref_test_table.id)))) subquery_1
+DEBUG:  Router planner cannot handle multi-shard select queries
  count 
 -------
      4
@@ -293,8 +295,10 @@ SELECT count(*) FROM
   (SELECT item_id FROM user_buy_test_table JOIN generate_series(random()::int,10) AS users_ref_test_table(id)
   ON user_buy_test_table.item_id > users_ref_test_table.id) subquery_1
 WHERE item_id = 6;
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan 31_1 for subquery SELECT id FROM generate_series((random())::integer, 10) users_ref_test_table(id)
 DEBUG:  Plan 31 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT user_buy_test_table.item_id FROM (public.user_buy_test_table JOIN (SELECT intermediate_result.id FROM read_intermediate_result('31_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) users_ref_test_table(id) ON ((user_buy_test_table.item_id OPERATOR(pg_catalog.>) users_ref_test_table.id)))) subquery_1 WHERE (item_id OPERATOR(pg_catalog.=) 6)
+DEBUG:  Router planner cannot handle multi-shard select queries
  count 
 -------
      0
@@ -305,6 +309,8 @@ SELECT count(*) FROM
   (SELECT user_id FROM user_buy_test_table
    UNION ALL
    SELECT id FROM generate_series(1,10) AS users_ref_test_table(id)) subquery_1;
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan 32_1 for subquery SELECT user_id FROM public.user_buy_test_table
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
@@ -355,6 +361,8 @@ SELECT count(*) FROM
   (SELECT user_id FROM user_buy_test_table
    UNION ALL
    SELECT id FROM (SELECT 5 AS id) users_ref_test_table) subquery_1;
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan 39_1 for subquery SELECT user_id FROM public.user_buy_test_table
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
@@ -375,6 +383,8 @@ SELECT * FROM
 	 UNION
 	 SELECT user_id FROM user_buy_test_table) sub
 ORDER BY 1 DESC;
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan 42_1 for subquery SELECT user_id FROM public.user_buy_test_table
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
@@ -399,6 +409,8 @@ SELECT * FROM
 	 UNION
 	 SELECT user_id, random() * 0 FROM (SELECT user_id FROM user_buy_test_table) sub2) sub
 ORDER BY 1 DESC;
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan 45_1 for subquery SELECT user_id, (random() OPERATOR(pg_catalog.*) (0)::double precision) FROM (SELECT user_buy_test_table.user_id FROM public.user_buy_test_table) sub2
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
@@ -425,6 +437,7 @@ SELECT * FROM
 	 UNION
 	 SELECT user_id FROM user_buy_test_table) sub
 ORDER BY 1 DESC;
+DEBUG:  Router planner cannot handle multi-shard select queries
  user_id 
 ---------
        7
@@ -440,6 +453,7 @@ SELECT * FROM
 	 UNION
 	 SELECT user_id, random() * 0 FROM (SELECT user_id FROM user_buy_test_table) sub2) sub
 ORDER BY 1 DESC;
+DEBUG:  Router planner cannot handle multi-shard select queries
  user_id | ?column? 
 ---------+----------
        7 |        0
@@ -454,6 +468,7 @@ SELECT * FROM
 	 UNION
 	 SELECT user_id FROM user_buy_test_table) sub
 ORDER BY 1 DESC;
+DEBUG:  Router planner cannot handle multi-shard select queries
 ERROR:  cannot pushdown the subquery
 DETAIL:  There exist a reference table in the outer part of the outer join
 SELECT * FROM
@@ -462,6 +477,7 @@ SELECT * FROM
 	 UNION
 	 SELECT user_id FROM user_buy_test_table WHERE user_id in (select id from users_ref_test_table)) sub
 ORDER BY 1 DESC;
+DEBUG:  Router planner cannot handle multi-shard select queries
  user_id 
 ---------
        3
@@ -478,6 +494,7 @@ SELECT * FROM
 	 UNION
 	 SELECT user_id FROM user_buy_test_table) sub
 ORDER BY 1 DESC;
+DEBUG:  Router planner cannot handle multi-shard select queries
  user_id 
 ---------
        7
@@ -495,6 +512,7 @@ SELECT * FROM
 	 UNION
 	 SELECT user_id FROM user_buy_test_table) sub
 ORDER BY 1 DESC;
+DEBUG:  Router planner cannot handle multi-shard select queries
 ERROR:  cannot pushdown the subquery
 DETAIL:  There exist a reference table in the outer part of the outer join
 RESET client_min_messages;

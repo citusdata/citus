@@ -80,6 +80,12 @@ step "s1-select-from-t1-within-cte"
 	SELECT * FROM first_value;
 }
 
+step "s1-update-rt-with-cte-select-from-rt"
+{
+	WITH foo AS (SELECT * FROM ref_table FOR UPDATE)
+	UPDATE ref_table SET val_1 = 4 FROM foo WHERE ref_table.id = foo.id;
+}
+
 step "s1-select-from-t1-with-subquery"
 {
 	SELECT * FROM (SELECT * FROM test_table_1_rf1 FOR UPDATE) foo WHERE id = 1;
@@ -157,3 +163,4 @@ permutation "s1-begin" "s1-select-from-t1-within-cte" "s2-begin" "s2-update-t1" 
 permutation "s1-begin" "s1-select-from-t1-with-subquery" "s2-begin" "s2-update-t1" "s1-finish" "s2-finish"
 permutation "s1-begin" "s1-select-from-rt-with-subquery" "s2-begin" "s2-update-rt" "s1-finish" "s2-finish"
 permutation "s1-begin" "s1-select-from-t1-with-view" "s2-begin" "s2-update-t1" "s1-finish" "s2-finish"
+permutation "s1-begin" "s1-update-rt-with-cte-select-from-rt" "s2-begin" "s2-update-rt" "s1-finish" "s2-finish"

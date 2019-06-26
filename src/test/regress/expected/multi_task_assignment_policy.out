@@ -77,6 +77,7 @@ SET client_min_messages TO DEBUG3;
 -- First test the default greedy task assignment policy
 SET citus.task_assignment_policy TO 'greedy';
 EXPLAIN SELECT count(*) FROM task_assignment_test_table;
+DEBUG:  Router planner does not support append-partitioned tables.
 DEBUG:  assigned task 3 to node localhost:57637
 DEBUG:  assigned task 1 to node localhost:57638
 DEBUG:  assigned task 2 to node localhost:57637
@@ -88,6 +89,7 @@ DEBUG:  assigned task 2 to node localhost:57637
 (3 rows)
 
 EXPLAIN SELECT count(*) FROM task_assignment_test_table;
+DEBUG:  Router planner does not support append-partitioned tables.
 DEBUG:  assigned task 3 to node localhost:57637
 DEBUG:  assigned task 1 to node localhost:57638
 DEBUG:  assigned task 2 to node localhost:57637
@@ -101,6 +103,7 @@ DEBUG:  assigned task 2 to node localhost:57637
 -- Next test the first-replica task assignment policy
 SET citus.task_assignment_policy TO 'first-replica';
 EXPLAIN SELECT count(*) FROM task_assignment_test_table;
+DEBUG:  Router planner does not support append-partitioned tables.
 DEBUG:  assigned task 3 to node localhost:57637
 DEBUG:  assigned task 2 to node localhost:57637
 DEBUG:  assigned task 1 to node localhost:57638
@@ -112,6 +115,7 @@ DEBUG:  assigned task 1 to node localhost:57638
 (3 rows)
 
 EXPLAIN SELECT count(*) FROM task_assignment_test_table;
+DEBUG:  Router planner does not support append-partitioned tables.
 DEBUG:  assigned task 3 to node localhost:57637
 DEBUG:  assigned task 2 to node localhost:57637
 DEBUG:  assigned task 1 to node localhost:57638

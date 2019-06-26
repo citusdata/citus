@@ -31,6 +31,8 @@ DeferredErrorInternal(int code, const char *message, const char *detail, const c
 {
 	DeferredErrorMessage *error = CitusMakeNode(DeferredErrorMessage);
 
+	Assert(message != NULL);
+
 	error->code = code;
 	error->message = message;
 	error->detail = detail;

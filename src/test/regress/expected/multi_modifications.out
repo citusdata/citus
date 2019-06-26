@@ -112,6 +112,7 @@ DEBUG:  Plan is router executable
 (1 row)
 
 SELECT * FROM append_partitioned WHERE id = 414123;
+DEBUG:  Router planner does not support append-partitioned tables.
 DEBUG:  Plan is router executable
    id   | symbol | bidder_id |        placed_at         | kind | limit_price 
 --------+--------+-----------+--------------------------+------+-------------

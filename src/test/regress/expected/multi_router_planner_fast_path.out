@@ -162,6 +162,7 @@ DETAIL:  distribution column value: 1
 
 -- fast path planner only support = operator
 SELECT * FROM articles_hash WHERE author_id <= 1; 
+DEBUG:  Router planner cannot handle multi-shard select queries
  id | author_id |    title     | word_count 
 ----+-----------+--------------+------------
   1 |         1 | arsenous     |       9572
@@ -224,6 +225,7 @@ DETAIL:  distribution column value: 1
 WITH id_author AS ( SELECT id, author_id FROM articles_hash WHERE author_id = 1),
 id_title AS (SELECT id, title from articles_hash WHERE author_id = 2)
 SELECT * FROM id_author, id_title WHERE id_author.id = id_title.id;
+DEBUG:  cannot run command which targets multiple shards
 DEBUG:  generating subplan 12_1 for CTE id_author: SELECT id, author_id FROM fast_path_router_select.articles_hash WHERE (author_id OPERATOR(pg_catalog.=) 1)
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
@@ -378,6 +380,7 @@ SELECT
 	WHERE author_id = 1 or author_id = 2
 	GROUP BY GROUPING SETS ((id),(subtitle))
 	ORDER BY id, subtitle;
+DEBUG:  Router planner cannot handle multi-shard select queries
 ERROR:  could not run distributed query with GROUPING SETS, CUBE, or ROLLUP
 HINT:  Consider using an equality filter on the distributed table's partition column.
 -- queries which involve functions in FROM clause are not supported via fast path planning
@@ -414,8 +417,11 @@ DETAIL:  distribution column value: 2
 SELECT articles_hash.id,test.word_count
 FROM articles_hash, (SELECT id, word_count FROM articles_hash) AS test WHERE test.id = articles_hash.id
 ORDER BY test.word_count DESC, articles_hash.id LIMIT 5;
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan 32_1 for subquery SELECT id, word_count FROM fast_path_router_select.articles_hash
 DEBUG:  Plan 32 query after replacing subqueries and CTEs: SELECT articles_hash.id, test.word_count FROM fast_path_router_select.articles_hash, (SELECT intermediate_result.id, intermediate_result.word_count FROM read_intermediate_result('32_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, word_count integer)) test WHERE (test.id OPERATOR(pg_catalog.=) articles_hash.id) ORDER BY test.word_count DESC, articles_hash.id LIMIT 5
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  push down of limit count: 5
  id | word_count 
 ----+------------
@@ -430,6 +436,8 @@ SELECT articles_hash.id,test.word_count
 FROM articles_hash, (SELECT id, word_count FROM articles_hash) AS test 
 WHERE test.id = articles_hash.id and articles_hash.author_id = 1
 ORDER BY articles_hash.id;
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan 34_1 for subquery SELECT id, word_count FROM fast_path_router_select.articles_hash
 DEBUG:  Plan 34 query after replacing subqueries and CTEs: SELECT articles_hash.id, test.word_count FROM fast_path_router_select.articles_hash, (SELECT intermediate_result.id, intermediate_result.word_count FROM read_intermediate_result('34_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, word_count integer)) test WHERE ((test.id OPERATOR(pg_catalog.=) articles_hash.id) AND (articles_hash.author_id OPERATOR(pg_catalog.=) 1)) ORDER BY articles_hash.id
 DEBUG:  Creating router plan
@@ -447,6 +455,7 @@ DETAIL:  distribution column value: 1
 -- subqueries are not supported in SELECT clause
 SELECT a.title AS name, (SELECT a2.id FROM articles_hash a2 WHERE a.id = a2.id  LIMIT 1)
 						 AS special_price FROM articles_hash a;
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
 ERROR:  could not run distributed query with subquery outside the FROM and WHERE clauses
 HINT:  Consider using an equality filter on the distributed table's partition column.
@@ -751,6 +760,7 @@ DETAIL:  distribution column value: 1
 SELECT *
 	FROM articles_hash
 	WHERE author_id = 1 or id = 1;
+DEBUG:  Router planner cannot handle multi-shard select queries
  id | author_id |    title     | word_count 
 ----+-----------+--------------+------------
   1 |         1 | arsenous     |       9572
@@ -782,6 +792,7 @@ DETAIL:  distribution column value: 1
 SELECT *
 	FROM articles_hash
 	WHERE author_id = 1 and id = 1 or id = 41;
+DEBUG:  Router planner cannot handle multi-shard select queries
  id | author_id |  title   | word_count 
 ----+-----------+----------+------------
   1 |         1 | arsenous |       9572
@@ -806,6 +817,7 @@ DETAIL:  distribution column value: 1
 SELECT *
 	FROM articles_hash
 	WHERE author_id = (random()::int  * 0 + 1);
+DEBUG:  Router planner cannot handle multi-shard select queries
  id | author_id |    title     | word_count 
 ----+-----------+--------------+------------
   1 |         1 | arsenous     |       9572
@@ -838,6 +850,7 @@ DETAIL:  distribution column value: 1
 SELECT *
 	FROM articles_hash
 	WHERE 1 = abs(author_id);
+DEBUG:  Router planner cannot handle multi-shard select queries
  id | author_id |    title     | word_count 
 ----+-----------+--------------+------------
   1 |         1 | arsenous     |       9572
@@ -852,6 +865,7 @@ SELECT *
 SELECT *
 	FROM articles_hash
 	WHERE author_id = abs(author_id - 2);
+DEBUG:  Router planner cannot handle multi-shard select queries
  id | author_id |    title     | word_count 
 ----+-----------+--------------+------------
   1 |         1 | arsenous     |       9572
@@ -879,6 +893,7 @@ DETAIL:  distribution column value: 1
 SELECT *
 	FROM articles_hash
 	WHERE (author_id = 1) is true;
+DEBUG:  Router planner cannot handle multi-shard select queries
  id | author_id |    title     | word_count 
 ----+-----------+--------------+------------
   1 |         1 | arsenous     |       9572
@@ -916,18 +931,21 @@ DETAIL:  distribution column value: 15
 (1 row)
 
 SELECT count(*) FROM articles_hash WHERE (author_id = 15) OR (id = 1 AND word_count > 5);
+DEBUG:  Router planner cannot handle multi-shard select queries
  count 
 -------
      1
 (1 row)
 
 SELECT count(*) FROM articles_hash WHERE (id = 15) OR (author_id = 1 AND word_count > 5);
+DEBUG:  Router planner cannot handle multi-shard select queries
  count 
 -------
      6
 (1 row)
 
 SELECT count(*) FROM articles_hash WHERE (id = 15) AND (author_id = 1 OR word_count > 5);
+DEBUG:  Router planner cannot handle multi-shard select queries
  count 
 -------
      1
@@ -944,6 +962,7 @@ DETAIL:  distribution column value: 1
 (1 row)
 
 SELECT count(*) FROM articles_hash WHERE (id = 15) AND (title ilike 'a%' AND (word_count > 5 OR author_id  = 2));
+DEBUG:  Router planner cannot handle multi-shard select queries
  count 
 -------
      1
@@ -1229,6 +1248,7 @@ DETAIL:  distribution column value: 10
 SELECT * 
 	FROM articles_hash a
 	WHERE a.author_id is null;
+DEBUG:  Router planner cannot handle multi-shard select queries
  id | author_id | title | word_count 
 ----+-----------+-------+------------
 (0 rows)
@@ -1604,6 +1624,7 @@ DETAIL:  distribution column value: 1
 (5 rows)
 
 EXECUTE author_articles(1);
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
@@ -1728,6 +1749,7 @@ DEBUG:  Plan is router executable
 (1 row)
 
 SELECT author_articles_max_id(1);
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
@@ -1887,6 +1909,7 @@ DEBUG:  Plan is router executable
 (5 rows)
 
 SELECT * FROM author_articles_id_word_count(1);
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
@@ -2006,6 +2029,7 @@ DETAIL:  distribution column value: 5
 (1 row)
 
 EXECUTE fast_path_agg_filter(6,6);
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable

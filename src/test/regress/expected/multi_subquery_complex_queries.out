@@ -1499,8 +1499,11 @@ FROM
 ORDER BY 
   user_id DESC, lastseen DESC
 LIMIT 10;
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan 53_1 for subquery SELECT user_id FROM public.users_table users WHERE ((user_id OPERATOR(pg_catalog.>) 1) AND (user_id OPERATOR(pg_catalog.<) 4) AND (value_2 OPERATOR(pg_catalog.>) 3))
 DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
 ERROR:  cannot push down this subquery
 DETAIL:  Limit in subquery is currently unsupported when a subquery references a column from another query

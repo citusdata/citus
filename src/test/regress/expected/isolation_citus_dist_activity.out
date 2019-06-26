@@ -45,16 +45,16 @@ step s3-view-worker:
 
 query          query_hostname query_hostport master_query_host_namemaster_query_host_portstate          wait_event_typewait_event     usename        datname        
 
-SELECT worker_apply_shard_ddl_command (105949, 'public', '
+SELECT worker_apply_shard_ddl_command (105958, 'public', '
     ALTER TABLE test_table ADD COLUMN x INT;
 ')localhost      57638          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression     
-SELECT worker_apply_shard_ddl_command (105948, 'public', '
+SELECT worker_apply_shard_ddl_command (105957, 'public', '
     ALTER TABLE test_table ADD COLUMN x INT;
 ')localhost      57637          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression     
-SELECT worker_apply_shard_ddl_command (105947, 'public', '
+SELECT worker_apply_shard_ddl_command (105956, 'public', '
     ALTER TABLE test_table ADD COLUMN x INT;
 ')localhost      57638          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression     
-SELECT worker_apply_shard_ddl_command (105946, 'public', '
+SELECT worker_apply_shard_ddl_command (105955, 'public', '
     ALTER TABLE test_table ADD COLUMN x INT;
 ')localhost      57637          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression     
 SELECT gid FROM pg_prepared_xacts WHERE gid LIKE 'citus\_0\_%'localhost      57638                         0              idle           Client         ClientRead     postgres       regression     
@@ -116,7 +116,7 @@ query          query_hostname query_hostport master_query_host_namemaster_query_
 
 SELECT gid FROM pg_prepared_xacts WHERE gid LIKE 'citus\_0\_%'localhost      57638                         0              idle           Client         ClientRead     postgres       regression     
 SELECT gid FROM pg_prepared_xacts WHERE gid LIKE 'citus\_0\_%'localhost      57637                         0              idle           Client         ClientRead     postgres       regression     
-INSERT INTO public.test_table_105952 (column1, column2) VALUES (100, 100)localhost      57637          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression     
+INSERT INTO public.test_table_105961 (column1, column2) VALUES (100, 100)localhost      57637          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression     
 step s2-rollback: 
 	ROLLBACK;
 
@@ -177,10 +177,10 @@ query          query_hostname query_hostport master_query_host_namemaster_query_
 
 SELECT gid FROM pg_prepared_xacts WHERE gid LIKE 'citus\_0\_%'localhost      57638                         0              idle           Client         ClientRead     postgres       regression     
 SELECT gid FROM pg_prepared_xacts WHERE gid LIKE 'citus\_0\_%'localhost      57637                         0              idle           Client         ClientRead     postgres       regression     
-COPY (SELECT count(*) AS count FROM test_table_105957 test_table WHERE true) TO STDOUTlocalhost      57638          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression     
-COPY (SELECT count(*) AS count FROM test_table_105956 test_table WHERE true) TO STDOUTlocalhost      57637          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression     
-COPY (SELECT count(*) AS count FROM test_table_105955 test_table WHERE true) TO STDOUTlocalhost      57638          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression     
-COPY (SELECT count(*) AS count FROM test_table_105954 test_table WHERE true) TO STDOUTlocalhost      57637          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression     
+COPY (SELECT count(*) AS count FROM test_table_105966 test_table WHERE true) TO STDOUTlocalhost      57638          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression     
+COPY (SELECT count(*) AS count FROM test_table_105965 test_table WHERE true) TO STDOUTlocalhost      57637          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression     
+COPY (SELECT count(*) AS count FROM test_table_105964 test_table WHERE true) TO STDOUTlocalhost      57638          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression     
+COPY (SELECT count(*) AS count FROM test_table_105963 test_table WHERE true) TO STDOUTlocalhost      57637          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression     
 step s2-rollback: 
 	ROLLBACK;
 
@@ -241,7 +241,7 @@ query          query_hostname query_hostport master_query_host_namemaster_query_
 
 SELECT gid FROM pg_prepared_xacts WHERE gid LIKE 'citus\_0\_%'localhost      57638                         0              idle           Client         ClientRead     postgres       regression     
 SELECT gid FROM pg_prepared_xacts WHERE gid LIKE 'citus\_0\_%'localhost      57637                         0              idle           Client         ClientRead     postgres       regression     
-SELECT count(*) AS count FROM public.test_table_105959 test_table WHERE (column1 OPERATOR(pg_catalog.=) 55)localhost      57638                         0              idle           Client         ClientRead     postgres       regression     
+SELECT count(*) AS count FROM public.test_table_105968 test_table WHERE (column1 OPERATOR(pg_catalog.=) 55)localhost      57638                         0              idle           Client         ClientRead     postgres       regression     
 step s2-rollback: 
 	ROLLBACK;
 

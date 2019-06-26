@@ -111,7 +111,7 @@ GetOptions(
 #
 # XXX: There's some issues with el capitan's SIP here, causing
 # DYLD_LIBRARY_PATH not being inherited if SIP is enabled. That's a
-# know problem, present in postgres itself as well.
+# known problem, present in postgres itself as well.
 if (defined $libdir)
 {
     $ENV{LD_LIBRARY_PATH} = "$libdir:".($ENV{LD_LIBRARY_PATH} || '');
@@ -559,11 +559,11 @@ sub ShutdownServers()
                     or warn "Could not shutdown worker server";
             }
         }
-	if ($mitmPid != 0)
-	{
-	  # '-' means signal the process group, 2 is SIGINT
-          kill(-2, $mitmPid) or warn "could not interrupt mitmdump";
-	}
+        if ($mitmPid != 0)
+        {
+            # '-' means signal the process group, 2 is SIGINT
+            kill(-2, $mitmPid) or warn "could not interrupt mitmdump";
+        }
         $serversAreShutdown = "TRUE";
     }
 }
