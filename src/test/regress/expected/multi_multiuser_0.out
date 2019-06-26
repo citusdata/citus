@@ -41,6 +41,9 @@ SET citus.enable_ddl_propagation TO off;
 CREATE USER full_access;
 NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
 HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
+CREATE USER usage_access;
+NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
+HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
 CREATE USER read_access;
 NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
 HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
@@ -56,10 +59,14 @@ GRANT ALL ON TABLE test TO full_access;
 GRANT SELECT ON TABLE test TO read_access;
 CREATE SCHEMA full_access_user_schema;
 REVOKE ALL ON SCHEMA full_access_user_schema FROM PUBLIC;
-GRANT USAGE ON SCHEMA full_access_user_schema TO full_access;
+GRANT ALL ON SCHEMA full_access_user_schema TO full_access;
+GRANT USAGE ON SCHEMA full_access_user_schema TO usage_access;
 SET citus.enable_ddl_propagation TO DEFAULT;
 \c - - - :worker_1_port
 CREATE USER full_access;
+NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
+HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
+CREATE USER usage_access;
 NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
 HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
 CREATE USER read_access;
@@ -80,8 +87,13 @@ GRANT SELECT ON TABLE test_1420002 TO read_access;
 CREATE SCHEMA full_access_user_schema;
 REVOKE ALL ON SCHEMA full_access_user_schema FROM PUBLIC;
 GRANT USAGE ON SCHEMA full_access_user_schema TO full_access;
+GRANT ALL ON SCHEMA full_access_user_schema TO full_access;
+GRANT USAGE ON SCHEMA full_access_user_schema TO usage_access;
 \c - - - :worker_2_port
 CREATE USER full_access;
+NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
+HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
+CREATE USER usage_access;
 NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
 HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
 CREATE USER read_access;
@@ -102,6 +114,8 @@ GRANT SELECT ON TABLE test_1420003 TO read_access;
 CREATE SCHEMA full_access_user_schema;
 REVOKE ALL ON SCHEMA full_access_user_schema FROM PUBLIC;
 GRANT USAGE ON SCHEMA full_access_user_schema TO full_access;
+GRANT ALL ON SCHEMA full_access_user_schema TO full_access;
+GRANT USAGE ON SCHEMA full_access_user_schema TO usage_access;
 \c - - - :master_port
 -- create prepare tests
 PREPARE prepare_insert AS INSERT INTO test VALUES ($1);
@@ -363,7 +377,7 @@ $cmd$);
 -- its table distributed by the super user
 -- we want to make sure the schema and user are setup in such a way they can't create a
 -- table
-SET ROLE full_access;
+SET ROLE usage_access;
 CREATE TABLE full_access_user_schema.t1 (id int);
 ERROR:  permission denied for schema full_access_user_schema
 LINE 1: CREATE TABLE full_access_user_schema.t1 (id int);
@@ -371,9 +385,9 @@ LINE 1: CREATE TABLE full_access_user_schema.t1 (id int);
 RESET ROLE;
 -- now we create the table for the user
 CREATE TABLE full_access_user_schema.t1 (id int);
-ALTER TABLE full_access_user_schema.t1 OWNER TO full_access;
+ALTER TABLE full_access_user_schema.t1 OWNER TO usage_access;
 -- make sure we can insert data
-SET ROLE full_access;
+SET ROLE usage_access;
 INSERT INTO full_access_user_schema.t1 VALUES (1),(2),(3);
 -- creating the table should fail with a failure on the worker machine since the user is
 -- not allowed to create a table
@@ -397,14 +411,26 @@ SELECT result FROM run_command_on_workers($cmd$
     AND tablename LIKE 't1_%'
   LIMIT 1;
 $cmd$);
-   result    
--------------
- full_access
- full_access
+    result    
+--------------
+ usage_access
+ usage_access
 (2 rows)
 
+-- a user with all privileges on a schema should be able to distribute tables
+SET ROLE full_access;
+CREATE TABLE full_access_user_schema.t2(id int);
+SELECT create_distributed_table('full_access_user_schema.t2', 'id');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+RESET ROLE;
 DROP SCHEMA full_access_user_schema CASCADE;
-NOTICE:  drop cascades to table full_access_user_schema.t1
+NOTICE:  drop cascades to 2 other objects
+DETAIL:  drop cascades to table full_access_user_schema.t1
+drop cascades to table full_access_user_schema.t2
 DROP TABLE
     my_table,
     my_table_with_data,

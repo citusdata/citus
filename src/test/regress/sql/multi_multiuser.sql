@@ -27,6 +27,7 @@ SELECT create_distributed_table('singleshard', 'id');
 SET citus.enable_ddl_propagation TO off;
 
 CREATE USER full_access;
+CREATE USER usage_access;
 CREATE USER read_access;
 CREATE USER no_access;
 CREATE ROLE some_role;
@@ -38,12 +39,14 @@ GRANT SELECT ON TABLE test TO read_access;
 
 CREATE SCHEMA full_access_user_schema;
 REVOKE ALL ON SCHEMA full_access_user_schema FROM PUBLIC;
-GRANT USAGE ON SCHEMA full_access_user_schema TO full_access;
+GRANT ALL ON SCHEMA full_access_user_schema TO full_access;
+GRANT USAGE ON SCHEMA full_access_user_schema TO usage_access;
 
 SET citus.enable_ddl_propagation TO DEFAULT;
 
 \c - - - :worker_1_port
 CREATE USER full_access;
+CREATE USER usage_access;
 CREATE USER read_access;
 CREATE USER no_access;
 CREATE ROLE some_role;
@@ -59,9 +62,12 @@ GRANT SELECT ON TABLE test_1420002 TO read_access;
 CREATE SCHEMA full_access_user_schema;
 REVOKE ALL ON SCHEMA full_access_user_schema FROM PUBLIC;
 GRANT USAGE ON SCHEMA full_access_user_schema TO full_access;
+GRANT ALL ON SCHEMA full_access_user_schema TO full_access;
+GRANT USAGE ON SCHEMA full_access_user_schema TO usage_access;
 
 \c - - - :worker_2_port
 CREATE USER full_access;
+CREATE USER usage_access;
 CREATE USER read_access;
 CREATE USER no_access;
 CREATE ROLE some_role;
@@ -77,6 +83,8 @@ GRANT SELECT ON TABLE test_1420003 TO read_access;
 CREATE SCHEMA full_access_user_schema;
 REVOKE ALL ON SCHEMA full_access_user_schema FROM PUBLIC;
 GRANT USAGE ON SCHEMA full_access_user_schema TO full_access;
+GRANT ALL ON SCHEMA full_access_user_schema TO full_access;
+GRANT USAGE ON SCHEMA full_access_user_schema TO usage_access;
 
 \c - - - :master_port
 
@@ -234,16 +242,16 @@ $cmd$);
 
 -- we want to make sure the schema and user are setup in such a way they can't create a
 -- table
-SET ROLE full_access;
+SET ROLE usage_access;
 CREATE TABLE full_access_user_schema.t1 (id int);
 RESET ROLE;
 
 -- now we create the table for the user
 CREATE TABLE full_access_user_schema.t1 (id int);
-ALTER TABLE full_access_user_schema.t1 OWNER TO full_access;
+ALTER TABLE full_access_user_schema.t1 OWNER TO usage_access;
 
 -- make sure we can insert data
-SET ROLE full_access;
+SET ROLE usage_access;
 INSERT INTO full_access_user_schema.t1 VALUES (1),(2),(3);
 
 -- creating the table should fail with a failure on the worker machine since the user is
@@ -262,6 +270,12 @@ SELECT result FROM run_command_on_workers($cmd$
     AND tablename LIKE 't1_%'
   LIMIT 1;
 $cmd$);
+
+-- a user with all privileges on a schema should be able to distribute tables
+SET ROLE full_access;
+CREATE TABLE full_access_user_schema.t2(id int);
+SELECT create_distributed_table('full_access_user_schema.t2', 'id');
+RESET ROLE;
 
 DROP SCHEMA full_access_user_schema CASCADE;
 DROP TABLE
