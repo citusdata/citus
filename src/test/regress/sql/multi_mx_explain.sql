@@ -9,7 +9,7 @@ ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1320000;
 
 \a\t
 
-SET citus.task_executor_type TO 'real-time';
+RESET citus.task_executor_type;
 SET citus.explain_distributed_queries TO on;
 
 VACUUM ANALYZE lineitem_mx;

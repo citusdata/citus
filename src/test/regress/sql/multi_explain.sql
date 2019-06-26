@@ -10,7 +10,7 @@ SELECT substring(:'server_version', '\d+')::int > 9 AS version_above_nine;
 
 \a\t
 
-SET citus.task_executor_type TO 'real-time';
+RESET citus.task_executor_type;
 SET citus.explain_distributed_queries TO on;
 
 -- Function that parses explain output as JSON
@@ -490,7 +490,7 @@ PREPARE task_tracker_query AS
 	SELECT avg(l_linenumber) FROM lineitem WHERE l_orderkey > 9030;
 EXPLAIN (COSTS FALSE) EXECUTE task_tracker_query;
 
-SET citus.task_executor_type TO 'real-time';
+RESET citus.task_executor_type;
 
 PREPARE router_executor_query AS SELECT l_quantity FROM lineitem WHERE l_orderkey = 5;
 EXPLAIN EXECUTE router_executor_query;
