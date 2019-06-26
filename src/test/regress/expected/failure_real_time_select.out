@@ -52,7 +52,7 @@ WARNING:  could not consume data from worker node
 WARNING:  could not consume data from worker node
 WARNING:  could not consume data from worker node
 WARNING:  could not consume data from worker node
-ERROR:  failed to execute task 3
+ERROR:  failed to execute task 1
 -- Since the outer query uses the connection opened by the CTE,
 -- killing connection after first successful query should break.
 SET client_min_messages TO ERROR;

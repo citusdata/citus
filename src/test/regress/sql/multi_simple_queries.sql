@@ -217,7 +217,7 @@ SELECT o_orderstatus, sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 -- now, test the cases where Citus do or do not need to create
 -- the master queries
 SET client_min_messages TO 'DEBUG2';
-RESET citus.task_executor_type;
+SET citus.task_executor_type TO 'real-time';
 
 -- start with the simple lookup query
 SELECT *

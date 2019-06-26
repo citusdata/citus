@@ -1274,7 +1274,7 @@ SELECT relation::regclass, locktype, mode FROM pg_locks WHERE relation::regclass
 (3 rows)
 
 COMMIT;
-SET citus.task_executor_type TO 'real-time';
+RESET citus.task_executor_type;
 -- test locks on INSERT
 BEGIN;
 INSERT INTO partitioning_locks VALUES(1, 1, '2009-01-01');
