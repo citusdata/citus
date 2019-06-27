@@ -758,10 +758,16 @@ RegisterCitusConfigVariables(void)
 
 	DefineCustomIntVariable(
 		"citus.max_adaptive_executor_pool_size",
-		gettext_noop("Sets the maximum number of connections used per distributed query "
-					 "for each worker node. This is only effective when "
-					 "citus.task_executor_type is set to adaptive."),
-		gettext_noop("See src/backend/executor/adaptive_executor.c for the details"),
+		gettext_noop("Sets the maximum number of connections per worker node used by "
+					 "the adaptive executor to execute a multi-shard command"),
+		gettext_noop("The adaptive executor may open multiple connections per worker "
+					 "node when running multi-shard commands to parallelize the command "
+					 "across multiple cores on the worker. This setting specifies the "
+					 "maximum number of connections it will open. The number of "
+					 "connections is also bounded by the number of shards on the node. "
+					 "This setting can be used to reduce the memory usage of a query "
+					 "and allow a higher degree of concurrency when concurrent "
+					 "multi-shard queries open too many connections to a worker."),
 		&MaxAdaptiveExecutorPoolSize,
 		16, 1, INT_MAX,
 		PGC_USERSET,
