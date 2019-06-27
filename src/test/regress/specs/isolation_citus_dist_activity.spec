@@ -28,6 +28,7 @@ step "s1-begin"
 step "s1-cache-connections"
 {
     SET citus.max_cached_conns_per_worker TO 4;
+    SET citus.force_max_query_parallelization TO on;
     UPDATE test_table SET column2 = 0;
 }
 
