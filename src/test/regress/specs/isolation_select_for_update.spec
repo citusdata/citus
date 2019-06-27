@@ -101,7 +101,7 @@ step "s1-select-from-t1-with-view"
 	SELECT * FROM test_1 WHERE id = 1 FOR UPDATE;
 }
 
-step "s1-finish"
+step "s1-commit"
 {
 	COMMIT;
 }
@@ -146,21 +146,21 @@ step "s2-select-from-t1-t2-for-update"
 		FOR UPDATE;
 }
 
-step "s2-finish"
+step "s2-commit"
 {
 	COMMIT;
 }
 
-permutation "s1-begin" "s1-select-from-t1-t2-for-update" "s2-begin" "s2-update-t1" "s1-finish" "s2-finish"
-permutation "s1-begin" "s1-select-from-t1-t2-for-share" "s2-begin" "s2-delete-t1" "s1-finish" "s2-finish"
-permutation "s1-begin" "s1-select-from-t1-rt-for-update" "s2-begin" "s2-update-t1" "s1-finish" "s2-finish"
-permutation "s1-begin" "s1-select-from-t1-rt-with-lc-for-update" "s2-begin" "s2-update-rt" "s1-finish" "s2-finish"
-permutation "s1-begin" "s1-select-from-t1-rt-with-lc-for-update" "s2-begin" "s2-update-t1" "s1-finish" "s2-finish"
-permutation "s1-begin" "s1-select-from-t1-t2-for-share" "s2-begin" "s2-select-from-t1-t2-for-share" "s1-finish" "s2-finish"
-permutation "s1-begin" "s1-select-from-t1-rt-for-update" "s2-begin" "s2-select-from-t1-t2-for-update" "s1-finish" "s2-finish"
-permutation "s1-begin" "s1-select-from-t1-within-cte" "s2-begin" "s2-select-from-t1-t2-for-update" "s1-finish" "s2-finish"
-permutation "s1-begin" "s1-select-from-t1-within-cte" "s2-begin" "s2-update-t1" "s1-finish" "s2-finish"
-permutation "s1-begin" "s1-select-from-t1-with-subquery" "s2-begin" "s2-update-t1" "s1-finish" "s2-finish"
-permutation "s1-begin" "s1-select-from-rt-with-subquery" "s2-begin" "s2-update-rt" "s1-finish" "s2-finish"
-permutation "s1-begin" "s1-select-from-t1-with-view" "s2-begin" "s2-update-t1" "s1-finish" "s2-finish"
-permutation "s1-begin" "s1-update-rt-with-cte-select-from-rt" "s2-begin" "s2-update-rt" "s1-finish" "s2-finish"
+permutation "s1-begin" "s1-select-from-t1-t2-for-update" "s2-begin" "s2-update-t1" "s1-commit" "s2-commit"
+permutation "s1-begin" "s1-select-from-t1-t2-for-share" "s2-begin" "s2-delete-t1" "s1-commit" "s2-commit"
+permutation "s1-begin" "s1-select-from-t1-rt-for-update" "s2-begin" "s2-update-t1" "s1-commit" "s2-commit"
+permutation "s1-begin" "s1-select-from-t1-rt-with-lc-for-update" "s2-begin" "s2-update-rt" "s1-commit" "s2-commit"
+permutation "s1-begin" "s1-select-from-t1-rt-with-lc-for-update" "s2-begin" "s2-update-t1" "s1-commit" "s2-commit"
+permutation "s1-begin" "s1-select-from-t1-t2-for-share" "s2-begin" "s2-select-from-t1-t2-for-share" "s1-commit" "s2-commit"
+permutation "s1-begin" "s1-select-from-t1-rt-for-update" "s2-begin" "s2-select-from-t1-t2-for-update" "s1-commit" "s2-commit"
+permutation "s1-begin" "s1-select-from-t1-within-cte" "s2-begin" "s2-select-from-t1-t2-for-update" "s1-commit" "s2-commit"
+permutation "s1-begin" "s1-select-from-t1-within-cte" "s2-begin" "s2-update-t1" "s1-commit" "s2-commit"
+permutation "s1-begin" "s1-select-from-t1-with-subquery" "s2-begin" "s2-update-t1" "s1-commit" "s2-commit"
+permutation "s1-begin" "s1-select-from-rt-with-subquery" "s2-begin" "s2-update-rt" "s1-commit" "s2-commit"
+permutation "s1-begin" "s1-select-from-t1-with-view" "s2-begin" "s2-update-t1" "s1-commit" "s2-commit"
+permutation "s1-begin" "s1-update-rt-with-cte-select-from-rt" "s2-begin" "s2-update-rt" "s1-commit" "s2-commit"
