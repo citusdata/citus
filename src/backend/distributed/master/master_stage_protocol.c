@@ -534,8 +534,7 @@ CreateShardsOnWorkersViaExecutor(Oid distributedRelationId, List *shardPlacement
 
 	int taskId = 1;
 	List *taskList = NIL;
-
-	int poolSize = useExclusiveConnection ? MaxAdaptiveExecutorPoolSize : 1;
+	int poolSize = 1;
 
 	foreach(shardPlacementCell, shardPlacements)
 	{
@@ -568,6 +567,29 @@ CreateShardsOnWorkersViaExecutor(Oid distributedRelationId, List *shardPlacement
 		task->taskPlacementList = list_make1(shardPlacement);
 
 		taskList = lappend(taskList, task);
+	}
+
+	if (useExclusiveConnection)
+	{
+		/*
+		 * When the table has local data, we force max parallelization so data
+		 * copy is done efficiently. We also prefer to use max parallelization
+		 * when we're inside a transaction block because the user might execute
+		 * compute heavy commands (e.g., load data or create index) later in the
+		 * transaction block.
+		 */
+		SetLocalForceMaxQueryParallelization();
+
+		/*
+		 * TODO: After we fix adaptive executor to record parallel access for
+		 * ForceMaxQueryParallelization, we should remove this. This is just
+		 * to force adaptive executor to record parallel access to relations.
+		 *
+		 * Adaptive executor uses poolSize to decide if it should record parallel
+		 * access to relations or not, and it ignores ForceMaxQueryParallelization
+		 * because of some complications in TRUNCATE.
+		 */
+		poolSize = MaxAdaptiveExecutorPoolSize;
 	}
 
 	ExecuteTaskList(CMD_UTILITY, taskList, poolSize);
