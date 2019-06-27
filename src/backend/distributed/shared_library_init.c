@@ -759,11 +759,11 @@ RegisterCitusConfigVariables(void)
 	DefineCustomIntVariable(
 		"citus.max_adaptive_executor_pool_size",
 		gettext_noop("Sets the maximum number of connections used per distributed query "
-					 "for each worker node. If set to zero, adaptive executor is "
-					 "disabled"),
-		gettext_noop("See src/backend/executor/README for the details"),
+					 "for each worker node. This is only effective when "
+					 "citus.task_executor_type is set to adaptive."),
+		gettext_noop("See src/backend/executor/adaptive_executor.c for the details"),
 		&MaxAdaptiveExecutorPoolSize,
-		4, 1, INT_MAX,
+		16, 1, INT_MAX,
 		PGC_USERSET,
 		0,
 		NULL, NULL, NULL);
