@@ -133,7 +133,8 @@ CoordinatorInsertSelectExecScan(CustomScanState *node)
 					if (MultiShardConnectionType == SEQUENTIAL_CONNECTION)
 					{
 						ExecuteModifyTasksSequentially(scanState, prunedTaskList,
-													   CMD_INSERT, hasReturning);
+													   ROW_MODIFY_COMMUTATIVE,
+													   hasReturning);
 					}
 					else
 					{
@@ -151,7 +152,7 @@ CoordinatorInsertSelectExecScan(CustomScanState *node)
 					scanState->tuplestorestate =
 						tuplestore_begin_heap(randomAccess, interTransactions, work_mem);
 
-					ExecuteTaskListExtended(CMD_INSERT, prunedTaskList,
+					ExecuteTaskListExtended(ROW_MODIFY_COMMUTATIVE, prunedTaskList,
 											tupleDescriptor, scanState->tuplestorestate,
 											hasReturning, MaxAdaptiveExecutorPoolSize);
 				}

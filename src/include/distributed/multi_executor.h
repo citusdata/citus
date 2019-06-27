@@ -38,13 +38,14 @@ extern void CitusExecutorStart(QueryDesc *queryDesc, int eflags);
 extern void CitusExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint64 count,
 							 bool execute_once);
 extern TupleTableSlot * AdaptiveExecutor(CustomScanState *node);
-extern uint64 ExecuteTaskListExtended(CmdType operation, List *taskList,
+extern uint64 ExecuteTaskListExtended(RowModifyLevel modLevel, List *taskList,
 									  TupleDesc tupleDescriptor,
 									  Tuplestorestate *tupleStore,
 									  bool hasReturning, int targetPoolSize);
 extern void ExecuteUtilityTaskListWithoutResults(List *taskList, int targetPoolSize,
 												 bool forceSequentialExecution);
-extern uint64 ExecuteTaskList(CmdType operation, List *taskList, int targetPoolSize);
+extern uint64 ExecuteTaskList(RowModifyLevel modLevel, List *taskList, int
+							  targetPoolSize);
 extern TupleTableSlot * CitusExecScan(CustomScanState *node);
 extern TupleTableSlot * ReturnTupleFromTuplestore(CitusScanState *scanState);
 extern void LoadTuplesIntoTupleStore(CitusScanState *citusScanState, Job *workerJob);

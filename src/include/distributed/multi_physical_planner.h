@@ -110,6 +110,15 @@ typedef enum
 } BoundaryNodeJobType;
 
 
+/* Enumeration that specifies extent of DML modifications */
+typedef enum RowModifyLevel
+{
+	ROW_MODIFY_NONE = 0,
+	ROW_MODIFY_READONLY = 1,
+	ROW_MODIFY_COMMUTATIVE = 2,
+	ROW_MODIFY_NONCOMMUTATIVE = 3
+} RowModifyLevel;
+
 /*
  * Job represents a logical unit of work that contains one set of data transfers
  * in our physical plan. The physical planner maps each SQL query into one or
@@ -183,7 +192,6 @@ typedef struct Task
 	ShardInterval *shardInterval;  /* only applies to merge tasks */
 	bool assignmentConstrained;    /* only applies to merge tasks */
 	TaskExecution *taskExecution;  /* used by task tracker executor */
-	bool upsertQuery;              /* only applies to modify tasks */
 	char replicationModel;         /* only applies to modify tasks */
 
 	List *relationRowLockList;
@@ -229,20 +237,20 @@ typedef struct DistributedPlan
 	/* unique identifier of the plan within the session */
 	uint64 planId;
 
-	/* type of command to execute (SELECT/INSERT/...) */
-	CmdType operation;
+	/* specifies nature of modifications in query */
+	RowModifyLevel modLevel;
 
 	/* specifies whether a DML command has a RETURNING */
 	bool hasReturning;
+
+	/* a router executable query is executed entirely on a worker */
+	bool routerExecutable;
 
 	/* job tree containing the tasks to be executed on workers */
 	Job *workerJob;
 
 	/* local query that merges results from the workers */
 	Query *masterQuery;
-
-	/* a router executable query is executed entirely on a worker */
-	bool routerExecutable;
 
 	/* query identifier (copied from the top-level PlannedStmt) */
 	uint64 queryId;
@@ -340,6 +348,7 @@ extern bool ShardIntervalsOverlap(ShardInterval *firstInterval,
 								  ShardInterval *secondInterval);
 extern bool CoPartitionedTables(Oid firstRelationId, Oid secondRelationId);
 extern ShardInterval ** GenerateSyntheticShardIntervalArray(int partitionCount);
+extern RowModifyLevel RowModifyLevelForQuery(Query *query);
 
 
 /* function declarations for Task and Task list operations */

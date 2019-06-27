@@ -85,7 +85,7 @@ InsertSelectIntoDistributedTable(Query *query)
 
 	if (insertSelectQuery)
 	{
-		RangeTblEntry *insertRte = ExtractInsertRangeTableEntry(query);
+		RangeTblEntry *insertRte = ExtractResultRelationRTE(query);
 		if (IsDistributedTable(insertRte->relid))
 		{
 			return true;
@@ -108,7 +108,7 @@ InsertSelectIntoLocalTable(Query *query)
 
 	if (insertSelectQuery)
 	{
-		RangeTblEntry *insertRte = ExtractInsertRangeTableEntry(query);
+		RangeTblEntry *insertRte = ExtractResultRelationRTE(query);
 		if (!IsDistributedTable(insertRte->relid))
 		{
 			return true;
@@ -220,7 +220,7 @@ CreateDistributedInsertSelectPlan(Query *originalQuery,
 	Job *workerJob = NULL;
 	uint64 jobId = INVALID_JOB_ID;
 	DistributedPlan *distributedPlan = CitusMakeNode(DistributedPlan);
-	RangeTblEntry *insertRte = ExtractInsertRangeTableEntry(originalQuery);
+	RangeTblEntry *insertRte = ExtractResultRelationRTE(originalQuery);
 	RangeTblEntry *subqueryRte = ExtractSelectRangeTableEntry(originalQuery);
 	Oid targetRelationId = insertRte->relid;
 	DistTableCacheEntry *targetCacheEntry = DistributedTableCacheEntry(targetRelationId);
@@ -230,7 +230,7 @@ CreateDistributedInsertSelectPlan(Query *originalQuery,
 	bool allReferenceTables = relationRestrictionContext->allReferenceTables;
 	bool allDistributionKeysInQueryAreEqual = false;
 
-	distributedPlan->operation = originalQuery->commandType;
+	distributedPlan->modLevel = RowModifyLevelForQuery(originalQuery);
 
 	/*
 	 * Error semantics for INSERT ... SELECT queries are different than regular
@@ -423,7 +423,7 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 								 bool safeToPushdownSubquery)
 {
 	Query *copiedQuery = copyObject(originalQuery);
-	RangeTblEntry *copiedInsertRte = ExtractInsertRangeTableEntry(copiedQuery);
+	RangeTblEntry *copiedInsertRte = ExtractResultRelationRTE(copiedQuery);
 	RangeTblEntry *copiedSubqueryRte = ExtractSelectRangeTableEntry(copiedQuery);
 	Query *copiedSubquery = (Query *) copiedSubqueryRte->subquery;
 
@@ -443,7 +443,6 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 	uint64 jobId = INVALID_JOB_ID;
 	List *insertShardPlacementList = NULL;
 	List *intersectedPlacementList = NULL;
-	bool upsertQuery = false;
 	bool replacePrunedQueryWithDummy = false;
 	bool allReferenceTables =
 		plannerRestrictionContext->relationRestrictionContext->allReferenceTables;
@@ -566,12 +565,6 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 	/* this is required for correct deparsing of the query */
 	ReorderInsertSelectTargetLists(copiedQuery, copiedInsertRte, copiedSubqueryRte);
 
-	/* set the upsert flag */
-	if (originalQuery->onConflict != NULL)
-	{
-		upsertQuery = true;
-	}
-
 	/* setting an alias simplifies deparsing of RETURNING */
 	if (copiedInsertRte->alias == NULL)
 	{
@@ -589,7 +582,6 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 	modifyTask->dependedTaskList = NULL;
 	modifyTask->anchorShardId = shardId;
 	modifyTask->taskPlacementList = insertShardPlacementList;
-	modifyTask->upsertQuery = upsertQuery;
 	modifyTask->relationShardList = relationShardList;
 	modifyTask->replicationModel = cacheEntry->replicationModel;
 
@@ -1138,11 +1130,11 @@ CreateCoordinatorInsertSelectPlan(uint64 planId, Query *parse)
 	Query *selectQuery = NULL;
 
 	RangeTblEntry *selectRte = ExtractSelectRangeTableEntry(insertSelectQuery);
-	RangeTblEntry *insertRte = ExtractInsertRangeTableEntry(insertSelectQuery);
+	RangeTblEntry *insertRte = ExtractResultRelationRTE(insertSelectQuery);
 	Oid targetRelationId = insertRte->relid;
 
 	DistributedPlan *distributedPlan = CitusMakeNode(DistributedPlan);
-	distributedPlan->operation = CMD_INSERT;
+	distributedPlan->modLevel = RowModifyLevelForQuery(insertSelectQuery);
 
 	distributedPlan->planningError =
 		CoordinatorInsertSelectSupported(insertSelectQuery);
@@ -1243,7 +1235,7 @@ CoordinatorInsertSelectSupported(Query *insertSelectQuery)
 		return deferredError;
 	}
 
-	insertRte = ExtractInsertRangeTableEntry(insertSelectQuery);
+	insertRte = ExtractResultRelationRTE(insertSelectQuery);
 	if (PartitionMethod(insertRte->relid) == DISTRIBUTE_BY_APPEND)
 	{
 		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
@@ -1347,7 +1339,7 @@ TwoPhaseInsertSelectTaskList(Oid targetRelationId, Query *insertSelectQuery,
 	 * then deparse it.
 	 */
 	Query *insertResultQuery = copyObject(insertSelectQuery);
-	RangeTblEntry *insertRte = ExtractInsertRangeTableEntry(insertResultQuery);
+	RangeTblEntry *insertRte = ExtractResultRelationRTE(insertResultQuery);
 	RangeTblEntry *selectRte = ExtractSelectRangeTableEntry(insertResultQuery);
 
 	DistTableCacheEntry *targetCacheEntry = DistributedTableCacheEntry(targetRelationId);
@@ -1441,7 +1433,6 @@ TwoPhaseInsertSelectTaskList(Oid targetRelationId, Query *insertSelectQuery,
 		modifyTask->dependedTaskList = NULL;
 		modifyTask->anchorShardId = shardId;
 		modifyTask->taskPlacementList = insertShardPlacementList;
-		modifyTask->upsertQuery = insertResultQuery->onConflict != NULL;
 		modifyTask->relationShardList = list_make1(relationShard);
 		modifyTask->replicationModel = targetCacheEntry->replicationModel;
 

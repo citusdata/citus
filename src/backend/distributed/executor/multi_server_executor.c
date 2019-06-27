@@ -95,7 +95,7 @@ JobExecutorType(DistributedPlan *distributedPlan)
 		return MULTI_EXECUTOR_COORDINATOR_INSERT_SELECT;
 	}
 
-	Assert(distributedPlan->operation == CMD_SELECT);
+	Assert(distributedPlan->modLevel == ROW_MODIFY_READONLY);
 
 	workerNodeList = ActiveReadableNodeList();
 	workerNodeCount = list_length(workerNodeList);

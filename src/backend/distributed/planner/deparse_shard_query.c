@@ -70,7 +70,7 @@ RebuildQueryStrings(Query *originalQuery, List *taskList)
 
 			query = copyObject(originalQuery);
 
-			copiedInsertRte = ExtractInsertRangeTableEntry(query);
+			copiedInsertRte = ExtractResultRelationRTE(query);
 			copiedSubqueryRte = ExtractSelectRangeTableEntry(query);
 			copiedSubquery = copiedSubqueryRte->subquery;
 
@@ -92,7 +92,8 @@ RebuildQueryStrings(Query *originalQuery, List *taskList)
 
 			UpdateRelationToShardNames((Node *) copiedSubquery, relationShardList);
 		}
-		else if (task->upsertQuery || valuesRTE != NULL)
+		else if (query->commandType == CMD_INSERT && (query->onConflict != NULL ||
+													  valuesRTE != NULL))
 		{
 			RangeTblEntry *rangeTableEntry = NULL;
 

@@ -46,15 +46,15 @@ extern void ExecuteMultipleTasks(CitusScanState *scanState, List *taskList,
 								 bool isModificationQuery, bool expectResults);
 
 int64 ExecuteModifyTasksSequentially(CitusScanState *scanState, List *taskList,
-									 CmdType operation, bool hasReturning);
+									 RowModifyLevel modLevel, bool hasReturning);
 extern int64 ExecuteModifyTasksWithoutResults(List *taskList);
 extern int64 ExecuteModifyTasksSequentiallyWithoutResults(List *taskList,
-														  CmdType operation);
+														  RowModifyLevel modLevel);
 extern ShardPlacementAccess * CreatePlacementAccess(ShardPlacement *placement,
 													ShardPlacementAccessType accessType);
 
 /* helper functions */
-extern void AcquireExecutorShardLock(Task *task, CmdType commandType);
+extern void AcquireExecutorShardLocks(Task *task, RowModifyLevel modLevel);
 extern void AcquireExecutorMultiShardLocks(List *taskList);
 extern ShardPlacementAccess * CreatePlacementAccess(ShardPlacement *placement,
 													ShardPlacementAccessType accessType);

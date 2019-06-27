@@ -158,8 +158,8 @@
  */
 typedef struct DistributedExecution
 {
-	/* the corresponding distributed plan's operation */
-	CmdType operation;
+	/* the corresponding distributed plan's modLevel */
+	RowModifyLevel modLevel;
 
 	List *tasksToExecute;
 
@@ -504,7 +504,7 @@ int ExecutorSlowStartInterval = 10;
 
 
 /* local functions */
-static DistributedExecution * CreateDistributedExecution(CmdType operation,
+static DistributedExecution * CreateDistributedExecution(RowModifyLevel modLevel,
 														 List *taskList,
 														 bool hasReturning,
 														 ParamListInfo paramListInfo,
@@ -520,16 +520,16 @@ static void FinishDistributedExecution(DistributedExecution *execution);
 static void CleanUpSessions(DistributedExecution *execution);
 
 static void LockPartitionsForDistributedPlan(DistributedPlan *distributedPlan);
-static void AcquireExecutorShardLocks(DistributedExecution *execution);
+static void AcquireExecutorShardLocksForExecution(DistributedExecution *execution);
 static bool DistributedExecutionModifiesDatabase(DistributedExecution *execution);
 static bool DistributedPlanModifiesDatabase(DistributedPlan *plan);
-static bool TaskListModifiesDatabase(CmdType operation, List *taskList);
+static bool TaskListModifiesDatabase(RowModifyLevel modLevel, List *taskList);
 static bool DistributedExecutionRequiresRollback(DistributedExecution *execution);
-static bool SelectForUpdateOnReferenceTable(CmdType operation, List *taskList);
+static bool SelectForUpdateOnReferenceTable(RowModifyLevel modLevel, List *taskList);
 static void AssignTasksToConnections(DistributedExecution *execution);
 static void UnclaimAllSessionConnections(List *sessionList);
 static bool UseConnectionPerPlacement(void);
-static PlacementExecutionOrder ExecutionOrderForTask(CmdType operation, Task *task);
+static PlacementExecutionOrder ExecutionOrderForTask(RowModifyLevel modLevel, Task *task);
 static WorkerPool * FindOrCreateWorkerPool(DistributedExecution *execution,
 										   WorkerNode *workerNode);
 static WorkerSession * FindOrCreateWorkerSession(WorkerPool *workerPool,
@@ -610,7 +610,7 @@ AdaptiveExecutor(CustomScanState *node)
 		targetPoolSize = 1;
 	}
 
-	execution = CreateDistributedExecution(distributedPlan->operation, taskList,
+	execution = CreateDistributedExecution(distributedPlan->modLevel, taskList,
 										   distributedPlan->hasReturning,
 										   paramListInfo, tupleDescriptor,
 										   tupleStore, targetPoolSize);
@@ -626,7 +626,7 @@ AdaptiveExecutor(CustomScanState *node)
 		RunDistributedExecution(execution);
 	}
 
-	if (distributedPlan->operation != CMD_SELECT)
+	if (distributedPlan->modLevel != ROW_MODIFY_READONLY)
 	{
 		executorState->es_processed = execution->rowsProcessed;
 	}
@@ -654,14 +654,14 @@ ExecuteUtilityTaskListWithoutResults(List *taskList, int targetPoolSize,
 {
 	if (TaskExecutorType == MULTI_EXECUTOR_ADAPTIVE)
 	{
-		ExecuteTaskList(CMD_UTILITY, taskList, targetPoolSize);
+		ExecuteTaskList(ROW_MODIFY_NONE, taskList, targetPoolSize);
 	}
 	else
 	{
 		if (MultiShardConnectionType == SEQUENTIAL_CONNECTION ||
 			forceSequentialExecution)
 		{
-			ExecuteModifyTasksSequentiallyWithoutResults(taskList, CMD_UTILITY);
+			ExecuteModifyTasksSequentiallyWithoutResults(taskList, ROW_MODIFY_NONE);
 		}
 		else
 		{
@@ -676,13 +676,13 @@ ExecuteUtilityTaskListWithoutResults(List *taskList, int targetPoolSize,
  * for some of the arguments.
  */
 uint64
-ExecuteTaskList(CmdType operation, List *taskList, int targetPoolSize)
+ExecuteTaskList(RowModifyLevel modLevel, List *taskList, int targetPoolSize)
 {
 	TupleDesc tupleDescriptor = NULL;
 	Tuplestorestate *tupleStore = NULL;
 	bool hasReturning = false;
 
-	return ExecuteTaskListExtended(operation, taskList, tupleDescriptor,
+	return ExecuteTaskListExtended(modLevel, taskList, tupleDescriptor,
 								   tupleStore, hasReturning, targetPoolSize);
 }
 
@@ -692,7 +692,7 @@ ExecuteTaskList(CmdType operation, List *taskList, int targetPoolSize)
  * runs it.
  */
 uint64
-ExecuteTaskListExtended(CmdType operation, List *taskList,
+ExecuteTaskListExtended(RowModifyLevel modLevel, List *taskList,
 						TupleDesc tupleDescriptor, Tuplestorestate *tupleStore,
 						bool hasReturning, int targetPoolSize)
 {
@@ -705,7 +705,7 @@ ExecuteTaskListExtended(CmdType operation, List *taskList,
 	}
 
 	execution =
-		CreateDistributedExecution(operation, taskList, hasReturning, paramListInfo,
+		CreateDistributedExecution(modLevel, taskList, hasReturning, paramListInfo,
 								   tupleDescriptor, tupleStore, targetPoolSize);
 
 	StartDistributedExecution(execution);
@@ -721,14 +721,14 @@ ExecuteTaskListExtended(CmdType operation, List *taskList,
  * a distributed plan.
  */
 DistributedExecution *
-CreateDistributedExecution(CmdType operation, List *taskList, bool hasReturning,
+CreateDistributedExecution(RowModifyLevel modLevel, List *taskList, bool hasReturning,
 						   ParamListInfo paramListInfo, TupleDesc tupleDescriptor,
 						   Tuplestorestate *tupleStore, int targetPoolSize)
 {
 	DistributedExecution *execution =
 		(DistributedExecution *) palloc0(sizeof(DistributedExecution));
 
-	execution->operation = operation;
+	execution->modLevel = modLevel;
 	execution->tasksToExecute = taskList;
 	execution->hasReturning = hasReturning;
 
@@ -823,7 +823,7 @@ StartDistributedExecution(DistributedExecution *execution)
 	}
 
 	/* prevent unsafe concurrent modifications */
-	AcquireExecutorShardLocks(execution);
+	AcquireExecutorShardLocksForExecution(execution);
 }
 
 
@@ -834,7 +834,7 @@ StartDistributedExecution(DistributedExecution *execution)
 static bool
 DistributedExecutionModifiesDatabase(DistributedExecution *execution)
 {
-	return TaskListModifiesDatabase(execution->operation, execution->tasksToExecute);
+	return TaskListModifiesDatabase(execution->modLevel, execution->tasksToExecute);
 }
 
 
@@ -845,7 +845,7 @@ DistributedExecutionModifiesDatabase(DistributedExecution *execution)
 static bool
 DistributedPlanModifiesDatabase(DistributedPlan *plan)
 {
-	return TaskListModifiesDatabase(plan->operation, plan->workerJob->taskList);
+	return TaskListModifiesDatabase(plan->modLevel, plan->workerJob->taskList);
 }
 
 
@@ -854,22 +854,22 @@ DistributedPlanModifiesDatabase(DistributedPlan *plan)
  *  DistributedPlanModifiesDatabase.
  */
 static bool
-TaskListModifiesDatabase(CmdType operation, List *taskList)
+TaskListModifiesDatabase(RowModifyLevel modLevel, List *taskList)
 {
 	Task *firstTask = NULL;
 
-	if (operation == CMD_INSERT || operation == CMD_UPDATE || operation == CMD_DELETE)
+	if (modLevel > ROW_MODIFY_READONLY)
 	{
 		return true;
 	}
 
 	/*
-	 * If we cannot decide by only checking the operation, we should look closer
-	 * to the tasks.
+	 * If we cannot decide by only checking the row modify level,
+	 * we should look closer to the tasks.
 	 */
 	if (list_length(taskList) < 1)
 	{
-		/* does this ever possible? */
+		/* is this ever possible? */
 		return false;
 	}
 
@@ -968,12 +968,12 @@ DistributedExecutionRequiresRollback(DistributedExecution *execution)
  * that contains FOR UPDATE clause that locks any reference tables.
  */
 static bool
-SelectForUpdateOnReferenceTable(CmdType operation, List *taskList)
+SelectForUpdateOnReferenceTable(RowModifyLevel modLevel, List *taskList)
 {
 	Task *task = NULL;
 	ListCell *rtiLockCell = NULL;
 
-	if (operation != CMD_SELECT)
+	if (modLevel != ROW_MODIFY_READONLY)
 	{
 		return false;
 	}
@@ -1025,8 +1025,8 @@ LockPartitionsForDistributedPlan(DistributedPlan *distributedPlan)
 
 
 /*
- * AcquireExecutorShardLocks acquires advisory lock on shard IDs to prevent
- * unsafe concurrent modifications of shards.
+ * AcquireExecutorShardLocksForExecution acquires advisory lock on shard IDs
+ * to prevent unsafe concurrent modifications of shards.
  *
  * We prevent concurrent modifications of shards in two cases:
  * 1. Any non-commutative writes to a replicated table
@@ -1042,13 +1042,13 @@ LockPartitionsForDistributedPlan(DistributedPlan *distributedPlan)
  * TRUNCATE because the table locks already prevent concurrent access.
  */
 static void
-AcquireExecutorShardLocks(DistributedExecution *execution)
+AcquireExecutorShardLocksForExecution(DistributedExecution *execution)
 {
-	CmdType operation = execution->operation;
+	RowModifyLevel modLevel = execution->modLevel;
 	List *taskList = execution->tasksToExecute;
 
-	if (!(operation == CMD_INSERT || operation == CMD_UPDATE || operation == CMD_DELETE ||
-		  SelectForUpdateOnReferenceTable(operation, taskList)))
+	if (modLevel <= ROW_MODIFY_READONLY &&
+		!SelectForUpdateOnReferenceTable(modLevel, taskList))
 	{
 		/*
 		 * Executor locks only apply to DML commands and SELECT FOR UPDATE queries
@@ -1069,7 +1069,7 @@ AcquireExecutorShardLocks(DistributedExecution *execution)
 		{
 			Task *task = (Task *) lfirst(taskCell);
 
-			AcquireExecutorShardLock(task, operation);
+			AcquireExecutorShardLocks(task, modLevel);
 		}
 	}
 	else if (list_length(taskList) > 1)
@@ -1211,7 +1211,7 @@ UnclaimAllSessionConnections(List *sessionList)
 static void
 AssignTasksToConnections(DistributedExecution *execution)
 {
-	CmdType operation = execution->operation;
+	RowModifyLevel modLevel = execution->modLevel;
 	List *taskList = execution->tasksToExecute;
 	bool hasReturning = execution->hasReturning;
 
@@ -1233,13 +1233,15 @@ AssignTasksToConnections(DistributedExecution *execution)
 		shardCommandExecution =
 			(ShardCommandExecution *) palloc0(sizeof(ShardCommandExecution));
 		shardCommandExecution->task = task;
-		shardCommandExecution->executionOrder = ExecutionOrderForTask(operation, task);
+		shardCommandExecution->executionOrder = ExecutionOrderForTask(modLevel, task);
 		shardCommandExecution->executionState = TASK_EXECUTION_NOT_FINISHED;
 		shardCommandExecution->placementExecutions =
 			(TaskPlacementExecution **) palloc0(placementExecutionCount *
 												sizeof(TaskPlacementExecution *));
 		shardCommandExecution->placementExecutionCount = placementExecutionCount;
-		shardCommandExecution->expectResults = hasReturning || operation == CMD_SELECT;
+
+		shardCommandExecution->expectResults = hasReturning ||
+											   modLevel == ROW_MODIFY_READONLY;
 
 
 		foreach(taskPlacementCell, task->taskPlacementList)
@@ -1390,7 +1392,7 @@ UseConnectionPerPlacement(void)
  * ExecutionOrderForTask gives the appropriate execution order for a task.
  */
 static PlacementExecutionOrder
-ExecutionOrderForTask(CmdType operation, Task *task)
+ExecutionOrderForTask(RowModifyLevel modLevel, Task *task)
 {
 	switch (task->taskType)
 	{
@@ -1402,7 +1404,14 @@ ExecutionOrderForTask(CmdType operation, Task *task)
 
 		case MODIFY_TASK:
 		{
-			if (operation == CMD_INSERT && !task->upsertQuery)
+			/*
+			 * For non-commutative modifications we take aggressive locks, so
+			 * there is no risk of deadlock and we can run them in parallel.
+			 * When the modification is commutative, we take no additional
+			 * locks, so we take a conservative approach and execute sequentially
+			 * to avoid deadlocks.
+			 */
+			if (modLevel < ROW_MODIFY_NONCOMMUTATIVE)
 			{
 				return EXECUTION_ORDER_SEQUENTIAL;
 			}
