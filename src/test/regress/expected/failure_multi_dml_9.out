@@ -393,7 +393,7 @@ UPDATE dml_test SET name = 'gamma' WHERE id = 3;
 COMMIT;
 WARNING:  connection not open
 CONTEXT:  while executing command on localhost:9060
-WARNING:  failed to commit critical transaction on localhost:9060, metadata is likely out of sync
+WARNING:  failed to commit transaction on localhost:9060
 WARNING:  connection not open
 CONTEXT:  while executing command on localhost:9060
 --- should see all changes, but they only went to one placement (other is unhealthy)

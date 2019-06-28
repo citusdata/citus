@@ -377,9 +377,9 @@ DELETE FROM researchers WHERE lab_id = 6;
 \copy researchers FROM STDIN delimiter ','
 COMMIT;
 WARNING:  illegal value
-WARNING:  failed to commit critical transaction on localhost:57638, metadata is likely out of sync
+WARNING:  failed to commit transaction on localhost:57638
 WARNING:  illegal value
-WARNING:  failed to commit critical transaction on localhost:57637, metadata is likely out of sync
+WARNING:  failed to commit transaction on localhost:57637
 WARNING:  could not commit transaction for shard 1200001 on any active node
 ERROR:  could not commit transaction on any active node
 \unset VERBOSITY
@@ -620,7 +620,7 @@ INSERT INTO objects VALUES (2, 'BAD');
 INSERT INTO labs VALUES (9, 'Umbrella Corporation');
 COMMIT;
 WARNING:  illegal value
-WARNING:  failed to commit critical transaction on localhost:57638, metadata is likely out of sync
+WARNING:  failed to commit transaction on localhost:57638
 -- data should be persisted
 SELECT * FROM objects WHERE id = 2;
  id | name 
@@ -663,9 +663,9 @@ INSERT INTO labs VALUES (8, 'Aperture Science');
 INSERT INTO labs VALUES (9, 'BAD');
 COMMIT;
 WARNING:  illegal value
-WARNING:  failed to commit critical transaction on localhost:57637, metadata is likely out of sync
+WARNING:  failed to commit transaction on localhost:57637
 WARNING:  illegal value
-WARNING:  failed to commit critical transaction on localhost:57638, metadata is likely out of sync
+WARNING:  failed to commit transaction on localhost:57638
 WARNING:  could not commit transaction for shard 1200002 on any active node
 WARNING:  could not commit transaction for shard 1200003 on any active node
 ERROR:  could not commit transaction on any active node
@@ -704,7 +704,7 @@ INSERT INTO labs VALUES (8, 'Aperture Science');
 INSERT INTO labs VALUES (9, 'BAD');
 COMMIT;
 WARNING:  illegal value
-WARNING:  failed to commit critical transaction on localhost:57637, metadata is likely out of sync
+WARNING:  failed to commit transaction on localhost:57637
 WARNING:  could not commit transaction for shard 1200002 on any active node
 \set VERBOSITY default
 -- data to objects should be persisted, but labs should not...

@@ -668,7 +668,7 @@ COMMIT;
 WARNING:  duplicate key value violates unique constraint "ddl_commands_command_key"
 DETAIL:  Key (command)=(CREATE INDEX) already exists.
 CONTEXT:  while executing command on localhost:57638
-WARNING:  failed to commit critical transaction on localhost:57638, metadata is likely out of sync
+WARNING:  failed to commit transaction on localhost:57638
 -- The block should have committed with a warning
 SELECT indexname, tablename FROM pg_indexes WHERE tablename = 'single_shard_items' ORDER BY 1;
    indexname    |     tablename      
