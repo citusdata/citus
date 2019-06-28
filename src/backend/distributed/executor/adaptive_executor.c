@@ -1099,7 +1099,9 @@ FinishDistributedExecution(DistributedExecution *execution)
 
 /*
  * CleanUpSessions does any clean-up necessary for the session
- * used during the execution.
+ * used during the execution. We only reach the function after
+ * successfully completing all the tasks and we expect no tasks
+ * are still in progress.
  */
 static void
 CleanUpSessions(DistributedExecution *execution)
@@ -1107,14 +1109,15 @@ CleanUpSessions(DistributedExecution *execution)
 	List *sessionList = execution->sessionList;
 	ListCell *sessionCell = NULL;
 
+	/* we get to this function only after successful executions */
+	Assert(!execution->failed && execution->unfinishedTaskCount == 0);
+
 	/* always trigger wait event set in the first round */
 	foreach(sessionCell, sessionList)
 	{
 		WorkerSession *session = lfirst(sessionCell);
 
 		MultiConnection *connection = session->connection;
-		RemoteTransaction *transaction = &(connection->remoteTransaction);
-		RemoteTransactionState transactionState = transaction->transactionState;
 
 		elog(DEBUG4, "Total number of commands sent over the session %ld: %ld",
 			 session->sessionId, session->commandsSent);
@@ -1122,21 +1125,58 @@ CleanUpSessions(DistributedExecution *execution)
 		UnclaimConnection(connection);
 
 		if (connection->connectionState == MULTI_CONNECTION_CONNECTING ||
-			connection->connectionState == MULTI_CONNECTION_FAILED)
+			connection->connectionState == MULTI_CONNECTION_FAILED ||
+			connection->connectionState == MULTI_CONNECTION_LOST)
 		{
 			/*
 			 * We want the MultiConnection go away and not used in
 			 * the subsequent executions.
+			 *
+			 * We cannot get MULTI_CONNECTION_LOST via the ConnectionStateMachine,
+			 * but we might get it via the connection API and find us here before
+			 * changing any states in the ConnectionStateMachine.
 			 */
 			CloseConnection(connection);
 		}
-		else if (transactionState == REMOTE_TRANS_CLEARING_RESULTS)
+		else if (connection->connectionState == MULTI_CONNECTION_CONNECTED)
 		{
-			/* TODO: should we keep this in the state machine? or cancel? */
-			ClearResults(connection, false);
-		}
+			RemoteTransaction *transaction = &(connection->remoteTransaction);
+			RemoteTransactionState transactionState = transaction->transactionState;
 
-		/* TODO: can we be in SENT_COMMAND? */
+			if (transactionState == REMOTE_TRANS_CLEARING_RESULTS)
+			{
+				/*
+				 * We might have established the connection, and even sent BEGIN, but not
+				 * get to the point where we assigned a task to this specific connection
+				 * (because other connections in the pool already finished all the tasks).
+				 */
+				Assert(session->commandsSent == 0);
+
+				ClearResults(connection, false);
+			}
+			else if (!(transactionState == REMOTE_TRANS_INVALID ||
+					   transactionState == REMOTE_TRANS_STARTED))
+			{
+				/*
+				 * We don't have to handle anything else. Note that the execution
+				 * could only finish on connectionStates of MULTI_CONNECTION_CONNECTING,
+				 * MULTI_CONNECTION_FAILED and MULTI_CONNECTION_CONNECTED. The first two
+				 * are already handled above.
+				 *
+				 * When we're on MULTI_CONNECTION_CONNECTED, TransactionStateMachine
+				 * ensures that all the necessary commands are successfully sent over
+				 * the connection and everything is cleared up. Otherwise, we'd have been
+				 * on MULTI_CONNECTION_FAILED state.
+				 */
+				elog(WARNING, "unexpected transaction state at the end of execution: %d",
+					 transactionState);
+			}
+		}
+		else
+		{
+			elog(WARNING, "unexpected connection state at the end of execution: %d",
+				 connection->connectionState);
+		}
 
 		/* get ready for the next executions if we need use the same connection */
 		connection->waitFlags = WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE;
