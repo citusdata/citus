@@ -79,7 +79,7 @@ ERROR:  relation "partitioning_test" does not exist
 LINE 4:  WHERE logicalrelid IN ('partitioning_test', 'partitioning_t...
                                 ^
 -- see from MX node, partitioning hierarchy is built
-SELECT inhrelid::regclass FROM pg_inherits WHERE inhparent = 'partitioning_test'::regclass;
+SELECT inhrelid::regclass FROM pg_inherits WHERE inhparent = 'partitioning_test'::regclass ORDER BY 1;
 ERROR:  relation "partitioning_test" does not exist
 LINE 1: ...elid::regclass FROM pg_inherits WHERE inhparent = 'partition...
                                                              ^
@@ -115,7 +115,7 @@ ERROR:  relation "partitioning_test" does not exist
 LINE 4:  WHERE logicalrelid IN ('partitioning_test', 'partitioning_t...
                                 ^
 -- see from MX node, partitioning hierarchy is built
-SELECT inhrelid::regclass FROM pg_inherits WHERE inhparent = 'partitioning_test'::regclass;
+SELECT inhrelid::regclass FROM pg_inherits WHERE inhparent = 'partitioning_test'::regclass ORDER BY 1;
 ERROR:  relation "partitioning_test" does not exist
 LINE 1: ...elid::regclass FROM pg_inherits WHERE inhparent = 'partition...
                                                              ^
@@ -160,7 +160,7 @@ ERROR:  relation "partitioning_test" does not exist
 LINE 1: SELECT * FROM partitioning_test ORDER BY 1;
                       ^
 -- see from MX node, partitioning hierarchy is built
-SELECT inhrelid::regclass FROM pg_inherits WHERE inhparent = 'partitioning_test'::regclass;
+SELECT inhrelid::regclass FROM pg_inherits WHERE inhparent = 'partitioning_test'::regclass ORDER BY 1;
 ERROR:  relation "partitioning_test" does not exist
 LINE 1: ...elid::regclass FROM pg_inherits WHERE inhparent = 'partition...
                                                              ^
@@ -189,7 +189,7 @@ ERROR:  relation "partitioning_test" does not exist
 LINE 1: SELECT * FROM partitioning_test ORDER BY 1;
                       ^
 -- see from MX node, partitioning hierarchy is built
-SELECT inhrelid::regclass FROM pg_inherits WHERE inhparent = 'partitioning_test'::regclass;
+SELECT inhrelid::regclass FROM pg_inherits WHERE inhparent = 'partitioning_test'::regclass ORDER BY 1;
 ERROR:  relation "partitioning_test" does not exist
 LINE 1: ...elid::regclass FROM pg_inherits WHERE inhparent = 'partition...
                                                              ^
@@ -201,7 +201,7 @@ LINE 1: ALTER TABLE partitioning_test DETACH PARTITION partitioning_...
                                       ^
 -- see from MX node, partitioning hierarchy is built
 \c - - - :worker_1_port
-SELECT inhrelid::regclass FROM pg_inherits WHERE inhparent = 'partitioning_test'::regclass;
+SELECT inhrelid::regclass FROM pg_inherits WHERE inhparent = 'partitioning_test'::regclass ORDER BY 1;
 ERROR:  relation "partitioning_test" does not exist
 LINE 1: ...elid::regclass FROM pg_inherits WHERE inhparent = 'partition...
                                                              ^
