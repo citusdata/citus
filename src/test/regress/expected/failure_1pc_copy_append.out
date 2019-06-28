@@ -286,7 +286,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^COMMIT").kill()');
 COPY copy_test FROM PROGRAM 'echo 0, 0 && echo 1, 1 && echo 2, 4 && echo 3, 9' WITH CSV;
 WARNING:  connection not open
 CONTEXT:  while executing command on localhost:9060
-WARNING:  failed to commit critical transaction on localhost:9060, metadata is likely out of sync
+WARNING:  failed to commit transaction on localhost:9060
 WARNING:  connection not open
 CONTEXT:  while executing command on localhost:9060
 SELECT * FROM pg_dist_shard s, pg_dist_shard_placement p
