@@ -6,7 +6,7 @@ ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1320000;
 \c - - - :worker_2_port
 \c - - - :master_port
 \a\t
-SET citus.task_executor_type TO 'real-time';
+RESET citus.task_executor_type;
 SET citus.explain_distributed_queries TO on;
 VACUUM ANALYZE lineitem_mx;
 VACUUM ANALYZE orders_mx;
@@ -66,7 +66,7 @@ Sort
   Sort Key: COALESCE((pg_catalog.sum((COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint))))::bigint, '0'::bigint), remote_scan.l_quantity
   ->  HashAggregate
         Group Key: remote_scan.l_quantity
-        ->  Custom Scan (Citus Real-Time)
+        ->  Custom Scan (Citus Adaptive)
               Task Count: 16
               Tasks Shown: One of 16
               ->  Task
@@ -96,7 +96,7 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
             {
               "Node Type": "Custom Scan",
               "Parent Relationship": "Outer",
-              "Custom Plan Provider": "Citus Real-Time",
+              "Custom Plan Provider": "Citus Adaptive",
               "Parallel Aware": false,
               "Distributed Query": {
                 "Job": {
@@ -172,7 +172,7 @@ EXPLAIN (COSTS FALSE, FORMAT XML)
             <Plan>
               <Node-Type>Custom Scan</Node-Type>
               <Parent-Relationship>Outer</Parent-Relationship>
-              <Custom-Plan-Provider>Citus Real-Time</Custom-Plan-Provider>
+              <Custom-Plan-Provider>Citus Adaptive</Custom-Plan-Provider>
               <Parallel-Aware>false</Parallel-Aware>
               <Distributed-Query>
                 <Job>
@@ -242,7 +242,7 @@ EXPLAIN (COSTS FALSE, FORMAT YAML)
         Plans: 
           - Node Type: "Custom Scan"
             Parent Relationship: "Outer"
-            Custom Plan Provider: "Citus Real-Time"
+            Custom Plan Provider: "Citus Adaptive"
             Parallel Aware: false
             Distributed Query: 
               Job: 
@@ -273,7 +273,7 @@ Sort
   Sort Key: COALESCE((pg_catalog.sum((COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint))))::bigint, '0'::bigint), remote_scan.l_quantity
   ->  HashAggregate
         Group Key: remote_scan.l_quantity
-        ->  Custom Scan (Citus Real-Time)
+        ->  Custom Scan (Citus Adaptive)
               Task Count: 16
               Tasks Shown: One of 16
               ->  Task
@@ -287,7 +287,7 @@ EXPLAIN (COSTS FALSE, VERBOSE TRUE)
 	SELECT sum(l_quantity) / avg(l_quantity) FROM lineitem_mx;
 Aggregate
   Output: (sum(remote_scan."?column?") / (sum(remote_scan."?column?_1") / pg_catalog.sum(remote_scan."?column?_2")))
-  ->  Custom Scan (Citus Real-Time)
+  ->  Custom Scan (Citus Adaptive)
         Output: remote_scan."?column?", remote_scan."?column?_1", remote_scan."?column?_2"
         Task Count: 16
         Tasks Shown: One of 16
@@ -305,7 +305,7 @@ EXPLAIN (COSTS FALSE)
 Limit
   ->  Sort
         Sort Key: remote_scan.l_quantity
-        ->  Custom Scan (Citus Real-Time)
+        ->  Custom Scan (Citus Adaptive)
               Task Count: 16
               Tasks Shown: One of 16
               ->  Task
@@ -322,7 +322,7 @@ Limit
 -- Test insert
 EXPLAIN (COSTS FALSE)
 	INSERT INTO lineitem_mx VALUES(1,0);
-Custom Scan (Citus Router)
+Custom Scan (Citus Adaptive)
   Task Count: 1
   Tasks Shown: All
   ->  Task
@@ -334,7 +334,7 @@ EXPLAIN (COSTS FALSE)
 	UPDATE lineitem_mx
 	SET l_suppkey = 12
 	WHERE l_orderkey = 1 AND l_partkey = 0;
-Custom Scan (Citus Router)
+Custom Scan (Citus Adaptive)
   Task Count: 1
   Tasks Shown: All
   ->  Task
@@ -347,7 +347,7 @@ Custom Scan (Citus Router)
 EXPLAIN (COSTS FALSE)
 	DELETE FROM lineitem_mx
 	WHERE l_orderkey = 1 AND l_partkey = 0;
-Custom Scan (Citus Router)
+Custom Scan (Citus Adaptive)
   Task Count: 1
   Tasks Shown: All
   ->  Task
@@ -364,7 +364,7 @@ VACUUM ANALYZE supplier_mx;
 -- Test single-shard SELECT
 EXPLAIN (COSTS FALSE)
 	SELECT l_quantity FROM lineitem_mx WHERE l_orderkey = 5;
-Custom Scan (Citus Router)
+Custom Scan (Citus Adaptive)
   Task Count: 1
   Tasks Shown: All
   ->  Task
@@ -381,7 +381,7 @@ t
 EXPLAIN (COSTS FALSE)
 	CREATE TABLE explain_result AS
 	SELECT * FROM lineitem_mx;
-Custom Scan (Citus Real-Time)
+Custom Scan (Citus Adaptive)
   Task Count: 16
   Tasks Shown: One of 16
   ->  Task
@@ -392,7 +392,7 @@ SET citus.explain_all_tasks TO on;
 EXPLAIN (COSTS FALSE)
 	SELECT avg(l_linenumber) FROM lineitem_mx WHERE l_orderkey > 9030;
 Aggregate
-  ->  Custom Scan (Citus Real-Time)
+  ->  Custom Scan (Citus Adaptive)
         Task Count: 16
         Tasks Shown: All
         ->  Task

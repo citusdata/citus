@@ -6,6 +6,10 @@ SET search_path TO 'truncate_failure';
 SET citus.next_shard_id TO 120000;
 -- we don't want to see the prepared transaction numbers in the warnings
 SET client_min_messages TO ERROR;
+-- do not cache any connections
+SET citus.max_cached_conns_per_worker TO 0;
+-- use a predictable number of connections per task
+SET citus.force_max_query_parallelization TO on;
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
 -----------
@@ -278,12 +282,12 @@ SELECT citus.mitmproxy('conn.onCommandComplete(command="^COMMIT").kill()');
 TRUNCATE test_table;
 WARNING:  connection not open
 CONTEXT:  while executing command on localhost:9060
-WARNING:  failed to commit critical transaction on localhost:9060, metadata is likely out of sync
+WARNING:  failed to commit transaction on localhost:9060
 WARNING:  connection not open
 CONTEXT:  while executing command on localhost:9060
 WARNING:  connection not open
 CONTEXT:  while executing command on localhost:9060
-WARNING:  failed to commit critical transaction on localhost:9060, metadata is likely out of sync
+WARNING:  failed to commit transaction on localhost:9060
 WARNING:  connection not open
 CONTEXT:  while executing command on localhost:9060
 WARNING:  could not commit transaction for shard 120002 on any active node

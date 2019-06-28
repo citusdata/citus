@@ -67,7 +67,6 @@ typedef struct MultiConnectionPollState
 static bool MultiConnectionStatePoll(MultiConnectionPollState *connectionState);
 static WaitEventSet * WaitEventSetFromMultiConnectionStates(List *connections,
 															int *waitCount);
-static long DeadlineTimestampTzToTimeout(TimestampTz deadline);
 static void CloseNotReadyMultiConnectionStates(List *connectionStates);
 static uint32 MultiConnectionStateEventMask(MultiConnectionPollState *connectionState);
 
@@ -334,6 +333,8 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port, 
 	connection = StartConnectionEstablishment(&key);
 
 	dlist_push_tail(entry->connections, &connection->connectionNode);
+	entry->connectionCount++;
+
 	ResetShardPlacementAssociation(connection);
 
 	return connection;
@@ -745,6 +746,17 @@ FinishConnectionListEstablishment(List *multiConnectionList)
 					uint32 eventMask = MultiConnectionStateEventMask(connectionState);
 					ModifyWaitEvent(waitEventSet, event->pos, eventMask, NULL);
 				}
+
+				/*
+				 * The state has changed to connected, update the connection's
+				 * state as well.
+				 */
+				if (connectionState->phase == MULTI_CONNECTION_PHASE_CONNECTED)
+				{
+					MultiConnection *connection = connectionState->connection;
+
+					connection->connectionState = MULTI_CONNECTION_CONNECTED;
+				}
 			}
 		}
 
@@ -784,7 +796,7 @@ FinishConnectionListEstablishment(List *multiConnectionList)
  * before the deadline provided as an argument will be reached. The outcome can be used to
  * pass to the Wait of an EventSet to make sure it returns after the timeout has passed.
  */
-static long
+long
 DeadlineTimestampTzToTimeout(TimestampTz deadline)
 {
 	long secs = 0;
@@ -1053,6 +1065,8 @@ AfterXactHostConnectionHandling(ConnectionHashEntry *entry, bool isCommit)
 			cachedConnectionCount++;
 		}
 	}
+
+	entry->connectionCount = cachedConnectionCount;
 }
 
 
@@ -1157,4 +1171,30 @@ TrimLogLevel(const char *message)
 	} while (n < strlen(chompedMessage) && chompedMessage[n] == ' ');
 
 	return chompedMessage + n;
+}
+
+
+/*
+ * NodeConnectionCount gets the number of connections to the given node
+ * for the current username and database.
+ */
+int
+NodeConnectionCount(char *hostname, int port)
+{
+	ConnectionHashKey key;
+	ConnectionHashEntry *entry = NULL;
+	bool found = false;
+
+	strlcpy(key.hostname, hostname, MAX_NODE_LENGTH);
+	key.port = port;
+	strlcpy(key.user, CurrentUserName(), NAMEDATALEN);
+	strlcpy(key.database, CurrentDatabaseName(), NAMEDATALEN);
+
+	entry = (ConnectionHashEntry *) hash_search(ConnectionHash, &key, HASH_FIND, &found);
+	if (!found)
+	{
+		return 0;
+	}
+
+	return entry->connectionCount;
 }

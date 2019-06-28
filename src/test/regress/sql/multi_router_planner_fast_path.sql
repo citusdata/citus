@@ -67,7 +67,7 @@ INSERT INTO articles_hash VALUES (1,  1, 'arsenous', 9572), (2,  2, 'abducing', 
 								 (44,  4, 'anteport', 16793),(45,  5, 'afrasia', 864),(46,  6, 'atlanta', 17702),(47,  7, 'abeyance', 1772),
 								 (48,  8, 'alkylic', 18610),(49,  9, 'anyone', 2681),(50, 10, 'anjanette', 19519);
 
-SET citus.task_executor_type TO 'real-time';
+RESET citus.task_executor_type;
 SET client_min_messages TO 'DEBUG2';
 
 -- test simple select for a single row
@@ -123,7 +123,11 @@ SELECT * FROM id_author, id_title WHERE id_author.id = id_title.id;
 
 CREATE TABLE company_employees (company_id int, employee_id int, manager_id int); 
 SELECT master_create_distributed_table('company_employees', 'company_id', 'hash');
+
+-- do not print notices from workers since the order is not deterministic
+SET client_min_messages TO DEFAULT;
 SELECT master_create_worker_shards('company_employees', 4, 1);
+SET client_min_messages TO 'DEBUG2';
 
 INSERT INTO company_employees values(1, 1, 0);
 INSERT INTO company_employees values(1, 2, 1);
@@ -536,14 +540,37 @@ BEGIN
 END;
 $$ LANGUAGE 'plpgsql' IMMUTABLE;
 
+-- we execute the query within a function to consolidate the error messages
+-- between different executors
+CREATE FUNCTION raise_failed_execution_f_router(query text) RETURNS void AS $$
+BEGIN
+        EXECUTE query;
+        EXCEPTION WHEN OTHERS THEN
+        IF SQLERRM LIKE '%failed to execute task%' THEN
+                RAISE 'Task failed to execute';
+        ELSIF SQLERRM LIKE '%does not exist%' THEN
+          RAISE 'Task failed to execute';
+        ELSIF SQLERRM LIKE '%could not receive query results%' THEN
+          	RAISE 'Task failed to execute';
+        END IF;
+END;
+$$LANGUAGE plpgsql;
+
+SET client_min_messages TO ERROR;
+\set VERBOSITY terse
 
 -- fast path router plannable, but errors 
-SELECT * FROM articles_hash
-	WHERE
-		someDummyFunction('articles_hash') = md5('articles_hash') AND author_id = 1
-	ORDER BY
-		author_id, id
-	LIMIT 5;
+SELECT raise_failed_execution_f_router($$
+	SELECT * FROM articles_hash
+		WHERE
+			someDummyFunction('articles_hash') = md5('articles_hash') AND author_id = 1
+		ORDER BY
+			author_id, id
+		LIMIT 5;
+$$);
+
+\set VERBOSITY DEFAULT
+SET client_min_messages TO DEFAULT;
 
 -- temporarily turn off debug messages before dropping the function
 SET client_min_messages TO 'NOTICE';

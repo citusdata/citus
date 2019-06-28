@@ -7,6 +7,12 @@ SET citus.next_shard_id TO 120000;
 -- we don't want to see the prepared transaction numbers in the warnings
 SET client_min_messages TO ERROR;
 
+-- do not cache any connections
+SET citus.max_cached_conns_per_worker TO 0;
+
+-- use a predictable number of connections per task
+SET citus.force_max_query_parallelization TO on;
+
 SELECT citus.mitmproxy('conn.allow()');
 
 -- we'll start with replication factor 1, 1PC and parallel mode

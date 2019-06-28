@@ -181,7 +181,7 @@ ORDER BY
 	customer_keys.o_custkey DESC
 LIMIT 10 OFFSET 20;
 
-SET citus.task_executor_type TO 'real-time';
+RESET citus.task_executor_type;
 SET client_min_messages TO DEBUG1;
 
 -- Ensure that we push down LIMIT and OFFSET properly

@@ -53,7 +53,7 @@ ORDER BY
 	1,2;
 
 -- see from MX node, partitioning hierarchy is built
-SELECT inhrelid::regclass FROM pg_inherits WHERE inhparent = 'partitioning_test'::regclass;
+SELECT inhrelid::regclass FROM pg_inherits WHERE inhparent = 'partitioning_test'::regclass ORDER BY 1;
 
 \c - - - :master_port
 SET citus.replication_model TO 'streaming';
@@ -83,7 +83,7 @@ ORDER BY
 	1,2;
 
 -- see from MX node, partitioning hierarchy is built
-SELECT inhrelid::regclass FROM pg_inherits WHERE inhparent = 'partitioning_test'::regclass;
+SELECT inhrelid::regclass FROM pg_inherits WHERE inhparent = 'partitioning_test'::regclass ORDER BY 1;
 
 \c - - - :master_port
 SET citus.replication_model TO 'streaming';
@@ -122,7 +122,7 @@ ORDER BY
 SELECT * FROM partitioning_test ORDER BY 1;
 
 -- see from MX node, partitioning hierarchy is built
-SELECT inhrelid::regclass FROM pg_inherits WHERE inhparent = 'partitioning_test'::regclass;
+SELECT inhrelid::regclass FROM pg_inherits WHERE inhparent = 'partitioning_test'::regclass ORDER BY 1;
 
 \c - - - :master_port
 SET citus.replication_model TO 'streaming';
@@ -144,7 +144,7 @@ ALTER TABLE partitioning_test ATTACH PARTITION partitioning_test_2013 FOR VALUES
 SELECT * FROM partitioning_test ORDER BY 1;
 
 -- see from MX node, partitioning hierarchy is built
-SELECT inhrelid::regclass FROM pg_inherits WHERE inhparent = 'partitioning_test'::regclass;
+SELECT inhrelid::regclass FROM pg_inherits WHERE inhparent = 'partitioning_test'::regclass ORDER BY 1;
 
 \c - - - :master_port
 
@@ -154,7 +154,7 @@ ALTER TABLE partitioning_test DETACH PARTITION partitioning_test_2009;
 -- see from MX node, partitioning hierarchy is built
 \c - - - :worker_1_port
 
-SELECT inhrelid::regclass FROM pg_inherits WHERE inhparent = 'partitioning_test'::regclass;
+SELECT inhrelid::regclass FROM pg_inherits WHERE inhparent = 'partitioning_test'::regclass ORDER BY 1;
 
 -- make sure DROPping from worker node is not allowed
 DROP TABLE partitioning_test;

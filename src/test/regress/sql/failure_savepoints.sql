@@ -1,3 +1,9 @@
+-- We have two different output files for this failure test because the
+-- failure behaviour of SAVEPOINT and RELEASE commands are different if
+-- we use the executor. If we use it, these commands error out if any of
+-- the placement commands fail. Otherwise, we might mark the placement
+-- as invalid and continue with a WARNING.
+
 SELECT citus.mitmproxy('conn.allow()');
 
 SET citus.shard_count = 2;

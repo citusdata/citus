@@ -72,6 +72,35 @@ jobs:
       - {attach_workspace: {at: .}}
       - {run: {name: 'Install and Test (check-multi)', command: 'install-and-test-ext check-multi'}}
       - {codecov/upload: {flags: 'test_11,multi'}}
+
+  test-11_check-non-adaptive-multi:
+    docker:
+      - {image: 'citusdata/exttester-11:latest'}
+    working_directory: /home/circleci/project
+    steps:
+      - {attach_workspace: {at: .}}
+      - {run: {name: 'Install and Test (check-non-adaptive-executors)', command: 'install-and-test-ext check-multi-non-adaptive'}}
+      - {codecov/upload: {flags: 'test_11,multi'}}
+
+  test-11_check-non-adaptive-failure:
+    docker:
+      - {image: 'citusdata/failtester-11:latest'}
+    working_directory: /home/circleci/project
+    steps:
+      - {attach_workspace: {at: .}}
+      - {run: {name: 'Install and Test (check-non-adaptive-executors)', command: 'install-and-test-ext check-failure-non-adaptive'}}
+      - {codecov/upload: {flags: 'test_11,failure'}}
+
+  test-11_check-non-adaptive-isolation:
+    docker:
+      - {image: 'citusdata/exttester-11:latest'}
+    working_directory: /home/circleci/project
+    steps:
+      - {attach_workspace: {at: .}}
+      - {run: {name: 'Install and Test (check-non-adaptive-executors)', command: 'install-and-test-ext check-isolation-non-adaptive'}}
+      - {codecov/upload: {flags: 'test_11,isolation'}}
+
+
   test-11_check-tt-van-mx:
     docker:
       - {image: 'citusdata/exttester-11:latest'}
@@ -130,3 +159,7 @@ workflows:
       - {test-11_check-iso-work-fol: {requires: [build]}}
       - {test-11_check-fol: {requires: [build]}}
       - {test-11_check-failure: {requires: [build]}}
+
+      - {test-11_check-non-adaptive-multi: {requires: [build]}}
+      - {test-11_check-non-adaptive-failure: {requires: [build]}}
+      - {test-11_check-non-adaptive-isolation: {requires: [build]}}

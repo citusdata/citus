@@ -47,6 +47,14 @@ enum MultiConnectionMode
 	CONNECTION_PER_PLACEMENT = 1 << 3
 };
 
+typedef enum MultiConnectionState
+{
+	MULTI_CONNECTION_INITIAL,
+	MULTI_CONNECTION_CONNECTING,
+	MULTI_CONNECTION_CONNECTED,
+	MULTI_CONNECTION_FAILED,
+	MULTI_CONNECTION_LOST
+} MultiConnectionState;
 
 /* declaring this directly above makes uncrustify go crazy */
 typedef enum MultiConnectionMode MultiConnectionMode;
@@ -61,6 +69,15 @@ typedef struct MultiConnection
 
 	/* underlying libpq connection */
 	struct pg_conn *pgConn;
+
+	/* state of the connection */
+	MultiConnectionState connectionState;
+
+	/* signal that the connection is ready for read/write */
+	bool ioReady;
+
+	/* whether to wait for read/write */
+	int waitFlags;
 
 	/* force the connection to be closed at the end of the transaction */
 	bool forceCloseAtTransactionEnd;
@@ -111,6 +128,7 @@ typedef struct ConnectionHashEntry
 {
 	ConnectionHashKey key;
 	dlist_head *connections;
+	int connectionCount;
 } ConnectionHashEntry;
 
 /* hash entry for cached connection parameters */
@@ -173,12 +191,14 @@ extern MultiConnection * StartNodeUserDatabaseConnection(uint32 flags,
 extern void CloseNodeConnectionsAfterTransaction(char *nodeName, int nodePort);
 extern void CloseConnection(MultiConnection *connection);
 extern void ShutdownConnection(MultiConnection *connection);
+extern int NodeConnectionCount(char *nodeName, int nodePort);
 
 /* dealing with a connection */
 extern void FinishConnectionListEstablishment(List *multiConnectionList);
 extern void FinishConnectionEstablishment(MultiConnection *connection);
 extern void ClaimConnectionExclusively(MultiConnection *connection);
 extern void UnclaimConnection(MultiConnection *connection);
+extern long DeadlineTimestampTzToTimeout(TimestampTz deadline);
 
 /* dealing with notice handler */
 extern void SetCitusNoticeProcessor(MultiConnection *connection);

@@ -32,4 +32,27 @@ s/"(target_table_|target_table_|test_ref_table_)[0-9]+"/"\1xxxxxxx"/g
 s/\(col_1\)=\([0-9]+\)/(col_1)=(X)/g
 
 # In multi_name_lengths, normalize shard names
-s/name_len_12345678901234567890123456789012345678_fcd8ab6f_[0-9+]/name_len_12345678901234567890123456789012345678_fcd8ab6f_xxxxx/g
+s/name_len_12345678901234567890123456789012345678_fcd8ab6f_[0-9]+/name_len_12345678901234567890123456789012345678_fcd8ab6f_xxxxx/g
+
+# normalize pkey constraints in multi_insert_select.sql
+s/"(raw_events_second_user_id_value_1_key_|agg_events_user_id_value_1_agg_key_)[0-9]+"/"\1xxxxxxx"/g
+
+# normalize explain outputs, basically wipeout the executor name from the output
+s/.*Custom Scan \(Citus.*/Custom Scan \(Citus\)/g
+s/.*-------------.*/---------------------------------------------------------------------/g
+s/.* QUERY PLAN .*/                              QUERY PLAN                              /g
+s/.*Custom Plan Provider.*Citus.*/              \"Custom Plan Provider\": \"Citus\",     /g
+s/.*Custom-Plan-Provide.*/\<Custom-Plan-Provider\>Citus Unified\<\/Custom-Plan-Provider\>     /g
+s/ +$//g
+
+# normalize shard ids in failure_vaccum
+s/10209[0-9] \|          3/10209x \|          3/g
+
+# normalize failed task ids
+s/ERROR:  failed to execute task [0-9]+/ERROR:  failed to execute task X/g
+
+# ignore could not consume warnings
+/WARNING:  could not consume data from worker node/d
+
+# ignore WAL warnings
+/DEBUG: .+creating and filling new WAL file/d

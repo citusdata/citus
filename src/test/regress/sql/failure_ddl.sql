@@ -9,6 +9,9 @@ CREATE SCHEMA ddl_failure;
 
 SET search_path TO 'ddl_failure';
 
+-- do not cache any connections
+SET citus.max_cached_conns_per_worker TO 0;
+
 -- we don't want to see the prepared transaction numbers in the warnings
 SET client_min_messages TO ERROR;
 

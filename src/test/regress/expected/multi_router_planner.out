@@ -120,7 +120,7 @@ INSERT INTO articles_hash VALUES (47,  7, 'abeyance', 1772);
 INSERT INTO articles_hash VALUES (48,  8, 'alkylic', 18610);
 INSERT INTO articles_hash VALUES (49,  9, 'anyone', 2681);
 INSERT INTO articles_hash VALUES (50, 10, 'anjanette', 19519);
-SET citus.task_executor_type TO 'real-time';
+RESET citus.task_executor_type;
 SET client_min_messages TO 'DEBUG2';
 -- insert a single row for the test
 INSERT INTO articles_single_shard_hash VALUES (50, 10, 'anjanette', 19519);
@@ -1060,7 +1060,7 @@ ORDER BY 1,2,3,4;
  43 |         3 | affixal      |      12723
 (15 rows)
 
-SET citus.task_executor_type TO 'real-time';
+RESET citus.task_executor_type;
 -- Test various filtering options for router plannable check
 SET client_min_messages to 'DEBUG2';
 -- this is definitely single shard
@@ -1928,62 +1928,62 @@ SELECT master_create_distributed_table('articles_append', 'author_id', 'append')
 SET citus.shard_replication_factor TO 1;
 SELECT master_create_empty_shard('articles_append') AS shard_id \gset
 UPDATE pg_dist_shard SET shardmaxvalue = 100, shardminvalue=1 WHERE shardid = :shard_id;
-SELECT author_id FROM articles_append
-	WHERE 
-		substring('articles_append'::regclass::text, 1, 5) = 'hello'
-	ORDER BY
-		author_id
-	LIMIT 1;
-DEBUG:  Router planner does not support append-partitioned tables.
-DEBUG:  push down of limit count: 1
-WARNING:  relation "public.articles_append" does not exist
-CONTEXT:  while executing command on localhost:57638
-WARNING:  relation "public.articles_append" does not exist
-CONTEXT:  while executing command on localhost:57638
-WARNING:  relation "public.articles_append" does not exist
-CONTEXT:  while executing command on localhost:57638
-ERROR:  failed to execute task 1
+-- we execute the query within a function to consolidate the error messages
+-- between different executors
+CREATE FUNCTION raise_failed_execution_router(query text) RETURNS void AS $$
+BEGIN
+        EXECUTE query;
+        EXCEPTION WHEN OTHERS THEN
+        IF SQLERRM LIKE '%failed to execute task%' THEN
+                RAISE 'Task failed to execute';
+        ELSIF SQLERRM LIKE '%does not exist%' THEN
+          RAISE 'Task failed to execute';
+        ELSIF SQLERRM LIKE '%could not receive query results%' THEN
+          	RAISE 'Task failed to execute';
+        END IF;
+END;
+$$LANGUAGE plpgsql;
+SET client_min_messages TO ERROR;
+\set VERBOSITY terse
+SELECT raise_failed_execution_router($$
+	SELECT author_id FROM articles_append
+		WHERE 
+			substring('articles_append'::regclass::text, 1, 5) = 'hello'
+		ORDER BY
+			author_id
+		LIMIT 1;
+$$);
+ERROR:  Task failed to execute
 -- same query with where false but evaluation left to worker
-SELECT author_id FROM articles_append
-	WHERE 
-		substring('articles_append'::regclass::text, 1, 4) = 'hello'
-	ORDER BY
-		author_id
-	LIMIT 1;
-DEBUG:  Router planner does not support append-partitioned tables.
-DEBUG:  push down of limit count: 1
-WARNING:  relation "public.articles_append" does not exist
-CONTEXT:  while executing command on localhost:57638
-WARNING:  relation "public.articles_append" does not exist
-CONTEXT:  while executing command on localhost:57638
-WARNING:  relation "public.articles_append" does not exist
-CONTEXT:  while executing command on localhost:57638
-ERROR:  failed to execute task 1
+SELECT raise_failed_execution_router($$
+	SELECT author_id FROM articles_append
+		WHERE 
+			substring('articles_append'::regclass::text, 1, 4) = 'hello'
+		ORDER BY
+			author_id
+		LIMIT 1;
+$$);
+ERROR:  Task failed to execute
 -- same query on router planner with where false but evaluation left to worker
-SELECT author_id FROM articles_single_shard_hash
-	WHERE 
-		substring('articles_single_shard_hash'::regclass::text, 1, 4) = 'hello'
-	ORDER BY
-		author_id
-	LIMIT 1;
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-WARNING:  relation "public.articles_single_shard_hash" does not exist
-CONTEXT:  while executing command on localhost:57637
-ERROR:  could not receive query results
-SELECT author_id FROM articles_hash
-	WHERE 
-		author_id = 1
-		AND substring('articles_hash'::regclass::text, 1, 5) = 'hello'
-	ORDER BY
-		author_id
-	LIMIT 1;
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 1
-WARNING:  relation "public.articles_hash" does not exist
-CONTEXT:  while executing command on localhost:57637
-ERROR:  could not receive query results
+SELECT raise_failed_execution_router($$
+	SELECT author_id FROM articles_single_shard_hash
+		WHERE 
+			substring('articles_single_shard_hash'::regclass::text, 1, 4) = 'hello'
+		ORDER BY
+			author_id
+		LIMIT 1;
+$$);
+ERROR:  Task failed to execute
+SELECT raise_failed_execution_router($$
+	SELECT author_id FROM articles_hash
+		WHERE 
+			author_id = 1
+			AND substring('articles_hash'::regclass::text, 1, 5) = 'hello'
+		ORDER BY
+			author_id
+		LIMIT 1;
+$$);
+ERROR:  Task failed to execute
 -- create a dummy function to be used in filtering
 CREATE OR REPLACE FUNCTION someDummyFunction(regclass)
     RETURNS text AS
@@ -1999,8 +1999,6 @@ SELECT * FROM articles_hash
 	ORDER BY
 		author_id, id
 	LIMIT 5;
-DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  push down of limit count: 5
  id | author_id |    title     | word_count 
 ----+-----------+--------------+------------
   1 |         1 | arsenous     |       9572
@@ -2011,18 +2009,16 @@ DEBUG:  push down of limit count: 5
 (5 rows)
 
 -- router plannable, errors
-SELECT * FROM articles_hash
-	WHERE
-		someDummyFunction('articles_hash') = md5('articles_hash') AND author_id = 1
-	ORDER BY
-		author_id, id
-	LIMIT 5;
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 1
-WARNING:  relation "public.articles_hash" does not exist
-CONTEXT:  while executing command on localhost:57637
-ERROR:  could not receive query results
+SELECT raise_failed_execution_router($$
+	SELECT * FROM articles_hash
+		WHERE
+			someDummyFunction('articles_hash') = md5('articles_hash') AND author_id = 1
+		ORDER BY
+			author_id, id
+		LIMIT 5;
+$$);
+ERROR:  Task failed to execute
+\set VERBOSITY DEFAULT
 -- temporarily turn off debug messages before dropping the function
 SET client_min_messages TO 'NOTICE';
 DROP FUNCTION someDummyFunction(regclass);

@@ -100,14 +100,9 @@ static List * BuildPlacementAccessList(int32 groupId, List *relationShardList,
 static List * GetModifyConnections(Task *task, bool markCritical);
 static int64 ExecuteModifyTasks(List *taskList, bool expectResults,
 								ParamListInfo paramListInfo, CitusScanState *scanState);
-static void AcquireExecutorShardLock(Task *task, CmdType commandType);
-static void AcquireExecutorMultiShardLocks(List *taskList);
 static bool RequiresConsistentSnapshot(Task *task);
 static void RouterMultiModifyExecScan(CustomScanState *node);
 static void RouterSequentialModifyExecScan(CustomScanState *node);
-static void ExtractParametersFromParamListInfo(ParamListInfo paramListInfo,
-											   Oid **parameterTypes,
-											   const char ***parameterValues);
 static bool SendQueryInSingleRowMode(MultiConnection *connection, char *query,
 									 ParamListInfo paramListInfo);
 static bool StoreQueryResult(CitusScanState *scanState, MultiConnection *connection, bool
@@ -157,7 +152,7 @@ AcquireMetadataLocks(List *taskList)
  * to communicate that the application is only generating commutative
  * UPDATE/DELETE/UPSERT commands and exclusive locks are unnecessary.
  */
-static void
+void
 AcquireExecutorShardLock(Task *task, CmdType commandType)
 {
 	LOCKMODE lockMode = NoLock;
@@ -349,7 +344,7 @@ AcquireExecutorShardLock(Task *task, CmdType commandType)
  * RowExclusiveLock, which is normally obtained by single-shard, commutative
  * writes.
  */
-static void
+void
 AcquireExecutorMultiShardLocks(List *taskList)
 {
 	ListCell *taskCell = NULL;
@@ -485,8 +480,6 @@ RequiresConsistentSnapshot(Task *task)
  *
  * The function also checks the validity of the given custom scan node and
  * gets locks on the shards involved in the task list of the distributed plan.
- *
- * It also sets the backend as initiated by Citus.
  */
 void
 CitusModifyBeginScan(CustomScanState *node, EState *estate, int eflags)
@@ -496,8 +489,6 @@ CitusModifyBeginScan(CustomScanState *node, EState *estate, int eflags)
 	Job *workerJob = NULL;
 	Query *jobQuery = NULL;
 	List *taskList = NIL;
-
-	MarkCitusInitiatedCoordinatorBackend();
 
 	/*
 	 * We must not change the distributed plan since it may be reused across multiple
@@ -773,14 +764,45 @@ TaskListRequires2PC(List *taskList)
 	 * Can't we always rely on anchorShardId?
 	 */
 	anchorShardId = task->anchorShardId;
-	if (ReferenceTableShardId(anchorShardId))
+	if (anchorShardId != INVALID_SHARD_ID && ReferenceTableShardId(anchorShardId))
 	{
 		return true;
 	}
 
 	multipleTasks = list_length(taskList) > 1;
-	if (multipleTasks && MultiShardCommitProtocol == COMMIT_PROTOCOL_2PC)
+	if (!ReadOnlyTask(task->taskType) &&
+		multipleTasks && MultiShardCommitProtocol == COMMIT_PROTOCOL_2PC)
 	{
+		return true;
+	}
+
+	if (task->taskType == DDL_TASK)
+	{
+		if (MultiShardCommitProtocol == COMMIT_PROTOCOL_2PC ||
+			task->replicationModel == REPLICATION_MODEL_2PC)
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+
+/*
+ * ReadOnlyTask returns true if the input task does a read-only operation
+ * on the database.
+ */
+bool
+ReadOnlyTask(TaskType taskType)
+{
+	if (taskType == ROUTER_TASK || taskType == SQL_TASK)
+	{
+		/*
+		 * TODO: We currently do not execute modifying CTEs via ROUTER_TASK/SQL_TASK.
+		 * When we implement it, we should either not use the mentioned task types for
+		 * modifying CTEs detect them here.
+		 */
 		return true;
 	}
 
@@ -1713,7 +1735,7 @@ SendQueryInSingleRowMode(MultiConnection *connection, char *query,
  * ExtractParametersFromParamListInfo extracts parameter types and values from
  * the given ParamListInfo structure, and fills parameter type and value arrays.
  */
-static void
+void
 ExtractParametersFromParamListInfo(ParamListInfo paramListInfo, Oid **parameterTypes,
 								   const char ***parameterValues)
 {

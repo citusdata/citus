@@ -29,11 +29,23 @@ extern int MultiShardConnectionType;
 
 
 extern bool WritableStandbyCoordinator;
+extern bool ForceMaxQueryParallelization;
+extern int MaxAdaptiveExecutorPoolSize;
+extern int ExecutorSlowStartInterval;
 
 
 extern void CitusExecutorStart(QueryDesc *queryDesc, int eflags);
 extern void CitusExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint64 count,
 							 bool execute_once);
+extern TupleTableSlot * AdaptiveExecutor(CustomScanState *node);
+extern uint64 ExecuteTaskListExtended(CmdType operation, List *taskList,
+									  TupleDesc tupleDescriptor,
+									  Tuplestorestate *tupleStore,
+									  bool hasReturning, int targetPoolSize);
+extern void ExecuteUtilityTaskListWithoutResults(List *taskList, int targetPoolSize,
+												 bool forceSequentialExecution);
+extern uint64 ExecuteTaskList(CmdType operation, List *taskList, int targetPoolSize);
+extern TupleTableSlot * CitusExecScan(CustomScanState *node);
 extern TupleTableSlot * ReturnTupleFromTuplestore(CitusScanState *scanState);
 extern void LoadTuplesIntoTupleStore(CitusScanState *citusScanState, Job *workerJob);
 extern void ReadFileIntoTupleStore(char *fileName, char *copyFormat, TupleDesc
@@ -47,6 +59,7 @@ extern void ExecuteQueryIntoDestReceiver(Query *query, ParamListInfo params,
 extern void ExecutePlanIntoDestReceiver(PlannedStmt *queryPlan, ParamListInfo params,
 										DestReceiver *dest);
 extern void SetLocalMultiShardModifyModeToSequential(void);
+extern void SetLocalForceMaxQueryParallelization(void);
 extern void SortTupleStore(CitusScanState *scanState);
 
 

@@ -1,5 +1,9 @@
 SET citus.next_shard_id TO 1610000;
 
+-- enforce 1 connection per placement since
+-- the tests are prepared for that
+SET citus.force_max_query_parallelization TO ON;
+
 CREATE SCHEMA multi_real_time_transaction;
 SET search_path = 'multi_real_time_transaction';
 SET citus.shard_replication_factor to 1;
@@ -274,6 +278,7 @@ SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
 SELECT id, pg_advisory_lock(15) FROM test_table ORDER BY 1 DESC;
 ROLLBACK;
 
+
 SET client_min_messages TO DEFAULT;
 alter system set deadlock_timeout TO DEFAULT;
 SELECT pg_reload_conf();
@@ -281,7 +286,9 @@ SELECT pg_reload_conf();
 BEGIN;
 SET citus.select_opens_transaction_block TO off;
 -- This query would self-deadlock if it ran in a distributed transaction
-SELECT id, pg_advisory_lock(15) FROM test_table ORDER BY id;
+-- we use a different advisory lock because previous tests
+-- still holds the advisory locks since the sessions are still active
+SELECT id, pg_advisory_xact_lock(16) FROM test_table ORDER BY id;
 END;
 
 DROP SCHEMA multi_real_time_transaction CASCADE;

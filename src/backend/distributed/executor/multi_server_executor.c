@@ -20,6 +20,7 @@
 #include <unistd.h>
 
 #include "distributed/multi_client_executor.h"
+#include "distributed/multi_executor.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_resowner.h"
 #include "distributed/multi_server_executor.h"
@@ -28,7 +29,7 @@
 #include "utils/lsyscache.h"
 
 int RemoteTaskCheckInterval = 100; /* per cycle sleep interval in millisecs */
-int TaskExecutorType = MULTI_EXECUTOR_REAL_TIME; /* distributed executor type */
+int TaskExecutorType = MULTI_EXECUTOR_ADAPTIVE; /* distributed executor type */
 bool BinaryMasterCopyFormat = false; /* copy data from workers in binary format */
 bool EnableRepartitionJoins = false;
 
@@ -74,11 +75,23 @@ JobExecutorType(DistributedPlan *distributedPlan)
 				ereport(DEBUG2, (errmsg("Plan is router executable")));
 			}
 		}
+
+		if (TaskExecutorType == MULTI_EXECUTOR_ADAPTIVE)
+		{
+			return TaskExecutorType;
+		}
+
 		return MULTI_EXECUTOR_ROUTER;
 	}
 
 	if (distributedPlan->insertSelectSubquery != NULL)
 	{
+		/*
+		 * Even if adaptiveExecutorEnabled, we go through
+		 * MULTI_EXECUTOR_COORDINATOR_INSERT_SELECT because
+		 * the executor already knows how to handle adaptive
+		 * executor when necessary.
+		 */
 		return MULTI_EXECUTOR_COORDINATOR_INSERT_SELECT;
 	}
 
@@ -92,7 +105,6 @@ JobExecutorType(DistributedPlan *distributedPlan)
 	if (executorType == MULTI_EXECUTOR_REAL_TIME)
 	{
 		double reasonableConnectionCount = 0;
-		int dependedJobCount = 0;
 
 		/* if we need to open too many connections per worker, warn the user */
 		if (tasksPerNode >= MaxConnections)
@@ -118,11 +130,15 @@ JobExecutorType(DistributedPlan *distributedPlan)
 									  "setting citus.task_executor_type to "
 									  "\"task-tracker\".")));
 		}
+	}
 
+	if (executorType == MULTI_EXECUTOR_REAL_TIME ||
+		executorType == MULTI_EXECUTOR_ADAPTIVE)
+	{
 		/* if we have repartition jobs with real time executor and repartition
 		 * joins are not enabled, error out. Otherwise, switch to task-tracker
 		 */
-		dependedJobCount = list_length(job->dependedJobList);
+		int dependedJobCount = list_length(job->dependedJobList);
 		if (dependedJobCount > 0)
 		{
 			if (!EnableRepartitionJoins)

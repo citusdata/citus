@@ -5,6 +5,8 @@
 -- 
 CREATE SCHEMA ddl_failure;
 SET search_path TO 'ddl_failure';
+-- do not cache any connections
+SET citus.max_cached_conns_per_worker TO 0;
 -- we don't want to see the prepared transaction numbers in the warnings
 SET client_min_messages TO ERROR;
 SELECT citus.mitmproxy('conn.allow()');
@@ -218,12 +220,12 @@ SELECT citus.mitmproxy('conn.onCommandComplete(command="^COMMIT").kill()');
 ALTER TABLE test_table ADD COLUMN new_column INT;
 WARNING:  connection not open
 CONTEXT:  while executing command on localhost:9060
-WARNING:  failed to commit critical transaction on localhost:9060, metadata is likely out of sync
+WARNING:  failed to commit transaction on localhost:9060
 WARNING:  connection not open
 CONTEXT:  while executing command on localhost:9060
 WARNING:  connection not open
 CONTEXT:  while executing command on localhost:9060
-WARNING:  failed to commit critical transaction on localhost:9060, metadata is likely out of sync
+WARNING:  failed to commit transaction on localhost:9060
 WARNING:  connection not open
 CONTEXT:  while executing command on localhost:9060
 WARNING:  could not commit transaction for shard 100802 on any active node

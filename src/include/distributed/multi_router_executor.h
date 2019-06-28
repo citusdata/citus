@@ -54,8 +54,16 @@ extern ShardPlacementAccess * CreatePlacementAccess(ShardPlacement *placement,
 													ShardPlacementAccessType accessType);
 
 /* helper functions */
+extern void AcquireExecutorShardLock(Task *task, CmdType commandType);
+extern void AcquireExecutorMultiShardLocks(List *taskList);
+extern ShardPlacementAccess * CreatePlacementAccess(ShardPlacement *placement,
+													ShardPlacementAccessType accessType);
 extern bool TaskListRequires2PC(List *taskList);
+extern bool ReadOnlyTask(TaskType taskType);
 extern List * BuildPlacementSelectList(int32 groupId, List *relationShardList);
 extern List * BuildPlacementDDLList(int32 groupId, List *relationShardList);
+extern void ExtractParametersFromParamListInfo(ParamListInfo paramListInfo,
+											   Oid **parameterTypes,
+											   const char ***parameterValues);
 
 #endif /* MULTI_ROUTER_EXECUTOR_H_ */

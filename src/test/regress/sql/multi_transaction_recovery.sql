@@ -1,6 +1,10 @@
 -- Tests for prepared transaction recovery
 SET citus.next_shard_id TO 1220000;
 
+-- enforce 1 connection per placement since
+-- the tests are prepared for that
+SET citus.force_max_query_parallelization TO ON;
+
 -- Disable auto-recovery for the initial tests
 ALTER SYSTEM SET citus.recover_2pc_interval TO -1;
 SELECT pg_reload_conf();
@@ -24,6 +28,7 @@ CREATE TABLE should_be_sorted_into_middle (value int);
 PREPARE TRANSACTION 'citus_0_should_be_sorted_into_middle';
 
 \c - - - :master_port
+SET citus.force_max_query_parallelization TO ON;
 -- Add "fake" pg_dist_transaction records and run recovery
 INSERT INTO pg_dist_transaction VALUES (1, 'citus_0_should_commit');
 INSERT INTO pg_dist_transaction VALUES (1, 'citus_0_should_be_forgotten');
@@ -37,19 +42,23 @@ SELECT count(*) FROM pg_tables WHERE tablename = 'should_abort';
 SELECT count(*) FROM pg_tables WHERE tablename = 'should_commit';
 
 \c - - - :master_port
+SET citus.force_max_query_parallelization TO ON;
 SET citus.shard_replication_factor TO 2;
 SET citus.shard_count TO 2;
 SET citus.multi_shard_commit_protocol TO '2pc';
 
--- create_distributed_table should add 2 recovery records (1 connection per node)
+-- create_distributed_table may behave differently if shards
+-- created via the executor or not, so not checking its value
+-- may result multiple test outputs, so instead just make sure that
+-- there are at least 2 entries
 CREATE TABLE test_recovery (x text);
 SELECT create_distributed_table('test_recovery', 'x');
-SELECT count(*) FROM pg_dist_transaction;
+SELECT count(*) >= 2 FROM pg_dist_transaction;
 
 -- create_reference_table should add another 2 recovery records
 CREATE TABLE test_recovery_ref (x text);
 SELECT create_reference_table('test_recovery_ref');
-SELECT count(*) FROM pg_dist_transaction;
+SELECT count(*) >= 4 FROM pg_dist_transaction;
 
 SELECT recover_prepared_transactions();
 
@@ -113,6 +122,45 @@ INSERT INTO test_recovery_single VALUES ('hello-0');
 INSERT INTO test_recovery_single VALUES ('hello-2');
 COMMIT;
 SELECT count(*) FROM pg_dist_transaction;
+
+SELECT recover_prepared_transactions();
+
+-- the same test with citus.force_max_query_parallelization=off
+-- should be fine as well
+SET citus.force_max_query_parallelization TO OFF;
+BEGIN;
+INSERT INTO test_recovery_single VALUES ('hello-0');
+INSERT INTO test_recovery_single VALUES ('hello-2');
+COMMIT;
+SELECT count(*) FROM pg_dist_transaction;
+
+SELECT recover_prepared_transactions();
+
+-- slightly more complicated test with citus.force_max_query_parallelization=off
+-- should be fine as well
+SET citus.force_max_query_parallelization TO OFF;
+BEGIN;
+SELECT count(*) FROM test_recovery_single WHERE x = 'hello-0';
+SELECT count(*) FROM test_recovery_single WHERE x = 'hello-2';
+INSERT INTO test_recovery_single VALUES ('hello-0');
+INSERT INTO test_recovery_single VALUES ('hello-2');
+COMMIT;
+SELECT count(*) FROM pg_dist_transaction;
+
+
+SELECT recover_prepared_transactions();
+
+-- the same test as the above with citus.force_max_query_parallelization=on
+-- should be fine as well
+SET citus.force_max_query_parallelization TO ON;
+BEGIN;
+SELECT count(*) FROM test_recovery_single WHERE x = 'hello-0';
+SELECT count(*) FROM test_recovery_single WHERE x = 'hello-2';
+INSERT INTO test_recovery_single VALUES ('hello-0');
+INSERT INTO test_recovery_single VALUES ('hello-2');
+COMMIT;
+SELECT count(*) FROM pg_dist_transaction;
+
 
 -- Test whether auto-recovery runs
 ALTER SYSTEM SET citus.recover_2pc_interval TO 10;

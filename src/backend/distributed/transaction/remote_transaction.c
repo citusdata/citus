@@ -126,6 +126,8 @@ StartRemoteTransactionBegin(struct MultiConnection *connection)
 
 		HandleRemoteTransactionConnectionError(connection, raiseErrors);
 	}
+
+	transaction->beginSent = true;
 }
 
 
@@ -301,17 +303,8 @@ FinishRemoteTransactionCommit(MultiConnection *connection)
 
 		if (transaction->transactionState == REMOTE_TRANS_1PC_COMMITTING)
 		{
-			if (transaction->transactionCritical)
-			{
-				ereport(WARNING, (errmsg("failed to commit critical transaction "
-										 "on %s:%d, metadata is likely out of sync",
-										 connection->hostname, connection->port)));
-			}
-			else
-			{
-				ereport(WARNING, (errmsg("failed to commit transaction on %s:%d",
-										 connection->hostname, connection->port)));
-			}
+			ereport(WARNING, (errmsg("failed to commit transaction on %s:%d",
+									 connection->hostname, connection->port)));
 		}
 		else if (transaction->transactionState == REMOTE_TRANS_2PC_COMMITTING)
 		{
@@ -1255,6 +1248,9 @@ FinishRemoteTransactionSavepointRollback(MultiConnection *connection, SubTransac
 
 	PQclear(result);
 	ForgetResults(connection);
+
+	/* reset transaction state so the executor can accept next commands in transaction */
+	transaction->transactionState = REMOTE_TRANS_STARTED;
 }
 
 

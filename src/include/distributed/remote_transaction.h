@@ -32,6 +32,12 @@ typedef enum
 	REMOTE_TRANS_STARTING,
 	REMOTE_TRANS_STARTED,
 
+	/* command execution */
+	REMOTE_TRANS_SENT_BEGIN,
+	REMOTE_TRANS_SENT_COMMAND,
+	REMOTE_TRANS_FETCHING_RESULTS,
+	REMOTE_TRANS_CLEARING_RESULTS,
+
 	/* 2pc prepare */
 	REMOTE_TRANS_PREPARING,
 	REMOTE_TRANS_PREPARED,
@@ -77,6 +83,9 @@ typedef struct RemoteTransaction
 
 	/* 2PC transaction name currently associated with connection */
 	char preparedName[NAMEDATALEN];
+
+	/* set when BEGIN is sent over the connection */
+	bool beginSent;
 } RemoteTransaction;
 
 

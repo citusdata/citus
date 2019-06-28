@@ -14,6 +14,7 @@
 #include "port.h"
 
 #include "utils/lsyscache.h"
+#include "lib/stringinfo.h"
 #include "distributed/listutils.h"
 #include "nodes/pg_list.h"
 #include "utils/memutils.h"
@@ -153,4 +154,27 @@ ListToHashSet(List *itemList, Size keySize, bool isStringList)
 	}
 
 	return itemSet;
+}
+
+
+/*
+ * StringJoin gets a list of char * and then simply
+ * returns a newly allocated char * joined with the
+ * given delimiter.
+ */
+char *
+StringJoin(List *stringList, char delimiter)
+{
+	ListCell *stringCell = NULL;
+	StringInfo joinedString = makeStringInfo();
+
+	foreach(stringCell, stringList)
+	{
+		const char *command = lfirst(stringCell);
+
+		appendStringInfoString(joinedString, command);
+		appendStringInfoChar(joinedString, delimiter);
+	}
+
+	return joinedString->data;
 }

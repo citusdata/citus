@@ -113,6 +113,7 @@ static void CreateSingleTaskRouterPlan(DistributedPlan *distributedPlan,
 									   Query *query,
 									   PlannerRestrictionContext *
 									   plannerRestrictionContext);
+static Oid ResultRelationOidForQuery(Query *query);
 static bool IsTidColumn(Node *node);
 static DeferredErrorMessage * MultiShardModifyQuerySupported(Query *originalQuery,
 															 PlannerRestrictionContext *
@@ -228,6 +229,7 @@ CreateModifyPlan(Query *originalQuery, Query *query,
 	distributedPlan->masterQuery = NULL;
 	distributedPlan->routerExecutable = true;
 	distributedPlan->hasReturning = false;
+	distributedPlan->targetRelationId = ResultRelationOidForQuery(query);
 
 	if (list_length(originalQuery->returningList) > 0)
 	{
@@ -493,6 +495,19 @@ ModifyQueryResultRelationId(Query *query)
 	Assert(OidIsValid(resultRte->relid));
 
 	return resultRte->relid;
+}
+
+
+/*
+ * ResultRelationOidForQuery returns the OID of the relation this is modified
+ * by a given query.
+ */
+static Oid
+ResultRelationOidForQuery(Query *query)
+{
+	RangeTblEntry *resultRTE = rt_fetch(query->resultRelation, query->rtable);
+
+	return resultRTE->relid;
 }
 
 

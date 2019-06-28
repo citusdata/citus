@@ -77,14 +77,8 @@ citus_truncate_trigger(PG_FUNCTION_ARGS)
 	{
 		List *taskList = TruncateTaskList(relationId);
 
-		if (MultiShardConnectionType == SEQUENTIAL_CONNECTION)
-		{
-			ExecuteModifyTasksSequentiallyWithoutResults(taskList, CMD_UTILITY);
-		}
-		else
-		{
-			ExecuteModifyTasksWithoutResults(taskList);
-		}
+		ExecuteUtilityTaskListWithoutResults(taskList, MaxAdaptiveExecutorPoolSize,
+											 false);
 	}
 
 	PG_RETURN_DATUM(PointerGetDatum(NULL));

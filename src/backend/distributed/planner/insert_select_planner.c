@@ -296,6 +296,7 @@ CreateDistributedInsertSelectPlan(Query *originalQuery,
 	distributedPlan->masterQuery = NULL;
 	distributedPlan->routerExecutable = true;
 	distributedPlan->hasReturning = false;
+	distributedPlan->targetRelationId = targetRelationId;
 
 	if (list_length(originalQuery->returningList) > 0)
 	{

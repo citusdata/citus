@@ -4,6 +4,8 @@ SELECT citus.mitmproxy('conn.allow()');
  
 (1 row)
 
+-- do not cache any connections
+SET citus.max_cached_conns_per_worker TO 1;
 SET citus.shard_count = 1;
 SET citus.shard_replication_factor = 2; -- one shard per worker
 SET citus.multi_shard_commit_protocol TO '1pc';
@@ -159,6 +161,12 @@ SELECT * FROM pg_dist_shard s, pg_dist_shard_placement p
  copy_test    |  100400 | t            | 0             | 3             |  100400 |          1 |        8192 | localhost |     9060 |         101
 (2 rows)
 
+SELECT citus.mitmproxy('conn.onQuery(query="SELECT|COPY").kill()');
+ mitmproxy 
+-----------
+ 
+(1 row)
+
 SELECT count(1) FROM copy_test;
 WARNING:  could not consume data from worker node
  count 
@@ -167,7 +175,7 @@ WARNING:  could not consume data from worker node
 (1 row)
 
 ---- cancel the connection when we send the data ----
-SELECT citus.mitmproxy(format('conn.onCopyData().cancel(%s)', pg_backend_pid()));
+SELECT citus.mitmproxy('conn.onQuery(query="SELECT|COPY").cancel(' ||  pg_backend_pid() || ')');
  mitmproxy 
 -----------
  
@@ -225,9 +233,9 @@ SELECT * FROM pg_dist_shard s, pg_dist_shard_placement p
  logicalrelid | shardid | shardstorage | shardminvalue | shardmaxvalue | shardid | shardstate | shardlength | nodename  | nodeport | placementid 
 --------------+---------+--------------+---------------+---------------+---------+------------+-------------+-----------+----------+-------------
  copy_test    |  100400 | t            | 0             | 3             |  100400 |          1 |        8192 | localhost |     9060 |         101
- copy_test    |  100407 | t            | 0             | 3             |  100407 |          1 |        8192 | localhost |     9060 |         112
+ copy_test    |  100407 | t            | 0             | 3             |  100407 |          1 |        8192 | localhost |     9060 |         110
  copy_test    |  100400 | t            | 0             | 3             |  100400 |          1 |        8192 | localhost |    57637 |         100
- copy_test    |  100407 | t            | 0             | 3             |  100407 |          1 |        8192 | localhost |    57637 |         113
+ copy_test    |  100407 | t            | 0             | 3             |  100407 |          1 |        8192 | localhost |    57637 |         111
 (4 rows)
 
 SELECT count(1) FROM copy_test;
@@ -258,8 +266,8 @@ SELECT * FROM pg_dist_shard s, pg_dist_shard_placement p
 --------------+---------+--------------+---------------+---------------+---------+------------+-------------+-----------+----------+-------------
  copy_test    |  100400 | t            | 0             | 3             |  100400 |          1 |        8192 | localhost |    57637 |         100
  copy_test    |  100400 | t            | 0             | 3             |  100400 |          1 |        8192 | localhost |     9060 |         101
- copy_test    |  100407 | t            | 0             | 3             |  100407 |          1 |        8192 | localhost |     9060 |         112
- copy_test    |  100407 | t            | 0             | 3             |  100407 |          1 |        8192 | localhost |    57637 |         113
+ copy_test    |  100407 | t            | 0             | 3             |  100407 |          1 |        8192 | localhost |     9060 |         110
+ copy_test    |  100407 | t            | 0             | 3             |  100407 |          1 |        8192 | localhost |    57637 |         111
 (4 rows)
 
 SELECT count(1) FROM copy_test;
@@ -278,7 +286,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^COMMIT").kill()');
 COPY copy_test FROM PROGRAM 'echo 0, 0 && echo 1, 1 && echo 2, 4 && echo 3, 9' WITH CSV;
 WARNING:  connection not open
 CONTEXT:  while executing command on localhost:9060
-WARNING:  failed to commit critical transaction on localhost:9060, metadata is likely out of sync
+WARNING:  failed to commit transaction on localhost:9060
 WARNING:  connection not open
 CONTEXT:  while executing command on localhost:9060
 SELECT * FROM pg_dist_shard s, pg_dist_shard_placement p
@@ -288,10 +296,10 @@ SELECT * FROM pg_dist_shard s, pg_dist_shard_placement p
 --------------+---------+--------------+---------------+---------------+---------+------------+-------------+-----------+----------+-------------
  copy_test    |  100400 | t            | 0             | 3             |  100400 |          1 |        8192 | localhost |    57637 |         100
  copy_test    |  100400 | t            | 0             | 3             |  100400 |          1 |        8192 | localhost |     9060 |         101
- copy_test    |  100407 | t            | 0             | 3             |  100407 |          1 |        8192 | localhost |     9060 |         112
- copy_test    |  100407 | t            | 0             | 3             |  100407 |          1 |        8192 | localhost |    57637 |         113
- copy_test    |  100409 | t            | 0             | 3             |  100409 |          3 |        8192 | localhost |     9060 |         116
- copy_test    |  100409 | t            | 0             | 3             |  100409 |          1 |        8192 | localhost |    57637 |         117
+ copy_test    |  100407 | t            | 0             | 3             |  100407 |          1 |        8192 | localhost |     9060 |         110
+ copy_test    |  100407 | t            | 0             | 3             |  100407 |          1 |        8192 | localhost |    57637 |         111
+ copy_test    |  100409 | t            | 0             | 3             |  100409 |          3 |        8192 | localhost |     9060 |         114
+ copy_test    |  100409 | t            | 0             | 3             |  100409 |          1 |        8192 | localhost |    57637 |         115
 (6 rows)
 
 SELECT count(1) FROM copy_test;

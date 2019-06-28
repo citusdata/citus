@@ -1,6 +1,11 @@
 -- 
 --  Failure tests for COPY to reference tables 
 -- 
+
+-- We have to keep two copies of this failure test
+-- because if the shards are created via the executor
+-- cancellations are processed, otherwise they are not
+
 CREATE SCHEMA create_distributed_table_non_empty_failure;
 SET search_path TO 'create_distributed_table_non_empty_failure';
 
@@ -49,7 +54,8 @@ SELECT count(*) FROM pg_dist_shard WHERE logicalrelid='create_distributed_table_
 SELECT run_command_on_workers($$SELECT count(*) FROM information_schema.schemata WHERE schema_name = 'create_distributed_table_non_empty_failure'$$);
 
 -- cancel as soon as the coordinator sends begin
--- shards will be created because we ignore cancel requests during the shard creation 
+-- if the shards are created via the executor, the table creation will fail
+-- otherwise shards will be created because we ignore cancel requests during the shard creation 
 -- Interrupts are hold in CreateShardsWithRoundRobinPolicy
 SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED").cancel(' ||  pg_backend_pid() || ')');
 SELECT create_distributed_table('test_table', 'id');
@@ -221,7 +227,8 @@ SELECT count(*) FROM pg_dist_shard WHERE logicalrelid='create_distributed_table_
 SELECT run_command_on_workers($$SELECT count(*) FROM information_schema.schemata WHERE schema_name = 'create_distributed_table_non_empty_failure'$$);
 
 -- cancel as soon as the coordinator sends begin
--- shards will be created because we ignore cancel requests during the shard creation 
+-- if the shards are created via the executor, the table creation will fail
+-- otherwise shards will be created because we ignore cancel requests during the shard creation 
 -- Interrupts are hold in CreateShardsWithRoundRobinPolicy
 SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED").cancel(' ||  pg_backend_pid() || ')');
 SELECT create_distributed_table('test_table', 'id');

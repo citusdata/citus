@@ -420,7 +420,7 @@ BEGIN;
 \copy labs from stdin delimiter ','
 ALTER TABLE labs ADD COLUMN motto text;
 ABORT;
--- cannot perform parallel DDL once a connection is used for multiple shards
+-- can perform parallel DDL even a connection is used for multiple shards
 BEGIN;
 SELECT lab_id FROM researchers WHERE lab_id = 1 AND id = 0;
  lab_id 
@@ -523,14 +523,14 @@ DEFERRABLE INITIALLY IMMEDIATE
 FOR EACH ROW EXECUTE PROCEDURE reject_bad();
 \c - - - :master_port
 -- test partial failure; worker_1 succeeds, 2 fails
+-- in this case, we expect the transaction to abort
 \set VERBOSITY terse
 BEGIN;
 INSERT INTO objects VALUES (1, 'apple');
 INSERT INTO objects VALUES (2, 'BAD');
 WARNING:  illegal value
-INSERT INTO labs VALUES (7, 'E Corp');
 COMMIT;
--- data should be persisted
+-- so the data should noy be persisted
 SELECT * FROM objects WHERE id = 2;
  id | name 
 ----+------
@@ -538,12 +538,11 @@ SELECT * FROM objects WHERE id = 2;
 (1 row)
 
 SELECT * FROM labs WHERE id = 7;
- id |  name  
-----+--------
-  7 | E Corp
-(1 row)
+ id | name 
+----+------
+(0 rows)
 
--- but one placement should be bad
+-- and none of placements should be inactive
 SELECT count(*)
 FROM   pg_dist_shard_placement AS sp,
 	   pg_dist_shard           AS s
@@ -558,12 +557,8 @@ AND    s.logicalrelid = 'objects'::regclass;
 (1 row)
 
 DELETE FROM objects;
--- mark shards as healthy again; delete all data
-UPDATE pg_dist_shard_placement AS sp SET shardstate = 1
-FROM   pg_dist_shard AS s
-WHERE  sp.shardid = s.shardid
-AND    s.logicalrelid = 'objects'::regclass;
--- what if there are errors on different shards at different times?
+-- there cannot be errors on different shards at different times
+-- because the first failure will fail the whole transaction
 \c - - - :worker_1_port
 CREATE FUNCTION reject_bad() RETURNS trigger AS $rb$
     BEGIN
@@ -582,9 +577,8 @@ FOR EACH ROW EXECUTE PROCEDURE reject_bad();
 BEGIN;
 INSERT INTO objects VALUES (1, 'apple');
 INSERT INTO objects VALUES (2, 'BAD');
-WARNING:  illegal value
 INSERT INTO labs VALUES (8, 'Aperture Science');
-INSERT INTO labs VALUES (9, 'BAD');
+INSERT INTO labs VALUES (2, 'BAD');
 ERROR:  illegal value
 COMMIT;
 -- data should NOT be persisted
@@ -608,7 +602,7 @@ AND    (s.logicalrelid = 'objects'::regclass OR
 	    s.logicalrelid = 'labs'::regclass);
  count 
 -------
-     3
+     2
 (1 row)
 
 -- what if the failures happen at COMMIT time?
@@ -625,19 +619,11 @@ INSERT INTO objects VALUES (1, 'apple');
 INSERT INTO objects VALUES (2, 'BAD');
 INSERT INTO labs VALUES (9, 'Umbrella Corporation');
 COMMIT;
-WARNING:  illegal value
-WARNING:  failed to commit transaction on localhost:57638
 -- data should be persisted
 SELECT * FROM objects WHERE id = 2;
  id | name 
 ----+------
   2 | BAD
-(1 row)
-
-SELECT * FROM labs WHERE id = 7;
- id |  name  
-----+--------
-  7 | E Corp
 (1 row)
 
 -- but one placement should be bad
@@ -1433,7 +1419,7 @@ INSERT INTO users VALUES (2, 'burak');
 INSERT INTO users VALUES (3, 'burak');
 \COPY items FROM STDIN WITH CSV
 ROLLBACK;
--- cannot perform parallel DDL after a co-located table has been read over 1 connection
+-- perform parallel DDL after a co-located table has been read over 1 connection
 BEGIN;
 SELECT id FROM users WHERE id = 1;
  id 
@@ -1449,7 +1435,7 @@ SELECT id FROM users WHERE id = 6;
 
 ALTER TABLE items ADD COLUMN last_update timestamptz;
 ERROR:  cannot perform a parallel DDL command because multiple placements have been accessed over the same connection
-END;
+ROLLBACK;
 -- can perform sequential DDL after a co-located table has been read over 1 connection
 BEGIN;
 SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
@@ -1467,7 +1453,7 @@ SELECT id FROM users WHERE id = 6;
 
 ALTER TABLE items ADD COLUMN last_update timestamptz;
 ROLLBACK;
--- but the other way around is fine
+-- and the other way around is also fine
 BEGIN;
 ALTER TABLE items ADD COLUMN last_update timestamptz;
 SELECT id FROM users JOIN items ON (id = user_id) WHERE id = 1;
@@ -1497,7 +1483,9 @@ SELECT user_id FROM items JOIN itemgroups ON (item_group = gid) WHERE user_id = 
 ---------
 (0 rows)
 
--- perform a DDL command on the reference table
+-- perform a DDL command on the reference table errors
+-- because the current implementation of COPY always opens one connection
+-- per placement SELECTs have to use those connections for correctness  
 ALTER TABLE itemgroups ADD COLUMN last_update timestamptz;
 ERROR:  cannot perform DDL on placement 1200036, which has been read over multiple connections
 END;

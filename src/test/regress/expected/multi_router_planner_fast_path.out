@@ -62,7 +62,7 @@ INSERT INTO articles_hash VALUES (1,  1, 'arsenous', 9572), (2,  2, 'abducing', 
 								 (40, 10, 'attemper', 14976),(41,  1, 'aznavour', 11814),(42,  2, 'ausable', 15885),(43,  3, 'affixal', 12723),
 								 (44,  4, 'anteport', 16793),(45,  5, 'afrasia', 864),(46,  6, 'atlanta', 17702),(47,  7, 'abeyance', 1772),
 								 (48,  8, 'alkylic', 18610),(49,  9, 'anyone', 2681),(50, 10, 'anjanette', 19519);
-SET citus.task_executor_type TO 'real-time';
+RESET citus.task_executor_type;
 SET client_min_messages TO 'DEBUG2';
 -- test simple select for a single row
 SELECT * FROM articles_hash WHERE author_id = 10 AND id = 50;
@@ -254,16 +254,15 @@ DETAIL:  NOTICE from localhost:57637
  
 (1 row)
 
+-- do not print notices from workers since the order is not deterministic
+SET client_min_messages TO DEFAULT;
 SELECT master_create_worker_shards('company_employees', 4, 1);
-DEBUG:  schema "fast_path_router_select" already exists, skipping
-DETAIL:  NOTICE from localhost:57638
-DEBUG:  schema "fast_path_router_select" already exists, skipping
-DETAIL:  NOTICE from localhost:57637
  master_create_worker_shards 
 -----------------------------
  
 (1 row)
 
+SET client_min_messages TO 'DEBUG2';
 INSERT INTO company_employees values(1, 1, 0);
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
@@ -1319,20 +1318,35 @@ BEGIN
     RETURN md5($1::text);
 END;
 $$ LANGUAGE 'plpgsql' IMMUTABLE;
+-- we execute the query within a function to consolidate the error messages
+-- between different executors
+CREATE FUNCTION raise_failed_execution_f_router(query text) RETURNS void AS $$
+BEGIN
+        EXECUTE query;
+        EXCEPTION WHEN OTHERS THEN
+        IF SQLERRM LIKE '%failed to execute task%' THEN
+                RAISE 'Task failed to execute';
+        ELSIF SQLERRM LIKE '%does not exist%' THEN
+          RAISE 'Task failed to execute';
+        ELSIF SQLERRM LIKE '%could not receive query results%' THEN
+          	RAISE 'Task failed to execute';
+        END IF;
+END;
+$$LANGUAGE plpgsql;
+SET client_min_messages TO ERROR;
+\set VERBOSITY terse
 -- fast path router plannable, but errors 
-SELECT * FROM articles_hash
-	WHERE
-		someDummyFunction('articles_hash') = md5('articles_hash') AND author_id = 1
-	ORDER BY
-		author_id, id
-	LIMIT 5;
-DEBUG:  Distributed planning for a fast-path router query
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 1
-WARNING:  relation "fast_path_router_select.articles_hash" does not exist
-CONTEXT:  while executing command on localhost:57637
-ERROR:  could not receive query results
+SELECT raise_failed_execution_f_router($$
+	SELECT * FROM articles_hash
+		WHERE
+			someDummyFunction('articles_hash') = md5('articles_hash') AND author_id = 1
+		ORDER BY
+			author_id, id
+		LIMIT 5;
+$$);
+ERROR:  Task failed to execute
+\set VERBOSITY DEFAULT
+SET client_min_messages TO DEFAULT;
 -- temporarily turn off debug messages before dropping the function
 SET client_min_messages TO 'NOTICE';
 DROP FUNCTION someDummyFunction(regclass);
@@ -2221,8 +2235,9 @@ DROP TABLE articles_append;
 DROP TABLE collections_list;
 RESET search_path;
 DROP SCHEMA fast_path_router_select CASCADE;
-NOTICE:  drop cascades to 4 other objects
+NOTICE:  drop cascades to 5 other objects
 DETAIL:  drop cascades to table fast_path_router_select.articles_hash
+drop cascades to function fast_path_router_select.raise_failed_execution_f_router(text)
 drop cascades to function fast_path_router_select.author_articles_max_id(integer)
 drop cascades to function fast_path_router_select.author_articles_id_word_count(integer)
 drop cascades to view fast_path_router_select.test_view

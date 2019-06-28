@@ -62,7 +62,7 @@ SELECT sql_test_no_4();
 
 -- run the tests which do not require re-partition
 -- with real-time executor
-SET citus.task_executor_type TO 'real-time';
+RESET citus.task_executor_type;
 -- now, run plain SQL functions
 SELECT sql_test_no_1();
  sql_test_no_1 
