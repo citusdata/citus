@@ -1171,16 +1171,15 @@ CleanUpSessions(DistributedExecution *execution)
 				elog(WARNING, "unexpected transaction state at the end of execution: %d",
 					 transactionState);
 			}
+
+			/* get ready for the next executions if we need use the same connection */
+			connection->waitFlags = WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE;
 		}
 		else
 		{
 			elog(WARNING, "unexpected connection state at the end of execution: %d",
 				 connection->connectionState);
 		}
-
-		/* get ready for the next executions if we need use the same connection */
-		connection->waitFlags = WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE;
-		execution->waitFlagsChanged = true;
 	}
 }
 
