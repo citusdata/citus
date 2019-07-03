@@ -232,6 +232,7 @@ exec $valgrindPath \\
     --trace-children=yes --track-origins=yes --read-var-info=no \\
     --leak-check=no \\
     --error-markers=VALGRINDERROR-BEGIN,VALGRINDERROR-END \\
+    --max-stackframe=16000000 \\
     --log-file=$valgrindLogFile \\
     $bindir/postgres.orig \\
     "\$@"
