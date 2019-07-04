@@ -290,7 +290,7 @@ typedef struct WorkerPool
 	DistributedExecution *distributedExecution;
 
 	/* worker node on which we have a pool of sessions */
-	WorkerNode *node;
+	WorkerNode node;
 
 	/* all sessions on the worker that are part of the current execution */
 	List *sessionList;
@@ -1444,14 +1444,14 @@ FindOrCreateWorkerPool(DistributedExecution *execution, WorkerNode *workerNode)
 	{
 		workerPool = lfirst(workerCell);
 
-		if (WorkerNodeCompare(workerPool->node, workerNode, 0) == 0)
+		if (WorkerNodeCompare(&workerPool->node, workerNode, 0) == 0)
 		{
 			return workerPool;
 		}
 	}
 
 	workerPool = (WorkerPool *) palloc0(sizeof(WorkerPool));
-	workerPool->node = workerNode;
+	memcpy(&workerPool->node, workerNode, sizeof(WorkerNode));
 	workerPool->poolStartTime = 0;
 	workerPool->distributedExecution = execution;
 
@@ -1741,7 +1741,7 @@ static void
 ManageWorkerPool(WorkerPool *workerPool)
 {
 	DistributedExecution *execution = workerPool->distributedExecution;
-	WorkerNode *workerNode = workerPool->node;
+	WorkerNode *workerNode = &workerPool->node;
 	int targetPoolSize = execution->targetPoolSize;
 	int initiatedConnectionCount = list_length(workerPool->sessionList);
 	int activeConnectionCount PG_USED_FOR_ASSERTS_ONLY =
@@ -1943,8 +1943,8 @@ CheckConnectionTimeout(WorkerPool *workerPool)
 
 			ereport(logLevel, (errcode(ERRCODE_CONNECTION_FAILURE),
 							   errmsg("could not establish any connections to the node "
-									  "%s:%d after %u ms", workerPool->node->workerName,
-									  workerPool->node->workerPort,
+									  "%s:%d after %u ms", workerPool->node.workerName,
+									  workerPool->node.workerPort,
 									  NodeConnectionTimeout)));
 		}
 		else
