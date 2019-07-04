@@ -406,7 +406,7 @@ $$;
 ERROR:  create distributed table failed
 CONTEXT:  PL/pgSQL function inline_code_block line 6 at RAISE
 \c regression
-\c - - - :worker_1_port
-DROP DATABASE another;
 \c - - - :master_port
+DROP DATABASE another;
+\c - - - :worker_1_port
 DROP DATABASE another;
