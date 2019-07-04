@@ -380,9 +380,9 @@ END;
 $$;
 
 \c regression
-\c - - - :worker_1_port
+\c - - - :master_port
 DROP DATABASE another;
 
-\c - - - :master_port
+\c - - - :worker_1_port
 DROP DATABASE another;
 
