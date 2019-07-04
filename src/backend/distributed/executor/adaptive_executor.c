@@ -1444,6 +1444,9 @@ FindOrCreateWorkerPool(DistributedExecution *execution, WorkerNode *workerNode)
 	{
 		workerPool = lfirst(workerCell);
 
+		elog(WARNING, "name: %s, port: %u",
+			 workerPool->node->workerName, workerPool->node->workerPort);
+
 		if (WorkerNodeCompare(workerPool->node, workerNode, 0) == 0)
 		{
 			return workerPool;
@@ -1543,6 +1546,8 @@ static bool
 ShouldRunTasksSequentially(List *taskList)
 {
 	Task *initialTask = NULL;
+
+	return true;
 
 	if (list_length(taskList) < 2)
 	{

@@ -2768,6 +2768,8 @@ InitializeWorkerNodeCache(void)
 	int newWorkerNodeCount = 0;
 	WorkerNode **newWorkerNodeArray = NULL;
 	int workerNodeIndex = 0;
+	HASH_SEQ_STATUS status;
+	WorkerNode *node = NULL;
 
 	InitializeCaches();
 
@@ -2828,6 +2830,20 @@ InitializeWorkerNodeCache(void)
 
 		/* we do not need the currentNode anymore */
 		pfree(currentNode);
+	}
+
+	if (WorkerNodeHash != NULL)
+	{
+		hash_seq_init(&status, WorkerNodeHash);
+
+		node = (WorkerNode *) hash_seq_search(&status);
+		while (node != NULL)
+		{
+			node->workerPort = 0;
+			strcpy(node->workerName, "Invalidated");
+
+			node = (WorkerNode *) hash_seq_search(&status);
+		}
 	}
 
 	/* now, safe to destroy the old hash */
