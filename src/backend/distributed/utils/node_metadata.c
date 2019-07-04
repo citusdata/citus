@@ -1527,6 +1527,13 @@ TupleToWorkerNode(TupleDesc tupleDescriptor, HeapTuple heapTuple)
 	Assert(!HeapTupleHasNulls(heapTuple));
 
 	/*
+	 * This function can be called before "ALTER TABLE ... ADD COLUMN nodecluster ...",
+	 * therefore heap_deform_tuple() won't set the isNullArray for this column. We
+	 * initialize it true to be safe in that case.
+	 */
+	memset(isNullArray, true, sizeof(isNullArray));
+
+	/*
 	 * We use heap_deform_tuple() instead of heap_getattr() to expand tuple
 	 * to contain missing values when ALTER TABLE ADD COLUMN happens.
 	 */
@@ -1545,21 +1552,17 @@ TupleToWorkerNode(TupleDesc tupleDescriptor, HeapTuple heapTuple)
 	workerNode->isActive = DatumGetBool(datumArray[Anum_pg_dist_node_isactive - 1]);
 	workerNode->nodeRole = DatumGetObjectId(datumArray[Anum_pg_dist_node_noderole - 1]);
 
+	/*
+	 * nodecluster column can be missing. In the case of extension creation/upgrade,
+	 * master_initialize_node_metadata function is called before the nodecluster
+	 * column is added to pg_dist_node table.
+	 */
+	if (!isNullArray[Anum_pg_dist_node_nodecluster - 1])
 	{
-		Name nodeClusterName = DatumGetName(datumArray[Anum_pg_dist_node_nodecluster -
-													   1]);
+		Name nodeClusterName =
+			DatumGetName(datumArray[Anum_pg_dist_node_nodecluster - 1]);
 		char *nodeClusterString = NameStr(*nodeClusterName);
-
-		/*
-		 * nodeClusterString can be null if nodecluster column is not present.
-		 * In the case of extension creation/upgrade, master_initialize_node_metadata
-		 * function is called before the nodecluster column is added to pg_dist_node
-		 * table.
-		 */
-		if (nodeClusterString != NULL)
-		{
-			strlcpy(workerNode->nodeCluster, nodeClusterString, NAMEDATALEN);
-		}
+		strlcpy(workerNode->nodeCluster, nodeClusterString, NAMEDATALEN);
 	}
 
 	return workerNode;
