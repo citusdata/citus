@@ -181,15 +181,12 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 	if (IsA(parsetree, VariableSetStmt))
 	{
 		VariableSetStmt *setStmt = (VariableSetStmt *) parsetree;
-		bool propagateSetVar = (PropagateSetCommands == PROPSETCMD_LOCAL &&
-								setStmt->is_local);
-		bool setVarIsValid = SetCommandTargetIsValid(setStmt);
 
 		/* at present, we only implement the NONE and LOCAL behaviors */
 		AssertState(PropagateSetCommands == PROPSETCMD_NONE ||
 					PropagateSetCommands == PROPSETCMD_LOCAL);
 
-		if (propagateSetVar && setVarIsValid && IsMultiStatementTransaction())
+		if (IsMultiStatementTransaction() && ShouldPropagateSetCommand(setStmt))
 		{
 			ProcessVariableSetStmt(setStmt, queryString);
 		}

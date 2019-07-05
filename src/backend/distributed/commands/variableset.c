@@ -27,34 +27,87 @@
 #include "distributed/remote_commands.h"
 
 
+static bool IsSettingSafeToPropagate(char *name);
+
+
 /*
- * Checks whether a SET command modifies a variable which might violate assumptions
- * made by Citus. Because we generally don't want a connection to be destroyed on error,
- * and because we eagerly ensure the stack can be fully allocated (at backend startup),
- * permitting changes to these two variables seems unwise. Also, ban propagating the
- * SET command propagation setting (not for correctness, more to avoid confusion).
+ * ShouldPropagateSetCommand determines whether a SET or RESET command should be
+ * propagated to the workers.
+ *
+ * We currently propagate:
+ * - SET LOCAL (for allowed settings)
+ * - RESET (for allowed settings)
+ * - RESET ALL
  */
 bool
-SetCommandTargetIsValid(VariableSetStmt *setStmt)
+ShouldPropagateSetCommand(VariableSetStmt *setStmt)
 {
-	/* if this list grows considerably, switch to bsearch */
-	const char *blacklist[] = {
+	if (PropagateSetCommands != PROPSETCMD_LOCAL)
+	{
+		/* SET propagation is disabled */
+		return false;
+	}
+
+	switch (setStmt->kind)
+	{
+		case VAR_SET_VALUE:
+		case VAR_SET_CURRENT:
+		case VAR_SET_DEFAULT:
+		{
+			/* SET LOCAL on a safe setting */
+			return setStmt->is_local && IsSettingSafeToPropagate(setStmt->name);
+		}
+
+		case VAR_RESET:
+		{
+			/* may need to reset prior SET LOCAL */
+			return IsSettingSafeToPropagate(setStmt->name);
+		}
+
+		case VAR_RESET_ALL:
+		{
+			/* always propagate RESET ALL since it might affect prior SET LOCALs */
+			return true;
+		}
+
+		case VAR_SET_MULTI:
+		default:
+		{
+			/* SET (LOCAL) TRANSACTION should be handled locally */
+			return false;
+		}
+	}
+}
+
+
+/*
+ * IsSettingSafeToPropagate returns whether a SET LOCAL is safe to propagate.
+ *
+ * We exclude settings that are highly specific to the client or session and also ban
+ * ban propagating the SET command propagation setting (not for correctness, more to
+ * avoid confusion).
+ */
+static bool
+IsSettingSafeToPropagate(char *name)
+{
+	/* if this list grows considerably we should switch to bsearch */
+	const char *skipSettings[] = {
 		"citus.propagate_set_commands",
 		"client_encoding",
 		"exit_on_error",
 		"max_stack_depth"
 	};
-	Index idx = 0;
+	Index settingIndex = 0;
 
-	for (idx = 0; idx < lengthof(blacklist); idx++)
+	for (settingIndex = 0; settingIndex < lengthof(skipSettings); settingIndex++)
 	{
-		if (pg_strcasecmp(blacklist[idx], setStmt->name))
+		if (pg_strcasecmp(skipSettings[settingIndex], name) == 0)
 		{
-			return true;
+			return false;
 		}
 	}
 
-	return false;
+	return true;
 }
 
 
