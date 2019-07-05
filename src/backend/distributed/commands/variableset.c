@@ -83,9 +83,9 @@ ShouldPropagateSetCommand(VariableSetStmt *setStmt)
 /*
  * IsSettingSafeToPropagate returns whether a SET LOCAL is safe to propagate.
  *
- * We exclude settings that are highly specific to the client or session and also ban
- * ban propagating the SET command propagation setting (not for correctness, more to
- * avoid confusion).
+ * We exclude settings that are highly specific to the client or session and also
+ * ban propagating the citus.propagate_set_commands setting (not for correctness,
+ * more to avoid confusion).
  */
 static bool
 IsSettingSafeToPropagate(char *name)
@@ -124,7 +124,7 @@ ProcessVariableSetStmt(VariableSetStmt *setStmt, const char *setStmtString)
 	List *connectionList = NIL;
 
 	/* at present we only support SET LOCAL */
-	AssertArg(setStmt->is_local);
+	AssertArg(ShouldPropagateSetCommand(setStmt));
 
 	/* haven't seen any SET stmts so far in this (sub-)xact: initialize StringInfo */
 	if (activeSetStmts == NULL)
