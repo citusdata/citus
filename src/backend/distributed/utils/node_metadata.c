@@ -764,7 +764,7 @@ get_shard_id_for_distribution_column(PG_FUNCTION_ARGS)
 WorkerNode *
 FindWorkerNode(char *nodeName, int32 nodePort)
 {
-	WorkerNode *workerNode = NULL;
+	WorkerNode *cachedWorkerNode = NULL;
 	HTAB *workerNodeHash = GetWorkerNodeHash();
 	bool handleFound = false;
 	void *hashKey = NULL;
@@ -774,10 +774,16 @@ FindWorkerNode(char *nodeName, int32 nodePort)
 	searchedNode->workerPort = nodePort;
 
 	hashKey = (void *) searchedNode;
-	workerNode = (WorkerNode *) hash_search(workerNodeHash, hashKey,
-											HASH_FIND, &handleFound);
+	cachedWorkerNode = (WorkerNode *) hash_search(workerNodeHash, hashKey, HASH_FIND,
+												  &handleFound);
+	if (handleFound)
+	{
+		WorkerNode *workerNode = (WorkerNode *) palloc(sizeof(WorkerNode));
+		memcpy(workerNode, cachedWorkerNode, sizeof(WorkerNode));
+		return workerNode;
+	}
 
-	return workerNode;
+	return NULL;
 }
 
 
