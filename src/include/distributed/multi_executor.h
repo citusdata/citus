@@ -19,6 +19,14 @@
 #include "distributed/multi_server_executor.h"
 
 
+typedef enum LocalExecutionLevel
+{
+	LOCAL_EXECUTION_DISALLOWED,
+	LOCAL_EXECUTION_ALLOWED,
+	LOCAL_EXECUTION_REQUIRED,
+} LocalExecutionLevel;
+extern LocalExecutionLevel LocalTaskExecutionLevel;
+
 /* managed via guc.c */
 typedef enum
 {
@@ -28,6 +36,7 @@ typedef enum
 extern int MultiShardConnectionType;
 
 
+extern bool EnableLocalExecution;
 extern bool WritableStandbyCoordinator;
 extern bool ForceMaxQueryParallelization;
 extern int MaxAdaptiveExecutorPoolSize;

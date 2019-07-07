@@ -582,8 +582,6 @@ AdaptiveExecutor(CustomScanState *node)
 	ParamListInfo paramListInfo = executorState->es_param_list_info;
 	Tuplestorestate *tupleStore = NULL;
 	TupleDesc tupleDescriptor = ScanStateGetTupleDescriptor(scanState);
-	bool randomAccess = true;
-	bool interTransactions = false;
 	int targetPoolSize = MaxAdaptiveExecutorPoolSize;
 
 	Job *job = distributedPlan->workerJob;
@@ -601,8 +599,6 @@ AdaptiveExecutor(CustomScanState *node)
 
 	ExecuteSubPlans(distributedPlan);
 
-	scanState->tuplestorestate =
-		tuplestore_begin_heap(randomAccess, interTransactions, work_mem);
 	tupleStore = scanState->tuplestorestate;
 
 	if (MultiShardConnectionType == SEQUENTIAL_CONNECTION)
@@ -628,7 +624,7 @@ AdaptiveExecutor(CustomScanState *node)
 
 	if (distributedPlan->operation != CMD_SELECT)
 	{
-		executorState->es_processed = execution->rowsProcessed;
+		executorState->es_processed += execution->rowsProcessed;
 	}
 
 	FinishDistributedExecution(execution);
@@ -652,6 +648,14 @@ void
 ExecuteUtilityTaskListWithoutResults(List *taskList, int targetPoolSize,
 									 bool forceSequentialExecution)
 {
+	if (LocalTaskExecutionLevel == LOCAL_EXECUTION_REQUIRED)
+	{
+		ereport(ERROR, (errmsg("the transaction accessed shards locally, but this "
+							   "command does not support local execution")));
+	}
+
+	LocalTaskExecutionLevel = LOCAL_EXECUTION_DISALLOWED;
+
 	if (TaskExecutorType == MULTI_EXECUTOR_ADAPTIVE)
 	{
 		ExecuteTaskList(CMD_UTILITY, taskList, targetPoolSize);
@@ -681,6 +685,14 @@ ExecuteTaskList(CmdType operation, List *taskList, int targetPoolSize)
 	TupleDesc tupleDescriptor = NULL;
 	Tuplestorestate *tupleStore = NULL;
 	bool hasReturning = false;
+
+	if (LocalTaskExecutionLevel == LOCAL_EXECUTION_REQUIRED)
+	{
+		ereport(ERROR, (errmsg("the transaction accessed shards locally, but this "
+							   "command does not support local execution")));
+	}
+
+	LocalTaskExecutionLevel = LOCAL_EXECUTION_DISALLOWED;
 
 	return ExecuteTaskListExtended(operation, taskList, tupleDescriptor,
 								   tupleStore, hasReturning, targetPoolSize);

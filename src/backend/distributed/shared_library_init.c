@@ -453,6 +453,17 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
+		"citus.enable_local_execution",
+		gettext_noop("Enables queries on shards that are local to the current node "
+					 "to be planned and executed locally."),
+		NULL,
+		&EnableLocalExecution,
+		true,
+		PGC_USERSET,
+		0,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
 		"citus.override_table_visibility",
 		gettext_noop("Enables replacing occurencens of pg_catalog.pg_table_visible() "
 					 "with pg_catalog.citus_table_visible()"),

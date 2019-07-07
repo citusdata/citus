@@ -23,6 +23,7 @@
 #include "distributed/connection_management.h"
 #include "distributed/hash_helpers.h"
 #include "distributed/intermediate_results.h"
+#include "distributed/multi_executor.h"
 #include "distributed/multi_shard_transaction.h"
 #include "distributed/transaction_management.h"
 #include "distributed/placement_connection.h"
@@ -224,6 +225,7 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 
 			CurrentCoordinatedTransactionState = COORD_TRANS_NONE;
 			XactModificationLevel = XACT_MODIFICATION_NONE;
+			LocalTaskExecutionLevel = LOCAL_EXECUTION_ALLOWED;
 			dlist_init(&InProgressTransactions);
 			activeSetStmts = NULL;
 			CoordinatedTransactionUses2PC = false;
@@ -277,6 +279,7 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 
 			CurrentCoordinatedTransactionState = COORD_TRANS_NONE;
 			XactModificationLevel = XACT_MODIFICATION_NONE;
+			LocalTaskExecutionLevel = LOCAL_EXECUTION_ALLOWED;
 			dlist_init(&InProgressTransactions);
 			activeSetStmts = NULL;
 			CoordinatedTransactionUses2PC = false;

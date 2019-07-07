@@ -345,6 +345,7 @@ CitusCopyFrom(CopyStmt *copyStatement, char *completionTag)
 	}
 
 	XactModificationLevel = XACT_MODIFICATION_DATA;
+	LocalTaskExecutionLevel = LOCAL_EXECUTION_DISALLOWED;
 }
 
 

@@ -11,11 +11,16 @@
 
 #include "miscadmin.h"
 
+#include "catalog/namespace.h"
 #include "commands/copy.h"
+#include "executor/tstoreReceiver.h"
 #include "distributed/backend_data.h"
 #include "distributed/citus_custom_scan.h"
+#include "distributed/citus_nodefuncs.h"
+#include "distributed/deparse_shard_query.h"
 #include "distributed/insert_select_executor.h"
 #include "distributed/insert_select_planner.h"
+#include "distributed/multi_logical_planner.h"
 #include "distributed/multi_server_executor.h"
 #include "distributed/multi_router_executor.h"
 #include "distributed/multi_router_planner.h"
@@ -23,10 +28,28 @@
 #include "distributed/subplan_execution.h"
 #include "distributed/worker_protocol.h"
 #include "executor/executor.h"
+#include "optimizer/planner.h"
+#include "parser/parsetree.h"
 #include "nodes/makefuncs.h"
+#include "nodes/nodeFuncs.h"
+#include "utils/lsyscache.h"
 #include "utils/memutils.h"
+#include "utils/queryenvironment.h"
 #include "utils/rel.h"
+#include "utils/snapmgr.h"
 
+
+bool EnableLocalExecution = true;
+LocalExecutionLevel LocalTaskExecutionLevel = LOCAL_EXECUTION_ALLOWED;
+
+
+static void ExecuteLocallyExecutableTasks(CitusScanState *scanState);
+static bool IsLocalExecutionAllowed(DistributedPlan *distributedPlan);
+static bool ReplaceShardReferencesWalker(Node *node, Task *task);
+static PlannedStmt * LocalTaskPlannedStmt(Job *workerJob, Task *task,
+										  ParamListInfo boundParams);
+static void ExecuteLocalTaskPlan(CitusScanState *scanState, PlannedStmt *taskPlan,
+								 char *queryString);
 
 /* functions for creating custom scan nodes */
 static Node * AdaptiveExecutorCreateScan(CustomScan *scan);
@@ -163,14 +186,21 @@ CitusBeginScan(CustomScanState *node, EState *estate, int eflags)
 
 	scanState = (CitusScanState *) node;
 	distributedPlan = scanState->distributedPlan;
-	if (distributedPlan->operation == CMD_SELECT ||
-		distributedPlan->insertSelectSubquery != NULL)
+	if (distributedPlan->operation != CMD_SELECT &&
+		distributedPlan->insertSelectSubquery == NULL)
 	{
-		/* no more action required */
-		return;
-	}
+		/*
+		 * Modifications require specialised logic. In particular, we need to
+		 * evaluate functions and then reconsider shard pruning.
+		 *
+		 * We also need to take locks to prevent shards from being moved while a
+		 * write is in progress.
+		 */
+		CitusModifyBeginScan(node, estate, eflags);
 
-	CitusModifyBeginScan(node, estate, eflags);
+		/* plan is modified by CitusModifyBeginScan */
+		distributedPlan = scanState->distributedPlan;
+	}
 }
 
 
@@ -188,6 +218,17 @@ CitusExecScan(CustomScanState *node)
 
 	if (!scanState->finishedRemoteScan)
 	{
+		bool randomAccess = true;
+		bool interTransactions = false;
+
+		scanState->tuplestorestate =
+			tuplestore_begin_heap(randomAccess, interTransactions, work_mem);
+
+		if (EnableLocalExecution && LocalTaskExecutionLevel >= LOCAL_EXECUTION_ALLOWED)
+		{
+			ExecuteLocallyExecutableTasks(scanState);
+		}
+
 		AdaptiveExecutor(node);
 
 		scanState->finishedRemoteScan = true;
@@ -196,6 +237,253 @@ CitusExecScan(CustomScanState *node)
 	resultSlot = ReturnTupleFromTuplestore(scanState);
 
 	return resultSlot;
+}
+
+
+/*
+ *
+ */
+static void
+ExecuteLocallyExecutableTasks(CitusScanState *scanState)
+{
+	DistributedPlan *distributedPlan = scanState->distributedPlan;
+	Job *workerJob = distributedPlan->workerJob;
+	EState *executorState = ScanStateGetExecutorState(scanState);
+	ParamListInfo paramListInfo = executorState->es_param_list_info;
+	List *taskList = workerJob->taskList;
+	ListCell *taskCell = NULL;
+	int myGroupId = GetLocalGroupId();
+	List *newTaskList = NIL;
+
+	if (!IsLocalExecutionAllowed(distributedPlan))
+	{
+		if (LocalTaskExecutionLevel == LOCAL_EXECUTION_REQUIRED)
+		{
+			ereport(ERROR, (errmsg("the transaction accessed shards locally, but this "
+								   "command does not support local execution")));
+		}
+
+		/* avoid local execution in the remainder of the transaction */
+		LocalTaskExecutionLevel = LOCAL_EXECUTION_DISALLOWED;
+		return;
+	}
+
+	foreach(taskCell, taskList)
+	{
+		Task *task = (Task *) lfirst(taskCell);
+		List *newTaskPlacementList = NIL;
+		ListCell *taskPlacementCell = NULL;
+		bool readOnly = ReadOnlyTask(task->taskType);
+
+		foreach(taskPlacementCell, task->taskPlacementList)
+		{
+			ShardPlacement *taskPlacement = (ShardPlacement *) lfirst(taskPlacementCell);
+
+			if (taskPlacement->groupId == myGroupId)
+			{
+				PlannedStmt *localPlan = LocalTaskPlannedStmt(workerJob, task,
+															  paramListInfo);
+
+				/* execute on local placement */
+				ExecuteLocalTaskPlan(scanState, localPlan, task->queryString);
+				LocalTaskExecutionLevel = LOCAL_EXECUTION_REQUIRED;
+
+				if (readOnly)
+				{
+					/* only need to query one shard in case of read-only tasks */
+					newTaskPlacementList = NIL;
+					break;
+				}
+			}
+			else
+			{
+				newTaskPlacementList = lappend(newTaskPlacementList, taskPlacement);
+			}
+		}
+
+		if (list_length(newTaskPlacementList) > 0)
+		{
+			task->taskPlacementList = newTaskPlacementList;
+			newTaskList = lappend(newTaskList, task);
+		}
+	}
+
+	workerJob->taskList = newTaskList;
+}
+
+
+/*
+ * IsLocalExecutionAllowed returns whether a given plan can be executed locally.
+ */
+static bool
+IsLocalExecutionAllowed(DistributedPlan *distributedPlan)
+{
+	Job *workerJob = distributedPlan->workerJob;
+	List *taskList = NIL;
+
+	if (!EnableLocalExecution || LocalTaskExecutionLevel == LOCAL_EXECUTION_DISALLOWED)
+	{
+		/* already decided not to use local execution */
+		return false;
+	}
+
+	if (distributedPlan->insertSelectSubquery != NULL)
+	{
+		/* INSERT...SELECT via the coordinator is always local */
+		return false;
+	}
+
+	taskList = workerJob->taskList;
+	if (LocalTaskExecutionLevel == LOCAL_EXECUTION_ALLOWED &&
+		list_length(taskList) > 1)
+	{
+		/* avoid local execution for parallel queries */
+		return false;
+	}
+
+	if (ContainsReadIntermediateResultFunction((Node *) workerJob->jobQuery))
+	{
+		return false;
+	}
+
+	return true;
+}
+
+
+/*
+ * LocalTaskPlannedStmt builds a PlannedStmt for an individual task that can be
+ * executed on the local node.
+ */
+static PlannedStmt *
+LocalTaskPlannedStmt(Job *workerJob, Task *task, ParamListInfo boundParams)
+{
+	Query *shardQuery = copyObject(workerJob->jobQuery);
+	PlannedStmt *localPlan = NULL;
+	int cursorOptions = 0;
+
+	/* add a RelationShard for the result relation, TODO: move into planner(s) */
+	if (shardQuery->resultRelation != 0)
+	{
+		RangeTblEntry *rangeTableEntry = rt_fetch(shardQuery->resultRelation,
+												  shardQuery->rtable);
+		RelationShard *relationShard = CitusMakeNode(RelationShard);
+
+		relationShard->relationId = rangeTableEntry->relid;
+		relationShard->shardId = task->anchorShardId;
+
+		task->relationShardList = lcons(relationShard, task->relationShardList);
+	}
+
+	UpdateRelationToShardNames((Node *) shardQuery, task->relationShardList);
+	ReplaceShardReferencesWalker((Node *) shardQuery, task);
+
+	CreateAndPushPlannerRestrictionContext();
+
+	PG_TRY();
+	{
+		localPlan = standard_planner(shardQuery, cursorOptions, boundParams);
+	}
+	PG_CATCH();
+	{
+		/* TODO: use memory context callback? */
+		PopPlannerRestrictionContext();
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
+
+	PopPlannerRestrictionContext();
+
+	return localPlan;
+}
+
+
+/*
+ * ReplaceShardReferencesWalker replaces RTE_SHARDs with proper RTEs for the local
+ * shards..
+ */
+static bool
+ReplaceShardReferencesWalker(Node *node, Task *task)
+{
+	if (node == NULL)
+	{
+		return false;
+	}
+
+	if (IsA(node, RangeTblEntry))
+	{
+		RangeTblEntry *rangeTableEntry = (RangeTblEntry *) node;
+
+		if (GetRangeTblKind(rangeTableEntry) == CITUS_RTE_SHARD)
+		{
+			char *schemaName = NULL;
+			char *shardTableName = NULL;
+			RangeVar *rangeVar = NULL;
+			bool failOK = false;
+			Oid shardRelationId = InvalidOid;
+
+			/* job query from the router planner has a shard name */
+			ExtractRangeTblExtraData(rangeTableEntry, NULL, &schemaName,
+									 &shardTableName, NULL);
+
+			rangeVar = makeRangeVar(schemaName, shardTableName, -1);
+			shardRelationId = RangeVarGetRelid(rangeVar, AccessShareLock, failOK);
+
+			/* change citus_extradata_container call into shard */
+			rangeTableEntry->rtekind = RTE_RELATION;
+			rangeTableEntry->relid = shardRelationId;
+			rangeTableEntry->functions = NIL;
+		}
+
+		/* caller will descend into range table entry */
+		return false;
+	}
+	else if (IsA(node, Query))
+	{
+		return query_tree_walker((Query *) node, ReplaceShardReferencesWalker, task,
+								 QTW_EXAMINE_RTES);
+	}
+	else
+	{
+		return expression_tree_walker(node, ReplaceShardReferencesWalker, task);
+	}
+}
+
+
+/*
+ * ExecuteLocalTaskPlan
+ */
+static void
+ExecuteLocalTaskPlan(CitusScanState *scanState, PlannedStmt *taskPlan, char *queryString)
+{
+	EState *executorState = ScanStateGetExecutorState(scanState);
+	ParamListInfo paramListInfo = executorState->es_param_list_info;
+	DestReceiver *dest = CreateDestReceiver(DestTuplestore);
+	ScanDirection scanDirection = ForwardScanDirection;
+	QueryEnvironment *queryEnv = create_queryEnv();
+	QueryDesc *queryDesc = NULL;
+	int eflags = 0;
+
+	SetTuplestoreDestReceiverParams(dest, scanState->tuplestorestate,
+									CurrentMemoryContext, false);
+
+	/* Create a QueryDesc for the query */
+	queryDesc = CreateQueryDesc(taskPlan, queryString,
+								GetActiveSnapshot(), InvalidSnapshot,
+								dest, paramListInfo, queryEnv, 0);
+
+	ExecutorStart(queryDesc, eflags);
+	ExecutorRun(queryDesc, scanDirection, 0L, true);
+
+	if (queryDesc->operation != CMD_SELECT)
+	{
+		/* make sure we get the right completion tag */
+		executorState->es_processed = queryDesc->estate->es_processed;
+	}
+
+	ExecutorFinish(queryDesc);
+	ExecutorEnd(queryDesc);
+
+	FreeQueryDesc(queryDesc);
 }
 
 

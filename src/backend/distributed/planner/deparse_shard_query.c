@@ -212,7 +212,7 @@ UpdateRelationToShardNames(Node *node, List *relationShardList)
 
 	newRte = (RangeTblEntry *) node;
 
-	if (newRte->rtekind != RTE_RELATION)
+	if (GetRangeTblKind(newRte) != CITUS_RTE_RELATION)
 	{
 		return false;
 	}

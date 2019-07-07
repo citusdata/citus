@@ -24,6 +24,8 @@
 
 #define CURSOR_OPT_FORCE_DISTRIBUTED 0x080000
 
+struct DistributedPlan;
+
 typedef struct RelationRestrictionContext
 {
 	bool hasDistributedRelation;
@@ -99,6 +101,9 @@ extern PlannedStmt * distributed_planner(Query *parse, int cursorOptions,
 extern List * ExtractRangeTableEntryList(Query *query);
 extern bool NeedsDistributedPlanning(Query *query);
 extern struct DistributedPlan * GetDistributedPlan(CustomScan *node);
+extern bool PlanCanBeExecutedLocally(struct DistributedPlan *distributedPlan);
+extern PlannedStmt * LocalShardPlannedStmt(struct DistributedPlan *distributedPlan,
+										   ParamListInfo boundParams);
 extern void multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo,
 											Index index, RangeTblEntry *rte);
 extern void multi_join_restriction_hook(PlannerInfo *root,
@@ -116,5 +121,7 @@ extern bool IsMultiTaskPlan(struct DistributedPlan *distributedPlan);
 extern bool IsMultiShardModifyPlan(struct DistributedPlan *distributedPlan);
 extern RangeTblEntry * RemoteScanRangeTableEntry(List *columnNameList);
 extern int GetRTEIdentity(RangeTblEntry *rte);
+extern PlannerRestrictionContext * CreateAndPushPlannerRestrictionContext(void);
+extern void PopPlannerRestrictionContext(void);
 
 #endif /* DISTRIBUTED_PLANNER_H */

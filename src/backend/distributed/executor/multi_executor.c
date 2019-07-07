@@ -452,6 +452,7 @@ ExecutePlanIntoDestReceiver(PlannedStmt *queryPlan, ParamListInfo params,
 	Portal portal = NULL;
 	int eflags = 0;
 	long count = FETCH_ALL;
+	char *completionTag = NULL;
 
 	/* create a new portal for executing the query */
 	portal = CreateNewPortal();
@@ -467,7 +468,7 @@ ExecutePlanIntoDestReceiver(PlannedStmt *queryPlan, ParamListInfo params,
 					  NULL);
 
 	PortalStart(portal, params, eflags, GetActiveSnapshot());
-	PortalRun(portal, count, false, true, dest, dest, NULL);
+	PortalRun(portal, count, false, true, dest, dest, completionTag);
 	PortalDrop(portal, false);
 }
 
