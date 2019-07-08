@@ -732,7 +732,7 @@ LockModeToLockModeText(LOCKMODE lockMode)
  *
  * The relation name should be qualified with the schema name.
  *
- * The function errors out of the lockmode isn't defined in the PostgreSQL's
+ * The function errors out if the lockmode isn't defined in the PostgreSQL's
  * explicit locking table.
  */
 Datum
