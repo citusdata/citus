@@ -13,7 +13,7 @@ SELECT create_distributed_table('test','x');
 INSERT INTO test VALUES (1,2);
 INSERT INTO test VALUES (3,2);
 -- Set a very high slow start to avoid opening parallel connections
-SET citus.executor_slow_start_interval TO '1s';
+SET citus.executor_slow_start_interval TO '60s';
 SET citus.max_adaptive_executor_pool_size TO 2;
 SET citus.task_executor_type TO 'adaptive';
 BEGIN;
