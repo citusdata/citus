@@ -62,7 +62,7 @@ test: subquery_prepared_statements
 # Miscellaneous tests to check our query planning behavior
 # ----------
 test: multi_deparse_shard_query multi_distributed_transaction_id multi_real_time_transaction intermediate_results limit_intermediate_size
-test: multi_explain
+test: multi_explain hyperscale_tutorial
 test: multi_basic_queries multi_complex_expressions multi_subquery multi_subquery_complex_queries multi_subquery_behavioral_analytics
 test: multi_subquery_complex_reference_clause multi_subquery_window_functions multi_view multi_sql_function multi_prepare_sql
 test: sql_procedure multi_function_in_join
