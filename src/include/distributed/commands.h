@@ -126,4 +126,9 @@ extern void ProcessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand)
 extern bool ShouldPropagateSetCommand(VariableSetStmt *setStmt);
 extern void ProcessVariableSetStmt(VariableSetStmt *setStmt, const char *setCommand);
 
+/* commands.c */
+extern bool CallDistributedProcedureRemotely(CallStmt *callStmt, const char *callCommand,
+											 DestReceiver *dest);
+
+
 #endif /*CITUS_COMMANDS_H */

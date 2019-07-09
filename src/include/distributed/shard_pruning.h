@@ -20,5 +20,6 @@
 extern List * PruneShards(Oid relationId, Index rangeTableId, List *whereClauseList,
 						  Const **partitionValueConst);
 extern bool ContainsFalseClause(List *whereClauseList);
+extern List * ShardsForPartitionColumnValue(Oid relationId, Node *partitionColumnValue);
 
 #endif /* SHARD_PRUNING_H_ */

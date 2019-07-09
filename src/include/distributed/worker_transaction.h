@@ -34,8 +34,9 @@ extern void SendCommandToFirstWorker(char *command);
 extern void SendCommandToWorkers(TargetWorkerSet targetWorkerSet, char *command);
 extern void SendBareCommandListToWorkers(TargetWorkerSet targetWorkerSet,
 										 List *commandList);
-extern void SendCommandToWorkersParams(TargetWorkerSet targetWorkerSet, char *command,
-									   int parameterCount, const Oid *parameterTypes,
+extern void SendCommandToWorkersParams(TargetWorkerSet targetWorkerSet, char *userName,
+									   char *command, int parameterCount,
+									   const Oid *parameterTypes,
 									   const char *const *parameterValues);
 extern void SendCommandListToWorkerInSingleTransaction(char *nodeName, int32 nodePort,
 													   char *nodeUser, List *commandList);
