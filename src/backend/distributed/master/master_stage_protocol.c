@@ -728,10 +728,14 @@ RelationShardListForShardCreate(ShardInterval *shardInterval)
 	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(relationId);
 	List *referencedRelationList = cacheEntry->referencedRelationsViaForeignKey;
 	List *referencingRelationList = cacheEntry->referencingRelationsViaForeignKey;
-	List *allForeignKeyRelations =
-		list_concat_unique_oid(referencedRelationList, referencingRelationList);
+	List *allForeignKeyRelations = NIL;
 	int shardIndex = -1;
 	ListCell *fkeyRelationIdCell = NULL;
+
+	/* list_concat_*() modifies the first arg, so make a copy first */
+	allForeignKeyRelations = list_copy(referencedRelationList);
+	allForeignKeyRelations = list_concat_unique_oid(allForeignKeyRelations,
+													referencingRelationList);
 
 	/* record the placement access of the shard itself */
 	relationShard = CitusMakeNode(RelationShard);
