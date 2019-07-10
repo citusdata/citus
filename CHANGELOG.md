@@ -10,21 +10,21 @@
 
 * Adds option to force master_update_node during failover
 
+* Deprecates master_modify_multiple_shards
+
 * Improves round robin logic on router queries
 
-* Create all distributed schemas as superuser on a separate connection
+* Creates all distributed schemas as superuser on a separate connection
 
-* Make COPY adapt to connection use behaviour of previous commands
-
-* Search all outer node levels for lateral join params
+* Makes COPY adapt to connection use behaviour of previous commands
 
 * Replaces SESSION_LIFESPAN with configurable number of connections at xact end
 
-* Propagate ALTER FOREIGN TABLE commands to workers
+* Propagates ALTER FOREIGN TABLE commands to workers
 
 * Don't schedule tasks on inactive nodes
 
-* Make DROP/VALIDATE CONSTRAINT tolerant of ambiguous shard extension
+* Makes DROP/VALIDATE CONSTRAINT tolerant of ambiguous shard extension
 
 * Fixes an issue with subquery map merge jobs as non-root
 
@@ -43,8 +43,6 @@
 * Fixes bad foreign constraint name search
 
 * Fixes a bug that prevents stack size to be adjusted
-
-* Deprecates master_modify_multiple_shards
 
 ### citus v8.2.2 (June 11, 2019) ###
 
