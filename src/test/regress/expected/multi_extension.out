@@ -165,7 +165,7 @@ ALTER EXTENSION citus UPDATE TO '8.2-4';
 SHOW citus.version;
  citus.version 
 ---------------
- 8.2devel
+ 8.3.0
 (1 row)
 
 -- ensure no objects were created outside pg_catalog
@@ -187,7 +187,7 @@ RESET citus.enable_version_checks;
 DROP EXTENSION citus;
 CREATE EXTENSION citus VERSION '5.0';
 ERROR:  specified version incompatible with loaded Citus library
-DETAIL:  Loaded library requires 8.2, but 5.0 was specified.
+DETAIL:  Loaded library requires 8.3, but 5.0 was specified.
 HINT:  If a newer library is present, restart the database and try the command again.
 -- Test non-distributed queries work even in version mismatch
 SET citus.enable_version_checks TO 'false';
@@ -230,7 +230,7 @@ ORDER BY 1;
 -- We should not distribute table in version mistmatch
 SELECT create_distributed_table('version_mismatch_table', 'column1');
 ERROR:  loaded Citus library version differs from installed extension version
-DETAIL:  Loaded library requires 8.2, but the installed extension version is 6.2-1.
+DETAIL:  Loaded library requires 8.3, but the installed extension version is 6.2-1.
 HINT:  Run ALTER EXTENSION citus UPDATE and try again.
 -- This function will cause fail in next ALTER EXTENSION
 CREATE OR REPLACE FUNCTION pg_catalog.citus_table_size(table_name regclass)
