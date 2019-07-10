@@ -40,7 +40,7 @@ then
     $DIFF $args $file1.modified $file2.modified
     exitcode=$?
 
-    rm -rf $file1.modified $file2.modified
+    rm -f $file1.modified $file2.modified
 else
     # if test is not in normalized_tests.lst, just diff without normalizing.
     $DIFF $args $file1 $file2
