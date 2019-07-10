@@ -1,3 +1,49 @@
+### citus v8.3.0 (July 10, 2019) ###
+
+* Adds a new distributed executor: Adaptive Executor
+
+* citus.enable_statistics_collection defaults to off (opt-in)
+
+* Adds support for CTEs in router planner for modification queries
+
+* Adds support for propagating SET LOCAL at xact start
+
+* Adds option to force master_update_node during failover
+
+* Deprecates master_modify_multiple_shards
+
+* Improves round robin logic on router queries
+
+* Creates all distributed schemas as superuser on a separate connection
+
+* Makes COPY adapt to connection use behaviour of previous commands
+
+* Replaces SESSION_LIFESPAN with configurable number of connections at xact end
+
+* Propagates ALTER FOREIGN TABLE commands to workers
+
+* Don't schedule tasks on inactive nodes
+
+* Makes DROP/VALIDATE CONSTRAINT tolerant of ambiguous shard extension
+
+* Fixes an issue with subquery map merge jobs as non-root
+
+* Fixes null pointers caused by partial initialization of ConnParamsHashEntry
+
+* Fixes errors caused by joins with shadowed aliases
+
+* Fixes a regression in outer joining subqueries introduced in 8.2.0
+
+* Fixes a crash that can occur under high memory load
+
+* Fixes a bug that selects wrong worker when using round-robin assignment
+
+* Fixes savepoint rollback after multi-shard modify/copy failure
+
+* Fixes bad foreign constraint name search
+
+* Fixes a bug that prevents stack size to be adjusted
+
 ### citus v8.2.2 (June 11, 2019) ###
 
 * Fixes a bug in outer joins wrapped in subqueries
