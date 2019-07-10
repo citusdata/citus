@@ -175,6 +175,8 @@ worker_merge_files_and_run_query(PG_FUNCTION_ARGS)
 	int createMergeTableResult = 0;
 	int createIntermediateTableResult = 0;
 	int finished = 0;
+	Oid savedUserId = InvalidOid;
+	int savedSecurityContext = 0;
 	Oid userId = GetUserId();
 
 	CheckCitusVersion(ERROR);
@@ -221,10 +223,16 @@ worker_merge_files_and_run_query(PG_FUNCTION_ARGS)
 							   createMergeTableQuery)));
 	}
 
+	/* need superuser to copy from files */
+	GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
+	SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);
+
 	appendStringInfo(mergeTableName, "%s%s", intermediateTableName->data,
 					 MERGE_TABLE_SUFFIX);
 	CopyTaskFilesFromDirectory(jobSchemaName, mergeTableName, taskDirectoryName,
 							   userId);
+
+	SetUserIdAndSecContext(savedUserId, savedSecurityContext);
 
 	createIntermediateTableResult = SPI_exec(createIntermediateTableQuery, 0);
 	if (createIntermediateTableResult < 0)

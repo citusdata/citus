@@ -56,3 +56,7 @@ s/ERROR:  failed to execute task [0-9]+/ERROR:  failed to execute task X/g
 
 # ignore WAL warnings
 /DEBUG: .+creating and filling new WAL file/d
+
+# normalize file names for partitioned files
+s/(task_[0-9]+\.)[0-9]+/\1xxxx/g
+s/(job_[0-9]+\/task_[0-9]+\/p_[0-9]+\.)[0-9]+/\1xxxx/g
