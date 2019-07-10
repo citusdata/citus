@@ -435,7 +435,7 @@ GROUP BY
 
 SET client_min_messages TO INFO;
 
--- we don't want to see constraint vialotions, so truncate first
+-- we don't want to see constraint violations, so truncate first
 TRUNCATE agg_events;
 -- add a row to first table to make table contents different
 INSERT INTO raw_events_second (user_id, time, value_1, value_2, value_3, value_4) VALUES
@@ -471,7 +471,7 @@ FROM
 ORDER BY
   user_id, value_1_agg;
 
--- we don't want to see constraint vialotions, so truncate first
+-- we don't want to see constraint violations, so truncate first
 SET client_min_messages TO INFO;
 TRUNCATE agg_events;
 SET client_min_messages TO DEBUG2;
@@ -483,7 +483,7 @@ INSERT INTO agg_events (value_1_agg, user_id)
   FROM
     raw_events_first;
 
--- we don't want to see constraint vialotions, so truncate first
+-- we don't want to see constraint violations, so truncate first
 SET client_min_messages TO INFO;
 truncate agg_events;
 SET client_min_messages TO DEBUG2;
@@ -499,7 +499,7 @@ INSERT INTO agg_events (value_1_agg, user_id)
 
 SELECT user_id, value_1_agg FROM agg_events ORDER BY 1,2;
 
--- we don't want to see constraint vialotions, so truncate first
+-- we don't want to see constraint violations, so truncate first
 SET client_min_messages TO INFO;
 truncate agg_events;
 SET client_min_messages TO DEBUG2;

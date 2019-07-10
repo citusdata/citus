@@ -16,6 +16,7 @@ multi_partition_pruning
 multi_subtransactions
 multi_modifying_xacts
 multi_insert_select
+sql_procedure
 
 # the following tests' output are
 # normalized for EXPLAIN outputs
@@ -34,3 +35,4 @@ window_functions
 multi_having_pushdown
 multi_partitioning
 multi_mx_explain
+custom_aggregate_support
