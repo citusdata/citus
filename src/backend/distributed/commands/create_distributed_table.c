@@ -1202,6 +1202,7 @@ CopyLocalDataIntoShards(Oid distributedRelationId)
 	MemoryContext oldContext = NULL;
 	TupleTableSlot *slot = NULL;
 	uint64 rowsCopied = 0;
+	char partitionMethod = '\0';
 
 	/* take an ExclusiveLock to block all operations except SELECT */
 	distributedRelation = heap_open(distributedRelationId, ExclusiveLock);
@@ -1245,10 +1246,13 @@ CopyLocalDataIntoShards(Oid distributedRelationId)
 	econtext = GetPerTupleExprContext(estate);
 	econtext->ecxt_scantuple = slot;
 
+	partitionMethod = PartitionMethod(distributedRelationId);
+
 	copyDest =
 		(DestReceiver *) CreateCitusCopyDestReceiver(distributedRelationId,
 													 columnNameList,
 													 partitionColumnIndex,
+													 partitionMethod,
 													 estate, stopOnFailure,
 													 NULL);
 

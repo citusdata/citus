@@ -212,8 +212,9 @@ ExecuteSelectIntoColocatedIntermediateResults(Oid targetRelationId,
 
 	/* set up a DestReceiver that copies into the intermediate table */
 	copyDest = CreateCitusCopyDestReceiver(targetRelationId, columnNameList,
-										   partitionColumnIndex, executorState,
-										   stopOnFailure, intermediateResultIdPrefix);
+										   partitionColumnIndex, partitionMethod,
+										   executorState, stopOnFailure,
+										   intermediateResultIdPrefix);
 
 	/*
 	 * Make a copy of the query, since ExecuteQueryIntoDestReceiver may scribble on it
@@ -263,8 +264,8 @@ ExecuteSelectIntoRelation(Oid targetRelationId, List *insertTargetList,
 
 	/* set up a DestReceiver that copies into the distributed table */
 	copyDest = CreateCitusCopyDestReceiver(targetRelationId, columnNameList,
-										   partitionColumnIndex, executorState,
-										   stopOnFailure, NULL);
+										   partitionColumnIndex, partitionMethod,
+										   executorState, stopOnFailure, NULL);
 
 	/*
 	 * Make a copy of the query, since ExecuteQueryIntoDestReceiver may scribble on it

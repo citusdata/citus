@@ -73,6 +73,10 @@ typedef struct CitusCopyDestReceiver
 	Oid distributedRelationId;
 	List *columnNameList;
 	int partitionColumnIndex;
+	char partitionMethod;
+
+	/* used only for append partitioned tables */
+	uint64 currentShardId;
 
 	/* distributed table metadata */
 	DistTableCacheEntry *tableMetadata;
@@ -125,6 +129,7 @@ typedef struct CitusCopyDestReceiver
 extern CitusCopyDestReceiver * CreateCitusCopyDestReceiver(Oid relationId,
 														   List *columnNameList,
 														   int partitionColumnIndex,
+														   char partitionMethod,
 														   EState *executorState,
 														   bool stopOnFailure,
 														   char *intermediateResultPrefix);
