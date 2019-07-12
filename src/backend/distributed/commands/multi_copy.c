@@ -2066,6 +2066,7 @@ CitusSendTupleToPlacements(TupleTableSlot *slot, CitusCopyDestReceiver *copyDest
 	ListCell *placementStateCell = NULL;
 	bool cachedShardStateFound = false;
 	bool firstTupleInShard = false;
+	bool capacityDone = false;
 
 	bool stopOnFailure = copyDest->stopOnFailure;
 
@@ -2196,12 +2197,18 @@ CitusSendTupleToPlacements(TupleTableSlot *slot, CitusCopyDestReceiver *copyDest
 		if (copyDest->partitionMethod == DISTRIBUTE_BY_APPEND &&
 			currentPlacementState->bytesCopied > (int64) ShardMaxSize * 1024L)
 		{
-			copyDest->currentShardId = 0;
+			capacityDone = true;
 			ShutdownCopyConnectionState(connectionState, copyDest);
 		}
 	}
 
 	MemoryContextSwitchTo(oldContext);
+
+	if (capacityDone)
+	{
+		copyDest->currentShardId = 0;
+		MasterUpdateShardStatistics(shardState->shardId);
+	}
 
 	copyDest->tuplesSent++;
 
