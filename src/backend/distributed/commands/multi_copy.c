@@ -1899,16 +1899,17 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
 				ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 								errmsg("could not find any shards into which to copy"),
 								errdetail("No shards exist for distributed table \"%s\".",
-										relationName),
-								errhint("Run master_create_worker_shards to create shards "
-										"and try again.")));
+										  relationName),
+								errhint(
+									"Run master_create_worker_shards to create shards "
+									"and try again.")));
 			}
 			else
 			{
 				ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 								errmsg("could not find any shards into which to copy"),
 								errdetail("No shards exist for distributed table \"%s\".",
-										relationName)));
+										  relationName)));
 			}
 		}
 
@@ -1919,17 +1920,17 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
 			ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 							errmsg("could not start copy"),
 							errdetail("Distributed relation \"%s\" has shards "
-									"with missing shardminvalue/shardmaxvalue.",
-									relationName)));
+									  "with missing shardminvalue/shardmaxvalue.",
+									  relationName)));
 		}
 
 		/* prevent concurrent placement changes and non-commutative DML statements */
 		LockShardListMetadata(shardIntervalList, ShareLock);
 
 		/*
-		* Prevent concurrent UPDATE/DELETE on replication factor >1
-		* (see AcquireExecutorMultiShardLocks() at multi_router_executor.c)
-		*/
+		 * Prevent concurrent UPDATE/DELETE on replication factor >1
+		 * (see AcquireExecutorMultiShardLocks() at multi_router_executor.c)
+		 */
 		SerializeNonCommutativeWrites(shardIntervalList, RowExclusiveLock);
 	}
 
