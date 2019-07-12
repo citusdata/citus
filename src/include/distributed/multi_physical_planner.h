@@ -51,13 +51,12 @@ typedef enum CitusRTEKind
 	CITUS_RTE_SUBQUERY = RTE_SUBQUERY,  /* subquery in FROM */
 	CITUS_RTE_JOIN = RTE_JOIN,          /* join */
 	CITUS_RTE_FUNCTION = RTE_FUNCTION,  /* function in FROM */
-#if (PG_VERSION_NUM >= 100000)
 	CITUS_RTE_TABLEFUNC = RTE_TABLEFUNC, /* TableFunc(.., column list) */
-#endif
 	CITUS_RTE_VALUES = RTE_VALUES,      /* VALUES (<exprlist>), (<exprlist>), ... */
 	CITUS_RTE_CTE = RTE_CTE,            /* common table expr (WITH list element) */
-#if (PG_VERSION_NUM >= 100000)
 	CITUS_RTE_NAMEDTUPLESTORE = RTE_NAMEDTUPLESTORE, /* tuplestore, e.g. for triggers */
+#if (PG_VERSION_NUM >= 120000)
+	CITUS_RTE_RESULT = RTE_RESULT,      /* RTE represents an empty FROM clause */
 #endif
 	CITUS_RTE_SHARD,
 	CITUS_RTE_REMOTE_QUERY

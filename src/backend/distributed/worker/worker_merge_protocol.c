@@ -21,6 +21,13 @@
 #include "access/genam.h"
 #endif
 #include "access/htup_details.h"
+#if PG_VERSION_NUM >= 120000
+#include "access/table.h"
+#define heap_beginscan_catalog table_beginscan_catalog
+#define TableHeapScanDesc TableScanDesc
+#else
+#define TableHeapScanDesc HeapScanDesc
+#endif
 #include "access/xact.h"
 #include "catalog/dependency.h"
 #include "catalog/pg_namespace.h"
@@ -265,7 +272,7 @@ Datum
 worker_cleanup_job_schema_cache(PG_FUNCTION_ARGS)
 {
 	Relation pgNamespace = NULL;
-	HeapScanDesc scanDescriptor = NULL;
+	TableHeapScanDesc scanDescriptor = NULL;
 	ScanKey scanKey = NULL;
 	int scanKeyCount = 0;
 	HeapTuple heapTuple = NULL;
