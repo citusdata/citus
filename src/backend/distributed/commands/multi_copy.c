@@ -172,6 +172,8 @@ struct CopyPlacementState
 
 	/* List node for CopyConnectionState->bufferedPlacementList. */
 	dlist_node bufferedPlacementNode;
+
+	uint64 bytesCopied;
 };
 
 struct CopyShardState
@@ -181,8 +183,6 @@ struct CopyShardState
 
 	/* List of CopyPlacementStates for all active placements of the shard. */
 	List *placementStateList;
-
-	uint64 bytesCopied;
 };
 
 
@@ -1888,47 +1888,50 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
 	copyDest->distributedRelation = distributedRelation;
 	copyDest->tupleDescriptor = inputTupleDescriptor;
 
-	/* load the list of shards and verify that we have shards to copy into */
-	shardIntervalList = LoadShardIntervalList(tableId);
-	if (shardIntervalList == NIL)
+	if (partitionMethod != DISTRIBUTE_BY_APPEND)
 	{
-		if (partitionMethod == DISTRIBUTE_BY_HASH)
+		/* load the list of shards and verify that we have shards to copy into */
+		shardIntervalList = LoadShardIntervalList(tableId);
+		if (shardIntervalList == NIL)
+		{
+			if (partitionMethod == DISTRIBUTE_BY_HASH)
+			{
+				ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+								errmsg("could not find any shards into which to copy"),
+								errdetail("No shards exist for distributed table \"%s\".",
+										relationName),
+								errhint("Run master_create_worker_shards to create shards "
+										"and try again.")));
+			}
+			else
+			{
+				ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+								errmsg("could not find any shards into which to copy"),
+								errdetail("No shards exist for distributed table \"%s\".",
+										relationName)));
+			}
+		}
+
+		/* error if any shard missing min/max values */
+		if (partitionMethod != DISTRIBUTE_BY_NONE &&
+			cacheEntry->hasUninitializedShardInterval)
 		{
 			ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-							errmsg("could not find any shards into which to copy"),
-							errdetail("No shards exist for distributed table \"%s\".",
-									  relationName),
-							errhint("Run master_create_worker_shards to create shards "
-									"and try again.")));
+							errmsg("could not start copy"),
+							errdetail("Distributed relation \"%s\" has shards "
+									"with missing shardminvalue/shardmaxvalue.",
+									relationName)));
 		}
-		else
-		{
-			ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-							errmsg("could not find any shards into which to copy"),
-							errdetail("No shards exist for distributed table \"%s\".",
-									  relationName)));
-		}
+
+		/* prevent concurrent placement changes and non-commutative DML statements */
+		LockShardListMetadata(shardIntervalList, ShareLock);
+
+		/*
+		* Prevent concurrent UPDATE/DELETE on replication factor >1
+		* (see AcquireExecutorMultiShardLocks() at multi_router_executor.c)
+		*/
+		SerializeNonCommutativeWrites(shardIntervalList, RowExclusiveLock);
 	}
-
-	/* error if any shard missing min/max values */
-	if (partitionMethod != DISTRIBUTE_BY_NONE &&
-		cacheEntry->hasUninitializedShardInterval)
-	{
-		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-						errmsg("could not start copy"),
-						errdetail("Distributed relation \"%s\" has shards "
-								  "with missing shardminvalue/shardmaxvalue.",
-								  relationName)));
-	}
-
-	/* prevent concurrent placement changes and non-commutative DML statements */
-	LockShardListMetadata(shardIntervalList, ShareLock);
-
-	/*
-	 * Prevent concurrent UPDATE/DELETE on replication factor >1
-	 * (see AcquireExecutorMultiShardLocks() at multi_router_executor.c)
-	 */
-	SerializeNonCommutativeWrites(shardIntervalList, RowExclusiveLock);
 
 	/* keep the table metadata to avoid looking it up for every tuple */
 	copyDest->tableMetadata = cacheEntry;
@@ -2069,7 +2072,6 @@ CitusSendTupleToPlacements(TupleTableSlot *slot, CitusCopyDestReceiver *copyDest
 	bool *columnNulls = NULL;
 
 	int64 shardId = 0;
-	bool firstPlacement = true;
 
 	EState *executorState = copyDest->executorState;
 	MemoryContext executorTupleContext = GetPerTupleMemoryContext(executorState);
@@ -2188,23 +2190,19 @@ CitusSendTupleToPlacements(TupleTableSlot *slot, CitusCopyDestReceiver *copyDest
 									connectionState->connection);
 		}
 
-		if (firstPlacement)
+		currentPlacementState->bytesCopied += copyOutState->fe_msgbuf->len;
+
+		if (copyDest->partitionMethod == DISTRIBUTE_BY_APPEND &&
+			currentPlacementState->bytesCopied > (int64) ShardMaxSize * 1024L)
 		{
-			shardState->bytesCopied += copyOutState->fe_msgbuf->len;
-			firstPlacement = false;
+			copyDest->currentShardId = 0;
+			ShutdownCopyConnectionState(connectionState, copyDest);
 		}
 	}
 
 	MemoryContextSwitchTo(oldContext);
 
 	copyDest->tuplesSent++;
-
-	if (copyDest->partitionMethod == DISTRIBUTE_BY_APPEND &&
-		shardState->bytesCopied > (int64) ShardMaxSize * 1024L)
-	{
-		MasterUpdateShardStatistics(shardState->shardId);
-		copyDest->currentShardId = 0;
-	}
 
 	/*
 	 * Release per tuple memory allocated in this function. If we're writing
