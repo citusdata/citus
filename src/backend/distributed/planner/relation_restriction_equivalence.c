@@ -19,7 +19,7 @@
 #include "nodes/nodeFuncs.h"
 #include "nodes/pg_list.h"
 #include "nodes/primnodes.h"
-#include "nodes/relation.h"
+#include "compat/nodes/relation.h"
 #include "parser/parsetree.h"
 #include "optimizer/pathnode.h"
 

@@ -15,6 +15,9 @@
 #include "libpq-fe.h"
 #include "miscadmin.h"
 
+#if PG_VERSION_NUM >= 120000
+#include "access/genam.h"
+#endif
 #include "access/htup_details.h"
 #include "access/sysattr.h"
 #include "access/xact.h"
@@ -53,7 +56,6 @@
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
 #include "utils/syscache.h"
-#include "utils/tqual.h"
 
 
 /* Local functions forward declarations */

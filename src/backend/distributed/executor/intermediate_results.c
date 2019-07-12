@@ -27,6 +27,7 @@
 #include "distributed/remote_commands.h"
 #include "distributed/transmit.h"
 #include "distributed/transaction_identifier.h"
+#include "distributed/version_compat.h"
 #include "distributed/worker_protocol.h"
 #include "nodes/makefuncs.h"
 #include "nodes/parsenodes.h"
@@ -413,7 +414,8 @@ RemoteFileDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
 static void
 WriteToLocalFile(StringInfo copyData, File fileDesc)
 {
-	int bytesWritten = FileWrite(fileDesc, copyData->data, copyData->len, PG_WAIT_IO);
+	int bytesWritten = FileWriteCompat(fileDesc, copyData->data, copyData->len, 0,
+									   PG_WAIT_IO);
 	if (bytesWritten < 0)
 	{
 		ereport(ERROR, (errcode_for_file_access(),

@@ -15,6 +15,7 @@
 #include "postgres.h"
 #include "c.h"
 
+#include <errno.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -755,8 +756,10 @@ AppendShardIdToName(char **name, uint64 shardId)
 	neededBytes = snprintf((*name), NAMEDATALEN, "%s", extendedName);
 	if (neededBytes < 0)
 	{
+		char *strerrno = strerror(errno);
+
 		ereport(ERROR, (errcode(ERRCODE_OUT_OF_MEMORY),
-						errmsg("out of memory: %s", strerror(errno))));
+						errmsg("out of memory: %s", strerrno)));
 	}
 	else if (neededBytes >= NAMEDATALEN)
 	{

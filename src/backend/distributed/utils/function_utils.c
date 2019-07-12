@@ -11,11 +11,10 @@
 
 #include "catalog/namespace.h"
 #include "distributed/function_utils.h"
+#include "distributed/version_compat.h"
 #include "executor/executor.h"
 #include "utils/builtins.h"
-#if (PG_VERSION_NUM >= 100000)
 #include "utils/regproc.h"
-#endif
 
 /*
  * FunctionOid searches for a function that has the given name and the given
@@ -83,7 +82,7 @@ FunctionOidExtended(const char *schemaName, const char *functionName, int argume
 ReturnSetInfo *
 FunctionCallGetTupleStore1(PGFunction function, Oid functionId, Datum argument)
 {
-	FunctionCallInfoData fcinfo;
+	LOCAL_FCINFO(fcinfo, 1);
 	FmgrInfo flinfo;
 	ReturnSetInfo *rsinfo = makeNode(ReturnSetInfo);
 	EState *estate = CreateExecutorState();
@@ -91,12 +90,11 @@ FunctionCallGetTupleStore1(PGFunction function, Oid functionId, Datum argument)
 	rsinfo->allowedModes = SFRM_Materialize;
 
 	fmgr_info(functionId, &flinfo);
-	InitFunctionCallInfoData(fcinfo, &flinfo, 1, InvalidOid, NULL, (Node *) rsinfo);
+	InitFunctionCallInfoData(*fcinfo, &flinfo, 1, InvalidOid, NULL, (Node *) rsinfo);
 
-	fcinfo.arg[0] = argument;
-	fcinfo.argnull[0] = false;
+	fcSetArg(fcinfo, 0, argument);
 
-	(*function)(&fcinfo);
+	(*function)(fcinfo);
 
 	return rsinfo;
 }

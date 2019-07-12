@@ -22,9 +22,162 @@
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
 
+#if PG_VERSION_NUM >= 120000
+
+#include "commands/vacuum.h"
+#include "commands/defrem.h"
+
+/*
+ * This is mostly ExecVacuum from Postgres's commands/vacuum.c
+ */
+
+/*
+ * A wrapper function of defGetBoolean().
+ *
+ * This function returns VACOPT_TERNARY_ENABLED and VACOPT_TERNARY_DISABLED
+ * instead of true and false.
+ */
+static VacOptTernaryValue
+get_vacopt_ternary_value(DefElem *def)
+{
+	return defGetBoolean(def) ? VACOPT_TERNARY_ENABLED : VACOPT_TERNARY_DISABLED;
+}
+
+
+static int
+VacuumStmt_options(VacuumStmt *vacstmt)
+{
+	VacuumParams params;
+	bool verbose = false;
+	bool skip_locked = false;
+	bool analyze = false;
+	bool freeze = false;
+	bool full = false;
+	bool disable_page_skipping = false;
+	ListCell *lc;
+
+	/* Set default value */
+	params.index_cleanup = VACOPT_TERNARY_DEFAULT;
+	params.truncate = VACOPT_TERNARY_DEFAULT;
+
+	/* Parse options list */
+	foreach(lc, vacstmt->options)
+	{
+		DefElem *opt = (DefElem *) lfirst(lc);
+
+		/* Parse common options for VACUUM and ANALYZE */
+		if (strcmp(opt->defname, "verbose") == 0)
+		{
+			verbose = defGetBoolean(opt);
+		}
+		else if (strcmp(opt->defname, "skip_locked") == 0)
+		{
+			skip_locked = defGetBoolean(opt);
+		}
+
+		/* Parse options available on VACUUM */
+		else if (strcmp(opt->defname, "analyze") == 0)
+		{
+			analyze = defGetBoolean(opt);
+		}
+		else if (strcmp(opt->defname, "freeze") == 0)
+		{
+			freeze = defGetBoolean(opt);
+		}
+		else if (strcmp(opt->defname, "full") == 0)
+		{
+			full = defGetBoolean(opt);
+		}
+		else if (strcmp(opt->defname, "disable_page_skipping") == 0)
+		{
+			disable_page_skipping = defGetBoolean(opt);
+		}
+		else if (strcmp(opt->defname, "index_cleanup") == 0)
+		{
+			params.index_cleanup = get_vacopt_ternary_value(opt);
+		}
+		else if (strcmp(opt->defname, "truncate") == 0)
+		{
+			params.truncate = get_vacopt_ternary_value(opt);
+		}
+	}
+
+	/* Set vacuum options */
+	params.options =
+		(vacstmt->is_vacuumcmd ? VACOPT_VACUUM : VACOPT_ANALYZE) |
+		(verbose ? VACOPT_VERBOSE : 0) |
+		(skip_locked ? VACOPT_SKIP_LOCKED : 0) |
+		(analyze ? VACOPT_ANALYZE : 0) |
+		(freeze ? VACOPT_FREEZE : 0) |
+		(full ? VACOPT_FULL : 0) |
+		(disable_page_skipping ? VACOPT_DISABLE_PAGE_SKIPPING : 0);
+
+	/* sanity checks on options */
+	Assert(params.options & (VACOPT_VACUUM | VACOPT_ANALYZE));
+	Assert((params.options & VACOPT_VACUUM) ||
+		   !(params.options & (VACOPT_FULL | VACOPT_FREEZE)));
+	Assert(!(params.options & VACOPT_SKIPTOAST));
+
+	/*
+	 * Make sure VACOPT_ANALYZE is specified if any column lists are present.
+	 */
+	if (!(params.options & VACOPT_ANALYZE))
+	{
+		foreach(lc, vacstmt->rels)
+		{
+			VacuumRelation *vrel = lfirst_node(VacuumRelation, lc);
+
+			if (vrel->va_cols != NIL)
+			{
+				ereport(ERROR,
+						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						 errmsg(
+							 "ANALYZE option must be specified when a column list is provided")));
+			}
+		}
+	}
+
+	/*
+	 * All freeze ages are zero if the FREEZE option is given; otherwise pass
+	 * them as -1 which means to use the default values.
+	 */
+	if (params.options & VACOPT_FREEZE)
+	{
+		params.freeze_min_age = 0;
+		params.freeze_table_age = 0;
+		params.multixact_freeze_min_age = 0;
+		params.multixact_freeze_table_age = 0;
+	}
+	else
+	{
+		params.freeze_min_age = -1;
+		params.freeze_table_age = -1;
+		params.multixact_freeze_min_age = -1;
+		params.multixact_freeze_table_age = -1;
+	}
+
+	/* user-invoked vacuum is never "for wraparound" */
+	params.is_wraparound = false;
+
+	/* user-invoked vacuum never uses this parameter */
+	params.log_min_duration = -1;
+
+	return params.options;
+}
+
+
+#else
+static int
+VacuumStmt_options(VacuumStmt *vacuumStmt)
+{
+	return vacuumStmt->options;
+}
+
+
+#endif
 
 /* Local functions forward declarations for processing distributed table commands */
-static bool IsDistributedVacuumStmt(VacuumStmt *vacuumStmt, List *vacuumRelationIdList);
+static bool IsDistributedVacuumStmt(int vacuumOptions, List *vacuumRelationIdList);
 static List * VacuumTaskList(Oid relationId, int vacuumOptions, List *vacuumColumnList);
 static StringInfo DeparseVacuumStmtPrefix(int vacuumFlags);
 static char * DeparseVacuumColumnNames(List *columnNameList);
@@ -49,7 +202,8 @@ ProcessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand)
 	ListCell *vacuumRelationCell = NULL;
 	List *relationIdList = NIL;
 	ListCell *relationIdCell = NULL;
-	LOCKMODE lockMode = (vacuumStmt->options & VACOPT_FULL) ? AccessExclusiveLock :
+	int vacuumOptions = VacuumStmt_options(vacuumStmt);
+	LOCKMODE lockMode = (vacuumOptions & VACOPT_FULL) ? AccessExclusiveLock :
 						ShareUpdateExclusiveLock;
 	int executedVacuumCount = 0;
 
@@ -60,7 +214,7 @@ ProcessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand)
 		relationIdList = lappend_oid(relationIdList, relationId);
 	}
 
-	distributedVacuumStmt = IsDistributedVacuumStmt(vacuumStmt, relationIdList);
+	distributedVacuumStmt = IsDistributedVacuumStmt(vacuumOptions, relationIdList);
 	if (!distributedVacuumStmt)
 	{
 		return;
@@ -82,7 +236,7 @@ ProcessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand)
 			 * commands can run inside a transaction block. Notice that we do this
 			 * once even if there are multiple distributed tables to be vacuumed.
 			 */
-			if (executedVacuumCount == 0 && (vacuumStmt->options & VACOPT_VACUUM) != 0)
+			if (executedVacuumCount == 0 && (vacuumOptions & VACOPT_VACUUM) != 0)
 			{
 				/* save old commit protocol to restore at xact end */
 				Assert(SavedMultiShardCommitProtocol == COMMIT_PROTOCOL_BARE);
@@ -91,7 +245,7 @@ ProcessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand)
 			}
 
 			vacuumColumnList = VacuumColumnList(vacuumStmt, relationIndex);
-			taskList = VacuumTaskList(relationId, vacuumStmt->options, vacuumColumnList);
+			taskList = VacuumTaskList(relationId, vacuumOptions, vacuumColumnList);
 
 			/* use adaptive executor when enabled */
 			ExecuteUtilityTaskListWithoutResults(taskList, targetPoolSize, false);
@@ -111,9 +265,9 @@ ProcessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand)
  * false otherwise.
  */
 static bool
-IsDistributedVacuumStmt(VacuumStmt *vacuumStmt, List *vacuumRelationIdList)
+IsDistributedVacuumStmt(int vacuumOptions, List *vacuumRelationIdList)
 {
-	const char *stmtName = (vacuumStmt->options & VACOPT_VACUUM) ? "VACUUM" : "ANALYZE";
+	const char *stmtName = (vacuumOptions & VACOPT_VACUUM) ? "VACUUM" : "ANALYZE";
 	bool distributeStmt = false;
 	ListCell *relationIdCell = NULL;
 	int distributedRelationCount = 0;

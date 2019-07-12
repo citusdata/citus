@@ -11,7 +11,7 @@
 #define DISTRIBUTED_PLANNER_H
 
 #include "nodes/plannodes.h"
-#include "nodes/relation.h"
+#include "compat/nodes/relation.h"
 
 #include "distributed/citus_nodes.h"
 #include "distributed/errormessage.h"

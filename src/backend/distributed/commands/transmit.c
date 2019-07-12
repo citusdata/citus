@@ -46,6 +46,7 @@ RedirectCopyDataToRegularFile(const char *filename)
 	File fileDesc = -1;
 	const int fileFlags = (O_APPEND | O_CREAT | O_RDWR | O_TRUNC | PG_BINARY);
 	const int fileMode = (S_IRUSR | S_IWUSR);
+	off_t offset = 0;
 
 	fileDesc = FileOpenForTransmit(filename, fileFlags, fileMode);
 
@@ -57,14 +58,16 @@ RedirectCopyDataToRegularFile(const char *filename)
 		/* if received data has contents, append to regular file */
 		if (copyData->len > 0)
 		{
-			int appended = FileWrite(fileDesc, copyData->data, copyData->len,
-									 PG_WAIT_IO);
+			int appended = FileWriteCompat(fileDesc, copyData->data, copyData->len,
+										   offset, PG_WAIT_IO);
 
 			if (appended != copyData->len)
 			{
 				ereport(ERROR, (errcode_for_file_access(),
 								errmsg("could not append to received file: %m")));
 			}
+
+			offset += appended;
 		}
 
 		resetStringInfo(copyData);
@@ -90,6 +93,7 @@ SendRegularFile(const char *filename)
 	const uint32 fileBufferSize = 32768; /* 32 KB */
 	const int fileFlags = (O_RDONLY | PG_BINARY);
 	const int fileMode = 0;
+	off_t offset = 0;
 
 	/* we currently do not check if the caller has permissions for this file */
 	fileDesc = FileOpenForTransmit(filename, fileFlags, fileMode);
@@ -103,7 +107,8 @@ SendRegularFile(const char *filename)
 
 	SendCopyOutStart();
 
-	readBytes = FileRead(fileDesc, fileBuffer->data, fileBufferSize, PG_WAIT_IO);
+	readBytes = FileReadCompat(fileDesc, fileBuffer->data, fileBufferSize, offset,
+							   PG_WAIT_IO);
 	while (readBytes > 0)
 	{
 		fileBuffer->len = readBytes;
@@ -111,8 +116,9 @@ SendRegularFile(const char *filename)
 		SendCopyData(fileBuffer);
 
 		resetStringInfo(fileBuffer);
-		readBytes = FileRead(fileDesc, fileBuffer->data, fileBufferSize,
-							 PG_WAIT_IO);
+		readBytes = FileReadCompat(fileDesc, fileBuffer->data, fileBufferSize,
+								   offset, PG_WAIT_IO);
+		offset += readBytes;
 	}
 
 	SendCopyDone();

@@ -24,7 +24,7 @@
 #include "distributed/pg_dist_partition.h"
 #include "distributed/worker_protocol.h"
 #include "lib/stringinfo.h"
-#include "optimizer/var.h"
+#include "compat/optimizer/var.h"
 #include "nodes/nodeFuncs.h"
 #include "utils/builtins.h"
 #include "utils/datum.h"

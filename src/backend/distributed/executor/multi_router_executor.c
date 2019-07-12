@@ -704,7 +704,7 @@ SortTupleStore(CitusScanState *scanState)
 	/* iterate over all the sorted tuples, add them to original tuplestore */
 	while (true)
 	{
-		TupleTableSlot *newSlot = MakeSingleTupleTableSlot(tupleDescriptor);
+		TupleTableSlot *newSlot = MakeSingleTupleTableSlotCompat(tupleDescriptor);
 		bool found = tuplesort_gettupleslot(tuplesortstate, true, false, newSlot, NULL);
 
 		if (!found)

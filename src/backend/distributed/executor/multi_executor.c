@@ -138,7 +138,9 @@ CitusExecutorRun(QueryDesc *queryDesc,
 		EState *estate = queryDesc->estate;
 
 		estate->es_processed = 0;
+#if PG_VERSION_NUM < 120000
 		estate->es_lastoid = InvalidOid;
+#endif
 
 		/* start and shutdown tuple receiver to simulate empty result */
 		dest->rStartup(queryDesc->dest, CMD_SELECT, queryDesc->tupDesc);
@@ -351,8 +353,8 @@ ReadFileIntoTupleStore(char *fileName, char *copyFormat, TupleDesc tupleDescript
 		ResetPerTupleExprContext(executorState);
 		oldContext = MemoryContextSwitchTo(executorTupleContext);
 
-		nextRowFound = NextCopyFrom(copyState, executorExpressionContext,
-									columnValues, columnNulls, NULL);
+		nextRowFound = NextCopyFromCompat(copyState, executorExpressionContext,
+										  columnValues, columnNulls);
 		if (!nextRowFound)
 		{
 			MemoryContextSwitchTo(oldContext);

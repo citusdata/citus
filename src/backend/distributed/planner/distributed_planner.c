@@ -35,7 +35,11 @@
 #include "nodes/nodeFuncs.h"
 #include "parser/parsetree.h"
 #include "parser/parse_type.h"
+#if PG_VERSION_NUM >= 120000
+#include "optimizer/optimizer.h"
+#else
 #include "optimizer/cost.h"
+#endif
 #include "optimizer/pathnode.h"
 #include "optimizer/planner.h"
 #include "utils/builtins.h"

@@ -15,7 +15,7 @@
 #include "distributed/relation_restriction_equivalence.h"
 #include "nodes/pg_list.h"
 #include "nodes/primnodes.h"
-#include "nodes/relation.h"
+#include "compat/nodes/relation.h"
 
 
 extern List * GenerateSubplansForSubqueriesAndCTEs(uint64 planId, Query *originalQuery,

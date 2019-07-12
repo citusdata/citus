@@ -22,7 +22,7 @@
 #include "nodes/nodes.h"
 #include "nodes/pg_list.h"
 #include "nodes/plannodes.h"
-#include "nodes/relation.h"
+#include "compat/nodes/relation.h"
 #include "optimizer/pathnode.h"
 #include "optimizer/planmain.h"
 #include "optimizer/restrictinfo.h"

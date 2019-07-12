@@ -92,6 +92,7 @@ typedef struct HashPartitionContext
 typedef struct FileOutputStream
 {
 	File fileDescriptor;
+	off_t offset;
 	StringInfo fileBuffer;
 	StringInfo filePath;
 } FileOutputStream;

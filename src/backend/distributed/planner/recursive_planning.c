@@ -78,7 +78,7 @@
 #include "nodes/nodes.h"
 #include "nodes/pg_list.h"
 #include "nodes/primnodes.h"
-#include "nodes/relation.h"
+#include "compat/nodes/relation.h"
 #include "utils/builtins.h"
 #include "utils/guc.h"
 

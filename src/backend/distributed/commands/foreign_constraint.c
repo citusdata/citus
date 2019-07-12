@@ -15,6 +15,9 @@
 #include "access/htup_details.h"
 #include "catalog/namespace.h"
 #include "catalog/pg_constraint.h"
+#if (PG_VERSION_NUM >= 120000)
+#include "access/genam.h"
+#endif
 #if (PG_VERSION_NUM < 110000)
 #include "catalog/pg_constraint_fn.h"
 #endif

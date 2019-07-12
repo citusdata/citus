@@ -21,6 +21,7 @@
 #include "distributed/multi_physical_planner.h"
 #include "distributed/distributed_planner.h"
 #include "distributed/multi_server_executor.h"
+#include "distributed/version_compat.h"
 #include "distributed/worker_protocol.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
@@ -29,7 +30,7 @@
 #include "optimizer/cost.h"
 #include "optimizer/planmain.h"
 #include "optimizer/tlist.h"
-#include "optimizer/var.h"
+#include "compat/optimizer/var.h"
 #include "utils/builtins.h"
 #include "utils/guc.h"
 #include "utils/memutils.h"
@@ -356,10 +357,12 @@ BuildAggregatePlan(Query *masterQuery, Plan *subPlan)
 	}
 
 	/* finally create the plan */
-	aggregatePlan = make_agg(aggregateTargetList, (List *) havingQual, aggregateStrategy,
-							 AGGSPLIT_SIMPLE, groupColumnCount, groupColumnIdArray,
-							 groupColumnOpArray, NIL, NIL,
-							 rowEstimate, subPlan);
+	/* TODO no nulls */
+	aggregatePlan = make_aggCompat(aggregateTargetList, (List *) havingQual,
+								   aggregateStrategy,
+								   AGGSPLIT_SIMPLE, groupColumnCount, groupColumnIdArray,
+								   groupColumnOpArray, NULL, NIL, NIL,
+								   rowEstimate, subPlan);
 
 	/* just for reproducible costs between different PostgreSQL versions */
 	aggregatePlan->plan.startup_cost = 0;
@@ -529,11 +532,13 @@ BuildDistinctPlan(Query *masterQuery, Plan *subPlan)
 		Oid *distinctColumnOpArray = extract_grouping_ops(distinctClauseList);
 		uint32 distinctClauseCount = list_length(distinctClauseList);
 
-		distinctPlan = (Plan *) make_agg(targetList, NIL, AGG_HASHED,
-										 AGGSPLIT_SIMPLE, distinctClauseCount,
-										 distinctColumnIdArray,
-										 distinctColumnOpArray, NIL, NIL,
-										 rowEstimate, subPlan);
+		/* TODO no nulls */
+		distinctPlan = (Plan *) make_aggCompat(targetList, NIL, AGG_HASHED,
+											   AGGSPLIT_SIMPLE, distinctClauseCount,
+											   distinctColumnIdArray,
+											   distinctColumnOpArray,
+											   NULL, NIL, NIL,
+											   rowEstimate, subPlan);
 	}
 	else
 	{

@@ -16,6 +16,10 @@
 #include "catalog/namespace.h"
 #include "nodes/parsenodes.h"
 
+#if (PG_VERSION_NUM >= 120000)
+#include "optimizer/optimizer.h"
+#endif
+
 #if (PG_VERSION_NUM >= 100000 && PG_VERSION_NUM < 110000)
 
 #include "access/hash.h"
@@ -240,5 +244,67 @@ RangeVarGetRelidInternal(const RangeVar *relation, LOCKMODE lockmode, uint32 fla
 
 #endif
 
+#if PG_VERSION_NUM >= 120000
+
+#define NextCopyLastParam
+#define MakeSingleTupleTableSlotCompat(tupleDesc) \
+	MakeSingleTupleTableSlot(tupleDesc, &TTSOpsHeapTuple)
+#define AllocSetContextCreateExtended AllocSetContextCreateInternal
+#define ExecStoreTuple(tuple, slot, buffer, shouldFree) \
+	ExecStoreHeapTuple(tuple, slot, shouldFree)
+#define NextCopyFromCompat NextCopyFrom
+#define QTW_EXAMINE_RTES QTW_EXAMINE_RTES_BEFORE
+#define ArrayRef SubscriptingRef
+#define T_ArrayRef T_SubscriptingRef
+#define or_clause is_orclause
+#define GetSysCacheOid1Compat GetSysCacheOid1
+#define GetSysCacheOid2Compat GetSysCacheOid2
+#define GetSysCacheOid3Compat GetSysCacheOid3
+#define GetSysCacheOid4Compat GetSysCacheOid4
+#define make_aggCompat make_agg
+#define FileReadCompat FileRead
+#define FileWriteCompat FileWrite
+
+#define fcSetArg(fc, n, argval) \
+	((fc)->args[n].isnull = false, (fc)->args[n].value = (argval))
+#define fcSetArgNull(fc, n) \
+	((fc)->args[n].isnull = true, (fc)->args[n].value = (Datum) 0)
+#define InitFunctionCallInfoDataCompat InitFunctionCallInfoData
+
+#else /* pre PG12 */
+#define MakeSingleTupleTableSlotCompat MakeSingleTupleTableSlot
+#define NextCopyFromCompat(cstate, econtext, values, nulls) \
+	NextCopyFrom(cstate, econtext, values, nulls, NULL)
+#define GetSysCacheOid1Compat(cacheId, oidcol, key1) \
+	GetSysCacheOid1(cacheId, key1)
+#define GetSysCacheOid2Compat(cacheId, oidcol, key1, key2) \
+	GetSysCacheOid2(cacheId, key1, key2)
+#define GetSysCacheOid3Compat(cacheId, oidcol, key1, key2, key3) \
+	GetSysCacheOid3(cacheId, key1, key2, key3)
+#define GetSysCacheOid4Compat(cacheId, oidcol, key1, key2, key3, key4) \
+	GetSysCacheOid4(cacheId, key1, key2, key3, key4)
+#define LOCAL_FCINFO(name, nargs) \
+	FunctionCallInfoData name ## data; \
+	FunctionCallInfoData *name = &name ## data
+#define make_aggCompat(tlist, qual, aggstrategy, aggsplit, numGroupCols, grpColIdx, \
+					   grpOperators, grpCollations, groupingSets, chain, dNumGrous, \
+					   lefttree) \
+	make_agg(tlist, qual, aggstrategy, aggsplit, numGroupCols, grpColIdx, grpOperators, \
+			 groupingSets, chain, dNumGrous, lefttree)
+
+
+#define fcSetArg(fc, n, value) \
+	(((fc)->argnull[n] = false), ((fc)->arg[n] = (value)))
+#define fcSetArgNull(fc, n) \
+	(((fc)->argnull[n] = true), ((fc)->arg[n] = (Datum) 0))
+#define InitFunctionCallInfoDataCompat(fc, fn, nargs, collation, ctx, result) \
+	InitFunctionCallInfoData(fc, fn, nargs, collation, ctx, result)
+
+#define FileReadCompat(file, buffer, amount, offset, wait_event_info) \
+	FileRead(file, buffer, amount, wait_event_info)
+#define FileWriteCompat(file, buffer, amount, offset, wait_event_info) \
+	FileWrite(file, buffer, amount, wait_event_info)
+
+#endif /* PG12 */
 
 #endif   /* VERSION_COMPAT_H */

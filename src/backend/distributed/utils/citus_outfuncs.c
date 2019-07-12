@@ -30,7 +30,7 @@
 #include "distributed/master_metadata_utility.h"
 #include "lib/stringinfo.h"
 #include "nodes/plannodes.h"
-#include "nodes/relation.h"
+#include "compat/nodes/relation.h"
 #include "utils/datum.h"
 
 

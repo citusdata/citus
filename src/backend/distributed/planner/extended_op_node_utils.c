@@ -14,7 +14,7 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_logical_optimizer.h"
 #include "distributed/pg_dist_partition.h"
-#include "optimizer/var.h"
+#include "compat/optimizer/var.h"
 #include "nodes/nodeFuncs.h"
 #include "nodes/pg_list.h"
 
