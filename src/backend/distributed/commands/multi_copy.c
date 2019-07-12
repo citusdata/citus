@@ -2066,7 +2066,6 @@ CitusSendTupleToPlacements(TupleTableSlot *slot, CitusCopyDestReceiver *copyDest
 	ListCell *placementStateCell = NULL;
 	bool cachedShardStateFound = false;
 	bool firstTupleInShard = false;
-	bool capacityDone = false;
 
 	bool stopOnFailure = copyDest->stopOnFailure;
 
@@ -2091,8 +2090,12 @@ CitusSendTupleToPlacements(TupleTableSlot *slot, CitusCopyDestReceiver *copyDest
 			char *relationName = copyStatement->relation->relname;
 			char *schemaName = copyStatement->relation->schemaname;
 			char *qualifiedName = quote_qualified_identifier(schemaName, relationName);
+			uint64 newShardId = MasterCreateEmptyShard(qualifiedName);
+			uint64 *newShardIdPointer = palloc0(sizeof(uint64));
+			*newShardIdPointer = newShardId;
 
-			copyDest->currentShardId = MasterCreateEmptyShard(qualifiedName);
+			copyDest->currentShardId = newShardId;
+			copyDest->shardsCreated = lappend(copyDest->shardsCreated, newShardIdPointer);
 		}
 
 		shardId = copyDest->currentShardId;
@@ -2197,18 +2200,12 @@ CitusSendTupleToPlacements(TupleTableSlot *slot, CitusCopyDestReceiver *copyDest
 		if (copyDest->partitionMethod == DISTRIBUTE_BY_APPEND &&
 			currentPlacementState->bytesCopied > (int64) ShardMaxSize * 1024L)
 		{
-			capacityDone = true;
+			copyDest->currentShardId = 0;
 			ShutdownCopyConnectionState(connectionState, copyDest);
 		}
 	}
 
 	MemoryContextSwitchTo(oldContext);
-
-	if (capacityDone)
-	{
-		copyDest->currentShardId = 0;
-		MasterUpdateShardStatistics(shardState->shardId);
-	}
 
 	copyDest->tuplesSent++;
 
@@ -2299,6 +2296,7 @@ CitusCopyDestReceiverShutdown(DestReceiver *destReceiver)
 	HTAB *connectionStateHash = copyDest->connectionStateHash;
 	List *connectionStateList = NIL;
 	ListCell *connectionStateCell = NULL;
+	ListCell *shardIdCell = NULL;
 	Relation distributedRelation = copyDest->distributedRelation;
 
 	connectionStateList = ConnectionStateList(connectionStateHash);
@@ -2311,6 +2309,14 @@ CitusCopyDestReceiverShutdown(DestReceiver *destReceiver)
 				(CopyConnectionState *) lfirst(connectionStateCell);
 
 			ShutdownCopyConnectionState(connectionState, copyDest);
+		}
+
+		foreach(shardIdCell, copyDest->shardsCreated)
+		{
+			uint64 *shardIdPointer = lfirst(shardIdCell);
+			uint64 shardId = *shardIdPointer;
+
+			MasterUpdateShardStatistics(shardId);
 		}
 	}
 	PG_CATCH();

@@ -77,6 +77,7 @@ typedef struct CitusCopyDestReceiver
 
 	/* used only for append partitioned tables */
 	uint64 currentShardId;
+	List *shardsCreated;
 
 	/* distributed table metadata */
 	DistTableCacheEntry *tableMetadata;
