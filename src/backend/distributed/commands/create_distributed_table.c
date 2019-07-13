@@ -1237,7 +1237,7 @@ CopyLocalDataIntoShards(Oid distributedRelationId)
 
 	/* get the table columns */
 	tupleDescriptor = RelationGetDescr(distributedRelation);
-	slot = MakeSingleTupleTableSlotCompat(tupleDescriptor);
+	slot = MakeSingleTupleTableSlotCompat(tupleDescriptor, &TTSOpsHeapTuple);
 	columnNameList = TupleDescColumnNameList(tupleDescriptor);
 
 	/* determine the partition column in the tuple descriptor */

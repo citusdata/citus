@@ -1336,7 +1336,7 @@ static bool
 IsRecurringRangeTable(List *rangeTable, RecurringTuplesType *recurType)
 {
 	return range_table_walker(rangeTable, HasRecurringTuples, recurType,
-							  QTW_EXAMINE_RTES);
+							  QTW_EXAMINE_RTES_BEFORE);
 }
 
 
@@ -1411,7 +1411,7 @@ HasRecurringTuples(Node *node, RecurringTuplesType *recurType)
 		}
 
 		return query_tree_walker((Query *) node, HasRecurringTuples,
-								 recurType, QTW_EXAMINE_RTES);
+								 recurType, QTW_EXAMINE_RTES_BEFORE);
 	}
 
 	return expression_tree_walker(node, HasRecurringTuples, recurType);

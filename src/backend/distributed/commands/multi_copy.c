@@ -463,7 +463,7 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 	columnNulls = palloc0(columnCount * sizeof(bool));
 
 	/* set up a virtual tuple table slot */
-	tupleTableSlot = MakeSingleTupleTableSlotCompat(tupleDescriptor);
+	tupleTableSlot = MakeSingleTupleTableSlotCompat(tupleDescriptor, &TTSOpsVirtual);
 	tupleTableSlot->tts_nvalid = columnCount;
 	tupleTableSlot->tts_values = columnValues;
 	tupleTableSlot->tts_isnull = columnNulls;

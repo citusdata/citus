@@ -156,7 +156,8 @@ ProgressMonitorList(uint64 commandTypeMagicNumber, List **attachedDSMSegments)
 												   getProgressInfoFunctionOid,
 												   commandTypeDatum);
 
-	tupleTableSlot = MakeSingleTupleTableSlotCompat(progressResultSet->setDesc);
+	tupleTableSlot = MakeSingleTupleTableSlotCompat(progressResultSet->setDesc,
+													&TTSOpsMinimalTuple);
 
 	/* iterate over tuples in tuple store, and send them to destination */
 	for (;;)

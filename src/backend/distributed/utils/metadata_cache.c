@@ -1641,7 +1641,8 @@ AvailableExtensionVersion(void)
 	/* pg_available_extensions returns result set containing all available extensions */
 	(*pg_available_extensions)(fcinfo);
 
-	tupleTableSlot = MakeSingleTupleTableSlotCompat(extensionsResultSet->setDesc);
+	tupleTableSlot = MakeSingleTupleTableSlotCompat(extensionsResultSet->setDesc,
+													&TTSOpsMinimalTuple);
 	hasTuple = tuplestore_gettupleslot(extensionsResultSet->setResult, goForward, doCopy,
 									   tupleTableSlot);
 	while (hasTuple)

@@ -247,13 +247,11 @@ RangeVarGetRelidInternal(const RangeVar *relation, LOCKMODE lockmode, uint32 fla
 #if PG_VERSION_NUM >= 120000
 
 #define NextCopyLastParam
-#define MakeSingleTupleTableSlotCompat(tupleDesc) \
-	MakeSingleTupleTableSlot(tupleDesc, &TTSOpsHeapTuple)
+#define MakeSingleTupleTableSlotCompat MakeSingleTupleTableSlot
 #define AllocSetContextCreateExtended AllocSetContextCreateInternal
 #define ExecStoreTuple(tuple, slot, buffer, shouldFree) \
 	ExecStoreHeapTuple(tuple, slot, shouldFree)
 #define NextCopyFromCompat NextCopyFrom
-#define QTW_EXAMINE_RTES QTW_EXAMINE_RTES_BEFORE
 #define ArrayRef SubscriptingRef
 #define T_ArrayRef T_SubscriptingRef
 #define or_clause is_orclause
@@ -272,7 +270,9 @@ RangeVarGetRelidInternal(const RangeVar *relation, LOCKMODE lockmode, uint32 fla
 #define InitFunctionCallInfoDataCompat InitFunctionCallInfoData
 
 #else /* pre PG12 */
-#define MakeSingleTupleTableSlotCompat MakeSingleTupleTableSlot
+#define QTW_EXAMINE_RTES_BEFORE QTW_EXAMINE_RTES
+#define MakeSingleTupleTableSlotCompat(tupleDesc, tts_opts) \
+	MakeSingleTupleTableSlot(tupleDesc)
 #define NextCopyFromCompat(cstate, econtext, values, nulls) \
 	NextCopyFrom(cstate, econtext, values, nulls, NULL)
 #define GetSysCacheOid1Compat(cacheId, oidcol, key1) \
