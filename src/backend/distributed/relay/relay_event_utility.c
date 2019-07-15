@@ -756,10 +756,8 @@ AppendShardIdToName(char **name, uint64 shardId)
 	neededBytes = snprintf((*name), NAMEDATALEN, "%s", extendedName);
 	if (neededBytes < 0)
 	{
-		char *strerrno = strerror(errno);
-
 		ereport(ERROR, (errcode(ERRCODE_OUT_OF_MEMORY),
-						errmsg("out of memory: %s", strerrno)));
+						errmsg("out of memory: %m")));
 	}
 	else if (neededBytes >= NAMEDATALEN)
 	{

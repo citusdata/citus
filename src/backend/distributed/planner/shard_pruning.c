@@ -273,10 +273,10 @@ PruneShards(Oid relationId, Index rangeTableId, List *whereClauseList,
 	if (cacheEntry->shardIntervalCompareFunction)
 	{
 		/* initiate function call info once (allows comparators to cache metadata) */
-		InitFunctionCallInfoDataCompat(*(FunctionCallInfo) &
-									   context.compareIntervalFunctionCall,
-									   cacheEntry->shardIntervalCompareFunction,
-									   2, DEFAULT_COLLATION_OID, NULL, NULL);
+		InitFunctionCallInfoData(*(FunctionCallInfo) &
+								 context.compareIntervalFunctionCall,
+								 cacheEntry->shardIntervalCompareFunction,
+								 2, DEFAULT_COLLATION_OID, NULL, NULL);
 	}
 	else
 	{
@@ -287,10 +287,10 @@ PruneShards(Oid relationId, Index rangeTableId, List *whereClauseList,
 	if (cacheEntry->shardColumnCompareFunction)
 	{
 		/* initiate function call info once (allows comparators to cache metadata) */
-		InitFunctionCallInfoDataCompat(*(FunctionCallInfo) &
-									   context.compareValueFunctionCall,
-									   cacheEntry->shardColumnCompareFunction,
-									   2, DEFAULT_COLLATION_OID, NULL, NULL);
+		InitFunctionCallInfoData(*(FunctionCallInfo) &
+								 context.compareValueFunctionCall,
+								 cacheEntry->shardColumnCompareFunction,
+								 2, DEFAULT_COLLATION_OID, NULL, NULL);
 	}
 	else
 	{

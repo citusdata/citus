@@ -267,7 +267,6 @@ RangeVarGetRelidInternal(const RangeVar *relation, LOCKMODE lockmode, uint32 fla
 	((fc)->args[n].isnull = false, (fc)->args[n].value = (argval))
 #define fcSetArgNull(fc, n) \
 	((fc)->args[n].isnull = true, (fc)->args[n].value = (Datum) 0)
-#define InitFunctionCallInfoDataCompat InitFunctionCallInfoData
 
 #else /* pre PG12 */
 #define QTW_EXAMINE_RTES_BEFORE QTW_EXAMINE_RTES
@@ -297,8 +296,6 @@ RangeVarGetRelidInternal(const RangeVar *relation, LOCKMODE lockmode, uint32 fla
 	(((fc)->argnull[n] = false), ((fc)->arg[n] = (value)))
 #define fcSetArgNull(fc, n) \
 	(((fc)->argnull[n] = true), ((fc)->arg[n] = (Datum) 0))
-#define InitFunctionCallInfoDataCompat(fc, fn, nargs, collation, ctx, result) \
-	InitFunctionCallInfoData(fc, fn, nargs, collation, ctx, result)
 
 #define FileReadCompat(file, buffer, amount, offset, wait_event_info) \
 	FileRead(file, buffer, amount, wait_event_info)
