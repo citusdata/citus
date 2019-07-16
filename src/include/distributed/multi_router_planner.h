@@ -61,7 +61,7 @@ extern RelationRestrictionContext * CopyRelationRestrictionContext(
 extern Oid ExtractFirstDistributedTableId(Query *query);
 extern RangeTblEntry * ExtractSelectRangeTableEntry(Query *query);
 extern Oid ModifyQueryResultRelationId(Query *query);
-extern RangeTblEntry * ExtractInsertRangeTableEntry(Query *query);
+extern RangeTblEntry * ExtractResultRelationRTE(Query *query);
 extern RangeTblEntry * ExtractDistributedInsertValuesRTE(Query *query);
 extern bool IsMultiRowInsert(Query *query);
 extern void AddShardIntervalRestrictionToSelect(Query *subqery,

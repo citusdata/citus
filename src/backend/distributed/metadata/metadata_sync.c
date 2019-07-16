@@ -69,7 +69,7 @@ PG_FUNCTION_INFO_V1(stop_metadata_sync_to_node);
  * start_metadata_sync_to_node function creates the metadata in a worker for preparing the
  * worker for accepting queries. The function first sets the localGroupId of the worker
  * so that the worker knows which tuple in pg_dist_node table represents itself. After
- * that, SQL statetemens for re-creating metadata of MX-eligible distributed tables are
+ * that, SQL statements for re-creating metadata of MX-eligible distributed tables are
  * sent to the worker. Finally, the hasmetadata column of the target node in pg_dist_node
  * is marked as true.
  */
@@ -1188,7 +1188,7 @@ DetachPartitionCommandList(void)
 
 	/*
 	 * We probably do not need this but as an extra precaution, we are enabling
-	 * DDL propagation to swtich back to original state.
+	 * DDL propagation to switch back to original state.
 	 */
 	detachPartitionCommandList = lappend(detachPartitionCommandList,
 										 ENABLE_DDL_PROPAGATION);

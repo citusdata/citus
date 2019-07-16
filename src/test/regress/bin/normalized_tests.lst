@@ -17,6 +17,8 @@ multi_subtransactions
 multi_modifying_xacts
 multi_insert_select
 sql_procedure
+multi_reference_table
+multi_create_table_constraints
 
 # the following tests' output are
 # normalized for EXPLAIN outputs

@@ -50,8 +50,8 @@ int MultiTaskQueryLogLevel = MULTI_TASK_QUERY_INFO_OFF; /* multi-task query log 
 static uint64 NextPlanId = 1;
 
 
-/* local function forward declarations */
 static bool ListContainsDistributedTableRTE(List *rangeTableList);
+static bool IsUpdateOrDelete(Query *query);
 static PlannedStmt * CreateDistributedPlannedStmt(uint64 planId, PlannedStmt *localPlan,
 												  Query *originalQuery, Query *query,
 												  ParamListInfo boundParams,
@@ -424,22 +424,6 @@ IsModifyCommand(Query *query)
 
 
 /*
- * IsMultiShardModifyPlan returns true if the given plan was generated for
- * multi shard update or delete query.
- */
-bool
-IsMultiShardModifyPlan(DistributedPlan *distributedPlan)
-{
-	if (IsUpdateOrDelete(distributedPlan) && IsMultiTaskPlan(distributedPlan))
-	{
-		return true;
-	}
-
-	return false;
-}
-
-
-/*
  * IsMultiTaskPlan returns true if job contains multiple tasks.
  */
 bool
@@ -457,19 +441,13 @@ IsMultiTaskPlan(DistributedPlan *distributedPlan)
 
 
 /*
- * IsUpdateOrDelete returns true if the query performs update or delete.
+ * IsUpdateOrDelete returns true if the query performs an update or delete.
  */
 bool
-IsUpdateOrDelete(DistributedPlan *distributedPlan)
+IsUpdateOrDelete(Query *query)
 {
-	CmdType commandType = distributedPlan->operation;
-
-	if (commandType == CMD_UPDATE || commandType == CMD_DELETE)
-	{
-		return true;
-	}
-
-	return false;
+	return query->commandType == CMD_UPDATE ||
+		   query->commandType == CMD_DELETE;
 }
 
 
@@ -480,15 +458,7 @@ IsUpdateOrDelete(DistributedPlan *distributedPlan)
 bool
 IsModifyDistributedPlan(DistributedPlan *distributedPlan)
 {
-	bool isModifyDistributedPlan = false;
-	CmdType operation = distributedPlan->operation;
-
-	if (operation == CMD_INSERT || operation == CMD_UPDATE || operation == CMD_DELETE)
-	{
-		isModifyDistributedPlan = true;
-	}
-
-	return isModifyDistributedPlan;
+	return distributedPlan->modLevel > ROW_MODIFY_READONLY;
 }
 
 
@@ -569,11 +539,12 @@ CreateDistributedPlannedStmt(uint64 planId, PlannedStmt *localPlan, Query *origi
 	 * query planning failed (possibly) due to prepared statement parameters or
 	 * if it is planned as a multi shard modify query.
 	 */
-	if ((distributedPlan->planningError || IsMultiShardModifyPlan(distributedPlan)) &&
+	if ((distributedPlan->planningError ||
+		 (IsUpdateOrDelete(originalQuery) && IsMultiTaskPlan(distributedPlan))) &&
 		hasUnresolvedParams)
 	{
 		/*
-		 * Arbitraryly high cost, but low enough that it can be added up
+		 * Arbitrarily high cost, but low enough that it can be added up
 		 * without overflowing by choose_custom_plan().
 		 */
 		resultPlan->planTree->total_cost = FLT_MAX / 100000000;

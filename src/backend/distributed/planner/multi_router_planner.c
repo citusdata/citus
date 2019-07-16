@@ -165,7 +165,7 @@ static void ReorderTaskPlacementsByTaskAssignmentPolicy(Job *job,
 
 /*
  * CreateRouterPlan attempts to create a router executor plan for the given
- * SELECT statement.  ->planningError is set if planning fails.
+ * SELECT statement. ->planningError is set if planning fails.
  */
 DistributedPlan *
 CreateRouterPlan(Query *originalQuery, Query *query,
@@ -186,8 +186,8 @@ CreateRouterPlan(Query *originalQuery, Query *query,
 
 
 /*
- * CreateModifyPlan attempts to create a plan the given modification
- * statement.  If planning fails ->planningError is set to a description of
+ * CreateModifyPlan attempts to create a plan for the given modification
+ * statement. If planning fails ->planningError is set to a description of
  * the failure.
  */
 DistributedPlan *
@@ -198,7 +198,7 @@ CreateModifyPlan(Query *originalQuery, Query *query,
 	DistributedPlan *distributedPlan = CitusMakeNode(DistributedPlan);
 	bool multiShardQuery = false;
 
-	distributedPlan->operation = query->commandType;
+	distributedPlan->modLevel = RowModifyLevelForQuery(query);
 
 	distributedPlan->planningError = ModifyQuerySupported(query, originalQuery,
 														  multiShardQuery,
@@ -244,8 +244,8 @@ CreateModifyPlan(Query *originalQuery, Query *query,
  * CreateSingleTaskRouterPlan creates a physical plan for given query. The created plan is
  * either a modify task that changes a single shard, or a router task that returns
  * query results from a single worker. Supported modify queries (insert/update/delete)
- * are router plannable by default. If query is not router plannable then either NULL is
- * returned, or the returned plan has planningError set to a description of the problem.
+ * are router plannable by default. If query is not router plannable the returned plan
+ * has planningError set to a description of the problem.
  */
 static void
 CreateSingleTaskRouterPlan(DistributedPlan *distributedPlan, Query *originalQuery,
@@ -254,7 +254,7 @@ CreateSingleTaskRouterPlan(DistributedPlan *distributedPlan, Query *originalQuer
 {
 	Job *job = NULL;
 
-	distributedPlan->operation = query->commandType;
+	distributedPlan->modLevel = RowModifyLevelForQuery(query);
 
 	/* we cannot have multi shard update/delete query via this code path */
 	job = RouterJob(originalQuery, plannerRestrictionContext,
@@ -491,7 +491,7 @@ ModifyQueryResultRelationId(Query *query)
 						errmsg("input query is not a modification query")));
 	}
 
-	resultRte = ExtractInsertRangeTableEntry(query);
+	resultRte = ExtractResultRelationRTE(query);
 	Assert(OidIsValid(resultRte->relid));
 
 	return resultRte->relid;
@@ -512,20 +512,12 @@ ResultRelationOidForQuery(Query *query)
 
 
 /*
- * ExtractInsertRangeTableEntry returns the INSERT'ed table's range table entry.
- * Note that the function expects and asserts that the input query be
- * an INSERT...SELECT query.
+ * ExtractResultRelationRTE returns the table's resultRelation range table entry.
  */
 RangeTblEntry *
-ExtractInsertRangeTableEntry(Query *query)
+ExtractResultRelationRTE(Query *query)
 {
-	int resultRelation = query->resultRelation;
-	List *rangeTableList = query->rtable;
-	RangeTblEntry *insertRTE = NULL;
-
-	insertRTE = rt_fetch(resultRelation, rangeTableList);
-
-	return insertRTE;
+	return rt_fetch(query->resultRelation, query->rtable);
 }
 
 
@@ -1086,7 +1078,7 @@ HasDangerousJoinUsing(List *rtableList, Node *joinTreeNode)
 		{
 			/*
 			 * Yes, so check each join alias var to see if any of them are not
-			 * simple references to underlying columns.  If so, we have a
+			 * simple references to underlying columns. If so, we have a
 			 * dangerous situation and must pick unique aliases.
 			 */
 			RangeTblEntry *joinRTE = rt_fetch(joinExpr->rtindex, rtableList);
@@ -1129,14 +1121,8 @@ HasDangerousJoinUsing(List *rtableList, Node *joinTreeNode)
 bool
 UpdateOrDeleteQuery(Query *query)
 {
-	CmdType commandType = query->commandType;
-
-	if (commandType == CMD_UPDATE || commandType == CMD_DELETE)
-	{
-		return true;
-	}
-
-	return false;
+	return query->commandType == CMD_UPDATE ||
+		   query->commandType == CMD_DELETE;
 }
 
 
@@ -1538,11 +1524,6 @@ RouterInsertTaskList(Query *query, DeferredErrorMessage **planningError)
 		modifyTask->replicationModel = cacheEntry->replicationModel;
 		modifyTask->rowValuesLists = modifyRoute->rowValuesLists;
 
-		if (query->onConflict != NULL)
-		{
-			modifyTask->upsertQuery = true;
-		}
-
 		insertTaskList = lappend(insertTaskList, modifyTask);
 	}
 
@@ -1572,7 +1553,6 @@ CreateTask(TaskType taskType)
 	task->shardInterval = NULL;
 	task->assignmentConstrained = false;
 	task->taskExecution = NULL;
-	task->upsertQuery = false;
 	task->replicationModel = REPLICATION_MODEL_INVALID;
 	task->relationRowLockList = NIL;
 
@@ -1858,8 +1838,8 @@ SingleShardModifyTaskList(Query *query, uint64 jobId, List *relationShardList,
 
 
 /*
- * GetUpdateOrDeleteRTE checks query if it has an UPDATE or DELETE RTE. If it finds
- * it returns it.
+ * GetUpdateOrDeleteRTE checks query if it has an UPDATE or DELETE RTE.
+ * Returns that RTE if found.
  */
 static RangeTblEntry *
 GetUpdateOrDeleteRTE(Query *query)
