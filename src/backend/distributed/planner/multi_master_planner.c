@@ -357,12 +357,13 @@ BuildAggregatePlan(Query *masterQuery, Plan *subPlan)
 	}
 
 	/* finally create the plan */
-	/* TODO no nulls */
 	aggregatePlan = make_aggCompat(aggregateTargetList, (List *) havingQual,
 								   aggregateStrategy,
 								   AGGSPLIT_SIMPLE, groupColumnCount, groupColumnIdArray,
-								   groupColumnOpArray, NULL, NIL, NIL,
-								   rowEstimate, subPlan);
+								   groupColumnOpArray,
+								   extract_grouping_collations(groupColumnList,
+															   subPlan->targetlist),
+								   NIL, NIL, rowEstimate, subPlan);
 
 	/* just for reproducible costs between different PostgreSQL versions */
 	aggregatePlan->plan.startup_cost = 0;
@@ -532,13 +533,14 @@ BuildDistinctPlan(Query *masterQuery, Plan *subPlan)
 		Oid *distinctColumnOpArray = extract_grouping_ops(distinctClauseList);
 		uint32 distinctClauseCount = list_length(distinctClauseList);
 
-		/* TODO no nulls */
 		distinctPlan = (Plan *) make_aggCompat(targetList, NIL, AGG_HASHED,
 											   AGGSPLIT_SIMPLE, distinctClauseCount,
 											   distinctColumnIdArray,
 											   distinctColumnOpArray,
-											   NULL, NIL, NIL,
-											   rowEstimate, subPlan);
+											   extract_grouping_collations(
+												   distinctClauseList,
+												   subPlan->targetlist),
+											   NIL, NIL, rowEstimate, subPlan);
 	}
 	else
 	{

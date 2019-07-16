@@ -1013,7 +1013,11 @@ DeferErrorIfUnsupportedTableCombination(Query *queryTree)
 		 * subquery, or immutable function.
 		 */
 		if (rangeTableEntry->rtekind == RTE_RELATION ||
-			rangeTableEntry->rtekind == RTE_SUBQUERY)
+			rangeTableEntry->rtekind == RTE_SUBQUERY
+#if PG_VERSION_NUM >= 120000
+			|| rangeTableEntry->rtekind == RTE_RESULT
+#endif
+			)
 		{
 			/* accepted */
 		}
