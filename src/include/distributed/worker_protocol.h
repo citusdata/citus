@@ -79,6 +79,7 @@ typedef struct HashPartitionContext
 	FmgrInfo *comparisonFunction;
 	ShardInterval **syntheticShardIntervalArray;
 	uint32 partitionCount;
+	Oid collation;
 	bool hasUniformHashDistribution;
 } HashPartitionContext;
 

@@ -221,6 +221,7 @@ worker_hash_partition_table(PG_FUNCTION_ARGS)
 
 	partitionContext->hashFunction = hashFunction;
 	partitionContext->partitionCount = partitionCount;
+	partitionContext->collation = PG_GET_COLLATION();
 
 	/* we'll use binary search, we need the comparison function */
 	if (!partitionContext->hasUniformHashDistribution)
@@ -1256,7 +1257,8 @@ HashPartitionId(Datum partitionValue, const void *context)
 	ShardInterval **syntheticShardIntervalArray =
 		hashPartitionContext->syntheticShardIntervalArray;
 	FmgrInfo *comparisonFunction = hashPartitionContext->comparisonFunction;
-	Datum hashDatum = FunctionCall1(hashFunction, partitionValue);
+	Datum hashDatum = FunctionCall1Coll(hashFunction, hashPartitionContext->collation,
+										partitionValue);
 	int32 hashResult = 0;
 	uint32 hashPartitionId = 0;
 
