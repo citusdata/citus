@@ -1,19 +1,9 @@
-/* citus.sql */
+/* citus--7.0-1.sql */
 
 -- complain if script is sourced in psql, rather than via CREATE EXTENSION
 \echo Use "CREATE EXTENSION citus" to load this file. \quit
 
 CREATE SCHEMA citus;
-
--- Ensure CREATE EXTENSION is not run against an old citus data
--- directory, we're not compatible (due to the builtin functions/tables)
-DO $$
-BEGIN
-   IF EXISTS(SELECT * FROM pg_proc WHERE proname = 'worker_apply_shard_ddl_command') THEN
-      RAISE 'cannot install citus extension in Citus 4 data directory';
-   END IF;
-END;
-$$;
 
 /*****************************************************************************
  * Enable SSL to encrypt all trafic by default
@@ -51,23 +41,30 @@ CREATE TYPE citus.distribution_type AS ENUM (
  * Citus tables & corresponding indexes
  *****************************************************************************/
 CREATE TABLE citus.pg_dist_partition(
-    logicalrelid Oid NOT NULL,    /* type changed to regclass as of version 6.0-1 */
+    logicalrelid regclass NOT NULL,
     partmethod "char" NOT NULL,
-    partkey text NOT NULL
+    partkey text,
+	colocationid integer DEFAULT 0 NOT NULL,
+	repmodel "char" DEFAULT 'c' NOT NULL
 );
 /* SELECT granted to PUBLIC in upgrade script */
 CREATE UNIQUE INDEX pg_dist_partition_logical_relid_index
 ON citus.pg_dist_partition using btree(logicalrelid);
 ALTER TABLE citus.pg_dist_partition SET SCHEMA pg_catalog;
+CREATE INDEX pg_dist_partition_colocationid_index
+ON pg_catalog.pg_dist_partition using btree(colocationid);
 
 CREATE TABLE citus.pg_dist_shard(
-    logicalrelid oid NOT NULL,    /* type changed to regclass as of version 6.0-1 */
+    logicalrelid regclass NOT NULL,
     shardid int8 NOT NULL,
     shardstorage "char" NOT NULL,
     shardalias text,
     shardminvalue text,
     shardmaxvalue text
 );
+-- ALTER-after-CREATE to keep table tuple layout consistent
+-- with earlier versions of Citus.
+ALTER TABLE citus.pg_dist_shard DROP shardalias;
 /* SELECT granted to PUBLIC in upgrade script */
 CREATE UNIQUE INDEX pg_dist_shard_shardid_index
 ON citus.pg_dist_shard using btree(shardid);
@@ -102,7 +99,7 @@ ALTER TABLE citus.pg_dist_shard_placement SET SCHEMA pg_catalog;
  *****************************************************************************/
 
 /*
- * Unternal sequence to generate 64-bit shard ids. These identifiers are then
+ * internal sequence to generate 64-bit shard ids. These identifiers are then
  * used to identify shards in the distributed database.
  */
 CREATE SEQUENCE citus.pg_dist_shardid_seq
@@ -283,13 +280,6 @@ CREATE FUNCTION worker_cleanup_job_schema_cache()
 COMMENT ON FUNCTION worker_cleanup_job_schema_cache()
     IS 'cleanup all job schemas in current database';
 
-CREATE FUNCTION worker_apply_shard_ddl_command(bigint, text)
-    RETURNS void
-    LANGUAGE C STRICT
-    AS 'MODULE_PATHNAME', $$worker_apply_shard_ddl_command$$;
-COMMENT ON FUNCTION worker_apply_shard_ddl_command(bigint, text)
-    IS 'extend ddl command with shardId and apply on database';
-
 CREATE FUNCTION worker_append_table_to_shard(text, text, text, integer)
     RETURNS void
     LANGUAGE C STRICT
@@ -297,37 +287,59 @@ CREATE FUNCTION worker_append_table_to_shard(text, text, text, integer)
 COMMENT ON FUNCTION worker_append_table_to_shard(text, text, text, integer)
     IS 'append a regular table''s contents to the shard';
 
+CREATE FUNCTION master_drop_sequences(sequence_names text[])
+    RETURNS void
+    LANGUAGE C STRICT
+    AS 'MODULE_PATHNAME', $$master_drop_sequences$$;
+COMMENT ON FUNCTION master_drop_sequences(text[])
+    IS 'drop specified sequences from the cluster';
 
 /* trigger functions */
 
-CREATE OR REPLACE FUNCTION citus_drop_trigger()
+CREATE FUNCTION pg_catalog.citus_drop_trigger()
     RETURNS event_trigger
     LANGUAGE plpgsql
+    SECURITY DEFINER
     SET search_path = pg_catalog
-    /* declared as SECURITY DEFINER in upgrade script */
     AS $cdbdt$
-DECLARE v_obj record;
+DECLARE
+    v_obj record;
+    sequence_names text[] := '{}';
+    table_colocation_id integer;
+    propagate_drop boolean := false;
 BEGIN
-    FOR v_obj IN SELECT * FROM pg_event_trigger_dropped_objects() LOOP
-        IF v_obj.object_type NOT IN ('table', 'foreign table') THEN
-           CONTINUE;
-        END IF;
+    -- collect set of dropped sequences to drop on workers later
+    SELECT array_agg(object_identity) INTO sequence_names
+    FROM pg_event_trigger_dropped_objects()
+    WHERE object_type = 'sequence';
 
-        -- nothing to do if not a distributed table
-        IF NOT EXISTS(SELECT * FROM pg_dist_partition WHERE logicalrelid = v_obj.objid) THEN
-            CONTINUE;
-        END IF;
+    FOR v_obj IN SELECT * FROM pg_event_trigger_dropped_objects() JOIN
+                               pg_dist_partition ON (logicalrelid = objid)
+                 WHERE object_type IN ('table', 'foreign table')
+    LOOP
+        -- get colocation group
+        SELECT colocationid INTO table_colocation_id FROM pg_dist_partition WHERE logicalrelid = v_obj.objid;
 
         -- ensure all shards are dropped
         PERFORM master_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name);
 
-        -- delete partition entry
-        DELETE FROM pg_dist_partition WHERE logicalrelid = v_obj.objid;
+        PERFORM master_drop_distributed_table_metadata(v_obj.objid, v_obj.schema_name, v_obj.object_name);
 
+        -- drop colocation group if all referencing tables are dropped
+        IF NOT EXISTS(SELECT * FROM pg_dist_partition WHERE colocationId = table_colocation_id) THEN
+            DELETE FROM pg_dist_colocation WHERE colocationId = table_colocation_id;
+        END IF;
     END LOOP;
+
+    IF cardinality(sequence_names) = 0 THEN
+        RETURN;
+    END IF;
+
+    PERFORM master_drop_sequences(sequence_names);
 END;
 $cdbdt$;
-COMMENT ON FUNCTION citus_drop_trigger()
+
+COMMENT ON FUNCTION pg_catalog.citus_drop_trigger()
     IS 'perform checks and actions at the end of DROP actions';
 
 CREATE FUNCTION master_dist_partition_cache_invalidate()
@@ -381,33 +393,11 @@ CREATE AGGREGATE array_cat_agg(anyarray) (SFUNC = array_cat, STYPE = anyarray);
 COMMENT ON AGGREGATE array_cat_agg(anyarray)
     IS 'concatenate input arrays into a single array';
 
--- define shard repair function
-CREATE FUNCTION master_copy_shard_placement(shard_id bigint,
-                                            source_node_name text,
-                                            source_node_port integer,
-                                            target_node_name text,
-                                            target_node_port integer)
-RETURNS void
-AS 'MODULE_PATHNAME'
-LANGUAGE C STRICT;
-
 RESET search_path;
-/* citus--5.0--5.0-1.sql */
-
-ALTER FUNCTION pg_catalog.citus_drop_trigger() SECURITY DEFINER;
 
 GRANT SELECT ON pg_catalog.pg_dist_partition TO public;
 GRANT SELECT ON pg_catalog.pg_dist_shard TO public;
 GRANT SELECT ON pg_catalog.pg_dist_shard_placement TO public;
-/* citus--5.0-1--5.0-2.sql */
-
-CREATE FUNCTION master_update_shard_statistics(shard_id bigint)
-    RETURNS bigint
-    LANGUAGE C STRICT
-    AS 'MODULE_PATHNAME', $$master_update_shard_statistics$$;
-COMMENT ON FUNCTION master_update_shard_statistics(bigint)
-    IS 'updates shard statistics and returns the updated shard size';
-/* citus--5.0-2--5.1-1.sql */
 
 /* empty, but required to update the extension version */
 CREATE FUNCTION pg_catalog.master_modify_multiple_shards(text)
@@ -415,40 +405,30 @@ CREATE FUNCTION pg_catalog.master_modify_multiple_shards(text)
     LANGUAGE C STRICT
     AS 'MODULE_PATHNAME', $$master_modify_multiple_shards$$;
 COMMENT ON FUNCTION master_modify_multiple_shards(text)
-    IS 'push delete and update queries to shards';DROP FUNCTION IF EXISTS public.master_update_shard_statistics(shard_id bigint);
+    IS 'push delete and update queries to shards';
 
-CREATE OR REPLACE FUNCTION pg_catalog.master_update_shard_statistics(shard_id bigint)
+CREATE FUNCTION pg_catalog.master_update_shard_statistics(shard_id bigint)
     RETURNS bigint
     LANGUAGE C STRICT
     AS 'MODULE_PATHNAME', $$master_update_shard_statistics$$;
 COMMENT ON FUNCTION master_update_shard_statistics(bigint)
     IS 'updates shard statistics and returns the updated shard size';
-DROP FUNCTION IF EXISTS pg_catalog.worker_apply_shard_ddl_command(bigint, text);
 
-CREATE OR REPLACE FUNCTION pg_catalog.worker_apply_shard_ddl_command(bigint, text, text)
+CREATE FUNCTION pg_catalog.worker_apply_shard_ddl_command(bigint, text, text)
     RETURNS void
     LANGUAGE C STRICT
     AS 'MODULE_PATHNAME', $$worker_apply_shard_ddl_command$$;
 COMMENT ON FUNCTION worker_apply_shard_ddl_command(bigint, text, text)
     IS 'extend ddl command with shardId and apply on database';
-DROP FUNCTION IF EXISTS pg_catalog.worker_fetch_foreign_file(text, bigint, text[], integer[]);
 
-CREATE OR REPLACE FUNCTION pg_catalog.worker_fetch_foreign_file(text, text, bigint, text[], integer[])
+CREATE FUNCTION pg_catalog.worker_fetch_foreign_file(text, text, bigint, text[], integer[])
     RETURNS void
     LANGUAGE C STRICT
     AS 'MODULE_PATHNAME', $$worker_fetch_foreign_file$$;
 COMMENT ON FUNCTION pg_catalog.worker_fetch_foreign_file(text, text, bigint, text[], integer[])
     IS 'fetch foreign file from remote node and apply file';
 
-DROP FUNCTION IF EXISTS pg_catalog.worker_fetch_regular_table(text, bigint, text[], integer[]);
-
-CREATE OR REPLACE FUNCTION pg_catalog.worker_fetch_regular_table(text, text, bigint, text[], integer[])
-    RETURNS void
-    LANGUAGE C STRICT
-    AS 'MODULE_PATHNAME', $$worker_fetch_regular_table$$;
-COMMENT ON FUNCTION pg_catalog.worker_fetch_regular_table(text, text, bigint, text[], integer[])
-    IS 'fetch PostgreSQL table from remote node';
-CREATE OR REPLACE FUNCTION pg_catalog.worker_apply_shard_ddl_command(bigint, text)
+CREATE FUNCTION pg_catalog.worker_apply_shard_ddl_command(bigint, text)
     RETURNS void
     LANGUAGE sql
 AS $worker_apply_shard_ddl_command$
@@ -457,161 +437,24 @@ $worker_apply_shard_ddl_command$;
 COMMENT ON FUNCTION worker_apply_shard_ddl_command(bigint, text)
     IS 'extend ddl command with shardId and apply on database';
 
-CREATE OR REPLACE FUNCTION pg_catalog.worker_fetch_foreign_file(text, bigint, text[], integer[])
-    RETURNS void
-    LANGUAGE sql
-AS $worker_fetch_foreign_file$
-    SELECT pg_catalog.worker_fetch_foreign_file('public', $1, $2, $3, $4);
-$worker_fetch_foreign_file$;
-COMMENT ON FUNCTION pg_catalog.worker_fetch_foreign_file(text, bigint, text[], integer[])
-    IS 'fetch foreign file from remote node and apply file';
-
-CREATE OR REPLACE FUNCTION pg_catalog.worker_fetch_regular_table(text, bigint, text[], integer[])
-    RETURNS void
-    LANGUAGE sql
-AS $worker_fetch_regular_table$
-    SELECT pg_catalog.worker_fetch_regular_table('public', $1, $2, $3, $4);
-$worker_fetch_regular_table$;
-COMMENT ON FUNCTION pg_catalog.worker_fetch_regular_table(text, bigint, text[], integer[])
-    IS 'fetch PostgreSQL table from remote node';
-DROP FUNCTION IF EXISTS pg_catalog.worker_fetch_foreign_file(text, text, bigint, text[], integer[]);
-
-CREATE OR REPLACE FUNCTION pg_catalog.worker_fetch_foreign_file(text, bigint, text[], integer[])
+CREATE FUNCTION pg_catalog.worker_fetch_foreign_file(text, bigint, text[], integer[])
     RETURNS void
     LANGUAGE C STRICT
     AS 'MODULE_PATHNAME', $$worker_fetch_foreign_file$$;
 COMMENT ON FUNCTION pg_catalog.worker_fetch_foreign_file(text, bigint, text[], integer[])
     IS 'fetch foreign file from remote node and apply file';
 
-DROP FUNCTION IF EXISTS pg_catalog.worker_fetch_regular_table(text, text, bigint, text[], integer[]);
-
-CREATE OR REPLACE FUNCTION pg_catalog.worker_fetch_regular_table(text, bigint, text[], integer[])
+CREATE FUNCTION pg_catalog.worker_fetch_regular_table(text, bigint, text[], integer[])
     RETURNS void
     LANGUAGE C STRICT
     AS 'MODULE_PATHNAME', $$worker_fetch_regular_table$$;
 COMMENT ON FUNCTION pg_catalog.worker_fetch_regular_table(text, bigint, text[], integer[])
     IS 'fetch PostgreSQL table from remote node';
-CREATE FUNCTION pg_catalog.master_drop_sequences(sequence_names text[],
-												 node_name text,
-												 node_port bigint)
-	RETURNS bool
-	LANGUAGE C STRICT
-	AS 'MODULE_PATHNAME', $$master_drop_sequences$$;
-COMMENT ON FUNCTION pg_catalog.master_drop_sequences(text[], text, bigint)
-	IS 'drop specified sequences from a node';
 
-REVOKE ALL ON FUNCTION pg_catalog.master_drop_sequences(text[], text, bigint) FROM PUBLIC;
-
-CREATE OR REPLACE FUNCTION pg_catalog.citus_drop_trigger()
-	RETURNS event_trigger
-	LANGUAGE plpgsql
-	SECURITY DEFINER
-	SET search_path = pg_catalog
-	AS $cdbdt$
-DECLARE
-	v_obj record;
-	sequence_names text[] := '{}';
-	node_names text[] := '{}';
-	node_ports bigint[] := '{}';
-	node_name text;
-	node_port bigint;
-BEGIN
-	-- collect set of dropped sequences to drop on workers later
-	SELECT array_agg(object_identity) INTO sequence_names
-	FROM pg_event_trigger_dropped_objects()
-	WHERE object_type = 'sequence';
-
-	-- Must accumulate set of affected nodes before deleting placements, as
-	-- master_drop_all_shards will erase their rows, making it impossible for
-	-- us to know where to drop sequences (which must be dropped after shards,
-	-- since they have default value expressions which depend on sequences).
-	SELECT array_agg(sp.nodename), array_agg(sp.nodeport)
-	INTO node_names, node_ports
-	FROM pg_event_trigger_dropped_objects() AS dobj,
-		 pg_dist_shard AS s,
-		 pg_dist_shard_placement AS sp
-	WHERE dobj.object_type IN ('table', 'foreign table')
-	  AND dobj.objid = s.logicalrelid
-	  AND s.shardid = sp.shardid;
-
-	FOR v_obj IN SELECT * FROM pg_event_trigger_dropped_objects() LOOP
-		IF v_obj.object_type NOT IN ('table', 'foreign table') THEN
-		   CONTINUE;
-		END IF;
-
-		-- nothing to do if not a distributed table
-		IF NOT EXISTS(SELECT * FROM pg_dist_partition WHERE logicalrelid = v_obj.objid) THEN
-			CONTINUE;
-		END IF;
-
-		-- ensure all shards are dropped
-		PERFORM master_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name);
-
-		-- delete partition entry
-		DELETE FROM pg_dist_partition WHERE logicalrelid = v_obj.objid;
-	END LOOP;
-
-	IF cardinality(sequence_names) = 0 THEN
-		RETURN;
-	END IF;
-
-	FOR node_name, node_port IN
-	SELECT DISTINCT name, port
-	FROM unnest(node_names, node_ports) AS nodes(name, port)
-	LOOP
-		PERFORM master_drop_sequences(sequence_names, node_name, node_port);
-	END LOOP;
-END;
-$cdbdt$;
-/* citus--5.1-8--5.2-1.sql */
-
-/* empty, but required to update the extension version */
-/* citus--5.2-1--5.2-2.sql */
-
-CREATE OR REPLACE FUNCTION pg_catalog.citus_truncate_trigger()
-	RETURNS trigger
-	LANGUAGE plpgsql
-	SET search_path = 'pg_catalog'
-	AS $cdbtt$
-DECLARE
-	partitionType char;
-	commandText text;
-BEGIN
-	SELECT partmethod INTO partitionType
-	FROM pg_dist_partition WHERE logicalrelid = TG_RELID;
-	IF NOT FOUND THEN
-		RETURN NEW;
-	END IF;
-
-	IF (partitionType = 'a') THEN
-		PERFORM master_drop_all_shards(TG_RELID, TG_TABLE_SCHEMA, TG_TABLE_NAME);
-	ELSE
-		SELECT format('TRUNCATE TABLE %I.%I CASCADE', TG_TABLE_SCHEMA, TG_TABLE_NAME)
-		INTO commandText;
-		PERFORM master_modify_multiple_shards(commandText);
-	END IF;
-
-	RETURN NEW;
-END;
-$cdbtt$;
-/* citus--5.2-2--5.2-3.sql */
-CREATE OR REPLACE FUNCTION master_expire_table_cache(table_name regclass)
+CREATE FUNCTION pg_catalog.master_expire_table_cache(table_name regclass)
 	RETURNS VOID
 	LANGUAGE C STRICT
 	AS 'MODULE_PATHNAME', $$master_expire_table_cache$$;
-/* citus--5.2-3--5.2-4.sql */
-
-ALTER TABLE pg_dist_partition ADD COLUMN colocationid BIGINT DEFAULT 0 NOT NULL;
-
-CREATE INDEX pg_dist_partition_colocationid_index
-ON pg_dist_partition using btree(colocationid);
-
-/* citus--5.2-4--6.0-1.sql */
-
-/* change logicalrelid type to regclass to allow implicit casts to text */
-ALTER TABLE pg_catalog.pg_dist_partition ALTER COLUMN logicalrelid TYPE regclass;
-ALTER TABLE pg_catalog.pg_dist_shard ALTER COLUMN logicalrelid TYPE regclass;
-/* citus--6.0-1--6.0-2.sql */
 
 CREATE FUNCTION pg_catalog.shard_name(object_name regclass, shard_id bigint)
     RETURNS text
@@ -620,10 +463,6 @@ CREATE FUNCTION pg_catalog.shard_name(object_name regclass, shard_id bigint)
 COMMENT ON FUNCTION pg_catalog.shard_name(object_name regclass, shard_id bigint)
     IS 'returns shard-extended version of object name';
 
-/* citus--6.0-2--6.0-3.sql */
-
-ALTER TABLE pg_catalog.pg_dist_partition
-ADD COLUMN repmodel "char" DEFAULT 'c' NOT NULL;
 SET search_path = 'pg_catalog';
 
 CREATE SEQUENCE citus.pg_dist_groupid_seq
@@ -646,6 +485,10 @@ CREATE TABLE citus.pg_dist_node(
 	noderack text NOT NULL DEFAULT 'default',
 	UNIQUE (nodename, nodeport)
 );
+-- ALTER-after-CREATE to preserve table tuple layout
+ALTER TABLE citus.pg_dist_node
+	ADD hasmetadata bool NOT NULL DEFAULT false,
+	ADD isactive bool NOT NULL DEFAULT true;
 
 ALTER TABLE citus.pg_dist_node SET SCHEMA pg_catalog;
 
@@ -659,15 +502,6 @@ CREATE TRIGGER dist_node_cache_invalidate
     AFTER INSERT OR UPDATE OR DELETE
     ON pg_catalog.pg_dist_node
     FOR EACH ROW EXECUTE PROCEDURE master_dist_node_cache_invalidate();
-
-CREATE FUNCTION master_add_node(nodename text,
-								nodeport integer)
-	RETURNS record
-	LANGUAGE C STRICT
-	AS 'MODULE_PATHNAME', $$master_add_node$$;
-COMMENT ON FUNCTION master_add_node(nodename text,
-									nodeport integer)
-	IS 'add node to the cluster';
 
 CREATE FUNCTION master_remove_node(nodename text, nodeport integer)
 	RETURNS void
@@ -686,35 +520,34 @@ SELECT master_initialize_node_metadata();
 
 RESET search_path;
 
-CREATE FUNCTION master_get_new_placementid()
+CREATE FUNCTION pg_catalog.master_get_new_placementid()
     RETURNS bigint
     LANGUAGE C STRICT
     AS 'MODULE_PATHNAME', $$master_get_new_placementid$$;
-COMMENT ON FUNCTION master_get_new_placementid()
+COMMENT ON FUNCTION pg_catalog.master_get_new_placementid()
     IS 'fetch unique placementid';
 
-CREATE FUNCTION worker_drop_distributed_table(logicalrelid Oid)
+CREATE FUNCTION pg_catalog.worker_drop_distributed_table(logicalrelid Oid)
     RETURNS VOID
     LANGUAGE C STRICT
     AS 'MODULE_PATHNAME', $$worker_drop_distributed_table$$;
 
-COMMENT ON FUNCTION worker_drop_distributed_table(logicalrelid Oid)
+COMMENT ON FUNCTION pg_catalog.worker_drop_distributed_table(logicalrelid Oid)
     IS 'drop the clustered table and its reference from metadata tables';
 
-CREATE FUNCTION column_name_to_column(table_name regclass, column_name text)
+CREATE FUNCTION pg_catalog.column_name_to_column(table_name regclass, column_name text)
     RETURNS text
     LANGUAGE C STRICT
     AS 'MODULE_PATHNAME', $$column_name_to_column$$;
-COMMENT ON FUNCTION column_name_to_column(table_name regclass, column_name text)
+COMMENT ON FUNCTION pg_catalog.column_name_to_column(table_name regclass, column_name text)
     IS 'convert a column name to its textual Var representation';
-/* citus--6.0-6--6.0-7.sql */
 
 CREATE FUNCTION pg_catalog.get_colocated_table_array(regclass)
     RETURNS regclass[]
     AS 'citus'
     LANGUAGE C STRICT;
 
-CREATE OR REPLACE FUNCTION pg_catalog.master_move_shard_placement(shard_id bigint,
+CREATE FUNCTION pg_catalog.master_move_shard_placement(shard_id bigint,
 													   source_node_name text,
 													   source_node_port integer,
 													   target_node_name text,
@@ -728,11 +561,6 @@ COMMENT ON FUNCTION pg_catalog.master_move_shard_placement(shard_id bigint,
 													   target_node_name text,
 													   target_node_port integer)
     IS 'move shard from remote node';
-/*
- * Drop shardalias from pg_dist_shard
- */
-ALTER TABLE pg_dist_shard DROP shardalias;
-/* citus--6.0-8--6.0-9.sql */
 
 CREATE TABLE citus.pg_dist_local_group(
     groupid int NOT NULL PRIMARY KEY)
@@ -743,9 +571,6 @@ INSERT INTO citus.pg_dist_local_group VALUES (0);
 
 ALTER TABLE citus.pg_dist_local_group SET SCHEMA pg_catalog;
 GRANT SELECT ON pg_catalog.pg_dist_local_group TO public;
-
-ALTER TABLE pg_catalog.pg_dist_node ADD COLUMN hasmetadata bool NOT NULL DEFAULT false;
-/* citus--6.0-9--6.0-10.sql */
 
 CREATE TABLE citus.pg_dist_transaction (
     groupid int NOT NULL,
@@ -761,15 +586,13 @@ ADD CONSTRAINT pg_dist_transaction_unique_constraint UNIQUE (groupid, gid);
 
 GRANT SELECT ON pg_catalog.pg_dist_transaction TO public;
 
-CREATE FUNCTION recover_prepared_transactions()
+CREATE FUNCTION pg_catalog.recover_prepared_transactions()
     RETURNS int
     LANGUAGE C STRICT
     AS 'MODULE_PATHNAME', $$recover_prepared_transactions$$;
 
-COMMENT ON FUNCTION recover_prepared_transactions()
+COMMENT ON FUNCTION pg_catalog.recover_prepared_transactions()
     IS 'recover prepared transactions started by this node';
-
-/* citus--6.0-10--6.0-11.sql */
 
 SET search_path = 'pg_catalog';
 
@@ -792,99 +615,6 @@ ALTER TABLE citus.pg_dist_colocation SET SCHEMA pg_catalog;
 CREATE INDEX pg_dist_colocation_configuration_index
 ON pg_dist_colocation USING btree(shardcount, replicationfactor, distributioncolumntype);
 
-CREATE FUNCTION create_distributed_table(table_name regclass,
-										 distribution_column text,
-										 distribution_type citus.distribution_type DEFAULT 'hash')
-    RETURNS void
-    LANGUAGE C STRICT
-    AS 'MODULE_PATHNAME', $$create_distributed_table$$;
-COMMENT ON FUNCTION create_distributed_table(table_name regclass,
-											 distribution_column text,
-											 distribution_type citus.distribution_type)
-    IS 'creates a distributed table';
-
-
-CREATE OR REPLACE FUNCTION pg_catalog.citus_drop_trigger()
-    RETURNS event_trigger
-    LANGUAGE plpgsql
-    SECURITY DEFINER
-    SET search_path = pg_catalog
-    AS $cdbdt$
-DECLARE
-    v_obj record;
-    sequence_names text[] := '{}';
-    node_names text[] := '{}';
-    node_ports bigint[] := '{}';
-    node_name text;
-    node_port bigint;
-    table_colocation_id integer;
-BEGIN
-    -- collect set of dropped sequences to drop on workers later
-    SELECT array_agg(object_identity) INTO sequence_names
-    FROM pg_event_trigger_dropped_objects()
-    WHERE object_type = 'sequence';
-
-    -- Must accumulate set of affected nodes before deleting placements, as
-    -- master_drop_all_shards will erase their rows, making it impossible for
-    -- us to know where to drop sequences (which must be dropped after shards,
-    -- since they have default value expressions which depend on sequences).
-    SELECT array_agg(sp.nodename), array_agg(sp.nodeport)
-    INTO node_names, node_ports
-    FROM pg_event_trigger_dropped_objects() AS dobj,
-         pg_dist_shard AS s,
-         pg_dist_shard_placement AS sp
-    WHERE dobj.object_type IN ('table', 'foreign table')
-      AND dobj.objid = s.logicalrelid
-      AND s.shardid = sp.shardid;
-
-    FOR v_obj IN SELECT * FROM pg_event_trigger_dropped_objects() LOOP
-        IF v_obj.object_type NOT IN ('table', 'foreign table') THEN
-           CONTINUE;
-        END IF;
-
-        -- nothing to do if not a distributed table
-        IF NOT EXISTS(SELECT * FROM pg_dist_partition WHERE logicalrelid = v_obj.objid) THEN
-            CONTINUE;
-        END IF;
-
-        -- ensure all shards are dropped
-        PERFORM master_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name);
-
-        -- get colocation group
-        SELECT colocationid INTO table_colocation_id FROM pg_dist_partition WHERE logicalrelid = v_obj.objid;
-
-        -- delete partition entry
-        DELETE FROM pg_dist_partition WHERE logicalrelid = v_obj.objid;
-
-        -- drop colocation group if all referencing tables are dropped
-        IF NOT EXISTS(SELECT * FROM pg_dist_partition WHERE colocationId = table_colocation_id) THEN
-            DELETE FROM pg_dist_colocation WHERE colocationId = table_colocation_id;
-        END IF;
-    END LOOP;
-
-    IF cardinality(sequence_names) = 0 THEN
-        RETURN;
-    END IF;
-
-    FOR node_name, node_port IN
-    SELECT DISTINCT name, port
-    FROM unnest(node_names, node_ports) AS nodes(name, port)
-    LOOP
-        PERFORM master_drop_sequences(sequence_names, node_name, node_port);
-    END LOOP;
-END;
-$cdbdt$;
-
-COMMENT ON FUNCTION citus_drop_trigger()
-    IS 'perform checks and actions at the end of DROP actions';
-
-ALTER TABLE pg_dist_partition ALTER COLUMN colocationid TYPE integer;
-
-RESET search_path;
-/* citus--6.0-11--6.0-12.sql */
-
-SET search_path = 'pg_catalog';
-
 CREATE FUNCTION create_reference_table(table_name regclass)
 	RETURNS void
 	LANGUAGE C STRICT
@@ -893,7 +623,6 @@ COMMENT ON FUNCTION create_reference_table(table_name regclass)
 	IS 'create a distributed reference table';
 
 RESET search_path;
-/* citus--6.0-12--6.0-13.sql */
 
 CREATE FUNCTION pg_catalog.worker_apply_inter_shard_ddl_command(referencing_shard bigint,
 																referencing_schema_name text,
@@ -909,33 +638,6 @@ COMMENT ON FUNCTION pg_catalog.worker_apply_inter_shard_ddl_command(referencing_
 																	referenced_schema_name text,
 																	command text)
     IS 'executes inter shard ddl command';
-/* citus--6.0-13--6.0-14.sql */
-
-DO $ff$
-BEGIN
-	-- fix functions created in wrong namespace
-	ALTER FUNCTION public.recover_prepared_transactions()
-	SET SCHEMA pg_catalog;
-
-	ALTER FUNCTION public.column_name_to_column(table_name regclass, column_name text)
-	SET SCHEMA pg_catalog;
-
-	ALTER FUNCTION public.worker_drop_distributed_table(logicalrelid Oid)
-	SET SCHEMA pg_catalog;
-
-	ALTER FUNCTION public.master_get_new_placementid()
-	SET SCHEMA pg_catalog;
-
-	ALTER FUNCTION public.master_expire_table_cache(table_name regclass)
-	SET SCHEMA pg_catalog;
-
--- some installations don't need this corrective, so just skip...
-EXCEPTION WHEN undefined_function THEN
-	-- do nothing
-END
-$ff$;
-/* citus--6.0-14--6.0-15.sql */
-
 
 CREATE FUNCTION pg_catalog.master_dist_placement_cache_invalidate()
     RETURNS trigger
@@ -948,7 +650,6 @@ CREATE TRIGGER dist_placement_cache_invalidate
     AFTER INSERT OR UPDATE OR DELETE
     ON pg_catalog.pg_dist_shard_placement
     FOR EACH ROW EXECUTE PROCEDURE master_dist_placement_cache_invalidate();
-/* citus--6.0-15--6.0-16.sql */
 
 SET search_path = 'pg_catalog';
 
@@ -959,55 +660,22 @@ CREATE FUNCTION mark_tables_colocated(source_table_name regclass, target_table_n
 COMMENT ON FUNCTION mark_tables_colocated(source_table_name regclass, target_table_names regclass[])
 	IS 'mark target distributed tables as colocated with the source table';
 
-RESET search_path;
-/* citus--6.0-16--6.0-17.sql */
-
-SET search_path = 'pg_catalog';
-
-DROP FUNCTION pg_catalog.master_copy_shard_placement(bigint, text, integer, text, integer);
-
 CREATE FUNCTION pg_catalog.master_copy_shard_placement(shard_id bigint,
-                                                                                                           source_node_name text,
-                                                                                                           source_node_port integer,
-                                                                                                           target_node_name text,
-                                                                                                           target_node_port integer,
-                                                                                                           do_repair bool DEFAULT true)
+                                                       source_node_name text,
+                                                       source_node_port integer,
+                                                       target_node_name text,
+                                                       target_node_port integer,
+                                                       do_repair bool DEFAULT true)
     RETURNS void
     LANGUAGE C STRICT
     AS 'citus', $$master_copy_shard_placement$$;
 COMMENT ON FUNCTION pg_catalog.master_copy_shard_placement(shard_id bigint,
-                                                                                                           source_node_name text,
-                                                                                                           source_node_port integer,
-                                                                                                           target_node_name text,
-                                                                                                           target_node_port integer,
-                                                                                                           do_repair bool)
+                                                           source_node_name text,
+                                                           source_node_port integer,
+                                                           target_node_name text,
+                                                           target_node_port integer,
+                                                           do_repair bool)
     IS 'copy shard from remote node';
-
-RESET search_path;
-/* citus--6.0-17--6.0-18.sql */
-
-SET search_path = 'pg_catalog';
-
-DROP FUNCTION IF EXISTS master_add_node(text, integer);
-
-CREATE FUNCTION master_add_node(nodename text,
-                                nodeport integer,
-                                OUT nodeid integer,
-                                OUT groupid integer,
-                                OUT nodename text,
-                                OUT nodeport integer,
-                                OUT noderack text,
-                                OUT hasmetadata boolean)
-    RETURNS record
-    LANGUAGE C STRICT
-    AS 'MODULE_PATHNAME', $$master_add_node$$;
-COMMENT ON FUNCTION master_add_node(nodename text, nodeport integer)
-    IS 'add node to the cluster';
-
-RESET search_path;
-/* citus--6.0-18--6.1-1.sql */
-
-SET search_path = 'pg_catalog';
 
 CREATE FUNCTION start_metadata_sync_to_node(nodename text, nodeport integer)
 	RETURNS VOID
@@ -1016,22 +684,12 @@ CREATE FUNCTION start_metadata_sync_to_node(nodename text, nodeport integer)
 COMMENT ON FUNCTION start_metadata_sync_to_node(nodename text, nodeport integer)
     IS 'sync metadata to node';
 
-RESET search_path;
-/* citus--6.1-1--6.1-2.sql */
-
-SET search_path = 'pg_catalog';
-
 CREATE FUNCTION worker_create_truncate_trigger(table_name regclass)
 	RETURNS VOID
 	LANGUAGE C STRICT
 	AS 'MODULE_PATHNAME', $$worker_create_truncate_trigger$$;
 COMMENT ON FUNCTION worker_create_truncate_trigger(tablename regclass)
 	IS 'create truncate trigger for distributed table';
-
-RESET search_path;
-/* citus--6.1-2--6.1-3.sql */
-
-SET search_path = 'pg_catalog';
 
 CREATE FUNCTION stop_metadata_sync_to_node(nodename text, nodeport integer)
 	RETURNS VOID
@@ -1040,23 +698,12 @@ CREATE FUNCTION stop_metadata_sync_to_node(nodename text, nodeport integer)
 COMMENT ON FUNCTION stop_metadata_sync_to_node(nodename text, nodeport integer)
     IS 'stop metadata sync to node';
 
-RESET search_path;/* citus--6.1-3--6.1-4.sql */
-
-SET search_path = 'pg_catalog';
-
 CREATE FUNCTION column_to_column_name(table_name regclass, column_var_text text)
     RETURNS text
     LANGUAGE C STRICT
     AS 'MODULE_PATHNAME', $$column_to_column_name$$;
 COMMENT ON FUNCTION column_to_column_name(table_name regclass, column_var_text text)
     IS 'convert the textual Var representation to a column name';
-
-RESET search_path;
-/* citus--6.1-4--6.1-5.sql */
-
-SET search_path = 'pg_catalog';
-
-DROP FUNCTION create_distributed_table(regclass, text, citus.distribution_type);
 
 CREATE FUNCTION create_distributed_table(table_name regclass,
 										 distribution_column text,
@@ -1071,31 +718,12 @@ COMMENT ON FUNCTION create_distributed_table(table_name regclass,
 											 colocate_with text)
     IS 'creates a distributed table';
 
-RESET search_path;
-/* citus--6.1-5--6.1-6.sql */
-
-SET search_path = 'pg_catalog';
-
--- we don't need this constraint any more since reference tables
--- wouldn't have partition columns, which we represent as NULL
-ALTER TABLE pg_dist_partition ALTER COLUMN partkey DROP NOT NULL;
-
-RESET search_path;
-/* citus--6.1-6--6.1-7.sql */
-
-SET search_path = 'pg_catalog';
-
 CREATE FUNCTION get_shard_id_for_distribution_column(table_name regclass, distribution_value "any" DEFAULT NULL)
 	RETURNS bigint
 	LANGUAGE C
 	AS 'MODULE_PATHNAME', $$get_shard_id_for_distribution_column$$;
 COMMENT ON FUNCTION get_shard_id_for_distribution_column(table_name regclass, distribution_value "any")
     IS 'return shard id which belongs to given table and contains given value';
-
-RESET search_path;
-/* citus--6.1-4--6.1-5.sql */
-
-SET search_path = 'pg_catalog';
 
 CREATE FUNCTION lock_shard_resources(lock_mode int, shard_id bigint[])
     RETURNS VOID
@@ -1111,11 +739,6 @@ CREATE FUNCTION lock_shard_metadata(lock_mode int, shard_id bigint[])
 COMMENT ON FUNCTION lock_shard_metadata(lock_mode int, shard_id bigint[])
     IS 'lock shard metadata to prevent writes during metadata changes';
 
-RESET search_path;
-/* citus--6.1-8--6.1-9.sql */
-
-SET search_path = 'pg_catalog';
-
 CREATE FUNCTION master_drop_distributed_table_metadata(logicalrelid regclass,
                                           			   schema_name text,
                                           			   table_name text)
@@ -1127,81 +750,7 @@ COMMENT ON FUNCTION master_drop_distributed_table_metadata(logicalrelid regclass
                                               			   table_name text)
     IS 'delete metadata of the distributed table';
 
-CREATE OR REPLACE FUNCTION pg_catalog.citus_drop_trigger()
-    RETURNS event_trigger
-    LANGUAGE plpgsql
-    SECURITY DEFINER
-    SET search_path = pg_catalog
-    AS $cdbdt$
-DECLARE
-    v_obj record;
-    sequence_names text[] := '{}';
-    node_names text[] := '{}';
-    node_ports bigint[] := '{}';
-    node_name text;
-    node_port bigint;
-    table_colocation_id integer;
-BEGIN
-    -- collect set of dropped sequences to drop on workers later
-    SELECT array_agg(object_identity) INTO sequence_names
-    FROM pg_event_trigger_dropped_objects()
-    WHERE object_type = 'sequence';
-
-    -- Must accumulate set of affected nodes before deleting placements, as
-    -- master_drop_all_shards will erase their rows, making it impossible for
-    -- us to know where to drop sequences (which must be dropped after shards,
-    -- since they have default value expressions which depend on sequences).
-    SELECT array_agg(sp.nodename), array_agg(sp.nodeport)
-    INTO node_names, node_ports
-    FROM pg_event_trigger_dropped_objects() AS dobj,
-         pg_dist_shard AS s,
-         pg_dist_shard_placement AS sp
-    WHERE dobj.object_type IN ('table', 'foreign table')
-      AND dobj.objid = s.logicalrelid
-      AND s.shardid = sp.shardid;
-
-    FOR v_obj IN SELECT * FROM pg_event_trigger_dropped_objects() LOOP
-        IF v_obj.object_type NOT IN ('table', 'foreign table') THEN
-           CONTINUE;
-        END IF;
-
-        -- nothing to do if not a distributed table
-        IF NOT EXISTS(SELECT * FROM pg_dist_partition WHERE logicalrelid = v_obj.objid) THEN
-            CONTINUE;
-        END IF;
-
-        -- get colocation group
-        SELECT colocationid INTO table_colocation_id FROM pg_dist_partition WHERE logicalrelid = v_obj.objid;
-
-        -- ensure all shards are dropped
-        PERFORM master_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name);
-
-        PERFORM master_drop_distributed_table_metadata(v_obj.objid, v_obj.schema_name, v_obj.object_name);
-
-        -- drop colocation group if all referencing tables are dropped
-        IF NOT EXISTS(SELECT * FROM pg_dist_partition WHERE colocationId = table_colocation_id) THEN
-            DELETE FROM pg_dist_colocation WHERE colocationId = table_colocation_id;
-        END IF;
-    END LOOP;
-
-    IF cardinality(sequence_names) = 0 THEN
-        RETURN;
-    END IF;
-
-    FOR node_name, node_port IN
-    SELECT DISTINCT name, port
-    FROM unnest(node_names, node_ports) AS nodes(name, port)
-    LOOP
-        PERFORM master_drop_sequences(sequence_names, node_name, node_port);
-    END LOOP;
-END;
-$cdbdt$;
-
-COMMENT ON FUNCTION citus_drop_trigger()
-    IS 'perform checks and actions at the end of DROP actions';
-
 RESET search_path;
-/* citus--6.1-9--6.1-10.sql */
 
 GRANT SELECT ON pg_catalog.pg_dist_node TO public;
 GRANT SELECT ON pg_catalog.pg_dist_colocation TO public;
@@ -1211,67 +760,6 @@ GRANT SELECT ON pg_catalog.pg_dist_node_nodeid_seq TO public;
 GRANT SELECT ON pg_catalog.pg_dist_shard_placement_placementid_seq TO public;
 GRANT SELECT ON pg_catalog.pg_dist_shardid_seq TO public;
 GRANT SELECT ON pg_catalog.pg_dist_jobid_seq TO public;
-/* citus--6.1-10--6.1-11.sql */
-
-SET search_path = 'pg_catalog';
-
-DROP FUNCTION master_drop_sequences(text[], text, bigint);
-
-CREATE FUNCTION master_drop_sequences(sequence_names text[])
-    RETURNS void
-    LANGUAGE C STRICT
-    AS 'MODULE_PATHNAME', $$master_drop_sequences$$;
-COMMENT ON FUNCTION master_drop_sequences(text[])
-    IS 'drop specified sequences from the cluster';
-
-CREATE OR REPLACE FUNCTION pg_catalog.citus_drop_trigger()
-    RETURNS event_trigger
-    LANGUAGE plpgsql
-    SECURITY DEFINER
-    SET search_path = pg_catalog
-    AS $cdbdt$
-DECLARE
-    v_obj record;
-    sequence_names text[] := '{}';
-    table_colocation_id integer;
-    propagate_drop boolean := false;
-BEGIN
-    -- collect set of dropped sequences to drop on workers later
-    SELECT array_agg(object_identity) INTO sequence_names
-    FROM pg_event_trigger_dropped_objects()
-    WHERE object_type = 'sequence';
-
-    FOR v_obj IN SELECT * FROM pg_event_trigger_dropped_objects() JOIN
-                               pg_dist_partition ON (logicalrelid = objid)
-                 WHERE object_type IN ('table', 'foreign table')
-    LOOP
-        -- get colocation group
-        SELECT colocationid INTO table_colocation_id FROM pg_dist_partition WHERE logicalrelid = v_obj.objid;
-
-        -- ensure all shards are dropped
-        PERFORM master_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name);
-
-        PERFORM master_drop_distributed_table_metadata(v_obj.objid, v_obj.schema_name, v_obj.object_name);
-
-        -- drop colocation group if all referencing tables are dropped
-        IF NOT EXISTS(SELECT * FROM pg_dist_partition WHERE colocationId = table_colocation_id) THEN
-            DELETE FROM pg_dist_colocation WHERE colocationId = table_colocation_id;
-        END IF;
-    END LOOP;
-
-    IF cardinality(sequence_names) = 0 THEN
-        RETURN;
-    END IF;
-
-    PERFORM master_drop_sequences(sequence_names);
-END;
-$cdbdt$;
-
-COMMENT ON FUNCTION citus_drop_trigger()
-    IS 'perform checks and actions at the end of DROP actions';
-
-RESET search_path;
-/* citus--6.1-11--6.1-12.sql */
 
 SET search_path = 'pg_catalog';
 
@@ -1282,11 +770,6 @@ CREATE FUNCTION upgrade_to_reference_table(table_name regclass)
 COMMENT ON FUNCTION upgrade_to_reference_table(table_name regclass)
     IS 'upgrades an existing broadcast table to a reference table';
 
-RESET search_path;
-/* citus--6.1-12--6.1-13.sql */
-
-SET search_path = 'pg_catalog';
-
 CREATE FUNCTION master_disable_node(nodename text, nodeport integer)
 	RETURNS void
 	LANGUAGE C STRICT
@@ -1295,9 +778,8 @@ COMMENT ON FUNCTION master_disable_node(nodename text, nodeport integer)
 	IS 'removes node from the cluster temporarily';
 
 RESET search_path;
-/* citus--6.1-13--6.1-14.sql */
 
-CREATE OR REPLACE FUNCTION pg_catalog.master_run_on_worker(worker_name text[],
+CREATE FUNCTION pg_catalog.master_run_on_worker(worker_name text[],
 														   port integer[],
 														   command text[],
 														   parallel boolean,
@@ -1321,7 +803,7 @@ CREATE TYPE citus.colocation_placement_type AS (
 -- distributed_tables_colocated returns true if given tables are co-located, false otherwise.
 -- The function checks shard definitions, matches shard placements for given tables.
 --
-CREATE OR REPLACE FUNCTION pg_catalog.distributed_tables_colocated(table1 regclass,
+CREATE FUNCTION pg_catalog.distributed_tables_colocated(table1 regclass,
 																   table2 regclass)
     RETURNS bool
     LANGUAGE plpgsql
@@ -1402,7 +884,7 @@ END;
 $function$;
 
 
-CREATE OR REPLACE FUNCTION pg_catalog.run_command_on_workers(command text,
+CREATE FUNCTION pg_catalog.run_command_on_workers(command text,
 													parallel bool default true,
 													OUT nodename text,
 													OUT nodeport int,
@@ -1427,7 +909,7 @@ END;
 $function$;
 
 
-CREATE OR REPLACE FUNCTION pg_catalog.run_command_on_placements(table_name regclass,
+CREATE FUNCTION pg_catalog.run_command_on_placements(table_name regclass,
 																command text,
 																parallel bool default true,
 																OUT nodename text,
@@ -1467,7 +949,7 @@ END;
 $function$;
 
 
-CREATE OR REPLACE FUNCTION pg_catalog.run_command_on_colocated_placements(
+CREATE FUNCTION pg_catalog.run_command_on_colocated_placements(
 																 table_name1 regclass,
 																 table_name2 regclass,
 																 command text,
@@ -1539,7 +1021,7 @@ END;
 $function$;
 
 
-CREATE OR REPLACE FUNCTION pg_catalog.run_command_on_shards(table_name regclass,
+CREATE FUNCTION pg_catalog.run_command_on_shards(table_name regclass,
 															command text,
 															parallel bool default true,
 															OUT shardid bigint,
@@ -1583,7 +1065,6 @@ BEGIN
 		FROM master_run_on_worker(workers, ports, commands, parallel) WITH ORDINALITY r;
 END;
 $function$;
-/* citus--6.1-14--6.1-15.sql */
 
 SET search_path = 'pg_catalog';
 
@@ -1599,22 +1080,12 @@ CREATE TRIGGER dist_local_group_cache_invalidate
     ON pg_catalog.pg_dist_local_group
     FOR EACH ROW EXECUTE PROCEDURE master_dist_local_group_cache_invalidate();
 
-RESET search_path;
-/* citus--6.1-15--6.1-16.sql */
-
-SET search_path = 'pg_catalog';
-
 CREATE FUNCTION worker_apply_sequence_command(text)
     RETURNS VOID
     LANGUAGE C STRICT
     AS 'MODULE_PATHNAME', $$worker_apply_sequence_command$$;
 COMMENT ON FUNCTION worker_apply_sequence_command(text)
     IS 'create a sequence which products globally unique values';
-
-RESET search_path;
-/* citus--6.1-16--6.1-17.sql */
-
-SET search_path = 'pg_catalog';
 
 CREATE FUNCTION isolate_tenant_to_new_shard(table_name regclass, tenant_id "any", cascade_option text DEFAULT '')
 	RETURNS bigint
@@ -1629,22 +1100,6 @@ CREATE FUNCTION worker_hash(value "any")
     AS 'MODULE_PATHNAME', $$worker_hash$$;
 COMMENT ON FUNCTION worker_hash(value "any")
     IS 'calculate hashed value and return it';
-
-RESET search_path;
-/* citus--6.1-17--6.2-1.sql */
-
-SET search_path = 'pg_catalog';
-
-DROP FUNCTION IF EXISTS master_get_local_first_candidate_nodes();
-DROP FUNCTION IF EXISTS master_get_round_robin_candidate_nodes();
-
-DROP FUNCTION IF EXISTS master_stage_shard_row();
-DROP FUNCTION IF EXISTS master_stage_shard_placement_row();
-
-RESET search_path;
-/* citus--6.2-1--6.2-2.sql */
-
-SET search_path = 'pg_catalog';
 
 CREATE FUNCTION citus_table_size(logicalrelid regclass)
     RETURNS bigint
@@ -1666,15 +1121,6 @@ CREATE FUNCTION citus_total_relation_size(logicalrelid regclass)
     AS 'MODULE_PATHNAME', $$citus_total_relation_size$$;
 COMMENT ON FUNCTION citus_total_relation_size(logicalrelid regclass)
     IS 'get total disk space used by the specified table';
-
-RESET search_path;
-/* citus--6.2-2--6.2-3.sql */
-
-SET search_path = 'pg_catalog';
-
-ALTER TABLE pg_dist_node ADD isactive bool NOT NULL DEFAULT true;
-
-DROP FUNCTION IF EXISTS master_add_node(text, integer);
 
 CREATE FUNCTION master_add_node(nodename text,
                                 nodeport integer,
@@ -1722,14 +1168,11 @@ COMMENT ON FUNCTION master_activate_node(nodename text, nodeport integer)
     IS 'activate a node which is in the cluster';
 
 RESET search_path;
-/* citus--6.2-3--6.2-4.sql */
 
-CREATE OR REPLACE FUNCTION pg_catalog.citus_truncate_trigger()
+CREATE FUNCTION pg_catalog.citus_truncate_trigger()
     RETURNS trigger
     LANGUAGE C STRICT
     AS 'MODULE_PATHNAME', $$citus_truncate_trigger$$;
 COMMENT ON FUNCTION pg_catalog.citus_truncate_trigger()
     IS 'trigger function called when truncating the distributed table';
-/* citus--6.2-4--7.0-1.sql */
 
-/* empty, but required to update the extension version */
