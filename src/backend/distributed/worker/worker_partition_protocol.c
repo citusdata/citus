@@ -855,8 +855,7 @@ FileOutputStreamFlush(FileOutputStream *file)
 
 	errno = 0;
 	written = FileWriteCompat(file->fileDescriptor, fileBuffer->data, fileBuffer->len,
-							  file->offset,
-							  PG_WAIT_IO);
+							  file->offset, PG_WAIT_IO);
 	if (written != fileBuffer->len)
 	{
 		ereport(ERROR, (errcode_for_file_access(),
