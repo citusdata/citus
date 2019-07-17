@@ -162,6 +162,11 @@ CitusBeginScan(CustomScanState *node, EState *estate, int eflags)
 	MarkCitusInitiatedCoordinatorBackend();
 
 	scanState = (CitusScanState *) node;
+
+#if PG_VERSION_NUM >= 120000
+	ExecInitResultSlot(&scanState->customScanState.ss.ps, &TTSOpsMinimalTuple);
+#endif
+
 	distributedPlan = scanState->distributedPlan;
 	if (distributedPlan->modLevel == ROW_MODIFY_READONLY ||
 		distributedPlan->insertSelectSubquery != NULL)

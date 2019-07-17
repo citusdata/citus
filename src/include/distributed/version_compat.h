@@ -264,9 +264,9 @@ RangeVarGetRelidInternal(const RangeVar *relation, LOCKMODE lockmode, uint32 fla
 #define FileWriteCompat FileWrite
 
 #define fcSetArg(fc, n, argval) \
-	((fc)->args[n].isnull = false, (fc)->args[n].value = (argval))
-#define fcSetArgNull(fc, n) \
-	((fc)->args[n].isnull = true, (fc)->args[n].value = (Datum) 0)
+	(((fc)->args[n].isnull = false), ((fc)->args[n].value = (argval)))
+	#define fcSetArgNull(fc, n) \
+	(((fc)->args[n].isnull = true), ((fc)->args[n].value = (Datum) 0))
 
 #else /* pre PG12 */
 #define QTW_EXAMINE_RTES_BEFORE QTW_EXAMINE_RTES
