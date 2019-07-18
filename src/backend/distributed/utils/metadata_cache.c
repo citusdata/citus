@@ -1261,8 +1261,6 @@ static ShardInterval **
 SortShardIntervalArray(ShardInterval **shardIntervalArray, int shardCount,
 					   FmgrInfo *shardIntervalSortCompareFunction)
 {
-	ShardInterval **sortedShardIntervalArray = NULL;
-
 	/* short cut if there are no shard intervals in the array */
 	if (shardCount == 0)
 	{
@@ -1274,9 +1272,7 @@ SortShardIntervalArray(ShardInterval **shardIntervalArray, int shardCount,
 			  (qsort_arg_comparator) CompareShardIntervals,
 			  (void *) shardIntervalSortCompareFunction);
 
-	sortedShardIntervalArray = shardIntervalArray;
-
-	return sortedShardIntervalArray;
+	return shardIntervalArray;
 }
 
 

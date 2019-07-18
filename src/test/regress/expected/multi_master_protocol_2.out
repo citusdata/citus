@@ -1,0 +1,34 @@
+--
+-- MULTI_MASTER_PROTOCOL
+--
+-- Tests that check the metadata returned by the master node.
+SET citus.next_shard_id TO 740000;
+SELECT part_storage_type, part_key, part_replica_count, part_max_size,
+	   part_placement_policy FROM master_get_table_metadata('lineitem');
+ part_storage_type |  part_key  | part_replica_count | part_max_size | part_placement_policy 
+-------------------+------------+--------------------+---------------+-----------------------
+ t                 | l_orderkey |                  2 |       1536000 |                     2
+(1 row)
+
+SELECT * FROM master_get_table_ddl_events('lineitem');
+                                                                                                                                                                                                                                                                         master_get_table_ddl_events                                                                                                                                                                                                                                                                         
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ CREATE TABLE public.lineitem (l_orderkey bigint NOT NULL, l_partkey integer NOT NULL, l_suppkey integer NOT NULL, l_linenumber integer NOT NULL, l_quantity numeric(15,2) NOT NULL, l_extendedprice numeric(15,2) NOT NULL, l_discount numeric(15,2) NOT NULL, l_tax numeric(15,2) NOT NULL, l_returnflag character(1) NOT NULL, l_linestatus character(1) NOT NULL, l_shipdate date NOT NULL, l_commitdate date NOT NULL, l_receiptdate date NOT NULL, l_shipinstruct character(25) NOT NULL, l_shipmode character(10) NOT NULL, l_comment character varying(44) NOT NULL)
+ ALTER TABLE public.lineitem OWNER TO postgres
+ ALTER TABLE public.lineitem ADD CONSTRAINT lineitem_pkey PRIMARY KEY (l_orderkey, l_linenumber)
+ CREATE INDEX lineitem_time_index ON public.lineitem USING btree (l_shipdate)
+(4 rows)
+
+SELECT * FROM master_get_new_shardid();
+ master_get_new_shardid 
+------------------------
+                 740000
+(1 row)
+
+SELECT * FROM master_get_active_worker_nodes();
+ node_name | node_port 
+-----------+-----------
+ localhost |     57638
+ localhost |     57637
+(2 rows)
+

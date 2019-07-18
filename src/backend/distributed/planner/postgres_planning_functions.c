@@ -30,6 +30,7 @@
  */
 
 #if PG_VERSION_NUM >= 120000
+
 /*
  * distinctList is a list of SortGroupClauses, identifying the targetlist items
  * that should be considered by the Unique filter.  The input path must
@@ -38,14 +39,14 @@
 Unique *
 make_unique_from_sortclauses(Plan *lefttree, List *distinctList)
 {
-	Unique	   *node = makeNode(Unique);
-	Plan	   *plan = &node->plan;
-	int			numCols = list_length(distinctList);
-	int			keyno = 0;
+	Unique *node = makeNode(Unique);
+	Plan *plan = &node->plan;
+	int numCols = list_length(distinctList);
+	int keyno = 0;
 	AttrNumber *uniqColIdx;
-	Oid		   *uniqOperators;
-	Oid		   *uniqCollations;
-	ListCell   *slitem;
+	Oid *uniqOperators;
+	Oid *uniqCollations;
+	ListCell *slitem;
 
 	plan->targetlist = lefttree->targetlist;
 	plan->qual = NIL;
@@ -81,7 +82,9 @@ make_unique_from_sortclauses(Plan *lefttree, List *distinctList)
 	return node;
 }
 
+
 #else
+
 /*
  * distinctList is a list of SortGroupClauses, identifying the targetlist items
  * that should be considered by the Unique filter.  The input path must
@@ -128,4 +131,6 @@ make_unique_from_sortclauses(Plan *lefttree, List *distinctList)
 
 	return node;
 }
+
+
 #endif

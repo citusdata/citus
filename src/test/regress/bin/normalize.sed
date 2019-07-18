@@ -63,3 +63,8 @@ s/ERROR:  failed to execute task [0-9]+/ERROR:  failed to execute task X/g
 # normalize file names for partitioned files
 s/(task_[0-9]+\.)[0-9]+/\1xxxx/g
 s/(job_[0-9]+\/task_[0-9]+\/p_[0-9]+\.)[0-9]+/\1xxxx/g
+
+# pg12 changes
+s/Partitioned table "/Table "/g
+s/\) TABLESPACE pg_default$/\)/g
+s/invalid input syntax for type /invalid input syntax /g
