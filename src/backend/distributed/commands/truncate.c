@@ -67,7 +67,7 @@ ErrorIfUnsupportedTruncateStmt(TruncateStmt *truncateStatement)
 	foreach(relationCell, relationList)
 	{
 		RangeVar *rangeVar = (RangeVar *) lfirst(relationCell);
-		Oid relationId = RangeVarGetRelid(rangeVar, NoLock, true);
+		Oid relationId = RangeVarGetRelid(rangeVar, AccessShareLock, true);
 		char relationKind = get_rel_relkind(relationId);
 		if (IsDistributedTable(relationId) &&
 			relationKind == RELKIND_FOREIGN_TABLE)
@@ -94,7 +94,7 @@ EnsurePartitionTableNotReplicatedForTruncate(TruncateStmt *truncateStatement)
 	foreach(relationCell, truncateStatement->relations)
 	{
 		RangeVar *relationRV = (RangeVar *) lfirst(relationCell);
-		Relation relation = heap_openrv(relationRV, NoLock);
+		Relation relation = heap_openrv(relationRV, AccessShareLock);
 		Oid relationId = RelationGetRelid(relation);
 
 		if (!IsDistributedTable(relationId))

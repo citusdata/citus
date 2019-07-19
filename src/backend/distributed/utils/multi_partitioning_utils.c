@@ -66,7 +66,7 @@ PartitionedTable(Oid relationId)
 bool
 PartitionedTableNoLock(Oid relationId)
 {
-	Relation rel = try_relation_open(relationId, NoLock);
+	Relation rel = try_relation_open(relationId, AccessShareLock);
 	bool partitionedTable = false;
 
 	/* don't error out for tables that are dropped */
