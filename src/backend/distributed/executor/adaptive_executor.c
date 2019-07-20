@@ -1629,8 +1629,8 @@ RunDistributedExecution(DistributedExecution *execution)
 		/* additional 2 is for postmaster and latch */
 		int eventSetSize = list_length(execution->sessionList) + 2;
 
-		execution->waitEventSet = BuildWaitEventSet(execution->sessionList);
-		events = palloc0(eventSetSize * sizeof(WaitEvent));
+		/* always (re)build the wait event set the first time */
+		execution->connectionSetChanged = true;
 
 		while (execution->unfinishedTaskCount > 0 && !cancellationReceived)
 		{
@@ -1647,15 +1647,23 @@ RunDistributedExecution(DistributedExecution *execution)
 
 			if (execution->connectionSetChanged)
 			{
-				FreeWaitEventSet(execution->waitEventSet);
+				if (execution->waitEventSet != NULL)
+				{
+					FreeWaitEventSet(execution->waitEventSet);
+					execution->waitEventSet = NULL;
+				}
+
+				if (events != NULL)
+				{
+					/*
+					 * The execution might take a while, so explicitly free at this point
+					 * because we don't need anymore.
+					 */
+					pfree(events);
+					events = NULL;
+				}
 
 				execution->waitEventSet = BuildWaitEventSet(execution->sessionList);
-
-				/*
-				 * The execution might take a while, so explicitly free at this point
-				 * because we don't need anymore.
-				 */
-				pfree(events);
 
 				/* recalculate (and allocate) since the sessions have changed */
 				eventSetSize = list_length(execution->sessionList) + 2;
@@ -1722,8 +1730,16 @@ RunDistributedExecution(DistributedExecution *execution)
 			}
 		}
 
-		pfree(events);
-		FreeWaitEventSet(execution->waitEventSet);
+		if (events != NULL)
+		{
+			pfree(events);
+		}
+
+		if (execution->waitEventSet != NULL)
+		{
+			FreeWaitEventSet(execution->waitEventSet);
+			execution->waitEventSet = NULL;
+		}
 
 		CleanUpSessions(execution);
 	}
@@ -1735,7 +1751,11 @@ RunDistributedExecution(DistributedExecution *execution)
 		 */
 		UnclaimAllSessionConnections(execution->sessionList);
 
-		FreeWaitEventSet(execution->waitEventSet);
+		if (execution->waitEventSet != NULL)
+		{
+			FreeWaitEventSet(execution->waitEventSet);
+			execution->waitEventSet = NULL;
+		}
 
 		PG_RE_THROW();
 	}
