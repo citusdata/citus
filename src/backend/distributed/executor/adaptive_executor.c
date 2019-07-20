@@ -389,6 +389,9 @@ typedef struct WorkerSession
 
 	/* index in the wait event set */
 	int waitEventSetIndex;
+
+	/* events reported by the latest call to WaitEventSetWait */
+	int latestUnconsumedWaitEvents;
 } WorkerSession;
 
 
@@ -1713,6 +1716,7 @@ RunDistributedExecution(DistributedExecution *execution)
 				}
 
 				session = (WorkerSession *) event->user_data;
+				session->latestUnconsumedWaitEvents = event->events;
 
 				ConnectionStateMachine(session);
 			}
@@ -2564,11 +2568,13 @@ CheckConnectionReady(WorkerSession *session)
 		waitFlags = waitFlags | WL_SOCKET_WRITEABLE;
 	}
 
-	/* if reading fails, there's not much we can do */
-	if (PQconsumeInput(connection->pgConn) == 0)
+	if ((session->latestUnconsumedWaitEvents & WL_SOCKET_READABLE) != 0)
 	{
-		connection->connectionState = MULTI_CONNECTION_LOST;
-		return false;
+		if (PQconsumeInput(connection->pgConn) == 0)
+		{
+			connection->connectionState = MULTI_CONNECTION_LOST;
+			return false;
+		}
 	}
 
 	if (!PQisBusy(connection->pgConn))
@@ -2577,6 +2583,9 @@ CheckConnectionReady(WorkerSession *session)
 	}
 
 	UpdateConnectionWaitFlags(session, waitFlags);
+
+	/* don't consume input redundantly if we cycle back into CheckConnectionReady */
+	session->latestUnconsumedWaitEvents = 0;
 
 	return connectionReady;
 }
