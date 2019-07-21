@@ -1463,8 +1463,7 @@ FindOrCreateWorkerPool(DistributedExecution *execution, WorkerNode *workerNode)
 	workerPool->distributedExecution = execution;
 
 	/* "open" connections aggressively when there are cached connections */
-	nodeConnectionCount = NodeConnectionCount(workerNode->workerName,
-											  workerNode->workerPort);
+	nodeConnectionCount = MaxCachedConnectionsPerWorker;
 	workerPool->maxNewConnectionsPerCycle = Max(1, nodeConnectionCount);
 
 	dlist_init(&workerPool->pendingTaskQueue);
