@@ -1127,8 +1127,8 @@ CleanUpSessions(DistributedExecution *execution)
 
 		MultiConnection *connection = session->connection;
 
-		elog(DEBUG4, "Total number of commands sent over the session %ld: %ld",
-			 session->sessionId, session->commandsSent);
+		ereport(DEBUG4, (errmsg("Total number of commands sent over the session %ld: %ld",
+								session->sessionId, session->commandsSent)));
 
 		UnclaimConnection(connection);
 
@@ -1176,8 +1176,8 @@ CleanUpSessions(DistributedExecution *execution)
 				 * the connection and everything is cleared up. Otherwise, we'd have been
 				 * on MULTI_CONNECTION_FAILED state.
 				 */
-				elog(WARNING, "unexpected transaction state at the end of execution: %d",
-					 transactionState);
+				ereport(WARNING, (errmsg("unexpected transaction state at the end of "
+										 "execution: %d", transactionState)));
 			}
 
 			/* get ready for the next executions if we need use the same connection */
@@ -1185,8 +1185,8 @@ CleanUpSessions(DistributedExecution *execution)
 		}
 		else
 		{
-			elog(WARNING, "unexpected connection state at the end of execution: %d",
-				 connection->connectionState);
+			ereport(WARNING, (errmsg("unexpected connection state at the end of "
+									 "execution: %d", connection->connectionState)));
 		}
 	}
 }
@@ -1306,8 +1306,9 @@ AssignTasksToConnections(DistributedExecution *execution)
 				WorkerSession *session =
 					FindOrCreateWorkerSession(workerPool, connection);
 
-				elog(DEBUG4, "Session %ld (%s:%d) has an assigned task",
-					 session->sessionId, connection->hostname, connection->port);
+				ereport(DEBUG4, (errmsg("Session %ld (%s:%d) has an assigned task",
+										session->sessionId, connection->hostname,
+										connection->port)));
 
 				placementExecution->assignedSession = session;
 
@@ -1433,7 +1434,8 @@ ExecutionOrderForTask(CmdType operation, Task *task)
 		case MERGE_FETCH_TASK:
 		default:
 		{
-			elog(ERROR, "unsupported task type %d in adaptive executor", task->taskType);
+			ereport(ERROR, (errmsg("unsupported task type %d in adaptive executor",
+								   task->taskType)));
 		}
 	}
 }
@@ -1870,8 +1872,8 @@ ManageWorkerPool(WorkerPool *workerPool)
 		return;
 	}
 
-	elog(DEBUG4, "opening %d new connections to %s:%d", newConnectionCount,
-		 workerPool->nodeName, workerPool->nodePort);
+	ereport(DEBUG4, (errmsg("opening %d new connections to %s:%d", newConnectionCount,
+							workerPool->nodeName, workerPool->nodePort)));
 
 	for (connectionIndex = 0; connectionIndex < newConnectionCount; connectionIndex++)
 	{
@@ -2134,8 +2136,10 @@ ConnectionStateMachine(WorkerSession *session)
 				ConnStatusType status = PQstatus(connection->pgConn);
 				if (status == CONNECTION_OK)
 				{
-					elog(DEBUG4, "established connection to %s:%d for session %ld",
-						 connection->hostname, connection->port, session->sessionId);
+					ereport(DEBUG4, (errmsg("established connection to %s:%d for "
+											"session %ld",
+											connection->hostname, connection->port,
+											session->sessionId)));
 
 					workerPool->activeConnectionCount++;
 					workerPool->idleConnectionCount++;
@@ -2167,8 +2171,10 @@ ConnectionStateMachine(WorkerSession *session)
 				}
 				else
 				{
-					elog(DEBUG4, "established connection to %s:%d for session %ld",
-						 connection->hostname, connection->port, session->sessionId);
+					ereport(DEBUG4, (errmsg("established connection to %s:%d for "
+											"session %ld",
+											connection->hostname, connection->port,
+											session->sessionId)));
 
 					workerPool->activeConnectionCount++;
 					workerPool->idleConnectionCount++;
