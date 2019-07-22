@@ -474,7 +474,7 @@ OpenPartitionFiles(StringInfo directoryName, uint32 fileCount)
 	{
 		StringInfo filePath = UserPartitionFilename(directoryName, fileIndex);
 
-		fileDescriptor = PathNameOpenFilePerm(filePath->data, fileFlags, fileMode);
+		fileDescriptor = open(filePath->data, fileFlags, fileMode);
 		if (fileDescriptor < 0)
 		{
 			ereport(ERROR, (errcode_for_file_access(),
@@ -505,7 +505,7 @@ ClosePartitionFiles(FileOutputStream *partitionFileArray, uint32 fileCount)
 
 		FileOutputStreamFlush(partitionFile);
 
-		FileClose(partitionFile->fileDescriptor);
+		close(partitionFile->fileDescriptor);
 		FreeStringInfo(partitionFile->fileBuffer);
 		FreeStringInfo(partitionFile->filePath);
 	}
@@ -854,8 +854,7 @@ FileOutputStreamFlush(FileOutputStream *file)
 	int written = 0;
 
 	errno = 0;
-	written = FileWriteCompat(file->fileDescriptor, fileBuffer->data, fileBuffer->len,
-							  file->offset, PG_WAIT_IO);
+	written = write(file->fileDescriptor, fileBuffer->data, fileBuffer->len);
 	if (written != fileBuffer->len)
 	{
 		ereport(ERROR, (errcode_for_file_access(),

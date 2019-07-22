@@ -48,7 +48,7 @@ RedirectCopyDataToRegularFile(const char *filename)
 	const int fileMode = (S_IRUSR | S_IWUSR);
 	off_t offset = 0;
 
-	fileDesc = FileOpenForTransmit(filename, fileFlags, fileMode);
+	fileDesc = open(filename, fileFlags, fileMode);
 
 	SendCopyInStart();
 
@@ -58,8 +58,7 @@ RedirectCopyDataToRegularFile(const char *filename)
 		/* if received data has contents, append to regular file */
 		if (copyData->len > 0)
 		{
-			int appended = FileWriteCompat(fileDesc, copyData->data, copyData->len,
-										   offset, PG_WAIT_IO);
+			int appended = write(fileDesc, copyData->data, copyData->len);
 
 			if (appended != copyData->len)
 			{
@@ -75,7 +74,7 @@ RedirectCopyDataToRegularFile(const char *filename)
 	}
 
 	FreeStringInfo(copyData);
-	FileClose(fileDesc);
+	close(fileDesc);
 }
 
 
@@ -96,7 +95,7 @@ SendRegularFile(const char *filename)
 	off_t offset = 0;
 
 	/* we currently do not check if the caller has permissions for this file */
-	fileDesc = FileOpenForTransmit(filename, fileFlags, fileMode);
+	fileDesc = open(filename, fileFlags, fileMode);
 
 	/*
 	 * We read file's contents into buffers of 32 KB. This buffer size is twice
@@ -107,8 +106,7 @@ SendRegularFile(const char *filename)
 
 	SendCopyOutStart();
 
-	readBytes = FileReadCompat(fileDesc, fileBuffer->data, fileBufferSize, offset,
-							   PG_WAIT_IO);
+	readBytes = read(fileDesc, fileBuffer->data, fileBufferSize);
 	while (readBytes > 0)
 	{
 		fileBuffer->len = readBytes;
@@ -116,15 +114,14 @@ SendRegularFile(const char *filename)
 		SendCopyData(fileBuffer);
 
 		resetStringInfo(fileBuffer);
-		readBytes = FileReadCompat(fileDesc, fileBuffer->data, fileBufferSize,
-								   offset, PG_WAIT_IO);
+		readBytes = read(fileDesc, fileBuffer->data, fileBufferSize);
 		offset += readBytes;
 	}
 
 	SendCopyDone();
 
 	FreeStringInfo(fileBuffer);
-	FileClose(fileDesc);
+	close(fileDesc);
 }
 
 

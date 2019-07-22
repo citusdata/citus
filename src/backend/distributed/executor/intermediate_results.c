@@ -265,7 +265,7 @@ RemoteFileDestReceiverStartup(DestReceiver *dest, int operation,
 
 		elog(DEBUG1, "writing to local file \"%s\"", fileName);
 
-		resultDest->fileDesc = FileOpenForTransmit(fileName, fileFlags, fileMode);
+		resultDest->fileDesc = open(fileName, fileFlags, fileMode);
 		resultDest->offset = 0;
 	}
 
@@ -416,9 +416,7 @@ RemoteFileDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
 static void
 WriteToLocalFile(StringInfo copyData, RemoteFileDestReceiver *fileDest)
 {
-	int bytesWritten = FileWriteCompat(fileDest->fileDesc, copyData->data, copyData->len,
-									   fileDest->offset,
-									   PG_WAIT_IO);
+	int bytesWritten = write(fileDest->fileDesc, copyData->data, copyData->len);
 	if (bytesWritten < 0)
 	{
 		ereport(ERROR, (errcode_for_file_access(),
@@ -460,7 +458,7 @@ RemoteFileDestReceiverShutdown(DestReceiver *destReceiver)
 
 	if (resultDest->writeLocalFile)
 	{
-		FileClose(resultDest->fileDesc);
+		close(resultDest->fileDesc);
 	}
 }
 

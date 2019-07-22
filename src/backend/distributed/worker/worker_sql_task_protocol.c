@@ -185,8 +185,7 @@ TaskFileDestReceiverStartup(DestReceiver *dest, int operation,
 	taskFileDest->columnOutputFunctions = ColumnOutputFunctions(inputTupleDescriptor,
 																copyOutState->binary);
 
-	taskFileDest->fileDesc = FileOpenForTransmit(taskFileDest->filePath, fileFlags,
-												 fileMode);
+	taskFileDest->fileDesc = open(taskFileDest->filePath, fileFlags, fileMode);
 	taskFileDest->offset = 0;
 
 	if (copyOutState->binary)
@@ -254,9 +253,8 @@ TaskFileDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
 static void
 WriteToLocalFile(StringInfo copyData, TaskFileDestReceiver *taskFileDest)
 {
-	int bytesWritten = FileWriteCompat(taskFileDest->fileDesc, copyData->data,
-									   copyData->len, taskFileDest->offset,
-									   PG_WAIT_IO);
+	int bytesWritten = write(taskFileDest->fileDesc, copyData->data,
+									   copyData->len);
 	if (bytesWritten < 0)
 	{
 		ereport(ERROR, (errcode_for_file_access(),
@@ -286,7 +284,7 @@ TaskFileDestReceiverShutdown(DestReceiver *destReceiver)
 		WriteToLocalFile(copyOutState->fe_msgbuf, taskFileDest);
 	}
 
-	FileClose(taskFileDest->fileDesc);
+	close(taskFileDest->fileDesc);
 }
 
 
