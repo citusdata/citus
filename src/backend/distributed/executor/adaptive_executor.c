@@ -1801,7 +1801,10 @@ ManageWorkerPool(WorkerPool *workerPool)
 	}
 
 	/* we might fail the execution or warn the user about connection timeouts */
-	CheckConnectionTimeout(workerPool);
+	if (workerPool->checkForPoolTimeout)
+	{
+		CheckConnectionTimeout(workerPool);
+	}
 
 	if (failedConnectionCount >= 1)
 	{
