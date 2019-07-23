@@ -1334,7 +1334,7 @@ DeleteNodeRow(char *nodeName, int32 nodePort)
 	Relation pgDistNode = heap_open(DistNodeRelationId(), RowExclusiveLock);
 
 	/*
-	 * simple_hea_delete() expects that the caller has at least an
+	 * simple_heap_delete() expects that the caller has at least an
 	 * AccessShareLock on replica identity index.
 	 */
 	Relation replicaIndex = index_open(RelationGetReplicaIndex(pgDistNode),
