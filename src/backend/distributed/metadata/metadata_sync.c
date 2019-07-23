@@ -263,7 +263,7 @@ MetadataCreateCommands(void)
 	bool includeSequenceDefaults = true;
 
 	/* make sure we have deterministic output for our tests */
-	SortList(workerNodeList, CompareWorkerNodes);
+	workerNodeList = SortList(workerNodeList, CompareWorkerNodes);
 
 	/* generate insert command for pg_dist_node table */
 	nodeListInsertCommand = NodeListInsertCommand(workerNodeList);
