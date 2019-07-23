@@ -1331,8 +1331,14 @@ DeleteNodeRow(char *nodeName, int32 nodePort)
 	HeapTuple heapTuple = NULL;
 	SysScanDesc heapScan = NULL;
 	ScanKeyData scanKey[2];
-
 	Relation pgDistNode = heap_open(DistNodeRelationId(), RowExclusiveLock);
+
+	/*
+	 * simple_hea_delete() expects that the caller has at least an
+	 * AccessShareLock on replica identity index.
+	 */
+	Relation replicaIndex = index_open(RelationGetReplicaIndex(pgDistNode),
+									   AccessShareLock);
 
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_node_nodename,
 				BTEqualStrategyNumber, F_TEXTEQ, CStringGetTextDatum(nodeName));
@@ -1360,6 +1366,7 @@ DeleteNodeRow(char *nodeName, int32 nodePort)
 	/* increment the counter so that next command won't see the row */
 	CommandCounterIncrement();
 
+	heap_close(replicaIndex, NoLock);
 	heap_close(pgDistNode, NoLock);
 }
 

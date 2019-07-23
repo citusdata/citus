@@ -155,6 +155,14 @@ ProcessCreateTableStmtPartitionOf(CreateStmt *createStatement)
 			char *parentRelationName = generate_qualified_relation_name(parentRelationId);
 			bool viaDeprecatedAPI = false;
 
+
+			/*
+			 * relation_access_tracking assumes we acquire locks on all partitions
+			 * of the parent relation.
+			 */
+			LockRelationOid(parentRelationId, ExclusiveLock);
+			LockRelationPartitions(parentRelationId, ExclusiveLock);
+
 			CreateDistributedTable(relationId, parentDistributionColumn,
 								   parentDistributionMethod, parentRelationName,
 								   viaDeprecatedAPI);
@@ -230,6 +238,16 @@ ProcessAlterTableStmtAttachPartition(AlterTableStmt *alterTableStatement)
 				char distributionMethod = DISTRIBUTE_BY_HASH;
 				char *parentRelationName = generate_qualified_relation_name(relationId);
 				bool viaDeprecatedAPI = false;
+
+				/*
+				 * relation_access_tracking assumes we acquire locks on all partitions
+				 * of the parent relation.
+				 */
+				LockRelationOid(relationId, ExclusiveLock);
+				LockRelationPartitions(relationId, ExclusiveLock);
+
+				/* Table to be attached is not a partition yet, so lock it explicitly */
+				LockRelationOid(partitionRelationId, ExclusiveLock);
 
 				CreateDistributedTable(partitionRelationId, distributionColumn,
 									   distributionMethod, parentRelationName,

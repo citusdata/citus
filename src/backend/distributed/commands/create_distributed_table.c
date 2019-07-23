@@ -60,6 +60,7 @@
 #include "parser/parse_node.h"
 #include "parser/parse_relation.h"
 #include "parser/parser.h"
+#include "storage/lmgr.h"
 #include "tcop/pquery.h"
 #include "tcop/tcopprot.h"
 #include "utils/builtins.h"
@@ -152,6 +153,12 @@ master_create_distributed_table(PG_FUNCTION_ARGS)
 	{
 		ereport(ERROR, (errmsg("could not create distributed table: "
 							   "relation does not exist")));
+	}
+
+	/* We need to lock partitions too */
+	if (PartitionedTable(relationId))
+	{
+		LockRelationPartitions(relationId, ExclusiveLock);
 	}
 
 	/*
@@ -1354,4 +1361,23 @@ RelationUsesIdentityColumns(TupleDesc relationDesc)
 	}
 
 	return false;
+}
+
+
+/* Locks all paritions of the given relation with the given lock mode. */
+void
+LockRelationPartitions(Oid relationId, LOCKMODE lockMode)
+{
+	List *partitionList = NIL;
+	ListCell *partitionCell = NULL;
+
+	Assert(PartitionedTable(relationId));
+
+	partitionList = PartitionList(relationId);
+
+	foreach(partitionCell, partitionList)
+	{
+		Oid partitionRelationId = lfirst_oid(partitionCell);
+		LockRelationOid(partitionRelationId, lockMode);
+	}
 }

@@ -77,7 +77,6 @@ PartitionedTableNoLock(Oid relationId)
 		partitionedTable = true;
 	}
 
-	/* keep the lock */
 	heap_close(rel, NoLock);
 
 	return partitionedTable;
@@ -121,7 +120,6 @@ PartitionTableNoLock(Oid relationId)
 
 	partitionTable = rel->rd_rel->relispartition;
 
-	/* keep the lock */
 	heap_close(rel, NoLock);
 
 	return partitionTable;

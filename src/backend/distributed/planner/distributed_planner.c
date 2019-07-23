@@ -794,7 +794,7 @@ EnsurePartitionTableNotReplicated(Oid relationId)
 static DeferredErrorMessage *
 DeferErrorIfPartitionTableNotSingleReplicated(Oid relationId)
 {
-	if (PartitionTableNoLock(relationId) && !SingleReplicatedTable(relationId))
+	if (PartitionTable(relationId) && !SingleReplicatedTable(relationId))
 	{
 		Oid parentOid = PartitionParentOid(relationId);
 		char *parentRelationTest = get_rel_name(parentOid);

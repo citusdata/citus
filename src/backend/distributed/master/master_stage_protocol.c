@@ -259,6 +259,10 @@ master_append_table_to_shard(PG_FUNCTION_ARGS)
 
 	shardInterval = LoadShardInterval(shardId);
 	relationId = shardInterval->relationId;
+
+	/* don't allow the table to be dropped */
+	LockRelationOid(relationId, AccessShareLock);
+
 	cstoreTable = CStoreTable(relationId);
 	storageType = shardInterval->storageType;
 
