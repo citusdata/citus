@@ -3,7 +3,6 @@
 --
 -- This test checks that we can handle null min/max values in shard statistics
 -- and that we don't partition or join prune shards that have null values.
-SET citus.next_shard_id TO 760000;
 -- print major version number for version-specific tests
 SHOW server_version \gset
 SELECT substring(:'server_version', '\d+')::int AS server_version;
