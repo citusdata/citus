@@ -1188,11 +1188,13 @@ COPY reference_failure_test FROM STDIN WITH (FORMAT 'csv');
 ERROR:  connection error: localhost:57637
 COMMIT;
 -- show that no data go through the table and shard states are good
+SET client_min_messages to 'ERROR';
 SELECT * FROM reference_failure_test;
  key | value 
 -----+-------
 (0 rows)
 
+RESET client_min_messages;
 -- all placements should be healthy
 SELECT   s.logicalrelid::regclass::text, sp.shardstate, count(*)
 FROM     pg_dist_shard_placement AS sp,
