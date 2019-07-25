@@ -128,7 +128,6 @@ typedef struct ConnectionHashEntry
 {
 	ConnectionHashKey key;
 	dlist_head *connections;
-	int connectionCount;
 } ConnectionHashEntry;
 
 /* hash entry for cached connection parameters */
@@ -191,7 +190,6 @@ extern MultiConnection * StartNodeUserDatabaseConnection(uint32 flags,
 extern void CloseNodeConnectionsAfterTransaction(char *nodeName, int nodePort);
 extern void CloseConnection(MultiConnection *connection);
 extern void ShutdownConnection(MultiConnection *connection);
-extern int NodeConnectionCount(char *nodeName, int nodePort);
 
 /* dealing with a connection */
 extern void FinishConnectionListEstablishment(List *multiConnectionList);

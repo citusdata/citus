@@ -333,7 +333,6 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port, 
 	connection = StartConnectionEstablishment(&key);
 
 	dlist_push_tail(entry->connections, &connection->connectionNode);
-	entry->connectionCount++;
 
 	ResetShardPlacementAssociation(connection);
 
@@ -1065,8 +1064,6 @@ AfterXactHostConnectionHandling(ConnectionHashEntry *entry, bool isCommit)
 			cachedConnectionCount++;
 		}
 	}
-
-	entry->connectionCount = cachedConnectionCount;
 }
 
 
@@ -1171,30 +1168,4 @@ TrimLogLevel(const char *message)
 	} while (n < strlen(chompedMessage) && chompedMessage[n] == ' ');
 
 	return chompedMessage + n;
-}
-
-
-/*
- * NodeConnectionCount gets the number of connections to the given node
- * for the current username and database.
- */
-int
-NodeConnectionCount(char *hostname, int port)
-{
-	ConnectionHashKey key;
-	ConnectionHashEntry *entry = NULL;
-	bool found = false;
-
-	strlcpy(key.hostname, hostname, MAX_NODE_LENGTH);
-	key.port = port;
-	strlcpy(key.user, CurrentUserName(), NAMEDATALEN);
-	strlcpy(key.database, CurrentDatabaseName(), NAMEDATALEN);
-
-	entry = (ConnectionHashEntry *) hash_search(ConnectionHash, &key, HASH_FIND, &found);
-	if (!found)
-	{
-		return 0;
-	}
-
-	return entry->connectionCount;
 }
