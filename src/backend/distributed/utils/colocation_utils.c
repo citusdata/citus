@@ -1059,10 +1059,18 @@ DeleteColocationGroup(uint32 colocationId)
 	heapTuple = systable_getnext(scanDescriptor);
 	if (HeapTupleIsValid(heapTuple))
 	{
+		/*
+		 * simple_heap_delete() expects that the caller has at least an
+		 * AccessShareLock on replica identity index.
+		 */
+		Relation replicaIndex =
+			index_open(RelationGetReplicaIndex(pgDistColocation),
+					   AccessShareLock);
 		simple_heap_delete(pgDistColocation, &(heapTuple->t_self));
 
 		CitusInvalidateRelcacheByRelid(DistColocationRelationId());
 		CommandCounterIncrement();
+		heap_close(replicaIndex, AccessShareLock);
 	}
 
 	systable_endscan(scanDescriptor);

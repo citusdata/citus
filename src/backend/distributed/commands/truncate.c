@@ -48,9 +48,32 @@ static void AcquireDistributedLockOnRelations(List *relationIdList, LOCKMODE loc
 void
 ProcessTruncateStatement(TruncateStmt *truncateStatement)
 {
+	ListCell *rangeVarCell = NULL;
+	ListCell *relationCell = NULL;
+	List *lockedRelations = NIL;
+
+	/*
+	 * Lock relations while calling next three functions, because they expect
+	 * relations to be locked. We release them then to avoid distributed
+	 * deadlock in MX.
+	 */
+	foreach(rangeVarCell, truncateStatement->relations)
+	{
+		RangeVar *rangeVar = (RangeVar *) lfirst(rangeVarCell);
+		Relation relation = heap_openrv(rangeVar, AccessShareLock);
+		lockedRelations = lappend(lockedRelations, relation);
+	}
+
 	ErrorIfUnsupportedTruncateStmt(truncateStatement);
 	EnsurePartitionTableNotReplicatedForTruncate(truncateStatement);
 	ExecuteTruncateStmtSequentialIfNecessary(truncateStatement);
+
+	foreach(relationCell, lockedRelations)
+	{
+		Relation relation = (Relation) lfirst(relationCell);
+		heap_close(relation, AccessShareLock);
+	}
+
 	LockTruncatedRelationMetadataInWorkers(truncateStatement);
 }
 
@@ -67,7 +90,7 @@ ErrorIfUnsupportedTruncateStmt(TruncateStmt *truncateStatement)
 	foreach(relationCell, relationList)
 	{
 		RangeVar *rangeVar = (RangeVar *) lfirst(relationCell);
-		Oid relationId = RangeVarGetRelid(rangeVar, NoLock, true);
+		Oid relationId = RangeVarGetRelid(rangeVar, NoLock, false);
 		char relationKind = get_rel_relkind(relationId);
 		if (IsDistributedTable(relationId) &&
 			relationKind == RELKIND_FOREIGN_TABLE)
@@ -93,19 +116,15 @@ EnsurePartitionTableNotReplicatedForTruncate(TruncateStmt *truncateStatement)
 
 	foreach(relationCell, truncateStatement->relations)
 	{
-		RangeVar *relationRV = (RangeVar *) lfirst(relationCell);
-		Relation relation = heap_openrv(relationRV, NoLock);
-		Oid relationId = RelationGetRelid(relation);
+		RangeVar *rangeVar = (RangeVar *) lfirst(relationCell);
+		Oid relationId = RangeVarGetRelid(rangeVar, NoLock, false);
 
 		if (!IsDistributedTable(relationId))
 		{
-			heap_close(relation, NoLock);
 			continue;
 		}
 
 		EnsurePartitionTableNotReplicated(relationId);
-
-		heap_close(relation, NoLock);
 	}
 }
 
@@ -181,22 +200,19 @@ LockTruncatedRelationMetadataInWorkers(TruncateStmt *truncateStatement)
 
 	foreach(relationCell, truncateStatement->relations)
 	{
-		RangeVar *relationRV = (RangeVar *) lfirst(relationCell);
-		Relation relation = heap_openrv(relationRV, NoLock);
-		Oid relationId = RelationGetRelid(relation);
+		RangeVar *rangeVar = (RangeVar *) lfirst(relationCell);
+		Oid relationId = RangeVarGetRelid(rangeVar, NoLock, false);
 		DistTableCacheEntry *cacheEntry = NULL;
 		List *referencingTableList = NIL;
 		ListCell *referencingTableCell = NULL;
 
 		if (!IsDistributedTable(relationId))
 		{
-			heap_close(relation, NoLock);
 			continue;
 		}
 
 		if (list_member_oid(distributedRelationList, relationId))
 		{
-			heap_close(relation, NoLock);
 			continue;
 		}
 
@@ -212,8 +228,6 @@ LockTruncatedRelationMetadataInWorkers(TruncateStmt *truncateStatement)
 			distributedRelationList = list_append_unique_oid(distributedRelationList,
 															 referencingRelationId);
 		}
-
-		heap_close(relation, NoLock);
 	}
 
 	if (distributedRelationList != NIL)

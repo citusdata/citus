@@ -222,45 +222,14 @@ PlacementAccessTypeToText(ShardPlacementAccessType accessType)
 static void
 RecordRelationAccessBase(Oid relationId, ShardPlacementAccessType accessType)
 {
+	/*
+	 * We call this only for reference tables, and we don't support partitioned
+	 * reference tables.
+	 */
+	Assert(!PartitionedTable(relationId) && !PartitionTable(relationId));
+
 	/* make sure that this is not a conflicting access */
 	CheckConflictingRelationAccesses(relationId, accessType);
-
-	/*
-	 * If a relation is partitioned, record accesses to all of its partitions as well.
-	 * We prefer to use PartitionedTableNoLock() because at this point the necessary
-	 * locks on the relation has already been acquired.
-	 */
-	if (PartitionedTableNoLock(relationId))
-	{
-		List *partitionList = PartitionList(relationId);
-		ListCell *partitionCell = NULL;
-
-		foreach(partitionCell, partitionList)
-		{
-			Oid partitionOid = lfirst_oid(partitionCell);
-
-			/*
-			 * During create_distributed_table, the partitions may not
-			 * have been created yet and so there are no placements yet.
-			 * We're already going to register them when we distribute
-			 * the partitions.
-			 */
-			if (!IsDistributedTable(partitionOid))
-			{
-				continue;
-			}
-
-			/* recursively call the function to cover multi-level partitioned tables */
-			RecordRelationAccessBase(partitionOid, accessType);
-		}
-	}
-	else if (PartitionTableNoLock(relationId))
-	{
-		Oid parentOid = PartitionParentOid(relationId);
-
-		/* record the parent */
-		RecordPlacementAccessToCache(parentOid, accessType);
-	}
 
 	/* always record the relation that is being considered */
 	RecordPlacementAccessToCache(relationId, accessType);
@@ -521,12 +490,8 @@ RecordParallelRelationAccess(Oid relationId, ShardPlacementAccessType placementA
 	/* act accordingly if it's a conflicting access */
 	CheckConflictingParallelRelationAccesses(relationId, placementAccess);
 
-	/*
-	 * If a relation is partitioned, record accesses to all of its partitions as well.
-	 * We prefer to use PartitionedTableNoLock() because at this point the necessary
-	 * locks on the relation has already been acquired.
-	 */
-	if (PartitionedTableNoLock(relationId))
+	/* If a relation is partitioned, record accesses to all of its partitions as well. */
+	if (PartitionedTable(relationId))
 	{
 		List *partitionList = PartitionList(relationId);
 		ListCell *partitionCell = NULL;
@@ -539,7 +504,7 @@ RecordParallelRelationAccess(Oid relationId, ShardPlacementAccessType placementA
 			RecordParallelRelationAccess(partitionOid, placementAccess);
 		}
 	}
-	else if (PartitionTableNoLock(relationId))
+	else if (PartitionTable(relationId))
 	{
 		Oid parentOid = PartitionParentOid(relationId);
 

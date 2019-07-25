@@ -1409,8 +1409,10 @@ SELECT relation::regclass, locktype, mode FROM pg_locks WHERE relation::regclass
  partitioning_locks      | relation | AccessExclusiveLock
  partitioning_locks      | relation | AccessShareLock
  partitioning_locks_2009 | relation | AccessExclusiveLock
+ partitioning_locks_2009 | relation | AccessShareLock
  partitioning_locks_2010 | relation | AccessExclusiveLock
-(4 rows)
+ partitioning_locks_2010 | relation | AccessShareLock
+(6 rows)
 
 COMMIT;
 -- test locks on TRUNCATE
