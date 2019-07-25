@@ -64,39 +64,40 @@ CompareShardIntervals(const void *leftElement, const void *rightElement,
 {
 	ShardInterval *leftShardInterval = *((ShardInterval **) leftElement);
 	ShardInterval *rightShardInterval = *((ShardInterval **) rightElement);
-	Datum leftDatum = 0;
-	Datum rightDatum = 0;
-	Datum comparisonDatum = 0;
 	int comparisonResult = 0;
+	bool leftHasNull = (!leftShardInterval->minValueExists ||
+						!leftShardInterval->maxValueExists);
+	bool rightHasNull = (!rightShardInterval->minValueExists ||
+						 !rightShardInterval->maxValueExists);
 
 	Assert(typeCompareFunction != NULL);
 
-	/*
-	 * Left element should be treated as the greater element in case it doesn't
-	 * have min or max values.
-	 */
-	if (!leftShardInterval->minValueExists || !leftShardInterval->maxValueExists)
+	if (leftHasNull && rightHasNull)
+	{
+		comparisonResult = 0;
+	}
+	else if (leftHasNull)
 	{
 		comparisonResult = 1;
-		return comparisonResult;
 	}
-
-	/*
-	 * Right element should be treated as the greater element in case it doesn't
-	 * have min or max values.
-	 */
-	if (!rightShardInterval->minValueExists || !rightShardInterval->maxValueExists)
+	else if (rightHasNull)
 	{
 		comparisonResult = -1;
-		return comparisonResult;
+	}
+	else
+	{
+		/* if both shard interval have min/max values, calculate comparison result */
+		Datum leftDatum = leftShardInterval->minValue;
+		Datum rightDatum = rightShardInterval->minValue;
+		Datum comparisonDatum = CompareCall2(typeCompareFunction, leftDatum, rightDatum);
+		comparisonResult = DatumGetInt32(comparisonDatum);
 	}
 
-	/* if both shard interval have min/max values, calculate the comparison result */
-	leftDatum = leftShardInterval->minValue;
-	rightDatum = rightShardInterval->minValue;
-
-	comparisonDatum = CompareCall2(typeCompareFunction, leftDatum, rightDatum);
-	comparisonResult = DatumGetInt32(comparisonDatum);
+	/* Two different shards should never be equal */
+	if (comparisonResult == 0)
+	{
+		return CompareShardIntervalsById(leftElement, rightElement);
+	}
 
 	return comparisonResult;
 }
