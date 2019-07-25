@@ -339,7 +339,7 @@ ORDER BY
     logicalrelid,
     shardmaxvalue::integer,
     shardid,
-    placementid;
+    nodeport;
 
 -- reset colocation ids to test mark_tables_colocated
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 1;

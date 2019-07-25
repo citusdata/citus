@@ -755,20 +755,20 @@ SELECT * FROM run_command_on_workers('DROP USER test_user');
 DROP USER test_user;
 
 -- Test copy with built-in type without binary output function
-CREATE TABLE test_smgr (
-col1 smgr NOT NULL,
+CREATE TABLE test_binaryless_builtin (
+col1 aclitem NOT NULL,
 col2 character varying(255) NOT NULL
 );
 
-SELECT create_reference_table('test_smgr');
+SELECT create_reference_table('test_binaryless_builtin');
 
-\COPY test_smgr FROM STDIN WITH (format CSV)
-magnetic disk, test
+\COPY test_binaryless_builtin FROM STDIN WITH (format CSV)
+user postgres=r/postgres, test
 \.
 
-SELECT * FROM test_smgr;
+SELECT * FROM test_binaryless_builtin;
 
-DROP TABLE test_smgr;
+DROP TABLE test_binaryless_builtin;
 
 -- Test drop table with copy in the same transaction
 BEGIN;
