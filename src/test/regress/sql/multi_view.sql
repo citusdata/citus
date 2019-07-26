@@ -360,7 +360,7 @@ SELECT * FROM distinct_value_1 ORDER BY 1 DESC LIMIT 5;
 
 -- CTEs are supported even if they are on views
 CREATE VIEW cte_view_1 AS
-WITH c1 AS (SELECT * FROM users_table WHERE value_1 = 3) SELECT * FROM c1 WHERE value_2 < 4;
+WITH c1 AS (SELECT * FROM users_table WHERE value_1 = 3) SELECT * FROM c1 WHERE value_2 < 4 AND EXISTS (SELECT * FROM c1);
 
 SELECT * FROM cte_view_1 ORDER BY 1,2,3,4,5 LIMIT 5;
 
