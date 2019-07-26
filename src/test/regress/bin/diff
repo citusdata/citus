@@ -37,13 +37,13 @@ then
     sed -Ef $BASEDIR/normalize.sed < $file1 > $file1.modified
     sed -Ef $BASEDIR/normalize.sed < $file2 > $file2.modified
 
-    $DIFF $args $file1.modified $file2.modified
+    $DIFF -w $args $file1.modified $file2.modified
     exitcode=$?
 
     rm -f $file1.modified $file2.modified
 else
     # if test is not in normalized_tests.lst, just diff without normalizing.
-    $DIFF $args $file1 $file2
+    $DIFF -w $args $file1 $file2
     exitcode=$?
 fi
 
