@@ -1,3 +1,7 @@
+### citus v8.3.1 (July 29, 2019) ###
+
+* Improves Adaptive Executor performance
+
 ### citus v8.3.0 (July 10, 2019) ###
 
 * Adds a new distributed executor: Adaptive Executor
