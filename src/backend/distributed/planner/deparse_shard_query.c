@@ -111,6 +111,7 @@ RebuildQueryStrings(Query *originalQuery, List *taskList)
 		}
 
 		ereport(DEBUG4, (errmsg("query before rebuilding: %s",
+								task->queryString == NULL ? "(null)" :
 								ApplyLogRedaction(task->queryString))));
 
 		UpdateTaskQueryString(query, relationId, valuesRTE, task);
