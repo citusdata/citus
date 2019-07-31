@@ -188,7 +188,24 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 
 		if (IsMultiStatementTransaction() && ShouldPropagateSetCommand(setStmt))
 		{
-			ProcessVariableSetStmt(setStmt, queryString);
+			ProcessSetStmt(queryString);
+		}
+	}
+
+	/* process SET CONSTRAINTS ALL { DEFERRED | IMMEDIATE } */
+	if (IsA(parsetree, ConstraintsSetStmt))
+	{
+		ConstraintsSetStmt *constraintSetStmt = (ConstraintsSetStmt *) parsetree;
+		if (constraintSetStmt->constraints != NIL)
+		{
+			ereport(WARNING,
+					(errmsg("Citus does not support propagating SET CONSTRAINTS"
+							" for named constraints"),
+					 errhint("Consider using SET CONSTRAINTS ALL instead.")));
+		}
+		else
+		{
+			ProcessSetStmt(queryString);
 		}
 	}
 

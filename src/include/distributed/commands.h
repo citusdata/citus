@@ -123,7 +123,8 @@ extern void ProcessTruncateStatement(TruncateStmt *truncateStatement);
 /* vacuum.c - froward declarations */
 extern void ProcessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand);
 
+/* variableset.c - forward declarations */
 extern bool ShouldPropagateSetCommand(VariableSetStmt *setStmt);
-extern void ProcessVariableSetStmt(VariableSetStmt *setStmt, const char *setCommand);
+extern void ProcessSetStmt(const char *setCommand);
 
-#endif /*CITUS_COMMANDS_H */
+#endif /* CITUS_COMMANDS_H */

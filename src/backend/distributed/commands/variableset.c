@@ -112,19 +112,16 @@ IsSettingSafeToPropagate(char *name)
 
 
 /*
- * ProcessVariableSetStmt actually does the work of propagating a provided SET stmt
+ * ProcessSetStmt actually does the work of propagating a provided SET stmt
  * to currently-participating worker nodes and adding the SET command test to a string
  * keeping track of all propagated SET commands since (sub-)xact start.
  */
 void
-ProcessVariableSetStmt(VariableSetStmt *setStmt, const char *setStmtString)
+ProcessSetStmt(const char *setStmtString)
 {
 	dlist_iter iter;
 	const bool raiseInterrupts = true;
 	List *connectionList = NIL;
-
-	/* at present we only support SET LOCAL */
-	AssertArg(ShouldPropagateSetCommand(setStmt));
 
 	/* haven't seen any SET stmts so far in this (sub-)xact: initialize StringInfo */
 	if (activeSetStmts == NULL)

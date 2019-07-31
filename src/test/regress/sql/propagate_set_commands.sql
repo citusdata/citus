@@ -90,4 +90,27 @@ SET LOCAL enable_hashagg TO false;
 SELECT current_setting('enable_hashagg') FROM test WHERE id = 3;
 ABORT;
 
+-- Test SET CONSTRAINTS ALL ...
+CREATE TABLE test_set_transaction (id int UNIQUE DEFERRABLE, value int);
+SELECT create_distributed_table('test_set_transaction', 'id');
+INSERT INTO test_set_transaction VALUES (1,1), (3,3);
+
+-- the following should error out
+INSERT INTO test_set_transaction VALUES (1,1), (3,3);
+
+-- but this should work
+BEGIN;
+SET CONSTRAINTS ALL DEFERRED;
+INSERT INTO test_set_transaction VALUES (1,2), (3,4);
+DELETE FROM test_set_transaction WHERE value IN (1, 3);
+COMMIT;
+
+-- and this should error right when setting constraints to IMMEDIATE
+BEGIN;
+SET CONSTRAINTS ALL DEFERRED;
+INSERT INTO test_set_transaction VALUES (1,2), (3,4);
+DELETE FROM test_set_transaction WHERE value IN (1, 3);
+SET CONSTRAINTS ALL IMMEDIATE;
+ROLLBACK;
+
 DROP SCHEMA propagate_set_commands CASCADE;

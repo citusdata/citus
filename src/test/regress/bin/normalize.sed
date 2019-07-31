@@ -65,3 +65,6 @@ s/ERROR:  failed to execute task [0-9]+/ERROR:  failed to execute task X/g
 # normalize file names for partitioned files
 s/(task_[0-9]+\.)[0-9]+/\1xxxx/g
 s/(job_[0-9]+\/task_[0-9]+\/p_[0-9]+\.)[0-9]+/\1xxxx/g
+
+# normalize propagate_set_commands
+s/test_set_transaction_id_key_[0-9]+/test_set_transaction_id_key_xxxxx/g

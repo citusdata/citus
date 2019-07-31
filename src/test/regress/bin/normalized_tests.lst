@@ -19,6 +19,7 @@ multi_insert_select
 sql_procedure
 multi_reference_table
 multi_create_table_constraints
+propagate_set_commands
 
 # the following tests' output are
 # normalized for EXPLAIN outputs
