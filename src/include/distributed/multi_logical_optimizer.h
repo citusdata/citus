@@ -26,6 +26,8 @@
 #define ARRAY_CAT_AGGREGATE_NAME "array_cat_agg"
 #define JSONB_CAT_AGGREGATE_NAME "jsonb_cat_agg"
 #define JSON_CAT_AGGREGATE_NAME "json_cat_agg"
+#define WORKER_PARTIAL_AGGREGATE_NAME "worker_partial_agg"
+#define COORD_COMBINE_AGGREGATE_NAME "coord_combine_agg"
 #define WORKER_COLUMN_FORMAT "worker_column_%d"
 
 /* Definitions related to count(distinct) approximations */
