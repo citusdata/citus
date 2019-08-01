@@ -37,8 +37,9 @@ extern DeferredErrorMessage * PlanRouterQuery(Query *originalQuery,
 											  PlannerRestrictionContext *
 											  plannerRestrictionContext,
 											  List **placementList, uint64 *anchorShardId,
-											  List **relationShardList, bool
-											  replacePrunedQueryWithDummy,
+											  List **relationShardList,
+											  List **prunedShardIntervalListList,
+											  bool replacePrunedQueryWithDummy,
 											  bool *multiShardModifyQuery,
 											  Const **partitionValueConst);
 extern List * RouterInsertTaskList(Query *query, DeferredErrorMessage **planningError);
