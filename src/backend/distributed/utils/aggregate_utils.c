@@ -145,7 +145,7 @@ stypebox_serialize(PG_FUNCTION_ARGS)
 		pfree(valbytes); /* TODO I get to free this right? */
 	}
 
-	PG_RETURN_BYTEA_P(valbytes);
+	PG_RETURN_BYTEA_P(realbytes);
 }
 
 
@@ -296,6 +296,7 @@ stypebox_combine(PG_FUNCTION_ARGS)
 	inner_fcinfo->argnull[0] = box1->value_null;
 	inner_fcinfo->arg[1] = box2->value;
 	inner_fcinfo->argnull[1] = box2->value_null;
+
 	/* TODO Deal with memory management juggling (see executor/nodeAgg) */
 	box1->value = FunctionCallInvoke(inner_fcinfo);
 	box1->value_null = inner_fcinfo->isnull;
@@ -347,6 +348,7 @@ worker_partial_agg_sfunc(PG_FUNCTION_ARGS)
 			}
 		}
 	}
+
 	/* Deal with memory management juggling (see executor/nodeAgg) */
 	inner_fcinfo->arg[0] = box->value;
 	inner_fcinfo->argnull[0] = box->value_null;
