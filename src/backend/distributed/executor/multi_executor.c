@@ -442,7 +442,7 @@ ExecuteQueryIntoDestReceiver(Query *query, ParamListInfo params, DestReceiver *d
 
 
 /*
- * ExecuteIntoDestReceiver plans and executes a query and sends results to the given
+ * ExecutePlanIntoDestReceiver executes a query plan and sends results to the given
  * DestReceiver.
  */
 void
