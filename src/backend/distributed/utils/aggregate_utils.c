@@ -4,9 +4,9 @@
 #include "catalog/pg_aggregate.h"
 #include "catalog/pg_proc.h"
 #include "catalog/pg_type.h"
-#include "utils/cache/lsyscache.h"
-#include "utils/fmgr.h"
+#include "utils/lsyscache.h"
 #include "utils/syscache.h"
+#include "fmgr.h"
 
 PG_FUNCTION_INFO_V1(stypebox_serialize);
 PG_FUNCTION_INFO_V1(stypebox_deserialize);
@@ -16,48 +16,58 @@ PG_FUNCTION_INFO_V1(worker_partial_agg_ffunc);
 PG_FUNCTION_INFO_V1(coord_combine_agg_sfunc);
 PG_FUNCTION_INFO_V1(coord_combine_agg_ffunc);
 
-// TODO nodeAgg seems to decide to use serial/deserial based on stype == internal
-//      Preferably we should match that logic, instead of checking serial/deserial oids
+/* TODO nodeAgg seems to decide to use serial/deserial based on stype == internal */
+/*      Preferably we should match that logic, instead of checking serial/deserial oids */
 
-typedef struct StypeBox {
+typedef struct StypeBox
+{
 	Datum value;
 	Oid agg;
 	bool value_null;
 } StypeBox;
 
-static HeapTuple *get_aggform(Oid oid, Form_pg_aggregate *form);
-static HeapTuple *get_procform(Oid oid, Form_pg_proc *form);
-static HeapTuple *get_typeform(Oid oid, Form_pg_type *form);
+static HeapTuple get_aggform(Oid oid, Form_pg_aggregate *form);
+static HeapTuple get_procform(Oid oid, Form_pg_proc *form);
+static HeapTuple get_typeform(Oid oid, Form_pg_type *form);
 
-static HeapTuple *
+static HeapTuple
 get_aggform(Oid oid, Form_pg_aggregate *form)
 {
 	HeapTuple tuple = SearchSysCache1(AGGFNOID, ObjectIdGetDatum(oid));
 	if (!HeapTupleIsValid(tuple))
+	{
 		elog(ERROR, "cache lookup failed for aggregate %u", oid);
+	}
 	*form = (Form_pg_aggregate) GETSTRUCT(tuple);
 	return tuple;
 }
 
-static HeapTuple *
-get_procform(Oid oid)
+
+static HeapTuple
+get_procform(Oid oid, Form_pg_proc *form)
 {
-	HeapTuple tuple = SearchSysCache1(PROCID, ObjectIdGetDatum(fnoid));
+	HeapTuple tuple = SearchSysCache1(PROCOID, ObjectIdGetDatum(oid));
 	if (!HeapTupleIsValid(tuple))
+	{
 		elog(ERROR, "cache lookup failed for function %u", oid);
+	}
 	*form = (Form_pg_proc) GETSTRUCT(tuple);
 	return tuple;
 }
 
-static HeapTuple *
-get_typeform(Oid oid)
+
+static HeapTuple
+get_typeform(Oid oid, Form_pg_type *form)
 {
-	HeapTuple tuple = SearchSysCache1(TYPEID, ObjectIdGetDatum(oid));
+	HeapTuple tuple = SearchSysCache1(TYPEOID, ObjectIdGetDatum(oid));
 	if (!HeapTupleIsValid(tuple))
+	{
 		elog(ERROR, "cache lookup failed for type %u", oid);
+	}
 	*form = (Form_pg_type) GETSTRUCT(tuple);
 	return tuple;
 }
+
 
 /*
  * (box) -> bytea
@@ -66,15 +76,17 @@ get_typeform(Oid oid)
 Datum
 stypebox_serialize(PG_FUNCTION_ARGS)
 {
-	FunctionCallInfo inner_fcinfo;
-	FmgrInfo info;
-	StypeBox *box = PG_GETARG_POINTER(0);
-	HeapTuple *aggtuple;
-	HeapTuple *transtypetuple;
+	FunctionCallInfoData inner_fcinfodata;
+	FunctionCallInfo inner_fcinfo = &inner_fcinfodata;
+	FmgrInfo infodata;
+	FmgrInfo *info = &infodata;
+	StypeBox *box = (StypeBox *) PG_GETARG_POINTER(0);
+	HeapTuple aggtuple;
+	HeapTuple transtypetuple;
 	Form_pg_aggregate aggform;
 	Form_pg_type transtypeform;
-	byteap *valbytes;
-	byteap *realbytes;
+	bytea *valbytes;
+	bytea *realbytes;
 	Oid serial;
 	Oid transtype;
 	Size valbyteslen_exhdr;
@@ -82,20 +94,20 @@ stypebox_serialize(PG_FUNCTION_ARGS)
 	Datum result;
 
 	aggtuple = get_aggform(box->agg, &aggform);
-	serial = aggform->serialfunc;
+	serial = aggform->aggserialfn;
 	transtype = aggform->aggtranstype;
 	ReleaseSysCache(aggtuple);
 
-	if (!IsValidOid(serial))
+	if (serial != InvalidOid)
 	{
-		// TODO do we have to fallback to output/receive if not set?
-		// ie is it possible for send/recv to be unset?
+		/* TODO do we have to fallback to output/receive if not set? */
+		/* ie is it possible for send/recv to be unset? */
 		transtypetuple = get_typeform(transtype, &transtypeform);
 		serial = transtypeform->typsend;
 		ReleaseSysCache(transtypetuple);
 	}
 
-	fmgr_info(serial, &info);
+	fmgr_info(serial, info);
 	if (info->fn_strict && box->value_null)
 	{
 		valbytes = NULL;
@@ -103,11 +115,12 @@ stypebox_serialize(PG_FUNCTION_ARGS)
 	}
 	else
 	{
-		InitFunctionCallInfoData(&inner_fcinfo, &info, 1, fcinfo->collation, fcinfo->context, fcinfo->resultinfo);
-		inner_fcinfo.arg[0] = box->value;
-		inner_fcinfo.argnull[0] = box->value_null;
-		result = FunctionCallInvoke(&inner_fcinfo);
-		if (inner_fcinfo.isnull)
+		InitFunctionCallInfoData(*inner_fcinfo, info, 1, fcinfo->fncollation,
+								 fcinfo->context, fcinfo->resultinfo);
+		inner_fcinfo->arg[0] = box->value;
+		inner_fcinfo->argnull[0] = box->value_null;
+		result = FunctionCallInvoke(inner_fcinfo);
+		if (inner_fcinfo->isnull)
 		{
 			valbytes = NULL;
 			valbyteslen_exhdr = 0;
@@ -129,11 +142,12 @@ stypebox_serialize(PG_FUNCTION_ARGS)
 		memcpy(VARDATA(realbytes) + sizeof(Oid) + sizeof(bool),
 			   VARDATA(valbytes),
 			   valbyteslen_exhdr);
-		pfree(valbytes); // TODO I get to free this right?
+		pfree(valbytes); /* TODO I get to free this right? */
 	}
 
 	PG_RETURN_BYTEA_P(valbytes);
 }
+
 
 /*
  * (bytea, internal) -> box
@@ -146,11 +160,11 @@ Datum
 stypebox_deserialize(PG_FUNCTION_ARGS)
 {
 	StypeBox *box;
-	byteap *bytes = PG_GETARG_BYTEA_PP(0);
-	byteap *inner_bytes;
+	bytea *bytes = PG_GETARG_BYTEA_PP(0);
+	bytea *inner_bytes;
 	Oid agg;
-	HeapTuple *aggtuple;
-	HeapTuple *transtypetuple;
+	HeapTuple aggtuple;
+	HeapTuple transtypetuple;
 	Form_pg_aggregate aggform;
 	Form_pg_type transtypeform;
 	Oid deserial;
@@ -173,14 +187,27 @@ stypebox_deserialize(PG_FUNCTION_ARGS)
 	}
 
 	aggtuple = get_aggform(agg, &aggform);
-	deserial = aggform->deserialfunc;
+	deserial = aggform->aggdeserialfn;
 	transtype = aggform->aggtranstype;
 	ReleaseSysCache(aggtuple);
 
-	if (aggform->deserialfunc) {
-		inner_bytes = PG_GETARG_BYTEA_P_SLICE(0, sizeof(Oid), VARSIZE(bytes) - sizeof(Oid))
-		box->value = DirectFunctionCall2(deserial, inner_bytes, PG_GETARG_DATUM(1));
-		box->null_value = false;
+	if (deserial != InvalidOid)
+	{
+		FmgrInfo fdeserialinfo;
+		FunctionCallInfoData fdeserial_callinfodata;
+
+		inner_bytes = PG_GETARG_BYTEA_P_SLICE(0, sizeof(Oid), VARSIZE(bytes) -
+											  sizeof(Oid));
+		fmgr_info(deserial, &fdeserialinfo);
+		InitFunctionCallInfoData(fdeserial_callinfodata, &fdeserialinfo, 2,
+								 fcinfo->fncollation, fcinfo->context,
+								 fcinfo->resultinfo);
+		fdeserial_callinfodata.arg[0] = PointerGetDatum(inner_bytes);
+		fdeserial_callinfodata.argnull[0] = false;
+		fdeserial_callinfodata.arg[1] = PG_GETARG_DATUM(1);
+		fdeserial_callinfodata.argnull[1] = false;
+		box->value = FunctionCallInvoke(&fdeserial_callinfodata);
+		box->value_null = fdeserial_callinfodata.isnull;
 	}
 	else
 	{
@@ -190,9 +217,9 @@ stypebox_deserialize(PG_FUNCTION_ARGS)
 		ReleaseSysCache(transtypetuple);
 
 		initStringInfo(&buf);
-		appendBinaryStringInfo(buf,
-							   VARDATA(realbytes) + sizeof(Oid) + sizeof(bool),
-							   VARSIZE(realbytes) - VARHDRSZ - sizeof(Oid) - sizeof(bool));
+		appendBinaryStringInfo(&buf,
+							   VARDATA(bytes) + sizeof(Oid) + sizeof(bool),
+							   VARSIZE(bytes) - VARHDRSZ - sizeof(Oid) - sizeof(bool));
 
 		box->value = OidReceiveFunctionCall(recv, &buf, ioparam, -1);
 		box->value_null = value_null;
@@ -200,6 +227,7 @@ stypebox_deserialize(PG_FUNCTION_ARGS)
 
 	PG_RETURN_POINTER(box);
 }
+
 
 /*
  * (box1, box2) -> box
@@ -211,19 +239,20 @@ stypebox_combine(PG_FUNCTION_ARGS)
 {
 	StypeBox *box1 = NULL;
 	StypeBox *box2 = NULL;
-	FunctionCallInfo inner_fcinfo;
+	FunctionCallInfoData inner_fcinfodata;
+	FunctionCallInfo inner_fcinfo = &inner_fcinfodata;
 	FmgrInfo info;
-	Oid aggOid;
-	HeapTuple *aggtuple;
+	Oid combine;
+	HeapTuple aggtuple;
 	Form_pg_aggregate aggform;
 
-	if (!PG_ISARGNULL(0))
+	if (!PG_ARGISNULL(0))
 	{
-		box1 = PG_GETARG_POINTER(0);
+		box1 = (StypeBox *) PG_GETARG_POINTER(0);
 	}
-	if (!PG_ISARGNULL(1))
+	if (!PG_ARGISNULL(1))
 	{
-		box2 = PG_GETARG_POINTER(1);
+		box2 = (StypeBox *) PG_GETARG_POINTER(1);
 	}
 
 	if (box1 == NULL)
@@ -239,8 +268,8 @@ stypebox_combine(PG_FUNCTION_ARGS)
 	}
 
 	aggtuple = get_aggform(box1->agg, &aggform);
-	Assert(IsValidOid(aggform->combineefn));
-	combine = aggform->combinefn;
+	Assert(aggform->combineefn != InvalidOid);
+	combine = aggform->aggcombinefn;
 	ReleaseSysCache(aggtuple);
 
 	fmgr_info(combine, &info);
@@ -261,17 +290,19 @@ stypebox_combine(PG_FUNCTION_ARGS)
 		}
 	}
 
-	InitFunctionCallInfoData(&inner_fcinfo, &info, 2, fcinfo->collation, fcinfo->context, fcinfo->resultinfo);
-	inner_fcinfo.arg[0] = box1->value;
-	inner_fcinfo.argnull[0] = box1->value_null;
-	inner_fcinfo.arg[1] = box2->value;
-	inner_fcinfo.argnull[1] = box2->value_null;
-	// TODO Deal with memory management juggling (see executor/nodeAgg)
-	box1->value = FunctionCallInvoke(&inner_fcinfo);
-	box1->value_null = inner_fcinfo.isnull;
+	InitFunctionCallInfoData(*inner_fcinfo, &info, 2, fcinfo->fncollation,
+							 fcinfo->context, fcinfo->resultinfo);
+	inner_fcinfo->arg[0] = box1->value;
+	inner_fcinfo->argnull[0] = box1->value_null;
+	inner_fcinfo->arg[1] = box2->value;
+	inner_fcinfo->argnull[1] = box2->value_null;
+	/* TODO Deal with memory management juggling (see executor/nodeAgg) */
+	box1->value = FunctionCallInvoke(inner_fcinfo);
+	box1->value_null = inner_fcinfo->isnull;
 
 	PG_RETURN_POINTER(box1);
 }
+
 
 /*
  * (box, agg, ...) -> box
@@ -283,10 +314,12 @@ Datum
 worker_partial_agg_sfunc(PG_FUNCTION_ARGS)
 {
 	StypeBox *box;
-	FunctionCallInfo inner_fcinfo;
+	FunctionCallInfoData inner_fcinfodata;
+	FunctionCallInfo inner_fcinfo = &inner_fcinfodata;
 	FmgrInfo info;
 	int i;
-	if (PG_ARGISNULL(0)) {
+	if (PG_ARGISNULL(0))
+	{
 		box = palloc(sizeof(StypeBox));
 		box->agg = PG_GETARG_OID(1);
 		box->value = (Datum) 0;
@@ -294,17 +327,19 @@ worker_partial_agg_sfunc(PG_FUNCTION_ARGS)
 	}
 	else
 	{
-		box = PG_GETARG_POINTER(0);
+		box = (StypeBox *) PG_GETARG_POINTER(0);
 		Assert(box->agg == PG_GETARG_OID(1));
 	}
 	fmgr_info(box->agg, &info);
-	InitFunctionCallInfoData(&inner_fcinfo, &info, fcinfo->nargs - 1, fcinfo->collation, fcinfo->context, fcinfo->resultinfo);
-	if (info.flinfo->fn_strict) {
+	InitFunctionCallInfoData(*inner_fcinfo, &info, fcinfo->nargs - 1, fcinfo->fncollation,
+							 fcinfo->context, fcinfo->resultinfo);
+	if (info.fn_strict)
+	{
 		if (box->value_null)
 		{
 			PG_RETURN_NULL();
 		}
-		for (i = 2; i<PG_NARGS(); i++)
+		for (i = 2; i < PG_NARGS(); i++)
 		{
 			if (PG_ARGISNULL(i))
 			{
@@ -312,15 +347,18 @@ worker_partial_agg_sfunc(PG_FUNCTION_ARGS)
 			}
 		}
 	}
-	// Deal with memory management juggling (see executor/nodeAgg)
-	inner_fcinfo.arg[0] = box->value;
-	inner_fcinfo.argnull[0] = box->value_null;
-	memcpy(&inner_fcinfo.arg[1], &fcinfo.arg[2], sizeof(Datum) * (inner_fcinfo.nargs - 1));
-	memcpy(&inner_fcinfo.argnull[1], &fcinfo.argnull[2], sizeof(bool) * (inner_fcinfo.nargs - 1));
-	box->value = FunctionCallInvoke(&inner_fcinfo);
-	box->value_null = inner_fcinfo.isnull;
+	/* Deal with memory management juggling (see executor/nodeAgg) */
+	inner_fcinfo->arg[0] = box->value;
+	inner_fcinfo->argnull[0] = box->value_null;
+	memcpy(&inner_fcinfo->arg[1], &fcinfo->arg[2], sizeof(Datum) * (inner_fcinfo->nargs -
+																	1));
+	memcpy(&inner_fcinfo->argnull[1], &fcinfo->argnull[2], sizeof(bool) *
+		   (inner_fcinfo->nargs - 1));
+	box->value = FunctionCallInvoke(inner_fcinfo);
+	box->value_null = inner_fcinfo->isnull;
 	PG_RETURN_POINTER(box);
 }
+
 
 /*
  * (box) -> box.agg.stype
@@ -329,30 +367,32 @@ worker_partial_agg_sfunc(PG_FUNCTION_ARGS)
 Datum
 worker_partial_agg_ffunc(PG_FUNCTION_ARGS)
 {
-	FunctionCallInfo inner_fcinfo;
+	FunctionCallInfoData inner_fcinfodata;
+	FunctionCallInfo inner_fcinfo = &inner_fcinfodata;
 	FmgrInfo info;
-	StypeBox *box = PG_GETARG_POINTER(0);
-	HeapTuple *aggtuple;
+	StypeBox *box = (StypeBox *) PG_GETARG_POINTER(0);
+	HeapTuple aggtuple;
 	Form_pg_aggregate aggform;
 	Oid serial;
 	Datum result;
 
-	aggtuple = get_aggform(box->agg);
-	serial = aggform->serialfunc;
+	aggtuple = get_aggform(box->agg, &aggform);
+	serial = aggform->aggserialfn;
 	ReleaseSysCache(aggtuple);
 
-	if (IsValidOid(serial))
+	if (serial != InvalidOid)
 	{
 		fmgr_info(serial, &info);
-		if (info->fn_strict && box->value_null)
+		if (info.fn_strict && box->value_null)
 		{
 			PG_RETURN_NULL();
 		}
-		InitFunctionCallInfoData(&inner_fcinfo, &info, 1, fcinfo->collation, fcinfo->context, fcinfo->resultinfo);
-		inner_fcinfo.arg[0] = box->value;
-		inner_fcinfo.argnull[0] = box->value_null;
-		result = FunctionCallInvoke(&inner_fcinfo);
-		if (inner_fcinfo.isnull)
+		InitFunctionCallInfoData(*inner_fcinfo, &info, 1, fcinfo->fncollation,
+								 fcinfo->context, fcinfo->resultinfo);
+		inner_fcinfo->arg[0] = box->value;
+		inner_fcinfo->argnull[0] = box->value_null;
+		result = FunctionCallInvoke(inner_fcinfo);
+		if (inner_fcinfo->isnull)
 		{
 			PG_RETURN_NULL();
 		}
@@ -368,6 +408,7 @@ worker_partial_agg_ffunc(PG_FUNCTION_ARGS)
 	}
 }
 
+
 /*
  * (box, agg, valbytes|value) -> box
  * box->agg = agg
@@ -378,18 +419,19 @@ worker_partial_agg_ffunc(PG_FUNCTION_ARGS)
 Datum
 coord_combine_agg_sfunc(PG_FUNCTION_ARGS)
 {
-	FunctionCallInfo inner_fcinfo;
+	FunctionCallInfoData inner_fcinfodata;
+	FunctionCallInfo inner_fcinfo = &inner_fcinfodata;
 	FmgrInfo info;
-	HeapTuple *aggtuple;
-	HeapTuple *transtypetuple;
+	HeapTuple aggtuple;
 	Form_pg_aggregate aggform;
-	Form_pg_type transtypeform;
 	Oid combine;
 	Oid deserial;
 	Datum value;
 	bool value_null;
+	StypeBox *box;
 
-	if (PG_ARGISNULL(0)) {
+	if (PG_ARGISNULL(0))
+	{
 		box = palloc(sizeof(StypeBox));
 		box->agg = PG_GETARG_OID(1);
 		box->value = (Datum) 0;
@@ -397,28 +439,29 @@ coord_combine_agg_sfunc(PG_FUNCTION_ARGS)
 	}
 	else
 	{
-		box = PG_GETARG_POINTER(0);
+		box = (StypeBox *) PG_GETARG_POINTER(0);
 		Assert(box->agg == PG_GETARG_OID(1));
 	}
 
 	aggtuple = get_aggform(box->agg, &aggform);
-	deserial = aggform->deserialfunc;
-	combine = aggform->combinefn;
+	deserial = aggform->aggdeserialfn;
+	combine = aggform->aggcombinefn;
 	ReleaseSysCache(aggtuple);
 
-	value_null = PG_ISARGNULL(2);
-	if (IsOidValid(deserial))
+	value_null = PG_ARGISNULL(2);
+	if (deserial != InvalidOid)
 	{
 		fmgr_info(deserial, &info);
-		if (!value_null || !info->fn_strict)
+		if (!value_null || !info.fn_strict)
 		{
-			InitFunctionCallInfoData(&inner_fcinfo, &info, 2, fcinfo->collation, fcinfo->context, fcinfo->resultinfo);
-			inner_fcinfo.arg[0] = value_null ? 0 (Datum) : PG_GETARG_BYTEA_PP(2);
-			inner_fcinfo.arg[1] = 0 (Datum);
-			inner_fcinfo.argnull[0] = value_null;
-			inner_fcinfo.argnull[1] = true;
-			value = FunctionCallInvoke(&inner_fcinfo);
-			value_null = inner_fcinfo.isnull;
+			InitFunctionCallInfoData(*inner_fcinfo, &info, 2, fcinfo->fncollation,
+									 fcinfo->context, fcinfo->resultinfo);
+			inner_fcinfo->arg[0] = value_null ? (Datum) 0 : PG_GETARG_DATUM(2);
+			inner_fcinfo->arg[1] = (Datum) 0;
+			inner_fcinfo->argnull[0] = value_null;
+			inner_fcinfo->argnull[1] = true;
+			value = FunctionCallInvoke(inner_fcinfo);
+			value_null = inner_fcinfo->isnull;
 		}
 		else
 		{
@@ -427,12 +470,13 @@ coord_combine_agg_sfunc(PG_FUNCTION_ARGS)
 	}
 	else
 	{
-		value = value_null ? (Datum) 0 : PG_GETARG(2);
+		value = value_null ? (Datum) 0 : PG_GETARG_DATUM(2);
 	}
 
 	fmgr_info(combine, &info);
 
-	if (info.fn_strict) {
+	if (info.fn_strict)
+	{
 		if (box->value_null)
 		{
 			if (value_null)
@@ -449,17 +493,18 @@ coord_combine_agg_sfunc(PG_FUNCTION_ARGS)
 		}
 	}
 
-	InitFunctionCallInfoData(&innerfcinfo, &info, 2, fcinfo->collation, fcinfo->context, fcinfo->resultinfo);
-	inner_fcinfo.arg[0] = box->value;
-	inner_fcinfo.argnull[0] = box->value_null;
-	inner_fcinfo.arg[1] = value;
-	inner_fcinfo.argnull[1] = value_null;
-	box->value = DirectFunctionCall2(combine, box->value, value);
-	box->value = FunctionCallInvoke(&inner_fcinfo);
-	box->value_null = inner_fcinfo.isnull;
+	InitFunctionCallInfoData(*inner_fcinfo, &info, 2, fcinfo->fncollation,
+							 fcinfo->context, fcinfo->resultinfo);
+	inner_fcinfo->arg[0] = box->value;
+	inner_fcinfo->argnull[0] = box->value_null;
+	inner_fcinfo->arg[1] = value;
+	inner_fcinfo->argnull[1] = value_null;
+	box->value = FunctionCallInvoke(inner_fcinfo);
+	box->value_null = inner_fcinfo->isnull;
 
 	PG_RETURN_POINTER(box);
 }
+
 
 /*
  * (box, ...) -> fval
@@ -469,12 +514,13 @@ Datum
 coord_combine_agg_ffunc(PG_FUNCTION_ARGS)
 {
 	Datum ret;
-	StypeBox *box = PG_GETARG_POINTER(0);
-	FunctionCallInfo inner_fcinfo;
+	StypeBox *box = (StypeBox *) PG_GETARG_POINTER(0);
+	FunctionCallInfoData inner_fcinfodata;
+	FunctionCallInfo inner_fcinfo = &inner_fcinfodata;
 	FmgrInfo info;
 	int inner_nargs;
-	HeapTuple *aggtuple;
-	HeapTuple *ffunctuple;
+	HeapTuple aggtuple;
+	HeapTuple ffunctuple;
 	Form_pg_aggregate aggform;
 	Form_pg_proc ffuncform;
 	Oid ffunc;
@@ -487,7 +533,7 @@ coord_combine_agg_ffunc(PG_FUNCTION_ARGS)
 	fextra = aggform->aggfinalextra;
 	ReleaseSysCache(aggtuple);
 
-	if (!IsValidOid(ffunc))
+	if (ffunc == InvalidOid)
 	{
 		if (box->value_null)
 		{
@@ -515,15 +561,15 @@ coord_combine_agg_ffunc(PG_FUNCTION_ARGS)
 		inner_nargs = 1;
 	}
 	fmgr_info(ffunc, &info);
-	InitFunctionCallInfoData(&inner_fcinfo, &info, inner_nargs, fcinfo->collation, fcinfo->context, fcinfo->resultinfo);
-	inner_fcinfo.arg[0] = box->value;
-	inner_fcinfo.argnull[0] = box->value_null;
-	for (i = 1; i<inner_nargs; i++)
+	InitFunctionCallInfoData(*inner_fcinfo, &info, inner_nargs, fcinfo->fncollation,
+							 fcinfo->context, fcinfo->resultinfo);
+	inner_fcinfo->arg[0] = box->value;
+	inner_fcinfo->argnull[0] = box->value_null;
+	for (i = 1; i < inner_nargs; i++)
 	{
-		inner_fcinfo.argnull[i] = true;
+		inner_fcinfo->argnull[i] = true;
 	}
-	ret = FunctionCallInvoke(&inner_fcinfo);
-	fcinfo.isnull = inner_fcinfo.isnull;
+	ret = FunctionCallInvoke(inner_fcinfo);
+	fcinfo->isnull = inner_fcinfo->isnull;
 	return ret;
 }
-

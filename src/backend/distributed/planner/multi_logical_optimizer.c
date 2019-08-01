@@ -1515,23 +1515,26 @@ MasterAggregateExpression(Aggref *originalAggregate,
 	Oid deserial = InvalidOid;
 
 	aggTuple = SearchSysCache1(AGGFNOID,
-								ObjectIdGetDatum(originalAggregate->aggfnoid));
+							   ObjectIdGetDatum(originalAggregate->aggfnoid));
 	if (!HeapTupleIsValid(aggTuple))
+	{
 		elog(ERROR, "cache lookup failed for aggregate %u",
-				originalAggregate->aggfnoid);
+			 originalAggregate->aggfnoid);
+	}
 	aggform = (Form_pg_aggregate) GETSTRUCT(aggTuple);
 	combine = aggform->aggcombinefn;
-	if (IsValidOid(combine) && originalAggregate->aggtranstype == INTERNALOID) {
+	if (combine != InvalidOid && originalAggregate->aggtranstype == INTERNALOID)
+	{
 		serial = aggform->aggserialfn;
 		deserial = aggform->aggdeserialfn;
 	}
 	ReleaseSysCache(aggTuple);
 
-	if (IsValidOid(combine)) {
-
-	} else if (aggregateType == AGGREGATE_COUNT && originalAggregate->aggdistinct &&
-		CountDistinctErrorRate == DISABLE_DISTINCT_APPROXIMATION &&
-		walkerContext->pullDistinctColumns)
+	if (combine != InvalidOid)
+	{ }
+	else if (aggregateType == AGGREGATE_COUNT && originalAggregate->aggdistinct &&
+			 CountDistinctErrorRate == DISABLE_DISTINCT_APPROXIMATION &&
+			 walkerContext->pullDistinctColumns)
 	{
 		Aggref *aggregate = (Aggref *) copyObject(originalAggregate);
 		List *varList = pull_var_clause_default((Node *) aggregate);
