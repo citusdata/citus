@@ -3,7 +3,7 @@ SET citus.next_shard_id TO 750000;
 SET citus.next_placement_id TO 750000;
 
 -- some failure messages that comes from the worker nodes
--- might change due to parallel exectuions, so supress those
+-- might change due to parallel executions, so suppress those
 -- using \set VERBOSITY terse
 
 -- ===================================================================
@@ -88,11 +88,9 @@ INSERT INTO append_partitioned VALUES (414123, 'AAPL', 9580, '2004-10-19 10:23:5
 									   20.69);
 -- ensure the values are where we put them and query to ensure they are properly pruned
 SET client_min_messages TO 'DEBUG2';
-RESET citus.task_executor_type;
 SELECT * FROM range_partitioned WHERE id = 32743;
 SELECT * FROM append_partitioned WHERE id = 414123;
 SET client_min_messages TO DEFAULT;
-SET citus.task_executor_type TO DEFAULT;
 
 -- try inserting without a range-partitioned shard to receive the value
 INSERT INTO range_partitioned VALUES (999999, 'AAPL', 9580, '2004-10-19 10:23:54', 'buy',
@@ -262,10 +260,16 @@ INSERT INTO limit_orders VALUES (276, 'ADR', 140, '2007-07-02 16:32:15', 'sell',
 -- Second: Move aside limit_orders shard on the second worker node
 ALTER TABLE renamed_orders RENAME TO limit_orders_750000;
 
--- Connect back to master node
+-- Verify the insert failed and both placements are healthy
+-- or the insert succeeded and placement marked unhealthy
+\c - - - :worker_1_port
+SELECT count(*) FROM limit_orders_750000 WHERE id = 276;
+
+\c - - - :worker_2_port
+SELECT count(*) FROM limit_orders_750000 WHERE id = 276;
+
 \c - - - :master_port
 
--- Verify the insert failed and both placements are healthy
 SELECT count(*) FROM limit_orders WHERE id = 276;
 
 SELECT count(*)
