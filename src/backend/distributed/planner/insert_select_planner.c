@@ -440,6 +440,7 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 	List *selectPlacementList = NIL;
 	uint64 selectAnchorShardId = INVALID_SHARD_ID;
 	List *relationShardList = NIL;
+	List *prunedShardIntervalListList = NIL;
 	uint64 jobId = INVALID_JOB_ID;
 	List *insertShardPlacementList = NULL;
 	List *intersectedPlacementList = NULL;
@@ -519,7 +520,8 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 	 */
 	planningError = PlanRouterQuery(copiedSubquery, copyOfPlannerRestrictionContext,
 									&selectPlacementList, &selectAnchorShardId,
-									&relationShardList, replacePrunedQueryWithDummy,
+									&relationShardList, &prunedShardIntervalListList,
+									replacePrunedQueryWithDummy,
 									&multiShardModifyQuery, NULL);
 
 	Assert(!multiShardModifyQuery);

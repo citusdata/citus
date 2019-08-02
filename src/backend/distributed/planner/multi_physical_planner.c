@@ -2066,7 +2066,7 @@ BuildJobTreeTaskList(Job *jobTree, PlannerRestrictionContext *plannerRestriction
 
 /*
  * QueryPushdownSqlTaskList creates a list of SQL tasks to execute the given subquery
- * pushdown job. For this, the it is being checked whether the query is router
+ * pushdown job. For this, it is being checked whether the query is router
  * plannable per target shard interval. For those router plannable worker
  * queries, we create a SQL task and append the task to the task list that is going
  * to be executed.
