@@ -94,7 +94,7 @@ ProcessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand)
 			taskList = VacuumTaskList(relationId, vacuumStmt->options, vacuumColumnList);
 
 			/* use adaptive executor when enabled */
-			ExecuteUtilityTaskListWithoutResults(taskList, targetPoolSize, false);
+			ExecuteUtilityTaskListWithoutResults(taskList, targetPoolSize);
 			executedVacuumCount++;
 		}
 		relationIndex++;
