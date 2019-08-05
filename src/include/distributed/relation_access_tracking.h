@@ -23,13 +23,20 @@ struct ShardPlacement;
 typedef enum RelationAccessMode
 {
 	RELATION_NOT_ACCESSED,
-	RELATION_SEQUENTIAL_ACCESSED,
+
+	/* only valid for reference tables */
+	RELATION_REFERENCE_ACCESSED,
+
+	/*
+	 * Only valid for distributed tables and set
+	 * if table is accessed in parallel mode
+	 */
 	RELATION_PARALLEL_ACCESSED
 } RelationAccessMode;
 
 extern void AllocateRelationAccessHash(void);
 extern void ResetRelationAccessHash(void);
-extern void AssociatePlacementAccessWithRelation(ShardPlacement *placement,
+extern void RecordRelationAccessIfReferenceTable(Oid relationId,
 												 ShardPlacementAccessType accessType);
 extern void RecordParallelRelationAccessForTaskList(List *taskList);
 extern void RecordParallelSelectAccess(Oid relationId);

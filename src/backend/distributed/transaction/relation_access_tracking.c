@@ -82,7 +82,7 @@ static HTAB *RelationAccessHash;
 
 
 /* functions related to access recording */
-static void RecordRelationAccess(Oid relationId, ShardPlacementAccessType accessType);
+static void RecordRelationAccessBase(Oid relationId, ShardPlacementAccessType accessType);
 static void RecordPlacementAccessToCache(Oid relationId,
 										 ShardPlacementAccessType accessType);
 static void RecordRelationParallelSelectAccessForTask(Task *task);
@@ -148,25 +148,32 @@ AllocateRelationAccessHash(void)
 
 
 /*
- * AssociatePlacementAccessWithRelation associates the placement access to the
- * distributed relation that the placement belongs to.
+ * RecordRelationAccessIfReferenceTable marks the relation accessed if it is a
+ * reference relation.
+ *
+ * The function is a wrapper around RecordRelationAccessBase().
  */
 void
-AssociatePlacementAccessWithRelation(ShardPlacement *placement,
-									 ShardPlacementAccessType accessType)
+RecordRelationAccessIfReferenceTable(Oid relationId, ShardPlacementAccessType accessType)
 {
-	Oid relationId = InvalidOid;
-	uint64 shardId = INVALID_SHARD_ID;
-
 	if (!ShouldRecordRelationAccess())
 	{
 		return;
 	}
 
-	shardId = placement->shardId;
-	relationId = RelationIdForShard(shardId);
+	/*
+	 * We keep track of relation accesses for the purposes of foreign keys to
+	 * reference tables. So, other distributed tables are not relevant for now.
+	 * Additionally, partitioned tables with lots of partitions might require
+	 * recursively calling RecordRelationAccessBase(), so becareful about
+	 * removing this check.
+	 */
+	if (PartitionMethod(relationId) != DISTRIBUTE_BY_NONE)
+	{
+		return;
+	}
 
-	RecordRelationAccess(relationId, accessType);
+	RecordRelationAccessBase(relationId, accessType);
 }
 
 
@@ -205,15 +212,15 @@ PlacementAccessTypeToText(ShardPlacementAccessType accessType)
 
 
 /*
- * RecordRelationAccess associates the access to the distributed relation. The
+ * RecordRelationAccessBase associates the access to the distributed relation. The
  * function takes partitioned relations into account as well.
  *
  * We implemented this function to prevent accessing placement metadata during
  * recursive calls of the function itself (e.g., avoid
- * AssociatePlacementAccessWithRelation()).
+ * RecordRelationAccessBase()).
  */
 static void
-RecordRelationAccess(Oid relationId, ShardPlacementAccessType accessType)
+RecordRelationAccessBase(Oid relationId, ShardPlacementAccessType accessType)
 {
 	/* make sure that this is not a conflicting access */
 	CheckConflictingRelationAccesses(relationId, accessType);
@@ -244,7 +251,7 @@ RecordRelationAccess(Oid relationId, ShardPlacementAccessType accessType)
 			}
 
 			/* recursively call the function to cover multi-level partitioned tables */
-			RecordRelationAccess(partitionOid, accessType);
+			RecordRelationAccessBase(partitionOid, accessType);
 		}
 	}
 	else if (PartitionTableNoLock(relationId))
@@ -680,7 +687,7 @@ GetRelationAccessMode(Oid relationId, ShardPlacementAccessType accessType)
 	}
 	else
 	{
-		return RELATION_SEQUENTIAL_ACCESSED;
+		return RELATION_REFERENCE_ACCESSED;
 	}
 }
 

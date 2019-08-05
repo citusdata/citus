@@ -23,15 +23,32 @@ CREATE OR REPLACE FUNCTION relation_ddl_access_mode(relationId Oid)
     LANGUAGE C STABLE STRICT
     AS 'citus', $$relation_ddl_access_mode$$;
 
+CREATE OR REPLACE FUNCTION distributed_relation(relation_name text)
+RETURNS bool AS
+$$
+DECLARE
+	part_method char;
+BEGIN
+		 select partmethod INTO part_method from pg_dist_partition  WHERE logicalrelid = relation_name::regclass;
+         IF part_method = 'h' THEN
+                RETURN true;
+         ELSE
+                RETURN false;
+         END IF;
+END;
+$$ LANGUAGE 'plpgsql' IMMUTABLE;
 
-CREATE OR REPLACE FUNCTION relation_access_mode_to_text(relationShardAccess int)
+
+CREATE OR REPLACE FUNCTION relation_access_mode_to_text(relation_name text, relationShardAccess int)
 RETURNS text AS
 $$
 BEGIN
-	 IF relationShardAccess = 0 THEN
+	 IF relationShardAccess = 0 and distributed_relation(relation_name) THEN
+	 	RETURN 'not_parallel_accessed';
+	 ELSIF relationShardAccess = 0 and NOT distributed_relation(relation_name) THEN
 	 	RETURN 'not_accessed';
 	 ELSIF relationShardAccess = 1 THEN
-	 	RETURN 'sequential_access';
+	 	RETURN 'reference_table_access';
 	 ELSE 
 		RETURN 'parallel_access';
 	 END IF;
@@ -42,9 +59,9 @@ $$ LANGUAGE 'plpgsql' IMMUTABLE;
 
 CREATE VIEW relation_acesses AS 
 	SELECT table_name, 
-			relation_access_mode_to_text(relation_select_access_mode(table_name::regclass)) as select_access,
-			relation_access_mode_to_text(relation_dml_access_mode(table_name::regclass)) as dml_access,
-			relation_access_mode_to_text(relation_ddl_access_mode(table_name::regclass)) as ddl_access
+			relation_access_mode_to_text(table_name, relation_select_access_mode(table_name::regclass)) as select_access,
+			relation_access_mode_to_text(table_name, relation_dml_access_mode(table_name::regclass)) as dml_access,
+			relation_access_mode_to_text(table_name, relation_ddl_access_mode(table_name::regclass)) as ddl_access
 	FROM 
 		((SELECT 'table_' || i as table_name FROM generate_series(1, 7) i) UNION (SELECT 'partitioning_test') UNION (SELECT 'partitioning_test_2009') UNION (SELECT 'partitioning_test_2010')) tables;
 
