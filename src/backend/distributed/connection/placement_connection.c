@@ -700,9 +700,6 @@ FindPlacementListConnection(int flags, List *placementAccessList, const char *us
 			Assert(!placementConnection->hadDML);
 			Assert(accessType != PLACEMENT_ACCESS_DDL);
 		}
-
-		/* record the relation access mapping */
-		AssociatePlacementAccessWithRelation(placement, accessType);
 	}
 
 	return chosenConnection;

@@ -2468,6 +2468,10 @@ CitusSendTupleToPlacements(TupleTableSlot *slot, CitusCopyDestReceiver *copyDest
 
 		if (switchToCurrentPlacement)
 		{
+			List *placementList = ShardPlacementList(shardId);
+			ShardPlacement *placement = NULL;
+			MultiConnection *connection = connectionState->connection;
+
 			StartPlacementStateCopyCommand(currentPlacementState, copyStatement,
 										   copyOutState);
 			dlist_delete(&currentPlacementState->bufferedPlacementNode);
@@ -2480,6 +2484,12 @@ CitusSendTupleToPlacements(TupleTableSlot *slot, CitusCopyDestReceiver *copyDest
 
 			/* additionaly, we need to send the current tuple too */
 			sendTupleOverConnection = true;
+
+			/* make sure that we keep track of relation accesses */
+			placement =
+				SearchShardPlacementInList(placementList, connection->hostname,
+										   connection->port, false);
+			AssociatePlacementAccessWithRelation(placement, PLACEMENT_ACCESS_DML);
 		}
 		else if (currentPlacementState != activePlacementState)
 		{
