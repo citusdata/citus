@@ -2346,6 +2346,8 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
 
 	copyDest->shardStateHash = CreateShardStateHash(TopTransactionContext);
 	copyDest->connectionStateHash = CreateConnectionStateHash(TopTransactionContext);
+
+	RecordRelationAccessIfReferenceTable(tableId, PLACEMENT_ACCESS_DML);
 }
 
 
