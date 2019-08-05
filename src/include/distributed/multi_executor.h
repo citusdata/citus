@@ -42,8 +42,7 @@ extern uint64 ExecuteTaskListExtended(RowModifyLevel modLevel, List *taskList,
 									  TupleDesc tupleDescriptor,
 									  Tuplestorestate *tupleStore,
 									  bool hasReturning, int targetPoolSize);
-extern void ExecuteUtilityTaskListWithoutResults(List *taskList, int targetPoolSize,
-												 bool forceSequentialExecution);
+extern void ExecuteUtilityTaskListWithoutResults(List *taskList, int targetPoolSize);
 extern uint64 ExecuteTaskList(RowModifyLevel modLevel, List *taskList, int
 							  targetPoolSize);
 extern TupleTableSlot * CitusExecScan(CustomScanState *node);
