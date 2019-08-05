@@ -77,8 +77,7 @@ citus_truncate_trigger(PG_FUNCTION_ARGS)
 	{
 		List *taskList = TruncateTaskList(relationId);
 
-		ExecuteUtilityTaskListWithoutResults(taskList, MaxAdaptiveExecutorPoolSize,
-											 false);
+		ExecuteUtilityTaskListWithoutResults(taskList, MaxAdaptiveExecutorPoolSize);
 	}
 
 	PG_RETURN_DATUM(PointerGetDatum(NULL));

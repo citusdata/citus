@@ -1064,8 +1064,6 @@ ADD CONSTRAINT
 	fkey_delete FOREIGN KEY(value_1) 
 REFERENCES 
 	reference_table(id) ON DELETE CASCADE;
-DEBUG:  switching to sequential query execution mode
-DETAIL:  Reference relation "reference_table" is modified, which might lead to data inconsistencies or distributed deadlocks via parallel accesses to hash distributed relations due to foreign keys. Any parallel modification to those hash distributed relations in the same transaction can only be executed in sequential query execution mode
 INSERT INTO reference_table SELECT i FROM generate_series(0, 10) i;
 DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
 DEBUG:  Collecting INSERT ... SELECT results on coordinator

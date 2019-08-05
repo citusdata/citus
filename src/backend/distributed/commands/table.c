@@ -418,11 +418,15 @@ PlanAlterTableStmt(AlterTableStmt *alterTableStatement, const char *alterTableCo
 															   command);
 	}
 
+	if (executeSequentially)
+	{
+		SetLocalMultiShardModifyModeToSequential();
+	}
+
 	ddlJob = palloc0(sizeof(DDLJob));
 	ddlJob->targetRelationId = leftRelationId;
 	ddlJob->concurrentIndexCmd = false;
 	ddlJob->commandString = alterTableCommand;
-	ddlJob->executeSequentially = executeSequentially;
 
 	if (rightRelationId)
 	{

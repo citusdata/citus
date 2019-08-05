@@ -657,8 +657,7 @@ AdaptiveExecutor(CustomScanState *node)
  * through router executor.
  */
 void
-ExecuteUtilityTaskListWithoutResults(List *taskList, int targetPoolSize,
-									 bool forceSequentialExecution)
+ExecuteUtilityTaskListWithoutResults(List *taskList, int targetPoolSize)
 {
 	if (TaskExecutorType == MULTI_EXECUTOR_ADAPTIVE)
 	{
@@ -666,8 +665,7 @@ ExecuteUtilityTaskListWithoutResults(List *taskList, int targetPoolSize,
 	}
 	else
 	{
-		if (MultiShardConnectionType == SEQUENTIAL_CONNECTION ||
-			forceSequentialExecution)
+		if (MultiShardConnectionType == SEQUENTIAL_CONNECTION)
 		{
 			ExecuteModifyTasksSequentiallyWithoutResults(taskList, ROW_MODIFY_NONE);
 		}
