@@ -23,7 +23,14 @@ struct ShardPlacement;
 typedef enum RelationAccessMode
 {
 	RELATION_NOT_ACCESSED,
-	RELATION_SEQUENTIAL_ACCESSED,
+
+	/* only valid for reference tables */
+	RELATION_REFERENCE_ACCESSED,
+
+	/*
+	 * Only valid for distributed tables and set
+	 * if table is accessed in parallel mode
+	 */
 	RELATION_PARALLEL_ACCESSED
 } RelationAccessMode;
 

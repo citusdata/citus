@@ -166,6 +166,12 @@ AssociatePlacementAccessWithRelation(ShardPlacement *placement,
 	shardId = placement->shardId;
 	relationId = RelationIdForShard(shardId);
 
+	/* placement accesses are only relevant for reference tables */
+	if (!ReferenceTableShardId(shardId))
+	{
+		return;
+	}
+
 	RecordRelationAccess(relationId, accessType);
 }
 
@@ -680,7 +686,7 @@ GetRelationAccessMode(Oid relationId, ShardPlacementAccessType accessType)
 	}
 	else
 	{
-		return RELATION_SEQUENTIAL_ACCESSED;
+		return RELATION_REFERENCE_ACCESSED;
 	}
 }
 
