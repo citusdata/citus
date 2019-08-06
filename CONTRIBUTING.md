@@ -74,14 +74,29 @@ why we ask this as well as instructions for how to proceed, see the
   sudo yum install -y <url>
   ```
 
-3. Install build dependencies
+3. Register EPEL and SCL repositories for your distro.
+
+  On CentOS:
+
+  ```bash
+  yum install -y centos-release-scl-rh epel-release
+  ```
+
+  On RHEL, see [this RedHat blog post](https://developers.redhat.com/blog/2018/07/07/yum-install-gcc7-clang/) to install set-up SCL first. Then run:
+
+  ```bash
+  yum install -y epel-release
+  ```
+
+4. Install build dependencies
 
   ```bash
   sudo yum update -y
   sudo yum groupinstall -y 'Development Tools'
-  sudo yum install -y postgresql11-devel postgresql11-server    \
-                      libxml2-devel libxslt-devel openssl-devel \
-                      pam-devel readline-devel git libcurl-devel
+  sudo yum install -y postgresql11-devel postgresql11-server     \
+                      libxml2-devel libxslt-devel openssl-devel  \
+                      pam-devel readline-devel git libcurl-devel \
+                      llvm5.0 llvm-toolset-7-clang
 
   git clone https://github.com/citusdata/citus.git
   cd citus
