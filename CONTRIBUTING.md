@@ -47,10 +47,10 @@ why we ask this as well as instructions for how to proceed, see the
        sudo apt-key add -
   sudo apt-get update
 
-  sudo apt-get install -y postgresql-server-dev-10 postgresql-10 \
+  sudo apt-get install -y postgresql-server-dev-11 postgresql-11 \
                           libedit-dev libselinux1-dev libxslt-dev  \
                           libpam0g-dev git flex make libssl-dev    \
-                          libkrb5-dev
+                          libkrb5-dev libcurl4-gnutls-dev autoconf
   ```
 
 2. Get, build, and test the code
@@ -67,25 +67,40 @@ why we ask this as well as instructions for how to proceed, see the
 
 #### Red Hat-based Linux (RHEL, CentOS, Fedora)
 
-1. Find the PostgreSQL 10 RPM URL for your repo at [yum.postgresql.org](http://yum.postgresql.org/repopackages.php#pg10)
+1. Find the RPM URL for your repo at [yum.postgresql.org](http://yum.postgresql.org/repopackages.php)
 2. Register its contents with Yum:
 
   ```bash
   sudo yum install -y <url>
   ```
 
-3. Install build dependencies
+3. Register EPEL and SCL repositories for your distro.
+
+  On CentOS:
+
+  ```bash
+  yum install -y centos-release-scl-rh epel-release
+  ```
+
+  On RHEL, see [this RedHat blog post](https://developers.redhat.com/blog/2018/07/07/yum-install-gcc7-clang/) to install set-up SCL first. Then run:
+
+  ```bash
+  yum install -y epel-release
+  ```
+
+4. Install build dependencies
 
   ```bash
   sudo yum update -y
   sudo yum groupinstall -y 'Development Tools'
-  sudo yum install -y postgresql96-devel postgresql96-server    \
-                      libxml2-devel libxslt-devel openssl-devel \
-                      pam-devel readline-devel git
+  sudo yum install -y postgresql11-devel postgresql11-server     \
+                      libxml2-devel libxslt-devel openssl-devel  \
+                      pam-devel readline-devel git libcurl-devel \
+                      llvm5.0 llvm-toolset-7-clang
 
   git clone https://github.com/citusdata/citus.git
   cd citus
-  PG_CONFIG=/usr/pgsql-9.6/bin/pg_config ./configure
+  PG_CONFIG=/usr/pgsql-11/bin/pg_config ./configure
   make
   sudo make install
   cd src/test/regress
