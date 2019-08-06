@@ -657,11 +657,11 @@ AdaptiveExecutor(CustomScanState *node)
  * through router executor.
  */
 void
-ExecuteUtilityTaskListWithoutResults(List *taskList, int targetPoolSize)
+ExecuteUtilityTaskListWithoutResults(List *taskList)
 {
 	if (TaskExecutorType == MULTI_EXECUTOR_ADAPTIVE)
 	{
-		ExecuteTaskList(ROW_MODIFY_NONE, taskList, targetPoolSize);
+		ExecuteTaskList(ROW_MODIFY_NONE, taskList, MaxAdaptiveExecutorPoolSize);
 	}
 	else
 	{
