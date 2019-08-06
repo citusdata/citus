@@ -81,7 +81,7 @@ why we ask this as well as instructions for how to proceed, see the
   sudo yum groupinstall -y 'Development Tools'
   sudo yum install -y postgresql11-devel postgresql11-server    \
                       libxml2-devel libxslt-devel openssl-devel \
-                      pam-devel readline-devel git
+                      pam-devel readline-devel git libcurl-devel
 
   git clone https://github.com/citusdata/citus.git
   cd citus
