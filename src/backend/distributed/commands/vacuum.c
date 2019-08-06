@@ -74,7 +74,6 @@ ProcessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand)
 		{
 			List *vacuumColumnList = NIL;
 			List *taskList = NIL;
-			int targetPoolSize = MaxAdaptiveExecutorPoolSize;
 
 			/*
 			 * VACUUM commands cannot run inside a transaction block, so we use
@@ -94,7 +93,7 @@ ProcessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand)
 			taskList = VacuumTaskList(relationId, vacuumStmt->options, vacuumColumnList);
 
 			/* use adaptive executor when enabled */
-			ExecuteUtilityTaskListWithoutResults(taskList, targetPoolSize);
+			ExecuteUtilityTaskListWithoutResults(taskList);
 			executedVacuumCount++;
 		}
 		relationIndex++;
