@@ -46,7 +46,7 @@ Sort
   Sort Key: COALESCE((pg_catalog.sum((COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint))))::bigint, '0'::bigint), remote_scan.l_quantity
   ->  HashAggregate
         Group Key: remote_scan.l_quantity
-        ->  Custom Scan (Citus Real-Time)
+        ->  Custom Scan (Citus Adaptive)
               Task Count: 2
               Tasks Shown: One of 2
               ->  Task
@@ -65,7 +65,7 @@ Sort
         Group Key: remote_scan.l_quantity
         ->  Sort
               Sort Key: remote_scan.l_quantity
-              ->  Custom Scan (Citus Real-Time)
+              ->  Custom Scan (Citus Adaptive)
                     Task Count: 2
                     Tasks Shown: One of 2
                     ->  Task
@@ -96,7 +96,7 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
             {
               "Node Type": "Custom Scan",
               "Parent Relationship": "Outer",
-              "Custom Plan Provider": "Citus Real-Time",
+              "Custom Plan Provider": "Citus Adaptive",
               "Parallel Aware": false,
               "Distributed Query": {
                 "Job": {
@@ -171,7 +171,7 @@ EXPLAIN (COSTS FALSE, FORMAT XML)
             <Plan>
               <Node-Type>Custom Scan</Node-Type>
               <Parent-Relationship>Outer</Parent-Relationship>
-              <Custom-Plan-Provider>Citus Real-Time</Custom-Plan-Provider>
+              <Custom-Plan-Provider>Citus Adaptive</Custom-Plan-Provider>
               <Parallel-Aware>false</Parallel-Aware>
               <Distributed-Query>
                 <Job>
@@ -241,7 +241,7 @@ EXPLAIN (COSTS FALSE, FORMAT YAML)
         Plans: 
           - Node Type: "Custom Scan"
             Parent Relationship: "Outer"
-            Custom Plan Provider: "Citus Real-Time"
+            Custom Plan Provider: "Citus Adaptive"
             Parallel Aware: false
             Distributed Query: 
               Job: 
@@ -272,7 +272,7 @@ Sort
   Sort Key: COALESCE((pg_catalog.sum((COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint))))::bigint, '0'::bigint), remote_scan.l_quantity
   ->  HashAggregate
         Group Key: remote_scan.l_quantity
-        ->  Custom Scan (Citus Real-Time)
+        ->  Custom Scan (Citus Adaptive)
               Task Count: 2
               Tasks Shown: One of 2
               ->  Task
@@ -285,7 +285,7 @@ EXPLAIN (COSTS FALSE, VERBOSE TRUE)
 	SELECT sum(l_quantity) / avg(l_quantity) FROM lineitem;
 Aggregate
   Output: (sum(remote_scan."?column?") / (sum(remote_scan."?column?_1") / pg_catalog.sum(remote_scan."?column?_2")))
-  ->  Custom Scan (Citus Real-Time)
+  ->  Custom Scan (Citus Adaptive)
         Output: remote_scan."?column?", remote_scan."?column?_1", remote_scan."?column?_2"
         Task Count: 2
         Tasks Shown: One of 2
@@ -303,7 +303,7 @@ EXPLAIN (COSTS FALSE)
 Limit
   ->  Sort
         Sort Key: remote_scan.l_quantity
-        ->  Custom Scan (Citus Real-Time)
+        ->  Custom Scan (Citus Adaptive)
               Task Count: 2
               Tasks Shown: One of 2
               ->  Task
@@ -320,7 +320,7 @@ Limit
 -- Test insert
 EXPLAIN (COSTS FALSE)
 	INSERT INTO lineitem VALUES (1,0), (2, 0), (3, 0), (4, 0);
-Custom Scan (Citus Router)
+Custom Scan (Citus Adaptive)
   Task Count: 1
   Tasks Shown: All
   ->  Task
@@ -332,7 +332,7 @@ EXPLAIN (COSTS FALSE)
 	UPDATE lineitem
 	SET l_suppkey = 12
 	WHERE l_orderkey = 1 AND l_partkey = 0;
-Custom Scan (Citus Router)
+Custom Scan (Citus Adaptive)
   Task Count: 1
   Tasks Shown: All
   ->  Task
@@ -345,7 +345,7 @@ Custom Scan (Citus Router)
 EXPLAIN (COSTS FALSE)
 	DELETE FROM lineitem
 	WHERE l_orderkey = 1 AND l_partkey = 0;
-Custom Scan (Citus Router)
+Custom Scan (Citus Adaptive)
   Task Count: 1
   Tasks Shown: All
   ->  Task
@@ -359,20 +359,20 @@ EXPLAIN (COSTS FALSE)
 	UPDATE lineitem
 	SET l_suppkey = 12
 	WHERE l_orderkey = 1 AND l_orderkey = 0;
-Custom Scan (Citus Router)
+Custom Scan (Citus Adaptive)
   Task Count: 0
   Tasks Shown: All
 -- Test zero-shard delete
 EXPLAIN (COSTS FALSE)
 	DELETE FROM lineitem
 	WHERE l_orderkey = 1 AND l_orderkey = 0;
-Custom Scan (Citus Router)
+Custom Scan (Citus Adaptive)
   Task Count: 0
   Tasks Shown: All
 -- Test single-shard SELECT
 EXPLAIN (COSTS FALSE)
 	SELECT l_quantity FROM lineitem WHERE l_orderkey = 5;
-Custom Scan (Citus Router)
+Custom Scan (Citus Adaptive)
   Task Count: 1
   Tasks Shown: All
   ->  Task
@@ -389,7 +389,7 @@ t
 EXPLAIN (COSTS FALSE)
 	CREATE TABLE explain_result AS
 	SELECT * FROM lineitem;
-Custom Scan (Citus Real-Time)
+Custom Scan (Citus Adaptive)
   Task Count: 2
   Tasks Shown: One of 2
   ->  Task
@@ -402,7 +402,7 @@ EXPLAIN (COSTS FALSE, VERBOSE TRUE)
 Aggregate
   Output: (sum(remote_scan."?column?") / (sum(remote_scan."?column?_1") / pg_catalog.sum(remote_scan."?column?_2")))
   Filter: (sum(remote_scan.worker_column_4) > '100'::numeric)
-  ->  Custom Scan (Citus Real-Time)
+  ->  Custom Scan (Citus Adaptive)
         Output: remote_scan."?column?", remote_scan."?column?_1", remote_scan."?column?_2", remote_scan.worker_column_4
         Task Count: 2
         Tasks Shown: One of 2
@@ -421,7 +421,7 @@ HashAggregate
   Output: remote_scan.l_quantity
   Group Key: remote_scan.l_quantity
   Filter: ((remote_scan.worker_column_2)::double precision > ('100'::double precision * random()))
-  ->  Custom Scan (Citus Real-Time)
+  ->  Custom Scan (Citus Adaptive)
         Output: remote_scan.l_quantity, remote_scan.worker_column_2
         Task Count: 2
         Tasks Shown: One of 2
@@ -459,7 +459,7 @@ FROM
 		tenant_id,
 		user_id) AS subquery;
 Aggregate
-  ->  Custom Scan (Citus Real-Time)
+  ->  Custom Scan (Citus Adaptive)
         Task Count: 4
         Tasks Shown: One of 4
         ->  Task
@@ -541,7 +541,7 @@ GROUP BY
 	hasdone;
 HashAggregate
   Group Key: remote_scan.hasdone
-  ->  Custom Scan (Citus Real-Time)
+  ->  Custom Scan (Citus Adaptive)
         Task Count: 4
         Tasks Shown: One of 4
         ->  Task
@@ -709,7 +709,7 @@ LIMIT
 Limit
   ->  Sort
         Sort Key: remote_scan.user_lastseen DESC
-        ->  Custom Scan (Citus Real-Time)
+        ->  Custom Scan (Citus Adaptive)
               Task Count: 4
               Tasks Shown: One of 4
               ->  Task
@@ -738,7 +738,7 @@ SET citus.explain_all_tasks TO on;
 EXPLAIN (COSTS FALSE)
 	SELECT avg(l_linenumber) FROM lineitem WHERE l_orderkey > 9030;
 Aggregate
-  ->  Custom Scan (Citus Real-Time)
+  ->  Custom Scan (Citus Adaptive)
         Task Count: 1
         Tasks Shown: All
         ->  Task
@@ -757,7 +757,7 @@ t
 EXPLAIN (COSTS FALSE)
 	UPDATE lineitem_hash_part
 	SET l_suppkey = 12;
-Custom Scan (Citus Router)
+Custom Scan (Citus Adaptive)
   Task Count: 4
   Tasks Shown: All
   ->  Task
@@ -781,7 +781,7 @@ EXPLAIN (COSTS FALSE)
 	UPDATE lineitem_hash_part
 	SET l_suppkey = 12
 	WHERE l_orderkey = 1 OR l_orderkey = 3;
-Custom Scan (Citus Router)
+Custom Scan (Citus Adaptive)
   Task Count: 2
   Tasks Shown: All
   ->  Task
@@ -797,7 +797,7 @@ Custom Scan (Citus Router)
 -- Test multi shard delete
 EXPLAIN (COSTS FALSE)
 	DELETE FROM lineitem_hash_part;
-Custom Scan (Citus Router)
+Custom Scan (Citus Adaptive)
   Task Count: 4
   Tasks Shown: All
   ->  Task
@@ -823,7 +823,7 @@ EXPLAIN (COSTS FALSE)
 	SET l_suppkey = 12
 	FROM orders_hash_part
 	WHERE orders_hash_part.o_orderkey = lineitem_hash_part.l_orderkey;
-Custom Scan (Citus Router)
+Custom Scan (Citus Adaptive)
   Task Count: 4
   Tasks Shown: One of 4
   ->  Task
@@ -839,7 +839,7 @@ EXPLAIN (COSTS FALSE)
 	DELETE FROM lineitem_hash_part
 	USING orders_hash_part
 	WHERE orders_hash_part.o_orderkey = lineitem_hash_part.l_orderkey;
-Custom Scan (Citus Router)
+Custom Scan (Citus Adaptive)
   Task Count: 4
   Tasks Shown: One of 4
   ->  Task
@@ -1055,7 +1055,7 @@ Aggregate
 RESET citus.task_executor_type;
 PREPARE router_executor_query AS SELECT l_quantity FROM lineitem WHERE l_orderkey = 5;
 EXPLAIN EXECUTE router_executor_query;
-Custom Scan (Citus Router)  (cost=0.00..0.00 rows=0 width=0)
+Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
   Task Count: 1
   Tasks Shown: All
   ->  Task
@@ -1066,7 +1066,7 @@ PREPARE real_time_executor_query AS
 	SELECT avg(l_linenumber) FROM lineitem WHERE l_orderkey > 9030;
 EXPLAIN (COSTS FALSE) EXECUTE real_time_executor_query;
 Aggregate
-  ->  Custom Scan (Citus Real-Time)
+  ->  Custom Scan (Citus Adaptive)
         Task Count: 1
         Tasks Shown: All
         ->  Task
@@ -1078,7 +1078,7 @@ Aggregate
 -- at least make sure to fail without crashing
 PREPARE router_executor_query_param(int) AS SELECT l_quantity FROM lineitem WHERE l_orderkey = $1;
 EXPLAIN EXECUTE router_executor_query_param(5);
-Custom Scan (Citus Router)  (cost=0.00..0.00 rows=0 width=0)
+Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
   Task Count: 1
   Tasks Shown: All
   ->  Task
@@ -1098,11 +1098,11 @@ INSERT INTO lineitem_hash_part
 SELECT o_orderkey FROM orders_hash_part LIMIT 3;
 Custom Scan (Citus INSERT ... SELECT via coordinator)
   ->  Limit
-        ->  Custom Scan (Citus Real-Time)
+        ->  Custom Scan (Citus Adaptive)
               Task Count: 4
               Tasks Shown: One of 4
               ->  Task
-                    Node: host=localhost port=57638 dbname=regression
+                    Node: host=localhost port=57637 dbname=regression
                     ->  Limit
                           ->  Seq Scan on orders_hash_part_360045 orders_hash_part
 SELECT true AS valid FROM explain_json($$
@@ -1115,11 +1115,11 @@ INSERT INTO lineitem_hash_part (l_orderkey, l_quantity)
 SELECT o_orderkey, 5 FROM orders_hash_part LIMIT 3;
 Custom Scan (Citus INSERT ... SELECT via coordinator)
   ->  Limit
-        ->  Custom Scan (Citus Real-Time)
+        ->  Custom Scan (Citus Adaptive)
               Task Count: 4
               Tasks Shown: One of 4
               ->  Task
-                    Node: host=localhost port=57638 dbname=regression
+                    Node: host=localhost port=57637 dbname=regression
                     ->  Limit
                           ->  Seq Scan on orders_hash_part_360045 orders_hash_part
 EXPLAIN (COSTS OFF)
@@ -1127,18 +1127,27 @@ INSERT INTO lineitem_hash_part (l_orderkey)
 SELECT s FROM generate_series(1,5) s;
 Custom Scan (Citus INSERT ... SELECT via coordinator)
   ->  Function Scan on generate_series s
+-- WHERE EXISTS forces pg12 to materialize cte
 EXPLAIN (COSTS OFF)
 WITH cte1 AS (SELECT s FROM generate_series(1,10) s)
 INSERT INTO lineitem_hash_part
-WITH cte1 AS (SELECT * FROM cte1 LIMIT 5)
-SELECT s FROM cte1;
+WITH cte1 AS (SELECT * FROM cte1 WHERE EXISTS (SELECT * FROM cte1) LIMIT 5)
+SELECT s FROM cte1 WHERE EXISTS (SELECT * FROM cte1);
 Custom Scan (Citus INSERT ... SELECT via coordinator)
-  ->  CTE Scan on cte1
+  ->  Result
+        One-Time Filter: $3
         CTE cte1
           ->  Function Scan on generate_series s
         CTE cte1
           ->  Limit
-                ->  CTE Scan on cte1 cte1_1
+                InitPlan 2 (returns $1)
+                  ->  CTE Scan on cte1 cte1_1
+                ->  Result
+                      One-Time Filter: $1
+                      ->  CTE Scan on cte1 cte1_2
+        InitPlan 4 (returns $3)
+          ->  CTE Scan on cte1 cte1_3
+        ->  CTE Scan on cte1
 EXPLAIN (COSTS OFF)
 INSERT INTO lineitem_hash_part
 ( SELECT s FROM generate_series(1,5) s) UNION
@@ -1159,13 +1168,13 @@ series AS (
 )
 SELECT l_orderkey FROM series JOIN keys ON (s = l_orderkey)
 ORDER BY s;
-Custom Scan (Citus Router)
+Custom Scan (Citus Adaptive)
   Output: remote_scan.l_orderkey
   ->  Distributed Subplan 57_1
         ->  HashAggregate
               Output: remote_scan.l_orderkey
               Group Key: remote_scan.l_orderkey
-              ->  Custom Scan (Citus Real-Time)
+              ->  Custom Scan (Citus Adaptive)
                     Output: remote_scan.l_orderkey
                     Task Count: 4
                     Tasks Shown: One of 4

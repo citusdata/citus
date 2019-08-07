@@ -11,7 +11,7 @@ SET citus.shard_replication_factor TO 2;
 
 -- print major version number for version-specific tests
 SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int AS server_version;
+SELECT substring(:'server_version', '\d+')::int < 11 AS server_version_is_10;
 
 
 CREATE TABLE collections (

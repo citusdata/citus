@@ -8,7 +8,7 @@
 
 -- print major version number for version-specific tests
 SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int AS server_version;
+SELECT substring(:'server_version', '\d+')::int > 10 AS server_version_above_ten;
 
 SET client_min_messages TO DEBUG2;
 SET citus.explain_all_tasks TO on;

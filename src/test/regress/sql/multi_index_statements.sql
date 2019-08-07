@@ -6,7 +6,7 @@
 -- tables.
 
 SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int AS major_version;
+SELECT substring(:'server_version', '\d+')::int > 10 AS server_version_above_ten;
 
 --
 -- CREATE TEST TABLES

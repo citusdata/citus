@@ -532,11 +532,12 @@ EXPLAIN (COSTS OFF)
 INSERT INTO lineitem_hash_part (l_orderkey)
 SELECT s FROM generate_series(1,5) s;
 
+-- WHERE EXISTS forces pg12 to materialize cte
 EXPLAIN (COSTS OFF)
 WITH cte1 AS (SELECT s FROM generate_series(1,10) s)
 INSERT INTO lineitem_hash_part
-WITH cte1 AS (SELECT * FROM cte1 LIMIT 5)
-SELECT s FROM cte1;
+WITH cte1 AS (SELECT * FROM cte1 WHERE EXISTS (SELECT * FROM cte1) LIMIT 5)
+SELECT s FROM cte1 WHERE EXISTS (SELECT * FROM cte1);
 
 EXPLAIN (COSTS OFF)
 INSERT INTO lineitem_hash_part

@@ -53,7 +53,8 @@ FROM
 	ids_to_delete, (SELECT tenant_id FROM distributed_table WHERE tenant_id::int < 60) as some_tenants
 WHERE
 	some_tenants.tenant_id = ids_to_delete.tenant_id
-	AND distributed_table.tenant_id = some_tenants.tenant_id;
+	AND distributed_table.tenant_id = some_tenants.tenant_id
+	AND EXISTS (SELECT * FROM ids_to_delete);
 
 -- this query errors out since we've some hard
 -- errors in the INSERT ... SELECT pushdown

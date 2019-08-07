@@ -5,10 +5,10 @@
 -- and that we don't partition or join prune shards that have null values.
 -- print major version number for version-specific tests
 SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int AS server_version;
- server_version 
-----------------
-             11
+SELECT substring(:'server_version', '\d+')::int > 10 AS server_version_above_ten;
+ server_version_above_ten 
+--------------------------
+ t
 (1 row)
 
 SET client_min_messages TO DEBUG2;
@@ -39,7 +39,7 @@ DEBUG:  Router planner does not support append-partitioned tables.
 LOG:  join order: [ "lineitem" ]
                               QUERY PLAN                               
 -----------------------------------------------------------------------
- Custom Scan (Citus Real-Time)
+ Custom Scan (Citus Adaptive)
    Task Count: 2
    Tasks Shown: All
    ->  Task
@@ -72,7 +72,7 @@ DEBUG:  join prunable for intervals [8997,14947] and [1,5986]
                                    QUERY PLAN                                   
 --------------------------------------------------------------------------------
  Aggregate
-   ->  Custom Scan (Citus Real-Time)
+   ->  Custom Scan (Citus Adaptive)
          Task Count: 2
          Tasks Shown: All
          ->  Task
@@ -103,7 +103,7 @@ DEBUG:  Router planner does not support append-partitioned tables.
 LOG:  join order: [ "lineitem" ]
                                   QUERY PLAN                                   
 -------------------------------------------------------------------------------
- Custom Scan (Citus Real-Time)
+ Custom Scan (Citus Adaptive)
    Task Count: 2
    Tasks Shown: All
    ->  Task
@@ -175,16 +175,16 @@ DEBUG:  Router planner does not support append-partitioned tables.
 LOG:  join order: [ "lineitem" ]
                                   QUERY PLAN                                   
 -------------------------------------------------------------------------------
- Custom Scan (Citus Real-Time)
+ Custom Scan (Citus Adaptive)
    Task Count: 2
    Tasks Shown: All
    ->  Task
-         Node: host=localhost port=57638 dbname=regression
-         ->  Index Scan using lineitem_pkey_290000 on lineitem_290000 lineitem
-               Index Cond: (l_orderkey = 9030)
-   ->  Task
          Node: host=localhost port=57637 dbname=regression
          ->  Index Scan using lineitem_pkey_290001 on lineitem_290001 lineitem
+               Index Cond: (l_orderkey = 9030)
+   ->  Task
+         Node: host=localhost port=57638 dbname=regression
+         ->  Index Scan using lineitem_pkey_290000 on lineitem_290000 lineitem
                Index Cond: (l_orderkey = 9030)
 (11 rows)
 
@@ -248,7 +248,7 @@ LOG:  join order: [ "lineitem" ]
 DEBUG:  Plan is router executable
                                   QUERY PLAN                                   
 -------------------------------------------------------------------------------
- Custom Scan (Citus Router)
+ Custom Scan (Citus Adaptive)
    Task Count: 1
    Tasks Shown: All
    ->  Task
