@@ -874,9 +874,6 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='reference_sche
 \di reference_schema.reference_index_2*
 \c - - - :master_port
 
--- as we expect, setting WITH OIDS does not work for reference tables
-ALTER TABLE reference_schema.reference_table_ddl SET WITH OIDS;
-
 -- now test the renaming of the table, and back to the expected name
 ALTER TABLE reference_schema.reference_table_ddl RENAME TO reference_table_ddl_test;
 ALTER TABLE reference_schema.reference_table_ddl_test RENAME TO reference_table_ddl;

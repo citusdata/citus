@@ -467,6 +467,9 @@ BEGIN;
 ROLLBACK;
 
 -- case 4.5: SELECT to a dist table is follwed by a TRUNCATE
+\set VERBOSITY terse
+SET client_min_messages to LOG;
+
 BEGIN;
 	SELECT count(*) FROM on_update_fkey_table WHERE value_1 = 99;
 	TRUNCATE reference_table CASCADE;
@@ -487,6 +490,9 @@ BEGIN;
 	SELECT count(*) FROM on_update_fkey_table WHERE id = 9;
 	TRUNCATE transitive_reference_table CASCADE;
 ROLLBACK;
+
+RESET client_min_messages;
+\set VERBOSITY default
 
 -- case 5.1: Parallel UPDATE on distributed table follow by a SELECT
 BEGIN;
@@ -899,6 +905,8 @@ ROLLBACK;
 
 RESET client_min_messages;
 
+\set VERBOSITY terse
 DROP SCHEMA test_fkey_to_ref_in_tx CASCADE;
+\set VERBOSITY default
 
 SET search_path TO public;

@@ -157,7 +157,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^COMMIT").kill()');
 
 -- hide the error message (it has the PID)...
 -- we'll test for the txn side-effects to ensure it didn't run
-SET client_min_messages TO FATAL;
+SET client_min_messages TO ERROR;
 
 BEGIN;
 DELETE FROM dml_test WHERE id = 1;

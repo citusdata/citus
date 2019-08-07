@@ -277,6 +277,8 @@ SELECT * from test_table;
 ----+--------
 (0 rows)
 
+\set VERBOSITY terse
 DROP SCHEMA procedure_schema CASCADE;
 NOTICE:  drop cascades to table test_table
+\set VERBOSITY default
 RESET SEARCH_PATH;
