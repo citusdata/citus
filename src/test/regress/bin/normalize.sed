@@ -13,6 +13,9 @@ s/placement [0-9]+/placement xxxxx/g
 s/shard [0-9]+/shard xxxxx/g
 s/assigned task [0-9]+ to node/assigned task to node/
 
+# Differing names can have differing table column widths
+s/(-+\|)+-+/---/g
+
 # In foreign_key_to_reference_table, normalize shard table names, etc in
 # the generated plan
 s/"(foreign_key_2_|fkey_ref_to_dist_|fkey_ref_)[0-9]+"/"\1xxxxxxx"/g
@@ -65,3 +68,16 @@ s/ERROR:  failed to execute task [0-9]+/ERROR:  failed to execute task X/g
 # normalize file names for partitioned files
 s/(task_[0-9]+\.)[0-9]+/\1xxxx/g
 s/(job_[0-9]+\/task_[0-9]+\/p_[0-9]+\.)[0-9]+/\1xxxx/g
+
+# Line info varies between versions
+/^LINE [0-9]+:.*$/d
+/^\s*\^\s*$/d
+
+# pg12 changes
+s/Partitioned table "/Table "/g
+s/\) TABLESPACE pg_default$/\)/g
+s/invalid input syntax for type /invalid input syntax for /g
+s/_id_ref_id_fkey/_id_fkey/g
+s/_ref_id_id_fkey_/_ref_id_fkey_/g
+s/fk_test_2_col1_col2_fkey/fk_test_2_col1_fkey/g
+s/_id_other_column_ref_fkey/_id_fkey/g
