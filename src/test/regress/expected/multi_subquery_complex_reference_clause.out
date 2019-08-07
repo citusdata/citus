@@ -349,7 +349,7 @@ ON user_buy_test_table.item_id = users_ref_test_table.id;
      4
 (1 row)
 
--- subquery without FROM cannot be the outer relationship in an outer join
+-- subquery without FROM cannot be the outer relationship in an outer join before pg12
 SELECT count(*) FROM user_buy_test_table RIGHT JOIN (SELECT 5 AS id) users_ref_test_table
 ON user_buy_test_table.item_id = users_ref_test_table.id;
 ERROR:  cannot pushdown the subquery

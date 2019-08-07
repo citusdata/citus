@@ -1,0 +1,238 @@
+SET citus.next_shard_id TO 370000;
+-- ===================================================================
+-- create test functions and types needed for tests
+-- ===================================================================
+CREATE FUNCTION sort_names(cstring, cstring, cstring)
+	RETURNS cstring
+	AS 'citus'
+	LANGUAGE C STRICT;
+-- create a custom type...
+CREATE TYPE dummy_type AS (
+    i integer
+);
+-- ... as well as a function to use as its comparator...
+CREATE FUNCTION dummy_type_function(dummy_type, dummy_type) RETURNS boolean
+AS 'SELECT TRUE;'
+LANGUAGE SQL
+IMMUTABLE
+RETURNS NULL ON NULL INPUT;
+-- ... use that function to create a custom operator...
+CREATE OPERATOR = (
+    LEFTARG = dummy_type,
+    RIGHTARG = dummy_type,
+    PROCEDURE = dummy_type_function
+);
+-- ... and create a custom operator family for hash indexes...
+CREATE OPERATOR FAMILY dummy_op_family USING hash;
+-- ... finally, build an operator class, designate it as the default operator
+-- class for the type, but only specify an equality operator. So the type will
+-- have a default op class but no hash operator in that class.
+CREATE OPERATOR CLASS dummy_op_family_class
+DEFAULT FOR TYPE dummy_type USING hash FAMILY dummy_op_family AS
+OPERATOR 1 =;
+-- ===================================================================
+-- test shard creation functionality
+-- ===================================================================
+CREATE TABLE table_to_distribute (
+	name text PRIMARY KEY,
+	id bigint,
+	json_data json,
+	test_type_data dummy_type
+);
+-- use the table WITH (OIDS) set
+ALTER TABLE table_to_distribute SET WITH OIDS;
+ERROR:  syntax error at or near "WITH"
+LINE 1: ALTER TABLE table_to_distribute SET WITH OIDS;
+                                            ^
+SELECT create_distributed_table('table_to_distribute', 'id', 'hash');
+ERROR:  cannot create constraint on "table_to_distribute"
+DETAIL:  Distributed relations cannot have UNIQUE, EXCLUDE, or PRIMARY KEY constraints that do not include the partition column (with an equality operator if EXCLUDE).
+-- revert WITH (OIDS) from above
+ALTER TABLE table_to_distribute SET WITHOUT OIDS;
+-- use an index instead of table name
+SELECT create_distributed_table('table_to_distribute_pkey', 'id', 'hash');
+ERROR:  table_to_distribute_pkey is not a regular, foreign or partitioned table
+-- use a bad column name
+SELECT create_distributed_table('table_to_distribute', 'bad_column', 'hash');
+ERROR:  column "bad_column" of relation "table_to_distribute" does not exist
+-- use unrecognized partition type
+SELECT create_distributed_table('table_to_distribute', 'name', 'unrecognized');
+ERROR:  invalid input value for enum citus.distribution_type: "unrecognized"
+LINE 1: ..._distributed_table('table_to_distribute', 'name', 'unrecogni...
+                                                             ^
+-- use a partition column of a type lacking any default operator class
+SELECT create_distributed_table('table_to_distribute', 'json_data', 'hash');
+ERROR:  data type json has no default operator class for specified partition method
+DETAIL:  Partition column types must have a default operator class defined.
+-- use a partition column of type lacking the required support function (hash)
+SELECT create_distributed_table('table_to_distribute', 'test_type_data', 'hash');
+ERROR:  could not identify a hash function for type dummy_type
+DETAIL:  Partition column types must have a hash function defined to use hash partitioning.
+-- distribute table and inspect side effects
+SELECT master_create_distributed_table('table_to_distribute', 'name', 'hash');
+ master_create_distributed_table 
+---------------------------------
+ 
+(1 row)
+
+SELECT partmethod, partkey FROM pg_dist_partition
+	WHERE logicalrelid = 'table_to_distribute'::regclass;
+ partmethod |                                                         partkey                                                          
+------------+--------------------------------------------------------------------------------------------------------------------------
+ h          | {VAR :varno 1 :varattno 1 :vartype 25 :vartypmod -1 :varcollid 100 :varlevelsup 0 :varnoold 1 :varoattno 1 :location -1}
+(1 row)
+
+-- use a bad shard count
+SELECT master_create_worker_shards('table_to_distribute', 0, 1);
+ERROR:  shard_count must be positive
+-- use a bad replication factor
+SELECT master_create_worker_shards('table_to_distribute', 16, 0);
+ERROR:  replication_factor must be positive
+-- use a replication factor higher than shard count
+SELECT master_create_worker_shards('table_to_distribute', 16, 3);
+ERROR:  replication_factor (3) exceeds number of worker nodes (2)
+HINT:  Add more worker nodes or try again with a lower replication factor.
+-- finally, create shards and inspect metadata
+SELECT master_create_worker_shards('table_to_distribute', 16, 1);
+ master_create_worker_shards 
+-----------------------------
+ 
+(1 row)
+
+SELECT shardstorage, shardminvalue, shardmaxvalue FROM pg_dist_shard
+	WHERE logicalrelid = 'table_to_distribute'::regclass
+	ORDER BY (shardminvalue::integer) ASC;
+ shardstorage | shardminvalue | shardmaxvalue 
+--------------+---------------+---------------
+ t            | -2147483648   | -1879048193
+ t            | -1879048192   | -1610612737
+ t            | -1610612736   | -1342177281
+ t            | -1342177280   | -1073741825
+ t            | -1073741824   | -805306369
+ t            | -805306368    | -536870913
+ t            | -536870912    | -268435457
+ t            | -268435456    | -1
+ t            | 0             | 268435455
+ t            | 268435456     | 536870911
+ t            | 536870912     | 805306367
+ t            | 805306368     | 1073741823
+ t            | 1073741824    | 1342177279
+ t            | 1342177280    | 1610612735
+ t            | 1610612736    | 1879048191
+ t            | 1879048192    | 2147483647
+(16 rows)
+
+-- all shards should have the same size (16 divides evenly into the hash space)
+SELECT count(*) AS shard_count,
+	shardmaxvalue::integer - shardminvalue::integer AS shard_size
+	FROM pg_dist_shard
+	WHERE logicalrelid='table_to_distribute'::regclass
+	GROUP BY shard_size;
+ shard_count | shard_size 
+-------------+------------
+          16 |  268435455
+(1 row)
+
+SELECT COUNT(*) FROM pg_class WHERE relname LIKE 'table_to_distribute%' AND relkind = 'r';
+ count 
+-------
+     1
+(1 row)
+
+-- try to create them again
+SELECT master_create_worker_shards('table_to_distribute', 16, 1);
+ERROR:  table "table_to_distribute" has already had shards created for it
+-- test list sorting
+SELECT sort_names('sumedh', 'jason', 'ozgun');
+ sort_names 
+------------
+ jason     +
+ ozgun     +
+ sumedh    +
+ 
+(1 row)
+
+SELECT COUNT(*) FROM pg_class WHERE relname LIKE 'throwaway%' AND relkind = 'r';
+ count 
+-------
+     0
+(1 row)
+
+-- test foreign table creation
+CREATE FOREIGN TABLE foreign_table_to_distribute
+(
+	name text,
+	id bigint
+)
+SERVER fake_fdw_server;
+SET citus.shard_count TO 16;
+SET citus.shard_replication_factor TO 1;
+SELECT create_distributed_table('foreign_table_to_distribute', 'id', 'hash');
+NOTICE:  foreign-data wrapper "fake_fdw" does not have an extension defined
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+SELECT shardstorage, shardminvalue, shardmaxvalue FROM pg_dist_shard
+	WHERE logicalrelid = 'foreign_table_to_distribute'::regclass
+	ORDER BY (shardminvalue::integer) ASC;
+ shardstorage | shardminvalue | shardmaxvalue 
+--------------+---------------+---------------
+ f            | -2147483648   | -1879048193
+ f            | -1879048192   | -1610612737
+ f            | -1610612736   | -1342177281
+ f            | -1342177280   | -1073741825
+ f            | -1073741824   | -805306369
+ f            | -805306368    | -536870913
+ f            | -536870912    | -268435457
+ f            | -268435456    | -1
+ f            | 0             | 268435455
+ f            | 268435456     | 536870911
+ f            | 536870912     | 805306367
+ f            | 805306368     | 1073741823
+ f            | 1073741824    | 1342177279
+ f            | 1342177280    | 1610612735
+ f            | 1610612736    | 1879048191
+ f            | 1879048192    | 2147483647
+(16 rows)
+
+-- test shard creation using weird shard count
+CREATE TABLE weird_shard_count
+(
+	name text,
+	id bigint
+);
+SET citus.shard_count TO 7;
+SELECT create_distributed_table('weird_shard_count', 'id', 'hash');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+-- Citus ensures all shards are roughly the same size
+SELECT shardmaxvalue::integer - shardminvalue::integer AS shard_size
+	FROM pg_dist_shard
+	WHERE logicalrelid = 'weird_shard_count'::regclass
+	ORDER BY shardminvalue::integer ASC;
+ shard_size 
+------------
+  613566755
+  613566755
+  613566755
+  613566755
+  613566755
+  613566755
+  613566759
+(7 rows)
+
+-- cleanup foreign table, related shards and shard placements
+DELETE FROM pg_dist_shard_placement
+	WHERE shardid IN (SELECT shardid FROM pg_dist_shard
+					   WHERE logicalrelid = 'foreign_table_to_distribute'::regclass);
+	
+DELETE FROM pg_dist_shard
+	WHERE logicalrelid = 'foreign_table_to_distribute'::regclass;
+	
+DELETE FROM pg_dist_partition
+	WHERE logicalrelid = 'foreign_table_to_distribute'::regclass;

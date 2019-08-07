@@ -1,0 +1,1451 @@
+--
+-- MULTI_METADATA_SYNC
+--
+-- Tests for metadata snapshot functions, metadata syncing functions and propagation of
+-- metadata changes to MX tables.
+ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1310000;
+SELECT nextval('pg_catalog.pg_dist_placement_placementid_seq') AS last_placement_id
+\gset
+ALTER SEQUENCE pg_catalog.pg_dist_placement_placementid_seq RESTART 100000;
+SELECT nextval('pg_catalog.pg_dist_groupid_seq') AS last_group_id \gset
+SELECT nextval('pg_catalog.pg_dist_node_nodeid_seq') AS last_node_id \gset
+-- Create the necessary test utility function
+CREATE FUNCTION master_metadata_snapshot()
+    RETURNS text[]
+    LANGUAGE C STRICT
+    AS 'citus';
+    
+COMMENT ON FUNCTION master_metadata_snapshot()
+    IS 'commands to create the metadata snapshot';
+    
+-- Show that none of the existing tables are qualified to be MX tables
+SELECT * FROM pg_dist_partition WHERE partmethod='h' AND repmodel='s';
+ logicalrelid | partmethod | partkey | colocationid | repmodel 
+--------------+------------+---------+--------------+----------
+(0 rows)
+
+-- Show that, with no MX tables, metadata snapshot contains only the delete commands,
+-- pg_dist_node entries and reference tables
+SELECT unnest(master_metadata_snapshot());
+                                                                                                                                               unnest                                                                                                                                                
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ SELECT worker_drop_distributed_table(logicalrelid::regclass::text) FROM pg_dist_partition
+ TRUNCATE pg_dist_node CASCADE
+ INSERT INTO pg_dist_node (nodeid, groupid, nodename, nodeport, noderack, hasmetadata, isactive, noderole, nodecluster) VALUES (1, 1, 'localhost', 57637, 'default', FALSE, TRUE, 'primary'::noderole, 'default'),(2, 2, 'localhost', 57638, 'default', FALSE, TRUE, 'primary'::noderole, 'default')
+(3 rows)
+
+-- Create a test table with constraints and SERIAL
+CREATE TABLE mx_test_table (col_1 int UNIQUE, col_2 text NOT NULL, col_3 BIGSERIAL);
+SELECT master_create_distributed_table('mx_test_table', 'col_1', 'hash');
+ master_create_distributed_table 
+---------------------------------
+ 
+(1 row)
+
+SELECT master_create_worker_shards('mx_test_table', 8, 1);
+ master_create_worker_shards 
+-----------------------------
+ 
+(1 row)
+
+-- Set the replication model of the test table to streaming replication so that it is 
+-- considered as an MX table
+UPDATE pg_dist_partition SET repmodel='s' WHERE logicalrelid='mx_test_table'::regclass;
+-- Show that the created MX table is included in the metadata snapshot
+SELECT unnest(master_metadata_snapshot());
+                                                                                                                                                                                                                                                                                                                                                             unnest                                                                                                                                                                                                                                                                                                                                                             
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ SELECT worker_drop_distributed_table(logicalrelid::regclass::text) FROM pg_dist_partition
+ TRUNCATE pg_dist_node CASCADE
+ INSERT INTO pg_dist_node (nodeid, groupid, nodename, nodeport, noderack, hasmetadata, isactive, noderole, nodecluster) VALUES (1, 1, 'localhost', 57637, 'default', FALSE, TRUE, 'primary'::noderole, 'default'),(2, 2, 'localhost', 57638, 'default', FALSE, TRUE, 'primary'::noderole, 'default')
+ SELECT worker_apply_sequence_command ('CREATE SEQUENCE IF NOT EXISTS mx_test_table_col_3_seq INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 NO CYCLE')
+ ALTER SEQUENCE public.mx_test_table_col_3_seq OWNER TO postgres
+ CREATE TABLE public.mx_test_table (col_1 integer, col_2 text NOT NULL, col_3 bigint DEFAULT nextval('public.mx_test_table_col_3_seq'::regclass) NOT NULL)
+ ALTER TABLE public.mx_test_table OWNER TO postgres
+ ALTER TABLE public.mx_test_table ADD CONSTRAINT mx_test_table_col_1_key UNIQUE (col_1)
+ ALTER TABLE public.mx_test_table OWNER TO postgres
+ INSERT INTO pg_dist_partition (logicalrelid, partmethod, partkey, colocationid, repmodel) VALUES ('public.mx_test_table'::regclass, 'h', column_name_to_column('public.mx_test_table','col_1'), 0, 's')
+ SELECT worker_create_truncate_trigger('public.mx_test_table')
+ INSERT INTO pg_dist_placement (shardid, shardstate, shardlength, groupid, placementid) VALUES (1310000, 1, 0, 1, 100000),(1310001, 1, 0, 2, 100001),(1310002, 1, 0, 1, 100002),(1310003, 1, 0, 2, 100003),(1310004, 1, 0, 1, 100004),(1310005, 1, 0, 2, 100005),(1310006, 1, 0, 1, 100006),(1310007, 1, 0, 2, 100007)
+ INSERT INTO pg_dist_shard (logicalrelid, shardid, shardstorage, shardminvalue, shardmaxvalue) VALUES ('public.mx_test_table'::regclass, 1310000, 't', '-2147483648', '-1610612737'),('public.mx_test_table'::regclass, 1310001, 't', '-1610612736', '-1073741825'),('public.mx_test_table'::regclass, 1310002, 't', '-1073741824', '-536870913'),('public.mx_test_table'::regclass, 1310003, 't', '-536870912', '-1'),('public.mx_test_table'::regclass, 1310004, 't', '0', '536870911'),('public.mx_test_table'::regclass, 1310005, 't', '536870912', '1073741823'),('public.mx_test_table'::regclass, 1310006, 't', '1073741824', '1610612735'),('public.mx_test_table'::regclass, 1310007, 't', '1610612736', '2147483647')
+(13 rows)
+
+-- Show that CREATE INDEX commands are included in the metadata snapshot
+CREATE INDEX mx_index ON mx_test_table(col_2);
+SELECT unnest(master_metadata_snapshot());
+                                                                                                                                                                                                                                                                                                                                                             unnest                                                                                                                                                                                                                                                                                                                                                             
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ SELECT worker_drop_distributed_table(logicalrelid::regclass::text) FROM pg_dist_partition
+ TRUNCATE pg_dist_node CASCADE
+ INSERT INTO pg_dist_node (nodeid, groupid, nodename, nodeport, noderack, hasmetadata, isactive, noderole, nodecluster) VALUES (1, 1, 'localhost', 57637, 'default', FALSE, TRUE, 'primary'::noderole, 'default'),(2, 2, 'localhost', 57638, 'default', FALSE, TRUE, 'primary'::noderole, 'default')
+ SELECT worker_apply_sequence_command ('CREATE SEQUENCE IF NOT EXISTS mx_test_table_col_3_seq INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 NO CYCLE')
+ ALTER SEQUENCE public.mx_test_table_col_3_seq OWNER TO postgres
+ CREATE TABLE public.mx_test_table (col_1 integer, col_2 text NOT NULL, col_3 bigint DEFAULT nextval('public.mx_test_table_col_3_seq'::regclass) NOT NULL)
+ ALTER TABLE public.mx_test_table OWNER TO postgres
+ ALTER TABLE public.mx_test_table ADD CONSTRAINT mx_test_table_col_1_key UNIQUE (col_1)
+ CREATE INDEX mx_index ON public.mx_test_table USING btree (col_2)
+ ALTER TABLE public.mx_test_table OWNER TO postgres
+ INSERT INTO pg_dist_partition (logicalrelid, partmethod, partkey, colocationid, repmodel) VALUES ('public.mx_test_table'::regclass, 'h', column_name_to_column('public.mx_test_table','col_1'), 0, 's')
+ SELECT worker_create_truncate_trigger('public.mx_test_table')
+ INSERT INTO pg_dist_placement (shardid, shardstate, shardlength, groupid, placementid) VALUES (1310000, 1, 0, 1, 100000),(1310001, 1, 0, 2, 100001),(1310002, 1, 0, 1, 100002),(1310003, 1, 0, 2, 100003),(1310004, 1, 0, 1, 100004),(1310005, 1, 0, 2, 100005),(1310006, 1, 0, 1, 100006),(1310007, 1, 0, 2, 100007)
+ INSERT INTO pg_dist_shard (logicalrelid, shardid, shardstorage, shardminvalue, shardmaxvalue) VALUES ('public.mx_test_table'::regclass, 1310000, 't', '-2147483648', '-1610612737'),('public.mx_test_table'::regclass, 1310001, 't', '-1610612736', '-1073741825'),('public.mx_test_table'::regclass, 1310002, 't', '-1073741824', '-536870913'),('public.mx_test_table'::regclass, 1310003, 't', '-536870912', '-1'),('public.mx_test_table'::regclass, 1310004, 't', '0', '536870911'),('public.mx_test_table'::regclass, 1310005, 't', '536870912', '1073741823'),('public.mx_test_table'::regclass, 1310006, 't', '1073741824', '1610612735'),('public.mx_test_table'::regclass, 1310007, 't', '1610612736', '2147483647')
+(14 rows)
+
+-- Show that schema changes are included in the metadata snapshot
+CREATE SCHEMA mx_testing_schema;
+ALTER TABLE mx_test_table SET SCHEMA mx_testing_schema;
+WARNING:  not propagating ALTER ... SET SCHEMA commands to worker nodes
+HINT:  Connect to worker nodes directly to manually change schemas of affected objects.
+SELECT unnest(master_metadata_snapshot());
+                                                                                                                                                                                                                                                                                                                                                                                                         unnest                                                                                                                                                                                                                                                                                                                                                                                                         
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ SELECT worker_drop_distributed_table(logicalrelid::regclass::text) FROM pg_dist_partition
+ TRUNCATE pg_dist_node CASCADE
+ INSERT INTO pg_dist_node (nodeid, groupid, nodename, nodeport, noderack, hasmetadata, isactive, noderole, nodecluster) VALUES (1, 1, 'localhost', 57637, 'default', FALSE, TRUE, 'primary'::noderole, 'default'),(2, 2, 'localhost', 57638, 'default', FALSE, TRUE, 'primary'::noderole, 'default')
+ SELECT worker_apply_sequence_command ('CREATE SEQUENCE IF NOT EXISTS mx_testing_schema.mx_test_table_col_3_seq INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 NO CYCLE')
+ ALTER SEQUENCE mx_testing_schema.mx_test_table_col_3_seq OWNER TO postgres
+ CREATE TABLE mx_testing_schema.mx_test_table (col_1 integer, col_2 text NOT NULL, col_3 bigint DEFAULT nextval('mx_testing_schema.mx_test_table_col_3_seq'::regclass) NOT NULL)
+ ALTER TABLE mx_testing_schema.mx_test_table OWNER TO postgres
+ ALTER TABLE mx_testing_schema.mx_test_table ADD CONSTRAINT mx_test_table_col_1_key UNIQUE (col_1)
+ CREATE INDEX mx_index ON mx_testing_schema.mx_test_table USING btree (col_2)
+ ALTER TABLE mx_testing_schema.mx_test_table OWNER TO postgres
+ INSERT INTO pg_dist_partition (logicalrelid, partmethod, partkey, colocationid, repmodel) VALUES ('mx_testing_schema.mx_test_table'::regclass, 'h', column_name_to_column('mx_testing_schema.mx_test_table','col_1'), 0, 's')
+ SELECT worker_create_truncate_trigger('mx_testing_schema.mx_test_table')
+ INSERT INTO pg_dist_placement (shardid, shardstate, shardlength, groupid, placementid) VALUES (1310000, 1, 0, 1, 100000),(1310001, 1, 0, 2, 100001),(1310002, 1, 0, 1, 100002),(1310003, 1, 0, 2, 100003),(1310004, 1, 0, 1, 100004),(1310005, 1, 0, 2, 100005),(1310006, 1, 0, 1, 100006),(1310007, 1, 0, 2, 100007)
+ INSERT INTO pg_dist_shard (logicalrelid, shardid, shardstorage, shardminvalue, shardmaxvalue) VALUES ('mx_testing_schema.mx_test_table'::regclass, 1310000, 't', '-2147483648', '-1610612737'),('mx_testing_schema.mx_test_table'::regclass, 1310001, 't', '-1610612736', '-1073741825'),('mx_testing_schema.mx_test_table'::regclass, 1310002, 't', '-1073741824', '-536870913'),('mx_testing_schema.mx_test_table'::regclass, 1310003, 't', '-536870912', '-1'),('mx_testing_schema.mx_test_table'::regclass, 1310004, 't', '0', '536870911'),('mx_testing_schema.mx_test_table'::regclass, 1310005, 't', '536870912', '1073741823'),('mx_testing_schema.mx_test_table'::regclass, 1310006, 't', '1073741824', '1610612735'),('mx_testing_schema.mx_test_table'::regclass, 1310007, 't', '1610612736', '2147483647')
+(14 rows)
+
+-- Show that append distributed tables are not included in the metadata snapshot
+CREATE TABLE non_mx_test_table (col_1 int, col_2 text);
+SELECT master_create_distributed_table('non_mx_test_table', 'col_1', 'append');
+ master_create_distributed_table 
+---------------------------------
+ 
+(1 row)
+
+UPDATE pg_dist_partition SET repmodel='s' WHERE logicalrelid='non_mx_test_table'::regclass;
+SELECT unnest(master_metadata_snapshot());
+                                                                                                                                                                                                                                                                                                                                                                                                         unnest                                                                                                                                                                                                                                                                                                                                                                                                         
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ SELECT worker_drop_distributed_table(logicalrelid::regclass::text) FROM pg_dist_partition
+ TRUNCATE pg_dist_node CASCADE
+ INSERT INTO pg_dist_node (nodeid, groupid, nodename, nodeport, noderack, hasmetadata, isactive, noderole, nodecluster) VALUES (1, 1, 'localhost', 57637, 'default', FALSE, TRUE, 'primary'::noderole, 'default'),(2, 2, 'localhost', 57638, 'default', FALSE, TRUE, 'primary'::noderole, 'default')
+ SELECT worker_apply_sequence_command ('CREATE SEQUENCE IF NOT EXISTS mx_testing_schema.mx_test_table_col_3_seq INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 NO CYCLE')
+ ALTER SEQUENCE mx_testing_schema.mx_test_table_col_3_seq OWNER TO postgres
+ CREATE TABLE mx_testing_schema.mx_test_table (col_1 integer, col_2 text NOT NULL, col_3 bigint DEFAULT nextval('mx_testing_schema.mx_test_table_col_3_seq'::regclass) NOT NULL)
+ ALTER TABLE mx_testing_schema.mx_test_table OWNER TO postgres
+ ALTER TABLE mx_testing_schema.mx_test_table ADD CONSTRAINT mx_test_table_col_1_key UNIQUE (col_1)
+ CREATE INDEX mx_index ON mx_testing_schema.mx_test_table USING btree (col_2)
+ ALTER TABLE mx_testing_schema.mx_test_table OWNER TO postgres
+ INSERT INTO pg_dist_partition (logicalrelid, partmethod, partkey, colocationid, repmodel) VALUES ('mx_testing_schema.mx_test_table'::regclass, 'h', column_name_to_column('mx_testing_schema.mx_test_table','col_1'), 0, 's')
+ SELECT worker_create_truncate_trigger('mx_testing_schema.mx_test_table')
+ INSERT INTO pg_dist_placement (shardid, shardstate, shardlength, groupid, placementid) VALUES (1310000, 1, 0, 1, 100000),(1310001, 1, 0, 2, 100001),(1310002, 1, 0, 1, 100002),(1310003, 1, 0, 2, 100003),(1310004, 1, 0, 1, 100004),(1310005, 1, 0, 2, 100005),(1310006, 1, 0, 1, 100006),(1310007, 1, 0, 2, 100007)
+ INSERT INTO pg_dist_shard (logicalrelid, shardid, shardstorage, shardminvalue, shardmaxvalue) VALUES ('mx_testing_schema.mx_test_table'::regclass, 1310000, 't', '-2147483648', '-1610612737'),('mx_testing_schema.mx_test_table'::regclass, 1310001, 't', '-1610612736', '-1073741825'),('mx_testing_schema.mx_test_table'::regclass, 1310002, 't', '-1073741824', '-536870913'),('mx_testing_schema.mx_test_table'::regclass, 1310003, 't', '-536870912', '-1'),('mx_testing_schema.mx_test_table'::regclass, 1310004, 't', '0', '536870911'),('mx_testing_schema.mx_test_table'::regclass, 1310005, 't', '536870912', '1073741823'),('mx_testing_schema.mx_test_table'::regclass, 1310006, 't', '1073741824', '1610612735'),('mx_testing_schema.mx_test_table'::regclass, 1310007, 't', '1610612736', '2147483647')
+(14 rows)
+
+-- Show that range distributed tables are not included in the metadata snapshot
+UPDATE pg_dist_partition SET partmethod='r' WHERE logicalrelid='non_mx_test_table'::regclass;
+SELECT unnest(master_metadata_snapshot());
+                                                                                                                                                                                                                                                                                                                                                                                                         unnest                                                                                                                                                                                                                                                                                                                                                                                                         
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ SELECT worker_drop_distributed_table(logicalrelid::regclass::text) FROM pg_dist_partition
+ TRUNCATE pg_dist_node CASCADE
+ INSERT INTO pg_dist_node (nodeid, groupid, nodename, nodeport, noderack, hasmetadata, isactive, noderole, nodecluster) VALUES (1, 1, 'localhost', 57637, 'default', FALSE, TRUE, 'primary'::noderole, 'default'),(2, 2, 'localhost', 57638, 'default', FALSE, TRUE, 'primary'::noderole, 'default')
+ SELECT worker_apply_sequence_command ('CREATE SEQUENCE IF NOT EXISTS mx_testing_schema.mx_test_table_col_3_seq INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 NO CYCLE')
+ ALTER SEQUENCE mx_testing_schema.mx_test_table_col_3_seq OWNER TO postgres
+ CREATE TABLE mx_testing_schema.mx_test_table (col_1 integer, col_2 text NOT NULL, col_3 bigint DEFAULT nextval('mx_testing_schema.mx_test_table_col_3_seq'::regclass) NOT NULL)
+ ALTER TABLE mx_testing_schema.mx_test_table OWNER TO postgres
+ ALTER TABLE mx_testing_schema.mx_test_table ADD CONSTRAINT mx_test_table_col_1_key UNIQUE (col_1)
+ CREATE INDEX mx_index ON mx_testing_schema.mx_test_table USING btree (col_2)
+ ALTER TABLE mx_testing_schema.mx_test_table OWNER TO postgres
+ INSERT INTO pg_dist_partition (logicalrelid, partmethod, partkey, colocationid, repmodel) VALUES ('mx_testing_schema.mx_test_table'::regclass, 'h', column_name_to_column('mx_testing_schema.mx_test_table','col_1'), 0, 's')
+ SELECT worker_create_truncate_trigger('mx_testing_schema.mx_test_table')
+ INSERT INTO pg_dist_placement (shardid, shardstate, shardlength, groupid, placementid) VALUES (1310000, 1, 0, 1, 100000),(1310001, 1, 0, 2, 100001),(1310002, 1, 0, 1, 100002),(1310003, 1, 0, 2, 100003),(1310004, 1, 0, 1, 100004),(1310005, 1, 0, 2, 100005),(1310006, 1, 0, 1, 100006),(1310007, 1, 0, 2, 100007)
+ INSERT INTO pg_dist_shard (logicalrelid, shardid, shardstorage, shardminvalue, shardmaxvalue) VALUES ('mx_testing_schema.mx_test_table'::regclass, 1310000, 't', '-2147483648', '-1610612737'),('mx_testing_schema.mx_test_table'::regclass, 1310001, 't', '-1610612736', '-1073741825'),('mx_testing_schema.mx_test_table'::regclass, 1310002, 't', '-1073741824', '-536870913'),('mx_testing_schema.mx_test_table'::regclass, 1310003, 't', '-536870912', '-1'),('mx_testing_schema.mx_test_table'::regclass, 1310004, 't', '0', '536870911'),('mx_testing_schema.mx_test_table'::regclass, 1310005, 't', '536870912', '1073741823'),('mx_testing_schema.mx_test_table'::regclass, 1310006, 't', '1073741824', '1610612735'),('mx_testing_schema.mx_test_table'::regclass, 1310007, 't', '1610612736', '2147483647')
+(14 rows)
+
+-- Test start_metadata_sync_to_node UDF
+-- Ensure that hasmetadata=false for all nodes
+SELECT count(*) FROM pg_dist_node WHERE hasmetadata=true;
+ count 
+-------
+     0
+(1 row)
+
+-- Ensure it works when run on a secondary node
+SELECT groupid AS worker_1_group FROM pg_dist_node WHERE nodeport = :worker_1_port \gset
+SELECT master_add_node('localhost', 8888, groupid => :worker_1_group, noderole => 'secondary');
+                  master_add_node                   
+----------------------------------------------------
+ (4,1,localhost,8888,default,f,t,secondary,default)
+(1 row)
+
+SELECT start_metadata_sync_to_node('localhost', 8888);
+ start_metadata_sync_to_node 
+-----------------------------
+ 
+(1 row)
+
+SELECT hasmetadata FROM pg_dist_node WHERE nodeport = 8888;
+ hasmetadata 
+-------------
+ t
+(1 row)
+
+SELECT stop_metadata_sync_to_node('localhost', 8888);
+ stop_metadata_sync_to_node 
+----------------------------
+ 
+(1 row)
+
+SELECT hasmetadata FROM pg_dist_node WHERE nodeport = 8888;
+ hasmetadata 
+-------------
+ f
+(1 row)
+
+-- Add a node to another cluster to make sure it's also synced
+SELECT master_add_secondary_node('localhost', 8889, 'localhost', :worker_1_port, nodecluster => 'second-cluster');
+                 master_add_secondary_node                 
+-----------------------------------------------------------
+ (5,1,localhost,8889,default,f,t,secondary,second-cluster)
+(1 row)
+
+-- Run start_metadata_sync_to_node and check that it marked hasmetadata for that worker
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+ start_metadata_sync_to_node 
+-----------------------------
+ 
+(1 row)
+
+SELECT nodeid, hasmetadata FROM pg_dist_node WHERE nodename='localhost' AND nodeport=:worker_1_port;
+ nodeid | hasmetadata 
+--------+-------------
+      1 | t
+(1 row)
+
+-- Check that the metadata has been copied to the worker
+\c - - - :worker_1_port
+SELECT * FROM pg_dist_local_group;
+ groupid 
+---------
+       1
+(1 row)
+
+SELECT * FROM pg_dist_node ORDER BY nodeid;
+ nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole  |  nodecluster   
+--------+---------+-----------+----------+----------+-------------+----------+-----------+----------------
+      1 |       1 | localhost |    57637 | default  | t           | t        | primary   | default
+      2 |       2 | localhost |    57638 | default  | f           | t        | primary   | default
+      4 |       1 | localhost |     8888 | default  | f           | t        | secondary | default
+      5 |       1 | localhost |     8889 | default  | f           | t        | secondary | second-cluster
+(4 rows)
+
+SELECT * FROM pg_dist_partition ORDER BY logicalrelid;
+          logicalrelid           | partmethod |                                                        partkey                                                         | colocationid | repmodel 
+---------------------------------+------------+------------------------------------------------------------------------------------------------------------------------+--------------+----------
+ mx_testing_schema.mx_test_table | h          | {VAR :varno 1 :varattno 1 :vartype 23 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnoold 1 :varoattno 1 :location -1} |            0 | s
+(1 row)
+
+SELECT * FROM pg_dist_shard ORDER BY shardid;
+          logicalrelid           | shardid | shardstorage | shardminvalue | shardmaxvalue 
+---------------------------------+---------+--------------+---------------+---------------
+ mx_testing_schema.mx_test_table | 1310000 | t            | -2147483648   | -1610612737
+ mx_testing_schema.mx_test_table | 1310001 | t            | -1610612736   | -1073741825
+ mx_testing_schema.mx_test_table | 1310002 | t            | -1073741824   | -536870913
+ mx_testing_schema.mx_test_table | 1310003 | t            | -536870912    | -1
+ mx_testing_schema.mx_test_table | 1310004 | t            | 0             | 536870911
+ mx_testing_schema.mx_test_table | 1310005 | t            | 536870912     | 1073741823
+ mx_testing_schema.mx_test_table | 1310006 | t            | 1073741824    | 1610612735
+ mx_testing_schema.mx_test_table | 1310007 | t            | 1610612736    | 2147483647
+(8 rows)
+
+SELECT * FROM pg_dist_shard_placement ORDER BY shardid, nodename, nodeport;
+ shardid | shardstate | shardlength | nodename  | nodeport | placementid 
+---------+------------+-------------+-----------+----------+-------------
+ 1310000 |          1 |           0 | localhost |    57637 |      100000
+ 1310001 |          1 |           0 | localhost |    57638 |      100001
+ 1310002 |          1 |           0 | localhost |    57637 |      100002
+ 1310003 |          1 |           0 | localhost |    57638 |      100003
+ 1310004 |          1 |           0 | localhost |    57637 |      100004
+ 1310005 |          1 |           0 | localhost |    57638 |      100005
+ 1310006 |          1 |           0 | localhost |    57637 |      100006
+ 1310007 |          1 |           0 | localhost |    57638 |      100007
+(8 rows)
+
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_testing_schema.mx_test_table'::regclass;
+ Column |  Type   |                                    Modifiers                                    
+--------+---------+---------------------------------------------------------------------------------
+ col_1  | integer | 
+ col_2  | text    | not null
+ col_3  | bigint  | not null default nextval('mx_testing_schema.mx_test_table_col_3_seq'::regclass)
+(3 rows)
+
+SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
+    relid = 'mx_testing_schema.mx_test_table_col_1_key'::regclass;
+ Column |  Type   | Definition 
+--------+---------+------------
+ col_1  | integer | col_1
+(1 row)
+
+SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
+    relid = 'mx_testing_schema.mx_index'::regclass;
+ Column | Type | Definition 
+--------+------+------------
+ col_2  | text | col_2
+(1 row)
+
+-- Check that pg_dist_colocation is not synced
+SELECT * FROM pg_dist_colocation ORDER BY colocationid;
+ colocationid | shardcount | replicationfactor | distributioncolumntype 
+--------------+------------+-------------------+------------------------
+(0 rows)
+
+-- Make sure that truncate trigger has been set for the MX table on worker
+SELECT count(*) FROM pg_trigger WHERE tgrelid='mx_testing_schema.mx_test_table'::regclass;
+ count 
+-------
+     1
+(1 row)
+
+-- Make sure that start_metadata_sync_to_node considers foreign key constraints
+\c - - - :master_port
+-- Since we're superuser, we can set the replication model to 'streaming' to
+-- create some MX tables
+SET citus.shard_replication_factor TO 1;
+SET citus.replication_model TO 'streaming';
+CREATE SCHEMA mx_testing_schema_2;
+CREATE TABLE mx_testing_schema.fk_test_1 (col1 int, col2 text, col3 int, UNIQUE(col1, col3));
+CREATE TABLE mx_testing_schema_2.fk_test_2 (col1 int, col2 int, col3 text, 
+	FOREIGN KEY (col1, col2) REFERENCES mx_testing_schema.fk_test_1 (col1, col3));
+SELECT create_distributed_table('mx_testing_schema.fk_test_1', 'col1');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+SELECT create_distributed_table('mx_testing_schema_2.fk_test_2', 'col1');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+		
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+ start_metadata_sync_to_node 
+-----------------------------
+ 
+(1 row)
+
+-- Check that foreign key metadata exists on the worker
+\c - - - :worker_1_port
+SELECT "Constraint", "Definition" FROM table_fkeys WHERE relid='mx_testing_schema_2.fk_test_2'::regclass;
+        Constraint        |                                 Definition                                  
+--------------------------+-----------------------------------------------------------------------------
+ fk_test_2_col1_col2_fkey | FOREIGN KEY (col1, col2) REFERENCES mx_testing_schema.fk_test_1(col1, col3)
+(1 row)
+
+\c - - - :master_port
+DROP TABLE mx_testing_schema_2.fk_test_2;
+DROP TABLE mx_testing_schema.fk_test_1;
+RESET citus.shard_replication_factor;
+RESET citus.replication_model;
+-- Check that repeated calls to start_metadata_sync_to_node has no side effects
+\c - - - :master_port
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+ start_metadata_sync_to_node 
+-----------------------------
+ 
+(1 row)
+
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+ start_metadata_sync_to_node 
+-----------------------------
+ 
+(1 row)
+
+\c - - - :worker_1_port
+SELECT * FROM pg_dist_local_group;
+ groupid 
+---------
+       1
+(1 row)
+
+SELECT * FROM pg_dist_node ORDER BY nodeid;
+ nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole  |  nodecluster   
+--------+---------+-----------+----------+----------+-------------+----------+-----------+----------------
+      1 |       1 | localhost |    57637 | default  | t           | t        | primary   | default
+      2 |       2 | localhost |    57638 | default  | f           | t        | primary   | default
+      4 |       1 | localhost |     8888 | default  | f           | t        | secondary | default
+      5 |       1 | localhost |     8889 | default  | f           | t        | secondary | second-cluster
+(4 rows)
+
+SELECT * FROM pg_dist_partition ORDER BY logicalrelid;
+          logicalrelid           | partmethod |                                                        partkey                                                         | colocationid | repmodel 
+---------------------------------+------------+------------------------------------------------------------------------------------------------------------------------+--------------+----------
+ mx_testing_schema.mx_test_table | h          | {VAR :varno 1 :varattno 1 :vartype 23 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnoold 1 :varoattno 1 :location -1} |            0 | s
+(1 row)
+
+SELECT * FROM pg_dist_shard ORDER BY shardid;
+          logicalrelid           | shardid | shardstorage | shardminvalue | shardmaxvalue 
+---------------------------------+---------+--------------+---------------+---------------
+ mx_testing_schema.mx_test_table | 1310000 | t            | -2147483648   | -1610612737
+ mx_testing_schema.mx_test_table | 1310001 | t            | -1610612736   | -1073741825
+ mx_testing_schema.mx_test_table | 1310002 | t            | -1073741824   | -536870913
+ mx_testing_schema.mx_test_table | 1310003 | t            | -536870912    | -1
+ mx_testing_schema.mx_test_table | 1310004 | t            | 0             | 536870911
+ mx_testing_schema.mx_test_table | 1310005 | t            | 536870912     | 1073741823
+ mx_testing_schema.mx_test_table | 1310006 | t            | 1073741824    | 1610612735
+ mx_testing_schema.mx_test_table | 1310007 | t            | 1610612736    | 2147483647
+(8 rows)
+
+SELECT * FROM pg_dist_shard_placement ORDER BY shardid, nodename, nodeport;
+ shardid | shardstate | shardlength | nodename  | nodeport | placementid 
+---------+------------+-------------+-----------+----------+-------------
+ 1310000 |          1 |           0 | localhost |    57637 |      100000
+ 1310001 |          1 |           0 | localhost |    57638 |      100001
+ 1310002 |          1 |           0 | localhost |    57637 |      100002
+ 1310003 |          1 |           0 | localhost |    57638 |      100003
+ 1310004 |          1 |           0 | localhost |    57637 |      100004
+ 1310005 |          1 |           0 | localhost |    57638 |      100005
+ 1310006 |          1 |           0 | localhost |    57637 |      100006
+ 1310007 |          1 |           0 | localhost |    57638 |      100007
+(8 rows)
+
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_testing_schema.mx_test_table'::regclass;
+ Column |  Type   |                                    Modifiers                                    
+--------+---------+---------------------------------------------------------------------------------
+ col_1  | integer | 
+ col_2  | text    | not null
+ col_3  | bigint  | not null default nextval('mx_testing_schema.mx_test_table_col_3_seq'::regclass)
+(3 rows)
+
+SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
+    relid = 'mx_testing_schema.mx_test_table_col_1_key'::regclass;
+ Column |  Type   | Definition 
+--------+---------+------------
+ col_1  | integer | col_1
+(1 row)
+
+SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
+    relid = 'mx_testing_schema.mx_index'::regclass;
+ Column | Type | Definition 
+--------+------+------------
+ col_2  | text | col_2
+(1 row)
+
+SELECT count(*) FROM pg_trigger WHERE tgrelid='mx_testing_schema.mx_test_table'::regclass;
+ count 
+-------
+     1
+(1 row)
+
+-- Make sure that start_metadata_sync_to_node cannot be called inside a transaction
+\c - - - :master_port
+BEGIN;
+SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
+ERROR:  start_metadata_sync_to_node cannot run inside a transaction block
+ROLLBACK;
+SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_2_port;
+ hasmetadata 
+-------------
+ f
+(1 row)
+
+-- Check that the distributed table can be queried from the worker
+\c - - - :master_port
+SET citus.shard_replication_factor TO 1;
+SET citus.replication_model TO 'streaming';
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+ start_metadata_sync_to_node 
+-----------------------------
+ 
+(1 row)
+
+CREATE TABLE mx_query_test (a int, b text, c int);
+SELECT create_distributed_table('mx_query_test', 'a');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+SELECT repmodel FROM pg_dist_partition WHERE logicalrelid='mx_query_test'::regclass;
+ repmodel 
+----------
+ s
+(1 row)
+
+INSERT INTO mx_query_test VALUES (1, 'one', 1);
+INSERT INTO mx_query_test VALUES (2, 'two', 4);
+INSERT INTO mx_query_test VALUES (3, 'three', 9);
+INSERT INTO mx_query_test VALUES (4, 'four', 16);
+INSERT INTO mx_query_test VALUES (5, 'five', 24);
+\c - - - :worker_1_port
+SELECT * FROM mx_query_test ORDER BY a;
+ a |   b   | c  
+---+-------+----
+ 1 | one   |  1
+ 2 | two   |  4
+ 3 | three |  9
+ 4 | four  | 16
+ 5 | five  | 24
+(5 rows)
+
+INSERT INTO mx_query_test VALUES (6, 'six', 36);
+UPDATE mx_query_test SET c = 25 WHERE a = 5;
+\c - - - :master_port
+SELECT * FROM mx_query_test ORDER BY a;
+ a |   b   | c  
+---+-------+----
+ 1 | one   |  1
+ 2 | two   |  4
+ 3 | three |  9
+ 4 | four  | 16
+ 5 | five  | 25
+ 6 | six   | 36
+(6 rows)
+
+\c - - - :master_port
+DROP TABLE mx_query_test;
+-- Check that stop_metadata_sync_to_node function sets hasmetadata of the node to false 
+\c - - - :master_port
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+ start_metadata_sync_to_node 
+-----------------------------
+ 
+(1 row)
+
+SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_1_port;
+ hasmetadata 
+-------------
+ t
+(1 row)
+
+SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
+ stop_metadata_sync_to_node 
+----------------------------
+ 
+(1 row)
+
+SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_1_port;
+ hasmetadata 
+-------------
+ f
+(1 row)
+
+-- Test DDL propagation in MX tables
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+ start_metadata_sync_to_node 
+-----------------------------
+ 
+(1 row)
+
+SET citus.shard_count = 5;
+SET citus.multi_shard_commit_protocol TO '2pc';
+CREATE SCHEMA mx_test_schema_1;
+CREATE SCHEMA mx_test_schema_2;
+-- Create MX tables
+SET citus.shard_replication_factor TO 1;
+SET citus.replication_model TO 'streaming';
+CREATE TABLE mx_test_schema_1.mx_table_1 (col1 int UNIQUE, col2 text);
+CREATE INDEX mx_index_1 ON mx_test_schema_1.mx_table_1 (col1);
+CREATE TABLE mx_test_schema_2.mx_table_2 (col1 int, col2 text);
+CREATE INDEX mx_index_2 ON mx_test_schema_2.mx_table_2 (col2);
+ALTER TABLE mx_test_schema_2.mx_table_2 ADD CONSTRAINT mx_fk_constraint FOREIGN KEY(col1) REFERENCES mx_test_schema_1.mx_table_1(col1);
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_test_schema_1.mx_table_1'::regclass;
+ Column |  Type   | Modifiers 
+--------+---------+-----------
+ col1   | integer | 
+ col2   | text    | 
+(2 rows)
+
+SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
+    relid = 'mx_test_schema_1.mx_table_1_col1_key'::regclass;
+ Column |  Type   | Definition 
+--------+---------+------------
+ col1   | integer | col1
+(1 row)
+
+SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
+    relid = 'mx_test_schema_1.mx_index_1'::regclass;
+ Column |  Type   | Definition 
+--------+---------+------------
+ col1   | integer | col1
+(1 row)
+
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_test_schema_2.mx_table_2'::regclass;
+ Column |  Type   | Modifiers 
+--------+---------+-----------
+ col1   | integer | 
+ col2   | text    | 
+(2 rows)
+
+SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
+    relid = 'mx_test_schema_2.mx_index_2'::regclass;
+ Column | Type | Definition 
+--------+------+------------
+ col2   | text | col2
+(1 row)
+
+SELECT "Constraint", "Definition" FROM table_fkeys WHERE relid='mx_test_schema_2.mx_table_2'::regclass;
+    Constraint    |                           Definition                            
+------------------+-----------------------------------------------------------------
+ mx_fk_constraint | FOREIGN KEY (col1) REFERENCES mx_test_schema_1.mx_table_1(col1)
+(1 row)
+
+SELECT create_distributed_table('mx_test_schema_1.mx_table_1', 'col1');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+SELECT create_distributed_table('mx_test_schema_2.mx_table_2', 'col1');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+-- Check that created tables are marked as streaming replicated tables
+SELECT 
+	logicalrelid, repmodel 
+FROM 
+	pg_dist_partition 
+WHERE 
+	logicalrelid = 'mx_test_schema_1.mx_table_1'::regclass
+	OR logicalrelid = 'mx_test_schema_2.mx_table_2'::regclass
+ORDER BY 
+	logicalrelid;
+        logicalrelid         | repmodel 
+-----------------------------+----------
+ mx_test_schema_1.mx_table_1 | s
+ mx_test_schema_2.mx_table_2 | s
+(2 rows)
+
+-- See the shards and placements of the mx tables 
+SELECT 
+	logicalrelid, shardid, nodename, nodeport
+FROM 
+	pg_dist_shard NATURAL JOIN pg_dist_shard_placement
+WHERE 
+	logicalrelid = 'mx_test_schema_1.mx_table_1'::regclass
+	OR logicalrelid = 'mx_test_schema_2.mx_table_2'::regclass
+ORDER BY 
+	logicalrelid, shardid;
+        logicalrelid         | shardid | nodename  | nodeport 
+-----------------------------+---------+-----------+----------
+ mx_test_schema_1.mx_table_1 | 1310020 | localhost |    57637
+ mx_test_schema_1.mx_table_1 | 1310021 | localhost |    57638
+ mx_test_schema_1.mx_table_1 | 1310022 | localhost |    57637
+ mx_test_schema_1.mx_table_1 | 1310023 | localhost |    57638
+ mx_test_schema_1.mx_table_1 | 1310024 | localhost |    57637
+ mx_test_schema_2.mx_table_2 | 1310025 | localhost |    57637
+ mx_test_schema_2.mx_table_2 | 1310026 | localhost |    57638
+ mx_test_schema_2.mx_table_2 | 1310027 | localhost |    57637
+ mx_test_schema_2.mx_table_2 | 1310028 | localhost |    57638
+ mx_test_schema_2.mx_table_2 | 1310029 | localhost |    57637
+(10 rows)
+
+	
+-- Check that metadata of MX tables exist on the metadata worker
+\c - - - :worker_1_port
+-- Check that tables are created
+\dt mx_test_schema_?.mx_table_?
+                List of relations
+      Schema      |    Name    | Type  |  Owner   
+------------------+------------+-------+----------
+ mx_test_schema_1 | mx_table_1 | table | postgres
+ mx_test_schema_2 | mx_table_2 | table | postgres
+(2 rows)
+
+-- Check that table metadata are created
+SELECT 
+	logicalrelid, repmodel 
+FROM 
+	pg_dist_partition 
+WHERE 
+	logicalrelid = 'mx_test_schema_1.mx_table_1'::regclass
+	OR logicalrelid = 'mx_test_schema_2.mx_table_2'::regclass;
+        logicalrelid         | repmodel 
+-----------------------------+----------
+ mx_test_schema_1.mx_table_1 | s
+ mx_test_schema_2.mx_table_2 | s
+(2 rows)
+
+-- Check that shard and placement data are created
+SELECT 
+	logicalrelid, shardid, nodename, nodeport
+FROM 
+	pg_dist_shard NATURAL JOIN pg_dist_shard_placement
+WHERE 
+	logicalrelid = 'mx_test_schema_1.mx_table_1'::regclass
+	OR logicalrelid = 'mx_test_schema_2.mx_table_2'::regclass
+ORDER BY 
+	logicalrelid, shardid;
+        logicalrelid         | shardid | nodename  | nodeport 
+-----------------------------+---------+-----------+----------
+ mx_test_schema_1.mx_table_1 | 1310020 | localhost |    57637
+ mx_test_schema_1.mx_table_1 | 1310021 | localhost |    57638
+ mx_test_schema_1.mx_table_1 | 1310022 | localhost |    57637
+ mx_test_schema_1.mx_table_1 | 1310023 | localhost |    57638
+ mx_test_schema_1.mx_table_1 | 1310024 | localhost |    57637
+ mx_test_schema_2.mx_table_2 | 1310025 | localhost |    57637
+ mx_test_schema_2.mx_table_2 | 1310026 | localhost |    57638
+ mx_test_schema_2.mx_table_2 | 1310027 | localhost |    57637
+ mx_test_schema_2.mx_table_2 | 1310028 | localhost |    57638
+ mx_test_schema_2.mx_table_2 | 1310029 | localhost |    57637
+(10 rows)
+
+-- Check that metadata of MX tables don't exist on the non-metadata worker
+\c - - - :worker_2_port
+\d mx_test_schema_1.mx_table_1
+\d mx_test_schema_2.mx_table_2
+SELECT * FROM pg_dist_partition;
+ logicalrelid | partmethod | partkey | colocationid | repmodel 
+--------------+------------+---------+--------------+----------
+(0 rows)
+
+SELECT * FROM pg_dist_shard;
+ logicalrelid | shardid | shardstorage | shardminvalue | shardmaxvalue 
+--------------+---------+--------------+---------------+---------------
+(0 rows)
+
+SELECT * FROM pg_dist_shard_placement ORDER BY shardid, nodename, nodeport;
+ shardid | shardstate | shardlength | nodename | nodeport | placementid 
+---------+------------+-------------+----------+----------+-------------
+(0 rows)
+
+-- Check that CREATE INDEX statement is propagated
+\c - - - :master_port
+SET citus.multi_shard_commit_protocol TO '2pc';
+SET client_min_messages TO 'ERROR';
+CREATE INDEX mx_index_3 ON mx_test_schema_2.mx_table_2 USING hash (col1);
+ALTER TABLE mx_test_schema_2.mx_table_2 ADD CONSTRAINT mx_table_2_col1_key UNIQUE (col1);
+\c - - - :worker_1_port
+SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
+    relid = 'mx_test_schema_2.mx_index_3'::regclass;
+ Column |  Type   | Definition 
+--------+---------+------------
+ col1   | integer | col1
+(1 row)
+
+SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
+    relid = 'mx_test_schema_2.mx_table_2_col1_key'::regclass;
+ Column |  Type   | Definition 
+--------+---------+------------
+ col1   | integer | col1
+(1 row)
+
+-- Check that DROP INDEX statement is propagated
+\c - - - :master_port
+SET citus.multi_shard_commit_protocol TO '2pc';
+DROP INDEX mx_test_schema_2.mx_index_3;
+\c - - - :worker_1_port
+SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
+    relid = 'mx_test_schema_2.mx_index_3'::regclass;
+ERROR:  relation "mx_test_schema_2.mx_index_3" does not exist
+LINE 2:     relid = 'mx_test_schema_2.mx_index_3'::regclass;
+                    ^
+-- Check that ALTER TABLE statements are propagated
+\c - - - :master_port
+SET citus.multi_shard_commit_protocol TO '2pc';
+ALTER TABLE mx_test_schema_1.mx_table_1 ADD COLUMN col3 NUMERIC;
+ALTER TABLE mx_test_schema_1.mx_table_1 ALTER COLUMN col3 SET DATA TYPE INT;
+ALTER TABLE 
+	mx_test_schema_1.mx_table_1 
+ADD CONSTRAINT 
+	mx_fk_constraint 
+FOREIGN KEY 
+	(col1)
+REFERENCES
+	mx_test_schema_2.mx_table_2(col1);
+\c - - - :worker_1_port
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_test_schema_1.mx_table_1'::regclass;
+ Column |  Type   | Modifiers 
+--------+---------+-----------
+ col1   | integer | 
+ col2   | text    | 
+ col3   | integer | 
+(3 rows)
+
+SELECT "Constraint", "Definition" FROM table_fkeys WHERE relid='mx_test_schema_1.mx_table_1'::regclass;
+    Constraint    |                           Definition                            
+------------------+-----------------------------------------------------------------
+ mx_fk_constraint | FOREIGN KEY (col1) REFERENCES mx_test_schema_2.mx_table_2(col1)
+(1 row)
+
+-- Check that foreign key constraint with NOT VALID works as well
+\c - - - :master_port
+SET citus.multi_shard_commit_protocol TO '2pc';
+ALTER TABLE mx_test_schema_1.mx_table_1 DROP CONSTRAINT mx_fk_constraint; 
+ALTER TABLE 
+	mx_test_schema_1.mx_table_1 
+ADD CONSTRAINT 
+	mx_fk_constraint_2
+FOREIGN KEY 
+	(col1)
+REFERENCES
+	mx_test_schema_2.mx_table_2(col1)
+NOT VALID;
+\c - - - :worker_1_port
+SELECT "Constraint", "Definition" FROM table_fkeys WHERE relid='mx_test_schema_1.mx_table_1'::regclass;
+     Constraint     |                           Definition                            
+--------------------+-----------------------------------------------------------------
+ mx_fk_constraint_2 | FOREIGN KEY (col1) REFERENCES mx_test_schema_2.mx_table_2(col1)
+(1 row)
+
+-- Check that mark_tables_colocated call propagates the changes to the workers 
+\c - - - :master_port
+SELECT nextval('pg_catalog.pg_dist_colocationid_seq') AS last_colocation_id \gset
+ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 10000;
+SET citus.shard_count TO 7;
+SET citus.shard_replication_factor TO 1;
+SET citus.replication_model TO 'streaming';
+CREATE TABLE mx_colocation_test_1 (a int);
+SELECT create_distributed_table('mx_colocation_test_1', 'a');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+CREATE TABLE mx_colocation_test_2 (a int);
+SELECT create_distributed_table('mx_colocation_test_2', 'a');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+-- Check the colocation IDs of the created tables
+SELECT 
+	logicalrelid, colocationid
+FROM 
+	pg_dist_partition 
+WHERE
+	logicalrelid = 'mx_colocation_test_1'::regclass
+	OR logicalrelid = 'mx_colocation_test_2'::regclass
+ORDER BY logicalrelid;
+     logicalrelid     | colocationid 
+----------------------+--------------
+ mx_colocation_test_1 |        10000
+ mx_colocation_test_2 |        10000
+(2 rows)
+
+	
+-- Reset the colocation IDs of the test tables
+DELETE FROM 
+	pg_dist_colocation
+WHERE EXISTS (
+	SELECT 1 
+	FROM pg_dist_partition 
+	WHERE 
+		colocationid = pg_dist_partition.colocationid 
+		AND pg_dist_partition.logicalrelid = 'mx_colocation_test_1'::regclass);
+UPDATE 
+	pg_dist_partition 
+SET 
+	colocationid = 0
+WHERE 
+	logicalrelid = 'mx_colocation_test_1'::regclass 
+	OR logicalrelid = 'mx_colocation_test_2'::regclass;
+-- Mark tables colocated and see the changes on the master and the worker
+SELECT mark_tables_colocated('mx_colocation_test_1', ARRAY['mx_colocation_test_2']);
+ mark_tables_colocated 
+-----------------------
+ 
+(1 row)
+
+SELECT 
+	logicalrelid, colocationid 
+FROM 
+	pg_dist_partition 
+WHERE
+	logicalrelid = 'mx_colocation_test_1'::regclass
+	OR logicalrelid = 'mx_colocation_test_2'::regclass;
+     logicalrelid     | colocationid 
+----------------------+--------------
+ mx_colocation_test_1 |        10001
+ mx_colocation_test_2 |        10001
+(2 rows)
+
+\c - - - :worker_1_port
+SELECT 
+	logicalrelid, colocationid 
+FROM 
+	pg_dist_partition 
+WHERE
+	logicalrelid = 'mx_colocation_test_1'::regclass
+	OR logicalrelid = 'mx_colocation_test_2'::regclass;
+     logicalrelid     | colocationid 
+----------------------+--------------
+ mx_colocation_test_1 |        10001
+ mx_colocation_test_2 |        10001
+(2 rows)
+
+\c - - - :master_port	
+-- Check that DROP TABLE on MX tables works
+DROP TABLE mx_colocation_test_1;
+DROP TABLE mx_colocation_test_2;
+\d mx_colocation_test_1
+\d mx_colocation_test_2
+\c - - - :worker_1_port
+\d mx_colocation_test_1
+\d mx_colocation_test_2
+	
+-- Check that dropped MX table can be recreated again
+\c - - - :master_port	
+SET citus.shard_count TO 7;
+SET citus.shard_replication_factor TO 1;
+SET citus.replication_model TO 'streaming';
+CREATE TABLE mx_temp_drop_test (a int);
+SELECT create_distributed_table('mx_temp_drop_test', 'a');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+SELECT logicalrelid, repmodel FROM pg_dist_partition WHERE logicalrelid = 'mx_temp_drop_test'::regclass;
+   logicalrelid    | repmodel 
+-------------------+----------
+ mx_temp_drop_test | s
+(1 row)
+
+DROP TABLE mx_temp_drop_test;
+CREATE TABLE mx_temp_drop_test (a int);
+SELECT create_distributed_table('mx_temp_drop_test', 'a');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+SELECT logicalrelid, repmodel FROM pg_dist_partition WHERE logicalrelid = 'mx_temp_drop_test'::regclass;
+   logicalrelid    | repmodel 
+-------------------+----------
+ mx_temp_drop_test | s
+(1 row)
+
+DROP TABLE mx_temp_drop_test;
+-- Check that MX tables can be created with SERIAL columns, but error out on metadata sync
+\c - - - :master_port	
+SET citus.shard_count TO 3;
+SET citus.shard_replication_factor TO 1;
+SET citus.replication_model TO 'streaming';
+SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
+ stop_metadata_sync_to_node 
+----------------------------
+ 
+(1 row)
+
+SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
+ stop_metadata_sync_to_node 
+----------------------------
+ 
+(1 row)
+
+CREATE TABLE mx_table_with_small_sequence(a int, b SERIAL);
+SELECT create_distributed_table('mx_table_with_small_sequence', 'a');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+ERROR:  cannot create an mx table with a serial or smallserial column 
+DETAIL:  Only bigserial is supported in mx tables.
+DROP TABLE mx_table_with_small_sequence;
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+ start_metadata_sync_to_node 
+-----------------------------
+ 
+(1 row)
+
+-- Show that create_distributed_table errors out if the table has a SERIAL column and 
+-- there are metadata workers
+CREATE TABLE mx_table_with_small_sequence(a int, b SERIAL);
+SELECT create_distributed_table('mx_table_with_small_sequence', 'a');
+ERROR:  cannot create an mx table with a serial or smallserial column 
+DETAIL:  Only bigserial is supported in mx tables.
+DROP TABLE mx_table_with_small_sequence;
+-- Create an MX table with (BIGSERIAL) sequences
+CREATE TABLE mx_table_with_sequence(a int, b BIGSERIAL, c BIGSERIAL);
+SELECT create_distributed_table('mx_table_with_sequence', 'a');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_table_with_sequence'::regclass;
+ Column |  Type   |                             Modifiers                              
+--------+---------+--------------------------------------------------------------------
+ a      | integer | 
+ b      | bigint  | not null default nextval('mx_table_with_sequence_b_seq'::regclass)
+ c      | bigint  | not null default nextval('mx_table_with_sequence_c_seq'::regclass)
+(3 rows)
+
+\ds mx_table_with_sequence_b_seq
+                      List of relations
+ Schema |             Name             |   Type   |  Owner   
+--------+------------------------------+----------+----------
+ public | mx_table_with_sequence_b_seq | sequence | postgres
+(1 row)
+
+\ds mx_table_with_sequence_c_seq
+                      List of relations
+ Schema |             Name             |   Type   |  Owner   
+--------+------------------------------+----------+----------
+ public | mx_table_with_sequence_c_seq | sequence | postgres
+(1 row)
+
+-- Check that the sequences created on the metadata worker as well
+\c - - - :worker_1_port
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_table_with_sequence'::regclass;
+ Column |  Type   |                             Modifiers                              
+--------+---------+--------------------------------------------------------------------
+ a      | integer | 
+ b      | bigint  | not null default nextval('mx_table_with_sequence_b_seq'::regclass)
+ c      | bigint  | not null default nextval('mx_table_with_sequence_c_seq'::regclass)
+(3 rows)
+
+\ds mx_table_with_sequence_b_seq
+                      List of relations
+ Schema |             Name             |   Type   |  Owner   
+--------+------------------------------+----------+----------
+ public | mx_table_with_sequence_b_seq | sequence | postgres
+(1 row)
+
+\ds mx_table_with_sequence_c_seq
+                      List of relations
+ Schema |             Name             |   Type   |  Owner   
+--------+------------------------------+----------+----------
+ public | mx_table_with_sequence_c_seq | sequence | postgres
+(1 row)
+
+-- Check that the sequences on the worker have their own space
+SELECT nextval('mx_table_with_sequence_b_seq');
+     nextval     
+-----------------
+ 281474976710657
+(1 row)
+
+SELECT nextval('mx_table_with_sequence_c_seq');
+     nextval     
+-----------------
+ 281474976710657
+(1 row)
+
+-- Check that adding a new metadata node sets the sequence space correctly
+\c - - - :master_port
+SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
+ start_metadata_sync_to_node 
+-----------------------------
+ 
+(1 row)
+
+\c - - - :worker_2_port
+SELECT groupid FROM pg_dist_local_group;
+ groupid 
+---------
+       2
+(1 row)
+
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_table_with_sequence'::regclass;
+ Column |  Type   |                             Modifiers                              
+--------+---------+--------------------------------------------------------------------
+ a      | integer | 
+ b      | bigint  | not null default nextval('mx_table_with_sequence_b_seq'::regclass)
+ c      | bigint  | not null default nextval('mx_table_with_sequence_c_seq'::regclass)
+(3 rows)
+
+\ds mx_table_with_sequence_b_seq
+                      List of relations
+ Schema |             Name             |   Type   |  Owner   
+--------+------------------------------+----------+----------
+ public | mx_table_with_sequence_b_seq | sequence | postgres
+(1 row)
+
+\ds mx_table_with_sequence_c_seq
+                      List of relations
+ Schema |             Name             |   Type   |  Owner   
+--------+------------------------------+----------+----------
+ public | mx_table_with_sequence_c_seq | sequence | postgres
+(1 row)
+
+SELECT nextval('mx_table_with_sequence_b_seq');
+     nextval     
+-----------------
+ 562949953421313
+(1 row)
+
+SELECT nextval('mx_table_with_sequence_c_seq');
+     nextval     
+-----------------
+ 562949953421313
+(1 row)
+
+-- Check that dropping the mx table with sequences works as expected
+\c - - - :master_port
+DROP TABLE mx_table_with_sequence;
+\d mx_table_with_sequence
+\ds mx_table_with_sequence_b_seq
+      List of relations
+ Schema | Name | Type | Owner 
+--------+------+------+-------
+(0 rows)
+
+\ds mx_table_with_sequence_c_seq
+      List of relations
+ Schema | Name | Type | Owner 
+--------+------+------+-------
+(0 rows)
+
+-- Check that the sequences are dropped from the workers
+\c - - - :worker_1_port
+\d mx_table_with_sequence
+\ds mx_table_with_sequence_b_seq
+      List of relations
+ Schema | Name | Type | Owner 
+--------+------+------+-------
+(0 rows)
+
+\ds mx_table_with_sequence_c_seq
+      List of relations
+ Schema | Name | Type | Owner 
+--------+------+------+-------
+(0 rows)
+
+-- Check that the sequences are dropped from the workers
+\c - - - :worker_2_port
+\ds mx_table_with_sequence_b_seq
+      List of relations
+ Schema | Name | Type | Owner 
+--------+------+------+-------
+(0 rows)
+
+\ds mx_table_with_sequence_c_seq
+      List of relations
+ Schema | Name | Type | Owner 
+--------+------+------+-------
+(0 rows)
+
+-- Check that MX sequences play well with non-super users
+\c - - - :master_port
+-- Remove a node so that shards and sequences won't be created on table creation. Therefore,
+-- we can test that start_metadata_sync_to_node can actually create the sequence with proper
+-- owner
+CREATE TABLE pg_dist_placement_temp AS SELECT * FROM pg_dist_placement;
+CREATE TABLE pg_dist_partition_temp AS SELECT * FROM pg_dist_partition;
+DELETE FROM pg_dist_placement;
+DELETE FROM pg_dist_partition;
+SELECT groupid AS old_worker_2_group FROM pg_dist_node WHERE nodeport = :worker_2_port \gset
+SELECT master_remove_node('localhost', :worker_2_port);
+ master_remove_node 
+--------------------
+ 
+(1 row)
+
+ -- the master user needs superuser permissions to change the replication model
+CREATE USER mx_user WITH SUPERUSER;
+NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
+HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
+\c - - - :worker_1_port
+CREATE USER mx_user;
+NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
+HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
+\c - - - :worker_2_port
+CREATE USER mx_user;
+NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
+HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
+\c - mx_user - :master_port
+-- Create an mx table as a different user
+CREATE TABLE mx_table (a int, b BIGSERIAL);
+SET citus.shard_replication_factor TO 1;
+SET citus.replication_model TO 'streaming';
+SELECT create_distributed_table('mx_table', 'a');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+\c - postgres - :master_port
+SELECT master_add_node('localhost', :worker_2_port);
+                  master_add_node                  
+---------------------------------------------------
+ (6,4,localhost,57638,default,f,t,primary,default)
+(1 row)
+
+SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
+ start_metadata_sync_to_node 
+-----------------------------
+ 
+(1 row)
+
+\c - mx_user - :worker_1_port
+SELECT nextval('mx_table_b_seq');
+     nextval     
+-----------------
+ 281474976710657
+(1 row)
+
+INSERT INTO mx_table (a) VALUES (37);
+INSERT INTO mx_table (a) VALUES (38);
+SELECT * FROM mx_table ORDER BY a;
+ a  |        b        
+----+-----------------
+ 37 | 281474976710658
+ 38 | 281474976710659
+(2 rows)
+
+\c - mx_user - :worker_2_port
+SELECT nextval('mx_table_b_seq');
+     nextval      
+------------------
+ 1125899906842625
+(1 row)
+
+INSERT INTO mx_table (a) VALUES (39);
+INSERT INTO mx_table (a) VALUES (40);
+SELECT * FROM mx_table ORDER BY a;
+ a  |        b         
+----+------------------
+ 37 |  281474976710658
+ 38 |  281474976710659
+ 39 | 1125899906842626
+ 40 | 1125899906842627
+(4 rows)
+
+\c - mx_user - :master_port
+DROP TABLE mx_table;
+-- put the metadata back into a consistent state
+\c - postgres - :master_port
+INSERT INTO pg_dist_placement SELECT * FROM pg_dist_placement_temp;
+INSERT INTO pg_dist_partition SELECT * FROM pg_dist_partition_temp;
+DROP TABLE pg_dist_placement_temp;
+DROP TABLE pg_dist_partition_temp;
+UPDATE pg_dist_placement
+  SET groupid = (SELECT groupid FROM pg_dist_node WHERE nodeport = :worker_2_port)
+  WHERE groupid = :old_worker_2_group;
+\c - - - :worker_1_port
+UPDATE pg_dist_placement
+  SET groupid = (SELECT groupid FROM pg_dist_node WHERE nodeport = :worker_2_port)
+  WHERE groupid = :old_worker_2_group;
+\c - - - :worker_2_port
+UPDATE pg_dist_placement
+  SET groupid = (SELECT groupid FROM pg_dist_node WHERE nodeport = :worker_2_port)
+  WHERE groupid = :old_worker_2_group;
+\c - - - :master_port
+SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
+ stop_metadata_sync_to_node 
+----------------------------
+ 
+(1 row)
+
+DROP USER mx_user;
+\c - - - :worker_1_port
+DROP USER mx_user;
+\c - - - :worker_2_port
+DROP USER mx_user;
+-- Check that create_reference_table creates the metadata on workers
+\c - - - :master_port
+CREATE TABLE mx_ref (col_1 int, col_2 text);
+SELECT create_reference_table('mx_ref');
+ create_reference_table 
+------------------------
+ 
+(1 row)
+
+\dt mx_ref
+         List of relations
+ Schema |  Name  | Type  |  Owner   
+--------+--------+-------+----------
+ public | mx_ref | table | postgres
+(1 row)
+
+\c - - - :worker_1_port
+\dt mx_ref
+         List of relations
+ Schema |  Name  | Type  |  Owner   
+--------+--------+-------+----------
+ public | mx_ref | table | postgres
+(1 row)
+
+SELECT
+	logicalrelid, partmethod, repmodel, shardid, placementid, nodename, nodeport
+FROM
+	pg_dist_partition 
+	NATURAL JOIN pg_dist_shard
+	NATURAL JOIN pg_dist_shard_placement
+WHERE
+	logicalrelid = 'mx_ref'::regclass
+ORDER BY
+ 	nodeport;
+ logicalrelid | partmethod | repmodel | shardid | placementid | nodename  | nodeport 
+--------------+------------+----------+---------+-------------+-----------+----------
+ mx_ref       | n          | t        | 1310071 |      100071 | localhost |    57637
+ mx_ref       | n          | t        | 1310071 |      100072 | localhost |    57638
+(2 rows)
+
+	
+SELECT shardid AS ref_table_shardid FROM pg_dist_shard WHERE logicalrelid='mx_ref'::regclass \gset
+-- Check that DDL commands are propagated to reference tables on workers
+\c - - - :master_port
+ALTER TABLE mx_ref ADD COLUMN col_3 NUMERIC DEFAULT 0;
+CREATE INDEX mx_ref_index ON mx_ref(col_1);
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_ref'::regclass;
+ Column |  Type   | Modifiers 
+--------+---------+-----------
+ col_1  | integer | 
+ col_2  | text    | 
+ col_3  | numeric | default 0
+(3 rows)
+
+SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
+    relid = 'mx_ref_index'::regclass;
+ Column |  Type   | Definition 
+--------+---------+------------
+ col_1  | integer | col_1
+(1 row)
+
+\c - - - :worker_1_port
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_ref'::regclass;
+ Column |  Type   | Modifiers 
+--------+---------+-----------
+ col_1  | integer | 
+ col_2  | text    | 
+ col_3  | numeric | default 0
+(3 rows)
+
+SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
+    relid = 'mx_ref_index'::regclass;
+ Column |  Type   | Definition 
+--------+---------+------------
+ col_1  | integer | col_1
+(1 row)
+
+	
+-- Check that metada is cleaned successfully upon drop table
+\c - - - :master_port
+DROP TABLE mx_ref;
+SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
+    relid = 'mx_ref_index'::regclass;
+ERROR:  relation "mx_ref_index" does not exist
+LINE 2:     relid = 'mx_ref_index'::regclass;
+                    ^
+\c - - - :worker_1_port
+SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
+    relid = 'mx_ref_index'::regclass;
+ERROR:  relation "mx_ref_index" does not exist
+LINE 2:     relid = 'mx_ref_index'::regclass;
+                    ^
+SELECT * FROM pg_dist_shard WHERE shardid=:ref_table_shardid;
+ logicalrelid | shardid | shardstorage | shardminvalue | shardmaxvalue 
+--------------+---------+--------------+---------------+---------------
+(0 rows)
+
+SELECT * FROM pg_dist_shard_placement WHERE shardid=:ref_table_shardid;
+ shardid | shardstate | shardlength | nodename | nodeport | placementid 
+---------+------------+-------------+----------+----------+-------------
+(0 rows)
+
+-- Check that master_add_node propagates the metadata about new placements of a reference table
+\c - - - :master_port
+SELECT groupid AS old_worker_2_group
+  FROM pg_dist_node WHERE nodeport = :worker_2_port \gset
+CREATE TABLE tmp_placement AS
+  SELECT * FROM pg_dist_placement WHERE groupid = :old_worker_2_group;
+DELETE FROM pg_dist_placement
+  WHERE groupid = :old_worker_2_group;
+SELECT master_remove_node('localhost', :worker_2_port);
+ master_remove_node 
+--------------------
+ 
+(1 row)
+
+CREATE TABLE mx_ref (col_1 int, col_2 text);
+SELECT create_reference_table('mx_ref');
+ create_reference_table 
+------------------------
+ 
+(1 row)
+
+SELECT shardid, nodename, nodeport 
+FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement
+WHERE logicalrelid='mx_ref'::regclass;
+ shardid | nodename  | nodeport 
+---------+-----------+----------
+ 1310072 | localhost |    57637
+(1 row)
+
+\c - - - :worker_1_port
+SELECT shardid, nodename, nodeport 
+FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement
+WHERE logicalrelid='mx_ref'::regclass;
+ shardid | nodename  | nodeport 
+---------+-----------+----------
+ 1310072 | localhost |    57637
+(1 row)
+
+\c - - - :master_port
+SELECT master_add_node('localhost', :worker_2_port);
+NOTICE:  Replicating reference table "mx_ref" to the node localhost:57638
+                  master_add_node                  
+---------------------------------------------------
+ (7,5,localhost,57638,default,f,t,primary,default)
+(1 row)
+
+SELECT shardid, nodename, nodeport 
+FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement
+WHERE logicalrelid='mx_ref'::regclass
+ORDER BY shardid, nodeport;
+ shardid | nodename  | nodeport 
+---------+-----------+----------
+ 1310072 | localhost |    57637
+ 1310072 | localhost |    57638
+(2 rows)
+
+\c - - - :worker_1_port
+SELECT shardid, nodename, nodeport 
+FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement
+WHERE logicalrelid='mx_ref'::regclass
+ORDER BY shardid, nodeport;
+ shardid | nodename  | nodeport 
+---------+-----------+----------
+ 1310072 | localhost |    57637
+ 1310072 | localhost |    57638
+(2 rows)
+
+-- Get the metadata back into a consistent state
+\c - - - :master_port
+INSERT INTO pg_dist_placement (SELECT * FROM tmp_placement);
+DROP TABLE tmp_placement;
+UPDATE pg_dist_placement
+  SET groupid = (SELECT groupid FROM pg_dist_node WHERE nodeport = :worker_2_port)
+  WHERE groupid = :old_worker_2_group;
+\c - - - :worker_1_port
+UPDATE pg_dist_placement
+  SET groupid = (SELECT groupid FROM pg_dist_node WHERE nodeport = :worker_2_port)
+  WHERE groupid = :old_worker_2_group;
+-- Cleanup
+\c - - - :master_port
+DROP TABLE mx_test_schema_2.mx_table_2 CASCADE;
+NOTICE:  drop cascades to constraint mx_fk_constraint_2 on table mx_test_schema_1.mx_table_1
+DROP TABLE mx_test_schema_1.mx_table_1 CASCADE;
+DROP TABLE mx_testing_schema.mx_test_table;
+DROP TABLE mx_ref;
+SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
+ stop_metadata_sync_to_node 
+----------------------------
+ 
+(1 row)
+
+SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
+ stop_metadata_sync_to_node 
+----------------------------
+ 
+(1 row)
+
+RESET citus.shard_count;
+RESET citus.shard_replication_factor;
+RESET citus.replication_model;
+RESET citus.multi_shard_commit_protocol;
+ALTER SEQUENCE pg_catalog.pg_dist_groupid_seq RESTART :last_group_id;
+ALTER SEQUENCE pg_catalog.pg_dist_node_nodeid_seq RESTART :last_node_id;
+ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART :last_colocation_id;
+ALTER SEQUENCE pg_catalog.pg_dist_placement_placementid_seq RESTART :last_placement_id;
