@@ -77,7 +77,7 @@ LIMIT 3;
 SELECT
   user_id
 FROM
-  (SELECT  5 AS user_id) users_reference_table
+  (SELECT  5 AS user_id UNION ALL SELECT 6) users_reference_table
 WHERE
   NOT EXISTS
       (SELECT
