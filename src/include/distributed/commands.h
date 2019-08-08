@@ -92,11 +92,8 @@ extern void ErrorIfUnsupportedSeqStmt(CreateSeqStmt *createSeqStmt);
 extern void ErrorIfDistributedAlterSeqOwnedBy(AlterSeqStmt *alterSeqStmt);
 
 
-#if (PG_VERSION_NUM >= 100000)
-
 /* subscription.c - forward declarations */
 extern Node * ProcessCreateSubscriptionStmt(CreateSubscriptionStmt *createSubStmt);
-#endif /* PG_VERSION_NUM >= 100000 */
 
 
 /* table.c - forward declarations */

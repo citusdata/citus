@@ -14,7 +14,12 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_logical_optimizer.h"
 #include "distributed/pg_dist_partition.h"
+#if PG_VERSION_NUM >= 120000
+#include "optimizer/optimizer.h"
+#else
 #include "optimizer/var.h"
+#endif
+#include "optimizer/restrictinfo.h"
 #include "nodes/nodeFuncs.h"
 #include "nodes/pg_list.h"
 

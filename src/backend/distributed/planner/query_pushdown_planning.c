@@ -32,9 +32,14 @@
 #include "distributed/query_pushdown_planning.h"
 #include "distributed/relation_restriction_equivalence.h"
 #include "nodes/nodeFuncs.h"
+#if PG_VERSION_NUM >= 120000
+#include "nodes/makefuncs.h"
+#include "optimizer/optimizer.h"
+#else
+#include "optimizer/var.h"
+#endif
 #include "nodes/pg_list.h"
 #include "optimizer/clauses.h"
-#include "optimizer/var.h"
 #include "parser/parsetree.h"
 
 

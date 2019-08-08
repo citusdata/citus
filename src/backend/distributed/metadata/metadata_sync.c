@@ -48,7 +48,6 @@
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
 #include "utils/syscache.h"
-#include "utils/tqual.h"
 
 
 static char * LocalGroupIdUpdateCommand(int32 groupId);

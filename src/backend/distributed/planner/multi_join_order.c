@@ -24,7 +24,12 @@
 #include "distributed/pg_dist_partition.h"
 #include "distributed/worker_protocol.h"
 #include "lib/stringinfo.h"
+#if PG_VERSION_NUM >= 120000
+#include "optimizer/optimizer.h"
+#else
 #include "optimizer/var.h"
+#endif
+#include "utils/builtins.h"
 #include "nodes/nodeFuncs.h"
 #include "utils/builtins.h"
 #include "utils/datum.h"
