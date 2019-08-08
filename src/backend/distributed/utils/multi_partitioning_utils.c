@@ -25,6 +25,9 @@
 #include "lib/stringinfo.h"
 #include "nodes/pg_list.h"
 #include "pgstat.h"
+#if PG_VERSION_NUM >= 120000
+#include "partitioning/partdesc.h"
+#endif
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"

@@ -19,9 +19,7 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_client_executor.h"
 #include "libpq/hba.h"
-#if (PG_VERSION_NUM >= 100000)
 #include "common/ip.h"
-#endif
 #include "libpq/libpq-be.h"
 #include "postmaster/postmaster.h"
 #include "storage/fd.h"

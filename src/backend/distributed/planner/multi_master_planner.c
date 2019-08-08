@@ -29,7 +29,11 @@
 #include "optimizer/cost.h"
 #include "optimizer/planmain.h"
 #include "optimizer/tlist.h"
+#if PG_VERSION_NUM >= 120000
+#include "optimizer/optimizer.h"
+#else
 #include "optimizer/var.h"
+#endif
 #include "utils/builtins.h"
 #include "utils/guc.h"
 #include "utils/memutils.h"

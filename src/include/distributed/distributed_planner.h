@@ -11,7 +11,12 @@
 #define DISTRIBUTED_PLANNER_H
 
 #include "nodes/plannodes.h"
+
+#if PG_VERSION_NUM >= 120000
+#include "nodes/pathnodes.h"
+#else
 #include "nodes/relation.h"
+#endif
 
 #include "distributed/citus_nodes.h"
 #include "distributed/errormessage.h"

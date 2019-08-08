@@ -54,9 +54,14 @@
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
 #include "optimizer/clauses.h"
-#include "optimizer/predtest.h"
-#include "optimizer/restrictinfo.h"
+#if PG_VERSION_NUM >= 120000
+#include "nodes/pathnodes.h"
+#include "optimizer/optimizer.h"
+#else
+#include "nodes/relation.h"
 #include "optimizer/var.h"
+#endif
+#include "optimizer/restrictinfo.h"
 #include "parser/parse_relation.h"
 #include "parser/parsetree.h"
 #include "utils/builtins.h"

@@ -10,6 +10,9 @@
 
 #include "postgres.h"
 
+#if PG_VERSION_NUM >= 120000
+#include "access/genam.h"
+#endif
 #include "access/htup_details.h"
 #include "access/xact.h"
 #include "catalog/index.h"

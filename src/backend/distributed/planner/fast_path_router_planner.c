@@ -41,10 +41,17 @@
 #include "distributed/pg_dist_partition.h"
 #include "distributed/shardinterval_utils.h"
 #include "distributed/shard_pruning.h"
+#if PG_VERSION_NUM >= 120000
+#include "nodes/makefuncs.h"
+#endif
 #include "nodes/nodeFuncs.h"
 #include "nodes/parsenodes.h"
 #include "nodes/pg_list.h"
+#if PG_VERSION_NUM >= 120000
+#include "optimizer/optimizer.h"
+#else
 #include "optimizer/clauses.h"
+#endif
 
 bool EnableFastPathRouterPlanner = true;
 

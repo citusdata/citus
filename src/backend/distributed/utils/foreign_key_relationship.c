@@ -12,8 +12,14 @@
 
 #include "postgres.h"
 
+#if PG_VERSION_NUM >= 120000
+#include "access/genam.h"
+#endif
 #include "access/htup_details.h"
 #include "access/stratnum.h"
+#if PG_VERSION_NUM >= 120000
+#include "access/table.h"
+#endif
 #include "catalog/pg_constraint.h"
 #include "distributed/foreign_key_relationship.h"
 #include "distributed/hash_helpers.h"
