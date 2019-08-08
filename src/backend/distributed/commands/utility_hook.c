@@ -553,7 +553,6 @@ static void
 ExecuteDistributedDDLJob(DDLJob *ddlJob)
 {
 	bool shouldSyncMetadata = ShouldSyncTableMetadata(ddlJob->targetRelationId);
-	int targetPoolSize = ddlJob->executeSequentially ? 1 : MaxAdaptiveExecutorPoolSize;
 
 	EnsureCoordinator();
 	EnsurePartitionTableNotReplicated(ddlJob->targetRelationId);
@@ -579,8 +578,7 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 		}
 
 		/* use adaptive executor when enabled */
-		ExecuteUtilityTaskListWithoutResults(ddlJob->taskList, targetPoolSize,
-											 ddlJob->executeSequentially);
+		ExecuteUtilityTaskListWithoutResults(ddlJob->taskList);
 	}
 	else
 	{
@@ -592,8 +590,7 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 		PG_TRY();
 		{
 			/* use adaptive executor when enabled */
-			ExecuteUtilityTaskListWithoutResults(ddlJob->taskList, targetPoolSize,
-												 ddlJob->executeSequentially);
+			ExecuteUtilityTaskListWithoutResults(ddlJob->taskList);
 
 			if (shouldSyncMetadata)
 			{

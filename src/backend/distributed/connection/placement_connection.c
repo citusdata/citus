@@ -366,6 +366,8 @@ AssignPlacementListToConnection(List *placementAccessList, MultiConnection *conn
 		ConnectionPlacementHashEntry *placementEntry = NULL;
 		ConnectionReference *placementConnection = NULL;
 
+		Oid relationId = InvalidOid;
+
 		if (placement->shardId == INVALID_SHARD_ID)
 		{
 			/*
@@ -452,8 +454,9 @@ AssignPlacementListToConnection(List *placementAccessList, MultiConnection *conn
 			placementConnection->hadDML = true;
 		}
 
-		/* record the relation access mapping */
-		AssociatePlacementAccessWithRelation(placement, accessType);
+		/* record the relation access */
+		relationId = RelationIdForShard(placement->shardId);
+		RecordRelationAccessIfReferenceTable(relationId, accessType);
 	}
 }
 
@@ -700,9 +703,6 @@ FindPlacementListConnection(int flags, List *placementAccessList, const char *us
 			Assert(!placementConnection->hadDML);
 			Assert(accessType != PLACEMENT_ACCESS_DDL);
 		}
-
-		/* record the relation access mapping */
-		AssociatePlacementAccessWithRelation(placement, accessType);
 	}
 
 	return chosenConnection;
