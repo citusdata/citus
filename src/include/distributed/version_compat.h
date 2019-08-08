@@ -257,6 +257,11 @@ RangeVarGetRelidInternal(const RangeVar *relation, LOCKMODE lockmode, uint32 fla
 #define GetSysCacheOid3Compat GetSysCacheOid3
 #define GetSysCacheOid4Compat GetSysCacheOid4
 
+#define fcSetArg(fc, n, argval) \
+	(((fc)->args[n].isnull = false), ((fc)->args[n].value = (argval)))
+#define fcSetArgNull(fc, n) \
+	(((fc)->args[n].isnull = true), ((fc)->args[n].value = (Datum) 0))
+
 typedef struct
 {
 	File fd;
@@ -318,6 +323,15 @@ FileCompatFromFileStart(File fileDesc)
 	GetSysCacheOid3(cacheId, key1, key2, key3)
 #define GetSysCacheOid4Compat(cacheId, oidcol, key1, key2, key3, key4) \
 	GetSysCacheOid4(cacheId, key1, key2, key3, key4)
+
+#define LOCAL_FCINFO(name, nargs) \
+	FunctionCallInfoData name ## data; \
+	FunctionCallInfoData *name = &name ## data
+
+#define fcSetArg(fc, n, value) \
+	(((fc)->argnull[n] = false), ((fc)->arg[n] = (value)))
+#define fcSetArgNull(fc, n) \
+	(((fc)->argnull[n] = true), ((fc)->arg[n] = (Datum) 0))
 
 typedef struct
 {

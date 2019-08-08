@@ -20,6 +20,7 @@
 #include "access/sysattr.h"
 #include "catalog/indexing.h"
 #include "catalog/pg_am.h"
+#include "catalog/pg_enum.h"
 #include "catalog/pg_extension.h"
 #include "catalog/pg_namespace.h"
 #include "catalog/pg_type.h"
@@ -43,6 +44,7 @@
 #include "distributed/pg_dist_placement.h"
 #include "distributed/shared_library_init.h"
 #include "distributed/shardinterval_utils.h"
+#include "distributed/version_compat.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_protocol.h"
 #include "executor/executor.h"
@@ -1259,8 +1261,6 @@ static ShardInterval **
 SortShardIntervalArray(ShardInterval **shardIntervalArray, int shardCount,
 					   FmgrInfo *shardIntervalSortCompareFunction)
 {
-	ShardInterval **sortedShardIntervalArray = NULL;
-
 	/* short cut if there are no shard intervals in the array */
 	if (shardCount == 0)
 	{
@@ -1272,9 +1272,7 @@ SortShardIntervalArray(ShardInterval **shardIntervalArray, int shardCount,
 			  (qsort_arg_comparator) CompareShardIntervals,
 			  (void *) shardIntervalSortCompareFunction);
 
-	sortedShardIntervalArray = shardIntervalArray;
-
-	return sortedShardIntervalArray;
+	return shardIntervalArray;
 }
 
 
@@ -1616,9 +1614,8 @@ AvailableExtensionVersion(void)
 {
 	ReturnSetInfo *extensionsResultSet = NULL;
 	TupleTableSlot *tupleTableSlot = NULL;
-	FunctionCallInfoData *fcinfo = NULL;
-	FmgrInfo *flinfo = NULL;
-	int argumentCount = 0;
+	LOCAL_FCINFO(fcinfo, 0);
+	FmgrInfo flinfo;
 	EState *estate = NULL;
 
 	bool hasTuple = false;
@@ -1633,17 +1630,15 @@ AvailableExtensionVersion(void)
 	extensionsResultSet->econtext = GetPerTupleExprContext(estate);
 	extensionsResultSet->allowedModes = SFRM_Materialize;
 
-	fcinfo = palloc0(sizeof(FunctionCallInfoData));
-	flinfo = palloc0(sizeof(FmgrInfo));
-
-	fmgr_info(F_PG_AVAILABLE_EXTENSIONS, flinfo);
-	InitFunctionCallInfoData(*fcinfo, flinfo, argumentCount, InvalidOid, NULL,
+	fmgr_info(F_PG_AVAILABLE_EXTENSIONS, &flinfo);
+	InitFunctionCallInfoData(*fcinfo, &flinfo, 0, InvalidOid, NULL,
 							 (Node *) extensionsResultSet);
 
 	/* pg_available_extensions returns result set containing all available extensions */
 	(*pg_available_extensions)(fcinfo);
 
-	tupleTableSlot = MakeSingleTupleTableSlot(extensionsResultSet->setDesc);
+	tupleTableSlot = MakeSingleTupleTableSlotCompat(extensionsResultSet->setDesc,
+													&TTSOpsMinimalTuple);
 	hasTuple = tuplestore_gettupleslot(extensionsResultSet->setResult, goForward, doCopy,
 									   tupleTableSlot);
 	while (hasTuple)
@@ -1984,9 +1979,10 @@ CitusCopyFormatTypeId(void)
 	if (MetadataCache.copyFormatTypeId == InvalidOid)
 	{
 		char *typeName = "citus_copy_format";
-		MetadataCache.copyFormatTypeId = GetSysCacheOid2(TYPENAMENSP,
-														 PointerGetDatum(typeName),
-														 PG_CATALOG_NAMESPACE);
+		MetadataCache.copyFormatTypeId = GetSysCacheOid2Compat(TYPENAMENSP,
+															   Anum_pg_enum_oid,
+															   PointerGetDatum(typeName),
+															   PG_CATALOG_NAMESPACE);
 	}
 
 	return MetadataCache.copyFormatTypeId;
@@ -2248,7 +2244,11 @@ LookupNodeRoleTypeOid()
 		return InvalidOid;
 	}
 
+#if PG_VERSION_NUM >= 120000
+	nodeRoleTypId = ((Form_pg_type) GETSTRUCT(tup))->oid;
+#else
 	nodeRoleTypId = HeapTupleGetOid(tup);
+#endif
 	ReleaseSysCache(tup);
 
 	return nodeRoleTypId;
