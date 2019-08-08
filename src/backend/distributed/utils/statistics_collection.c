@@ -13,7 +13,6 @@
 #include "citus_version.h"
 #include "fmgr.h"
 #include "utils/uuid.h"
-#include "utils/backend_random.h"
 
 bool EnableStatisticsCollection = true; /* send basic usage statistics to Citus */
 
@@ -600,11 +599,11 @@ citus_server_id(PG_FUNCTION_ARGS)
 	uint8 *buf = (uint8 *) palloc(UUID_LEN);
 
 	/*
-	 * If pg_backend_random() fails, fall-back to using random(). In previous
-	 * versions of postgres we don't have pg_backend_random(), so use it by
+	 * If pg_strong_random() fails, fall-back to using random(). In previous
+	 * versions of postgres we don't have pg_strong_random(), so use it by
 	 * default in that case.
 	 */
-	if (!pg_backend_random((char *) buf, UUID_LEN))
+	if (!pg_strong_random((char *) buf, UUID_LEN))
 	{
 		int bufIdx = 0;
 		for (bufIdx = 0; bufIdx < UUID_LEN; bufIdx++)

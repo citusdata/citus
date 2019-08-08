@@ -17,6 +17,10 @@
 #include "funcapi.h"
 #include "miscadmin.h"
 
+#if PG_VERSION_NUM >= 120000
+#include "access/genam.h"
+#include "access/table.h"
+#endif
 #include "access/htup_details.h"
 #include "access/xact.h"
 #include "catalog/dependency.h"
@@ -35,7 +39,6 @@
 #include "utils/builtins.h"
 #include "utils/snapmgr.h"
 #include "utils/syscache.h"
-#include "utils/tqual.h"
 
 
 /* Local functions forward declarations */
@@ -263,7 +266,11 @@ Datum
 worker_cleanup_job_schema_cache(PG_FUNCTION_ARGS)
 {
 	Relation pgNamespace = NULL;
+#if PG_VERSION_NUM >= 120000
+	TableScanDesc scanDescriptor = NULL;
+#else
 	HeapScanDesc scanDescriptor = NULL;
+#endif
 	ScanKey scanKey = NULL;
 	int scanKeyCount = 0;
 	HeapTuple heapTuple = NULL;
@@ -271,7 +278,11 @@ worker_cleanup_job_schema_cache(PG_FUNCTION_ARGS)
 	CheckCitusVersion(ERROR);
 
 	pgNamespace = heap_open(NamespaceRelationId, AccessExclusiveLock);
+#if PG_VERSION_NUM >= 120000
+	scanDescriptor = table_beginscan_catalog(pgNamespace, scanKeyCount, scanKey);
+#else
 	scanDescriptor = heap_beginscan_catalog(pgNamespace, scanKeyCount, scanKey);
+#endif
 
 	heapTuple = heap_getnext(scanDescriptor, ForwardScanDirection);
 	while (HeapTupleIsValid(heapTuple))
@@ -362,7 +373,8 @@ RemoveJobSchema(StringInfo schemaName)
 	Datum schemaNameDatum = CStringGetDatum(schemaName->data);
 	Oid schemaId = InvalidOid;
 
-	schemaId = GetSysCacheOid(NAMESPACENAME, schemaNameDatum, 0, 0, 0);
+	schemaId = GetSysCacheOid1Compat(NAMESPACENAME, Anum_pg_namespace_oid,
+									 schemaNameDatum);
 	if (OidIsValid(schemaId))
 	{
 		ObjectAddress schemaObject = { 0, 0, 0 };

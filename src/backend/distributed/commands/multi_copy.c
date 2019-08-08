@@ -463,7 +463,7 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 	columnNulls = palloc0(columnCount * sizeof(bool));
 
 	/* set up a virtual tuple table slot */
-	tupleTableSlot = MakeSingleTupleTableSlot(tupleDescriptor);
+	tupleTableSlot = MakeSingleTupleTableSlotCompat(tupleDescriptor, &TTSOpsVirtual);
 	tupleTableSlot->tts_nvalid = columnCount;
 	tupleTableSlot->tts_values = columnValues;
 	tupleTableSlot->tts_isnull = columnNulls;
@@ -561,8 +561,8 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 		oldContext = MemoryContextSwitchTo(executorTupleContext);
 
 		/* parse a row from the input */
-		nextRowFound = NextCopyFrom(copyState, executorExpressionContext,
-									columnValues, columnNulls, NULL);
+		nextRowFound = NextCopyFromCompat(copyState, executorExpressionContext,
+										  columnValues, columnNulls);
 
 		if (!nextRowFound)
 		{
@@ -681,8 +681,8 @@ CopyToNewShards(CopyStmt *copyStatement, char *completionTag, Oid relationId)
 		oldContext = MemoryContextSwitchTo(executorTupleContext);
 
 		/* parse a row from the input */
-		nextRowFound = NextCopyFrom(copyState, executorExpressionContext,
-									columnValues, columnNulls, NULL);
+		nextRowFound = NextCopyFromCompat(copyState, executorExpressionContext,
+										  columnValues, columnNulls);
 
 		if (!nextRowFound)
 		{

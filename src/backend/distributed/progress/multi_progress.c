@@ -13,6 +13,7 @@
 
 #include "distributed/function_utils.h"
 #include "distributed/multi_progress.h"
+#include "distributed/version_compat.h"
 #include "storage/dsm.h"
 #include "utils/builtins.h"
 
@@ -155,7 +156,8 @@ ProgressMonitorList(uint64 commandTypeMagicNumber, List **attachedDSMSegments)
 												   getProgressInfoFunctionOid,
 												   commandTypeDatum);
 
-	tupleTableSlot = MakeSingleTupleTableSlot(progressResultSet->setDesc);
+	tupleTableSlot = MakeSingleTupleTableSlotCompat(progressResultSet->setDesc,
+													&TTSOpsMinimalTuple);
 
 	/* iterate over tuples in tuple store, and send them to destination */
 	for (;;)

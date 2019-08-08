@@ -16,7 +16,11 @@
 #include "catalog/namespace.h"
 #include "nodes/parsenodes.h"
 
-#if (PG_VERSION_NUM >= 100000 && PG_VERSION_NUM < 110000)
+#if (PG_VERSION_NUM >= 120000)
+#include "optimizer/optimizer.h"
+#endif
+
+#if (PG_VERSION_NUM < 110000)
 
 #include "access/hash.h"
 #include "storage/fd.h"
@@ -240,5 +244,39 @@ RangeVarGetRelidInternal(const RangeVar *relation, LOCKMODE lockmode, uint32 fla
 
 #endif
 
+#if PG_VERSION_NUM >= 120000
+
+#define MakeSingleTupleTableSlotCompat MakeSingleTupleTableSlot
+#define AllocSetContextCreateExtended AllocSetContextCreateInternal
+#define NextCopyFromCompat NextCopyFrom
+#define ArrayRef SubscriptingRef
+#define T_ArrayRef T_SubscriptingRef
+#define or_clause is_orclause
+#define GetSysCacheOid1Compat GetSysCacheOid1
+#define GetSysCacheOid2Compat GetSysCacheOid2
+#define GetSysCacheOid3Compat GetSysCacheOid3
+#define GetSysCacheOid4Compat GetSysCacheOid4
+
+#else /* pre PG12 */
+#define QTW_EXAMINE_RTES_BEFORE QTW_EXAMINE_RTES
+#define MakeSingleTupleTableSlotCompat(tupleDesc, tts_opts) \
+	MakeSingleTupleTableSlot(tupleDesc)
+#define NextCopyFromCompat(cstate, econtext, values, nulls) \
+	NextCopyFrom(cstate, econtext, values, nulls, NULL)
+
+/*
+ * In PG12 GetSysCacheOid requires an oid column,
+ * whereas beforehand the oid column was implicit with WITH OIDS
+ */
+#define GetSysCacheOid1Compat(cacheId, oidcol, key1) \
+	GetSysCacheOid1(cacheId, key1)
+#define GetSysCacheOid2Compat(cacheId, oidcol, key1, key2) \
+	GetSysCacheOid2(cacheId, key1, key2)
+#define GetSysCacheOid3Compat(cacheId, oidcol, key1, key2, key3) \
+	GetSysCacheOid3(cacheId, key1, key2, key3)
+#define GetSysCacheOid4Compat(cacheId, oidcol, key1, key2, key3, key4) \
+	GetSysCacheOid4(cacheId, key1, key2, key3, key4)
+
+#endif /* PG12 */
 
 #endif   /* VERSION_COMPAT_H */

@@ -155,7 +155,7 @@ MultiLogicalPlanCreate(Query *originalQuery, Query *queryTree,
  * FindNodeCheck finds a node for which the check function returns true.
  *
  * To call this function directly with an RTE, use:
- * range_table_walker(rte, FindNodeCheck, check, QTW_EXAMINE_RTES)
+ * range_table_walker(rte, FindNodeCheck, check, QTW_EXAMINE_RTES_BEFORE)
  */
 bool
 FindNodeCheck(Node *node, bool (*check)(Node *))
@@ -177,7 +177,8 @@ FindNodeCheck(Node *node, bool (*check)(Node *))
 	}
 	else if (IsA(node, Query))
 	{
-		return query_tree_walker((Query *) node, FindNodeCheck, check, QTW_EXAMINE_RTES);
+		return query_tree_walker((Query *) node, FindNodeCheck, check,
+								 QTW_EXAMINE_RTES_BEFORE);
 	}
 
 	return expression_tree_walker(node, FindNodeCheck, check);
@@ -385,7 +386,7 @@ AllTargetExpressionsAreColumnReferences(List *targetEntryList)
 bool
 FindNodeCheckInRangeTableList(List *rtable, bool (*check)(Node *))
 {
-	return range_table_walker(rtable, FindNodeCheck, check, QTW_EXAMINE_RTES);
+	return range_table_walker(rtable, FindNodeCheck, check, QTW_EXAMINE_RTES_BEFORE);
 }
 
 
@@ -1997,7 +1998,8 @@ ExtractRangeTableRelationWalker(Node *node, List **rangeTableRelationList)
 	{
 		walkIsComplete = query_tree_walker((Query *) node,
 										   ExtractRangeTableRelationWalker,
-										   rangeTableRelationList, QTW_EXAMINE_RTES);
+										   rangeTableRelationList,
+										   QTW_EXAMINE_RTES_BEFORE);
 	}
 	else
 	{
@@ -2045,7 +2047,7 @@ ExtractRangeTableEntryWalker(Node *node, List **rangeTableList)
 			walkIsComplete = query_tree_walker((Query *) node,
 											   ExtractRangeTableEntryWalker,
 											   rangeTableList,
-											   QTW_EXAMINE_RTES);
+											   QTW_EXAMINE_RTES_BEFORE);
 		}
 		else
 		{
@@ -2053,7 +2055,7 @@ ExtractRangeTableEntryWalker(Node *node, List **rangeTableList)
 			walkIsComplete = range_table_walker(query->rtable,
 												ExtractRangeTableEntryWalker,
 												rangeTableList,
-												QTW_EXAMINE_RTES);
+												QTW_EXAMINE_RTES_BEFORE);
 		}
 	}
 	else
