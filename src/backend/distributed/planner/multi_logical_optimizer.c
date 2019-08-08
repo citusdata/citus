@@ -35,6 +35,7 @@
 #include "distributed/multi_physical_planner.h"
 #include "distributed/pg_dist_partition.h"
 #include "distributed/worker_protocol.h"
+#include "distributed/version_compat.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
 #include "nodes/print.h"
@@ -53,7 +54,6 @@
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
 #include "utils/syscache.h"
-#include "utils/tqual.h"
 
 
 /* Config variable managed via guc.c */
@@ -2966,7 +2966,11 @@ AggregateFunctionOid(const char *functionName, Oid inputType)
 			/* check if input type and found value type match */
 			if (procForm->proargtypes.values[0] == inputType)
 			{
+#if PG_VERSION_NUM < 120000
 				functionOid = HeapTupleGetOid(heapTuple);
+#else
+				functionOid = procForm->oid;
+#endif
 				break;
 			}
 		}
@@ -2996,8 +3000,9 @@ TypeOid(Oid schemaId, const char *typeName)
 {
 	Oid typeOid;
 
-	typeOid = GetSysCacheOid2(TYPENAMENSP, PointerGetDatum(typeName),
-							  ObjectIdGetDatum(schemaId));
+	typeOid = GetSysCacheOid2Compat(TYPENAMENSP, Anum_pg_type_oid, PointerGetDatum(
+										typeName),
+									ObjectIdGetDatum(schemaId));
 
 	return typeOid;
 }

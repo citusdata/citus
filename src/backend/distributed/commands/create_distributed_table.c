@@ -645,6 +645,8 @@ EnsureRelationCanBeDistributed(Oid relationId, Var *distributionColumn,
 	relationDesc = RelationGetDescr(relation);
 	relationName = RelationGetRelationName(relation);
 
+#if PG_VERSION_NUM < 120000
+
 	/* verify target relation does not use WITH (OIDS) PostgreSQL feature */
 	if (relationDesc->tdhasoid)
 	{
@@ -653,6 +655,7 @@ EnsureRelationCanBeDistributed(Oid relationId, Var *distributionColumn,
 						errdetail("Distributed relations must not specify the WITH "
 								  "(OIDS) option in their definitions.")));
 	}
+#endif
 
 	/* verify target relation does not use identity columns */
 	if (RelationUsesIdentityColumns(relationDesc))
@@ -1196,7 +1199,11 @@ CopyLocalDataIntoShards(Oid distributedRelationId)
 	bool stopOnFailure = true;
 
 	EState *estate = NULL;
+#if PG_VERSION_NUM >= 120000
+	TableScanDesc scan = NULL;
+#else
 	HeapScanDesc scan = NULL;
+#endif
 	HeapTuple tuple = NULL;
 	ExprContext *econtext = NULL;
 	MemoryContext oldContext = NULL;
@@ -1230,7 +1237,7 @@ CopyLocalDataIntoShards(Oid distributedRelationId)
 
 	/* get the table columns */
 	tupleDescriptor = RelationGetDescr(distributedRelation);
-	slot = MakeSingleTupleTableSlot(tupleDescriptor);
+	slot = MakeSingleTupleTableSlotCompat(tupleDescriptor, &TTSOpsHeapTuple);
 	columnNameList = TupleDescColumnNameList(tupleDescriptor);
 
 	/* determine the partition column in the tuple descriptor */
@@ -1256,14 +1263,22 @@ CopyLocalDataIntoShards(Oid distributedRelationId)
 	copyDest->rStartup(copyDest, 0, tupleDescriptor);
 
 	/* begin reading from local table */
+#if PG_VERSION_NUM >= 120000
+	scan = table_beginscan(distributedRelation, GetActiveSnapshot(), 0, NULL);
+#else
 	scan = heap_beginscan(distributedRelation, GetActiveSnapshot(), 0, NULL);
+#endif
 
 	oldContext = MemoryContextSwitchTo(GetPerTupleMemoryContext(estate));
 
 	while ((tuple = heap_getnext(scan, ForwardScanDirection)) != NULL)
 	{
 		/* materialize tuple and send it to a shard */
+#if PG_VERSION_NUM >= 120000
+		ExecStoreHeapTuple(tuple, slot, false);
+#else
 		ExecStoreTuple(tuple, slot, InvalidBuffer, false);
+#endif
 		copyDest->receiveSlot(slot, copyDest);
 
 		/* clear tuple memory */
@@ -1293,7 +1308,11 @@ CopyLocalDataIntoShards(Oid distributedRelationId)
 	MemoryContextSwitchTo(oldContext);
 
 	/* finish reading from the local table */
+#if PG_VERSION_NUM >= 120000
+	table_endscan(scan);
+#else
 	heap_endscan(scan);
+#endif
 
 	/* finish writing into the shards */
 	copyDest->rShutdown(copyDest);

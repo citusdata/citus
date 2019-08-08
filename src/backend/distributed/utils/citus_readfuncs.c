@@ -45,9 +45,15 @@ CitusSetTag(Node *node, int tag)
 	nodeTypeName *local_node = (nodeTypeName *) CitusSetTag((Node *) node, T_##nodeTypeName)
 
 /* And a few guys need only the pg_strtok support fields */
+#if PG_VERSION_NUM >= 120000
 #define READ_TEMP_LOCALS()	\
-	char	   *token;		\
+	const char	*token;		\
 	int			length
+#else
+#define READ_TEMP_LOCALS()	\
+	char		*token;		\
+	int			length
+#endif
 
 /* ... but most need both */
 #define READ_LOCALS(nodeTypeName)			\

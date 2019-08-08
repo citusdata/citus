@@ -60,7 +60,6 @@
 #include "utils/palloc.h"
 #include "utils/relcache.h"
 #include "utils/ruleutils.h"
-#include "utils/tqual.h"
 #include "utils/varlena.h"
 
 
@@ -472,7 +471,6 @@ master_get_active_worker_nodes(PG_FUNCTION_ARGS)
 		MemoryContext oldContext = NULL;
 		List *workerNodeList = NIL;
 		TupleDesc tupleDescriptor = NULL;
-		bool hasOid = false;
 
 		/* create a function context for cross-call persistence */
 		functionContext = SRF_FIRSTCALL_INIT();
@@ -490,7 +488,11 @@ master_get_active_worker_nodes(PG_FUNCTION_ARGS)
 		 * This tuple descriptor must match the output parameters declared for
 		 * the function in pg_proc.
 		 */
-		tupleDescriptor = CreateTemplateTupleDesc(WORKER_NODE_FIELDS, hasOid);
+#if PG_VERSION_NUM < 120000
+		tupleDescriptor = CreateTemplateTupleDesc(WORKER_NODE_FIELDS, false);
+#else
+		tupleDescriptor = CreateTemplateTupleDesc(WORKER_NODE_FIELDS);
+#endif
 		TupleDescInitEntry(tupleDescriptor, (AttrNumber) 1, "node_name",
 						   TEXTOID, -1, 0);
 		TupleDescInitEntry(tupleDescriptor, (AttrNumber) 2, "node_port",
