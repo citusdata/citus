@@ -24,6 +24,7 @@ extern bool SubqueryPushdown;
 
 extern bool ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery);
 extern bool JoinTreeContainsSubquery(Query *query);
+extern bool JoinTreeContainsWithoutFrom(Query *query);
 extern bool WhereClauseContainsSubquery(Query *query);
 extern bool SafeToPushdownWindowFunction(Query *query, StringInfo *errorDetail);
 extern MultiNode * SubqueryMultiNodeTree(Query *originalQuery,

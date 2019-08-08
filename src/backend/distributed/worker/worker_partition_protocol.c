@@ -65,8 +65,8 @@ static uint32 FileBufferSize(int partitionBufferSizeInKB, uint32 fileCount);
 static FileOutputStream * OpenPartitionFiles(StringInfo directoryName, uint32 fileCount);
 static void ClosePartitionFiles(FileOutputStream *partitionFileArray, uint32 fileCount);
 static void RenameDirectory(StringInfo oldDirectoryName, StringInfo newDirectoryName);
-static void FileOutputStreamWrite(FileOutputStream file, StringInfo dataToWrite);
-static void FileOutputStreamFlush(FileOutputStream file);
+static void FileOutputStreamWrite(FileOutputStream *file, StringInfo dataToWrite);
+static void FileOutputStreamFlush(FileOutputStream *file);
 static void FilterAndPartitionTable(const char *filterQuery,
 									const char *columnName, Oid columnType,
 									uint32 (*PartitionIdFunction)(Datum, const void *),
@@ -221,6 +221,7 @@ worker_hash_partition_table(PG_FUNCTION_ARGS)
 
 	partitionContext->hashFunction = hashFunction;
 	partitionContext->partitionCount = partitionCount;
+	partitionContext->collation = PG_GET_COLLATION();
 
 	/* we'll use binary search, we need the comparison function */
 	if (!partitionContext->hasUniformHashDistribution)
@@ -464,7 +465,7 @@ OpenPartitionFiles(StringInfo directoryName, uint32 fileCount)
 	FileOutputStream *partitionFileArray = NULL;
 	File fileDescriptor = 0;
 	uint32 fileIndex = 0;
-	const int fileFlags = (O_APPEND | O_CREAT | O_RDWR | PG_BINARY);
+	const int fileFlags = (O_APPEND | O_CREAT | O_RDWR | O_TRUNC | PG_BINARY);
 	const int fileMode = (S_IRUSR | S_IWUSR);
 
 	partitionFileArray = palloc0(fileCount * sizeof(FileOutputStream));
@@ -480,7 +481,8 @@ OpenPartitionFiles(StringInfo directoryName, uint32 fileCount)
 							errmsg("could not open file \"%s\": %m", filePath->data)));
 		}
 
-		partitionFileArray[fileIndex].fileDescriptor = fileDescriptor;
+		partitionFileArray[fileIndex].fileCompat = FileCompatFromFileStart(
+			fileDescriptor);
 		partitionFileArray[fileIndex].fileBuffer = makeStringInfo();
 		partitionFileArray[fileIndex].filePath = filePath;
 	}
@@ -500,13 +502,13 @@ ClosePartitionFiles(FileOutputStream *partitionFileArray, uint32 fileCount)
 	uint32 fileIndex = 0;
 	for (fileIndex = 0; fileIndex < fileCount; fileIndex++)
 	{
-		FileOutputStream partitionFile = partitionFileArray[fileIndex];
+		FileOutputStream *partitionFile = &partitionFileArray[fileIndex];
 
 		FileOutputStreamFlush(partitionFile);
 
-		FileClose(partitionFile.fileDescriptor);
-		FreeStringInfo(partitionFile.fileBuffer);
-		FreeStringInfo(partitionFile.filePath);
+		FileClose(partitionFile->fileCompat.fd);
+		FreeStringInfo(partitionFile->fileBuffer);
+		FreeStringInfo(partitionFile->filePath);
 	}
 
 	pfree(partitionFileArray);
@@ -829,9 +831,9 @@ RenameDirectory(StringInfo oldDirectoryName, StringInfo newDirectoryName)
  * if so, the function flushes the buffer to the underlying file.
  */
 static void
-FileOutputStreamWrite(FileOutputStream file, StringInfo dataToWrite)
+FileOutputStreamWrite(FileOutputStream *file, StringInfo dataToWrite)
 {
-	StringInfo fileBuffer = file.fileBuffer;
+	StringInfo fileBuffer = file->fileBuffer;
 	uint32 newBufferSize = fileBuffer->len + dataToWrite->len;
 
 	appendBinaryStringInfo(fileBuffer, dataToWrite->data, dataToWrite->len);
@@ -847,19 +849,19 @@ FileOutputStreamWrite(FileOutputStream file, StringInfo dataToWrite)
 
 /* Flushes data buffered in the file stream object to the underlying file. */
 static void
-FileOutputStreamFlush(FileOutputStream file)
+FileOutputStreamFlush(FileOutputStream *file)
 {
-	StringInfo fileBuffer = file.fileBuffer;
+	StringInfo fileBuffer = file->fileBuffer;
 	int written = 0;
 
 	errno = 0;
-	written = FileWrite(file.fileDescriptor, fileBuffer->data, fileBuffer->len,
-						PG_WAIT_IO);
+	written = FileWriteCompat(&file->fileCompat, fileBuffer->data, fileBuffer->len,
+							  PG_WAIT_IO);
 	if (written != fileBuffer->len)
 	{
 		ereport(ERROR, (errcode_for_file_access(),
 						errmsg("could not write %d bytes to partition file \"%s\"",
-							   fileBuffer->len, file.filePath->data)));
+							   fileBuffer->len, file->filePath->data)));
 	}
 }
 
@@ -946,7 +948,7 @@ FilterAndPartitionTable(const char *filterQuery,
 		{
 			HeapTuple row = SPI_tuptable->vals[rowIndex];
 			TupleDesc rowDescriptor = SPI_tuptable->tupdesc;
-			FileOutputStream partitionFile = { 0, 0, 0 };
+			FileOutputStream *partitionFile = NULL;
 			StringInfo rowText = NULL;
 			Datum partitionKey = 0;
 			bool partitionKeyNull = false;
@@ -978,7 +980,7 @@ FilterAndPartitionTable(const char *filterQuery,
 
 			rowText = rowOutputState->fe_msgbuf;
 
-			partitionFile = partitionFileArray[partitionId];
+			partitionFile = &partitionFileArray[partitionId];
 			FileOutputStreamWrite(partitionFile, rowText);
 
 			resetStringInfo(rowText);
@@ -1126,7 +1128,7 @@ OutputBinaryHeaders(FileOutputStream *partitionFileArray, uint32 fileCount)
 	for (fileIndex = 0; fileIndex < fileCount; fileIndex++)
 	{
 		/* Generate header for a binary copy */
-		FileOutputStream partitionFile = { 0, 0, 0 };
+		FileOutputStream partitionFile = { };
 		CopyOutStateData headerOutputStateData;
 		CopyOutState headerOutputState = (CopyOutState) & headerOutputStateData;
 
@@ -1136,7 +1138,7 @@ OutputBinaryHeaders(FileOutputStream *partitionFileArray, uint32 fileCount)
 		AppendCopyBinaryHeaders(headerOutputState);
 
 		partitionFile = partitionFileArray[fileIndex];
-		FileOutputStreamWrite(partitionFile, headerOutputState->fe_msgbuf);
+		FileOutputStreamWrite(&partitionFile, headerOutputState->fe_msgbuf);
 	}
 }
 
@@ -1152,7 +1154,7 @@ OutputBinaryFooters(FileOutputStream *partitionFileArray, uint32 fileCount)
 	for (fileIndex = 0; fileIndex < fileCount; fileIndex++)
 	{
 		/* Generate footer for a binary copy */
-		FileOutputStream partitionFile = { 0, 0, 0 };
+		FileOutputStream partitionFile = { };
 		CopyOutStateData footerOutputStateData;
 		CopyOutState footerOutputState = (CopyOutState) & footerOutputStateData;
 
@@ -1162,7 +1164,7 @@ OutputBinaryFooters(FileOutputStream *partitionFileArray, uint32 fileCount)
 		AppendCopyBinaryFooters(footerOutputState);
 
 		partitionFile = partitionFileArray[fileIndex];
-		FileOutputStreamWrite(partitionFile, footerOutputState->fe_msgbuf);
+		FileOutputStreamWrite(&partitionFile, footerOutputState->fe_msgbuf);
 	}
 }
 
@@ -1253,7 +1255,8 @@ HashPartitionId(Datum partitionValue, const void *context)
 	ShardInterval **syntheticShardIntervalArray =
 		hashPartitionContext->syntheticShardIntervalArray;
 	FmgrInfo *comparisonFunction = hashPartitionContext->comparisonFunction;
-	Datum hashDatum = FunctionCall1(hashFunction, partitionValue);
+	Datum hashDatum = FunctionCall1Coll(hashFunction, hashPartitionContext->collation,
+										partitionValue);
 	int32 hashResult = 0;
 	uint32 hashPartitionId = 0;
 

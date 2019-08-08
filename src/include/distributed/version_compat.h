@@ -257,6 +257,48 @@ RangeVarGetRelidInternal(const RangeVar *relation, LOCKMODE lockmode, uint32 fla
 #define GetSysCacheOid3Compat GetSysCacheOid3
 #define GetSysCacheOid4Compat GetSysCacheOid4
 
+typedef struct
+{
+	File fd;
+	off_t offset;
+} FileCompat;
+
+static inline int
+FileWriteCompat(FileCompat *file, char *buffer, int amount, uint32 wait_event_info)
+{
+	int count = FileWrite(file->fd, buffer, amount, file->offset, wait_event_info);
+	if (count > 0)
+	{
+		file->offset += count;
+	}
+	return count;
+}
+
+
+static inline int
+FileReadCompat(FileCompat *file, char *buffer, int amount, uint32 wait_event_info)
+{
+	int count = FileRead(file->fd, buffer, amount, file->offset, wait_event_info);
+	if (count > 0)
+	{
+		file->offset += count;
+	}
+	return count;
+}
+
+
+static inline FileCompat
+FileCompatFromFileStart(File fileDesc)
+{
+	FileCompat fc = {
+		.fd = fileDesc,
+		.offset = 0
+	};
+
+	return fc;
+}
+
+
 #else /* pre PG12 */
 #define QTW_EXAMINE_RTES_BEFORE QTW_EXAMINE_RTES
 #define MakeSingleTupleTableSlotCompat(tupleDesc, tts_opts) \
@@ -276,6 +318,36 @@ RangeVarGetRelidInternal(const RangeVar *relation, LOCKMODE lockmode, uint32 fla
 	GetSysCacheOid3(cacheId, key1, key2, key3)
 #define GetSysCacheOid4Compat(cacheId, oidcol, key1, key2, key3, key4) \
 	GetSysCacheOid4(cacheId, key1, key2, key3, key4)
+
+typedef struct
+{
+	File fd;
+} FileCompat;
+
+static inline int
+FileWriteCompat(FileCompat *file, char *buffer, int amount, uint32 wait_event_info)
+{
+	return FileWrite(file->fd, buffer, amount, wait_event_info);
+}
+
+
+static inline int
+FileReadCompat(FileCompat *file, char *buffer, int amount, uint32 wait_event_info)
+{
+	return FileRead(file->fd, buffer, amount, wait_event_info);
+}
+
+
+static inline FileCompat
+FileCompatFromFileStart(File fileDesc)
+{
+	FileCompat fc = {
+		.fd = fileDesc,
+	};
+
+	return fc;
+}
+
 
 #endif /* PG12 */
 

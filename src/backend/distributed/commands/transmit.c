@@ -43,11 +43,10 @@ RedirectCopyDataToRegularFile(const char *filename)
 {
 	StringInfo copyData = makeStringInfo();
 	bool copyDone = false;
-	File fileDesc = -1;
 	const int fileFlags = (O_APPEND | O_CREAT | O_RDWR | O_TRUNC | PG_BINARY);
 	const int fileMode = (S_IRUSR | S_IWUSR);
-
-	fileDesc = FileOpenForTransmit(filename, fileFlags, fileMode);
+	File fileDesc = FileOpenForTransmit(filename, fileFlags, fileMode);
+	FileCompat fileCompat = FileCompatFromFileStart(fileDesc);
 
 	SendCopyInStart();
 
@@ -57,8 +56,8 @@ RedirectCopyDataToRegularFile(const char *filename)
 		/* if received data has contents, append to regular file */
 		if (copyData->len > 0)
 		{
-			int appended = FileWrite(fileDesc, copyData->data, copyData->len,
-									 PG_WAIT_IO);
+			int appended = FileWriteCompat(&fileCompat, copyData->data,
+										   copyData->len, PG_WAIT_IO);
 
 			if (appended != copyData->len)
 			{
@@ -84,7 +83,6 @@ RedirectCopyDataToRegularFile(const char *filename)
 void
 SendRegularFile(const char *filename)
 {
-	File fileDesc = -1;
 	StringInfo fileBuffer = NULL;
 	int readBytes = -1;
 	const uint32 fileBufferSize = 32768; /* 32 KB */
@@ -92,7 +90,8 @@ SendRegularFile(const char *filename)
 	const int fileMode = 0;
 
 	/* we currently do not check if the caller has permissions for this file */
-	fileDesc = FileOpenForTransmit(filename, fileFlags, fileMode);
+	File fileDesc = FileOpenForTransmit(filename, fileFlags, fileMode);
+	FileCompat fileCompat = FileCompatFromFileStart(fileDesc);
 
 	/*
 	 * We read file's contents into buffers of 32 KB. This buffer size is twice
@@ -103,7 +102,8 @@ SendRegularFile(const char *filename)
 
 	SendCopyOutStart();
 
-	readBytes = FileRead(fileDesc, fileBuffer->data, fileBufferSize, PG_WAIT_IO);
+	readBytes = FileReadCompat(&fileCompat, fileBuffer->data, fileBufferSize,
+							   PG_WAIT_IO);
 	while (readBytes > 0)
 	{
 		fileBuffer->len = readBytes;
@@ -111,8 +111,8 @@ SendRegularFile(const char *filename)
 		SendCopyData(fileBuffer);
 
 		resetStringInfo(fileBuffer);
-		readBytes = FileRead(fileDesc, fileBuffer->data, fileBufferSize,
-							 PG_WAIT_IO);
+		readBytes = FileReadCompat(&fileCompat, fileBuffer->data, fileBufferSize,
+								   PG_WAIT_IO);
 	}
 
 	SendCopyDone();
