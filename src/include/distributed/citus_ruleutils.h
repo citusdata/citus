@@ -12,11 +12,8 @@
 #define CITUS_RULEUTILS_H
 
 #include "postgres.h" /* IWYU pragma: keep */
-#include "c.h"
 
-#if (PG_VERSION_NUM >= 100000)
 #include "catalog/pg_sequence.h"
-#endif
 #include "commands/sequence.h"
 #include "lib/stringinfo.h"
 #include "nodes/parsenodes.h"
