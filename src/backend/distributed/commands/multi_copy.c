@@ -64,6 +64,7 @@
 #include "access/sysattr.h"
 #include "access/xact.h"
 #include "catalog/namespace.h"
+#include "catalog/pg_attribute.h"
 #include "catalog/pg_type.h"
 #include "commands/copy.h"
 #include "commands/defrem.h"
@@ -481,7 +482,11 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 		Form_pg_attribute currentColumn = TupleDescAttr(tupleDescriptor, columnIndex);
 		char *columnName = NameStr(currentColumn->attname);
 
-		if (currentColumn->attisdropped)
+		if (currentColumn->attisdropped
+#if PG_VERSION_NUM >= 120000
+			|| currentColumn->attgenerated == ATTRIBUTE_GENERATED_STORED
+#endif
+			)
 		{
 			continue;
 		}
@@ -510,7 +515,7 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 	 * of BeginCopyFrom. However, we obviously should not do this in relcache
 	 * and therefore make a copy of the Relation.
 	 */
-	copiedDistributedRelation = (Relation) palloc0(sizeof(RelationData));
+	copiedDistributedRelation = (Relation) palloc(sizeof(RelationData));
 	copiedDistributedRelationTuple = (Form_pg_class) palloc(CLASS_TUPLE_SIZE);
 
 	/*
@@ -1028,7 +1033,11 @@ CanUseBinaryCopyFormat(TupleDesc tupleDescription)
 		Form_pg_attribute currentColumn = TupleDescAttr(tupleDescription, columnIndex);
 		Oid typeId = InvalidOid;
 
-		if (currentColumn->attisdropped)
+		if (currentColumn->attisdropped
+#if PG_VERSION_NUM >= 120000
+			|| currentColumn->attgenerated == ATTRIBUTE_GENERATED_STORED
+#endif
+			)
 		{
 			continue;
 		}
@@ -1667,7 +1676,11 @@ AppendCopyRowData(Datum *valueArray, bool *isNullArray, TupleDesc rowDescriptor,
 			value = CoerceColumnValue(value, &columnCoercionPaths[columnIndex]);
 		}
 
-		if (currentColumn->attisdropped)
+		if (currentColumn->attisdropped
+#if PG_VERSION_NUM >= 120000
+			|| currentColumn->attgenerated == ATTRIBUTE_GENERATED_STORED
+#endif
+			)
 		{
 			continue;
 		}
@@ -1787,7 +1800,11 @@ AvailableColumnCount(TupleDesc tupleDescriptor)
 	{
 		Form_pg_attribute currentColumn = TupleDescAttr(tupleDescriptor, columnIndex);
 
-		if (!currentColumn->attisdropped)
+		if (!currentColumn->attisdropped
+#if PG_VERSION_NUM >= 120000
+			&& currentColumn->attgenerated != ATTRIBUTE_GENERATED_STORED
+#endif
+			)
 		{
 			columnCount++;
 		}

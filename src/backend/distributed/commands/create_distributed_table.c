@@ -1368,7 +1368,11 @@ TupleDescColumnNameList(TupleDesc tupleDescriptor)
 		Form_pg_attribute currentColumn = TupleDescAttr(tupleDescriptor, columnIndex);
 		char *columnName = NameStr(currentColumn->attname);
 
-		if (currentColumn->attisdropped)
+		if (currentColumn->attisdropped
+#if PG_VERSION_NUM >= 120000
+			|| currentColumn->attgenerated == ATTRIBUTE_GENERATED_STORED
+#endif
+			)
 		{
 			continue;
 		}
