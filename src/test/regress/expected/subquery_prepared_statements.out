@@ -2,22 +2,15 @@
 -- test recursive planning functionality on prepared statements
 -- ===================================================================
 CREATE SCHEMA subquery_prepared_statements;
-SET search_path TO subquery_prepared_statements, public;
-CREATE TYPE xy AS (x int, y int);
-SELECT run_command_on_workers('CREATE SCHEMA subquery_prepared_statements');
+SELECT run_command_on_workers('CREATE SCHEMA subquery_prepared_statements;');
        run_command_on_workers        
 -------------------------------------
  (localhost,57637,t,"CREATE SCHEMA")
  (localhost,57638,t,"CREATE SCHEMA")
 (2 rows)
 
-SELECT run_command_on_workers('CREATE TYPE subquery_prepared_statements.xy AS (x int, y int)');
-      run_command_on_workers       
------------------------------------
- (localhost,57637,t,"CREATE TYPE")
- (localhost,57638,t,"CREATE TYPE")
-(2 rows)
-
+SET search_path TO subquery_prepared_statements, public;
+CREATE TYPE subquery_prepared_statements.xy AS (x int, y int);
 SET client_min_messages TO DEBUG1;
 PREPARE subquery_prepare_without_param AS 
 SELECT

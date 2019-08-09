@@ -7,13 +7,6 @@ SET citus.next_placement_id TO 7000000;
 SET citus.replication_model TO streaming;
 -- Setup the view so that we can check if the foreign keys are created properly
 CREATE TYPE foreign_details AS (name text, relid text, refd_relid text);
-SELECT run_command_on_workers($$CREATE TYPE foreign_details AS (name text, relid text, refd_relid text)$$);
-      run_command_on_workers       
------------------------------------
- (localhost,57637,t,"CREATE TYPE")
- (localhost,57638,t,"CREATE TYPE")
-(2 rows)
-
 CREATE VIEW table_fkeys_in_workers AS 
 SELECT
 (json_populate_record(NULL::foreign_details, 

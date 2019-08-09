@@ -8,7 +8,6 @@ SET citus.replication_model TO streaming;
 
 -- Setup the view so that we can check if the foreign keys are created properly
 CREATE TYPE foreign_details AS (name text, relid text, refd_relid text);
-SELECT run_command_on_workers($$CREATE TYPE foreign_details AS (name text, relid text, refd_relid text)$$);
 
 CREATE VIEW table_fkeys_in_workers AS 
 SELECT

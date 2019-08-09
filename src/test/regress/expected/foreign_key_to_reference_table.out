@@ -15,13 +15,6 @@ SET citus.shard_count TO 8;
 SET citus.next_shard_id TO 7000000;
 SET citus.next_placement_id TO 7000000;
 CREATE TYPE foreign_details AS (name text, relid text, refd_relid text);
-SELECT run_command_on_workers($$CREATE TYPE foreign_details AS (name text, relid text, refd_relid text)$$);
-      run_command_on_workers       
------------------------------------
- (localhost,57637,t,"CREATE TYPE")
- (localhost,57638,t,"CREATE TYPE")
-(2 rows)
-
 CREATE VIEW table_fkeys_in_workers AS 
 SELECT
 (json_populate_record(NULL::foreign_details, 
@@ -576,13 +569,6 @@ DROP TABLE referencing_table;
 DROP TABLE referenced_table;
 -- foreign key as composite key
 CREATE TYPE fkey_reference_table.composite AS (key1 int, key2 int); 
-SELECT run_command_on_workers($$CREATE TYPE fkey_reference_table.composite AS (key1 int, key2 int)$$) ORDER BY 1;
-      run_command_on_workers       
------------------------------------
- (localhost,57637,t,"CREATE TYPE")
- (localhost,57638,t,"CREATE TYPE")
-(2 rows)
-
 CREATE TABLE referenced_table(test_column composite, PRIMARY KEY(test_column));
 CREATE TABLE referencing_table(id int, referencing_composite composite);
 SELECT create_reference_table('referenced_table');

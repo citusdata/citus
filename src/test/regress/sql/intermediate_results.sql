@@ -80,7 +80,6 @@ END;
 
 -- try a composite type
 CREATE TYPE intermediate_results.square_type AS (x text, x2 int);
-SELECT run_command_on_workers('CREATE TYPE intermediate_results.square_type AS (x text, x2 int)');
 
 CREATE TABLE stored_squares (user_id text, square intermediate_results.square_type, metadata jsonb);
 INSERT INTO stored_squares VALUES ('jon', '(2,4)'::intermediate_results.square_type, '{"value":2}');

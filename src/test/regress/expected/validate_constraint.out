@@ -28,14 +28,6 @@ SET citus.shard_count TO 8;
 SET citus.next_shard_id TO 8000000;
 SET citus.next_placement_id TO 8000000;
 CREATE TYPE constraint_validity AS (name text, validated bool);
-SELECT run_command_on_workers(
-         $$CREATE TYPE constraint_validity AS (name text, validated bool)$$);
-      run_command_on_workers       
------------------------------------
- (localhost,57637,t,"CREATE TYPE")
- (localhost,57638,t,"CREATE TYPE")
-(2 rows)
-
 CREATE VIEW constraint_validations_in_workers AS
   SELECT (json_populate_record(NULL :: constraint_validity,
                                json_array_elements_text((run_command_on_workers($$

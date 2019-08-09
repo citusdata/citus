@@ -1,7 +1,6 @@
 -- Test the basic CTE functionality and expected error messages
 SET search_path TO 'with_basics';
-CREATE TYPE xy AS (x int, y int);
-SELECT run_command_on_workers('CREATE TYPE with_basics.xy AS (x int, y int)');
+CREATE TYPE with_basics.xy AS (x int, y int);
 
 -- CTEs in FROM should work
 WITH cte AS (

@@ -55,10 +55,6 @@ DROP TABLE upgrade_reference_table_unhealthy;
 -- test with table containing composite type
 CREATE TYPE upgrade_test_composite_type AS (key1 text, key2 text);
 
-\c - - - :worker_1_port
-CREATE TYPE upgrade_test_composite_type AS (key1 text, key2 text);
-
-\c - - - :master_port
 SET citus.shard_count TO 1;
 SET citus.shard_replication_factor TO 1;
 CREATE TABLE upgrade_reference_table_composite(column1 int, column2 upgrade_test_composite_type);

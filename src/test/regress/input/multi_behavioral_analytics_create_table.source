@@ -81,14 +81,11 @@ CREATE INDEX is_index5 ON users_table(value_2);
 CREATE INDEX is_index6 ON events_table(value_2);
 
 -- Create composite type to use in subquery pushdown
-SELECT run_command_on_master_and_workers($f$
-
-	CREATE TYPE user_composite_type AS
-	(
-		tenant_id BIGINT,
-		user_id BIGINT
-	);
-$f$);
+CREATE TYPE user_composite_type AS
+(
+    tenant_id BIGINT,
+    user_id BIGINT
+);
 
 SELECT run_command_on_master_and_workers($f$
 

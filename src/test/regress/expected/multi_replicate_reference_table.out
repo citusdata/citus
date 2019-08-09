@@ -394,7 +394,7 @@ ORDER BY logicalrelid;
               logicalrelid               | partmethod | colocationid | repmodel 
 -----------------------------------------+------------+--------------+----------
  replicate_reference_table_reference_one | n          |        10004 | t
- replicate_reference_table_hash          | h          |      1360004 | c
+ replicate_reference_table_hash          | h          |      1360005 | c
 (2 rows)
 
 BEGIN;
