@@ -1,3 +1,7 @@
+### citus v8.3.2 (August 09, 2019) ###
+
+* Fixes performance issues by skipping unnecessary relation access recordings
+
 ### citus v8.3.1 (July 29, 2019) ###
 
 * Improves Adaptive Executor performance
