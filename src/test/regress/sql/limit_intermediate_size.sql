@@ -84,8 +84,8 @@ UNION
 )a ORDER BY 1,2,3,4,5 LIMIT 10;
 
 
--- this should fail since the cte-subplan exceeds the limit even if the
--- cte2 and cte3 does not
+-- this fails since cte-subplan exceeds limit even if cte2 and cte3 don't
+-- WHERE EXISTS forces materialization in pg12
 SET citus.max_intermediate_result_size TO 4;
 WITH cte AS (
 	WITH cte2 AS (
@@ -95,8 +95,9 @@ WITH cte AS (
 		SELECT * FROM events_table
 	)
 	SELECT * FROM cte2, cte3 WHERE cte2.user_id = cte3.user_id AND cte2.user_id = 1
+	AND EXISTS (select * from cte2, cte3)
 )
-SELECT * FROM cte;
+SELECT * FROM cte WHERE EXISTS (select * from cte);
 
 
 SET citus.max_intermediate_result_size TO 3;

@@ -923,7 +923,9 @@ COPY reference_failure_test FROM STDIN WITH (FORMAT 'csv');
 COMMIT;
 
 -- show that no data go through the table and shard states are good
+SET client_min_messages to 'ERROR';
 SELECT * FROM reference_failure_test;
+RESET client_min_messages;
 
 
 -- all placements should be healthy

@@ -681,6 +681,9 @@ INTERSECT
 (SELECT * FROM articles_hash WHERE author_id = 2 and 1=0);
 
 -- CTEs with where false
+-- terse because distribution column inference varies between pg11 & pg12
+\set VERBOSITY terse
+
 WITH id_author AS ( SELECT id, author_id FROM articles_hash WHERE author_id = 1),
 id_title AS (SELECT id, title from articles_hash WHERE author_id = 1 and 1=0)
 SELECT * FROM id_author, id_title WHERE id_author.id = id_title.id;
@@ -688,6 +691,8 @@ SELECT * FROM id_author, id_title WHERE id_author.id = id_title.id;
 WITH id_author AS ( SELECT id, author_id FROM articles_hash WHERE author_id = 1),
 id_title AS (SELECT id, title from articles_hash WHERE author_id = 1)
 SELECT * FROM id_author, id_title WHERE id_author.id = id_title.id and 1=0;
+
+\set VERBOSITY DEFAULT
 
 WITH RECURSIVE hierarchy as (
 	SELECT *, 1 AS level

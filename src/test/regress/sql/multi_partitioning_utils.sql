@@ -1,6 +1,6 @@
 -- This test has different output per major version
 SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int as server_major_version;
+SELECT substring(:'server_version', '\d+')::int > 10 AS version_above_ten;
 
 -- ===================================================================
 -- create test functions

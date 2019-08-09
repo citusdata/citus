@@ -302,7 +302,7 @@ SELECT
 	COUNT(*) OVER (PARTITION BY user_id, user_id + 1),
 	rank() OVER (PARTITION BY user_id) as cnt1,
 	COUNT(*) OVER (PARTITION BY user_id, abs(value_1 - value_2)) as cnt2, 
-	date_trunc('min', lag(time) OVER (PARTITION BY user_id)) as datee,
+	date_trunc('min', lag(time) OVER (PARTITION BY user_id ORDER BY time)) as datee,
 	rank() OVER my_win  as rnnk,
 	avg(CASE
 			WHEN user_id > 4
@@ -558,6 +558,7 @@ ORDER BY
        1 | 3.2857142857142857 | 1.00000000000000000000
 (6 rows)
 
+SELECT coordinator_plan($Q$
 EXPLAIN (COSTS FALSE)
 SELECT
 	user_id, 
@@ -569,27 +570,16 @@ GROUP BY
 	1
 ORDER BY
 	3 DESC, 2 DESC, 1 DESC;
-                                                            QUERY PLAN                                                             
------------------------------------------------------------------------------------------------------------------------------------
+$Q$);
+                                  coordinator_plan                                  
+------------------------------------------------------------------------------------
  Sort
    Sort Key: remote_scan.avg_1 DESC, remote_scan.avg DESC, remote_scan.user_id DESC
    ->  HashAggregate
          Group Key: remote_scan.user_id
-         ->  Custom Scan (Citus Real-Time)
+         ->  Custom Scan (Citus Adaptive)
                Task Count: 4
-               Tasks Shown: One of 4
-               ->  Task
-                     Node: host=localhost port=57637 dbname=regression
-                     ->  WindowAgg
-                           ->  Sort
-                                 Sort Key: users_table.user_id, (min(users_table.user_id)), (avg(users_table.value_1))
-                                 ->  WindowAgg
-                                       ->  Sort
-                                             Sort Key: users_table.user_id, (max(users_table.user_id)), (min(users_table.value_2))
-                                             ->  HashAggregate
-                                                   Group Key: users_table.user_id
-                                                   ->  Seq Scan on users_table_1400256 users_table
-(18 rows)
+(6 rows)
 
 SELECT
 	user_id,

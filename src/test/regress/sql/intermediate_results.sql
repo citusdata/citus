@@ -122,15 +122,15 @@ END;
 BEGIN;
 -- accurate row count estimates for primitive types
 SELECT create_intermediate_result('squares', 'SELECT s, s*s FROM generate_series(1,632) s');
-EXPLAIN SELECT * FROM read_intermediate_result('squares', 'binary') AS res (x int, x2 int);
+EXPLAIN (COSTS OFF) SELECT * FROM read_intermediate_result('squares', 'binary') AS res (x int, x2 int);
 
 -- less accurate results for variable types
 SELECT create_intermediate_result('hellos', $$SELECT s, 'hello-'||s FROM generate_series(1,63) s$$);
-EXPLAIN SELECT * FROM read_intermediate_result('hellos', 'binary') AS res (x int, y text);
+EXPLAIN (COSTS OFF) SELECT * FROM read_intermediate_result('hellos', 'binary') AS res (x int, y text);
 
 -- not very accurate results for text encoding
 SELECT create_intermediate_result('stored_squares', 'SELECT square FROM stored_squares');
-EXPLAIN SELECT * FROM read_intermediate_result('stored_squares', 'text') AS res (s intermediate_results.square_type);
+EXPLAIN (COSTS OFF) SELECT * FROM read_intermediate_result('stored_squares', 'text') AS res (s intermediate_results.square_type);
 END;
 
 -- pipe query output into a result file and create a table to check the result

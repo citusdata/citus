@@ -428,7 +428,7 @@ INSERT INTO referencing_table SELECT x, x+1 FROM generate_series(0,1500) AS f(x)
 INSERT INTO referencing_table SELECT x, x+1 FROM generate_series(0,400) AS f(x);
 -- should fail
 INSERT INTO referencing_table SELECT x, x+1 FROM generate_series(1000,1400) AS f(x);
--- should success
+-- should succeed
 INSERT INTO referencing_table SELECT x, x+1 FROM generate_series(600,900) AS f(x);
 
 SELECT count(*) FROM referencing_table;
@@ -451,6 +451,7 @@ SELECT create_distributed_table('referencing_table', 'id');
 
 SELECT count(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
 
+\set VERBOSITY terse
 DROP TABLE referenced_table CASCADE;
 DROP TABLE referenced_table2 CASCADE;
 DROP TABLE referencing_table CASCADE;
@@ -484,7 +485,7 @@ INSERT INTO referencing_table SELECT x, x+1 FROM generate_series(0,1500) AS f(x)
 INSERT INTO referencing_table SELECT x, x+1 FROM generate_series(0,400) AS f(x);
 -- should fail
 INSERT INTO referencing_table SELECT x, x+1 FROM generate_series(1000,1400) AS f(x);
--- should success
+-- should succeed
 INSERT INTO referencing_table SELECT x, x+501 FROM generate_series(0,1000) AS f(x);
 
 SELECT count(*) FROM referencing_table;
@@ -514,6 +515,7 @@ SELECT count(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_tab
 DROP TABLE referenced_table CASCADE;
 DROP TABLE referenced_table2 CASCADE;
 DROP TABLE referencing_table CASCADE;
+\set VERBOSITY default
 
 
 -- two distributed tables are referencing to one reference table and
@@ -542,11 +544,11 @@ SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' A
 INSERT INTO referenced_table SELECT x, x+1 FROM generate_series(0,1000) AS f(x);
 -- should fail
 INSERT INTO referencing_table2 SELECT x, x+1 FROM generate_series(0,100) AS f(x);
--- should success
+-- should succeed
 INSERT INTO referencing_table SELECT x, x+1 FROM generate_series(0,400) AS f(x);
 -- should fail
 INSERT INTO referencing_table2 SELECT x, x+1 FROM generate_series(200,500) AS f(x);
--- should success
+-- should succeed
 INSERT INTO referencing_table2 SELECT x, x+1 FROM generate_series(0,300) AS f(x);
 
 DELETE FROM referenced_table WHERE test_column < 200;
@@ -555,9 +557,11 @@ SELECT count(*) FROM referencing_table2;
 DELETE FROM referencing_table WHERE id > 200;
 SELECT count(*) FROM referencing_table2;
 
+\set VERBOSITY terse
 DROP TABLE referenced_table CASCADE;
 DROP TABLE referencing_table CASCADE;
 DROP TABLE referencing_table2 CASCADE;
+\set VERBOSITY default
 
 -- Check if the above fkeys are created with create_distributed_table
 CREATE TABLE referenced_table(test_column int, test_column2 int UNIQUE, PRIMARY KEY(test_column));
@@ -572,10 +576,11 @@ COMMIT;
 
 SELECT count(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
 
+\set VERBOSITY terse
 DROP TABLE referenced_table CASCADE;
 DROP TABLE referencing_table CASCADE;
 DROP TABLE referencing_table2 CASCADE;
-
+\set VERBOSITY default
 
 -- In this test we have a chained relationship in form of 
 -- distributed table (referencing_referencing_table) has a foreign key with two columns

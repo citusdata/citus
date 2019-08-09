@@ -6,10 +6,6 @@
 -- and that we don't partition or join prune shards that have null values.
 
 
--- print major version number for version-specific tests
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int AS server_version;
-
 SET client_min_messages TO DEBUG2;
 SET citus.explain_all_tasks TO on;
 -- to avoid differing explain output - executor doesn't matter,
@@ -26,8 +22,10 @@ SELECT shardminvalue, shardmaxvalue from pg_dist_shard WHERE shardid = 290001;
 
 -- Check that partition and join pruning works when min/max values exist
 -- Adding l_orderkey = 1 to make the query not router executable
+SELECT coordinator_plan($Q$
 EXPLAIN (COSTS FALSE)
 SELECT l_orderkey, l_linenumber, l_shipdate FROM lineitem WHERE l_orderkey = 9030 or l_orderkey = 1;
+$Q$);
 
 EXPLAIN (COSTS FALSE)
 SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
@@ -39,8 +37,10 @@ SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 
 UPDATE pg_dist_shard SET shardminvalue = NULL WHERE shardid = 290000;
 
+SELECT coordinator_plan($Q$
 EXPLAIN (COSTS FALSE)
 SELECT l_orderkey, l_linenumber, l_shipdate FROM lineitem WHERE l_orderkey = 9030;
+$Q$);
 
 EXPLAIN (COSTS FALSE)
 SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
@@ -52,8 +52,10 @@ SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 
 UPDATE pg_dist_shard SET shardmaxvalue = NULL WHERE shardid = 290001;
 
+SELECT coordinator_plan($Q$
 EXPLAIN (COSTS FALSE)
 SELECT l_orderkey, l_linenumber, l_shipdate FROM lineitem WHERE l_orderkey = 9030;
+$Q$);
 
 EXPLAIN (COSTS FALSE)
 SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
@@ -65,8 +67,10 @@ SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 
 UPDATE pg_dist_shard SET shardminvalue = '0' WHERE shardid = 290000;
 
+SELECT coordinator_plan($Q$
 EXPLAIN (COSTS FALSE)
 SELECT l_orderkey, l_linenumber, l_shipdate FROM lineitem WHERE l_orderkey = 9030;
+$Q$);
 
 EXPLAIN (COSTS FALSE)
 SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
