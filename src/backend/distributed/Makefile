@@ -10,7 +10,7 @@ EXTENSION = citus
 DATA = $(patsubst $(citus_abs_srcdir)/%.sql,%.sql,$(wildcard $(citus_abs_srcdir)/$(EXTENSION)--*.sql))
 
 # directories with source files
-SUBDIRS = . commands connection ddl executor master metadata planner progress relay test transaction utils worker
+SUBDIRS = . catalog commands connection ddl executor master metadata planner progress relay test transaction utils worker
 
 # That patsubst rule searches all directories listed in SUBDIRS for .c
 # files, and adds the corresponding .o files to OBJS

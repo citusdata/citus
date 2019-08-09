@@ -141,12 +141,48 @@ PlanAlterObjectSchemaStmt(AlterObjectSchemaStmt *alterObjectSchemaStmt,
 
 
 /*
- * EnsureSchemaExistsOnAllNodes connects to all nodes with citus extension user
+ * EnsureSchemaForRelationExistsOnAllNodes connects to all nodes with citus extension user
  * and creates the schema of the given relationId. The function errors out if the
  * command cannot be executed in any of the worker nodes.
  */
 void
-EnsureSchemaExistsOnAllNodes(Oid relationId)
+EnsureSchemaForRelationExistsOnAllNodes(Oid relationId)
+{
+	List *workerNodeList = ActivePrimaryNodeList();
+	ListCell *workerNodeCell = NULL;
+	Oid schemaId = get_rel_namespace(relationId);
+
+	foreach(workerNodeCell, workerNodeList)
+	{
+		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
+		char *nodeName = workerNode->workerName;
+		uint32 nodePort = workerNode->workerPort;
+
+		EnsureSchemaExistsOnNode(schemaId, nodeName, nodePort);
+	}
+}
+
+
+/*
+ * EnsureSchemaForRelationExistsOnNode connects to one node with citus extension user
+ * and creates the schema of the given relationId. The function errors out if the
+ * command cannot be executed in the node.
+ */
+void
+EnsureSchemaForRelationExistsOnNode(Oid relationId, char *nodeName, int32 nodePort)
+{
+	Oid schemaId = get_rel_namespace(relationId);
+	EnsureSchemaExistsOnNode(schemaId, nodeName, nodePort);
+}
+
+
+/*
+ * EnsureSchemaExistsOnAllNodes connects to all nodes with citus extension user
+ * and creates the schema for the given schemaId. The function errors out if the
+ * command cannot be executed in any of the worker nodes.
+ */
+void
+EnsureSchemaExistsOnAllNodes(Oid schemaId)
 {
 	List *workerNodeList = ActivePrimaryNodeList();
 	ListCell *workerNodeCell = NULL;
@@ -157,24 +193,21 @@ EnsureSchemaExistsOnAllNodes(Oid relationId)
 		char *nodeName = workerNode->workerName;
 		uint32 nodePort = workerNode->workerPort;
 
-		EnsureSchemaExistsOnNode(relationId, nodeName, nodePort);
+		EnsureSchemaExistsOnNode(schemaId, nodeName, nodePort);
 	}
 }
 
 
 /*
- * EnsureSchemaExistsOnNode connects to one node with citus extension user
- * and creates the schema of the given relationId. The function errors out if the
+ * EnsureSchemaForRelationExistsOnNode connects to one node with citus extension user
+ * and creates the schema of the given schemaId. The function errors out if the
  * command cannot be executed in the node.
  */
 void
-EnsureSchemaExistsOnNode(Oid relationId, char *nodeName, int32 nodePort)
+EnsureSchemaExistsOnNode(Oid schemaId, char *nodeName, int32 nodePort)
 {
 	uint64 connectionFlag = FORCE_NEW_CONNECTION;
 	MultiConnection *connection = NULL;
-
-	/* if the schema creation command is not provided, create it */
-	Oid schemaId = get_rel_namespace(relationId);
 	char *schemaCreationDDL = CreateSchemaDDLCommand(schemaId);
 
 	/* if the relation lives in public namespace, no need to perform any queries in workers */

@@ -243,8 +243,8 @@ RepairShardPlacement(int64 shardId, char *sourceNodeName, int32 sourceNodePort,
 	 * sessions and shard creation depends on the schema being present and
 	 * visible from all sessions.
 	 */
-	EnsureSchemaExistsOnNode(distributedTableId, targetNodeName,
-							 targetNodePort);
+	EnsureSchemaForRelationExistsOnNode(distributedTableId, targetNodeName,
+										targetNodePort);
 
 	if (relationKind == RELKIND_FOREIGN_TABLE)
 	{

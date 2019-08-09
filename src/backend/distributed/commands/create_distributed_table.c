@@ -145,7 +145,7 @@ master_create_distributed_table(PG_FUNCTION_ARGS)
 	 * shard creation depends on the schema being present and visible from all
 	 * sessions.
 	 */
-	EnsureSchemaExistsOnAllNodes(relationId);
+	EnsureSchemaForRelationExistsOnAllNodes(relationId);
 
 	/*
 	 * Lock target relation with an exclusive lock - there's no way to make
@@ -193,6 +193,7 @@ create_distributed_table(PG_FUNCTION_ARGS)
 	text *distributionColumnText = NULL;
 	Oid distributionMethodOid = InvalidOid;
 	text *colocateWithTableNameText = NULL;
+	ObjectAddress tableAddress = { 0 };
 
 	Relation relation = NULL;
 	char *distributionColumnName = NULL;
@@ -214,12 +215,15 @@ create_distributed_table(PG_FUNCTION_ARGS)
 	EnsureTableOwner(relationId);
 
 	/*
-	 * Ensure schema exists on each worker node. We can not run this function
-	 * transactionally, since we may create shards over separate sessions and
-	 * shard creation depends on the schema being present and visible from all
-	 * sessions.
+	 * distributed tables might have dependencies on different objects, since we create
+	 * shards for a distributed table via multiple sessions these objects will be created
+	 * via their own connection and committed immediately so they become visible to all
+	 * sessions creating shards.
 	 */
-	EnsureSchemaExistsOnAllNodes(relationId);
+
+	/* TODO the dependencies are created outside of this transaction, the book keeping within */
+	ObjectAddressSet(tableAddress, RelationRelationId, relationId);
+	EnsureDependenciesExistsOnAllNodes(&tableAddress);
 
 	/*
 	 * Lock target relation with an exclusive lock - there's no way to make
@@ -285,7 +289,7 @@ create_reference_table(PG_FUNCTION_ARGS)
 	 * shard creation depends on the schema being present and visible from all
 	 * sessions.
 	 */
-	EnsureSchemaExistsOnAllNodes(relationId);
+	EnsureSchemaForRelationExistsOnAllNodes(relationId);
 
 	/*
 	 * Lock target relation with an exclusive lock - there's no way to make

@@ -18,6 +18,7 @@
 #include "access/htup.h"
 #include "access/tupdesc.h"
 #include "catalog/indexing.h"
+#include "catalog/objectaddress.h"
 #include "distributed/citus_nodes.h"
 #include "distributed/relay_utility.h"
 #include "utils/acl.h"
@@ -130,9 +131,12 @@ extern void CreateDistributedTable(Oid relationId, Var *distributionColumn,
 								   char distributionMethod, char *colocateWithTableName,
 								   bool viaDeprecatedAPI);
 extern void CreateTruncateTrigger(Oid relationId);
-extern void EnsureSchemaExistsOnAllNodes(Oid relationId);
-extern void EnsureSchemaExistsOnNode(Oid relationId, char *nodeName,
-									 int32 nodePort);
+extern void EnsureSchemaForRelationExistsOnAllNodes(Oid relationId);
+extern void EnsureSchemaForRelationExistsOnNode(Oid relationId, char *nodeName,
+												int32 nodePort);
+extern void EnsureSchemaExistsOnAllNodes(Oid schemaId);
+extern void EnsureSchemaExistsOnNode(Oid schemaId, char *nodeName, int32 nodePort);
+extern void EnsureDependenciesExistsOnAllNodes(const ObjectAddress *target);
 
 /* Remaining metadata utility functions  */
 extern char * TableOwner(Oid relationId);

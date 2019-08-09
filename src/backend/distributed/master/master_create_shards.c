@@ -82,7 +82,7 @@ master_create_worker_shards(PG_FUNCTION_ARGS)
 	 * shard creation depends on the schema being present and visible from all
 	 * sessions.
 	 */
-	EnsureSchemaExistsOnAllNodes(distributedTableId);
+	EnsureSchemaForRelationExistsOnAllNodes(distributedTableId);
 
 	CreateShardsWithRoundRobinPolicy(distributedTableId, shardCount, replicationFactor,
 									 useExclusiveConnections);

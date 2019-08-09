@@ -307,7 +307,7 @@ ReplicateShardToNode(ShardInterval *shardInterval, char *nodeName, int nodePort)
 	 * sessions and shard creation depends on the schema being present and
 	 * visible from all sessions.
 	 */
-	EnsureSchemaExistsOnNode(shardInterval->relationId, nodeName, nodePort);
+	EnsureSchemaForRelationExistsOnNode(shardInterval->relationId, nodeName, nodePort);
 
 
 	/*

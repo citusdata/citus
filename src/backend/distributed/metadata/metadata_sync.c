@@ -297,7 +297,7 @@ MetadataCreateCommands(void)
 		 * shard creation depends on the schema being present and visible from all
 		 * sessions.
 		 */
-		EnsureSchemaExistsOnAllNodes(relationId);
+		EnsureSchemaForRelationExistsOnAllNodes(relationId);
 
 		metadataSnapshotCommandList = list_concat(metadataSnapshotCommandList,
 												  workerSequenceDDLCommands);

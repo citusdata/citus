@@ -113,7 +113,7 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 	 * shard creation depends on the schema being present and visible from all
 	 * sessions.
 	 */
-	EnsureSchemaExistsOnAllNodes(relationId);
+	EnsureSchemaForRelationExistsOnAllNodes(relationId);
 
 	/* don't allow the table to be dropped */
 	LockRelationOid(relationId, AccessShareLock);
