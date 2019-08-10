@@ -223,7 +223,7 @@ SELECT count(*) FROM referencing_table;
 DROP TABLE referencing_table;
 DROP TABLE referenced_table;
 
--- self referencing foreign key on reference tables are not allowed
+-- self referencing foreign key on reference tables are allowed
 -- TODO try create_reference_table with already created foreign key.
 CREATE TABLE referenced_table(id int, test_column int, PRIMARY KEY(id));
 CREATE TABLE referencing_table(id int, ref_id int);
@@ -231,11 +231,11 @@ SELECT create_reference_table('referenced_table');
 SELECT create_reference_table('referencing_table');
 -- self referencing foreign key
 ALTER TABLE referenced_table ADD CONSTRAINT fkey_ref FOREIGN KEY (test_column) REFERENCES referenced_table(id);
--- foreign Keys from reference table to reference table are not allowed
+-- foreign Keys from reference table to reference table are allowed
 ALTER TABLE referencing_table ADD CONSTRAINT fkey_ref FOREIGN KEY(id) REFERENCES referenced_table(id) ON UPDATE CASCADE;
 
-DROP TABLE referenced_table;
 DROP TABLE referencing_table;
+DROP TABLE referenced_table;
 
 -- cascades on delete with different schemas
 CREATE SCHEMA referenced_schema;

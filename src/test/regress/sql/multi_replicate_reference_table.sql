@@ -1,7 +1,7 @@
 --
 -- MULTI_REPLICATE_REFERENCE_TABLE
 --
--- Tests that check the metadata returned by the master node.
+-- Tests that check that reference tables are replicated when adding new nodes.
 
 
 SET citus.next_shard_id TO 1370000;
@@ -415,6 +415,41 @@ WHERE colocationid IN
 
 DROP TABLE replicate_reference_table_schema.table1;
 DROP SCHEMA replicate_reference_table_schema CASCADE;
+
+
+-- test adding a node when there are foreign keys between reference tables
+SELECT master_remove_node('localhost', :worker_2_port);
+
+CREATE TABLE ref_table_1(id int primary key, v int);
+CREATE TABLE ref_table_2(id int primary key, v int references ref_table_1(id));
+CREATE TABLE ref_table_3(id int primary key, v int references ref_table_2(id));
+
+SELECT create_reference_table('ref_table_1'),
+       create_reference_table('ref_table_2'),
+       create_reference_table('ref_table_3');
+
+-- status before master_add_node
+SELECT
+    shardid, shardstate, shardlength, nodename, nodeport
+FROM
+    pg_dist_shard_placement
+WHERE
+    nodeport = :worker_2_port;
+
+SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+
+-- status after master_add_node
+SELECT
+    shardid, shardstate, shardlength, nodename, nodeport
+FROM
+    pg_dist_shard_placement
+WHERE
+    nodeport = :worker_2_port;
+
+-- verify constraints have been created on the new node
+SELECT run_command_on_workers('select count(*) from pg_constraint where contype=''f'' AND conname like ''ref_table%'';');
+
+DROP TABLE ref_table_1, ref_table_2, ref_table_3;
 
 -- do some tests with inactive node
 SELECT master_remove_node('localhost', :worker_2_port);

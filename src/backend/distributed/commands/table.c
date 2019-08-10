@@ -763,8 +763,8 @@ ErrorUnsupportedAlterTableAddColumn(Oid relationId, AlterTableCmd *command,
 }
 
 
-/*ErrorIfUnsupportedConstraint
- *  run checks related to unique index / exclude
+/*
+ * ErrorIfUnsupportedConstraint runs checks related to unique index / exclude
  * constraints.
  *
  * The function skips the uniqeness checks for reference tables (i.e., distribution
@@ -796,8 +796,9 @@ ErrorIfUnsupportedConstraint(Relation relation, char distributionMethod,
 	 * for reference tables, we first check for foreing constraints and if they are OK,
 	 * we do not error out for other types of constraints.
 	 */
-	ErrorIfUnsupportedForeignConstraint(relation, distributionMethod, distributionColumn,
-										colocationId);
+	ErrorIfUnsupportedForeignConstraintExists(relation, distributionMethod,
+											  distributionColumn,
+											  colocationId);
 
 	/*
 	 * Citus supports any kind of uniqueness constraints for reference tables

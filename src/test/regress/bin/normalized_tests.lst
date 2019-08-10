@@ -8,6 +8,7 @@ foreign_key_restriction_enforcement
 failure_real_time_select
 failure_vacuum
 isolation_citus_dist_activity
+isolation_ref2ref_foreign_keys
 multi_insert_select
 multi_insert_select_conflict
 multi_multiuser

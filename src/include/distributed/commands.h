@@ -31,10 +31,10 @@ extern void ErrorIfUnstableCreateOrAlterExtensionStmt(Node *parsetree);
 /* foreign_constraint.c - forward declarations */
 extern bool ConstraintIsAForeignKeyToReferenceTable(char *constraintName,
 													Oid leftRelationId);
-extern void ErrorIfUnsupportedForeignConstraint(Relation relation, char
-												distributionMethod,
-												Var *distributionColumn, uint32
-												colocationId);
+extern void ErrorIfUnsupportedForeignConstraintExists(Relation relation, char
+													  distributionMethod,
+													  Var *distributionColumn, uint32
+													  colocationId);
 extern bool ColumnAppearsInForeignKeyToReferenceTable(char *columnName, Oid
 													  relationId);
 extern List * GetTableForeignConstraintCommands(Oid relationId);

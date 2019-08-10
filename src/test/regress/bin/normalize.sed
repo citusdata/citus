@@ -17,6 +17,7 @@ s/assigned task [0-9]+ to node/assigned task to node/
 # the generated plan
 s/"(foreign_key_2_|fkey_ref_to_dist_|fkey_ref_)[0-9]+"/"\1xxxxxxx"/g
 s/"(referenced_table_|referencing_table_|referencing_table2_)[0-9]+"/"\1xxxxxxx"/g
+s/"(referencing_table_0_|referenced_table2_)[0-9]+"/"\1xxxxxxx"/g
 s/\(id\)=\([0-9]+\)/(id)=(X)/g
 s/\(ref_id\)=\([0-9]+\)/(ref_id)=(X)/g
 
@@ -65,3 +66,6 @@ s/ERROR:  failed to execute task [0-9]+/ERROR:  failed to execute task X/g
 # normalize file names for partitioned files
 s/(task_[0-9]+\.)[0-9]+/\1xxxx/g
 s/(job_[0-9]+\/task_[0-9]+\/p_[0-9]+\.)[0-9]+/\1xxxx/g
+
+# isolation_ref2ref_foreign_keys
+s/"(ref_table_[0-9]_|ref_table_[0-9]_value_fkey_)[0-9]+"/"\1xxxxxxx"/g
