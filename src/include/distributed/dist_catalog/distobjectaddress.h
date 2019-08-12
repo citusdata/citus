@@ -16,6 +16,13 @@
 
 #include "catalog/objectaddress.h"
 
+#define RowToDistObjectAddress(address, form) \
+	do { \
+		(addr).classId = (form).classid; \
+		(addr).objectId = (form).objid; \
+		(addr).classId = text_to_cstring(&((form).identifier)); \
+	} while (0)
+
 
 /*
  * DistObjectAddress is the citus equivalent of a postgres ObjectAddress. They both
@@ -36,18 +43,11 @@ typedef struct DistObjectAddress
 	const char *identifier;
 } DistObjectAddress;
 
-#define RowToDistObjectAddress(address, form) \
-	do { \
-		(addr).classId = (form).classid; \
-		(addr).objectId = (form).objid; \
-		(addr).classId = text_to_cstring(& ((form).identifier)); \
-	} while (0)
 
 extern DistObjectAddress * getDistObjectAddressFromPg(const ObjectAddress *address);
 extern ObjectAddress * getObjectAddresFromCitus(const DistObjectAddress *distAddress);
 extern DistObjectAddress * makeDistObjectAddress(Oid classid, Oid objectid, const
 												 char *identifier);
-
 extern bool isObjectDistributedByAddress(const ObjectAddress *address);
 extern bool isObjectDistributed(const DistObjectAddress *distAddress);
 extern void recordObjectDistributedByAddress(const ObjectAddress *address);
