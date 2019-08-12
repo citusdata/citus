@@ -1353,10 +1353,6 @@ CREATE TABLE distributed_table(id int PRIMARY KEY, value_1 int);
 DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "distributed_table_pkey" for table "distributed_table"
 DEBUG:  building index "distributed_table_pkey" on table "distributed_table"
 SELECT create_distributed_table('distributed_table', 'id');
-DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
-DETAIL:  NOTICE from localhost:57638
-DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
-DETAIL:  NOTICE from localhost:57637
  create_distributed_table 
 --------------------------
  
