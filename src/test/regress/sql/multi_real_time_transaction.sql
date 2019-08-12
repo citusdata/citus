@@ -271,6 +271,90 @@ COMMIT;
 
 RESET ROLE;
 
+-- Test GUC propagation of SET LOCAL in combination with a RLS policy
+-- that uses a GUC to filter tenants. Tenant data is spread across nodes.
+-- First, as a non-superuser, we'll see all rows because RLS is not in place yet.
+SET ROLE rls_user;
+SET search_path = 'multi_real_time_transaction';
+SELECT * FROM co_test_table ORDER BY id, col_1;
+
+\c - - - :worker_1_port
+SET search_path = 'multi_real_time_transaction';
+
+-- shard 1610004 contains data from tenant id 1
+SELECT * FROM co_test_table_1610004 ORDER BY id, col_1;
+SELECT * FROM co_test_table_1610006 ORDER BY id, col_1;
+
+\c - - - :worker_2_port
+SET search_path = 'multi_real_time_transaction';
+
+-- shard 1610005 contains data from tenant id 3
+SELECT * FROM co_test_table_1610005 ORDER BY id, col_1;
+-- shard 1610007 contains data from tenant id 2
+SELECT * FROM co_test_table_1610007 ORDER BY id, col_1;
+
+\c - - - :master_port
+SET search_path = 'multi_real_time_transaction';
+
+-- Let's set up a policy on the coordinator and workers which filters the tenants.
+SET citus.enable_ddl_propagation to off;
+CREATE POLICY filter_by_tenant_id ON co_test_table TO PUBLIC
+    USING (id = ANY(string_to_array(current_setting('app.tenant_id'), ',')::int[]));
+SET citus.enable_ddl_propagation to on;
+SELECT run_command_on_shards('co_test_table', $cmd$CREATE POLICY filter_by_tenant_id ON %s TO PUBLIC
+        USING (id = ANY(string_to_array(current_setting('app.tenant_id'), ',')::int[]));$cmd$);
+
+-- Let's activate RLS on the coordinator and workers.
+SET citus.enable_ddl_propagation to off;
+ALTER TABLE co_test_table ENABLE ROW LEVEL SECURITY;
+SET citus.enable_ddl_propagation to on;
+SELECT run_command_on_shards('co_test_table','ALTER TABLE %s ENABLE ROW LEVEL SECURITY;');
+
+-- Switch to non-superuser to make sure RLS takes effect.
+SET ROLE rls_user;
+
+BEGIN;
+-- Make sure, from now on, GUCs will be propagated to workers.
+SET LOCAL citus.propagate_set_commands TO 'local';
+
+-- Only tenant id 1 will be fetched, and so on.
+SET LOCAL app.tenant_id TO 1;
+SELECT * FROM co_test_table ORDER BY id, col_1;
+
+SAVEPOINT disable_rls;
+SET LOCAL app.tenant_id TO 3;
+SELECT * FROM co_test_table ORDER BY id, col_1;
+
+ROLLBACK TO SAVEPOINT disable_rls;
+SELECT * FROM co_test_table ORDER BY id, col_1;
+
+SAVEPOINT disable_rls_for_real;
+SET LOCAL app.tenant_id TO 3;
+RELEASE SAVEPOINT disable_rls_for_real;
+
+SELECT * FROM co_test_table ORDER BY id, col_1;
+
+RELEASE SAVEPOINT disable_rls;
+
+-- Make sure it's possible to fetch multiple tenants located on separate nodes
+-- via RLS policies that use GUCs.
+SET LOCAL app.tenant_id TO '1,3';
+SELECT * FROM co_test_table ORDER BY id, col_1;
+
+COMMIT;
+
+RESET ROLE;
+
+-- Cleanup RLS
+SET citus.enable_ddl_propagation to off;
+ALTER TABLE co_test_table DISABLE ROW LEVEL SECURITY;
+SET citus.enable_ddl_propagation to on;
+SELECT run_command_on_shards('co_test_table','ALTER TABLE %s DISABLE ROW LEVEL SECURITY;');
+SET citus.enable_ddl_propagation to off;
+DROP POLICY filter_by_tenant_id ON co_test_table;
+SET citus.enable_ddl_propagation to on;
+SELECT run_command_on_shards('co_test_table', 'DROP POLICY filter_by_tenant_id ON %s;');
+
 -- sequential real-time queries should be successfully executed
 -- since the queries are sent over the same connection
 BEGIN;
