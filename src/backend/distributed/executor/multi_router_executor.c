@@ -101,7 +101,7 @@ static List * GetModifyConnections(Task *task, bool markCritical);
 static int64 ExecuteModifyTasks(List *taskList, bool expectResults,
 								ParamListInfo paramListInfo, CitusScanState *scanState);
 static void AcquireExecutorShardLockForRowModify(Task *task, RowModifyLevel modLevel);
-static void AcquireExecutorShardLocksForRelationRowLockList(Task *task);
+static void AcquireExecutorShardLocksForRelationRowLockList(List *relationRowLockList);
 static bool RequiresConsistentSnapshot(Task *task);
 static void RouterMultiModifyExecScan(CustomScanState *node);
 static void RouterSequentialModifyExecScan(CustomScanState *node);
@@ -247,8 +247,16 @@ AcquireExecutorShardLockForRowModify(Task *task, RowModifyLevel modLevel)
 
 
 static void
-AcquireExecutorShardLocksForRelationRowLockList(Task *task)
+AcquireExecutorShardLocksForRelationRowLockList(List *relationRowLockList)
 {
+	ListCell *relationRowLockCell = NULL;
+	LOCKMODE rowLockMode = NoLock;
+
+	if (relationRowLockList == NIL)
+	{
+		return;
+	}
+
 	/*
 	 * If lock clause exists and it effects any reference table, we need to get
 	 * lock on shard resource. Type of lock is determined by the type of row lock
@@ -266,33 +274,27 @@ AcquireExecutorShardLocksForRelationRowLockList(Task *task)
 	 * with each other but conflicts with modify commands, we get ShareLock for
 	 * them.
 	 */
-	if (task->relationRowLockList != NIL)
+	foreach(relationRowLockCell, relationRowLockList)
 	{
-		ListCell *rtiLockCell = NULL;
-		LOCKMODE rowLockMode = NoLock;
+		RelationRowLock *relationRowLock = lfirst(relationRowLockCell);
+		LockClauseStrength rowLockStrength = relationRowLock->rowLockStrength;
+		Oid relationId = relationRowLock->relationId;
 
-		foreach(rtiLockCell, task->relationRowLockList)
+		if (PartitionMethod(relationId) == DISTRIBUTE_BY_NONE)
 		{
-			RelationRowLock *relationRowLock = (RelationRowLock *) lfirst(rtiLockCell);
-			LockClauseStrength rowLockStrength = relationRowLock->rowLockStrength;
-			Oid relationId = relationRowLock->relationId;
+			List *shardIntervalList = LoadShardIntervalList(relationId);
 
-			if (PartitionMethod(relationId) == DISTRIBUTE_BY_NONE)
+			if (rowLockStrength == LCS_FORKEYSHARE || rowLockStrength == LCS_FORSHARE)
 			{
-				List *shardIntervalList = LoadShardIntervalList(relationId);
-
-				if (rowLockStrength == LCS_FORKEYSHARE || rowLockStrength == LCS_FORSHARE)
-				{
-					rowLockMode = ShareLock;
-				}
-				else if (rowLockStrength == LCS_FORNOKEYUPDATE || rowLockStrength ==
-						 LCS_FORUPDATE)
-				{
-					rowLockMode = ExclusiveLock;
-				}
-
-				SerializeNonCommutativeWrites(shardIntervalList, rowLockMode);
+				rowLockMode = ShareLock;
 			}
+			else if (rowLockStrength == LCS_FORNOKEYUPDATE ||
+					 rowLockStrength == LCS_FORUPDATE)
+			{
+				rowLockMode = ExclusiveLock;
+			}
+
+			SerializeNonCommutativeWrites(shardIntervalList, rowLockMode);
 		}
 	}
 }
@@ -316,7 +318,7 @@ void
 AcquireExecutorShardLocks(Task *task, RowModifyLevel modLevel)
 {
 	AcquireExecutorShardLockForRowModify(task, modLevel);
-	AcquireExecutorShardLocksForRelationRowLockList(task);
+	AcquireExecutorShardLocksForRelationRowLockList(task->relationRowLockList);
 
 	/*
 	 * If the task has a subselect, then we may need to lock the shards from which
@@ -920,8 +922,6 @@ ExecuteSingleSelectTask(CitusScanState *scanState, Task *task)
 		{
 			placementAccessList = BuildPlacementSelectList(taskPlacement->groupId,
 														   relationShardList);
-
-			Assert(list_length(placementAccessList) == list_length(relationShardList));
 		}
 		else
 		{
@@ -1315,9 +1315,6 @@ GetModifyConnections(Task *task, bool markCritical)
 
 		multiConnectionList = lappend(multiConnectionList, multiConnection);
 	}
-
-	/* then finish in parallel */
-	FinishConnectionListEstablishment(multiConnectionList);
 
 	/* and start transactions if applicable */
 	RemoteTransactionsBeginIfNecessary(multiConnectionList);

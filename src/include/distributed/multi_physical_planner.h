@@ -194,8 +194,23 @@ typedef struct Task
 	TaskExecution *taskExecution;  /* used by task tracker executor */
 	char replicationModel;         /* only applies to modify tasks */
 
+	/*
+	 * List of struct RelationRowLock. This contains an entry for each
+	 * query identified as a FOR [KEY] UPDATE/SHARE target. Citus
+	 * converts PostgreSQL's RowMarkClause to RelationRowLock in
+	 * RowLocksOnRelations().
+	 */
 	List *relationRowLockList;
+
 	bool modifyWithSubquery;
+
+	/*
+	 * List of struct RelationShard. This represents the mapping of relations
+	 * in the RTE list to shard IDs for a task for the purposes of:
+	 *  - Locking: See AcquireExecutorShardLocks()
+	 *  - Deparsing: See UpdateRelationToShardNames()
+	 *  - Relation Access Tracking
+	 */
 	List *relationShardList;
 
 	List *rowValuesLists;          /* rows to use when building multi-row INSERT */

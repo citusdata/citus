@@ -308,7 +308,7 @@ StartPlacementListConnection(uint32 flags, List *placementAccessList,
 		chosenConnection = StartNodeUserDatabaseConnection(flags, nodeName, nodePort,
 														   userName, NULL);
 
-		if (flags & CONNECTION_PER_PLACEMENT &&
+		if ((flags & CONNECTION_PER_PLACEMENT) &&
 			ConnectionAccessedDifferentPlacement(chosenConnection, placement))
 		{
 			/*
