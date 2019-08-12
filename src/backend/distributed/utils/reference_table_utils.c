@@ -129,60 +129,52 @@ void
 ReplicateAllReferenceTablesToNode(char *nodeName, int nodePort)
 {
 	List *referenceTableList = ReferenceTableOidList();
-	List *referenceShardIntervalList = NIL;
 	ListCell *referenceTableCell = NULL;
-	ListCell *referenceShardIntervalCell = NULL;
-	List *workerNodeList = ActivePrimaryNodeList();
-	uint32 workerCount = 0;
-	Oid firstReferenceTableId = InvalidOid;
-	uint32 referenceTableColocationId = INVALID_COLOCATION_ID;
+	uint32 workerCount = ActivePrimaryNodeCount();
 
-	/* if there is no reference table, we do not need to do anything */
-	if (list_length(referenceTableList) == 0)
+	/* if there is no reference table, we do not need to replicate anything */
+	if (list_length(referenceTableList) > 0)
 	{
-		return;
+		List *referenceShardIntervalList = NIL;
+		ListCell *referenceShardIntervalCell = NULL;
+
+		/*
+		 * We sort the reference table list to prevent deadlocks in concurrent
+		 * ReplicateAllReferenceTablesToAllNodes calls.
+		 */
+		referenceTableList = SortList(referenceTableList, CompareOids);
+		foreach(referenceTableCell, referenceTableList)
+		{
+			Oid referenceTableId = lfirst_oid(referenceTableCell);
+			List *shardIntervalList = LoadShardIntervalList(referenceTableId);
+			ShardInterval *shardInterval = (ShardInterval *) linitial(shardIntervalList);
+
+			referenceShardIntervalList = lappend(referenceShardIntervalList,
+												 shardInterval);
+		}
+
+		if (ClusterHasKnownMetadataWorkers())
+		{
+			BlockWritesToShardList(referenceShardIntervalList);
+		}
+
+		foreach(referenceShardIntervalCell, referenceShardIntervalList)
+		{
+			ShardInterval *shardInterval = (ShardInterval *) lfirst(
+				referenceShardIntervalCell);
+			uint64 shardId = shardInterval->shardId;
+
+			LockShardDistributionMetadata(shardId, ExclusiveLock);
+
+			ReplicateShardToNode(shardInterval, nodeName, nodePort);
+		}
 	}
 
 	/*
-	 * We sort the reference table list to prevent deadlocks in concurrent
-	 * ReplicateAllReferenceTablesToAllNodes calls.
+	 * Update replication factor column for colocation group of reference tables
+	 * so that worker count will be equal to replication factor again.
 	 */
-	referenceTableList = SortList(referenceTableList, CompareOids);
-	foreach(referenceTableCell, referenceTableList)
-	{
-		Oid referenceTableId = lfirst_oid(referenceTableCell);
-		List *shardIntervalList = LoadShardIntervalList(referenceTableId);
-		ShardInterval *shardInterval = (ShardInterval *) linitial(shardIntervalList);
-
-		referenceShardIntervalList = lappend(referenceShardIntervalList,
-											 shardInterval);
-	}
-
-	if (ClusterHasKnownMetadataWorkers())
-	{
-		BlockWritesToShardList(referenceShardIntervalList);
-	}
-
-	foreach(referenceShardIntervalCell, referenceShardIntervalList)
-	{
-		ShardInterval *shardInterval = (ShardInterval *) lfirst(
-			referenceShardIntervalCell);
-		uint64 shardId = shardInterval->shardId;
-
-		LockShardDistributionMetadata(shardId, ExclusiveLock);
-
-		ReplicateShardToNode(shardInterval, nodeName, nodePort);
-	}
-
-	/*
-	 * After replicating reference tables, we will update replication factor column for
-	 * colocation group of reference tables so that worker count will be equal to
-	 * replication factor again.
-	 */
-	workerCount = list_length(workerNodeList);
-	firstReferenceTableId = linitial_oid(referenceTableList);
-	referenceTableColocationId = TableColocationId(firstReferenceTableId);
-	UpdateColocationGroupReplicationFactor(referenceTableColocationId, workerCount);
+	UpdateColocationGroupReplicationFactorForReferenceTables(workerCount);
 }
 
 

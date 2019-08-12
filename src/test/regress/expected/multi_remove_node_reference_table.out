@@ -141,7 +141,7 @@ WHERE colocationid IN
      WHERE logicalrelid = 'remove_node_reference_table'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype 
 --------------+------------+-------------------+------------------------
-      1370005 |          1 |                 2 |                      0
+        10004 |          1 |                 2 |                      0
 (1 row)
 
      
@@ -196,7 +196,7 @@ WHERE colocationid IN
      WHERE logicalrelid = 'remove_node_reference_table'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype 
 --------------+------------+-------------------+------------------------
-      1370005 |          1 |                 1 |                      0
+        10004 |          1 |                 1 |                      0
 (1 row)
 
 \c - - - :worker_1_port
@@ -277,7 +277,7 @@ WHERE colocationid IN
      WHERE logicalrelid = 'remove_node_reference_table'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype 
 --------------+------------+-------------------+------------------------
-      1370005 |          1 |                 2 |                      0
+        10004 |          1 |                 2 |                      0
 (1 row)
 
      
@@ -335,7 +335,7 @@ WHERE colocationid IN
      WHERE logicalrelid = 'remove_node_reference_table'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype 
 --------------+------------+-------------------+------------------------
-      1370005 |          1 |                 2 |                      0
+        10004 |          1 |                 2 |                      0
 (1 row)
 
 \c - - - :worker_1_port
@@ -385,7 +385,7 @@ WHERE colocationid IN
      WHERE logicalrelid = 'remove_node_reference_table'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype 
 --------------+------------+-------------------+------------------------
-      1370005 |          1 |                 2 |                      0
+        10004 |          1 |                 2 |                      0
 (1 row)
 
      
@@ -442,7 +442,7 @@ WHERE colocationid IN
      WHERE logicalrelid = 'remove_node_reference_table'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype 
 --------------+------------+-------------------+------------------------
-      1370005 |          1 |                 1 |                      0
+        10004 |          1 |                 1 |                      0
 (1 row)
 
      
@@ -500,7 +500,7 @@ WHERE colocationid IN
      WHERE logicalrelid = 'remove_node_reference_table'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype 
 --------------+------------+-------------------+------------------------
-      1370005 |          1 |                 2 |                      0
+        10004 |          1 |                 2 |                      0
 (1 row)
 
 \c - - - :worker_1_port
@@ -558,7 +558,7 @@ WHERE colocationid IN
      WHERE logicalrelid = 'remove_node_reference_table'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype 
 --------------+------------+-------------------+------------------------
-      1370005 |          1 |                 1 |                      0
+        10004 |          1 |                 1 |                      0
 (1 row)
 
 --verify the data is inserted
@@ -629,7 +629,7 @@ WHERE colocationid IN
      WHERE logicalrelid = 'remove_node_reference_table'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype 
 --------------+------------+-------------------+------------------------
-      1370005 |          1 |                 2 |                      0
+        10004 |          1 |                 2 |                      0
 (1 row)
 
 \c - - - :worker_1_port
@@ -686,7 +686,7 @@ WHERE colocationid IN
      WHERE logicalrelid = 'remove_node_reference_table'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype 
 --------------+------------+-------------------+------------------------
-      1370005 |          1 |                 1 |                      0
+        10004 |          1 |                 1 |                      0
 (1 row)
 
      
@@ -753,7 +753,7 @@ WHERE colocationid IN
      WHERE logicalrelid = 'remove_node_reference_table'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype 
 --------------+------------+-------------------+------------------------
-      1370005 |          1 |                 2 |                      0
+        10004 |          1 |                 2 |                      0
 (1 row)
 
 BEGIN;
@@ -840,7 +840,7 @@ WHERE colocationid IN
      WHERE logicalrelid = 'remove_node_reference_table_schema.table1'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype 
 --------------+------------+-------------------+------------------------
-      1370004 |          1 |                 2 |                      0
+        10004 |          1 |                 2 |                      0
 (1 row)
 
      
@@ -897,7 +897,7 @@ WHERE colocationid IN
      WHERE logicalrelid = 'remove_node_reference_table_schema.table1'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype 
 --------------+------------+-------------------+------------------------
-      1370004 |          1 |                 1 |                      0
+        10004 |          1 |                 1 |                      0
 (1 row)
 
 \c - - - :worker_1_port
@@ -959,7 +959,7 @@ WHERE colocationid IN
      WHERE logicalrelid = 'remove_node_reference_table'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype 
 --------------+------------+-------------------+------------------------
-      1370004 |          1 |                 2 |                      0
+        10004 |          1 |                 2 |                      0
 (1 row)
 
 \c - - - :worker_1_port
@@ -1016,7 +1016,7 @@ WHERE colocationid IN
      WHERE logicalrelid = 'remove_node_reference_table'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype 
 --------------+------------+-------------------+------------------------
-      1370004 |          1 |                 2 |                      0
+        10004 |          1 |                 1 |                      0
 (1 row)
 
 \c - - - :worker_1_port

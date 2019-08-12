@@ -117,7 +117,7 @@ WHERE colocationid IN
      WHERE logicalrelid = 'replicate_reference_table_valid'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype 
 --------------+------------+-------------------+------------------------
-      1370000 |          1 |                 1 |                      0
+        10004 |          1 |                 1 |                      0
 (1 row)
 
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
@@ -147,7 +147,7 @@ WHERE colocationid IN
      WHERE logicalrelid = 'replicate_reference_table_valid'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype 
 --------------+------------+-------------------+------------------------
-      1370000 |          1 |                 2 |                      0
+        10004 |          1 |                 2 |                      0
 (1 row)
 
 -- test add same node twice
@@ -171,7 +171,7 @@ WHERE colocationid IN
      WHERE logicalrelid = 'replicate_reference_table_valid'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype 
 --------------+------------+-------------------+------------------------
-      1370000 |          1 |                 2 |                      0
+        10004 |          1 |                 2 |                      0
 (1 row)
 
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
@@ -200,7 +200,7 @@ WHERE colocationid IN
      WHERE logicalrelid = 'replicate_reference_table_valid'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype 
 --------------+------------+-------------------+------------------------
-      1370000 |          1 |                 2 |                      0
+        10004 |          1 |                 2 |                      0
 (1 row)
 
 DROP TABLE replicate_reference_table_valid;
@@ -237,7 +237,7 @@ WHERE colocationid IN
      WHERE logicalrelid = 'replicate_reference_table_rollback'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype 
 --------------+------------+-------------------+------------------------
-      1370001 |          1 |                 1 |                      0
+        10004 |          1 |                 1 |                      0
 (1 row)
 
 BEGIN;
@@ -268,7 +268,7 @@ WHERE colocationid IN
      WHERE logicalrelid = 'replicate_reference_table_rollback'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype 
 --------------+------------+-------------------+------------------------
-      1370001 |          1 |                 1 |                      0
+        10004 |          1 |                 1 |                      0
 (1 row)
 
 DROP TABLE replicate_reference_table_rollback;
@@ -299,7 +299,7 @@ WHERE colocationid IN
      WHERE logicalrelid = 'replicate_reference_table_commit'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype 
 --------------+------------+-------------------+------------------------
-      1370001 |          1 |                 1 |                      0
+        10004 |          1 |                 1 |                      0
 (1 row)
 
 BEGIN;
@@ -331,7 +331,7 @@ WHERE colocationid IN
      WHERE logicalrelid = 'replicate_reference_table_commit'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype 
 --------------+------------+-------------------+------------------------
-      1370001 |          1 |                 2 |                      0
+        10004 |          1 |                 2 |                      0
 (1 row)
 
 DROP TABLE replicate_reference_table_commit;
@@ -381,7 +381,7 @@ WHERE colocationid IN
      WHERE logicalrelid = 'replicate_reference_table_reference_one'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype 
 --------------+------------+-------------------+------------------------
-      1370002 |          1 |                 1 |                      0
+        10004 |          1 |                 1 |                      0
 (1 row)
 
 SELECT
@@ -393,7 +393,7 @@ WHERE
 ORDER BY logicalrelid;
               logicalrelid               | partmethod | colocationid | repmodel 
 -----------------------------------------+------------+--------------+----------
- replicate_reference_table_reference_one | n          |      1370002 | t
+ replicate_reference_table_reference_one | n          |        10004 | t
  replicate_reference_table_hash          | h          |      1360004 | c
 (2 rows)
 
@@ -443,7 +443,7 @@ WHERE colocationid IN
      WHERE logicalrelid = 'replicate_reference_table_reference_one'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype 
 --------------+------------+-------------------+------------------------
-      1370002 |          1 |                 2 |                      0
+        10004 |          1 |                 2 |                      0
 (1 row)
 
 SELECT
@@ -456,9 +456,9 @@ ORDER BY
 	logicalrelid;
               logicalrelid               | partmethod | colocationid | repmodel 
 -----------------------------------------+------------+--------------+----------
- replicate_reference_table_reference_one | n          |      1370002 | t
- replicate_reference_table_hash          | n          |      1370002 | t
- replicate_reference_table_reference_two | n          |      1370002 | t
+ replicate_reference_table_reference_one | n          |        10004 | t
+ replicate_reference_table_hash          | n          |        10004 | t
+ replicate_reference_table_reference_two | n          |        10004 | t
 (3 rows)
 
 DROP TABLE replicate_reference_table_reference_one;
@@ -542,7 +542,7 @@ WHERE colocationid IN
      WHERE logicalrelid = 'replicate_reference_table_drop'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype 
 --------------+------------+-------------------+------------------------
-      1370003 |          1 |                 1 |                      0
+        10004 |          1 |                 1 |                      0
 (1 row)
 
 BEGIN;
@@ -605,7 +605,7 @@ WHERE colocationid IN
      WHERE logicalrelid = 'replicate_reference_table_schema.table1'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype 
 --------------+------------+-------------------+------------------------
-      1370004 |          1 |                 1 |                      0
+        10004 |          1 |                 1 |                      0
 (1 row)
 
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
@@ -635,7 +635,7 @@ WHERE colocationid IN
      WHERE logicalrelid = 'replicate_reference_table_schema.table1'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype 
 --------------+------------+-------------------+------------------------
-      1370004 |          1 |                 2 |                      0
+        10004 |          1 |                 2 |                      0
 (1 row)
 
 DROP TABLE replicate_reference_table_schema.table1;

@@ -569,6 +569,11 @@ DROP USER mx_user;
 \c - - - :master_port
 CREATE TABLE mx_ref (col_1 int, col_2 text);
 SELECT create_reference_table('mx_ref');
+
+-- make sure that adding/removing nodes doesn't cause
+-- multiple colocation entries for reference tables
+SELECT count(*) FROM pg_dist_colocation WHERE distributioncolumntype = 0;
+
 \dt mx_ref
 
 \c - - - :worker_1_port
