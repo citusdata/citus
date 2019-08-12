@@ -262,6 +262,9 @@ citus_update_dist_object_oids(PG_FUNCTION_ARGS)
 
 	while (HeapTupleIsValid(heapTuple = systable_getnext(scanDescriptor)))
 	{
+		DistObjectAddress distAddress = { 0 };
+		ObjectAddress *address = NULL;
+
 		heap_deform_tuple(heapTuple, tupleDescriptor, datumArray, isnull);
 
 		/* after we find colocation group, we update it with new values */
@@ -269,14 +272,14 @@ citus_update_dist_object_oids(PG_FUNCTION_ARGS)
 		memset(isnull, false, sizeof(isnull));
 		memset(values, 0, sizeof(values));
 
-		DistObjectAddress distAddress = {
-			.classId = DatumGetObjectId(datumArray[Anum_pg_dist_object_classid - 1]),
-			.objectId = DatumGetObjectId(datumArray[Anum_pg_dist_object_objid - 1]),
-			.identifier =
-				TextDatumGetCString(datumArray[Anum_pg_dist_object_identifier - 1]),
-		};
+		distAddress.classId = DatumGetObjectId(
+			datumArray[Anum_pg_dist_object_classid - 1]);
+		distAddress.objectId = DatumGetObjectId(
+			datumArray[Anum_pg_dist_object_objid - 1]);
+		distAddress.identifier = TextDatumGetCString(
+			datumArray[Anum_pg_dist_object_identifier - 1]);
 
-		ObjectAddress *address = getObjectAddresFromCitus(&distAddress);
+		address = getObjectAddresFromCitus(&distAddress);
 
 		values[Anum_pg_dist_object_objid - 1] = ObjectIdGetDatum(address->objectId);
 		replace[Anum_pg_dist_object_objid - 1] = true;
