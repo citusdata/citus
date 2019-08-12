@@ -14,6 +14,7 @@
 #include "distributed/connection_management.h"
 
 /* errors which ExecuteRemoteCommand might return */
+#define RESPONSE_OKAY 0
 #define QUERY_SEND_FAILED 1
 #define RESPONSE_NOT_OKAY 2
 

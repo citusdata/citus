@@ -62,6 +62,8 @@ bool EnableDDLPropagation = true; /* ddl propagation is enabled */
 PropSetCmdBehavior PropagateSetCommands = PROPSETCMD_NONE; /* SET prop off */
 static bool shouldInvalidateForeignKeyGraph = false;
 static int activeAlterTables = 0;
+static int activeCreateExtension = 0;
+static int activeAlterExtension = 0;
 
 
 /* Local functions forward declarations for helper functions */
@@ -69,6 +71,8 @@ static void ExecuteDistributedDDLJob(DDLJob *ddlJob);
 static char * SetSearchPathToCurrentSearchPathCommand(void);
 static char * CurrentSearchPath(void);
 static void PostProcessUtility(Node *parsetree);
+
+static inline void trackStatementDepth(Node *parsetree, const bool increment);
 
 
 /*
@@ -337,25 +341,48 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		if (IsA(parsetree, DropStmt))
 		{
 			DropStmt *dropStatement = (DropStmt *) parsetree;
-			if (dropStatement->removeType == OBJECT_INDEX)
+			switch (dropStatement->removeType)
 			{
-				ddlJobs = PlanDropIndexStmt(dropStatement, queryString);
-			}
+				case OBJECT_INDEX:
+				{
+					ddlJobs = PlanDropIndexStmt(dropStatement, queryString);
+					break;
+				}
 
-			if (dropStatement->removeType == OBJECT_TABLE)
-			{
-				ProcessDropTableStmt(dropStatement);
-			}
+				case OBJECT_TABLE:
+				{
+					ProcessDropTableStmt(dropStatement);
+					break;
+				}
 
-			if (dropStatement->removeType == OBJECT_SCHEMA)
-			{
-				ProcessDropSchemaStmt(dropStatement);
-			}
+				case OBJECT_SCHEMA:
+				{
+					ProcessDropSchemaStmt(dropStatement);
+					break;
+				}
 
-			if (dropStatement->removeType == OBJECT_POLICY)
-			{
-				ddlJobs = PlanDropPolicyStmt(dropStatement, queryString);
+				case OBJECT_POLICY:
+				{
+					ddlJobs = PlanDropPolicyStmt(dropStatement, queryString);
+					break;
+				}
+
+				case OBJECT_TYPE:
+				{
+					ddlJobs = PlanDropTypeStmt(dropStatement, queryString);
+				}
+
+				default:
+				{
+					/* unsupported type, skipping*/
+				}
 			}
+		}
+
+		if (IsA(parsetree, AlterEnumStmt))
+		{
+			AlterEnumStmt *alterEnumStmt = (AlterEnumStmt *) parsetree;
+			ddlJobs = PlanAlterEnumStmt(alterEnumStmt, queryString);
 		}
 
 		if (IsA(parsetree, AlterTableStmt))
@@ -366,6 +393,11 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 				alterTableStmt->relkind == OBJECT_INDEX)
 			{
 				ddlJobs = PlanAlterTableStmt(alterTableStmt, queryString);
+			}
+
+			if (alterTableStmt->relkind == OBJECT_TYPE)
+			{
+				ddlJobs = PlanAlterTypeStmt(alterTableStmt, queryString);
 			}
 		}
 
@@ -496,29 +528,37 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 
 	PG_TRY();
 	{
-		if (IsA(parsetree, AlterTableStmt))
-		{
-			activeAlterTables++;
-		}
+		trackStatementDepth(parsetree, true);
 
 		standard_ProcessUtility(pstmt, queryString, context,
 								params, queryEnv, dest, completionTag);
 
-		if (IsA(parsetree, AlterTableStmt))
-		{
-			activeAlterTables--;
-		}
+		trackStatementDepth(parsetree, false);
 	}
 	PG_CATCH();
 	{
-		if (IsA(parsetree, AlterTableStmt))
-		{
-			activeAlterTables--;
-		}
-
+		trackStatementDepth(parsetree, false);
 		PG_RE_THROW();
 	}
 	PG_END_TRY();
+
+	/*
+	 * Post process for ddl statements
+	 */
+	if (EnableDDLPropagation)
+	{
+		if (IsA(parsetree, CompositeTypeStmt))
+		{
+			CompositeTypeStmt *compositeTypeStmt = (CompositeTypeStmt *) parsetree;
+			PlanCompositeTypeStmt(compositeTypeStmt, queryString);
+		}
+
+		if (IsA(parsetree, CreateEnumStmt))
+		{
+			CreateEnumStmt *createEnumStmt = (CreateEnumStmt *) parsetree;
+			PlanCreateEnumStmt(createEnumStmt, queryString);
+		}
+	}
 
 	/*
 	 * We only process CREATE TABLE ... PARTITION OF commands in the function below
@@ -844,6 +884,44 @@ DDLTaskList(Oid relationId, const char *commandString)
 
 
 /*
+ * trackStatementDepth keeps counters for certain parsetree statements. If no counter is
+ * kept for the parsetree this function is a no-op.
+ *
+ * When tracking statements depth keep in mind to increment call decrement in a PG_TRY
+ * block and also decrement in the PG_CATCH block.
+ */
+static inline void
+trackStatementDepth(Node *parsetree, const bool increment)
+{
+	const int diff = increment ? 1 : -1;
+
+	switch (parsetree->type)
+	{
+		case T_AlterTableStmt:
+		{
+			activeAlterTables += diff;
+			break;
+		}
+
+		case T_CreateExtensionStmt:
+		{
+			activeCreateExtension += diff;
+			break;
+		}
+
+		case T_AlterExtensionStmt:
+		{
+			activeAlterExtension += diff;
+			break;
+		}
+
+		default:
+		{ }
+	}
+}
+
+
+/*
  * AlterTableInProgress returns true if we're processing an ALTER TABLE command
  * right now.
  */
@@ -851,4 +929,25 @@ bool
 AlterTableInProgress(void)
 {
 	return activeAlterTables > 0;
+}
+
+
+bool
+CreateExtensionInProgess(void)
+{
+	return activeCreateExtension > 0;
+}
+
+
+bool
+AlterExtensionInProgess(void)
+{
+	return activeAlterExtension > 0;
+}
+
+
+bool
+ExtensionStmtInProgess(void)
+{
+	return CreateExtensionInProgess() || AlterExtensionInProgess();
 }

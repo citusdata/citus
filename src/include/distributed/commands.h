@@ -117,6 +117,18 @@ extern void ErrorIfUnsupportedConstraint(Relation relation, char distributionMet
 /* truncate.c - forward declarations */
 extern void ProcessTruncateStatement(TruncateStmt *truncateStatement);
 
+/* type.c - forward declarations */
+extern List * PlanCompositeTypeStmt(CompositeTypeStmt *stmt, const char *queryString);
+extern List * PlanAlterTypeStmt(AlterTableStmt *stmt, const char *queryString);
+extern List * PlanCreateEnumStmt(CreateEnumStmt *createEnumStmt, const char *queryString);
+extern List * PlanAlterEnumStmt(AlterEnumStmt *stmt, const char *queryString);
+extern List * PlanDropTypeStmt(DropStmt *stmt, const char *queryString);
+extern Node * RecreateTypeStatement(Oid typeOid);
+extern bool CompositeTypeExists(CompositeTypeStmt *stmt);
+extern bool EnumTypeExists(CreateEnumStmt *stmt);
+extern DropStmt * CompositeTypeStmtToDrop(CompositeTypeStmt *stmt);
+extern DropStmt * CreateEnumStmtToDrop(CreateEnumStmt *stmt);
+extern List * CreateTypeDDLCommandsIdempotent(const ObjectAddress *typeAddress);
 
 /* vacuum.c - froward declarations */
 extern void ProcessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand);

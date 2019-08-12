@@ -356,7 +356,8 @@ LogRemoteCommand(MultiConnection *connection, const char *command)
 	}
 
 	ereport(LOG, (errmsg("issuing %s", ApplyLogRedaction(command)),
-				  errdetail("on server %s:%d", connection->hostname, connection->port)));
+				  errdetail("on server %s@%s:%d", connection->user, connection->hostname,
+							connection->port)));
 }
 
 
@@ -440,8 +441,20 @@ ExecuteOptionalRemoteCommand(MultiConnection *connection, const char *command,
 		return RESPONSE_NOT_OKAY;
 	}
 
-	*result = localResult;
-	return 0;
+	/*
+	 * store result if result has been set, when the user is not interested in the result
+	 * a NULL pointer could be passed and the result will be cleared
+	 */
+	if (result)
+	{
+		*result = localResult;
+	}
+	else
+	{
+		PQclear(localResult);
+		ForgetResults(connection);
+	}
+	return RESPONSE_OKAY;
 }
 
 

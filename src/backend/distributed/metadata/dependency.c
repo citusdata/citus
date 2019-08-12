@@ -17,6 +17,7 @@
 #include "catalog/dependency.h"
 #include "catalog/indexing.h"
 #include "catalog/pg_depend.h"
+#include "catalog/pg_type.h"
 #include "distributed/metadata/dependency.h"
 #include "distributed/metadata/distobject.h"
 #include "utils/fmgroids.h"
@@ -311,6 +312,38 @@ SupportedDependencyByCitus(const ObjectAddress *address)
 		case OCLASS_SCHEMA:
 		{
 			return true;
+		}
+
+		case OCLASS_TYPE:
+		{
+			switch (get_typtype(address->objectId))
+			{
+				case TYPTYPE_ENUM:
+				case TYPTYPE_COMPOSITE:
+				{
+					return true;
+				}
+
+				case TYPTYPE_BASE:
+				{
+					/*
+					 * array types should be followed but not created, as they get created
+					 * by the original type.
+					 */
+					return type_is_array(address->objectId);
+				}
+
+				default:
+				{
+					/* type not supported */
+					return false;
+				}
+			}
+
+			/*
+			 * should be unreachable, break here is to make sure the function has a path
+			 * without return, instead of falling through to the next block */
+			break;
 		}
 
 		default:
