@@ -7,17 +7,20 @@ CREATE OR REPLACE FUNCTION pg_catalog.citus_prepare_pg_upgrade()
     SET search_path = pg_catalog
     AS $cppu$
 BEGIN
+    --
     -- backup citus catalog tables
-    CREATE TABLE public.pg_dist_authinfo AS SELECT * FROM pg_catalog.pg_dist_authinfo;
-    CREATE TABLE public.pg_dist_colocation AS SELECT * FROM pg_catalog.pg_dist_colocation;
-    CREATE TABLE public.pg_dist_local_group AS SELECT * FROM pg_catalog.pg_dist_local_group;
-    CREATE TABLE public.pg_dist_node AS SELECT * FROM pg_catalog.pg_dist_node;
-    CREATE TABLE public.pg_dist_node_metadata AS SELECT * FROM pg_catalog.pg_dist_node_metadata;
+    --
     CREATE TABLE public.pg_dist_partition AS SELECT * FROM pg_catalog.pg_dist_partition;
-    CREATE TABLE public.pg_dist_placement AS SELECT * FROM pg_catalog.pg_dist_placement;
-    CREATE TABLE public.pg_dist_poolinfo AS SELECT * FROM pg_catalog.pg_dist_poolinfo;
     CREATE TABLE public.pg_dist_shard AS SELECT * FROM pg_catalog.pg_dist_shard;
+    CREATE TABLE public.pg_dist_placement AS SELECT * FROM pg_catalog.pg_dist_placement;
+    CREATE TABLE public.pg_dist_node_metadata AS SELECT * FROM pg_catalog.pg_dist_node_metadata;
+    CREATE TABLE public.pg_dist_node AS SELECT * FROM pg_catalog.pg_dist_node;
+    CREATE TABLE public.pg_dist_local_group AS SELECT * FROM pg_catalog.pg_dist_local_group;
     CREATE TABLE public.pg_dist_transaction AS SELECT * FROM pg_catalog.pg_dist_transaction;
+    CREATE TABLE public.pg_dist_colocation AS SELECT * FROM pg_catalog.pg_dist_colocation;
+    -- enterprise catalog tables
+    CREATE TABLE public.pg_dist_authinfo AS SELECT * FROM pg_catalog.pg_dist_authinfo;
+    CREATE TABLE public.pg_dist_poolinfo AS SELECT * FROM pg_catalog.pg_dist_poolinfo;
 END;
 $cppu$;
 
@@ -35,19 +38,24 @@ DECLARE
     command text;
     trigger_name text;
 BEGIN
+    --
     -- restore citus catalog tables
-    INSERT INTO pg_catalog.pg_dist_authinfo SELECT * FROM public.pg_dist_authinfo;
-    INSERT INTO pg_catalog.pg_dist_colocation SELECT * FROM public.pg_dist_colocation;
-    INSERT INTO pg_catalog.pg_dist_local_group SELECT * FROM public.pg_dist_local_group;
-    INSERT INTO pg_catalog.pg_dist_node SELECT * FROM public.pg_dist_node;
-    INSERT INTO pg_catalog.pg_dist_node_metadata SELECT * FROM public.pg_dist_node_metadata;
+    --
     INSERT INTO pg_catalog.pg_dist_partition SELECT * FROM public.pg_dist_partition;
-    INSERT INTO pg_catalog.pg_dist_placement SELECT * FROM public.pg_dist_placement;
-    INSERT INTO pg_catalog.pg_dist_poolinfo SELECT * FROM public.pg_dist_poolinfo;
     INSERT INTO pg_catalog.pg_dist_shard SELECT * FROM public.pg_dist_shard;
+    INSERT INTO pg_catalog.pg_dist_placement SELECT * FROM public.pg_dist_placement;
+    INSERT INTO pg_catalog.pg_dist_node_metadata SELECT * FROM public.pg_dist_node_metadata;
+    INSERT INTO pg_catalog.pg_dist_node SELECT * FROM public.pg_dist_node;
+    INSERT INTO pg_catalog.pg_dist_local_group SELECT * FROM public.pg_dist_local_group;
     INSERT INTO pg_catalog.pg_dist_transaction SELECT * FROM public.pg_dist_transaction;
+    INSERT INTO pg_catalog.pg_dist_colocation SELECT * FROM public.pg_dist_colocation;
+    -- enterprise catalog tables
+    INSERT INTO pg_catalog.pg_dist_authinfo SELECT * FROM public.pg_dist_authinfo;
+    INSERT INTO pg_catalog.pg_dist_poolinfo SELECT * FROM public.pg_dist_poolinfo;
 
+    --
     -- drop backup tables
+    --
     DROP TABLE public.pg_dist_authinfo;
     DROP TABLE public.pg_dist_colocation;
     DROP TABLE public.pg_dist_local_group;
@@ -59,14 +67,18 @@ BEGIN
     DROP TABLE public.pg_dist_shard;
     DROP TABLE public.pg_dist_transaction;
 
+    --
     -- reset sequences
-    PERFORM setval('pg_catalog.pg_dist_colocationid_seq', (SELECT MAX(colocationid)+1 AS max_colocation_id FROM pg_dist_colocation), false);
+    --
+    PERFORM setval('pg_catalog.pg_dist_shardid_seq', (SELECT MAX(shardid)+1 AS max_shard_id FROM pg_dist_shard), false);
+    PERFORM setval('pg_catalog.pg_dist_placement_placementid_seq', (SELECT MAX(placementid)+1 AS max_placement_id FROM pg_dist_placement), false);
     PERFORM setval('pg_catalog.pg_dist_groupid_seq', (SELECT MAX(groupid)+1 AS max_group_id FROM pg_dist_node), false);
     PERFORM setval('pg_catalog.pg_dist_node_nodeid_seq', (SELECT MAX(nodeid)+1 AS max_node_id FROM pg_dist_node), false);
-    PERFORM setval('pg_catalog.pg_dist_placement_placementid_seq', (SELECT MAX(placementid)+1 AS max_placement_id FROM pg_dist_placement), false);
-    PERFORM setval('pg_catalog.pg_dist_shardid_seq', (SELECT MAX(shardid)+1 AS max_shard_id FROM pg_dist_shard), false);
+    PERFORM setval('pg_catalog.pg_dist_colocationid_seq', (SELECT MAX(colocationid)+1 AS max_colocation_id FROM pg_dist_colocation), false);
 
+    --
     -- register triggers
+    --
     FOR table_name IN SELECT logicalrelid FROM pg_catalog.pg_dist_partition
     LOOP
         trigger_name := 'truncate_trigger_' || table_name::oid;
@@ -76,7 +88,9 @@ BEGIN
         EXECUTE command;
     END LOOP;
 
+    --
     -- set dependencies
+    --
     INSERT INTO pg_depend
     SELECT
         'pg_class'::regclass::oid as classid,
