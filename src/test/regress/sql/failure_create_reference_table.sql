@@ -75,6 +75,8 @@ SET client_min_messages TO NOTICE;
 
 SELECT citus.mitmproxy('conn.allow()');
 DROP TABLE ref_table;
+DROP SCHEMA failure_reference_table;
+CREATE SCHEMA failure_reference_table;
 CREATE TABLE ref_table(id int);
 INSERT INTO ref_table VALUES(1),(2),(3);
 

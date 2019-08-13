@@ -78,6 +78,11 @@ check-failure-non-adaptive: all tempinstall-main
 	--server-option=citus.task_executor_type=real-time \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/failure_schedule $(EXTRA_TESTS)
 
+check-failure-non-adaptive-base: all tempinstall-main
+	$(pg_regress_multi_check) --load-extension=citus --mitmproxy \
+	--server-option=citus.task_executor_type=real-time \
+	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/failure_base_schedule $(EXTRA_TESTS)
+
 check-isolation-non-adaptive: all tempinstall-main
 	$(pg_regress_multi_check) --load-extension=citus --isolationtester \
 	--server-option=citus.task_executor_type=real-time \

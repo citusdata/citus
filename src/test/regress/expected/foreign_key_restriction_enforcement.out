@@ -1340,10 +1340,6 @@ CREATE TABLE reference_table(id int PRIMARY KEY);
 DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "reference_table_pkey" for table "reference_table"
 DEBUG:  building index "reference_table_pkey" on table "reference_table" serially
 SELECT create_reference_table('reference_table');
-DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
-DETAIL:  NOTICE from localhost:57638
-DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
-DETAIL:  NOTICE from localhost:57637
  create_reference_table 
 ------------------------
  

@@ -90,6 +90,7 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 	char *relationName = text_to_cstring(relationNameText);
 	uint64 shardId = INVALID_SHARD_ID;
 	uint32 attemptableNodeCount = 0;
+	ObjectAddress tableAddress = { 0 };
 
 	uint32 candidateNodeIndex = 0;
 	List *candidateNodeList = NIL;
@@ -108,12 +109,15 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 	CheckDistributedTable(relationId);
 
 	/*
-	 * Ensure schema exists on each worker node. We can not run this function
-	 * transactionally, since we may create shards over separate sessions and
-	 * shard creation depends on the schema being present and visible from all
-	 * sessions.
+	 * distributed tables might have dependencies on different objects, since we create
+	 * shards for a distributed table via multiple sessions these objects will be created
+	 * via their own connection and committed immediately so they become visible to all
+	 * sessions creating shards.
 	 */
-	EnsureSchemaForRelationExistsOnAllNodes(relationId);
+
+	/* TODO the dependencies are created outside of this transaction, the book keeping within */
+	ObjectAddressSet(tableAddress, RelationRelationId, relationId);
+	EnsureDependenciesExistsOnAllNodes(&tableAddress);
 
 	/* don't allow the table to be dropped */
 	LockRelationOid(relationId, AccessShareLock);

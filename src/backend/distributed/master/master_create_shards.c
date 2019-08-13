@@ -67,6 +67,7 @@ master_create_worker_shards(PG_FUNCTION_ARGS)
 	text *tableNameText = PG_GETARG_TEXT_P(0);
 	int32 shardCount = PG_GETARG_INT32(1);
 	int32 replicationFactor = PG_GETARG_INT32(2);
+	ObjectAddress tableAddress = { 0 };
 
 	Oid distributedTableId = ResolveRelationId(tableNameText, false);
 
@@ -77,12 +78,15 @@ master_create_worker_shards(PG_FUNCTION_ARGS)
 	CheckCitusVersion(ERROR);
 
 	/*
-	 * Ensure schema exists on each worker node. We can not run this function
-	 * transactionally, since we may create shards over separate sessions and
-	 * shard creation depends on the schema being present and visible from all
-	 * sessions.
+	 * distributed tables might have dependencies on different objects, since we create
+	 * shards for a distributed table via multiple sessions these objects will be created
+	 * via their own connection and committed immediately so they become visible to all
+	 * sessions creating shards.
 	 */
-	EnsureSchemaForRelationExistsOnAllNodes(distributedTableId);
+
+	/* TODO the dependencies are created outside of this transaction, the book keeping within */
+	ObjectAddressSet(tableAddress, RelationRelationId, distributedTableId);
+	EnsureDependenciesExistsOnAllNodes(&tableAddress);
 
 	CreateShardsWithRoundRobinPolicy(distributedTableId, shardCount, replicationFactor,
 									 useExclusiveConnections);

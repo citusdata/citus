@@ -455,6 +455,7 @@ ActivateNode(char *nodeName, int nodePort)
 
 	if (WorkerNodeIsPrimary(workerNode))
 	{
+		/* TODO replicate all dependencies in pg_dist_object */
 		ReplicateAllReferenceTablesToNode(nodeName, nodePort);
 	}
 

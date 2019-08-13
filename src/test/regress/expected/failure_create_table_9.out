@@ -584,6 +584,8 @@ SELECT run_command_on_workers($$SELECT count(*) FROM information_schema.tables W
 (2 rows)
 
 DROP TABLE test_table;
+DROP SCHEMA failure_create_table;
+CREATE SCHEMA failure_create_table;
 -- Test master_create_worker_shards with 2pc
 SET citus.multi_shard_commit_protocol TO "2pc";
 CREATE TABLE test_table_2(id int, value_1 int);
@@ -593,8 +595,8 @@ SELECT master_create_distributed_table('test_table_2', 'id', 'hash');
  
 (1 row)
 
--- Kill connection before sending query to the worker 
-SELECT citus.mitmproxy('conn.kill()');
+-- Kill connection before sending query to the worker
+SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED").kill()');
  mitmproxy 
 -----------
  

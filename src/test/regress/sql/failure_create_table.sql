@@ -204,14 +204,16 @@ SELECT count(*) FROM pg_dist_shard;
 SELECT run_command_on_workers($$SELECT count(*) FROM information_schema.tables WHERE table_schema = 'failure_create_table' and table_name LIKE 'test_table%' ORDER BY 1$$);
 
 DROP TABLE test_table;
+DROP SCHEMA failure_create_table;
+CREATE SCHEMA failure_create_table;
 
 -- Test master_create_worker_shards with 2pc
 SET citus.multi_shard_commit_protocol TO "2pc";
 CREATE TABLE test_table_2(id int, value_1 int);
 SELECT master_create_distributed_table('test_table_2', 'id', 'hash');
 
--- Kill connection before sending query to the worker 
-SELECT citus.mitmproxy('conn.kill()');
+-- Kill connection before sending query to the worker
+SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED").kill()');
 SELECT master_create_worker_shards('test_table_2', 4, 2);
 
 SELECT count(*) FROM pg_dist_shard;
