@@ -104,7 +104,12 @@ SELECT citus.mitmproxy('conn.allow()');
 SELECT count(*) FROM pg_dist_shard;
 SELECT run_command_on_workers($$SELECT count(*) FROM information_schema.tables WHERE table_schema = 'failure_create_table' and table_name LIKE 'test_table%' ORDER BY 1$$);
 
+-- drop tables and schema and recreate to start from a non-distributed schema again
 DROP TABLE temp_table;
+DROP TABLE test_table;
+DROP SCHEMA failure_create_table;
+CREATE SCHEMA failure_create_table;
+CREATE TABLE test_table(id int, value_1 int);
 
 -- Test inside transaction
 -- Kill connection before sending query to the worker 
@@ -143,7 +148,10 @@ SELECT citus.mitmproxy('conn.allow()');
 SELECT count(*) FROM pg_dist_shard;
 SELECT run_command_on_workers($$SELECT count(*) FROM information_schema.tables WHERE table_schema = 'failure_create_table' and table_name LIKE 'test_table%' ORDER BY 1$$);
 
+-- drop tables and schema and recreate to start from a non-distributed schema again
 DROP TABLE test_table;
+DROP SCHEMA failure_create_table;
+CREATE SCHEMA failure_create_table;
 CREATE TABLE test_table(id int, value_1 int);
 
 -- Test inside transaction and with 1PC
