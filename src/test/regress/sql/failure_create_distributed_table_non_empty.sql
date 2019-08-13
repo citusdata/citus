@@ -117,6 +117,10 @@ SELECT citus.mitmproxy('conn.allow()');
 
 SELECT recover_prepared_transactions();
 DROP TABLE test_table ;
+-- since we want to interrupt the schema creation again we need to drop and recreate
+-- for citus to redistribute the dependency
+DROP SCHEMA create_distributed_table_non_empty_failure;
+CREATE SCHEMA create_distributed_table_non_empty_failure;
 CREATE TABLE test_table(id int, value_1 int);
 INSERT INTO test_table VALUES (1,1),(2,2),(3,3),(4,4);
 
