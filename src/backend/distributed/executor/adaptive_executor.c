@@ -1635,9 +1635,11 @@ RunDistributedExecution(DistributedExecution *execution)
 			int eventCount = 0;
 			int eventIndex = 0;
 			ListCell *workerCell = NULL;
-			long timeout = NextEventTimeout(execution);
+			long timeout = 0;
 
 			SpeedUpSlowStartIfNecessary(execution);
+
+			timeout = NextEventTimeout(execution);
 
 			foreach(workerCell, execution->workerList)
 			{
