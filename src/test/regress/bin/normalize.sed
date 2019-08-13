@@ -55,9 +55,6 @@ s/.*Custom Plan Provider.*Citus.*/              \"Custom Plan Provider\": \"Citu
 s/.*Custom-Plan-Provide.*/\<Custom-Plan-Provider\>Citus Unified\<\/Custom-Plan-Provider\>     /g
 s/ +$//g
 
-# normalize shard ids in failure_vaccum
-s/10209[0-9] \|          3/10209x \|          3/g
-
 # normalize failed task ids
 s/ERROR:  failed to execute task [0-9]+/ERROR:  failed to execute task X/g
 
