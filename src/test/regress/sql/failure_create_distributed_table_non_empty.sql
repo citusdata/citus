@@ -206,6 +206,8 @@ SELECT run_command_on_workers($$SELECT count(*) FROM information_schema.tables W
 SELECT citus.mitmproxy('conn.allow()');
 DROP TABLE colocated_table;
 DROP TABLE test_table;
+DROP SCHEMA create_distributed_table_non_empty_failure;
+CREATE SCHEMA create_distributed_table_non_empty_failure;
 CREATE TABLE test_table(id int, value_1 int);
 INSERT INTO test_table VALUES (1,1),(2,2),(3,3),(4,4);
 SET citus.multi_shard_commit_protocol TO '1pc';
