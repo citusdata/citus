@@ -254,6 +254,8 @@ typedef struct DistributedExecution
 
 	/* statistics on distributed execution */
 	DistributedExecutionStats *executionStats;
+
+	int slowStartInterval;
 } DistributedExecution;
 
 /*
@@ -541,6 +543,7 @@ static WorkerPool * FindOrCreateWorkerPool(DistributedExecution *execution,
 										   char *nodeName, int nodePort);
 static WorkerSession * FindOrCreateWorkerSession(WorkerPool *workerPool,
 												 MultiConnection *connection);
+static void SpeedUpSlowStartIfNecessary(DistributedExecution *execution);
 static void ManageWorkerPool(WorkerPool *workerPool);
 static void CheckConnectionTimeout(WorkerPool *workerPool);
 static int UsableConnectionCount(WorkerPool *workerPool);
@@ -756,6 +759,8 @@ CreateDistributedExecution(RowModifyLevel modLevel, List *taskList, bool hasRetu
 
 	execution->connectionSetChanged = false;
 	execution->waitFlagsChanged = false;
+
+	execution->slowStartInterval = ExecutorSlowStartInterval;
 
 	return execution;
 }
@@ -1632,6 +1637,8 @@ RunDistributedExecution(DistributedExecution *execution)
 			ListCell *workerCell = NULL;
 			long timeout = NextEventTimeout(execution);
 
+			SpeedUpSlowStartIfNecessary(execution);
+
 			foreach(workerCell, execution->workerList)
 			{
 				WorkerPool *workerPool = lfirst(workerCell);
@@ -1755,6 +1762,37 @@ RunDistributedExecution(DistributedExecution *execution)
 	PG_END_TRY();
 }
 
+static void
+SpeedUpSlowStartIfNecessary(DistributedExecution *execution)
+{
+
+	/*
+	 * - No tasks has finished yet
+	 * - The slow start interval has not been already adjusted (or already disable by the user)
+	 * - It passed more than ExecutorSlowStartInterval until the first connection is established
+	 * -
+	 */
+	if (execution->unfinishedTaskCount == execution->totalTaskCount &&
+		execution->slowStartInterval > 0 &&
+		execution->executionStats->firstConnectionEstablishement > 0 &&
+		TimestampDifferenceExceeds(execution->executionStats->firstConnectionEstablishement,
+								  GetCurrentTimestamp(),
+								  ExecutorSlowStartInterval))
+		{
+			ListCell *workerCell = NULL;
+
+			execution->slowStartInterval = 0;
+
+			foreach(workerCell, execution->workerList)
+			{
+				WorkerPool *workerPool = lfirst(workerCell);
+
+				workerPool->maxNewConnectionsPerCycle = UINT32_MAX;
+			}
+		}
+
+}
+
 
 /*
  * ManageWorkerPool ensures the worker pool has the appropriate number of connections
@@ -1834,12 +1872,12 @@ ManageWorkerPool(WorkerPool *workerPool)
 		 */
 		newConnectionCount = Min(newConnectionsForReadyTasks, maxNewConnectionCount);
 
-		if (newConnectionCount > 0 && ExecutorSlowStartInterval > 0)
+		if (newConnectionCount > 0 && execution->slowStartInterval > 0)
 		{
 			TimestampTz now = GetCurrentTimestamp();
 
 			if (TimestampDifferenceExceeds(workerPool->lastConnectionOpenTime, now,
-										   ExecutorSlowStartInterval))
+										   execution->slowStartInterval))
 			{
 				newConnectionCount = Min(newConnectionCount,
 										 workerPool->maxNewConnectionsPerCycle);
@@ -2062,7 +2100,7 @@ NextEventTimeout(DistributedExecution *execution)
 			long timeSinceLastConnectMs =
 				MillisecondsBetweenTimestamps(workerPool->lastConnectionOpenTime, now);
 			long timeUntilSlowStartInterval =
-				ExecutorSlowStartInterval - timeSinceLastConnectMs;
+					execution->slowStartInterval - timeSinceLastConnectMs;
 
 			if (timeUntilSlowStartInterval < eventTimeout)
 			{
@@ -2120,6 +2158,7 @@ ConnectionStateMachine(WorkerSession *session)
 			case MULTI_CONNECTION_CONNECTING:
 			{
 				PostgresPollingStatusType pollMode;
+				DistributedExecutionStats *executionStats = execution->executionStats;
 
 				ConnStatusType status = PQstatus(connection->pgConn);
 				if (status == CONNECTION_OK)
@@ -2136,6 +2175,12 @@ ConnectionStateMachine(WorkerSession *session)
 											  WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE);
 
 					connection->connectionState = MULTI_CONNECTION_CONNECTED;
+
+					if (executionStats->firstConnectionEstablishement == 0)
+					{
+						executionStats->firstConnectionEstablishement = GetCurrentTimestamp();
+					}
+
 					break;
 				}
 				else if (status == CONNECTION_BAD)
@@ -2171,6 +2216,11 @@ ConnectionStateMachine(WorkerSession *session)
 											  WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE);
 
 					connection->connectionState = MULTI_CONNECTION_CONNECTED;
+
+					if (executionStats->firstConnectionEstablishement == 0)
+					{
+						executionStats->firstConnectionEstablishement = GetCurrentTimestamp();
+					}
 				}
 
 				break;

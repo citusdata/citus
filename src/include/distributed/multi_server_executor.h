@@ -120,6 +120,8 @@ typedef enum
 typedef struct DistributedExecutionStats
 {
 	uint64 totalIntermediateResultSize;
+
+	TimestampTz firstConnectionEstablishement;
 } DistributedExecutionStats;
 
 
