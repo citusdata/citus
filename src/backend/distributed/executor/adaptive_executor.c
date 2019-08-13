@@ -1764,10 +1764,10 @@ RunDistributedExecution(DistributedExecution *execution)
 	PG_END_TRY();
 }
 
+
 static void
 SpeedUpSlowStartIfNecessary(DistributedExecution *execution)
 {
-
 	/*
 	 * - No tasks has finished yet
 	 * - The slow start interval has not been already adjusted (or already disable by the user)
@@ -1777,22 +1777,22 @@ SpeedUpSlowStartIfNecessary(DistributedExecution *execution)
 	if (execution->unfinishedTaskCount == execution->totalTaskCount &&
 		execution->slowStartInterval > 0 &&
 		execution->executionStats->firstConnectionEstablishement > 0 &&
-		TimestampDifferenceExceeds(execution->executionStats->firstConnectionEstablishement,
-								  GetCurrentTimestamp(),
-								  ExecutorSlowStartInterval))
+		TimestampDifferenceExceeds(
+			execution->executionStats->firstConnectionEstablishement,
+			GetCurrentTimestamp(),
+			ExecutorSlowStartInterval))
+	{
+		ListCell *workerCell = NULL;
+
+		execution->slowStartInterval = 0;
+
+		foreach(workerCell, execution->workerList)
 		{
-			ListCell *workerCell = NULL;
+			WorkerPool *workerPool = lfirst(workerCell);
 
-			execution->slowStartInterval = 0;
-
-			foreach(workerCell, execution->workerList)
-			{
-				WorkerPool *workerPool = lfirst(workerCell);
-
-				workerPool->maxNewConnectionsPerCycle = UINT32_MAX;
-			}
+			workerPool->maxNewConnectionsPerCycle = UINT32_MAX;
 		}
-
+	}
 }
 
 
@@ -2102,7 +2102,7 @@ NextEventTimeout(DistributedExecution *execution)
 			long timeSinceLastConnectMs =
 				MillisecondsBetweenTimestamps(workerPool->lastConnectionOpenTime, now);
 			long timeUntilSlowStartInterval =
-					execution->slowStartInterval - timeSinceLastConnectMs;
+				execution->slowStartInterval - timeSinceLastConnectMs;
 
 			if (timeUntilSlowStartInterval < eventTimeout)
 			{
@@ -2180,7 +2180,8 @@ ConnectionStateMachine(WorkerSession *session)
 
 					if (executionStats->firstConnectionEstablishement == 0)
 					{
-						executionStats->firstConnectionEstablishement = GetCurrentTimestamp();
+						executionStats->firstConnectionEstablishement =
+							GetCurrentTimestamp();
 					}
 
 					break;
@@ -2221,7 +2222,8 @@ ConnectionStateMachine(WorkerSession *session)
 
 					if (executionStats->firstConnectionEstablishement == 0)
 					{
-						executionStats->firstConnectionEstablishement = GetCurrentTimestamp();
+						executionStats->firstConnectionEstablishement =
+							GetCurrentTimestamp();
 					}
 				}
 
@@ -2574,7 +2576,6 @@ TransactionStateMachine(WorkerSession *session)
 			}
 		}
 	}
-
 	/* iterate in case we can perform multiple transitions at once */
 	while (transaction->transactionState != currentState);
 }
