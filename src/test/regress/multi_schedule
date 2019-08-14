@@ -277,3 +277,7 @@ test: multi_task_string_size
 # ---------
 test: ssl_by_default
 
+# ---------
+# test features introduced in postgres 12
+# ---------
+test: pg12

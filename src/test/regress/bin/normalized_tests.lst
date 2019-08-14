@@ -37,6 +37,7 @@ multi_subquery_window_functions
 multi_subtransactions
 multi_task_assignment_policy
 multi_view
+pg12
 sql_procedure
 window_functions
 

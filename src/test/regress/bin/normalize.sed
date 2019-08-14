@@ -73,6 +73,9 @@ s/(job_[0-9]+\/task_[0-9]+\/p_[0-9]+\.)[0-9]+/\1xxxx/g
 /^LINE [0-9]+:.*$/d
 /^\s*\^\s*$/d
 
+# Ignore file paths
+s,"/(home|usr|lib)/(.+/)*([^/]*\.so)","\3",
+
 # pg12 changes
 s/Partitioned table "/Table "/g
 s/\) TABLESPACE pg_default$/\)/g
