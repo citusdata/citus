@@ -810,6 +810,7 @@ if ($vanillatest)
     $ENV{PGHOST} = $host;
     $ENV{PGPORT} = $masterPort;
     $ENV{PGUSER} = $user;
+	$ENV{VANILLATEST} = "1";
 
 	if (-f "$vanillaSchedule")
 	{
