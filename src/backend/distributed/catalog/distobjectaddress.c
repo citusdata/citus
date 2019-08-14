@@ -297,3 +297,30 @@ citus_update_dist_object_oids(PG_FUNCTION_ARGS)
 
 	PG_RETURN_NULL();
 }
+
+
+List *
+GetDistributedObjectAddressList(void)
+{
+	Relation pgDistObjectRel = NULL;
+	SysScanDesc pgDistObjectScan = NULL;
+	HeapTuple pgDistObjectTup = NULL;
+	List *objectAddressList = NIL;
+
+	pgDistObjectRel = heap_open(DistObjectRelationId(), AccessShareLock);
+	pgDistObjectScan = systable_beginscan(pgDistObjectRel, InvalidOid, false, NULL, 0,
+										  NULL);
+	while (HeapTupleIsValid(pgDistObjectTup = systable_getnext(pgDistObjectScan)))
+	{
+		Form_pg_dist_object pg_dist_object =
+			(Form_pg_dist_object) GETSTRUCT(pgDistObjectTup);
+		ObjectAddress *objectAddress = palloc0(sizeof(ObjectAddress));
+		ObjectAddressSet(*objectAddress, pg_dist_object->classid, pg_dist_object->objid);
+		objectAddressList = lappend(objectAddressList, objectAddress);
+	}
+
+	systable_endscan(pgDistObjectScan);
+	relation_close(pgDistObjectRel, AccessShareLock);
+
+	return objectAddressList;
+}

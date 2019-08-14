@@ -55,4 +55,6 @@ extern void recordObjectDistributed(const DistObjectAddress *distAddress);
 extern void dropObjectDistributedByAddress(const ObjectAddress *address);
 extern void dropObjectDistributed(const DistObjectAddress *distAddress);
 
+extern List * GetDistributedObjectAddressList(void);
+
 #endif /* CITUS_CATALOG_DISTOBJECTADDRESS_H */

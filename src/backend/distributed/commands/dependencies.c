@@ -127,3 +127,38 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 		}
 	}
 }
+
+
+void
+ReplicateAllDependenciesToNode(const char *nodeName, int nodePort)
+{
+	const uint64 connectionFlag = FORCE_NEW_CONNECTION;
+	ListCell *dependencyCell = NULL;
+	List *dependencies = NIL;
+	List *ddlCommands = NIL;
+	MultiConnection *connection = NULL;
+
+	/* collect all dependencies in creation order and get their ddl commands */
+	dependencies = GetDistributedObjectAddressList();
+	dependencies = OrderObjectAddressListInDependencyOrder(dependencies);
+
+	/* create all dependencies on all nodes and mark them as distributed */
+	foreach(dependencyCell, dependencies)
+	{
+		ObjectAddress *dependency = (ObjectAddress *) lfirst(dependencyCell);
+		ddlCommands = list_concat(ddlCommands,
+								  GetDependencyCreateDDLCommands(dependency));
+	}
+
+	if (list_length(ddlCommands) <= 0)
+	{
+		/* no commands to replicate dependencies to the new worker*/
+		return;
+	}
+
+	/* connect to the new host and create all applicable dependencies */
+	connection = GetNodeUserDatabaseConnection(connectionFlag, nodeName, nodePort,
+											   CitusExtensionOwnerName(), NULL);
+	ExecuteCriticalRemoteCommandList(connection, ddlCommands);
+	CloseConnection(connection);
+}

@@ -131,10 +131,9 @@ extern void CreateDistributedTable(Oid relationId, Var *distributionColumn,
 								   char distributionMethod, char *colocateWithTableName,
 								   bool viaDeprecatedAPI);
 extern void CreateTruncateTrigger(Oid relationId);
-extern void EnsureSchemaForRelationExistsOnNode(Oid relationId, char *nodeName,
-												int32 nodePort);
-extern void EnsureSchemaExistsOnNode(Oid schemaId, char *nodeName, int32 nodePort);
+
 extern void EnsureDependenciesExistsOnAllNodes(const ObjectAddress *target);
+extern void ReplicateAllDependenciesToNode(const char *nodeName, int nodePort);
 
 /* Remaining metadata utility functions  */
 extern char * TableOwner(Oid relationId);

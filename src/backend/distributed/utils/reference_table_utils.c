@@ -300,16 +300,6 @@ ReplicateShardToNode(ShardInterval *shardInterval, char *nodeName, int nodePort)
 																 missingWorkerOk);
 	char *tableOwner = TableOwner(shardInterval->relationId);
 
-
-	/*
-	 * Ensure schema exists on the worker node. We can not run this
-	 * function transactionally, since we may create shards over separate
-	 * sessions and shard creation depends on the schema being present and
-	 * visible from all sessions.
-	 */
-	EnsureSchemaForRelationExistsOnNode(shardInterval->relationId, nodeName, nodePort);
-
-
 	/*
 	 * Although this function is used for reference tables and reference table shard
 	 * placements always have shardState = FILE_FINALIZED, in case of an upgrade of
