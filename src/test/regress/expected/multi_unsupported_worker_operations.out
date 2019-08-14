@@ -159,8 +159,8 @@ SELECT count(*) FROM mx_table;
      5
 (1 row)
 
--- master_add_node
-SELECT 1 FROM master_add_node('localhost', 5432);
+-- master_add_inactive_node
+SELECT 1 FROM master_add_inactive_node('localhost', 5432);
 ERROR:  operation is not allowed on this node
 HINT:  Connect to the coordinator and run it again.
 SELECT count(1) FROM pg_dist_node WHERE nodename='localhost' AND nodeport=5432;
@@ -172,7 +172,7 @@ SELECT count(1) FROM pg_dist_node WHERE nodename='localhost' AND nodeport=5432;
 -- master_remove_node
 \c - - - :master_port
 DROP INDEX mx_test_uniq_index;
-SELECT 1 FROM master_add_node('localhost', 5432);
+SELECT 1 FROM master_add_inactive_node('localhost', 5432);
  ?column? 
 ----------
         1

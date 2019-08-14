@@ -100,15 +100,15 @@ SELECT count(*) FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement WHERE lo
 SELECT master_apply_delete_command('DELETE FROM mx_table');
 SELECT count(*) FROM mx_table;
 
--- master_add_node
+-- master_add_inactive_node
 
-SELECT 1 FROM master_add_node('localhost', 5432);
+SELECT 1 FROM master_add_inactive_node('localhost', 5432);
 SELECT count(1) FROM pg_dist_node WHERE nodename='localhost' AND nodeport=5432;
 
 -- master_remove_node
 \c - - - :master_port
 DROP INDEX mx_test_uniq_index;
-SELECT 1 FROM master_add_node('localhost', 5432);
+SELECT 1 FROM master_add_inactive_node('localhost', 5432);
 
 \c - - - :worker_1_port
 SELECT master_remove_node('localhost', 5432);
