@@ -2803,6 +2803,14 @@ ProcessCopyStmt(CopyStmt *copyStatement, char *completionTag, const char *queryS
 		{
 			if (copyStatement->is_from)
 			{
+#if PG_VERSION_NUM >= 120000
+				if (copyStatement->whereClause)
+				{
+					ereport(ERROR, (errmsg(
+										"Citus does not support COPY FROM with WHERE")));
+				}
+#endif
+
 				/* check permissions, we're bypassing postgres' normal checks */
 				if (!isCopyFromWorker)
 				{
@@ -2812,7 +2820,7 @@ ProcessCopyStmt(CopyStmt *copyStatement, char *completionTag, const char *queryS
 				CitusCopyFrom(copyStatement, completionTag);
 				return NULL;
 			}
-			else if (!copyStatement->is_from)
+			else
 			{
 				/*
 				 * The copy code only handles SELECTs in COPY ... TO on master tables,
