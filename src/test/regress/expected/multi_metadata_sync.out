@@ -1251,6 +1251,14 @@ SELECT create_reference_table('mx_ref');
  
 (1 row)
 
+-- make sure that adding/removing nodes doesn't cause
+-- multiple colocation entries for reference tables
+SELECT count(*) FROM pg_dist_colocation WHERE distributioncolumntype = 0;
+ count 
+-------
+     1
+(1 row)
+
 \dt mx_ref
          List of relations
  Schema |  Name  | Type  |  Owner   

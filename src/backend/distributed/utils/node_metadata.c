@@ -284,6 +284,12 @@ master_disable_node(PG_FUNCTION_ARGS)
 
 	SetNodeState(nodeName, nodePort, isActive);
 
+	if (WorkerNodeIsPrimary(workerNode))
+	{
+		UpdateColocationGroupReplicationFactorForReferenceTables(
+			ActivePrimaryNodeCount());
+	}
+
 	PG_RETURN_VOID();
 }
 
@@ -875,7 +881,6 @@ RemoveNodeFromCluster(char *nodeName, int32 nodePort)
 	const bool onlyConsiderActivePlacements = false;
 	char *nodeDeleteCommand = NULL;
 	WorkerNode *workerNode = NULL;
-	List *referenceTableList = NIL;
 	uint32 deletedNodeId = INVALID_PLACEMENT_ID;
 
 	EnsureCoordinator();
@@ -908,25 +913,10 @@ RemoveNodeFromCluster(char *nodeName, int32 nodePort)
 
 	DeleteNodeRow(nodeName, nodePort);
 
-	/*
-	 * After deleting reference tables placements, we will update replication factor
-	 * column for colocation group of reference tables so that replication factor will
-	 * be equal to worker count.
-	 */
 	if (WorkerNodeIsPrimary(workerNode))
 	{
-		referenceTableList = ReferenceTableOidList();
-		if (list_length(referenceTableList) != 0)
-		{
-			Oid firstReferenceTableId = linitial_oid(referenceTableList);
-			uint32 referenceTableColocationId = TableColocationId(firstReferenceTableId);
-
-			List *workerNodeList = ActivePrimaryNodeList();
-			int workerCount = list_length(workerNodeList);
-
-			UpdateColocationGroupReplicationFactor(referenceTableColocationId,
-												   workerCount);
-		}
+		UpdateColocationGroupReplicationFactorForReferenceTables(
+			ActivePrimaryNodeCount());
 	}
 
 	nodeDeleteCommand = NodeDeleteCommand(deletedNodeId);

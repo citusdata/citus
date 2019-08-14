@@ -1253,61 +1253,63 @@ UpdateShardPlacementState(uint64 placementId, char shardState)
 
 
 /*
- * UpdateColocationGroupReplicationFactor finds colocation group record for given
- * colocationId and updates its replication factor to given replicationFactor value.
+ * UpdateColocationGroupReplicationFactorForReferenceTables updates the
+ * replicationFactor for the pg_dist_colocation record for reference tables.
  * Since we do not cache pg_dist_colocation table, we do not need to invalidate the
  * cache after updating replication factor.
  */
 void
-UpdateColocationGroupReplicationFactor(uint32 colocationId, int replicationFactor)
+UpdateColocationGroupReplicationFactorForReferenceTables(int replicationFactor)
 {
 	Relation pgDistColocation = NULL;
 	SysScanDesc scanDescriptor = NULL;
 	ScanKeyData scanKey[1];
 	int scanKeyCount = 1;
-	bool indexOK = true;
+	bool indexOK = false;
 	HeapTuple heapTuple = NULL;
-	HeapTuple newHeapTuple = NULL;
 	TupleDesc tupleDescriptor = NULL;
 
-	Datum values[Natts_pg_dist_colocation];
-	bool isnull[Natts_pg_dist_colocation];
-	bool replace[Natts_pg_dist_colocation];
-
-	/* we first search for colocation group by its colocation id */
+	/*
+	 * All reference tables share a colocation entry with:
+	 * shardCount = 1, replicationFactor = activeWorkerCount, distributiontype = InvalidOid
+	 * Find the record based on distributiontype = InvalidOid, as this uniquely identifies the group.
+	 */
 	pgDistColocation = heap_open(DistColocationRelationId(), RowExclusiveLock);
 	tupleDescriptor = RelationGetDescr(pgDistColocation);
-	ScanKeyInit(&scanKey[0], Anum_pg_dist_colocation_colocationid, BTEqualStrategyNumber,
-				F_OIDEQ, ObjectIdGetDatum(colocationId));
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_colocation_distributioncolumntype,
+				BTEqualStrategyNumber, F_OIDEQ, ObjectIdGetDatum(InvalidOid));
 
 	scanDescriptor = systable_beginscan(pgDistColocation,
-										DistColocationColocationidIndexId(), indexOK,
+										InvalidOid, indexOK,
 										NULL, scanKeyCount, scanKey);
 
 	heapTuple = systable_getnext(scanDescriptor);
-	if (!HeapTupleIsValid(heapTuple))
+	if (HeapTupleIsValid(heapTuple))
 	{
-		ereport(ERROR, (errcode(ERRCODE_UNDEFINED_OBJECT),
-						errmsg("could not find valid entry for colocation group "
-							   "%d", colocationId)));
+		/* after finding the group, update its replication factor */
+		/* if it doesn't exist, no worries, it'll be created when needed */
+		HeapTuple newHeapTuple = NULL;
+		Datum values[Natts_pg_dist_colocation];
+		bool isnull[Natts_pg_dist_colocation];
+		bool replace[Natts_pg_dist_colocation];
+
+		memset(replace, false, sizeof(replace));
+		memset(isnull, false, sizeof(isnull));
+		memset(values, 0, sizeof(values));
+
+		values[Anum_pg_dist_colocation_replicationfactor - 1] = Int32GetDatum(
+			replicationFactor);
+		replace[Anum_pg_dist_colocation_replicationfactor - 1] = true;
+
+		newHeapTuple = heap_modify_tuple(heapTuple, tupleDescriptor, values, isnull,
+										 replace);
+
+		CatalogTupleUpdate(pgDistColocation, &newHeapTuple->t_self, newHeapTuple);
+
+		CommandCounterIncrement();
+
+		heap_freetuple(newHeapTuple);
 	}
-
-	/* after we find colocation group, we update it with new values */
-	memset(replace, false, sizeof(replace));
-	memset(isnull, false, sizeof(isnull));
-	memset(values, 0, sizeof(values));
-
-	values[Anum_pg_dist_colocation_replicationfactor - 1] = Int32GetDatum(
-		replicationFactor);
-	replace[Anum_pg_dist_colocation_replicationfactor - 1] = true;
-
-	newHeapTuple = heap_modify_tuple(heapTuple, tupleDescriptor, values, isnull, replace);
-
-	CatalogTupleUpdate(pgDistColocation, &newHeapTuple->t_self, newHeapTuple);
-
-	CommandCounterIncrement();
-
-	heap_freetuple(newHeapTuple);
 
 	systable_endscan(scanDescriptor);
 	heap_close(pgDistColocation, NoLock);

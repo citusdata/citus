@@ -180,7 +180,7 @@ WHERE
     logicalrelid = 'upgrade_reference_table_append'::regclass;
  partmethod | partkeyisnull | colocationid | repmodel 
 ------------+---------------+--------------+----------
- n          | t             |        10005 | t
+ n          | t             |        10004 | t
 (1 row)
 
 SELECT
@@ -202,7 +202,7 @@ WHERE colocationid IN
      WHERE logicalrelid = 'upgrade_reference_table_append'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype 
 --------------+------------+-------------------+------------------------
-        10005 |          1 |                 2 |                      0
+        10004 |          1 |                 2 |                      0
 (1 row)
 
 SELECT
@@ -293,7 +293,7 @@ WHERE
     logicalrelid = 'upgrade_reference_table_one_worker'::regclass;
  partmethod | partkeyisnull | colocationid | repmodel 
 ------------+---------------+--------------+----------
- n          | t             |        10005 | t
+ n          | t             |        10004 | t
 (1 row)
 
 SELECT
@@ -315,7 +315,7 @@ WHERE colocationid IN
      WHERE logicalrelid = 'upgrade_reference_table_one_worker'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype 
 --------------+------------+-------------------+------------------------
-        10005 |          1 |                 2 |                      0
+        10004 |          1 |                 2 |                      0
 (1 row)
 
 SELECT
@@ -409,7 +409,7 @@ WHERE
     logicalrelid = 'upgrade_reference_table_one_unhealthy'::regclass;
  partmethod | partkeyisnull | colocationid | repmodel 
 ------------+---------------+--------------+----------
- n          | t             |        10005 | t
+ n          | t             |        10004 | t
 (1 row)
 
 SELECT
@@ -431,7 +431,7 @@ WHERE colocationid IN
      WHERE logicalrelid = 'upgrade_reference_table_one_unhealthy'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype 
 --------------+------------+-------------------+------------------------
-        10005 |          1 |                 2 |                      0
+        10004 |          1 |                 2 |                      0
 (1 row)
 
 SELECT
@@ -523,7 +523,7 @@ WHERE
     logicalrelid = 'upgrade_reference_table_both_healthy'::regclass;
  partmethod | partkeyisnull | colocationid | repmodel 
 ------------+---------------+--------------+----------
- n          | t             |        10005 | t
+ n          | t             |        10004 | t
 (1 row)
 
 SELECT
@@ -545,7 +545,7 @@ WHERE colocationid IN
      WHERE logicalrelid = 'upgrade_reference_table_both_healthy'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype 
 --------------+------------+-------------------+------------------------
-        10005 |          1 |                 2 |                      0
+        10004 |          1 |                 2 |                      0
 (1 row)
 
 SELECT
@@ -752,7 +752,7 @@ WHERE
     logicalrelid = 'upgrade_reference_table_transaction_commit'::regclass;
  partmethod | partkeyisnull | colocationid | repmodel 
 ------------+---------------+--------------+----------
- n          | t             |        10005 | t
+ n          | t             |        10004 | t
 (1 row)
 
 SELECT
@@ -774,7 +774,7 @@ WHERE colocationid IN
      WHERE logicalrelid = 'upgrade_reference_table_transaction_commit'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype 
 --------------+------------+-------------------+------------------------
-        10005 |          1 |                 2 |                      0
+        10004 |          1 |                 2 |                      0
 (1 row)
 
 SELECT
@@ -1001,7 +1001,7 @@ WHERE
     logicalrelid = 'upgrade_reference_table_mx'::regclass;
  partmethod | partkeyisnull | colocationid | repmodel 
 ------------+---------------+--------------+----------
- n          | t             |        10005 | t
+ n          | t             |        10004 | t
 (1 row)
 
 SELECT
@@ -1023,7 +1023,7 @@ WHERE colocationid IN
      WHERE logicalrelid = 'upgrade_reference_table_mx'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype 
 --------------+------------+-------------------+------------------------
-        10005 |          1 |                 2 |                      0
+        10004 |          1 |                 2 |                      0
 (1 row)
 
 SELECT
@@ -1051,7 +1051,7 @@ WHERE
     logicalrelid = 'upgrade_reference_table_mx'::regclass;
  partmethod | partkeyisnull | colocationid | repmodel 
 ------------+---------------+--------------+----------
- n          | t             |        10005 | t
+ n          | t             |        10004 | t
 (1 row)
 
 SELECT
