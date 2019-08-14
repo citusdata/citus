@@ -1,15 +1,22 @@
 /* citus--8.3-1--8.4-1 */
 
 /* bump version to 8.4-1 */
-CREATE OR REPLACE FUNCTION citus_update_dist_object_oids()
-  RETURNS bool
+CREATE SCHEMA IF NOT EXISTS citus_internal;
+
+CREATE OR REPLACE FUNCTION citus_internal.prepare_pg_upgrade_pg_dist_object()
+  RETURNS void
   LANGUAGE C STRICT
-  AS 'MODULE_PATHNAME', $$citus_update_dist_object_oids$$;
+  AS 'MODULE_PATHNAME', 'citus_prepare_pg_upgrade_pg_dist_object';
+
+CREATE OR REPLACE FUNCTION citus_internal.finish_pg_upgrade_pg_dist_object()
+  RETURNS void
+  LANGUAGE C STRICT
+  AS 'MODULE_PATHNAME', 'citus_finish_pg_upgrade_pg_dist_object';
 
 CREATE TABLE citus.pg_dist_object (
     classid oid NOT NULL,
     objid oid NOT NULL,
-    identifier text NOT NULL
+    identifier text DEFAULT NULL -- used to store a stable identifier during pg_upgrade
 );
 
 GRANT USAGE ON SCHEMA citus TO public;
@@ -83,6 +90,8 @@ BEGIN
     -- enterprise catalog tables
     CREATE TABLE public.pg_dist_authinfo AS SELECT * FROM pg_catalog.pg_dist_authinfo;
     CREATE TABLE public.pg_dist_poolinfo AS SELECT * FROM pg_catalog.pg_dist_poolinfo;
+
+    PERFORM citus_internal.prepare_pg_upgrade_pg_dist_object();
 END;
 $cppu$;
 
@@ -164,7 +173,7 @@ BEGIN
         'n' as deptype
     FROM pg_catalog.pg_dist_partition p;
 
-    PERFORM citus_update_dist_object_oids();
+    PERFORM citus_internal.finish_pg_upgrade_pg_dist_object();
 END;
 $cppu$;
 

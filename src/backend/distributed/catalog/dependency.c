@@ -21,7 +21,7 @@
 #include "utils/lsyscache.h"
 
 #include "distributed/dist_catalog/dependency.h"
-#include "distributed/dist_catalog/distobjectaddress.h"
+#include "distributed/dist_catalog/distobject.h"
 
 
 static bool SupportedDependencyByCitus(const ObjectAddress *toFollow);
@@ -306,7 +306,7 @@ follow_get_dependencies_for_object(void *context, const Form_pg_depend pg_depend
 		return false;
 	}
 
-	if (isObjectDistributedByAddress(&address))
+	if (isObjectDistributed(&address))
 	{
 		return false;
 	}

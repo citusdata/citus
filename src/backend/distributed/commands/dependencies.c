@@ -19,7 +19,7 @@
 #include "distributed/metadata_sync.h"
 #include "distributed/commands.h"
 #include "distributed/remote_commands.h"
-#include "distributed/dist_catalog/distobjectaddress.h"
+#include "distributed/dist_catalog/distobject.h"
 
 static List * GetDependencyCreateDDLCommands(const ObjectAddress *dependency);
 
@@ -92,7 +92,7 @@ EnsureDependenciesExistsOnAllNodes(const ObjectAddress *target)
 		}
 
 		/* mark the object as distributed in this transaction */
-		recordObjectDistributedByAddress(dependency);
+		recordObjectDistributed(dependency);
 	}
 
 	foreach(connectionCell, connections)
