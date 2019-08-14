@@ -20,6 +20,7 @@
 #include "nodes/parsenodes.h"
 #include "storage/fd.h"
 #include "utils/array.h"
+#include "distributed/version_compat.h"
 
 
 /* Number of rows to prefetch when reading data with a cursor */
@@ -79,6 +80,7 @@ typedef struct HashPartitionContext
 	FmgrInfo *comparisonFunction;
 	ShardInterval **syntheticShardIntervalArray;
 	uint32 partitionCount;
+	Oid collation;
 	bool hasUniformHashDistribution;
 } HashPartitionContext;
 

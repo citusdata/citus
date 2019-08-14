@@ -21,6 +21,7 @@
 #include "distributed/multi_physical_planner.h"
 #include "distributed/distributed_planner.h"
 #include "distributed/multi_server_executor.h"
+#include "distributed/version_compat.h"
 #include "distributed/worker_protocol.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
@@ -51,6 +52,8 @@ static bool UseGroupAggregateWithHLL(Query *masterQuery);
 static bool QueryContainsAggregateWithHLL(Query *query);
 static Plan * BuildDistinctPlan(Query *masterQuery, Plan *subPlan);
 static List * PrepareTargetListForNextPlan(List *targetList);
+static Agg * makeAggNode(List *groupClauseList, List *havingQual,
+						 AggStrategy aggrStrategy, List *queryTargetList, Plan *subPlan);
 
 
 /*
@@ -267,7 +270,6 @@ BuildAggregatePlan(Query *masterQuery, Plan *subPlan)
 	Agg *aggregatePlan = NULL;
 	AggStrategy aggregateStrategy = AGG_PLAIN;
 	AggClauseCosts aggregateCosts;
-	AttrNumber *groupColumnIdArray = NULL;
 	List *aggregateTargetList = NIL;
 	List *groupColumnList = NIL;
 	List *aggregateColumnList = NIL;
@@ -275,9 +277,7 @@ BuildAggregatePlan(Query *masterQuery, Plan *subPlan)
 	List *columnList = NIL;
 	ListCell *columnCell = NULL;
 	Node *havingQual = NULL;
-	Oid *groupColumnOpArray = NULL;
 	uint32 groupColumnCount = 0;
-	const long rowEstimate = 10;
 
 	/* assert that we need to build an aggregate plan */
 	Assert(masterQuery->hasAggs || masterQuery->groupClause);
@@ -353,17 +353,11 @@ BuildAggregatePlan(Query *masterQuery, Plan *subPlan)
 		{
 			aggregateStrategy = AGG_HASHED;
 		}
-
-		/* get column indexes that are being grouped */
-		groupColumnIdArray = extract_grouping_cols(groupColumnList, subPlan->targetlist);
-		groupColumnOpArray = extract_grouping_ops(groupColumnList);
 	}
 
 	/* finally create the plan */
-	aggregatePlan = make_agg(aggregateTargetList, (List *) havingQual, aggregateStrategy,
-							 AGGSPLIT_SIMPLE, groupColumnCount, groupColumnIdArray,
-							 groupColumnOpArray, NIL, NIL,
-							 rowEstimate, subPlan);
+	aggregatePlan = makeAggNode(groupColumnList, (List *) havingQual,
+								aggregateStrategy, aggregateTargetList, subPlan);
 
 	/* just for reproducible costs between different PostgreSQL versions */
 	aggregatePlan->plan.startup_cost = 0;
@@ -527,17 +521,8 @@ BuildDistinctPlan(Query *masterQuery, Plan *subPlan)
 
 	if (enable_hashagg && distinctClausesHashable && !hasDistinctAggregate)
 	{
-		const long rowEstimate = 10;  /* using the same value as BuildAggregatePlan() */
-		AttrNumber *distinctColumnIdArray = extract_grouping_cols(distinctClauseList,
-																  subPlan->targetlist);
-		Oid *distinctColumnOpArray = extract_grouping_ops(distinctClauseList);
-		uint32 distinctClauseCount = list_length(distinctClauseList);
-
-		distinctPlan = (Plan *) make_agg(targetList, NIL, AGG_HASHED,
-										 AGGSPLIT_SIMPLE, distinctClauseCount,
-										 distinctColumnIdArray,
-										 distinctColumnOpArray, NIL, NIL,
-										 rowEstimate, subPlan);
+		distinctPlan = (Plan *) makeAggNode(distinctClauseList, NIL, AGG_HASHED,
+											targetList, subPlan);
 	}
 	else
 	{
@@ -580,4 +565,37 @@ PrepareTargetListForNextPlan(List *targetList)
 	}
 
 	return newtargetList;
+}
+
+
+/*
+ * makeAggNode creates a "Agg" plan node. groupClauseList is a list of
+ * SortGroupClause's.
+ */
+static Agg *
+makeAggNode(List *groupClauseList, List *havingQual, AggStrategy aggrStrategy,
+			List *queryTargetList, Plan *subPlan)
+{
+	Agg *aggNode = NULL;
+	int groupColumnCount = list_length(groupClauseList);
+	AttrNumber *groupColumnIdArray =
+		extract_grouping_cols(groupClauseList, subPlan->targetlist);
+	Oid *groupColumnOpArray = extract_grouping_ops(groupClauseList);
+	const int rowEstimate = 10;
+
+#if (PG_VERSION_NUM >= 120000)
+	aggNode = make_agg(queryTargetList, havingQual, aggrStrategy,
+					   AGGSPLIT_SIMPLE, groupColumnCount, groupColumnIdArray,
+					   groupColumnOpArray,
+					   extract_grouping_collations(groupClauseList,
+												   subPlan->targetlist),
+					   NIL, NIL, rowEstimate, subPlan);
+#else
+	aggNode = make_agg(queryTargetList, havingQual, aggrStrategy,
+					   AGGSPLIT_SIMPLE, groupColumnCount, groupColumnIdArray,
+					   groupColumnOpArray,
+					   NIL, NIL, rowEstimate, subPlan);
+#endif
+
+	return aggNode;
 }
