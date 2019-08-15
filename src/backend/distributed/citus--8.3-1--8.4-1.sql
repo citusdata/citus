@@ -19,6 +19,9 @@ CREATE TABLE citus.pg_dist_object (
     identifier text DEFAULT NULL -- used to store a stable identifier during pg_upgrade
 );
 
+CREATE INDEX citus.pg_dist_object_classid_objid_index ON
+    citus.pg_dist_object USING btree(classid, objid);
+
 GRANT USAGE ON SCHEMA citus TO public;
 GRANT SELECT ON citus.pg_dist_object TO public;
 GRANT DELETE ON citus.pg_dist_object TO public;

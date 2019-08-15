@@ -115,6 +115,7 @@ typedef struct MetadataCacheData
 	Oid distNodeNodeIdIndexId;
 	Oid distLocalGroupRelationId;
 	Oid distObjectRelationId;
+	Oid distObjectClassIDObjectIDIndexId;
 	Oid distColocationRelationId;
 	Oid distColocationConfigurationIndexId;
 	Oid distColocationColocationidIndexId;
@@ -1826,6 +1827,18 @@ DistObjectRelationId(void)
 {
 	CachedRelationNamespaceLookup("pg_dist_object", CitusCatalogNamespaceId(),
 								  &MetadataCache.distObjectRelationId);
+
+	return MetadataCache.distObjectRelationId;
+}
+
+
+/* return oid of pg_dist_object_classid_objid_index */
+Oid
+DistObjectClassIDObjectIDIndexId(void)
+{
+	CachedRelationNamespaceLookup("pg_dist_object_classid_objid_index",
+								  CitusCatalogNamespaceId(),
+								  &MetadataCache.distObjectClassIDObjectIDIndexId);
 
 	return MetadataCache.distObjectRelationId;
 }
@@ -3597,6 +3610,10 @@ TupleToShardInterval(HeapTuple heapTuple, TupleDesc tupleDescriptor, Oid interva
 }
 
 
+/*
+ * CachedNamespaceLookup performs a cached lookup for the namespace (schema), with the
+ * result cached in cachedOid.
+ */
 static void
 CachedNamespaceLookup(const char *nspname, Oid *cachedOid)
 {

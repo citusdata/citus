@@ -24,7 +24,7 @@
 #include "distributed/dist_catalog/distobject.h"
 
 
-static bool SupportedDependencyByCitus(const ObjectAddress *toFollow);
+static bool SupportedDependencyByCitus(const ObjectAddress *address);
 static bool IsObjectAddressInList(const ObjectAddress *findAddress, List *addressList);
 static bool IsObjectAddressOwnedByExtension(const ObjectAddress *target);
 
@@ -33,8 +33,8 @@ static void recurse_pg_depend(const ObjectAddress *target,
 							  void (*apply)(void *context, const Form_pg_depend row),
 							  void *context);
 static bool follow_order_object_address(void *context, const Form_pg_depend pg_depend);
-static bool follow_get_dependencies_for_object(void *context, const Form_pg_depend
-											   pg_depend);
+static bool follow_get_dependencies_for_object(void *context,
+											   const Form_pg_depend pg_depend);
 static void apply_add_to_target_list(void *context, const Form_pg_depend pg_depend);
 
 
@@ -43,19 +43,21 @@ static void apply_add_to_target_list(void *context, const Form_pg_depend pg_depe
  * before the target object could safely be created on a worker. Some of the object might
  * already be created on a worker. It should be created in an idempotent way.
  */
-void
-GetDependenciesForObject(const ObjectAddress *target, List **dependencyList)
+List *
+GetDependenciesForObject(const ObjectAddress *target)
 {
+	List *dependencyList = NIL;
 	recurse_pg_depend(target,
 					  &follow_get_dependencies_for_object,
 					  &apply_add_to_target_list,
-					  dependencyList);
+					  &dependencyList);
+	return dependencyList;
 }
 
 
 /*
  * IsObjectAddressInList is a helper function that can check if an ObjectAddress is
- * already in a (unsorted) list of ObjectAddress'.
+ * already in a (unsorted) list of ObjectAddresses
  */
 static bool
 IsObjectAddressInList(const ObjectAddress *findAddress, List *addressList)
@@ -82,34 +84,20 @@ IsObjectAddressInList(const ObjectAddress *findAddress, List *addressList)
 
 
 /*
- * ShouldFollowDependency applies a couple of rules to test if we need to traverse the
- * dependencies of this objects.
- *
- * Most important check; we nee to support the object for distribution, otherwise we do
- * not need to traverse it and its dependencies. For simplicity in the implementation we
- * actually check this as the last check.
- *
- * Other checks we do:
- *  - do not follow if the object is owned by an extension.
- *    As extensions are created separately on each worker we do not need to take into
- *    account objects that are the result of CREATE EXTENSION.
- *
- *  - do not follow objects that citus has already distributed.
- *    Objects only need to be distributed once. If citus has already distributed the
- *    object we do not follow its dependencies.
+ * SupportedDependencyByCitus returns whether citus has support to distribute the object
+ * addressed.
  */
 static bool
-SupportedDependencyByCitus(const ObjectAddress *toFollow)
+SupportedDependencyByCitus(const ObjectAddress *address)
 {
 	/*
-	 * looking at the type of a object to see if we should follow this dependency to
-	 * create on the workers.
+	 * looking at the type of a object to see if we know how to create the object on the
+	 * workers.
 	 */
-	switch (getObjectClass(toFollow))
+	switch (getObjectClass(address))
 	{
 		case OCLASS_SCHEMA:
 		{
-			/* always follow */
 			return true;
 		}
 
@@ -122,7 +110,8 @@ SupportedDependencyByCitus(const ObjectAddress *toFollow)
 
 	/*
 	 * all types should have returned above, compilers complaining about a non return path
-	 * indicate a bug int the above switch. Fix it there instead of adding a return here.
+	 * indicate a bug in the above switch. Missing returns or breaking code flow should be
+	 * addressed in the switch statement, preferably not here.
 	 */
 }
 
@@ -168,12 +157,13 @@ IsObjectAddressOwnedByExtension(const ObjectAddress *target)
 
 
 /*
- * OrderObjectAddressListInDependencyOrder given a list of ObjectAddress' return a new
- * list of the same ObjectAddress'.
+ * OrderObjectAddressListInDependencyOrder given a list of ObjectAddresses return a new
+ * list of the same ObjectAddresses ordered on dependency order with the objects without
+ * dependencies first.
  *
  * The algortihm traveses pg_depend in a depth first order starting at the first object in
- * the provided list. By traversing depth first it will create to first dependency first
- * and subsequent dependencies later.
+ * the provided list. By traversing depth first it will put the first dependency at the
+ * head of the list with dependencies depending on them later.
  *
  * If the object is already in the list it is skipped for traversal. This happens when an
  * object was already added to the target list before it occurred in the input list.
@@ -208,19 +198,19 @@ OrderObjectAddressListInDependencyOrder(List *objectAddressList)
 /*
  * recurse_pg_depend recursively visits pg_depend entries, starting at the target
  * ObjectAddress. For every entry the follow function will be called. When follow returns
- * true it will recursively visit the dependencies of that object. recurse_pg_depend will
+ * true it will recursively visit the dependencies for that object. recurse_pg_depend will
  * visit therefore all pg_depend entries.
  *
  * Visiting will happen in depth first order, which is useful to create or sort lists of
  * dependencies to create.
  *
- * For all pg_depend entries that should be visit the apply function will be called. This
- * function is designed to be the mutating function for the context being passed. Although
- * nothing prevents the follow functions to also mutate the context.
+ * For all pg_depend entries that should be visited the apply function will be called.
+ * This function is designed to be the mutating function for the context being passed.
+ * Although nothing prevents the follow function to also mutate the context.
  *
  *  - follow will be called on the way down, so the invocation order is top to bottom of
  *    the dependency tree
- *  - allow is called on the way back, so the invocation order is bottom to top. Allow is
+ *  - apply is called on the way back, so the invocation order is bottom to top. Apply is
  *    not called for entries for which follow has returned false.
  */
 static void
@@ -329,7 +319,7 @@ follow_get_dependencies_for_object(void *context, const Form_pg_depend pg_depend
  * follow_order_object_address applies filters on pg_depend entries to follow the
  * dependency tree of objects in depth first order. The filters are practically the same
  * to follow_get_dependencies_for_object, except it will follow objects that have already
- * been distributed. This is because its primary use is order the objects from
+ * been distributed. This is because its primary use is to order the objects from
  * pg_dist_object in dependency order.
  *
  * For completeness the list of all edges it will follow;

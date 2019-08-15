@@ -17,7 +17,7 @@
 #include "catalog/objectaddress.h"
 #include "nodes/pg_list.h"
 
-extern void GetDependenciesForObject(const ObjectAddress *target, List **dependencyList);
+extern List * GetDependenciesForObject(const ObjectAddress *target);
 extern List * OrderObjectAddressListInDependencyOrder(List *objectAddressList);
 
 #endif /* CITUS_DEPENDENCY_H */

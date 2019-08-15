@@ -27,7 +27,7 @@ typedef struct FormData_pg_dist_object
 	Oid classid;      /* class of the distributed object */
 	Oid objid;        /* object id of the distributed object */
 #ifdef CATALOG_VARLEN /* variable-length fields start here */
-	text identifier;  /* qualified identifier of the object */
+	text identifier;  /* qualified identifier of the object, used during pg_upgrade */
 #endif
 } FormData_pg_dist_object;
 

@@ -1,16 +1,15 @@
 /*-------------------------------------------------------------------------
  *
  * distobject.h
- *	  Declarations for mapping between postgres' ObjectAddress and citus'
- *	  DistObjectAddress.
+ *	  Declarations for functions to work with pg_dist_object
  *
  * Copyright (c) 2019, Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */
 
-#ifndef CITUS_CATALOG_DISTOBJECTADDRESS_H
-#define CITUS_CATALOG_DISTOBJECTADDRESS_H
+#ifndef CITUS_CATALOG_DISTOBJECT_H
+#define CITUS_CATALOG_DISTOBJECT_H
 
 #include "postgres.h"
 
@@ -19,9 +18,9 @@
 
 extern ObjectAddress * getObjectAddressByIdentifier(Oid classId, const char *identifier);
 extern bool isObjectDistributed(const ObjectAddress *address);
-extern void recordObjectDistributed(const ObjectAddress *address);
-extern void dropObjectDistributed(const ObjectAddress *address);
+extern void markObjectDistributed(const ObjectAddress *distAddress);
+extern void unmarkObjectDistributed(const ObjectAddress *address);
 
 extern List * GetDistributedObjectAddressList(void);
 
-#endif /* CITUS_CATALOG_DISTOBJECTADDRESS_H */
+#endif /* CITUS_CATALOG_DISTOBJECT_H */

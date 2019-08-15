@@ -37,8 +37,10 @@ PG_FUNCTION_INFO_V1(citus_finish_pg_upgrade_pg_dist_object);
 
 
 /*
- * getObjectAddressByIdentifier maps a citus distributed object address to a postgres object
- * address
+ * getObjectAddressByIdentifier provides the ObjectAddress for an object of type classid
+ * with the fully qualified name of identifier.
+ *
+ * The goal of this function is to be functionally reverse of getObjectIdentity
  */
 ObjectAddress *
 getObjectAddressByIdentifier(Oid classId, const char *identifier)
@@ -73,10 +75,11 @@ getObjectAddressByIdentifier(Oid classId, const char *identifier)
 
 
 /*
- * recordObjectDistributed mark an object as a distributed object in citus.
+ * markObjectDistributed marks an object as a distributed object by citus. Marking is done
+ * by adding appropriate entries to citus.pg_dist_object
  */
 void
-recordObjectDistributed(const ObjectAddress *distAddress)
+markObjectDistributed(const ObjectAddress *distAddress)
 {
 	Relation pgDistObject = NULL;
 
@@ -87,10 +90,11 @@ recordObjectDistributed(const ObjectAddress *distAddress)
 	/* open system catalog and insert new tuple */
 	pgDistObject = heap_open(DistObjectRelationId(), RowExclusiveLock);
 
-	/* form new tuple for pg_dist_partition */
+	/* form new tuple for pg_dist_object */
 	memset(newValues, 0, sizeof(newValues));
 	memset(newNulls, false, sizeof(newNulls));
 
+	/* tuple (classId, objectId, NULL) */
 	newValues[Anum_pg_dist_object_classid - 1] = ObjectIdGetDatum(distAddress->classId);
 	newValues[Anum_pg_dist_object_objid - 1] = ObjectIdGetDatum(distAddress->objectId);
 	newNulls[Anum_pg_dist_object_identifier - 1] = true;
@@ -105,8 +109,12 @@ recordObjectDistributed(const ObjectAddress *distAddress)
 }
 
 
+/*
+ * unmarkObjectDistributed removes the entry from pg_dist_object that marks this object as
+ * distributed. This will prevent updates to that object to be propagated to the worker.
+ */
 void
-dropObjectDistributed(const ObjectAddress *address)
+unmarkObjectDistributed(const ObjectAddress *address)
 {
 	Relation pgDistObjectRel = NULL;
 	ScanKeyData key[2] = { 0 };
@@ -115,13 +123,14 @@ dropObjectDistributed(const ObjectAddress *address)
 
 	pgDistObjectRel = heap_open(DistObjectRelationId(), RowExclusiveLock);
 
-	/* scan pg_dist_object for classid = $1 AND identifier = $2 */
+	/* scan pg_dist_object for classid = $1 AND objid = $2 using an index */
 	ScanKeyInit(&key[0], Anum_pg_dist_object_classid, BTEqualStrategyNumber, F_OIDEQ,
 				ObjectIdGetDatum(address->classId));
 	ScanKeyInit(&key[1], Anum_pg_dist_object_objid, BTEqualStrategyNumber, F_OIDEQ,
 				ObjectIdGetDatum(address->objectId));
-	pgDistObjectScan = systable_beginscan(pgDistObjectRel, InvalidOid, false, NULL, 2,
-										  key);
+	pgDistObjectScan = systable_beginscan(pgDistObjectRel,
+										  DistObjectClassIDObjectIDIndexId(), true, NULL,
+										  2, key);
 
 	while (HeapTupleIsValid(pgDistObjectTup = systable_getnext(pgDistObjectScan)))
 	{
@@ -134,8 +143,8 @@ dropObjectDistributed(const ObjectAddress *address)
 
 
 /*
- * isObjectDistributed returns if the object identified by the distAddress is already
- * distributed in the cluster. This performs a local lookup in pg_dist_object.
+ * isObjectDistributed returns if the object addressed is already distributed in the
+ * cluster. This performs a local indexed lookup in pg_dist_object.
  */
 bool
 isObjectDistributed(const ObjectAddress *address)
@@ -148,14 +157,14 @@ isObjectDistributed(const ObjectAddress *address)
 
 	pgDistObjectRel = heap_open(DistObjectRelationId(), AccessShareLock);
 
-	/* scan pg_dist_object for classid = $1 AND objid = $2 */
-	/* TODO use an index for this scan */
+	/* scan pg_dist_object for classid = $1 AND objid = $2 using an index */
 	ScanKeyInit(&key[0], Anum_pg_dist_object_classid, BTEqualStrategyNumber, F_OIDEQ,
 				ObjectIdGetDatum(address->classId));
 	ScanKeyInit(&key[1], Anum_pg_dist_object_objid, BTEqualStrategyNumber, F_OIDEQ,
 				ObjectIdGetDatum(address->objectId));
-	pgDistObjectScan = systable_beginscan(pgDistObjectRel, InvalidOid, false, NULL, 2,
-										  key);
+	pgDistObjectScan = systable_beginscan(pgDistObjectRel,
+										  DistObjectClassIDObjectIDIndexId(), true, NULL,
+										  2, key);
 
 	while (HeapTupleIsValid(pgDistObjectTup = systable_getnext(pgDistObjectScan)))
 	{
@@ -173,7 +182,7 @@ isObjectDistributed(const ObjectAddress *address)
 
 /*
  * citus_prepare_pg_upgrade_pg_dist_object prepares pg_dist_object before a pg_upgrade. It
- * stores a upgrade stable identifier of the objects in the identifier column which can
+ * stores an upgrade stable identifier of the objects in the identifier column which can
  * later be restored to the object id of the object.
  */
 Datum
@@ -205,7 +214,6 @@ citus_prepare_pg_upgrade_pg_dist_object(PG_FUNCTION_ARGS)
 
 		heap_deform_tuple(heapTuple, tupleDescriptor, datumArray, isnull);
 
-		/* after we find colocation group, we update it with new values */
 		memset(replace, false, sizeof(replace));
 		memset(isnull, false, sizeof(isnull));
 		memset(values, 0, sizeof(values));
@@ -216,7 +224,7 @@ citus_prepare_pg_upgrade_pg_dist_object(PG_FUNCTION_ARGS)
 		ObjectAddressSet(address, classId, objectId);
 		identifier = getObjectIdentity(&address);
 
-		/* update identifier on tuple */
+		/* update tuple SET identifier = $1 */
 		values[Anum_pg_dist_object_identifier - 1] = CStringGetTextDatum(identifier);
 		replace[Anum_pg_dist_object_identifier - 1] = true;
 
@@ -254,7 +262,6 @@ citus_finish_pg_upgrade_pg_dist_object(PG_FUNCTION_ARGS)
 	bool replace[Natts_pg_dist_object];
 	Datum datumArray[Natts_pg_dist_object];
 
-	/* we first search for colocation group by its colocation id */
 	pgDistObject = heap_open(DistObjectRelationId(), RowExclusiveLock);
 	tupleDescriptor = RelationGetDescr(pgDistObject);
 
@@ -269,21 +276,17 @@ citus_finish_pg_upgrade_pg_dist_object(PG_FUNCTION_ARGS)
 
 		heap_deform_tuple(heapTuple, tupleDescriptor, datumArray, isnull);
 
-		/* after we find colocation group, we update it with new values */
 		memset(replace, false, sizeof(replace));
 		memset(isnull, false, sizeof(isnull));
 		memset(values, 0, sizeof(values));
 
 		classId = DatumGetObjectId(datumArray[Anum_pg_dist_object_classid - 1]);
 		identifier = TextDatumGetCString(datumArray[Anum_pg_dist_object_identifier - 1]);
-
 		address = getObjectAddressByIdentifier(classId, identifier);
 
-		/* set oid */
+		/* update tuple SET objid = $1 AND identifier = NULL*/
 		values[Anum_pg_dist_object_objid - 1] = ObjectIdGetDatum(address->objectId);
 		replace[Anum_pg_dist_object_objid - 1] = true;
-
-		/* clear identifier */
 		isnull[Anum_pg_dist_object_identifier - 1] = true;
 		replace[Anum_pg_dist_object_identifier - 1] = true;
 
@@ -302,6 +305,10 @@ citus_finish_pg_upgrade_pg_dist_object(PG_FUNCTION_ARGS)
 }
 
 
+/*
+ * GetDistributedObjectAddressList returns a list of ObjectAddresses that contains all
+ * distributed objects as marked in pg_dist_object
+ */
 List *
 GetDistributedObjectAddressList(void)
 {
