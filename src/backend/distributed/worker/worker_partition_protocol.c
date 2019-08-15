@@ -917,8 +917,13 @@ FilterAndPartitionTable(const char *filterQuery,
 	if (SPI_processed > 0)
 	{
 		TupleDesc rowDescriptor = SPI_tuptable->tupdesc;
-		partitionColumnIndex = ColumnIndex(rowDescriptor, partitionColumnName);
 
+		if (fileCount == 0)
+		{
+			ereport(ERROR, (errmsg("no partition to read into")));
+		}
+
+		partitionColumnIndex = ColumnIndex(rowDescriptor, partitionColumnName);
 		partitionColumnTypeId = SPI_gettypeid(rowDescriptor, partitionColumnIndex);
 		if (partitionColumnType != partitionColumnTypeId)
 		{
@@ -942,6 +947,7 @@ FilterAndPartitionTable(const char *filterQuery,
 	while (SPI_processed > 0)
 	{
 		int rowIndex = 0;
+
 		for (rowIndex = 0; rowIndex < SPI_processed; rowIndex++)
 		{
 			HeapTuple row = SPI_tuptable->vals[rowIndex];
@@ -964,6 +970,10 @@ FilterAndPartitionTable(const char *filterQuery,
 			if (!partitionKeyNull)
 			{
 				partitionId = (*PartitionIdFunction)(partitionKey, partitionIdContext);
+				if (partitionId == INVALID_SHARD_INDEX)
+				{
+					ereport(ERROR, (errmsg("invalid distribution column value")));
+				}
 			}
 			else
 			{
