@@ -40,8 +40,14 @@ static char * PartitionBound(Oid partitionId);
 bool
 PartitionedTable(Oid relationId)
 {
-	Relation rel = heap_open(relationId, AccessShareLock);
+	Relation rel = try_relation_open(relationId, AccessShareLock);
 	bool partitionedTable = false;
+
+	/* don't error out for tables that are dropped */
+	if (rel == NULL)
+	{
+		return false;
+	}
 
 	if (rel->rd_rel->relkind == RELKIND_PARTITIONED_TABLE)
 	{
@@ -90,8 +96,14 @@ PartitionedTableNoLock(Oid relationId)
 bool
 PartitionTable(Oid relationId)
 {
-	Relation rel = heap_open(relationId, AccessShareLock);
+	Relation rel = try_relation_open(relationId, AccessShareLock);
 	bool partitionTable = false;
+
+	/* don't error out for tables that are dropped */
+	if (rel == NULL)
+	{
+		return false;
+	}
 
 	partitionTable = rel->rd_rel->relispartition;
 
