@@ -128,7 +128,7 @@ static const struct config_enum_entry use_secondary_nodes_options[] = {
 	{ NULL, 0, false }
 };
 
-static const struct config_enum_entry multi_shard_commit_protocol_options[] = {
+static const struct config_enum_entry shard_commit_protocol_options[] = {
 	{ "1pc", COMMIT_PROTOCOL_1PC, false },
 	{ "2pc", COMMIT_PROTOCOL_2PC, false },
 	{ NULL, 0, false }
@@ -930,7 +930,22 @@ RegisterCitusConfigVariables(void)
 					 "performance benefits."),
 		&MultiShardCommitProtocol,
 		COMMIT_PROTOCOL_2PC,
-		multi_shard_commit_protocol_options,
+		shard_commit_protocol_options,
+		PGC_USERSET,
+		0,
+		NULL, NULL, NULL);
+
+	DefineCustomEnumVariable(
+		"citus.single_shard_commit_protocol",
+		gettext_noop(
+			"Sets the commit protocol for commands modifying a single shards with multiple replicas."),
+		gettext_noop("When a failure occurs during commands that modify multiple "
+					 "replicas, two-phase commit is required to ensure data is never lost "
+					 "and this is the default. However, changing to 1pc may give small "
+					 "performance benefits."),
+		&SingleShardCommitProtocol,
+		COMMIT_PROTOCOL_2PC,
+		shard_commit_protocol_options,
 		PGC_USERSET,
 		0,
 		NULL, NULL, NULL);

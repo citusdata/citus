@@ -75,6 +75,7 @@ extern bool FunctionOpensTransactionBlock;
 
 /* config variable managed via guc.c */
 extern int MultiShardCommitProtocol;
+extern int SingleShardCommitProtocol;
 
 /* state needed to restore multi-shard commit protocol during VACUUM/ANALYZE */
 extern int SavedMultiShardCommitProtocol;
