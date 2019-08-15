@@ -938,12 +938,34 @@ DistributedExecutionRequiresRollback(DistributedExecution *execution)
 
 	if (list_length(task->taskPlacementList) > 1)
 	{
+		if (SingleShardCommitProtocol == COMMIT_PROTOCOL_2PC)
+		{
+			/*
+			 * Adaptive executor opts to error out on queries if a placement is unhealthy,
+			 * not marking the placement itself unhealthy in the process.
+			 * Use 2PC to rollback placements before the unhealthy replica failed.
+			 */
+			return true;
+		}
+
 		/*
-		 * Adaptive executor opts to error out on queries if a placement is unhealthy,
-		 * not marking the placement itself unhealthy in the process.
-		 * Use 2PC to rollback placements before the unhealthy shard failed.
+		 * Some tasks don't set replicationModel thus we only
+		 * rely on the anchorShardId, not replicationModel.
+		 *
+		 * TODO: Do we ever need replicationModel in the Task structure?
+		 * Can't we always rely on anchorShardId?
 		 */
-		return true;
+		if (task->anchorShardId != INVALID_SHARD_ID && ReferenceTableShardId(
+				task->anchorShardId))
+		{
+			return true;
+		}
+
+		/*
+		 * Single DML/DDL tasks with replicated tables (non-reference)
+		 * should not require BEGIN/COMMIT/ROLLBACK.
+		 */
+		return false;
 	}
 
 	return false;

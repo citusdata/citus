@@ -38,6 +38,7 @@ CoordinatedTransactionState CurrentCoordinatedTransactionState = COORD_TRANS_NON
 
 /* GUC, the commit protocol to use for commands affecting more than one connection */
 int MultiShardCommitProtocol = COMMIT_PROTOCOL_2PC;
+int SingleShardCommitProtocol = COMMIT_PROTOCOL_2PC;
 int SavedMultiShardCommitProtocol = COMMIT_PROTOCOL_BARE;
 
 /* state needed to keep track of operations used during a transaction */
