@@ -34,6 +34,7 @@
 #include "lib/stringinfo.h"
 #include "nodes/pg_list.h"
 #include "storage/lock.h"
+#include "storage/lmgr.h"
 #include "utils/builtins.h"
 #include "utils/elog.h"
 #include "utils/errcodes.h"
@@ -230,6 +231,9 @@ RepairShardPlacement(int64 shardId, char *sourceNodeName, int32 sourceNodePort,
 	List *foreignConstraintCommandList = NIL;
 	List *placementList = NIL;
 	ShardPlacement *placement = NULL;
+
+	/* prevent table from being dropped */
+	LockRelationOid(distributedTableId, AccessShareLock);
 
 	EnsureTableOwner(distributedTableId);
 
