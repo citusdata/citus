@@ -947,7 +947,7 @@ RegisterCitusConfigVariables(void)
 		COMMIT_PROTOCOL_2PC,
 		shard_commit_protocol_options,
 		PGC_USERSET,
-		0,
+		GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
 	DefineCustomEnumVariable(
