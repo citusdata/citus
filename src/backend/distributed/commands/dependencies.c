@@ -151,9 +151,21 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 
 		default:
 		{
-			return NIL;
+			break;
 		}
 	}
+
+	/*
+	 * make sure it fails hard when in debug mode, leave a hint for the user if this ever
+	 * happens in production
+	 */
+	Assert(false);
+	ereport(ERROR, (errmsg("unsupported object %s for distribution by citus",
+						   getObjectTypeDescription(dependency)),
+					errdetail(
+						"citus tries to recreate an unsupported object on its workers"),
+					errhint("please report a bug as this should not be happening")));
+	return NIL;
 }
 
 
