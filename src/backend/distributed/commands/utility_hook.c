@@ -533,6 +533,22 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		standard_ProcessUtility(pstmt, queryString, context,
 								params, queryEnv, dest, completionTag);
 
+		/*
+		 * Postgres added the following CommandCounterIncrement as a patch in:
+		 *  - 10.7 -> 10.8
+		 *  - 11.2 -> 11.3
+		 * The patch was a response to bug #15631.
+		 *
+		 * CommandCounterIncrement is used to make changes to the catalog visible for post
+		 * processing of create commands (eg. create type). It is safe to call
+		 * CommandCounterIncrement twice, as the call is a no-op if the command id is not
+		 * used yet.
+		 *
+		 * Once versions older then above are not deemed important anymore this patch can
+		 * be remove from citus.
+		 */
+		CommandCounterIncrement();
+
 		trackStatementDepth(parsetree, false);
 	}
 	PG_CATCH();
