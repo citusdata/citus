@@ -11,6 +11,17 @@
 SET citus.next_shard_id TO 810000;
 SET citus.enable_unique_job_ids TO off;
 
+CREATE FUNCTION citus_rm_job_directory(bigint)
+	RETURNS void
+	AS 'citus'
+	LANGUAGE C STRICT;
+
+with silence as (
+	SELECT citus_rm_job_directory(split_part(f, '_', 2)::bigint)
+	from pg_ls_dir('base/pgsql_job_cache') f
+)
+select count(*) * 0 zero
+from silence;
 
 BEGIN;
 
