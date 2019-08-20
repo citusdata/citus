@@ -1,0 +1,65 @@
+SET citus.next_shard_id TO 20010000;
+
+CREATE SCHEMA type_tests;
+SET search_path TO type_tests;
+SET citus.shard_count TO 4;
+
+-- single statement transactions with a simple type used in a table
+CREATE TYPE tc1 AS (a int, b int);
+CREATE TABLE t1 (a int PRIMARY KEY, b tc1);
+SELECT create_distributed_table('t1','a');
+INSERT INTO t1 VALUES (1, (2,3)::tc1);
+SELECT * FROM t1;
+
+-- single statement transactions with a an enum used in a table
+CREATE TYPE te1 AS ENUM ('one', 'two', 'three');
+CREATE TABLE t2 (a int PRIMARY KEY, b te1);
+SELECT create_distributed_table('t2','a');
+INSERT INTO t2 VALUES (1, 'two');
+SELECT * FROM t2;
+
+-- add an extra value to the enum and use in table
+ALTER TYPE te1 ADD VALUE 'four';
+UPDATE t2 SET b = 'four';
+SELECT * FROM t2;
+
+-- transaction block with simple type
+BEGIN;
+CREATE TYPE tc2 AS (a int, b int);
+CREATE TABLE t3 (a int PRIMARY KEY, b tc2);
+SELECT create_distributed_table('t3','a');
+INSERT INTO t3 VALUES (4, (5,6)::tc2);
+SELECT * FROM t3;
+COMMIT;
+
+-- transaction block with simple type
+BEGIN;
+CREATE TYPE te2 AS ENUM ('yes', 'no');
+CREATE TABLE t4 (a int PRIMARY KEY, b te2);
+SELECT create_distributed_table('t4','a');
+INSERT INTO t4 VALUES (1, 'yes');
+SELECT * FROM t4;
+-- ALTER TYPE ... ADD VALUE does not work in transactions
+COMMIT;
+
+-- test some combination of types without ddl propagation, this will prevent the workers
+-- from having those types created. They are created just-in-time on table distribution
+SET citus.enable_ddl_propagation TO off;
+CREATE TYPE tc3 AS (a int, b int);
+CREATE TYPE tc4 AS (a int, b tc3[]);
+CREATE TYPE tc5 AS (a int, b tc4);
+CREATE TYPE te3 AS ENUM ('a','b');
+RESET citus.enable_ddl_propagation;
+
+CREATE TABLE t5 (a int PRIMARY KEY, b tc5[], c te3);
+SELECT create_distributed_table('t5','a');
+
+-- deleting the enum cascade will remove the type from the table and the workers
+DROP TYPE te3 CASCADE;
+
+-- DELETE multiple types at once
+DROP TYPE tc3, tc4, tc5 CASCADE;
+
+-- clear objects
+SET client_min_messages TO fatal; -- suppress cascading objects dropping
+DROP SCHEMA type_tests CASCADE;
