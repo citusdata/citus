@@ -169,6 +169,69 @@ PlanIndexStmt(IndexStmt *createIndexStatement, const char *createIndexCommand)
 
 
 /*
+ * ErrorIfReindexOnDistributedTable determines whether a given REINDEX
+ * involves a distributed table, & raises an error if so.
+ */
+void
+ErrorIfReindexOnDistributedTable(ReindexStmt *ReindexStatement)
+{
+	Relation relation = NULL;
+	Oid relationId = InvalidOid;
+	bool isDistributedRelation = false;
+	LOCKMODE lockmode = AccessShareLock;
+
+	/*
+	 * We first check whether a distributed relation is affected. For that, we need to
+	 * open the relation.
+	 */
+	if (ReindexStatement->relation == NULL)
+	{
+		/* ignore REINDEX SCHEMA, REINDEX SYSTEM, and REINDEX DATABASE */
+		return;
+	}
+
+	Assert(ReindexStatement->relkind == REINDEX_OBJECT_INDEX ||
+		   ReindexStatement->relkind == REINDEX_OBJECT_TABLE);
+
+	/*
+	 * XXX: Consider using RangeVarGetRelidExtended with a permission
+	 * checking callback. Right now we'll acquire the lock before having
+	 * checked permissions.
+	 */
+	if (ReindexStatement->kind == REINDEX_OBJECT_INDEX)
+	{
+		Oid indOid = RangeVarGetRelid(ReindexStatement->relation,
+									  NoLock, false);
+		relation = index_open(indOid, lockmode);
+		relationId = IndexGetRelation(indOid, false);
+	}
+	else
+	{
+		relation = heap_openrv(ReindexStatement->relation, lockmode);
+		relationId = RelationGetRelid(relation);
+	}
+
+	isDistributedRelation = IsDistributedTable(relationId);
+
+	if (ReindexStatement->kind == REINDEX_OBJECT_INDEX)
+	{
+		index_close(relation, NoLock);
+	}
+	else
+	{
+		heap_close(relation, NoLock);
+	}
+
+	if (isDistributedRelation)
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg(
+							"REINDEX is not implemented for distributed relations")));
+	}
+}
+
+
+/*
  * PlanDropIndexStmt determines whether a given DROP INDEX statement involves
  * a distributed table. If so (and if the statement does not use unsupported
  * options), it modifies the input statement to ensure proper execution against

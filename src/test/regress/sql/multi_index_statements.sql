@@ -114,6 +114,20 @@ CREATE INDEX ON lineitem (l_orderkey);
 SELECT * FROM pg_indexes WHERE tablename = 'lineitem' or tablename like 'index_test_%' ORDER BY indexname;
 
 --
+-- REINDEX
+--
+
+SET citus.log_remote_commands to on;
+SET client_min_messages = LOG;
+REINDEX INDEX lineitem_orderkey_index;
+REINDEX TABLE lineitem;
+REINDEX SCHEMA public;
+REINDEX DATABASE regression;
+REINDEX SYSTEM regression;
+SET citus.log_remote_commands to off;
+RESET client_min_messages;
+
+--
 -- DROP INDEX
 --
 
