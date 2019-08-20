@@ -6,12 +6,10 @@
  *	  functions that are currently only used for deparsing of the type statements.
  *
  *	  Functions that could move later are appendColumnDef, appendColumnDefList, etc. These
- *	  should be reused across multimple statements and should live in their own deparse
+ *	  should be reused across multiple statements and should live in their own deparse
  *	  file.
  *
  * Copyright (c) 2019, Citus Data, Inc.
- *
- * $Id$
  *
  *-------------------------------------------------------------------------
  */
