@@ -28,6 +28,7 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/remote_commands.h"
 #include "distributed/transaction_identifier.h"
+#include "distributed/tuplestore.h"
 #include "executor/spi.h"
 #include "nodes/execnodes.h"
 #include "storage/ipc.h"
@@ -974,44 +975,10 @@ ParseXIDField(PGresult *result, int rowIndex, int colIndex)
 static void
 ReturnCitusDistStats(List *citusStatsList, FunctionCallInfo fcinfo)
 {
-	ReturnSetInfo *resultInfo = (ReturnSetInfo *) fcinfo->resultinfo;
-	TupleDesc tupleDesc = NULL;
-	Tuplestorestate *tupleStore = NULL;
-	MemoryContext per_query_ctx = NULL;
-	MemoryContext oldContext = NULL;
-
 	ListCell *citusStatsCell = NULL;
 
-	/* check to see if caller supports us returning a tuplestore */
-	if (resultInfo == NULL || !IsA(resultInfo, ReturnSetInfo))
-	{
-		ereport(ERROR,
-				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg(
-					 "set-valued function called in context that cannot accept a set")));
-	}
-	if (!(resultInfo->allowedModes & SFRM_Materialize))
-	{
-		ereport(ERROR,
-				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg("materialize mode required, but it is not " \
-						"allowed in this context")));
-	}
-
-	/* Build a tuple descriptor for our result type */
-	if (get_call_result_type(fcinfo, NULL, &tupleDesc) != TYPEFUNC_COMPOSITE)
-	{
-		elog(ERROR, "return type must be a row type");
-	}
-
-	per_query_ctx = resultInfo->econtext->ecxt_per_query_memory;
-	oldContext = MemoryContextSwitchTo(per_query_ctx);
-
-	tupleStore = tuplestore_begin_heap(true, false, work_mem);
-	resultInfo->returnMode = SFRM_Materialize;
-	resultInfo->setResult = tupleStore;
-	resultInfo->setDesc = tupleDesc;
-	MemoryContextSwitchTo(oldContext);
+	TupleDesc tupleDesc;
+	Tuplestorestate *tupleStore = SetupTuplestore(fcinfo, &tupleDesc);
 
 	foreach(citusStatsCell, citusStatsList)
 	{

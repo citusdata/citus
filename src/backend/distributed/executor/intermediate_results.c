@@ -27,6 +27,7 @@
 #include "distributed/remote_commands.h"
 #include "distributed/transmit.h"
 #include "distributed/transaction_identifier.h"
+#include "distributed/tuplestore.h"
 #include "distributed/worker_protocol.h"
 #include "nodes/makefuncs.h"
 #include "nodes/parsenodes.h"
@@ -700,8 +701,6 @@ IntermediateResultSize(char *resultId)
 Datum
 read_intermediate_result(PG_FUNCTION_ARGS)
 {
-	ReturnSetInfo *rsinfo = (ReturnSetInfo *) fcinfo->resultinfo;
-
 	text *resultIdText = PG_GETARG_TEXT_P(0);
 	char *resultIdString = text_to_cstring(resultIdText);
 	Datum copyFormatOidDatum = PG_GETARG_DATUM(1);
@@ -714,7 +713,6 @@ read_intermediate_result(PG_FUNCTION_ARGS)
 
 	Tuplestorestate *tupstore = NULL;
 	TupleDesc tupleDescriptor = NULL;
-	MemoryContext oldcontext = NULL;
 
 	CheckCitusVersion(ERROR);
 
@@ -726,59 +724,7 @@ read_intermediate_result(PG_FUNCTION_ARGS)
 						errmsg("result \"%s\" does not exist", resultIdString)));
 	}
 
-	/* check to see if query supports us returning a tuplestore */
-	if (rsinfo == NULL || !IsA(rsinfo, ReturnSetInfo))
-	{
-		ereport(ERROR,
-				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg(
-					 "set-valued function called in context that cannot accept a set")));
-	}
-
-	if (!(rsinfo->allowedModes & SFRM_Materialize))
-	{
-		ereport(ERROR,
-				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg(
-					 "materialize mode required, but it is not allowed in this context")));
-	}
-
-	/* get a tuple descriptor for our result type */
-	switch (get_call_result_type(fcinfo, NULL, &tupleDescriptor))
-	{
-		case TYPEFUNC_COMPOSITE:
-		{
-			/* success */
-			break;
-		}
-
-		case TYPEFUNC_RECORD:
-		{
-			/* failed to determine actual type of RECORD */
-			ereport(ERROR,
-					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					 errmsg("function returning record called in context "
-							"that cannot accept type record")));
-			break;
-		}
-
-		default:
-		{
-			/* result type isn't composite */
-			elog(ERROR, "return type must be a row type");
-			break;
-		}
-	}
-
-	tupleDescriptor = CreateTupleDescCopy(tupleDescriptor);
-
-	oldcontext = MemoryContextSwitchTo(rsinfo->econtext->ecxt_per_query_memory);
-
-	tupstore = tuplestore_begin_heap(true, false, work_mem);
-	rsinfo->returnMode = SFRM_Materialize;
-	rsinfo->setResult = tupstore;
-	rsinfo->setDesc = tupleDescriptor;
-	MemoryContextSwitchTo(oldcontext);
+	tupstore = SetupTuplestore(fcinfo, &tupleDescriptor);
 
 	ReadFileIntoTupleStore(resultFileName, copyFormatLabel, tupleDescriptor, tupstore);
 
