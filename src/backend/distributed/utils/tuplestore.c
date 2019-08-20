@@ -42,9 +42,30 @@ CheckTuplestoreReturn(FunctionCallInfo fcinfo, TupleDesc *tupdesc)
 				 errmsg("materialize mode required, but it is not " \
 						"allowed in this context")));
 	}
-	if (get_call_result_type(fcinfo, NULL, tupdesc) != TYPEFUNC_COMPOSITE)
+	switch (get_call_result_type(fcinfo, NULL, tupdesc))
 	{
-		elog(ERROR, "return type must be a row type");
+		case TYPEFUNC_COMPOSITE:
+		{
+			/* success */
+			break;
+		}
+
+		case TYPEFUNC_RECORD:
+		{
+			/* failed to determine actual type of RECORD */
+			ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					 errmsg("function returning record called in context "
+							"that cannot accept type record")));
+			break;
+		}
+
+		default:
+		{
+			/* result type isn't composite */
+			elog(ERROR, "return type must be a row type");
+			break;
+		}
 	}
 	return returnSetInfo;
 }
