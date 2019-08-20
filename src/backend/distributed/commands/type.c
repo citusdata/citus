@@ -5,14 +5,29 @@
  *    The following types are supported in citus
  *     - Composite Types
  *     - Enum Types
+ *     - Array Types
  *
  *    Base types are more complex and often involve c code from extensions.
  *    These types should be created by creating the extension on all the
  *    workers as well. Therefore types created during the creation of an
  *    extension are not propagated to the worker nodes.
  *
- *    Types will be created on all active workers on type creation and
- *    during the node activate protocol.
+ *    Types will be created on the workers during the following situations:
+ *     - on type creation (except if called in a transaction)
+ *       By not distributing types directly when in a transaction allows
+ *       the type to be used in a newly created table that will be
+ *       distributed in the same transaction. In that case the type will be
+ *       created just-in-time to allow citus' parallelism to work.
+ *     - just-in-time
+ *       When the type is not already distributed but used in an object
+ *       that will distribute now. This allows distributed tables to use
+ *       types that have not yet been propagated, either due to the
+ *       transaction case abvove, or due to a type predating the citus
+ *       extension.
+ *     - node activation
+ *       Together with all objects that are marked as distributed in citus
+ *       types will be created during the activation of a new node to allow
+ *       reference tables to use this type.
  *
  * Copyright (c) 2019, Citus Data, Inc.
  *
@@ -82,6 +97,11 @@ PlanCompositeTypeStmt(CompositeTypeStmt *stmt, const char *queryString)
 	Oid typeOid = InvalidOid;
 	ObjectAddress typeAddress = { 0 };
 
+	/*
+	 * by not propagating in a transaction block we allow for parallelism to be used when
+	 * this type will be used as a column in a table that will be created and distributed
+	 * in this same transaction.
+	 */
 	if (IsTransactionBlock())
 	{
 		return NIL;
@@ -111,7 +131,14 @@ PlanCompositeTypeStmt(CompositeTypeStmt *stmt, const char *queryString)
 
 	EnsureDependenciesExistsOnAllNodes(&typeAddress);
 
-	/* reconstruct creation statement in a portable fashion */
+	/*
+	 * reconstruct creation statement in a portable fashion. The create_or_replace helper
+	 * function will be used to create the type in an idempotent manner on the workers.
+	 *
+	 * Types could exist on the worker prior to being created on the coordinator when the
+	 * type previously has been attempted to be created in a transaction which did not
+	 * commit on the coordinator.
+	 */
 	compositeTypeStmtSql = deparse_composite_type_stmt(stmt);
 	ereport(DEBUG3, (errmsg("deparsed composite type statement"),
 					 errdetail("sql: %s", compositeTypeStmtSql)));
@@ -143,11 +170,25 @@ PlanAlterTypeStmt(AlterTableStmt *stmt, const char *queryString)
 
 	Assert(stmt->relkind == OBJECT_TYPE);
 
-	if (IsTransactionBlock())
+	/* check if type is distributed before we run the coordinator check */
+	typeName = makeTypeNameFromRangeVar(stmt->relation);
+	typeOid = LookupTypeNameOid(NULL, typeName, false);
+	ObjectAddressSet(typeAddress, TypeRelationId, typeOid);
+	if (!IsObjectDistributed(&typeAddress))
 	{
 		return NIL;
 	}
 
+	/*
+	 * all types that are distributed will need their alter statements propagated
+	 * regardless if in a transaction or not. If we would not propagate the alter
+	 * statement the types would be different on worker and coordinator.
+	 */
+
+	/*
+	 * we should not get to a point where an alter happens on a distributed type during an
+	 * extension statement, but better safe then sorry.
+	 */
 	if (ExtensionStmtInProgess())
 	{
 		/*
@@ -190,6 +231,16 @@ PlanCreateEnumStmt(CreateEnumStmt *stmt, const char *queryString)
 	ObjectAddress typeAddress = { 0 };
 	Oid typeOid = InvalidOid;
 	TypeName *typeName = NULL;
+
+	/*
+	 * by not propagating in a transaction block we allow for parallelism to be used when
+	 * this type will be used as a column in a table that will be created and distributed
+	 * in this same transaction.
+	 */
+	if (IsTransactionBlock())
+	{
+		return NIL;
+	}
 
 	if (ExtensionStmtInProgess())
 	{
@@ -269,6 +320,13 @@ PlanAlterEnumStmt(AlterEnumStmt *stmt, const char *queryString)
 	}
 
 	/*
+	 * alter enum will run for all distributed enums, regardless if in a transaction or
+	 * not since the enum will be different on the coordinator and workers if we didn't.
+	 * (adding values to an enum can not run in a transaction anyway and would error by
+	 * postgres already).
+	 */
+
+	/*
 	 * managing types can only be done on the coordinator if ddl propagation is on. when
 	 * it is off we will never get here
 	 */
@@ -317,6 +375,11 @@ PlanAlterEnumStmt(AlterEnumStmt *stmt, const char *queryString)
 }
 
 
+/*
+ * PlanDropTypeStmt is called for all DROP TYPE statements. For all types in the list that
+ * citus has distributed to the workers it will drop the type on the workers as well. If
+ * no types in the drop list are distributed no calls will be made to the workers.
+ */
 List *
 PlanDropTypeStmt(DropStmt *stmt, const char *queryString)
 {
@@ -339,22 +402,19 @@ PlanDropTypeStmt(DropStmt *stmt, const char *queryString)
 		return NIL;
 	}
 
+	/*
+	 * managing types can only be done on the coordinator if ddl propagation is on. when
+	 * it is off we will never get here. MX workers don't have a notion of distributed
+	 * types, so we block the call.
+	 */
+	EnsureCoordinator();
+
 	distributedTypes = FilterNameListForDistributedTypes(oldTypes);
 	if (list_length(distributedTypes) <= 0)
 	{
-		/*
-		 * no distributed types to drop, we allow local drops of non distributed types on
-		 * workers as well, hence we perform this check before ensuring being a
-		 * coordinator
-		 */
+		/* no distributed types to drop */
 		return NULL;
 	}
-
-	/*
-	 * managing types can only be done on the coordinator if ddl propagation is on. when
-	 * it is off we will never get here
-	 */
-	EnsureCoordinator();
 
 	/*
 	 * temporary swap the lists of objects to delete with the distributed objects and
@@ -383,6 +443,10 @@ PlanDropTypeStmt(DropStmt *stmt, const char *queryString)
 }
 
 
+/*
+ * RecreateTypeStatement returns a parsetree for the CREATE TYPE statement to recreate the
+ * type by its oid.
+ */
 Node *
 RecreateTypeStatement(Oid typeOid)
 {
@@ -407,6 +471,10 @@ RecreateTypeStatement(Oid typeOid)
 }
 
 
+/*
+ * RecreateCompositeTypeStmt is called for composite types to create its parsetree for the
+ * CREATE TYPE statement that would recreate the composite type.
+ */
 static CompositeTypeStmt *
 RecreateCompositeTypeStmt(Oid typeOid)
 {
@@ -424,6 +492,12 @@ RecreateCompositeTypeStmt(Oid typeOid)
 }
 
 
+/*
+ * attributeFormToColumnDef returns a ColumnDef * describing the field and its property
+ * for a pg_attribute entry.
+ *
+ * Note: Current implementation is only covering the features supported by composite types
+ */
 static ColumnDef *
 attributeFormToColumnDef(Form_pg_attribute attributeForm)
 {
@@ -434,6 +508,10 @@ attributeFormToColumnDef(Form_pg_attribute attributeForm)
 }
 
 
+/*
+ * composite_type_coldeflist returns a list of ColumnDef *'s that make up all the fields
+ * of the composite type.
+ */
 static List *
 composite_type_coldeflist(Oid typeOid)
 {
@@ -466,6 +544,10 @@ composite_type_coldeflist(Oid typeOid)
 }
 
 
+/*
+ * RecreateEnumStmt returns a parsetree for a CREATE TYPE ... AS ENUM statement that would
+ * recreate the given enum type.
+ */
 static CreateEnumStmt *
 RecreateEnumStmt(Oid typeOid)
 {
@@ -481,6 +563,10 @@ RecreateEnumStmt(Oid typeOid)
 }
 
 
+/*
+ * enum_vals_list returns a list of String values containing the enum values for the given
+ * enum type.
+ */
 static List *
 enum_vals_list(Oid typeOid)
 {
@@ -516,6 +602,10 @@ enum_vals_list(Oid typeOid)
 }
 
 
+/*
+ * CompositeTypeExists checks, given a CREATE TYPE statement, if the composite type to be
+ * created already exists or not.
+ */
 bool
 CompositeTypeExists(CompositeTypeStmt *stmt)
 {
@@ -525,6 +615,10 @@ CompositeTypeExists(CompositeTypeStmt *stmt)
 }
 
 
+/*
+ * EnumTypeExists checks, given a CREATE TYPE ... AS ENUM statement, it the enum type to
+ * be created already exists or not.
+ */
 bool
 EnumTypeExists(CreateEnumStmt *stmt)
 {
@@ -534,6 +628,11 @@ EnumTypeExists(CreateEnumStmt *stmt)
 }
 
 
+/*
+ * CompositeTypeStmtToDrop returns, given a CREATE TYPE statement, a corresponding
+ * statement to drop the type that is to be created. The type does not need to exists in
+ * this postgres for this function to succeed.
+ */
 DropStmt *
 CompositeTypeStmtToDrop(CompositeTypeStmt *stmt)
 {
@@ -547,6 +646,11 @@ CompositeTypeStmtToDrop(CompositeTypeStmt *stmt)
 }
 
 
+/*
+ * CreateEnumStmtToDrop returns, given a CREATE TYPE ... AS ENUM statement, a
+ * corresponding statement to drop the type that is to be created. The type does not need
+ * to exists in this postgres for this function to succeed.
+ */
 DropStmt *
 CreateEnumStmtToDrop(CreateEnumStmt *stmt)
 {
@@ -559,6 +663,10 @@ CreateEnumStmtToDrop(CreateEnumStmt *stmt)
 }
 
 
+/*
+ * CreateTypeDDLCommandsIdempotent returns a list of DDL statements (const char *) to be
+ * executed on a node to recreate the type addressed by the typeAddress.
+ */
 List *
 CreateTypeDDLCommandsIdempotent(const ObjectAddress *typeAddress)
 {
@@ -639,6 +747,11 @@ FilterNameListForDistributedTypes(List *objects)
 }
 
 
+/*
+ * TypeNameListToObjectAddresses transforms a List * of TypeName *'s into a List * of
+ * ObjectAddress *'s. For this to succeed all Types identiefied by the TypeName *'s should
+ * exist on this postgres, an error will be thrown otherwise.
+ */
 static List *
 TypeNameListToObjectAddresses(List *objects)
 {
@@ -696,6 +809,9 @@ makeRangeVarQualified(RangeVar *var)
 }
 
 
+/*
+ * makeTypeNameFromRangeVar creates a TypeName based on a RangeVar.
+ */
 static TypeName *
 makeTypeNameFromRangeVar(const RangeVar *relation)
 {
@@ -710,6 +826,17 @@ makeTypeNameFromRangeVar(const RangeVar *relation)
 }
 
 
+/*
+ * EnsureSequentialModeForTypeDDL makes sure that the current transaction is already in
+ * sequential mode, or can still safely be put in sequential mode, it errors if that is
+ * not possible. The error contains information for the user to retry the transaction with
+ * sequential mode set from the beginnig.
+ *
+ * As types are node scoped objects there exists only 1 instance of the type used by
+ * potentially multiple shards. To make sure all shards in the transaction can interact
+ * with the type the type needs to be visible on all connections used by the transaction,
+ * meaning we can only use 1 connection per node.
+ */
 static void
 EnsureSequentialModeForTypeDDL(void)
 {
