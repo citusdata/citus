@@ -141,4 +141,7 @@ WITH (FORMAT text);
 
 SELECT * FROM squares ORDER BY x;
 
+-- empty shard interval array should raise error
+SELECT worker_hash_partition_table(42,1,'SELECT a FROM generate_series(1,100) AS a', 'a', 23, ARRAY[0]);
+
 DROP SCHEMA intermediate_results CASCADE;
