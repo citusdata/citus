@@ -16,7 +16,6 @@
 #include "catalog/objectaddress.h"
 
 
-extern ObjectAddress * getObjectAddressByIdentifier(Oid classId, const char *identifier);
 extern bool isObjectDistributed(const ObjectAddress *address);
 extern void markObjectDistributed(const ObjectAddress *distAddress);
 extern void unmarkObjectDistributed(const ObjectAddress *address);

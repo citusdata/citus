@@ -26,9 +26,7 @@ typedef struct FormData_pg_dist_object
 {
 	Oid classid;      /* class of the distributed object */
 	Oid objid;        /* object id of the distributed object */
-#ifdef CATALOG_VARLEN /* variable-length fields start here */
-	text identifier;  /* qualified identifier of the object, used during pg_upgrade */
-#endif
+	int32 objsubid;   /* object sub id of the distributed object, eg. attnum */
 } FormData_pg_dist_object;
 
 /* ----------------
@@ -45,6 +43,6 @@ typedef FormData_pg_dist_object *Form_pg_dist_object;
 #define Natts_pg_dist_object 3
 #define Anum_pg_dist_object_classid 1
 #define Anum_pg_dist_object_objid 2
-#define Anum_pg_dist_object_identifier 3
+#define Anum_pg_dist_object_objsubid 3
 
 #endif /* PG_DIST_OBJECT_H */

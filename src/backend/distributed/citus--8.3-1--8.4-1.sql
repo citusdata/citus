@@ -3,20 +3,10 @@
 /* bump version to 8.4-1 */
 CREATE SCHEMA IF NOT EXISTS citus_internal;
 
-CREATE OR REPLACE FUNCTION citus_internal.prepare_pg_upgrade_pg_dist_object()
-  RETURNS void
-  LANGUAGE C STRICT
-  AS 'MODULE_PATHNAME', 'citus_prepare_pg_upgrade_pg_dist_object';
-
-CREATE OR REPLACE FUNCTION citus_internal.finish_pg_upgrade_pg_dist_object()
-  RETURNS void
-  LANGUAGE C STRICT
-  AS 'MODULE_PATHNAME', 'citus_finish_pg_upgrade_pg_dist_object';
-
 CREATE TABLE citus.pg_dist_object (
     classid oid NOT NULL,
     objid oid NOT NULL,
-    identifier text DEFAULT NULL -- used to store a stable identifier during pg_upgrade
+    objsubid integer NOT NULL
 );
 
 CREATE INDEX pg_dist_object_classid_objid_index ON
@@ -64,7 +54,7 @@ BEGIN
           FROM pg_event_trigger_dropped_objects() AS drop_object
           WHERE dist_object.classid = drop_object.classid
             AND dist_object.objid = drop_object.objid
-            AND drop_object.objsubid = 0
+            AND drop_object.objsubid = drop_object.objsubid
     );
 
 END;
@@ -94,7 +84,14 @@ BEGIN
     CREATE TABLE public.pg_dist_authinfo AS SELECT * FROM pg_catalog.pg_dist_authinfo;
     CREATE TABLE public.pg_dist_poolinfo AS SELECT * FROM pg_catalog.pg_dist_poolinfo;
 
-    PERFORM citus_internal.prepare_pg_upgrade_pg_dist_object();
+    -- store upgrade stable identifiers on pg_dist_object catalog
+    ALTER TABLE citus.pg_dist_object
+      ADD COLUMN type text,
+      ADD COLUMN object_names text[],
+      ADD COLUMN object_args text[];
+
+    UPDATE citus.pg_dist_object
+       SET (type, object_names, object_args) = (SELECT * FROM pg_identify_object_as_address(classid, objid, objsubid));
 END;
 $cppu$;
 
@@ -176,7 +173,14 @@ BEGIN
         'n' as deptype
     FROM pg_catalog.pg_dist_partition p;
 
-    PERFORM citus_internal.finish_pg_upgrade_pg_dist_object();
+    -- restore pg_dist_object from the stable identifiers
+    UPDATE citus.pg_dist_object
+       SET (classid, objid, objsubid) = (SELECT * FROM pg_get_object_address(type, object_names, object_args));
+
+    ALTER TABLE citus.pg_dist_object
+     DROP COLUMN type,
+     DROP COLUMN object_names,
+     DROP COLUMN object_args;
 END;
 $cppu$;
 
