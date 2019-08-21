@@ -143,6 +143,8 @@ worker_create_or_replace(PG_FUNCTION_ARGS)
 	 */
 	if (object_from_create_exists(parseTree))
 	{
+		/* TODO check if object is equal to what we plan to create */
+
 		DropStmt *dropStmtParseTree = NULL;
 
 		/*
