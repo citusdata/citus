@@ -190,8 +190,8 @@ ErrorIfReindexOnDistributedTable(ReindexStmt *ReindexStatement)
 		return;
 	}
 
-	Assert(ReindexStatement->relkind == REINDEX_OBJECT_INDEX ||
-		   ReindexStatement->relkind == REINDEX_OBJECT_TABLE);
+	Assert(ReindexStatement->kind == REINDEX_OBJECT_INDEX ||
+		   ReindexStatement->kind == REINDEX_OBJECT_TABLE);
 
 	/*
 	 * XXX: Consider using RangeVarGetRelidExtended with a permission
