@@ -40,6 +40,11 @@
 #include "utils/palloc.h"
 
 
+/* forward declaration of local functions */
+static int CompareShardPlacementsByWorker(const void *leftElement,
+										  const void *rightElement);
+
+
 /* declarations for dynamic loading */
 PG_FUNCTION_INFO_V1(load_shard_id_array);
 PG_FUNCTION_INFO_V1(load_shard_interval_array);
@@ -143,7 +148,7 @@ load_shard_placement_array(PG_FUNCTION_ARGS)
 		placementList = ShardPlacementList(shardId);
 	}
 
-	placementList = SortList(placementList, CompareShardPlacements);
+	placementList = SortList(placementList, CompareShardPlacementsByWorker);
 
 	placementCount = list_length(placementList);
 	placementDatumArray = palloc0(placementCount * sizeof(Datum));
@@ -163,6 +168,35 @@ load_shard_placement_array(PG_FUNCTION_ARGS)
 											   placementTypeId);
 
 	PG_RETURN_ARRAYTYPE_P(placementArrayType);
+}
+
+
+/*
+ * CompareShardPlacementsByWorker compares two shard placements by their
+ * worker node name and port.
+ */
+static int
+CompareShardPlacementsByWorker(const void *leftElement, const void *rightElement)
+{
+	const ShardPlacement *leftPlacement = *((const ShardPlacement **) leftElement);
+	const ShardPlacement *rightPlacement = *((const ShardPlacement **) rightElement);
+
+	int nodeNameCmp = strncmp(leftPlacement->nodeName, rightPlacement->nodeName,
+							  WORKER_LENGTH);
+	if (nodeNameCmp != 0)
+	{
+		return nodeNameCmp;
+	}
+	else if (leftPlacement->nodePort > rightPlacement->nodePort)
+	{
+		return 1;
+	}
+	else if (leftPlacement->nodePort < rightPlacement->nodePort)
+	{
+		return -1;
+	}
+
+	return 0;
 }
 
 
