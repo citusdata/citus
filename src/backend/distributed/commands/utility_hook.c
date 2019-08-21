@@ -279,6 +279,11 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 			ddlJobs = PlanIndexStmt((IndexStmt *) parsetree, queryString);
 		}
 
+		if (IsA(parsetree, ReindexStmt))
+		{
+			ErrorIfReindexOnDistributedTable((ReindexStmt *) parsetree);
+		}
+
 		if (IsA(parsetree, DropStmt))
 		{
 			DropStmt *dropStatement = (DropStmt *) parsetree;
