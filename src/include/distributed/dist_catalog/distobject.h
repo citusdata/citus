@@ -16,9 +16,9 @@
 #include "catalog/objectaddress.h"
 
 
-extern bool isObjectDistributed(const ObjectAddress *address);
-extern void markObjectDistributed(const ObjectAddress *distAddress);
-extern void unmarkObjectDistributed(const ObjectAddress *address);
+extern bool IsObjectDistributed(const ObjectAddress *address);
+extern void MarkObjectDistributed(const ObjectAddress *distAddress);
+extern void UnmarkObjectDistributed(const ObjectAddress *address);
 
 extern List * GetDistributedObjectAddressList(void);
 

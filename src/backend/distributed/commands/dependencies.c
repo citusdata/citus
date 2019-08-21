@@ -113,7 +113,7 @@ EnsureDependenciesExistsOnAllNodes(const ObjectAddress *target)
 	foreach(dependencyCell, dependencies)
 	{
 		ObjectAddress *dependency = (ObjectAddress *) lfirst(dependencyCell);
-		markObjectDistributed(dependency);
+		MarkObjectDistributed(dependency);
 	}
 
 	/*

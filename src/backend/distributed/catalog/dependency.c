@@ -40,10 +40,10 @@ static void recurse_pg_depend(const ObjectAddress *target,
 							  bool (*follow)(void *context, const Form_pg_depend row),
 							  void (*apply)(void *context, const Form_pg_depend row),
 							  void *context);
-static bool follow_order_object_address(void *context, const Form_pg_depend pg_depend);
-static bool follow_get_dependencies_for_object(void *context,
-											   const Form_pg_depend pg_depend);
-static void apply_add_to_target_list(void *context, const Form_pg_depend pg_depend);
+static bool FollowAllSupportedDependencies(void *context, const Form_pg_depend pg_depend);
+static bool FollowNewSupportedDependencies(void *context,
+										   const Form_pg_depend pg_depend);
+static void ApplyAddToDependencyList(void *context, const Form_pg_depend pg_depend);
 
 static void InitObjectAddressCollector(ObjectAddressCollector *collector);
 static void CollectObjectAddress(ObjectAddressCollector *collector, const
@@ -99,8 +99,8 @@ GetDependenciesForObject(const ObjectAddress *target)
 	InitObjectAddressCollector(&collector);
 
 	recurse_pg_depend(target,
-					  &follow_get_dependencies_for_object,
-					  &apply_add_to_target_list,
+					  &FollowNewSupportedDependencies,
+					  &ApplyAddToDependencyList,
 					  &collector);
 
 	return collector.dependencyList;
@@ -148,12 +148,6 @@ SupportedDependencyByCitus(const ObjectAddress *address)
 			return false;
 		}
 	}
-
-	/*
-	 * all types should have returned above, compilers complaining about a non return path
-	 * indicate a bug in the above switch. Missing returns or breaking code flow should be
-	 * addressed in the switch statement, preferably not here.
-	 */
 }
 
 
@@ -199,8 +193,8 @@ IsObjectAddressOwnedByExtension(const ObjectAddress *target)
 
 /*
  * OrderObjectAddressListInDependencyOrder given a list of ObjectAddresses return a new
- * list of the same ObjectAddresses ordered on dependency order with the objects without
- * dependencies first.
+ * list of the same ObjectAddresses ordered on dependency order where dependencies
+ * precedes the corresponding object in the list.
  *
  * The algortihm traveses pg_depend in a depth first order starting at the first object in
  * the provided list. By traversing depth first it will put the first dependency at the
@@ -228,8 +222,8 @@ OrderObjectAddressListInDependencyOrder(List *objectAddressList)
 		}
 
 		recurse_pg_depend(objectAddress,
-						  &follow_order_object_address,
-						  &apply_add_to_target_list,
+						  &FollowAllSupportedDependencies,
+						  &ApplyAddToDependencyList,
 						  &collector);
 
 		CollectObjectAddress(&collector, objectAddress);
@@ -285,7 +279,7 @@ recurse_pg_depend(const ObjectAddress *target,
 
 		if (follow == NULL || !follow(context, pg_depend))
 		{
-			/* skip all pg_depend entries the user didn't want to follow */
+			/* skip all pg_depend entries the caller didn't want to follow */
 			continue;
 		}
 
@@ -308,49 +302,56 @@ recurse_pg_depend(const ObjectAddress *target,
 
 
 /*
- * follow_get_dependencies_for_object applies filters on pg_depend entries to follow all
+ * FollowNewSupportedDependencies applies filters on pg_depend entries to follow all
  * objects which should be distributed before the root object can safely be created.
- *
- * Objects are only followed if all of the following checks hold true:
- *  - the pg_depend entry is a normal dependency, all other types are created and
- *    maintained by postgres
- *  - the object is not already in the targetList (context), if it is already in there an
- *    other object already caused the creation of this object
- *  - the object is not already marked as distributed in pg_dist_object. Objects in
- *    pg_dist_object are already available on all workers.
- *  - object is not created by an other extension. Objects created by extensions are
- *    assumed to be created on the worker when the extension is created there.
- *  - citus supports object distribution. If citus does not support the distribution of
- *    the object we will not try and distribute it.
  */
 static bool
-follow_get_dependencies_for_object(void *context, const Form_pg_depend pg_depend)
+FollowNewSupportedDependencies(void *context, const Form_pg_depend pg_depend)
 {
 	ObjectAddressCollector *collector = (ObjectAddressCollector *) context;
 	ObjectAddress address = { 0 };
 	ObjectAddressSet(address, pg_depend->refclassid, pg_depend->refobjid);
 
+	/*
+	 *  Distirbute only normal dependencies, other dependencies are internal dependencies
+	 *  and managed by postgres
+	 */
 	if (pg_depend->deptype != DEPENDENCY_NORMAL)
 	{
 		return false;
 	}
 
+	/*
+	 * We can only distribute dependencies that citus knows how to distribute
+	 */
+	if (!SupportedDependencyByCitus(&address))
+	{
+		return false;
+	}
+
+	/*
+	 * If the object is already in our dependency list we do not have to follow any
+	 * further
+	 */
 	if (IsObjectAddressCollected(&address, collector))
 	{
 		return false;
 	}
 
-	if (isObjectDistributed(&address))
+	/*
+	 * If the object is already distributed it is not a `new` object that needs to be
+	 * distributed before we create a dependant object
+	 */
+	if (IsObjectDistributed(&address))
 	{
 		return false;
 	}
 
+	/*
+	 * Objects owned by an extension are assumed to be created on the workers by creating
+	 * the extension in the cluster
+	 */
 	if (IsObjectAddressOwnedByExtension(&address))
-	{
-		return false;
-	}
-
-	if (!SupportedDependencyByCitus(&address))
 	{
 		return false;
 	}
@@ -360,47 +361,48 @@ follow_get_dependencies_for_object(void *context, const Form_pg_depend pg_depend
 
 
 /*
- * follow_order_object_address applies filters on pg_depend entries to follow the
- * dependency tree of objects in depth first order. The filters are practically the same
- * to follow_get_dependencies_for_object, except it will follow objects that have already
- * been distributed. This is because its primary use is to order the objects from
- * pg_dist_object in dependency order.
- *
- * For completeness the list of all edges it will follow;
- *
- * Objects are only followed if all of the following checks hold true:
- *  - the pg_depend entry is a normal dependency, all other types are created and
- *    maintained by postgres
- *  - the object is not already in the targetList (context), if it is already in there an
- *    other object already caused the creation of this object
- *  - object is not created by an other extension. Objects created by extensions are
- *    assumed to be created on the worker when the extension is created there.
- *  - citus supports object distribution. If citus does not support the distribution of
- *    the object we will not try and distribute it.
+ * FollowAllSupportedDependencies applies filters on pg_depend entries to follow the
+ * dependency tree of objects in depth first order. We will visit all supported objects.
+ * This is used to sort a list of dependencies in dependency order.
  */
 static bool
-follow_order_object_address(void *context, const Form_pg_depend pg_depend)
+FollowAllSupportedDependencies(void *context, const Form_pg_depend pg_depend)
 {
 	ObjectAddressCollector *collector = (ObjectAddressCollector *) context;
 	ObjectAddress address = { 0 };
 	ObjectAddressSet(address, pg_depend->refclassid, pg_depend->refobjid);
 
+	/*
+	 *  Distirbute only normal dependencies, other dependencies are internal dependencies
+	 *  and managed by postgres
+	 */
 	if (pg_depend->deptype != DEPENDENCY_NORMAL)
 	{
 		return false;
 	}
 
+	/*
+	 * We can only distribute dependencies that citus knows how to distribute
+	 */
+	if (!SupportedDependencyByCitus(&address))
+	{
+		return false;
+	}
+
+	/*
+	 * If the object is already in our dependency list we do not have to follow any
+	 * further
+	 */
 	if (IsObjectAddressCollected(&address, collector))
 	{
 		return false;
 	}
 
+	/*
+	 * Objects owned by an extension are assumed to be created on the workers by creating
+	 * the extension in the cluster
+	 */
 	if (IsObjectAddressOwnedByExtension(&address))
-	{
-		return false;
-	}
-
-	if (!SupportedDependencyByCitus(&address))
 	{
 		return false;
 	}
@@ -410,12 +412,12 @@ follow_order_object_address(void *context, const Form_pg_depend pg_depend)
 
 
 /*
- * apply_add_to_target_list is an apply function for recurse_pg_depend that will append
+ * ApplyAddToDependencyList is an apply function for recurse_pg_depend that will append
  * all the ObjectAddresses for pg_depend entries to the context. The context here is
  * assumed to be a (List **) to the location where all ObjectAddresses will be collected.
  */
 static void
-apply_add_to_target_list(void *context, const Form_pg_depend pg_depend)
+ApplyAddToDependencyList(void *context, const Form_pg_depend pg_depend)
 {
 	ObjectAddressCollector *collector = (ObjectAddressCollector *) context;
 	ObjectAddress address = { 0 };

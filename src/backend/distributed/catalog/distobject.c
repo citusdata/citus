@@ -33,11 +33,11 @@
 
 
 /*
- * markObjectDistributed marks an object as a distributed object by citus. Marking is done
+ * MarkObjectDistributed marks an object as a distributed object by citus. Marking is done
  * by adding appropriate entries to citus.pg_dist_object
  */
 void
-markObjectDistributed(const ObjectAddress *distAddress)
+MarkObjectDistributed(const ObjectAddress *distAddress)
 {
 	Relation pgDistObject = NULL;
 
@@ -68,11 +68,11 @@ markObjectDistributed(const ObjectAddress *distAddress)
 
 
 /*
- * unmarkObjectDistributed removes the entry from pg_dist_object that marks this object as
+ * UnmarkObjectDistributed removes the entry from pg_dist_object that marks this object as
  * distributed. This will prevent updates to that object to be propagated to the worker.
  */
 void
-unmarkObjectDistributed(const ObjectAddress *address)
+UnmarkObjectDistributed(const ObjectAddress *address)
 {
 	Relation pgDistObjectRel = NULL;
 	ScanKeyData key[2] = { 0 };
@@ -101,11 +101,11 @@ unmarkObjectDistributed(const ObjectAddress *address)
 
 
 /*
- * isObjectDistributed returns if the object addressed is already distributed in the
+ * IsObjectDistributed returns if the object addressed is already distributed in the
  * cluster. This performs a local indexed lookup in pg_dist_object.
  */
 bool
-isObjectDistributed(const ObjectAddress *address)
+IsObjectDistributed(const ObjectAddress *address)
 {
 	Relation pgDistObjectRel = NULL;
 	ScanKeyData key[2] = { 0 };
@@ -124,11 +124,10 @@ isObjectDistributed(const ObjectAddress *address)
 										  DistObjectClassIDObjectIDIndexId(), true, NULL,
 										  2, key);
 
-	while (HeapTupleIsValid(pgDistObjectTup = systable_getnext(pgDistObjectScan)))
+	pgDistObjectTup = systable_getnext(pgDistObjectScan);
+	if (HeapTupleIsValid(pgDistObjectTup))
 	{
-		/* tuple found, we are done */
 		result = true;
-		break;
 	}
 
 	systable_endscan(pgDistObjectScan);
