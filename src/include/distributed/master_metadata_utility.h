@@ -147,6 +147,8 @@ extern char * ConstructQualifiedShardName(ShardInterval *shardInterval);
 extern uint64 GetFirstShardId(Oid relationId);
 extern Datum StringToDatum(char *inputString, Oid dataType);
 extern char * DatumToString(Datum datum, Oid dataType);
+extern int CompareShardPlacementsByWorker(const void *leftElement,
+										  const void *rightElement);
 
 
 #endif   /* MASTER_METADATA_UTILITY_H */
