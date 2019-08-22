@@ -69,6 +69,7 @@ static const int lock_mode_to_string_map_count = sizeof(lockmode_to_string_map) 
 
 /* local function forward declarations */
 static LOCKMODE IntToLockMode(int mode);
+static void LockReferencedReferenceShardResources(uint64 shardId, LOCKMODE lockMode);
 static void LockShardListResources(List *shardIntervalList, LOCKMODE lockMode);
 static void LockShardListResourcesOnFirstWorker(LOCKMODE lockmode,
 												List *shardIntervalList);
@@ -318,14 +319,15 @@ LockShardDistributionMetadata(int64 shardId, LOCKMODE lockMode)
 
 
 /*
- * LockReferencedReferenceShardDistributionMetadata acquires the given lock
- * on the reference tables which has a foreign key from the given relation.
+ * LockReferencedReferenceShardDistributionMetadata acquires shard distribution
+ * metadata locks with the given lock mode on the reference tables which has a
+ * foreign key from the given relation.
  *
  * It also gets metadata locks on worker nodes to prevent concurrent write
  * operations on reference tables from metadata nodes.
  */
 void
-LockReferencedReferenceShardDistributionMetadata(uint64 shardId, LOCKMODE lock)
+LockReferencedReferenceShardDistributionMetadata(uint64 shardId, LOCKMODE lockMode)
 {
 	ListCell *shardIntervalCell = NULL;
 	Oid relationId = RelationIdForShard(shardId);
@@ -336,21 +338,61 @@ LockReferencedReferenceShardDistributionMetadata(uint64 shardId, LOCKMODE lock)
 
 	if (list_length(shardIntervalList) > 0 && ClusterHasKnownMetadataWorkers())
 	{
-		LockShardListMetadataOnWorkers(lock, shardIntervalList);
+		LockShardListMetadataOnWorkers(lockMode, shardIntervalList);
 	}
 
 	foreach(shardIntervalCell, shardIntervalList)
 	{
 		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
 
-		LockShardDistributionMetadata(shardInterval->shardId, lock);
+		LockShardDistributionMetadata(shardInterval->shardId, lockMode);
 	}
 }
 
 
 /*
- * GetSortedReferenceShards iterates through the given relation list.
- * Lists the shards of reference tables and returns the list after sorting.
+ * LockReferencedReferenceShardResources acquires resource locks with the
+ * given lock mode on the reference tables which has a foreign key from
+ * the given relation.
+ *
+ * It also gets resource locks on worker nodes to prevent concurrent write
+ * operations on reference tables from metadata nodes.
+ */
+static void
+LockReferencedReferenceShardResources(uint64 shardId, LOCKMODE lockMode)
+{
+	ListCell *shardIntervalCell = NULL;
+	Oid relationId = RelationIdForShard(shardId);
+
+	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(relationId);
+
+	/*
+	 * Note that referencedRelationsViaForeignKey contains transitively referenced
+	 * relations too.
+	 */
+	List *referencedRelationList = cacheEntry->referencedRelationsViaForeignKey;
+	List *referencedShardIntervalList =
+		GetSortedReferenceShardIntervals(referencedRelationList);
+
+	if (list_length(referencedShardIntervalList) > 0 &&
+		ClusterHasKnownMetadataWorkers() &&
+		!IsFirstWorkerNode())
+	{
+		LockShardListResourcesOnFirstWorker(lockMode, referencedShardIntervalList);
+	}
+
+	foreach(shardIntervalCell, referencedShardIntervalList)
+	{
+		ShardInterval *referencedShardInterval = (ShardInterval *) lfirst(
+			shardIntervalCell);
+		LockShardResource(referencedShardInterval->shardId, lockMode);
+	}
+}
+
+
+/*
+ * GetSortedReferenceShardIntervals iterates through the given relation list,
+ * lists the shards of reference tables, and returns the list after sorting.
  */
 List *
 GetSortedReferenceShardIntervals(List *relationList)
@@ -534,11 +576,20 @@ SerializeNonCommutativeWrites(List *shardIntervalList, LOCKMODE lockMode)
 	ShardInterval *firstShardInterval = (ShardInterval *) linitial(shardIntervalList);
 	int64 firstShardId = firstShardInterval->shardId;
 
-	if (ReferenceTableShardId(firstShardId) && ClusterHasKnownMetadataWorkers() &&
-		!IsFirstWorkerNode())
+	if (ReferenceTableShardId(firstShardId))
 	{
-		LockShardListResourcesOnFirstWorker(lockMode, shardIntervalList);
+		if (ClusterHasKnownMetadataWorkers() && !IsFirstWorkerNode())
+		{
+			LockShardListResourcesOnFirstWorker(lockMode, shardIntervalList);
+		}
+
+		/*
+		 * Referenced tables can cascade their changes to this table, and we
+		 * want to serialize changes to keep different replicas consistent.
+		 */
+		LockReferencedReferenceShardResources(firstShardId, lockMode);
 	}
+
 
 	LockShardListResources(shardIntervalList, lockMode);
 }

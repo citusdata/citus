@@ -71,8 +71,8 @@ extern void LockShardListMetadataOnWorkers(LOCKMODE lockmode, List *shardInterva
 extern void BlockWritesToShardList(List *shardList);
 
 /* Lock shard/relation metadata of the referenced reference table if exists */
-extern void LockReferencedReferenceShardDistributionMetadata(uint64 shardId, LOCKMODE
-															 lock);
+extern void LockReferencedReferenceShardDistributionMetadata(uint64 shardId,
+															 LOCKMODE lock);
 
 /* Lock shard data, for DML commands or remote fetches */
 extern void LockShardResource(uint64 shardId, LOCKMODE lockmode);

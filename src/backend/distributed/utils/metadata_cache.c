@@ -1456,6 +1456,14 @@ CitusHasBeenLoaded(void)
 			 */
 			DistPartitionRelationId();
 
+
+			/*
+			 * This needs to be initialized so we can receive foreign relation graph
+			 * invalidation messages in InvalidateForeignRelationGraphCacheCallback().
+			 * See the comments of InvalidateForeignKeyGraph for more context.
+			 */
+			DistColocationRelationId();
+
 			/*
 			 * We also reset citusVersionKnownCompatible, so it will be re-read in
 			 * case of extension update.
@@ -3089,7 +3097,6 @@ ResetDistTableCacheEntry(DistTableCacheEntry *cacheEntry)
 static void
 InvalidateForeignRelationGraphCacheCallback(Datum argument, Oid relationId)
 {
-	/* when invalidation happens simply set the LocalGroupId to the default value */
 	if (relationId == MetadataCache.distColocationRelationId)
 	{
 		SetForeignConstraintRelationshipGraphInvalid();
@@ -3164,7 +3171,7 @@ InvalidateDistRelationCacheCallback(Datum argument, Oid relationId)
  * InvalidateEntireDistCache makes entire cache entries invalid.
  */
 static void
-InvalidateEntireDistCache()
+InvalidateEntireDistCache(void)
 {
 	DistTableCacheEntry *cacheEntry = NULL;
 	HASH_SEQ_STATUS status;

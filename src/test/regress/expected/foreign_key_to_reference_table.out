@@ -492,7 +492,7 @@ SELECT count(*) FROM referencing_table;
 -- drop table for next tests
 DROP TABLE referencing_table;
 DROP TABLE referenced_table;
--- self referencing foreign key on reference tables are not allowed
+-- self referencing foreign key on reference tables are allowed
 -- TODO try create_reference_table with already created foreign key.
 CREATE TABLE referenced_table(id int, test_column int, PRIMARY KEY(id));
 CREATE TABLE referencing_table(id int, ref_id int);
@@ -510,14 +510,10 @@ SELECT create_reference_table('referencing_table');
 
 -- self referencing foreign key
 ALTER TABLE referenced_table ADD CONSTRAINT fkey_ref FOREIGN KEY (test_column) REFERENCES referenced_table(id);
-ERROR:  cannot create foreign key constraint because reference tables are not supported as the referencing table of a foreign constraint
-DETAIL:  Reference tables are only supported as the referenced table of a foreign key when the referencing table is a hash distributed table
--- foreign Keys from reference table to reference table are not allowed
+-- foreign Keys from reference table to reference table are allowed
 ALTER TABLE referencing_table ADD CONSTRAINT fkey_ref FOREIGN KEY(id) REFERENCES referenced_table(id) ON UPDATE CASCADE;
-ERROR:  cannot create foreign key constraint because reference tables are not supported as the referencing table of a foreign constraint
-DETAIL:  Reference tables are only supported as the referenced table of a foreign key when the referencing table is a hash distributed table
-DROP TABLE referenced_table;
 DROP TABLE referencing_table;
+DROP TABLE referenced_table;
 -- cascades on delete with different schemas
 CREATE SCHEMA referenced_schema;
 CREATE SCHEMA referencing_schema;
