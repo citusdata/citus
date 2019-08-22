@@ -75,7 +75,6 @@
 #define AlterEnumIsAddValue(stmt) (stmt->oldVal == NULL)
 
 
-#define CREATE_IF_NOT_EXISTS_COMMAND "SELECT worker_create_if_not_exists(%s);"
 #define ALTER_TYPE_OWNER_COMMAND "ALTER TYPE %s OWNER TO %s;"
 #define CREATE_OR_REPLACE_COMMAND "SELECT worker_create_or_replace(%s);"
 
