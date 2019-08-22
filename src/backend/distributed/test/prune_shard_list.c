@@ -25,9 +25,13 @@
 #include "distributed/multi_physical_planner.h"
 #include "distributed/resource_lock.h"
 #include "distributed/shard_pruning.h"
+#if PG_VERSION_NUM >= 120000
+#include "nodes/makefuncs.h"
+#include "nodes/nodeFuncs.h"
+#endif
+#include "nodes/nodes.h"
 #include "nodes/pg_list.h"
 #include "nodes/primnodes.h"
-#include "nodes/nodes.h"
 #include "optimizer/clauses.h"
 #include "utils/array.h"
 #include "utils/palloc.h"

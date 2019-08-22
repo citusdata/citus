@@ -463,7 +463,7 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 	columnNulls = palloc0(columnCount * sizeof(bool));
 
 	/* set up a virtual tuple table slot */
-	tupleTableSlot = MakeSingleTupleTableSlot(tupleDescriptor);
+	tupleTableSlot = MakeSingleTupleTableSlotCompat(tupleDescriptor, &TTSOpsVirtual);
 	tupleTableSlot->tts_nvalid = columnCount;
 	tupleTableSlot->tts_values = columnValues;
 	tupleTableSlot->tts_isnull = columnNulls;
@@ -561,8 +561,8 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 		oldContext = MemoryContextSwitchTo(executorTupleContext);
 
 		/* parse a row from the input */
-		nextRowFound = NextCopyFrom(copyState, executorExpressionContext,
-									columnValues, columnNulls, NULL);
+		nextRowFound = NextCopyFromCompat(copyState, executorExpressionContext,
+										  columnValues, columnNulls);
 
 		if (!nextRowFound)
 		{
@@ -681,8 +681,8 @@ CopyToNewShards(CopyStmt *copyStatement, char *completionTag, Oid relationId)
 		oldContext = MemoryContextSwitchTo(executorTupleContext);
 
 		/* parse a row from the input */
-		nextRowFound = NextCopyFrom(copyState, executorExpressionContext,
-									columnValues, columnNulls, NULL);
+		nextRowFound = NextCopyFromCompat(copyState, executorExpressionContext,
+										  columnValues, columnNulls);
 
 		if (!nextRowFound)
 		{
@@ -2803,6 +2803,14 @@ ProcessCopyStmt(CopyStmt *copyStatement, char *completionTag, const char *queryS
 		{
 			if (copyStatement->is_from)
 			{
+#if PG_VERSION_NUM >= 120000
+				if (copyStatement->whereClause)
+				{
+					ereport(ERROR, (errmsg(
+										"Citus does not support COPY FROM with WHERE")));
+				}
+#endif
+
 				/* check permissions, we're bypassing postgres' normal checks */
 				if (!isCopyFromWorker)
 				{
@@ -2812,7 +2820,7 @@ ProcessCopyStmt(CopyStmt *copyStatement, char *completionTag, const char *queryS
 				CitusCopyFrom(copyStatement, completionTag);
 				return NULL;
 			}
-			else if (!copyStatement->is_from)
+			else
 			{
 				/*
 				 * The copy code only handles SELECTs in COPY ... TO on master tables,

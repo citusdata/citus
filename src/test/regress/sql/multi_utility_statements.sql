@@ -106,12 +106,11 @@ COPY nation TO STDOUT;
 -- ensure individual cols can be copied out, too
 COPY nation(n_name) TO STDOUT;
 
--- Test that we can create on-commit drop tables, and also test creating with
--- oids, along with changing column names
+-- Test that we can create on-commit drop tables, along with changing column names
 
 BEGIN;
 
-CREATE TEMP TABLE customer_few (customer_key) WITH (OIDS) ON COMMIT DROP AS 
+CREATE TEMP TABLE customer_few (customer_key) ON COMMIT DROP AS 
     (SELECT * FROM customer WHERE c_nationkey = 1 ORDER BY c_custkey LIMIT 10);
 
 SELECT customer_key, c_name, c_address 

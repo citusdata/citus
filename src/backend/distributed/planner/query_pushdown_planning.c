@@ -31,10 +31,16 @@
 #include "distributed/pg_dist_partition.h"
 #include "distributed/query_pushdown_planning.h"
 #include "distributed/relation_restriction_equivalence.h"
+#include "distributed/version_compat.h"
 #include "nodes/nodeFuncs.h"
+#if PG_VERSION_NUM >= 120000
+#include "nodes/makefuncs.h"
+#include "optimizer/optimizer.h"
+#else
+#include "optimizer/var.h"
+#endif
 #include "nodes/pg_list.h"
 #include "optimizer/clauses.h"
-#include "optimizer/var.h"
 #include "parser/parsetree.h"
 
 
@@ -191,6 +197,32 @@ JoinTreeContainsSubquery(Query *query)
 	}
 
 	return JoinTreeContainsSubqueryWalker((Node *) joinTree, query);
+}
+
+
+/*
+ * HasEmptyJoinTree returns whether the query selects from anything.
+ */
+bool
+HasEmptyJoinTree(Query *query)
+{
+	if (query->rtable == NIL)
+	{
+		return true;
+	}
+
+#if PG_VERSION_NUM >= 120000
+	else if (list_length(query->rtable) == 1)
+	{
+		RangeTblEntry *rte = (RangeTblEntry *) linitial(query->rtable);
+		if (rte->rtekind == RTE_RESULT)
+		{
+			return true;
+		}
+	}
+#endif
+
+	return false;
 }
 
 
@@ -651,7 +683,7 @@ FromClauseRecurringTupleType(Query *queryTree)
 {
 	RecurringTuplesType recurType = RECURRING_TUPLES_INVALID;
 
-	if (queryTree->rtable == NIL)
+	if (HasEmptyJoinTree(queryTree))
 	{
 		return RECURRING_TUPLES_EMPTY_JOIN_TREE;
 	}
@@ -817,7 +849,7 @@ DeferErrorIfCannotPushdownSubquery(Query *subqueryTree, bool outerMostQueryHasLi
 		return deferredError;
 	}
 
-	if (subqueryTree->rtable == NIL &&
+	if (HasEmptyJoinTree(subqueryTree) &&
 		contain_mutable_functions((Node *) subqueryTree->targetList))
 	{
 		preconditionsSatisfied = false;
@@ -1009,7 +1041,11 @@ DeferErrorIfUnsupportedTableCombination(Query *queryTree)
 		 * subquery, or immutable function.
 		 */
 		if (rangeTableEntry->rtekind == RTE_RELATION ||
-			rangeTableEntry->rtekind == RTE_SUBQUERY)
+			rangeTableEntry->rtekind == RTE_SUBQUERY
+#if PG_VERSION_NUM >= 120000
+			|| rangeTableEntry->rtekind == RTE_RESULT
+#endif
+			)
 		{
 			/* accepted */
 		}
@@ -1332,7 +1368,7 @@ static bool
 IsRecurringRangeTable(List *rangeTable, RecurringTuplesType *recurType)
 {
 	return range_table_walker(rangeTable, HasRecurringTuples, recurType,
-							  QTW_EXAMINE_RTES);
+							  QTW_EXAMINE_RTES_BEFORE);
 }
 
 
@@ -1388,6 +1424,13 @@ HasRecurringTuples(Node *node, RecurringTuplesType *recurType)
 			 */
 			return true;
 		}
+#if PG_VERSION_NUM >= 120000
+		else if (rangeTableEntry->rtekind == RTE_RESULT)
+		{
+			*recurType = RECURRING_TUPLES_EMPTY_JOIN_TREE;
+			return true;
+		}
+#endif
 
 		return false;
 	}
@@ -1395,7 +1438,7 @@ HasRecurringTuples(Node *node, RecurringTuplesType *recurType)
 	{
 		Query *query = (Query *) node;
 
-		if (query->rtable == NIL)
+		if (HasEmptyJoinTree(query))
 		{
 			*recurType = RECURRING_TUPLES_EMPTY_JOIN_TREE;
 
@@ -1407,7 +1450,7 @@ HasRecurringTuples(Node *node, RecurringTuplesType *recurType)
 		}
 
 		return query_tree_walker((Query *) node, HasRecurringTuples,
-								 recurType, QTW_EXAMINE_RTES);
+								 recurType, QTW_EXAMINE_RTES_BEFORE);
 	}
 
 	return expression_tree_walker(node, HasRecurringTuples, recurType);

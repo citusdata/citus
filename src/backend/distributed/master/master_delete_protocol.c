@@ -42,13 +42,21 @@
 #include "distributed/worker_protocol.h"
 #include "distributed/worker_transaction.h"
 #include "lib/stringinfo.h"
+#if PG_VERSION_NUM >= 120000
+#include "nodes/nodeFuncs.h"
+#endif
 #include "nodes/nodes.h"
 #include "nodes/parsenodes.h"
 #include "nodes/pg_list.h"
 #include "nodes/primnodes.h"
-#include "nodes/relation.h"
 #include "optimizer/clauses.h"
+#if PG_VERSION_NUM >= 120000
+#include "nodes/pathnodes.h"
+#include "optimizer/optimizer.h"
+#else
+#include "nodes/relation.h"
 #include "optimizer/predtest.h"
+#endif
 #include "optimizer/restrictinfo.h"
 #include "storage/lock.h"
 #include "storage/lmgr.h"

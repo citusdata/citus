@@ -756,7 +756,7 @@ AppendShardIdToName(char **name, uint64 shardId)
 	if (neededBytes < 0)
 	{
 		ereport(ERROR, (errcode(ERRCODE_OUT_OF_MEMORY),
-						errmsg("out of memory: %s", strerror(errno))));
+						errmsg("out of memory: %m")));
 	}
 	else if (neededBytes >= NAMEDATALEN)
 	{

@@ -26,6 +26,7 @@
 #include "distributed/query_pushdown_planning.h"
 #include "distributed/recursive_planning.h"
 #include "distributed/resource_lock.h"
+#include "distributed/version_compat.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
 #include "nodes/parsenodes.h"
@@ -33,7 +34,11 @@
 #include "optimizer/planner.h"
 #include "optimizer/restrictinfo.h"
 #include "optimizer/tlist.h"
+#if PG_VERSION_NUM >= 120000
+#include "optimizer/optimizer.h"
+#else
 #include "optimizer/var.h"
+#endif
 #include "parser/parsetree.h"
 #include "parser/parse_coerce.h"
 #include "parser/parse_relation.h"
@@ -765,7 +770,7 @@ MultiTaskRouterSelectQuerySupported(Query *query)
 		Assert(subquery->commandType == CMD_SELECT);
 
 		/* pushing down rtes without relations yields (shardCount * expectedRows) */
-		if (subquery->rtable == NIL)
+		if (HasEmptyJoinTree(subquery))
 		{
 			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 								 "Subqueries without relations are not allowed in "

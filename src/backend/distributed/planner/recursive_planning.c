@@ -78,7 +78,11 @@
 #include "nodes/nodes.h"
 #include "nodes/pg_list.h"
 #include "nodes/primnodes.h"
+#if PG_VERSION_NUM >= 120000
+#include "nodes/pathnodes.h"
+#else
 #include "nodes/relation.h"
+#endif
 #include "utils/builtins.h"
 #include "utils/guc.h"
 
@@ -1218,7 +1222,8 @@ CteReferenceListWalker(Node *node, CteReferenceWalkerContext *context)
 		Query *query = (Query *) node;
 
 		context->level += 1;
-		query_tree_walker(query, CteReferenceListWalker, context, QTW_EXAMINE_RTES);
+		query_tree_walker(query, CteReferenceListWalker, context,
+						  QTW_EXAMINE_RTES_BEFORE);
 		context->level -= 1;
 
 		return false;

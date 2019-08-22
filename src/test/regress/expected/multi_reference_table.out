@@ -1382,10 +1382,6 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='reference_sche
 (0 rows)
 
 \c - - - :master_port
--- as we expect, setting WITH OIDS does not work for reference tables
-ALTER TABLE reference_schema.reference_table_ddl SET WITH OIDS;
-ERROR:  alter table command is currently unsupported
-DETAIL:  Only ADD|DROP COLUMN, SET|DROP NOT NULL, SET|DROP DEFAULT, ADD|DROP|VALIDATE CONSTRAINT, SET (), RESET (), ATTACH|DETACH PARTITION and TYPE subcommands are supported.
 -- now test the renaming of the table, and back to the expected name
 ALTER TABLE reference_schema.reference_table_ddl RENAME TO reference_table_ddl_test;
 ALTER TABLE reference_schema.reference_table_ddl_test RENAME TO reference_table_ddl;

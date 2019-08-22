@@ -72,14 +72,6 @@ SELECT * FROM pg_dist_shard s, pg_dist_shard_placement p
   ORDER BY placementid;
 SELECT count(1) FROM copy_test;
 
--- we round-robin when picking which node to run pg_table_size on, this COPY runs it on
--- the other node, so the next copy will try to run it on our node
-COPY copy_test FROM PROGRAM 'echo 0, 0 && echo 1, 1 && echo 2, 4 && echo 3, 9' WITH CSV;
-SELECT * FROM pg_dist_shard s, pg_dist_shard_placement p
-  WHERE (s.shardid = p.shardid) AND s.logicalrelid = 'copy_test'::regclass
-  ORDER BY p.nodeport, p.placementid;
-SELECT count(1) FROM copy_test;
-
 ---- kill the connection when we try to get the min, max of the table ----
 SELECT citus.mitmproxy('conn.onQuery(query="SELECT min\(key\), max\(key\)").kill()');
 COPY copy_test FROM PROGRAM 'echo 0, 0 && echo 1, 1 && echo 2, 4 && echo 3, 9' WITH CSV;

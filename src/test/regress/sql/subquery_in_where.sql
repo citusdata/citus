@@ -6,46 +6,45 @@ SET search_path TO subquery_in_where, public;
 
 SET client_min_messages TO DEBUG1;
 
---CTEs can be used as a recurring tuple with subqueries in WHERE 
+--CTEs can be used as a recurring tuple with subqueries in WHERE
 WITH event_id
-     AS (SELECT user_id AS events_user_id, 
-                time    AS events_time, 
+     AS (SELECT user_id AS events_user_id,
+                time    AS events_time,
                 event_type
-         FROM   events_table) 
-SELECT Count(*) 
+         FROM   events_table)
+SELECT Count(*)
 FROM   event_id
 WHERE  events_user_id IN (SELECT user_id
                           FROM   users_table);
 
---Correlated subqueries can not be used in WHERE clause 
-WITH event_id 
-     AS (SELECT user_id AS events_user_id, 
-                time    AS events_time, 
-                event_type 
-         FROM   events_table) 
-SELECT Count(*) 
-FROM   event_id 
-WHERE  events_user_id IN (SELECT user_id 
-                          FROM   users_table 
-                          WHERE  users_table.time = events_time); 
+--Correlated subqueries can not be used in WHERE clause
+WITH event_id
+     AS (SELECT user_id AS events_user_id,
+                time    AS events_time,
+                event_type
+         FROM   events_table)
+SELECT Count(*)
+FROM   event_id
+WHERE  events_user_id IN (SELECT user_id
+                          FROM   users_table
+                          WHERE  users_table.time = events_time);
 
--- Recurring tuples as empty join tree 
-SELECT * 
-FROM   (SELECT 1 AS id, 
-               2 AS value_1, 
-               3 AS value_3) AS tt1 
-WHERE  id IN (SELECT user_id 
-              FROM   events_table); 
+-- Recurring tuples as empty join tree
+SELECT *
+FROM   (SELECT 1 AS id, 2 AS value_1, 3 AS value_3
+		UNION ALL SELECT 2 as id, 3 as value_1, 4 as value_3) AS tt1
+WHERE  id IN (SELECT user_id
+              FROM   events_table);
 
 -- Recurring tuples in from clause as CTE and SET operation in WHERE clause
 SELECT Count(*)
 FROM   (WITH event_id AS
-       (SELECT user_id AS events_user_id, time AS events_time, event_type 
+       (SELECT user_id AS events_user_id, time AS events_time, event_type
         FROM events_table)
        SELECT events_user_id, events_time, event_type
-	   FROM event_id 
+	   FROM event_id
 	   ORDER BY 1,2,3
-	   LIMIT 10) AS sub_table 
+	   LIMIT 10) AS sub_table
 WHERE  events_user_id IN (
        (SELECT user_id
         FROM users_table
@@ -157,7 +156,7 @@ FROM
 		user_id as events_user_id, time as events_time, event_type
 	FROM
 		events_table
-	ORDER BY 
+	ORDER BY
 		1,2,3
 	LIMIT
 		10
@@ -499,7 +498,7 @@ FROM
 		users_table
 	ORDER BY
 		user_id
-	LIMIT 
+	LIMIT
 		10) as sub_table
 WHERE
 	user_id

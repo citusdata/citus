@@ -203,7 +203,7 @@ UpdateRelationToShardNames(Node *node, List *relationShardList)
 	if (IsA(node, Query))
 	{
 		return query_tree_walker((Query *) node, UpdateRelationToShardNames,
-								 relationShardList, QTW_EXAMINE_RTES);
+								 relationShardList, QTW_EXAMINE_RTES_BEFORE);
 	}
 
 	if (!IsA(node, RangeTblEntry))

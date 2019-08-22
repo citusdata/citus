@@ -21,12 +21,16 @@
 #include "catalog/dependency.h"
 #include "catalog/index.h"
 #include "catalog/pg_am.h"
+#include "catalog/pg_attribute.h"
 #if (PG_VERSION_NUM < 110000)
 #include "catalog/pg_constraint_fn.h"
 #endif
 #include "catalog/pg_enum.h"
 #include "catalog/pg_extension.h"
 #include "catalog/pg_opclass.h"
+#if PG_VERSION_NUM >= 12000
+#include "catalog/pg_proc.h"
+#endif
 #include "catalog/pg_trigger.h"
 #include "commands/defrem.h"
 #include "commands/extension.h"
@@ -99,6 +103,8 @@ static bool LocalTableEmpty(Oid tableId);
 static void CopyLocalDataIntoShards(Oid relationId);
 static List * TupleDescColumnNameList(TupleDesc tupleDescriptor);
 static bool RelationUsesIdentityColumns(TupleDesc relationDesc);
+static bool RelationUsesGeneratedStoredColumns(TupleDesc relationDesc);
+static bool RelationUsesHeapAccessMethodOrNone(Relation relation);
 static bool CanUseExclusiveConnections(Oid relationId, bool localTableEmpty);
 
 /* exports for SQL callable functions */
@@ -645,6 +651,14 @@ EnsureRelationCanBeDistributed(Oid relationId, Var *distributionColumn,
 	relationDesc = RelationGetDescr(relation);
 	relationName = RelationGetRelationName(relation);
 
+	if (!RelationUsesHeapAccessMethodOrNone(relation))
+	{
+		ereport(ERROR, (errmsg(
+							"cannot distribute relations using non-heap access methods")));
+	}
+
+#if PG_VERSION_NUM < 120000
+
 	/* verify target relation does not use WITH (OIDS) PostgreSQL feature */
 	if (relationDesc->tdhasoid)
 	{
@@ -653,6 +667,7 @@ EnsureRelationCanBeDistributed(Oid relationId, Var *distributionColumn,
 						errdetail("Distributed relations must not specify the WITH "
 								  "(OIDS) option in their definitions.")));
 	}
+#endif
 
 	/* verify target relation does not use identity columns */
 	if (RelationUsesIdentityColumns(relationDesc))
@@ -661,6 +676,15 @@ EnsureRelationCanBeDistributed(Oid relationId, Var *distributionColumn,
 						errmsg("cannot distribute relation: %s", relationName),
 						errdetail("Distributed relations must not use GENERATED "
 								  "... AS IDENTITY.")));
+	}
+
+	/* verify target relation does not use generated columns */
+	if (RelationUsesGeneratedStoredColumns(relationDesc))
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("cannot distribute relation: %s", relationName),
+						errdetail("Distributed relations must not use GENERATED ALWAYS "
+								  "AS (...) STORED.")));
 	}
 
 	/* check for support function needed by specified partition method */
@@ -1196,7 +1220,11 @@ CopyLocalDataIntoShards(Oid distributedRelationId)
 	bool stopOnFailure = true;
 
 	EState *estate = NULL;
+#if PG_VERSION_NUM >= 120000
+	TableScanDesc scan = NULL;
+#else
 	HeapScanDesc scan = NULL;
+#endif
 	HeapTuple tuple = NULL;
 	ExprContext *econtext = NULL;
 	MemoryContext oldContext = NULL;
@@ -1230,7 +1258,7 @@ CopyLocalDataIntoShards(Oid distributedRelationId)
 
 	/* get the table columns */
 	tupleDescriptor = RelationGetDescr(distributedRelation);
-	slot = MakeSingleTupleTableSlot(tupleDescriptor);
+	slot = MakeSingleTupleTableSlotCompat(tupleDescriptor, &TTSOpsHeapTuple);
 	columnNameList = TupleDescColumnNameList(tupleDescriptor);
 
 	/* determine the partition column in the tuple descriptor */
@@ -1256,14 +1284,22 @@ CopyLocalDataIntoShards(Oid distributedRelationId)
 	copyDest->rStartup(copyDest, 0, tupleDescriptor);
 
 	/* begin reading from local table */
+#if PG_VERSION_NUM >= 120000
+	scan = table_beginscan(distributedRelation, GetActiveSnapshot(), 0, NULL);
+#else
 	scan = heap_beginscan(distributedRelation, GetActiveSnapshot(), 0, NULL);
+#endif
 
 	oldContext = MemoryContextSwitchTo(GetPerTupleMemoryContext(estate));
 
 	while ((tuple = heap_getnext(scan, ForwardScanDirection)) != NULL)
 	{
 		/* materialize tuple and send it to a shard */
+#if PG_VERSION_NUM >= 120000
+		ExecStoreHeapTuple(tuple, slot, false);
+#else
 		ExecStoreTuple(tuple, slot, InvalidBuffer, false);
+#endif
 		copyDest->receiveSlot(slot, copyDest);
 
 		/* clear tuple memory */
@@ -1293,7 +1329,11 @@ CopyLocalDataIntoShards(Oid distributedRelationId)
 	MemoryContextSwitchTo(oldContext);
 
 	/* finish reading from the local table */
+#if PG_VERSION_NUM >= 120000
+	table_endscan(scan);
+#else
 	heap_endscan(scan);
+#endif
 
 	/* finish writing into the shards */
 	copyDest->rShutdown(copyDest);
@@ -1354,4 +1394,45 @@ RelationUsesIdentityColumns(TupleDesc relationDesc)
 	}
 
 	return false;
+}
+
+
+/*
+ * RelationUsesIdentityColumns returns whether a given relation uses the SQL
+ * GENERATED ... AS IDENTITY features introduced as of PostgreSQL 10.
+ */
+static bool
+RelationUsesGeneratedStoredColumns(TupleDesc relationDesc)
+{
+#if PG_VERSION_NUM >= 120000
+	int attributeIndex = 0;
+
+	for (attributeIndex = 0; attributeIndex < relationDesc->natts; attributeIndex++)
+	{
+		Form_pg_attribute attributeForm = TupleDescAttr(relationDesc, attributeIndex);
+
+		if (attributeForm->attgenerated == ATTRIBUTE_GENERATED_STORED)
+		{
+			return true;
+		}
+	}
+#endif
+
+	return false;
+}
+
+
+/*
+ * Returns whether given relation uses default access method
+ */
+static bool
+RelationUsesHeapAccessMethodOrNone(Relation relation)
+{
+#if PG_VERSION_NUM >= 120000
+
+	return relation->rd_rel->relkind != RELKIND_RELATION ||
+		   relation->rd_amhandler == HEAP_TABLE_AM_HANDLER_OID;
+#else
+	return true;
+#endif
 }

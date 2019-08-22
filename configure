@@ -2531,7 +2531,7 @@ if test -z "$version_num"; then
   as_fn_error $? "Could not detect PostgreSQL version from pg_config." "$LINENO" 5
 fi
 
-if test "$version_num" != '10' -a "$version_num" != '11'; then
+if test "$version_num" != '10' -a "$version_num" != '11' -a "$version_num" != '12'; then
    as_fn_error $? "Citus is not compatible with the detected PostgreSQL version ${version_num}." "$LINENO" 5
 else
    { $as_echo "$as_me:${as_lineno-$LINENO}: building against PostgreSQL $version_num" >&5
@@ -3830,6 +3830,41 @@ fi
 $as_echo "$citusac_cv_prog_cc_cflags__Wno_clobbered" >&6; }
 if test x"$citusac_cv_prog_cc_cflags__Wno_clobbered" = x"yes"; then
   CITUS_CFLAGS="$CITUS_CFLAGS -Wno-clobbered"
+fi
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking whether $CC supports -Wno-gnu-variable-sized-type-not-at-end" >&5
+$as_echo_n "checking whether $CC supports -Wno-gnu-variable-sized-type-not-at-end... " >&6; }
+if ${citusac_cv_prog_cc_cflags__Wno_gnu_variable_sized_type_not_at_end+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  citusac_save_CFLAGS=$CFLAGS
+CFLAGS="$citusac_save_CFLAGS -Wno-gnu-variable-sized-type-not-at-end"
+ac_save_c_werror_flag=$ac_c_werror_flag
+ac_c_werror_flag=yes
+cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+int
+main ()
+{
+
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_compile "$LINENO"; then :
+  citusac_cv_prog_cc_cflags__Wno_gnu_variable_sized_type_not_at_end=yes
+else
+  citusac_cv_prog_cc_cflags__Wno_gnu_variable_sized_type_not_at_end=no
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
+ac_c_werror_flag=$ac_save_c_werror_flag
+CFLAGS="$citusac_save_CFLAGS"
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $citusac_cv_prog_cc_cflags__Wno_gnu_variable_sized_type_not_at_end" >&5
+$as_echo "$citusac_cv_prog_cc_cflags__Wno_gnu_variable_sized_type_not_at_end" >&6; }
+if test x"$citusac_cv_prog_cc_cflags__Wno_gnu_variable_sized_type_not_at_end" = x"yes"; then
+  CITUS_CFLAGS="$CITUS_CFLAGS -Wno-gnu-variable-sized-type-not-at-end"
 fi
 
 # And add a few extra warnings

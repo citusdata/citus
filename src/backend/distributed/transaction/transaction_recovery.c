@@ -19,6 +19,9 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#if PG_VERSION_NUM >= 120000
+#include "access/genam.h"
+#endif
 #include "access/heapam.h"
 #include "access/htup_details.h"
 #include "access/relscan.h"

@@ -39,13 +39,9 @@ CREATE TABLE table_to_distribute (
 	json_data json,
 	test_type_data dummy_type
 );
--- use the table WITH (OIDS) set
-ALTER TABLE table_to_distribute SET WITH OIDS;
 SELECT create_distributed_table('table_to_distribute', 'id', 'hash');
-ERROR:  cannot distribute relation: table_to_distribute
-DETAIL:  Distributed relations must not specify the WITH (OIDS) option in their definitions.
--- revert WITH (OIDS) from above
-ALTER TABLE table_to_distribute SET WITHOUT OIDS;
+ERROR:  cannot create constraint on "table_to_distribute"
+DETAIL:  Distributed relations cannot have UNIQUE, EXCLUDE, or PRIMARY KEY constraints that do not include the partition column (with an equality operator if EXCLUDE).
 -- use an index instead of table name
 SELECT create_distributed_table('table_to_distribute_pkey', 'id', 'hash');
 ERROR:  table_to_distribute_pkey is not a regular, foreign or partitioned table

@@ -166,6 +166,8 @@ call test_procedure(1,1);
 call test_procedure(20, 20);
 SELECT * from test_table;
 
+\set VERBOSITY terse
 DROP SCHEMA procedure_schema CASCADE;
+\set VERBOSITY default
 
 RESET SEARCH_PATH;

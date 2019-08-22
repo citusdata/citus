@@ -74,7 +74,7 @@ if test -z "$version_num"; then
   AC_MSG_ERROR([Could not detect PostgreSQL version from pg_config.])
 fi
 
-if test "$version_num" != '10' -a "$version_num" != '11'; then
+if test "$version_num" != '10' -a "$version_num" != '11' -a "$version_num" != '12'; then
    AC_MSG_ERROR([Citus is not compatible with the detected PostgreSQL version ${version_num}.])
 else
    AC_MSG_NOTICE([building against PostgreSQL $version_num])
@@ -157,6 +157,7 @@ CITUSAC_PROG_CC_CFLAGS_OPT([-Wno-unused-parameter])
 CITUSAC_PROG_CC_CFLAGS_OPT([-Wno-sign-compare])
 CITUSAC_PROG_CC_CFLAGS_OPT([-Wno-missing-field-initializers])
 CITUSAC_PROG_CC_CFLAGS_OPT([-Wno-clobbered])
+CITUSAC_PROG_CC_CFLAGS_OPT([-Wno-gnu-variable-sized-type-not-at-end])
 # And add a few extra warnings
 CITUSAC_PROG_CC_CFLAGS_OPT([-Wdeclaration-after-statement])
 CITUSAC_PROG_CC_CFLAGS_OPT([-Wendif-labels])

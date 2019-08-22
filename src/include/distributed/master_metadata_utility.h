@@ -32,27 +32,6 @@
 #define PG_TOTAL_RELATION_SIZE_FUNCTION "pg_total_relation_size(%s)"
 #define CSTORE_TABLE_SIZE_FUNCTION "cstore_table_size(%s)"
 
-#if (PG_VERSION_NUM < 100000)
-static inline void
-CatalogTupleUpdate(Relation heapRel, ItemPointer otid, HeapTuple tup)
-{
-	simple_heap_update(heapRel, otid, tup);
-	CatalogUpdateIndexes(heapRel, tup);
-}
-
-
-static inline Oid
-CatalogTupleInsert(Relation heapRel, HeapTuple tup)
-{
-	Oid oid = simple_heap_insert(heapRel, tup);
-	CatalogUpdateIndexes(heapRel, tup);
-
-	return oid;
-}
-
-
-#endif
-
 /* In-memory representation of a typed tuple in pg_dist_shard. */
 typedef struct ShardInterval
 {
@@ -168,6 +147,8 @@ extern char * ConstructQualifiedShardName(ShardInterval *shardInterval);
 extern uint64 GetFirstShardId(Oid relationId);
 extern Datum StringToDatum(char *inputString, Oid dataType);
 extern char * DatumToString(Datum datum, Oid dataType);
+extern int CompareShardPlacementsByWorker(const void *leftElement,
+										  const void *rightElement);
 
 
 #endif   /* MASTER_METADATA_UTILITY_H */

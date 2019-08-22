@@ -15,6 +15,9 @@
 #include "libpq-fe.h"
 #include "miscadmin.h"
 
+#if PG_VERSION_NUM >= 120000
+#include "access/genam.h"
+#endif
 #include "access/htup_details.h"
 #include "access/sysattr.h"
 #include "access/xact.h"
@@ -27,11 +30,13 @@
 #include "commands/extension.h"
 #include "distributed/connection_management.h"
 #include "distributed/citus_nodes.h"
+#include "distributed/listutils.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_join_order.h"
 #include "distributed/multi_logical_optimizer.h"
+#include "distributed/multi_physical_planner.h"
 #include "distributed/pg_dist_colocation.h"
 #include "distributed/pg_dist_partition.h"
 #include "distributed/pg_dist_shard.h"
@@ -53,7 +58,6 @@
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
 #include "utils/syscache.h"
-#include "utils/tqual.h"
 
 
 /* Local functions forward declarations */
@@ -407,6 +411,35 @@ ErrorIfNotSuitableToGetSize(Oid relationId)
 
 
 /*
+ * CompareShardPlacementsByWorker compares two shard placements by their
+ * worker node name and port.
+ */
+int
+CompareShardPlacementsByWorker(const void *leftElement, const void *rightElement)
+{
+	const ShardPlacement *leftPlacement = *((const ShardPlacement **) leftElement);
+	const ShardPlacement *rightPlacement = *((const ShardPlacement **) rightElement);
+
+	int nodeNameCmp = strncmp(leftPlacement->nodeName, rightPlacement->nodeName,
+							  WORKER_LENGTH);
+	if (nodeNameCmp != 0)
+	{
+		return nodeNameCmp;
+	}
+	else if (leftPlacement->nodePort > rightPlacement->nodePort)
+	{
+		return 1;
+	}
+	else if (leftPlacement->nodePort < rightPlacement->nodePort)
+	{
+		return -1;
+	}
+
+	return 0;
+}
+
+
+/*
  * TableShardReplicationFactor returns the current replication factor of the
  * given relation by looking into shard placements. It errors out if there
  * are different number of shard placements for different shards. It also
@@ -691,7 +724,7 @@ FinalizedShardPlacementList(uint64 shardId)
 		}
 	}
 
-	return finalizedPlacementList;
+	return SortList(finalizedPlacementList, CompareShardPlacementsByWorker);
 }
 
 

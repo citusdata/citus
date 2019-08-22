@@ -68,7 +68,6 @@ ErrorIfDistributedAlterSeqOwnedBy(AlterSeqStmt *alterSeqStmt)
 		return;
 	}
 
-#if (PG_VERSION_NUM >= 100000)
 	sequenceOwned = sequenceIsOwned(sequenceId, DEPENDENCY_AUTO, &ownedByTableId,
 									&ownedByColumnId);
 	if (!sequenceOwned)
@@ -76,9 +75,6 @@ ErrorIfDistributedAlterSeqOwnedBy(AlterSeqStmt *alterSeqStmt)
 		sequenceOwned = sequenceIsOwned(sequenceId, DEPENDENCY_INTERNAL, &ownedByTableId,
 										&ownedByColumnId);
 	}
-#else
-	sequenceOwned = sequenceIsOwned(sequenceId, &ownedByTableId, &ownedByColumnId);
-#endif
 
 	/* see whether the sequence is already owned by a distributed table */
 	if (sequenceOwned)
