@@ -16,6 +16,7 @@
 #include "access/skey.h"
 #include "catalog/dependency.h"
 #include "catalog/indexing.h"
+#include "catalog/pg_class.h"
 #include "catalog/pg_depend.h"
 #include "catalog/pg_type.h"
 #include "distributed/metadata/dependency.h"
@@ -56,6 +57,7 @@ static void recurse_pg_depend(const ObjectAddress *target,
 static bool FollowAllSupportedDependencies(void *context, Form_pg_depend pg_depend);
 static bool FollowNewSupportedDependencies(void *context, Form_pg_depend pg_depend);
 static void ApplyAddToDependencyList(void *context, Form_pg_depend pg_depend);
+static List * EpxandCitusSupportedTypes(void *context, const ObjectAddress *target);
 
 /* forward declaration of support functions to decide what to follow */
 static bool SupportedDependencyByCitus(const ObjectAddress *address);
@@ -75,7 +77,7 @@ GetDependenciesForObject(const ObjectAddress *target)
 	InitObjectAddressCollector(&collector);
 
 	recurse_pg_depend(target,
-					  NULL,
+					  &EpxandCitusSupportedTypes,
 					  &FollowNewSupportedDependencies,
 					  &ApplyAddToDependencyList,
 					  &collector);
@@ -115,7 +117,7 @@ OrderObjectAddressListInDependencyOrder(List *objectAddressList)
 		}
 
 		recurse_pg_depend(objectAddress,
-						  NULL,
+						  &EpxandCitusSupportedTypes,
 						  &FollowAllSupportedDependencies,
 						  &ApplyAddToDependencyList,
 						  &collector);
@@ -519,4 +521,79 @@ ApplyAddToDependencyList(void *context, Form_pg_depend pg_depend)
 	ObjectAddressSet(address, pg_depend->refclassid, pg_depend->refobjid);
 
 	CollectObjectAddress(collector, &address);
+}
+
+
+/*
+ * EpxandCitusSupportedTypes base on supported types by citus we might want to expand
+ * the list of objects to visit in pg_depend.
+ *
+ * An example where we want to expand is for types. Their dependencies are not captured
+ * with an entry in pg_depend from their object address, but by the object address of the
+ * relation describing the type.
+ */
+static List *
+EpxandCitusSupportedTypes(void *context, const ObjectAddress *target)
+{
+	List *result = NIL;
+
+	switch (target->classId)
+	{
+		case TypeRelationId:
+		{
+			/*
+			 * types depending on other types are not captured in pg_depend, instead they
+			 * are described with their dependencies by the relation that describes the
+			 * composite type.
+			 */
+			if (get_typtype(target->objectId) == TYPTYPE_COMPOSITE)
+			{
+				Form_pg_depend dependency = palloc0(sizeof(FormData_pg_depend));
+				dependency->classid = target->classId;
+				dependency->objid = target->objectId;
+				dependency->objsubid = target->objectSubId;
+
+				/* add outward edge to the type's relation */
+				dependency->refclassid = RelationRelationId;
+				dependency->refobjid = get_typ_typrelid(target->objectId);
+				dependency->refobjsubid = 0;
+
+				dependency->deptype = DEPENDENCY_NORMAL;
+
+				result = lappend(result, dependency);
+			}
+
+			/*
+			 * array types don't have a normal dependency on their element type, instead
+			 * their dependency is an internal one. We can't follow interal dependencies
+			 * as that would cause a cyclic dependency on others, instead we expand here
+			 * to follow the dependency on the element type.
+			 */
+			if (type_is_array(target->objectId))
+			{
+				Form_pg_depend dependency = palloc0(sizeof(FormData_pg_depend));
+				dependency->classid = target->classId;
+				dependency->objid = target->objectId;
+				dependency->objsubid = target->objectSubId;
+
+				/* add outward edge to the element type */
+				dependency->refclassid = TypeRelationId;
+				dependency->refobjid = get_element_type(target->objectId);
+				dependency->refobjsubid = 0;
+
+				dependency->deptype = DEPENDENCY_NORMAL;
+
+				result = lappend(result, dependency);
+			}
+
+			break;
+		}
+
+		default:
+		{
+			/* no expansion for unsupported types */
+			break;
+		}
+	}
+	return result;
 }

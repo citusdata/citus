@@ -20,6 +20,7 @@
 #include "distributed/remote_commands.h"
 #include "distributed/worker_manager.h"
 #include "storage/lmgr.h"
+#include "utils/lsyscache.h"
 
 static List * GetDependencyCreateDDLCommands(const ObjectAddress *dependency);
 
@@ -178,6 +179,21 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 		case OCLASS_TYPE:
 		{
 			return CreateTypeDDLCommandsIdempotent(dependency);
+		}
+
+		case OCLASS_CLASS:
+		{
+			/*
+			 * types have an intermediate dependency on a relation (aka class), so we do
+			 * support classes when the relkind is composite
+			 */
+			if (get_rel_relkind(dependency->objectId) == RELKIND_COMPOSITE_TYPE)
+			{
+				return NIL;
+			}
+
+			/* if this relation is not supported, break to the error at the end */
+			break;
 		}
 
 		default:
