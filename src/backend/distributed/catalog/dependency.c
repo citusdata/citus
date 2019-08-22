@@ -18,14 +18,22 @@
 #include "catalog/indexing.h"
 #include "catalog/pg_depend.h"
 #include "utils/fmgroids.h"
+#include "utils/hsearch.h"
 #include "utils/lsyscache.h"
 
 #include "distributed/dist_catalog/dependency.h"
 #include "distributed/dist_catalog/distobject.h"
 
+typedef struct ObjectAddressCollector
+{
+	List *dependencyList;
+	HTAB *dependencySet;
+} ObjectAddressCollector;
+
 
 static bool SupportedDependencyByCitus(const ObjectAddress *address);
-static bool IsObjectAddressInList(const ObjectAddress *findAddress, List *addressList);
+static bool IsObjectAddressCollected(const ObjectAddress *findAddress,
+									 ObjectAddressCollector *collector);
 static bool IsObjectAddressOwnedByExtension(const ObjectAddress *target);
 
 static void recurse_pg_depend(const ObjectAddress *target,
@@ -37,6 +45,46 @@ static bool follow_get_dependencies_for_object(void *context,
 											   const Form_pg_depend pg_depend);
 static void apply_add_to_target_list(void *context, const Form_pg_depend pg_depend);
 
+static void InitObjectAddressCollector(ObjectAddressCollector *collector);
+static void CollectObjectAddress(ObjectAddressCollector *collector, const
+								 ObjectAddress *address);
+
+static void
+InitObjectAddressCollector(ObjectAddressCollector *collector)
+{
+	int hashFlags = 0;
+	HASHCTL info;
+
+	memset(&info, 0, sizeof(info));
+	info.keysize = sizeof(ObjectAddress);
+	info.entrysize = sizeof(ObjectAddress);
+	info.hcxt = CurrentMemoryContext;
+	hashFlags = (HASH_ELEM | HASH_CONTEXT | HASH_BLOBS);
+
+	collector->dependencySet = hash_create("dependency set", 128, &info, hashFlags);
+}
+
+
+static void
+CollectObjectAddress(ObjectAddressCollector *collector, const ObjectAddress *collect)
+{
+	ObjectAddress *address = NULL;
+	bool found = false;
+
+	/* add to set */
+	address = (ObjectAddress *) hash_search(collector->dependencySet, collect,
+											HASH_ENTER, &found);
+
+	if (!found)
+	{
+		/* copy object address in */
+		*address = *collect;
+	}
+
+	/* add to list*/
+	collector->dependencyList = lappend(collector->dependencyList, address);
+}
+
 
 /*
  * GetDependenciesForObject returns a list of ObjectAddesses to be created in order
@@ -46,40 +94,33 @@ static void apply_add_to_target_list(void *context, const Form_pg_depend pg_depe
 List *
 GetDependenciesForObject(const ObjectAddress *target)
 {
-	List *dependencyList = NIL;
+	ObjectAddressCollector collector = { 0 };
+
+	InitObjectAddressCollector(&collector);
+
 	recurse_pg_depend(target,
 					  &follow_get_dependencies_for_object,
 					  &apply_add_to_target_list,
-					  &dependencyList);
-	return dependencyList;
+					  &collector);
+
+	return collector.dependencyList;
 }
 
 
 /*
- * IsObjectAddressInList is a helper function that can check if an ObjectAddress is
+ * IsObjectAddressCollected is a helper function that can check if an ObjectAddress is
  * already in a (unsorted) list of ObjectAddresses
  */
 static bool
-IsObjectAddressInList(const ObjectAddress *findAddress, List *addressList)
+IsObjectAddressCollected(const ObjectAddress *findAddress,
+						 ObjectAddressCollector *collector)
 {
-	ListCell *addressCell = NULL;
-	foreach(addressCell, addressList)
-	{
-		ObjectAddress *currentAddress = (ObjectAddress *) lfirst(addressCell);
+	bool found = false;
 
-		/* equality check according as used in postgres for object_address_present */
-		if (findAddress->classId == currentAddress->classId && findAddress->objectId ==
-			currentAddress->objectId)
-		{
-			if (findAddress->objectSubId == currentAddress->objectSubId ||
-				currentAddress->objectSubId == 0)
-			{
-				return true;
-			}
-		}
-	}
+	/* add to set */
+	hash_search(collector->dependencySet, findAddress, HASH_FIND, &found);
 
-	return false;
+	return found;
 }
 
 
@@ -171,12 +212,16 @@ IsObjectAddressOwnedByExtension(const ObjectAddress *target)
 List *
 OrderObjectAddressListInDependencyOrder(List *objectAddressList)
 {
-	List *targetList = NIL;
+	ObjectAddressCollector collector = { 0 };
 	ListCell *ojectAddressCell = NULL;
+
+	InitObjectAddressCollector(&collector);
+
 	foreach(ojectAddressCell, objectAddressList)
 	{
 		ObjectAddress *objectAddress = (ObjectAddress *) lfirst(ojectAddressCell);
-		if (IsObjectAddressInList(objectAddress, targetList))
+
+		if (IsObjectAddressCollected(objectAddress, &collector))
 		{
 			/* skip objects that are already ordered */
 			continue;
@@ -185,13 +230,12 @@ OrderObjectAddressListInDependencyOrder(List *objectAddressList)
 		recurse_pg_depend(objectAddress,
 						  &follow_order_object_address,
 						  &apply_add_to_target_list,
-						  &targetList);
+						  &collector);
 
-		/* all dependencies are added before, now add the current object */
-		targetList = lappend(targetList, objectAddress);
+		CollectObjectAddress(&collector, objectAddress);
 	}
 
-	return targetList;
+	return collector.dependencyList;
 }
 
 
@@ -282,7 +326,7 @@ recurse_pg_depend(const ObjectAddress *target,
 static bool
 follow_get_dependencies_for_object(void *context, const Form_pg_depend pg_depend)
 {
-	List **targetList = (List **) context;
+	ObjectAddressCollector *collector = (ObjectAddressCollector *) context;
 	ObjectAddress address = { 0 };
 	ObjectAddressSet(address, pg_depend->refclassid, pg_depend->refobjid);
 
@@ -291,7 +335,7 @@ follow_get_dependencies_for_object(void *context, const Form_pg_depend pg_depend
 		return false;
 	}
 
-	if (IsObjectAddressInList(&address, *targetList))
+	if (IsObjectAddressCollected(&address, collector))
 	{
 		return false;
 	}
@@ -337,7 +381,7 @@ follow_get_dependencies_for_object(void *context, const Form_pg_depend pg_depend
 static bool
 follow_order_object_address(void *context, const Form_pg_depend pg_depend)
 {
-	List **targetList = (List **) context;
+	ObjectAddressCollector *collector = (ObjectAddressCollector *) context;
 	ObjectAddress address = { 0 };
 	ObjectAddressSet(address, pg_depend->refclassid, pg_depend->refobjid);
 
@@ -346,7 +390,7 @@ follow_order_object_address(void *context, const Form_pg_depend pg_depend)
 		return false;
 	}
 
-	if (IsObjectAddressInList(&address, *targetList))
+	if (IsObjectAddressCollected(&address, collector))
 	{
 		return false;
 	}
@@ -373,9 +417,9 @@ follow_order_object_address(void *context, const Form_pg_depend pg_depend)
 static void
 apply_add_to_target_list(void *context, const Form_pg_depend pg_depend)
 {
-	List **targetList = (List **) context;
-	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
-	ObjectAddressSet(*address, pg_depend->refclassid, pg_depend->refobjid);
+	ObjectAddressCollector *collector = (ObjectAddressCollector *) context;
+	ObjectAddress address = { 0 };
+	ObjectAddressSet(address, pg_depend->refclassid, pg_depend->refobjid);
 
-	*targetList = lappend(*targetList, address);
+	CollectObjectAddress(collector, &address);
 }
