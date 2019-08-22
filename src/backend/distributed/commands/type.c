@@ -48,6 +48,7 @@
 #include "catalog/namespace.h"
 #include "catalog/pg_enum.h"
 #include "catalog/pg_type.h"
+#include "commands/extension.h"
 #include "miscadmin.h"
 #include "nodes/makefuncs.h"
 #include "parser/parse_type.h"
@@ -113,7 +114,7 @@ PlanCompositeTypeStmt(CompositeTypeStmt *stmt, const char *queryString)
 		return NIL;
 	}
 
-	if (ExtensionStmtInProgess())
+	if (creating_extension)
 	{
 		/*
 		 * extensions should be created separately on the workers, types cascading from an
@@ -195,7 +196,7 @@ PlanAlterTypeStmt(AlterTableStmt *stmt, const char *queryString)
 	 * we should not get to a point where an alter happens on a distributed type during an
 	 * extension statement, but better safe then sorry.
 	 */
-	if (ExtensionStmtInProgess())
+	if (creating_extension)
 	{
 		/*
 		 * extensions should be created separately on the workers, types cascading from an
@@ -248,7 +249,7 @@ PlanCreateEnumStmt(CreateEnumStmt *stmt, const char *queryString)
 		return NIL;
 	}
 
-	if (ExtensionStmtInProgess())
+	if (creating_extension)
 	{
 		/*
 		 * extensions should be created separately on the workers, types cascading from an
@@ -308,7 +309,7 @@ PlanAlterEnumStmt(AlterEnumStmt *stmt, const char *queryString)
 	ObjectAddress typeAddress = { 0 };
 	const char *alterEnumStmtSql = NULL;
 
-	if (ExtensionStmtInProgess())
+	if (creating_extension)
 	{
 		/*
 		 * extensions should be created separately on the workers, types cascading from an
@@ -399,7 +400,7 @@ PlanDropTypeStmt(DropStmt *stmt, const char *queryString)
 	ListCell *addressCell = NULL;
 	List *distributedTypeAddresses = NIL;
 
-	if (ExtensionStmtInProgess())
+	if (creating_extension)
 	{
 		/*
 		 * extensions should be created separately on the workers, types cascading from an

@@ -54,8 +54,5 @@ extern void MarkInvalidateForeignKeyGraph(void);
 extern void InvalidateForeignKeyGraphForDDL(void);
 extern List * DDLTaskList(Oid relationId, const char *commandString);
 extern bool AlterTableInProgress(void);
-extern bool CreateExtensionInProgess(void);
-extern bool AlterExtensionInProgess(void);
-extern bool ExtensionStmtInProgess(void);
 
 #endif /* MULTI_UTILITY_H */
