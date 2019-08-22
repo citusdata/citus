@@ -212,7 +212,6 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 					errdetail(
 						"citus tries to recreate an unsupported object on its workers"),
 					errhint("please report a bug as this should not be happening")));
-	return NIL;
 }
 
 

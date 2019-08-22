@@ -7,6 +7,13 @@
  *     - Enum Types
  *     - Array Types
  *
+ *    Types that are currently not supporter:
+ *     - Range Types
+ *     - Base Types
+ *
+ *    Range types have a dependency on functions. We can only support Range
+ *    types after we have function distribution sorted.
+ *
  *    Base types are more complex and often involve c code from extensions.
  *    These types should be created by creating the extension on all the
  *    workers as well. Therefore types created during the creation of an
@@ -636,7 +643,7 @@ EnumTypeExists(CreateEnumStmt *stmt)
 DropStmt *
 CompositeTypeStmtToDrop(CompositeTypeStmt *stmt)
 {
-	List *names = makeNameListFromRangeVar(stmt->typevar);
+	List *names = MakeNameListFromRangeVar(stmt->typevar);
 	TypeName *typeName = makeTypeNameFromNameList(names);
 
 	DropStmt *dropStmt = makeNode(DropStmt);
@@ -840,6 +847,12 @@ makeTypeNameFromRangeVar(const RangeVar *relation)
 static void
 EnsureSequentialModeForTypeDDL(void)
 {
+	if (!IsTransactionBlock())
+	{
+		/* we do not need to switch to sequential mode if we are not in a transaction */
+		return;
+	}
+
 	if (ParallelQueryExecutedInTransaction())
 	{
 		ereport(ERROR, (errmsg("cannot create or modify type because there was a "

@@ -1,7 +1,12 @@
-/* */
-
-/* Created by Nils Dijk on 2019-08-07. */
-/* */
+/*-------------------------------------------------------------------------
+ *
+ * namespace.h
+ *    Helper functions for citus to work with postgres namespaces/schemas
+ *
+ * Copyright (c) 2019, Citus Data, Inc.
+ *
+ *-------------------------------------------------------------------------
+ */
 
 #ifndef CITUS_NAMESPACE_H
 #define CITUS_NAMESPACE_H
@@ -10,6 +15,6 @@
 
 #include "nodes/primnodes.h"
 
-extern List * makeNameListFromRangeVar(const RangeVar *var);
+extern List * MakeNameListFromRangeVar(const RangeVar *rel);
 
 #endif /*CITUS_NAMESPACE_H */

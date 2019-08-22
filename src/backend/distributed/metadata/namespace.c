@@ -7,29 +7,29 @@
 #include "distributed/metadata/namespace.h"
 
 /*
- * makeNameListFromRangeVar makes a namelist from a RangeVar. Its behaviour should be the
+ * MakeNameListFromRangeVar makes a namelist from a RangeVar. Its behaviour should be the
  * exact opposite of postgres' makeRangeVarFromNameList.
  */
 List *
-makeNameListFromRangeVar(const RangeVar *var)
+MakeNameListFromRangeVar(const RangeVar *rel)
 {
-	if (var->catalogname != NULL)
+	if (rel->catalogname != NULL)
 	{
-		Assert(var->schemaname != NULL);
-		Assert(var->relname != NULL);
-		return list_make3(makeString(var->catalogname),
-						  makeString(var->schemaname),
-						  makeString(var->relname));
+		Assert(rel->schemaname != NULL);
+		Assert(rel->relname != NULL);
+		return list_make3(makeString(rel->catalogname),
+						  makeString(rel->schemaname),
+						  makeString(rel->relname));
 	}
-	else if (var->schemaname != NULL)
+	else if (rel->schemaname != NULL)
 	{
-		Assert(var->relname != NULL);
-		return list_make2(makeString(var->schemaname),
-						  makeString(var->relname));
+		Assert(rel->relname != NULL);
+		return list_make2(makeString(rel->schemaname),
+						  makeString(rel->relname));
 	}
 	else
 	{
-		Assert(var->relname != NULL);
-		return list_make1(makeString(var->relname));
+		Assert(rel->relname != NULL);
+		return list_make1(makeString(rel->relname));
 	}
 }

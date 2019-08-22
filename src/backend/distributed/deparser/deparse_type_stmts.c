@@ -149,7 +149,7 @@ deparse_alter_type_stmt(AlterTableStmt *stmt)
 static void
 appendAlterTypeStmt(StringInfo buf, AlterTableStmt *stmt)
 {
-	List *names = makeNameListFromRangeVar(stmt->relation);
+	List *names = MakeNameListFromRangeVar(stmt->relation);
 	TypeName *typeName = makeTypeNameFromNameList(names);
 	Oid typeOid = LookupTypeNameOid(NULL, typeName, false);
 	const char *identifier = format_type_be_qualified(typeOid);
