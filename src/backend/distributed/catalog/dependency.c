@@ -37,13 +37,20 @@ static bool IsObjectAddressCollected(const ObjectAddress *findAddress,
 static bool IsObjectAddressOwnedByExtension(const ObjectAddress *target);
 
 static void recurse_pg_depend(const ObjectAddress *target,
-							  bool (*follow)(void *context, const Form_pg_depend row),
-							  void (*apply)(void *context, const Form_pg_depend row),
+							  List * (*expand)(void *context, const
+											   ObjectAddress *target),
+							  bool (*follow)(void *context, Form_pg_depend row),
+							  void (*apply)(void *context, Form_pg_depend row),
 							  void *context);
-static bool FollowAllSupportedDependencies(void *context, const Form_pg_depend pg_depend);
-static bool FollowNewSupportedDependencies(void *context,
-										   const Form_pg_depend pg_depend);
-static void ApplyAddToDependencyList(void *context, const Form_pg_depend pg_depend);
+static void recurse_pg_depend_iterate(Form_pg_depend pg_depend,
+									  List * (*expand)(void *context, const
+													   ObjectAddress *target),
+									  bool (*follow)(void *context, Form_pg_depend row),
+									  void (*apply)(void *context, Form_pg_depend row),
+									  void *context);
+static bool FollowAllSupportedDependencies(void *context, Form_pg_depend pg_depend);
+static bool FollowNewSupportedDependencies(void *context, Form_pg_depend pg_depend);
+static void ApplyAddToDependencyList(void *context, Form_pg_depend pg_depend);
 
 static void InitObjectAddressCollector(ObjectAddressCollector *collector);
 static void CollectObjectAddress(ObjectAddressCollector *collector, const
@@ -99,6 +106,7 @@ GetDependenciesForObject(const ObjectAddress *target)
 	InitObjectAddressCollector(&collector);
 
 	recurse_pg_depend(target,
+					  NULL,
 					  &FollowNewSupportedDependencies,
 					  &ApplyAddToDependencyList,
 					  &collector);
@@ -222,6 +230,7 @@ OrderObjectAddressListInDependencyOrder(List *objectAddressList)
 		}
 
 		recurse_pg_depend(objectAddress,
+						  NULL,
 						  &FollowAllSupportedDependencies,
 						  &ApplyAddToDependencyList,
 						  &collector);
@@ -234,12 +243,17 @@ OrderObjectAddressListInDependencyOrder(List *objectAddressList)
 
 
 /*
- * recurse_pg_depend recursively visits pg_depend entries, starting at the target
- * ObjectAddress. For every entry the follow function will be called. When follow returns
- * true it will recursively visit the dependencies for that object. recurse_pg_depend will
- * visit therefore all pg_depend entries.
+ * recurse_pg_depend recursively visits pg_depend entries.
  *
- * Visiting will happen in depth first order, which is useful to create or sort lists of
+ * `expand` allows based on the target ObjectAddress to generate extra entries for ease of
+ * traversal.
+ *
+ * Starting from the target ObjectAddress. For every existing and generated entry the
+ * `follow` function will be called. When `follow` returns true it will recursively visit
+ * the dependencies for that object. recurse_pg_depend will visit therefore all pg_depend
+ * entries.
+ *
+ * Visiting will happen in depth first order, which is useful to create or sorted lists of
  * dependencies to create.
  *
  * For all pg_depend entries that should be visited the apply function will be called.
@@ -253,8 +267,9 @@ OrderObjectAddressListInDependencyOrder(List *objectAddressList)
  */
 static void
 recurse_pg_depend(const ObjectAddress *target,
-				  bool (*follow)(void *context, const Form_pg_depend row),
-				  void (*apply)(void *context, const Form_pg_depend row),
+				  List * (*expand)(void *context, const ObjectAddress *target),
+				  bool (*follow)(void *context, Form_pg_depend row),
+				  void (*apply)(void *context, Form_pg_depend row),
 				  void *context)
 {
 	Relation depRel = NULL;
@@ -262,6 +277,25 @@ recurse_pg_depend(const ObjectAddress *target,
 	SysScanDesc depScan = NULL;
 	HeapTuple depTup = NULL;
 
+	/********************
+	* first apply on expanded entries of pg_depend
+	********************/
+	if (expand != NULL)
+	{
+		List *expandedEntries = NIL;
+		ListCell *expandedEntryCell = NULL;
+
+		expandedEntries = expand(context, target);
+		foreach(expandedEntryCell, expandedEntries)
+		{
+			Form_pg_depend pg_depend = (Form_pg_depend) lfirst(expandedEntryCell);
+			recurse_pg_depend_iterate(pg_depend, expand, follow, apply, context);
+		}
+	}
+
+	/********************
+	* secondly iterate the actual pg_depend catalog
+	********************/
 	depRel = heap_open(DependRelationId, AccessShareLock);
 
 	/* scan pg_depend for classid = $1 AND objid = $2 using pg_depend_depender_index */
@@ -274,26 +308,7 @@ recurse_pg_depend(const ObjectAddress *target,
 	while (HeapTupleIsValid(depTup = systable_getnext(depScan)))
 	{
 		Form_pg_depend pg_depend = (Form_pg_depend) GETSTRUCT(depTup);
-		ObjectAddress address = { 0 };
-		ObjectAddressSet(address, pg_depend->refclassid, pg_depend->refobjid);
-
-		if (follow == NULL || !follow(context, pg_depend))
-		{
-			/* skip all pg_depend entries the caller didn't want to follow */
-			continue;
-		}
-
-		/*
-		 * recurse depth first, this makes sure we call apply for the deepest dependency
-		 * first.
-		 */
-		recurse_pg_depend(&address, follow, apply, context);
-
-		/* now apply changes for current entry */
-		if (apply != NULL)
-		{
-			apply(context, pg_depend);
-		}
+		recurse_pg_depend_iterate(pg_depend, expand, follow, apply, context);
 	}
 
 	systable_endscan(depScan);
@@ -302,11 +317,48 @@ recurse_pg_depend(const ObjectAddress *target,
 
 
 /*
+ * recurse_pg_depend_iterate is called for every real and expanded pg_depend entries for
+ * recurse_pg_depend. It calls follow for the entry and if it should follow it recurses
+ * back to recurse_pg_depend with a new target, all other arguments are passed verbatim.
+ *
+ * after we have recursed we call the apply function
+ */
+static void
+recurse_pg_depend_iterate(Form_pg_depend pg_depend,
+						  List * (*expand)(void *context, const ObjectAddress *target),
+						  bool (*follow)(void *context, Form_pg_depend row),
+						  void (*apply)(void *context, Form_pg_depend row),
+						  void *context)
+{
+	ObjectAddress address = { 0 };
+	ObjectAddressSet(address, pg_depend->refclassid, pg_depend->refobjid);
+
+	if (follow == NULL || !follow(context, pg_depend))
+	{
+		/* skip all pg_depend entries the user didn't want to follow */
+		return;
+	}
+
+	/*
+	 * recurse depth first, this makes sure we call apply for the deepest dependency
+	 * first.
+	 */
+	recurse_pg_depend(&address, expand, follow, apply, context);
+
+	/* now apply changes for current entry */
+	if (apply != NULL)
+	{
+		apply(context, pg_depend);
+	}
+}
+
+
+/*
  * FollowNewSupportedDependencies applies filters on pg_depend entries to follow all
  * objects which should be distributed before the root object can safely be created.
  */
 static bool
-FollowNewSupportedDependencies(void *context, const Form_pg_depend pg_depend)
+FollowNewSupportedDependencies(void *context, Form_pg_depend pg_depend)
 {
 	ObjectAddressCollector *collector = (ObjectAddressCollector *) context;
 	ObjectAddress address = { 0 };
@@ -366,7 +418,7 @@ FollowNewSupportedDependencies(void *context, const Form_pg_depend pg_depend)
  * This is used to sort a list of dependencies in dependency order.
  */
 static bool
-FollowAllSupportedDependencies(void *context, const Form_pg_depend pg_depend)
+FollowAllSupportedDependencies(void *context, Form_pg_depend pg_depend)
 {
 	ObjectAddressCollector *collector = (ObjectAddressCollector *) context;
 	ObjectAddress address = { 0 };
@@ -417,7 +469,7 @@ FollowAllSupportedDependencies(void *context, const Form_pg_depend pg_depend)
  * assumed to be a (List **) to the location where all ObjectAddresses will be collected.
  */
 static void
-ApplyAddToDependencyList(void *context, const Form_pg_depend pg_depend)
+ApplyAddToDependencyList(void *context, Form_pg_depend pg_depend)
 {
 	ObjectAddressCollector *collector = (ObjectAddressCollector *) context;
 	ObjectAddress address = { 0 };
