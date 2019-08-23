@@ -5,8 +5,8 @@
 
 setup
 {
-  SELECT citus.replace_isolation_tester_func();
-  SELECT citus.refresh_isolation_tester_prepared_statement();
+  SELECT citus_internal.replace_isolation_tester_func();
+  SELECT citus_internal.refresh_isolation_tester_prepared_statement();
 
   CREATE TABLE test_locking (a int unique);
   SELECT create_distributed_table('test_locking', 'a');
@@ -15,7 +15,7 @@ setup
 teardown
 {
   DROP TABLE test_locking;
-  SELECT citus.restore_isolation_tester_func();
+  SELECT citus_internal.restore_isolation_tester_func();
 }
 
 session "s1"
