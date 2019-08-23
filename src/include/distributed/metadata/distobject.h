@@ -8,8 +8,8 @@
  *-------------------------------------------------------------------------
  */
 
-#ifndef CITUS_CATALOG_DISTOBJECT_H
-#define CITUS_CATALOG_DISTOBJECT_H
+#ifndef CITUS_METADATA_DISTOBJECT_H
+#define CITUS_METADATA_DISTOBJECT_H
 
 #include "postgres.h"
 
@@ -22,4 +22,4 @@ extern void UnmarkObjectDistributed(const ObjectAddress *address);
 
 extern List * GetDistributedObjectAddressList(void);
 
-#endif /* CITUS_CATALOG_DISTOBJECT_H */
+#endif /* CITUS_METADATA_DISTOBJECT_H */

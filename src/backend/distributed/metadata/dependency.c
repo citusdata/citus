@@ -24,6 +24,14 @@
 #include "distributed/metadata/dependency.h"
 #include "distributed/metadata/distobject.h"
 
+/*
+ * ObjectAddressCollector keeps track of collected ObjectAddresses. This can be used
+ * together with recurse_pg_depend.
+ *
+ * We keep two different datastructures for the following reasons
+ *  - A List ordered by insert/collect order
+ *  - A Set to quickly O(1) check if an ObjectAddress has already been collected
+ */
 typedef struct ObjectAddressCollector
 {
 	List *dependencyList;
@@ -56,6 +64,14 @@ static void InitObjectAddressCollector(ObjectAddressCollector *collector);
 static void CollectObjectAddress(ObjectAddressCollector *collector, const
 								 ObjectAddress *address);
 
+/*
+ * InitObjectAddressCollector takes a pointer to an already allocated (possibly stack)
+ * ObjectAddressCollector struct. It makes sure this struct is ready to be used for object
+ * collection.
+ *
+ * If an already initialized collector is passed the collector will be cleared from its
+ * contents to be reused.
+ */
 static void
 InitObjectAddressCollector(ObjectAddressCollector *collector)
 {
@@ -69,9 +85,13 @@ InitObjectAddressCollector(ObjectAddressCollector *collector)
 	hashFlags = (HASH_ELEM | HASH_CONTEXT | HASH_BLOBS);
 
 	collector->dependencySet = hash_create("dependency set", 128, &info, hashFlags);
+	collector->dependencyList = NULL;
 }
 
 
+/*
+ * CollectObjectAddress adds an ObjectAddress to the collector.
+ */
 static void
 CollectObjectAddress(ObjectAddressCollector *collector, const ObjectAddress *collect)
 {
@@ -193,7 +213,7 @@ IsObjectAddressOwnedByExtension(const ObjectAddress *target)
 	}
 
 	systable_endscan(depScan);
-	relation_close(depRel, AccessShareLock);
+	heap_close(depRel, AccessShareLock);
 
 	return result;
 }
@@ -464,9 +484,10 @@ FollowAllSupportedDependencies(void *context, Form_pg_depend pg_depend)
 
 
 /*
- * ApplyAddToDependencyList is an apply function for recurse_pg_depend that will append
+ * ApplyAddToDependencyList is an apply function for recurse_pg_depend that will collect
  * all the ObjectAddresses for pg_depend entries to the context. The context here is
- * assumed to be a (List **) to the location where all ObjectAddresses will be collected.
+ * assumed to be a (ObjectAddressCollector *) to the location where all ObjectAddresses
+ * will be collected.
  */
 static void
 ApplyAddToDependencyList(void *context, Form_pg_depend pg_depend)

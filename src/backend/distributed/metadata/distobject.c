@@ -62,7 +62,6 @@ MarkObjectDistributed(const ObjectAddress *distAddress)
 
 	newTuple = heap_form_tuple(RelationGetDescr(pgDistObject), newValues, newNulls);
 
-	/* finally insert tuple, build index entries & register cache invalidation */
 	CatalogTupleInsert(pgDistObject, newTuple);
 
 	CommandCounterIncrement();
