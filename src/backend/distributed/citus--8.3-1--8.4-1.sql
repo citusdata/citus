@@ -86,13 +86,10 @@ BEGIN
 
     -- remove entries from citus.pg_dist_object for all dropped root (objsubid = 0) objects
     DELETE FROM citus.pg_dist_object AS dist_object
-    WHERE EXISTS (
-        SELECT 1
-          FROM pg_event_trigger_dropped_objects() AS drop_object
+          USING pg_event_trigger_dropped_objects() AS drop_object
           WHERE dist_object.classid = drop_object.classid
             AND dist_object.objid = drop_object.objid
-            AND drop_object.objsubid = drop_object.objsubid
-    );
+            AND drop_object.objsubid = drop_object.objsubid;
 
 END;
 $cdbdt$;
