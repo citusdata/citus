@@ -147,7 +147,7 @@ extern Oid DistTransactionRelationId(void);
 extern Oid DistTransactionGroupIndexId(void);
 extern Oid DistTransactionRecordIndexId(void);
 extern Oid DistPlacementGroupidIndexId(void);
-extern Oid DistObjectClassIDObjectIDIndexId(void);
+extern Oid DistObjectClassIDObjectIDObjectSubIdIndexId(void);
 
 /* type oids */
 extern Oid CitusCopyFormatTypeId(void);

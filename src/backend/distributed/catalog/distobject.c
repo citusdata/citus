@@ -50,12 +50,15 @@ MarkObjectDistributed(const ObjectAddress *distAddress)
 
 	/* form new tuple for pg_dist_object */
 	memset(newValues, 0, sizeof(newValues));
-	memset(newNulls, false, sizeof(newNulls));
+	memset(newNulls, true, sizeof(newNulls));
 
 	/* tuple (classId, objectId, NULL) */
 	newValues[Anum_pg_dist_object_classid - 1] = ObjectIdGetDatum(distAddress->classId);
+	newNulls[Anum_pg_dist_object_classid - 1] = false;
 	newValues[Anum_pg_dist_object_objid - 1] = ObjectIdGetDatum(distAddress->objectId);
+	newNulls[Anum_pg_dist_object_objid - 1] = false;
 	newValues[Anum_pg_dist_object_objsubid - 1] = Int32GetDatum(distAddress->objectSubId);
+	newNulls[Anum_pg_dist_object_objsubid - 1] = false;
 
 	newTuple = heap_form_tuple(RelationGetDescr(pgDistObject), newValues, newNulls);
 
@@ -75,7 +78,7 @@ void
 UnmarkObjectDistributed(const ObjectAddress *address)
 {
 	Relation pgDistObjectRel = NULL;
-	ScanKeyData key[2] = { 0 };
+	ScanKeyData key[3] = { 0 };
 	SysScanDesc pgDistObjectScan = NULL;
 	HeapTuple pgDistObjectTup = NULL;
 
@@ -86,9 +89,11 @@ UnmarkObjectDistributed(const ObjectAddress *address)
 				ObjectIdGetDatum(address->classId));
 	ScanKeyInit(&key[1], Anum_pg_dist_object_objid, BTEqualStrategyNumber, F_OIDEQ,
 				ObjectIdGetDatum(address->objectId));
+	ScanKeyInit(&key[2], Anum_pg_dist_object_objsubid, BTEqualStrategyNumber, F_INT4EQ,
+				ObjectIdGetDatum(address->objectSubId));
 	pgDistObjectScan = systable_beginscan(pgDistObjectRel,
-										  DistObjectClassIDObjectIDIndexId(), true, NULL,
-										  2, key);
+										  DistObjectClassIDObjectIDObjectSubIdIndexId(),
+										  true, NULL, 3, key);
 
 	while (HeapTupleIsValid(pgDistObjectTup = systable_getnext(pgDistObjectScan)))
 	{
@@ -108,21 +113,23 @@ bool
 IsObjectDistributed(const ObjectAddress *address)
 {
 	Relation pgDistObjectRel = NULL;
-	ScanKeyData key[2] = { 0 };
+	ScanKeyData key[3] = { 0 };
 	SysScanDesc pgDistObjectScan = NULL;
 	HeapTuple pgDistObjectTup = NULL;
 	bool result = false;
 
 	pgDistObjectRel = heap_open(DistObjectRelationId(), AccessShareLock);
 
-	/* scan pg_dist_object for classid = $1 AND objid = $2 using an index */
+	/* scan pg_dist_object for classid = $1 AND objid = $2 AND objsubid = $3 via index */
 	ScanKeyInit(&key[0], Anum_pg_dist_object_classid, BTEqualStrategyNumber, F_OIDEQ,
 				ObjectIdGetDatum(address->classId));
 	ScanKeyInit(&key[1], Anum_pg_dist_object_objid, BTEqualStrategyNumber, F_OIDEQ,
 				ObjectIdGetDatum(address->objectId));
+	ScanKeyInit(&key[2], Anum_pg_dist_object_objsubid, BTEqualStrategyNumber, F_INT4EQ,
+				ObjectIdGetDatum(address->objectSubId));
 	pgDistObjectScan = systable_beginscan(pgDistObjectRel,
-										  DistObjectClassIDObjectIDIndexId(), true, NULL,
-										  2, key);
+										  DistObjectClassIDObjectIDObjectSubIdIndexId(),
+										  true, NULL, 3, key);
 
 	pgDistObjectTup = systable_getnext(pgDistObjectScan);
 	if (HeapTupleIsValid(pgDistObjectTup))

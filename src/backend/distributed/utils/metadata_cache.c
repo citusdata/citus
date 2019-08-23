@@ -1832,11 +1832,11 @@ DistObjectRelationId(void)
 }
 
 
-/* return oid of pg_dist_object_classid_objid_index */
+/* return oid of pg_dist_object_classid_objid_objsubid_index */
 Oid
-DistObjectClassIDObjectIDIndexId(void)
+DistObjectClassIDObjectIDObjectSubIdIndexId(void)
 {
-	CachedRelationNamespaceLookup("pg_dist_object_classid_objid_index",
+	CachedRelationNamespaceLookup("pg_dist_object_classid_objid_objsubid_index",
 								  CitusCatalogNamespaceId(),
 								  &MetadataCache.distObjectClassIDObjectIDIndexId);
 

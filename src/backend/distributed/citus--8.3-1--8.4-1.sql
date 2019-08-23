@@ -6,11 +6,16 @@ CREATE SCHEMA IF NOT EXISTS citus_internal;
 CREATE TABLE citus.pg_dist_object (
     classid oid NOT NULL,
     objid oid NOT NULL,
-    objsubid integer NOT NULL
+    objsubid integer NOT NULL,
+
+    -- fields used for upgrades
+    type text DEFAULT NULL,
+    object_names text[] DEFAULT NULL,
+    object_args text[] DEFAULT NULL
 );
 
-CREATE INDEX pg_dist_object_classid_objid_index ON
-    citus.pg_dist_object USING btree(classid, objid);
+CREATE INDEX pg_dist_object_classid_objid_objsubid_index ON
+    citus.pg_dist_object USING btree(classid, objid, objsubid);
 
 GRANT USAGE ON SCHEMA citus TO public;
 GRANT SELECT ON citus.pg_dist_object TO public;
@@ -85,11 +90,6 @@ BEGIN
     CREATE TABLE public.pg_dist_poolinfo AS SELECT * FROM pg_catalog.pg_dist_poolinfo;
 
     -- store upgrade stable identifiers on pg_dist_object catalog
-    ALTER TABLE citus.pg_dist_object
-      ADD COLUMN type text,
-      ADD COLUMN object_names text[],
-      ADD COLUMN object_args text[];
-
     UPDATE citus.pg_dist_object
        SET (type, object_names, object_args) = (SELECT * FROM pg_identify_object_as_address(classid, objid, objsubid));
 END;
@@ -175,12 +175,13 @@ BEGIN
 
     -- restore pg_dist_object from the stable identifiers
     UPDATE citus.pg_dist_object
-       SET (classid, objid, objsubid) = (SELECT * FROM pg_get_object_address(type, object_names, object_args));
-
-    ALTER TABLE citus.pg_dist_object
-     DROP COLUMN type,
-     DROP COLUMN object_names,
-     DROP COLUMN object_args;
+       SET (classid, objid, objsubid) = (SELECT * FROM pg_get_object_address(type, object_names, object_args)),
+           type = NULL,
+           object_names = NULL,
+           object_args = NULL
+     WHERE NOT type IS NULL
+       AND NOT object_names IS NULL
+       AND NOT object_args IS NULL;
 END;
 $cppu$;
 
