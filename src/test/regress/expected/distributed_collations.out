@@ -53,6 +53,34 @@ SELECT * FROM collation_tests.test_propagate WHERE t2 < 'b' COLLATE "C";
   2 | Voẞr | Vossr
 (1 row)
 
+-- Test range table with collated distribution column
+CREATE TABLE test_range(key text COLLATE german_phonebook, val int);
+SELECT create_distributed_table('test_range', 'key', 'range');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+SELECT master_create_empty_shard('test_range') AS new_shard_id
+\gset
+UPDATE pg_dist_shard SET shardminvalue = 'a', shardmaxvalue = 'f'
+WHERE shardid = :new_shard_id;
+SELECT master_create_empty_shard('test_range') AS new_shard_id
+\gset
+UPDATE pg_dist_shard SET shardminvalue = 'G', shardmaxvalue = 'Z'
+WHERE shardid = :new_shard_id;
+-- without german_phonebook collation, this would fail
+INSERT INTO test_range VALUES (U&'\00E4sop', 1), (U&'Vo\1E9Er', 2);
+-- without german_phonebook collation, this would not be router executable
+SET client_min_messages TO debug;
+SELECT * FROM test_range WHERE key > 'Ab' AND key < U&'\00E4z';
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ key  | val 
+------+-----
+ äsop |   1
+(1 row)
+
 \c - - - :worker_1_port
 SELECT c.collname, nsp.nspname, a.rolname
 FROM pg_collation c

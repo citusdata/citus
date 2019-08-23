@@ -17,9 +17,9 @@
 #include "access/stratnum.h"
 #include "access/xact.h"
 #include "catalog/pg_opfamily.h"
-#include "distributed/citus_clauses.h"
 #include "catalog/pg_type.h"
 #include "distributed/colocation_utils.h"
+#include "distributed/citus_clauses.h"
 #include "distributed/citus_nodes.h"
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/deparse_shard_query.h"
@@ -379,7 +379,7 @@ AddShardIntervalRestrictionToSelect(Query *subqery, ShardInterval *shardInterval
 	TypeCacheEntry *typeEntry = lookup_type_cache(targetPartitionColumnVar->vartype,
 												  TYPECACHE_HASH_PROC_FINFO);
 
-	/* probable never possible given that the tables are already hash partitioned */
+	/* probably never possible given that the tables are already hash partitioned */
 	if (!OidIsValid(typeEntry->hash_proc_finfo.fn_oid))
 	{
 		ereport(ERROR, (errcode(ERRCODE_UNDEFINED_FUNCTION),
@@ -387,7 +387,10 @@ AddShardIntervalRestrictionToSelect(Query *subqery, ShardInterval *shardInterval
 							   format_type_be(targetPartitionColumnVar->vartype))));
 	}
 
-	/* generate hashfunc(partCol) expression */
+	/*
+	 * Generate hashfunc(partCol) expression.
+	 * Don't set inputcollid as we don't support non deterministic collations.
+	 */
 	FuncExpr *hashFunctionExpr = makeNode(FuncExpr);
 	hashFunctionExpr->funcid = CitusWorkerHashFunctionId();
 	hashFunctionExpr->args = list_make1(targetPartitionColumnVar);
@@ -401,8 +404,7 @@ AddShardIntervalRestrictionToSelect(Query *subqery, ShardInterval *shardInterval
 								 InvalidOid, false,
 								 (Expr *) hashFunctionExpr,
 								 (Expr *) MakeInt4Constant(shardInterval->minValue),
-								 targetPartitionColumnVar->varcollid,
-								 targetPartitionColumnVar->varcollid);
+								 InvalidOid, InvalidOid);
 
 	/* update the operators with correct operator numbers and function ids */
 	greaterThanAndEqualsBoundExpr->opfuncid =
@@ -416,8 +418,7 @@ AddShardIntervalRestrictionToSelect(Query *subqery, ShardInterval *shardInterval
 								 InvalidOid, false,
 								 (Expr *) hashFunctionExpr,
 								 (Expr *) MakeInt4Constant(shardInterval->maxValue),
-								 targetPartitionColumnVar->varcollid,
-								 targetPartitionColumnVar->varcollid);
+								 InvalidOid, InvalidOid);
 
 	/* update the operators with correct operator numbers and function ids */
 	lessThanAndEqualsBoundExpr->opfuncid = get_opcode(lessThanAndEqualsBoundExpr->opno);
