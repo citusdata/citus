@@ -90,13 +90,12 @@ EnsureDependenciesExistsOnAllNodes(const ObjectAddress *target)
 		char *nodeName = workerNode->workerName;
 		uint32 nodePort = workerNode->workerPort;
 
-		connection = GetNodeUserDatabaseConnection(connectionFlag, nodeName,
-												   nodePort,
-												   CitusExtensionOwnerName(),
-												   NULL);
+		connection = StartNodeUserDatabaseConnection(connectionFlag, nodeName, nodePort,
+													 CitusExtensionOwnerName(), NULL);
 
 		connections = lappend(connections, connection);
 	}
+	FinishConnectionListEstablishment(connections);
 
 	/*
 	 * create dependency on all nodes
