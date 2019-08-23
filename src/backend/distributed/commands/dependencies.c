@@ -185,6 +185,15 @@ ReplicateAllDependenciesToNode(const char *nodeName, int nodePort)
 	 * collect all dependencies in creation order and get their ddl commands
 	 */
 	dependencies = GetDistributedObjectAddressList();
+	if (list_length(dependencies) > 100)
+	{
+		ereport(NOTICE, (errmsg("Replicating postgres objects to node %s:%d", nodeName,
+								nodePort),
+						 errdetail("There are %d objects to replicate, depending on your "
+								   "environment this might take a while",
+								   list_length(dependencies))));
+	}
+
 	dependencies = OrderObjectAddressListInDependencyOrder(dependencies);
 	foreach(dependencyCell, dependencies)
 	{
