@@ -16,7 +16,7 @@ step s1-commit:
   COMMIT;
 
 step s2-insert: <... completed>
-error in steps s1-commit s2-insert: ERROR:  duplicate key value violates unique constraint "test_locking_a_key_102413"
+error in steps s1-commit s2-insert: ERROR:  duplicate key value violates unique constraint "test_locking_a_key_102417"
 step s2-commit: 
   COMMIT;
 

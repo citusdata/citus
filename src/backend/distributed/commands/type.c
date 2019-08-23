@@ -52,6 +52,7 @@
 #include "miscadmin.h"
 #include "nodes/makefuncs.h"
 #include "parser/parse_type.h"
+#include "storage/lmgr.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
@@ -82,7 +83,7 @@
 
 /* forward declaration for helper functions*/
 static void makeRangeVarQualified(RangeVar *var);
-static List * FilterNameListForDistributedTypes(List *objects);
+static List * FilterNameListForDistributedTypes(List *objects, bool missing_ok);
 static List * TypeNameListToObjectAddresses(List *objects);
 static TypeName * makeTypeNameFromRangeVar(const RangeVar *relation);
 static void EnsureSequentialModeForTypeDDL(void);
@@ -135,6 +136,16 @@ PlanCompositeTypeStmt(CompositeTypeStmt *stmt, const char *queryString)
 	typeName = makeTypeNameFromRangeVar(stmt->typevar);
 	typeOid = LookupTypeNameOid(NULL, typeName, false);
 	ObjectAddressSet(typeAddress, TypeRelationId, typeOid);
+
+	/*
+	 * Make sure that no new nodes are added after this point until the end of the
+	 * transaction by taking a RowShareLock on pg_dist_node, which conflicts with the
+	 * ExclusiveLock taken by master_add_node.
+	 * This guarantees that all active nodes will have the object, because they will
+	 * either get it now, or get it in master_add_node after this transaction finishes and
+	 * the pg_dist_object record becomes visible.
+	 */
+	LockRelationOid(DistNodeRelationId(), RowShareLock);
 
 	EnsureDependenciesExistsOnAllNodes(&typeAddress);
 
@@ -416,7 +427,7 @@ PlanDropTypeStmt(DropStmt *stmt, const char *queryString)
 	 */
 	EnsureCoordinator();
 
-	distributedTypes = FilterNameListForDistributedTypes(oldTypes);
+	distributedTypes = FilterNameListForDistributedTypes(oldTypes, stmt->missing_ok);
 	if (list_length(distributedTypes) <= 0)
 	{
 		/* no distributed types to drop */
@@ -735,15 +746,21 @@ wrap_in_sql(const char *fmt, const char *sql)
  * in there.
  */
 static List *
-FilterNameListForDistributedTypes(List *objects)
+FilterNameListForDistributedTypes(List *objects, bool missing_ok)
 {
 	ListCell *objectCell = NULL;
 	List *result = NIL;
 	foreach(objectCell, objects)
 	{
 		TypeName *typeName = castNode(TypeName, lfirst(objectCell));
-		Oid typeOid = LookupTypeNameOid(NULL, typeName, false);
+		Oid typeOid = LookupTypeNameOid(NULL, typeName, missing_ok);
 		ObjectAddress typeAddress = { 0 };
+
+		if (!OidIsValid(typeOid))
+		{
+			continue;
+		}
+
 		ObjectAddressSet(typeAddress, TypeRelationId, typeOid);
 		if (IsObjectDistributed(&typeAddress))
 		{

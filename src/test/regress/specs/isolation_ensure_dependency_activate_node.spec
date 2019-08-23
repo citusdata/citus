@@ -19,6 +19,7 @@ teardown
     DROP TABLE IF EXISTS t1 CASCADE;
     DROP TABLE IF EXISTS t2 CASCADE;
     DROP TABLE IF EXISTS t3 CASCADE;
+    DROP TYPE IF EXISTS tt1 CASCADE;
 
 	SELECT master_remove_node(nodename, nodeport) FROM pg_dist_node;
 }
@@ -53,6 +54,10 @@ step "s1-print-distributed-objects"
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
 
+    -- print if the type has been created
+	SELECT count(*) FROM pg_type where typname = 'tt1';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
+
     SELECT master_remove_node('localhost', 57638);
 }
 
@@ -72,6 +77,19 @@ step "s2-create-schema"
 step "s2-create-table"
 {
 	CREATE TABLE t1 (a int, b int);
+    -- session needs to have replication factor set to 1, can't do in setup
+	SET citus.shard_replication_factor TO 1;
+	SELECT create_distributed_table('t1', 'a');
+}
+
+step "s2-create-type"
+{
+	CREATE TYPE tt1 AS (a int, b int);
+}
+
+step "s2-create-table-with-type"
+{
+	CREATE TABLE t1 (a int, b tt1);
     -- session needs to have replication factor set to 1, can't do in setup
 	SET citus.shard_replication_factor TO 1;
 	SELECT create_distributed_table('t1', 'a');
@@ -97,6 +115,10 @@ step "s2-print-distributed-objects"
     -- print if the schema has been created
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
+
+    -- print if the type has been created
+	SELECT count(*) FROM pg_type where typname = 'tt1';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
 }
 
 session "s3"
@@ -178,3 +200,8 @@ permutation "s1-print-distributed-objects" "s2-create-schema" "s1-begin" "s2-beg
 permutation "s1-print-distributed-objects" "s2-create-schema" "s1-begin" "s2-begin" "s3-begin" "s4-begin" "s1-add-worker" "s2-create-table" "s3-use-schema" "s3-create-table" "s4-use-schema" "s4-create-table" "s1-commit" "s2-commit" "s3-commit" "s4-commit" "s2-print-distributed-objects"
 permutation "s1-print-distributed-objects" "s1-add-worker" "s2-create-schema" "s2-begin" "s3-begin" "s3-use-schema" "s2-create-table" "s3-create-table" "s2-commit" "s3-commit" "s2-print-distributed-objects"
 permutation "s1-print-distributed-objects" "s1-begin" "s2-begin" "s4-begin" "s1-add-worker" "s2-create-schema" "s4-create-schema2" "s2-create-table" "s4-create-table" "s1-commit" "s2-commit" "s4-commit" "s2-print-distributed-objects"
+
+# type and schema tests
+permutation "s1-print-distributed-objects" "s1-begin" "s1-add-worker" "s2-public-schema" "s2-create-type" "s1-commit" "s2-print-distributed-objects"
+permutation "s1-print-distributed-objects" "s1-begin" "s2-public-schema" "s2-create-type" "s1-add-worker" "s1-commit" "s2-print-distributed-objects"
+permutation "s1-print-distributed-objects" "s1-begin" "s2-begin" "s2-create-schema" "s2-create-type" "s2-create-table-with-type" "s1-add-worker" "s2-commit" "s1-commit" "s2-print-distributed-objects"
