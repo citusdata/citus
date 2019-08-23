@@ -115,7 +115,7 @@ typedef struct MetadataCacheData
 	Oid distNodeNodeIdIndexId;
 	Oid distLocalGroupRelationId;
 	Oid distObjectRelationId;
-	Oid distObjectClassIDObjectIDIndexId;
+	Oid distObjectPrimaryKeyIndexId;
 	Oid distColocationRelationId;
 	Oid distColocationConfigurationIndexId;
 	Oid distColocationColocationidIndexId;
@@ -1832,15 +1832,15 @@ DistObjectRelationId(void)
 }
 
 
-/* return oid of pg_dist_object_classid_objid_objsubid_index */
+/* return oid of pg_dist_object_pk */
 Oid
-DistObjectClassIDObjectIDObjectSubIdIndexId(void)
+DistObjectPrimaryKeyIndexId(void)
 {
-	CachedRelationNamespaceLookup("pg_dist_object_classid_objid_objsubid_index",
+	CachedRelationNamespaceLookup("pg_dist_object_pk",
 								  CitusCatalogNamespaceId(),
-								  &MetadataCache.distObjectClassIDObjectIDIndexId);
+								  &MetadataCache.distObjectPrimaryKeyIndexId);
 
-	return MetadataCache.distObjectClassIDObjectIDIndexId;
+	return MetadataCache.distObjectPrimaryKeyIndexId;
 }
 
 

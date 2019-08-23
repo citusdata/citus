@@ -567,14 +567,16 @@ step s1-commit:
     COMMIT;
 
 step s2-create-table: <... completed>
+create_distributed_table
+
+               
+step s2-commit: 
+	COMMIT;
+
 step s3-create-table: <... completed>
 create_distributed_table
 
                
-error in steps s1-commit s2-create-table s3-create-table: ERROR:  duplicate key value violates unique constraint "pg_namespace_nspname_index"
-step s2-commit: 
-	COMMIT;
-
 step s3-commit: 
 	COMMIT;
 

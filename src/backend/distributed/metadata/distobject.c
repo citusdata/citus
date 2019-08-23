@@ -9,6 +9,7 @@
  */
 
 #include "postgres.h"
+#include "miscadmin.h"
 
 #include "access/genam.h"
 #include "access/heapam.h"
@@ -19,9 +20,11 @@
 #include "catalog/namespace.h"
 #include "catalog/objectaddress.h"
 #include "catalog/pg_namespace.h"
+#include "catalog/pg_type.h"
 #include "distributed/metadata/distobject.h"
 #include "distributed/metadata/pg_dist_object.h"
 #include "distributed/metadata_cache.h"
+#include "executor/spi.h"
 #include "nodes/makefuncs.h"
 #include "nodes/pg_list.h"
 #include "parser/parse_type.h"
@@ -29,6 +32,10 @@
 #include "utils/fmgroids.h"
 #include "utils/regproc.h"
 #include "utils/rel.h"
+
+
+static int ExecuteCommandAsSuperuser(char *query, int paramCount, Oid *paramTypes,
+									 Datum *paramValues);
 
 
 PG_FUNCTION_INFO_V1(master_unmark_object_distributed);
@@ -108,33 +115,66 @@ ObjectExsists(const ObjectAddress *address)
 void
 MarkObjectDistributed(const ObjectAddress *distAddress)
 {
-	Relation pgDistObject = NULL;
+	int paramCount = 3;
+	Oid paramTypes[3] = {
+		OIDOID,
+		OIDOID,
+		INT4OID
+	};
+	Datum paramValues[3] = {
+		ObjectIdGetDatum(distAddress->classId),
+		ObjectIdGetDatum(distAddress->objectId),
+		Int32GetDatum(distAddress->objectSubId)
+	};
+	int spiStatus = 0;
 
-	HeapTuple newTuple = NULL;
-	Datum newValues[Natts_pg_dist_object];
-	bool newNulls[Natts_pg_dist_object];
+	char *insertQuery = "INSERT INTO citus.pg_dist_object (classid, objid, objsubid) "
+						"VALUES ($1, $2, $3) ON CONFLICT DO NOTHING";
 
-	/* open system catalog and insert new tuple */
-	pgDistObject = heap_open(DistObjectRelationId(), RowExclusiveLock);
+	spiStatus = ExecuteCommandAsSuperuser(insertQuery, paramCount, paramTypes,
+										  paramValues);
+	if (spiStatus < 0)
+	{
+		ereport(ERROR, (errmsg("failed to insert object into citus.pg_dist_object")));
+	}
+}
 
-	/* form new tuple for pg_dist_object */
-	memset(newValues, 0, sizeof(newValues));
-	memset(newNulls, true, sizeof(newNulls));
 
-	/* tuple (classId, objectId, NULL) */
-	newValues[Anum_pg_dist_object_classid - 1] = ObjectIdGetDatum(distAddress->classId);
-	newNulls[Anum_pg_dist_object_classid - 1] = false;
-	newValues[Anum_pg_dist_object_objid - 1] = ObjectIdGetDatum(distAddress->objectId);
-	newNulls[Anum_pg_dist_object_objid - 1] = false;
-	newValues[Anum_pg_dist_object_objsubid - 1] = Int32GetDatum(distAddress->objectSubId);
-	newNulls[Anum_pg_dist_object_objsubid - 1] = false;
+/*
+ * ExecuteCommandAsSuperuser executes a command via SPI as superuser.
+ */
+static int
+ExecuteCommandAsSuperuser(char *query, int paramCount, Oid *paramTypes,
+						  Datum *paramValues)
+{
+	int spiConnected = 0;
+	Oid savedUserId = InvalidOid;
+	int savedSecurityContext = 0;
+	int spiStatus = 0;
+	int spiFinished = 0;
 
-	newTuple = heap_form_tuple(RelationGetDescr(pgDistObject), newValues, newNulls);
+	spiConnected = SPI_connect();
+	if (spiConnected != SPI_OK_CONNECT)
+	{
+		ereport(ERROR, (errmsg("could not connect to SPI manager")));
+	}
 
-	CatalogTupleInsert(pgDistObject, newTuple);
+	/* make sure we have write access */
+	GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
+	SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);
 
-	CommandCounterIncrement();
-	heap_close(pgDistObject, NoLock);
+	spiStatus = SPI_execute_with_args(query, paramCount, paramTypes, paramValues,
+									  NULL, false, 0);
+
+	SetUserIdAndSecContext(savedUserId, savedSecurityContext);
+
+	spiFinished = SPI_finish();
+	if (spiFinished != SPI_OK_FINISH)
+	{
+		ereport(ERROR, (errmsg("could not disconnect from SPI manager")));
+	}
+
+	return spiStatus;
 }
 
 
@@ -145,31 +185,28 @@ MarkObjectDistributed(const ObjectAddress *distAddress)
 void
 UnmarkObjectDistributed(const ObjectAddress *address)
 {
-	Relation pgDistObjectRel = NULL;
-	ScanKeyData key[3] = { 0 };
-	SysScanDesc pgDistObjectScan = NULL;
-	HeapTuple pgDistObjectTup = NULL;
+	int paramCount = 3;
+	Oid paramTypes[3] = {
+		OIDOID,
+		OIDOID,
+		INT4OID
+	};
+	Datum paramValues[3] = {
+		ObjectIdGetDatum(address->classId),
+		ObjectIdGetDatum(address->objectId),
+		Int32GetDatum(address->objectSubId)
+	};
+	int spiStatus = 0;
 
-	pgDistObjectRel = heap_open(DistObjectRelationId(), RowExclusiveLock);
+	char *deleteQuery = "DELETE FROM citus.pg_dist_object WHERE classid = $1 AND "
+						"objid = $2 AND objsubid = $3";
 
-	/* scan pg_dist_object for classid = $1 AND objid = $2 using an index */
-	ScanKeyInit(&key[0], Anum_pg_dist_object_classid, BTEqualStrategyNumber, F_OIDEQ,
-				ObjectIdGetDatum(address->classId));
-	ScanKeyInit(&key[1], Anum_pg_dist_object_objid, BTEqualStrategyNumber, F_OIDEQ,
-				ObjectIdGetDatum(address->objectId));
-	ScanKeyInit(&key[2], Anum_pg_dist_object_objsubid, BTEqualStrategyNumber, F_INT4EQ,
-				ObjectIdGetDatum(address->objectSubId));
-	pgDistObjectScan = systable_beginscan(pgDistObjectRel,
-										  DistObjectClassIDObjectIDObjectSubIdIndexId(),
-										  true, NULL, 3, key);
-
-	while (HeapTupleIsValid(pgDistObjectTup = systable_getnext(pgDistObjectScan)))
+	spiStatus = ExecuteCommandAsSuperuser(deleteQuery, paramCount, paramTypes,
+										  paramValues);
+	if (spiStatus < 0)
 	{
-		CatalogTupleDelete(pgDistObjectRel, &pgDistObjectTup->t_self);
+		ereport(ERROR, (errmsg("failed to delete object from citus.pg_dist_object")));
 	}
-
-	systable_endscan(pgDistObjectScan);
-	relation_close(pgDistObjectRel, RowExclusiveLock);
 }
 
 
@@ -181,7 +218,7 @@ bool
 IsObjectDistributed(const ObjectAddress *address)
 {
 	Relation pgDistObjectRel = NULL;
-	ScanKeyData key[3] = { 0 };
+	ScanKeyData key[3];
 	SysScanDesc pgDistObjectScan = NULL;
 	HeapTuple pgDistObjectTup = NULL;
 	bool result = false;
@@ -195,8 +232,7 @@ IsObjectDistributed(const ObjectAddress *address)
 				ObjectIdGetDatum(address->objectId));
 	ScanKeyInit(&key[2], Anum_pg_dist_object_objsubid, BTEqualStrategyNumber, F_INT4EQ,
 				ObjectIdGetDatum(address->objectSubId));
-	pgDistObjectScan = systable_beginscan(pgDistObjectRel,
-										  DistObjectClassIDObjectIDObjectSubIdIndexId(),
+	pgDistObjectScan = systable_beginscan(pgDistObjectRel, DistObjectPrimaryKeyIndexId(),
 										  true, NULL, 3, key);
 
 	pgDistObjectTup = systable_getnext(pgDistObjectScan);

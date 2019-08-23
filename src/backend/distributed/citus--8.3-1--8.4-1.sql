@@ -53,8 +53,9 @@ CREATE TABLE citus.pg_dist_object (
     object_args text[] DEFAULT NULL
 );
 
-CREATE INDEX pg_dist_object_classid_objid_objsubid_index ON
-    citus.pg_dist_object USING btree(classid, objid, objsubid);
+ALTER TABLE citus.pg_dist_object
+    ADD CONSTRAINT pg_dist_object_pk
+    PRIMARY KEY (classid, objid, objsubid);
 
 CREATE OR REPLACE FUNCTION pg_catalog.citus_drop_trigger()
     RETURNS event_trigger
@@ -204,14 +205,12 @@ BEGIN
     FROM pg_catalog.pg_dist_partition p;
 
     -- restore pg_dist_object from the stable identifiers
-    UPDATE citus.pg_dist_object
-       SET (classid, objid, objsubid) = (SELECT * FROM pg_get_object_address(type, object_names, object_args)),
-           type = NULL,
-           object_names = NULL,
-           object_args = NULL
-     WHERE NOT type IS NULL
-       AND NOT object_names IS NULL
-       AND NOT object_args IS NULL;
+    WITH old_records AS (
+        DELETE FROM citus.pg_dist_object RETURNING type, object_names, object_args
+    )
+    INSERT INTO citus.pg_dist_object (classid, objid, objsubid)
+	SELECT address.classid, address.objid, address.objsubid
+	FROM old_records naming, pg_get_object_address(naming.type, naming.object_names, naming.object_args) address;
 END;
 $cppu$;
 
