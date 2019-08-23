@@ -12,6 +12,7 @@
 
 #include "catalog/dependency.h"
 #include "catalog/objectaddress.h"
+#include "storage/lmgr.h"
 
 #include "distributed/commands.h"
 #include "distributed/connection_management.h"
@@ -75,7 +76,15 @@ EnsureDependenciesExistsOnAllNodes(const ObjectAddress *target)
 
 	/*
 	 * collect and connect to all applicable nodes
+	 *
+	 * Make sure that no new nodes are added after this point until the end of the
+	 * transaction by taking a RowShareLock on pg_dist_node, which conflicts with the
+	 * ExclusiveLock taken by master_add_node.
+	 * This guarantees that all active nodes will have the object, because they will
+	 * either get it now, or get it in master_add_node after this transaction finishes and
+	 * the pg_dist_object record becomes visible.
 	 */
+	LockRelationOid(DistNodeRelationId(), RowShareLock);
 	workerNodeList = ActivePrimaryNodeList();
 	if (list_length(workerNodeList) <= 0)
 	{

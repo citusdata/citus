@@ -77,7 +77,7 @@ step s1-get-current-transaction-id:
 
 row            
 
-(0,174)        
+(0,204)        
 step s2-get-first-worker-active-transactions: 
 		SELECT * FROM run_command_on_workers('SELECT row(initiator_node_identifier, transaction_number)
 												FROM	 
@@ -88,7 +88,7 @@ step s2-get-first-worker-active-transactions:
 
 nodename       nodeport       success        result         
 
-localhost      57637          t              (0,174)        
+localhost      57637          t              (0,204)        
 step s1-commit: 
     COMMIT;
 

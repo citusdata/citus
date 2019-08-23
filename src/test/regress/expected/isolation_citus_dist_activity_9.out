@@ -41,16 +41,16 @@ step s3-view-worker:
 
 query          query_hostname query_hostport master_query_host_namemaster_query_host_portstate          wait_event_typewait_event     usename        datname        
 
-SELECT worker_apply_shard_ddl_command (102081, 'public', '
+SELECT worker_apply_shard_ddl_command (102105, 'public', '
     ALTER TABLE test_table ADD COLUMN x INT;
 ')localhost      57638          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression     
-SELECT worker_apply_shard_ddl_command (102080, 'public', '
+SELECT worker_apply_shard_ddl_command (102104, 'public', '
     ALTER TABLE test_table ADD COLUMN x INT;
 ')localhost      57637          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression     
-SELECT worker_apply_shard_ddl_command (102079, 'public', '
+SELECT worker_apply_shard_ddl_command (102103, 'public', '
     ALTER TABLE test_table ADD COLUMN x INT;
 ')localhost      57638          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression     
-SELECT worker_apply_shard_ddl_command (102078, 'public', '
+SELECT worker_apply_shard_ddl_command (102102, 'public', '
     ALTER TABLE test_table ADD COLUMN x INT;
 ')localhost      57637          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression     
 step s2-rollback: 
@@ -104,7 +104,7 @@ step s3-view-worker:
 
 query          query_hostname query_hostport master_query_host_namemaster_query_host_portstate          wait_event_typewait_event     usename        datname        
 
-INSERT INTO public.test_table_102084 (column1, column2) VALUES (100, 100)localhost      57637          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression     
+INSERT INTO public.test_table_102108 (column1, column2) VALUES (100, 100)localhost      57637          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression     
 step s2-rollback: 
 	ROLLBACK;
 
@@ -159,10 +159,10 @@ step s3-view-worker:
 
 query          query_hostname query_hostport master_query_host_namemaster_query_host_portstate          wait_event_typewait_event     usename        datname        
 
-SELECT count(*) AS count FROM test_table_102089 test_table WHERE truelocalhost      57638          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression     
-SELECT count(*) AS count FROM test_table_102088 test_table WHERE truelocalhost      57637          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression     
-SELECT count(*) AS count FROM test_table_102087 test_table WHERE truelocalhost      57638          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression     
-SELECT count(*) AS count FROM test_table_102086 test_table WHERE truelocalhost      57637          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression     
+SELECT count(*) AS count FROM test_table_102113 test_table WHERE truelocalhost      57638          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression     
+SELECT count(*) AS count FROM test_table_102112 test_table WHERE truelocalhost      57637          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression     
+SELECT count(*) AS count FROM test_table_102111 test_table WHERE truelocalhost      57638          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression     
+SELECT count(*) AS count FROM test_table_102110 test_table WHERE truelocalhost      57637          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression     
 step s2-rollback: 
 	ROLLBACK;
 
@@ -217,7 +217,7 @@ step s3-view-worker:
 
 query          query_hostname query_hostport master_query_host_namemaster_query_host_portstate          wait_event_typewait_event     usename        datname        
 
-SELECT count(*) AS count FROM public.test_table_102091 test_table WHERE (column1 OPERATOR(pg_catalog.=) 55)localhost      57638          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression     
+SELECT count(*) AS count FROM public.test_table_102115 test_table WHERE (column1 OPERATOR(pg_catalog.=) 55)localhost      57638          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression     
 step s2-rollback: 
 	ROLLBACK;
 
