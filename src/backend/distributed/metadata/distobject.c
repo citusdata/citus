@@ -32,6 +32,76 @@
 #include "distributed/metadata_cache.h"
 
 
+PG_FUNCTION_INFO_V1(master_unmark_object_distributed);
+
+
+/*
+ * master_unmark_object_distributed(classid oid, objid oid, objsubid int)
+ *
+ * removes the entry for an object address from pg_dist_object. Only removes the entry if
+ * the object does not exist anymore.
+ */
+Datum
+master_unmark_object_distributed(PG_FUNCTION_ARGS)
+{
+	Oid classid = PG_GETARG_OID(0);
+	Oid objid = PG_GETARG_OID(1);
+	int32 objsubid = PG_GETARG_INT32(2);
+
+	ObjectAddress address = { 0 };
+	ObjectAddressSubSet(address, classid, objid, objsubid);
+
+	if (!IsObjectDistributed(&address))
+	{
+		/* if the object is not distributed there is no need to unmark it */
+		PG_RETURN_VOID();
+	}
+
+	if (ObjectExsists(&address))
+	{
+		ereport(ERROR, (errmsg("object still exists"),
+						errdetail("the %s \"%s\" still exists",
+								  getObjectTypeDescription(&address),
+								  getObjectIdentity(&address)),
+						errhint("drop the object via a DROP command")));
+	}
+
+	UnmarkObjectDistributed(&address);
+
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * ObjectExsists checks if an object given by its object address exists
+ *
+ * This is done by opening the catalog for the object and search the catalog for the
+ * objects' oid. If we can find a tuple the object is existing. If no tuple is found, or
+ * we don't have the information to find the tuple by its oid we assume the object does
+ * not exist.
+ */
+bool
+ObjectExsists(const ObjectAddress *address)
+{
+	if (is_objectclass_supported(address->classId))
+	{
+		HeapTuple objtup;
+		Relation catalog = heap_open(address->classId, AccessShareLock);
+
+		objtup = get_catalog_object_by_oid(catalog, address->objectId);
+		heap_close(catalog, AccessShareLock);
+		if (objtup != NULL)
+		{
+			return true;
+		}
+
+		return false;
+	}
+
+	return false;
+}
+
+
 /*
  * MarkObjectDistributed marks an object as a distributed object by citus. Marking is done
  * by adding appropriate entries to citus.pg_dist_object

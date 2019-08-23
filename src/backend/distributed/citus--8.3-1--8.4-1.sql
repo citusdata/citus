@@ -35,6 +35,13 @@ RETURNS TRIGGER AS $$
   END;
 $$ LANGUAGE plpgsql;
 
+CREATE OR REPLACE FUNCTION pg_catalog.master_unmark_object_distributed(classid oid, objid oid, objsubid int)
+    RETURNS void
+    LANGUAGE C STRICT
+    AS 'MODULE_PATHNAME', $$master_unmark_object_distributed$$;
+COMMENT ON FUNCTION pg_catalog.master_unmark_object_distributed(classid oid, objid oid, objsubid int)
+    IS 'remove an object address from citus.pg_dist_object once the object has been deleted';
+
 CREATE TABLE citus.pg_dist_object (
     classid oid NOT NULL,
     objid oid NOT NULL,
@@ -48,10 +55,6 @@ CREATE TABLE citus.pg_dist_object (
 
 CREATE INDEX pg_dist_object_classid_objid_objsubid_index ON
     citus.pg_dist_object USING btree(classid, objid, objsubid);
-
-GRANT USAGE ON SCHEMA citus TO public;
-GRANT SELECT ON citus.pg_dist_object TO public;
-GRANT DELETE ON citus.pg_dist_object TO public;
 
 CREATE OR REPLACE FUNCTION pg_catalog.citus_drop_trigger()
     RETURNS event_trigger
@@ -85,12 +88,10 @@ BEGIN
     END IF;
 
     -- remove entries from citus.pg_dist_object for all dropped root (objsubid = 0) objects
-    DELETE FROM citus.pg_dist_object AS dist_object
-          USING pg_event_trigger_dropped_objects() AS drop_object
-          WHERE dist_object.classid = drop_object.classid
-            AND dist_object.objid = drop_object.objid
-            AND drop_object.objsubid = drop_object.objsubid;
-
+    FOR v_obj IN SELECT * FROM pg_event_trigger_dropped_objects()
+    LOOP
+        PERFORM master_unmark_object_distributed(v_obj.classid, v_obj.objid, v_obj.objsubid);
+    END LOOP;
 END;
 $cdbdt$;
 COMMENT ON FUNCTION pg_catalog.citus_drop_trigger()

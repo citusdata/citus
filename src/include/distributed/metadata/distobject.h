@@ -16,6 +16,7 @@
 #include "catalog/objectaddress.h"
 
 
+extern bool ObjectExsists(const ObjectAddress *address);
 extern bool IsObjectDistributed(const ObjectAddress *address);
 extern void MarkObjectDistributed(const ObjectAddress *distAddress);
 extern void UnmarkObjectDistributed(const ObjectAddress *address);
