@@ -27,8 +27,8 @@
 #include "utils/rel.h"
 #include "utils/builtins.h"
 
-#include "distributed/dist_catalog/distobject.h"
-#include "distributed/dist_catalog/pg_dist_object.h"
+#include "distributed/metadata/distobject.h"
+#include "distributed/metadata/pg_dist_object.h"
 #include "distributed/metadata_cache.h"
 
 

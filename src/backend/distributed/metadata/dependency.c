@@ -21,8 +21,8 @@
 #include "utils/hsearch.h"
 #include "utils/lsyscache.h"
 
-#include "distributed/dist_catalog/dependency.h"
-#include "distributed/dist_catalog/distobject.h"
+#include "distributed/metadata/dependency.h"
+#include "distributed/metadata/distobject.h"
 
 typedef struct ObjectAddressCollector
 {
