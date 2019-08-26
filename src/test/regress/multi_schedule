@@ -56,7 +56,7 @@ test: multi_partitioning_utils multi_partitioning replicated_partitioned_table
 test: subquery_basics subquery_local_tables subquery_executors subquery_and_cte set_operations set_operation_and_local_tables
 test: subqueries_deep subquery_view subquery_partitioning subquery_complex_target_list subqueries_not_supported subquery_in_where 
 test: non_colocated_leaf_subquery_joins non_colocated_subquery_joins non_colocated_join_order
-test: subquery_prepared_statements 
+test: subquery_prepared_statements pg12
 
 # ----------
 # Miscellaneous tests to check our query planning behavior
@@ -276,4 +276,3 @@ test: multi_task_string_size
 # connection encryption tests
 # ---------
 test: ssl_by_default
-

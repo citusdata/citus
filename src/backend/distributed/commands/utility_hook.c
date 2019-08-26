@@ -194,7 +194,7 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 
 	/*
 	 * TRANSMIT used to be separate command, but to avoid patching the grammar
-	 * it's no overlaid onto COPY, but with FORMAT = 'transmit' instead of the
+	 * it's now overlaid onto COPY, but with FORMAT = 'transmit' instead of the
 	 * normal FORMAT options.
 	 */
 	if (IsTransmitStmt(parsetree))
@@ -277,6 +277,11 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 			MemoryContextSwitchTo(oldContext);
 
 			ddlJobs = PlanIndexStmt((IndexStmt *) parsetree, queryString);
+		}
+
+		if (IsA(parsetree, ReindexStmt))
+		{
+			ErrorIfReindexOnDistributedTable((ReindexStmt *) parsetree);
 		}
 
 		if (IsA(parsetree, DropStmt))

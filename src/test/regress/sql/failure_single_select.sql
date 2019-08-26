@@ -8,20 +8,20 @@ CREATE TABLE select_test (key int, value text);
 SELECT create_distributed_table('select_test', 'key');
 
 -- put data in shard for which mitm node is first placement
-INSERT INTO select_test VALUES (2, 'test data');
+INSERT INTO select_test VALUES (3, 'test data');
 
 SELECT citus.mitmproxy('conn.onQuery(query="^SELECT").kill()');
-SELECT * FROM select_test WHERE key = 2;
-SELECT * FROM select_test WHERE key = 2;
+SELECT * FROM select_test WHERE key = 3;
+SELECT * FROM select_test WHERE key = 3;
 
 -- kill after first SELECT; txn should work (though placement marked bad)
 SELECT citus.mitmproxy('conn.onQuery(query="^SELECT").kill()');
 
 BEGIN;
-INSERT INTO select_test VALUES (2, 'more data');
-SELECT * FROM select_test WHERE key = 2;
-INSERT INTO select_test VALUES (2, 'even more data');
-SELECT * FROM select_test WHERE key = 2;
+INSERT INTO select_test VALUES (3, 'more data');
+SELECT * FROM select_test WHERE key = 3;
+INSERT INTO select_test VALUES (3, 'even more data');
+SELECT * FROM select_test WHERE key = 3;
 COMMIT;
 
 -- some clean up
@@ -34,18 +34,18 @@ TRUNCATE select_test;
 -- now the same tests with query cancellation
 
 -- put data in shard for which mitm node is first placement
-INSERT INTO select_test VALUES (2, 'test data');
+INSERT INTO select_test VALUES (3, 'test data');
 
 SELECT citus.mitmproxy('conn.onQuery(query="^SELECT").cancel(' ||  pg_backend_pid() || ')');
-SELECT * FROM select_test WHERE key = 2;
-SELECT * FROM select_test WHERE key = 2;
+SELECT * FROM select_test WHERE key = 3;
+SELECT * FROM select_test WHERE key = 3;
 
 -- cancel after first SELECT; txn should fail and nothing should be marked as invalid
 SELECT citus.mitmproxy('conn.onQuery(query="^SELECT").cancel(' ||  pg_backend_pid() || ')');
 
 BEGIN;
-INSERT INTO select_test VALUES (2, 'more data');
-SELECT * FROM select_test WHERE key = 2;
+INSERT INTO select_test VALUES (3, 'more data');
+SELECT * FROM select_test WHERE key = 3;
 COMMIT;
 
 -- show that all placements are OK
@@ -60,20 +60,20 @@ TRUNCATE select_test;
 SELECT citus.mitmproxy('conn.onQuery(query="^SELECT").after(1).cancel(' ||  pg_backend_pid() || ')');
 
 BEGIN;
-INSERT INTO select_test VALUES (2, 'more data');
-SELECT * FROM select_test WHERE key = 2;
-INSERT INTO select_test VALUES (2, 'even more data');
-SELECT * FROM select_test WHERE key = 2;
+INSERT INTO select_test VALUES (3, 'more data');
+SELECT * FROM select_test WHERE key = 3;
+INSERT INTO select_test VALUES (3, 'even more data');
+SELECT * FROM select_test WHERE key = 3;
 COMMIT;
 
 -- error after second SELECT; txn should work (though placement marked bad)
 SELECT citus.mitmproxy('conn.onQuery(query="^SELECT").after(1).reset()');
 
 BEGIN;
-INSERT INTO select_test VALUES (2, 'more data');
-SELECT * FROM select_test WHERE key = 2;
-INSERT INTO select_test VALUES (2, 'even more data');
-SELECT * FROM select_test WHERE key = 2;
+INSERT INTO select_test VALUES (3, 'more data');
+SELECT * FROM select_test WHERE key = 3;
+INSERT INTO select_test VALUES (3, 'even more data');
+SELECT * FROM select_test WHERE key = 3;
 COMMIT;
 
 SELECT citus.mitmproxy('conn.onQuery(query="^SELECT").after(2).kill()');

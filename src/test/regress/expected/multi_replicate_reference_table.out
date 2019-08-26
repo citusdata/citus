@@ -1,7 +1,7 @@
 --
 -- MULTI_REPLICATE_REFERENCE_TABLE
 --
--- Tests that check the metadata returned by the master node.
+-- Tests that check that reference tables are replicated when adding new nodes.
 SET citus.next_shard_id TO 1370000;
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 1370000;
 ALTER SEQUENCE pg_catalog.pg_dist_groupid_seq RESTART 1370000;
@@ -640,6 +640,67 @@ WHERE colocationid IN
 
 DROP TABLE replicate_reference_table_schema.table1;
 DROP SCHEMA replicate_reference_table_schema CASCADE;
+-- test adding a node when there are foreign keys between reference tables
+SELECT master_remove_node('localhost', :worker_2_port);
+ master_remove_node 
+--------------------
+ 
+(1 row)
+
+CREATE TABLE ref_table_1(id int primary key, v int);
+CREATE TABLE ref_table_2(id int primary key, v int references ref_table_1(id));
+CREATE TABLE ref_table_3(id int primary key, v int references ref_table_2(id));
+SELECT create_reference_table('ref_table_1'),
+       create_reference_table('ref_table_2'),
+       create_reference_table('ref_table_3');
+ create_reference_table | create_reference_table | create_reference_table 
+------------------------+------------------------+------------------------
+                        |                        | 
+(1 row)
+
+-- status before master_add_node
+SELECT
+    shardid, shardstate, shardlength, nodename, nodeport
+FROM
+    pg_dist_shard_placement
+WHERE
+    nodeport = :worker_2_port;
+ shardid | shardstate | shardlength | nodename | nodeport 
+---------+------------+-------------+----------+----------
+(0 rows)
+
+SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+NOTICE:  Replicating reference table "ref_table_1" to the node localhost:57638
+NOTICE:  Replicating reference table "ref_table_2" to the node localhost:57638
+NOTICE:  Replicating reference table "ref_table_3" to the node localhost:57638
+ ?column? 
+----------
+        1
+(1 row)
+
+-- status after master_add_node
+SELECT
+    shardid, shardstate, shardlength, nodename, nodeport
+FROM
+    pg_dist_shard_placement
+WHERE
+    nodeport = :worker_2_port;
+ shardid | shardstate | shardlength | nodename  | nodeport 
+---------+------------+-------------+-----------+----------
+ 1370012 |          1 |           0 | localhost |    57638
+ 1370013 |          1 |           0 | localhost |    57638
+ 1370014 |          1 |           0 | localhost |    57638
+(3 rows)
+
+-- verify constraints have been created on the new node
+SELECT run_command_on_workers('select count(*) from pg_constraint where contype=''f'' AND conname like ''ref_table%'';');
+ run_command_on_workers 
+------------------------
+ (localhost,57637,t,2)
+ (localhost,57638,t,2)
+(2 rows)
+
+DROP TABLE ref_table_1, ref_table_2, ref_table_3;
 -- do some tests with inactive node
 SELECT master_remove_node('localhost', :worker_2_port);
  master_remove_node 
@@ -675,7 +736,7 @@ WHERE
 ORDER BY 1,4,5;
  shardid | shardstate | shardlength | nodename  | nodeport 
 ---------+------------+-------------+-----------+----------
- 1370012 |          1 |           0 | localhost |    57637
+ 1370015 |          1 |           0 | localhost |    57637
 (1 row)
 
 -- we should see the two shard placements after activation
@@ -700,8 +761,8 @@ WHERE
 ORDER BY 1,4,5;
  shardid | shardstate | shardlength | nodename  | nodeport 
 ---------+------------+-------------+-----------+----------
- 1370012 |          1 |           0 | localhost |    57637
- 1370012 |          1 |           0 | localhost |    57638
+ 1370015 |          1 |           0 | localhost |    57637
+ 1370015 |          1 |           0 | localhost |    57638
 (2 rows)
 
 -- this should have no effect

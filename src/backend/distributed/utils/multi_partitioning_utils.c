@@ -24,6 +24,10 @@
 #include "distributed/shardinterval_utils.h"
 #include "lib/stringinfo.h"
 #include "nodes/pg_list.h"
+#include "pgstat.h"
+#if PG_VERSION_NUM >= 120000
+#include "partitioning/partdesc.h"
+#endif
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
@@ -32,6 +36,7 @@
 
 
 static char * PartitionBound(Oid partitionId);
+static Relation try_relation_open_nolock(Oid relationId);
 
 
 /*
@@ -69,7 +74,7 @@ PartitionedTable(Oid relationId)
 bool
 PartitionedTableNoLock(Oid relationId)
 {
-	Relation rel = try_relation_open(relationId, NoLock);
+	Relation rel = try_relation_open_nolock(relationId);
 	bool partitionedTable = false;
 
 	/* don't error out for tables that are dropped */
@@ -122,7 +127,7 @@ PartitionTable(Oid relationId)
 bool
 PartitionTableNoLock(Oid relationId)
 {
-	Relation rel = try_relation_open(relationId, NoLock);
+	Relation rel = try_relation_open_nolock(relationId);
 	bool partitionTable = false;
 
 	/* don't error out for tables that are dropped */
@@ -137,6 +142,39 @@ PartitionTableNoLock(Oid relationId)
 	heap_close(rel, NoLock);
 
 	return partitionTable;
+}
+
+
+/*
+ * try_relation_open_nolock opens a relation with given relationId without
+ * acquiring locks. PostgreSQL's try_relation_open() asserts that caller
+ * has already acquired a lock on the relation, which we don't always do.
+ *
+ * ATTENTION:
+ *   1. Sync this with try_relation_open(). It hasn't changed for 10 to 12
+ *      releases though.
+ *   2. We should remove this after we fix the locking/distributed deadlock
+ *      issues with MX Truncate. See https://github.com/citusdata/citus/pull/2894
+ *      for more discussion.
+ */
+static Relation
+try_relation_open_nolock(Oid relationId)
+{
+	Relation relation = NULL;
+	if (!SearchSysCacheExists1(RELOID, ObjectIdGetDatum(relationId)))
+	{
+		return NULL;
+	}
+
+	relation = RelationIdGetRelation(relationId);
+	if (!RelationIsValid(relation))
+	{
+		return NULL;
+	}
+
+	pgstat_initstats(relation);
+
+	return relation;
 }
 
 

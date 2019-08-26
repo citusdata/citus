@@ -31,10 +31,10 @@ extern void ErrorIfUnstableCreateOrAlterExtensionStmt(Node *parsetree);
 /* foreign_constraint.c - forward declarations */
 extern bool ConstraintIsAForeignKeyToReferenceTable(char *constraintName,
 													Oid leftRelationId);
-extern void ErrorIfUnsupportedForeignConstraint(Relation relation, char
-												distributionMethod,
-												Var *distributionColumn, uint32
-												colocationId);
+extern void ErrorIfUnsupportedForeignConstraintExists(Relation relation, char
+													  distributionMethod,
+													  Var *distributionColumn, uint32
+													  colocationId);
 extern bool ColumnAppearsInForeignKeyToReferenceTable(char *columnName, Oid
 													  relationId);
 extern List * GetTableForeignConstraintCommands(Oid relationId);
@@ -52,6 +52,7 @@ extern List * PlanGrantStmt(GrantStmt *grantStmt);
 extern bool IsIndexRenameStmt(RenameStmt *renameStmt);
 extern List * PlanIndexStmt(IndexStmt *createIndexStatement,
 							const char *createIndexCommand);
+extern void ErrorIfReindexOnDistributedTable(ReindexStmt *ReindexStatement);
 extern List * PlanDropIndexStmt(DropStmt *dropIndexStatement,
 								const char *dropIndexCommand);
 extern void PostProcessIndexStmt(IndexStmt *indexStmt);
@@ -92,11 +93,8 @@ extern void ErrorIfUnsupportedSeqStmt(CreateSeqStmt *createSeqStmt);
 extern void ErrorIfDistributedAlterSeqOwnedBy(AlterSeqStmt *alterSeqStmt);
 
 
-#if (PG_VERSION_NUM >= 100000)
-
 /* subscription.c - forward declarations */
 extern Node * ProcessCreateSubscriptionStmt(CreateSubscriptionStmt *createSubStmt);
-#endif /* PG_VERSION_NUM >= 100000 */
 
 
 /* table.c - forward declarations */

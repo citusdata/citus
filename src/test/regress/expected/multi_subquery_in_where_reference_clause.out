@@ -87,7 +87,7 @@ DETAIL:  Functions are not allowed in FROM clause when the query has subqueries 
 SELECT
   user_id
 FROM
-  (SELECT  5 AS user_id) users_reference_table
+  (SELECT  5 AS user_id UNION ALL SELECT 6) users_reference_table
 WHERE
   NOT EXISTS
       (SELECT
@@ -99,7 +99,7 @@ WHERE
       )
 LIMIT 3;
 ERROR:  cannot pushdown the subquery
-DETAIL:  Subqueries without FROM are not allowed in FROM clause when the outer query has subqueries in WHERE clause and it references a column from another query
+DETAIL:  Complex subqueries and CTEs are not allowed in the FROM clause when the query has subqueries in the WHERE clause and it references a column from another query
 -- join with distributed table prevents FROM from recurring
 SELECT
   DISTINCT user_id

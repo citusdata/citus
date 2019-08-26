@@ -11,7 +11,6 @@
  */
 
 #include "postgres.h"
-#include "c.h"
 
 #include <stddef.h>
 
@@ -57,9 +56,13 @@
 #include "optimizer/joininfo.h"
 #include "optimizer/pathnode.h"
 #include "optimizer/paths.h"
-#include "optimizer/predtest.h"
-#include "optimizer/restrictinfo.h"
+#if PG_VERSION_NUM >= 120000
+#include "optimizer/optimizer.h"
+#else
 #include "optimizer/var.h"
+#include "optimizer/predtest.h"
+#endif
+#include "optimizer/restrictinfo.h"
 #include "parser/parsetree.h"
 #include "parser/parse_oper.h"
 #include "storage/lock.h"
@@ -676,7 +679,11 @@ ModifyQuerySupported(Query *queryTree, Query *originalQuery, bool multiShardQuer
 									 NULL, NULL);
 			}
 		}
-		else if (rangeTableEntry->rtekind == RTE_VALUES)
+		else if (rangeTableEntry->rtekind == RTE_VALUES
+#if PG_VERSION_NUM >= 120000
+				 || rangeTableEntry->rtekind == RTE_RESULT
+#endif
+				 )
 		{
 			/* do nothing, this type is supported */
 		}

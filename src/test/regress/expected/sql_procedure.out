@@ -98,7 +98,7 @@ $$;
 CALL test_procedure_modify_insert(2,12);
 ERROR:  duplicate key value violates unique constraint "idx_table_100503"
 DETAIL:  Key (id, org_id)=(2, 12) already exists.
-CONTEXT:  while executing command on localhost:57637
+CONTEXT:  while executing command on localhost:57638
 SQL statement "INSERT INTO test_table VALUES (tt_id, tt_org_id)"
 PL/pgSQL function test_procedure_modify_insert(integer,integer) line 5 at SQL statement
 SELECT * FROM test_table ORDER BY 1, 2;
@@ -118,7 +118,7 @@ $$;
 CALL test_procedure_modify_insert_commit(2,30);
 ERROR:  duplicate key value violates unique constraint "idx_table_100503"
 DETAIL:  Key (id, org_id)=(2, 30) already exists.
-CONTEXT:  while executing command on localhost:57637
+CONTEXT:  while executing command on localhost:57638
 SQL statement "INSERT INTO test_table VALUES (tt_id, tt_org_id)"
 PL/pgSQL function test_procedure_modify_insert_commit(integer,integer) line 5 at SQL statement
 SELECT * FROM test_table ORDER BY 1, 2;
@@ -209,14 +209,8 @@ SELECT * from test_table;
 ----+--------
 (0 rows)
 
+\set VERBOSITY terse
 DROP SCHEMA procedure_schema CASCADE;
 NOTICE:  drop cascades to 8 other objects
-DETAIL:  drop cascades to table test_table
-drop cascades to function test_procedure_delete_insert(integer,integer)
-drop cascades to function test_procedure_modify_insert(integer,integer)
-drop cascades to function test_procedure_modify_insert_commit(integer,integer)
-drop cascades to function test_procedure_rollback_3(integer,integer)
-drop cascades to function test_procedure_rollback(integer,integer)
-drop cascades to function test_procedure_rollback_2(integer,integer)
-drop cascades to function test_procedure(integer,integer)
+\set VERBOSITY default
 RESET SEARCH_PATH;

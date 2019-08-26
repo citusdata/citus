@@ -254,7 +254,9 @@ FindShardInterval(Datum partitionColumnValue, DistTableCacheEntry *cacheEntry)
 
 	if (cacheEntry->partitionMethod == DISTRIBUTE_BY_HASH)
 	{
-		searchedValue = FunctionCall1(cacheEntry->hashFunction, partitionColumnValue);
+		searchedValue = FunctionCall1Coll(cacheEntry->hashFunction,
+										  cacheEntry->partitionColumn->varcollid,
+										  partitionColumnValue);
 	}
 
 	shardIndex = FindShardIntervalIndex(searchedValue, cacheEntry);

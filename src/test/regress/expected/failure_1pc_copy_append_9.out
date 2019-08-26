@@ -52,8 +52,8 @@ SELECT citus.dump_network_traffic();
  (0,worker,"[""RowDescription(fieldcount=2,fields=['F(name=min,tableoid=0,colattrnum=0,typoid=23,typlen=4,typmod=-1,format_code=0)', 'F(name=max,tableoid=0,colattrnum=0,typoid=23,typlen=4,typmod=-1,format_code=0)'])"", 'DataRow(columncount=2,columns=[""C(length=0,value=b\\'\\')"", ""C(length=1,value=b\\'0\\')""])', 'CommandComplete(command=SELECT 1)', 'ReadyForQuery(state=in_transaction_block)']")
  (0,coordinator,"['Query(query=COMMIT)']")
  (0,worker,"['CommandComplete(command=COMMIT)', 'ReadyForQuery(state=idle)']")
- (0,coordinator,"['Query(query=SELECT count(1) AS count FROM copy_test_100400 copy_test WHERE true)']")
- (0,worker,"[""RowDescription(fieldcount=1,fields=['F(name=count,tableoid=0,colattrnum=0,typoid=20,typlen=8,typmod=-1,format_code=0)'])"", 'DataRow(columncount=1,columns=[""C(length=0,value=b\\'\\')""])', 'CommandComplete(command=SELECT 1)', 'ReadyForQuery(state=idle)']")
+ (0,coordinator,"['Query(query=COPY (SELECT count(1) AS count FROM copy_test_100400 copy_test WHERE true) TO STDOUT)']")
+ (0,worker,"[""CopyOutResponse(format=0,columncount=1,columns=['Anonymous(format=0)'])"", ""CopyData(data=b'4\\\\n')"", 'CopyDone()', 'CommandComplete(command=COPY 1)', 'ReadyForQuery(state=idle)']")
 (20 rows)
 
 ---- all of the following tests test behavior with 2 shard placements ----
@@ -168,10 +168,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="SELECT|COPY").kill()');
 (1 row)
 
 SELECT count(1) FROM copy_test;
-WARNING:  connection error: localhost:9060
-DETAIL:  server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
+WARNING:  could not consume data from worker node
  count 
 -------
      4
@@ -227,26 +224,6 @@ SELECT count(1) FROM copy_test;
      4
 (1 row)
 
--- we round-robin when picking which node to run pg_table_size on, this COPY runs it on
--- the other node, so the next copy will try to run it on our node
-COPY copy_test FROM PROGRAM 'echo 0, 0 && echo 1, 1 && echo 2, 4 && echo 3, 9' WITH CSV;
-SELECT * FROM pg_dist_shard s, pg_dist_shard_placement p
-  WHERE (s.shardid = p.shardid) AND s.logicalrelid = 'copy_test'::regclass
-  ORDER BY p.nodeport, p.placementid;
- logicalrelid | shardid | shardstorage | shardminvalue | shardmaxvalue | shardid | shardstate | shardlength | nodename  | nodeport | placementid 
---------------+---------+--------------+---------------+---------------+---------+------------+-------------+-----------+----------+-------------
- copy_test    |  100400 | t            | 0             | 3             |  100400 |          1 |        8192 | localhost |     9060 |         101
- copy_test    |  100407 | t            | 0             | 3             |  100407 |          1 |        8192 | localhost |     9060 |         110
- copy_test    |  100400 | t            | 0             | 3             |  100400 |          1 |        8192 | localhost |    57637 |         100
- copy_test    |  100407 | t            | 0             | 3             |  100407 |          1 |        8192 | localhost |    57637 |         111
-(4 rows)
-
-SELECT count(1) FROM copy_test;
- count 
--------
-     8
-(1 row)
-
 ---- kill the connection when we try to get the min, max of the table ----
 SELECT citus.mitmproxy('conn.onQuery(query="SELECT min\(key\), max\(key\)").kill()');
  mitmproxy 
@@ -269,14 +246,12 @@ SELECT * FROM pg_dist_shard s, pg_dist_shard_placement p
 --------------+---------+--------------+---------------+---------------+---------+------------+-------------+-----------+----------+-------------
  copy_test    |  100400 | t            | 0             | 3             |  100400 |          1 |        8192 | localhost |    57637 |         100
  copy_test    |  100400 | t            | 0             | 3             |  100400 |          1 |        8192 | localhost |     9060 |         101
- copy_test    |  100407 | t            | 0             | 3             |  100407 |          1 |        8192 | localhost |     9060 |         110
- copy_test    |  100407 | t            | 0             | 3             |  100407 |          1 |        8192 | localhost |    57637 |         111
-(4 rows)
+(2 rows)
 
 SELECT count(1) FROM copy_test;
  count 
 -------
-     8
+     4
 (1 row)
 
 ---- kill the connection when we try to COMMIT ----
@@ -299,16 +274,14 @@ SELECT * FROM pg_dist_shard s, pg_dist_shard_placement p
 --------------+---------+--------------+---------------+---------------+---------+------------+-------------+-----------+----------+-------------
  copy_test    |  100400 | t            | 0             | 3             |  100400 |          1 |        8192 | localhost |    57637 |         100
  copy_test    |  100400 | t            | 0             | 3             |  100400 |          1 |        8192 | localhost |     9060 |         101
- copy_test    |  100407 | t            | 0             | 3             |  100407 |          1 |        8192 | localhost |     9060 |         110
- copy_test    |  100407 | t            | 0             | 3             |  100407 |          1 |        8192 | localhost |    57637 |         111
- copy_test    |  100409 | t            | 0             | 3             |  100409 |          3 |        8192 | localhost |     9060 |         114
- copy_test    |  100409 | t            | 0             | 3             |  100409 |          1 |        8192 | localhost |    57637 |         115
-(6 rows)
+ copy_test    |  100408 | t            | 0             | 3             |  100408 |          1 |        8192 | localhost |    57637 |         112
+ copy_test    |  100408 | t            | 0             | 3             |  100408 |          3 |        8192 | localhost |     9060 |         113
+(4 rows)
 
 SELECT count(1) FROM copy_test;
  count 
 -------
-    12
+     8
 (1 row)
 
 -- ==== Clean up, we're done here ====

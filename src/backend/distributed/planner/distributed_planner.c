@@ -35,7 +35,12 @@
 #include "nodes/nodeFuncs.h"
 #include "parser/parsetree.h"
 #include "parser/parse_type.h"
+#if PG_VERSION_NUM >= 120000
+#include "optimizer/optimizer.h"
+#include "optimizer/plancat.h"
+#else
 #include "optimizer/cost.h"
+#endif
 #include "optimizer/pathnode.h"
 #include "optimizer/planner.h"
 #include "utils/builtins.h"
@@ -1327,6 +1332,11 @@ AdjustReadIntermediateResultCost(RangeTblEntry *rangeTableEntry, RelOptInfo *rel
 	double rowSizeEstimate = 0;
 	double rowCountEstimate = 0.;
 	double ioCost = 0.;
+#if PG_VERSION_NUM >= 120000
+	QualCost funcCost = { 0., 0. };
+#else
+	double funcCost = 0.;
+#endif
 
 	if (rangeTableEntry->rtekind != RTE_FUNCTION ||
 		list_length(rangeTableEntry->functions) != 1)
@@ -1413,9 +1423,19 @@ AdjustReadIntermediateResultCost(RangeTblEntry *rangeTableEntry, RelOptInfo *rel
 			rowSizeEstimate += 1;
 		}
 
+
 		/* add the cost of parsing a column */
-		rowCost += get_func_cost(inputFunctionId) * cpu_operator_cost;
+#if PG_VERSION_NUM >= 120000
+		add_function_cost(NULL, inputFunctionId, NULL, &funcCost);
+#else
+		funcCost += get_func_cost(inputFunctionId);
+#endif
 	}
+#if PG_VERSION_NUM >= 120000
+	rowCost += funcCost.per_tuple;
+#else
+	rowCost += funcCost * cpu_operator_cost;
+#endif
 
 	/* estimate the number of rows based on the file size and estimated row size */
 	rowCountEstimate = Max(1, (double) resultSize / rowSizeEstimate);
@@ -1429,6 +1449,10 @@ AdjustReadIntermediateResultCost(RangeTblEntry *rangeTableEntry, RelOptInfo *rel
 	path = (Path *) linitial(pathList);
 	path->rows = rowCountEstimate;
 	path->total_cost = rowCountEstimate * rowCost + ioCost;
+
+#if PG_VERSION_NUM >= 120000
+	path->startup_cost = funcCost.startup + relOptInfo->baserestrictcost.startup;
+#endif
 }
 
 

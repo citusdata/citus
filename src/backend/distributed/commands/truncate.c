@@ -48,32 +48,9 @@ static void AcquireDistributedLockOnRelations(List *relationIdList, LOCKMODE loc
 void
 ProcessTruncateStatement(TruncateStmt *truncateStatement)
 {
-	ListCell *rangeVarCell = NULL;
-	ListCell *relationCell = NULL;
-	List *lockedRelations = NIL;
-
-	/*
-	 * Lock relations while calling next three functions, because they expect
-	 * relations to be locked. We release them then to avoid distributed
-	 * deadlock in MX.
-	 */
-	foreach(rangeVarCell, truncateStatement->relations)
-	{
-		RangeVar *rangeVar = (RangeVar *) lfirst(rangeVarCell);
-		Relation relation = heap_openrv(rangeVar, AccessShareLock);
-		lockedRelations = lappend(lockedRelations, relation);
-	}
-
 	ErrorIfUnsupportedTruncateStmt(truncateStatement);
 	EnsurePartitionTableNotReplicatedForTruncate(truncateStatement);
 	ExecuteTruncateStmtSequentialIfNecessary(truncateStatement);
-
-	foreach(relationCell, lockedRelations)
-	{
-		Relation relation = (Relation) lfirst(relationCell);
-		heap_close(relation, AccessShareLock);
-	}
-
 	LockTruncatedRelationMetadataInWorkers(truncateStatement);
 }
 

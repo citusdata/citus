@@ -143,7 +143,7 @@ load_shard_placement_array(PG_FUNCTION_ARGS)
 		placementList = ShardPlacementList(shardId);
 	}
 
-	placementList = SortList(placementList, CompareShardPlacements);
+	placementList = SortList(placementList, CompareShardPlacementsByWorker);
 
 	placementCount = list_length(placementList);
 	placementDatumArray = palloc0(placementCount * sizeof(Datum));

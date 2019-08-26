@@ -447,7 +447,7 @@ MultiTaskTrackerExecute(Job *job)
 	}
 	else if (clusterFailed)
 	{
-		ereport(ERROR, (errmsg("failed to execute task %u", failedTaskId)));
+		ereport(ERROR, (errmsg("majority of nodes failed")));
 	}
 	else if (QueryCancelPending)
 	{

@@ -39,17 +39,18 @@ ERROR:  cannot pushdown the subquery
 DETAIL:  Complex subqueries and CTEs are not allowed in the FROM clause when the query has subqueries in the WHERE clause and it references a column from another query
 -- Recurring tuples as empty join tree 
 SELECT * 
-FROM   (SELECT 1 AS id, 
-               2 AS value_1, 
-               3 AS value_3) AS tt1 
+FROM   (SELECT 1 AS id, 2 AS value_1, 3 AS value_3
+		UNION ALL SELECT 2 as id, 3 as value_1, 4 as value_3) AS tt1 
 WHERE  id IN (SELECT user_id 
               FROM   events_table); 
-DEBUG:  generating subplan 6_1 for subquery SELECT user_id FROM public.events_table
-DEBUG:  Plan 6 query after replacing subqueries and CTEs: SELECT id, value_1, value_3 FROM (SELECT 1 AS id, 2 AS value_1, 3 AS value_3) tt1 WHERE (id OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.user_id FROM read_intermediate_result('6_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)))
+DEBUG:  generating subplan 6_1 for subquery SELECT 1 AS id, 2 AS value_1, 3 AS value_3 UNION ALL SELECT 2 AS id, 3 AS value_1, 4 AS value_3
+DEBUG:  generating subplan 6_2 for subquery SELECT user_id FROM public.events_table
+DEBUG:  Plan 6 query after replacing subqueries and CTEs: SELECT id, value_1, value_3 FROM (SELECT intermediate_result.id, intermediate_result.value_1, intermediate_result.value_3 FROM read_intermediate_result('6_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer, value_1 integer, value_3 integer)) tt1 WHERE (id OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.user_id FROM read_intermediate_result('6_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)))
  id | value_1 | value_3 
 ----+---------+---------
   1 |       2 |       3
-(1 row)
+  2 |       3 |       4
+(2 rows)
 
 -- Recurring tuples in from clause as CTE and SET operation in WHERE clause
 SELECT Count(*)

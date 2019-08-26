@@ -51,12 +51,7 @@ CREATE TABLE table_to_distribute (
 	test_type_data dummy_type
 );
 
--- use the table WITH (OIDS) set
-ALTER TABLE table_to_distribute SET WITH OIDS;
 SELECT create_distributed_table('table_to_distribute', 'id', 'hash');
-
--- revert WITH (OIDS) from above
-ALTER TABLE table_to_distribute SET WITHOUT OIDS;
 
 -- use an index instead of table name
 SELECT create_distributed_table('table_to_distribute_pkey', 'id', 'hash');

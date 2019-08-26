@@ -15,6 +15,9 @@
 #include "access/htup_details.h"
 #include "catalog/namespace.h"
 #include "catalog/pg_constraint.h"
+#if (PG_VERSION_NUM >= 120000)
+#include "access/genam.h"
+#endif
 #if (PG_VERSION_NUM < 110000)
 #include "catalog/pg_constraint_fn.h"
 #endif
@@ -35,14 +38,19 @@
 static bool HeapTupleOfForeignConstraintIncludesColumn(HeapTuple heapTuple, Oid
 													   relationId, int pgConstraintKey,
 													   char *columnName);
+static void ForeignConstraintFindDistKeys(HeapTuple pgConstraintTuple,
+										  Var *referencingDistColumn,
+										  Var *referencedDistColumn,
+										  int *referencingAttrIndex,
+										  int *referencedAttrIndex);
 
 /*
- * ConstraintIsAForeignKeyToReferenceTable function scans the pgConstraint to
- * fetch all of the constraints on the given relationId and see if at least one
- * of them is a foreign key referencing to a reference table.
+ * ConstraintIsAForeignKeyToReferenceTable checks if the given constraint is a
+ * foreign key constraint from the given relation to a reference table. It does
+ * that by scanning pg_constraint for foreign key constraints.
  */
 bool
-ConstraintIsAForeignKeyToReferenceTable(char *constraintNameInput, Oid relationId)
+ConstraintIsAForeignKeyToReferenceTable(char *constraintName, Oid relationId)
 {
 	Relation pgConstraint = NULL;
 	SysScanDesc scanDescriptor = NULL;
@@ -64,9 +72,9 @@ ConstraintIsAForeignKeyToReferenceTable(char *constraintNameInput, Oid relationI
 	{
 		Oid referencedTableId = InvalidOid;
 		Form_pg_constraint constraintForm = (Form_pg_constraint) GETSTRUCT(heapTuple);
-		char *constraintName = (constraintForm->conname).data;
+		char *tupleConstraintName = (constraintForm->conname).data;
 
-		if (strncmp(constraintNameInput, constraintName, NAMEDATALEN) != 0 ||
+		if (strncmp(constraintName, tupleConstraintName, NAMEDATALEN) != 0 ||
 			constraintForm->conrelid != relationId)
 		{
 			heapTuple = systable_getnext(scanDescriptor);
@@ -95,7 +103,7 @@ ConstraintIsAForeignKeyToReferenceTable(char *constraintNameInput, Oid relationI
 
 
 /*
- * ErrorIfUnsupportedForeignConstraint runs checks related to foreign constraints and
+ * ErrorIfUnsupportedForeignConstraintExists runs checks related to foreign constraints and
  * errors out if it is not possible to create one of the foreign constraint in distributed
  * environment.
  *
@@ -109,11 +117,13 @@ ConstraintIsAForeignKeyToReferenceTable(char *constraintNameInput, Oid relationI
  * - If referenced table is a reference table
  *      - ON DELETE/UPDATE SET NULL, ON DELETE/UPDATE SET DEFAULT and ON UPDATE CASCADE options
  *        are not used on the distribution key of the referencing column.
- * - If referencing table is a reference table, error out
+ * - If referencing table is a reference table, error out if the referenced table is not a
+ *   a reference table.
  */
 void
-ErrorIfUnsupportedForeignConstraint(Relation relation, char distributionMethod,
-									Var *distributionColumn, uint32 colocationId)
+ErrorIfUnsupportedForeignConstraintExists(Relation relation, char referencingDistMethod,
+										  Var *referencingDistKey,
+										  uint32 referencingColocationId)
 {
 	Relation pgConstraint = NULL;
 	SysScanDesc scanDescriptor = NULL;
@@ -123,21 +133,20 @@ ErrorIfUnsupportedForeignConstraint(Relation relation, char distributionMethod,
 
 	Oid referencingTableId = relation->rd_id;
 	Oid referencedTableId = InvalidOid;
-	uint32 referencedTableColocationId = INVALID_COLOCATION_ID;
-	Var *referencedTablePartitionColumn = NULL;
-
-	Datum referencingColumnsDatum = 0;
-	Datum *referencingColumnArray = NULL;
-	int referencingColumnCount = 0;
-	Datum referencedColumnsDatum = 0;
-	Datum *referencedColumnArray = NULL;
-	int referencedColumnCount = 0;
-	bool isNull = false;
-	int attrIdx = 0;
-	bool foreignConstraintOnPartitionColumn = false;
+	uint32 referencedColocationId = INVALID_COLOCATION_ID;
 	bool selfReferencingTable = false;
-	bool referencedTableIsAReferenceTable = false;
-	bool referencingColumnsIncludeDistKey = false;
+	bool referencingNotReplicated = true;
+
+	if (IsDistributedTable(referencingTableId))
+	{
+		/* ALTER TABLE command is applied over single replicated table */
+		referencingNotReplicated = SingleReplicatedTable(referencingTableId);
+	}
+	else
+	{
+		/* Creating single replicated table with foreign constraint */
+		referencingNotReplicated = (ShardReplicationFactor == 1);
+	}
 
 	pgConstraint = heap_open(ConstraintRelationId, AccessShareLock);
 	ScanKeyInit(&scanKey[0], Anum_pg_constraint_conrelid, BTEqualStrategyNumber, F_OIDEQ,
@@ -149,7 +158,15 @@ ErrorIfUnsupportedForeignConstraint(Relation relation, char distributionMethod,
 	while (HeapTupleIsValid(heapTuple))
 	{
 		Form_pg_constraint constraintForm = (Form_pg_constraint) GETSTRUCT(heapTuple);
-		bool singleReplicatedTable = true;
+		bool referencedIsDistributed = false;
+		char referencedDistMethod = 0;
+		Var *referencedDistKey = NULL;
+		bool referencingIsReferenceTable = false;
+		bool referencedIsReferenceTable = false;
+		int referencingAttrIndex = -1;
+		int referencedAttrIndex = -1;
+		bool referencingColumnsIncludeDistKey = false;
+		bool foreignConstraintOnDistKey = false;
 
 		if (constraintForm->contype != CONSTRAINT_FOREIGN)
 		{
@@ -157,124 +174,94 @@ ErrorIfUnsupportedForeignConstraint(Relation relation, char distributionMethod,
 			continue;
 		}
 
-		/*
-		 * We should make this check in this loop because the error message will only
-		 * be given if the table has a foreign constraint and the table is a reference
-		 * table.
-		 */
-		if (distributionMethod == DISTRIBUTE_BY_NONE)
+		referencedTableId = constraintForm->confrelid;
+		selfReferencingTable = (referencingTableId == referencedTableId);
+
+		referencedIsDistributed = IsDistributedTable(referencedTableId);
+		if (!referencedIsDistributed && !selfReferencingTable)
 		{
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("cannot create foreign key constraint because "
-								   "reference tables are not supported as the "
-								   "referencing table of a foreign constraint"),
-							errdetail("Reference tables are only supported as the "
-									  "referenced table of a foreign key when the "
-									  "referencing table is a hash distributed "
-									  "table")));
+			ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
+							errmsg("cannot create foreign key constraint"),
+							errdetail("Referenced table must be a distributed table"
+									  " or a reference table.")));
 		}
 
-		referencedTableId = constraintForm->confrelid;
-		selfReferencingTable = referencingTableId == referencedTableId;
-
-		/*
-		 * Some checks are not meaningful if foreign key references the table itself.
-		 * Therefore we will skip those checks.
-		 */
 		if (!selfReferencingTable)
 		{
-			if (!IsDistributedTable(referencedTableId))
-			{
-				ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
-								errmsg("cannot create foreign key constraint"),
-								errdetail("Referenced table must be a distributed "
-										  "table.")));
-			}
-
-			/*
-			 * PartitionMethod errors out when it is called for non-distributed
-			 * tables. This is why we make this check under !selfReferencingTable
-			 * and after !IsDistributedTable(referencedTableId).
-			 */
-			if (PartitionMethod(referencedTableId) == DISTRIBUTE_BY_NONE)
-			{
-				referencedTableIsAReferenceTable = true;
-			}
-
-			/*
-			 * To enforce foreign constraints, tables must be co-located unless a
-			 * reference table is referenced.
-			 */
-			referencedTableColocationId = TableColocationId(referencedTableId);
-			if (colocationId == INVALID_COLOCATION_ID ||
-				(colocationId != referencedTableColocationId &&
-				 !referencedTableIsAReferenceTable))
-			{
-				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-								errmsg("cannot create foreign key constraint since "
-									   "relations are not colocated or not referencing "
-									   "a reference table"),
-								errdetail(
-									"A distributed table can only have foreign keys "
-									"if it is referencing another colocated hash "
-									"distributed table or a reference table")));
-			}
-
-			referencedTablePartitionColumn = DistPartitionKey(referencedTableId);
+			referencedDistMethod = PartitionMethod(referencedTableId);
+			referencedDistKey = (referencedDistMethod == DISTRIBUTE_BY_NONE) ?
+								NULL :
+								DistPartitionKey(referencedTableId);
+			referencedColocationId = TableColocationId(referencedTableId);
 		}
 		else
 		{
-			/*
-			 * If the referenced table is not a reference table, the distribution
-			 * column in referencing table should be the distribution column in
-			 * referenced table as well.
-			 */
-			referencedTablePartitionColumn = distributionColumn;
+			referencedDistMethod = referencingDistMethod;
+			referencedDistKey = referencingDistKey;
+			referencedColocationId = referencingColocationId;
+		}
+
+		referencingIsReferenceTable = (referencingDistMethod == DISTRIBUTE_BY_NONE);
+		referencedIsReferenceTable = (referencedDistMethod == DISTRIBUTE_BY_NONE);
+
+
+		/*
+		 * We support foreign keys between reference tables. No more checks
+		 * are necessary.
+		 */
+		if (referencingIsReferenceTable && referencedIsReferenceTable)
+		{
+			heapTuple = systable_getnext(scanDescriptor);
+			continue;
 		}
 
 		/*
-		 * Column attributes are not available in Form_pg_constraint, therefore we need
-		 * to find them in the system catalog. After finding them, we iterate over column
-		 * attributes together because partition column must be at the same place in both
-		 * referencing and referenced side of the foreign key constraint
+		 * Foreign keys from reference tables to distributed tables are not
+		 * supported.
 		 */
-		referencingColumnsDatum = SysCacheGetAttr(CONSTROID, heapTuple,
-												  Anum_pg_constraint_conkey, &isNull);
-		referencedColumnsDatum = SysCacheGetAttr(CONSTROID, heapTuple,
-												 Anum_pg_constraint_confkey, &isNull);
-
-		deconstruct_array(DatumGetArrayTypeP(referencingColumnsDatum), INT2OID, 2, true,
-						  's', &referencingColumnArray, NULL, &referencingColumnCount);
-		deconstruct_array(DatumGetArrayTypeP(referencedColumnsDatum), INT2OID, 2, true,
-						  's', &referencedColumnArray, NULL, &referencedColumnCount);
-
-		Assert(referencingColumnCount == referencedColumnCount);
-
-		for (attrIdx = 0; attrIdx < referencingColumnCount; ++attrIdx)
+		if (referencingIsReferenceTable && !referencedIsReferenceTable)
 		{
-			AttrNumber referencingAttrNo = DatumGetInt16(referencingColumnArray[attrIdx]);
-			AttrNumber referencedAttrNo = DatumGetInt16(referencedColumnArray[attrIdx]);
-
-			if (distributionColumn->varattno == referencingAttrNo &&
-				(!referencedTableIsAReferenceTable &&
-				 referencedTablePartitionColumn->varattno == referencedAttrNo))
-			{
-				foreignConstraintOnPartitionColumn = true;
-			}
-
-			if (distributionColumn->varattno == referencingAttrNo)
-			{
-				referencingColumnsIncludeDistKey = true;
-			}
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("cannot create foreign key constraint "
+								   "since foreign keys from reference tables "
+								   "to distributed tables are not supported"),
+							errdetail("A reference table can only have reference "
+									  "keys to other reference tables")));
 		}
 
+		/*
+		 * To enforce foreign constraints, tables must be co-located unless a
+		 * reference table is referenced.
+		 */
+		if (referencingColocationId == INVALID_COLOCATION_ID ||
+			(referencingColocationId != referencedColocationId &&
+			 !referencedIsReferenceTable))
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("cannot create foreign key constraint since "
+								   "relations are not colocated or not referencing "
+								   "a reference table"),
+							errdetail(
+								"A distributed table can only have foreign keys "
+								"if it is referencing another colocated hash "
+								"distributed table or a reference table")));
+		}
+
+		ForeignConstraintFindDistKeys(heapTuple,
+									  referencingDistKey,
+									  referencedDistKey,
+									  &referencingAttrIndex,
+									  &referencedAttrIndex);
+		referencingColumnsIncludeDistKey = (referencingAttrIndex != -1);
+		foreignConstraintOnDistKey =
+			(referencingColumnsIncludeDistKey && referencingAttrIndex ==
+			 referencedAttrIndex);
 
 		/*
 		 * If columns in the foreign key includes the distribution key from the
 		 * referencing side, we do not allow update/delete operations through
 		 * foreign key constraints (e.g. ... ON UPDATE SET NULL)
 		 */
-
 		if (referencingColumnsIncludeDistKey)
 		{
 			/*
@@ -314,7 +301,7 @@ ErrorIfUnsupportedForeignConstraint(Relation relation, char distributionMethod,
 		 * if tables are hash-distributed and colocated, we need to make sure that
 		 * the distribution key is included in foreign constraint.
 		 */
-		if (!referencedTableIsAReferenceTable && !foreignConstraintOnPartitionColumn)
+		if (!referencedIsReferenceTable && !foreignConstraintOnDistKey)
 		{
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 							errmsg("cannot create foreign key constraint"),
@@ -334,26 +321,7 @@ ErrorIfUnsupportedForeignConstraint(Relation relation, char distributionMethod,
 		 * placements always be in the same state (b) executors are aware of reference
 		 * tables and handle concurrency related issues accordingly.
 		 */
-		if (IsDistributedTable(referencingTableId))
-		{
-			/* check whether ALTER TABLE command is applied over single replicated table */
-			if (!SingleReplicatedTable(referencingTableId))
-			{
-				singleReplicatedTable = false;
-			}
-		}
-		else
-		{
-			Assert(distributionMethod == DISTRIBUTE_BY_HASH);
-
-			/* check whether creating single replicated table with foreign constraint */
-			if (ShardReplicationFactor > 1)
-			{
-				singleReplicatedTable = false;
-			}
-		}
-
-		if (!singleReplicatedTable)
+		if (!referencingNotReplicated)
 		{
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 							errmsg("cannot create foreign key constraint"),
@@ -376,10 +344,72 @@ ErrorIfUnsupportedForeignConstraint(Relation relation, char distributionMethod,
 
 
 /*
- * ColumnAppearsInForeignKeyToReferenceTable checks if there is foreign constraint
- * from/to a reference table on the given column. We iterate pgConstraint to fetch
- * the constraint on the given relationId and find if any of the constraints
- * includes the given column.
+ * ForeignConstraintFindDistKeys finds the index of the given distribution columns
+ * in the given foreig key constraint and returns them in referencingAttrIndex
+ * and referencedAttrIndex. If one of them is not found, it returns -1 instead.
+ */
+static void
+ForeignConstraintFindDistKeys(HeapTuple pgConstraintTuple,
+							  Var *referencingDistColumn,
+							  Var *referencedDistColumn,
+							  int *referencingAttrIndex,
+							  int *referencedAttrIndex)
+{
+	Datum referencingColumnsDatum = 0;
+	Datum *referencingColumnArray = NULL;
+	int referencingColumnCount = 0;
+	Datum referencedColumnsDatum = 0;
+	Datum *referencedColumnArray = NULL;
+	int referencedColumnCount = 0;
+	bool isNull = false;
+	int attrIdx = 0;
+
+	*referencedAttrIndex = -1;
+	*referencedAttrIndex = -1;
+
+	/*
+	 * Column attributes are not available in Form_pg_constraint, therefore we need
+	 * to find them in the system catalog. After finding them, we iterate over column
+	 * attributes together because partition column must be at the same place in both
+	 * referencing and referenced side of the foreign key constraint.
+	 */
+	referencingColumnsDatum = SysCacheGetAttr(CONSTROID, pgConstraintTuple,
+											  Anum_pg_constraint_conkey, &isNull);
+	referencedColumnsDatum = SysCacheGetAttr(CONSTROID, pgConstraintTuple,
+											 Anum_pg_constraint_confkey, &isNull);
+
+	deconstruct_array(DatumGetArrayTypeP(referencingColumnsDatum), INT2OID, 2, true,
+					  's', &referencingColumnArray, NULL, &referencingColumnCount);
+	deconstruct_array(DatumGetArrayTypeP(referencedColumnsDatum), INT2OID, 2, true,
+					  's', &referencedColumnArray, NULL, &referencedColumnCount);
+
+	Assert(referencingColumnCount == referencedColumnCount);
+
+	for (attrIdx = 0; attrIdx < referencingColumnCount; ++attrIdx)
+	{
+		AttrNumber referencingAttrNo = DatumGetInt16(referencingColumnArray[attrIdx]);
+		AttrNumber referencedAttrNo = DatumGetInt16(referencedColumnArray[attrIdx]);
+
+		if (referencedDistColumn != NULL &&
+			referencedDistColumn->varattno == referencedAttrNo)
+		{
+			*referencedAttrIndex = attrIdx;
+		}
+
+		if (referencingDistColumn != NULL &&
+			referencingDistColumn->varattno == referencingAttrNo)
+		{
+			*referencingAttrIndex = attrIdx;
+		}
+	}
+}
+
+
+/*
+ * ColumnAppearsInForeignKeyToReferenceTable checks if there is a foreign key
+ * constraint from/to a reference table on the given column. We iterate
+ * pg_constraint to fetch the constraint on the given relationId and find
+ * if any of the constraints includes the given column.
  */
 bool
 ColumnAppearsInForeignKeyToReferenceTable(char *columnName, Oid relationId)
@@ -582,9 +612,9 @@ HasForeignKeyToReferenceTable(Oid relationId)
 /*
  * TableReferenced function checks whether given table is referenced by another table
  * via foreign constraints. If it is referenced, this function returns true. To check
- * that, this function searches given relation at pg_constraints system catalog. However
- * since there is no index for the column we searched, this function performs sequential
- * search, therefore call this function with caution.
+ * that, this function searches for the given relation in the pg_constraint system
+ * catalog table. However since there are no indexes for the column we search for,
+ * this function performs sequential search. So call this function with caution.
  */
 bool
 TableReferenced(Oid relationId)

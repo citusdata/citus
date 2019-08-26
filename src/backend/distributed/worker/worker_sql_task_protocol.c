@@ -16,6 +16,7 @@
 #include "distributed/commands/multi_copy.h"
 #include "distributed/multi_executor.h"
 #include "distributed/transmit.h"
+#include "distributed/version_compat.h"
 #include "distributed/worker_protocol.h"
 #include "utils/builtins.h"
 #include "utils/memutils.h"
@@ -38,7 +39,7 @@ typedef struct TaskFileDestReceiver
 
 	/* output file */
 	char *filePath;
-	File fileDesc;
+	FileCompat fileCompat;
 	bool binaryCopyFormat;
 
 	/* state on how to copy out data types */
@@ -55,7 +56,7 @@ static DestReceiver * CreateTaskFileDestReceiver(char *filePath, EState *executo
 static void TaskFileDestReceiverStartup(DestReceiver *dest, int operation,
 										TupleDesc inputTupleDescriptor);
 static bool TaskFileDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest);
-static void WriteToLocalFile(StringInfo copyData, File fileDesc);
+static void WriteToLocalFile(StringInfo copyData, TaskFileDestReceiver *taskFileDest);
 static void TaskFileDestReceiverShutdown(DestReceiver *destReceiver);
 static void TaskFileDestReceiverDestroy(DestReceiver *destReceiver);
 
@@ -183,8 +184,10 @@ TaskFileDestReceiverStartup(DestReceiver *dest, int operation,
 	taskFileDest->columnOutputFunctions = ColumnOutputFunctions(inputTupleDescriptor,
 																copyOutState->binary);
 
-	taskFileDest->fileDesc = FileOpenForTransmit(taskFileDest->filePath, fileFlags,
-												 fileMode);
+	taskFileDest->fileCompat = FileCompatFromFileStart(FileOpenForTransmit(
+														   taskFileDest->filePath,
+														   fileFlags,
+														   fileMode));
 
 	if (copyOutState->binary)
 	{
@@ -192,7 +195,7 @@ TaskFileDestReceiverStartup(DestReceiver *dest, int operation,
 		resetStringInfo(copyOutState->fe_msgbuf);
 		AppendCopyBinaryHeaders(copyOutState);
 
-		WriteToLocalFile(copyOutState->fe_msgbuf, taskFileDest->fileDesc);
+		WriteToLocalFile(copyOutState->fe_msgbuf, taskFileDest);
 	}
 
 	MemoryContextSwitchTo(oldContext);
@@ -233,7 +236,7 @@ TaskFileDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
 	AppendCopyRowData(columnValues, columnNulls, tupleDescriptor,
 					  copyOutState, columnOutputFunctions, NULL);
 
-	WriteToLocalFile(copyOutState->fe_msgbuf, taskFileDest->fileDesc);
+	WriteToLocalFile(copyOutState->fe_msgbuf, taskFileDest);
 
 	MemoryContextSwitchTo(oldContext);
 
@@ -249,9 +252,10 @@ TaskFileDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
  * WriteToLocalResultsFile writes the bytes in a StringInfo to a local file.
  */
 static void
-WriteToLocalFile(StringInfo copyData, File fileDesc)
+WriteToLocalFile(StringInfo copyData, TaskFileDestReceiver *taskFileDest)
 {
-	int bytesWritten = FileWrite(fileDesc, copyData->data, copyData->len, PG_WAIT_IO);
+	int bytesWritten = FileWriteCompat(&taskFileDest->fileCompat, copyData->data,
+									   copyData->len, PG_WAIT_IO);
 	if (bytesWritten < 0)
 	{
 		ereport(ERROR, (errcode_for_file_access(),
@@ -276,10 +280,10 @@ TaskFileDestReceiverShutdown(DestReceiver *destReceiver)
 		/* write footers when using binary encoding */
 		resetStringInfo(copyOutState->fe_msgbuf);
 		AppendCopyBinaryFooters(copyOutState);
-		WriteToLocalFile(copyOutState->fe_msgbuf, taskFileDest->fileDesc);
+		WriteToLocalFile(copyOutState->fe_msgbuf, taskFileDest);
 	}
 
-	FileClose(taskFileDest->fileDesc);
+	FileClose(taskFileDest->fileCompat.fd);
 }
 
 

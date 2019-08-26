@@ -15,7 +15,14 @@ SET search_path TO 'test_fkey_to_ref_in_tx';
 SET citus.next_shard_id TO 2380000;
 SET citus.next_placement_id TO 2380000;
 SET citus.shard_replication_factor TO 1;
-CREATE TABLE reference_table(id int PRIMARY KEY);
+CREATE TABLE transitive_reference_table(id int PRIMARY KEY);
+SELECT create_reference_table('transitive_reference_table');
+ create_reference_table 
+------------------------
+ 
+(1 row)
+
+CREATE TABLE reference_table(id int PRIMARY KEY, value_1 int);
 SELECT create_reference_table('reference_table');
  create_reference_table 
 ------------------------
@@ -37,7 +44,9 @@ SELECT create_distributed_table('unrelated_dist_table', 'id');
 (1 row)
 
 ALTER TABLE on_update_fkey_table ADD CONSTRAINT fkey FOREIGN KEY(value_1) REFERENCES reference_table(id) ON UPDATE CASCADE;
-INSERT INTO reference_table SELECT i FROM generate_series(0, 100) i;
+ALTER TABLE reference_table ADD CONSTRAINT fkey FOREIGN KEY(value_1) REFERENCES transitive_reference_table(id) ON UPDATE CASCADE;
+INSERT INTO transitive_reference_table SELECT i FROM generate_series(0, 100) i;
+INSERT INTO reference_table SELECT i, i FROM generate_series(0, 100) i;
 INSERT INTO on_update_fkey_table SELECT i, i % 100  FROM generate_series(0, 1000) i;
 INSERT INTO unrelated_dist_table SELECT i, i % 100  FROM generate_series(0, 1000) i;
 -- in order to see when the mode automatically swithces to sequential execution
@@ -45,6 +54,20 @@ SET client_min_messages TO DEBUG1;
 -- case 1.1: SELECT to a reference table is followed by a parallel SELECT to a distributed table
 BEGIN;
 	SELECT count(*) FROM reference_table;
+ count 
+-------
+   101
+(1 row)
+
+	SELECT count(*) FROM on_update_fkey_table;
+ count 
+-------
+  1001
+(1 row)
+
+ROLLBACK;
+BEGIN;
+	SELECT count(*) FROM transitive_reference_table;
  count 
 -------
    101
@@ -89,10 +112,41 @@ BEGIN;
      1
 (1 row)
 
-	
+ROLLBACK;
+BEGIN;	
+	SELECT count(*) FROM transitive_reference_table;
+ count 
+-------
+   101
+(1 row)
+
+	SELECT count(*) FROM on_update_fkey_table WHERE id = 15;
+ count 
+-------
+     1
+(1 row)
+
+	SELECT count(*) FROM on_update_fkey_table WHERE id = 16;
+ count 
+-------
+     1
+(1 row)
+
+	SELECT count(*) FROM on_update_fkey_table WHERE id = 17;
+ count 
+-------
+     1
+(1 row)
+
+	SELECT count(*) FROM on_update_fkey_table WHERE id = 18;
+ count 
+-------
+     1
+(1 row)
+
 ROLLBACK;
 -- case 1.3: SELECT to a reference table is followed by a multi-shard UPDATE to a distributed table
-BEGIN;	
+BEGIN;
 	SELECT count(*) FROM reference_table;
  count 
 -------
@@ -101,9 +155,30 @@ BEGIN;
 
 	UPDATE on_update_fkey_table SET value_1 = 16 WHERE value_1 = 15;
 ROLLBACK;
+BEGIN;
+	SELECT count(*) FROM transitive_reference_table;
+ count 
+-------
+   101
+(1 row)
+
+	UPDATE on_update_fkey_table SET value_1 = 16 WHERE value_1 = 15;
+ROLLBACK;
 -- case 1.4: SELECT to a reference table is followed by a multiple sing-shard UPDATE to a distributed table
-BEGIN;	
+BEGIN;
 	SELECT count(*) FROM reference_table;
+ count 
+-------
+   101
+(1 row)
+
+	UPDATE on_update_fkey_table SET value_1 = 16 WHERE id = 15;
+	UPDATE on_update_fkey_table SET value_1 = 16 WHERE id = 16;
+	UPDATE on_update_fkey_table SET value_1 = 16 WHERE id = 17;
+	UPDATE on_update_fkey_table SET value_1 = 16 WHERE id = 18;
+ROLLBACK;
+BEGIN;
+	SELECT count(*) FROM transitive_reference_table;
  count 
 -------
    101
@@ -127,6 +202,18 @@ DEBUG:  rewriting table "on_update_fkey_table"
 DEBUG:  building index "on_update_fkey_table_pkey" on table "on_update_fkey_table"
 DEBUG:  validating foreign key constraint "fkey"
 ROLLBACK;
+BEGIN;	
+	SELECT count(*) FROM transitive_reference_table;
+ count 
+-------
+   101
+(1 row)
+
+	ALTER TABLE on_update_fkey_table ALTER COLUMN value_1 SET DATA TYPE bigint;
+DEBUG:  rewriting table "on_update_fkey_table"
+DEBUG:  building index "on_update_fkey_table_pkey" on table "on_update_fkey_table"
+DEBUG:  validating foreign key constraint "fkey"
+ROLLBACK;
 -- case 1.6: SELECT to a reference table is followed by an unrelated DDL
 BEGIN;	
 	SELECT count(*) FROM reference_table;
@@ -139,10 +226,32 @@ BEGIN;
 DEBUG:  switching to sequential query execution mode
 DETAIL:  cannot execute parallel DDL on relation "on_update_fkey_table" after SELECT command on reference relation "reference_table" because there is a foreign key between them and "reference_table" has been accessed in this transaction
 ROLLBACK;
+BEGIN;	
+	SELECT count(*) FROM transitive_reference_table;
+ count 
+-------
+   101
+(1 row)
+
+	ALTER TABLE on_update_fkey_table ADD COLUMN X INT;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  cannot execute parallel DDL on relation "on_update_fkey_table" after SELECT command on reference relation "transitive_reference_table" because there is a foreign key between them and "transitive_reference_table" has been accessed in this transaction
+ROLLBACK;
 -- case 1.7.1: SELECT to a reference table is followed by a DDL that is on 
 -- the foreign key column
 BEGIN;
 	SELECT count(*) FROM reference_table;
+ count 
+-------
+   101
+(1 row)
+
+	-- make sure that the output isn't too verbose
+ 	SET LOCAL client_min_messages TO ERROR;
+	ALTER TABLE on_update_fkey_table DROP COLUMN value_1 CASCADE;
+ROLLBACK;
+BEGIN;
+	SELECT count(*) FROM transitive_reference_table;
  count 
 -------
    101
@@ -162,6 +271,24 @@ BEGIN;
 (1 row)
 
 	SELECT count(*) FROM reference_table;
+ count 
+-------
+   101
+(1 row)
+
+	ALTER TABLE on_update_fkey_table DROP COLUMN value_1 CASCADE;
+ERROR:  cannot modify table "on_update_fkey_table" because there was a parallel operation on a distributed table in the transaction
+DETAIL:  When there is a foreign key to a reference table, Citus needs to perform all operations over a single connection per node to ensure consistency.
+HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
+ROLLBACK;
+BEGIN;	
+	SELECT count(*) FROM unrelated_dist_table;
+ count 
+-------
+  1001
+(1 row)
+
+	SELECT count(*) FROM transitive_reference_table;
  count 
 -------
    101
@@ -192,9 +319,36 @@ ERROR:  cannot execute parallel DDL on relation "on_update_fkey_table" after SEL
 DETAIL:  When there is a foreign key to a reference table, Citus needs to perform all operations over a single connection per node to ensure consistency.
 HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
 ROLLBACK;
+BEGIN;	
+	SELECT count(*) FROM unrelated_dist_table;
+ count 
+-------
+  1001
+(1 row)
+
+	SELECT count(*) FROM transitive_reference_table;
+ count 
+-------
+   101
+(1 row)
+
+	ALTER TABLE on_update_fkey_table ADD COLUMN X INT;
+ERROR:  cannot execute parallel DDL on relation "on_update_fkey_table" after SELECT command on reference relation "transitive_reference_table" because there is a foreign key between them and "transitive_reference_table" has been accessed in this transaction
+DETAIL:  When there is a foreign key to a reference table, Citus needs to perform all operations over a single connection per node to ensure consistency.
+HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
+ROLLBACK;
 -- case 1.8: SELECT to a reference table is followed by a COPY
 BEGIN;
 	SELECT count(*) FROM reference_table;
+ count 
+-------
+   101
+(1 row)
+
+	COPY on_update_fkey_table FROM STDIN WITH CSV;
+ROLLBACK;
+BEGIN;
+	SELECT count(*) FROM transitive_reference_table;
  count 
 -------
    101
@@ -217,6 +371,23 @@ DETAIL:  Reference relation "reference_table" is modified, which might lead to d
  count 
 -------
     10
+(1 row)
+
+ROLLBACK;
+BEGIN;
+	UPDATE transitive_reference_table SET id = 101 WHERE id = 99;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  Reference relation "transitive_reference_table" is modified, which might lead to data inconsistencies or distributed deadlocks via parallel accesses to hash distributed relations due to foreign keys. Any parallel modification to those hash distributed relations in the same transaction can only be executed in sequential query execution mode
+	SELECT count(*) FROM on_update_fkey_table WHERE value_1 = 99;
+ count 
+-------
+    10
+(1 row)
+
+	SELECT count(*) FROM on_update_fkey_table WHERE value_1 = 101;
+ count 
+-------
+     0
 (1 row)
 
 ROLLBACK;
@@ -250,11 +421,46 @@ DETAIL:  Reference relation "reference_table" is modified, which might lead to d
 (1 row)
 
 ROLLBACK;
+BEGIN;
+	UPDATE transitive_reference_table SET id = 101 WHERE id = 99;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  Reference relation "transitive_reference_table" is modified, which might lead to data inconsistencies or distributed deadlocks via parallel accesses to hash distributed relations due to foreign keys. Any parallel modification to those hash distributed relations in the same transaction can only be executed in sequential query execution mode
+	SELECT count(*) FROM on_update_fkey_table WHERE value_1 = 101 AND id = 99;
+ count 
+-------
+     0
+(1 row)
+
+	SELECT count(*) FROM on_update_fkey_table WHERE value_1 = 101 AND id = 199;
+ count 
+-------
+     0
+(1 row)
+
+	SELECT count(*) FROM on_update_fkey_table WHERE value_1 = 101 AND id = 299;
+ count 
+-------
+     0
+(1 row)
+
+	SELECT count(*) FROM on_update_fkey_table WHERE value_1 = 101 AND id = 399;
+ count 
+-------
+     0
+(1 row)
+
+ROLLBACK;
 -- case 2.3: UPDATE to a reference table is followed by a multi-shard UPDATE
 BEGIN;
 	UPDATE reference_table SET id = 101 WHERE id = 99;
 DEBUG:  switching to sequential query execution mode
 DETAIL:  Reference relation "reference_table" is modified, which might lead to data inconsistencies or distributed deadlocks via parallel accesses to hash distributed relations due to foreign keys. Any parallel modification to those hash distributed relations in the same transaction can only be executed in sequential query execution mode
+	UPDATE on_update_fkey_table SET value_1 = 15;
+ROLLBACK;
+BEGIN;
+	UPDATE transitive_reference_table SET id = 101 WHERE id = 99;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  Reference relation "transitive_reference_table" is modified, which might lead to data inconsistencies or distributed deadlocks via parallel accesses to hash distributed relations due to foreign keys. Any parallel modification to those hash distributed relations in the same transaction can only be executed in sequential query execution mode
 	UPDATE on_update_fkey_table SET value_1 = 15;
 ROLLBACK;
 -- case 2.4: UPDATE to a reference table is followed by multiple router UPDATEs
@@ -267,11 +473,35 @@ DETAIL:  Reference relation "reference_table" is modified, which might lead to d
 	UPDATE on_update_fkey_table SET value_1 = 101 WHERE id = 3;
 	UPDATE on_update_fkey_table SET value_1 = 101 WHERE id = 4;
 ROLLBACK;
+BEGIN;
+	UPDATE transitive_reference_table SET id = 101 WHERE id = 99;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  Reference relation "transitive_reference_table" is modified, which might lead to data inconsistencies or distributed deadlocks via parallel accesses to hash distributed relations due to foreign keys. Any parallel modification to those hash distributed relations in the same transaction can only be executed in sequential query execution mode
+	UPDATE on_update_fkey_table SET value_1 = 101 WHERE id = 1;
+ERROR:  insert or update on table "on_update_fkey_table_2380002" violates foreign key constraint "fkey_2380002"
+DETAIL:  Key (value_1)=(101) is not present in table "reference_table_2380001".
+CONTEXT:  while executing command on localhost:57637
+	UPDATE on_update_fkey_table SET value_1 = 101 WHERE id = 2;
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+	UPDATE on_update_fkey_table SET value_1 = 101 WHERE id = 3;
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+	UPDATE on_update_fkey_table SET value_1 = 101 WHERE id = 4;
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+ROLLBACK;
 -- case 2.5: UPDATE to a reference table is followed by a DDL that touches fkey column
 BEGIN;
 	UPDATE reference_table SET id = 101 WHERE id = 99;
 DEBUG:  switching to sequential query execution mode
 DETAIL:  Reference relation "reference_table" is modified, which might lead to data inconsistencies or distributed deadlocks via parallel accesses to hash distributed relations due to foreign keys. Any parallel modification to those hash distributed relations in the same transaction can only be executed in sequential query execution mode
+	ALTER TABLE on_update_fkey_table ALTER COLUMN value_1 SET DATA TYPE bigint;
+DEBUG:  rewriting table "on_update_fkey_table"
+DEBUG:  building index "on_update_fkey_table_pkey" on table "on_update_fkey_table"
+DEBUG:  validating foreign key constraint "fkey"
+ROLLBACK;
+BEGIN;
+	UPDATE transitive_reference_table SET id = 101 WHERE id = 99;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  Reference relation "transitive_reference_table" is modified, which might lead to data inconsistencies or distributed deadlocks via parallel accesses to hash distributed relations due to foreign keys. Any parallel modification to those hash distributed relations in the same transaction can only be executed in sequential query execution mode
 	ALTER TABLE on_update_fkey_table ALTER COLUMN value_1 SET DATA TYPE bigint;
 DEBUG:  rewriting table "on_update_fkey_table"
 DEBUG:  building index "on_update_fkey_table_pkey" on table "on_update_fkey_table"
@@ -284,12 +514,26 @@ DEBUG:  switching to sequential query execution mode
 DETAIL:  Reference relation "reference_table" is modified, which might lead to data inconsistencies or distributed deadlocks via parallel accesses to hash distributed relations due to foreign keys. Any parallel modification to those hash distributed relations in the same transaction can only be executed in sequential query execution mode
 	ALTER TABLE on_update_fkey_table ADD COLUMN value_1_X INT;
 ROLLBACK;
+BEGIN;
+	UPDATE transitive_reference_table SET id = 101 WHERE id = 99;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  Reference relation "transitive_reference_table" is modified, which might lead to data inconsistencies or distributed deadlocks via parallel accesses to hash distributed relations due to foreign keys. Any parallel modification to those hash distributed relations in the same transaction can only be executed in sequential query execution mode
+	ALTER TABLE on_update_fkey_table ADD COLUMN value_1_X INT;
+ROLLBACK;
 -- case 2.7: UPDATE to a reference table is followed by COPY
 BEGIN;
 	UPDATE reference_table SET id = 101 WHERE id = 99;
 DEBUG:  switching to sequential query execution mode
 DETAIL:  Reference relation "reference_table" is modified, which might lead to data inconsistencies or distributed deadlocks via parallel accesses to hash distributed relations due to foreign keys. Any parallel modification to those hash distributed relations in the same transaction can only be executed in sequential query execution mode
 	COPY on_update_fkey_table FROM STDIN WITH CSV;
+ROLLBACK;
+BEGIN;
+	UPDATE transitive_reference_table SET id = 101 WHERE id = 99;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  Reference relation "transitive_reference_table" is modified, which might lead to data inconsistencies or distributed deadlocks via parallel accesses to hash distributed relations due to foreign keys. Any parallel modification to those hash distributed relations in the same transaction can only be executed in sequential query execution mode
+	COPY on_update_fkey_table FROM STDIN WITH CSV;
+ERROR:  insert or update on table "on_update_fkey_table_2380005" violates foreign key constraint "fkey_2380005"
+DETAIL:  Key (value_1)=(101) is not present in table "reference_table_2380001".
 ROLLBACK;
 -- case 2.8: UPDATE to a reference table is followed by TRUNCATE
 BEGIN;
@@ -299,11 +543,29 @@ DETAIL:  Reference relation "reference_table" is modified, which might lead to d
 	TRUNCATE on_update_fkey_table;
 DEBUG:  building index "on_update_fkey_table_pkey" on table "on_update_fkey_table"
 ROLLBACK;
+BEGIN;
+	UPDATE transitive_reference_table SET id = 101 WHERE id = 99;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  Reference relation "transitive_reference_table" is modified, which might lead to data inconsistencies or distributed deadlocks via parallel accesses to hash distributed relations due to foreign keys. Any parallel modification to those hash distributed relations in the same transaction can only be executed in sequential query execution mode
+	TRUNCATE on_update_fkey_table;
+DEBUG:  building index "on_update_fkey_table_pkey" on table "on_update_fkey_table"
+ROLLBACK;
 -- case 3.1: an unrelated DDL to a reference table is followed by a real-time SELECT
 BEGIN;
 	ALTER TABLE reference_table ALTER COLUMN id SET DEFAULT 1001;
 DEBUG:  switching to sequential query execution mode
 DETAIL:  Reference relation "reference_table" is modified, which might lead to data inconsistencies or distributed deadlocks via parallel accesses to hash distributed relations due to foreign keys. Any parallel modification to those hash distributed relations in the same transaction can only be executed in sequential query execution mode
+	SELECT count(*) FROM on_update_fkey_table;
+ count 
+-------
+  1001
+(1 row)
+
+ROLLBACK;
+BEGIN;
+	ALTER TABLE transitive_reference_table ALTER COLUMN id SET DEFAULT 1001;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  Reference relation "transitive_reference_table" is modified, which might lead to data inconsistencies or distributed deadlocks via parallel accesses to hash distributed relations due to foreign keys. Any parallel modification to those hash distributed relations in the same transaction can only be executed in sequential query execution mode
 	SELECT count(*) FROM on_update_fkey_table;
  count 
 -------
@@ -321,11 +583,26 @@ BEGIN;
 (1 row)
 
 ROLLBACK;
+BEGIN;
+	ALTER TABLE transitive_reference_table ALTER COLUMN id SET DATA TYPE int;
+	SELECT count(*) FROM on_update_fkey_table;
+ count 
+-------
+  1001
+(1 row)
+
+ROLLBACK;
 -- case 3.3: DDL to a reference table followed by a multi shard UPDATE
 BEGIN;
 	ALTER TABLE reference_table ALTER COLUMN id SET DEFAULT 1001;
 DEBUG:  switching to sequential query execution mode
 DETAIL:  Reference relation "reference_table" is modified, which might lead to data inconsistencies or distributed deadlocks via parallel accesses to hash distributed relations due to foreign keys. Any parallel modification to those hash distributed relations in the same transaction can only be executed in sequential query execution mode
+	UPDATE on_update_fkey_table SET value_1 = 5 WHERE id != 11;
+ROLLBACK;
+BEGIN;
+	ALTER TABLE transitive_reference_table ALTER COLUMN id SET DEFAULT 1001;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  Reference relation "transitive_reference_table" is modified, which might lead to data inconsistencies or distributed deadlocks via parallel accesses to hash distributed relations due to foreign keys. Any parallel modification to those hash distributed relations in the same transaction can only be executed in sequential query execution mode
 	UPDATE on_update_fkey_table SET value_1 = 5 WHERE id != 11;
 ROLLBACK;
 -- case 3.4: DDL to a reference table followed by multiple router UPDATEs
@@ -338,11 +615,28 @@ DETAIL:  Reference relation "reference_table" is modified, which might lead to d
 	UPDATE on_update_fkey_table SET value_1 = 98 WHERE id = 3;
 	UPDATE on_update_fkey_table SET value_1 = 98 WHERE id = 4;
 ROLLBACK;
+BEGIN;
+	ALTER TABLE transitive_reference_table ALTER COLUMN id SET DEFAULT 1001;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  Reference relation "transitive_reference_table" is modified, which might lead to data inconsistencies or distributed deadlocks via parallel accesses to hash distributed relations due to foreign keys. Any parallel modification to those hash distributed relations in the same transaction can only be executed in sequential query execution mode
+	UPDATE on_update_fkey_table SET value_1 = 98 WHERE id = 1;
+	UPDATE on_update_fkey_table SET value_1 = 98 WHERE id = 2;
+	UPDATE on_update_fkey_table SET value_1 = 98 WHERE id = 3;
+	UPDATE on_update_fkey_table SET value_1 = 98 WHERE id = 4;
+ROLLBACK;
 -- case 3.5: DDL to reference table followed by a DDL to dist table
 BEGIN;
 	ALTER TABLE reference_table ALTER COLUMN id SET DATA TYPE smallint;
 DEBUG:  rewriting table "reference_table"
 DEBUG:  building index "reference_table_pkey" on table "reference_table"
+DEBUG:  validating foreign key constraint "fkey"
+	CREATE INDEX fkey_test_index_1 ON on_update_fkey_table(value_1);
+DEBUG:  building index "fkey_test_index_1" on table "on_update_fkey_table"
+ROLLBACK;
+BEGIN;
+	ALTER TABLE transitive_reference_table ALTER COLUMN id SET DATA TYPE smallint;
+DEBUG:  rewriting table "transitive_reference_table"
+DEBUG:  building index "transitive_reference_table_pkey" on table "transitive_reference_table"
 DEBUG:  validating foreign key constraint "fkey"
 	CREATE INDEX fkey_test_index_1 ON on_update_fkey_table(value_1);
 DEBUG:  building index "fkey_test_index_1" on table "on_update_fkey_table"
@@ -358,11 +652,27 @@ DEBUG:  rewriting table "on_update_fkey_table"
 DEBUG:  building index "on_update_fkey_table_pkey" on table "on_update_fkey_table"
 DEBUG:  validating foreign key constraint "fkey"
 ROLLBACK;
+BEGIN;
+	ALTER TABLE transitive_reference_table ALTER COLUMN id SET DATA TYPE smallint;
+DEBUG:  rewriting table "transitive_reference_table"
+DEBUG:  building index "transitive_reference_table_pkey" on table "transitive_reference_table"
+DEBUG:  validating foreign key constraint "fkey"
+	ALTER TABLE on_update_fkey_table ALTER COLUMN value_1 SET DATA TYPE smallint;
+DEBUG:  rewriting table "on_update_fkey_table"
+DEBUG:  building index "on_update_fkey_table_pkey" on table "on_update_fkey_table"
+DEBUG:  validating foreign key constraint "fkey"
+ROLLBACK;
 -- case 3.7: DDL to a reference table is followed by COPY
 BEGIN;
 	ALTER TABLE reference_table  ADD COLUMN X int;
 DEBUG:  switching to sequential query execution mode
 DETAIL:  Reference relation "reference_table" is modified, which might lead to data inconsistencies or distributed deadlocks via parallel accesses to hash distributed relations due to foreign keys. Any parallel modification to those hash distributed relations in the same transaction can only be executed in sequential query execution mode
+	COPY on_update_fkey_table FROM STDIN WITH CSV;
+ROLLBACK;
+BEGIN;
+	ALTER TABLE transitive_reference_table  ADD COLUMN X int;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  Reference relation "transitive_reference_table" is modified, which might lead to data inconsistencies or distributed deadlocks via parallel accesses to hash distributed relations due to foreign keys. Any parallel modification to those hash distributed relations in the same transaction can only be executed in sequential query execution mode
 	COPY on_update_fkey_table FROM STDIN WITH CSV;
 ROLLBACK;
 -- case 3.8: DDL to a reference table is followed by TRUNCATE
@@ -373,11 +683,26 @@ DETAIL:  Reference relation "reference_table" is modified, which might lead to d
 	TRUNCATE on_update_fkey_table;
 DEBUG:  building index "on_update_fkey_table_pkey" on table "on_update_fkey_table"
 ROLLBACK;
+BEGIN;
+	ALTER TABLE transitive_reference_table  ADD COLUMN X int;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  Reference relation "transitive_reference_table" is modified, which might lead to data inconsistencies or distributed deadlocks via parallel accesses to hash distributed relations due to foreign keys. Any parallel modification to those hash distributed relations in the same transaction can only be executed in sequential query execution mode
+	TRUNCATE on_update_fkey_table;
+DEBUG:  building index "on_update_fkey_table_pkey" on table "on_update_fkey_table"
+ROLLBACK;
 -- case 3.9: DDL to a reference table is followed by TRUNCATE
 BEGIN;
 	ALTER TABLE reference_table ALTER COLUMN id SET DATA TYPE smallint;
 DEBUG:  rewriting table "reference_table"
 DEBUG:  building index "reference_table_pkey" on table "reference_table"
+DEBUG:  validating foreign key constraint "fkey"
+	TRUNCATE on_update_fkey_table;
+DEBUG:  building index "on_update_fkey_table_pkey" on table "on_update_fkey_table"
+ROLLBACK;
+BEGIN;
+	ALTER TABLE transitive_reference_table ALTER COLUMN id SET DATA TYPE smallint;
+DEBUG:  rewriting table "transitive_reference_table"
+DEBUG:  building index "transitive_reference_table_pkey" on table "transitive_reference_table"
 DEBUG:  validating foreign key constraint "fkey"
 	TRUNCATE on_update_fkey_table;
 DEBUG:  building index "on_update_fkey_table_pkey" on table "on_update_fkey_table"
@@ -400,6 +725,20 @@ BEGIN;
 (1 row)
 
 ROLLBACK;
+BEGIN;
+	SELECT count(*) FROM on_update_fkey_table WHERE value_1 = 99;
+ count 
+-------
+    10
+(1 row)
+
+	SELECT count(*) FROM transitive_reference_table;
+ count 
+-------
+   101
+(1 row)
+
+ROLLBACK;
 -- case 4.2: SELECT to a dist table is follwed by a DML to a reference table
 BEGIN;
 	SELECT count(*) FROM on_update_fkey_table WHERE value_1 = 99;
@@ -413,6 +752,18 @@ ERROR:  cannot modify reference table "reference_table" because there was a para
 DETAIL:  When there is a foreign key to a reference table, Citus needs to perform all operations over a single connection per node to ensure consistency.
 HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
 ROLLBACK;
+BEGIN;
+	SELECT count(*) FROM on_update_fkey_table WHERE value_1 = 99;
+ count 
+-------
+    10
+(1 row)
+
+	UPDATE transitive_reference_table SET id = 101 WHERE id = 99;
+ERROR:  cannot modify reference table "transitive_reference_table" because there was a parallel operation on a distributed table
+DETAIL:  When there is a foreign key to a reference table, Citus needs to perform all operations over a single connection per node to ensure consistency.
+HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
+ROLLBACK;
 -- case 4.3: SELECT to a dist table is follwed by an unrelated DDL to a reference table
 BEGIN;
 	SELECT count(*) FROM on_update_fkey_table WHERE value_1 = 99;
@@ -423,6 +774,17 @@ BEGIN;
 
 	ALTER TABLE reference_table ADD COLUMN X INT;
 ERROR:  cannot execute DDL on reference relation "reference_table" because there was a parallel SELECT access to distributed relation "on_update_fkey_table" in the same transaction
+HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
+ROLLBACK;
+BEGIN;
+	SELECT count(*) FROM on_update_fkey_table WHERE value_1 = 99;
+ count 
+-------
+    10
+(1 row)
+
+	ALTER TABLE transitive_reference_table ADD COLUMN X INT;
+ERROR:  cannot execute DDL on reference relation "transitive_reference_table" because there was a parallel SELECT access to distributed relation "on_update_fkey_table" in the same transaction
 HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
 ROLLBACK;
 -- case 4.4: SELECT to a dist table is follwed by a DDL to a reference table
@@ -440,7 +802,23 @@ DEBUG:  validating foreign key constraint "fkey"
 ERROR:  cannot execute DDL on reference relation "reference_table" because there was a parallel SELECT access to distributed relation "on_update_fkey_table" in the same transaction
 HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
 ROLLBACK;
+BEGIN;
+	SELECT count(*) FROM on_update_fkey_table WHERE value_1 = 99;
+ count 
+-------
+    10
+(1 row)
+
+	ALTER TABLE transitive_reference_table ALTER COLUMN id SET DATA TYPE smallint;
+DEBUG:  rewriting table "transitive_reference_table"
+DEBUG:  building index "transitive_reference_table_pkey" on table "transitive_reference_table"
+DEBUG:  validating foreign key constraint "fkey"
+ERROR:  cannot execute DDL on reference relation "transitive_reference_table" because there was a parallel SELECT access to distributed relation "on_update_fkey_table" in the same transaction
+HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
+ROLLBACK;
 -- case 4.5: SELECT to a dist table is follwed by a TRUNCATE
+\set VERBOSITY terse
+SET client_min_messages to LOG;
 BEGIN;
 	SELECT count(*) FROM on_update_fkey_table WHERE value_1 = 99;
  count 
@@ -449,11 +827,20 @@ BEGIN;
 (1 row)
 
 	TRUNCATE reference_table CASCADE;
-DEBUG:  switching to sequential query execution mode
-DETAIL:  Reference relation "reference_table" is modified, which might lead to data inconsistencies or distributed deadlocks via parallel accesses to hash distributed relations due to foreign keys. Any parallel modification to those hash distributed relations in the same transaction can only be executed in sequential query execution mode
 NOTICE:  truncate cascades to table "on_update_fkey_table"
 ERROR:  cannot execute DDL on reference relation "reference_table" because there was a parallel SELECT access to distributed relation "on_update_fkey_table" in the same transaction
-HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
+ROLLBACK;
+BEGIN;
+	SELECT count(*) FROM on_update_fkey_table WHERE value_1 = 99;
+ count 
+-------
+    10
+(1 row)
+
+	TRUNCATE transitive_reference_table CASCADE;
+NOTICE:  truncate cascades to table "reference_table"
+NOTICE:  truncate cascades to table "on_update_fkey_table"
+ERROR:  cannot execute DDL on reference relation "transitive_reference_table" because there was a parallel SELECT access to distributed relation "on_update_fkey_table" in the same transaction
 ROLLBACK;
 -- case 4.6: Router SELECT to a dist table is followed by a TRUNCATE
 BEGIN;
@@ -464,24 +851,34 @@ BEGIN;
 (1 row)
 
 	TRUNCATE reference_table CASCADE;
-DEBUG:  switching to sequential query execution mode
-DETAIL:  Reference relation "reference_table" is modified, which might lead to data inconsistencies or distributed deadlocks via parallel accesses to hash distributed relations due to foreign keys. Any parallel modification to those hash distributed relations in the same transaction can only be executed in sequential query execution mode
 NOTICE:  truncate cascades to table "on_update_fkey_table"
-DEBUG:  truncate cascades to table "on_update_fkey_table_2380002"
-DETAIL:  NOTICE from localhost:57638
-DEBUG:  truncate cascades to table "on_update_fkey_table_2380004"
-DETAIL:  NOTICE from localhost:57638
-DEBUG:  truncate cascades to table "on_update_fkey_table_2380001"
-DETAIL:  NOTICE from localhost:57637
-DEBUG:  truncate cascades to table "on_update_fkey_table_2380003"
-DETAIL:  NOTICE from localhost:57637
-DEBUG:  building index "reference_table_pkey" on table "reference_table"
-DEBUG:  building index "on_update_fkey_table_pkey" on table "on_update_fkey_table"
 ROLLBACK;
+BEGIN;
+	SELECT count(*) FROM on_update_fkey_table WHERE id = 9;
+ count 
+-------
+     1
+(1 row)
+
+	TRUNCATE transitive_reference_table CASCADE;
+NOTICE:  truncate cascades to table "reference_table"
+NOTICE:  truncate cascades to table "on_update_fkey_table"
+ROLLBACK;
+RESET client_min_messages;
+\set VERBOSITY default
 -- case 5.1: Parallel UPDATE on distributed table follow by a SELECT
 BEGIN;
 	UPDATE on_update_fkey_table SET value_1 = 16 WHERE value_1 = 15;
 	SELECT count(*) FROM reference_table;
+ count 
+-------
+   101
+(1 row)
+
+ROLLBACK;
+BEGIN;
+	UPDATE on_update_fkey_table SET value_1 = 16 WHERE value_1 = 15;
+	SELECT count(*) FROM transitive_reference_table;
  count 
 -------
    101
@@ -495,6 +892,12 @@ BEGIN;
 ERROR:  cannot execute DML on reference relation "reference_table" because there was a parallel DML access to distributed relation "on_update_fkey_table" in the same transaction
 HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
 ROLLBACK;
+BEGIN;
+	UPDATE on_update_fkey_table SET value_1 = 16 WHERE value_1 = 15;
+	UPDATE transitive_reference_table SET id = 160 WHERE id = 15;
+ERROR:  cannot execute DML on reference relation "transitive_reference_table" because there was a parallel DML access to distributed relation "on_update_fkey_table" in the same transaction
+HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
+ROLLBACK;
 -- case 5.3: Parallel UPDATE on distributed table follow by an unrelated DDL on reference table
 BEGIN;
 	UPDATE on_update_fkey_table SET value_1 = 16 WHERE value_1 = 15;
@@ -502,14 +905,23 @@ BEGIN;
 ERROR:  cannot execute DDL on reference relation "reference_table" because there was a parallel DML access to distributed relation "on_update_fkey_table" in the same transaction
 HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
 ROLLBACK;
+BEGIN;
+	UPDATE on_update_fkey_table SET value_1 = 16 WHERE value_1 = 15;
+	ALTER TABLE transitive_reference_table ADD COLUMN X INT;
+ERROR:  cannot execute DDL on reference relation "transitive_reference_table" because there was a parallel DML access to distributed relation "on_update_fkey_table" in the same transaction
+HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
+ROLLBACK;
 -- case 5.4: Parallel UPDATE on distributed table follow by a related DDL on reference table
 BEGIN;
 	UPDATE on_update_fkey_table SET value_1 = 16 WHERE value_1 = 15;
 	ALTER TABLE reference_table ALTER COLUMN id SET DATA TYPE smallint;
-DEBUG:  rewriting table "reference_table"
-DEBUG:  building index "reference_table_pkey" on table "reference_table"
-DEBUG:  validating foreign key constraint "fkey"
 ERROR:  cannot execute DDL on reference relation "reference_table" because there was a parallel DML access to distributed relation "on_update_fkey_table" in the same transaction
+HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
+ROLLBACK;
+BEGIN;
+	UPDATE on_update_fkey_table SET value_1 = 16 WHERE value_1 = 15;
+	ALTER TABLE transitive_reference_table ALTER COLUMN id SET DATA TYPE smallint;
+ERROR:  cannot execute DDL on reference relation "transitive_reference_table" because there was a parallel DML access to distributed relation "on_update_fkey_table" in the same transaction
 HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
 ROLLBACK;
 -- case 6:1: Unrelated parallel DDL on distributed table followed by SELECT on ref. table
@@ -519,19 +931,32 @@ BEGIN;
 ERROR:  cannot execute SELECT on reference relation "reference_table" because there was a parallel DDL access to distributed relation "on_update_fkey_table" in the same transaction
 HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
 ROLLBACK;
+BEGIN;
+	ALTER TABLE on_update_fkey_table ADD COLUMN X int;
+	SELECT count(*) FROM transitive_reference_table;
+ERROR:  cannot execute SELECT on reference relation "transitive_reference_table" because there was a parallel DDL access to distributed relation "on_update_fkey_table" in the same transaction
+HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
+ROLLBACK;
 -- case 6:2: Related parallel DDL on distributed table followed by SELECT on ref. table
 BEGIN;
 	ALTER TABLE on_update_fkey_table ALTER COLUMN value_1 SET DATA TYPE smallint;
-DEBUG:  rewriting table "on_update_fkey_table"
-DEBUG:  building index "on_update_fkey_table_pkey" on table "on_update_fkey_table"
-DEBUG:  validating foreign key constraint "fkey"
 	UPDATE reference_table SET id = 160 WHERE id = 15;
+ROLLBACK;
+BEGIN;
+	ALTER TABLE on_update_fkey_table ALTER COLUMN value_1 SET DATA TYPE smallint;
+	UPDATE transitive_reference_table SET id = 160 WHERE id = 15;
 ROLLBACK;
 -- case 6:3: Unrelated parallel DDL on distributed table followed by UPDATE on ref. table
 BEGIN;
 	ALTER TABLE on_update_fkey_table ADD COLUMN X int;
 	SELECT count(*) FROM reference_table;
 ERROR:  cannot execute SELECT on reference relation "reference_table" because there was a parallel DDL access to distributed relation "on_update_fkey_table" in the same transaction
+HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
+ROLLBACK;
+BEGIN;
+	ALTER TABLE on_update_fkey_table ADD COLUMN X int;
+	SELECT count(*) FROM transitive_reference_table;
+ERROR:  cannot execute SELECT on reference relation "transitive_reference_table" because there was a parallel DDL access to distributed relation "on_update_fkey_table" in the same transaction
 HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
 ROLLBACK;
 -- case 6:4: Related parallel DDL on distributed table followed by SELECT on ref. table
@@ -541,11 +966,23 @@ BEGIN;
 ERROR:  cannot execute DML on reference relation "reference_table" because there was a parallel DDL access to distributed relation "on_update_fkey_table" in the same transaction
 HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
 ROLLBACK;
+BEGIN;
+	ALTER TABLE on_update_fkey_table ADD COLUMN X int;
+	UPDATE transitive_reference_table SET id = 160 WHERE id = 15;
+ERROR:  cannot execute DML on reference relation "transitive_reference_table" because there was a parallel DDL access to distributed relation "on_update_fkey_table" in the same transaction
+HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
+ROLLBACK;
 -- case 6:5: Unrelated parallel DDL on distributed table followed by unrelated DDL on ref. table
 BEGIN;
 	ALTER TABLE on_update_fkey_table ADD COLUMN X int;
 	ALTER TABLE reference_table ADD COLUMN X int;
 ERROR:  cannot execute DDL on reference relation "reference_table" because there was a parallel DDL access to distributed relation "on_update_fkey_table" in the same transaction
+HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
+ROLLBACK;
+BEGIN;
+	ALTER TABLE on_update_fkey_table ADD COLUMN X int;
+	ALTER TABLE transitive_reference_table ADD COLUMN X int;
+ERROR:  cannot execute DDL on reference relation "transitive_reference_table" because there was a parallel DDL access to distributed relation "on_update_fkey_table" in the same transaction
 HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
 ROLLBACK;
 -- case 6:6: Unrelated parallel DDL on distributed table followed by related DDL on ref. table
@@ -564,6 +1001,12 @@ BEGIN;
 ERROR:  cannot execute DML on reference relation "reference_table" because there was a parallel DML access to distributed relation "on_update_fkey_table" in the same transaction
 HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
 ROLLBACK;
+BEGIN;
+	UPDATE on_update_fkey_table SET value_1 = 5 WHERE id != 11;
+	DELETE FROM transitive_reference_table  WHERE id = 99;
+ERROR:  cannot execute DML on reference relation "transitive_reference_table" because there was a parallel DML access to distributed relation "on_update_fkey_table" in the same transaction
+HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
+ROLLBACK;
 -- an unrelated update followed by update on dist table and update
 -- on reference table
 BEGIN;
@@ -571,6 +1014,13 @@ BEGIN;
 	UPDATE on_update_fkey_table SET value_1 = 5 WHERE id != 11;
 	UPDATE reference_table SET id = 101 WHERE id = 99;
 ERROR:  cannot execute DML on reference relation "reference_table" because there was a parallel DML access to distributed relation "on_update_fkey_table" in the same transaction
+HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
+ROLLBACK;
+BEGIN;
+	UPDATE unrelated_dist_table SET value_1 = 15;
+	UPDATE on_update_fkey_table SET value_1 = 5 WHERE id != 11;
+	UPDATE transitive_reference_table SET id = 101 WHERE id = 99;
+ERROR:  cannot execute DML on reference relation "transitive_reference_table" because there was a parallel DML access to distributed relation "on_update_fkey_table" in the same transaction
 HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
 ROLLBACK;
 -- an unrelated update followed by update on the reference table and update
@@ -589,26 +1039,14 @@ ERROR:  current transaction is aborted, commands ignored until end of transactio
 ROLLBACK;
 BEGIN;
 	CREATE TABLE test_table_1(id int PRIMARY KEY);
-DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "test_table_1_pkey" for table "test_table_1"
-DEBUG:  building index "test_table_1_pkey" on table "test_table_1"
 	SELECT create_reference_table('test_table_1');
-DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
-DETAIL:  NOTICE from localhost:57638
-DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
-DETAIL:  NOTICE from localhost:57637
  create_reference_table 
 ------------------------
  
 (1 row)
 
 	CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int, FOREIGN KEY(value_1) REFERENCES test_table_1(id));
-DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "test_table_2_pkey" for table "test_table_2"
-DEBUG:  building index "test_table_2_pkey" on table "test_table_2"
 	SELECT create_distributed_table('test_table_2', 'id');
-DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
-DETAIL:  NOTICE from localhost:57638
-DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
-DETAIL:  NOTICE from localhost:57637
  create_distributed_table 
 --------------------------
  
@@ -622,39 +1060,21 @@ ROLLBACK;
 -- already executed a parallel query
 BEGIN;
 	CREATE TABLE test_table_1(id int PRIMARY KEY);
-DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "test_table_1_pkey" for table "test_table_1"
-DEBUG:  building index "test_table_1_pkey" on table "test_table_1"
 	SELECT create_reference_table('test_table_1'); 
-DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
-DETAIL:  NOTICE from localhost:57638
-DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
-DETAIL:  NOTICE from localhost:57637
  create_reference_table 
 ------------------------
  
 (1 row)
 
 	CREATE TABLE tt4(id int PRIMARY KEY, value_1 int, FOREIGN KEY(id) REFERENCES tt4(id));
-DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "tt4_pkey" for table "tt4"
-DEBUG:  building index "tt4_pkey" on table "tt4"
 	SELECT create_distributed_table('tt4', 'id');
-DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
-DETAIL:  NOTICE from localhost:57638
-DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
-DETAIL:  NOTICE from localhost:57637
  create_distributed_table 
 --------------------------
  
 (1 row)
 
 	CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int, FOREIGN KEY(value_1) REFERENCES test_table_1(id), FOREIGN KEY(id) REFERENCES tt4(id));
-DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "test_table_2_pkey" for table "test_table_2"
-DEBUG:  building index "test_table_2_pkey" on table "test_table_2"
 	SELECT create_distributed_table('test_table_2', 'id');
-DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
-DETAIL:  NOTICE from localhost:57638
-DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
-DETAIL:  NOTICE from localhost:57637
 ERROR:  cannot distribute relation "test_table_2" in this transaction because it has a foreign key to a reference table
 DETAIL:  If a hash distributed table has a foreign key to a reference table, it has to be created in sequential mode before any parallel commands have been executed in the same transaction
 HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
@@ -669,39 +1089,21 @@ ROLLBACK;
 BEGIN;
 	SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
 	CREATE TABLE test_table_1(id int PRIMARY KEY);
-DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "test_table_1_pkey" for table "test_table_1"
-DEBUG:  building index "test_table_1_pkey" on table "test_table_1"
 	SELECT create_reference_table('test_table_1'); 
-DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
-DETAIL:  NOTICE from localhost:57638
-DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
-DETAIL:  NOTICE from localhost:57637
  create_reference_table 
 ------------------------
  
 (1 row)
 
 	CREATE TABLE tt4(id int PRIMARY KEY, value_1 int, FOREIGN KEY(id) REFERENCES tt4(id));
-DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "tt4_pkey" for table "tt4"
-DEBUG:  building index "tt4_pkey" on table "tt4"
 	SELECT create_distributed_table('tt4', 'id');
-DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
-DETAIL:  NOTICE from localhost:57638
-DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
-DETAIL:  NOTICE from localhost:57637
  create_distributed_table 
 --------------------------
  
 (1 row)
 
 	CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int, FOREIGN KEY(value_1) REFERENCES test_table_1(id), FOREIGN KEY(id) REFERENCES tt4(id));
-DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "test_table_2_pkey" for table "test_table_2"
-DEBUG:  building index "test_table_2_pkey" on table "test_table_2"
 	SELECT create_distributed_table('test_table_2', 'id');
-DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
-DETAIL:  NOTICE from localhost:57638
-DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
-DETAIL:  NOTICE from localhost:57637
  create_distributed_table 
 --------------------------
  
@@ -717,26 +1119,14 @@ ROLLBACK;
 BEGIN;
 	
 	CREATE TABLE test_table_1(id int PRIMARY KEY);
-DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "test_table_1_pkey" for table "test_table_1"
-DEBUG:  building index "test_table_1_pkey" on table "test_table_1"
 	SELECT create_reference_table('test_table_1');
-DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
-DETAIL:  NOTICE from localhost:57638
-DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
-DETAIL:  NOTICE from localhost:57637
  create_reference_table 
 ------------------------
  
 (1 row)
 
 	CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int);
-DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "test_table_2_pkey" for table "test_table_2"
-DEBUG:  building index "test_table_2_pkey" on table "test_table_2"
 	SELECT create_distributed_table('test_table_2', 'id');
-DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
-DETAIL:  NOTICE from localhost:57638
-DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
-DETAIL:  NOTICE from localhost:57637
  create_distributed_table 
 --------------------------
  
@@ -757,26 +1147,14 @@ BEGIN;
 	
 	SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
 	CREATE TABLE test_table_1(id int PRIMARY KEY);
-DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "test_table_1_pkey" for table "test_table_1"
-DEBUG:  building index "test_table_1_pkey" on table "test_table_1"
 	SELECT create_reference_table('test_table_1');
-DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
-DETAIL:  NOTICE from localhost:57638
-DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
-DETAIL:  NOTICE from localhost:57637
  create_reference_table 
 ------------------------
  
 (1 row)
 
 	CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int);
-DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "test_table_2_pkey" for table "test_table_2"
-DEBUG:  building index "test_table_2_pkey" on table "test_table_2"
 	SELECT create_distributed_table('test_table_2', 'id');
-DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
-DETAIL:  NOTICE from localhost:57638
-DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
-DETAIL:  NOTICE from localhost:57637
  create_distributed_table 
 --------------------------
  
@@ -792,26 +1170,14 @@ COMMIT;
 -- changed
 BEGIN;
 	CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int);
-DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "test_table_2_pkey" for table "test_table_2"
-DEBUG:  building index "test_table_2_pkey" on table "test_table_2"
 	SELECT create_distributed_table('test_table_2', 'id');
-DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
-DETAIL:  NOTICE from localhost:57638
-DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
-DETAIL:  NOTICE from localhost:57637
  create_distributed_table 
 --------------------------
  
 (1 row)
 
 	CREATE TABLE test_table_1(id int PRIMARY KEY);
-DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "test_table_1_pkey" for table "test_table_1"
-DEBUG:  building index "test_table_1_pkey" on table "test_table_1"
 	SELECT create_reference_table('test_table_1');
-DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
-DETAIL:  NOTICE from localhost:57638
-DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
-DETAIL:  NOTICE from localhost:57637
  create_reference_table 
 ------------------------
  
@@ -831,26 +1197,14 @@ ROLLBACK;
 BEGIN;
 	SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
 	CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int);
-DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "test_table_2_pkey" for table "test_table_2"
-DEBUG:  building index "test_table_2_pkey" on table "test_table_2"
 	SELECT create_distributed_table('test_table_2', 'id');
-DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
-DETAIL:  NOTICE from localhost:57638
-DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
-DETAIL:  NOTICE from localhost:57637
  create_distributed_table 
 --------------------------
  
 (1 row)
 
 	CREATE TABLE test_table_1(id int PRIMARY KEY);
-DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "test_table_1_pkey" for table "test_table_1"
-DEBUG:  building index "test_table_1_pkey" on table "test_table_1"
 	SELECT create_reference_table('test_table_1');
-DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
-DETAIL:  NOTICE from localhost:57638
-DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
-DETAIL:  NOTICE from localhost:57637
  create_reference_table 
 ------------------------
  
@@ -873,13 +1227,7 @@ BEGIN;
 
 	SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
 	CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int);
-DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "test_table_2_pkey" for table "test_table_2"
-DEBUG:  building index "test_table_2_pkey" on table "test_table_2"
 	SELECT create_distributed_table('test_table_2', 'id');
-DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
-DETAIL:  NOTICE from localhost:57638
-DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
-DETAIL:  NOTICE from localhost:57637
 ERROR:  cannot distribute relation "test_table_2" in this transaction because it has a foreign key to a reference table
 DETAIL:  If a hash distributed table has a foreign key to a reference table, it has to be created in sequential mode before any parallel commands have been executed in the same transaction
 HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
@@ -900,32 +1248,17 @@ ROLLBACK;
 BEGIN;
 	
 	CREATE TABLE test_table_1(id int PRIMARY KEY);
-DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "test_table_1_pkey" for table "test_table_1"
-DEBUG:  building index "test_table_1_pkey" on table "test_table_1"
 	INSERT INTO test_table_1 SELECT i FROM generate_series(0,100) i;
 	CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int, FOREIGN KEY(value_1) REFERENCES test_table_1(id));
-DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "test_table_2_pkey" for table "test_table_2"
-DEBUG:  building index "test_table_2_pkey" on table "test_table_2"
 	INSERT INTO test_table_2 SELECT i, i FROM generate_series(0,100) i;
 	SELECT create_reference_table('test_table_1');
-DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
-DETAIL:  NOTICE from localhost:57638
-DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
-DETAIL:  NOTICE from localhost:57637
-DEBUG:  switching to sequential query execution mode
-DETAIL:  Reference relation "test_table_1" is modified, which might lead to data inconsistencies or distributed deadlocks via parallel accesses to hash distributed relations due to foreign keys. Any parallel modification to those hash distributed relations in the same transaction can only be executed in sequential query execution mode
 NOTICE:  Copying data from local table...
-DEBUG:  Copied 101 rows
  create_reference_table 
 ------------------------
  
 (1 row)
 
 	SELECT create_distributed_table('test_table_2', 'id');
-DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
-DETAIL:  NOTICE from localhost:57638
-DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
-DETAIL:  NOTICE from localhost:57637
 ERROR:  cannot distribute "test_table_2" in sequential mode because it is not empty
 HINT:  If you have manually set citus.multi_shard_modify_mode to 'sequential', try with 'parallel' option. If that is not the case, try distributing local tables when they are empty.
 	-- make sure that the output isn't too verbose
@@ -940,30 +1273,17 @@ BEGIN;
 	
 	SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
 	CREATE TABLE test_table_1(id int PRIMARY KEY);
-DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "test_table_1_pkey" for table "test_table_1"
-DEBUG:  building index "test_table_1_pkey" on table "test_table_1"
 	INSERT INTO test_table_1 SELECT i FROM generate_series(0,100) i;
 	CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int, FOREIGN KEY(value_1) REFERENCES test_table_1(id));
-DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "test_table_2_pkey" for table "test_table_2"
-DEBUG:  building index "test_table_2_pkey" on table "test_table_2"
 	INSERT INTO test_table_2 SELECT i, i FROM generate_series(0,100) i;
 	SELECT create_reference_table('test_table_1');
-DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
-DETAIL:  NOTICE from localhost:57638
-DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
-DETAIL:  NOTICE from localhost:57637
 NOTICE:  Copying data from local table...
-DEBUG:  Copied 101 rows
  create_reference_table 
 ------------------------
  
 (1 row)
 
 	SELECT create_distributed_table('test_table_2', 'id');
-DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
-DETAIL:  NOTICE from localhost:57638
-DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
-DETAIL:  NOTICE from localhost:57637
 ERROR:  cannot distribute "test_table_2" in sequential mode because it is not empty
 HINT:  If you have manually set citus.multi_shard_modify_mode to 'sequential', try with 'parallel' option. If that is not the case, try distributing local tables when they are empty.
 	
@@ -978,28 +1298,14 @@ COMMIT;
 BEGIN;
 	
 	CREATE TABLE test_table_1(id int PRIMARY KEY);
-DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "test_table_1_pkey" for table "test_table_1"
-DEBUG:  building index "test_table_1_pkey" on table "test_table_1"
 	CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int, FOREIGN KEY(value_1) REFERENCES test_table_1(id));
-DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "test_table_2_pkey" for table "test_table_2"
-DEBUG:  building index "test_table_2_pkey" on table "test_table_2"
 	SELECT create_reference_table('test_table_1');
-DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
-DETAIL:  NOTICE from localhost:57638
-DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
-DETAIL:  NOTICE from localhost:57637
-DEBUG:  switching to sequential query execution mode
-DETAIL:  Reference relation "test_table_1" is modified, which might lead to data inconsistencies or distributed deadlocks via parallel accesses to hash distributed relations due to foreign keys. Any parallel modification to those hash distributed relations in the same transaction can only be executed in sequential query execution mode
  create_reference_table 
 ------------------------
  
 (1 row)
 
 	SELECT create_distributed_table('test_table_2', 'id');
-DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
-DETAIL:  NOTICE from localhost:57638
-DEBUG:  schema "test_fkey_to_ref_in_tx" already exists, skipping
-DETAIL:  NOTICE from localhost:57637
  create_distributed_table 
 --------------------------
  
@@ -1007,9 +1313,7 @@ DETAIL:  NOTICE from localhost:57637
 
 	-- and maybe some other test
 	CREATE INDEX i1 ON test_table_1(id);
-DEBUG:  building index "i1" on table "test_table_1"
 	ALTER TABLE test_table_2 ADD CONSTRAINT check_val CHECK (id > 0);
-DEBUG:  verifying table "test_table_2"
 	SELECT count(*) FROM test_table_2;
  count 
 -------
@@ -1076,8 +1380,8 @@ DEBUG:  Collecting INSERT ... SELECT results on coordinator
 -- see https://github.com/citusdata/citus_docs/issues/664 for the discussion
 WITH t1 AS (DELETE FROM reference_table RETURNING id) 
 	DELETE FROM distributed_table USING t1 WHERE value_1 = t1.id RETURNING *;
-DEBUG:  generating subplan 92_1 for CTE t1: DELETE FROM test_fkey_to_ref_in_tx.reference_table RETURNING id
-DEBUG:  Plan 92 query after replacing subqueries and CTEs: DELETE FROM test_fkey_to_ref_in_tx.distributed_table USING (SELECT intermediate_result.id FROM read_intermediate_result('92_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) t1 WHERE (distributed_table.value_1 OPERATOR(pg_catalog.=) t1.id) RETURNING distributed_table.id, distributed_table.value_1, t1.id
+DEBUG:  generating subplan 170_1 for CTE t1: DELETE FROM test_fkey_to_ref_in_tx.reference_table RETURNING id
+DEBUG:  Plan 170 query after replacing subqueries and CTEs: DELETE FROM test_fkey_to_ref_in_tx.distributed_table USING (SELECT intermediate_result.id FROM read_intermediate_result('170_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) t1 WHERE (distributed_table.value_1 OPERATOR(pg_catalog.=) t1.id) RETURNING distributed_table.id, distributed_table.value_1, t1.id
 DEBUG:  switching to sequential query execution mode
 DETAIL:  Reference relation "reference_table" is modified, which might lead to data inconsistencies or distributed deadlocks via parallel accesses to hash distributed relations due to foreign keys. Any parallel modification to those hash distributed relations in the same transaction can only be executed in sequential query execution mode
  id | value_1 | id 
@@ -1097,8 +1401,8 @@ DEBUG:  Collecting INSERT ... SELECT results on coordinator
 -- see https://github.com/citusdata/citus_docs/issues/664 for the discussion
 WITH t1 AS (DELETE FROM reference_table RETURNING id) 
 	SELECT count(*) FROM distributed_table, t1 WHERE  value_1 = t1.id;
-DEBUG:  generating subplan 96_1 for CTE t1: DELETE FROM test_fkey_to_ref_in_tx.reference_table RETURNING id
-DEBUG:  Plan 96 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM test_fkey_to_ref_in_tx.distributed_table, (SELECT intermediate_result.id FROM read_intermediate_result('96_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) t1 WHERE (distributed_table.value_1 OPERATOR(pg_catalog.=) t1.id)
+DEBUG:  generating subplan 174_1 for CTE t1: DELETE FROM test_fkey_to_ref_in_tx.reference_table RETURNING id
+DEBUG:  Plan 174 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM test_fkey_to_ref_in_tx.distributed_table, (SELECT intermediate_result.id FROM read_intermediate_result('174_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) t1 WHERE (distributed_table.value_1 OPERATOR(pg_catalog.=) t1.id)
 DEBUG:  switching to sequential query execution mode
 DETAIL:  Reference relation "reference_table" is modified, which might lead to data inconsistencies or distributed deadlocks via parallel accesses to hash distributed relations due to foreign keys. Any parallel modification to those hash distributed relations in the same transaction can only be executed in sequential query execution mode
  count 
@@ -1111,17 +1415,17 @@ DETAIL:  Reference relation "reference_table" is modified, which might lead to d
 WITH t1 AS (DELETE FROM distributed_table RETURNING id),
 	t2 AS (DELETE FROM reference_table RETURNING id)
 	SELECT count(*) FROM distributed_table, t1, t2 WHERE  value_1 = t1.id AND value_1 = t2.id;
-DEBUG:  generating subplan 98_1 for CTE t1: DELETE FROM test_fkey_to_ref_in_tx.distributed_table RETURNING id
-DEBUG:  generating subplan 98_2 for CTE t2: DELETE FROM test_fkey_to_ref_in_tx.reference_table RETURNING id
-DEBUG:  Plan 98 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM test_fkey_to_ref_in_tx.distributed_table, (SELECT intermediate_result.id FROM read_intermediate_result('98_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) t1, (SELECT intermediate_result.id FROM read_intermediate_result('98_2'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) t2 WHERE ((distributed_table.value_1 OPERATOR(pg_catalog.=) t1.id) AND (distributed_table.value_1 OPERATOR(pg_catalog.=) t2.id))
+DEBUG:  generating subplan 176_1 for CTE t1: DELETE FROM test_fkey_to_ref_in_tx.distributed_table RETURNING id
+DEBUG:  generating subplan 176_2 for CTE t2: DELETE FROM test_fkey_to_ref_in_tx.reference_table RETURNING id
+DEBUG:  Plan 176 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM test_fkey_to_ref_in_tx.distributed_table, (SELECT intermediate_result.id FROM read_intermediate_result('176_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) t1, (SELECT intermediate_result.id FROM read_intermediate_result('176_2'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) t2 WHERE ((distributed_table.value_1 OPERATOR(pg_catalog.=) t1.id) AND (distributed_table.value_1 OPERATOR(pg_catalog.=) t2.id))
 ERROR:  cannot execute DML on reference relation "reference_table" because there was a parallel DML access to distributed relation "distributed_table" in the same transaction
 HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
 -- similarly this should fail since we first access to a distributed
 -- table via t1, and then access to the reference table in the main query
 WITH t1 AS (DELETE FROM distributed_table RETURNING id)
 	DELETE FROM reference_table RETURNING id;
-DEBUG:  generating subplan 101_1 for CTE t1: DELETE FROM test_fkey_to_ref_in_tx.distributed_table RETURNING id
-DEBUG:  Plan 101 query after replacing subqueries and CTEs: DELETE FROM test_fkey_to_ref_in_tx.reference_table RETURNING id
+DEBUG:  generating subplan 179_1 for CTE t1: DELETE FROM test_fkey_to_ref_in_tx.distributed_table RETURNING id
+DEBUG:  Plan 179 query after replacing subqueries and CTEs: DELETE FROM test_fkey_to_ref_in_tx.reference_table RETURNING id
 ERROR:  cannot execute DML on reference relation "reference_table" because there was a parallel DML access to distributed relation "distributed_table" in the same transaction
 HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
 -- finally, make sure that we can execute the same queries
@@ -1132,9 +1436,9 @@ BEGIN;
 	WITH t1 AS (DELETE FROM distributed_table RETURNING id),
 		t2 AS (DELETE FROM reference_table RETURNING id)
 		SELECT count(*) FROM distributed_table, t1, t2 WHERE  value_1 = t1.id AND value_1 = t2.id;
-DEBUG:  generating subplan 103_1 for CTE t1: DELETE FROM test_fkey_to_ref_in_tx.distributed_table RETURNING id
-DEBUG:  generating subplan 103_2 for CTE t2: DELETE FROM test_fkey_to_ref_in_tx.reference_table RETURNING id
-DEBUG:  Plan 103 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM test_fkey_to_ref_in_tx.distributed_table, (SELECT intermediate_result.id FROM read_intermediate_result('103_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) t1, (SELECT intermediate_result.id FROM read_intermediate_result('103_2'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) t2 WHERE ((distributed_table.value_1 OPERATOR(pg_catalog.=) t1.id) AND (distributed_table.value_1 OPERATOR(pg_catalog.=) t2.id))
+DEBUG:  generating subplan 181_1 for CTE t1: DELETE FROM test_fkey_to_ref_in_tx.distributed_table RETURNING id
+DEBUG:  generating subplan 181_2 for CTE t2: DELETE FROM test_fkey_to_ref_in_tx.reference_table RETURNING id
+DEBUG:  Plan 181 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM test_fkey_to_ref_in_tx.distributed_table, (SELECT intermediate_result.id FROM read_intermediate_result('181_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) t1, (SELECT intermediate_result.id FROM read_intermediate_result('181_2'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) t2 WHERE ((distributed_table.value_1 OPERATOR(pg_catalog.=) t1.id) AND (distributed_table.value_1 OPERATOR(pg_catalog.=) t2.id))
  count 
 -------
      0
@@ -1146,18 +1450,16 @@ BEGIN;
 	SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
 	WITH t1 AS (DELETE FROM distributed_table RETURNING id)
 		DELETE FROM reference_table RETURNING id;
-DEBUG:  generating subplan 106_1 for CTE t1: DELETE FROM test_fkey_to_ref_in_tx.distributed_table RETURNING id
-DEBUG:  Plan 106 query after replacing subqueries and CTEs: DELETE FROM test_fkey_to_ref_in_tx.reference_table RETURNING id
+DEBUG:  generating subplan 184_1 for CTE t1: DELETE FROM test_fkey_to_ref_in_tx.distributed_table RETURNING id
+DEBUG:  Plan 184 query after replacing subqueries and CTEs: DELETE FROM test_fkey_to_ref_in_tx.reference_table RETURNING id
  id 
 ----
 (0 rows)
 
 ROLLBACK;
 RESET client_min_messages;
+\set VERBOSITY terse
 DROP SCHEMA test_fkey_to_ref_in_tx CASCADE;
-NOTICE:  drop cascades to 4 other objects
-DETAIL:  drop cascades to table on_update_fkey_table
-drop cascades to table unrelated_dist_table
-drop cascades to table reference_table
-drop cascades to table distributed_table
+NOTICE:  drop cascades to 5 other objects
+\set VERBOSITY default
 SET search_path TO public;

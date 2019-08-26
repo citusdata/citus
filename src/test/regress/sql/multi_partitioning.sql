@@ -6,9 +6,8 @@ SET citus.next_shard_id TO 1660000;
 SET citus.shard_count TO 4;
 SET citus.shard_replication_factor TO 1;
 
--- print major version number for version-specific tests
 SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int AS server_version;
+SELECT substring(:'server_version', '\d+')::int > 10 AS server_version_above_ten;
 
 --
 -- Distributed Partitioned Table Creation Tests
@@ -339,7 +338,7 @@ CREATE INDEX partitioning_2009_index ON partitioning_test_2009(id);
 CREATE INDEX CONCURRENTLY partitioned_2010_index ON partitioning_test_2010(id);
 
 -- see index is created
-SELECT tablename, indexname FROM pg_indexes WHERE tablename LIKE 'partitioning_test%' ORDER BY indexname;
+SELECT tablename, indexname FROM pg_indexes WHERE tablename LIKE 'partitioning_test_%' ORDER BY indexname;
 
 -- test drop
 -- indexes created on parent table can only be dropped on parent table
@@ -360,7 +359,7 @@ FOR VALUES FROM (0) TO (10);
 CREATE INDEX non_distributed_partitioned_table_index ON non_distributed_partitioned_table(a);
 
 -- see index is created
-SELECT tablename, indexname FROM pg_indexes WHERE tablename LIKE 'non_distributed%' ORDER BY indexname;
+SELECT tablename, indexname FROM pg_indexes WHERE tablename LIKE 'non_distributed_partitioned_table_%' ORDER BY indexname;
 
 -- drop the index and see it is dropped
 DROP INDEX non_distributed_partitioned_table_index;

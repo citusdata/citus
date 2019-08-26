@@ -1695,13 +1695,8 @@ RunDistributedExecution(DistributedExecution *execution)
 			}
 
 			/* wait for I/O events */
-#if (PG_VERSION_NUM >= 100000)
 			eventCount = WaitEventSetWait(execution->waitEventSet, timeout, events,
 										  eventSetSize, WAIT_EVENT_CLIENT_READ);
-#else
-			eventCount = WaitEventSetWait(execution->waitEventSet, timeout, events,
-										  eventSetSize);
-#endif
 
 			/* process I/O events */
 			for (; eventIndex < eventCount; eventIndex++)
