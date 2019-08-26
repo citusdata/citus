@@ -10,26 +10,25 @@
 
 #include "postgres.h"
 
-#include "access/heapam.h"
 #include "access/genam.h"
-#include "access/skey.h"
+#include "access/heapam.h"
 #include "access/htup_details.h"
+#include "access/skey.h"
 #include "access/xact.h"
 #include "catalog/dependency.h"
 #include "catalog/namespace.h"
 #include "catalog/objectaddress.h"
 #include "catalog/pg_namespace.h"
-#include "nodes/makefuncs.h"
-#include "nodes/pg_list.h"
-#include "parser/parse_type.h"
-#include "utils/fmgroids.h"
-#include "utils/regproc.h"
-#include "utils/rel.h"
-#include "utils/builtins.h"
-
 #include "distributed/metadata/distobject.h"
 #include "distributed/metadata/pg_dist_object.h"
 #include "distributed/metadata_cache.h"
+#include "nodes/makefuncs.h"
+#include "nodes/pg_list.h"
+#include "parser/parse_type.h"
+#include "utils/builtins.h"
+#include "utils/fmgroids.h"
+#include "utils/regproc.h"
+#include "utils/rel.h"
 
 
 PG_FUNCTION_INFO_V1(master_unmark_object_distributed);

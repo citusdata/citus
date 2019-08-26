@@ -12,8 +12,6 @@
 
 #include "catalog/dependency.h"
 #include "catalog/objectaddress.h"
-#include "storage/lmgr.h"
-
 #include "distributed/commands.h"
 #include "distributed/connection_management.h"
 #include "distributed/metadata/dependency.h"
@@ -21,6 +19,7 @@
 #include "distributed/metadata_sync.h"
 #include "distributed/remote_commands.h"
 #include "distributed/worker_manager.h"
+#include "storage/lmgr.h"
 
 static List * GetDependencyCreateDDLCommands(const ObjectAddress *dependency);
 

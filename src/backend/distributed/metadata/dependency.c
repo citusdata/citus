@@ -17,12 +17,11 @@
 #include "catalog/dependency.h"
 #include "catalog/indexing.h"
 #include "catalog/pg_depend.h"
+#include "distributed/metadata/dependency.h"
+#include "distributed/metadata/distobject.h"
 #include "utils/fmgroids.h"
 #include "utils/hsearch.h"
 #include "utils/lsyscache.h"
-
-#include "distributed/metadata/dependency.h"
-#include "distributed/metadata/distobject.h"
 
 /*
  * ObjectAddressCollector keeps track of collected ObjectAddresses. This can be used
