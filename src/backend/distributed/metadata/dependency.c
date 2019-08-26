@@ -39,11 +39,14 @@ typedef struct ObjectAddressCollector
 } ObjectAddressCollector;
 
 
-static bool SupportedDependencyByCitus(const ObjectAddress *address);
+/* forward declarations for functions to interact with the ObjectAddressCollector */
+static void InitObjectAddressCollector(ObjectAddressCollector *collector);
+static void CollectObjectAddress(ObjectAddressCollector *collector, const
+								 ObjectAddress *address);
 static bool IsObjectAddressCollected(const ObjectAddress *findAddress,
 									 ObjectAddressCollector *collector);
-static bool IsObjectAddressOwnedByExtension(const ObjectAddress *target);
 
+/* forward declaration of functions that recurse pg_depend */
 static void recurse_pg_depend(const ObjectAddress *target,
 							  List * (*expand)(void *context, const
 											   ObjectAddress *target),
@@ -54,57 +57,9 @@ static bool FollowAllSupportedDependencies(void *context, Form_pg_depend pg_depe
 static bool FollowNewSupportedDependencies(void *context, Form_pg_depend pg_depend);
 static void ApplyAddToDependencyList(void *context, Form_pg_depend pg_depend);
 
-static void InitObjectAddressCollector(ObjectAddressCollector *collector);
-static void CollectObjectAddress(ObjectAddressCollector *collector, const
-								 ObjectAddress *address);
-
-/*
- * InitObjectAddressCollector takes a pointer to an already allocated (possibly stack)
- * ObjectAddressCollector struct. It makes sure this struct is ready to be used for object
- * collection.
- *
- * If an already initialized collector is passed the collector will be cleared from its
- * contents to be reused.
- */
-static void
-InitObjectAddressCollector(ObjectAddressCollector *collector)
-{
-	int hashFlags = 0;
-	HASHCTL info;
-
-	memset(&info, 0, sizeof(info));
-	info.keysize = sizeof(ObjectAddress);
-	info.entrysize = sizeof(ObjectAddress);
-	info.hcxt = CurrentMemoryContext;
-	hashFlags = (HASH_ELEM | HASH_CONTEXT | HASH_BLOBS);
-
-	collector->dependencySet = hash_create("dependency set", 128, &info, hashFlags);
-	collector->dependencyList = NULL;
-}
-
-
-/*
- * CollectObjectAddress adds an ObjectAddress to the collector.
- */
-static void
-CollectObjectAddress(ObjectAddressCollector *collector, const ObjectAddress *collect)
-{
-	ObjectAddress *address = NULL;
-	bool found = false;
-
-	/* add to set */
-	address = (ObjectAddress *) hash_search(collector->dependencySet, collect,
-											HASH_ENTER, &found);
-
-	if (!found)
-	{
-		/* copy object address in */
-		*address = *collect;
-	}
-
-	/* add to list*/
-	collector->dependencyList = lappend(collector->dependencyList, address);
-}
+/* forward declaration of support functions to decide what to follow */
+static bool SupportedDependencyByCitus(const ObjectAddress *address);
+static bool IsObjectAddressOwnedByExtension(const ObjectAddress *target);
 
 
 /*
@@ -126,90 +81,6 @@ GetDependenciesForObject(const ObjectAddress *target)
 					  &collector);
 
 	return collector.dependencyList;
-}
-
-
-/*
- * IsObjectAddressCollected is a helper function that can check if an ObjectAddress is
- * already in a (unsorted) list of ObjectAddresses
- */
-static bool
-IsObjectAddressCollected(const ObjectAddress *findAddress,
-						 ObjectAddressCollector *collector)
-{
-	bool found = false;
-
-	/* add to set */
-	hash_search(collector->dependencySet, findAddress, HASH_FIND, &found);
-
-	return found;
-}
-
-
-/*
- * SupportedDependencyByCitus returns whether citus has support to distribute the object
- * addressed.
- */
-static bool
-SupportedDependencyByCitus(const ObjectAddress *address)
-{
-	/*
-	 * looking at the type of a object to see if we know how to create the object on the
-	 * workers.
-	 */
-	switch (getObjectClass(address))
-	{
-		case OCLASS_SCHEMA:
-		{
-			return true;
-		}
-
-		default:
-		{
-			/* unsupported type */
-			return false;
-		}
-	}
-}
-
-
-/*
- * IsObjectAddressOwnedByExtension returns whether or not the object is owned by an
- * extension. It is assumed that an object having a dependency on an extension is created
- * by that extension and therefore owned by that extension.
- */
-static bool
-IsObjectAddressOwnedByExtension(const ObjectAddress *target)
-{
-	Relation depRel = NULL;
-	ScanKeyData key[2] = { 0 };
-	SysScanDesc depScan = NULL;
-	HeapTuple depTup = NULL;
-	bool result = false;
-
-	depRel = heap_open(DependRelationId, AccessShareLock);
-
-	/* scan pg_depend for classid = $1 AND objid = $2 using pg_depend_depender_index */
-	ScanKeyInit(&key[0], Anum_pg_depend_classid, BTEqualStrategyNumber, F_OIDEQ,
-				ObjectIdGetDatum(target->classId));
-	ScanKeyInit(&key[1], Anum_pg_depend_objid, BTEqualStrategyNumber, F_OIDEQ,
-				ObjectIdGetDatum(target->objectId));
-	depScan = systable_beginscan(depRel, DependDependerIndexId, true, NULL, 2, key);
-
-	while (HeapTupleIsValid(depTup = systable_getnext(depScan)))
-	{
-		Form_pg_depend pg_depend = (Form_pg_depend) GETSTRUCT(depTup);
-		if (pg_depend->deptype == DEPENDENCY_EXTENSION)
-		{
-			result = true;
-			break;
-		}
-	}
-
-	systable_endscan(depScan);
-	heap_close(depRel, AccessShareLock);
-
-	return result;
 }
 
 
@@ -356,6 +227,139 @@ recurse_pg_depend(const ObjectAddress *target,
 			apply(context, pg_depend);
 		}
 	}
+}
+
+
+/*
+ * InitObjectAddressCollector takes a pointer to an already allocated (possibly stack)
+ * ObjectAddressCollector struct. It makes sure this struct is ready to be used for object
+ * collection.
+ *
+ * If an already initialized collector is passed the collector will be cleared from its
+ * contents to be reused.
+ */
+static void
+InitObjectAddressCollector(ObjectAddressCollector *collector)
+{
+	int hashFlags = 0;
+	HASHCTL info;
+
+	memset(&info, 0, sizeof(info));
+	info.keysize = sizeof(ObjectAddress);
+	info.entrysize = sizeof(ObjectAddress);
+	info.hcxt = CurrentMemoryContext;
+	hashFlags = (HASH_ELEM | HASH_CONTEXT | HASH_BLOBS);
+
+	collector->dependencySet = hash_create("dependency set", 128, &info, hashFlags);
+	collector->dependencyList = NULL;
+}
+
+
+/*
+ * CollectObjectAddress adds an ObjectAddress to the collector.
+ */
+static void
+CollectObjectAddress(ObjectAddressCollector *collector, const ObjectAddress *collect)
+{
+	ObjectAddress *address = NULL;
+	bool found = false;
+
+	/* add to set */
+	address = (ObjectAddress *) hash_search(collector->dependencySet, collect,
+											HASH_ENTER, &found);
+
+	if (!found)
+	{
+		/* copy object address in */
+		*address = *collect;
+	}
+
+	/* add to list*/
+	collector->dependencyList = lappend(collector->dependencyList, address);
+}
+
+
+/*
+ * IsObjectAddressCollected is a helper function that can check if an ObjectAddress is
+ * already in a (unsorted) list of ObjectAddresses
+ */
+static bool
+IsObjectAddressCollected(const ObjectAddress *findAddress,
+						 ObjectAddressCollector *collector)
+{
+	bool found = false;
+
+	/* add to set */
+	hash_search(collector->dependencySet, findAddress, HASH_FIND, &found);
+
+	return found;
+}
+
+
+/*
+ * SupportedDependencyByCitus returns whether citus has support to distribute the object
+ * addressed.
+ */
+static bool
+SupportedDependencyByCitus(const ObjectAddress *address)
+{
+	/*
+	 * looking at the type of a object to see if we know how to create the object on the
+	 * workers.
+	 */
+	switch (getObjectClass(address))
+	{
+		case OCLASS_SCHEMA:
+		{
+			return true;
+		}
+
+		default:
+		{
+			/* unsupported type */
+			return false;
+		}
+	}
+}
+
+
+/*
+ * IsObjectAddressOwnedByExtension returns whether or not the object is owned by an
+ * extension. It is assumed that an object having a dependency on an extension is created
+ * by that extension and therefore owned by that extension.
+ */
+static bool
+IsObjectAddressOwnedByExtension(const ObjectAddress *target)
+{
+	Relation depRel = NULL;
+	ScanKeyData key[2] = { 0 };
+	SysScanDesc depScan = NULL;
+	HeapTuple depTup = NULL;
+	bool result = false;
+
+	depRel = heap_open(DependRelationId, AccessShareLock);
+
+	/* scan pg_depend for classid = $1 AND objid = $2 using pg_depend_depender_index */
+	ScanKeyInit(&key[0], Anum_pg_depend_classid, BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(target->classId));
+	ScanKeyInit(&key[1], Anum_pg_depend_objid, BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(target->objectId));
+	depScan = systable_beginscan(depRel, DependDependerIndexId, true, NULL, 2, key);
+
+	while (HeapTupleIsValid(depTup = systable_getnext(depScan)))
+	{
+		Form_pg_depend pg_depend = (Form_pg_depend) GETSTRUCT(depTup);
+		if (pg_depend->deptype == DEPENDENCY_EXTENSION)
+		{
+			result = true;
+			break;
+		}
+	}
+
+	systable_endscan(depScan);
+	heap_close(depRel, AccessShareLock);
+
+	return result;
 }
 
 
