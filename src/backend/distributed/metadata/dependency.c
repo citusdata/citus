@@ -50,12 +50,6 @@ static void recurse_pg_depend(const ObjectAddress *target,
 							  bool (*follow)(void *context, Form_pg_depend row),
 							  void (*apply)(void *context, Form_pg_depend row),
 							  void *context);
-static void recurse_pg_depend_iterate(Form_pg_depend pg_depend,
-									  List * (*expand)(void *context, const
-													   ObjectAddress *target),
-									  bool (*follow)(void *context, Form_pg_depend row),
-									  void (*apply)(void *context, Form_pg_depend row),
-									  void *context);
 static bool FollowAllSupportedDependencies(void *context, Form_pg_depend pg_depend);
 static bool FollowNewSupportedDependencies(void *context, Form_pg_depend pg_depend);
 static void ApplyAddToDependencyList(void *context, Form_pg_depend pg_depend);
@@ -296,25 +290,11 @@ recurse_pg_depend(const ObjectAddress *target,
 	ScanKeyData key[2] = { 0 };
 	SysScanDesc depScan = NULL;
 	HeapTuple depTup = NULL;
+	List *pgDependEntries = NIL;
+	ListCell *pgDependCell = NULL;
 
 	/********************
-	* first apply on expanded entries of pg_depend
-	********************/
-	if (expand != NULL)
-	{
-		List *expandedEntries = NIL;
-		ListCell *expandedEntryCell = NULL;
-
-		expandedEntries = expand(context, target);
-		foreach(expandedEntryCell, expandedEntries)
-		{
-			Form_pg_depend pg_depend = (Form_pg_depend) lfirst(expandedEntryCell);
-			recurse_pg_depend_iterate(pg_depend, expand, follow, apply, context);
-		}
-	}
-
-	/********************
-	* secondly iterate the actual pg_depend catalog
+	* iterate the actual pg_depend catalog
 	********************/
 	depRel = heap_open(DependRelationId, AccessShareLock);
 
@@ -328,47 +308,53 @@ recurse_pg_depend(const ObjectAddress *target,
 	while (HeapTupleIsValid(depTup = systable_getnext(depScan)))
 	{
 		Form_pg_depend pg_depend = (Form_pg_depend) GETSTRUCT(depTup);
-		recurse_pg_depend_iterate(pg_depend, expand, follow, apply, context);
+		Form_pg_depend pg_depend_copy = palloc0(sizeof(FormData_pg_depend));
+
+		*pg_depend_copy = *pg_depend;
+
+		pgDependEntries = lappend(pgDependEntries, pg_depend_copy);
 	}
 
 	systable_endscan(depScan);
 	relation_close(depRel, AccessShareLock);
-}
 
-
-/*
- * recurse_pg_depend_iterate is called for every real and expanded pg_depend entries for
- * recurse_pg_depend. It calls follow for the entry and if it should follow it recurses
- * back to recurse_pg_depend with a new target, all other arguments are passed verbatim.
- *
- * after we have recursed we call the apply function
- */
-static void
-recurse_pg_depend_iterate(Form_pg_depend pg_depend,
-						  List * (*expand)(void *context, const ObjectAddress *target),
-						  bool (*follow)(void *context, Form_pg_depend row),
-						  void (*apply)(void *context, Form_pg_depend row),
-						  void *context)
-{
-	ObjectAddress address = { 0 };
-	ObjectAddressSet(address, pg_depend->refclassid, pg_depend->refobjid);
-
-	if (follow == NULL || !follow(context, pg_depend))
+	/********************
+	* concat expended entries if applicable
+	********************/
+	if (expand != NULL)
 	{
-		/* skip all pg_depend entries the user didn't want to follow */
-		return;
+		List *expandedEntries = NIL;
+
+		expandedEntries = expand(context, target);
+		pgDependEntries = list_concat(pgDependEntries, expandedEntries);
 	}
 
-	/*
-	 * recurse depth first, this makes sure we call apply for the deepest dependency
-	 * first.
-	 */
-	recurse_pg_depend(&address, expand, follow, apply, context);
-
-	/* now apply changes for current entry */
-	if (apply != NULL)
+	/********************
+	* Iterate all entries and recurse depth first
+	********************/
+	foreach(pgDependCell, pgDependEntries)
 	{
-		apply(context, pg_depend);
+		Form_pg_depend pg_depend = (Form_pg_depend) lfirst(pgDependCell);
+		ObjectAddress address = { 0 };
+		ObjectAddressSet(address, pg_depend->refclassid, pg_depend->refobjid);
+
+		if (follow == NULL || !follow(context, pg_depend))
+		{
+			/* skip all pg_depend entries the user didn't want to follow */
+			return;
+		}
+
+		/*
+		 * recurse depth first, this makes sure we call apply for the deepest dependency
+		 * first.
+		 */
+		recurse_pg_depend(&address, expand, follow, apply, context);
+
+		/* now apply changes for current entry */
+		if (apply != NULL)
+		{
+			apply(context, pg_depend);
+		}
 	}
 }
 
