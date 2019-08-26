@@ -75,8 +75,6 @@ EnsureDependenciesExistsOnAllNodes(const ObjectAddress *target)
 	}
 
 	/*
-	 * collect and connect to all applicable nodes
-	 *
 	 * Make sure that no new nodes are added after this point until the end of the
 	 * transaction by taking a RowShareLock on pg_dist_node, which conflicts with the
 	 * ExclusiveLock taken by master_add_node.
@@ -85,6 +83,26 @@ EnsureDependenciesExistsOnAllNodes(const ObjectAddress *target)
 	 * the pg_dist_object record becomes visible.
 	 */
 	LockRelationOid(DistNodeRelationId(), RowShareLock);
+
+	/*
+	 * right after we acquired the lock we mark our objects as distributed, these changes
+	 * will not become visible before we have successfully created all the objects on our
+	 * workers.
+	 *
+	 * It is possible to create distributed tables which depend on other dependencies
+	 * before any node is in the cluster. If we would wait till we actually had connected
+	 * to the nodes before marking the objects as distributed these objects would never be
+	 * created on the workers when they get added, causing shards to fail to create.
+	 */
+	foreach(dependencyCell, dependencies)
+	{
+		ObjectAddress *dependency = (ObjectAddress *) lfirst(dependencyCell);
+		MarkObjectDistributed(dependency);
+	}
+
+	/*
+	 * collect and connect to all applicable nodes
+	 */
 	workerNodeList = ActivePrimaryNodeList();
 	if (list_length(workerNodeList) <= 0)
 	{
@@ -113,15 +131,6 @@ EnsureDependenciesExistsOnAllNodes(const ObjectAddress *target)
 	{
 		MultiConnection *connection = (MultiConnection *) lfirst(connectionCell);
 		ExecuteCriticalRemoteCommandList(connection, ddlCommands);
-	}
-
-	/*
-	 * mark all objects as distributed
-	 */
-	foreach(dependencyCell, dependencies)
-	{
-		ObjectAddress *dependency = (ObjectAddress *) lfirst(dependencyCell);
-		MarkObjectDistributed(dependency);
 	}
 
 	/*
