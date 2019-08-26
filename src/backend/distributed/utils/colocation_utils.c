@@ -116,9 +116,6 @@ get_colocated_shard_array(PG_FUNCTION_ARGS)
 	Oid arrayTypeId = OIDOID;
 	int colocatedShardIndex = 0;
 
-	/* sort to get consistent output */
-	colocatedShardList = SortList(colocatedShardList, CompareShardIntervalsById);
-
 	foreach(colocatedShardCell, colocatedShardList)
 	{
 		ShardInterval *colocatedShardInterval = (ShardInterval *) lfirst(
@@ -918,7 +915,7 @@ ColocatedShardIntervalList(ShardInterval *shardInterval)
 
 	Assert(list_length(colocatedTableList) == list_length(colocatedShardList));
 
-	return colocatedShardList;
+	return SortList(colocatedShardList, CompareShardIntervalsById);
 }
 
 
