@@ -6,7 +6,7 @@
 # into the SCM.
 
 AC_INIT([Citus], [8.4devel])
-AC_COPYRIGHT([Copyright (c) 2012-2017, Citus Data, Inc.])
+AC_COPYRIGHT([Copyright (c) 2012-2019, Citus Data, Inc.])
 
 # we'll need sed and awk for some of the version commands
 AC_PROG_SED

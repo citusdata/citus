@@ -5,7 +5,7 @@
  * Header and type declarations for coordinating execution of tasks and data
  * source transfers on worker nodes.
  *
- * Copyright (c) 2012-2016, Citus Data, Inc.
+ * Copyright (c) 2012-2019, Citus Data, Inc.
  *
  * $Id$
  *

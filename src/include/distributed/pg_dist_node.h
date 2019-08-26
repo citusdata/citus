@@ -3,7 +3,7 @@
  * pg_dist_node.h
  *	  definition of the relation that holds the nodes on the cluster (pg_dist_node).
  *
- * Copyright (c) 2012-2016, Citus Data, Inc.
+ * Copyright (c) 2012-2019, Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */

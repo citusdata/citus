@@ -5,7 +5,7 @@
  * Routines for handling DDL statements that relate to relay files. These
  * routines extend relation, index and constraint names in utility commands.
  *
- * Copyright (c) 2012-2016, Citus Data, Inc.
+ * Copyright (c) 2012-2019, Citus Data, Inc.
  *
  * $Id$
  *
