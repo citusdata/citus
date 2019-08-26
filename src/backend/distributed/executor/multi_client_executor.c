@@ -5,7 +5,7 @@
  * This file contains the libpq-specific parts of executing queries on remote
  * nodes.
  *
- * Copyright (c) 2012-2016, Citus Data, Inc.
+ * Copyright (c) 2012-2019, Citus Data, Inc.
  *
  * $Id$
  *

@@ -4,7 +4,7 @@
  * Implements the functions for hiding shards on the Citus MX
  * worker (data) nodes.
  *
- * Copyright (c) 2012-2018, Citus Data, Inc.
+ * Copyright (c) 2012-2019, Citus Data, Inc.
  */
 
 #include "postgres.h"

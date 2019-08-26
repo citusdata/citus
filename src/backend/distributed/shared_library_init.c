@@ -3,7 +3,7 @@
  * shared_library_init.c
  *	  Functionality related to the initialization of the Citus extension.
  *
- * Copyright (c) 2012-2016, Citus Data, Inc.
+ * Copyright (c) 2012-2019, Citus Data, Inc.
  *-------------------------------------------------------------------------
  */
 

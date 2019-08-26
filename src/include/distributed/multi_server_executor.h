@@ -4,7 +4,7 @@
  *	  Type and function declarations for executing remote jobs from a backend;
  *	  the ensemble of these jobs form the distributed execution plan.
  *
- * Copyright (c) 2012-2016, Citus Data, Inc.
+ * Copyright (c) 2012-2019, Citus Data, Inc.
  *
  * $Id$
  *

@@ -4,7 +4,7 @@
  *	  Type declarations for multi-relational algebra operators, and function
  *	  declarations for building logical plans over distributed relations.
  *
- * Copyright (c) 2012-2016, Citus Data, Inc.
+ * Copyright (c) 2012-2019, Citus Data, Inc.
  *
  * $Id$
  *

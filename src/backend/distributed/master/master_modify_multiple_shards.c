@@ -9,7 +9,7 @@
  * one-phase or two-phase fashion, depending on the citus.multi_shard_commit_protocol
  * setting.
  *
- * Copyright (c) 2012-2016, Citus Data, Inc.
+ * Copyright (c) 2012-2019, Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */

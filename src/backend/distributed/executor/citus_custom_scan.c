@@ -4,7 +4,7 @@
  *
  * Definitions of custom scan methods for all executor types.
  *
- * Copyright (c) 2012-2017, Citus Data, Inc.
+ * Copyright (c) 2012-2019, Citus Data, Inc.
  *-------------------------------------------------------------------------
  */
 #include "postgres.h"

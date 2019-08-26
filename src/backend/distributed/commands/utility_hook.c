@@ -21,7 +21,7 @@
  * ProcessUtility, which will plan the query via the distributed planner
  * hook.
  *
- * Copyright (c) 2012-2018, Citus Data, Inc.
+ * Copyright (c) 2012-2019, Citus Data, Inc.
  *-------------------------------------------------------------------------
  */
 

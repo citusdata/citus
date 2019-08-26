@@ -3,7 +3,7 @@
  * query_stats.c
  *    Statement-level statistics for distributed queries.
  *
- * Copyright (c) 2012-2018, Citus Data, Inc.
+ * Copyright (c) 2012-2019, Citus Data, Inc.
  *-------------------------------------------------------------------------
  */
 
