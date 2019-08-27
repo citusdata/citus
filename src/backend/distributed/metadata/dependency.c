@@ -348,6 +348,20 @@ SupportedDependencyByCitus(const ObjectAddress *address)
 			break;
 		}
 
+		case OCLASS_CLASS:
+		{
+			/*
+			 * composite types have a reference to a relation of composite type, we need
+			 * to follow those to get the dependencies of type fields.
+			 */
+			if (get_rel_relkind(address->objectId) == RELKIND_COMPOSITE_TYPE)
+			{
+				return true;
+			}
+
+			return false;
+		}
+
 		default:
 		{
 			/* unsupported type */

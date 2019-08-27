@@ -104,7 +104,7 @@ EnsureDependenciesExistsOnAllNodes(const ObjectAddress *target)
 	 * to the nodes before marking the objects as distributed these objects would never be
 	 * created on the workers when they get added, causing shards to fail to create.
 	 */
-	foreach(dependencyCell, dependencies)
+	foreach(dependencyCell, dependenciesWithCommands)
 	{
 		ObjectAddress *dependency = (ObjectAddress *) lfirst(dependencyCell);
 		MarkObjectDistributed(dependency);
