@@ -20,11 +20,6 @@
 ReturnSetInfo *
 CheckTuplestoreReturn(FunctionCallInfo fcinfo, TupleDesc *tupdesc)
 {
-	/* IMPORTANT can this be undefined behaviour. Casting to ReturnSetInfo before
-	 * we checked the type with IsA?
-	 * In case the type actual type is more strictly aligned than ReturnSetInfo
-	 * it is it seems:
-	 * https://wiki.sei.cmu.edu/confluence/display/c/EXP36-C.+Do+not+cast+pointers+into+more+strictly+aligned+pointer+types */
 	ReturnSetInfo *returnSetInfo = (ReturnSetInfo *) fcinfo->resultinfo;
 
 	/* check to see if caller supports us returning a tuplestore */
