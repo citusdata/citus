@@ -25,6 +25,7 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/remote_commands.h"
 #include "distributed/transaction_identifier.h"
+#include "distributed/tuplestore.h"
 #include "nodes/execnodes.h"
 #include "postmaster/autovacuum.h" /* to access autovacuum_max_workers */
 #include "storage/ipc.h"
@@ -62,7 +63,6 @@ typedef struct BackendManagementShmemData
 
 static void StoreAllActiveTransactions(Tuplestorestate *tupleStore, TupleDesc
 									   tupleDescriptor);
-static void CheckReturnSetInfo(ReturnSetInfo *returnSetInfo);
 
 static shmem_startup_hook_type prev_shmem_startup_hook = NULL;
 static BackendManagementShmemData *backendManagementShmemData = NULL;
@@ -211,11 +211,8 @@ get_current_transaction_id(PG_FUNCTION_ARGS)
 Datum
 get_global_active_transactions(PG_FUNCTION_ARGS)
 {
-	ReturnSetInfo *returnSetInfo = (ReturnSetInfo *) fcinfo->resultinfo;
 	TupleDesc tupleDescriptor = NULL;
 	Tuplestorestate *tupleStore = NULL;
-	MemoryContext perQueryContext = NULL;
-	MemoryContext oldContext = NULL;
 	List *workerNodeList = ActivePrimaryNodeList();
 	ListCell *workerNodeCell = NULL;
 	List *connectionList = NIL;
@@ -223,26 +220,9 @@ get_global_active_transactions(PG_FUNCTION_ARGS)
 	StringInfo queryToSend = makeStringInfo();
 
 	CheckCitusVersion(ERROR);
-	CheckReturnSetInfo(returnSetInfo);
-
-	/* build a tuple descriptor for our result type */
-	if (get_call_result_type(fcinfo, NULL, &tupleDescriptor) != TYPEFUNC_COMPOSITE)
-	{
-		elog(ERROR, "return type must be a row type");
-	}
+	tupleStore = SetupTuplestore(fcinfo, &tupleDescriptor);
 
 	appendStringInfo(queryToSend, GET_ACTIVE_TRANSACTION_QUERY);
-
-	perQueryContext = returnSetInfo->econtext->ecxt_per_query_memory;
-
-	oldContext = MemoryContextSwitchTo(perQueryContext);
-
-	tupleStore = tuplestore_begin_heap(true, false, work_mem);
-	returnSetInfo->returnMode = SFRM_Materialize;
-	returnSetInfo->setResult = tupleStore;
-	returnSetInfo->setDesc = tupleDescriptor;
-
-	MemoryContextSwitchTo(oldContext);
 
 	/* add active transactions for local node */
 	StoreAllActiveTransactions(tupleStore, tupleDescriptor);
@@ -350,31 +330,12 @@ get_global_active_transactions(PG_FUNCTION_ARGS)
 Datum
 get_all_active_transactions(PG_FUNCTION_ARGS)
 {
-	ReturnSetInfo *returnSetInfo = (ReturnSetInfo *) fcinfo->resultinfo;
 	TupleDesc tupleDescriptor = NULL;
 	Tuplestorestate *tupleStore = NULL;
-	MemoryContext perQueryContext = NULL;
-	MemoryContext oldContext = NULL;
 
 	CheckCitusVersion(ERROR);
-	CheckReturnSetInfo(returnSetInfo);
+	tupleStore = SetupTuplestore(fcinfo, &tupleDescriptor);
 
-	/* build a tuple descriptor for our result type */
-	if (get_call_result_type(fcinfo, NULL, &tupleDescriptor) != TYPEFUNC_COMPOSITE)
-	{
-		elog(ERROR, "return type must be a row type");
-	}
-
-	perQueryContext = returnSetInfo->econtext->ecxt_per_query_memory;
-
-	oldContext = MemoryContextSwitchTo(perQueryContext);
-
-	tupleStore = tuplestore_begin_heap(true, false, work_mem);
-	returnSetInfo->returnMode = SFRM_Materialize;
-	returnSetInfo->setResult = tupleStore;
-	returnSetInfo->setDesc = tupleDescriptor;
-
-	MemoryContextSwitchTo(oldContext);
 	StoreAllActiveTransactions(tupleStore, tupleDescriptor);
 
 	/* clean up and return the tuplestore */
@@ -483,32 +444,6 @@ StoreAllActiveTransactions(Tuplestorestate *tupleStore, TupleDesc tupleDescripto
 	}
 
 	UnlockBackendSharedMemory();
-}
-
-
-/*
- * CheckReturnSetInfo checks whether the defined given returnSetInfo is
- * proper for returning tuplestore.
- */
-static void
-CheckReturnSetInfo(ReturnSetInfo *returnSetInfo)
-{
-	/* check to see if caller supports us returning a tuplestore */
-	if (returnSetInfo == NULL || !IsA(returnSetInfo, ReturnSetInfo))
-	{
-		ereport(ERROR,
-				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg("set-valued function called in context " \
-						"that cannot accept a set")));
-	}
-
-	if (!(returnSetInfo->allowedModes & SFRM_Materialize))
-	{
-		ereport(ERROR,
-				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg("materialize mode required, but it is not " \
-						"allowed in this context")));
-	}
 }
 
 

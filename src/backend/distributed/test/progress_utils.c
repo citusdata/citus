@@ -19,6 +19,7 @@
 #include <unistd.h>
 
 #include "distributed/multi_progress.h"
+#include "distributed/tuplestore.h"
 #include "nodes/execnodes.h"
 #include "utils/tuplestore.h"
 
@@ -85,40 +86,9 @@ show_progress(PG_FUNCTION_ARGS)
 	uint64 magicNumber = PG_GETARG_INT64(0);
 	List *attachedDSMSegments = NIL;
 	List *monitorList = ProgressMonitorList(magicNumber, &attachedDSMSegments);
-	Tuplestorestate *tupstore = NULL;
-	TupleDesc tupdesc;
-	MemoryContext perQueryContext;
-	MemoryContext currentContext;
-	ReturnSetInfo *resultSet = (ReturnSetInfo *) fcinfo->resultinfo;
 	ListCell *monitorCell = NULL;
-
-	/* check to see if caller supports us returning a tuplestore */
-	if (resultSet == NULL || !IsA(resultSet, ReturnSetInfo))
-	{
-		ereport(ERROR,
-				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg("set-valued function called in context that cannot " \
-						"accept a set")));
-	}
-	if (!(resultSet->allowedModes & SFRM_Materialize))
-	{
-		ereport(ERROR,
-				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg("materialize mode required, but it is not " \
-						"allowed in this context")));
-	}
-	if (get_call_result_type(fcinfo, NULL, &tupdesc) != TYPEFUNC_COMPOSITE)
-	{
-		elog(ERROR, "return type must be a row type");
-	}
-
-	perQueryContext = resultSet->econtext->ecxt_per_query_memory;
-	currentContext = MemoryContextSwitchTo(perQueryContext);
-	tupstore = tuplestore_begin_heap(true, false, work_mem);
-	resultSet->returnMode = SFRM_Materialize;
-	resultSet->setResult = tupstore;
-	resultSet->setDesc = tupdesc;
-	MemoryContextSwitchTo(currentContext);
+	TupleDesc tupdesc;
+	Tuplestorestate *tupstore = SetupTuplestore(fcinfo, &tupdesc);
 
 	foreach(monitorCell, monitorList)
 	{
