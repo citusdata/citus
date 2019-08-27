@@ -67,8 +67,27 @@ ERROR:  column name array size: 2 and type array size: 3 do not match
 SELECT worker_merge_files_into_table(:JobId, :TaskId,
        				     ARRAY['textcolumn', 'binarycolumn'],
 				     ARRAY['text', 'integer']);
-ERROR:  invalid input syntax for integer: "\x0b50"
+ERROR:  invalid input syntax for type integer: "\x0b50"
 CONTEXT:  COPY task_101108, line 1, column binarycolumn: "\x0b50"
+-- Check that we fail to merge when ids are wrong
+SELECT worker_merge_files_into_table(-1, :TaskId,
+       				     ARRAY['textcolumn', 'binarycolumn'],
+				     ARRAY['text', 'bytea']);
+ERROR:  could not open directory "base/pgsql_job_cache/job_18446744073709551615/task_101108": No such file or directory
+SELECT worker_merge_files_into_table(:JobId, -1,
+       				     ARRAY['textcolumn', 'binarycolumn'],
+				     ARRAY['text', 'bytea']);
+ERROR:  could not open directory "base/pgsql_job_cache/job_201010/task_4294967295": No such file or directory
+SELECT worker_merge_files_and_run_query(-1, :TaskId,
+    'CREATE TABLE task_000001_merge(merge_column_0 int)',
+    'CREATE TABLE task_000001 (a) AS SELECT sum(merge_column_0) FROM task_000001_merge'
+);
+ERROR:  could not open directory "base/pgsql_job_cache/job_18446744073709551615/task_101108": No such file or directory
+SELECT worker_merge_files_and_run_query(:JobId, -1,
+    'CREATE TABLE task_000001_merge(merge_column_0 int)',
+    'CREATE TABLE task_000001 (a) AS SELECT sum(merge_column_0) FROM task_000001_merge'
+);
+ERROR:  could not open directory "base/pgsql_job_cache/job_201010/task_4294967295": No such file or directory
 -- Finally, merge partitioned files using valid arguments
 SELECT worker_merge_files_into_table(:JobId, :TaskId,
        				     ARRAY['textcolumn', 'binarycolumn'],
