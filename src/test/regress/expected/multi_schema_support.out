@@ -448,6 +448,13 @@ CREATE TABLE test_schema_support.nation_hash_collation(
     n_regionkey integer not null,
     n_comment varchar(152)
 );
+SELECT master_get_table_ddl_events('test_schema_support.nation_hash_collation') ORDER BY 1;
+                                                                                               master_get_table_ddl_events                                                                                                
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ ALTER TABLE test_schema_support.nation_hash_collation OWNER TO postgres
+ CREATE TABLE test_schema_support.nation_hash_collation (n_nationkey integer NOT NULL, n_name character(25) NOT NULL COLLATE test_schema_support.english, n_regionkey integer NOT NULL, n_comment character varying(152))
+(2 rows)
+
 SELECT master_create_distributed_table('test_schema_support.nation_hash_collation', 'n_nationkey', 'hash');
  master_create_distributed_table 
 ---------------------------------
