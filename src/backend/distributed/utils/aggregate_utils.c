@@ -4,10 +4,12 @@
 #include "catalog/pg_aggregate.h"
 #include "catalog/pg_proc.h"
 #include "catalog/pg_type.h"
+#include "distributed/version_compat.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
 #include "fmgr.h"
+#include "pg_config_manual.h"
 
 PG_FUNCTION_INFO_V1(citus_stype_serialize);
 PG_FUNCTION_INFO_V1(citus_stype_deserialize);
@@ -105,8 +107,7 @@ InitializeStypeBox(StypeBox *box, HeapTuple aggTuple, Oid transtype)
 Datum
 citus_stype_serialize(PG_FUNCTION_ARGS)
 {
-	FunctionCallInfoData inner_fcinfodata;
-	FunctionCallInfo inner_fcinfo = &inner_fcinfodata;
+	LOCAL_FCINFO(inner_fcinfo, 1);
 	FmgrInfo infodata;
 	FmgrInfo *info = &infodata;
 	StypeBox *box = (StypeBox *) PG_GETARG_POINTER(0);
@@ -150,8 +151,7 @@ citus_stype_serialize(PG_FUNCTION_ARGS)
 	{
 		InitFunctionCallInfoData(*inner_fcinfo, info, 1, fcinfo->fncollation,
 								 fcinfo->context, fcinfo->resultinfo);
-		inner_fcinfo->arg[0] = box->value;
-		inner_fcinfo->argnull[0] = box->value_null;
+		fcSetArgExt(inner_fcinfo, 0, box->value, box->value_null);
 		result = FunctionCallInvoke(inner_fcinfo);
 		if (inner_fcinfo->isnull)
 		{
@@ -229,21 +229,19 @@ citus_stype_deserialize(PG_FUNCTION_ARGS)
 	if (deserial != InvalidOid)
 	{
 		FmgrInfo fdeserialinfo;
-		FunctionCallInfoData fdeserial_callinfodata;
+		LOCAL_FCINFO(fdeserial_callinfo, 2);
 
 		inner_bytes = PG_GETARG_BYTEA_P_SLICE(0, sizeof(Oid), VARSIZE(bytes) -
 											  sizeof(Oid));
 		elog(WARNING, "deserial %d", VARSIZE(inner_bytes));
 		fmgr_info(deserial, &fdeserialinfo);
-		InitFunctionCallInfoData(fdeserial_callinfodata, &fdeserialinfo, 2,
+		InitFunctionCallInfoData(*fdeserial_callinfo, &fdeserialinfo, 2,
 								 fcinfo->fncollation, fcinfo->context,
 								 fcinfo->resultinfo);
-		fdeserial_callinfodata.arg[0] = PointerGetDatum(inner_bytes);
-		fdeserial_callinfodata.argnull[0] = false;
-		fdeserial_callinfodata.arg[1] = PG_GETARG_DATUM(1);
-		fdeserial_callinfodata.argnull[1] = false;
-		box->value = FunctionCallInvoke(&fdeserial_callinfodata);
-		box->value_null = fdeserial_callinfodata.isnull;
+		fcSetArg(fdeserial_callinfo, 0, PointerGetDatum(inner_bytes));
+		fcSetArg(fdeserial_callinfo, 1, PG_GETARG_DATUM(1));
+		box->value = FunctionCallInvoke(fdeserial_callinfo);
+		box->value_null = fdeserial_callinfo->isnull;
 	}
 
 	/* TODO Correct null handling */
@@ -281,8 +279,7 @@ citus_stype_combine(PG_FUNCTION_ARGS)
 {
 	StypeBox *box1 = NULL;
 	StypeBox *box2 = NULL;
-	FunctionCallInfoData inner_fcinfodata;
-	FunctionCallInfo inner_fcinfo = &inner_fcinfodata;
+	LOCAL_FCINFO(inner_fcinfo, 2);
 	FmgrInfo info;
 	Oid combine;
 	HeapTuple aggtuple;
@@ -336,10 +333,8 @@ citus_stype_combine(PG_FUNCTION_ARGS)
 
 	InitFunctionCallInfoData(*inner_fcinfo, &info, 2, fcinfo->fncollation,
 							 fcinfo->context, fcinfo->resultinfo);
-	inner_fcinfo->arg[0] = box1->value;
-	inner_fcinfo->argnull[0] = box1->value_null;
-	inner_fcinfo->arg[1] = box2->value;
-	inner_fcinfo->argnull[1] = box2->value_null;
+	fcSetArgExt(inner_fcinfo, 0, box1->value, box1->value_null);
+	fcSetArgExt(inner_fcinfo, 1, box2->value, box2->value_null);
 
 	/* TODO Deal with memory management juggling (see executor/nodeAgg) */
 	box1->value = FunctionCallInvoke(inner_fcinfo);
@@ -362,8 +357,7 @@ worker_partial_agg_sfunc(PG_FUNCTION_ARGS)
 	Form_pg_aggregate aggform;
 	HeapTuple aggtuple;
 	Oid aggsfunc;
-	FunctionCallInfoData inner_fcinfodata;
-	FunctionCallInfo inner_fcinfo = &inner_fcinfodata;
+	LOCAL_FCINFO(inner_fcinfo, FUNC_MAX_ARGS);
 	FmgrInfo info;
 	int i;
 	bool is_initial_call = PG_ARGISNULL(0);
@@ -411,13 +405,13 @@ worker_partial_agg_sfunc(PG_FUNCTION_ARGS)
 		}
 	}
 
-	/* Deal with memory management juggling (see executor/nodeAgg) */
-	inner_fcinfo->arg[0] = box->value;
-	inner_fcinfo->argnull[0] = box->value_null;
-	memcpy(&inner_fcinfo->arg[1], &fcinfo->arg[2], sizeof(Datum) * (inner_fcinfo->nargs -
-																	1));
-	memcpy(&inner_fcinfo->argnull[1], &fcinfo->argnull[2], sizeof(bool) *
-		   (inner_fcinfo->nargs - 1));
+	/* TODO Deal with memory management juggling (see executor/nodeAgg) */
+	fcSetArgExt(inner_fcinfo, 0, box->value, box->value_null);
+	for (i = 1; i < inner_fcinfo->nargs; i++)
+	{
+		fcSetArgExt(inner_fcinfo, i, fcGetArgValue(fcinfo, i + 1), fcGetArgNull(fcinfo,
+																				i + 1));
+	}
 	box->value = FunctionCallInvoke(inner_fcinfo);
 	box->value_null = inner_fcinfo->isnull;
 
@@ -434,8 +428,7 @@ worker_partial_agg_sfunc(PG_FUNCTION_ARGS)
 Datum
 worker_partial_agg_ffunc(PG_FUNCTION_ARGS)
 {
-	FunctionCallInfoData inner_fcinfodata;
-	FunctionCallInfo inner_fcinfo = &inner_fcinfodata;
+	LOCAL_FCINFO(inner_fcinfo, 1);
 	FmgrInfo info;
 	StypeBox *box = (StypeBox *) PG_GETARG_POINTER(0);
 	HeapTuple aggtuple;
@@ -477,8 +470,7 @@ worker_partial_agg_ffunc(PG_FUNCTION_ARGS)
 	}
 	InitFunctionCallInfoData(*inner_fcinfo, &info, 1, fcinfo->fncollation,
 							 fcinfo->context, fcinfo->resultinfo);
-	inner_fcinfo->arg[0] = box->value;
-	inner_fcinfo->argnull[0] = box->value_null;
+	fcSetArgExt(inner_fcinfo, 0, box->value, box->value_null);
 	result = FunctionCallInvoke(inner_fcinfo);
 	elog(WARNING, "& done %d", VARSIZE(DatumGetByteaPP(result)));
 	if (inner_fcinfo->isnull)
@@ -498,8 +490,7 @@ worker_partial_agg_ffunc(PG_FUNCTION_ARGS)
 Datum
 coord_combine_agg_sfunc(PG_FUNCTION_ARGS)
 {
-	FunctionCallInfoData inner_fcinfodata;
-	FunctionCallInfo inner_fcinfo = &inner_fcinfodata;
+	LOCAL_FCINFO(inner_fcinfo, 3);
 	FmgrInfo info;
 	HeapTuple aggtuple;
 	HeapTuple transtypetuple;
@@ -544,10 +535,9 @@ coord_combine_agg_sfunc(PG_FUNCTION_ARGS)
 		{
 			InitFunctionCallInfoData(*inner_fcinfo, &info, 2, fcinfo->fncollation,
 									 fcinfo->context, fcinfo->resultinfo);
-			inner_fcinfo->arg[0] = value_null ? (Datum) 0 : PG_GETARG_DATUM(2);
-			inner_fcinfo->arg[1] = (Datum) 0;
-			inner_fcinfo->argnull[0] = value_null;
-			inner_fcinfo->argnull[1] = true;
+			fcSetArgExt(inner_fcinfo, 0, value_null ? (Datum) 0 : PG_GETARG_DATUM(2),
+						value_null);
+			fcSetArgNull(inner_fcinfo, 1);
 			value = FunctionCallInvoke(inner_fcinfo);
 			value_null = inner_fcinfo->isnull;
 		}
@@ -579,12 +569,10 @@ coord_combine_agg_sfunc(PG_FUNCTION_ARGS)
 
 			InitFunctionCallInfoData(*inner_fcinfo, &info, 3, fcinfo->fncollation,
 									 fcinfo->context, fcinfo->resultinfo);
-			inner_fcinfo->arg[0] = PointerGetDatum(value_null ? NULL : &buf);
-			inner_fcinfo->arg[1] = ObjectIdGetDatum(ioparam);
-			inner_fcinfo->arg[2] = Int32GetDatum(-1); /* typmod */
-			inner_fcinfo->argnull[0] = value_null;
-			inner_fcinfo->argnull[1] = false;
-			inner_fcinfo->argnull[2] = false;
+			fcSetArgExt(inner_fcinfo, 0, PointerGetDatum(value_null ? NULL : &buf),
+						value_null);
+			fcSetArg(inner_fcinfo, 1, ObjectIdGetDatum(ioparam));
+			fcSetArg(inner_fcinfo, 2, Int32GetDatum(-1)); /* typmod */
 
 			value = FunctionCallInvoke(inner_fcinfo);
 			value_null = inner_fcinfo->isnull;
@@ -620,10 +608,8 @@ coord_combine_agg_sfunc(PG_FUNCTION_ARGS)
 	elog(WARNING, "\tcombine %u", box->agg);
 	InitFunctionCallInfoData(*inner_fcinfo, &info, 2, fcinfo->fncollation,
 							 fcinfo->context, fcinfo->resultinfo);
-	inner_fcinfo->arg[0] = box->value;
-	inner_fcinfo->argnull[0] = box->value_null;
-	inner_fcinfo->arg[1] = value;
-	inner_fcinfo->argnull[1] = value_null;
+	fcSetArgExt(inner_fcinfo, 0, box->value, box->value_null);
+	fcSetArgExt(inner_fcinfo, 1, value, value_null);
 	box->value = FunctionCallInvoke(inner_fcinfo);
 	box->value_null = inner_fcinfo->isnull;
 
@@ -640,8 +626,7 @@ coord_combine_agg_ffunc(PG_FUNCTION_ARGS)
 {
 	Datum ret;
 	StypeBox *box = (StypeBox *) PG_GETARG_POINTER(0);
-	FunctionCallInfoData inner_fcinfodata;
-	FunctionCallInfo inner_fcinfo = &inner_fcinfodata;
+	LOCAL_FCINFO(inner_fcinfo, FUNC_MAX_ARGS);
 	FmgrInfo info;
 	int inner_nargs;
 	HeapTuple aggtuple;
@@ -695,11 +680,10 @@ coord_combine_agg_ffunc(PG_FUNCTION_ARGS)
 	fmgr_info(ffunc, &info);
 	InitFunctionCallInfoData(*inner_fcinfo, &info, inner_nargs, fcinfo->fncollation,
 							 fcinfo->context, fcinfo->resultinfo);
-	inner_fcinfo->arg[0] = box->value;
-	inner_fcinfo->argnull[0] = box->value_null;
+	fcSetArgExt(inner_fcinfo, 0, box->value, box->value_null);
 	for (i = 1; i < inner_nargs; i++)
 	{
-		inner_fcinfo->argnull[i] = true;
+		fcSetArgNull(inner_fcinfo, i);
 	}
 	ret = FunctionCallInvoke(inner_fcinfo);
 	fcinfo->isnull = inner_fcinfo->isnull;
