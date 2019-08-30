@@ -2835,7 +2835,7 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 		aggArguments = list_make1(makeTargetEntry((Expr *) aggparam, 1, NULL, false));
 		foreach(originalAggArgCell, originalAggregate->args)
 		{
-			TargetEntry *arg = (TargetEntry *) lfirst(originalAggArgCell);
+			TargetEntry *arg = lfirst(originalAggArgCell);
 			TargetEntry *newArg = copyObject(arg);
 			newArg->resno++;
 			aggArguments = lappend(aggArguments, newArg);
