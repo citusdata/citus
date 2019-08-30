@@ -39,14 +39,14 @@ create table gen2 (
 insert into gen1 (id, val1) values (1,4),(3,6),(5,2),(7,2);
 insert into gen2 (id, val1) values (1,4),(3,6),(5,2),(7,2);
 
-select * from create_distributed_table('gen1', 'id');
-select * from create_distributed_table('gen2', 'val2');
+select create_distributed_table('gen1', 'id');
+select create_distributed_table('gen2', 'val2');
 
 insert into gen1 (id, val1) values (2,4),(4,6),(6,2),(8,2);
 insert into gen2 (id, val1) values (2,4),(4,6),(6,2),(8,2);
 
-select * from gen1;
-select * from gen2;
+select * from gen1 order by 1,2,3;
+select * from gen2 order by 1,2,3;
 
 -- Test new VACUUM/ANALYZE options
 analyze (skip_locked) gen1;
