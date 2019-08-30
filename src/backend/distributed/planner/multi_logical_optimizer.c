@@ -1517,7 +1517,7 @@ MasterAggregateExpression(Aggref *originalAggregate,
 							   ObjectIdGetDatum(originalAggregate->aggfnoid));
 	if (!HeapTupleIsValid(aggTuple))
 	{
-		elog(WARNING, "cache lookup failed for aggregate %u",
+		elog(WARNING, "citus cache lookup failed for aggregate %u",
 			 originalAggregate->aggfnoid);
 		combine = InvalidOid;
 	}
@@ -2808,7 +2808,7 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 							   ObjectIdGetDatum(originalAggregate->aggfnoid));
 	if (!HeapTupleIsValid(aggTuple))
 	{
-		elog(WARNING, "cache lookup failed for aggregate %u",
+		elog(WARNING, "citus cache lookup failed for aggregate %u",
 			 originalAggregate->aggfnoid);
 		combine = InvalidOid;
 	}
@@ -3006,7 +3006,8 @@ GetAggregateType(Oid aggFunctionId)
 	aggregateProcName = get_func_name(aggFunctionId);
 	if (aggregateProcName == NULL)
 	{
-		ereport(ERROR, (errmsg("cache lookup failed for function %u", aggFunctionId)));
+		ereport(ERROR, (errmsg("citus cache lookup failed for function %u",
+							   aggFunctionId)));
 	}
 
 	aggregateCount = lengthof(AggregateNames);
