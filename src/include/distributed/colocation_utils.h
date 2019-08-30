@@ -36,5 +36,6 @@ extern void CheckDistributionColumnType(Oid sourceRelationId, Oid targetRelation
 extern void DeleteColocationGroupIfNoTablesBelong(uint32 colocationId);
 extern PartitioningScheme * GetPartitioningSchemeForColocationId(int colocationId);
 extern DistributionScheme * GetDistributionSchemeForColocationId(int colocationId);
+extern DistributionScheme * GetDistributionSchemeForRelationId(Oid relationId);
 
 #endif /* COLOCATION_UTILS_H_ */

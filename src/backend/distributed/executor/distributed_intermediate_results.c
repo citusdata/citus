@@ -33,6 +33,7 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_executor.h"
 #include "distributed/recursive_planning.h"
+#include "distributed/redistribution.h"
 #include "distributed/remote_commands.h"
 #include "distributed/sharding.h"
 #include "distributed/transmit.h"
@@ -75,21 +76,14 @@ typedef struct NodeToNodeFragmentsTransfer
 
 
 /*
- * TargetShardFragmentStats contains statistics on the fragments that came
- * out of predistribution using worker_predistribute_query_result.
+ * TargetShardFragment
  */
-typedef struct TargetShardFragmentStats
-{
-	int sourceNodeId;
-	uint64 sourceShardId;
-	int targetShardIndex;
-	long byteCount;
-	long rowCount;
-} TargetShardFragmentStats;
-
 typedef struct TargetShardFragments
 {
+	/* index of the target shard, when shards are sorted by minvalue */
 	int targetShardIndex;
+
+	/* list of TargetShardFragmentStats, one for each fragment in the target shard */
 	List *fragments;
 } TargetShardFragments;
 
@@ -106,53 +100,17 @@ typedef struct PredistributionStats
 } PredistributionStats;
 
 
-/*
- * ReassembledFragmentSet represents a set of fragments that have been fetched
- * to a particular node and when concatenated form one shard of a
- * RedistributedQueryResult.
- */
-typedef struct ReassembledFragmentSet
-{
-	/* node where the fragments are located */
-	int nodeId;
-
-	/* list of TargetShardFragmentStats for each fragment in a target partition */
-	List *fragments;
-} ReassembledFragmentSet;
-
-
-/*
- * A RedistributedQueryResult represents a temporary distributed table that
- * originated from a redistribuion operation and is therefore stored as a
- * set of fragments per shard, which need to be concatenated at run-time.
- */
-typedef struct RedistributedQueryResult
-{
-	/* prefix of all fragment names */
-	char *resultPrefix;
-
-	/* the partitioning between the fragment sets */
-	PartitioningScheme *partitioning;
-
-	/*
-	 * Array of reassembled fragment sets, keyed by partition index.
-	 *
-	 * The number of elements in the array is partitioning->partitionCount.
-	 */
-	ReassembledFragmentSet *reassembledFragmentSets;
-} RedistributedQueryResult;
-
 
 static RedistributedQueryResult *RedistributeDistributedQueryResult(
-											   char *distResultId, Query *query,
-											   int distributionColumnIndex,
-											   DistributionScheme *targetDistribution,
-											   bool isForWrites);
+										char *distResultId, Query *query,
+										int distributionColumnIndex,
+										DistributionScheme *targetDistribution,
+										bool isForWrites);
 static RedistributedQueryResult * RedistributeTaskListResult(
-									   char *distResultId, List *taskList,
-									   int distributionColumnIndex,
-									   DistributionScheme *targetDistribution,
-									   bool isForWrites);
+										char *distResultId, List *taskList,
+										int distributionColumnIndex,
+										DistributionScheme *targetDistribution,
+										bool isForWrites);
 static void WrapTasksForPredistribution(List *taskList, char *resultPrefix,
 										int distributionColumnIndex,
 										DistributionScheme *targetDistribution);
@@ -172,7 +130,6 @@ static char * BuildQueryStringForFragmentsTransfer(char *resultPrefix, NodeToNod
 static char * TargetShardFragmentName(char *resultPrefix, TargetShardFragmentStats *fragmentStats);
 static void ExecuteFetchTasks(List *fetchTaskList);
 static Tuplestorestate * ExecuteTasksIntoTupleStore(List *taskList, TupleDesc resultDescriptor);
-static Query *ReadReassembledFragmentSetQuery(char *resultPrefix, List *targetList, ReassembledFragmentSet *fragmentSet);
 
 
 /* exports for SQL callable functions */
@@ -249,7 +206,6 @@ RedistributeDistributedQueryResult(char *distResultId, Query *query,
 	ParamListInfo paramListInfo = NULL;
 	PlannedStmt *queryPlan = NULL;
 	DistributedPlan *distributedPlan = NULL;
-	List *taskList = NIL;
 
 	/* plan the query */
 	queryPlan = pg_plan_query(query, cursorOptions, paramListInfo);
@@ -260,6 +216,23 @@ RedistributeDistributedQueryResult(char *distResultId, Query *query,
 	}
 
 	distributedPlan = GetDistributedPlan((CustomScan *) queryPlan->planTree);
+
+	result = RedistributeDistributedPlanResult(distResultId, distributedPlan,
+											   distributionColumnIndex,
+											   targetDistribution, isForWrites);
+
+	return result;
+}
+
+
+RedistributedQueryResult *
+RedistributeDistributedPlanResult(char *distResultId, DistributedPlan *distributedPlan,
+								  int distributionColumnIndex,
+								  DistributionScheme *targetDistribution,
+								  bool isForWrites)
+{
+	RedistributedQueryResult *result = NULL;
+	List *taskList = NIL;
 
 	/* TODO: check for weird plans (insert select) */
 
@@ -811,7 +784,7 @@ ExecuteTasksIntoTupleStore(List *taskList, TupleDesc resultDescriptor)
 }
 
 
-static Query *
+Query *
 ReadReassembledFragmentSetQuery(char *resultPrefix, List *targetList,
 								ReassembledFragmentSet *fragmentSet)
 {

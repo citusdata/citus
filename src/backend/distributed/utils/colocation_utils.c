@@ -1136,11 +1136,6 @@ LoadPartitioningSchemeForRelationId(PartitioningScheme *partitioningScheme, Oid 
 DistributionScheme *
 GetDistributionSchemeForColocationId(int colocationId)
 {
-	DistributionScheme *distributionScheme = NULL;
-	DistTableCacheEntry *distTableCacheEntry = NULL;
-	int shardCount = 0;
-	int shardIndex = 0;
-
 	Oid relationId = ColocatedTableId(colocationId);
 	if (relationId == InvalidOid)
 	{
@@ -1148,11 +1143,23 @@ GetDistributionSchemeForColocationId(int colocationId)
 		return NULL;
 	}
 
+	return GetDistributionSchemeForRelationId(relationId);
+}
+
+
+DistributionScheme *
+GetDistributionSchemeForRelationId(Oid relationId)
+{
+	DistributionScheme *distributionScheme = NULL;
+	DistTableCacheEntry *distTableCacheEntry = NULL;
+	int shardCount = 0;
+	int shardIndex = 0;
+
 	distTableCacheEntry = DistributedTableCacheEntry(relationId);
 	shardCount = distTableCacheEntry->shardIntervalArrayLength;
 
 	distributionScheme = (DistributionScheme *) palloc0(sizeof(DistributionScheme));
-	distributionScheme->colocationId = colocationId;
+	distributionScheme->colocationId = distTableCacheEntry->colocationId;
 	distributionScheme->groupIds = (int **) palloc0(sizeof(int *) * shardCount);
 
 	LoadPartitioningSchemeForRelationId(&distributionScheme->partitioning, relationId);

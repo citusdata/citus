@@ -844,8 +844,6 @@ fetch_intermediate_results(PG_FUNCTION_ARGS)
 							   "distributed transaction")));
 	}
 
-	CurrentCoordinatedTransactionState = COORD_TRANS_STARTED;
-
 	connection = GetNodeConnection(connectionFlags, remoteHost, remotePort);
 
 	if (PQstatus(connection->pgConn) != CONNECTION_OK)
@@ -855,7 +853,7 @@ fetch_intermediate_results(PG_FUNCTION_ARGS)
 							   remoteHost, remotePort)));
 	}
 
-	RemoteTransactionBeginIfNecessary(connection);
+	RemoteTransactionBegin(connection);
 
 	for (resultIndex = 0; resultIndex < resultCount; resultIndex++)
 	{
