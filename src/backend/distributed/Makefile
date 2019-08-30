@@ -24,6 +24,12 @@ NO_PGXS = 1
 
 SHLIB_LINK = $(libpq)
 
+DEPFLAGS = -MMD -MP
+
+EXTRA_CLEAN = $(wildcard *.d */*.d)
+
+include $(wildcard *.d */*.d)
+
 include $(citus_top_builddir)/Makefile.global
 
 SHLIB_LINK += $(filter -lssl -lcrypto -lssleay32 -leay32, $(LIBS))
