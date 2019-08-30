@@ -28,6 +28,9 @@
 #include "distributed/tuplestore.h"
 #include "nodes/execnodes.h"
 #include "postmaster/autovacuum.h" /* to access autovacuum_max_workers */
+#if PG_VERSION_NUM >= 120000
+#include "replication/walsender.h"
+#endif
 #include "storage/ipc.h"
 #include "storage/lmgr.h"
 #include "storage/lwlock.h"
@@ -518,9 +521,10 @@ BackendManagementShmemInit(void)
 		totalProcs = TotalProcCount();
 		for (backendIndex = 0; backendIndex < totalProcs; ++backendIndex)
 		{
-			backendManagementShmemData->backends[backendIndex].citusBackend.
-			initiatorNodeIdentifier = -1;
-			SpinLockInit(&backendManagementShmemData->backends[backendIndex].mutex);
+			BackendData *backendData =
+				&backendManagementShmemData->backends[backendIndex];
+			backendData->citusBackend.initiatorNodeIdentifier = -1;
+			SpinLockInit(&backendData->mutex);
 		}
 	}
 
@@ -587,11 +591,15 @@ TotalProcCount(void)
 	 * We prefer to maintain space for auxiliary procs or preperad transactions in
 	 * the backend space because they could be blocking processes and our current
 	 * implementation of distributed deadlock detection could process them
-	 * as a regular backend. In the future, we could consider chaning deadlock
-	 * detection algorithm to ignore auxiliary procs or preperad transactions and
-	 * save same space.
+	 * as a regular backend. In the future, we could consider changing deadlock
+	 * detection algorithm to ignore auxiliary procs or prepared transactions and
+	 * save some space.
 	 */
 	totalProcs = maxBackends + NUM_AUXILIARY_PROCS + max_prepared_xacts;
+
+#if PG_VERSION_NUM >= 120000
+	totalProcs += max_wal_senders;
+#endif
 
 	return totalProcs;
 }

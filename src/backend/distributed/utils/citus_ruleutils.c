@@ -8,7 +8,6 @@
  */
 
 #include "postgres.h"
-#include "c.h"
 #include "miscadmin.h"
 
 #include <stddef.h>
@@ -28,6 +27,7 @@
 #include "catalog/pg_attribute.h"
 #include "catalog/pg_authid.h"
 #include "catalog/pg_class.h"
+#include "catalog/pg_collation.h"
 #include "catalog/pg_extension.h"
 #include "catalog/pg_foreign_data_wrapper.h"
 #include "catalog/pg_index.h"
@@ -379,6 +379,13 @@ pg_get_tableschemadef_string(Oid tableRelationId, bool includeSequenceDefaults)
 			if (attributeForm->attnotnull)
 			{
 				appendStringInfoString(&buffer, " NOT NULL");
+			}
+
+			if (attributeForm->attcollation != InvalidOid &&
+				attributeForm->attcollation != DEFAULT_COLLATION_OID)
+			{
+				appendStringInfo(&buffer, " COLLATE %s", generate_collation_name(
+									 attributeForm->attcollation));
 			}
 		}
 	}

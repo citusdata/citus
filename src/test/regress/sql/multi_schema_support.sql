@@ -338,6 +338,7 @@ CREATE TABLE test_schema_support.nation_hash_collation(
     n_regionkey integer not null,
     n_comment varchar(152)
 );
+SELECT master_get_table_ddl_events('test_schema_support.nation_hash_collation') ORDER BY 1;
 SELECT master_create_distributed_table('test_schema_support.nation_hash_collation', 'n_nationkey', 'hash');
 SELECT master_create_worker_shards('test_schema_support.nation_hash_collation', 4, 2);
 
