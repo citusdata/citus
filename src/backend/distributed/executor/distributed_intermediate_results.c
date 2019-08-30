@@ -207,7 +207,7 @@ partition_distributed_query_result(PG_FUNCTION_ARGS)
 	targetDistribution = GetDistributionSchemeForColocationId(colocationId);
 
 	/* parse the query */
-	query = ParseQueryString(queryString);
+	query = ParseQueryString(queryString, NULL, 0);
 
 	result = RedistributeDistributedQueryResult(distResultIdString, query,
 												distributionColumnIndex, targetDistribution,

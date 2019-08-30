@@ -69,10 +69,7 @@ static DeferredErrorMessage * InsertPartitionColumnMatchesSelect(Query *query,
 																 selectPartitionColumnTableId);
 static DistributedPlan * CreateCoordinatorInsertSelectPlan(uint64 planId, Query *parse);
 static DeferredErrorMessage * CoordinatorInsertSelectSupported(Query *insertSelectQuery);
-static Query * WrapSubquery(Query *subquery);
 static bool CheckInsertSelectQuery(Query *query);
-static List * TwoPhaseInsertSelectTaskList(Oid targetRelationId, Query *insertSelectQuery,
-										   char *resultIdPrefix);
 
 
 /*
@@ -1134,9 +1131,7 @@ static DistributedPlan *
 CreateCoordinatorInsertSelectPlan(uint64 planId, Query *parse)
 {
 	Query *insertSelectQuery = copyObject(parse);
-	Query *selectQuery = NULL;
 
-	RangeTblEntry *selectRte = ExtractSelectRangeTableEntry(insertSelectQuery);
 	RangeTblEntry *insertRte = ExtractResultRelationRTE(insertSelectQuery);
 	Oid targetRelationId = insertRte->relid;
 
@@ -1151,71 +1146,9 @@ CreateCoordinatorInsertSelectPlan(uint64 planId, Query *parse)
 		return distributedPlan;
 	}
 
-	selectQuery = selectRte->subquery;
-
-	/*
-	 * Wrap the SELECT as a subquery if the INSERT...SELECT has CTEs or the SELECT
-	 * has top-level set operations.
-	 *
-	 * We could simply wrap all queries, but that might create a subquery that is
-	 * not supported by the logical planner. Since the logical planner also does
-	 * not support CTEs and top-level set operations, we can wrap queries containing
-	 * those without breaking anything.
-	 */
-	if (list_length(insertSelectQuery->cteList) > 0)
-	{
-		selectQuery = WrapSubquery(selectRte->subquery);
-
-		/* copy CTEs from the INSERT ... SELECT statement into outer SELECT */
-		selectQuery->cteList = copyObject(insertSelectQuery->cteList);
-		selectQuery->hasModifyingCTE = insertSelectQuery->hasModifyingCTE;
-	}
-	else if (selectQuery->setOperations != NULL)
-	{
-		/* top-level set operations confuse the ReorderInsertSelectTargetLists logic */
-		selectQuery = WrapSubquery(selectRte->subquery);
-	}
-
-	selectRte->subquery = selectQuery;
-
-	ReorderInsertSelectTargetLists(insertSelectQuery, insertRte, selectRte);
-
-	if (insertSelectQuery->onConflict || insertSelectQuery->returningList != NIL)
-	{
-		/*
-		 * We cannot perform a COPY operation with RETURNING or ON CONFLICT.
-		 * We therefore perform the INSERT...SELECT in two phases. First we
-		 * copy the result of the SELECT query in a set of intermediate
-		 * results, one for each shard placement in the destination table.
-		 * Second, we perform an INSERT..SELECT..ON CONFLICT/RETURNING from
-		 * the intermediate results into the destination table. This is
-		 * represented in the plan by simply having both an
-		 * insertSelectSubuery and a workerJob to execute afterwards.
-		 */
-		uint64 jobId = INVALID_JOB_ID;
-		Job *workerJob = NULL;
-		List *taskList = NIL;
-		char *resultIdPrefix = InsertSelectResultIdPrefix(planId);
-
-		/* generate tasks for the INSERT..SELECT phase */
-		taskList = TwoPhaseInsertSelectTaskList(targetRelationId, insertSelectQuery,
-												resultIdPrefix);
-
-		workerJob = CitusMakeNode(Job);
-		workerJob->taskList = taskList;
-		workerJob->subqueryPushdown = false;
-		workerJob->dependedJobList = NIL;
-		workerJob->jobId = jobId;
-		workerJob->jobQuery = insertSelectQuery;
-		workerJob->requiresMasterEvaluation = false;
-
-		distributedPlan->workerJob = workerJob;
-		distributedPlan->hasReturning = insertSelectQuery->returningList != NIL;
-		distributedPlan->intermediateResultIdPrefix = resultIdPrefix;
-	}
-
-	distributedPlan->insertSelectSubquery = selectQuery;
-	distributedPlan->insertTargetList = insertSelectQuery->targetList;
+	distributedPlan->insertSelectQuery = insertSelectQuery;
+	distributedPlan->hasReturning = insertSelectQuery->returningList != NIL;
+	distributedPlan->intermediateResultIdPrefix = InsertSelectResultIdPrefix(planId);
 	distributedPlan->targetRelationId = targetRelationId;
 
 	return distributedPlan;
@@ -1265,193 +1198,6 @@ CoordinatorInsertSelectSupported(Query *insertSelectQuery)
 	return NULL;
 }
 
-
-/*
- * WrapSubquery wraps the given query as a subquery in a newly constructed
- * "SELECT * FROM (...subquery...) citus_insert_select_subquery" query.
- */
-static Query *
-WrapSubquery(Query *subquery)
-{
-	Query *outerQuery = NULL;
-	ParseState *pstate = make_parsestate(NULL);
-	Alias *selectAlias = NULL;
-	RangeTblEntry *newRangeTableEntry = NULL;
-	RangeTblRef *newRangeTableRef = NULL;
-	ListCell *selectTargetCell = NULL;
-	List *newTargetList = NIL;
-
-	outerQuery = makeNode(Query);
-	outerQuery->commandType = CMD_SELECT;
-
-	/* create range table entries */
-	selectAlias = makeAlias("citus_insert_select_subquery", NIL);
-	newRangeTableEntry = addRangeTableEntryForSubquery(pstate, subquery,
-													   selectAlias, false, true);
-	outerQuery->rtable = list_make1(newRangeTableEntry);
-
-	/* set the FROM expression to the subquery */
-	newRangeTableRef = makeNode(RangeTblRef);
-	newRangeTableRef->rtindex = 1;
-	outerQuery->jointree = makeFromExpr(list_make1(newRangeTableRef), NULL);
-
-	/* create a target list that matches the SELECT */
-	foreach(selectTargetCell, subquery->targetList)
-	{
-		TargetEntry *selectTargetEntry = (TargetEntry *) lfirst(selectTargetCell);
-		Var *newSelectVar = NULL;
-		TargetEntry *newSelectTargetEntry = NULL;
-
-		/* exactly 1 entry in FROM */
-		int indexInRangeTable = 1;
-
-		if (selectTargetEntry->resjunk)
-		{
-			continue;
-		}
-
-		newSelectVar = makeVar(indexInRangeTable, selectTargetEntry->resno,
-							   exprType((Node *) selectTargetEntry->expr),
-							   exprTypmod((Node *) selectTargetEntry->expr),
-							   exprCollation((Node *) selectTargetEntry->expr), 0);
-
-		newSelectTargetEntry = makeTargetEntry((Expr *) newSelectVar,
-											   selectTargetEntry->resno,
-											   selectTargetEntry->resname,
-											   selectTargetEntry->resjunk);
-
-		newTargetList = lappend(newTargetList, newSelectTargetEntry);
-	}
-
-	outerQuery->targetList = newTargetList;
-
-	return outerQuery;
-}
-
-
-/*
- * TwoPhaseInsertSelectTaskList generates a list of tasks for a query that
- * inserts into a target relation and selects from a set of co-located
- * intermediate results.
- */
-static List *
-TwoPhaseInsertSelectTaskList(Oid targetRelationId, Query *insertSelectQuery,
-							 char *resultIdPrefix)
-{
-	List *taskList = NIL;
-
-	/*
-	 * Make a copy of the INSERT ... SELECT. We'll repeatedly replace the
-	 * subquery of insertResultQuery for different intermediate results and
-	 * then deparse it.
-	 */
-	Query *insertResultQuery = copyObject(insertSelectQuery);
-	RangeTblEntry *insertRte = ExtractResultRelationRTE(insertResultQuery);
-	RangeTblEntry *selectRte = ExtractSelectRangeTableEntry(insertResultQuery);
-
-	DistTableCacheEntry *targetCacheEntry = DistributedTableCacheEntry(targetRelationId);
-	int shardCount = targetCacheEntry->shardIntervalArrayLength;
-	int shardOffset = 0;
-	uint32 taskIdIndex = 1;
-	uint64 jobId = INVALID_JOB_ID;
-
-	ListCell *targetEntryCell = NULL;
-	Relation distributedRelation = NULL;
-	TupleDesc destTupleDescriptor = NULL;
-
-	distributedRelation = heap_open(targetRelationId, RowExclusiveLock);
-	destTupleDescriptor = RelationGetDescr(distributedRelation);
-
-	/*
-	 * If the type of insert column and target table's column type is
-	 * different from each other. Cast insert column't type to target
-	 * table's column
-	 */
-	foreach(targetEntryCell, insertSelectQuery->targetList)
-	{
-		TargetEntry *targetEntry = (TargetEntry *) lfirst(targetEntryCell);
-		Var *insertColumn = (Var *) targetEntry->expr;
-		Form_pg_attribute attr = TupleDescAttr(destTupleDescriptor, targetEntry->resno -
-											   1);
-
-		if (insertColumn->vartype != attr->atttypid)
-		{
-			CoerceViaIO *coerceExpr = makeNode(CoerceViaIO);
-			coerceExpr->arg = (Expr *) copyObject(insertColumn);
-			coerceExpr->resulttype = attr->atttypid;
-			coerceExpr->resultcollid = attr->attcollation;
-			coerceExpr->coerceformat = COERCE_IMPLICIT_CAST;
-			coerceExpr->location = -1;
-
-			targetEntry->expr = (Expr *) coerceExpr;
-		}
-	}
-
-	for (shardOffset = 0; shardOffset < shardCount; shardOffset++)
-	{
-		ShardInterval *targetShardInterval =
-			targetCacheEntry->sortedShardIntervalArray[shardOffset];
-		uint64 shardId = targetShardInterval->shardId;
-		List *columnAliasList = NIL;
-		List *insertShardPlacementList = NIL;
-		Query *resultSelectQuery = NULL;
-		StringInfo queryString = makeStringInfo();
-		RelationShard *relationShard = NULL;
-		Task *modifyTask = NULL;
-		StringInfo resultId = makeStringInfo();
-
-		/* during COPY, the shard ID is appended to the result name */
-		appendStringInfo(resultId, "%s_" UINT64_FORMAT, resultIdPrefix, shardId);
-
-		/* generate the query on the intermediate result */
-		resultSelectQuery = BuildSubPlanResultQuery(insertSelectQuery->targetList,
-													columnAliasList, resultId->data);
-
-		/* put the intermediate result query in the INSERT..SELECT */
-		selectRte->subquery = resultSelectQuery;
-
-		/* setting an alias simplifies deparsing of RETURNING */
-		if (insertRte->alias == NULL)
-		{
-			Alias *alias = makeAlias(CITUS_TABLE_ALIAS, NIL);
-			insertRte->alias = alias;
-		}
-
-		/*
-		 * Generate a query string for the query that inserts into a shard and reads
-		 * from an intermediate result.
-		 *
-		 * Since CTEs have already been converted to intermediate results, they need
-		 * to removed from the query. Otherwise, worker queries include both
-		 * intermediate results and CTEs in the query.
-		 */
-		insertResultQuery->cteList = NIL;
-		deparse_shard_query(insertResultQuery, targetRelationId, shardId, queryString);
-		ereport(DEBUG2, (errmsg("distributed statement: %s", queryString->data)));
-
-		LockShardDistributionMetadata(shardId, ShareLock);
-		insertShardPlacementList = FinalizedShardPlacementList(shardId);
-
-		relationShard = CitusMakeNode(RelationShard);
-		relationShard->relationId = targetShardInterval->relationId;
-		relationShard->shardId = targetShardInterval->shardId;
-
-		modifyTask = CreateBasicTask(jobId, taskIdIndex, MODIFY_TASK, queryString->data);
-		modifyTask->dependedTaskList = NULL;
-		modifyTask->anchorShardId = shardId;
-		modifyTask->taskPlacementList = insertShardPlacementList;
-		modifyTask->relationShardList = list_make1(relationShard);
-		modifyTask->replicationModel = targetCacheEntry->replicationModel;
-
-		taskList = lappend(taskList, modifyTask);
-
-		taskIdIndex++;
-	}
-
-	heap_close(distributedRelation, NoLock);
-
-	return taskList;
-}
 
 
 /*

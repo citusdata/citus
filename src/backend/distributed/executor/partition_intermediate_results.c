@@ -167,16 +167,8 @@ worker_predistribute_query_result(PG_FUNCTION_ARGS)
 		ereport(ERROR, (errmsg("partition column index cannot be negative")));
 	}
 
-	/*
-	 * Make sure that this transaction has a distributed transaction ID.
-	 *
-	 * Intermediate results will be stored in a directory that is derived
-	 * from the distributed transaction ID.
-	 */
-	//BeginOrContinueCoordinatedTransaction();
-
 	/* parse the query */
-	query = ParseQueryString(queryString);
+	query = ParseQueryString(queryString, NULL, 0);
 
 	/* plan the query */
 	cursorOptions = CURSOR_OPT_PARALLEL_OK;

@@ -169,7 +169,7 @@ CitusBeginScan(CustomScanState *node, EState *estate, int eflags)
 
 	distributedPlan = scanState->distributedPlan;
 	if (distributedPlan->modLevel == ROW_MODIFY_READONLY ||
-		distributedPlan->insertSelectSubquery != NULL)
+		distributedPlan->insertSelectQuery != NULL)
 	{
 		/* no more action required */
 		return;

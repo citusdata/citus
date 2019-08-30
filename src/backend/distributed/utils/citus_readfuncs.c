@@ -216,10 +216,8 @@ ReadDistributedPlan(READFUNC_ARGS)
 	READ_NODE_FIELD(masterQuery);
 	READ_UINT64_FIELD(queryId);
 	READ_NODE_FIELD(relationIdList);
-
-	READ_NODE_FIELD(insertSelectSubquery);
-	READ_NODE_FIELD(insertTargetList);
 	READ_OID_FIELD(targetRelationId);
+	READ_NODE_FIELD(insertSelectQuery);
 	READ_STRING_FIELD(intermediateResultIdPrefix);
 
 	READ_NODE_FIELD(subPlanList);

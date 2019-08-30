@@ -272,14 +272,11 @@ typedef struct DistributedPlan
 	/* which relations are accessed by this distributed plan */
 	List *relationIdList;
 
-	/* SELECT query in an INSERT ... SELECT via the coordinator */
-	Query *insertSelectSubquery;
-
-	/* target list of an INSERT ... SELECT via the coordinator */
-	List *insertTargetList;
-
 	/* target relation of a modification */
 	Oid targetRelationId;
+
+	/* INSERT .. SELECT via the coordinator */
+	Query *insertSelectQuery;
 
 	/*
 	 * If intermediateResultIdPrefix is non-null, an INSERT ... SELECT
