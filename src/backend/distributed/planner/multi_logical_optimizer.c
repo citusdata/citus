@@ -1541,9 +1541,6 @@ MasterAggregateExpression(Aggref *originalAggregate,
 		int32 workerReturnTypeMod = -1;
 		Oid workerCollationId = InvalidOid;
 
-		elog(WARNING, "coord_combine_agg %d %d", coordCombineId,
-			 originalAggregate->aggfnoid);
-
 		aggparam = makeConst(OIDOID, -1, InvalidOid, sizeof(Oid), ObjectIdGetDatum(
 								 originalAggregate->aggfnoid), false, true);
 		column = makeVar(masterTableId, walkerContext->columnId, workerReturnType,
@@ -2828,8 +2825,6 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 		Oid workerPartialId = AggregateFunctionOidWithoutInput(
 			WORKER_PARTIAL_AGGREGATE_NAME);
 
-		elog(WARNING, "worker_partial_agg %d %d", workerPartialId,
-			 originalAggregate->aggfnoid);
 		aggparam = makeConst(OIDOID, -1, InvalidOid, sizeof(Oid), ObjectIdGetDatum(
 								 originalAggregate->aggfnoid), false, true);
 		aggArguments = list_make1(makeTargetEntry((Expr *) aggparam, 1, NULL, false));

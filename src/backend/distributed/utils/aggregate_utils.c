@@ -124,10 +124,9 @@ InitializeStypeBox(FunctionCallInfo fcinfo, StypeBox *box, HeapTuple aggTuple, O
 
 		MemoryContext aggregateContext;
 		MemoryContext oldContext;
-		elog(WARNING, "\tworker sfunc seed");
 		if (!AggCheckCallContext(fcinfo, &aggregateContext))
 		{
-			elog(WARNING, "worker_partiail_agg_sfunc called from non aggregate context");
+			elog(ERROR, "worker_partiail_agg_sfunc called from non aggregate context");
 		}
 		oldContext = MemoryContextSwitchTo(aggregateContext);
 
@@ -164,19 +163,15 @@ citus_stype_serialize(PG_FUNCTION_ARGS)
 	Size realbyteslen;
 	Datum result;
 
-	elog(WARNING, "citus_stype_serialize");
-	elog(WARNING, "\t%d", box->agg);
-
 	aggtuple = get_aggform(box->agg, &aggform);
 	serial = aggform->aggserialfn;
 	ReleaseSysCache(aggtuple);
 
 	if (serial == InvalidOid)
 	{
-		elog(WARNING, "\tnoserial, load %d", box->transtype);
-
 		/* TODO do we have to fallback to output/receive if not set? */
 		/* ie is it possible for send/recv to be unset? */
+		/* Answer: yes, but extremely rare */
 		transtypetuple = get_typeform(box->transtype, &transtypeform);
 		serial = transtypeform->typsend;
 		ReleaseSysCache(transtypetuple);
@@ -252,8 +247,6 @@ citus_stype_deserialize(PG_FUNCTION_ARGS)
 	memcpy(&agg, VARDATA(bytes), sizeof(Oid));
 	memcpy(&value_null, VARDATA(bytes) + sizeof(Oid), sizeof(bool));
 
-	elog(WARNING, "citus_stype_deserialize %d %d", agg, value_null);
-
 	box = pallocInAggContext(fcinfo, sizeof(StypeBox));
 	box->agg = agg;
 
@@ -280,7 +273,6 @@ citus_stype_deserialize(PG_FUNCTION_ARGS)
 
 		inner_bytes = PG_GETARG_BYTEA_P_SLICE(0, sizeof(Oid), VARSIZE(bytes) -
 											  sizeof(Oid));
-		elog(WARNING, "deserial %d", VARSIZE(inner_bytes));
 		fmgr_info(deserial, &fdeserialinfo);
 		InitFunctionCallInfoData(*fdeserial_callinfo, &fdeserialinfo, 2,
 								 fcinfo->fncollation, fcinfo->context,
@@ -330,8 +322,6 @@ citus_stype_combine(PG_FUNCTION_ARGS)
 	Oid combine;
 	HeapTuple aggtuple;
 	Form_pg_aggregate aggform;
-
-	elog(WARNING, "citus_stype_combine");
 
 	if (!PG_ARGISNULL(0))
 	{
@@ -410,8 +400,6 @@ worker_partial_agg_sfunc(PG_FUNCTION_ARGS)
 	bool is_initial_call = PG_ARGISNULL(0);
 	Datum newVal;
 
-	elog(WARNING, "worker_partial_agg_sfunc");
-
 	if (is_initial_call)
 	{
 		box = pallocInAggContext(fcinfo, sizeof(StypeBox));
@@ -423,8 +411,6 @@ worker_partial_agg_sfunc(PG_FUNCTION_ARGS)
 		Assert(box->agg == PG_GETARG_OID(1));
 	}
 
-	elog(WARNING, "\tbox: %p", box);
-	elog(WARNING, "\tagg: %d", box->agg);
 	aggtuple = get_aggform(box->agg, &aggform);
 	aggsfunc = aggform->aggtransfn;
 	if (is_initial_call)
@@ -448,7 +434,6 @@ worker_partial_agg_sfunc(PG_FUNCTION_ARGS)
 		{
 			if (PG_ARGISNULL(i))
 			{
-				elog(WARNING, "\tworker sfunc retnull %i", i);
 				PG_RETURN_POINTER(box);
 			}
 		}
@@ -456,10 +441,9 @@ worker_partial_agg_sfunc(PG_FUNCTION_ARGS)
 		{
 			MemoryContext aggregateContext;
 			MemoryContext oldContext;
-			elog(WARNING, "\tworker sfunc seed");
 			if (!AggCheckCallContext(fcinfo, &aggregateContext))
 			{
-				elog(WARNING,
+				elog(ERROR,
 					 "worker_partiail_agg_sfunc called from non aggregate context");
 			}
 			oldContext = MemoryContextSwitchTo(aggregateContext);
@@ -483,7 +467,6 @@ worker_partial_agg_sfunc(PG_FUNCTION_ARGS)
 		fcSetArgExt(inner_fcinfo, i, fcGetArgValue(fcinfo, i + 1), fcGetArgNull(fcinfo,
 																				i + 1));
 	}
-	elog(WARNING, "invoke sfunc");
 	newVal = FunctionCallInvoke(inner_fcinfo);
 	box->value_null = inner_fcinfo->isnull;
 
@@ -493,7 +476,7 @@ worker_partial_agg_sfunc(PG_FUNCTION_ARGS)
 		MemoryContext oldContext;
 		if (!AggCheckCallContext(fcinfo, &aggregateContext))
 		{
-			elog(WARNING, "worker_partial_agg_sfunc called from non aggregate context");
+			elog(ERROR, "worker_partial_agg_sfunc called from non aggregate context");
 		}
 
 		oldContext = MemoryContextSwitchTo(aggregateContext);
@@ -509,12 +492,6 @@ worker_partial_agg_sfunc(PG_FUNCTION_ARGS)
 	}
 
 	box->value = newVal;
-
-	elog(WARNING, "\tworker sfunc ret: %ld", box->value);
-	elog(WARNING, "\tworker sfunc ret type: %d", AARR_ELEMTYPE(DatumGetAnyArrayP(
-																   box->value)));
-	elog(WARNING, "\tworker sfunc agg: %d", box->agg);
-	elog(WARNING, "\tworker sfunc null: %d", box->value_null);
 
 	PG_RETURN_POINTER(box);
 }
@@ -538,14 +515,10 @@ worker_partial_agg_ffunc(PG_FUNCTION_ARGS)
 	Oid transtype;
 	Datum result;
 
-	elog(WARNING, "worker_partial_agg_ffunc %p", box);
-
 	if (box == NULL)
 	{
 		PG_RETURN_NULL();
 	}
-
-	elog(WARNING, "\tagg: %d", box->agg);
 
 	aggtuple = get_aggform(box->agg, &aggform);
 	serial = aggform->aggserialfn;
@@ -554,10 +527,9 @@ worker_partial_agg_ffunc(PG_FUNCTION_ARGS)
 
 	if (serial == InvalidOid)
 	{
-		elog(WARNING, "\tload typeform %d", box->transtype);
-
 		/* TODO do we have to fallback to output/receive if not set? */
 		/* ie is it possible for send/recv to be unset? */
+		/* Answer: yes, but extremely rarely */
 		transtypetuple = get_typeform(transtype, &transtypeform);
 		serial = transtypeform->typsend;
 		ReleaseSysCache(transtypetuple);
@@ -565,27 +537,16 @@ worker_partial_agg_ffunc(PG_FUNCTION_ARGS)
 
 	Assert(serial != InvalidOid);
 
-	elog(WARNING, "\tcalling serial %d", serial);
 	fmgr_info(serial, &info);
 	if (info.fn_strict && box->value_null)
 	{
-		elog(WARNING, "\t\t& strict NULL");
 		PG_RETURN_NULL();
 	}
-	elog(WARNING, "\t\tinit inner_fcinfo %ld %d", box->value, box->value_null);
 	InitFunctionCallInfoData(*inner_fcinfo, &info, 1, fcinfo->fncollation,
 							 fcinfo->context, fcinfo->resultinfo);
 	fcSetArgExt(inner_fcinfo, 0, box->value, box->value_null);
 
-	elog(WARNING, "\t\tinvoke inner_fcinfo %p %p", info.fn_addr, array_send);
 	result = FunctionCallInvoke(inner_fcinfo);
-
-	elog(WARNING, "\t\t& done %ld %d", result, VARSIZE(DatumGetByteaPP(result)) -
-		 VARHDRSZ);
-	for (int i = 0; i < VARSIZE(DatumGetByteaPP(result)) - VARHDRSZ; i++)
-	{
-		elog(WARNING, "\t\t%d\t%d", i, VARDATA(DatumGetByteaPP(result))[i]);
-	}
 
 	if (inner_fcinfo->isnull)
 	{
@@ -617,22 +578,16 @@ coord_combine_agg_sfunc(PG_FUNCTION_ARGS)
 	bool value_null;
 	StypeBox *box;
 
-	elog(WARNING, "coord_combine_agg_sfunc");
-
 	if (PG_ARGISNULL(0))
 	{
 		box = pallocInAggContext(fcinfo, sizeof(StypeBox));
 		box->agg = PG_GETARG_OID(1);
-		elog(WARNING, "\tinit");
 	}
 	else
 	{
 		box = (StypeBox *) PG_GETARG_POINTER(0);
 		Assert(box->agg == PG_GETARG_OID(1));
-		elog(WARNING, "\talready %d", box->value_null);
 	}
-
-	elog(WARNING, "\tbox->agg = %u", box->agg);
 
 	aggtuple = get_aggform(box->agg, &aggform);
 	if (PG_ARGISNULL(0))
@@ -686,11 +641,6 @@ coord_combine_agg_sfunc(PG_FUNCTION_ARGS)
 				initStringInfo(&buf);
 				appendBinaryStringInfo(&buf, (char *) VARDATA_ANY(data),
 									   VARSIZE_ANY_EXHDR(data));
-				elog(WARNING, "\treceive %ld %d", PG_GETARG_DATUM(2), buf.len);
-				for (int i = 0; i < buf.len; i++)
-				{
-					elog(WARNING, "\t%d\t%d", i, buf.data[i]);
-				}
 			}
 
 			InitFunctionCallInfoData(*inner_fcinfo, &info, 3, fcinfo->fncollation,
@@ -715,7 +665,6 @@ coord_combine_agg_sfunc(PG_FUNCTION_ARGS)
 	{
 		if (box->value_null)
 		{
-			elog(WARNING, "\tbox null");
 			if (value_null)
 			{
 				PG_RETURN_NULL();
@@ -726,14 +675,10 @@ coord_combine_agg_sfunc(PG_FUNCTION_ARGS)
 		}
 		if (value_null)
 		{
-			elog(WARNING, "\tvalue null");
 			PG_RETURN_POINTER(box);
 		}
 	}
 
-	elog(WARNING, "\tcombine %u", box->agg);
-	elog(WARNING, "\t\t %d", *AARR_DIMS(DatumGetAnyArrayP(value)));
-	elog(WARNING, "\t\t %d", *AARR_DIMS(DatumGetAnyArrayP(box->value)));
 	InitFunctionCallInfoData(*inner_fcinfo, &info, 2, fcinfo->fncollation,
 							 fcinfo->context, fcinfo->resultinfo);
 	fcSetArgExt(inner_fcinfo, 0, box->value, box->value_null);
@@ -765,8 +710,6 @@ coord_combine_agg_ffunc(PG_FUNCTION_ARGS)
 	bool fextra;
 	bool final_strict;
 	int i;
-
-	elog(WARNING, "coord_combine_agg_ffunc %p", box);
 
 	if (box == NULL)
 	{
