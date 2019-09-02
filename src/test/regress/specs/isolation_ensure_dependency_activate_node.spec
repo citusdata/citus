@@ -16,6 +16,7 @@ teardown
     RESET search_path;
     DROP TABLE IF EXISTS t1 CASCADE;
     DROP TABLE IF EXISTS t2 CASCADE;
+    DROP TABLE IF EXISTS t3 CASCADE;
 
 	SELECT master_remove_node(nodename, nodeport) FROM pg_dist_node;
 }
@@ -126,6 +127,36 @@ step "s3-commit"
 	COMMIT;
 }
 
+session "s4"
+
+step "s4-public-schema"
+{
+    SET search_path TO public;
+}
+
+step "s4-use-schema"
+{
+    SET search_path TO myschema;
+}
+
+step "s4-create-table"
+{
+	CREATE TABLE t3 (a int, b int);
+    -- session needs to have replication factor set to 1, can't do in setup
+	SET citus.shard_replication_factor TO 1;
+	SELECT create_distributed_table('t3', 'a');
+}
+
+step "s4-begin"
+{
+	BEGIN;
+}
+
+step "s4-commit"
+{
+	COMMIT;
+}
+
 # schema only tests
 permutation "s1-print-distributed-objects" "s1-begin" "s1-add-worker" "s2-public-schema" "s2-create-table" "s1-commit" "s2-print-distributed-objects"
 permutation "s1-print-distributed-objects" "s1-begin" "s2-begin" "s1-add-worker" "s2-public-schema" "s2-create-table" "s1-commit" "s2-commit" "s2-print-distributed-objects"
@@ -136,3 +167,4 @@ permutation "s1-print-distributed-objects" "s1-begin" "s2-begin" "s2-create-sche
 
 # concurrency tests with multi schema distribution
 permutation "s1-print-distributed-objects" "s2-create-schema" "s1-begin" "s2-begin" "s3-begin" "s1-add-worker" "s2-create-table" "s3-use-schema" "s3-create-table" "s1-commit" "s2-commit" "s3-commit" "s2-print-distributed-objects"
+permutation "s1-print-distributed-objects" "s2-create-schema" "s1-begin" "s2-begin" "s3-begin" "s4-begin" "s1-add-worker" "s2-create-table" "s3-use-schema" "s3-create-table" "s4-use-schema" "s4-create-table" "s1-commit" "s2-commit" "s3-commit" "s4-commit" "s2-print-distributed-objects"
