@@ -89,6 +89,11 @@ master_unmark_object_distributed(PG_FUNCTION_ARGS)
 bool
 ObjectExists(const ObjectAddress *address)
 {
+	if (address == NULL)
+	{
+		return false;
+	}
+
 	if (is_objectclass_supported(address->classId))
 	{
 		HeapTuple objtup;
