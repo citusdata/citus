@@ -1,6 +1,7 @@
 SET citus.next_shard_id TO 20010000;
 
 CREATE SCHEMA type_tests;
+CREATE SCHEMA type_tests2; -- to test creation in a specific schema and moving to schema
 SET search_path TO type_tests;
 SET citus.shard_count TO 4;
 
@@ -10,6 +11,8 @@ CREATE TABLE t1 (a int PRIMARY KEY, b tc1);
 SELECT create_distributed_table('t1','a');
 INSERT INTO t1 VALUES (1, (2,3)::tc1);
 SELECT * FROM t1;
+ALTER TYPE tc1 RENAME TO tc1_newname;
+INSERT INTO t1 VALUES (3, (4,5)::tc1_newname); -- insert with a cast would fail if the rename didn't propagate
 
 -- single statement transactions with a an enum used in a table
 CREATE TYPE te1 AS ENUM ('one', 'two', 'three');
@@ -18,8 +21,11 @@ SELECT create_distributed_table('t2','a');
 INSERT INTO t2 VALUES (1, 'two');
 SELECT * FROM t2;
 
+-- rename enum, subsequent operations on the type would fail if the rename was not propagated
+ALTER TYPE te1 RENAME TO te1_newname;
+
 -- add an extra value to the enum and use in table
-ALTER TYPE te1 ADD VALUE 'four';
+ALTER TYPE te1_newname ADD VALUE 'four';
 UPDATE t2 SET b = 'four';
 SELECT * FROM t2;
 
@@ -63,3 +69,4 @@ DROP TYPE tc3, tc4, tc5 CASCADE;
 -- clear objects
 SET client_min_messages TO fatal; -- suppress cascading objects dropping
 DROP SCHEMA type_tests CASCADE;
+DROP SCHEMA type_tests2 CASCADE;

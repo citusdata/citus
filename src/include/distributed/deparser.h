@@ -32,5 +32,6 @@ extern const char * deparse_create_enum_stmt(CreateEnumStmt *stmt);
 extern const char * deparse_drop_type_stmt(DropStmt *stmt);
 extern const char * deparse_alter_enum_stmt(AlterEnumStmt *stmt);
 extern const char * deparse_alter_type_stmt(AlterTableStmt *stmt);
+extern const char * deparse_rename_type_stmt(RenameStmt *stmt);
 
 #endif /* CITUS_DEPARSER_H */

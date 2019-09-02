@@ -406,7 +406,22 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		 */
 		if (IsA(parsetree, RenameStmt))
 		{
-			ddlJobs = PlanRenameStmt((RenameStmt *) parsetree, queryString);
+			RenameStmt *renameStmt = (RenameStmt *) parsetree;
+
+			switch (renameStmt->renameType)
+			{
+				case OBJECT_TYPE:
+				{
+					ddlJobs = PlanRenameTypeStmt(renameStmt, queryString);
+					break;
+				}
+
+				default:
+				{
+					ddlJobs = PlanRenameStmt(renameStmt, queryString);
+					break;
+				}
+			}
 		}
 
 		/* handle distributed CLUSTER statements */

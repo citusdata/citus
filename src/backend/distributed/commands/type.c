@@ -460,6 +460,50 @@ PlanDropTypeStmt(DropStmt *stmt, const char *queryString)
 }
 
 
+List *
+PlanRenameTypeStmt(RenameStmt *stmt, const char *queryString)
+{
+	/* TODO extract type address from statement function */
+	TypeName *typeName = makeTypeNameFromNameList((List *) stmt->object);
+	Oid typeOid = LookupTypeNameOid(NULL, typeName, false);
+	ObjectAddress typeAddress = { 0 };
+	ObjectAddressSet(typeAddress, TypeRelationId, typeOid);
+	const char *renameStmtSql = NULL;
+
+	if (!IsObjectDistributed(&typeAddress))
+	{
+		return NIL;
+	}
+
+	/*
+	 * we should not get to a point where an alter happens on a distributed type during an
+	 * extension statement, but better safe then sorry.
+	 */
+	if (creating_extension)
+	{
+		/*
+		 * extensions should be created separately on the workers, types cascading from an
+		 * extension should therefor not be propagated here.
+		 */
+		return NIL;
+	}
+
+
+	/* fully qualify */
+	/* TODO abstract into nice place */
+
+	/* deparse sql*/
+	renameStmtSql = DeparseTreeNode((Node *) stmt);
+
+	/* to prevent recursion with mx we disable ddl propagation */
+	EnsureSequentialModeForTypeDDL();
+	SendCommandToWorkersAsUser(ALL_WORKERS, DISABLE_DDL_PROPAGATION, NULL);
+	SendCommandToWorkersAsUser(ALL_WORKERS, renameStmtSql, NULL);
+
+	return NIL;
+}
+
+
 /*
  * CreateTypeStmtByObjectAddress returns a parsetree for the CREATE TYPE statement to
  * recreate the type by its object address.

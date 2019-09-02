@@ -123,6 +123,7 @@ extern List * PlanAlterTypeStmt(AlterTableStmt *stmt, const char *queryString);
 extern List * PlanCreateEnumStmt(CreateEnumStmt *createEnumStmt, const char *queryString);
 extern List * PlanAlterEnumStmt(AlterEnumStmt *stmt, const char *queryString);
 extern List * PlanDropTypeStmt(DropStmt *stmt, const char *queryString);
+extern List * PlanRenameTypeStmt(RenameStmt *stmt, const char *queryString);
 extern Node * CreateTypeStmtByObjectAddress(const ObjectAddress *address);
 extern const ObjectAddress * CompositeTypeStmtObjectAddress(CompositeTypeStmt *stmt, bool
 															missing_ok);

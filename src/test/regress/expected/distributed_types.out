@@ -1,5 +1,6 @@
 SET citus.next_shard_id TO 20010000;
 CREATE SCHEMA type_tests;
+CREATE SCHEMA type_tests2; -- to test creation in a specific schema and moving to schema
 SET search_path TO type_tests;
 SET citus.shard_count TO 4;
 -- single statement transactions with a simple type used in a table
@@ -18,6 +19,8 @@ SELECT * FROM t1;
  1 | (2,3)
 (1 row)
 
+ALTER TYPE tc1 RENAME TO tc1_newname;
+INSERT INTO t1 VALUES (3, (4,5)::tc1_newname); -- insert with a cast would fail if the rename didn't propagate
 -- single statement transactions with a an enum used in a table
 CREATE TYPE te1 AS ENUM ('one', 'two', 'three');
 CREATE TABLE t2 (a int PRIMARY KEY, b te1);
@@ -34,8 +37,10 @@ SELECT * FROM t2;
  1 | two
 (1 row)
 
+-- rename enum, subsequent operations on the type would fail if the rename was not propagated
+ALTER TYPE te1 RENAME TO te1_newname;
 -- add an extra value to the enum and use in table
-ALTER TYPE te1 ADD VALUE 'four';
+ALTER TYPE te1_newname ADD VALUE 'four';
 UPDATE t2 SET b = 'four';
 SELECT * FROM t2;
  a |  b   
@@ -90,9 +95,9 @@ CREATE TYPE te3 AS ENUM ('a','b');
 RESET citus.enable_ddl_propagation;
 CREATE TABLE t5 (a int PRIMARY KEY, b tc5[], c te3);
 SELECT create_distributed_table('t5','a');
- create_distributed_table
+ create_distributed_table 
 --------------------------
-
+ 
 (1 row)
 
 -- deleting the enum cascade will remove the type from the table and the workers
@@ -104,3 +109,4 @@ NOTICE:  drop cascades to column b of table t5
 -- clear objects
 SET client_min_messages TO fatal; -- suppress cascading objects dropping
 DROP SCHEMA type_tests CASCADE;
+DROP SCHEMA type_tests2 CASCADE;

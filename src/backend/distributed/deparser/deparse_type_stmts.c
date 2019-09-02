@@ -50,6 +50,8 @@ static void appendAlterTypeCmdDropColumn(StringInfo buf, AlterTableCmd *alterTab
 static void appendAlterTypeCmdAlterColumnType(StringInfo buf,
 											  AlterTableCmd *alterTableCmd);
 
+static void appendRenameTypeStmt(StringInfo buf, RenameStmt *stmt);
+
 
 /*
  * deparse_composite_type_stmt builds and returns a string representing the
@@ -395,4 +397,31 @@ appendColumnDef(StringInfo str, ColumnDef *columnDef)
 		const char *identifier = format_collate_be_qualified(collationOid);
 		appendStringInfo(str, " COLLATE %s", identifier);
 	}
+}
+
+
+const char *
+deparse_rename_type_stmt(RenameStmt *stmt)
+{
+	StringInfoData str = { 0 };
+	initStringInfo(&str);
+
+	Assert(stmt->renameType == OBJECT_TYPE);
+
+	appendRenameTypeStmt(&str, stmt);
+
+	return str.data;
+}
+
+
+static void
+appendRenameTypeStmt(StringInfo buf, RenameStmt *stmt)
+{
+	List *names = (List *) stmt->object;
+	TypeName *typeName = makeTypeNameFromNameList(names);
+	Oid typeOid = LookupTypeNameOid(NULL, typeName, false);
+	const char *identifier = format_type_be_qualified(typeOid);
+
+	appendStringInfo(buf, "ALTER TYPE %s RENAME TO %s", identifier, quote_identifier(
+						 stmt->newname));
 }
