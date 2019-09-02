@@ -1832,11 +1832,11 @@ DistObjectRelationId(void)
 }
 
 
-/* return oid of pg_dist_object_pk */
+/* return oid of pg_dist_object_pkey */
 Oid
 DistObjectPrimaryKeyIndexId(void)
 {
-	CachedRelationNamespaceLookup("pg_dist_object_pk",
+	CachedRelationNamespaceLookup("pg_dist_object_pkey",
 								  CitusCatalogNamespaceId(),
 								  &MetadataCache.distObjectPrimaryKeyIndexId);
 

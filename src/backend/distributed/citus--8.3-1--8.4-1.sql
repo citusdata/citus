@@ -50,12 +50,10 @@ CREATE TABLE citus.pg_dist_object (
     -- fields used for upgrades
     type text DEFAULT NULL,
     object_names text[] DEFAULT NULL,
-    object_args text[] DEFAULT NULL
-);
+    object_args text[] DEFAULT NULL,
 
-ALTER TABLE citus.pg_dist_object
-    ADD CONSTRAINT pg_dist_object_pk
-    PRIMARY KEY (classid, objid, objsubid);
+    CONSTRAINT pg_dist_object_pkey PRIMARY KEY (classid, objid, objsubid)
+);
 
 CREATE OR REPLACE FUNCTION pg_catalog.citus_drop_trigger()
     RETURNS event_trigger
