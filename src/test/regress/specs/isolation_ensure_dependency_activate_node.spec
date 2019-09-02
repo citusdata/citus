@@ -42,6 +42,9 @@ step "s1-print-distributed-objects"
 {
     SELECT nodename, nodeport, isactive FROM master_add_node('localhost', 57638);
 
+    -- print an overview of all distributed objects
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object;
+
     -- print if the schema has been created
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
@@ -84,6 +87,9 @@ step "s2-commit"
 # test
 step "s2-print-distributed-objects"
 {
+    -- print an overview of all distributed objects
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object;
+
     -- print if the schema has been created
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
