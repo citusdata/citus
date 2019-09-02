@@ -10,6 +10,8 @@
 
 #include "postgres.h"
 
+#include "catalog/dependency.h"
+#include "catalog/pg_type.h"
 #include "fmgr.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodes.h"
@@ -22,29 +24,33 @@
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
 #include "distributed/deparser.h"
+#include "distributed/metadata/distobject.h"
 #include "distributed/worker_protocol.h"
 
 PG_FUNCTION_INFO_V1(worker_create_or_replace);
 PG_FUNCTION_INFO_V1(type_recreate_command);
 
 
-static bool object_from_create_exists(Node *parseTree);
+static const ObjectAddress * GetObjectAddressFromParseTree(Node *parseTree, bool
+														   missing_ok);
 static DropStmt * drop_stmt_from_object_create(Node *createStmt);
 
 
-static bool
-object_from_create_exists(Node *parseTree)
+static const ObjectAddress *
+GetObjectAddressFromParseTree(Node *parseTree, bool missing_ok)
 {
 	switch (parseTree->type)
 	{
 		case T_CompositeTypeStmt:
 		{
-			return CompositeTypeExists(castNode(CompositeTypeStmt, parseTree));
+			return CompositeTypeStmtObjectAddress(castNode(CompositeTypeStmt, parseTree),
+												  missing_ok);
 		}
 
 		case T_CreateEnumStmt:
 		{
-			return EnumTypeExists(castNode(CreateEnumStmt, parseTree));
+			return CreateEnumStmtObjectAddress(castNode(CreateEnumStmt, parseTree),
+											   missing_ok);
 		}
 
 		default:
@@ -53,15 +59,34 @@ object_from_create_exists(Node *parseTree)
 			 * should not be reached, indicates the coordinator is sending unsupported
 			 * statements
 			 */
-			ereport(ERROR, (errmsg("unsupported statement to check existence for"),
+			ereport(ERROR, (errmsg("unsupported statement to get object address for"),
 							errhint("The coordinator send an unsupported command to the "
 									"worker")));
-			return false;
+			return NULL;
 		}
 	}
 }
 
 
+static Node *
+CreateStmtByObjectAddress(const ObjectAddress *address)
+{
+	switch (getObjectClass(address))
+	{
+		case OCLASS_TYPE:
+		{
+			return CreateTypeStmtByObjectAddress(address);
+		}
+
+		default:
+		{
+			ereport(ERROR, (errmsg("unsupported object to construct a create statment")));
+		}
+	}
+}
+
+
+/* TODO rewrite to create based on ObjectAddress */
 static DropStmt *
 drop_stmt_from_object_create(Node *createStmt)
 {
@@ -91,12 +116,30 @@ drop_stmt_from_object_create(Node *createStmt)
 }
 
 
+/*
+ * worker_create_or_replace(statement text)
+ *
+ * function is called, by the coordinator, with a CREATE statement for an object. This
+ * function implements the CREATE ... IF NOT EXISTS functionality for objects that do not
+ * have this functionality or where their implementation is not sufficient.
+ *
+ * Besides checking if an object of said name exists it tries to compare the object to be
+ * created with the one in the local catalog. If there is a difference the on in the local
+ * catalog will be renamed after which the statement can be executed on this worker to
+ * create the object.
+ *
+ * Renaming has two purposes
+ *  - free the identifier for creation
+ *  - non destructive if there is data store that would be destroyed if the object was
+ *    used in a table on this node, eg. types. If the type would be dropped with a cascade
+ *    it would drop any column holding user data for this type.
+ */
 Datum
 worker_create_or_replace(PG_FUNCTION_ARGS)
 {
 	text *sqlStatementText = PG_GETARG_TEXT_P(0);
 	const char *sqlStatement = text_to_cstring(sqlStatementText);
-
+	const ObjectAddress *address = NULL;
 	Node *parseTree = ParseTreeNode(sqlStatement);
 
 	/*
@@ -104,11 +147,37 @@ worker_create_or_replace(PG_FUNCTION_ARGS)
 	 * if the type actually exists instead of adding the IF EXISTS keyword to the
 	 * statement.
 	 */
-	if (object_from_create_exists(parseTree))
+	address = GetObjectAddressFromParseTree(parseTree, true);
+	if (ObjectExists(address))
 	{
-		/* TODO check if object is equal to what we plan to create */
-
+		Node *localCreateStmt = NULL;
+		const char *localSqlStatement = NULL;
 		DropStmt *dropStmtParseTree = NULL;
+
+		localCreateStmt = CreateStmtByObjectAddress(address);
+		localSqlStatement = DeparseTreeNode(localCreateStmt);
+		if (strcmp(sqlStatement, localSqlStatement) == 0)
+		{
+			/*
+			 * TODO string compare is a poor mans comparison, but calling equal on the
+			 * parsetree's returns false because there is extra information list character
+			 * position of some sort
+			 */
+
+			/*
+			 * parseTree sent by the coordinator is the same as we would create for our
+			 * object, therefore we can omit the create statement locally and not create
+			 * the object as it already exists.
+			 *
+			 * We let the coordinator know we didn't create the object.
+			 */
+			PG_RETURN_BOOL(false);
+		}
+
+		/* TODO for now we assume that we always recreate the same object crash if not */
+		Assert(false);
+
+		/* TODO don't drop, instead rename as described in documentation */
 
 		/*
 		 * there might be dependencies left on the worker on this type, these are not
@@ -116,16 +185,21 @@ worker_create_or_replace(PG_FUNCTION_ARGS)
 		 * dependencies
 		 */
 		dropStmtParseTree = drop_stmt_from_object_create(parseTree);
-		dropStmtParseTree->behavior = DROP_CASCADE;
 
 		if (dropStmtParseTree != NULL)
 		{
-			const char *sqlDropStmt = DeparseTreeNode((Node *) dropStmtParseTree);
+			const char *sqlDropStmt = NULL;
+
+			/* force the drop */
+			dropStmtParseTree->behavior = DROP_CASCADE;
+
+			sqlDropStmt = DeparseTreeNode((Node *) dropStmtParseTree);
 			CitusProcessUtility((Node *) dropStmtParseTree, sqlDropStmt,
 								PROCESS_UTILITY_TOPLEVEL, NULL, None_Receiver, NULL);
 		}
 	}
 
+	/* apply create statement locally */
 	CitusProcessUtility(parseTree, sqlStatement, PROCESS_UTILITY_TOPLEVEL, NULL,
 						None_Receiver, NULL);
 
@@ -145,31 +219,9 @@ type_recreate_command(PG_FUNCTION_ARGS)
 	List *typeNameList = stringToQualifiedNameList(typeNameStr);
 	TypeName *typeName = makeTypeNameFromNameList(typeNameList);
 	Oid typeOid = LookupTypeNameOid(NULL, typeName, false);
+	ObjectAddress typeAddress = { 0 };
 
-	Node *stmt = RecreateTypeStatement(typeOid);
-
-	switch (stmt->type)
-	{
-		case T_CreateEnumStmt:
-		{
-			const char *createEnumStmtSql = NULL;
-			createEnumStmtSql = deparse_create_enum_stmt(castNode(CreateEnumStmt, stmt));
-			return CStringGetTextDatum(createEnumStmtSql);
-		}
-
-		case T_CompositeTypeStmt:
-		{
-			const char *compositeTypeStmtSql = NULL;
-			compositeTypeStmtSql = deparse_composite_type_stmt(castNode(CompositeTypeStmt,
-																		stmt));
-			return CStringGetTextDatum(compositeTypeStmtSql);
-		}
-
-		default:
-		{
-			ereport(ERROR, (errmsg("unsupported statement for deparse")));
-		}
-	}
-
-	PG_RETURN_VOID();
+	ObjectAddressSet(typeAddress, TypeRelationId, typeOid);
+	Node *stmt = CreateTypeStmtByObjectAddress(&typeAddress);
+	return CStringGetTextDatum(DeparseTreeNode(stmt));
 }

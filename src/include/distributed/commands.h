@@ -123,9 +123,11 @@ extern List * PlanAlterTypeStmt(AlterTableStmt *stmt, const char *queryString);
 extern List * PlanCreateEnumStmt(CreateEnumStmt *createEnumStmt, const char *queryString);
 extern List * PlanAlterEnumStmt(AlterEnumStmt *stmt, const char *queryString);
 extern List * PlanDropTypeStmt(DropStmt *stmt, const char *queryString);
-extern Node * RecreateTypeStatement(Oid typeOid);
-extern bool CompositeTypeExists(CompositeTypeStmt *stmt);
-extern bool EnumTypeExists(CreateEnumStmt *stmt);
+extern Node * CreateTypeStmtByObjectAddress(const ObjectAddress *address);
+extern const ObjectAddress * CompositeTypeStmtObjectAddress(CompositeTypeStmt *stmt, bool
+															missing_ok);
+extern const ObjectAddress * CreateEnumStmtObjectAddress(CreateEnumStmt *stmt, bool
+														 missing_ok);
 extern DropStmt * CompositeTypeStmtToDrop(CompositeTypeStmt *stmt);
 extern DropStmt * CreateEnumStmtToDrop(CreateEnumStmt *stmt);
 extern List * CreateTypeDDLCommandsIdempotent(const ObjectAddress *typeAddress);

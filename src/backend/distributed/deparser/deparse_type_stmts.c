@@ -50,33 +50,6 @@ static void appendAlterTypeCmdDropColumn(StringInfo buf, AlterTableCmd *alterTab
 static void appendAlterTypeCmdAlterColumnType(StringInfo buf,
 											  AlterTableCmd *alterTableCmd);
 
-/*
- * deparse_create_type_stmt deparses any type creation statement
- *
- * TODO: needs to remove to be folded in a deparse_ddl_stmt_thing
- */
-const char *
-deparse_create_type_stmt(Node *stmt)
-{
-	switch (stmt->type)
-	{
-		case T_CreateEnumStmt:
-		{
-			return deparse_create_enum_stmt(castNode(CreateEnumStmt, stmt));
-		}
-
-		case T_CompositeTypeStmt:
-		{
-			return deparse_composite_type_stmt(castNode(CompositeTypeStmt, stmt));
-		}
-
-		default:
-		{
-			ereport(ERROR, (errmsg("unsupported statement for deparse")));
-		}
-	}
-}
-
 
 /*
  * deparse_composite_type_stmt builds and returns a string representing the

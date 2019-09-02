@@ -461,22 +461,24 @@ PlanDropTypeStmt(DropStmt *stmt, const char *queryString)
 
 
 /*
- * RecreateTypeStatement returns a parsetree for the CREATE TYPE statement to recreate the
- * type by its oid.
+ * CreateTypeStmtByObjectAddress returns a parsetree for the CREATE TYPE statement to
+ * recreate the type by its object address.
  */
 Node *
-RecreateTypeStatement(Oid typeOid)
+CreateTypeStmtByObjectAddress(const ObjectAddress *address)
 {
-	switch (get_typtype(typeOid))
+	Assert(address->classId == TypeRelationId);
+
+	switch (get_typtype(address->objectId))
 	{
 		case TYPTYPE_ENUM:
 		{
-			return (Node *) RecreateEnumStmt(typeOid);
+			return (Node *) RecreateEnumStmt(address->objectId);
 		}
 
 		case TYPTYPE_COMPOSITE:
 		{
-			return (Node *) RecreateCompositeTypeStmt(typeOid);
+			return (Node *) RecreateCompositeTypeStmt(address->objectId);
 		}
 
 		default:
@@ -620,28 +622,46 @@ enum_vals_list(Oid typeOid)
 
 
 /*
- * CompositeTypeExists checks, given a CREATE TYPE statement, if the composite type to be
- * created already exists or not.
+ * CompositeTypeStmtObjectAddress finds the ObjectAddress for the composite type described
+ * by the  CompositeTypeStmt. If missing_ok is false this function throws an error if the
+ * type does not exist.
+ *
+ * Never returns NULL, but the objid in the address could be invalid if missing_ok was set
+ * to true.
  */
-bool
-CompositeTypeExists(CompositeTypeStmt *stmt)
+const ObjectAddress *
+CompositeTypeStmtObjectAddress(CompositeTypeStmt *stmt, bool missing_ok)
 {
+	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
+
 	TypeName *typeName = makeTypeNameFromRangeVar(stmt->typevar);
-	Oid typeOid = LookupTypeNameOid(NULL, typeName, true);
-	return OidIsValid(typeOid);
+	Oid typeOid = LookupTypeNameOid(NULL, typeName, missing_ok);
+
+	ObjectAddressSet(*address, TypeRelationId, typeOid);
+
+	return address;
 }
 
 
 /*
- * EnumTypeExists checks, given a CREATE TYPE ... AS ENUM statement, it the enum type to
- * be created already exists or not.
+ * CreateEnumStmtObjectAddress finds the ObjectAddress for the enum type described by the
+ * CreateEnumStmt. If missing_ok is false this function throws an error if the  type does
+ * not exist.
+ *
+ * Never returns NULL, but the objid in the address could be invalid if missing_ok was set
+ * to true.
  */
-bool
-EnumTypeExists(CreateEnumStmt *stmt)
+const ObjectAddress *
+CreateEnumStmtObjectAddress(CreateEnumStmt *stmt, bool missing_ok)
 {
+	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
+
 	TypeName *typeName = makeTypeNameFromNameList(stmt->typeName);
-	Oid typeOid = LookupTypeNameOid(NULL, typeName, true);
-	return OidIsValid(typeOid);
+	Oid typeOid = LookupTypeNameOid(NULL, typeName, missing_ok);
+
+	ObjectAddressSet(*address, TypeRelationId, typeOid);
+
+	return address;
 }
 
 
@@ -706,10 +726,10 @@ CreateTypeDDLCommandsIdempotent(const ObjectAddress *typeAddress)
 		return NIL;
 	}
 
-	stmt = RecreateTypeStatement(typeAddress->objectId);
+	stmt = CreateTypeStmtByObjectAddress(typeAddress);
 
 	/* capture ddl command for recreation and wrap in create if not exists construct */
-	ddlCommand = deparse_create_type_stmt(stmt);
+	ddlCommand = DeparseTreeNode(stmt);
 	ddlCommand = wrap_in_sql(CREATE_OR_REPLACE_COMMAND, ddlCommand);
 	ddlCommands = lappend(ddlCommands, (void *) ddlCommand);
 
