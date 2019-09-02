@@ -3,7 +3,7 @@
  * multi_progress.c
  *	  Routines for tracking long-running jobs and seeing their progress.
  *
- * Copyright (c) 2017, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *-------------------------------------------------------------------------
  */
 

@@ -4,7 +4,7 @@
  *	  Type and function declarations used in performing transactions across
  *	  shard placements.
  *
- * Copyright (c) 2016, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */

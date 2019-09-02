@@ -2,7 +2,7 @@
  * multi_partitioning_utils.h
  *	  Utility functions declarations for declarative partitioning
  *
- * Copyright (c) 2017, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  */
 #ifndef MULTI_PARTITIONING_UTILS_H_
 #define MULTI_PARTITIONING_UTILS_H_

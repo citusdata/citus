@@ -45,7 +45,7 @@
  * replaced then what remains is a router query which can use nearly all
  * SQL features.
  *
- * Copyright (c) 2017, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *-------------------------------------------------------------------------
  */
 

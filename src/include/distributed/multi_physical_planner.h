@@ -4,7 +4,7 @@
  *	  Type and function declarations used in creating the distributed execution
  *	  plan.
  *
- * Copyright (c) 2012-2019, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  * $Id$
  *

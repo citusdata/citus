@@ -4,7 +4,7 @@
  *
  * Functions for execution subplans prior to distributed table execution.
  *
- * Copyright (c) 2017, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *-------------------------------------------------------------------------
  */
 

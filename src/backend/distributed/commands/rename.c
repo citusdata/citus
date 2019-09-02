@@ -3,7 +3,7 @@
  * rename.c
  *    Commands for renaming objects related to distributed tables
  *
- * Copyright (c) 2018, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */

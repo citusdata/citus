@@ -3,7 +3,7 @@
  * pg_dist_local_group.h
  *	  definition of the relation that holds the local group id (pg_dist_local_group).
  *
- * Copyright (c) 2016, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */

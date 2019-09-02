@@ -4,7 +4,7 @@
  *
  * UDF for creating a consistent restore point across all nodes.
  *
- * Copyright (c) 2017, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */

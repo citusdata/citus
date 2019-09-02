@@ -4,7 +4,7 @@
  * This file contains functions helper functions for planning
  * queries with colocated tables and subqueries.
  *
- * Copyright (c) 2017-2017, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */

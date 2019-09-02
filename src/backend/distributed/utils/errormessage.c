@@ -2,7 +2,7 @@
  * errormessage.c
  *	  Error handling related support functionality.
  *
- * Copyright (c) 2017, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  */
 
 #include "postgres.h"

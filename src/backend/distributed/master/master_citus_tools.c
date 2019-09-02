@@ -5,7 +5,7 @@
  *
  * This file contains functions to run commands on other worker/shards.
  *
- * Copyright (c) 2016-2016, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */

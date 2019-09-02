@@ -5,7 +5,7 @@
  *   between distributed tables. Created relationship graph will be hold by
  *   a static variable defined in this file until an invalidation comes in.
  *
- * Copyright (c) 2018, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */

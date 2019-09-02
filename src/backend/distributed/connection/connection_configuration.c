@@ -3,7 +3,7 @@
  * connection_configuration.c
  *   Functions for controlling configuration of Citus connections
  *
- * Copyright (c) 2018, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */

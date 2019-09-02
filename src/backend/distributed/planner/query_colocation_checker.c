@@ -15,7 +15,7 @@
  * necessary since some of the attribute equivalance checks are based on
  * queries rather than range table entries.
  *
- * Copyright (c) 2018, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *-------------------------------------------------------------------------
  */
 

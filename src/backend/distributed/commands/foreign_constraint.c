@@ -5,7 +5,7 @@
  * This file contains functions to create, alter and drop foreign
  * constraints on distributed tables.
  *
- * Copyright (c) 2018, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */

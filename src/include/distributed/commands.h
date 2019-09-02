@@ -5,7 +5,7 @@
  *    and DDL operations for citus. All declarations are grouped by the
  *    file that implements them.
  *
- * Copyright (c) 2018, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */

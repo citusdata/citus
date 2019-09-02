@@ -3,7 +3,7 @@
  * extension.c
  *    Commands for creating and altering extensions.
  *
- * Copyright (c) 2018, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */

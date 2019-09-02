@@ -4,7 +4,7 @@
  * information that is shared among both the worker and master extended
  * op nodes.
  *
- * Copyright (c) 2018, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *-------------------------------------------------------------------------
  */
 

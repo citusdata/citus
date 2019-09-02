@@ -4,7 +4,7 @@
  *    Declarations for public functions and variables used in COPY for
  *    distributed tables.
  *
- * Copyright (c) 2016, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */

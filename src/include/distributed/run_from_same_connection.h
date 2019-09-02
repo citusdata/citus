@@ -4,7 +4,7 @@
  * Sending commands from same connection to test transactions initiated from
  * worker nodes in the isolation framework.
  *
- * Copyright (c) 2018, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */

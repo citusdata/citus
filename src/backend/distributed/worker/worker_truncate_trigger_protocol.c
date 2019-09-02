@@ -4,7 +4,7 @@
  *
  * Routines for creating truncate triggers on distributed tables on worker nodes.
  *
- * Copyright (c) 2016, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  * $Id$
  *

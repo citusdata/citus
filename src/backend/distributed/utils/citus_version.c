@@ -4,7 +4,7 @@
  *
  * This file contains functions for displaying the Citus version string
  *
- * Copyright (c) 2017, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */

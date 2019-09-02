@@ -3,7 +3,7 @@
  * enable_ssl.c
  *    UDF and Utilities for enabling ssl during citus setup
  *
- * Copyright (c) 2018, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */
