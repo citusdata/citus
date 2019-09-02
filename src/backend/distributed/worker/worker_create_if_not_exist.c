@@ -28,7 +28,6 @@
 #include "distributed/worker_protocol.h"
 
 PG_FUNCTION_INFO_V1(worker_create_or_replace);
-PG_FUNCTION_INFO_V1(type_recreate_command);
 
 
 static const ObjectAddress * GetObjectAddressFromParseTree(Node *parseTree, bool
@@ -205,23 +204,4 @@ worker_create_or_replace(PG_FUNCTION_ARGS)
 
 	/* type has been created */
 	PG_RETURN_BOOL(true);
-}
-
-
-/*
- * type_recreate_command(typename text) text
- */
-Datum
-type_recreate_command(PG_FUNCTION_ARGS)
-{
-	text *typeNameText = PG_GETARG_TEXT_P(0);
-	const char *typeNameStr = text_to_cstring(typeNameText);
-	List *typeNameList = stringToQualifiedNameList(typeNameStr);
-	TypeName *typeName = makeTypeNameFromNameList(typeNameList);
-	Oid typeOid = LookupTypeNameOid(NULL, typeName, false);
-	ObjectAddress typeAddress = { 0 };
-
-	ObjectAddressSet(typeAddress, TypeRelationId, typeOid);
-	Node *stmt = CreateTypeStmtByObjectAddress(&typeAddress);
-	return CStringGetTextDatum(DeparseTreeNode(stmt));
 }
