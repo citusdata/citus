@@ -22,6 +22,7 @@
 #include "distributed/connection_management.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/metadata_sync.h"
 #include "distributed/multi_shard_transaction.h"
 #include "distributed/resource_lock.h"
 #include "distributed/remote_commands.h"
@@ -118,7 +119,7 @@ SendBareCommandListToWorkers(TargetWorkerSet targetWorkerSet, List *commandList)
 		int connectionFlags = FORCE_NEW_CONNECTION;
 
 		if (targetWorkerSet == WORKERS_WITH_METADATA &&
-			!workerNode->hasMetadata)
+			(!workerNode->hasMetadata || !workerNode->metadataSynced))
 		{
 			continue;
 		}
@@ -137,7 +138,20 @@ SendBareCommandListToWorkers(TargetWorkerSet targetWorkerSet, List *commandList)
 		{
 			char *commandString = lfirst(commandCell);
 
-			ExecuteCriticalRemoteCommand(workerConnection, commandString);
+			if (targetWorkerSet == WORKERS_WITH_METADATA)
+			{
+				int execResult = ExecuteOptionalRemoteCommand(workerConnection,
+															  commandString, NULL);
+				if (execResult != 0)
+				{
+					MarkNodeMetadataSynced(nodeName, nodePort, false);
+					break;
+				}
+			}
+			else
+			{
+				ExecuteCriticalRemoteCommand(workerConnection, commandString);
+			}
 		}
 
 		CloseConnection(workerConnection);

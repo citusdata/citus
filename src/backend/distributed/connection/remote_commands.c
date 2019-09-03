@@ -440,7 +440,11 @@ ExecuteOptionalRemoteCommand(MultiConnection *connection, const char *command,
 		return RESPONSE_NOT_OKAY;
 	}
 
-	*result = localResult;
+	if (result != NULL)
+	{
+		*result = localResult;
+	}
+
 	return 0;
 }
 
