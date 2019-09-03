@@ -449,11 +449,11 @@ List *
 PlanRenameTypeStmt(RenameStmt *stmt, const char *queryString)
 {
 	/* TODO extract type address from statement function */
+	const char *renameStmtSql = NULL;
 	TypeName *typeName = makeTypeNameFromNameList((List *) stmt->object);
 	Oid typeOid = LookupTypeNameOid(NULL, typeName, false);
 	ObjectAddress typeAddress = { 0 };
 	ObjectAddressSet(typeAddress, TypeRelationId, typeOid);
-	const char *renameStmtSql = NULL;
 
 	if (!IsObjectDistributed(&typeAddress))
 	{

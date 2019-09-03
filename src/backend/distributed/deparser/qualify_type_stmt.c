@@ -24,11 +24,12 @@
 static Oid
 type_get_namespace_oid(Oid typeOid)
 {
+	Form_pg_type typeData = NULL;
 	Relation catalog = heap_open(TypeRelationId, AccessShareLock);
 	HeapTuple typeTuple = get_catalog_object_by_oid(catalog, typeOid);
 	heap_close(catalog, AccessShareLock);
 
-	Form_pg_type typeData = (Form_pg_type) GETSTRUCT(typeTuple);
+	typeData = (Form_pg_type) GETSTRUCT(typeTuple);
 
 	return typeData->typnamespace;
 }
