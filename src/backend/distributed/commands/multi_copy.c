@@ -71,6 +71,7 @@
 #include "distributed/commands/multi_copy.h"
 #include "distributed/commands/utility_hook.h"
 #include "distributed/intermediate_results.h"
+#include "distributed/local_executor.h"
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_partitioning_utils.h"
@@ -2232,6 +2233,9 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
 	CopyOutState copyOutState = NULL;
 	const char *delimiterCharacter = "\t";
 	const char *nullPrintCharacter = "\\N";
+
+	/* Citus currently doesn't know how to handle COPY command locally */
+	ErrorIfLocalExecutionHappened();
 
 	/* look up table properties */
 	distributedRelation = heap_open(tableId, RowExclusiveLock);

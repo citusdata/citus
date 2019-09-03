@@ -31,14 +31,17 @@
 #include "access/attnum.h"
 #include "access/heapam.h"
 #include "access/htup_details.h"
+#include "access/xact.h"
 #include "catalog/catalog.h"
 #include "catalog/dependency.h"
 #include "commands/dbcommands.h"
+#include "commands/defrem.h"
 #include "commands/tablecmds.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/commands.h"
 #include "distributed/commands/multi_copy.h"
 #include "distributed/commands/utility_hook.h" /* IWYU pragma: keep */
+#include "distributed/local_executor.h"
 #include "distributed/maintenanced.h"
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
@@ -138,6 +141,49 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 								params, queryEnv, dest, completionTag);
 
 		return;
+	}
+
+	if (IsA(parsetree, ExplainStmt) &&
+		IsA(((ExplainStmt *) parsetree)->query, Query))
+	{
+		ExplainStmt *explainStmt = (ExplainStmt *) parsetree;
+
+		if (IsTransactionBlock())
+		{
+			ListCell *optionCell = NULL;
+			bool analyze = false;
+
+			foreach(optionCell, explainStmt->options)
+			{
+				DefElem *option = (DefElem *) lfirst(optionCell);
+
+				if (strcmp(option->defname, "analyze") == 0)
+				{
+					analyze = defGetBoolean(option);
+				}
+
+				/* don't "break", as explain.c will use the last value */
+			}
+
+			if (analyze)
+			{
+				/*
+				 * Since we cannot execute EXPLAIN ANALYZE locally, we
+				 * cannot continue.
+				 */
+				ErrorIfLocalExecutionHappened();
+			}
+		}
+
+		/*
+		 * EXPLAIN ANALYZE is tricky with local execution, and there is not
+		 * much difference between the local and distributed execution in terms
+		 * of the actual EXPLAIN output.
+		 *
+		 * TODO: It might be nice to have a way to show that the query is locally
+		 * executed. Shall we add a INFO output?
+		 */
+		DisableLocalExecution();
 	}
 
 	if (IsA(parsetree, CreateSubscriptionStmt))

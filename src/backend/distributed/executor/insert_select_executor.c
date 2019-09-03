@@ -14,6 +14,7 @@
 #include "distributed/commands/multi_copy.h"
 #include "distributed/insert_select_executor.h"
 #include "distributed/insert_select_planner.h"
+#include "distributed/local_executor.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/multi_physical_planner.h"
@@ -74,6 +75,16 @@ CoordinatorInsertSelectExecScan(CustomScanState *node)
 
 		ereport(DEBUG1, (errmsg("Collecting INSERT ... SELECT results on coordinator")));
 
+
+		/*
+		 * INSERT .. SELECT via coordinator consists of two steps, a SELECT is
+		 * followd by a COPY. If the SELECT is executed locally, then the COPY
+		 * would fail since Citus currently doesn't know how to handle COPY
+		 * locally. So, to prevent the command fail, we simply disable local
+		 * execution.
+		 */
+		DisableLocalExecution();
+
 		/*
 		 * If we are dealing with partitioned table, we also need to lock its
 		 * partitions. Here we only lock targetRelation, we acquire necessary
@@ -83,7 +94,6 @@ CoordinatorInsertSelectExecScan(CustomScanState *node)
 		{
 			LockPartitionRelations(targetRelationId, RowExclusiveLock);
 		}
-
 
 		if (distributedPlan->workerJob != NULL)
 		{

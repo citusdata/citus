@@ -64,6 +64,18 @@ SELECT count(*) FROM pg_dist_transaction;
 
 -- Multi-statement transactions should write 2 transaction recovery records
 BEGIN;
+SET LOCAL citus.enable_local_execution TO false;
+INSERT INTO test_recovery VALUES ('hello');
+INSERT INTO test_recovery VALUES ('world');
+COMMIT;
+SELECT count(*) FROM pg_dist_transaction;
+SELECT recover_prepared_transactions();
+
+-- the same transaction block, but this time
+-- enable local execution as well. The first
+-- command is locally executed, the second
+-- is remote, so 1 entry is expected
+BEGIN;
 INSERT INTO test_recovery VALUES ('hello');
 INSERT INTO test_recovery VALUES ('world');
 COMMIT;

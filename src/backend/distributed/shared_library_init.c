@@ -26,6 +26,7 @@
 #include "distributed/commands/utility_hook.h"
 #include "distributed/connection_management.h"
 #include "distributed/distributed_deadlock_detection.h"
+#include "distributed/local_executor.h"
 #include "distributed/maintenanced.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/master_protocol.h"
@@ -431,6 +432,17 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
+		"citus.enable_local_execution",
+		gettext_noop("Enables queries on shards that are local to the current node "
+					 "to be planned and executed locally."),
+		NULL,
+		&EnableLocalExecution,
+		true,
+		PGC_USERSET,
+		0,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
 		"citus.enable_single_hash_repartition_joins",
 		gettext_noop("Enables single hash repartitioning between hash "
 					 "distributed tables"),
@@ -507,6 +519,17 @@ RegisterCitusConfigVariables(void)
 		false,
 		PGC_USERSET,
 		0,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		"citus.log_local_commands",
+		gettext_noop("Log queries that are executed locally, can be overriden by "
+					 "citus.log_remote_commands"),
+		NULL,
+		&LogLocalCommands,
+		false,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
