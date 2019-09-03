@@ -124,10 +124,8 @@ deparse_alter_type_stmt(AlterTableStmt *stmt)
 static void
 appendAlterTypeStmt(StringInfo buf, AlterTableStmt *stmt)
 {
-	List *names = MakeNameListFromRangeVar(stmt->relation);
-	TypeName *typeName = makeTypeNameFromNameList(names);
-	Oid typeOid = LookupTypeNameOid(NULL, typeName, false);
-	const char *identifier = format_type_be_qualified(typeOid);
+	const char *identifier = quote_qualified_identifier(stmt->relation->schemaname,
+														stmt->relation->relname);
 	ListCell *cmdCell = NULL;
 
 	Assert(stmt->relkind = OBJECT_TYPE);
@@ -223,11 +221,7 @@ appendAlterTypeCmdAlterColumnType(StringInfo buf, AlterTableCmd *alterTableCmd)
 static void
 appendAlterEnumStmt(StringInfo buf, AlterEnumStmt *stmt)
 {
-	TypeName *typeName = makeTypeNameFromNameList(stmt->typeName);
-	Oid typeOid = LookupTypeNameOid(NULL, typeName, false);
-	const char *identifier = format_type_be_qualified(typeOid);
-
-	appendStringInfo(buf, "ALTER TYPE %s", identifier);
+	appendStringInfo(buf, "ALTER TYPE %s", NameListToQuotedString(stmt->typeName));
 
 	if (AlterEnumIsRename(stmt))
 	{

@@ -43,6 +43,11 @@ DeparseTreeNode(Node *stmt)
 			return deparse_alter_table_stmt(castNode(AlterTableStmt, stmt));
 		}
 
+		case T_AlterEnumStmt:
+		{
+			return deparse_alter_enum_stmt(castNode(AlterEnumStmt, stmt));
+		}
+
 		case T_RenameStmt:
 		{
 			return deparse_rename_stmt(castNode(RenameStmt, stmt));

@@ -35,5 +35,9 @@ extern const char * deparse_alter_type_stmt(AlterTableStmt *stmt);
 extern const char * deparse_rename_type_stmt(RenameStmt *stmt);
 
 extern void qualify_rename_type_stmt(RenameStmt *stmt);
+extern void qualify_alter_enum_stmt(AlterEnumStmt *stmt);
+extern void qualify_alter_type_stmt(AlterTableStmt *stmt);
+extern void qualify_composite_type_stmt(CompositeTypeStmt *stmt);
+extern void qualify_create_enum_stmt(CreateEnumStmt *stmt);
 
 #endif /* CITUS_DEPARSER_H */

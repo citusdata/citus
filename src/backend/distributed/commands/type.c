@@ -81,7 +81,6 @@
 
 
 /* forward declaration for helper functions*/
-static void makeRangeVarQualified(RangeVar *var);
 static List * FilterNameListForDistributedTypes(List *objects, bool missing_ok);
 static List * TypeNameListToObjectAddresses(List *objects);
 static TypeName * makeTypeNameFromRangeVar(const RangeVar *relation);
@@ -129,7 +128,7 @@ PlanCompositeTypeStmt(CompositeTypeStmt *stmt, const char *queryString)
 	 */
 	EnsureCoordinator();
 
-	makeRangeVarQualified(stmt->typevar);
+	QualifyTreeNode((Node *) stmt);
 
 	/* find object address of just created object */
 	typeName = makeTypeNameFromRangeVar(stmt->typevar);
@@ -215,19 +214,11 @@ PlanAlterTypeStmt(AlterTableStmt *stmt, const char *queryString)
 		return NIL;
 	}
 
-	/* check if type is distributed before we run the coordinator check */
-	typeName = makeTypeNameFromRangeVar(stmt->relation);
-	typeOid = LookupTypeNameOid(NULL, typeName, false);
-	ObjectAddressSet(typeAddress, TypeRelationId, typeOid);
-	if (!IsObjectDistributed(&typeAddress))
-	{
-		return NIL;
-	}
-
 	EnsureCoordinator();
 
 	/* reconstruct alter statement in a portable fashion */
-	alterTypeStmtSql = deparse_alter_type_stmt(stmt);
+	QualifyTreeNode((Node *) stmt);
+	alterTypeStmtSql = DeparseTreeNode((Node *) stmt);
 	ereport(DEBUG3, (errmsg("deparsed alter type statement"),
 					 errdetail("sql: %s", alterTypeStmtSql)));
 
@@ -244,7 +235,6 @@ List *
 PlanCreateEnumStmt(CreateEnumStmt *stmt, const char *queryString)
 {
 	const char *createEnumStmtSql = NULL;
-	RangeVar *var = NULL;
 	ObjectAddress typeAddress = { 0 };
 	Oid typeOid = InvalidOid;
 	TypeName *typeName = NULL;
@@ -275,13 +265,7 @@ PlanCreateEnumStmt(CreateEnumStmt *stmt, const char *queryString)
 	EnsureCoordinator();
 
 	/* enforce fully qualified typeName for correct deparsing and pg_dist_object */
-	var = makeRangeVarFromNameList(stmt->typeName);
-	if (var->schemaname == NULL)
-	{
-		makeRangeVarQualified(var);
-		stmt->typeName = list_make2(makeString(var->schemaname),
-									makeString(var->relname));
-	}
+	QualifyTreeNode((Node *) stmt);
 
 	/* lookup type address of just created type */
 	typeName = makeTypeNameFromNameList(stmt->typeName);
@@ -349,7 +333,8 @@ PlanAlterEnumStmt(AlterEnumStmt *stmt, const char *queryString)
 	 */
 	EnsureCoordinator();
 
-	alterEnumStmtSql = deparse_alter_enum_stmt(stmt);
+	QualifyTreeNode((Node *) stmt);
+	alterEnumStmtSql = DeparseTreeNode((Node *) stmt);
 	if (AlterEnumIsAddValue(stmt))
 	{
 		/*
@@ -877,22 +862,6 @@ get_typowner(Oid typid)
 	}
 
 	return result;
-}
-
-
-/*
- * makeRangeVarQualified will fill in the schemaname in RangeVar if it is not already
- * present. The schema used will be the default schemaname for creation of new objects as
- * returned by RangeVarGetCreationNamespace.
- */
-static void
-makeRangeVarQualified(RangeVar *var)
-{
-	if (var->schemaname == NULL)
-	{
-		Oid creationSchema = RangeVarGetCreationNamespace(var);
-		var->schemaname = get_namespace_name(creationSchema);
-	}
 }
 
 
