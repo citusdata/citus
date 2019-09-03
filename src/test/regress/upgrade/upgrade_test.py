@@ -5,6 +5,8 @@ import utils
 HOME = expanduser('~')
 CURRENT_PG_PATH = HOME + '/.pgenv/pgsql/bin'
 CURRENT_PG_DATA_PATH = HOME + '/oldData'
+NEW_PG_PATH = HOME + '/.pgenv/pgsql-11.3/bin'
+NEW_PG_DATA_PATH = HOME + '/newData'
 CITUS_DIR = HOME + '/citus'
 
 COORDINATOR_NAME = 'coordinator'
@@ -45,7 +47,7 @@ def start_databases(pg_path, base_data_path):
 
 def create_citus_extension(pg_path):
     for port in NODE_PORTS.values():
-        utils.psql(pg_path, port, '"CREATE EXTENSION citus;"')
+        utils.psql(pg_path, port, "CREATE EXTENSION citus;")
 
 
 def add_workers(pg_path):
@@ -74,3 +76,35 @@ def citus_prepare_pg_upgrade(pg_path):
 
 
 create_table(CURRENT_PG_PATH, NODE_PORTS[COORDINATOR_NAME])
+citus_prepare_pg_upgrade(CURRENT_PG_PATH)
+
+
+def stop_databases(pg_path, base_data_path):
+    for node_name in NODE_NAMES:
+        abs_data_path = base_data_path + '/' + node_name
+        command = '{}/pg_ctl -D {} -o "-p {}" -l {}/logfile stop'.format(pg_path,
+                                                                         abs_data_path, NODE_PORTS[node_name], pg_path)
+        utils.run(command)
+
+
+def perform_postgres_upgrade():
+    with utils.cd("~"):
+        for node_name in NODE_NAMES:
+            abs_new_data_path = NEW_PG_DATA_PATH + "/" + node_name
+            abs_old_data_path = CURRENT_PG_DATA_PATH + "/" + node_name
+            command = "{}/pg_upgrade --old-bindir={} --new-bindir={} --old-datadir={} \
+                                        --new-datadir={}".format(NEW_PG_PATH, CURRENT_PG_PATH, NEW_PG_PATH,
+                                                                 abs_old_data_path, abs_new_data_path)
+            utils.run(command)
+
+
+def citus_finish_pg_upgrade(pg_path):
+    for port in NODE_PORTS.values():
+        utils.psql(pg_path, port, "SELECT citus_finish_pg_upgrade();")
+
+
+stop_databases(CURRENT_PG_PATH, CURRENT_PG_DATA_PATH)
+initialize_db_for_cluster(NEW_PG_PATH, NEW_PG_DATA_PATH)
+perform_postgres_upgrade()
+start_databases(NEW_PG_PATH, NEW_PG_DATA_PATH)
+citus_finish_pg_upgrade(NEW_PG_PATH)
