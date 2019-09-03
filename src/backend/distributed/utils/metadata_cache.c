@@ -581,7 +581,10 @@ LookupNodeByNodeId(uint32 nodeId)
 		WorkerNode *workerNode = WorkerNodeArray[workerNodeIndex];
 		if (workerNode->nodeId == nodeId)
 		{
-			return workerNode;
+			WorkerNode *workerNodeCopy = palloc0(sizeof(WorkerNode));
+			memcpy(workerNodeCopy, workerNode, sizeof(WorkerNode));
+
+			return workerNodeCopy;
 		}
 	}
 
@@ -2858,6 +2861,7 @@ InitializeWorkerNodeCache(void)
 		workerNode->nodeId = currentNode->nodeId;
 		strlcpy(workerNode->workerRack, currentNode->workerRack, WORKER_LENGTH);
 		workerNode->hasMetadata = currentNode->hasMetadata;
+		workerNode->metadataSynced = currentNode->metadataSynced;
 		workerNode->isActive = currentNode->isActive;
 		workerNode->nodeRole = currentNode->nodeRole;
 		strlcpy(workerNode->nodeCluster, currentNode->nodeCluster, NAMEDATALEN);

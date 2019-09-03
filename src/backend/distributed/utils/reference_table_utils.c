@@ -177,8 +177,8 @@ ReplicateAllReferenceTablesToNode(char *nodeName, int nodePort)
 			char *tableOwner = TableOwner(shardInterval->relationId);
 			List *commandList = CopyShardForeignConstraintCommandList(shardInterval);
 
-			SendCommandListToWorkerInSingleTransaction(nodeName, nodePort,
-													   tableOwner, commandList);
+			SendCommandListToWorkerInSingleTransaction(nodeName, nodePort, tableOwner,
+													   commandList);
 		}
 	}
 

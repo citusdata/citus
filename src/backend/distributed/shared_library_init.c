@@ -31,6 +31,7 @@
 #include "distributed/master_metadata_utility.h"
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/metadata_sync.h"
 #include "distributed/multi_explain.h"
 #include "distributed/multi_join_order.h"
 #include "distributed/multi_logical_optimizer.h"
@@ -603,6 +604,30 @@ RegisterCitusConfigVariables(void)
 		60000, -1, 7 * 24 * 3600 * 1000,
 		PGC_SIGHUP,
 		GUC_UNIT_MS,
+		NULL, NULL, NULL);
+
+	DefineCustomIntVariable(
+		"citus.metadata_sync_interval",
+		gettext_noop("Sets the time to wait between metadata syncs."),
+		gettext_noop("metadata sync needs to run every so often "
+					 "to synchronize metadata to metadata nodes "
+					 "that are out of sync."),
+		&MetadataSyncInterval,
+		60000, 1, 7 * 24 * 3600 * 1000,
+		PGC_SIGHUP,
+		GUC_UNIT_MS | GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
+	DefineCustomIntVariable(
+		"citus.metadata_sync_retry_interval",
+		gettext_noop("Sets the interval to retry failed metadata syncs."),
+		gettext_noop("metadata sync needs to run every so often "
+					 "to synchronize metadata to metadata nodes "
+					 "that are out of sync."),
+		&MetadataSyncRetryInterval,
+		5000, 1, 7 * 24 * 3600 * 1000,
+		PGC_SIGHUP,
+		GUC_UNIT_MS | GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(

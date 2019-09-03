@@ -143,4 +143,8 @@ REVOKE ALL ON FUNCTION master_add_inactive_node(text,int,int,noderole,name) FROM
 REVOKE ALL ON FUNCTION master_add_node(text,int,int,noderole,name) FROM PUBLIC;
 REVOKE ALL ON FUNCTION master_add_secondary_node(text,int,text,int,name) FROM PUBLIC;
 
+ALTER TABLE pg_dist_node ADD COLUMN metadatasynced BOOLEAN DEFAULT FALSE;
+COMMENT ON COLUMN pg_dist_node.metadatasynced IS
+    'indicates whether the node has the most recent metadata';
+
 RESET search_path;

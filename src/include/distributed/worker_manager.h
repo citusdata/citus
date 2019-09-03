@@ -47,6 +47,7 @@ typedef struct WorkerNode
 	bool isActive;                      /* node's state */
 	Oid nodeRole;                       /* the node's role in its group */
 	char nodeCluster[NAMEDATALEN];      /* the cluster the node is a part of */
+	bool metadataSynced;                /* node has the most recent metadata */
 } WorkerNode;
 
 

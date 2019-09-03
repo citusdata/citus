@@ -23,6 +23,7 @@
 #include "distributed/citus_acquire_lock.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/connection_management.h"
+#include "distributed/maintenanced.h"
 #include "distributed/master_protocol.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/metadata_cache.h"
@@ -31,6 +32,7 @@
 #include "distributed/multi_router_planner.h"
 #include "distributed/pg_dist_node.h"
 #include "distributed/reference_table_utils.h"
+#include "distributed/remote_commands.h"
 #include "distributed/resource_lock.h"
 #include "distributed/shardinterval_utils.h"
 #include "distributed/worker_manager.h"
@@ -58,12 +60,16 @@ typedef struct NodeMetadata
 	int32 groupId;
 	char *nodeRack;
 	bool hasMetadata;
+	bool metadataSynced;
 	bool isActive;
 	Oid nodeRole;
 	char *nodeCluster;
 } NodeMetadata;
 
 /* local function forward declarations */
+static List * WorkerListDelete(List *workerList, uint32 nodeId);
+static List * SyncedMetadataNodeList(void);
+static void SyncDistNodeEntryToNodes(WorkerNode *workerNode, List *metadataWorkers);
 static int ActivateNode(char *nodeName, int nodePort);
 static void RemoveNodeFromCluster(char *nodeName, int32 nodePort);
 static int AddNodeMetadata(char *nodeName, int32 nodePort, NodeMetadata
@@ -78,6 +84,9 @@ static void DeleteNodeRow(char *nodename, int32 nodeport);
 static List * ParseWorkerNodeFileAndRename(void);
 static WorkerNode * TupleToWorkerNode(TupleDesc tupleDescriptor, HeapTuple heapTuple);
 static void UpdateNodeLocation(int32 nodeId, char *newNodeName, int32 newNodePort);
+static bool * SendOptionalCommandListToWorkers(List *workerNodeList,
+											   List *commandList,
+											   const char *nodeUser);
 
 /* declarations for dynamic loading */
 PG_FUNCTION_INFO_V1(master_add_node);
@@ -493,7 +502,7 @@ master_update_node(PG_FUNCTION_ARGS)
 	/*
 	 * force is used when an update needs to happen regardless of conflicting locks. This
 	 * feature is important to force the update during a failover due to failure, eg. by
-	 * a high-availability system such as pg_auto_failover. The strategy is a to start a
+	 * a high-availability system such as pg_auto_failover. The strategy is to start a
 	 * background worker that actively cancels backends holding conflicting locks with
 	 * this backend.
 	 *
@@ -506,6 +515,7 @@ master_update_node(PG_FUNCTION_ARGS)
 	WorkerNode *workerNode = NULL;
 	WorkerNode *workerNodeWithSameAddress = NULL;
 	List *placementList = NIL;
+	List *metadataWorkersToSync = NIL;
 	BackgroundWorkerHandle *handle = NULL;
 
 	CheckCitusVersion(ERROR);
@@ -578,6 +588,30 @@ master_update_node(PG_FUNCTION_ARGS)
 
 	UpdateNodeLocation(nodeId, newNodeNameString, newNodePort);
 
+	strlcpy(workerNode->workerName, newNodeNameString, WORKER_LENGTH);
+	workerNode->workerPort = newNodePort;
+
+	/*
+	 * Propagate the updated pg_dist_node entry to all metadata workers.
+	 * The usual case is that the new node is in stand-by mode, so we don't
+	 * sync the changes to the new node, and instead schedule it for being
+	 * synced by the maintenance daemon.
+	 *
+	 * It is possible that maintenance daemon does the first resync too
+	 * early, but that's fine, since this will start a retry loop with
+	 * 5 second intervals until sync is complete.
+	 */
+	metadataWorkersToSync = SyncedMetadataNodeList();
+	if (workerNode->hasMetadata)
+	{
+		metadataWorkersToSync = WorkerListDelete(metadataWorkersToSync, nodeId);
+		MarkNodeMetadataSynced(workerNode->workerName,
+							   workerNode->workerPort, false);
+		TriggerMetadataSync(MyDatabaseId);
+	}
+
+	SyncDistNodeEntryToNodes(workerNode, metadataWorkersToSync);
+
 	if (handle != NULL)
 	{
 		/*
@@ -588,6 +622,176 @@ master_update_node(PG_FUNCTION_ARGS)
 	}
 
 	PG_RETURN_VOID();
+}
+
+
+/* MetadataNodeList returns list of all synced metadata workers. */
+static List *
+SyncedMetadataNodeList(void)
+{
+	List *metadataNodeList = NIL;
+	List *activePrimaries = ActivePrimaryNodeList(AccessShareLock);
+	ListCell *workerNodeCell = NULL;
+
+	foreach(workerNodeCell, activePrimaries)
+	{
+		WorkerNode *workerNode = lfirst(workerNodeCell);
+		if (workerNode->hasMetadata && workerNode->metadataSynced)
+		{
+			metadataNodeList = lappend(metadataNodeList, workerNode);
+		}
+	}
+
+	return metadataNodeList;
+}
+
+
+/*
+ * WorkerListDelete removes the worker node with the given id
+ * from the list of given workers.
+ */
+static List *
+WorkerListDelete(List *workerList, uint32 nodeId)
+{
+	List *filteredWorkerList = NIL;
+	ListCell *workerCell = NULL;
+
+	foreach(workerCell, workerList)
+	{
+		WorkerNode *workerNode = lfirst(workerCell);
+		if (workerNode->nodeId != nodeId)
+		{
+			filteredWorkerList = lappend(filteredWorkerList, workerNode);
+		}
+	}
+
+	return filteredWorkerList;
+}
+
+
+/*
+ * SyncDistNodeEntryToNodes synchronizes the corresponding entry for
+ * the given workerNode in pg_dist_node metadata table of given
+ * metadataWorkers. If syncing to a node fails, pg_distnode.metadatasynced
+ * is set to false.
+ */
+static void
+SyncDistNodeEntryToNodes(WorkerNode *nodeToSync, List *metadataWorkers)
+{
+	ListCell *workerCell = NULL;
+	char *extensionOwner = CitusExtensionOwnerName();
+	char *nodeDeleteCommand = NodeDeleteCommand(nodeToSync->nodeId);
+	char *nodeInsertCommand = NodeListInsertCommand(list_make1(nodeToSync));
+	List *commandList = list_make2(nodeDeleteCommand, nodeInsertCommand);
+	bool *workerFailed = SendOptionalCommandListToWorkers(metadataWorkers, commandList,
+														  extensionOwner);
+
+	int workerIndex = 0;
+	foreach(workerCell, metadataWorkers)
+	{
+		WorkerNode *workerNode = lfirst(workerCell);
+
+		if (workerFailed[workerIndex])
+		{
+			MarkNodeMetadataSynced(workerNode->workerName, workerNode->workerPort, false);
+		}
+
+		workerIndex++;
+	}
+}
+
+
+/*
+ * SendOptionalCommandListToWorkers sends the given command list to the given
+ * worker list, and returns a bool[] indicating whether execution of the command
+ * list failed at a worker or not.
+ *
+ * If execution fails at a worker because of connection error, this function just
+ * emits a warning for that node. If execution fails because of a result error,
+ * the node is rolled-back to the status before this function so further queries
+ * can be sent to the node.
+ */
+static bool *
+SendOptionalCommandListToWorkers(List *workerNodeList, List *commandList,
+								 const char *nodeUser)
+{
+	List *connectionList = NIL;
+	ListCell *commandCell = NULL;
+	ListCell *connectionCell = NULL;
+	bool *workerFailed = palloc0(sizeof(workerNodeList));
+	char *beginSavepointCommand = "SAVEPOINT sp_node_metadata";
+	char *rollbackSavepointCommand = "ROLLBACK TO SAVEPOINT sp_node_metadata";
+	char *releaseSavepointCommand = "RELEASE SAVEPOINT sp_node_metadata";
+
+	BeginOrContinueCoordinatedTransaction();
+
+	/* open connections in parallel */
+	connectionList = StartWorkerListConnections(workerNodeList, 0, nodeUser, NULL);
+	FinishConnectionListEstablishment(connectionList);
+
+	RemoteTransactionsBeginIfNecessary(connectionList);
+
+	commandList = lcons(beginSavepointCommand, commandList);
+	commandList = lappend(commandList, releaseSavepointCommand);
+
+	foreach(commandCell, commandList)
+	{
+		char *command = lfirst(commandCell);
+		int workerIndex = 0;
+		foreach(connectionCell, connectionList)
+		{
+			MultiConnection *connection = lfirst(connectionCell);
+
+			if (!workerFailed[workerIndex])
+			{
+				if (SendRemoteCommand(connection, command) == 0)
+				{
+					ReportConnectionError(connection, WARNING);
+					workerFailed[workerIndex] = true;
+				}
+			}
+
+			workerIndex++;
+		}
+
+		workerIndex = 0;
+		foreach(connectionCell, connectionList)
+		{
+			MultiConnection *connection = lfirst(connectionCell);
+			bool raiseInterrupts = true;
+			PGresult *commandResult = NULL;
+			bool responseOK = false;
+
+			if (workerFailed[workerIndex])
+			{
+				workerIndex++;
+				continue;
+			}
+
+			commandResult = GetRemoteCommandResult(connection, raiseInterrupts);
+			responseOK = IsResponseOK(commandResult);
+
+			if (!responseOK)
+			{
+				ReportResultError(connection, commandResult, WARNING);
+				workerFailed[workerIndex] = true;
+
+				PQclear(commandResult);
+				ForgetResults(connection);
+
+				ExecuteOptionalRemoteCommand(connection, rollbackSavepointCommand, NULL);
+			}
+			else
+			{
+				PQclear(commandResult);
+				ForgetResults(connection);
+			}
+
+			workerIndex++;
+		}
+	}
+
+	return workerFailed;
 }
 
 
@@ -1255,6 +1459,8 @@ InsertNodeRow(int nodeid, char *nodeName, int32 nodePort, NodeMetadata *nodeMeta
 	values[Anum_pg_dist_node_nodeport - 1] = UInt32GetDatum(nodePort);
 	values[Anum_pg_dist_node_noderack - 1] = CStringGetTextDatum(nodeMetadata->nodeRack);
 	values[Anum_pg_dist_node_hasmetadata - 1] = BoolGetDatum(nodeMetadata->hasMetadata);
+	values[Anum_pg_dist_node_metadatasynced - 1] = BoolGetDatum(
+		nodeMetadata->metadataSynced);
 	values[Anum_pg_dist_node_isactive - 1] = BoolGetDatum(nodeMetadata->isActive);
 	values[Anum_pg_dist_node_noderole - 1] = ObjectIdGetDatum(nodeMetadata->nodeRole);
 	values[Anum_pg_dist_node_nodecluster - 1] = nodeClusterNameDatum;
@@ -1463,6 +1669,7 @@ ParseWorkerNodeFileAndRename()
 		strlcpy(workerNode->workerRack, nodeRack, WORKER_LENGTH);
 		workerNode->workerPort = nodePort;
 		workerNode->hasMetadata = false;
+		workerNode->metadataSynced = false;
 		workerNode->isActive = true;
 
 		workerNodeList = lappend(workerNodeList, workerNode);
@@ -1519,6 +1726,8 @@ TupleToWorkerNode(TupleDesc tupleDescriptor, HeapTuple heapTuple)
 	strlcpy(workerNode->workerName, TextDatumGetCString(nodeName), WORKER_LENGTH);
 	strlcpy(workerNode->workerRack, TextDatumGetCString(nodeRack), WORKER_LENGTH);
 	workerNode->hasMetadata = DatumGetBool(datumArray[Anum_pg_dist_node_hasmetadata - 1]);
+	workerNode->metadataSynced =
+		DatumGetBool(datumArray[Anum_pg_dist_node_metadatasynced - 1]);
 	workerNode->isActive = DatumGetBool(datumArray[Anum_pg_dist_node_isactive - 1]);
 	workerNode->nodeRole = DatumGetObjectId(datumArray[Anum_pg_dist_node_noderole - 1]);
 

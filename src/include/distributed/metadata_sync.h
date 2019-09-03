@@ -16,6 +16,9 @@
 #include "distributed/metadata_cache.h"
 #include "nodes/pg_list.h"
 
+/* config variables */
+extern int MetadataSyncInterval;
+extern int MetadataSyncRetryInterval;
 
 /* Functions declarations for metadata syncing */
 extern bool ClusterHasKnownMetadataWorkers(void);
@@ -37,7 +40,11 @@ extern char * CreateSchemaDDLCommand(Oid schemaId);
 extern char * PlacementUpsertCommand(uint64 shardId, uint64 placementId, int shardState,
 									 uint64 shardLength, int32 groupId);
 extern void CreateTableMetadataOnWorkers(Oid relationId);
-
+extern void MarkNodeMetadataSynced(char *nodeName, int32 nodePort, bool synced);
+extern bool SyncMetadataToNodes(void);
+extern bool SendOptionalCommandListToWorkerInTransaction(char *nodeName, int32 nodePort,
+														 char *nodeUser,
+														 List *commandList);
 
 #define DELETE_ALL_NODES "TRUNCATE pg_dist_node CASCADE"
 #define REMOVE_ALL_CLUSTERED_TABLES_COMMAND \
@@ -57,5 +64,6 @@ extern void CreateTableMetadataOnWorkers(Oid relationId);
 	"shardstate = EXCLUDED.shardstate, " \
 	"shardlength = EXCLUDED.shardlength, " \
 	"groupid = EXCLUDED.groupid"
+#define METADATA_SYNC_CHANNEL "metadata_sync"
 
 #endif /* METADATA_SYNC_H */

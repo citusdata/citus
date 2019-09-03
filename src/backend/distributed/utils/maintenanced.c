@@ -26,6 +26,7 @@
 #include "catalog/pg_extension.h"
 #include "citus_version.h"
 #include "catalog/pg_namespace.h"
+#include "commands/async.h"
 #include "commands/extension.h"
 #include "libpq/pqsignal.h"
 #include "catalog/namespace.h"
@@ -33,11 +34,13 @@
 #include "distributed/maintenanced.h"
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/metadata_sync.h"
 #include "distributed/statistics_collection.h"
 #include "distributed/transaction_recovery.h"
 #include "distributed/version_compat.h"
 #include "nodes/makefuncs.h"
 #include "postmaster/bgworker.h"
+#include "postmaster/postmaster.h"
 #include "nodes/makefuncs.h"
 #include "storage/ipc.h"
 #include "storage/proc.h"
@@ -47,7 +50,6 @@
 #include "tcop/tcopprot.h"
 #include "utils/memutils.h"
 #include "utils/lsyscache.h"
-
 
 /*
  * Shared memory data for all maintenance workers.
@@ -77,12 +79,17 @@ typedef struct MaintenanceDaemonDBData
 	Oid userOid;
 	bool daemonStarted;
 	pid_t workerPid;
+	bool triggerMetadataSync;
 	Latch *latch; /* pointer to the background worker's latch */
 } MaintenanceDaemonDBData;
 
 /* config variable for distributed deadlock detection timeout */
 double DistributedDeadlockDetectionTimeoutFactor = 2.0;
 int Recover2PCInterval = 60000;
+
+/* config variables for metadata sync timeout */
+int MetadataSyncInterval = 60000;
+int MetadataSyncRetryInterval = 5000;
 
 static shmem_startup_hook_type prev_shmem_startup_hook = NULL;
 static MaintenanceDaemonControlData *MaintenanceDaemonControl = NULL;
@@ -100,6 +107,7 @@ static size_t MaintenanceDaemonShmemSize(void);
 static void MaintenanceDaemonShmemInit(void);
 static void MaintenanceDaemonErrorContext(void *arg);
 static bool LockCitusExtension(void);
+static bool MetadataSyncTriggeredCheckAndReset(MaintenanceDaemonDBData *dbData);
 
 
 /*
@@ -185,6 +193,7 @@ InitializeMaintenanceDaemonBackend(void)
 
 		dbData->daemonStarted = true;
 		dbData->workerPid = 0;
+		dbData->triggerMetadataSync = false;
 		LWLockRelease(&MaintenanceDaemonControl->lock);
 
 		WaitForBackgroundWorkerStartup(handle, &pid);
@@ -225,6 +234,7 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 	bool retryStatsCollection USED_WITH_LIBCURL_ONLY = false;
 	ErrorContextCallback errorCallback;
 	TimestampTz lastRecoveryTime = 0;
+	TimestampTz nextMetadataSyncTime = 0;
 
 	/*
 	 * Look up this worker's configuration.
@@ -356,6 +366,36 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 		}
 #endif
 
+		if (MetadataSyncTriggeredCheckAndReset(myDbData) ||
+			GetCurrentTimestamp() >= nextMetadataSyncTime)
+		{
+			bool metadataSyncFailed = false;
+			int64 nextTimeout = 0;
+
+			InvalidateMetadataSystemCache();
+			StartTransactionCommand();
+
+			if (!LockCitusExtension())
+			{
+				ereport(DEBUG1, (errmsg("could not lock the citus extension, "
+										"skipping metadata sync")));
+			}
+			else if (CheckCitusVersion(DEBUG1) && CitusHasBeenLoaded())
+			{
+				metadataSyncFailed = !SyncMetadataToNodes();
+				Async_Notify(METADATA_SYNC_CHANNEL, NULL);
+			}
+
+			CommitTransactionCommand();
+			ProcessCompletedNotifies();
+
+			nextTimeout = metadataSyncFailed ? MetadataSyncRetryInterval :
+						  MetadataSyncInterval;
+			nextMetadataSyncTime =
+				TimestampTzPlusMilliseconds(GetCurrentTimestamp(), nextTimeout);
+			timeout = Min(timeout, nextTimeout);
+		}
+
 		/*
 		 * If enabled, run 2PC recovery on primary nodes (where !RecoveryInProgress()),
 		 * since we'll write to the pg_dist_transaction log.
@@ -466,6 +506,14 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 			/* check for changed configuration */
 			if (myDbData->userOid != GetSessionUserId())
 			{
+				/*
+				 * Reset myDbData->daemonStarted so InitializeMaintenanceDaemonBackend()
+				 * notices this is a restart.
+				 */
+				LWLockAcquire(&MaintenanceDaemonControl->lock, LW_EXCLUSIVE);
+				myDbData->daemonStarted = false;
+				LWLockRelease(&MaintenanceDaemonControl->lock);
+
 				/* return code of 1 requests worker restart */
 				proc_exit(1);
 			}
@@ -656,4 +704,50 @@ StopMaintenanceDaemon(Oid databaseId)
 	{
 		kill(workerPid, SIGTERM);
 	}
+}
+
+
+/*
+ * TriggerMetadataSync triggers the maintenance daemon to do a metadata sync for
+ * the given database.
+ */
+void
+TriggerMetadataSync(Oid databaseId)
+{
+	bool found = false;
+	MaintenanceDaemonDBData *dbData = NULL;
+
+	LWLockAcquire(&MaintenanceDaemonControl->lock, LW_EXCLUSIVE);
+
+	dbData = (MaintenanceDaemonDBData *) hash_search(MaintenanceDaemonDBHash,
+													 &databaseId, HASH_FIND, &found);
+	if (found)
+	{
+		dbData->triggerMetadataSync = true;
+
+		/* set latch to wake-up the maintenance loop */
+		SetLatch(dbData->latch);
+	}
+
+	LWLockRelease(&MaintenanceDaemonControl->lock);
+}
+
+
+/*
+ * MetadataSyncTriggeredCheckAndReset checks if metadata sync has been
+ * triggered for the given database, and resets the flag.
+ */
+static bool
+MetadataSyncTriggeredCheckAndReset(MaintenanceDaemonDBData *dbData)
+{
+	bool metadataSyncTriggered = false;
+
+	LWLockAcquire(&MaintenanceDaemonControl->lock, LW_EXCLUSIVE);
+
+	metadataSyncTriggered = dbData->triggerMetadataSync;
+	dbData->triggerMetadataSync = false;
+
+	LWLockRelease(&MaintenanceDaemonControl->lock);
+
+	return metadataSyncTriggered;
 }
