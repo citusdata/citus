@@ -64,6 +64,7 @@
 #include "parser/parse_node.h"
 #include "parser/parse_relation.h"
 #include "parser/parser.h"
+#include "storage/lmgr.h"
 #include "tcop/pquery.h"
 #include "tcop/tcopprot.h"
 #include "utils/builtins.h"
@@ -308,7 +309,7 @@ create_reference_table(PG_FUNCTION_ARGS)
 	 */
 	EnsureRelationKindSupported(relationId);
 
-	workerNodeList = ActivePrimaryNodeList();
+	workerNodeList = ActivePrimaryNodeList(ShareLock);
 	workerCount = list_length(workerNodeList);
 
 	/* if there are no workers, error out */
@@ -333,7 +334,7 @@ create_reference_table(PG_FUNCTION_ARGS)
 /*
  * CreateDistributedTable creates distributed table in the given configuration.
  * This functions contains all necessary logic to create distributed tables. It
- * perform necessary checks to ensure distributing the table is safe. If it is
+ * performs necessary checks to ensure distributing the table is safe. If it is
  * safe to distribute the table, this function creates distributed table metadata,
  * creates shards and copies local data to shards. This function also handles
  * partitioned tables by distributing its partitions as well.

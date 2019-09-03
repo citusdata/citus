@@ -24,6 +24,7 @@
 #include "postmaster/postmaster.h"
 #include "storage/fd.h"
 #include "storage/ipc.h"
+#include "storage/lmgr.h"
 #include "storage/shmem.h"
 #include "utils/guc.h"
 #include "utils/hsearch.h"
@@ -297,7 +298,7 @@ WorkerGetNodeWithName(const char *hostname)
 uint32
 ActivePrimaryNodeCount(void)
 {
-	List *workerNodeList = ActivePrimaryNodeList();
+	List *workerNodeList = ActivePrimaryNodeList(NoLock);
 	uint32 liveWorkerCount = list_length(workerNodeList);
 
 	return liveWorkerCount;
@@ -319,17 +320,25 @@ ActiveReadableNodeCount(void)
 
 /*
  * ActivePrimaryNodeList returns a list of all the active primary nodes in workerNodeHash
+ * lockMode specifies which lock to use on pg_dist_node, this is necessary when
+ * the caller wouldn't want nodes to be added concurrent to their use of this list
  */
 List *
-ActivePrimaryNodeList(void)
+ActivePrimaryNodeList(LOCKMODE lockMode)
 {
 	List *workerNodeList = NIL;
 	WorkerNode *workerNode = NULL;
-	HTAB *workerNodeHash = GetWorkerNodeHash();
+	HTAB *workerNodeHash = NULL;
 	HASH_SEQ_STATUS status;
 
 	EnsureModificationsCanRun();
 
+	if (lockMode != NoLock)
+	{
+		LockRelationOid(DistNodeRelationId(), lockMode);
+	}
+
+	workerNodeHash = GetWorkerNodeHash();
 	hash_seq_init(&status, workerNodeHash);
 
 	while ((workerNode = hash_seq_search(&status)) != NULL)

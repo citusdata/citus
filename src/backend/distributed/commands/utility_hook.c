@@ -1066,7 +1066,7 @@ DDLTaskList(Oid relationId, const char *commandString)
 List *
 NodeDDLTaskList(TargetWorkerSet targets, List *commands)
 {
-	List *workerNodes = TargetWorkerSetNodeList(targets);
+	List *workerNodes = TargetWorkerSetNodeList(targets, NoLock);
 	char *concatenatedCommands = StringJoin(commands, ';');
 	DDLJob *ddlJob = NULL;
 	ListCell *workerNodeCell = NULL;

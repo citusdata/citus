@@ -63,7 +63,7 @@ extern WorkerNode * WorkerGetRoundRobinCandidateNode(List *workerNodeList,
 													 uint32 placementIndex);
 extern WorkerNode * WorkerGetLocalFirstCandidateNode(List *currentNodeList);
 extern uint32 ActivePrimaryNodeCount(void);
-extern List * ActivePrimaryNodeList(void);
+extern List * ActivePrimaryNodeList(LOCKMODE lockMode);
 extern uint32 ActiveReadableNodeCount(void);
 extern List * ActiveReadableNodeList(void);
 extern WorkerNode * GetWorkerNodeByNodeId(int nodeId);

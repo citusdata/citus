@@ -209,14 +209,14 @@ get_current_transaction_id(PG_FUNCTION_ARGS)
  * the active backends from each node of the cluster. If you call that function from
  * the coordinator, it will returns back active transaction from the coordinator as
  * well. Yet, if you call it from the worker, result won't include the transactions
- * on the coordinator node, since worker nodes do not aware of the coordinator.
+ * on the coordinator node, since worker nodes are not aware of the coordinator.
  */
 Datum
 get_global_active_transactions(PG_FUNCTION_ARGS)
 {
 	TupleDesc tupleDescriptor = NULL;
 	Tuplestorestate *tupleStore = NULL;
-	List *workerNodeList = ActivePrimaryNodeList();
+	List *workerNodeList = ActivePrimaryNodeList(NoLock);
 	ListCell *workerNodeCell = NULL;
 	List *connectionList = NIL;
 	ListCell *connectionCell = NULL;

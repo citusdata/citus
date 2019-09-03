@@ -967,7 +967,7 @@ CountPrimariesWithMetadata(void)
  * AddNodeMetadata checks the given node information and adds the specified node to the
  * pg_dist_node table of the master and workers with metadata.
  * If the node already exists, the function returns the id of the node.
- * If not, the following prodecure is followed while adding a node: If the groupId is not
+ * If not, the following procedure is followed while adding a node: If the groupId is not
  * explicitly given by the user, the function picks the group that the new node should
  * be in with respect to GroupSize. Then, the new node is inserted into the local
  * pg_dist_node as well as the nodes with hasmetadata=true.
