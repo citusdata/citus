@@ -329,15 +329,6 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 				FlushDistTableCache();
 				WarnIfSyncDNS();
 				statsCollectionSuccess = CollectBasicUsageStatistics();
-				if (statsCollectionSuccess)
-				{
-					/*
-					 * Checking for updates only when collecting statistics succeeds,
-					 * so we don't log update messages twice when we retry statistics
-					 * collection in a minute.
-					 */
-					CheckForUpdates();
-				}
 			}
 
 			/*
