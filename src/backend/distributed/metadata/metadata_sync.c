@@ -52,7 +52,8 @@
 
 static char * LocalGroupIdUpdateCommand(int32 groupId);
 static void MarkNodeHasMetadata(char *nodeName, int32 nodePort, bool hasMetadata);
-static void UpdateDistNodeBoolAttr(char *nodeName, int32 nodePort, int attrNum, bool value);
+static void UpdateDistNodeBoolAttr(char *nodeName, int32 nodePort, int attrNum,
+								   bool value);
 static List * SequenceDDLCommandsForTable(Oid relationId);
 static void EnsureSupportedSequenceColumnType(Oid sequenceOid);
 static Oid TypeOfColumn(Oid tableId, int16 columnId);

@@ -1560,7 +1560,8 @@ TupleToWorkerNode(TupleDesc tupleDescriptor, HeapTuple heapTuple)
 	workerNode->hasMetadata = DatumGetBool(datumArray[Anum_pg_dist_node_hasmetadata - 1]);
 	workerNode->isActive = DatumGetBool(datumArray[Anum_pg_dist_node_isactive - 1]);
 	workerNode->nodeRole = DatumGetObjectId(datumArray[Anum_pg_dist_node_noderole - 1]);
-	workerNode->metadataSynced = DatumGetBool(datumArray[Anum_pg_dist_node_metadatasynced - 1]);
+	workerNode->metadataSynced =
+		DatumGetBool(datumArray[Anum_pg_dist_node_metadatasynced - 1]);
 
 	/*
 	 * nodecluster column can be missing. In the case of extension creation/upgrade,
