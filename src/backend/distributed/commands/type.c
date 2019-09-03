@@ -490,7 +490,7 @@ PlanRenameTypeStmt(RenameStmt *stmt, const char *queryString)
 
 
 	/* fully qualify */
-	/* TODO abstract into nice place */
+	QualifyTreeNode((Node *) stmt);
 
 	/* deparse sql*/
 	renameStmtSql = DeparseTreeNode((Node *) stmt);

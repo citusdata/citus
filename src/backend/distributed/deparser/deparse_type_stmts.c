@@ -418,10 +418,7 @@ static void
 appendRenameTypeStmt(StringInfo buf, RenameStmt *stmt)
 {
 	List *names = (List *) stmt->object;
-	TypeName *typeName = makeTypeNameFromNameList(names);
-	Oid typeOid = LookupTypeNameOid(NULL, typeName, false);
-	const char *identifier = format_type_be_qualified(typeOid);
 
-	appendStringInfo(buf, "ALTER TYPE %s RENAME TO %s", identifier, quote_identifier(
-						 stmt->newname));
+	appendStringInfo(buf, "ALTER TYPE %s RENAME TO %s;", NameListToQuotedString(names),
+					 quote_identifier(stmt->newname));
 }

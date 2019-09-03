@@ -24,7 +24,7 @@ extern char * format_collate_be(Oid type_oid);
 extern char * format_collate_be_qualified(Oid type_oid);
 extern char * format_collate_extended(Oid collid, bits16 flags);
 
-
+extern void QualifyTreeNode(Node *stmt);
 extern const char * DeparseTreeNode(Node *stmt);
 
 extern const char * deparse_composite_type_stmt(CompositeTypeStmt *stmt);
@@ -33,5 +33,7 @@ extern const char * deparse_drop_type_stmt(DropStmt *stmt);
 extern const char * deparse_alter_enum_stmt(AlterEnumStmt *stmt);
 extern const char * deparse_alter_type_stmt(AlterTableStmt *stmt);
 extern const char * deparse_rename_type_stmt(RenameStmt *stmt);
+
+extern void qualify_rename_type_stmt(RenameStmt *stmt);
 
 #endif /* CITUS_DEPARSER_H */
