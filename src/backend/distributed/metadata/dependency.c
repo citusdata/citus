@@ -157,15 +157,15 @@ recurse_pg_depend(const ObjectAddress *target,
 				  void *context)
 {
 	Relation depRel = NULL;
-	ScanKeyData key[2] = { 0 };
+	ScanKeyData key[2];
 	SysScanDesc depScan = NULL;
 	HeapTuple depTup = NULL;
 	List *pgDependEntries = NIL;
 	ListCell *pgDependCell = NULL;
 
-	/********************
-	* iterate the actual pg_depend catalog
-	********************/
+	/*
+	 * iterate the actual pg_depend catalog
+	 */
 	depRel = heap_open(DependRelationId, AccessShareLock);
 
 	/* scan pg_depend for classid = $1 AND objid = $2 using pg_depend_depender_index */
@@ -188,9 +188,9 @@ recurse_pg_depend(const ObjectAddress *target,
 	systable_endscan(depScan);
 	relation_close(depRel, AccessShareLock);
 
-	/********************
-	* concat expended entries if applicable
-	********************/
+	/*
+	 * concat expended entries if applicable
+	 */
 	if (expand != NULL)
 	{
 		List *expandedEntries = NIL;
@@ -199,9 +199,9 @@ recurse_pg_depend(const ObjectAddress *target,
 		pgDependEntries = list_concat(pgDependEntries, expandedEntries);
 	}
 
-	/********************
-	* Iterate all entries and recurse depth first
-	********************/
+	/*
+	 * Iterate all entries and recurse depth first
+	 */
 	foreach(pgDependCell, pgDependEntries)
 	{
 		Form_pg_depend pg_depend = (Form_pg_depend) lfirst(pgDependCell);
@@ -331,7 +331,7 @@ static bool
 IsObjectAddressOwnedByExtension(const ObjectAddress *target)
 {
 	Relation depRel = NULL;
-	ScanKeyData key[2] = { 0 };
+	ScanKeyData key[2];
 	SysScanDesc depScan = NULL;
 	HeapTuple depTup = NULL;
 	bool result = false;

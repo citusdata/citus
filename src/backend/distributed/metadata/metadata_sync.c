@@ -293,7 +293,7 @@ MetadataCreateCommands(void)
 		char *tableOwnerResetCommand = TableOwnerResetCommand(relationId);
 
 		/*
-		 * distributed tables might have dependencies on different objects, since we
+		 * Distributed tables might have dependencies on different objects, since we
 		 * create shards for a distributed table via multiple sessions these objects will
 		 * be created via their own connection and committed immediately so they become
 		 * visible to all sessions creating shards.

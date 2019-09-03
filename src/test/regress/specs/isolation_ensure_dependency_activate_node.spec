@@ -12,6 +12,8 @@ teardown
     -- schema drops are not cascaded
     SELECT run_command_on_workers($$DROP SCHEMA IF EXISTS myschema CASCADE;$$);
     DROP SCHEMA IF EXISTS myschema CASCADE;
+    SELECT run_command_on_workers($$DROP SCHEMA IF EXISTS myschema2 CASCADE;$$);
+    DROP SCHEMA IF EXISTS myschema2 CASCADE;
 
     RESET search_path;
     DROP TABLE IF EXISTS t1 CASCADE;
@@ -39,7 +41,7 @@ step "s1-commit"
 }
 
 # printing in session 1 adds the worker node, this makes we are sure we count the objects
-# on that node as well
+# on that node as well. After counting objects is done we remove the node again.
 step "s1-print-distributed-objects"
 {
     SELECT nodename, nodeport, isactive FROM master_add_node('localhost', 57638);
@@ -139,6 +141,12 @@ step "s4-use-schema"
     SET search_path TO myschema;
 }
 
+step "s4-create-schema2"
+{
+    CREATE SCHEMA myschema2;
+    SET search_path TO myschema2;
+}
+
 step "s4-create-table"
 {
 	CREATE TABLE t3 (a int, b int);
@@ -168,3 +176,5 @@ permutation "s1-print-distributed-objects" "s1-begin" "s2-begin" "s2-create-sche
 # concurrency tests with multi schema distribution
 permutation "s1-print-distributed-objects" "s2-create-schema" "s1-begin" "s2-begin" "s3-begin" "s1-add-worker" "s2-create-table" "s3-use-schema" "s3-create-table" "s1-commit" "s2-commit" "s3-commit" "s2-print-distributed-objects"
 permutation "s1-print-distributed-objects" "s2-create-schema" "s1-begin" "s2-begin" "s3-begin" "s4-begin" "s1-add-worker" "s2-create-table" "s3-use-schema" "s3-create-table" "s4-use-schema" "s4-create-table" "s1-commit" "s2-commit" "s3-commit" "s4-commit" "s2-print-distributed-objects"
+permutation "s1-print-distributed-objects" "s1-add-worker" "s2-create-schema" "s2-begin" "s3-begin" "s3-use-schema" "s2-create-table" "s3-create-table" "s2-commit" "s3-commit" "s2-print-distributed-objects"
+permutation "s1-print-distributed-objects" "s1-begin" "s2-begin" "s4-begin" "s1-add-worker" "s2-create-schema" "s4-create-schema2" "s2-create-table" "s4-create-table" "s1-commit" "s2-commit" "s4-commit" "s2-print-distributed-objects"

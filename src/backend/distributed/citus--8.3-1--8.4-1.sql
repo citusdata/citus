@@ -204,11 +204,21 @@ BEGIN
 
     -- restore pg_dist_object from the stable identifiers
     WITH old_records AS (
-        DELETE FROM citus.pg_dist_object RETURNING type, object_names, object_args
+        DELETE FROM
+            citus.pg_dist_object
+        RETURNING
+            type,
+            object_names,
+            object_args
     )
     INSERT INTO citus.pg_dist_object (classid, objid, objsubid)
-	SELECT address.classid, address.objid, address.objsubid
-	FROM old_records naming, pg_get_object_address(naming.type, naming.object_names, naming.object_args) address;
+    SELECT
+        address.classid,
+        address.objid,
+        address.objsubid
+    FROM
+        old_records naming,
+        pg_get_object_address(naming.type, naming.object_names, naming.object_args) address;
 END;
 $cppu$;
 

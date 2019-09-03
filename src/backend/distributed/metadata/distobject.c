@@ -63,7 +63,7 @@ master_unmark_object_distributed(PG_FUNCTION_ARGS)
 		PG_RETURN_VOID();
 	}
 
-	if (ObjectExsists(&address))
+	if (ObjectExists(&address))
 	{
 		ereport(ERROR, (errmsg("object still exists"),
 						errdetail("the %s \"%s\" still exists",
@@ -79,7 +79,7 @@ master_unmark_object_distributed(PG_FUNCTION_ARGS)
 
 
 /*
- * ObjectExsists checks if an object given by its object address exists
+ * ObjectExists checks if an object given by its object address exists
  *
  * This is done by opening the catalog for the object and search the catalog for the
  * objects' oid. If we can find a tuple the object is existing. If no tuple is found, or
@@ -87,7 +87,7 @@ master_unmark_object_distributed(PG_FUNCTION_ARGS)
  * not exist.
  */
 bool
-ObjectExsists(const ObjectAddress *address)
+ObjectExists(const ObjectAddress *address)
 {
 	if (is_objectclass_supported(address->classId))
 	{

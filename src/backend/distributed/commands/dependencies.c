@@ -203,7 +203,7 @@ ReplicateAllDependenciesToNode(const char *nodeName, int nodePort)
 	dependencies = GetDistributedObjectAddressList();
 
 	/*
-	 * When dependency lists are getting longer we see a delat in the creation time on the
+	 * When dependency lists are getting longer we see a delay in the creation time on the
 	 * workers. We would like to inform the user. Currently we warn for lists greater then
 	 * 100 items, where 100 is an arbitrarily chosen number. If we find it too high or too
 	 * low we can adjust this based on experience.
