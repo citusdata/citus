@@ -6,6 +6,7 @@ verify_ssl = true
 [packages]
 mitmproxy = "==4.0.4"
 construct = "==2.9.45"
+docopt = "*"
 
 [dev-packages]
 

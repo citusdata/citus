@@ -4,7 +4,7 @@ from config import USER
 
 
 def run(command):
-    subprocess.call(command, shell=True)
+    return subprocess.call(command, shell=True)
 
 
 def psql(pg_path, port, command):
