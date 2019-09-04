@@ -6,14 +6,14 @@ SELECT citus.mitmproxy('conn.allow()');
 
 -- add the workers
 SELECT master_add_node('localhost', :worker_1_port);
-                  master_add_node                  
----------------------------------------------------
- (1,1,localhost,57637,default,f,t,primary,default)
+                   master_add_node                   
+-----------------------------------------------------
+ (1,1,localhost,57637,default,f,t,primary,default,t)
 (1 row)
 
 SELECT master_add_node('localhost', :worker_2_proxy_port);  -- an mitmproxy which forwards to the second worker
-                 master_add_node                  
---------------------------------------------------
- (2,2,localhost,9060,default,f,t,primary,default)
+                  master_add_node                   
+----------------------------------------------------
+ (2,2,localhost,9060,default,f,t,primary,default,t)
 (1 row)
 

@@ -1,4 +1,4 @@
-DROP FUNCTION master_add_inactive_node(text, integer, integer, noderole);
+DROP FUNCTION master_add_inactive_node(text, integer, integer, noderole, name);
 CREATE FUNCTION master_add_inactive_node(nodename text,
                                          nodeport integer,
                                          groupid integer default 0,
@@ -12,7 +12,8 @@ CREATE FUNCTION master_add_inactive_node(nodename text,
                                          OUT hasmetadata boolean,
                                          OUT isactive bool,
                                          OUT noderole noderole,
-                                         OUT nodecluster name)
+                                         OUT nodecluster name,
+                                         OUT shouldhavedata bool)
   RETURNS record
   LANGUAGE C STRICT
   AS 'MODULE_PATHNAME',$$master_add_inactive_node$$;
@@ -20,4 +21,4 @@ COMMENT ON FUNCTION master_add_inactive_node(nodename text,nodeport integer,
                                              groupid integer, noderole noderole,
                                              nodecluster name)
   IS 'prepare node by adding it to pg_dist_node';
-
+REVOKE ALL ON FUNCTION master_add_inactive_node(text, integer, integer, noderole, name) FROM PUBLIC;

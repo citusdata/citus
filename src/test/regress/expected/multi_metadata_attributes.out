@@ -5,11 +5,12 @@ SELECT attrelid::regclass, attname, atthasmissing, attmissingval
 FROM pg_attribute
 WHERE atthasmissing
 ORDER BY attrelid, attname;
-   attrelid   |   attname   | atthasmissing | attmissingval 
---------------+-------------+---------------+---------------
- pg_dist_node | hasmetadata | t             | {f}
- pg_dist_node | isactive    | t             | {t}
- pg_dist_node | nodecluster | t             | {default}
- pg_dist_node | noderole    | t             | {primary}
-(4 rows)
+   attrelid   |    attname     | atthasmissing | attmissingval 
+--------------+----------------+---------------+---------------
+ pg_dist_node | hasmetadata    | t             | {f}
+ pg_dist_node | isactive       | t             | {t}
+ pg_dist_node | nodecluster    | t             | {default}
+ pg_dist_node | noderole       | t             | {primary}
+ pg_dist_node | shouldhavedata | t             | {t}
+(5 rows)
 

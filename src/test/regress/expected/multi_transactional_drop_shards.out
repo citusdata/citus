@@ -656,9 +656,9 @@ ORDER BY
 -- try using the coordinator as a worker and then dropping the table
 SELECT master_add_node('localhost', :master_port);
 NOTICE:  Replicating reference table "transactional_drop_reference" to the node localhost:57636
-                        master_add_node                        
----------------------------------------------------------------
- (1380010,1380008,localhost,57636,default,f,t,primary,default)
+                         master_add_node                         
+-----------------------------------------------------------------
+ (1380010,1380008,localhost,57636,default,f,t,primary,default,t)
 (1 row)
 
 CREATE TABLE citus_local (id serial, k int);
