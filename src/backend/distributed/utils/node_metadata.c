@@ -71,6 +71,7 @@ static void DeleteNodeRow(char *nodename, int32 nodeport);
 static List * ParseWorkerNodeFileAndRename(void);
 static WorkerNode * TupleToWorkerNode(TupleDesc tupleDescriptor, HeapTuple heapTuple);
 static void UpdateNodeLocation(int32 nodeId, char *newNodeName, int32 newNodePort);
+static void SyncDistNodeEntry(WorkerNode *workerNode);
 
 /* declarations for dynamic loading */
 PG_FUNCTION_INFO_V1(master_add_node);
@@ -566,12 +567,15 @@ master_update_node(PG_FUNCTION_ARGS)
 
 	UpdateNodeLocation(nodeId, newNodeNameString, newNodePort);
 
+	strlcpy(workerNode->workerName, newNodeNameString, WORKER_LENGTH);
+	workerNode->workerPort = newNodePort;
+
 	if (workerNode->hasMetadata)
 	{
-		strlcpy(workerNode->workerName, newNodeNameString, WORKER_LENGTH);
-		workerNode->workerPort = newNodePort;
 		RecreateMetadataSnapshot(workerNode);
 	}
+
+	SyncDistNodeEntry(workerNode);
 
 	if (handle != NULL)
 	{
@@ -977,8 +981,6 @@ AddNodeMetadata(char *nodeName, int32 nodePort, int32 groupId, char *nodeRack,
 	int nextNodeIdInt = 0;
 	Datum returnData = 0;
 	WorkerNode *workerNode = NULL;
-	char *nodeDeleteCommand = NULL;
-	uint32 primariesWithMetadata = 0;
 
 	EnsureCoordinator();
 
@@ -1033,19 +1035,7 @@ AddNodeMetadata(char *nodeName, int32 nodePort, int32 groupId, char *nodeRack,
 				  isActive, nodeRole, nodeCluster);
 
 	workerNode = FindWorkerNodeAnyCluster(nodeName, nodePort);
-
-	/* send the delete command to all primary nodes with metadata */
-	nodeDeleteCommand = NodeDeleteCommand(workerNode->nodeId);
-	SendCommandToWorkers(WORKERS_WITH_METADATA, nodeDeleteCommand);
-
-	/* finally prepare the insert command and send it to all primary nodes */
-	primariesWithMetadata = CountPrimariesWithMetadata();
-	if (primariesWithMetadata != 0)
-	{
-		List *workerNodeList = list_make1(workerNode);
-		char *nodeInsertCommand = NodeListInsertCommand(workerNodeList);
-		SendCommandToWorkers(WORKERS_WITH_METADATA, nodeInsertCommand);
-	}
+	SyncDistNodeEntry(workerNode);
 
 	returnData = GenerateNodeTuple(workerNode);
 	return returnData;
@@ -1616,4 +1606,28 @@ DatumToString(Datum datum, Oid dataType)
 	outputString = OidOutputFunctionCall(typIoFunc, datum);
 
 	return outputString;
+}
+
+
+/*
+ * SyncDistNodeEntry synchronizes the corresponding entry for the given workerNode
+ * in pg_dist_node metadata table of all workers.
+ */
+static void
+SyncDistNodeEntry(WorkerNode *workerNode)
+{
+	int primariesWithMetadata = 0;
+
+	/* send the delete command to all primary nodes with metadata */
+	char *nodeDeleteCommand = NodeDeleteCommand(workerNode->nodeId);
+	SendCommandToWorkers(WORKERS_WITH_METADATA, nodeDeleteCommand);
+
+	/* finally prepare the insert command and send it to all primary nodes */
+	primariesWithMetadata = CountPrimariesWithMetadata();
+	if (primariesWithMetadata != 0)
+	{
+		List *workerNodeList = list_make1(workerNode);
+		char *nodeInsertCommand = NodeListInsertCommand(workerNodeList);
+		SendCommandToWorkers(WORKERS_WITH_METADATA, nodeInsertCommand);
+	}
 }
