@@ -175,9 +175,9 @@ SELECT count(*) FROM pg_dist_node WHERE hasmetadata=true;
 -- Ensure it works when run on a secondary node
 SELECT groupid AS worker_1_group FROM pg_dist_node WHERE nodeport = :worker_1_port \gset
 SELECT master_add_node('localhost', 8888, groupid => :worker_1_group, noderole => 'secondary');
-                  master_add_node                   
-----------------------------------------------------
- (4,1,localhost,8888,default,f,t,secondary,default)
+                   master_add_node                    
+------------------------------------------------------
+ (4,1,localhost,8888,default,f,t,secondary,default,t)
 (1 row)
 
 SELECT start_metadata_sync_to_node('localhost', 8888);
@@ -206,9 +206,9 @@ SELECT hasmetadata FROM pg_dist_node WHERE nodeport = 8888;
 
 -- Add a node to another cluster to make sure it's also synced
 SELECT master_add_secondary_node('localhost', 8889, 'localhost', :worker_1_port, nodecluster => 'second-cluster');
-                 master_add_secondary_node                 
------------------------------------------------------------
- (5,1,localhost,8889,default,f,t,secondary,second-cluster)
+                  master_add_secondary_node                  
+-------------------------------------------------------------
+ (5,1,localhost,8889,default,f,t,secondary,second-cluster,t)
 (1 row)
 
 -- Run start_metadata_sync_to_node and check that it marked hasmetadata for that worker
@@ -233,12 +233,12 @@ SELECT * FROM pg_dist_local_group;
 (1 row)
 
 SELECT * FROM pg_dist_node ORDER BY nodeid;
- nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole  |  nodecluster   
---------+---------+-----------+----------+----------+-------------+----------+-----------+----------------
-      1 |       1 | localhost |    57637 | default  | t           | t        | primary   | default
-      2 |       2 | localhost |    57638 | default  | f           | t        | primary   | default
-      4 |       1 | localhost |     8888 | default  | f           | t        | secondary | default
-      5 |       1 | localhost |     8889 | default  | f           | t        | secondary | second-cluster
+ nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole  |  nodecluster   | shouldhavedata 
+--------+---------+-----------+----------+----------+-------------+----------+-----------+----------------+----------------
+      1 |       1 | localhost |    57637 | default  | t           | t        | primary   | default        | t
+      2 |       2 | localhost |    57638 | default  | f           | t        | primary   | default        | t
+      4 |       1 | localhost |     8888 | default  | f           | t        | secondary | default        | t
+      5 |       1 | localhost |     8889 | default  | f           | t        | secondary | second-cluster | t
 (4 rows)
 
 SELECT * FROM pg_dist_partition ORDER BY logicalrelid;
@@ -372,12 +372,12 @@ SELECT * FROM pg_dist_local_group;
 (1 row)
 
 SELECT * FROM pg_dist_node ORDER BY nodeid;
- nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole  |  nodecluster   
---------+---------+-----------+----------+----------+-------------+----------+-----------+----------------
-      1 |       1 | localhost |    57637 | default  | t           | t        | primary   | default
-      2 |       2 | localhost |    57638 | default  | f           | t        | primary   | default
-      4 |       1 | localhost |     8888 | default  | f           | t        | secondary | default
-      5 |       1 | localhost |     8889 | default  | f           | t        | secondary | second-cluster
+ nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole  |  nodecluster   | shouldhavedata 
+--------+---------+-----------+----------+----------+-------------+----------+-----------+----------------+----------------
+      1 |       1 | localhost |    57637 | default  | t           | t        | primary   | default        | t
+      2 |       2 | localhost |    57638 | default  | f           | t        | primary   | default        | t
+      4 |       1 | localhost |     8888 | default  | f           | t        | secondary | default        | t
+      5 |       1 | localhost |     8889 | default  | f           | t        | secondary | second-cluster | t
 (4 rows)
 
 SELECT * FROM pg_dist_partition ORDER BY logicalrelid;
@@ -1166,9 +1166,9 @@ SELECT create_distributed_table('mx_table', 'a');
 
 \c - postgres - :master_port
 SELECT master_add_node('localhost', :worker_2_port);
-                  master_add_node                  
----------------------------------------------------
- (6,4,localhost,57638,default,f,t,primary,default)
+                   master_add_node                   
+-----------------------------------------------------
+ (6,4,localhost,57638,default,f,t,primary,default,t)
 (1 row)
 
 SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
@@ -1393,9 +1393,9 @@ WHERE logicalrelid='mx_ref'::regclass;
 \c - - - :master_port
 SELECT master_add_node('localhost', :worker_2_port);
 NOTICE:  Replicating reference table "mx_ref" to the node localhost:57638
-                  master_add_node                  
----------------------------------------------------
- (7,5,localhost,57638,default,f,t,primary,default)
+                   master_add_node                   
+-----------------------------------------------------
+ (7,5,localhost,57638,default,f,t,primary,default,t)
 (1 row)
 
 SELECT shardid, nodename, nodeport 

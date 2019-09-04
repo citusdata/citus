@@ -14,6 +14,7 @@
 #ifndef WORKER_MANAGER_H
 #define WORKER_MANAGER_H
 
+#include "postgres.h"
 #include "nodes/pg_list.h"
 
 
@@ -45,6 +46,7 @@ typedef struct WorkerNode
 	char workerRack[WORKER_LENGTH];     /* node's network location */
 	bool hasMetadata;                   /* node gets metadata changes */
 	bool isActive;                      /* node's state */
+	bool shouldHaveData;                /* if the node should have shards on it */
 	Oid nodeRole;                       /* the node's role in its group */
 	char nodeCluster[NAMEDATALEN];      /* the cluster the node is a part of */
 } WorkerNode;

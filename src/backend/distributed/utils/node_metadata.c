@@ -59,6 +59,7 @@ typedef struct NodeMetadata
 	char *nodeRack;
 	bool hasMetadata;
 	bool isActive;
+	bool shouldHaveData;
 	Oid nodeRole;
 	char *nodeCluster;
 } NodeMetadata;
@@ -98,6 +99,7 @@ DefaultNodeMetadata()
 	NodeMetadata nodeMetadata = {
 		.nodeRole = InvalidOid,
 		.nodeRack = WORKER_DEFAULT_RACK,
+		.shouldHaveData = true,
 	};
 	return nodeMetadata;
 }
@@ -1170,6 +1172,8 @@ GenerateNodeTuple(WorkerNode *workerNode)
 	values[Anum_pg_dist_node_isactive - 1] = BoolGetDatum(workerNode->isActive);
 	values[Anum_pg_dist_node_noderole - 1] = ObjectIdGetDatum(workerNode->nodeRole);
 	values[Anum_pg_dist_node_nodecluster - 1] = nodeClusterNameDatum;
+	values[Anum_pg_dist_node_shouldhavedata - 1] = BoolGetDatum(
+		workerNode->shouldHaveData);
 
 	pgDistNode = heap_open(DistNodeRelationId(), AccessShareLock);
 
@@ -1302,6 +1306,8 @@ InsertNodeRow(int nodeid, char *nodeName, int32 nodePort, NodeMetadata nodeMetad
 	values[Anum_pg_dist_node_isactive - 1] = BoolGetDatum(nodeMetadata.isActive);
 	values[Anum_pg_dist_node_noderole - 1] = ObjectIdGetDatum(nodeMetadata.nodeRole);
 	values[Anum_pg_dist_node_nodecluster - 1] = nodeClusterNameDatum;
+	values[Anum_pg_dist_node_shouldhavedata - 1] = BoolGetDatum(
+		nodeMetadata.shouldHaveData);
 
 	pgDistNode = heap_open(DistNodeRelationId(), RowExclusiveLock);
 
@@ -1564,6 +1570,8 @@ TupleToWorkerNode(TupleDesc tupleDescriptor, HeapTuple heapTuple)
 	strlcpy(workerNode->workerRack, TextDatumGetCString(nodeRack), WORKER_LENGTH);
 	workerNode->hasMetadata = DatumGetBool(datumArray[Anum_pg_dist_node_hasmetadata - 1]);
 	workerNode->isActive = DatumGetBool(datumArray[Anum_pg_dist_node_isactive - 1]);
+	workerNode->shouldHaveData = DatumGetBool(
+		datumArray[Anum_pg_dist_node_shouldhavedata - 1]);
 	workerNode->nodeRole = DatumGetObjectId(datumArray[Anum_pg_dist_node_noderole - 1]);
 
 	/*
