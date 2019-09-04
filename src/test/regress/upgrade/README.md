@@ -16,12 +16,10 @@ Before running the script, make sure that:
     pipenv install
     pipenv shell
 ```
-- Finally run the script:
+- Finally run the script in `citus/src/test/regress`:
 ```
     pipenv run python upgrade/upgrade_test.py --old-bindir=<old-bindir> --new-bindir=<new-bindir> --postgres-srcdir=<postgres-srcdir>
 ```
-
-If your citus source dir is not in `~/citus` use `--citus-path` flag to specify where it is.
 
 To see full command list:
 

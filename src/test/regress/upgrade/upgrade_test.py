@@ -26,10 +26,10 @@ def initialize_temp_dir():
     os.chmod(config[TEMP_DIR], 0o777)
 
 
-def initialize_db_for_cluster(pg_path, base_data_path):
-    utils.run('mkdir ' + base_data_path)
+def initialize_db_for_cluster(pg_path, rel_data_path):
+    utils.run('mkdir ' + rel_data_path)
     for node_name in NODE_NAMES:
-        abs_data_path = base_data_path + '/' + node_name
+        abs_data_path = os.path.abspath(os.path.join(rel_data_path, node_name))
         pg_command = pg_path + '/initdb'
         utils.run(pg_command + ' --pgdata=' +
                   abs_data_path + ' --username=' + USER)
@@ -37,18 +37,21 @@ def initialize_db_for_cluster(pg_path, base_data_path):
 
 
 def get_add_citus_to_shared_preload_library_cmd(abs_data_path):
-    return 'echo "shared_preload_libraries = \'citus\'" >> {}/postgresql.conf'.format(abs_data_path)
+    return 'echo "shared_preload_libraries = \'citus\'" >> {abs_data_path}/postgresql.conf'.format(
+        abs_data_path=abs_data_path)
 
 
 def add_citus_to_shared_preload_libraries(abs_data_path):
     utils.run(get_add_citus_to_shared_preload_library_cmd(abs_data_path))
 
 
-def start_databases(pg_path, base_data_path):
+def start_databases(pg_path, rel_data_path):
     for node_name in NODE_NAMES:
-        abs_data_path = base_data_path + '/' + node_name
-        command = '{}/pg_ctl --pgdata={} -U={} -o "-p {}" --log={}/logfile_{} start'.format(pg_path,
-                                                                                            abs_data_path, USER, NODE_PORTS[node_name], pg_path, node_name)
+        abs_data_path = os.path.abspath(os.path.join(rel_data_path, node_name))
+        command = '{pg_path}/pg_ctl --pgdata={pgdata} -U={user}" \
+        " -o "-p {port}" --log={pg_path}/logfile_{node_name} start'.format(
+            pg_path=pg_path, pgdata=abs_data_path, user=USER,
+            port=NODE_PORTS[node_name], node_name=node_name)
         utils.run(command)
 
 
@@ -59,14 +62,17 @@ def create_citus_extension(pg_path):
 
 def add_workers(pg_path):
     for port in WORKER_PORTS:
-        command = "SELECT * from master_add_node('localhost', {});".format(
-            port)
+        command = "SELECT * from master_add_node('localhost', {port});".format(
+            port=port)
         utils.psql(pg_path, NODE_PORTS[COORDINATOR_NAME], command)
 
 
 def run_pg_regress(pg_path, pg_src_path, port, schedule):
-    command = "{}/src/test/regress/pg_regress --port={} --schedule={} --bindir={} --user={} --use-existing --dbname={}".format(
-        pg_src_path, port, schedule, pg_path, USER, DBNAME)
+    command = "{pg_src_path}/src/test/regress/pg_regress --port={port}" \
+        " --schedule={schedule_path} --bindir={pg_path} --user={user} --use-existing --dbname={dbname}".format(
+            pg_src_path=pg_src_path, port=port,
+            schedule_path=schedule, pg_path=pg_path,
+            user=USER, dbname=DBNAME)
     exit_code = utils.run(command)
     if exit_code != 0:
         sys.exit(exit_code)
@@ -77,24 +83,29 @@ def citus_prepare_pg_upgrade(pg_path):
         utils.psql(pg_path, port, "SELECT citus_prepare_pg_upgrade();")
 
 
-def stop_databases(pg_path, base_data_path):
+def stop_databases(pg_path, rel_data_path):
     for node_name in NODE_NAMES:
-        abs_data_path = base_data_path + '/' + node_name
-        command = '{}/pg_ctl --pgdata={} -U={} -o "-p {}" --log={}/logfile_{} stop'.format(pg_path,
-                                                                                           abs_data_path, USER, NODE_PORTS[node_name], pg_path, node_name)
+        abs_data_path = os.path.abspath(os.path.join(rel_data_path, node_name))
+        command = '{pg_path}/pg_ctl --pgdata={pgdata} -U={user}" \
+        " -o "-p {port}" --log={pg_path}/logfile_{node_name} stop'.format(
+            pg_path=pg_path, pgdata=abs_data_path, user=USER,
+            port=NODE_PORTS[node_name], node_name=node_name)
         utils.run(command)
 
 
 def perform_postgres_upgrade():
-    with utils.cd("~"):
-        for node_name in NODE_NAMES:
-            abs_new_data_path = config[NEW_PG_DATA_PATH] + \
-                "/" + node_name
-            abs_old_data_path = config[CURRENT_PG_DATA_PATH] + \
-                "/" + node_name
-            command = "{}/pg_upgrade --username={} --old-bindir={} --new-bindir={} --old-datadir={} \
-                                        --new-datadir={}".format(config[NEW_BINDIR], USER, config[OLD_BINDIR], config[NEW_BINDIR],
-                                                                 abs_old_data_path, abs_new_data_path)
+    for node_name in NODE_NAMES:
+        base_new_data_path = os.path.abspath(config[NEW_PG_DATA_PATH])
+        base_old_data_path = os.path.abspath(config[CURRENT_PG_DATA_PATH])
+        with utils.cd(base_new_data_path):
+            abs_new_data_path = os.path.join(base_new_data_path, node_name)
+            abs_old_data_path = os.path.join(base_old_data_path, node_name)
+            command = "{pg_new_bindir}/pg_upgrade --username={user}" \
+                " --old-bindir={pg_old_bindir} --new-bindir={pg_new_bindir} --old-datadir={old_datadir} \
+                                        --new-datadir={new_datadir}".format(
+                    pg_new_bindir=config[NEW_BINDIR], user=USER,
+                    pg_old_bindir=config[OLD_BINDIR],
+                    old_datadir=abs_old_data_path, new_datadir=abs_new_data_path)
             utils.run(command)
 
 
@@ -115,7 +126,7 @@ def main():
     initialize_citus_cluster()
 
     run_pg_regress(config[OLD_BINDIR], config[PG_SRC_PATH],
-                   NODE_PORTS[COORDINATOR_NAME], config[SCHEDULE_PATH] + '/before_upgrade_schedule')
+                   NODE_PORTS[COORDINATOR_NAME], BEFORE_UPGRADE_SCHEDULE)
     citus_prepare_pg_upgrade(config[OLD_BINDIR])
     stop_databases(config[OLD_BINDIR], config[CURRENT_PG_DATA_PATH])
 
@@ -125,7 +136,7 @@ def main():
     citus_finish_pg_upgrade(config[NEW_BINDIR])
 
     run_pg_regress(config[NEW_BINDIR], config[PG_SRC_PATH],
-                   NODE_PORTS[COORDINATOR_NAME], config[SCHEDULE_PATH] + '/after_upgrade_schedule')
+                   NODE_PORTS[COORDINATOR_NAME], AFTER_UPGRADE_SCHEDULE)
 
 
 if __name__ == '__main__':

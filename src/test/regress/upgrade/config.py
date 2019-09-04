@@ -1,39 +1,28 @@
-from os.path import expanduser
-
-
-HOME = expanduser('~')
-
-CITUS_PATH = 'CITUS_PATH'
 OLD_BINDIR = 'OLD_BINDIR'
 NEW_BINDIR = 'NEW_BINDIR'
 TEMP_DIR = 'TEMP_DIR'
 NEW_PG_DATA_PATH = 'NEW_PG_DATA_PATH'
 CURRENT_PG_DATA_PATH = 'CURRENT_PG_DATA_PATH'
-SCHEDULE_PATH = 'SCHEDULE_PATH'
 PG_SRC_PATH = 'PG_SRC_PATH'
-
+BEFORE_UPGRADE_SCHEDULE = './before_upgrade_schedule'
+AFTER_UPGRADE_SCHEDULE = './after_upgrade_schedule'
 
 config = {
-    CITUS_PATH : HOME + '/citus',
     OLD_BINDIR : '',
     NEW_BINDIR : '',
     PG_SRC_PATH : '',
     TEMP_DIR : '',
     NEW_PG_DATA_PATH : '',
     CURRENT_PG_DATA_PATH : '',
-    SCHEDULE_PATH : ''
 }
 
 def init_config(arguments):
     config[OLD_BINDIR] = arguments['--old-bindir'] 
     config[NEW_BINDIR] = arguments['--new-bindir']  
     config[PG_SRC_PATH] = arguments['--postgres-srcdir'] 
-    if arguments['--citus-path']:
-        config[CITUS_PATH] = arguments['--citus-path']
-    config[TEMP_DIR] = config[CITUS_PATH] + '/src/test/regress/tmp_upgrade'
+    config[TEMP_DIR] = './tmp_upgrade'
     config[NEW_PG_DATA_PATH] = config[TEMP_DIR] + '/newData'
-    config[CURRENT_PG_DATA_PATH] = config[TEMP_DIR] + '/oldData'
-    config[SCHEDULE_PATH] = config[CITUS_PATH] + '/src/test/regress'    
+    config[CURRENT_PG_DATA_PATH] = config[TEMP_DIR] + '/oldData'    
 
 
 
