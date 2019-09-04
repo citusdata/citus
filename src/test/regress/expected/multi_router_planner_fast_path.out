@@ -245,10 +245,6 @@ DEBUG:  Plan is router executable
 
 CREATE TABLE company_employees (company_id int, employee_id int, manager_id int); 
 SELECT master_create_distributed_table('company_employees', 'company_id', 'hash');
-DEBUG:  schema "fast_path_router_select" already exists, skipping
-DETAIL:  NOTICE from localhost:57638
-DEBUG:  schema "fast_path_router_select" already exists, skipping
-DETAIL:  NOTICE from localhost:57637
  master_create_distributed_table 
 ---------------------------------
  

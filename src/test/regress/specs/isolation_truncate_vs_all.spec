@@ -5,8 +5,8 @@
 # create range distributed table to test behavior of TRUNCATE in concurrent operations
 setup
 {
-	SELECT citus.replace_isolation_tester_func();
-	SELECT citus.refresh_isolation_tester_prepared_statement();
+	SELECT citus_internal.replace_isolation_tester_func();
+	SELECT citus_internal.refresh_isolation_tester_prepared_statement();
 
 	SET citus.shard_replication_factor TO 1;
 	CREATE TABLE truncate_append(id integer, data text);
@@ -18,7 +18,7 @@ teardown
 {
 	DROP TABLE IF EXISTS truncate_append CASCADE;
 
-	SELECT citus.restore_isolation_tester_func();
+	SELECT citus_internal.restore_isolation_tester_func();
 }
 
 # session 1

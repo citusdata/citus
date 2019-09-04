@@ -9,6 +9,7 @@ SELECT substring(:'server_version', '\d+')::int > 10 AS version_above_ten;
  t
 (1 row)
 
+SET citus.next_shard_id TO 12000000;
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
 -----------
@@ -69,9 +70,9 @@ CONTEXT:  while executing command on localhost:9060
 -- show that we marked as INVALID on COMMIT FAILURE
 SELECT shardid, shardstate FROM pg_dist_shard_placement where shardstate != 1 AND 
 shardid in ( SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'vacuum_test'::regclass);
- shardid | shardstate 
----------+------------
-  102093 |          3
+ shardid  | shardstate 
+----------+------------
+ 12000000 |          3
 (1 row)
 
 UPDATE pg_dist_shard_placement SET shardstate = 1

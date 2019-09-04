@@ -455,6 +455,7 @@ ActivateNode(char *nodeName, int nodePort)
 
 	if (WorkerNodeIsPrimary(workerNode))
 	{
+		ReplicateAllDependenciesToNode(nodeName, nodePort);
 		ReplicateAllReferenceTablesToNode(nodeName, nodePort);
 	}
 

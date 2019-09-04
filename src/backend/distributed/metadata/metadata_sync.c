@@ -286,18 +286,20 @@ MetadataCreateCommands(void)
 		DistTableCacheEntry *cacheEntry =
 			(DistTableCacheEntry *) lfirst(distributedTableCell);
 		Oid relationId = cacheEntry->relationId;
+		ObjectAddress tableAddress = { 0 };
 
 		List *workerSequenceDDLCommands = SequenceDDLCommandsForTable(relationId);
 		List *ddlCommandList = GetTableDDLEvents(relationId, includeSequenceDefaults);
 		char *tableOwnerResetCommand = TableOwnerResetCommand(relationId);
 
 		/*
-		 * Ensure schema exists on each worker node. We can not run this function
-		 * transactionally, since we may create shards over separate sessions and
-		 * shard creation depends on the schema being present and visible from all
-		 * sessions.
+		 * Distributed tables might have dependencies on different objects, since we
+		 * create shards for a distributed table via multiple sessions these objects will
+		 * be created via their own connection and committed immediately so they become
+		 * visible to all sessions creating shards.
 		 */
-		EnsureSchemaExistsOnAllNodes(relationId);
+		ObjectAddressSet(tableAddress, RelationRelationId, relationId);
+		EnsureDependenciesExistsOnAllNodes(&tableAddress);
 
 		metadataSnapshotCommandList = list_concat(metadataSnapshotCommandList,
 												  workerSequenceDDLCommands);

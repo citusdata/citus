@@ -1,7 +1,7 @@
 setup
 {	
-  	SELECT citus.replace_isolation_tester_func();
-  	SELECT citus.refresh_isolation_tester_prepared_statement();
+  	SELECT citus_internal.replace_isolation_tester_func();
+  	SELECT citus_internal.refresh_isolation_tester_prepared_statement();
 
 	SET citus.shard_replication_factor to 1;
 	SET citus.shard_count to 32;
@@ -34,7 +34,7 @@ teardown
 {
 	DROP TABLE users_test_table;
 	DROP TABLE events_test_table;
-	SELECT citus.restore_isolation_tester_func();
+	SELECT citus_internal.restore_isolation_tester_func();
 	SET citus.shard_count to 4;
 }
 
