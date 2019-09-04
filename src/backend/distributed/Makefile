@@ -6,8 +6,12 @@ citus_top_builddir = ../../..
 MODULE_big = citus
 EXTENSION = citus
 
-# All citus--*.sql files in the source directory
-DATA = $(patsubst $(citus_abs_srcdir)/%.sql,%.sql,$(wildcard $(citus_abs_srcdir)/$(EXTENSION)--*.sql))
+template_sql_files = $(patsubst $(citus_abs_srcdir)/%,%,$(wildcard $(citus_abs_srcdir)/*.template.sql))
+generated_sql_files = $(patsubst %.template.sql,%.sql,$(template_sql_files))
+existing_sql_files = $(patsubst $(citus_abs_srcdir)/%.sql,%.sql,$(wildcard $(citus_abs_srcdir)/$(EXTENSION)--*.sql))
+non_generated_sql_files = $(filter-out $(template_sql_files) $(generated_sql_files),$(existing_sql_files))
+# All citus--*.sql files that are used to upgrade between versions
+DATA = $(generated_sql_files) $(non_generated_sql_files)
 
 # directories with source files
 SUBDIRS = . commands connection ddl executor master metadata planner progress relay test transaction utils worker
@@ -29,3 +33,10 @@ include $(citus_top_builddir)/Makefile.global
 SHLIB_LINK += $(filter -lssl -lcrypto -lssleay32 -leay32, $(LIBS))
 
 override CPPFLAGS += -I$(libpq_srcdir)
+
+udf_sql_files = $(wildcard $(citus_abs_srcdir)/udfs/*/*.sql)
+
+$(generated_sql_files): %.sql: %.template.sql $(udf_sql_files) template.awk
+	cd $(citus_abs_srcdir) && awk -f template.awk $< > $@
+
+install: $(generated_sql_files)
