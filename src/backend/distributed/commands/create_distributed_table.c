@@ -103,7 +103,8 @@ static bool LocalTableEmpty(Oid tableId);
 static void CopyLocalDataIntoShards(Oid relationId);
 static List * TupleDescColumnNameList(TupleDesc tupleDescriptor);
 static bool RelationUsesIdentityColumns(TupleDesc relationDesc);
-static bool RelationUsesGeneratedStoredColumns(TupleDesc relationDesc);
+static bool DistributionColumnUsesGeneratedStoredColumn(TupleDesc relationDesc,
+														Var *distributionColumn);
 static bool RelationUsesHeapAccessMethodOrNone(Relation relation);
 static bool CanUseExclusiveConnections(Oid relationId, bool localTableEmpty);
 
@@ -684,12 +685,13 @@ EnsureRelationCanBeDistributed(Oid relationId, Var *distributionColumn,
 								  "... AS IDENTITY.")));
 	}
 
-	/* verify target relation does not use generated columns */
-	if (RelationUsesGeneratedStoredColumns(relationDesc))
+	/* verify target relation is not distributed by a generated columns */
+	if (distributionMethod != DISTRIBUTE_BY_NONE &&
+		DistributionColumnUsesGeneratedStoredColumn(relationDesc, distributionColumn))
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						errmsg("cannot distribute relation: %s", relationName),
-						errdetail("Distributed relations must not use GENERATED ALWAYS "
+						errdetail("Distribution column must not use GENERATED ALWAYS "
 								  "AS (...) STORED.")));
 	}
 
@@ -1368,7 +1370,11 @@ TupleDescColumnNameList(TupleDesc tupleDescriptor)
 		Form_pg_attribute currentColumn = TupleDescAttr(tupleDescriptor, columnIndex);
 		char *columnName = NameStr(currentColumn->attname);
 
-		if (currentColumn->attisdropped)
+		if (currentColumn->attisdropped
+#if PG_VERSION_NUM >= 120000
+			|| currentColumn->attgenerated == ATTRIBUTE_GENERATED_STORED
+#endif
+			)
 		{
 			continue;
 		}
@@ -1381,8 +1387,8 @@ TupleDescColumnNameList(TupleDesc tupleDescriptor)
 
 
 /*
- * RelationUsesIdentityColumns returns whether a given relation uses the SQL
- * GENERATED ... AS IDENTITY features introduced as of PostgreSQL 10.
+ * RelationUsesIdentityColumns returns whether a given relation uses
+ * GENERATED ... AS IDENTITY
  */
 static bool
 RelationUsesIdentityColumns(TupleDesc relationDesc)
@@ -1404,23 +1410,20 @@ RelationUsesIdentityColumns(TupleDesc relationDesc)
 
 
 /*
- * RelationUsesIdentityColumns returns whether a given relation uses the SQL
- * GENERATED ... AS IDENTITY features introduced as of PostgreSQL 10.
+ * DistributionColumnUsesGeneratedStoredColumn returns whether a given relation uses
+ * GENERATED ALWAYS AS (...) STORED on distribution column
  */
 static bool
-RelationUsesGeneratedStoredColumns(TupleDesc relationDesc)
+DistributionColumnUsesGeneratedStoredColumn(TupleDesc relationDesc,
+											Var *distributionColumn)
 {
 #if PG_VERSION_NUM >= 120000
-	int attributeIndex = 0;
+	Form_pg_attribute attributeForm = TupleDescAttr(relationDesc,
+													distributionColumn->varattno - 1);
 
-	for (attributeIndex = 0; attributeIndex < relationDesc->natts; attributeIndex++)
+	if (attributeForm->attgenerated == ATTRIBUTE_GENERATED_STORED)
 	{
-		Form_pg_attribute attributeForm = TupleDescAttr(relationDesc, attributeIndex);
-
-		if (attributeForm->attgenerated == ATTRIBUTE_GENERATED_STORED)
-		{
-			return true;
-		}
+		return true;
 	}
 #endif
 
