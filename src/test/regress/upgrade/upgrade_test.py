@@ -39,11 +39,10 @@ def add_workers(pg_path):
         utils.psql(pg_path, NODE_PORTS[COORDINATOR_NAME], command)
 
 
-def create_table(pg_path, port):
-    utils.psql(pg_path, port, "CREATE TABLE t(a int);")
-    utils.psql(pg_path, port, "SELECT create_distributed_table('t', 'a');")
-    utils.psql(pg_path, port,
-               "INSERT INTO t select * from generate_series(1,100);")
+def run_pg_regress(pg_path, pg_regress_path, port, schedule):
+    command = "{}/pg_regress --port={} --schedule={} --bindir={} --user={} --use-existing --dbname={}".format(
+        pg_regress_path, port, schedule, pg_path, USER, DBNAME)
+    utils.run(command)
 
 
 def citus_prepare_pg_upgrade(pg_path):
@@ -85,7 +84,8 @@ def initialize_citus_cluster():
 def main():
     initialize_citus_cluster()
 
-    create_table(CURRENT_PG_PATH, NODE_PORTS[COORDINATOR_NAME])
+    run_pg_regress(CURRENT_PG_PATH, PG_REGRESS_PATH,
+                   NODE_PORTS[COORDINATOR_NAME], CITUS_PATH + "/src/test/regress/before_upgrade_schedule")
     citus_prepare_pg_upgrade(CURRENT_PG_PATH)
     stop_databases(CURRENT_PG_PATH, CURRENT_PG_DATA_PATH)
 
@@ -93,6 +93,10 @@ def main():
     perform_postgres_upgrade()
     start_databases(NEW_PG_PATH, NEW_PG_DATA_PATH)
     citus_finish_pg_upgrade(NEW_PG_PATH)
+
+    run_pg_regress(NEW_PG_PATH, PG_REGRESS_PATH,
+                   NODE_PORTS[COORDINATOR_NAME], CITUS_PATH + "/src/test/regress/after_upgrade_schedule")
+
 
 if __name__ == '__main__':
     main()

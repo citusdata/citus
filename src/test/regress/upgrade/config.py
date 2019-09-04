@@ -6,7 +6,11 @@ CURRENT_PG_PATH = HOME + '/.pgenv/pgsql/bin'
 CURRENT_PG_DATA_PATH = HOME + '/oldData'
 NEW_PG_PATH = HOME + '/.pgenv/pgsql-11.3/bin'
 NEW_PG_DATA_PATH = HOME + '/newData'
+CITUS_PATH = HOME + "/citus"
+USER = 'postgres'
+DBNAME = 'postgres'
 
+PG_REGRESS_PATH = '~/.pgenv/src/postgresql-11.3/src/test/regress'
 COORDINATOR_NAME = 'coordinator'
 NODE_NAMES = [COORDINATOR_NAME, 'worker1', 'worker2']
 

@@ -1,0 +1,19 @@
+SET search_path TO upgrade_before, public;
+SELECT * FROM t;
+ a 
+---
+ 1
+ 5
+ 4
+ 3
+ 2
+(5 rows)
+
+SELECT * FROM t WHERE a = 1;
+ a 
+---
+ 1
+(1 row)
+
+DROP SCHEMA upgrade_before CASCADE;
+NOTICE:  drop cascades to table t
