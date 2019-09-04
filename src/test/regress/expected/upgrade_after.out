@@ -1,12 +1,12 @@
 SET search_path TO upgrade_before, public;
-SELECT * FROM t;
+SELECT * FROM t ORDER BY a;
  a 
 ---
  1
- 5
- 4
- 3
  2
+ 3
+ 4
+ 5
 (5 rows)
 
 SELECT * FROM t WHERE a = 1;

@@ -1,5 +1,15 @@
 import utils
 from config import *
+import os
+import shutil
+
+
+def initialize_temp_dir():
+    if os.path.exists(TEMP_DIR):
+        shutil.rmtree(TEMP_DIR)
+    os.mkdir(TEMP_DIR)
+    # Give full access to TEMP_DIR so that postgres user can use it.
+    os.chmod(TEMP_DIR, 0o777)
 
 
 def initialize_db_for_cluster(pg_path, base_data_path):
@@ -7,7 +17,8 @@ def initialize_db_for_cluster(pg_path, base_data_path):
     for node_name in NODE_NAMES:
         abs_data_path = base_data_path + '/' + node_name
         pg_command = pg_path + '/initdb'
-        utils.run(pg_command + ' -D ' + abs_data_path)
+        utils.run(pg_command + ' --pgdata=' +
+                  abs_data_path + ' --username=' + USER)
         add_citus_to_shared_preload_libraries(abs_data_path)
 
 
@@ -22,8 +33,8 @@ def add_citus_to_shared_preload_libraries(abs_data_path):
 def start_databases(pg_path, base_data_path):
     for node_name in NODE_NAMES:
         abs_data_path = base_data_path + '/' + node_name
-        command = '{}/pg_ctl -D {} -o "-p {}" -l {}/logfile start'.format(pg_path,
-                                                                          abs_data_path, NODE_PORTS[node_name], pg_path)
+        command = '{}/pg_ctl --pgdata={} -U={} -o "-p {}" --log={}/logfile_{} start'.format(pg_path,
+                                                                                                    abs_data_path, USER, NODE_PORTS[node_name], pg_path, node_name)
         utils.run(command)
 
 
@@ -53,8 +64,8 @@ def citus_prepare_pg_upgrade(pg_path):
 def stop_databases(pg_path, base_data_path):
     for node_name in NODE_NAMES:
         abs_data_path = base_data_path + '/' + node_name
-        command = '{}/pg_ctl -D {} -o "-p {}" -l {}/logfile stop'.format(pg_path,
-                                                                         abs_data_path, NODE_PORTS[node_name], pg_path)
+        command = '{}/pg_ctl --pgdata={} -U={} -o "-p {}" --log={}/logfile_{} stop'.format(pg_path,
+                                                                                                   abs_data_path, USER, NODE_PORTS[node_name], pg_path, node_name)
         utils.run(command)
 
 
@@ -63,8 +74,8 @@ def perform_postgres_upgrade():
         for node_name in NODE_NAMES:
             abs_new_data_path = NEW_PG_DATA_PATH + "/" + node_name
             abs_old_data_path = CURRENT_PG_DATA_PATH + "/" + node_name
-            command = "{}/pg_upgrade --old-bindir={} --new-bindir={} --old-datadir={} \
-                                        --new-datadir={}".format(NEW_PG_PATH, CURRENT_PG_PATH, NEW_PG_PATH,
+            command = "{}/pg_upgrade --username={} --old-bindir={} --new-bindir={} --old-datadir={} \
+                                        --new-datadir={}".format(NEW_PG_PATH, USER, CURRENT_PG_PATH, NEW_PG_PATH,
                                                                  abs_old_data_path, abs_new_data_path)
             utils.run(command)
 
@@ -82,10 +93,11 @@ def initialize_citus_cluster():
 
 
 def main():
+    initialize_temp_dir()
     initialize_citus_cluster()
 
     run_pg_regress(CURRENT_PG_PATH, PG_REGRESS_PATH,
-                   NODE_PORTS[COORDINATOR_NAME], CITUS_PATH + "/src/test/regress/before_upgrade_schedule")
+                   NODE_PORTS[COORDINATOR_NAME], SCHEDULE_PATH + '/before_upgrade_schedule')
     citus_prepare_pg_upgrade(CURRENT_PG_PATH)
     stop_databases(CURRENT_PG_PATH, CURRENT_PG_DATA_PATH)
 
@@ -95,7 +107,7 @@ def main():
     citus_finish_pg_upgrade(NEW_PG_PATH)
 
     run_pg_regress(NEW_PG_PATH, PG_REGRESS_PATH,
-                   NODE_PORTS[COORDINATOR_NAME], CITUS_PATH + "/src/test/regress/after_upgrade_schedule")
+                   NODE_PORTS[COORDINATOR_NAME], SCHEDULE_PATH + '/after_upgrade_schedule')
 
 
 if __name__ == '__main__':

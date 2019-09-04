@@ -1,5 +1,6 @@
 import subprocess
 import os
+from config import USER
 
 
 def run(command):
@@ -7,7 +8,7 @@ def run(command):
 
 
 def psql(pg_path, port, command):
-    run('{}/psql -p {} -c "{}"'.format(pg_path, port, command))
+    run('{}/psql -U {} -p {} -c "{}"'.format(pg_path, USER,  port, command))
 
 # Taken from https://stackoverflow.com/questions/431684/how-do-i-change-directory-cd-in-python/13197763#13197763
 class cd(object):

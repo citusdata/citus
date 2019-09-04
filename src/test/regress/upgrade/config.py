@@ -3,12 +3,14 @@ from os.path import expanduser
 
 HOME = expanduser('~')
 CURRENT_PG_PATH = HOME + '/.pgenv/pgsql/bin'
-CURRENT_PG_DATA_PATH = HOME + '/oldData'
 NEW_PG_PATH = HOME + '/.pgenv/pgsql-11.3/bin'
-NEW_PG_DATA_PATH = HOME + '/newData'
 CITUS_PATH = HOME + "/citus"
 USER = 'postgres'
 DBNAME = 'postgres'
+TEMP_DIR = CITUS_PATH + "/src/test/regress/tmp_upgrade"
+NEW_PG_DATA_PATH = TEMP_DIR + '/newData'
+CURRENT_PG_DATA_PATH = TEMP_DIR + '/oldData'
+SCHEDULE_PATH = CITUS_PATH + '/src/test/regress'
 
 PG_REGRESS_PATH = '~/.pgenv/src/postgresql-11.3/src/test/regress'
 COORDINATOR_NAME = 'coordinator'

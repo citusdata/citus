@@ -3,6 +3,7 @@
 
 # Generated subdirectories
 /tmp_check/
+/tmp_upgrade/
 /results/
 /log/
 
@@ -15,3 +16,6 @@
 
 # Failure test side effets
 /proxy.output
+
+# python
+**.pyc
