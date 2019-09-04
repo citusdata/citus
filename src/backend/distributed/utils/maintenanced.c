@@ -363,7 +363,7 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 
 		if (TimestampDifferenceExceeds(lastMetadataSyncTime,
 									   GetCurrentTimestamp(),
-									   METADATA_SYNC_TIMEOUT))
+									   METADATA_SYNC_TIMEOUT) && false)
 		{
 			InvalidateMetadataSystemCache();
 			StartTransactionCommand();

@@ -568,6 +568,8 @@ master_update_node(PG_FUNCTION_ARGS)
 
 	if (workerNode->hasMetadata)
 	{
+		strlcpy(workerNode->workerName, newNodeNameString, WORKER_LENGTH);
+		workerNode->workerPort = newNodePort;
 		RecreateMetadataSnapshot(workerNode);
 	}
 
