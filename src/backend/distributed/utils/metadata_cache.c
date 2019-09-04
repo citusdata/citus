@@ -143,6 +143,9 @@ typedef struct MetadataCacheData
 	Oid primaryNodeRoleId;
 	Oid secondaryNodeRoleId;
 	Oid unavailableNodeRoleId;
+	Oid isDataNodeTrueId;
+	Oid isDataNodeFalseId;
+	Oid isDataNodeMarkedForRemovalId;
 	Oid pgTableIsVisibleFuncId;
 	Oid citusTableIsVisibleFuncId;
 	bool databaseNameValid;
@@ -2385,14 +2388,14 @@ CurrentUserName(void)
 
 
 /*
- * LookupNodeRoleValueId returns the Oid of the "pg_catalog.noderole" type, or InvalidOid
- * if it does not exist.
+ * LookupTypeOid returns the Oid of the "pg_catalog.{typeNameString}" type, or
+ * InvalidOid if it does not exist.
  */
 static Oid
-LookupNodeRoleTypeOid()
+LookupTypeOid(char *typeNameString)
 {
 	Value *schemaName = makeString("pg_catalog");
-	Value *typeName = makeString("noderole");
+	Value *typeName = makeString(typeNameString);
 	List *qualifiedName = list_make2(schemaName, typeName);
 	TypeName *enumTypeName = makeTypeNameFromNameList(qualifiedName);
 
@@ -2417,21 +2420,21 @@ LookupNodeRoleTypeOid()
 
 
 /*
- * LookupNodeRoleValueId returns the Oid of the value in "pg_catalog.noderole" which
- * matches the provided name, or InvalidOid if the noderole enum doesn't exist yet.
+ * LookupStringEnumValueId returns the Oid of the value in "pg_catalog.{enumName}"
+ * which matches the provided valueName, or InvalidOid if the enum doesn't exist yet.
  */
 static Oid
-LookupNodeRoleValueId(char *valueName)
+LookupStringEnumValueId(char *enumName, char *valueName)
 {
-	Oid nodeRoleTypId = LookupNodeRoleTypeOid();
+	Oid enumTypeId = LookupTypeOid(enumName);
 
-	if (nodeRoleTypId == InvalidOid)
+	if (enumTypeId == InvalidOid)
 	{
 		return InvalidOid;
 	}
 	else
 	{
-		Oid valueId = LookupEnumValueId(nodeRoleTypId, valueName);
+		Oid valueId = LookupEnumValueId(enumTypeId, valueName);
 		return valueId;
 	}
 }
@@ -2458,7 +2461,7 @@ PrimaryNodeRoleId(void)
 {
 	if (!MetadataCache.primaryNodeRoleId)
 	{
-		MetadataCache.primaryNodeRoleId = LookupNodeRoleValueId("primary");
+		MetadataCache.primaryNodeRoleId = LookupStringEnumValueId("noderole", "primary");
 	}
 
 	return MetadataCache.primaryNodeRoleId;
@@ -2471,7 +2474,8 @@ SecondaryNodeRoleId(void)
 {
 	if (!MetadataCache.secondaryNodeRoleId)
 	{
-		MetadataCache.secondaryNodeRoleId = LookupNodeRoleValueId("secondary");
+		MetadataCache.secondaryNodeRoleId = LookupStringEnumValueId("noderole",
+																	"secondary");
 	}
 
 	return MetadataCache.secondaryNodeRoleId;
@@ -2484,10 +2488,52 @@ UnavailableNodeRoleId(void)
 {
 	if (!MetadataCache.unavailableNodeRoleId)
 	{
-		MetadataCache.unavailableNodeRoleId = LookupNodeRoleValueId("unavailable");
+		MetadataCache.unavailableNodeRoleId = LookupStringEnumValueId("noderole",
+																	  "unavailable");
 	}
 
 	return MetadataCache.unavailableNodeRoleId;
+}
+
+
+/* return the Oid of the 'true' isDataNode enum value */
+Oid
+IsDataNodeTrueId(void)
+{
+	if (!MetadataCache.isDataNodeTrueId)
+	{
+		MetadataCache.isDataNodeTrueId = LookupStringEnumValueId("isdatanode", "true");
+	}
+
+	return MetadataCache.isDataNodeTrueId;
+}
+
+
+/* return the Oid of the 'false' isDataNode enum value */
+Oid
+IsDataNodeFalseId(void)
+{
+	if (!MetadataCache.isDataNodeFalseId)
+	{
+		MetadataCache.isDataNodeFalseId = LookupStringEnumValueId("isdatanode", "false");
+	}
+
+	return MetadataCache.isDataNodeFalseId;
+}
+
+
+/* return the Oid of the 'marked for draining' isDataNode enum value */
+Oid
+IsDataNodeMarkedForRemovalId(void)
+{
+	if (!MetadataCache.isDataNodeMarkedForRemovalId)
+	{
+		MetadataCache.isDataNodeMarkedForRemovalId = LookupStringEnumValueId(
+			"isdatanode",
+			"marked for draining");
+	}
+
+	return MetadataCache.isDataNodeMarkedForRemovalId;
 }
 
 
@@ -3037,6 +3083,7 @@ InitializeWorkerNodeCache(void)
 		workerNode->metadataSynced = currentNode->metadataSynced;
 		workerNode->isActive = currentNode->isActive;
 		workerNode->nodeRole = currentNode->nodeRole;
+		workerNode->isDataNode = currentNode->isDataNode;
 		strlcpy(workerNode->nodeCluster, currentNode->nodeCluster, NAMEDATALEN);
 
 		newWorkerNodeArray[workerNodeIndex++] = workerNode;

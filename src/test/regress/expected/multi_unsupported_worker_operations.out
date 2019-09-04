@@ -112,6 +112,16 @@ SELECT count(*) FROM pg_dist_shard WHERE logicalrelid='mx_table'::regclass;
 DROP TABLE mx_ref_table;
 CREATE UNIQUE INDEX mx_test_uniq_index ON mx_table(col_1);
 \c - - - :worker_1_port
+-- changing isdatanode
+SELECT * from master_make_nodata_node('localhost', 8888);
+ERROR:  operation is not allowed on this node
+HINT:  Connect to the coordinator and run it again.
+SELECT * from master_make_data_node('localhost', 8888);
+ERROR:  operation is not allowed on this node
+HINT:  Connect to the coordinator and run it again.
+SELECT * from master_mark_node_for_draining('localhost', 8888);
+ERROR:  operation is not allowed on this node
+HINT:  Connect to the coordinator and run it again.
 -- DDL commands
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.mx_table'::regclass;
  Column |  Type   |                        Modifiers                         

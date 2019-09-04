@@ -15,9 +15,10 @@
 #include "miscadmin.h"
 
 #include "commands/dbcommands.h"
-#include "distributed/worker_manager.h"
+#include "distributed/hash_helpers.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_client_executor.h"
+#include "distributed/worker_manager.h"
 #include "libpq/hba.h"
 #include "common/ip.h"
 #include "libpq/libpq-be.h"
@@ -306,6 +307,17 @@ ActivePrimaryNodeCount(void)
 
 
 /*
+ * ActivePrimaryCurrentDataNodeCount returns the number of groups with a primary in the cluster.
+ */
+uint32
+ActivePrimaryCurrentDataNodeCount(void)
+{
+	List *workerNodeList = ActivePrimaryCurrentDataNodeList(NoLock);
+	return list_length(workerNodeList);
+}
+
+
+/*
  * ActiveReadableNodeCount returns the number of groups with a node we can read from.
  */
 uint32
@@ -319,19 +331,20 @@ ActiveReadableNodeCount(void)
 
 
 /*
- * ActivePrimaryNodeList returns a list of all the active primary nodes in workerNodeHash
+ * ActiveNodeListFilterFunc returns a list of all active nodes that checkFunction
+ * returns true for.
  * lockMode specifies which lock to use on pg_dist_node, this is necessary when
  * the caller wouldn't want nodes to be added concurrent to their use of this list
  */
-List *
-ActivePrimaryNodeList(LOCKMODE lockMode)
+static List *
+FilterActiveNodeListFunc(LOCKMODE lockMode, bool (*checkFunction)(WorkerNode *))
 {
 	List *workerNodeList = NIL;
 	WorkerNode *workerNode = NULL;
 	HTAB *workerNodeHash = NULL;
 	HASH_SEQ_STATUS status;
 
-	EnsureModificationsCanRun();
+	Assert(checkFunction != NULL);
 
 	if (lockMode != NoLock)
 	{
@@ -343,7 +356,7 @@ ActivePrimaryNodeList(LOCKMODE lockMode)
 
 	while ((workerNode = hash_seq_search(&status)) != NULL)
 	{
-		if (workerNode->isActive && WorkerNodeIsPrimary(workerNode))
+		if (workerNode->isActive && checkFunction(workerNode))
 		{
 			WorkerNode *workerNodeCopy = palloc0(sizeof(WorkerNode));
 			memcpy(workerNodeCopy, workerNode, sizeof(WorkerNode));
@@ -356,38 +369,50 @@ ActivePrimaryNodeList(LOCKMODE lockMode)
 
 
 /*
+ * ActivePrimaryNodeList returns a list of all the active primary nodes in workerNodeHash
+ * lockMode specifies which lock to use on pg_dist_node, this is necessary when
+ * the caller wouldn't want nodes to be added concurrent to their use of this list
+ */
+List *
+ActivePrimaryNodeList(LOCKMODE lockMode)
+{
+	EnsureModificationsCanRun();
+	return FilterActiveNodeListFunc(lockMode, WorkerNodeIsPrimary);
+}
+
+
+/*
+ * ActivePrimaryDesiredDataNodeList returns a list of all active, primary
+ * worker nodes that can store new data, i.e isdatanode is 'true'.
+ */
+List *
+ActivePrimaryDesiredDataNodeList(LOCKMODE lockMode)
+{
+	EnsureModificationsCanRun();
+	return FilterActiveNodeListFunc(lockMode, WorkerNodeIsPrimaryDesiredDataNode);
+}
+
+
+/*
+ * ActivePrimaryCurrentDataNodeList returns a list of all active, primary
+ * worker nodes that currently store data, i.e isdatanode is 'true' or
+ * 'marked for draining'.
+ */
+List *
+ActivePrimaryCurrentDataNodeList(LOCKMODE lockMode)
+{
+	EnsureModificationsCanRun();
+	return FilterActiveNodeListFunc(lockMode, WorkerNodeIsPrimaryCurrentDataNode);
+}
+
+
+/*
  * ActiveReadableNodeList returns a list of all nodes in workerNodeHash we can read from.
  */
 List *
 ActiveReadableNodeList(void)
 {
-	List *workerNodeList = NIL;
-	WorkerNode *workerNode = NULL;
-	HTAB *workerNodeHash = GetWorkerNodeHash();
-	HASH_SEQ_STATUS status;
-
-	hash_seq_init(&status, workerNodeHash);
-
-	while ((workerNode = hash_seq_search(&status)) != NULL)
-	{
-		WorkerNode *workerNodeCopy;
-
-		if (!workerNode->isActive)
-		{
-			continue;
-		}
-
-		if (!WorkerNodeIsReadable(workerNode))
-		{
-			continue;
-		}
-
-		workerNodeCopy = palloc0(sizeof(WorkerNode));
-		memcpy(workerNodeCopy, workerNode, sizeof(WorkerNode));
-		workerNodeList = lappend(workerNodeList, workerNodeCopy);
-	}
-
-	return workerNodeList;
+	return FilterActiveNodeListFunc(NoLock, WorkerNodeIsReadable);
 }
 
 

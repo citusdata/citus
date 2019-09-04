@@ -678,6 +678,38 @@ UPDATE pg_dist_placement
   SET groupid = (SELECT groupid FROM pg_dist_node WHERE nodeport = :worker_2_port)
   WHERE groupid = :old_worker_2_group;
 
+-- Confirm that isdatanode is 'true'
+\c - - - :master_port
+select isdatanode from pg_dist_node where nodeport = 8888;
+\c - postgres - :worker_1_port
+select isdatanode from pg_dist_node where nodeport = 8888;
+
+
+-- Check that master_mark_node_for_draining is correctly transferred to other mx nodes
+\c - - - :master_port
+SELECT * from master_mark_node_for_draining('localhost', 8888);
+select isdatanode from pg_dist_node where nodeport = 8888;
+
+\c - postgres - :worker_1_port
+select isdatanode from pg_dist_node where nodeport = 8888;
+
+-- Check that master_make_nodata_node is correctly transferred to other mx nodes
+\c - postgres - :master_port
+SELECT * from master_make_nodata_node('localhost', 8888);
+select isdatanode from pg_dist_node where nodeport = 8888;
+
+\c - postgres - :worker_1_port
+select isdatanode from pg_dist_node where nodeport = 8888;
+
+-- Check that master_make_data_node is correctly transferred to other mx nodes
+\c - postgres - :master_port
+SELECT * from master_make_data_node('localhost', 8888);
+select isdatanode from pg_dist_node where nodeport = 8888;
+
+\c - postgres - :worker_1_port
+select isdatanode from pg_dist_node where nodeport = 8888;
+
+
 -- Cleanup
 \c - - - :master_port
 DROP TABLE mx_test_schema_2.mx_table_2 CASCADE;

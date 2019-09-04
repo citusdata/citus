@@ -84,6 +84,7 @@ SELECT pg_table_is_visible('test_table_1130000'::regclass);
 SET search_path TO 'mx_hide_shard_names';
 SET citus.shard_count TO 4;
 SET citus.shard_replication_factor TO 1;
+SET citus.next_shard_id TO 1131000;
 
 SET citus.replication_model TO 'streaming';
 
@@ -110,6 +111,7 @@ CREATE SCHEMA mx_hide_shard_names_2;
 SET search_path TO 'mx_hide_shard_names_2';
 SET citus.shard_count TO 4;
 SET citus.shard_replication_factor TO 1;
+SET citus.next_shard_id TO 1132000;
 
 SET citus.replication_model TO 'streaming';
 CREATE TABLE test_table(id int, time date);
@@ -132,6 +134,7 @@ SELECT * FROM citus_shard_indexes_on_worker ORDER BY 2;
 
 SET citus.shard_count TO 4;
 SET citus.shard_replication_factor TO 1;
+SET citus.next_shard_id TO 1133000;
 
 SET citus.replication_model TO 'streaming';
 
@@ -156,6 +159,7 @@ SELECT * FROM citus_shards_on_worker ORDER BY 2;
 
 SET citus.shard_count TO 4;
 SET citus.shard_replication_factor TO 1;
+SET citus.next_shard_id TO 1134000;
 
 SET citus.replication_model TO 'streaming';
 

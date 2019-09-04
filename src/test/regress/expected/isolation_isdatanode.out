@@ -1,0 +1,133 @@
+Parsed test spec with 2 sessions
+
+starting permutation: s1-begin s2-begin s2-create-distributed-table s1-nodata s2-commit s1-commit
+?column?       
+
+1              
+step s1-begin: 
+	BEGIN;
+
+step s2-begin: 
+	BEGIN;
+
+step s2-create-distributed-table: 
+	CREATE TABLE t1 (a int);
+	-- session needs to have replication factor set to 1, can't do in setup
+	SET citus.shard_replication_factor TO 1;
+	SELECT create_distributed_table('t1', 'a');
+
+create_distributed_table
+
+               
+step s1-nodata: 
+	SELECT * from master_make_nodata_node('localhost', 57637);
+ <waiting ...>
+step s2-commit: 
+	COMMIT;
+
+step s1-nodata: <... completed>
+error in steps s2-commit s1-nodata: ERROR:  operation is not supported on a primary data node that has shard placements
+step s1-commit: 
+	COMMIT;
+
+master_remove_node
+
+               
+
+starting permutation: s1-begin s2-begin s1-nodata s2-create-distributed-table s1-commit s2-commit
+?column?       
+
+1              
+step s1-begin: 
+	BEGIN;
+
+step s2-begin: 
+	BEGIN;
+
+step s1-nodata: 
+	SELECT * from master_make_nodata_node('localhost', 57637);
+
+master_make_nodata_node
+
+               
+step s2-create-distributed-table: 
+	CREATE TABLE t1 (a int);
+	-- session needs to have replication factor set to 1, can't do in setup
+	SET citus.shard_replication_factor TO 1;
+	SELECT create_distributed_table('t1', 'a');
+ <waiting ...>
+step s1-commit: 
+	COMMIT;
+
+step s2-create-distributed-table: <... completed>
+error in steps s1-commit s2-create-distributed-table: ERROR:  replication_factor (1) exceeds number of worker nodes (0)
+step s2-commit: 
+	COMMIT;
+
+master_remove_node
+
+               
+
+starting permutation: s1-begin s2-begin s1-nodata s2-update-node s1-commit s2-commit
+?column?       
+
+1              
+step s1-begin: 
+	BEGIN;
+
+step s2-begin: 
+	BEGIN;
+
+step s1-nodata: 
+	SELECT * from master_make_nodata_node('localhost', 57637);
+
+master_make_nodata_node
+
+               
+step s2-update-node: 
+	select * from master_update_node((select nodeid from pg_dist_node where nodeport = 57637), 'localhost', 57638)
+ <waiting ...>
+step s1-commit: 
+	COMMIT;
+
+step s2-update-node: <... completed>
+master_update_node
+
+               
+step s2-commit: 
+	COMMIT;
+
+master_remove_node
+
+               
+
+starting permutation: s1-begin s2-begin s2-update-node s1-nodata s2-commit s1-commit
+?column?       
+
+1              
+step s1-begin: 
+	BEGIN;
+
+step s2-begin: 
+	BEGIN;
+
+step s2-update-node: 
+	select * from master_update_node((select nodeid from pg_dist_node where nodeport = 57637), 'localhost', 57638)
+
+master_update_node
+
+               
+step s1-nodata: 
+	SELECT * from master_make_nodata_node('localhost', 57637);
+ <waiting ...>
+step s2-commit: 
+	COMMIT;
+
+step s1-nodata: <... completed>
+error in steps s2-commit s1-nodata: ERROR:  node at "localhost:57637" does not exist
+step s1-commit: 
+	COMMIT;
+
+master_remove_node
+
+               

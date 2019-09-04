@@ -295,3 +295,83 @@ SELECT * FROM pg_dist_node WHERE nodeid = :worker_1_node;
 -- cleanup
 SELECT master_update_node(:worker_1_node, 'localhost', :worker_1_port);
 SELECT * FROM pg_dist_node WHERE nodeid = :worker_1_node;
+
+
+SET citus.shard_replication_factor TO 1;
+
+CREATE TABLE test_dist (x int, y int);
+SELECT create_distributed_table('test_dist', 'x');
+
+-- testing behaviour when setting isdatanode to 'marked for draining'
+SELECT * from master_mark_node_for_draining('localhost', :worker_2_port);
+CREATE TABLE test_dist_colocated (x int, y int);
+CREATE TABLE test_dist_non_colocated (x int, y int);
+CREATE TABLE test_dist_colocated_with_non_colocated (x int, y int);
+CREATE TABLE test_ref (a int, b int);
+SELECT create_distributed_table('test_dist_colocated', 'x');
+SELECT create_distributed_table('test_dist_non_colocated', 'x', colocate_with => 'none');
+SELECT create_distributed_table('test_dist_colocated_with_non_colocated', 'x', colocate_with => 'test_dist_non_colocated');
+SELECT create_reference_table('test_ref');
+
+-- colocated tables should still be placed on 'marked for draining' nodes for safety
+SELECT nodeport, count(*)
+FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
+WHERE logicalrelid = 'test_dist_colocated'::regclass GROUP BY nodeport;
+
+-- non colocated tables should not be placed on 'marked for draining' nodes anymore
+SELECT nodeport, count(*)
+FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
+WHERE logicalrelid = 'test_dist_non_colocated'::regclass GROUP BY nodeport;
+
+-- this table should be colocated with the test_dist_non_colocated table
+-- correctly only on nodes without 'marked for draining' nodes
+SELECT nodeport, count(*)
+FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
+WHERE logicalrelid = 'test_dist_colocated_with_non_colocated'::regclass GROUP BY nodeport;
+
+-- reference tables should be placed on 'marked for draining' nodes for safety
+SELECT nodeport, count(*)
+FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
+WHERE logicalrelid = 'test_ref'::regclass GROUP BY nodeport;
+
+-- make sure it's not allowed to set isdatanode to 'false' when there are still
+-- distributed tables on the node
+SELECT * from master_make_nodata_node('localhost', :worker_2_port);
+
+-- cleanup for next test
+DROP TABLE test_dist, test_ref, test_dist_colocated, test_dist_non_colocated, test_dist_colocated_with_non_colocated;
+
+-- testing behaviour when setting isdatanode to 'false'
+SELECT * from master_make_nodata_node('localhost', :worker_2_port);
+CREATE TABLE test_dist (x int, y int);
+CREATE TABLE test_ref (a int, b int);
+SELECT create_distributed_table('test_dist', 'x');
+SELECT create_reference_table('test_ref');
+
+-- distributed tables should still not be placed on nodes with isdatanode 'false'
+SELECT nodeport, count(*)
+FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
+WHERE logicalrelid = 'test_dist'::regclass GROUP BY nodeport;
+
+-- reference tables should not be placed on nodes with isdatanode 'false'
+SELECT nodeport, count(*)
+FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
+WHERE logicalrelid = 'test_ref'::regclass GROUP BY nodeport;
+
+-- shouldn't be possible to go from isdatanode 'false' to 'marked for draining'
+SELECT * from master_mark_node_for_draining('localhost', :worker_2_port);
+
+SELECT * from master_make_data_node('localhost', :worker_2_port);
+
+-- distributed tables should still not be placed on nodes that were switched to
+-- isdatanode 'true'
+SELECT nodeport, count(*)
+FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
+WHERE logicalrelid = 'test_dist'::regclass GROUP BY nodeport;
+
+-- reference tables should now be placed on all nodes with isdatanode 'true'
+SELECT nodeport, count(*)
+FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
+WHERE logicalrelid = 'test_ref'::regclass GROUP BY nodeport;
+
+DROP TABLE test_dist, test_ref;

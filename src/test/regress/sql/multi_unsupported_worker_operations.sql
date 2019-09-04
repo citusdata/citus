@@ -84,6 +84,11 @@ DROP TABLE mx_ref_table;
 CREATE UNIQUE INDEX mx_test_uniq_index ON mx_table(col_1);
 \c - - - :worker_1_port
 
+-- changing isdatanode
+SELECT * from master_make_nodata_node('localhost', 8888);
+SELECT * from master_make_data_node('localhost', 8888);
+SELECT * from master_mark_node_for_draining('localhost', 8888);
+
 -- DDL commands
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.mx_table'::regclass;
 CREATE INDEX mx_test_index ON mx_table(col_2);

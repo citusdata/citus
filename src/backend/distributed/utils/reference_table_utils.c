@@ -130,7 +130,7 @@ ReplicateAllReferenceTablesToNode(char *nodeName, int nodePort)
 {
 	List *referenceTableList = ReferenceTableOidList();
 	ListCell *referenceTableCell = NULL;
-	uint32 workerCount = ActivePrimaryNodeCount();
+	uint32 workerCount = ActivePrimaryCurrentDataNodeCount();
 
 	/* if there is no reference table, we do not need to replicate anything */
 	if (list_length(referenceTableList) > 0)
@@ -253,7 +253,7 @@ ReplicateShardToAllWorkers(ShardInterval *shardInterval)
 	ListCell *workerNodeCell = NULL;
 
 	/* prevent concurrent pg_dist_node changes */
-	workerNodeList = ActivePrimaryNodeList(ShareLock);
+	workerNodeList = ActivePrimaryCurrentDataNodeList(ShareLock);
 
 	/*
 	 * We will iterate over all worker nodes and if a healthy placement does not exist
@@ -389,7 +389,7 @@ uint32
 CreateReferenceTableColocationId()
 {
 	uint32 colocationId = INVALID_COLOCATION_ID;
-	List *workerNodeList = ActivePrimaryNodeList(ShareLock);
+	List *workerNodeList = ActivePrimaryCurrentDataNodeList(ShareLock);
 	int shardCount = 1;
 	int replicationFactor = list_length(workerNodeList);
 	Oid distributionColumnType = InvalidOid;

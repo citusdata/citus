@@ -900,6 +900,32 @@ NodeStateUpdateCommand(uint32 nodeId, bool isActive)
 
 
 /*
+ * IsDataNodeUpdateCommand generates a command that can be executed to update
+ * isdatanode column of a node in pg_dist_node table.
+ */
+char *
+IsDataNodeUpdateCommand(uint32 nodeId, Oid isDataNode)
+{
+	StringInfo nodeStateUpdateCommand = makeStringInfo();
+	char *isDataNodeString = "true";
+	if (isDataNode == IsDataNodeFalseId())
+	{
+		isDataNodeString = "false";
+	}
+	else if (isDataNode == IsDataNodeMarkedForRemovalId())
+	{
+		isDataNodeString = "marked for draining";
+	}
+
+	appendStringInfo(nodeStateUpdateCommand,
+					 "UPDATE pg_dist_node SET isdatanode = '%s' "
+					 "WHERE nodeid = %u", isDataNodeString, nodeId);
+
+	return nodeStateUpdateCommand->data;
+}
+
+
+/*
  * ColocationIdUpdateCommand creates the SQL command to change the colocationId
  * of the table with the given name to the given colocationId in pg_dist_partition
  * table.

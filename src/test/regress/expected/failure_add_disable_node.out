@@ -176,7 +176,7 @@ SELECT citus.mitmproxy('conn.allow()');
 
 -- master_remove_node fails when there are shards on that worker
 SELECT master_remove_node('localhost', :worker_2_proxy_port);
-ERROR:  you cannot remove the primary node of a node group which has shard placements
+ERROR:  operation is not supported on a primary data node that has shard placements
 -- drop event table and re-run remove
 DROP TABLE event_table;
 SELECT master_remove_node('localhost', :worker_2_proxy_port);
