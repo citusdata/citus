@@ -30,41 +30,7 @@
 PG_FUNCTION_INFO_V1(worker_create_or_replace);
 
 
-static const ObjectAddress * GetObjectAddressFromParseTree(Node *parseTree, bool
-														   missing_ok);
 static DropStmt * drop_stmt_from_object_create(Node *createStmt);
-
-
-static const ObjectAddress *
-GetObjectAddressFromParseTree(Node *parseTree, bool missing_ok)
-{
-	switch (parseTree->type)
-	{
-		case T_CompositeTypeStmt:
-		{
-			return CompositeTypeStmtObjectAddress(castNode(CompositeTypeStmt, parseTree),
-												  missing_ok);
-		}
-
-		case T_CreateEnumStmt:
-		{
-			return CreateEnumStmtObjectAddress(castNode(CreateEnumStmt, parseTree),
-											   missing_ok);
-		}
-
-		default:
-		{
-			/*
-			 * should not be reached, indicates the coordinator is sending unsupported
-			 * statements
-			 */
-			ereport(ERROR, (errmsg("unsupported statement to get object address for"),
-							errhint("The coordinator send an unsupported command to the "
-									"worker")));
-			return NULL;
-		}
-	}
-}
 
 
 static Node *

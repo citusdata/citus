@@ -99,19 +99,7 @@ List *
 PlanCompositeTypeStmt(CompositeTypeStmt *stmt, const char *queryString)
 {
 	const char *compositeTypeStmtSql = NULL;
-	TypeName *typeName = NULL;
-	Oid typeOid = InvalidOid;
-	ObjectAddress typeAddress = { 0 };
-
-	/*
-	 * by not propagating in a transaction block we allow for parallelism to be used when
-	 * this type will be used as a column in a table that will be created and distributed
-	 * in this same transaction.
-	 */
-	if (IsTransactionBlock())
-	{
-		return NIL;
-	}
+	const ObjectAddress *typeAddress = NULL;
 
 	if (creating_extension)
 	{
@@ -123,17 +111,20 @@ PlanCompositeTypeStmt(CompositeTypeStmt *stmt, const char *queryString)
 	}
 
 	/*
+	 * by not propagating in a transaction block we allow for parallelism to be used when
+	 * this type will be used as a column in a table that will be created and distributed
+	 * in this same transaction.
+	 */
+	if (IsTransactionBlock())
+	{
+		return NIL;
+	}
+
+	/*
 	 * managing types can only be done on the coordinator if ddl propagation is on. when
 	 * it is off we will never get here
 	 */
 	EnsureCoordinator();
-
-	QualifyTreeNode((Node *) stmt);
-
-	/* find object address of just created object */
-	typeName = makeTypeNameFromRangeVar(stmt->typevar);
-	typeOid = LookupTypeNameOid(NULL, typeName, false);
-	ObjectAddressSet(typeAddress, TypeRelationId, typeOid);
 
 	/*
 	 * Make sure that no new nodes are added after this point until the end of the
@@ -145,7 +136,12 @@ PlanCompositeTypeStmt(CompositeTypeStmt *stmt, const char *queryString)
 	 */
 	LockRelationOid(DistNodeRelationId(), RowShareLock);
 
-	EnsureDependenciesExistsOnAllNodes(&typeAddress);
+	/* fully qualify before lookup and later deparsing */
+	QualifyTreeNode((Node *) stmt);
+
+	/* find object address of just created object, should not be missing now */
+	typeAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
+	EnsureDependenciesExistsOnAllNodes(typeAddress);
 
 	/*
 	 * reconstruct creation statement in a portable fashion. The create_or_replace helper
@@ -156,18 +152,25 @@ PlanCompositeTypeStmt(CompositeTypeStmt *stmt, const char *queryString)
 	 * commit on the coordinator.
 	 */
 	compositeTypeStmtSql = deparse_composite_type_stmt(stmt);
-	ereport(DEBUG3, (errmsg("deparsed composite type statement"),
-					 errdetail("sql: %s", compositeTypeStmtSql)));
 	compositeTypeStmtSql = wrap_in_sql(CREATE_OR_REPLACE_COMMAND, compositeTypeStmtSql);
 
+	/*
+	 * when we allow propagation within a transaction block we should make sure to only
+	 * allow this in sequential mode
+	 */
+	EnsureSequentialModeForTypeDDL();
 
 	/* to prevent recursion with mx we disable ddl propagation */
 	/* TODO, mx expects the extension owner to be used here, this requires an alter owner statement as well */
-	EnsureSequentialModeForTypeDDL();
 	SendCommandToWorkersAsUser(ALL_WORKERS, DISABLE_DDL_PROPAGATION, NULL);
 	SendCommandToWorkersAsUser(ALL_WORKERS, compositeTypeStmtSql, NULL);
 
-	MarkObjectDistributed(&typeAddress);
+	/*
+	 * now that the object has been created and distributed to the workers we mark them as
+	 * distributed so we know to keep them up to date and recreate on a new node in the
+	 * future
+	 */
+	MarkObjectDistributed(typeAddress);
 
 	return NULL;
 }
@@ -180,37 +183,25 @@ List *
 PlanAlterTypeStmt(AlterTableStmt *stmt, const char *queryString)
 {
 	const char *alterTypeStmtSql = NULL;
-	TypeName *typeName = NULL;
-	Oid typeOid = InvalidOid;
-	ObjectAddress typeAddress = { 0 };
+	const ObjectAddress *typeAddress = NULL;
 
 	Assert(stmt->relkind == OBJECT_TYPE);
 
-	/* check if type is distributed before we run the coordinator check */
-	typeName = makeTypeNameFromRangeVar(stmt->relation);
-	typeOid = LookupTypeNameOid(NULL, typeName, false);
-	ObjectAddressSet(typeAddress, TypeRelationId, typeOid);
-	if (!IsObjectDistributed(&typeAddress))
-	{
-		return NIL;
-	}
-
-	/*
-	 * all types that are distributed will need their alter statements propagated
-	 * regardless if in a transaction or not. If we would not propagate the alter
-	 * statement the types would be different on worker and coordinator.
-	 */
-
-	/*
-	 * we should not get to a point where an alter happens on a distributed type during an
-	 * extension statement, but better safe then sorry.
-	 */
 	if (creating_extension)
 	{
 		/*
 		 * extensions should be created separately on the workers, types cascading from an
-		 * extension should therefor not be propagated here.
+		 * extension should therefor not be propagated.
 		 */
+		return NIL;
+	}
+
+	/*
+	 * Only distributed types should be propagated
+	 */
+	typeAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
+	if (!IsObjectDistributed(typeAddress))
+	{
 		return NIL;
 	}
 
@@ -219,11 +210,15 @@ PlanAlterTypeStmt(AlterTableStmt *stmt, const char *queryString)
 	/* reconstruct alter statement in a portable fashion */
 	QualifyTreeNode((Node *) stmt);
 	alterTypeStmtSql = DeparseTreeNode((Node *) stmt);
-	ereport(DEBUG3, (errmsg("deparsed alter type statement"),
-					 errdetail("sql: %s", alterTypeStmtSql)));
+
+	/*
+	 * all types that are distributed will need their alter statements propagated
+	 * regardless if in a transaction or not. If we would not propagate the alter
+	 * statement the types would be different on worker and coordinator.
+	 */
+	EnsureSequentialModeForTypeDDL();
 
 	/* TODO, mx expects the extension owner to be used here, this requires an alter owner statement as well */
-	EnsureSequentialModeForTypeDDL();
 	SendCommandToWorkersAsUser(ALL_WORKERS, DISABLE_DDL_PROPAGATION, NULL);
 	SendCommandToWorkersAsUser(ALL_WORKERS, alterTypeStmtSql, NULL);
 
@@ -235,9 +230,7 @@ List *
 PlanCreateEnumStmt(CreateEnumStmt *stmt, const char *queryString)
 {
 	const char *createEnumStmtSql = NULL;
-	ObjectAddress typeAddress = { 0 };
-	Oid typeOid = InvalidOid;
-	TypeName *typeName = NULL;
+	const ObjectAddress *typeAddress = NULL;
 
 	/*
 	 * by not propagating in a transaction block we allow for parallelism to be used when
@@ -264,29 +257,34 @@ PlanCreateEnumStmt(CreateEnumStmt *stmt, const char *queryString)
 	 */
 	EnsureCoordinator();
 
-	/* enforce fully qualified typeName for correct deparsing and pg_dist_object */
+	/* enforce fully qualified typeName for correct deparsing and lookup */
 	QualifyTreeNode((Node *) stmt);
 
 	/* lookup type address of just created type */
-	typeName = makeTypeNameFromNameList(stmt->typeName);
-	typeOid = LookupTypeNameOid(NULL, typeName, false);
-	ObjectAddressSet(typeAddress, TypeRelationId, typeOid);
-
-	EnsureDependenciesExistsOnAllNodes(&typeAddress);
+	typeAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
+	EnsureDependenciesExistsOnAllNodes(typeAddress);
 
 	/* reconstruct creation statement in a portable fashion */
 	createEnumStmtSql = deparse_create_enum_stmt(stmt);
-	ereport(DEBUG3, (errmsg("deparsed enum type statement"),
-					 errdetail("sql: %s", createEnumStmtSql)));
 	createEnumStmtSql = wrap_in_sql(CREATE_OR_REPLACE_COMMAND, createEnumStmtSql);
+
+	/*
+	 * when we allow propagation within a transaction block we should make sure to only
+	 * allow this in sequential mode
+	 */
+	EnsureSequentialModeForTypeDDL();
 
 	/* to prevent recursion with mx we disable ddl propagation */
 	/* TODO, mx expects the extension owner to be used here, this requires an alter owner statement as well */
-	EnsureSequentialModeForTypeDDL();
 	SendCommandToWorkersAsUser(ALL_WORKERS, DISABLE_DDL_PROPAGATION, NULL);
 	SendCommandToWorkersAsUser(ALL_WORKERS, createEnumStmtSql, NULL);
 
-	MarkObjectDistributed(&typeAddress);
+	/*
+	 * now that the object has been created and distributed to the workers we mark them as
+	 * distributed so we know to keep them up to date and recreate on a new node in the
+	 * future
+	 */
+	MarkObjectDistributed(typeAddress);
 
 	return NULL;
 }
@@ -298,10 +296,8 @@ PlanCreateEnumStmt(CreateEnumStmt *stmt, const char *queryString)
 List *
 PlanAlterEnumStmt(AlterEnumStmt *stmt, const char *queryString)
 {
-	TypeName *typeName = NULL;
-	Oid typeOid = InvalidOid;
-	ObjectAddress typeAddress = { 0 };
 	const char *alterEnumStmtSql = NULL;
+	const ObjectAddress *typeAddress = NULL;
 
 	if (creating_extension)
 	{
@@ -312,10 +308,8 @@ PlanAlterEnumStmt(AlterEnumStmt *stmt, const char *queryString)
 		return NIL;
 	}
 
-	typeName = makeTypeNameFromNameList(stmt->typeName);
-	typeOid = LookupTypeNameOid(NULL, typeName, false);
-	ObjectAddressSet(typeAddress, TypeRelationId, typeOid);
-	if (!IsObjectDistributed(&typeAddress))
+	typeAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
+	if (!IsObjectDistributed(typeAddress))
 	{
 		return NIL;
 	}
@@ -326,6 +320,7 @@ PlanAlterEnumStmt(AlterEnumStmt *stmt, const char *queryString)
 	 * (adding values to an enum can not run in a transaction anyway and would error by
 	 * postgres already).
 	 */
+	EnsureSequentialModeForTypeDDL();
 
 	/*
 	 * managing types can only be done on the coordinator if ddl propagation is on. when
@@ -367,8 +362,6 @@ PlanAlterEnumStmt(AlterEnumStmt *stmt, const char *queryString)
 	}
 	else
 	{
-		/* other statements can be run in a transaction and will be dispatched here. */
-		EnsureSequentialModeForTypeDDL();
 		SendCommandToWorkersAsUser(ALL_WORKERS, DISABLE_DDL_PROPAGATION, NULL);
 		SendCommandToWorkersAsUser(ALL_WORKERS, alterEnumStmtSql, NULL);
 	}
@@ -448,14 +441,11 @@ PlanDropTypeStmt(DropStmt *stmt, const char *queryString)
 List *
 PlanRenameTypeStmt(RenameStmt *stmt, const char *queryString)
 {
-	/* TODO extract type address from statement function */
 	const char *renameStmtSql = NULL;
-	TypeName *typeName = makeTypeNameFromNameList((List *) stmt->object);
-	Oid typeOid = LookupTypeNameOid(NULL, typeName, false);
-	ObjectAddress typeAddress = { 0 };
-	ObjectAddressSet(typeAddress, TypeRelationId, typeOid);
+	const ObjectAddress *typeAddress = NULL;
 
-	if (!IsObjectDistributed(&typeAddress))
+	typeAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
+	if (!IsObjectDistributed(typeAddress))
 	{
 		return NIL;
 	}
@@ -661,11 +651,13 @@ enum_vals_list(Oid typeOid)
 const ObjectAddress *
 CompositeTypeStmtObjectAddress(CompositeTypeStmt *stmt, bool missing_ok)
 {
-	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
+	TypeName *typeName = NULL;
+	Oid typeOid = InvalidOid;
+	ObjectAddress *address = NULL;
 
-	TypeName *typeName = makeTypeNameFromRangeVar(stmt->typevar);
-	Oid typeOid = LookupTypeNameOid(NULL, typeName, missing_ok);
-
+	typeName = makeTypeNameFromRangeVar(stmt->typevar);
+	typeOid = LookupTypeNameOid(NULL, typeName, missing_ok);
+	address = palloc0(sizeof(ObjectAddress));
 	ObjectAddressSet(*address, TypeRelationId, typeOid);
 
 	return address;
@@ -683,11 +675,73 @@ CompositeTypeStmtObjectAddress(CompositeTypeStmt *stmt, bool missing_ok)
 const ObjectAddress *
 CreateEnumStmtObjectAddress(CreateEnumStmt *stmt, bool missing_ok)
 {
-	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
+	TypeName *typeName = NULL;
+	Oid typeOid = InvalidOid;
+	ObjectAddress *address = NULL;
 
-	TypeName *typeName = makeTypeNameFromNameList(stmt->typeName);
-	Oid typeOid = LookupTypeNameOid(NULL, typeName, missing_ok);
+	typeName = makeTypeNameFromNameList(stmt->typeName);
+	typeOid = LookupTypeNameOid(NULL, typeName, missing_ok);
+	address = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*address, TypeRelationId, typeOid);
 
+	return address;
+}
+
+
+/*
+ * AlterTypeStmtObjectAddress finds the ObjectAddress for the type described by the ALTER
+ * TYPE statement. If missing_ok is false this function throws an error if the  type does
+ * not exist.
+ *
+ * Never returns NULL, but the objid in the address could be invalid if missing_ok was set
+ * to true.
+ */
+const ObjectAddress *
+AlterTypeStmtObjectAddress(AlterTableStmt *stmt, bool missing_ok)
+{
+	TypeName *typeName = NULL;
+	Oid typeOid = InvalidOid;
+	ObjectAddress *address = NULL;
+
+	Assert(stmt->relkind == OBJECT_TYPE);
+
+	typeName = makeTypeNameFromRangeVar(stmt->relation);
+	typeOid = LookupTypeNameOid(NULL, typeName, missing_ok);
+	address = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*address, TypeRelationId, typeOid);
+
+	return address;
+}
+
+
+const ObjectAddress *
+AlterEnumStmtObjectAddress(AlterEnumStmt *stmt, bool missing_ok)
+{
+	TypeName *typeName = NULL;
+	Oid typeOid = InvalidOid;
+	ObjectAddress *address = NULL;
+
+	typeName = makeTypeNameFromNameList(stmt->typeName);
+	typeOid = LookupTypeNameOid(NULL, typeName, missing_ok);
+	address = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*address, TypeRelationId, typeOid);
+
+	return address;
+}
+
+
+const ObjectAddress *
+RenameTypeStmtObjectAddress(RenameStmt *stmt, bool missing_ok)
+{
+	TypeName *typeName = NULL;
+	Oid typeOid = InvalidOid;
+	ObjectAddress *address = NULL;
+
+	Assert(stmt->renameType == OBJECT_TYPE);
+
+	typeName = makeTypeNameFromNameList((List *) stmt->object);
+	typeOid = LookupTypeNameOid(NULL, typeName, missing_ok);
+	address = palloc0(sizeof(ObjectAddress));
 	ObjectAddressSet(*address, TypeRelationId, typeOid);
 
 	return address;

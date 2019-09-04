@@ -125,10 +125,16 @@ extern List * PlanAlterEnumStmt(AlterEnumStmt *stmt, const char *queryString);
 extern List * PlanDropTypeStmt(DropStmt *stmt, const char *queryString);
 extern List * PlanRenameTypeStmt(RenameStmt *stmt, const char *queryString);
 extern Node * CreateTypeStmtByObjectAddress(const ObjectAddress *address);
-extern const ObjectAddress * CompositeTypeStmtObjectAddress(CompositeTypeStmt *stmt, bool
-															missing_ok);
-extern const ObjectAddress * CreateEnumStmtObjectAddress(CreateEnumStmt *stmt, bool
-														 missing_ok);
+extern const ObjectAddress * CompositeTypeStmtObjectAddress(CompositeTypeStmt *stmt,
+															bool missing_ok);
+extern const ObjectAddress * CreateEnumStmtObjectAddress(CreateEnumStmt *stmt,
+														 bool missing_ok);
+extern const ObjectAddress * AlterTypeStmtObjectAddress(AlterTableStmt *stmt,
+														bool missing_ok);
+extern const ObjectAddress * AlterEnumStmtObjectAddress(AlterEnumStmt *stmt,
+														bool missing_ok);
+extern const ObjectAddress * RenameTypeStmtObjectAddress(RenameStmt *stmt,
+														 bool missing_ok);
 extern DropStmt * CompositeTypeStmtToDrop(CompositeTypeStmt *stmt);
 extern DropStmt * CreateEnumStmtToDrop(CreateEnumStmt *stmt);
 extern List * CreateTypeDDLCommandsIdempotent(const ObjectAddress *typeAddress);

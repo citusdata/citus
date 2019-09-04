@@ -13,8 +13,11 @@
 #ifndef CITUS_DEPARSER_H
 #define CITUS_DEPARSER_H
 
+#include "postgres.h"
+
 #include "nodes/nodes.h"
 #include "nodes/parsenodes.h"
+#include "catalog/objectaddress.h"
 
 /* forward declarations for format_collate.c */
 /* Control flags for format_collate_extended, compatible with format_type_extended */
@@ -39,5 +42,8 @@ extern void qualify_alter_enum_stmt(AlterEnumStmt *stmt);
 extern void qualify_alter_type_stmt(AlterTableStmt *stmt);
 extern void qualify_composite_type_stmt(CompositeTypeStmt *stmt);
 extern void qualify_create_enum_stmt(CreateEnumStmt *stmt);
+
+extern const ObjectAddress * GetObjectAddressFromParseTree(Node *parseTree, bool
+														   missing_ok);
 
 #endif /* CITUS_DEPARSER_H */
