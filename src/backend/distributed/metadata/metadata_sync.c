@@ -43,6 +43,7 @@
 #include "distributed/version_compat.h"
 #include "foreign/foreign.h"
 #include "nodes/pg_list.h"
+#include "storage/lmgr.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
@@ -1231,4 +1232,29 @@ DetachPartitionCommandList(void)
 										 ENABLE_DDL_PROPAGATION);
 
 	return detachPartitionCommandList;
+}
+
+
+/*
+ * SyncMetadataToNodes tries recreating the metadata snapshop in the
+ * metadata workers that are out of sync.
+ */
+void
+SyncMetadataToNodes(void)
+{
+	List *workerList = NIL;
+	ListCell *workerCell = NULL;
+
+	LockRelationOid(DistNodeRelationId(), ExclusiveLock);
+
+	workerList = ActivePrimaryNodeList();
+	foreach(workerCell, workerList)
+	{
+		WorkerNode *workerNode = lfirst(workerCell);
+
+		if (workerNode->hasMetadata && !workerNode->metadataSynced)
+		{
+			RecreateMetadataSnapshot(workerNode);
+		}
+	}
 }

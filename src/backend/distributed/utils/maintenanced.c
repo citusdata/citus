@@ -33,6 +33,7 @@
 #include "distributed/maintenanced.h"
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/metadata_sync.h"
 #include "distributed/statistics_collection.h"
 #include "distributed/transaction_recovery.h"
 #include "distributed/version_compat.h"
@@ -48,6 +49,9 @@
 #include "utils/memutils.h"
 #include "utils/lsyscache.h"
 
+
+/* Sync metadata to MX nodes every second. */
+#define METADATA_SYNC_TIMEOUT (1000)
 
 /*
  * Shared memory data for all maintenance workers.
@@ -225,6 +229,7 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 	bool retryStatsCollection USED_WITH_LIBCURL_ONLY = false;
 	ErrorContextCallback errorCallback;
 	TimestampTz lastRecoveryTime = 0;
+	TimestampTz lastMetadataSyncTime = 0;
 
 	/*
 	 * Look up this worker's configuration.
@@ -355,6 +360,29 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 			CommitTransactionCommand();
 		}
 #endif
+
+		if (TimestampDifferenceExceeds(lastMetadataSyncTime,
+									   GetCurrentTimestamp(),
+									   METADATA_SYNC_TIMEOUT))
+		{
+			InvalidateMetadataSystemCache();
+			StartTransactionCommand();
+
+			if (!LockCitusExtension())
+			{
+				ereport(DEBUG1, (errmsg("could not lock the citus extension, "
+										"skipping metadata sync")));
+			}
+			else if (CheckCitusVersion(DEBUG1) && CitusHasBeenLoaded())
+			{
+				lastMetadataSyncTime = GetCurrentTimestamp();
+				SyncMetadataToNodes();
+			}
+
+			CommitTransactionCommand();
+
+			timeout = Min(timeout, METADATA_SYNC_TIMEOUT);
+		}
 
 		/*
 		 * If enabled, run 2PC recovery on primary nodes (where !RecoveryInProgress()),
