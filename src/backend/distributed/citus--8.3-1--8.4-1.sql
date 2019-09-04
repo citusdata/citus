@@ -224,3 +224,10 @@ $cppu$;
 
 COMMENT ON FUNCTION pg_catalog.citus_finish_pg_upgrade()
     IS 'perform tasks to restore citus settings from a location that has been prepared before pg_upgrade';
+
+/*
+ * We truncate pg_dist_node during metadata syncing, but we do not want
+ * this to cascade to pg_dist_poolinfo, which is generally maintained
+ * by the operator.
+ */
+ALTER TABLE pg_dist_poolinfo DROP CONSTRAINT pg_dist_poolinfo_nodeid_fkey;
