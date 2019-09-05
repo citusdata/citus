@@ -61,12 +61,11 @@ def start_databases(pg_path, rel_data_path):
     for node_name in NODE_NAMES:
         abs_data_path = os.path.abspath(os.path.join(rel_data_path, node_name))
         command = [
-            os.path.join(pg_path, 'pg_ctl'),
+            os.path.join(pg_path, 'pg_ctl'), 'start',
             '--pgdata', abs_data_path,
             '-U', USER,
-            "-o '-p {}'".format(NODE_PORTS[node_name]),
-            '--log', os.path.join(pg_path, 'logfile_' + node_name),
-            'start'
+            '-o', '-p {}'.format(NODE_PORTS[node_name]),
+            '--log', os.path.join(abs_data_path, 'logfile_' + node_name)
         ]
         subprocess.call(command)
 
@@ -107,12 +106,11 @@ def stop_databases(pg_path, rel_data_path):
     for node_name in NODE_NAMES:
         abs_data_path = os.path.abspath(os.path.join(rel_data_path, node_name))
         command = [
-            os.path.join(pg_path, 'pg_ctl'),
+            os.path.join(pg_path, 'pg_ctl'), 'stop',
             '--pgdata', abs_data_path,
             '-U', USER,
-            "-o '-p {}'".format(NODE_PORTS[node_name]),
-            '--log', os.path.join(pg_path, 'logfile_' + node_name),
-            'stop'
+            '-o', '-p {}'.format(NODE_PORTS[node_name]),
+            '--log', os.path.join(abs_data_path, 'logfile_' + node_name)
         ]
         subprocess.call(command)
 
@@ -176,6 +174,6 @@ def main(config):
 
 if __name__ == '__main__':
     config = Config(docopt(__doc__, version='upgrade_test'))
-    #atexit.register(stop_all_databases, config.old_bindir,
-    #                config.new_bindir, config.old_datadir, config.new_datadir)
+    atexit.register(stop_all_databases, config.old_bindir,
+                    config.new_bindir, config.old_datadir, config.new_datadir)
     main(config)

@@ -12,7 +12,7 @@ class Config():
         self.new_datadir = self.temp_dir + '/newData'
         self.settings = {
             'shared_preload_libraries': 'citus',
-            'citus.node_conninfo': 'prefer'
+            'citus.node_conninfo': 'sslmode=prefer'
         }
 
 

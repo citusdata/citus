@@ -19,7 +19,7 @@ Before running the script, make sure that:
 
 - Finally run upgrade test in `citus/src/test/regress`:
 ```
-    pipenv run make check-upgrade old-bindir=<old-bindir> new-bindir=<new-bindir> pgxsdir=<pgxsdir>
+    pipenv run make check-upgrade old-bindir=<old-bindir> new-bindir=<new-bindir>
 ```
 
 To see full command list:
