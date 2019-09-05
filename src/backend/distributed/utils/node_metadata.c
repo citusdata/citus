@@ -57,7 +57,8 @@ char *CurrentCluster = "default";
 static Datum ActivateNode(char *nodeName, int nodePort);
 static void RemoveNodeFromCluster(char *nodeName, int32 nodePort);
 static Datum AddNodeMetadata(char *nodeName, int32 nodePort, int32 groupId,
-							 char *nodeRack, bool hasMetadata, bool isActive,
+							 char *nodeRack, bool hasMetadata, bool metadataSynced, bool
+							 isActive,
 							 Oid nodeRole, char *nodeCluster, bool *nodeAlreadyExists);
 static void SetNodeState(char *nodeName, int32 nodePort, bool isActive);
 static HeapTuple GetNodeTuple(char *nodeName, int32 nodePort);
@@ -65,7 +66,8 @@ static Datum GenerateNodeTuple(WorkerNode *workerNode);
 static int32 GetNextGroupId(void);
 static int GetNextNodeId(void);
 static void InsertNodeRow(int nodeid, char *nodename, int32 nodeport, int32 groupId,
-						  char *nodeRack, bool hasMetadata, bool isActive, Oid nodeRole,
+						  char *nodeRack, bool hasMetadata, bool metadataSynced, bool
+						  isActive, Oid nodeRole,
 						  char *nodeCluster);
 static void DeleteNodeRow(char *nodename, int32 nodeport);
 static List * ParseWorkerNodeFileAndRename(void);
@@ -100,6 +102,7 @@ master_add_node(PG_FUNCTION_ARGS)
 	char *nodeClusterString = NULL;
 	char *nodeRack = WORKER_DEFAULT_RACK;
 	bool hasMetadata = false;
+	bool metadataSynced = false;
 	bool isActive = false;
 	bool nodeAlreadyExists = false;
 	Datum nodeRecord;
@@ -124,7 +127,8 @@ master_add_node(PG_FUNCTION_ARGS)
 	}
 
 	nodeRecord = AddNodeMetadata(nodeNameString, nodePort, groupId, nodeRack,
-								 hasMetadata, isActive, nodeRole, nodeClusterString,
+								 hasMetadata, metadataSynced, isActive, nodeRole,
+								 nodeClusterString,
 								 &nodeAlreadyExists);
 
 	/*
@@ -158,6 +162,7 @@ master_add_inactive_node(PG_FUNCTION_ARGS)
 	char *nodeClusterString = NameStr(*nodeClusterName);
 	char *nodeRack = WORKER_DEFAULT_RACK;
 	bool hasMetadata = false;
+	bool metadataSynced = false;
 	bool isActive = false;
 	bool nodeAlreadyExists = false;
 	Datum nodeRecord;
@@ -165,7 +170,8 @@ master_add_inactive_node(PG_FUNCTION_ARGS)
 	CheckCitusVersion(ERROR);
 
 	nodeRecord = AddNodeMetadata(nodeNameString, nodePort, groupId, nodeRack,
-								 hasMetadata, isActive, nodeRole, nodeClusterString,
+								 hasMetadata, metadataSynced, isActive, nodeRole,
+								 nodeClusterString,
 								 &nodeAlreadyExists);
 
 	PG_RETURN_DATUM(nodeRecord);
@@ -193,6 +199,7 @@ master_add_secondary_node(PG_FUNCTION_ARGS)
 	char *nodeClusterString = NameStr(*nodeClusterName);
 	char *nodeRack = WORKER_DEFAULT_RACK;
 	bool hasMetadata = false;
+	bool metadataSynced = false;
 	bool isActive = true;
 	bool nodeAlreadyExists = false;
 	Datum nodeRecord;
@@ -200,7 +207,8 @@ master_add_secondary_node(PG_FUNCTION_ARGS)
 	CheckCitusVersion(ERROR);
 
 	nodeRecord = AddNodeMetadata(nodeNameString, nodePort, groupId, nodeRack,
-								 hasMetadata, isActive, nodeRole, nodeClusterString,
+								 hasMetadata, metadataSynced, isActive, nodeRole,
+								 nodeClusterString,
 								 &nodeAlreadyExists);
 
 	PG_RETURN_DATUM(nodeRecord);
@@ -675,8 +683,9 @@ master_initialize_node_metadata(PG_FUNCTION_ARGS)
 		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
 
 		AddNodeMetadata(workerNode->workerName, workerNode->workerPort, 0,
-						workerNode->workerRack, false, workerNode->isActive,
-						nodeRole, nodeCluster, &nodeAlreadyExists);
+						workerNode->workerRack, false, false,
+						workerNode->isActive, nodeRole, nodeCluster,
+						&nodeAlreadyExists);
 	}
 
 	PG_RETURN_BOOL(true);
@@ -975,7 +984,8 @@ CountPrimariesWithMetadata(void)
  */
 static Datum
 AddNodeMetadata(char *nodeName, int32 nodePort, int32 groupId, char *nodeRack,
-				bool hasMetadata, bool isActive, Oid nodeRole, char *nodeCluster,
+				bool hasMetadata, bool metadataSynced, bool isActive, Oid nodeRole,
+				char *nodeCluster,
 				bool *nodeAlreadyExists)
 {
 	int nextNodeIdInt = 0;
@@ -1032,7 +1042,7 @@ AddNodeMetadata(char *nodeName, int32 nodePort, int32 groupId, char *nodeRack,
 	nextNodeIdInt = GetNextNodeId();
 
 	InsertNodeRow(nextNodeIdInt, nodeName, nodePort, groupId, nodeRack, hasMetadata,
-				  isActive, nodeRole, nodeCluster);
+				  metadataSynced, isActive, nodeRole, nodeCluster);
 
 	workerNode = FindWorkerNodeAnyCluster(nodeName, nodePort);
 	SyncDistNodeEntry(workerNode);
@@ -1153,6 +1163,8 @@ GenerateNodeTuple(WorkerNode *workerNode)
 	values[Anum_pg_dist_node_nodeport - 1] = UInt32GetDatum(workerNode->workerPort);
 	values[Anum_pg_dist_node_noderack - 1] = CStringGetTextDatum(workerNode->workerRack);
 	values[Anum_pg_dist_node_hasmetadata - 1] = BoolGetDatum(workerNode->hasMetadata);
+	values[Anum_pg_dist_node_metadatasynced - 1] = BoolGetDatum(
+		workerNode->metadataSynced);
 	values[Anum_pg_dist_node_isactive - 1] = BoolGetDatum(workerNode->isActive);
 	values[Anum_pg_dist_node_noderole - 1] = ObjectIdGetDatum(workerNode->nodeRole);
 	values[Anum_pg_dist_node_nodecluster - 1] = nodeClusterNameDatum;
@@ -1265,7 +1277,8 @@ EnsureCoordinator(void)
  */
 static void
 InsertNodeRow(int nodeid, char *nodeName, int32 nodePort, int32 groupId, char *nodeRack,
-			  bool hasMetadata, bool isActive, Oid nodeRole, char *nodeCluster)
+			  bool hasMetadata, bool metadataSynced, bool isActive, Oid nodeRole,
+			  char *nodeCluster)
 {
 	Relation pgDistNode = NULL;
 	TupleDesc tupleDescriptor = NULL;
@@ -1286,6 +1299,7 @@ InsertNodeRow(int nodeid, char *nodeName, int32 nodePort, int32 groupId, char *n
 	values[Anum_pg_dist_node_nodeport - 1] = UInt32GetDatum(nodePort);
 	values[Anum_pg_dist_node_noderack - 1] = CStringGetTextDatum(nodeRack);
 	values[Anum_pg_dist_node_hasmetadata - 1] = BoolGetDatum(hasMetadata);
+	values[Anum_pg_dist_node_metadatasynced - 1] = BoolGetDatum(metadataSynced);
 	values[Anum_pg_dist_node_isactive - 1] = BoolGetDatum(isActive);
 	values[Anum_pg_dist_node_noderole - 1] = ObjectIdGetDatum(nodeRole);
 	values[Anum_pg_dist_node_nodecluster - 1] = nodeClusterNameDatum;
@@ -1494,6 +1508,7 @@ ParseWorkerNodeFileAndRename()
 		strlcpy(workerNode->workerRack, nodeRack, WORKER_LENGTH);
 		workerNode->workerPort = nodePort;
 		workerNode->hasMetadata = false;
+		workerNode->metadataSynced = false;
 		workerNode->isActive = true;
 
 		workerNodeList = lappend(workerNodeList, workerNode);
@@ -1550,10 +1565,10 @@ TupleToWorkerNode(TupleDesc tupleDescriptor, HeapTuple heapTuple)
 	strlcpy(workerNode->workerName, TextDatumGetCString(nodeName), WORKER_LENGTH);
 	strlcpy(workerNode->workerRack, TextDatumGetCString(nodeRack), WORKER_LENGTH);
 	workerNode->hasMetadata = DatumGetBool(datumArray[Anum_pg_dist_node_hasmetadata - 1]);
-	workerNode->isActive = DatumGetBool(datumArray[Anum_pg_dist_node_isactive - 1]);
-	workerNode->nodeRole = DatumGetObjectId(datumArray[Anum_pg_dist_node_noderole - 1]);
 	workerNode->metadataSynced =
 		DatumGetBool(datumArray[Anum_pg_dist_node_metadatasynced - 1]);
+	workerNode->isActive = DatumGetBool(datumArray[Anum_pg_dist_node_isactive - 1]);
+	workerNode->nodeRole = DatumGetObjectId(datumArray[Anum_pg_dist_node_noderole - 1]);
 
 	/*
 	 * nodecluster column can be missing. In the case of extension creation/upgrade,

@@ -2859,6 +2859,7 @@ InitializeWorkerNodeCache(void)
 		workerNode->nodeId = currentNode->nodeId;
 		strlcpy(workerNode->workerRack, currentNode->workerRack, WORKER_LENGTH);
 		workerNode->hasMetadata = currentNode->hasMetadata;
+		workerNode->metadataSynced = currentNode->metadataSynced;
 		workerNode->isActive = currentNode->isActive;
 		workerNode->nodeRole = currentNode->nodeRole;
 		strlcpy(workerNode->nodeCluster, currentNode->nodeCluster, NAMEDATALEN);

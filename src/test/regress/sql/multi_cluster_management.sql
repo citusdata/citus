@@ -133,9 +133,9 @@ SELECT master_remove_node('localhost', 9990);
 -- clean-up
 DROP TABLE cluster_management_test;
 
--- check that adding/removing nodes are propagated to nodes with hasmetadata=true
+-- check that adding/removing nodes are propagated to nodes with metadata
 SELECT master_remove_node('localhost', :worker_2_port);
-UPDATE pg_dist_node SET hasmetadata=true WHERE nodeport=:worker_1_port;
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 \c - - - :worker_1_port
 SELECT nodename, nodeport FROM pg_dist_node WHERE nodename='localhost' AND nodeport=:worker_2_port;
@@ -145,8 +145,8 @@ SELECT master_remove_node('localhost', :worker_2_port);
 SELECT nodename, nodeport FROM pg_dist_node WHERE nodename='localhost' AND nodeport=:worker_2_port;
 \c - - - :master_port
 
--- check that added nodes are not propagated to nodes with hasmetadata=false
-UPDATE pg_dist_node SET hasmetadata=false WHERE nodeport=:worker_1_port;
+-- check that added nodes are not propagated to nodes without metadata
+SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 \c - - - :worker_1_port
 SELECT nodename, nodeport FROM pg_dist_node WHERE nodename='localhost' AND nodeport=:worker_2_port;
@@ -173,7 +173,7 @@ COMMIT;
 
 SELECT nodename, nodeport FROM pg_dist_node WHERE nodename='localhost' AND nodeport=:worker_2_port;
 
-UPDATE pg_dist_node SET hasmetadata=true WHERE nodeport=:worker_1_port;
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 BEGIN;
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 SELECT master_remove_node('localhost', :worker_2_port);

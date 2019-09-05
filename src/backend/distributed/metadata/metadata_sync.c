@@ -510,13 +510,14 @@ NodeListInsertCommand(List *workerNodeList)
 	/* generate the query without any values yet */
 	appendStringInfo(nodeListInsertCommand,
 					 "INSERT INTO pg_dist_node (nodeid, groupid, nodename, nodeport, "
-					 "noderack, hasmetadata, isactive, noderole, nodecluster) VALUES ");
+					 "noderack, hasmetadata, metadatasynced, isactive, noderole, nodecluster) VALUES ");
 
 	/* iterate over the worker nodes, add the values */
 	foreach(workerNodeCell, workerNodeList)
 	{
 		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
 		char *hasMetadataString = workerNode->hasMetadata ? "TRUE" : "FALSE";
+		char *metadataSyncedString = workerNode->metadataSynced ? "TRUE" : "FALSE";
 		char *isActiveString = workerNode->isActive ? "TRUE" : "FALSE";
 
 		Datum nodeRoleOidDatum = ObjectIdGetDatum(workerNode->nodeRole);
@@ -524,13 +525,14 @@ NodeListInsertCommand(List *workerNodeList)
 		char *nodeRoleString = DatumGetCString(nodeRoleStringDatum);
 
 		appendStringInfo(nodeListInsertCommand,
-						 "(%d, %d, %s, %d, %s, %s, %s, '%s'::noderole, %s)",
+						 "(%d, %d, %s, %d, %s, %s, %s, %s, '%s'::noderole, %s)",
 						 workerNode->nodeId,
 						 workerNode->groupId,
 						 quote_literal_cstr(workerNode->workerName),
 						 workerNode->workerPort,
 						 quote_literal_cstr(workerNode->workerRack),
 						 hasMetadataString,
+						 metadataSyncedString,
 						 isActiveString,
 						 nodeRoleString,
 						 quote_literal_cstr(workerNode->nodeCluster));

@@ -191,7 +191,7 @@ SendCommandToWorkersParams(TargetWorkerSet targetWorkerSet, char *command,
 		int connectionFlags = 0;
 
 		if (targetWorkerSet == WORKERS_WITH_METADATA &&
-			!workerNode->hasMetadata)
+			(!workerNode->hasMetadata || !workerNode->metadataSynced))
 		{
 			continue;
 		}
