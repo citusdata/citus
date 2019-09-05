@@ -22,6 +22,8 @@ MULTI_INSTALLDIR=$(CURDIR)/tmp_check/install
 pg_regress_multi_check = $(PERL) $(citus_abs_srcdir)/pg_regress_multi.pl --pgxsdir="$(pgxsdir)" --bindir="$(bindir)" --libdir="$(libdir)" --majorversion="$(MAJORVERSION)" --postgres-builddir="$(postgres_abs_builddir)"  --postgres-srcdir="$(postgres_abs_srcdir)"
 MULTI_REGRESS_OPTS = --inputdir=$(citus_abs_srcdir) $(pg_regress_locale_flags) --launcher="$(citus_abs_srcdir)/log_test_times"
 
+pg_upgrade_check = $(citus_abs_srcdir)/upgrade/upgrade_test.py
+
 # XXX: Can't actually do useful testruns against install - $libdir
 # etc will point to the directory configured during postgres'
 # build. We could copy the installed tree around, but that's quite
@@ -119,6 +121,9 @@ check-failure: all
 check-failure-base: all
 	$(pg_regress_multi_check) --load-extension=citus --mitmproxy \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/failure_base_schedule $(EXTRA_TESTS)
+
+check-upgrade:
+	$(pg_upgrade_check) --old-bindir=$(old-bindir) --new-bindir=$(new-bindir) --pgxsdir=$(pgxsdir)
 
 clean distclean maintainer-clean:
 	rm -f $(output_files) $(input_files)

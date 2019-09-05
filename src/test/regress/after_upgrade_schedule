@@ -1,1 +1,1 @@
-test: upgrade_after
+test: upgrade_distributed_table_after

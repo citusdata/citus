@@ -1,5 +1,5 @@
-CREATE SCHEMA upgrade_before;
-SET search_path TO upgrade_before, public;
+CREATE SCHEMA upgrade_distributed_table_before;
+SET search_path TO upgrade_distributed_table_before, public;
 CREATE TABLE t(a int);
 SELECT create_distributed_table('t', 'a');
  create_distributed_table 

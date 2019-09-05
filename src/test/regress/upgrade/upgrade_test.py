@@ -1,59 +1,74 @@
+#!/usr/bin/env python3
+
 """upgrade_test
 Usage:
-    upgrade_test --old-bindir=<old-bindir> --new-bindir=<new-bindir> --postgres-srcdir=<postgres-srcdir> [--citus-path=<citus-path>]
+    upgrade_test --old-bindir=<old-bindir> --new-bindir=<new-bindir> --pgxsdir=<pgxsdir>
 
 Options:
     --old-bindir=<old-bindir>              The old PostgreSQL executable directory;(ex: '~/.pgenv/pgsql/bin')
     --new-bindir=<new-bindir>              New postgres binary absolute path(ex: '~/.pgenv/pgsql-11.3/bin')
-    --postgres-srcdir=<postgres-srcdir>    Path to postgres build directory(ex: ~/.pgenv/src/postgresql-11.3/src/test/regress)
-    --citus-path=<citus-path>              Absolute path for citus directory (default: ~/citus)
+    --pgxsdir=<pgxsdir>           	       Path to the PGXS directory(ex: ~/.pgenv/src/postgresql-11.3)
 """
 
-from config import *
-from docopt import docopt
 import utils
-import os
-import shutil
+import atexit
+import subprocess
 import sys
+import shutil
+import os
+
+from docopt import docopt
+
+from config import (
+    Config, USER, NODE_PORTS,
+    NODE_NAMES, DBNAME, COORDINATOR_NAME,
+    WORKER_PORTS, AFTER_UPGRADE_SCHEDULE, BEFORE_UPGRADE_SCHEDULE
+)
 
 
-def initialize_temp_dir():
-    if os.path.exists(config[TEMP_DIR]):
-        shutil.rmtree(config[TEMP_DIR])
-    os.mkdir(config[TEMP_DIR])
+def initialize_temp_dir(temp_dir):
+    if os.path.exists(temp_dir):
+        shutil.rmtree(temp_dir)
+    os.mkdir(temp_dir)
     # Give full access to TEMP_DIR so that postgres user can use it.
-    os.chmod(config[TEMP_DIR], 0o777)
+    os.chmod(temp_dir, 0o777)
 
 
-def initialize_db_for_cluster(pg_path, rel_data_path):
-    utils.run(['mkdir', rel_data_path])
+def initialize_db_for_cluster(pg_path, rel_data_path, settings):
+    subprocess.call(['mkdir', rel_data_path])
     for node_name in NODE_NAMES:
         abs_data_path = os.path.abspath(os.path.join(rel_data_path, node_name))
-        command = [os.path.join(pg_path, 'initdb'),
-                   '--pgdata', abs_data_path, '--username', USER]
-        utils.run(command)
-        add_citus_to_shared_preload_libraries(abs_data_path)
+        command = [
+            os.path.join(pg_path, 'initdb'),
+            '--pgdata', abs_data_path,
+            '--username', USER
+        ]
+        subprocess.call(command)
+        add_settings(abs_data_path, settings)
 
 
-def get_add_citus_to_shared_preload_library_cmd(abs_data_path):
-    return 'echo "shared_preload_libraries = \'citus\'" >> {conf_path}'.format(
-        conf_path=os.path.join(abs_data_path, 'postgresql.conf'))
-
-
-def add_citus_to_shared_preload_libraries(abs_data_path):
+def add_settings(abs_data_path, settings):
     conf_path = os.path.join(abs_data_path, 'postgresql.conf')
     with open(conf_path, 'a') as conf_file:
-        utils.run_with_stdout(
-            ['echo', "shared_preload_libraries = \'citus\'"], conf_file)
+        for setting_key, setting_val in settings.items():
+            setting = "{setting_key} = \'{setting_val}\'\n".format(
+                setting_key=setting_key,
+                setting_val=setting_val)
+            conf_file.write(setting)
 
 
 def start_databases(pg_path, rel_data_path):
     for node_name in NODE_NAMES:
         abs_data_path = os.path.abspath(os.path.join(rel_data_path, node_name))
-        command = [os.path.join(pg_path, 'pg_ctl'), '--pgdata', abs_data_path, '-U',
-                   USER, "-o '-p {}'".format(NODE_PORTS[node_name]), '--log',
-                   os.path.join(pg_path, 'logfile_' + node_name), 'start']
-        utils.run(command)
+        command = [
+            os.path.join(pg_path, 'pg_ctl'),
+            '--pgdata', abs_data_path,
+            '-U', USER,
+            "-o '-p {}'".format(NODE_PORTS[node_name]),
+            '--log', os.path.join(pg_path, 'logfile_' + node_name),
+            'start'
+        ]
+        subprocess.call(command)
 
 
 def create_citus_extension(pg_path):
@@ -69,10 +84,16 @@ def add_workers(pg_path):
 
 
 def run_pg_regress(pg_path, PG_SRCDIR, port, schedule):
-    command = [os.path.join(PG_SRCDIR, 'src/test/regress/pg_regress'), '--port', str(port),
-               '--schedule', schedule, '--bindir', pg_path, '--user', USER, '--dbname', DBNAME,
-               '--use-existing']
-    exit_code = utils.run(command)
+    command = [
+        os.path.join(PG_SRCDIR, 'src/test/regress/pg_regress'),
+        '--port', str(port),
+        '--schedule', schedule,
+        '--bindir', pg_path,
+        '--user', USER,
+        '--dbname', DBNAME,
+        '--use-existing'
+    ]
+    exit_code = subprocess.call(command)
     if exit_code != 0:
         sys.exit(exit_code)
 
@@ -85,23 +106,33 @@ def citus_prepare_pg_upgrade(pg_path):
 def stop_databases(pg_path, rel_data_path):
     for node_name in NODE_NAMES:
         abs_data_path = os.path.abspath(os.path.join(rel_data_path, node_name))
-        command = [os.path.join(pg_path, 'pg_ctl'), '--pgdata', abs_data_path, '-U',
-                   USER, "-o '-p {}'".format(NODE_PORTS[node_name]), '--log',
-                   os.path.join(pg_path, 'logfile_' + node_name), 'stop']
-        utils.run(command)
+        command = [
+            os.path.join(pg_path, 'pg_ctl'),
+            '--pgdata', abs_data_path,
+            '-U', USER,
+            "-o '-p {}'".format(NODE_PORTS[node_name]),
+            '--log', os.path.join(pg_path, 'logfile_' + node_name),
+            'stop'
+        ]
+        subprocess.call(command)
 
 
-def perform_postgres_upgrade():
+def perform_postgres_upgrade(old_bindir, new_bindir, old_datadir, new_datadir):
     for node_name in NODE_NAMES:
-        base_new_data_path = os.path.abspath(config[NEW_DATADIR])
-        base_old_data_path = os.path.abspath(config[OLD_DATADIR])
+        base_new_data_path = os.path.abspath(new_datadir)
+        base_old_data_path = os.path.abspath(old_datadir)
         with utils.cd(base_new_data_path):
             abs_new_data_path = os.path.join(base_new_data_path, node_name)
             abs_old_data_path = os.path.join(base_old_data_path, node_name)
-            command = [os.path.join(config[NEW_BINDIR], 'pg_upgrade'), '--username', USER,
-                       '--old-bindir', config[OLD_BINDIR], '--new-bindir', config[NEW_BINDIR],
-                       '--old-datadir', abs_old_data_path, '--new-datadir', abs_new_data_path]
-            utils.run(command)
+            command = [
+                os.path.join(new_bindir, 'pg_upgrade'),
+                '--username', USER,
+                '--old-bindir', old_bindir,
+                '--new-bindir', new_bindir,
+                '--old-datadir', abs_old_data_path,
+                '--new-datadir', abs_new_data_path
+            ]
+            subprocess.call(command)
 
 
 def citus_finish_pg_upgrade(pg_path):
@@ -109,31 +140,42 @@ def citus_finish_pg_upgrade(pg_path):
         utils.psql(pg_path, port, "SELECT citus_finish_pg_upgrade();")
 
 
-def initialize_citus_cluster():
-    initialize_db_for_cluster(config[OLD_BINDIR], config[OLD_DATADIR])
-    start_databases(config[OLD_BINDIR], config[OLD_DATADIR])
-    create_citus_extension(config[OLD_BINDIR])
-    add_workers(config[OLD_BINDIR])
+def initialize_citus_cluster(old_bindir, old_datadir, settings):
+    initialize_db_for_cluster(old_bindir, old_datadir, settings)
+    start_databases(old_bindir, old_datadir)
+    create_citus_extension(old_bindir)
+    add_workers(old_bindir)
 
 
-def main():
-    initialize_temp_dir()
-    initialize_citus_cluster()
+def stop_all_databases(old_bindir, new_bindir, old_datadir, new_datadir):
+    stop_databases(old_bindir, old_datadir)
+    stop_databases(new_bindir, new_datadir)
 
-    run_pg_regress(config[OLD_BINDIR], config[PG_SRCDIR],
+
+def main(config):
+    initialize_temp_dir(config.temp_dir)
+    initialize_citus_cluster(
+        config.old_bindir, config.old_datadir, config.settings)
+
+    run_pg_regress(config.old_bindir, config.pg_srcdir,
                    NODE_PORTS[COORDINATOR_NAME], BEFORE_UPGRADE_SCHEDULE)
-    citus_prepare_pg_upgrade(config[OLD_BINDIR])
-    stop_databases(config[OLD_BINDIR], config[OLD_DATADIR])
 
-    initialize_db_for_cluster(config[NEW_BINDIR], config[NEW_DATADIR])
-    perform_postgres_upgrade()
-    start_databases(config[NEW_BINDIR], config[NEW_DATADIR])
-    citus_finish_pg_upgrade(config[NEW_BINDIR])
+    citus_prepare_pg_upgrade(config.old_bindir)
+    stop_databases(config.old_bindir, config.old_datadir)
 
-    run_pg_regress(config[NEW_BINDIR], config[PG_SRCDIR],
+    initialize_db_for_cluster(
+        config.new_bindir, config.new_datadir, config.settings)
+    perform_postgres_upgrade(
+        config.old_bindir, config.new_bindir, config.old_datadir, config.new_datadir)
+    start_databases(config.new_bindir, config.new_datadir)
+    citus_finish_pg_upgrade(config.new_bindir)
+
+    run_pg_regress(config.new_bindir, config.pg_srcdir,
                    NODE_PORTS[COORDINATOR_NAME], AFTER_UPGRADE_SCHEDULE)
 
 
 if __name__ == '__main__':
-    init_config(docopt(__doc__, version='upgrade_test'))
-    main()
+    config = Config(docopt(__doc__, version='upgrade_test'))
+    #atexit.register(stop_all_databases, config.old_bindir,
+    #                config.new_bindir, config.old_datadir, config.new_datadir)
+    main(config)

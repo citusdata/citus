@@ -3,16 +3,9 @@ import os
 from config import USER
 
 
-def run(command):
-    return subprocess.call(command)
-
-def run_with_stdout(command, file):
-    return subprocess.call(command, stdout = file)
-
-
 def psql(pg_path, port, command):
-    return run([os.path.join(pg_path, 'psql'), '-U', USER, '-p', str(port),
-                '-c {}'.format(command)])
+    return subprocess.call([os.path.join(pg_path, 'psql'), '-U', USER, '-p', str(port),
+                            '-c {}'.format(command)])
 
 # Taken from https://stackoverflow.com/questions/431684/how-do-i-change-directory-cd-in-python/13197763#13197763
 
