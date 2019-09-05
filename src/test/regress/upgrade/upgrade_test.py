@@ -68,8 +68,8 @@ def add_workers(pg_path):
         utils.psql(pg_path, NODE_PORTS[COORDINATOR_NAME], command)
 
 
-def run_pg_regress(pg_path, pg_src_path, port, schedule):
-    command = [os.path.join(pg_src_path, 'src/test/regress/pg_regress'), '--port', str(port),
+def run_pg_regress(pg_path, PG_SRCDIR, port, schedule):
+    command = [os.path.join(PG_SRCDIR, 'src/test/regress/pg_regress'), '--port', str(port),
                '--schedule', schedule, '--bindir', pg_path, '--user', USER, '--dbname', DBNAME,
                '--use-existing']
     exit_code = utils.run(command)
@@ -93,8 +93,8 @@ def stop_databases(pg_path, rel_data_path):
 
 def perform_postgres_upgrade():
     for node_name in NODE_NAMES:
-        base_new_data_path = os.path.abspath(config[NEW_PG_DATA_PATH])
-        base_old_data_path = os.path.abspath(config[CURRENT_PG_DATA_PATH])
+        base_new_data_path = os.path.abspath(config[NEW_DATADIR])
+        base_old_data_path = os.path.abspath(config[OLD_DATADIR])
         with utils.cd(base_new_data_path):
             abs_new_data_path = os.path.join(base_new_data_path, node_name)
             abs_old_data_path = os.path.join(base_old_data_path, node_name)
@@ -110,8 +110,8 @@ def citus_finish_pg_upgrade(pg_path):
 
 
 def initialize_citus_cluster():
-    initialize_db_for_cluster(config[OLD_BINDIR], config[CURRENT_PG_DATA_PATH])
-    start_databases(config[OLD_BINDIR], config[CURRENT_PG_DATA_PATH])
+    initialize_db_for_cluster(config[OLD_BINDIR], config[OLD_DATADIR])
+    start_databases(config[OLD_BINDIR], config[OLD_DATADIR])
     create_citus_extension(config[OLD_BINDIR])
     add_workers(config[OLD_BINDIR])
 
@@ -120,17 +120,17 @@ def main():
     initialize_temp_dir()
     initialize_citus_cluster()
 
-    run_pg_regress(config[OLD_BINDIR], config[PG_SRC_PATH],
+    run_pg_regress(config[OLD_BINDIR], config[PG_SRCDIR],
                    NODE_PORTS[COORDINATOR_NAME], BEFORE_UPGRADE_SCHEDULE)
     citus_prepare_pg_upgrade(config[OLD_BINDIR])
-    stop_databases(config[OLD_BINDIR], config[CURRENT_PG_DATA_PATH])
+    stop_databases(config[OLD_BINDIR], config[OLD_DATADIR])
 
-    initialize_db_for_cluster(config[NEW_BINDIR], config[NEW_PG_DATA_PATH])
+    initialize_db_for_cluster(config[NEW_BINDIR], config[NEW_DATADIR])
     perform_postgres_upgrade()
-    start_databases(config[NEW_BINDIR], config[NEW_PG_DATA_PATH])
+    start_databases(config[NEW_BINDIR], config[NEW_DATADIR])
     citus_finish_pg_upgrade(config[NEW_BINDIR])
 
-    run_pg_regress(config[NEW_BINDIR], config[PG_SRC_PATH],
+    run_pg_regress(config[NEW_BINDIR], config[PG_SRCDIR],
                    NODE_PORTS[COORDINATOR_NAME], AFTER_UPGRADE_SCHEDULE)
 
 

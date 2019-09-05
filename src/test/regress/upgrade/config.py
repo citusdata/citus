@@ -1,28 +1,28 @@
 OLD_BINDIR = 'OLD_BINDIR'
 NEW_BINDIR = 'NEW_BINDIR'
 TEMP_DIR = 'TEMP_DIR'
-NEW_PG_DATA_PATH = 'NEW_PG_DATA_PATH'
-CURRENT_PG_DATA_PATH = 'CURRENT_PG_DATA_PATH'
-PG_SRC_PATH = 'PG_SRC_PATH'
+NEW_DATADIR = 'NEW_DATADIR'
+OLD_DATADIR = 'OLD_DATADIR'
+PG_SRCDIR = 'PG_SRCDIR'
 BEFORE_UPGRADE_SCHEDULE = './before_upgrade_schedule'
 AFTER_UPGRADE_SCHEDULE = './after_upgrade_schedule'
 
 config = {
     OLD_BINDIR : '',
     NEW_BINDIR : '',
-    PG_SRC_PATH : '',
+    PG_SRCDIR : '',
     TEMP_DIR : '',
-    NEW_PG_DATA_PATH : '',
-    CURRENT_PG_DATA_PATH : '',
+    NEW_DATADIR : '',
+    OLD_DATADIR : '',
 }
 
 def init_config(arguments):
     config[OLD_BINDIR] = arguments['--old-bindir'] 
     config[NEW_BINDIR] = arguments['--new-bindir']  
-    config[PG_SRC_PATH] = arguments['--postgres-srcdir'] 
+    config[PG_SRCDIR] = arguments['--postgres-srcdir'] 
     config[TEMP_DIR] = './tmp_upgrade'
-    config[NEW_PG_DATA_PATH] = config[TEMP_DIR] + '/newData'
-    config[CURRENT_PG_DATA_PATH] = config[TEMP_DIR] + '/oldData'    
+    config[NEW_DATADIR] = config[TEMP_DIR] + '/newData'
+    config[OLD_DATADIR] = config[TEMP_DIR] + '/oldData'    
 
 
 
