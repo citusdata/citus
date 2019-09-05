@@ -479,6 +479,46 @@ PlanRenameTypeStmt(RenameStmt *stmt, const char *queryString)
 }
 
 
+List *
+PlanRenameTypeAttributeStmt(RenameStmt *stmt, const char *queryString)
+{
+	const char *sql = NULL;
+	const ObjectAddress *address = NULL;
+
+	Assert(stmt->renameType == OBJECT_ATTRIBUTE);
+	Assert(stmt->relationType == OBJECT_TYPE);
+
+	address = GetObjectAddressFromParseTree((Node *) stmt, false);
+	if (!IsObjectDistributed(address))
+	{
+		return NIL;
+	}
+
+	/*
+	 * we should not get to a point where an alter happens on a distributed type during an
+	 * extension statement, but better safe then sorry.
+	 */
+	if (creating_extension)
+	{
+		/*
+		 * extensions should be created separately on the workers, types cascading from an
+		 * extension should therefor not be propagated here.
+		 */
+		return NIL;
+	}
+
+	QualifyTreeNode((Node *) stmt);
+
+	sql = DeparseTreeNode((Node *) stmt);
+
+	EnsureSequentialModeForTypeDDL();
+	SendCommandToWorkersAsUser(ALL_WORKERS, DISABLE_DDL_PROPAGATION, NULL);
+	SendCommandToWorkersAsUser(ALL_WORKERS, sql, NULL);
+
+	return NIL;
+}
+
+
 /*
  * PlanAlterTypeSchemaStmt is executed before the statement is applied to the local
  * postgres instance.
@@ -856,6 +896,25 @@ AlterTypeSchemaStmtObjectAddress(AlterObjectSchemaStmt *stmt, bool missing_ok)
 		}
 	}
 
+	address = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*address, TypeRelationId, typeOid);
+
+	return address;
+}
+
+
+const ObjectAddress *
+RenameTypeAttributeStmtObjectAddress(RenameStmt *stmt, bool missing_ok)
+{
+	TypeName *typeName = NULL;
+	Oid typeOid = InvalidOid;
+	ObjectAddress *address = NULL;
+
+	Assert(stmt->renameType == OBJECT_ATTRIBUTE);
+	Assert(stmt->relationType == OBJECT_TYPE);
+
+	typeName = makeTypeNameFromRangeVar(stmt->relation);
+	typeOid = LookupTypeNameOid(NULL, typeName, missing_ok);
 	address = palloc0(sizeof(ObjectAddress));
 	ObjectAddressSet(*address, TypeRelationId, typeOid);
 

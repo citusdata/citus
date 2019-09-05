@@ -69,6 +69,7 @@ static void ExecuteDistributedDDLJob(DDLJob *ddlJob);
 static char * SetSearchPathToCurrentSearchPathCommand(void);
 static char * CurrentSearchPath(void);
 static void PostProcessUtility(Node *parsetree);
+static List * PlanRenameAttributeStmt(RenameStmt *stmt, const char *queryString);
 
 static inline void trackStatementDepth(Node *parsetree, const bool increment);
 
@@ -416,6 +417,12 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 					break;
 				}
 
+				case OBJECT_ATTRIBUTE:
+				{
+					ddlJobs = PlanRenameAttributeStmt(renameStmt, queryString);
+					break;
+				}
+
 				default:
 				{
 					ddlJobs = PlanRenameStmt(renameStmt, queryString);
@@ -665,6 +672,27 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 	 * EXTENSION. This is important to register some invalidation callbacks.
 	 */
 	CitusHasBeenLoaded();
+}
+
+
+static List *
+PlanRenameAttributeStmt(RenameStmt *stmt, const char *queryString)
+{
+	Assert(stmt->renameType == OBJECT_ATTRIBUTE);
+
+	switch (stmt->relationType)
+	{
+		case OBJECT_TYPE:
+		{
+			return PlanRenameTypeAttributeStmt(stmt, queryString);
+		}
+
+		default:
+		{
+			/* unsupported relation for attribute rename, do nothing */
+			return NIL;
+		}
+	}
 }
 
 

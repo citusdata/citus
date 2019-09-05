@@ -129,6 +129,7 @@ extern List * PlanCreateEnumStmt(CreateEnumStmt *createEnumStmt, const char *que
 extern List * PlanAlterEnumStmt(AlterEnumStmt *stmt, const char *queryString);
 extern List * PlanDropTypeStmt(DropStmt *stmt, const char *queryString);
 extern List * PlanRenameTypeStmt(RenameStmt *stmt, const char *queryString);
+extern List * PlanRenameTypeAttributeStmt(RenameStmt *stmt, const char *queryString);
 extern List * PlanAlterTypeSchemaStmt(AlterObjectSchemaStmt *stmt,
 									  const char *queryString);
 extern void ProcessAlterTypeSchemaStmt(AlterObjectSchemaStmt *stmt,
@@ -146,6 +147,8 @@ extern const ObjectAddress * RenameTypeStmtObjectAddress(RenameStmt *stmt,
 														 bool missing_ok);
 extern const ObjectAddress * AlterTypeSchemaStmtObjectAddress(AlterObjectSchemaStmt *stmt,
 															  bool missing_ok);
+extern const ObjectAddress * RenameTypeAttributeStmtObjectAddress(RenameStmt *stmt,
+																  bool missing_ok);
 extern DropStmt * CompositeTypeStmtToDrop(CompositeTypeStmt *stmt);
 extern DropStmt * CreateEnumStmtToDrop(CreateEnumStmt *stmt);
 extern List * CreateTypeDDLCommandsIdempotent(const ObjectAddress *typeAddress);

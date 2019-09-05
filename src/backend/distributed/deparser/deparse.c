@@ -6,6 +6,7 @@
 static const char * deparse_drop_stmt(DropStmt *stmt);
 static const char * deparse_alter_table_stmt(AlterTableStmt *stmt);
 static const char * deparse_rename_stmt(RenameStmt *stmt);
+static const char * deparse_rename_attribute_stmt(RenameStmt *stmt);
 static const char * deparse_alter_object_schema_stmt(AlterObjectSchemaStmt *stmt);
 
 
@@ -114,9 +115,35 @@ deparse_rename_stmt(RenameStmt *stmt)
 			return deparse_rename_type_stmt(stmt);
 		}
 
+		case OBJECT_ATTRIBUTE:
+		{
+			return deparse_rename_attribute_stmt(stmt);
+		}
+
 		default:
 		{
 			ereport(ERROR, (errmsg("unsupported rename statement for deparsing")));
+		}
+	}
+}
+
+
+static const char *
+deparse_rename_attribute_stmt(RenameStmt *stmt)
+{
+	Assert(stmt->renameType == OBJECT_ATTRIBUTE);
+
+	switch (stmt->relationType)
+	{
+		case OBJECT_TYPE:
+		{
+			return deparse_rename_type_attribute_stmt(stmt);
+		}
+
+		default:
+		{
+			ereport(ERROR, (errmsg("unsupported rename attribute statement for"
+								   " deparsing")));
 		}
 	}
 }

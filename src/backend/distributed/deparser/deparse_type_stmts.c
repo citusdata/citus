@@ -51,6 +51,7 @@ static void appendAlterTypeCmdAlterColumnType(StringInfo buf,
 											  AlterTableCmd *alterTableCmd);
 
 static void appendRenameTypeStmt(StringInfo buf, RenameStmt *stmt);
+static void appendRenameTypeAttributeStmt(StringInfo buf, RenameStmt *stmt);
 static void appendAlterTypeSchemaStmt(StringInfo buf, AlterObjectSchemaStmt *stmt);
 
 
@@ -416,6 +417,39 @@ appendRenameTypeStmt(StringInfo buf, RenameStmt *stmt)
 
 	appendStringInfo(buf, "ALTER TYPE %s RENAME TO %s;", NameListToQuotedString(names),
 					 quote_identifier(stmt->newname));
+}
+
+
+const char *
+deparse_rename_type_attribute_stmt(RenameStmt *stmt)
+{
+	StringInfoData str = { 0 };
+	initStringInfo(&str);
+
+	Assert(stmt->renameType == OBJECT_ATTRIBUTE);
+	Assert(stmt->relationType == OBJECT_TYPE);
+
+	appendRenameTypeAttributeStmt(&str, stmt);
+
+	return str.data;
+}
+
+
+static void
+appendRenameTypeAttributeStmt(StringInfo buf, RenameStmt *stmt)
+{
+	appendStringInfo(buf, "ALTER TYPE %s RENAME ATTRIBUTE %s TO %s",
+					 quote_qualified_identifier(stmt->relation->schemaname,
+												stmt->relation->relname),
+					 quote_identifier(stmt->subname),
+					 quote_identifier(stmt->newname));
+
+	if (stmt->behavior == DROP_CASCADE)
+	{
+		appendStringInfoString(buf, " CASCADE");
+	}
+
+	appendStringInfoString(buf, ";");
 }
 
 

@@ -59,6 +59,24 @@ qualify_rename_type_stmt(RenameStmt *stmt)
 
 
 void
+qualify_rename_type_attribute_stmt(RenameStmt *stmt)
+{
+	Assert(stmt->renameType == OBJECT_ATTRIBUTE);
+	Assert(stmt->relationType == OBJECT_TYPE);
+
+	if (stmt->relation->schemaname == NULL)
+	{
+		List *names = list_make1(makeString(stmt->relation->relname));
+		TypeName *typeName = makeTypeNameFromNameList(names);
+		Oid typeOid = LookupTypeNameOid(NULL, typeName, false);
+		Oid namespaceOid = type_get_namespace_oid(typeOid);
+		char *nspname = get_namespace_name_or_temp(namespaceOid);
+		stmt->relation->schemaname = nspname;
+	}
+}
+
+
+void
 qualify_alter_enum_stmt(AlterEnumStmt *stmt)
 {
 	List *names = stmt->typeName;

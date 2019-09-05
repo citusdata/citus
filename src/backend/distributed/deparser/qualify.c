@@ -16,6 +16,7 @@
 
 
 static void qualify_rename_stmt(RenameStmt *stmt);
+static void qualify_rename_attribute_stmt(RenameStmt *stmt);
 static void qualify_alter_table_stmt(AlterTableStmt *stmt);
 static void qualify_alter_object_schema_stmt(AlterObjectSchemaStmt *stmt);
 
@@ -86,10 +87,37 @@ qualify_rename_stmt(RenameStmt *stmt)
 			return;
 		}
 
+		case OBJECT_ATTRIBUTE:
+		{
+			qualify_rename_attribute_stmt(stmt);
+			return;
+		}
+
 		default:
 		{
 			/* skip unsupported statements */
 			break;
+		}
+	}
+}
+
+
+static void
+qualify_rename_attribute_stmt(RenameStmt *stmt)
+{
+	Assert(stmt->renameType == OBJECT_ATTRIBUTE);
+
+	switch (stmt->relationType)
+	{
+		case OBJECT_TYPE:
+		{
+			qualify_rename_type_attribute_stmt(stmt);
+			return;
+		}
+
+		default:
+		{
+			return;
 		}
 	}
 }

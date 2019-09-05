@@ -9,6 +9,8 @@ static const ObjectAddress * AlterTableStmtObjectAddress(AlterTableStmt *stmt,
 static const ObjectAddress * RenameStmtObjectAddress(RenameStmt *stmt, bool missing_ok);
 static const ObjectAddress * AlterObjectSchemaStmtObjectAddress(
 	AlterObjectSchemaStmt *stmt, bool missing_ok);
+static const ObjectAddress * RenameAttributeStmtObjectAddress(RenameStmt *stmt,
+															  bool missing_ok);
 
 
 /*
@@ -97,6 +99,11 @@ RenameStmtObjectAddress(RenameStmt *stmt, bool missing_ok)
 			return RenameTypeStmtObjectAddress(stmt, missing_ok);
 		}
 
+		case OBJECT_ATTRIBUTE:
+		{
+			return RenameAttributeStmtObjectAddress(stmt, missing_ok);
+		}
+
 		default:
 		{
 			ereport(ERROR, (errmsg("unsupported rename statement to get object address "
@@ -120,6 +127,27 @@ AlterObjectSchemaStmtObjectAddress(AlterObjectSchemaStmt *stmt, bool missing_ok)
 		{
 			ereport(ERROR, (errmsg("unsupported alter schema statement to get object "
 								   "address for")));
+		}
+	}
+}
+
+
+const ObjectAddress *
+RenameAttributeStmtObjectAddress(RenameStmt *stmt, bool missing_ok)
+{
+	Assert(stmt->renameType == OBJECT_ATTRIBUTE);
+
+	switch (stmt->relationType)
+	{
+		case OBJECT_TYPE:
+		{
+			return RenameTypeAttributeStmtObjectAddress(stmt, missing_ok);
+		}
+
+		default:
+		{
+			ereport(ERROR, (errmsg("unsupported alter rename attribute statement to get "
+								   "object address for")));
 		}
 	}
 }
