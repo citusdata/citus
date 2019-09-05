@@ -211,7 +211,7 @@ recurse_pg_depend(const ObjectAddress *target,
 		if (follow == NULL || !follow(context, pg_depend))
 		{
 			/* skip all pg_depend entries the user didn't want to follow */
-			return;
+			continue;
 		}
 
 		/*
