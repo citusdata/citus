@@ -103,26 +103,51 @@ ProcessDropSchemaStmt(DropStmt *dropStatement)
 }
 
 
+List *
+PlanAlterObjectSchemaStmt(AlterObjectSchemaStmt *stmt, const char *queryString)
+{
+	switch (stmt->objectType)
+	{
+		case OBJECT_TYPE:
+		{
+			return PlanAlterTypeSchemaStmt(stmt, queryString);
+		}
+
+		default:
+		{
+			/* do nothing for unsupported objects */
+			break;
+		}
+	}
+
+	/*
+	 * old behaviour, needs to be reconciled to the above switch statement for all
+	 * objectType's relating to tables. Maybe it is as easy to support
+	 * ALTER TABLE ... SET SCHEMA
+	 */
+	return PlanAlterTableSchemaStmt(stmt, queryString);
+}
+
+
 /*
- * PlanAlterObjectSchemaStmt determines whether a given ALTER ... SET SCHEMA
+ * PlanAlterTableSchemaStmt determines whether a given ALTER ... SET SCHEMA
  * statement involves a distributed table and issues a warning if so. Because
  * we do not support distributed ALTER ... SET SCHEMA, this function always
  * returns NIL.
  */
 List *
-PlanAlterObjectSchemaStmt(AlterObjectSchemaStmt *alterObjectSchemaStmt,
-						  const char *alterObjectSchemaCommand)
+PlanAlterTableSchemaStmt(AlterObjectSchemaStmt *stmt, const char *queryString)
 {
 	Oid relationId = InvalidOid;
 
-	if (alterObjectSchemaStmt->relation == NULL)
+	if (stmt->relation == NULL)
 	{
 		return NIL;
 	}
 
-	relationId = RangeVarGetRelid(alterObjectSchemaStmt->relation,
+	relationId = RangeVarGetRelid(stmt->relation,
 								  AccessExclusiveLock,
-								  alterObjectSchemaStmt->missing_ok);
+								  stmt->missing_ok);
 
 	/* first check whether a distributed relation is affected */
 	if (!OidIsValid(relationId) || !IsDistributedTable(relationId))
@@ -137,4 +162,30 @@ PlanAlterObjectSchemaStmt(AlterObjectSchemaStmt *alterObjectSchemaStmt,
 							  "change schemas of affected objects.")));
 
 	return NIL;
+}
+
+
+/*
+ * ProcessAlterObjectSchemaStmt is called by multi_ProcessUtility _after_ the command has
+ * been applied to the local postgres. It is useful to create potentially new dependencies
+ * of this object (the new schema) on the workers before the command gets applied to the
+ * remote objects.
+ */
+void
+ProcessAlterObjectSchemaStmt(AlterObjectSchemaStmt *stmt, const char *queryString)
+{
+	switch (stmt->objectType)
+	{
+		case OBJECT_TYPE:
+		{
+			ProcessAlterTypeSchemaStmt(stmt, queryString);
+			return;
+		}
+
+		default:
+		{
+			/* do nothing for unsupported objects */
+			return;
+		}
+	}
 }

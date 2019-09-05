@@ -17,6 +17,7 @@
 
 static void qualify_rename_stmt(RenameStmt *stmt);
 static void qualify_alter_table_stmt(AlterTableStmt *stmt);
+static void qualify_alter_object_schema_stmt(AlterObjectSchemaStmt *stmt);
 
 
 /*
@@ -59,6 +60,12 @@ QualifyTreeNode(Node *stmt)
 			return;
 		}
 
+		case T_AlterObjectSchemaStmt:
+		{
+			qualify_alter_object_schema_stmt(castNode(AlterObjectSchemaStmt, stmt));
+			return;
+		}
+
 		default:
 		{
 			/* skip unsupported statements */
@@ -96,6 +103,26 @@ qualify_alter_table_stmt(AlterTableStmt *stmt)
 		case OBJECT_TYPE:
 		{
 			qualify_alter_type_stmt(stmt);
+			return;
+		}
+
+		default:
+		{
+			/* skip unsupported statements */
+			break;
+		}
+	}
+}
+
+
+static void
+qualify_alter_object_schema_stmt(AlterObjectSchemaStmt *stmt)
+{
+	switch (stmt->objectType)
+	{
+		case OBJECT_TYPE:
+		{
+			qualify_alter_type_schema_stmt(stmt);
 			return;
 		}
 

@@ -51,6 +51,7 @@ static void appendAlterTypeCmdAlterColumnType(StringInfo buf,
 											  AlterTableCmd *alterTableCmd);
 
 static void appendRenameTypeStmt(StringInfo buf, RenameStmt *stmt);
+static void appendAlterTypeSchemaStmt(StringInfo buf, AlterObjectSchemaStmt *stmt);
 
 
 /*
@@ -415,4 +416,31 @@ appendRenameTypeStmt(StringInfo buf, RenameStmt *stmt)
 
 	appendStringInfo(buf, "ALTER TYPE %s RENAME TO %s;", NameListToQuotedString(names),
 					 quote_identifier(stmt->newname));
+}
+
+
+const char *
+deparse_alter_type_schema_stmt(AlterObjectSchemaStmt *stmt)
+{
+	StringInfoData str = { 0 };
+	initStringInfo(&str);
+
+	Assert(stmt->objectType == OBJECT_TYPE);
+
+	appendAlterTypeSchemaStmt(&str, stmt);
+
+	return str.data;
+}
+
+
+static void
+appendAlterTypeSchemaStmt(StringInfo buf, AlterObjectSchemaStmt *stmt)
+{
+	List *names = NIL;
+
+	Assert(stmt->objectType == OBJECT_TYPE);
+
+	names = (List *) stmt->object;
+	appendStringInfo(buf, "ALTER TYPE %s SET SCHEMA %s;", NameListToQuotedString(names),
+					 quote_identifier(stmt->newschema));
 }

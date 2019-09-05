@@ -13,6 +13,8 @@ INSERT INTO t1 VALUES (1, (2,3)::tc1);
 SELECT * FROM t1;
 ALTER TYPE tc1 RENAME TO tc1_newname;
 INSERT INTO t1 VALUES (3, (4,5)::tc1_newname); -- insert with a cast would fail if the rename didn't propagate
+ALTER TYPE tc1_newname SET SCHEMA type_tests2;
+INSERT INTO t1 VALUES (6, (7,8)::type_tests2.tc1_newname); -- insert with a cast would fail if the rename didn't propagate
 
 -- single statement transactions with a an enum used in a table
 CREATE TYPE te1 AS ENUM ('one', 'two', 'three');
@@ -28,6 +30,10 @@ ALTER TYPE te1 RENAME TO te1_newname;
 ALTER TYPE te1_newname ADD VALUE 'four';
 UPDATE t2 SET b = 'four';
 SELECT * FROM t2;
+
+-- change the schema of the type and use the new fully qualified name in an insert
+ALTER TYPE te1_newname SET SCHEMA type_tests2;
+INSERT INTO t2 VALUES (3, 'three'::type_tests2.te1_newname);
 
 -- transaction block with simple type
 BEGIN;

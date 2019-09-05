@@ -480,6 +480,62 @@ PlanRenameTypeStmt(RenameStmt *stmt, const char *queryString)
 
 
 /*
+ * PlanAlterTypeSchemaStmt is executed before the statement is applied to the local
+ * postgres instance.
+ *
+ * As the change has not been made yet we can now still resolve the original schema and
+ * set that on the TreeNode via QualifyTreeNode. This will be used during deparsing in
+ * ProcessAlterTypeStmt which is executed after the command has been applied locally.
+ */
+List *
+PlanAlterTypeSchemaStmt(AlterObjectSchemaStmt *stmt, const char *queryString)
+{
+	/*
+	 * we can safely do this for all types, if it was not distributed we will skip
+	 * deparsing during post processing
+	 */
+	QualifyTreeNode((Node *) stmt);
+
+	return NIL;
+}
+
+
+void
+ProcessAlterTypeSchemaStmt(AlterObjectSchemaStmt *stmt, const char *queryString)
+{
+	const char *sql = NULL;
+	const ObjectAddress *typeAddress = NULL;
+
+	Assert(stmt->objectType == OBJECT_TYPE);
+
+	if (creating_extension)
+	{
+		/* types from extensions are managed by extensions, skipping */
+		return;
+	}
+
+	typeAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
+	if (!IsObjectDistributed(typeAddress))
+	{
+		/* not distributed to the workers, nothing to do */
+		return;
+	}
+
+	EnsureCoordinator();
+
+	/* dependencies have changed (schema) lets ensure they exist */
+	EnsureDependenciesExistsOnAllNodes(typeAddress);
+
+	/* qualification of the tree has already been done in PlanAlterTypeSchemaStmt */
+	sql = DeparseTreeNode((Node *) stmt);
+
+	EnsureSequentialModeForTypeDDL();
+	SendCommandToWorkersAsUser(ALL_WORKERS, DISABLE_DDL_PROPAGATION, NULL);
+	SendCommandToWorkersAsUser(ALL_WORKERS, sql, NULL);
+}
+
+
+/*
  * CreateTypeStmtByObjectAddress returns a parsetree for the CREATE TYPE statement to
  * recreate the type by its object address.
  */
@@ -741,6 +797,65 @@ RenameTypeStmtObjectAddress(RenameStmt *stmt, bool missing_ok)
 
 	typeName = makeTypeNameFromNameList((List *) stmt->object);
 	typeOid = LookupTypeNameOid(NULL, typeName, missing_ok);
+	address = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*address, TypeRelationId, typeOid);
+
+	return address;
+}
+
+
+const ObjectAddress *
+AlterTypeSchemaStmtObjectAddress(AlterObjectSchemaStmt *stmt, bool missing_ok)
+{
+	ObjectAddress *address = NULL;
+	TypeName *typeName = NULL;
+	Oid typeOid = InvalidOid;
+	List *names = NIL;
+
+	Assert(stmt->objectType == OBJECT_TYPE);
+
+	names = (List *) stmt->object;
+
+	/*
+	 * we hardcode missing_ok here during LookupTypeNameOid because if we can't find it it
+	 * might have already been moved in this transaction.
+	 */
+	typeName = makeTypeNameFromNameList(names);
+	typeOid = LookupTypeNameOid(NULL, typeName, true);
+
+	if (typeOid == InvalidOid)
+	{
+		/*
+		 * couldn't find the type, might have already been moved to the new schema, we
+		 * construct a new typename that uses the new schema to search in.
+		 */
+
+		/* typename is the last in the list of names */
+		Value *typeNameStr = lfirst(list_tail(names));
+
+		/*
+		 * we don't error here either, as the error would be not a good user facing
+		 * error if the type didn't exist in the first place.
+		 */
+		names = list_make2(makeString(stmt->newschema), typeNameStr);
+		typeName = makeTypeNameFromNameList(names);
+		typeOid = LookupTypeNameOid(NULL, typeName, true);
+
+		/*
+		 * if the type is still invalid we couldn't find the type, error with the same
+		 * message postgres would error with it missing_ok is false (not ok to miss)
+		 */
+		if (!missing_ok && typeOid == InvalidOid)
+		{
+			names = (List *) stmt->object;
+			typeName = makeTypeNameFromNameList(names);
+
+			ereport(ERROR, (errcode(ERRCODE_UNDEFINED_OBJECT),
+							errmsg("type \"%s\" does not exist",
+								   TypeNameToString(typeName))));
+		}
+	}
+
 	address = palloc0(sizeof(ObjectAddress));
 	ObjectAddressSet(*address, TypeRelationId, typeOid);
 

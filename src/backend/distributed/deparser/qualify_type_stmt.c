@@ -118,3 +118,25 @@ qualify_create_enum_stmt(CreateEnumStmt *stmt)
 									linitial(stmt->typeName));
 	}
 }
+
+
+void
+qualify_alter_type_schema_stmt(AlterObjectSchemaStmt *stmt)
+{
+	List *names = NIL;
+
+	Assert(stmt->objectType == OBJECT_TYPE);
+
+	names = (List *) stmt->object;
+	if (list_length(names) == 1)
+	{
+		/* not qualified with schema, lookup type and its schema s*/
+		TypeName *typeName = makeTypeNameFromNameList(names);
+		Oid typeOid = LookupTypeNameOid(NULL, typeName, false);
+		Oid namespaceOid = type_get_namespace_oid(typeOid);
+		char *nspname = get_namespace_name_or_temp(namespaceOid);
+
+		names = list_make2(makeString(nspname), linitial(names));
+		stmt->object = (Node *) names;
+	}
+}

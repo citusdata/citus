@@ -588,6 +588,12 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 			CreateEnumStmt *createEnumStmt = (CreateEnumStmt *) parsetree;
 			PlanCreateEnumStmt(createEnumStmt, queryString);
 		}
+
+		if (IsA(parsetree, AlterObjectSchemaStmt))
+		{
+			ProcessAlterObjectSchemaStmt(castNode(AlterObjectSchemaStmt, parsetree),
+										 queryString);
+		}
 	}
 
 	/*

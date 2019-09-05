@@ -84,8 +84,13 @@ extern void ErrorIfUnsupportedRenameStmt(RenameStmt *renameStmt);
 
 /* schema.c - forward declarations */
 extern void ProcessDropSchemaStmt(DropStmt *dropSchemaStatement);
+extern List * PlanAlterTableSchemaStmt(AlterObjectSchemaStmt *stmt,
+									   const char *queryString);
 extern List * PlanAlterObjectSchemaStmt(AlterObjectSchemaStmt *alterObjectSchemaStmt,
 										const char *alterObjectSchemaCommand);
+
+extern void ProcessAlterObjectSchemaStmt(AlterObjectSchemaStmt *stmt,
+										 const char *queryString);
 
 
 /* sequence.c - forward declarations */
@@ -124,6 +129,10 @@ extern List * PlanCreateEnumStmt(CreateEnumStmt *createEnumStmt, const char *que
 extern List * PlanAlterEnumStmt(AlterEnumStmt *stmt, const char *queryString);
 extern List * PlanDropTypeStmt(DropStmt *stmt, const char *queryString);
 extern List * PlanRenameTypeStmt(RenameStmt *stmt, const char *queryString);
+extern List * PlanAlterTypeSchemaStmt(AlterObjectSchemaStmt *stmt,
+									  const char *queryString);
+extern void ProcessAlterTypeSchemaStmt(AlterObjectSchemaStmt *stmt,
+									   const char *queryString);
 extern Node * CreateTypeStmtByObjectAddress(const ObjectAddress *address);
 extern const ObjectAddress * CompositeTypeStmtObjectAddress(CompositeTypeStmt *stmt,
 															bool missing_ok);
@@ -135,6 +144,8 @@ extern const ObjectAddress * AlterEnumStmtObjectAddress(AlterEnumStmt *stmt,
 														bool missing_ok);
 extern const ObjectAddress * RenameTypeStmtObjectAddress(RenameStmt *stmt,
 														 bool missing_ok);
+extern const ObjectAddress * AlterTypeSchemaStmtObjectAddress(AlterObjectSchemaStmt *stmt,
+															  bool missing_ok);
 extern DropStmt * CompositeTypeStmtToDrop(CompositeTypeStmt *stmt);
 extern DropStmt * CreateEnumStmtToDrop(CreateEnumStmt *stmt);
 extern List * CreateTypeDDLCommandsIdempotent(const ObjectAddress *typeAddress);

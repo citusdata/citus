@@ -36,12 +36,14 @@ extern const char * deparse_drop_type_stmt(DropStmt *stmt);
 extern const char * deparse_alter_enum_stmt(AlterEnumStmt *stmt);
 extern const char * deparse_alter_type_stmt(AlterTableStmt *stmt);
 extern const char * deparse_rename_type_stmt(RenameStmt *stmt);
+extern const char * deparse_alter_type_schema_stmt(AlterObjectSchemaStmt *stmt);
 
 extern void qualify_rename_type_stmt(RenameStmt *stmt);
 extern void qualify_alter_enum_stmt(AlterEnumStmt *stmt);
 extern void qualify_alter_type_stmt(AlterTableStmt *stmt);
 extern void qualify_composite_type_stmt(CompositeTypeStmt *stmt);
 extern void qualify_create_enum_stmt(CreateEnumStmt *stmt);
+extern void qualify_alter_type_schema_stmt(AlterObjectSchemaStmt *stmt);
 
 extern const ObjectAddress * GetObjectAddressFromParseTree(Node *parseTree, bool
 														   missing_ok);

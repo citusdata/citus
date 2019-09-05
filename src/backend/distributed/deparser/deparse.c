@@ -6,6 +6,7 @@
 static const char * deparse_drop_stmt(DropStmt *stmt);
 static const char * deparse_alter_table_stmt(AlterTableStmt *stmt);
 static const char * deparse_rename_stmt(RenameStmt *stmt);
+static const char * deparse_alter_object_schema_stmt(AlterObjectSchemaStmt *stmt);
 
 
 /*
@@ -51,6 +52,12 @@ DeparseTreeNode(Node *stmt)
 		case T_RenameStmt:
 		{
 			return deparse_rename_stmt(castNode(RenameStmt, stmt));
+		}
+
+		case T_AlterObjectSchemaStmt:
+		{
+			return deparse_alter_object_schema_stmt(castNode(AlterObjectSchemaStmt,
+															 stmt));
 		}
 
 		default:
@@ -105,6 +112,24 @@ deparse_rename_stmt(RenameStmt *stmt)
 		case OBJECT_TYPE:
 		{
 			return deparse_rename_type_stmt(stmt);
+		}
+
+		default:
+		{
+			ereport(ERROR, (errmsg("unsupported rename statement for deparsing")));
+		}
+	}
+}
+
+
+static const char *
+deparse_alter_object_schema_stmt(AlterObjectSchemaStmt *stmt)
+{
+	switch (stmt->objectType)
+	{
+		case OBJECT_TYPE:
+		{
+			return deparse_alter_type_schema_stmt(stmt);
 		}
 
 		default:

@@ -7,6 +7,8 @@
 static const ObjectAddress * AlterTableStmtObjectAddress(AlterTableStmt *stmt,
 														 bool missing_ok);
 static const ObjectAddress * RenameStmtObjectAddress(RenameStmt *stmt, bool missing_ok);
+static const ObjectAddress * AlterObjectSchemaStmtObjectAddress(
+	AlterObjectSchemaStmt *stmt, bool missing_ok);
 
 
 /*
@@ -45,6 +47,12 @@ GetObjectAddressFromParseTree(Node *parseTree, bool missing_ok)
 		case T_RenameStmt:
 		{
 			return RenameStmtObjectAddress(castNode(RenameStmt, parseTree), missing_ok);
+		}
+
+		case T_AlterObjectSchemaStmt:
+		{
+			return AlterObjectSchemaStmtObjectAddress(castNode(AlterObjectSchemaStmt,
+															   parseTree), missing_ok);
 		}
 
 		default:
@@ -93,6 +101,25 @@ RenameStmtObjectAddress(RenameStmt *stmt, bool missing_ok)
 		{
 			ereport(ERROR, (errmsg("unsupported rename statement to get object address "
 								   "for")));
+		}
+	}
+}
+
+
+static const ObjectAddress *
+AlterObjectSchemaStmtObjectAddress(AlterObjectSchemaStmt *stmt, bool missing_ok)
+{
+	switch (stmt->objectType)
+	{
+		case OBJECT_TYPE:
+		{
+			return AlterTypeSchemaStmtObjectAddress(stmt, missing_ok);
+		}
+
+		default:
+		{
+			ereport(ERROR, (errmsg("unsupported alter schema statement to get object "
+								   "address for")));
 		}
 	}
 }
