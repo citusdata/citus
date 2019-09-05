@@ -583,11 +583,11 @@ SELECT master_remove_node('localhost', 9999);
 INSERT INTO pg_dist_node (nodename, nodeport, groupid, noderole)
   VALUES ('localhost', 5000, :worker_1_group, 'primary');
 ERROR:  there cannot be two primary nodes in a group
-CONTEXT:  PL/pgSQL function citus.pg_dist_node_trigger_func() line 10 at RAISE
+CONTEXT:  PL/pgSQL function citus_internal.pg_dist_node_trigger_func() line 10 at RAISE
 UPDATE pg_dist_node SET noderole = 'primary'
   WHERE groupid = :worker_1_group AND nodeport = 9998;
 ERROR:  there cannot be two primary nodes in a group
-CONTEXT:  PL/pgSQL function citus.pg_dist_node_trigger_func() line 18 at RAISE
+CONTEXT:  PL/pgSQL function citus_internal.pg_dist_node_trigger_func() line 18 at RAISE
 -- check that you can't manually add a primary to a non-default cluster
 INSERT INTO pg_dist_node (nodename, nodeport, groupid, noderole, nodecluster)
   VALUES ('localhost', 5000, 1000, 'primary', 'olap');

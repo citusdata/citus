@@ -6,6 +6,8 @@
 SHOW server_version \gset
 SELECT substring(:'server_version', '\d+')::int > 10 AS version_above_ten;
 
+SET citus.next_shard_id TO 12000000;
+
 SELECT citus.mitmproxy('conn.allow()');
 
 SET citus.shard_count = 1;

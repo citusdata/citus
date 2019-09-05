@@ -33,37 +33,41 @@ create table gen2 (
 );
 insert into gen1 (id, val1) values (1,4),(3,6),(5,2),(7,2);
 insert into gen2 (id, val1) values (1,4),(3,6),(5,2),(7,2);
-select * from create_distributed_table('gen1', 'id');
-ERROR:  cannot distribute relation: gen1
-DETAIL:  Distributed relations must not use GENERATED ALWAYS AS (...) STORED.
-select * from create_distributed_table('gen2', 'val2');
+select create_distributed_table('gen1', 'id');
+NOTICE:  Copying data from local table...
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+select create_distributed_table('gen2', 'val2');
 ERROR:  cannot distribute relation: gen2
-DETAIL:  Distributed relations must not use GENERATED ALWAYS AS (...) STORED.
+DETAIL:  Distribution column must not use GENERATED ALWAYS AS (...) STORED.
 insert into gen1 (id, val1) values (2,4),(4,6),(6,2),(8,2);
 insert into gen2 (id, val1) values (2,4),(4,6),(6,2),(8,2);
-select * from gen1;
+select * from gen1 order by 1,2,3;
  id | val1 | val2 
 ----+------+------
   1 |    4 |    6
-  3 |    6 |    8
-  5 |    2 |    4
-  7 |    2 |    4
   2 |    4 |    6
+  3 |    6 |    8
   4 |    6 |    8
+  5 |    2 |    4
   6 |    2 |    4
+  7 |    2 |    4
   8 |    2 |    4
 (8 rows)
 
-select * from gen2;
+select * from gen2 order by 1,2,3;
  id | val1 | val2 
 ----+------+------
   1 |    4 |    6
-  3 |    6 |    8
-  5 |    2 |    4
-  7 |    2 |    4
   2 |    4 |    6
+  3 |    6 |    8
   4 |    6 |    8
+  5 |    2 |    4
   6 |    2 |    4
+  7 |    2 |    4
   8 |    2 |    4
 (8 rows)
 
@@ -169,7 +173,7 @@ $Q$);
              coordinator_plan             
 ------------------------------------------
  Custom Scan (Citus Adaptive)
-   ->  Distributed Subplan 5_1
+   ->  Distributed Subplan 7_1
          ->  Custom Scan (Citus Adaptive)
                Task Count: 4
 (4 rows)
@@ -214,7 +218,7 @@ $Q$);
 ------------------------------------------------
  Aggregate
    ->  Custom Scan (Citus Adaptive)
-         ->  Distributed Subplan 8_1
+         ->  Distributed Subplan 10_1
                ->  Custom Scan (Citus Adaptive)
                      Task Count: 4
 (5 rows)
@@ -235,7 +239,7 @@ $Q$);
 ------------------------------------------------
  Aggregate
    ->  Custom Scan (Citus Adaptive)
-         ->  Distributed Subplan 10_1
+         ->  Distributed Subplan 12_1
                ->  Custom Scan (Citus Adaptive)
                      Task Count: 4
 (5 rows)
@@ -280,8 +284,8 @@ NOTICE:  Copying data from local table...
 
 -- should still fail because of fkey
 INSERT INTO collection_users VALUES (1, 1000, 1);
-ERROR:  insert or update on table "collection_users_60024" violates foreign key constraint "collection_users_fkey_60024"
-DETAIL:  Key (key, collection_id)=(1, 1000) is not present in table "collections_list_60012".
+ERROR:  insert or update on table "collection_users_60028" violates foreign key constraint "collection_users_fkey_60028"
+DETAIL:  Key (key, collection_id)=(1, 1000) is not present in table "collections_list_60016".
 CONTEXT:  while executing command on localhost:57637
 -- whereas new record with partition should go through
 INSERT INTO collections_list VALUES (2, 1, '1.2');

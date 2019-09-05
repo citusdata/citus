@@ -1,0 +1,933 @@
+Parsed test spec with 4 sessions
+
+starting permutation: s1-print-distributed-objects s1-begin s1-add-worker s2-public-schema s2-create-table s1-commit s2-print-distributed-objects
+nodename       nodeport       isactive       
+
+localhost      57637          t              
+step s1-print-distributed-objects: 
+    SELECT nodename, nodeport, isactive FROM master_add_node('localhost', 57638);
+
+    -- print an overview of all distributed objects
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
+
+    -- print if the schema has been created
+    SELECT count(*) FROM pg_namespace where nspname = 'myschema';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
+
+    SELECT master_remove_node('localhost', 57638);
+
+nodename       nodeport       isactive       
+
+localhost      57638          t              
+pg_identify_object_as_address
+
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
+master_remove_node
+
+               
+step s1-begin: 
+    BEGIN;
+
+step s1-add-worker: 
+	SELECT nodename, nodeport, isactive FROM master_add_node('localhost', 57638);
+
+nodename       nodeport       isactive       
+
+localhost      57638          t              
+step s2-public-schema: 
+    SET search_path TO public;
+
+step s2-create-table: 
+	CREATE TABLE t1 (a int, b int);
+    -- session needs to have replication factor set to 1, can't do in setup
+	SET citus.shard_replication_factor TO 1;
+	SELECT create_distributed_table('t1', 'a');
+ <waiting ...>
+step s1-commit: 
+    COMMIT;
+
+step s2-create-table: <... completed>
+create_distributed_table
+
+               
+step s2-print-distributed-objects: 
+    -- print an overview of all distributed objects
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
+
+    -- print if the schema has been created
+    SELECT count(*) FROM pg_namespace where nspname = 'myschema';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
+
+pg_identify_object_as_address
+
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
+master_remove_node
+
+               
+               
+
+starting permutation: s1-print-distributed-objects s1-begin s2-begin s1-add-worker s2-public-schema s2-create-table s1-commit s2-commit s2-print-distributed-objects
+nodename       nodeport       isactive       
+
+localhost      57637          t              
+step s1-print-distributed-objects: 
+    SELECT nodename, nodeport, isactive FROM master_add_node('localhost', 57638);
+
+    -- print an overview of all distributed objects
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
+
+    -- print if the schema has been created
+    SELECT count(*) FROM pg_namespace where nspname = 'myschema';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
+
+    SELECT master_remove_node('localhost', 57638);
+
+nodename       nodeport       isactive       
+
+localhost      57638          t              
+pg_identify_object_as_address
+
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
+master_remove_node
+
+               
+step s1-begin: 
+    BEGIN;
+
+step s2-begin: 
+	BEGIN;
+
+step s1-add-worker: 
+	SELECT nodename, nodeport, isactive FROM master_add_node('localhost', 57638);
+
+nodename       nodeport       isactive       
+
+localhost      57638          t              
+step s2-public-schema: 
+    SET search_path TO public;
+
+step s2-create-table: 
+	CREATE TABLE t1 (a int, b int);
+    -- session needs to have replication factor set to 1, can't do in setup
+	SET citus.shard_replication_factor TO 1;
+	SELECT create_distributed_table('t1', 'a');
+ <waiting ...>
+step s1-commit: 
+    COMMIT;
+
+step s2-create-table: <... completed>
+create_distributed_table
+
+               
+step s2-commit: 
+	COMMIT;
+
+step s2-print-distributed-objects: 
+    -- print an overview of all distributed objects
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
+
+    -- print if the schema has been created
+    SELECT count(*) FROM pg_namespace where nspname = 'myschema';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
+
+pg_identify_object_as_address
+
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
+master_remove_node
+
+               
+               
+
+starting permutation: s1-print-distributed-objects s1-begin s2-begin s2-public-schema s2-create-table s1-add-worker s2-commit s1-commit s2-print-distributed-objects
+nodename       nodeport       isactive       
+
+localhost      57637          t              
+step s1-print-distributed-objects: 
+    SELECT nodename, nodeport, isactive FROM master_add_node('localhost', 57638);
+
+    -- print an overview of all distributed objects
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
+
+    -- print if the schema has been created
+    SELECT count(*) FROM pg_namespace where nspname = 'myschema';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
+
+    SELECT master_remove_node('localhost', 57638);
+
+nodename       nodeport       isactive       
+
+localhost      57638          t              
+pg_identify_object_as_address
+
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
+master_remove_node
+
+               
+step s1-begin: 
+    BEGIN;
+
+step s2-begin: 
+	BEGIN;
+
+step s2-public-schema: 
+    SET search_path TO public;
+
+step s2-create-table: 
+	CREATE TABLE t1 (a int, b int);
+    -- session needs to have replication factor set to 1, can't do in setup
+	SET citus.shard_replication_factor TO 1;
+	SELECT create_distributed_table('t1', 'a');
+
+create_distributed_table
+
+               
+step s1-add-worker: 
+	SELECT nodename, nodeport, isactive FROM master_add_node('localhost', 57638);
+ <waiting ...>
+step s2-commit: 
+	COMMIT;
+
+step s1-add-worker: <... completed>
+nodename       nodeport       isactive       
+
+localhost      57638          t              
+step s1-commit: 
+    COMMIT;
+
+step s2-print-distributed-objects: 
+    -- print an overview of all distributed objects
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
+
+    -- print if the schema has been created
+    SELECT count(*) FROM pg_namespace where nspname = 'myschema';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
+
+pg_identify_object_as_address
+
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
+master_remove_node
+
+               
+               
+
+starting permutation: s1-print-distributed-objects s1-begin s1-add-worker s2-create-schema s2-create-table s1-commit s2-print-distributed-objects
+nodename       nodeport       isactive       
+
+localhost      57637          t              
+step s1-print-distributed-objects: 
+    SELECT nodename, nodeport, isactive FROM master_add_node('localhost', 57638);
+
+    -- print an overview of all distributed objects
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
+
+    -- print if the schema has been created
+    SELECT count(*) FROM pg_namespace where nspname = 'myschema';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
+
+    SELECT master_remove_node('localhost', 57638);
+
+nodename       nodeport       isactive       
+
+localhost      57638          t              
+pg_identify_object_as_address
+
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
+master_remove_node
+
+               
+step s1-begin: 
+    BEGIN;
+
+step s1-add-worker: 
+	SELECT nodename, nodeport, isactive FROM master_add_node('localhost', 57638);
+
+nodename       nodeport       isactive       
+
+localhost      57638          t              
+step s2-create-schema: 
+    CREATE SCHEMA myschema;
+    SET search_path TO myschema;
+
+step s2-create-table: 
+	CREATE TABLE t1 (a int, b int);
+    -- session needs to have replication factor set to 1, can't do in setup
+	SET citus.shard_replication_factor TO 1;
+	SELECT create_distributed_table('t1', 'a');
+ <waiting ...>
+step s1-commit: 
+    COMMIT;
+
+step s2-create-table: <... completed>
+create_distributed_table
+
+               
+step s2-print-distributed-objects: 
+    -- print an overview of all distributed objects
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
+
+    -- print if the schema has been created
+    SELECT count(*) FROM pg_namespace where nspname = 'myschema';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
+
+pg_identify_object_as_address
+
+(schema,{myschema},{})
+count          
+
+1              
+run_command_on_workers
+
+(localhost,57637,t,1)
+(localhost,57638,t,1)
+master_remove_node
+
+               
+               
+
+starting permutation: s1-print-distributed-objects s1-begin s2-begin s1-add-worker s2-create-schema s2-create-table s1-commit s2-commit s2-print-distributed-objects
+nodename       nodeport       isactive       
+
+localhost      57637          t              
+step s1-print-distributed-objects: 
+    SELECT nodename, nodeport, isactive FROM master_add_node('localhost', 57638);
+
+    -- print an overview of all distributed objects
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
+
+    -- print if the schema has been created
+    SELECT count(*) FROM pg_namespace where nspname = 'myschema';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
+
+    SELECT master_remove_node('localhost', 57638);
+
+nodename       nodeport       isactive       
+
+localhost      57638          t              
+pg_identify_object_as_address
+
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
+master_remove_node
+
+               
+step s1-begin: 
+    BEGIN;
+
+step s2-begin: 
+	BEGIN;
+
+step s1-add-worker: 
+	SELECT nodename, nodeport, isactive FROM master_add_node('localhost', 57638);
+
+nodename       nodeport       isactive       
+
+localhost      57638          t              
+step s2-create-schema: 
+    CREATE SCHEMA myschema;
+    SET search_path TO myschema;
+
+step s2-create-table: 
+	CREATE TABLE t1 (a int, b int);
+    -- session needs to have replication factor set to 1, can't do in setup
+	SET citus.shard_replication_factor TO 1;
+	SELECT create_distributed_table('t1', 'a');
+ <waiting ...>
+step s1-commit: 
+    COMMIT;
+
+step s2-create-table: <... completed>
+create_distributed_table
+
+               
+step s2-commit: 
+	COMMIT;
+
+step s2-print-distributed-objects: 
+    -- print an overview of all distributed objects
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
+
+    -- print if the schema has been created
+    SELECT count(*) FROM pg_namespace where nspname = 'myschema';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
+
+pg_identify_object_as_address
+
+(schema,{myschema},{})
+count          
+
+1              
+run_command_on_workers
+
+(localhost,57637,t,1)
+(localhost,57638,t,1)
+master_remove_node
+
+               
+               
+
+starting permutation: s1-print-distributed-objects s1-begin s2-begin s2-create-schema s2-create-table s1-add-worker s2-commit s1-commit s2-print-distributed-objects
+nodename       nodeport       isactive       
+
+localhost      57637          t              
+step s1-print-distributed-objects: 
+    SELECT nodename, nodeport, isactive FROM master_add_node('localhost', 57638);
+
+    -- print an overview of all distributed objects
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
+
+    -- print if the schema has been created
+    SELECT count(*) FROM pg_namespace where nspname = 'myschema';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
+
+    SELECT master_remove_node('localhost', 57638);
+
+nodename       nodeport       isactive       
+
+localhost      57638          t              
+pg_identify_object_as_address
+
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
+master_remove_node
+
+               
+step s1-begin: 
+    BEGIN;
+
+step s2-begin: 
+	BEGIN;
+
+step s2-create-schema: 
+    CREATE SCHEMA myschema;
+    SET search_path TO myschema;
+
+step s2-create-table: 
+	CREATE TABLE t1 (a int, b int);
+    -- session needs to have replication factor set to 1, can't do in setup
+	SET citus.shard_replication_factor TO 1;
+	SELECT create_distributed_table('t1', 'a');
+
+create_distributed_table
+
+               
+step s1-add-worker: 
+	SELECT nodename, nodeport, isactive FROM master_add_node('localhost', 57638);
+ <waiting ...>
+step s2-commit: 
+	COMMIT;
+
+step s1-add-worker: <... completed>
+nodename       nodeport       isactive       
+
+localhost      57638          t              
+step s1-commit: 
+    COMMIT;
+
+step s2-print-distributed-objects: 
+    -- print an overview of all distributed objects
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
+
+    -- print if the schema has been created
+    SELECT count(*) FROM pg_namespace where nspname = 'myschema';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
+
+pg_identify_object_as_address
+
+(schema,{myschema},{})
+count          
+
+1              
+run_command_on_workers
+
+(localhost,57637,t,1)
+(localhost,57638,t,1)
+master_remove_node
+
+               
+               
+
+starting permutation: s1-print-distributed-objects s2-create-schema s1-begin s2-begin s3-begin s1-add-worker s2-create-table s3-use-schema s3-create-table s1-commit s2-commit s3-commit s2-print-distributed-objects
+nodename       nodeport       isactive       
+
+localhost      57637          t              
+step s1-print-distributed-objects: 
+    SELECT nodename, nodeport, isactive FROM master_add_node('localhost', 57638);
+
+    -- print an overview of all distributed objects
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
+
+    -- print if the schema has been created
+    SELECT count(*) FROM pg_namespace where nspname = 'myschema';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
+
+    SELECT master_remove_node('localhost', 57638);
+
+nodename       nodeport       isactive       
+
+localhost      57638          t              
+pg_identify_object_as_address
+
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
+master_remove_node
+
+               
+step s2-create-schema: 
+    CREATE SCHEMA myschema;
+    SET search_path TO myschema;
+
+step s1-begin: 
+    BEGIN;
+
+step s2-begin: 
+	BEGIN;
+
+step s3-begin: 
+	BEGIN;
+
+step s1-add-worker: 
+	SELECT nodename, nodeport, isactive FROM master_add_node('localhost', 57638);
+
+nodename       nodeport       isactive       
+
+localhost      57638          t              
+step s2-create-table: 
+	CREATE TABLE t1 (a int, b int);
+    -- session needs to have replication factor set to 1, can't do in setup
+	SET citus.shard_replication_factor TO 1;
+	SELECT create_distributed_table('t1', 'a');
+ <waiting ...>
+step s3-use-schema: 
+    SET search_path TO myschema;
+
+step s3-create-table: 
+	CREATE TABLE t2 (a int, b int);
+    -- session needs to have replication factor set to 1, can't do in setup
+	SET citus.shard_replication_factor TO 1;
+	SELECT create_distributed_table('t2', 'a');
+ <waiting ...>
+step s1-commit: 
+    COMMIT;
+
+step s2-create-table: <... completed>
+create_distributed_table
+
+               
+step s2-commit: 
+	COMMIT;
+
+step s3-create-table: <... completed>
+create_distributed_table
+
+               
+step s3-commit: 
+	COMMIT;
+
+step s2-print-distributed-objects: 
+    -- print an overview of all distributed objects
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
+
+    -- print if the schema has been created
+    SELECT count(*) FROM pg_namespace where nspname = 'myschema';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
+
+pg_identify_object_as_address
+
+(schema,{myschema},{})
+count          
+
+1              
+run_command_on_workers
+
+(localhost,57637,t,1)
+(localhost,57638,t,1)
+master_remove_node
+
+               
+               
+
+starting permutation: s1-print-distributed-objects s2-create-schema s1-begin s2-begin s3-begin s4-begin s1-add-worker s2-create-table s3-use-schema s3-create-table s4-use-schema s4-create-table s1-commit s2-commit s3-commit s4-commit s2-print-distributed-objects
+nodename       nodeport       isactive       
+
+localhost      57637          t              
+step s1-print-distributed-objects: 
+    SELECT nodename, nodeport, isactive FROM master_add_node('localhost', 57638);
+
+    -- print an overview of all distributed objects
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
+
+    -- print if the schema has been created
+    SELECT count(*) FROM pg_namespace where nspname = 'myschema';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
+
+    SELECT master_remove_node('localhost', 57638);
+
+nodename       nodeport       isactive       
+
+localhost      57638          t              
+pg_identify_object_as_address
+
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
+master_remove_node
+
+               
+step s2-create-schema: 
+    CREATE SCHEMA myschema;
+    SET search_path TO myschema;
+
+step s1-begin: 
+    BEGIN;
+
+step s2-begin: 
+	BEGIN;
+
+step s3-begin: 
+	BEGIN;
+
+step s4-begin: 
+	BEGIN;
+
+step s1-add-worker: 
+	SELECT nodename, nodeport, isactive FROM master_add_node('localhost', 57638);
+
+nodename       nodeport       isactive       
+
+localhost      57638          t              
+step s2-create-table: 
+	CREATE TABLE t1 (a int, b int);
+    -- session needs to have replication factor set to 1, can't do in setup
+	SET citus.shard_replication_factor TO 1;
+	SELECT create_distributed_table('t1', 'a');
+ <waiting ...>
+step s3-use-schema: 
+    SET search_path TO myschema;
+
+step s3-create-table: 
+	CREATE TABLE t2 (a int, b int);
+    -- session needs to have replication factor set to 1, can't do in setup
+	SET citus.shard_replication_factor TO 1;
+	SELECT create_distributed_table('t2', 'a');
+ <waiting ...>
+step s4-use-schema: 
+    SET search_path TO myschema;
+
+step s4-create-table: 
+	CREATE TABLE t3 (a int, b int);
+    -- session needs to have replication factor set to 1, can't do in setup
+	SET citus.shard_replication_factor TO 1;
+	SELECT create_distributed_table('t3', 'a');
+ <waiting ...>
+step s1-commit: 
+    COMMIT;
+
+step s2-create-table: <... completed>
+create_distributed_table
+
+               
+step s2-commit: 
+	COMMIT;
+
+step s3-create-table: <... completed>
+create_distributed_table
+
+               
+step s4-create-table: <... completed>
+create_distributed_table
+
+               
+step s3-commit: 
+	COMMIT;
+
+step s4-commit: 
+	COMMIT;
+
+step s2-print-distributed-objects: 
+    -- print an overview of all distributed objects
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
+
+    -- print if the schema has been created
+    SELECT count(*) FROM pg_namespace where nspname = 'myschema';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
+
+pg_identify_object_as_address
+
+(schema,{myschema},{})
+count          
+
+1              
+run_command_on_workers
+
+(localhost,57637,t,1)
+(localhost,57638,t,1)
+master_remove_node
+
+               
+               
+
+starting permutation: s1-print-distributed-objects s1-add-worker s2-create-schema s2-begin s3-begin s3-use-schema s2-create-table s3-create-table s2-commit s3-commit s2-print-distributed-objects
+nodename       nodeport       isactive       
+
+localhost      57637          t              
+step s1-print-distributed-objects: 
+    SELECT nodename, nodeport, isactive FROM master_add_node('localhost', 57638);
+
+    -- print an overview of all distributed objects
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
+
+    -- print if the schema has been created
+    SELECT count(*) FROM pg_namespace where nspname = 'myschema';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
+
+    SELECT master_remove_node('localhost', 57638);
+
+nodename       nodeport       isactive       
+
+localhost      57638          t              
+pg_identify_object_as_address
+
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
+master_remove_node
+
+               
+step s1-add-worker: 
+	SELECT nodename, nodeport, isactive FROM master_add_node('localhost', 57638);
+
+nodename       nodeport       isactive       
+
+localhost      57638          t              
+step s2-create-schema: 
+    CREATE SCHEMA myschema;
+    SET search_path TO myschema;
+
+step s2-begin: 
+	BEGIN;
+
+step s3-begin: 
+	BEGIN;
+
+step s3-use-schema: 
+    SET search_path TO myschema;
+
+step s2-create-table: 
+	CREATE TABLE t1 (a int, b int);
+    -- session needs to have replication factor set to 1, can't do in setup
+	SET citus.shard_replication_factor TO 1;
+	SELECT create_distributed_table('t1', 'a');
+
+create_distributed_table
+
+               
+step s3-create-table: 
+	CREATE TABLE t2 (a int, b int);
+    -- session needs to have replication factor set to 1, can't do in setup
+	SET citus.shard_replication_factor TO 1;
+	SELECT create_distributed_table('t2', 'a');
+ <waiting ...>
+step s2-commit: 
+	COMMIT;
+
+step s3-create-table: <... completed>
+create_distributed_table
+
+               
+step s3-commit: 
+	COMMIT;
+
+step s2-print-distributed-objects: 
+    -- print an overview of all distributed objects
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
+
+    -- print if the schema has been created
+    SELECT count(*) FROM pg_namespace where nspname = 'myschema';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
+
+pg_identify_object_as_address
+
+(schema,{myschema},{})
+count          
+
+1              
+run_command_on_workers
+
+(localhost,57637,t,1)
+(localhost,57638,t,1)
+master_remove_node
+
+               
+               
+
+starting permutation: s1-print-distributed-objects s1-begin s2-begin s4-begin s1-add-worker s2-create-schema s4-create-schema2 s2-create-table s4-create-table s1-commit s2-commit s4-commit s2-print-distributed-objects
+nodename       nodeport       isactive       
+
+localhost      57637          t              
+step s1-print-distributed-objects: 
+    SELECT nodename, nodeport, isactive FROM master_add_node('localhost', 57638);
+
+    -- print an overview of all distributed objects
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
+
+    -- print if the schema has been created
+    SELECT count(*) FROM pg_namespace where nspname = 'myschema';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
+
+    SELECT master_remove_node('localhost', 57638);
+
+nodename       nodeport       isactive       
+
+localhost      57638          t              
+pg_identify_object_as_address
+
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
+master_remove_node
+
+               
+step s1-begin: 
+    BEGIN;
+
+step s2-begin: 
+	BEGIN;
+
+step s4-begin: 
+	BEGIN;
+
+step s1-add-worker: 
+	SELECT nodename, nodeport, isactive FROM master_add_node('localhost', 57638);
+
+nodename       nodeport       isactive       
+
+localhost      57638          t              
+step s2-create-schema: 
+    CREATE SCHEMA myschema;
+    SET search_path TO myschema;
+
+step s4-create-schema2: 
+    CREATE SCHEMA myschema2;
+    SET search_path TO myschema2;
+
+step s2-create-table: 
+	CREATE TABLE t1 (a int, b int);
+    -- session needs to have replication factor set to 1, can't do in setup
+	SET citus.shard_replication_factor TO 1;
+	SELECT create_distributed_table('t1', 'a');
+ <waiting ...>
+step s4-create-table: 
+	CREATE TABLE t3 (a int, b int);
+    -- session needs to have replication factor set to 1, can't do in setup
+	SET citus.shard_replication_factor TO 1;
+	SELECT create_distributed_table('t3', 'a');
+ <waiting ...>
+step s1-commit: 
+    COMMIT;
+
+step s2-create-table: <... completed>
+create_distributed_table
+
+               
+step s4-create-table: <... completed>
+create_distributed_table
+
+               
+step s2-commit: 
+	COMMIT;
+
+step s4-commit: 
+	COMMIT;
+
+step s2-print-distributed-objects: 
+    -- print an overview of all distributed objects
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
+
+    -- print if the schema has been created
+    SELECT count(*) FROM pg_namespace where nspname = 'myschema';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
+
+pg_identify_object_as_address
+
+(schema,{myschema},{})
+(schema,{myschema2},{})
+count          
+
+1              
+run_command_on_workers
+
+(localhost,57637,t,1)
+(localhost,57638,t,1)
+master_remove_node
+
+               
+               

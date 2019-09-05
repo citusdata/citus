@@ -75,6 +75,26 @@ SELECT worker_merge_files_into_table(:JobId, :TaskId,
        				     ARRAY['textcolumn', 'binarycolumn'],
 				     ARRAY['text', 'integer']);
 
+-- Check that we fail to merge when ids are wrong
+
+SELECT worker_merge_files_into_table(-1, :TaskId,
+       				     ARRAY['textcolumn', 'binarycolumn'],
+				     ARRAY['text', 'bytea']);
+
+SELECT worker_merge_files_into_table(:JobId, -1,
+       				     ARRAY['textcolumn', 'binarycolumn'],
+				     ARRAY['text', 'bytea']);
+
+SELECT worker_merge_files_and_run_query(-1, :TaskId,
+    'CREATE TABLE task_000001_merge(merge_column_0 int)',
+    'CREATE TABLE task_000001 (a) AS SELECT sum(merge_column_0) FROM task_000001_merge'
+);
+
+SELECT worker_merge_files_and_run_query(:JobId, -1,
+    'CREATE TABLE task_000001_merge(merge_column_0 int)',
+    'CREATE TABLE task_000001 (a) AS SELECT sum(merge_column_0) FROM task_000001_merge'
+);
+
 -- Finally, merge partitioned files using valid arguments
 
 SELECT worker_merge_files_into_table(:JobId, :TaskId,

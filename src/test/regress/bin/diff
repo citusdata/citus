@@ -29,22 +29,15 @@ then
     DIFF=/usr/bin/diff
 fi
 
-grep -q "^$test$" $BASEDIR/normalized_tests.lst
-grep_result=$?
-
-if [ "$grep_result" -eq "0" ]
+if test -z "$VANILLATEST"
 then
-    sed -Ef $BASEDIR/normalize.sed < $file1 > $file1.modified
-    sed -Ef $BASEDIR/normalize.sed < $file2 > $file2.modified
-
-    $DIFF -w $args $file1.modified $file2.modified
-    exitcode=$?
-
-    rm -f $file1.modified $file2.modified
+	sed -Ef $BASEDIR/normalize.sed < $file1 > $file1.modified
+	sed -Ef $BASEDIR/normalize.sed < $file2 > $file2.modified
+	$DIFF -w $args $file1.modified $file2.modified
+	exitcode=$?
+	rm -f $file1.modified $file2.modified
+	exit $exitcode
 else
-    # if test is not in normalized_tests.lst, just diff without normalizing.
-    $DIFF -w $args $file1 $file2
-    exitcode=$?
+	exec $DIFF -w $args $file1 $file2
 fi
 
-exit $exitcode

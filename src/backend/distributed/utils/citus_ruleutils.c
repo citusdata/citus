@@ -312,7 +312,7 @@ pg_get_tableschemadef_string(Oid tableRelationId, bool includeSequenceDefaults)
 		 * reasoning behind this is that Citus implements declarative partitioning
 		 * by creating the partitions first and then sending
 		 * "ALTER TABLE parent_table ATTACH PARTITION .." command. This may not play
-		 * well with regular inhereted tables, which isn't a big concern from Citus'
+		 * well with regular inherited tables, which isn't a big concern from Citus'
 		 * perspective.
 		 */
 		if (!attributeForm->attisdropped)
@@ -371,7 +371,19 @@ pg_get_tableschemadef_string(Oid tableRelationId, bool includeSequenceDefaults)
 					defaultString = deparse_expression(defaultNode, defaultContext,
 													   false, false);
 
+#if PG_VERSION_NUM >= 120000
+					if (attributeForm->attgenerated == ATTRIBUTE_GENERATED_STORED)
+					{
+						appendStringInfo(&buffer, " GENERATED ALWAYS AS (%s) STORED",
+										 defaultString);
+					}
+					else
+					{
+						appendStringInfo(&buffer, " DEFAULT %s", defaultString);
+					}
+#else
 					appendStringInfo(&buffer, " DEFAULT %s", defaultString);
+#endif
 				}
 			}
 

@@ -1,6 +1,102 @@
 /* citus--8.3-1--8.4-1 */
 
 /* bump version to 8.4-1 */
+CREATE SCHEMA IF NOT EXISTS citus_internal;
+
+-- move citus internal functions to citus_internal to make space in the citus schema for
+-- our public interface
+ALTER FUNCTION citus.find_groupid_for_node SET SCHEMA citus_internal;
+ALTER FUNCTION citus.pg_dist_node_trigger_func SET SCHEMA citus_internal;
+ALTER FUNCTION citus.pg_dist_shard_placement_trigger_func SET SCHEMA citus_internal;
+ALTER FUNCTION citus.refresh_isolation_tester_prepared_statement SET SCHEMA citus_internal;
+ALTER FUNCTION citus.replace_isolation_tester_func SET SCHEMA citus_internal;
+ALTER FUNCTION citus.restore_isolation_tester_func SET SCHEMA citus_internal;
+
+CREATE OR REPLACE FUNCTION citus_internal.pg_dist_shard_placement_trigger_func()
+RETURNS TRIGGER AS $$
+  BEGIN
+    IF (TG_OP = 'DELETE') THEN
+      DELETE FROM pg_dist_placement WHERE placementid = OLD.placementid;
+      RETURN OLD;
+    ELSIF (TG_OP = 'UPDATE') THEN
+      UPDATE pg_dist_placement
+        SET shardid = NEW.shardid, shardstate = NEW.shardstate,
+            shardlength = NEW.shardlength, placementid = NEW.placementid,
+            groupid = citus_internal.find_groupid_for_node(NEW.nodename, NEW.nodeport)
+        WHERE placementid = OLD.placementid;
+      RETURN NEW;
+    ELSIF (TG_OP = 'INSERT') THEN
+      INSERT INTO pg_dist_placement
+        (placementid, shardid, shardstate, shardlength, groupid)
+      VALUES (NEW.placementid, NEW.shardid, NEW.shardstate, NEW.shardlength,
+        citus_internal.find_groupid_for_node(NEW.nodename, NEW.nodeport));
+      RETURN NEW;
+    END IF;
+  END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION pg_catalog.master_unmark_object_distributed(classid oid, objid oid, objsubid int)
+    RETURNS void
+    LANGUAGE C STRICT
+    AS 'MODULE_PATHNAME', $$master_unmark_object_distributed$$;
+COMMENT ON FUNCTION pg_catalog.master_unmark_object_distributed(classid oid, objid oid, objsubid int)
+    IS 'remove an object address from citus.pg_dist_object once the object has been deleted';
+
+CREATE TABLE citus.pg_dist_object (
+    classid oid NOT NULL,
+    objid oid NOT NULL,
+    objsubid integer NOT NULL,
+
+    -- fields used for upgrades
+    type text DEFAULT NULL,
+    object_names text[] DEFAULT NULL,
+    object_args text[] DEFAULT NULL,
+
+    CONSTRAINT pg_dist_object_pkey PRIMARY KEY (classid, objid, objsubid)
+);
+
+CREATE OR REPLACE FUNCTION pg_catalog.citus_drop_trigger()
+    RETURNS event_trigger
+    LANGUAGE plpgsql
+    SET search_path = pg_catalog
+    AS $cdbdt$
+DECLARE
+    v_obj record;
+    sequence_names text[] := '{}';
+    table_colocation_id integer;
+    propagate_drop boolean := false;
+BEGIN
+    -- collect set of dropped sequences to drop on workers later
+    SELECT array_agg(object_identity) INTO sequence_names
+    FROM pg_event_trigger_dropped_objects()
+    WHERE object_type = 'sequence';
+
+    FOR v_obj IN SELECT * FROM pg_event_trigger_dropped_objects()
+                 WHERE object_type IN ('table', 'foreign table')
+    LOOP
+        -- first drop the table and metadata on the workers
+        -- then drop all the shards on the workers
+        -- finally remove the pg_dist_partition entry on the coordinator
+        PERFORM master_remove_distributed_table_metadata_from_workers(v_obj.objid, v_obj.schema_name, v_obj.object_name);
+        PERFORM master_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name);
+        PERFORM master_remove_partition_metadata(v_obj.objid, v_obj.schema_name, v_obj.object_name);
+    END LOOP;
+
+    IF cardinality(sequence_names) > 0 THEN
+        PERFORM master_drop_sequences(sequence_names);
+    END IF;
+
+    -- remove entries from citus.pg_dist_object for all dropped root (objsubid = 0) objects
+    FOR v_obj IN SELECT * FROM pg_event_trigger_dropped_objects()
+    LOOP
+        PERFORM master_unmark_object_distributed(v_obj.classid, v_obj.objid, v_obj.objsubid);
+    END LOOP;
+END;
+$cdbdt$;
+COMMENT ON FUNCTION pg_catalog.citus_drop_trigger()
+    IS 'perform checks and actions at the end of DROP actions';
+
+
 CREATE OR REPLACE FUNCTION pg_catalog.citus_prepare_pg_upgrade()
     RETURNS void
     LANGUAGE plpgsql
@@ -21,6 +117,10 @@ BEGIN
     -- enterprise catalog tables
     CREATE TABLE public.pg_dist_authinfo AS SELECT * FROM pg_catalog.pg_dist_authinfo;
     CREATE TABLE public.pg_dist_poolinfo AS SELECT * FROM pg_catalog.pg_dist_poolinfo;
+
+    -- store upgrade stable identifiers on pg_dist_object catalog
+    UPDATE citus.pg_dist_object
+       SET (type, object_names, object_args) = (SELECT * FROM pg_identify_object_as_address(classid, objid, objsubid));
 END;
 $cppu$;
 
@@ -102,6 +202,23 @@ BEGIN
         'n' as deptype
     FROM pg_catalog.pg_dist_partition p;
 
+    -- restore pg_dist_object from the stable identifiers
+    WITH old_records AS (
+        DELETE FROM
+            citus.pg_dist_object
+        RETURNING
+            type,
+            object_names,
+            object_args
+    )
+    INSERT INTO citus.pg_dist_object (classid, objid, objsubid)
+    SELECT
+        address.classid,
+        address.objid,
+        address.objsubid
+    FROM
+        old_records naming,
+        pg_get_object_address(naming.type, naming.object_names, naming.object_args) address;
 END;
 $cppu$;
 
