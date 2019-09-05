@@ -444,6 +444,11 @@ ExecuteOptionalRemoteCommand(MultiConnection *connection, const char *command,
 	{
 		*result = localResult;
 	}
+	else
+	{
+		PQclear(localResult);
+		ForgetResults(connection);
+	}
 
 	return 0;
 }
