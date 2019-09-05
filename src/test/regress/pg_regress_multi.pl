@@ -25,6 +25,7 @@ use Cwd 'abs_path';
 
 my $regressdir = (File::Spec->splitpath(__FILE__))[1];
 
+
 sub Usage()
 {
     print "pg_regress_multi - Citus test runner\n";
@@ -51,6 +52,11 @@ sub Usage()
     exit 1;
 }
 
+my $TMP_CHECKDIR = 'tmp_check';
+my $TMP_BINDIR = 'tmp-bin';
+my $MASTERDIR = 'master';
+my $MASTER_FOLLOWERDIR = 'master-follower';
+
 # Option parsing
 my $isolationtester = 0;
 my $vanillatest = 0;
@@ -74,7 +80,7 @@ my $valgrindLogFile = "valgrind_test_log.txt";
 my $pgCtlTimeout = undef;
 my $connectionTimeout = 5000;
 my $useMitmproxy = 0;
-my $mitmFifoPath = catfile("tmp_check", "mitmproxy.fifo");
+my $mitmFifoPath = catfile($TMP_CHECKDIR, "mitmproxy.fifo");
 
 my $serversAreShutdown = "TRUE";
 my $usingWindows = 0;
@@ -343,9 +349,9 @@ elsif ($followercluster)
 
 if ($useMitmproxy)
 {
-  if (! -e "tmp_check")
+  if (! -e $TMP_CHECKDIR)
   {
-    make_path("tmp_check") or die 'could not create tmp_check directory';
+    make_path($TMP_CHECKDIR) or die "could not create $TMP_CHECKDIR directory";
   }
   my $absoluteFifoPath = abs_path($mitmFifoPath);
   die 'abs_path returned empty string' unless ($absoluteFifoPath ne "");
@@ -401,39 +407,39 @@ for my $option (@userPgOptions)
 %fdwServers = ('fake_fdw_server', 'fake_fdw');
 
 # Cleanup leftovers and prepare directories for the run
-if (-e catfile('tmp_check', 'tmp-bin'))
+if (-e catfile($TMP_CHECKDIR, $TMP_BINDIR))
 {
-	remove_tree(catfile('tmp_check', 'tmp-bin')) or die "Could not remove tmp-bin directory";
+	remove_tree(catfile($TMP_CHECKDIR, $TMP_BINDIR)) or die "Could not remove $TMP_BINDIR directory";
 }
 
-if (-e catfile('tmp_check', 'master'))
+if (-e catfile($TMP_CHECKDIR, $MASTERDIR))
 {
-	remove_tree(catfile('tmp_check', 'master')) or die "Could not remove master directory";
+	remove_tree(catfile($TMP_CHECKDIR, $MASTERDIR)) or die "Could not remove $MASTERDIR directory";
 }
 
 for my $port (@workerPorts)
 {
-	if (-e catfile("tmp_check", "worker.$port"))
+	if (-e catfile($TMP_CHECKDIR, "worker.$port"))
 	{
-    		remove_tree(catfile("tmp_check", "worker.$port")) or die "Could not remove worker directory";
+    		remove_tree(catfile($TMP_CHECKDIR, "worker.$port")) or die "Could not remove worker directory";
 	}
 }
 
-if (-e catfile("tmp_check", "master-follower"))
+if (-e catfile($TMP_CHECKDIR, $MASTER_FOLLOWERDIR))
 {
-	remove_tree(catfile("tmp_check", "master-follower")) or die "Could not remove master directory";
+	remove_tree(catfile($TMP_CHECKDIR, $MASTER_FOLLOWERDIR)) or die "Could not remove $MASTER_FOLLOWERDIR directory";
 }
 
 for my $port (@followerWorkerPorts)
 {
-	if (-e catfile("tmp_check", "follower.$port"))
+	if (-e catfile($TMP_CHECKDIR, "follower.$port"))
 	{
-	    remove_tree(catfile("tmp_check", "follower.$port")) or die "Could not remove worker directory";
+	    remove_tree(catfile($TMP_CHECKDIR, "follower.$port")) or die "Could not remove worker directory";
 	}
 }
 
 # Prepare directory in which 'psql' has some helpful variables for locating the workers
-make_path(catfile("tmp_check", "tmp-bin")) or die "Could not create tmp_bin directory $!\n";
+make_path(catfile($TMP_CHECKDIR, $TMP_BINDIR)) or die "Could not create $TMP_BINDIR directory $!\n";
 
 my $psql_name = "psql";
 if ($usingWindows)
@@ -441,7 +447,7 @@ if ($usingWindows)
 	$psql_name = "psql.cmd";
 }
 
-sysopen my $fh, catfile("tmp_check", "tmp-bin", $psql_name), O_CREAT|O_TRUNC|O_RDWR, 0700
+sysopen my $fh, catfile($TMP_CHECKDIR, $TMP_BINDIR, $psql_name), O_CREAT|O_TRUNC|O_RDWR, 0700
 	or die "Could not create psql wrapper";
 if ($usingWindows)
 { 
@@ -488,31 +494,31 @@ else
 }
 close $fh;
 
-make_path(catfile('tmp_check', 'master', 'log')) or die 'Could not create master directory';
+make_path(catfile($TMP_CHECKDIR, $MASTERDIR, 'log')) or die "Could not create $MASTERDIR directory";
 for my $port (@workerPorts)
 {
-    make_path(catfile("tmp_check", "worker.$port", "log"))
+    make_path(catfile($TMP_CHECKDIR, "worker.$port", "log"))
         or die "Could not create worker directory";
 }
 
 if ($followercluster)
 {
-    make_path(catfile('tmp_check', 'master-follower', 'log')) or die "Could not create follower directory";
+    make_path(catfile($TMP_CHECKDIR, $MASTER_FOLLOWERDIR, 'log')) or die "Could not create $MASTER_FOLLOWERDIR directory";
     for my $port (@followerWorkerPorts)
     {
-        make_path(catfile("tmp_check", "follower.$port", "log"))
+        make_path(catfile($TMP_CHECKDIR, "follower.$port", "log"))
             or die "Could not create worker directory";
     }
 }
 
 # Create new data directories, copy workers for speed
-system(catfile("$bindir", "initdb"), ("--nosync", "-U", $user, "--encoding", "UTF8", catfile("tmp_check", "master", "data"))) == 0
-    or die "Could not create master data directory";
+system(catfile("$bindir", "initdb"), ("--nosync", "-U", $user, "--encoding", "UTF8", catfile($TMP_CHECKDIR, $MASTERDIR, "data"))) == 0
+    or die "Could not create $MASTERDIR data directory";
 
 if ($followercluster)
 {
   # This is only necessary on PG 9.6 but it doesn't hurt PG 10
-  open(my $fd, ">>", catfile("tmp_check", "master", "data", "pg_hba.conf"))
+  open(my $fd, ">>", catfile($TMP_CHECKDIR, $MASTERDIR, "data", "pg_hba.conf"))
     or die "could not open pg_hba.conf";
   print $fd "\nhost replication postgres 127.0.0.1/32 trust";
   close $fd;
@@ -522,7 +528,7 @@ if ($usingWindows)
 {
 	for my $port (@workerPorts)
 	{
-		system(catfile("$bindir", "initdb"), ("--nosync", "-U", $user, "--encoding", "UTF8", catfile("tmp_check", "worker.$port", "data"))) == 0
+		system(catfile("$bindir", "initdb"), ("--nosync", "-U", $user, "--encoding", "UTF8", catfile($TMP_CHECKDIR, "worker.$port", "data"))) == 0
 		    or die "Could not create worker data directory";
 	}	
 }
@@ -530,7 +536,7 @@ else
 {
 	for my $port (@workerPorts)
 	{
-	    system("cp", ("-a", catfile("tmp_check", "master", "data"), catfile("tmp_check", "worker.$port", "data"))) == 0
+	    system("cp", ("-a", catfile($TMP_CHECKDIR, $MASTERDIR, "data"), catfile($TMP_CHECKDIR, "worker.$port", "data"))) == 0
 	        or die "Could not create worker data directory";
 	}
 }
@@ -542,26 +548,26 @@ sub ShutdownServers()
     if ($serversAreShutdown eq "FALSE")
     {
         system(catfile("$bindir", "pg_ctl"),
-               ('stop', '-w', '-D', catfile('tmp_check', 'master', 'data'))) == 0
+               ('stop', '-w', '-D', catfile($TMP_CHECKDIR, $MASTERDIR, 'data'))) == 0
             or warn "Could not shutdown worker server";
 
         for my $port (@workerPorts)
         {
             system(catfile("$bindir", "pg_ctl"),
-                   ('stop', '-w', '-D', catfile("tmp_check", "worker.$port", "data"))) == 0
+                   ('stop', '-w', '-D', catfile($TMP_CHECKDIR, "worker.$port", "data"))) == 0
                 or warn "Could not shutdown worker server";
         }
 
         if ($followercluster)
         {
             system(catfile("$bindir", "pg_ctl"),
-                   ('stop', '-w', '-D', catfile('tmp_check', 'master-follower', 'data'))) == 0
+                   ('stop', '-w', '-D', catfile($TMP_CHECKDIR, $MASTER_FOLLOWERDIR, 'data'))) == 0
                 or warn "Could not shutdown worker server";
 
             for my $port (@followerWorkerPorts)
             {
                 system(catfile("$bindir", "pg_ctl"),
-                       ('stop', '-w', '-D', catfile("tmp_check", "follower.$port", "data"))) == 0
+                       ('stop', '-w', '-D', catfile($TMP_CHECKDIR, "follower.$port", "data"))) == 0
                     or warn "Could not shutdown worker server";
             }
         }
@@ -663,9 +669,9 @@ $serversAreShutdown = "FALSE";
 if(system(catfile("$bindir", "pg_ctl"),
        ('start', '-w',
         '-o', join(" ", @pgOptions)." -c port=$masterPort",
-       '-D', catfile('tmp_check', 'master', 'data'), '-l', catfile('tmp_check', 'master', 'log', 'postmaster.log'))) != 0)
+       '-D', catfile($TMP_CHECKDIR, $MASTERDIR, 'data'), '-l', catfile($TMP_CHECKDIR, $MASTERDIR, 'log', 'postmaster.log'))) != 0)
 {
-  system("tail", ("-n20", catfile("tmp_check", "master", "log", "postmaster.log")));
+  system("tail", ("-n20", catfile($TMP_CHECKDIR, $MASTERDIR, "log", "postmaster.log")));
   die "Could not start master server";
 }
 
@@ -674,10 +680,10 @@ for my $port (@workerPorts)
     if(system(catfile("$bindir", "pg_ctl"),
            ('start', '-w',
             '-o', join(" ", @pgOptions)." -c port=$port",
-            '-D', catfile("tmp_check", "worker.$port", "data"),
-            '-l', catfile("tmp_check", "worker.$port", "log", "postmaster.log"))) != 0)
+            '-D', catfile($TMP_CHECKDIR, "worker.$port", "data"),
+            '-l', catfile($TMP_CHECKDIR, "worker.$port", "log", "postmaster.log"))) != 0)
     {
-      system("tail", ("-n20", catfile("tmp_check", "worker.$port", "log", "postmaster.log")));
+      system("tail", ("-n20", catfile($TMP_CHECKDIR, "worker.$port", "log", "postmaster.log")));
       die "Could not start worker server";
     }
 }
@@ -688,7 +694,7 @@ if ($followercluster)
     # This test would run faster on PG10 if we could pass --no-sync here but that flag
     # isn't supported on PG 9.6. In a year when we drop support for PG9.6 add that flag!
     system(catfile("$bindir", "pg_basebackup"),
-           ("-D", catfile("tmp_check", "master-follower", "data"), "--host=$host", "--port=$masterPort",
+           ("-D", catfile($TMP_CHECKDIR, $MASTER_FOLLOWERDIR, "data"), "--host=$host", "--port=$masterPort",
             "--username=$user", "-R", "-X", "stream")) == 0
       or die 'could not take basebackup';
 
@@ -697,7 +703,7 @@ if ($followercluster)
         my $workerPort = $workerPorts[$offset];
         my $followerPort = $followerWorkerPorts[$offset];
         system(catfile("$bindir", "pg_basebackup"),
-               ("-D", catfile("tmp_check", "follower.$followerPort", "data"), "--host=$host", "--port=$workerPort",
+               ("-D", catfile($TMP_CHECKDIR, "follower.$followerPort", "data"), "--host=$host", "--port=$workerPort",
                 "--username=$user", "-R", "-X", "stream")) == 0
             or die "Could not take basebackup";
     }
@@ -705,9 +711,9 @@ if ($followercluster)
     if(system(catfile("$bindir", "pg_ctl"),
            ('start', '-w',
             '-o', join(" ", @pgOptions)." -c port=$followerCoordPort",
-           '-D', catfile('tmp_check', 'master-follower', 'data'), '-l', catfile('tmp_check', 'master-follower', 'log', 'postmaster.log'))) != 0)
+           '-D', catfile($TMP_CHECKDIR, $MASTER_FOLLOWERDIR, 'data'), '-l', catfile($TMP_CHECKDIR, $MASTER_FOLLOWERDIR, 'log', 'postmaster.log'))) != 0)
     {
-      system("tail", ("-n20", catfile("tmp_check", "master-follower", "log", "postmaster.log")));
+      system("tail", ("-n20", catfile($TMP_CHECKDIR, $MASTER_FOLLOWERDIR, "log", "postmaster.log")));
       die "Could not start master follower server";
     }
 
@@ -716,10 +722,10 @@ if ($followercluster)
         if(system(catfile("$bindir", "pg_ctl"),
                ('start', '-w',
                 '-o', join(" ", @pgOptions)." -c port=$port",
-                '-D', catfile("tmp_check", "follower.$port", "data"),
-                '-l', catfile("tmp_check", "follower.$port", "log", "postmaster.log"))) != 0)
+                '-D', catfile($TMP_CHECKDIR, "follower.$port", "data"),
+                '-l', catfile($TMP_CHECKDIR, "follower.$port", "log", "postmaster.log"))) != 0)
         {
-          system("tail", ("-n20", catfile("tmp_check", "follower.$port", "log", "postmaster.log")));
+          system("tail", ("-n20", catfile($TMP_CHECKDIR, "follower.$port", "log", "postmaster.log")));
           die "Could not start follower server";
         }
     }
@@ -790,7 +796,7 @@ my @arguments = (
     "--host", $host,
     '--port', $masterPort,
     '--user', $user,
-    '--bindir', catfile("tmp_check", "tmp-bin")
+    '--bindir', catfile($TMP_CHECKDIR, $TMP_BINDIR)
 );
 
 # Add load extension parameters to the argument list
