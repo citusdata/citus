@@ -9,10 +9,9 @@ Options:
     --citus-path=<citus-path>              Absolute path for citus directory (default: ~/citus)
 """
 
-
-import utils
 from config import *
 from docopt import docopt
+import utils
 import os
 import shutil
 import sys
@@ -27,31 +26,33 @@ def initialize_temp_dir():
 
 
 def initialize_db_for_cluster(pg_path, rel_data_path):
-    utils.run('mkdir ' + rel_data_path)
+    utils.run(['mkdir', rel_data_path])
     for node_name in NODE_NAMES:
         abs_data_path = os.path.abspath(os.path.join(rel_data_path, node_name))
-        pg_command = pg_path + '/initdb'
-        utils.run(pg_command + ' --pgdata=' +
-                  abs_data_path + ' --username=' + USER)
+        command = [os.path.join(pg_path, 'initdb'),
+                   '--pgdata', abs_data_path, '--username', USER]
+        utils.run(command)
         add_citus_to_shared_preload_libraries(abs_data_path)
 
 
 def get_add_citus_to_shared_preload_library_cmd(abs_data_path):
-    return 'echo "shared_preload_libraries = \'citus\'" >> {abs_data_path}/postgresql.conf'.format(
-        abs_data_path=abs_data_path)
+    return 'echo "shared_preload_libraries = \'citus\'" >> {conf_path}'.format(
+        conf_path=os.path.join(abs_data_path, 'postgresql.conf'))
 
 
 def add_citus_to_shared_preload_libraries(abs_data_path):
-    utils.run(get_add_citus_to_shared_preload_library_cmd(abs_data_path))
+    conf_path = os.path.join(abs_data_path, 'postgresql.conf')
+    with open(conf_path, 'a') as conf_file:
+        utils.run_with_stdout(
+            ['echo', "shared_preload_libraries = \'citus\'"], conf_file)
 
 
 def start_databases(pg_path, rel_data_path):
     for node_name in NODE_NAMES:
         abs_data_path = os.path.abspath(os.path.join(rel_data_path, node_name))
-        command = '{pg_path}/pg_ctl --pgdata={pgdata} -U={user}" \
-        " -o "-p {port}" --log={pg_path}/logfile_{node_name} start'.format(
-            pg_path=pg_path, pgdata=abs_data_path, user=USER,
-            port=NODE_PORTS[node_name], node_name=node_name)
+        command = [os.path.join(pg_path, 'pg_ctl'), '--pgdata', abs_data_path, '-U',
+                   USER, "-o '-p {}'".format(NODE_PORTS[node_name]), '--log',
+                   os.path.join(pg_path, 'logfile_' + node_name), 'start']
         utils.run(command)
 
 
@@ -68,11 +69,9 @@ def add_workers(pg_path):
 
 
 def run_pg_regress(pg_path, pg_src_path, port, schedule):
-    command = "{pg_src_path}/src/test/regress/pg_regress --port={port}" \
-        " --schedule={schedule_path} --bindir={pg_path} --user={user} --use-existing --dbname={dbname}".format(
-            pg_src_path=pg_src_path, port=port,
-            schedule_path=schedule, pg_path=pg_path,
-            user=USER, dbname=DBNAME)
+    command = [os.path.join(pg_src_path, 'src/test/regress/pg_regress'), '--port', str(port),
+               '--schedule', schedule, '--bindir', pg_path, '--user', USER, '--dbname', DBNAME,
+               '--use-existing']
     exit_code = utils.run(command)
     if exit_code != 0:
         sys.exit(exit_code)
@@ -86,10 +85,9 @@ def citus_prepare_pg_upgrade(pg_path):
 def stop_databases(pg_path, rel_data_path):
     for node_name in NODE_NAMES:
         abs_data_path = os.path.abspath(os.path.join(rel_data_path, node_name))
-        command = '{pg_path}/pg_ctl --pgdata={pgdata} -U={user}" \
-        " -o "-p {port}" --log={pg_path}/logfile_{node_name} stop'.format(
-            pg_path=pg_path, pgdata=abs_data_path, user=USER,
-            port=NODE_PORTS[node_name], node_name=node_name)
+        command = [os.path.join(pg_path, 'pg_ctl'), '--pgdata', abs_data_path, '-U',
+                   USER, "-o '-p {}'".format(NODE_PORTS[node_name]), '--log',
+                   os.path.join(pg_path, 'logfile_' + node_name), 'stop']
         utils.run(command)
 
 
@@ -100,12 +98,9 @@ def perform_postgres_upgrade():
         with utils.cd(base_new_data_path):
             abs_new_data_path = os.path.join(base_new_data_path, node_name)
             abs_old_data_path = os.path.join(base_old_data_path, node_name)
-            command = "{pg_new_bindir}/pg_upgrade --username={user}" \
-                " --old-bindir={pg_old_bindir} --new-bindir={pg_new_bindir} --old-datadir={old_datadir} \
-                                        --new-datadir={new_datadir}".format(
-                    pg_new_bindir=config[NEW_BINDIR], user=USER,
-                    pg_old_bindir=config[OLD_BINDIR],
-                    old_datadir=abs_old_data_path, new_datadir=abs_new_data_path)
+            command = [os.path.join(config[NEW_BINDIR], 'pg_upgrade'), '--username', USER,
+                       '--old-bindir', config[OLD_BINDIR], '--new-bindir', config[NEW_BINDIR],
+                       '--old-datadir', abs_old_data_path, '--new-datadir', abs_new_data_path]
             utils.run(command)
 
 

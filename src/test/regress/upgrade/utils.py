@@ -4,14 +4,19 @@ from config import USER
 
 
 def run(command):
-    return subprocess.call(command, shell=True)
+    return subprocess.call(command)
+
+def run_with_stdout(command, file):
+    return subprocess.call(command, stdout = file)
 
 
 def psql(pg_path, port, command):
-    run('{pg_path}/psql -U {user} -p {port} -c "{command}"'.format(
-        pg_path = pg_path, user = USER, port = port, command = command))
+    return run([os.path.join(pg_path, 'psql'), '-U', USER, '-p', str(port),
+                '-c {}'.format(command)])
 
 # Taken from https://stackoverflow.com/questions/431684/how-do-i-change-directory-cd-in-python/13197763#13197763
+
+
 class cd(object):
     """Context manager for changing the current working directory"""
 
