@@ -10,6 +10,12 @@ SET citus.next_shard_id TO 1060000;
 \set CompletedTaskId 801107
 \set RunningTaskId 801108
 
+-- Test worker_cleanup_job_schema_cache
+SELECT * FROM task_tracker_assign_task(2, 2, '');
+SELECT count(*) FROM pg_catalog.pg_namespace WHERE nspname = 'pg_merge_job_0002';
+SELECT worker_cleanup_job_schema_cache();
+SELECT count(*) FROM pg_catalog.pg_namespace WHERE nspname = 'pg_merge_job_0002';
+
 -- We assign two tasks to the task tracker. The first task should complete and
 -- the second task should continue to keep running.
 

@@ -411,6 +411,18 @@ SELECT worker_merge_files_and_run_query(42, 1,
     'CREATE TABLE task_000001_merge(merge_column_0 int)',
     'CREATE TABLE task_000001 (a) AS SELECT sum(merge_column_0) FROM task_000001_merge'
 );
+
+-- test that owner of task cannot execute arbitrary sql
+SELECT worker_merge_files_and_run_query(42, 1,
+    'CREATE TABLE task_000002_merge(merge_column_0 int)',
+    'DROP USER usage_access'
+);
+
+SELECT worker_merge_files_and_run_query(42, 1,
+    'DROP USER usage_access',
+    'CREATE TABLE task_000002 (a) AS SELECT sum(merge_column_0) FROM task_000002_merge'
+);
+
 SELECT count(*) FROM pg_merge_job_0042.task_000001_merge;
 SELECT count(*) FROM pg_merge_job_0042.task_000001;
 DROP TABLE pg_merge_job_0042.task_000001, pg_merge_job_0042.task_000001_merge; -- drop table so we can reuse the same files for more tests

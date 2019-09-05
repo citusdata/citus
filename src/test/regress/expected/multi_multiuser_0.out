@@ -536,7 +536,7 @@ ERROR:  could not receive file "base/pgsql_job_cache/job_0042/task_000001/p_0000
 -- different user should not be able to fetch partition file
 SET ROLE usage_access;
 SELECT worker_fetch_partition_file(42, 1, 1, 1, 'localhost', :worker_1_port);
-WARNING:  could not open file "base/pgsql_job_cache/job_0042/task_000001/p_00001.18058": No such file or directory
+WARNING:  could not open file "base/pgsql_job_cache/job_0042/task_000001/p_00001.18007": No such file or directory
 CONTEXT:  while executing command on localhost:57637
 ERROR:  could not receive file "base/pgsql_job_cache/job_0042/task_000001/p_00001" from localhost:57637
 -- only the user whom created the files should be able to fetch
@@ -575,7 +575,7 @@ RESET ROLE;
 -- test that the super user is unable to read the contents of the intermediate file,
 -- although it does create the table
 SELECT worker_merge_files_into_table(42, 1, ARRAY['a'], ARRAY['integer']);
-WARNING:  Task file "task_000001.18054" does not have expected suffix ".10"
+WARNING:  Task file "task_000001.18003" does not have expected suffix ".10"
  worker_merge_files_into_table 
 -------------------------------
  
@@ -617,7 +617,7 @@ SELECT worker_merge_files_and_run_query(42, 1,
     'CREATE TABLE task_000001_merge(merge_column_0 int)',
     'CREATE TABLE task_000001 (a) AS SELECT sum(merge_column_0) FROM task_000001_merge'
 );
-WARNING:  Task file "task_000001.18054" does not have expected suffix ".10"
+WARNING:  Task file "task_000001.18003" does not have expected suffix ".10"
  worker_merge_files_and_run_query 
 ----------------------------------
  
@@ -647,6 +647,19 @@ SELECT worker_merge_files_and_run_query(42, 1,
  
 (1 row)
 
+-- test that owner of task cannot execute arbitrary sql
+SELECT worker_merge_files_and_run_query(42, 1,
+    'CREATE TABLE task_000002_merge(merge_column_0 int)',
+    'DROP USER usage_access'
+);
+ERROR:  permission denied to drop role
+CONTEXT:  SQL statement "DROP USER usage_access"
+SELECT worker_merge_files_and_run_query(42, 1,
+    'DROP USER usage_access',
+    'CREATE TABLE task_000002 (a) AS SELECT sum(merge_column_0) FROM task_000002_merge'
+);
+ERROR:  permission denied to drop role
+CONTEXT:  SQL statement "DROP USER usage_access"
 SELECT count(*) FROM pg_merge_job_0042.task_000001_merge;
  count 
 -------
