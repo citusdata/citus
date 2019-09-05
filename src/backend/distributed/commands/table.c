@@ -649,6 +649,7 @@ PostProcessAlterTableStmt(AlterTableStmt *alterTableStatement)
 			ListCell *columnConstraint = NULL;
 			Oid relationId = InvalidOid;
 			LOCKMODE lockmode = NoLock;
+			ObjectAddress tableAddress = { 0 };
 
 			ColumnDef *columnDefinition = (ColumnDef *) command->def;
 			columnConstraints = columnDefinition->constraints;
@@ -678,6 +679,10 @@ PostProcessAlterTableStmt(AlterTableStmt *alterTableStatement)
 														constraint);
 				}
 			}
+
+			/* adding a column could introduce new dependencies */
+			ObjectAddressSet(tableAddress, RelationRelationId, relationId);
+			EnsureDependenciesExistsOnAllNodes(&tableAddress);
 		}
 	}
 }
