@@ -925,7 +925,7 @@ RemoveNodeFromCluster(char *nodeName, int32 nodePort)
 	/* make sure we don't have any lingering session lifespan connections */
 	CloseNodeConnectionsAfterTransaction(nodeName, nodePort);
 
-	SendCommandToWorkers(WORKERS_WITH_METADATA, nodeDeleteCommand);
+	SendCommandToMetadataWorkers(nodeDeleteCommand);
 }
 
 
@@ -1029,7 +1029,7 @@ AddNodeMetadata(char *nodeName, int32 nodePort, int32 groupId, char *nodeRack,
 
 	/* send the delete command to all primary nodes with metadata */
 	nodeDeleteCommand = NodeDeleteCommand(workerNode->nodeId);
-	SendCommandToWorkers(WORKERS_WITH_METADATA, nodeDeleteCommand);
+	SendCommandToMetadataWorkers(nodeDeleteCommand);
 
 	/* finally prepare the insert command and send it to all primary nodes */
 	primariesWithMetadata = CountPrimariesWithMetadata();
@@ -1037,7 +1037,7 @@ AddNodeMetadata(char *nodeName, int32 nodePort, int32 groupId, char *nodeRack,
 	{
 		List *workerNodeList = list_make1(workerNode);
 		char *nodeInsertCommand = NodeListInsertCommand(workerNodeList);
-		SendCommandToWorkers(WORKERS_WITH_METADATA, nodeInsertCommand);
+		SendCommandToMetadataWorkers(nodeInsertCommand);
 	}
 
 	returnData = GenerateNodeTuple(workerNode);
@@ -1087,7 +1087,7 @@ SetNodeState(char *nodeName, int32 nodePort, bool isActive)
 
 	/* we also update isactive column at worker nodes */
 	nodeStateUpdateCommand = NodeStateUpdateCommand(workerNode->nodeId, isActive);
-	SendCommandToWorkers(WORKERS_WITH_METADATA, nodeStateUpdateCommand);
+	SendCommandToMetadataWorkers(nodeStateUpdateCommand);
 }
 
 

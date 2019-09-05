@@ -148,5 +148,5 @@ MasterRemoveDistributedTableMetadataFromWorkers(Oid relationId, char *schemaName
 
 	/* drop the distributed table metadata on the workers */
 	deleteDistributionCommand = DistributionDeleteCommand(schemaName, tableName);
-	SendCommandToWorkers(WORKERS_WITH_METADATA, deleteDistributionCommand);
+	SendCommandToMetadataWorkers(deleteDistributionCommand);
 }

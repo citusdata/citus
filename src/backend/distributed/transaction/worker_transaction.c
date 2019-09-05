@@ -81,19 +81,6 @@ SendCommandToFirstWorker(char *command)
 
 
 /*
- * SendCommandToWorkers sends a command to all workers in
- * parallel. Commands are committed on the workers when the local
- * transaction commits. The connection are made as the extension
- * owner to ensure write access to the Citus metadata tables.
- */
-void
-SendCommandToWorkers(TargetWorkerSet targetWorkerSet, char *command)
-{
-	SendCommandToWorkersParams(targetWorkerSet, command, 0, NULL, NULL);
-}
-
-
-/*
  * SendBareCommandListToWorkers sends a list of commands to a set of target
  * workers in serial. Commands are committed immediately: new connections are
  * always used and no transaction block is used (hence "bare"). The connections
@@ -146,17 +133,13 @@ SendBareCommandListToWorkers(TargetWorkerSet targetWorkerSet, List *commandList)
 
 
 /*
- * SendCommandToWorkersParams sends a command to all workers in parallel.
+ * SendCommandToMetadataWorkers sends a command to all workers in parallel.
  * Commands are committed on the workers when the local transaction commits. The
- * connection are made as the extension owner to ensure write access to the Citus
- * metadata tables. Parameters can be specified as for PQexecParams, except that
- * paramLengths, paramFormats and resultFormat are hard-coded to NULL, NULL and 0
- * respectively.
+ * connections are made as the extension owner to ensure write access to the Citus
+ * metadata tables.
  */
 void
-SendCommandToWorkersParams(TargetWorkerSet targetWorkerSet, char *command,
-						   int parameterCount, const Oid *parameterTypes,
-						   const char *const *parameterValues)
+SendCommandToMetadataWorkers(char *command)
 {
 	List *connectionList = NIL;
 	ListCell *connectionCell = NULL;
@@ -176,14 +159,7 @@ SendCommandToWorkersParams(TargetWorkerSet targetWorkerSet, char *command,
 		MultiConnection *connection = NULL;
 		int connectionFlags = 0;
 
-		if (targetWorkerSet == WORKERS_WITH_METADATA &&
-			!workerNode->hasMetadata)
-		{
-			continue;
-		}
-
-		if (targetWorkerSet == OTHER_WORKERS &&
-			workerNode->groupId == GetLocalGroupId())
+		if (!workerNode->hasMetadata)
 		{
 			continue;
 		}
@@ -211,8 +187,7 @@ SendCommandToWorkersParams(TargetWorkerSet targetWorkerSet, char *command,
 	{
 		MultiConnection *connection = (MultiConnection *) lfirst(connectionCell);
 
-		int querySent = SendRemoteCommandParams(connection, command, parameterCount,
-												parameterTypes, parameterValues);
+		int querySent = SendRemoteCommandParams(connection, command, 0, NULL, NULL);
 		if (querySent == 0)
 		{
 			ReportConnectionError(connection, ERROR);

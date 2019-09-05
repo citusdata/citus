@@ -697,7 +697,7 @@ UpdateRelationColocationGroup(Oid distributedRelationId, uint32 colocationId)
 		char *updateColocationIdCommand = ColocationIdUpdateCommand(distributedRelationId,
 																	colocationId);
 
-		SendCommandToWorkers(WORKERS_WITH_METADATA, updateColocationIdCommand);
+		SendCommandToMetadataWorkers(updateColocationIdCommand);
 	}
 }
 

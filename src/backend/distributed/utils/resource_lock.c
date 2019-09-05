@@ -266,7 +266,7 @@ LockShardListMetadataOnWorkers(LOCKMODE lockmode, List *shardIntervalList)
 
 	appendStringInfo(lockCommand, "])");
 
-	SendCommandToWorkers(WORKERS_WITH_METADATA, lockCommand->data);
+	SendCommandToMetadataWorkers(lockCommand->data);
 }
 
 
