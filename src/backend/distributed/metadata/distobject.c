@@ -94,7 +94,12 @@ ObjectExists(const ObjectAddress *address)
 		HeapTuple objtup;
 		Relation catalog = heap_open(address->classId, AccessShareLock);
 
+#if PG_VERSION_NUM >= 120000
+		objtup = get_catalog_object_by_oid(catalog, get_object_attnum_oid(
+											   address->classId), address->objectId);
+#else
 		objtup = get_catalog_object_by_oid(catalog, address->objectId);
+#endif
 		heap_close(catalog, AccessShareLock);
 		if (objtup != NULL)
 		{
