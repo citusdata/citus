@@ -3,6 +3,16 @@ CREATE SCHEMA type_tests;
 CREATE SCHEMA type_tests2; -- to test creation in a specific schema and moving to schema
 SET search_path TO type_tests;
 SET citus.shard_count TO 4;
+CREATE USER typeuser;
+NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
+HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
+SELECT run_command_on_workers($$CREATE USER typeuser;$$);
+      run_command_on_workers       
+-----------------------------------
+ (localhost,57637,t,"CREATE ROLE")
+ (localhost,57638,t,"CREATE ROLE")
+(2 rows)
+
 -- single statement transactions with a simple type used in a table
 CREATE TYPE tc1 AS (a int, b int);
 CREATE TABLE t1 (a int PRIMARY KEY, b tc1);
@@ -21,6 +31,8 @@ SELECT * FROM t1;
 
 ALTER TYPE tc1 RENAME TO tc1_newname;
 INSERT INTO t1 VALUES (3, (4,5)::tc1_newname); -- insert with a cast would fail if the rename didn't propagate
+ALTER TYPE tc1_newname SET SCHEMA type_tests2;
+INSERT INTO t1 VALUES (6, (7,8)::type_tests2.tc1_newname); -- insert with a cast would fail if the rename didn't propagate
 -- single statement transactions with a an enum used in a table
 CREATE TYPE te1 AS ENUM ('one', 'two', 'three');
 CREATE TABLE t2 (a int PRIMARY KEY, b te1);
@@ -48,6 +60,9 @@ SELECT * FROM t2;
  1 | four
 (1 row)
 
+-- change the schema of the type and use the new fully qualified name in an insert
+ALTER TYPE te1_newname SET SCHEMA type_tests2;
+INSERT INTO t2 VALUES (3, 'three'::type_tests2.te1_newname);
 -- transaction block with simple type
 BEGIN;
 CREATE TYPE tc2 AS (a int, b int);
@@ -100,6 +115,45 @@ SELECT create_distributed_table('t5','a');
  
 (1 row)
 
+-- test adding a column to a table of a non-distributed type
+SET citus.enable_ddl_propagation TO off;
+CREATE TYPE te4 AS ENUM ('c','d');
+CREATE TYPE tc6 AS (a int, b int);
+RESET citus.enable_ddl_propagation;
+-- types need to be fully qualified because of the search_path which is not supported by ALTER TYPE ... ADD COLUMN
+ALTER TABLE t5 ADD COLUMN d type_tests.te4;
+ALTER TABLE t5 ADD COLUMN e type_tests.tc6;
+-- last two values are only there if above commands succeeded
+INSERT INTO t5 VALUES (1, NULL, 'a', 'd', (1,2)::tc6);
+-- test renaming an attribute of a distrbuted type and read it by its new name to verify propagation
+ALTER TYPE tc6 RENAME ATTRIBUTE b TO c;
+SELECT (e::tc6).c FROM t5 ORDER BY 1;
+ c 
+---
+ 2
+(1 row)
+
+-- change owner of supported types and check ownership on remote server
+ALTER TYPE te4 OWNER TO typeuser;
+ALTER TYPE tc6 OWNER TO typeuser;
+\c - - - :worker_1_port
+\dT+ type_tests.te4
+                                             List of data types
+   Schema   |      Name      | Internal name | Size | Elements |  Owner   | Access privileges | Description 
+------------+----------------+---------------+------+----------+----------+-------------------+-------------
+ type_tests | type_tests.te4 | te4           | 4    | c       +| typeuser |                   | 
+            |                |               |      | d        |          |                   | 
+(1 row)
+
+\dT+ type_tests.tc6
+                                             List of data types
+   Schema   |      Name      | Internal name | Size  | Elements |  Owner   | Access privileges | Description 
+------------+----------------+---------------+-------+----------+----------+-------------------+-------------
+ type_tests | type_tests.tc6 | tc6           | tuple |          | typeuser |                   | 
+(1 row)
+
+\c - - - :master_port
+SET search_path TO type_tests;
 -- deleting the enum cascade will remove the type from the table and the workers
 DROP TYPE te3 CASCADE;
 NOTICE:  drop cascades to table t5 column c
@@ -109,4 +163,26 @@ NOTICE:  drop cascades to table t5 column b
 -- clear objects
 SET client_min_messages TO fatal; -- suppress cascading objects dropping
 DROP SCHEMA type_tests CASCADE;
+SELECT run_command_on_workers($$DROP SCHEMA type_tests CASCADE;$$);
+      run_command_on_workers       
+-----------------------------------
+ (localhost,57637,t,"DROP SCHEMA")
+ (localhost,57638,t,"DROP SCHEMA")
+(2 rows)
+
 DROP SCHEMA type_tests2 CASCADE;
+SELECT run_command_on_workers($$DROP SCHEMA type_tests2 CASCADE;$$);
+      run_command_on_workers       
+-----------------------------------
+ (localhost,57637,t,"DROP SCHEMA")
+ (localhost,57638,t,"DROP SCHEMA")
+(2 rows)
+
+DROP USER typeuser;
+SELECT run_command_on_workers($$DROP USER typeuser;$$);
+     run_command_on_workers      
+---------------------------------
+ (localhost,57637,t,"DROP ROLE")
+ (localhost,57638,t,"DROP ROLE")
+(2 rows)
+
