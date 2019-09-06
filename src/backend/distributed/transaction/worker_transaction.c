@@ -40,9 +40,21 @@
 void
 SendCommandToWorker(char *nodeName, int32 nodePort, const char *command)
 {
+	const char *nodeUser = CitusExtensionOwnerName();
+	SendCommandToWorkerAsUser(nodeName, nodePort, nodeUser, command);
+}
+
+
+/*
+ * SendCommandToWorkerAsUSer sends a command to a particular worker as a particular user
+ * as part of the 2PC.
+ */
+void
+SendCommandToWorkerAsUser(char *nodeName, int32 nodePort, const char *nodeUser,
+						  const char *command)
+{
 	MultiConnection *transactionConnection = NULL;
-	char *nodeUser = CitusExtensionOwnerName();
-	int connectionFlags = 0;
+	uint connectionFlags = 0;
 
 	BeginOrContinueCoordinatedTransaction();
 	CoordinatedTransactionUse2PC();

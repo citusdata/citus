@@ -57,6 +57,11 @@ check-base: all
 	$(pg_regress_multi_check) --load-extension=citus \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/base_schedule $(EXTRA_TESTS)
 
+check-base-non-adaptive: all tempinstall-main
+	$(pg_regress_multi_check) --load-extension=citus \
+	--server-option=citus.task_executor_type=real-time \
+	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/base_schedule $(EXTRA_TESTS)
+
 # check-minimal only sets up the cluster
 check-minimal: all
 	$(pg_regress_multi_check) --load-extension=citus \
