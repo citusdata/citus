@@ -26,7 +26,11 @@ type_get_namespace_oid(Oid typeOid)
 {
 	Form_pg_type typeData = NULL;
 	Relation catalog = heap_open(TypeRelationId, AccessShareLock);
+#if PG_VERSION_NUM >= 120000
+	HeapTuple typeTuple = get_catalog_object_by_oid(catalog, Anum_pg_type_oid, typeOid);
+#else
 	HeapTuple typeTuple = get_catalog_object_by_oid(catalog, typeOid);
+#endif
 	heap_close(catalog, AccessShareLock);
 
 	typeData = (Form_pg_type) GETSTRUCT(typeTuple);
