@@ -575,6 +575,39 @@ ProcessAlterTypeSchemaStmt(AlterObjectSchemaStmt *stmt, const char *queryString)
 }
 
 
+List *
+PlanAlterTypeOwnerStmt(AlterOwnerStmt *stmt, const char *queryString)
+{
+	const ObjectAddress *typeAddress = NULL;
+	const char *sql = NULL;
+
+	Assert(stmt->objectType == OBJECT_TYPE);
+
+	if (creating_extension)
+	{
+		/* types from extensions are managed by extensions, skipping */
+		return NIL;
+	}
+
+	typeAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
+	if (!IsObjectDistributed(typeAddress))
+	{
+		return NIL;
+	}
+
+	EnsureCoordinator();
+
+	QualifyTreeNode((Node *) stmt);
+	sql = DeparseTreeNode((Node *) stmt);
+
+	EnsureSequentialModeForTypeDDL();
+	SendCommandToWorkersAsUser(ALL_WORKERS, DISABLE_DDL_PROPAGATION, NULL);
+	SendCommandToWorkersAsUser(ALL_WORKERS, sql, NULL);
+
+	return NIL;
+}
+
+
 /*
  * CreateTypeStmtByObjectAddress returns a parsetree for the CREATE TYPE statement to
  * recreate the type by its object address.
@@ -914,6 +947,24 @@ RenameTypeAttributeStmtObjectAddress(RenameStmt *stmt, bool missing_ok)
 	Assert(stmt->relationType == OBJECT_TYPE);
 
 	typeName = makeTypeNameFromRangeVar(stmt->relation);
+	typeOid = LookupTypeNameOid(NULL, typeName, missing_ok);
+	address = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*address, TypeRelationId, typeOid);
+
+	return address;
+}
+
+
+const ObjectAddress *
+AlterTypeOwnerObjectAddress(AlterOwnerStmt *stmt, bool missing_ok)
+{
+	TypeName *typeName = NULL;
+	Oid typeOid = InvalidOid;
+	ObjectAddress *address = NULL;
+
+	Assert(stmt->objectType == OBJECT_TYPE);
+
+	typeName = makeTypeNameFromNameList((List *) stmt->object);
 	typeOid = LookupTypeNameOid(NULL, typeName, missing_ok);
 	address = palloc0(sizeof(ObjectAddress));
 	ObjectAddressSet(*address, TypeRelationId, typeOid);

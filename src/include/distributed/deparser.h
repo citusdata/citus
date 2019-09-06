@@ -38,6 +38,7 @@ extern const char * deparse_alter_type_stmt(AlterTableStmt *stmt);
 extern const char * deparse_rename_type_stmt(RenameStmt *stmt);
 extern const char * deparse_rename_type_attribute_stmt(RenameStmt *stmt);
 extern const char * deparse_alter_type_schema_stmt(AlterObjectSchemaStmt *stmt);
+extern const char * deparse_alter_type_owner_stmt(AlterOwnerStmt *stmt);
 
 extern void qualify_rename_type_stmt(RenameStmt *stmt);
 extern void qualify_rename_type_attribute_stmt(RenameStmt *stmt);
@@ -46,6 +47,7 @@ extern void qualify_alter_type_stmt(AlterTableStmt *stmt);
 extern void qualify_composite_type_stmt(CompositeTypeStmt *stmt);
 extern void qualify_create_enum_stmt(CreateEnumStmt *stmt);
 extern void qualify_alter_type_schema_stmt(AlterObjectSchemaStmt *stmt);
+extern void qualify_alter_type_owner_stmt(AlterOwnerStmt *stmt);
 
 extern const ObjectAddress * GetObjectAddressFromParseTree(Node *parseTree, bool
 														   missing_ok);

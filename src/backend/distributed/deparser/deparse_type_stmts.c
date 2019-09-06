@@ -23,9 +23,10 @@
 #include "parser/parse_type.h"
 #include "utils/builtins.h"
 
-#include "distributed/metadata/namespace.h"
+#include "distributed/citus_ruleutils.h"
 #include "distributed/commands.h"
 #include "distributed/deparser.h"
+#include "distributed/metadata/namespace.h"
 
 #define AlterEnumIsRename(stmt) (stmt->oldVal != NULL)
 #define AlterEnumIsAddValue(stmt) (stmt->oldVal == NULL)
@@ -53,6 +54,7 @@ static void appendAlterTypeCmdAlterColumnType(StringInfo buf,
 static void appendRenameTypeStmt(StringInfo buf, RenameStmt *stmt);
 static void appendRenameTypeAttributeStmt(StringInfo buf, RenameStmt *stmt);
 static void appendAlterTypeSchemaStmt(StringInfo buf, AlterObjectSchemaStmt *stmt);
+static void appendAlterTypeOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt);
 
 
 /*
@@ -477,4 +479,31 @@ appendAlterTypeSchemaStmt(StringInfo buf, AlterObjectSchemaStmt *stmt)
 	names = (List *) stmt->object;
 	appendStringInfo(buf, "ALTER TYPE %s SET SCHEMA %s;", NameListToQuotedString(names),
 					 quote_identifier(stmt->newschema));
+}
+
+
+const char *
+deparse_alter_type_owner_stmt(AlterOwnerStmt *stmt)
+{
+	StringInfoData str = { 0 };
+	initStringInfo(&str);
+
+	Assert(stmt->objectType == OBJECT_TYPE);
+
+	appendAlterTypeOwnerStmt(&str, stmt);
+
+	return str.data;
+}
+
+
+static void
+appendAlterTypeOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt)
+{
+	List *names = NIL;
+
+	Assert(stmt->objectType == OBJECT_TYPE);
+
+	names = (List *) stmt->object;
+	appendStringInfo(buf, "ALTER TYPE %s OWNER TO %s;", NameListToQuotedString(names),
+					 RoleSpecString(stmt->newowner));
 }

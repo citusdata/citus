@@ -8,6 +8,7 @@ static const char * deparse_alter_table_stmt(AlterTableStmt *stmt);
 static const char * deparse_rename_stmt(RenameStmt *stmt);
 static const char * deparse_rename_attribute_stmt(RenameStmt *stmt);
 static const char * deparse_alter_object_schema_stmt(AlterObjectSchemaStmt *stmt);
+static const char * deparse_alter_owner_stmt(AlterOwnerStmt *stmt);
 
 
 /*
@@ -59,6 +60,11 @@ DeparseTreeNode(Node *stmt)
 		{
 			return deparse_alter_object_schema_stmt(castNode(AlterObjectSchemaStmt,
 															 stmt));
+		}
+
+		case T_AlterOwnerStmt:
+		{
+			return deparse_alter_owner_stmt(castNode(AlterOwnerStmt, stmt));
 		}
 
 		default:
@@ -162,6 +168,24 @@ deparse_alter_object_schema_stmt(AlterObjectSchemaStmt *stmt)
 		default:
 		{
 			ereport(ERROR, (errmsg("unsupported rename statement for deparsing")));
+		}
+	}
+}
+
+
+static const char *
+deparse_alter_owner_stmt(AlterOwnerStmt *stmt)
+{
+	switch (stmt->objectType)
+	{
+		case OBJECT_TYPE:
+		{
+			return deparse_alter_type_owner_stmt(stmt);
+		}
+
+		default:
+		{
+			ereport(ERROR, (errmsg("unsupported alter owner statement for deparsing")));
 		}
 	}
 }

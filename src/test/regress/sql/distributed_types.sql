@@ -4,6 +4,8 @@ CREATE SCHEMA type_tests;
 CREATE SCHEMA type_tests2; -- to test creation in a specific schema and moving to schema
 SET search_path TO type_tests;
 SET citus.shard_count TO 4;
+CREATE USER typeuser;
+SELECT run_command_on_workers($$CREATE USER typeuser;$$);
 
 -- single statement transactions with a simple type used in a table
 CREATE TYPE tc1 AS (a int, b int);
@@ -83,6 +85,16 @@ INSERT INTO t5 VALUES (1, NULL, 'a', 'd', (1,2)::tc6);
 ALTER TYPE tc6 RENAME ATTRIBUTE b TO c;
 SELECT (e::tc6).c FROM t5 ORDER BY 1;
 
+-- change owner of supported types and check ownership on remote server
+ALTER TYPE te4 OWNER TO typeuser;
+ALTER TYPE tc6 OWNER TO typeuser;
+
+\c - - - :worker_1_port
+\dT+ type_tests.te4
+\dT+ type_tests.tc6
+\c - - - :master_port
+SET search_path TO type_tests;
+
 -- deleting the enum cascade will remove the type from the table and the workers
 DROP TYPE te3 CASCADE;
 
@@ -92,4 +104,8 @@ DROP TYPE tc3, tc4, tc5 CASCADE;
 -- clear objects
 SET client_min_messages TO fatal; -- suppress cascading objects dropping
 DROP SCHEMA type_tests CASCADE;
+SELECT run_command_on_workers($$DROP SCHEMA type_tests CASCADE;$$);
 DROP SCHEMA type_tests2 CASCADE;
+SELECT run_command_on_workers($$DROP SCHEMA type_tests2 CASCADE;$$);
+DROP USER typeuser;
+SELECT run_command_on_workers($$DROP USER typeuser;$$);

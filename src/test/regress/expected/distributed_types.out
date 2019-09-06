@@ -3,6 +3,16 @@ CREATE SCHEMA type_tests;
 CREATE SCHEMA type_tests2; -- to test creation in a specific schema and moving to schema
 SET search_path TO type_tests;
 SET citus.shard_count TO 4;
+CREATE USER typeuser;
+NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
+HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
+SELECT run_command_on_workers($$CREATE USER typeuser;$$);
+      run_command_on_workers       
+-----------------------------------
+ (localhost,57637,t,"CREATE ROLE")
+ (localhost,57638,t,"CREATE ROLE")
+(2 rows)
+
 -- single statement transactions with a simple type used in a table
 CREATE TYPE tc1 AS (a int, b int);
 CREATE TABLE t1 (a int PRIMARY KEY, b tc1);
@@ -123,6 +133,27 @@ SELECT (e::tc6).c FROM t5 ORDER BY 1;
  2
 (1 row)
 
+-- change owner of supported types and check ownership on remote server
+ALTER TYPE te4 OWNER TO typeuser;
+ALTER TYPE tc6 OWNER TO typeuser;
+\c - - - :worker_1_port
+\dT+ type_tests.te4
+                                             List of data types
+   Schema   |      Name      | Internal name | Size | Elements |  Owner   | Access privileges | Description 
+------------+----------------+---------------+------+----------+----------+-------------------+-------------
+ type_tests | type_tests.te4 | te4           | 4    | c       +| typeuser |                   | 
+            |                |               |      | d        |          |                   | 
+(1 row)
+
+\dT+ type_tests.tc6
+                                             List of data types
+   Schema   |      Name      | Internal name | Size  | Elements |  Owner   | Access privileges | Description 
+------------+----------------+---------------+-------+----------+----------+-------------------+-------------
+ type_tests | type_tests.tc6 | tc6           | tuple |          | typeuser |                   | 
+(1 row)
+
+\c - - - :master_port
+SET search_path TO type_tests;
 -- deleting the enum cascade will remove the type from the table and the workers
 DROP TYPE te3 CASCADE;
 NOTICE:  drop cascades to column c of table t5
@@ -132,4 +163,26 @@ NOTICE:  drop cascades to column b of table t5
 -- clear objects
 SET client_min_messages TO fatal; -- suppress cascading objects dropping
 DROP SCHEMA type_tests CASCADE;
+SELECT run_command_on_workers($$DROP SCHEMA type_tests CASCADE;$$);
+      run_command_on_workers       
+-----------------------------------
+ (localhost,57637,t,"DROP SCHEMA")
+ (localhost,57638,t,"DROP SCHEMA")
+(2 rows)
+
 DROP SCHEMA type_tests2 CASCADE;
+SELECT run_command_on_workers($$DROP SCHEMA type_tests2 CASCADE;$$);
+      run_command_on_workers       
+-----------------------------------
+ (localhost,57637,t,"DROP SCHEMA")
+ (localhost,57638,t,"DROP SCHEMA")
+(2 rows)
+
+DROP USER typeuser;
+SELECT run_command_on_workers($$DROP USER typeuser;$$);
+     run_command_on_workers      
+---------------------------------
+ (localhost,57637,t,"DROP ROLE")
+ (localhost,57638,t,"DROP ROLE")
+(2 rows)
+

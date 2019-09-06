@@ -132,6 +132,7 @@ extern List * PlanRenameTypeStmt(RenameStmt *stmt, const char *queryString);
 extern List * PlanRenameTypeAttributeStmt(RenameStmt *stmt, const char *queryString);
 extern List * PlanAlterTypeSchemaStmt(AlterObjectSchemaStmt *stmt,
 									  const char *queryString);
+extern List * PlanAlterTypeOwnerStmt(AlterOwnerStmt *stmt, const char *queryString);
 extern void ProcessAlterTypeSchemaStmt(AlterObjectSchemaStmt *stmt,
 									   const char *queryString);
 extern Node * CreateTypeStmtByObjectAddress(const ObjectAddress *address);
@@ -149,6 +150,8 @@ extern const ObjectAddress * AlterTypeSchemaStmtObjectAddress(AlterObjectSchemaS
 															  bool missing_ok);
 extern const ObjectAddress * RenameTypeAttributeStmtObjectAddress(RenameStmt *stmt,
 																  bool missing_ok);
+extern const ObjectAddress * AlterTypeOwnerObjectAddress(AlterOwnerStmt *stmt,
+														 bool missing_ok);
 extern DropStmt * CompositeTypeStmtToDrop(CompositeTypeStmt *stmt);
 extern DropStmt * CreateEnumStmtToDrop(CreateEnumStmt *stmt);
 extern List * CreateTypeDDLCommandsIdempotent(const ObjectAddress *typeAddress);

@@ -11,6 +11,8 @@ static const ObjectAddress * AlterObjectSchemaStmtObjectAddress(
 	AlterObjectSchemaStmt *stmt, bool missing_ok);
 static const ObjectAddress * RenameAttributeStmtObjectAddress(RenameStmt *stmt,
 															  bool missing_ok);
+static const ObjectAddress * AlterOwnerStmtObjectAddress(AlterOwnerStmt *stmt,
+														 bool missing_ok);
 
 
 /*
@@ -55,6 +57,12 @@ GetObjectAddressFromParseTree(Node *parseTree, bool missing_ok)
 		{
 			return AlterObjectSchemaStmtObjectAddress(castNode(AlterObjectSchemaStmt,
 															   parseTree), missing_ok);
+		}
+
+		case T_AlterOwnerStmt:
+		{
+			return AlterOwnerStmtObjectAddress(castNode(AlterOwnerStmt, parseTree),
+											   missing_ok);
 		}
 
 		default:
@@ -148,6 +156,25 @@ RenameAttributeStmtObjectAddress(RenameStmt *stmt, bool missing_ok)
 		{
 			ereport(ERROR, (errmsg("unsupported alter rename attribute statement to get "
 								   "object address for")));
+		}
+	}
+}
+
+
+static const ObjectAddress *
+AlterOwnerStmtObjectAddress(AlterOwnerStmt *stmt, bool missing_ok)
+{
+	switch (stmt->objectType)
+	{
+		case OBJECT_TYPE:
+		{
+			return AlterTypeOwnerObjectAddress(stmt, missing_ok);
+		}
+
+		default:
+		{
+			ereport(ERROR, (errmsg("unsupported alter owner statement to get object "
+								   "address for")));
 		}
 	}
 }
