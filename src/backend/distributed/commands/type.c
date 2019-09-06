@@ -340,6 +340,8 @@ PlanAlterEnumStmt(AlterEnumStmt *stmt, const char *queryString)
 	/* TODO this is not needed anymore for pg12, alter enum can actually run in a xact */
 	if (AlterEnumIsAddValue(stmt))
 	{
+		int result = 0;
+
 		/*
 		 * ADD VALUE can't be executed in a transaction, we will execute optimistically
 		 * and on an error we will advise to fix the issue with the worker and rerun the
@@ -347,10 +349,10 @@ PlanAlterEnumStmt(AlterEnumStmt *stmt, const char *queryString)
 		 * might already be added to some nodes, but not all.
 		 */
 
-		/* TODO function name is unwieldly long, and runs serially which is not nice */
 		commands = list_make2(DISABLE_DDL_PROPAGATION, (void *) alterEnumStmtSql);
-		int result =
-			SendBareOptionalCommandListToWorkersAsUser(ALL_WORKERS, commands, NULL);
+
+		/* TODO function name is unwieldly long, and runs serially which is not nice */
+		result = SendBareOptionalCommandListToWorkersAsUser(ALL_WORKERS, commands, NULL);
 
 		if (result != RESPONSE_OKAY)
 		{
