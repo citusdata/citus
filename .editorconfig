@@ -2,6 +2,13 @@
 root = true
 
 # rules for all files
+# we use tabs with indent size 4
 [*]
-indent_style = tab # we use tabs
-indent_size = 4    # of size four
+indent_style = tab
+indent_size = 4
+tab_width = 4
+
+[*.sql]
+indent_style = space
+indent_size = 4
+tab_width = 4
