@@ -1,11 +1,12 @@
 SET citus.next_shard_id TO 20010000;
 
-CREATE SCHEMA type_tests;
-CREATE SCHEMA type_tests2; -- to test creation in a specific schema and moving to schema
-SET search_path TO type_tests;
-SET citus.shard_count TO 4;
 CREATE USER typeuser;
 SELECT run_command_on_workers($$CREATE USER typeuser;$$);
+
+CREATE SCHEMA type_tests AUTHORIZATION typeuser;
+CREATE SCHEMA type_tests2 AUTHORIZATION typeuser; -- to test creation in a specific schema and moving to schema
+SET search_path TO type_tests;
+SET citus.shard_count TO 4;
 
 -- single statement transactions with a simple type used in a table
 CREATE TYPE tc1 AS (a int, b int);
@@ -87,13 +88,31 @@ SELECT (e::tc6).c FROM t5 ORDER BY 1;
 
 -- change owner of supported types and check ownership on remote server
 ALTER TYPE te4 OWNER TO typeuser;
-ALTER TYPE tc6 OWNER TO typeuser;
+SELECT typname, usename FROM pg_type, pg_user where typname = 'te4' and typowner = usesysid;
+SELECT run_command_on_workers($$SELECT row(typname, usename) FROM pg_type, pg_user where typname = 'te4' and typowner = usesysid;$$);
 
-\c - - - :worker_1_port
-\dT+ type_tests.te4
-\dT+ type_tests.tc6
-\c - - - :master_port
+ALTER TYPE tc6 OWNER TO typeuser;
+SELECT typname, usename FROM pg_type, pg_user where typname = 'tc6' and typowner = usesysid;
+SELECT run_command_on_workers($$SELECT row(typname, usename) FROM pg_type, pg_user where typname = 'tc6' and typowner = usesysid;$$);
+
+-- create a type as a different user
+SET ROLE typeuser;
 SET search_path TO type_tests;
+SET citus.enable_ddl_propagation TO off;
+CREATE TYPE tc7 AS (a int, b int);
+CREATE TYPE te5 AS ENUM ('a','b','c');
+RESET citus.enable_ddl_propagation;
+
+CREATE TABLE t6 (a int, b tc7, c te5);
+SELECT create_distributed_table('t6', 'a');
+RESET ROLE;
+
+SELECT typname, usename FROM pg_type, pg_user where typname = 'tc7' and typowner = usesysid;
+SELECT run_command_on_workers($$SELECT row(typname, usename) FROM pg_type, pg_user where typname = 'tc7' and typowner = usesysid;$$);
+
+SELECT typname, usename FROM pg_type, pg_user where typname = 'te5' and typowner = usesysid;
+SELECT run_command_on_workers($$SELECT row(typname, usename) FROM pg_type, pg_user where typname = 'te5' and typowner = usesysid;$$);
+
 
 -- deleting the enum cascade will remove the type from the table and the workers
 DROP TYPE te3 CASCADE;
