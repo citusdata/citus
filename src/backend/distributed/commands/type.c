@@ -95,7 +95,7 @@ static List * composite_type_coldeflist(Oid typeOid);
 static CreateEnumStmt * RecreateEnumStmt(Oid typeOid);
 static List * enum_vals_list(Oid typeOid);
 
-static bool ShouldPropagateTypeCreate();
+static bool ShouldPropagateTypeCreate(void);
 
 
 List *
