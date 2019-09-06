@@ -164,12 +164,15 @@ SELECT run_command_on_workers($$SELECT row(typname, usename) FROM pg_type, pg_us
 
 -- create a type as a different user
 SET ROLE typeuser;
-SET search_path TO type_tests;
-SET citus.enable_ddl_propagation TO off;
+-- create directly on the worker
 CREATE TYPE tc7 AS (a int, b int);
 CREATE TYPE te5 AS ENUM ('a','b','c');
+-- cascade to the worker when table gets created
+SET citus.enable_ddl_propagation TO off;
+CREATE TYPE tc8 AS (a int, b int);
+CREATE TYPE te6 AS ENUM ('a','b','c');
 RESET citus.enable_ddl_propagation;
-CREATE TABLE t6 (a int, b tc7, c te5);
+CREATE TABLE t6 (a int, b tc8, c te6);
 SELECT create_distributed_table('t6', 'a');
  create_distributed_table 
 --------------------------
@@ -177,6 +180,7 @@ SELECT create_distributed_table('t6', 'a');
 (1 row)
 
 RESET ROLE;
+--  test ownership of all types
 SELECT typname, usename FROM pg_type, pg_user where typname = 'tc7' and typowner = usesysid;
  typname | usename  
 ---------+----------
@@ -201,6 +205,32 @@ SELECT run_command_on_workers($$SELECT row(typname, usename) FROM pg_type, pg_us
 --------------------------------------
  (localhost,57637,t,"(te5,typeuser)")
  (localhost,57638,t,"(te5,typeuser)")
+(2 rows)
+
+SELECT typname, usename FROM pg_type, pg_user where typname = 'tc8' and typowner = usesysid;
+ typname | usename  
+---------+----------
+ tc8     | typeuser
+(1 row)
+
+SELECT run_command_on_workers($$SELECT row(typname, usename) FROM pg_type, pg_user where typname = 'tc8' and typowner = usesysid;$$);
+        run_command_on_workers        
+--------------------------------------
+ (localhost,57637,t,"(tc8,typeuser)")
+ (localhost,57638,t,"(tc8,typeuser)")
+(2 rows)
+
+SELECT typname, usename FROM pg_type, pg_user where typname = 'te6' and typowner = usesysid;
+ typname | usename  
+---------+----------
+ te6     | typeuser
+(1 row)
+
+SELECT run_command_on_workers($$SELECT row(typname, usename) FROM pg_type, pg_user where typname = 'te6' and typowner = usesysid;$$);
+        run_command_on_workers        
+--------------------------------------
+ (localhost,57637,t,"(te6,typeuser)")
+ (localhost,57638,t,"(te6,typeuser)")
 (2 rows)
 
 -- deleting the enum cascade will remove the type from the table and the workers

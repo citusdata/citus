@@ -97,21 +97,31 @@ SELECT run_command_on_workers($$SELECT row(typname, usename) FROM pg_type, pg_us
 
 -- create a type as a different user
 SET ROLE typeuser;
-SET search_path TO type_tests;
-SET citus.enable_ddl_propagation TO off;
+-- create directly on the worker
 CREATE TYPE tc7 AS (a int, b int);
 CREATE TYPE te5 AS ENUM ('a','b','c');
-RESET citus.enable_ddl_propagation;
 
-CREATE TABLE t6 (a int, b tc7, c te5);
+-- cascade to the worker when table gets created
+SET citus.enable_ddl_propagation TO off;
+CREATE TYPE tc8 AS (a int, b int);
+CREATE TYPE te6 AS ENUM ('a','b','c');
+RESET citus.enable_ddl_propagation;
+CREATE TABLE t6 (a int, b tc8, c te6);
 SELECT create_distributed_table('t6', 'a');
 RESET ROLE;
 
+--  test ownership of all types
 SELECT typname, usename FROM pg_type, pg_user where typname = 'tc7' and typowner = usesysid;
 SELECT run_command_on_workers($$SELECT row(typname, usename) FROM pg_type, pg_user where typname = 'tc7' and typowner = usesysid;$$);
 
 SELECT typname, usename FROM pg_type, pg_user where typname = 'te5' and typowner = usesysid;
 SELECT run_command_on_workers($$SELECT row(typname, usename) FROM pg_type, pg_user where typname = 'te5' and typowner = usesysid;$$);
+
+SELECT typname, usename FROM pg_type, pg_user where typname = 'tc8' and typowner = usesysid;
+SELECT run_command_on_workers($$SELECT row(typname, usename) FROM pg_type, pg_user where typname = 'tc8' and typowner = usesysid;$$);
+
+SELECT typname, usename FROM pg_type, pg_user where typname = 'te6' and typowner = usesysid;
+SELECT run_command_on_workers($$SELECT row(typname, usename) FROM pg_type, pg_user where typname = 'te6' and typowner = usesysid;$$);
 
 
 -- deleting the enum cascade will remove the type from the table and the workers
