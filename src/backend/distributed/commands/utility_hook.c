@@ -41,6 +41,7 @@
 #include "distributed/commands.h"
 #include "distributed/commands/multi_copy.h"
 #include "distributed/commands/utility_hook.h" /* IWYU pragma: keep */
+#include "distributed/listutils.h"
 #include "distributed/local_executor.h"
 #include "distributed/maintenanced.h"
 #include "distributed/master_protocol.h"
@@ -382,8 +383,7 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 
 		if (IsA(parsetree, AlterEnumStmt))
 		{
-			AlterEnumStmt *alterEnumStmt = (AlterEnumStmt *) parsetree;
-			ddlJobs = PlanAlterEnumStmt(alterEnumStmt, queryString);
+			ddlJobs = PlanAlterEnumStmt(castNode(AlterEnumStmt, parsetree), queryString);
 		}
 
 		if (IsA(parsetree, AlterTableStmt))
@@ -444,8 +444,8 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		 */
 		if (IsA(parsetree, AlterObjectSchemaStmt))
 		{
-			AlterObjectSchemaStmt *setSchemaStmt = (AlterObjectSchemaStmt *) parsetree;
-			ddlJobs = PlanAlterObjectSchemaStmt(setSchemaStmt, queryString);
+			ddlJobs = PlanAlterObjectSchemaStmt(
+				castNode(AlterObjectSchemaStmt, parsetree), queryString);
 		}
 
 		if (IsA(parsetree, GrantStmt))
@@ -467,6 +467,18 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		if (IsA(parsetree, AlterPolicyStmt))
 		{
 			ddlJobs = PlanAlterPolicyStmt((AlterPolicyStmt *) parsetree);
+		}
+
+		if (IsA(parsetree, CompositeTypeStmt))
+		{
+			ddlJobs = PlanCompositeTypeStmt(castNode(CompositeTypeStmt, parsetree),
+											queryString);
+		}
+
+		if (IsA(parsetree, CreateEnumStmt))
+		{
+			ddlJobs = PlanCreateEnumStmt(castNode(CreateEnumStmt, parsetree),
+										 queryString);
 		}
 
 		/*
@@ -593,14 +605,12 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 	{
 		if (IsA(parsetree, CompositeTypeStmt))
 		{
-			CompositeTypeStmt *compositeTypeStmt = (CompositeTypeStmt *) parsetree;
-			PlanCompositeTypeStmt(compositeTypeStmt, queryString);
+			ProcessCompositeTypeStmt(castNode(CompositeTypeStmt, parsetree), queryString);
 		}
 
 		if (IsA(parsetree, CreateEnumStmt))
 		{
-			CreateEnumStmt *createEnumStmt = (CreateEnumStmt *) parsetree;
-			PlanCreateEnumStmt(createEnumStmt, queryString);
+			ProcessCreateEnumStmt(castNode(CreateEnumStmt, parsetree), queryString);
 		}
 
 		if (IsA(parsetree, AlterObjectSchemaStmt))
@@ -737,10 +747,15 @@ PlanAlterOwnerStmt(AlterOwnerStmt *stmt, const char *queryString)
 static void
 ExecuteDistributedDDLJob(DDLJob *ddlJob)
 {
-	bool shouldSyncMetadata = ShouldSyncTableMetadata(ddlJob->targetRelationId);
+	bool shouldSyncMetadata = false;
 
 	EnsureCoordinator();
-	EnsurePartitionTableNotReplicated(ddlJob->targetRelationId);
+
+	if (ddlJob->targetRelationId != InvalidOid)
+	{
+		shouldSyncMetadata = ShouldSyncTableMetadata(ddlJob->targetRelationId);
+		EnsurePartitionTableNotReplicated(ddlJob->targetRelationId);
+	}
 
 	if (!ddlJob->concurrentIndexCmd)
 	{
@@ -970,6 +985,46 @@ DDLTaskList(Oid relationId, const char *commandString)
 	}
 
 	return taskList;
+}
+
+
+/*
+ * NodeDDLTaskList builds a list of tasks to execute a DDL command on a
+ * given target set of nodes.
+ */
+List *
+NodeDDLTaskList(TargetWorkerSet targets, List *commands)
+{
+	List *workerNodes = TargetWorkerSetNodeList(targets);
+	char *concatenatedCommands = StringJoin(commands, ';');
+	DDLJob *ddlJob = NULL;
+	ListCell *workerNodeCell = NULL;
+	Task *task = NULL;
+
+	task = CitusMakeNode(Task);
+	task->taskType = DDL_TASK;
+	task->queryString = concatenatedCommands;
+
+	foreach(workerNodeCell, workerNodes)
+	{
+		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
+		ShardPlacement *targetPlacement = NULL;
+
+		targetPlacement = CitusMakeNode(ShardPlacement);
+		targetPlacement->nodeName = workerNode->workerName;
+		targetPlacement->nodePort = workerNode->workerPort;
+		targetPlacement->groupId = workerNode->groupId;
+
+		task->taskPlacementList = lappend(task->taskPlacementList, targetPlacement);
+	}
+
+	ddlJob = palloc0(sizeof(DDLJob));
+	ddlJob->targetRelationId = InvalidOid;
+	ddlJob->concurrentIndexCmd = false;
+	ddlJob->commandString = NULL;
+	ddlJob->taskList = list_make1(task);
+
+	return list_make1(ddlJob);
 }
 
 

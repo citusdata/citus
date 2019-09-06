@@ -16,6 +16,7 @@
 #include "tcop/utility.h"
 
 #include "distributed/version_compat.h"
+#include "distributed/worker_transaction.h"
 
 typedef enum
 {
@@ -53,6 +54,7 @@ extern void CitusProcessUtility(Node *node, const char *queryString,
 extern void MarkInvalidateForeignKeyGraph(void);
 extern void InvalidateForeignKeyGraphForDDL(void);
 extern List * DDLTaskList(Oid relationId, const char *commandString);
+extern List * NodeDDLTaskList(TargetWorkerSet targets, List *commands);
 extern bool AlterTableInProgress(void);
 
 #endif /* MULTI_UTILITY_H */

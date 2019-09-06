@@ -439,7 +439,10 @@ RecordRelationParallelDDLAccessForTask(Task *task)
 		lastRelationId = currentRelationId;
 	}
 
-	RecordParallelDDLAccess(RelationIdForShard(task->anchorShardId));
+	if (task->anchorShardId != INVALID_SHARD_ID)
+	{
+		RecordParallelDDLAccess(RelationIdForShard(task->anchorShardId));
+	}
 }
 
 

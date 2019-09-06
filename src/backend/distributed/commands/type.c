@@ -95,28 +95,16 @@ static List * composite_type_coldeflist(Oid typeOid);
 static CreateEnumStmt * RecreateEnumStmt(Oid typeOid);
 static List * enum_vals_list(Oid typeOid);
 
+static bool ShouldPropagateTypeCreate();
+
 
 List *
 PlanCompositeTypeStmt(CompositeTypeStmt *stmt, const char *queryString)
 {
 	const char *compositeTypeStmtSql = NULL;
-	const ObjectAddress *typeAddress = NULL;
+	List *commands = NIL;
 
-	if (creating_extension)
-	{
-		/*
-		 * extensions should be created separately on the workers, types cascading from an
-		 * extension should therefor not be propagated here.
-		 */
-		return NIL;
-	}
-
-	/*
-	 * by not propagating in a transaction block we allow for parallelism to be used when
-	 * this type will be used as a column in a table that will be created and distributed
-	 * in this same transaction.
-	 */
-	if (IsTransactionBlock())
+	if (!ShouldPropagateTypeCreate())
 	{
 		return NIL;
 	}
@@ -140,10 +128,6 @@ PlanCompositeTypeStmt(CompositeTypeStmt *stmt, const char *queryString)
 	/* fully qualify before lookup and later deparsing */
 	QualifyTreeNode((Node *) stmt);
 
-	/* find object address of just created object, should not be missing now */
-	typeAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
-	EnsureDependenciesExistsOnAllNodes(typeAddress);
-
 	/*
 	 * reconstruct creation statement in a portable fashion. The create_or_replace helper
 	 * function will be used to create the type in an idempotent manner on the workers.
@@ -161,19 +145,38 @@ PlanCompositeTypeStmt(CompositeTypeStmt *stmt, const char *queryString)
 	 */
 	EnsureSequentialModeForTypeDDL();
 
-	/* to prevent recursion with mx we disable ddl propagation */
-	/* TODO, mx expects the extension owner to be used here, this requires an alter owner statement as well */
-	SendCommandToWorkersAsUser(ALL_WORKERS, DISABLE_DDL_PROPAGATION, NULL);
-	SendCommandToWorkersAsUser(ALL_WORKERS, compositeTypeStmtSql, NULL);
+	commands = list_make3(DISABLE_DDL_PROPAGATION,
+						  (void *) compositeTypeStmtSql,
+						  ENABLE_DDL_PROPAGATION);
+
+	return NodeDDLTaskList(ALL_WORKERS, commands);
+}
+
+
+/*
+ * ProcessCompositeTypeStmt is executed after the type has been created locally and before
+ * we create it on the remote servers. Here we have access to the ObjectAddress of the new
+ * type which we use to make sure the type's dependencies are on all nodes.
+ */
+void
+ProcessCompositeTypeStmt(CompositeTypeStmt *stmt, const char *queryString)
+{
+	const ObjectAddress *typeAddress = NULL;
+
+	/* same check we perform during planning of the statement */
+	if (!ShouldPropagateTypeCreate())
+	{
+		return;
+	}
 
 	/*
-	 * now that the object has been created and distributed to the workers we mark them as
-	 * distributed so we know to keep them up to date and recreate on a new node in the
-	 * future
+	 * find object address of the just created object, because the type has been created
+	 * locally it can't be missing
 	 */
-	MarkObjectDistributed(typeAddress);
+	typeAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
+	EnsureDependenciesExistsOnAllNodes(typeAddress);
 
-	return NULL;
+	MarkObjectDistributed(typeAddress);
 }
 
 
@@ -185,6 +188,7 @@ PlanAlterTypeStmt(AlterTableStmt *stmt, const char *queryString)
 {
 	const char *alterTypeStmtSql = NULL;
 	const ObjectAddress *typeAddress = NULL;
+	List *commands = NIL;
 
 	Assert(stmt->relkind == OBJECT_TYPE);
 
@@ -212,6 +216,8 @@ PlanAlterTypeStmt(AlterTableStmt *stmt, const char *queryString)
 	QualifyTreeNode((Node *) stmt);
 	alterTypeStmtSql = DeparseTreeNode((Node *) stmt);
 
+	/* TODO needs to have a process step as well to ensure dependencies */
+
 	/*
 	 * all types that are distributed will need their alter statements propagated
 	 * regardless if in a transaction or not. If we would not propagate the alter
@@ -219,11 +225,11 @@ PlanAlterTypeStmt(AlterTableStmt *stmt, const char *queryString)
 	 */
 	EnsureSequentialModeForTypeDDL();
 
-	/* TODO, mx expects the extension owner to be used here, this requires an alter owner statement as well */
-	SendCommandToWorkersAsUser(ALL_WORKERS, DISABLE_DDL_PROPAGATION, NULL);
-	SendCommandToWorkersAsUser(ALL_WORKERS, alterTypeStmtSql, NULL);
+	commands = list_make3(DISABLE_DDL_PROPAGATION,
+						  (void *) alterTypeStmtSql,
+						  ENABLE_DDL_PROPAGATION);
 
-	return NULL;
+	return NodeDDLTaskList(ALL_WORKERS, commands);
 }
 
 
@@ -231,24 +237,10 @@ List *
 PlanCreateEnumStmt(CreateEnumStmt *stmt, const char *queryString)
 {
 	const char *createEnumStmtSql = NULL;
-	const ObjectAddress *typeAddress = NULL;
+	List *commands = NIL;
 
-	/*
-	 * by not propagating in a transaction block we allow for parallelism to be used when
-	 * this type will be used as a column in a table that will be created and distributed
-	 * in this same transaction.
-	 */
-	if (IsTransactionBlock())
+	if (!ShouldPropagateTypeCreate())
 	{
-		return NIL;
-	}
-
-	if (creating_extension)
-	{
-		/*
-		 * extensions should be created separately on the workers, types cascading from an
-		 * extension should therefor not be propagated here.
-		 */
 		return NIL;
 	}
 
@@ -261,10 +253,6 @@ PlanCreateEnumStmt(CreateEnumStmt *stmt, const char *queryString)
 	/* enforce fully qualified typeName for correct deparsing and lookup */
 	QualifyTreeNode((Node *) stmt);
 
-	/* lookup type address of just created type */
-	typeAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
-	EnsureDependenciesExistsOnAllNodes(typeAddress);
-
 	/* reconstruct creation statement in a portable fashion */
 	createEnumStmtSql = deparse_create_enum_stmt(stmt);
 	createEnumStmtSql = wrap_in_sql(CREATE_OR_REPLACE_COMMAND, createEnumStmtSql);
@@ -276,9 +264,27 @@ PlanCreateEnumStmt(CreateEnumStmt *stmt, const char *queryString)
 	EnsureSequentialModeForTypeDDL();
 
 	/* to prevent recursion with mx we disable ddl propagation */
-	/* TODO, mx expects the extension owner to be used here, this requires an alter owner statement as well */
-	SendCommandToWorkersAsUser(ALL_WORKERS, DISABLE_DDL_PROPAGATION, NULL);
-	SendCommandToWorkersAsUser(ALL_WORKERS, createEnumStmtSql, NULL);
+	commands = list_make3(DISABLE_DDL_PROPAGATION,
+						  (void *) createEnumStmtSql,
+						  ENABLE_DDL_PROPAGATION);
+
+	return NodeDDLTaskList(ALL_WORKERS, commands);
+}
+
+
+void
+ProcessCreateEnumStmt(CreateEnumStmt *stmt, const char *queryString)
+{
+	const ObjectAddress *typeAddress = NULL;
+
+	if (!ShouldPropagateTypeCreate())
+	{
+		return;
+	}
+
+	/* lookup type address of just created type */
+	typeAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
+	EnsureDependenciesExistsOnAllNodes(typeAddress);
 
 	/*
 	 * now that the object has been created and distributed to the workers we mark them as
@@ -286,8 +292,6 @@ PlanCreateEnumStmt(CreateEnumStmt *stmt, const char *queryString)
 	 * future
 	 */
 	MarkObjectDistributed(typeAddress);
-
-	return NULL;
 }
 
 
@@ -299,6 +303,7 @@ PlanAlterEnumStmt(AlterEnumStmt *stmt, const char *queryString)
 {
 	const char *alterEnumStmtSql = NULL;
 	const ObjectAddress *typeAddress = NULL;
+	List *commands = NIL;
 
 	if (creating_extension)
 	{
@@ -331,6 +336,8 @@ PlanAlterEnumStmt(AlterEnumStmt *stmt, const char *queryString)
 
 	QualifyTreeNode((Node *) stmt);
 	alterEnumStmtSql = DeparseTreeNode((Node *) stmt);
+
+	/* TODO this is not needed anymore for pg12, alter enum can actually run in a xact */
 	if (AlterEnumIsAddValue(stmt))
 	{
 		/*
@@ -341,7 +348,7 @@ PlanAlterEnumStmt(AlterEnumStmt *stmt, const char *queryString)
 		 */
 
 		/* TODO function name is unwieldly long, and runs serially which is not nice */
-		List *commands = list_make2(DISABLE_DDL_PROPAGATION, (void *) alterEnumStmtSql);
+		commands = list_make2(DISABLE_DDL_PROPAGATION, (void *) alterEnumStmtSql);
 		int result =
 			SendBareOptionalCommandListToWorkersAsUser(ALL_WORKERS, commands, NULL);
 
@@ -360,14 +367,15 @@ PlanAlterEnumStmt(AlterEnumStmt *stmt, const char *queryString)
 							  errhint("make sure the coordinators can communicate with "
 									  "all workers")));
 		}
-	}
-	else
-	{
-		SendCommandToWorkersAsUser(ALL_WORKERS, DISABLE_DDL_PROPAGATION, NULL);
-		SendCommandToWorkersAsUser(ALL_WORKERS, alterEnumStmtSql, NULL);
+
+		return NIL;
 	}
 
-	return NIL;
+	commands = list_make3(DISABLE_DDL_PROPAGATION,
+						  (void *) alterEnumStmtSql,
+						  ENABLE_DDL_PROPAGATION);
+
+	return NodeDDLTaskList(ALL_WORKERS, commands);
 }
 
 
@@ -388,6 +396,7 @@ PlanDropTypeStmt(DropStmt *stmt, const char *queryString)
 	const char *dropStmtSql = NULL;
 	ListCell *addressCell = NULL;
 	List *distributedTypeAddresses = NIL;
+	List *commands = NIL;
 
 	if (creating_extension)
 	{
@@ -398,6 +407,13 @@ PlanDropTypeStmt(DropStmt *stmt, const char *queryString)
 		return NIL;
 	}
 
+	distributedTypes = FilterNameListForDistributedTypes(oldTypes, stmt->missing_ok);
+	if (list_length(distributedTypes) <= 0)
+	{
+		/* no distributed types to drop */
+		return NIL;
+	}
+
 	/*
 	 * managing types can only be done on the coordinator if ddl propagation is on. when
 	 * it is off we will never get here. MX workers don't have a notion of distributed
@@ -405,11 +421,14 @@ PlanDropTypeStmt(DropStmt *stmt, const char *queryString)
 	 */
 	EnsureCoordinator();
 
-	distributedTypes = FilterNameListForDistributedTypes(oldTypes, stmt->missing_ok);
-	if (list_length(distributedTypes) <= 0)
+	/*
+	 * remove the entries for the distributed objects on dropping
+	 */
+	distributedTypeAddresses = TypeNameListToObjectAddresses(distributedTypes);
+	foreach(addressCell, distributedTypeAddresses)
 	{
-		/* no distributed types to drop */
-		return NULL;
+		ObjectAddress *address = (ObjectAddress *) lfirst(addressCell);
+		UnmarkObjectDistributed(address);
 	}
 
 	/*
@@ -422,20 +441,12 @@ PlanDropTypeStmt(DropStmt *stmt, const char *queryString)
 
 	/* to prevent recursion with mx we disable ddl propagation */
 	EnsureSequentialModeForTypeDDL();
-	SendCommandToWorkersAsUser(ALL_WORKERS, DISABLE_DDL_PROPAGATION, NULL);
-	SendCommandToWorkersAsUser(ALL_WORKERS, dropStmtSql, NULL);
 
-	/*
-	 * remove the entries for the distributed objects on dropping
-	 */
-	distributedTypeAddresses = TypeNameListToObjectAddresses(distributedTypes);
-	foreach(addressCell, distributedTypeAddresses)
-	{
-		ObjectAddress *address = (ObjectAddress *) lfirst(addressCell);
-		UnmarkObjectDistributed(address);
-	}
+	commands = list_make3(DISABLE_DDL_PROPAGATION,
+						  (void *) dropStmtSql,
+						  ENABLE_DDL_PROPAGATION);
 
-	return NULL;
+	return NodeDDLTaskList(ALL_WORKERS, commands);
 }
 
 
@@ -444,6 +455,7 @@ PlanRenameTypeStmt(RenameStmt *stmt, const char *queryString)
 {
 	const char *renameStmtSql = NULL;
 	const ObjectAddress *typeAddress = NULL;
+	List *commands = NIL;
 
 	typeAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
 	if (!IsObjectDistributed(typeAddress))
@@ -473,10 +485,12 @@ PlanRenameTypeStmt(RenameStmt *stmt, const char *queryString)
 
 	/* to prevent recursion with mx we disable ddl propagation */
 	EnsureSequentialModeForTypeDDL();
-	SendCommandToWorkersAsUser(ALL_WORKERS, DISABLE_DDL_PROPAGATION, NULL);
-	SendCommandToWorkersAsUser(ALL_WORKERS, renameStmtSql, NULL);
 
-	return NIL;
+	commands = list_make3(DISABLE_DDL_PROPAGATION,
+						  (void *) renameStmtSql,
+						  ENABLE_DDL_PROPAGATION);
+
+	return NodeDDLTaskList(ALL_WORKERS, commands);
 }
 
 
@@ -485,6 +499,7 @@ PlanRenameTypeAttributeStmt(RenameStmt *stmt, const char *queryString)
 {
 	const char *sql = NULL;
 	const ObjectAddress *address = NULL;
+	List *commands = NIL;
 
 	Assert(stmt->renameType == OBJECT_ATTRIBUTE);
 	Assert(stmt->relationType == OBJECT_TYPE);
@@ -513,10 +528,11 @@ PlanRenameTypeAttributeStmt(RenameStmt *stmt, const char *queryString)
 	sql = DeparseTreeNode((Node *) stmt);
 
 	EnsureSequentialModeForTypeDDL();
-	SendCommandToWorkersAsUser(ALL_WORKERS, DISABLE_DDL_PROPAGATION, NULL);
-	SendCommandToWorkersAsUser(ALL_WORKERS, sql, NULL);
+	commands = list_make3(DISABLE_DDL_PROPAGATION,
+						  (void *) sql,
+						  ENABLE_DDL_PROPAGATION);
 
-	return NIL;
+	return NodeDDLTaskList(ALL_WORKERS, commands);
 }
 
 
@@ -524,27 +540,53 @@ PlanRenameTypeAttributeStmt(RenameStmt *stmt, const char *queryString)
  * PlanAlterTypeSchemaStmt is executed before the statement is applied to the local
  * postgres instance.
  *
- * As the change has not been made yet we can now still resolve the original schema and
- * set that on the TreeNode via QualifyTreeNode. This will be used during deparsing in
- * ProcessAlterTypeStmt which is executed after the command has been applied locally.
+ * In this stage we can prepare the commands that need to be run on all workers.
  */
 List *
 PlanAlterTypeSchemaStmt(AlterObjectSchemaStmt *stmt, const char *queryString)
 {
-	/*
-	 * we can safely do this for all types, if it was not distributed we will skip
-	 * deparsing during post processing
-	 */
-	QualifyTreeNode((Node *) stmt);
+	const char *sql = NULL;
+	const ObjectAddress *typeAddress = NULL;
+	List *commands = NIL;
 
-	return NIL;
+	Assert(stmt->objectType == OBJECT_TYPE);
+
+	if (creating_extension)
+	{
+		/* types from extensions are managed by extensions, skipping */
+		return NIL;
+	}
+
+	typeAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
+	if (!IsObjectDistributed(typeAddress))
+	{
+		/* not distributed to the workers, nothing to do */
+		return NIL;
+	}
+
+	EnsureCoordinator();
+
+	QualifyTreeNode((Node *) stmt);
+	sql = DeparseTreeNode((Node *) stmt);
+
+	EnsureSequentialModeForTypeDDL();
+
+	commands = list_make3(DISABLE_DDL_PROPAGATION,
+						  (void *) sql,
+						  ENABLE_DDL_PROPAGATION);
+
+	return NodeDDLTaskList(ALL_WORKERS, commands);
 }
 
 
+/*
+ * ProcessAlterTypeSchemaStmt is executed after the change has been applied locally, we
+ * can now use the new dependencies of the type to ensure all its dependencies exist on
+ * the workers before we apply the commands remotely.
+ */
 void
 ProcessAlterTypeSchemaStmt(AlterObjectSchemaStmt *stmt, const char *queryString)
 {
-	const char *sql = NULL;
 	const ObjectAddress *typeAddress = NULL;
 
 	Assert(stmt->objectType == OBJECT_TYPE);
@@ -562,17 +604,8 @@ ProcessAlterTypeSchemaStmt(AlterObjectSchemaStmt *stmt, const char *queryString)
 		return;
 	}
 
-	EnsureCoordinator();
-
 	/* dependencies have changed (schema) lets ensure they exist */
 	EnsureDependenciesExistsOnAllNodes(typeAddress);
-
-	/* qualification of the tree has already been done in PlanAlterTypeSchemaStmt */
-	sql = DeparseTreeNode((Node *) stmt);
-
-	EnsureSequentialModeForTypeDDL();
-	SendCommandToWorkersAsUser(ALL_WORKERS, DISABLE_DDL_PROPAGATION, NULL);
-	SendCommandToWorkersAsUser(ALL_WORKERS, sql, NULL);
 }
 
 
@@ -581,6 +614,7 @@ PlanAlterTypeOwnerStmt(AlterOwnerStmt *stmt, const char *queryString)
 {
 	const ObjectAddress *typeAddress = NULL;
 	const char *sql = NULL;
+	List *commands = NULL;
 
 	Assert(stmt->objectType == OBJECT_TYPE);
 
@@ -602,10 +636,11 @@ PlanAlterTypeOwnerStmt(AlterOwnerStmt *stmt, const char *queryString)
 	sql = DeparseTreeNode((Node *) stmt);
 
 	EnsureSequentialModeForTypeDDL();
-	SendCommandToWorkersAsUser(ALL_WORKERS, DISABLE_DDL_PROPAGATION, NULL);
-	SendCommandToWorkersAsUser(ALL_WORKERS, sql, NULL);
+	commands = list_make3(DISABLE_DDL_PROPAGATION,
+						  (void *) sql,
+						  ENABLE_DDL_PROPAGATION);
 
-	return NIL;
+	return NodeDDLTaskList(ALL_WORKERS, commands);
 }
 
 
@@ -1201,4 +1236,41 @@ EnsureSequentialModeForTypeDDL(void)
 							   "commands see the type correctly we need to make sure to "
 							   "use only one connection for all future commands")));
 	SetLocalMultiShardModifyModeToSequential();
+}
+
+
+/*
+ * ShouldPropagateTypeCreate returns if we should propagate the creation of a type.
+ *
+ * There are two moments we decide to not directly propagate the creation of a type.
+ *  - During the creation of an Extension; we assume the type will be created by creating
+ *    the extension on the worker
+ *  - During a transaction block; if types are used in a distributed table in the same
+ *    block we can only provide parallelism on the table if we do not change to sequentia
+ *    mode. Types will be propagated outside of this transaction to the workers so that
+ *    the transaction can use 1 connection per shard and fully utilize citus' parallelism
+ */
+static bool
+ShouldPropagateTypeCreate()
+{
+	if (creating_extension)
+	{
+		/*
+		 * extensions should be created separately on the workers, types cascading from an
+		 * extension should therefor not be propagated here.
+		 */
+		return false;
+	}
+
+	/*
+	 * by not propagating in a transaction block we allow for parallelism to be used when
+	 * this type will be used as a column in a table that will be created and distributed
+	 * in this same transaction.
+	 */
+	if (IsTransactionBlock())
+	{
+		return false;
+	}
+
+	return true;
 }

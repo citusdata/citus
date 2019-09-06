@@ -239,6 +239,19 @@ NOTICE:  drop cascades to table t5 column c
 -- DELETE multiple types at once
 DROP TYPE tc3, tc4, tc5 CASCADE;
 NOTICE:  drop cascades to table t5 column b
+-- test if the types are deleted
+SELECT typname FROM pg_type, pg_user where typname IN ('te3','tc3','tc4','tc5') and typowner = usesysid ORDER BY typname;
+ typname 
+---------
+(0 rows)
+
+SELECT run_command_on_workers($$SELECT typname FROM pg_type, pg_user where typname IN ('te3','tc3','tc4','tc5') and typowner = usesysid ORDER BY typname;$$);
+ run_command_on_workers 
+------------------------
+ (localhost,57637,t,"")
+ (localhost,57638,t,"")
+(2 rows)
+
 -- clear objects
 SET client_min_messages TO fatal; -- suppress cascading objects dropping
 DROP SCHEMA type_tests CASCADE;
