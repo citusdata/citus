@@ -1047,6 +1047,7 @@ CreateTypeDDLCommandsIdempotent(const ObjectAddress *typeAddress)
 	initStringInfo(&buf);
 	appendStringInfo(&buf, ALTER_TYPE_OWNER_COMMAND, getObjectIdentity(typeAddress),
 					 quote_identifier(username));
+	ddlCommands = lappend(ddlCommands, buf.data);
 
 	return ddlCommands;
 }

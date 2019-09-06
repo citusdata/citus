@@ -186,8 +186,8 @@ SELECT typname, usename FROM pg_type, pg_user where typname = 'tc7' and typowner
 SELECT run_command_on_workers($$SELECT row(typname, usename) FROM pg_type, pg_user where typname = 'tc7' and typowner = usesysid;$$);
         run_command_on_workers        
 --------------------------------------
- (localhost,57637,t,"(tc7,postgres)")
- (localhost,57638,t,"(tc7,postgres)")
+ (localhost,57637,t,"(tc7,typeuser)")
+ (localhost,57638,t,"(tc7,typeuser)")
 (2 rows)
 
 SELECT typname, usename FROM pg_type, pg_user where typname = 'te5' and typowner = usesysid;
@@ -199,8 +199,8 @@ SELECT typname, usename FROM pg_type, pg_user where typname = 'te5' and typowner
 SELECT run_command_on_workers($$SELECT row(typname, usename) FROM pg_type, pg_user where typname = 'te5' and typowner = usesysid;$$);
         run_command_on_workers        
 --------------------------------------
- (localhost,57637,t,"(te5,postgres)")
- (localhost,57638,t,"(te5,postgres)")
+ (localhost,57637,t,"(te5,typeuser)")
+ (localhost,57638,t,"(te5,typeuser)")
 (2 rows)
 
 -- deleting the enum cascade will remove the type from the table and the workers
