@@ -223,7 +223,6 @@ static void CachedRelationNamespaceLookup(const char *relationName, Oid relnames
 										  Oid *cachedOid);
 static ShardPlacement * ResolveGroupShardPlacement(
 	GroupShardPlacement *groupShardPlacement, ShardCacheEntry *shardEntry);
-static WorkerNode * LookupNodeForGroup(int32 groupId);
 static Oid LookupEnumValueId(Oid typeId, char *valueName);
 static void InvalidateEntireDistCache(void);
 
@@ -596,7 +595,7 @@ LookupNodeByNodeId(uint32 nodeId)
  * if we're reading from secondaries). If such a node does not exist it emits an
  * appropriate error message.
  */
-static WorkerNode *
+WorkerNode *
 LookupNodeForGroup(int32 groupId)
 {
 	bool foundAnyNodes = false;
