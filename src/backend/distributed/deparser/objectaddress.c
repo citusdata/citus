@@ -140,7 +140,7 @@ AlterObjectSchemaStmtObjectAddress(AlterObjectSchemaStmt *stmt, bool missing_ok)
 }
 
 
-const ObjectAddress *
+static const ObjectAddress *
 RenameAttributeStmtObjectAddress(RenameStmt *stmt, bool missing_ok)
 {
 	Assert(stmt->renameType == OBJECT_ATTRIBUTE);
