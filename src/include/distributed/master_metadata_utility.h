@@ -14,6 +14,8 @@
 #ifndef MASTER_METADATA_UTILITY_H
 #define MASTER_METADATA_UTILITY_H
 
+#include "postgres.h"
+
 #include "access/heapam.h"
 #include "access/htup.h"
 #include "access/tupdesc.h"

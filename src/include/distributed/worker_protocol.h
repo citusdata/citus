@@ -14,6 +14,8 @@
 #ifndef WORKER_PROTOCOL_H
 #define WORKER_PROTOCOL_H
 
+#include "postgres.h"
+
 #include "fmgr.h"
 #include "distributed/shardinterval_utils.h"
 #include "lib/stringinfo.h"

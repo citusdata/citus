@@ -11,6 +11,8 @@
 #ifndef METADATA_CACHE_H
 #define METADATA_CACHE_H
 
+#include "postgres.h"
+
 #include "fmgr.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/pg_dist_partition.h"
