@@ -69,22 +69,25 @@ RESET citus.enable_ddl_propagation;
 CREATE TABLE t5 (a int PRIMARY KEY, b tc5[], c te3);
 SELECT create_distributed_table('t5','a');
 
--- test adding a column to a table of a non-distributed type
+-- test adding an attribute to a type and a column to a table both for a non-distributed type
 SET citus.enable_ddl_propagation TO off;
 CREATE TYPE te4 AS ENUM ('c','d');
 CREATE TYPE tc6 AS (a int, b int);
+CREATE TYPE tc6c AS (a int, b int);
 RESET citus.enable_ddl_propagation;
+
+ALTER TYPE tc6 ADD ATTRIBUTE c tc6c;
 
 -- types need to be fully qualified because of the search_path which is not supported by ALTER TYPE ... ADD COLUMN
 ALTER TABLE t5 ADD COLUMN d type_tests.te4;
 ALTER TABLE t5 ADD COLUMN e type_tests.tc6;
 
 -- last two values are only there if above commands succeeded
-INSERT INTO t5 VALUES (1, NULL, 'a', 'd', (1,2)::tc6);
+INSERT INTO t5 VALUES (1, NULL, 'a', 'd', (1,2,(4,5)::tc6c)::tc6);
 
 -- test renaming an attribute of a distrbuted type and read it by its new name to verify propagation
-ALTER TYPE tc6 RENAME ATTRIBUTE b TO c;
-SELECT (e::tc6).c FROM t5 ORDER BY 1;
+ALTER TYPE tc6 RENAME ATTRIBUTE b TO d;
+SELECT (e::tc6).d FROM t5 ORDER BY 1;
 
 -- change owner of supported types and check ownership on remote server
 ALTER TYPE te4 OWNER TO typeuser;

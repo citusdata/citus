@@ -181,7 +181,10 @@ ProcessCompositeTypeStmt(CompositeTypeStmt *stmt, const char *queryString)
 
 
 /*
- * PlanAlterTypeStmt is invoked for alter type statements for composite types (and possibly base types).
+ * PlanAlterTypeStmt is invoked for alter type statements for composite types.
+ *
+ * Normally we would have a process step as well to re-ensure dependencies exists, however
+ * this is already implemented by the post processing for adding columns to tables.
  */
 List *
 PlanAlterTypeStmt(AlterTableStmt *stmt, const char *queryString)
@@ -215,8 +218,6 @@ PlanAlterTypeStmt(AlterTableStmt *stmt, const char *queryString)
 	/* reconstruct alter statement in a portable fashion */
 	QualifyTreeNode((Node *) stmt);
 	alterTypeStmtSql = DeparseTreeNode((Node *) stmt);
-
-	/* TODO needs to have a process step as well to ensure dependencies */
 
 	/*
 	 * all types that are distributed will need their alter statements propagated

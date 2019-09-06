@@ -414,8 +414,11 @@ AcquireExecutorMultiShardLocks(List *taskList)
 		 * If we are dealing with a partition we are also taking locks on parent table
 		 * to prevent deadlocks on concurrent operations on a partition and its parent.
 		 */
-		LockParentShardResourceIfPartition(task->anchorShardId, lockMode);
-		LockShardResource(task->anchorShardId, lockMode);
+		if (task->anchorShardId != INVALID_SHARD_ID)
+		{
+			LockParentShardResourceIfPartition(task->anchorShardId, lockMode);
+			LockShardResource(task->anchorShardId, lockMode);
+		}
 
 		/*
 		 * If the task has a subselect, then we may need to lock the shards from which
@@ -1465,7 +1468,6 @@ ExecuteModifyTasks(List *taskList, bool expectResults, ParamListInfo paramListIn
 	int64 totalAffectedTupleCount = 0;
 	ListCell *taskCell = NULL;
 	Task *firstTask = NULL;
-	ShardInterval *firstShardInterval = NULL;
 	int connectionFlags = 0;
 	List *affectedTupleCountList = NIL;
 	HTAB *shardConnectionHash = NULL;
@@ -1486,11 +1488,15 @@ ExecuteModifyTasks(List *taskList, bool expectResults, ParamListInfo paramListIn
 	 * ProcessUtility, so we only need to do this for DML commands.
 	 */
 	firstTask = (Task *) linitial(taskList);
-	firstShardInterval = LoadShardInterval(firstTask->anchorShardId);
-	if (PartitionedTable(firstShardInterval->relationId) &&
-		firstTask->taskType == MODIFY_TASK)
+	if (firstTask->taskType == MODIFY_TASK)
 	{
-		LockPartitionRelations(firstShardInterval->relationId, RowExclusiveLock);
+		ShardInterval *firstShardInterval = NULL;
+
+		firstShardInterval = LoadShardInterval(firstTask->anchorShardId);
+		if (PartitionedTable(firstShardInterval->relationId))
+		{
+			LockPartitionRelations(firstShardInterval->relationId, RowExclusiveLock);
+		}
 	}
 
 	/*
