@@ -35,7 +35,8 @@ typedef enum AdvisoryLocktagClass
 	/* Citus lock types */
 	ADV_LOCKTAG_CLASS_CITUS_SHARD_METADATA = 4,
 	ADV_LOCKTAG_CLASS_CITUS_SHARD = 5,
-	ADV_LOCKTAG_CLASS_CITUS_JOB = 6
+	ADV_LOCKTAG_CLASS_CITUS_JOB = 6,
+	ADV_LOCKTAG_CLASS_CITUS_REBALANCE_COLOCATION = 7
 } AdvisoryLocktagClass;
 
 
@@ -62,6 +63,16 @@ typedef enum AdvisoryLocktagClass
 						 (uint32) ((jobid) >> 32), \
 						 (uint32) (jobid), \
 						 ADV_LOCKTAG_CLASS_CITUS_JOB)
+
+/* reuse advisory lock, but with different, unused field 4 (7)
+ * Also it has the the database hardcoded to MyDatabaseId, to ensure the locks
+ * are local to each database */
+#define SET_LOCKTAG_REBALANCE_COLOCATION(tag, colocationOrTableId) \
+	SET_LOCKTAG_ADVISORY(tag, \
+						 MyDatabaseId, \
+						 (uint32) ((colocationOrTableId) >> 32), \
+						 (uint32) (colocationOrTableId), \
+						 ADV_LOCKTAG_CLASS_CITUS_REBALANCE_COLOCATION)
 
 
 /* Lock shard/relation metadata for safe modifications */
