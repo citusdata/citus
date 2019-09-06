@@ -613,6 +613,19 @@ PostProcessAlterTableStmt(AlterTableStmt *alterTableStatement)
 {
 	List *commandList = alterTableStatement->cmds;
 	ListCell *commandCell = NULL;
+	LOCKMODE lockmode = NoLock;
+	Oid relationId = InvalidOid;
+
+	lockmode = AlterTableGetLockLevel(alterTableStatement->cmds);
+	relationId = AlterTableLookupRelation(alterTableStatement, lockmode);
+
+	if (relationId != InvalidOid)
+	{
+		/* changing a relation could introduce new dependencies */
+		ObjectAddress tableAddress = { 0 };
+		ObjectAddressSet(tableAddress, RelationRelationId, relationId);
+		EnsureDependenciesExistsOnAllNodes(&tableAddress);
+	}
 
 	foreach(commandCell, commandList)
 	{
@@ -621,16 +634,11 @@ PostProcessAlterTableStmt(AlterTableStmt *alterTableStatement)
 
 		if (alterTableType == AT_AddConstraint)
 		{
-			LOCKMODE lockmode = NoLock;
-			Oid relationId = InvalidOid;
 			Constraint *constraint = NULL;
 
 			Assert(list_length(commandList) == 1);
 
 			ErrorIfUnsupportedAlterAddConstraintStmt(alterTableStatement);
-
-			lockmode = AlterTableGetLockLevel(alterTableStatement->cmds);
-			relationId = AlterTableLookupRelation(alterTableStatement, lockmode);
 
 			if (!OidIsValid(relationId))
 			{
@@ -647,9 +655,6 @@ PostProcessAlterTableStmt(AlterTableStmt *alterTableStatement)
 		{
 			List *columnConstraints = NIL;
 			ListCell *columnConstraint = NULL;
-			Oid relationId = InvalidOid;
-			LOCKMODE lockmode = NoLock;
-			ObjectAddress tableAddress = { 0 };
 
 			ColumnDef *columnDefinition = (ColumnDef *) command->def;
 			columnConstraints = columnDefinition->constraints;
@@ -658,8 +663,6 @@ PostProcessAlterTableStmt(AlterTableStmt *alterTableStatement)
 				ErrorIfUnsupportedAlterAddConstraintStmt(alterTableStatement);
 			}
 
-			lockmode = AlterTableGetLockLevel(alterTableStatement->cmds);
-			relationId = AlterTableLookupRelation(alterTableStatement, lockmode);
 			if (!OidIsValid(relationId))
 			{
 				continue;
@@ -679,10 +682,6 @@ PostProcessAlterTableStmt(AlterTableStmt *alterTableStatement)
 														constraint);
 				}
 			}
-
-			/* adding a column could introduce new dependencies */
-			ObjectAddressSet(tableAddress, RelationRelationId, relationId);
-			EnsureDependenciesExistsOnAllNodes(&tableAddress);
 		}
 	}
 }
