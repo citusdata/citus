@@ -360,6 +360,11 @@ ArrayObjectCount(ArrayType *arrayObject)
 	int32 *dimensionLengthArray = ARR_DIMS(arrayObject);
 	int32 arrayLength = 0;
 
+	if (dimensionCount == 0)
+	{
+		return 0;
+	}
+
 	/* we currently allow split point arrays to have only one subarray */
 	Assert(dimensionCount == 1);
 
