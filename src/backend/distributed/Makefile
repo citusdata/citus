@@ -6,8 +6,8 @@ citus_top_builddir = ../../..
 MODULE_big = citus
 EXTENSION = citus
 
-template_sql_files = $(patsubst $(citus_abs_srcdir)/%,%,$(wildcard $(citus_abs_srcdir)/*.template.sql))
-generated_sql_files = $(patsubst %.template.sql,%.sql,$(template_sql_files))
+template_sql_files = $(patsubst $(citus_abs_srcdir)/%,%,$(wildcard $(citus_abs_srcdir)/sql/*.sql))
+generated_sql_files = $(patsubst sql/%.sql,%.sql,$(template_sql_files))
 existing_sql_files = $(patsubst $(citus_abs_srcdir)/%.sql,%.sql,$(wildcard $(citus_abs_srcdir)/$(EXTENSION)--*.sql))
 non_generated_sql_files = $(filter-out $(template_sql_files) $(generated_sql_files),$(existing_sql_files))
 # All citus--*.sql files that are used to upgrade between versions
@@ -35,11 +35,9 @@ SHLIB_LINK += $(filter -lssl -lcrypto -lssleay32 -leay32, $(LIBS))
 
 override CPPFLAGS += -I$(libpq_srcdir)
 
-udf_sql_files = $(wildcard $(citus_abs_srcdir)/udfs/*/*.sql)
-
 SQL_DEPDIR=.deps/sql
 
-$(generated_sql_files): %.sql: %.template.sql
+$(generated_sql_files): %.sql: sql/%.sql
 	@if test ! -d $(SQL_DEPDIR); then mkdir -p $(SQL_DEPDIR); fi
 	cd $(citus_abs_srcdir) && cpp -undef -w -P -MMD -MP -MF $(SQL_DEPDIR)/$(*F).Po -MT $@ $< > $@
 
