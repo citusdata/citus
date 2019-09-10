@@ -1,0 +1,43 @@
+SET citus.next_shard_id TO 20020000;
+CREATE SCHEMA type_conflict;
+SELECT run_command_on_workers($$CREATE SCHEMA type_conflict;$$);
+       run_command_on_workers        
+-------------------------------------
+ (localhost,57637,t,"CREATE SCHEMA")
+ (localhost,57638,t,"CREATE SCHEMA")
+(2 rows)
+
+-- create a type on a worker that should not cause data loss once overwritten with a type
+-- from the coordinator
+\c - - - :worker_1_port
+SET citus.enable_ddl_propagation TO off;
+SET search_path TO type_conflict;
+CREATE TYPE my_precious_type AS (secret text, should bool);
+CREATE TABLE local_table (a int, b my_precious_type);
+INSERT INTO local_table VALUES (42, ('always bring a towel', true)::my_precious_type);
+\c - - - :master_port
+SET search_path TO type_conflict;
+-- overwrite the type on the worker from the coordinator. The type should be over written
+-- but the data should not have been destroyed
+--CREATE TYPE my_precious_type AS (scatterd_secret text);
+-- verify the data is retained
+\c - - - :worker_1_port
+SET search_path TO type_conflict;
+\d+ local_table
+                                 Table "type_conflict.local_table"
+ Column |       Type       | Collation | Nullable | Default | Storage  | Stats target | Description 
+--------+------------------+-----------+----------+---------+----------+--------------+-------------
+ a      | integer          |           |          |         | plain    |              | 
+ b      | my_precious_type |           |          |         | extended |              | 
+
+SELECT * FROM local_table;
+ a  |             b              
+----+----------------------------
+ 42 | ("always bring a towel",t)
+(1 row)
+
+\c - - - :master_port
+SET search_path TO type_conflict;
+-- hide cascades
+SET client_min_messages TO error;
+DROP SCHEMA type_conflict CASCADE;
