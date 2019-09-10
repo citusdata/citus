@@ -11,7 +11,8 @@ generated_sql_files = $(patsubst %.template.sql,%.sql,$(template_sql_files))
 existing_sql_files = $(patsubst $(citus_abs_srcdir)/%.sql,%.sql,$(wildcard $(citus_abs_srcdir)/$(EXTENSION)--*.sql))
 non_generated_sql_files = $(filter-out $(template_sql_files) $(generated_sql_files),$(existing_sql_files))
 # All citus--*.sql files that are used to upgrade between versions
-DATA = $(generated_sql_files) $(non_generated_sql_files)
+DATA = $(non_generated_sql_files)
+DATA_built = $(generated_sql_files)
 
 # directories with source files
 SUBDIRS = . commands connection ddl executor master metadata planner progress relay test transaction utils worker
@@ -36,7 +37,13 @@ override CPPFLAGS += -I$(libpq_srcdir)
 
 udf_sql_files = $(wildcard $(citus_abs_srcdir)/udfs/*/*.sql)
 
-$(generated_sql_files): %.sql: %.template.sql $(udf_sql_files) template.awk
-	cd $(citus_abs_srcdir) && awk -f template.awk $< > $@
+SQL_DEPDIR=.deps/sql
 
-install: $(generated_sql_files)
+$(generated_sql_files): %.sql: %.template.sql
+	@if test ! -d $(SQL_DEPDIR); then mkdir -p $(SQL_DEPDIR); fi
+	cd $(citus_abs_srcdir) && cpp -undef -w -P -MMD -MP -MF $(SQL_DEPDIR)/$(*F).Po -MT $@ $< > $@
+
+SQL_Po_files := $(wildcard $(SQL_DEPDIR)/*.Po)
+ifneq (,$(SQL_Po_files))
+include $(SQL_Po_files)
+endif
