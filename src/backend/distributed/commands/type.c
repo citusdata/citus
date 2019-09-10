@@ -98,6 +98,17 @@ static List * enum_vals_list(Oid typeOid);
 static bool ShouldPropagateTypeCreate(void);
 
 
+/*
+ * PlanCompositeTypeStmt is called during the creation of a composite type. It is executed
+ * before the statement is applied locally.
+ *
+ * We decide if the compisite type needs to be replicated to the worker, and if that is
+ * the case return a list of DDLJob's that describe how and where the type needs to be
+ * created.
+ *
+ * Since the planning happens before the statement has been applied locally we do not have
+ * access to the ObjectAddress of the new type.
+ */
 List *
 PlanCompositeTypeStmt(CompositeTypeStmt *stmt, const char *queryString)
 {
@@ -234,6 +245,16 @@ PlanAlterTypeStmt(AlterTableStmt *stmt, const char *queryString)
 }
 
 
+/*
+ * PlanCreateEnumStmt is called before the statement gets applied locally.
+ *
+ * It decides if the create statement will be applied to the workers and if that is the
+ * case returns a list of DDLJobs that will be executed _after_ the statement has been
+ * applied locally.
+ *
+ * Since planning is done before we have created the object locally we do not have an
+ * ObjectAddress for the new type just yet.
+ */
 List *
 PlanCreateEnumStmt(CreateEnumStmt *stmt, const char *queryString)
 {
@@ -273,6 +294,14 @@ PlanCreateEnumStmt(CreateEnumStmt *stmt, const char *queryString)
 }
 
 
+/*
+ * ProcessCreateEnumStmt is called after the statement has been applied locally, but
+ * before the plan on how to create the types on the workers has been executed.
+ *
+ * We apply the same checks to verify if the type should be distributed, if that is the
+ * case we resolve the ObjectAddress for the just created object, distribute its
+ * dependencies to all the nodes, and mark the object as distributed.
+ */
 void
 ProcessCreateEnumStmt(CreateEnumStmt *stmt, const char *queryString)
 {
@@ -297,7 +326,12 @@ ProcessCreateEnumStmt(CreateEnumStmt *stmt, const char *queryString)
 
 
 /*
- * PlanAlterEnumStmt handles ALTER TYPE ... ADD VALUE for enum based types.
+ * PlanAlterEnumStmt handles ALTER TYPE ... ADD VALUE for enum based types. Planning
+ * happens before the statement has been applied locally.
+ *
+ * Since it is an alter of an existing type we actually have the ObjectAddress. This is
+ * used to check if the type is distributed, if so the alter will be executed on the
+ * workers directly to keep the types in sync accross the cluster.
  */
 List *
 PlanAlterEnumStmt(AlterEnumStmt *stmt, const char *queryString)
@@ -453,6 +487,14 @@ PlanDropTypeStmt(DropStmt *stmt, const char *queryString)
 }
 
 
+/*
+ * PlanRenameTypeStmt is called when the user is renaming the type. The invocation happens
+ * before the statement is applied locally.
+ *
+ * As the type already exists we have access to the ObjectAddress for the type, this is
+ * used to check if the type is distributed. If the type is distributed the rename is
+ * executed on all the workers to keep the types in sync across the cluster.
+ */
 List *
 PlanRenameTypeStmt(RenameStmt *stmt, const char *queryString)
 {
@@ -497,6 +539,13 @@ PlanRenameTypeStmt(RenameStmt *stmt, const char *queryString)
 }
 
 
+/*
+ * PlanRenameTypeAttributeStmt is called for changes of attribute names for composite
+ * types. Planning is called before the statement is applied locally.
+ *
+ * For distributed types we apply the attribute renames directly on all the workers to
+ * keep the type in sync across the cluster.
+ */
 List *
 PlanRenameTypeAttributeStmt(RenameStmt *stmt, const char *queryString)
 {
@@ -612,6 +661,13 @@ ProcessAlterTypeSchemaStmt(AlterObjectSchemaStmt *stmt, const char *queryString)
 }
 
 
+/*
+ * PlanAlterTypeOwnerStmt is called for change of owner ship of types before the owner
+ * ship is changed on the local instance.
+ *
+ * If the type for which the owner is changed is distributed we execute the change on all
+ * the workers to keep the type in sync across the cluster.
+ */
 List *
 PlanAlterTypeOwnerStmt(AlterOwnerStmt *stmt, const char *queryString)
 {
@@ -882,6 +938,10 @@ AlterTypeStmtObjectAddress(AlterTableStmt *stmt, bool missing_ok)
 }
 
 
+/*
+ * AlterEnumStmtObjectAddress return the ObjectAddress of the enum type that is the
+ * subject of the AlterEnumStmt. Errors is missing_ok is false.
+ */
 const ObjectAddress *
 AlterEnumStmtObjectAddress(AlterEnumStmt *stmt, bool missing_ok)
 {
@@ -898,6 +958,10 @@ AlterEnumStmtObjectAddress(AlterEnumStmt *stmt, bool missing_ok)
 }
 
 
+/*
+ * RenameTypeStmtObjectAddress returns the ObjectAddress of the type that is the subject
+ * of the RenameStmt. Errors if missing_ok is false.
+ */
 const ObjectAddress *
 RenameTypeStmtObjectAddress(RenameStmt *stmt, bool missing_ok)
 {
@@ -916,6 +980,15 @@ RenameTypeStmtObjectAddress(RenameStmt *stmt, bool missing_ok)
 }
 
 
+/*
+ * AlterTypeSchemaStmtObjectAddress returns the ObjectAddress of the type that is the
+ * subject of the AlterObjectSchemaStmt. Errors if missing_ok is false.
+ *
+ * This could be called both before or after it has been applied locally. It will look in
+ * the old schema first, if the type cannot be found in that schema it will look in the
+ * new schema. Errors if missing_ok is false and the type cannot be found in either of the
+ * schemas.
+ */
 const ObjectAddress *
 AlterTypeSchemaStmtObjectAddress(AlterObjectSchemaStmt *stmt, bool missing_ok)
 {
@@ -975,6 +1048,14 @@ AlterTypeSchemaStmtObjectAddress(AlterObjectSchemaStmt *stmt, bool missing_ok)
 }
 
 
+/*
+ * RenameTypeAttributeStmtObjectAddress returns the ObjectAddress of the type that is the
+ * subject of the RenameStmt. Errors if missing_ok is false.
+ *
+ * The ObjectAddress is that of the type, not that of the attributed for which the name is
+ * changed as Attributes are not distributed on their own but as a side effect of the
+ * whole type distribution.
+ */
 const ObjectAddress *
 RenameTypeAttributeStmtObjectAddress(RenameStmt *stmt, bool missing_ok)
 {
@@ -994,6 +1075,10 @@ RenameTypeAttributeStmtObjectAddress(RenameStmt *stmt, bool missing_ok)
 }
 
 
+/*
+ * AlterTypeOwnerObjectAddress returns the ObjectAddress of the type that is the subject
+ * of the AlterOwnerStmt. Errors if missing_ok is false.
+ */
 const ObjectAddress *
 AlterTypeOwnerObjectAddress(AlterOwnerStmt *stmt, bool missing_ok)
 {
@@ -1091,9 +1176,11 @@ CreateTypeDDLCommandsIdempotent(const ObjectAddress *typeAddress)
 }
 
 
-/********************************************************************************
- * Section with helper functions
- *********************************************************************************/
+/*
+ * wrap_in_sql
+ *
+ * TODO specialize info create_or_replace command
+ */
 const char *
 wrap_in_sql(const char *fmt, const char *sql)
 {
