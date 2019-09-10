@@ -3,7 +3,16 @@
  * qualify.c
  *	  The deparser relies on fully qualified names on all statements to
  *	  work transparently on a remote worker node. Here we have helpers to
- *	  fully qualify parsetrees
+ *	  fully qualify parsetrees.
+ *
+ *	  Fully qualified parsetrees contain names for all identifiers that
+ *	  are search_path agnostic. Meaning we need to include the schema name
+ *	  for each and every identifier in the parsetree.
+ *
+ *	  This file contains mostly the distpatching functions to specialized
+ *	  functions for each class of objects. eg qualify_type_stmt.c contains
+ *	  all functions related to fully qualifying parsetrees that interact
+ *	  with types.
  *
  * Copyright (c) 2019, Citus Data, Inc.
  *

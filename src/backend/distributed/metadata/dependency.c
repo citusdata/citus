@@ -57,7 +57,7 @@ static void recurse_pg_depend(const ObjectAddress *target,
 static bool FollowAllSupportedDependencies(void *context, Form_pg_depend pg_depend);
 static bool FollowNewSupportedDependencies(void *context, Form_pg_depend pg_depend);
 static void ApplyAddToDependencyList(void *context, Form_pg_depend pg_depend);
-static List * EpxandCitusSupportedTypes(void *context, const ObjectAddress *target);
+static List * ExpandCitusSupportedTypes(void *context, const ObjectAddress *target);
 
 /* forward declaration of support functions to decide what to follow */
 static bool SupportedDependencyByCitus(const ObjectAddress *address);
@@ -77,7 +77,7 @@ GetDependenciesForObject(const ObjectAddress *target)
 	InitObjectAddressCollector(&collector);
 
 	recurse_pg_depend(target,
-					  &EpxandCitusSupportedTypes,
+					  &ExpandCitusSupportedTypes,
 					  &FollowNewSupportedDependencies,
 					  &ApplyAddToDependencyList,
 					  &collector);
@@ -117,7 +117,7 @@ OrderObjectAddressListInDependencyOrder(List *objectAddressList)
 		}
 
 		recurse_pg_depend(objectAddress,
-						  &EpxandCitusSupportedTypes,
+						  &ExpandCitusSupportedTypes,
 						  &FollowAllSupportedDependencies,
 						  &ApplyAddToDependencyList,
 						  &collector);
@@ -539,7 +539,7 @@ ApplyAddToDependencyList(void *context, Form_pg_depend pg_depend)
 
 
 /*
- * EpxandCitusSupportedTypes base on supported types by citus we might want to expand
+ * ExpandCitusSupportedTypes base on supported types by citus we might want to expand
  * the list of objects to visit in pg_depend.
  *
  * An example where we want to expand is for types. Their dependencies are not captured
@@ -547,7 +547,7 @@ ApplyAddToDependencyList(void *context, Form_pg_depend pg_depend)
  * relation describing the type.
  */
 static List *
-EpxandCitusSupportedTypes(void *context, const ObjectAddress *target)
+ExpandCitusSupportedTypes(void *context, const ObjectAddress *target)
 {
 	List *result = NIL;
 

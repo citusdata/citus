@@ -1,7 +1,15 @@
 /*-------------------------------------------------------------------------
  *
  * qualify_type_stmt.c
- *	  Functins specialized in fully qualifying all type statements
+ *	  Functions specialized in fully qualifying all type statements. These
+ *	  functions are dispatched from qualify.c
+ *
+ *	  Fully qualifying type statements consists of adding the schema name
+ *	  to the subject of the types as well as any other branch of the
+ *	  parsetree.
+ *
+ *	  Goal would be that the deparser functions for these statements can
+ *	  serialize the statement without any external lookups.
  *
  * Copyright (c) 2019, Citus Data, Inc.
  *
