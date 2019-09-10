@@ -385,7 +385,7 @@ appendColumnDef(StringInfo str, ColumnDef *columnDef)
 
 	if (columnDef->colname)
 	{
-		appendStringInfo(str, "%s ", columnDef->colname);
+		appendStringInfo(str, "%s ", quote_identifier(columnDef->colname));
 	}
 
 	appendStringInfo(str, "%s", format_type_be_qualified(typeOid));

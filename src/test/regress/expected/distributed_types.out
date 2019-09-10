@@ -254,6 +254,10 @@ SELECT run_command_on_workers($$SELECT typname FROM pg_type, pg_user where typna
  (localhost,57638,t,"")
 (2 rows)
 
+-- make sure attribute names are quoted correctly, no errors indicates types are propagated correctly
+CREATE TYPE tc9 AS ("field-with-dashes" text COLLATE "de_DE");
+ALTER TYPE tc9 ADD ATTRIBUTE "some-more" int, ADD ATTRIBUTE normal int;
+ALTER TYPE tc9 RENAME ATTRIBUTE normal TO "not-so-normal";
 -- clear objects
 SET client_min_messages TO fatal; -- suppress cascading objects dropping
 DROP SCHEMA type_tests CASCADE;

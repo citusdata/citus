@@ -137,6 +137,11 @@ DROP TYPE tc3, tc4, tc5 CASCADE;
 SELECT typname FROM pg_type, pg_user where typname IN ('te3','tc3','tc4','tc5') and typowner = usesysid ORDER BY typname;
 SELECT run_command_on_workers($$SELECT typname FROM pg_type, pg_user where typname IN ('te3','tc3','tc4','tc5') and typowner = usesysid ORDER BY typname;$$);
 
+-- make sure attribute names are quoted correctly, no errors indicates types are propagated correctly
+CREATE TYPE tc9 AS ("field-with-dashes" text COLLATE "de_DE");
+ALTER TYPE tc9 ADD ATTRIBUTE "some-more" int, ADD ATTRIBUTE normal int;
+ALTER TYPE tc9 RENAME ATTRIBUTE normal TO "not-so-normal";
+
 -- clear objects
 SET client_min_messages TO fatal; -- suppress cascading objects dropping
 DROP SCHEMA type_tests CASCADE;
