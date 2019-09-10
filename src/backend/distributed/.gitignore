@@ -8,3 +8,4 @@
 /regression.out
 /results/
 /tmp_check*
+/citus--*.sql
