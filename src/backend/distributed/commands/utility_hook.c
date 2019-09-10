@@ -74,7 +74,6 @@ static void PostProcessUtility(Node *parsetree);
 static List * PlanRenameAttributeStmt(RenameStmt *stmt, const char *queryString);
 static List * PlanAlterOwnerStmt(AlterOwnerStmt *stmt, const char *queryString);
 
-static inline void trackStatementDepth(Node *parsetree, const bool increment);
 static void ExecuteNodeBaseDDLCommands(List *taskList);
 
 
@@ -570,7 +569,10 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 
 	PG_TRY();
 	{
-		trackStatementDepth(parsetree, true);
+		if (IsA(parsetree, AlterTableStmt))
+		{
+			activeAlterTables++;
+		}
 
 		standard_ProcessUtility(pstmt, queryString, context,
 								params, queryEnv, dest, completionTag);
@@ -591,11 +593,18 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		 */
 		CommandCounterIncrement();
 
-		trackStatementDepth(parsetree, false);
+		if (IsA(parsetree, AlterTableStmt))
+		{
+			activeAlterTables--;
+		}
 	}
 	PG_CATCH();
 	{
-		trackStatementDepth(parsetree, false);
+		if (IsA(parsetree, AlterTableStmt))
+		{
+			activeAlterTables--;
+		}
+
 		PG_RE_THROW();
 	}
 	PG_END_TRY();
@@ -1067,32 +1076,6 @@ NodeDDLTaskList(TargetWorkerSet targets, List *commands)
 	ddlJob->taskList = list_make1(task);
 
 	return list_make1(ddlJob);
-}
-
-
-/*
- * trackStatementDepth keeps counters for certain parsetree statements. If no counter is
- * kept for the parsetree this function is a no-op.
- *
- * When tracking statements depth keep in mind to increment call decrement in a PG_TRY
- * block and also decrement in the PG_CATCH block.
- */
-static inline void
-trackStatementDepth(Node *parsetree, const bool increment)
-{
-	const int diff = increment ? 1 : -1;
-
-	switch (parsetree->type)
-	{
-		case T_AlterTableStmt:
-		{
-			activeAlterTables += diff;
-			break;
-		}
-
-		default:
-		{ }
-	}
 }
 
 
