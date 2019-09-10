@@ -319,8 +319,8 @@ SendCommandToWorkersParams(TargetWorkerSet targetWorkerSet, const char *command,
  * any of the queries fails.
  */
 void
-SendCommandListToWorkerInSingleTransaction(char *nodeName, int32 nodePort, char *nodeUser,
-										   List *commandList)
+SendCommandListToWorkerInSingleTransaction(const char *nodeName, int32 nodePort,
+										   const char *nodeUser, List *commandList)
 {
 	MultiConnection *workerConnection = NULL;
 	ListCell *commandCell = NULL;

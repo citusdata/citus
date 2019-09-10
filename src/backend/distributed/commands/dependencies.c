@@ -19,6 +19,7 @@
 #include "distributed/metadata_sync.h"
 #include "distributed/remote_commands.h"
 #include "distributed/worker_manager.h"
+#include "distributed/worker_transaction.h"
 #include "storage/lmgr.h"
 #include "utils/lsyscache.h"
 
@@ -140,7 +141,13 @@ EnsureDependenciesExistsOnAllNodes(const ObjectAddress *target)
 	foreach(connectionCell, connections)
 	{
 		MultiConnection *connection = (MultiConnection *) lfirst(connectionCell);
+
+		MarkRemoteTransactionCritical(connection);
+		RemoteTransactionBegin(connection);
+
 		ExecuteCriticalRemoteCommandList(connection, ddlCommands);
+
+		RemoteTransactionCommit(connection);
 	}
 
 	/*
@@ -221,11 +228,9 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 void
 ReplicateAllDependenciesToNode(const char *nodeName, int nodePort)
 {
-	const uint32 connectionFlag = FORCE_NEW_CONNECTION;
 	ListCell *dependencyCell = NULL;
 	List *dependencies = NIL;
 	List *ddlCommands = NIL;
-	MultiConnection *connection = NULL;
 
 	/*
 	 * collect all dependencies in creation order and get their ddl commands
@@ -263,11 +268,6 @@ ReplicateAllDependenciesToNode(const char *nodeName, int nodePort)
 	/* since we are executing ddl commands lets disable propagation, primarily for mx */
 	ddlCommands = list_concat(list_make1(DISABLE_DDL_PROPAGATION), ddlCommands);
 
-	/*
-	 * connect to the new host and create all applicable dependencies
-	 */
-	connection = GetNodeUserDatabaseConnection(connectionFlag, nodeName, nodePort,
-											   CitusExtensionOwnerName(), NULL);
-	ExecuteCriticalRemoteCommandList(connection, ddlCommands);
-	CloseConnection(connection);
+	SendCommandListToWorkerInSingleTransaction(nodeName, nodePort,
+											   CitusExtensionOwnerName(), ddlCommands);
 }
