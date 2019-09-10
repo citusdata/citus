@@ -30,6 +30,11 @@ SELECT citus.mitmproxy('conn.allow()');
 SELECT count(*) FROM pg_dist_shard;
 SELECT run_command_on_workers($$SELECT count(*) FROM information_schema.schemata WHERE schema_name = 'failure_create_table'$$);
 
+-- this is merely used to get the schema creation propagated. Without there are failures
+-- not related to reference tables but schema creation due to dependency creation on workers
+CREATE TYPE schema_proc AS (a int);
+DROP TYPE schema_proc;
+
 -- Now, kill the connection while opening transaction on workers.
 SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED").kill()');
 SELECT create_distributed_table('test_table','id');
@@ -123,6 +128,11 @@ SELECT citus.mitmproxy('conn.allow()');
 SELECT count(*) FROM pg_dist_shard;
 SELECT run_command_on_workers($$SELECT count(*) FROM information_schema.tables WHERE table_schema = 'failure_create_table' and table_name LIKE 'test_table%' ORDER BY 1$$);
 
+-- this is merely used to get the schema creation propagated. Without there are failures
+-- not related to reference tables but schema creation due to dependency creation on workers
+CREATE TYPE schema_proc AS (a int);
+DROP TYPE schema_proc;
+
 -- Now, kill the connection while creating transaction on workers in transaction.
 SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED").kill()');
 
@@ -178,6 +188,11 @@ ROLLBACK;
 SELECT citus.mitmproxy('conn.allow()');
 SELECT count(*) FROM pg_dist_shard;
 SELECT run_command_on_workers($$SELECT count(*) FROM information_schema.tables WHERE table_schema = 'failure_create_table' and table_name LIKE 'test_table%' ORDER BY 1$$);
+
+-- this is merely used to get the schema creation propagated. Without there are failures
+-- not related to reference tables but schema creation due to dependency creation on workers
+CREATE TYPE schema_proc AS (a int);
+DROP TYPE schema_proc;
 
 -- Now, kill the connection while opening transactions on workers with 1pc. Transaction will be opened due to BEGIN.
 SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED").kill()');
