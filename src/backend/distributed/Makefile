@@ -7,7 +7,7 @@ MODULE_big = citus
 EXTENSION = citus
 
 template_sql_files = $(patsubst $(citus_abs_srcdir)/%,%,$(wildcard $(citus_abs_srcdir)/sql/*.sql))
-generated_sql_files = $(patsubst %,build/%,$(template_sql_files))
+generated_sql_files = $(patsubst %,$(citus_abs_srcdir)/build/%,$(template_sql_files))
 # All citus--*.sql files that are used to upgrade between versions
 DATA_built = $(generated_sql_files)
 
@@ -38,7 +38,7 @@ SQL_BUILDDIR=build/sql
 $(SQL_DEPDIR) $(SQL_BUILDDIR):
 	mkdir -p $(citus_abs_srcdir)/$@
 
-$(generated_sql_files): build/%: % $(SQL_DEPDIR) $(SQL_BUILDDIR)
+$(generated_sql_files): $(citus_abs_srcdir)/build/%: % $(SQL_DEPDIR) $(SQL_BUILDDIR)
 	cd $(citus_abs_srcdir) && cpp -undef -w -P -C -MMD -MP -MF $(SQL_DEPDIR)/$(*F).Po -MT $@ $< > $@
 
 SQL_Po_files := $(wildcard $(SQL_DEPDIR)/*.Po)
