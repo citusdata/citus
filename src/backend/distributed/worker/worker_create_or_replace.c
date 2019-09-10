@@ -27,58 +27,11 @@
 #include "distributed/metadata/distobject.h"
 #include "distributed/worker_protocol.h"
 
-PG_FUNCTION_INFO_V1(worker_create_or_replace);
-
-
+static Node * CreateStmtByObjectAddress(const ObjectAddress *address);
 static DropStmt * drop_stmt_from_object_create(Node *createStmt);
 
 
-static Node *
-CreateStmtByObjectAddress(const ObjectAddress *address)
-{
-	switch (getObjectClass(address))
-	{
-		case OCLASS_TYPE:
-		{
-			return CreateTypeStmtByObjectAddress(address);
-		}
-
-		default:
-		{
-			ereport(ERROR, (errmsg("unsupported object to construct a create statment")));
-		}
-	}
-}
-
-
-/* TODO rewrite to create based on ObjectAddress */
-static DropStmt *
-drop_stmt_from_object_create(Node *createStmt)
-{
-	switch (nodeTag(createStmt))
-	{
-		case T_CompositeTypeStmt:
-		{
-			return CompositeTypeStmtToDrop(castNode(CompositeTypeStmt, createStmt));
-		}
-
-		case T_CreateEnumStmt:
-		{
-			return CreateEnumStmtToDrop(castNode(CreateEnumStmt, createStmt));
-		}
-
-		default:
-		{
-			/*
-			 * should not be reached, indicates the coordinator is sending unsupported
-			 * statements
-			 */
-			ereport(ERROR, (errmsg("unsupported statement to check existence for"),
-							errhint("The coordinator send an unsupported command to the "
-									"worker")));
-		}
-	}
-}
+PG_FUNCTION_INFO_V1(worker_create_or_replace);
 
 
 /*
@@ -139,9 +92,6 @@ worker_create_or_replace(PG_FUNCTION_ARGS)
 			PG_RETURN_BOOL(false);
 		}
 
-		/* TODO for now we assume that we always recreate the same object crash if not */
-		Assert(false);
-
 		/* TODO don't drop, instead rename as described in documentation */
 
 		/*
@@ -170,4 +120,60 @@ worker_create_or_replace(PG_FUNCTION_ARGS)
 
 	/* type has been created */
 	PG_RETURN_BOOL(true);
+}
+
+
+/*
+ * CreateStmtByObjectAddress returns a parsetree that will recreate the object addressed
+ * by the ObjectAddress provided.
+ *
+ * Note: this tree does not contain position information that is normally in a parsetree,
+ * therefore you cannot equal this tree against parsed statement. Instead it can be
+ * deparsed to do a string comparison.
+ */
+static Node *
+CreateStmtByObjectAddress(const ObjectAddress *address)
+{
+	switch (getObjectClass(address))
+	{
+		case OCLASS_TYPE:
+		{
+			return CreateTypeStmtByObjectAddress(address);
+		}
+
+		default:
+		{
+			ereport(ERROR, (errmsg("unsupported object to construct a create statment")));
+		}
+	}
+}
+
+
+/* TODO will be removed as we will not drop but rename instead */
+static DropStmt *
+drop_stmt_from_object_create(Node *createStmt)
+{
+	switch (nodeTag(createStmt))
+	{
+		case T_CompositeTypeStmt:
+		{
+			return CompositeTypeStmtToDrop(castNode(CompositeTypeStmt, createStmt));
+		}
+
+		case T_CreateEnumStmt:
+		{
+			return CreateEnumStmtToDrop(castNode(CreateEnumStmt, createStmt));
+		}
+
+		default:
+		{
+			/*
+			 * should not be reached, indicates the coordinator is sending unsupported
+			 * statements
+			 */
+			ereport(ERROR, (errmsg("unsupported statement to check existence for"),
+							errhint("The coordinator send an unsupported command to the "
+									"worker")));
+		}
+	}
 }
