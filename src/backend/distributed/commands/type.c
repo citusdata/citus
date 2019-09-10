@@ -396,7 +396,7 @@ PlanAlterEnumStmt(AlterEnumStmt *stmt, const char *queryString)
 
 			/* deparse the query with IF NOT EXISTS */
 			stmt->skipIfNewValExists = true;
-			alterEnumStmtIfNotExistsSql = deparse_alter_enum_stmt(stmt);
+			alterEnumStmtIfNotExistsSql = DeparseTreeNode((Node *) stmt);
 			stmt->skipIfNewValExists = oldSkipIfNewValueExists;
 
 			ereport(WARNING, (errmsg("not all workers applied change to enum"),
@@ -473,7 +473,7 @@ PlanDropTypeStmt(DropStmt *stmt, const char *queryString)
 	 * deparse to an executable sql statement for the workers
 	 */
 	stmt->objects = distributedTypes;
-	dropStmtSql = deparse_drop_type_stmt(stmt);
+	dropStmtSql = DeparseTreeNode((Node *) stmt);
 	stmt->objects = oldTypes;
 
 	/* to prevent recursion with mx we disable ddl propagation */

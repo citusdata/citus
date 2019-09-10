@@ -76,11 +76,11 @@ CREATE TYPE tc6 AS (a int, b int);
 CREATE TYPE tc6c AS (a int, b int);
 RESET citus.enable_ddl_propagation;
 
-ALTER TYPE tc6 ADD ATTRIBUTE c tc6c;
-
 -- types need to be fully qualified because of the search_path which is not supported by ALTER TYPE ... ADD COLUMN
 ALTER TABLE t5 ADD COLUMN d type_tests.te4;
 ALTER TABLE t5 ADD COLUMN e type_tests.tc6;
+
+ALTER TYPE tc6 ADD ATTRIBUTE c tc6c;
 
 -- last two values are only there if above commands succeeded
 INSERT INTO t5 VALUES (1, NULL, 'a', 'd', (1,2,(4,5)::tc6c)::tc6);
@@ -138,7 +138,7 @@ SELECT typname FROM pg_type, pg_user where typname IN ('te3','tc3','tc4','tc5') 
 SELECT run_command_on_workers($$SELECT typname FROM pg_type, pg_user where typname IN ('te3','tc3','tc4','tc5') and typowner = usesysid ORDER BY typname;$$);
 
 -- make sure attribute names are quoted correctly, no errors indicates types are propagated correctly
-CREATE TYPE tc9 AS ("field-with-dashes" text COLLATE "de_DE");
+CREATE TYPE tc9 AS ("field-with-dashes" text COLLATE "en_US");
 ALTER TYPE tc9 ADD ATTRIBUTE "some-more" int, ADD ATTRIBUTE normal int;
 ALTER TYPE tc9 RENAME ATTRIBUTE normal TO "not-so-normal";
 
