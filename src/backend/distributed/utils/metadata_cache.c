@@ -128,6 +128,7 @@ typedef struct MetadataCacheData
 	Oid distPlacementShardidIndexId;
 	Oid distPlacementPlacementidIndexId;
 	Oid distPlacementGroupidIndexId;
+	Oid distEnabledCustomAggregatesId;
 	Oid distTransactionRelationId;
 	Oid distTransactionGroupIndexId;
 	Oid distTransactionRecordIndexId;
@@ -2110,6 +2111,17 @@ DistPlacementGroupidIndexId(void)
 						 &MetadataCache.distPlacementGroupidIndexId);
 
 	return MetadataCache.distPlacementGroupidIndexId;
+}
+
+
+/* return oid of pg_dist_enabled_custom_aggregates relation */
+Oid
+DistEnabledCustomAggregatesId(void)
+{
+	CachedRelationLookup("pg_dist_enabled_custom_aggregates",
+						 &MetadataCache.distEnabledCustomAggregatesId);
+
+	return MetadataCache.distEnabledCustomAggregatesId;
 }
 
 

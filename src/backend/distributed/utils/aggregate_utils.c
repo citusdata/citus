@@ -12,8 +12,6 @@
 #include "fmgr.h"
 #include "pg_config_manual.h"
 
-#include "utils/array.h"
-
 PG_FUNCTION_INFO_V1(citus_stype_serialize);
 PG_FUNCTION_INFO_V1(citus_stype_deserialize);
 PG_FUNCTION_INFO_V1(citus_stype_combine);
@@ -265,8 +263,7 @@ citus_stype_deserialize(PG_FUNCTION_ARGS)
 		box->value_null = true;
 		PG_RETURN_POINTER(box);
 	}
-
-	if (deserial != InvalidOid)
+	else if (deserial != InvalidOid)
 	{
 		FmgrInfo fdeserialinfo;
 		LOCAL_FCINFO(fdeserial_callinfo, 2);
@@ -281,12 +278,6 @@ citus_stype_deserialize(PG_FUNCTION_ARGS)
 		fcSetArg(fdeserial_callinfo, 1, PG_GETARG_DATUM(1));
 		box->value = FunctionCallInvoke(fdeserial_callinfo);
 		box->value_null = fdeserial_callinfo->isnull;
-	}
-	/* TODO Correct null handling */
-	else if (value_null)
-	{
-		box->value = (Datum) 0;
-		box->value_null = true;
 	}
 	else
 	{

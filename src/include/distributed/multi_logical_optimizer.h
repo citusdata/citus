@@ -77,9 +77,11 @@ typedef enum
 	AGGREGATE_HLL_ADD = 16,
 	AGGREGATE_HLL_UNION = 17,
 	AGGREGATE_TOPN_ADD_AGG = 18,
-	AGGREGATE_TOPN_UNION_AGG = 19
-} AggregateType;
+	AGGREGATE_TOPN_UNION_AGG = 19,
 
+	/* AGGREGATE_CUSTOM must come last */
+	AGGREGATE_CUSTOM = 20
+} AggregateType;
 
 /*
  * PushDownStatus indicates whether a node can be pushed down below its child

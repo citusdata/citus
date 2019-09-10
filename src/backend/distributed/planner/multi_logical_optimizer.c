@@ -34,6 +34,7 @@
 #include "distributed/multi_logical_planner.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/pg_dist_partition.h"
+#include "distributed/pg_dist_enabled_custom_aggregates.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/version_compat.h"
 #include "nodes/makefuncs.h"
@@ -252,6 +253,7 @@ static List * WorkerAggregateExpressionList(Aggref *originalAggregate,
 											WorkerAggregateWalkerContext *walkerContextry);
 static AggregateType GetAggregateType(Oid aggFunctionId);
 static Oid AggregateArgumentType(Aggref *aggregate);
+static bool AggregateEnabledCustom(const char *functionName);
 static Oid AggregateFunctionOidWithoutInput(const char *functionName);
 static Oid AggregateFunctionOid(const char *functionName, Oid inputType);
 static Oid TypeOid(Oid schemaId, const char *typeName);
@@ -1513,60 +1515,9 @@ MasterAggregateExpression(Aggref *originalAggregate,
 	Form_pg_aggregate aggform;
 	Oid combine;
 
-	aggTuple = SearchSysCache1(AGGFNOID,
-							   ObjectIdGetDatum(originalAggregate->aggfnoid));
-	if (!HeapTupleIsValid(aggTuple))
-	{
-		elog(WARNING, "citus cache lookup failed for aggregate %u",
-			 originalAggregate->aggfnoid);
-		combine = InvalidOid;
-	}
-	else
-	{
-		aggform = (Form_pg_aggregate) GETSTRUCT(aggTuple);
-		combine = aggform->aggcombinefn;
-		ReleaseSysCache(aggTuple);
-	}
-
-	if (combine != InvalidOid)
-	{
-		Const *aggparam = NULL;
-		Var *column = NULL;
-		List *aggArguments = NIL;
-		Aggref *newMasterAggregate = NULL;
-		Oid coordCombineId = AggregateFunctionOidWithoutInput(
-			COORD_COMBINE_AGGREGATE_NAME);
-
-		Oid workerReturnType = BYTEAOID;
-		int32 workerReturnTypeMod = -1;
-		Oid workerCollationId = InvalidOid;
-
-		aggparam = makeConst(OIDOID, -1, InvalidOid, sizeof(Oid), ObjectIdGetDatum(
-								 originalAggregate->aggfnoid), false, true);
-		column = makeVar(masterTableId, walkerContext->columnId, workerReturnType,
-						 workerReturnTypeMod, workerCollationId, columnLevelsUp);
-
-		aggArguments = list_make1(makeTargetEntry((Expr *) aggparam, 1, NULL, false));
-		aggArguments = lappend(aggArguments, makeTargetEntry((Expr *) column, 2, NULL,
-															 false));
-
-		/* coord_combine_agg(agg, workercol) */
-		newMasterAggregate = makeNode(Aggref);
-		newMasterAggregate->aggfnoid = coordCombineId;
-		newMasterAggregate->aggtype = originalAggregate->aggtype;
-		newMasterAggregate->args = aggArguments;
-		newMasterAggregate->aggkind = AGGKIND_NORMAL;
-		newMasterAggregate->aggfilter = originalAggregate->aggfilter;
-		newMasterAggregate->aggtranstype = INTERNALOID;
-		newMasterAggregate->aggargtypes = list_concat(list_make1_oid(OIDOID),
-													  list_make1_oid(BYTEAOID));
-		newMasterAggregate->aggsplit = AGGSPLIT_SIMPLE;
-
-		newMasterExpression = (Expr *) newMasterAggregate;
-	}
-	else if (aggregateType == AGGREGATE_COUNT && originalAggregate->aggdistinct &&
-			 CountDistinctErrorRate == DISABLE_DISTINCT_APPROXIMATION &&
-			 walkerContext->pullDistinctColumns)
+	if (aggregateType == AGGREGATE_COUNT && originalAggregate->aggdistinct &&
+		CountDistinctErrorRate == DISABLE_DISTINCT_APPROXIMATION &&
+		walkerContext->pullDistinctColumns)
 	{
 		Aggref *aggregate = (Aggref *) copyObject(originalAggregate);
 		List *varList = pull_var_clause_default((Node *) aggregate);
@@ -1894,6 +1845,60 @@ MasterAggregateExpression(Aggref *originalAggregate,
 
 		newMasterExpression = (Expr *) unionAggregate;
 	}
+	else if (aggregateType == AGGREGATE_CUSTOM)
+	{
+		aggTuple = SearchSysCache1(AGGFNOID,
+								   ObjectIdGetDatum(originalAggregate->aggfnoid));
+		if (!HeapTupleIsValid(aggTuple))
+		{
+			elog(WARNING, "citus cache lookup failed for aggregate %u",
+				 originalAggregate->aggfnoid);
+			combine = InvalidOid;
+		}
+		else
+		{
+			aggform = (Form_pg_aggregate) GETSTRUCT(aggTuple);
+			combine = aggform->aggcombinefn;
+			ReleaseSysCache(aggTuple);
+		}
+
+		if (combine != InvalidOid)
+		{
+			Const *aggparam = NULL;
+			Var *column = NULL;
+			List *aggArguments = NIL;
+			Aggref *newMasterAggregate = NULL;
+			Oid coordCombineId = AggregateFunctionOidWithoutInput(
+				COORD_COMBINE_AGGREGATE_NAME);
+
+			Oid workerReturnType = BYTEAOID;
+			int32 workerReturnTypeMod = -1;
+			Oid workerCollationId = InvalidOid;
+
+			aggparam = makeConst(OIDOID, -1, InvalidOid, sizeof(Oid), ObjectIdGetDatum(
+									 originalAggregate->aggfnoid), false, true);
+			column = makeVar(masterTableId, walkerContext->columnId, workerReturnType,
+							 workerReturnTypeMod, workerCollationId, columnLevelsUp);
+
+			aggArguments = list_make1(makeTargetEntry((Expr *) aggparam, 1, NULL, false));
+			aggArguments = lappend(aggArguments, makeTargetEntry((Expr *) column, 2, NULL,
+																 false));
+
+			/* coord_combine_agg(agg, workercol) */
+			newMasterAggregate = makeNode(Aggref);
+			newMasterAggregate->aggfnoid = coordCombineId;
+			newMasterAggregate->aggtype = originalAggregate->aggtype;
+			newMasterAggregate->args = aggArguments;
+			newMasterAggregate->aggkind = AGGKIND_NORMAL;
+			newMasterAggregate->aggfilter = originalAggregate->aggfilter;
+			newMasterAggregate->aggtranstype = INTERNALOID;
+			newMasterAggregate->aggargtypes = list_concat(list_make1_oid(OIDOID),
+														  list_make1_oid(BYTEAOID));
+			newMasterAggregate->aggsplit = AGGSPLIT_SIMPLE;
+
+			newMasterExpression = (Expr *) newMasterAggregate;
+		}
+	}
 	else
 	{
 		/*
@@ -1928,6 +1933,7 @@ MasterAggregateExpression(Aggref *originalAggregate,
 
 		newMasterExpression = (Expr *) newMasterAggregate;
 	}
+
 
 	/*
 	 * Aggregate functions could have changed the return type. If so, we wrap
@@ -2801,58 +2807,9 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 	Form_pg_aggregate aggform;
 	Oid combine;
 
-	aggTuple = SearchSysCache1(AGGFNOID,
-							   ObjectIdGetDatum(originalAggregate->aggfnoid));
-	if (!HeapTupleIsValid(aggTuple))
-	{
-		elog(WARNING, "citus cache lookup failed for aggregate %u",
-			 originalAggregate->aggfnoid);
-		combine = InvalidOid;
-	}
-	else
-	{
-		aggform = (Form_pg_aggregate) GETSTRUCT(aggTuple);
-		combine = aggform->aggcombinefn;
-		ReleaseSysCache(aggTuple);
-	}
-
-	if (combine != InvalidOid)
-	{
-		Const *aggparam = NULL;
-		Aggref *newWorkerAggregate = NULL;
-		List *aggArguments = NIL;
-		ListCell *originalAggArgCell;
-		Oid workerPartialId = AggregateFunctionOidWithoutInput(
-			WORKER_PARTIAL_AGGREGATE_NAME);
-
-		aggparam = makeConst(OIDOID, -1, InvalidOid, sizeof(Oid), ObjectIdGetDatum(
-								 originalAggregate->aggfnoid), false, true);
-		aggArguments = list_make1(makeTargetEntry((Expr *) aggparam, 1, NULL, false));
-		foreach(originalAggArgCell, originalAggregate->args)
-		{
-			TargetEntry *arg = lfirst(originalAggArgCell);
-			TargetEntry *newArg = copyObject(arg);
-			newArg->resno++;
-			aggArguments = lappend(aggArguments, newArg);
-		}
-
-		/* worker_partial_agg(agg, ...args) */
-		newWorkerAggregate = makeNode(Aggref);
-		newWorkerAggregate->aggfnoid = workerPartialId;
-		newWorkerAggregate->aggtype = BYTEAOID;
-		newWorkerAggregate->args = aggArguments;
-		newWorkerAggregate->aggkind = AGGKIND_NORMAL;
-		newWorkerAggregate->aggfilter = originalAggregate->aggfilter;
-		newWorkerAggregate->aggtranstype = INTERNALOID;
-		newWorkerAggregate->aggargtypes = list_concat(list_make1_oid(OIDOID),
-													  originalAggregate->aggargtypes);
-		newWorkerAggregate->aggsplit = AGGSPLIT_SIMPLE;
-
-		workerAggregateList = list_make1(newWorkerAggregate);
-	}
-	else if (aggregateType == AGGREGATE_COUNT && originalAggregate->aggdistinct &&
-			 CountDistinctErrorRate == DISABLE_DISTINCT_APPROXIMATION &&
-			 walkerContext->pullDistinctColumns)
+	if (aggregateType == AGGREGATE_COUNT && originalAggregate->aggdistinct &&
+		CountDistinctErrorRate == DISABLE_DISTINCT_APPROXIMATION &&
+		walkerContext->pullDistinctColumns)
 	{
 		Aggref *aggregate = (Aggref *) copyObject(originalAggregate);
 		List *columnList = pull_var_clause_default((Node *) aggregate);
@@ -2964,6 +2921,58 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 		workerAggregateList = lappend(workerAggregateList, sumAggregate);
 		workerAggregateList = lappend(workerAggregateList, countAggregate);
 	}
+	else if (aggregateType == AGGREGATE_CUSTOM)
+	{
+		aggTuple = SearchSysCache1(AGGFNOID,
+								   ObjectIdGetDatum(originalAggregate->aggfnoid));
+		if (!HeapTupleIsValid(aggTuple))
+		{
+			elog(WARNING, "citus cache lookup failed for aggregate %u",
+				 originalAggregate->aggfnoid);
+			combine = InvalidOid;
+		}
+		else
+		{
+			aggform = (Form_pg_aggregate) GETSTRUCT(aggTuple);
+			combine = aggform->aggcombinefn;
+			ReleaseSysCache(aggTuple);
+		}
+
+		if (combine != InvalidOid)
+		{
+			Const *aggparam = NULL;
+			Aggref *newWorkerAggregate = NULL;
+			List *aggArguments = NIL;
+			ListCell *originalAggArgCell;
+			Oid workerPartialId = AggregateFunctionOidWithoutInput(
+				WORKER_PARTIAL_AGGREGATE_NAME);
+
+			aggparam = makeConst(OIDOID, -1, InvalidOid, sizeof(Oid), ObjectIdGetDatum(
+									 originalAggregate->aggfnoid), false, true);
+			aggArguments = list_make1(makeTargetEntry((Expr *) aggparam, 1, NULL, false));
+			foreach(originalAggArgCell, originalAggregate->args)
+			{
+				TargetEntry *arg = lfirst(originalAggArgCell);
+				TargetEntry *newArg = copyObject(arg);
+				newArg->resno++;
+				aggArguments = lappend(aggArguments, newArg);
+			}
+
+			/* worker_partial_agg(agg, ...args) */
+			newWorkerAggregate = makeNode(Aggref);
+			newWorkerAggregate->aggfnoid = workerPartialId;
+			newWorkerAggregate->aggtype = BYTEAOID;
+			newWorkerAggregate->args = aggArguments;
+			newWorkerAggregate->aggkind = AGGKIND_NORMAL;
+			newWorkerAggregate->aggfilter = originalAggregate->aggfilter;
+			newWorkerAggregate->aggtranstype = INTERNALOID;
+			newWorkerAggregate->aggargtypes = list_concat(list_make1_oid(OIDOID),
+														  originalAggregate->aggargtypes);
+			newWorkerAggregate->aggsplit = AGGSPLIT_SIMPLE;
+
+			workerAggregateList = list_make1(newWorkerAggregate);
+		}
+	}
 	else
 	{
 		/*
@@ -3005,9 +3014,15 @@ GetAggregateType(Oid aggFunctionId)
 							   aggFunctionId)));
 	}
 
+	if (AggregateEnabledCustom(aggregateProcName))
+	{
+		return AGGREGATE_CUSTOM;
+	}
+
 	aggregateCount = lengthof(AggregateNames);
 
 	Assert(AGGREGATE_INVALID_FIRST == 0);
+
 	for (aggregateIndex = 1; aggregateIndex < aggregateCount; aggregateIndex++)
 	{
 		const char *aggregateName = AggregateNames[aggregateIndex];
@@ -3039,6 +3054,35 @@ AggregateArgumentType(Aggref *aggregate)
 	Assert(list_length(argumentList) == 1);
 
 	return returnTypeId;
+}
+
+
+static bool
+AggregateEnabledCustom(const char *functionName)
+{
+	SysScanDesc scanDescriptor = NULL;
+	ScanKeyData scanKey[1];
+	bool enabled = false;
+	HeapTuple heapTuple = NULL;
+	Relation pgDistEnabledCustomAggregates = NULL;
+
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_enabled_custom_aggregates_name,
+				BTEqualStrategyNumber, F_NAMEEQ, CStringGetDatum(functionName));
+
+	pgDistEnabledCustomAggregates = heap_open(DistEnabledCustomAggregatesId(),
+											  AccessShareLock);
+
+	scanDescriptor = systable_beginscan(pgDistEnabledCustomAggregates, InvalidOid, false,
+										NULL, 1, scanKey);
+
+	heapTuple = systable_getnext(scanDescriptor);
+
+	enabled = HeapTupleIsValid(heapTuple);
+
+	systable_endscan(scanDescriptor);
+	heap_close(pgDistEnabledCustomAggregates, AccessShareLock);
+
+	return enabled;
 }
 
 
@@ -3160,8 +3204,8 @@ TypeOid(Oid schemaId, const char *typeName)
 {
 	Oid typeOid;
 
-	typeOid = GetSysCacheOid2Compat(TYPENAMENSP, Anum_pg_type_oid, PointerGetDatum(
-										typeName),
+	typeOid = GetSysCacheOid2Compat(TYPENAMENSP, Anum_pg_type_oid,
+									PointerGetDatum(typeName),
 									ObjectIdGetDatum(schemaId));
 
 	return typeOid;
