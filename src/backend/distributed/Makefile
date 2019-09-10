@@ -8,7 +8,9 @@ EXTENSION = citus
 
 template_sql_files = $(patsubst $(citus_abs_srcdir)/%,%,$(wildcard $(citus_abs_srcdir)/sql/*.sql))
 generated_sql_files = $(patsubst %,$(citus_abs_srcdir)/build/%,$(template_sql_files))
+non_generated_sql_files = $(patsubst $(citus_abs_srcdir)/%.sql,%.sql,$(wildcard $(citus_abs_srcdir)/$(EXTENSION)--*.sql))
 # All citus--*.sql files that are used to upgrade between versions
+DATA = $(non_generated_sql_files)
 DATA_built = $(generated_sql_files)
 
 # directories with source files
