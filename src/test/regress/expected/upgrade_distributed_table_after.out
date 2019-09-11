@@ -1,0 +1,19 @@
+SET search_path TO upgrade_distributed_table_before, public;
+SELECT * FROM t ORDER BY a;
+ a 
+---
+ 1
+ 2
+ 3
+ 4
+ 5
+(5 rows)
+
+SELECT * FROM t WHERE a = 1;
+ a 
+---
+ 1
+(1 row)
+
+DROP SCHEMA upgrade_distributed_table_before CASCADE;
+NOTICE:  drop cascades to table t
