@@ -373,6 +373,12 @@ AcquireExecutorMultiShardLocks(List *taskList)
 		Task *task = (Task *) lfirst(taskCell);
 		LOCKMODE lockMode = NoLock;
 
+		if (task->anchorShardId == INVALID_SHARD_ID)
+		{
+			/* no shard locks to take if the task is not anchored to a shard */
+			continue;
+		}
+
 		if (AllModificationsCommutative || list_length(task->taskPlacementList) == 1)
 		{
 			/*
@@ -414,11 +420,8 @@ AcquireExecutorMultiShardLocks(List *taskList)
 		 * If we are dealing with a partition we are also taking locks on parent table
 		 * to prevent deadlocks on concurrent operations on a partition and its parent.
 		 */
-		if (task->anchorShardId != INVALID_SHARD_ID)
-		{
-			LockParentShardResourceIfPartition(task->anchorShardId, lockMode);
-			LockShardResource(task->anchorShardId, lockMode);
-		}
+		LockParentShardResourceIfPartition(task->anchorShardId, lockMode);
+		LockShardResource(task->anchorShardId, lockMode);
 
 		/*
 		 * If the task has a subselect, then we may need to lock the shards from which
