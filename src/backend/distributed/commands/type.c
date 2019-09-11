@@ -78,7 +78,7 @@
 
 
 #define ALTER_TYPE_OWNER_COMMAND "ALTER TYPE %s OWNER TO %s;"
-#define CREATE_OR_REPLACE_COMMAND "SELECT worker_create_or_replace(%s);"
+#define CREATE_OR_REPLACE_COMMAND "SELECT worker_create_or_replace_object(%s);"
 
 
 /* forward declaration for helper functions*/

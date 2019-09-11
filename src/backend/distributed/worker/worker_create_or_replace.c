@@ -31,11 +31,11 @@ static Node * CreateStmtByObjectAddress(const ObjectAddress *address);
 static DropStmt * CreateDropStmtBasedOnCreateStmt(Node *createStmt);
 
 
-PG_FUNCTION_INFO_V1(worker_create_or_replace);
+PG_FUNCTION_INFO_V1(worker_create_or_replace_object);
 
 
 /*
- * worker_create_or_replace(statement text)
+ * worker_create_or_replace_object(statement text)
  *
  * function is called, by the coordinator, with a CREATE statement for an object. This
  * function implements the CREATE ... IF NOT EXISTS functionality for objects that do not
@@ -53,7 +53,7 @@ PG_FUNCTION_INFO_V1(worker_create_or_replace);
  *    it would drop any column holding user data for this type.
  */
 Datum
-worker_create_or_replace(PG_FUNCTION_ARGS)
+worker_create_or_replace_object(PG_FUNCTION_ARGS)
 {
 	text *sqlStatementText = PG_GETARG_TEXT_P(0);
 	const char *sqlStatement = text_to_cstring(sqlStatementText);
