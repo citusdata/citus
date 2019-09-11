@@ -73,6 +73,7 @@ BEGIN
     FROM pg_catalog.pg_dist_partition p;
 
     -- restore pg_dist_object from the stable identifiers
+    -- DELETE/INSERT to avoid primary key violations
     WITH old_records AS (
         DELETE FROM
             citus.pg_dist_object
