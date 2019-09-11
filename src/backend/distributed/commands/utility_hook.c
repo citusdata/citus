@@ -201,6 +201,19 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 #if (PG_VERSION_NUM >= 110000)
 	if (IsA(parsetree, CallStmt))
 	{
+		CallStmt *callStmt = (CallStmt *) parsetree;
+
+		/*
+		 * If the procedure is distributed and we are using MX then we have the
+		 * possibility of calling it on the worker. If the data is located on
+		 * the worker this can avoid making many network round trips.
+		 */
+		if (context == PROCESS_UTILITY_TOPLEVEL &&
+			CallDistributedProcedureRemotely(callStmt, queryString, dest))
+		{
+			return;
+		}
+
 		/*
 		 * Stored procedures are a bit strange in the sense that some statements
 		 * are not in a transaction block, but can be rolled back. We need to
