@@ -34,10 +34,8 @@ static char * DeparseAlterObjectDependsStmt(AlterObjectDependsStmt *stmt);
  *  - CREATE TYPE, ALTER TYPE, DROP TYPE
  *  - ALTER FUNCTION, ALTER PROCEDURE, ALTER AGGREGATE
  *  - DROP FUNCTION, DROP PROCEDURE, DROP AGGREGATE
- *
- *  - CREATE EXTENSION
- *  - ALTER EXTENSION
- *  - DROP EXTENSION
+ *  - CREATE EXTENSION, ALTER EXTENSION, DROP EXTENSION
+ *  - ALTER COLLATION, DROP COLLATION
  */
 char *
 DeparseTreeNode(Node *stmt)
@@ -133,6 +131,11 @@ DeparseDropStmt(DropStmt *stmt)
 			return DeparseDropTypeStmt(stmt);
 		}
 
+		case OBJECT_COLLATION:
+		{
+			return DeparseDropCollationStmt(stmt);
+		}
+
 		case OBJECT_PROCEDURE:
 		case OBJECT_AGGREGATE:
 		case OBJECT_FUNCTION:
@@ -205,6 +208,11 @@ DeparseRenameStmt(RenameStmt *stmt)
 			return DeparseRenameAttributeStmt(stmt);
 		}
 
+		case OBJECT_COLLATION:
+		{
+			return DeparseRenameCollationStmt(stmt);
+		}
+
 		case OBJECT_PROCEDURE:
 		case OBJECT_AGGREGATE:
 		case OBJECT_FUNCTION:
@@ -259,6 +267,11 @@ DeparseAlterObjectSchemaStmt(AlterObjectSchemaStmt *stmt)
 			return DeparseAlterTypeSchemaStmt(stmt);
 		}
 
+		case OBJECT_COLLATION:
+		{
+			return DeparseAlterCollationSchemaStmt(stmt);
+		}
+
 		case OBJECT_PROCEDURE:
 		case OBJECT_AGGREGATE:
 		case OBJECT_FUNCTION:
@@ -295,6 +308,11 @@ DeparseAlterOwnerStmt(AlterOwnerStmt *stmt)
 		case OBJECT_TYPE:
 		{
 			return DeparseAlterTypeOwnerStmt(stmt);
+		}
+
+		case OBJECT_COLLATION:
+		{
+			return DeparseAlterCollationOwnerStmt(stmt);
 		}
 
 		case OBJECT_PROCEDURE:

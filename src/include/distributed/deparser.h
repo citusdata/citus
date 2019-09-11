@@ -32,6 +32,17 @@ extern void AssertObjectTypeIsFunctional(ObjectType type);
 extern void QualifyTreeNode(Node *stmt);
 extern char * DeparseTreeNode(Node *stmt);
 
+/* forward declarations for deparse_collation_stmts.c */
+extern char * DeparseDropCollationStmt(DropStmt *stmt);
+extern char * DeparseRenameCollationStmt(RenameStmt *stmt);
+extern char * DeparseAlterCollationSchemaStmt(AlterObjectSchemaStmt *stmt);
+extern char * DeparseAlterCollationOwnerStmt(AlterOwnerStmt *stmt);
+
+extern void QualifyDropCollationStmt(DropStmt *stmt);
+extern void QualifyRenameCollationStmt(RenameStmt *stmt);
+extern void QualifyAlterCollationSchemaStmt(AlterObjectSchemaStmt *stmt);
+extern void QualifyAlterCollationOwnerStmt(AlterOwnerStmt *stmt);
+
 /* forward declarations for deparse_type_stmts.c */
 extern char * DeparseCompositeTypeStmt(CompositeTypeStmt *stmt);
 extern char * DeparseCreateEnumStmt(CreateEnumStmt *stmt);
@@ -52,8 +63,7 @@ extern void QualifyCreateEnumStmt(CreateEnumStmt *stmt);
 extern void QualifyAlterTypeSchemaStmt(AlterObjectSchemaStmt *stmt);
 extern void QualifyAlterTypeOwnerStmt(AlterOwnerStmt *stmt);
 
-extern ObjectAddress * GetObjectAddressFromParseTree(Node *parseTree, bool
-													 missing_ok);
+extern ObjectAddress * GetObjectAddressFromParseTree(Node *parseTree, bool missing_ok);
 
 /* forward declarations for deparse_function_stmts.c */
 extern char * DeparseDropFunctionStmt(DropStmt *stmt);

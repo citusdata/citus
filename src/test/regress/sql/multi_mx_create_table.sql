@@ -100,9 +100,6 @@ CREATE OPERATOR citus_mx_test_schema.=== (
     HASHES, MERGES
 );
 
-SET search_path TO public;
-CREATE COLLATION citus_mx_test_schema.english (LOCALE=:current_locale);
-
 -- now create required stuff in the worker 2
 \c - - - :worker_2_port
 
@@ -147,10 +144,6 @@ CREATE OPERATOR citus_mx_test_schema.=== (
     NEGATOR = !==,
     HASHES, MERGES
 );
-
-
-SET search_path TO public;
-CREATE COLLATION citus_mx_test_schema.english (LOCALE=:current_locale);
 
 -- connect back to the master, and do some more tests
 \c - - - :master_port

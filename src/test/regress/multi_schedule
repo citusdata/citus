@@ -302,6 +302,7 @@ test: ssl_by_default
 # ---------
 test: distributed_types distributed_types_conflict disable_object_propagation distributed_types_xact_add_enum_value
 test: distributed_functions distributed_functions_conflict
+test: distributed_collations distributed_collations_conflict
 test: distributed_procedure
 
 # ---------

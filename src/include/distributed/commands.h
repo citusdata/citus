@@ -27,6 +27,25 @@ extern List * PlanClusterStmt(ClusterStmt *clusterStmt, const char *clusterComma
 /* call.c */
 extern bool CallDistributedProcedureRemotely(CallStmt *callStmt, DestReceiver *dest);
 
+/* collation.c - forward declarations */
+extern char * CreateCollationDDL(Oid collationId);
+extern List * CreateCollationDDLsIdempotent(Oid collationId);
+extern ObjectAddress AlterCollationOwnerObjectAddress(AlterOwnerStmt *stmt);
+extern List * PlanDropCollationStmt(DropStmt *stmt);
+extern List * PlanAlterCollationOwnerStmt(AlterOwnerStmt *stmt, const char *queryString);
+extern List * PlanAlterCollationSchemaStmt(AlterObjectSchemaStmt *stmt,
+										   const char *queryString);
+extern List * PlanRenameCollationStmt(RenameStmt *stmt, const char *queryString);
+extern ObjectAddress * RenameCollationStmtObjectAddress(RenameStmt *stmt,
+														bool missing_ok);
+extern ObjectAddress * AlterCollationSchemaStmtObjectAddress(AlterObjectSchemaStmt *stmt,
+															 bool missing_ok);
+extern void ProcessAlterCollationSchemaStmt(AlterObjectSchemaStmt *stmt,
+											const char *queryString);
+extern char * GenerateBackupNameForCollationCollision(const ObjectAddress *address);
+extern ObjectAddress * DefineCollationStmtObjectAddress(DefineStmt *stmt, bool
+														missing_ok);
+extern List * ProcessCollationDefineStmt(DefineStmt *stmt, const char *queryString);
 
 /* extension.c - forward declarations */
 extern bool IsCreateAlterExtensionUpdateCitusStmt(Node *parsetree);

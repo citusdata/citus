@@ -130,7 +130,7 @@ PlanCreateExtensionStmt(CreateExtensionStmt *createExtensionStmt, const char *qu
 	}
 
 	/*
-	 * If the extension command is a part of a bigger multi-statement transaction,
+	 * If the extension command is a part of a multi-statement transaction,
 	 * do not propagate it
 	 */
 	if (IsMultiStatementTransaction())
