@@ -1072,6 +1072,15 @@ NodeDDLTaskList(TargetWorkerSet targets, List *commands)
 	ListCell *workerNodeCell = NULL;
 	Task *task = NULL;
 
+	if (list_length(workerNodes) <= 0)
+	{
+		/*
+		 * if there are no nodes we don't have to plan any ddl tasks. Planning them would
+		 * cause a hang in the executor.
+		 */
+		return NIL;
+	}
+
 	task = CitusMakeNode(Task);
 	task->taskType = DDL_TASK;
 	task->queryString = concatenatedCommands;
