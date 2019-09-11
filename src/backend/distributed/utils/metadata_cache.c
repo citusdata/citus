@@ -34,6 +34,7 @@
 #include "distributed/function_utils.h"
 #include "distributed/foreign_key_relationship.h"
 #include "distributed/master_metadata_utility.h"
+#include "distributed/metadata/pg_dist_object.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_executor.h"
 #include "distributed/pg_dist_local_group.h"
@@ -55,7 +56,6 @@
 #include "parser/parse_type.h"
 #include "storage/lmgr.h"
 #include "utils/builtins.h"
-#include "utils/catcache.h"
 #include "utils/datum.h"
 #include "utils/elog.h"
 #include "utils/hsearch.h"
@@ -163,6 +163,9 @@ static HTAB *DistTableCacheHash = NULL;
 static HTAB *DistShardCacheHash = NULL;
 static MemoryContext MetadataCacheMemoryContext = NULL;
 
+/* Hash table for information about each object */
+static HTAB *DistObjectCacheHash = NULL;
+
 /* Hash table for informations about worker nodes */
 static HTAB *WorkerNodeHash = NULL;
 static WorkerNode **WorkerNodeArray = NULL;
@@ -172,9 +175,10 @@ static bool workerNodeHashValid = false;
 /* default value is -1, for coordinator it's 0 and for worker nodes > 0 */
 static int32 LocalGroupId = -1;
 
-/* built first time through in InitializeDistTableCache */
+/* built first time through in InitializeDistCache */
 static ScanKeyData DistPartitionScanKey[1];
 static ScanKeyData DistShardScanKey[1];
+static ScanKeyData DistObjectScanKey[3];
 
 
 /* local function forward declarations */
@@ -197,7 +201,8 @@ static bool HasOverlappingShardInterval(ShardInterval **shardIntervalArray,
 										int shardIntervalArrayLength,
 										FmgrInfo *shardIntervalSortCompareFunction);
 static void InitializeCaches(void);
-static void InitializeDistTableCache(void);
+static void InitializeDistCache(void);
+static void InitializeDistObjectCache(void);
 static void InitializeWorkerNodeCache(void);
 static void RegisterForeignKeyGraphCacheCallbacks(void);
 static void RegisterWorkerNodeCacheCallbacks(void);
@@ -205,6 +210,7 @@ static void RegisterLocalGroupIdCacheCallbacks(void);
 static uint32 WorkerNodeHashCode(const void *key, Size keySize);
 static void ResetDistTableCacheEntry(DistTableCacheEntry *cacheEntry);
 static void CreateDistTableCache(void);
+static void CreateDistObjectCache(void);
 static void InvalidateForeignRelationGraphCacheCallback(Datum argument, Oid relationId);
 static void InvalidateDistRelationCacheCallback(Datum argument, Oid relationId);
 static void InvalidateNodeRelationCacheCallback(Datum argument, Oid relationId);
@@ -224,7 +230,8 @@ static void CachedRelationNamespaceLookup(const char *relationName, Oid relnames
 static ShardPlacement * ResolveGroupShardPlacement(
 	GroupShardPlacement *groupShardPlacement, ShardCacheEntry *shardEntry);
 static Oid LookupEnumValueId(Oid typeId, char *valueName);
-static void InvalidateEntireDistCache(void);
+static void InvalidateDistTableCache(void);
+static void InvalidateDistObjectCache(void);
 
 
 /* exports for SQL callable functions */
@@ -234,6 +241,7 @@ PG_FUNCTION_INFO_V1(master_dist_placement_cache_invalidate);
 PG_FUNCTION_INFO_V1(master_dist_node_cache_invalidate);
 PG_FUNCTION_INFO_V1(master_dist_local_group_cache_invalidate);
 PG_FUNCTION_INFO_V1(master_dist_authinfo_cache_invalidate);
+PG_FUNCTION_INFO_V1(master_dist_object_cache_invalidate);
 PG_FUNCTION_INFO_V1(role_exists);
 PG_FUNCTION_INFO_V1(authinfo_valid);
 PG_FUNCTION_INFO_V1(poolinfo_valid);
@@ -789,9 +797,8 @@ LookupShardCacheEntry(int64 shardId)
 DistTableCacheEntry *
 DistributedTableCacheEntry(Oid distributedRelationId)
 {
-	DistTableCacheEntry *cacheEntry = NULL;
-
-	cacheEntry = LookupDistTableCacheEntry(distributedRelationId);
+	DistTableCacheEntry *cacheEntry =
+		LookupDistTableCacheEntry(distributedRelationId);
 
 	if (cacheEntry && cacheEntry->isDistributedTable)
 	{
@@ -801,6 +808,26 @@ DistributedTableCacheEntry(Oid distributedRelationId)
 	{
 		char *relationName = get_rel_name(distributedRelationId);
 		ereport(ERROR, (errmsg("relation %s is not distributed", relationName)));
+	}
+}
+
+
+/*
+ * DistributedProcedureRecord loads a record from citus.pg_dist_object.
+ */
+DistObjectCacheEntry *
+DistributedObjectCacheEntry(Oid classid, Oid objid, int32 objsubid)
+{
+	DistObjectCacheEntry *cacheEntry =
+		LookupDistObjectCacheEntry(classid, objid, objsubid);
+
+	if (cacheEntry)
+	{
+		return cacheEntry;
+	}
+	else
+	{
+		ereport(ERROR, (errmsg("object is not distributed")));
 	}
 }
 
@@ -894,6 +921,107 @@ LookupDistTableCacheEntry(Oid relationId)
 	cacheEntry->isValid = true;
 
 	RESUME_INTERRUPTS();
+
+	return cacheEntry;
+}
+
+
+/*
+ * LookupDistObjectCacheEntry returns the distributed table metadata for the
+ * passed relationId. For efficiency it caches lookups.
+ */
+DistObjectCacheEntry *
+LookupDistObjectCacheEntry(Oid classid, Oid objid, int32 objsubid)
+{
+	DistObjectCacheEntry *cacheEntry = NULL;
+	bool foundInCache = false;
+	DistObjectCacheEntryKey hashKey;
+	Relation pgDistObjectRel = NULL;
+	TupleDesc pgDistObjectTupleDesc = NULL;
+	ScanKeyData pgDistObjectKey[3];
+	SysScanDesc pgDistObjectScan = NULL;
+	HeapTuple pgDistObjectTup = NULL;
+
+	memset(&hashKey, 0, sizeof(DistObjectCacheEntryKey));
+	hashKey.classid = classid;
+	hashKey.objid = objid;
+	hashKey.objsubid = objsubid;
+
+	/*
+	 * Can't be a distributed relation if the extension hasn't been loaded
+	 * yet. As we can't do lookups in nonexistent tables, directly return NULL
+	 * here.
+	 */
+	if (!CitusHasBeenLoaded())
+	{
+		return NULL;
+	}
+
+	InitializeCaches();
+
+	cacheEntry = hash_search(DistObjectCacheHash, &hashKey, HASH_ENTER, &foundInCache);
+
+	/* return valid matches */
+	if (foundInCache)
+	{
+		/*
+		 * We might have some concurrent metadata changes. In order to get the changes,
+		 * we first need to accept the cache invalidation messages.
+		 */
+		AcceptInvalidationMessages();
+
+		if (cacheEntry->isValid)
+		{
+			return cacheEntry;
+		}
+
+		/* this is where we'd free old entry's out of band data if it had any */
+	}
+
+	/* zero out entry, but not the key part */
+	memset(((char *) cacheEntry), 0, sizeof(DistObjectCacheEntry));
+	cacheEntry->key.classid = classid;
+	cacheEntry->key.objid = objid;
+	cacheEntry->key.objsubid = objsubid;
+
+	pgDistObjectRel = heap_open(DistObjectRelationId(), AccessShareLock);
+	pgDistObjectTupleDesc = RelationGetDescr(pgDistObjectRel);
+
+	ScanKeyInit(&pgDistObjectKey[0], Anum_pg_dist_object_classid,
+				BTEqualStrategyNumber, F_OIDEQ, ObjectIdGetDatum(classid));
+	ScanKeyInit(&pgDistObjectKey[1], Anum_pg_dist_object_objid,
+				BTEqualStrategyNumber, F_OIDEQ, ObjectIdGetDatum(objid));
+	ScanKeyInit(&pgDistObjectKey[2], Anum_pg_dist_object_objsubid,
+				BTEqualStrategyNumber, F_INT4EQ, Int32GetDatum(objsubid));
+
+	pgDistObjectScan = systable_beginscan(pgDistObjectRel, DistObjectPrimaryKeyIndexId(),
+										  true, NULL, 3, pgDistObjectKey);
+	pgDistObjectTup = systable_getnext(pgDistObjectScan);
+
+	if (HeapTupleIsValid(pgDistObjectTup))
+	{
+		Datum datumArray[Natts_pg_dist_object];
+		bool isNullArray[Natts_pg_dist_object];
+
+		heap_deform_tuple(pgDistObjectTup, pgDistObjectTupleDesc, datumArray,
+						  isNullArray);
+
+		cacheEntry->isValid = true;
+
+		cacheEntry->distributionArgIndex =
+			DatumGetInt32(datumArray[Anum_pg_dist_object_distribution_argument_index -
+									 1]);
+		cacheEntry->colocationId =
+			DatumGetInt32(datumArray[Anum_pg_dist_object_colocationid - 1]);
+	}
+	else
+	{
+		/* return NULL, cacheEntry left invalid in hash table */
+		cacheEntry = NULL;
+	}
+
+	systable_endscan(pgDistObjectScan);
+	relation_close(pgDistObjectRel, AccessShareLock);
 
 	return cacheEntry;
 }
@@ -2644,6 +2772,31 @@ master_dist_local_group_cache_invalidate(PG_FUNCTION_ARGS)
 
 
 /*
+ * master_dist_object_invalidate is a trigger function that performs relcache
+ * invalidation when the contents of pg_dist_object are changed on the SQL
+ * level.
+ *
+ * NB: We decided there is little point in checking permissions here, there
+ * are much easier ways to waste CPU than causing cache invalidations.
+ */
+Datum
+master_dist_object_cache_invalidate(PG_FUNCTION_ARGS)
+{
+	if (!CALLED_AS_TRIGGER(fcinfo))
+	{
+		ereport(ERROR, (errcode(ERRCODE_E_R_I_E_TRIGGER_PROTOCOL_VIOLATED),
+						errmsg("must be called as trigger")));
+	}
+
+	CheckCitusVersion(ERROR);
+
+	CitusInvalidateRelcacheByRelid(DistObjectRelationId());
+
+	PG_RETURN_DATUM(PointerGetDatum(NULL));
+}
+
+
+/*
  * InitializeCaches() registers invalidation handlers for metadata_cache.c's
  * caches.
  */
@@ -2670,18 +2823,12 @@ InitializeCaches(void)
 			/* set first, to avoid recursion dangers */
 			performedInitialization = true;
 
-			/* make sure we've initialized CacheMemoryContext */
-			if (CacheMemoryContext == NULL)
-			{
-				CreateCacheMemoryContext();
-			}
-
 			MetadataCacheMemoryContext = AllocSetContextCreate(
 				CacheMemoryContext,
 				"MetadataCacheMemoryContext",
 				ALLOCSET_DEFAULT_SIZES);
 
-			InitializeDistTableCache();
+			InitializeDistCache();
 			RegisterForeignKeyGraphCacheCallbacks();
 			RegisterWorkerNodeCacheCallbacks();
 			RegisterLocalGroupIdCacheCallbacks();
@@ -2708,7 +2855,7 @@ InitializeCaches(void)
 
 /* initialize the infrastructure for the metadata cache */
 static void
-InitializeDistTableCache(void)
+InitializeDistCache(void)
 {
 	HASHCTL info;
 
@@ -2733,8 +2880,9 @@ InitializeDistTableCache(void)
 	DistShardScanKey[0].sk_collation = InvalidOid;
 	DistShardScanKey[0].sk_attno = Anum_pg_dist_shard_logicalrelid;
 
-	/* initialize the per-table hash table */
 	CreateDistTableCache();
+
+	InitializeDistObjectCache();
 
 	/* initialize the per-shard hash table */
 	MemSet(&info, 0, sizeof(info));
@@ -2749,6 +2897,40 @@ InitializeDistTableCache(void)
 	/* Watch for invalidation events. */
 	CacheRegisterRelcacheCallback(InvalidateDistRelationCacheCallback,
 								  (Datum) 0);
+}
+
+
+static void
+InitializeDistObjectCache(void)
+{
+	/* build initial scan keys, copied for every relation scan */
+	memset(&DistObjectScanKey, 0, sizeof(DistObjectScanKey));
+
+	fmgr_info_cxt(F_OIDEQ,
+				  &DistObjectScanKey[0].sk_func,
+				  MetadataCacheMemoryContext);
+	DistObjectScanKey[0].sk_strategy = BTEqualStrategyNumber;
+	DistObjectScanKey[0].sk_subtype = InvalidOid;
+	DistObjectScanKey[0].sk_collation = InvalidOid;
+	DistObjectScanKey[0].sk_attno = Anum_pg_dist_object_classid;
+
+	fmgr_info_cxt(F_OIDEQ,
+				  &DistObjectScanKey[1].sk_func,
+				  MetadataCacheMemoryContext);
+	DistObjectScanKey[1].sk_strategy = BTEqualStrategyNumber;
+	DistObjectScanKey[1].sk_subtype = InvalidOid;
+	DistObjectScanKey[1].sk_collation = InvalidOid;
+	DistObjectScanKey[1].sk_attno = Anum_pg_dist_object_objid;
+
+	fmgr_info_cxt(F_INT4EQ,
+				  &DistObjectScanKey[2].sk_func,
+				  MetadataCacheMemoryContext);
+	DistObjectScanKey[2].sk_strategy = BTEqualStrategyNumber;
+	DistObjectScanKey[2].sk_subtype = InvalidOid;
+	DistObjectScanKey[2].sk_collation = InvalidOid;
+	DistObjectScanKey[2].sk_attno = Anum_pg_dist_object_objsubid;
+
+	CreateDistObjectCache();
 }
 
 
@@ -3141,7 +3323,7 @@ InvalidateForeignRelationGraphCacheCallback(Datum argument, Oid relationId)
 	if (relationId == MetadataCache.distColocationRelationId)
 	{
 		SetForeignConstraintRelationshipGraphInvalid();
-		InvalidateEntireDistCache();
+		InvalidateDistTableCache();
 	}
 }
 
@@ -3180,7 +3362,8 @@ InvalidateDistRelationCacheCallback(Datum argument, Oid relationId)
 	/* invalidate either entire cache or a specific entry */
 	if (relationId == InvalidOid)
 	{
-		InvalidateEntireDistCache();
+		InvalidateDistTableCache();
+		InvalidateDistObjectCache();
 	}
 	else
 	{
@@ -3194,25 +3377,30 @@ InvalidateDistRelationCacheCallback(Datum argument, Oid relationId)
 		{
 			cacheEntry->isValid = false;
 		}
-	}
 
-	/*
-	 * If pg_dist_partition is being invalidated drop all state
-	 * This happens pretty rarely, but most importantly happens during
-	 * DROP EXTENSION citus;
-	 */
-	if (relationId != InvalidOid && relationId == MetadataCache.distPartitionRelationId)
-	{
-		InvalidateMetadataSystemCache();
+		/*
+		 * If pg_dist_partition is being invalidated drop all state
+		 * This happens pretty rarely, but most importantly happens during
+		 * DROP EXTENSION citus;
+		 */
+		if (relationId == MetadataCache.distPartitionRelationId)
+		{
+			InvalidateMetadataSystemCache();
+		}
+
+		if (relationId == MetadataCache.distObjectRelationId)
+		{
+			InvalidateDistObjectCache();
+		}
 	}
 }
 
 
 /*
- * InvalidateEntireDistCache makes entire cache entries invalid.
+ * InvalidateDistTableCache marks all DistTableCacheHash entries invalid.
  */
 static void
-InvalidateEntireDistCache(void)
+InvalidateDistTableCache(void)
 {
 	DistTableCacheEntry *cacheEntry = NULL;
 	HASH_SEQ_STATUS status;
@@ -3220,6 +3408,24 @@ InvalidateEntireDistCache(void)
 	hash_seq_init(&status, DistTableCacheHash);
 
 	while ((cacheEntry = (DistTableCacheEntry *) hash_seq_search(&status)) != NULL)
+	{
+		cacheEntry->isValid = false;
+	}
+}
+
+
+/*
+ * InvalidateDistObjectCache marks all DistObjectCacheHash entries invalid.
+ */
+static void
+InvalidateDistObjectCache(void)
+{
+	DistObjectCacheEntry *cacheEntry = NULL;
+	HASH_SEQ_STATUS status;
+
+	hash_seq_init(&status, DistObjectCacheHash);
+
+	while ((cacheEntry = (DistObjectCacheEntry *) hash_seq_search(&status)) != NULL)
 	{
 		cacheEntry->isValid = false;
 	}
@@ -3260,6 +3466,22 @@ CreateDistTableCache(void)
 	info.hcxt = MetadataCacheMemoryContext;
 	DistTableCacheHash =
 		hash_create("Distributed Relation Cache", 32, &info,
+					HASH_ELEM | HASH_FUNCTION | HASH_CONTEXT);
+}
+
+
+/* CreateDistObjectCache initializes the per-object hash table */
+static void
+CreateDistObjectCache(void)
+{
+	HASHCTL info;
+	MemSet(&info, 0, sizeof(info));
+	info.keysize = sizeof(DistObjectCacheEntryKey);
+	info.entrysize = sizeof(DistObjectCacheEntry);
+	info.hash = tag_hash;
+	info.hcxt = MetadataCacheMemoryContext;
+	DistObjectCacheHash =
+		hash_create("Distributed Object Cache", 32, &info,
 					HASH_ELEM | HASH_FUNCTION | HASH_CONTEXT);
 }
 
@@ -3309,9 +3531,7 @@ DistTableOidList(void)
 		Datum relationIdDatum = heap_getattr(heapTuple,
 											 Anum_pg_dist_partition_logicalrelid,
 											 tupleDescriptor, &isNull);
-
 		relationId = DatumGetObjectId(relationIdDatum);
-
 		distTableOidList = lappend_oid(distTableOidList, relationId);
 
 		heapTuple = systable_getnext(scanDescriptor);
@@ -3410,7 +3630,8 @@ LookupDistShardTuples(Oid relationId)
 	/* set scan arguments */
 	scanKey[0].sk_argument = ObjectIdGetDatum(relationId);
 
-	scanDescriptor = systable_beginscan(pgDistShard, DistShardLogicalRelidIndexId(), true,
+	scanDescriptor = systable_beginscan(pgDistShard,
+										DistShardLogicalRelidIndexId(), true,
 										NULL, 1, scanKey);
 
 	currentShardTuple = systable_getnext(scanDescriptor);
@@ -3539,7 +3760,8 @@ GetPartitionTypeInputInfo(char *partitionKeyString, char partitionMethod,
  * ShardInterval using the provided descriptor and partition type information.
  */
 static ShardInterval *
-TupleToShardInterval(HeapTuple heapTuple, TupleDesc tupleDescriptor, Oid intervalTypeId,
+TupleToShardInterval(HeapTuple heapTuple, TupleDesc tupleDescriptor, Oid
+					 intervalTypeId,
 					 int32 intervalTypeMod)
 {
 	ShardInterval *shardInterval = NULL;
@@ -3569,7 +3791,8 @@ TupleToShardInterval(HeapTuple heapTuple, TupleDesc tupleDescriptor, Oid interva
 	 */
 	heap_deform_tuple(heapTuple, tupleDescriptor, datumArray, isNullArray);
 
-	relationId = DatumGetObjectId(datumArray[Anum_pg_dist_shard_logicalrelid - 1]);
+	relationId = DatumGetObjectId(datumArray[Anum_pg_dist_shard_logicalrelid -
+											 1]);
 	shardId = DatumGetInt64(datumArray[Anum_pg_dist_shard_shardid - 1]);
 	storageType = DatumGetChar(datumArray[Anum_pg_dist_shard_shardstorage - 1]);
 	minValueTextDatum = datumArray[Anum_pg_dist_shard_shardminvalue - 1];
@@ -3584,8 +3807,10 @@ TupleToShardInterval(HeapTuple heapTuple, TupleDesc tupleDescriptor, Oid interva
 		char *maxValueString = TextDatumGetCString(maxValueTextDatum);
 
 		/* TODO: move this up the call stack to avoid per-tuple invocation? */
-		get_type_io_data(intervalTypeId, IOFunc_input, &intervalTypeLen, &intervalByVal,
-						 &intervalAlign, &intervalDelim, &typeIoParam, &inputFunctionId);
+		get_type_io_data(intervalTypeId, IOFunc_input, &intervalTypeLen,
+						 &intervalByVal,
+						 &intervalAlign, &intervalDelim, &typeIoParam,
+						 &inputFunctionId);
 
 		/* finally convert min/max values to their actual types */
 		minValue = OidInputFunctionCall(inputFunctionId, minValueString,
@@ -3649,7 +3874,8 @@ CachedRelationLookup(const char *relationName, Oid *cachedOid)
 
 
 static void
-CachedRelationNamespaceLookup(const char *relationName, Oid relnamespace, Oid *cachedOid)
+CachedRelationNamespaceLookup(const char *relationName, Oid relnamespace,
+							  Oid *cachedOid)
 {
 	/* force callbacks to be registered, so we always get notified upon changes */
 	InitializeCaches();
@@ -3660,8 +3886,9 @@ CachedRelationNamespaceLookup(const char *relationName, Oid relnamespace, Oid *c
 
 		if (*cachedOid == InvalidOid)
 		{
-			ereport(ERROR, (errmsg("cache lookup failed for %s, called too early?",
-								   relationName)));
+			ereport(ERROR, (errmsg(
+								"cache lookup failed for %s, called too early?",
+								relationName)));
 		}
 	}
 }
@@ -3738,8 +3965,9 @@ CitusInvalidateRelcacheByShardId(int64 shardId)
 		 *
 		 * Hence we just emit a DEBUG5 message.
 		 */
-		ereport(DEBUG5, (errmsg("could not find distributed relation to invalidate for "
-								"shard "INT64_FORMAT, shardId)));
+		ereport(DEBUG5, (errmsg(
+							 "could not find distributed relation to invalidate for "
+							 "shard "INT64_FORMAT, shardId)));
 	}
 
 	systable_endscan(scanDescriptor);
@@ -3766,7 +3994,8 @@ DistNodeMetadata(void)
 	Relation pgDistNodeMetadata = NULL;
 	TupleDesc tupleDescriptor = NULL;
 
-	metadataTableOid = get_relname_relid("pg_dist_node_metadata", PG_CATALOG_NAMESPACE);
+	metadataTableOid = get_relname_relid("pg_dist_node_metadata",
+										 PG_CATALOG_NAMESPACE);
 	if (metadataTableOid == InvalidOid)
 	{
 		ereport(ERROR, (errmsg("pg_dist_node_metadata was not found")));
@@ -3788,7 +4017,8 @@ DistNodeMetadata(void)
 	}
 	else
 	{
-		ereport(ERROR, (errmsg("could not find any entries in pg_dist_metadata")));
+		ereport(ERROR, (errmsg(
+							"could not find any entries in pg_dist_metadata")));
 	}
 
 	systable_endscan(scanDescriptor);
@@ -3821,11 +4051,13 @@ authinfo_valid(PG_FUNCTION_ARGS)
 {
 	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 					errmsg("cannot write to pg_dist_authinfo"),
-					errdetail("Citus Community Edition does not support the use of "
-							  "custom authentication options."),
-					errhint("To learn more about using advanced authentication schemes "
-							"with Citus, please contact us at "
-							"https://citusdata.com/about/contact_us")));
+					errdetail(
+						"Citus Community Edition does not support the use of "
+						"custom authentication options."),
+					errhint(
+						"To learn more about using advanced authentication schemes "
+						"with Citus, please contact us at "
+						"https://citusdata.com/about/contact_us")));
 }
 
 
@@ -3838,8 +4070,9 @@ poolinfo_valid(PG_FUNCTION_ARGS)
 {
 	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 					errmsg("cannot write to pg_dist_poolinfo"),
-					errdetail("Citus Community Edition does not support the use of "
-							  "pooler options."),
+					errdetail(
+						"Citus Community Edition does not support the use of "
+						"pooler options."),
 					errhint("To learn more about using advanced pooling schemes "
 							"with Citus, please contact us at "
 							"https://citusdata.com/about/contact_us")));

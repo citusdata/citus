@@ -64,7 +64,7 @@ SendCommandToWorkerAsUser(char *nodeName, int32 nodePort, const char *nodeUser,
 
 	MarkRemoteTransactionCritical(transactionConnection);
 	RemoteTransactionBeginIfNecessary(transactionConnection);
-	ExecuteCriticalRemoteCommand(transactionConnection, command);
+	ExecuteCriticalRemoteCommand(transactionConnection, command, NULL);
 }
 
 
@@ -170,7 +170,7 @@ SendBareCommandListToWorkers(TargetWorkerSet targetWorkerSet, List *commandList)
 		{
 			char *commandString = lfirst(commandCell);
 
-			ExecuteCriticalRemoteCommand(workerConnection, commandString);
+			ExecuteCriticalRemoteCommand(workerConnection, commandString, NULL);
 		}
 
 		CloseConnection(workerConnection);
@@ -339,7 +339,7 @@ SendCommandListToWorkerInSingleTransaction(const char *nodeName, int32 nodePort,
 	{
 		char *commandString = lfirst(commandCell);
 
-		ExecuteCriticalRemoteCommand(workerConnection, commandString);
+		ExecuteCriticalRemoteCommand(workerConnection, commandString, NULL);
 	}
 
 	RemoteTransactionCommit(workerConnection);

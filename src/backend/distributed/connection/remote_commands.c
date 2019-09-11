@@ -35,6 +35,8 @@ static bool FinishConnectionIO(MultiConnection *connection, bool raiseInterrupts
 static WaitEventSet * BuildWaitEventSet(MultiConnection **allConnections,
 										int totalConnectionCount,
 										int pendingConnectionsStartIndex);
+static int ExecuteRemoteCommand(MultiConnection *connection, const char *command,
+								int elevel, PGresult **result);
 
 
 /* simple helpers */
@@ -377,36 +379,8 @@ ExecuteCriticalRemoteCommandList(MultiConnection *connection, List *commandList)
 	{
 		char *command = (char *) lfirst(commandCell);
 
-		ExecuteCriticalRemoteCommand(connection, command);
+		ExecuteCriticalRemoteCommand(connection, command, NULL);
 	}
-}
-
-
-/*
- * ExecuteCriticalRemoteCommand executes a remote command that is critical
- * to the transaction. If the command fails then the transaction aborts.
- */
-void
-ExecuteCriticalRemoteCommand(MultiConnection *connection, const char *command)
-{
-	int querySent = 0;
-	PGresult *result = NULL;
-	bool raiseInterrupts = true;
-
-	querySent = SendRemoteCommand(connection, command);
-	if (querySent == 0)
-	{
-		ReportConnectionError(connection, ERROR);
-	}
-
-	result = GetRemoteCommandResult(connection, raiseInterrupts);
-	if (!IsResponseOK(result))
-	{
-		ReportResultError(connection, result, ERROR);
-	}
-
-	PQclear(result);
-	ForgetResults(connection);
 }
 
 
@@ -417,9 +391,9 @@ ExecuteCriticalRemoteCommand(MultiConnection *connection, const char *command)
  * could return 0, QUERY_SEND_FAILED, or RESPONSE_NOT_OKAY
  * result is only set if there was no error
  */
-int
-ExecuteOptionalRemoteCommand(MultiConnection *connection, const char *command,
-							 PGresult **result)
+static int
+ExecuteRemoteCommand(MultiConnection *connection, const char *command,
+					 int elevel, PGresult **result)
 {
 	int querySent = 0;
 	PGresult *localResult = NULL;
@@ -428,14 +402,14 @@ ExecuteOptionalRemoteCommand(MultiConnection *connection, const char *command,
 	querySent = SendRemoteCommand(connection, command);
 	if (querySent == 0)
 	{
-		ReportConnectionError(connection, WARNING);
+		ReportConnectionError(connection, elevel);
 		return QUERY_SEND_FAILED;
 	}
 
 	localResult = GetRemoteCommandResult(connection, raiseInterrupts);
 	if (!IsResponseOK(localResult))
 	{
-		ReportResultError(connection, localResult, WARNING);
+		ReportResultError(connection, localResult, elevel);
 		PQclear(localResult);
 		ForgetResults(connection);
 		return RESPONSE_NOT_OKAY;
@@ -456,6 +430,33 @@ ExecuteOptionalRemoteCommand(MultiConnection *connection, const char *command,
 	}
 
 	return RESPONSE_OKAY;
+}
+
+
+/*
+ * ExecuteCriticalRemoteCommand executes a remote command that is critical
+ * to the transaction. If the command fails then the transaction aborts.
+ */
+void
+ExecuteCriticalRemoteCommand(MultiConnection *connection, const char *command,
+							 PGresult **result)
+{
+	ExecuteRemoteCommand(connection, command, ERROR, result);
+}
+
+
+/*
+ * ExecuteOptionalRemoteCommand executes a remote command. If the command fails a WARNING
+ * is emitted but execution continues.
+ *
+ * could return 0, QUERY_SEND_FAILED, or RESPONSE_NOT_OKAY
+ * result is only set if there was no error
+ */
+int
+ExecuteOptionalRemoteCommand(MultiConnection *connection, const char *command,
+							 PGresult **result)
+{
+	return ExecuteRemoteCommand(connection, command, WARNING, result);
 }
 
 

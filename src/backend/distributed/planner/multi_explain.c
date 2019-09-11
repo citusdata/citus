@@ -423,7 +423,8 @@ RemoteExplain(Task *task, ExplainState *es)
 		 * query, we will rollback to this savepoint. This saves us from side
 		 * effects of EXPLAIN ANALYZE on DML queries.
 		 */
-		ExecuteCriticalRemoteCommand(connection, "SAVEPOINT citus_explain_savepoint");
+		ExecuteCriticalRemoteCommand(connection, "SAVEPOINT citus_explain_savepoint",
+									 NULL);
 
 		/* run explain query */
 		executeResult = ExecuteOptionalRemoteCommand(connection, explainQuery->data,
@@ -444,7 +445,8 @@ RemoteExplain(Task *task, ExplainState *es)
 
 		/* rollback to the savepoint */
 		ExecuteCriticalRemoteCommand(connection,
-									 "ROLLBACK TO SAVEPOINT citus_explain_savepoint");
+									 "ROLLBACK TO SAVEPOINT citus_explain_savepoint",
+									 NULL);
 
 		if (remotePlan->explainOutputList != NIL)
 		{

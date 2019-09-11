@@ -82,7 +82,7 @@ wait_until_metadata_sync(PG_FUNCTION_ARGS)
 
 	MultiConnection *connection = GetNodeConnection(FORCE_NEW_CONNECTION,
 													"localhost", PostPortNumber);
-	ExecuteCriticalRemoteCommand(connection, "LISTEN " METADATA_SYNC_CHANNEL);
+	ExecuteCriticalRemoteCommand(connection, "LISTEN " METADATA_SYNC_CHANNEL, NULL);
 
 	waitResult = WaitLatchOrSocket(NULL, WL_SOCKET_READABLE | WL_TIMEOUT,
 								   PQsocket(connection->pgConn), timeout, 0);
