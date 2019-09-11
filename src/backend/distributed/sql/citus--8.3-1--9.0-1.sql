@@ -29,6 +29,7 @@ COMMENT ON FUNCTION pg_catalog.master_unmark_object_distributed(classid oid, obj
     IS 'remove an object address from citus.pg_dist_object once the object has been deleted';
 
 CREATE TABLE citus.pg_dist_object (
+	-- primary key
     classid oid NOT NULL,
     objid oid NOT NULL,
     objsubid integer NOT NULL,
@@ -45,6 +46,17 @@ CREATE TABLE citus.pg_dist_object (
 
     CONSTRAINT pg_dist_object_pkey PRIMARY KEY (classid, objid, objsubid)
 );
+
+CREATE FUNCTION master_dist_object_cache_invalidate()
+    RETURNS trigger
+    LANGUAGE C
+    AS 'MODULE_PATHNAME', $$master_dist_object_cache_invalidate$$;
+COMMENT ON FUNCTION master_dist_object_cache_invalidate()
+    IS 'register relcache invalidation for changed rows';
+CREATE TRIGGER dist_object_cache_invalidate
+    AFTER INSERT OR UPDATE OR DELETE
+    ON citus.pg_dist_object
+    FOR EACH ROW EXECUTE PROCEDURE master_dist_object_cache_invalidate();
 
 #include "udfs/create_distributed_function/9.0-1.sql"
 

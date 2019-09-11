@@ -244,7 +244,7 @@ IsObjectDistributed(const ObjectAddress *address)
 	ScanKeyInit(&key[1], Anum_pg_dist_object_objid, BTEqualStrategyNumber, F_OIDEQ,
 				ObjectIdGetDatum(address->objectId));
 	ScanKeyInit(&key[2], Anum_pg_dist_object_objsubid, BTEqualStrategyNumber, F_INT4EQ,
-				ObjectIdGetDatum(address->objectSubId));
+				Int32GetDatum(address->objectSubId));
 	pgDistObjectScan = systable_beginscan(pgDistObjectRel, DistObjectPrimaryKeyIndexId(),
 										  true, NULL, 3, key);
 

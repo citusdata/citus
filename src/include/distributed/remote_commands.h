@@ -43,7 +43,8 @@ extern void LogRemoteCommand(MultiConnection *connection, const char *command);
 extern void ExecuteCriticalRemoteCommandList(MultiConnection *connection,
 											 List *commandList);
 extern void ExecuteCriticalRemoteCommand(MultiConnection *connection,
-										 const char *command);
+										 const char *command,
+										 struct pg_result **result);
 extern int ExecuteOptionalRemoteCommand(MultiConnection *connection,
 										const char *command,
 										struct pg_result **result);

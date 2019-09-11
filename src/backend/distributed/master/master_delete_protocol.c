@@ -443,7 +443,7 @@ DropShards(Oid relationId, char *schemaName, char *relationName,
 
 			MarkRemoteTransactionCritical(connection);
 
-			ExecuteCriticalRemoteCommand(connection, workerDropQuery->data);
+			ExecuteCriticalRemoteCommand(connection, workerDropQuery->data, NULL);
 
 			DeleteShardPlacementRow(shardPlacement->placementId);
 		}

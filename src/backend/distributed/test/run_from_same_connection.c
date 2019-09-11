@@ -148,14 +148,14 @@ run_commands_on_session_level_connection_to_node(PG_FUNCTION_ARGS)
 	appendStringInfo(workerProcessStringInfo, ALTER_CURRENT_WORKER_PROCESS_ID,
 					 GetRemoteProcessId());
 
-	ExecuteCriticalRemoteCommand(singleConnection, queryString);
+	ExecuteCriticalRemoteCommand(singleConnection, queryString, NULL);
 
 	/*
 	 * Since we cannot run `ALTER SYSTEM` command within a transaction, we are
 	 * calling it from a self-connected session.
 	 */
-	ExecuteCriticalRemoteCommand(localConnection, processStringInfo->data);
-	ExecuteCriticalRemoteCommand(localConnection, workerProcessStringInfo->data);
+	ExecuteCriticalRemoteCommand(localConnection, processStringInfo->data, NULL);
+	ExecuteCriticalRemoteCommand(localConnection, workerProcessStringInfo->data, NULL);
 
 	CloseConnection(localConnection);
 

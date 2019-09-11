@@ -89,6 +89,24 @@ typedef struct
 	int *arrayOfPlacementArrayLengths;
 } DistTableCacheEntry;
 
+typedef struct DistObjectCacheEntryKey
+{
+	Oid classid;
+	Oid objid;
+	int32 objsubid;
+} DistObjectCacheEntryKey;
+
+typedef struct DistObjectCacheEntry
+{
+	/* lookup key - must be first. */
+	DistObjectCacheEntryKey key;
+
+	bool isValid;
+
+	int distributionArgIndex;
+	int colocationId;
+} DistObjectCacheEntry;
+
 
 extern bool IsDistributedTable(Oid relationId);
 extern List * DistributedTableList(void);
@@ -99,6 +117,10 @@ extern ShardPlacement * FindShardPlacementOnGroup(int32 groupId, uint64 shardId)
 extern GroupShardPlacement * LoadGroupShardPlacement(uint64 shardId, uint64 placementId);
 extern ShardPlacement * LoadShardPlacement(uint64 shardId, uint64 placementId);
 extern DistTableCacheEntry * DistributedTableCacheEntry(Oid distributedRelationId);
+extern DistObjectCacheEntry * DistributedObjectCacheEntry(Oid classid, Oid objid, int32
+														  objsubid);
+extern DistObjectCacheEntry * LookupDistObjectCacheEntry(Oid classid, Oid objid, int32
+														 objsubid);
 extern int32 GetLocalGroupId(void);
 extern List * DistTableOidList(void);
 extern Oid LookupShardRelation(int64 shardId, bool missing_ok);
