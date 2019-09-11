@@ -5,8 +5,8 @@ Usage:
     upgrade_test --old-bindir=<old-bindir> --new-bindir=<new-bindir> --pgxsdir=<pgxsdir>
 
 Options:
-    --old-bindir=<old-bindir>              The old PostgreSQL executable directory;(ex: '~/.pgenv/pgsql/bin')
-    --new-bindir=<new-bindir>              New postgres binary absolute path(ex: '~/.pgenv/pgsql-11.3/bin')
+    --old-bindir=<old-bindir>              The old PostgreSQL executable directory(ex: '~/.pgenv/pgsql-10.4/bin')
+    --new-bindir=<new-bindir>              The new PostgreSQL executable directory(ex: '~/.pgenv/pgsql-11.3/bin')
     --pgxsdir=<pgxsdir>           	       Path to the PGXS directory(ex: ~/.pgenv/src/postgresql-11.3)
 """
 
