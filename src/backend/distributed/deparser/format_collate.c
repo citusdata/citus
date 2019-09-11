@@ -28,9 +28,9 @@
  * The result is always a palloc'd string.
  */
 char *
-format_collate_be(Oid collate_oid)
+FormatCollateBE(Oid collate_oid)
 {
-	return format_collate_extended(collate_oid, 0);
+	return FormatCollateExtended(collate_oid, 0);
 }
 
 
@@ -38,14 +38,14 @@ format_collate_be(Oid collate_oid)
  * This version returns a name that is always qualified.
  */
 char *
-format_collate_be_qualified(Oid collate_oid)
+FormatCollateBEQualified(Oid collate_oid)
 {
-	return format_collate_extended(collate_oid, FORMAT_COLLATE_FORCE_QUALIFY);
+	return FormatCollateExtended(collate_oid, FORMAT_COLLATE_FORCE_QUALIFY);
 }
 
 
 /*
- * format_collate_extended - inspired by format_type_extended
+ * FormatCollateExtended - inspired by format_type_extended
  *		Generate a possibly-qualified collate name.
  *
  * The default behavior is to only qualify if the type is not in the search
@@ -58,7 +58,7 @@ format_collate_be_qualified(Oid collate_oid)
  * Returns a palloc'd string.
  */
 char *
-format_collate_extended(Oid collid, bits16 flags)
+FormatCollateExtended(Oid collid, bits16 flags)
 {
 	HeapTuple tuple = NULL;
 	Form_pg_collation collform = NULL;

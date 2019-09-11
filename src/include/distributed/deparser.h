@@ -20,34 +20,34 @@
 #include "catalog/objectaddress.h"
 
 /* forward declarations for format_collate.c */
-/* Control flags for format_collate_extended, compatible with format_type_extended */
+/* Control flags for FormatCollateExtended, compatible with format_type_extended */
 #define FORMAT_COLLATE_ALLOW_INVALID 0x02       /* allow invalid types */
 #define FORMAT_COLLATE_FORCE_QUALIFY 0x04       /* force qualification of collate */
-extern char * format_collate_be(Oid type_oid);
-extern char * format_collate_be_qualified(Oid type_oid);
-extern char * format_collate_extended(Oid collid, bits16 flags);
+extern char * FormatCollateBE(Oid collate_oid);
+extern char * FormatCollateBEQualified(Oid collate_oid);
+extern char * FormatCollateExtended(Oid collid, bits16 flags);
 
 extern void QualifyTreeNode(Node *stmt);
 extern const char * DeparseTreeNode(Node *stmt);
 
-extern const char * deparse_composite_type_stmt(CompositeTypeStmt *stmt);
-extern const char * deparse_create_enum_stmt(CreateEnumStmt *stmt);
-extern const char * deparse_drop_type_stmt(DropStmt *stmt);
-extern const char * deparse_alter_enum_stmt(AlterEnumStmt *stmt);
-extern const char * deparse_alter_type_stmt(AlterTableStmt *stmt);
-extern const char * deparse_rename_type_stmt(RenameStmt *stmt);
-extern const char * deparse_rename_type_attribute_stmt(RenameStmt *stmt);
-extern const char * deparse_alter_type_schema_stmt(AlterObjectSchemaStmt *stmt);
-extern const char * deparse_alter_type_owner_stmt(AlterOwnerStmt *stmt);
+extern const char * DeparseCompositeTypeStmt(CompositeTypeStmt *stmt);
+extern const char * DeparseCreateEnumStmt(CreateEnumStmt *stmt);
+extern const char * DeparseDropTypeStmt(DropStmt *stmt);
+extern const char * DeparseAlterEnumStmt(AlterEnumStmt *stmt);
+extern const char * DeparseAlterTypeStmt(AlterTableStmt *stmt);
+extern const char * DeparseRenameTypeStmt(RenameStmt *stmt);
+extern const char * DeparseRenameTypeAttributeStmt(RenameStmt *stmt);
+extern const char * DeparseAlterTypeSchemaStmt(AlterObjectSchemaStmt *stmt);
+extern const char * DeparseAlterTypeOwnerStmt(AlterOwnerStmt *stmt);
 
-extern void qualify_rename_type_stmt(RenameStmt *stmt);
-extern void qualify_rename_type_attribute_stmt(RenameStmt *stmt);
-extern void qualify_alter_enum_stmt(AlterEnumStmt *stmt);
-extern void qualify_alter_type_stmt(AlterTableStmt *stmt);
-extern void qualify_composite_type_stmt(CompositeTypeStmt *stmt);
-extern void qualify_create_enum_stmt(CreateEnumStmt *stmt);
-extern void qualify_alter_type_schema_stmt(AlterObjectSchemaStmt *stmt);
-extern void qualify_alter_type_owner_stmt(AlterOwnerStmt *stmt);
+extern void QualifyRenameTypeStmt(RenameStmt *stmt);
+extern void QualifyRenameTypeAttributeStmt(RenameStmt *stmt);
+extern void QualifyAlterEnumStmt(AlterEnumStmt *stmt);
+extern void QualifyAlterTypeStmt(AlterTableStmt *stmt);
+extern void QualifyCompositeTypeStmt(CompositeTypeStmt *stmt);
+extern void QualifyCreateEnumStmt(CreateEnumStmt *stmt);
+extern void QualifyAlterTypeSchemaStmt(AlterObjectSchemaStmt *stmt);
+extern void QualifyAlterTypeOwnerStmt(AlterOwnerStmt *stmt);
 
 extern const ObjectAddress * GetObjectAddressFromParseTree(Node *parseTree, bool
 														   missing_ok);

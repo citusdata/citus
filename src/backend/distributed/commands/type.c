@@ -84,16 +84,16 @@
 /* forward declaration for helper functions*/
 static List * FilterNameListForDistributedTypes(List *objects, bool missing_ok);
 static List * TypeNameListToObjectAddresses(List *objects);
-static TypeName * makeTypeNameFromRangeVar(const RangeVar *relation);
+static TypeName * MakeTypeNameFromRangeVar(const RangeVar *relation);
 static void EnsureSequentialModeForTypeDDL(void);
-static Oid get_typowner(Oid typid);
-static const char * wrap_in_sql(const char *fmt, const char *sql);
+static Oid GetTypeOwner(Oid typeOid);
+static const char * WrapCreateOrReplace(const char *sql);
 
 /* recreate functions */
 static CompositeTypeStmt * RecreateCompositeTypeStmt(Oid typeOid);
-static List * composite_type_coldeflist(Oid typeOid);
+static List * CompositeTypeColumnDefList(Oid typeOid);
 static CreateEnumStmt * RecreateEnumStmt(Oid typeOid);
-static List * enum_vals_list(Oid typeOid);
+static List * EnumValsList(Oid typeOid);
 
 static bool ShouldPropagateTypeCreate(void);
 
@@ -147,8 +147,8 @@ PlanCompositeTypeStmt(CompositeTypeStmt *stmt, const char *queryString)
 	 * type previously has been attempted to be created in a transaction which did not
 	 * commit on the coordinator.
 	 */
-	compositeTypeStmtSql = deparse_composite_type_stmt(stmt);
-	compositeTypeStmtSql = wrap_in_sql(CREATE_OR_REPLACE_COMMAND, compositeTypeStmtSql);
+	compositeTypeStmtSql = DeparseCompositeTypeStmt(stmt);
+	compositeTypeStmtSql = WrapCreateOrReplace(compositeTypeStmtSql);
 
 	/*
 	 * when we allow propagation within a transaction block we should make sure to only
@@ -276,8 +276,8 @@ PlanCreateEnumStmt(CreateEnumStmt *stmt, const char *queryString)
 	QualifyTreeNode((Node *) stmt);
 
 	/* reconstruct creation statement in a portable fashion */
-	createEnumStmtSql = deparse_create_enum_stmt(stmt);
-	createEnumStmtSql = wrap_in_sql(CREATE_OR_REPLACE_COMMAND, createEnumStmtSql);
+	createEnumStmtSql = DeparseCreateEnumStmt(stmt);
+	createEnumStmtSql = WrapCreateOrReplace(createEnumStmtSql);
 
 	/*
 	 * when we allow propagation within a transaction block we should make sure to only
@@ -375,7 +375,66 @@ PlanAlterEnumStmt(AlterEnumStmt *stmt, const char *queryString)
 	/* TODO this is not needed anymore for pg12, alter enum can actually run in a xact */
 	if (AlterEnumIsAddValue(stmt))
 	{
+		/*
+		 * a plan cannot be made as it will be committed via 2PC when ran through the
+		 * executor, instead we directly distributed during processing phase
+		 */
+		return NIL;
+	}
+
+	commands = list_make3(DISABLE_DDL_PROPAGATION,
+						  (void *) alterEnumStmtSql,
+						  ENABLE_DDL_PROPAGATION);
+
+	return NodeDDLTaskList(ALL_WORKERS, commands);
+}
+
+
+/*
+ * ProcessAlterEnumStmt is called after the AlterEnumStmt has been applied locally.
+ *
+ * This function is used for ALTER ENUM ... ADD VALUE for postgres versions lower then 12
+ * to distribute the call. Before pg12 these statements could not be called in a
+ * transaction. If we would plan the distirbution of these statements the same as we do
+ * with the other statements they would get executed in a transaction to perform 2PC, that
+ * would error out.
+ *
+ * If it would error on some workers we provide a warning to the user that the statement
+ * failed to distributed with some detail on what to call after the cluster has been
+ * repaired.
+ *
+ * For pg12 the statements can be called in a transaction but will only become visible
+ * when the transaction commits. This is behaviour that is ok to perform in a 2PC.
+ */
+void
+ProcessAlterEnumStmt(AlterEnumStmt *stmt, const char *queryString)
+{
+	const char *alterEnumStmtSql = NULL;
+	const ObjectAddress *typeAddress = NULL;
+
+	if (creating_extension)
+	{
+		/*
+		 * extensions should be created separately on the workers, types cascading from an
+		 * extension should therefor not be propagated here.
+		 */
+		return;
+	}
+
+	typeAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
+	if (!IsObjectDistributed(typeAddress))
+	{
+		return;
+	}
+
+	/* qualification of the stmt happened during planning */
+	alterEnumStmtSql = DeparseTreeNode((Node *) stmt);
+
+	/* TODO this is not needed anymore for pg12, alter enum can actually run in a xact */
+	if (AlterEnumIsAddValue(stmt))
+	{
 		int result = 0;
+		List *commands = NIL;
 
 		/*
 		 * ADD VALUE can't be executed in a transaction, we will execute optimistically
@@ -386,7 +445,6 @@ PlanAlterEnumStmt(AlterEnumStmt *stmt, const char *queryString)
 
 		commands = list_make2(DISABLE_DDL_PROPAGATION, (void *) alterEnumStmtSql);
 
-		/* TODO function name is unwieldly long, and runs serially which is not nice */
 		result = SendBareOptionalCommandListToWorkersAsUser(ALL_WORKERS, commands, NULL);
 
 		if (result != RESPONSE_OKAY)
@@ -404,15 +462,7 @@ PlanAlterEnumStmt(AlterEnumStmt *stmt, const char *queryString)
 							  errhint("make sure the coordinators can communicate with "
 									  "all workers")));
 		}
-
-		return NIL;
 	}
-
-	commands = list_make3(DISABLE_DDL_PROPAGATION,
-						  (void *) alterEnumStmtSql,
-						  ENABLE_DDL_PROPAGATION);
-
-	return NodeDDLTaskList(ALL_WORKERS, commands);
 }
 
 
@@ -748,7 +798,7 @@ RecreateCompositeTypeStmt(Oid typeOid)
 	stmt = makeNode(CompositeTypeStmt);
 	names = stringToQualifiedNameList(format_type_be_qualified(typeOid));
 	stmt->typevar = makeRangeVarFromNameList(names);
-	stmt->coldeflist = composite_type_coldeflist(typeOid);
+	stmt->coldeflist = CompositeTypeColumnDefList(typeOid);
 
 	return stmt;
 }
@@ -771,11 +821,11 @@ attributeFormToColumnDef(Form_pg_attribute attributeForm)
 
 
 /*
- * composite_type_coldeflist returns a list of ColumnDef *'s that make up all the fields
+ * CompositeTypeColumnDefList returns a list of ColumnDef *'s that make up all the fields
  * of the composite type.
  */
 static List *
-composite_type_coldeflist(Oid typeOid)
+CompositeTypeColumnDefList(Oid typeOid)
 {
 	Relation relation = NULL;
 	Oid relationId = InvalidOid;
@@ -819,18 +869,18 @@ RecreateEnumStmt(Oid typeOid)
 
 	stmt = makeNode(CreateEnumStmt);
 	stmt->typeName = stringToQualifiedNameList(format_type_be_qualified(typeOid));
-	stmt->vals = enum_vals_list(typeOid);
+	stmt->vals = EnumValsList(typeOid);
 
 	return stmt;
 }
 
 
 /*
- * enum_vals_list returns a list of String values containing the enum values for the given
+ * EnumValsList returns a list of String values containing the enum values for the given
  * enum type.
  */
 static List *
-enum_vals_list(Oid typeOid)
+EnumValsList(Oid typeOid)
 {
 	Relation enum_rel = NULL;
 	SysScanDesc enum_scan = NULL;
@@ -879,7 +929,7 @@ CompositeTypeStmtObjectAddress(CompositeTypeStmt *stmt, bool missing_ok)
 	Oid typeOid = InvalidOid;
 	ObjectAddress *address = NULL;
 
-	typeName = makeTypeNameFromRangeVar(stmt->typevar);
+	typeName = MakeTypeNameFromRangeVar(stmt->typevar);
 	typeOid = LookupTypeNameOid(NULL, typeName, missing_ok);
 	address = palloc0(sizeof(ObjectAddress));
 	ObjectAddressSet(*address, TypeRelationId, typeOid);
@@ -929,7 +979,7 @@ AlterTypeStmtObjectAddress(AlterTableStmt *stmt, bool missing_ok)
 
 	Assert(stmt->relkind == OBJECT_TYPE);
 
-	typeName = makeTypeNameFromRangeVar(stmt->relation);
+	typeName = MakeTypeNameFromRangeVar(stmt->relation);
 	typeOid = LookupTypeNameOid(NULL, typeName, missing_ok);
 	address = palloc0(sizeof(ObjectAddress));
 	ObjectAddressSet(*address, TypeRelationId, typeOid);
@@ -1066,7 +1116,7 @@ RenameTypeAttributeStmtObjectAddress(RenameStmt *stmt, bool missing_ok)
 	Assert(stmt->renameType == OBJECT_ATTRIBUTE);
 	Assert(stmt->relationType == OBJECT_TYPE);
 
-	typeName = makeTypeNameFromRangeVar(stmt->relation);
+	typeName = MakeTypeNameFromRangeVar(stmt->relation);
 	typeOid = LookupTypeNameOid(NULL, typeName, missing_ok);
 	address = palloc0(sizeof(ObjectAddress));
 	ObjectAddressSet(*address, TypeRelationId, typeOid);
@@ -1098,12 +1148,12 @@ AlterTypeOwnerObjectAddress(AlterOwnerStmt *stmt, bool missing_ok)
 
 
 /*
- * CompositeTypeStmtToDrop returns, given a CREATE TYPE statement, a corresponding
- * statement to drop the type that is to be created. The type does not need to exists in
- * this postgres for this function to succeed.
+ * CreateDropStmtBasedOnCompositeTypeStmt returns, given a CREATE TYPE statement, a
+ * corresponding statement to drop the type that is to be created. The type does not need
+ * to exists in this postgres for this function to succeed.
  */
 DropStmt *
-CompositeTypeStmtToDrop(CompositeTypeStmt *stmt)
+CreateDropStmtBasedOnCompositeTypeStmt(CompositeTypeStmt *stmt)
 {
 	List *names = MakeNameListFromRangeVar(stmt->typevar);
 	TypeName *typeName = makeTypeNameFromNameList(names);
@@ -1116,12 +1166,12 @@ CompositeTypeStmtToDrop(CompositeTypeStmt *stmt)
 
 
 /*
- * CreateEnumStmtToDrop returns, given a CREATE TYPE ... AS ENUM statement, a
+ * CreateDropStmtBasedOnEnumStmt returns, given a CREATE TYPE ... AS ENUM statement, a
  * corresponding statement to drop the type that is to be created. The type does not need
  * to exists in this postgres for this function to succeed.
  */
 DropStmt *
-CreateEnumStmtToDrop(CreateEnumStmt *stmt)
+CreateDropStmtBasedOnEnumStmt(CreateEnumStmt *stmt)
 {
 	TypeName *typeName = makeTypeNameFromNameList(stmt->typeName);
 
@@ -1162,11 +1212,11 @@ CreateTypeDDLCommandsIdempotent(const ObjectAddress *typeAddress)
 
 	/* capture ddl command for recreation and wrap in create if not exists construct */
 	ddlCommand = DeparseTreeNode(stmt);
-	ddlCommand = wrap_in_sql(CREATE_OR_REPLACE_COMMAND, ddlCommand);
+	ddlCommand = WrapCreateOrReplace(ddlCommand);
 	ddlCommands = lappend(ddlCommands, (void *) ddlCommand);
 
 	/* add owner ship change so the creation command can be run as a different user */
-	username = GetUserNameFromId(get_typowner(typeAddress->objectId), false);
+	username = GetUserNameFromId(GetTypeOwner(typeAddress->objectId), false);
 	initStringInfo(&buf);
 	appendStringInfo(&buf, ALTER_TYPE_OWNER_COMMAND, getObjectIdentity(typeAddress),
 					 quote_identifier(username));
@@ -1177,16 +1227,15 @@ CreateTypeDDLCommandsIdempotent(const ObjectAddress *typeAddress)
 
 
 /*
- * wrap_in_sql
- *
- * TODO specialize info create_or_replace command
+ * WrapCreateOrReplace takes a sql CREATE command and wraps it in a call to citus' udf to
+ * create or replace the existing object based on its create command.
  */
 const char *
-wrap_in_sql(const char *fmt, const char *sql)
+WrapCreateOrReplace(const char *sql)
 {
 	StringInfoData buf = { 0 };
 	initStringInfo(&buf);
-	appendStringInfo(&buf, fmt, quote_literal_cstr(sql));
+	appendStringInfo(&buf, CREATE_OR_REPLACE_COMMAND, quote_literal_cstr(sql));
 	return buf.data;
 }
 
@@ -1248,17 +1297,17 @@ TypeNameListToObjectAddresses(List *objects)
 
 
 /*
- * get_typowner
+ * GetTypeOwner
  *
  *		Given the type OID, find its owner
  */
 static Oid
-get_typowner(Oid typid)
+GetTypeOwner(Oid typeOid)
 {
 	Oid result = InvalidOid;
 	HeapTuple tp = NULL;
 
-	tp = SearchSysCache1(TYPEOID, ObjectIdGetDatum(typid));
+	tp = SearchSysCache1(TYPEOID, ObjectIdGetDatum(typeOid));
 	if (HeapTupleIsValid(tp))
 	{
 		Form_pg_type typtup = (Form_pg_type) GETSTRUCT(tp);
@@ -1272,10 +1321,10 @@ get_typowner(Oid typid)
 
 
 /*
- * makeTypeNameFromRangeVar creates a TypeName based on a RangeVar.
+ * MakeTypeNameFromRangeVar creates a TypeName based on a RangeVar.
  */
 static TypeName *
-makeTypeNameFromRangeVar(const RangeVar *relation)
+MakeTypeNameFromRangeVar(const RangeVar *relation)
 {
 	List *names = NIL;
 	if (relation->schemaname)
@@ -1336,7 +1385,7 @@ EnsureSequentialModeForTypeDDL(void)
  *  - During the creation of an Extension; we assume the type will be created by creating
  *    the extension on the worker
  *  - During a transaction block; if types are used in a distributed table in the same
- *    block we can only provide parallelism on the table if we do not change to sequentia
+ *    block we can only provide parallelism on the table if we do not change to sequential
  *    mode. Types will be propagated outside of this transaction to the workers so that
  *    the transaction can use 1 connection per shard and fully utilize citus' parallelism
  */
@@ -1357,7 +1406,7 @@ ShouldPropagateTypeCreate()
 	 * this type will be used as a column in a table that will be created and distributed
 	 * in this same transaction.
 	 */
-	if (IsTransactionBlock())
+	if (IsMultiStatementTransaction())
 	{
 		return false;
 	}

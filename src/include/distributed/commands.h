@@ -129,6 +129,7 @@ extern List * PlanAlterTypeStmt(AlterTableStmt *stmt, const char *queryString);
 extern List * PlanCreateEnumStmt(CreateEnumStmt *createEnumStmt, const char *queryString);
 extern void ProcessCreateEnumStmt(CreateEnumStmt *stmt, const char *queryString);
 extern List * PlanAlterEnumStmt(AlterEnumStmt *stmt, const char *queryString);
+extern void ProcessAlterEnumStmt(AlterEnumStmt *stmt, const char *queryString);
 extern List * PlanDropTypeStmt(DropStmt *stmt, const char *queryString);
 extern List * PlanRenameTypeStmt(RenameStmt *stmt, const char *queryString);
 extern List * PlanRenameTypeAttributeStmt(RenameStmt *stmt, const char *queryString);
@@ -154,8 +155,8 @@ extern const ObjectAddress * RenameTypeAttributeStmtObjectAddress(RenameStmt *st
 																  bool missing_ok);
 extern const ObjectAddress * AlterTypeOwnerObjectAddress(AlterOwnerStmt *stmt,
 														 bool missing_ok);
-extern DropStmt * CompositeTypeStmtToDrop(CompositeTypeStmt *stmt);
-extern DropStmt * CreateEnumStmtToDrop(CreateEnumStmt *stmt);
+extern DropStmt * CreateDropStmtBasedOnCompositeTypeStmt(CompositeTypeStmt *stmt);
+extern DropStmt * CreateDropStmtBasedOnEnumStmt(CreateEnumStmt *stmt);
 extern List * CreateTypeDDLCommandsIdempotent(const ObjectAddress *typeAddress);
 
 /* vacuum.c - froward declarations */

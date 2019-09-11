@@ -5,7 +5,7 @@
  *	  This file contains all entry points specific for type statement deparsing as well as
  *	  functions that are currently only used for deparsing of the type statements.
  *
- *	  Functions that could move later are appendColumnDef, appendColumnDefList, etc. These
+ *	  Functions that could move later are AppendColumnDef, AppendColumnDefList, etc. These
  *	  should be reused across multiple statements and should live in their own deparse
  *	  file.
  *
@@ -32,101 +32,101 @@
 #define AlterEnumIsAddValue(stmt) (stmt->oldVal == NULL)
 
 /* forward declaration for deparse functions */
-static void appendCompositeTypeStmt(StringInfo str, CompositeTypeStmt *stmt);
-static void appendColumnDef(StringInfo str, ColumnDef *columnDef);
-static void appendColumnDefList(StringInfo str, List *columnDefs);
+static void AppendCompositeTypeStmt(StringInfo str, CompositeTypeStmt *stmt);
+static void AppendColumnDef(StringInfo str, ColumnDef *columnDef);
+static void AppendColumnDefList(StringInfo str, List *columnDefs);
 
-static void appendCreateEnumStmt(StringInfo str, CreateEnumStmt *stmt);
-static void appendStringList(StringInfo str, List *strings);
+static void AppendCreateEnumStmt(StringInfo str, CreateEnumStmt *stmt);
+static void AppendStringList(StringInfo str, List *strings);
 
-static void appendDropTypeStmt(StringInfo buf, DropStmt *stmt);
-static void appendTypeNameList(StringInfo buf, List *objects);
+static void AppendDropTypeStmt(StringInfo buf, DropStmt *stmt);
+static void AppendTypeNameList(StringInfo buf, List *objects);
 
-static void appendAlterEnumStmt(StringInfo buf, AlterEnumStmt *stmt);
+static void AppendAlterEnumStmt(StringInfo buf, AlterEnumStmt *stmt);
 
-static void appendAlterTypeStmt(StringInfo buf, AlterTableStmt *stmt);
-static void appendAlterTypeCmd(StringInfo buf, AlterTableCmd *alterTableCmd);
-static void appendAlterTypeCmdAddColumn(StringInfo buf, AlterTableCmd *alterTableCmd);
-static void appendAlterTypeCmdDropColumn(StringInfo buf, AlterTableCmd *alterTableCmd);
-static void appendAlterTypeCmdAlterColumnType(StringInfo buf,
+static void AppendAlterTypeStmt(StringInfo buf, AlterTableStmt *stmt);
+static void AppendAlterTypeCmd(StringInfo buf, AlterTableCmd *alterTableCmd);
+static void AppendAlterTypeCmdAddColumn(StringInfo buf, AlterTableCmd *alterTableCmd);
+static void AppendAlterTypeCmdDropColumn(StringInfo buf, AlterTableCmd *alterTableCmd);
+static void AppendAlterTypeCmdAlterColumnType(StringInfo buf,
 											  AlterTableCmd *alterTableCmd);
 
-static void appendRenameTypeStmt(StringInfo buf, RenameStmt *stmt);
-static void appendRenameTypeAttributeStmt(StringInfo buf, RenameStmt *stmt);
-static void appendAlterTypeSchemaStmt(StringInfo buf, AlterObjectSchemaStmt *stmt);
-static void appendAlterTypeOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt);
+static void AppendRenameTypeStmt(StringInfo buf, RenameStmt *stmt);
+static void AppendRenameTypeAttributeStmt(StringInfo buf, RenameStmt *stmt);
+static void AppendAlterTypeSchemaStmt(StringInfo buf, AlterObjectSchemaStmt *stmt);
+static void AppendAlterTypeOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt);
 
 
 /*
- * deparse_composite_type_stmt builds and returns a string representing the
+ * DeparseCompositeTypeStmt builds and returns a string representing the
  * CompositeTypeStmt for application on a remote server.
  */
 const char *
-deparse_composite_type_stmt(CompositeTypeStmt *stmt)
+DeparseCompositeTypeStmt(CompositeTypeStmt *stmt)
 {
 	StringInfoData sql = { 0 };
 	initStringInfo(&sql);
 
-	appendCompositeTypeStmt(&sql, stmt);
+	AppendCompositeTypeStmt(&sql, stmt);
 
 	return sql.data;
 }
 
 
 const char *
-deparse_create_enum_stmt(CreateEnumStmt *stmt)
+DeparseCreateEnumStmt(CreateEnumStmt *stmt)
 {
 	StringInfoData sql = { 0 };
 	initStringInfo(&sql);
 
-	appendCreateEnumStmt(&sql, stmt);
+	AppendCreateEnumStmt(&sql, stmt);
 
 	return sql.data;
 }
 
 
 const char *
-deparse_alter_enum_stmt(AlterEnumStmt *stmt)
+DeparseAlterEnumStmt(AlterEnumStmt *stmt)
 {
 	StringInfoData sql = { 0 };
 	initStringInfo(&sql);
 
-	appendAlterEnumStmt(&sql, stmt);
+	AppendAlterEnumStmt(&sql, stmt);
 
 	return sql.data;
 }
 
 
 const char *
-deparse_drop_type_stmt(DropStmt *stmt)
+DeparseDropTypeStmt(DropStmt *stmt)
 {
 	StringInfoData str = { 0 };
 	initStringInfo(&str);
 
 	Assert(stmt->removeType == OBJECT_TYPE);
 
-	appendDropTypeStmt(&str, stmt);
+	AppendDropTypeStmt(&str, stmt);
 
 	return str.data;
 }
 
 
 const char *
-deparse_alter_type_stmt(AlterTableStmt *stmt)
+DeparseAlterTypeStmt(AlterTableStmt *stmt)
 {
 	StringInfoData str = { 0 };
 	initStringInfo(&str);
 
 	Assert(stmt->relkind == OBJECT_TYPE);
 
-	appendAlterTypeStmt(&str, stmt);
+	AppendAlterTypeStmt(&str, stmt);
 
 	return str.data;
 }
 
 
 static void
-appendAlterTypeStmt(StringInfo buf, AlterTableStmt *stmt)
+AppendAlterTypeStmt(StringInfo buf, AlterTableStmt *stmt)
 {
 	const char *identifier = quote_qualified_identifier(stmt->relation->schemaname,
 														stmt->relation->relname);
@@ -145,7 +145,7 @@ appendAlterTypeStmt(StringInfo buf, AlterTableStmt *stmt)
 		}
 
 		alterTableCmd = castNode(AlterTableCmd, lfirst(cmdCell));
-		appendAlterTypeCmd(buf, alterTableCmd);
+		AppendAlterTypeCmd(buf, alterTableCmd);
 	}
 
 	appendStringInfoString(buf, ";");
@@ -153,25 +153,25 @@ appendAlterTypeStmt(StringInfo buf, AlterTableStmt *stmt)
 
 
 static void
-appendAlterTypeCmd(StringInfo buf, AlterTableCmd *alterTableCmd)
+AppendAlterTypeCmd(StringInfo buf, AlterTableCmd *alterTableCmd)
 {
 	switch (alterTableCmd->subtype)
 	{
 		case AT_AddColumn:
 		{
-			appendAlterTypeCmdAddColumn(buf, alterTableCmd);
+			AppendAlterTypeCmdAddColumn(buf, alterTableCmd);
 			break;
 		}
 
 		case AT_DropColumn:
 		{
-			appendAlterTypeCmdDropColumn(buf, alterTableCmd);
+			AppendAlterTypeCmdDropColumn(buf, alterTableCmd);
 			break;
 		}
 
 		case AT_AlterColumnType:
 		{
-			appendAlterTypeCmdAlterColumnType(buf, alterTableCmd);
+			AppendAlterTypeCmdAlterColumnType(buf, alterTableCmd);
 			break;
 		}
 
@@ -185,17 +185,17 @@ appendAlterTypeCmd(StringInfo buf, AlterTableCmd *alterTableCmd)
 
 
 static void
-appendAlterTypeCmdAddColumn(StringInfo buf, AlterTableCmd *alterTableCmd)
+AppendAlterTypeCmdAddColumn(StringInfo buf, AlterTableCmd *alterTableCmd)
 {
 	Assert(alterTableCmd->subtype == AT_AddColumn);
 
 	appendStringInfoString(buf, " ADD ATTRIBUTE ");
-	appendColumnDef(buf, castNode(ColumnDef, alterTableCmd->def));
+	AppendColumnDef(buf, castNode(ColumnDef, alterTableCmd->def));
 }
 
 
 static void
-appendAlterTypeCmdDropColumn(StringInfo buf, AlterTableCmd *alterTableCmd)
+AppendAlterTypeCmdDropColumn(StringInfo buf, AlterTableCmd *alterTableCmd)
 {
 	Assert(alterTableCmd->subtype == AT_DropColumn);
 	appendStringInfo(buf, " DROP ATTRIBUTE %s", quote_identifier(alterTableCmd->name));
@@ -208,12 +208,12 @@ appendAlterTypeCmdDropColumn(StringInfo buf, AlterTableCmd *alterTableCmd)
 
 
 static void
-appendAlterTypeCmdAlterColumnType(StringInfo buf, AlterTableCmd *alterTableCmd)
+AppendAlterTypeCmdAlterColumnType(StringInfo buf, AlterTableCmd *alterTableCmd)
 {
 	Assert(alterTableCmd->subtype == AT_AlterColumnType);
 	appendStringInfo(buf, " ALTER ATTRIBUTE %s SET DATA TYPE ", quote_identifier(
 						 alterTableCmd->name));
-	appendColumnDef(buf, castNode(ColumnDef, alterTableCmd->def));
+	AppendColumnDef(buf, castNode(ColumnDef, alterTableCmd->def));
 
 	if (alterTableCmd->behavior == DROP_CASCADE)
 	{
@@ -223,7 +223,7 @@ appendAlterTypeCmdAlterColumnType(StringInfo buf, AlterTableCmd *alterTableCmd)
 
 
 static void
-appendAlterEnumStmt(StringInfo buf, AlterEnumStmt *stmt)
+AppendAlterEnumStmt(StringInfo buf, AlterEnumStmt *stmt)
 {
 	appendStringInfo(buf, "ALTER TYPE %s", NameListToQuotedString(stmt->typeName));
 
@@ -257,11 +257,11 @@ appendAlterEnumStmt(StringInfo buf, AlterEnumStmt *stmt)
 
 
 static void
-appendDropTypeStmt(StringInfo buf, DropStmt *stmt)
+AppendDropTypeStmt(StringInfo buf, DropStmt *stmt)
 {
 	/*
 	 * already tested at call site, but for future it might be collapsed in a
-	 * deparse_drop_stmt so be safe and check again
+	 * DeparseDropStmt so be safe and check again
 	 */
 	Assert(stmt->removeType == OBJECT_TYPE);
 
@@ -270,7 +270,7 @@ appendDropTypeStmt(StringInfo buf, DropStmt *stmt)
 	{
 		appendStringInfoString(buf, "IF EXISTS ");
 	}
-	appendTypeNameList(buf, stmt->objects);
+	AppendTypeNameList(buf, stmt->objects);
 	if (stmt->behavior == DROP_CASCADE)
 	{
 		appendStringInfoString(buf, " CASCADE");
@@ -280,7 +280,7 @@ appendDropTypeStmt(StringInfo buf, DropStmt *stmt)
 
 
 static void
-appendTypeNameList(StringInfo buf, List *objects)
+AppendTypeNameList(StringInfo buf, List *objects)
 {
 	ListCell *objectCell = NULL;
 	foreach(objectCell, objects)
@@ -300,22 +300,22 @@ appendTypeNameList(StringInfo buf, List *objects)
 
 
 /*
- * appendCompositeTypeStmt appends the sql string to recreate a CompositeTypeStmt to the
+ * AppendCompositeTypeStmt appends the sql string to recreate a CompositeTypeStmt to the
  * provided buffer, ending in a ; for concatination of multiple statements.
  */
 static void
-appendCompositeTypeStmt(StringInfo str, CompositeTypeStmt *stmt)
+AppendCompositeTypeStmt(StringInfo str, CompositeTypeStmt *stmt)
 {
 	const char *identifier = quote_qualified_identifier(stmt->typevar->schemaname,
 														stmt->typevar->relname);
 	appendStringInfo(str, "CREATE TYPE %s AS (", identifier);
-	appendColumnDefList(str, stmt->coldeflist);
+	AppendColumnDefList(str, stmt->coldeflist);
 	appendStringInfo(str, ");");
 }
 
 
 static void
-appendCreateEnumStmt(StringInfo str, CreateEnumStmt *stmt)
+AppendCreateEnumStmt(StringInfo str, CreateEnumStmt *stmt)
 {
 	RangeVar *typevar = NULL;
 	const char *identifier = NULL;
@@ -326,13 +326,13 @@ appendCreateEnumStmt(StringInfo str, CreateEnumStmt *stmt)
 	identifier = quote_qualified_identifier(typevar->schemaname, typevar->relname);
 
 	appendStringInfo(str, "CREATE TYPE %s AS ENUM (", identifier);
-	appendStringList(str, stmt->vals);
+	AppendStringList(str, stmt->vals);
 	appendStringInfo(str, ");");
 }
 
 
 static void
-appendStringList(StringInfo str, List *strings)
+AppendStringList(StringInfo str, List *strings)
 {
 	ListCell *stringCell = NULL;
 	foreach(stringCell, strings)
@@ -350,11 +350,11 @@ appendStringList(StringInfo str, List *strings)
 
 
 /*
- * appendColumnDefList appends the definition of a list of ColumnDef items to the provided
+ * AppendColumnDefList appends the definition of a list of ColumnDef items to the provided
  * buffer, adding separators as necessary.
  */
 static void
-appendColumnDefList(StringInfo str, List *columnDefs)
+AppendColumnDefList(StringInfo str, List *columnDefs)
 {
 	ListCell *columnDefCell = NULL;
 	foreach(columnDefCell, columnDefs)
@@ -363,20 +363,20 @@ appendColumnDefList(StringInfo str, List *columnDefs)
 		{
 			appendStringInfoString(str, ", ");
 		}
-		appendColumnDef(str, castNode(ColumnDef, lfirst(columnDefCell)));
+		AppendColumnDef(str, castNode(ColumnDef, lfirst(columnDefCell)));
 	}
 }
 
 
 /*
- * appendColumnDef appends the definition of one ColumnDef completely qualified to the
+ * AppendColumnDef appends the definition of one ColumnDef completely qualified to the
  * provided buffer.
  *
  * If the colname is not set that part is ommitted. This is the case in alter column type
  * statements.
  */
 static void
-appendColumnDef(StringInfo str, ColumnDef *columnDef)
+AppendColumnDef(StringInfo str, ColumnDef *columnDef)
 {
 	Oid typeOid = LookupTypeNameOid(NULL, columnDef->typeName, false);
 	Oid collationOid = GetColumnDefCollation(NULL, columnDef, typeOid);
@@ -392,28 +392,28 @@ appendColumnDef(StringInfo str, ColumnDef *columnDef)
 
 	if (OidIsValid(collationOid))
 	{
-		const char *identifier = format_collate_be_qualified(collationOid);
+		const char *identifier = FormatCollateBEQualified(collationOid);
 		appendStringInfo(str, " COLLATE %s", identifier);
 	}
 }
 
 
 const char *
-deparse_rename_type_stmt(RenameStmt *stmt)
+DeparseRenameTypeStmt(RenameStmt *stmt)
 {
 	StringInfoData str = { 0 };
 	initStringInfo(&str);
 
 	Assert(stmt->renameType == OBJECT_TYPE);
 
-	appendRenameTypeStmt(&str, stmt);
+	AppendRenameTypeStmt(&str, stmt);
 
 	return str.data;
 }
 
 
 static void
-appendRenameTypeStmt(StringInfo buf, RenameStmt *stmt)
+AppendRenameTypeStmt(StringInfo buf, RenameStmt *stmt)
 {
 	List *names = (List *) stmt->object;
 
@@ -423,7 +423,7 @@ appendRenameTypeStmt(StringInfo buf, RenameStmt *stmt)
 
 
 const char *
-deparse_rename_type_attribute_stmt(RenameStmt *stmt)
+DeparseRenameTypeAttributeStmt(RenameStmt *stmt)
 {
 	StringInfoData str = { 0 };
 	initStringInfo(&str);
@@ -431,14 +431,14 @@ deparse_rename_type_attribute_stmt(RenameStmt *stmt)
 	Assert(stmt->renameType == OBJECT_ATTRIBUTE);
 	Assert(stmt->relationType == OBJECT_TYPE);
 
-	appendRenameTypeAttributeStmt(&str, stmt);
+	AppendRenameTypeAttributeStmt(&str, stmt);
 
 	return str.data;
 }
 
 
 static void
-appendRenameTypeAttributeStmt(StringInfo buf, RenameStmt *stmt)
+AppendRenameTypeAttributeStmt(StringInfo buf, RenameStmt *stmt)
 {
 	appendStringInfo(buf, "ALTER TYPE %s RENAME ATTRIBUTE %s TO %s",
 					 quote_qualified_identifier(stmt->relation->schemaname,
@@ -456,21 +456,21 @@ appendRenameTypeAttributeStmt(StringInfo buf, RenameStmt *stmt)
 
 
 const char *
-deparse_alter_type_schema_stmt(AlterObjectSchemaStmt *stmt)
+DeparseAlterTypeSchemaStmt(AlterObjectSchemaStmt *stmt)
 {
 	StringInfoData str = { 0 };
 	initStringInfo(&str);
 
 	Assert(stmt->objectType == OBJECT_TYPE);
 
-	appendAlterTypeSchemaStmt(&str, stmt);
+	AppendAlterTypeSchemaStmt(&str, stmt);
 
 	return str.data;
 }
 
 
 static void
-appendAlterTypeSchemaStmt(StringInfo buf, AlterObjectSchemaStmt *stmt)
+AppendAlterTypeSchemaStmt(StringInfo buf, AlterObjectSchemaStmt *stmt)
 {
 	List *names = NIL;
 
@@ -483,21 +483,21 @@ appendAlterTypeSchemaStmt(StringInfo buf, AlterObjectSchemaStmt *stmt)
 
 
 const char *
-deparse_alter_type_owner_stmt(AlterOwnerStmt *stmt)
+DeparseAlterTypeOwnerStmt(AlterOwnerStmt *stmt)
 {
 	StringInfoData str = { 0 };
 	initStringInfo(&str);
 
 	Assert(stmt->objectType == OBJECT_TYPE);
 
-	appendAlterTypeOwnerStmt(&str, stmt);
+	AppendAlterTypeOwnerStmt(&str, stmt);
 
 	return str.data;
 }
 
 
 static void
-appendAlterTypeOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt)
+AppendAlterTypeOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt)
 {
 	List *names = NIL;
 

@@ -49,7 +49,7 @@ QualifyTreeNode(Node *stmt)
 
 		case T_AlterEnumStmt:
 		{
-			qualify_alter_enum_stmt(castNode(AlterEnumStmt, stmt));
+			QualifyAlterEnumStmt(castNode(AlterEnumStmt, stmt));
 			return;
 		}
 
@@ -61,13 +61,13 @@ QualifyTreeNode(Node *stmt)
 
 		case T_CompositeTypeStmt:
 		{
-			qualify_composite_type_stmt(castNode(CompositeTypeStmt, stmt));
+			QualifyCompositeTypeStmt(castNode(CompositeTypeStmt, stmt));
 			return;
 		}
 
 		case T_CreateEnumStmt:
 		{
-			qualify_create_enum_stmt(castNode(CreateEnumStmt, stmt));
+			QualifyCreateEnumStmt(castNode(CreateEnumStmt, stmt));
 			return;
 		}
 
@@ -99,7 +99,7 @@ qualify_rename_stmt(RenameStmt *stmt)
 	{
 		case OBJECT_TYPE:
 		{
-			qualify_rename_type_stmt(stmt);
+			QualifyRenameTypeStmt(stmt);
 			return;
 		}
 
@@ -127,7 +127,7 @@ qualify_rename_attribute_stmt(RenameStmt *stmt)
 	{
 		case OBJECT_TYPE:
 		{
-			qualify_rename_type_attribute_stmt(stmt);
+			QualifyRenameTypeAttributeStmt(stmt);
 			return;
 		}
 
@@ -146,7 +146,7 @@ qualify_alter_table_stmt(AlterTableStmt *stmt)
 	{
 		case OBJECT_TYPE:
 		{
-			qualify_alter_type_stmt(stmt);
+			QualifyAlterTypeStmt(stmt);
 			return;
 		}
 
@@ -166,7 +166,7 @@ qualify_alter_object_schema_stmt(AlterObjectSchemaStmt *stmt)
 	{
 		case OBJECT_TYPE:
 		{
-			qualify_alter_type_schema_stmt(stmt);
+			QualifyAlterTypeSchemaStmt(stmt);
 			return;
 		}
 
@@ -186,7 +186,7 @@ qualify_alter_owner_stmt(AlterOwnerStmt *stmt)
 	{
 		case OBJECT_TYPE:
 		{
-			qualify_alter_type_owner_stmt(stmt);
+			QualifyAlterTypeOwnerStmt(stmt);
 			return;
 		}
 

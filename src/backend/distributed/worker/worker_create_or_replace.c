@@ -28,7 +28,7 @@
 #include "distributed/worker_protocol.h"
 
 static Node * CreateStmtByObjectAddress(const ObjectAddress *address);
-static DropStmt * drop_stmt_from_object_create(Node *createStmt);
+static DropStmt * CreateDropStmtBasedOnCreateStmt(Node *createStmt);
 
 
 PG_FUNCTION_INFO_V1(worker_create_or_replace);
@@ -99,7 +99,7 @@ worker_create_or_replace(PG_FUNCTION_ARGS)
 		 * managed by citus anyway so it should be ok to drop, thus we cascade to any such
 		 * dependencies
 		 */
-		dropStmtParseTree = drop_stmt_from_object_create(parseTree);
+		dropStmtParseTree = CreateDropStmtBasedOnCreateStmt(parseTree);
 
 		if (dropStmtParseTree != NULL)
 		{
@@ -151,18 +151,19 @@ CreateStmtByObjectAddress(const ObjectAddress *address)
 
 /* TODO will be removed as we will not drop but rename instead */
 static DropStmt *
-drop_stmt_from_object_create(Node *createStmt)
+CreateDropStmtBasedOnCreateStmt(Node *createStmt)
 {
 	switch (nodeTag(createStmt))
 	{
 		case T_CompositeTypeStmt:
 		{
-			return CompositeTypeStmtToDrop(castNode(CompositeTypeStmt, createStmt));
+			return CreateDropStmtBasedOnCompositeTypeStmt(
+				castNode(CompositeTypeStmt, createStmt));
 		}
 
 		case T_CreateEnumStmt:
 		{
-			return CreateEnumStmtToDrop(castNode(CreateEnumStmt, createStmt));
+			return CreateDropStmtBasedOnEnumStmt(castNode(CreateEnumStmt, createStmt));
 		}
 
 		default:
@@ -171,7 +172,7 @@ drop_stmt_from_object_create(Node *createStmt)
 			 * should not be reached, indicates the coordinator is sending unsupported
 			 * statements
 			 */
-			ereport(ERROR, (errmsg("unsupported statement to check existence for"),
+			ereport(ERROR, (errmsg("unsupported statement to transform to a drop stmt"),
 							errhint("The coordinator send an unsupported command to the "
 									"worker")));
 		}

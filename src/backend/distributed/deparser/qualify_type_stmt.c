@@ -29,8 +29,11 @@
 #include "parser/parse_type.h"
 #include "utils/lsyscache.h"
 
+/*
+ * TypeOidGetNamespaceOid resolves the namespace oid for a type identified by its type oid
+ */
 static Oid
-type_get_namespace_oid(Oid typeOid)
+TypeOidGetNamespaceOid(Oid typeOid)
 {
 	Form_pg_type typeData = NULL;
 	Relation catalog = heap_open(TypeRelationId, AccessShareLock);
@@ -48,7 +51,7 @@ type_get_namespace_oid(Oid typeOid)
 
 
 void
-qualify_rename_type_stmt(RenameStmt *stmt)
+QualifyRenameTypeStmt(RenameStmt *stmt)
 {
 	List *names = (List *) stmt->object;
 
@@ -59,7 +62,7 @@ qualify_rename_type_stmt(RenameStmt *stmt)
 		/* not qualified, lookup name and add namespace name to names */
 		TypeName *typeName = makeTypeNameFromNameList(names);
 		Oid typeOid = LookupTypeNameOid(NULL, typeName, false);
-		Oid namespaceOid = type_get_namespace_oid(typeOid);
+		Oid namespaceOid = TypeOidGetNamespaceOid(typeOid);
 		char *nspname = get_namespace_name_or_temp(namespaceOid);
 
 		names = list_make2(makeString(nspname),
@@ -71,7 +74,7 @@ qualify_rename_type_stmt(RenameStmt *stmt)
 
 
 void
-qualify_rename_type_attribute_stmt(RenameStmt *stmt)
+QualifyRenameTypeAttributeStmt(RenameStmt *stmt)
 {
 	Assert(stmt->renameType == OBJECT_ATTRIBUTE);
 	Assert(stmt->relationType == OBJECT_TYPE);
@@ -81,7 +84,7 @@ qualify_rename_type_attribute_stmt(RenameStmt *stmt)
 		List *names = list_make1(makeString(stmt->relation->relname));
 		TypeName *typeName = makeTypeNameFromNameList(names);
 		Oid typeOid = LookupTypeNameOid(NULL, typeName, false);
-		Oid namespaceOid = type_get_namespace_oid(typeOid);
+		Oid namespaceOid = TypeOidGetNamespaceOid(typeOid);
 		char *nspname = get_namespace_name_or_temp(namespaceOid);
 		stmt->relation->schemaname = nspname;
 	}
@@ -89,7 +92,7 @@ qualify_rename_type_attribute_stmt(RenameStmt *stmt)
 
 
 void
-qualify_alter_enum_stmt(AlterEnumStmt *stmt)
+QualifyAlterEnumStmt(AlterEnumStmt *stmt)
 {
 	List *names = stmt->typeName;
 
@@ -98,7 +101,7 @@ qualify_alter_enum_stmt(AlterEnumStmt *stmt)
 		/* not qualified, lookup name and add namespace name to names */
 		TypeName *typeName = makeTypeNameFromNameList(names);
 		Oid typeOid = LookupTypeNameOid(NULL, typeName, false);
-		Oid namespaceOid = type_get_namespace_oid(typeOid);
+		Oid namespaceOid = TypeOidGetNamespaceOid(typeOid);
 		char *nspname = get_namespace_name_or_temp(namespaceOid);
 
 		names = list_make2(makeString(nspname),
@@ -110,7 +113,7 @@ qualify_alter_enum_stmt(AlterEnumStmt *stmt)
 
 
 void
-qualify_alter_type_stmt(AlterTableStmt *stmt)
+QualifyAlterTypeStmt(AlterTableStmt *stmt)
 {
 	Assert(stmt->relkind == OBJECT_TYPE);
 
@@ -119,7 +122,7 @@ qualify_alter_type_stmt(AlterTableStmt *stmt)
 		List *names = MakeNameListFromRangeVar(stmt->relation);
 		TypeName *typeName = makeTypeNameFromNameList(names);
 		Oid typeOid = LookupTypeNameOid(NULL, typeName, false);
-		Oid namespaceOid = type_get_namespace_oid(typeOid);
+		Oid namespaceOid = TypeOidGetNamespaceOid(typeOid);
 		char *nspname = get_namespace_name_or_temp(namespaceOid);
 		stmt->relation->schemaname = nspname;
 	}
@@ -127,7 +130,7 @@ qualify_alter_type_stmt(AlterTableStmt *stmt)
 
 
 void
-qualify_composite_type_stmt(CompositeTypeStmt *stmt)
+QualifyCompositeTypeStmt(CompositeTypeStmt *stmt)
 {
 	if (stmt->typevar->schemaname == NULL)
 	{
@@ -138,7 +141,7 @@ qualify_composite_type_stmt(CompositeTypeStmt *stmt)
 
 
 void
-qualify_create_enum_stmt(CreateEnumStmt *stmt)
+QualifyCreateEnumStmt(CreateEnumStmt *stmt)
 {
 	if (list_length(stmt->typeName) == 1)
 	{
@@ -151,7 +154,7 @@ qualify_create_enum_stmt(CreateEnumStmt *stmt)
 
 
 void
-qualify_alter_type_schema_stmt(AlterObjectSchemaStmt *stmt)
+QualifyAlterTypeSchemaStmt(AlterObjectSchemaStmt *stmt)
 {
 	List *names = NIL;
 
@@ -163,7 +166,7 @@ qualify_alter_type_schema_stmt(AlterObjectSchemaStmt *stmt)
 		/* not qualified with schema, lookup type and its schema s*/
 		TypeName *typeName = makeTypeNameFromNameList(names);
 		Oid typeOid = LookupTypeNameOid(NULL, typeName, false);
-		Oid namespaceOid = type_get_namespace_oid(typeOid);
+		Oid namespaceOid = TypeOidGetNamespaceOid(typeOid);
 		char *nspname = get_namespace_name_or_temp(namespaceOid);
 
 		names = list_make2(makeString(nspname), linitial(names));
@@ -173,7 +176,7 @@ qualify_alter_type_schema_stmt(AlterObjectSchemaStmt *stmt)
 
 
 void
-qualify_alter_type_owner_stmt(AlterOwnerStmt *stmt)
+QualifyAlterTypeOwnerStmt(AlterOwnerStmt *stmt)
 {
 	List *names = NIL;
 
@@ -185,7 +188,7 @@ qualify_alter_type_owner_stmt(AlterOwnerStmt *stmt)
 		/* not qualified with schema, lookup type and its schema s*/
 		TypeName *typeName = makeTypeNameFromNameList(names);
 		Oid typeOid = LookupTypeNameOid(NULL, typeName, false);
-		Oid namespaceOid = type_get_namespace_oid(typeOid);
+		Oid namespaceOid = TypeOidGetNamespaceOid(typeOid);
 		char *nspname = get_namespace_name_or_temp(namespaceOid);
 
 		names = list_make2(makeString(nspname), linitial(names));

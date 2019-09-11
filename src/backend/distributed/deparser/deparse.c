@@ -1,14 +1,28 @@
+/*-------------------------------------------------------------------------
+ *
+ * deparse.c
+ *    Entrypoint for deparsing parsetrees.
+ *
+ *    The goal of deparsing parsetrees is to reconstruct sql statements
+ *    from any parsed sql statement by ParseTreeNode. Deparsed statements
+ *    can be used to reapply them on remote postgres nodes like the citus
+ *    workers.
+ *
+ * Copyright (c) 2019, Citus Data, Inc.
+ *
+ *-------------------------------------------------------------------------
+ */
 
 #include "postgres.h"
 
 #include "distributed/deparser.h"
 
-static const char * deparse_drop_stmt(DropStmt *stmt);
-static const char * deparse_alter_table_stmt(AlterTableStmt *stmt);
-static const char * deparse_rename_stmt(RenameStmt *stmt);
-static const char * deparse_rename_attribute_stmt(RenameStmt *stmt);
-static const char * deparse_alter_object_schema_stmt(AlterObjectSchemaStmt *stmt);
-static const char * deparse_alter_owner_stmt(AlterOwnerStmt *stmt);
+static const char * DeparseDropStmt(DropStmt *stmt);
+static const char * DeparseAlterTableStmt(AlterTableStmt *stmt);
+static const char * DeparseRenameStmt(RenameStmt *stmt);
+static const char * DeparseRenameAttributeStmt(RenameStmt *stmt);
+static const char * DeparseAlterObjectSchemaStmt(AlterObjectSchemaStmt *stmt);
+static const char * DeparseAlterOwnerStmt(AlterOwnerStmt *stmt);
 
 
 /*
@@ -28,43 +42,42 @@ DeparseTreeNode(Node *stmt)
 	{
 		case T_DropStmt:
 		{
-			return deparse_drop_stmt(castNode(DropStmt, stmt));
+			return DeparseDropStmt(castNode(DropStmt, stmt));
 		}
 
 		case T_CompositeTypeStmt:
 		{
-			return deparse_composite_type_stmt(castNode(CompositeTypeStmt, stmt));
+			return DeparseCompositeTypeStmt(castNode(CompositeTypeStmt, stmt));
 		}
 
 		case T_CreateEnumStmt:
 		{
-			return deparse_create_enum_stmt(castNode(CreateEnumStmt, stmt));
+			return DeparseCreateEnumStmt(castNode(CreateEnumStmt, stmt));
 		}
 
 		case T_AlterTableStmt:
 		{
-			return deparse_alter_table_stmt(castNode(AlterTableStmt, stmt));
+			return DeparseAlterTableStmt(castNode(AlterTableStmt, stmt));
 		}
 
 		case T_AlterEnumStmt:
 		{
-			return deparse_alter_enum_stmt(castNode(AlterEnumStmt, stmt));
+			return DeparseAlterEnumStmt(castNode(AlterEnumStmt, stmt));
 		}
 
 		case T_RenameStmt:
 		{
-			return deparse_rename_stmt(castNode(RenameStmt, stmt));
+			return DeparseRenameStmt(castNode(RenameStmt, stmt));
 		}
 
 		case T_AlterObjectSchemaStmt:
 		{
-			return deparse_alter_object_schema_stmt(castNode(AlterObjectSchemaStmt,
-															 stmt));
+			return DeparseAlterObjectSchemaStmt(castNode(AlterObjectSchemaStmt, stmt));
 		}
 
 		case T_AlterOwnerStmt:
 		{
-			return deparse_alter_owner_stmt(castNode(AlterOwnerStmt, stmt));
+			return DeparseAlterOwnerStmt(castNode(AlterOwnerStmt, stmt));
 		}
 
 		default:
@@ -76,13 +89,13 @@ DeparseTreeNode(Node *stmt)
 
 
 static const char *
-deparse_drop_stmt(DropStmt *stmt)
+DeparseDropStmt(DropStmt *stmt)
 {
 	switch (stmt->removeType)
 	{
 		case OBJECT_TYPE:
 		{
-			return deparse_drop_type_stmt(stmt);
+			return DeparseDropTypeStmt(stmt);
 		}
 
 		default:
@@ -94,13 +107,13 @@ deparse_drop_stmt(DropStmt *stmt)
 
 
 static const char *
-deparse_alter_table_stmt(AlterTableStmt *stmt)
+DeparseAlterTableStmt(AlterTableStmt *stmt)
 {
 	switch (stmt->relkind)
 	{
 		case OBJECT_TYPE:
 		{
-			return deparse_alter_type_stmt(stmt);
+			return DeparseAlterTypeStmt(stmt);
 		}
 
 		default:
@@ -112,18 +125,18 @@ deparse_alter_table_stmt(AlterTableStmt *stmt)
 
 
 static const char *
-deparse_rename_stmt(RenameStmt *stmt)
+DeparseRenameStmt(RenameStmt *stmt)
 {
 	switch (stmt->renameType)
 	{
 		case OBJECT_TYPE:
 		{
-			return deparse_rename_type_stmt(stmt);
+			return DeparseRenameTypeStmt(stmt);
 		}
 
 		case OBJECT_ATTRIBUTE:
 		{
-			return deparse_rename_attribute_stmt(stmt);
+			return DeparseRenameAttributeStmt(stmt);
 		}
 
 		default:
@@ -135,7 +148,7 @@ deparse_rename_stmt(RenameStmt *stmt)
 
 
 static const char *
-deparse_rename_attribute_stmt(RenameStmt *stmt)
+DeparseRenameAttributeStmt(RenameStmt *stmt)
 {
 	Assert(stmt->renameType == OBJECT_ATTRIBUTE);
 
@@ -143,7 +156,7 @@ deparse_rename_attribute_stmt(RenameStmt *stmt)
 	{
 		case OBJECT_TYPE:
 		{
-			return deparse_rename_type_attribute_stmt(stmt);
+			return DeparseRenameTypeAttributeStmt(stmt);
 		}
 
 		default:
@@ -156,13 +169,13 @@ deparse_rename_attribute_stmt(RenameStmt *stmt)
 
 
 static const char *
-deparse_alter_object_schema_stmt(AlterObjectSchemaStmt *stmt)
+DeparseAlterObjectSchemaStmt(AlterObjectSchemaStmt *stmt)
 {
 	switch (stmt->objectType)
 	{
 		case OBJECT_TYPE:
 		{
-			return deparse_alter_type_schema_stmt(stmt);
+			return DeparseAlterTypeSchemaStmt(stmt);
 		}
 
 		default:
@@ -174,13 +187,13 @@ deparse_alter_object_schema_stmt(AlterObjectSchemaStmt *stmt)
 
 
 static const char *
-deparse_alter_owner_stmt(AlterOwnerStmt *stmt)
+DeparseAlterOwnerStmt(AlterOwnerStmt *stmt)
 {
 	switch (stmt->objectType)
 	{
 		case OBJECT_TYPE:
 		{
-			return deparse_alter_type_owner_stmt(stmt);
+			return DeparseAlterTypeOwnerStmt(stmt);
 		}
 
 		default:

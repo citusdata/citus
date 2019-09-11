@@ -629,6 +629,11 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 			ProcessAlterObjectSchemaStmt(castNode(AlterObjectSchemaStmt, parsetree),
 										 queryString);
 		}
+
+		if (IsA(parsetree, AlterEnumStmt))
+		{
+			ProcessAlterEnumStmt(castNode(AlterEnumStmt, parsetree), queryString);
+		}
 	}
 
 	/*
@@ -703,6 +708,11 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 }
 
 
+/*
+ * PlanRenameAttributeStmt called for RenameStmt's that are targetting an attribute eg.
+ * type attributes. Based on the relation type the attribute gets renamed it dispatches to
+ * a specialized implementation if present, otherwise return an empty list for its DDLJobs
+ */
 static List *
 PlanRenameAttributeStmt(RenameStmt *stmt, const char *queryString)
 {
@@ -724,6 +734,12 @@ PlanRenameAttributeStmt(RenameStmt *stmt, const char *queryString)
 }
 
 
+/*
+ * PlanAlterOwnerStmt gets called for statements that change the ownership of an object.
+ * Based on the type of object the ownership gets changed for it dispatches to a
+ * specialized implementation or returns an empty list of DDLJobs for objects that do not
+ * have an implementation provided.
+ */
 static List *
 PlanAlterOwnerStmt(AlterOwnerStmt *stmt, const char *queryString)
 {
@@ -764,6 +780,10 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 
 	if (ddlJob->targetRelationId != InvalidOid)
 	{
+		/*
+		 * Only for ddlJobs that are targetting a relation (table) we want to sync its
+		 * metadata and verify some properties around the table.
+		 */
 		shouldSyncMetadata = ShouldSyncTableMetadata(ddlJob->targetRelationId);
 		EnsurePartitionTableNotReplicated(ddlJob->targetRelationId);
 	}

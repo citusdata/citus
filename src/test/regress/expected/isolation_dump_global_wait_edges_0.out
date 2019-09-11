@@ -1,0 +1,98 @@
+Parsed test spec with 4 sessions
+
+starting permutation: s1-begin s2-begin s1-update s2-update detector-dump-wait-edges s1-abort s2-abort
+step s1-begin: 
+    BEGIN;
+
+step s2-begin: 
+    BEGIN;
+
+step s1-update: 
+    UPDATE distributed_table SET y = 1 WHERE x = 1;
+
+step s2-update: 
+    UPDATE distributed_table SET y = 2 WHERE x = 1;
+ <waiting ...>
+step detector-dump-wait-edges: 
+    SELECT
+        waiting_transaction_num,
+        blocking_transaction_num,
+        blocking_transaction_waiting
+    FROM
+        dump_global_wait_edges()
+    ORDER BY
+        waiting_transaction_num,
+        blocking_transaction_num,
+        blocking_transaction_waiting;
+
+    SELECT * FROM get_adjacency_list_wait_graph() ORDER BY 1;
+
+waiting_transaction_numblocking_transaction_numblocking_transaction_waiting
+
+247            246            f              
+transactionnumberwaitingtransactionnumbers
+
+246                           
+247            246            
+step s1-abort: 
+    ABORT;
+
+step s2-update: <... completed>
+step s2-abort: 
+    ABORT;
+
+
+starting permutation: s1-begin s2-begin s3-begin s1-update s2-update s3-update detector-dump-wait-edges s1-abort s2-abort s3-abort
+step s1-begin: 
+    BEGIN;
+
+step s2-begin: 
+    BEGIN;
+
+step s3-begin: 
+    BEGIN;
+
+step s1-update: 
+    UPDATE distributed_table SET y = 1 WHERE x = 1;
+
+step s2-update: 
+    UPDATE distributed_table SET y = 2 WHERE x = 1;
+ <waiting ...>
+step s3-update: 
+    UPDATE distributed_table SET y = 3 WHERE x = 1;
+ <waiting ...>
+step detector-dump-wait-edges: 
+    SELECT
+        waiting_transaction_num,
+        blocking_transaction_num,
+        blocking_transaction_waiting
+    FROM
+        dump_global_wait_edges()
+    ORDER BY
+        waiting_transaction_num,
+        blocking_transaction_num,
+        blocking_transaction_waiting;
+
+    SELECT * FROM get_adjacency_list_wait_graph() ORDER BY 1;
+
+waiting_transaction_numblocking_transaction_numblocking_transaction_waiting
+
+251            250            f              
+252            250            f              
+252            251            t              
+transactionnumberwaitingtransactionnumbers
+
+250                           
+251            250            
+252            250,251        
+step s1-abort: 
+    ABORT;
+
+step s2-update: <... completed>
+step s2-abort: 
+    ABORT;
+
+step s3-update: <... completed>
+step s3-abort: 
+    ABORT;
+

@@ -1,3 +1,14 @@
+/*-------------------------------------------------------------------------
+ *
+ * objectaddress.c
+ *    Parstrees almost always target a object that postgres can address by
+ *    an ObjectAddress. Here we have a walker for parsetrees to find the
+ *    address of the object targeted.
+ *
+ * Copyright (c) 2019, Citus Data, Inc.
+ *
+ *-------------------------------------------------------------------------
+ */
 
 #include "postgres.h"
 

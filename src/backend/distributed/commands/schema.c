@@ -103,6 +103,14 @@ ProcessDropSchemaStmt(DropStmt *dropStatement)
 }
 
 
+/*
+ * PlanAlterObjectSchemaStmt is called by citus' utility hook for AlterObjectSchemaStmt
+ * parsetrees. It dispatches the statement based on the object type for which the schema
+ * is being altered.
+ *
+ * A (potentially empty) list of DDLJobs is being returned with the jobs on how to
+ * distribute the change into the cluster.
+ */
 List *
 PlanAlterObjectSchemaStmt(AlterObjectSchemaStmt *stmt, const char *queryString)
 {
