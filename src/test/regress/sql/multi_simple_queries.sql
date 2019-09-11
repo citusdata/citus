@@ -271,10 +271,23 @@ SELECT id
 -- copying from a single shard table does not require the master query
 COPY articles_single_shard TO stdout;
 
--- error out for queries with aggregates
 SELECT avg(word_count)
 	FROM articles
 	WHERE author_id = 2;
+
+-- error out on unsupported aggregate
+SET client_min_messages to 'NOTICE';
+
+CREATE AGGREGATE public.invalid(int) (
+    sfunc = int4pl,
+    stype = int
+);
+
+SELECT invalid(word_count) FROM articles;
+
+DROP AGGREGATE invalid(int);
+
+SET client_min_messages to 'DEBUG2';
 
 -- max, min, sum, count is somehow implemented
 -- differently in distributed planning 
@@ -312,6 +325,5 @@ SELECT * FROM articles TABLESAMPLE SYSTEM (0) WHERE author_id = 1;
 SELECT * FROM articles TABLESAMPLE BERNOULLI (0) WHERE author_id = 1;
 SELECT * FROM articles TABLESAMPLE SYSTEM (100) WHERE author_id = 1 ORDER BY id;
 SELECT * FROM articles TABLESAMPLE BERNOULLI (100) WHERE author_id = 1 ORDER BY id;
-
 
 SET client_min_messages to 'NOTICE';
