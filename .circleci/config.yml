@@ -16,6 +16,7 @@ jobs:
     steps:
       - checkout
       - {run: {name: 'Check Style', command: citus_indent --check}}
+      - {run: {name: 'Check Snapshots', command: "make check-sql-snapshots -C src/backend/distributed"}}
   test-10_check-multi:
     docker:
       - {image: 'citusdata/exttester-10:latest'}
