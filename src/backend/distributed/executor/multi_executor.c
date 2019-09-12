@@ -397,7 +397,7 @@ void
 ExecuteQueryStringIntoDestReceiver(const char *queryString, ParamListInfo params,
 								   DestReceiver *dest)
 {
-	Query *query = ParseQueryString(queryString);
+	Query *query = ParseQueryString(queryString, NULL, 0);
 
 	ExecuteQueryIntoDestReceiver(query, params, dest);
 }
@@ -407,11 +407,12 @@ ExecuteQueryStringIntoDestReceiver(const char *queryString, ParamListInfo params
  * ParseQuery parses query string and returns a Query struct.
  */
 Query *
-ParseQueryString(const char *queryString)
+ParseQueryString(const char *queryString, Oid *paramOids, int numParams)
 {
 	Query *query = NULL;
 	RawStmt *rawStmt = (RawStmt *) ParseTreeRawStmt(queryString);
-	List *queryTreeList = pg_analyze_and_rewrite(rawStmt, queryString, NULL, 0, NULL);
+	List *queryTreeList =
+		pg_analyze_and_rewrite(rawStmt, queryString, paramOids, numParams, NULL);
 
 	if (list_length(queryTreeList) != 1)
 	{

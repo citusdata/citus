@@ -50,7 +50,7 @@ extern TupleTableSlot * ReturnTupleFromTuplestore(CitusScanState *scanState);
 extern void LoadTuplesIntoTupleStore(CitusScanState *citusScanState, Job *workerJob);
 extern void ReadFileIntoTupleStore(char *fileName, char *copyFormat, TupleDesc
 								   tupleDescriptor, Tuplestorestate *tupstore);
-extern Query * ParseQueryString(const char *queryString);
+extern Query * ParseQueryString(const char *queryString, Oid *paramOids, int numParams);
 extern void ExecuteQueryStringIntoDestReceiver(const char *queryString, ParamListInfo
 											   params,
 											   DestReceiver *dest);
@@ -61,6 +61,7 @@ extern void ExecutePlanIntoDestReceiver(PlannedStmt *queryPlan, ParamListInfo pa
 extern void SetLocalMultiShardModifyModeToSequential(void);
 extern void SetLocalForceMaxQueryParallelization(void);
 extern void SortTupleStore(CitusScanState *scanState);
+extern bool DistributedPlanModifiesDatabase(DistributedPlan *plan);
 
 
 #endif /* MULTI_EXECUTOR_H */

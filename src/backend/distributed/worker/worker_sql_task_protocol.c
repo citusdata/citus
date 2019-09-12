@@ -85,7 +85,7 @@ worker_execute_sql_task(PG_FUNCTION_ARGS)
 	StringInfo jobDirectoryName = JobDirectoryName(jobId);
 	StringInfo taskFilename = UserTaskFilename(jobDirectoryName, taskId);
 
-	query = ParseQueryString(queryString);
+	query = ParseQueryString(queryString, NULL, 0);
 	tuplesSent = WorkerExecuteSqlTask(query, taskFilename->data, binaryCopyFormat);
 
 	PG_RETURN_INT64(tuplesSent);

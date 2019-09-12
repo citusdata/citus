@@ -32,6 +32,7 @@
 #include "distributed/connection_management.h"
 #include "distributed/deparse_shard_query.h"
 #include "distributed/listutils.h"
+#include "distributed/local_executor.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
@@ -588,6 +589,9 @@ RouterModifyExecScan(CustomScanState *node)
 		List *taskList = workerJob->taskList;
 		bool parallelExecution = true;
 
+		ErrorIfLocalExecutionHappened();
+		DisableLocalExecution();
+
 		ExecuteSubPlans(distributedPlan);
 
 		if (list_length(taskList) <= 1 ||
@@ -865,6 +869,9 @@ RouterSelectExecScan(CustomScanState *node)
 		DistributedPlan *distributedPlan = scanState->distributedPlan;
 		Job *workerJob = distributedPlan->workerJob;
 		List *taskList = workerJob->taskList;
+
+		ErrorIfLocalExecutionHappened();
+		DisableLocalExecution();
 
 		/* we are taking locks on partitions of partitioned tables */
 		LockPartitionsInRelationList(distributedPlan->relationIdList, AccessShareLock);

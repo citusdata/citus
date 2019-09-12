@@ -26,6 +26,7 @@
 #include "commands/dbcommands.h"
 #include "distributed/citus_custom_scan.h"
 #include "distributed/connection_management.h"
+#include "distributed/local_executor.h"
 #include "distributed/multi_client_executor.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_physical_planner.h"
@@ -1034,6 +1035,9 @@ RealTimeExecScan(CustomScanState *node)
 	{
 		DistributedPlan *distributedPlan = scanState->distributedPlan;
 		Job *workerJob = distributedPlan->workerJob;
+
+		ErrorIfLocalExecutionHappened();
+		DisableLocalExecution();
 
 		/* we are taking locks on partitions of partitioned tables */
 		LockPartitionsInRelationList(distributedPlan->relationIdList, AccessShareLock);

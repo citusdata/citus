@@ -23,6 +23,7 @@ SELECT COUNT(*) FROM limit_orders_mx WHERE id = 32744;
 
 -- now singe-row INSERT to the other worker
 \c - - - :worker_2_port
+\set VERBOSITY terse
 INSERT INTO limit_orders_mx VALUES (32745, 'AAPL', 9580, '2004-10-19 10:23:54', 'buy',
 								 20.69);
 SELECT COUNT(*) FROM limit_orders_mx WHERE id = 32745;
@@ -77,22 +78,15 @@ ERROR:  cannot perform an INSERT with NULL in the partition column
 INSERT INTO limit_orders_mx VALUES (18811, 'BUD', 14962, '2014-04-05 08:32:16', 'sell',
 								 -5.00);
 ERROR:  new row for relation "limit_orders_mx_1220092" violates check constraint "limit_orders_mx_limit_price_check"
-DETAIL:  Failing row contains (18811, BUD, 14962, 2014-04-05 08:32:16, sell, -5.00).
-CONTEXT:  while executing command on localhost:57637
 -- INSERT violating primary key constraint
 INSERT INTO limit_orders_mx VALUES (32743, 'LUV', 5994, '2001-04-16 03:37:28', 'buy', 0.58);
 ERROR:  duplicate key value violates unique constraint "limit_orders_mx_pkey_1220093"
-DETAIL:  Key (id)=(32743) already exists.
-CONTEXT:  while executing command on localhost:57638
 -- INSERT violating primary key constraint, with RETURNING specified.
 INSERT INTO limit_orders_mx VALUES (32743, 'LUV', 5994, '2001-04-16 03:37:28', 'buy', 0.58) RETURNING *;
 ERROR:  duplicate key value violates unique constraint "limit_orders_mx_pkey_1220093"
-DETAIL:  Key (id)=(32743) already exists.
-CONTEXT:  while executing command on localhost:57638
 -- INSERT, with RETURNING specified, failing with a non-constraint error
 INSERT INTO limit_orders_mx VALUES (34153, 'LEE', 5994, '2001-04-16 03:37:28', 'buy', 0.58) RETURNING id / 0;
 ERROR:  division by zero
-CONTEXT:  while executing command on localhost:57638
 SET client_min_messages TO DEFAULT;
 -- commands with non-constant partition values are unsupported
 INSERT INTO limit_orders_mx VALUES (random() * 100, 'ORCL', 152, '2011-08-25 11:50:45',
@@ -221,8 +215,6 @@ UPDATE limit_orders_mx SET (kind, limit_price) = ('buy', 999) WHERE id = 246 RET
 INSERT INTO limit_orders_mx VALUES (275, 'ADR', 140, '2007-07-02 16:32:15', 'sell', 43.67);
 INSERT INTO limit_orders_mx VALUES (275, 'ADR', 140, '2007-07-02 16:32:15', 'sell', 43.67);
 ERROR:  duplicate key value violates unique constraint "limit_orders_mx_pkey_1220093"
-DETAIL:  Key (id)=(275) already exists.
-CONTEXT:  while executing command on localhost:57638
 -- multi shard update is supported
 UPDATE limit_orders_mx SET limit_price = 0.00;
 -- attempting to change the partition key is unsupported
@@ -294,8 +286,6 @@ CREATE FUNCTION temp_strict_func(integer,integer) RETURNS integer AS
 'SELECT COALESCE($1, 2) + COALESCE($1, 3);' LANGUAGE SQL STABLE STRICT;
 UPDATE limit_orders_mx SET bidder_id = temp_strict_func(1, null) WHERE id = 246;
 ERROR:  null value in column "bidder_id" violates not-null constraint
-DETAIL:  Failing row contains (246, GM, null, 2007-07-02 16:32:15, buy, 0.00, {1,2}).
-CONTEXT:  while executing command on localhost:57637
 SELECT array_of_values FROM limit_orders_mx WHERE id = 246;
  array_of_values 
 -----------------

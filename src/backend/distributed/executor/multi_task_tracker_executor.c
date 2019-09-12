@@ -28,6 +28,7 @@
 #include "distributed/citus_custom_scan.h"
 #include "distributed/citus_nodes.h"
 #include "distributed/connection_management.h"
+#include "distributed/local_executor.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_client_executor.h"
 #include "distributed/multi_executor.h"
@@ -3007,6 +3008,9 @@ TaskTrackerExecScan(CustomScanState *node)
 		DistributedPlan *distributedPlan = scanState->distributedPlan;
 		Job *workerJob = distributedPlan->workerJob;
 		Query *jobQuery = workerJob->jobQuery;
+
+		ErrorIfLocalExecutionHappened();
+		DisableLocalExecution();
 
 		if (ContainsReadIntermediateResultFunction((Node *) jobQuery))
 		{
