@@ -1247,9 +1247,9 @@ SELECT ddl_in_plpgsql2();
 
 -- verify the index is created in the correct schema
 SELECT schemaname, indexrelname FROM pg_stat_all_indexes WHERE indexrelname = 'prepared_index';
- schemaname |  indexrelname  
-------------+----------------
- public     | prepared_index
+ schemaname  |  indexrelname  
+-------------+----------------
+ otherschema | prepared_index
 (1 row)
 
 RESET search_path;
