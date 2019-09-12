@@ -40,9 +40,6 @@ create_distributed_function(PG_FUNCTION_ARGS)
 	EnsureDependenciesExistsOnAllNodes(&functionAddress);
 
 	ddlCommand = GetFunctionDDLCommand(funcOid);
-
-	/* EnsureSequentialModeForTypeDDL(); */
-	SendCommandToWorkersAsUser(ALL_WORKERS, DISABLE_DDL_PROPAGATION, NULL);
 	SendCommandToWorkersAsUser(ALL_WORKERS, ddlCommand, NULL);
 
 	MarkObjectDistributed(&functionAddress);
