@@ -83,7 +83,11 @@
 #include "distributed/transaction_management.h"
 #include "executor/tstoreReceiver.h"
 #include "executor/tuptable.h"
+#if PG_VERSION_NUM >= 120000
+#include "optimizer/optimizer.h"
+#else
 #include "optimizer/planner.h"
+#endif
 #include "nodes/params.h"
 #include "utils/snapmgr.h"
 
