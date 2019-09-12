@@ -3,7 +3,7 @@
 setup
 {
     SELECT master_remove_node(nodename, nodeport) FROM pg_dist_node;
-	SELECT nodename, nodeport, isactive FROM master_add_node('localhost', 57637);
+	SELECT 1 FROM master_add_node('localhost', 57637);
 }
 
 # ensure that both nodes exists for the remaining of the isolation tests
@@ -32,7 +32,7 @@ step "s1-begin"
 
 step "s1-add-worker"
 {
-	SELECT nodename, nodeport, isactive FROM master_add_node('localhost', 57638);
+	SELECT 1 FROM master_add_node('localhost', 57638);
 }
 
 step "s1-commit"
@@ -44,7 +44,7 @@ step "s1-commit"
 # on that node as well. After counting objects is done we remove the node again.
 step "s1-print-distributed-objects"
 {
-    SELECT nodename, nodeport, isactive FROM master_add_node('localhost', 57638);
+    SELECT 1 FROM master_add_node('localhost', 57638);
 
     -- print an overview of all distributed objects
     SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;

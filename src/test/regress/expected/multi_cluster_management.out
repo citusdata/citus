@@ -28,10 +28,10 @@ SELECT master_get_active_worker_nodes();
 (2 rows)
 
 -- try to add a node that is already in the cluster
-SELECT nodeid, groupid FROM master_add_node('localhost', :worker_1_port);
- nodeid | groupid 
---------+---------
-      1 |       1
+SELECT * FROM master_add_node('localhost', :worker_1_port);
+ master_add_node 
+-----------------
+               1
 (1 row)
 
 -- get the active nodes
@@ -78,10 +78,10 @@ SELECT master_get_active_worker_nodes();
 -- add some shard placements to the cluster
 SET citus.shard_count TO 16;
 SET citus.shard_replication_factor TO 1;
-SELECT isactive FROM master_activate_node('localhost', :worker_2_port);
- isactive 
-----------
- t
+SELECT * FROM master_activate_node('localhost', :worker_2_port);
+ master_activate_node 
+----------------------
+                    3
 (1 row)
 
 CREATE TABLE cluster_management_test (col_1 text, col_2 int);
@@ -229,10 +229,10 @@ SELECT master_get_active_worker_nodes();
 (1 row)
 
 -- restore the node for next tests
-SELECT isactive FROM master_activate_node('localhost', :worker_2_port);
- isactive 
-----------
- t
+SELECT * FROM master_activate_node('localhost', :worker_2_port);
+ master_activate_node 
+----------------------
+                    3
 (1 row)
 
 -- try to remove a node with active placements and see that node removal is failed
@@ -281,7 +281,8 @@ DELETE FROM pg_dist_node WHERE nodeport=:worker_2_port;
 SELECT * FROM cluster_management_test;
 ERROR:  there is a shard placement in node group 3 but there are no nodes in that group
 -- clean-up
-SELECT groupid as new_group FROM master_add_node('localhost', :worker_2_port) \gset
+SELECT master_add_node('localhost', :worker_2_port) AS new_node \gset
+SELECT groupid AS new_group FROM pg_dist_node WHERE nodeid = :new_node \gset
 UPDATE pg_dist_placement SET groupid = :new_group WHERE groupid = :worker_2_group;
 -- test that you are allowed to remove secondary nodes even if there are placements
 SELECT 1 FROM master_add_node('localhost', 9990, groupid => :new_group, noderole => 'secondary');
@@ -369,9 +370,9 @@ SELECT count(1) FROM pg_dist_node;
 SELECT
 	master_add_node('localhost', :worker_1_port),
 	master_add_node('localhost', :worker_2_port);
-                  master_add_node                   |                   master_add_node                   
-----------------------------------------------------+-----------------------------------------------------
- (11,9,localhost,57637,default,f,t,primary,default) | (12,10,localhost,57638,default,f,t,primary,default)
+ master_add_node | master_add_node 
+-----------------+-----------------
+              11 |              12
 (1 row)
 
 SELECT * FROM pg_dist_node ORDER BY nodeid;
@@ -556,15 +557,15 @@ SELECT 1 FROM master_add_inactive_node('localhost', 9996, groupid => :worker_2_g
 
 -- check that you can add a seconary to a non-default cluster, and activate it, and remove it
 SELECT master_add_inactive_node('localhost', 9999, groupid => :worker_2_group, nodecluster => 'olap', noderole => 'secondary');
-             master_add_inactive_node              
----------------------------------------------------
- (22,16,localhost,9999,default,f,f,secondary,olap)
+ master_add_inactive_node 
+--------------------------
+                       22
 (1 row)
 
 SELECT master_activate_node('localhost', 9999);
-               master_activate_node                
----------------------------------------------------
- (22,16,localhost,9999,default,f,t,secondary,olap)
+ master_activate_node 
+----------------------
+                   22
 (1 row)
 
 SELECT master_disable_node('localhost', 9999);
@@ -600,9 +601,9 @@ DETAIL:  Failing row contains (16, 14, localhost, 57637, default, f, t, primary,
 -- check that you /can/ add a secondary node to a non-default cluster
 SELECT groupid AS worker_2_group FROM pg_dist_node WHERE nodeport = :worker_2_port \gset
 SELECT master_add_node('localhost', 8888, groupid => :worker_1_group, noderole => 'secondary', nodecluster=> 'olap');
-                  master_add_node                  
----------------------------------------------------
- (23,14,localhost,8888,default,f,t,secondary,olap)
+ master_add_node 
+-----------------
+              23
 (1 row)
 
 -- check that super-long cluster names are truncated
@@ -613,9 +614,9 @@ SELECT master_add_node('localhost', 8887, groupid => :worker_1_group, noderole =
 	'thisisasixtyfourcharacterstringrepeatedfourtimestomake256chars.'
 	'overflow'
 );
-                                               master_add_node                                                
---------------------------------------------------------------------------------------------------------------
- (24,14,localhost,8887,default,f,t,secondary,thisisasixtyfourcharacterstringrepeatedfourtimestomake256chars.)
+ master_add_node 
+-----------------
+              24
 (1 row)
 
 SELECT * FROM pg_dist_node WHERE nodeport=8887;
@@ -628,23 +629,23 @@ SELECT * FROM pg_dist_node WHERE nodeport=8887;
 -- them in any of the remaining tests
 -- master_add_secondary_node lets you skip looking up the groupid
 SELECT master_add_secondary_node('localhost', 9995, 'localhost', :worker_1_port);
-              master_add_secondary_node               
-------------------------------------------------------
- (25,14,localhost,9995,default,f,t,secondary,default)
+ master_add_secondary_node 
+---------------------------
+                        25
 (1 row)
 
 SELECT master_add_secondary_node('localhost', 9994, primaryname => 'localhost', primaryport => :worker_2_port);
-              master_add_secondary_node               
-------------------------------------------------------
- (26,16,localhost,9994,default,f,t,secondary,default)
+ master_add_secondary_node 
+---------------------------
+                        26
 (1 row)
 
 SELECT master_add_secondary_node('localhost', 9993, 'localhost', 2000);
 ERROR:  node at "localhost:2000" does not exist
 SELECT master_add_secondary_node('localhost', 9992, 'localhost', :worker_1_port, nodecluster => 'second-cluster');
-                  master_add_secondary_node                  
--------------------------------------------------------------
- (27,14,localhost,9992,default,f,t,secondary,second-cluster)
+ master_add_secondary_node 
+---------------------------
+                        27
 (1 row)
 
 SELECT nodeid AS worker_1_node FROM pg_dist_node WHERE nodeport=:worker_1_port \gset

@@ -1,11 +1,11 @@
 Parsed test spec with 4 sessions
 
 starting permutation: s1-print-distributed-objects s1-begin s1-add-worker s2-public-schema s2-create-table s1-commit s2-print-distributed-objects
-nodename       nodeport       isactive       
+?column?       
 
-localhost      57637          t              
+1              
 step s1-print-distributed-objects: 
-    SELECT nodename, nodeport, isactive FROM master_add_node('localhost', 57638);
+    SELECT 1 FROM master_add_node('localhost', 57638);
 
     -- print an overview of all distributed objects
     SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
@@ -16,9 +16,9 @@ step s1-print-distributed-objects:
 
     SELECT master_remove_node('localhost', 57638);
 
-nodename       nodeport       isactive       
+?column?       
 
-localhost      57638          t              
+1              
 pg_identify_object_as_address
 
 count          
@@ -35,11 +35,11 @@ step s1-begin:
     BEGIN;
 
 step s1-add-worker: 
-	SELECT nodename, nodeport, isactive FROM master_add_node('localhost', 57638);
+	SELECT 1 FROM master_add_node('localhost', 57638);
 
-nodename       nodeport       isactive       
+?column?       
 
-localhost      57638          t              
+1              
 step s2-public-schema: 
     SET search_path TO public;
 
@@ -79,11 +79,11 @@ master_remove_node
                
 
 starting permutation: s1-print-distributed-objects s1-begin s2-begin s1-add-worker s2-public-schema s2-create-table s1-commit s2-commit s2-print-distributed-objects
-nodename       nodeport       isactive       
+?column?       
 
-localhost      57637          t              
+1              
 step s1-print-distributed-objects: 
-    SELECT nodename, nodeport, isactive FROM master_add_node('localhost', 57638);
+    SELECT 1 FROM master_add_node('localhost', 57638);
 
     -- print an overview of all distributed objects
     SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
@@ -94,9 +94,9 @@ step s1-print-distributed-objects:
 
     SELECT master_remove_node('localhost', 57638);
 
-nodename       nodeport       isactive       
+?column?       
 
-localhost      57638          t              
+1              
 pg_identify_object_as_address
 
 count          
@@ -116,11 +116,11 @@ step s2-begin:
 	BEGIN;
 
 step s1-add-worker: 
-	SELECT nodename, nodeport, isactive FROM master_add_node('localhost', 57638);
+	SELECT 1 FROM master_add_node('localhost', 57638);
 
-nodename       nodeport       isactive       
+?column?       
 
-localhost      57638          t              
+1              
 step s2-public-schema: 
     SET search_path TO public;
 
@@ -163,11 +163,11 @@ master_remove_node
                
 
 starting permutation: s1-print-distributed-objects s1-begin s2-begin s2-public-schema s2-create-table s1-add-worker s2-commit s1-commit s2-print-distributed-objects
-nodename       nodeport       isactive       
+?column?       
 
-localhost      57637          t              
+1              
 step s1-print-distributed-objects: 
-    SELECT nodename, nodeport, isactive FROM master_add_node('localhost', 57638);
+    SELECT 1 FROM master_add_node('localhost', 57638);
 
     -- print an overview of all distributed objects
     SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
@@ -178,9 +178,9 @@ step s1-print-distributed-objects:
 
     SELECT master_remove_node('localhost', 57638);
 
-nodename       nodeport       isactive       
+?column?       
 
-localhost      57638          t              
+1              
 pg_identify_object_as_address
 
 count          
@@ -212,15 +212,15 @@ create_distributed_table
 
                
 step s1-add-worker: 
-	SELECT nodename, nodeport, isactive FROM master_add_node('localhost', 57638);
+	SELECT 1 FROM master_add_node('localhost', 57638);
  <waiting ...>
 step s2-commit: 
 	COMMIT;
 
 step s1-add-worker: <... completed>
-nodename       nodeport       isactive       
+?column?       
 
-localhost      57638          t              
+1              
 step s1-commit: 
     COMMIT;
 
@@ -247,11 +247,11 @@ master_remove_node
                
 
 starting permutation: s1-print-distributed-objects s1-begin s1-add-worker s2-create-schema s2-create-table s1-commit s2-print-distributed-objects
-nodename       nodeport       isactive       
+?column?       
 
-localhost      57637          t              
+1              
 step s1-print-distributed-objects: 
-    SELECT nodename, nodeport, isactive FROM master_add_node('localhost', 57638);
+    SELECT 1 FROM master_add_node('localhost', 57638);
 
     -- print an overview of all distributed objects
     SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
@@ -262,9 +262,9 @@ step s1-print-distributed-objects:
 
     SELECT master_remove_node('localhost', 57638);
 
-nodename       nodeport       isactive       
+?column?       
 
-localhost      57638          t              
+1              
 pg_identify_object_as_address
 
 count          
@@ -281,11 +281,11 @@ step s1-begin:
     BEGIN;
 
 step s1-add-worker: 
-	SELECT nodename, nodeport, isactive FROM master_add_node('localhost', 57638);
+	SELECT 1 FROM master_add_node('localhost', 57638);
 
-nodename       nodeport       isactive       
+?column?       
 
-localhost      57638          t              
+1              
 step s2-create-schema: 
     CREATE SCHEMA myschema;
     SET search_path TO myschema;
@@ -327,11 +327,11 @@ master_remove_node
                
 
 starting permutation: s1-print-distributed-objects s1-begin s2-begin s1-add-worker s2-create-schema s2-create-table s1-commit s2-commit s2-print-distributed-objects
-nodename       nodeport       isactive       
+?column?       
 
-localhost      57637          t              
+1              
 step s1-print-distributed-objects: 
-    SELECT nodename, nodeport, isactive FROM master_add_node('localhost', 57638);
+    SELECT 1 FROM master_add_node('localhost', 57638);
 
     -- print an overview of all distributed objects
     SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
@@ -342,9 +342,9 @@ step s1-print-distributed-objects:
 
     SELECT master_remove_node('localhost', 57638);
 
-nodename       nodeport       isactive       
+?column?       
 
-localhost      57638          t              
+1              
 pg_identify_object_as_address
 
 count          
@@ -364,11 +364,11 @@ step s2-begin:
 	BEGIN;
 
 step s1-add-worker: 
-	SELECT nodename, nodeport, isactive FROM master_add_node('localhost', 57638);
+	SELECT 1 FROM master_add_node('localhost', 57638);
 
-nodename       nodeport       isactive       
+?column?       
 
-localhost      57638          t              
+1              
 step s2-create-schema: 
     CREATE SCHEMA myschema;
     SET search_path TO myschema;
@@ -413,11 +413,11 @@ master_remove_node
                
 
 starting permutation: s1-print-distributed-objects s1-begin s2-begin s2-create-schema s2-create-table s1-add-worker s2-commit s1-commit s2-print-distributed-objects
-nodename       nodeport       isactive       
+?column?       
 
-localhost      57637          t              
+1              
 step s1-print-distributed-objects: 
-    SELECT nodename, nodeport, isactive FROM master_add_node('localhost', 57638);
+    SELECT 1 FROM master_add_node('localhost', 57638);
 
     -- print an overview of all distributed objects
     SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
@@ -428,9 +428,9 @@ step s1-print-distributed-objects:
 
     SELECT master_remove_node('localhost', 57638);
 
-nodename       nodeport       isactive       
+?column?       
 
-localhost      57638          t              
+1              
 pg_identify_object_as_address
 
 count          
@@ -463,15 +463,15 @@ create_distributed_table
 
                
 step s1-add-worker: 
-	SELECT nodename, nodeport, isactive FROM master_add_node('localhost', 57638);
+	SELECT 1 FROM master_add_node('localhost', 57638);
  <waiting ...>
 step s2-commit: 
 	COMMIT;
 
 step s1-add-worker: <... completed>
-nodename       nodeport       isactive       
+?column?       
 
-localhost      57638          t              
+1              
 step s1-commit: 
     COMMIT;
 
@@ -499,11 +499,11 @@ master_remove_node
                
 
 starting permutation: s1-print-distributed-objects s2-create-schema s1-begin s2-begin s3-begin s1-add-worker s2-create-table s3-use-schema s3-create-table s1-commit s2-commit s3-commit s2-print-distributed-objects
-nodename       nodeport       isactive       
+?column?       
 
-localhost      57637          t              
+1              
 step s1-print-distributed-objects: 
-    SELECT nodename, nodeport, isactive FROM master_add_node('localhost', 57638);
+    SELECT 1 FROM master_add_node('localhost', 57638);
 
     -- print an overview of all distributed objects
     SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
@@ -514,9 +514,9 @@ step s1-print-distributed-objects:
 
     SELECT master_remove_node('localhost', 57638);
 
-nodename       nodeport       isactive       
+?column?       
 
-localhost      57638          t              
+1              
 pg_identify_object_as_address
 
 count          
@@ -543,11 +543,11 @@ step s3-begin:
 	BEGIN;
 
 step s1-add-worker: 
-	SELECT nodename, nodeport, isactive FROM master_add_node('localhost', 57638);
+	SELECT 1 FROM master_add_node('localhost', 57638);
 
-nodename       nodeport       isactive       
+?column?       
 
-localhost      57638          t              
+1              
 step s2-create-table: 
 	CREATE TABLE t1 (a int, b int);
     -- session needs to have replication factor set to 1, can't do in setup
@@ -604,11 +604,11 @@ master_remove_node
                
 
 starting permutation: s1-print-distributed-objects s2-create-schema s1-begin s2-begin s3-begin s4-begin s1-add-worker s2-create-table s3-use-schema s3-create-table s4-use-schema s4-create-table s1-commit s2-commit s3-commit s4-commit s2-print-distributed-objects
-nodename       nodeport       isactive       
+?column?       
 
-localhost      57637          t              
+1              
 step s1-print-distributed-objects: 
-    SELECT nodename, nodeport, isactive FROM master_add_node('localhost', 57638);
+    SELECT 1 FROM master_add_node('localhost', 57638);
 
     -- print an overview of all distributed objects
     SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
@@ -619,9 +619,9 @@ step s1-print-distributed-objects:
 
     SELECT master_remove_node('localhost', 57638);
 
-nodename       nodeport       isactive       
+?column?       
 
-localhost      57638          t              
+1              
 pg_identify_object_as_address
 
 count          
@@ -651,11 +651,11 @@ step s4-begin:
 	BEGIN;
 
 step s1-add-worker: 
-	SELECT nodename, nodeport, isactive FROM master_add_node('localhost', 57638);
+	SELECT 1 FROM master_add_node('localhost', 57638);
 
-nodename       nodeport       isactive       
+?column?       
 
-localhost      57638          t              
+1              
 step s2-create-table: 
 	CREATE TABLE t1 (a int, b int);
     -- session needs to have replication factor set to 1, can't do in setup
@@ -728,11 +728,11 @@ master_remove_node
                
 
 starting permutation: s1-print-distributed-objects s1-add-worker s2-create-schema s2-begin s3-begin s3-use-schema s2-create-table s3-create-table s2-commit s3-commit s2-print-distributed-objects
-nodename       nodeport       isactive       
+?column?       
 
-localhost      57637          t              
+1              
 step s1-print-distributed-objects: 
-    SELECT nodename, nodeport, isactive FROM master_add_node('localhost', 57638);
+    SELECT 1 FROM master_add_node('localhost', 57638);
 
     -- print an overview of all distributed objects
     SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
@@ -743,9 +743,9 @@ step s1-print-distributed-objects:
 
     SELECT master_remove_node('localhost', 57638);
 
-nodename       nodeport       isactive       
+?column?       
 
-localhost      57638          t              
+1              
 pg_identify_object_as_address
 
 count          
@@ -759,11 +759,11 @@ master_remove_node
 
                
 step s1-add-worker: 
-	SELECT nodename, nodeport, isactive FROM master_add_node('localhost', 57638);
+	SELECT 1 FROM master_add_node('localhost', 57638);
 
-nodename       nodeport       isactive       
+?column?       
 
-localhost      57638          t              
+1              
 step s2-create-schema: 
     CREATE SCHEMA myschema;
     SET search_path TO myschema;
@@ -826,11 +826,11 @@ master_remove_node
                
 
 starting permutation: s1-print-distributed-objects s1-begin s2-begin s4-begin s1-add-worker s2-create-schema s4-create-schema2 s2-create-table s4-create-table s1-commit s2-commit s4-commit s2-print-distributed-objects
-nodename       nodeport       isactive       
+?column?       
 
-localhost      57637          t              
+1              
 step s1-print-distributed-objects: 
-    SELECT nodename, nodeport, isactive FROM master_add_node('localhost', 57638);
+    SELECT 1 FROM master_add_node('localhost', 57638);
 
     -- print an overview of all distributed objects
     SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
@@ -841,9 +841,9 @@ step s1-print-distributed-objects:
 
     SELECT master_remove_node('localhost', 57638);
 
-nodename       nodeport       isactive       
+?column?       
 
-localhost      57638          t              
+1              
 pg_identify_object_as_address
 
 count          
@@ -866,11 +866,11 @@ step s4-begin:
 	BEGIN;
 
 step s1-add-worker: 
-	SELECT nodename, nodeport, isactive FROM master_add_node('localhost', 57638);
+	SELECT 1 FROM master_add_node('localhost', 57638);
 
-nodename       nodeport       isactive       
+?column?       
 
-localhost      57638          t              
+1              
 step s2-create-schema: 
     CREATE SCHEMA myschema;
     SET search_path TO myschema;

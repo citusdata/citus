@@ -2,7 +2,7 @@
 # add single one of the nodes for the purpose of the test
 setup
 {	
-	SELECT nodename, nodeport, isactive FROM master_add_node('localhost', 57637);
+	SELECT 1 FROM master_add_node('localhost', 57637);
 	
 	CREATE TABLE test_reference_table (test_id integer);
 	SELECT create_reference_table('test_reference_table');
@@ -24,7 +24,7 @@ step "s1-begin"
 
 step "s1-add-second-worker"
 {
-	SELECT nodename, nodeport, isactive FROM master_add_node('localhost', 57638);
+	SELECT 1 FROM master_add_node('localhost', 57638);
 }
 
 step "s1-remove-second-worker"

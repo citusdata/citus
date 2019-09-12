@@ -11,11 +11,11 @@ step s1-begin:
     BEGIN;
 
 step s1-add-second-worker: 
-	SELECT nodename, nodeport, isactive FROM master_add_node('localhost', 57638);
+	SELECT 1 FROM master_add_node('localhost', 57638);
 
-nodename       nodeport       isactive       
+?column?       
 
-localhost      57638          t              
+1              
 step s2-copy-to-reference-table: 
 	COPY test_reference_table FROM PROGRAM 'echo 1 && echo 2 && echo 3 && echo 4 && echo 5';
  <waiting ...>
@@ -54,15 +54,15 @@ step s2-copy-to-reference-table:
 	COPY test_reference_table FROM PROGRAM 'echo 1 && echo 2 && echo 3 && echo 4 && echo 5';
 
 step s1-add-second-worker: 
-	SELECT nodename, nodeport, isactive FROM master_add_node('localhost', 57638);
+	SELECT 1 FROM master_add_node('localhost', 57638);
  <waiting ...>
 step s2-commit: 
 	COMMIT;
 
 step s1-add-second-worker: <... completed>
-nodename       nodeport       isactive       
+?column?       
 
-localhost      57638          t              
+1              
 step s2-print-content: 
 	SELECT 
 		nodeport, success, result 
@@ -91,11 +91,11 @@ step s1-begin:
     BEGIN;
 
 step s1-add-second-worker: 
-	SELECT nodename, nodeport, isactive FROM master_add_node('localhost', 57638);
+	SELECT 1 FROM master_add_node('localhost', 57638);
 
-nodename       nodeport       isactive       
+?column?       
 
-localhost      57638          t              
+1              
 step s2-insert-to-reference-table: 
 	INSERT INTO test_reference_table VALUES (6);
  <waiting ...>
@@ -134,15 +134,15 @@ step s2-insert-to-reference-table:
 	INSERT INTO test_reference_table VALUES (6);
 
 step s1-add-second-worker: 
-	SELECT nodename, nodeport, isactive FROM master_add_node('localhost', 57638);
+	SELECT 1 FROM master_add_node('localhost', 57638);
  <waiting ...>
 step s2-commit: 
 	COMMIT;
 
 step s1-add-second-worker: <... completed>
-nodename       nodeport       isactive       
+?column?       
 
-localhost      57638          t              
+1              
 step s2-print-content: 
 	SELECT 
 		nodeport, success, result 
@@ -171,11 +171,11 @@ step s1-begin:
     BEGIN;
 
 step s1-add-second-worker: 
-	SELECT nodename, nodeport, isactive FROM master_add_node('localhost', 57638);
+	SELECT 1 FROM master_add_node('localhost', 57638);
 
-nodename       nodeport       isactive       
+?column?       
 
-localhost      57638          t              
+1              
 step s2-ddl-on-reference-table: 
 	CREATE INDEX reference_index ON test_reference_table(test_id);
  <waiting ...>
@@ -214,15 +214,15 @@ step s2-ddl-on-reference-table:
 	CREATE INDEX reference_index ON test_reference_table(test_id);
 
 step s1-add-second-worker: 
-	SELECT nodename, nodeport, isactive FROM master_add_node('localhost', 57638);
+	SELECT 1 FROM master_add_node('localhost', 57638);
  <waiting ...>
 step s2-commit: 
 	COMMIT;
 
 step s1-add-second-worker: <... completed>
-nodename       nodeport       isactive       
+?column?       
 
-localhost      57638          t              
+1              
 step s2-print-index-count: 
 	SELECT 
 		nodeport, success, result 
@@ -248,11 +248,11 @@ step s1-begin:
     BEGIN;
 
 step s1-add-second-worker: 
-	SELECT nodename, nodeport, isactive FROM master_add_node('localhost', 57638);
+	SELECT 1 FROM master_add_node('localhost', 57638);
 
-nodename       nodeport       isactive       
+?column?       
 
-localhost      57638          t              
+1              
 step s2-copy-to-reference-table: 
 	COPY test_reference_table FROM PROGRAM 'echo 1 && echo 2 && echo 3 && echo 4 && echo 5';
  <waiting ...>
@@ -288,15 +288,15 @@ step s2-copy-to-reference-table:
 	COPY test_reference_table FROM PROGRAM 'echo 1 && echo 2 && echo 3 && echo 4 && echo 5';
 
 step s1-add-second-worker: 
-	SELECT nodename, nodeport, isactive FROM master_add_node('localhost', 57638);
+	SELECT 1 FROM master_add_node('localhost', 57638);
  <waiting ...>
 step s2-commit: 
 	COMMIT;
 
 step s1-add-second-worker: <... completed>
-nodename       nodeport       isactive       
+?column?       
 
-localhost      57638          t              
+1              
 step s2-print-content: 
 	SELECT 
 		nodeport, success, result 
@@ -322,11 +322,11 @@ step s1-begin:
     BEGIN;
 
 step s1-add-second-worker: 
-	SELECT nodename, nodeport, isactive FROM master_add_node('localhost', 57638);
+	SELECT 1 FROM master_add_node('localhost', 57638);
 
-nodename       nodeport       isactive       
+?column?       
 
-localhost      57638          t              
+1              
 step s2-insert-to-reference-table: 
 	INSERT INTO test_reference_table VALUES (6);
  <waiting ...>
@@ -362,15 +362,15 @@ step s2-insert-to-reference-table:
 	INSERT INTO test_reference_table VALUES (6);
 
 step s1-add-second-worker: 
-	SELECT nodename, nodeport, isactive FROM master_add_node('localhost', 57638);
+	SELECT 1 FROM master_add_node('localhost', 57638);
  <waiting ...>
 step s2-commit: 
 	COMMIT;
 
 step s1-add-second-worker: <... completed>
-nodename       nodeport       isactive       
+?column?       
 
-localhost      57638          t              
+1              
 step s2-print-content: 
 	SELECT 
 		nodeport, success, result 
@@ -396,11 +396,11 @@ step s1-begin:
     BEGIN;
 
 step s1-add-second-worker: 
-	SELECT nodename, nodeport, isactive FROM master_add_node('localhost', 57638);
+	SELECT 1 FROM master_add_node('localhost', 57638);
 
-nodename       nodeport       isactive       
+?column?       
 
-localhost      57638          t              
+1              
 step s2-ddl-on-reference-table: 
 	CREATE INDEX reference_index ON test_reference_table(test_id);
  <waiting ...>
@@ -436,15 +436,15 @@ step s2-ddl-on-reference-table:
 	CREATE INDEX reference_index ON test_reference_table(test_id);
 
 step s1-add-second-worker: 
-	SELECT nodename, nodeport, isactive FROM master_add_node('localhost', 57638);
+	SELECT 1 FROM master_add_node('localhost', 57638);
  <waiting ...>
 step s2-commit: 
 	COMMIT;
 
 step s1-add-second-worker: <... completed>
-nodename       nodeport       isactive       
+?column?       
 
-localhost      57638          t              
+1              
 step s2-print-index-count: 
 	SELECT 
 		nodeport, success, result 
