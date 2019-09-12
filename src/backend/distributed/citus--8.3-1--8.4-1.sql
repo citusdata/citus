@@ -304,4 +304,62 @@ CREATE OR REPLACE FUNCTION rebalance_table_shards(relation regclass,
 COMMENT ON FUNCTION rebalance_table_shards(regclass, float4, int, bigint[], citus.shard_transfer_mode)
     IS 'rebalance the shards of the given table across the worker nodes (including colocated shards of other tables)';
 
+DROP FUNCTION master_add_node(text, integer, integer, noderole, name);
+CREATE FUNCTION master_add_node(nodename text,
+                                nodeport integer,
+                                groupid integer default 0,
+                                noderole noderole default 'primary',
+                                nodecluster name default 'default')
+  RETURNS INTEGER
+  LANGUAGE C STRICT
+  AS 'MODULE_PATHNAME', $$master_add_node$$;
+COMMENT ON FUNCTION master_add_node(nodename text, nodeport integer,
+                                    groupid integer, noderole noderole, nodecluster name)
+  IS 'add node to the cluster';
+
+DROP FUNCTION master_add_inactive_node(text, integer, integer, noderole, name);
+CREATE FUNCTION master_add_inactive_node(nodename text,
+                                         nodeport integer,
+                                         groupid integer default 0,
+                                         noderole noderole default 'primary',
+                                         nodecluster name default 'default')
+  RETURNS INTEGER
+  LANGUAGE C STRICT
+  AS 'MODULE_PATHNAME',$$master_add_inactive_node$$;
+COMMENT ON FUNCTION master_add_inactive_node(nodename text,nodeport integer,
+                                             groupid integer, noderole noderole,
+                                             nodecluster name)
+  IS 'prepare node by adding it to pg_dist_node';
+
+SET search_path = 'pg_catalog';
+
+DROP FUNCTION master_activate_node(text, integer);
+CREATE FUNCTION master_activate_node(nodename text,
+                                     nodeport integer)
+    RETURNS INTEGER
+    LANGUAGE C STRICT
+    AS 'MODULE_PATHNAME',$$master_activate_node$$;
+COMMENT ON FUNCTION master_activate_node(nodename text, nodeport integer)
+    IS 'activate a node which is in the cluster';
+
+DROP FUNCTION master_add_secondary_node(text, integer, text, integer, name);
+CREATE FUNCTION master_add_secondary_node(nodename text,
+                                          nodeport integer,
+                                          primaryname text,
+                                          primaryport integer,
+                                          nodecluster name default 'default')
+  RETURNS INTEGER
+  LANGUAGE C STRICT
+  AS 'MODULE_PATHNAME', $$master_add_secondary_node$$;
+COMMENT ON FUNCTION master_add_secondary_node(nodename text, nodeport integer,
+                                              primaryname text, primaryport integer,
+                                              nodecluster name)
+  IS 'add a secondary node to the cluster';
+
+
+REVOKE ALL ON FUNCTION master_activate_node(text,int) FROM PUBLIC;
+REVOKE ALL ON FUNCTION master_add_inactive_node(text,int,int,noderole,name) FROM PUBLIC;
+REVOKE ALL ON FUNCTION master_add_node(text,int,int,noderole,name) FROM PUBLIC;
+REVOKE ALL ON FUNCTION master_add_secondary_node(text,int,text,int,name) FROM PUBLIC;
+
 RESET search_path;

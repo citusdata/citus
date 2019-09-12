@@ -54,14 +54,13 @@ int GroupSize = 1;
 char *CurrentCluster = "default";
 
 /* local function forward declarations */
-static Datum ActivateNode(char *nodeName, int nodePort);
+static int ActivateNode(char *nodeName, int nodePort);
 static void RemoveNodeFromCluster(char *nodeName, int32 nodePort);
-static Datum AddNodeMetadata(char *nodeName, int32 nodePort, int32 groupId,
-							 char *nodeRack, bool hasMetadata, bool isActive,
-							 Oid nodeRole, char *nodeCluster, bool *nodeAlreadyExists);
+static int AddNodeMetadata(char *nodeName, int32 nodePort, int32 groupId,
+						   char *nodeRack, bool hasMetadata, bool isActive,
+						   Oid nodeRole, char *nodeCluster, bool *nodeAlreadyExists);
 static void SetNodeState(char *nodeName, int32 nodePort, bool isActive);
 static HeapTuple GetNodeTuple(char *nodeName, int32 nodePort);
-static Datum GenerateNodeTuple(WorkerNode *workerNode);
 static int32 GetNextGroupId(void);
 static int GetNextNodeId(void);
 static void InsertNodeRow(int nodeid, char *nodename, int32 nodeport, int32 groupId,
@@ -85,7 +84,7 @@ PG_FUNCTION_INFO_V1(get_shard_id_for_distribution_column);
 
 
 /*
- * master_add_node function adds a new node to the cluster and returns its data. It also
+ * master_add_node function adds a new node to the cluster and returns its id. It also
  * replicates all reference tables to the new node.
  */
 Datum
@@ -101,7 +100,7 @@ master_add_node(PG_FUNCTION_ARGS)
 	bool hasMetadata = false;
 	bool isActive = false;
 	bool nodeAlreadyExists = false;
-	Datum nodeRecord;
+	int nodeId = 0;
 
 	CheckCitusVersion(ERROR);
 
@@ -122,9 +121,9 @@ master_add_node(PG_FUNCTION_ARGS)
 		nodeRole = PG_GETARG_OID(3);
 	}
 
-	nodeRecord = AddNodeMetadata(nodeNameString, nodePort, groupId, nodeRack,
-								 hasMetadata, isActive, nodeRole, nodeClusterString,
-								 &nodeAlreadyExists);
+	nodeId = AddNodeMetadata(nodeNameString, nodePort, groupId, nodeRack,
+							 hasMetadata, isActive, nodeRole, nodeClusterString,
+							 &nodeAlreadyExists);
 
 	/*
 	 * After adding new node, if the node did not already exist, we will activate
@@ -133,16 +132,16 @@ master_add_node(PG_FUNCTION_ARGS)
 	 */
 	if (!nodeAlreadyExists)
 	{
-		nodeRecord = ActivateNode(nodeNameString, nodePort);
+		ActivateNode(nodeNameString, nodePort);
 	}
 
-	PG_RETURN_DATUM(nodeRecord);
+	PG_RETURN_INT32(nodeId);
 }
 
 
 /*
  * master_add_inactive_node function adds a new node to the cluster as inactive node
- * and returns information about newly added node. It does not replicate reference
+ * and returns id of the newly added node. It does not replicate reference
  * tables to the new node, it only adds new node to the pg_dist_node table.
  */
 Datum
@@ -159,15 +158,15 @@ master_add_inactive_node(PG_FUNCTION_ARGS)
 	bool hasMetadata = false;
 	bool isActive = false;
 	bool nodeAlreadyExists = false;
-	Datum nodeRecord;
+	int nodeId = 0;
 
 	CheckCitusVersion(ERROR);
 
-	nodeRecord = AddNodeMetadata(nodeNameString, nodePort, groupId, nodeRack,
-								 hasMetadata, isActive, nodeRole, nodeClusterString,
-								 &nodeAlreadyExists);
+	nodeId = AddNodeMetadata(nodeNameString, nodePort, groupId, nodeRack,
+							 hasMetadata, isActive, nodeRole, nodeClusterString,
+							 &nodeAlreadyExists);
 
-	PG_RETURN_DATUM(nodeRecord);
+	PG_RETURN_INT32(nodeId);
 }
 
 
@@ -194,15 +193,15 @@ master_add_secondary_node(PG_FUNCTION_ARGS)
 	bool hasMetadata = false;
 	bool isActive = true;
 	bool nodeAlreadyExists = false;
-	Datum nodeRecord;
+	int nodeId = 0;
 
 	CheckCitusVersion(ERROR);
 
-	nodeRecord = AddNodeMetadata(nodeNameString, nodePort, groupId, nodeRack,
-								 hasMetadata, isActive, nodeRole, nodeClusterString,
-								 &nodeAlreadyExists);
+	nodeId = AddNodeMetadata(nodeNameString, nodePort, groupId, nodeRack,
+							 hasMetadata, isActive, nodeRole, nodeClusterString,
+							 &nodeAlreadyExists);
 
-	PG_RETURN_DATUM(nodeRecord);
+	PG_RETURN_INT32(nodeId);
 }
 
 
@@ -305,15 +304,15 @@ master_activate_node(PG_FUNCTION_ARGS)
 	int32 nodePort = PG_GETARG_INT32(1);
 
 	char *nodeNameString = text_to_cstring(nodeName);
-	Datum nodeRecord = 0;
+	int nodeId = 0;
 
 	CheckCitusVersion(ERROR);
 
 	EnsureCoordinator();
 
-	nodeRecord = ActivateNode(nodeNameString, nodePort);
+	nodeId = ActivateNode(nodeNameString, nodePort);
 
-	PG_RETURN_DATUM(nodeRecord);
+	PG_RETURN_INT32(nodeId);
 }
 
 
@@ -439,12 +438,11 @@ PrimaryNodeForGroup(int32 groupId, bool *groupContainsNodes)
  * includes only replicating the reference tables and setting isactive column of the
  * given node.
  */
-static Datum
+static int
 ActivateNode(char *nodeName, int nodePort)
 {
 	WorkerNode *workerNode = NULL;
 	bool isActive = true;
-	Datum nodeRecord = 0;
 
 	/* take an exclusive lock on pg_dist_node to serialize pg_dist_node changes */
 	LockRelationOid(DistNodeRelationId(), ExclusiveLock);
@@ -459,9 +457,7 @@ ActivateNode(char *nodeName, int nodePort)
 		ReplicateAllReferenceTablesToNode(nodeName, nodePort);
 	}
 
-	nodeRecord = GenerateNodeTuple(workerNode);
-
-	return nodeRecord;
+	return workerNode->nodeId;
 }
 
 
@@ -481,7 +477,7 @@ master_update_node(PG_FUNCTION_ARGS)
 	/*
 	 * force is used when an update needs to happen regardless of conflicting locks. This
 	 * feature is important to force the update during a failover due to failure, eg. by
-	 * a highavailability system such as pg_auto_failover. The strategy is a to start a
+	 * a high-availability system such as pg_auto_failover. The strategy is a to start a
 	 * background worker that actively cancels backends holding conflicting locks with
 	 * this backend.
 	 *
@@ -956,19 +952,18 @@ CountPrimariesWithMetadata(void)
 /*
  * AddNodeMetadata checks the given node information and adds the specified node to the
  * pg_dist_node table of the master and workers with metadata.
- * If the node already exists, the function returns the information about the node.
+ * If the node already exists, the function returns the id of the node.
  * If not, the following prodecure is followed while adding a node: If the groupId is not
  * explicitly given by the user, the function picks the group that the new node should
  * be in with respect to GroupSize. Then, the new node is inserted into the local
  * pg_dist_node as well as the nodes with hasmetadata=true.
  */
-static Datum
+static int
 AddNodeMetadata(char *nodeName, int32 nodePort, int32 groupId, char *nodeRack,
 				bool hasMetadata, bool isActive, Oid nodeRole, char *nodeCluster,
 				bool *nodeAlreadyExists)
 {
 	int nextNodeIdInt = 0;
-	Datum returnData = 0;
 	WorkerNode *workerNode = NULL;
 	char *nodeDeleteCommand = NULL;
 	uint32 primariesWithMetadata = 0;
@@ -988,10 +983,9 @@ AddNodeMetadata(char *nodeName, int32 nodePort, int32 groupId, char *nodeRack,
 	if (workerNode != NULL)
 	{
 		/* fill return data and return */
-		returnData = GenerateNodeTuple(workerNode);
 		*nodeAlreadyExists = true;
 
-		return returnData;
+		return workerNode->nodeId;
 	}
 
 	/* user lets Citus to decide on the group that the newly added node should be in */
@@ -1040,8 +1034,7 @@ AddNodeMetadata(char *nodeName, int32 nodePort, int32 groupId, char *nodeRack,
 		SendCommandToWorkers(WORKERS_WITH_METADATA, nodeInsertCommand);
 	}
 
-	returnData = GenerateNodeTuple(workerNode);
-	return returnData;
+	return nextNodeIdInt;
 }
 
 
@@ -1126,50 +1119,6 @@ GetNodeTuple(char *nodeName, int32 nodePort)
 	heap_close(pgDistNode, NoLock);
 
 	return nodeTuple;
-}
-
-
-/*
- * GenerateNodeTuple gets a worker node and return a heap tuple of
- * given worker node.
- */
-static Datum
-GenerateNodeTuple(WorkerNode *workerNode)
-{
-	Relation pgDistNode = NULL;
-	TupleDesc tupleDescriptor = NULL;
-	HeapTuple heapTuple = NULL;
-	Datum nodeDatum = 0;
-	Datum values[Natts_pg_dist_node];
-	bool isNulls[Natts_pg_dist_node];
-
-	Datum nodeClusterStringDatum = CStringGetDatum(workerNode->nodeCluster);
-	Datum nodeClusterNameDatum = DirectFunctionCall1(namein, nodeClusterStringDatum);
-
-	/* form new shard tuple */
-	memset(values, 0, sizeof(values));
-	memset(isNulls, false, sizeof(isNulls));
-
-	values[Anum_pg_dist_node_nodeid - 1] = UInt32GetDatum(workerNode->nodeId);
-	values[Anum_pg_dist_node_groupid - 1] = Int32GetDatum(workerNode->groupId);
-	values[Anum_pg_dist_node_nodename - 1] = CStringGetTextDatum(workerNode->workerName);
-	values[Anum_pg_dist_node_nodeport - 1] = UInt32GetDatum(workerNode->workerPort);
-	values[Anum_pg_dist_node_noderack - 1] = CStringGetTextDatum(workerNode->workerRack);
-	values[Anum_pg_dist_node_hasmetadata - 1] = BoolGetDatum(workerNode->hasMetadata);
-	values[Anum_pg_dist_node_isactive - 1] = BoolGetDatum(workerNode->isActive);
-	values[Anum_pg_dist_node_noderole - 1] = ObjectIdGetDatum(workerNode->nodeRole);
-	values[Anum_pg_dist_node_nodecluster - 1] = nodeClusterNameDatum;
-
-	pgDistNode = heap_open(DistNodeRelationId(), AccessShareLock);
-
-	/* generate the tuple */
-	tupleDescriptor = RelationGetDescr(pgDistNode);
-	heapTuple = heap_form_tuple(tupleDescriptor, values, isNulls);
-	nodeDatum = HeapTupleGetDatum(heapTuple);
-
-	heap_close(pgDistNode, NoLock);
-
-	return nodeDatum;
 }
 
 
