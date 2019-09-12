@@ -409,7 +409,6 @@ PlanAlterEnumStmt(AlterEnumStmt *stmt, const char *queryString)
 void
 ProcessAlterEnumStmt(AlterEnumStmt *stmt, const char *queryString)
 {
-	const char *alterEnumStmtSql = NULL;
 	const ObjectAddress *typeAddress = NULL;
 
 	if (creating_extension)
@@ -427,21 +426,22 @@ ProcessAlterEnumStmt(AlterEnumStmt *stmt, const char *queryString)
 		return;
 	}
 
-	/* qualification of the stmt happened during planning */
-	alterEnumStmtSql = DeparseTreeNode((Node *) stmt);
-
 	/* TODO this is not needed anymore for pg12, alter enum can actually run in a xact */
 	if (AlterEnumIsAddValue(stmt))
 	{
-		int result = 0;
-		List *commands = NIL;
-
 		/*
 		 * ADD VALUE can't be executed in a transaction, we will execute optimistically
 		 * and on an error we will advise to fix the issue with the worker and rerun the
 		 * query with the IF NOT EXTISTS modifier. The modifier is needed as the value
 		 * might already be added to some nodes, but not all.
 		 */
+
+		int result = 0;
+		List *commands = NIL;
+		const char *alterEnumStmtSql = NULL;
+
+		/* qualification of the stmt happened during planning */
+		alterEnumStmtSql = DeparseTreeNode((Node *) stmt);
 
 		commands = list_make2(DISABLE_DDL_PROPAGATION, (void *) alterEnumStmtSql);
 
