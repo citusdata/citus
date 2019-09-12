@@ -206,7 +206,7 @@ pg_get_sequencedef_string(Oid sequenceRelationId)
 	pgSequenceForm = pg_get_sequencedef(sequenceRelationId);
 
 	/* build our DDL command */
-	qualifiedSequenceName = generate_relation_name(sequenceRelationId, NIL);
+	qualifiedSequenceName = generate_qualified_relation_name(sequenceRelationId);
 
 	sequenceDef = psprintf(CREATE_SEQUENCE_COMMAND, qualifiedSequenceName,
 						   pgSequenceForm->seqincrement, pgSequenceForm->seqmin,

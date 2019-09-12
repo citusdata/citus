@@ -31,21 +31,22 @@ INSERT INTO distributed_table VALUES (1, '1', 20);
 INSERT INTO second_distributed_table VALUES (1, '1');
 -- a simple test for 
 CREATE TABLE collections_list (
-	key int,
+	key bigserial,
+	ser bigserial,
 	ts timestamptz,
 	collection_id integer,
 	value numeric,
 	PRIMARY KEY(key, collection_id)
 ) PARTITION BY LIST (collection_id );
 ERROR:  primary key constraints are not supported on partitioned tables
-LINE 6:  PRIMARY KEY(key, collection_id)
+LINE 7:  PRIMARY KEY(key, collection_id)
          ^
 SELECT create_distributed_table('collections_list', 'key');
 ERROR:  relation "collections_list" does not exist
 LINE 1: SELECT create_distributed_table('collections_list', 'key');
                                         ^
 CREATE TABLE collections_list_0 
-	PARTITION OF collections_list (key, ts, collection_id, value)
+	PARTITION OF collections_list (key, ser, ts, collection_id, value)
 	FOR VALUES IN ( 0 );
 ERROR:  relation "collections_list" does not exist
 -- connection worker and get ready for the tests
@@ -1071,6 +1072,10 @@ LOG:  executing the command locally: SELECT count(*) AS count FROM local_shard_e
 LOG:  executing the command locally: DELETE FROM local_shard_execution.distributed_table_1470003 distributed_table WHERE (key OPERATOR(pg_catalog.=) 500)
 COMMIT;
 -- sanity check: local execution on partitions
+INSERT INTO collections_list (collection_id) VALUES (0) RETURNING *;
+ERROR:  relation "collections_list" does not exist
+LINE 1: INSERT INTO collections_list (collection_id) VALUES (0) RETU...
+                    ^
 BEGIN;
 	INSERT INTO collections_list (key, collection_id) VALUES (1,0);
 ERROR:  relation "collections_list" does not exist
@@ -1079,6 +1084,8 @@ LINE 1: INSERT INTO collections_list (key, collection_id) VALUES (1,...
 	SELECT count(*) FROM collections_list_0 WHERE key = 1;
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
 	SELECT count(*) FROM collections_list;
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+	SELECT * FROM collections_list ORDER BY 1,2,3,4;
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
 COMMIT;
 -- the final queries for the following CTEs are going to happen on the intermediate results only
