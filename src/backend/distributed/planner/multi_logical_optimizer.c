@@ -2896,7 +2896,9 @@ GetAggregateType(Oid aggFunctionId)
 	}
 
 	aggregateCount = lengthof(AggregateNames);
-	for (aggregateIndex = 0; aggregateIndex < aggregateCount; aggregateIndex++)
+
+	Assert(AGGREGATE_INVALID_FIRST == 0);
+	for (aggregateIndex = 1; aggregateIndex < aggregateCount; aggregateIndex++)
 	{
 		const char *aggregateName = AggregateNames[aggregateIndex];
 		if (strncmp(aggregateName, aggregateProcName, NAMEDATALEN) == 0)
