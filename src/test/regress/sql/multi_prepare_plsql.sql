@@ -582,8 +582,6 @@ SELECT schemaname, indexrelname FROM pg_stat_all_indexes WHERE indexrelname = 'p
 
 -- cleanup
 DROP TABLE prepare_ddl;
-DROP SCHEMA otherschema;
-
 RESET search_path;
 
 -- test prepared COPY
@@ -612,10 +610,39 @@ $BODY$ LANGUAGE plpgsql;
 SELECT local_copy_in_plpgsql();
 SELECT local_copy_in_plpgsql();
 
+-- types statements should not crash nor leak schema specifications on to cached statements
+
+CREATE TYPE prepare_ddl_type AS (x int, y int);
+SET search_path TO 'otherschema', public;
+
+CREATE OR REPLACE FUNCTION public.type_ddl_plpgsql()
+RETURNS void
+LANGUAGE plpgsql
+AS $function$
+DECLARE
+BEGIN
+        ALTER TYPE prepare_ddl_type RENAME TO prepare_ddl_type_backup;
+END;
+$function$;
+
+SELECT type_ddl_plpgsql();
+-- create same type in new schema, owner of this new type should change
+CREATE TYPE prepare_ddl_type AS (x int, y int);
+SELECT type_ddl_plpgsql();
+
+-- find all renamed types to verify the schema name didn't leak, nor a crash happened
+SELECT nspname, typname FROM pg_type JOIN pg_namespace ON pg_namespace.oid = pg_type.typnamespace WHERE typname = 'prepare_ddl_type_backup';
+
+DROP TYPE prepare_ddl_type_backup;
+RESET search_path;
+
+DROP TYPE prepare_ddl_type_backup;
+DROP FUNCTION type_ddl_plpgsql();
 DROP FUNCTION ddl_in_plpgsql();
 DROP FUNCTION copy_in_plpgsql();
 DROP TABLE prepare_ddl;
 DROP TABLE local_ddl;
+DROP SCHEMA otherschema;
 
 -- clean-up functions
 DROP FUNCTION plpgsql_test_1();
