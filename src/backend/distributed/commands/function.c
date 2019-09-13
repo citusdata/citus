@@ -22,9 +22,9 @@
 #include "distributed/metadata/distobject.h"
 #include "distributed/multi_executor.h"
 #include "distributed/relation_access_tracking.h"
-#include "server/catalog/namespace.h"
 #include "distributed/worker_transaction.h"
 #include "server/access/xact.h"
+#include "server/catalog/namespace.h"
 #include "utils/builtins.h"
 #include "utils/fmgrprotos.h"
 
@@ -66,7 +66,7 @@ create_distributed_function(PG_FUNCTION_ARGS)
 	EnsureDependenciesExistsOnAllNodes(&functionAddress);
 
 	ddlCommand = GetFunctionDDLCommand(funcOid);
-	SendCommandToWorkersAsUser(ALL_WORKERS, ddlCommand, NULL);
+	SendCommandToWorkers(ALL_WORKERS, ddlCommand);
 
 	MarkObjectDistributed(&functionAddress);
 
