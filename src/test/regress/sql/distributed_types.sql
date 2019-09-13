@@ -142,6 +142,76 @@ CREATE TYPE tc9 AS ("field-with-dashes" text COLLATE "en_US");
 ALTER TYPE tc9 ADD ATTRIBUTE "some-more" int, ADD ATTRIBUTE normal int;
 ALTER TYPE tc9 RENAME ATTRIBUTE normal TO "not-so-normal";
 
+-- test alter statements for non-distributed types, if they would be propagated they would
+-- error, preventing from changing them
+SET citus.enable_ddl_propagation TO off;
+CREATE TYPE non_distributed_composite_type AS (a int, b int);
+CREATE TYPE non_distributed_enum_type AS ENUM ('a', 'c');
+SET citus.enable_ddl_propagation TO on;
+
+ALTER TYPE non_distributed_composite_type ADD ATTRIBUTE c int;
+ALTER TYPE non_distributed_composite_type RENAME ATTRIBUTE c TO d;
+ALTER TYPE non_distributed_composite_type ALTER ATTRIBUTE d SET DATA TYPE text COLLATE "en_US" CASCADE;
+ALTER TYPE non_distributed_composite_type DROP ATTRIBUTE d;
+
+ALTER TYPE non_distributed_composite_type OWNER TO typeuser;
+
+ALTER TYPE non_distributed_composite_type RENAME TO non_distributed_composite_type_renamed;
+ALTER TYPE non_distributed_composite_type_renamed RENAME TO non_distributed_composite_type;
+
+ALTER TYPE non_distributed_composite_type SET SCHEMA type_tests2;
+ALTER TYPE type_tests2.non_distributed_composite_type SET SCHEMA type_tests;
+
+
+ALTER TYPE non_distributed_enum_type OWNER TO typeuser;
+
+ALTER TYPE non_distributed_enum_type RENAME TO non_distributed_enum_type_renamed;
+ALTER TYPE non_distributed_enum_type_renamed RENAME TO non_distributed_enum_type;
+
+ALTER TYPE non_distributed_enum_type SET SCHEMA type_tests2;
+ALTER TYPE type_tests2.non_distributed_enum_type SET SCHEMA type_tests;
+
+ALTER TYPE non_distributed_enum_type ADD VALUE 'b' BEFORE 'c';
+ALTER TYPE non_distributed_enum_type ADD VALUE 'd' AFTER 'c';
+
+ALTER TYPE non_distributed_enum_type RENAME VALUE 'd' TO 'something-with-quotes''andstuff';
+
+
+-- test all forms of alter statements on distributed types
+CREATE TYPE distributed_composite_type AS (a int, b int);
+CREATE TYPE distributed_enum_type AS ENUM ('a', 'c');
+-- enforce distribution of types in every case
+CREATE TABLE type_proc (a int, b distributed_composite_type, c distributed_enum_type);
+SELECT create_distributed_table('type_proc','a');
+DROP TABLE type_proc;
+
+ALTER TYPE distributed_composite_type ADD ATTRIBUTE c int;
+ALTER TYPE distributed_composite_type RENAME ATTRIBUTE c TO d;
+ALTER TYPE distributed_composite_type ALTER ATTRIBUTE d SET DATA TYPE text COLLATE "en_US" CASCADE;
+ALTER TYPE distributed_composite_type DROP ATTRIBUTE d;
+
+ALTER TYPE distributed_composite_type OWNER TO typeuser;
+
+ALTER TYPE distributed_composite_type RENAME TO distributed_composite_type_renamed;
+ALTER TYPE distributed_composite_type_renamed RENAME TO distributed_composite_type;
+
+ALTER TYPE distributed_composite_type SET SCHEMA type_tests2;
+ALTER TYPE type_tests2.distributed_composite_type SET SCHEMA type_tests;
+
+
+ALTER TYPE distributed_enum_type OWNER TO typeuser;
+
+ALTER TYPE distributed_enum_type RENAME TO distributed_enum_type_renamed;
+ALTER TYPE distributed_enum_type_renamed RENAME TO distributed_enum_type;
+
+ALTER TYPE distributed_enum_type SET SCHEMA type_tests2;
+ALTER TYPE type_tests2.distributed_enum_type SET SCHEMA type_tests;
+
+ALTER TYPE distributed_enum_type ADD VALUE 'b' BEFORE 'c';
+ALTER TYPE distributed_enum_type ADD VALUE 'd' AFTER 'c';
+
+ALTER TYPE distributed_enum_type RENAME VALUE 'd' TO 'something-with-quotes''andstuff';
+
 -- clear objects
 SET client_min_messages TO fatal; -- suppress cascading objects dropping
 DROP SCHEMA type_tests CASCADE;
