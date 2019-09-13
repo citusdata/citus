@@ -83,6 +83,7 @@ GetFunctionDDLCommand(RegProcedure funcOid)
 {
 	OverrideSearchPath *overridePath = NULL;
 	Datum sqlTextDatum = 0;
+	const char *sql = NULL;
 
 	/*
 	 * Set search_path to NIL so that all objects outside of pg_catalog will be
@@ -100,7 +101,7 @@ GetFunctionDDLCommand(RegProcedure funcOid)
 	/* revert back to original search_path */
 	PopOverrideSearchPath();
 
-	const char *sql = TextDatumGetCString(sqlTextDatum);
+	sql = TextDatumGetCString(sqlTextDatum);
 	return sql;
 }
 
