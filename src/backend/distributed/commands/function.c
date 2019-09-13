@@ -2,14 +2,14 @@
  *
  * function.c
  *    Commands for FUNCTION statements.
- * 
+ *
  *    We currently support replicating function definitions on the
- *    coordinator in all the worker nodes in the form of 
- * 
+ *    coordinator in all the worker nodes in the form of
+ *
  *    CREATE OR REPLACE FUNCTION ... queries.
- *    
+ *
  *    ALTER or DROP operations are not yet propagated.
- *    
+ *
  * Copyright (c) 2019, Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
@@ -40,6 +40,17 @@ create_distributed_function(PG_FUNCTION_ARGS)
 	RegProcedure funcOid = PG_GETARG_OID(0);
 	const char *ddlCommand = NULL;
 	ObjectAddress functionAddress = { 0 };
+
+	/* if called on NULL input, error out */
+	if (funcOid == InvalidOid)
+	{
+		ereport(ERROR, (errmsg("create_distributed_function() requires a single "
+							   "parameter that is a valid function or procedure name "
+							   "followed by a list of parameters in parantheses"),
+						errhint("skip the parameters with OUT argtype as they are not "
+								"part of the signature in PostgreSQL")));
+	}
+
 	ObjectAddressSet(functionAddress, ProcedureRelationId, funcOid);
 
 	EnsureDependenciesExistsOnAllNodes(&functionAddress);
@@ -52,7 +63,8 @@ create_distributed_function(PG_FUNCTION_ARGS)
 	PG_RETURN_VOID();
 }
 
-/* 
+
+/*
  * GetFunctionDDLCommand returns the complete "CREATE OR REPLACE FUNCTION ..." statement for
  * the specified function.
  */
