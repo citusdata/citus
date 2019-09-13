@@ -41,6 +41,8 @@ CREATE TABLE citus.pg_dist_object (
     CONSTRAINT pg_dist_object_pkey PRIMARY KEY (classid, objid, objsubid)
 );
 
+#include "udfs/create_distributed_function/9.0-1.sql"
+
 #include "udfs/citus_drop_trigger/9.0-1.sql"
 #include "udfs/citus_prepare_pg_upgrade/9.0-1.sql"
 #include "udfs/citus_finish_pg_upgrade/9.0-1.sql"

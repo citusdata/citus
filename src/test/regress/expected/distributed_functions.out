@@ -1,0 +1,72 @@
+SET citus.next_shard_id TO 20020000;
+CREATE USER functionuser;
+NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
+HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
+SELECT run_command_on_workers($$CREATE USER functionuser;$$);
+      run_command_on_workers       
+-----------------------------------
+ (localhost,57637,t,"CREATE ROLE")
+ (localhost,57638,t,"CREATE ROLE")
+(2 rows)
+
+CREATE SCHEMA function_tests AUTHORIZATION functionuser;
+SET search_path TO function_tests;
+SET citus.shard_count TO 4;
+-- Create and distribute a simple function
+CREATE FUNCTION add(integer, integer) RETURNS integer
+    AS 'select $1 + $2;'
+    LANGUAGE SQL
+    IMMUTABLE
+    RETURNS NULL ON NULL INPUT;
+SELECT create_distributed_function('add(int,int)');
+ create_distributed_function 
+-----------------------------
+ 
+(1 row)
+
+SELECT * FROM run_command_on_workers('SELECT function_tests.add(2,3);') ORDER BY 1,2;
+ nodename  | nodeport | success | result 
+-----------+----------+---------+--------
+ localhost |    57637 | t       | 5
+ localhost |    57638 | t       | 5
+(2 rows)
+
+-- Test some combination of functions without ddl propagation
+-- This will prevent the workers from having those types created. They are
+-- created just-in-time on function distribution
+SET citus.enable_ddl_propagation TO off;
+CREATE TYPE dup_result AS (f1 int, f2 text);
+CREATE FUNCTION dup(int) RETURNS dup_result
+    AS $$ SELECT $1, CAST($1 AS text) || ' is text' $$
+    LANGUAGE SQL;
+SELECT create_distributed_function('dup(int)');
+ create_distributed_function 
+-----------------------------
+ 
+(1 row)
+
+SELECT * FROM run_command_on_workers('SELECT function_tests.dup(42);') ORDER BY 1,2;
+ nodename  | nodeport | success |      result       
+-----------+----------+---------+-------------------
+ localhost |    57637 | t       | (42,"42 is text")
+ localhost |    57638 | t       | (42,"42 is text")
+(2 rows)
+
+-- clear objects
+SET client_min_messages TO fatal; -- suppress cascading objects dropping
+DROP SCHEMA function_tests CASCADE;
+SELECT run_command_on_workers($$DROP SCHEMA function_tests CASCADE;$$);
+      run_command_on_workers       
+-----------------------------------
+ (localhost,57637,t,"DROP SCHEMA")
+ (localhost,57638,t,"DROP SCHEMA")
+(2 rows)
+
+DROP USER functionuser;
+SELECT run_command_on_workers($$DROP USER functionuser;$$);
+     run_command_on_workers      
+---------------------------------
+ (localhost,57637,t,"DROP ROLE")
+ (localhost,57638,t,"DROP ROLE")
+(2 rows)
+
