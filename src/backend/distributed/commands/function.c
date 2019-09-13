@@ -22,6 +22,7 @@
 #include "distributed/metadata/distobject.h"
 #include "distributed/multi_executor.h"
 #include "distributed/relation_access_tracking.h"
+#include "server/catalog/namespace.h"
 #include "distributed/worker_transaction.h"
 #include "server/access/xact.h"
 #include "utils/builtins.h"
@@ -80,8 +81,25 @@ create_distributed_function(PG_FUNCTION_ARGS)
 static const char *
 GetFunctionDDLCommand(RegProcedure funcOid)
 {
-	Datum sqlTextDatum = DirectFunctionCall1(pg_get_functiondef,
-											 ObjectIdGetDatum(funcOid));
+	OverrideSearchPath *overridePath = NULL;
+	Datum sqlTextDatum = 0;
+
+	/*
+	 * Set search_path to NIL so that all objects outside of pg_catalog will be
+	 * schema-prefixed. pg_catalog will be added automatically when we call
+	 * PushOverrideSearchPath(), since we set addCatalog to true;
+	 */
+	overridePath = GetOverrideSearchPath(CurrentMemoryContext);
+	overridePath->schemas = NIL;
+	overridePath->addCatalog = true;
+	PushOverrideSearchPath(overridePath);
+
+	sqlTextDatum = DirectFunctionCall1(pg_get_functiondef,
+									   ObjectIdGetDatum(funcOid));
+
+	/* revert back to original search_path */
+	PopOverrideSearchPath();
+
 	const char *sql = TextDatumGetCString(sqlTextDatum);
 	return sql;
 }
