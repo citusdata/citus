@@ -107,20 +107,6 @@ SendCommandToWorkers(TargetWorkerSet targetWorkerSet, const char *command)
 
 
 /*
- * SendCommandToWorkersAsUser sends a command to all workers in
- * parallel as the specified user, NULL means the current user.
- * Commands are committed on the workers when the local
- * transaction commits.
- */
-void
-SendCommandToWorkersAsUser(TargetWorkerSet targetWorkerSet, const char *command,
-						   const char *user)
-{
-	SendCommandToWorkersParams(targetWorkerSet, command, user, 0, NULL, NULL);
-}
-
-
-/*
  * TargetWorkerSetNodeList returns a list of WorkerNode's that satisfies the
  * TargetWorkerSet.
  */

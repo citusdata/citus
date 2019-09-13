@@ -35,8 +35,6 @@ extern void SendCommandToWorkerAsUser(char *nodeName, int32 nodePort,
 									  const char *nodeUser, const char *command);
 extern void SendCommandToFirstWorker(char *command);
 extern void SendCommandToWorkers(TargetWorkerSet targetWorkerSet, const char *command);
-extern void SendCommandToWorkersAsUser(TargetWorkerSet targetWorkerSet,
-									   const char *command, const char *user);
 extern void SendBareCommandListToWorkers(TargetWorkerSet targetWorkerSet,
 										 List *commandList);
 extern int SendBareOptionalCommandListToWorkersAsUser(TargetWorkerSet targetWorkerSet,
