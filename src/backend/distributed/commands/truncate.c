@@ -229,7 +229,7 @@ static void
 AcquireDistributedLockOnRelations(List *relationIdList, LOCKMODE lockMode)
 {
 	ListCell *relationIdCell = NULL;
-	List *workerNodeList = ActivePrimaryNodeList();
+	List *workerNodeList = ActivePrimaryNodeList(NoLock);
 	const char *lockModeText = LockModeToLockModeText(lockMode);
 
 	/*

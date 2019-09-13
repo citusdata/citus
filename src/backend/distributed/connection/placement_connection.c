@@ -979,7 +979,7 @@ CloseShardPlacementAssociation(struct MultiConnection *connection)
 
 		/*
 		 * Note that we don't reset ConnectionPlacementHashEntry's
-		 * primaryConnection here, that'd more complicated than it seems
+		 * primaryConnection here, that'd be more complicated than it seems
 		 * worth.  That means we'll error out spuriously if a DML/DDL
 		 * executing connection is closed earlier in a transaction.
 		 */

@@ -13,6 +13,7 @@
 #define WORKER_TRANSACTION_H
 
 #include "distributed/worker_manager.h"
+#include "storage/lockdefs.h"
 
 
 /*
@@ -29,7 +30,7 @@ typedef enum TargetWorkerSet
 
 /* Functions declarations for worker transactions */
 extern List * GetWorkerTransactions(void);
-extern List * TargetWorkerSetNodeList(TargetWorkerSet targetWorkerSet);
+extern List * TargetWorkerSetNodeList(TargetWorkerSet targetWorkerSet, LOCKMODE lockMode);
 extern void SendCommandToWorker(char *nodeName, int32 nodePort, const char *command);
 extern void SendCommandToWorkerAsUser(char *nodeName, int32 nodePort,
 									  const char *nodeUser, const char *command);

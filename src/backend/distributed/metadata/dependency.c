@@ -102,13 +102,13 @@ List *
 OrderObjectAddressListInDependencyOrder(List *objectAddressList)
 {
 	ObjectAddressCollector collector = { 0 };
-	ListCell *ojectAddressCell = NULL;
+	ListCell *objectAddressCell = NULL;
 
 	InitObjectAddressCollector(&collector);
 
-	foreach(ojectAddressCell, objectAddressList)
+	foreach(objectAddressCell, objectAddressList)
 	{
-		ObjectAddress *objectAddress = (ObjectAddress *) lfirst(ojectAddressCell);
+		ObjectAddress *objectAddress = (ObjectAddress *) lfirst(objectAddressCell);
 
 		if (IsObjectAddressCollected(objectAddress, &collector))
 		{

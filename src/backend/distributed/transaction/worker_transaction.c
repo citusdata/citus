@@ -75,7 +75,7 @@ SendCommandToWorkerAsUser(char *nodeName, int32 nodePort, const char *nodeUser,
 void
 SendCommandToFirstWorker(char *command)
 {
-	List *workerNodeList = ActivePrimaryNodeList();
+	List *workerNodeList = ActivePrimaryNodeList(NoLock);
 	WorkerNode *firstWorkerNode = NULL;
 
 	workerNodeList = SortList(workerNodeList, CompareWorkerNodes);
@@ -111,9 +111,9 @@ SendCommandToWorkers(TargetWorkerSet targetWorkerSet, const char *command)
  * TargetWorkerSet.
  */
 List *
-TargetWorkerSetNodeList(TargetWorkerSet targetWorkerSet)
+TargetWorkerSetNodeList(TargetWorkerSet targetWorkerSet, LOCKMODE lockMode)
 {
-	List *workerNodeList = ActivePrimaryNodeList();
+	List *workerNodeList = ActivePrimaryNodeList(lockMode);
 	ListCell *workerNodeCell = NULL;
 	List *result = NIL;
 
@@ -148,7 +148,7 @@ TargetWorkerSetNodeList(TargetWorkerSet targetWorkerSet)
 void
 SendBareCommandListToWorkers(TargetWorkerSet targetWorkerSet, List *commandList)
 {
-	List *workerNodeList = TargetWorkerSetNodeList(targetWorkerSet);
+	List *workerNodeList = TargetWorkerSetNodeList(targetWorkerSet, ShareLock);
 	ListCell *workerNodeCell = NULL;
 	char *nodeUser = CitusExtensionOwnerName();
 	ListCell *commandCell = NULL;
@@ -187,7 +187,7 @@ int
 SendBareOptionalCommandListToWorkersAsUser(TargetWorkerSet targetWorkerSet,
 										   List *commandList, const char *user)
 {
-	List *workerNodeList = TargetWorkerSetNodeList(targetWorkerSet);
+	List *workerNodeList = TargetWorkerSetNodeList(targetWorkerSet, ShareLock);
 	ListCell *workerNodeCell = NULL;
 	ListCell *commandCell = NULL;
 	int maxError = RESPONSE_OKAY;
@@ -239,7 +239,7 @@ SendCommandToWorkersParams(TargetWorkerSet targetWorkerSet, const char *command,
 {
 	List *connectionList = NIL;
 	ListCell *connectionCell = NULL;
-	List *workerNodeList = TargetWorkerSetNodeList(targetWorkerSet);
+	List *workerNodeList = TargetWorkerSetNodeList(targetWorkerSet, ShareLock);
 	ListCell *workerNodeCell = NULL;
 
 	BeginOrContinueCoordinatedTransaction();

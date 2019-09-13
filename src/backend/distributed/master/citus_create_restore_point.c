@@ -30,7 +30,7 @@
 
 
 /* local functions forward declarations */
-static List * OpenConnectionsToAllNodes(void);
+static List * OpenConnectionsToAllNodes(LOCKMODE lockMode);
 static void BlockDistributedTransactions(void);
 static void CreateRemoteRestorePoints(char *restoreName, List *connectionList);
 
@@ -83,8 +83,11 @@ citus_create_restore_point(PG_FUNCTION_ARGS)
 						MAXFNAMELEN - 1)));
 	}
 
-	/* establish connections to all nodes before taking any locks */
-	connectionList = OpenConnectionsToAllNodes();
+	/*
+	 * establish connections to all nodes before taking any locks
+	 * ShareLock prevents new nodes being added, rendering connectionList incomplete
+	 */
+	connectionList = OpenConnectionsToAllNodes(ShareLock);
 
 	/*
 	 * Send a BEGIN to bust through pgbouncer. We won't actually commit since
@@ -111,14 +114,14 @@ citus_create_restore_point(PG_FUNCTION_ARGS)
  * of connections.
  */
 static List *
-OpenConnectionsToAllNodes(void)
+OpenConnectionsToAllNodes(LOCKMODE lockMode)
 {
 	List *connectionList = NIL;
 	List *workerNodeList = NIL;
 	ListCell *workerNodeCell = NULL;
 	int connectionFlags = FORCE_NEW_CONNECTION;
 
-	workerNodeList = ActivePrimaryNodeList();
+	workerNodeList = ActivePrimaryNodeList(lockMode);
 
 	foreach(workerNodeCell, workerNodeList)
 	{

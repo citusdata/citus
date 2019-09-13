@@ -122,7 +122,7 @@ RecoverTwoPhaseCommits(void)
 	ListCell *workerNodeCell = NULL;
 	int recoveredTransactionCount = 0;
 
-	workerList = ActivePrimaryNodeList();
+	workerList = ActivePrimaryNodeList(NoLock);
 
 	foreach(workerNodeCell, workerList)
 	{

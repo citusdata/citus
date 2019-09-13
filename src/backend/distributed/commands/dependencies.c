@@ -89,7 +89,7 @@ EnsureDependenciesExistsOnAllNodes(const ObjectAddress *target)
 	 * either get it now, or get it in master_add_node after this transaction finishes and
 	 * the pg_dist_object record becomes visible.
 	 */
-	LockRelationOid(DistNodeRelationId(), RowShareLock);
+	workerNodeList = ActivePrimaryNodeList(RowShareLock);
 
 	/*
 	 * right after we acquired the lock we mark our objects as distributed, these changes
@@ -110,7 +110,6 @@ EnsureDependenciesExistsOnAllNodes(const ObjectAddress *target)
 	/*
 	 * collect and connect to all applicable nodes
 	 */
-	workerNodeList = ActivePrimaryNodeList();
 	if (list_length(workerNodeList) <= 0)
 	{
 		/* no nodes to execute on */
