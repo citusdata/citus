@@ -290,6 +290,14 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		{
 			return;
 		}
+
+		/*
+		 * we need to set the parsetree here already as we copy and replace the original
+		 * parsetree during ddl propagation. In reality we need to refactor the code above
+		 * to not juggle copy the parsetree and leak it to a potential cache above the
+		 * utillity hook.
+		 */
+		pstmt->utilityStmt = parsetree;
 	}
 
 	/* we're mostly in DDL (and VACUUM/TRUNCATE) territory at this point... */
@@ -312,16 +320,12 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 	/* only generate worker DDLJobs if propagation is enabled */
 	if (EnableDDLPropagation)
 	{
+		/* copy planned statement since we might scribble on it or its utilityStmt */
+		pstmt = copyObject(pstmt);
+		parsetree = pstmt->utilityStmt;
+
 		if (IsA(parsetree, IndexStmt))
 		{
-			MemoryContext oldContext = MemoryContextSwitchTo(GetMemoryChunkContext(
-																 parsetree));
-
-			/* copy parse tree since we might scribble on it to fix the schema name */
-			parsetree = copyObject(parsetree);
-
-			MemoryContextSwitchTo(oldContext);
-
 			ddlJobs = PlanIndexStmt((IndexStmt *) parsetree, queryString);
 		}
 

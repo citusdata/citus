@@ -555,6 +555,37 @@ $BODY$ LANGUAGE plpgsql;
 SELECT ddl_in_plpgsql();
 SELECT ddl_in_plpgsql();
 
+-- test prepared ddl with multi search path to make sure the schema name doesn't leak on
+-- to the cached statement
+CREATE OR REPLACE FUNCTION ddl_in_plpgsql()
+RETURNS VOID  AS
+$BODY$
+BEGIN
+    CREATE INDEX prepared_index ON prepare_ddl(x);
+END;
+$BODY$ LANGUAGE plpgsql;
+
+CREATE SCHEMA otherschema;
+SET search_path TO otherschema, public;
+
+SELECT ddl_in_plpgsql();
+DROP INDEX prepared_index;
+
+-- this creates the same table it 'otherschema'. If there is a leak the index will not be
+-- created on this table, but instead on the table in the public schema
+CREATE TABLE prepare_ddl (x int, y int);
+SELECT create_distributed_table('prepare_ddl', 'x');
+
+SELECT ddl_in_plpgsql();
+-- verify the index is created in the correct schema
+SELECT schemaname, indexrelname FROM pg_stat_all_indexes WHERE indexrelname = 'prepared_index';
+
+-- cleanup
+DROP TABLE prepare_ddl;
+DROP SCHEMA otherschema;
+
+RESET search_path;
+
 -- test prepared COPY
 CREATE OR REPLACE FUNCTION copy_in_plpgsql()
 RETURNS VOID  AS
