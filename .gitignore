@@ -41,3 +41,6 @@ lib*.pc
 
 # temporary files vim creates
 *.swp
+
+# vscode
+.vscode/*
