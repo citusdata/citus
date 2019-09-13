@@ -24,11 +24,11 @@
 #include "distributed/deparser.h"
 
 
-static void qualify_rename_stmt(RenameStmt *stmt);
-static void qualify_rename_attribute_stmt(RenameStmt *stmt);
-static void qualify_alter_table_stmt(AlterTableStmt *stmt);
-static void qualify_alter_object_schema_stmt(AlterObjectSchemaStmt *stmt);
-static void qualify_alter_owner_stmt(AlterOwnerStmt *stmt);
+static void QualifyRenameStmt(RenameStmt *stmt);
+static void QualifyRenameAttributeStmt(RenameStmt *stmt);
+static void QualifyAlterTableStmt(AlterTableStmt *stmt);
+static void QualifyAlterObjectSchemaStmt(AlterObjectSchemaStmt *stmt);
+static void QualifyAlterOwnerStmt(AlterOwnerStmt *stmt);
 
 
 /*
@@ -43,7 +43,7 @@ QualifyTreeNode(Node *stmt)
 	{
 		case T_RenameStmt:
 		{
-			qualify_rename_stmt(castNode(RenameStmt, stmt));
+			QualifyRenameStmt(castNode(RenameStmt, stmt));
 			return;
 		}
 
@@ -55,7 +55,7 @@ QualifyTreeNode(Node *stmt)
 
 		case T_AlterTableStmt:
 		{
-			qualify_alter_table_stmt(castNode(AlterTableStmt, stmt));
+			QualifyAlterTableStmt(castNode(AlterTableStmt, stmt));
 			return;
 		}
 
@@ -73,13 +73,13 @@ QualifyTreeNode(Node *stmt)
 
 		case T_AlterObjectSchemaStmt:
 		{
-			qualify_alter_object_schema_stmt(castNode(AlterObjectSchemaStmt, stmt));
+			QualifyAlterObjectSchemaStmt(castNode(AlterObjectSchemaStmt, stmt));
 			return;
 		}
 
 		case T_AlterOwnerStmt:
 		{
-			qualify_alter_owner_stmt(castNode(AlterOwnerStmt, stmt));
+			QualifyAlterOwnerStmt(castNode(AlterOwnerStmt, stmt));
 			return;
 		}
 
@@ -93,7 +93,7 @@ QualifyTreeNode(Node *stmt)
 
 
 static void
-qualify_rename_stmt(RenameStmt *stmt)
+QualifyRenameStmt(RenameStmt *stmt)
 {
 	switch (stmt->renameType)
 	{
@@ -105,7 +105,7 @@ qualify_rename_stmt(RenameStmt *stmt)
 
 		case OBJECT_ATTRIBUTE:
 		{
-			qualify_rename_attribute_stmt(stmt);
+			QualifyRenameAttributeStmt(stmt);
 			return;
 		}
 
@@ -119,7 +119,7 @@ qualify_rename_stmt(RenameStmt *stmt)
 
 
 static void
-qualify_rename_attribute_stmt(RenameStmt *stmt)
+QualifyRenameAttributeStmt(RenameStmt *stmt)
 {
 	Assert(stmt->renameType == OBJECT_ATTRIBUTE);
 
@@ -140,7 +140,7 @@ qualify_rename_attribute_stmt(RenameStmt *stmt)
 
 
 static void
-qualify_alter_table_stmt(AlterTableStmt *stmt)
+QualifyAlterTableStmt(AlterTableStmt *stmt)
 {
 	switch (stmt->relkind)
 	{
@@ -160,7 +160,7 @@ qualify_alter_table_stmt(AlterTableStmt *stmt)
 
 
 static void
-qualify_alter_object_schema_stmt(AlterObjectSchemaStmt *stmt)
+QualifyAlterObjectSchemaStmt(AlterObjectSchemaStmt *stmt)
 {
 	switch (stmt->objectType)
 	{
@@ -180,7 +180,7 @@ qualify_alter_object_schema_stmt(AlterObjectSchemaStmt *stmt)
 
 
 static void
-qualify_alter_owner_stmt(AlterOwnerStmt *stmt)
+QualifyAlterOwnerStmt(AlterOwnerStmt *stmt)
 {
 	switch (stmt->objectType)
 	{
