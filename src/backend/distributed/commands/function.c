@@ -17,14 +17,14 @@
 
 #include "postgres.h"
 
+#include "access/xact.h"
+#include "catalog/namespace.h"
 #include "catalog/pg_proc.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/metadata/distobject.h"
 #include "distributed/multi_executor.h"
 #include "distributed/relation_access_tracking.h"
 #include "distributed/worker_transaction.h"
-#include "server/access/xact.h"
-#include "server/catalog/namespace.h"
 #include "utils/builtins.h"
 #include "utils/fmgrprotos.h"
 
