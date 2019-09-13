@@ -42,10 +42,12 @@ CREATE OR REPLACE FUNCTION pg_catalog.master_unmark_object_distributed(classid o
 COMMENT ON FUNCTION pg_catalog.master_unmark_object_distributed(classid oid, objid oid, objsubid int)
     IS 'remove an object address from citus.pg_dist_object once the object has been deleted';
 
-CREATE OR REPLACE FUNCTION worker_create_or_replace_object(statement text)
+CREATE OR REPLACE FUNCTION pg_catalog.worker_create_or_replace_object(statement text)
   RETURNS bool
   LANGUAGE C STRICT
   AS 'MODULE_PATHNAME', $$worker_create_or_replace_object$$;
+COMMENT ON FUNCTION pg_catalog.worker_create_or_replace_object(statement text)
+    IS 'takes a sql CREATE statement, before executing the create it will check if an object with that name already exists and safely replaces that named object with the new object';
 
 CREATE TABLE citus.pg_dist_object (
     classid oid NOT NULL,

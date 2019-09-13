@@ -29,6 +29,23 @@
 #include "parser/parse_type.h"
 #include "utils/lsyscache.h"
 
+static char * GetTypeNamespaceNameByNameList(List *names);
+static Oid TypeOidGetNamespaceOid(Oid typeOid);
+
+/*
+ * GetTypeNamespaceNameByNameList resolved the schema name of a type by its namelist.
+ */
+static char *
+GetTypeNamespaceNameByNameList(List *names)
+{
+	TypeName *typeName = makeTypeNameFromNameList(names);
+	Oid typeOid = LookupTypeNameOid(NULL, typeName, false);
+	Oid namespaceOid = TypeOidGetNamespaceOid(typeOid);
+	char *nspname = get_namespace_name_or_temp(namespaceOid);
+	return nspname;
+}
+
+
 /*
  * TypeOidGetNamespaceOid resolves the namespace oid for a type identified by its type oid
  */
@@ -60,13 +77,8 @@ QualifyRenameTypeStmt(RenameStmt *stmt)
 	if (list_length(names) == 1)
 	{
 		/* not qualified, lookup name and add namespace name to names */
-		TypeName *typeName = makeTypeNameFromNameList(names);
-		Oid typeOid = LookupTypeNameOid(NULL, typeName, false);
-		Oid namespaceOid = TypeOidGetNamespaceOid(typeOid);
-		char *nspname = get_namespace_name_or_temp(namespaceOid);
-
-		names = list_make2(makeString(nspname),
-						   linitial(names));
+		char *nspname = GetTypeNamespaceNameByNameList(names);
+		names = list_make2(makeString(nspname), linitial(names));
 
 		stmt->object = (Node *) names;
 	}
@@ -82,10 +94,7 @@ QualifyRenameTypeAttributeStmt(RenameStmt *stmt)
 	if (stmt->relation->schemaname == NULL)
 	{
 		List *names = list_make1(makeString(stmt->relation->relname));
-		TypeName *typeName = makeTypeNameFromNameList(names);
-		Oid typeOid = LookupTypeNameOid(NULL, typeName, false);
-		Oid namespaceOid = TypeOidGetNamespaceOid(typeOid);
-		char *nspname = get_namespace_name_or_temp(namespaceOid);
+		char *nspname = GetTypeNamespaceNameByNameList(names);
 		stmt->relation->schemaname = nspname;
 	}
 }
@@ -99,13 +108,8 @@ QualifyAlterEnumStmt(AlterEnumStmt *stmt)
 	if (list_length(names) == 1)
 	{
 		/* not qualified, lookup name and add namespace name to names */
-		TypeName *typeName = makeTypeNameFromNameList(names);
-		Oid typeOid = LookupTypeNameOid(NULL, typeName, false);
-		Oid namespaceOid = TypeOidGetNamespaceOid(typeOid);
-		char *nspname = get_namespace_name_or_temp(namespaceOid);
-
-		names = list_make2(makeString(nspname),
-						   linitial(names));
+		char *nspname = GetTypeNamespaceNameByNameList(names);
+		names = list_make2(makeString(nspname), linitial(names));
 
 		stmt->typeName = names;
 	}
@@ -120,10 +124,7 @@ QualifyAlterTypeStmt(AlterTableStmt *stmt)
 	if (stmt->relation->schemaname == NULL)
 	{
 		List *names = MakeNameListFromRangeVar(stmt->relation);
-		TypeName *typeName = makeTypeNameFromNameList(names);
-		Oid typeOid = LookupTypeNameOid(NULL, typeName, false);
-		Oid namespaceOid = TypeOidGetNamespaceOid(typeOid);
-		char *nspname = get_namespace_name_or_temp(namespaceOid);
+		char *nspname = GetTypeNamespaceNameByNameList(names);
 		stmt->relation->schemaname = nspname;
 	}
 }
@@ -164,11 +165,7 @@ QualifyAlterTypeSchemaStmt(AlterObjectSchemaStmt *stmt)
 	if (list_length(names) == 1)
 	{
 		/* not qualified with schema, lookup type and its schema s*/
-		TypeName *typeName = makeTypeNameFromNameList(names);
-		Oid typeOid = LookupTypeNameOid(NULL, typeName, false);
-		Oid namespaceOid = TypeOidGetNamespaceOid(typeOid);
-		char *nspname = get_namespace_name_or_temp(namespaceOid);
-
+		char *nspname = GetTypeNamespaceNameByNameList(names);
 		names = list_make2(makeString(nspname), linitial(names));
 		stmt->object = (Node *) names;
 	}
@@ -186,11 +183,7 @@ QualifyAlterTypeOwnerStmt(AlterOwnerStmt *stmt)
 	if (list_length(names) == 1)
 	{
 		/* not qualified with schema, lookup type and its schema s*/
-		TypeName *typeName = makeTypeNameFromNameList(names);
-		Oid typeOid = LookupTypeNameOid(NULL, typeName, false);
-		Oid namespaceOid = TypeOidGetNamespaceOid(typeOid);
-		char *nspname = get_namespace_name_or_temp(namespaceOid);
-
+		char *nspname = GetTypeNamespaceNameByNameList(names);
 		names = list_make2(makeString(nspname), linitial(names));
 		stmt->object = (Node *) names;
 	}

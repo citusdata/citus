@@ -44,6 +44,7 @@ extern void SendCommandToWorkersParams(TargetWorkerSet targetWorkerSet,
 									   const char *command, const char *user,
 									   int parameterCount, const Oid *parameterTypes,
 									   const char *const *parameterValues);
+extern void EnsureNoModificationsHaveBeenDone(void);
 extern void SendCommandListToWorkerInSingleTransaction(const char *nodeName,
 													   int32 nodePort,
 													   const char *nodeUser,

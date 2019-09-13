@@ -44,8 +44,6 @@ static List * GetDependencyCreateDDLCommands(const ObjectAddress *dependency);
 void
 EnsureDependenciesExistsOnAllNodes(const ObjectAddress *target)
 {
-	const uint32 connectionFlag = FORCE_NEW_CONNECTION;
-
 	/* local variables to work with dependencies */
 	List *dependencies = NIL;
 	List *dependenciesWithCommands = NIL;
@@ -57,8 +55,6 @@ EnsureDependenciesExistsOnAllNodes(const ObjectAddress *target)
 	/* local variables to work with worker nodes */
 	List *workerNodeList = NULL;
 	ListCell *workerNodeCell = NULL;
-	List *connections = NULL;
-	ListCell *connectionCell = NULL;
 
 	/*
 	 * collect all dependencies in creation order and get their ddl commands
@@ -120,43 +116,18 @@ EnsureDependenciesExistsOnAllNodes(const ObjectAddress *target)
 		/* no nodes to execute on */
 		return;
 	}
+
+
 	foreach(workerNodeCell, workerNodeList)
 	{
 		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
-		MultiConnection *connection = NULL;
 
-		char *nodeName = workerNode->workerName;
+		const char *nodeName = workerNode->workerName;
 		uint32 nodePort = workerNode->workerPort;
 
-		connection = StartNodeUserDatabaseConnection(connectionFlag, nodeName, nodePort,
-													 CitusExtensionOwnerName(), NULL);
-
-		connections = lappend(connections, connection);
-	}
-	FinishConnectionListEstablishment(connections);
-
-	/*
-	 * create dependency on all nodes
-	 */
-	foreach(connectionCell, connections)
-	{
-		MultiConnection *connection = (MultiConnection *) lfirst(connectionCell);
-
-		MarkRemoteTransactionCritical(connection);
-		RemoteTransactionBegin(connection);
-
-		ExecuteCriticalRemoteCommandList(connection, ddlCommands);
-
-		RemoteTransactionCommit(connection);
-	}
-
-	/*
-	 * disconnect from nodes
-	 */
-	foreach(connectionCell, connections)
-	{
-		MultiConnection *connection = (MultiConnection *) lfirst(connectionCell);
-		CloseConnection(connection);
+		SendCommandListToWorkerInSingleTransaction(nodeName, nodePort,
+												   CitusExtensionOwnerName(),
+												   ddlCommands);
 	}
 }
 

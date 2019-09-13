@@ -299,6 +299,22 @@ SendCommandToWorkersParams(TargetWorkerSet targetWorkerSet, const char *command,
 
 
 /*
+ * EnsureNoModificationsHaveBeenDone reports an error if we have performed any
+ * modification in the current transaction to prevent opening a connection is such cases.
+ */
+void
+EnsureNoModificationsHaveBeenDone()
+{
+	if (XactModificationLevel > XACT_MODIFICATION_NONE)
+	{
+		ereport(ERROR, (errcode(ERRCODE_ACTIVE_SQL_TRANSACTION),
+						errmsg("cannot open new connections after the first modification "
+							   "command within a transaction")));
+	}
+}
+
+
+/*
  * SendCommandListToWorkerInSingleTransaction opens connection to the node with the given
  * nodeName and nodePort. Then, the connection starts a transaction on the remote
  * node and executes the commands in the transaction. The function raises error if
@@ -311,13 +327,6 @@ SendCommandListToWorkerInSingleTransaction(const char *nodeName, int32 nodePort,
 	MultiConnection *workerConnection = NULL;
 	ListCell *commandCell = NULL;
 	int connectionFlags = FORCE_NEW_CONNECTION;
-
-	if (XactModificationLevel > XACT_MODIFICATION_NONE)
-	{
-		ereport(ERROR, (errcode(ERRCODE_ACTIVE_SQL_TRANSACTION),
-						errmsg("cannot open new connections after the first modification "
-							   "command within a transaction")));
-	}
 
 	workerConnection = GetNodeUserDatabaseConnection(connectionFlags, nodeName, nodePort,
 													 nodeUser, NULL);
