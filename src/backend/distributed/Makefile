@@ -6,8 +6,10 @@ citus_top_builddir = ../../..
 MODULE_big = citus
 EXTENSION = citus
 
-# All citus--*.sql files in the source directory
-DATA = $(patsubst $(citus_abs_srcdir)/%.sql,%.sql,$(wildcard $(citus_abs_srcdir)/$(EXTENSION)--*.sql))
+template_sql_files = $(patsubst $(citus_abs_srcdir)/%,%,$(wildcard $(citus_abs_srcdir)/sql/*.sql))
+generated_sql_files = $(patsubst %,$(citus_abs_srcdir)/build/%,$(template_sql_files))
+# All citus--*.sql files that are used to upgrade between versions
+DATA_built = $(generated_sql_files)
 
 # directories with source files
 SUBDIRS = . commands connection ddl deparser executor master metadata planner progress relay test transaction utils worker
@@ -29,3 +31,27 @@ include $(citus_top_builddir)/Makefile.global
 SHLIB_LINK += $(filter -lssl -lcrypto -lssleay32 -leay32, $(LIBS))
 
 override CPPFLAGS += -I$(libpq_srcdir)
+
+SQL_DEPDIR=.deps/sql
+SQL_BUILDDIR=build/sql
+
+$(SQL_DEPDIR) $(SQL_BUILDDIR):
+	mkdir -p $(citus_abs_srcdir)/$@
+
+$(generated_sql_files): $(citus_abs_srcdir)/build/%: % $(SQL_DEPDIR) $(SQL_BUILDDIR)
+	cd $(citus_abs_srcdir) && cpp -undef -w -P -MMD -MP -MF $(SQL_DEPDIR)/$(*F).Po -MT $@ $< > $@
+
+SQL_Po_files := $(wildcard $(SQL_DEPDIR)/*.Po)
+ifneq (,$(SQL_Po_files))
+include $(SQL_Po_files)
+endif
+
+.PHONY: check-sql-snapshots
+
+check-sql-snapshots:
+	bash -c '\
+	set -eu -o pipefail; \
+	for f in sql/udfs/*; do \
+		latest_snapshot=$$(ls $$f | { grep -v latest.sql || true; } | sort -V | tail -n 1); \
+		diff -u $$f/latest.sql $$f/$$latest_snapshot; \
+	done'

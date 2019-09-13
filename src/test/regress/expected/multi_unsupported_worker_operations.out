@@ -269,7 +269,7 @@ DROP TABLE mx_table;
 ERROR:  operation is not allowed on this node
 HINT:  Connect to the coordinator and run it again.
 CONTEXT:  SQL statement "SELECT master_remove_distributed_table_metadata_from_workers(v_obj.objid, v_obj.schema_name, v_obj.object_name)"
-PL/pgSQL function citus_drop_trigger() line 19 at PERFORM
+PL/pgSQL function citus_drop_trigger() line 18 at PERFORM
 SELECT count(*) FROM mx_table;
  count 
 -------

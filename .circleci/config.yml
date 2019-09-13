@@ -16,6 +16,12 @@ jobs:
     steps:
       - checkout
       - {run: {name: 'Check Style', command: citus_indent --check}}
+  check-sql-snapshots:
+    docker:
+      - {image: 'citusdata/extbuilder:werror'}
+    steps:
+      - checkout
+      - {run: {name: 'Check Snapshots', command: "./configure && make check-sql-snapshots -C src/backend/distributed"}}
   test-10_check-multi:
     docker:
       - {image: 'citusdata/exttester-10:latest'}
@@ -147,6 +153,7 @@ workflows:
     jobs:
       - build
       - check-style
+      - check-sql-snapshots
 
       - {test-10_check-multi: {requires: [build]}}
       - {test-10_check-tt-van-mx: {requires: [build]}}

@@ -29,7 +29,7 @@ CREATE OR REPLACE VIEW pg_catalog.pg_dist_shard_placement AS
 CREATE OR REPLACE FUNCTION citus.pg_dist_node_trigger_func()
 RETURNS TRIGGER AS $$
   BEGIN
-    /* AddNodeMetadata also takes out a ShareRowExclusiveLock */
+    -- AddNodeMetadata also takes out a ShareRowExclusiveLock
     LOCK TABLE pg_dist_node IN SHARE ROW EXCLUSIVE MODE;
     IF (TG_OP = 'INSERT') THEN
       IF NEW.noderole = 'primary'
