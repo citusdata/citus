@@ -22,7 +22,8 @@ INSERT INTO second_distributed_table VALUES (1, '1');
 
 -- a simple test for 
 CREATE TABLE collections_list (
-	key int,
+	key bigserial,
+	ser bigserial,
 	ts timestamptz,
 	collection_id integer,
 	value numeric,
@@ -32,7 +33,7 @@ CREATE TABLE collections_list (
 SELECT create_distributed_table('collections_list', 'key');
 
 CREATE TABLE collections_list_0 
-	PARTITION OF collections_list (key, ts, collection_id, value)
+	PARTITION OF collections_list (key, ser, ts, collection_id, value)
 	FOR VALUES IN ( 0 );
 
 -- connection worker and get ready for the tests
@@ -652,10 +653,13 @@ BEGIN;
 COMMIT;
 
 -- sanity check: local execution on partitions
+INSERT INTO collections_list (collection_id) VALUES (0) RETURNING *;
+
 BEGIN;
 	INSERT INTO collections_list (key, collection_id) VALUES (1,0);
 	SELECT count(*) FROM collections_list_0 WHERE key = 1;
 	SELECT count(*) FROM collections_list;
+	SELECT * FROM collections_list ORDER BY 1,2,3,4;
 COMMIT;
 
 -- the final queries for the following CTEs are going to happen on the intermediate results only
