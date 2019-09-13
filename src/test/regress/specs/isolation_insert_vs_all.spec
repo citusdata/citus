@@ -64,7 +64,7 @@ step "s2-distribute-table" { SELECT create_distributed_table('insert_hash', 'id'
 permutation "s1-initialize" "s1-begin" "s1-insert" "s2-insert" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-insert" "s2-insert-multi-row" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-insert-multi-row" "s2-insert" "s1-commit" "s1-select-count"
-permutation "s1-initialize" "s1-begin" "s1-insert-multi-row" "s2-insert" "s1-commit" "s1-select-count"
+permutation "s1-initialize" "s1-begin" "s1-insert-multi-row" "s2-insert-multi-row" "s1-commit" "s1-select-count"
 
 # permutations - INSERT first
 permutation "s1-initialize" "s1-begin" "s1-insert" "s2-insert-select" "s1-commit" "s1-select-count"
