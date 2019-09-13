@@ -93,10 +93,12 @@ SELECT * FROM ROWS FROM (next_k_integers(5), next_k_integers(10)) AS f(a, b),
 
 
 -- Custom Type returning function used in a join
+RESET client_min_messages;
 CREATE TYPE min_and_max AS (
   minimum INT,
   maximum INT
 );
+SET client_min_messages TO DEBUG1;
 
 CREATE OR REPLACE FUNCTION max_and_min () RETURNS
   min_and_max AS $$

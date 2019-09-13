@@ -381,15 +381,6 @@ SELECT n_comment FROM nation_hash_collation_search_path ORDER BY n_comment COLLA
 SET search_path TO public;
 CREATE TYPE test_schema_support.new_composite_type as (key1 text, key2 text);
 
--- create type in worker node 1 in schema
-\c - - - :worker_1_port
-CREATE TYPE test_schema_support.new_composite_type as (key1 text, key2 text);
-
--- create type in worker node 2 in schema
-\c - - - :worker_2_port
-CREATE TYPE test_schema_support.new_composite_type as (key1 text, key2 text);
-
-\c - - - :master_port
 CREATE TABLE test_schema_support.nation_hash_composite_types(
     n_nationkey integer not null,
     n_name char(25) not null,
@@ -741,14 +732,6 @@ SET citus.task_executor_type TO "real-time";
 -- we expect that it will warn out
 SET search_path TO public;
 ALTER TABLE test_schema_support.nation_hash SET SCHEMA public;
-
--- we will use this function in next test
-CREATE FUNCTION run_command_on_coordinator_and_workers(p_sql text)
-RETURNS void LANGUAGE plpgsql AS $$
-BEGIN
-     EXECUTE p_sql;
-     PERFORM run_command_on_workers(p_sql);
-END;$$;
 
 -- test schema propagation with user other than current user
 SELECT run_command_on_coordinator_and_workers('CREATE USER "test-user"');

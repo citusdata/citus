@@ -14,6 +14,10 @@ step s1-print-distributed-objects:
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
 
+    -- print if the type has been created
+	SELECT count(*) FROM pg_type where typname = 'tt1';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
+
     SELECT master_remove_node('localhost', 57638);
 
 ?column?       
@@ -21,6 +25,13 @@ step s1-print-distributed-objects:
 1              
 pg_identify_object_as_address
 
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
 count          
 
 0              
@@ -64,8 +75,19 @@ step s2-print-distributed-objects:
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
 
+    -- print if the type has been created
+	SELECT count(*) FROM pg_type where typname = 'tt1';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
+
 pg_identify_object_as_address
 
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
 count          
 
 0              
@@ -92,6 +114,10 @@ step s1-print-distributed-objects:
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
 
+    -- print if the type has been created
+	SELECT count(*) FROM pg_type where typname = 'tt1';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
+
     SELECT master_remove_node('localhost', 57638);
 
 ?column?       
@@ -99,6 +125,13 @@ step s1-print-distributed-objects:
 1              
 pg_identify_object_as_address
 
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
 count          
 
 0              
@@ -148,8 +181,19 @@ step s2-print-distributed-objects:
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
 
+    -- print if the type has been created
+	SELECT count(*) FROM pg_type where typname = 'tt1';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
+
 pg_identify_object_as_address
 
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
 count          
 
 0              
@@ -176,6 +220,10 @@ step s1-print-distributed-objects:
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
 
+    -- print if the type has been created
+	SELECT count(*) FROM pg_type where typname = 'tt1';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
+
     SELECT master_remove_node('localhost', 57638);
 
 ?column?       
@@ -183,6 +231,13 @@ step s1-print-distributed-objects:
 1              
 pg_identify_object_as_address
 
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
 count          
 
 0              
@@ -232,8 +287,19 @@ step s2-print-distributed-objects:
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
 
+    -- print if the type has been created
+	SELECT count(*) FROM pg_type where typname = 'tt1';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
+
 pg_identify_object_as_address
 
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
 count          
 
 0              
@@ -260,6 +326,10 @@ step s1-print-distributed-objects:
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
 
+    -- print if the type has been created
+	SELECT count(*) FROM pg_type where typname = 'tt1';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
+
     SELECT master_remove_node('localhost', 57638);
 
 ?column?       
@@ -267,6 +337,13 @@ step s1-print-distributed-objects:
 1              
 pg_identify_object_as_address
 
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
 count          
 
 0              
@@ -311,6 +388,10 @@ step s2-print-distributed-objects:
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
 
+    -- print if the type has been created
+	SELECT count(*) FROM pg_type where typname = 'tt1';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
+
 pg_identify_object_as_address
 
 (schema,{myschema},{})
@@ -321,6 +402,13 @@ run_command_on_workers
 
 (localhost,57637,t,1)
 (localhost,57638,t,1)
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
 master_remove_node
 
                
@@ -340,6 +428,10 @@ step s1-print-distributed-objects:
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
 
+    -- print if the type has been created
+	SELECT count(*) FROM pg_type where typname = 'tt1';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
+
     SELECT master_remove_node('localhost', 57638);
 
 ?column?       
@@ -347,6 +439,13 @@ step s1-print-distributed-objects:
 1              
 pg_identify_object_as_address
 
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
 count          
 
 0              
@@ -397,6 +496,10 @@ step s2-print-distributed-objects:
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
 
+    -- print if the type has been created
+	SELECT count(*) FROM pg_type where typname = 'tt1';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
+
 pg_identify_object_as_address
 
 (schema,{myschema},{})
@@ -407,6 +510,13 @@ run_command_on_workers
 
 (localhost,57637,t,1)
 (localhost,57638,t,1)
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
 master_remove_node
 
                
@@ -426,6 +536,10 @@ step s1-print-distributed-objects:
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
 
+    -- print if the type has been created
+	SELECT count(*) FROM pg_type where typname = 'tt1';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
+
     SELECT master_remove_node('localhost', 57638);
 
 ?column?       
@@ -433,6 +547,13 @@ step s1-print-distributed-objects:
 1              
 pg_identify_object_as_address
 
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
 count          
 
 0              
@@ -483,6 +604,10 @@ step s2-print-distributed-objects:
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
 
+    -- print if the type has been created
+	SELECT count(*) FROM pg_type where typname = 'tt1';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
+
 pg_identify_object_as_address
 
 (schema,{myschema},{})
@@ -493,6 +618,13 @@ run_command_on_workers
 
 (localhost,57637,t,1)
 (localhost,57638,t,1)
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
 master_remove_node
 
                
@@ -512,6 +644,10 @@ step s1-print-distributed-objects:
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
 
+    -- print if the type has been created
+	SELECT count(*) FROM pg_type where typname = 'tt1';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
+
     SELECT master_remove_node('localhost', 57638);
 
 ?column?       
@@ -519,6 +655,13 @@ step s1-print-distributed-objects:
 1              
 pg_identify_object_as_address
 
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
 count          
 
 0              
@@ -588,6 +731,10 @@ step s2-print-distributed-objects:
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
 
+    -- print if the type has been created
+	SELECT count(*) FROM pg_type where typname = 'tt1';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
+
 pg_identify_object_as_address
 
 (schema,{myschema},{})
@@ -598,6 +745,13 @@ run_command_on_workers
 
 (localhost,57637,t,1)
 (localhost,57638,t,1)
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
 master_remove_node
 
                
@@ -617,6 +771,10 @@ step s1-print-distributed-objects:
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
 
+    -- print if the type has been created
+	SELECT count(*) FROM pg_type where typname = 'tt1';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
+
     SELECT master_remove_node('localhost', 57638);
 
 ?column?       
@@ -624,6 +782,13 @@ step s1-print-distributed-objects:
 1              
 pg_identify_object_as_address
 
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
 count          
 
 0              
@@ -712,6 +877,10 @@ step s2-print-distributed-objects:
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
 
+    -- print if the type has been created
+	SELECT count(*) FROM pg_type where typname = 'tt1';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
+
 pg_identify_object_as_address
 
 (schema,{myschema},{})
@@ -722,6 +891,13 @@ run_command_on_workers
 
 (localhost,57637,t,1)
 (localhost,57638,t,1)
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
 master_remove_node
 
                
@@ -741,6 +917,10 @@ step s1-print-distributed-objects:
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
 
+    -- print if the type has been created
+	SELECT count(*) FROM pg_type where typname = 'tt1';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
+
     SELECT master_remove_node('localhost', 57638);
 
 ?column?       
@@ -748,6 +928,13 @@ step s1-print-distributed-objects:
 1              
 pg_identify_object_as_address
 
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
 count          
 
 0              
@@ -810,6 +997,10 @@ step s2-print-distributed-objects:
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
 
+    -- print if the type has been created
+	SELECT count(*) FROM pg_type where typname = 'tt1';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
+
 pg_identify_object_as_address
 
 (schema,{myschema},{})
@@ -820,6 +1011,13 @@ run_command_on_workers
 
 (localhost,57637,t,1)
 (localhost,57638,t,1)
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
 master_remove_node
 
                
@@ -839,6 +1037,10 @@ step s1-print-distributed-objects:
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
 
+    -- print if the type has been created
+	SELECT count(*) FROM pg_type where typname = 'tt1';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
+
     SELECT master_remove_node('localhost', 57638);
 
 ?column?       
@@ -846,6 +1048,13 @@ step s1-print-distributed-objects:
 1              
 pg_identify_object_as_address
 
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
 count          
 
 0              
@@ -916,10 +1125,322 @@ step s2-print-distributed-objects:
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
 
+    -- print if the type has been created
+	SELECT count(*) FROM pg_type where typname = 'tt1';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
+
 pg_identify_object_as_address
 
 (schema,{myschema},{})
 (schema,{myschema2},{})
+count          
+
+1              
+run_command_on_workers
+
+(localhost,57637,t,1)
+(localhost,57638,t,1)
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
+master_remove_node
+
+               
+               
+
+starting permutation: s1-print-distributed-objects s1-begin s1-add-worker s2-public-schema s2-create-type s1-commit s2-print-distributed-objects
+?column?       
+
+1              
+step s1-print-distributed-objects: 
+    SELECT 1 FROM master_add_node('localhost', 57638);
+
+    -- print an overview of all distributed objects
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
+
+    -- print if the schema has been created
+    SELECT count(*) FROM pg_namespace where nspname = 'myschema';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
+
+    -- print if the type has been created
+	SELECT count(*) FROM pg_type where typname = 'tt1';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
+
+    SELECT master_remove_node('localhost', 57638);
+
+?column?       
+
+1              
+pg_identify_object_as_address
+
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
+master_remove_node
+
+               
+step s1-begin: 
+    BEGIN;
+
+step s1-add-worker: 
+	SELECT 1 FROM master_add_node('localhost', 57638);
+
+?column?       
+
+1              
+step s2-public-schema: 
+    SET search_path TO public;
+
+step s2-create-type: 
+	CREATE TYPE tt1 AS (a int, b int);
+ <waiting ...>
+step s1-commit: 
+    COMMIT;
+
+step s2-create-type: <... completed>
+step s2-print-distributed-objects: 
+    -- print an overview of all distributed objects
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
+
+    -- print if the schema has been created
+    SELECT count(*) FROM pg_namespace where nspname = 'myschema';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
+
+    -- print if the type has been created
+	SELECT count(*) FROM pg_type where typname = 'tt1';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
+
+pg_identify_object_as_address
+
+(type,{public.tt1},{})
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
+count          
+
+1              
+run_command_on_workers
+
+(localhost,57637,t,1)
+(localhost,57638,t,1)
+master_remove_node
+
+               
+               
+
+starting permutation: s1-print-distributed-objects s1-begin s2-public-schema s2-create-type s1-add-worker s1-commit s2-print-distributed-objects
+?column?       
+
+1              
+step s1-print-distributed-objects: 
+    SELECT 1 FROM master_add_node('localhost', 57638);
+
+    -- print an overview of all distributed objects
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
+
+    -- print if the schema has been created
+    SELECT count(*) FROM pg_namespace where nspname = 'myschema';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
+
+    -- print if the type has been created
+	SELECT count(*) FROM pg_type where typname = 'tt1';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
+
+    SELECT master_remove_node('localhost', 57638);
+
+?column?       
+
+1              
+pg_identify_object_as_address
+
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
+master_remove_node
+
+               
+step s1-begin: 
+    BEGIN;
+
+step s2-public-schema: 
+    SET search_path TO public;
+
+step s2-create-type: 
+	CREATE TYPE tt1 AS (a int, b int);
+
+step s1-add-worker: 
+	SELECT 1 FROM master_add_node('localhost', 57638);
+
+?column?       
+
+1              
+step s1-commit: 
+    COMMIT;
+
+step s2-print-distributed-objects: 
+    -- print an overview of all distributed objects
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
+
+    -- print if the schema has been created
+    SELECT count(*) FROM pg_namespace where nspname = 'myschema';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
+
+    -- print if the type has been created
+	SELECT count(*) FROM pg_type where typname = 'tt1';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
+
+pg_identify_object_as_address
+
+(type,{public.tt1},{})
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
+count          
+
+1              
+run_command_on_workers
+
+(localhost,57637,t,1)
+(localhost,57638,t,1)
+master_remove_node
+
+               
+               
+
+starting permutation: s1-print-distributed-objects s1-begin s2-begin s2-create-schema s2-create-type s2-create-table-with-type s1-add-worker s2-commit s1-commit s2-print-distributed-objects
+?column?       
+
+1              
+step s1-print-distributed-objects: 
+    SELECT 1 FROM master_add_node('localhost', 57638);
+
+    -- print an overview of all distributed objects
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
+
+    -- print if the schema has been created
+    SELECT count(*) FROM pg_namespace where nspname = 'myschema';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
+
+    -- print if the type has been created
+	SELECT count(*) FROM pg_type where typname = 'tt1';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
+
+    SELECT master_remove_node('localhost', 57638);
+
+?column?       
+
+1              
+pg_identify_object_as_address
+
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
+master_remove_node
+
+               
+step s1-begin: 
+    BEGIN;
+
+step s2-begin: 
+	BEGIN;
+
+step s2-create-schema: 
+    CREATE SCHEMA myschema;
+    SET search_path TO myschema;
+
+step s2-create-type: 
+	CREATE TYPE tt1 AS (a int, b int);
+
+step s2-create-table-with-type: 
+	CREATE TABLE t1 (a int, b tt1);
+    -- session needs to have replication factor set to 1, can't do in setup
+	SET citus.shard_replication_factor TO 1;
+	SELECT create_distributed_table('t1', 'a');
+
+create_distributed_table
+
+               
+step s1-add-worker: 
+	SELECT 1 FROM master_add_node('localhost', 57638);
+ <waiting ...>
+step s2-commit: 
+	COMMIT;
+
+step s1-add-worker: <... completed>
+?column?       
+
+1              
+step s1-commit: 
+    COMMIT;
+
+step s2-print-distributed-objects: 
+    -- print an overview of all distributed objects
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
+
+    -- print if the schema has been created
+    SELECT count(*) FROM pg_namespace where nspname = 'myschema';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
+
+    -- print if the type has been created
+	SELECT count(*) FROM pg_type where typname = 'tt1';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
+
+pg_identify_object_as_address
+
+(schema,{myschema},{})
+(type,{myschema.tt1},{})
+count          
+
+1              
+run_command_on_workers
+
+(localhost,57637,t,1)
+(localhost,57638,t,1)
 count          
 
 1              

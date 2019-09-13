@@ -954,12 +954,7 @@ TRUNCATE reference_table_test;
 
 -- first create the type on all nodes
 CREATE TYPE reference_comp_key as (key text, value text);
-\c - - - :worker_1_port
-CREATE TYPE reference_comp_key as (key text, value text);
-\c - - - :worker_2_port
-CREATE TYPE reference_comp_key as (key text, value text);
 
-\c - - - :master_port
 CREATE TABLE reference_table_composite (id int PRIMARY KEY, data reference_comp_key);
 SELECT create_reference_table('reference_table_composite');
 

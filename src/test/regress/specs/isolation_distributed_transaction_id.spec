@@ -45,9 +45,18 @@ step "s1-insert"
 	INSERT INTO distributed_transaction_id_table VALUES (1, 1);
 }
 
-step "s1-get-current-transaction-id"
+step "s1-verify-current-xact-is-on-worker"
 {
-	SELECT row(initiator_node_identifier, transaction_number) FROM  get_current_transaction_id();
+	SELECT
+	    remote.nodeport,
+	    remote.result = row(xact.initiator_node_identifier, xact.transaction_number)::text AS xact_exists
+	FROM
+	    get_current_transaction_id() as xact,
+	    run_command_on_workers($$
+	        SELECT row(initiator_node_identifier, transaction_number)
+            FROM get_all_active_transactions();
+        $$) as remote
+    ORDER BY remote.nodeport ASC;
 }
 
 step "s1-get-all-transactions"
@@ -121,7 +130,7 @@ permutation "s1-begin" "s1-assign-transaction-id" "s1-get-all-transactions" "s2-
 
 # now show that distributed transaction id on the coordinator
 # is the same with the one on the worker
-permutation "s1-create-table" "s1-begin" "s1-insert" "s1-get-current-transaction-id" "s2-get-first-worker-active-transactions" "s1-commit"
+permutation "s1-create-table" "s1-begin" "s1-insert" "s1-verify-current-xact-is-on-worker" "s1-commit"
 
 # we would initially forget the distributed transaction ID on pg_dist_partition invalidations
 permutation "s1-begin" "s1-assign-transaction-id" "s1-has-transaction-number" "s2-vacuum" "s1-has-transaction-number" "s1-commit"

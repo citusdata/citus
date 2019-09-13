@@ -6,7 +6,6 @@
 
 SET citus.next_shard_id TO 530000;
 
-
 -- create a custom type...
 CREATE TYPE test_composite_type AS (
     i integer,
@@ -14,25 +13,31 @@ CREATE TYPE test_composite_type AS (
 );
 
 -- ... as well as a function to use as its comparator...
-CREATE FUNCTION equal_test_composite_type_function(test_composite_type, test_composite_type) RETURNS boolean
-LANGUAGE 'internal'
-AS 'record_eq'
-IMMUTABLE
-RETURNS NULL ON NULL INPUT;
+SELECT run_command_on_coordinator_and_workers($cf$
+    CREATE FUNCTION equal_test_composite_type_function(test_composite_type, test_composite_type) RETURNS boolean
+    LANGUAGE 'internal'
+    AS 'record_eq'
+    IMMUTABLE
+    RETURNS NULL ON NULL INPUT;
+$cf$);
 
-CREATE FUNCTION cmp_test_composite_type_function(test_composite_type, test_composite_type) RETURNS int
-LANGUAGE 'internal'
-AS 'btrecordcmp'
-IMMUTABLE
-RETURNS NULL ON NULL INPUT;
+SELECT run_command_on_coordinator_and_workers($cf$
+    CREATE FUNCTION cmp_test_composite_type_function(test_composite_type, test_composite_type) RETURNS int
+    LANGUAGE 'internal'
+    AS 'btrecordcmp'
+    IMMUTABLE
+    RETURNS NULL ON NULL INPUT;
+$cf$);
 
 -- ... use that function to create a custom equality operator...
-CREATE OPERATOR = (
-    LEFTARG = test_composite_type,
-    RIGHTARG = test_composite_type,
-    PROCEDURE = equal_test_composite_type_function,
-    HASHES
-);
+SELECT run_command_on_coordinator_and_workers($co$
+    CREATE OPERATOR = (
+        LEFTARG = test_composite_type,
+        RIGHTARG = test_composite_type,
+        PROCEDURE = equal_test_composite_type_function,
+        HASHES
+    );
+$co$);
 
 -- ... and create a custom operator family for hash indexes...
 CREATE OPERATOR FAMILY cats_op_fam USING hash;

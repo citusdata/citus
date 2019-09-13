@@ -394,7 +394,7 @@ ORDER BY logicalrelid;
               logicalrelid               | partmethod | colocationid | repmodel 
 -----------------------------------------+------------+--------------+----------
  replicate_reference_table_reference_one | n          |        10004 | t
- replicate_reference_table_hash          | h          |      1360004 | c
+ replicate_reference_table_hash          | h          |      1360005 | c
 (2 rows)
 
 BEGIN;
@@ -481,7 +481,6 @@ SELECT create_reference_table('replicate_reference_table_insert');
 BEGIN;
 INSERT INTO replicate_reference_table_insert VALUES(1);
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
-NOTICE:  Replicating reference table "replicate_reference_table_insert" to the node localhost:57638
 ERROR:  cannot open new connections after the first modification command within a transaction
 ROLLBACK;
 DROP TABLE replicate_reference_table_insert;
@@ -496,7 +495,6 @@ SELECT create_reference_table('replicate_reference_table_copy');
 BEGIN;
 COPY replicate_reference_table_copy FROM STDIN;
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
-NOTICE:  Replicating reference table "replicate_reference_table_copy" to the node localhost:57638
 ERROR:  cannot open new connections after the first modification command within a transaction
 ROLLBACK;
 DROP TABLE replicate_reference_table_copy;
@@ -511,7 +509,6 @@ SELECT create_reference_table('replicate_reference_table_ddl');
 BEGIN;
 ALTER TABLE replicate_reference_table_ddl ADD column2 int;
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
-NOTICE:  Replicating reference table "replicate_reference_table_ddl" to the node localhost:57638
 ERROR:  cannot open new connections after the first modification command within a transaction
 ROLLBACK;
 DROP TABLE replicate_reference_table_ddl;

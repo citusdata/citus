@@ -443,37 +443,6 @@ CREATE TYPE super_number_pack AS (
         packed_number2 number_pack
 );
 
--- Create same types in worker1
-\c - - - :worker_1_port
-
-CREATE TYPE number_pack AS (
-        number1 integer,
-        number2 integer
-);
-
-CREATE TYPE super_number_pack AS (
-        packed_number1 number_pack,
-        packed_number2 number_pack
-);
-
--- Create same types in worker2
-\c - - - :worker_2_port
-
-CREATE TYPE number_pack AS (
-        number1 integer,
-        number2 integer
-);
-
-CREATE TYPE super_number_pack AS (
-        packed_number1 number_pack,
-        packed_number2 number_pack
-);
-
-
--- Connect back to master
-\c - - - :master_port
-
-
 -- Test array of user-defined type with hash distribution
 CREATE TABLE packed_numbers_hash (
         id integer,

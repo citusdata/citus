@@ -132,3 +132,11 @@ BEGIN
   END LOOP;
   RETURN;
 END; $$ language plpgsql;
+
+-- helper function to quickly run SQL on the whole cluster
+CREATE FUNCTION run_command_on_coordinator_and_workers(p_sql text)
+RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+     EXECUTE p_sql;
+     PERFORM run_command_on_workers(p_sql);
+END;$$;

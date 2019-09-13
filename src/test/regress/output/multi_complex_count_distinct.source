@@ -942,17 +942,6 @@ CREATE TYPE test_item AS
   id       INTEGER,
   duration INTEGER
 );
-SELECT * FROM run_command_on_workers($$CREATE TYPE test_item AS
-(
-  id       INTEGER,
-  duration INTEGER
-)$$) ORDER BY nodeport;
- nodename  | nodeport | success |   result    
------------+----------+---------+-------------
- localhost |    57637 | t       | CREATE TYPE
- localhost |    57638 | t       | CREATE TYPE
-(2 rows)
-
 CREATE TABLE test_count_distinct_array (key int, value int ,  value_arr test_item[]);
 SELECT create_distributed_table('test_count_distinct_array', 'key');
  create_distributed_table 
@@ -984,13 +973,6 @@ LIMIT 5;
 
 DROP TABLE test_count_distinct_array;
 DROP TYPE test_item;
-SELECT * FROM run_command_on_workers($$DROP TYPE test_item$$) ORDER BY nodeport;
- nodename  | nodeport | success |  result   
------------+----------+---------+-----------
- localhost |    57637 | t       | DROP TYPE
- localhost |    57638 | t       | DROP TYPE
-(2 rows)
-
 -- other distinct aggregate are not supported
 SELECT *
 	FROM (

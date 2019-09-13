@@ -97,7 +97,7 @@ SELECT count(*) FROM pg_dist_shard WHERE logicalrelid='create_distributed_table_
 SELECT run_command_on_workers($$SELECT count(*) FROM information_schema.schemata WHERE schema_name = 'create_distributed_table_non_empty_failure'$$);
  run_command_on_workers 
 ------------------------
- (localhost,9060,t,1)
+ (localhost,9060,t,0)
  (localhost,57637,t,1)
 (2 rows)
 
@@ -108,6 +108,15 @@ SELECT run_command_on_workers($$DROP SCHEMA IF EXISTS create_distributed_table_n
  (localhost,57637,t,"DROP SCHEMA")
 (2 rows)
 
+-- this triggers a schema creation which prevents further transactions around dependency propagation
+SELECT citus.mitmproxy('conn.allow()');
+ mitmproxy 
+-----------
+ 
+(1 row)
+
+CREATE TYPE schema_proc AS (a int);
+DROP TYPE schema_proc;
 -- kill as soon as the coordinator sends begin
 SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED").kill()');
  mitmproxy 
@@ -639,6 +648,15 @@ SELECT run_command_on_workers($$SELECT count(*) FROM information_schema.tables W
  (localhost,57637,t,0)
 (2 rows)
 
+-- this triggers a schema creation which prevents further transactions around dependency propagation
+SELECT citus.mitmproxy('conn.allow()');
+ mitmproxy 
+-----------
+ 
+(1 row)
+
+CREATE TYPE schema_proc AS (a int);
+DROP TYPE schema_proc;
 -- kill as soon as the coordinator sends begin
 SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED").kill()');
  mitmproxy 

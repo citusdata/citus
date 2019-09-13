@@ -19,7 +19,9 @@
 #include "distributed/metadata_sync.h"
 #include "distributed/remote_commands.h"
 #include "distributed/worker_manager.h"
+#include "distributed/worker_transaction.h"
 #include "storage/lmgr.h"
+#include "utils/lsyscache.h"
 
 static List * GetDependencyCreateDDLCommands(const ObjectAddress *dependency);
 
@@ -42,10 +44,9 @@ static List * GetDependencyCreateDDLCommands(const ObjectAddress *dependency);
 void
 EnsureDependenciesExistsOnAllNodes(const ObjectAddress *target)
 {
-	const uint32 connectionFlag = FORCE_NEW_CONNECTION;
-
 	/* local variables to work with dependencies */
 	List *dependencies = NIL;
+	List *dependenciesWithCommands = NIL;
 	ListCell *dependencyCell = NULL;
 
 	/* local variables to collect ddl commands */
@@ -54,8 +55,6 @@ EnsureDependenciesExistsOnAllNodes(const ObjectAddress *target)
 	/* local variables to work with worker nodes */
 	List *workerNodeList = NULL;
 	ListCell *workerNodeCell = NULL;
-	List *connections = NULL;
-	ListCell *connectionCell = NULL;
 
 	/*
 	 * collect all dependencies in creation order and get their ddl commands
@@ -64,14 +63,23 @@ EnsureDependenciesExistsOnAllNodes(const ObjectAddress *target)
 	foreach(dependencyCell, dependencies)
 	{
 		ObjectAddress *dependency = (ObjectAddress *) lfirst(dependencyCell);
-		ddlCommands = list_concat(ddlCommands,
-								  GetDependencyCreateDDLCommands(dependency));
+		List *dependencyCommands = GetDependencyCreateDDLCommands(dependency);
+		ddlCommands = list_concat(ddlCommands, dependencyCommands);
+
+		/* create a new list with dependencies that actually created commands */
+		if (list_length(dependencyCommands) > 0)
+		{
+			dependenciesWithCommands = lappend(dependenciesWithCommands, dependency);
+		}
 	}
 	if (list_length(ddlCommands) <= 0)
 	{
 		/* no ddl commands to be executed */
 		return;
 	}
+
+	/* since we are executing ddl commands lets disable propagation, primarily for mx */
+	ddlCommands = list_concat(list_make1(DISABLE_DDL_PROPAGATION), ddlCommands);
 
 	/*
 	 * Make sure that no new nodes are added after this point until the end of the
@@ -93,7 +101,7 @@ EnsureDependenciesExistsOnAllNodes(const ObjectAddress *target)
 	 * to the nodes before marking the objects as distributed these objects would never be
 	 * created on the workers when they get added, causing shards to fail to create.
 	 */
-	foreach(dependencyCell, dependencies)
+	foreach(dependencyCell, dependenciesWithCommands)
 	{
 		ObjectAddress *dependency = (ObjectAddress *) lfirst(dependencyCell);
 		MarkObjectDistributed(dependency);
@@ -108,37 +116,18 @@ EnsureDependenciesExistsOnAllNodes(const ObjectAddress *target)
 		/* no nodes to execute on */
 		return;
 	}
+
+
 	foreach(workerNodeCell, workerNodeList)
 	{
 		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
-		MultiConnection *connection = NULL;
 
-		char *nodeName = workerNode->workerName;
+		const char *nodeName = workerNode->workerName;
 		uint32 nodePort = workerNode->workerPort;
 
-		connection = StartNodeUserDatabaseConnection(connectionFlag, nodeName, nodePort,
-													 CitusExtensionOwnerName(), NULL);
-
-		connections = lappend(connections, connection);
-	}
-	FinishConnectionListEstablishment(connections);
-
-	/*
-	 * create dependency on all nodes
-	 */
-	foreach(connectionCell, connections)
-	{
-		MultiConnection *connection = (MultiConnection *) lfirst(connectionCell);
-		ExecuteCriticalRemoteCommandList(connection, ddlCommands);
-	}
-
-	/*
-	 * disconnect from nodes
-	 */
-	foreach(connectionCell, connections)
-	{
-		MultiConnection *connection = (MultiConnection *) lfirst(connectionCell);
-		CloseConnection(connection);
+		SendCommandListToWorkerInSingleTransaction(nodeName, nodePort,
+												   CitusExtensionOwnerName(),
+												   ddlCommands);
 	}
 }
 
@@ -165,6 +154,26 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 			return list_make1((void *) schemaDDLCommand);
 		}
 
+		case OCLASS_TYPE:
+		{
+			return CreateTypeDDLCommandsIdempotent(dependency);
+		}
+
+		case OCLASS_CLASS:
+		{
+			/*
+			 * types have an intermediate dependency on a relation (aka class), so we do
+			 * support classes when the relkind is composite
+			 */
+			if (get_rel_relkind(dependency->objectId) == RELKIND_COMPOSITE_TYPE)
+			{
+				return NIL;
+			}
+
+			/* if this relation is not supported, break to the error at the end */
+			break;
+		}
+
 		default:
 		{
 			break;
@@ -181,7 +190,6 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 					errdetail(
 						"citus tries to recreate an unsupported object on its workers"),
 					errhint("please report a bug as this should not be happening")));
-	return NIL;
 }
 
 
@@ -191,11 +199,9 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 void
 ReplicateAllDependenciesToNode(const char *nodeName, int nodePort)
 {
-	const uint32 connectionFlag = FORCE_NEW_CONNECTION;
 	ListCell *dependencyCell = NULL;
 	List *dependencies = NIL;
 	List *ddlCommands = NIL;
-	MultiConnection *connection = NULL;
 
 	/*
 	 * collect all dependencies in creation order and get their ddl commands
@@ -230,11 +236,9 @@ ReplicateAllDependenciesToNode(const char *nodeName, int nodePort)
 		return;
 	}
 
-	/*
-	 * connect to the new host and create all applicable dependencies
-	 */
-	connection = GetNodeUserDatabaseConnection(connectionFlag, nodeName, nodePort,
-											   CitusExtensionOwnerName(), NULL);
-	ExecuteCriticalRemoteCommandList(connection, ddlCommands);
-	CloseConnection(connection);
+	/* since we are executing ddl commands lets disable propagation, primarily for mx */
+	ddlCommands = list_concat(list_make1(DISABLE_DDL_PROPAGATION), ddlCommands);
+
+	SendCommandListToWorkerInSingleTransaction(nodeName, nodePort,
+											   CitusExtensionOwnerName(), ddlCommands);
 }

@@ -373,6 +373,12 @@ AcquireExecutorMultiShardLocks(List *taskList)
 		Task *task = (Task *) lfirst(taskCell);
 		LOCKMODE lockMode = NoLock;
 
+		if (task->anchorShardId == INVALID_SHARD_ID)
+		{
+			/* no shard locks to take if the task is not anchored to a shard */
+			continue;
+		}
+
 		if (AllModificationsCommutative || list_length(task->taskPlacementList) == 1)
 		{
 			/*
@@ -1465,7 +1471,6 @@ ExecuteModifyTasks(List *taskList, bool expectResults, ParamListInfo paramListIn
 	int64 totalAffectedTupleCount = 0;
 	ListCell *taskCell = NULL;
 	Task *firstTask = NULL;
-	ShardInterval *firstShardInterval = NULL;
 	int connectionFlags = 0;
 	List *affectedTupleCountList = NIL;
 	HTAB *shardConnectionHash = NULL;
@@ -1486,11 +1491,15 @@ ExecuteModifyTasks(List *taskList, bool expectResults, ParamListInfo paramListIn
 	 * ProcessUtility, so we only need to do this for DML commands.
 	 */
 	firstTask = (Task *) linitial(taskList);
-	firstShardInterval = LoadShardInterval(firstTask->anchorShardId);
-	if (PartitionedTable(firstShardInterval->relationId) &&
-		firstTask->taskType == MODIFY_TASK)
+	if (firstTask->taskType == MODIFY_TASK)
 	{
-		LockPartitionRelations(firstShardInterval->relationId, RowExclusiveLock);
+		ShardInterval *firstShardInterval = NULL;
+
+		firstShardInterval = LoadShardInterval(firstTask->anchorShardId);
+		if (PartitionedTable(firstShardInterval->relationId))
+		{
+			LockPartitionRelations(firstShardInterval->relationId, RowExclusiveLock);
+		}
 	}
 
 	/*

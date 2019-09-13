@@ -322,6 +322,7 @@ RepairShardPlacement(int64 shardId, char *sourceNodeName, int32 sourceNodePort,
 		ddlCommandList = lappend(ddlCommandList, copyShardDataCommand->data);
 	}
 
+	EnsureNoModificationsHaveBeenDone();
 	SendCommandListToWorkerInSingleTransaction(targetNodeName, targetNodePort, tableOwner,
 											   ddlCommandList);
 

@@ -145,6 +145,7 @@ start_metadata_sync_to_node(PG_FUNCTION_ARGS)
 	 * createMetadataSnapshotCommandList in the same transaction that we send
 	 * nodeDeleteCommand and nodeInsertCommand commands below.
 	 */
+	EnsureNoModificationsHaveBeenDone();
 	SendCommandListToWorkerInSingleTransaction(nodeNameString, nodePort, extensionOwner,
 											   recreateMetadataSnapshotCommandList);
 

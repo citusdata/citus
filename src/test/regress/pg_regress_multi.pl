@@ -69,11 +69,9 @@ my $postgresSrcdir = "";
 my $majorversion = "";
 my @extensions = ();
 my @userPgOptions = ();
-my %dataTypes = ();
 my %fdws = ();
 my %fdwServers = ();
 my %functions = ();
-my %operators = ();
 my $valgrind = 0;
 my $valgrindPath = "valgrind";
 my $valgrindLogFile = "valgrind_test_log.txt";
@@ -386,19 +384,8 @@ for my $option (@userPgOptions)
 	push(@pgOptions, '-c', $option);
 }
 
-#define data types as a name->definition
-%dataTypes = ('dummy_type', '(i integer)',
-               'order_side', ' ENUM (\'buy\', \'sell\')',
-               'test_composite_type', '(i integer, i2 integer)',
-               'bug_status', ' ENUM (\'new\', \'open\', \'closed\')');
-
 # define functions as signature->definition
-%functions = ('fake_fdw_handler()', 'fdw_handler AS \'citus\' LANGUAGE C STRICT;',
-               'equal_test_composite_type_function(test_composite_type, test_composite_type)',
-               'boolean AS \'select $1.i = $2.i AND $1.i2 = $2.i2;\' LANGUAGE SQL IMMUTABLE RETURNS NULL ON NULL INPUT;');
-
-
-%operators = ('=', '(LEFTARG = test_composite_type, RIGHTARG = test_composite_type, PROCEDURE = equal_test_composite_type_function, HASHES)');
+%functions = ('fake_fdw_handler()', 'fdw_handler AS \'citus\' LANGUAGE C STRICT;');
 
 #define fdws as name->handler name
 %fdws = ('fake_fdw', 'fake_fdw_handler');
@@ -750,28 +737,12 @@ for my $port (@workerPorts)
             or die "Could not create extension on worker";
     }
 
-    foreach my $dataType (keys %dataTypes)
-    {
-        system(catfile($bindir, "psql"),
-                ('-X', '-h', $host, '-p', $port, '-U', $user, "-d", "regression",
-                 '-c', "CREATE TYPE $dataType AS $dataTypes{$dataType};")) == 0
-            or die "Could not create TYPE $dataType on worker";
-    }
-
     foreach my $function (keys %functions)
     {
         system(catfile($bindir, "psql"),
                 ('-X', '-h', $host, '-p', $port, '-U', $user, "-d", "regression",
                  '-c', "CREATE FUNCTION $function RETURNS $functions{$function};")) == 0
             or die "Could not create FUNCTION $function on worker";
-    }
-
-    foreach my $operator (keys %operators)
-    {
-        system(catfile($bindir, "psql"),
-                ('-X', '-h', $host, '-p', $port, '-U', $user, "-d", "regression",
-                 '-c', "CREATE OPERATOR $operator $operators{$operator};")) == 0
-            or die "Could not create OPERATOR $operator on worker";
     }
 
     foreach my $fdw (keys %fdws)

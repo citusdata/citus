@@ -316,6 +316,7 @@ ReplicateShardToNode(ShardInterval *shardInterval, char *nodeName, int nodePort)
 								get_rel_name(shardInterval->relationId), nodeName,
 								nodePort)));
 
+		EnsureNoModificationsHaveBeenDone();
 		SendCommandListToWorkerInSingleTransaction(nodeName, nodePort, tableOwner,
 												   ddlCommandList);
 		if (targetPlacement == NULL)

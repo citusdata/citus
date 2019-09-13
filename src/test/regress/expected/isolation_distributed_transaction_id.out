@@ -56,7 +56,7 @@ step s3-commit:
     COMMIT;
 
 
-starting permutation: s1-create-table s1-begin s1-insert s1-get-current-transaction-id s2-get-first-worker-active-transactions s1-commit
+starting permutation: s1-create-table s1-begin s1-insert s1-verify-current-xact-is-on-worker s1-commit
 step s1-create-table: 
 	-- some tests also use distributed table
 	CREATE TABLE distributed_transaction_id_table(some_value int, other_value int);
@@ -72,23 +72,22 @@ step s1-begin:
 step s1-insert: 
 	INSERT INTO distributed_transaction_id_table VALUES (1, 1);
 
-step s1-get-current-transaction-id: 
-	SELECT row(initiator_node_identifier, transaction_number) FROM  get_current_transaction_id();
+step s1-verify-current-xact-is-on-worker: 
+	SELECT
+	    remote.nodeport,
+	    remote.result = row(xact.initiator_node_identifier, xact.transaction_number)::text AS xact_exists
+	FROM
+	    get_current_transaction_id() as xact,
+	    run_command_on_workers($$
+	        SELECT row(initiator_node_identifier, transaction_number)
+            FROM get_all_active_transactions();
+        $$) as remote
+    ORDER BY remote.nodeport ASC;
 
-row            
+nodeport       xact_exists    
 
-(0,229)        
-step s2-get-first-worker-active-transactions: 
-		SELECT * FROM run_command_on_workers('SELECT row(initiator_node_identifier, transaction_number)
-												FROM	 
-											  get_all_active_transactions();
-											') 
-		WHERE nodeport = 57637;
-;
-
-nodename       nodeport       success        result         
-
-localhost      57637          t              (0,229)        
+57637          t              
+57638          t              
 step s1-commit: 
     COMMIT;
 

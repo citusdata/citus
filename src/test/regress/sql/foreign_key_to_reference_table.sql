@@ -12,7 +12,6 @@ SET citus.next_shard_id TO 7000000;
 SET citus.next_placement_id TO 7000000;
 
 CREATE TYPE foreign_details AS (name text, relid text, refd_relid text);
-SELECT run_command_on_workers($$CREATE TYPE foreign_details AS (name text, relid text, refd_relid text)$$);
 
 CREATE VIEW table_fkeys_in_workers AS 
 SELECT
@@ -273,7 +272,6 @@ DROP TABLE referenced_table;
 
 -- foreign key as composite key
 CREATE TYPE fkey_reference_table.composite AS (key1 int, key2 int); 
-SELECT run_command_on_workers($$CREATE TYPE fkey_reference_table.composite AS (key1 int, key2 int)$$) ORDER BY 1;
 
 CREATE TABLE referenced_table(test_column composite, PRIMARY KEY(test_column));
 CREATE TABLE referencing_table(id int, referencing_composite composite);

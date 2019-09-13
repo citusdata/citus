@@ -158,10 +158,12 @@ DEBUG:  Plan 13 query after replacing subqueries and CTEs: SELECT f.a, f.b, tabl
 (3 rows)
 
 -- Custom Type returning function used in a join
+RESET client_min_messages;
 CREATE TYPE min_and_max AS (
   minimum INT,
   maximum INT
 );
+SET client_min_messages TO DEBUG1;
 CREATE OR REPLACE FUNCTION max_and_min () RETURNS
   min_and_max AS $$
 DECLARE

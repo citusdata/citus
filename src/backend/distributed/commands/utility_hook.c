@@ -41,6 +41,7 @@
 #include "distributed/commands.h"
 #include "distributed/commands/multi_copy.h"
 #include "distributed/commands/utility_hook.h" /* IWYU pragma: keep */
+#include "distributed/listutils.h"
 #include "distributed/local_executor.h"
 #include "distributed/maintenanced.h"
 #include "distributed/master_protocol.h"
@@ -52,6 +53,7 @@
 #include "distributed/version_compat.h"
 #include "distributed/worker_transaction.h"
 #include "lib/stringinfo.h"
+#include "nodes/pg_list.h"
 #include "tcop/utility.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
@@ -69,6 +71,10 @@ static void ExecuteDistributedDDLJob(DDLJob *ddlJob);
 static char * SetSearchPathToCurrentSearchPathCommand(void);
 static char * CurrentSearchPath(void);
 static void PostProcessUtility(Node *parsetree);
+static List * PlanRenameAttributeStmt(RenameStmt *stmt, const char *queryString);
+static List * PlanAlterOwnerStmt(AlterOwnerStmt *stmt, const char *queryString);
+
+static void ExecuteNodeBaseDDLCommands(List *taskList);
 
 
 /*
@@ -337,25 +343,48 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		if (IsA(parsetree, DropStmt))
 		{
 			DropStmt *dropStatement = (DropStmt *) parsetree;
-			if (dropStatement->removeType == OBJECT_INDEX)
+			switch (dropStatement->removeType)
 			{
-				ddlJobs = PlanDropIndexStmt(dropStatement, queryString);
-			}
+				case OBJECT_INDEX:
+				{
+					ddlJobs = PlanDropIndexStmt(dropStatement, queryString);
+					break;
+				}
 
-			if (dropStatement->removeType == OBJECT_TABLE)
-			{
-				ProcessDropTableStmt(dropStatement);
-			}
+				case OBJECT_TABLE:
+				{
+					ProcessDropTableStmt(dropStatement);
+					break;
+				}
 
-			if (dropStatement->removeType == OBJECT_SCHEMA)
-			{
-				ProcessDropSchemaStmt(dropStatement);
-			}
+				case OBJECT_SCHEMA:
+				{
+					ProcessDropSchemaStmt(dropStatement);
+					break;
+				}
 
-			if (dropStatement->removeType == OBJECT_POLICY)
-			{
-				ddlJobs = PlanDropPolicyStmt(dropStatement, queryString);
+				case OBJECT_POLICY:
+				{
+					ddlJobs = PlanDropPolicyStmt(dropStatement, queryString);
+					break;
+				}
+
+				case OBJECT_TYPE:
+				{
+					ddlJobs = PlanDropTypeStmt(dropStatement, queryString);
+					break;
+				}
+
+				default:
+				{
+					/* unsupported type, skipping*/
+				}
 			}
+		}
+
+		if (IsA(parsetree, AlterEnumStmt))
+		{
+			ddlJobs = PlanAlterEnumStmt(castNode(AlterEnumStmt, parsetree), queryString);
 		}
 
 		if (IsA(parsetree, AlterTableStmt))
@@ -367,6 +396,11 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 			{
 				ddlJobs = PlanAlterTableStmt(alterTableStmt, queryString);
 			}
+
+			if (alterTableStmt->relkind == OBJECT_TYPE)
+			{
+				ddlJobs = PlanAlterTypeStmt(alterTableStmt, queryString);
+			}
 		}
 
 		/*
@@ -375,7 +409,28 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		 */
 		if (IsA(parsetree, RenameStmt))
 		{
-			ddlJobs = PlanRenameStmt((RenameStmt *) parsetree, queryString);
+			RenameStmt *renameStmt = (RenameStmt *) parsetree;
+
+			switch (renameStmt->renameType)
+			{
+				case OBJECT_TYPE:
+				{
+					ddlJobs = PlanRenameTypeStmt(renameStmt, queryString);
+					break;
+				}
+
+				case OBJECT_ATTRIBUTE:
+				{
+					ddlJobs = PlanRenameAttributeStmt(renameStmt, queryString);
+					break;
+				}
+
+				default:
+				{
+					ddlJobs = PlanRenameStmt(renameStmt, queryString);
+					break;
+				}
+			}
 		}
 
 		/* handle distributed CLUSTER statements */
@@ -390,13 +445,19 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		 */
 		if (IsA(parsetree, AlterObjectSchemaStmt))
 		{
-			AlterObjectSchemaStmt *setSchemaStmt = (AlterObjectSchemaStmt *) parsetree;
-			ddlJobs = PlanAlterObjectSchemaStmt(setSchemaStmt, queryString);
+			ddlJobs = PlanAlterObjectSchemaStmt(
+				castNode(AlterObjectSchemaStmt, parsetree), queryString);
 		}
 
 		if (IsA(parsetree, GrantStmt))
 		{
 			ddlJobs = PlanGrantStmt((GrantStmt *) parsetree);
+		}
+
+		if (IsA(parsetree, AlterOwnerStmt))
+		{
+			ddlJobs = PlanAlterOwnerStmt(castNode(AlterOwnerStmt, parsetree),
+										 queryString);
 		}
 
 		if (IsA(parsetree, CreatePolicyStmt))
@@ -407,6 +468,18 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		if (IsA(parsetree, AlterPolicyStmt))
 		{
 			ddlJobs = PlanAlterPolicyStmt((AlterPolicyStmt *) parsetree);
+		}
+
+		if (IsA(parsetree, CompositeTypeStmt))
+		{
+			ddlJobs = PlanCompositeTypeStmt(castNode(CompositeTypeStmt, parsetree),
+											queryString);
+		}
+
+		if (IsA(parsetree, CreateEnumStmt))
+		{
+			ddlJobs = PlanCreateEnumStmt(castNode(CreateEnumStmt, parsetree),
+										 queryString);
 		}
 
 		/*
@@ -504,6 +577,22 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		standard_ProcessUtility(pstmt, queryString, context,
 								params, queryEnv, dest, completionTag);
 
+		/*
+		 * Postgres added the following CommandCounterIncrement as a patch in:
+		 *  - 10.7 -> 10.8
+		 *  - 11.2 -> 11.3
+		 * The patch was a response to bug #15631.
+		 *
+		 * CommandCounterIncrement is used to make changes to the catalog visible for post
+		 * processing of create commands (eg. create type). It is safe to call
+		 * CommandCounterIncrement twice, as the call is a no-op if the command id is not
+		 * used yet.
+		 *
+		 * Once versions older then above are not deemed important anymore this patch can
+		 * be remove from citus.
+		 */
+		CommandCounterIncrement();
+
 		if (IsA(parsetree, AlterTableStmt))
 		{
 			activeAlterTables--;
@@ -519,6 +608,33 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		PG_RE_THROW();
 	}
 	PG_END_TRY();
+
+	/*
+	 * Post process for ddl statements
+	 */
+	if (EnableDDLPropagation)
+	{
+		if (IsA(parsetree, CompositeTypeStmt))
+		{
+			ProcessCompositeTypeStmt(castNode(CompositeTypeStmt, parsetree), queryString);
+		}
+
+		if (IsA(parsetree, CreateEnumStmt))
+		{
+			ProcessCreateEnumStmt(castNode(CreateEnumStmt, parsetree), queryString);
+		}
+
+		if (IsA(parsetree, AlterObjectSchemaStmt))
+		{
+			ProcessAlterObjectSchemaStmt(castNode(AlterObjectSchemaStmt, parsetree),
+										 queryString);
+		}
+
+		if (IsA(parsetree, AlterEnumStmt))
+		{
+			ProcessAlterEnumStmt(castNode(AlterEnumStmt, parsetree), queryString);
+		}
+	}
 
 	/*
 	 * We only process CREATE TABLE ... PARTITION OF commands in the function below
@@ -593,6 +709,57 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 
 
 /*
+ * PlanRenameAttributeStmt called for RenameStmt's that are targetting an attribute eg.
+ * type attributes. Based on the relation type the attribute gets renamed it dispatches to
+ * a specialized implementation if present, otherwise return an empty list for its DDLJobs
+ */
+static List *
+PlanRenameAttributeStmt(RenameStmt *stmt, const char *queryString)
+{
+	Assert(stmt->renameType == OBJECT_ATTRIBUTE);
+
+	switch (stmt->relationType)
+	{
+		case OBJECT_TYPE:
+		{
+			return PlanRenameTypeAttributeStmt(stmt, queryString);
+		}
+
+		default:
+		{
+			/* unsupported relation for attribute rename, do nothing */
+			return NIL;
+		}
+	}
+}
+
+
+/*
+ * PlanAlterOwnerStmt gets called for statements that change the ownership of an object.
+ * Based on the type of object the ownership gets changed for it dispatches to a
+ * specialized implementation or returns an empty list of DDLJobs for objects that do not
+ * have an implementation provided.
+ */
+static List *
+PlanAlterOwnerStmt(AlterOwnerStmt *stmt, const char *queryString)
+{
+	switch (stmt->objectType)
+	{
+		case OBJECT_TYPE:
+		{
+			return PlanAlterTypeOwnerStmt(stmt, queryString);
+		}
+
+		default:
+		{
+			/* do nothing for unsupported alter owner statements */
+			return NIL;
+		}
+	}
+}
+
+
+/*
  * ExecuteDistributedDDLJob simply executes a provided DDLJob in a distributed trans-
  * action, including metadata sync if needed. If the multi shard commit protocol is
  * in its default value of '1pc', then a notice message indicating that '2pc' might be
@@ -607,12 +774,33 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 static void
 ExecuteDistributedDDLJob(DDLJob *ddlJob)
 {
-	bool shouldSyncMetadata = ShouldSyncTableMetadata(ddlJob->targetRelationId);
+	bool shouldSyncMetadata = false;
 
 	EnsureCoordinator();
-	EnsurePartitionTableNotReplicated(ddlJob->targetRelationId);
 
-	if (!ddlJob->concurrentIndexCmd)
+	if (ddlJob->targetRelationId != InvalidOid)
+	{
+		/*
+		 * Only for ddlJobs that are targetting a relation (table) we want to sync its
+		 * metadata and verify some properties around the table.
+		 */
+		shouldSyncMetadata = ShouldSyncTableMetadata(ddlJob->targetRelationId);
+		EnsurePartitionTableNotReplicated(ddlJob->targetRelationId);
+	}
+
+	if (TaskExecutorType != MULTI_EXECUTOR_ADAPTIVE &&
+		ddlJob->targetRelationId == InvalidOid)
+	{
+		/*
+		 * Some ddl jobs can only be run by the adaptive executor and not our legacy ones.
+		 *
+		 * These are tasks that are not pinned to any relation nor shards. We can execute
+		 * these very naively with a simple for loop that sends them to the target worker.
+		 */
+
+		ExecuteNodeBaseDDLCommands(ddlJob->taskList);
+	}
+	else if (!ddlJob->concurrentIndexCmd)
 	{
 		if (shouldSyncMetadata)
 		{
@@ -676,6 +864,34 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 							 "invalid index, then retry the original command.")));
 		}
 		PG_END_TRY();
+	}
+}
+
+
+/*
+ * ExecuteNodeBaseDDLCommands executes ddl commands naively only when we are not using the
+ * adaptive executor. It gets connections to the target placements and executes the
+ * commands.
+ */
+static void
+ExecuteNodeBaseDDLCommands(List *taskList)
+{
+	ListCell *taskCell = NULL;
+
+	foreach(taskCell, taskList)
+	{
+		Task *task = (Task *) lfirst(taskCell);
+		ListCell *taskPlacementCell = NULL;
+
+		/* these tasks should not be pinned to any shard */
+		Assert(task->anchorShardId == INVALID_SHARD_ID);
+
+		foreach(taskPlacementCell, task->taskPlacementList)
+		{
+			ShardPlacement *placement = (ShardPlacement *) lfirst(taskPlacementCell);
+			SendCommandToWorkerAsUser(placement->nodeName, placement->nodePort, NULL,
+									  task->queryString);
+		}
 	}
 }
 
@@ -840,6 +1056,55 @@ DDLTaskList(Oid relationId, const char *commandString)
 	}
 
 	return taskList;
+}
+
+
+/*
+ * NodeDDLTaskList builds a list of tasks to execute a DDL command on a
+ * given target set of nodes.
+ */
+List *
+NodeDDLTaskList(TargetWorkerSet targets, List *commands)
+{
+	List *workerNodes = TargetWorkerSetNodeList(targets);
+	char *concatenatedCommands = StringJoin(commands, ';');
+	DDLJob *ddlJob = NULL;
+	ListCell *workerNodeCell = NULL;
+	Task *task = NULL;
+
+	if (list_length(workerNodes) <= 0)
+	{
+		/*
+		 * if there are no nodes we don't have to plan any ddl tasks. Planning them would
+		 * cause a hang in the executor.
+		 */
+		return NIL;
+	}
+
+	task = CitusMakeNode(Task);
+	task->taskType = DDL_TASK;
+	task->queryString = concatenatedCommands;
+
+	foreach(workerNodeCell, workerNodes)
+	{
+		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
+		ShardPlacement *targetPlacement = NULL;
+
+		targetPlacement = CitusMakeNode(ShardPlacement);
+		targetPlacement->nodeName = workerNode->workerName;
+		targetPlacement->nodePort = workerNode->workerPort;
+		targetPlacement->groupId = workerNode->groupId;
+
+		task->taskPlacementList = lappend(task->taskPlacementList, targetPlacement);
+	}
+
+	ddlJob = palloc0(sizeof(DDLJob));
+	ddlJob->targetRelationId = InvalidOid;
+	ddlJob->concurrentIndexCmd = false;
+	ddlJob->commandString = NULL;
+	ddlJob->taskList = list_make1(task);
+
+	return list_make1(ddlJob);
 }
 
 

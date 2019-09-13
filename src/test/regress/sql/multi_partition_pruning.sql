@@ -92,6 +92,7 @@ INSERT INTO pg_dist_shard_placement (shardid, shardstate, shardlength, nodename,
 	LIMIT 1;
 
 -- Create composite type partitioned table
+RESET client_min_messages; -- avoid debug messages
 
 CREATE TYPE composite_type AS
 (
@@ -100,7 +101,6 @@ CREATE TYPE composite_type AS
 	varchar_column varchar(50)
 );
 
-RESET client_min_messages; -- avoid debug messages about toast index creation
 CREATE TABLE composite_partitioned_table
 (
 	composite_column composite_type

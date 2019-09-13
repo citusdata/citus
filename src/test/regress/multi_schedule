@@ -276,3 +276,8 @@ test: multi_task_string_size
 # connection encryption tests
 # ---------
 test: ssl_by_default
+
+# ---------
+# object distribution tests
+# ---------
+test: distributed_types

@@ -84,8 +84,13 @@ extern void ErrorIfUnsupportedRenameStmt(RenameStmt *renameStmt);
 
 /* schema.c - forward declarations */
 extern void ProcessDropSchemaStmt(DropStmt *dropSchemaStatement);
+extern List * PlanAlterTableSchemaStmt(AlterObjectSchemaStmt *stmt,
+									   const char *queryString);
 extern List * PlanAlterObjectSchemaStmt(AlterObjectSchemaStmt *alterObjectSchemaStmt,
 										const char *alterObjectSchemaCommand);
+
+extern void ProcessAlterObjectSchemaStmt(AlterObjectSchemaStmt *stmt,
+										 const char *queryString);
 
 
 /* sequence.c - forward declarations */
@@ -117,6 +122,42 @@ extern void ErrorIfUnsupportedConstraint(Relation relation, char distributionMet
 /* truncate.c - forward declarations */
 extern void ProcessTruncateStatement(TruncateStmt *truncateStatement);
 
+/* type.c - forward declarations */
+extern List * PlanCompositeTypeStmt(CompositeTypeStmt *stmt, const char *queryString);
+extern void ProcessCompositeTypeStmt(CompositeTypeStmt *stmt, const char *queryString);
+extern List * PlanAlterTypeStmt(AlterTableStmt *stmt, const char *queryString);
+extern List * PlanCreateEnumStmt(CreateEnumStmt *createEnumStmt, const char *queryString);
+extern void ProcessCreateEnumStmt(CreateEnumStmt *stmt, const char *queryString);
+extern List * PlanAlterEnumStmt(AlterEnumStmt *stmt, const char *queryString);
+extern void ProcessAlterEnumStmt(AlterEnumStmt *stmt, const char *queryString);
+extern List * PlanDropTypeStmt(DropStmt *stmt, const char *queryString);
+extern List * PlanRenameTypeStmt(RenameStmt *stmt, const char *queryString);
+extern List * PlanRenameTypeAttributeStmt(RenameStmt *stmt, const char *queryString);
+extern List * PlanAlterTypeSchemaStmt(AlterObjectSchemaStmt *stmt,
+									  const char *queryString);
+extern List * PlanAlterTypeOwnerStmt(AlterOwnerStmt *stmt, const char *queryString);
+extern void ProcessAlterTypeSchemaStmt(AlterObjectSchemaStmt *stmt,
+									   const char *queryString);
+extern Node * CreateTypeStmtByObjectAddress(const ObjectAddress *address);
+extern const ObjectAddress * CompositeTypeStmtObjectAddress(CompositeTypeStmt *stmt,
+															bool missing_ok);
+extern const ObjectAddress * CreateEnumStmtObjectAddress(CreateEnumStmt *stmt,
+														 bool missing_ok);
+extern const ObjectAddress * AlterTypeStmtObjectAddress(AlterTableStmt *stmt,
+														bool missing_ok);
+extern const ObjectAddress * AlterEnumStmtObjectAddress(AlterEnumStmt *stmt,
+														bool missing_ok);
+extern const ObjectAddress * RenameTypeStmtObjectAddress(RenameStmt *stmt,
+														 bool missing_ok);
+extern const ObjectAddress * AlterTypeSchemaStmtObjectAddress(AlterObjectSchemaStmt *stmt,
+															  bool missing_ok);
+extern const ObjectAddress * RenameTypeAttributeStmtObjectAddress(RenameStmt *stmt,
+																  bool missing_ok);
+extern const ObjectAddress * AlterTypeOwnerObjectAddress(AlterOwnerStmt *stmt,
+														 bool missing_ok);
+extern DropStmt * CreateDropStmtBasedOnCompositeTypeStmt(CompositeTypeStmt *stmt);
+extern DropStmt * CreateDropStmtBasedOnEnumStmt(CreateEnumStmt *stmt);
+extern List * CreateTypeDDLCommandsIdempotent(const ObjectAddress *typeAddress);
 
 /* vacuum.c - froward declarations */
 extern void ProcessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand);

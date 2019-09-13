@@ -67,13 +67,7 @@ CREATE TABLE repartition_udt_other (
 
 \c - - - :worker_1_port
 
-CREATE TYPE test_udt AS (i integer, i2 integer);
-DROP TYPE test_udt CASCADE;
-
 -- START type creation
-
-CREATE TYPE test_udt AS (i integer, i2 integer);
-
 -- ... as well as a function to use as its comparator...
 CREATE FUNCTION equal_test_udt_function(test_udt, test_udt) RETURNS boolean
 AS 'select $1.i = $2.i AND $1.i2 = $2.i2;'
@@ -118,9 +112,6 @@ FUNCTION 1 test_udt_hash(test_udt);
 \c - - - :worker_2_port
 
 -- START type creation
-
-CREATE TYPE test_udt AS (i integer, i2 integer);
-
 -- ... as well as a function to use as its comparator...
 CREATE FUNCTION equal_test_udt_function(test_udt, test_udt) RETURNS boolean
 AS 'select $1.i = $2.i AND $1.i2 = $2.i2;'

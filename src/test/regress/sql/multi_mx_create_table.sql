@@ -61,7 +61,6 @@ CREATE TYPE order_side_mx AS ENUM ('buy', 'sell');
 \c - - - :worker_1_port
 
 -- create schema to test schema support
-CREATE SCHEMA citus_mx_test_schema;
 CREATE SCHEMA citus_mx_test_schema_join_1;
 CREATE SCHEMA citus_mx_test_schema_join_2;
 
@@ -105,15 +104,10 @@ CREATE OPERATOR citus_mx_test_schema.=== (
 SET search_path TO public;
 CREATE COLLATION citus_mx_test_schema.english (LOCALE=:current_locale);
 
-SET search_path TO public;
-CREATE TYPE citus_mx_test_schema.new_composite_type as (key1 text, key2 text);
-CREATE TYPE order_side_mx AS ENUM ('buy', 'sell');
-
 -- now create required stuff in the worker 2
 \c - - - :worker_2_port
 
 -- create schema to test schema support
-CREATE SCHEMA citus_mx_test_schema;
 CREATE SCHEMA citus_mx_test_schema_join_1;
 CREATE SCHEMA citus_mx_test_schema_join_2;
 
@@ -158,10 +152,6 @@ CREATE OPERATOR citus_mx_test_schema.=== (
 
 SET search_path TO public;
 CREATE COLLATION citus_mx_test_schema.english (LOCALE=:current_locale);
-
-SET search_path TO public;
-CREATE TYPE citus_mx_test_schema.new_composite_type as (key1 text, key2 text);
-CREATE TYPE order_side_mx AS ENUM ('buy', 'sell');
 
 -- connect back to the master, and do some more tests
 \c - - - :master_port

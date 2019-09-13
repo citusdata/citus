@@ -38,11 +38,23 @@
  * 2PC.
  */
 void
-SendCommandToWorker(char *nodeName, int32 nodePort, char *command)
+SendCommandToWorker(char *nodeName, int32 nodePort, const char *command)
+{
+	const char *nodeUser = CitusExtensionOwnerName();
+	SendCommandToWorkerAsUser(nodeName, nodePort, nodeUser, command);
+}
+
+
+/*
+ * SendCommandToWorkerAsUSer sends a command to a particular worker as a particular user
+ * as part of the 2PC.
+ */
+void
+SendCommandToWorkerAsUser(char *nodeName, int32 nodePort, const char *nodeUser,
+						  const char *command)
 {
 	MultiConnection *transactionConnection = NULL;
-	char *nodeUser = CitusExtensionOwnerName();
-	int connectionFlags = 0;
+	uint connectionFlags = 0;
 
 	BeginOrContinueCoordinatedTransaction();
 	CoordinatedTransactionUse2PC();
@@ -87,9 +99,42 @@ SendCommandToFirstWorker(char *command)
  * owner to ensure write access to the Citus metadata tables.
  */
 void
-SendCommandToWorkers(TargetWorkerSet targetWorkerSet, char *command)
+SendCommandToWorkers(TargetWorkerSet targetWorkerSet, const char *command)
 {
-	SendCommandToWorkersParams(targetWorkerSet, command, 0, NULL, NULL);
+	SendCommandToWorkersParams(targetWorkerSet, command, CitusExtensionOwnerName(),
+							   0, NULL, NULL);
+}
+
+
+/*
+ * TargetWorkerSetNodeList returns a list of WorkerNode's that satisfies the
+ * TargetWorkerSet.
+ */
+List *
+TargetWorkerSetNodeList(TargetWorkerSet targetWorkerSet)
+{
+	List *workerNodeList = ActivePrimaryNodeList();
+	ListCell *workerNodeCell = NULL;
+	List *result = NIL;
+
+	foreach(workerNodeCell, workerNodeList)
+	{
+		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
+		if (targetWorkerSet == WORKERS_WITH_METADATA &&
+			!workerNode->hasMetadata)
+		{
+			continue;
+		}
+		if (targetWorkerSet == OTHER_WORKERS &&
+			workerNode->groupId == GetLocalGroupId())
+		{
+			continue;
+		}
+
+		result = lappend(result, workerNode);
+	}
+
+	return result;
 }
 
 
@@ -103,7 +148,7 @@ SendCommandToWorkers(TargetWorkerSet targetWorkerSet, char *command)
 void
 SendBareCommandListToWorkers(TargetWorkerSet targetWorkerSet, List *commandList)
 {
-	List *workerNodeList = ActivePrimaryNodeList();
+	List *workerNodeList = TargetWorkerSetNodeList(targetWorkerSet);
 	ListCell *workerNodeCell = NULL;
 	char *nodeUser = CitusExtensionOwnerName();
 	ListCell *commandCell = NULL;
@@ -116,18 +161,6 @@ SendBareCommandListToWorkers(TargetWorkerSet targetWorkerSet, List *commandList)
 		char *nodeName = workerNode->workerName;
 		int nodePort = workerNode->workerPort;
 		int connectionFlags = FORCE_NEW_CONNECTION;
-
-		if (targetWorkerSet == WORKERS_WITH_METADATA &&
-			!workerNode->hasMetadata)
-		{
-			continue;
-		}
-
-		if (targetWorkerSet == OTHER_WORKERS &&
-			workerNode->groupId == GetLocalGroupId())
-		{
-			continue;
-		}
 
 		workerConnection = GetNodeUserDatabaseConnection(connectionFlags, nodeName,
 														 nodePort, nodeUser, NULL);
@@ -146,6 +179,52 @@ SendBareCommandListToWorkers(TargetWorkerSet targetWorkerSet, List *commandList)
 
 
 /*
+ * SendBareOptionalCommandListToWorkersAsUser sends a list of commands to a set of target
+ * workers in serial. Commands are committed immediately: new connections are
+ * always used and no transaction block is used (hence "bare").
+ */
+int
+SendBareOptionalCommandListToWorkersAsUser(TargetWorkerSet targetWorkerSet,
+										   List *commandList, const char *user)
+{
+	List *workerNodeList = TargetWorkerSetNodeList(targetWorkerSet);
+	ListCell *workerNodeCell = NULL;
+	ListCell *commandCell = NULL;
+	int maxError = RESPONSE_OKAY;
+
+	/* run commands serially */
+	foreach(workerNodeCell, workerNodeList)
+	{
+		MultiConnection *workerConnection = NULL;
+		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
+		char *nodeName = workerNode->workerName;
+		int nodePort = workerNode->workerPort;
+		int connectionFlags = FORCE_NEW_CONNECTION;
+
+		workerConnection = GetNodeUserDatabaseConnection(connectionFlags, nodeName,
+														 nodePort, user, NULL);
+
+		/* iterate over the commands and execute them in the same connection */
+		foreach(commandCell, commandList)
+		{
+			char *commandString = lfirst(commandCell);
+			int result = ExecuteOptionalRemoteCommand(workerConnection, commandString,
+													  NULL);
+			if (result != RESPONSE_OKAY)
+			{
+				maxError = Max(maxError, result);
+				break;
+			}
+		}
+
+		CloseConnection(workerConnection);
+	}
+
+	return maxError;
+}
+
+
+/*
  * SendCommandToWorkersParams sends a command to all workers in parallel.
  * Commands are committed on the workers when the local transaction commits. The
  * connection are made as the extension owner to ensure write access to the Citus
@@ -154,15 +233,14 @@ SendBareCommandListToWorkers(TargetWorkerSet targetWorkerSet, List *commandList)
  * respectively.
  */
 void
-SendCommandToWorkersParams(TargetWorkerSet targetWorkerSet, char *command,
-						   int parameterCount, const Oid *parameterTypes,
-						   const char *const *parameterValues)
+SendCommandToWorkersParams(TargetWorkerSet targetWorkerSet, const char *command,
+						   const char *user, int parameterCount,
+						   const Oid *parameterTypes, const char *const *parameterValues)
 {
 	List *connectionList = NIL;
 	ListCell *connectionCell = NULL;
-	List *workerNodeList = ActivePrimaryNodeList();
+	List *workerNodeList = TargetWorkerSetNodeList(targetWorkerSet);
 	ListCell *workerNodeCell = NULL;
-	char *nodeUser = CitusExtensionOwnerName();
 
 	BeginOrContinueCoordinatedTransaction();
 	CoordinatedTransactionUse2PC();
@@ -174,22 +252,10 @@ SendCommandToWorkersParams(TargetWorkerSet targetWorkerSet, char *command,
 		char *nodeName = workerNode->workerName;
 		int nodePort = workerNode->workerPort;
 		MultiConnection *connection = NULL;
-		int connectionFlags = 0;
-
-		if (targetWorkerSet == WORKERS_WITH_METADATA &&
-			!workerNode->hasMetadata)
-		{
-			continue;
-		}
-
-		if (targetWorkerSet == OTHER_WORKERS &&
-			workerNode->groupId == GetLocalGroupId())
-		{
-			continue;
-		}
+		int32 connectionFlags = 0;
 
 		connection = StartNodeUserDatabaseConnection(connectionFlags, nodeName, nodePort,
-													 nodeUser, NULL);
+													 user, NULL);
 
 		MarkRemoteTransactionCritical(connection);
 
@@ -197,12 +263,7 @@ SendCommandToWorkersParams(TargetWorkerSet targetWorkerSet, char *command,
 	}
 
 	/* finish opening connections */
-	foreach(connectionCell, connectionList)
-	{
-		MultiConnection *connection = (MultiConnection *) lfirst(connectionCell);
-
-		FinishConnectionEstablishment(connection);
-	}
+	FinishConnectionListEstablishment(connectionList);
 
 	RemoteTransactionsBeginIfNecessary(connectionList);
 
@@ -238,25 +299,34 @@ SendCommandToWorkersParams(TargetWorkerSet targetWorkerSet, char *command,
 
 
 /*
- * SendCommandListToWorkerInSingleTransaction opens connection to the node with the given
- * nodeName and nodePort. Then, the connection starts a transaction on the remote
- * node and executes the commands in the transaction. The function raises error if
- * any of the queries fails.
+ * EnsureNoModificationsHaveBeenDone reports an error if we have performed any
+ * modification in the current transaction to prevent opening a connection is such cases.
  */
 void
-SendCommandListToWorkerInSingleTransaction(char *nodeName, int32 nodePort, char *nodeUser,
-										   List *commandList)
+EnsureNoModificationsHaveBeenDone()
 {
-	MultiConnection *workerConnection = NULL;
-	ListCell *commandCell = NULL;
-	int connectionFlags = FORCE_NEW_CONNECTION;
-
 	if (XactModificationLevel > XACT_MODIFICATION_NONE)
 	{
 		ereport(ERROR, (errcode(ERRCODE_ACTIVE_SQL_TRANSACTION),
 						errmsg("cannot open new connections after the first modification "
 							   "command within a transaction")));
 	}
+}
+
+
+/*
+ * SendCommandListToWorkerInSingleTransaction opens connection to the node with the given
+ * nodeName and nodePort. Then, the connection starts a transaction on the remote
+ * node and executes the commands in the transaction. The function raises error if
+ * any of the queries fails.
+ */
+void
+SendCommandListToWorkerInSingleTransaction(const char *nodeName, int32 nodePort,
+										   const char *nodeUser, List *commandList)
+{
+	MultiConnection *workerConnection = NULL;
+	ListCell *commandCell = NULL;
+	int connectionFlags = FORCE_NEW_CONNECTION;
 
 	workerConnection = GetNodeUserDatabaseConnection(connectionFlags, nodeName, nodePort,
 													 nodeUser, NULL);

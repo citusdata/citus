@@ -126,13 +126,6 @@ ERROR:  invalid input syntax for integer: "PGCOPY"
 END;
 -- try a composite type
 CREATE TYPE intermediate_results.square_type AS (x text, x2 int);
-SELECT run_command_on_workers('CREATE TYPE intermediate_results.square_type AS (x text, x2 int)');
-      run_command_on_workers       
------------------------------------
- (localhost,57637,t,"CREATE TYPE")
- (localhost,57638,t,"CREATE TYPE")
-(2 rows)
-
 CREATE TABLE stored_squares (user_id text, square intermediate_results.square_type, metadata jsonb);
 INSERT INTO stored_squares VALUES ('jon', '(2,4)'::intermediate_results.square_type, '{"value":2}');
 INSERT INTO stored_squares VALUES ('jon', '(3,9)'::intermediate_results.square_type, '{"value":3}');
