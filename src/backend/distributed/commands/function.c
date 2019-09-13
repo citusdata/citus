@@ -2,9 +2,14 @@
  *
  * function.c
  *    Commands for FUNCTION statements.
- *    Currently the following will be supported in Citus:
- * 	  -
- *
+ * 
+ *    We currently support replicating function definitions on the
+ *    coordinator in all the worker nodes in the form of 
+ * 
+ *    CREATE OR REPLACE FUNCTION ... queries.
+ *    
+ *    ALTER or DROP operations are not yet propagated.
+ *    
  * Copyright (c) 2019, Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
@@ -47,9 +52,12 @@ create_distributed_function(PG_FUNCTION_ARGS)
 	PG_RETURN_VOID();
 }
 
-
+/* 
+ * GetFunctionDDLCommand returns the complete "CREATE OR REPLACE FUNCTION ..." statement for
+ * the specified function.
+ */
 static const char *
-GetFunctionDDLCommand(Oid funcOid)
+GetFunctionDDLCommand(RegProcedure funcOid)
 {
 	Datum sqlTextDatum = DirectFunctionCall1(pg_get_functiondef,
 											 ObjectIdGetDatum(funcOid));
