@@ -1214,7 +1214,7 @@ SELECT ddl_in_plpgsql();
 
 -- test prepared ddl with multi search path to make sure the schema name doesn't leak on
 -- to the cached statement
-CREATE OR REPLACE FUNCTION ddl_in_plpgsql2()
+CREATE OR REPLACE FUNCTION ddl_in_plpgsql()
 RETURNS VOID  AS
 $BODY$
 BEGIN
@@ -1223,9 +1223,9 @@ END;
 $BODY$ LANGUAGE plpgsql;
 CREATE SCHEMA otherschema;
 SET search_path TO otherschema, public;
-SELECT ddl_in_plpgsql2();
- ddl_in_plpgsql2 
------------------
+SELECT ddl_in_plpgsql();
+ ddl_in_plpgsql 
+----------------
  
 (1 row)
 
@@ -1239,9 +1239,9 @@ SELECT create_distributed_table('prepare_ddl', 'x');
  
 (1 row)
 
-SELECT ddl_in_plpgsql2();
- ddl_in_plpgsql2 
------------------
+SELECT ddl_in_plpgsql();
+ ddl_in_plpgsql 
+----------------
  
 (1 row)
 
@@ -1252,6 +1252,9 @@ SELECT schemaname, indexrelname FROM pg_stat_all_indexes WHERE indexrelname = 'p
  otherschema | prepared_index
 (1 row)
 
+-- cleanup
+DROP TABLE prepare_ddl;
+DROP SCHEMA otherschema;
 RESET search_path;
 -- test prepared COPY
 CREATE OR REPLACE FUNCTION copy_in_plpgsql()
