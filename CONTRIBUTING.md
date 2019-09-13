@@ -136,3 +136,39 @@ Once you've done that, you can run the `citus_indent` command to recursively che
 correct the style of any source files in the current directory. You can also run `make
 reindent` from within the Citus repo to correct the style of all source files in the
 repository.
+
+### Making SQL changes
+
+Sometimes you need to make change to the SQL that the citus extension runs upon
+creations. The way this is done is by changing the last file in
+`src/backend/distributed/sql`, or creating it if the last file is from a
+published release. If you needed to create a new file, also change the
+`default_version` field in `src/backend/distributed/citus.control` to match your
+new version. All the files in this directory are run in order based on
+their name. See [this page in the Postgres
+docs](https://www.postgresql.org/docs/current/extend-extensions.html) for more
+information on how Postgres runs these files.
+
+#### Changing or creating functions
+
+If you need to change any functions defined by Citus. You should check inside
+`src/backend/distributed/sql/udfs` to see if there is already a directory for
+this function, if not create one. Then change or create the file called
+`latest.sql` in that directory to match how it should create the function. This
+should be including any DROP (IF EXISTS), COMMENT and REVOKE statements for this
+function.
+
+Then copy the `latest.sql` file to `{version}.sql`, where `{version}` is the
+version for which this sql change is, e.g. `{9.0-1.sql}`. Now that you've
+created this stable snapshot of the function definition for your version you
+should use it in your actual sql file, .e.g.
+`src/backend/distributed/sql/citus--8.3-1--9.0-1.sql`. You do this by using C
+style `#include` statements like this:
+```
+#include "udfs/myudf/9.0-1.sql"
+```
+
+#### Other SQL
+
+Any other SQL you can put directly in the main sql file, e.g.
+`src/backend/distributed/sql/citus--8.3-1--9.0-1.sql`.
