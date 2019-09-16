@@ -15,6 +15,7 @@
 #include "commands/explain.h"
 #include "catalog/namespace.h"
 #include "nodes/parsenodes.h"
+#include "parser/parse_func.h"
 
 #if (PG_VERSION_NUM >= 120000)
 #include "optimizer/optimizer.h"
@@ -165,6 +166,25 @@ get_expr_result_tupdesc(Node *expr, bool noError)
 	return NULL;
 }
 
+
+/* following compat function and macro should be removed when we drop support for PG10 */
+static inline Oid
+LookupFuncWithArgsCompat(ObjectType objtype, ObjectWithArgs *func, bool noError)
+{
+	if (objtype == OBJECT_FUNCTION)
+	{
+		return LookupFuncWithArgs(func, noError);
+	}
+	else if (objtype == OBJECT_AGGREGATE)
+	{
+		return LookupAggWithArgs(func, noError);
+	}
+
+	return InvalidOid;
+}
+
+
+#define LookupFuncWithArgs LookupFuncWithArgsCompat
 
 #endif
 

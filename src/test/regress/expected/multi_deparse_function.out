@@ -1,0 +1,267 @@
+--
+-- Regression tests for deparsing ALTER/DROP TABLE Queries
+--
+-- This test implements all the possible queries as of Postgres 11:
+-- 
+-- ALTER FUNCTION name [ ( [ [ argmode ] [ argname ] argtype [, ...] ] ) ]
+--     action [ ... ] [ RESTRICT ]
+-- ALTER FUNCTION name [ ( [ [ argmode ] [ argname ] argtype [, ...] ] ) ]
+--     RENAME TO new_name
+-- ALTER FUNCTION name [ ( [ [ argmode ] [ argname ] argtype [, ...] ] ) ]
+--     OWNER TO { new_owner | CURRENT_USER | SESSION_USER }
+-- ALTER FUNCTION name [ ( [ [ argmode ] [ argname ] argtype [, ...] ] ) ]
+--     SET SCHEMA new_schema
+-- ALTER FUNCTION name [ ( [ [ argmode ] [ argname ] argtype [, ...] ] ) ]
+--     DEPENDS ON EXTENSION extension_name
+-- 
+-- where action is one of:
+-- 
+--     CALLED ON NULL INPUT | RETURNS NULL ON NULL INPUT | STRICT
+--     IMMUTABLE | STABLE | VOLATILE | [ NOT ] LEAKPROOF
+--     [ EXTERNAL ] SECURITY INVOKER | [ EXTERNAL ] SECURITY DEFINER
+--     PARALLEL { UNSAFE | RESTRICTED | SAFE }
+--     COST execution_cost
+--     ROWS result_rows
+--     SET configuration_parameter { TO | = } { value | DEFAULT }
+--     SET configuration_parameter FROM CURRENT
+--     RESET configuration_parameter
+--     RESET ALL
+-- 
+-- DROP FUNCTION [ IF EXISTS ] name [ ( [ [ argmode ] [ argname ] argtype [, ...] ] ) ] [, ...]
+--     [ CASCADE | RESTRICT ]
+SET citus.next_shard_id TO 20020000;
+CREATE SCHEMA function_tests;
+SET search_path TO function_tests;
+SET citus.shard_count TO 4;
+SET client_min_messages TO DEBUG;
+CREATE FUNCTION deparse_test(text)
+	RETURNS text
+	AS 'citus'
+ 	LANGUAGE C STRICT;
+-- Create a simple function
+CREATE FUNCTION add(integer, integer) RETURNS integer
+    AS 'select $1 + $2;'
+    LANGUAGE SQL
+    IMMUTABLE
+    RETURNS NULL ON NULL INPUT;
+SELECT deparse_test($cmd$
+ALTER FUNCTION  add CALLED ON NULL INPUT
+$cmd$);
+                       deparse_test                        
+-----------------------------------------------------------
+ ALTER FUNCTION function_tests.add() CALLED ON NULL INPUT;
+(1 row)
+
+SELECT deparse_test($cmd$
+ALTER FUNCTION add  RETURNS NULL ON NULL INPUT
+$cmd$);
+                deparse_test                 
+---------------------------------------------
+ ALTER FUNCTION function_tests.add() STRICT;
+(1 row)
+
+SELECT deparse_test($cmd$
+ALTER FUNCTION add STRICT
+$cmd$);
+                deparse_test                 
+---------------------------------------------
+ ALTER FUNCTION function_tests.add() STRICT;
+(1 row)
+
+SELECT deparse_test($cmd$
+ALTER FUNCTION add IMMUTABLE
+$cmd$);
+                  deparse_test                  
+------------------------------------------------
+ ALTER FUNCTION function_tests.add() immutable;
+(1 row)
+
+SELECT deparse_test($cmd$
+ALTER FUNCTION add STABLE
+$cmd$);
+                deparse_test                 
+---------------------------------------------
+ ALTER FUNCTION function_tests.add() stable;
+(1 row)
+
+SELECT deparse_test($cmd$
+ALTER FUNCTION add VOLATILE
+$cmd$);
+                 deparse_test                  
+-----------------------------------------------
+ ALTER FUNCTION function_tests.add() volatile;
+(1 row)
+
+SELECT deparse_test($cmd$
+ALTER FUNCTION add LEAKPROOF
+$cmd$);
+                  deparse_test                  
+------------------------------------------------
+ ALTER FUNCTION function_tests.add() LEAKPROOF;
+(1 row)
+
+SELECT deparse_test($cmd$
+ALTER FUNCTION add NOT LEAKPROOF
+$cmd$);
+                    deparse_test                    
+----------------------------------------------------
+ ALTER FUNCTION function_tests.add() NOT LEAKPROOF;
+(1 row)
+
+SELECT deparse_test($cmd$
+ALTER  FUNCTION add EXTERNAL SECURITY INVOKER
+$cmd$);
+                     deparse_test                      
+-------------------------------------------------------
+ ALTER FUNCTION function_tests.add() SECURITY INVOKER;
+(1 row)
+
+SELECT deparse_test($cmd$
+ALTER FUNCTION add SECURITY INVOKER
+$cmd$);
+                     deparse_test                      
+-------------------------------------------------------
+ ALTER FUNCTION function_tests.add() SECURITY INVOKER;
+(1 row)
+
+SELECT deparse_test($cmd$
+ALTER  FUNCTION add EXTERNAL SECURITY DEFINER
+$cmd$);
+                     deparse_test                      
+-------------------------------------------------------
+ ALTER FUNCTION function_tests.add() SECURITY DEFINER;
+(1 row)
+
+SELECT deparse_test($cmd$
+ALTER FUNCTION add SECURITY DEFINER
+$cmd$);
+                     deparse_test                      
+-------------------------------------------------------
+ ALTER FUNCTION function_tests.add() SECURITY DEFINER;
+(1 row)
+
+SELECT deparse_test($cmd$
+ALTER FUNCTION add PARALLEL UNSAFE
+$cmd$);
+                     deparse_test                     
+------------------------------------------------------
+ ALTER FUNCTION function_tests.add() PARALLEL unsafe;
+(1 row)
+
+SELECT deparse_test($cmd$
+ALTER FUNCTION add PARALLEL RESTRICTED
+$cmd$);
+                       deparse_test                       
+----------------------------------------------------------
+ ALTER FUNCTION function_tests.add() PARALLEL restricted;
+(1 row)
+
+SELECT deparse_test($cmd$
+ALTER FUNCTION add PARALLEL SAFE
+$cmd$);
+                    deparse_test                    
+----------------------------------------------------
+ ALTER FUNCTION function_tests.add() PARALLEL safe;
+(1 row)
+
+-- The COST/ROWS arguments should always be numeric
+SELECT deparse_test($cmd$
+ALTER FUNCTION add COST 1234
+$cmd$);
+                     deparse_test                      
+-------------------------------------------------------
+ ALTER FUNCTION function_tests.add() COST 1234.000000;
+(1 row)
+
+SELECT deparse_test($cmd$
+ALTER  FUNCTION add COST 1234.5
+$cmd$);
+                     deparse_test                      
+-------------------------------------------------------
+ ALTER FUNCTION function_tests.add() COST 1234.500000;
+(1 row)
+
+SELECT deparse_test($cmd$
+ALTER FUNCTION add ROWS 10
+$cmd$);
+                     deparse_test                     
+------------------------------------------------------
+ ALTER FUNCTION function_tests.add() ROWS  10.000000;
+(1 row)
+
+SELECT deparse_test($cmd$
+ALTER  FUNCTION add ROWS 10.8
+$cmd$);
+                     deparse_test                     
+------------------------------------------------------
+ ALTER FUNCTION function_tests.add() ROWS  10.800000;
+(1 row)
+
+SELECT deparse_test($cmd$
+ALTER FUNCTION  add SET log_min_messages = ERROR
+$cmd$);
+                           deparse_test                            
+-------------------------------------------------------------------
+ ALTER FUNCTION function_tests.add() SET log_min_messages = error;
+(1 row)
+
+SELECT deparse_test($cmd$
+ALTER FUNCTION  add SET log_min_messages TO DEFAULT
+$cmd$);
+                             deparse_test                             
+----------------------------------------------------------------------
+ ALTER FUNCTION function_tests.add() SET log_min_messages TO DEFAULT;
+(1 row)
+
+SELECT deparse_test($cmd$
+ALTER FUNCTION  add SET log_min_messages FROM CURRENT
+$cmd$);
+                              deparse_test                              
+------------------------------------------------------------------------
+ ALTER FUNCTION function_tests.add() SET log_min_messages FROM CURRENT;
+(1 row)
+
+SELECT deparse_test($cmd$
+ALTER FUNCTION add RESET log_min_messages
+$cmd$);
+                        deparse_test                         
+-------------------------------------------------------------
+ ALTER FUNCTION function_tests.add() RESET log_min_messages;
+(1 row)
+
+SELECT deparse_test($cmd$
+ALTER FUNCTION add RESET ALL
+$cmd$);
+                  deparse_test                  
+------------------------------------------------
+ ALTER FUNCTION function_tests.add() RESET ALL;
+(1 row)
+
+SELECT deparse_test($cmd$
+DROP FUNCTION IF EXISTS add(int,int);
+$cmd$);
+                                 deparse_test                                 
+------------------------------------------------------------------------------
+ DROP FUNCTION IF EXISTS function_tests.add(pg_catalog.int4,pg_catalog.int4);
+(1 row)
+
+-- Check that an invalid function name is still parsed correctly
+SELECT deparse_test($cmd$
+DROP FUNCTION IF EXISTS missing_function(int, text);
+$cmd$);
+                          deparse_test                           
+-----------------------------------------------------------------
+ DROP FUNCTION IF EXISTS missing_function(pg_catalog.int4,text);
+(1 row)
+
+SELECT deparse_test($cmd$
+DROP FUNCTION IF EXISTS missing_schema.missing_function(int,float);
+$cmd$);
+                                        deparse_test                                         
+---------------------------------------------------------------------------------------------
+ DROP FUNCTION IF EXISTS missing_schema.missing_function(pg_catalog.int4,pg_catalog.float8);
+(1 row)
+
+-- clear objects
+SET client_min_messages TO FATAL; -- suppress cascading objects dropping
+DROP SCHEMA function_tests CASCADE;
