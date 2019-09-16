@@ -38,6 +38,11 @@ CREATE TABLE citus.pg_dist_object (
     object_names text[] DEFAULT NULL,
     object_args text[] DEFAULT NULL,
 
+    -- fields that are only valid for distributed
+    -- functions/procedures
+    distribution_argument_index int,
+    colocationid int,
+
     CONSTRAINT pg_dist_object_pkey PRIMARY KEY (classid, objid, objsubid)
 );
 

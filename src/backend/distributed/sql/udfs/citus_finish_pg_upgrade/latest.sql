@@ -79,13 +79,17 @@ BEGIN
         RETURNING
             type,
             object_names,
-            object_args
+            object_args,
+            distribution_argument_index,
+            colocationid
     )
-    INSERT INTO citus.pg_dist_object (classid, objid, objsubid)
+    INSERT INTO citus.pg_dist_object (classid, objid, objsubid, distribution_argument_index, colocationid)
     SELECT
         address.classid,
         address.objid,
-        address.objsubid
+        address.objsubid,
+        naming.distribution_argument_index,
+        naming.colocationid
     FROM
         old_records naming,
         pg_get_object_address(naming.type, naming.object_names, naming.object_args) address;
