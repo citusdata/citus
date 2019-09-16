@@ -34,6 +34,8 @@ static const char * DeparseAlterOwnerStmt(AlterOwnerStmt *stmt);
  *  - CREATE TYPE
  *  - ALTER TYPE
  *  - DROP TYPE
+ *
+ *  - DROP FUNCTION
  */
 const char *
 DeparseTreeNode(Node *stmt)
@@ -63,6 +65,11 @@ DeparseTreeNode(Node *stmt)
 		case T_AlterEnumStmt:
 		{
 			return DeparseAlterEnumStmt(castNode(AlterEnumStmt, stmt));
+		}
+
+		case T_AlterFunctionStmt:
+		{
+			return DeparseAlterFunctionStmt(castNode(AlterFunctionStmt, stmt));
 		}
 
 		case T_RenameStmt:
@@ -96,6 +103,11 @@ DeparseDropStmt(DropStmt *stmt)
 		case OBJECT_TYPE:
 		{
 			return DeparseDropTypeStmt(stmt);
+		}
+
+		case OBJECT_FUNCTION:
+		{
+			return DeparseDropFunctionStmt(stmt);
 		}
 
 		default:

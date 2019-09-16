@@ -52,4 +52,9 @@ extern void QualifyAlterTypeOwnerStmt(AlterOwnerStmt *stmt);
 extern const ObjectAddress * GetObjectAddressFromParseTree(Node *parseTree, bool
 														   missing_ok);
 
+/* forward declarations for deparse_function_stmts.c */
+extern const char * DeparseDropFunctionStmt(DropStmt *stmt);
+extern const char * DeparseAlterFunctionStmt(AlterFunctionStmt *stmt);
+
+
 #endif /* CITUS_DEPARSER_H */
