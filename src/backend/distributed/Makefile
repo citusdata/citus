@@ -37,7 +37,7 @@ SQL_BUILDDIR=build/sql
 
 $(generated_sql_files): $(citus_abs_srcdir)/build/%: %
 	@mkdir -p $(citus_abs_srcdir)/$(SQL_DEPDIR) $(citus_abs_srcdir)/$(SQL_BUILDDIR)
-	cd $(citus_abs_srcdir) && cpp -undef -w -P -MMD -MP -MF $(SQL_DEPDIR)/$(*F).Po -MT $@ $< > $@
+	cd $(citus_abs_srcdir) && cpp -undef -w -P -MMD -MP -MF$(SQL_DEPDIR)/$(*F).Po -MT$@ $< > $@
 
 SQL_Po_files := $(wildcard $(SQL_DEPDIR)/*.Po)
 ifneq (,$(SQL_Po_files))
