@@ -35,10 +35,8 @@ override CPPFLAGS += -I$(libpq_srcdir)
 SQL_DEPDIR=.deps/sql
 SQL_BUILDDIR=build/sql
 
-$(SQL_DEPDIR) $(SQL_BUILDDIR):
-	mkdir -p $(citus_abs_srcdir)/$@
-
-$(generated_sql_files): $(citus_abs_srcdir)/build/%: % $(SQL_DEPDIR) $(SQL_BUILDDIR)
+$(generated_sql_files): $(citus_abs_srcdir)/build/%: %
+	@mkdir -p $(citus_abs_srcdir)/$(SQL_DEPDIR) $(citus_abs_srcdir)/$(SQL_BUILDDIR)
 	cd $(citus_abs_srcdir) && cpp -undef -w -P $< > $@
 
 SQL_Po_files := $(wildcard $(SQL_DEPDIR)/*.Po)
