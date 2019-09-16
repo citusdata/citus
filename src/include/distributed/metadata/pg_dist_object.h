@@ -49,12 +49,14 @@ typedef FormData_pg_dist_object *Form_pg_dist_object;
  *      compiler constants for pg_dist_object
  * ----------------
  */
-#define Natts_pg_dist_object 6
+#define Natts_pg_dist_object 8
 #define Anum_pg_dist_object_classid 1
 #define Anum_pg_dist_object_objid 2
 #define Anum_pg_dist_object_objsubid 3
 #define Anum_pg_dist_object_type 4
 #define Anum_pg_dist_object_object_names 5
 #define Anum_pg_dist_object_object_args 6
+#define Anum_pg_dist_object_distribution_argument_index 7
+#define Anum_pg_dist_object_colocationid 8
 
 #endif /* PG_DIST_OBJECT_H */
