@@ -351,7 +351,7 @@ SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname IN ('
 
 RESET citus.enable_create_type_propagation;
 -- clear objects
-SET client_min_messages TO fatal; -- suppress cascading objects dropping
+SET client_min_messages TO error; -- suppress cascading objects dropping
 DROP SCHEMA type_tests CASCADE;
 SELECT run_command_on_workers($$DROP SCHEMA type_tests CASCADE;$$);
       run_command_on_workers       
