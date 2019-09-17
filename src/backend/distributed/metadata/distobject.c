@@ -37,7 +37,6 @@
 static int ExecuteCommandAsSuperuser(char *query, int paramCount, Oid *paramTypes,
 									 Datum *paramValues);
 
-
 PG_FUNCTION_INFO_V1(master_unmark_object_distributed);
 
 
@@ -151,7 +150,10 @@ MarkObjectDistributed(const ObjectAddress *distAddress)
 
 
 /*
- * ExecuteCommandAsSuperuser executes a command via SPI as superuser.
+ * ExecuteCommandAsSuperuser executes a command via SPI as superuser. Using this
+ * function (and in general SPI/SQL with superuser) should be avoided as much as
+ * possible. This is to prevent any user to exploit the superuser access via
+ * triggers.
  */
 static int
 ExecuteCommandAsSuperuser(char *query, int paramCount, Oid *paramTypes,
