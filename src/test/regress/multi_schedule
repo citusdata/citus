@@ -280,5 +280,5 @@ test: ssl_by_default
 # ---------
 # object distribution tests
 # ---------
-test: distributed_types
+test: distributed_types distributed_types_conflict
 test: distributed_functions

@@ -155,9 +155,9 @@ extern const ObjectAddress * RenameTypeAttributeStmtObjectAddress(RenameStmt *st
 																  bool missing_ok);
 extern const ObjectAddress * AlterTypeOwnerObjectAddress(AlterOwnerStmt *stmt,
 														 bool missing_ok);
-extern DropStmt * CreateDropStmtBasedOnCompositeTypeStmt(CompositeTypeStmt *stmt);
-extern DropStmt * CreateDropStmtBasedOnEnumStmt(CreateEnumStmt *stmt);
 extern List * CreateTypeDDLCommandsIdempotent(const ObjectAddress *typeAddress);
+extern char * GenerateBackupNameForTypeCollision(const ObjectAddress *address);
+extern RenameStmt * CreateRenameTypeStmt(const ObjectAddress *address, char *newName);
 
 /* vacuum.c - froward declarations */
 extern void ProcessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand);
