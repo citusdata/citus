@@ -67,9 +67,6 @@ typedef struct NodeMetadata
 } NodeMetadata;
 
 /* local function forward declarations */
-static List * WorkerListDelete(List *workerList, uint32 nodeId);
-static List * SyncedMetadataNodeList(void);
-static void SyncDistNodeEntryToNodes(WorkerNode *workerNode, List *metadataWorkers);
 static int ActivateNode(char *nodeName, int nodePort);
 static void RemoveNodeFromCluster(char *nodeName, int32 nodePort);
 static int AddNodeMetadata(char *nodeName, int32 nodePort, NodeMetadata
@@ -84,9 +81,7 @@ static void DeleteNodeRow(char *nodename, int32 nodeport);
 static List * ParseWorkerNodeFileAndRename(void);
 static WorkerNode * TupleToWorkerNode(TupleDesc tupleDescriptor, HeapTuple heapTuple);
 static void UpdateNodeLocation(int32 nodeId, char *newNodeName, int32 newNodePort);
-static bool * SendOptionalCommandListToWorkers(List *workerNodeList,
-											   List *commandList,
-											   const char *nodeUser);
+static bool UnsetMetadataSyncedForAll(void);
 
 /* declarations for dynamic loading */
 PG_FUNCTION_INFO_V1(master_add_node);
@@ -515,7 +510,6 @@ master_update_node(PG_FUNCTION_ARGS)
 	WorkerNode *workerNode = NULL;
 	WorkerNode *workerNodeWithSameAddress = NULL;
 	List *placementList = NIL;
-	List *metadataWorkersToSync = NIL;
 	BackgroundWorkerHandle *handle = NULL;
 
 	CheckCitusVersion(ERROR);
@@ -593,24 +587,20 @@ master_update_node(PG_FUNCTION_ARGS)
 
 	/*
 	 * Propagate the updated pg_dist_node entry to all metadata workers.
-	 * The usual case is that the new node is in stand-by mode, so we don't
-	 * sync the changes to the new node, and instead schedule it for being
-	 * synced by the maintenance daemon.
+	 * citus-ha uses master_update_node() in a prepared transaction, and
+	 * we don't support coordinated prepared transactions, so we cannot
+	 * propagate the changes to the worker nodes here. Instead we mark
+	 * all metadata nodes as not-synced and ask maintenanced to do the
+	 * propagation.
 	 *
 	 * It is possible that maintenance daemon does the first resync too
 	 * early, but that's fine, since this will start a retry loop with
 	 * 5 second intervals until sync is complete.
 	 */
-	metadataWorkersToSync = SyncedMetadataNodeList();
-	if (workerNode->hasMetadata)
+	if (UnsetMetadataSyncedForAll())
 	{
-		metadataWorkersToSync = WorkerListDelete(metadataWorkersToSync, nodeId);
-		MarkNodeMetadataSynced(workerNode->workerName,
-							   workerNode->workerPort, false);
 		TriggerMetadataSync(MyDatabaseId);
 	}
-
-	SyncDistNodeEntryToNodes(workerNode, metadataWorkersToSync);
 
 	if (handle != NULL)
 	{
@@ -622,176 +612,6 @@ master_update_node(PG_FUNCTION_ARGS)
 	}
 
 	PG_RETURN_VOID();
-}
-
-
-/* MetadataNodeList returns list of all synced metadata workers. */
-static List *
-SyncedMetadataNodeList(void)
-{
-	List *metadataNodeList = NIL;
-	List *activePrimaries = ActivePrimaryNodeList(AccessShareLock);
-	ListCell *workerNodeCell = NULL;
-
-	foreach(workerNodeCell, activePrimaries)
-	{
-		WorkerNode *workerNode = lfirst(workerNodeCell);
-		if (workerNode->hasMetadata && workerNode->metadataSynced)
-		{
-			metadataNodeList = lappend(metadataNodeList, workerNode);
-		}
-	}
-
-	return metadataNodeList;
-}
-
-
-/*
- * WorkerListDelete removes the worker node with the given id
- * from the list of given workers.
- */
-static List *
-WorkerListDelete(List *workerList, uint32 nodeId)
-{
-	List *filteredWorkerList = NIL;
-	ListCell *workerCell = NULL;
-
-	foreach(workerCell, workerList)
-	{
-		WorkerNode *workerNode = lfirst(workerCell);
-		if (workerNode->nodeId != nodeId)
-		{
-			filteredWorkerList = lappend(filteredWorkerList, workerNode);
-		}
-	}
-
-	return filteredWorkerList;
-}
-
-
-/*
- * SyncDistNodeEntryToNodes synchronizes the corresponding entry for
- * the given workerNode in pg_dist_node metadata table of given
- * metadataWorkers. If syncing to a node fails, pg_distnode.metadatasynced
- * is set to false.
- */
-static void
-SyncDistNodeEntryToNodes(WorkerNode *nodeToSync, List *metadataWorkers)
-{
-	ListCell *workerCell = NULL;
-	char *extensionOwner = CitusExtensionOwnerName();
-	char *nodeDeleteCommand = NodeDeleteCommand(nodeToSync->nodeId);
-	char *nodeInsertCommand = NodeListInsertCommand(list_make1(nodeToSync));
-	List *commandList = list_make2(nodeDeleteCommand, nodeInsertCommand);
-	bool *workerFailed = SendOptionalCommandListToWorkers(metadataWorkers, commandList,
-														  extensionOwner);
-
-	int workerIndex = 0;
-	foreach(workerCell, metadataWorkers)
-	{
-		WorkerNode *workerNode = lfirst(workerCell);
-
-		if (workerFailed[workerIndex])
-		{
-			MarkNodeMetadataSynced(workerNode->workerName, workerNode->workerPort, false);
-		}
-
-		workerIndex++;
-	}
-}
-
-
-/*
- * SendOptionalCommandListToWorkers sends the given command list to the given
- * worker list, and returns a bool[] indicating whether execution of the command
- * list failed at a worker or not.
- *
- * If execution fails at a worker because of connection error, this function just
- * emits a warning for that node. If execution fails because of a result error,
- * the node is rolled-back to the status before this function so further queries
- * can be sent to the node.
- */
-static bool *
-SendOptionalCommandListToWorkers(List *workerNodeList, List *commandList,
-								 const char *nodeUser)
-{
-	List *connectionList = NIL;
-	ListCell *commandCell = NULL;
-	ListCell *connectionCell = NULL;
-	bool *workerFailed = palloc0(sizeof(workerNodeList));
-	char *beginSavepointCommand = "SAVEPOINT sp_node_metadata";
-	char *rollbackSavepointCommand = "ROLLBACK TO SAVEPOINT sp_node_metadata";
-	char *releaseSavepointCommand = "RELEASE SAVEPOINT sp_node_metadata";
-
-	BeginOrContinueCoordinatedTransaction();
-
-	/* open connections in parallel */
-	connectionList = StartWorkerListConnections(workerNodeList, 0, nodeUser, NULL);
-	FinishConnectionListEstablishment(connectionList);
-
-	RemoteTransactionsBeginIfNecessary(connectionList);
-
-	commandList = lcons(beginSavepointCommand, commandList);
-	commandList = lappend(commandList, releaseSavepointCommand);
-
-	foreach(commandCell, commandList)
-	{
-		char *command = lfirst(commandCell);
-		int workerIndex = 0;
-		foreach(connectionCell, connectionList)
-		{
-			MultiConnection *connection = lfirst(connectionCell);
-
-			if (!workerFailed[workerIndex])
-			{
-				if (SendRemoteCommand(connection, command) == 0)
-				{
-					ReportConnectionError(connection, WARNING);
-					workerFailed[workerIndex] = true;
-				}
-			}
-
-			workerIndex++;
-		}
-
-		workerIndex = 0;
-		foreach(connectionCell, connectionList)
-		{
-			MultiConnection *connection = lfirst(connectionCell);
-			bool raiseInterrupts = true;
-			PGresult *commandResult = NULL;
-			bool responseOK = false;
-
-			if (workerFailed[workerIndex])
-			{
-				workerIndex++;
-				continue;
-			}
-
-			commandResult = GetRemoteCommandResult(connection, raiseInterrupts);
-			responseOK = IsResponseOK(commandResult);
-
-			if (!responseOK)
-			{
-				ReportResultError(connection, commandResult, WARNING);
-				workerFailed[workerIndex] = true;
-
-				PQclear(commandResult);
-				ForgetResults(connection);
-
-				ExecuteOptionalRemoteCommand(connection, rollbackSavepointCommand, NULL);
-			}
-			else
-			{
-				PQclear(commandResult);
-				ForgetResults(connection);
-			}
-
-			workerIndex++;
-		}
-	}
-
-	return workerFailed;
 }
 
 
@@ -1782,4 +1602,70 @@ DatumToString(Datum datum, Oid dataType)
 	outputString = OidOutputFunctionCall(typIoFunc, datum);
 
 	return outputString;
+}
+
+
+/*
+ * UnsetMetadataSyncedForAll sets the metadatasynced column of all metadata
+ * nodes to false. It returns true if it updated at least a node.
+ */
+static bool
+UnsetMetadataSyncedForAll(void)
+{
+	bool updatedAtLeastOne = false;
+	Relation relation = NULL;
+	SysScanDesc scanDescriptor = NULL;
+	ScanKeyData scanKey[2];
+	int scanKeyCount = 2;
+	bool indexOK = false;
+	HeapTuple heapTuple = NULL;
+	TupleDesc tupleDescriptor = NULL;
+
+	relation = heap_open(DistNodeRelationId(), ExclusiveLock);
+	tupleDescriptor = RelationGetDescr(relation);
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_node_hasmetadata,
+				BTEqualStrategyNumber, F_BOOLEQ, BoolGetDatum(true));
+	ScanKeyInit(&scanKey[1], Anum_pg_dist_node_metadatasynced,
+				BTEqualStrategyNumber, F_BOOLEQ, BoolGetDatum(true));
+
+	scanDescriptor = systable_beginscan(relation,
+										InvalidOid, indexOK,
+										NULL, scanKeyCount, scanKey);
+
+	heapTuple = systable_getnext(scanDescriptor);
+	if (HeapTupleIsValid(heapTuple))
+	{
+		updatedAtLeastOne = true;
+	}
+
+	while (HeapTupleIsValid(heapTuple))
+	{
+		HeapTuple newHeapTuple = NULL;
+		Datum values[Natts_pg_dist_node];
+		bool isnull[Natts_pg_dist_node];
+		bool replace[Natts_pg_dist_node];
+
+		memset(replace, false, sizeof(replace));
+		memset(isnull, false, sizeof(isnull));
+		memset(values, 0, sizeof(values));
+
+		values[Anum_pg_dist_node_metadatasynced - 1] = BoolGetDatum(false);
+		replace[Anum_pg_dist_node_metadatasynced - 1] = true;
+
+		newHeapTuple = heap_modify_tuple(heapTuple, tupleDescriptor, values, isnull,
+										 replace);
+
+		CatalogTupleUpdate(relation, &newHeapTuple->t_self, newHeapTuple);
+
+		CommandCounterIncrement();
+
+		heap_freetuple(newHeapTuple);
+
+		heapTuple = systable_getnext(scanDescriptor);
+	}
+
+	systable_endscan(scanDescriptor);
+	heap_close(relation, NoLock);
+
+	return updatedAtLeastOne;
 }

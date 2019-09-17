@@ -131,10 +131,11 @@ INSERT INTO dist_table_2 SELECT i FROM generate_series(1, 100) i;
 
 SELECT mark_node_readonly('localhost', :worker_2_port, TRUE);
 
--- Now updating the other node should try syncing to worker 2, but instead of
--- failure, it should just warn and mark the readonly node as not synced.
+-- Now updating the other node will mark worker 2 as not synced.
+BEGIN;
 SELECT 1 FROM master_update_node(:nodeid_1, 'localhost', 12345);
 SELECT nodeid, hasmetadata, metadatasynced FROM pg_dist_node ORDER BY nodeid;
+COMMIT;
 
 -- worker_2 is out of sync, so further updates aren't sent to it and
 -- we shouldn't see the warnings.
@@ -148,9 +149,7 @@ SELECT wait_until_metadata_sync();
 -- Mark the node readonly again, so the following master_update_node warns
 SELECT mark_node_readonly('localhost', :worker_2_port, TRUE);
 
--- Revert the nodeport of worker 1, metadata propagation to worker 2 should
--- still fail, but after the failure, we should still be able to read from
--- worker 2 in the same transaction!
+-- Revert the nodeport of worker 1.
 BEGIN;
 SELECT 1 FROM master_update_node(:nodeid_1, 'localhost', :worker_1_port);
 SELECT count(*) FROM dist_table_2;
@@ -172,6 +171,28 @@ SELECT verify_metadata('localhost', :worker_1_port),
 BEGIN;
 SELECT 1 FROM master_update_node(:nodeid_1, 'localhost', 12345);
 ROLLBACK;
+
+SELECT verify_metadata('localhost', :worker_1_port),
+       verify_metadata('localhost', :worker_2_port);
+
+--------------------------------------------------------------------------
+-- Test that master_update_node can appear in a prepared transaction.
+--------------------------------------------------------------------------
+BEGIN;
+SELECT 1 FROM master_update_node(:nodeid_1, 'localhost', 12345);
+PREPARE TRANSACTION 'tx01';
+COMMIT PREPARED 'tx01';
+
+SELECT wait_until_metadata_sync();
+SELECT nodeid, hasmetadata, metadatasynced FROM pg_dist_node ORDER BY nodeid;
+
+BEGIN;
+SELECT 1 FROM master_update_node(:nodeid_1, 'localhost', :worker_1_port);
+PREPARE TRANSACTION 'tx01';
+COMMIT PREPARED 'tx01';
+
+SELECT wait_until_metadata_sync();
+SELECT nodeid, hasmetadata, metadatasynced FROM pg_dist_node ORDER BY nodeid;
 
 SELECT verify_metadata('localhost', :worker_1_port),
        verify_metadata('localhost', :worker_2_port);

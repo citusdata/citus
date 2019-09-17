@@ -233,11 +233,9 @@ SELECT mark_node_readonly('localhost', :worker_2_port, TRUE);
  t
 (1 row)
 
--- Now updating the other node should try syncing to worker 2, but instead of
--- failure, it should just warn and mark the readonly node as not synced.
+-- Now updating the other node will mark worker 2 as not synced.
+BEGIN;
 SELECT 1 FROM master_update_node(:nodeid_1, 'localhost', 12345);
-WARNING:  cannot execute DELETE in a read-only transaction
-CONTEXT:  while executing command on localhost:57638
  ?column? 
 ----------
         1
@@ -250,6 +248,7 @@ SELECT nodeid, hasmetadata, metadatasynced FROM pg_dist_node ORDER BY nodeid;
       3 | t           | f
 (2 rows)
 
+COMMIT;
 -- worker_2 is out of sync, so further updates aren't sent to it and
 -- we shouldn't see the warnings.
 SELECT 1 FROM master_update_node(:nodeid_1, 'localhost', 23456);
@@ -285,13 +284,9 @@ SELECT mark_node_readonly('localhost', :worker_2_port, TRUE);
  t
 (1 row)
 
--- Revert the nodeport of worker 1, metadata propagation to worker 2 should
--- still fail, but after the failure, we should still be able to read from
--- worker 2 in the same transaction!
+-- Revert the nodeport of worker 1.
 BEGIN;
 SELECT 1 FROM master_update_node(:nodeid_1, 'localhost', :worker_1_port);
-WARNING:  cannot execute DELETE in a read-only transaction
-CONTEXT:  while executing command on localhost:57638
  ?column? 
 ----------
         1
@@ -347,6 +342,60 @@ SELECT 1 FROM master_update_node(:nodeid_1, 'localhost', 12345);
 (1 row)
 
 ROLLBACK;
+SELECT verify_metadata('localhost', :worker_1_port),
+       verify_metadata('localhost', :worker_2_port);
+ verify_metadata | verify_metadata 
+-----------------+-----------------
+ t               | t
+(1 row)
+
+--------------------------------------------------------------------------
+-- Test that master_update_node can appear in a prepared transaction.
+--------------------------------------------------------------------------
+BEGIN;
+SELECT 1 FROM master_update_node(:nodeid_1, 'localhost', 12345);
+ ?column? 
+----------
+        1
+(1 row)
+
+PREPARE TRANSACTION 'tx01';
+COMMIT PREPARED 'tx01';
+SELECT wait_until_metadata_sync();
+ wait_until_metadata_sync 
+--------------------------
+ 
+(1 row)
+
+SELECT nodeid, hasmetadata, metadatasynced FROM pg_dist_node ORDER BY nodeid;
+ nodeid | hasmetadata | metadatasynced 
+--------+-------------+----------------
+      2 | t           | f
+      3 | t           | t
+(2 rows)
+
+BEGIN;
+SELECT 1 FROM master_update_node(:nodeid_1, 'localhost', :worker_1_port);
+ ?column? 
+----------
+        1
+(1 row)
+
+PREPARE TRANSACTION 'tx01';
+COMMIT PREPARED 'tx01';
+SELECT wait_until_metadata_sync();
+ wait_until_metadata_sync 
+--------------------------
+ 
+(1 row)
+
+SELECT nodeid, hasmetadata, metadatasynced FROM pg_dist_node ORDER BY nodeid;
+ nodeid | hasmetadata | metadatasynced 
+--------+-------------+----------------
+      2 | t           | t
+      3 | t           | t
+(2 rows)
+
 SELECT verify_metadata('localhost', :worker_1_port),
        verify_metadata('localhost', :worker_2_port);
  verify_metadata | verify_metadata 
