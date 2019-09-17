@@ -21,7 +21,17 @@ CREATE TYPE my_precious_type AS (scatterd_secret text);
 -- verify the data is retained
 \c - - - :worker_1_port
 SET search_path TO type_conflict;
-\d+ local_table
+-- show fields for table
+  SELECT pg_class.relname,
+         attname,
+         atttype.typname
+    FROM pg_attribute
+    JOIN pg_class ON (attrelid = pg_class.oid)
+    JOIN pg_type AS atttype ON (atttypid = atttype.oid)
+   WHERE pg_class.relname = 'local_table'
+     AND attnum > 0
+ORDER BY attnum;
+
 SELECT * FROM local_table;
 
 \c - - - :master_port
@@ -35,6 +45,16 @@ SELECT worker_create_or_replace_object('CREATE TYPE type_conflict.multi_conflict
 SELECT worker_create_or_replace_object('CREATE TYPE type_conflict.multi_conflicting_type_with_a_really_long_name_that_truncates AS (a int, b int);');
 SELECT worker_create_or_replace_object('CREATE TYPE type_conflict.multi_conflicting_type_with_a_really_long_name_that_truncates AS (a int, b int, c int);');
 SELECT worker_create_or_replace_object('CREATE TYPE type_conflict.multi_conflicting_type_with_a_really_long_name_that_truncates AS (a int, b int, c int, d int);');
+
+-- verify they have been created with their names and attributes
+SELECT pg_type.typname,
+       string_agg(attname || ' ' || atttype.typname, ', ' ORDER BY attnum) AS fields
+FROM pg_attribute
+         JOIN pg_class ON (attrelid = pg_class.oid)
+         JOIN pg_type ON (pg_class.reltype = pg_type.oid)
+         JOIN pg_type AS atttype ON (atttypid = atttype.oid)
+WHERE pg_type.typname LIKE 'multi_conflicting_type%'
+GROUP BY pg_type.typname;
 
 -- hide cascades
 SET client_min_messages TO error;

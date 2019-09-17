@@ -23,12 +23,21 @@ CREATE TYPE my_precious_type AS (scatterd_secret text);
 -- verify the data is retained
 \c - - - :worker_1_port
 SET search_path TO type_conflict;
-\d+ local_table
-                                          Table "type_conflict.local_table"
- Column |                Type                | Collation | Nullable | Default | Storage  | Stats target | Description 
---------+------------------------------------+-----------+----------+---------+----------+--------------+-------------
- a      | integer                            |           |          |         | plain    |              | 
- b      | "my_precious_type(citus_backup_0)" |           |          |         | extended |              | 
+-- show fields for table
+  SELECT pg_class.relname,
+         attname,
+         atttype.typname
+    FROM pg_attribute
+    JOIN pg_class ON (attrelid = pg_class.oid)
+    JOIN pg_type AS atttype ON (atttypid = atttype.oid)
+   WHERE pg_class.relname = 'local_table'
+     AND attnum > 0
+ORDER BY attnum;
+   relname   | attname |             typname              
+-------------+---------+----------------------------------
+ local_table | a       | int4
+ local_table | b       | my_precious_type(citus_backup_0)
+(2 rows)
 
 SELECT * FROM local_table;
  a  |             b              
@@ -74,6 +83,25 @@ SELECT worker_create_or_replace_object('CREATE TYPE type_conflict.multi_conflict
 ---------------------------------
  t
 (1 row)
+
+-- verify they have been created with their names and attributes
+SELECT pg_type.typname,
+       string_agg(attname || ' ' || atttype.typname, ', ' ORDER BY attnum) AS fields
+FROM pg_attribute
+         JOIN pg_class ON (attrelid = pg_class.oid)
+         JOIN pg_type ON (pg_class.reltype = pg_type.oid)
+         JOIN pg_type AS atttype ON (atttypid = atttype.oid)
+WHERE pg_type.typname LIKE 'multi_conflicting_type%'
+GROUP BY pg_type.typname;
+                             typname                             |             fields             
+-----------------------------------------------------------------+--------------------------------
+ multi_conflicting_type                                          | a int4, b int4, c int4, d int4
+ multi_conflicting_type(citus_backup_0)                          | a int4, b int4
+ multi_conflicting_type(citus_backup_1)                          | a int4, b int4, c int4
+ multi_conflicting_type_with_a_really_long_name_(citus_backup_0) | a int4, b int4
+ multi_conflicting_type_with_a_really_long_name_(citus_backup_1) | a int4, b int4, c int4
+ multi_conflicting_type_with_a_really_long_name_that_truncates   | a int4, b int4, c int4, d int4
+(6 rows)
 
 -- hide cascades
 SET client_min_messages TO error;
