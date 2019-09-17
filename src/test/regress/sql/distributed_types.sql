@@ -212,6 +212,24 @@ ALTER TYPE distributed_enum_type ADD VALUE 'd' AFTER 'c';
 
 ALTER TYPE distributed_enum_type RENAME VALUE 'd' TO 'something-with-quotes''andstuff';
 
+-- make sure types are not distributed by default when feature flag is turned off
+SET citus.enable_create_type_propagation TO off;
+CREATE TYPE feature_flag_composite_type AS (a int, b int);
+CREATE TYPE feature_flag_enum_type AS ENUM ('a', 'b');
+
+-- verify types do not exist on workers
+SELECT count(*) FROM pg_type where typname IN ('feature_flag_composite_type', 'feature_flag_enum_type');
+SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname IN ('feature_flag_composite_type', 'feature_flag_enum_type');$$);
+
+-- verify they are still distributed when required
+CREATE TABLE feature_flag_table (a int PRIMARY KEY, b feature_flag_composite_type, c feature_flag_enum_type);
+SELECT create_distributed_table('feature_flag_table','a');
+
+SELECT count(*) FROM pg_type where typname IN ('feature_flag_composite_type', 'feature_flag_enum_type');
+SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname IN ('feature_flag_composite_type', 'feature_flag_enum_type');$$);
+
+RESET citus.enable_create_type_propagation;
+
 -- clear objects
 SET client_min_messages TO fatal; -- suppress cascading objects dropping
 DROP SCHEMA type_tests CASCADE;

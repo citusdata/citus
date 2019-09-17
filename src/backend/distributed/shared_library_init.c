@@ -693,6 +693,16 @@ RegisterCitusConfigVariables(void)
 		0,
 		NULL, NULL, NULL);
 
+	DefineCustomBoolVariable(
+		"citus.enable_create_type_propagation",
+		gettext_noop("Enables propagating of CREATE TYPE statements to workers"),
+		NULL,
+		&EnableCreateTypePropagation,
+		true,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
 	DefineCustomEnumVariable(
 		"citus.propagate_set_commands",
 		gettext_noop("Sets which SET commands are propagated to workers."),
