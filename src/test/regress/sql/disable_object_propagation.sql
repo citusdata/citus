@@ -14,8 +14,11 @@ SELECT create_distributed_table('t1','a');
 CREATE TYPE tt1 AS (a int , b int);
 CREATE TABLE t2 (a int PRIMARY KEY, b tt1);
 SELECT create_distributed_table('t2', 'a');
-SELECT run_command_on_workers($$
+SELECT 1 FROM run_command_on_workers($$
+    BEGIN;
+    SET LOCAL citus.enable_ddl_propagation TO off;
     CREATE TYPE disabled_object_propagation.tt1 AS (a int , b int);
+    COMMIT;
 $$);
 SELECT create_distributed_table('t2', 'a');
 
@@ -23,8 +26,11 @@ SELECT create_distributed_table('t2', 'a');
 CREATE TYPE tt2 AS ENUM ('a', 'b');
 CREATE TABLE t3 (a int PRIMARY KEY, b tt2);
 SELECT create_distributed_table('t3', 'a');
-SELECT run_command_on_workers($$
+SELECT 1 FROM  run_command_on_workers($$
+    BEGIN;
+    SET LOCAL citus.enable_ddl_propagation TO off;
     CREATE TYPE disabled_object_propagation.tt2 AS ENUM ('a', 'b');
+    COMMIT;
 $$);
 SELECT create_distributed_table('t3', 'a');
 
