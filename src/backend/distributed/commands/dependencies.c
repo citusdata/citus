@@ -25,6 +25,7 @@
 
 static List * GetDependencyCreateDDLCommands(const ObjectAddress *dependency);
 
+bool EnableDependencyCreation = true;
 
 /*
  * EnsureDependenciesExists finds all the dependencies that we support and makes sure

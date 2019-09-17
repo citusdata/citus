@@ -99,6 +99,7 @@ static CreateEnumStmt * RecreateEnumStmt(Oid typeOid);
 static List * EnumValsList(Oid typeOid);
 
 static bool ShouldPropagateTypeCreate(void);
+static bool ShouldPropagateAlterType(const ObjectAddress *address);
 
 
 /*
@@ -209,20 +210,8 @@ PlanAlterTypeStmt(AlterTableStmt *stmt, const char *queryString)
 
 	Assert(stmt->relkind == OBJECT_TYPE);
 
-	if (creating_extension)
-	{
-		/*
-		 * extensions should be created separately on the workers, types cascading from an
-		 * extension should therefor not be propagated.
-		 */
-		return NIL;
-	}
-
-	/*
-	 * Only distributed types should be propagated
-	 */
 	typeAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
-	if (!IsObjectDistributed(typeAddress))
+	if (!ShouldPropagateAlterType(typeAddress))
 	{
 		return NIL;
 	}
@@ -343,17 +332,8 @@ PlanAlterEnumStmt(AlterEnumStmt *stmt, const char *queryString)
 	const ObjectAddress *typeAddress = NULL;
 	List *commands = NIL;
 
-	if (creating_extension)
-	{
-		/*
-		 * extensions should be created separately on the workers, types cascading from an
-		 * extension should therefor not be propagated here.
-		 */
-		return NIL;
-	}
-
 	typeAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
-	if (!IsObjectDistributed(typeAddress))
+	if (!ShouldPropagateAlterType(typeAddress))
 	{
 		return NIL;
 	}
@@ -414,17 +394,8 @@ ProcessAlterEnumStmt(AlterEnumStmt *stmt, const char *queryString)
 {
 	const ObjectAddress *typeAddress = NULL;
 
-	if (creating_extension)
-	{
-		/*
-		 * extensions should be created separately on the workers, types cascading from an
-		 * extension should therefor not be propagated here.
-		 */
-		return;
-	}
-
 	typeAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
-	if (!IsObjectDistributed(typeAddress))
+	if (!ShouldPropagateAlterType(typeAddress))
 	{
 		return;
 	}
@@ -497,6 +468,14 @@ PlanDropTypeStmt(DropStmt *stmt, const char *queryString)
 		return NIL;
 	}
 
+	if (!EnableDependencyCreation)
+	{
+		/*
+		 * we are configured to disable object propagation, should not propagate anything
+		 */
+		return NIL;
+	}
+
 	distributedTypes = FilterNameListForDistributedTypes(oldTypes, stmt->missing_ok);
 	if (list_length(distributedTypes) <= 0)
 	{
@@ -556,24 +535,10 @@ PlanRenameTypeStmt(RenameStmt *stmt, const char *queryString)
 	List *commands = NIL;
 
 	typeAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
-	if (!IsObjectDistributed(typeAddress))
+	if (!ShouldPropagateAlterType(typeAddress))
 	{
 		return NIL;
 	}
-
-	/*
-	 * we should not get to a point where an alter happens on a distributed type during an
-	 * extension statement, but better safe then sorry.
-	 */
-	if (creating_extension)
-	{
-		/*
-		 * extensions should be created separately on the workers, types cascading from an
-		 * extension should therefor not be propagated here.
-		 */
-		return NIL;
-	}
-
 
 	/* fully qualify */
 	QualifyTreeNode((Node *) stmt);
@@ -603,28 +568,15 @@ List *
 PlanRenameTypeAttributeStmt(RenameStmt *stmt, const char *queryString)
 {
 	const char *sql = NULL;
-	const ObjectAddress *address = NULL;
+	const ObjectAddress *typeAddress = NULL;
 	List *commands = NIL;
 
 	Assert(stmt->renameType == OBJECT_ATTRIBUTE);
 	Assert(stmt->relationType == OBJECT_TYPE);
 
-	address = GetObjectAddressFromParseTree((Node *) stmt, false);
-	if (!IsObjectDistributed(address))
+	typeAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
+	if (!ShouldPropagateAlterType(typeAddress))
 	{
-		return NIL;
-	}
-
-	/*
-	 * we should not get to a point where an alter happens on a distributed type during an
-	 * extension statement, but better safe then sorry.
-	 */
-	if (creating_extension)
-	{
-		/*
-		 * extensions should be created separately on the workers, types cascading from an
-		 * extension should therefor not be propagated here.
-		 */
 		return NIL;
 	}
 
@@ -656,16 +608,9 @@ PlanAlterTypeSchemaStmt(AlterObjectSchemaStmt *stmt, const char *queryString)
 
 	Assert(stmt->objectType == OBJECT_TYPE);
 
-	if (creating_extension)
-	{
-		/* types from extensions are managed by extensions, skipping */
-		return NIL;
-	}
-
 	typeAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
-	if (!IsObjectDistributed(typeAddress))
+	if (!ShouldPropagateAlterType(typeAddress))
 	{
-		/* not distributed to the workers, nothing to do */
 		return NIL;
 	}
 
@@ -696,16 +641,9 @@ ProcessAlterTypeSchemaStmt(AlterObjectSchemaStmt *stmt, const char *queryString)
 
 	Assert(stmt->objectType == OBJECT_TYPE);
 
-	if (creating_extension)
-	{
-		/* types from extensions are managed by extensions, skipping */
-		return;
-	}
-
 	typeAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
-	if (!IsObjectDistributed(typeAddress))
+	if (!ShouldPropagateAlterType(typeAddress))
 	{
-		/* not distributed to the workers, nothing to do */
 		return;
 	}
 
@@ -730,14 +668,8 @@ PlanAlterTypeOwnerStmt(AlterOwnerStmt *stmt, const char *queryString)
 
 	Assert(stmt->objectType == OBJECT_TYPE);
 
-	if (creating_extension)
-	{
-		/* types from extensions are managed by extensions, skipping */
-		return NIL;
-	}
-
 	typeAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
-	if (!IsObjectDistributed(typeAddress))
+	if (!ShouldPropagateAlterType(typeAddress))
 	{
 		return NIL;
 	}
@@ -1430,6 +1362,14 @@ EnsureSequentialModeForTypeDDL(void)
 static bool
 ShouldPropagateTypeCreate()
 {
+	if (!EnableDependencyCreation)
+	{
+		/*
+		 * we are configured to disable object propagation, should not propagate anything
+		 */
+		return false;
+	}
+
 	if (!EnableCreateTypePropagation)
 	{
 		/*
@@ -1454,6 +1394,40 @@ ShouldPropagateTypeCreate()
 	 */
 	if (IsMultiStatementTransaction())
 	{
+		return false;
+	}
+
+	return true;
+}
+
+
+/*
+ * ShouldPropagateAlterType determines if we should be propagating type alterations based
+ * on its object address.
+ */
+static bool
+ShouldPropagateAlterType(const ObjectAddress *address)
+{
+	if (creating_extension)
+	{
+		/*
+		 * extensions should be created separately on the workers, types cascading from an
+		 * extension should therefor not be propagated.
+		 */
+		return false;
+	}
+
+	if (!EnableDependencyCreation)
+	{
+		/*
+		 * we are configured to disable object propagation, should not propagate anything
+		 */
+		return false;
+	}
+
+	if (!IsObjectDistributed(address))
+	{
+		/* do not propagate alter types for non-distributed types */
 		return false;
 	}
 

@@ -694,6 +694,17 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
+		"citus.enable_object_propagation",
+		gettext_noop("Enables propagating object creation for more complex objects, "
+					 "schema's will always be created"),
+		NULL,
+		&EnableDependencyCreation,
+		true,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
 		"citus.enable_create_type_propagation",
 		gettext_noop("Enables propagating of CREATE TYPE statements to workers"),
 		NULL,
