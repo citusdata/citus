@@ -1212,7 +1212,8 @@ GenerateBackupNameForTypeCollision(const ObjectAddress *address)
 
 	while (true)
 	{
-		int postfixLength = snprintf(postfix, NAMEDATALEN - 1, " (backup %d)", count);
+		int postfixLength = snprintf(postfix, NAMEDATALEN - 1, "(citus_backup_%d)",
+									 count);
 		int baseLength = strlen(baseName);
 		TypeName *newTypeName = NULL;
 		Oid typeOid = InvalidOid;
@@ -1225,7 +1226,7 @@ GenerateBackupNameForTypeCollision(const ObjectAddress *address)
 		strncpy(newName, baseName, baseLength);
 		strncpy(newName + baseLength, postfix, postfixLength);
 
-		rel->schemaname = newName;
+		rel->relname = newName;
 		newTypeName = makeTypeNameFromNameList(MakeNameListFromRangeVar(rel));
 
 		typeOid = LookupTypeNameOid(NULL, newTypeName, true);
@@ -1233,9 +1234,9 @@ GenerateBackupNameForTypeCollision(const ObjectAddress *address)
 		{
 			/*
 			 * Typename didn't exist yet.
-			 * Need to strdup the name as it was stack allocated during calculations.
+			 * Need to pstrdup the name as it was stack allocated during calculations.
 			 */
-			return strdup(newName);
+			return pstrdup(newName);
 		}
 
 		count++;
@@ -1243,6 +1244,11 @@ GenerateBackupNameForTypeCollision(const ObjectAddress *address)
 }
 
 
+/*
+ * CreateRenameTypeStmt creates a rename statement for a type based on its ObjectAddress.
+ * The rename statement will rename the existing object on its address to the value
+ * provided in newName.
+ */
 RenameStmt *
 CreateRenameTypeStmt(const ObjectAddress *address, char *newName)
 {

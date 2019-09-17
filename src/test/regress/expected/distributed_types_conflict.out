@@ -24,11 +24,11 @@ CREATE TYPE my_precious_type AS (scatterd_secret text);
 \c - - - :worker_1_port
 SET search_path TO type_conflict;
 \d+ local_table
-                                        Table "type_conflict.local_table"
- Column |             Type              | Collation | Nullable | Default | Storage  | Stats target | Description 
---------+-------------------------------+-----------+----------+---------+----------+--------------+-------------
- a      | integer                       |           |          |         | plain    |              | 
- b      | "my_precious_type (backup 0)" |           |          |         | extended |              | 
+                                          Table "type_conflict.local_table"
+ Column |                Type                | Collation | Nullable | Default | Storage  | Stats target | Description 
+--------+------------------------------------+-----------+----------+---------+----------+--------------+-------------
+ a      | integer                            |           |          |         | plain    |              | 
+ b      | "my_precious_type(citus_backup_0)" |           |          |         | extended |              | 
 
 SELECT * FROM local_table;
  a  |             b              
@@ -38,6 +38,43 @@ SELECT * FROM local_table;
 
 \c - - - :master_port
 SET search_path TO type_conflict;
+-- make sure worker_create_or_replace correctly generates new names while types are existing
+SELECT worker_create_or_replace_object('CREATE TYPE type_conflict.multi_conflicting_type AS (a int, b int);');
+ worker_create_or_replace_object 
+---------------------------------
+ t
+(1 row)
+
+SELECT worker_create_or_replace_object('CREATE TYPE type_conflict.multi_conflicting_type AS (a int, b int, c int);');
+ worker_create_or_replace_object 
+---------------------------------
+ t
+(1 row)
+
+SELECT worker_create_or_replace_object('CREATE TYPE type_conflict.multi_conflicting_type AS (a int, b int, c int, d int);');
+ worker_create_or_replace_object 
+---------------------------------
+ t
+(1 row)
+
+SELECT worker_create_or_replace_object('CREATE TYPE type_conflict.multi_conflicting_type_with_a_really_long_name_that_truncates AS (a int, b int);');
+ worker_create_or_replace_object 
+---------------------------------
+ t
+(1 row)
+
+SELECT worker_create_or_replace_object('CREATE TYPE type_conflict.multi_conflicting_type_with_a_really_long_name_that_truncates AS (a int, b int, c int);');
+ worker_create_or_replace_object 
+---------------------------------
+ t
+(1 row)
+
+SELECT worker_create_or_replace_object('CREATE TYPE type_conflict.multi_conflicting_type_with_a_really_long_name_that_truncates AS (a int, b int, c int, d int);');
+ worker_create_or_replace_object 
+---------------------------------
+ t
+(1 row)
+
 -- hide cascades
 SET client_min_messages TO error;
 DROP SCHEMA type_conflict CASCADE;
