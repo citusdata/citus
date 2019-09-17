@@ -1,6 +1,20 @@
 BEFORE_UPGRADE_SCHEDULE = './before_upgrade_schedule'
 AFTER_UPGRADE_SCHEDULE = './after_upgrade_schedule'
 
+BEFORE_CITUS_UPGRADE_SCHEDULE = './before_citus{}_upgrade_schedule'
+
+class CitusUpgradeConfig():
+    def __init__(self, arguments):
+        self.bindir = arguments['--bindir']
+        self.citus_version = arguments['--citus-version']
+        self.pg_srcdir = arguments['--pgxsdir']
+        self.temp_dir = './tmp_citus_upgrade'
+        self.datadir = self.temp_dir + '/data'
+        self.settings = {
+            'shared_preload_libraries': 'citus',
+            'citus.node_conninfo': 'sslmode=prefer'
+        }
+
 
 class Config():
     def __init__(self, arguments):
