@@ -28,6 +28,7 @@ typedef enum
 } PropSetCmdBehavior;
 extern PropSetCmdBehavior PropagateSetCommands;
 extern bool EnableDDLPropagation;
+extern bool EnableCreateTypePropagation;
 
 /*
  * A DDLJob encapsulates the remote tasks and commands needed to process all or

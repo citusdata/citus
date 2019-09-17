@@ -81,6 +81,9 @@
 #define CREATE_OR_REPLACE_COMMAND "SELECT worker_create_or_replace_object(%s);"
 
 
+/* guc to turn of the automatic type distribution */
+bool EnableCreateTypePropagation = true;
+
 /* forward declaration for helper functions*/
 static List * FilterNameListForDistributedTypes(List *objects, bool missing_ok);
 static List * TypeNameListToObjectAddresses(List *objects);
@@ -1392,6 +1395,14 @@ EnsureSequentialModeForTypeDDL(void)
 static bool
 ShouldPropagateTypeCreate()
 {
+	if (!EnableCreateTypePropagation)
+	{
+		/*
+		 * Administrator has turned of type creation propagation
+		 */
+		return false;
+	}
+
 	if (creating_extension)
 	{
 		/*
