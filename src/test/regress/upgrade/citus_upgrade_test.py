@@ -12,12 +12,13 @@ Options:
 
 import subprocess
 import atexit
+import os 
 
 import utils
 
 from docopt import docopt
 
-from config import CitusUpgradeConfig, NODE_PORTS, COORDINATOR_NAME, BEFORE_CITUS_UPGRADE_SCHEDULE
+from config import CitusUpgradeConfig, NODE_PORTS, COORDINATOR_NAME, BEFORE_CITUS_UPGRADE_SCHEDULE, NODE_NAMES, USER
 from upgrade_test import initialize_temp_dir, initialize_citus_cluster, run_pg_regress, stop_databases
 
 
@@ -30,11 +31,15 @@ def install_citus(citus_version):
     with utils.cd('/'):
         subprocess.call(['tar', 'xvf', '/install-pg11-citus{}.tar'.format(citus_version)])
 
+def run_alter_citus(pg_path):
+    for port in NODE_PORTS.values():
+        utils.psql(pg_path, port, "ALTER EXTENSION citus UPDATE;")
+
 def restart_databases(pg_path, rel_data_path):
     for node_name in NODE_NAMES:
         abs_data_path = os.path.abspath(os.path.join(rel_data_path, node_name))
         command = [
-            os.path.join(pg_patps -h, 'pg_ctl'), 'restart',
+            os.path.join(pg_path, 'pg_ctl'), 'restart',
             '--pgdata', abs_data_path,
             '-U', USER,
             '-o', '-p {}'.format(NODE_PORTS[node_name]),
@@ -50,6 +55,7 @@ def main(config):
     run_test_in_all_nodes(config)    
     install_citus("citusUpgrade")
     restart_databases(config.bindir, config.datadir)
+    run_alter_citus(config.bindir)
     # verify upgrade
     
     
