@@ -20,6 +20,7 @@
 #include "access/xact.h"
 #include "catalog/namespace.h"
 #include "catalog/pg_proc.h"
+#include "distributed/commands.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/metadata/distobject.h"
 #include "distributed/multi_executor.h"
@@ -29,7 +30,7 @@
 #include "utils/fmgrprotos.h"
 
 /* forward declaration for helper functions*/
-static const char * GetFunctionDDLCommand(Oid funcOid);
+static char * GetFunctionDDLCommand(const RegProcedure funcOid);
 static void EnsureSequentialModeForFunctionDDL(void);
 
 PG_FUNCTION_INFO_V1(create_distributed_function);
@@ -75,15 +76,31 @@ create_distributed_function(PG_FUNCTION_ARGS)
 
 
 /*
+ * CreateFunctionDDLCommandsIdempotent returns a list of DDL statements (const char *) to be
+ * executed on a node to recreate the function addressed by the functionAddress.
+ */
+List *
+CreateFunctionDDLCommandsIdempotent(const ObjectAddress *functionAddress)
+{
+	char *ddlCommand = NULL;
+
+	Assert(functionAddress->classId == ProcedureRelationId);
+
+	ddlCommand = GetFunctionDDLCommand(functionAddress->objectId);
+	return list_make1(ddlCommand);
+}
+
+
+/*
  * GetFunctionDDLCommand returns the complete "CREATE OR REPLACE FUNCTION ..." statement for
  * the specified function.
  */
-static const char *
-GetFunctionDDLCommand(RegProcedure funcOid)
+static char *
+GetFunctionDDLCommand(const RegProcedure funcOid)
 {
 	OverrideSearchPath *overridePath = NULL;
 	Datum sqlTextDatum = 0;
-	const char *sql = NULL;
+	char *sql = NULL;
 
 	/*
 	 * Set search_path to NIL so that all objects outside of pg_catalog will be

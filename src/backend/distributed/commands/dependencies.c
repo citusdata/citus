@@ -177,6 +177,11 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 			break;
 		}
 
+		case OCLASS_PROC:
+		{
+			return CreateFunctionDDLCommandsIdempotent(dependency);
+		}
+
 		default:
 		{
 			break;
