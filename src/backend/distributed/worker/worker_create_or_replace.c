@@ -28,8 +28,8 @@
 #include "distributed/worker_protocol.h"
 
 static Node * CreateStmtByObjectAddress(const ObjectAddress *address);
-static DropStmt * CreateDropStmtBasedOnCreateStmt(Node *createStmt);
-
+static RenameStmt * CreateRenameStatement(const ObjectAddress *address, char *newName);
+static char * GenerateBackupNameForCollision(const ObjectAddress *address);
 
 PG_FUNCTION_INFO_V1(worker_create_or_replace_object);
 
@@ -70,7 +70,9 @@ worker_create_or_replace_object(PG_FUNCTION_ARGS)
 	{
 		Node *localCreateStmt = NULL;
 		const char *localSqlStatement = NULL;
-		DropStmt *dropStmtParseTree = NULL;
+		char *newName = NULL;
+		RenameStmt *renameStmt = NULL;
+		const char *sqlRenameStmt = NULL;
 
 		localCreateStmt = CreateStmtByObjectAddress(address);
 		localSqlStatement = DeparseTreeNode(localCreateStmt);
@@ -92,26 +94,12 @@ worker_create_or_replace_object(PG_FUNCTION_ARGS)
 			PG_RETURN_BOOL(false);
 		}
 
-		/* TODO don't drop, instead rename as described in documentation */
+		newName = GenerateBackupNameForCollision(address);
 
-		/*
-		 * there might be dependencies left on the worker on this type, these are not
-		 * managed by citus anyway so it should be ok to drop, thus we cascade to any such
-		 * dependencies
-		 */
-		dropStmtParseTree = CreateDropStmtBasedOnCreateStmt(parseTree);
-
-		if (dropStmtParseTree != NULL)
-		{
-			const char *sqlDropStmt = NULL;
-
-			/* force the drop */
-			dropStmtParseTree->behavior = DROP_CASCADE;
-
-			sqlDropStmt = DeparseTreeNode((Node *) dropStmtParseTree);
-			CitusProcessUtility((Node *) dropStmtParseTree, sqlDropStmt,
-								PROCESS_UTILITY_TOPLEVEL, NULL, None_Receiver, NULL);
-		}
+		renameStmt = CreateRenameStatement(address, newName);
+		sqlRenameStmt = DeparseTreeNode((Node *) renameStmt);
+		CitusProcessUtility((Node *) renameStmt, sqlRenameStmt, PROCESS_UTILITY_TOPLEVEL,
+							NULL, None_Receiver, NULL);
 	}
 
 	/* apply create statement locally */
@@ -149,32 +137,49 @@ CreateStmtByObjectAddress(const ObjectAddress *address)
 }
 
 
-/* TODO will be removed as we will not drop but rename instead */
-static DropStmt *
-CreateDropStmtBasedOnCreateStmt(Node *createStmt)
+/*
+ * GenerateBackupNameForCollision calculate a backup name for a given object by its
+ * address. This name should be used when renaming an existing object before creating the
+ * new object locally on the worker.
+ */
+static char *
+GenerateBackupNameForCollision(const ObjectAddress *address)
 {
-	switch (nodeTag(createStmt))
+	switch (getObjectClass(address))
 	{
-		case T_CompositeTypeStmt:
+		case OCLASS_TYPE:
 		{
-			return CreateDropStmtBasedOnCompositeTypeStmt(
-				castNode(CompositeTypeStmt, createStmt));
-		}
-
-		case T_CreateEnumStmt:
-		{
-			return CreateDropStmtBasedOnEnumStmt(castNode(CreateEnumStmt, createStmt));
+			return GenerateBackupNameForTypeCollision(address);
 		}
 
 		default:
 		{
-			/*
-			 * should not be reached, indicates the coordinator is sending unsupported
-			 * statements
-			 */
-			ereport(ERROR, (errmsg("unsupported statement to transform to a drop stmt"),
-							errhint("The coordinator send an unsupported command to the "
-									"worker")));
+			ereport(ERROR, (errmsg("unsupported object to construct a rename statement"),
+							errdetail(
+								"unable to generate a backup name for the old type")));
+		}
+	}
+}
+
+
+/*
+ * CreateRenameStatement creates a rename statement for an existing object to rename the
+ * object to newName.
+ */
+static RenameStmt *
+CreateRenameStatement(const ObjectAddress *address, char *newName)
+{
+	switch (getObjectClass(address))
+	{
+		case OCLASS_TYPE:
+		{
+			return CreateRenameTypeStmt(address, newName);
+		}
+
+		default:
+		{
+			ereport(ERROR, (errmsg("unsupported object to construct a rename statement"),
+							errdetail("unable to generate a parsetree for the rename")));
 		}
 	}
 }

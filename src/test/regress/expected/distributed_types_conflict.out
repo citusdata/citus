@@ -19,16 +19,16 @@ INSERT INTO local_table VALUES (42, ('always bring a towel', true)::my_precious_
 SET search_path TO type_conflict;
 -- overwrite the type on the worker from the coordinator. The type should be over written
 -- but the data should not have been destroyed
---CREATE TYPE my_precious_type AS (scatterd_secret text);
+CREATE TYPE my_precious_type AS (scatterd_secret text);
 -- verify the data is retained
 \c - - - :worker_1_port
 SET search_path TO type_conflict;
 \d+ local_table
-                                 Table "type_conflict.local_table"
- Column |       Type       | Collation | Nullable | Default | Storage  | Stats target | Description 
---------+------------------+-----------+----------+---------+----------+--------------+-------------
- a      | integer          |           |          |         | plain    |              | 
- b      | my_precious_type |           |          |         | extended |              | 
+                                        Table "type_conflict.local_table"
+ Column |             Type              | Collation | Nullable | Default | Storage  | Stats target | Description 
+--------+-------------------------------+-----------+----------+---------+----------+--------------+-------------
+ a      | integer                       |           |          |         | plain    |              | 
+ b      | "my_precious_type (backup 0)" |           |          |         | extended |              | 
 
 SELECT * FROM local_table;
  a  |             b              

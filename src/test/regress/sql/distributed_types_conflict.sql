@@ -16,7 +16,7 @@ SET search_path TO type_conflict;
 
 -- overwrite the type on the worker from the coordinator. The type should be over written
 -- but the data should not have been destroyed
---CREATE TYPE my_precious_type AS (scatterd_secret text);
+CREATE TYPE my_precious_type AS (scatterd_secret text);
 
 -- verify the data is retained
 \c - - - :worker_1_port

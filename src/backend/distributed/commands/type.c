@@ -1151,41 +1151,6 @@ AlterTypeOwnerObjectAddress(AlterOwnerStmt *stmt, bool missing_ok)
 
 
 /*
- * CreateDropStmtBasedOnCompositeTypeStmt returns, given a CREATE TYPE statement, a
- * corresponding statement to drop the type that is to be created. The type does not need
- * to exists in this postgres for this function to succeed.
- */
-DropStmt *
-CreateDropStmtBasedOnCompositeTypeStmt(CompositeTypeStmt *stmt)
-{
-	List *names = MakeNameListFromRangeVar(stmt->typevar);
-	TypeName *typeName = makeTypeNameFromNameList(names);
-
-	DropStmt *dropStmt = makeNode(DropStmt);
-	dropStmt->removeType = OBJECT_TYPE;
-	dropStmt->objects = list_make1(typeName);
-	return dropStmt;
-}
-
-
-/*
- * CreateDropStmtBasedOnEnumStmt returns, given a CREATE TYPE ... AS ENUM statement, a
- * corresponding statement to drop the type that is to be created. The type does not need
- * to exists in this postgres for this function to succeed.
- */
-DropStmt *
-CreateDropStmtBasedOnEnumStmt(CreateEnumStmt *stmt)
-{
-	TypeName *typeName = makeTypeNameFromNameList(stmt->typeName);
-
-	DropStmt *dropStmt = makeNode(DropStmt);
-	dropStmt->removeType = OBJECT_TYPE;
-	dropStmt->objects = list_make1(typeName);
-	return dropStmt;
-}
-
-
-/*
  * CreateTypeDDLCommandsIdempotent returns a list of DDL statements (const char *) to be
  * executed on a node to recreate the type addressed by the typeAddress.
  */
@@ -1226,6 +1191,70 @@ CreateTypeDDLCommandsIdempotent(const ObjectAddress *typeAddress)
 	ddlCommands = lappend(ddlCommands, buf.data);
 
 	return ddlCommands;
+}
+
+
+/*
+ * GenerateBackupNameForTypeCollision generates a new type name for an existing type. The
+ * name is generated in such a way that the new name doesn't overlap with an existing type
+ * by adding a postfix with incrementing number after the new name.
+ */
+char *
+GenerateBackupNameForTypeCollision(const ObjectAddress *address)
+{
+	List *names = stringToQualifiedNameList(format_type_be_qualified(address->objectId));
+	RangeVar *rel = makeRangeVarFromNameList(names);
+
+	char newName[NAMEDATALEN] = { 0 };
+	char postfix[NAMEDATALEN] = { 0 };
+	char *baseName = rel->relname;
+	int count = 0;
+
+	while (true)
+	{
+		int postfixLength = snprintf(postfix, NAMEDATALEN - 1, " (backup %d)", count);
+		int baseLength = strlen(baseName);
+		TypeName *newTypeName = NULL;
+		Oid typeOid = InvalidOid;
+
+		/* trim the base name at the end to leave space for the postfix and trailing \0 */
+		baseLength = Min(baseLength, NAMEDATALEN - postfixLength - 1);
+
+		/* clear newName before copying the potentially trimmed baseName and postfix */
+		memset(newName, 0, NAMEDATALEN);
+		strncpy(newName, baseName, baseLength);
+		strncpy(newName + baseLength, postfix, postfixLength);
+
+		rel->schemaname = newName;
+		newTypeName = makeTypeNameFromNameList(MakeNameListFromRangeVar(rel));
+
+		typeOid = LookupTypeNameOid(NULL, newTypeName, true);
+		if (typeOid == InvalidOid)
+		{
+			/*
+			 * Typename didn't exist yet.
+			 * Need to strdup the name as it was stack allocated during calculations.
+			 */
+			return strdup(newName);
+		}
+
+		count++;
+	}
+}
+
+
+RenameStmt *
+CreateRenameTypeStmt(const ObjectAddress *address, char *newName)
+{
+	RenameStmt *stmt = NULL;
+
+	stmt = makeNode(RenameStmt);
+	stmt->renameType = OBJECT_TYPE;
+	stmt->object = (Node *) stringToQualifiedNameList(format_type_be_qualified(
+														  address->objectId));
+	stmt->newname = newName;
+
+	return stmt;
 }
 
 
