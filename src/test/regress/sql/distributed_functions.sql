@@ -34,7 +34,7 @@ SELECT create_distributed_function('dup(int)');
 SELECT * FROM run_command_on_workers('SELECT function_tests.dup(42);') ORDER BY 1,2;
 
 -- clear objects
-SET client_min_messages TO fatal; -- suppress cascading objects dropping
+SET client_min_messages TO error; -- suppress cascading objects dropping
 DROP SCHEMA function_tests CASCADE;
 SELECT run_command_on_workers($$DROP SCHEMA function_tests CASCADE;$$);
 DROP USER functionuser;
