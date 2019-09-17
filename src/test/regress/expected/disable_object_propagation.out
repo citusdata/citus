@@ -19,7 +19,7 @@ CREATE TYPE tt1 AS (a int , b int);
 CREATE TABLE t2 (a int PRIMARY KEY, b tt1);
 SELECT create_distributed_table('t2', 'a');
 ERROR:  type "disabled_object_propagation.tt1" does not exist
-CONTEXT:  while executing command on localhost:57637
+CONTEXT:  while executing command on localhost:57638
 SELECT run_command_on_workers($$
     CREATE TYPE disabled_object_propagation.tt1 AS (a int , b int);
 $$);
@@ -40,7 +40,7 @@ CREATE TYPE tt2 AS ENUM ('a', 'b');
 CREATE TABLE t3 (a int PRIMARY KEY, b tt2);
 SELECT create_distributed_table('t3', 'a');
 ERROR:  type "disabled_object_propagation.tt2" does not exist
-CONTEXT:  while executing command on localhost:57637
+CONTEXT:  while executing command on localhost:57638
 SELECT run_command_on_workers($$
     CREATE TYPE disabled_object_propagation.tt2 AS ENUM ('a', 'b');
 $$);
@@ -82,6 +82,7 @@ ALTER TYPE tt3 OWNER TO typeowner_for_disabled_object_propagation_guc;
 ALTER TYPE tt3 RENAME ATTRIBUTE c TO d;
 ALTER TYPE tt3 RENAME TO tt4;
 ALTER TYPE tt4 SET SCHEMA disabled_object_propagation2;
+DROP TYPE disabled_object_propagation2.tt4;
 -- verify no changes have been made to the type on the remote servers. tt3 is used as a name since the rename should not have been propagated
 SELECT run_command_on_workers($$
 SELECT row(nspname, typname, usename)

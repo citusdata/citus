@@ -46,6 +46,7 @@ ALTER TYPE tt3 OWNER TO typeowner_for_disabled_object_propagation_guc;
 ALTER TYPE tt3 RENAME ATTRIBUTE c TO d;
 ALTER TYPE tt3 RENAME TO tt4;
 ALTER TYPE tt4 SET SCHEMA disabled_object_propagation2;
+DROP TYPE disabled_object_propagation2.tt4;
 
 -- verify no changes have been made to the type on the remote servers. tt3 is used as a name since the rename should not have been propagated
 SELECT run_command_on_workers($$
