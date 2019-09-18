@@ -19,6 +19,7 @@
 #include "catalog/index.h"
 #include "catalog/namespace.h"
 #include "catalog/pg_class.h"
+#include "commands/tablecmds.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
@@ -39,8 +40,12 @@
 
 /* Local functions forward declarations for helper functions */
 static List * CreateIndexTaskList(Oid relationId, IndexStmt *indexStmt);
+static List * CreateReindexTaskList(Oid relationId, ReindexStmt *reindexStmt);
 static void RangeVarCallbackForDropIndex(const RangeVar *rel, Oid relOid, Oid oldRelOid,
 										 void *arg);
+static void RangeVarCallbackForReindexIndex(const RangeVar *rel, Oid relOid, Oid
+											oldRelOid,
+											void *arg);
 static void ErrorIfUnsupportedIndexStmt(IndexStmt *createIndexStatement);
 static void ErrorIfUnsupportedDropIndexStmt(DropStmt *dropIndexStatement);
 static List * DropIndexTaskList(Oid relationId, Oid indexId, DropStmt *dropStmt);
@@ -55,6 +60,18 @@ struct DropRelationCallbackState
 	char relkind;
 	Oid heapOid;
 	bool concurrent;
+};
+
+/*
+ * This struct defines the state for the callback for reindex statements.
+ * It is copied as it is from commands/indexcmds.c in Postgres source.
+ */
+struct ReindexIndexCallbackState
+{
+#if PG_VERSION_NUM >= 120000
+	bool concurrent;
+#endif
+	Oid locked_table_oid;
 };
 
 
@@ -101,7 +118,6 @@ PlanIndexStmt(IndexStmt *createIndexStatement, const char *createIndexCommand)
 		Relation relation = NULL;
 		Oid relationId = InvalidOid;
 		bool isDistributedRelation = false;
-		char *namespaceName = NULL;
 		LOCKMODE lockmode = ShareLock;
 		MemoryContext relationContext = NULL;
 
@@ -126,19 +142,22 @@ PlanIndexStmt(IndexStmt *createIndexStatement, const char *createIndexCommand)
 
 		isDistributedRelation = IsDistributedTable(relationId);
 
-		/*
-		 * Before we do any further processing, fix the schema name to make sure
-		 * that a (distributed) table with the same name does not appear on the
-		 * search path in front of the current schema. We do this even if the
-		 * table is not distributed, since a distributed table may appear on the
-		 * search path by the time postgres starts processing this statement.
-		 */
-		namespaceName = get_namespace_name(RelationGetNamespace(relation));
+		if (createIndexStatement->relation->schemaname == NULL)
+		{
+			/*
+			 * Before we do any further processing, fix the schema name to make sure
+			 * that a (distributed) table with the same name does not appear on the
+			 * search path in front of the current schema. We do this even if the
+			 * table is not distributed, since a distributed table may appear on the
+			 * search path by the time postgres starts processing this statement.
+			 */
+			char *namespaceName = get_namespace_name(RelationGetNamespace(relation));
 
-		/* ensure we copy string into proper context */
-		relationContext = GetMemoryChunkContext(createIndexStatement->relation);
-		namespaceName = MemoryContextStrdup(relationContext, namespaceName);
-		createIndexStatement->relation->schemaname = namespaceName;
+			/* ensure we copy string into proper context */
+			relationContext = GetMemoryChunkContext(createIndexStatement->relation);
+			createIndexStatement->relation->schemaname = MemoryContextStrdup(
+				relationContext, namespaceName);
+		}
 
 		heap_close(relation, NoLock);
 
@@ -147,6 +166,7 @@ PlanIndexStmt(IndexStmt *createIndexStatement, const char *createIndexCommand)
 			Oid namespaceId = InvalidOid;
 			Oid indexRelationId = InvalidOid;
 			char *indexName = createIndexStatement->idxname;
+			char *namespaceName = createIndexStatement->relation->schemaname;
 
 			ErrorIfUnsupportedIndexStmt(createIndexStatement);
 
@@ -172,65 +192,109 @@ PlanIndexStmt(IndexStmt *createIndexStatement, const char *createIndexCommand)
 
 
 /*
- * ErrorIfReindexOnDistributedTable determines whether a given REINDEX
- * involves a distributed table, & raises an error if so.
+ * PlanReindexStmt determines whether a given REINDEX statement involves
+ * a distributed table. If so (and if the statement does not use unsupported
+ * options), it modifies the input statement to ensure proper execution against
+ * the master node table and creates a DDLJob to encapsulate information needed
+ * during the worker node portion of DDL execution before returning that DDLJob
+ * in a List. If no distributed table is involved, this function returns NIL.
  */
-void
-ErrorIfReindexOnDistributedTable(ReindexStmt *ReindexStatement)
+List *
+PlanReindexStmt(ReindexStmt *reindexStatement, const char *reindexCommand)
 {
-	Relation relation = NULL;
-	Oid relationId = InvalidOid;
-	bool isDistributedRelation = false;
-	LOCKMODE lockmode = AccessShareLock;
+	List *ddlJobs = NIL;
 
 	/*
 	 * We first check whether a distributed relation is affected. For that, we need to
-	 * open the relation.
+	 * open the relation. To prevent race conditions with later lookups, lock the table,
+	 * and modify the rangevar to include the schema.
 	 */
-	if (ReindexStatement->relation == NULL)
+	if (reindexStatement->relation != NULL)
 	{
-		/* ignore REINDEX SCHEMA, REINDEX SYSTEM, and REINDEX DATABASE */
-		return;
+		Relation relation = NULL;
+		Oid relationId = InvalidOid;
+		bool isDistributedRelation = false;
+#if PG_VERSION_NUM >= 120000
+		LOCKMODE lockmode = reindexStatement->concurrent ? ShareUpdateExclusiveLock :
+							AccessExclusiveLock;
+#else
+		LOCKMODE lockmode = AccessExclusiveLock;
+#endif
+		MemoryContext relationContext = NULL;
+
+		Assert(reindexStatement->kind == REINDEX_OBJECT_INDEX ||
+			   reindexStatement->kind == REINDEX_OBJECT_TABLE);
+
+		if (reindexStatement->kind == REINDEX_OBJECT_INDEX)
+		{
+			Oid indOid;
+			struct ReindexIndexCallbackState state;
+#if PG_VERSION_NUM >= 120000
+			state.concurrent = reindexStatement->concurrent;
+#endif
+			state.locked_table_oid = InvalidOid;
+
+			indOid = RangeVarGetRelidInternal(reindexStatement->relation,
+											  lockmode, 0,
+											  RangeVarCallbackForReindexIndex,
+											  &state);
+			relation = index_open(indOid, NoLock);
+			relationId = IndexGetRelation(indOid, false);
+		}
+		else
+		{
+			RangeVarGetRelidInternal(reindexStatement->relation, lockmode, 0,
+									 RangeVarCallbackOwnsTable, NULL);
+
+			relation = heap_openrv(reindexStatement->relation, NoLock);
+			relationId = RelationGetRelid(relation);
+		}
+
+		isDistributedRelation = IsDistributedTable(relationId);
+
+		if (reindexStatement->relation->schemaname == NULL)
+		{
+			/*
+			 * Before we do any further processing, fix the schema name to make sure
+			 * that a (distributed) table with the same name does not appear on the
+			 * search path in front of the current schema. We do this even if the
+			 * table is not distributed, since a distributed table may appear on the
+			 * search path by the time postgres starts processing this statement.
+			 */
+			char *namespaceName = get_namespace_name(RelationGetNamespace(relation));
+
+			/* ensure we copy string into proper context */
+			relationContext = GetMemoryChunkContext(reindexStatement->relation);
+			reindexStatement->relation->schemaname = MemoryContextStrdup(relationContext,
+																		 namespaceName);
+		}
+
+		if (reindexStatement->kind == REINDEX_OBJECT_INDEX)
+		{
+			index_close(relation, NoLock);
+		}
+		else
+		{
+			heap_close(relation, NoLock);
+		}
+
+		if (isDistributedRelation)
+		{
+			DDLJob *ddlJob = palloc0(sizeof(DDLJob));
+			ddlJob->targetRelationId = relationId;
+#if PG_VERSION_NUM >= 120000
+			ddlJob->concurrentIndexCmd = reindexStatement->concurrent;
+#else
+			ddlJob->concurrentIndexCmd = false;
+#endif
+			ddlJob->commandString = reindexCommand;
+			ddlJob->taskList = CreateReindexTaskList(relationId, reindexStatement);
+
+			ddlJobs = list_make1(ddlJob);
+		}
 	}
 
-	Assert(ReindexStatement->kind == REINDEX_OBJECT_INDEX ||
-		   ReindexStatement->kind == REINDEX_OBJECT_TABLE);
-
-	/*
-	 * XXX: Consider using RangeVarGetRelidExtended with a permission
-	 * checking callback. Right now we'll acquire the lock before having
-	 * checked permissions.
-	 */
-	if (ReindexStatement->kind == REINDEX_OBJECT_INDEX)
-	{
-		Oid indOid = RangeVarGetRelid(ReindexStatement->relation,
-									  NoLock, false);
-		relation = index_open(indOid, lockmode);
-		relationId = IndexGetRelation(indOid, false);
-	}
-	else
-	{
-		relation = heap_openrv(ReindexStatement->relation, lockmode);
-		relationId = RelationGetRelid(relation);
-	}
-
-	isDistributedRelation = IsDistributedTable(relationId);
-
-	if (ReindexStatement->kind == REINDEX_OBJECT_INDEX)
-	{
-		index_close(relation, NoLock);
-	}
-	else
-	{
-		heap_close(relation, NoLock);
-	}
-
-	if (isDistributedRelation)
-	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg(
-							"REINDEX is not implemented for distributed relations")));
-	}
+	return ddlJobs;
 }
 
 
@@ -488,6 +552,52 @@ CreateIndexTaskList(Oid relationId, IndexStmt *indexStmt)
 
 
 /*
+ * CreateReindexTaskList builds a list of tasks to execute a REINDEX command
+ * against a specified distributed table.
+ */
+static List *
+CreateReindexTaskList(Oid relationId, ReindexStmt *reindexStmt)
+{
+	List *taskList = NIL;
+	List *shardIntervalList = LoadShardIntervalList(relationId);
+	ListCell *shardIntervalCell = NULL;
+	StringInfoData ddlString;
+	uint64 jobId = INVALID_JOB_ID;
+	int taskId = 1;
+
+	initStringInfo(&ddlString);
+
+	/* lock metadata before getting placement lists */
+	LockShardListMetadata(shardIntervalList, ShareLock);
+
+	foreach(shardIntervalCell, shardIntervalList)
+	{
+		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
+		uint64 shardId = shardInterval->shardId;
+		Task *task = NULL;
+
+		deparse_shard_reindex_statement(reindexStmt, relationId, shardId, &ddlString);
+
+		task = CitusMakeNode(Task);
+		task->jobId = jobId;
+		task->taskId = taskId++;
+		task->taskType = DDL_TASK;
+		task->queryString = pstrdup(ddlString.data);
+		task->replicationModel = REPLICATION_MODEL_INVALID;
+		task->dependedTaskList = NULL;
+		task->anchorShardId = shardId;
+		task->taskPlacementList = FinalizedShardPlacementList(shardId);
+
+		taskList = lappend(taskList, task);
+
+		resetStringInfo(&ddlString);
+	}
+
+	return taskList;
+}
+
+
+/*
  * Before acquiring a table lock, check whether we have sufficient rights.
  * In the case of DROP INDEX, also try to lock the table before the index.
  *
@@ -580,6 +690,90 @@ RangeVarCallbackForDropIndex(const RangeVar *rel, Oid relOid, Oid oldRelOid, voi
 		state->heapOid = IndexGetRelation(relOid, true);
 		if (OidIsValid(state->heapOid))
 			LockRelationOid(state->heapOid, heap_lockmode);
+	}
+	/* *INDENT-ON* */
+}
+
+
+/*
+ * Check permissions on table before acquiring relation lock; also lock
+ * the heap before the RangeVarGetRelidExtended takes the index lock, to avoid
+ * deadlocks.
+ *
+ * This code is borrowed from RangeVarCallbackForReindexIndex() in
+ * commands/indexcmds.c in Postgres source. We need this to ensure the right
+ * order of locking while dealing with REINDEX statements.
+ */
+static void
+RangeVarCallbackForReindexIndex(const RangeVar *relation, Oid relId, Oid oldRelId,
+								void *arg)
+{
+	/* *INDENT-OFF* */
+	char		relkind;
+	struct ReindexIndexCallbackState *state = arg;
+	LOCKMODE	table_lockmode;
+
+	/*
+	 * Lock level here should match table lock in reindex_index() for
+	 * non-concurrent case and table locks used by index_concurrently_*() for
+	 * concurrent case.
+	 */
+#if PG_VERSION_NUM >= 120000
+	table_lockmode = state->concurrent ? ShareUpdateExclusiveLock : ShareLock;
+#else
+	table_lockmode = ShareLock;
+#endif
+
+	/*
+	 * If we previously locked some other index's heap, and the name we're
+	 * looking up no longer refers to that relation, release the now-useless
+	 * lock.
+	 */
+	if (relId != oldRelId && OidIsValid(oldRelId))
+	{
+		UnlockRelationOid(state->locked_table_oid, table_lockmode);
+		state->locked_table_oid = InvalidOid;
+	}
+
+	/* If the relation does not exist, there's nothing more to do. */
+	if (!OidIsValid(relId))
+		return;
+
+	/*
+	 * If the relation does exist, check whether it's an index.  But note that
+	 * the relation might have been dropped between the time we did the name
+	 * lookup and now.  In that case, there's nothing to do.
+	 */
+	relkind = get_rel_relkind(relId);
+	if (!relkind)
+		return;
+	if (relkind != RELKIND_INDEX
+#if PG_VERSION_NUM >= 110000
+		&& relkind != RELKIND_PARTITIONED_INDEX
+#endif
+		)
+		ereport(ERROR,
+				(errcode(ERRCODE_WRONG_OBJECT_TYPE),
+				 errmsg("\"%s\" is not an index", relation->relname)));
+
+	/* Check permissions */
+	if (!pg_class_ownercheck(relId, GetUserId()))
+		aclcheck_error(ACLCHECK_NOT_OWNER, OBJECT_INDEX, relation->relname);
+
+	/* Lock heap before index to avoid deadlock. */
+	if (relId != oldRelId)
+	{
+		Oid			table_oid = IndexGetRelation(relId, true);
+
+		/*
+		 * If the OID isn't valid, it means the index was concurrently
+		 * dropped, which is not a problem for us; just return normally.
+		 */
+		if (OidIsValid(table_oid))
+		{
+			LockRelationOid(table_oid, table_lockmode);
+			state->locked_table_oid = table_oid;
+		}
 	}
 	/* *INDENT-ON* */
 }
