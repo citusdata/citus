@@ -24,6 +24,7 @@ pg_regress_multi_check = $(PERL) $(citus_abs_srcdir)/pg_regress_multi.pl --pgxsd
 MULTI_REGRESS_OPTS = --inputdir=$(citus_abs_srcdir) $(pg_regress_locale_flags) --launcher="$(citus_abs_srcdir)/log_test_times"
 
 pg_upgrade_check = $(citus_abs_srcdir)/upgrade/upgrade_test.py
+citus_upgrade_check = $(citus_abs_srcdir)/upgrade/citus_upgrade_test.py
 
 # XXX: Can't actually do useful testruns against install - $libdir
 # etc will point to the directory configured during postgres'
@@ -144,6 +145,9 @@ check-failure-base: all
 
 check-upgrade:
 	$(pg_upgrade_check) --old-bindir=$(old-bindir) --new-bindir=$(new-bindir) --pgxsdir=$(pgxsdir)
+
+check-citus-upgrade:
+	$(citus_upgrade_check) --bindir=$(bindir) --citus-version=$(citus-version) --pgxsdir=$(pgxsdir)
 
 clean distclean maintainer-clean:
 	rm -f $(output_files) $(input_files)
