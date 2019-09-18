@@ -531,6 +531,12 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 										 queryString);
 		}
 
+		if (IsA(parsetree, AlterFunctionStmt))
+		{
+			ddlJobs = PlanAlterFunctionStmt(castNode(AlterFunctionStmt, parsetree),
+											queryString);
+		}
+
 		/*
 		 * ALTER TABLE ALL IN TABLESPACE statements have their node type as
 		 * AlterTableMoveAllStmt. At the moment we do not support this functionality in

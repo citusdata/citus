@@ -31,6 +31,7 @@
 #include "distributed/colocation_utils.h"
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
+#include "distributed/deparser.h"
 #include "distributed/maintenanced.h"
 #include "distributed/master_protocol.h"
 #include "distributed/metadata/distobject.h"
@@ -648,4 +649,57 @@ ShouldPropagateAlterFunction(const ObjectAddress *address)
 	}
 
 	return true;
+}
+
+
+/*
+ * PlanAlterFunctionStmt is invoked for alter function statements with actions. Here we
+ * plan the jobs to be executed on the workers for functions that have been distributed in
+ * the cluster.
+ */
+List *
+PlanAlterFunctionStmt(AlterFunctionStmt *stmt, const char *queryString)
+{
+	const char *sql = NULL;
+	const ObjectAddress *address = NULL;
+	List *commands = NIL;
+
+	address = GetObjectAddressFromParseTree((Node *) stmt, false);
+	if (!ShouldPropagateAlterFunction(address))
+	{
+		return NIL;
+	}
+
+	EnsureCoordinator();
+
+	/* reconstruct alter statement in a portable fashion */
+	QualifyTreeNode((Node *) stmt);
+	sql = DeparseTreeNode((Node *) stmt);
+
+	/*
+	 * all functions that are distributed will need their alter statements propagated
+	 * regardless if in a transaction or not. If we would not propagate the alter
+	 * statement the functions would be different on worker and coordinator.
+	 */
+	EnsureSequentialModeForFunctionDDL();
+
+	commands = list_make3(DISABLE_DDL_PROPAGATION,
+						  (void *) sql,
+						  ENABLE_DDL_PROPAGATION);
+
+	return NodeDDLTaskList(ALL_WORKERS, commands);
+}
+
+
+const ObjectAddress *
+AlterFunctionStmtObjectAddress(AlterFunctionStmt *stmt, bool missing_ok)
+{
+	Oid funcOid = InvalidOid;
+	ObjectAddress *address = NULL;
+
+	funcOid = LookupFuncWithArgsCompat(OBJECT_FUNCTION, stmt->func, missing_ok);
+	address = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*address, ProcedureRelationId, funcOid);
+
+	return address;
 }
