@@ -121,6 +121,11 @@ PlanAlterObjectSchemaStmt(AlterObjectSchemaStmt *stmt, const char *queryString)
 			return PlanAlterTypeSchemaStmt(stmt, queryString);
 		}
 
+		case OBJECT_FUNCTION:
+		{
+			return PlanAlterFunctionSchemaStmt(stmt, queryString);
+		}
+
 		default:
 		{
 			/* do nothing for unsupported objects */
@@ -187,6 +192,12 @@ ProcessAlterObjectSchemaStmt(AlterObjectSchemaStmt *stmt, const char *queryStrin
 		case OBJECT_TYPE:
 		{
 			ProcessAlterTypeSchemaStmt(stmt, queryString);
+			return;
+		}
+
+		case OBJECT_FUNCTION:
+		{
+			ProcessAlterFunctionSchemaStmt(stmt, queryString);
 			return;
 		}
 

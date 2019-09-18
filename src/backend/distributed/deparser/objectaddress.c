@@ -142,6 +142,11 @@ AlterObjectSchemaStmtObjectAddress(AlterObjectSchemaStmt *stmt, bool missing_ok)
 			return AlterTypeSchemaStmtObjectAddress(stmt, missing_ok);
 		}
 
+		case OBJECT_FUNCTION:
+		{
+			return AlterFunctionSchemaStmtObjectAddress(stmt, missing_ok);
+		}
+
 		default:
 		{
 			ereport(ERROR, (errmsg("unsupported alter schema statement to get object "

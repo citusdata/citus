@@ -31,6 +31,7 @@
 #include "distributed/colocation_utils.h"
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
+#include "distributed/deparser.h"
 #include "distributed/maintenanced.h"
 #include "distributed/master_protocol.h"
 #include "distributed/metadata/distobject.h"
@@ -39,6 +40,7 @@
 #include "distributed/multi_executor.h"
 #include "distributed/relation_access_tracking.h"
 #include "distributed/worker_transaction.h"
+#include "parser/parse_type.h"
 #include "storage/lmgr.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
@@ -651,4 +653,118 @@ ShouldPropagateAlterFunction(const ObjectAddress *address)
 	}
 
 	return true;
+}
+
+
+/*
+ * PlanAlterFunctionSchemaStmt is executed before the statement is applied to the local
+ * postgres instance.
+ *
+ * In this stage we can prepare the commands that need to be run on all workers.
+ */
+List *
+PlanAlterFunctionSchemaStmt(AlterObjectSchemaStmt *stmt, const char *queryString)
+{
+	const char *sql = NULL;
+	const ObjectAddress *address = NULL;
+	List *commands = NIL;
+
+	Assert(stmt->objectType == OBJECT_FUNCTION);
+
+	address = GetObjectAddressFromParseTree((Node *) stmt, false);
+	if (!ShouldPropagateAlterFunction(address))
+	{
+		return NIL;
+	}
+
+	EnsureCoordinator();
+
+	QualifyTreeNode((Node *) stmt);
+	sql = DeparseTreeNode((Node *) stmt);
+
+	EnsureSequentialModeForFunctionDDL();
+
+	commands = list_make3(DISABLE_DDL_PROPAGATION,
+						  (void *) sql,
+						  ENABLE_DDL_PROPAGATION);
+
+	return NodeDDLTaskList(ALL_WORKERS, commands);
+}
+
+
+/*
+ * ProcessAlterFunctionSchemaStmt is executed after the change has been applied locally,
+ * we can now use the new dependencies of the function to ensure all its dependencies
+ * exist on the workers before we apply the commands remotely.
+ */
+void
+ProcessAlterFunctionSchemaStmt(AlterObjectSchemaStmt *stmt, const char *queryString)
+{
+	const ObjectAddress *address = NULL;
+
+	Assert(stmt->objectType == OBJECT_FUNCTION);
+
+	address = GetObjectAddressFromParseTree((Node *) stmt, false);
+	if (!ShouldPropagateAlterFunction(address))
+	{
+		return;
+	}
+
+	/* dependencies have changed (schema) lets ensure they exist */
+	EnsureDependenciesExistsOnAllNodes(address);
+}
+
+
+/*
+ * AlterFunctionSchemaStmtObjectAddress returns the ObjectAddress of the function that is
+ * the subject of the AlterObjectSchemaStmt. Errors if missing_ok is false.
+ *
+ * This could be called both before or after it has been applied locally. It will look in
+ * the old schema first, if the function cannot be found in that schema it will look in
+ * the new schema. Errors if missing_ok is false and the type cannot be found in either of
+ * the schemas.
+ */
+const ObjectAddress *
+AlterFunctionSchemaStmtObjectAddress(AlterObjectSchemaStmt *stmt, bool missing_ok)
+{
+	ObjectWithArgs *objectWithArgs = castNode(ObjectWithArgs, stmt->object);
+	Oid funcOid = LookupFuncWithArgsCompat(OBJECT_FUNCTION, objectWithArgs, true);
+	List *names = objectWithArgs->objname;
+	ObjectAddress *address = NULL;
+
+	if (funcOid == InvalidOid)
+	{
+		/*
+		 * couldn't find the function, might have already been moved to the new schema, we
+		 * construct a new objname that uses the new schema to search in.
+		 */
+
+		/* the name of the function is the last in the list of names */
+		Value *funcNameStr = lfirst(list_tail(names));
+		List *newNames = list_make2(makeString(stmt->newschema), funcNameStr);
+
+		/*
+		 * we don't error here either, as the error would be not a good user facing
+		 * error if the type didn't exist in the first place.
+		 */
+		objectWithArgs->objname = newNames;
+		funcOid = LookupFuncWithArgsCompat(OBJECT_FUNCTION, objectWithArgs, true);
+		objectWithArgs->objname = names; /* restore the original names */
+
+		/*
+		 * if the function is still invalid we couldn't find the function, error with the
+		 * same message postgres would error with it missing_ok is false (not ok to miss)
+		 */
+		if (!missing_ok && funcOid == InvalidOid)
+		{
+			ereport(ERROR, (errcode(ERRCODE_UNDEFINED_OBJECT),
+							errmsg("function %s(%s) does not exist",
+								   NameListToString(objectWithArgs->objname),
+								   TypeNameListToString(objectWithArgs->objargs))));
+		}
+	}
+
+	address = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*address, ProcedureRelationId, funcOid);
+	return address;
 }
