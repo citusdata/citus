@@ -38,8 +38,8 @@ def install_citus(citus_version, pg_version):
         subprocess.call(['tar', 'xvf', '/install-pg{}-citus{}.tar'.format(pg_version, citus_version)])
 
 def install_citus_master(pg_version):
-    with utils.cd('~'):
-        abs_tar_path = os.path.abspath('./install-{}'.format(pg_version))
+    with utils.cd('~/project'):
+        abs_tar_path = os.path.abspath('./install-{}.tar'.format(pg_version))
         with utils.cd('/'):
             subprocess.call(['tar', 'xvf', abs_tar_path])
 
