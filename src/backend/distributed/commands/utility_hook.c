@@ -375,6 +375,11 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 					break;
 				}
 
+				case OBJECT_FUNCTION:
+				{
+					ddlJobs = PlanDropFunctionStmt(dropStatement, queryString);
+				}
+
 				default:
 				{
 					/* unsupported type, skipping*/

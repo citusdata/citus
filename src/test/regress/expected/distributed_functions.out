@@ -41,6 +41,7 @@ CREATE FUNCTION add_mixed_param_names(integer, val1 integer) RETURNS integer
     LANGUAGE SQL
     IMMUTABLE
     RETURNS NULL ON NULL INPUT;
+RESET citus.enable_ddl_propagation;
 -- make sure that none of the active and primary nodes hasmetadata
 -- at the start of the test
 select bool_or(hasmetadata) from pg_dist_node WHERE isactive AND  noderole = 'primary';
@@ -104,6 +105,15 @@ SELECT * FROM run_command_on_workers('SELECT function_tests.add(2,3);') ORDER BY
 -----------+----------+---------+--------
  localhost |    57637 | t       | 5
  localhost |    57638 | t       | 5
+(2 rows)
+
+DROP FUNCTION add(int,int);
+-- call should fail as function should have been dropped
+SELECT * FROM run_command_on_workers('SELECT function_tests.add(2,3);') ORDER BY 1,2;
+ nodename  | nodeport | success |                                result                                
+-----------+----------+---------+----------------------------------------------------------------------
+ localhost |    57637 | f       | ERROR:  function function_tests.add(integer, integer) does not exist
+ localhost |    57638 | f       | ERROR:  function function_tests.add(integer, integer) does not exist
 (2 rows)
 
 -- postgres doesn't accept parameter names in the regprocedure input

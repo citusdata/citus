@@ -44,6 +44,10 @@ extern bool TableReferencing(Oid relationId);
 extern bool ConstraintIsAForeignKey(char *constraintName, Oid relationId);
 
 
+/* function.c - forward devlarations */
+extern List * PlanDropFunctionStmt(DropStmt *stmt, const char *queryString);
+
+
 /* grant.c - forward declarations */
 extern List * PlanGrantStmt(GrantStmt *grantStmt);
 
