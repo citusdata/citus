@@ -811,6 +811,11 @@ PlanAlterOwnerStmt(AlterOwnerStmt *stmt, const char *queryString)
 			return PlanAlterTypeOwnerStmt(stmt, queryString);
 		}
 
+		case OBJECT_FUNCTION:
+		{
+			return PlanAlterFunctionOwnerStmt(stmt, queryString);
+		}
+
 		default:
 		{
 			/* do nothing for unsupported alter owner statements */

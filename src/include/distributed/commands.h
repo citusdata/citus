@@ -57,6 +57,9 @@ extern const ObjectAddress * AlterFunctionStmtObjectAddress(AlterFunctionStmt *s
 extern List * PlanRenameFunctionStmt(RenameStmt *stmt, const char *queryString);
 extern const ObjectAddress * RenameFunctionStmtObjectAddress(RenameStmt *stmt,
 															 bool missing_ok);
+extern List * PlanAlterFunctionOwnerStmt(AlterOwnerStmt *stmt, const char *queryString);
+extern const ObjectAddress * AlterFunctionOwnerObjectAddress(AlterOwnerStmt *stmt,
+															 bool missing_ok);
 
 /* grant.c - forward declarations */
 extern List * PlanGrantStmt(GrantStmt *grantStmt);

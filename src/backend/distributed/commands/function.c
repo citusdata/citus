@@ -731,6 +731,43 @@ PlanRenameFunctionStmt(RenameStmt *stmt, const char *queryString)
 }
 
 
+/*
+ * PlanAlterTypeOwnerStmt is called for change of owner ship of functions before the owner
+ * ship is changed on the local instance.
+ *
+ * If the function for which the owner is changed is distributed we execute the change on
+ * all the workers to keep the type in sync across the cluster.
+ */
+List *
+PlanAlterFunctionOwnerStmt(AlterOwnerStmt *stmt, const char *queryString)
+{
+	const ObjectAddress *address = NULL;
+	const char *sql = NULL;
+	List *commands = NULL;
+
+	Assert(stmt->objectType == OBJECT_FUNCTION);
+
+	address = GetObjectAddressFromParseTree((Node *) stmt, false);
+	if (!ShouldPropagateAlterFunction(address))
+	{
+		return NIL;
+	}
+
+	EnsureCoordinator();
+
+	QualifyTreeNode((Node *) stmt);
+	sql = DeparseTreeNode((Node *) stmt);
+
+	EnsureSequentialModeForFunctionDDL();
+
+	commands = list_make3(DISABLE_DDL_PROPAGATION,
+						  (void *) sql,
+						  ENABLE_DDL_PROPAGATION);
+
+	return NodeDDLTaskList(ALL_WORKERS, commands);
+}
+
+
 const ObjectAddress *
 AlterFunctionStmtObjectAddress(AlterFunctionStmt *stmt, bool missing_ok)
 {
@@ -757,6 +794,28 @@ RenameFunctionStmtObjectAddress(RenameStmt *stmt, bool missing_ok)
 	ObjectAddress *address = NULL;
 
 	Assert(stmt->renameType == OBJECT_FUNCTION);
+
+	objectWithArgs = castNode(ObjectWithArgs, stmt->object);
+	funcOid = LookupFuncWithArgsCompat(OBJECT_FUNCTION, objectWithArgs, missing_ok);
+	address = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*address, ProcedureRelationId, funcOid);
+
+	return address;
+}
+
+
+/*
+ * AlterFunctionOwnerObjectAddress returns the ObjectAddress of the function that is the
+ * subject of the AlterOwnerStmt. Errors if missing_ok is false.
+ */
+const ObjectAddress *
+AlterFunctionOwnerObjectAddress(AlterOwnerStmt *stmt, bool missing_ok)
+{
+	ObjectWithArgs *objectWithArgs = NULL;
+	Oid funcOid = InvalidOid;
+	ObjectAddress *address = NULL;
+
+	Assert(stmt->objectType == OBJECT_FUNCTION);
 
 	objectWithArgs = castNode(ObjectWithArgs, stmt->object);
 	funcOid = LookupFuncWithArgsCompat(OBJECT_FUNCTION, objectWithArgs, missing_ok);
