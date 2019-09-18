@@ -6,7 +6,7 @@ Usage:
 
 Options:
     --bindir=<bindir>                      The PostgreSQL executable directory(ex: '~/.pgenv/pgsql-10.4/bin')
-    --citus-version=<citus-version>        Citus version(ex: v8.0.0)
+    --citus-version=<citus-version>        Citus version, this should be a branch or tag(ex: v8.0.0)
     --pgxsdir=<pgxsdir>           	       Path to the PGXS directory(ex: ~/.pgenv/src/postgresql-11.3)
     --pg-version<pg-version>               Major Postgres version to use(ex: 11)
 """
@@ -23,7 +23,7 @@ from config import CitusUpgradeConfig, NODE_PORTS, COORDINATOR_NAME, BEFORE_CITU
 from upgrade_common import initialize_temp_dir, initialize_citus_cluster, run_pg_regress, stop_databases
 
 
-def verify_initial_verson(config):
+def verify_initial_version(config):
     for port in NODE_PORTS.values():
         run_pg_regress(config.bindir, config.pg_srcdir,
                 port, BEFORE_CITUS_UPGRADE_SCHEDULE.format(config.citus_version))  
@@ -66,7 +66,7 @@ def main(config):
     initialize_citus_cluster(
         config.bindir, config.datadir, config.settings)  
         
-    verify_initial_verson(config)    
+    verify_initial_version(config)    
     install_citus_master(config.pg_version)
     restart_databases(config.bindir, config.datadir)
     run_alter_citus(config.bindir)
