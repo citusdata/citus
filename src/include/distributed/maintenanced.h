@@ -22,6 +22,7 @@
 extern double DistributedDeadlockDetectionTimeoutFactor;
 
 extern void StopMaintenanceDaemon(Oid databaseId);
+extern void TriggerMetadataSync(Oid databaseId);
 extern void InitializeMaintenanceDaemon(void);
 extern void InitializeMaintenanceDaemonBackend(void);
 

@@ -301,14 +301,19 @@ SELECT master_remove_node('localhost', 9990);
 
 -- clean-up
 DROP TABLE cluster_management_test;
--- check that adding/removing nodes are propagated to nodes with hasmetadata=true
+-- check that adding/removing nodes are propagated to nodes with metadata
 SELECT master_remove_node('localhost', :worker_2_port);
  master_remove_node 
 --------------------
  
 (1 row)
 
-UPDATE pg_dist_node SET hasmetadata=true WHERE nodeport=:worker_1_port;
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+ start_metadata_sync_to_node 
+-----------------------------
+ 
+(1 row)
+
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
  ?column? 
 ----------
@@ -336,8 +341,13 @@ SELECT nodename, nodeport FROM pg_dist_node WHERE nodename='localhost' AND nodep
 (0 rows)
 
 \c - - - :master_port
--- check that added nodes are not propagated to nodes with hasmetadata=false
-UPDATE pg_dist_node SET hasmetadata=false WHERE nodeport=:worker_1_port;
+-- check that added nodes are not propagated to nodes without metadata
+SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
+ stop_metadata_sync_to_node 
+----------------------------
+ 
+(1 row)
+
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
  ?column? 
 ----------
@@ -376,10 +386,10 @@ SELECT
 (1 row)
 
 SELECT * FROM pg_dist_node ORDER BY nodeid;
- nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole | nodecluster 
---------+---------+-----------+----------+----------+-------------+----------+----------+-------------
-     11 |       9 | localhost |    57637 | default  | f           | t        | primary  | default
-     12 |      10 | localhost |    57638 | default  | f           | t        | primary  | default
+ nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole | nodecluster | metadatasynced 
+--------+---------+-----------+----------+----------+-------------+----------+----------+-------------+----------------
+     11 |       9 | localhost |    57637 | default  | f           | t        | primary  | default     | f
+     12 |      10 | localhost |    57638 | default  | f           | t        | primary  | default     | f
 (2 rows)
 
 -- check that mixed add/remove node commands work fine inside transaction
@@ -408,7 +418,12 @@ SELECT nodename, nodeport FROM pg_dist_node WHERE nodename='localhost' AND nodep
 ----------+----------
 (0 rows)
 
-UPDATE pg_dist_node SET hasmetadata=true WHERE nodeport=:worker_1_port;
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+ start_metadata_sync_to_node 
+-----------------------------
+ 
+(1 row)
+
 BEGIN;
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
  ?column? 
@@ -593,11 +608,11 @@ CONTEXT:  PL/pgSQL function citus_internal.pg_dist_node_trigger_func() line 18 a
 INSERT INTO pg_dist_node (nodename, nodeport, groupid, noderole, nodecluster)
   VALUES ('localhost', 5000, 1000, 'primary', 'olap');
 ERROR:  new row for relation "pg_dist_node" violates check constraint "primaries_are_only_allowed_in_the_default_cluster"
-DETAIL:  Failing row contains (19, 1000, localhost, 5000, default, f, t, primary, olap).
+DETAIL:  Failing row contains (19, 1000, localhost, 5000, default, f, t, primary, olap, f).
 UPDATE pg_dist_node SET nodecluster = 'olap'
   WHERE nodeport = :worker_1_port;
 ERROR:  new row for relation "pg_dist_node" violates check constraint "primaries_are_only_allowed_in_the_default_cluster"
-DETAIL:  Failing row contains (16, 14, localhost, 57637, default, f, t, primary, olap).
+DETAIL:  Failing row contains (16, 14, localhost, 57637, default, f, t, primary, olap, f).
 -- check that you /can/ add a secondary node to a non-default cluster
 SELECT groupid AS worker_2_group FROM pg_dist_node WHERE nodeport = :worker_2_port \gset
 SELECT master_add_node('localhost', 8888, groupid => :worker_1_group, noderole => 'secondary', nodecluster=> 'olap');
@@ -620,9 +635,9 @@ SELECT master_add_node('localhost', 8887, groupid => :worker_1_group, noderole =
 (1 row)
 
 SELECT * FROM pg_dist_node WHERE nodeport=8887;
- nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole  |                           nodecluster                           
---------+---------+-----------+----------+----------+-------------+----------+-----------+-----------------------------------------------------------------
-     24 |      14 | localhost |     8887 | default  | f           | t        | secondary | thisisasixtyfourcharacterstringrepeatedfourtimestomake256chars.
+ nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole  |                           nodecluster                           | metadatasynced 
+--------+---------+-----------+----------+----------+-------------+----------+-----------+-----------------------------------------------------------------+----------------
+     24 |      14 | localhost |     8887 | default  | f           | t        | secondary | thisisasixtyfourcharacterstringrepeatedfourtimestomake256chars. | f
 (1 row)
 
 -- don't remove the secondary and unavailable nodes, check that no commands are sent to
@@ -663,9 +678,9 @@ SELECT master_update_node(:worker_1_node, 'somehost', 9000);
 (1 row)
 
 SELECT * FROM pg_dist_node WHERE nodeid = :worker_1_node;
- nodeid | groupid | nodename | nodeport | noderack | hasmetadata | isactive | noderole | nodecluster 
---------+---------+----------+----------+----------+-------------+----------+----------+-------------
-     16 |      14 | somehost |     9000 | default  | f           | t        | primary  | default
+ nodeid | groupid | nodename | nodeport | noderack | hasmetadata | isactive | noderole | nodecluster | metadatasynced 
+--------+---------+----------+----------+----------+-------------+----------+----------+-------------+----------------
+     16 |      14 | somehost |     9000 | default  | f           | t        | primary  | default     | f
 (1 row)
 
 -- cleanup
@@ -676,8 +691,8 @@ SELECT master_update_node(:worker_1_node, 'localhost', :worker_1_port);
 (1 row)
 
 SELECT * FROM pg_dist_node WHERE nodeid = :worker_1_node;
- nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole | nodecluster 
---------+---------+-----------+----------+----------+-------------+----------+----------+-------------
-     16 |      14 | localhost |    57637 | default  | f           | t        | primary  | default
+ nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole | nodecluster | metadatasynced 
+--------+---------+-----------+----------+----------+-------------+----------+----------+-------------+----------------
+     16 |      14 | localhost |    57637 | default  | f           | t        | primary  | default     | f
 (1 row)
 

@@ -359,8 +359,8 @@ StartRemoteTransactionAbort(MultiConnection *connection)
 	 * [PREPARED]. If we've previously sent a PREPARE TRANSACTION, we always
 	 * want to wait for that result, as that shouldn't take long and will
 	 * reserve resources.  But if there's another query running, we don't want
-	 * to wait, because a longrunning statement may be running, force it to be
-	 * killed in that case.
+	 * to wait, because a long running statement may be running, so force it to
+	 * be killed in that case.
 	 */
 	if (transaction->transactionState == REMOTE_TRANS_PREPARING ||
 		transaction->transactionState == REMOTE_TRANS_PREPARED)
@@ -619,7 +619,7 @@ RemoteTransactionsBeginIfNecessary(List *connectionList)
 
 		/*
 		 * If a transaction already is in progress (including having failed),
-		 * don't start it again.  Thats quite normal if a piece of code allows
+		 * don't start it again. That's quite normal if a piece of code allows
 		 * cached connections.
 		 */
 		if (transaction->transactionState != REMOTE_TRANS_INVALID)
@@ -708,7 +708,7 @@ HandleRemoteTransactionResultError(MultiConnection *connection, PGresult *result
  * If the connection is marked as critical, and allowErrorPromotion is true,
  * this routine will ERROR out. The allowErrorPromotion case is primarily
  * required for the transaction management code itself. Usually it is helpful
- * to fail as soon as possible.  If !allowErrorPromotion transaction commit
+ * to fail as soon as possible. If !allowErrorPromotion transaction commit
  * will instead issue an error before committing on any node.
  */
 void

@@ -23,6 +23,7 @@
 #include "distributed/citus_acquire_lock.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/connection_management.h"
+#include "distributed/maintenanced.h"
 #include "distributed/master_protocol.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/metadata_cache.h"
@@ -31,6 +32,7 @@
 #include "distributed/multi_router_planner.h"
 #include "distributed/pg_dist_node.h"
 #include "distributed/reference_table_utils.h"
+#include "distributed/remote_commands.h"
 #include "distributed/resource_lock.h"
 #include "distributed/shardinterval_utils.h"
 #include "distributed/worker_manager.h"
@@ -58,6 +60,7 @@ typedef struct NodeMetadata
 	int32 groupId;
 	char *nodeRack;
 	bool hasMetadata;
+	bool metadataSynced;
 	bool isActive;
 	Oid nodeRole;
 	char *nodeCluster;
@@ -78,6 +81,7 @@ static void DeleteNodeRow(char *nodename, int32 nodeport);
 static List * ParseWorkerNodeFileAndRename(void);
 static WorkerNode * TupleToWorkerNode(TupleDesc tupleDescriptor, HeapTuple heapTuple);
 static void UpdateNodeLocation(int32 nodeId, char *newNodeName, int32 newNodePort);
+static bool UnsetMetadataSyncedForAll(void);
 
 /* declarations for dynamic loading */
 PG_FUNCTION_INFO_V1(master_add_node);
@@ -493,7 +497,7 @@ master_update_node(PG_FUNCTION_ARGS)
 	/*
 	 * force is used when an update needs to happen regardless of conflicting locks. This
 	 * feature is important to force the update during a failover due to failure, eg. by
-	 * a high-availability system such as pg_auto_failover. The strategy is a to start a
+	 * a high-availability system such as pg_auto_failover. The strategy is to start a
 	 * background worker that actively cancels backends holding conflicting locks with
 	 * this backend.
 	 *
@@ -577,6 +581,26 @@ master_update_node(PG_FUNCTION_ARGS)
 	}
 
 	UpdateNodeLocation(nodeId, newNodeNameString, newNodePort);
+
+	strlcpy(workerNode->workerName, newNodeNameString, WORKER_LENGTH);
+	workerNode->workerPort = newNodePort;
+
+	/*
+	 * Propagate the updated pg_dist_node entry to all metadata workers.
+	 * citus-ha uses master_update_node() in a prepared transaction, and
+	 * we don't support coordinated prepared transactions, so we cannot
+	 * propagate the changes to the worker nodes here. Instead we mark
+	 * all metadata nodes as not-synced and ask maintenanced to do the
+	 * propagation.
+	 *
+	 * It is possible that maintenance daemon does the first resync too
+	 * early, but that's fine, since this will start a retry loop with
+	 * 5 second intervals until sync is complete.
+	 */
+	if (UnsetMetadataSyncedForAll())
+	{
+		TriggerMetadataSync(MyDatabaseId);
+	}
 
 	if (handle != NULL)
 	{
@@ -1255,6 +1279,8 @@ InsertNodeRow(int nodeid, char *nodeName, int32 nodePort, NodeMetadata *nodeMeta
 	values[Anum_pg_dist_node_nodeport - 1] = UInt32GetDatum(nodePort);
 	values[Anum_pg_dist_node_noderack - 1] = CStringGetTextDatum(nodeMetadata->nodeRack);
 	values[Anum_pg_dist_node_hasmetadata - 1] = BoolGetDatum(nodeMetadata->hasMetadata);
+	values[Anum_pg_dist_node_metadatasynced - 1] = BoolGetDatum(
+		nodeMetadata->metadataSynced);
 	values[Anum_pg_dist_node_isactive - 1] = BoolGetDatum(nodeMetadata->isActive);
 	values[Anum_pg_dist_node_noderole - 1] = ObjectIdGetDatum(nodeMetadata->nodeRole);
 	values[Anum_pg_dist_node_nodecluster - 1] = nodeClusterNameDatum;
@@ -1463,6 +1489,7 @@ ParseWorkerNodeFileAndRename()
 		strlcpy(workerNode->workerRack, nodeRack, WORKER_LENGTH);
 		workerNode->workerPort = nodePort;
 		workerNode->hasMetadata = false;
+		workerNode->metadataSynced = false;
 		workerNode->isActive = true;
 
 		workerNodeList = lappend(workerNodeList, workerNode);
@@ -1519,6 +1546,8 @@ TupleToWorkerNode(TupleDesc tupleDescriptor, HeapTuple heapTuple)
 	strlcpy(workerNode->workerName, TextDatumGetCString(nodeName), WORKER_LENGTH);
 	strlcpy(workerNode->workerRack, TextDatumGetCString(nodeRack), WORKER_LENGTH);
 	workerNode->hasMetadata = DatumGetBool(datumArray[Anum_pg_dist_node_hasmetadata - 1]);
+	workerNode->metadataSynced =
+		DatumGetBool(datumArray[Anum_pg_dist_node_metadatasynced - 1]);
 	workerNode->isActive = DatumGetBool(datumArray[Anum_pg_dist_node_isactive - 1]);
 	workerNode->nodeRole = DatumGetObjectId(datumArray[Anum_pg_dist_node_noderole - 1]);
 
@@ -1573,4 +1602,70 @@ DatumToString(Datum datum, Oid dataType)
 	outputString = OidOutputFunctionCall(typIoFunc, datum);
 
 	return outputString;
+}
+
+
+/*
+ * UnsetMetadataSyncedForAll sets the metadatasynced column of all metadata
+ * nodes to false. It returns true if it updated at least a node.
+ */
+static bool
+UnsetMetadataSyncedForAll(void)
+{
+	bool updatedAtLeastOne = false;
+	Relation relation = NULL;
+	SysScanDesc scanDescriptor = NULL;
+	ScanKeyData scanKey[2];
+	int scanKeyCount = 2;
+	bool indexOK = false;
+	HeapTuple heapTuple = NULL;
+	TupleDesc tupleDescriptor = NULL;
+
+	relation = heap_open(DistNodeRelationId(), ExclusiveLock);
+	tupleDescriptor = RelationGetDescr(relation);
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_node_hasmetadata,
+				BTEqualStrategyNumber, F_BOOLEQ, BoolGetDatum(true));
+	ScanKeyInit(&scanKey[1], Anum_pg_dist_node_metadatasynced,
+				BTEqualStrategyNumber, F_BOOLEQ, BoolGetDatum(true));
+
+	scanDescriptor = systable_beginscan(relation,
+										InvalidOid, indexOK,
+										NULL, scanKeyCount, scanKey);
+
+	heapTuple = systable_getnext(scanDescriptor);
+	if (HeapTupleIsValid(heapTuple))
+	{
+		updatedAtLeastOne = true;
+	}
+
+	while (HeapTupleIsValid(heapTuple))
+	{
+		HeapTuple newHeapTuple = NULL;
+		Datum values[Natts_pg_dist_node];
+		bool isnull[Natts_pg_dist_node];
+		bool replace[Natts_pg_dist_node];
+
+		memset(replace, false, sizeof(replace));
+		memset(isnull, false, sizeof(isnull));
+		memset(values, 0, sizeof(values));
+
+		values[Anum_pg_dist_node_metadatasynced - 1] = BoolGetDatum(false);
+		replace[Anum_pg_dist_node_metadatasynced - 1] = true;
+
+		newHeapTuple = heap_modify_tuple(heapTuple, tupleDescriptor, values, isnull,
+										 replace);
+
+		CatalogTupleUpdate(relation, &newHeapTuple->t_self, newHeapTuple);
+
+		CommandCounterIncrement();
+
+		heap_freetuple(newHeapTuple);
+
+		heapTuple = systable_getnext(scanDescriptor);
+	}
+
+	systable_endscan(scanDescriptor);
+	heap_close(relation, NoLock);
+
+	return updatedAtLeastOne;
 }

@@ -443,9 +443,9 @@ ExecuteOptionalRemoteCommand(MultiConnection *connection, const char *command,
 
 	/*
 	 * store result if result has been set, when the user is not interested in the result
-	 * a NULL pointer could be passed and the result will be cleared
+	 * a NULL pointer could be passed and the result will be cleared.
 	 */
-	if (result)
+	if (result != NULL)
 	{
 		*result = localResult;
 	}
@@ -454,6 +454,7 @@ ExecuteOptionalRemoteCommand(MultiConnection *connection, const char *command,
 		PQclear(localResult);
 		ForgetResults(connection);
 	}
+
 	return RESPONSE_OKAY;
 }
 

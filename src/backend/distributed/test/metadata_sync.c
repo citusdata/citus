@@ -14,14 +14,20 @@
 #include "fmgr.h"
 
 #include "catalog/pg_type.h"
+#include "distributed/connection_management.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_sync.h"
+#include "distributed/remote_commands.h"
+#include "postmaster/postmaster.h"
+#include "miscadmin.h"
+#include "storage/latch.h"
 #include "utils/array.h"
 #include "utils/builtins.h"
 
 
 /* declarations for dynamic loading */
 PG_FUNCTION_INFO_V1(master_metadata_snapshot);
+PG_FUNCTION_INFO_V1(wait_until_metadata_sync);
 
 
 /*
@@ -61,4 +67,35 @@ master_metadata_snapshot(PG_FUNCTION_ARGS)
 													 ddlCommandTypeId);
 
 	PG_RETURN_ARRAYTYPE_P(snapshotCommandArrayType);
+}
+
+
+/*
+ * wait_until_metadata_sync waits until the maintenance daemon does a metadata
+ * sync, or times out.
+ */
+Datum
+wait_until_metadata_sync(PG_FUNCTION_ARGS)
+{
+	uint32 timeout = PG_GETARG_UINT32(0);
+	int waitResult = 0;
+
+	MultiConnection *connection = GetNodeConnection(FORCE_NEW_CONNECTION,
+													"localhost", PostPortNumber);
+	ExecuteCriticalRemoteCommand(connection, "LISTEN " METADATA_SYNC_CHANNEL);
+
+	waitResult = WaitLatchOrSocket(NULL, WL_SOCKET_READABLE | WL_TIMEOUT,
+								   PQsocket(connection->pgConn), timeout, 0);
+	if (waitResult & WL_SOCKET_MASK)
+	{
+		ClearResults(connection, true);
+	}
+	else if (waitResult & WL_TIMEOUT)
+	{
+		elog(WARNING, "waiting for metadata sync timed out");
+	}
+
+	CloseConnection(connection);
+
+	PG_RETURN_VOID();
 }

@@ -70,6 +70,20 @@ step "s2-update-node-2"
         58638);
 }
 
+step "s2-verify-metadata"
+{
+    SELECT nodeid, groupid, nodename, nodeport FROM pg_dist_node ORDER BY nodeid;
+    SELECT master_run_on_worker(
+        ARRAY['localhost'], ARRAY[57638],
+        ARRAY['SELECT jsonb_agg(ROW(nodeid, groupid, nodename, nodeport) ORDER BY nodeid) FROM  pg_dist_node'],
+        false);
+}
+
+step "s2-start-metadata-sync-node-2"
+{
+    SELECT start_metadata_sync_to_node('localhost', 57638);
+}
+
 step "s2-abort"
 {
 	ABORT;
@@ -85,3 +99,8 @@ permutation "s1-begin" "s1-update-node-1" "s2-update-node-2" "s1-commit" "s1-sho
 
 # sessions 1 updates node 1, session 2 tries to do the same
 permutation "s1-begin" "s1-update-node-1" "s2-begin" "s2-update-node-1" "s1-commit" "s2-abort" "s1-show-nodes"
+
+# master_update_node should block start_metadata_sync_to_node. Note that we
+# cannot run start_metadata_sync_to_node in a transaction, so we're not
+# testing the reverse order here.
+permutation "s1-begin" "s1-update-node-1" "s2-start-metadata-sync-node-2" "s1-commit" "s2-verify-metadata"
