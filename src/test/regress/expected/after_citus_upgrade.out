@@ -1,0 +1,8 @@
+\dx;
+                 List of installed extensions
+  Name   | Version |   Schema   |         Description          
+---------+---------+------------+------------------------------
+ citus   | 9.0-1   | pg_catalog | Citus distributed database
+ plpgsql | 1.0     | pg_catalog | PL/pgSQL procedural language
+(2 rows)
+

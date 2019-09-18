@@ -18,18 +18,31 @@ import utils
 
 from docopt import docopt
 
-from config import CitusUpgradeConfig, NODE_PORTS, COORDINATOR_NAME, BEFORE_CITUS_UPGRADE_SCHEDULE, NODE_NAMES, USER
+from config import CitusUpgradeConfig, NODE_PORTS, COORDINATOR_NAME, BEFORE_CITUS_UPGRADE_SCHEDULE, NODE_NAMES, USER, AFTER_CITUS_UPGRADE_SCHEDULE
 from upgrade_test import initialize_temp_dir, initialize_citus_cluster, run_pg_regress, stop_databases
 
+PG_VERSION = 11
 
-def run_test_in_all_nodes(config):
+def verify_initial_verson(config):
     for port in NODE_PORTS.values():
         run_pg_regress(config.bindir, config.pg_srcdir,
                 port, BEFORE_CITUS_UPGRADE_SCHEDULE.format(config.citus_version))  
 
-def install_citus(citus_version):
+def verify_upgrade(config):
+    for port in NODE_PORTS.values():
+        run_pg_regress(config.bindir, config.pg_srcdir,
+                port, AFTER_CITUS_UPGRADE_SCHEDULE)                  
+
+def install_citus(citus_version, pg_version):
     with utils.cd('/'):
-        subprocess.call(['tar', 'xvf', '/install-pg11-citus{}.tar'.format(citus_version)])
+        subprocess.call(['tar', 'xvf', '/install-pg{}-citus{}.tar'.format(pg_version, citus_version)])
+
+def install_citus_master(pg_version):
+    with utils.cd('~'):
+        abs_tar_path = os.path.abspath('./install-{}'.format(pg_version))
+        with utils.cd('/'):
+            subprocess.call(['tar', 'xvf', abs_tar_path])
+
 
 def run_alter_citus(pg_path):
     for port in NODE_PORTS.values():
@@ -48,15 +61,16 @@ def restart_databases(pg_path, rel_data_path):
         subprocess.call(command)    
 
 def main(config):
-    install_citus(config.citus_version)
+    install_citus(config.citus_version, PG_VERSION)
     initialize_temp_dir(config.temp_dir)
     initialize_citus_cluster(
         config.bindir, config.datadir, config.settings)  
-    run_test_in_all_nodes(config)    
-    install_citus("citusUpgrade")
+        
+    verify_initial_verson(config)    
+    install_citus_master(PG_VERSION)
     restart_databases(config.bindir, config.datadir)
     run_alter_citus(config.bindir)
-    # verify upgrade
+    verify_upgrade(config)
     
     
 if __name__ == '__main__':

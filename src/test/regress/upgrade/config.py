@@ -2,6 +2,7 @@ BEFORE_UPGRADE_SCHEDULE = './before_upgrade_schedule'
 AFTER_UPGRADE_SCHEDULE = './after_upgrade_schedule'
 
 BEFORE_CITUS_UPGRADE_SCHEDULE = './before_citus{}_upgrade_schedule'
+AFTER_CITUS_UPGRADE_SCHEDULE = './after_citus_upgrade_schedule'
 
 class CitusUpgradeConfig():
     def __init__(self, arguments):
