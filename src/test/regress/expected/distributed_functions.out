@@ -183,6 +183,15 @@ SELECT * FROM run_command_on_workers('SELECT function_tests2.add(2,3);') ORDER B
 (2 rows)
 
 ALTER FUNCTION function_tests2.add(int,int) SET SCHEMA function_tests;
+DROP FUNCTION add(int,int);
+-- call should fail as function should have been dropped
+SELECT * FROM run_command_on_workers('SELECT function_tests.add(2,3);') ORDER BY 1,2;
+ nodename  | nodeport | success |                                result                                
+-----------+----------+---------+----------------------------------------------------------------------
+ localhost |    57637 | f       | ERROR:  function function_tests.add(integer, integer) does not exist
+ localhost |    57638 | f       | ERROR:  function function_tests.add(integer, integer) does not exist
+(2 rows)
+
 -- postgres doesn't accept parameter names in the regprocedure input
 SELECT create_distributed_function('add_with_param_names(val1 int, int)', 'val1');
 ERROR:  syntax error at or near "int"

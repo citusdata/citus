@@ -122,6 +122,10 @@ SELECT * FROM run_command_on_workers('SELECT function_tests.add(2,3);') ORDER BY
 SELECT * FROM run_command_on_workers('SELECT function_tests2.add(2,3);') ORDER BY 1,2;
 ALTER FUNCTION function_tests2.add(int,int) SET SCHEMA function_tests;
 
+DROP FUNCTION add(int,int);
+-- call should fail as function should have been dropped
+SELECT * FROM run_command_on_workers('SELECT function_tests.add(2,3);') ORDER BY 1,2;
+
 -- postgres doesn't accept parameter names in the regprocedure input
 SELECT create_distributed_function('add_with_param_names(val1 int, int)', 'val1');
 

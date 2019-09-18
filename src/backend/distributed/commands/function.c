@@ -67,6 +67,7 @@ static void UpdateFunctionDistributionInfo(const ObjectAddress *distAddress,
 static void EnsureSequentialModeForFunctionDDL(void);
 static void TriggerSyncMetadataToPrimaryNodes(void);
 static bool ShouldPropagateAlterFunction(const ObjectAddress *address);
+static List * FunctionListToObjectAddresses(List *objectWithArgsList, bool missing_ok);
 
 
 PG_FUNCTION_INFO_V1(create_distributed_function);
@@ -806,6 +807,103 @@ PlanAlterFunctionOwnerStmt(AlterOwnerStmt *stmt, const char *queryString)
 
 
 /*
+ * PlanDropFunctionStmt gets called during the planning phase of a DROP FUNCTION statement
+ * and returns a list of DDLJob's that will drop any distributed functions from the
+ * workers.
+ */
+List *
+PlanDropFunctionStmt(DropStmt *stmt, const char *queryString)
+{
+	List *oldObjectWithArgsList = stmt->objects;
+	List *distributedObjectWithArgsList = NIL;
+	List *distributedFunctionAddresses = NIL;
+	ListCell *addressCell = NULL;
+	const char *dropStmtSql = NULL;
+	List *commands = NULL;
+	List *objectAddresses = NIL;
+	ListCell *objectWithArgsListCell = NULL;
+
+	if (creating_extension)
+	{
+		/*
+		 * extensions should be created separately on the workers, types cascading from an
+		 * extension should therefor not be propagated here.
+		 */
+		return NIL;
+	}
+
+	if (!EnableDependencyCreation)
+	{
+		/*
+		 * we are configured to disable object propagation, should not propagate anything
+		 */
+		return NIL;
+	}
+
+
+	/*
+	 * Our statements need to be fully qualified so we can drop them from the right schema
+	 * on the workers
+	 */
+	QualifyTreeNode((Node *) stmt);
+
+	/*
+	 * map all functions to their object addresses and step through them in lock step to
+	 * create two lists with all distributed functions and their addresses.
+	 */
+	objectAddresses = FunctionListToObjectAddresses(oldObjectWithArgsList,
+													stmt->missing_ok);
+	forboth(objectWithArgsListCell, oldObjectWithArgsList, addressCell, objectAddresses)
+	{
+		ObjectAddress *address = (ObjectAddress *) lfirst(addressCell);
+		ObjectWithArgs *func = castNode(ObjectWithArgs, lfirst(objectWithArgsListCell));
+
+		if (!IsObjectDistributed(address))
+		{
+			continue;
+		}
+
+		/* collect information for all distributed functions */
+		distributedFunctionAddresses = lappend(distributedFunctionAddresses, address);
+		distributedObjectWithArgsList = lappend(distributedObjectWithArgsList, func);
+	}
+
+	if (list_length(distributedObjectWithArgsList) <= 0)
+	{
+		/* no distributed functions to drop */
+		return NIL;
+	}
+
+	/*
+	 * managing types can only be done on the coordinator if ddl propagation is on. when
+	 * it is off we will never get here. MX workers don't have a notion of distributed
+	 * types, so we block the call.
+	 */
+	EnsureCoordinator();
+
+	/* remove the entries for the distributed objects on dropping */
+	foreach(addressCell, distributedFunctionAddresses)
+	{
+		ObjectAddress *address = (ObjectAddress *) lfirst(addressCell);
+		UnmarkObjectDistributed(address);
+	}
+
+	stmt->objects = distributedObjectWithArgsList;
+	dropStmtSql = DeparseTreeNode((Node *) stmt);
+	stmt->objects = oldObjectWithArgsList;
+
+	/* to prevent recursion with mx we disable ddl propagation */
+	EnsureSequentialModeForFunctionDDL();
+
+	commands = list_make3(DISABLE_DDL_PROPAGATION,
+						  (void *) dropStmtSql,
+						  ENABLE_DDL_PROPAGATION);
+
+	return NodeDDLTaskList(ALL_WORKERS, commands);
+}
+
+
+/*
  * ProcessAlterFunctionSchemaStmt is executed after the change has been applied locally,
  * we can now use the new dependencies of the function to ensure all its dependencies
  * exist on the workers before we apply the commands remotely.
@@ -939,4 +1037,25 @@ AlterFunctionSchemaStmtObjectAddress(AlterObjectSchemaStmt *stmt, bool missing_o
 	ObjectAddressSet(*address, ProcedureRelationId, funcOid);
 
 	return address;
+}
+
+
+static List *
+FunctionListToObjectAddresses(List *objectWithArgsList, bool missing_ok)
+{
+	List *result = NIL;
+	ListCell *objectWithArgsListCell = NULL;
+
+	foreach(objectWithArgsListCell, objectWithArgsList)
+	{
+		ObjectWithArgs *objectWithArgs = (ObjectWithArgs *) lfirst(
+			objectWithArgsListCell);
+		Oid funcOid = LookupFuncWithArgsCompat(OBJECT_FUNCTION, objectWithArgs,
+											   missing_ok);
+		ObjectAddress *address = palloc0(sizeof(ObjectAddress));
+		ObjectAddressSet(*address, ProcedureRelationId, funcOid);
+		result = lappend(result, address);
+	}
+
+	return result;
 }
