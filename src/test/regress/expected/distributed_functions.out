@@ -106,6 +106,14 @@ SELECT * FROM run_command_on_workers('SELECT function_tests.add(2,3);') ORDER BY
  localhost |    57638 | t       | 5
 (2 rows)
 
+-- testing alter statements for a distributed function
+-- ROWS 5, untested because;
+-- ERROR:  ROWS is not applicable when function does not return a set
+-- TODO verify settings are changed on remotes
+ALTER FUNCTION add(int,int) CALLED ON NULL INPUT IMMUTABLE SECURITY INVOKER PARALLEL UNSAFE LEAKPROOF COST 5;
+ALTER FUNCTION add(int,int) RETURNS NULL ON NULL INPUT STABLE SECURITY DEFINER PARALLEL RESTRICTED;
+ALTER FUNCTION add(int,int) STRICT VOLATILE PARALLEL SAFE;
+-- TODO test SET/RESET
 -- postgres doesn't accept parameter names in the regprocedure input
 SELECT create_distributed_function('add_with_param_names(val1 int, int)', 'val1');
 ERROR:  syntax error at or near "int"
