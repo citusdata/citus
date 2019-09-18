@@ -10,6 +10,7 @@ SELECT run_command_on_workers($$CREATE USER functionuser;$$);
 (2 rows)
 
 CREATE SCHEMA function_tests AUTHORIZATION functionuser;
+CREATE SCHEMA function_tests2 AUTHORIZATION functionuser;
 SET search_path TO function_tests;
 SET citus.shard_count TO 4;
 -- Create and distribute a simple function
@@ -41,6 +42,7 @@ CREATE FUNCTION add_mixed_param_names(integer, val1 integer) RETURNS integer
     LANGUAGE SQL
     IMMUTABLE
     RETURNS NULL ON NULL INPUT;
+RESET citus.enable_ddl_propagation;
 -- make sure that none of the active and primary nodes hasmetadata
 -- at the start of the test
 select bool_or(hasmetadata) from pg_dist_node WHERE isactive AND  noderole = 'primary';
@@ -100,6 +102,23 @@ SELECT create_distributed_function('add(int,int)', '$1');
 (1 row)
 
 SELECT * FROM run_command_on_workers('SELECT function_tests.add(2,3);') ORDER BY 1,2;
+ nodename  | nodeport | success | result 
+-----------+----------+---------+--------
+ localhost |    57637 | t       | 5
+ localhost |    57638 | t       | 5
+(2 rows)
+
+-- change the schema of the function and verify the old schema doesn't exist anymore while
+-- the new schema has the function.
+ALTER FUNCTION add(int,int) SET SCHEMA function_tests2;
+SELECT * FROM run_command_on_workers('SELECT function_tests.add(2,3);') ORDER BY 1,2;
+ nodename  | nodeport | success |                                result                                
+-----------+----------+---------+----------------------------------------------------------------------
+ localhost |    57637 | f       | ERROR:  function function_tests.add(integer, integer) does not exist
+ localhost |    57638 | f       | ERROR:  function function_tests.add(integer, integer) does not exist
+(2 rows)
+
+SELECT * FROM run_command_on_workers('SELECT function_tests2.add(2,3);') ORDER BY 1,2;
  nodename  | nodeport | success | result 
 -----------+----------+---------+--------
  localhost |    57637 | t       | 5
@@ -307,6 +326,7 @@ SELECT stop_metadata_sync_to_node(nodename,nodeport) FROM pg_dist_node WHERE isa
 
 SET client_min_messages TO error; -- suppress cascading objects dropping
 DROP SCHEMA function_tests CASCADE;
+DROP SCHEMA function_tests2 CASCADE;
 -- This is hacky, but we should clean-up the resources as below
 \c - - - :worker_1_port
 SET client_min_messages TO error; -- suppress cascading objects dropping
@@ -321,6 +341,7 @@ SELECT worker_drop_distributed_table(logicalrelid::text) FROM pg_dist_partition 
 
 TRUNCATE pg_dist_node;
 DROP SCHEMA function_tests CASCADE;
+DROP SCHEMA function_tests2 CASCADE;
 \c - - - :worker_2_port
 SET client_min_messages TO error; -- suppress cascading objects dropping
 UPDATE pg_dist_local_group SET groupid = 0;
@@ -334,6 +355,7 @@ SELECT worker_drop_distributed_table(logicalrelid::text) FROM pg_dist_partition 
 
 TRUNCATE pg_dist_node;
 DROP SCHEMA function_tests CASCADE;
+DROP SCHEMA function_tests2 CASCADE;
 \c - - - :master_port
 DROP USER functionuser;
 SELECT run_command_on_workers($$DROP USER functionuser;$$);
