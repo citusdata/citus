@@ -63,3 +63,4 @@ test: isolation_ref2ref_foreign_keys_on_mx
 test: isolation_get_distributed_wait_queries
 test: isolation_insert_vs_all_on_mx
 test: isolation_select_vs_all_on_mx
+test: isolation_update_delete_upsert_vs_all_on_mx
