@@ -19,6 +19,7 @@
 #include "catalog/pg_class.h"
 #include "catalog/pg_depend.h"
 #include "catalog/pg_type.h"
+#include "distributed/commands/utility_hook.h"
 #include "distributed/metadata/dependency.h"
 #include "distributed/metadata/distobject.h"
 #include "utils/fmgroids.h"
@@ -60,7 +61,6 @@ static void ApplyAddToDependencyList(void *context, Form_pg_depend pg_depend);
 static List * ExpandCitusSupportedTypes(void *context, const ObjectAddress *target);
 
 /* forward declaration of support functions to decide what to follow */
-static bool SupportedDependencyByCitus(const ObjectAddress *address);
 static bool IsObjectAddressOwnedByExtension(const ObjectAddress *target);
 
 
@@ -302,9 +302,32 @@ IsObjectAddressCollected(const ObjectAddress *findAddress,
  * SupportedDependencyByCitus returns whether citus has support to distribute the object
  * addressed.
  */
-static bool
+bool
 SupportedDependencyByCitus(const ObjectAddress *address)
 {
+	if (!EnableDependencyCreation)
+	{
+		/*
+		 * If the user has disabled object propagation we need to fall back to the legacy
+		 * behaviour in which we only support schema creation
+		 */
+		switch (getObjectClass(address))
+		{
+			case OCLASS_SCHEMA:
+			{
+				return true;
+			}
+
+			default:
+			{
+				return false;
+			}
+		}
+
+		/* should be unreachable */
+		Assert(false);
+	}
+
 	/*
 	 * looking at the type of a object to see if we know how to create the object on the
 	 * workers.

@@ -19,5 +19,6 @@
 
 extern List * GetDependenciesForObject(const ObjectAddress *target);
 extern List * OrderObjectAddressListInDependencyOrder(List *objectAddressList);
+extern bool SupportedDependencyByCitus(const ObjectAddress *address);
 
 #endif /* CITUS_DEPENDENCY_H */
