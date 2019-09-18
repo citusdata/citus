@@ -406,15 +406,6 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 
 				AppendShardIdToName(objectName, shardId);
 			}
-			else if (objectType == REINDEX_OBJECT_DATABASE)
-			{
-				ereport(ERROR, (errmsg("cannot extend name for multi-relation reindex")));
-			}
-			else
-			{
-				ereport(ERROR, (errmsg("invalid object type in reindex statement"),
-								errdetail("Object type: %u", (uint32) objectType)));
-			}
 
 			break;
 		}

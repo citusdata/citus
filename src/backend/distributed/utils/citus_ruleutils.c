@@ -38,6 +38,7 @@
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/relay_utility.h"
 #include "distributed/master_metadata_utility.h"
+#include "distributed/metadata_cache.h"
 #include "distributed/version_compat.h"
 #include "foreign/foreign.h"
 #include "lib/stringinfo.h"
@@ -711,6 +712,82 @@ deparse_shard_index_statement(IndexStmt *origStmt, Oid distrelid, int64 shardid,
 		appendStringInfo(buffer, "WHERE %s", deparse_expression(indexStmt->whereClause,
 																deparseContext, false,
 																false));
+	}
+}
+
+
+/*
+ * deparse_shard_reindex_statement uses the provided REINDEX node, dist.
+ * relation, and shard identifier to populate a provided buffer with a string
+ * representation of a shard-extended version of that command.
+ */
+void
+deparse_shard_reindex_statement(ReindexStmt *origStmt, Oid distrelid, int64 shardid,
+								StringInfo buffer)
+{
+	ReindexStmt *reindexStmt = copyObject(origStmt); /* copy to avoid modifications */
+	char *relationName = NULL;
+#if PG_VERSION_NUM >= 120000
+	const char *concurrentlyString = reindexStmt->concurrent ? "CONCURRENTLY " : "";
+#else
+	const char *concurrentlyString = "";
+#endif
+
+
+	if (reindexStmt->kind == REINDEX_OBJECT_INDEX ||
+		reindexStmt->kind == REINDEX_OBJECT_TABLE)
+	{
+		relationName = reindexStmt->relation->relname;
+
+		/* extend relation and index name using shard identifier */
+		AppendShardIdToName(&relationName, shardid);
+	}
+
+	appendStringInfoString(buffer, "REINDEX ");
+
+	if (reindexStmt->options == REINDEXOPT_VERBOSE)
+	{
+		appendStringInfoString(buffer, "(VERBOSE) ");
+	}
+
+	switch (reindexStmt->kind)
+	{
+		case REINDEX_OBJECT_INDEX:
+		{
+			appendStringInfo(buffer, "INDEX %s%s", concurrentlyString,
+							 quote_qualified_identifier(reindexStmt->relation->schemaname,
+														relationName));
+			break;
+		}
+
+		case REINDEX_OBJECT_TABLE:
+		{
+			appendStringInfo(buffer, "TABLE %s%s", concurrentlyString,
+							 quote_qualified_identifier(reindexStmt->relation->schemaname,
+														relationName));
+			break;
+		}
+
+		case REINDEX_OBJECT_SCHEMA:
+		{
+			appendStringInfo(buffer, "SCHEMA %s%s", concurrentlyString,
+							 quote_identifier(reindexStmt->name));
+			break;
+		}
+
+		case REINDEX_OBJECT_SYSTEM:
+		{
+			appendStringInfo(buffer, "SYSTEM %s%s", concurrentlyString,
+							 quote_identifier(reindexStmt->name));
+			break;
+		}
+
+		case REINDEX_OBJECT_DATABASE:
+		{
+			appendStringInfo(buffer, "DATABASE %s%s", concurrentlyString,
+							 quote_identifier(reindexStmt->name));
+			break;
+		}
 	}
 }
 

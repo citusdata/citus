@@ -386,7 +386,7 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 
 		if (IsA(parsetree, ReindexStmt))
 		{
-			ErrorIfReindexOnDistributedTable((ReindexStmt *) parsetree);
+			ddlJobs = PlanReindexStmt((ReindexStmt *) parsetree, queryString);
 		}
 
 		if (IsA(parsetree, DropStmt))

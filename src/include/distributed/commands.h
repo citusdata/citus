@@ -58,7 +58,8 @@ extern List * PlanGrantStmt(GrantStmt *grantStmt);
 extern bool IsIndexRenameStmt(RenameStmt *renameStmt);
 extern List * PlanIndexStmt(IndexStmt *createIndexStatement,
 							const char *createIndexCommand);
-extern void ErrorIfReindexOnDistributedTable(ReindexStmt *ReindexStatement);
+extern List * PlanReindexStmt(ReindexStmt *ReindexStatement,
+							  const char *ReindexCommand);
 extern List * PlanDropIndexStmt(DropStmt *dropIndexStatement,
 								const char *dropIndexCommand);
 extern void PostProcessIndexStmt(IndexStmt *indexStmt);
