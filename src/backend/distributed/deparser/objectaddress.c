@@ -76,6 +76,12 @@ GetObjectAddressFromParseTree(Node *parseTree, bool missing_ok)
 											   missing_ok);
 		}
 
+		case T_AlterFunctionStmt:
+		{
+			return AlterFunctionStmtObjectAddress(castNode(AlterFunctionStmt, parseTree),
+												  missing_ok);
+		}
+
 		default:
 		{
 			/*

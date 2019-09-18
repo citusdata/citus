@@ -44,6 +44,11 @@ extern bool TableReferencing(Oid relationId);
 extern bool ConstraintIsAForeignKey(char *constraintName, Oid relationId);
 
 
+/* function.c - forward declarations */
+extern List * PlanAlterFunctionStmt(AlterFunctionStmt *stmt, const char *queryString);
+extern const ObjectAddress * AlterFunctionStmtObjectAddress(AlterFunctionStmt *stmt,
+															bool missing_ok);
+
 /* grant.c - forward declarations */
 extern List * PlanGrantStmt(GrantStmt *grantStmt);
 
