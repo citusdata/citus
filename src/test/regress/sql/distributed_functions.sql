@@ -102,6 +102,17 @@ ALTER FUNCTION add(int,int) STRICT VOLATILE PARALLEL SAFE;
 ALTER FUNCTION add(int,int) RENAME TO add2;
 SELECT * FROM run_command_on_workers('SELECT function_tests.add(2,3);') ORDER BY 1,2;
 SELECT * FROM run_command_on_workers('SELECT function_tests.add2(2,3);') ORDER BY 1,2;
+ALTER FUNCTION add2(int,int) RENAME TO add;
+
+-- change the owner of the function and verify the owner has been changed on the workers
+ALTER FUNCTION add(int,int) OWNER TO functionuser;
+SELECT run_command_on_workers($$
+SELECT row(usename, nspname, proname)
+FROM pg_proc
+JOIN pg_user ON (usesysid = proowner)
+JOIN pg_namespace ON (pg_namespace.oid = pronamespace)
+WHERE proname = 'add';
+$$);
 
 -- postgres doesn't accept parameter names in the regprocedure input
 SELECT create_distributed_function('add_with_param_names(val1 int, int)', 'val1');
