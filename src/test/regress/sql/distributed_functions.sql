@@ -44,6 +44,10 @@ CREATE FUNCTION add_mixed_param_names(integer, val1 integer) RETURNS integer
     IMMUTABLE
     RETURNS NULL ON NULL INPUT;
 
+-- Allow ddl propagation to go through again so that we can verify utility hook for alter
+-- statements
+RESET citus.enable_ddl_propagation;
+
 -- make sure that none of the active and primary nodes hasmetadata
 -- at the start of the test
 select bool_or(hasmetadata) from pg_dist_node WHERE isactive AND  noderole = 'primary';
@@ -66,6 +70,16 @@ SELECT * FROM run_command_on_workers('SELECT function_tests.dup(42);') ORDER BY 
 
 SELECT create_distributed_function('add(int,int)', '$1');
 SELECT * FROM run_command_on_workers('SELECT function_tests.add(2,3);') ORDER BY 1,2;
+
+-- change the owner of the function and verify the owner has been changed on the workers
+ALTER FUNCTION add(int,int) OWNER TO functionuser;
+SELECT run_command_on_workers($$
+SELECT row(usename, nspname, proname)
+FROM pg_proc
+JOIN pg_user ON (usesysid = proowner)
+JOIN pg_namespace ON (pg_namespace.oid = pronamespace)
+WHERE proname = 'add';
+$$);
 
 -- postgres doesn't accept parameter names in the regprocedure input
 SELECT create_distributed_function('add_with_param_names(val1 int, int)', 'val1');
