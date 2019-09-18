@@ -26,22 +26,24 @@
 #include "access/xact.h"
 #include "catalog/namespace.h"
 #include "catalog/pg_proc.h"
-#include "distributed/commands.h"
 #include "catalog/pg_type.h"
+#include "commands/extension.h"
 #include "distributed/colocation_utils.h"
-#include "distributed/master_protocol.h"
+#include "distributed/commands.h"
+#include "distributed/commands/utility_hook.h"
 #include "distributed/maintenanced.h"
-#include "distributed/metadata_sync.h"
+#include "distributed/master_protocol.h"
 #include "distributed/metadata/distobject.h"
 #include "distributed/metadata/pg_dist_object.h"
+#include "distributed/metadata_sync.h"
 #include "distributed/multi_executor.h"
 #include "distributed/relation_access_tracking.h"
 #include "distributed/worker_transaction.h"
 #include "parser/parse_coerce.h"
 #include "storage/lmgr.h"
 #include "utils/builtins.h"
-#include "utils/fmgrprotos.h"
 #include "utils/fmgroids.h"
+#include "utils/fmgrprotos.h"
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
 
@@ -62,6 +64,7 @@ static void UpdateFunctionDistributionInfo(const ObjectAddress *distAddress,
 										   int *colocationId);
 static void EnsureSequentialModeForFunctionDDL(void);
 static void TriggerSyncMetadataToPrimaryNodes(void);
+static bool ShouldPropagateAlterFunction(const ObjectAddress *address);
 
 
 PG_FUNCTION_INFO_V1(create_distributed_function);
@@ -611,4 +614,38 @@ TriggerSyncMetadataToPrimaryNodes(void)
 	{
 		TriggerMetadataSync(MyDatabaseId);
 	}
+}
+
+
+/*
+ * ShouldPropagateAlterFunction returns, based on the address of a function, if alter
+ * statements targeting the function should be propagated.
+ */
+static bool
+ShouldPropagateAlterFunction(const ObjectAddress *address)
+{
+	if (creating_extension)
+	{
+		/*
+		 * extensions should be created separately on the workers, functions cascading
+		 * from an extension should therefor not be propagated.
+		 */
+		return false;
+	}
+
+	if (!EnableDependencyCreation)
+	{
+		/*
+		 * we are configured to disable object propagation, should not propagate anything
+		 */
+		return false;
+	}
+
+	if (!IsObjectDistributed(address))
+	{
+		/* do not propagate alter function for non-distributed functions */
+		return false;
+	}
+
+	return true;
 }
