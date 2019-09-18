@@ -67,6 +67,8 @@ SELECT * FROM run_command_on_workers('SELECT function_tests.dup(42);') ORDER BY 
 SELECT create_distributed_function('add(int,int)', '$1');
 SELECT * FROM run_command_on_workers('SELECT function_tests.add(2,3);') ORDER BY 1,2;
 
+ALTER FUNCTION add(int,int) RENAME TO add2;
+
 -- postgres doesn't accept parameter names in the regprocedure input
 SELECT create_distributed_function('add_with_param_names(val1 int, int)', 'val1');
 

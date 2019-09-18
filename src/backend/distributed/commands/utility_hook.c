@@ -425,6 +425,12 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 					break;
 				}
 
+				case OBJECT_FUNCTION:
+				{
+					ddlJobs = PlanRenameFunctionStmt(renameStmt, queryString);
+					break;
+				}
+
 				default:
 				{
 					ddlJobs = PlanRenameStmt(renameStmt, queryString);

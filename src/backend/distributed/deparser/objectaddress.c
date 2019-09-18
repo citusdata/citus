@@ -123,6 +123,11 @@ RenameStmtObjectAddress(RenameStmt *stmt, bool missing_ok)
 			return RenameAttributeStmtObjectAddress(stmt, missing_ok);
 		}
 
+		case OBJECT_FUNCTION:
+		{
+			return RenameFunctionStmtObjectAddress(stmt, missing_ok);
+		}
+
 		default:
 		{
 			ereport(ERROR, (errmsg("unsupported rename statement to get object address "
