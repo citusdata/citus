@@ -19,7 +19,7 @@ import utils
 from docopt import docopt
 
 from config import CitusUpgradeConfig, NODE_PORTS, COORDINATOR_NAME, BEFORE_CITUS_UPGRADE_SCHEDULE, NODE_NAMES, USER, AFTER_CITUS_UPGRADE_SCHEDULE
-from upgrade_test import initialize_temp_dir, initialize_citus_cluster, run_pg_regress, stop_databases
+from upgrade_common import initialize_temp_dir, initialize_citus_cluster, run_pg_regress, stop_databases
 
 PG_VERSION = 11
 
