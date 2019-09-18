@@ -284,6 +284,10 @@ jobs:
            install-and-test-ext --target check-citus-upgrade --pg-version 11 --citus-version v8.1.0
            install-and-test-ext --target check-citus-upgrade --pg-version 11 --citus-version v8.2.0
            install-and-test-ext --target check-citus-upgrade --pg-version 11 --citus-version v8.3.0
+           install-and-test-ext --target check-citus-upgrade --pg-version 10 --citus-version v8.0.0
+           install-and-test-ext --target check-citus-upgrade --pg-version 10 --citus-version v8.1.0
+           install-and-test-ext --target check-citus-upgrade --pg-version 10 --citus-version v8.2.0
+           install-and-test-ext --target check-citus-upgrade --pg-version 10 --citus-version v8.3.0
           
            
 
