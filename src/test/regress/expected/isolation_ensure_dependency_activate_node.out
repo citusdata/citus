@@ -18,6 +18,10 @@ step s1-print-distributed-objects:
 	SELECT count(*) FROM pg_type where typname = 'tt1';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
 
+    -- print if the function has been created
+    SELECT count(*) FROM pg_proc WHERE proname='add';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
+
     SELECT master_remove_node('localhost', 57638);
 
 ?column?       
@@ -25,6 +29,13 @@ step s1-print-distributed-objects:
 1              
 pg_identify_object_as_address
 
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
 count          
 
 0              
@@ -79,8 +90,19 @@ step s2-print-distributed-objects:
 	SELECT count(*) FROM pg_type where typname = 'tt1';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
 
+    -- print if the function has been created
+    SELECT count(*) FROM pg_proc WHERE proname='add';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
+
 pg_identify_object_as_address
 
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
 count          
 
 0              
@@ -118,6 +140,10 @@ step s1-print-distributed-objects:
 	SELECT count(*) FROM pg_type where typname = 'tt1';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
 
+    -- print if the function has been created
+    SELECT count(*) FROM pg_proc WHERE proname='add';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
+
     SELECT master_remove_node('localhost', 57638);
 
 ?column?       
@@ -125,6 +151,13 @@ step s1-print-distributed-objects:
 1              
 pg_identify_object_as_address
 
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
 count          
 
 0              
@@ -185,8 +218,19 @@ step s2-print-distributed-objects:
 	SELECT count(*) FROM pg_type where typname = 'tt1';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
 
+    -- print if the function has been created
+    SELECT count(*) FROM pg_proc WHERE proname='add';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
+
 pg_identify_object_as_address
 
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
 count          
 
 0              
@@ -224,6 +268,10 @@ step s1-print-distributed-objects:
 	SELECT count(*) FROM pg_type where typname = 'tt1';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
 
+    -- print if the function has been created
+    SELECT count(*) FROM pg_proc WHERE proname='add';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
+
     SELECT master_remove_node('localhost', 57638);
 
 ?column?       
@@ -231,6 +279,13 @@ step s1-print-distributed-objects:
 1              
 pg_identify_object_as_address
 
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
 count          
 
 0              
@@ -291,8 +346,19 @@ step s2-print-distributed-objects:
 	SELECT count(*) FROM pg_type where typname = 'tt1';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
 
+    -- print if the function has been created
+    SELECT count(*) FROM pg_proc WHERE proname='add';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
+
 pg_identify_object_as_address
 
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
 count          
 
 0              
@@ -330,6 +396,10 @@ step s1-print-distributed-objects:
 	SELECT count(*) FROM pg_type where typname = 'tt1';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
 
+    -- print if the function has been created
+    SELECT count(*) FROM pg_proc WHERE proname='add';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
+
     SELECT master_remove_node('localhost', 57638);
 
 ?column?       
@@ -337,6 +407,13 @@ step s1-print-distributed-objects:
 1              
 pg_identify_object_as_address
 
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
 count          
 
 0              
@@ -392,6 +469,10 @@ step s2-print-distributed-objects:
 	SELECT count(*) FROM pg_type where typname = 'tt1';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
 
+    -- print if the function has been created
+    SELECT count(*) FROM pg_proc WHERE proname='add';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
+
 pg_identify_object_as_address
 
 (schema,{myschema},{})
@@ -402,6 +483,13 @@ run_command_on_workers
 
 (localhost,57637,t,1)
 (localhost,57638,t,1)
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
 count          
 
 0              
@@ -432,6 +520,10 @@ step s1-print-distributed-objects:
 	SELECT count(*) FROM pg_type where typname = 'tt1';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
 
+    -- print if the function has been created
+    SELECT count(*) FROM pg_proc WHERE proname='add';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
+
     SELECT master_remove_node('localhost', 57638);
 
 ?column?       
@@ -439,6 +531,13 @@ step s1-print-distributed-objects:
 1              
 pg_identify_object_as_address
 
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
 count          
 
 0              
@@ -500,6 +599,10 @@ step s2-print-distributed-objects:
 	SELECT count(*) FROM pg_type where typname = 'tt1';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
 
+    -- print if the function has been created
+    SELECT count(*) FROM pg_proc WHERE proname='add';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
+
 pg_identify_object_as_address
 
 (schema,{myschema},{})
@@ -510,6 +613,13 @@ run_command_on_workers
 
 (localhost,57637,t,1)
 (localhost,57638,t,1)
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
 count          
 
 0              
@@ -540,6 +650,10 @@ step s1-print-distributed-objects:
 	SELECT count(*) FROM pg_type where typname = 'tt1';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
 
+    -- print if the function has been created
+    SELECT count(*) FROM pg_proc WHERE proname='add';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
+
     SELECT master_remove_node('localhost', 57638);
 
 ?column?       
@@ -547,6 +661,13 @@ step s1-print-distributed-objects:
 1              
 pg_identify_object_as_address
 
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
 count          
 
 0              
@@ -608,6 +729,10 @@ step s2-print-distributed-objects:
 	SELECT count(*) FROM pg_type where typname = 'tt1';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
 
+    -- print if the function has been created
+    SELECT count(*) FROM pg_proc WHERE proname='add';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
+
 pg_identify_object_as_address
 
 (schema,{myschema},{})
@@ -618,6 +743,13 @@ run_command_on_workers
 
 (localhost,57637,t,1)
 (localhost,57638,t,1)
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
 count          
 
 0              
@@ -648,6 +780,10 @@ step s1-print-distributed-objects:
 	SELECT count(*) FROM pg_type where typname = 'tt1';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
 
+    -- print if the function has been created
+    SELECT count(*) FROM pg_proc WHERE proname='add';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
+
     SELECT master_remove_node('localhost', 57638);
 
 ?column?       
@@ -655,6 +791,13 @@ step s1-print-distributed-objects:
 1              
 pg_identify_object_as_address
 
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
 count          
 
 0              
@@ -735,6 +878,10 @@ step s2-print-distributed-objects:
 	SELECT count(*) FROM pg_type where typname = 'tt1';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
 
+    -- print if the function has been created
+    SELECT count(*) FROM pg_proc WHERE proname='add';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
+
 pg_identify_object_as_address
 
 (schema,{myschema},{})
@@ -745,6 +892,13 @@ run_command_on_workers
 
 (localhost,57637,t,1)
 (localhost,57638,t,1)
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
 count          
 
 0              
@@ -775,6 +929,10 @@ step s1-print-distributed-objects:
 	SELECT count(*) FROM pg_type where typname = 'tt1';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
 
+    -- print if the function has been created
+    SELECT count(*) FROM pg_proc WHERE proname='add';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
+
     SELECT master_remove_node('localhost', 57638);
 
 ?column?       
@@ -782,6 +940,13 @@ step s1-print-distributed-objects:
 1              
 pg_identify_object_as_address
 
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
 count          
 
 0              
@@ -881,6 +1046,10 @@ step s2-print-distributed-objects:
 	SELECT count(*) FROM pg_type where typname = 'tt1';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
 
+    -- print if the function has been created
+    SELECT count(*) FROM pg_proc WHERE proname='add';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
+
 pg_identify_object_as_address
 
 (schema,{myschema},{})
@@ -891,6 +1060,13 @@ run_command_on_workers
 
 (localhost,57637,t,1)
 (localhost,57638,t,1)
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
 count          
 
 0              
@@ -921,6 +1097,10 @@ step s1-print-distributed-objects:
 	SELECT count(*) FROM pg_type where typname = 'tt1';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
 
+    -- print if the function has been created
+    SELECT count(*) FROM pg_proc WHERE proname='add';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
+
     SELECT master_remove_node('localhost', 57638);
 
 ?column?       
@@ -928,6 +1108,13 @@ step s1-print-distributed-objects:
 1              
 pg_identify_object_as_address
 
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
 count          
 
 0              
@@ -1001,6 +1188,10 @@ step s2-print-distributed-objects:
 	SELECT count(*) FROM pg_type where typname = 'tt1';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
 
+    -- print if the function has been created
+    SELECT count(*) FROM pg_proc WHERE proname='add';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
+
 pg_identify_object_as_address
 
 (schema,{myschema},{})
@@ -1011,6 +1202,13 @@ run_command_on_workers
 
 (localhost,57637,t,1)
 (localhost,57638,t,1)
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
 count          
 
 0              
@@ -1041,6 +1239,10 @@ step s1-print-distributed-objects:
 	SELECT count(*) FROM pg_type where typname = 'tt1';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
 
+    -- print if the function has been created
+    SELECT count(*) FROM pg_proc WHERE proname='add';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
+
     SELECT master_remove_node('localhost', 57638);
 
 ?column?       
@@ -1048,6 +1250,13 @@ step s1-print-distributed-objects:
 1              
 pg_identify_object_as_address
 
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
 count          
 
 0              
@@ -1129,6 +1338,10 @@ step s2-print-distributed-objects:
 	SELECT count(*) FROM pg_type where typname = 'tt1';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
 
+    -- print if the function has been created
+    SELECT count(*) FROM pg_proc WHERE proname='add';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
+
 pg_identify_object_as_address
 
 (schema,{myschema},{})
@@ -1140,6 +1353,13 @@ run_command_on_workers
 
 (localhost,57637,t,1)
 (localhost,57638,t,1)
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
 count          
 
 0              
@@ -1170,6 +1390,10 @@ step s1-print-distributed-objects:
 	SELECT count(*) FROM pg_type where typname = 'tt1';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
 
+    -- print if the function has been created
+    SELECT count(*) FROM pg_proc WHERE proname='add';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
+
     SELECT master_remove_node('localhost', 57638);
 
 ?column?       
@@ -1177,6 +1401,13 @@ step s1-print-distributed-objects:
 1              
 pg_identify_object_as_address
 
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
 count          
 
 0              
@@ -1225,6 +1456,10 @@ step s2-print-distributed-objects:
 	SELECT count(*) FROM pg_type where typname = 'tt1';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
 
+    -- print if the function has been created
+    SELECT count(*) FROM pg_proc WHERE proname='add';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
+
 pg_identify_object_as_address
 
 (type,{public.tt1},{})
@@ -1242,6 +1477,13 @@ run_command_on_workers
 
 (localhost,57637,t,1)
 (localhost,57638,t,1)
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
 master_remove_node
 
                
@@ -1265,6 +1507,10 @@ step s1-print-distributed-objects:
 	SELECT count(*) FROM pg_type where typname = 'tt1';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
 
+    -- print if the function has been created
+    SELECT count(*) FROM pg_proc WHERE proname='add';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
+
     SELECT master_remove_node('localhost', 57638);
 
 ?column?       
@@ -1272,6 +1518,13 @@ step s1-print-distributed-objects:
 1              
 pg_identify_object_as_address
 
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
 count          
 
 0              
@@ -1319,6 +1572,10 @@ step s2-print-distributed-objects:
 	SELECT count(*) FROM pg_type where typname = 'tt1';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
 
+    -- print if the function has been created
+    SELECT count(*) FROM pg_proc WHERE proname='add';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
+
 pg_identify_object_as_address
 
 (type,{public.tt1},{})
@@ -1336,6 +1593,13 @@ run_command_on_workers
 
 (localhost,57637,t,1)
 (localhost,57638,t,1)
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
 master_remove_node
 
                
@@ -1359,6 +1623,10 @@ step s1-print-distributed-objects:
 	SELECT count(*) FROM pg_type where typname = 'tt1';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
 
+    -- print if the function has been created
+    SELECT count(*) FROM pg_proc WHERE proname='add';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
+
     SELECT master_remove_node('localhost', 57638);
 
 ?column?       
@@ -1366,6 +1634,13 @@ step s1-print-distributed-objects:
 1              
 pg_identify_object_as_address
 
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
 count          
 
 0              
@@ -1430,6 +1705,10 @@ step s2-print-distributed-objects:
 	SELECT count(*) FROM pg_type where typname = 'tt1';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
 
+    -- print if the function has been created
+    SELECT count(*) FROM pg_proc WHERE proname='add';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
+
 pg_identify_object_as_address
 
 (schema,{myschema},{})
@@ -1448,6 +1727,383 @@ run_command_on_workers
 
 (localhost,57637,t,1)
 (localhost,57638,t,1)
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
+master_remove_node
+
+               
+               
+
+starting permutation: s1-print-distributed-objects s1-begin s1-add-worker s2-public-schema s2-distribute-function s1-commit s2-print-distributed-objects
+?column?       
+
+1              
+step s1-print-distributed-objects: 
+    SELECT 1 FROM master_add_node('localhost', 57638);
+
+    -- print an overview of all distributed objects
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
+
+    -- print if the schema has been created
+    SELECT count(*) FROM pg_namespace where nspname = 'myschema';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
+
+    -- print if the type has been created
+	SELECT count(*) FROM pg_type where typname = 'tt1';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
+
+    -- print if the function has been created
+    SELECT count(*) FROM pg_proc WHERE proname='add';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
+
+    SELECT master_remove_node('localhost', 57638);
+
+?column?       
+
+1              
+pg_identify_object_as_address
+
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
+master_remove_node
+
+               
+step s1-begin: 
+    BEGIN;
+
+step s1-add-worker: 
+	SELECT 1 FROM master_add_node('localhost', 57638);
+
+?column?       
+
+1              
+step s2-public-schema: 
+    SET search_path TO public;
+
+step s2-distribute-function: 
+    CREATE OR REPLACE FUNCTION add (INT,INT) RETURNS INT AS $$ SELECT $1 + $2 $$ LANGUAGE SQL;
+	SELECT create_distributed_function('add(INT,INT)');
+ <waiting ...>
+step s1-commit: 
+    COMMIT;
+
+step s2-distribute-function: <... completed>
+create_distributed_function
+
+               
+step s2-print-distributed-objects: 
+    -- print an overview of all distributed objects
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
+
+    -- print if the schema has been created
+    SELECT count(*) FROM pg_namespace where nspname = 'myschema';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
+
+    -- print if the type has been created
+	SELECT count(*) FROM pg_type where typname = 'tt1';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
+
+    -- print if the function has been created
+    SELECT count(*) FROM pg_proc WHERE proname='add';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
+
+pg_identify_object_as_address
+
+(function,"{public,add}","{integer,integer}")
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
+count          
+
+1              
+run_command_on_workers
+
+(localhost,57637,t,1)
+(localhost,57638,t,1)
+master_remove_node
+
+               
+               
+
+starting permutation: s1-print-distributed-objects s1-begin s2-public-schema s2-distribute-function s1-add-worker s1-commit s2-print-distributed-objects
+?column?       
+
+1              
+step s1-print-distributed-objects: 
+    SELECT 1 FROM master_add_node('localhost', 57638);
+
+    -- print an overview of all distributed objects
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
+
+    -- print if the schema has been created
+    SELECT count(*) FROM pg_namespace where nspname = 'myschema';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
+
+    -- print if the type has been created
+	SELECT count(*) FROM pg_type where typname = 'tt1';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
+
+    -- print if the function has been created
+    SELECT count(*) FROM pg_proc WHERE proname='add';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
+
+    SELECT master_remove_node('localhost', 57638);
+
+?column?       
+
+1              
+pg_identify_object_as_address
+
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
+master_remove_node
+
+               
+step s1-begin: 
+    BEGIN;
+
+step s2-public-schema: 
+    SET search_path TO public;
+
+step s2-distribute-function: 
+    CREATE OR REPLACE FUNCTION add (INT,INT) RETURNS INT AS $$ SELECT $1 + $2 $$ LANGUAGE SQL;
+	SELECT create_distributed_function('add(INT,INT)');
+
+create_distributed_function
+
+               
+step s1-add-worker: 
+	SELECT 1 FROM master_add_node('localhost', 57638);
+
+?column?       
+
+1              
+step s1-commit: 
+    COMMIT;
+
+step s2-print-distributed-objects: 
+    -- print an overview of all distributed objects
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
+
+    -- print if the schema has been created
+    SELECT count(*) FROM pg_namespace where nspname = 'myschema';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
+
+    -- print if the type has been created
+	SELECT count(*) FROM pg_type where typname = 'tt1';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
+
+    -- print if the function has been created
+    SELECT count(*) FROM pg_proc WHERE proname='add';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
+
+pg_identify_object_as_address
+
+(function,"{public,add}","{integer,integer}")
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
+count          
+
+1              
+run_command_on_workers
+
+(localhost,57637,t,1)
+(localhost,57638,t,0)
+master_remove_node
+
+               
+               
+
+starting permutation: s1-print-distributed-objects s1-begin s2-begin s2-create-schema s2-distribute-function s1-add-worker s2-commit s1-commit s2-print-distributed-objects
+?column?       
+
+1              
+step s1-print-distributed-objects: 
+    SELECT 1 FROM master_add_node('localhost', 57638);
+
+    -- print an overview of all distributed objects
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
+
+    -- print if the schema has been created
+    SELECT count(*) FROM pg_namespace where nspname = 'myschema';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
+
+    -- print if the type has been created
+	SELECT count(*) FROM pg_type where typname = 'tt1';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
+
+    -- print if the function has been created
+    SELECT count(*) FROM pg_proc WHERE proname='add';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
+
+    SELECT master_remove_node('localhost', 57638);
+
+?column?       
+
+1              
+pg_identify_object_as_address
+
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
+master_remove_node
+
+               
+step s1-begin: 
+    BEGIN;
+
+step s2-begin: 
+	BEGIN;
+
+step s2-create-schema: 
+    CREATE SCHEMA myschema;
+    SET search_path TO myschema;
+
+step s2-distribute-function: 
+    CREATE OR REPLACE FUNCTION add (INT,INT) RETURNS INT AS $$ SELECT $1 + $2 $$ LANGUAGE SQL;
+	SELECT create_distributed_function('add(INT,INT)');
+
+create_distributed_function
+
+               
+step s1-add-worker: 
+	SELECT 1 FROM master_add_node('localhost', 57638);
+ <waiting ...>
+step s2-commit: 
+	COMMIT;
+
+step s1-add-worker: <... completed>
+?column?       
+
+1              
+step s1-commit: 
+    COMMIT;
+
+step s2-print-distributed-objects: 
+    -- print an overview of all distributed objects
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
+
+    -- print if the schema has been created
+    SELECT count(*) FROM pg_namespace where nspname = 'myschema';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
+
+    -- print if the type has been created
+	SELECT count(*) FROM pg_type where typname = 'tt1';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
+
+    -- print if the function has been created
+    SELECT count(*) FROM pg_proc WHERE proname='add';
+    SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
+
+pg_identify_object_as_address
+
+(function,"{myschema,add}","{integer,integer}")
+(schema,{myschema},{})
+count          
+
+1              
+run_command_on_workers
+
+(localhost,57637,t,1)
+(localhost,57638,t,1)
+count          
+
+0              
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
+count          
+
+1              
+run_command_on_workers
+
+(localhost,57637,t,1)
+(localhost,57638,t,0)
 master_remove_node
 
                

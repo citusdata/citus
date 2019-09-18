@@ -159,6 +159,9 @@ extern List * CreateTypeDDLCommandsIdempotent(const ObjectAddress *typeAddress);
 extern char * GenerateBackupNameForTypeCollision(const ObjectAddress *address);
 extern RenameStmt * CreateRenameTypeStmt(const ObjectAddress *address, char *newName);
 
+/* function.c - forward declarations */
+extern List * CreateFunctionDDLCommandsIdempotent(const ObjectAddress *functionAddress);
+
 /* vacuum.c - froward declarations */
 extern void ProcessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand);
 
