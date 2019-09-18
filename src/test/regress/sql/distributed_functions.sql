@@ -62,6 +62,10 @@ CREATE FUNCTION add_mixed_param_names(integer, val1 integer) RETURNS integer
     IMMUTABLE
     RETURNS NULL ON NULL INPUT;
 
+-- make sure to propagate ddl propagation after we have setup our functions, this will
+-- allow alter statements to be propagated and keep the functions in sync across machines
+SET citus.enable_ddl_propagation TO on;
+
 -- make sure that none of the active and primary nodes hasmetadata
 -- at the start of the test
 select bool_or(hasmetadata) from pg_dist_node WHERE isactive AND  noderole = 'primary';
@@ -93,6 +97,11 @@ ALTER FUNCTION add(int,int) CALLED ON NULL INPUT IMMUTABLE SECURITY INVOKER PARA
 ALTER FUNCTION add(int,int) RETURNS NULL ON NULL INPUT STABLE SECURITY DEFINER PARALLEL RESTRICTED;
 ALTER FUNCTION add(int,int) STRICT VOLATILE PARALLEL SAFE;
 -- TODO test SET/RESET
+
+-- rename function and make sure the new name can be used on the workers while the old name can't
+ALTER FUNCTION add(int,int) RENAME TO add2;
+SELECT * FROM run_command_on_workers('SELECT function_tests.add(2,3);') ORDER BY 1,2;
+SELECT * FROM run_command_on_workers('SELECT function_tests.add2(2,3);') ORDER BY 1,2;
 
 -- postgres doesn't accept parameter names in the regprocedure input
 SELECT create_distributed_function('add_with_param_names(val1 int, int)', 'val1');

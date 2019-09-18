@@ -691,6 +691,46 @@ PlanAlterFunctionStmt(AlterFunctionStmt *stmt, const char *queryString)
 }
 
 
+/*
+ * PlanRenameFunctionStmt is called when the user is renaming a function. The invocation
+ * happens before the statement is applied locally.
+ *
+ * As the function already exists we have access to the ObjectAddress, this is used to
+ * check if it is distributed. If so the rename is executed on all the workers to keep the
+ * types in sync across the cluster.
+ */
+List *
+PlanRenameFunctionStmt(RenameStmt *stmt, const char *queryString)
+{
+	const char *sql = NULL;
+	const ObjectAddress *address = NULL;
+	List *commands = NIL;
+
+	address = GetObjectAddressFromParseTree((Node *) stmt, false);
+	if (!ShouldPropagateAlterFunction(address))
+	{
+		return NIL;
+	}
+
+	EnsureCoordinator();
+
+	/* fully qualify */
+	QualifyTreeNode((Node *) stmt);
+
+	/* deparse sql*/
+	sql = DeparseTreeNode((Node *) stmt);
+
+	/* to prevent recursion with mx we disable ddl propagation */
+	EnsureSequentialModeForFunctionDDL();
+
+	commands = list_make3(DISABLE_DDL_PROPAGATION,
+						  (void *) sql,
+						  ENABLE_DDL_PROPAGATION);
+
+	return NodeDDLTaskList(ALL_WORKERS, commands);
+}
+
+
 const ObjectAddress *
 AlterFunctionStmtObjectAddress(AlterFunctionStmt *stmt, bool missing_ok)
 {
@@ -698,6 +738,28 @@ AlterFunctionStmtObjectAddress(AlterFunctionStmt *stmt, bool missing_ok)
 	ObjectAddress *address = NULL;
 
 	funcOid = LookupFuncWithArgsCompat(OBJECT_FUNCTION, stmt->func, missing_ok);
+	address = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*address, ProcedureRelationId, funcOid);
+
+	return address;
+}
+
+
+/*
+ * RenameFunctionStmtObjectAddress returns the ObjectAddress of the function that is the
+ * subject of the RenameStmt. Errors if missing_ok is false.
+ */
+const ObjectAddress *
+RenameFunctionStmtObjectAddress(RenameStmt *stmt, bool missing_ok)
+{
+	ObjectWithArgs *objectWithArgs = NULL;
+	Oid funcOid = InvalidOid;
+	ObjectAddress *address = NULL;
+
+	Assert(stmt->renameType == OBJECT_FUNCTION);
+
+	objectWithArgs = castNode(ObjectWithArgs, stmt->object);
+	funcOid = LookupFuncWithArgsCompat(OBJECT_FUNCTION, objectWithArgs, missing_ok);
 	address = palloc0(sizeof(ObjectAddress));
 	ObjectAddressSet(*address, ProcedureRelationId, funcOid);
 
