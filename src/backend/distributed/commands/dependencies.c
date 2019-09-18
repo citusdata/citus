@@ -24,6 +24,9 @@
 #include "utils/lsyscache.h"
 
 static List * GetDependencyCreateDDLCommands(const ObjectAddress *dependency);
+static List * FilterObjectAddressListByPredicate(List *objectAddressList,
+												 bool (*predicate)(const
+																   ObjectAddress *));
 
 bool EnableDependencyCreation = true;
 
@@ -209,6 +212,14 @@ ReplicateAllDependenciesToNode(const char *nodeName, int nodePort)
 	dependencies = GetDistributedObjectAddressList();
 
 	/*
+	 * Depending on changes in the environment, such as the enable_object_propagation guc
+	 * there might be objects in the distributed object address list that should currently
+	 * not be propagated by citus as the are 'not supported'.
+	 */
+	dependencies = FilterObjectAddressListByPredicate(dependencies,
+													  &SupportedDependencyByCitus);
+
+	/*
 	 * When dependency lists are getting longer we see a delay in the creation time on the
 	 * workers. We would like to inform the user. Currently we warn for lists greater then
 	 * 100 items, where 100 is an arbitrarily chosen number. If we find it too high or too
@@ -241,4 +252,28 @@ ReplicateAllDependenciesToNode(const char *nodeName, int nodePort)
 
 	SendCommandListToWorkerInSingleTransaction(nodeName, nodePort,
 											   CitusExtensionOwnerName(), ddlCommands);
+}
+
+
+/*
+ * FilterObjectAddressListByPredicate takes a list of ObjectAddress *'s and returns a list
+ * only containing the ObjectAddress *'s for which the predicate returned true.
+ */
+static List *
+FilterObjectAddressListByPredicate(List *objectAddressList,
+								   bool (*predicate)(const ObjectAddress *))
+{
+	List *result = NIL;
+	ListCell *objectAddressListCell = NULL;
+
+	foreach(objectAddressListCell, objectAddressList)
+	{
+		ObjectAddress *address = (ObjectAddress *) lfirst(objectAddressListCell);
+		if (predicate(address))
+		{
+			result = lappend(result, address);
+		}
+	}
+
+	return result;
 }

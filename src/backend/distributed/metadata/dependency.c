@@ -61,7 +61,6 @@ static void ApplyAddToDependencyList(void *context, Form_pg_depend pg_depend);
 static List * ExpandCitusSupportedTypes(void *context, const ObjectAddress *target);
 
 /* forward declaration of support functions to decide what to follow */
-static bool SupportedDependencyByCitus(const ObjectAddress *address);
 static bool IsObjectAddressOwnedByExtension(const ObjectAddress *target);
 
 
@@ -303,7 +302,7 @@ IsObjectAddressCollected(const ObjectAddress *findAddress,
  * SupportedDependencyByCitus returns whether citus has support to distribute the object
  * addressed.
  */
-static bool
+bool
 SupportedDependencyByCitus(const ObjectAddress *address)
 {
 	if (!EnableDependencyCreation)
