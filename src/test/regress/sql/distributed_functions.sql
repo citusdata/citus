@@ -85,6 +85,15 @@ SELECT * FROM run_command_on_workers('SELECT function_tests.dup(42);') ORDER BY 
 SELECT create_distributed_function('add(int,int)', '$1');
 SELECT * FROM run_command_on_workers('SELECT function_tests.add(2,3);') ORDER BY 1,2;
 
+-- testing alter statements for a distributed function
+-- ROWS 5, untested because;
+-- ERROR:  ROWS is not applicable when function does not return a set
+-- TODO verify settings are changed on remotes
+ALTER FUNCTION add(int,int) CALLED ON NULL INPUT IMMUTABLE SECURITY INVOKER PARALLEL UNSAFE LEAKPROOF COST 5;
+ALTER FUNCTION add(int,int) RETURNS NULL ON NULL INPUT STABLE SECURITY DEFINER PARALLEL RESTRICTED;
+ALTER FUNCTION add(int,int) STRICT VOLATILE PARALLEL SAFE;
+-- TODO test SET/RESET
+
 -- postgres doesn't accept parameter names in the regprocedure input
 SELECT create_distributed_function('add_with_param_names(val1 int, int)', 'val1');
 
