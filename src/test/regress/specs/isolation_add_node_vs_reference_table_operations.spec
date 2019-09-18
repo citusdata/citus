@@ -4,6 +4,7 @@ setup
 {	
 	SET citus.shard_replication_factor to 1;
 	SELECT 1 FROM master_add_node('localhost', 57637);
+	SELECT nodename, nodeport, isactive FROM pg_dist_node ORDER BY nodeid;
 	
 	CREATE TABLE test_reference_table (test_id integer);
 	CREATE TABLE test_reference_table_2 (test_id integer);
@@ -32,6 +33,7 @@ step "s1-begin"
 step "s1-add-second-worker"
 {
 	SELECT 1 FROM master_add_node('localhost', 57638);
+	SELECT nodename, nodeport, isactive FROM pg_dist_node ORDER BY nodeid;
 }
 
 step "s1-remove-second-worker"

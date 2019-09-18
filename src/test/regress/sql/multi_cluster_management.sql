@@ -15,7 +15,8 @@ SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 SELECT master_get_active_worker_nodes();
 
 -- try to add a node that is already in the cluster
-SELECT * FROM master_add_node('localhost', :worker_1_port);
+SELECT master_add_node('localhost', :worker_1_port) AS nodeid \gset
+SELECT nodeid, groupid FROM pg_dist_node WHERE nodeid = :nodeid;
 
 -- get the active nodes
 SELECT master_get_active_worker_nodes();
@@ -35,7 +36,8 @@ SELECT master_get_active_worker_nodes();
 SET citus.shard_count TO 16;
 SET citus.shard_replication_factor TO 1;
 
-SELECT * FROM master_activate_node('localhost', :worker_2_port);
+SELECT master_activate_node('localhost', :worker_2_port) AS nodeid \gset
+SELECT isactive FROM pg_dist_node WHERE nodeid=:nodeid;
 CREATE TABLE cluster_management_test (col_1 text, col_2 int);
 SELECT create_distributed_table('cluster_management_test', 'col_1', 'hash');
 
@@ -95,7 +97,8 @@ ABORT;
 SELECT master_get_active_worker_nodes();
 
 -- restore the node for next tests
-SELECT * FROM master_activate_node('localhost', :worker_2_port);
+SELECT master_activate_node('localhost', :worker_2_port) AS nodeid \gset
+SELECT isactive FROM pg_dist_node WHERE nodeid=:nodeid;
 
 -- try to remove a node with active placements and see that node removal is failed
 SELECT master_remove_node('localhost', :worker_2_port); 

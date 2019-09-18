@@ -12,10 +12,15 @@ step s1-begin:
 
 step s1-add-second-worker: 
 	SELECT 1 FROM master_add_node('localhost', 57638);
+	SELECT nodename, nodeport, isactive FROM pg_dist_node ORDER BY nodeid;
 
 ?column?       
 
 1              
+nodename       nodeport       isactive       
+
+localhost      57637          t              
+localhost      57638          t              
 step s2-copy-to-reference-table: 
 	COPY test_reference_table FROM PROGRAM 'echo 1 && echo 2 && echo 3 && echo 4 && echo 5';
  <waiting ...>
@@ -55,6 +60,7 @@ step s2-copy-to-reference-table:
 
 step s1-add-second-worker: 
 	SELECT 1 FROM master_add_node('localhost', 57638);
+	SELECT nodename, nodeport, isactive FROM pg_dist_node ORDER BY nodeid;
  <waiting ...>
 step s2-commit: 
 	COMMIT;
@@ -63,6 +69,10 @@ step s1-add-second-worker: <... completed>
 ?column?       
 
 1              
+nodename       nodeport       isactive       
+
+localhost      57637          t              
+localhost      57638          t              
 step s2-print-content: 
 	SELECT
 		nodeport, success, result
@@ -92,10 +102,15 @@ step s1-begin:
 
 step s1-add-second-worker: 
 	SELECT 1 FROM master_add_node('localhost', 57638);
+	SELECT nodename, nodeport, isactive FROM pg_dist_node ORDER BY nodeid;
 
 ?column?       
 
 1              
+nodename       nodeport       isactive       
+
+localhost      57637          t              
+localhost      57638          t              
 step s2-insert-to-reference-table: 
 	INSERT INTO test_reference_table VALUES (6);
  <waiting ...>
@@ -135,6 +150,7 @@ step s2-insert-to-reference-table:
 
 step s1-add-second-worker: 
 	SELECT 1 FROM master_add_node('localhost', 57638);
+	SELECT nodename, nodeport, isactive FROM pg_dist_node ORDER BY nodeid;
  <waiting ...>
 step s2-commit: 
 	COMMIT;
@@ -143,6 +159,10 @@ step s1-add-second-worker: <... completed>
 ?column?       
 
 1              
+nodename       nodeport       isactive       
+
+localhost      57637          t              
+localhost      57638          t              
 step s2-print-content: 
 	SELECT
 		nodeport, success, result
@@ -172,10 +192,15 @@ step s1-begin:
 
 step s1-add-second-worker: 
 	SELECT 1 FROM master_add_node('localhost', 57638);
+	SELECT nodename, nodeport, isactive FROM pg_dist_node ORDER BY nodeid;
 
 ?column?       
 
 1              
+nodename       nodeport       isactive       
+
+localhost      57637          t              
+localhost      57638          t              
 step s2-ddl-on-reference-table: 
 	CREATE INDEX reference_index ON test_reference_table(test_id);
  <waiting ...>
@@ -215,6 +240,7 @@ step s2-ddl-on-reference-table:
 
 step s1-add-second-worker: 
 	SELECT 1 FROM master_add_node('localhost', 57638);
+	SELECT nodename, nodeport, isactive FROM pg_dist_node ORDER BY nodeid;
  <waiting ...>
 step s2-commit: 
 	COMMIT;
@@ -223,6 +249,10 @@ step s1-add-second-worker: <... completed>
 ?column?       
 
 1              
+nodename       nodeport       isactive       
+
+localhost      57637          t              
+localhost      57638          t              
 step s2-print-index-count: 
 	SELECT
 		nodeport, success, result
@@ -252,10 +282,15 @@ step s1-begin:
 
 step s1-add-second-worker: 
 	SELECT 1 FROM master_add_node('localhost', 57638);
+	SELECT nodename, nodeport, isactive FROM pg_dist_node ORDER BY nodeid;
 
 ?column?       
 
 1              
+nodename       nodeport       isactive       
+
+localhost      57637          t              
+localhost      57638          t              
 step s2-create-reference-table-2: 
 	SELECT create_reference_table('test_reference_table_2');
  <waiting ...>
@@ -301,6 +336,7 @@ create_reference_table
                
 step s1-add-second-worker: 
 	SELECT 1 FROM master_add_node('localhost', 57638);
+	SELECT nodename, nodeport, isactive FROM pg_dist_node ORDER BY nodeid;
  <waiting ...>
 step s2-commit: 
 	COMMIT;
@@ -309,6 +345,10 @@ step s1-add-second-worker: <... completed>
 ?column?       
 
 1              
+nodename       nodeport       isactive       
+
+localhost      57637          t              
+localhost      57638          t              
 step s2-print-content-2: 
 	SELECT
 		nodeport, success, result
@@ -335,10 +375,15 @@ step s1-begin:
 
 step s1-add-second-worker: 
 	SELECT 1 FROM master_add_node('localhost', 57638);
+	SELECT nodename, nodeport, isactive FROM pg_dist_node ORDER BY nodeid;
 
 ?column?       
 
 1              
+nodename       nodeport       isactive       
+
+localhost      57637          t              
+localhost      57638          t              
 step s2-copy-to-reference-table: 
 	COPY test_reference_table FROM PROGRAM 'echo 1 && echo 2 && echo 3 && echo 4 && echo 5';
  <waiting ...>
@@ -375,6 +420,7 @@ step s2-copy-to-reference-table:
 
 step s1-add-second-worker: 
 	SELECT 1 FROM master_add_node('localhost', 57638);
+	SELECT nodename, nodeport, isactive FROM pg_dist_node ORDER BY nodeid;
  <waiting ...>
 step s2-commit: 
 	COMMIT;
@@ -383,6 +429,10 @@ step s1-add-second-worker: <... completed>
 ?column?       
 
 1              
+nodename       nodeport       isactive       
+
+localhost      57637          t              
+localhost      57638          t              
 step s2-print-content: 
 	SELECT
 		nodeport, success, result
@@ -409,10 +459,15 @@ step s1-begin:
 
 step s1-add-second-worker: 
 	SELECT 1 FROM master_add_node('localhost', 57638);
+	SELECT nodename, nodeport, isactive FROM pg_dist_node ORDER BY nodeid;
 
 ?column?       
 
 1              
+nodename       nodeport       isactive       
+
+localhost      57637          t              
+localhost      57638          t              
 step s2-insert-to-reference-table: 
 	INSERT INTO test_reference_table VALUES (6);
  <waiting ...>
@@ -449,6 +504,7 @@ step s2-insert-to-reference-table:
 
 step s1-add-second-worker: 
 	SELECT 1 FROM master_add_node('localhost', 57638);
+	SELECT nodename, nodeport, isactive FROM pg_dist_node ORDER BY nodeid;
  <waiting ...>
 step s2-commit: 
 	COMMIT;
@@ -457,6 +513,10 @@ step s1-add-second-worker: <... completed>
 ?column?       
 
 1              
+nodename       nodeport       isactive       
+
+localhost      57637          t              
+localhost      57638          t              
 step s2-print-content: 
 	SELECT
 		nodeport, success, result
@@ -483,10 +543,15 @@ step s1-begin:
 
 step s1-add-second-worker: 
 	SELECT 1 FROM master_add_node('localhost', 57638);
+	SELECT nodename, nodeport, isactive FROM pg_dist_node ORDER BY nodeid;
 
 ?column?       
 
 1              
+nodename       nodeport       isactive       
+
+localhost      57637          t              
+localhost      57638          t              
 step s2-ddl-on-reference-table: 
 	CREATE INDEX reference_index ON test_reference_table(test_id);
  <waiting ...>
@@ -523,6 +588,7 @@ step s2-ddl-on-reference-table:
 
 step s1-add-second-worker: 
 	SELECT 1 FROM master_add_node('localhost', 57638);
+	SELECT nodename, nodeport, isactive FROM pg_dist_node ORDER BY nodeid;
  <waiting ...>
 step s2-commit: 
 	COMMIT;
@@ -531,6 +597,10 @@ step s1-add-second-worker: <... completed>
 ?column?       
 
 1              
+nodename       nodeport       isactive       
+
+localhost      57637          t              
+localhost      57638          t              
 step s2-print-index-count: 
 	SELECT
 		nodeport, success, result
@@ -557,10 +627,15 @@ step s1-begin:
 
 step s1-add-second-worker: 
 	SELECT 1 FROM master_add_node('localhost', 57638);
+	SELECT nodename, nodeport, isactive FROM pg_dist_node ORDER BY nodeid;
 
 ?column?       
 
 1              
+nodename       nodeport       isactive       
+
+localhost      57637          t              
+localhost      57638          t              
 step s2-create-reference-table-2: 
 	SELECT create_reference_table('test_reference_table_2');
  <waiting ...>
@@ -603,6 +678,7 @@ create_reference_table
                
 step s1-add-second-worker: 
 	SELECT 1 FROM master_add_node('localhost', 57638);
+	SELECT nodename, nodeport, isactive FROM pg_dist_node ORDER BY nodeid;
  <waiting ...>
 step s2-commit: 
 	COMMIT;
@@ -611,6 +687,10 @@ step s1-add-second-worker: <... completed>
 ?column?       
 
 1              
+nodename       nodeport       isactive       
+
+localhost      57637          t              
+localhost      57638          t              
 step s2-print-content-2: 
 	SELECT
 		nodeport, success, result
