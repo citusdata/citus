@@ -182,6 +182,11 @@ AlterOwnerStmtObjectAddress(AlterOwnerStmt *stmt, bool missing_ok)
 			return AlterTypeOwnerObjectAddress(stmt, missing_ok);
 		}
 
+		case OBJECT_FUNCTION:
+		{
+			return AlterFunctionOwnerObjectAddress(stmt, missing_ok);
+		}
+
 		default:
 		{
 			ereport(ERROR, (errmsg("unsupported alter owner statement to get object "
