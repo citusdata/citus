@@ -147,7 +147,7 @@ check-upgrade:
 	$(pg_upgrade_check) --old-bindir=$(old-bindir) --new-bindir=$(new-bindir) --pgxsdir=$(pgxsdir)
 
 check-citus-upgrade:
-	$(citus_upgrade_check) --bindir=$(bindir) --citus-version=$(citus-version) --pgxsdir=$(pgxsdir)
+	$(citus_upgrade_check) --bindir=$(bindir) --citus-version=$(citus-version) --pgxsdir=$(pgxsdir) --pg-version=$(pg-version)
 
 clean distclean maintainer-clean:
 	rm -f $(output_files) $(input_files)

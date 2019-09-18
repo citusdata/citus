@@ -25,7 +25,7 @@ Before running the script, make sure that:
 To see full command list:
 
 ```
-    pipenv run upgrade/upgrade_test.py -help
+    pipenv run upgrade/pg_upgrade_test.py -help
 ```
 
 

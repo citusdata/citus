@@ -9,6 +9,7 @@ class CitusUpgradeConfig():
         self.bindir = arguments['--bindir']
         self.citus_version = arguments['--citus-version']
         self.pg_srcdir = arguments['--pgxsdir']
+        self.pg_version = arguments['--pg-version']
         self.temp_dir = './tmp_citus_upgrade'
         self.datadir = self.temp_dir + '/data'
         self.settings = {
