@@ -1,0 +1,3 @@
+# this schedule is to be run on only coordinators
+
+test: upgrade_distributed_table_before

@@ -19,7 +19,11 @@ import utils
 
 from docopt import docopt
 
-from config import CitusUpgradeConfig, NODE_PORTS, COORDINATOR_NAME, BEFORE_CITUS_UPGRADE_SCHEDULE, NODE_NAMES, USER, AFTER_CITUS_UPGRADE_SCHEDULE
+from config import (
+    CitusUpgradeConfig, NODE_PORTS, COORDINATOR_NAME, BEFORE_CITUS_UPGRADE_SCHEDULE,
+    NODE_NAMES, USER, AFTER_CITUS_UPGRADE_SCHEDULE,
+    AFTER_CITUS_UPGRADE_COORD_SCHEDULE, BEFORE_CITUS_UPGRADE_COORD_SCHEDULE
+)
 from upgrade_common import initialize_temp_dir, initialize_citus_cluster, run_pg_regress, stop_databases
 
 
@@ -27,6 +31,9 @@ def verify_initial_version(config):
     for port in NODE_PORTS.values():
         run_pg_regress(config.bindir, config.pg_srcdir,
                 port, BEFORE_CITUS_UPGRADE_SCHEDULE.format(config.citus_version))  
+
+def run_test_on_coordinator(config, schedule):
+    run_pg_regress(config.bindir, config.pg_srcdir, NODE_PORTS[COORDINATOR_NAME], schedule)                
 
 def verify_upgrade(config):
     for port in NODE_PORTS.values():
@@ -67,10 +74,13 @@ def main(config):
         config.bindir, config.datadir, config.settings)  
         
     verify_initial_version(config)    
+    run_test_on_coordinator(config, BEFORE_CITUS_UPGRADE_COORD_SCHEDULE)
     install_citus_master(config.pg_version)
     restart_databases(config.bindir, config.datadir)
     run_alter_citus(config.bindir)
     verify_upgrade(config)
+    run_test_on_coordinator(config, AFTER_CITUS_UPGRADE_COORD_SCHEDULE)
+
     
     
 if __name__ == '__main__':
