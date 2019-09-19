@@ -56,5 +56,10 @@ extern const ObjectAddress * GetObjectAddressFromParseTree(Node *parseTree, bool
 extern const char * DeparseDropFunctionStmt(DropStmt *stmt);
 extern const char * DeparseAlterFunctionStmt(AlterFunctionStmt *stmt);
 
+extern void QualifyAlterFunctionStmt(AlterFunctionStmt *stmt);
+extern void QualifyRenameFunctionStmt(RenameStmt *stmt);
+extern void QualifyAlterFunctionSchemaStmt(AlterObjectSchemaStmt *stmt);
+extern void QualifyAlterFunctionOwnerStmt(AlterOwnerStmt *stmt);
+extern void QualifyAlterFunctionDependsStmt(AlterObjectDependsStmt *stmt);
 
 #endif /* CITUS_DEPARSER_H */

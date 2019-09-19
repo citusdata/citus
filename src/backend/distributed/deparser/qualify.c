@@ -29,7 +29,7 @@ static void QualifyRenameAttributeStmt(RenameStmt *stmt);
 static void QualifyAlterTableStmt(AlterTableStmt *stmt);
 static void QualifyAlterObjectSchemaStmt(AlterObjectSchemaStmt *stmt);
 static void QualifyAlterOwnerStmt(AlterOwnerStmt *stmt);
-
+static void QualifyAlterObjectDependsStmt(AlterObjectDependsStmt *stmt);
 
 /*
  * QualifyTreeNode transforms the statement in place and makes all (supported) statements
@@ -83,6 +83,18 @@ QualifyTreeNode(Node *stmt)
 			return;
 		}
 
+		case T_AlterFunctionStmt:
+		{
+			QualifyAlterFunctionStmt(castNode(AlterFunctionStmt, stmt));
+			return;
+		}
+
+		case T_AlterObjectDependsStmt:
+		{
+			QualifyAlterObjectDependsStmt(castNode(AlterObjectDependsStmt, stmt));
+			return;
+		}
+
 		default:
 		{
 			/* skip unsupported statements */
@@ -107,6 +119,12 @@ QualifyRenameStmt(RenameStmt *stmt)
 		{
 			QualifyRenameAttributeStmt(stmt);
 			return;
+		}
+
+		case OBJECT_PROCEDURE:
+		case OBJECT_FUNCTION:
+		{
+			QualifyRenameFunctionStmt(stmt);
 		}
 
 		default:
@@ -170,6 +188,12 @@ QualifyAlterObjectSchemaStmt(AlterObjectSchemaStmt *stmt)
 			return;
 		}
 
+		case OBJECT_PROCEDURE:
+		case OBJECT_FUNCTION:
+		{
+			QualifyAlterFunctionSchemaStmt(stmt);
+		}
+
 		default:
 		{
 			/* skip unsupported statements */
@@ -188,6 +212,31 @@ QualifyAlterOwnerStmt(AlterOwnerStmt *stmt)
 		{
 			QualifyAlterTypeOwnerStmt(stmt);
 			return;
+		}
+
+		case OBJECT_PROCEDURE:
+		case OBJECT_FUNCTION:
+		{
+			QualifyAlterFunctionOwnerStmt(stmt);
+		}
+
+		default:
+		{
+			return;
+		}
+	}
+}
+
+
+static void
+QualifyAlterObjectDependsStmt(AlterObjectDependsStmt *stmt)
+{
+	switch (stmt->objectType)
+	{
+		case OBJECT_PROCEDURE:
+		case OBJECT_FUNCTION:
+		{
+			QualifyAlterFunctionDependsStmt(stmt);
 		}
 
 		default:
