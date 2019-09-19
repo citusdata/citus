@@ -32,7 +32,7 @@ COMMENT ON FUNCTION pg_catalog.master_unmark_object_distributed(classid oid, obj
     IS 'remove an object address from citus.pg_dist_object once the object has been deleted';
 
 CREATE TABLE citus.pg_dist_object (
-	-- primary key
+	-- fields used for composite primary key
     classid oid NOT NULL,
     objid oid NOT NULL,
     objsubid integer NOT NULL,
