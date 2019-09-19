@@ -16,6 +16,7 @@
  */
 
 #include "postgres.h"
+#include "miscadmin.h"
 #include "funcapi.h"
 
 #include "access/htup_details.h"
@@ -26,12 +27,14 @@
 #include "catalog/pg_type.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/master_protocol.h"
+#include "distributed/maintenanced.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/metadata/distobject.h"
 #include "distributed/metadata/pg_dist_object.h"
 #include "distributed/multi_executor.h"
 #include "distributed/relation_access_tracking.h"
 #include "distributed/worker_transaction.h"
+#include "storage/lmgr.h"
 #include "utils/builtins.h"
 #include "utils/fmgrprotos.h"
 #include "utils/fmgroids.h"
@@ -54,8 +57,11 @@ static void UpdateFunctionDistributionInfo(const ObjectAddress *distAddress,
 										   int *distribution_argument_index,
 										   int *colocationId);
 static void EnsureSequentialModeForFunctionDDL(void);
+static void TriggerSyncMetadataToPrimaryNodes(void);
+
 
 PG_FUNCTION_INFO_V1(create_distributed_function);
+
 
 /*
  * create_distributed_function gets a function or procedure name with their list of
@@ -165,6 +171,13 @@ create_distributed_function(PG_FUNCTION_ARGS)
 		/* if provided, make sure to record the distribution argument and colocationId */
 		UpdateFunctionDistributionInfo(&functionAddress, &distributionArgumentIndex,
 									   &colocationId);
+
+		/*
+		 * Once we have at least one distributed function/procedure with distribution
+		 * argument, we sync the metadata to nodes so that the function/procedure
+		 * delegation can be handled locally on the nodes.
+		 */
+		TriggerSyncMetadataToPrimaryNodes();
 	}
 
 	PG_RETURN_VOID();
@@ -560,4 +573,42 @@ EnsureSequentialModeForFunctionDDL(void)
 						 "commands see the type correctly we need to make sure to "
 						 "use only one connection for all future commands")));
 	SetLocalMultiShardModifyModeToSequential();
+}
+
+
+/*
+ * TriggerSyncMetadataToPrimaryNodes iterates over the active primary nodes,
+ * and triggers the metadata syncs if the node has not the metadata. Later,
+ * maintenance daemon will sync the metadata to nodes.
+ */
+static void
+TriggerSyncMetadataToPrimaryNodes(void)
+{
+	List *workerList = ActivePrimaryNodeList(ShareLock);
+	ListCell *workerCell = NULL;
+	bool triggerMetadataSync = false;
+
+	foreach(workerCell, workerList)
+	{
+		WorkerNode *workerNode = (WorkerNode *) lfirst(workerCell);
+
+		/* if already has metadata, no need to do it again */
+		if (!workerNode->hasMetadata)
+		{
+			/*
+			 * Let the maintanince deamon do the hard work of syncing the metadata. We prefer
+			 * this because otherwise node activation might fail withing transaction blocks.
+			 */
+			LockRelationOid(DistNodeRelationId(), ExclusiveLock);
+			MarkNodeHasMetadata(workerNode->workerName, workerNode->workerPort, true);
+
+			triggerMetadataSync = true;
+		}
+	}
+
+	/* let the maintanince deamon know about the metadata sync */
+	if (triggerMetadataSync)
+	{
+		TriggerMetadataSync(MyDatabaseId);
+	}
 }

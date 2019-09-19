@@ -26,6 +26,7 @@
 #include "distributed/maintenanced.h"
 #include "distributed/master_protocol.h"
 #include "distributed/master_metadata_utility.h"
+#include "distributed/metadata/distobject.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/multi_join_order.h"
@@ -475,6 +476,16 @@ ActivateNode(char *nodeName, int nodePort)
 		EnsureNoModificationsHaveBeenDone();
 		ReplicateAllDependenciesToNode(nodeName, nodePort);
 		ReplicateAllReferenceTablesToNode(nodeName, nodePort);
+
+		/*
+		 * Let the maintanince deamon do the hard work of syncing the metadata. We prefer
+		 * this because otherwise node activation might fail withing transaction blocks.
+		 */
+		if (ClusterHasDistributedFunctionWithDistArgument())
+		{
+			MarkNodeHasMetadata(nodeName, nodePort, true);
+			TriggerMetadataSync(MyDatabaseId);
+		}
 	}
 
 	return workerNode->nodeId;
@@ -1073,6 +1084,7 @@ AddNodeMetadata(char *nodeName, int32 nodePort,
 	{
 		List *workerNodeList = list_make1(workerNode);
 		char *nodeInsertCommand = NodeListInsertCommand(workerNodeList);
+
 		SendCommandToWorkers(WORKERS_WITH_METADATA, nodeInsertCommand);
 	}
 

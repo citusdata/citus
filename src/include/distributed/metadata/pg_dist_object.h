@@ -28,13 +28,13 @@ typedef struct FormData_pg_dist_object
 	Oid objid;        /* object id of the distributed object */
 	int32 objsubid;   /* object sub id of the distributed object, eg. attnum */
 
-	uint32 distribution_argument_index; /* only valid for distributed functions/procedures */
-	uint32 colocationid;            /* only valid for distributed functions/procedures */
-
 #ifdef CATALOG_VARLEN           /* variable-length fields start here */
 	text type;
 	text[] object_names;
 	text[] object_arguments;
+
+	uint32 distribution_argument_index; /* only valid for distributed functions/procedures */
+	uint32 colocationid;            /* only valid for distributed functions/procedures */
 #endif
 } FormData_pg_dist_object;
 

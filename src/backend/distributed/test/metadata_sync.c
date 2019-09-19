@@ -80,8 +80,36 @@ wait_until_metadata_sync(PG_FUNCTION_ARGS)
 	uint32 timeout = PG_GETARG_UINT32(0);
 	int waitResult = 0;
 
-	MultiConnection *connection = GetNodeConnection(FORCE_NEW_CONNECTION,
-													"localhost", PostPortNumber);
+	List *workerList = ActivePrimaryNodeList(NoLock);
+	ListCell *workerCell = NULL;
+	bool waitNotifications = false;
+	MultiConnection *connection = NULL;
+
+	foreach(workerCell, workerList)
+	{
+		WorkerNode *workerNode = (WorkerNode *) lfirst(workerCell);
+
+		/* if already has metadata, no need to do it again */
+		if (workerNode->hasMetadata && !workerNode->metadataSynced)
+		{
+			waitNotifications = true;
+			break;
+		}
+	}
+
+	/*
+	 * If all the metadata nodes have already been synced, we should not wait.
+	 * That's primarily because the maintenance deamon might have already sent
+	 * the notification and we'd wait unnecessarily here. Worse, the test outputs
+	 * might be inconsistent across executions due to the warning.
+	 */
+	if (!waitNotifications)
+	{
+		PG_RETURN_VOID();
+	}
+
+	connection = GetNodeConnection(FORCE_NEW_CONNECTION,
+								   "localhost", PostPortNumber);
 	ExecuteCriticalRemoteCommand(connection, "LISTEN " METADATA_SYNC_CHANNEL);
 
 	waitResult = WaitLatchOrSocket(NULL, WL_SOCKET_READABLE | WL_TIMEOUT,

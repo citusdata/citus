@@ -202,7 +202,9 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 
 
 /*
- * ReplicateAllDependenciesToNode replicate all previously marked objects to a worker node
+ * ReplicateAllDependenciesToNode replicate all previously marked objects to a worker
+ * node. The function also sets clusterHasDistributedFunction if there are any
+ * distributed functions.
  */
 void
 ReplicateAllDependenciesToNode(const char *nodeName, int nodePort)

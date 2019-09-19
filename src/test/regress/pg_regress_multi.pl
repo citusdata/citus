@@ -376,6 +376,8 @@ if($isolationtester)
    push(@pgOptions, '-c', "citus.log_distributed_deadlock_detection=on");
    push(@pgOptions, '-c', "citus.distributed_deadlock_detection_factor=-1");
    push(@pgOptions, '-c', "citus.shard_count=4");
+   push(@pgOptions, '-c', "citus.metadata_sync_interval=1000");
+   push(@pgOptions, '-c', "citus.metadata_sync_retry_interval=100");
 }
 
 # Add externally added options last, so they overwrite the default ones above

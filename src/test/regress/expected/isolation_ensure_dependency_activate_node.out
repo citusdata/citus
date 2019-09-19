@@ -1739,7 +1739,7 @@ master_remove_node
                
                
 
-starting permutation: s1-print-distributed-objects s1-begin s1-add-worker s2-public-schema s2-distribute-function s1-commit s2-print-distributed-objects
+starting permutation: s1-print-distributed-objects s1-begin s1-add-worker s2-public-schema s2-distribute-function s1-commit s2-begin s2-commit s3-wait-for-metadata-sync s1-print-distributed-objects
 ?column?       
 
 1              
@@ -1815,7 +1815,21 @@ step s2-distribute-function: <... completed>
 create_distributed_function
 
                
-step s2-print-distributed-objects: 
+step s2-begin: 
+	BEGIN;
+
+step s2-commit: 
+	COMMIT;
+
+step s3-wait-for-metadata-sync: 
+    SELECT public.wait_until_metadata_sync(5000);
+
+wait_until_metadata_sync
+
+               
+step s1-print-distributed-objects: 
+    SELECT 1 FROM master_add_node('localhost', 57638);
+
     -- print an overview of all distributed objects
     SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
 
@@ -1831,6 +1845,11 @@ step s2-print-distributed-objects:
     SELECT count(*) FROM pg_proc WHERE proname='add';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
 
+    SELECT master_remove_node('localhost', 57638);
+
+?column?       
+
+1              
 pg_identify_object_as_address
 
 (function,"{public,add}","{integer,integer}")
@@ -1858,9 +1877,12 @@ run_command_on_workers
 master_remove_node
 
                
+master_remove_node
+
+               
                
 
-starting permutation: s1-print-distributed-objects s1-begin s2-public-schema s2-distribute-function s1-add-worker s1-commit s2-print-distributed-objects
+starting permutation: s1-print-distributed-objects s1-begin s2-public-schema s2-distribute-function s2-begin s2-commit s3-wait-for-metadata-sync s1-add-worker s1-commit s3-wait-for-metadata-sync s2-print-distributed-objects
 ?column?       
 
 1              
@@ -1926,6 +1948,18 @@ step s2-distribute-function:
 create_distributed_function
 
                
+step s2-begin: 
+	BEGIN;
+
+step s2-commit: 
+	COMMIT;
+
+step s3-wait-for-metadata-sync: 
+    SELECT public.wait_until_metadata_sync(5000);
+
+wait_until_metadata_sync
+
+               
 step s1-add-worker: 
 	SELECT 1 FROM master_add_node('localhost', 57638);
 
@@ -1935,6 +1969,12 @@ step s1-add-worker:
 step s1-commit: 
     COMMIT;
 
+step s3-wait-for-metadata-sync: 
+    SELECT public.wait_until_metadata_sync(5000);
+
+wait_until_metadata_sync
+
+               
 step s2-print-distributed-objects: 
     -- print an overview of all distributed objects
     SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
@@ -1980,7 +2020,7 @@ master_remove_node
                
                
 
-starting permutation: s1-print-distributed-objects s1-begin s2-begin s2-create-schema s2-distribute-function s1-add-worker s2-commit s1-commit s2-print-distributed-objects
+starting permutation: s1-print-distributed-objects s2-begin s2-create-schema s2-distribute-function s2-commit s3-wait-for-metadata-sync s1-begin s1-add-worker s1-commit s3-wait-for-metadata-sync s2-print-distributed-objects
 ?column?       
 
 1              
@@ -2033,9 +2073,6 @@ run_command_on_workers
 master_remove_node
 
                
-step s1-begin: 
-    BEGIN;
-
 step s2-begin: 
 	BEGIN;
 
@@ -2050,19 +2087,33 @@ step s2-distribute-function:
 create_distributed_function
 
                
-step s1-add-worker: 
-	SELECT 1 FROM master_add_node('localhost', 57638);
- <waiting ...>
 step s2-commit: 
 	COMMIT;
 
-step s1-add-worker: <... completed>
+step s3-wait-for-metadata-sync: 
+    SELECT public.wait_until_metadata_sync(5000);
+
+wait_until_metadata_sync
+
+               
+step s1-begin: 
+    BEGIN;
+
+step s1-add-worker: 
+	SELECT 1 FROM master_add_node('localhost', 57638);
+
 ?column?       
 
 1              
 step s1-commit: 
     COMMIT;
 
+step s3-wait-for-metadata-sync: 
+    SELECT public.wait_until_metadata_sync(5000);
+
+wait_until_metadata_sync
+
+               
 step s2-print-distributed-objects: 
     -- print an overview of all distributed objects
     SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
