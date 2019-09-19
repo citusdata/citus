@@ -19,6 +19,8 @@
 #include "distributed/connection_management.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/multi_executor.h"
+#include "distributed/multi_physical_planner.h"
 #include "distributed/remote_commands.h"
 #include "distributed/shard_pruning.h"
 #include "distributed/version_compat.h"
@@ -26,12 +28,11 @@
 #include "nodes/nodeFuncs.h"
 #include "nodes/parsenodes.h"
 #include "nodes/primnodes.h"
+#include "miscadmin.h"
 #include "tcop/dest.h"
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
 
-static void PipePgResultToDestReceiver(TupleDesc resultDesc, PGresult *result,
-									   DestReceiver *dest);
 static bool CallFuncExprRemotely(CallStmt *callStmt,
 								 DistObjectCacheEntry *procedure,
 								 FuncExpr *funcExpr, const char *queryString,
@@ -59,55 +60,6 @@ CallDistributedProcedureRemotely(CallStmt *callStmt, const char *queryString,
 
 
 /*
- * PipePgResultToDestReceiver outputs a PGresult into a DestReceiver
- * We assume DestReceiver expects a TTSOpsVirtual tuple slot
- */
-static void
-PipePgResultToDestReceiver(TupleDesc resultDesc, PGresult *result, DestReceiver *dest)
-{
-	TupleTableSlot *slot = MakeSingleTupleTableSlotCompat(resultDesc, &TTSOpsVirtual);
-	int tupleIndex = 0;
-	int tupleCount = PQntuples(result);
-	int fieldCount = PQnfields(result);
-
-	for (; tupleIndex < tupleCount; tupleIndex++)
-	{
-		int fieldIndex = 0;
-
-		ExecClearTuple(slot);
-		for (; fieldIndex < fieldCount; fieldIndex++)
-		{
-			if (PQgetisnull(result, tupleIndex, fieldIndex))
-			{
-				slot->tts_isnull[fieldIndex] = true;
-				slot->tts_values[fieldIndex] = (Datum) 0;
-			}
-			else
-			{
-				Form_pg_attribute att = TupleDescAttr(slot->tts_tupleDescriptor,
-													  fieldIndex);
-				Oid typinput;
-				Oid typioparam;
-
-				getTypeInputInfo(att->atttypid, &typinput, &typioparam);
-
-				slot->tts_isnull[fieldIndex] = false;
-				slot->tts_values[fieldIndex] = OidInputFunctionCall(
-					typinput, PQgetvalue(result, tupleIndex, fieldIndex),
-					typioparam, att->atttypmod);
-			}
-		}
-		if (!dest->receiveSlot(slot, dest))
-		{
-			break;
-		}
-	}
-
-	PQclear(result);
-}
-
-
-/*
  * CallFuncExprRemotely calls a procedure of function on the worker if possible.
  */
 static bool
@@ -120,10 +72,7 @@ CallFuncExprRemotely(CallStmt *callStmt, DistObjectCacheEntry *procedure,
 	List *placementList = NIL;
 	ListCell *argCell = NULL;
 	WorkerNode *preferredWorkerNode = NULL;
-	int connectionFlags = 0;
-	MultiConnection *connection = NULL;
 	DistTableCacheEntry *distTable = NULL;
-	PGresult *result = NULL;
 	ShardPlacement *placement = NULL;
 	WorkerNode *workerNode = NULL;
 
@@ -191,11 +140,31 @@ CallFuncExprRemotely(CallStmt *callStmt, DistObjectCacheEntry *procedure,
 		return false;
 	}
 
-	connection = GetNodeConnection(connectionFlags, preferredWorkerNode->workerName,
-								   preferredWorkerNode->workerPort);
+	{
+		Tuplestorestate *tupleStore = tuplestore_begin_heap(true, false, work_mem);
+		TupleDesc tupleDesc = CallStmtResultDesc(callStmt);
+		TupleTableSlot *slot = MakeSingleTupleTableSlotCompat(tupleDesc, &TTSOpsVirtual);
 
-	ExecuteCriticalRemoteCommand(connection, queryString, &result);
-	PipePgResultToDestReceiver(CallStmtResultDesc(callStmt), result, dest);
+		Task *task = CitusMakeNode(Task);
+		task->jobId = INVALID_JOB_ID;
+		task->taskId = 0;
+		task->taskType = DDL_TASK;
+		task->queryString = pstrdup(queryString);
+		task->replicationModel = REPLICATION_MODEL_INVALID;
+		task->dependedTaskList = NIL;
+		task->anchorShardId = placement->shardId;
+		task->relationShardList = NIL;
+		task->taskPlacementList = placementList;
+
+		ExecuteTaskListExtended(ROW_MODIFY_COMMUTATIVE, list_make1(task),
+								tupleDesc, tupleStore, true,
+								MaxAdaptiveExecutorPoolSize);
+
+		while (tuplestore_gettupleslot(tupleStore, true, false, slot))
+		{
+			dest->receiveSlot(slot, dest);
+		}
+	}
 
 	return true;
 }

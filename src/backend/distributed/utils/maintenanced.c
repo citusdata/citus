@@ -374,6 +374,7 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 
 			InvalidateMetadataSystemCache();
 			StartTransactionCommand();
+			PushActiveSnapshot(GetTransactionSnapshot());
 
 			if (!LockCitusExtension())
 			{
@@ -386,6 +387,7 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 				Async_Notify(METADATA_SYNC_CHANNEL, NULL);
 			}
 
+			PopActiveSnapshot();
 			CommitTransactionCommand();
 			ProcessCompletedNotifies();
 
