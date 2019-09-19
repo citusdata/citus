@@ -127,7 +127,7 @@ CallFuncExprRemotely(CallStmt *callStmt, DistObjectCacheEntry *procedure,
 	placement = (ShardPlacement *) linitial(placementList);
 	workerNode = FindWorkerNode(placement->nodeName, placement->nodePort);
 
-	if (workerNode == NULL || !workerNode->hasMetadata)
+	if (workerNode == NULL || !workerNode->hasMetadata || !workerNode->metadataSynced)
 	{
 		ereport(DEBUG2, (errmsg("there is no worker node with metadata")));
 		return false;
