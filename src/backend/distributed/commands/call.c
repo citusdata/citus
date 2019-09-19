@@ -156,7 +156,10 @@ CallFuncExprRemotely(CallStmt *callStmt, DistObjectCacheEntry *procedure,
 
 		while (tuplestore_gettupleslot(tupleStore, true, false, slot))
 		{
-			dest->receiveSlot(slot, dest);
+			if (!dest->receiveSlot(slot, dest))
+			{
+				break;
+			}
 		}
 	}
 
