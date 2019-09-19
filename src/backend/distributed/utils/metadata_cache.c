@@ -56,6 +56,7 @@
 #include "parser/parse_type.h"
 #include "storage/lmgr.h"
 #include "utils/builtins.h"
+#include "utils/catcache.h"
 #include "utils/datum.h"
 #include "utils/elog.h"
 #include "utils/hsearch.h"
@@ -813,26 +814,6 @@ DistributedTableCacheEntry(Oid distributedRelationId)
 
 
 /*
- * DistributedProcedureRecord loads a record from citus.pg_dist_object.
- */
-DistObjectCacheEntry *
-DistributedObjectCacheEntry(Oid classid, Oid objid, int32 objsubid)
-{
-	DistObjectCacheEntry *cacheEntry =
-		LookupDistObjectCacheEntry(classid, objid, objsubid);
-
-	if (cacheEntry)
-	{
-		return cacheEntry;
-	}
-	else
-	{
-		ereport(ERROR, (errmsg("object is not distributed")));
-	}
-}
-
-
-/*
  * LookupDistTableCacheEntry returns the distributed table metadata for the
  * passed relationId. For efficiency it caches lookups.
  */
@@ -975,7 +956,10 @@ LookupDistObjectCacheEntry(Oid classid, Oid objid, int32 objsubid)
 			return cacheEntry;
 		}
 
-		/* this is where we'd free old entry's out of band data if it had any */
+		/*
+		 * This is where we'd free the old entry's out of band data if it had any.
+		 * Right now we don't have anything to free.
+		 */
 	}
 
 	/* zero out entry, but not the key part */
@@ -2772,7 +2756,7 @@ master_dist_local_group_cache_invalidate(PG_FUNCTION_ARGS)
 
 
 /*
- * master_dist_object_invalidate is a trigger function that performs relcache
+ * master_dist_object_cache_invalidate is a trigger function that performs relcache
  * invalidation when the contents of pg_dist_object are changed on the SQL
  * level.
  *
@@ -2822,6 +2806,12 @@ InitializeCaches(void)
 		{
 			/* set first, to avoid recursion dangers */
 			performedInitialization = true;
+
+			/* make sure we've initialized CacheMemoryContext */
+			if (CacheMemoryContext == NULL)
+			{
+				CreateCacheMemoryContext();
+			}
 
 			MetadataCacheMemoryContext = AllocSetContextCreate(
 				CacheMemoryContext,

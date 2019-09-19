@@ -39,7 +39,7 @@ static bool CallFuncExprRemotely(CallStmt *callStmt,
 								 DestReceiver *dest);
 
 /*
- * CallDistributedProcedure calls a stored procedure on the worker if possible.
+ * CallDistributedProcedureRemotely calls a stored procedure on the worker if possible.
  */
 bool
 CallDistributedProcedureRemotely(CallStmt *callStmt, const char *queryString,
@@ -71,7 +71,6 @@ CallFuncExprRemotely(CallStmt *callStmt, DistObjectCacheEntry *procedure,
 	ShardInterval *shardInterval = NULL;
 	List *placementList = NIL;
 	ListCell *argCell = NULL;
-	WorkerNode *preferredWorkerNode = NULL;
 	DistTableCacheEntry *distTable = NULL;
 	ShardPlacement *placement = NULL;
 	WorkerNode *workerNode = NULL;
@@ -128,13 +127,7 @@ CallFuncExprRemotely(CallStmt *callStmt, DistObjectCacheEntry *procedure,
 	placement = (ShardPlacement *) linitial(placementList);
 	workerNode = FindWorkerNode(placement->nodeName, placement->nodePort);
 
-	if (workerNode->hasMetadata)
-	{
-		/* we can execute this procedure on the worker! */
-		preferredWorkerNode = workerNode;
-	}
-
-	if (preferredWorkerNode == NULL)
+	if (workerNode == NULL || !workerNode->hasMetadata || !workerNode->metadataSynced)
 	{
 		ereport(DEBUG2, (errmsg("there is no worker node with metadata")));
 		return false;
