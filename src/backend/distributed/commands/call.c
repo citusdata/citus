@@ -143,7 +143,8 @@ CallFuncExprRemotely(CallStmt *callStmt, DistObjectCacheEntry *procedure,
 	{
 		Tuplestorestate *tupleStore = tuplestore_begin_heap(true, false, work_mem);
 		TupleDesc tupleDesc = CallStmtResultDesc(callStmt);
-		TupleTableSlot *slot = MakeSingleTupleTableSlotCompat(tupleDesc, &TTSOpsVirtual);
+		TupleTableSlot *slot = MakeSingleTupleTableSlotCompat(tupleDesc,
+															  &TTSOpsMinimalTuple);
 
 		Task *task = CitusMakeNode(Task);
 		task->jobId = INVALID_JOB_ID;
