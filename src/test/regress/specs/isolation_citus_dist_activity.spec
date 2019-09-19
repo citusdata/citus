@@ -1,13 +1,8 @@
 setup
 {
-    -- would be great if we could SET citus.next_shard_id TO 107000;
-    -- unfortunately that will cause messages like
-    -- ERROR:  cached metadata for shard 107000 is inconsistent
-    -- to show up. This test is therefore subject to change due to
-    -- addition of tests or permutations prior to this test.
-
     SET citus.shard_replication_factor TO 1;
     SET citus.shard_count TO 4;
+    select setval('pg_dist_shardid_seq', GREATEST(1300000, nextval('pg_dist_shardid_seq')));
 
     CREATE TABLE test_table(column1 int, column2 int);
     SELECT create_distributed_table('test_table', 'column1');
