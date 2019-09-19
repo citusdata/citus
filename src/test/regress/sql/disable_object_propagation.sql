@@ -74,7 +74,7 @@ GROUP BY pg_type.typname;
 $$);
 
 -- suppress any warnings during cleanup
-SET client_min_messages TO fatal;
+SET client_min_messages TO error;
 RESET citus.enable_object_propagation;
 DROP SCHEMA disabled_object_propagation CASCADE;
 DROP SCHEMA disabled_object_propagation2 CASCADE;
