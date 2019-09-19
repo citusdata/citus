@@ -374,6 +374,7 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 
 			InvalidateMetadataSystemCache();
 			StartTransactionCommand();
+			PushActiveSnapshot(GetTransactionSnapshot());
 
 			/*
 			 * Some functions in ruleutils.c, which we use to get the DDL for
