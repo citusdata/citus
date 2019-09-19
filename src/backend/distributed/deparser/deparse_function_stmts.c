@@ -13,6 +13,7 @@
 #include "catalog/namespace.h"
 #include "catalog/pg_proc.h"
 #include "commands/defrem.h"
+#include "distributed/citus_ruleutils.h"
 #include "distributed/commands.h"
 #include "distributed/deparser.h"
 #include "distributed/version_compat.h"
@@ -43,6 +44,10 @@ static void AppendDefElemCost(StringInfo buf, DefElem *def);
 static void AppendDefElemRows(StringInfo buf, DefElem *def);
 static void AppendDefElemSet(StringInfo buf, DefElem *def);
 
+static void AppendRenameFunctionStmt(StringInfo buf, RenameStmt *stmt);
+static void AppendAlterFunctionSchemaStmt(StringInfo buf, AlterObjectSchemaStmt *stmt);
+static void AppendAlterFunctionOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt);
+static void AppendAlterFunctionDependsStmt(StringInfo buf, AlterObjectDependsStmt *stmt);
 
 const char *
 DeparseAlterFunctionStmt(AlterFunctionStmt *stmt)
@@ -53,6 +58,118 @@ DeparseAlterFunctionStmt(AlterFunctionStmt *stmt)
 	AppendAlterFunctionStmt(&str, stmt);
 
 	return str.data;
+}
+
+
+/* TODO: implement this and add some comments here */
+const char *
+DeparseRenameFunctionStmt(RenameStmt *stmt)
+{
+	StringInfoData str = { 0 };
+	initStringInfo(&str);
+
+	/* TODO: check that OBJECT_PROCEDURE still works fine */
+	Assert(stmt->renameType == OBJECT_FUNCTION);
+
+	AppendRenameFunctionStmt(&str, stmt);
+
+	return str.data;
+}
+
+
+static void
+AppendRenameFunctionStmt(StringInfo buf, RenameStmt *stmt)
+{
+	List *names = (List *) stmt->object;
+
+	appendStringInfo(buf, "ALTER FUNCTION %s RENAME TO %s;", NameListToQuotedString(
+						 names), quote_identifier(stmt->newname));
+}
+
+
+/* TODO: implement this and add some comments here */
+const char *
+DeparseAlterFunctionSchemaStmt(AlterObjectSchemaStmt *stmt)
+{
+	StringInfoData str = { 0 };
+	initStringInfo(&str);
+
+	Assert(stmt->objectType == OBJECT_FUNCTION);
+
+	AppendAlterFunctionSchemaStmt(&str, stmt);
+
+	return str.data;
+}
+
+
+static void
+AppendAlterFunctionSchemaStmt(StringInfo buf, AlterObjectSchemaStmt *stmt)
+{
+	List *names = NIL;
+
+	Assert(stmt->objectType == OBJECT_FUNCTION);
+
+	names = (List *) stmt->object;
+	appendStringInfo(buf, "ALTER FUNCTION %s SET SCHEMA %s;", NameListToQuotedString(
+						 names),
+					 quote_identifier(stmt->newschema));
+}
+
+
+/* TODO: implement this and add some comments here */
+const char *
+DeparseAlterFunctionOwnerStmt(AlterOwnerStmt *stmt)
+{
+	StringInfoData str = { 0 };
+	initStringInfo(&str);
+
+	Assert(stmt->objectType == OBJECT_FUNCTION);
+
+	AppendAlterFunctionOwnerStmt(&str, stmt);
+
+	return str.data;
+}
+
+
+static void
+AppendAlterFunctionOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt)
+{
+	List *names = NIL;
+
+	Assert(stmt->objectType == OBJECT_FUNCTION);
+
+	names = (List *) stmt->object;
+	appendStringInfo(buf, "ALTER FUNCTION %s OWNER TO %s;", NameListToQuotedString(names),
+					 RoleSpecString(stmt->newowner));
+}
+
+
+/* TODO: implement this and add some comments here */
+const char *
+DeparseAlterFunctionDependsStmt(AlterObjectDependsStmt *stmt)
+{
+	StringInfoData str = { 0 };
+	initStringInfo(&str);
+
+	Assert(stmt->objectType == OBJECT_FUNCTION);
+
+	AppendAlterFunctionDependsStmt(&str, stmt);
+
+	return str.data;
+}
+
+
+static void
+AppendAlterFunctionDependsStmt(StringInfo buf, AlterObjectDependsStmt *stmt)
+{
+	List *names = NIL;
+
+	Assert(stmt->objectType == OBJECT_FUNCTION);
+
+	names = (List *) stmt->object;
+	appendStringInfo(buf, "ALTER FUNCTION %s DEPENDS ON EXTENSION %s;",
+					 NameListToQuotedString(names),
+					 strVal(stmt->extname));
 }
 
 
