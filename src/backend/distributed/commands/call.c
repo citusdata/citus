@@ -161,6 +161,10 @@ CallFuncExprRemotely(CallStmt *callStmt, DistObjectCacheEntry *procedure,
 				break;
 			}
 		}
+
+		/* Don't call tuplestore_end(tupleStore). It'll be freed soon enough in a top level CALL,
+		 * & dest->receiveSlot could conceivably rely on slots being long lived.
+		 */
 	}
 
 	return true;
