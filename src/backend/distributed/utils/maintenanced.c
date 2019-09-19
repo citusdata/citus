@@ -375,6 +375,12 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 			InvalidateMetadataSystemCache();
 			StartTransactionCommand();
 
+			/*
+			 * Some functions in ruleutils.c, which we use to get the DDL for
+			 * metadata propagation, require an active snapshot.
+			 */
+			PushActiveSnapshot(GetTransactionSnapshot());
+
 			if (!LockCitusExtension())
 			{
 				ereport(DEBUG1, (errmsg("could not lock the citus extension, "
@@ -386,6 +392,7 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 				Async_Notify(METADATA_SYNC_CHANNEL, NULL);
 			}
 
+			PopActiveSnapshot();
 			CommitTransactionCommand();
 			ProcessCompletedNotifies();
 
