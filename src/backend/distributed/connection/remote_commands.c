@@ -385,8 +385,8 @@ ExecuteCriticalRemoteCommandList(MultiConnection *connection, List *commandList)
 
 
 /*
- * ExecuteOptionalRemoteCommand executes a remote command. If the command fails a WARNING
- * is emitted but execution continues.
+ * ExecuteRemoteCommand executes a remote command. Command failure is raised with
+ * elevel severity before continuing if elevel is non fatal.
  *
  * could return 0, QUERY_SEND_FAILED, or RESPONSE_NOT_OKAY
  * result is only set if there was no error
