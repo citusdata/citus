@@ -10,6 +10,7 @@ select create_distributed_table('mx_call_dist_table', 'id');
 insert into mx_call_dist_table values (1),(2),(3),(4),(5);
 
 create type mx_call_enum as enum ('A', 'S', 'D', 'F');
+CREATE TABLE mx_call_dist_table_enum(id int, key mx_call_enum);
 
 CREATE PROCEDURE mx_call_proc(x int, INOUT y int) LANGUAGE plpgsql AS $$
 BEGIN
@@ -34,6 +35,8 @@ CREATE FUNCTION mx_call_add(int, int) RETURNS int
 call mx_call_proc(2, 0);
 call mx_call_proc_asdf('S', 'A');
 
+select create_distributed_table('mx_call_dist_table_enum', 'key');
+
 select create_distributed_function('mx_call_proc(int,int)');
 update citus.pg_dist_object
 set distribution_argument_index = 1, colocationid = pg_dist_partition.colocationid
@@ -44,7 +47,7 @@ select create_distributed_function('mx_call_proc_asdf(mx_call_enum,mx_call_enum)
 update citus.pg_dist_object
 set distribution_argument_index = 1, colocationid = pg_dist_partition.colocationid
 from pg_proc, pg_dist_partition
-where proname = 'mx_call_proc_asdf' and oid = objid and pg_dist_partition.logicalrelid = 'mx_call_dist_table'::regclass;
+where proname = 'mx_call_proc_asdf' and oid = objid and pg_dist_partition.logicalrelid = 'mx_call_dist_table_enum'::regclass;
 
 call mx_call_proc(2, 0);
 call mx_call_proc_asdf('S', 'A');
