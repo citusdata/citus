@@ -102,7 +102,7 @@ CallFuncExprRemotely(CallStmt *callStmt, DistObjectCacheEntry *procedure,
 	{
 		ereport(DEBUG2, (errmsg("arguments in a distributed stored procedure must "
 								"be constant expressions")));
-		return NULL;
+		return false;
 	}
 
 	distTable = DistributedTableCacheEntry(colocatedRelationId);
