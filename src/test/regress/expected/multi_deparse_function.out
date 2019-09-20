@@ -238,6 +238,56 @@ $cmd$);
 (1 row)
 
 SELECT deparse_test($cmd$
+ALTER FUNCTION add RENAME TO summation
+$cmd$);
+                       deparse_test                       
+----------------------------------------------------------
+ ALTER FUNCTION function_tests.add() RENAME TO summation;
+(1 row)
+
+CREATE ROLE function_role;
+NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
+HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
+SELECT run_command_on_workers('CREATE ROLE function_role');
+DEBUG:  not propagating CREATE ROLE/USER commands to worker nodes
+HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
+DETAIL:  NOTICE from localhost:57637
+CONTEXT:  PL/pgSQL function run_command_on_workers(text,boolean) line 13 at RETURN QUERY
+DEBUG:  not propagating CREATE ROLE/USER commands to worker nodes
+HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
+DETAIL:  NOTICE from localhost:57638
+CONTEXT:  PL/pgSQL function run_command_on_workers(text,boolean) line 13 at RETURN QUERY
+      run_command_on_workers       
+-----------------------------------
+ (localhost,57637,t,"CREATE ROLE")
+ (localhost,57638,t,"CREATE ROLE")
+(2 rows)
+
+SELECT deparse_test($cmd$
+ALTER FUNCTION add OWNER TO function_role
+$cmd$);
+                        deparse_test                         
+-------------------------------------------------------------
+ ALTER FUNCTION function_tests.add() OWNER TO function_role;
+(1 row)
+
+SELECT deparse_test($cmd$
+ALTER FUNCTION add SET SCHEMA public
+$cmd$);
+                      deparse_test                      
+--------------------------------------------------------
+ ALTER FUNCTION function_tests.add() SET SCHEMA public;
+(1 row)
+
+SELECT deparse_test($cmd$
+ALTER FUNCTION add DEPENDS ON EXTENSION citus
+$cmd$);
+                          deparse_test                           
+-----------------------------------------------------------------
+ ALTER FUNCTION function_tests.add() DEPENDS ON EXTENSION citus;
+(1 row)
+
+SELECT deparse_test($cmd$
 DROP FUNCTION IF EXISTS add(int,int);
 $cmd$);
                                  deparse_test                                 
@@ -265,3 +315,11 @@ $cmd$);
 -- clear objects
 SET client_min_messages TO FATAL; -- suppress cascading objects dropping
 DROP SCHEMA function_tests CASCADE;
+DROP ROLE function_role;
+SELECT result FROM run_command_on_workers('DROP ROLE function_role');
+  result   
+-----------
+ DROP ROLE
+ DROP ROLE
+(2 rows)
+

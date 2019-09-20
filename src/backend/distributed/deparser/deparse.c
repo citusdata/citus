@@ -23,7 +23,7 @@ static const char * DeparseRenameStmt(RenameStmt *stmt);
 static const char * DeparseRenameAttributeStmt(RenameStmt *stmt);
 static const char * DeparseAlterObjectSchemaStmt(AlterObjectSchemaStmt *stmt);
 static const char * DeparseAlterOwnerStmt(AlterOwnerStmt *stmt);
-
+static const char * DeparseAlterObjectDependsStmt(AlterObjectDependsStmt *stmt);
 
 /*
  * DeparseTreeNode aims to be the inverse of postgres' ParseTreeNode. Currently with
@@ -85,6 +85,11 @@ DeparseTreeNode(Node *stmt)
 		case T_AlterOwnerStmt:
 		{
 			return DeparseAlterOwnerStmt(castNode(AlterOwnerStmt, stmt));
+		}
+
+		case T_AlterObjectDependsStmt:
+		{
+			return DeparseAlterObjectDependsStmt(castNode(AlterObjectDependsStmt, stmt));
 		}
 
 		default:
@@ -151,6 +156,11 @@ DeparseRenameStmt(RenameStmt *stmt)
 			return DeparseRenameAttributeStmt(stmt);
 		}
 
+		case OBJECT_FUNCTION:
+		{
+			return DeparseRenameFunctionStmt(stmt);
+		}
+
 		default:
 		{
 			ereport(ERROR, (errmsg("unsupported rename statement for deparsing")));
@@ -190,6 +200,11 @@ DeparseAlterObjectSchemaStmt(AlterObjectSchemaStmt *stmt)
 			return DeparseAlterTypeSchemaStmt(stmt);
 		}
 
+		case OBJECT_FUNCTION:
+		{
+			return DeparseAlterFunctionSchemaStmt(stmt);
+		}
+
 		default:
 		{
 			ereport(ERROR, (errmsg("unsupported rename statement for deparsing")));
@@ -208,9 +223,34 @@ DeparseAlterOwnerStmt(AlterOwnerStmt *stmt)
 			return DeparseAlterTypeOwnerStmt(stmt);
 		}
 
+		case OBJECT_FUNCTION:
+		case OBJECT_PROCEDURE:
+		{
+			return DeparseAlterFunctionOwnerStmt(stmt);
+		}
+
 		default:
 		{
 			ereport(ERROR, (errmsg("unsupported alter owner statement for deparsing")));
+		}
+	}
+}
+
+
+static const char *
+DeparseAlterObjectDependsStmt(AlterObjectDependsStmt *stmt)
+{
+	switch (stmt->objectType)
+	{
+		case OBJECT_FUNCTION:
+		case OBJECT_PROCEDURE:
+		{
+			return DeparseAlterFunctionDependsStmt(stmt);
+		}
+
+		default:
+		{
+			ereport(ERROR, (errmsg("unsupported alter depends statement for deparsing")));
 		}
 	}
 }
