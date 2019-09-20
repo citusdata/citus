@@ -1,0 +1,151 @@
+-- Tests for row types on the target list
+CREATE SCHEMA row_types;
+SET search_path TO row_types;
+CREATE TABLE test (x int, y int);
+SELECT create_distributed_table('test','x');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+CREATE OR REPLACE FUNCTION table_returner(INT) RETURNS TABLE(name text, id INT)
+AS $$
+BEGIN
+   RETURN QUERY SELECT $1::text, $1;
+END;
+$$ language plpgsql;
+SELECT create_distributed_function('table_returner(int)');
+ create_distributed_function 
+-----------------------------
+ 
+(1 row)
+
+CREATE OR REPLACE FUNCTION record_returner(INOUT id int, OUT name text)
+RETURNS record
+AS $$
+BEGIN
+   id := id + 1;
+   name := 'returned';
+END;
+$$ language plpgsql;
+SELECT create_distributed_function('record_returner(int)');
+ create_distributed_function 
+-----------------------------
+ 
+(1 row)
+
+INSERT INTO test VALUES (1,2), (1,3), (2,2), (2,3);
+-- multi-shard queries do not support row types
+SELECT (x,y) FROM test ORDER BY x, y;
+ERROR:  input of anonymous composite types is not implemented
+SELECT (x,y) FROM test GROUP BY x, y ORDER BY x, y;
+ERROR:  input of anonymous composite types is not implemented
+select distinct (x,y) AS foo, x, y FROM test ORDER BY x, y;
+ERROR:  input of anonymous composite types is not implemented
+SELECT table_returner(x) FROM test ORDER BY x, y;
+ERROR:  input of anonymous composite types is not implemented
+SELECT record_returner(x) FROM test ORDER BY x, y;
+ERROR:  input of anonymous composite types is not implemented
+-- router queries support row types
+SELECT (x,y) FROM test WHERE x = 1 ORDER BY x, y;
+  row  
+-------
+ (1,2)
+ (1,3)
+(2 rows)
+
+SELECT (x,y) AS foo FROM test WHERE x = 1 ORDER BY x, y;
+  foo  
+-------
+ (1,2)
+ (1,3)
+(2 rows)
+
+select distinct (x,y) AS foo, x, y FROM test WHERE x = 1 ORDER BY x, y;
+  foo  | x | y 
+-------+---+---
+ (1,2) | 1 | 2
+ (1,3) | 1 | 3
+(2 rows)
+
+SELECT table_returner(x) FROM test WHERE x = 1 ORDER BY x, y;
+ table_returner 
+----------------
+ (1,1)
+ (1,1)
+(2 rows)
+
+SELECT record_returner(x) FROM test WHERE x = 1 ORDER BY x, y;
+ record_returner 
+-----------------
+ (2,returned)
+ (2,returned)
+(2 rows)
+
+-- nested row expressions
+SELECT (x,(x,y)) AS foo FROM test WHERE x = 1 ORDER BY x, y;
+     foo     
+-------------
+ (1,"(1,2)")
+ (1,"(1,3)")
+(2 rows)
+
+SELECT (x,record_returner(x)) FROM test WHERE x = 1 ORDER BY x, y;
+        row         
+--------------------
+ (1,"(2,returned)")
+ (1,"(2,returned)")
+(2 rows)
+
+-- table functions in row expressions are not supported
+SELECT (x,table_returner(x)) FROM test WHERE x = 1 ORDER BY x, y;
+ERROR:  input of anonymous composite types is not implemented
+-- try prepared statements
+PREPARE rec(int) AS SELECT (x,y*$1) FROM test WHERE x = $1  ORDER BY x, y;
+EXECUTE rec(1);
+  row  
+-------
+ (1,2)
+ (1,3)
+(2 rows)
+
+EXECUTE rec(1);
+  row  
+-------
+ (1,2)
+ (1,3)
+(2 rows)
+
+EXECUTE rec(1);
+  row  
+-------
+ (1,2)
+ (1,3)
+(2 rows)
+
+EXECUTE rec(1);
+  row  
+-------
+ (1,2)
+ (1,3)
+(2 rows)
+
+EXECUTE rec(1);
+  row  
+-------
+ (1,2)
+ (1,3)
+(2 rows)
+
+EXECUTE rec(1);
+  row  
+-------
+ (1,2)
+ (1,3)
+(2 rows)
+
+DROP SCHEMA row_types CASCADE;
+NOTICE:  drop cascades to 3 other objects
+DETAIL:  drop cascades to table test
+drop cascades to function table_returner(integer)
+drop cascades to function record_returner(integer)

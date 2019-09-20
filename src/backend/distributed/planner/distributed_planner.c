@@ -8,10 +8,12 @@
  */
 
 #include "postgres.h"
+#include "funcapi.h"
 
 #include <float.h>
 #include <limits.h>
 
+#include "access/htup_details.h"
 #include "catalog/pg_class.h"
 #include "catalog/pg_type.h"
 #include "distributed/citus_nodefuncs.h"
@@ -80,6 +82,7 @@ static PlannedStmt * FinalizeNonRouterPlan(PlannedStmt *localPlan,
 										   DistributedPlan *distributedPlan,
 										   CustomScan *customScan);
 static PlannedStmt * FinalizeRouterPlan(PlannedStmt *localPlan, CustomScan *customScan);
+static int32 BlessRecordExpression(Expr *expr);
 static void CheckNodeIsDumpable(Node *node);
 static Node * CheckNodeCopyAndSerialization(Node *node);
 static void AdjustReadIntermediateResultCost(RangeTblEntry *rangeTableEntry,
@@ -1089,6 +1092,18 @@ FinalizeRouterPlan(PlannedStmt *localPlan, CustomScan *customScan)
 
 		/* build target entry pointing to remote scan range table entry */
 		newVar = makeVarFromTargetEntry(customScanRangeTableIndex, targetEntry);
+
+		if (newVar->vartype == RECORDOID)
+		{
+			/*
+			 * Add the anonymous composite type to the type cache and store
+			 * the key in vartypmod. Eventually this makes its way into the
+			 * TupleDesc used by the executor, which uses it to parse the
+			 * query results from the workers in BuildTupleFromCStrings.
+			 */
+			newVar->vartypmod = BlessRecordExpression(targetEntry->expr);
+		}
+
 		newTargetEntry = flatCopyTargetEntry(targetEntry);
 		newTargetEntry->expr = (Expr *) newVar;
 		targetList = lappend(targetList, newTargetEntry);
@@ -1117,6 +1132,78 @@ FinalizeRouterPlan(PlannedStmt *localPlan, CustomScan *customScan)
 	routerPlan->hasReturning = localPlan->hasReturning;
 
 	return routerPlan;
+}
+
+
+/*
+ * BlessRecordExpression ensures we can parse an anonymous composite type on the
+ * target list of a query that is sent to the worker.
+ *
+ * We cannot normally parse record types coming from the workers unless we
+ * "bless" the tuple descriptor, which adds a transient type to the type cache
+ * and assigns it a type mod value, which is the key in the type cache.
+ */
+static int32
+BlessRecordExpression(Expr *expr)
+{
+	int32 typeMod = -1;
+
+	if (IsA(expr, FuncExpr))
+	{
+		/*
+		 * Handle functions that return records on the target
+		 * list, e.g. SELECT function_call(1,2);
+		 */
+		Oid resultTypeId = InvalidOid;
+		TupleDesc resultTupleDesc = NULL;
+		TypeFuncClass typeClass;
+
+		/* get_expr_result_type blesses the tuple descriptor */
+		typeClass = get_expr_result_type((Node *) expr, &resultTypeId,
+										 &resultTupleDesc);
+		if (typeClass == TYPEFUNC_COMPOSITE)
+		{
+			typeMod = resultTupleDesc->tdtypmod;
+		}
+	}
+	else if (IsA(expr, RowExpr))
+	{
+		/*
+		 * Handle row expressions, e.g. SELECT (1,2);
+		 */
+		RowExpr *rowExpr = (RowExpr *) expr;
+		TupleDesc rowTupleDesc = NULL;
+		ListCell *argCell = NULL;
+		int currentResno = 1;
+
+		rowTupleDesc = CreateTemplateTupleDesc(list_length(rowExpr->args), false);
+
+		foreach(argCell, rowExpr->args)
+		{
+			Node *rowArg = (Node *) lfirst(argCell);
+			Oid rowArgTypeId = exprType(rowArg);
+			int rowArgTypeMod = exprTypmod(rowArg);
+
+			if (rowArgTypeId == RECORDOID)
+			{
+				/* ensure nested rows are blessed as well */
+				rowArgTypeMod = BlessRecordExpression((Expr *) rowArg);
+			}
+
+			TupleDescInitEntry(rowTupleDesc, currentResno, NULL,
+							   rowArgTypeId, rowArgTypeMod, 0);
+			TupleDescInitEntryCollation(rowTupleDesc, currentResno,
+										exprCollation(rowArg));
+
+			currentResno++;
+		}
+
+		BlessTupleDesc(rowTupleDesc);
+
+		typeMod = rowTupleDesc->tdtypmod;
+	}
+
+	return typeMod;
 }
 
 
