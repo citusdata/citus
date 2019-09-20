@@ -1,7 +1,5 @@
 -- Test passing off CALL to mx workers
 -- Create worker-local tables to test procedure calls were routed
-create schema multi_mx_call;
-set search_path to multi_mx_call, public;
 set citus.shard_replication_factor to 1;
 set citus.replication_model to 'streaming';
 create table mx_call_dist_table(id int, val int);
@@ -106,13 +104,17 @@ call mx_call_dist_object('mx_call_proc_commit', 'mx_call_dist_table'::regclass, 
 call mx_call_dist_object('mx_call_proc_raise', 'mx_call_dist_table'::regclass, 0);
 call mx_call_dist_object('mx_call_proc_asdf', 'mx_call_dist_table_enum'::regclass, 1);
 call mx_call_proc(2, 0);
-ERROR:  procedure mx_call_proc(integer, integer) does not exist
-HINT:  No procedure matches the given name and argument types. You might need to add explicit type casts.
-CONTEXT:  while executing command on localhost:57638
+ y  
+----
+ 28
+(1 row)
+
 call mx_call_proc_asdf('S', 'A');
-ERROR:  procedure mx_call_proc_asdf(unknown, unknown) does not exist
-HINT:  No procedure matches the given name and argument types. You might need to add explicit type casts.
-CONTEXT:  while executing command on localhost:57638
+ x | y 
+---+---
+ S | S
+(1 row)
+
 drop table mx_call_dist_table_enum;
 set client_min_messages to DEBUG2;
 -- Procedure calls can't be distributed without a distributed table to guide process
@@ -169,7 +171,7 @@ PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
 DEBUG:  join prunable for intervals [1073741824,2147483647] and [0,1073741823]
 CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
-DEBUG:  generating subplan 6_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (multi_mx_call.mx_call_dist_table t1 JOIN multi_mx_call.mx_call_dist_table2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
+DEBUG:  generating subplan 6_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (public.mx_call_dist_table t1 JOIN public.mx_call_dist_table2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
 CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
 DEBUG:  Plan 6 query after replacing subqueries and CTEs: SELECT (3 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('6_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
@@ -188,13 +190,12 @@ PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
 
 commit;
 call mx_call_proc_raise(2);
-ERROR:  procedure mx_call_proc_raise(integer) does not exist
-HINT:  No procedure matches the given name and argument types. You might need to add explicit type casts.
+DEBUG:  warning
+DETAIL:  WARNING from localhost:57638
+ERROR:  error
 CONTEXT:  while executing command on localhost:57638
+PL/pgSQL function mx_call_proc_raise(integer) line 4 at RAISE
 call mx_call_proc_commit(2);
-ERROR:  procedure mx_call_proc_commit(integer) does not exist
-HINT:  No procedure matches the given name and argument types. You might need to add explicit type casts.
-CONTEXT:  while executing command on localhost:57638
 -- Make sure we do bounds checking on distributed argument index
 -- This also tests that we have cache invalidation for pg_dist_object updates
 call mx_call_dist_object('mx_call_proc', 'mx_call_dist_table'::regclass, -1);
@@ -242,7 +243,7 @@ PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
 DEBUG:  join prunable for intervals [1073741824,2147483647] and [0,1073741823]
 CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
-DEBUG:  generating subplan 8_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (multi_mx_call.mx_call_dist_table t1 JOIN multi_mx_call.mx_call_dist_table2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
+DEBUG:  generating subplan 8_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (public.mx_call_dist_table t1 JOIN public.mx_call_dist_table2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
 CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
 DEBUG:  Plan 8 query after replacing subqueries and CTEs: SELECT (3 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('8_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
@@ -304,7 +305,7 @@ PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
 DEBUG:  join prunable for intervals [1073741824,2147483647] and [0,1073741823]
 CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
-DEBUG:  generating subplan 10_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (multi_mx_call.mx_call_dist_table t1 JOIN multi_mx_call.mx_call_dist_table2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
+DEBUG:  generating subplan 10_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (public.mx_call_dist_table t1 JOIN public.mx_call_dist_table2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
 CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
 DEBUG:  Plan 10 query after replacing subqueries and CTEs: SELECT (3 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('10_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
@@ -367,7 +368,7 @@ PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
 DEBUG:  join prunable for intervals [1073741824,2147483647] and [0,1073741823]
 CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
-DEBUG:  generating subplan 12_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (multi_mx_call.mx_call_dist_table t1 JOIN multi_mx_call.mx_call_dist_table2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
+DEBUG:  generating subplan 12_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (public.mx_call_dist_table t1 JOIN public.mx_call_dist_table2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
 CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
 DEBUG:  Plan 12 query after replacing subqueries and CTEs: SELECT (3 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('12_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
@@ -386,9 +387,11 @@ PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
 
 -- non const parameter can be pushed down
 call mx_call_proc(mx_call_add(3, 4), 2);
-ERROR:  function mx_call_add(integer, integer) does not exist
-HINT:  No function matches the given name and argument types. You might need to add explicit type casts.
-CONTEXT:  while executing command on localhost:57638
+ y  
+----
+ 33
+(1 row)
+
 -- volatile parameter cannot be pushed down
 call mx_call_proc(random()::int, 2);
 DEBUG:  arguments in a distributed stored procedure must be constant expressions
@@ -437,10 +440,10 @@ PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
 DEBUG:  join prunable for intervals [1073741824,2147483647] and [0,1073741823]
 CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
-DEBUG:  generating subplan 15_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (multi_mx_call.mx_call_dist_table t1 JOIN multi_mx_call.mx_call_dist_table2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
+DEBUG:  generating subplan 15_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (public.mx_call_dist_table t1 JOIN public.mx_call_dist_table2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
 CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
-DEBUG:  Plan 15 query after replacing subqueries and CTEs: SELECT (1 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('15_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
+DEBUG:  Plan 15 query after replacing subqueries and CTEs: SELECT (2 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('15_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
 CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
 DEBUG:  Creating router plan
@@ -451,13 +454,22 @@ CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_di
 PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
  y  
 ----
- 27
+ 28
 (1 row)
 
 reset client_min_messages;
 reset citus.shard_replication_factor;
 reset citus.replication_model;
-\set VERBOSITY terse
-drop schema multi_mx_call cascade;
-NOTICE:  drop cascades to 9 other objects
-\set VERBOSITY default
+drop table mx_call_dist_table;
+drop table mx_call_dist_table2;
+drop function mx_call_add;
+drop procedure mx_call_dist_object;
+drop procedure mx_call_proc;
+drop procedure mx_call_proc_asdf;
+drop procedure mx_call_proc_raise;
+drop procedure mx_call_proc_commit;
+drop type mx_call_enum;
+ERROR:  cannot drop type mx_call_enum because other objects depend on it
+DETAIL:  function mx_call_proc_asdf(mx_call_enum,mx_call_enum) depends on type mx_call_enum
+HINT:  Use DROP ... CASCADE to drop the dependent objects too.
+CONTEXT:  while executing command on localhost:57638

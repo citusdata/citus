@@ -1,7 +1,5 @@
 -- Test passing off CALL to mx workers
 -- Create worker-local tables to test procedure calls were routed
-create schema multi_mx_call;
-set search_path to multi_mx_call, public;
 set citus.shard_replication_factor to 1;
 set citus.replication_model to 'streaming';
 create table mx_call_dist_table(id int, val int);
@@ -190,7 +188,27 @@ LINE 1: call mx_call_proc(random()::int, 2);
 reset client_min_messages;
 reset citus.shard_replication_factor;
 reset citus.replication_model;
-\set VERBOSITY terse
-drop schema multi_mx_call cascade;
-NOTICE:  drop cascades to 4 other objects
-\set VERBOSITY default
+drop table mx_call_dist_table;
+drop table mx_call_dist_table2;
+drop function mx_call_add;
+drop procedure mx_call_dist_object;
+ERROR:  syntax error at or near "procedure"
+LINE 1: drop procedure mx_call_dist_object;
+             ^
+drop procedure mx_call_proc;
+ERROR:  syntax error at or near "procedure"
+LINE 1: drop procedure mx_call_proc;
+             ^
+drop procedure mx_call_proc_asdf;
+ERROR:  syntax error at or near "procedure"
+LINE 1: drop procedure mx_call_proc_asdf;
+             ^
+drop procedure mx_call_proc_raise;
+ERROR:  syntax error at or near "procedure"
+LINE 1: drop procedure mx_call_proc_raise;
+             ^
+drop procedure mx_call_proc_commit;
+ERROR:  syntax error at or near "procedure"
+LINE 1: drop procedure mx_call_proc_commit;
+             ^
+drop type mx_call_enum;
