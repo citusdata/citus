@@ -339,6 +339,11 @@ SupportedDependencyByCitus(const ObjectAddress *address)
 			return true;
 		}
 
+		case OCLASS_PROC:
+		{
+			return true;
+		}
+
 		case OCLASS_TYPE:
 		{
 			switch (get_typtype(address->objectId))
