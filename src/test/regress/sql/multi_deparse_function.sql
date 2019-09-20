@@ -35,7 +35,7 @@ SET citus.next_shard_id TO 20020000;
 CREATE SCHEMA function_tests;
 SET search_path TO function_tests;
 SET citus.shard_count TO 4;
-SET client_min_messages TO DEBUG;
+SET client_min_messages TO INFO;
 
 CREATE FUNCTION deparse_test(text)
 	RETURNS text
@@ -54,7 +54,7 @@ ALTER FUNCTION  add CALLED ON NULL INPUT
 $cmd$);
 
 SELECT deparse_test($cmd$
-ALTER FUNCTION add  RETURNS NULL ON NULL INPUT
+ALTER FUNCTION add RETURNS NULL ON NULL INPUT
 $cmd$);
 
 SELECT deparse_test($cmd$
@@ -156,10 +156,13 @@ ALTER FUNCTION add RENAME TO summation
 $cmd$);
 
 CREATE ROLE function_role;
-SELECT run_command_on_workers('CREATE ROLE function_role');
 
 SELECT deparse_test($cmd$
 ALTER FUNCTION add OWNER TO function_role
+$cmd$);
+
+SELECT deparse_test($cmd$
+ALTER FUNCTION add OWNER TO missing_role
 $cmd$);
 
 SELECT deparse_test($cmd$
@@ -187,4 +190,3 @@ $cmd$);
 SET client_min_messages TO FATAL; -- suppress cascading objects dropping
 DROP SCHEMA function_tests CASCADE;
 DROP ROLE function_role;
-SELECT result FROM run_command_on_workers('DROP ROLE function_role');
