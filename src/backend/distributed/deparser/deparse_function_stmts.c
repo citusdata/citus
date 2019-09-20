@@ -49,6 +49,8 @@ static void AppendAlterFunctionSchemaStmt(StringInfo buf, AlterObjectSchemaStmt 
 static void AppendAlterFunctionOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt);
 static void AppendAlterFunctionDependsStmt(StringInfo buf, AlterObjectDependsStmt *stmt);
 
+static void AppendQualifiedFunctionName(StringInfo buf, ObjectWithArgs *func);
+
 const char *
 DeparseAlterFunctionStmt(AlterFunctionStmt *stmt)
 {
@@ -80,10 +82,13 @@ DeparseRenameFunctionStmt(RenameStmt *stmt)
 static void
 AppendRenameFunctionStmt(StringInfo buf, RenameStmt *stmt)
 {
-	List *names = (List *) stmt->object;
+	ObjectWithArgs *func = castNode(ObjectWithArgs, stmt->object);
 
-	appendStringInfo(buf, "ALTER FUNCTION %s RENAME TO %s;", NameListToQuotedString(
-						 names), quote_identifier(stmt->newname));
+	appendStringInfoString(buf, "ALTER FUNCTION ");
+
+	AppendQualifiedFunctionName(buf, func);
+
+	appendStringInfo(buf, " RENAME TO %s;", quote_identifier(stmt->newname));
 }
 
 
@@ -105,14 +110,11 @@ DeparseAlterFunctionSchemaStmt(AlterObjectSchemaStmt *stmt)
 static void
 AppendAlterFunctionSchemaStmt(StringInfo buf, AlterObjectSchemaStmt *stmt)
 {
-	List *names = NIL;
+	ObjectWithArgs *func = castNode(ObjectWithArgs, stmt->object);
 
-	Assert(stmt->objectType == OBJECT_FUNCTION);
-
-	names = (List *) stmt->object;
-	appendStringInfo(buf, "ALTER FUNCTION %s SET SCHEMA %s;", NameListToQuotedString(
-						 names),
-					 quote_identifier(stmt->newschema));
+	appendStringInfoString(buf, "ALTER FUNCTION ");
+	AppendQualifiedFunctionName(buf, func);
+	appendStringInfo(buf, " SET SCHEMA %s;", quote_identifier(stmt->newschema));
 }
 
 
@@ -134,13 +136,11 @@ DeparseAlterFunctionOwnerStmt(AlterOwnerStmt *stmt)
 static void
 AppendAlterFunctionOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt)
 {
-	List *names = NIL;
+	ObjectWithArgs *func = castNode(ObjectWithArgs, stmt->object);
 
-	Assert(stmt->objectType == OBJECT_FUNCTION);
-
-	names = (List *) stmt->object;
-	appendStringInfo(buf, "ALTER FUNCTION %s OWNER TO %s;", NameListToQuotedString(names),
-					 RoleSpecString(stmt->newowner));
+	appendStringInfoString(buf, "ALTER FUNCTION ");
+	AppendQualifiedFunctionName(buf, func);
+	appendStringInfo(buf, " OWNER TO %s;", RoleSpecString(stmt->newowner));
 }
 
 
@@ -162,14 +162,11 @@ DeparseAlterFunctionDependsStmt(AlterObjectDependsStmt *stmt)
 static void
 AppendAlterFunctionDependsStmt(StringInfo buf, AlterObjectDependsStmt *stmt)
 {
-	List *names = NIL;
+	ObjectWithArgs *func = castNode(ObjectWithArgs, stmt->object);
 
-	Assert(stmt->objectType == OBJECT_FUNCTION);
-
-	names = (List *) stmt->object;
-	appendStringInfo(buf, "ALTER FUNCTION %s DEPENDS ON EXTENSION %s;",
-					 NameListToQuotedString(names),
-					 strVal(stmt->extname));
+	appendStringInfoString(buf, "ALTER FUNCTION ");
+	AppendQualifiedFunctionName(buf, func);
+	appendStringInfo(buf, " DEPENDS ON EXTENSION %s;", strVal(stmt->extname));
 }
 
 
@@ -208,24 +205,20 @@ AppendAlterFunctionStmt(StringInfo buf, AlterFunctionStmt *stmt)
 static void
 AppendDropFunctionStmt(StringInfo buf, DropStmt *stmt)
 {
-	/*
-	 * TODO: Hanefi you should check that this comment is still valid.
-	 *
-	 * already tested at call site, but for future it might be collapsed in a
-	 * deparse_function_stmt so be safe and check again
-	 */
-	Assert(stmt->removeType == OBJECT_FUNCTION);
-
 	appendStringInfo(buf, "DROP FUNCTION ");
+
 	if (stmt->missing_ok)
 	{
 		appendStringInfoString(buf, "IF EXISTS ");
 	}
+
 	AppendFunctionNameList(buf, stmt->objects);
+
 	if (stmt->behavior == DROP_CASCADE)
 	{
 		appendStringInfoString(buf, " CASCADE");
 	}
+
 	appendStringInfoString(buf, ";");
 }
 
@@ -244,7 +237,6 @@ AppendFunctionNameList(StringInfo buf, List *objects)
 			appendStringInfo(buf, ", ");
 		}
 
-		Assert(IsA(object, ObjectWithArgs));
 		func = castNode(ObjectWithArgs, object);
 
 		AppendFunctionName(buf, func);
@@ -260,6 +252,7 @@ AppendQualifiedFunctionName(StringInfo buf, ObjectWithArgs *func)
 	char *functionName = NULL;
 	char *schemaName = NULL;
 	char *qualifiedFunctionName;
+	char *args = TypeNameListToString(func->objargs);
 
 	funcid = LookupFuncWithArgs(OBJECT_FUNCTION, func, true);
 	proctup = SearchSysCache1(PROCOID, ObjectIdGetDatum(funcid));
@@ -287,21 +280,19 @@ AppendQualifiedFunctionName(StringInfo buf, ObjectWithArgs *func)
 
 	qualifiedFunctionName = quote_qualified_identifier(schemaName, functionName);
 	appendStringInfoString(buf, qualifiedFunctionName);
-}
-
-
-static void
-AppendFunctionName(StringInfo buf, ObjectWithArgs *func)
-{
-	char *args = TypeNameListToString(func->objargs);
-
-	AppendQualifiedFunctionName(buf, func);
 
 	/* append the optional arg list if provided */
 	if (args)
 	{
 		appendStringInfo(buf, "(%s)", args);
 	}
+}
+
+
+static void
+AppendFunctionName(StringInfo buf, ObjectWithArgs *func)
+{
+	AppendQualifiedFunctionName(buf, func);
 }
 
 

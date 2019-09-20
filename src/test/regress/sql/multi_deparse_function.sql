@@ -151,6 +151,24 @@ SELECT deparse_test($cmd$
 ALTER FUNCTION add RESET ALL
 $cmd$);
 
+SELECT deparse_test($cmd$
+ALTER FUNCTION add RENAME TO summation
+$cmd$);
+
+CREATE ROLE function_role;
+SELECT run_command_on_workers('CREATE ROLE function_role');
+
+SELECT deparse_test($cmd$
+ALTER FUNCTION add OWNER TO function_role
+$cmd$);
+
+SELECT deparse_test($cmd$
+ALTER FUNCTION add SET SCHEMA public
+$cmd$);
+
+SELECT deparse_test($cmd$
+ALTER FUNCTION add DEPENDS ON EXTENSION citus
+$cmd$);
 
 SELECT deparse_test($cmd$
 DROP FUNCTION IF EXISTS add(int,int);
@@ -168,3 +186,5 @@ $cmd$);
 -- clear objects
 SET client_min_messages TO FATAL; -- suppress cascading objects dropping
 DROP SCHEMA function_tests CASCADE;
+DROP ROLE function_role;
+SELECT result FROM run_command_on_workers('DROP ROLE function_role');
