@@ -21,6 +21,7 @@
 PG_FUNCTION_INFO_V1(deparse_test);
 
 
+/* TODO: Rewrite this using a ParseQueryString() call */
 Datum
 deparse_test(PG_FUNCTION_ARGS)
 {
@@ -39,7 +40,7 @@ deparse_test(PG_FUNCTION_ARGS)
 		RawStmt *parsetree = lfirst_node(RawStmt, parseTreeCell);
 		const char *deparsedQuery = NULL;
 
-		/* TODO: Do I need to call pg_analyze_and_rewrite? Do I need it to change parsetree? */
+		/* TODO: Do I need to call pg_analyze_and_rewrite? Do I need it to change parsetree? I guess not */
 		pg_analyze_and_rewrite(parsetree, queryStringChar, NULL, 0, NULL);
 
 		deparsedQuery = DeparseTreeNode(parsetree->stmt);
