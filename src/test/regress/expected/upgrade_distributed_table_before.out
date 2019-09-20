@@ -8,3 +8,11 @@ SELECT create_distributed_table('t', 'a');
 (1 row)
 
 INSERT INTO t SELECT * FROM generate_series(1, 5);
+CREATE TYPE tc1 AS (a int, b int);
+CREATE TABLE t1 (a int PRIMARY KEY, b tc1);
+SELECT create_distributed_table('t1','a');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
