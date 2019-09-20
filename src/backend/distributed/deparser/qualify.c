@@ -121,8 +121,10 @@ QualifyRenameStmt(RenameStmt *stmt)
 			return;
 		}
 
-		case OBJECT_PROCEDURE:
 		case OBJECT_FUNCTION:
+#if PG_VERSION_NUM >= 110000
+		case OBJECT_PROCEDURE:
+#endif
 		{
 			QualifyRenameFunctionStmt(stmt);
 		}
@@ -188,8 +190,10 @@ QualifyAlterObjectSchemaStmt(AlterObjectSchemaStmt *stmt)
 			return;
 		}
 
-		case OBJECT_PROCEDURE:
 		case OBJECT_FUNCTION:
+#if PG_VERSION_NUM >= 110000
+		case OBJECT_PROCEDURE:
+#endif
 		{
 			QualifyAlterFunctionSchemaStmt(stmt);
 		}
@@ -214,8 +218,10 @@ QualifyAlterOwnerStmt(AlterOwnerStmt *stmt)
 			return;
 		}
 
-		case OBJECT_PROCEDURE:
 		case OBJECT_FUNCTION:
+#if PG_VERSION_NUM >= 110000
+		case OBJECT_PROCEDURE:
+#endif
 		{
 			QualifyAlterFunctionOwnerStmt(stmt);
 		}
@@ -233,8 +239,10 @@ QualifyAlterObjectDependsStmt(AlterObjectDependsStmt *stmt)
 {
 	switch (stmt->objectType)
 	{
-		case OBJECT_PROCEDURE:
 		case OBJECT_FUNCTION:
+#if PG_VERSION_NUM >= 110000
+		case OBJECT_PROCEDURE:
+#endif
 		{
 			QualifyAlterFunctionDependsStmt(stmt);
 		}

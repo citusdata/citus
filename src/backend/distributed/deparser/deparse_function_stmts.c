@@ -70,8 +70,11 @@ DeparseRenameFunctionStmt(RenameStmt *stmt)
 	StringInfoData str = { 0 };
 	initStringInfo(&str);
 
-	/* TODO: check that OBJECT_PROCEDURE still works fine */
+#if (PG_VERSION_NUM < 110000)
 	Assert(stmt->renameType == OBJECT_FUNCTION);
+#else
+	Assert(stmt->renameType == OBJECT_FUNCTION || stmt->renameType == OBJECT_PROCEDURE);
+#endif
 
 	AppendRenameFunctionStmt(&str, stmt);
 
@@ -99,7 +102,11 @@ DeparseAlterFunctionSchemaStmt(AlterObjectSchemaStmt *stmt)
 	StringInfoData str = { 0 };
 	initStringInfo(&str);
 
+#if (PG_VERSION_NUM < 110000)
 	Assert(stmt->objectType == OBJECT_FUNCTION);
+#else
+	Assert(stmt->objectType == OBJECT_FUNCTION || stmt->objectType == OBJECT_PROCEDURE);
+#endif
 
 	AppendAlterFunctionSchemaStmt(&str, stmt);
 
@@ -125,7 +132,11 @@ DeparseAlterFunctionOwnerStmt(AlterOwnerStmt *stmt)
 	StringInfoData str = { 0 };
 	initStringInfo(&str);
 
+#if (PG_VERSION_NUM < 110000)
 	Assert(stmt->objectType == OBJECT_FUNCTION);
+#else
+	Assert(stmt->objectType == OBJECT_FUNCTION || stmt->objectType == OBJECT_PROCEDURE);
+#endif
 
 	AppendAlterFunctionOwnerStmt(&str, stmt);
 
@@ -151,7 +162,11 @@ DeparseAlterFunctionDependsStmt(AlterObjectDependsStmt *stmt)
 	StringInfoData str = { 0 };
 	initStringInfo(&str);
 
+#if (PG_VERSION_NUM < 110000)
 	Assert(stmt->objectType == OBJECT_FUNCTION);
+#else
+	Assert(stmt->objectType == OBJECT_FUNCTION || stmt->objectType == OBJECT_PROCEDURE);
+#endif
 
 	AppendAlterFunctionDependsStmt(&str, stmt);
 
@@ -176,7 +191,11 @@ DeparseDropFunctionStmt(DropStmt *stmt)
 	StringInfoData str = { 0 };
 	initStringInfo(&str);
 
+#if (PG_VERSION_NUM < 110000)
 	Assert(stmt->removeType == OBJECT_FUNCTION);
+#else
+	Assert(stmt->removeType == OBJECT_FUNCTION || stmt->removeType == OBJECT_PROCEDURE);
+#endif
 
 	AppendDropFunctionStmt(&str, stmt);
 
