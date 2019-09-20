@@ -16,3 +16,17 @@ SELECT create_distributed_table('t1','a');
  
 (1 row)
 
+-- We store the index of distribution column and here we check that the distribution
+-- column index does not change after an upgrade if we drop a column that comes before the
+-- distribution column. The index information is in partkey column of pg_dist_partition table.
+CREATE TABLE t_ab(a int, b int);
+SELECT create_distributed_table('t_ab', 'b');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+INSERT INTO t_ab VALUES (1, 11);
+INSERT INTO t_ab VALUES (2, 22);
+INSERT INTO t_ab VALUES (3, 33);
+ALTER TABLE t_ab DROP a;

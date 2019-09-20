@@ -28,72 +28,6 @@ SELECT * FROM t WHERE a = 11;
  11
 (1 row)
 
--- test task-tracker executor
-SET citus.task_executor_type TO 'task-tracker';
-SELECT * FROM t WHERE a = 10;
- a  
-----
- 10
-(1 row)
-
-SELECT * FROM t WHERE a = 11;
- a  
-----
- 11
-(1 row)
-
-SELECT * FROM t WHERE a < 3 ORDER BY a;
- a 
----
- 1
- 2
-(2 rows)
-
-RESET citus.task_executor_type;
--- test adaptive executor
-SET citus.task_executor_type to "adaptive";
-SELECT * FROM t WHERE a = 10;
- a  
-----
- 10
-(1 row)
-
-SELECT * FROM t WHERE a = 11;
- a  
-----
- 11
-(1 row)
-
-SELECT * FROM t WHERE a < 3 ORDER BY a;
- a 
----
- 1
- 2
-(2 rows)
-
-RESET citus.task_executor_type;
--- test real-time executor
-SET citus.task_executor_type to "real-time";
-SELECT * FROM t WHERE a = 10;
- a  
-----
- 10
-(1 row)
-
-SELECT * FROM t WHERE a = 11;
- a  
-----
- 11
-(1 row)
-
-SELECT * FROM t WHERE a < 3 ORDER BY a;
- a 
----
- 1
- 2
-(2 rows)
-
-RESET citus.task_executor_type;
 -- test distributed type
 INSERT INTO t1 VALUES (1, (2,3)::tc1);
 SELECT * FROM t1;
@@ -110,8 +44,30 @@ SELECT * FROM T;
 ---
 (0 rows)
 
+-- verify that the table whose column is dropped before a pg_upgrade still works as expected.
+SELECT * FROM t_ab ORDER BY b;
+ b  
+----
+ 11
+ 22
+ 33
+(3 rows)
+
+SELECT * FROM t_ab WHERE b = 11;
+ b  
+----
+ 11
+(1 row)
+
+SELECT * FROM t_ab WHERE b = 22;
+ b  
+----
+ 22
+(1 row)
+
 DROP TABLE t;
 DROP SCHEMA upgrade_distributed_table_before CASCADE;
-NOTICE:  drop cascades to 2 other objects
+NOTICE:  drop cascades to 3 other objects
 DETAIL:  drop cascades to type tc1_newname
 drop cascades to table t1
+drop cascades to table t_ab
