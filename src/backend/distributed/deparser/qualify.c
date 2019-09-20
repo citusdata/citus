@@ -125,9 +125,9 @@ QualifyRenameStmt(RenameStmt *stmt)
 #if PG_VERSION_NUM >= 110000
 		case OBJECT_PROCEDURE:
 #endif
-		{
-			QualifyRenameFunctionStmt(stmt);
-		}
+			{
+				QualifyRenameFunctionStmt(stmt);
+			}
 
 		default:
 		{
@@ -194,9 +194,9 @@ QualifyAlterObjectSchemaStmt(AlterObjectSchemaStmt *stmt)
 #if PG_VERSION_NUM >= 110000
 		case OBJECT_PROCEDURE:
 #endif
-		{
-			QualifyAlterFunctionSchemaStmt(stmt);
-		}
+			{
+				QualifyAlterFunctionSchemaStmt(stmt);
+			}
 
 		default:
 		{
@@ -222,9 +222,9 @@ QualifyAlterOwnerStmt(AlterOwnerStmt *stmt)
 #if PG_VERSION_NUM >= 110000
 		case OBJECT_PROCEDURE:
 #endif
-		{
-			QualifyAlterFunctionOwnerStmt(stmt);
-		}
+			{
+				QualifyAlterFunctionOwnerStmt(stmt);
+			}
 
 		default:
 		{
@@ -243,9 +243,9 @@ QualifyAlterObjectDependsStmt(AlterObjectDependsStmt *stmt)
 #if PG_VERSION_NUM >= 110000
 		case OBJECT_PROCEDURE:
 #endif
-		{
-			QualifyAlterFunctionDependsStmt(stmt);
-		}
+			{
+				QualifyAlterFunctionDependsStmt(stmt);
+			}
 
 		default:
 		{
