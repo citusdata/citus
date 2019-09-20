@@ -219,7 +219,6 @@ static int64 RemoteCreateEmptyShard(char *relationName);
 static void MasterUpdateShardStatistics(uint64 shardId);
 static void RemoteUpdateShardStatistics(uint64 shardId);
 
-static void ConversionPathForTypes(Oid inputType, Oid destType, CopyCoercionData *result);
 static Oid TypeForColumnName(Oid relationId, TupleDesc tupleDescriptor, char *columnName);
 static Oid * TypeArrayFromTupleDescriptor(TupleDesc tupleDescriptor);
 static CopyCoercionData * ColumnCoercionPaths(TupleDesc destTupleDescriptor,
@@ -228,7 +227,6 @@ static CopyCoercionData * ColumnCoercionPaths(TupleDesc destTupleDescriptor,
 											  Oid *finalColumnTypeArray);
 static FmgrInfo * TypeOutputFunctions(uint32 columnCount, Oid *typeIdArray,
 									  bool binaryFormat);
-static Datum CoerceColumnValue(Datum inputValue, CopyCoercionData *coercionPath);
 static void CreateLocalTable(RangeVar *relation, char *nodeName, int32 nodePort);
 static List * CopyGetAttnums(TupleDesc tupDesc, Relation rel, List *attnamelist);
 static bool CopyStatementHasFormat(CopyStmt *copyStatement, char *formatName);
@@ -1384,7 +1382,7 @@ ReportCopyError(MultiConnection *connection, PGresult *result)
  * ConversionPathForTypes fills *result with all the data necessary for converting
  * Datums of type inputType to Datums of type destType.
  */
-static void
+void
 ConversionPathForTypes(Oid inputType, Oid destType, CopyCoercionData *result)
 {
 	Oid coercionFuncId = InvalidOid;
@@ -1743,7 +1741,7 @@ AppendCopyRowData(Datum *valueArray, bool *isNullArray, TupleDesc rowDescriptor,
  * CoerceColumnValue follows the instructions in *coercionPath and uses them to convert
  * inputValue into a Datum of the correct type.
  */
-static Datum
+Datum
 CoerceColumnValue(Datum inputValue, CopyCoercionData *coercionPath)
 {
 	switch (coercionPath->coercionType)

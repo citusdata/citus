@@ -16,6 +16,7 @@
 #include "commands/defrem.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/commands.h"
+#include "distributed/commands/multi_copy.h"
 #include "distributed/connection_management.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/metadata_cache.h"
@@ -25,6 +26,7 @@
 #include "distributed/shard_pruning.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_manager.h"
+#include "optimizer/clauses.h"
 #include "nodes/nodeFuncs.h"
 #include "nodes/parsenodes.h"
 #include "nodes/primnodes.h"
@@ -68,10 +70,11 @@ CallFuncExprRemotely(CallStmt *callStmt, DistObjectCacheEntry *procedure,
 {
 	Oid colocatedRelationId = InvalidOid;
 	Const *partitionValue = NULL;
+	Datum partitionValueDatum = 0;
 	ShardInterval *shardInterval = NULL;
 	List *placementList = NIL;
-	ListCell *argCell = NULL;
 	DistTableCacheEntry *distTable = NULL;
+	Var *partitionColumn = NULL;
 	ShardPlacement *placement = NULL;
 	WorkerNode *workerNode = NULL;
 
@@ -95,20 +98,36 @@ CallFuncExprRemotely(CallStmt *callStmt, DistObjectCacheEntry *procedure,
 		return false;
 	}
 
-	foreach(argCell, funcExpr->args)
+	if (contain_volatile_functions((Node *) funcExpr->args))
 	{
-		Node *argNode = (Node *) lfirst(argCell);
-		if (!IsA(argNode, Const))
-		{
-			ereport(DEBUG2, (errmsg("cannot push down non-constant argument value")));
-			return false;
-		}
+		ereport(DEBUG2, (errmsg("arguments in a distributed stored procedure must "
+								"be constant expressions")));
+		return NULL;
 	}
 
-	partitionValue = (Const *) list_nth(funcExpr->args, procedure->distributionArgIndex);
 	distTable = DistributedTableCacheEntry(colocatedRelationId);
-	shardInterval = FindShardInterval(partitionValue->constvalue, distTable);
+	partitionColumn = distTable->partitionColumn;
 
+	partitionValue = (Const *) list_nth(funcExpr->args, procedure->distributionArgIndex);
+	if (!IsA(partitionValue, Const))
+	{
+		ereport(DEBUG2, (errmsg("distribution argument value must be a constant")));
+		return false;
+	}
+
+	partitionValueDatum = partitionValue->constvalue;
+
+	if (partitionValue->consttype != partitionColumn->vartype)
+	{
+		CopyCoercionData coercionData;
+
+		ConversionPathForTypes(partitionValue->consttype, partitionColumn->vartype,
+							   &coercionData);
+
+		partitionValueDatum = CoerceColumnValue(partitionValueDatum, &coercionData);
+	}
+
+	shardInterval = FindShardInterval(partitionValueDatum, distTable);
 	if (shardInterval == NULL)
 	{
 		ereport(DEBUG2, (errmsg("cannot push down call, failed to find shard interval")));
