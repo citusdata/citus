@@ -85,8 +85,8 @@
 bool EnableCreateTypePropagation = true;
 
 /* forward declaration for helper functions*/
-static List * FilterNameListForDistributedTypes(List *objects, bool missing_ok);
-static List * TypeNameListToObjectAddresses(List *objects);
+static List * FilterNameListForDistributedTypes(List *objects, bool missing_ok,
+												List **objectAddresses);
 static TypeName * MakeTypeNameFromRangeVar(const RangeVar *relation);
 static void EnsureSequentialModeForTypeDDL(void);
 static Oid GetTypeOwner(Oid typeOid);
@@ -458,8 +458,10 @@ PreprocessDropTypeStmt(Node *node, const char *queryString)
 		return NIL;
 	}
 
+	List *distributedTypeAddresses = NULL;
 	List *distributedTypes = FilterNameListForDistributedTypes(oldTypes,
-															   stmt->missing_ok);
+															   stmt->missing_ok,
+															   &distributedTypeAddresses);
 	if (list_length(distributedTypes) <= 0)
 	{
 		/* no distributed types to drop */
@@ -476,7 +478,6 @@ PreprocessDropTypeStmt(Node *node, const char *queryString)
 	/*
 	 * remove the entries for the distributed objects on dropping
 	 */
-	List *distributedTypeAddresses = TypeNameListToObjectAddresses(distributedTypes);
 	foreach(addressCell, distributedTypeAddresses)
 	{
 		ObjectAddress *address = (ObjectAddress *) lfirst(addressCell);
@@ -1106,13 +1107,16 @@ GenerateBackupNameForTypeCollision(const ObjectAddress *address)
  * distributed.
  *
  * The original list will not be touched, a new list will be created with only the objects
- * in there.
+ * in there. objectAddresses receives a list of the objects' ObjectAddresses.
  */
 static List *
-FilterNameListForDistributedTypes(List *objects, bool missing_ok)
+FilterNameListForDistributedTypes(List *objects, bool missing_ok, List **objectAddresses)
 {
 	ListCell *objectCell = NULL;
 	List *result = NIL;
+
+	*objectAddresses = NIL;
+
 	foreach(objectCell, objects)
 	{
 		TypeName *typeName = castNode(TypeName, lfirst(objectCell));
@@ -1127,30 +1131,12 @@ FilterNameListForDistributedTypes(List *objects, bool missing_ok)
 		ObjectAddressSet(typeAddress, TypeRelationId, typeOid);
 		if (IsObjectDistributed(&typeAddress))
 		{
+			ObjectAddress *typeAddressp = palloc0(sizeof(ObjectAddress));
+			*typeAddressp = typeAddress;
+			*objectAddresses = lappend(*objectAddresses, typeAddressp);
+
 			result = lappend(result, typeName);
 		}
-	}
-	return result;
-}
-
-
-/*
- * TypeNameListToObjectAddresses transforms a List * of TypeName *'s into a List * of
- * ObjectAddress *'s. For this to succeed all Types identified by the TypeName *'s should
- * exist on this postgres, an error will be thrown otherwise.
- */
-static List *
-TypeNameListToObjectAddresses(List *objects)
-{
-	ListCell *objectCell = NULL;
-	List *result = NIL;
-	foreach(objectCell, objects)
-	{
-		TypeName *typeName = castNode(TypeName, lfirst(objectCell));
-		Oid typeOid = LookupTypeNameOid(NULL, typeName, false);
-		ObjectAddress *typeAddress = palloc0(sizeof(ObjectAddress));
-		ObjectAddressSet(*typeAddress, TypeRelationId, typeOid);
-		result = lappend(result, typeAddress);
 	}
 	return result;
 }
