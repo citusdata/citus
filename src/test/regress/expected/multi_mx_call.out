@@ -1,38 +1,67 @@
 -- Test passing off CALL to mx workers
 -- Create worker-local tables to test procedure calls were routed
+create schema multi_mx_call;
+set search_path to multi_mx_call, public;
 set citus.shard_replication_factor to 1;
 set citus.replication_model to 'streaming';
-CREATE TABLE mx_call_dist_table(id int);
+create table mx_call_dist_table(id int, val int);
 select create_distributed_table('mx_call_dist_table', 'id');
  create_distributed_table 
 --------------------------
  
 (1 row)
 
-insert into mx_call_dist_table values (1),(2),(3),(4),(5);
+insert into mx_call_dist_table values (3,1),(4,5),(9,2),(6,5),(3,5);
+create table mx_call_dist_table2(id int, val int);
+select create_distributed_table('mx_call_dist_table2', 'id');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+insert into mx_call_dist_table2 values (1,1),(1,2),(2,2),(3,3),(3,4);
 create type mx_call_enum as enum ('A', 'S', 'D', 'F');
-CREATE TABLE mx_call_dist_table_enum(id int, key mx_call_enum);
+create table mx_call_dist_table_enum(id int, key mx_call_enum);
+select create_distributed_table('mx_call_dist_table_enum', 'key');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+insert into mx_call_dist_table_enum values (1,'S'),(2,'A'),(3,'D'),(4,'F');
+CREATE PROCEDURE mx_call_dist_object(procname text, tablerelid regclass, argument_index int) LANGUAGE plpgsql AS $$
+BEGIN
+    update citus.pg_dist_object
+    set distribution_argument_index = argument_index, colocationid = pg_dist_partition.colocationid
+    from pg_proc, pg_dist_partition
+    where proname = procname and oid = objid and pg_dist_partition.logicalrelid = tablerelid;
+END;$$;
 CREATE PROCEDURE mx_call_proc(x int, INOUT y int) LANGUAGE plpgsql AS $$
 BEGIN
     y := x + (select case groupid when 0 then 1 else 0 end from pg_dist_local_group);
-    y := y + (select sum(id) from mx_call_dist_table);
-END;
-$$;
+    y := y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id);
+END;$$;
 CREATE PROCEDURE mx_call_proc_asdf(INOUT x mx_call_enum, INOUT y mx_call_enum) LANGUAGE plpgsql AS $$
 BEGIN
     y := x;
     x := (select case groupid when 0 then 'F' else 'S' end from pg_dist_local_group);
-END;
-$$;
+END;$$;
+CREATE PROCEDURE mx_call_proc_commit(x int) LANGUAGE plpgsql AS $$
+BEGIN
+    COMMIT;
+END;$$;
+CREATE PROCEDURE mx_call_proc_raise(x int) LANGUAGE plpgsql AS $$
+BEGIN
+    RAISE WARNING 'warning';
+    RAISE EXCEPTION 'error';
+END;$$;
 CREATE FUNCTION mx_call_add(int, int) RETURNS int
-    AS 'select $1 + $2;'
-    LANGUAGE SQL
-    IMMUTABLE
-    RETURNS NULL ON NULL INPUT;
+    AS 'select $1 + $2;' LANGUAGE SQL IMMUTABLE;
+-- Test that undistributed procedures have no issue executing
 call mx_call_proc(2, 0);
  y  
 ----
- 18
+ 29
 (1 row)
 
 call mx_call_proc_asdf('S', 'A');
@@ -41,9 +70,10 @@ call mx_call_proc_asdf('S', 'A');
  F | S
 (1 row)
 
-select create_distributed_table('mx_call_dist_table_enum', 'key');
- create_distributed_table 
---------------------------
+-- Test some straight forward distributed calls
+select create_distributed_function('mx_call_add(int,int)');
+ create_distributed_function 
+-----------------------------
  
 (1 row)
 
@@ -53,127 +83,381 @@ select create_distributed_function('mx_call_proc(int,int)');
  
 (1 row)
 
-update citus.pg_dist_object
-set distribution_argument_index = 1, colocationid = pg_dist_partition.colocationid
-from pg_proc, pg_dist_partition
-where proname = 'mx_call_proc' and oid = objid and pg_dist_partition.logicalrelid = 'mx_call_dist_table'::regclass;
+select create_distributed_function('mx_call_proc_commit(int)');
+ create_distributed_function 
+-----------------------------
+ 
+(1 row)
+
+select create_distributed_function('mx_call_proc_raise(int)');
+ create_distributed_function 
+-----------------------------
+ 
+(1 row)
+
 select create_distributed_function('mx_call_proc_asdf(mx_call_enum,mx_call_enum)');
  create_distributed_function 
 -----------------------------
  
 (1 row)
 
-update citus.pg_dist_object
-set distribution_argument_index = 1, colocationid = pg_dist_partition.colocationid
-from pg_proc, pg_dist_partition
-where proname = 'mx_call_proc_asdf' and oid = objid and pg_dist_partition.logicalrelid = 'mx_call_dist_table_enum'::regclass;
+call mx_call_dist_object('mx_call_proc', 'mx_call_dist_table'::regclass, 1);
+call mx_call_dist_object('mx_call_proc_commit', 'mx_call_dist_table'::regclass, 0);
+call mx_call_dist_object('mx_call_proc_raise', 'mx_call_dist_table'::regclass, 0);
+call mx_call_dist_object('mx_call_proc_asdf', 'mx_call_dist_table_enum'::regclass, 1);
 call mx_call_proc(2, 0);
- y  
-----
- 17
-(1 row)
-
+ERROR:  procedure mx_call_proc(integer, integer) does not exist
+HINT:  No procedure matches the given name and argument types. You might need to add explicit type casts.
+CONTEXT:  while executing command on localhost:57638
 call mx_call_proc_asdf('S', 'A');
+ERROR:  procedure mx_call_proc_asdf(unknown, unknown) does not exist
+HINT:  No procedure matches the given name and argument types. You might need to add explicit type casts.
+CONTEXT:  while executing command on localhost:57638
+drop table mx_call_dist_table_enum;
+set client_min_messages to DEBUG2;
+-- Procedure calls can't be distributed without a distributed table to guide process
+call mx_call_proc_asdf('S', 'A');
+DEBUG:  stored procedure does not have co-located tables
  x | y 
 ---+---
- S | S
+ F | S
 (1 row)
 
-set client_min_messages to DEBUG2;
+-- We don't allow distributing calls inside transactions
 begin;
-select sum(id) from mx_call_dist_table;
-DEBUG:  Router planner cannot handle multi-shard select queries
- sum 
------
-  15
-(1 row)
-
 call mx_call_proc(2, 0);
 DEBUG:  cannot push down CALL in multi-statement transaction
 DEBUG:  Router planner cannot handle multi-shard select queries
-CONTEXT:  SQL statement "SELECT y + (select sum(id) from mx_call_dist_table)"
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
 DEBUG:  Router planner cannot handle multi-shard select queries
-CONTEXT:  SQL statement "SELECT y + (select sum(id) from mx_call_dist_table)"
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
-DEBUG:  generating subplan 5_1 for subquery SELECT sum(id) AS sum FROM public.mx_call_dist_table
-CONTEXT:  SQL statement "SELECT y + (select sum(id) from mx_call_dist_table)"
+DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [-1073741824,-1]
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
-DEBUG:  Plan 5 query after replacing subqueries and CTEs: SELECT (3 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('5_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
-CONTEXT:  SQL statement "SELECT y + (select sum(id) from mx_call_dist_table)"
+DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [0,1073741823]
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
+DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [1073741824,2147483647]
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
+DEBUG:  join prunable for intervals [-1073741824,-1] and [-2147483648,-1073741825]
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
+DEBUG:  join prunable for intervals [-1073741824,-1] and [0,1073741823]
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
+DEBUG:  join prunable for intervals [-1073741824,-1] and [1073741824,2147483647]
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
+DEBUG:  join prunable for intervals [0,1073741823] and [-2147483648,-1073741825]
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
+DEBUG:  join prunable for intervals [0,1073741823] and [-1073741824,-1]
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
+DEBUG:  join prunable for intervals [0,1073741823] and [1073741824,2147483647]
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
+DEBUG:  join prunable for intervals [1073741824,2147483647] and [-2147483648,-1073741825]
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
+DEBUG:  join prunable for intervals [1073741824,2147483647] and [-1073741824,-1]
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
+DEBUG:  join prunable for intervals [1073741824,2147483647] and [0,1073741823]
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
+DEBUG:  generating subplan 6_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (multi_mx_call.mx_call_dist_table t1 JOIN multi_mx_call.mx_call_dist_table2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
+DEBUG:  Plan 6 query after replacing subqueries and CTEs: SELECT (3 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('6_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
 DEBUG:  Creating router plan
-CONTEXT:  SQL statement "SELECT y + (select sum(id) from mx_call_dist_table)"
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
 DEBUG:  Plan is router executable
-CONTEXT:  SQL statement "SELECT y + (select sum(id) from mx_call_dist_table)"
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
  y  
 ----
- 18
+ 29
 (1 row)
 
 commit;
-update citus.pg_dist_object
-set distribution_argument_index = -1, colocationid = pg_dist_partition.colocationid
-from pg_proc, pg_dist_partition
-where proname = 'mx_call_proc' and oid = objid and pg_dist_partition.logicalrelid = 'mx_call_dist_table'::regclass;
+call mx_call_proc_raise(2);
+ERROR:  procedure mx_call_proc_raise(integer) does not exist
+HINT:  No procedure matches the given name and argument types. You might need to add explicit type casts.
+CONTEXT:  while executing command on localhost:57638
+call mx_call_proc_commit(2);
+ERROR:  procedure mx_call_proc_commit(integer) does not exist
+HINT:  No procedure matches the given name and argument types. You might need to add explicit type casts.
+CONTEXT:  while executing command on localhost:57638
+-- Make sure we do bounds checking on distributed argument index
+-- This also tests that we have cache invalidation for pg_dist_object updates
+call mx_call_dist_object('mx_call_proc', 'mx_call_dist_table'::regclass, -1);
 call mx_call_proc(2, 0);
 DEBUG:  cannot push down invalid distribution_argument_index
 DEBUG:  Router planner cannot handle multi-shard select queries
-CONTEXT:  SQL statement "SELECT y + (select sum(id) from mx_call_dist_table)"
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
 DEBUG:  Router planner cannot handle multi-shard select queries
-CONTEXT:  SQL statement "SELECT y + (select sum(id) from mx_call_dist_table)"
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
-DEBUG:  generating subplan 7_1 for subquery SELECT sum(id) AS sum FROM public.mx_call_dist_table
-CONTEXT:  SQL statement "SELECT y + (select sum(id) from mx_call_dist_table)"
+DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [-1073741824,-1]
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
-DEBUG:  Plan 7 query after replacing subqueries and CTEs: SELECT (3 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('7_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
-CONTEXT:  SQL statement "SELECT y + (select sum(id) from mx_call_dist_table)"
+DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [0,1073741823]
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
+DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [1073741824,2147483647]
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
+DEBUG:  join prunable for intervals [-1073741824,-1] and [-2147483648,-1073741825]
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
+DEBUG:  join prunable for intervals [-1073741824,-1] and [0,1073741823]
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
+DEBUG:  join prunable for intervals [-1073741824,-1] and [1073741824,2147483647]
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
+DEBUG:  join prunable for intervals [0,1073741823] and [-2147483648,-1073741825]
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
+DEBUG:  join prunable for intervals [0,1073741823] and [-1073741824,-1]
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
+DEBUG:  join prunable for intervals [0,1073741823] and [1073741824,2147483647]
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
+DEBUG:  join prunable for intervals [1073741824,2147483647] and [-2147483648,-1073741825]
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
+DEBUG:  join prunable for intervals [1073741824,2147483647] and [-1073741824,-1]
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
+DEBUG:  join prunable for intervals [1073741824,2147483647] and [0,1073741823]
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
+DEBUG:  generating subplan 8_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (multi_mx_call.mx_call_dist_table t1 JOIN multi_mx_call.mx_call_dist_table2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
+DEBUG:  Plan 8 query after replacing subqueries and CTEs: SELECT (3 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('8_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
 DEBUG:  Creating router plan
-CONTEXT:  SQL statement "SELECT y + (select sum(id) from mx_call_dist_table)"
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
 DEBUG:  Plan is router executable
-CONTEXT:  SQL statement "SELECT y + (select sum(id) from mx_call_dist_table)"
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
  y  
 ----
- 18
+ 29
 (1 row)
 
-update citus.pg_dist_object
-set distribution_argument_index = 1, colocationid = pg_dist_partition.colocationid
-from pg_proc, pg_dist_partition
-where proname = 'mx_call_proc' and oid = objid and pg_dist_partition.logicalrelid = 'mx_call_dist_table'::regclass;
+call mx_call_dist_object('mx_call_proc', 'mx_call_dist_table'::regclass, 2);
+call mx_call_proc(2, 0);
+DEBUG:  cannot push down invalid distribution_argument_index
+DEBUG:  Router planner cannot handle multi-shard select queries
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
+DEBUG:  Router planner cannot handle multi-shard select queries
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
+DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [-1073741824,-1]
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
+DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [0,1073741823]
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
+DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [1073741824,2147483647]
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
+DEBUG:  join prunable for intervals [-1073741824,-1] and [-2147483648,-1073741825]
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
+DEBUG:  join prunable for intervals [-1073741824,-1] and [0,1073741823]
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
+DEBUG:  join prunable for intervals [-1073741824,-1] and [1073741824,2147483647]
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
+DEBUG:  join prunable for intervals [0,1073741823] and [-2147483648,-1073741825]
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
+DEBUG:  join prunable for intervals [0,1073741823] and [-1073741824,-1]
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
+DEBUG:  join prunable for intervals [0,1073741823] and [1073741824,2147483647]
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
+DEBUG:  join prunable for intervals [1073741824,2147483647] and [-2147483648,-1073741825]
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
+DEBUG:  join prunable for intervals [1073741824,2147483647] and [-1073741824,-1]
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
+DEBUG:  join prunable for intervals [1073741824,2147483647] and [0,1073741823]
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
+DEBUG:  generating subplan 10_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (multi_mx_call.mx_call_dist_table t1 JOIN multi_mx_call.mx_call_dist_table2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
+DEBUG:  Plan 10 query after replacing subqueries and CTEs: SELECT (3 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('10_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
+DEBUG:  Creating router plan
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
+DEBUG:  Plan is router executable
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
+ y  
+----
+ 29
+(1 row)
+
+call mx_call_dist_object('mx_call_proc', 'mx_call_dist_table'::regclass, 1);
+-- test non Const distribution parameter
 call mx_call_proc(2, mx_call_add(3, 4));
 DEBUG:  distribution argument value must be a constant
 DEBUG:  Router planner cannot handle multi-shard select queries
-CONTEXT:  SQL statement "SELECT y + (select sum(id) from mx_call_dist_table)"
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
 DEBUG:  Router planner cannot handle multi-shard select queries
-CONTEXT:  SQL statement "SELECT y + (select sum(id) from mx_call_dist_table)"
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
-DEBUG:  generating subplan 9_1 for subquery SELECT sum(id) AS sum FROM public.mx_call_dist_table
-CONTEXT:  SQL statement "SELECT y + (select sum(id) from mx_call_dist_table)"
+DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [-1073741824,-1]
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
-DEBUG:  Plan 9 query after replacing subqueries and CTEs: SELECT (3 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('9_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
-CONTEXT:  SQL statement "SELECT y + (select sum(id) from mx_call_dist_table)"
+DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [0,1073741823]
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
+DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [1073741824,2147483647]
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
+DEBUG:  join prunable for intervals [-1073741824,-1] and [-2147483648,-1073741825]
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
+DEBUG:  join prunable for intervals [-1073741824,-1] and [0,1073741823]
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
+DEBUG:  join prunable for intervals [-1073741824,-1] and [1073741824,2147483647]
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
+DEBUG:  join prunable for intervals [0,1073741823] and [-2147483648,-1073741825]
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
+DEBUG:  join prunable for intervals [0,1073741823] and [-1073741824,-1]
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
+DEBUG:  join prunable for intervals [0,1073741823] and [1073741824,2147483647]
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
+DEBUG:  join prunable for intervals [1073741824,2147483647] and [-2147483648,-1073741825]
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
+DEBUG:  join prunable for intervals [1073741824,2147483647] and [-1073741824,-1]
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
+DEBUG:  join prunable for intervals [1073741824,2147483647] and [0,1073741823]
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
+DEBUG:  generating subplan 12_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (multi_mx_call.mx_call_dist_table t1 JOIN multi_mx_call.mx_call_dist_table2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
+DEBUG:  Plan 12 query after replacing subqueries and CTEs: SELECT (3 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('12_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
 DEBUG:  Creating router plan
-CONTEXT:  SQL statement "SELECT y + (select sum(id) from mx_call_dist_table)"
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
 DEBUG:  Plan is router executable
-CONTEXT:  SQL statement "SELECT y + (select sum(id) from mx_call_dist_table)"
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
  y  
 ----
- 18
+ 29
+(1 row)
+
+-- non const parameter can be pushed down
+call mx_call_proc(mx_call_add(3, 4), 2);
+ERROR:  function mx_call_add(integer, integer) does not exist
+HINT:  No function matches the given name and argument types. You might need to add explicit type casts.
+CONTEXT:  while executing command on localhost:57638
+-- volatile parameter cannot be pushed down
+call mx_call_proc(random()::int, 2);
+DEBUG:  arguments in a distributed stored procedure must be constant expressions
+DEBUG:  Router planner cannot handle multi-shard select queries
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
+DEBUG:  Router planner cannot handle multi-shard select queries
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
+DEBUG:  Router planner cannot handle multi-shard select queries
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
+DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [-1073741824,-1]
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
+DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [0,1073741823]
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
+DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [1073741824,2147483647]
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
+DEBUG:  join prunable for intervals [-1073741824,-1] and [-2147483648,-1073741825]
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
+DEBUG:  join prunable for intervals [-1073741824,-1] and [0,1073741823]
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
+DEBUG:  join prunable for intervals [-1073741824,-1] and [1073741824,2147483647]
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
+DEBUG:  join prunable for intervals [0,1073741823] and [-2147483648,-1073741825]
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
+DEBUG:  join prunable for intervals [0,1073741823] and [-1073741824,-1]
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
+DEBUG:  join prunable for intervals [0,1073741823] and [1073741824,2147483647]
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
+DEBUG:  join prunable for intervals [1073741824,2147483647] and [-2147483648,-1073741825]
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
+DEBUG:  join prunable for intervals [1073741824,2147483647] and [-1073741824,-1]
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
+DEBUG:  join prunable for intervals [1073741824,2147483647] and [0,1073741823]
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
+DEBUG:  generating subplan 15_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (multi_mx_call.mx_call_dist_table t1 JOIN multi_mx_call.mx_call_dist_table2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
+DEBUG:  Plan 15 query after replacing subqueries and CTEs: SELECT (1 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('15_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
+DEBUG:  Creating router plan
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
+DEBUG:  Plan is router executable
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_proc(integer,integer) line 4 at assignment
+ y  
+----
+ 27
 (1 row)
 
 reset client_min_messages;
-DROP TABLE mx_call_dist_table;
-DROP PROCEDURE mx_call_proc;
 reset citus.shard_replication_factor;
 reset citus.replication_model;
+\set VERBOSITY terse
+drop schema multi_mx_call cascade;
+NOTICE:  drop cascades to 9 other objects
+\set VERBOSITY default
