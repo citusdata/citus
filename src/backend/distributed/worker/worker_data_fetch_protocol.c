@@ -22,6 +22,7 @@
 #include "access/xact.h"
 #include "catalog/dependency.h"
 #include "catalog/namespace.h"
+#include "catalog/pg_type.h"
 #include "commands/copy.h"
 #include "commands/dbcommands.h"
 #include "commands/extension.h"
@@ -63,7 +64,8 @@ static void ReceiveResourceCleanup(int32 connectionId, const char *filename,
 								   int32 fileDescriptor);
 static void CitusDeleteFile(const char *filename);
 static bool check_log_statement(List *stmt_list);
-static void AlterSequenceMinMax(Oid sequenceId, char *schemaName, char *sequenceName);
+static void AlterSequenceMinMax(Oid sequenceId, char *schemaName, char *sequenceName,
+								Oid sequenceTypeId);
 static void SetDefElemArg(AlterSeqStmt *statement, const char *name, Node *arg);
 
 
@@ -457,6 +459,7 @@ Datum
 worker_apply_sequence_command(PG_FUNCTION_ARGS)
 {
 	text *commandText = PG_GETARG_TEXT_P(0);
+	Oid sequenceTypeId = PG_GETARG_OID(1);
 	const char *commandString = text_to_cstring(commandText);
 	Node *commandNode = ParseTreeNode(commandString);
 	CreateSeqStmt *createSequenceStatement = NULL;
@@ -490,7 +493,7 @@ worker_apply_sequence_command(PG_FUNCTION_ARGS)
 										  AccessShareLock, false);
 	Assert(sequenceRelationId != InvalidOid);
 
-	AlterSequenceMinMax(sequenceRelationId, sequenceSchema, sequenceName);
+	AlterSequenceMinMax(sequenceRelationId, sequenceSchema, sequenceName, sequenceTypeId);
 
 	PG_RETURN_VOID();
 }
@@ -862,27 +865,42 @@ check_log_statement(List *statementList)
  * GetLocalGroupId() << 48 + 1 and sets a maxvalue which stops it from passing out any
  * values greater than: (GetLocalGroupID() + 1) << 48.
  *
+ * For serial we only have 32 bits and therefore shift by 28, and for smallserial
+ * we only have 16 bits and therefore shift by 12.
+ *
  * This is to ensure every group of workers passes out values from a unique range,
  * and therefore that all values generated for the sequence are globally unique.
  */
 static void
-AlterSequenceMinMax(Oid sequenceId, char *schemaName, char *sequenceName)
+AlterSequenceMinMax(Oid sequenceId, char *schemaName, char *sequenceName,
+					Oid sequenceTypeId)
 {
 	Form_pg_sequence sequenceData = pg_get_sequencedef(sequenceId);
 	int64 startValue = 0;
 	int64 maxValue = 0;
 	int64 sequenceMaxValue = sequenceData->seqmax;
 	int64 sequenceMinValue = sequenceData->seqmin;
+	int valueBitLength = 48;
 
+	/* for smaller types, put the group ID into the first 4 bits */
+	if (sequenceTypeId == INT4OID)
+	{
+		valueBitLength = 28;
+		sequenceMaxValue = INT_MAX;
+	}
+	else if (sequenceTypeId == INT2OID)
+	{
+		valueBitLength = 12;
+		sequenceMaxValue = SHRT_MAX;
+	}
 
 	/* calculate min/max values that the sequence can generate in this worker */
-	startValue = (((int64) GetLocalGroupId()) << 48) + 1;
-	maxValue = startValue + ((int64) 1 << 48);
+	startValue = (((int64) GetLocalGroupId()) << valueBitLength) + 1;
+	maxValue = startValue + ((int64) 1 << valueBitLength);
 
 	/*
 	 * We alter the sequence if the previously set min and max values are not equal to
-	 * their correct values. This happens when the sequence has been created
-	 * during shard, before the current worker having the metadata.
+	 * their correct values.
 	 */
 	if (sequenceMinValue != startValue || sequenceMaxValue != maxValue)
 	{

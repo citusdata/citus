@@ -57,8 +57,6 @@ static void MarkNodeHasMetadata(char *nodeName, int32 nodePort, bool hasMetadata
 static void UpdateDistNodeBoolAttr(char *nodeName, int32 nodePort, int attrNum,
 								   bool value);
 static List * SequenceDDLCommandsForTable(Oid relationId);
-static void EnsureSupportedSequenceColumnType(Oid sequenceOid);
-static Oid TypeOfColumn(Oid tableId, int16 columnId);
 static char * TruncateTriggerCreateCommand(Oid relationId);
 static char * SchemaOwnerName(Oid objectId);
 static bool HasMetadataWorkers(void);
@@ -1048,13 +1046,15 @@ SequenceDDLCommandsForTable(Oid relationId)
 		StringInfo wrappedSequenceDef = makeStringInfo();
 		StringInfo sequenceGrantStmt = makeStringInfo();
 		char *sequenceName = generate_qualified_relation_name(sequenceOid);
-
-		EnsureSupportedSequenceColumnType(sequenceOid);
+		Form_pg_sequence sequenceData = pg_get_sequencedef(sequenceOid);
+		Oid sequenceTypeOid = sequenceData->seqtypid;
+		char *typeName = format_type_be(sequenceTypeOid);
 
 		/* create schema if needed */
 		appendStringInfo(wrappedSequenceDef,
 						 WORKER_APPLY_SEQUENCE_COMMAND,
-						 escapedSequenceDef);
+						 escapedSequenceDef,
+						 quote_literal_cstr(typeName));
 
 		appendStringInfo(sequenceGrantStmt,
 						 "ALTER SEQUENCE %s OWNER TO %s", sequenceName,
@@ -1091,63 +1091,6 @@ CreateSchemaDDLCommand(Oid schemaId)
 	appendStringInfo(schemaNameDef, CREATE_SCHEMA_COMMAND, quotedSchemaName, ownerName);
 
 	return schemaNameDef->data;
-}
-
-
-/*
- * EnsureSupportedSequenceColumnType looks at the column which depends on this sequence
- * (which it Assert's exists) and makes sure its type is suitable for use in a disributed
- * manner.
- *
- * Any column which depends on a sequence (and will therefore be replicated) but which is
- * not a bigserial cannot be used for an mx table, because there aren't enough values to
- * ensure that generated numbers are globally unique.
- */
-static void
-EnsureSupportedSequenceColumnType(Oid sequenceOid)
-{
-	Oid tableId = InvalidOid;
-	Oid columnType = InvalidOid;
-	int32 columnId = 0;
-	bool shouldSyncMetadata = false;
-	bool hasMetadataWorkers = HasMetadataWorkers();
-
-	/* call sequenceIsOwned in order to get the tableId and columnId */
-	bool sequenceOwned = sequenceIsOwned(sequenceOid, DEPENDENCY_AUTO, &tableId,
-										 &columnId);
-	if (!sequenceOwned)
-	{
-		sequenceOwned = sequenceIsOwned(sequenceOid, DEPENDENCY_INTERNAL, &tableId,
-										&columnId);
-	}
-
-	Assert(sequenceOwned);
-
-	shouldSyncMetadata = ShouldSyncTableMetadata(tableId);
-
-	columnType = TypeOfColumn(tableId, (int16) columnId);
-
-	if (columnType != INT8OID && shouldSyncMetadata && hasMetadataWorkers)
-	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("cannot create an mx table with a serial or smallserial "
-							   "column "),
-						errdetail("Only bigserial is supported in mx tables.")));
-	}
-}
-
-
-/*
- * TypeOfColumn returns the Oid of the type of the provided column of the provided table.
- */
-static Oid
-TypeOfColumn(Oid tableId, int16 columnId)
-{
-	Relation tableRelation = relation_open(tableId, NoLock);
-	TupleDesc tupleDescriptor = RelationGetDescr(tableRelation);
-	Form_pg_attribute attrForm = TupleDescAttr(tupleDescriptor, columnId - 1);
-	relation_close(tableRelation, NoLock);
-	return attrForm->atttypid;
 }
 
 
