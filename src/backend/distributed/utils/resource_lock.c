@@ -31,6 +31,7 @@
 #include "distributed/multi_router_executor.h"
 #include "distributed/relay_utility.h"
 #include "distributed/reference_table_utils.h"
+#include "distributed/remote_commands.h"
 #include "distributed/resource_lock.h"
 #include "distributed/shardinterval_utils.h"
 #include "distributed/worker_protocol.h"
@@ -179,6 +180,10 @@ LockShardListResourcesOnFirstWorker(LOCKMODE lockmode, List *shardIntervalList)
 	ListCell *shardIntervalCell = NULL;
 	int processedShardIntervalCount = 0;
 	int totalShardIntervalCount = list_length(shardIntervalList);
+	WorkerNode *firstWorkerNode = GetFirstPrimaryWorkerNode();
+	int connectionFlags = 0;
+	const char *superuser = CitusExtensionOwnerName();
+	MultiConnection *firstWorkerConnection = NULL;
 
 	appendStringInfo(lockCommand, "SELECT lock_shard_resources(%d, ARRAY[", lockmode);
 
@@ -198,7 +203,26 @@ LockShardListResourcesOnFirstWorker(LOCKMODE lockmode, List *shardIntervalList)
 
 	appendStringInfo(lockCommand, "])");
 
-	SendCommandToFirstWorker(lockCommand->data);
+	/* need to hold the lock until commit */
+	BeginOrContinueCoordinatedTransaction();
+
+	/*
+	 * Use the superuser connection to make sure we are allowed to lock.
+	 * This also helps ensure we only use one connection.
+	 */
+	firstWorkerConnection = GetNodeUserDatabaseConnection(connectionFlags,
+														  firstWorkerNode->workerName,
+														  firstWorkerNode->workerPort,
+														  superuser, NULL);
+
+	/* the SELECT .. FOR UPDATE breaks if we lose the connection */
+	MarkRemoteTransactionCritical(firstWorkerConnection);
+
+	/* make sure we are in a tranasaction block to hold the lock until commit */
+	RemoteTransactionBeginIfNecessary(firstWorkerConnection);
+
+	/* grab the lock on the first worker node */
+	ExecuteCriticalRemoteCommand(firstWorkerConnection, lockCommand->data);
 }
 
 
@@ -378,6 +402,12 @@ LockReferencedReferenceShardResources(uint64 shardId, LOCKMODE lockMode)
 		ClusterHasKnownMetadataWorkers() &&
 		!IsFirstWorkerNode())
 	{
+		/*
+		 * When there is metadata, all nodes can write to the reference table,
+		 * but the writes need to be serialised. To achieve that, all nodes will
+		 * take the shard resource lock on the first worker node via RPC, except
+		 * for the first worker node which will just take it the regular way.
+		 */
 		LockShardListResourcesOnFirstWorker(lockMode, referencedShardIntervalList);
 	}
 

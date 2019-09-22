@@ -512,3 +512,31 @@ WorkerNodeCompare(const void *lhsKey, const void *rhsKey, Size keySize)
 	portCompare = workerLhs->workerPort - workerRhs->workerPort;
 	return portCompare;
 }
+
+
+/*
+ * GetFirstPrimaryWorkerNode returns the primary worker node with the
+ * lowest rank based on CompareWorkerNodes.
+ *
+ * The ranking is arbitrary, but needs to be kept consistent with IsFirstWorkerNode.
+ */
+WorkerNode *
+GetFirstPrimaryWorkerNode(void)
+{
+	List *workerNodeList = ActivePrimaryNodeList(NoLock);
+	ListCell *workerNodeCell = NULL;
+	WorkerNode *firstWorkerNode = NULL;
+
+	foreach(workerNodeCell, workerNodeList)
+	{
+		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
+
+		if (firstWorkerNode == NULL ||
+			CompareWorkerNodes(&workerNode, &firstWorkerNode) < 0)
+		{
+			firstWorkerNode = workerNode;
+		}
+	}
+
+	return firstWorkerNode;
+}
