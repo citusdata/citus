@@ -156,7 +156,16 @@ static void
 AppendAlterFunctionStmt(StringInfo buf, AlterFunctionStmt *stmt)
 {
 	ListCell *actionCell = NULL;
-	appendStringInfo(buf, "ALTER FUNCTION ");
+
+	if (stmt->objtype == OBJECT_FUNCTION)
+	{
+		appendStringInfo(buf, "ALTER FUNCTION ");
+	}
+	else
+	{
+		appendStringInfo(buf, "ALTER PROCEDURE ");
+	}
+
 	AppendFunctionName(buf, stmt->func);
 
 	foreach(actionCell, stmt->actions)
@@ -328,7 +337,14 @@ AppendRenameFunctionStmt(StringInfo buf, RenameStmt *stmt)
 {
 	ObjectWithArgs *func = castNode(ObjectWithArgs, stmt->object);
 
-	appendStringInfoString(buf, "ALTER FUNCTION ");
+	if (stmt->renameType == OBJECT_FUNCTION)
+	{
+		appendStringInfoString(buf, "ALTER FUNCTION ");
+	}
+	else
+	{
+		appendStringInfoString(buf, "ALTER PROCEDURE ");
+	}
 
 	AppendFunctionName(buf, func);
 
@@ -341,7 +357,15 @@ AppendAlterFunctionSchemaStmt(StringInfo buf, AlterObjectSchemaStmt *stmt)
 {
 	ObjectWithArgs *func = castNode(ObjectWithArgs, stmt->object);
 
-	appendStringInfoString(buf, "ALTER FUNCTION ");
+	if (stmt->objectType == OBJECT_FUNCTION)
+	{
+		appendStringInfoString(buf, "ALTER FUNCTION ");
+	}
+	else
+	{
+		appendStringInfoString(buf, "ALTER PROCEDURE ");
+	}
+
 	AppendFunctionName(buf, func);
 	appendStringInfo(buf, " SET SCHEMA %s;", quote_identifier(stmt->newschema));
 }
@@ -352,7 +376,15 @@ AppendAlterFunctionOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt)
 {
 	ObjectWithArgs *func = castNode(ObjectWithArgs, stmt->object);
 
-	appendStringInfoString(buf, "ALTER FUNCTION ");
+	if (stmt->objectType == OBJECT_FUNCTION)
+	{
+		appendStringInfoString(buf, "ALTER FUNCTION ");
+	}
+	else
+	{
+		appendStringInfoString(buf, "ALTER PROCEDURE ");
+	}
+
 	AppendFunctionName(buf, func);
 	appendStringInfo(buf, " OWNER TO %s;", RoleSpecString(stmt->newowner));
 }
@@ -363,7 +395,15 @@ AppendAlterFunctionDependsStmt(StringInfo buf, AlterObjectDependsStmt *stmt)
 {
 	ObjectWithArgs *func = castNode(ObjectWithArgs, stmt->object);
 
-	appendStringInfoString(buf, "ALTER FUNCTION ");
+	if (stmt->objectType == OBJECT_FUNCTION)
+	{
+		appendStringInfoString(buf, "ALTER FUNCTION ");
+	}
+	else
+	{
+		appendStringInfoString(buf, "ALTER PROCEDURE ");
+	}
+
 	AppendFunctionName(buf, func);
 	appendStringInfo(buf, " DEPENDS ON EXTENSION %s;", strVal(stmt->extname));
 }
@@ -372,7 +412,14 @@ AppendAlterFunctionDependsStmt(StringInfo buf, AlterObjectDependsStmt *stmt)
 static void
 AppendDropFunctionStmt(StringInfo buf, DropStmt *stmt)
 {
-	appendStringInfo(buf, "DROP FUNCTION ");
+	if (stmt->removeType == OBJECT_FUNCTION)
+	{
+		appendStringInfo(buf, "DROP FUNCTION ");
+	}
+	else
+	{
+		appendStringInfo(buf, "DROP PROCEDURE ");
+	}
 
 	if (stmt->missing_ok)
 	{
