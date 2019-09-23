@@ -84,6 +84,7 @@ wait_until_metadata_sync(PG_FUNCTION_ARGS)
 	ListCell *workerCell = NULL;
 	bool waitNotifications = false;
 	MultiConnection *connection = NULL;
+	int waitFlags = 0;
 
 	foreach(workerCell, workerList)
 	{
@@ -112,9 +113,14 @@ wait_until_metadata_sync(PG_FUNCTION_ARGS)
 								   "localhost", PostPortNumber);
 	ExecuteCriticalRemoteCommand(connection, "LISTEN " METADATA_SYNC_CHANNEL);
 
-	waitResult = WaitLatchOrSocket(NULL, WL_SOCKET_READABLE | WL_TIMEOUT,
-								   PQsocket(connection->pgConn), timeout, 0);
-	if (waitResult & WL_SOCKET_MASK)
+	waitFlags = WL_SOCKET_READABLE | WL_TIMEOUT | WL_POSTMASTER_DEATH;
+	waitResult = WaitLatchOrSocket(NULL, waitFlags, PQsocket(connection->pgConn),
+								   timeout, 0);
+	if (waitResult & WL_POSTMASTER_DEATH)
+	{
+		ereport(ERROR, (errmsg("postmaster was shut down, exiting")));
+	}
+	else if (waitResult & WL_SOCKET_MASK)
 	{
 		ClearResults(connection, true);
 	}
