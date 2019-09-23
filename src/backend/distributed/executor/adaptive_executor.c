@@ -790,7 +790,7 @@ ExecuteTaskListExtended(RowModifyLevel modLevel, List *taskList,
 	ParamListInfo paramListInfo = NULL;
 
 	/*
-	 * The code-paths that rely on this function do not know how execute
+	 * The code-paths that rely on this function do not know how to execute
 	 * commands locally.
 	 */
 	ErrorIfLocalExecutionHappened();
@@ -3093,7 +3093,7 @@ ReceiveResults(WorkerSession *session, bool storeRows)
 		else if (!storeRows)
 		{
 			/*
-			 * Already receieved rows from executing on another shard placement or
+			 * Already received rows from executing on another shard placement or
 			 * doesn't need at all (e.g., DDL).
 			 */
 			PQclear(result);

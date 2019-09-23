@@ -55,6 +55,7 @@ extern void CitusProcessUtility(Node *node, const char *queryString,
 								DestReceiver *dest, char *completionTag);
 extern void MarkInvalidateForeignKeyGraph(void);
 extern void InvalidateForeignKeyGraphForDDL(void);
+extern char * SetSearchPathToCurrentSearchPathCommand(void);
 extern List * DDLTaskList(Oid relationId, const char *commandString);
 extern List * NodeDDLTaskList(TargetWorkerSet targets, List *commands);
 extern bool AlterTableInProgress(void);

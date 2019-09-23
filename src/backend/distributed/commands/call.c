@@ -17,6 +17,7 @@
 #include "distributed/colocation_utils.h"
 #include "distributed/commands.h"
 #include "distributed/commands/multi_copy.h"
+#include "distributed/commands/utility_hook.h"
 #include "distributed/connection_management.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/metadata_cache.h"
@@ -153,16 +154,28 @@ CallFuncExprRemotely(CallStmt *callStmt, DistObjectCacheEntry *procedure,
 	}
 
 	{
+		StringInfoData taskQuery;
 		Tuplestorestate *tupleStore = tuplestore_begin_heap(true, false, work_mem);
 		TupleDesc tupleDesc = CallStmtResultDesc(callStmt);
 		TupleTableSlot *slot = MakeSingleTupleTableSlotCompat(tupleDesc,
 															  &TTSOpsMinimalTuple);
-
+		char *setSearchPathCommand = SetSearchPathToCurrentSearchPathCommand();
 		Task *task = CitusMakeNode(Task);
+
+		initStringInfo(&taskQuery);
+		if (setSearchPathCommand == NULL)
+		{
+			appendStringInfoString(&taskQuery, queryString);
+		}
+		else
+		{
+			appendStringInfo(&taskQuery, "%s;%s", setSearchPathCommand, queryString);
+		}
+
 		task->jobId = INVALID_JOB_ID;
 		task->taskId = 0;
 		task->taskType = DDL_TASK;
-		task->queryString = pstrdup(queryString);
+		task->queryString = taskQuery.data;
 		task->replicationModel = REPLICATION_MODEL_INVALID;
 		task->dependedTaskList = NIL;
 		task->anchorShardId = placement->shardId;

@@ -5,6 +5,9 @@
 set citus.shard_replication_factor to 1;
 set citus.replication_model to 'streaming';
 
+create schema multi_mx_call;
+set search_path to multi_mx_call, public;
+
 create table mx_call_dist_table(id int, val int);
 select create_distributed_table('mx_call_dist_table', 'id');
 insert into mx_call_dist_table values (3,1),(4,5),(9,2),(6,5),(3,5);
@@ -40,7 +43,12 @@ END;$$;
 
 CREATE PROCEDURE mx_call_proc_commit(x int) LANGUAGE plpgsql AS $$
 BEGIN
+    insert into mx_call_dist_table values (100 + x, 1);
+    ROLLBACK;
+    insert into mx_call_dist_table values (100 + x, 2);
     COMMIT;
+    insert into mx_call_dist_table values (101 + x, 1);
+    ROLLBACK;
 END;$$;
 
 CREATE PROCEDURE mx_call_proc_raise(x int) LANGUAGE plpgsql AS $$
@@ -82,6 +90,7 @@ call mx_call_proc(2, 0);
 commit;
 call mx_call_proc_raise(2);
 call mx_call_proc_commit(2);
+select id, val from mx_call_dist_table where id >= 100 order by id, val;
 
 -- Make sure we do bounds checking on distributed argument index
 -- This also tests that we have cache invalidation for pg_dist_object updates
@@ -113,4 +122,6 @@ drop procedure mx_call_proc_asdf;
 drop procedure mx_call_proc_raise;
 drop procedure mx_call_proc_commit;
 drop type mx_call_enum;
+
+drop schema multi_mx_call cascade;
 
