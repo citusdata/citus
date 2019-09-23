@@ -8,20 +8,14 @@ set citus.replication_model to 'streaming';
 create schema multi_mx_call;
 set search_path to multi_mx_call, public;
 
-create table mx_call_dist_table(id int, val int);
-select create_distributed_table('mx_call_dist_table', 'id');
-insert into mx_call_dist_table values (3,1),(4,5),(9,2),(6,5),(3,5);
-create table mx_call_dist_table2(id int, val int);
-select create_distributed_table('mx_call_dist_table2', 'id');
-insert into mx_call_dist_table2 values (1,1),(1,2),(2,2),(3,3),(3,4);
+--
+-- Utility UDFs
+--
 
-create type mx_call_enum as enum ('A', 'S', 'D', 'F');
-create table mx_call_dist_table_enum(id int, key mx_call_enum);
-select create_distributed_table('mx_call_dist_table_enum', 'key');
-insert into mx_call_dist_table_enum values (1,'S'),(2,'A'),(3,'D'),(4,'F');
-
-
-CREATE PROCEDURE mx_call_dist_object(procname text, tablerelid regclass, argument_index int) LANGUAGE plpgsql AS $$
+-- 1. Marks the given procedure as colocated with the given table.
+-- 2. Marks the argument index with which we route the procedure.
+CREATE PROCEDURE collocate_proc_with_table(procname text, tablerelid regclass, argument_index int)
+LANGUAGE plpgsql AS $$
 BEGIN
     update citus.pg_dist_object
     set distribution_argument_index = argument_index, colocationid = pg_dist_partition.colocationid
@@ -29,99 +23,137 @@ BEGIN
     where proname = procname and oid = objid and pg_dist_partition.logicalrelid = tablerelid;
 END;$$;
 
-CREATE PROCEDURE mx_call_proc(x int, INOUT y int) LANGUAGE plpgsql AS $$
+
+--
+-- Create tables and procedures we want to use in tests
+--
+create table mx_call_dist_table_1(id int, val int);
+select create_distributed_table('mx_call_dist_table_1', 'id');
+insert into mx_call_dist_table_1 values (3,1),(4,5),(9,2),(6,5),(3,5);
+create table mx_call_dist_table_2(id int, val int);
+select create_distributed_table('mx_call_dist_table_2', 'id');
+insert into mx_call_dist_table_2 values (1,1),(1,2),(2,2),(3,3),(3,4);
+
+create type mx_call_enum as enum ('A', 'S', 'D', 'F');
+create table mx_call_dist_table_enum(id int, key mx_call_enum);
+select create_distributed_table('mx_call_dist_table_enum', 'key');
+insert into mx_call_dist_table_enum values (1,'S'),(2,'A'),(3,'D'),(4,'F');
+
+
+CREATE PROCEDURE mx_call_proc(x int, INOUT y int)
+LANGUAGE plpgsql AS $$
 BEGIN
+    -- groupid is 0 in coordinator and non-zero in workers, so by using it here
+    -- we make sure the procedure is being executed in the worker.
     y := x + (select case groupid when 0 then 1 else 0 end from pg_dist_local_group);
-    y := y + (select sum(t1.val + t2.val) from mx_call_dist_table t1 join mx_call_dist_table2 t2 on t1.id = t2.id);
+    -- we also make sure that we can run distributed queries in the procedures
+    -- that are routed to the workers.
+    y := y + (select sum(t1.val + t2.val) from mx_call_dist_table_1 t1 join mx_call_dist_table_2 t2 on t1.id = t2.id);
 END;$$;
 
-CREATE PROCEDURE mx_call_proc_asdf(INOUT x mx_call_enum, INOUT y mx_call_enum) LANGUAGE plpgsql AS $$
+-- create another procedure which verifies:
+-- 1. we work fine with multiple return columns
+-- 2. we work find in combination with custom types
+CREATE PROCEDURE mx_call_proc_custom_types(INOUT x mx_call_enum, INOUT y mx_call_enum)
+LANGUAGE plpgsql AS $$
 BEGIN
     y := x;
     x := (select case groupid when 0 then 'F' else 'S' end from pg_dist_local_group);
 END;$$;
 
-CREATE PROCEDURE mx_call_proc_commit(x int) LANGUAGE plpgsql AS $$
-BEGIN
-    insert into mx_call_dist_table values (100 + x, 1);
-    ROLLBACK;
-    insert into mx_call_dist_table values (100 + x, 2);
-    COMMIT;
-    insert into mx_call_dist_table values (101 + x, 1);
-    ROLLBACK;
-END;$$;
-
-CREATE PROCEDURE mx_call_proc_raise(x int) LANGUAGE plpgsql AS $$
-BEGIN
-    RAISE WARNING 'warning';
-    RAISE EXCEPTION 'error';
-END;$$;
-
-CREATE FUNCTION mx_call_add(int, int) RETURNS int
-    AS 'select $1 + $2;' LANGUAGE SQL IMMUTABLE;
-
 -- Test that undistributed procedures have no issue executing
 call mx_call_proc(2, 0);
-call mx_call_proc_asdf('S', 'A');
+call mx_call_proc_custom_types('S', 'A');
 
--- Test some straight forward distributed calls
-select create_distributed_function('mx_call_add(int,int)');
+-- Mark both procedures as distributed ...
 select create_distributed_function('mx_call_proc(int,int)');
-select create_distributed_function('mx_call_proc_commit(int)');
-select create_distributed_function('mx_call_proc_raise(int)');
-select create_distributed_function('mx_call_proc_asdf(mx_call_enum,mx_call_enum)');
-call mx_call_dist_object('mx_call_proc', 'mx_call_dist_table'::regclass, 1);
-call mx_call_dist_object('mx_call_proc_commit', 'mx_call_dist_table'::regclass, 0);
-call mx_call_dist_object('mx_call_proc_raise', 'mx_call_dist_table'::regclass, 0);
-call mx_call_dist_object('mx_call_proc_asdf', 'mx_call_dist_table_enum'::regclass, 1);
+select create_distributed_function('mx_call_proc_custom_types(mx_call_enum,mx_call_enum)');
 
+-- We still don't route them to the workers, because they aren't
+-- colocated with any distributed tables.
+SET client_min_messages TO DEBUG1;
 call mx_call_proc(2, 0);
-call mx_call_proc_asdf('S', 'A');
+call mx_call_proc_custom_types('S', 'A');
 
-drop table mx_call_dist_table_enum;
-set client_min_messages to DEBUG2;
-
--- Procedure calls can't be distributed without a distributed table to guide process
-call mx_call_proc_asdf('S', 'A');
+-- Mark them as colocated with a table. Now we should route them to workers.
+call collocate_proc_with_table('mx_call_proc', 'mx_call_dist_table_1'::regclass, 1);
+call collocate_proc_with_table('mx_call_proc_custom_types', 'mx_call_dist_table_enum'::regclass, 1);
+call mx_call_proc(2, 0);
+call mx_call_proc_custom_types('S', 'A');
 
 -- We don't allow distributing calls inside transactions
 begin;
 call mx_call_proc(2, 0);
 commit;
-call mx_call_proc_raise(2);
-call mx_call_proc_commit(2);
-select id, val from mx_call_dist_table where id >= 100 order by id, val;
+
+-- Drop the table colocated with mx_call_proc_custom_types. Now it shouldn't
+-- be routed to workers anymore.
+drop table mx_call_dist_table_enum;
+call mx_call_proc_custom_types('S', 'A');
 
 -- Make sure we do bounds checking on distributed argument index
 -- This also tests that we have cache invalidation for pg_dist_object updates
-call mx_call_dist_object('mx_call_proc', 'mx_call_dist_table'::regclass, -1);
+call collocate_proc_with_table('mx_call_proc', 'mx_call_dist_table_1'::regclass, -1);
 call mx_call_proc(2, 0);
-call mx_call_dist_object('mx_call_proc', 'mx_call_dist_table'::regclass, 2);
+call collocate_proc_with_table('mx_call_proc', 'mx_call_dist_table_1'::regclass, 2);
 call mx_call_proc(2, 0);
-call mx_call_dist_object('mx_call_proc', 'mx_call_dist_table'::regclass, 1);
+call collocate_proc_with_table('mx_call_proc', 'mx_call_dist_table_1'::regclass, 1);
 
--- test non Const distribution parameter
+-- Test that we handle transactional constructs correctly inside a procedure
+-- that is routed to the workers.
+CREATE PROCEDURE mx_call_proc_tx(x int) LANGUAGE plpgsql AS $$
+BEGIN
+    INSERT INTO mx_call_dist_table_1 VALUES (x, -1), (x+1, 4);
+    COMMIT;
+    UPDATE mx_call_dist_table_1 SET val = val+1 WHERE id >= x;
+    ROLLBACK;
+    -- Now do the final update!
+    UPDATE mx_call_dist_table_1 SET val = val-1 WHERE id >= x;
+END;$$;
+
+-- before distribution ...
+CALL mx_call_proc_tx(10);
+SELECT id, val FROM mx_call_dist_table_1 ORDER BY id, val;
+-- after distribution ...
+select create_distributed_function('mx_call_proc_tx(int)');
+call collocate_proc_with_table('mx_call_proc_tx', 'mx_call_dist_table_1'::regclass, 0);
+CALL mx_call_proc_tx(20);
+SELECT id, val FROM mx_call_dist_table_1 ORDER BY id, val;
+
+-- Test that we properly propagate errors raised from procedures.
+CREATE PROCEDURE mx_call_proc_raise(x int) LANGUAGE plpgsql AS $$
+BEGIN
+    RAISE WARNING 'warning';
+    RAISE EXCEPTION 'error';
+END;$$;
+select create_distributed_function('mx_call_proc_raise(int)');
+call collocate_proc_with_table('mx_call_proc_raise', 'mx_call_dist_table_1'::regclass, 0);
+call mx_call_proc_raise(2);
+
+
+--
+-- Test non-const parameter values
+--
+CREATE FUNCTION mx_call_add(int, int) RETURNS int
+    AS 'select $1 + $2;' LANGUAGE SQL IMMUTABLE;
+SELECT create_distributed_function('mx_call_add(int,int)');
+
+-- non-const distribution parameters cannot be pushed down
 call mx_call_proc(2, mx_call_add(3, 4));
 
--- non const parameter can be pushed down
+-- non-const parameter can be pushed down
 call mx_call_proc(mx_call_add(3, 4), 2);
 
 -- volatile parameter cannot be pushed down
 call mx_call_proc(random()::int, 2);
 
+--
+-- clean-up
+--
 reset client_min_messages;
 reset citus.shard_replication_factor;
 reset citus.replication_model;
-
-drop table mx_call_dist_table;
-drop table mx_call_dist_table2;
-drop function mx_call_add;
-drop procedure mx_call_dist_object;
-drop procedure mx_call_proc;
-drop procedure mx_call_proc_asdf;
-drop procedure mx_call_proc_raise;
-drop procedure mx_call_proc_commit;
-drop type mx_call_enum;
+reset search_path;
 
 drop schema multi_mx_call cascade;
 

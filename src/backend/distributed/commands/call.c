@@ -81,27 +81,27 @@ CallFuncExprRemotely(CallStmt *callStmt, DistObjectCacheEntry *procedure,
 
 	if (IsMultiStatementTransaction())
 	{
-		ereport(DEBUG2, (errmsg("cannot push down CALL in multi-statement transaction")));
+		ereport(DEBUG1, (errmsg("cannot push down CALL in multi-statement transaction")));
 		return false;
 	}
 
 	colocatedRelationId = ColocatedTableId(procedure->colocationId);
 	if (colocatedRelationId == InvalidOid)
 	{
-		ereport(DEBUG2, (errmsg("stored procedure does not have co-located tables")));
+		ereport(DEBUG1, (errmsg("stored procedure does not have co-located tables")));
 		return false;
 	}
 
 	if (procedure->distributionArgIndex < 0 ||
 		procedure->distributionArgIndex >= list_length(funcExpr->args))
 	{
-		ereport(DEBUG2, (errmsg("cannot push down invalid distribution_argument_index")));
+		ereport(DEBUG1, (errmsg("cannot push down invalid distribution_argument_index")));
 		return false;
 	}
 
 	if (contain_volatile_functions((Node *) funcExpr->args))
 	{
-		ereport(DEBUG2, (errmsg("arguments in a distributed stored procedure must "
+		ereport(DEBUG1, (errmsg("arguments in a distributed stored procedure must "
 								"be constant expressions")));
 		return false;
 	}
@@ -112,7 +112,7 @@ CallFuncExprRemotely(CallStmt *callStmt, DistObjectCacheEntry *procedure,
 	partitionValue = (Const *) list_nth(funcExpr->args, procedure->distributionArgIndex);
 	if (!IsA(partitionValue, Const))
 	{
-		ereport(DEBUG2, (errmsg("distribution argument value must be a constant")));
+		ereport(DEBUG1, (errmsg("distribution argument value must be a constant")));
 		return false;
 	}
 
@@ -131,7 +131,7 @@ CallFuncExprRemotely(CallStmt *callStmt, DistObjectCacheEntry *procedure,
 	shardInterval = FindShardInterval(partitionValueDatum, distTable);
 	if (shardInterval == NULL)
 	{
-		ereport(DEBUG2, (errmsg("cannot push down call, failed to find shard interval")));
+		ereport(DEBUG1, (errmsg("cannot push down call, failed to find shard interval")));
 		return false;
 	}
 
@@ -139,7 +139,7 @@ CallFuncExprRemotely(CallStmt *callStmt, DistObjectCacheEntry *procedure,
 	if (list_length(placementList) != 1)
 	{
 		/* punt on reference tables for now */
-		ereport(DEBUG2, (errmsg(
+		ereport(DEBUG1, (errmsg(
 							 "cannot push down CALL for reference tables or replicated distributed tables")));
 		return false;
 	}
@@ -149,9 +149,11 @@ CallFuncExprRemotely(CallStmt *callStmt, DistObjectCacheEntry *procedure,
 
 	if (workerNode == NULL || !workerNode->hasMetadata || !workerNode->metadataSynced)
 	{
-		ereport(DEBUG2, (errmsg("there is no worker node with metadata")));
+		ereport(DEBUG1, (errmsg("there is no worker node with metadata")));
 		return false;
 	}
+
+	ereport(DEBUG1, (errmsg("pushing down the procedure")));
 
 	{
 		StringInfoData taskQuery;
