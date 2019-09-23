@@ -157,6 +157,9 @@ AppendAlterFunctionStmt(StringInfo buf, AlterFunctionStmt *stmt)
 {
 	ListCell *actionCell = NULL;
 
+#if (PG_VERSION_NUM < 110000)
+		appendStringInfo(buf, "ALTER FUNCTION ");
+#else
 	if (stmt->objtype == OBJECT_FUNCTION)
 	{
 		appendStringInfo(buf, "ALTER FUNCTION ");
@@ -165,6 +168,7 @@ AppendAlterFunctionStmt(StringInfo buf, AlterFunctionStmt *stmt)
 	{
 		appendStringInfo(buf, "ALTER PROCEDURE ");
 	}
+#endif
 
 	AppendFunctionName(buf, stmt->func);
 
@@ -337,6 +341,9 @@ AppendRenameFunctionStmt(StringInfo buf, RenameStmt *stmt)
 {
 	ObjectWithArgs *func = castNode(ObjectWithArgs, stmt->object);
 
+#if (PG_VERSION_NUM < 110000)
+		appendStringInfo(buf, "ALTER FUNCTION ");
+#else
 	if (stmt->renameType == OBJECT_FUNCTION)
 	{
 		appendStringInfoString(buf, "ALTER FUNCTION ");
@@ -345,6 +352,7 @@ AppendRenameFunctionStmt(StringInfo buf, RenameStmt *stmt)
 	{
 		appendStringInfoString(buf, "ALTER PROCEDURE ");
 	}
+#endif
 
 	AppendFunctionName(buf, func);
 
@@ -357,6 +365,9 @@ AppendAlterFunctionSchemaStmt(StringInfo buf, AlterObjectSchemaStmt *stmt)
 {
 	ObjectWithArgs *func = castNode(ObjectWithArgs, stmt->object);
 
+#if (PG_VERSION_NUM < 110000)
+		appendStringInfo(buf, "ALTER FUNCTION ");
+#else
 	if (stmt->objectType == OBJECT_FUNCTION)
 	{
 		appendStringInfoString(buf, "ALTER FUNCTION ");
@@ -365,6 +376,7 @@ AppendAlterFunctionSchemaStmt(StringInfo buf, AlterObjectSchemaStmt *stmt)
 	{
 		appendStringInfoString(buf, "ALTER PROCEDURE ");
 	}
+#endif
 
 	AppendFunctionName(buf, func);
 	appendStringInfo(buf, " SET SCHEMA %s;", quote_identifier(stmt->newschema));
@@ -376,6 +388,9 @@ AppendAlterFunctionOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt)
 {
 	ObjectWithArgs *func = castNode(ObjectWithArgs, stmt->object);
 
+#if (PG_VERSION_NUM < 110000)
+		appendStringInfo(buf, "ALTER FUNCTION ");
+#else
 	if (stmt->objectType == OBJECT_FUNCTION)
 	{
 		appendStringInfoString(buf, "ALTER FUNCTION ");
@@ -384,6 +399,7 @@ AppendAlterFunctionOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt)
 	{
 		appendStringInfoString(buf, "ALTER PROCEDURE ");
 	}
+#endif
 
 	AppendFunctionName(buf, func);
 	appendStringInfo(buf, " OWNER TO %s;", RoleSpecString(stmt->newowner));
@@ -395,6 +411,9 @@ AppendAlterFunctionDependsStmt(StringInfo buf, AlterObjectDependsStmt *stmt)
 {
 	ObjectWithArgs *func = castNode(ObjectWithArgs, stmt->object);
 
+#if (PG_VERSION_NUM < 110000)
+		appendStringInfo(buf, "ALTER FUNCTION ");
+#else
 	if (stmt->objectType == OBJECT_FUNCTION)
 	{
 		appendStringInfoString(buf, "ALTER FUNCTION ");
@@ -403,6 +422,7 @@ AppendAlterFunctionDependsStmt(StringInfo buf, AlterObjectDependsStmt *stmt)
 	{
 		appendStringInfoString(buf, "ALTER PROCEDURE ");
 	}
+#endif
 
 	AppendFunctionName(buf, func);
 	appendStringInfo(buf, " DEPENDS ON EXTENSION %s;", strVal(stmt->extname));
@@ -412,14 +432,18 @@ AppendAlterFunctionDependsStmt(StringInfo buf, AlterObjectDependsStmt *stmt)
 static void
 AppendDropFunctionStmt(StringInfo buf, DropStmt *stmt)
 {
+#if (PG_VERSION_NUM < 110000)
+		appendStringInfo(buf, "DROP FUNCTION ");
+#else
 	if (stmt->removeType == OBJECT_FUNCTION)
 	{
-		appendStringInfo(buf, "DROP FUNCTION ");
+		appendStringInfoString(buf, "DROP FUNCTION ");
 	}
 	else
 	{
-		appendStringInfo(buf, "DROP PROCEDURE ");
+		appendStringInfoString(buf, "DROP PROCEDURE ");
 	}
+#endif
 
 	if (stmt->missing_ok)
 	{
