@@ -184,8 +184,6 @@ LookupFuncWithArgsCompat(ObjectType objtype, ObjectWithArgs *func, bool noError)
 }
 
 
-#define LookupFuncWithArgs LookupFuncWithArgsCompat
-
 #endif
 
 #if (PG_VERSION_NUM >= 110000)
@@ -259,6 +257,14 @@ RangeVarGetRelidInternal(const RangeVar *relation, LOCKMODE lockmode, uint32 fla
 						 RangeVarGetRelidCallback callback, void *callback_arg)
 {
 	return RangeVarGetRelidExtended(relation, lockmode, flags, callback, callback_arg);
+}
+
+
+/* following compat function and macro should be removed when we drop support for PG10 */
+static inline Oid
+LookupFuncWithArgsCompat(ObjectType objtype, ObjectWithArgs *func, bool noError)
+{
+	return LookupFuncWithArgs(objtype, func, noError);
 }
 
 

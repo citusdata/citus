@@ -421,7 +421,7 @@ AppendFunctionName(StringInfo buf, ObjectWithArgs *func)
 	char *qualifiedFunctionName;
 	char *args = TypeNameListToString(func->objargs);
 
-	funcid = LookupFuncWithArgs(OBJECT_FUNCTION, func, true);
+	funcid = LookupFuncWithArgsCompat(OBJECT_FUNCTION, func, true);
 	proctup = SearchSysCache1(PROCOID, ObjectIdGetDatum(funcid));
 
 	if (!HeapTupleIsValid(proctup))
