@@ -31,8 +31,8 @@
 /* forward declaration for deparse functions */
 static void AppendAlterFunctionStmt(StringInfo buf, AlterFunctionStmt *stmt);
 static void AppendDropFunctionStmt(StringInfo buf, DropStmt *stmt);
-static void AppendFunctionNameList(StringInfo buf, List *objects);
 static void AppendFunctionName(StringInfo buf, ObjectWithArgs *func);
+static void AppendFunctionNameList(StringInfo buf, List *objects);
 
 static void AppendDefElem(StringInfo buf, DefElem *def);
 static void AppendDefElemStrict(StringInfo buf, DefElem *def);
@@ -49,7 +49,6 @@ static void AppendAlterFunctionSchemaStmt(StringInfo buf, AlterObjectSchemaStmt 
 static void AppendAlterFunctionOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt);
 static void AppendAlterFunctionDependsStmt(StringInfo buf, AlterObjectDependsStmt *stmt);
 
-static void AppendQualifiedFunctionName(StringInfo buf, ObjectWithArgs *func);
 
 const char *
 DeparseAlterFunctionStmt(AlterFunctionStmt *stmt)
@@ -63,7 +62,6 @@ DeparseAlterFunctionStmt(AlterFunctionStmt *stmt)
 }
 
 
-/* TODO: implement this and add some comments here */
 const char *
 DeparseRenameFunctionStmt(RenameStmt *stmt)
 {
@@ -82,20 +80,6 @@ DeparseRenameFunctionStmt(RenameStmt *stmt)
 }
 
 
-static void
-AppendRenameFunctionStmt(StringInfo buf, RenameStmt *stmt)
-{
-	ObjectWithArgs *func = castNode(ObjectWithArgs, stmt->object);
-
-	appendStringInfoString(buf, "ALTER FUNCTION ");
-
-	AppendQualifiedFunctionName(buf, func);
-
-	appendStringInfo(buf, " RENAME TO %s;", quote_identifier(stmt->newname));
-}
-
-
-/* TODO: implement this and add some comments here */
 const char *
 DeparseAlterFunctionSchemaStmt(AlterObjectSchemaStmt *stmt)
 {
@@ -114,18 +98,6 @@ DeparseAlterFunctionSchemaStmt(AlterObjectSchemaStmt *stmt)
 }
 
 
-static void
-AppendAlterFunctionSchemaStmt(StringInfo buf, AlterObjectSchemaStmt *stmt)
-{
-	ObjectWithArgs *func = castNode(ObjectWithArgs, stmt->object);
-
-	appendStringInfoString(buf, "ALTER FUNCTION ");
-	AppendQualifiedFunctionName(buf, func);
-	appendStringInfo(buf, " SET SCHEMA %s;", quote_identifier(stmt->newschema));
-}
-
-
-/* TODO: implement this and add some comments here */
 const char *
 DeparseAlterFunctionOwnerStmt(AlterOwnerStmt *stmt)
 {
@@ -144,18 +116,6 @@ DeparseAlterFunctionOwnerStmt(AlterOwnerStmt *stmt)
 }
 
 
-static void
-AppendAlterFunctionOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt)
-{
-	ObjectWithArgs *func = castNode(ObjectWithArgs, stmt->object);
-
-	appendStringInfoString(buf, "ALTER FUNCTION ");
-	AppendQualifiedFunctionName(buf, func);
-	appendStringInfo(buf, " OWNER TO %s;", RoleSpecString(stmt->newowner));
-}
-
-
-/* TODO: implement this and add some comments here */
 const char *
 DeparseAlterFunctionDependsStmt(AlterObjectDependsStmt *stmt)
 {
@@ -171,17 +131,6 @@ DeparseAlterFunctionDependsStmt(AlterObjectDependsStmt *stmt)
 	AppendAlterFunctionDependsStmt(&str, stmt);
 
 	return str.data;
-}
-
-
-static void
-AppendAlterFunctionDependsStmt(StringInfo buf, AlterObjectDependsStmt *stmt)
-{
-	ObjectWithArgs *func = castNode(ObjectWithArgs, stmt->object);
-
-	appendStringInfoString(buf, "ALTER FUNCTION ");
-	AppendQualifiedFunctionName(buf, func);
-	appendStringInfo(buf, " DEPENDS ON EXTENSION %s;", strVal(stmt->extname));
 }
 
 
@@ -216,102 +165,7 @@ AppendAlterFunctionStmt(StringInfo buf, AlterFunctionStmt *stmt)
 		AppendDefElem(buf, def);
 	}
 
-	/* TODO: use other attributes to deparse the query here  */
 	appendStringInfoString(buf, ";");
-}
-
-
-static void
-AppendDropFunctionStmt(StringInfo buf, DropStmt *stmt)
-{
-	appendStringInfo(buf, "DROP FUNCTION ");
-
-	if (stmt->missing_ok)
-	{
-		appendStringInfoString(buf, "IF EXISTS ");
-	}
-
-	AppendFunctionNameList(buf, stmt->objects);
-
-	if (stmt->behavior == DROP_CASCADE)
-	{
-		appendStringInfoString(buf, " CASCADE");
-	}
-
-	appendStringInfoString(buf, ";");
-}
-
-
-static void
-AppendFunctionNameList(StringInfo buf, List *objects)
-{
-	ListCell *objectCell = NULL;
-	foreach(objectCell, objects)
-	{
-		Node *object = lfirst(objectCell);
-		ObjectWithArgs *func = NULL;
-
-		if (objectCell != list_head(objects))
-		{
-			appendStringInfo(buf, ", ");
-		}
-
-		func = castNode(ObjectWithArgs, object);
-
-		AppendFunctionName(buf, func);
-	}
-}
-
-
-static void
-AppendQualifiedFunctionName(StringInfo buf, ObjectWithArgs *func)
-{
-	Oid funcid = InvalidOid;
-	HeapTuple proctup;
-	char *functionName = NULL;
-	char *schemaName = NULL;
-	char *qualifiedFunctionName;
-	char *args = TypeNameListToString(func->objargs);
-
-	funcid = LookupFuncWithArgs(OBJECT_FUNCTION, func, true);
-	proctup = SearchSysCache1(PROCOID, ObjectIdGetDatum(funcid));
-
-	if (!HeapTupleIsValid(proctup))
-	{
-		/*
-		 * DROP FUNCTION IF EXISTS absent_function arrives here
-		 *
-		 * There is no namespace associated with the nonexistent function,
-		 * thus we return the function name as it is provided
-		 */
-		DeconstructQualifiedName(func->objname, &schemaName, &functionName);
-	}
-	else
-	{
-		Form_pg_proc procform;
-
-		procform = (Form_pg_proc) GETSTRUCT(proctup);
-		functionName = NameStr(procform->proname);
-		schemaName = get_namespace_name(procform->pronamespace);
-
-		ReleaseSysCache(proctup);
-	}
-
-	qualifiedFunctionName = quote_qualified_identifier(schemaName, functionName);
-	appendStringInfoString(buf, qualifiedFunctionName);
-
-	/* append the optional arg list if provided */
-	if (args)
-	{
-		appendStringInfo(buf, "(%s)", args);
-	}
-}
-
-
-static void
-AppendFunctionName(StringInfo buf, ObjectWithArgs *func)
-{
-	AppendQualifiedFunctionName(buf, func);
 }
 
 
@@ -465,5 +319,138 @@ AppendDefElemSet(StringInfo buf, DefElem *def)
 			ereport(ERROR, (errmsg("Unable to deparse SET statement")));
 			break;
 		}
+	}
+}
+
+
+static void
+AppendRenameFunctionStmt(StringInfo buf, RenameStmt *stmt)
+{
+	ObjectWithArgs *func = castNode(ObjectWithArgs, stmt->object);
+
+	appendStringInfoString(buf, "ALTER FUNCTION ");
+
+	AppendFunctionName(buf, func);
+
+	appendStringInfo(buf, " RENAME TO %s;", quote_identifier(stmt->newname));
+}
+
+
+static void
+AppendAlterFunctionSchemaStmt(StringInfo buf, AlterObjectSchemaStmt *stmt)
+{
+	ObjectWithArgs *func = castNode(ObjectWithArgs, stmt->object);
+
+	appendStringInfoString(buf, "ALTER FUNCTION ");
+	AppendFunctionName(buf, func);
+	appendStringInfo(buf, " SET SCHEMA %s;", quote_identifier(stmt->newschema));
+}
+
+
+static void
+AppendAlterFunctionOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt)
+{
+	ObjectWithArgs *func = castNode(ObjectWithArgs, stmt->object);
+
+	appendStringInfoString(buf, "ALTER FUNCTION ");
+	AppendFunctionName(buf, func);
+	appendStringInfo(buf, " OWNER TO %s;", RoleSpecString(stmt->newowner));
+}
+
+
+static void
+AppendAlterFunctionDependsStmt(StringInfo buf, AlterObjectDependsStmt *stmt)
+{
+	ObjectWithArgs *func = castNode(ObjectWithArgs, stmt->object);
+
+	appendStringInfoString(buf, "ALTER FUNCTION ");
+	AppendFunctionName(buf, func);
+	appendStringInfo(buf, " DEPENDS ON EXTENSION %s;", strVal(stmt->extname));
+}
+
+
+static void
+AppendDropFunctionStmt(StringInfo buf, DropStmt *stmt)
+{
+	appendStringInfo(buf, "DROP FUNCTION ");
+
+	if (stmt->missing_ok)
+	{
+		appendStringInfoString(buf, "IF EXISTS ");
+	}
+
+	AppendFunctionNameList(buf, stmt->objects);
+
+	if (stmt->behavior == DROP_CASCADE)
+	{
+		appendStringInfoString(buf, " CASCADE");
+	}
+
+	appendStringInfoString(buf, ";");
+}
+
+
+static void
+AppendFunctionNameList(StringInfo buf, List *objects)
+{
+	ListCell *objectCell = NULL;
+	foreach(objectCell, objects)
+	{
+		Node *object = lfirst(objectCell);
+		ObjectWithArgs *func = NULL;
+
+		if (objectCell != list_head(objects))
+		{
+			appendStringInfo(buf, ", ");
+		}
+
+		func = castNode(ObjectWithArgs, object);
+
+		AppendFunctionName(buf, func);
+	}
+}
+
+
+static void
+AppendFunctionName(StringInfo buf, ObjectWithArgs *func)
+{
+	Oid funcid = InvalidOid;
+	HeapTuple proctup;
+	char *functionName = NULL;
+	char *schemaName = NULL;
+	char *qualifiedFunctionName;
+	char *args = TypeNameListToString(func->objargs);
+
+	funcid = LookupFuncWithArgs(OBJECT_FUNCTION, func, true);
+	proctup = SearchSysCache1(PROCOID, ObjectIdGetDatum(funcid));
+
+	if (!HeapTupleIsValid(proctup))
+	{
+		/*
+		 * DROP FUNCTION IF EXISTS absent_function arrives here
+		 *
+		 * There is no namespace associated with the nonexistent function,
+		 * thus we return the function name as it is provided
+		 */
+		DeconstructQualifiedName(func->objname, &schemaName, &functionName);
+	}
+	else
+	{
+		Form_pg_proc procform;
+
+		procform = (Form_pg_proc) GETSTRUCT(proctup);
+		functionName = NameStr(procform->proname);
+		schemaName = get_namespace_name(procform->pronamespace);
+
+		ReleaseSysCache(proctup);
+	}
+
+	qualifiedFunctionName = quote_qualified_identifier(schemaName, functionName);
+	appendStringInfoString(buf, qualifiedFunctionName);
+
+	/* append the optional arg list if provided */
+	if (args)
+	{
+		appendStringInfo(buf, "(%s)", args);
 	}
 }
