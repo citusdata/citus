@@ -638,6 +638,11 @@ IsMultiStatementTransaction(void)
 		/* in a BEGIN...END block */
 		return true;
 	}
+	else if (DoBlockLevel > 0)
+	{
+		/* in (a transaction within) a do block */
+		return true;
+	}
 	else if (StoredProcedureLevel > 0)
 	{
 		/* in (a transaction within) a stored procedure */
