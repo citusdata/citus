@@ -425,7 +425,7 @@ SELECT
 FROM 
 	distributed_table, all_data 
 WHERE 
-	distributed_table.key = all_data.key AND distributed_table.key = 1;
+	distributed_table.key = all_data.key AND distributed_table.key = 1 AND EXISTS (SELECT * FROM all_data);
 
 
 -- get ready for the next commands

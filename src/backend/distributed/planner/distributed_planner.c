@@ -1176,7 +1176,11 @@ BlessRecordExpression(Expr *expr)
 		ListCell *argCell = NULL;
 		int currentResno = 1;
 
+#if PG_VERSION_NUM >= 120000
+		rowTupleDesc = CreateTemplateTupleDesc(list_length(rowExpr->args));
+#else
 		rowTupleDesc = CreateTemplateTupleDesc(list_length(rowExpr->args), false);
+#endif
 
 		foreach(argCell, rowExpr->args)
 		{
