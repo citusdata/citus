@@ -1,6 +1,9 @@
 /* citus--8.3-1--9.0-1 */
 
-/* bump version to 9.0-1 */
+-- We swapped the groupid and nodeid sequences when creating pg_dist_node
+ALTER TABLE pg_dist_node ALTER COLUMN groupid SET DEFAULT nextval ('pg_dist_groupid_seq');
+ALTER TABLE pg_dist_node ALTER COLUMN nodeid SET DEFAULT nextval('pg_dist_node_nodeid_seq');
+
 CREATE SCHEMA IF NOT EXISTS citus_internal;
 
 -- move citus internal functions to citus_internal to make space in the citus schema for
