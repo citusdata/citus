@@ -18,6 +18,7 @@
 #include "catalog/pg_type.h"
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/citus_nodes.h"
+#include "distributed/function_call_delegation.h"
 #include "distributed/insert_select_planner.h"
 #include "distributed/intermediate_results.h"
 #include "distributed/metadata_cache.h"
@@ -191,6 +192,14 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 			setPartitionedTablesInherited = true;
 			AdjustPartitioningForDistributedPlanning(rangeTableList,
 													 setPartitionedTablesInherited);
+		}
+		else
+		{
+			DistributedPlan *delegatePlan = TryToDelegateFunctionCall(parse);
+			if (delegatePlan != NULL)
+			{
+				result = FinalizePlan(result, delegatePlan);
+			}
 		}
 	}
 	PG_CATCH();
