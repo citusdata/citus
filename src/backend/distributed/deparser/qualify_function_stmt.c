@@ -19,12 +19,13 @@
 #include "postgres.h"
 
 #include "access/htup_details.h"
-#include "distributed/deparser.h"
-#include "utils/syscache.h"
-#include "catalog/pg_proc.h"
 #include "catalog/namespace.h"
+#include "catalog/pg_proc.h"
+#include "distributed/deparser.h"
+#include "distributed/version_compat.h"
 #include "parser/parse_func.h"
 #include "utils/lsyscache.h"
+#include "utils/syscache.h"
 
 /* forward declaration for qualify functions */
 void QualifyFunction(ObjectWithArgs *func);
@@ -116,7 +117,7 @@ QualifyFunctionSchemaName(ObjectWithArgs *func)
 	Oid funcid = InvalidOid;
 	HeapTuple proctup;
 
-	funcid = LookupFuncWithArgs(OBJECT_FUNCTION, func, true);
+	funcid = LookupFuncWithArgsCompat(OBJECT_FUNCTION, func, true);
 	proctup = SearchSysCache1(PROCOID, ObjectIdGetDatum(funcid));
 
 	/*
