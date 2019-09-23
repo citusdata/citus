@@ -921,6 +921,21 @@ StartDistributedExecution(DistributedExecution *execution)
 		execution->errorOnAnyFailure = true;
 	}
 
+	/*
+	 * Prevent unsafe concurrent modifications of replicated shards by taking
+	 * locks.
+	 *
+	 * When modifying a reference tables in MX mode, we take the lock via RPC
+	 * to the first worker in a transaction block, which activates a coordinated
+	 * transaction. We need to do this before determining whether the execution
+	 * should use transaction blocks (see below).
+	 */
+	AcquireExecutorShardLocksForExecution(execution);
+
+	/*
+	 * If the current or previous execution in the current transaction requires
+	 * rollback then we should use transaction blocks.
+	 */
 	execution->isTransaction = InCoordinatedTransaction();
 
 	/*
@@ -937,9 +952,6 @@ StartDistributedExecution(DistributedExecution *execution)
 	{
 		RecordParallelRelationAccessForTaskList(taskList);
 	}
-
-	/* prevent unsafe concurrent modifications */
-	AcquireExecutorShardLocksForExecution(execution);
 }
 
 

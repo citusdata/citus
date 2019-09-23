@@ -34,7 +34,6 @@ extern List * TargetWorkerSetNodeList(TargetWorkerSet targetWorkerSet, LOCKMODE 
 extern void SendCommandToWorker(char *nodeName, int32 nodePort, const char *command);
 extern void SendCommandToWorkerAsUser(char *nodeName, int32 nodePort,
 									  const char *nodeUser, const char *command);
-extern void SendCommandToFirstWorker(char *command);
 extern void SendCommandToWorkers(TargetWorkerSet targetWorkerSet, const char *command);
 extern void SendBareCommandListToWorkers(TargetWorkerSet targetWorkerSet,
 										 List *commandList);

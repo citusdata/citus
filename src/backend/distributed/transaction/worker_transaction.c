@@ -69,30 +69,6 @@ SendCommandToWorkerAsUser(char *nodeName, int32 nodePort, const char *nodeUser,
 
 
 /*
- * SendCommandToFirstWorker sends the given command only to the first worker node
- * sorted by host name and port number using SendCommandToWorker.
- */
-void
-SendCommandToFirstWorker(char *command)
-{
-	List *workerNodeList = ActivePrimaryNodeList(NoLock);
-	WorkerNode *firstWorkerNode = NULL;
-
-	workerNodeList = SortList(workerNodeList, CompareWorkerNodes);
-
-	if (list_length(workerNodeList) == 0)
-	{
-		ereport(ERROR, (errmsg("cannot find a worker node")));
-	}
-
-	firstWorkerNode = (WorkerNode *) linitial(workerNodeList);
-
-	SendCommandToWorker(firstWorkerNode->workerName, firstWorkerNode->workerPort,
-						command);
-}
-
-
-/*
  * SendCommandToWorkers sends a command to all workers in
  * parallel. Commands are committed on the workers when the local
  * transaction commits. The connection are made as the extension

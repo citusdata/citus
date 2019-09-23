@@ -12,7 +12,37 @@ INSERT INTO reference_table_test VALUES (2, 2.0, '2', '2016-12-02');
 INSERT INTO reference_table_test VALUES (3, 3.0, '3', '2016-12-03');
 INSERT INTO reference_table_test VALUES (4, 4.0, '4', '2016-12-04');
 INSERT INTO reference_table_test VALUES (5, 5.0, '5', '2016-12-05');
+-- SELECT .. FOR UPDATE should work on coordinator (takes lock on first worker)
+SELECT value_1, value_2 FROM reference_table_test ORDER BY value_1, value_2 LIMIT 1 FOR UPDATE;
+ value_1 | value_2 
+---------+---------
+       1 |       1
+(1 row)
+
+BEGIN;
+SELECT value_1, value_2 FROM reference_table_test ORDER BY value_1, value_2 LIMIT 1 FOR UPDATE;
+ value_1 | value_2 
+---------+---------
+       1 |       1
+(1 row)
+
+END;
 \c - - - :worker_1_port
+-- SELECT .. FOR UPDATE should work on first worker (takes lock on self)
+SELECT value_1, value_2 FROM reference_table_test ORDER BY value_1, value_2 LIMIT 1 FOR UPDATE;
+ value_1 | value_2 
+---------+---------
+       1 |       1
+(1 row)
+
+BEGIN;
+SELECT value_1, value_2 FROM reference_table_test ORDER BY value_1, value_2 LIMIT 1 FOR UPDATE;
+ value_1 | value_2 
+---------+---------
+       1 |       1
+(1 row)
+
+END;
 -- run some queries on top of the data
 SELECT
 	*
@@ -569,6 +599,21 @@ INSERT INTO reference_table_test_second VALUES (3, 3.0, '3', '2016-12-03');
 INSERT INTO reference_table_test_third VALUES (4, 4.0, '4', '2016-12-04');
 INSERT INTO reference_table_test_third VALUES (5, 5.0, '5', '2016-12-05');
 \c - - - :worker_2_port
+-- SELECT .. FOR UPDATE should work on second worker (takes lock on first worker)
+SELECT value_1, value_2 FROM reference_table_test ORDER BY value_1, value_2 LIMIT 1 FOR UPDATE;
+ value_1 | value_2 
+---------+---------
+       1 |       1
+(1 row)
+
+BEGIN;
+SELECT value_1, value_2 FROM reference_table_test ORDER BY value_1, value_2 LIMIT 1 FOR UPDATE;
+ value_1 | value_2 
+---------+---------
+       1 |       1
+(1 row)
+
+END;
 -- some very basic tests
 SELECT
 	DISTINCT t1.value_1
