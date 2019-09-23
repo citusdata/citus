@@ -286,4 +286,4 @@ test: distributed_functions
 # ---------
 # deparsing logic tests
 # ---------
-test: multi_deparse_function
+test: multi_deparse_function test: multi_deparse_procedure
