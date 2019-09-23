@@ -117,7 +117,7 @@ step "s2-create-table-with-type"
 step "s2-distribute-function"
 {
     CREATE OR REPLACE FUNCTION add (INT,INT) RETURNS INT AS $$ SELECT $1 + $2 $$ LANGUAGE SQL;
-	SELECT create_distributed_function('add(INT,INT)');
+    SELECT create_distributed_function('add(INT,INT)', '$1');
 }
 
 step "s2-begin"

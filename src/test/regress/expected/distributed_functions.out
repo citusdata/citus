@@ -18,7 +18,7 @@ CREATE FUNCTION add(integer, integer) RETURNS integer
     LANGUAGE SQL
     IMMUTABLE
     RETURNS NULL ON NULL INPUT;
-SELECT create_distributed_function('add(int,int)');
+SELECT create_distributed_function('add(int,int)', '$1');
  create_distributed_function 
 -----------------------------
  
@@ -39,7 +39,7 @@ CREATE TYPE dup_result AS (f1 int, f2 text);
 CREATE FUNCTION dup(int) RETURNS dup_result
     AS $$ SELECT $1, CAST($1 AS text) || ' is text' $$
     LANGUAGE SQL;
-SELECT create_distributed_function('dup(int)');
+SELECT create_distributed_function('dup(int)', '$1');
  create_distributed_function 
 -----------------------------
  
@@ -50,6 +50,195 @@ SELECT * FROM run_command_on_workers('SELECT function_tests.dup(42);') ORDER BY 
 -----------+----------+---------+-------------------
  localhost |    57637 | t       | (42,"42 is text")
  localhost |    57638 | t       | (42,"42 is text")
+(2 rows)
+
+CREATE FUNCTION add_with_param_names(val1 integer, val2 integer) RETURNS integer
+    AS 'select $1 + $2;'
+    LANGUAGE SQL
+    IMMUTABLE
+    RETURNS NULL ON NULL INPUT;
+CREATE FUNCTION add_without_param_names(integer, integer) RETURNS integer
+    AS 'select $1 + $2;'
+    LANGUAGE SQL
+    IMMUTABLE
+    RETURNS NULL ON NULL INPUT;
+CREATE FUNCTION add_mixed_param_names(integer, val1 integer) RETURNS integer
+    AS 'select $1 + $2;'
+    LANGUAGE SQL
+    IMMUTABLE
+    RETURNS NULL ON NULL INPUT;
+-- postgres doesn't accept parameter names in the regprocedure input
+SELECT create_distributed_function('add_with_param_names(val1 int, int)', 'val1');
+ERROR:  syntax error at or near "int"
+LINE 1: SELECT create_distributed_function('add_with_param_names(val...
+                                           ^
+CONTEXT:  invalid type name "val1 int"
+-- invalid distribution_arg_name
+SELECT create_distributed_function('add_with_param_names(int, int)', distribution_arg_name:='test');
+ERROR:  cannot distribute the function "add_with_param_names" since the distribution argument is not valid 
+HINT:  Either provide a valid function argument name or a valid "$paramIndex" to create_distributed_function()
+SELECT create_distributed_function('add_with_param_names(int, int)', distribution_arg_name:='int');
+ERROR:  cannot distribute the function "add_with_param_names" since the distribution argument is not valid 
+HINT:  Either provide a valid function argument name or a valid "$paramIndex" to create_distributed_function()
+-- invalid distribution_arg_index
+SELECT create_distributed_function('add_with_param_names(int, int)', '$0');
+ERROR:  cannot distribute the function "add_with_param_names" since the distribution argument is not valid
+HINT:  Either provide a valid function argument name or a valid "$paramIndex" to create_distributed_function()
+SELECT create_distributed_function('add_with_param_names(int, int)', '$-1');
+ERROR:  cannot distribute the function "add_with_param_names" since the distribution argument is not valid
+HINT:  Either provide a valid function argument name or a valid "$paramIndex" to create_distributed_function()
+SELECT create_distributed_function('add_with_param_names(int, int)', '$-10');
+ERROR:  cannot distribute the function "add_with_param_names" since the distribution argument is not valid
+HINT:  Either provide a valid function argument name or a valid "$paramIndex" to create_distributed_function()
+SELECT create_distributed_function('add_with_param_names(int, int)', '$3');
+ERROR:  cannot distribute the function "add_with_param_names" since the distribution argument is not valid
+HINT:  Either provide a valid function argument name or a valid "$paramIndex" to create_distributed_function()
+SELECT create_distributed_function('add_with_param_names(int, int)', '$1a');
+ERROR:  invalid input syntax for integer: "1a"
+-- non existing column name
+SELECT create_distributed_function('add_with_param_names(int, int)', 'aaa');
+ERROR:  cannot distribute the function "add_with_param_names" since the distribution argument is not valid 
+HINT:  Either provide a valid function argument name or a valid "$paramIndex" to create_distributed_function()
+-- NULL function
+SELECT create_distributed_function(NULL);
+ERROR:  the first parameter for create_distributed_function() should be a single a valid function or procedure name followed by a list of parameters in parantheses
+HINT:  skip the parameters with OUT argtype as they are not part of the signature in PostgreSQL
+-- NULL colocate_with
+SELECT create_distributed_function('add_with_param_names(int, int)', '$1', NULL);
+ERROR:  colocate_with parameter should not be NULL
+HINT:  To use the default value, set colocate_with option to "default"
+-- empty string distribution_arg_index
+SELECT create_distributed_function('add_with_param_names(int, int)', '');
+ERROR:  cannot distribute the function "add_with_param_names" since the distribution argument is not valid 
+HINT:  Either provide a valid function argument name or a valid "$paramIndex" to create_distributed_function()
+-- valid distribution with distribution_arg_name
+SELECT create_distributed_function('add_with_param_names(int, int)', distribution_arg_name:='val1');
+ create_distributed_function 
+-----------------------------
+ 
+(1 row)
+
+-- valid distribution with distribution_arg_name -- case insensitive
+SELECT create_distributed_function('add_with_param_names(int, int)', distribution_arg_name:='VaL1');
+ create_distributed_function 
+-----------------------------
+ 
+(1 row)
+
+-- valid distribution with distribution_arg_index
+SELECT create_distributed_function('add_with_param_names(int, int)','$1');
+ create_distributed_function 
+-----------------------------
+ 
+(1 row)
+
+-- a function cannot be colocated with a table that is not "streaming" replicated 
+SET citus.shard_replication_factor TO 2;
+CREATE TABLE replicated_table_func_test (a int);
+SET citus.replication_model TO "statement";
+SELECT create_distributed_table('replicated_table_func_test', 'a');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+SELECT create_distributed_function('add_with_param_names(int, int)', '$1', colocate_with:='replicated_table_func_test');
+ERROR:  cannot colocate function "add_with_param_names" and table "replicated_table_func_test"
+DETAIL:  Citus currently only supports colocating function with distributed tables that are created using streaming replication model.
+HINT:  When distributing tables make sure that "citus.replication_model" is set to "streaming"
+-- a function cannot be colocated with a different distribution argument type
+SET citus.shard_replication_factor TO 1;
+CREATE TABLE replicated_table_func_test_2 (a bigint);
+SET citus.replication_model TO "streaming";
+SELECT create_distributed_table('replicated_table_func_test_2', 'a');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+SELECT create_distributed_function('add_with_param_names(int, int)', 'val1', colocate_with:='replicated_table_func_test_2');
+ERROR:  cannot colocate function "replicated_table_func_test_2" and table "add_with_param_names" because distribution column types don't match
+-- colocate_with cannot be used without distribution key
+SELECT create_distributed_function('add_with_param_names(int, int)', colocate_with:='replicated_table_func_test_2');
+ERROR:  cannot distribute the function "add_with_param_names" since the distribution argument is not valid 
+HINT:  To provide "colocate_with" option, the distribution argument parameter should also be provided
+-- a function cannot be colocated with a local table
+CREATE TABLE replicated_table_func_test_3 (a bigint);
+SELECT create_distributed_function('add_with_param_names(int, int)', 'val1', colocate_with:='replicated_table_func_test_3');
+ERROR:  relation replicated_table_func_test_3 is not distributed
+-- a function cannot be colocated with a reference table
+SELECT create_reference_table('replicated_table_func_test_3');
+ create_reference_table 
+------------------------
+ 
+(1 row)
+
+SELECT create_distributed_function('add_with_param_names(int, int)', 'val1', colocate_with:='replicated_table_func_test_3');
+ERROR:  cannot colocate function "add_with_param_names" and table "replicated_table_func_test_3" because colocate_with option is only supported for hash distributed tables.
+-- finally, colocate the function with a distributed table
+SET citus.shard_replication_factor TO 1;
+CREATE TABLE replicated_table_func_test_4 (a int);
+SET citus.replication_model TO "streaming";
+SELECT create_distributed_table('replicated_table_func_test_4', 'a');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+SELECT create_distributed_function('add_with_param_names(int, int)', '$1', colocate_with:='replicated_table_func_test_4');
+ create_distributed_function 
+-----------------------------
+ 
+(1 row)
+
+-- show that the colocationIds are the same
+SELECT pg_dist_partition.colocationid = objects.colocationid as table_and_function_colocated
+FROM pg_dist_partition, citus.pg_dist_object as objects 
+WHERE pg_dist_partition.logicalrelid = 'replicated_table_func_test_4'::regclass AND 
+	  objects.objid = 'add_with_param_names(int, int)'::regprocedure;
+ table_and_function_colocated 
+------------------------------
+ t
+(1 row)
+
+-- now, re-distributed with the default colocation option, we should still see that the same colocation
+-- group preserved, because we're using the default shard creationg settings
+SELECT create_distributed_function('add_with_param_names(int, int)', 'val1');
+ create_distributed_function 
+-----------------------------
+ 
+(1 row)
+
+SELECT pg_dist_partition.colocationid = objects.colocationid as table_and_function_colocated
+FROM pg_dist_partition, citus.pg_dist_object as objects 
+WHERE pg_dist_partition.logicalrelid = 'replicated_table_func_test_4'::regclass AND 
+	  objects.objid = 'add_with_param_names(int, int)'::regprocedure;
+ table_and_function_colocated 
+------------------------------
+ t
+(1 row)
+
+-- if not paremeters are supplied, we'd see that function doesn't have
+-- distribution_argument_index and colocationid
+SELECT create_distributed_function('add_mixed_param_names(int, int)');
+ create_distributed_function 
+-----------------------------
+ 
+(1 row)
+
+SELECT distribution_argument_index is NULL, colocationid is NULL from citus.pg_dist_object
+WHERE objid = 'add_mixed_param_names(int, int)'::regprocedure;
+ ?column? | ?column? 
+----------+----------
+ t        | t
+(1 row)
+
+-- also show that we can use the function
+SELECT * FROM run_command_on_workers('SELECT function_tests.add_mixed_param_names(2,3);') ORDER BY 1,2;
+ nodename  | nodeport | success | result 
+-----------+----------+---------+--------
+ localhost |    57637 | t       | 5
+ localhost |    57638 | t       | 5
 (2 rows)
 
 -- clear objects
