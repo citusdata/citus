@@ -53,7 +53,6 @@
 
 
 static char * LocalGroupIdUpdateCommand(int32 groupId);
-static void MarkNodeHasMetadata(char *nodeName, int32 nodePort, bool hasMetadata);
 static void UpdateDistNodeBoolAttr(char *nodeName, int32 nodePort, int attrNum,
 								   bool value);
 static List * SequenceDDLCommandsForTable(Oid relationId);
@@ -76,10 +75,24 @@ start_metadata_sync_to_node(PG_FUNCTION_ARGS)
 {
 	text *nodeName = PG_GETARG_TEXT_P(0);
 	int32 nodePort = PG_GETARG_INT32(1);
-	char *nodeNameString = text_to_cstring(nodeName);
-	char *escapedNodeName = quote_literal_cstr(nodeNameString);
 
+	char *nodeNameString = text_to_cstring(nodeName);
+
+	StartMetadatSyncToNode(nodeNameString, nodePort);
+
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * StartMetadatSyncToNode is the internal API for
+ * start_metadata_sync_to_node().
+ */
+void
+StartMetadatSyncToNode(char *nodeNameString, int32 nodePort)
+{
 	WorkerNode *workerNode = NULL;
+	char *escapedNodeName = quote_literal_cstr(nodeNameString);
 
 	/* fail if metadata synchronization doesn't succeed */
 	bool raiseInterrupts = true;
@@ -119,13 +132,11 @@ start_metadata_sync_to_node(PG_FUNCTION_ARGS)
 		 * If this is a secondary node we can't actually sync metadata to it; we assume
 		 * the primary node is receiving metadata.
 		 */
-		PG_RETURN_VOID();
+		return;
 	}
 
 	SyncMetadataSnapshotToNode(workerNode, raiseInterrupts);
 	MarkNodeMetadataSynced(workerNode->workerName, workerNode->workerPort, true);
-
-	PG_RETURN_VOID();
 }
 
 
@@ -945,7 +956,7 @@ LocalGroupIdUpdateCommand(int32 groupId)
  * MarkNodeHasMetadata function sets the hasmetadata column of the specified worker in
  * pg_dist_node to hasMetadata.
  */
-static void
+void
 MarkNodeHasMetadata(char *nodeName, int32 nodePort, bool hasMetadata)
 {
 	UpdateDistNodeBoolAttr(nodeName, nodePort,

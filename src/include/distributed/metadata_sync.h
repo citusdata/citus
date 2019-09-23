@@ -21,6 +21,7 @@ extern int MetadataSyncInterval;
 extern int MetadataSyncRetryInterval;
 
 /* Functions declarations for metadata syncing */
+extern void StartMetadatSyncToNode(char *nodeNameString, int32 nodePort);
 extern bool ClusterHasKnownMetadataWorkers(void);
 extern bool ShouldSyncTableMetadata(Oid relationId);
 extern List * MetadataCreateCommands(void);
@@ -40,6 +41,7 @@ extern char * CreateSchemaDDLCommand(Oid schemaId);
 extern char * PlacementUpsertCommand(uint64 shardId, uint64 placementId, int shardState,
 									 uint64 shardLength, int32 groupId);
 extern void CreateTableMetadataOnWorkers(Oid relationId);
+extern void MarkNodeHasMetadata(char *nodeName, int32 nodePort, bool hasMetadata);
 extern void MarkNodeMetadataSynced(char *nodeName, int32 nodePort, bool synced);
 extern bool SyncMetadataToNodes(void);
 extern bool SendOptionalCommandListToWorkerInTransaction(char *nodeName, int32 nodePort,

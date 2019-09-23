@@ -20,6 +20,7 @@
 #include "catalog/namespace.h"
 #include "catalog/objectaddress.h"
 #include "catalog/pg_namespace.h"
+#include "catalog/pg_proc.h"
 #include "catalog/pg_type.h"
 #include "distributed/metadata/distobject.h"
 #include "distributed/metadata/pg_dist_object.h"
@@ -257,6 +258,63 @@ IsObjectDistributed(const ObjectAddress *address)
 	relation_close(pgDistObjectRel, AccessShareLock);
 
 	return result;
+}
+
+
+/*
+ * ClusterHasDistributedFunctionWithDistArgument returns true if there
+ * is at least one distributed function in the cluster with distribution
+ * argument index set.
+ */
+bool
+ClusterHasDistributedFunctionWithDistArgument(void)
+{
+	bool foundDistributedFunction = false;
+
+	SysScanDesc pgDistObjectScan = NULL;
+	HeapTuple pgDistObjectTup = NULL;
+
+	Relation pgDistObjectRel = heap_open(DistObjectRelationId(), AccessShareLock);
+
+#if (PG_VERSION_NUM >= 110000)
+	TupleDesc tupleDescriptor = RelationGetDescr(pgDistObjectRel);
+#endif
+
+	pgDistObjectScan =
+		systable_beginscan(pgDistObjectRel, InvalidOid, false, NULL, 0, NULL);
+	while (HeapTupleIsValid(pgDistObjectTup = systable_getnext(pgDistObjectScan)))
+	{
+		Form_pg_dist_object pg_dist_object =
+			(Form_pg_dist_object) GETSTRUCT(pgDistObjectTup);
+
+		if (pg_dist_object->classid == ProcedureRelationId)
+		{
+			bool distArgumentIsNull = false;
+#if (PG_VERSION_NUM >= 110000)
+			distArgumentIsNull =
+				heap_attisnull(pgDistObjectTup,
+							   Anum_pg_dist_object_distribution_argument_index,
+							   tupleDescriptor);
+#else
+			distArgumentIsNull =
+				heap_attisnull(pgDistObjectTup,
+							   Anum_pg_dist_object_distribution_argument_index);
+#endif
+
+			/* we found one distributed function that has an distribution argument */
+			if (!distArgumentIsNull)
+			{
+				foundDistributedFunction = true;
+
+				break;
+			}
+		}
+	}
+
+	systable_endscan(pgDistObjectScan);
+	relation_close(pgDistObjectRel, AccessShareLock);
+
+	return foundDistributedFunction;
 }
 
 

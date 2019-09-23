@@ -18,19 +18,6 @@ CREATE FUNCTION add(integer, integer) RETURNS integer
     LANGUAGE SQL
     IMMUTABLE
     RETURNS NULL ON NULL INPUT;
-SELECT create_distributed_function('add(int,int)', '$1');
- create_distributed_function 
------------------------------
- 
-(1 row)
-
-SELECT * FROM run_command_on_workers('SELECT function_tests.add(2,3);') ORDER BY 1,2;
- nodename  | nodeport | success | result 
------------+----------+---------+--------
- localhost |    57637 | t       | 5
- localhost |    57638 | t       | 5
-(2 rows)
-
 -- Test some combination of functions without ddl propagation
 -- This will prevent the workers from having those types created. They are
 -- created just-in-time on function distribution
@@ -39,19 +26,6 @@ CREATE TYPE dup_result AS (f1 int, f2 text);
 CREATE FUNCTION dup(int) RETURNS dup_result
     AS $$ SELECT $1, CAST($1 AS text) || ' is text' $$
     LANGUAGE SQL;
-SELECT create_distributed_function('dup(int)', '$1');
- create_distributed_function 
------------------------------
- 
-(1 row)
-
-SELECT * FROM run_command_on_workers('SELECT function_tests.dup(42);') ORDER BY 1,2;
- nodename  | nodeport | success |      result       
------------+----------+---------+-------------------
- localhost |    57637 | t       | (42,"42 is text")
- localhost |    57638 | t       | (42,"42 is text")
-(2 rows)
-
 CREATE FUNCTION add_with_param_names(val1 integer, val2 integer) RETURNS integer
     AS 'select $1 + $2;'
     LANGUAGE SQL
@@ -67,6 +41,71 @@ CREATE FUNCTION add_mixed_param_names(integer, val1 integer) RETURNS integer
     LANGUAGE SQL
     IMMUTABLE
     RETURNS NULL ON NULL INPUT;
+-- make sure that none of the active and primary nodes hasmetadata
+-- at the start of the test
+select bool_or(hasmetadata) from pg_dist_node WHERE isactive AND  noderole = 'primary';
+ bool_or 
+---------
+ f
+(1 row)
+
+-- if not paremeters are supplied, we'd see that function doesn't have
+-- distribution_argument_index and colocationid
+SELECT create_distributed_function('add_mixed_param_names(int, int)');
+ create_distributed_function 
+-----------------------------
+ 
+(1 row)
+
+SELECT distribution_argument_index is NULL, colocationid is NULL from citus.pg_dist_object
+WHERE objid = 'add_mixed_param_names(int, int)'::regprocedure;
+ ?column? | ?column? 
+----------+----------
+ t        | t
+(1 row)
+
+-- also show that we can use the function
+SELECT * FROM run_command_on_workers('SELECT function_tests.add_mixed_param_names(2,3);') ORDER BY 1,2;
+ nodename  | nodeport | success | result 
+-----------+----------+---------+--------
+ localhost |    57637 | t       | 5
+ localhost |    57638 | t       | 5
+(2 rows)
+
+-- make sure that none of the active and primary nodes hasmetadata
+-- since the function doesn't have a parameter
+select bool_or(hasmetadata) from pg_dist_node WHERE isactive AND  noderole = 'primary';
+ bool_or 
+---------
+ f
+(1 row)
+
+SELECT create_distributed_function('dup(int)', '$1');
+ create_distributed_function 
+-----------------------------
+ 
+(1 row)
+
+SELECT * FROM run_command_on_workers('SELECT function_tests.dup(42);') ORDER BY 1,2;
+ nodename  | nodeport | success |      result       
+-----------+----------+---------+-------------------
+ localhost |    57637 | t       | (42,"42 is text")
+ localhost |    57638 | t       | (42,"42 is text")
+(2 rows)
+
+SELECT create_distributed_function('add(int,int)', '$1');
+ create_distributed_function 
+-----------------------------
+ 
+(1 row)
+
+SELECT * FROM run_command_on_workers('SELECT function_tests.add(2,3);') ORDER BY 1,2;
+ nodename  | nodeport | success | result 
+-----------+----------+---------+--------
+ localhost |    57637 | t       | 5
+ localhost |    57638 | t       | 5
+(2 rows)
+
 -- postgres doesn't accept parameter names in the regprocedure input
 SELECT create_distributed_function('add_with_param_names(val1 int, int)', 'val1');
 ERROR:  syntax error at or near "int"
@@ -111,12 +150,52 @@ HINT:  To use the default value, set colocate_with option to "default"
 SELECT create_distributed_function('add_with_param_names(int, int)', '');
 ERROR:  cannot distribute the function "add_with_param_names" since the distribution argument is not valid 
 HINT:  Either provide a valid function argument name or a valid "$paramIndex" to create_distributed_function()
+-- The first distributed function syncs the metadata to nodes
+-- and metadata syncing is not supported within transaction blocks
+BEGIN;
+	SELECT create_distributed_function('add_with_param_names(int, int)', distribution_arg_name:='val1');
+ create_distributed_function 
+-----------------------------
+ 
+(1 row)
+
+ROLLBACK;
+-- make sure that none of the nodes have the function because we've rollbacked
+SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add_with_param_names';$$);
+ run_command_on_workers 
+------------------------
+ (localhost,57637,t,0)
+ (localhost,57638,t,0)
+(2 rows)
+
+-- make sure that none of the active and primary nodes hasmetadata
+select bool_or(hasmetadata) from pg_dist_node WHERE isactive AND  noderole = 'primary';
+ bool_or 
+---------
+ t
+(1 row)
+
 -- valid distribution with distribution_arg_name
 SELECT create_distributed_function('add_with_param_names(int, int)', distribution_arg_name:='val1');
  create_distributed_function 
 -----------------------------
  
 (1 row)
+
+-- make sure that the primary nodes are now metadata synced
+select bool_and(hasmetadata) from pg_dist_node WHERE isactive AND  noderole = 'primary';
+ bool_and 
+----------
+ t
+(1 row)
+
+-- make sure that both of the nodes have the function because we've succeeded
+SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add_with_param_names';$$);
+ run_command_on_workers 
+------------------------
+ (localhost,57637,t,1)
+ (localhost,57638,t,1)
+(2 rows)
 
 -- valid distribution with distribution_arg_name -- case insensitive
 SELECT create_distributed_function('add_with_param_names(int, int)', distribution_arg_name:='VaL1');
@@ -218,39 +297,44 @@ WHERE pg_dist_partition.logicalrelid = 'replicated_table_func_test_4'::regclass 
  t
 (1 row)
 
--- if not paremeters are supplied, we'd see that function doesn't have
--- distribution_argument_index and colocationid
-SELECT create_distributed_function('add_mixed_param_names(int, int)');
- create_distributed_function 
------------------------------
+-- clear objects
+SELECT stop_metadata_sync_to_node(nodename,nodeport) FROM pg_dist_node WHERE isactive AND noderole = 'primary';
+ stop_metadata_sync_to_node 
+----------------------------
  
-(1 row)
-
-SELECT distribution_argument_index is NULL, colocationid is NULL from citus.pg_dist_object
-WHERE objid = 'add_mixed_param_names(int, int)'::regprocedure;
- ?column? | ?column? 
-----------+----------
- t        | t
-(1 row)
-
--- also show that we can use the function
-SELECT * FROM run_command_on_workers('SELECT function_tests.add_mixed_param_names(2,3);') ORDER BY 1,2;
- nodename  | nodeport | success | result 
------------+----------+---------+--------
- localhost |    57637 | t       | 5
- localhost |    57638 | t       | 5
+ 
 (2 rows)
 
--- clear objects
 SET client_min_messages TO error; -- suppress cascading objects dropping
 DROP SCHEMA function_tests CASCADE;
-SELECT run_command_on_workers($$DROP SCHEMA function_tests CASCADE;$$);
-      run_command_on_workers       
------------------------------------
- (localhost,57637,t,"DROP SCHEMA")
- (localhost,57638,t,"DROP SCHEMA")
-(2 rows)
+-- This is hacky, but we should clean-up the resources as below
+\c - - - :worker_1_port
+SET client_min_messages TO error; -- suppress cascading objects dropping
+UPDATE pg_dist_local_group SET groupid = 0;
+SELECT worker_drop_distributed_table(logicalrelid::text) FROM pg_dist_partition WHERE logicalrelid::text ILIKE '%replicated_table_func_test%';
+ worker_drop_distributed_table 
+-------------------------------
+ 
+ 
+ 
+(3 rows)
 
+TRUNCATE pg_dist_node;
+DROP SCHEMA function_tests CASCADE;
+\c - - - :worker_2_port
+SET client_min_messages TO error; -- suppress cascading objects dropping
+UPDATE pg_dist_local_group SET groupid = 0;
+SELECT worker_drop_distributed_table(logicalrelid::text) FROM pg_dist_partition WHERE logicalrelid::text ILIKE '%replicated_table_func_test%';
+ worker_drop_distributed_table 
+-------------------------------
+ 
+ 
+ 
+(3 rows)
+
+TRUNCATE pg_dist_node;
+DROP SCHEMA function_tests CASCADE;
+\c - - - :master_port
 DROP USER functionuser;
 SELECT run_command_on_workers($$DROP USER functionuser;$$);
      run_command_on_workers      

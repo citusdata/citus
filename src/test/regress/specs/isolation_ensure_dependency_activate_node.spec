@@ -2,13 +2,21 @@
 # add single one of the nodes for the purpose of the test
 setup
 {
+    CREATE OR REPLACE FUNCTION wait_until_metadata_sync(timeout INTEGER)
+    RETURNS void
+    LANGUAGE C STRICT VOLATILE
+    AS 'citus', $$wait_until_metadata_sync$$;
+
     SELECT master_remove_node(nodename, nodeport) FROM pg_dist_node;
-	SELECT 1 FROM master_add_node('localhost', 57637);
+    SELECT 1 FROM master_add_node('localhost', 57637);
 }
 
 # ensure that both nodes exists for the remaining of the isolation tests
 teardown
 {
+    SELECT 1 FROM master_add_node('localhost', 57637);
+    SELECT 1 FROM master_add_node('localhost', 57638);
+
     -- schema drops are not cascaded
     SELECT run_command_on_workers($$DROP SCHEMA IF EXISTS myschema CASCADE;$$);
     DROP SCHEMA IF EXISTS myschema CASCADE;
@@ -36,7 +44,7 @@ teardown
     -- similarly drop the function in the workers manually
     SELECT run_command_on_workers($$DROP FUNCTION IF EXISTS add(INT,INT) CASCADE;$$); 
 
-	SELECT master_remove_node(nodename, nodeport) FROM pg_dist_node;
+    SELECT master_remove_node(nodename, nodeport) FROM pg_dist_node;
 }
 
 session "s1"
@@ -150,6 +158,7 @@ step "s2-print-distributed-objects"
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
 }
 
+
 session "s3"
 
 step "s3-public-schema"
@@ -178,6 +187,17 @@ step "s3-begin"
 step "s3-commit"
 {
 	COMMIT;
+}
+
+
+step "s3-wait-for-metadata-sync"
+{
+    SELECT public.wait_until_metadata_sync(5000);
+}
+
+step "s3-listen-channel"
+{
+   LISTEN metadata_sync;
 }
 
 session "s4"
@@ -216,6 +236,7 @@ step "s4-commit"
 	COMMIT;
 }
 
+
 # schema only tests
 permutation "s1-print-distributed-objects" "s1-begin" "s1-add-worker" "s2-public-schema" "s2-create-table" "s1-commit" "s2-print-distributed-objects"
 permutation "s1-print-distributed-objects" "s1-begin" "s2-begin" "s1-add-worker" "s2-public-schema" "s2-create-table" "s1-commit" "s2-commit" "s2-print-distributed-objects"
@@ -236,6 +257,14 @@ permutation "s1-print-distributed-objects" "s1-begin" "s2-public-schema" "s2-cre
 permutation "s1-print-distributed-objects" "s1-begin" "s2-begin" "s2-create-schema" "s2-create-type" "s2-create-table-with-type" "s1-add-worker" "s2-commit" "s1-commit" "s2-print-distributed-objects"
 
 # distributed function tests
-permutation "s1-print-distributed-objects" "s1-begin" "s1-add-worker" "s2-public-schema" "s2-distribute-function" "s1-commit" "s2-print-distributed-objects"
-permutation "s1-print-distributed-objects" "s1-begin" "s2-public-schema" "s2-distribute-function" "s1-add-worker" "s1-commit" "s2-print-distributed-objects"
-permutation "s1-print-distributed-objects" "s1-begin" "s2-begin" "s2-create-schema" "s2-distribute-function" "s1-add-worker" "s2-commit" "s1-commit" "s2-print-distributed-objects"
+# isolation tests are not very simple psql, so trigger NOTIFY reliably for 
+# s3-wait-for-metadata-sync step, we do "s2-begin" followed directly by 
+# "s2-commit", because "COMMIT"  syncs the messages
+
+permutation "s1-print-distributed-objects" "s1-begin" "s1-add-worker" "s2-public-schema" "s2-distribute-function" "s1-commit" "s2-begin" "s2-commit"  "s3-wait-for-metadata-sync" "s1-print-distributed-objects"
+permutation "s1-print-distributed-objects" "s1-begin" "s2-public-schema" "s2-distribute-function" "s2-begin" "s2-commit" "s3-wait-for-metadata-sync" "s1-add-worker" "s1-commit" "s3-wait-for-metadata-sync" "s2-print-distributed-objects"
+
+# we cannot run the following operations concurrently
+# the problem is that NOTIFY event doesn't (reliably) happen before COMMIT
+# so we have to commit s2 before s1 starts
+permutation "s1-print-distributed-objects" "s2-begin" "s2-create-schema" "s2-distribute-function" "s2-commit" "s3-wait-for-metadata-sync" "s1-begin" "s1-add-worker" "s1-commit" "s3-wait-for-metadata-sync" "s2-print-distributed-objects"
