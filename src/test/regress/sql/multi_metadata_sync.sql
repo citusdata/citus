@@ -423,7 +423,7 @@ SELECT logicalrelid, repmodel FROM pg_dist_partition WHERE logicalrelid = 'mx_te
 
 DROP TABLE mx_temp_drop_test;
 
--- Check that MX tables can be created with SERIAL columns, but error out on metadata sync
+-- Check that MX tables can be created with SERIAL columns
 \c - - - :master_port	
 SET citus.shard_count TO 3;
 SET citus.shard_replication_factor TO 1;
@@ -432,18 +432,23 @@ SET citus.replication_model TO 'streaming';
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
 SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
 
-CREATE TABLE mx_table_with_small_sequence(a int, b SERIAL);
+-- sync table with serial column after create_distributed_table
+CREATE TABLE mx_table_with_small_sequence(a int, b SERIAL, c SMALLSERIAL);
 SELECT create_distributed_table('mx_table_with_small_sequence', 'a');
-
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 DROP TABLE mx_table_with_small_sequence;
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 
--- Show that create_distributed_table errors out if the table has a SERIAL column and 
--- there are metadata workers
-CREATE TABLE mx_table_with_small_sequence(a int, b SERIAL);
+-- Show that create_distributed_table works with a serial column
+CREATE TABLE mx_table_with_small_sequence(a int, b SERIAL, c SMALLSERIAL);
 SELECT create_distributed_table('mx_table_with_small_sequence', 'a');
-DROP TABLE mx_table_with_small_sequence;
+INSERT INTO mx_table_with_small_sequence VALUES (0);
+
+\c - - - :worker_1_port
+INSERT INTO mx_table_with_small_sequence VALUES (1), (3);
+
+\c - - - :master_port
+SET citus.shard_replication_factor TO 1;
+SET citus.replication_model TO 'streaming';
 
 -- Create an MX table with (BIGSERIAL) sequences
 CREATE TABLE mx_table_with_sequence(a int, b BIGSERIAL, c BIGSERIAL);
@@ -474,9 +479,16 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_table_with_
 SELECT nextval('mx_table_with_sequence_b_seq');
 SELECT nextval('mx_table_with_sequence_c_seq');
 
+INSERT INTO mx_table_with_small_sequence VALUES (2), (4);
+
 -- Check that dropping the mx table with sequences works as expected
 \c - - - :master_port
-DROP TABLE mx_table_with_sequence;
+
+-- check our small sequence values
+SELECT a, b, c FROM mx_table_with_small_sequence ORDER BY a,b,c;
+
+-- Check that dropping the mx table with sequences works as expected
+DROP TABLE mx_table_with_small_sequence, mx_table_with_sequence;
 \d mx_table_with_sequence
 \ds mx_table_with_sequence_b_seq
 \ds mx_table_with_sequence_c_seq

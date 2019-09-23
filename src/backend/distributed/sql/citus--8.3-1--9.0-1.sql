@@ -147,4 +147,12 @@ ALTER TABLE pg_dist_node ADD COLUMN metadatasynced BOOLEAN DEFAULT FALSE;
 COMMENT ON COLUMN pg_dist_node.metadatasynced IS
     'indicates whether the node has the most recent metadata';
 
+CREATE FUNCTION worker_apply_sequence_command(create_sequence_command text,
+                                              sequence_type_id regtype DEFAULT 'bigint'::regtype)
+    RETURNS VOID
+    LANGUAGE C STRICT
+    AS 'MODULE_PATHNAME', $$worker_apply_sequence_command$$;
+COMMENT ON FUNCTION worker_apply_sequence_command(text,regtype)
+    IS 'create a sequence which produces globally unique values';
+
 RESET search_path;

@@ -64,7 +64,7 @@ SELECT unnest(master_metadata_snapshot()) order by 1;
  INSERT INTO pg_dist_partition (logicalrelid, partmethod, partkey, colocationid, repmodel) VALUES ('public.mx_test_table'::regclass, 'h', column_name_to_column('public.mx_test_table','col_1'), 0, 's')
  INSERT INTO pg_dist_placement (shardid, shardstate, shardlength, groupid, placementid) VALUES (1310000, 1, 0, 1, 100000),(1310001, 1, 0, 2, 100001),(1310002, 1, 0, 1, 100002),(1310003, 1, 0, 2, 100003),(1310004, 1, 0, 1, 100004),(1310005, 1, 0, 2, 100005),(1310006, 1, 0, 1, 100006),(1310007, 1, 0, 2, 100007)
  INSERT INTO pg_dist_shard (logicalrelid, shardid, shardstorage, shardminvalue, shardmaxvalue) VALUES ('public.mx_test_table'::regclass, 1310000, 't', '-2147483648', '-1610612737'),('public.mx_test_table'::regclass, 1310001, 't', '-1610612736', '-1073741825'),('public.mx_test_table'::regclass, 1310002, 't', '-1073741824', '-536870913'),('public.mx_test_table'::regclass, 1310003, 't', '-536870912', '-1'),('public.mx_test_table'::regclass, 1310004, 't', '0', '536870911'),('public.mx_test_table'::regclass, 1310005, 't', '536870912', '1073741823'),('public.mx_test_table'::regclass, 1310006, 't', '1073741824', '1610612735'),('public.mx_test_table'::regclass, 1310007, 't', '1610612736', '2147483647')
- SELECT worker_apply_sequence_command ('CREATE SEQUENCE IF NOT EXISTS public.mx_test_table_col_3_seq INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 NO CYCLE')
+ SELECT worker_apply_sequence_command ('CREATE SEQUENCE IF NOT EXISTS public.mx_test_table_col_3_seq INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 NO CYCLE','bigint')
  SELECT worker_create_truncate_trigger('public.mx_test_table')
  SELECT worker_drop_distributed_table(logicalrelid::regclass::text) FROM pg_dist_partition
  TRUNCATE pg_dist_node CASCADE
@@ -85,7 +85,7 @@ SELECT unnest(master_metadata_snapshot()) order by 1;
  INSERT INTO pg_dist_partition (logicalrelid, partmethod, partkey, colocationid, repmodel) VALUES ('public.mx_test_table'::regclass, 'h', column_name_to_column('public.mx_test_table','col_1'), 0, 's')
  INSERT INTO pg_dist_placement (shardid, shardstate, shardlength, groupid, placementid) VALUES (1310000, 1, 0, 1, 100000),(1310001, 1, 0, 2, 100001),(1310002, 1, 0, 1, 100002),(1310003, 1, 0, 2, 100003),(1310004, 1, 0, 1, 100004),(1310005, 1, 0, 2, 100005),(1310006, 1, 0, 1, 100006),(1310007, 1, 0, 2, 100007)
  INSERT INTO pg_dist_shard (logicalrelid, shardid, shardstorage, shardminvalue, shardmaxvalue) VALUES ('public.mx_test_table'::regclass, 1310000, 't', '-2147483648', '-1610612737'),('public.mx_test_table'::regclass, 1310001, 't', '-1610612736', '-1073741825'),('public.mx_test_table'::regclass, 1310002, 't', '-1073741824', '-536870913'),('public.mx_test_table'::regclass, 1310003, 't', '-536870912', '-1'),('public.mx_test_table'::regclass, 1310004, 't', '0', '536870911'),('public.mx_test_table'::regclass, 1310005, 't', '536870912', '1073741823'),('public.mx_test_table'::regclass, 1310006, 't', '1073741824', '1610612735'),('public.mx_test_table'::regclass, 1310007, 't', '1610612736', '2147483647')
- SELECT worker_apply_sequence_command ('CREATE SEQUENCE IF NOT EXISTS public.mx_test_table_col_3_seq INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 NO CYCLE')
+ SELECT worker_apply_sequence_command ('CREATE SEQUENCE IF NOT EXISTS public.mx_test_table_col_3_seq INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 NO CYCLE','bigint')
  SELECT worker_create_truncate_trigger('public.mx_test_table')
  SELECT worker_drop_distributed_table(logicalrelid::regclass::text) FROM pg_dist_partition
  TRUNCATE pg_dist_node CASCADE
@@ -109,7 +109,7 @@ SELECT unnest(master_metadata_snapshot()) order by 1;
  INSERT INTO pg_dist_partition (logicalrelid, partmethod, partkey, colocationid, repmodel) VALUES ('mx_testing_schema.mx_test_table'::regclass, 'h', column_name_to_column('mx_testing_schema.mx_test_table','col_1'), 0, 's')
  INSERT INTO pg_dist_placement (shardid, shardstate, shardlength, groupid, placementid) VALUES (1310000, 1, 0, 1, 100000),(1310001, 1, 0, 2, 100001),(1310002, 1, 0, 1, 100002),(1310003, 1, 0, 2, 100003),(1310004, 1, 0, 1, 100004),(1310005, 1, 0, 2, 100005),(1310006, 1, 0, 1, 100006),(1310007, 1, 0, 2, 100007)
  INSERT INTO pg_dist_shard (logicalrelid, shardid, shardstorage, shardminvalue, shardmaxvalue) VALUES ('mx_testing_schema.mx_test_table'::regclass, 1310000, 't', '-2147483648', '-1610612737'),('mx_testing_schema.mx_test_table'::regclass, 1310001, 't', '-1610612736', '-1073741825'),('mx_testing_schema.mx_test_table'::regclass, 1310002, 't', '-1073741824', '-536870913'),('mx_testing_schema.mx_test_table'::regclass, 1310003, 't', '-536870912', '-1'),('mx_testing_schema.mx_test_table'::regclass, 1310004, 't', '0', '536870911'),('mx_testing_schema.mx_test_table'::regclass, 1310005, 't', '536870912', '1073741823'),('mx_testing_schema.mx_test_table'::regclass, 1310006, 't', '1073741824', '1610612735'),('mx_testing_schema.mx_test_table'::regclass, 1310007, 't', '1610612736', '2147483647')
- SELECT worker_apply_sequence_command ('CREATE SEQUENCE IF NOT EXISTS mx_testing_schema.mx_test_table_col_3_seq INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 NO CYCLE')
+ SELECT worker_apply_sequence_command ('CREATE SEQUENCE IF NOT EXISTS mx_testing_schema.mx_test_table_col_3_seq INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 NO CYCLE','bigint')
  SELECT worker_create_truncate_trigger('mx_testing_schema.mx_test_table')
  SELECT worker_drop_distributed_table(logicalrelid::regclass::text) FROM pg_dist_partition
  TRUNCATE pg_dist_node CASCADE
@@ -137,7 +137,7 @@ SELECT unnest(master_metadata_snapshot()) order by 1;
  INSERT INTO pg_dist_partition (logicalrelid, partmethod, partkey, colocationid, repmodel) VALUES ('mx_testing_schema.mx_test_table'::regclass, 'h', column_name_to_column('mx_testing_schema.mx_test_table','col_1'), 0, 's')
  INSERT INTO pg_dist_placement (shardid, shardstate, shardlength, groupid, placementid) VALUES (1310000, 1, 0, 1, 100000),(1310001, 1, 0, 2, 100001),(1310002, 1, 0, 1, 100002),(1310003, 1, 0, 2, 100003),(1310004, 1, 0, 1, 100004),(1310005, 1, 0, 2, 100005),(1310006, 1, 0, 1, 100006),(1310007, 1, 0, 2, 100007)
  INSERT INTO pg_dist_shard (logicalrelid, shardid, shardstorage, shardminvalue, shardmaxvalue) VALUES ('mx_testing_schema.mx_test_table'::regclass, 1310000, 't', '-2147483648', '-1610612737'),('mx_testing_schema.mx_test_table'::regclass, 1310001, 't', '-1610612736', '-1073741825'),('mx_testing_schema.mx_test_table'::regclass, 1310002, 't', '-1073741824', '-536870913'),('mx_testing_schema.mx_test_table'::regclass, 1310003, 't', '-536870912', '-1'),('mx_testing_schema.mx_test_table'::regclass, 1310004, 't', '0', '536870911'),('mx_testing_schema.mx_test_table'::regclass, 1310005, 't', '536870912', '1073741823'),('mx_testing_schema.mx_test_table'::regclass, 1310006, 't', '1073741824', '1610612735'),('mx_testing_schema.mx_test_table'::regclass, 1310007, 't', '1610612736', '2147483647')
- SELECT worker_apply_sequence_command ('CREATE SEQUENCE IF NOT EXISTS mx_testing_schema.mx_test_table_col_3_seq INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 NO CYCLE')
+ SELECT worker_apply_sequence_command ('CREATE SEQUENCE IF NOT EXISTS mx_testing_schema.mx_test_table_col_3_seq INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 NO CYCLE','bigint')
  SELECT worker_create_truncate_trigger('mx_testing_schema.mx_test_table')
  SELECT worker_drop_distributed_table(logicalrelid::regclass::text) FROM pg_dist_partition
  TRUNCATE pg_dist_node CASCADE
@@ -158,7 +158,7 @@ SELECT unnest(master_metadata_snapshot()) order by 1;
  INSERT INTO pg_dist_partition (logicalrelid, partmethod, partkey, colocationid, repmodel) VALUES ('mx_testing_schema.mx_test_table'::regclass, 'h', column_name_to_column('mx_testing_schema.mx_test_table','col_1'), 0, 's')
  INSERT INTO pg_dist_placement (shardid, shardstate, shardlength, groupid, placementid) VALUES (1310000, 1, 0, 1, 100000),(1310001, 1, 0, 2, 100001),(1310002, 1, 0, 1, 100002),(1310003, 1, 0, 2, 100003),(1310004, 1, 0, 1, 100004),(1310005, 1, 0, 2, 100005),(1310006, 1, 0, 1, 100006),(1310007, 1, 0, 2, 100007)
  INSERT INTO pg_dist_shard (logicalrelid, shardid, shardstorage, shardminvalue, shardmaxvalue) VALUES ('mx_testing_schema.mx_test_table'::regclass, 1310000, 't', '-2147483648', '-1610612737'),('mx_testing_schema.mx_test_table'::regclass, 1310001, 't', '-1610612736', '-1073741825'),('mx_testing_schema.mx_test_table'::regclass, 1310002, 't', '-1073741824', '-536870913'),('mx_testing_schema.mx_test_table'::regclass, 1310003, 't', '-536870912', '-1'),('mx_testing_schema.mx_test_table'::regclass, 1310004, 't', '0', '536870911'),('mx_testing_schema.mx_test_table'::regclass, 1310005, 't', '536870912', '1073741823'),('mx_testing_schema.mx_test_table'::regclass, 1310006, 't', '1073741824', '1610612735'),('mx_testing_schema.mx_test_table'::regclass, 1310007, 't', '1610612736', '2147483647')
- SELECT worker_apply_sequence_command ('CREATE SEQUENCE IF NOT EXISTS mx_testing_schema.mx_test_table_col_3_seq INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 NO CYCLE')
+ SELECT worker_apply_sequence_command ('CREATE SEQUENCE IF NOT EXISTS mx_testing_schema.mx_test_table_col_3_seq INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 NO CYCLE','bigint')
  SELECT worker_create_truncate_trigger('mx_testing_schema.mx_test_table')
  SELECT worker_drop_distributed_table(logicalrelid::regclass::text) FROM pg_dist_partition
  TRUNCATE pg_dist_node CASCADE
@@ -923,7 +923,7 @@ SELECT logicalrelid, repmodel FROM pg_dist_partition WHERE logicalrelid = 'mx_te
 (1 row)
 
 DROP TABLE mx_temp_drop_test;
--- Check that MX tables can be created with SERIAL columns, but error out on metadata sync
+-- Check that MX tables can be created with SERIAL columns
 \c - - - :master_port	
 SET citus.shard_count TO 3;
 SET citus.shard_replication_factor TO 1;
@@ -940,7 +940,8 @@ SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
  
 (1 row)
 
-CREATE TABLE mx_table_with_small_sequence(a int, b SERIAL);
+-- sync table with serial column after create_distributed_table
+CREATE TABLE mx_table_with_small_sequence(a int, b SERIAL, c SMALLSERIAL);
 SELECT create_distributed_table('mx_table_with_small_sequence', 'a');
  create_distributed_table 
 --------------------------
@@ -948,22 +949,26 @@ SELECT create_distributed_table('mx_table_with_small_sequence', 'a');
 (1 row)
 
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
-ERROR:  cannot create an mx table with a serial or smallserial column 
-DETAIL:  Only bigserial is supported in mx tables.
-DROP TABLE mx_table_with_small_sequence;
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
  start_metadata_sync_to_node 
 -----------------------------
  
 (1 row)
 
--- Show that create_distributed_table errors out if the table has a SERIAL column and 
--- there are metadata workers
-CREATE TABLE mx_table_with_small_sequence(a int, b SERIAL);
-SELECT create_distributed_table('mx_table_with_small_sequence', 'a');
-ERROR:  cannot create an mx table with a serial or smallserial column 
-DETAIL:  Only bigserial is supported in mx tables.
 DROP TABLE mx_table_with_small_sequence;
+-- Show that create_distributed_table works with a serial column
+CREATE TABLE mx_table_with_small_sequence(a int, b SERIAL, c SMALLSERIAL);
+SELECT create_distributed_table('mx_table_with_small_sequence', 'a');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+INSERT INTO mx_table_with_small_sequence VALUES (0);
+\c - - - :worker_1_port
+INSERT INTO mx_table_with_small_sequence VALUES (1), (3);
+\c - - - :master_port
+SET citus.shard_replication_factor TO 1;
+SET citus.replication_model TO 'streaming';
 -- Create an MX table with (BIGSERIAL) sequences
 CREATE TABLE mx_table_with_sequence(a int, b BIGSERIAL, c BIGSERIAL);
 SELECT create_distributed_table('mx_table_with_sequence', 'a');
@@ -1080,9 +1085,22 @@ SELECT nextval('mx_table_with_sequence_c_seq');
  562949953421313
 (1 row)
 
+INSERT INTO mx_table_with_small_sequence VALUES (2), (4);
 -- Check that dropping the mx table with sequences works as expected
 \c - - - :master_port
-DROP TABLE mx_table_with_sequence;
+-- check our small sequence values
+SELECT a, b, c FROM mx_table_with_small_sequence ORDER BY a,b,c;
+ a |     b     |  c   
+---+-----------+------
+ 0 |         1 |    1
+ 1 | 268435457 | 4097
+ 2 | 536870913 | 8193
+ 3 | 268435458 | 4098
+ 4 | 536870914 | 8194
+(5 rows)
+
+-- Check that dropping the mx table with sequences works as expected
+DROP TABLE mx_table_with_small_sequence, mx_table_with_sequence;
 \d mx_table_with_sequence
 \ds mx_table_with_sequence_b_seq
       List of relations
@@ -1286,8 +1304,8 @@ ORDER BY
  	nodeport;
  logicalrelid | partmethod | repmodel | shardid | placementid | nodename  | nodeport 
 --------------+------------+----------+---------+-------------+-----------+----------
- mx_ref       | n          | t        | 1310071 |      100071 | localhost |    57637
- mx_ref       | n          | t        | 1310071 |      100072 | localhost |    57638
+ mx_ref       | n          | t        | 1310072 |      100072 | localhost |    57637
+ mx_ref       | n          | t        | 1310072 |      100073 | localhost |    57638
 (2 rows)
 
 	
@@ -1378,7 +1396,7 @@ FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement
 WHERE logicalrelid='mx_ref'::regclass;
  shardid | nodename  | nodeport 
 ---------+-----------+----------
- 1310072 | localhost |    57637
+ 1310073 | localhost |    57637
 (1 row)
 
 \c - - - :worker_1_port
@@ -1387,7 +1405,7 @@ FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement
 WHERE logicalrelid='mx_ref'::regclass;
  shardid | nodename  | nodeport 
 ---------+-----------+----------
- 1310072 | localhost |    57637
+ 1310073 | localhost |    57637
 (1 row)
 
 \c - - - :master_port
@@ -1404,8 +1422,8 @@ WHERE logicalrelid='mx_ref'::regclass
 ORDER BY shardid, nodeport;
  shardid | nodename  | nodeport 
 ---------+-----------+----------
- 1310072 | localhost |    57637
- 1310072 | localhost |    57638
+ 1310073 | localhost |    57637
+ 1310073 | localhost |    57638
 (2 rows)
 
 \c - - - :worker_1_port
@@ -1415,8 +1433,8 @@ WHERE logicalrelid='mx_ref'::regclass
 ORDER BY shardid, nodeport;
  shardid | nodename  | nodeport 
 ---------+-----------+----------
- 1310072 | localhost |    57637
- 1310072 | localhost |    57638
+ 1310073 | localhost |    57637
+ 1310073 | localhost |    57638
 (2 rows)
 
 -- Get the metadata back into a consistent state
