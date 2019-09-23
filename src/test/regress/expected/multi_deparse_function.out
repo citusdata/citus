@@ -1,5 +1,5 @@
 --
--- Regression tests for deparsing ALTER/DROP TABLE Queries
+-- Regression tests for deparsing ALTER/DROP FUNCTION Queries
 --
 -- This test implements all the possible queries as of Postgres 11:
 -- 

@@ -1,0 +1,308 @@
+--
+-- Regression tests for deparsing ALTER/DROP PROCEDURE Queries
+--
+-- ALTER PROCEDURE name [ ( [ [ argmode ] [ argname ] argtype [, ...] ] ) ]
+--     action [ ... ] [ RESTRICT ]
+-- ALTER PROCEDURE name [ ( [ [ argmode ] [ argname ] argtype [, ...] ] ) ]
+--     RENAME TO new_name
+-- ALTER PROCEDURE name [ ( [ [ argmode ] [ argname ] argtype [, ...] ] ) ]
+--     OWNER TO { new_owner | CURRENT_USER | SESSION_USER }
+-- ALTER PROCEDURE name [ ( [ [ argmode ] [ argname ] argtype [, ...] ] ) ]
+--     SET SCHEMA new_schema
+-- ALTER PROCEDURE name [ ( [ [ argmode ] [ argname ] argtype [, ...] ] ) ]
+--     DEPENDS ON EXTENSION extension_name
+-- where action is one of:
+--     [ EXTERNAL ] SECURITY INVOKER | [ EXTERNAL ] SECURITY DEFINER
+--     SET configuration_parameter { TO | = } { value | DEFAULT }
+--     SET configuration_parameter FROM CURRENT
+--     RESET configuration_parameter
+--     RESET ALL
+-- 
+-- DROP PROCEDURE [ IF EXISTS ] name [ ( [ [ argmode ] [ argname ] argtype [, ...] ] ) ] [, ...]
+--     [ CASCADE | RESTRICT ]
+-- 
+-- Please note that current deparser does not return errors on some invalid queries.
+-- 
+-- For example CALLED ON NULL INPUT action is valid only for FUNCTIONS, but we still 
+-- allow deparsing them here.
+SET citus.next_shard_id TO 20030000;
+CREATE SCHEMA procedure_tests;
+SET search_path TO procedure_tests;
+SET citus.shard_count TO 4;
+SET client_min_messages TO INFO;
+CREATE FUNCTION deparse_test(text)
+	RETURNS text
+	AS 'citus'
+ 	LANGUAGE C STRICT;
+-- Create a simple PROCEDURE
+CREATE OR REPLACE PROCEDURE raise_info(text)
+LANGUAGE PLPGSQL AS $proc$
+BEGIN
+  RAISE INFO 'information message %', $1;
+END;
+$proc$;
+SELECT deparse_test($cmd$
+ALTER PROCEDURE  raise_info CALLED ON NULL INPUT
+$cmd$);
+                   deparse_test                    
+---------------------------------------------------
+ ALTER FUNCTION raise_info() CALLED ON NULL INPUT;
+(1 row)
+
+SELECT deparse_test($cmd$
+ALTER PROCEDURE raise_info RETURNS NULL ON NULL INPUT
+$cmd$);
+            deparse_test             
+-------------------------------------
+ ALTER FUNCTION raise_info() STRICT;
+(1 row)
+
+SELECT deparse_test($cmd$
+ALTER PROCEDURE raise_info STRICT
+$cmd$);
+            deparse_test             
+-------------------------------------
+ ALTER FUNCTION raise_info() STRICT;
+(1 row)
+
+SELECT deparse_test($cmd$
+ALTER PROCEDURE raise_info IMMUTABLE
+$cmd$);
+              deparse_test              
+----------------------------------------
+ ALTER FUNCTION raise_info() immutable;
+(1 row)
+
+SELECT deparse_test($cmd$
+ALTER PROCEDURE raise_info STABLE
+$cmd$);
+            deparse_test             
+-------------------------------------
+ ALTER FUNCTION raise_info() stable;
+(1 row)
+
+SELECT deparse_test($cmd$
+ALTER PROCEDURE raise_info VOLATILE
+$cmd$);
+             deparse_test              
+---------------------------------------
+ ALTER FUNCTION raise_info() volatile;
+(1 row)
+
+SELECT deparse_test($cmd$
+ALTER PROCEDURE raise_info LEAKPROOF
+$cmd$);
+              deparse_test              
+----------------------------------------
+ ALTER FUNCTION raise_info() LEAKPROOF;
+(1 row)
+
+SELECT deparse_test($cmd$
+ALTER PROCEDURE raise_info NOT LEAKPROOF
+$cmd$);
+                deparse_test                
+--------------------------------------------
+ ALTER FUNCTION raise_info() NOT LEAKPROOF;
+(1 row)
+
+SELECT deparse_test($cmd$
+ALTER  PROCEDURE raise_info EXTERNAL SECURITY INVOKER
+$cmd$);
+                 deparse_test                  
+-----------------------------------------------
+ ALTER FUNCTION raise_info() SECURITY INVOKER;
+(1 row)
+
+SELECT deparse_test($cmd$
+ALTER PROCEDURE raise_info SECURITY INVOKER
+$cmd$);
+                 deparse_test                  
+-----------------------------------------------
+ ALTER FUNCTION raise_info() SECURITY INVOKER;
+(1 row)
+
+SELECT deparse_test($cmd$
+ALTER  PROCEDURE raise_info EXTERNAL SECURITY DEFINER
+$cmd$);
+                 deparse_test                  
+-----------------------------------------------
+ ALTER FUNCTION raise_info() SECURITY DEFINER;
+(1 row)
+
+SELECT deparse_test($cmd$
+ALTER PROCEDURE raise_info SECURITY DEFINER
+$cmd$);
+                 deparse_test                  
+-----------------------------------------------
+ ALTER FUNCTION raise_info() SECURITY DEFINER;
+(1 row)
+
+SELECT deparse_test($cmd$
+ALTER PROCEDURE raise_info PARALLEL UNSAFE
+$cmd$);
+                 deparse_test                 
+----------------------------------------------
+ ALTER FUNCTION raise_info() PARALLEL unsafe;
+(1 row)
+
+SELECT deparse_test($cmd$
+ALTER PROCEDURE raise_info PARALLEL RESTRICTED
+$cmd$);
+                   deparse_test                   
+--------------------------------------------------
+ ALTER FUNCTION raise_info() PARALLEL restricted;
+(1 row)
+
+SELECT deparse_test($cmd$
+ALTER PROCEDURE raise_info PARALLEL SAFE
+$cmd$);
+                deparse_test                
+--------------------------------------------
+ ALTER FUNCTION raise_info() PARALLEL safe;
+(1 row)
+
+-- The COST/ROWS arguments should always be numeric
+SELECT deparse_test($cmd$
+ALTER PROCEDURE raise_info COST 1234
+$cmd$);
+                 deparse_test                  
+-----------------------------------------------
+ ALTER FUNCTION raise_info() COST 1234.000000;
+(1 row)
+
+SELECT deparse_test($cmd$
+ALTER  PROCEDURE raise_info COST 1234.5
+$cmd$);
+                 deparse_test                  
+-----------------------------------------------
+ ALTER FUNCTION raise_info() COST 1234.500000;
+(1 row)
+
+SELECT deparse_test($cmd$
+ALTER PROCEDURE raise_info ROWS 10
+$cmd$);
+                 deparse_test                 
+----------------------------------------------
+ ALTER FUNCTION raise_info() ROWS  10.000000;
+(1 row)
+
+SELECT deparse_test($cmd$
+ALTER  PROCEDURE raise_info ROWS 10.8
+$cmd$);
+                 deparse_test                 
+----------------------------------------------
+ ALTER FUNCTION raise_info() ROWS  10.800000;
+(1 row)
+
+SELECT deparse_test($cmd$
+ALTER PROCEDURE  raise_info SET log_min_messages = ERROR
+$cmd$);
+                       deparse_test                        
+-----------------------------------------------------------
+ ALTER FUNCTION raise_info() SET log_min_messages = error;
+(1 row)
+
+SELECT deparse_test($cmd$
+ALTER PROCEDURE  raise_info SET log_min_messages TO DEFAULT
+$cmd$);
+                         deparse_test                         
+--------------------------------------------------------------
+ ALTER FUNCTION raise_info() SET log_min_messages TO DEFAULT;
+(1 row)
+
+SELECT deparse_test($cmd$
+ALTER PROCEDURE  raise_info SET log_min_messages FROM CURRENT
+$cmd$);
+                          deparse_test                          
+----------------------------------------------------------------
+ ALTER FUNCTION raise_info() SET log_min_messages FROM CURRENT;
+(1 row)
+
+SELECT deparse_test($cmd$
+ALTER PROCEDURE raise_info RESET log_min_messages
+$cmd$);
+                    deparse_test                     
+-----------------------------------------------------
+ ALTER FUNCTION raise_info() RESET log_min_messages;
+(1 row)
+
+SELECT deparse_test($cmd$
+ALTER PROCEDURE raise_info RESET ALL
+$cmd$);
+              deparse_test              
+----------------------------------------
+ ALTER FUNCTION raise_info() RESET ALL;
+(1 row)
+
+SELECT deparse_test($cmd$
+ALTER PROCEDURE raise_info RENAME TO summation
+$cmd$);
+                   deparse_test                   
+--------------------------------------------------
+ ALTER FUNCTION raise_info() RENAME TO summation;
+(1 row)
+
+CREATE ROLE PROCEDURE_role;
+NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
+HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
+SELECT deparse_test($cmd$
+ALTER PROCEDURE raise_info OWNER TO PROCEDURE_role
+$cmd$);
+                     deparse_test                     
+------------------------------------------------------
+ ALTER FUNCTION raise_info() OWNER TO procedure_role;
+(1 row)
+
+SELECT deparse_test($cmd$
+ALTER PROCEDURE raise_info OWNER TO missing_role
+$cmd$);
+                    deparse_test                    
+----------------------------------------------------
+ ALTER FUNCTION raise_info() OWNER TO missing_role;
+(1 row)
+
+SELECT deparse_test($cmd$
+ALTER PROCEDURE raise_info SET SCHEMA public
+$cmd$);
+                  deparse_test                  
+------------------------------------------------
+ ALTER FUNCTION raise_info() SET SCHEMA public;
+(1 row)
+
+SELECT deparse_test($cmd$
+ALTER PROCEDURE raise_info DEPENDS ON EXTENSION citus
+$cmd$);
+                      deparse_test                       
+---------------------------------------------------------
+ ALTER FUNCTION raise_info() DEPENDS ON EXTENSION citus;
+(1 row)
+
+SELECT deparse_test($cmd$
+DROP PROCEDURE IF EXISTS raise_info(int,int);
+$cmd$);
+                             deparse_test                             
+----------------------------------------------------------------------
+ DROP FUNCTION IF EXISTS raise_info(pg_catalog.int4,pg_catalog.int4);
+(1 row)
+
+-- Check that an invalid PROCEDURE name is still parsed correctly
+SELECT deparse_test($cmd$
+DROP PROCEDURE IF EXISTS missing_PROCEDURE(int, text);
+$cmd$);
+                           deparse_test                           
+------------------------------------------------------------------
+ DROP FUNCTION IF EXISTS missing_procedure(pg_catalog.int4,text);
+(1 row)
+
+SELECT deparse_test($cmd$
+DROP PROCEDURE IF EXISTS missing_schema.missing_PROCEDURE(int,float);
+$cmd$);
+                                         deparse_test                                         
+----------------------------------------------------------------------------------------------
+ DROP FUNCTION IF EXISTS missing_schema.missing_procedure(pg_catalog.int4,pg_catalog.float8);
+(1 row)
+
+-- clear objects
+SET client_min_messages TO FATAL; -- suppress cascading objects dropping
+DROP SCHEMA procedure_tests CASCADE;
+DROP ROLE PROCEDURE_role;
