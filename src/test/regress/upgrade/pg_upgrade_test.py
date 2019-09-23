@@ -10,6 +10,12 @@ Options:
     --pgxsdir=<pgxsdir>           	       Path to the PGXS directory(ex: ~/.pgenv/src/postgresql-11.3)
 """
 
+from config import (
+    PGUpgradeConfig, USER, NODE_PORTS,
+    NODE_NAMES, DBNAME, COORDINATOR_NAME,
+    WORKER_PORTS, AFTER_UPGRADE_SCHEDULE, BEFORE_UPGRADE_SCHEDULE
+)
+from docopt import docopt
 import utils
 import atexit
 import subprocess
@@ -17,15 +23,11 @@ import sys
 import shutil
 import os
 
-from upgrade_common import initialize_temp_dir, initialize_citus_cluster, run_pg_regress, stop_databases
-
-from docopt import docopt
-
-from config import (
-    PGUpgradeConfig, USER, NODE_PORTS,
-    NODE_NAMES, DBNAME, COORDINATOR_NAME,
-    WORKER_PORTS, AFTER_UPGRADE_SCHEDULE, BEFORE_UPGRADE_SCHEDULE
+from upgrade_common import (
+    initialize_temp_dir, initialize_citus_cluster, run_pg_regress,
+    stop_databases, initialize_db_for_cluster, start_databases
 )
+
 
 def citus_prepare_pg_upgrade(pg_path):
     for port in NODE_PORTS.values():
