@@ -18,33 +18,123 @@
 
 #include "postgres.h"
 
+#include "access/htup_details.h"
 #include "distributed/deparser.h"
+#include "utils/syscache.h"
+#include "catalog/pg_proc.h"
+#include "catalog/namespace.h"
+#include "parser/parse_func.h"
+#include "utils/lsyscache.h"
 
-/* TODO: implement this and add some comments here */
+/* forward declaration for qualify functions */
+void QualifyFunction(ObjectWithArgs *func);
+void QualifyFunctionSchemaName(ObjectWithArgs *func);
+
+
 void
 QualifyAlterFunctionStmt(AlterFunctionStmt *stmt)
-{ }
+{
+	QualifyFunction(stmt->func);
+}
 
 
-/* TODO: implement this and add some comments here */
 void
 QualifyRenameFunctionStmt(RenameStmt *stmt)
-{ }
+{
+#if (PG_VERSION_NUM < 110000)
+	Assert(stmt->renameType == OBJECT_FUNCTION);
+#else
+	Assert(stmt->renameType == OBJECT_FUNCTION || stmt->renameType == OBJECT_PROCEDURE);
+#endif
+
+	QualifyFunction(castNode(ObjectWithArgs, stmt->object));
+}
 
 
-/* TODO: implement this and add some comments here */
 void
 QualifyAlterFunctionSchemaStmt(AlterObjectSchemaStmt *stmt)
-{ }
+{
+#if (PG_VERSION_NUM < 110000)
+	Assert(stmt->objectType == OBJECT_FUNCTION);
+#else
+	Assert(stmt->objectType == OBJECT_FUNCTION || stmt->objectType == OBJECT_PROCEDURE);
+#endif
+
+	QualifyFunction(castNode(ObjectWithArgs, stmt->object));
+}
 
 
-/* TODO: implement this and add some comments here */
 void
 QualifyAlterFunctionOwnerStmt(AlterOwnerStmt *stmt)
-{ }
+{
+#if (PG_VERSION_NUM < 110000)
+	Assert(stmt->objectType == OBJECT_FUNCTION);
+#else
+	Assert(stmt->objectType == OBJECT_FUNCTION || stmt->objectType == OBJECT_PROCEDURE);
+#endif
+
+	QualifyFunction(castNode(ObjectWithArgs, stmt->object));
+}
 
 
-/* TODO: implement this and add some comments here */
 void
 QualifyAlterFunctionDependsStmt(AlterObjectDependsStmt *stmt)
-{ }
+{
+#if (PG_VERSION_NUM < 110000)
+	Assert(stmt->objectType == OBJECT_FUNCTION);
+#else
+	Assert(stmt->objectType == OBJECT_FUNCTION || stmt->objectType == OBJECT_PROCEDURE);
+#endif
+
+	QualifyFunction(castNode(ObjectWithArgs, stmt->object));
+}
+
+
+void
+QualifyFunction(ObjectWithArgs *func)
+{
+	char *functionName = NULL;
+	char *schemaName = NULL;
+
+	/* check if the function name is already qualified */
+	DeconstructQualifiedName(func->objname, &schemaName, &functionName);
+
+	/* do a lookup for the schema name if the statement does not include one */
+	if (schemaName == NULL)
+	{
+		QualifyFunctionSchemaName(func);
+	}
+}
+
+
+void
+QualifyFunctionSchemaName(ObjectWithArgs *func)
+{
+	char *schemaName = NULL;
+	char *functionName = NULL;
+
+	Oid funcid = InvalidOid;
+	HeapTuple proctup;
+
+	funcid = LookupFuncWithArgs(OBJECT_FUNCTION, func, true);
+	proctup = SearchSysCache1(PROCOID, ObjectIdGetDatum(funcid));
+
+	/*
+	 * We can not qualify the function if the catalogs do not have any records.
+	 *
+	 * e.g. DROP FUNC IF EXISTS non_existent_func() do not result in a valid heap tuple
+	 */
+	if (HeapTupleIsValid(proctup))
+	{
+		Form_pg_proc procform;
+
+		procform = (Form_pg_proc) GETSTRUCT(proctup);
+		schemaName = get_namespace_name(procform->pronamespace);
+		functionName = NameStr(procform->proname);
+
+		ReleaseSysCache(proctup);
+
+		/* update the function using the schema name */
+		func->objname = list_make2(makeString(schemaName), makeString(functionName));
+	}
+}

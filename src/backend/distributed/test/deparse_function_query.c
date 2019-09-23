@@ -31,6 +31,7 @@ deparse_test(PG_FUNCTION_ARGS)
 
 	queryStringChar = text_to_cstring(queryStringText);
 	query = ParseQueryString(queryStringChar, NULL, 0);
+
 	QualifyTreeNode(query->utilityStmt);
 	deparsedQuery = DeparseTreeNode(query->utilityStmt);
 
