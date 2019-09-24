@@ -67,6 +67,7 @@ my $pgxsdir = "";
 my $postgresBuilddir = "";
 my $postgresSrcdir = "";
 my $majorversion = "";
+my $synchronousReplication = "";
 my @extensions = ();
 my @userPgOptions = ();
 my %fdws = ();
@@ -645,10 +646,16 @@ if ($valgrind)
 # Signal that servers should be shutdown
 $serversAreShutdown = "FALSE";
 
+# enable synchronous replication if needed
+if ($followercluster)
+{
+    $synchronousReplication = "-c synchronous_standby_names='FIRST 1 (*)' -c synchronous_commit=remote_apply";
+}
+
 # Start servers
 if(system(catfile("$bindir", "pg_ctl"),
        ('start', '-w',
-        '-o', join(" ", @pgOptions)." -c port=$masterPort",
+        '-o', join(" ", @pgOptions)." -c port=$masterPort $synchronousReplication",
        '-D', catfile($TMP_CHECKDIR, $MASTERDIR, 'data'), '-l', catfile($TMP_CHECKDIR, $MASTERDIR, 'log', 'postmaster.log'))) != 0)
 {
   system("tail", ("-n20", catfile($TMP_CHECKDIR, $MASTERDIR, "log", "postmaster.log")));
@@ -659,7 +666,7 @@ for my $port (@workerPorts)
 {
     if(system(catfile("$bindir", "pg_ctl"),
            ('start', '-w',
-            '-o', join(" ", @pgOptions)." -c port=$port",
+            '-o', join(" ", @pgOptions)." -c port=$port $synchronousReplication",
             '-D', catfile($TMP_CHECKDIR, "worker.$port", "data"),
             '-l', catfile($TMP_CHECKDIR, "worker.$port", "log", "postmaster.log"))) != 0)
     {
