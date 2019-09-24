@@ -217,14 +217,10 @@ ERROR:  syntax error at or near "CALL"
 LINE 1: CALL multi_mx_call.mx_call_proc_tx(10);
         ^
 -- after distribution ...
-select create_distributed_function('mx_call_proc_tx(int)');
+select create_distributed_function('mx_call_proc_tx(int)', '$1', 'mx_call_dist_table_1');
 ERROR:  function "mx_call_proc_tx(int)" does not exist
-LINE 1: select create_distributed_function('mx_call_proc_tx(int)');
+LINE 1: select create_distributed_function('mx_call_proc_tx(int)', '...
                                            ^
-call multi_mx_call.colocate_proc_with_table('mx_call_proc_tx', 'mx_call_dist_table_1'::regclass, 0);
-ERROR:  syntax error at or near "call"
-LINE 1: call multi_mx_call.colocate_proc_with_table('mx_call_proc_tx...
-        ^
 CALL multi_mx_call.mx_call_proc_tx(20);
 ERROR:  syntax error at or near "CALL"
 LINE 1: CALL multi_mx_call.mx_call_proc_tx(20);
@@ -248,14 +244,10 @@ END;$$;
 ERROR:  syntax error at or near "PROCEDURE"
 LINE 1: CREATE PROCEDURE mx_call_proc_raise(x int) LANGUAGE plpgsql ...
                ^
-select create_distributed_function('mx_call_proc_raise(int)');
+select create_distributed_function('mx_call_proc_raise(int)', '$1', 'mx_call_dist_table_1');
 ERROR:  function "mx_call_proc_raise(int)" does not exist
 LINE 1: select create_distributed_function('mx_call_proc_raise(int)'...
                                            ^
-call multi_mx_call.colocate_proc_with_table('mx_call_proc_raise', 'mx_call_dist_table_1'::regclass, 0);
-ERROR:  syntax error at or near "call"
-LINE 1: call multi_mx_call.colocate_proc_with_table('mx_call_proc_ra...
-        ^
 call multi_mx_call.mx_call_proc_raise(2);
 ERROR:  syntax error at or near "call"
 LINE 1: call multi_mx_call.mx_call_proc_raise(2);
@@ -296,7 +288,7 @@ SET client_min_messages TO DEBUG1;
 --
 CREATE FUNCTION mx_call_add(int, int) RETURNS int
     AS 'select $1 + $2;' LANGUAGE SQL IMMUTABLE;
-SELECT create_distributed_function('mx_call_add(int,int)');
+SELECT create_distributed_function('mx_call_add(int,int)', '$1');
 DEBUG:  switching to sequential query execution mode
 DETAIL:  A distributed function is created. To make sure subsequent commands see the type correctly we need to make sure to use only one connection for all future commands
  create_distributed_function 

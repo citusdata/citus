@@ -141,8 +141,7 @@ END;$$;
 -- before distribution ...
 CALL multi_mx_call.mx_call_proc_tx(10);
 -- after distribution ...
-select create_distributed_function('mx_call_proc_tx(int)');
-call multi_mx_call.colocate_proc_with_table('mx_call_proc_tx', 'mx_call_dist_table_1'::regclass, 0);
+select create_distributed_function('mx_call_proc_tx(int)', '$1', 'mx_call_dist_table_1');
 CALL multi_mx_call.mx_call_proc_tx(20);
 SELECT id, val FROM mx_call_dist_table_1 ORDER BY id, val;
 
@@ -152,8 +151,7 @@ BEGIN
     RAISE WARNING 'warning';
     RAISE EXCEPTION 'error';
 END;$$;
-select create_distributed_function('mx_call_proc_raise(int)');
-call multi_mx_call.colocate_proc_with_table('mx_call_proc_raise', 'mx_call_dist_table_1'::regclass, 0);
+select create_distributed_function('mx_call_proc_raise(int)', '$1', 'mx_call_dist_table_1');
 call multi_mx_call.mx_call_proc_raise(2);
 
 
@@ -171,7 +169,7 @@ SET client_min_messages TO DEBUG1;
 --
 CREATE FUNCTION mx_call_add(int, int) RETURNS int
     AS 'select $1 + $2;' LANGUAGE SQL IMMUTABLE;
-SELECT create_distributed_function('mx_call_add(int,int)');
+SELECT create_distributed_function('mx_call_add(int,int)', '$1');
 
 -- non-const distribution parameters cannot be pushed down
 call multi_mx_call.mx_call_proc(2, mx_call_add(3, 4));
