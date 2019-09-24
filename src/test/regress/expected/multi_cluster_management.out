@@ -608,7 +608,7 @@ CONTEXT:  PL/pgSQL function citus_internal.pg_dist_node_trigger_func() line 18 a
 INSERT INTO pg_dist_node (nodename, nodeport, groupid, noderole, nodecluster)
   VALUES ('localhost', 5000, 1000, 'primary', 'olap');
 ERROR:  new row for relation "pg_dist_node" violates check constraint "primaries_are_only_allowed_in_the_default_cluster"
-DETAIL:  Failing row contains (19, 1000, localhost, 5000, default, f, t, primary, olap, f).
+DETAIL:  Failing row contains (24, 1000, localhost, 5000, default, f, t, primary, olap, f).
 UPDATE pg_dist_node SET nodecluster = 'olap'
   WHERE nodeport = :worker_1_port;
 ERROR:  new row for relation "pg_dist_node" violates check constraint "primaries_are_only_allowed_in_the_default_cluster"
@@ -618,7 +618,7 @@ SELECT groupid AS worker_2_group FROM pg_dist_node WHERE nodeport = :worker_2_po
 SELECT master_add_node('localhost', 8888, groupid => :worker_1_group, noderole => 'secondary', nodecluster=> 'olap');
  master_add_node 
 -----------------
-              23
+              25
 (1 row)
 
 -- check that super-long cluster names are truncated
@@ -631,13 +631,13 @@ SELECT master_add_node('localhost', 8887, groupid => :worker_1_group, noderole =
 );
  master_add_node 
 -----------------
-              24
+              26
 (1 row)
 
 SELECT * FROM pg_dist_node WHERE nodeport=8887;
  nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole  |                           nodecluster                           | metadatasynced 
 --------+---------+-----------+----------+----------+-------------+----------+-----------+-----------------------------------------------------------------+----------------
-     24 |      14 | localhost |     8887 | default  | f           | t        | secondary | thisisasixtyfourcharacterstringrepeatedfourtimestomake256chars. | f
+     26 |      14 | localhost |     8887 | default  | f           | t        | secondary | thisisasixtyfourcharacterstringrepeatedfourtimestomake256chars. | f
 (1 row)
 
 -- don't remove the secondary and unavailable nodes, check that no commands are sent to
@@ -646,13 +646,13 @@ SELECT * FROM pg_dist_node WHERE nodeport=8887;
 SELECT master_add_secondary_node('localhost', 9995, 'localhost', :worker_1_port);
  master_add_secondary_node 
 ---------------------------
-                        25
+                        27
 (1 row)
 
 SELECT master_add_secondary_node('localhost', 9994, primaryname => 'localhost', primaryport => :worker_2_port);
  master_add_secondary_node 
 ---------------------------
-                        26
+                        28
 (1 row)
 
 SELECT master_add_secondary_node('localhost', 9993, 'localhost', 2000);
@@ -660,7 +660,7 @@ ERROR:  node at "localhost:2000" does not exist
 SELECT master_add_secondary_node('localhost', 9992, 'localhost', :worker_1_port, nodecluster => 'second-cluster');
  master_add_secondary_node 
 ---------------------------
-                        27
+                        29
 (1 row)
 
 SELECT nodeid AS worker_1_node FROM pg_dist_node WHERE nodeport=:worker_1_port \gset

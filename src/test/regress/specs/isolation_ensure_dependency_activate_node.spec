@@ -179,17 +179,6 @@ step "s3-create-table"
 	SELECT create_distributed_table('t2', 'a');
 }
 
-step "s3-begin"
-{
-	BEGIN;
-}
-
-step "s3-commit"
-{
-	COMMIT;
-}
-
-
 step "s3-wait-for-metadata-sync"
 {
     SELECT public.wait_until_metadata_sync(5000);
@@ -200,38 +189,19 @@ step "s3-listen-channel"
    LISTEN metadata_sync;
 }
 
-session "s4"
-
-step "s4-public-schema"
-{
-    SET search_path TO public;
-}
-
-step "s4-use-schema"
-{
-    SET search_path TO myschema;
-}
-
-step "s4-create-schema2"
+step "s3-create-schema2"
 {
     CREATE SCHEMA myschema2;
     SET search_path TO myschema2;
 }
 
-step "s4-create-table"
-{
-	CREATE TABLE t3 (a int, b int);
-    -- session needs to have replication factor set to 1, can't do in setup
-	SET citus.shard_replication_factor TO 1;
-	SELECT create_distributed_table('t3', 'a');
-}
 
-step "s4-begin"
+step "s3-begin"
 {
 	BEGIN;
 }
 
-step "s4-commit"
+step "s3-commit"
 {
 	COMMIT;
 }
@@ -248,10 +218,7 @@ permutation "s1-print-distributed-objects" "s1-begin" "s2-begin" "s2-create-sche
 # concurrency tests with multi schema distribution
 permutation "s1-print-distributed-objects" "s2-create-schema" "s1-begin" "s2-begin" "s3-begin" "s1-add-worker" "s2-create-table" "s3-use-schema" "s3-create-table" "s1-commit" "s2-commit" "s3-commit" "s2-print-distributed-objects"
 permutation "s1-print-distributed-objects" "s1-add-worker" "s2-create-schema" "s2-begin" "s3-begin" "s3-use-schema" "s2-create-table" "s3-create-table" "s2-commit" "s3-commit" "s2-print-distributed-objects"
-
-# multiple sessions block waiting to create the same schema (temporarily disabled because too unstable)
-#permutation "s1-print-distributed-objects" "s2-create-schema" "s1-begin" "s2-begin" "s3-begin" "s4-begin" "s1-add-worker" "s2-create-table" "s3-use-schema" "s3-create-table" "s4-use-schema" "s4-create-table" "s1-commit" "s2-commit" "s3-commit" "s4-commit" "s2-print-distributed-objects"
-#permutation "s1-print-distributed-objects" "s1-begin" "s2-begin" "s4-begin" "s1-add-worker" "s2-create-schema" "s4-create-schema2" "s2-create-table" "s4-create-table" "s1-commit" "s2-commit" "s4-commit" "s2-print-distributed-objects"
+permutation "s1-print-distributed-objects" "s1-begin" "s2-begin" "s3-begin" "s1-add-worker" "s2-create-schema" "s3-create-schema2" "s2-create-table" "s3-create-table" "s1-commit" "s2-commit" "s3-commit" "s2-print-distributed-objects"
 
 # type and schema tests
 permutation "s1-print-distributed-objects" "s1-begin" "s1-add-worker" "s2-public-schema" "s2-create-type" "s1-commit" "s2-print-distributed-objects"
