@@ -43,6 +43,7 @@ extern const char * RoleSpecString(RoleSpec *spec);
 
 /* Function declarations for version dependent PostgreSQL ruleutils functions */
 extern void pg_get_query_def(Query *query, StringInfo buffer);
+char * pg_get_rule_expr(Node *expression);
 extern void deparse_shard_query(Query *query, Oid distrelid, int64 shardid,
 								StringInfo buffer);
 extern char * generate_relation_name(Oid relid, List *namespaces);

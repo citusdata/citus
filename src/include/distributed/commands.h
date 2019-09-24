@@ -26,8 +26,7 @@ extern List * PlanClusterStmt(ClusterStmt *clusterStmt, const char *clusterComma
 #if PG_VERSION_NUM >= 110000
 
 /* call.c */
-extern bool CallDistributedProcedureRemotely(CallStmt *callStmt, const char *callCommand,
-											 DestReceiver *dest);
+extern bool CallDistributedProcedureRemotely(CallStmt *callStmt, DestReceiver *dest);
 #endif /* PG_VERSION_NUM >= 110000 */
 
 /* extension.c - forward declarations */

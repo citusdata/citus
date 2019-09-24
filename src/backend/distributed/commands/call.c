@@ -14,6 +14,7 @@
 
 #include "catalog/pg_proc.h"
 #include "commands/defrem.h"
+#include "distributed/citus_ruleutils.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/commands.h"
 #include "distributed/commands/multi_copy.h"
@@ -38,15 +39,13 @@
 
 static bool CallFuncExprRemotely(CallStmt *callStmt,
 								 DistObjectCacheEntry *procedure,
-								 FuncExpr *funcExpr, const char *queryString,
-								 DestReceiver *dest);
+								 FuncExpr *funcExpr, DestReceiver *dest);
 
 /*
  * CallDistributedProcedureRemotely calls a stored procedure on the worker if possible.
  */
 bool
-CallDistributedProcedureRemotely(CallStmt *callStmt, const char *queryString,
-								 DestReceiver *dest)
+CallDistributedProcedureRemotely(CallStmt *callStmt, DestReceiver *dest)
 {
 	DistObjectCacheEntry *procedure = NULL;
 	FuncExpr *funcExpr = callStmt->funcexpr;
@@ -58,7 +57,7 @@ CallDistributedProcedureRemotely(CallStmt *callStmt, const char *queryString,
 		return false;
 	}
 
-	return CallFuncExprRemotely(callStmt, procedure, funcExpr, queryString, dest);
+	return CallFuncExprRemotely(callStmt, procedure, funcExpr, dest);
 }
 
 
@@ -67,7 +66,7 @@ CallDistributedProcedureRemotely(CallStmt *callStmt, const char *queryString,
  */
 static bool
 CallFuncExprRemotely(CallStmt *callStmt, DistObjectCacheEntry *procedure,
-					 FuncExpr *funcExpr, const char *queryString, DestReceiver *dest)
+					 FuncExpr *funcExpr, DestReceiver *dest)
 {
 	Oid colocatedRelationId = InvalidOid;
 	Const *partitionValue = NULL;
@@ -78,6 +77,7 @@ CallFuncExprRemotely(CallStmt *callStmt, DistObjectCacheEntry *procedure,
 	Var *partitionColumn = NULL;
 	ShardPlacement *placement = NULL;
 	WorkerNode *workerNode = NULL;
+	StringInfo callCommand = NULL;
 
 	if (IsMultiStatementTransaction())
 	{
@@ -160,6 +160,10 @@ CallFuncExprRemotely(CallStmt *callStmt, DistObjectCacheEntry *procedure,
 
 	ereport(DEBUG1, (errmsg("pushing down the procedure")));
 
+	/* build remote command with fully qualified names */
+	callCommand = makeStringInfo();
+	appendStringInfo(callCommand, "CALL %s", pg_get_rule_expr((Node *) funcExpr));
+
 	{
 		Tuplestorestate *tupleStore = tuplestore_begin_heap(true, false, work_mem);
 		TupleDesc tupleDesc = CallStmtResultDesc(callStmt);
@@ -170,7 +174,7 @@ CallFuncExprRemotely(CallStmt *callStmt, DistObjectCacheEntry *procedure,
 		task->jobId = INVALID_JOB_ID;
 		task->taskId = 0;
 		task->taskType = DDL_TASK;
-		task->queryString = pstrdup(queryString);
+		task->queryString = callCommand->data;
 		task->replicationModel = REPLICATION_MODEL_INVALID;
 		task->dependedTaskList = NIL;
 		task->anchorShardId = placement->shardId;
