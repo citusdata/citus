@@ -66,4 +66,5 @@ select mx_call_func(mx_call_add(3, 4), 2);
 select mx_call_func(least(random()::int,0), 2);
 
 RESET client_min_messages;
+\set VERBOSITY terse
 DROP SCHEMA multi_mx_function_call_delegation CASCADE;
