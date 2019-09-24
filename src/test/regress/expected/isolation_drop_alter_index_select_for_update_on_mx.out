@@ -1,0 +1,218 @@
+Parsed test spec with 3 sessions
+
+starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-insert s2-start-session-level-connection s2-begin-on-worker s2-alter s1-commit-worker s2-commit-worker s1-stop-connection s2-stop-connection s3-select-count
+step s1-start-session-level-connection: 
+        SELECT start_session_level_connection_to_node('localhost', 57637);
+
+start_session_level_connection_to_node
+
+               
+step s1-begin-on-worker: 
+        SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s1-insert: 
+        SELECT run_commands_on_session_level_connection_to_node('INSERT INTO dist_table VALUES(5, 55)');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s2-start-session-level-connection: 
+        SELECT start_session_level_connection_to_node('localhost', 57638);
+
+start_session_level_connection_to_node
+
+               
+step s2-begin-on-worker: 
+        SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s2-alter: 
+	ALTER TABLE dist_table DROP value;
+ <waiting ...>
+step s1-commit-worker: 
+	SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s2-alter: <... completed>
+step s2-commit-worker: 
+        SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s1-stop-connection: 
+	SELECT stop_session_level_connection_to_node();
+
+stop_session_level_connection_to_node
+
+               
+step s2-stop-connection: 
+        SELECT stop_session_level_connection_to_node();
+
+stop_session_level_connection_to_node
+
+               
+step s3-select-count: 
+	SELECT COUNT(*) FROM dist_table;
+
+count          
+
+6              
+restore_isolation_tester_func
+
+               
+
+starting permutation: s1-begin s1-index s2-start-session-level-connection s2-begin-on-worker s2-select-for-update s1-commit s2-commit-worker s2-stop-connection
+step s1-begin: 
+	BEGIN;
+
+step s1-index: 
+	CREATE INDEX dist_table_index ON dist_table (id);
+
+step s2-start-session-level-connection: 
+        SELECT start_session_level_connection_to_node('localhost', 57638);
+
+start_session_level_connection_to_node
+
+               
+step s2-begin-on-worker: 
+        SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s2-select-for-update: 
+	SELECT run_commands_on_session_level_connection_to_node('SELECT * FROM dist_table WHERE id = 5 FOR UPDATE');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s1-commit: 
+	COMMIT;
+
+step s2-commit-worker: 
+        SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s2-stop-connection: 
+        SELECT stop_session_level_connection_to_node();
+
+stop_session_level_connection_to_node
+
+               
+restore_isolation_tester_func
+
+               
+
+starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-select-for-update s2-start-session-level-connection s2-begin-on-worker s2-select-for-update s1-commit-worker s2-commit-worker s1-stop-connection s2-stop-connection
+step s1-start-session-level-connection: 
+        SELECT start_session_level_connection_to_node('localhost', 57637);
+
+start_session_level_connection_to_node
+
+               
+step s1-begin-on-worker: 
+        SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s1-select-for-update: 
+	SELECT run_commands_on_session_level_connection_to_node('SELECT * FROM dist_table WHERE id = 5 FOR UPDATE');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s2-start-session-level-connection: 
+        SELECT start_session_level_connection_to_node('localhost', 57638);
+
+start_session_level_connection_to_node
+
+               
+step s2-begin-on-worker: 
+        SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s2-select-for-update: 
+	SELECT run_commands_on_session_level_connection_to_node('SELECT * FROM dist_table WHERE id = 5 FOR UPDATE');
+ <waiting ...>
+step s1-commit-worker: 
+	SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s2-select-for-update: <... completed>
+run_commands_on_session_level_connection_to_node
+
+               
+step s2-commit-worker: 
+        SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s1-stop-connection: 
+	SELECT stop_session_level_connection_to_node();
+
+stop_session_level_connection_to_node
+
+               
+step s2-stop-connection: 
+        SELECT stop_session_level_connection_to_node();
+
+stop_session_level_connection_to_node
+
+               
+restore_isolation_tester_func
+
+               
+
+starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-select-for-update s2-coordinator-create-index-concurrently s1-commit-worker s1-stop-connection
+step s1-start-session-level-connection: 
+        SELECT start_session_level_connection_to_node('localhost', 57637);
+
+start_session_level_connection_to_node
+
+               
+step s1-begin-on-worker: 
+        SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s1-select-for-update: 
+	SELECT run_commands_on_session_level_connection_to_node('SELECT * FROM dist_table WHERE id = 5 FOR UPDATE');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s2-coordinator-create-index-concurrently: 
+	CREATE INDEX CONCURRENTLY dist_table_index_conc ON dist_table(id);
+
+step s1-commit-worker: 
+	SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s1-stop-connection: 
+	SELECT stop_session_level_connection_to_node();
+
+stop_session_level_connection_to_node
+
+               
+restore_isolation_tester_func
+
+               
