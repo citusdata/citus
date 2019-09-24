@@ -1,7 +1,9 @@
 /*-------------------------------------------------------------------------
  *
  * call.c
- *    Commands for call remote stored procedures.
+ *    Commands for distributing CALL for distributed procedures.
+ *
+ *    Procedures can be distributed with create_distributed_function.
  *
  * Copyright (c) 2019, Citus Data, Inc.
  *
@@ -169,6 +171,7 @@ CallFuncExprRemotely(CallStmt *callStmt, DistObjectCacheEntry *procedure,
 		TupleDesc tupleDesc = CallStmtResultDesc(callStmt);
 		TupleTableSlot *slot = MakeSingleTupleTableSlotCompat(tupleDesc,
 															  &TTSOpsMinimalTuple);
+		bool hasReturning = true;
 		Task *task = CitusMakeNode(Task);
 
 		task->jobId = INVALID_JOB_ID;
@@ -182,7 +185,7 @@ CallFuncExprRemotely(CallStmt *callStmt, DistObjectCacheEntry *procedure,
 		task->taskPlacementList = placementList;
 
 		ExecuteTaskListExtended(ROW_MODIFY_NONE, list_make1(task),
-								tupleDesc, tupleStore, true,
+								tupleDesc, tupleStore, hasReturning,
 								MaxAdaptiveExecutorPoolSize);
 
 		while (tuplestore_gettupleslot(tupleStore, true, false, slot))
