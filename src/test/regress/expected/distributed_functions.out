@@ -18,6 +18,21 @@ CREATE FUNCTION add(integer, integer) RETURNS integer
     LANGUAGE SQL
     IMMUTABLE
     RETURNS NULL ON NULL INPUT;
+CREATE FUNCTION add_numeric(numeric, numeric) RETURNS numeric
+    AS 'select $1 + $2;'
+    LANGUAGE SQL
+    IMMUTABLE
+    RETURNS NULL ON NULL INPUT;
+CREATE FUNCTION add_text(text, text) RETURNS int
+    AS 'select $1::int + $2::int;'
+    LANGUAGE SQL
+    IMMUTABLE
+    RETURNS NULL ON NULL INPUT;
+CREATE FUNCTION add_polygons(polygon, polygon) RETURNS int
+    AS 'select 1'
+    LANGUAGE SQL
+    IMMUTABLE
+    RETURNS NULL ON NULL INPUT;
 -- Test some combination of functions without ddl propagation
 -- This will prevent the workers from having those types created. They are
 -- created just-in-time on function distribution
@@ -225,7 +240,8 @@ SELECT create_distributed_function('add_with_param_names(int, int)', '$1', coloc
 ERROR:  cannot colocate function "add_with_param_names" and table "replicated_table_func_test"
 DETAIL:  Citus currently only supports colocating function with distributed tables that are created using streaming replication model.
 HINT:  When distributing tables make sure that "citus.replication_model" is set to "streaming"
--- a function cannot be colocated with a different distribution argument type
+-- a function can be colocated with a different distribution argument type
+-- as long as there is a coercion path
 SET citus.shard_replication_factor TO 1;
 CREATE TABLE replicated_table_func_test_2 (a bigint);
 SET citus.replication_model TO "streaming";
@@ -236,7 +252,11 @@ SELECT create_distributed_table('replicated_table_func_test_2', 'a');
 (1 row)
 
 SELECT create_distributed_function('add_with_param_names(int, int)', 'val1', colocate_with:='replicated_table_func_test_2');
-ERROR:  cannot colocate function "replicated_table_func_test_2" and table "add_with_param_names" because distribution column types don't match
+ create_distributed_function 
+-----------------------------
+ 
+(1 row)
+
 -- colocate_with cannot be used without distribution key
 SELECT create_distributed_function('add_with_param_names(int, int)', colocate_with:='replicated_table_func_test_2');
 ERROR:  cannot distribute the function "add_with_param_names" since the distribution argument is not valid 
@@ -297,6 +317,50 @@ WHERE pg_dist_partition.logicalrelid = 'replicated_table_func_test_4'::regclass 
  t
 (1 row)
 
+-- function with a numeric dist. arg can be colocated with int 
+-- column of a distributed table. In general, if there is a coercion
+-- path, we rely on postgres for implicit coersions, and users for explicit coersions
+-- to coerce the values
+SELECT create_distributed_function('add_numeric(numeric, numeric)', '$1', colocate_with:='replicated_table_func_test_4');
+ create_distributed_function 
+-----------------------------
+ 
+(1 row)
+
+SELECT pg_dist_partition.colocationid = objects.colocationid as table_and_function_colocated
+FROM pg_dist_partition, citus.pg_dist_object as objects 
+WHERE pg_dist_partition.logicalrelid = 'replicated_table_func_test_4'::regclass AND 
+	  objects.objid = 'add_numeric(numeric, numeric)'::regprocedure;
+ table_and_function_colocated 
+------------------------------
+ t
+(1 row)
+
+SELECT create_distributed_function('add_text(text, text)', '$1', colocate_with:='replicated_table_func_test_4');
+ create_distributed_function 
+-----------------------------
+ 
+(1 row)
+
+SELECT pg_dist_partition.colocationid = objects.colocationid as table_and_function_colocated
+FROM pg_dist_partition, citus.pg_dist_object as objects 
+WHERE pg_dist_partition.logicalrelid = 'replicated_table_func_test_4'::regclass AND 
+	  objects.objid = 'add_text(text, text)'::regprocedure;
+ table_and_function_colocated 
+------------------------------
+ t
+(1 row)
+
+-- cannot distribute function because there is no
+-- coercion path from polygon to int
+SELECT create_distributed_function('add_polygons(polygon,polygon)', '$1', colocate_with:='replicated_table_func_test_4');
+ERROR:  cannot colocate function "replicated_table_func_test_4" and table "add_polygons" because distribution column types don't match and there is no coercion path
+-- without the colocate_with, the function errors out since there is no
+-- default colocation group
+SET citus.shard_count TO 55;
+SELECT create_distributed_function('add_with_param_names(int, int)', 'val1');
+ERROR:  cannot distribute the function "add_with_param_names" since there is no table to colocate with
+HINT:  Provide a distributed table via "colocate_with" option to create_distributed_function()
 -- clear objects
 SELECT stop_metadata_sync_to_node(nodename,nodeport) FROM pg_dist_node WHERE isactive AND noderole = 'primary';
  stop_metadata_sync_to_node 

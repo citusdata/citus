@@ -37,6 +37,7 @@
 #include "distributed/multi_executor.h"
 #include "distributed/relation_access_tracking.h"
 #include "distributed/worker_transaction.h"
+#include "parser/parse_coerce.h"
 #include "storage/lmgr.h"
 #include "utils/builtins.h"
 #include "utils/fmgrprotos.h"
@@ -318,14 +319,7 @@ GetFunctionColocationId(Oid functionOid, char *colocateWithTableName,
 						Oid distributionArgumentOid)
 {
 	int colocationId = INVALID_COLOCATION_ID;
-	bool createdColocationGroup = false;
-
-	/*
-	 * Get an exclusive lock on the colocation system catalog. Therefore, we
-	 * can be sure that there will no modifications on the colocation table
-	 * until this transaction is committed.
-	 */
-	Relation pgDistColocation = heap_open(DistColocationRelationId(), ExclusiveLock);
+	Relation pgDistColocation = heap_open(DistColocationRelationId(), ShareLock);
 
 	if (pg_strncasecmp(colocateWithTableName, "default", NAMEDATALEN) == 0)
 	{
@@ -335,11 +329,13 @@ GetFunctionColocationId(Oid functionOid, char *colocateWithTableName,
 
 		if (colocationId == INVALID_COLOCATION_ID)
 		{
-			colocationId =
-				CreateColocationGroup(ShardCount, ShardReplicationFactor,
-									  distributionArgumentOid);
+			char *functionName = get_func_name(functionOid);
 
-			createdColocationGroup = true;
+			ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+							errmsg("cannot distribute the function \"%s\" since there "
+								   "is no table to colocate with", functionName),
+							errhint("Provide a distributed table via \"colocate_with\" "
+									"option to create_distributed_function()")));
 		}
 	}
 	else
@@ -353,23 +349,8 @@ GetFunctionColocationId(Oid functionOid, char *colocateWithTableName,
 		colocationId = TableColocationId(sourceRelationId);
 	}
 
-	/*
-	 * If we created a new colocation group then we need to keep the lock to
-	 * prevent a concurrent create_distributed_table call from creating another
-	 * colocation group with the same parameters. If we're using an existing
-	 * colocation group then other transactions will use the same one.
-	 */
-	if (createdColocationGroup)
-	{
-		/* keep the exclusive lock */
-		heap_close(pgDistColocation, NoLock);
-	}
-	else
-	{
-		/* release the exclusive lock */
-		heap_close(pgDistColocation, ExclusiveLock);
-	}
-
+	/* keep the lock */
+	heap_close(pgDistColocation, NoLock);
 
 	return colocationId;
 }
@@ -415,15 +396,31 @@ EnsureFunctionCanBeColocatedWithTable(Oid functionOid, Oid distributionColumnTyp
 								"\"citus.replication_model\" is set to \"streaming\"")));
 	}
 
+	/*
+	 * If the types are the same, we're good. If not, we still check if there
+	 * is any coercion path between the types.
+	 */
 	sourceDistributionColumnType = sourceDistributionColumn->vartype;
 	if (sourceDistributionColumnType != distributionColumnType)
 	{
-		char *functionName = get_func_name(functionOid);
-		char *sourceRelationName = get_rel_name(sourceRelationId);
+		Oid coercionFuncId = InvalidOid;
+		CoercionPathType coercionType = COERCION_PATH_NONE;
 
-		ereport(ERROR, (errmsg("cannot colocate function \"%s\" and table \"%s\" "
-							   "because distribution column types don't match",
-							   sourceRelationName, functionName)));
+		coercionType =
+			find_coercion_pathway(distributionColumnType, sourceDistributionColumnType,
+								  COERCION_EXPLICIT, &coercionFuncId);
+
+		/* if there is no path for coercion, error out*/
+		if (coercionType == COERCION_PATH_NONE)
+		{
+			char *functionName = get_func_name(functionOid);
+			char *sourceRelationName = get_rel_name(sourceRelationId);
+
+			ereport(ERROR, (errmsg("cannot colocate function \"%s\" and table \"%s\" "
+								   "because distribution column types don't match and "
+								   "there is no coercion path", sourceRelationName,
+								   functionName)));
+		}
 	}
 }
 
