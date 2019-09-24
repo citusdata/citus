@@ -497,9 +497,9 @@ SELECT create_distributed_table('table3_groupE', 'id');
 (1 row)
 
 -- test different schema
-CREATE SCHEMA schema_collocation;
-CREATE TABLE schema_collocation.table4_groupE ( id int );
-SELECT create_distributed_table('schema_collocation.table4_groupE', 'id');
+CREATE SCHEMA schema_colocation;
+CREATE TABLE schema_colocation.table4_groupE ( id int );
+SELECT create_distributed_table('schema_colocation.table4_groupE', 'id');
  create_distributed_table 
 --------------------------
  
@@ -568,25 +568,25 @@ SELECT * FROM pg_dist_colocation
 SELECT logicalrelid, colocationid FROM pg_dist_partition
     WHERE colocationid >= 1 AND colocationid < 1000
     ORDER BY colocationid, logicalrelid;
-           logicalrelid           | colocationid 
-----------------------------------+--------------
- table1_groupe                    |            4
- table2_groupe                    |            4
- table3_groupe                    |            4
- schema_collocation.table4_groupe |            4
- table4_groupe                    |            4
- table1_groupb                    |            5
- table2_groupb                    |            5
- table1_groupc                    |            6
- table2_groupc                    |            6
- table1_groupd                    |            7
- table2_groupd                    |            7
- table3_groupd                    |            7
- table1_group_none_1              |            8
- table2_group_none_1              |            8
- table1_group_none_2              |            9
- table1_group_none_3              |           10
- table1_group_default             |           11
+          logicalrelid           | colocationid 
+---------------------------------+--------------
+ table1_groupe                   |            4
+ table2_groupe                   |            4
+ table3_groupe                   |            4
+ schema_colocation.table4_groupe |            4
+ table4_groupe                   |            4
+ table1_groupb                   |            5
+ table2_groupb                   |            5
+ table1_groupc                   |            6
+ table2_groupc                   |            6
+ table1_groupd                   |            7
+ table2_groupd                   |            7
+ table3_groupd                   |            7
+ table1_group_none_1             |            8
+ table2_group_none_1             |            8
+ table1_group_none_2             |            9
+ table1_group_none_3             |           10
+ table1_group_default            |           11
 (17 rows)
 
 -- check failing colocate_with options
@@ -624,7 +624,7 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.table3_
  id           | integer | 
 (2 rows)
 
-SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='schema_collocation.table4_groupE_1300064'::regclass;
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='schema_colocation.table4_groupE_1300064'::regclass;
  Column |  Type   | Modifiers 
 --------+---------+-----------
  id     | integer | 
@@ -676,26 +676,26 @@ WHERE
 ORDER BY
     table1,
     table2;
-              table1              |              table2              | colocated 
-----------------------------------+----------------------------------+-----------
- table1_group1                    | table2_group1                    | t
- table1_groupb                    | table2_groupb                    | t
- table1_groupc                    | table2_groupc                    | t
- table1_groupd                    | table2_groupd                    | t
- table1_groupd                    | table3_groupd                    | t
- table2_groupd                    | table3_groupd                    | t
- table1_groupe                    | table2_groupe                    | t
- table1_groupe                    | table3_groupe                    | t
- table1_groupe                    | schema_collocation.table4_groupe | t
- table1_groupe                    | table4_groupe                    | t
- table2_groupe                    | table3_groupe                    | t
- table2_groupe                    | schema_collocation.table4_groupe | t
- table2_groupe                    | table4_groupe                    | t
- table3_groupe                    | schema_collocation.table4_groupe | t
- table3_groupe                    | table4_groupe                    | t
- schema_collocation.table4_groupe | table4_groupe                    | t
- table1_group_none_1              | table2_group_none_1              | t
- table1_groupf                    | table2_groupf                    | t
+             table1              |             table2              | colocated 
+---------------------------------+---------------------------------+-----------
+ table1_group1                   | table2_group1                   | t
+ table1_groupb                   | table2_groupb                   | t
+ table1_groupc                   | table2_groupc                   | t
+ table1_groupd                   | table2_groupd                   | t
+ table1_groupd                   | table3_groupd                   | t
+ table2_groupd                   | table3_groupd                   | t
+ table1_groupe                   | table2_groupe                   | t
+ table1_groupe                   | table3_groupe                   | t
+ table1_groupe                   | schema_colocation.table4_groupe | t
+ table1_groupe                   | table4_groupe                   | t
+ table2_groupe                   | table3_groupe                   | t
+ table2_groupe                   | schema_colocation.table4_groupe | t
+ table2_groupe                   | table4_groupe                   | t
+ table3_groupe                   | schema_colocation.table4_groupe | t
+ table3_groupe                   | table4_groupe                   | t
+ schema_colocation.table4_groupe | table4_groupe                   | t
+ table1_group_none_1             | table2_group_none_1             | t
+ table1_groupf                   | table2_groupf                   | t
 (18 rows)
 
 -- check created shards
@@ -717,116 +717,116 @@ ORDER BY
     shardmaxvalue::integer,
     shardid,
     nodeport;
-           logicalrelid           | shardid | shardstorage | nodeport | shardminvalue | shardmaxvalue 
-----------------------------------+---------+--------------+----------+---------------+---------------
- table1_groupb                    | 1300026 | t            |    57637 | -2147483648   | -1
- table1_groupb                    | 1300027 | t            |    57638 | 0             | 2147483647
- table2_groupb                    | 1300028 | t            |    57637 | -2147483648   | -1
- table2_groupb                    | 1300029 | t            |    57638 | 0             | 2147483647
- table1_groupc                    | 1300030 | t            |    57637 | -2147483648   | -1
- table1_groupc                    | 1300030 | t            |    57638 | -2147483648   | -1
- table1_groupc                    | 1300031 | t            |    57637 | 0             | 2147483647
- table1_groupc                    | 1300031 | t            |    57638 | 0             | 2147483647
- table2_groupc                    | 1300032 | t            |    57637 | -2147483648   | -1
- table2_groupc                    | 1300032 | t            |    57638 | -2147483648   | -1
- table2_groupc                    | 1300033 | t            |    57637 | 0             | 2147483647
- table2_groupc                    | 1300033 | t            |    57638 | 0             | 2147483647
- table1_groupd                    | 1300034 | t            |    57637 | -2147483648   | -1610612737
- table1_groupd                    | 1300034 | t            |    57638 | -2147483648   | -1610612737
- table1_groupd                    | 1300035 | t            |    57637 | -1610612736   | -1073741825
- table1_groupd                    | 1300035 | t            |    57638 | -1610612736   | -1073741825
- table1_groupd                    | 1300036 | t            |    57637 | -1073741824   | -536870913
- table1_groupd                    | 1300036 | t            |    57638 | -1073741824   | -536870913
- table1_groupd                    | 1300037 | t            |    57637 | -536870912    | -1
- table1_groupd                    | 1300037 | t            |    57638 | -536870912    | -1
- table1_groupd                    | 1300038 | t            |    57637 | 0             | 536870911
- table1_groupd                    | 1300038 | t            |    57638 | 0             | 536870911
- table1_groupd                    | 1300039 | t            |    57637 | 536870912     | 1073741823
- table1_groupd                    | 1300039 | t            |    57638 | 536870912     | 1073741823
- table1_groupd                    | 1300040 | t            |    57637 | 1073741824    | 1610612735
- table1_groupd                    | 1300040 | t            |    57638 | 1073741824    | 1610612735
- table1_groupd                    | 1300041 | t            |    57637 | 1610612736    | 2147483647
- table1_groupd                    | 1300041 | t            |    57638 | 1610612736    | 2147483647
- table2_groupd                    | 1300042 | t            |    57637 | -2147483648   | -1610612737
- table2_groupd                    | 1300042 | t            |    57638 | -2147483648   | -1610612737
- table2_groupd                    | 1300043 | t            |    57637 | -1610612736   | -1073741825
- table2_groupd                    | 1300043 | t            |    57638 | -1610612736   | -1073741825
- table2_groupd                    | 1300044 | t            |    57637 | -1073741824   | -536870913
- table2_groupd                    | 1300044 | t            |    57638 | -1073741824   | -536870913
- table2_groupd                    | 1300045 | t            |    57637 | -536870912    | -1
- table2_groupd                    | 1300045 | t            |    57638 | -536870912    | -1
- table2_groupd                    | 1300046 | t            |    57637 | 0             | 536870911
- table2_groupd                    | 1300046 | t            |    57638 | 0             | 536870911
- table2_groupd                    | 1300047 | t            |    57637 | 536870912     | 1073741823
- table2_groupd                    | 1300047 | t            |    57638 | 536870912     | 1073741823
- table2_groupd                    | 1300048 | t            |    57637 | 1073741824    | 1610612735
- table2_groupd                    | 1300048 | t            |    57638 | 1073741824    | 1610612735
- table2_groupd                    | 1300049 | t            |    57637 | 1610612736    | 2147483647
- table2_groupd                    | 1300049 | t            |    57638 | 1610612736    | 2147483647
- table3_groupd                    | 1300050 | f            |    57637 | -2147483648   | -1610612737
- table3_groupd                    | 1300050 | f            |    57638 | -2147483648   | -1610612737
- table3_groupd                    | 1300051 | f            |    57637 | -1610612736   | -1073741825
- table3_groupd                    | 1300051 | f            |    57638 | -1610612736   | -1073741825
- table3_groupd                    | 1300052 | f            |    57637 | -1073741824   | -536870913
- table3_groupd                    | 1300052 | f            |    57638 | -1073741824   | -536870913
- table3_groupd                    | 1300053 | f            |    57637 | -536870912    | -1
- table3_groupd                    | 1300053 | f            |    57638 | -536870912    | -1
- table3_groupd                    | 1300054 | f            |    57637 | 0             | 536870911
- table3_groupd                    | 1300054 | f            |    57638 | 0             | 536870911
- table3_groupd                    | 1300055 | f            |    57637 | 536870912     | 1073741823
- table3_groupd                    | 1300055 | f            |    57638 | 536870912     | 1073741823
- table3_groupd                    | 1300056 | f            |    57637 | 1073741824    | 1610612735
- table3_groupd                    | 1300056 | f            |    57638 | 1073741824    | 1610612735
- table3_groupd                    | 1300057 | f            |    57637 | 1610612736    | 2147483647
- table3_groupd                    | 1300057 | f            |    57638 | 1610612736    | 2147483647
- table1_groupe                    | 1300058 | t            |    57637 | -2147483648   | -1
- table1_groupe                    | 1300058 | t            |    57638 | -2147483648   | -1
- table1_groupe                    | 1300059 | t            |    57637 | 0             | 2147483647
- table1_groupe                    | 1300059 | t            |    57638 | 0             | 2147483647
- table2_groupe                    | 1300060 | t            |    57637 | -2147483648   | -1
- table2_groupe                    | 1300060 | t            |    57638 | -2147483648   | -1
- table2_groupe                    | 1300061 | t            |    57637 | 0             | 2147483647
- table2_groupe                    | 1300061 | t            |    57638 | 0             | 2147483647
- table3_groupe                    | 1300062 | t            |    57637 | -2147483648   | -1
- table3_groupe                    | 1300062 | t            |    57638 | -2147483648   | -1
- table3_groupe                    | 1300063 | t            |    57637 | 0             | 2147483647
- table3_groupe                    | 1300063 | t            |    57638 | 0             | 2147483647
- schema_collocation.table4_groupe | 1300064 | t            |    57637 | -2147483648   | -1
- schema_collocation.table4_groupe | 1300064 | t            |    57638 | -2147483648   | -1
- schema_collocation.table4_groupe | 1300065 | t            |    57637 | 0             | 2147483647
- schema_collocation.table4_groupe | 1300065 | t            |    57638 | 0             | 2147483647
- table1_group_none_1              | 1300066 | t            |    57637 | -2147483648   | -1
- table1_group_none_1              | 1300066 | t            |    57638 | -2147483648   | -1
- table1_group_none_1              | 1300067 | t            |    57637 | 0             | 2147483647
- table1_group_none_1              | 1300067 | t            |    57638 | 0             | 2147483647
- table2_group_none_1              | 1300068 | t            |    57637 | -2147483648   | -1
- table2_group_none_1              | 1300068 | t            |    57638 | -2147483648   | -1
- table2_group_none_1              | 1300069 | t            |    57637 | 0             | 2147483647
- table2_group_none_1              | 1300069 | t            |    57638 | 0             | 2147483647
- table1_group_none_2              | 1300070 | t            |    57637 | -2147483648   | -1
- table1_group_none_2              | 1300070 | t            |    57638 | -2147483648   | -1
- table1_group_none_2              | 1300071 | t            |    57637 | 0             | 2147483647
- table1_group_none_2              | 1300071 | t            |    57638 | 0             | 2147483647
- table4_groupe                    | 1300072 | t            |    57637 | -2147483648   | -1
- table4_groupe                    | 1300072 | t            |    57638 | -2147483648   | -1
- table4_groupe                    | 1300073 | t            |    57637 | 0             | 2147483647
- table4_groupe                    | 1300073 | t            |    57638 | 0             | 2147483647
- table1_group_none_3              | 1300074 | t            |    57637 | -2147483648   | -715827884
- table1_group_none_3              | 1300074 | t            |    57638 | -2147483648   | -715827884
- table1_group_none_3              | 1300075 | t            |    57637 | -715827883    | 715827881
- table1_group_none_3              | 1300075 | t            |    57638 | -715827883    | 715827881
- table1_group_none_3              | 1300076 | t            |    57637 | 715827882     | 2147483647
- table1_group_none_3              | 1300076 | t            |    57638 | 715827882     | 2147483647
- table1_group_default             | 1300077 | t            |    57637 | -2147483648   | -715827884
- table1_group_default             | 1300077 | t            |    57638 | -2147483648   | -715827884
- table1_group_default             | 1300078 | t            |    57637 | -715827883    | 715827881
- table1_group_default             | 1300078 | t            |    57638 | -715827883    | 715827881
- table1_group_default             | 1300079 | t            |    57637 | 715827882     | 2147483647
- table1_group_default             | 1300079 | t            |    57638 | 715827882     | 2147483647
- table1_groupf                    | 1300080 | t            |    57637 |               | 
- table1_groupf                    | 1300080 | t            |    57638 |               | 
- table2_groupf                    | 1300081 | t            |    57637 |               | 
- table2_groupf                    | 1300081 | t            |    57638 |               | 
+          logicalrelid           | shardid | shardstorage | nodeport | shardminvalue | shardmaxvalue 
+---------------------------------+---------+--------------+----------+---------------+---------------
+ table1_groupb                   | 1300026 | t            |    57637 | -2147483648   | -1
+ table1_groupb                   | 1300027 | t            |    57638 | 0             | 2147483647
+ table2_groupb                   | 1300028 | t            |    57637 | -2147483648   | -1
+ table2_groupb                   | 1300029 | t            |    57638 | 0             | 2147483647
+ table1_groupc                   | 1300030 | t            |    57637 | -2147483648   | -1
+ table1_groupc                   | 1300030 | t            |    57638 | -2147483648   | -1
+ table1_groupc                   | 1300031 | t            |    57637 | 0             | 2147483647
+ table1_groupc                   | 1300031 | t            |    57638 | 0             | 2147483647
+ table2_groupc                   | 1300032 | t            |    57637 | -2147483648   | -1
+ table2_groupc                   | 1300032 | t            |    57638 | -2147483648   | -1
+ table2_groupc                   | 1300033 | t            |    57637 | 0             | 2147483647
+ table2_groupc                   | 1300033 | t            |    57638 | 0             | 2147483647
+ table1_groupd                   | 1300034 | t            |    57637 | -2147483648   | -1610612737
+ table1_groupd                   | 1300034 | t            |    57638 | -2147483648   | -1610612737
+ table1_groupd                   | 1300035 | t            |    57637 | -1610612736   | -1073741825
+ table1_groupd                   | 1300035 | t            |    57638 | -1610612736   | -1073741825
+ table1_groupd                   | 1300036 | t            |    57637 | -1073741824   | -536870913
+ table1_groupd                   | 1300036 | t            |    57638 | -1073741824   | -536870913
+ table1_groupd                   | 1300037 | t            |    57637 | -536870912    | -1
+ table1_groupd                   | 1300037 | t            |    57638 | -536870912    | -1
+ table1_groupd                   | 1300038 | t            |    57637 | 0             | 536870911
+ table1_groupd                   | 1300038 | t            |    57638 | 0             | 536870911
+ table1_groupd                   | 1300039 | t            |    57637 | 536870912     | 1073741823
+ table1_groupd                   | 1300039 | t            |    57638 | 536870912     | 1073741823
+ table1_groupd                   | 1300040 | t            |    57637 | 1073741824    | 1610612735
+ table1_groupd                   | 1300040 | t            |    57638 | 1073741824    | 1610612735
+ table1_groupd                   | 1300041 | t            |    57637 | 1610612736    | 2147483647
+ table1_groupd                   | 1300041 | t            |    57638 | 1610612736    | 2147483647
+ table2_groupd                   | 1300042 | t            |    57637 | -2147483648   | -1610612737
+ table2_groupd                   | 1300042 | t            |    57638 | -2147483648   | -1610612737
+ table2_groupd                   | 1300043 | t            |    57637 | -1610612736   | -1073741825
+ table2_groupd                   | 1300043 | t            |    57638 | -1610612736   | -1073741825
+ table2_groupd                   | 1300044 | t            |    57637 | -1073741824   | -536870913
+ table2_groupd                   | 1300044 | t            |    57638 | -1073741824   | -536870913
+ table2_groupd                   | 1300045 | t            |    57637 | -536870912    | -1
+ table2_groupd                   | 1300045 | t            |    57638 | -536870912    | -1
+ table2_groupd                   | 1300046 | t            |    57637 | 0             | 536870911
+ table2_groupd                   | 1300046 | t            |    57638 | 0             | 536870911
+ table2_groupd                   | 1300047 | t            |    57637 | 536870912     | 1073741823
+ table2_groupd                   | 1300047 | t            |    57638 | 536870912     | 1073741823
+ table2_groupd                   | 1300048 | t            |    57637 | 1073741824    | 1610612735
+ table2_groupd                   | 1300048 | t            |    57638 | 1073741824    | 1610612735
+ table2_groupd                   | 1300049 | t            |    57637 | 1610612736    | 2147483647
+ table2_groupd                   | 1300049 | t            |    57638 | 1610612736    | 2147483647
+ table3_groupd                   | 1300050 | f            |    57637 | -2147483648   | -1610612737
+ table3_groupd                   | 1300050 | f            |    57638 | -2147483648   | -1610612737
+ table3_groupd                   | 1300051 | f            |    57637 | -1610612736   | -1073741825
+ table3_groupd                   | 1300051 | f            |    57638 | -1610612736   | -1073741825
+ table3_groupd                   | 1300052 | f            |    57637 | -1073741824   | -536870913
+ table3_groupd                   | 1300052 | f            |    57638 | -1073741824   | -536870913
+ table3_groupd                   | 1300053 | f            |    57637 | -536870912    | -1
+ table3_groupd                   | 1300053 | f            |    57638 | -536870912    | -1
+ table3_groupd                   | 1300054 | f            |    57637 | 0             | 536870911
+ table3_groupd                   | 1300054 | f            |    57638 | 0             | 536870911
+ table3_groupd                   | 1300055 | f            |    57637 | 536870912     | 1073741823
+ table3_groupd                   | 1300055 | f            |    57638 | 536870912     | 1073741823
+ table3_groupd                   | 1300056 | f            |    57637 | 1073741824    | 1610612735
+ table3_groupd                   | 1300056 | f            |    57638 | 1073741824    | 1610612735
+ table3_groupd                   | 1300057 | f            |    57637 | 1610612736    | 2147483647
+ table3_groupd                   | 1300057 | f            |    57638 | 1610612736    | 2147483647
+ table1_groupe                   | 1300058 | t            |    57637 | -2147483648   | -1
+ table1_groupe                   | 1300058 | t            |    57638 | -2147483648   | -1
+ table1_groupe                   | 1300059 | t            |    57637 | 0             | 2147483647
+ table1_groupe                   | 1300059 | t            |    57638 | 0             | 2147483647
+ table2_groupe                   | 1300060 | t            |    57637 | -2147483648   | -1
+ table2_groupe                   | 1300060 | t            |    57638 | -2147483648   | -1
+ table2_groupe                   | 1300061 | t            |    57637 | 0             | 2147483647
+ table2_groupe                   | 1300061 | t            |    57638 | 0             | 2147483647
+ table3_groupe                   | 1300062 | t            |    57637 | -2147483648   | -1
+ table3_groupe                   | 1300062 | t            |    57638 | -2147483648   | -1
+ table3_groupe                   | 1300063 | t            |    57637 | 0             | 2147483647
+ table3_groupe                   | 1300063 | t            |    57638 | 0             | 2147483647
+ schema_colocation.table4_groupe | 1300064 | t            |    57637 | -2147483648   | -1
+ schema_colocation.table4_groupe | 1300064 | t            |    57638 | -2147483648   | -1
+ schema_colocation.table4_groupe | 1300065 | t            |    57637 | 0             | 2147483647
+ schema_colocation.table4_groupe | 1300065 | t            |    57638 | 0             | 2147483647
+ table1_group_none_1             | 1300066 | t            |    57637 | -2147483648   | -1
+ table1_group_none_1             | 1300066 | t            |    57638 | -2147483648   | -1
+ table1_group_none_1             | 1300067 | t            |    57637 | 0             | 2147483647
+ table1_group_none_1             | 1300067 | t            |    57638 | 0             | 2147483647
+ table2_group_none_1             | 1300068 | t            |    57637 | -2147483648   | -1
+ table2_group_none_1             | 1300068 | t            |    57638 | -2147483648   | -1
+ table2_group_none_1             | 1300069 | t            |    57637 | 0             | 2147483647
+ table2_group_none_1             | 1300069 | t            |    57638 | 0             | 2147483647
+ table1_group_none_2             | 1300070 | t            |    57637 | -2147483648   | -1
+ table1_group_none_2             | 1300070 | t            |    57638 | -2147483648   | -1
+ table1_group_none_2             | 1300071 | t            |    57637 | 0             | 2147483647
+ table1_group_none_2             | 1300071 | t            |    57638 | 0             | 2147483647
+ table4_groupe                   | 1300072 | t            |    57637 | -2147483648   | -1
+ table4_groupe                   | 1300072 | t            |    57638 | -2147483648   | -1
+ table4_groupe                   | 1300073 | t            |    57637 | 0             | 2147483647
+ table4_groupe                   | 1300073 | t            |    57638 | 0             | 2147483647
+ table1_group_none_3             | 1300074 | t            |    57637 | -2147483648   | -715827884
+ table1_group_none_3             | 1300074 | t            |    57638 | -2147483648   | -715827884
+ table1_group_none_3             | 1300075 | t            |    57637 | -715827883    | 715827881
+ table1_group_none_3             | 1300075 | t            |    57638 | -715827883    | 715827881
+ table1_group_none_3             | 1300076 | t            |    57637 | 715827882     | 2147483647
+ table1_group_none_3             | 1300076 | t            |    57638 | 715827882     | 2147483647
+ table1_group_default            | 1300077 | t            |    57637 | -2147483648   | -715827884
+ table1_group_default            | 1300077 | t            |    57638 | -2147483648   | -715827884
+ table1_group_default            | 1300078 | t            |    57637 | -715827883    | 715827881
+ table1_group_default            | 1300078 | t            |    57638 | -715827883    | 715827881
+ table1_group_default            | 1300079 | t            |    57637 | 715827882     | 2147483647
+ table1_group_default            | 1300079 | t            |    57638 | 715827882     | 2147483647
+ table1_groupf                   | 1300080 | t            |    57637 |               | 
+ table1_groupf                   | 1300080 | t            |    57638 |               | 
+ table2_groupf                   | 1300081 | t            |    57637 |               | 
+ table2_groupf                   | 1300081 | t            |    57638 |               | 
 (108 rows)
 
 -- reset colocation ids to test mark_tables_colocated
@@ -1045,7 +1045,7 @@ DROP TABLE table1_groupe;
 DROP TABLE table2_groupe;
 DROP TABLE table3_groupe;
 DROP TABLE table4_groupe;
-DROP TABLE schema_collocation.table4_groupe;
+DROP TABLE schema_colocation.table4_groupe;
 DROP TABLE table1_group_none_1;
 DROP TABLE table2_group_none_1;
 DROP TABLE table1_group_none_2;

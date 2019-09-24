@@ -234,10 +234,10 @@ CREATE TABLE table3_groupE ( dummy_column text, id int );
 SELECT create_distributed_table('table3_groupE', 'id');
 
 -- test different schema
-CREATE SCHEMA schema_collocation;
+CREATE SCHEMA schema_colocation;
 
-CREATE TABLE schema_collocation.table4_groupE ( id int );
-SELECT create_distributed_table('schema_collocation.table4_groupE', 'id');
+CREATE TABLE schema_colocation.table4_groupE ( id int );
+SELECT create_distributed_table('schema_colocation.table4_groupE', 'id');
 
 -- test colocate_with option
 CREATE TABLE table1_group_none_1 ( id int );
@@ -288,7 +288,7 @@ SELECT create_distributed_table('table_bigint', 'id', colocate_with => 'table1_g
 -- check worker table schemas
 \c - - - :worker_1_port
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.table3_groupE_1300062'::regclass;
-SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='schema_collocation.table4_groupE_1300064'::regclass;
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='schema_colocation.table4_groupE_1300064'::regclass;
 
 \c - - - :master_port
 SET citus.next_shard_id TO 1300080;
@@ -443,7 +443,7 @@ DROP TABLE table1_groupe;
 DROP TABLE table2_groupe;
 DROP TABLE table3_groupe;
 DROP TABLE table4_groupe;
-DROP TABLE schema_collocation.table4_groupe;
+DROP TABLE schema_colocation.table4_groupe;
 DROP TABLE table1_group_none_1;
 DROP TABLE table2_group_none_1;
 DROP TABLE table1_group_none_2;
