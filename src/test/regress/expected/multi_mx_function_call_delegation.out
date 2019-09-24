@@ -135,11 +135,11 @@ DEBUG:  Plan is router executable
 (1 row)
 
 -- volatile parameter cannot be pushed down
-select mx_call_func(random()::int, 2);
+select mx_call_func(least(random()::int,0), 2);
 DEBUG:  arguments in a distributed function must be constant expressions
  mx_call_func 
 --------------
- (1,3)
+ (0,2)
 (1 row)
 
 RESET client_min_messages;
