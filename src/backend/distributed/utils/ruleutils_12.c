@@ -453,6 +453,48 @@ pg_get_query_def(Query *query, StringInfo buffer)
 
 
 /*
+ * pg_get_rule_expr deparses an expression and returns the result as a string.
+ */
+char *
+pg_get_rule_expr(Node *expression)
+{
+	bool showImplicitCasts = true;
+	deparse_context context;
+	OverrideSearchPath *overridePath = NULL;
+	StringInfo buffer = makeStringInfo();
+
+	/*
+	 * Set search_path to NIL so that all objects outside of pg_catalog will be
+	 * schema-prefixed. pg_catalog will be added automatically when we call
+	 * PushOverrideSearchPath(), since we set addCatalog to true;
+	 */
+	overridePath = GetOverrideSearchPath(CurrentMemoryContext);
+	overridePath->schemas = NIL;
+	overridePath->addCatalog = true;
+	PushOverrideSearchPath(overridePath);
+
+	context.buf = buffer;
+	context.namespaces = NIL;
+	context.windowClause = NIL;
+	context.windowTList = NIL;
+	context.varprefix = false;
+	context.prettyFlags = 0;
+	context.wrapColumn = WRAP_COLUMN_DEFAULT;
+	context.indentLevel = 0;
+	context.special_exprkind = EXPR_KIND_NONE;
+	context.distrelid = InvalidOid;
+	context.shardid = INVALID_SHARD_ID;
+
+	get_rule_expr(expression, &context, showImplicitCasts);
+
+	/* revert back to original search_path */
+	PopOverrideSearchPath();
+
+	return buffer->data;
+}
+
+
+/*
  * set_rtable_names: select RTE aliases to be used in printing a query
  *
  * We fill in dpns->rtable_names with a list of names that is one-for-one with

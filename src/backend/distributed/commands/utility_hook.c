@@ -209,7 +209,7 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		 * the worker this can avoid making many network round trips.
 		 */
 		if (context == PROCESS_UTILITY_TOPLEVEL &&
-			CallDistributedProcedureRemotely(callStmt, queryString, dest))
+			CallDistributedProcedureRemotely(callStmt, dest))
 		{
 			return;
 		}
