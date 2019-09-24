@@ -79,7 +79,6 @@ CallFuncExprRemotely(CallStmt *callStmt, DistObjectCacheEntry *procedure,
 	Var *partitionColumn = NULL;
 	ShardPlacement *placement = NULL;
 	WorkerNode *workerNode = NULL;
-	StringInfo callCommand = NULL;
 
 	if (IsMultiStatementTransaction())
 	{
@@ -162,22 +161,31 @@ CallFuncExprRemotely(CallStmt *callStmt, DistObjectCacheEntry *procedure,
 
 	ereport(DEBUG1, (errmsg("pushing down the procedure")));
 
-	/* build remote command with fully qualified names */
-	callCommand = makeStringInfo();
-	appendStringInfo(callCommand, "CALL %s", pg_get_rule_expr((Node *) funcExpr));
-
 	{
+		StringInfoData taskQuery;
 		Tuplestorestate *tupleStore = tuplestore_begin_heap(true, false, work_mem);
 		TupleDesc tupleDesc = CallStmtResultDesc(callStmt);
 		TupleTableSlot *slot = MakeSingleTupleTableSlotCompat(tupleDesc,
 															  &TTSOpsMinimalTuple);
 		bool hasReturning = true;
+		char *setSearchPathCommand = SetSearchPathToCurrentSearchPathCommand();
 		Task *task = CitusMakeNode(Task);
+		char *callExprString = pg_get_rule_expr((Node *) funcExpr);
+
+		initStringInfo(&taskQuery);
+		if (setSearchPathCommand == NULL)
+		{
+			appendStringInfo(&taskQuery, "CALL %s", callExprString);
+		}
+		else
+		{
+			appendStringInfo(&taskQuery, "%s;CALL %s", setSearchPathCommand, callExprString);
+		}
 
 		task->jobId = INVALID_JOB_ID;
 		task->taskId = 0;
 		task->taskType = DDL_TASK;
-		task->queryString = callCommand->data;
+		task->queryString = taskQuery.data;
 		task->replicationModel = REPLICATION_MODEL_INVALID;
 		task->dependedTaskList = NIL;
 		task->anchorShardId = placement->shardId;

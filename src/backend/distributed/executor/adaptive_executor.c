@@ -790,7 +790,7 @@ ExecuteTaskListExtended(RowModifyLevel modLevel, List *taskList,
 	ParamListInfo paramListInfo = NULL;
 
 	/*
-	 * The code-paths that rely on this function do not know how execute
+	 * The code-paths that rely on this function do not know how to execute
 	 * commands locally.
 	 */
 	ErrorIfLocalExecutionHappened();
@@ -3067,23 +3067,16 @@ ReceiveResults(WorkerSession *session, bool storeRows)
 				execution->rowsProcessed += currentAffectedTupleCount;
 			}
 
-			PQclear(result);
-
-			/* no more results, break out of loop and free allocated memory */
-			fetchDone = true;
-			break;
+			continue;
 		}
 		else if (resultStatus == PGRES_TUPLES_OK)
 		{
 			/*
-			 * We've already consumed all the tuples, no more results. Break out
-			 * of loop and free allocated memory before returning.
+			 * We've already consumed all the tuples.
+			 * Continue in case there's more results.
 			 */
-			Assert(PQntuples(result) == 0);
-			PQclear(result);
 
-			fetchDone = true;
-			break;
+			continue;
 		}
 		else if (resultStatus != PGRES_SINGLE_TUPLE)
 		{
@@ -3093,7 +3086,7 @@ ReceiveResults(WorkerSession *session, bool storeRows)
 		else if (!storeRows)
 		{
 			/*
-			 * Already receieved rows from executing on another shard placement or
+			 * Already received rows from executing on another shard placement or
 			 * doesn't need at all (e.g., DDL).
 			 */
 			PQclear(result);
