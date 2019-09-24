@@ -152,6 +152,13 @@ TryToDelegateFunctionCall(Query *query)
 
 	distTable = DistributedTableCacheEntry(colocatedRelationId);
 	partitionColumn = distTable->partitionColumn;
+	if (partitionColumn == NULL)
+	{
+		/* This can happen if colocated with a reference table. Punt for now. */
+		ereport(DEBUG1, (errmsg(
+							 "cannnot push down function call for reference tables for reference tables")));
+		return NULL;
+	}
 
 	partitionValue = (Const *) list_nth(funcExpr->args, procedure->distributionArgIndex);
 	if (!IsA(partitionValue, Const))
@@ -182,9 +189,9 @@ TryToDelegateFunctionCall(Query *query)
 	placementList = FinalizedShardPlacementList(shardInterval->shardId);
 	if (list_length(placementList) != 1)
 	{
-		/* punt on reference tables for now */
-		ereport(DEBUG1, (errmsg("cannot push down function call for reference tables or "
-								"replicated distributed tables")));
+		/* punt on this for now */
+		ereport(DEBUG1, (errmsg(
+							 "cannot push down function call for replicated distributed tables")));
 		return NULL;
 	}
 
@@ -205,7 +212,7 @@ TryToDelegateFunctionCall(Query *query)
 	task = CitusMakeNode(Task);
 	task->taskType = SQL_TASK;
 	task->queryString = queryString->data;
-	task->taskPlacementList = list_make1(placement);
+	task->taskPlacementList = placementList;
 	task->anchorShardId = shardInterval->shardId;
 	task->replicationModel = distTable->replicationModel;
 
