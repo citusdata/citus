@@ -390,14 +390,7 @@ PL/pgSQL function mx_call_proc(integer,integer) line 8 at assignment
  27
 (1 row)
 
---
--- clean-up
---
 reset client_min_messages;
-reset citus.shard_replication_factor;
-reset citus.replication_model;
-reset search_path;
 \set VERBOSITY terse
 drop schema multi_mx_call cascade;
 NOTICE:  drop cascades to 10 other objects
-\set VERBOSITY default

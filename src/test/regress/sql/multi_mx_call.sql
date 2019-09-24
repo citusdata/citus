@@ -180,15 +180,7 @@ call multi_mx_call.mx_call_proc(multi_mx_call.mx_call_add(3, 4), 2);
 -- volatile parameter cannot be pushed down
 call multi_mx_call.mx_call_proc(floor(random())::int, 2);
 
---
--- clean-up
---
 reset client_min_messages;
-reset citus.shard_replication_factor;
-reset citus.replication_model;
-reset search_path;
-
 \set VERBOSITY terse
 drop schema multi_mx_call cascade;
-\set VERBOSITY default
 
