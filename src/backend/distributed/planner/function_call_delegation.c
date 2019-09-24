@@ -114,6 +114,12 @@ TryToDelegateFunctionCall(Query *query)
 		return NULL;
 	}
 
+	if (!CitusHasBeenLoaded() || !CheckCitusVersion(DEBUG4))
+	{
+		/* Citus is not ready to determine whether function is distributed */
+		return NULL;
+	}
+
 	funcExpr = (FuncExpr *) targetEntry->expr;
 	procedure = LookupDistObjectCacheEntry(ProcedureRelationId, funcExpr->funcid, 0);
 	if (procedure == NULL)
