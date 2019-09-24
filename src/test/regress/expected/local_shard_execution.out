@@ -699,6 +699,9 @@ ORDER BY
 
 -- multi-shard CTE is followed by a query which could be executed locally, but
 -- since the query started with a parallel query, it doesn't use local execution
+-- note that if we allow Postgres to inline the CTE (e.g., not have the EXISTS 
+-- subquery), then it'd pushdown the filters and the query becomes single-shard, 
+-- locally executable query
 WITH all_data AS (SELECT * FROM distributed_table)
 SELECT 
 	count(*) 
@@ -706,11 +709,25 @@ FROM
 	distributed_table, all_data 
 WHERE 
 	distributed_table.key = all_data.key AND distributed_table.key = 1
-	-- the following is to avoid CTE inlining
 	AND EXISTS (SELECT * FROM all_data);
  count 
 -------
      1
+(1 row)
+
+-- in pg12, the following CTE can be inlined, still the query becomes
+-- a subquery that needs to be recursively planned and a parallel
+-- query, so do not use local execution
+WITH all_data AS (SELECT age FROM distributed_table)
+SELECT 
+	count(*) 
+FROM 
+	distributed_table, all_data 
+WHERE 
+	distributed_table.key = all_data.age AND distributed_table.key = 1;
+ count 
+-------
+     0
 (1 row)
 
 -- get ready for the next commands
