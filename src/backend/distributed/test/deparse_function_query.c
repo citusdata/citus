@@ -1,10 +1,10 @@
 /*-------------------------------------------------------------------------
  *
- * test/src/depase_function_query.c
+ * test/src/deparse_function_query.c
  *
  * This file contains functions to exercise deparsing of
- *  CREATE|ALTER|DROP [...] function/procedure ...
- * statements
+ *  CREATE|ALTER|DROP [...] {FUNCTION|PROCEDURE} ...
+ * queries
  *
  * Copyright (c) Citus Data, Inc.
  *
@@ -21,6 +21,12 @@
 PG_FUNCTION_INFO_V1(deparse_test);
 
 
+/*
+ * deparse_test UDF is a UDF to test deparsing in Citus.
+ *
+ * This function accepts a query string; parses, qualifies and then deparses it to create
+ * a qualified query string.
+ */
 Datum
 deparse_test(PG_FUNCTION_ARGS)
 {

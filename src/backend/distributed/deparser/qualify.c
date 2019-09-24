@@ -104,6 +104,10 @@ QualifyTreeNode(Node *stmt)
 }
 
 
+/*
+ * QualifyRenameStmt transforms a RENAME statement in place and makes all (supported)
+ * statements fully qualified.
+ */
 static void
 QualifyRenameStmt(RenameStmt *stmt)
 {
@@ -138,6 +142,10 @@ QualifyRenameStmt(RenameStmt *stmt)
 }
 
 
+/*
+ * QualifyRenameAttributeStmt transforms a RENAME ATTRIBUTE statement in place and makes all (supported)
+ * statements fully qualified.
+ */
 static void
 QualifyRenameAttributeStmt(RenameStmt *stmt)
 {
