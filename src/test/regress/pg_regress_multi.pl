@@ -504,15 +504,6 @@ if ($followercluster)
 system(catfile("$bindir", "initdb"), ("--nosync", "-U", $user, "--encoding", "UTF8", catfile($TMP_CHECKDIR, $MASTERDIR, "data"))) == 0
     or die "Could not create $MASTERDIR data directory";
 
-if ($followercluster)
-{
-  # This is only necessary on PG 9.6 but it doesn't hurt PG 10
-  open(my $fd, ">>", catfile($TMP_CHECKDIR, $MASTERDIR, "data", "pg_hba.conf"))
-    or die "could not open pg_hba.conf";
-  print $fd "\nhost replication postgres 127.0.0.1/32 trust";
-  close $fd;
-}
-
 if ($usingWindows)
 {
 	for my $port (@workerPorts)
@@ -680,11 +671,9 @@ for my $port (@workerPorts)
 # Setup the follower nodes
 if ($followercluster)
 {
-    # This test would run faster on PG10 if we could pass --no-sync here but that flag
-    # isn't supported on PG 9.6. In a year when we drop support for PG9.6 add that flag!
     system(catfile("$bindir", "pg_basebackup"),
            ("-D", catfile($TMP_CHECKDIR, $MASTER_FOLLOWERDIR, "data"), "--host=$host", "--port=$masterPort",
-            "--username=$user", "-R", "-X", "stream")) == 0
+            "--username=$user", "-R", "-X", "stream", "--no-sync")) == 0
       or die 'could not take basebackup';
 
     for my $offset (0 .. $#workerPorts)
