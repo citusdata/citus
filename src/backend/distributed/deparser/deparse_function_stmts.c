@@ -50,6 +50,9 @@ static void AppendAlterFunctionOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt);
 static void AppendAlterFunctionDependsStmt(StringInfo buf, AlterObjectDependsStmt *stmt);
 
 
+/*
+ * DeparseAlterFunctionStmt builds and returns a string representing the AlterFunctionStmt
+ */
 const char *
 DeparseAlterFunctionStmt(AlterFunctionStmt *stmt)
 {
@@ -62,96 +65,9 @@ DeparseAlterFunctionStmt(AlterFunctionStmt *stmt)
 }
 
 
-const char *
-DeparseRenameFunctionStmt(RenameStmt *stmt)
-{
-	StringInfoData str = { 0 };
-	initStringInfo(&str);
-
-#if (PG_VERSION_NUM < 110000)
-	Assert(stmt->renameType == OBJECT_FUNCTION);
-#else
-	Assert(stmt->renameType == OBJECT_FUNCTION || stmt->renameType == OBJECT_PROCEDURE);
-#endif
-
-	AppendRenameFunctionStmt(&str, stmt);
-
-	return str.data;
-}
-
-
-const char *
-DeparseAlterFunctionSchemaStmt(AlterObjectSchemaStmt *stmt)
-{
-	StringInfoData str = { 0 };
-	initStringInfo(&str);
-
-#if (PG_VERSION_NUM < 110000)
-	Assert(stmt->objectType == OBJECT_FUNCTION);
-#else
-	Assert(stmt->objectType == OBJECT_FUNCTION || stmt->objectType == OBJECT_PROCEDURE);
-#endif
-
-	AppendAlterFunctionSchemaStmt(&str, stmt);
-
-	return str.data;
-}
-
-
-const char *
-DeparseAlterFunctionOwnerStmt(AlterOwnerStmt *stmt)
-{
-	StringInfoData str = { 0 };
-	initStringInfo(&str);
-
-#if (PG_VERSION_NUM < 110000)
-	Assert(stmt->objectType == OBJECT_FUNCTION);
-#else
-	Assert(stmt->objectType == OBJECT_FUNCTION || stmt->objectType == OBJECT_PROCEDURE);
-#endif
-
-	AppendAlterFunctionOwnerStmt(&str, stmt);
-
-	return str.data;
-}
-
-
-const char *
-DeparseAlterFunctionDependsStmt(AlterObjectDependsStmt *stmt)
-{
-	StringInfoData str = { 0 };
-	initStringInfo(&str);
-
-#if (PG_VERSION_NUM < 110000)
-	Assert(stmt->objectType == OBJECT_FUNCTION);
-#else
-	Assert(stmt->objectType == OBJECT_FUNCTION || stmt->objectType == OBJECT_PROCEDURE);
-#endif
-
-	AppendAlterFunctionDependsStmt(&str, stmt);
-
-	return str.data;
-}
-
-
-const char *
-DeparseDropFunctionStmt(DropStmt *stmt)
-{
-	StringInfoData str = { 0 };
-	initStringInfo(&str);
-
-#if (PG_VERSION_NUM < 110000)
-	Assert(stmt->removeType == OBJECT_FUNCTION);
-#else
-	Assert(stmt->removeType == OBJECT_FUNCTION || stmt->removeType == OBJECT_PROCEDURE);
-#endif
-
-	AppendDropFunctionStmt(&str, stmt);
-
-	return str.data;
-}
-
-
+/*
+ * AppendAlterFunctionStmt appends a string representing the AlterFunctionStmt to a buffer
+ */
 static void
 AppendAlterFunctionStmt(StringInfo buf, AlterFunctionStmt *stmt)
 {
@@ -182,6 +98,9 @@ AppendAlterFunctionStmt(StringInfo buf, AlterFunctionStmt *stmt)
 }
 
 
+/*
+ * AppendDefElem appends a string representing the DefElem to a buffer
+ */
 static void
 AppendDefElem(StringInfo buf, DefElem *def)
 {
@@ -220,6 +139,9 @@ AppendDefElem(StringInfo buf, DefElem *def)
 }
 
 
+/*
+ * AppendDefElemStrict appends a string representing the DefElem to a buffer
+ */
 static void
 AppendDefElemStrict(StringInfo buf, DefElem *def)
 {
@@ -234,6 +156,9 @@ AppendDefElemStrict(StringInfo buf, DefElem *def)
 }
 
 
+/*
+ * AppendDefElemVolatility appends a string representing the DefElem to a buffer
+ */
 static void
 AppendDefElemVolatility(StringInfo buf, DefElem *def)
 {
@@ -241,6 +166,9 @@ AppendDefElemVolatility(StringInfo buf, DefElem *def)
 }
 
 
+/*
+ * AppendDefElemLeakproof appends a string representing the DefElem to a buffer
+ */
 static void
 AppendDefElemLeakproof(StringInfo buf, DefElem *def)
 {
@@ -252,6 +180,9 @@ AppendDefElemLeakproof(StringInfo buf, DefElem *def)
 }
 
 
+/*
+ * AppendDefElemSecurity appends a string representing the DefElem to a buffer
+ */
 static void
 AppendDefElemSecurity(StringInfo buf, DefElem *def)
 {
@@ -266,6 +197,9 @@ AppendDefElemSecurity(StringInfo buf, DefElem *def)
 }
 
 
+/*
+ * AppendDefElemParallel appends a string representing the DefElem to a buffer
+ */
 static void
 AppendDefElemParallel(StringInfo buf, DefElem *def)
 {
@@ -273,6 +207,9 @@ AppendDefElemParallel(StringInfo buf, DefElem *def)
 }
 
 
+/*
+ * AppendDefElemCost appends a string representing the DefElem to a buffer
+ */
 static void
 AppendDefElemCost(StringInfo buf, DefElem *def)
 {
@@ -280,6 +217,9 @@ AppendDefElemCost(StringInfo buf, DefElem *def)
 }
 
 
+/*
+ * AppendDefElemRows appends a string representing the DefElem to a buffer
+ */
 static void
 AppendDefElemRows(StringInfo buf, DefElem *def)
 {
@@ -287,6 +227,9 @@ AppendDefElemRows(StringInfo buf, DefElem *def)
 }
 
 
+/*
+ * AppendDefElemSet appends a string representing the DefElem to a buffer
+ */
 static void
 AppendDefElemSet(StringInfo buf, DefElem *def)
 {
@@ -336,6 +279,30 @@ AppendDefElemSet(StringInfo buf, DefElem *def)
 }
 
 
+/*
+ * DeparseRenameFunctionStmt builds and returns a string representing the RenameStmt
+ */
+const char *
+DeparseRenameFunctionStmt(RenameStmt *stmt)
+{
+	StringInfoData str = { 0 };
+	initStringInfo(&str);
+
+#if (PG_VERSION_NUM < 110000)
+	Assert(stmt->renameType == OBJECT_FUNCTION);
+#else
+	Assert(stmt->renameType == OBJECT_FUNCTION || stmt->renameType == OBJECT_PROCEDURE);
+#endif
+
+	AppendRenameFunctionStmt(&str, stmt);
+
+	return str.data;
+}
+
+
+/*
+ * AppendRenameFunctionStmt appends a string representing the RenameStmt to a buffer
+ */
 static void
 AppendRenameFunctionStmt(StringInfo buf, RenameStmt *stmt)
 {
@@ -360,6 +327,30 @@ AppendRenameFunctionStmt(StringInfo buf, RenameStmt *stmt)
 }
 
 
+/*
+ * DeparseAlterFunctionSchemaStmt builds and returns a string representing the AlterObjectSchemaStmt
+ */
+const char *
+DeparseAlterFunctionSchemaStmt(AlterObjectSchemaStmt *stmt)
+{
+	StringInfoData str = { 0 };
+	initStringInfo(&str);
+
+#if (PG_VERSION_NUM < 110000)
+	Assert(stmt->objectType == OBJECT_FUNCTION);
+#else
+	Assert(stmt->objectType == OBJECT_FUNCTION || stmt->objectType == OBJECT_PROCEDURE);
+#endif
+
+	AppendAlterFunctionSchemaStmt(&str, stmt);
+
+	return str.data;
+}
+
+
+/*
+ * AppendAlterFunctionSchemaStmt appends a string representing the AlterObjectSchemaStmt to a buffer
+ */
 static void
 AppendAlterFunctionSchemaStmt(StringInfo buf, AlterObjectSchemaStmt *stmt)
 {
@@ -383,6 +374,30 @@ AppendAlterFunctionSchemaStmt(StringInfo buf, AlterObjectSchemaStmt *stmt)
 }
 
 
+/*
+ * DeparseAlterFunctionOwnerStmt builds and returns a string representing the AlterOwnerStmt
+ */
+const char *
+DeparseAlterFunctionOwnerStmt(AlterOwnerStmt *stmt)
+{
+	StringInfoData str = { 0 };
+	initStringInfo(&str);
+
+#if (PG_VERSION_NUM < 110000)
+	Assert(stmt->objectType == OBJECT_FUNCTION);
+#else
+	Assert(stmt->objectType == OBJECT_FUNCTION || stmt->objectType == OBJECT_PROCEDURE);
+#endif
+
+	AppendAlterFunctionOwnerStmt(&str, stmt);
+
+	return str.data;
+}
+
+
+/*
+ * AppendAlterFunctionOwnerStmt appends a string representing the AlterOwnerStmt to a buffer
+ */
 static void
 AppendAlterFunctionOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt)
 {
@@ -406,6 +421,30 @@ AppendAlterFunctionOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt)
 }
 
 
+/*
+ * DeparseAlterFunctionDependsStmt builds and returns a string representing the AlterObjectDependsStmt
+ */
+const char *
+DeparseAlterFunctionDependsStmt(AlterObjectDependsStmt *stmt)
+{
+	StringInfoData str = { 0 };
+	initStringInfo(&str);
+
+#if (PG_VERSION_NUM < 110000)
+	Assert(stmt->objectType == OBJECT_FUNCTION);
+#else
+	Assert(stmt->objectType == OBJECT_FUNCTION || stmt->objectType == OBJECT_PROCEDURE);
+#endif
+
+	AppendAlterFunctionDependsStmt(&str, stmt);
+
+	return str.data;
+}
+
+
+/*
+ * AppendAlterFunctionDependsStmt appends a string representing the AlterObjectDependsStmt to a buffer
+ */
 static void
 AppendAlterFunctionDependsStmt(StringInfo buf, AlterObjectDependsStmt *stmt)
 {
@@ -429,6 +468,30 @@ AppendAlterFunctionDependsStmt(StringInfo buf, AlterObjectDependsStmt *stmt)
 }
 
 
+/*
+ * DeparseDropFunctionStmt builds and returns a string representing the DropStmt
+ */
+const char *
+DeparseDropFunctionStmt(DropStmt *stmt)
+{
+	StringInfoData str = { 0 };
+	initStringInfo(&str);
+
+#if (PG_VERSION_NUM < 110000)
+	Assert(stmt->removeType == OBJECT_FUNCTION);
+#else
+	Assert(stmt->removeType == OBJECT_FUNCTION || stmt->removeType == OBJECT_PROCEDURE);
+#endif
+
+	AppendDropFunctionStmt(&str, stmt);
+
+	return str.data;
+}
+
+
+/*
+ * AppendDropFunctionStmt appends a string representing the DropStmt to a buffer
+ */
 static void
 AppendDropFunctionStmt(StringInfo buf, DropStmt *stmt)
 {
@@ -461,6 +524,9 @@ AppendDropFunctionStmt(StringInfo buf, DropStmt *stmt)
 }
 
 
+/*
+ * AppendFunctionNameList appends a string representing the list of function names to a buffer
+ */
 static void
 AppendFunctionNameList(StringInfo buf, List *objects)
 {
@@ -482,6 +548,9 @@ AppendFunctionNameList(StringInfo buf, List *objects)
 }
 
 
+/*
+ * AppendFunctionName appends a string representing a single function name to a buffer
+ */
 static void
 AppendFunctionName(StringInfo buf, ObjectWithArgs *func)
 {

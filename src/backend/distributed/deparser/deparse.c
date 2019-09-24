@@ -104,6 +104,12 @@ DeparseTreeNode(Node *stmt)
 }
 
 
+/*
+ * DeparseDropStmt aims to deparse DROP statements.
+ *
+ * Currently with limited support. Check support before using, and add support for new
+ * statements as required.
+ */
 static const char *
 DeparseDropStmt(DropStmt *stmt)
 {
@@ -130,6 +136,14 @@ DeparseDropStmt(DropStmt *stmt)
 }
 
 
+/*
+ * DeparseAlterTableStmt aims to deparse
+ * ALTER TABLE ..
+ * statements.
+ *
+ * Currently with limited support. Check support before using, and add support for new
+ * statements as required.
+ */
 static const char *
 DeparseAlterTableStmt(AlterTableStmt *stmt)
 {
@@ -148,6 +162,14 @@ DeparseAlterTableStmt(AlterTableStmt *stmt)
 }
 
 
+/*
+ * DeparseRenameStmt aims to deparse
+ * ALTER .. RENAME TO ..
+ * statements.
+ *
+ * Currently with limited support. Check support before using, and add support for new
+ * statements as required.
+ */
 static const char *
 DeparseRenameStmt(RenameStmt *stmt)
 {
@@ -179,6 +201,14 @@ DeparseRenameStmt(RenameStmt *stmt)
 }
 
 
+/*
+ * DeparseRenameAttributeStmt aims to deparse
+ * ALTER TYPE .. RENAME ATTRIBUTE .. TO ..
+ * statements.
+ *
+ * Currently with limited support. Check support before using, and add support for new
+ * statements as required.
+ */
 static const char *
 DeparseRenameAttributeStmt(RenameStmt *stmt)
 {
@@ -200,6 +230,14 @@ DeparseRenameAttributeStmt(RenameStmt *stmt)
 }
 
 
+/*
+ * DeparseAlterObjectSchemaStmt aims to deparse
+ * ALTER .. SET SCHEMA ..
+ * statements.
+ *
+ * Currently with limited support. Check support before using, and add support for new
+ * statements as required.
+ */
 static const char *
 DeparseAlterObjectSchemaStmt(AlterObjectSchemaStmt *stmt)
 {
@@ -226,6 +264,14 @@ DeparseAlterObjectSchemaStmt(AlterObjectSchemaStmt *stmt)
 }
 
 
+/*
+ * DeparseAlterOwnerStmt aims to deparse
+ * ALTER .. OWNER TO ..
+ * statements.
+ *
+ * Currently with limited support. Check support before using, and add support for new
+ * statements as required.
+ */
 static const char *
 DeparseAlterOwnerStmt(AlterOwnerStmt *stmt)
 {
@@ -252,6 +298,14 @@ DeparseAlterOwnerStmt(AlterOwnerStmt *stmt)
 }
 
 
+/*
+ * DeparseAlterObjectDependsStmt aims to deparse
+ * ALTER .. DEPENDS ON EXTENSION ..
+ * statements.
+ *
+ * Currently with limited support. Check support before using, and add support for new
+ * statements as required.
+ */
 static const char *
 DeparseAlterObjectDependsStmt(AlterObjectDependsStmt *stmt)
 {

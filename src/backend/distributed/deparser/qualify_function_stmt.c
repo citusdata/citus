@@ -32,6 +32,14 @@ void QualifyFunction(ObjectWithArgs *func);
 void QualifyFunctionSchemaName(ObjectWithArgs *func);
 
 
+/*
+ * QualifyAlterFunctionStmt transforms a
+ * ALTER {FUNCTION|PROCEDURE} ..
+ * statement in place and makes all (supported) statements fully qualified.
+ *
+ * Note that not all queries of this form are valid AlterFunctionStmt
+ * (e.g. ALTER FUNCTION .. RENAME .. queries are RenameStmt )
+ */
 void
 QualifyAlterFunctionStmt(AlterFunctionStmt *stmt)
 {
@@ -39,58 +47,57 @@ QualifyAlterFunctionStmt(AlterFunctionStmt *stmt)
 }
 
 
+/*
+ * QualifyRenameFunctionStmt transforms a
+ * ALTER {FUNCTION|PROCEDURE} .. RENAME TO ..
+ * statement in place and makes the function name fully qualified.
+ */
 void
 QualifyRenameFunctionStmt(RenameStmt *stmt)
 {
-#if (PG_VERSION_NUM < 110000)
-	Assert(stmt->renameType == OBJECT_FUNCTION);
-#else
-	Assert(stmt->renameType == OBJECT_FUNCTION || stmt->renameType == OBJECT_PROCEDURE);
-#endif
-
 	QualifyFunction(castNode(ObjectWithArgs, stmt->object));
 }
 
 
+/*
+ * QualifyAlterFunctionSchemaStmt transforms a
+ * ALTER {FUNCTION|PROCEDURE} .. SET SCHEMA ..
+ * statement in place and makes the function name fully qualified.
+ */
 void
 QualifyAlterFunctionSchemaStmt(AlterObjectSchemaStmt *stmt)
 {
-#if (PG_VERSION_NUM < 110000)
-	Assert(stmt->objectType == OBJECT_FUNCTION);
-#else
-	Assert(stmt->objectType == OBJECT_FUNCTION || stmt->objectType == OBJECT_PROCEDURE);
-#endif
-
 	QualifyFunction(castNode(ObjectWithArgs, stmt->object));
 }
 
 
+/*
+ * QualifyAlterFunctionOwnerStmt transforms a
+ * ALTER {FUNCTION|PROCEDURE} .. OWNER TO ..
+ * statement in place and makes the function name fully qualified.
+ */
 void
 QualifyAlterFunctionOwnerStmt(AlterOwnerStmt *stmt)
 {
-#if (PG_VERSION_NUM < 110000)
-	Assert(stmt->objectType == OBJECT_FUNCTION);
-#else
-	Assert(stmt->objectType == OBJECT_FUNCTION || stmt->objectType == OBJECT_PROCEDURE);
-#endif
-
 	QualifyFunction(castNode(ObjectWithArgs, stmt->object));
 }
 
 
+/*
+ * QualifyAlterFunctionDependsStmt transforms a
+ * ALTER {FUNCTION|PROCEDURE} .. DEPENDS ON EXTENSIOIN ..
+ * statement in place and makes the function name fully qualified.
+ */
 void
 QualifyAlterFunctionDependsStmt(AlterObjectDependsStmt *stmt)
 {
-#if (PG_VERSION_NUM < 110000)
-	Assert(stmt->objectType == OBJECT_FUNCTION);
-#else
-	Assert(stmt->objectType == OBJECT_FUNCTION || stmt->objectType == OBJECT_PROCEDURE);
-#endif
-
 	QualifyFunction(castNode(ObjectWithArgs, stmt->object));
 }
 
 
+/*
+ * QualifyFunction transforms a function in place and makes it's name fully qualified.
+ */
 void
 QualifyFunction(ObjectWithArgs *func)
 {
@@ -108,6 +115,9 @@ QualifyFunction(ObjectWithArgs *func)
 }
 
 
+/*
+ * QualifyFunction transforms a function in place using a catalog lookup for its schema name to make it fully qualified.
+ */
 void
 QualifyFunctionSchemaName(ObjectWithArgs *func)
 {
