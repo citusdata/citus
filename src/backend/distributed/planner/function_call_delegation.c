@@ -37,6 +37,9 @@
 #include "nodes/primnodes.h"
 #include "optimizer/clauses.h"
 #include "parser/parse_coerce.h"
+#if PG_VERSION_NUM >= 120000
+#include "parser/parsetree.h"
+#endif
 #include "miscadmin.h"
 #include "tcop/dest.h"
 #include "utils/lsyscache.h"
@@ -93,10 +96,34 @@ TryToDelegateFunctionCall(Query *query)
 		return NULL;
 	}
 
-	if (joinTree->fromlist != NIL || joinTree->quals != NULL)
+	if (joinTree->quals != NULL)
 	{
-		/* query has a FROM or WHERE section */
+		/* query has a WHERE section */
 		return NULL;
+	}
+
+	if (joinTree->fromlist != NIL)
+	{
+		/* query has a FROM section */
+#if PG_VERSION_NUM >= 120000
+
+		/* in pg12 empty FROMs are represented with an RTE_RESULT */
+		if (list_length(joinTree->fromlist) == 1)
+		{
+			RangeTblRef *reference = linitial(joinTree->fromlist);
+			RangeTblEntry *rtentry = rt_fetch(reference->rtindex, query->rtable);
+			if (rtentry->rtekind != RTE_RESULT)
+			{
+				return NULL;
+			}
+		}
+		else
+		{
+			return NULL;
+		}
+#else
+		return NULL;
+#endif
 	}
 
 	targetList = query->targetList;
