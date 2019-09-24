@@ -15,6 +15,24 @@ CREATE FUNCTION add(integer, integer) RETURNS integer
     IMMUTABLE
     RETURNS NULL ON NULL INPUT;
 
+CREATE FUNCTION add_numeric(numeric, numeric) RETURNS numeric
+    AS 'select $1 + $2;'
+    LANGUAGE SQL
+    IMMUTABLE
+    RETURNS NULL ON NULL INPUT;
+
+CREATE FUNCTION add_text(text, text) RETURNS int
+    AS 'select $1::int + $2::int;'
+    LANGUAGE SQL
+    IMMUTABLE
+    RETURNS NULL ON NULL INPUT;
+
+CREATE FUNCTION add_polygons(polygon, polygon) RETURNS int
+    AS 'select 1'
+    LANGUAGE SQL
+    IMMUTABLE
+    RETURNS NULL ON NULL INPUT;
+
 -- Test some combination of functions without ddl propagation
 -- This will prevent the workers from having those types created. They are
 -- created just-in-time on function distribution
@@ -127,7 +145,8 @@ SET citus.replication_model TO "statement";
 SELECT create_distributed_table('replicated_table_func_test', 'a');
 SELECT create_distributed_function('add_with_param_names(int, int)', '$1', colocate_with:='replicated_table_func_test');
 
--- a function cannot be colocated with a different distribution argument type
+-- a function can be colocated with a different distribution argument type
+-- as long as there is a coercion path
 SET citus.shard_replication_factor TO 1;
 CREATE TABLE replicated_table_func_test_2 (a bigint);
 SET citus.replication_model TO "streaming";
@@ -165,6 +184,31 @@ SELECT pg_dist_partition.colocationid = objects.colocationid as table_and_functi
 FROM pg_dist_partition, citus.pg_dist_object as objects 
 WHERE pg_dist_partition.logicalrelid = 'replicated_table_func_test_4'::regclass AND 
 	  objects.objid = 'add_with_param_names(int, int)'::regprocedure;
+
+-- function with a numeric dist. arg can be colocated with int 
+-- column of a distributed table. In general, if there is a coercion
+-- path, we rely on postgres for implicit coersions, and users for explicit coersions
+-- to coerce the values
+SELECT create_distributed_function('add_numeric(numeric, numeric)', '$1', colocate_with:='replicated_table_func_test_4');
+SELECT pg_dist_partition.colocationid = objects.colocationid as table_and_function_colocated
+FROM pg_dist_partition, citus.pg_dist_object as objects 
+WHERE pg_dist_partition.logicalrelid = 'replicated_table_func_test_4'::regclass AND 
+	  objects.objid = 'add_numeric(numeric, numeric)'::regprocedure;
+
+SELECT create_distributed_function('add_text(text, text)', '$1', colocate_with:='replicated_table_func_test_4');
+SELECT pg_dist_partition.colocationid = objects.colocationid as table_and_function_colocated
+FROM pg_dist_partition, citus.pg_dist_object as objects 
+WHERE pg_dist_partition.logicalrelid = 'replicated_table_func_test_4'::regclass AND 
+	  objects.objid = 'add_text(text, text)'::regprocedure;
+
+-- cannot distribute function because there is no
+-- coercion path from polygon to int
+SELECT create_distributed_function('add_polygons(polygon,polygon)', '$1', colocate_with:='replicated_table_func_test_4');
+
+-- without the colocate_with, the function errors out since there is no
+-- default colocation group
+SET citus.shard_count TO 55;
+SELECT create_distributed_function('add_with_param_names(int, int)', 'val1');
 
 -- clear objects
 SELECT stop_metadata_sync_to_node(nodename,nodeport) FROM pg_dist_node WHERE isactive AND noderole = 'primary';
