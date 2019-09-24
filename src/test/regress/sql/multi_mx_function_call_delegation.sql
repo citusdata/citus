@@ -63,7 +63,7 @@ select mx_call_func(2, mx_call_add(3, 4));
 select mx_call_func(mx_call_add(3, 4), 2);
 
 -- volatile parameter cannot be pushed down
-select mx_call_func(random()::int, 2);
+select mx_call_func(least(random()::int,0), 2);
 
 RESET client_min_messages;
 DROP SCHEMA multi_mx_function_call_delegation CASCADE;
