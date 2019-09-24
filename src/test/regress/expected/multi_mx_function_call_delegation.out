@@ -143,10 +143,6 @@ DEBUG:  arguments in a distributed function must be constant expressions
 (1 row)
 
 RESET client_min_messages;
+\set VERBOSITY terse
 DROP SCHEMA multi_mx_function_call_delegation CASCADE;
 NOTICE:  drop cascades to 5 other objects
-DETAIL:  drop cascades to table mx_call_dist_table
-drop cascades to function mx_call_func(integer,integer)
-drop cascades to function mx_call_func_raise(integer)
-drop cascades to function mx_call_add(integer,integer)
-drop cascades to function mx_call_dist_object(text,regclass,integer)
