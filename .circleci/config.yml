@@ -207,6 +207,7 @@ jobs:
       - run: 
           name: 'Install and Test (check-failure)'
           command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext check-failure'
+
   test-10-11_check-pg-upgrade:
     docker:
       - image: 'citus/pgupgradetester:latest'
@@ -217,6 +218,7 @@ jobs:
       - run: 
           name: 'Install and test postgres upgrade'
           command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext --target check-upgrade --old-pg-version 10 --new-pg-version 11'
+
   test-11-12_check-pg-upgrade:
     docker:
       - image: 'citus/pgupgradetester:latest'
@@ -227,6 +229,115 @@ jobs:
       - run: 
           name: 'Install and test postgres upgrade'
           command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext --target check-upgrade --old-pg-version 11 --new-pg-version 12'
+
+  test-12_check-multi:
+    docker:
+      - image: 'heisenberg302/exttester-12:latest'
+    working_directory: /home/circleci/project
+    steps:
+      - attach_workspace: 
+          at: .
+      - run: 
+          name: 'Install and Test (check-multi)'
+          command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext check-multi'
+      - codecov/upload:
+          flags: 'test_12,multi'
+  test-12_check-tt-van-mx:
+    docker:
+      - image: 'heisenberg302/exttester-12:latest'
+    working_directory: /home/circleci/project
+    steps:
+      - attach_workspace:
+          at: .
+      - run:
+          name: 'Install and Test (check-tt-van-mx)'
+          command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext check-multi-task-tracker-extra check-vanilla check-multi-mx'
+      - codecov/upload:
+          flags: 'test_12,tracker,vanilla,mx'
+  test-12_check-iso-work-fol:
+    docker:
+      - image: 'heisenberg302/exttester-12:latest'
+    working_directory: /home/circleci/project
+    steps:
+      - attach_workspace:
+           at: .
+      - run: 
+          name: 'Install and Test (check-iso-work-fol)'
+          command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext check-isolation check-worker'
+      - codecov/upload: 
+          flags: 'test_12,isolation,worker'
+  test-12_check-fol:
+    docker:
+      - image: 'heisenberg302/exttester-12:latest'
+    working_directory: /home/circleci/project
+    steps:
+      - attach_workspace:
+          at: .
+      - run:
+          name: 'Enable core dumps'
+          command: 'ulimit -c unlimited'
+      - run: 
+          name: 'Install and Test (fol)'
+          command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext check-follower-cluster'
+      - run:
+          command: |
+            mkdir -p /tmp/core_dumps
+            cp core.* /tmp/core_dumps
+          when: on_fail
+      - codecov/upload: 
+          flags: 'follower'
+      - store_artifacts:
+          path: '/tmp/core_dumps'
+
+  test-12_check-non-adaptive-multi:
+    docker:
+      - image: 'heisenberg302/exttester-12:latest'
+    working_directory: /home/circleci/project
+    steps:
+      - attach_workspace:
+          at: .
+      - run: 
+          name: 'Install and Test (check-non-adaptive-executors)'
+          command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext check-multi-non-adaptive'
+      - codecov/upload:
+          flags: 'test_12,multi'
+
+  test-12_check-failure:
+    docker:
+      - image: 'heisenberg302/failtester-12:latest'
+    working_directory: /home/circleci/project
+    steps:
+      - attach_workspace: 
+          at: .
+      - run:
+          name: 'Install and Test (check-failure)'
+          command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext check-failure'
+
+  test-12_check-non-adaptive-failure:
+    docker:
+      - image: 'heisenberg302/failtester-12:latest'
+    working_directory: /home/circleci/project
+    steps:
+      - attach_workspace: 
+          at: .
+      - run: 
+          name: 'Install and Test (check-non-adaptive-executors)'
+          command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext check-failure-non-adaptive'
+      - codecov/upload:
+          flags: 'test_12,failure'        
+
+  test-12_check-non-adaptive-isolation:
+    docker:
+      - image: 'heisenberg302/exttester-12:latest'
+    working_directory: /home/circleci/project
+    steps:
+      - attach_workspace:
+          at: .
+      - run: 
+          name: 'Install and Test (check-non-adaptive-executors)'
+          command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext check-isolation-non-adaptive'
+      - codecov/upload: 
+          flags: 'test_12,isolation'        
 
 workflows:
   version: 2
@@ -269,3 +380,21 @@ workflows:
           requires: [build]
       - test-11-12_check-pg-upgrade: 
           requires: [build]    
+      - test-12_check-multi:
+          requires: [build] 
+      - test-12_check-tt-van-mx:
+          requires: [build]
+      - test-12_check-iso-work-fol:
+          requires: [build]
+      - test-12_check-fol:
+          requires: [build]
+      - test-12_check-failure:
+          requires: [build]        
+
+      - test-12_check-non-adaptive-multi:
+          requires: [build]
+      - test-12_check-non-adaptive-failure:
+          requires: [build]   
+      - test-12_check-non-adaptive-isolation:
+          requires: [build]
+
