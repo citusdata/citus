@@ -255,7 +255,7 @@ END;$$;
 -- before distribution ...
 CALL multi_mx_call.mx_call_proc_tx(10);
 -- after distribution ...
-select create_distributed_function('mx_call_proc_tx(int)');
+select create_distributed_function('mx_call_proc_tx(int)', '$1', 'mx_call_dist_table_1');
 DEBUG:  switching to sequential query execution mode
 DETAIL:  A distributed function is created. To make sure subsequent commands see the type correctly we need to make sure to use only one connection for all future commands
  create_distributed_function 
@@ -263,7 +263,6 @@ DETAIL:  A distributed function is created. To make sure subsequent commands see
  
 (1 row)
 
-call multi_mx_call.colocate_proc_with_table('mx_call_proc_tx', 'mx_call_dist_table_1'::regclass, 0);
 CALL multi_mx_call.mx_call_proc_tx(20);
 DEBUG:  pushing down the procedure
 ERROR:  relation "mx_call_dist_table_1" does not exist
@@ -287,7 +286,7 @@ BEGIN
     RAISE WARNING 'warning';
     RAISE EXCEPTION 'error';
 END;$$;
-select create_distributed_function('mx_call_proc_raise(int)');
+select create_distributed_function('mx_call_proc_raise(int)', '$1', 'mx_call_dist_table_1');
 DEBUG:  switching to sequential query execution mode
 DETAIL:  A distributed function is created. To make sure subsequent commands see the type correctly we need to make sure to use only one connection for all future commands
  create_distributed_function 
@@ -295,7 +294,6 @@ DETAIL:  A distributed function is created. To make sure subsequent commands see
  
 (1 row)
 
-call multi_mx_call.colocate_proc_with_table('mx_call_proc_raise', 'mx_call_dist_table_1'::regclass, 0);
 call multi_mx_call.mx_call_proc_raise(2);
 DEBUG:  pushing down the procedure
 DEBUG:  warning
@@ -348,7 +346,7 @@ SET client_min_messages TO DEBUG1;
 --
 CREATE FUNCTION mx_call_add(int, int) RETURNS int
     AS 'select $1 + $2;' LANGUAGE SQL IMMUTABLE;
-SELECT create_distributed_function('mx_call_add(int,int)');
+SELECT create_distributed_function('mx_call_add(int,int)', '$1');
 DEBUG:  switching to sequential query execution mode
 DETAIL:  A distributed function is created. To make sure subsequent commands see the type correctly we need to make sure to use only one connection for all future commands
  create_distributed_function 
