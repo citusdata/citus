@@ -5,7 +5,7 @@ orbs:
 jobs:
   build:
     docker:
-      - image: 'citusdata/extbuilder:werror'
+      - image: 'citus/extbuilder:latest'
     steps:
       - checkout
       - run: 
@@ -204,9 +204,30 @@ jobs:
     steps:
       - attach_workspace: 
           at: .
-      - run:
+      - run: 
           name: 'Install and Test (check-failure)'
           command: 'install-and-test-ext check-failure'
+  test-10-11_check-pg-upgrade:
+    docker:
+      - image: 'citus/pgupgradetester:latest'
+    working_directory: /home/circleci/project     
+    steps:
+      - attach_workspace:
+          at: .
+      - run: 
+          name: 'Install and test postgres upgrade'
+          command: 'install-and-test-ext --target check-upgrade --old-pg-version 10 --new-pg-version 11'
+  test-11-12_check-pg-upgrade:
+    docker:
+      - image: 'citus/pgupgradetester:latest'
+    working_directory: /home/circleci/project     
+    steps:
+      - attach_workspace:
+          at: .
+      - run: 
+          name: 'Install and test postgres upgrade'
+          command: 'install-and-test-ext --target check-upgrade --old-pg-version 11 --new-pg-version 12'        
+
 workflows:
   version: 2
   build_and_test:
@@ -237,9 +258,14 @@ workflows:
       - test-11_check-failure:
           requires: [build]
 
-      - test-11_check-non-adaptive-multi:
+      - test-11_check-non-adaptive-multi: 
           requires: [build]
       - test-11_check-non-adaptive-failure:
           requires: [build]
       - test-11_check-non-adaptive-isolation:
           requires: [build]
+
+      - test-10-11_check-pg-upgrade: 
+          requires: [build]
+      - test-11-12_check-pg-upgrade: 
+          requires: [build]    
