@@ -442,4 +442,4 @@ reset client_min_messages;
 \set VERBOSITY terse
 drop schema multi_mx_call cascade;
 NOTICE:  drop cascades to 9 other objects
-ERROR:  cached metadata for shard 102016 is inconsistent
+ERROR:  cached metadata for shard 535027 is inconsistent
