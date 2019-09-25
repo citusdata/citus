@@ -162,10 +162,7 @@ CREATE FUNCTION mx_call_add(int, int) RETURNS int
     AS 'select $1 + $2;' LANGUAGE SQL IMMUTABLE;
 SELECT create_distributed_function('mx_call_add(int,int)', '$1');
 
--- non-const distribution parameters cannot be pushed down
-select mx_call_func(2, (select x + 1 from mx_call_add(3, 4) x));
-
--- non-const parameter can be pushed down
+-- subquery parameters cannot be pushed down
 select mx_call_func((select x + 1 from mx_call_add(3, 4) x), 2);
 
 -- volatile parameter cannot be pushed down

@@ -45,6 +45,18 @@
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
 
+static bool contain_param_walker(Node *node, void *context);
+
+/*
+ * contain_param_walker scans node for Param nodes.
+ * returns whether any such nodes found.
+ */
+static bool
+contain_param_walker(Node *node, void *context)
+{
+	return IsA(node, Param);
+}
+
 
 /*
  * CallDistributedProcedureRemotely calls a stored procedure on the worker if possible.
@@ -167,6 +179,13 @@ TryToDelegateFunctionCall(Query *query)
 	{
 		ereport(DEBUG1, (errmsg("arguments in a distributed function must "
 								"be constant expressions")));
+		return NULL;
+	}
+
+	if (expression_tree_walker((Node *) funcExpr->args, contain_param_walker, NULL))
+	{
+		ereport(DEBUG1, (errmsg("arguments in a distributed function must "
+								"not contain subqueries")));
 		return NULL;
 	}
 

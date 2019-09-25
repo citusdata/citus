@@ -403,25 +403,20 @@ DETAIL:  A distributed function is created. To make sure subsequent commands see
  
 (1 row)
 
--- non-const distribution parameters cannot be pushed down
-select mx_call_func(2, (select x + 1 from mx_call_add(3, 4) x));
-DEBUG:  distribution argument value must be a constant
+-- subquery parameters cannot be pushed down
+select mx_call_func((select x + 1 from mx_call_add(3, 4) x), 2);
+DEBUG:  arguments in a distributed function must not contain subqueries
 DEBUG:  generating subplan 29_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (multi_mx_function_call_delegation.mx_call_dist_table_1 t1 JOIN multi_mx_function_call_delegation.mx_call_dist_table_2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
 CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_function_call_delegation.mx_call_dist_table_1 t1 join multi_mx_function_call_delegation.mx_call_dist_table_2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_func(integer,integer) line 8 at assignment
-DEBUG:  Plan 29 query after replacing subqueries and CTEs: SELECT (3 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('29_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
+DEBUG:  Plan 29 query after replacing subqueries and CTEs: SELECT (9 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('29_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
 CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_function_call_delegation.mx_call_dist_table_1 t1 join multi_mx_function_call_delegation.mx_call_dist_table_2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_func(integer,integer) line 8 at assignment
  mx_call_func 
 --------------
-           29
+           35
 (1 row)
 
--- non-const parameter can be pushed down
-select mx_call_func((select x + 1 from mx_call_add(3, 4) x), 2);
-DEBUG:  pushing down the function call
-ERROR:  there is no parameter $0
-CONTEXT:  while executing command on localhost:57638
 -- volatile parameter cannot be pushed down
 select mx_call_func(floor(random())::int, 2);
 DEBUG:  arguments in a distributed function must be constant expressions
