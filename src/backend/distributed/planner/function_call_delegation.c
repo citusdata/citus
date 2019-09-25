@@ -183,7 +183,7 @@ TryToDelegateFunctionCall(Query *query)
 	{
 		/* This can happen if colocated with a reference table. Punt for now. */
 		ereport(DEBUG1, (errmsg(
-							 "cannnot push down function call for reference tables for reference tables")));
+							 "cannnot push down function call for reference tables")));
 		return NULL;
 	}
 
