@@ -16,19 +16,6 @@ insert into mx_call_dist_table_replica values (9,1),(8,2),(7,3),(6,4),(5,5);
 set citus.shard_replication_factor to 1;
 set citus.replication_model to 'streaming';
 --
--- Utility UDFs
---
--- 1. Marks the given procedure as colocated with the given table.
--- 2. Marks the argument index with which we route the procedure.
-CREATE PROCEDURE colocate_proc_with_table(procname text, tablerelid regclass, argument_index int)
-LANGUAGE plpgsql AS $$
-BEGIN
-    update citus.pg_dist_object
-    set distribution_argument_index = argument_index, colocationid = pg_dist_partition.colocationid
-    from pg_proc, pg_dist_partition
-    where proname = procname and oid = objid and pg_dist_partition.logicalrelid = tablerelid;
-END;$$;
---
 -- Create tables and procedures we want to use in tests
 --
 create table mx_call_dist_table_1(id int, val int);
@@ -146,8 +133,18 @@ DEBUG:  stored procedure does not have co-located tables
 (1 row)
 
 -- Mark them as colocated with a table. Now we should route them to workers.
-call multi_mx_call.colocate_proc_with_table('mx_call_proc', 'mx_call_dist_table_1'::regclass, 1);
-call multi_mx_call.colocate_proc_with_table('mx_call_proc_custom_types', 'mx_call_dist_table_enum'::regclass, 1);
+select colocate_proc_with_table('mx_call_proc', 'mx_call_dist_table_1'::regclass, 1);
+ colocate_proc_with_table 
+--------------------------
+ 
+(1 row)
+
+select colocate_proc_with_table('mx_call_proc_custom_types', 'mx_call_dist_table_enum'::regclass, 1);
+ colocate_proc_with_table 
+--------------------------
+ 
+(1 row)
+
 call multi_mx_call.mx_call_proc(2, 0);
 DEBUG:  pushing down the procedure
  y  
@@ -156,6 +153,20 @@ DEBUG:  pushing down the procedure
 (1 row)
 
 call multi_mx_call.mx_call_proc_custom_types('S', 'A');
+DEBUG:  pushing down the procedure
+ x | y 
+---+---
+ S | S
+(1 row)
+
+call mx_call_proc(2, 0);
+DEBUG:  pushing down the procedure
+ y  
+----
+ 28
+(1 row)
+
+call mx_call_proc_custom_types('S', 'A');
 DEBUG:  pushing down the procedure
  x | y 
 ---+---
@@ -192,7 +203,12 @@ DEBUG:  stored procedure does not have co-located tables
 
 -- Make sure we do bounds checking on distributed argument index
 -- This also tests that we have cache invalidation for pg_dist_object updates
-call multi_mx_call.colocate_proc_with_table('mx_call_proc', 'mx_call_dist_table_1'::regclass, -1);
+select colocate_proc_with_table('mx_call_proc', 'mx_call_dist_table_1'::regclass, -1);
+ colocate_proc_with_table 
+--------------------------
+ 
+(1 row)
+
 call multi_mx_call.mx_call_proc(2, 0);
 DEBUG:  cannot push down invalid distribution_argument_index
 DEBUG:  generating subplan 14_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (multi_mx_call.mx_call_dist_table_1 t1 JOIN multi_mx_call.mx_call_dist_table_2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
@@ -206,7 +222,12 @@ PL/pgSQL function mx_call_proc(integer,integer) line 8 at assignment
  29
 (1 row)
 
-call multi_mx_call.colocate_proc_with_table('mx_call_proc', 'mx_call_dist_table_1'::regclass, 2);
+select colocate_proc_with_table('mx_call_proc', 'mx_call_dist_table_1'::regclass, 2);
+ colocate_proc_with_table 
+--------------------------
+ 
+(1 row)
+
 call multi_mx_call.mx_call_proc(2, 0);
 DEBUG:  cannot push down invalid distribution_argument_index
 DEBUG:  generating subplan 17_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (multi_mx_call.mx_call_dist_table_1 t1 JOIN multi_mx_call.mx_call_dist_table_2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
@@ -221,7 +242,12 @@ PL/pgSQL function mx_call_proc(integer,integer) line 8 at assignment
 (1 row)
 
 -- We don't currently support colocating with reference tables
-call multi_mx_call.colocate_proc_with_table('mx_call_proc', 'mx_call_dist_table_ref'::regclass, 1);
+select colocate_proc_with_table('mx_call_proc', 'mx_call_dist_table_ref'::regclass, 1);
+ colocate_proc_with_table 
+--------------------------
+ 
+(1 row)
+
 call multi_mx_call.mx_call_proc(2, 0);
 DEBUG:  cannot push down CALL for reference tables
 DEBUG:  generating subplan 19_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (multi_mx_call.mx_call_dist_table_1 t1 JOIN multi_mx_call.mx_call_dist_table_2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
@@ -236,7 +262,12 @@ PL/pgSQL function mx_call_proc(integer,integer) line 8 at assignment
 (1 row)
 
 -- We don't currently support colocating with replicated tables
-call multi_mx_call.colocate_proc_with_table('mx_call_proc', 'mx_call_dist_table_replica'::regclass, 1);
+select colocate_proc_with_table('mx_call_proc', 'mx_call_dist_table_replica'::regclass, 1);
+ colocate_proc_with_table 
+--------------------------
+ 
+(1 row)
+
 call multi_mx_call.mx_call_proc(2, 0);
 DEBUG:  cannot push down CALL for replicated distributed tables
 DEBUG:  generating subplan 21_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (multi_mx_call.mx_call_dist_table_1 t1 JOIN multi_mx_call.mx_call_dist_table_2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
@@ -253,17 +284,22 @@ PL/pgSQL function mx_call_proc(integer,integer) line 8 at assignment
 SET client_min_messages TO NOTICE;
 drop table mx_call_dist_table_replica;
 SET client_min_messages TO DEBUG1;
-call multi_mx_call.colocate_proc_with_table('mx_call_proc', 'mx_call_dist_table_1'::regclass, 1);
+select colocate_proc_with_table('mx_call_proc', 'mx_call_dist_table_1'::regclass, 1);
+ colocate_proc_with_table 
+--------------------------
+ 
+(1 row)
+
 -- Test that we handle transactional constructs correctly inside a procedure
 -- that is routed to the workers.
 CREATE PROCEDURE mx_call_proc_tx(x int) LANGUAGE plpgsql AS $$
 BEGIN
-    INSERT INTO mx_call_dist_table_1 VALUES (x, -1), (x+1, 4);
+    INSERT INTO multi_mx_call.mx_call_dist_table_1 VALUES (x, -1), (x+1, 4);
     COMMIT;
-    UPDATE mx_call_dist_table_1 SET val = val+1 WHERE id >= x;
+    UPDATE multi_mx_call.mx_call_dist_table_1 SET val = val+1 WHERE id >= x;
     ROLLBACK;
     -- Now do the final update!
-    UPDATE mx_call_dist_table_1 SET val = val-1 WHERE id >= x;
+    UPDATE multi_mx_call.mx_call_dist_table_1 SET val = val-1 WHERE id >= x;
 END;$$;
 -- before distribution ...
 CALL multi_mx_call.mx_call_proc_tx(10);
@@ -278,9 +314,6 @@ DETAIL:  A distributed function is created. To make sure subsequent commands see
 
 CALL multi_mx_call.mx_call_proc_tx(20);
 DEBUG:  pushing down the procedure
-ERROR:  relation "mx_call_dist_table_1" does not exist
-CONTEXT:  while executing command on localhost:57637
-PL/pgSQL function multi_mx_call.mx_call_proc_tx(integer) line 3 at SQL statement
 SELECT id, val FROM mx_call_dist_table_1 ORDER BY id, val;
  id | val 
 ----+-----
@@ -291,7 +324,9 @@ SELECT id, val FROM mx_call_dist_table_1 ORDER BY id, val;
   9 |   2
  10 |  -2
  11 |   3
-(7 rows)
+ 20 |  -2
+ 21 |   3
+(9 rows)
 
 -- Test that we properly propagate errors raised from procedures.
 CREATE PROCEDURE mx_call_proc_raise(x int) LANGUAGE plpgsql AS $$
@@ -406,4 +441,5 @@ PL/pgSQL function mx_call_proc(integer,integer) line 8 at assignment
 reset client_min_messages;
 \set VERBOSITY terse
 drop schema multi_mx_call cascade;
-NOTICE:  drop cascades to 10 other objects
+NOTICE:  drop cascades to 9 other objects
+ERROR:  cached metadata for shard 102016 is inconsistent
