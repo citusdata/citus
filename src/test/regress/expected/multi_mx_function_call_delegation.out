@@ -1,5 +1,4 @@
 -- Test passing off function call to mx workers
--- Create worker-local tables to test function calls were routed
 CREATE SCHEMA multi_mx_function_call_delegation;
 SET search_path TO multi_mx_function_call_delegation, public;
 SET citus.shard_replication_factor TO 2;
@@ -411,6 +410,11 @@ select start_metadata_sync_to_node('localhost', :worker_2_port);
  
 (1 row)
 
+-- stop_metadata_sync_to_node()/start_metadata_sync_to_node() might make
+-- worker backend caches inconsistent. Reconnect to coordinator to use
+-- new worker connections, hence new backends.
+\c - - - :master_port
+SET search_path to multi_mx_function_call_delegation, public;
 SET client_min_messages TO DEBUG1;
 --
 -- Test non-const parameter values
@@ -428,10 +432,10 @@ DETAIL:  A distributed function is created. To make sure subsequent commands see
 -- subquery parameters cannot be pushed down
 select mx_call_func((select x + 1 from mx_call_add(3, 4) x), 2);
 DEBUG:  arguments in a distributed function must not contain subqueries
-DEBUG:  generating subplan 29_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (multi_mx_function_call_delegation.mx_call_dist_table_1 t1 JOIN multi_mx_function_call_delegation.mx_call_dist_table_2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
+DEBUG:  generating subplan 1_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (multi_mx_function_call_delegation.mx_call_dist_table_1 t1 JOIN multi_mx_function_call_delegation.mx_call_dist_table_2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
 CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_function_call_delegation.mx_call_dist_table_1 t1 join multi_mx_function_call_delegation.mx_call_dist_table_2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_func(integer,integer) line 8 at assignment
-DEBUG:  Plan 29 query after replacing subqueries and CTEs: SELECT (9 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('29_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
+DEBUG:  Plan 1 query after replacing subqueries and CTEs: SELECT (9 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('1_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
 CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_function_call_delegation.mx_call_dist_table_1 t1 join multi_mx_function_call_delegation.mx_call_dist_table_2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_func(integer,integer) line 8 at assignment
  mx_call_func 
@@ -442,10 +446,10 @@ PL/pgSQL function mx_call_func(integer,integer) line 8 at assignment
 -- volatile parameter cannot be pushed down
 select mx_call_func(floor(random())::int, 2);
 DEBUG:  arguments in a distributed function must be constant expressions
-DEBUG:  generating subplan 31_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (multi_mx_function_call_delegation.mx_call_dist_table_1 t1 JOIN multi_mx_function_call_delegation.mx_call_dist_table_2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
+DEBUG:  generating subplan 3_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (multi_mx_function_call_delegation.mx_call_dist_table_1 t1 JOIN multi_mx_function_call_delegation.mx_call_dist_table_2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
 CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_function_call_delegation.mx_call_dist_table_1 t1 join multi_mx_function_call_delegation.mx_call_dist_table_2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_func(integer,integer) line 8 at assignment
-DEBUG:  Plan 31 query after replacing subqueries and CTEs: SELECT (1 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('31_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
+DEBUG:  Plan 3 query after replacing subqueries and CTEs: SELECT (1 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('3_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
 CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_function_call_delegation.mx_call_dist_table_1 t1 join multi_mx_function_call_delegation.mx_call_dist_table_2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_func(integer,integer) line 8 at assignment
  mx_call_func 
@@ -455,10 +459,10 @@ PL/pgSQL function mx_call_func(integer,integer) line 8 at assignment
 
 -- test forms we don't distribute
 select * from mx_call_func(2, 0);
-DEBUG:  generating subplan 33_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (multi_mx_function_call_delegation.mx_call_dist_table_1 t1 JOIN multi_mx_function_call_delegation.mx_call_dist_table_2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
+DEBUG:  generating subplan 5_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (multi_mx_function_call_delegation.mx_call_dist_table_1 t1 JOIN multi_mx_function_call_delegation.mx_call_dist_table_2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
 CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_function_call_delegation.mx_call_dist_table_1 t1 join multi_mx_function_call_delegation.mx_call_dist_table_2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_func(integer,integer) line 8 at assignment
-DEBUG:  Plan 33 query after replacing subqueries and CTEs: SELECT (3 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('33_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
+DEBUG:  Plan 5 query after replacing subqueries and CTEs: SELECT (3 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('5_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
 CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_function_call_delegation.mx_call_dist_table_1 t1 join multi_mx_function_call_delegation.mx_call_dist_table_2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_func(integer,integer) line 8 at assignment
  y  
@@ -467,16 +471,24 @@ PL/pgSQL function mx_call_func(integer,integer) line 8 at assignment
 (1 row)
 
 select mx_call_func(2, 0) from mx_call_dist_table_1;
-ERROR:  cached metadata for shard 102033 is inconsistent
-HINT:  Reconnect and try again.
-CONTEXT:  while executing command on localhost:57637
-SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_function_call_delegation.mx_call_dist_table_1 t1 join multi_mx_function_call_delegation.mx_call_dist_table_2 t2 on t1.id = t2.id)"
-PL/pgSQL function multi_mx_function_call_delegation.mx_call_func(integer,integer) line 8 at assignment
+ mx_call_func 
+--------------
+           28
+           28
+           28
+           28
+           28
+           28
+           28
+           28
+           28
+(9 rows)
+
 select mx_call_func(2, 0) where mx_call_func(0, 2) = 0;
-DEBUG:  generating subplan 36_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (multi_mx_function_call_delegation.mx_call_dist_table_1 t1 JOIN multi_mx_function_call_delegation.mx_call_dist_table_2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
+DEBUG:  generating subplan 8_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (multi_mx_function_call_delegation.mx_call_dist_table_1 t1 JOIN multi_mx_function_call_delegation.mx_call_dist_table_2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
 CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_function_call_delegation.mx_call_dist_table_1 t1 join multi_mx_function_call_delegation.mx_call_dist_table_2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_func(integer,integer) line 8 at assignment
-DEBUG:  Plan 36 query after replacing subqueries and CTEs: SELECT (1 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('36_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
+DEBUG:  Plan 8 query after replacing subqueries and CTEs: SELECT (1 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('8_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
 CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_function_call_delegation.mx_call_dist_table_1 t1 join multi_mx_function_call_delegation.mx_call_dist_table_2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_func(integer,integer) line 8 at assignment
  mx_call_func 
@@ -484,16 +496,16 @@ PL/pgSQL function mx_call_func(integer,integer) line 8 at assignment
 (0 rows)
 
 select mx_call_func(2, 0), mx_call_func(0, 2);
-DEBUG:  generating subplan 38_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (multi_mx_function_call_delegation.mx_call_dist_table_1 t1 JOIN multi_mx_function_call_delegation.mx_call_dist_table_2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
+DEBUG:  generating subplan 10_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (multi_mx_function_call_delegation.mx_call_dist_table_1 t1 JOIN multi_mx_function_call_delegation.mx_call_dist_table_2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
 CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_function_call_delegation.mx_call_dist_table_1 t1 join multi_mx_function_call_delegation.mx_call_dist_table_2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_func(integer,integer) line 8 at assignment
-DEBUG:  Plan 38 query after replacing subqueries and CTEs: SELECT (3 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('38_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
+DEBUG:  Plan 10 query after replacing subqueries and CTEs: SELECT (3 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('10_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
 CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_function_call_delegation.mx_call_dist_table_1 t1 join multi_mx_function_call_delegation.mx_call_dist_table_2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_func(integer,integer) line 8 at assignment
-DEBUG:  generating subplan 40_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (multi_mx_function_call_delegation.mx_call_dist_table_1 t1 JOIN multi_mx_function_call_delegation.mx_call_dist_table_2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
+DEBUG:  generating subplan 13_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (multi_mx_function_call_delegation.mx_call_dist_table_1 t1 JOIN multi_mx_function_call_delegation.mx_call_dist_table_2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
 CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_function_call_delegation.mx_call_dist_table_1 t1 join multi_mx_function_call_delegation.mx_call_dist_table_2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_func(integer,integer) line 8 at assignment
-DEBUG:  Plan 40 query after replacing subqueries and CTEs: SELECT (1 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('40_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
+DEBUG:  Plan 13 query after replacing subqueries and CTEs: SELECT (1 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('13_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
 CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_function_call_delegation.mx_call_dist_table_1 t1 join multi_mx_function_call_delegation.mx_call_dist_table_2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_func(integer,integer) line 8 at assignment
  mx_call_func | mx_call_func 

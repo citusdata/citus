@@ -1,5 +1,5 @@
 -- Test passing off function call to mx workers
--- Create worker-local tables to test function calls were routed
+
 CREATE SCHEMA multi_mx_function_call_delegation;
 SET search_path TO multi_mx_function_call_delegation, public;
 
@@ -159,6 +159,12 @@ select mx_call_func(2, 0);
 SET client_min_messages TO NOTICE;
 select start_metadata_sync_to_node('localhost', :worker_1_port);
 select start_metadata_sync_to_node('localhost', :worker_2_port);
+
+-- stop_metadata_sync_to_node()/start_metadata_sync_to_node() might make
+-- worker backend caches inconsistent. Reconnect to coordinator to use
+-- new worker connections, hence new backends.
+\c - - - :master_port
+SET search_path to multi_mx_function_call_delegation, public;
 SET client_min_messages TO DEBUG1;
 
 --
