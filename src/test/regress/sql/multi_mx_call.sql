@@ -1,5 +1,8 @@
 -- Test passing off CALL to mx workers
 
+create schema multi_mx_call;
+set search_path to multi_mx_call, public;
+
 -- Create worker-local tables to test procedure calls were routed
 
 set citus.shard_replication_factor to 2;
@@ -12,9 +15,6 @@ insert into mx_call_dist_table_replica values (9,1),(8,2),(7,3),(6,4),(5,5);
 
 set citus.shard_replication_factor to 1;
 set citus.replication_model to 'streaming';
-
-create schema multi_mx_call;
-set search_path to multi_mx_call, public;
 
 --
 -- Utility UDFs
@@ -77,6 +77,10 @@ END;$$;
 -- Test that undistributed procedures have no issue executing
 call multi_mx_call.mx_call_proc(2, 0);
 call multi_mx_call.mx_call_proc_custom_types('S', 'A');
+
+-- Same for unqualified names
+call mx_call_proc(2, 0);
+call mx_call_proc_custom_types('S', 'A');
 
 -- Mark both procedures as distributed ...
 select create_distributed_function('mx_call_proc(int,int)');
