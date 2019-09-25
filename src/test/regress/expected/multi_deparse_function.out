@@ -47,202 +47,202 @@ CREATE FUNCTION add(integer, integer) RETURNS integer
 SELECT deparse_test($cmd$
 ALTER FUNCTION  add CALLED ON NULL INPUT
 $cmd$);
-                       deparse_test                        
------------------------------------------------------------
- ALTER FUNCTION function_tests.add() CALLED ON NULL INPUT;
+                               deparse_test                                
+---------------------------------------------------------------------------
+ ALTER FUNCTION function_tests.add(integer, integer) CALLED ON NULL INPUT;
 (1 row)
 
 SELECT deparse_test($cmd$
 ALTER FUNCTION add RETURNS NULL ON NULL INPUT
 $cmd$);
-                deparse_test                 
----------------------------------------------
- ALTER FUNCTION function_tests.add() STRICT;
+                        deparse_test                         
+-------------------------------------------------------------
+ ALTER FUNCTION function_tests.add(integer, integer) STRICT;
 (1 row)
 
 SELECT deparse_test($cmd$
 ALTER FUNCTION add STRICT
 $cmd$);
-                deparse_test                 
----------------------------------------------
- ALTER FUNCTION function_tests.add() STRICT;
+                        deparse_test                         
+-------------------------------------------------------------
+ ALTER FUNCTION function_tests.add(integer, integer) STRICT;
 (1 row)
 
 SELECT deparse_test($cmd$
 ALTER FUNCTION add IMMUTABLE
 $cmd$);
-                  deparse_test                  
-------------------------------------------------
- ALTER FUNCTION function_tests.add() immutable;
+                          deparse_test                          
+----------------------------------------------------------------
+ ALTER FUNCTION function_tests.add(integer, integer) immutable;
 (1 row)
 
 SELECT deparse_test($cmd$
 ALTER FUNCTION add STABLE
 $cmd$);
-                deparse_test                 
----------------------------------------------
- ALTER FUNCTION function_tests.add() stable;
+                        deparse_test                         
+-------------------------------------------------------------
+ ALTER FUNCTION function_tests.add(integer, integer) stable;
 (1 row)
 
 SELECT deparse_test($cmd$
 ALTER FUNCTION add VOLATILE
 $cmd$);
-                 deparse_test                  
------------------------------------------------
- ALTER FUNCTION function_tests.add() volatile;
+                         deparse_test                          
+---------------------------------------------------------------
+ ALTER FUNCTION function_tests.add(integer, integer) volatile;
 (1 row)
 
 SELECT deparse_test($cmd$
 ALTER FUNCTION add LEAKPROOF
 $cmd$);
-                  deparse_test                  
-------------------------------------------------
- ALTER FUNCTION function_tests.add() LEAKPROOF;
+                          deparse_test                          
+----------------------------------------------------------------
+ ALTER FUNCTION function_tests.add(integer, integer) LEAKPROOF;
 (1 row)
 
 SELECT deparse_test($cmd$
 ALTER FUNCTION add NOT LEAKPROOF
 $cmd$);
-                    deparse_test                    
-----------------------------------------------------
- ALTER FUNCTION function_tests.add() NOT LEAKPROOF;
+                            deparse_test                            
+--------------------------------------------------------------------
+ ALTER FUNCTION function_tests.add(integer, integer) NOT LEAKPROOF;
 (1 row)
 
 SELECT deparse_test($cmd$
 ALTER  FUNCTION add EXTERNAL SECURITY INVOKER
 $cmd$);
-                     deparse_test                      
--------------------------------------------------------
- ALTER FUNCTION function_tests.add() SECURITY INVOKER;
+                             deparse_test                              
+-----------------------------------------------------------------------
+ ALTER FUNCTION function_tests.add(integer, integer) SECURITY INVOKER;
 (1 row)
 
 SELECT deparse_test($cmd$
 ALTER FUNCTION add SECURITY INVOKER
 $cmd$);
-                     deparse_test                      
--------------------------------------------------------
- ALTER FUNCTION function_tests.add() SECURITY INVOKER;
+                             deparse_test                              
+-----------------------------------------------------------------------
+ ALTER FUNCTION function_tests.add(integer, integer) SECURITY INVOKER;
 (1 row)
 
 SELECT deparse_test($cmd$
 ALTER  FUNCTION add EXTERNAL SECURITY DEFINER
 $cmd$);
-                     deparse_test                      
--------------------------------------------------------
- ALTER FUNCTION function_tests.add() SECURITY DEFINER;
+                             deparse_test                              
+-----------------------------------------------------------------------
+ ALTER FUNCTION function_tests.add(integer, integer) SECURITY DEFINER;
 (1 row)
 
 SELECT deparse_test($cmd$
 ALTER FUNCTION add SECURITY DEFINER
 $cmd$);
-                     deparse_test                      
--------------------------------------------------------
- ALTER FUNCTION function_tests.add() SECURITY DEFINER;
+                             deparse_test                              
+-----------------------------------------------------------------------
+ ALTER FUNCTION function_tests.add(integer, integer) SECURITY DEFINER;
 (1 row)
 
 SELECT deparse_test($cmd$
 ALTER FUNCTION add PARALLEL UNSAFE
 $cmd$);
-                     deparse_test                     
-------------------------------------------------------
- ALTER FUNCTION function_tests.add() PARALLEL unsafe;
+                             deparse_test                             
+----------------------------------------------------------------------
+ ALTER FUNCTION function_tests.add(integer, integer) PARALLEL unsafe;
 (1 row)
 
 SELECT deparse_test($cmd$
 ALTER FUNCTION add PARALLEL RESTRICTED
 $cmd$);
-                       deparse_test                       
-----------------------------------------------------------
- ALTER FUNCTION function_tests.add() PARALLEL restricted;
+                               deparse_test                               
+--------------------------------------------------------------------------
+ ALTER FUNCTION function_tests.add(integer, integer) PARALLEL restricted;
 (1 row)
 
 SELECT deparse_test($cmd$
 ALTER FUNCTION add PARALLEL SAFE
 $cmd$);
-                    deparse_test                    
-----------------------------------------------------
- ALTER FUNCTION function_tests.add() PARALLEL safe;
+                            deparse_test                            
+--------------------------------------------------------------------
+ ALTER FUNCTION function_tests.add(integer, integer) PARALLEL safe;
 (1 row)
 
 -- The COST/ROWS arguments should always be numeric
 SELECT deparse_test($cmd$
 ALTER FUNCTION add COST 1234
 $cmd$);
-                     deparse_test                      
--------------------------------------------------------
- ALTER FUNCTION function_tests.add() COST 1234.000000;
+                             deparse_test                              
+-----------------------------------------------------------------------
+ ALTER FUNCTION function_tests.add(integer, integer) COST 1234.000000;
 (1 row)
 
 SELECT deparse_test($cmd$
 ALTER  FUNCTION add COST 1234.5
 $cmd$);
-                     deparse_test                      
--------------------------------------------------------
- ALTER FUNCTION function_tests.add() COST 1234.500000;
+                             deparse_test                              
+-----------------------------------------------------------------------
+ ALTER FUNCTION function_tests.add(integer, integer) COST 1234.500000;
 (1 row)
 
 SELECT deparse_test($cmd$
 ALTER FUNCTION add ROWS 10
 $cmd$);
-                     deparse_test                     
-------------------------------------------------------
- ALTER FUNCTION function_tests.add() ROWS  10.000000;
+                             deparse_test                             
+----------------------------------------------------------------------
+ ALTER FUNCTION function_tests.add(integer, integer) ROWS  10.000000;
 (1 row)
 
 SELECT deparse_test($cmd$
 ALTER  FUNCTION add ROWS 10.8
 $cmd$);
-                     deparse_test                     
-------------------------------------------------------
- ALTER FUNCTION function_tests.add() ROWS  10.800000;
+                             deparse_test                             
+----------------------------------------------------------------------
+ ALTER FUNCTION function_tests.add(integer, integer) ROWS  10.800000;
 (1 row)
 
 SELECT deparse_test($cmd$
 ALTER FUNCTION  add SET log_min_messages = ERROR
 $cmd$);
-                           deparse_test                            
--------------------------------------------------------------------
- ALTER FUNCTION function_tests.add() SET log_min_messages = error;
+                                   deparse_test                                    
+-----------------------------------------------------------------------------------
+ ALTER FUNCTION function_tests.add(integer, integer) SET log_min_messages = error;
 (1 row)
 
 SELECT deparse_test($cmd$
 ALTER FUNCTION  add SET log_min_messages TO DEFAULT
 $cmd$);
-                             deparse_test                             
-----------------------------------------------------------------------
- ALTER FUNCTION function_tests.add() SET log_min_messages TO DEFAULT;
+                                     deparse_test                                     
+--------------------------------------------------------------------------------------
+ ALTER FUNCTION function_tests.add(integer, integer) SET log_min_messages TO DEFAULT;
 (1 row)
 
 SELECT deparse_test($cmd$
 ALTER FUNCTION  add SET log_min_messages FROM CURRENT
 $cmd$);
-                              deparse_test                              
-------------------------------------------------------------------------
- ALTER FUNCTION function_tests.add() SET log_min_messages FROM CURRENT;
+                                      deparse_test                                      
+----------------------------------------------------------------------------------------
+ ALTER FUNCTION function_tests.add(integer, integer) SET log_min_messages FROM CURRENT;
 (1 row)
 
 SELECT deparse_test($cmd$
 ALTER FUNCTION add RESET log_min_messages
 $cmd$);
-                        deparse_test                         
--------------------------------------------------------------
- ALTER FUNCTION function_tests.add() RESET log_min_messages;
+                                deparse_test                                 
+-----------------------------------------------------------------------------
+ ALTER FUNCTION function_tests.add(integer, integer) RESET log_min_messages;
 (1 row)
 
 SELECT deparse_test($cmd$
 ALTER FUNCTION add RESET ALL
 $cmd$);
-                  deparse_test                  
-------------------------------------------------
- ALTER FUNCTION function_tests.add() RESET ALL;
+                          deparse_test                          
+----------------------------------------------------------------
+ ALTER FUNCTION function_tests.add(integer, integer) RESET ALL;
 (1 row)
 
 SELECT deparse_test($cmd$
 ALTER FUNCTION add RENAME TO summation
 $cmd$);
-                       deparse_test                       
-----------------------------------------------------------
- ALTER FUNCTION function_tests.add() RENAME TO summation;
+                               deparse_test                               
+--------------------------------------------------------------------------
+ ALTER FUNCTION function_tests.add(integer, integer) RENAME TO summation;
 (1 row)
 
 CREATE ROLE function_role;
@@ -251,33 +251,33 @@ HINT:  Connect to worker nodes directly to manually create all necessary users a
 SELECT deparse_test($cmd$
 ALTER FUNCTION add OWNER TO function_role
 $cmd$);
-                        deparse_test                         
--------------------------------------------------------------
- ALTER FUNCTION function_tests.add() OWNER TO function_role;
+                                deparse_test                                 
+-----------------------------------------------------------------------------
+ ALTER FUNCTION function_tests.add(integer, integer) OWNER TO function_role;
 (1 row)
 
 SELECT deparse_test($cmd$
 ALTER FUNCTION add OWNER TO missing_role
 $cmd$);
-                        deparse_test                        
-------------------------------------------------------------
- ALTER FUNCTION function_tests.add() OWNER TO missing_role;
+                                deparse_test                                
+----------------------------------------------------------------------------
+ ALTER FUNCTION function_tests.add(integer, integer) OWNER TO missing_role;
 (1 row)
 
 SELECT deparse_test($cmd$
 ALTER FUNCTION add SET SCHEMA public
 $cmd$);
-                      deparse_test                      
---------------------------------------------------------
- ALTER FUNCTION function_tests.add() SET SCHEMA public;
+                              deparse_test                              
+------------------------------------------------------------------------
+ ALTER FUNCTION function_tests.add(integer, integer) SET SCHEMA public;
 (1 row)
 
 SELECT deparse_test($cmd$
 ALTER FUNCTION add DEPENDS ON EXTENSION citus
 $cmd$);
-                          deparse_test                           
------------------------------------------------------------------
- ALTER FUNCTION function_tests.add() DEPENDS ON EXTENSION citus;
+                                  deparse_test                                   
+---------------------------------------------------------------------------------
+ ALTER FUNCTION function_tests.add(integer, integer) DEPENDS ON EXTENSION citus;
 (1 row)
 
 SELECT deparse_test($cmd$
@@ -306,6 +306,6 @@ $cmd$);
 (1 row)
 
 -- clear objects
-SET client_min_messages TO FATAL; -- suppress cascading objects dropping
+SET client_min_messages TO WARNING; -- suppress cascading objects dropping
 DROP SCHEMA function_tests CASCADE;
 DROP ROLE function_role;

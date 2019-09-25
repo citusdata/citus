@@ -190,6 +190,6 @@ DROP PROCEDURE IF EXISTS missing_schema.missing_PROCEDURE(int,float);
 $cmd$);
 
 -- clear objects
-SET client_min_messages TO FATAL; -- suppress cascading objects dropping
+SET client_min_messages TO WARNING; -- suppress cascading objects dropping
 DROP SCHEMA procedure_tests CASCADE;
 DROP ROLE PROCEDURE_role;

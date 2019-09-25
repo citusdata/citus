@@ -28,8 +28,8 @@
 #include "utils/syscache.h"
 
 /* forward declaration for qualify functions */
-void QualifyFunction(ObjectWithArgs *func);
-void QualifyFunctionSchemaName(ObjectWithArgs *func);
+void QualifyFunction(ObjectWithArgs *func, ObjectType type);
+void QualifyFunctionSchemaName(ObjectWithArgs *func, ObjectType type);
 
 
 /*
@@ -43,7 +43,13 @@ void QualifyFunctionSchemaName(ObjectWithArgs *func);
 void
 QualifyAlterFunctionStmt(AlterFunctionStmt *stmt)
 {
-	QualifyFunction(stmt->func);
+	ObjectType objtype = OBJECT_FUNCTION;
+
+#if (PG_VERSION_NUM >= 110000)
+	objtype = stmt->objtype;
+#endif
+
+	QualifyFunction(stmt->func, objtype);
 }
 
 
@@ -55,7 +61,13 @@ QualifyAlterFunctionStmt(AlterFunctionStmt *stmt)
 void
 QualifyRenameFunctionStmt(RenameStmt *stmt)
 {
-	QualifyFunction(castNode(ObjectWithArgs, stmt->object));
+#if (PG_VERSION_NUM < 110000)
+	Assert(stmt->renameType == OBJECT_FUNCTION);
+#else
+	Assert(stmt->renameType == OBJECT_FUNCTION || stmt->renameType == OBJECT_PROCEDURE);
+#endif
+
+	QualifyFunction(castNode(ObjectWithArgs, stmt->object), stmt->renameType);
 }
 
 
@@ -67,7 +79,13 @@ QualifyRenameFunctionStmt(RenameStmt *stmt)
 void
 QualifyAlterFunctionSchemaStmt(AlterObjectSchemaStmt *stmt)
 {
-	QualifyFunction(castNode(ObjectWithArgs, stmt->object));
+#if (PG_VERSION_NUM < 110000)
+	Assert(stmt->objectType == OBJECT_FUNCTION);
+#else
+	Assert(stmt->objectType == OBJECT_FUNCTION || stmt->objectType == OBJECT_PROCEDURE);
+#endif
+
+	QualifyFunction(castNode(ObjectWithArgs, stmt->object), stmt->objectType);
 }
 
 
@@ -79,7 +97,13 @@ QualifyAlterFunctionSchemaStmt(AlterObjectSchemaStmt *stmt)
 void
 QualifyAlterFunctionOwnerStmt(AlterOwnerStmt *stmt)
 {
-	QualifyFunction(castNode(ObjectWithArgs, stmt->object));
+#if (PG_VERSION_NUM < 110000)
+	Assert(stmt->objectType == OBJECT_FUNCTION);
+#else
+	Assert(stmt->objectType == OBJECT_FUNCTION || stmt->objectType == OBJECT_PROCEDURE);
+#endif
+
+	QualifyFunction(castNode(ObjectWithArgs, stmt->object), stmt->objectType);
 }
 
 
@@ -91,7 +115,13 @@ QualifyAlterFunctionOwnerStmt(AlterOwnerStmt *stmt)
 void
 QualifyAlterFunctionDependsStmt(AlterObjectDependsStmt *stmt)
 {
-	QualifyFunction(castNode(ObjectWithArgs, stmt->object));
+#if (PG_VERSION_NUM < 110000)
+	Assert(stmt->objectType == OBJECT_FUNCTION);
+#else
+	Assert(stmt->objectType == OBJECT_FUNCTION || stmt->objectType == OBJECT_PROCEDURE);
+#endif
+
+	QualifyFunction(castNode(ObjectWithArgs, stmt->object), stmt->objectType);
 }
 
 
@@ -99,7 +129,7 @@ QualifyAlterFunctionDependsStmt(AlterObjectDependsStmt *stmt)
  * QualifyFunction transforms a function in place and makes it's name fully qualified.
  */
 void
-QualifyFunction(ObjectWithArgs *func)
+QualifyFunction(ObjectWithArgs *func, ObjectType type)
 {
 	char *functionName = NULL;
 	char *schemaName = NULL;
@@ -110,7 +140,7 @@ QualifyFunction(ObjectWithArgs *func)
 	/* do a lookup for the schema name if the statement does not include one */
 	if (schemaName == NULL)
 	{
-		QualifyFunctionSchemaName(func);
+		QualifyFunctionSchemaName(func, type);
 	}
 }
 
@@ -119,15 +149,14 @@ QualifyFunction(ObjectWithArgs *func)
  * QualifyFunction transforms a function in place using a catalog lookup for its schema name to make it fully qualified.
  */
 void
-QualifyFunctionSchemaName(ObjectWithArgs *func)
+QualifyFunctionSchemaName(ObjectWithArgs *func, ObjectType type)
 {
 	char *schemaName = NULL;
 	char *functionName = NULL;
-
 	Oid funcid = InvalidOid;
 	HeapTuple proctup;
 
-	funcid = LookupFuncWithArgsCompat(OBJECT_FUNCTION, func, true);
+	funcid = LookupFuncWithArgsCompat(type, func, true);
 	proctup = SearchSysCache1(PROCOID, ObjectIdGetDatum(funcid));
 
 	/*

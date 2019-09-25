@@ -24,6 +24,8 @@
 #include "parser/parse_func.h"
 #include "parser/parse_type.h"
 #include "utils/builtins.h"
+#include "utils/fmgroids.h"
+#include "utils/fmgrprotos.h"
 #include "utils/guc.h"
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
@@ -31,8 +33,8 @@
 /* forward declaration for deparse functions */
 static void AppendAlterFunctionStmt(StringInfo buf, AlterFunctionStmt *stmt);
 static void AppendDropFunctionStmt(StringInfo buf, DropStmt *stmt);
-static void AppendFunctionName(StringInfo buf, ObjectWithArgs *func);
-static void AppendFunctionNameList(StringInfo buf, List *objects);
+static void AppendFunctionName(StringInfo buf, ObjectWithArgs *func, ObjectType objtype);
+static void AppendFunctionNameList(StringInfo buf, List *objects, ObjectType objtype);
 
 static void AppendDefElem(StringInfo buf, DefElem *def);
 static void AppendDefElemStrict(StringInfo buf, DefElem *def);
@@ -75,6 +77,8 @@ AppendAlterFunctionStmt(StringInfo buf, AlterFunctionStmt *stmt)
 
 #if (PG_VERSION_NUM < 110000)
 	appendStringInfo(buf, "ALTER FUNCTION ");
+
+	AppendFunctionName(buf, stmt->func, OBJECT_FUNCTION);
 #else
 	if (stmt->objtype == OBJECT_FUNCTION)
 	{
@@ -84,9 +88,10 @@ AppendAlterFunctionStmt(StringInfo buf, AlterFunctionStmt *stmt)
 	{
 		appendStringInfo(buf, "ALTER PROCEDURE ");
 	}
+
+	AppendFunctionName(buf, stmt->func, stmt->objtype);
 #endif
 
-	AppendFunctionName(buf, stmt->func);
 
 	foreach(actionCell, stmt->actions)
 	{
@@ -321,7 +326,7 @@ AppendRenameFunctionStmt(StringInfo buf, RenameStmt *stmt)
 	}
 #endif
 
-	AppendFunctionName(buf, func);
+	AppendFunctionName(buf, func, stmt->renameType);
 
 	appendStringInfo(buf, " RENAME TO %s;", quote_identifier(stmt->newname));
 }
@@ -369,7 +374,7 @@ AppendAlterFunctionSchemaStmt(StringInfo buf, AlterObjectSchemaStmt *stmt)
 	}
 #endif
 
-	AppendFunctionName(buf, func);
+	AppendFunctionName(buf, func, stmt->objectType);
 	appendStringInfo(buf, " SET SCHEMA %s;", quote_identifier(stmt->newschema));
 }
 
@@ -416,7 +421,7 @@ AppendAlterFunctionOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt)
 	}
 #endif
 
-	AppendFunctionName(buf, func);
+	AppendFunctionName(buf, func, stmt->objectType);
 	appendStringInfo(buf, " OWNER TO %s;", RoleSpecString(stmt->newowner));
 }
 
@@ -463,7 +468,7 @@ AppendAlterFunctionDependsStmt(StringInfo buf, AlterObjectDependsStmt *stmt)
 	}
 #endif
 
-	AppendFunctionName(buf, func);
+	AppendFunctionName(buf, func, stmt->objectType);
 	appendStringInfo(buf, " DEPENDS ON EXTENSION %s;", strVal(stmt->extname));
 }
 
@@ -513,7 +518,7 @@ AppendDropFunctionStmt(StringInfo buf, DropStmt *stmt)
 		appendStringInfoString(buf, "IF EXISTS ");
 	}
 
-	AppendFunctionNameList(buf, stmt->objects);
+	AppendFunctionNameList(buf, stmt->objects, stmt->removeType);
 
 	if (stmt->behavior == DROP_CASCADE)
 	{
@@ -528,7 +533,7 @@ AppendDropFunctionStmt(StringInfo buf, DropStmt *stmt)
  * AppendFunctionNameList appends a string representing the list of function names to a buffer
  */
 static void
-AppendFunctionNameList(StringInfo buf, List *objects)
+AppendFunctionNameList(StringInfo buf, List *objects, ObjectType objtype)
 {
 	ListCell *objectCell = NULL;
 	foreach(objectCell, objects)
@@ -543,7 +548,7 @@ AppendFunctionNameList(StringInfo buf, List *objects)
 
 		func = castNode(ObjectWithArgs, object);
 
-		AppendFunctionName(buf, func);
+		AppendFunctionName(buf, func, objtype);
 	}
 }
 
@@ -552,7 +557,7 @@ AppendFunctionNameList(StringInfo buf, List *objects)
  * AppendFunctionName appends a string representing a single function name to a buffer
  */
 static void
-AppendFunctionName(StringInfo buf, ObjectWithArgs *func)
+AppendFunctionName(StringInfo buf, ObjectWithArgs *func, ObjectType objtype)
 {
 	Oid funcid = InvalidOid;
 	HeapTuple proctup;
@@ -561,7 +566,7 @@ AppendFunctionName(StringInfo buf, ObjectWithArgs *func)
 	char *qualifiedFunctionName;
 	char *args = TypeNameListToString(func->objargs);
 
-	funcid = LookupFuncWithArgsCompat(OBJECT_FUNCTION, func, true);
+	funcid = LookupFuncWithArgsCompat(objtype, func, true);
 	proctup = SearchSysCache1(PROCOID, ObjectIdGetDatum(funcid));
 
 	if (!HeapTupleIsValid(proctup))
@@ -589,8 +594,30 @@ AppendFunctionName(StringInfo buf, ObjectWithArgs *func)
 	appendStringInfoString(buf, qualifiedFunctionName);
 
 	/* append the optional arg list if provided */
-	if (args)
+	if (func->args_unspecified)
 	{
-		appendStringInfo(buf, "(%s)", args);
+		OverrideSearchPath *overridePath = NULL;
+		Datum sqlTextDatum = 0;
+
+		/*
+		 * Set search_path to NIL so that all objects outside of pg_catalog will be
+		 * schema-prefixed. pg_catalog will be added automatically when we call
+		 * PushOverrideSearchPath(), since we set addCatalog to true;
+		 */
+		overridePath = GetOverrideSearchPath(CurrentMemoryContext);
+		overridePath->schemas = NIL;
+		overridePath->addCatalog = true;
+
+		PushOverrideSearchPath(overridePath);
+
+		sqlTextDatum = DirectFunctionCall1(pg_get_function_identity_arguments,
+										   ObjectIdGetDatum(funcid));
+
+		/* revert back to original search_path */
+		PopOverrideSearchPath();
+
+		args = TextDatumGetCString(sqlTextDatum);
 	}
+
+	appendStringInfo(buf, "(%s)", args);
 }
