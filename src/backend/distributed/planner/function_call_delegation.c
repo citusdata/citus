@@ -83,12 +83,6 @@ TryToDelegateFunctionCall(Query *query)
 	Job *job = NULL;
 	DistributedPlan *distributedPlan = NULL;
 
-	if (IsMultiStatementTransaction())
-	{
-		/* cannot delegate function calls in a multi-statement transaction */
-		return NULL;
-	}
-
 	if (!IsCoordinator())
 	{
 		/* do not delegate from workers */
@@ -165,6 +159,14 @@ TryToDelegateFunctionCall(Query *query)
 	{
 		/* not a distributed function call */
 		ereport(DEBUG4, (errmsg("function is not distributed")));
+		return NULL;
+	}
+
+	if (IsMultiStatementTransaction())
+	{
+		/* cannot delegate function calls in a multi-statement transaction */
+		ereport(DEBUG1, (errmsg("not pushing down function calls in "
+								"a multi-statement transaction")));
 		return NULL;
 	}
 

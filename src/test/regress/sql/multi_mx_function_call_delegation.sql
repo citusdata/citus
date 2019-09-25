@@ -173,7 +173,9 @@ select * from mx_call_func(2, 0);
 select mx_call_func(2, 0) from mx_call_dist_table_1;
 select mx_call_func(2, 0) where mx_call_func(0, 2) = 0;
 select mx_call_func(2, 0), mx_call_func(0, 2);
-do $$ begin select mx_call_func(2, 0); END; $$;
+
+DO $$ BEGIN perform mx_call_func_tbl(40); END; $$;
+SELECT * FROM mx_call_dist_table_1 WHERE id >= 40 ORDER BY id, val;
 
 RESET client_min_messages;
 \set VERBOSITY terse
