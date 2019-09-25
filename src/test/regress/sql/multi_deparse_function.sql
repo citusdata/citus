@@ -187,6 +187,6 @@ DROP FUNCTION IF EXISTS missing_schema.missing_function(int,float);
 $cmd$);
 
 -- clear objects
-SET client_min_messages TO FATAL; -- suppress cascading objects dropping
+SET client_min_messages TO WARNING; -- suppress cascading objects dropping
 DROP SCHEMA function_tests CASCADE;
 DROP ROLE function_role;

@@ -52,202 +52,202 @@ $proc$;
 SELECT deparse_test($cmd$
 ALTER PROCEDURE  raise_info CALLED ON NULL INPUT
 $cmd$);
-                    deparse_test                    
-----------------------------------------------------
- ALTER PROCEDURE raise_info() CALLED ON NULL INPUT;
+                              deparse_test                              
+------------------------------------------------------------------------
+ ALTER PROCEDURE procedure_tests.raise_info(text) CALLED ON NULL INPUT;
 (1 row)
 
 SELECT deparse_test($cmd$
 ALTER PROCEDURE raise_info RETURNS NULL ON NULL INPUT
 $cmd$);
-             deparse_test             
---------------------------------------
- ALTER PROCEDURE raise_info() STRICT;
+                       deparse_test                       
+----------------------------------------------------------
+ ALTER PROCEDURE procedure_tests.raise_info(text) STRICT;
 (1 row)
 
 SELECT deparse_test($cmd$
 ALTER PROCEDURE raise_info STRICT
 $cmd$);
-             deparse_test             
---------------------------------------
- ALTER PROCEDURE raise_info() STRICT;
+                       deparse_test                       
+----------------------------------------------------------
+ ALTER PROCEDURE procedure_tests.raise_info(text) STRICT;
 (1 row)
 
 SELECT deparse_test($cmd$
 ALTER PROCEDURE raise_info IMMUTABLE
 $cmd$);
-              deparse_test               
------------------------------------------
- ALTER PROCEDURE raise_info() immutable;
+                        deparse_test                         
+-------------------------------------------------------------
+ ALTER PROCEDURE procedure_tests.raise_info(text) immutable;
 (1 row)
 
 SELECT deparse_test($cmd$
 ALTER PROCEDURE raise_info STABLE
 $cmd$);
-             deparse_test             
---------------------------------------
- ALTER PROCEDURE raise_info() stable;
+                       deparse_test                       
+----------------------------------------------------------
+ ALTER PROCEDURE procedure_tests.raise_info(text) stable;
 (1 row)
 
 SELECT deparse_test($cmd$
 ALTER PROCEDURE raise_info VOLATILE
 $cmd$);
-              deparse_test              
-----------------------------------------
- ALTER PROCEDURE raise_info() volatile;
+                        deparse_test                        
+------------------------------------------------------------
+ ALTER PROCEDURE procedure_tests.raise_info(text) volatile;
 (1 row)
 
 SELECT deparse_test($cmd$
 ALTER PROCEDURE raise_info LEAKPROOF
 $cmd$);
-              deparse_test               
------------------------------------------
- ALTER PROCEDURE raise_info() LEAKPROOF;
+                        deparse_test                         
+-------------------------------------------------------------
+ ALTER PROCEDURE procedure_tests.raise_info(text) LEAKPROOF;
 (1 row)
 
 SELECT deparse_test($cmd$
 ALTER PROCEDURE raise_info NOT LEAKPROOF
 $cmd$);
-                deparse_test                 
----------------------------------------------
- ALTER PROCEDURE raise_info() NOT LEAKPROOF;
+                          deparse_test                           
+-----------------------------------------------------------------
+ ALTER PROCEDURE procedure_tests.raise_info(text) NOT LEAKPROOF;
 (1 row)
 
 SELECT deparse_test($cmd$
 ALTER  PROCEDURE raise_info EXTERNAL SECURITY INVOKER
 $cmd$);
-                  deparse_test                  
-------------------------------------------------
- ALTER PROCEDURE raise_info() SECURITY INVOKER;
+                            deparse_test                            
+--------------------------------------------------------------------
+ ALTER PROCEDURE procedure_tests.raise_info(text) SECURITY INVOKER;
 (1 row)
 
 SELECT deparse_test($cmd$
 ALTER PROCEDURE raise_info SECURITY INVOKER
 $cmd$);
-                  deparse_test                  
-------------------------------------------------
- ALTER PROCEDURE raise_info() SECURITY INVOKER;
+                            deparse_test                            
+--------------------------------------------------------------------
+ ALTER PROCEDURE procedure_tests.raise_info(text) SECURITY INVOKER;
 (1 row)
 
 SELECT deparse_test($cmd$
 ALTER  PROCEDURE raise_info EXTERNAL SECURITY DEFINER
 $cmd$);
-                  deparse_test                  
-------------------------------------------------
- ALTER PROCEDURE raise_info() SECURITY DEFINER;
+                            deparse_test                            
+--------------------------------------------------------------------
+ ALTER PROCEDURE procedure_tests.raise_info(text) SECURITY DEFINER;
 (1 row)
 
 SELECT deparse_test($cmd$
 ALTER PROCEDURE raise_info SECURITY DEFINER
 $cmd$);
-                  deparse_test                  
-------------------------------------------------
- ALTER PROCEDURE raise_info() SECURITY DEFINER;
+                            deparse_test                            
+--------------------------------------------------------------------
+ ALTER PROCEDURE procedure_tests.raise_info(text) SECURITY DEFINER;
 (1 row)
 
 SELECT deparse_test($cmd$
 ALTER PROCEDURE raise_info PARALLEL UNSAFE
 $cmd$);
-                 deparse_test                  
------------------------------------------------
- ALTER PROCEDURE raise_info() PARALLEL unsafe;
+                           deparse_test                            
+-------------------------------------------------------------------
+ ALTER PROCEDURE procedure_tests.raise_info(text) PARALLEL unsafe;
 (1 row)
 
 SELECT deparse_test($cmd$
 ALTER PROCEDURE raise_info PARALLEL RESTRICTED
 $cmd$);
-                   deparse_test                    
----------------------------------------------------
- ALTER PROCEDURE raise_info() PARALLEL restricted;
+                             deparse_test                              
+-----------------------------------------------------------------------
+ ALTER PROCEDURE procedure_tests.raise_info(text) PARALLEL restricted;
 (1 row)
 
 SELECT deparse_test($cmd$
 ALTER PROCEDURE raise_info PARALLEL SAFE
 $cmd$);
-                deparse_test                 
----------------------------------------------
- ALTER PROCEDURE raise_info() PARALLEL safe;
+                          deparse_test                           
+-----------------------------------------------------------------
+ ALTER PROCEDURE procedure_tests.raise_info(text) PARALLEL safe;
 (1 row)
 
 -- The COST/ROWS arguments should always be numeric
 SELECT deparse_test($cmd$
 ALTER PROCEDURE raise_info COST 1234
 $cmd$);
-                  deparse_test                  
-------------------------------------------------
- ALTER PROCEDURE raise_info() COST 1234.000000;
+                            deparse_test                            
+--------------------------------------------------------------------
+ ALTER PROCEDURE procedure_tests.raise_info(text) COST 1234.000000;
 (1 row)
 
 SELECT deparse_test($cmd$
 ALTER  PROCEDURE raise_info COST 1234.5
 $cmd$);
-                  deparse_test                  
-------------------------------------------------
- ALTER PROCEDURE raise_info() COST 1234.500000;
+                            deparse_test                            
+--------------------------------------------------------------------
+ ALTER PROCEDURE procedure_tests.raise_info(text) COST 1234.500000;
 (1 row)
 
 SELECT deparse_test($cmd$
 ALTER PROCEDURE raise_info ROWS 10
 $cmd$);
-                 deparse_test                  
------------------------------------------------
- ALTER PROCEDURE raise_info() ROWS  10.000000;
+                           deparse_test                            
+-------------------------------------------------------------------
+ ALTER PROCEDURE procedure_tests.raise_info(text) ROWS  10.000000;
 (1 row)
 
 SELECT deparse_test($cmd$
 ALTER  PROCEDURE raise_info ROWS 10.8
 $cmd$);
-                 deparse_test                  
------------------------------------------------
- ALTER PROCEDURE raise_info() ROWS  10.800000;
+                           deparse_test                            
+-------------------------------------------------------------------
+ ALTER PROCEDURE procedure_tests.raise_info(text) ROWS  10.800000;
 (1 row)
 
 SELECT deparse_test($cmd$
 ALTER PROCEDURE  raise_info SET log_min_messages = ERROR
 $cmd$);
-                        deparse_test                        
-------------------------------------------------------------
- ALTER PROCEDURE raise_info() SET log_min_messages = error;
+                                  deparse_test                                  
+--------------------------------------------------------------------------------
+ ALTER PROCEDURE procedure_tests.raise_info(text) SET log_min_messages = error;
 (1 row)
 
 SELECT deparse_test($cmd$
 ALTER PROCEDURE  raise_info SET log_min_messages TO DEFAULT
 $cmd$);
-                         deparse_test                          
----------------------------------------------------------------
- ALTER PROCEDURE raise_info() SET log_min_messages TO DEFAULT;
+                                   deparse_test                                    
+-----------------------------------------------------------------------------------
+ ALTER PROCEDURE procedure_tests.raise_info(text) SET log_min_messages TO DEFAULT;
 (1 row)
 
 SELECT deparse_test($cmd$
 ALTER PROCEDURE  raise_info SET log_min_messages FROM CURRENT
 $cmd$);
-                          deparse_test                           
------------------------------------------------------------------
- ALTER PROCEDURE raise_info() SET log_min_messages FROM CURRENT;
+                                    deparse_test                                     
+-------------------------------------------------------------------------------------
+ ALTER PROCEDURE procedure_tests.raise_info(text) SET log_min_messages FROM CURRENT;
 (1 row)
 
 SELECT deparse_test($cmd$
 ALTER PROCEDURE raise_info RESET log_min_messages
 $cmd$);
-                     deparse_test                     
-------------------------------------------------------
- ALTER PROCEDURE raise_info() RESET log_min_messages;
+                               deparse_test                               
+--------------------------------------------------------------------------
+ ALTER PROCEDURE procedure_tests.raise_info(text) RESET log_min_messages;
 (1 row)
 
 SELECT deparse_test($cmd$
 ALTER PROCEDURE raise_info RESET ALL
 $cmd$);
-              deparse_test               
------------------------------------------
- ALTER PROCEDURE raise_info() RESET ALL;
+                        deparse_test                         
+-------------------------------------------------------------
+ ALTER PROCEDURE procedure_tests.raise_info(text) RESET ALL;
 (1 row)
 
 SELECT deparse_test($cmd$
 ALTER PROCEDURE raise_info RENAME TO summation
 $cmd$);
-                   deparse_test                    
----------------------------------------------------
- ALTER PROCEDURE raise_info() RENAME TO summation;
+                             deparse_test                              
+-----------------------------------------------------------------------
+ ALTER PROCEDURE procedure_tests.raise_info(text) RENAME TO summation;
 (1 row)
 
 CREATE ROLE PROCEDURE_role;
@@ -256,33 +256,33 @@ HINT:  Connect to worker nodes directly to manually create all necessary users a
 SELECT deparse_test($cmd$
 ALTER PROCEDURE raise_info OWNER TO PROCEDURE_role
 $cmd$);
-                     deparse_test                      
--------------------------------------------------------
- ALTER PROCEDURE raise_info() OWNER TO procedure_role;
+                               deparse_test                                
+---------------------------------------------------------------------------
+ ALTER PROCEDURE procedure_tests.raise_info(text) OWNER TO procedure_role;
 (1 row)
 
 SELECT deparse_test($cmd$
 ALTER PROCEDURE raise_info OWNER TO missing_role
 $cmd$);
-                    deparse_test                     
------------------------------------------------------
- ALTER PROCEDURE raise_info() OWNER TO missing_role;
+                              deparse_test                               
+-------------------------------------------------------------------------
+ ALTER PROCEDURE procedure_tests.raise_info(text) OWNER TO missing_role;
 (1 row)
 
 SELECT deparse_test($cmd$
 ALTER PROCEDURE raise_info SET SCHEMA public
 $cmd$);
-                  deparse_test                   
--------------------------------------------------
- ALTER PROCEDURE raise_info() SET SCHEMA public;
+                            deparse_test                             
+---------------------------------------------------------------------
+ ALTER PROCEDURE procedure_tests.raise_info(text) SET SCHEMA public;
 (1 row)
 
 SELECT deparse_test($cmd$
 ALTER PROCEDURE raise_info DEPENDS ON EXTENSION citus
 $cmd$);
-                       deparse_test                       
-----------------------------------------------------------
- ALTER PROCEDURE raise_info() DEPENDS ON EXTENSION citus;
+                                 deparse_test                                 
+------------------------------------------------------------------------------
+ ALTER PROCEDURE procedure_tests.raise_info(text) DEPENDS ON EXTENSION citus;
 (1 row)
 
 SELECT deparse_test($cmd$
@@ -311,6 +311,6 @@ $cmd$);
 (1 row)
 
 -- clear objects
-SET client_min_messages TO FATAL; -- suppress cascading objects dropping
+SET client_min_messages TO WARNING; -- suppress cascading objects dropping
 DROP SCHEMA procedure_tests CASCADE;
 DROP ROLE PROCEDURE_role;
