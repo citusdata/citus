@@ -1,7 +1,7 @@
 -- Test passing off function call to mx workers
 -- Create worker-local tables to test function calls were routed
 CREATE SCHEMA multi_mx_function_call_delegation;
-SET search_path TO multi_mx_function_call_delegation;
+SET search_path TO multi_mx_function_call_delegation, public;
 SET citus.shard_replication_factor TO 2;
 SET citus.replication_model TO 'statement';
 -- This table requires specific settings, create before getting into things
@@ -15,19 +15,6 @@ select create_distributed_table('mx_call_dist_table_replica', 'id');
 insert into mx_call_dist_table_replica values (9,1),(8,2),(7,3),(6,4),(5,5);
 SET citus.shard_replication_factor TO 1;
 SET citus.replication_model TO 'streaming';
---
--- Utility UDFs
---
--- 1. Marks the given function as colocated with the given table.
--- 2. Marks the argument index with which we route the function.
-CREATE FUNCTION colocate_func_with_table(procname text, tablerelid regclass, argument_index int)
-RETURNS void LANGUAGE plpgsql AS $$
-BEGIN
-    update citus.pg_dist_object
-    set distribution_argument_index = argument_index, colocationid = pg_dist_partition.colocationid
-    from pg_proc, pg_dist_partition
-    where proname = procname and oid = objid and pg_dist_partition.logicalrelid = tablerelid;
-END;$$;
 --
 -- Create tables and functions we want to use in tests
 --
@@ -84,13 +71,13 @@ BEGIN
     x := (select case groupid when 0 then 'F' else 'S' end from pg_dist_local_group);
 END;$$;
 -- Test that undistributed functions have no issue executing
-select mx_call_func(2, 0);
+select multi_mx_function_call_delegation.mx_call_func(2, 0);
  mx_call_func 
 --------------
            29
 (1 row)
 
-select mx_call_func_custom_types('S', 'A');
+select multi_mx_function_call_delegation.mx_call_func_custom_types('S', 'A');
  mx_call_func_custom_types 
 ---------------------------
  (F,S)
@@ -145,55 +132,15 @@ DEBUG:  function does not have co-located tables
  (F,S)
 (1 row)
 
--- Mark both functions as distributed ...
-select create_distributed_function('mx_call_func(int,int)');
-DEBUG:  switching to sequential query execution mode
-DETAIL:  A distributed function is created. To make sure subsequent commands see the type correctly we need to make sure to use only one connection for all future commands
- create_distributed_function 
------------------------------
- 
-(1 row)
-
-select create_distributed_function('mx_call_func_custom_types(mx_call_enum,mx_call_enum)');
-DEBUG:  switching to sequential query execution mode
-DETAIL:  A distributed function is created. To make sure subsequent commands see the type correctly we need to make sure to use only one connection for all future commands
- create_distributed_function 
------------------------------
- 
-(1 row)
-
--- We still don't route them to the workers, because they aren't
--- colocated with any distributed tables.
-SET client_min_messages TO DEBUG1;
-select mx_call_func(2, 0);
-DEBUG:  function does not have co-located tables
-DEBUG:  generating subplan 12_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (multi_mx_function_call_delegation.mx_call_dist_table_1 t1 JOIN multi_mx_function_call_delegation.mx_call_dist_table_2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
-CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_function_call_delegation.mx_call_dist_table_1 t1 join multi_mx_function_call_delegation.mx_call_dist_table_2 t2 on t1.id = t2.id)"
-PL/pgSQL function mx_call_func(integer,integer) line 8 at assignment
-DEBUG:  Plan 12 query after replacing subqueries and CTEs: SELECT (3 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('12_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
-CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_function_call_delegation.mx_call_dist_table_1 t1 join multi_mx_function_call_delegation.mx_call_dist_table_2 t2 on t1.id = t2.id)"
-PL/pgSQL function mx_call_func(integer,integer) line 8 at assignment
- mx_call_func 
---------------
-           29
-(1 row)
-
-select mx_call_func_custom_types('S', 'A');
-DEBUG:  function does not have co-located tables
- mx_call_func_custom_types 
----------------------------
- (F,S)
-(1 row)
-
 -- Mark them as colocated with a table. Now we should route them to workers.
-select colocate_func_with_table('mx_call_func', 'mx_call_dist_table_1'::regclass, 1);
- colocate_func_with_table 
+select colocate_proc_with_table('mx_call_func', 'mx_call_dist_table_1'::regclass, 1);
+ colocate_proc_with_table 
 --------------------------
  
 (1 row)
 
-select colocate_func_with_table('mx_call_func_custom_types', 'mx_call_dist_table_enum'::regclass, 1);
- colocate_func_with_table 
+select colocate_proc_with_table('mx_call_func_custom_types', 'mx_call_dist_table_enum'::regclass, 1);
+ colocate_proc_with_table 
 --------------------------
  
 (1 row)
@@ -212,13 +159,27 @@ DEBUG:  pushing down the function call
  (S,S)
 (1 row)
 
+select multi_mx_function_call_delegation.mx_call_func(2, 0);
+DEBUG:  pushing down the function call
+ mx_call_func 
+--------------
+           28
+(1 row)
+
+select multi_mx_function_call_delegation.mx_call_func_custom_types('S', 'A');
+DEBUG:  pushing down the function call
+ mx_call_func_custom_types 
+---------------------------
+ (S,S)
+(1 row)
+
 -- We don't allow distributing calls inside transactions
 begin;
 select mx_call_func(2, 0);
-DEBUG:  generating subplan 14_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (multi_mx_function_call_delegation.mx_call_dist_table_1 t1 JOIN multi_mx_function_call_delegation.mx_call_dist_table_2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
+DEBUG:  generating subplan 12_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (multi_mx_function_call_delegation.mx_call_dist_table_1 t1 JOIN multi_mx_function_call_delegation.mx_call_dist_table_2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
 CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_function_call_delegation.mx_call_dist_table_1 t1 join multi_mx_function_call_delegation.mx_call_dist_table_2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_func(integer,integer) line 8 at assignment
-DEBUG:  Plan 14 query after replacing subqueries and CTEs: SELECT (3 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('14_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
+DEBUG:  Plan 12 query after replacing subqueries and CTEs: SELECT (3 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('12_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
 CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_function_call_delegation.mx_call_dist_table_1 t1 join multi_mx_function_call_delegation.mx_call_dist_table_2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_func(integer,integer) line 8 at assignment
  mx_call_func 
@@ -241,8 +202,27 @@ DEBUG:  function does not have co-located tables
 
 -- Make sure we do bounds checking on distributed argument index
 -- This also tests that we have cache invalidation for pg_dist_object updates
-select colocate_func_with_table('mx_call_func', 'mx_call_dist_table_1'::regclass, -1);
- colocate_func_with_table 
+select colocate_proc_with_table('mx_call_func', 'mx_call_dist_table_1'::regclass, -1);
+ colocate_proc_with_table 
+--------------------------
+ 
+(1 row)
+
+select mx_call_func(2, 0);
+DEBUG:  function call does not have a distribution argument
+DEBUG:  generating subplan 14_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (multi_mx_function_call_delegation.mx_call_dist_table_1 t1 JOIN multi_mx_function_call_delegation.mx_call_dist_table_2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_function_call_delegation.mx_call_dist_table_1 t1 join multi_mx_function_call_delegation.mx_call_dist_table_2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_func(integer,integer) line 8 at assignment
+DEBUG:  Plan 14 query after replacing subqueries and CTEs: SELECT (3 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('14_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_function_call_delegation.mx_call_dist_table_1 t1 join multi_mx_function_call_delegation.mx_call_dist_table_2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_func(integer,integer) line 8 at assignment
+ mx_call_func 
+--------------
+           29
+(1 row)
+
+select colocate_proc_with_table('mx_call_func', 'mx_call_dist_table_1'::regclass, 2);
+ colocate_proc_with_table 
 --------------------------
  
 (1 row)
@@ -260,14 +240,15 @@ PL/pgSQL function mx_call_func(integer,integer) line 8 at assignment
            29
 (1 row)
 
-select colocate_func_with_table('mx_call_func', 'mx_call_dist_table_1'::regclass, 2);
- colocate_func_with_table 
+-- We don't currently support colocating with reference tables
+select colocate_proc_with_table('mx_call_func', 'mx_call_dist_table_ref'::regclass, 1);
+ colocate_proc_with_table 
 --------------------------
  
 (1 row)
 
 select mx_call_func(2, 0);
-DEBUG:  function call does not have a distribution argument
+DEBUG:  cannnot push down function call for reference tables for reference tables
 DEBUG:  generating subplan 19_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (multi_mx_function_call_delegation.mx_call_dist_table_1 t1 JOIN multi_mx_function_call_delegation.mx_call_dist_table_2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
 CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_function_call_delegation.mx_call_dist_table_1 t1 join multi_mx_function_call_delegation.mx_call_dist_table_2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_func(integer,integer) line 8 at assignment
@@ -279,15 +260,15 @@ PL/pgSQL function mx_call_func(integer,integer) line 8 at assignment
            29
 (1 row)
 
--- We don't currently support colocating with reference tables
-select colocate_func_with_table('mx_call_func', 'mx_call_dist_table_ref'::regclass, 1);
- colocate_func_with_table 
+-- We don't currently support colocating with replicated tables
+select colocate_proc_with_table('mx_call_func', 'mx_call_dist_table_replica'::regclass, 1);
+ colocate_proc_with_table 
 --------------------------
  
 (1 row)
 
 select mx_call_func(2, 0);
-DEBUG:  cannnot push down function call for reference tables for reference tables
+DEBUG:  cannot push down function call for replicated distributed tables
 DEBUG:  generating subplan 21_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (multi_mx_function_call_delegation.mx_call_dist_table_1 t1 JOIN multi_mx_function_call_delegation.mx_call_dist_table_2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
 CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_function_call_delegation.mx_call_dist_table_1 t1 join multi_mx_function_call_delegation.mx_call_dist_table_2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_func(integer,integer) line 8 at assignment
@@ -299,19 +280,95 @@ PL/pgSQL function mx_call_func(integer,integer) line 8 at assignment
            29
 (1 row)
 
--- We don't currently support colocating with replicated tables
-select colocate_func_with_table('mx_call_func', 'mx_call_dist_table_replica'::regclass, 1);
- colocate_func_with_table 
+SET client_min_messages TO NOTICE;
+drop table mx_call_dist_table_replica;
+SET client_min_messages TO DEBUG1;
+select colocate_proc_with_table('mx_call_func', 'mx_call_dist_table_1'::regclass, 1);
+ colocate_proc_with_table 
 --------------------------
  
 (1 row)
 
+-- Test table returning functions.
+CREATE FUNCTION mx_call_func_tbl(x int)
+RETURNS TABLE (p0 int, p1 int)
+LANGUAGE plpgsql AS $$
+BEGIN
+    INSERT INTO multi_mx_function_call_delegation.mx_call_dist_table_1 VALUES (x, -1), (x+1, 4);
+    UPDATE multi_mx_function_call_delegation.mx_call_dist_table_1 SET val = val+1 WHERE id >= x;
+    UPDATE multi_mx_function_call_delegation.mx_call_dist_table_1 SET val = val-1 WHERE id >= x;
+    RETURN QUERY
+        SELECT id, val
+        FROM multi_mx_function_call_delegation.mx_call_dist_table_1 t
+        WHERE id >= x
+        ORDER BY 1, 2;
+END;$$;
+-- before distribution ...
+select mx_call_func_tbl(10);
+ mx_call_func_tbl 
+------------------
+ (10,-1)
+ (11,4)
+(2 rows)
+
+-- after distribution ...
+select create_distributed_function('mx_call_func_tbl(int)', '$1', 'mx_call_dist_table_1');
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A distributed function is created. To make sure subsequent commands see the type correctly we need to make sure to use only one connection for all future commands
+ create_distributed_function 
+-----------------------------
+ 
+(1 row)
+
+select mx_call_func_tbl(20);
+DEBUG:  pushing down the function call
+ mx_call_func_tbl 
+------------------
+ (20,-1)
+ (21,4)
+(2 rows)
+
+-- Test that we properly propagate errors raised from procedures.
+CREATE FUNCTION mx_call_func_raise(x int)
+RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+    RAISE WARNING 'warning';
+    RAISE EXCEPTION 'error';
+END;$$;
+select create_distributed_function('mx_call_func_raise(int)', '$1', 'mx_call_dist_table_1');
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A distributed function is created. To make sure subsequent commands see the type correctly we need to make sure to use only one connection for all future commands
+ create_distributed_function 
+-----------------------------
+ 
+(1 row)
+
+select mx_call_func_raise(2);
+DEBUG:  pushing down the function call
+DEBUG:  warning
+DETAIL:  WARNING from localhost:57638
+ERROR:  error
+CONTEXT:  while executing command on localhost:57638
+PL/pgSQL function multi_mx_function_call_delegation.mx_call_func_raise(integer) line 4 at RAISE
+-- Test that we don't propagate to non-metadata worker nodes
+select stop_metadata_sync_to_node('localhost', :worker_1_port);
+ stop_metadata_sync_to_node 
+----------------------------
+ 
+(1 row)
+
+select stop_metadata_sync_to_node('localhost', :worker_2_port);
+ stop_metadata_sync_to_node 
+----------------------------
+ 
+(1 row)
+
 select mx_call_func(2, 0);
-DEBUG:  cannot push down function call for replicated distributed tables
-DEBUG:  generating subplan 23_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (multi_mx_function_call_delegation.mx_call_dist_table_1 t1 JOIN multi_mx_function_call_delegation.mx_call_dist_table_2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
+DEBUG:  the worker node does not have metadata
+DEBUG:  generating subplan 27_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (multi_mx_function_call_delegation.mx_call_dist_table_1 t1 JOIN multi_mx_function_call_delegation.mx_call_dist_table_2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
 CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_function_call_delegation.mx_call_dist_table_1 t1 join multi_mx_function_call_delegation.mx_call_dist_table_2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_func(integer,integer) line 8 at assignment
-DEBUG:  Plan 23 query after replacing subqueries and CTEs: SELECT (3 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('23_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
+DEBUG:  Plan 27 query after replacing subqueries and CTEs: SELECT (3 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('27_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
 CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_function_call_delegation.mx_call_dist_table_1 t1 join multi_mx_function_call_delegation.mx_call_dist_table_2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_func(integer,integer) line 8 at assignment
  mx_call_func 
@@ -320,28 +377,120 @@ PL/pgSQL function mx_call_func(integer,integer) line 8 at assignment
 (1 row)
 
 SET client_min_messages TO NOTICE;
-drop table mx_call_dist_table_replica;
-SET client_min_messages TO DEBUG1;
-select colocate_func_with_table('mx_call_func', 'mx_call_dist_table_1'::regclass, 1);
- colocate_func_with_table 
---------------------------
+select start_metadata_sync_to_node('localhost', :worker_1_port);
+ start_metadata_sync_to_node 
+-----------------------------
  
 (1 row)
 
--- Drop the table colocated with mx_call_func_custom_types. Now it shouldn't
--- be routed to workers anymore.
-SET client_min_messages TO NOTICE;
-drop table mx_call_dist_table_enum;
-ERROR:  table "mx_call_dist_table_enum" does not exist
-SET client_min_messages TO DEBUG1;
-select mx_call_func_custom_types('S', 'A');
-DEBUG:  function does not have co-located tables
- mx_call_func_custom_types 
----------------------------
- (F,S)
+select start_metadata_sync_to_node('localhost', :worker_2_port);
+ start_metadata_sync_to_node 
+-----------------------------
+ 
 (1 row)
 
+SET client_min_messages TO DEBUG1;
+--
+-- Test non-const parameter values
+--
+CREATE FUNCTION mx_call_add(int, int) RETURNS int
+    AS 'select $1 + $2;' LANGUAGE SQL IMMUTABLE;
+SELECT create_distributed_function('mx_call_add(int,int)', '$1');
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A distributed function is created. To make sure subsequent commands see the type correctly we need to make sure to use only one connection for all future commands
+ create_distributed_function 
+-----------------------------
+ 
+(1 row)
+
+-- non-const distribution parameters cannot be pushed down
+select mx_call_func(2, (select x + 1 from mx_call_add(3, 4) x));
+DEBUG:  distribution argument value must be a constant
+DEBUG:  generating subplan 29_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (multi_mx_function_call_delegation.mx_call_dist_table_1 t1 JOIN multi_mx_function_call_delegation.mx_call_dist_table_2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_function_call_delegation.mx_call_dist_table_1 t1 join multi_mx_function_call_delegation.mx_call_dist_table_2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_func(integer,integer) line 8 at assignment
+DEBUG:  Plan 29 query after replacing subqueries and CTEs: SELECT (3 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('29_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_function_call_delegation.mx_call_dist_table_1 t1 join multi_mx_function_call_delegation.mx_call_dist_table_2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_func(integer,integer) line 8 at assignment
+ mx_call_func 
+--------------
+           29
+(1 row)
+
+-- non-const parameter can be pushed down
+select mx_call_func((select x + 1 from mx_call_add(3, 4) x), 2);
+DEBUG:  pushing down the function call
+ERROR:  there is no parameter $0
+CONTEXT:  while executing command on localhost:57638
+-- volatile parameter cannot be pushed down
+select mx_call_func(floor(random())::int, 2);
+DEBUG:  arguments in a distributed function must be constant expressions
+DEBUG:  generating subplan 31_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (multi_mx_function_call_delegation.mx_call_dist_table_1 t1 JOIN multi_mx_function_call_delegation.mx_call_dist_table_2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_function_call_delegation.mx_call_dist_table_1 t1 join multi_mx_function_call_delegation.mx_call_dist_table_2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_func(integer,integer) line 8 at assignment
+DEBUG:  Plan 31 query after replacing subqueries and CTEs: SELECT (1 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('31_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_function_call_delegation.mx_call_dist_table_1 t1 join multi_mx_function_call_delegation.mx_call_dist_table_2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_func(integer,integer) line 8 at assignment
+ mx_call_func 
+--------------
+           27
+(1 row)
+
+-- test forms we don't distribute
+select * from mx_call_func(2, 0);
+DEBUG:  generating subplan 33_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (multi_mx_function_call_delegation.mx_call_dist_table_1 t1 JOIN multi_mx_function_call_delegation.mx_call_dist_table_2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_function_call_delegation.mx_call_dist_table_1 t1 join multi_mx_function_call_delegation.mx_call_dist_table_2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_func(integer,integer) line 8 at assignment
+DEBUG:  Plan 33 query after replacing subqueries and CTEs: SELECT (3 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('33_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_function_call_delegation.mx_call_dist_table_1 t1 join multi_mx_function_call_delegation.mx_call_dist_table_2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_func(integer,integer) line 8 at assignment
+ y  
+----
+ 29
+(1 row)
+
+select mx_call_func(2, 0) from mx_call_dist_table_1;
+ERROR:  cached metadata for shard 102033 is inconsistent
+HINT:  Reconnect and try again.
+CONTEXT:  while executing command on localhost:57637
+SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_function_call_delegation.mx_call_dist_table_1 t1 join multi_mx_function_call_delegation.mx_call_dist_table_2 t2 on t1.id = t2.id)"
+PL/pgSQL function multi_mx_function_call_delegation.mx_call_func(integer,integer) line 8 at assignment
+select mx_call_func(2, 0) where mx_call_func(0, 2) = 0;
+DEBUG:  generating subplan 36_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (multi_mx_function_call_delegation.mx_call_dist_table_1 t1 JOIN multi_mx_function_call_delegation.mx_call_dist_table_2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_function_call_delegation.mx_call_dist_table_1 t1 join multi_mx_function_call_delegation.mx_call_dist_table_2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_func(integer,integer) line 8 at assignment
+DEBUG:  Plan 36 query after replacing subqueries and CTEs: SELECT (1 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('36_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_function_call_delegation.mx_call_dist_table_1 t1 join multi_mx_function_call_delegation.mx_call_dist_table_2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_func(integer,integer) line 8 at assignment
+ mx_call_func 
+--------------
+(0 rows)
+
+select mx_call_func(2, 0), mx_call_func(0, 2);
+DEBUG:  generating subplan 38_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (multi_mx_function_call_delegation.mx_call_dist_table_1 t1 JOIN multi_mx_function_call_delegation.mx_call_dist_table_2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_function_call_delegation.mx_call_dist_table_1 t1 join multi_mx_function_call_delegation.mx_call_dist_table_2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_func(integer,integer) line 8 at assignment
+DEBUG:  Plan 38 query after replacing subqueries and CTEs: SELECT (3 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('38_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_function_call_delegation.mx_call_dist_table_1 t1 join multi_mx_function_call_delegation.mx_call_dist_table_2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_func(integer,integer) line 8 at assignment
+DEBUG:  generating subplan 40_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (multi_mx_function_call_delegation.mx_call_dist_table_1 t1 JOIN multi_mx_function_call_delegation.mx_call_dist_table_2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_function_call_delegation.mx_call_dist_table_1 t1 join multi_mx_function_call_delegation.mx_call_dist_table_2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_func(integer,integer) line 8 at assignment
+DEBUG:  Plan 40 query after replacing subqueries and CTEs: SELECT (1 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('40_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
+CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_function_call_delegation.mx_call_dist_table_1 t1 join multi_mx_function_call_delegation.mx_call_dist_table_2 t2 on t1.id = t2.id)"
+PL/pgSQL function mx_call_func(integer,integer) line 8 at assignment
+ mx_call_func | mx_call_func 
+--------------+--------------
+           29 |           27
+(1 row)
+
+do $$ begin select mx_call_func(2, 0); END; $$;
+DEBUG:  pushing down the function call
+CONTEXT:  SQL statement "select mx_call_func(2, 0)"
+PL/pgSQL function inline_code_block line 1 at SQL statement
+ERROR:  unexpected plan node type: 34
+CONTEXT:  PL/pgSQL function inline_code_block line 1 at SQL statement
 RESET client_min_messages;
 \set VERBOSITY terse
 DROP SCHEMA multi_mx_function_call_delegation CASCADE;
-NOTICE:  drop cascades to 7 other objects
+NOTICE:  drop cascades to 9 other objects
