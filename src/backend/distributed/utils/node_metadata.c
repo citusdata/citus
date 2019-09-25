@@ -69,11 +69,11 @@ typedef struct NodeMetadata
 } NodeMetadata;
 
 /* local function forward declarations */
-static void ActivateNode(WorkerNode *workerNode);
+static int ActivateNode(char *nodeName, int nodePort);
 static void RemoveNodeFromCluster(char *nodeName, int32 nodePort);
-static WorkerNode * AddNodeMetadata(char *nodeName, int32 nodePort, NodeMetadata
-									*nodeMetadata, bool *nodeAlreadyExists);
-static WorkerNode * SetNodeState(WorkerNode *workerNode, bool isActive);
+static int AddNodeMetadata(char *nodeName, int32 nodePort, NodeMetadata
+						   *nodeMetadata, bool *nodeAlreadyExists);
+static WorkerNode * SetNodeState(char *nodeName, int32 nodePort, bool isActive);
 static HeapTuple GetNodeTuple(const char *nodeName, int32 nodePort);
 static int32 GetNextGroupId(void);
 static int GetNextNodeId(void);
@@ -132,7 +132,7 @@ master_add_node(PG_FUNCTION_ARGS)
 	text *nodeName = PG_GETARG_TEXT_P(0);
 	int32 nodePort = PG_GETARG_INT32(1);
 	char *nodeNameString = text_to_cstring(nodeName);
-	WorkerNode *workerNode = NULL;
+	int nodeId = 0;
 
 	NodeMetadata nodeMetadata = DefaultNodeMetadata();
 	bool nodeAlreadyExists = false;
@@ -157,8 +157,8 @@ master_add_node(PG_FUNCTION_ARGS)
 		nodeMetadata.nodeRole = PG_GETARG_OID(3);
 	}
 
-	workerNode = AddNodeMetadata(nodeNameString, nodePort, &nodeMetadata,
-								 &nodeAlreadyExists);
+	nodeId = AddNodeMetadata(nodeNameString, nodePort, &nodeMetadata,
+							 &nodeAlreadyExists);
 
 	/*
 	 * After adding new node, if the node did not already exist, we will activate
@@ -167,10 +167,10 @@ master_add_node(PG_FUNCTION_ARGS)
 	 */
 	if (!nodeAlreadyExists)
 	{
-		ActivateNode(workerNode);
+		ActivateNode(nodeNameString, nodePort);
 	}
 
-	PG_RETURN_INT32(workerNode->nodeId);
+	PG_RETURN_INT32(nodeId);
 }
 
 
@@ -189,17 +189,17 @@ master_add_inactive_node(PG_FUNCTION_ARGS)
 
 	NodeMetadata nodeMetadata = DefaultNodeMetadata();
 	bool nodeAlreadyExists = false;
-	WorkerNode *workerNode = NULL;
+	int nodeId = 0;
 	nodeMetadata.groupId = PG_GETARG_INT32(2);
 	nodeMetadata.nodeRole = PG_GETARG_OID(3);
 	nodeMetadata.nodeCluster = NameStr(*nodeClusterName);
 
 	CheckCitusVersion(ERROR);
 
-	workerNode = AddNodeMetadata(nodeNameString, nodePort, &nodeMetadata,
-								 &nodeAlreadyExists);
+	nodeId = AddNodeMetadata(nodeNameString, nodePort, &nodeMetadata,
+							 &nodeAlreadyExists);
 
-	PG_RETURN_INT32(workerNode->nodeId);
+	PG_RETURN_INT32(nodeId);
 }
 
 
@@ -221,7 +221,7 @@ master_add_secondary_node(PG_FUNCTION_ARGS)
 	Name nodeClusterName = PG_GETARG_NAME(4);
 	NodeMetadata nodeMetadata = DefaultNodeMetadata();
 	bool nodeAlreadyExists = false;
-	WorkerNode *workerNode = NULL;
+	int nodeId = 0;
 
 	nodeMetadata.groupId = GroupForNode(primaryNameString, primaryPort);
 	nodeMetadata.nodeCluster = NameStr(*nodeClusterName);
@@ -230,10 +230,10 @@ master_add_secondary_node(PG_FUNCTION_ARGS)
 
 	CheckCitusVersion(ERROR);
 
-	workerNode = AddNodeMetadata(nodeNameString, nodePort, &nodeMetadata,
-								 &nodeAlreadyExists);
+	nodeId = AddNodeMetadata(nodeNameString, nodePort, &nodeMetadata,
+							 &nodeAlreadyExists);
 
-	PG_RETURN_INT32(workerNode->nodeId);
+	PG_RETURN_INT32(nodeId);
 }
 
 
@@ -277,8 +277,8 @@ master_disable_node(PG_FUNCTION_ARGS)
 {
 	text *nodeNameText = PG_GETARG_TEXT_P(0);
 	int32 nodePort = PG_GETARG_INT32(1);
-	WorkerNode *workerNode = ModifiableWorkerNode(text_to_cstring(nodeNameText),
-												  nodePort);
+	char *nodeName = text_to_cstring(nodeNameText);
+	WorkerNode *workerNode = ModifiableWorkerNode(nodeName, nodePort);
 	bool isActive = false;
 	bool onlyConsiderActivePlacements = false;
 
@@ -301,7 +301,7 @@ master_disable_node(PG_FUNCTION_ARGS)
 		}
 	}
 
-	SetNodeState(workerNode, isActive);
+	SetNodeState(nodeName, nodePort, isActive);
 
 	CleanUpReferenceTables(workerNode);
 
@@ -485,7 +485,7 @@ master_activate_node(PG_FUNCTION_ARGS)
 
 	WorkerNode *workerNode = ModifiableWorkerNode(text_to_cstring(nodeNameText),
 												  nodePort);
-	ActivateNode(workerNode);
+	ActivateNode(workerNode->workerName, workerNode->workerPort);
 
 	PG_RETURN_INT32(workerNode->nodeId);
 }
@@ -658,8 +658,8 @@ PrimaryNodeForGroup(int32 groupId, bool *groupContainsNodes)
  * includes only replicating the reference tables and setting isactive column of the
  * given node.
  */
-static void
-ActivateNode(WorkerNode *workerNode)
+static int
+ActivateNode(char *nodeName, int nodePort)
 {
 	WorkerNode *newWorkerNode = NULL;
 	bool isActive = true;
@@ -667,9 +667,10 @@ ActivateNode(WorkerNode *workerNode)
 	/* take an exclusive lock on pg_dist_node to serialize pg_dist_node changes */
 	LockRelationOid(DistNodeRelationId(), ExclusiveLock);
 
-	newWorkerNode = SetNodeState(workerNode, isActive);
+	newWorkerNode = SetNodeState(nodeName, nodePort, isActive);
 
 	SetUpReferenceTablesAndDistributedFunctions(newWorkerNode);
+	return newWorkerNode->nodeId;
 }
 
 
@@ -1154,7 +1155,7 @@ CountPrimariesWithMetadata(void)
  * be in with respect to GroupSize. Then, the new node is inserted into the local
  * pg_dist_node as well as the nodes with hasmetadata=true.
  */
-static WorkerNode *
+static int
 AddNodeMetadata(char *nodeName, int32 nodePort,
 				NodeMetadata *nodeMetadata,
 				bool *nodeAlreadyExists)
@@ -1181,7 +1182,7 @@ AddNodeMetadata(char *nodeName, int32 nodePort,
 		/* fill return data and return */
 		*nodeAlreadyExists = true;
 
-		return workerNode;
+		return workerNode->nodeId;
 	}
 
 	/* user lets Citus to decide on the group that the newly added node should be in */
@@ -1235,7 +1236,7 @@ AddNodeMetadata(char *nodeName, int32 nodePort,
 		SendCommandToWorkers(WORKERS_WITH_METADATA, nodeInsertCommand);
 	}
 
-	return workerNode;
+	return workerNode->nodeId;
 }
 
 
@@ -1312,8 +1313,9 @@ SetIsDataNode(WorkerNode *workerNode, Oid isDataNode)
  * It returns the new worker node after the modification.
  */
 static WorkerNode *
-SetNodeState(WorkerNode *workerNode, bool isActive)
+SetNodeState(char *nodeName, int nodePort, bool isActive)
 {
+	WorkerNode *workerNode = FindWorkerNodeAnyCluster(nodeName, nodePort);
 	char *nodeStateUpdateCommand = NodeStateUpdateCommand(workerNode->nodeId, isActive);
 	return SetWorkerColumn(workerNode, Anum_pg_dist_node_isactive,
 						   BoolGetDatum(isActive), nodeStateUpdateCommand);
