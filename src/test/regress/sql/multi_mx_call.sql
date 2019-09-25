@@ -1,6 +1,7 @@
 -- Test passing off CALL to mx workers
 
--- Create worker-local tables to test procedure calls were routed
+create schema multi_mx_call;
+set search_path to multi_mx_call, public;
 
 set citus.shard_replication_factor to 2;
 set citus.replication_model to 'statement';
@@ -12,25 +13,6 @@ insert into mx_call_dist_table_replica values (9,1),(8,2),(7,3),(6,4),(5,5);
 
 set citus.shard_replication_factor to 1;
 set citus.replication_model to 'streaming';
-
-create schema multi_mx_call;
-set search_path to multi_mx_call, public;
-
---
--- Utility UDFs
---
-
--- 1. Marks the given procedure as colocated with the given table.
--- 2. Marks the argument index with which we route the procedure.
-CREATE PROCEDURE colocate_proc_with_table(procname text, tablerelid regclass, argument_index int)
-LANGUAGE plpgsql AS $$
-BEGIN
-    update citus.pg_dist_object
-    set distribution_argument_index = argument_index, colocationid = pg_dist_partition.colocationid
-    from pg_proc, pg_dist_partition
-    where proname = procname and oid = objid and pg_dist_partition.logicalrelid = tablerelid;
-END;$$;
-
 
 --
 -- Create tables and procedures we want to use in tests
@@ -89,12 +71,12 @@ call multi_mx_call.mx_call_proc(2, 0);
 call multi_mx_call.mx_call_proc_custom_types('S', 'A');
 
 -- Mark them as colocated with a table. Now we should route them to workers.
-call multi_mx_call.colocate_proc_with_table('mx_call_proc', 'mx_call_dist_table_1'::regclass, 1);
-call multi_mx_call.colocate_proc_with_table('mx_call_proc_custom_types', 'mx_call_dist_table_enum'::regclass, 1);
+call colocate_proc_with_table('mx_call_proc', 'mx_call_dist_table_1'::regclass, 1);
+call colocate_proc_with_table('mx_call_proc_custom_types', 'mx_call_dist_table_enum'::regclass, 1);
 call multi_mx_call.mx_call_proc(2, 0);
 call multi_mx_call.mx_call_proc_custom_types('S', 'A');
 
--- We don't allow distributing calls inside transactions
+-- We don't route procedure calls inside transactions.
 begin;
 call multi_mx_call.mx_call_proc(2, 0);
 commit;
@@ -108,23 +90,23 @@ call multi_mx_call.mx_call_proc_custom_types('S', 'A');
 
 -- Make sure we do bounds checking on distributed argument index
 -- This also tests that we have cache invalidation for pg_dist_object updates
-call multi_mx_call.colocate_proc_with_table('mx_call_proc', 'mx_call_dist_table_1'::regclass, -1);
+call colocate_proc_with_table('mx_call_proc', 'mx_call_dist_table_1'::regclass, -1);
 call multi_mx_call.mx_call_proc(2, 0);
-call multi_mx_call.colocate_proc_with_table('mx_call_proc', 'mx_call_dist_table_1'::regclass, 2);
+call colocate_proc_with_table('mx_call_proc', 'mx_call_dist_table_1'::regclass, 2);
 call multi_mx_call.mx_call_proc(2, 0);
 
 -- We don't currently support colocating with reference tables
-call multi_mx_call.colocate_proc_with_table('mx_call_proc', 'mx_call_dist_table_ref'::regclass, 1);
+call colocate_proc_with_table('mx_call_proc', 'mx_call_dist_table_ref'::regclass, 1);
 call multi_mx_call.mx_call_proc(2, 0);
 
 -- We don't currently support colocating with replicated tables
-call multi_mx_call.colocate_proc_with_table('mx_call_proc', 'mx_call_dist_table_replica'::regclass, 1);
+call colocate_proc_with_table('mx_call_proc', 'mx_call_dist_table_replica'::regclass, 1);
 call multi_mx_call.mx_call_proc(2, 0);
 SET client_min_messages TO NOTICE;
 drop table mx_call_dist_table_replica;
 SET client_min_messages TO DEBUG1;
 
-call multi_mx_call.colocate_proc_with_table('mx_call_proc', 'mx_call_dist_table_1'::regclass, 1);
+call colocate_proc_with_table('mx_call_proc', 'mx_call_dist_table_1'::regclass, 1);
 
 -- Test that we handle transactional constructs correctly inside a procedure
 -- that is routed to the workers.
