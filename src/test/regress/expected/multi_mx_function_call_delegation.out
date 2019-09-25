@@ -51,6 +51,9 @@ select create_distributed_table('mx_call_dist_table_enum', 'key');
 (1 row)
 
 insert into mx_call_dist_table_enum values (1,'S'),(2,'A'),(3,'D'),(4,'F');
+CREATE FUNCTION squares(int) RETURNS SETOF RECORD
+    AS $$ SELECT i, i * i FROM generate_series(1, $1) i $$
+    LANGUAGE SQL;
 CREATE FUNCTION mx_call_func(x int, INOUT y int)
 LANGUAGE plpgsql AS $$
 BEGIN
@@ -83,17 +86,20 @@ select multi_mx_function_call_delegation.mx_call_func_custom_types('S', 'A');
  (F,S)
 (1 row)
 
--- Same for unqualified names
+select squares(4);
+ squares 
+---------
+ (1,1)
+ (2,4)
+ (3,9)
+ (4,16)
+(4 rows)
+
+-- Same for unqualified name
 select mx_call_func(2, 0);
  mx_call_func 
 --------------
            29
-(1 row)
-
-select mx_call_func_custom_types('S', 'A');
- mx_call_func_custom_types 
----------------------------
- (F,S)
 (1 row)
 
 -- Mark both functions as distributed ...
@@ -104,6 +110,12 @@ select create_distributed_function('mx_call_func(int,int)');
 (1 row)
 
 select create_distributed_function('mx_call_func_custom_types(mx_call_enum,mx_call_enum)');
+ create_distributed_function 
+-----------------------------
+ 
+(1 row)
+
+select create_distributed_function('squares(int)');
  create_distributed_function 
 -----------------------------
  
@@ -145,6 +157,12 @@ select colocate_proc_with_table('mx_call_func_custom_types', 'mx_call_dist_table
  
 (1 row)
 
+select colocate_proc_with_table('squares', 'mx_call_dist_table_2'::regclass, 0);
+ colocate_proc_with_table 
+--------------------------
+ 
+(1 row)
+
 select mx_call_func(2, 0);
 DEBUG:  pushing down the function call
  mx_call_func 
@@ -159,6 +177,9 @@ DEBUG:  pushing down the function call
  (S,S)
 (1 row)
 
+select squares(4);
+DEBUG:  pushing down the function call
+ERROR:  input of anonymous composite types is not implemented
 select multi_mx_function_call_delegation.mx_call_func(2, 0);
 DEBUG:  pushing down the function call
  mx_call_func 
@@ -446,7 +467,7 @@ PL/pgSQL function mx_call_func(integer,integer) line 8 at assignment
 (1 row)
 
 select mx_call_func(2, 0) from mx_call_dist_table_1;
-ERROR:  cached metadata for shard 535044 is inconsistent
+ERROR:  cached metadata for shard 102033 is inconsistent
 HINT:  Reconnect and try again.
 CONTEXT:  while executing command on localhost:57637
 SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_function_call_delegation.mx_call_dist_table_1 t1 join multi_mx_function_call_delegation.mx_call_dist_table_2 t2 on t1.id = t2.id)"
@@ -494,4 +515,4 @@ SELECT * FROM mx_call_dist_table_1 WHERE id >= 40 ORDER BY id, val;
 RESET client_min_messages;
 \set VERBOSITY terse
 DROP SCHEMA multi_mx_function_call_delegation CASCADE;
-NOTICE:  drop cascades to 9 other objects
+NOTICE:  drop cascades to 10 other objects

@@ -34,6 +34,9 @@ create table mx_call_dist_table_enum(id int, key mx_call_enum);
 select create_distributed_table('mx_call_dist_table_enum', 'key');
 insert into mx_call_dist_table_enum values (1,'S'),(2,'A'),(3,'D'),(4,'F');
 
+CREATE FUNCTION squares(int) RETURNS SETOF RECORD
+    AS $$ SELECT i, i * i FROM generate_series(1, $1) i $$
+    LANGUAGE SQL;
 
 CREATE FUNCTION mx_call_func(x int, INOUT y int)
 LANGUAGE plpgsql AS $$
@@ -59,14 +62,15 @@ END;$$;
 -- Test that undistributed functions have no issue executing
 select multi_mx_function_call_delegation.mx_call_func(2, 0);
 select multi_mx_function_call_delegation.mx_call_func_custom_types('S', 'A');
+select squares(4);
 
--- Same for unqualified names
+-- Same for unqualified name
 select mx_call_func(2, 0);
-select mx_call_func_custom_types('S', 'A');
 
 -- Mark both functions as distributed ...
 select create_distributed_function('mx_call_func(int,int)');
 select create_distributed_function('mx_call_func_custom_types(mx_call_enum,mx_call_enum)');
+select create_distributed_function('squares(int)');
 
 -- We still don't route them to the workers, because they aren't
 -- colocated with any distributed tables.
@@ -77,9 +81,11 @@ select mx_call_func_custom_types('S', 'A');
 -- Mark them as colocated with a table. Now we should route them to workers.
 select colocate_proc_with_table('mx_call_func', 'mx_call_dist_table_1'::regclass, 1);
 select colocate_proc_with_table('mx_call_func_custom_types', 'mx_call_dist_table_enum'::regclass, 1);
+select colocate_proc_with_table('squares', 'mx_call_dist_table_2'::regclass, 0);
 
 select mx_call_func(2, 0);
 select mx_call_func_custom_types('S', 'A');
+select squares(4);
 select multi_mx_function_call_delegation.mx_call_func(2, 0);
 select multi_mx_function_call_delegation.mx_call_func_custom_types('S', 'A');
 
