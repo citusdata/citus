@@ -70,6 +70,7 @@ static bool ShouldPropagateAlterFunction(const ObjectAddress *address);
 static ObjectAddress * FunctionToObjectAddress(ObjectType objectType,
 											   ObjectWithArgs *objectWithArgs,
 											   bool missing_ok);
+static void ErrorIfUnsupportedAlterFunctionStmt(AlterFunctionStmt *stmt);
 
 
 PG_FUNCTION_INFO_V1(create_distributed_function);
@@ -688,6 +689,8 @@ PlanAlterFunctionStmt(AlterFunctionStmt *stmt, const char *queryString)
 
 	EnsureCoordinator();
 
+	ErrorIfUnsupportedAlterFunctionStmt(stmt);
+
 	/* reconstruct alter statement in a portable fashion */
 	QualifyTreeNode((Node *) stmt);
 	sql = DeparseTreeNode((Node *) stmt);
@@ -1080,4 +1083,38 @@ FunctionToObjectAddress(ObjectType objectType, ObjectWithArgs *objectWithArgs,
 	ObjectAddressSet(*address, ProcedureRelationId, funcOid);
 
 	return address;
+}
+
+
+/*
+ * ErrorIfUnsupportedAlterFunctionStmt raises an error if the AlterFunctionStmt contains a
+ * construct that is not supported to be altered on a distributed function. It is assumed
+ * the statement passed in is already tested to be targeting a distributed function, and
+ * will only execute the checks to error on unsupported constructs.
+ *
+ * Unsupported Constructs:
+ *  - ALTER FUNCTION ... SET ... FROM CURRENT
+ */
+static void
+ErrorIfUnsupportedAlterFunctionStmt(AlterFunctionStmt *stmt)
+{
+	ListCell *actionCell = NULL;
+
+	foreach(actionCell, stmt->actions)
+	{
+		DefElem *action = castNode(DefElem, lfirst(actionCell));
+		if (strcmp(action->defname, "set") == 0)
+		{
+			VariableSetStmt *setStmt = castNode(VariableSetStmt, action->arg);
+			if (setStmt->kind == VAR_SET_CURRENT)
+			{
+				/* check if the set action is a SET ... FROM CURRENT */
+				ereport(ERROR, (errmsg("unsupported ALTER FUNCTION ... SET ... FROM "
+									   "CURRENT for a distributed function"),
+								errdetail("SET FROM CURRENT is not supported for "
+										  "distributed functions, instead use the SET "
+										  "... TO ... syntax with a constant value.")));
+			}
+		}
+	}
 }

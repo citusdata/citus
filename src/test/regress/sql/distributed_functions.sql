@@ -99,6 +99,11 @@ ALTER FUNCTION add(int,int) RETURNS NULL ON NULL INPUT STABLE SECURITY DEFINER P
 ALTER FUNCTION add(int,int) STRICT VOLATILE PARALLEL SAFE;
 -- TODO test SET/RESET
 
+-- SET ... FROM CURRENT is not supported, verify the query fails with a descriptive error irregardless of where in the action list the statement occurs
+ALTER FUNCTION add(int,int) SET client_min_messages FROM CURRENT;
+ALTER FUNCTION add(int,int) RETURNS NULL ON NULL INPUT SET client_min_messages FROM CURRENT;
+ALTER FUNCTION add(int,int) SET client_min_messages FROM CURRENT SECURITY DEFINER;
+
 -- rename function and make sure the new name can be used on the workers while the old name can't
 ALTER FUNCTION add(int,int) RENAME TO add2;
 SELECT * FROM run_command_on_workers('SELECT function_tests.add(2,3);') ORDER BY 1,2;
