@@ -57,8 +57,7 @@ def verify_upgrade(config):
 def install_citus(citus_version, pg_version):
     with utils.cd('/'):
         subprocess.call(
-            ['tar', 'xvf', '/install-pg{}-citus{}.tar'.format(pg_version, citus_version)])
-
+            ['tar', 'xvf', './install-pg{}-citus{}.tar'.format(pg_version, citus_version)])
 
 def install_citus_master(pg_version):
     with utils.cd('~/project'):
@@ -66,6 +65,20 @@ def install_citus_master(pg_version):
         with utils.cd('/'):
             subprocess.call(['tar', 'xvf', abs_tar_path])
 
+def remove_citus_master_artifacts(pg_version):
+    with utils.cd('~/project'):
+        abs_tar_path = os.path.abspath('./install-{}.tar'.format(pg_version))
+        with utils.cd('/'):
+            ps = subprocess.Popen(('tar', 'tf', abs_tar_path), stdout=subprocess.PIPE)
+            output = subprocess.check_output(('xargs', '-d', '\n', 'rm', '-v'), stdin=ps.stdout)
+            ps.wait()            
+
+def remove_citus_artifacts(citus_version, pg_version):
+    with utils.cd('/'):
+        ps = subprocess.Popen(('tar', 'tf', './install-pg{}-citus{}.tar'.format(pg_version, citus_version)), stdout=subprocess.PIPE)
+        output = subprocess.check_output(('xargs', '-d', '\n', 'rm', '-v'), stdin=ps.stdout)
+        ps.wait()
+        
 
 def run_alter_citus_mixed_mode(pg_path):
     for port in NODE_PORTS.values():
@@ -114,6 +127,7 @@ def run_citus_upgrade_test(config, mixed_mode):
 
     verify_initial_version(config)
     run_test_on_coordinator(config, BEFORE_CITUS_UPGRADE_COORD_SCHEDULE)
+    remove_citus_artifacts(config.citus_version, config.pg_version)
     install_citus_master(config.pg_version)
 
     if mixed_mode:
@@ -126,12 +140,12 @@ def run_citus_upgrade_test(config, mixed_mode):
         verify_upgrade(config)
 
     run_test_on_coordinator(config, AFTER_CITUS_UPGRADE_COORD_SCHEDULE)
-
+    remove_citus_master_artifacts(config.pg_version)
 
 def main(config):
     run_citus_upgrade_test(config=config, mixed_mode=False)
-    stop_databases(config.bindir, config.datadir)
-    run_citus_upgrade_test(config=config, mixed_mode=True)
+    #stop_databases(config.bindir, config.datadir)
+    #run_citus_upgrade_test(config=config, mixed_mode=True)
 
 
 if __name__ == '__main__':
