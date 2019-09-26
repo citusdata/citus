@@ -66,6 +66,7 @@ static void UpdateFunctionDistributionInfo(const ObjectAddress *distAddress,
 										   int *colocationId);
 static void EnsureSequentialModeForFunctionDDL(void);
 static void TriggerSyncMetadataToPrimaryNodes(void);
+static bool ShouldPropagateCreateFunction(CreateFunctionStmt *stmt);
 static bool ShouldPropagateAlterFunction(const ObjectAddress *address);
 static ObjectAddress * FunctionToObjectAddress(ObjectType objectType,
 											   ObjectWithArgs *objectWithArgs,
@@ -632,6 +633,57 @@ TriggerSyncMetadataToPrimaryNodes(void)
 
 
 /*
+ * ShouldPropagateCreateFunction tests if we need to propagate a CREATE FUNCTION
+ * statement. We only propagate replace's of distributed functions to keep the function on
+ * the workers in sync with the one on the coordinator.
+ */
+static bool
+ShouldPropagateCreateFunction(CreateFunctionStmt *stmt)
+{
+	const ObjectAddress *address = NULL;
+
+	if (creating_extension)
+	{
+		/*
+		 * extensions should be created separately on the workers, functions cascading
+		 * from an extension should therefore not be propagated.
+		 */
+		return false;
+	}
+
+	if (!EnableDependencyCreation)
+	{
+		/*
+		 * we are configured to disable object propagation, should not propagate anything
+		 */
+		return false;
+	}
+
+	if (!stmt->replace)
+	{
+		/*
+		 * Since we only care for a replace of distributed functions if the statement is
+		 * not a replace we are going to ignore.
+		 */
+		return false;
+	}
+
+	/*
+	 * Even though its a replace we should accept an non-existing function, it will just
+	 * not be distributed
+	 */
+	address = GetObjectAddressFromParseTree((Node *) stmt, true);
+	if (!IsObjectDistributed(address))
+	{
+		/* do not propagate alter function for non-distributed functions */
+		return false;
+	}
+
+	return true;
+}
+
+
+/*
  * ShouldPropagateAlterFunction returns, based on the address of a function, if alter
  * statements targeting the function should be propagated.
  */
@@ -662,6 +714,102 @@ ShouldPropagateAlterFunction(const ObjectAddress *address)
 	}
 
 	return true;
+}
+
+
+/*
+ * PlanCreateFunctionStmt is called during the planning phase for CREATE [OR REPLACE]
+ * FUNCTION. We primarily care for the replace variant of this statement to keep
+ * distributed functions in sync. We bail via a check on ShouldPropagateCreateFunction
+ * which checks for the OR REPLACE modifier.
+ *
+ * Since we use pg_get_functiondef to get the ddl command we actually do not do any
+ * planning here, instead we defer the plan creation to the processing step.
+ *
+ * Instead we do our basic housekeeping where we make sure we are on the coordinator and
+ * can propagate the function in sequential mode.
+ */
+List *
+PlanCreateFunctionStmt(CreateFunctionStmt *stmt, const char *queryString)
+{
+	if (!ShouldPropagateCreateFunction(stmt))
+	{
+		return NIL;
+	}
+
+	EnsureCoordinator();
+
+	EnsureSequentialModeForFunctionDDL();
+
+	/*
+	 * ddl jobs will be generated during the Processing phase as we need the function to
+	 * be updated in the catalog to get its sql representation
+	 */
+	return NIL;
+}
+
+
+/*
+ * ProcessCreateFunctionStmt actually creates the plan we need to execute for function
+ * propagation. This is the downside of using pg_get_functiondef to get the sql statement.
+ *
+ * Besides creating the plan we also make sure all (new) dependencies of the function are
+ * created on all nodes.
+ */
+List *
+ProcessCreateFunctionStmt(CreateFunctionStmt *stmt, const char *queryString)
+{
+	const ObjectAddress *address = NULL;
+	const char *sql = NULL;
+	List *commands = NIL;
+
+	if (!ShouldPropagateCreateFunction(stmt))
+	{
+		return NIL;
+	}
+
+	address = GetObjectAddressFromParseTree((Node *) stmt, false);
+	EnsureDependenciesExistsOnAllNodes(address);
+
+	sql = GetFunctionDDLCommand(address->objectId);
+
+	commands = list_make3(DISABLE_DDL_PROPAGATION,
+						  (void *) sql,
+						  ENABLE_DDL_PROPAGATION);
+
+	return NodeDDLTaskList(ALL_WORKERS, commands);
+}
+
+
+/*
+ * CreateFunctionStmtObjectAddress returns the ObjectAddress for the subject of the
+ * CREATE [OR REPLACE] FUNCTION statement. If missing_ok is false it will error with the
+ * normal postgres error for unfound functions.
+ */
+const ObjectAddress *
+CreateFunctionStmtObjectAddress(CreateFunctionStmt *stmt, bool missing_ok)
+{
+	ObjectType objectType = OBJECT_FUNCTION;
+	ObjectWithArgs *owa = NULL;
+	ListCell *parameterCell = NULL;
+
+#if PG_VERSION_NUM > 110000
+	if (stmt->is_procedure)
+	{
+		objectType = OBJECT_PROCEDURE;
+	}
+#endif
+
+	owa = makeNode(ObjectWithArgs);
+	owa->objname = stmt->funcname;
+
+	foreach(parameterCell, stmt->parameters)
+	{
+		FunctionParameter *funcParam = castNode(FunctionParameter, lfirst(parameterCell));
+		owa->objargs = lappend(owa->objargs, funcParam->argType);
+	}
+
+	return FunctionToObjectAddress(objectType, owa, missing_ok);
 }
 
 
