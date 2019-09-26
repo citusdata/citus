@@ -67,10 +67,19 @@ static void UpdateFunctionDistributionInfo(const ObjectAddress *distAddress,
 static void EnsureSequentialModeForFunctionDDL(void);
 static void TriggerSyncMetadataToPrimaryNodes(void);
 static bool ShouldPropagateAlterFunction(const ObjectAddress *address);
-static List * FunctionListToObjectAddresses(List *objectWithArgsList, bool missing_ok);
+static List * FunctionListToObjectAddresses(List *objectWithArgsList,
+											ObjectType objectType, bool missing_ok);
 
 
 PG_FUNCTION_INFO_V1(create_distributed_function);
+
+#if PG_VERSION_NUM > 110000
+#define AssertIsFunctionOrProcedure(objtype) \
+	Assert((objtype) == OBJECT_FUNCTION || (objtype) = OBJECT_PROCEDURE)
+#else
+#define AssertIsFunctionOrProcedure(objtype) \
+	Assert(objtype == OBJECT_FUNCTION)
+#endif
 
 
 /*
@@ -666,6 +675,10 @@ PlanAlterFunctionStmt(AlterFunctionStmt *stmt, const char *queryString)
 	const ObjectAddress *address = NULL;
 	List *commands = NIL;
 
+#if PG_VERSION_NUM > 110000
+	AssertIsFunctionOrProcedure(stmt->objtype);
+#endif
+
 	address = GetObjectAddressFromParseTree((Node *) stmt, false);
 	if (!ShouldPropagateAlterFunction(address))
 	{
@@ -708,6 +721,8 @@ PlanRenameFunctionStmt(RenameStmt *stmt, const char *queryString)
 	const ObjectAddress *address = NULL;
 	List *commands = NIL;
 
+	AssertIsFunctionOrProcedure(stmt->renameType);
+
 	address = GetObjectAddressFromParseTree((Node *) stmt, false);
 	if (!ShouldPropagateAlterFunction(address))
 	{
@@ -746,7 +761,7 @@ PlanAlterFunctionSchemaStmt(AlterObjectSchemaStmt *stmt, const char *queryString
 	const ObjectAddress *address = NULL;
 	List *commands = NIL;
 
-	Assert(stmt->objectType == OBJECT_FUNCTION);
+	AssertIsFunctionOrProcedure(stmt->objectType);
 
 	address = GetObjectAddressFromParseTree((Node *) stmt, false);
 	if (!ShouldPropagateAlterFunction(address))
@@ -783,7 +798,7 @@ PlanAlterFunctionOwnerStmt(AlterOwnerStmt *stmt, const char *queryString)
 	const char *sql = NULL;
 	List *commands = NULL;
 
-	Assert(stmt->objectType == OBJECT_FUNCTION);
+	AssertIsFunctionOrProcedure(stmt->objectType);
 
 	address = GetObjectAddressFromParseTree((Node *) stmt, false);
 	if (!ShouldPropagateAlterFunction(address))
@@ -823,6 +838,8 @@ PlanDropFunctionStmt(DropStmt *stmt, const char *queryString)
 	List *objectAddresses = NIL;
 	ListCell *objectWithArgsListCell = NULL;
 
+	AssertIsFunctionOrProcedure(stmt->removeType);
+
 	if (creating_extension)
 	{
 		/*
@@ -852,7 +869,7 @@ PlanDropFunctionStmt(DropStmt *stmt, const char *queryString)
 	 * create two lists with all distributed functions and their addresses.
 	 */
 	objectAddresses = FunctionListToObjectAddresses(oldObjectWithArgsList,
-													stmt->missing_ok);
+													stmt->removeType, stmt->missing_ok);
 	forboth(objectWithArgsListCell, oldObjectWithArgsList, addressCell, objectAddresses)
 	{
 		ObjectAddress *address = (ObjectAddress *) lfirst(addressCell);
@@ -913,7 +930,7 @@ ProcessAlterFunctionSchemaStmt(AlterObjectSchemaStmt *stmt, const char *queryStr
 {
 	const ObjectAddress *address = NULL;
 
-	Assert(stmt->objectType == OBJECT_FUNCTION);
+	AssertIsFunctionOrProcedure(stmt->objectType);
 
 	address = GetObjectAddressFromParseTree((Node *) stmt, false);
 	if (!ShouldPropagateAlterFunction(address))
@@ -931,8 +948,13 @@ AlterFunctionStmtObjectAddress(AlterFunctionStmt *stmt, bool missing_ok)
 {
 	Oid funcOid = InvalidOid;
 	ObjectAddress *address = NULL;
+	ObjectType objectType = OBJECT_FUNCTION;
 
-	funcOid = LookupFuncWithArgsCompat(OBJECT_FUNCTION, stmt->func, missing_ok);
+#if PG_VERSION_NUM > 110000
+	objectType = stmt->objtype;
+#endif
+
+	funcOid = LookupFuncWithArgsCompat(objectType, stmt->func, missing_ok);
 	address = palloc0(sizeof(ObjectAddress));
 	ObjectAddressSet(*address, ProcedureRelationId, funcOid);
 
@@ -951,10 +973,10 @@ RenameFunctionStmtObjectAddress(RenameStmt *stmt, bool missing_ok)
 	Oid funcOid = InvalidOid;
 	ObjectAddress *address = NULL;
 
-	Assert(stmt->renameType == OBJECT_FUNCTION);
+	AssertIsFunctionOrProcedure(stmt->renameType);
 
 	objectWithArgs = castNode(ObjectWithArgs, stmt->object);
-	funcOid = LookupFuncWithArgsCompat(OBJECT_FUNCTION, objectWithArgs, missing_ok);
+	funcOid = LookupFuncWithArgsCompat(stmt->renameType, objectWithArgs, missing_ok);
 	address = palloc0(sizeof(ObjectAddress));
 	ObjectAddressSet(*address, ProcedureRelationId, funcOid);
 
@@ -973,10 +995,10 @@ AlterFunctionOwnerObjectAddress(AlterOwnerStmt *stmt, bool missing_ok)
 	Oid funcOid = InvalidOid;
 	ObjectAddress *address = NULL;
 
-	Assert(stmt->objectType == OBJECT_FUNCTION);
+	AssertIsFunctionOrProcedure(stmt->objectType);
 
 	objectWithArgs = castNode(ObjectWithArgs, stmt->object);
-	funcOid = LookupFuncWithArgsCompat(OBJECT_FUNCTION, objectWithArgs, missing_ok);
+	funcOid = LookupFuncWithArgsCompat(stmt->objectType, objectWithArgs, missing_ok);
 	address = palloc0(sizeof(ObjectAddress));
 	ObjectAddressSet(*address, ProcedureRelationId, funcOid);
 
@@ -996,10 +1018,16 @@ AlterFunctionOwnerObjectAddress(AlterOwnerStmt *stmt, bool missing_ok)
 const ObjectAddress *
 AlterFunctionSchemaStmtObjectAddress(AlterObjectSchemaStmt *stmt, bool missing_ok)
 {
-	ObjectWithArgs *objectWithArgs = castNode(ObjectWithArgs, stmt->object);
-	Oid funcOid = LookupFuncWithArgsCompat(OBJECT_FUNCTION, objectWithArgs, true);
-	List *names = objectWithArgs->objname;
+	ObjectWithArgs *objectWithArgs = NULL;
+	Oid funcOid = InvalidOid;
+	List *names = NIL;
 	ObjectAddress *address = NULL;
+
+	AssertIsFunctionOrProcedure(stmt->objectType);
+
+	objectWithArgs = castNode(ObjectWithArgs, stmt->object);
+	funcOid = LookupFuncWithArgsCompat(stmt->objectType, objectWithArgs, true);
+	names = objectWithArgs->objname;
 
 	if (funcOid == InvalidOid)
 	{
@@ -1017,19 +1045,22 @@ AlterFunctionSchemaStmtObjectAddress(AlterObjectSchemaStmt *stmt, bool missing_o
 		 * error if the type didn't exist in the first place.
 		 */
 		objectWithArgs->objname = newNames;
-		funcOid = LookupFuncWithArgsCompat(OBJECT_FUNCTION, objectWithArgs, true);
+		funcOid = LookupFuncWithArgsCompat(stmt->objectType, objectWithArgs, true);
 		objectWithArgs->objname = names; /* restore the original names */
 
 		/*
-		 * if the function is still invalid we couldn't find the function, error with the
-		 * same message postgres would error with it missing_ok is false (not ok to miss)
+		 * if the function is still invalid we couldn't find the function, cause postgres
+		 * to error by preforming a lookup once more. Since we know the
 		 */
 		if (!missing_ok && funcOid == InvalidOid)
 		{
-			ereport(ERROR, (errcode(ERRCODE_UNDEFINED_OBJECT),
-							errmsg("function %s(%s) does not exist",
-								   NameListToString(objectWithArgs->objname),
-								   TypeNameListToString(objectWithArgs->objargs))));
+			/*
+			 * this will most probably throw an error, unless for some reason the function
+			 * has just been created (if possible at all). For safety we assign the
+			 * funcOid.
+			 */
+			funcOid = LookupFuncWithArgsCompat(stmt->objectType, objectWithArgs,
+											   missing_ok);
 		}
 	}
 
@@ -1041,16 +1072,19 @@ AlterFunctionSchemaStmtObjectAddress(AlterObjectSchemaStmt *stmt, bool missing_o
 
 
 static List *
-FunctionListToObjectAddresses(List *objectWithArgsList, bool missing_ok)
+FunctionListToObjectAddresses(List *objectWithArgsList, ObjectType objectType, bool
+							  missing_ok)
 {
 	List *result = NIL;
 	ListCell *objectWithArgsListCell = NULL;
+
+	AssertIsFunctionOrProcedure(objectType);
 
 	foreach(objectWithArgsListCell, objectWithArgsList)
 	{
 		ObjectWithArgs *objectWithArgs = (ObjectWithArgs *) lfirst(
 			objectWithArgsListCell);
-		Oid funcOid = LookupFuncWithArgsCompat(OBJECT_FUNCTION, objectWithArgs,
+		Oid funcOid = LookupFuncWithArgsCompat(objectType, objectWithArgs,
 											   missing_ok);
 		ObjectAddress *address = palloc0(sizeof(ObjectAddress));
 		ObjectAddressSet(*address, ProcedureRelationId, funcOid);
