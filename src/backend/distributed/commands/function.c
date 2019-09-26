@@ -67,8 +67,9 @@ static void UpdateFunctionDistributionInfo(const ObjectAddress *distAddress,
 static void EnsureSequentialModeForFunctionDDL(void);
 static void TriggerSyncMetadataToPrimaryNodes(void);
 static bool ShouldPropagateAlterFunction(const ObjectAddress *address);
-static List * FunctionListToObjectAddresses(List *objectWithArgsList,
-											ObjectType objectType, bool missing_ok);
+static ObjectAddress * FunctionToObjectAddress(ObjectType objectType,
+											   ObjectWithArgs *objectWithArgs,
+											   bool missing_ok);
 
 
 PG_FUNCTION_INFO_V1(create_distributed_function);
@@ -640,7 +641,7 @@ ShouldPropagateAlterFunction(const ObjectAddress *address)
 	{
 		/*
 		 * extensions should be created separately on the workers, functions cascading
-		 * from an extension should therefor not be propagated.
+		 * from an extension should therefore not be propagated.
 		 */
 		return false;
 	}
@@ -825,6 +826,10 @@ PlanAlterFunctionOwnerStmt(AlterOwnerStmt *stmt, const char *queryString)
  * PlanDropFunctionStmt gets called during the planning phase of a DROP FUNCTION statement
  * and returns a list of DDLJob's that will drop any distributed functions from the
  * workers.
+ *
+ * The DropStmt could have multiple objects to drop, the list of objects will be filtered
+ * to only keep the distributed functions for deletion on the workers. Non-distributed
+ * functions will still be dropped locally but not on the workers.
  */
 List *
 PlanDropFunctionStmt(DropStmt *stmt, const char *queryString)
@@ -835,7 +840,6 @@ PlanDropFunctionStmt(DropStmt *stmt, const char *queryString)
 	ListCell *addressCell = NULL;
 	const char *dropStmtSql = NULL;
 	List *commands = NULL;
-	List *objectAddresses = NIL;
 	ListCell *objectWithArgsListCell = NULL;
 
 	AssertIsFunctionOrProcedure(stmt->removeType);
@@ -865,15 +869,16 @@ PlanDropFunctionStmt(DropStmt *stmt, const char *queryString)
 	QualifyTreeNode((Node *) stmt);
 
 	/*
-	 * map all functions to their object addresses and step through them in lock step to
-	 * create two lists with all distributed functions and their addresses.
+	 * iterate over all functions to be dropped and filter to keep only distributed
+	 * functions.
 	 */
-	objectAddresses = FunctionListToObjectAddresses(oldObjectWithArgsList,
-													stmt->removeType, stmt->missing_ok);
-	forboth(objectWithArgsListCell, oldObjectWithArgsList, addressCell, objectAddresses)
+	foreach(objectWithArgsListCell, oldObjectWithArgsList)
 	{
-		ObjectAddress *address = (ObjectAddress *) lfirst(addressCell);
-		ObjectWithArgs *func = castNode(ObjectWithArgs, lfirst(objectWithArgsListCell));
+		ObjectWithArgs *func = NULL;
+		ObjectAddress *address = NULL;
+
+		func = castNode(ObjectWithArgs, lfirst(objectWithArgsListCell));
+		address = FunctionToObjectAddress(stmt->removeType, func, stmt->missing_ok);
 
 		if (!IsObjectDistributed(address))
 		{
@@ -905,6 +910,11 @@ PlanDropFunctionStmt(DropStmt *stmt, const char *queryString)
 		UnmarkObjectDistributed(address);
 	}
 
+	/*
+	 * Swap the list of objects before deparsing and restore the old list after. This
+	 * ensures we only have distributed functions in the deparsed drop statement.
+	 */
+	oldObjectWithArgsList = stmt->objects;
 	stmt->objects = distributedObjectWithArgsList;
 	dropStmtSql = DeparseTreeNode((Node *) stmt);
 	stmt->objects = oldObjectWithArgsList;
@@ -946,19 +956,13 @@ ProcessAlterFunctionSchemaStmt(AlterObjectSchemaStmt *stmt, const char *queryStr
 const ObjectAddress *
 AlterFunctionStmtObjectAddress(AlterFunctionStmt *stmt, bool missing_ok)
 {
-	Oid funcOid = InvalidOid;
-	ObjectAddress *address = NULL;
 	ObjectType objectType = OBJECT_FUNCTION;
 
 #if PG_VERSION_NUM > 110000
 	objectType = stmt->objtype;
 #endif
 
-	funcOid = LookupFuncWithArgsCompat(objectType, stmt->func, missing_ok);
-	address = palloc0(sizeof(ObjectAddress));
-	ObjectAddressSet(*address, ProcedureRelationId, funcOid);
-
-	return address;
+	return FunctionToObjectAddress(objectType, stmt->func, missing_ok);
 }
 
 
@@ -969,18 +973,8 @@ AlterFunctionStmtObjectAddress(AlterFunctionStmt *stmt, bool missing_ok)
 const ObjectAddress *
 RenameFunctionStmtObjectAddress(RenameStmt *stmt, bool missing_ok)
 {
-	ObjectWithArgs *objectWithArgs = NULL;
-	Oid funcOid = InvalidOid;
-	ObjectAddress *address = NULL;
-
-	AssertIsFunctionOrProcedure(stmt->renameType);
-
-	objectWithArgs = castNode(ObjectWithArgs, stmt->object);
-	funcOid = LookupFuncWithArgsCompat(stmt->renameType, objectWithArgs, missing_ok);
-	address = palloc0(sizeof(ObjectAddress));
-	ObjectAddressSet(*address, ProcedureRelationId, funcOid);
-
-	return address;
+	return FunctionToObjectAddress(stmt->renameType,
+								   castNode(ObjectWithArgs, stmt->object), missing_ok);
 }
 
 
@@ -991,18 +985,8 @@ RenameFunctionStmtObjectAddress(RenameStmt *stmt, bool missing_ok)
 const ObjectAddress *
 AlterFunctionOwnerObjectAddress(AlterOwnerStmt *stmt, bool missing_ok)
 {
-	ObjectWithArgs *objectWithArgs = NULL;
-	Oid funcOid = InvalidOid;
-	ObjectAddress *address = NULL;
-
-	AssertIsFunctionOrProcedure(stmt->objectType);
-
-	objectWithArgs = castNode(ObjectWithArgs, stmt->object);
-	funcOid = LookupFuncWithArgsCompat(stmt->objectType, objectWithArgs, missing_ok);
-	address = palloc0(sizeof(ObjectAddress));
-	ObjectAddressSet(*address, ProcedureRelationId, funcOid);
-
-	return address;
+	return FunctionToObjectAddress(stmt->objectType,
+								   castNode(ObjectWithArgs, stmt->object), missing_ok);
 }
 
 
@@ -1071,25 +1055,18 @@ AlterFunctionSchemaStmtObjectAddress(AlterObjectSchemaStmt *stmt, bool missing_o
 }
 
 
-static List *
-FunctionListToObjectAddresses(List *objectWithArgsList, ObjectType objectType, bool
-							  missing_ok)
+static ObjectAddress *
+FunctionToObjectAddress(ObjectType objectType, ObjectWithArgs *objectWithArgs,
+						bool missing_ok)
 {
-	List *result = NIL;
-	ListCell *objectWithArgsListCell = NULL;
+	Oid funcOid = InvalidOid;
+	ObjectAddress *address = NULL;
 
 	AssertIsFunctionOrProcedure(objectType);
 
-	foreach(objectWithArgsListCell, objectWithArgsList)
-	{
-		ObjectWithArgs *objectWithArgs = (ObjectWithArgs *) lfirst(
-			objectWithArgsListCell);
-		Oid funcOid = LookupFuncWithArgsCompat(objectType, objectWithArgs,
-											   missing_ok);
-		ObjectAddress *address = palloc0(sizeof(ObjectAddress));
-		ObjectAddressSet(*address, ProcedureRelationId, funcOid);
-		result = lappend(result, address);
-	}
+	funcOid = LookupFuncWithArgsCompat(objectType, objectWithArgs, missing_ok);
+	address = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*address, ProcedureRelationId, funcOid);
 
-	return result;
+	return address;
 }
