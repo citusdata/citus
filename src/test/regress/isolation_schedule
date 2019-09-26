@@ -67,3 +67,4 @@ test: isolation_update_delete_upsert_vs_all_on_mx
 test: isolation_copy_vs_all_on_mx
 test: isolation_truncate_vs_all_on_mx
 test: isolation_drop_alter_index_select_for_update_on_mx
+test: isolation_insert_select_vs_all_on_mx
