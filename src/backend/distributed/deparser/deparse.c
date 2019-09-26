@@ -137,9 +137,10 @@ DeparseDropStmt(DropStmt *stmt)
 
 
 /*
- * DeparseAlterTableStmt aims to deparse
- * ALTER TABLE ..
- * statements.
+ * DeparseAlterTableStmt deparses an AlterTableStmt to its SQL command.
+ * Contrary to its name these statements are covering not only ALTER TABLE ...
+ * statements but are used for almost all relation-esque objects in postgres,
+ * including but not limited to, Tables, Types, ...
  *
  * Currently with limited support. Check support before using, and add support for new
  * statements as required.
@@ -163,9 +164,11 @@ DeparseAlterTableStmt(AlterTableStmt *stmt)
 
 
 /*
- * DeparseRenameStmt aims to deparse
- * ALTER .. RENAME TO ..
- * statements.
+ * DeparseRenameStmt deparses an RenameStmt to its SQL command.
+ * Contrary to its name these statements are not covering all ALTER .. RENAME
+ * statements. 
+ * 
+ * e.g. ALTER TYPE name RENAME VALUE old TO new is an AlterEnumStmt
  *
  * Currently with limited support. Check support before using, and add support for new
  * statements as required.
@@ -201,14 +204,6 @@ DeparseRenameStmt(RenameStmt *stmt)
 }
 
 
-/*
- * DeparseRenameAttributeStmt aims to deparse
- * ALTER TYPE .. RENAME ATTRIBUTE .. TO ..
- * statements.
- *
- * Currently with limited support. Check support before using, and add support for new
- * statements as required.
- */
 static const char *
 DeparseRenameAttributeStmt(RenameStmt *stmt)
 {

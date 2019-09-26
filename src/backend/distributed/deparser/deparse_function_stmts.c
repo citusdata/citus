@@ -2,7 +2,15 @@
  *
  * deparse_function_stmts.c
  *
- * Copyright (c) 2019, Citus Data, Inc.
+ *	  All routines to deparse function and procedure statements.
+ *	  This file contains all entry points specific for function and procedure statement
+ *    deparsing
+ *
+ *	  Functions that could move later are AppendDefElem, AppendDefElemStrict, etc. These
+ *	  should be reused across multiple statements and should live in their own deparse
+ *	  file.
+ * 
+ * Copyright (c), Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */
