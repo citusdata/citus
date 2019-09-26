@@ -100,7 +100,7 @@ jobs:
           command: 'install-and-test-ext check-failure'
   test-11_check-multi:
     docker:
-      - image: 'citusdata/exttester-11:latest'
+      - image: 'citus/exttester-11:latest'
     working_directory: /home/circleci/project
     steps:
       - attach_workspace:
@@ -113,7 +113,7 @@ jobs:
 
   test-11_check-non-adaptive-multi:
     docker:
-      - image: 'citusdata/exttester-11:latest'
+      - image: 'citus/exttester-11:latest'
     working_directory: /home/circleci/project
     steps:
       - attach_workspace:
@@ -126,7 +126,7 @@ jobs:
 
   test-11_check-non-adaptive-failure:
     docker:
-      - image: 'citusdata/failtester-11:latest'
+      - image: 'citus/failtester-11:latest'
     working_directory: /home/circleci/project
     steps:
       - attach_workspace: 
@@ -139,7 +139,7 @@ jobs:
 
   test-11_check-non-adaptive-isolation:
     docker:
-      - image: 'citusdata/exttester-11:latest'
+      - image: 'citus/exttester-11:latest'
     working_directory: /home/circleci/project
     steps:
       - attach_workspace:
@@ -153,7 +153,7 @@ jobs:
 
   test-11_check-tt-van-mx:
     docker:
-      - image: 'citusdata/exttester-11:latest'
+      - image: 'citus/exttester-11:latest'
     working_directory: /home/circleci/project
     steps:
       - attach_workspace:
@@ -165,7 +165,7 @@ jobs:
           flags: 'test_11,tracker,vanilla,mx'
   test-11_check-iso-work-fol:
     docker:
-      - image: 'citusdata/exttester-11:latest'
+      - image: 'citus/exttester-11:latest'
     working_directory: /home/circleci/project
     steps:
       - attach_workspace:
@@ -177,7 +177,7 @@ jobs:
           flags: 'test_11,isolation,worker'
   test-11_check-fol:
     docker:
-      - image: 'citusdata/exttester-11:latest'
+      - image: 'citus/exttester-11:latest'
     working_directory: /home/circleci/project
     steps:
       - attach_workspace:
@@ -199,7 +199,7 @@ jobs:
           path: '/tmp/core_dumps'
   test-11_check-failure:
     docker:
-      - image: 'citusdata/failtester-11:latest'
+      - image: 'citus/failtester-11:latest'
     working_directory: /home/circleci/project
     steps:
       - attach_workspace: 
