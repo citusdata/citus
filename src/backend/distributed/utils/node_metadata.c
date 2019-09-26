@@ -81,7 +81,7 @@ static void InsertNodeRow(int nodeid, char *nodename, int32 nodeport, NodeMetada
 						  *nodeMetadata);
 static void DeleteNodeRow(char *nodename, int32 nodeport);
 static void CleanUpReferenceTables(WorkerNode *workerNode);
-static void SetUpReferenceTablesAndDistributedFunctions(WorkerNode *workerNode);
+static void SetUpDistributedTableDependencies(WorkerNode *workerNode);
 static List * ParseWorkerNodeFileAndRename(void);
 static WorkerNode * TupleToWorkerNode(TupleDesc tupleDescriptor, HeapTuple heapTuple);
 static WorkerNode * ModifiableWorkerNode(const char *nodeName, int32 nodePort);
@@ -363,7 +363,7 @@ master_make_data_node(PG_FUNCTION_ARGS)
 												  nodePort);
 	WorkerNode *newWorkerNode = SetIsDataNode(workerNode, IsDataNodeTrueId());
 
-	SetUpReferenceTablesAndDistributedFunctions(newWorkerNode);
+	SetUpDistributedTableDependencies(newWorkerNode);
 
 	PG_RETURN_VOID();
 }
@@ -385,11 +385,14 @@ CleanUpReferenceTables(WorkerNode *workerNode)
 
 
 /*
- * SetUpReferenceTablesAndDistributedFunctions sets up reference tables and
- * distributed functions on a node if it should store distributed data now.
+ * SetUpDistributedTableDependencies sets up up the following on a node if it's
+ * a primary node that currently stores data:
+ * - All dependencies (e.g., types, schemas)
+ * - Reference tables, because they are needed to handle queries efficiently.
+ * - Distributed functions
  */
 static void
-SetUpReferenceTablesAndDistributedFunctions(WorkerNode *newWorkerNode)
+SetUpDistributedTableDependencies(WorkerNode *newWorkerNode)
 {
 	if (WorkerNodeIsPrimaryCurrentDataNode(newWorkerNode))
 	{
@@ -400,8 +403,9 @@ SetUpReferenceTablesAndDistributedFunctions(WorkerNode *newWorkerNode)
 										  newWorkerNode->workerPort);
 
 		/*
-		 * Let the maintanince deamon do the hard work of syncing the metadata. We prefer
-		 * this because otherwise node activation might fail withing transaction blocks.
+		 * Let the maintanince deamon do the hard work of syncing the metadata.
+		 * We prefer this because otherwise node activation might fail within
+		 * transaction blocks.
 		 */
 		if (ClusterHasDistributedFunctionWithDistArgument())
 		{
@@ -669,7 +673,7 @@ ActivateNode(char *nodeName, int nodePort)
 
 	newWorkerNode = SetNodeState(nodeName, nodePort, isActive);
 
-	SetUpReferenceTablesAndDistributedFunctions(newWorkerNode);
+	SetUpDistributedTableDependencies(newWorkerNode);
 	return newWorkerNode->nodeId;
 }
 
