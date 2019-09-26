@@ -53,6 +53,7 @@
 #include "distributed/version_compat.h"
 #include "distributed/worker_transaction.h"
 #include "lib/stringinfo.h"
+#include "nodes/parsenodes.h"
 #include "nodes/pg_list.h"
 #include "tcop/utility.h"
 #include "utils/builtins.h"
@@ -116,9 +117,19 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 	List *ddlJobs = NIL;
 	bool checkExtensionVersion = false;
 
-	if (IsA(parsetree, TransactionStmt))
+	if (IsA(parsetree, TransactionStmt) ||
+		IsA(parsetree, LockStmt) ||
+		IsA(parsetree, ListenStmt) ||
+		IsA(parsetree, NotifyStmt) ||
+		IsA(parsetree, ExecuteStmt) ||
+		IsA(parsetree, PrepareStmt) ||
+		IsA(parsetree, DiscardStmt) ||
+		IsA(parsetree, DeallocateStmt))
 	{
 		/*
+		 * Skip additional checks for common commands that do not have any
+		 * Citus-specific logic.
+		 *
 		 * Transaction statements (e.g. ABORT, COMMIT) can be run in aborted
 		 * transactions in which case a lot of checks cannot be done safely in
 		 * that state. Since we never need to intercept transaction statements,
