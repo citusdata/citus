@@ -1,0 +1,151 @@
+SET citus.next_shard_id TO 20030000;
+CREATE USER procedureuser;
+NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
+HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
+SELECT run_command_on_workers($$CREATE USER procedureuser;$$);
+      run_command_on_workers       
+-----------------------------------
+ (localhost,57637,t,"CREATE ROLE")
+ (localhost,57638,t,"CREATE ROLE")
+(2 rows)
+
+CREATE SCHEMA procedure_tests AUTHORIZATION procedureuser;
+CREATE SCHEMA procedure_tests2 AUTHORIZATION procedureuser;
+SET search_path TO procedure_tests;
+SET citus.shard_count TO 4;
+-- Create and distribute a simple function
+CREATE OR REPLACE PROCEDURE raise_info(text)
+    LANGUAGE PLPGSQL AS $proc$
+BEGIN
+    RAISE INFO 'information message %', $1;
+END;
+$proc$;
+ERROR:  syntax error at or near "PROCEDURE"
+LINE 1: CREATE OR REPLACE PROCEDURE raise_info(text)
+                          ^
+SELECT create_distributed_function('raise_info(text)', '$1');
+ERROR:  function "raise_info(text)" does not exist
+LINE 1: SELECT create_distributed_function('raise_info(text)', '$1')...
+                                           ^
+SELECT * FROM run_command_on_workers($$CALL procedure_tests.raise_info('hello');$$) ORDER BY 1,2;
+ nodename  | nodeport | success |                 result                 
+-----------+----------+---------+----------------------------------------
+ localhost |    57637 | f       | ERROR:  syntax error at or near "CALL"
+ localhost |    57638 | f       | ERROR:  syntax error at or near "CALL"
+(2 rows)
+
+-- testing alter statements for a distributed function
+-- ROWS 5, untested because;
+-- ERROR:  ROWS is not applicable when function does not return a set
+-- TODO verify settings are changed on remotes
+ALTER PROCEDURE raise_info(text) SECURITY INVOKER;
+ERROR:  syntax error at or near "PROCEDURE"
+LINE 1: ALTER PROCEDURE raise_info(text) SECURITY INVOKER;
+              ^
+ALTER PROCEDURE raise_info(text) SECURITY DEFINER;
+ERROR:  syntax error at or near "PROCEDURE"
+LINE 1: ALTER PROCEDURE raise_info(text) SECURITY DEFINER;
+              ^
+-- TODO test SET/RESET
+-- rename function and make sure the new name can be used on the workers while the old name can't
+ALTER PROCEDURE raise_info(text) RENAME TO raise_info2;
+ERROR:  syntax error at or near "PROCEDURE"
+LINE 1: ALTER PROCEDURE raise_info(text) RENAME TO raise_info2;
+              ^
+SELECT * FROM run_command_on_workers($$CALL procedure_tests.raise_info('hello');$$) ORDER BY 1,2;
+ nodename  | nodeport | success |                 result                 
+-----------+----------+---------+----------------------------------------
+ localhost |    57637 | f       | ERROR:  syntax error at or near "CALL"
+ localhost |    57638 | f       | ERROR:  syntax error at or near "CALL"
+(2 rows)
+
+SELECT * FROM run_command_on_workers($$CALL procedure_tests.raise_info2('hello');$$) ORDER BY 1,2;
+ nodename  | nodeport | success |                 result                 
+-----------+----------+---------+----------------------------------------
+ localhost |    57637 | f       | ERROR:  syntax error at or near "CALL"
+ localhost |    57638 | f       | ERROR:  syntax error at or near "CALL"
+(2 rows)
+
+ALTER PROCEDURE raise_info2(text) RENAME TO raise_info;
+ERROR:  syntax error at or near "PROCEDURE"
+LINE 1: ALTER PROCEDURE raise_info2(text) RENAME TO raise_info;
+              ^
+-- change the owner of the function and verify the owner has been changed on the workers
+ALTER PROCEDURE raise_info(text) OWNER TO procedureuser;
+ERROR:  syntax error at or near "PROCEDURE"
+LINE 1: ALTER PROCEDURE raise_info(text) OWNER TO procedureuser;
+              ^
+SELECT run_command_on_workers($$
+SELECT row(usename, nspname, proname)
+FROM pg_proc
+JOIN pg_user ON (usesysid = proowner)
+JOIN pg_namespace ON (pg_namespace.oid = pronamespace)
+WHERE proname = 'raise_info';
+$$);
+ run_command_on_workers 
+------------------------
+ (localhost,57637,t,"")
+ (localhost,57638,t,"")
+(2 rows)
+
+-- change the schema of the procedure and verify the old schema doesn't exist anymore while
+-- the new schema has the function.
+ALTER PROCEDURE raise_info(text) SET SCHEMA procedure_tests2;
+ERROR:  syntax error at or near "PROCEDURE"
+LINE 1: ALTER PROCEDURE raise_info(text) SET SCHEMA procedure_tests2...
+              ^
+SELECT * FROM run_command_on_workers($$CALL procedure_tests.raise_info('hello');$$) ORDER BY 1,2;
+ nodename  | nodeport | success |                 result                 
+-----------+----------+---------+----------------------------------------
+ localhost |    57637 | f       | ERROR:  syntax error at or near "CALL"
+ localhost |    57638 | f       | ERROR:  syntax error at or near "CALL"
+(2 rows)
+
+SELECT * FROM run_command_on_workers($$CALL procedure_tests2.raise_info('hello');$$) ORDER BY 1,2;
+ nodename  | nodeport | success |                 result                 
+-----------+----------+---------+----------------------------------------
+ localhost |    57637 | f       | ERROR:  syntax error at or near "CALL"
+ localhost |    57638 | f       | ERROR:  syntax error at or near "CALL"
+(2 rows)
+
+ALTER PROCEDURE procedure_tests2.raise_info(text) SET SCHEMA procedure_tests;
+ERROR:  syntax error at or near "PROCEDURE"
+LINE 1: ALTER PROCEDURE procedure_tests2.raise_info(text) SET SCHEMA...
+              ^
+DROP PROCEDURE raise_info(text);
+ERROR:  syntax error at or near "PROCEDURE"
+LINE 1: DROP PROCEDURE raise_info(text);
+             ^
+-- call should fail as procedure should have been dropped
+SELECT * FROM run_command_on_workers($$CALL procedure_tests.raise_info('hello');$$) ORDER BY 1,2;
+ nodename  | nodeport | success |                 result                 
+-----------+----------+---------+----------------------------------------
+ localhost |    57637 | f       | ERROR:  syntax error at or near "CALL"
+ localhost |    57638 | f       | ERROR:  syntax error at or near "CALL"
+(2 rows)
+
+SET client_min_messages TO error; -- suppress cascading objects dropping
+DROP SCHEMA procedure_tests CASCADE;
+SELECT run_command_on_workers($$DROP SCHEMA procedure_tests CASCADE;$$);
+                         run_command_on_workers                          
+-------------------------------------------------------------------------
+ (localhost,57637,f,"ERROR:  schema ""procedure_tests"" does not exist")
+ (localhost,57638,f,"ERROR:  schema ""procedure_tests"" does not exist")
+(2 rows)
+
+DROP SCHEMA procedure_tests2 CASCADE;
+SELECT run_command_on_workers($$DROP SCHEMA procedure_tests2 CASCADE;$$);
+                          run_command_on_workers                          
+--------------------------------------------------------------------------
+ (localhost,57637,f,"ERROR:  schema ""procedure_tests2"" does not exist")
+ (localhost,57638,f,"ERROR:  schema ""procedure_tests2"" does not exist")
+(2 rows)
+
+DROP USER procedureuser;
+SELECT run_command_on_workers($$DROP USER procedureuser;$$);
+     run_command_on_workers      
+---------------------------------
+ (localhost,57637,t,"DROP ROLE")
+ (localhost,57638,t,"DROP ROLE")
+(2 rows)
+
