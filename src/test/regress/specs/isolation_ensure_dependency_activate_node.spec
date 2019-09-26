@@ -30,20 +30,6 @@ teardown
     DROP TYPE IF EXISTS tt1 CASCADE;
     DROP FUNCTION IF EXISTS add(INT,INT) CASCADE;
 
-    -- Remove the pg_dist_object record manually as we do not yet hook into DROP FUNC
-    -- queries. If the function does not exist, the casting to regprocedure fails.
-    DO
-    $do$
-    BEGIN
-        DELETE FROM citus.pg_dist_object WHERE objid = 'add(int,int)'::regprocedure;
-    EXCEPTION
-        WHEN undefined_function THEN RETURN;
-    END;
-    $do$;
-
-    -- similarly drop the function in the workers manually
-    SELECT run_command_on_workers($$DROP FUNCTION IF EXISTS add(INT,INT) CASCADE;$$); 
-
     SELECT master_remove_node(nodename, nodeport) FROM pg_dist_node;
 }
 
@@ -230,7 +216,7 @@ permutation "s1-print-distributed-objects" "s1-begin" "s2-begin" "s2-create-sche
 # s3-wait-for-metadata-sync step, we do "s2-begin" followed directly by 
 # "s2-commit", because "COMMIT"  syncs the messages
 
-permutation "s1-print-distributed-objects" "s1-begin" "s1-add-worker" "s2-public-schema" "s2-distribute-function" "s1-commit" "s2-begin" "s2-commit"  "s3-wait-for-metadata-sync" "s1-print-distributed-objects"
+permutation "s1-print-distributed-objects" "s1-begin" "s1-add-worker" "s2-public-schema" "s2-distribute-function" "s1-commit" "s2-begin" "s2-commit"  "s3-wait-for-metadata-sync" "s2-print-distributed-objects"
 permutation "s1-print-distributed-objects" "s1-begin" "s2-public-schema" "s2-distribute-function" "s2-begin" "s2-commit" "s3-wait-for-metadata-sync" "s1-add-worker" "s1-commit" "s3-wait-for-metadata-sync" "s2-print-distributed-objects"
 
 # we cannot run the following operations concurrently

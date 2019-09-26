@@ -75,7 +75,7 @@ PG_FUNCTION_INFO_V1(create_distributed_function);
 
 #if PG_VERSION_NUM > 110000
 #define AssertIsFunctionOrProcedure(objtype) \
-	Assert((objtype) == OBJECT_FUNCTION || (objtype) = OBJECT_PROCEDURE)
+	Assert((objtype) == OBJECT_FUNCTION || (objtype) == OBJECT_PROCEDURE)
 #else
 #define AssertIsFunctionOrProcedure(objtype) \
 	Assert(objtype == OBJECT_FUNCTION)
