@@ -953,6 +953,11 @@ ProcessAlterFunctionSchemaStmt(AlterObjectSchemaStmt *stmt, const char *queryStr
 }
 
 
+/*
+ * AlterFunctionStmtObjectAddress returns the ObjectAddress of the subject in the
+ * AlterFunctionStmt. If missing_ok is set to false an error will be raised if postgres
+ * was unable to find the function/procedure that was the target of the statement.
+ */
 const ObjectAddress *
 AlterFunctionStmtObjectAddress(AlterFunctionStmt *stmt, bool missing_ok)
 {
@@ -1055,6 +1060,12 @@ AlterFunctionSchemaStmtObjectAddress(AlterObjectSchemaStmt *stmt, bool missing_o
 }
 
 
+/*
+ * FunctionToObjectAddress returns the ObjectAddress of a Function or Procedure based on
+ * its type and ObjectWithArgs describing the Function/Procedure. If missing_ok is set to
+ * false an error will be raised by postgres explaining the Function/Procedure could not
+ * be found.
+ */
 static ObjectAddress *
 FunctionToObjectAddress(ObjectType objectType, ObjectWithArgs *objectWithArgs,
 						bool missing_ok)
