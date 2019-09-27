@@ -29,6 +29,7 @@
 -- allow deparsing them here.
 
 SET citus.next_shard_id TO 20030000;
+SET citus.enable_ddl_propagation TO off;
 
 CREATE SCHEMA procedure_tests;
 SET search_path TO procedure_tests;
@@ -167,30 +168,43 @@ SELECT deparse_and_run_on_workers($cmd$
 ALTER PROCEDURE raise_info RESET ALL
 $cmd$);
 
+-- rename and rename back to keep the nodes in sync
 SELECT deparse_and_run_on_workers($cmd$
-ALTER PROCEDURE raise_info RENAME TO summation
+ALTER PROCEDURE raise_info RENAME TO summation;
 $cmd$);
+ALTER PROCEDURE raise_info RENAME TO summation;
+SELECT deparse_and_run_on_workers($cmd$
+ALTER PROCEDURE summation RENAME TO raise_info;
+$cmd$);
+ALTER PROCEDURE summation RENAME TO raise_info;
 
-CREATE ROLE PROCEDURE_role;
+CREATE ROLE procedure_role;
+SELECT run_command_on_workers($$CREATE ROLE procedure_role;$$);
 
 SELECT deparse_and_run_on_workers($cmd$
-ALTER PROCEDURE raise_info OWNER TO PROCEDURE_role
+ALTER PROCEDURE raise_info OWNER TO procedure_role
 $cmd$);
 
 SELECT deparse_and_run_on_workers($cmd$
 ALTER PROCEDURE raise_info OWNER TO missing_role
 $cmd$);
 
+-- move schema and back to keep the nodes in sync
 SELECT deparse_and_run_on_workers($cmd$
-ALTER PROCEDURE raise_info SET SCHEMA public
+ALTER PROCEDURE raise_info SET SCHEMA public;
 $cmd$);
+ALTER PROCEDURE raise_info SET SCHEMA public;
+SELECT deparse_and_run_on_workers($cmd$
+ALTER PROCEDURE public.raise_info SET SCHEMA procedure_tests;
+$cmd$);
+ALTER PROCEDURE public.raise_info SET SCHEMA procedure_tests;
 
 SELECT deparse_and_run_on_workers($cmd$
 ALTER PROCEDURE raise_info DEPENDS ON EXTENSION citus
 $cmd$);
 
 SELECT deparse_and_run_on_workers($cmd$
-DROP PROCEDURE IF EXISTS raise_info(int,int);
+DROP PROCEDURE raise_info(text);
 $cmd$);
 
 -- Check that an invalid PROCEDURE name is still parsed correctly
@@ -209,4 +223,5 @@ $cmd$);
 -- clear objects
 SET client_min_messages TO WARNING; -- suppress cascading objects dropping
 DROP SCHEMA procedure_tests CASCADE;
-DROP ROLE PROCEDURE_role;
+DROP ROLE procedure_role;
+SELECT run_command_on_workers($$DROP ROLE procedure_role;$$);

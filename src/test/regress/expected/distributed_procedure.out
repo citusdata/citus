@@ -27,6 +27,14 @@ BEGIN
     RAISE INFO 'information message %', $1;
 END;
 $proc$;
+-- procedures are distributed by text arguments, when run in isolation it is not guaranteed a table actually exists.
+CREATE TABLE colocation_table(id text);
+SELECT create_distributed_table('colocation_table','id');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
 SELECT create_distributed_function('raise_info(text)', '$1');
  create_distributed_function 
 -----------------------------
