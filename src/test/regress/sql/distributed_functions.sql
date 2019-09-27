@@ -158,6 +158,11 @@ AS 'select $1 * $2;' -- I know, this is not an add, but the output will tell us 
 SELECT public.verify_function_is_same_on_workers('function_tests.add(int,int)');
 SELECT * FROM run_command_on_workers('SELECT function_tests.add(2,3);') ORDER BY 1,2;
 
+-- distributed functions should not be allowed to depend on an extension, also functions
+-- that depend on an extension should not be allowed to be distributed.
+ALTER FUNCTION add(int,int) DEPENDS ON EXTENSION citus;
+SELECT create_distributed_function('pg_catalog.citus_drop_trigger()');
+
 DROP FUNCTION add(int,int);
 -- call should fail as function should have been dropped
 SELECT * FROM run_command_on_workers('SELECT function_tests.add(2,3);') ORDER BY 1,2;

@@ -21,6 +21,7 @@ extern bool IsObjectDistributed(const ObjectAddress *address);
 extern bool ClusterHasDistributedFunctionWithDistArgument(void);
 extern void MarkObjectDistributed(const ObjectAddress *distAddress);
 extern void UnmarkObjectDistributed(const ObjectAddress *address);
+bool IsObjectAddressOwnedByExtension(const ObjectAddress *target);
 
 extern List * GetDistributedObjectAddressList(void);
 

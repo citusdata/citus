@@ -60,9 +60,6 @@ static bool FollowNewSupportedDependencies(void *context, Form_pg_depend pg_depe
 static void ApplyAddToDependencyList(void *context, Form_pg_depend pg_depend);
 static List * ExpandCitusSupportedTypes(void *context, const ObjectAddress *target);
 
-/* forward declaration of support functions to decide what to follow */
-static bool IsObjectAddressOwnedByExtension(const ObjectAddress *target);
-
 
 /*
  * GetDependenciesForObject returns a list of ObjectAddesses to be created in order
@@ -404,7 +401,7 @@ SupportedDependencyByCitus(const ObjectAddress *address)
  * extension. It is assumed that an object having a dependency on an extension is created
  * by that extension and therefore owned by that extension.
  */
-static bool
+bool
 IsObjectAddressOwnedByExtension(const ObjectAddress *target)
 {
 	Relation depRel = NULL;

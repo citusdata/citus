@@ -146,6 +146,17 @@ create_distributed_function(PG_FUNCTION_ARGS)
 
 	ObjectAddressSet(functionAddress, ProcedureRelationId, funcOid);
 
+	if (IsObjectAddressOwnedByExtension(&functionAddress))
+	{
+		char *functionName = get_func_name(funcOid);
+		ereport(ERROR, (errmsg("unable to create a distributed function from functions "
+							   "owned by an extension"),
+						errdetail("Function \"%s\" has a dependency on an extension. "
+								  "Functions depending on an extension cannot be "
+								  "distributed. Create the function by creating the "
+								  "extension on the workers.", functionName)));
+	}
+
 	/*
 	 * when we allow propagation within a transaction block we should make sure to only
 	 * allow this in sequential mode
@@ -1058,6 +1069,63 @@ PlanDropFunctionStmt(DropStmt *stmt, const char *queryString)
 						  ENABLE_DDL_PROPAGATION);
 
 	return NodeDDLTaskList(ALL_WORKERS, commands);
+}
+
+
+List *
+PlanAlterFunctionDependsStmt(AlterObjectDependsStmt *stmt, const char *queryString)
+{
+	const ObjectAddress *address = NULL;
+	const char *functionName = NULL;
+
+	AssertIsFunctionOrProcedure(stmt->objectType);
+
+	if (creating_extension)
+	{
+		/*
+		 * extensions should be created separately on the workers, types cascading from an
+		 * extension should therefor not be propagated here.
+		 */
+		return NIL;
+	}
+
+	if (!EnableDependencyCreation)
+	{
+		/*
+		 * we are configured to disable object propagation, should not propagate anything
+		 */
+		return NIL;
+	}
+
+	address = GetObjectAddressFromParseTree((Node *) stmt, true);
+	if (!IsObjectDistributed(address))
+	{
+		return NIL;
+	}
+
+	/*
+	 * Distributed objects should not start depending on an extension, this will break
+	 * the dependency resolving mechanism we use to replicate distributed objects to new
+	 * workers
+	 */
+
+	functionName = get_func_name(address->objectId);
+
+	ereport(ERROR, (errmsg("distrtibuted functions are not allowed to depend on an "
+						   "extension"),
+					errdetail("function \"%s\" is already distributed. Functions from "
+							  "extensions are expected to be created on the workers by "
+							  "the extension they depend on.", functionName)));
+}
+
+
+const ObjectAddress *
+AlterFunctionDependsStmtObjectAddress(AlterObjectDependsStmt *stmt, bool missing_ok)
+{
+	AssertIsFunctionOrProcedure(stmt->objectType);
+
+	return FunctionToObjectAddress(stmt->objectType,
+								   castNode(ObjectWithArgs, stmt->object), missing_ok);
 }
 
 
