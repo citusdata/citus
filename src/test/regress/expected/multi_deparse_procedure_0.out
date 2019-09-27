@@ -274,6 +274,17 @@ QUERY:
     
 CONTEXT:  SQL function "deparse_and_run_on_workers" statement 1
 SELECT deparse_and_run_on_workers($cmd$
+ALTER  PROCEDURE raise_info SECURITY INVOKER SET client_min_messages TO warning;
+$cmd$);
+ERROR:  syntax error at or near "PROCEDURE"
+LINE 2:     WITH deparsed_query AS ( SELECT deparse_test($1) qualifi...
+               ^
+QUERY:  
+    WITH deparsed_query AS ( SELECT deparse_test($1) qualified_query )
+    SELECT run_command_on_workers(qualified_query) FROM deparsed_query d 
+    
+CONTEXT:  SQL function "deparse_and_run_on_workers" statement 1
+SELECT deparse_and_run_on_workers($cmd$
 ALTER PROCEDURE  raise_info SET log_min_messages = ERROR
 $cmd$);
 ERROR:  syntax error at or near "PROCEDURE"
@@ -411,6 +422,17 @@ QUERY:
 CONTEXT:  SQL function "deparse_and_run_on_workers" statement 1
 SELECT deparse_and_run_on_workers($cmd$
 DROP PROCEDURE IF EXISTS missing_schema.missing_PROCEDURE(int,float);
+$cmd$);
+ERROR:  syntax error at or near "PROCEDURE"
+LINE 2:     WITH deparsed_query AS ( SELECT deparse_test($1) qualifi...
+             ^
+QUERY:  
+    WITH deparsed_query AS ( SELECT deparse_test($1) qualified_query )
+    SELECT run_command_on_workers(qualified_query) FROM deparsed_query d 
+    
+CONTEXT:  SQL function "deparse_and_run_on_workers" statement 1
+SELECT deparse_and_run_on_workers($cmd$
+DROP PROCEDURE IF EXISTS missing_schema.missing_PROCEDURE(int,float) CASCADE;
 $cmd$);
 ERROR:  syntax error at or near "PROCEDURE"
 LINE 2:     WITH deparsed_query AS ( SELECT deparse_test($1) qualifi...
