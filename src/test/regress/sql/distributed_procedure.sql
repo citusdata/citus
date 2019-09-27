@@ -19,23 +19,36 @@ $proc$;
 
 SELECT create_distributed_function('raise_info(text)', '$1');
 SELECT * FROM run_command_on_workers($$CALL procedure_tests.raise_info('hello');$$) ORDER BY 1,2;
+SELECT public.verify_function_is_same_on_workers('procedure_tests.raise_info(text)');
 
 -- testing alter statements for a distributed function
 -- ROWS 5, untested because;
 -- ERROR:  ROWS is not applicable when function does not return a set
--- TODO verify settings are changed on remotes
 ALTER PROCEDURE raise_info(text) SECURITY INVOKER;
+SELECT public.verify_function_is_same_on_workers('procedure_tests.raise_info(text)');
 ALTER PROCEDURE raise_info(text) SECURITY DEFINER;
--- TODO test SET/RESET
+SELECT public.verify_function_is_same_on_workers('procedure_tests.raise_info(text)');
+
+-- Test SET/RESET for alter procedure
+ALTER PROCEDURE raise_info(text) SET client_min_messages TO warning;
+SELECT public.verify_function_is_same_on_workers('procedure_tests.raise_info(text)');
+ALTER PROCEDURE raise_info(text) SET client_min_messages TO error;
+SELECT public.verify_function_is_same_on_workers('procedure_tests.raise_info(text)');
+ALTER PROCEDURE raise_info(text) SET client_min_messages TO debug;
+SELECT public.verify_function_is_same_on_workers('procedure_tests.raise_info(text)');
+ALTER PROCEDURE raise_info(text) RESET client_min_messages;
+SELECT public.verify_function_is_same_on_workers('procedure_tests.raise_info(text)');
 
 -- rename function and make sure the new name can be used on the workers while the old name can't
 ALTER PROCEDURE raise_info(text) RENAME TO raise_info2;
+SELECT public.verify_function_is_same_on_workers('procedure_tests.raise_info2(text)');
 SELECT * FROM run_command_on_workers($$CALL procedure_tests.raise_info('hello');$$) ORDER BY 1,2;
 SELECT * FROM run_command_on_workers($$CALL procedure_tests.raise_info2('hello');$$) ORDER BY 1,2;
 ALTER PROCEDURE raise_info2(text) RENAME TO raise_info;
 
 -- change the owner of the function and verify the owner has been changed on the workers
 ALTER PROCEDURE raise_info(text) OWNER TO procedureuser;
+SELECT public.verify_function_is_same_on_workers('procedure_tests.raise_info(text)');
 SELECT run_command_on_workers($$
 SELECT row(usename, nspname, proname)
 FROM pg_proc
@@ -47,6 +60,7 @@ $$);
 -- change the schema of the procedure and verify the old schema doesn't exist anymore while
 -- the new schema has the function.
 ALTER PROCEDURE raise_info(text) SET SCHEMA procedure_tests2;
+SELECT public.verify_function_is_same_on_workers('procedure_tests2.raise_info(text)');
 SELECT * FROM run_command_on_workers($$CALL procedure_tests.raise_info('hello');$$) ORDER BY 1,2;
 SELECT * FROM run_command_on_workers($$CALL procedure_tests2.raise_info('hello');$$) ORDER BY 1,2;
 ALTER PROCEDURE procedure_tests2.raise_info(text) SET SCHEMA procedure_tests;
