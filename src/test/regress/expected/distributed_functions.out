@@ -60,6 +60,14 @@ CREATE FUNCTION add_mixed_param_names(integer, val1 integer) RETURNS integer
 -- make sure to propagate ddl propagation after we have setup our functions, this will
 -- allow alter statements to be propagated and keep the functions in sync across machines
 SET citus.enable_ddl_propagation TO on;
+-- functions are distributed by int arguments, when run in isolation it is not guaranteed a table actually exists.
+CREATE TABLE colocation_table(id int);
+SELECT create_distributed_table('colocation_table','id');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
 -- make sure that none of the active and primary nodes hasmetadata
 -- at the start of the test
 select bool_or(hasmetadata) from pg_dist_node WHERE isactive AND  noderole = 'primary';
