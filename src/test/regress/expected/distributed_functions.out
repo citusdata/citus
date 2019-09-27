@@ -155,7 +155,35 @@ SELECT public.verify_function_is_same_on_workers('function_tests.add(int,int)');
  t
 (1 row)
 
--- TODO test SET/RESET
+-- Test SET/RESET for alter function
+ALTER FUNCTION add(int,int) SET client_min_messages TO warning;
+SELECT public.verify_function_is_same_on_workers('function_tests.add(int,int)');
+ verify_function_is_same_on_workers 
+------------------------------------
+ t
+(1 row)
+
+ALTER FUNCTION add(int,int) SET client_min_messages TO error;
+SELECT public.verify_function_is_same_on_workers('function_tests.add(int,int)');
+ verify_function_is_same_on_workers 
+------------------------------------
+ t
+(1 row)
+
+ALTER FUNCTION add(int,int) SET client_min_messages TO debug;
+SELECT public.verify_function_is_same_on_workers('function_tests.add(int,int)');
+ verify_function_is_same_on_workers 
+------------------------------------
+ t
+(1 row)
+
+ALTER FUNCTION add(int,int) RESET client_min_messages;
+SELECT public.verify_function_is_same_on_workers('function_tests.add(int,int)');
+ verify_function_is_same_on_workers 
+------------------------------------
+ t
+(1 row)
+
 -- SET ... FROM CURRENT is not supported, verify the query fails with a descriptive error irregardless of where in the action list the statement occurs
 ALTER FUNCTION add(int,int) SET client_min_messages FROM CURRENT;
 ERROR:  unsupported ALTER FUNCTION ... SET ... FROM CURRENT for a distributed function

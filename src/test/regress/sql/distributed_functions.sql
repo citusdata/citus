@@ -100,7 +100,16 @@ ALTER FUNCTION add(int,int) RETURNS NULL ON NULL INPUT STABLE SECURITY DEFINER P
 SELECT public.verify_function_is_same_on_workers('function_tests.add(int,int)');
 ALTER FUNCTION add(int,int) STRICT VOLATILE PARALLEL SAFE;
 SELECT public.verify_function_is_same_on_workers('function_tests.add(int,int)');
--- TODO test SET/RESET
+
+-- Test SET/RESET for alter function
+ALTER FUNCTION add(int,int) SET client_min_messages TO warning;
+SELECT public.verify_function_is_same_on_workers('function_tests.add(int,int)');
+ALTER FUNCTION add(int,int) SET client_min_messages TO error;
+SELECT public.verify_function_is_same_on_workers('function_tests.add(int,int)');
+ALTER FUNCTION add(int,int) SET client_min_messages TO debug;
+SELECT public.verify_function_is_same_on_workers('function_tests.add(int,int)');
+ALTER FUNCTION add(int,int) RESET client_min_messages;
+SELECT public.verify_function_is_same_on_workers('function_tests.add(int,int)');
 
 -- SET ... FROM CURRENT is not supported, verify the query fails with a descriptive error irregardless of where in the action list the statement occurs
 ALTER FUNCTION add(int,int) SET client_min_messages FROM CURRENT;
