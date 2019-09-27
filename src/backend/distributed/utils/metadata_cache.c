@@ -3143,17 +3143,21 @@ GetLocalGroupId(void)
 										  tupleDescriptor, &isNull);
 
 		groupId = DatumGetInt32(groupIdDatum);
+
+		/* set the local cache variable */
+		LocalGroupId = groupId;
 	}
 	else
 	{
-		elog(ERROR, "could not find any entries in pg_dist_local_group");
+		/*
+		 * Upgrade is happening. When upgrading postgres, pg_dist_local_group is
+		 * temporarily empty before citus_finish_pg_upgrade() finishes execution.
+		 */
+		groupId = GROUP_ID_UPGRADING;
 	}
 
 	systable_endscan(scanDescriptor);
 	heap_close(pgDistLocalGroupId, AccessShareLock);
-
-	/* set the local cache variable */
-	LocalGroupId = groupId;
 
 	return groupId;
 }

@@ -91,6 +91,9 @@ extern dlist_head InProgressTransactions;
 /* number of nested stored procedure call levels we are currently in */
 extern int StoredProcedureLevel;
 
+/* number of nested DO block levels we are currently in */
+extern int DoBlockLevel;
+
 /* number of nested function call levels we are currently in */
 extern int FunctionCallLevel;
 

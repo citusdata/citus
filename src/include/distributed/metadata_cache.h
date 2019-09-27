@@ -29,6 +29,14 @@ typedef enum
 } ReadFromSecondariesType;
 extern int ReadFromSecondaries;
 
+
+/*
+ * While upgrading pg_dist_local_group can be empty temporarily, in that
+ * case we use GROUP_ID_UPGRADING as the local group id to communicate
+ * this to other functions.
+ */
+#define GROUP_ID_UPGRADING -2
+
 /*
  * Representation of a table's metadata that is frequently used for
  * distributed execution. Cached.

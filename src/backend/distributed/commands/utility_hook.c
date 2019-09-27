@@ -253,6 +253,31 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 	}
 #endif
 
+	if (IsA(parsetree, DoStmt))
+	{
+		/*
+		 * All statements in a DO block are executed in a single transaciton,
+		 * so we need to keep track of whether we are inside a DO block.
+		 */
+		DoBlockLevel += 1;
+
+		PG_TRY();
+		{
+			standard_ProcessUtility(pstmt, queryString, context,
+									params, queryEnv, dest, completionTag);
+
+			DoBlockLevel -= 1;
+		}
+		PG_CATCH();
+		{
+			DoBlockLevel -= 1;
+			PG_RE_THROW();
+		}
+		PG_END_TRY();
+
+		return;
+	}
+
 	/* process SET LOCAL stmts of whitelisted GUCs in multi-stmt xacts */
 	if (IsA(parsetree, VariableSetStmt))
 	{

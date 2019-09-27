@@ -87,6 +87,9 @@ bool EnableDeadlockPrevention = true;
 /* number of nested stored procedure call levels we are currently in */
 int StoredProcedureLevel = 0;
 
+/* number of nested DO block levels we are currently in */
+int DoBlockLevel = 0;
+
 /* sort the returning to get consistent outputs */
 bool SortReturning = false;
 
