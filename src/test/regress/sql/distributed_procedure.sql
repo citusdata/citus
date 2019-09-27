@@ -1,3 +1,11 @@
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int >= 11 AS server_verion_eleven_and_above
+    \gset
+\if :server_verion_eleven_and_above
+\else
+\q
+\endif
+
 SET citus.next_shard_id TO 20030000;
 
 CREATE USER procedureuser;

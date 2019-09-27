@@ -819,13 +819,14 @@ PlanAlterFunctionOwnerStmt(AlterOwnerStmt *stmt, const char *queryString)
 List *
 PlanDropFunctionStmt(DropStmt *stmt, const char *queryString)
 {
-	List *oldObjectWithArgsList = stmt->objects;
+	List *deletingObjectWithArgsList = stmt->objects;
 	List *distributedObjectWithArgsList = NIL;
 	List *distributedFunctionAddresses = NIL;
 	ListCell *addressCell = NULL;
 	const char *dropStmtSql = NULL;
 	List *commands = NULL;
 	ListCell *objectWithArgsListCell = NULL;
+	DropStmt *stmtCopy = NULL;
 
 	AssertIsFunctionOrProcedure(stmt->removeType);
 
@@ -857,7 +858,7 @@ PlanDropFunctionStmt(DropStmt *stmt, const char *queryString)
 	 * iterate over all functions to be dropped and filter to keep only distributed
 	 * functions.
 	 */
-	foreach(objectWithArgsListCell, oldObjectWithArgsList)
+	foreach(objectWithArgsListCell, deletingObjectWithArgsList)
 	{
 		ObjectWithArgs *func = NULL;
 		ObjectAddress *address = NULL;
@@ -900,10 +901,9 @@ PlanDropFunctionStmt(DropStmt *stmt, const char *queryString)
 	 * Swap the list of objects before deparsing and restore the old list after. This
 	 * ensures we only have distributed functions in the deparsed drop statement.
 	 */
-	oldObjectWithArgsList = stmt->objects;
-	stmt->objects = distributedObjectWithArgsList;
-	dropStmtSql = DeparseTreeNode((Node *) stmt);
-	stmt->objects = oldObjectWithArgsList;
+	stmtCopy = copyObject(stmt);
+	stmtCopy->objects = distributedObjectWithArgsList;
+	dropStmtSql = DeparseTreeNode((Node *) stmtCopy);
 
 	commands = list_make3(DISABLE_DDL_PROPAGATION,
 						  (void *) dropStmtSql,
@@ -1091,9 +1091,9 @@ ErrorIfUnsupportedAlterFunctionStmt(AlterFunctionStmt *stmt)
 				/* check if the set action is a SET ... FROM CURRENT */
 				ereport(ERROR, (errmsg("unsupported ALTER FUNCTION ... SET ... FROM "
 									   "CURRENT for a distributed function"),
-								errdetail("SET FROM CURRENT is not supported for "
-										  "distributed functions, instead use the SET "
-										  "... TO ... syntax with a constant value.")));
+								errhint("SET FROM CURRENT is not supported for "
+										"distributed functions, instead use the SET ... "
+										"TO ... syntax with a constant value.")));
 			}
 		}
 	}

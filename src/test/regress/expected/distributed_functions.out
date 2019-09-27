@@ -195,7 +195,7 @@ SELECT public.verify_function_is_same_on_workers('function_tests.add(int,int)');
 -- SET ... FROM CURRENT is not supported, verify the query fails with a descriptive error irregardless of where in the action list the statement occurs
 ALTER FUNCTION add(int,int) SET client_min_messages FROM CURRENT;
 ERROR:  unsupported ALTER FUNCTION ... SET ... FROM CURRENT for a distributed function
-DETAIL:  SET FROM CURRENT is not supported for distributed functions, instead use the SET ... TO ... syntax with a constant value.
+HINT:  SET FROM CURRENT is not supported for distributed functions, instead use the SET ... TO ... syntax with a constant value.
 SELECT public.verify_function_is_same_on_workers('function_tests.add(int,int)');
  verify_function_is_same_on_workers 
 ------------------------------------
@@ -204,7 +204,7 @@ SELECT public.verify_function_is_same_on_workers('function_tests.add(int,int)');
 
 ALTER FUNCTION add(int,int) RETURNS NULL ON NULL INPUT SET client_min_messages FROM CURRENT;
 ERROR:  unsupported ALTER FUNCTION ... SET ... FROM CURRENT for a distributed function
-DETAIL:  SET FROM CURRENT is not supported for distributed functions, instead use the SET ... TO ... syntax with a constant value.
+HINT:  SET FROM CURRENT is not supported for distributed functions, instead use the SET ... TO ... syntax with a constant value.
 SELECT public.verify_function_is_same_on_workers('function_tests.add(int,int)');
  verify_function_is_same_on_workers 
 ------------------------------------
@@ -213,7 +213,7 @@ SELECT public.verify_function_is_same_on_workers('function_tests.add(int,int)');
 
 ALTER FUNCTION add(int,int) SET client_min_messages FROM CURRENT SECURITY DEFINER;
 ERROR:  unsupported ALTER FUNCTION ... SET ... FROM CURRENT for a distributed function
-DETAIL:  SET FROM CURRENT is not supported for distributed functions, instead use the SET ... TO ... syntax with a constant value.
+HINT:  SET FROM CURRENT is not supported for distributed functions, instead use the SET ... TO ... syntax with a constant value.
 SELECT public.verify_function_is_same_on_workers('function_tests.add(int,int)');
  verify_function_is_same_on_workers 
 ------------------------------------
