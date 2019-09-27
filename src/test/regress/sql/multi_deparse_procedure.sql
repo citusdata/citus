@@ -142,6 +142,10 @@ SELECT deparse_and_run_on_workers($cmd$
 ALTER  PROCEDURE raise_info ROWS 10.8
 $cmd$);
 
+SELECT deparse_and_run_on_workers($cmd$
+ALTER  PROCEDURE raise_info SECURITY INVOKER SET client_min_messages TO warning;
+$cmd$);
+
 
 SELECT deparse_and_run_on_workers($cmd$
 ALTER PROCEDURE  raise_info SET log_min_messages = ERROR
@@ -196,6 +200,10 @@ $cmd$);
 
 SELECT deparse_and_run_on_workers($cmd$
 DROP PROCEDURE IF EXISTS missing_schema.missing_PROCEDURE(int,float);
+$cmd$);
+
+SELECT deparse_and_run_on_workers($cmd$
+DROP PROCEDURE IF EXISTS missing_schema.missing_PROCEDURE(int,float) CASCADE;
 $cmd$);
 
 -- clear objects
