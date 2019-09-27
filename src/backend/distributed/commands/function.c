@@ -677,6 +677,7 @@ PlanAlterFunctionStmt(AlterFunctionStmt *stmt, const char *queryString)
 	const ObjectAddress *address = NULL;
 	List *commands = NIL;
 
+	/* AlterFunctionStmt->objtype has only been added since pg11 */
 #if PG_VERSION_NUM > 110000
 	AssertIsFunctionOrProcedure(stmt->objtype);
 #endif
@@ -688,19 +689,10 @@ PlanAlterFunctionStmt(AlterFunctionStmt *stmt, const char *queryString)
 	}
 
 	EnsureCoordinator();
-
 	ErrorIfUnsupportedAlterFunctionStmt(stmt);
-
-	/* reconstruct alter statement in a portable fashion */
+	EnsureSequentialModeForFunctionDDL();
 	QualifyTreeNode((Node *) stmt);
 	sql = DeparseTreeNode((Node *) stmt);
-
-	/*
-	 * all functions that are distributed will need their alter statements propagated
-	 * regardless if in a transaction or not. If we would not propagate the alter
-	 * statement the functions would be different on worker and coordinator.
-	 */
-	EnsureSequentialModeForFunctionDDL();
 
 	commands = list_make3(DISABLE_DDL_PROPAGATION,
 						  (void *) sql,
@@ -734,15 +726,9 @@ PlanRenameFunctionStmt(RenameStmt *stmt, const char *queryString)
 	}
 
 	EnsureCoordinator();
-
-	/* fully qualify */
-	QualifyTreeNode((Node *) stmt);
-
-	/* deparse sql*/
-	sql = DeparseTreeNode((Node *) stmt);
-
-	/* to prevent recursion with mx we disable ddl propagation */
 	EnsureSequentialModeForFunctionDDL();
+	QualifyTreeNode((Node *) stmt);
+	sql = DeparseTreeNode((Node *) stmt);
 
 	commands = list_make3(DISABLE_DDL_PROPAGATION,
 						  (void *) sql,
@@ -774,11 +760,9 @@ PlanAlterFunctionSchemaStmt(AlterObjectSchemaStmt *stmt, const char *queryString
 	}
 
 	EnsureCoordinator();
-
+	EnsureSequentialModeForFunctionDDL();
 	QualifyTreeNode((Node *) stmt);
 	sql = DeparseTreeNode((Node *) stmt);
-
-	EnsureSequentialModeForFunctionDDL();
 
 	commands = list_make3(DISABLE_DDL_PROPAGATION,
 						  (void *) sql,
@@ -811,11 +795,9 @@ PlanAlterFunctionOwnerStmt(AlterOwnerStmt *stmt, const char *queryString)
 	}
 
 	EnsureCoordinator();
-
+	EnsureSequentialModeForFunctionDDL();
 	QualifyTreeNode((Node *) stmt);
 	sql = DeparseTreeNode((Node *) stmt);
-
-	EnsureSequentialModeForFunctionDDL();
 
 	commands = list_make3(DISABLE_DDL_PROPAGATION,
 						  (void *) sql,
@@ -905,6 +887,7 @@ PlanDropFunctionStmt(DropStmt *stmt, const char *queryString)
 	 * types, so we block the call.
 	 */
 	EnsureCoordinator();
+	EnsureSequentialModeForFunctionDDL();
 
 	/* remove the entries for the distributed objects on dropping */
 	foreach(addressCell, distributedFunctionAddresses)
@@ -921,9 +904,6 @@ PlanDropFunctionStmt(DropStmt *stmt, const char *queryString)
 	stmt->objects = distributedObjectWithArgsList;
 	dropStmtSql = DeparseTreeNode((Node *) stmt);
 	stmt->objects = oldObjectWithArgsList;
-
-	/* to prevent recursion with mx we disable ddl propagation */
-	EnsureSequentialModeForFunctionDDL();
 
 	commands = list_make3(DISABLE_DDL_PROPAGATION,
 						  (void *) dropStmtSql,
