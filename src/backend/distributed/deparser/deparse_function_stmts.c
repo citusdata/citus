@@ -595,6 +595,7 @@ AppendFunctionName(StringInfo buf, ObjectWithArgs *func, ObjectType objtype)
 
 		procform = (Form_pg_proc) GETSTRUCT(proctup);
 		functionName = NameStr(procform->proname);
+		functionName = pstrdup(functionName); /* we release the tuple before used */
 		schemaName = get_namespace_name(procform->pronamespace);
 
 		ReleaseSysCache(proctup);

@@ -171,6 +171,7 @@ QualifyFunctionSchemaName(ObjectWithArgs *func, ObjectType type)
 		procform = (Form_pg_proc) GETSTRUCT(proctup);
 		schemaName = get_namespace_name(procform->pronamespace);
 		functionName = NameStr(procform->proname);
+		functionName = pstrdup(functionName); /* we release the tuple before used */
 
 		ReleaseSysCache(proctup);
 
