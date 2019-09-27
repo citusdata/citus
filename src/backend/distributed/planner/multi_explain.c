@@ -616,13 +616,14 @@ BuildRemoteExplainQuery(char *queryString, ExplainState *es)
 
 	appendStringInfo(explainQuery,
 					 "EXPLAIN (ANALYZE %s, VERBOSE %s, "
-					 "COSTS %s, BUFFERS %s, TIMING %s, "
+					 "COSTS %s, BUFFERS %s, TIMING %s, SUMMARY %s, "
 					 "FORMAT %s) %s",
 					 es->analyze ? "TRUE" : "FALSE",
 					 es->verbose ? "TRUE" : "FALSE",
 					 es->costs ? "TRUE" : "FALSE",
 					 es->buffers ? "TRUE" : "FALSE",
 					 es->timing ? "TRUE" : "FALSE",
+					 es->summary ? "TRUE" : "FALSE",
 					 formatStr,
 					 queryString);
 

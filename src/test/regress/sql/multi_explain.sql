@@ -84,6 +84,11 @@ EXPLAIN (COSTS FALSE, FORMAT TEXT)
 	SELECT l_quantity, count(*) count_quantity FROM lineitem
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
 
+-- Test analyze (with TIMING FALSE and SUMMARY FALSE for consistent output)
+EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE)
+	SELECT l_quantity, count(*) count_quantity FROM lineitem
+	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
+
 -- Test verbose
 EXPLAIN (COSTS FALSE, VERBOSE TRUE)
 	SELECT sum(l_quantity) / avg(l_quantity) FROM lineitem;
@@ -103,6 +108,14 @@ EXPLAIN (COSTS FALSE)
 	UPDATE lineitem
 	SET l_suppkey = 12
 	WHERE l_orderkey = 1 AND l_partkey = 0;
+
+-- Test analyze (with TIMING FALSE and SUMMARY FALSE for consistent output)
+BEGIN;
+EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE)
+	UPDATE lineitem
+	SET l_suppkey = 12
+	WHERE l_orderkey = 1 AND l_partkey = 0;
+ROLLBACk;
 
 -- Test delete
 EXPLAIN (COSTS FALSE)
@@ -391,6 +404,11 @@ EXPLAIN (COSTS FALSE)
 -- Test multi shard delete
 EXPLAIN (COSTS FALSE)
 	DELETE FROM lineitem_hash_part;
+
+-- Test analyze (with TIMING FALSE and SUMMARY FALSE for consistent output)
+EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE)
+	SELECT l_quantity, count(*) count_quantity FROM lineitem
+	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
 
 SET citus.explain_all_tasks TO off;
 
