@@ -411,13 +411,25 @@ CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
  (localhost,57638,t,"ALTER FUNCTION")
 (2 rows)
 
+-- make sure "any" type is correctly deparsed
+SELECT deparse_and_run_on_workers($cmd$
+ALTER FUNCTION pg_catalog.get_shard_id_for_distribution_column(table_name regclass, distribution_value "any") PARALLEL SAFE;
+$cmd$);
+INFO:  Propagating deparsed query: ALTER FUNCTION pg_catalog.get_shard_id_for_distribution_column(table_name regclass, distribution_value "any") PARALLEL SAFE;
+CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
+      deparse_and_run_on_workers      
+--------------------------------------
+ (localhost,57637,t,"ALTER FUNCTION")
+ (localhost,57638,t,"ALTER FUNCTION")
+(2 rows)
+
 -- Do not run valid drop queries in the workers
 SELECT deparse_test($cmd$
 DROP FUNCTION add(int,int);
 $cmd$);
-                            deparse_test                            
---------------------------------------------------------------------
- DROP FUNCTION function_tests.add(pg_catalog.int4,pg_catalog.int4);
+                    deparse_test                     
+-----------------------------------------------------
+ DROP FUNCTION function_tests.add(integer, integer);
 (1 row)
 
 -- have multiple actions in a single query
@@ -462,6 +474,17 @@ SELECT deparse_and_run_on_workers($cmd$
 DROP FUNCTION IF EXISTS missing_schema.missing_function(int,float);
 $cmd$);
 INFO:  Propagating deparsed query: DROP FUNCTION IF EXISTS missing_schema.missing_function(pg_catalog.int4,pg_catalog.float8);
+CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
+     deparse_and_run_on_workers      
+-------------------------------------
+ (localhost,57637,t,"DROP FUNCTION")
+ (localhost,57638,t,"DROP FUNCTION")
+(2 rows)
+
+SELECT deparse_and_run_on_workers($cmd$
+DROP FUNCTION IF EXISTS missing_func_without_args;
+$cmd$);
+INFO:  Propagating deparsed query: DROP FUNCTION IF EXISTS missing_func_without_args;
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
      deparse_and_run_on_workers      
 -------------------------------------

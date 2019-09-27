@@ -575,7 +575,6 @@ AppendFunctionName(StringInfo buf, ObjectWithArgs *func, ObjectType objtype)
 	char *functionName = NULL;
 	char *schemaName = NULL;
 	char *qualifiedFunctionName;
-	char *args = TypeNameListToString(func->objargs);
 
 	funcid = LookupFuncWithArgsCompat(objtype, func, true);
 	proctup = SearchSysCache1(PROCOID, ObjectIdGetDatum(funcid));
@@ -604,11 +603,15 @@ AppendFunctionName(StringInfo buf, ObjectWithArgs *func, ObjectType objtype)
 	qualifiedFunctionName = quote_qualified_identifier(schemaName, functionName);
 	appendStringInfoString(buf, qualifiedFunctionName);
 
-	/* append the optional arg list if provided */
-	if (func->args_unspecified)
+	if (OidIsValid(funcid))
 	{
+		/*
+		 * If the function exists we want to use pg_get_function_identity_arguments to
+		 * serialize its canonical arguments
+		 */
 		OverrideSearchPath *overridePath = NULL;
 		Datum sqlTextDatum = 0;
+		const char *args = NULL;
 
 		/*
 		 * Set search_path to NIL so that all objects outside of pg_catalog will be
@@ -628,9 +631,26 @@ AppendFunctionName(StringInfo buf, ObjectWithArgs *func, ObjectType objtype)
 		PopOverrideSearchPath();
 
 		args = TextDatumGetCString(sqlTextDatum);
+		appendStringInfo(buf, "(%s)", args);
+	}
+	else if (!func->args_unspecified)
+	{
+		/*
+		 * The function is not found, but there is an argument list specified, this has
+		 * some known issues with the "any" type. However this is mostly a bug in
+		 * postgres' TypeNameListToString. For now the best we can do until we understand
+		 * the underlying cause better.
+		 */
+		const char *args = NULL;
+
+		args = TypeNameListToString(func->objargs);
+		appendStringInfo(buf, "(%s)", args);
 	}
 
-	appendStringInfo(buf, "(%s)", args);
+	/*
+	 * If the type is not found, and no argument list given we don't append anything here.
+	 * This will cause mostly the same sql as the original statement.
+	 */
 }
 
 

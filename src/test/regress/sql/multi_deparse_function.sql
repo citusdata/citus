@@ -209,6 +209,11 @@ SELECT deparse_and_run_on_workers($cmd$
 ALTER FUNCTION add DEPENDS ON EXTENSION citus
 $cmd$);
 
+-- make sure "any" type is correctly deparsed
+SELECT deparse_and_run_on_workers($cmd$
+ALTER FUNCTION pg_catalog.get_shard_id_for_distribution_column(table_name regclass, distribution_value "any") PARALLEL SAFE;
+$cmd$);
+
 -- Do not run valid drop queries in the workers
 SELECT deparse_test($cmd$
 DROP FUNCTION add(int,int);
@@ -233,6 +238,10 @@ $cmd$);
 
 SELECT deparse_and_run_on_workers($cmd$
 DROP FUNCTION IF EXISTS missing_schema.missing_function(int,float);
+$cmd$);
+
+SELECT deparse_and_run_on_workers($cmd$
+DROP FUNCTION IF EXISTS missing_func_without_args;
 $cmd$);
 
 -- create schema with weird names
