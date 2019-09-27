@@ -5,7 +5,7 @@
 --
 CREATE OR REPLACE FUNCTION pg_catalog.get_rebalance_table_shards_plan(
         relation regclass,
-        threshold float4 default 0.1,
+        threshold float4 default 0,
         max_shard_moves int default 1000000,
         excluded_shard_list bigint[] default '{}')
     RETURNS TABLE (table_name regclass,
