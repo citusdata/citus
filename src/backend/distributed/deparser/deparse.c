@@ -120,13 +120,13 @@ DeparseDropStmt(DropStmt *stmt)
 			return DeparseDropTypeStmt(stmt);
 		}
 
-		case OBJECT_FUNCTION:
 #if PG_VERSION_NUM >= 110000
 		case OBJECT_PROCEDURE:
 #endif
-			{
-				return DeparseDropFunctionStmt(stmt);
-			}
+		case OBJECT_FUNCTION:
+		{
+			return DeparseDropFunctionStmt(stmt);
+		}
 
 		default:
 		{
@@ -188,13 +188,13 @@ DeparseRenameStmt(RenameStmt *stmt)
 			return DeparseRenameAttributeStmt(stmt);
 		}
 
-		case OBJECT_FUNCTION:
 #if PG_VERSION_NUM >= 110000
 		case OBJECT_PROCEDURE:
 #endif
-			{
-				return DeparseRenameFunctionStmt(stmt);
-			}
+		case OBJECT_FUNCTION:
+		{
+			return DeparseRenameFunctionStmt(stmt);
+		}
 
 		default:
 		{
@@ -243,13 +243,13 @@ DeparseAlterObjectSchemaStmt(AlterObjectSchemaStmt *stmt)
 			return DeparseAlterTypeSchemaStmt(stmt);
 		}
 
-		case OBJECT_FUNCTION:
 #if PG_VERSION_NUM >= 110000
 		case OBJECT_PROCEDURE:
 #endif
-			{
-				return DeparseAlterFunctionSchemaStmt(stmt);
-			}
+		case OBJECT_FUNCTION:
+		{
+			return DeparseAlterFunctionSchemaStmt(stmt);
+		}
 
 		default:
 		{
@@ -277,13 +277,13 @@ DeparseAlterOwnerStmt(AlterOwnerStmt *stmt)
 			return DeparseAlterTypeOwnerStmt(stmt);
 		}
 
-		case OBJECT_FUNCTION:
 #if PG_VERSION_NUM >= 110000
 		case OBJECT_PROCEDURE:
 #endif
-			{
-				return DeparseAlterFunctionOwnerStmt(stmt);
-			}
+		case OBJECT_FUNCTION:
+		{
+			return DeparseAlterFunctionOwnerStmt(stmt);
+		}
 
 		default:
 		{
@@ -306,13 +306,13 @@ DeparseAlterObjectDependsStmt(AlterObjectDependsStmt *stmt)
 {
 	switch (stmt->objectType)
 	{
-		case OBJECT_FUNCTION:
 #if PG_VERSION_NUM >= 110000
 		case OBJECT_PROCEDURE:
 #endif
-			{
-				return DeparseAlterFunctionDependsStmt(stmt);
-			}
+		case OBJECT_FUNCTION:
+		{
+			return DeparseAlterFunctionDependsStmt(stmt);
+		}
 
 		default:
 		{
