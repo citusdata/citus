@@ -1,3 +1,10 @@
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int >= 11 AS server_verion_eleven_and_above
+    \gset
+\if :server_verion_eleven_and_above
+\else
+\q
+\endif
 --
 -- Regression tests for deparsing ALTER/DROP PROCEDURE Queries
 --
