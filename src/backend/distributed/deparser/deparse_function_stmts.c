@@ -260,9 +260,23 @@ AppendDefElemSet(StringInfo buf, DefElem *def)
 			break;
 		}
 
+		/*
+		 * When we get a SET FROM CURRENT action, we capture the current config option on
+		 * the coordinator and use that value directly.
+		 *
+		 * The PG docs:
+		 * SET FROM CURRENT saves the value of the parameter that is current when
+		 * ALTER FUNCTION is executed as the value to be applied when the function
+		 * is entered.
+		 *
+		 * This logic should have been implemented in QualifyAlterFunction()
+		 */
 		case VAR_SET_CURRENT:
 		{
-			appendStringInfo(buf, " SET %s FROM CURRENT", setStmt->name);
+			char *currentValue = NULL;
+			currentValue = GetConfigOptionByName(setStmt->name, NULL, false);
+
+			appendStringInfo(buf, " SET %s TO %s", setStmt->name, currentValue);
 			break;
 		}
 

@@ -283,7 +283,7 @@ CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
 SELECT deparse_and_run_on_workers($cmd$
 ALTER FUNCTION  add SET log_min_messages FROM CURRENT
 $cmd$);
-INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.add(integer, integer) SET log_min_messages FROM CURRENT;
+INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.add(integer, integer) SET log_min_messages TO warning;
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers      
 --------------------------------------
