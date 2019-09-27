@@ -27,6 +27,8 @@ extern char * FormatCollateBE(Oid collate_oid);
 extern char * FormatCollateBEQualified(Oid collate_oid);
 extern char * FormatCollateExtended(Oid collid, bits16 flags);
 
+extern void AssertObjectTypeIsFunctional(ObjectType type);
+
 extern void QualifyTreeNode(Node *stmt);
 extern const char * DeparseTreeNode(Node *stmt);
 

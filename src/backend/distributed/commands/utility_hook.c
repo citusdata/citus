@@ -424,6 +424,7 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 				}
 
 				case OBJECT_PROCEDURE:
+				case OBJECT_AGGREGATE:
 				case OBJECT_FUNCTION:
 				{
 					ddlJobs = PlanDropFunctionStmt(dropStatement, queryString);
@@ -480,6 +481,7 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 				}
 
 				case OBJECT_PROCEDURE:
+				case OBJECT_AGGREGATE:
 				case OBJECT_FUNCTION:
 				{
 					ddlJobs = PlanRenameFunctionStmt(renameStmt, queryString);
@@ -837,6 +839,7 @@ PlanAlterOwnerStmt(AlterOwnerStmt *stmt, const char *queryString)
 		}
 
 		case OBJECT_PROCEDURE:
+		case OBJECT_AGGREGATE:
 		case OBJECT_FUNCTION:
 		{
 			return PlanAlterFunctionOwnerStmt(stmt, queryString);
