@@ -1752,8 +1752,8 @@ count
 0              
 run_command_on_workers
 
-(localhost,57637,t,1)
-(localhost,57638,t,1)
+(localhost,57637,t,0)
+(localhost,57638,t,0)
 master_remove_node
 
                
@@ -1890,8 +1890,8 @@ count
 0              
 run_command_on_workers
 
-(localhost,57637,t,1)
-(localhost,57638,t,1)
+(localhost,57637,t,0)
+(localhost,57638,t,0)
 master_remove_node
 
                
@@ -1975,8 +1975,8 @@ count
 1              
 run_command_on_workers
 
-(localhost,57637,t,2)
-(localhost,57638,t,2)
+(localhost,57637,t,1)
+(localhost,57638,t,1)
 master_remove_node
 
                
