@@ -240,8 +240,8 @@ CREATE SCHEMA "CiTuS.TeeN";
 CREATE SCHEMA "CiTUS.TEEN2";
 
 SELECT run_command_on_workers($$
-    CREATE SCHEMA "CiTuS.TeeN";
-    CREATE SCHEMA "CiTUS.TEEN2";
+    CREATE SCHEMA IF NOT EXISTS "CiTuS.TeeN";
+    CREATE SCHEMA IF NOT EXISTS "CiTUS.TEEN2";
 $$);
 
 -- create table with weird names

@@ -473,8 +473,8 @@ CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
 CREATE SCHEMA "CiTuS.TeeN";
 CREATE SCHEMA "CiTUS.TEEN2";
 SELECT run_command_on_workers($$
-    CREATE SCHEMA "CiTuS.TeeN";
-    CREATE SCHEMA "CiTUS.TEEN2";
+    CREATE SCHEMA IF NOT EXISTS "CiTuS.TeeN";
+    CREATE SCHEMA IF NOT EXISTS "CiTUS.TEEN2";
 $$);
        run_command_on_workers        
 -------------------------------------
