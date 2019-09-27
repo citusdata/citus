@@ -9,7 +9,7 @@
  *	  Functions that could move later are AppendDefElem, AppendDefElemStrict, etc. These
  *	  should be reused across multiple statements and should live in their own deparse
  *	  file.
- * 
+ *
  * Copyright (c), Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
@@ -36,7 +36,9 @@
 #include "utils/fmgrprotos.h"
 #include "utils/guc.h"
 #include "utils/lsyscache.h"
+#include "utils/memutils.h"
 #include "utils/syscache.h"
+
 
 /* forward declaration for deparse functions */
 static void AppendAlterFunctionStmt(StringInfo buf, AlterFunctionStmt *stmt);
@@ -59,6 +61,7 @@ static void AppendAlterFunctionSchemaStmt(StringInfo buf, AlterObjectSchemaStmt 
 static void AppendAlterFunctionOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt);
 static void AppendAlterFunctionDependsStmt(StringInfo buf, AlterObjectDependsStmt *stmt);
 
+static char * CopyAndConvertToUpperCase(const char *str);
 
 /*
  * DeparseAlterFunctionStmt builds and returns a string representing the AlterFunctionStmt
@@ -175,7 +178,7 @@ AppendDefElemStrict(StringInfo buf, DefElem *def)
 static void
 AppendDefElemVolatility(StringInfo buf, DefElem *def)
 {
-	appendStringInfo(buf, " %s", strVal(def->arg));
+	appendStringInfo(buf, " %s", CopyAndConvertToUpperCase(strVal(def->arg)));
 }
 
 
@@ -216,7 +219,7 @@ AppendDefElemSecurity(StringInfo buf, DefElem *def)
 static void
 AppendDefElemParallel(StringInfo buf, DefElem *def)
 {
-	appendStringInfo(buf, " PARALLEL %s", strVal(def->arg));
+	appendStringInfo(buf, " PARALLEL %s", CopyAndConvertToUpperCase(strVal(def->arg)));
 }
 
 
@@ -628,4 +631,23 @@ AppendFunctionName(StringInfo buf, ObjectWithArgs *func, ObjectType objtype)
 	}
 
 	appendStringInfo(buf, "(%s)", args);
+}
+
+
+/*
+ * CopyAndConvertToUpperCase copies a string and converts all characters to uppercase
+ */
+static char *
+CopyAndConvertToUpperCase(const char *str)
+{
+	char *result, *p;
+
+	result = pstrdup(str);
+
+	for (p = result; *p; p++)
+	{
+		*p = pg_toupper((unsigned char) *p);
+	}
+
+	return result;
 }

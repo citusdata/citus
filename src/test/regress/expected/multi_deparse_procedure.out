@@ -42,273 +42,318 @@ CREATE FUNCTION deparse_test(text)
 	RETURNS text
 	AS 'citus'
  	LANGUAGE C STRICT;
--- Create a simple PROCEDURE
+CREATE FUNCTION deparse_and_run_on_workers(text)
+    RETURNS SETOF record
+    AS $fnc$
+    WITH deparsed_query AS ( SELECT deparse_test($1) qualified_query )
+    SELECT run_command_on_workers(qualified_query) FROM deparsed_query d 
+    $fnc$
+    LANGUAGE SQL;
+-- Create a simple PROCEDURE and distribute it
 CREATE OR REPLACE PROCEDURE raise_info(text)
 LANGUAGE PLPGSQL AS $proc$
 BEGIN
   RAISE INFO 'information message %', $1;
 END;
 $proc$;
-SELECT deparse_test($cmd$
+SELECT create_distributed_function('raise_info(text)');
+ create_distributed_function 
+-----------------------------
+ 
+(1 row)
+
+SELECT deparse_and_run_on_workers($cmd$
 ALTER PROCEDURE  raise_info CALLED ON NULL INPUT
 $cmd$);
-                              deparse_test                              
-------------------------------------------------------------------------
- ALTER PROCEDURE procedure_tests.raise_info(text) CALLED ON NULL INPUT;
-(1 row)
+                       deparse_and_run_on_workers                        
+-------------------------------------------------------------------------
+ (localhost,57637,f,"ERROR:  invalid attribute in procedure definition")
+ (localhost,57638,f,"ERROR:  invalid attribute in procedure definition")
+(2 rows)
 
-SELECT deparse_test($cmd$
+SELECT deparse_and_run_on_workers($cmd$
 ALTER PROCEDURE raise_info RETURNS NULL ON NULL INPUT
 $cmd$);
-                       deparse_test                       
-----------------------------------------------------------
- ALTER PROCEDURE procedure_tests.raise_info(text) STRICT;
-(1 row)
+                       deparse_and_run_on_workers                        
+-------------------------------------------------------------------------
+ (localhost,57637,f,"ERROR:  invalid attribute in procedure definition")
+ (localhost,57638,f,"ERROR:  invalid attribute in procedure definition")
+(2 rows)
 
-SELECT deparse_test($cmd$
+SELECT deparse_and_run_on_workers($cmd$
 ALTER PROCEDURE raise_info STRICT
 $cmd$);
-                       deparse_test                       
-----------------------------------------------------------
- ALTER PROCEDURE procedure_tests.raise_info(text) STRICT;
-(1 row)
+                       deparse_and_run_on_workers                        
+-------------------------------------------------------------------------
+ (localhost,57637,f,"ERROR:  invalid attribute in procedure definition")
+ (localhost,57638,f,"ERROR:  invalid attribute in procedure definition")
+(2 rows)
 
-SELECT deparse_test($cmd$
+SELECT deparse_and_run_on_workers($cmd$
 ALTER PROCEDURE raise_info IMMUTABLE
 $cmd$);
-                        deparse_test                         
--------------------------------------------------------------
- ALTER PROCEDURE procedure_tests.raise_info(text) immutable;
-(1 row)
+                       deparse_and_run_on_workers                        
+-------------------------------------------------------------------------
+ (localhost,57637,f,"ERROR:  invalid attribute in procedure definition")
+ (localhost,57638,f,"ERROR:  invalid attribute in procedure definition")
+(2 rows)
 
-SELECT deparse_test($cmd$
+SELECT deparse_and_run_on_workers($cmd$
 ALTER PROCEDURE raise_info STABLE
 $cmd$);
-                       deparse_test                       
-----------------------------------------------------------
- ALTER PROCEDURE procedure_tests.raise_info(text) stable;
-(1 row)
+                       deparse_and_run_on_workers                        
+-------------------------------------------------------------------------
+ (localhost,57637,f,"ERROR:  invalid attribute in procedure definition")
+ (localhost,57638,f,"ERROR:  invalid attribute in procedure definition")
+(2 rows)
 
-SELECT deparse_test($cmd$
+SELECT deparse_and_run_on_workers($cmd$
 ALTER PROCEDURE raise_info VOLATILE
 $cmd$);
-                        deparse_test                        
-------------------------------------------------------------
- ALTER PROCEDURE procedure_tests.raise_info(text) volatile;
-(1 row)
+                       deparse_and_run_on_workers                        
+-------------------------------------------------------------------------
+ (localhost,57637,f,"ERROR:  invalid attribute in procedure definition")
+ (localhost,57638,f,"ERROR:  invalid attribute in procedure definition")
+(2 rows)
 
-SELECT deparse_test($cmd$
+SELECT deparse_and_run_on_workers($cmd$
 ALTER PROCEDURE raise_info LEAKPROOF
 $cmd$);
-                        deparse_test                         
--------------------------------------------------------------
- ALTER PROCEDURE procedure_tests.raise_info(text) LEAKPROOF;
-(1 row)
+                       deparse_and_run_on_workers                        
+-------------------------------------------------------------------------
+ (localhost,57637,f,"ERROR:  invalid attribute in procedure definition")
+ (localhost,57638,f,"ERROR:  invalid attribute in procedure definition")
+(2 rows)
 
-SELECT deparse_test($cmd$
+SELECT deparse_and_run_on_workers($cmd$
 ALTER PROCEDURE raise_info NOT LEAKPROOF
 $cmd$);
-                          deparse_test                           
------------------------------------------------------------------
- ALTER PROCEDURE procedure_tests.raise_info(text) NOT LEAKPROOF;
-(1 row)
+                       deparse_and_run_on_workers                        
+-------------------------------------------------------------------------
+ (localhost,57637,f,"ERROR:  invalid attribute in procedure definition")
+ (localhost,57638,f,"ERROR:  invalid attribute in procedure definition")
+(2 rows)
 
-SELECT deparse_test($cmd$
+SELECT deparse_and_run_on_workers($cmd$
 ALTER  PROCEDURE raise_info EXTERNAL SECURITY INVOKER
 $cmd$);
-                            deparse_test                            
---------------------------------------------------------------------
- ALTER PROCEDURE procedure_tests.raise_info(text) SECURITY INVOKER;
-(1 row)
+      deparse_and_run_on_workers       
+---------------------------------------
+ (localhost,57637,t,"ALTER PROCEDURE")
+ (localhost,57638,t,"ALTER PROCEDURE")
+(2 rows)
 
-SELECT deparse_test($cmd$
+SELECT deparse_and_run_on_workers($cmd$
 ALTER PROCEDURE raise_info SECURITY INVOKER
 $cmd$);
-                            deparse_test                            
---------------------------------------------------------------------
- ALTER PROCEDURE procedure_tests.raise_info(text) SECURITY INVOKER;
-(1 row)
+      deparse_and_run_on_workers       
+---------------------------------------
+ (localhost,57637,t,"ALTER PROCEDURE")
+ (localhost,57638,t,"ALTER PROCEDURE")
+(2 rows)
 
-SELECT deparse_test($cmd$
+SELECT deparse_and_run_on_workers($cmd$
 ALTER  PROCEDURE raise_info EXTERNAL SECURITY DEFINER
 $cmd$);
-                            deparse_test                            
---------------------------------------------------------------------
- ALTER PROCEDURE procedure_tests.raise_info(text) SECURITY DEFINER;
-(1 row)
+      deparse_and_run_on_workers       
+---------------------------------------
+ (localhost,57637,t,"ALTER PROCEDURE")
+ (localhost,57638,t,"ALTER PROCEDURE")
+(2 rows)
 
-SELECT deparse_test($cmd$
+SELECT deparse_and_run_on_workers($cmd$
 ALTER PROCEDURE raise_info SECURITY DEFINER
 $cmd$);
-                            deparse_test                            
---------------------------------------------------------------------
- ALTER PROCEDURE procedure_tests.raise_info(text) SECURITY DEFINER;
-(1 row)
+      deparse_and_run_on_workers       
+---------------------------------------
+ (localhost,57637,t,"ALTER PROCEDURE")
+ (localhost,57638,t,"ALTER PROCEDURE")
+(2 rows)
 
-SELECT deparse_test($cmd$
+SELECT deparse_and_run_on_workers($cmd$
 ALTER PROCEDURE raise_info PARALLEL UNSAFE
 $cmd$);
-                           deparse_test                            
--------------------------------------------------------------------
- ALTER PROCEDURE procedure_tests.raise_info(text) PARALLEL unsafe;
-(1 row)
+                       deparse_and_run_on_workers                        
+-------------------------------------------------------------------------
+ (localhost,57637,f,"ERROR:  invalid attribute in procedure definition")
+ (localhost,57638,f,"ERROR:  invalid attribute in procedure definition")
+(2 rows)
 
-SELECT deparse_test($cmd$
+SELECT deparse_and_run_on_workers($cmd$
 ALTER PROCEDURE raise_info PARALLEL RESTRICTED
 $cmd$);
-                             deparse_test                              
------------------------------------------------------------------------
- ALTER PROCEDURE procedure_tests.raise_info(text) PARALLEL restricted;
-(1 row)
+                       deparse_and_run_on_workers                        
+-------------------------------------------------------------------------
+ (localhost,57637,f,"ERROR:  invalid attribute in procedure definition")
+ (localhost,57638,f,"ERROR:  invalid attribute in procedure definition")
+(2 rows)
 
-SELECT deparse_test($cmd$
+SELECT deparse_and_run_on_workers($cmd$
 ALTER PROCEDURE raise_info PARALLEL SAFE
 $cmd$);
-                          deparse_test                           
------------------------------------------------------------------
- ALTER PROCEDURE procedure_tests.raise_info(text) PARALLEL safe;
-(1 row)
+                       deparse_and_run_on_workers                        
+-------------------------------------------------------------------------
+ (localhost,57637,f,"ERROR:  invalid attribute in procedure definition")
+ (localhost,57638,f,"ERROR:  invalid attribute in procedure definition")
+(2 rows)
 
 -- The COST/ROWS arguments should always be numeric
-SELECT deparse_test($cmd$
+SELECT deparse_and_run_on_workers($cmd$
 ALTER PROCEDURE raise_info COST 1234
 $cmd$);
-                            deparse_test                            
---------------------------------------------------------------------
- ALTER PROCEDURE procedure_tests.raise_info(text) COST 1234.000000;
-(1 row)
+                       deparse_and_run_on_workers                        
+-------------------------------------------------------------------------
+ (localhost,57637,f,"ERROR:  invalid attribute in procedure definition")
+ (localhost,57638,f,"ERROR:  invalid attribute in procedure definition")
+(2 rows)
 
-SELECT deparse_test($cmd$
+SELECT deparse_and_run_on_workers($cmd$
 ALTER  PROCEDURE raise_info COST 1234.5
 $cmd$);
-                            deparse_test                            
---------------------------------------------------------------------
- ALTER PROCEDURE procedure_tests.raise_info(text) COST 1234.500000;
-(1 row)
+                       deparse_and_run_on_workers                        
+-------------------------------------------------------------------------
+ (localhost,57637,f,"ERROR:  invalid attribute in procedure definition")
+ (localhost,57638,f,"ERROR:  invalid attribute in procedure definition")
+(2 rows)
 
-SELECT deparse_test($cmd$
+SELECT deparse_and_run_on_workers($cmd$
 ALTER PROCEDURE raise_info ROWS 10
 $cmd$);
-                           deparse_test                            
--------------------------------------------------------------------
- ALTER PROCEDURE procedure_tests.raise_info(text) ROWS  10.000000;
-(1 row)
+                       deparse_and_run_on_workers                        
+-------------------------------------------------------------------------
+ (localhost,57637,f,"ERROR:  invalid attribute in procedure definition")
+ (localhost,57638,f,"ERROR:  invalid attribute in procedure definition")
+(2 rows)
 
-SELECT deparse_test($cmd$
+SELECT deparse_and_run_on_workers($cmd$
 ALTER  PROCEDURE raise_info ROWS 10.8
 $cmd$);
-                           deparse_test                            
--------------------------------------------------------------------
- ALTER PROCEDURE procedure_tests.raise_info(text) ROWS  10.800000;
-(1 row)
+                       deparse_and_run_on_workers                        
+-------------------------------------------------------------------------
+ (localhost,57637,f,"ERROR:  invalid attribute in procedure definition")
+ (localhost,57638,f,"ERROR:  invalid attribute in procedure definition")
+(2 rows)
 
-SELECT deparse_test($cmd$
+SELECT deparse_and_run_on_workers($cmd$
 ALTER PROCEDURE  raise_info SET log_min_messages = ERROR
 $cmd$);
-                                  deparse_test                                  
---------------------------------------------------------------------------------
- ALTER PROCEDURE procedure_tests.raise_info(text) SET log_min_messages = error;
-(1 row)
+      deparse_and_run_on_workers       
+---------------------------------------
+ (localhost,57637,t,"ALTER PROCEDURE")
+ (localhost,57638,t,"ALTER PROCEDURE")
+(2 rows)
 
-SELECT deparse_test($cmd$
+SELECT deparse_and_run_on_workers($cmd$
 ALTER PROCEDURE  raise_info SET log_min_messages TO DEFAULT
 $cmd$);
-                                   deparse_test                                    
------------------------------------------------------------------------------------
- ALTER PROCEDURE procedure_tests.raise_info(text) SET log_min_messages TO DEFAULT;
-(1 row)
+      deparse_and_run_on_workers       
+---------------------------------------
+ (localhost,57637,t,"ALTER PROCEDURE")
+ (localhost,57638,t,"ALTER PROCEDURE")
+(2 rows)
 
-SELECT deparse_test($cmd$
+SELECT deparse_and_run_on_workers($cmd$
 ALTER PROCEDURE  raise_info SET log_min_messages FROM CURRENT
 $cmd$);
-                                    deparse_test                                     
--------------------------------------------------------------------------------------
- ALTER PROCEDURE procedure_tests.raise_info(text) SET log_min_messages FROM CURRENT;
-(1 row)
+      deparse_and_run_on_workers       
+---------------------------------------
+ (localhost,57637,t,"ALTER PROCEDURE")
+ (localhost,57638,t,"ALTER PROCEDURE")
+(2 rows)
 
-SELECT deparse_test($cmd$
+SELECT deparse_and_run_on_workers($cmd$
 ALTER PROCEDURE raise_info RESET log_min_messages
 $cmd$);
-                               deparse_test                               
---------------------------------------------------------------------------
- ALTER PROCEDURE procedure_tests.raise_info(text) RESET log_min_messages;
-(1 row)
+      deparse_and_run_on_workers       
+---------------------------------------
+ (localhost,57637,t,"ALTER PROCEDURE")
+ (localhost,57638,t,"ALTER PROCEDURE")
+(2 rows)
 
-SELECT deparse_test($cmd$
+SELECT deparse_and_run_on_workers($cmd$
 ALTER PROCEDURE raise_info RESET ALL
 $cmd$);
-                        deparse_test                         
--------------------------------------------------------------
- ALTER PROCEDURE procedure_tests.raise_info(text) RESET ALL;
-(1 row)
+      deparse_and_run_on_workers       
+---------------------------------------
+ (localhost,57637,t,"ALTER PROCEDURE")
+ (localhost,57638,t,"ALTER PROCEDURE")
+(2 rows)
 
-SELECT deparse_test($cmd$
+SELECT deparse_and_run_on_workers($cmd$
 ALTER PROCEDURE raise_info RENAME TO summation
 $cmd$);
-                             deparse_test                              
------------------------------------------------------------------------
- ALTER PROCEDURE procedure_tests.raise_info(text) RENAME TO summation;
-(1 row)
+      deparse_and_run_on_workers       
+---------------------------------------
+ (localhost,57637,t,"ALTER PROCEDURE")
+ (localhost,57638,t,"ALTER PROCEDURE")
+(2 rows)
 
 CREATE ROLE PROCEDURE_role;
 NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
 HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
-SELECT deparse_test($cmd$
+SELECT deparse_and_run_on_workers($cmd$
 ALTER PROCEDURE raise_info OWNER TO PROCEDURE_role
 $cmd$);
-                               deparse_test                                
----------------------------------------------------------------------------
- ALTER PROCEDURE procedure_tests.raise_info(text) OWNER TO procedure_role;
-(1 row)
+                      deparse_and_run_on_workers                      
+----------------------------------------------------------------------
+ (localhost,57637,f,"ERROR:  role ""procedure_role"" does not exist")
+ (localhost,57638,f,"ERROR:  role ""procedure_role"" does not exist")
+(2 rows)
 
-SELECT deparse_test($cmd$
+SELECT deparse_and_run_on_workers($cmd$
 ALTER PROCEDURE raise_info OWNER TO missing_role
 $cmd$);
-                              deparse_test                               
--------------------------------------------------------------------------
- ALTER PROCEDURE procedure_tests.raise_info(text) OWNER TO missing_role;
-(1 row)
+                     deparse_and_run_on_workers                     
+--------------------------------------------------------------------
+ (localhost,57637,f,"ERROR:  role ""missing_role"" does not exist")
+ (localhost,57638,f,"ERROR:  role ""missing_role"" does not exist")
+(2 rows)
 
-SELECT deparse_test($cmd$
+SELECT deparse_and_run_on_workers($cmd$
 ALTER PROCEDURE raise_info SET SCHEMA public
 $cmd$);
-                            deparse_test                             
----------------------------------------------------------------------
- ALTER PROCEDURE procedure_tests.raise_info(text) SET SCHEMA public;
-(1 row)
+                               deparse_and_run_on_workers                                
+-----------------------------------------------------------------------------------------
+ (localhost,57637,f,"ERROR:  procedure procedure_tests.raise_info(text) does not exist")
+ (localhost,57638,f,"ERROR:  procedure procedure_tests.raise_info(text) does not exist")
+(2 rows)
 
-SELECT deparse_test($cmd$
+SELECT deparse_and_run_on_workers($cmd$
 ALTER PROCEDURE raise_info DEPENDS ON EXTENSION citus
 $cmd$);
-                                 deparse_test                                 
-------------------------------------------------------------------------------
- ALTER PROCEDURE procedure_tests.raise_info(text) DEPENDS ON EXTENSION citus;
-(1 row)
+                               deparse_and_run_on_workers                                
+-----------------------------------------------------------------------------------------
+ (localhost,57637,f,"ERROR:  procedure procedure_tests.raise_info(text) does not exist")
+ (localhost,57638,f,"ERROR:  procedure procedure_tests.raise_info(text) does not exist")
+(2 rows)
 
-SELECT deparse_test($cmd$
+SELECT deparse_and_run_on_workers($cmd$
 DROP PROCEDURE IF EXISTS raise_info(int,int);
 $cmd$);
-                             deparse_test                              
------------------------------------------------------------------------
- DROP PROCEDURE IF EXISTS raise_info(pg_catalog.int4,pg_catalog.int4);
-(1 row)
+      deparse_and_run_on_workers      
+--------------------------------------
+ (localhost,57637,t,"DROP PROCEDURE")
+ (localhost,57638,t,"DROP PROCEDURE")
+(2 rows)
 
 -- Check that an invalid PROCEDURE name is still parsed correctly
-SELECT deparse_test($cmd$
+SELECT deparse_and_run_on_workers($cmd$
 DROP PROCEDURE IF EXISTS missing_PROCEDURE(int, text);
 $cmd$);
-                           deparse_test                            
--------------------------------------------------------------------
- DROP PROCEDURE IF EXISTS missing_procedure(pg_catalog.int4,text);
-(1 row)
+      deparse_and_run_on_workers      
+--------------------------------------
+ (localhost,57637,t,"DROP PROCEDURE")
+ (localhost,57638,t,"DROP PROCEDURE")
+(2 rows)
 
-SELECT deparse_test($cmd$
+SELECT deparse_and_run_on_workers($cmd$
 DROP PROCEDURE IF EXISTS missing_schema.missing_PROCEDURE(int,float);
 $cmd$);
-                                         deparse_test                                          
------------------------------------------------------------------------------------------------
- DROP PROCEDURE IF EXISTS missing_schema.missing_procedure(pg_catalog.int4,pg_catalog.float8);
-(1 row)
+      deparse_and_run_on_workers      
+--------------------------------------
+ (localhost,57637,t,"DROP PROCEDURE")
+ (localhost,57638,t,"DROP PROCEDURE")
+(2 rows)
 
 -- clear objects
 SET client_min_messages TO WARNING; -- suppress cascading objects dropping
