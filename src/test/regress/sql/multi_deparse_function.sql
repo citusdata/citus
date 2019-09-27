@@ -32,6 +32,7 @@
 --     [ CASCADE | RESTRICT ]
 
 SET citus.next_shard_id TO 20020000;
+SET citus.enable_ddl_propagation TO off;
 
 CREATE SCHEMA function_tests;
 SET search_path TO function_tests;

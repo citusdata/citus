@@ -76,6 +76,12 @@ GetObjectAddressFromParseTree(Node *parseTree, bool missing_ok)
 											   missing_ok);
 		}
 
+		case T_AlterFunctionStmt:
+		{
+			return AlterFunctionStmtObjectAddress(castNode(AlterFunctionStmt, parseTree),
+												  missing_ok);
+		}
+
 		default:
 		{
 			/*
@@ -123,6 +129,14 @@ RenameStmtObjectAddress(RenameStmt *stmt, bool missing_ok)
 			return RenameAttributeStmtObjectAddress(stmt, missing_ok);
 		}
 
+#if PG_VERSION_NUM > 110000
+		case OBJECT_PROCEDURE:
+#endif
+		case OBJECT_FUNCTION:
+		{
+			return RenameFunctionStmtObjectAddress(stmt, missing_ok);
+		}
+
 		default:
 		{
 			ereport(ERROR, (errmsg("unsupported rename statement to get object address "
@@ -140,6 +154,14 @@ AlterObjectSchemaStmtObjectAddress(AlterObjectSchemaStmt *stmt, bool missing_ok)
 		case OBJECT_TYPE:
 		{
 			return AlterTypeSchemaStmtObjectAddress(stmt, missing_ok);
+		}
+
+#if PG_VERSION_NUM > 110000
+		case OBJECT_PROCEDURE:
+#endif
+		case OBJECT_FUNCTION:
+		{
+			return AlterFunctionSchemaStmtObjectAddress(stmt, missing_ok);
 		}
 
 		default:
@@ -180,6 +202,14 @@ AlterOwnerStmtObjectAddress(AlterOwnerStmt *stmt, bool missing_ok)
 		case OBJECT_TYPE:
 		{
 			return AlterTypeOwnerObjectAddress(stmt, missing_ok);
+		}
+
+#if PG_VERSION_NUM > 110000
+		case OBJECT_PROCEDURE:
+#endif
+		case OBJECT_FUNCTION:
+		{
+			return AlterFunctionOwnerObjectAddress(stmt, missing_ok);
 		}
 
 		default:

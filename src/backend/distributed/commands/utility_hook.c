@@ -424,6 +424,14 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 					break;
 				}
 
+#if PG_VERSION_NUM > 110000
+				case OBJECT_PROCEDURE:
+#endif
+				case OBJECT_FUNCTION:
+				{
+					ddlJobs = PlanDropFunctionStmt(dropStatement, queryString);
+				}
+
 				default:
 				{
 					/* unsupported type, skipping*/
@@ -471,6 +479,15 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 				case OBJECT_ATTRIBUTE:
 				{
 					ddlJobs = PlanRenameAttributeStmt(renameStmt, queryString);
+					break;
+				}
+
+#if PG_VERSION_NUM > 110000
+				case OBJECT_PROCEDURE:
+#endif
+				case OBJECT_FUNCTION:
+				{
+					ddlJobs = PlanRenameFunctionStmt(renameStmt, queryString);
 					break;
 				}
 
@@ -529,6 +546,12 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		{
 			ddlJobs = PlanCreateEnumStmt(castNode(CreateEnumStmt, parsetree),
 										 queryString);
+		}
+
+		if (IsA(parsetree, AlterFunctionStmt))
+		{
+			ddlJobs = PlanAlterFunctionStmt(castNode(AlterFunctionStmt, parsetree),
+											queryString);
 		}
 
 		/*
@@ -797,6 +820,14 @@ PlanAlterOwnerStmt(AlterOwnerStmt *stmt, const char *queryString)
 		case OBJECT_TYPE:
 		{
 			return PlanAlterTypeOwnerStmt(stmt, queryString);
+		}
+
+#if PG_VERSION_NUM > 110000
+		case OBJECT_PROCEDURE:
+#endif
+		case OBJECT_FUNCTION:
+		{
+			return PlanAlterFunctionOwnerStmt(stmt, queryString);
 		}
 
 		default:

@@ -282,6 +282,7 @@ test: ssl_by_default
 # ---------
 test: distributed_types distributed_types_conflict disable_object_propagation
 test: distributed_functions
+test: distributed_procedure
 
 # ---------
 # deparsing logic tests

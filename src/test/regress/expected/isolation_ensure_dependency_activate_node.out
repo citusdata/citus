@@ -1571,7 +1571,7 @@ master_remove_node
                
                
 
-starting permutation: s1-print-distributed-objects s1-begin s1-add-worker s2-public-schema s2-distribute-function s1-commit s2-begin s2-commit s3-wait-for-metadata-sync s1-print-distributed-objects
+starting permutation: s1-print-distributed-objects s1-begin s1-add-worker s2-public-schema s2-distribute-function s1-commit s2-begin s2-commit s3-wait-for-metadata-sync s2-print-distributed-objects
 ?column?       
 
 1              
@@ -1659,9 +1659,7 @@ step s3-wait-for-metadata-sync:
 wait_until_metadata_sync
 
                
-step s1-print-distributed-objects: 
-    SELECT 1 FROM master_add_node('localhost', 57638);
-
+step s2-print-distributed-objects: 
     -- print an overview of all distributed objects
     SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
 
@@ -1677,11 +1675,6 @@ step s1-print-distributed-objects:
     SELECT count(*) FROM pg_proc WHERE proname='add';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
 
-    SELECT master_remove_node('localhost', 57638);
-
-?column?       
-
-1              
 pg_identify_object_as_address
 
 (function,"{public,add}","{integer,integer}")
@@ -1706,9 +1699,6 @@ run_command_on_workers
 
 (localhost,57637,t,1)
 (localhost,57638,t,1)
-master_remove_node
-
-               
 master_remove_node
 
                
