@@ -434,7 +434,6 @@ static char *generate_function_name(Oid funcid, int nargs,
 					   List *argnames, Oid *argtypes,
 					   bool has_variadic, bool *use_variadic_p,
 					   ParseExprKind special_exprkind);
-static char *generate_operator_name(Oid operid, Oid arg1, Oid arg2);
 
 #define only_marker(rte)  ((rte)->inh ? "" : "ONLY ")
 
@@ -7878,7 +7877,7 @@ generate_function_name(Oid funcid, int nargs, List *argnames, Oid *argtypes,
  * plus the OPERATOR() decoration needed to use a qualified operator name
  * in an expression.
  */
-static char *
+char *
 generate_operator_name(Oid operid, Oid arg1, Oid arg2)
 {
 	StringInfoData buf;

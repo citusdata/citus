@@ -119,7 +119,7 @@ GROUP BY(1);
 ------------------------------------------------------------------------
  HashAggregate
    Group Key: remote_scan.day
-   ->  Custom Scan (Citus Real-Time)
+   ->  Custom Scan (Citus Adaptive)
          Task Count: 4
          Tasks Shown: All
          ->  Task
@@ -157,7 +157,7 @@ GROUP BY(1);
    Group Key: remote_scan.day
    ->  Sort
          Sort Key: remote_scan.day
-         ->  Custom Scan (Citus Real-Time)
+         ->  Custom Scan (Citus Adaptive)
                Task Count: 4
                Tasks Shown: All
                ->  Task
@@ -194,7 +194,7 @@ GROUP BY(1);
 ------------------------------------------------------------------------
  HashAggregate
    Group Key: remote_scan.day
-   ->  Custom Scan (Citus Real-Time)
+   ->  Custom Scan (Citus Adaptive)
          Task Count: 4
          Tasks Shown: All
          ->  Task
@@ -232,7 +232,7 @@ GROUP BY(1);
    Group Key: remote_scan.day
    ->  Sort
          Sort Key: remote_scan.day
-         ->  Custom Scan (Citus Real-Time)
+         ->  Custom Scan (Citus Adaptive)
                Task Count: 4
                Tasks Shown: All
                ->  Task
@@ -269,7 +269,7 @@ GROUP BY(1);
 ------------------------------------------------------------------------
  HashAggregate
    Group Key: remote_scan.day
-   ->  Custom Scan (Citus Real-Time)
+   ->  Custom Scan (Citus Adaptive)
          Task Count: 4
          Tasks Shown: All
          ->  Task
@@ -307,7 +307,7 @@ GROUP BY(1);
    Group Key: remote_scan.day
    ->  Sort
          Sort Key: remote_scan.day
-         ->  Custom Scan (Citus Real-Time)
+         ->  Custom Scan (Citus Adaptive)
                Task Count: 4
                Tasks Shown: All
                ->  Task
@@ -344,7 +344,7 @@ GROUP BY(1);
 ------------------------------------------------------------------------
  HashAggregate
    Group Key: remote_scan.day
-   ->  Custom Scan (Citus Real-Time)
+   ->  Custom Scan (Citus Adaptive)
          Task Count: 4
          Tasks Shown: All
          ->  Task
@@ -384,7 +384,7 @@ HAVING hll_cardinality(hll_union_agg(unique_users)) > 1;
    Filter: (hll_cardinality(hll_union_agg(remote_scan.worker_column_3)) > '1'::double precision)
    ->  Sort
          Sort Key: remote_scan.day
-         ->  Custom Scan (Citus Real-Time)
+         ->  Custom Scan (Citus Adaptive)
                Task Count: 4
                Tasks Shown: All
                ->  Task
