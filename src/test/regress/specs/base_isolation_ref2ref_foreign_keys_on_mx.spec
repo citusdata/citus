@@ -1,20 +1,5 @@
-setup
+setup 
 {
-    SELECT citus_internal.replace_isolation_tester_func();
-  	SELECT citus_internal.refresh_isolation_tester_prepared_statement();
-
-	-- start_metadata_sync_to_node can not be run inside a transaction block.
-	-- Following is a workaround to overcome that. Port numbers are hard coded
-	-- at the moment.
-	SELECT master_run_on_worker(
-		ARRAY['localhost']::text[],
-		ARRAY[57636]::int[],
-		ARRAY[format('SELECT start_metadata_sync_to_node(''%s'', %s)', nodename, nodeport)]::text[],
-		false)
-	FROM pg_dist_node;
-
-	SET citus.replication_model to streaming;
-
     CREATE TABLE ref_table_1(id int PRIMARY KEY, value int);
 	SELECT create_reference_table('ref_table_1');
 
