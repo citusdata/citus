@@ -29,7 +29,7 @@ static void QualifyRenameAttributeStmt(RenameStmt *stmt);
 static void QualifyAlterTableStmt(AlterTableStmt *stmt);
 static void QualifyAlterObjectSchemaStmt(AlterObjectSchemaStmt *stmt);
 static void QualifyAlterOwnerStmt(AlterOwnerStmt *stmt);
-
+static void QualifyAlterObjectDependsStmt(AlterObjectDependsStmt *stmt);
 
 /*
  * QualifyTreeNode transforms the statement in place and makes all (supported) statements
@@ -83,6 +83,18 @@ QualifyTreeNode(Node *stmt)
 			return;
 		}
 
+		case T_AlterFunctionStmt:
+		{
+			QualifyAlterFunctionStmt(castNode(AlterFunctionStmt, stmt));
+			return;
+		}
+
+		case T_AlterObjectDependsStmt:
+		{
+			QualifyAlterObjectDependsStmt(castNode(AlterObjectDependsStmt, stmt));
+			return;
+		}
+
 		default:
 		{
 			/* skip unsupported statements */
@@ -92,6 +104,10 @@ QualifyTreeNode(Node *stmt)
 }
 
 
+/*
+ * QualifyRenameStmt transforms a RENAME statement in place and makes all (supported)
+ * statements fully qualified.
+ */
 static void
 QualifyRenameStmt(RenameStmt *stmt)
 {
@@ -109,6 +125,14 @@ QualifyRenameStmt(RenameStmt *stmt)
 			return;
 		}
 
+		case OBJECT_FUNCTION:
+#if PG_VERSION_NUM >= 110000
+		case OBJECT_PROCEDURE:
+#endif
+			{
+				QualifyRenameFunctionStmt(stmt);
+			}
+
 		default:
 		{
 			/* skip unsupported statements */
@@ -118,6 +142,10 @@ QualifyRenameStmt(RenameStmt *stmt)
 }
 
 
+/*
+ * QualifyRenameAttributeStmt transforms a RENAME ATTRIBUTE statement in place and makes all (supported)
+ * statements fully qualified.
+ */
 static void
 QualifyRenameAttributeStmt(RenameStmt *stmt)
 {
@@ -170,6 +198,14 @@ QualifyAlterObjectSchemaStmt(AlterObjectSchemaStmt *stmt)
 			return;
 		}
 
+		case OBJECT_FUNCTION:
+#if PG_VERSION_NUM >= 110000
+		case OBJECT_PROCEDURE:
+#endif
+			{
+				QualifyAlterFunctionSchemaStmt(stmt);
+			}
+
 		default:
 		{
 			/* skip unsupported statements */
@@ -189,6 +225,35 @@ QualifyAlterOwnerStmt(AlterOwnerStmt *stmt)
 			QualifyAlterTypeOwnerStmt(stmt);
 			return;
 		}
+
+		case OBJECT_FUNCTION:
+#if PG_VERSION_NUM >= 110000
+		case OBJECT_PROCEDURE:
+#endif
+			{
+				QualifyAlterFunctionOwnerStmt(stmt);
+			}
+
+		default:
+		{
+			return;
+		}
+	}
+}
+
+
+static void
+QualifyAlterObjectDependsStmt(AlterObjectDependsStmt *stmt)
+{
+	switch (stmt->objectType)
+	{
+		case OBJECT_FUNCTION:
+#if PG_VERSION_NUM >= 110000
+		case OBJECT_PROCEDURE:
+#endif
+			{
+				QualifyAlterFunctionDependsStmt(stmt);
+			}
 
 		default:
 		{
