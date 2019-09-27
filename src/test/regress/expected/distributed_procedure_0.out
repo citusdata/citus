@@ -34,24 +34,71 @@ SELECT * FROM run_command_on_workers($$CALL procedure_tests.raise_info('hello');
  localhost |    57638 | f       | ERROR:  syntax error at or near "CALL"
 (2 rows)
 
+SELECT public.verify_function_is_same_on_workers('procedure_tests.raise_info(text)');
+ERROR:  function "procedure_tests.raise_info(text)" does not exist
+CONTEXT:  SQL statement "SELECT pg_get_functiondef(funcname::regprocedure)"
+PL/pgSQL function public.verify_function_is_same_on_workers(text) line 6 at SQL statement
 -- testing alter statements for a distributed function
 -- ROWS 5, untested because;
 -- ERROR:  ROWS is not applicable when function does not return a set
--- TODO verify settings are changed on remotes
 ALTER PROCEDURE raise_info(text) SECURITY INVOKER;
 ERROR:  syntax error at or near "PROCEDURE"
 LINE 1: ALTER PROCEDURE raise_info(text) SECURITY INVOKER;
               ^
+SELECT public.verify_function_is_same_on_workers('procedure_tests.raise_info(text)');
+ERROR:  function "procedure_tests.raise_info(text)" does not exist
+CONTEXT:  SQL statement "SELECT pg_get_functiondef(funcname::regprocedure)"
+PL/pgSQL function public.verify_function_is_same_on_workers(text) line 6 at SQL statement
 ALTER PROCEDURE raise_info(text) SECURITY DEFINER;
 ERROR:  syntax error at or near "PROCEDURE"
 LINE 1: ALTER PROCEDURE raise_info(text) SECURITY DEFINER;
               ^
--- TODO test SET/RESET
+SELECT public.verify_function_is_same_on_workers('procedure_tests.raise_info(text)');
+ERROR:  function "procedure_tests.raise_info(text)" does not exist
+CONTEXT:  SQL statement "SELECT pg_get_functiondef(funcname::regprocedure)"
+PL/pgSQL function public.verify_function_is_same_on_workers(text) line 6 at SQL statement
+-- Test SET/RESET for alter procedure
+ALTER PROCEDURE raise_info(text) SET client_min_messages TO warning;
+ERROR:  syntax error at or near "PROCEDURE"
+LINE 1: ALTER PROCEDURE raise_info(text) SET client_min_messages TO ...
+              ^
+SELECT public.verify_function_is_same_on_workers('procedure_tests.raise_info(text)');
+ERROR:  function "procedure_tests.raise_info(text)" does not exist
+CONTEXT:  SQL statement "SELECT pg_get_functiondef(funcname::regprocedure)"
+PL/pgSQL function public.verify_function_is_same_on_workers(text) line 6 at SQL statement
+ALTER PROCEDURE raise_info(text) SET client_min_messages TO error;
+ERROR:  syntax error at or near "PROCEDURE"
+LINE 1: ALTER PROCEDURE raise_info(text) SET client_min_messages TO ...
+              ^
+SELECT public.verify_function_is_same_on_workers('procedure_tests.raise_info(text)');
+ERROR:  function "procedure_tests.raise_info(text)" does not exist
+CONTEXT:  SQL statement "SELECT pg_get_functiondef(funcname::regprocedure)"
+PL/pgSQL function public.verify_function_is_same_on_workers(text) line 6 at SQL statement
+ALTER PROCEDURE raise_info(text) SET client_min_messages TO debug;
+ERROR:  syntax error at or near "PROCEDURE"
+LINE 1: ALTER PROCEDURE raise_info(text) SET client_min_messages TO ...
+              ^
+SELECT public.verify_function_is_same_on_workers('procedure_tests.raise_info(text)');
+ERROR:  function "procedure_tests.raise_info(text)" does not exist
+CONTEXT:  SQL statement "SELECT pg_get_functiondef(funcname::regprocedure)"
+PL/pgSQL function public.verify_function_is_same_on_workers(text) line 6 at SQL statement
+ALTER PROCEDURE raise_info(text) RESET client_min_messages;
+ERROR:  syntax error at or near "PROCEDURE"
+LINE 1: ALTER PROCEDURE raise_info(text) RESET client_min_messages;
+              ^
+SELECT public.verify_function_is_same_on_workers('procedure_tests.raise_info(text)');
+ERROR:  function "procedure_tests.raise_info(text)" does not exist
+CONTEXT:  SQL statement "SELECT pg_get_functiondef(funcname::regprocedure)"
+PL/pgSQL function public.verify_function_is_same_on_workers(text) line 6 at SQL statement
 -- rename function and make sure the new name can be used on the workers while the old name can't
 ALTER PROCEDURE raise_info(text) RENAME TO raise_info2;
 ERROR:  syntax error at or near "PROCEDURE"
 LINE 1: ALTER PROCEDURE raise_info(text) RENAME TO raise_info2;
               ^
+SELECT public.verify_function_is_same_on_workers('procedure_tests.raise_info2(text)');
+ERROR:  function "procedure_tests.raise_info2(text)" does not exist
+CONTEXT:  SQL statement "SELECT pg_get_functiondef(funcname::regprocedure)"
+PL/pgSQL function public.verify_function_is_same_on_workers(text) line 6 at SQL statement
 SELECT * FROM run_command_on_workers($$CALL procedure_tests.raise_info('hello');$$) ORDER BY 1,2;
  nodename  | nodeport | success |                 result                 
 -----------+----------+---------+----------------------------------------
@@ -75,6 +122,10 @@ ALTER PROCEDURE raise_info(text) OWNER TO procedureuser;
 ERROR:  syntax error at or near "PROCEDURE"
 LINE 1: ALTER PROCEDURE raise_info(text) OWNER TO procedureuser;
               ^
+SELECT public.verify_function_is_same_on_workers('procedure_tests.raise_info(text)');
+ERROR:  function "procedure_tests.raise_info(text)" does not exist
+CONTEXT:  SQL statement "SELECT pg_get_functiondef(funcname::regprocedure)"
+PL/pgSQL function public.verify_function_is_same_on_workers(text) line 6 at SQL statement
 SELECT run_command_on_workers($$
 SELECT row(usename, nspname, proname)
 FROM pg_proc
@@ -94,6 +145,10 @@ ALTER PROCEDURE raise_info(text) SET SCHEMA procedure_tests2;
 ERROR:  syntax error at or near "PROCEDURE"
 LINE 1: ALTER PROCEDURE raise_info(text) SET SCHEMA procedure_tests2...
               ^
+SELECT public.verify_function_is_same_on_workers('procedure_tests2.raise_info(text)');
+ERROR:  function "procedure_tests2.raise_info(text)" does not exist
+CONTEXT:  SQL statement "SELECT pg_get_functiondef(funcname::regprocedure)"
+PL/pgSQL function public.verify_function_is_same_on_workers(text) line 6 at SQL statement
 SELECT * FROM run_command_on_workers($$CALL procedure_tests.raise_info('hello');$$) ORDER BY 1,2;
  nodename  | nodeport | success |                 result                 
 -----------+----------+---------+----------------------------------------
