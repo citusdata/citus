@@ -89,29 +89,37 @@ SELECT * FROM run_command_on_workers('SELECT function_tests.dup(42);') ORDER BY 
 
 SELECT create_distributed_function('add(int,int)', '$1');
 SELECT * FROM run_command_on_workers('SELECT function_tests.add(2,3);') ORDER BY 1,2;
+SELECT public.verify_function_is_same_on_workers('function_tests.add(int,int)');
 
 -- testing alter statements for a distributed function
 -- ROWS 5, untested because;
 -- ERROR:  ROWS is not applicable when function does not return a set
--- TODO verify settings are changed on remotes
 ALTER FUNCTION add(int,int) CALLED ON NULL INPUT IMMUTABLE SECURITY INVOKER PARALLEL UNSAFE LEAKPROOF COST 5;
+SELECT public.verify_function_is_same_on_workers('function_tests.add(int,int)');
 ALTER FUNCTION add(int,int) RETURNS NULL ON NULL INPUT STABLE SECURITY DEFINER PARALLEL RESTRICTED;
+SELECT public.verify_function_is_same_on_workers('function_tests.add(int,int)');
 ALTER FUNCTION add(int,int) STRICT VOLATILE PARALLEL SAFE;
+SELECT public.verify_function_is_same_on_workers('function_tests.add(int,int)');
 -- TODO test SET/RESET
 
 -- SET ... FROM CURRENT is not supported, verify the query fails with a descriptive error irregardless of where in the action list the statement occurs
 ALTER FUNCTION add(int,int) SET client_min_messages FROM CURRENT;
+SELECT public.verify_function_is_same_on_workers('function_tests.add(int,int)');
 ALTER FUNCTION add(int,int) RETURNS NULL ON NULL INPUT SET client_min_messages FROM CURRENT;
+SELECT public.verify_function_is_same_on_workers('function_tests.add(int,int)');
 ALTER FUNCTION add(int,int) SET client_min_messages FROM CURRENT SECURITY DEFINER;
+SELECT public.verify_function_is_same_on_workers('function_tests.add(int,int)');
 
 -- rename function and make sure the new name can be used on the workers while the old name can't
 ALTER FUNCTION add(int,int) RENAME TO add2;
+SELECT public.verify_function_is_same_on_workers('function_tests.add2(int,int)');
 SELECT * FROM run_command_on_workers('SELECT function_tests.add(2,3);') ORDER BY 1,2;
 SELECT * FROM run_command_on_workers('SELECT function_tests.add2(2,3);') ORDER BY 1,2;
 ALTER FUNCTION add2(int,int) RENAME TO add;
 
 -- change the owner of the function and verify the owner has been changed on the workers
 ALTER FUNCTION add(int,int) OWNER TO functionuser;
+SELECT public.verify_function_is_same_on_workers('function_tests.add(int,int)');
 SELECT run_command_on_workers($$
 SELECT row(usename, nspname, proname)
 FROM pg_proc
@@ -123,6 +131,7 @@ $$);
 -- change the schema of the function and verify the old schema doesn't exist anymore while
 -- the new schema has the function.
 ALTER FUNCTION add(int,int) SET SCHEMA function_tests2;
+SELECT public.verify_function_is_same_on_workers('function_tests2.add(int,int)');
 SELECT * FROM run_command_on_workers('SELECT function_tests.add(2,3);') ORDER BY 1,2;
 SELECT * FROM run_command_on_workers('SELECT function_tests2.add(2,3);') ORDER BY 1,2;
 ALTER FUNCTION function_tests2.add(int,int) SET SCHEMA function_tests;
