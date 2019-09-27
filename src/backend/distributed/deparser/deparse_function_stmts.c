@@ -90,13 +90,16 @@ AppendAlterFunctionStmt(StringInfo buf, AlterFunctionStmt *stmt)
 	{
 		appendStringInfo(buf, "ALTER FUNCTION ");
 	}
-	else
+	else if (stmt->objtype == OBJECT_PROCEDURE)
 	{
 		appendStringInfo(buf, "ALTER PROCEDURE ");
 	}
+	else
+	{
+		appendStringInfo(buf, "ALTER AGGREGATE ");
+	}
 
 	AppendFunctionName(buf, stmt->func, stmt->objtype);
-
 
 	foreach(actionCell, stmt->actions)
 	{
@@ -298,7 +301,7 @@ DeparseRenameFunctionStmt(RenameStmt *stmt)
 	StringInfoData str = { 0 };
 	initStringInfo(&str);
 
-	Assert(stmt->renameType == OBJECT_FUNCTION || stmt->renameType == OBJECT_PROCEDURE);
+	AssertObjectTypeIsFunctional(stmt->renameType);
 
 	AppendRenameFunctionStmt(&str, stmt);
 
@@ -318,9 +321,13 @@ AppendRenameFunctionStmt(StringInfo buf, RenameStmt *stmt)
 	{
 		appendStringInfoString(buf, "ALTER FUNCTION ");
 	}
-	else
+	else if (stmt->renameType == OBJECT_PROCEDURE)
 	{
 		appendStringInfoString(buf, "ALTER PROCEDURE ");
+	}
+	else
+	{
+		appendStringInfoString(buf, "ALTER AGGREGATE ");
 	}
 
 	AppendFunctionName(buf, func, stmt->renameType);
@@ -338,7 +345,7 @@ DeparseAlterFunctionSchemaStmt(AlterObjectSchemaStmt *stmt)
 	StringInfoData str = { 0 };
 	initStringInfo(&str);
 
-	Assert(stmt->objectType == OBJECT_FUNCTION || stmt->objectType == OBJECT_PROCEDURE);
+	AssertObjectTypeIsFunctional(stmt->objectType);
 
 	AppendAlterFunctionSchemaStmt(&str, stmt);
 
@@ -358,9 +365,13 @@ AppendAlterFunctionSchemaStmt(StringInfo buf, AlterObjectSchemaStmt *stmt)
 	{
 		appendStringInfoString(buf, "ALTER FUNCTION ");
 	}
-	else
+	else if (stmt->objectType == OBJECT_PROCEDURE)
 	{
 		appendStringInfoString(buf, "ALTER PROCEDURE ");
+	}
+	else
+	{
+		appendStringInfoString(buf, "ALTER AGGREGATE ");
 	}
 
 	AppendFunctionName(buf, func, stmt->objectType);
@@ -377,7 +388,7 @@ DeparseAlterFunctionOwnerStmt(AlterOwnerStmt *stmt)
 	StringInfoData str = { 0 };
 	initStringInfo(&str);
 
-	Assert(stmt->objectType == OBJECT_FUNCTION || stmt->objectType == OBJECT_PROCEDURE);
+	AssertObjectTypeIsFunctional(stmt->objectType);
 
 	AppendAlterFunctionOwnerStmt(&str, stmt);
 
@@ -397,9 +408,13 @@ AppendAlterFunctionOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt)
 	{
 		appendStringInfoString(buf, "ALTER FUNCTION ");
 	}
-	else
+	else if (stmt->objectType == OBJECT_PROCEDURE)
 	{
 		appendStringInfoString(buf, "ALTER PROCEDURE ");
+	}
+	else
+	{
+		appendStringInfoString(buf, "ALTER AGGREGATE ");
 	}
 
 	AppendFunctionName(buf, func, stmt->objectType);
@@ -416,7 +431,7 @@ DeparseAlterFunctionDependsStmt(AlterObjectDependsStmt *stmt)
 	StringInfoData str = { 0 };
 	initStringInfo(&str);
 
-	Assert(stmt->objectType == OBJECT_FUNCTION || stmt->objectType == OBJECT_PROCEDURE);
+	AssertObjectTypeIsFunctional(stmt->objectType);
 
 	AppendAlterFunctionDependsStmt(&str, stmt);
 
@@ -436,9 +451,13 @@ AppendAlterFunctionDependsStmt(StringInfo buf, AlterObjectDependsStmt *stmt)
 	{
 		appendStringInfoString(buf, "ALTER FUNCTION ");
 	}
-	else
+	else if (stmt->objectType == OBJECT_PROCEDURE)
 	{
 		appendStringInfoString(buf, "ALTER PROCEDURE ");
+	}
+	else
+	{
+		appendStringInfoString(buf, "ALTER AGGREGATE ");
 	}
 
 	AppendFunctionName(buf, func, stmt->objectType);
@@ -455,7 +474,7 @@ DeparseDropFunctionStmt(DropStmt *stmt)
 	StringInfoData str = { 0 };
 	initStringInfo(&str);
 
-	Assert(stmt->removeType == OBJECT_FUNCTION || stmt->removeType == OBJECT_PROCEDURE);
+	AssertObjectTypeIsFunctional(stmt->removeType);
 
 	AppendDropFunctionStmt(&str, stmt);
 
@@ -473,9 +492,13 @@ AppendDropFunctionStmt(StringInfo buf, DropStmt *stmt)
 	{
 		appendStringInfoString(buf, "DROP FUNCTION ");
 	}
-	else
+	else if (stmt->removeType == OBJECT_PROCEDURE)
 	{
 		appendStringInfoString(buf, "DROP PROCEDURE ");
+	}
+	else
+	{
+		appendStringInfoString(buf, "DROP AGGREGATE ");
 	}
 
 	if (stmt->missing_ok)

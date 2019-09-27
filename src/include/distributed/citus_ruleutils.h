@@ -50,6 +50,7 @@ extern void deparse_shard_query(Query *query, Oid distrelid, int64 shardid,
 								StringInfo buffer);
 extern char * generate_relation_name(Oid relid, List *namespaces);
 extern char * generate_qualified_relation_name(Oid relid);
+extern char * generate_operator_name(Oid operid, Oid arg1, Oid arg2);
 
 
 #endif /* CITUS_RULEUTILS_H */
