@@ -34,7 +34,6 @@
 #include "distributed/multi_logical_planner.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/pg_dist_partition.h"
-#include "distributed/pg_dist_enabled_custom_aggregates.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/version_compat.h"
 #include "nodes/makefuncs.h"
@@ -253,7 +252,7 @@ static List * WorkerAggregateExpressionList(Aggref *originalAggregate,
 											WorkerAggregateWalkerContext *walkerContextry);
 static AggregateType GetAggregateType(Oid aggFunctionId);
 static Oid AggregateArgumentType(Aggref *aggregate);
-static bool AggregateEnabledCustom(const char *functionName);
+static bool AggregateEnabledCustom(Oid aggregateOid);
 static Oid AggregateFunctionOidWithoutInput(const char *functionName);
 static Oid AggregateFunctionOid(const char *functionName, Oid inputType);
 static Oid TypeOid(Oid schemaId, const char *typeName);
@@ -3014,7 +3013,7 @@ GetAggregateType(Oid aggFunctionId)
 							   aggFunctionId)));
 	}
 
-	if (AggregateEnabledCustom(aggregateProcName))
+	if (AggregateEnabledCustom(aggFunctionId))
 	{
 		return AGGREGATE_CUSTOM;
 	}
@@ -3058,31 +3057,12 @@ AggregateArgumentType(Aggref *aggregate)
 
 
 static bool
-AggregateEnabledCustom(const char *functionName)
+AggregateEnabledCustom(Oid aggregateOid)
 {
-	SysScanDesc scanDescriptor = NULL;
-	ScanKeyData scanKey[1];
-	bool enabled = false;
-	HeapTuple heapTuple = NULL;
-	Relation pgDistEnabledCustomAggregates = NULL;
+	DistObjectCacheEntry *cacheEntry = LookupDistObjectCacheEntry(AggregateRelationId,
+																  aggregateOid, 0);
 
-	ScanKeyInit(&scanKey[0], Anum_pg_dist_enabled_custom_aggregates_name,
-				BTEqualStrategyNumber, F_NAMEEQ, CStringGetDatum(functionName));
-
-	pgDistEnabledCustomAggregates = heap_open(DistEnabledCustomAggregatesId(),
-											  AccessShareLock);
-
-	scanDescriptor = systable_beginscan(pgDistEnabledCustomAggregates, InvalidOid, false,
-										NULL, 1, scanKey);
-
-	heapTuple = systable_getnext(scanDescriptor);
-
-	enabled = HeapTupleIsValid(heapTuple);
-
-	systable_endscan(scanDescriptor);
-	heap_close(pgDistEnabledCustomAggregates, AccessShareLock);
-
-	return enabled;
+	return cacheEntry != NULL;
 }
 
 

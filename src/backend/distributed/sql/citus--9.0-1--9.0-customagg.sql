@@ -62,10 +62,4 @@ CREATE AGGREGATE coord_combine_agg(oid, bytea, anyelement) (
 	PARALLEL = SAFE
 );
 
-CREATE TABLE citus.pg_dist_enabled_custom_aggregates (
-	name text not null primary key
-);
-ALTER TABLE citus.pg_dist_enabled_custom_aggregates SET SCHEMA pg_catalog;
-GRANT SELECT ON pg_catalog.pg_dist_node_metadata TO public;
-
 RESET search_path;

@@ -18,11 +18,10 @@ WHERE
     AND ext.extname = 'citus'
     AND nsp.nspname = 'pg_catalog'
     AND NOT has_table_privilege(pg_class.oid, 'select');
-                oid                
------------------------------------
- pg_dist_enabled_custom_aggregates
+       oid        
+------------------
  pg_dist_authinfo
-(2 rows)
+(1 row)
 
 RESET role;
 DROP USER no_access;
