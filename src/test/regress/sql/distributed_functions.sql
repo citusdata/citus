@@ -155,6 +155,7 @@ AS 'select $1 * $2;' -- I know, this is not an add, but the output will tell us 
     LANGUAGE SQL
     IMMUTABLE
     RETURNS NULL ON NULL INPUT;
+SELECT public.verify_function_is_same_on_workers('function_tests.add(int,int)');
 SELECT * FROM run_command_on_workers('SELECT function_tests.add(2,3);') ORDER BY 1,2;
 
 DROP FUNCTION add(int,int);
