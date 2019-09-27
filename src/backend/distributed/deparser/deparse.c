@@ -166,8 +166,8 @@ DeparseAlterTableStmt(AlterTableStmt *stmt)
 /*
  * DeparseRenameStmt deparses an RenameStmt to its SQL command.
  * Contrary to its name these statements are not covering all ALTER .. RENAME
- * statements. 
- * 
+ * statements.
+ *
  * e.g. ALTER TYPE name RENAME VALUE old TO new is an AlterEnumStmt
  *
  * Currently with limited support. Check support before using, and add support for new
