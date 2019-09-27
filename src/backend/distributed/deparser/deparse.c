@@ -121,6 +121,7 @@ DeparseDropStmt(DropStmt *stmt)
 		}
 
 		case OBJECT_PROCEDURE:
+		case OBJECT_AGGREGATE:
 		case OBJECT_FUNCTION:
 		{
 			return DeparseDropFunctionStmt(stmt);
@@ -187,6 +188,7 @@ DeparseRenameStmt(RenameStmt *stmt)
 		}
 
 		case OBJECT_PROCEDURE:
+		case OBJECT_AGGREGATE:
 		case OBJECT_FUNCTION:
 		{
 			return DeparseRenameFunctionStmt(stmt);
@@ -240,6 +242,7 @@ DeparseAlterObjectSchemaStmt(AlterObjectSchemaStmt *stmt)
 		}
 
 		case OBJECT_PROCEDURE:
+		case OBJECT_AGGREGATE:
 		case OBJECT_FUNCTION:
 		{
 			return DeparseAlterFunctionSchemaStmt(stmt);
@@ -272,6 +275,7 @@ DeparseAlterOwnerStmt(AlterOwnerStmt *stmt)
 		}
 
 		case OBJECT_PROCEDURE:
+		case OBJECT_AGGREGATE:
 		case OBJECT_FUNCTION:
 		{
 			return DeparseAlterFunctionOwnerStmt(stmt);
@@ -299,6 +303,7 @@ DeparseAlterObjectDependsStmt(AlterObjectDependsStmt *stmt)
 	switch (stmt->objectType)
 	{
 		case OBJECT_PROCEDURE:
+		case OBJECT_AGGREGATE:
 		case OBJECT_FUNCTION:
 		{
 			return DeparseAlterFunctionDependsStmt(stmt);

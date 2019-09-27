@@ -32,8 +32,10 @@ CREATE FUNCTION add_numeric(numeric, numeric) RETURNS numeric
     IMMUTABLE
     RETURNS NULL ON NULL INPUT;
 
-CREATE FUNCTION add_text(text, text) RETURNS int
-    AS 'select $1::int + $2::int;'
+-- $function$ is what postgres escapes functions with when deparsing
+-- make sure $function$ doesn't cause invalid syntax
+CREATE FUNCTION add_text(text, text) RETURNS text
+    AS 'select $function$test$function$ || $1::int || $2::int;'
     LANGUAGE SQL
     IMMUTABLE
     RETURNS NULL ON NULL INPUT;
@@ -73,6 +75,45 @@ CREATE FUNCTION add_mixed_param_names(integer, val1 integer) RETURNS integer
     IMMUTABLE
     RETURNS NULL ON NULL INPUT;
 
+-- Include aggregate function case
+CREATE FUNCTION agg_sfunc(state int, item int)
+RETURNS int IMMUTABLE LANGUAGE plpgsql AS $$
+begin
+    return state + item;
+end;
+$$;
+
+CREATE FUNCTION agg_invfunc(state int, item int)
+RETURNS int IMMUTABLE LANGUAGE plpgsql AS $$
+begin
+    return state - item;
+end;
+$$;
+
+CREATE FUNCTION agg_finalfunc(state int, extra int)
+RETURNS int IMMUTABLE LANGUAGE plpgsql AS $$
+begin
+        return state * 2;
+end;
+$$;
+
+CREATE AGGREGATE sum2(int) (
+    sfunc = agg_sfunc,
+    stype = int,
+    sspace = 8,
+    finalfunc = agg_finalfunc,
+    finalfunc_extra,
+    initcond = '5',
+    msfunc = agg_sfunc,
+    mstype = int,
+    msspace = 12,
+    minvfunc = agg_invfunc,
+    mfinalfunc = agg_finalfunc,
+    mfinalfunc_extra,
+    minitcond = '1',
+    sortop = ">"
+);
+
 -- make sure to propagate ddl propagation after we have setup our functions, this will
 -- allow alter statements to be propagated and keep the functions in sync across machines
 SET citus.enable_ddl_propagation TO on;
@@ -104,6 +145,9 @@ SELECT * FROM run_command_on_workers('SELECT function_tests.dup(42);') ORDER BY 
 SELECT create_distributed_function('add(int,int)', '$1');
 SELECT * FROM run_command_on_workers('SELECT function_tests.add(2,3);') ORDER BY 1,2;
 SELECT public.verify_function_is_same_on_workers('function_tests.add(int,int)');
+
+-- distribute aggregate
+SELECT create_distributed_function('sum2(int)');
 
 -- testing alter statements for a distributed function
 -- ROWS 5, untested because;
@@ -140,15 +184,27 @@ SELECT * FROM run_command_on_workers('SELECT function_tests.add(2,3);') ORDER BY
 SELECT * FROM run_command_on_workers('SELECT function_tests.add2(2,3);') ORDER BY 1,2;
 ALTER FUNCTION add2(int,int) RENAME TO add;
 
+ALTER AGGREGATE sum2(int) RENAME TO sum27;
+SELECT * FROM run_command_on_workers($$SELECT 1 from pg_proc where proname = 'sum27';$$) ORDER BY 1,2;
+ALTER AGGREGATE sum27(int) RENAME TO sum2;
+
 -- change the owner of the function and verify the owner has been changed on the workers
 ALTER FUNCTION add(int,int) OWNER TO functionuser;
 SELECT public.verify_function_is_same_on_workers('function_tests.add(int,int)');
+ALTER AGGREGATE sum2(int) OWNER TO functionuser;
 SELECT run_command_on_workers($$
 SELECT row(usename, nspname, proname)
 FROM pg_proc
 JOIN pg_user ON (usesysid = proowner)
 JOIN pg_namespace ON (pg_namespace.oid = pronamespace)
 WHERE proname = 'add';
+$$);
+SELECT run_command_on_workers($$
+SELECT row(usename, nspname, proname)
+FROM pg_proc
+JOIN pg_user ON (usesysid = proowner)
+JOIN pg_namespace ON (pg_namespace.oid = pronamespace)
+WHERE proname = 'sum2';
 $$);
 
 -- change the schema of the function and verify the old schema doesn't exist anymore while
@@ -158,6 +214,8 @@ SELECT public.verify_function_is_same_on_workers('function_tests2.add(int,int)')
 SELECT * FROM run_command_on_workers('SELECT function_tests.add(2,3);') ORDER BY 1,2;
 SELECT * FROM run_command_on_workers('SELECT function_tests2.add(2,3);') ORDER BY 1,2;
 ALTER FUNCTION function_tests2.add(int,int) SET SCHEMA function_tests;
+
+ALTER AGGREGATE sum2(int) SET SCHEMA function_tests2;
 
 -- when a function is distributed and we create or replace the function we need to propagate the statement to the worker to keep it in sync with the coordinator
 CREATE OR REPLACE FUNCTION add(integer, integer) RETURNS integer
@@ -176,6 +234,10 @@ SELECT create_distributed_function('pg_catalog.citus_drop_trigger()');
 DROP FUNCTION add(int,int);
 -- call should fail as function should have been dropped
 SELECT * FROM run_command_on_workers('SELECT function_tests.add(2,3);') ORDER BY 1,2;
+
+DROP AGGREGATE function_tests2.sum2(int);
+-- call should fail as aggregate should have been dropped
+SELECT * FROM run_command_on_workers('SELECT function_tests2.sum2(id) FROM (select 1 id, 2) subq;') ORDER BY 1,2;
 
 -- postgres doesn't accept parameter names in the regprocedure input
 SELECT create_distributed_function('add_with_param_names(val1 int, int)', 'val1');
@@ -230,7 +292,7 @@ SELECT create_distributed_function('add_with_param_names(int, int)', distributio
 -- valid distribution with distribution_arg_index
 SELECT create_distributed_function('add_with_param_names(int, int)','$1');
 
--- a function cannot be colocated with a table that is not "streaming" replicated 
+-- a function cannot be colocated with a table that is not "streaming" replicated
 SET citus.shard_replication_factor TO 2;
 CREATE TABLE replicated_table_func_test (a int);
 SET citus.replication_model TO "statement";
@@ -265,32 +327,32 @@ SELECT create_distributed_function('add_with_param_names(int, int)', '$1', coloc
 
 -- show that the colocationIds are the same
 SELECT pg_dist_partition.colocationid = objects.colocationid as table_and_function_colocated
-FROM pg_dist_partition, citus.pg_dist_object as objects 
-WHERE pg_dist_partition.logicalrelid = 'replicated_table_func_test_4'::regclass AND 
+FROM pg_dist_partition, citus.pg_dist_object as objects
+WHERE pg_dist_partition.logicalrelid = 'replicated_table_func_test_4'::regclass AND
 	  objects.objid = 'add_with_param_names(int, int)'::regprocedure;
 
 -- now, re-distributed with the default colocation option, we should still see that the same colocation
--- group preserved, because we're using the default shard creationg settings
+-- group preserved, because we're using the default shard creation settings
 SELECT create_distributed_function('add_with_param_names(int, int)', 'val1');
 SELECT pg_dist_partition.colocationid = objects.colocationid as table_and_function_colocated
-FROM pg_dist_partition, citus.pg_dist_object as objects 
-WHERE pg_dist_partition.logicalrelid = 'replicated_table_func_test_4'::regclass AND 
+FROM pg_dist_partition, citus.pg_dist_object as objects
+WHERE pg_dist_partition.logicalrelid = 'replicated_table_func_test_4'::regclass AND
 	  objects.objid = 'add_with_param_names(int, int)'::regprocedure;
 
--- function with a numeric dist. arg can be colocated with int 
+-- function with a numeric dist. arg can be colocated with int
 -- column of a distributed table. In general, if there is a coercion
 -- path, we rely on postgres for implicit coersions, and users for explicit coersions
 -- to coerce the values
 SELECT create_distributed_function('add_numeric(numeric, numeric)', '$1', colocate_with:='replicated_table_func_test_4');
 SELECT pg_dist_partition.colocationid = objects.colocationid as table_and_function_colocated
-FROM pg_dist_partition, citus.pg_dist_object as objects 
-WHERE pg_dist_partition.logicalrelid = 'replicated_table_func_test_4'::regclass AND 
+FROM pg_dist_partition, citus.pg_dist_object as objects
+WHERE pg_dist_partition.logicalrelid = 'replicated_table_func_test_4'::regclass AND
 	  objects.objid = 'add_numeric(numeric, numeric)'::regprocedure;
 
 SELECT create_distributed_function('add_text(text, text)', '$1', colocate_with:='replicated_table_func_test_4');
 SELECT pg_dist_partition.colocationid = objects.colocationid as table_and_function_colocated
-FROM pg_dist_partition, citus.pg_dist_object as objects 
-WHERE pg_dist_partition.logicalrelid = 'replicated_table_func_test_4'::regclass AND 
+FROM pg_dist_partition, citus.pg_dist_object as objects
+WHERE pg_dist_partition.logicalrelid = 'replicated_table_func_test_4'::regclass AND
 	  objects.objid = 'add_text(text, text)'::regprocedure;
 
 -- cannot distribute function because there is no

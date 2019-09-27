@@ -28,13 +28,22 @@
 #include "utils/syscache.h"
 
 /* forward declaration for qualify functions */
-void QualifyFunction(ObjectWithArgs *func, ObjectType type);
-void QualifyFunctionSchemaName(ObjectWithArgs *func, ObjectType type);
+static void QualifyFunction(ObjectWithArgs *func, ObjectType type);
+static void QualifyFunctionSchemaName(ObjectWithArgs *func, ObjectType type);
+
+
+/* AssertObjectTypeIsFunctionType asserts we aren't receiving something we shouldn't */
+void
+AssertObjectTypeIsFunctional(ObjectType type)
+{
+	Assert(type == OBJECT_AGGREGATE || type == OBJECT_FUNCTION || type ==
+		   OBJECT_PROCEDURE);
+}
 
 
 /*
  * QualifyAlterFunctionStmt transforms a
- * ALTER {FUNCTION|PROCEDURE} ..
+ * ALTER {AGGREGATE|FUNCTION|PROCEDURE} ..
  * statement in place and makes all (supported) statements fully qualified.
  *
  * Note that not all queries of this form are valid AlterFunctionStmt
@@ -43,19 +52,21 @@ void QualifyFunctionSchemaName(ObjectWithArgs *func, ObjectType type);
 void
 QualifyAlterFunctionStmt(AlterFunctionStmt *stmt)
 {
+	AssertObjectTypeIsFunctional(stmt->objtype);
+
 	QualifyFunction(stmt->func, stmt->objtype);
 }
 
 
 /*
  * QualifyRenameFunctionStmt transforms a
- * ALTER {FUNCTION|PROCEDURE} .. RENAME TO ..
+ * ALTER {AGGREGATE|FUNCTION|PROCEDURE} .. RENAME TO ..
  * statement in place and makes the function name fully qualified.
  */
 void
 QualifyRenameFunctionStmt(RenameStmt *stmt)
 {
-	Assert(stmt->renameType == OBJECT_FUNCTION || stmt->renameType == OBJECT_PROCEDURE);
+	AssertObjectTypeIsFunctional(stmt->renameType);
 
 	QualifyFunction(castNode(ObjectWithArgs, stmt->object), stmt->renameType);
 }
@@ -63,13 +74,13 @@ QualifyRenameFunctionStmt(RenameStmt *stmt)
 
 /*
  * QualifyAlterFunctionSchemaStmt transforms a
- * ALTER {FUNCTION|PROCEDURE} .. SET SCHEMA ..
+ * ALTER {AGGREGATE|FUNCTION|PROCEDURE} .. SET SCHEMA ..
  * statement in place and makes the function name fully qualified.
  */
 void
 QualifyAlterFunctionSchemaStmt(AlterObjectSchemaStmt *stmt)
 {
-	Assert(stmt->objectType == OBJECT_FUNCTION || stmt->objectType == OBJECT_PROCEDURE);
+	AssertObjectTypeIsFunctional(stmt->objectType);
 
 	QualifyFunction(castNode(ObjectWithArgs, stmt->object), stmt->objectType);
 }
@@ -77,13 +88,13 @@ QualifyAlterFunctionSchemaStmt(AlterObjectSchemaStmt *stmt)
 
 /*
  * QualifyAlterFunctionOwnerStmt transforms a
- * ALTER {FUNCTION|PROCEDURE} .. OWNER TO ..
+ * ALTER {AGGREGATE|FUNCTION|PROCEDURE} .. OWNER TO ..
  * statement in place and makes the function name fully qualified.
  */
 void
 QualifyAlterFunctionOwnerStmt(AlterOwnerStmt *stmt)
 {
-	Assert(stmt->objectType == OBJECT_FUNCTION || stmt->objectType == OBJECT_PROCEDURE);
+	AssertObjectTypeIsFunctional(stmt->objectType);
 
 	QualifyFunction(castNode(ObjectWithArgs, stmt->object), stmt->objectType);
 }
@@ -91,13 +102,13 @@ QualifyAlterFunctionOwnerStmt(AlterOwnerStmt *stmt)
 
 /*
  * QualifyAlterFunctionDependsStmt transforms a
- * ALTER {FUNCTION|PROCEDURE} .. DEPENDS ON EXTENSIOIN ..
+ * ALTER {FUNCTION|PROCEDURE} .. DEPENDS ON EXTENSION ..
  * statement in place and makes the function name fully qualified.
  */
 void
 QualifyAlterFunctionDependsStmt(AlterObjectDependsStmt *stmt)
 {
-	Assert(stmt->objectType == OBJECT_FUNCTION || stmt->objectType == OBJECT_PROCEDURE);
+	AssertObjectTypeIsFunctional(stmt->objectType);
 
 	QualifyFunction(castNode(ObjectWithArgs, stmt->object), stmt->objectType);
 }

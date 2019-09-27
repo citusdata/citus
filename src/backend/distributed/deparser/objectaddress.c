@@ -144,6 +144,7 @@ RenameStmtObjectAddress(RenameStmt *stmt, bool missing_ok)
 		}
 
 		case OBJECT_PROCEDURE:
+		case OBJECT_AGGREGATE:
 		case OBJECT_FUNCTION:
 		{
 			return RenameFunctionStmtObjectAddress(stmt, missing_ok);
@@ -169,6 +170,7 @@ AlterObjectSchemaStmtObjectAddress(AlterObjectSchemaStmt *stmt, bool missing_ok)
 		}
 
 		case OBJECT_PROCEDURE:
+		case OBJECT_AGGREGATE:
 		case OBJECT_FUNCTION:
 		{
 			return AlterFunctionSchemaStmtObjectAddress(stmt, missing_ok);
@@ -215,6 +217,7 @@ AlterOwnerStmtObjectAddress(AlterOwnerStmt *stmt, bool missing_ok)
 		}
 
 		case OBJECT_PROCEDURE:
+		case OBJECT_AGGREGATE:
 		case OBJECT_FUNCTION:
 		{
 			return AlterFunctionOwnerObjectAddress(stmt, missing_ok);
