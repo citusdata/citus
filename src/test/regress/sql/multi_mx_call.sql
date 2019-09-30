@@ -143,8 +143,9 @@ BEGIN
     RAISE EXCEPTION 'error';
 END;$$;
 select create_distributed_function('mx_call_proc_raise(int)', '$1', 'mx_call_dist_table_1');
+\set VERBOSITY terse
 call multi_mx_call.mx_call_proc_raise(2);
-
+\set VERBOSITY default
 
 -- Test that we don't propagate to non-metadata worker nodes
 select stop_metadata_sync_to_node('localhost', :worker_1_port);

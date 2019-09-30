@@ -156,24 +156,45 @@ TryToDelegateFunctionCall(Query *query, bool *hasExternParam)
 
 	if (joinTree->fromlist != NIL)
 	{
-		/* query has a FROM section */
 #if PG_VERSION_NUM >= 120000
 
-		/* in pg12 empty FROMs are represented with an RTE_RESULT */
+		/*
+		 * In pg12's planning phase empty FROMs are represented with an RTE_RESULT.
+		 * When we arrive here, standard_planner has already been called which calls
+		 * replace_empty_jointree() which replaces empty fromlist with a list of
+		 * single RTE_RESULT RangleTableRef node.
+		 */
 		if (list_length(joinTree->fromlist) == 1)
 		{
 			RangeTblRef *reference = linitial(joinTree->fromlist);
-			RangeTblEntry *rtentry = rt_fetch(reference->rtindex, query->rtable);
-			if (rtentry->rtekind != RTE_RESULT)
+
+			if (IsA(reference, RangeTblRef))
 			{
+				RangeTblEntry *rtentry = rt_fetch(reference->rtindex, query->rtable);
+				if (rtentry->rtekind != RTE_RESULT)
+				{
+					/* e.g. SELECT f() FROM rel */
+					return NULL;
+				}
+			}
+			else
+			{
+				/*
+				 * e.g. IsA(reference, JoinExpr). This is explicit join expressions
+				 * like INNER JOIN, NATURAL JOIN, ...
+				 */
 				return NULL;
 			}
 		}
 		else
 		{
+			/* e.g. SELECT ... FROM rel1, rel2. */
+			Assert(list_length(joinTree->fromlist) > 1);
 			return NULL;
 		}
 #else
+
+		/* query has a FROM section */
 		return NULL;
 #endif
 	}
