@@ -1072,6 +1072,17 @@ PlanDropFunctionStmt(DropStmt *stmt, const char *queryString)
 }
 
 
+/*
+ * PlanAlterFunctionDependsStmt is called during the planning phase of an
+ * ALTER FUNCION ... DEPENDS ON EXTENSION ... statement. Since functions depending on
+ * extensions are assumed to be Owned by an extension we assume the extension to keep the
+ * function in sync.
+ *
+ * If we would allow users to create a dependency between a distributed function and an
+ * extension our pruning logic for which objects to distribute as dependencies of other
+ * objects will change significantly which could cause issues adding new workers. Hence we
+ * don't allow this dependency to be created.
+ */
 List *
 PlanAlterFunctionDependsStmt(AlterObjectDependsStmt *stmt, const char *queryString)
 {
@@ -1119,6 +1130,11 @@ PlanAlterFunctionDependsStmt(AlterObjectDependsStmt *stmt, const char *queryStri
 }
 
 
+/*
+ * AlterFunctionDependsStmtObjectAddress resolves the ObjectAddress of the function that
+ * is the subject of an ALTER FUNCTION ... DEPENS ON EXTENSION ... statement. If
+ * missing_ok is set to false the lookup will raise an error.
+ */
 const ObjectAddress *
 AlterFunctionDependsStmtObjectAddress(AlterObjectDependsStmt *stmt, bool missing_ok)
 {
