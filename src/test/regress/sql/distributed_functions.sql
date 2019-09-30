@@ -149,6 +149,15 @@ SELECT * FROM run_command_on_workers('SELECT function_tests.add(2,3);') ORDER BY
 SELECT * FROM run_command_on_workers('SELECT function_tests2.add(2,3);') ORDER BY 1,2;
 ALTER FUNCTION function_tests2.add(int,int) SET SCHEMA function_tests;
 
+-- when a function is distributed and we create or replace the function we need to propagate the statement to the worker to keep it in sync with the coordinator
+CREATE OR REPLACE FUNCTION add(integer, integer) RETURNS integer
+AS 'select $1 * $2;' -- I know, this is not an add, but the output will tell us if the update succeeded
+    LANGUAGE SQL
+    IMMUTABLE
+    RETURNS NULL ON NULL INPUT;
+SELECT public.verify_function_is_same_on_workers('function_tests.add(int,int)');
+SELECT * FROM run_command_on_workers('SELECT function_tests.add(2,3);') ORDER BY 1,2;
+
 DROP FUNCTION add(int,int);
 -- call should fail as function should have been dropped
 SELECT * FROM run_command_on_workers('SELECT function_tests.add(2,3);') ORDER BY 1,2;

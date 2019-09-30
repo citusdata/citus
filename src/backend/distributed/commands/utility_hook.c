@@ -554,6 +554,12 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 											queryString);
 		}
 
+		if (IsA(parsetree, CreateFunctionStmt))
+		{
+			ddlJobs = PlanCreateFunctionStmt(castNode(CreateFunctionStmt, parsetree),
+											 queryString);
+		}
+
 		/*
 		 * ALTER TABLE ALL IN TABLESPACE statements have their node type as
 		 * AlterTableMoveAllStmt. At the moment we do not support this functionality in
@@ -705,6 +711,13 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		if (IsA(parsetree, AlterEnumStmt))
 		{
 			ProcessAlterEnumStmt(castNode(AlterEnumStmt, parsetree), queryString);
+		}
+
+		if (IsA(parsetree, CreateFunctionStmt))
+		{
+			Assert(ddlJobs == NIL); /* jobs should not have been set before */
+			ddlJobs = ProcessCreateFunctionStmt(castNode(CreateFunctionStmt, parsetree),
+												queryString);
 		}
 	}
 

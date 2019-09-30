@@ -51,6 +51,11 @@ extern bool ConstraintIsAForeignKey(char *constraintName, Oid relationId);
 
 
 /* function.c - forward declarations */
+extern List * PlanCreateFunctionStmt(CreateFunctionStmt *stmt, const char *queryString);
+extern List * ProcessCreateFunctionStmt(CreateFunctionStmt *stmt, const
+										char *queryString);
+extern const ObjectAddress * CreateFunctionStmtObjectAddress(CreateFunctionStmt *stmt,
+															 bool missing_ok);
 extern List * PlanAlterFunctionStmt(AlterFunctionStmt *stmt, const char *queryString);
 extern const ObjectAddress * AlterFunctionStmtObjectAddress(AlterFunctionStmt *stmt,
 															bool missing_ok);
