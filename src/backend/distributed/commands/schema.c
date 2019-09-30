@@ -121,7 +121,7 @@ PlanAlterObjectSchemaStmt(AlterObjectSchemaStmt *stmt, const char *queryString)
 			return PlanAlterTypeSchemaStmt(stmt, queryString);
 		}
 
-#if PG_VERSION_NUM > 110000
+#if PG_VERSION_NUM >= 110000
 		case OBJECT_PROCEDURE:
 #endif
 		case OBJECT_FUNCTION:
@@ -198,7 +198,7 @@ ProcessAlterObjectSchemaStmt(AlterObjectSchemaStmt *stmt, const char *queryStrin
 			return;
 		}
 
-#if PG_VERSION_NUM > 110000
+#if PG_VERSION_NUM >= 110000
 		case OBJECT_PROCEDURE:
 #endif
 		case OBJECT_FUNCTION:

@@ -10,7 +10,7 @@
 
 #include "postgres.h"
 
-#if PG_VERSION_NUM > 12000
+#if PG_VERSION_NUM >= 120000
 #include "access/genam.h"
 #endif
 #include "access/htup_details.h"

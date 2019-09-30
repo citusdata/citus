@@ -77,7 +77,7 @@ static void ErrorIfFunctionDependsOnExtension(const ObjectAddress *functionAddre
 
 PG_FUNCTION_INFO_V1(create_distributed_function);
 
-#if PG_VERSION_NUM > 110000
+#if PG_VERSION_NUM >= 110000
 #define AssertIsFunctionOrProcedure(objtype) \
 	Assert((objtype) == OBJECT_FUNCTION || (objtype) == OBJECT_PROCEDURE)
 #else
@@ -795,7 +795,7 @@ CreateFunctionStmtObjectAddress(CreateFunctionStmt *stmt, bool missing_ok)
 	ObjectWithArgs *objectWithArgs = NULL;
 	ListCell *parameterCell = NULL;
 
-#if PG_VERSION_NUM > 110000
+#if PG_VERSION_NUM >= 110000
 	if (stmt->is_procedure)
 	{
 		objectType = OBJECT_PROCEDURE;
@@ -828,7 +828,7 @@ PlanAlterFunctionStmt(AlterFunctionStmt *stmt, const char *queryString)
 	List *commands = NIL;
 
 	/* AlterFunctionStmt->objtype has only been added since pg11 */
-#if PG_VERSION_NUM > 110000
+#if PG_VERSION_NUM >= 110000
 	AssertIsFunctionOrProcedure(stmt->objtype);
 #endif
 
@@ -1168,7 +1168,7 @@ AlterFunctionStmtObjectAddress(AlterFunctionStmt *stmt, bool missing_ok)
 {
 	ObjectType objectType = OBJECT_FUNCTION;
 
-#if PG_VERSION_NUM > 110000
+#if PG_VERSION_NUM >= 110000
 	objectType = stmt->objtype;
 #endif
 
