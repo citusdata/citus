@@ -171,3 +171,5 @@ COMMENT ON FUNCTION worker_apply_sequence_command(text,regtype)
     IS 'create a sequence which produces globally unique values';
 
 RESET search_path;
+
+#include "udfs/citus_isolation_test_session_is_blocked/9.0-1.sql"
