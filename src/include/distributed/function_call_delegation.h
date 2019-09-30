@@ -13,7 +13,7 @@
 #include "distributed/multi_physical_planner.h"
 
 
-DistributedPlan * TryToDelegateFunctionCall(Query *query);
+DistributedPlan * TryToDelegateFunctionCall(Query *query, bool *hasParam);
 
 
 #endif /* FUNCTION_CALL_DELEGATION_H */
