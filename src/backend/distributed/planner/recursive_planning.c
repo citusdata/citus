@@ -87,6 +87,9 @@
 #include "utils/guc.h"
 
 
+/* track depth of current recursive planner query */
+static int recursivePlanningDepth = 0;
+
 /*
  * RecursivePlanningContext is used to recursively plan subqueries
  * and CTEs, pull results to the coordinator, and push it back into
@@ -186,6 +189,8 @@ GenerateSubplansForSubqueriesAndCTEs(uint64 planId, Query *originalQuery,
 	RecursivePlanningContext context;
 	DeferredErrorMessage *error = NULL;
 
+	recursivePlanningDepth++;
+
 	/*
 	 * Plan subqueries and CTEs that cannot be pushed down by recursively
 	 * calling the planner and add the resulting plans to subPlanList.
@@ -213,6 +218,7 @@ GenerateSubplansForSubqueriesAndCTEs(uint64 planId, Query *originalQuery,
 	error = RecursivelyPlanSubqueriesAndCTEs(originalQuery, &context);
 	if (error != NULL)
 	{
+		recursivePlanningDepth--;
 		RaiseDeferredError(error, ERROR);
 	}
 
@@ -226,6 +232,8 @@ GenerateSubplansForSubqueriesAndCTEs(uint64 planId, Query *originalQuery,
 							 " query after replacing subqueries and CTEs: %s", planId,
 							 ApplyLogRedaction(subPlanString->data))));
 	}
+
+	recursivePlanningDepth--;
 
 	return context.subPlanList;
 }
@@ -1733,4 +1741,15 @@ GenerateResultId(uint64 planId, uint32 subPlanId)
 	appendStringInfo(resultId, UINT64_FORMAT "_%u", planId, subPlanId);
 
 	return resultId->data;
+}
+
+
+/*
+ * GeneratingSubplans returns true if we are currently in the process of
+ * generating subplans.
+ */
+bool
+GeneratingSubplans(void)
+{
+	return recursivePlanningDepth > 0;
 }
