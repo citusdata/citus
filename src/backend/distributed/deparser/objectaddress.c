@@ -82,6 +82,12 @@ GetObjectAddressFromParseTree(Node *parseTree, bool missing_ok)
 												  missing_ok);
 		}
 
+		case T_CreateFunctionStmt:
+		{
+			return CreateFunctionStmtObjectAddress(
+				castNode(CreateFunctionStmt, parseTree), missing_ok);
+		}
+
 		default:
 		{
 			/*
