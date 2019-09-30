@@ -89,7 +89,7 @@ ResetConnParams()
 
 	InvalidateConnParamsHashEntries();
 
-	AddConnParam("fallback_application_name", "citus");
+	AddConnParam("fallback_application_name", CITUS_APPLICATION_NAME);
 }
 
 

@@ -27,6 +27,9 @@
 /* default notice level */
 #define DEFAULT_CITUS_NOTICE_LEVEL DEBUG1
 
+/* application name used for internal connections in Citus */
+#define CITUS_APPLICATION_NAME "citus"
+
 /* forward declare, to avoid forcing large headers on everyone */
 struct pg_conn; /* target of the PGconn typedef */
 struct MemoryContextData;

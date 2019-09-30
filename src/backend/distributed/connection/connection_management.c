@@ -1046,6 +1046,18 @@ AfterXactHostConnectionHandling(ConnectionHashEntry *entry, bool isCommit)
 {
 	dlist_mutable_iter iter;
 	int cachedConnectionCount = 0;
+	bool isCitusInitiatedBackend = false;
+
+	/*
+	 * When we are in a backend that was created to service an internal connection
+	 * from the coordinator or another worker, we disable connection caching to avoid
+	 * escalating the number of cached connections. We can recognize such backends
+	 * from their application name.
+	 */
+	if (application_name != NULL && strcmp(application_name, CITUS_APPLICATION_NAME) == 0)
+	{
+		isCitusInitiatedBackend = true;
+	}
 
 	dlist_foreach_modify(iter, entry->connections)
 	{
@@ -1067,7 +1079,8 @@ AfterXactHostConnectionHandling(ConnectionHashEntry *entry, bool isCommit)
 		/*
 		 * Preserve session lifespan connections if they are still healthy.
 		 */
-		if (cachedConnectionCount >= MaxCachedConnectionsPerWorker ||
+		if (isCitusInitiatedBackend ||
+			cachedConnectionCount >= MaxCachedConnectionsPerWorker ||
 			connection->forceCloseAtTransactionEnd ||
 			PQstatus(connection->pgConn) != CONNECTION_OK ||
 			!RemoteTransactionIdle(connection))
