@@ -99,6 +99,7 @@ create_distributed_function(PG_FUNCTION_ARGS)
 
 	const char *ddlCommand = NULL;
 	ObjectAddress functionAddress = { 0 };
+	ObjectAddress extensionAddress = { 0 };
 
 	int distributionArgumentIndex = -1;
 	Oid distributionArgumentOid = InvalidOid;
@@ -146,15 +147,17 @@ create_distributed_function(PG_FUNCTION_ARGS)
 
 	ObjectAddressSet(functionAddress, ProcedureRelationId, funcOid);
 
-	if (IsObjectAddressOwnedByExtension(&functionAddress))
+	if (IsObjectAddressOwnedByExtension(&functionAddress, &extensionAddress))
 	{
+		char *extensionName = getObjectIdentity(&extensionAddress);
 		char *functionName = get_func_name(funcOid);
 		ereport(ERROR, (errmsg("unable to create a distributed function from functions "
 							   "owned by an extension"),
-						errdetail("Function \"%s\" has a dependency on an extension. "
+						errdetail("Function \"%s\" has a dependency on extension \"%s\". "
 								  "Functions depending on an extension cannot be "
 								  "distributed. Create the function by creating the "
-								  "extension on the workers.", functionName)));
+								  "extension on the workers.", functionName,
+								  extensionName)));
 	}
 
 	/*
