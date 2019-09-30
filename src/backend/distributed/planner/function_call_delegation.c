@@ -48,16 +48,43 @@
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
 
+struct ParamWalkerContext
+{
+	bool hasParam;
+	ParamKind paramKind;
+};
+
 static bool contain_param_walker(Node *node, void *context);
 
 /*
  * contain_param_walker scans node for Param nodes.
- * returns whether any such nodes found.
+ * Ignore the return value, instead check context afterwards.
+ *
+ * context is a struct ParamWalkerContext*.
+ * hasParam is set to true if we find a Param node.
+ * paramKind is set to the paramkind of the Param node if any found.
+ * paramKind is set to PARAM_EXEC if both PARAM_EXEC & PARAM_EXTERN are found.
+ *
+ * By time we walk, Param nodes are either PARAM_EXTERN or PARAM_EXEC.
  */
 static bool
 contain_param_walker(Node *node, void *context)
 {
-	return IsA(node, Param);
+	if (IsA(node, Param))
+	{
+		Param *paramNode = (Param *) node;
+		struct ParamWalkerContext *pwcontext =
+			(struct ParamWalkerContext *) context;
+
+		pwcontext->hasParam = true;
+		pwcontext->paramKind = paramNode->paramkind;
+		if (paramNode->paramkind == PARAM_EXEC)
+		{
+			return true;
+		}
+	}
+
+	return false;
 }
 
 
@@ -69,7 +96,7 @@ contain_param_walker(Node *node, void *context)
  * ... Those complex forms are handled in the coordinator.
  */
 DistributedPlan *
-TryToDelegateFunctionCall(Query *query)
+TryToDelegateFunctionCall(Query *query, bool *hasExternParam)
 {
 	FromExpr *joinTree = NULL;
 	List *targetList = NIL;
@@ -90,6 +117,10 @@ TryToDelegateFunctionCall(Query *query)
 	Job *job = NULL;
 	DistributedPlan *distributedPlan = NULL;
 	int32 groupId = 0;
+	struct ParamWalkerContext walkerParamContext = { 0 };
+
+	/* set hasExternParam now in case of early exit */
+	*hasExternParam = false;
 
 	if (!CitusHasBeenLoaded() || !CheckCitusVersion(DEBUG4))
 	{
@@ -192,13 +223,6 @@ TryToDelegateFunctionCall(Query *query)
 		return NULL;
 	}
 
-	if (expression_tree_walker((Node *) funcExpr->args, contain_param_walker, NULL))
-	{
-		ereport(DEBUG1, (errmsg("arguments in a distributed function must "
-								"not contain subqueries")));
-		return NULL;
-	}
-
 	colocatedRelationId = ColocatedTableId(procedure->colocationId);
 	if (colocatedRelationId == InvalidOid)
 	{
@@ -217,6 +241,19 @@ TryToDelegateFunctionCall(Query *query)
 	}
 
 	partitionValue = (Const *) list_nth(funcExpr->args, procedure->distributionArgIndex);
+
+	if (IsA(partitionValue, Param))
+	{
+		Param *partitionParam = (Param *) partitionValue;
+
+		if (partitionParam->paramkind == PARAM_EXTERN)
+		{
+			/* Don't log a message, we should end up here again without a parameter */
+			*hasExternParam = true;
+			return NULL;
+		}
+	}
+
 	if (!IsA(partitionValue, Const))
 	{
 		ereport(DEBUG1, (errmsg("distribution argument value must be a constant")));
@@ -279,6 +316,23 @@ TryToDelegateFunctionCall(Query *query)
 	if (workerNode == NULL || !workerNode->hasMetadata || !workerNode->metadataSynced)
 	{
 		ereport(DEBUG1, (errmsg("the worker node does not have metadata")));
+		return NULL;
+	}
+
+	(void) expression_tree_walker((Node *) funcExpr->args, contain_param_walker,
+								  &walkerParamContext);
+	if (walkerParamContext.hasParam)
+	{
+		if (walkerParamContext.paramKind == PARAM_EXTERN)
+		{
+			/* Don't log a message, we should end up here again without a parameter */
+			*hasExternParam = true;
+		}
+		else
+		{
+			ereport(DEBUG1, (errmsg("arguments in a distributed function must "
+									"not contain subqueries")));
+		}
 		return NULL;
 	}
 

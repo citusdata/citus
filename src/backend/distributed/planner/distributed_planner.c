@@ -195,10 +195,20 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 		}
 		else
 		{
-			DistributedPlan *delegatePlan = TryToDelegateFunctionCall(parse);
+			bool hasExternParam = false;
+			DistributedPlan *delegatePlan = TryToDelegateFunctionCall(parse,
+																	  &hasExternParam);
 			if (delegatePlan != NULL)
 			{
 				result = FinalizePlan(result, delegatePlan);
+			}
+			else if (hasExternParam)
+			{
+				/*
+				 * As in CreateDistributedPlannedStmt, try dissuade planner when planning
+				 * potentially failed due to unresolved prepared statement parameters.
+				 */
+				result->planTree->total_cost = FLT_MAX / 100000000;
 			}
 		}
 	}
