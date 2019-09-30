@@ -253,6 +253,31 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 	}
 #endif
 
+	if (IsA(parsetree, DoStmt))
+	{
+		/*
+		 * All statements in a DO block are executed in a single transaciton,
+		 * so we need to keep track of whether we are inside a DO block.
+		 */
+		DoBlockLevel += 1;
+
+		PG_TRY();
+		{
+			standard_ProcessUtility(pstmt, queryString, context,
+									params, queryEnv, dest, completionTag);
+
+			DoBlockLevel -= 1;
+		}
+		PG_CATCH();
+		{
+			DoBlockLevel -= 1;
+			PG_RE_THROW();
+		}
+		PG_END_TRY();
+
+		return;
+	}
+
 	/* process SET LOCAL stmts of whitelisted GUCs in multi-stmt xacts */
 	if (IsA(parsetree, VariableSetStmt))
 	{
@@ -361,7 +386,7 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 
 		if (IsA(parsetree, ReindexStmt))
 		{
-			ErrorIfReindexOnDistributedTable((ReindexStmt *) parsetree);
+			ddlJobs = PlanReindexStmt((ReindexStmt *) parsetree, queryString);
 		}
 
 		if (IsA(parsetree, DropStmt))
@@ -397,6 +422,14 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 				{
 					ddlJobs = PlanDropTypeStmt(dropStatement, queryString);
 					break;
+				}
+
+#if PG_VERSION_NUM > 110000
+				case OBJECT_PROCEDURE:
+#endif
+				case OBJECT_FUNCTION:
+				{
+					ddlJobs = PlanDropFunctionStmt(dropStatement, queryString);
 				}
 
 				default:
@@ -446,6 +479,15 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 				case OBJECT_ATTRIBUTE:
 				{
 					ddlJobs = PlanRenameAttributeStmt(renameStmt, queryString);
+					break;
+				}
+
+#if PG_VERSION_NUM > 110000
+				case OBJECT_PROCEDURE:
+#endif
+				case OBJECT_FUNCTION:
+				{
+					ddlJobs = PlanRenameFunctionStmt(renameStmt, queryString);
 					break;
 				}
 
@@ -504,6 +546,12 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		{
 			ddlJobs = PlanCreateEnumStmt(castNode(CreateEnumStmt, parsetree),
 										 queryString);
+		}
+
+		if (IsA(parsetree, AlterFunctionStmt))
+		{
+			ddlJobs = PlanAlterFunctionStmt(castNode(AlterFunctionStmt, parsetree),
+											queryString);
 		}
 
 		/*
@@ -772,6 +820,14 @@ PlanAlterOwnerStmt(AlterOwnerStmt *stmt, const char *queryString)
 		case OBJECT_TYPE:
 		{
 			return PlanAlterTypeOwnerStmt(stmt, queryString);
+		}
+
+#if PG_VERSION_NUM > 110000
+		case OBJECT_PROCEDURE:
+#endif
+		case OBJECT_FUNCTION:
+		{
+			return PlanAlterFunctionOwnerStmt(stmt, queryString);
 		}
 
 		default:

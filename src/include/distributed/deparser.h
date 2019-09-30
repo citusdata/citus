@@ -52,4 +52,19 @@ extern void QualifyAlterTypeOwnerStmt(AlterOwnerStmt *stmt);
 extern const ObjectAddress * GetObjectAddressFromParseTree(Node *parseTree, bool
 														   missing_ok);
 
+/* forward declarations for deparse_function_stmts.c */
+extern const char * DeparseDropFunctionStmt(DropStmt *stmt);
+extern const char * DeparseAlterFunctionStmt(AlterFunctionStmt *stmt);
+
+extern const char * DeparseRenameFunctionStmt(RenameStmt *stmt);
+extern const char * DeparseAlterFunctionSchemaStmt(AlterObjectSchemaStmt *stmt);
+extern const char * DeparseAlterFunctionOwnerStmt(AlterOwnerStmt *stmt);
+extern const char * DeparseAlterFunctionDependsStmt(AlterObjectDependsStmt *stmt);
+
+extern void QualifyAlterFunctionStmt(AlterFunctionStmt *stmt);
+extern void QualifyRenameFunctionStmt(RenameStmt *stmt);
+extern void QualifyAlterFunctionSchemaStmt(AlterObjectSchemaStmt *stmt);
+extern void QualifyAlterFunctionOwnerStmt(AlterOwnerStmt *stmt);
+extern void QualifyAlterFunctionDependsStmt(AlterObjectDependsStmt *stmt);
+
 #endif /* CITUS_DEPARSER_H */

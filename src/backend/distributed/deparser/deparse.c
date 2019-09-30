@@ -23,7 +23,7 @@ static const char * DeparseRenameStmt(RenameStmt *stmt);
 static const char * DeparseRenameAttributeStmt(RenameStmt *stmt);
 static const char * DeparseAlterObjectSchemaStmt(AlterObjectSchemaStmt *stmt);
 static const char * DeparseAlterOwnerStmt(AlterOwnerStmt *stmt);
-
+static const char * DeparseAlterObjectDependsStmt(AlterObjectDependsStmt *stmt);
 
 /*
  * DeparseTreeNode aims to be the inverse of postgres' ParseTreeNode. Currently with
@@ -34,6 +34,12 @@ static const char * DeparseAlterOwnerStmt(AlterOwnerStmt *stmt);
  *  - CREATE TYPE
  *  - ALTER TYPE
  *  - DROP TYPE
+ *
+ *  - ALTER FUNCTION
+ *  - DROP FUNCTION
+ *
+ *  - ALTER PROCEDURE
+ *  - DROP PROCEDURE
  */
 const char *
 DeparseTreeNode(Node *stmt)
@@ -65,6 +71,11 @@ DeparseTreeNode(Node *stmt)
 			return DeparseAlterEnumStmt(castNode(AlterEnumStmt, stmt));
 		}
 
+		case T_AlterFunctionStmt:
+		{
+			return DeparseAlterFunctionStmt(castNode(AlterFunctionStmt, stmt));
+		}
+
 		case T_RenameStmt:
 		{
 			return DeparseRenameStmt(castNode(RenameStmt, stmt));
@@ -80,6 +91,11 @@ DeparseTreeNode(Node *stmt)
 			return DeparseAlterOwnerStmt(castNode(AlterOwnerStmt, stmt));
 		}
 
+		case T_AlterObjectDependsStmt:
+		{
+			return DeparseAlterObjectDependsStmt(castNode(AlterObjectDependsStmt, stmt));
+		}
+
 		default:
 		{
 			ereport(ERROR, (errmsg("unsupported statement for deparsing")));
@@ -88,6 +104,12 @@ DeparseTreeNode(Node *stmt)
 }
 
 
+/*
+ * DeparseDropStmt aims to deparse DROP statements.
+ *
+ * Currently with limited support. Check support before using, and add support for new
+ * statements as required.
+ */
 static const char *
 DeparseDropStmt(DropStmt *stmt)
 {
@@ -98,6 +120,14 @@ DeparseDropStmt(DropStmt *stmt)
 			return DeparseDropTypeStmt(stmt);
 		}
 
+#if PG_VERSION_NUM >= 110000
+		case OBJECT_PROCEDURE:
+#endif
+		case OBJECT_FUNCTION:
+		{
+			return DeparseDropFunctionStmt(stmt);
+		}
+
 		default:
 		{
 			ereport(ERROR, (errmsg("unsupported drop statement for deparsing")));
@@ -106,6 +136,15 @@ DeparseDropStmt(DropStmt *stmt)
 }
 
 
+/*
+ * DeparseAlterTableStmt deparses an AlterTableStmt to its SQL command.
+ * Contrary to its name these statements are covering not only ALTER TABLE ...
+ * statements but are used for almost all relation-esque objects in postgres,
+ * including but not limited to, Tables, Types, ...
+ *
+ * Currently with limited support. Check support before using, and add support for new
+ * statements as required.
+ */
 static const char *
 DeparseAlterTableStmt(AlterTableStmt *stmt)
 {
@@ -124,6 +163,16 @@ DeparseAlterTableStmt(AlterTableStmt *stmt)
 }
 
 
+/*
+ * DeparseRenameStmt deparses an RenameStmt to its SQL command.
+ * Contrary to its name these statements are not covering all ALTER .. RENAME
+ * statements.
+ *
+ * e.g. ALTER TYPE name RENAME VALUE old TO new is an AlterEnumStmt
+ *
+ * Currently with limited support. Check support before using, and add support for new
+ * statements as required.
+ */
 static const char *
 DeparseRenameStmt(RenameStmt *stmt)
 {
@@ -137,6 +186,14 @@ DeparseRenameStmt(RenameStmt *stmt)
 		case OBJECT_ATTRIBUTE:
 		{
 			return DeparseRenameAttributeStmt(stmt);
+		}
+
+#if PG_VERSION_NUM >= 110000
+		case OBJECT_PROCEDURE:
+#endif
+		case OBJECT_FUNCTION:
+		{
+			return DeparseRenameFunctionStmt(stmt);
 		}
 
 		default:
@@ -168,6 +225,14 @@ DeparseRenameAttributeStmt(RenameStmt *stmt)
 }
 
 
+/*
+ * DeparseAlterObjectSchemaStmt aims to deparse
+ * ALTER .. SET SCHEMA ..
+ * statements.
+ *
+ * Currently with limited support. Check support before using, and add support for new
+ * statements as required.
+ */
 static const char *
 DeparseAlterObjectSchemaStmt(AlterObjectSchemaStmt *stmt)
 {
@@ -178,6 +243,14 @@ DeparseAlterObjectSchemaStmt(AlterObjectSchemaStmt *stmt)
 			return DeparseAlterTypeSchemaStmt(stmt);
 		}
 
+#if PG_VERSION_NUM >= 110000
+		case OBJECT_PROCEDURE:
+#endif
+		case OBJECT_FUNCTION:
+		{
+			return DeparseAlterFunctionSchemaStmt(stmt);
+		}
+
 		default:
 		{
 			ereport(ERROR, (errmsg("unsupported rename statement for deparsing")));
@@ -186,6 +259,14 @@ DeparseAlterObjectSchemaStmt(AlterObjectSchemaStmt *stmt)
 }
 
 
+/*
+ * DeparseAlterOwnerStmt aims to deparse
+ * ALTER .. OWNER TO ..
+ * statements.
+ *
+ * Currently with limited support. Check support before using, and add support for new
+ * statements as required.
+ */
 static const char *
 DeparseAlterOwnerStmt(AlterOwnerStmt *stmt)
 {
@@ -196,9 +277,46 @@ DeparseAlterOwnerStmt(AlterOwnerStmt *stmt)
 			return DeparseAlterTypeOwnerStmt(stmt);
 		}
 
+#if PG_VERSION_NUM >= 110000
+		case OBJECT_PROCEDURE:
+#endif
+		case OBJECT_FUNCTION:
+		{
+			return DeparseAlterFunctionOwnerStmt(stmt);
+		}
+
 		default:
 		{
 			ereport(ERROR, (errmsg("unsupported alter owner statement for deparsing")));
+		}
+	}
+}
+
+
+/*
+ * DeparseAlterObjectDependsStmt aims to deparse
+ * ALTER .. DEPENDS ON EXTENSION ..
+ * statements.
+ *
+ * Currently with limited support. Check support before using, and add support for new
+ * statements as required.
+ */
+static const char *
+DeparseAlterObjectDependsStmt(AlterObjectDependsStmt *stmt)
+{
+	switch (stmt->objectType)
+	{
+#if PG_VERSION_NUM >= 110000
+		case OBJECT_PROCEDURE:
+#endif
+		case OBJECT_FUNCTION:
+		{
+			return DeparseAlterFunctionDependsStmt(stmt);
+		}
+
+		default:
+		{
+			ereport(ERROR, (errmsg("unsupported alter depends statement for deparsing")));
 		}
 	}
 }

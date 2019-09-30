@@ -140,3 +140,33 @@ BEGIN
      EXECUTE p_sql;
      PERFORM run_command_on_workers(p_sql);
 END;$$;
+-- 1. Marks the given procedure as colocated with the given table.
+-- 2. Marks the argument index with which we route the procedure.
+CREATE FUNCTION colocate_proc_with_table(procname text, tablerelid regclass, argument_index int)
+RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+    update citus.pg_dist_object
+    set distribution_argument_index = argument_index, colocationid = pg_dist_partition.colocationid
+    from pg_proc, pg_dist_partition
+    where proname = procname and oid = objid and pg_dist_partition.logicalrelid = tablerelid;
+END;$$;
+-- helper function to verify the function of a coordinator is the same on all workers
+CREATE OR REPLACE FUNCTION verify_function_is_same_on_workers(funcname text)
+    RETURNS bool
+    LANGUAGE plpgsql
+AS $func$
+DECLARE
+    coordinatorSql text;
+    workerSql text;
+BEGIN
+    SELECT pg_get_functiondef(funcname::regprocedure) INTO coordinatorSql;
+    FOR workerSql IN SELECT result FROM run_command_on_workers('SELECT pg_get_functiondef(' || quote_literal(funcname) || '::regprocedure)') LOOP
+            IF workerSql != coordinatorSql THEN
+                RAISE INFO 'functions are different, coordinator:% worker:%', coordinatorSql, workerSql;
+                RETURN false;
+            END IF;
+        END LOOP;
+
+    RETURN true;
+END;
+$func$;

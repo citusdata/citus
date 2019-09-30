@@ -50,6 +50,25 @@ extern bool TableReferencing(Oid relationId);
 extern bool ConstraintIsAForeignKey(char *constraintName, Oid relationId);
 
 
+/* function.c - forward declarations */
+extern List * PlanAlterFunctionStmt(AlterFunctionStmt *stmt, const char *queryString);
+extern const ObjectAddress * AlterFunctionStmtObjectAddress(AlterFunctionStmt *stmt,
+															bool missing_ok);
+extern List * PlanRenameFunctionStmt(RenameStmt *stmt, const char *queryString);
+extern const ObjectAddress * RenameFunctionStmtObjectAddress(RenameStmt *stmt,
+															 bool missing_ok);
+extern List * PlanAlterFunctionOwnerStmt(AlterOwnerStmt *stmt, const char *queryString);
+extern const ObjectAddress * AlterFunctionOwnerObjectAddress(AlterOwnerStmt *stmt,
+															 bool missing_ok);
+extern List * PlanAlterFunctionSchemaStmt(AlterObjectSchemaStmt *stmt,
+										  const char *queryString);
+extern const ObjectAddress * AlterFunctionSchemaStmtObjectAddress(
+	AlterObjectSchemaStmt *stmt, bool missing_ok);
+extern void ProcessAlterFunctionSchemaStmt(AlterObjectSchemaStmt *stmt,
+										   const char *queryString);
+extern List * PlanDropFunctionStmt(DropStmt *stmt, const char *queryString);
+
+
 /* grant.c - forward declarations */
 extern List * PlanGrantStmt(GrantStmt *grantStmt);
 
@@ -58,7 +77,8 @@ extern List * PlanGrantStmt(GrantStmt *grantStmt);
 extern bool IsIndexRenameStmt(RenameStmt *renameStmt);
 extern List * PlanIndexStmt(IndexStmt *createIndexStatement,
 							const char *createIndexCommand);
-extern void ErrorIfReindexOnDistributedTable(ReindexStmt *ReindexStatement);
+extern List * PlanReindexStmt(ReindexStmt *ReindexStatement,
+							  const char *ReindexCommand);
 extern List * PlanDropIndexStmt(DropStmt *dropIndexStatement,
 								const char *dropIndexCommand);
 extern void PostProcessIndexStmt(IndexStmt *indexStmt);

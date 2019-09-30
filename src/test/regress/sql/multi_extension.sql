@@ -53,6 +53,9 @@ WHERE pgd.refclassid = 'pg_extension'::regclass AND
 DROP EXTENSION citus;
 \c
 
+-- these tests switch between citus versions and call ddl's that require pg_dist_object to be created
+SET citus.enable_object_propagation TO 'false';
+
 SET citus.enable_version_checks TO 'false';
 
 CREATE EXTENSION citus VERSION '7.0-1';

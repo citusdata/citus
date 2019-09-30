@@ -33,6 +33,7 @@ test: multi_mx_repartition_udt_prepare mx_foreign_key_to_reference_table
 test: multi_mx_repartition_join_w1 multi_mx_repartition_join_w2 multi_mx_repartition_udt_w1 multi_mx_repartition_udt_w2
 test: multi_mx_metadata 
 test: multi_mx_call
+test: multi_mx_function_call_delegation
 test: multi_mx_modifications local_shard_execution
 test: multi_mx_transaction_recovery
 test: multi_mx_modifying_xacts

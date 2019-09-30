@@ -26,22 +26,26 @@
 #include "access/xact.h"
 #include "catalog/namespace.h"
 #include "catalog/pg_proc.h"
-#include "distributed/commands.h"
 #include "catalog/pg_type.h"
+#include "commands/extension.h"
 #include "distributed/colocation_utils.h"
-#include "distributed/master_protocol.h"
+#include "distributed/commands.h"
+#include "distributed/commands/utility_hook.h"
+#include "distributed/deparser.h"
 #include "distributed/maintenanced.h"
-#include "distributed/metadata_sync.h"
+#include "distributed/master_protocol.h"
 #include "distributed/metadata/distobject.h"
 #include "distributed/metadata/pg_dist_object.h"
+#include "distributed/metadata_sync.h"
 #include "distributed/multi_executor.h"
 #include "distributed/relation_access_tracking.h"
 #include "distributed/worker_transaction.h"
 #include "parser/parse_coerce.h"
+#include "parser/parse_type.h"
 #include "storage/lmgr.h"
 #include "utils/builtins.h"
-#include "utils/fmgrprotos.h"
 #include "utils/fmgroids.h"
+#include "utils/fmgrprotos.h"
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
 
@@ -62,9 +66,22 @@ static void UpdateFunctionDistributionInfo(const ObjectAddress *distAddress,
 										   int *colocationId);
 static void EnsureSequentialModeForFunctionDDL(void);
 static void TriggerSyncMetadataToPrimaryNodes(void);
+static bool ShouldPropagateAlterFunction(const ObjectAddress *address);
+static ObjectAddress * FunctionToObjectAddress(ObjectType objectType,
+											   ObjectWithArgs *objectWithArgs,
+											   bool missing_ok);
+static void ErrorIfUnsupportedAlterFunctionStmt(AlterFunctionStmt *stmt);
 
 
 PG_FUNCTION_INFO_V1(create_distributed_function);
+
+#if PG_VERSION_NUM > 110000
+#define AssertIsFunctionOrProcedure(objtype) \
+	Assert((objtype) == OBJECT_FUNCTION || (objtype) == OBJECT_PROCEDURE)
+#else
+#define AssertIsFunctionOrProcedure(objtype) \
+	Assert(objtype == OBJECT_FUNCTION)
+#endif
 
 
 /*
@@ -610,5 +627,474 @@ TriggerSyncMetadataToPrimaryNodes(void)
 	if (triggerMetadataSync)
 	{
 		TriggerMetadataSync(MyDatabaseId);
+	}
+}
+
+
+/*
+ * ShouldPropagateAlterFunction returns, based on the address of a function, if alter
+ * statements targeting the function should be propagated.
+ */
+static bool
+ShouldPropagateAlterFunction(const ObjectAddress *address)
+{
+	if (creating_extension)
+	{
+		/*
+		 * extensions should be created separately on the workers, functions cascading
+		 * from an extension should therefore not be propagated.
+		 */
+		return false;
+	}
+
+	if (!EnableDependencyCreation)
+	{
+		/*
+		 * we are configured to disable object propagation, should not propagate anything
+		 */
+		return false;
+	}
+
+	if (!IsObjectDistributed(address))
+	{
+		/* do not propagate alter function for non-distributed functions */
+		return false;
+	}
+
+	return true;
+}
+
+
+/*
+ * PlanAlterFunctionStmt is invoked for alter function statements with actions. Here we
+ * plan the jobs to be executed on the workers for functions that have been distributed in
+ * the cluster.
+ */
+List *
+PlanAlterFunctionStmt(AlterFunctionStmt *stmt, const char *queryString)
+{
+	const char *sql = NULL;
+	const ObjectAddress *address = NULL;
+	List *commands = NIL;
+
+	/* AlterFunctionStmt->objtype has only been added since pg11 */
+#if PG_VERSION_NUM > 110000
+	AssertIsFunctionOrProcedure(stmt->objtype);
+#endif
+
+	address = GetObjectAddressFromParseTree((Node *) stmt, false);
+	if (!ShouldPropagateAlterFunction(address))
+	{
+		return NIL;
+	}
+
+	EnsureCoordinator();
+	ErrorIfUnsupportedAlterFunctionStmt(stmt);
+	EnsureSequentialModeForFunctionDDL();
+	QualifyTreeNode((Node *) stmt);
+	sql = DeparseTreeNode((Node *) stmt);
+
+	commands = list_make3(DISABLE_DDL_PROPAGATION,
+						  (void *) sql,
+						  ENABLE_DDL_PROPAGATION);
+
+	return NodeDDLTaskList(ALL_WORKERS, commands);
+}
+
+
+/*
+ * PlanRenameFunctionStmt is called when the user is renaming a function. The invocation
+ * happens before the statement is applied locally.
+ *
+ * As the function already exists we have access to the ObjectAddress, this is used to
+ * check if it is distributed. If so the rename is executed on all the workers to keep the
+ * types in sync across the cluster.
+ */
+List *
+PlanRenameFunctionStmt(RenameStmt *stmt, const char *queryString)
+{
+	const char *sql = NULL;
+	const ObjectAddress *address = NULL;
+	List *commands = NIL;
+
+	AssertIsFunctionOrProcedure(stmt->renameType);
+
+	address = GetObjectAddressFromParseTree((Node *) stmt, false);
+	if (!ShouldPropagateAlterFunction(address))
+	{
+		return NIL;
+	}
+
+	EnsureCoordinator();
+	EnsureSequentialModeForFunctionDDL();
+	QualifyTreeNode((Node *) stmt);
+	sql = DeparseTreeNode((Node *) stmt);
+
+	commands = list_make3(DISABLE_DDL_PROPAGATION,
+						  (void *) sql,
+						  ENABLE_DDL_PROPAGATION);
+
+	return NodeDDLTaskList(ALL_WORKERS, commands);
+}
+
+
+/*
+ * PlanAlterFunctionSchemaStmt is executed before the statement is applied to the local
+ * postgres instance.
+ *
+ * In this stage we can prepare the commands that need to be run on all workers.
+ */
+List *
+PlanAlterFunctionSchemaStmt(AlterObjectSchemaStmt *stmt, const char *queryString)
+{
+	const char *sql = NULL;
+	const ObjectAddress *address = NULL;
+	List *commands = NIL;
+
+	AssertIsFunctionOrProcedure(stmt->objectType);
+
+	address = GetObjectAddressFromParseTree((Node *) stmt, false);
+	if (!ShouldPropagateAlterFunction(address))
+	{
+		return NIL;
+	}
+
+	EnsureCoordinator();
+	EnsureSequentialModeForFunctionDDL();
+	QualifyTreeNode((Node *) stmt);
+	sql = DeparseTreeNode((Node *) stmt);
+
+	commands = list_make3(DISABLE_DDL_PROPAGATION,
+						  (void *) sql,
+						  ENABLE_DDL_PROPAGATION);
+
+	return NodeDDLTaskList(ALL_WORKERS, commands);
+}
+
+
+/*
+ * PlanAlterTypeOwnerStmt is called for change of owner ship of functions before the owner
+ * ship is changed on the local instance.
+ *
+ * If the function for which the owner is changed is distributed we execute the change on
+ * all the workers to keep the type in sync across the cluster.
+ */
+List *
+PlanAlterFunctionOwnerStmt(AlterOwnerStmt *stmt, const char *queryString)
+{
+	const ObjectAddress *address = NULL;
+	const char *sql = NULL;
+	List *commands = NULL;
+
+	AssertIsFunctionOrProcedure(stmt->objectType);
+
+	address = GetObjectAddressFromParseTree((Node *) stmt, false);
+	if (!ShouldPropagateAlterFunction(address))
+	{
+		return NIL;
+	}
+
+	EnsureCoordinator();
+	EnsureSequentialModeForFunctionDDL();
+	QualifyTreeNode((Node *) stmt);
+	sql = DeparseTreeNode((Node *) stmt);
+
+	commands = list_make3(DISABLE_DDL_PROPAGATION,
+						  (void *) sql,
+						  ENABLE_DDL_PROPAGATION);
+
+	return NodeDDLTaskList(ALL_WORKERS, commands);
+}
+
+
+/*
+ * PlanDropFunctionStmt gets called during the planning phase of a DROP FUNCTION statement
+ * and returns a list of DDLJob's that will drop any distributed functions from the
+ * workers.
+ *
+ * The DropStmt could have multiple objects to drop, the list of objects will be filtered
+ * to only keep the distributed functions for deletion on the workers. Non-distributed
+ * functions will still be dropped locally but not on the workers.
+ */
+List *
+PlanDropFunctionStmt(DropStmt *stmt, const char *queryString)
+{
+	List *deletingObjectWithArgsList = stmt->objects;
+	List *distributedObjectWithArgsList = NIL;
+	List *distributedFunctionAddresses = NIL;
+	ListCell *addressCell = NULL;
+	const char *dropStmtSql = NULL;
+	List *commands = NULL;
+	ListCell *objectWithArgsListCell = NULL;
+	DropStmt *stmtCopy = NULL;
+
+	AssertIsFunctionOrProcedure(stmt->removeType);
+
+	if (creating_extension)
+	{
+		/*
+		 * extensions should be created separately on the workers, types cascading from an
+		 * extension should therefor not be propagated here.
+		 */
+		return NIL;
+	}
+
+	if (!EnableDependencyCreation)
+	{
+		/*
+		 * we are configured to disable object propagation, should not propagate anything
+		 */
+		return NIL;
+	}
+
+
+	/*
+	 * Our statements need to be fully qualified so we can drop them from the right schema
+	 * on the workers
+	 */
+	QualifyTreeNode((Node *) stmt);
+
+	/*
+	 * iterate over all functions to be dropped and filter to keep only distributed
+	 * functions.
+	 */
+	foreach(objectWithArgsListCell, deletingObjectWithArgsList)
+	{
+		ObjectWithArgs *func = NULL;
+		ObjectAddress *address = NULL;
+
+		func = castNode(ObjectWithArgs, lfirst(objectWithArgsListCell));
+		address = FunctionToObjectAddress(stmt->removeType, func, stmt->missing_ok);
+
+		if (!IsObjectDistributed(address))
+		{
+			continue;
+		}
+
+		/* collect information for all distributed functions */
+		distributedFunctionAddresses = lappend(distributedFunctionAddresses, address);
+		distributedObjectWithArgsList = lappend(distributedObjectWithArgsList, func);
+	}
+
+	if (list_length(distributedObjectWithArgsList) <= 0)
+	{
+		/* no distributed functions to drop */
+		return NIL;
+	}
+
+	/*
+	 * managing types can only be done on the coordinator if ddl propagation is on. when
+	 * it is off we will never get here. MX workers don't have a notion of distributed
+	 * types, so we block the call.
+	 */
+	EnsureCoordinator();
+	EnsureSequentialModeForFunctionDDL();
+
+	/* remove the entries for the distributed objects on dropping */
+	foreach(addressCell, distributedFunctionAddresses)
+	{
+		ObjectAddress *address = (ObjectAddress *) lfirst(addressCell);
+		UnmarkObjectDistributed(address);
+	}
+
+	/*
+	 * Swap the list of objects before deparsing and restore the old list after. This
+	 * ensures we only have distributed functions in the deparsed drop statement.
+	 */
+	stmtCopy = copyObject(stmt);
+	stmtCopy->objects = distributedObjectWithArgsList;
+	dropStmtSql = DeparseTreeNode((Node *) stmtCopy);
+
+	commands = list_make3(DISABLE_DDL_PROPAGATION,
+						  (void *) dropStmtSql,
+						  ENABLE_DDL_PROPAGATION);
+
+	return NodeDDLTaskList(ALL_WORKERS, commands);
+}
+
+
+/*
+ * ProcessAlterFunctionSchemaStmt is executed after the change has been applied locally,
+ * we can now use the new dependencies of the function to ensure all its dependencies
+ * exist on the workers before we apply the commands remotely.
+ */
+void
+ProcessAlterFunctionSchemaStmt(AlterObjectSchemaStmt *stmt, const char *queryString)
+{
+	const ObjectAddress *address = NULL;
+
+	AssertIsFunctionOrProcedure(stmt->objectType);
+
+	address = GetObjectAddressFromParseTree((Node *) stmt, false);
+	if (!ShouldPropagateAlterFunction(address))
+	{
+		return;
+	}
+
+	/* dependencies have changed (schema) lets ensure they exist */
+	EnsureDependenciesExistsOnAllNodes(address);
+}
+
+
+/*
+ * AlterFunctionStmtObjectAddress returns the ObjectAddress of the subject in the
+ * AlterFunctionStmt. If missing_ok is set to false an error will be raised if postgres
+ * was unable to find the function/procedure that was the target of the statement.
+ */
+const ObjectAddress *
+AlterFunctionStmtObjectAddress(AlterFunctionStmt *stmt, bool missing_ok)
+{
+	ObjectType objectType = OBJECT_FUNCTION;
+
+#if PG_VERSION_NUM > 110000
+	objectType = stmt->objtype;
+#endif
+
+	return FunctionToObjectAddress(objectType, stmt->func, missing_ok);
+}
+
+
+/*
+ * RenameFunctionStmtObjectAddress returns the ObjectAddress of the function that is the
+ * subject of the RenameStmt. Errors if missing_ok is false.
+ */
+const ObjectAddress *
+RenameFunctionStmtObjectAddress(RenameStmt *stmt, bool missing_ok)
+{
+	return FunctionToObjectAddress(stmt->renameType,
+								   castNode(ObjectWithArgs, stmt->object), missing_ok);
+}
+
+
+/*
+ * AlterFunctionOwnerObjectAddress returns the ObjectAddress of the function that is the
+ * subject of the AlterOwnerStmt. Errors if missing_ok is false.
+ */
+const ObjectAddress *
+AlterFunctionOwnerObjectAddress(AlterOwnerStmt *stmt, bool missing_ok)
+{
+	return FunctionToObjectAddress(stmt->objectType,
+								   castNode(ObjectWithArgs, stmt->object), missing_ok);
+}
+
+
+/*
+ * AlterFunctionSchemaStmtObjectAddress returns the ObjectAddress of the function that is
+ * the subject of the AlterObjectSchemaStmt. Errors if missing_ok is false.
+ *
+ * This could be called both before or after it has been applied locally. It will look in
+ * the old schema first, if the function cannot be found in that schema it will look in
+ * the new schema. Errors if missing_ok is false and the type cannot be found in either of
+ * the schemas.
+ */
+const ObjectAddress *
+AlterFunctionSchemaStmtObjectAddress(AlterObjectSchemaStmt *stmt, bool missing_ok)
+{
+	ObjectWithArgs *objectWithArgs = NULL;
+	Oid funcOid = InvalidOid;
+	List *names = NIL;
+	ObjectAddress *address = NULL;
+
+	AssertIsFunctionOrProcedure(stmt->objectType);
+
+	objectWithArgs = castNode(ObjectWithArgs, stmt->object);
+	funcOid = LookupFuncWithArgsCompat(stmt->objectType, objectWithArgs, true);
+	names = objectWithArgs->objname;
+
+	if (funcOid == InvalidOid)
+	{
+		/*
+		 * couldn't find the function, might have already been moved to the new schema, we
+		 * construct a new objname that uses the new schema to search in.
+		 */
+
+		/* the name of the function is the last in the list of names */
+		Value *funcNameStr = lfirst(list_tail(names));
+		List *newNames = list_make2(makeString(stmt->newschema), funcNameStr);
+
+		/*
+		 * we don't error here either, as the error would be not a good user facing
+		 * error if the type didn't exist in the first place.
+		 */
+		objectWithArgs->objname = newNames;
+		funcOid = LookupFuncWithArgsCompat(stmt->objectType, objectWithArgs, true);
+		objectWithArgs->objname = names; /* restore the original names */
+
+		/*
+		 * if the function is still invalid we couldn't find the function, cause postgres
+		 * to error by preforming a lookup once more. Since we know the
+		 */
+		if (!missing_ok && funcOid == InvalidOid)
+		{
+			/*
+			 * this will most probably throw an error, unless for some reason the function
+			 * has just been created (if possible at all). For safety we assign the
+			 * funcOid.
+			 */
+			funcOid = LookupFuncWithArgsCompat(stmt->objectType, objectWithArgs,
+											   missing_ok);
+		}
+	}
+
+	address = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*address, ProcedureRelationId, funcOid);
+
+	return address;
+}
+
+
+/*
+ * FunctionToObjectAddress returns the ObjectAddress of a Function or Procedure based on
+ * its type and ObjectWithArgs describing the Function/Procedure. If missing_ok is set to
+ * false an error will be raised by postgres explaining the Function/Procedure could not
+ * be found.
+ */
+static ObjectAddress *
+FunctionToObjectAddress(ObjectType objectType, ObjectWithArgs *objectWithArgs,
+						bool missing_ok)
+{
+	Oid funcOid = InvalidOid;
+	ObjectAddress *address = NULL;
+
+	AssertIsFunctionOrProcedure(objectType);
+
+	funcOid = LookupFuncWithArgsCompat(objectType, objectWithArgs, missing_ok);
+	address = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*address, ProcedureRelationId, funcOid);
+
+	return address;
+}
+
+
+/*
+ * ErrorIfUnsupportedAlterFunctionStmt raises an error if the AlterFunctionStmt contains a
+ * construct that is not supported to be altered on a distributed function. It is assumed
+ * the statement passed in is already tested to be targeting a distributed function, and
+ * will only execute the checks to error on unsupported constructs.
+ *
+ * Unsupported Constructs:
+ *  - ALTER FUNCTION ... SET ... FROM CURRENT
+ */
+static void
+ErrorIfUnsupportedAlterFunctionStmt(AlterFunctionStmt *stmt)
+{
+	ListCell *actionCell = NULL;
+
+	foreach(actionCell, stmt->actions)
+	{
+		DefElem *action = castNode(DefElem, lfirst(actionCell));
+		if (strcmp(action->defname, "set") == 0)
+		{
+			VariableSetStmt *setStmt = castNode(VariableSetStmt, action->arg);
+			if (setStmt->kind == VAR_SET_CURRENT)
+			{
+				/* check if the set action is a SET ... FROM CURRENT */
+				ereport(ERROR, (errmsg("unsupported ALTER FUNCTION ... SET ... FROM "
+									   "CURRENT for a distributed function"),
+								errhint("SET FROM CURRENT is not supported for "
+										"distributed functions, instead use the SET ... "
+										"TO ... syntax with a constant value.")));
+			}
+		}
 	}
 }
