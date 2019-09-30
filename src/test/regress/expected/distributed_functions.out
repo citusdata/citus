@@ -314,7 +314,7 @@ ERROR:  distrtibuted functions are not allowed to depend on an extension
 DETAIL:  function "add" is already distributed. Functions from extensions are expected to be created on the workers by the extension they depend on.
 SELECT create_distributed_function('pg_catalog.citus_drop_trigger()');
 ERROR:  unable to create a distributed function from functions owned by an extension
-DETAIL:  Function "citus_drop_trigger" has a dependency on extension "citus". Functions depending on an extension cannot be distributed. Create the function by creating the extension on the workers.
+DETAIL:  Function "pg_catalog.citus_drop_trigger()" has a dependency on extension "citus". Functions depending on an extension cannot be distributed. Create the function by creating the extension on the workers.
 DROP FUNCTION add(int,int);
 -- call should fail as function should have been dropped
 SELECT * FROM run_command_on_workers('SELECT function_tests.add(2,3);') ORDER BY 1,2;

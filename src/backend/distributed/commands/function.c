@@ -72,6 +72,7 @@ static ObjectAddress * FunctionToObjectAddress(ObjectType objectType,
 											   ObjectWithArgs *objectWithArgs,
 											   bool missing_ok);
 static void ErrorIfUnsupportedAlterFunctionStmt(AlterFunctionStmt *stmt);
+static void ErrorIfFunctionDependsOnExtension(const ObjectAddress *functionAddress);
 
 
 PG_FUNCTION_INFO_V1(create_distributed_function);
@@ -99,7 +100,6 @@ create_distributed_function(PG_FUNCTION_ARGS)
 
 	const char *ddlCommand = NULL;
 	ObjectAddress functionAddress = { 0 };
-	ObjectAddress extensionAddress = { 0 };
 
 	int distributionArgumentIndex = -1;
 	Oid distributionArgumentOid = InvalidOid;
@@ -146,19 +146,7 @@ create_distributed_function(PG_FUNCTION_ARGS)
 
 
 	ObjectAddressSet(functionAddress, ProcedureRelationId, funcOid);
-
-	if (IsObjectAddressOwnedByExtension(&functionAddress, &extensionAddress))
-	{
-		char *extensionName = getObjectIdentity(&extensionAddress);
-		char *functionName = get_func_name(funcOid);
-		ereport(ERROR, (errmsg("unable to create a distributed function from functions "
-							   "owned by an extension"),
-						errdetail("Function \"%s\" has a dependency on extension \"%s\". "
-								  "Functions depending on an extension cannot be "
-								  "distributed. Create the function by creating the "
-								  "extension on the workers.", functionName,
-								  extensionName)));
-	}
+	ErrorIfFunctionDependsOnExtension(&functionAddress);
 
 	/*
 	 * when we allow propagation within a transaction block we should make sure to only
@@ -1331,5 +1319,30 @@ ErrorIfUnsupportedAlterFunctionStmt(AlterFunctionStmt *stmt)
 										"TO ... syntax with a constant value.")));
 			}
 		}
+	}
+}
+
+
+/*
+ * ErrorIfFunctionDependsOnExtension functions depending on extensions should raise an
+ * error informing the user why they can't be distributed.
+ */
+static void
+ErrorIfFunctionDependsOnExtension(const ObjectAddress *functionAddress)
+{
+	/* captures the extension address during lookup */
+	ObjectAddress extensionAddress = { 0 };
+
+	if (IsObjectAddressOwnedByExtension(functionAddress, &extensionAddress))
+	{
+		char *functionName = getObjectIdentity(functionAddress);
+		char *extensionName = getObjectIdentity(&extensionAddress);
+		ereport(ERROR, (errmsg("unable to create a distributed function from functions "
+							   "owned by an extension"),
+						errdetail("Function \"%s\" has a dependency on extension \"%s\". "
+								  "Functions depending on an extension cannot be "
+								  "distributed. Create the function by creating the "
+								  "extension on the workers.", functionName,
+								  extensionName)));
 	}
 }
