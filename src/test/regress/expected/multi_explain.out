@@ -280,6 +280,23 @@ Sort
                     ->  HashAggregate
                           Group Key: l_quantity
                           ->  Seq Scan on lineitem_290000 lineitem
+-- Test analyze (with TIMING FALSE and SUMMARY FALSE for consistent output)
+EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE)
+	SELECT l_quantity, count(*) count_quantity FROM lineitem
+	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
+Sort (actual rows=50 loops=1)
+  Sort Key: COALESCE((pg_catalog.sum((COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint))))::bigint, '0'::bigint), remote_scan.l_quantity
+  Sort Method: quicksort  Memory: 27kB
+  ->  HashAggregate (actual rows=50 loops=1)
+        Group Key: remote_scan.l_quantity
+        ->  Custom Scan (Citus Adaptive) (actual rows=100 loops=1)
+              Task Count: 2
+              Tasks Shown: One of 2
+              ->  Task
+                    Node: host=localhost port=57638 dbname=regression
+                    ->  HashAggregate (actual rows=50 loops=1)
+                          Group Key: l_quantity
+                          ->  Seq Scan on lineitem_290000 lineitem (actual rows=6000 loops=1)
 -- Test verbose
 EXPLAIN (COSTS FALSE, VERBOSE TRUE)
 	SELECT sum(l_quantity) / avg(l_quantity) FROM lineitem;
@@ -341,6 +358,23 @@ Custom Scan (Citus Adaptive)
               ->  Index Scan using lineitem_pkey_290000 on lineitem_290000 lineitem
                     Index Cond: (l_orderkey = 1)
                     Filter: (l_partkey = 0)
+-- Test analyze (with TIMING FALSE and SUMMARY FALSE for consistent output)
+BEGIN;
+EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE)
+	UPDATE lineitem
+	SET l_suppkey = 12
+	WHERE l_orderkey = 1 AND l_partkey = 0;
+Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
+  Task Count: 1
+  Tasks Shown: All
+  ->  Task
+        Node: host=localhost port=57638 dbname=regression
+        ->  Update on lineitem_290000 lineitem (actual rows=0 loops=1)
+              ->  Index Scan using lineitem_pkey_290000 on lineitem_290000 lineitem (actual rows=0 loops=1)
+                    Index Cond: (l_orderkey = 1)
+                    Filter: (l_partkey = 0)
+                    Rows Removed by Filter: 6
+ROLLBACk;
 -- Test delete
 EXPLAIN (COSTS FALSE)
 	DELETE FROM lineitem
@@ -816,6 +850,28 @@ Custom Scan (Citus Adaptive)
         Node: host=localhost port=57638 dbname=regression
         ->  Delete on lineitem_hash_part_360044 lineitem_hash_part
               ->  Seq Scan on lineitem_hash_part_360044 lineitem_hash_part
+-- Test analyze (with TIMING FALSE and SUMMARY FALSE for consistent output)
+EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE)
+	SELECT l_quantity, count(*) count_quantity FROM lineitem
+	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
+Sort (actual rows=50 loops=1)
+  Sort Key: COALESCE((pg_catalog.sum((COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint))))::bigint, '0'::bigint), remote_scan.l_quantity
+  Sort Method: quicksort  Memory: 27kB
+  ->  HashAggregate (actual rows=50 loops=1)
+        Group Key: remote_scan.l_quantity
+        ->  Custom Scan (Citus Adaptive) (actual rows=100 loops=1)
+              Task Count: 2
+              Tasks Shown: All
+              ->  Task
+                    Node: host=localhost port=57638 dbname=regression
+                    ->  HashAggregate (actual rows=50 loops=1)
+                          Group Key: l_quantity
+                          ->  Seq Scan on lineitem_290000 lineitem (actual rows=6000 loops=1)
+              ->  Task
+                    Node: host=localhost port=57637 dbname=regression
+                    ->  HashAggregate (actual rows=50 loops=1)
+                          Group Key: l_quantity
+                          ->  Seq Scan on lineitem_290001 lineitem (actual rows=6000 loops=1)
 SET citus.explain_all_tasks TO off;
 -- Test update with subquery
 EXPLAIN (COSTS FALSE)
@@ -1102,7 +1158,7 @@ Custom Scan (Citus INSERT ... SELECT via coordinator)
               Task Count: 4
               Tasks Shown: One of 4
               ->  Task
-                    Node: host=localhost port=57637 dbname=regression
+                    Node: host=localhost port=57638 dbname=regression
                     ->  Limit
                           ->  Seq Scan on orders_hash_part_360045 orders_hash_part
 SELECT true AS valid FROM explain_json($$
@@ -1119,7 +1175,7 @@ Custom Scan (Citus INSERT ... SELECT via coordinator)
               Task Count: 4
               Tasks Shown: One of 4
               ->  Task
-                    Node: host=localhost port=57637 dbname=regression
+                    Node: host=localhost port=57638 dbname=regression
                     ->  Limit
                           ->  Seq Scan on orders_hash_part_360045 orders_hash_part
 EXPLAIN (COSTS OFF)
@@ -1170,7 +1226,7 @@ SELECT l_orderkey FROM series JOIN keys ON (s = l_orderkey)
 ORDER BY s;
 Custom Scan (Citus Adaptive)
   Output: remote_scan.l_orderkey
-  ->  Distributed Subplan 57_1
+  ->  Distributed Subplan 60_1
         ->  HashAggregate
               Output: remote_scan.l_orderkey
               Group Key: remote_scan.l_orderkey
@@ -1185,7 +1241,7 @@ Custom Scan (Citus Adaptive)
                                 Group Key: lineitem_hash_part.l_orderkey
                                 ->  Seq Scan on public.lineitem_hash_part_360041 lineitem_hash_part
                                       Output: l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment
-  ->  Distributed Subplan 57_2
+  ->  Distributed Subplan 60_2
         ->  Function Scan on pg_catalog.generate_series s
               Output: s
               Function Call: generate_series(1, 10)
@@ -1201,13 +1257,13 @@ Custom Scan (Citus Adaptive)
                     Sort Key: intermediate_result.s
                     ->  Function Scan on pg_catalog.read_intermediate_result intermediate_result
                           Output: intermediate_result.s
-                          Function Call: read_intermediate_result('57_2'::text, 'binary'::citus_copy_format)
+                          Function Call: read_intermediate_result('60_2'::text, 'binary'::citus_copy_format)
               ->  Sort
                     Output: intermediate_result_1.l_orderkey
                     Sort Key: intermediate_result_1.l_orderkey
                     ->  Function Scan on pg_catalog.read_intermediate_result intermediate_result_1
                           Output: intermediate_result_1.l_orderkey
-                          Function Call: read_intermediate_result('57_1'::text, 'binary'::citus_copy_format)
+                          Function Call: read_intermediate_result('60_1'::text, 'binary'::citus_copy_format)
 SELECT true AS valid FROM explain_json($$
   WITH result AS (
     SELECT l_quantity, count(*) count_quantity FROM lineitem
