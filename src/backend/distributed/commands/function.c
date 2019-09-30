@@ -790,7 +790,7 @@ const ObjectAddress *
 CreateFunctionStmtObjectAddress(CreateFunctionStmt *stmt, bool missing_ok)
 {
 	ObjectType objectType = OBJECT_FUNCTION;
-	ObjectWithArgs *owa = NULL;
+	ObjectWithArgs *objectWithArgs = NULL;
 	ListCell *parameterCell = NULL;
 
 #if PG_VERSION_NUM > 110000
@@ -800,16 +800,16 @@ CreateFunctionStmtObjectAddress(CreateFunctionStmt *stmt, bool missing_ok)
 	}
 #endif
 
-	owa = makeNode(ObjectWithArgs);
-	owa->objname = stmt->funcname;
+	objectWithArgs = makeNode(ObjectWithArgs);
+	objectWithArgs->objname = stmt->funcname;
 
 	foreach(parameterCell, stmt->parameters)
 	{
 		FunctionParameter *funcParam = castNode(FunctionParameter, lfirst(parameterCell));
-		owa->objargs = lappend(owa->objargs, funcParam->argType);
+		objectWithArgs->objargs = lappend(objectWithArgs->objargs, funcParam->argType);
 	}
 
-	return FunctionToObjectAddress(objectType, owa, missing_ok);
+	return FunctionToObjectAddress(objectType, objectWithArgs, missing_ok);
 }
 
 
