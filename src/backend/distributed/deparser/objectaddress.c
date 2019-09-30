@@ -143,7 +143,7 @@ RenameStmtObjectAddress(RenameStmt *stmt, bool missing_ok)
 			return RenameAttributeStmtObjectAddress(stmt, missing_ok);
 		}
 
-#if PG_VERSION_NUM > 110000
+#if PG_VERSION_NUM >= 110000
 		case OBJECT_PROCEDURE:
 #endif
 		case OBJECT_FUNCTION:
@@ -170,7 +170,7 @@ AlterObjectSchemaStmtObjectAddress(AlterObjectSchemaStmt *stmt, bool missing_ok)
 			return AlterTypeSchemaStmtObjectAddress(stmt, missing_ok);
 		}
 
-#if PG_VERSION_NUM > 110000
+#if PG_VERSION_NUM >= 110000
 		case OBJECT_PROCEDURE:
 #endif
 		case OBJECT_FUNCTION:
@@ -218,7 +218,7 @@ AlterOwnerStmtObjectAddress(AlterOwnerStmt *stmt, bool missing_ok)
 			return AlterTypeOwnerObjectAddress(stmt, missing_ok);
 		}
 
-#if PG_VERSION_NUM > 110000
+#if PG_VERSION_NUM >= 110000
 		case OBJECT_PROCEDURE:
 #endif
 		case OBJECT_FUNCTION:
@@ -250,7 +250,7 @@ AlterObjectDependsStmtObjectAddress(AlterObjectDependsStmt *stmt, bool missing_o
 {
 	switch (stmt->objectType)
 	{
-#if PG_VERSION_NUM > 110000
+#if PG_VERSION_NUM >= 110000
 		case OBJECT_PROCEDURE:
 #endif
 		case OBJECT_FUNCTION:

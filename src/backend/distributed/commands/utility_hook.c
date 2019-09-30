@@ -426,7 +426,7 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 					break;
 				}
 
-#if PG_VERSION_NUM > 110000
+#if PG_VERSION_NUM >= 110000
 				case OBJECT_PROCEDURE:
 #endif
 				case OBJECT_FUNCTION:
@@ -484,7 +484,7 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 					break;
 				}
 
-#if PG_VERSION_NUM > 110000
+#if PG_VERSION_NUM >= 110000
 				case OBJECT_PROCEDURE:
 #endif
 				case OBJECT_FUNCTION:
@@ -843,7 +843,7 @@ PlanAlterOwnerStmt(AlterOwnerStmt *stmt, const char *queryString)
 			return PlanAlterTypeOwnerStmt(stmt, queryString);
 		}
 
-#if PG_VERSION_NUM > 110000
+#if PG_VERSION_NUM >= 110000
 		case OBJECT_PROCEDURE:
 #endif
 		case OBJECT_FUNCTION:
@@ -871,7 +871,7 @@ PlanAlterObjectDependsStmt(AlterObjectDependsStmt *stmt, const char *queryString
 {
 	switch (stmt->objectType)
 	{
-#if PG_VERSION_NUM > 110000
+#if PG_VERSION_NUM >= 110000
 		case OBJECT_PROCEDURE:
 #endif
 		case OBJECT_FUNCTION:
