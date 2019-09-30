@@ -72,6 +72,10 @@ extern const ObjectAddress * AlterFunctionSchemaStmtObjectAddress(
 extern void ProcessAlterFunctionSchemaStmt(AlterObjectSchemaStmt *stmt,
 										   const char *queryString);
 extern List * PlanDropFunctionStmt(DropStmt *stmt, const char *queryString);
+extern List * PlanAlterFunctionDependsStmt(AlterObjectDependsStmt *stmt,
+										   const char *queryString);
+extern const ObjectAddress * AlterFunctionDependsStmtObjectAddress(
+	AlterObjectDependsStmt *stmt, bool missing_ok);
 
 
 /* grant.c - forward declarations */

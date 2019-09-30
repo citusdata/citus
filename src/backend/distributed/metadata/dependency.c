@@ -60,9 +60,6 @@ static bool FollowNewSupportedDependencies(void *context, Form_pg_depend pg_depe
 static void ApplyAddToDependencyList(void *context, Form_pg_depend pg_depend);
 static List * ExpandCitusSupportedTypes(void *context, const ObjectAddress *target);
 
-/* forward declaration of support functions to decide what to follow */
-static bool IsObjectAddressOwnedByExtension(const ObjectAddress *target);
-
 
 /*
  * GetDependenciesForObject returns a list of ObjectAddesses to be created in order
@@ -403,9 +400,13 @@ SupportedDependencyByCitus(const ObjectAddress *address)
  * IsObjectAddressOwnedByExtension returns whether or not the object is owned by an
  * extension. It is assumed that an object having a dependency on an extension is created
  * by that extension and therefore owned by that extension.
+ *
+ * If extensionAddress is not set to a NULL pointer the function will write the extension
+ * address this function depends on into this location.
  */
-static bool
-IsObjectAddressOwnedByExtension(const ObjectAddress *target)
+bool
+IsObjectAddressOwnedByExtension(const ObjectAddress *target,
+								ObjectAddress *extensionAddress)
 {
 	Relation depRel = NULL;
 	ScanKeyData key[2];
@@ -428,6 +429,11 @@ IsObjectAddressOwnedByExtension(const ObjectAddress *target)
 		if (pg_depend->deptype == DEPENDENCY_EXTENSION)
 		{
 			result = true;
+			if (extensionAddress != NULL)
+			{
+				ObjectAddressSubSet(*extensionAddress, pg_depend->refclassid,
+									pg_depend->refobjid, pg_depend->refobjsubid);
+			}
 			break;
 		}
 	}
@@ -489,7 +495,7 @@ FollowNewSupportedDependencies(void *context, Form_pg_depend pg_depend)
 	 * Objects owned by an extension are assumed to be created on the workers by creating
 	 * the extension in the cluster
 	 */
-	if (IsObjectAddressOwnedByExtension(&address))
+	if (IsObjectAddressOwnedByExtension(&address, NULL))
 	{
 		return false;
 	}
@@ -540,7 +546,7 @@ FollowAllSupportedDependencies(void *context, Form_pg_depend pg_depend)
 	 * Objects owned by an extension are assumed to be created on the workers by creating
 	 * the extension in the cluster
 	 */
-	if (IsObjectAddressOwnedByExtension(&address))
+	if (IsObjectAddressOwnedByExtension(&address, NULL))
 	{
 		return false;
 	}

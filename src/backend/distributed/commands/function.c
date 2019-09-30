@@ -72,6 +72,7 @@ static ObjectAddress * FunctionToObjectAddress(ObjectType objectType,
 											   ObjectWithArgs *objectWithArgs,
 											   bool missing_ok);
 static void ErrorIfUnsupportedAlterFunctionStmt(AlterFunctionStmt *stmt);
+static void ErrorIfFunctionDependsOnExtension(const ObjectAddress *functionAddress);
 
 
 PG_FUNCTION_INFO_V1(create_distributed_function);
@@ -145,6 +146,7 @@ create_distributed_function(PG_FUNCTION_ARGS)
 
 
 	ObjectAddressSet(functionAddress, ProcedureRelationId, funcOid);
+	ErrorIfFunctionDependsOnExtension(&functionAddress);
 
 	/*
 	 * when we allow propagation within a transaction block we should make sure to only
@@ -1062,6 +1064,78 @@ PlanDropFunctionStmt(DropStmt *stmt, const char *queryString)
 
 
 /*
+ * PlanAlterFunctionDependsStmt is called during the planning phase of an
+ * ALTER FUNCION ... DEPENDS ON EXTENSION ... statement. Since functions depending on
+ * extensions are assumed to be Owned by an extension we assume the extension to keep the
+ * function in sync.
+ *
+ * If we would allow users to create a dependency between a distributed function and an
+ * extension our pruning logic for which objects to distribute as dependencies of other
+ * objects will change significantly which could cause issues adding new workers. Hence we
+ * don't allow this dependency to be created.
+ */
+List *
+PlanAlterFunctionDependsStmt(AlterObjectDependsStmt *stmt, const char *queryString)
+{
+	const ObjectAddress *address = NULL;
+	const char *functionName = NULL;
+
+	AssertIsFunctionOrProcedure(stmt->objectType);
+
+	if (creating_extension)
+	{
+		/*
+		 * extensions should be created separately on the workers, types cascading from an
+		 * extension should therefor not be propagated here.
+		 */
+		return NIL;
+	}
+
+	if (!EnableDependencyCreation)
+	{
+		/*
+		 * we are configured to disable object propagation, should not propagate anything
+		 */
+		return NIL;
+	}
+
+	address = GetObjectAddressFromParseTree((Node *) stmt, true);
+	if (!IsObjectDistributed(address))
+	{
+		return NIL;
+	}
+
+	/*
+	 * Distributed objects should not start depending on an extension, this will break
+	 * the dependency resolving mechanism we use to replicate distributed objects to new
+	 * workers
+	 */
+
+	functionName = getObjectIdentity(address);
+	ereport(ERROR, (errmsg("distrtibuted functions are not allowed to depend on an "
+						   "extension"),
+					errdetail("Function \"%s\" is already distributed. Functions from "
+							  "extensions are expected to be created on the workers by "
+							  "the extension they depend on.", functionName)));
+}
+
+
+/*
+ * AlterFunctionDependsStmtObjectAddress resolves the ObjectAddress of the function that
+ * is the subject of an ALTER FUNCTION ... DEPENS ON EXTENSION ... statement. If
+ * missing_ok is set to false the lookup will raise an error.
+ */
+const ObjectAddress *
+AlterFunctionDependsStmtObjectAddress(AlterObjectDependsStmt *stmt, bool missing_ok)
+{
+	AssertIsFunctionOrProcedure(stmt->objectType);
+
+	return FunctionToObjectAddress(stmt->objectType,
+								   castNode(ObjectWithArgs, stmt->object), missing_ok);
+}
+
+
+/*
  * ProcessAlterFunctionSchemaStmt is executed after the change has been applied locally,
  * we can now use the new dependencies of the function to ensure all its dependencies
  * exist on the workers before we apply the commands remotely.
@@ -1244,5 +1318,30 @@ ErrorIfUnsupportedAlterFunctionStmt(AlterFunctionStmt *stmt)
 										"TO ... syntax with a constant value.")));
 			}
 		}
+	}
+}
+
+
+/*
+ * ErrorIfFunctionDependsOnExtension functions depending on extensions should raise an
+ * error informing the user why they can't be distributed.
+ */
+static void
+ErrorIfFunctionDependsOnExtension(const ObjectAddress *functionAddress)
+{
+	/* captures the extension address during lookup */
+	ObjectAddress extensionAddress = { 0 };
+
+	if (IsObjectAddressOwnedByExtension(functionAddress, &extensionAddress))
+	{
+		char *functionName = getObjectIdentity(functionAddress);
+		char *extensionName = getObjectIdentity(&extensionAddress);
+		ereport(ERROR, (errmsg("unable to create a distributed function from functions "
+							   "owned by an extension"),
+						errdetail("Function \"%s\" has a dependency on extension \"%s\". "
+								  "Functions depending on an extension cannot be "
+								  "distributed. Create the function by creating the "
+								  "extension on the workers.", functionName,
+								  extensionName)));
 	}
 }

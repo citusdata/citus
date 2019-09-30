@@ -24,6 +24,8 @@ static const ObjectAddress * RenameAttributeStmtObjectAddress(RenameStmt *stmt,
 															  bool missing_ok);
 static const ObjectAddress * AlterOwnerStmtObjectAddress(AlterOwnerStmt *stmt,
 														 bool missing_ok);
+static const ObjectAddress * AlterObjectDependsStmtObjectAddress(
+	AlterObjectDependsStmt *stmt, bool missing_ok);
 
 
 /*
@@ -86,6 +88,12 @@ GetObjectAddressFromParseTree(Node *parseTree, bool missing_ok)
 		{
 			return CreateFunctionStmtObjectAddress(
 				castNode(CreateFunctionStmt, parseTree), missing_ok);
+		}
+
+		case T_AlterObjectDependsStmt:
+		{
+			return AlterObjectDependsStmtObjectAddress(
+				castNode(AlterObjectDependsStmt, parseTree), missing_ok);
 		}
 
 		default:
@@ -222,6 +230,38 @@ AlterOwnerStmtObjectAddress(AlterOwnerStmt *stmt, bool missing_ok)
 		{
 			ereport(ERROR, (errmsg("unsupported alter owner statement to get object "
 								   "address for")));
+		}
+	}
+}
+
+
+/*
+ * AlterObjectDependsStmtObjectAddress resolves the ObjectAddress for the object targeted
+ * by the AlterObjectDependStmt. This is done by dispatching the call to the object
+ * specific implementation based on the ObjectType captured in the original statement. If
+ * a specific implementation is not present an error will be raised. This is a developer
+ * error since this function should only be reachable by calls of supported types.
+ *
+ * If missing_ok is set to fails the object specific implementation is supposed to raise
+ * an error explaining the user the object is not existing.
+ */
+static const ObjectAddress *
+AlterObjectDependsStmtObjectAddress(AlterObjectDependsStmt *stmt, bool missing_ok)
+{
+	switch (stmt->objectType)
+	{
+#if PG_VERSION_NUM > 110000
+		case OBJECT_PROCEDURE:
+#endif
+		case OBJECT_FUNCTION:
+		{
+			return AlterFunctionDependsStmtObjectAddress(stmt, missing_ok);
+		}
+
+		default:
+		{
+			ereport(ERROR, (errmsg("unsupported alter depends on extension statement to "
+								   "get object address for")));
 		}
 	}
 }

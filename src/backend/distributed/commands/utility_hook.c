@@ -74,6 +74,8 @@ static char * CurrentSearchPath(void);
 static void PostProcessUtility(Node *parsetree);
 static List * PlanRenameAttributeStmt(RenameStmt *stmt, const char *queryString);
 static List * PlanAlterOwnerStmt(AlterOwnerStmt *stmt, const char *queryString);
+static List * PlanAlterObjectDependsStmt(AlterObjectDependsStmt *stmt,
+										 const char *queryString);
 
 static void ExecuteNodeBaseDDLCommands(List *taskList);
 
@@ -560,6 +562,12 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 											 queryString);
 		}
 
+		if (IsA(parsetree, AlterObjectDependsStmt))
+		{
+			ddlJobs = PlanAlterObjectDependsStmt(
+				castNode(AlterObjectDependsStmt, parsetree), queryString);
+		}
+
 		/*
 		 * ALTER TABLE ALL IN TABLESPACE statements have their node type as
 		 * AlterTableMoveAllStmt. At the moment we do not support this functionality in
@@ -846,6 +854,33 @@ PlanAlterOwnerStmt(AlterOwnerStmt *stmt, const char *queryString)
 		default:
 		{
 			/* do nothing for unsupported alter owner statements */
+			return NIL;
+		}
+	}
+}
+
+
+/*
+ * PlanAlterObjectDependsStmt gets called during the planning phase for
+ * ALTER ... DEPENDS ON EXTENSION ... statements. Based on the object type we call out to
+ * a specialized implementation. If no implementation is available we do nothing, eg. we
+ * allow the local node to execute.
+ */
+static List *
+PlanAlterObjectDependsStmt(AlterObjectDependsStmt *stmt, const char *queryString)
+{
+	switch (stmt->objectType)
+	{
+#if PG_VERSION_NUM > 110000
+		case OBJECT_PROCEDURE:
+#endif
+		case OBJECT_FUNCTION:
+		{
+			return PlanAlterFunctionDependsStmt(stmt, queryString);
+		}
+
+		default:
+		{
 			return NIL;
 		}
 	}
