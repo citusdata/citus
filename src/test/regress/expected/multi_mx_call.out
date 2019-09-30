@@ -342,13 +342,12 @@ DETAIL:  A distributed function is created. To make sure subsequent commands see
  
 (1 row)
 
+\set VERBOSITY terse
 call multi_mx_call.mx_call_proc_raise(2);
 DEBUG:  pushing down the procedure
 DEBUG:  warning
-DETAIL:  WARNING from localhost:57638
 ERROR:  error
-CONTEXT:  while executing command on localhost:57638
-PL/pgSQL function multi_mx_call.mx_call_proc_raise(integer) line 4 at RAISE
+\set VERBOSITY default
 -- Test that we don't propagate to non-metadata worker nodes
 select stop_metadata_sync_to_node('localhost', :worker_1_port);
  stop_metadata_sync_to_node 

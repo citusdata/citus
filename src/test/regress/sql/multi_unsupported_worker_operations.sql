@@ -154,7 +154,10 @@ DELETE FROM pg_dist_node;
 \c - - - :worker_1_port
 
 -- DROP TABLE
+-- terse verbosity because pg10 has slightly different output
+\set VERBOSITY terse
 DROP TABLE mx_table;
+\set VERBOSITY default
 SELECT count(*) FROM mx_table;
 
 -- master_drop_distributed_table_metadata

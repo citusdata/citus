@@ -263,10 +263,10 @@ select create_distributed_function('mx_call_proc_raise(int)', '$1', 'mx_call_dis
 ERROR:  function "mx_call_proc_raise(int)" does not exist
 LINE 1: select create_distributed_function('mx_call_proc_raise(int)'...
                                            ^
+\set VERBOSITY terse
 call multi_mx_call.mx_call_proc_raise(2);
-ERROR:  syntax error at or near "call"
-LINE 1: call multi_mx_call.mx_call_proc_raise(2);
-        ^
+ERROR:  syntax error at or near "call" at character 1
+\set VERBOSITY default
 -- Test that we don't propagate to non-metadata worker nodes
 select stop_metadata_sync_to_node('localhost', :worker_1_port);
  stop_metadata_sync_to_node 
