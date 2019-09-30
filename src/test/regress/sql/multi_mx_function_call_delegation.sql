@@ -152,6 +152,51 @@ END;$$;
 select create_distributed_function('mx_call_func_raise(int)', '$1', 'mx_call_dist_table_1');
 select mx_call_func_raise(2);
 
+-- Don't push-down when doing INSERT INTO ... SELECT func();
+SET client_min_messages TO ERROR;
+CREATE TABLE test (x int primary key);
+SELECT create_distributed_table('test','x');
+
+CREATE OR REPLACE FUNCTION delegated_function(a int)
+RETURNS int
+LANGUAGE plpgsql
+AS $function$
+DECLARE
+BEGIN
+    INSERT INTO multi_mx_function_call_delegation.test VALUES (a);
+    INSERT INTO multi_mx_function_call_delegation.test VALUES (a + 1);
+    RETURN a+2;
+END;
+$function$;
+
+SELECT create_distributed_function('delegated_function(int)', 'a');
+
+SET client_min_messages TO DEBUG1;
+INSERT INTO test SELECT delegated_function(1);
+
+-- Don't push down in subqueries or CTEs.
+SELECT * FROM test WHERE not exists(
+    SELECT delegated_function(4)
+);
+
+WITH r AS (
+    SELECT delegated_function(7)
+) SELECT * FROM test WHERE (SELECT count(*)=0 FROM r);
+
+WITH r AS (
+    SELECT delegated_function(10)
+), t AS (
+    SELECT count(*) c FROM r
+) SELECT * FROM test, t WHERE t.c=0;
+
+WITH r AS (
+    SELECT count(*) FROM test
+), s AS (
+    SELECT delegated_function(13)
+), t AS (
+    SELECT count(*) c FROM s
+) SELECT * FROM test, r, t WHERE t.c=0;
+
 -- Test that we don't propagate to non-metadata worker nodes
 select stop_metadata_sync_to_node('localhost', :worker_1_port);
 select stop_metadata_sync_to_node('localhost', :worker_2_port);

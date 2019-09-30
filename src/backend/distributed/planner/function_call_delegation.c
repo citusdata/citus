@@ -22,6 +22,8 @@
 #include "distributed/commands/multi_copy.h"
 #include "distributed/connection_management.h"
 #include "distributed/function_call_delegation.h"
+#include "distributed/insert_select_planner.h"
+#include "distributed/insert_select_executor.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
@@ -29,6 +31,7 @@
 #include "distributed/multi_physical_planner.h"
 #include "distributed/remote_commands.h"
 #include "distributed/shard_pruning.h"
+#include "distributed/recursive_planning.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_manager.h"
 #include "nodes/makefuncs.h"
@@ -217,6 +220,28 @@ TryToDelegateFunctionCall(Query *query)
 	if (!IsA(partitionValue, Const))
 	{
 		ereport(DEBUG1, (errmsg("distribution argument value must be a constant")));
+		return NULL;
+	}
+
+	/*
+	 * This can be called while executing INSERT ... SELECT func(). insert_select_executor
+	 * doesn't get the planned subquery and gets the actual struct Query, so the planning
+	 * for these kinds of queries happens at the execution time.
+	 */
+	if (ExecutingInsertSelect())
+	{
+		ereport(DEBUG1, (errmsg("not pushing down function calls in INSERT ... SELECT")));
+		return NULL;
+	}
+
+	/*
+	 * This can be called in queries like SELECT ... WHERE EXISTS(SELECT func()), or other
+	 * forms of CTEs or subqueries. We don't push-down in those cases.
+	 */
+	if (GeneratingSubplans())
+	{
+		ereport(DEBUG1, (errmsg(
+							 "not pushing down function calls in CTEs or Subqueries")));
 		return NULL;
 	}
 

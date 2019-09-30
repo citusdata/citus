@@ -38,6 +38,11 @@
 #include "utils/snapmgr.h"
 
 
+/* depth of current insert/select executor. */
+static int insertSelectExecutorLevel = 0;
+
+
+static TupleTableSlot * CoordinatorInsertSelectExecScanInternal(CustomScanState *node);
 static void ExecuteSelectIntoRelation(Oid targetRelationId, List *insertTargetList,
 									  Query *selectQuery, EState *executorState);
 static HTAB * ExecuteSelectIntoColocatedIntermediateResults(Oid targetRelationId,
@@ -52,13 +57,40 @@ static int PartitionColumnIndexFromColumnList(Oid relationId, List *columnNameLi
 
 
 /*
+ * CoordinatorInsertSelectExecScan is a wrapper around
+ * CoordinatorInsertSelectExecScanInternal which also properly increments
+ * or decrements insertSelectExecutorLevel.
+ */
+TupleTableSlot *
+CoordinatorInsertSelectExecScan(CustomScanState *node)
+{
+	TupleTableSlot *result = NULL;
+	insertSelectExecutorLevel++;
+
+	PG_TRY();
+	{
+		result = CoordinatorInsertSelectExecScanInternal(node);
+	}
+	PG_CATCH();
+	{
+		insertSelectExecutorLevel--;
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
+
+	insertSelectExecutorLevel--;
+	return result;
+}
+
+
+/*
  * CoordinatorInsertSelectExecScan executes an INSERT INTO distributed_table
  * SELECT .. query by setting up a DestReceiver that copies tuples into the
  * distributed table and then executing the SELECT query using that DestReceiver
  * as the tuple destination.
  */
-TupleTableSlot *
-CoordinatorInsertSelectExecScan(CustomScanState *node)
+static TupleTableSlot *
+CoordinatorInsertSelectExecScanInternal(CustomScanState *node)
 {
 	CitusScanState *scanState = (CitusScanState *) node;
 	TupleTableSlot *resultSlot = NULL;
@@ -342,4 +374,12 @@ PartitionColumnIndexFromColumnList(Oid relationId, List *columnNameList)
 	}
 
 	return -1;
+}
+
+
+/* ExecutingInsertSelect returns true if we are executing an INSERT ...SELECT query */
+bool
+ExecutingInsertSelect(void)
+{
+	return insertSelectExecutorLevel > 0;
 }
