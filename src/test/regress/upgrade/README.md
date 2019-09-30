@@ -29,7 +29,7 @@ Before running the script, make sure that:
 - Finally run upgrade test in `citus/src/test/regress`:
 
 ```bash
-    pipenv run make check-upgrade old-bindir=<old-bindir> new-bindir=<new-bindir>
+    pipenv run make check-pg-upgrade old-bindir=<old-bindir> new-bindir=<new-bindir>
 ```
 
 To see full command list:
@@ -59,7 +59,7 @@ The citus upgrade test is designed to be run on a docker image for CircleCI, so 
 
 Currently the citus upgrade test assumes that:
 
-- In the root directory("\\") there are citus installation tar files for postgres versions. The tar files are used to install specific citus version with a postgres version. The tar files format is `install-pg{pg-major}-citus{citus-version}.tar` such as install-pg11-citusv8.0.0.tar.
+- In the root directory("/") there are citus installation tar files for postgres versions. The tar files are used to install specific citus version with a postgres version. The tar files format is `install-pg{pg-major}-citus{citus-version}.tar` such as install-pg11-citusv8.0.0.tar.
 - `install-{pg_major}.tar` tars exist in `$HOME/project` folder. These tars should contain the checked out citus installation files. Currently build job creates these tars.
 
 How the citus upgrade test work:

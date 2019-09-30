@@ -4,8 +4,7 @@ from config import USER
 
 
 def psql(pg_path, port, command):
-
-    return subprocess.call([
+    return subprocess.check_output([
         os.path.join(pg_path, 'psql'),
         '-U', USER,
         '-p', str(port),

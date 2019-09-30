@@ -1,10 +1,20 @@
-BEFORE_UPGRADE_SCHEDULE = './before_pg_upgrade_schedule'
-AFTER_UPGRADE_SCHEDULE = './after_pg_upgrade_schedule'
+from os.path import expanduser
 
-BEFORE_CITUS_UPGRADE_SCHEDULE = './before_citus{}_upgrade_schedule'
-AFTER_CITUS_UPGRADE_SCHEDULE = './after_citus_upgrade_schedule'
+
+BEFORE_PG_UPGRADE_SCHEDULE = './before_pg_upgrade_schedule'
+AFTER_PG_UPGRADE_SCHEDULE = './after_pg_upgrade_schedule'
+
 AFTER_CITUS_UPGRADE_COORD_SCHEDULE = './after_citus_upgrade_coord_schedule'
 BEFORE_CITUS_UPGRADE_COORD_SCHEDULE = './before_citus_upgrade_coord_schedule'
+
+MASTER = 'master'
+# This should be updated when citus version changes
+MASTER_VERSION = '9.0'
+
+HOME = expanduser("~")
+
+
+CITUS_VERSION_SQL = "SELECT extversion FROM pg_extension WHERE extname = 'citus';"
 
 
 class CitusUpgradeConfig():

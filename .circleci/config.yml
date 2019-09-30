@@ -149,7 +149,7 @@ jobs:
           at: .
       - run: 
           name: 'Install and test postgres upgrade'
-          command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext --target check-upgrade --old-pg-version 10 --new-pg-version 11'
+          command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext --target check-pg-upgrade --old-pg-version 10 --new-pg-version 11'
 
   test-11-12_check-pg-upgrade:
     docker:
@@ -160,7 +160,7 @@ jobs:
           at: .
       - run: 
           name: 'Install and test postgres upgrade'
-          command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext --target check-upgrade --old-pg-version 11 --new-pg-version 12'
+          command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext --target check-pg-upgrade --old-pg-version 11 --new-pg-version 12'
 
   test-12_check-multi:
     docker:
@@ -282,10 +282,10 @@ jobs:
       - run: 
           name: 'Install and test citus upgrade'
           command: |
-           install-and-test-ext --target check-citus-upgrade --pg-version 10 --citus-version v8.0.0
-           install-and-test-ext --target check-citus-upgrade --pg-version 10 --citus-version v8.1.0
-           install-and-test-ext --target check-citus-upgrade --pg-version 10 --citus-version v8.2.0
-           install-and-test-ext --target check-citus-upgrade --pg-version 10 --citus-version v8.3.0          
+           chown -R circleci:circleci /home/circleci && install-and-test-ext --target check-citus-upgrade --pg-version 10 --citus-version v8.0.0
+           chown -R circleci:circleci /home/circleci && install-and-test-ext --target check-citus-upgrade --pg-version 10 --citus-version v8.1.0
+           chown -R circleci:circleci /home/circleci && install-and-test-ext --target check-citus-upgrade --pg-version 10 --citus-version v8.2.0
+           chown -R circleci:circleci /home/circleci && install-and-test-ext --target check-citus-upgrade --pg-version 10 --citus-version v8.3.0          
   test-11_check-citus-upgrade:
     docker:
       - image: 'heisenberg302/citusupgradetester:latest'
@@ -295,10 +295,10 @@ jobs:
       - run: 
           name: 'Install and test citus upgrade'
           command: |
-           install-and-test-ext --target check-citus-upgrade --pg-version 11 --citus-version v8.0.0
-           install-and-test-ext --target check-citus-upgrade --pg-version 11 --citus-version v8.1.0
-           install-and-test-ext --target check-citus-upgrade --pg-version 11 --citus-version v8.2.0
-           install-and-test-ext --target check-citus-upgrade --pg-version 11 --citus-version v8.3.0
+           chown -R circleci:circleci /home/circleci && install-and-test-ext --target check-citus-upgrade --pg-version 11 --citus-version v8.0.0
+           chown -R circleci:circleci /home/circleci && install-and-test-ext --target check-citus-upgrade --pg-version 11 --citus-version v8.1.0
+           chown -R circleci:circleci /home/circleci && install-and-test-ext --target check-citus-upgrade --pg-version 11 --citus-version v8.2.0
+           chown -R circleci:circleci /home/circleci && install-and-test-ext --target check-citus-upgrade --pg-version 11 --citus-version v8.3.0
 
           
            
@@ -311,47 +311,46 @@ workflows:
       - check-style
       - check-sql-snapshots
 
-      - test-11_check-multi:
-          requires: [build]
-      - test-11_check-tt-van-mx:
-          requires: [build]
-      - test-11_check-iso-work-fol:
-          requires: [build]
-      - test-11_check-fol:
-          requires: [build]
-      - test-11_check-failure:
-          requires: [build]
+      # - test-11_check-multi:
+      #     requires: [build]
+      # - test-11_check-tt-van-mx:
+      #     requires: [build]
+      # - test-11_check-iso-work-fol:
+      #     requires: [build]
+      # - test-11_check-fol:
+      #     requires: [build]
+      # - test-11_check-failure:
+      #     requires: [build]
 
-      - test-11_check-non-adaptive-multi: 
-          requires: [build]
-      - test-11_check-non-adaptive-failure:
-          requires: [build]
-      - test-11_check-non-adaptive-isolation:
-          requires: [build]
+      # - test-11_check-non-adaptive-multi: 
+      #     requires: [build]
+      # - test-11_check-non-adaptive-failure:
+      #     requires: [build]
+      # - test-11_check-non-adaptive-isolation:
+      #     requires: [build]
 
-      - test-10-11_check-pg-upgrade: 
-          requires: [build]
-      - test-11-12_check-pg-upgrade: 
-          requires: [build]    
-      - test-12_check-multi:
-          requires: [build] 
-      - test-12_check-tt-van-mx:
-          requires: [build]
-      - test-12_check-iso-work-fol:
-          requires: [build]
-      - test-12_check-fol:
-          requires: [build]
-      - test-12_check-failure:
-          requires: [build]        
+      # - test-12_check-multi:
+      #     requires: [build] 
+      # - test-12_check-tt-van-mx:
+      #     requires: [build]
+      # - test-12_check-iso-work-fol:
+      #     requires: [build]
+      # - test-12_check-fol:
+      #     requires: [build]
+      # - test-12_check-failure:
+      #     requires: [build]        
 
-      - test-12_check-non-adaptive-multi:
-          requires: [build]
-      - test-12_check-non-adaptive-failure:
-          requires: [build]   
-      - test-12_check-non-adaptive-isolation:
-          requires: [build]
+      # - test-12_check-non-adaptive-multi:
+      #     requires: [build]
+      # - test-12_check-non-adaptive-failure:
+      #     requires: [build]   
+      # - test-12_check-non-adaptive-isolation:
+      #     requires: [build] 
 
-          requires: [build]   
+      # - test-10-11_check-pg-upgrade: 
+      #     requires: [build]
+      # - test-11-12_check-pg-upgrade: 
+      #     requires: [build]    
 
       - test-10_check-citus-upgrade:
           requires: [build]    

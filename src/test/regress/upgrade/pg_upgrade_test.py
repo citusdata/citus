@@ -13,7 +13,7 @@ Options:
 from config import (
     PGUpgradeConfig, USER, NODE_PORTS,
     NODE_NAMES, DBNAME, COORDINATOR_NAME,
-    WORKER_PORTS, AFTER_UPGRADE_SCHEDULE, BEFORE_UPGRADE_SCHEDULE
+    WORKER_PORTS, AFTER_PG_UPGRADE_SCHEDULE, BEFORE_PG_UPGRADE_SCHEDULE
 )
 from docopt import docopt
 import utils
@@ -68,7 +68,7 @@ def main(config):
         config.old_bindir, config.old_datadir, config.settings)
 
     run_pg_regress(config.old_bindir, config.pg_srcdir,
-                   NODE_PORTS[COORDINATOR_NAME], BEFORE_UPGRADE_SCHEDULE)
+                   NODE_PORTS[COORDINATOR_NAME], BEFORE_PG_UPGRADE_SCHEDULE)
 
     citus_prepare_pg_upgrade(config.old_bindir)
     stop_databases(config.old_bindir, config.old_datadir)
@@ -81,7 +81,7 @@ def main(config):
     citus_finish_pg_upgrade(config.new_bindir)
 
     run_pg_regress(config.new_bindir, config.pg_srcdir,
-                   NODE_PORTS[COORDINATOR_NAME], AFTER_UPGRADE_SCHEDULE)
+                   NODE_PORTS[COORDINATOR_NAME], AFTER_PG_UPGRADE_SCHEDULE)
 
 
 if __name__ == '__main__':
