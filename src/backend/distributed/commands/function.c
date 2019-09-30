@@ -1111,11 +1111,10 @@ PlanAlterFunctionDependsStmt(AlterObjectDependsStmt *stmt, const char *queryStri
 	 * workers
 	 */
 
-	functionName = get_func_name(address->objectId);
-
+	functionName = getObjectIdentity(address);
 	ereport(ERROR, (errmsg("distrtibuted functions are not allowed to depend on an "
 						   "extension"),
-					errdetail("function \"%s\" is already distributed. Functions from "
+					errdetail("Function \"%s\" is already distributed. Functions from "
 							  "extensions are expected to be created on the workers by "
 							  "the extension they depend on.", functionName)));
 }
