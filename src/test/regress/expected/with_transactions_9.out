@@ -1,6 +1,7 @@
 CREATE SCHEMA with_transactions;
 SET search_path TO 	with_transactions, public;
 SET citus.shard_count TO 4;
+SET citus.shard_replication_factor TO 1; -- https://github.com/citusdata/citus/issues/3061
 SET citus.next_placement_id TO 800000;
 CREATE TABLE with_transactions.raw_table (tenant_id int, income float, created_at timestamptz);
 SELECT create_distributed_table('raw_table', 'tenant_id');
