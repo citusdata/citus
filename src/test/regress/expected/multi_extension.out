@@ -113,7 +113,7 @@ ALTER EXTENSION citus UPDATE TO '9.0-1';
 SHOW citus.version;
  citus.version 
 ---------------
- 9.0devel
+ 9.0.0
 (1 row)
 
 -- ensure no objects were created outside pg_catalog
