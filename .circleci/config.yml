@@ -5,7 +5,7 @@ orbs:
 jobs:
   build:
     docker:
-      - image: 'citus/extbuilder:latest'
+      - image: 'citus/extbuilder:dev'
     steps:
       - checkout
       - run: 
@@ -232,7 +232,7 @@ jobs:
 
   test-12_check-multi:
     docker:
-      - image: 'heisenberg302/exttester-12:latest'
+      - image: 'citus/exttester-12:dev'
     working_directory: /home/circleci/project
     steps:
       - attach_workspace: 
@@ -244,7 +244,7 @@ jobs:
           flags: 'test_12,multi'
   test-12_check-tt-van-mx:
     docker:
-      - image: 'heisenberg302/exttester-12:latest'
+      - image: 'citus/exttester-12:dev'
     working_directory: /home/circleci/project
     steps:
       - attach_workspace:
@@ -256,7 +256,7 @@ jobs:
           flags: 'test_12,tracker,vanilla,mx'
   test-12_check-iso-work-fol:
     docker:
-      - image: 'heisenberg302/exttester-12:latest'
+      - image: 'citus/exttester-12:dev'
     working_directory: /home/circleci/project
     steps:
       - attach_workspace:
@@ -268,7 +268,7 @@ jobs:
           flags: 'test_12,isolation,worker'
   test-12_check-fol:
     docker:
-      - image: 'heisenberg302/exttester-12:latest'
+      - image: 'citus/exttester-12:dev'
     working_directory: /home/circleci/project
     steps:
       - attach_workspace:
@@ -291,7 +291,7 @@ jobs:
 
   test-12_check-non-adaptive-multi:
     docker:
-      - image: 'heisenberg302/exttester-12:latest'
+      - image: 'citus/exttester-12:dev'
     working_directory: /home/circleci/project
     steps:
       - attach_workspace:
@@ -304,7 +304,7 @@ jobs:
 
   test-12_check-failure:
     docker:
-      - image: 'heisenberg302/failtester-12:latest'
+      - image: 'citus/failtester-12:dev'
     working_directory: /home/circleci/project
     steps:
       - attach_workspace: 
@@ -315,7 +315,7 @@ jobs:
 
   test-12_check-non-adaptive-failure:
     docker:
-      - image: 'heisenberg302/failtester-12:latest'
+      - image: 'citus/failtester-12:dev'
     working_directory: /home/circleci/project
     steps:
       - attach_workspace: 
@@ -328,7 +328,7 @@ jobs:
 
   test-12_check-non-adaptive-isolation:
     docker:
-      - image: 'heisenberg302/exttester-12:latest'
+      - image: 'citus/exttester-12:dev'
     working_directory: /home/circleci/project
     steps:
       - attach_workspace:
