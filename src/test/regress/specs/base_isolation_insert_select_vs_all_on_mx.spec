@@ -109,7 +109,7 @@ step "s2-select-for-update"
 
 step "s2-coordinator-create-index-concurrently"
 {
-	CREATE INDEX CONCURRENTLY t_index ON t(id);
+	CREATE INDEX CONCURRENTLY dist_table_index  ON dist_table(id);
 }
 
 step "s2-commit-worker"
