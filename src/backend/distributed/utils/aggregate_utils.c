@@ -124,7 +124,7 @@ InitializeStypeBox(FunctionCallInfo fcinfo, StypeBox *box, HeapTuple aggTuple, O
 		MemoryContext oldContext;
 		if (!AggCheckCallContext(fcinfo, &aggregateContext))
 		{
-			elog(ERROR, "worker_partiail_agg_sfunc called from non aggregate context");
+			elog(ERROR, "InitializeStypeBox called from non aggregate context");
 		}
 		oldContext = MemoryContextSwitchTo(aggregateContext);
 
@@ -435,7 +435,7 @@ worker_partial_agg_sfunc(PG_FUNCTION_ARGS)
 			if (!AggCheckCallContext(fcinfo, &aggregateContext))
 			{
 				elog(ERROR,
-					 "worker_partiail_agg_sfunc called from non aggregate context");
+					 "worker_partial_agg_sfunc called from non aggregate context");
 			}
 			oldContext = MemoryContextSwitchTo(aggregateContext);
 			box->value = datumCopy(PG_GETARG_DATUM(2), box->transtypeByVal,
