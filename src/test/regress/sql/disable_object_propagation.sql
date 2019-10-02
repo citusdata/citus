@@ -47,7 +47,7 @@ COMMIT;
 -- verify the type is distributed
 SELECT count(*) FROM citus.pg_dist_object WHERE objid = 'disabled_object_propagation.tt3'::regtype::oid;
 
-ALTER TYPE tt3 ADD ATTRIBUTE c int, DROP ATTRIBUTE b, ALTER ATTRIBUTE a SET DATA TYPE text COLLATE "en_US";
+ALTER TYPE tt3 ADD ATTRIBUTE c int, DROP ATTRIBUTE b, ALTER ATTRIBUTE a SET DATA TYPE text COLLATE "POSIX";
 ALTER TYPE tt3 OWNER TO typeowner_for_disabled_object_propagation_guc;
 ALTER TYPE tt3 RENAME ATTRIBUTE c TO d;
 ALTER TYPE tt3 RENAME TO tt4;
