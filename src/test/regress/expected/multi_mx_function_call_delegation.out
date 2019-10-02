@@ -369,8 +369,8 @@ DEBUG:  pushing down the function call
 DEBUG:  warning
 DETAIL:  WARNING from localhost:57638
 ERROR:  error
-CONTEXT:  PL/pgSQL function multi_mx_function_call_delegation.mx_call_func_raise(integer) line 4 at RAISE
-while executing command on localhost:57638
+CONTEXT:  while executing command on localhost:57638
+PL/pgSQL function multi_mx_function_call_delegation.mx_call_func_raise(integer) line 4 at RAISE
 -- Don't push-down when doing INSERT INTO ... SELECT func();
 SET client_min_messages TO ERROR;
 CREATE TABLE test (x int primary key);
