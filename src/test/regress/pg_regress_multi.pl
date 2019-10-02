@@ -294,7 +294,10 @@ push(@pgOptions, '-c', "listen_addresses=${host}");
 # not required, and we don't necessarily have access to the default directory
 push(@pgOptions, '-c', "unix_socket_directories=");
 push(@pgOptions, '-c', "fsync=off");
-push(@pgOptions, '-c', "extra_float_digits=0");
+if (! $vanillatest)
+{
+    push(@pgOptions, '-c', "extra_float_digits=0");
+}
 
 my $sharedPreloadLibraries = "citus";
 
@@ -379,6 +382,7 @@ if($isolationtester)
    push(@pgOptions, '-c', "citus.shard_count=4");
    push(@pgOptions, '-c', "citus.metadata_sync_interval=1000");
    push(@pgOptions, '-c', "citus.metadata_sync_retry_interval=100");
+   push(@pgOptions, '-c', "client_min_messages=warning"); # pg12 introduced notice showing during isolation tests
 }
 
 # Add externally added options last, so they overwrite the default ones above
