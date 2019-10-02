@@ -126,7 +126,7 @@ jobs:
             cp core.* /tmp/core_dumps
           when: on_fail
       - codecov/upload: 
-          flags: 'follower'
+          flags: 'test_11,follower'
       - store_artifacts: 
           path: '/tmp/core_dumps'
   test-11_check-failure:
@@ -217,7 +217,7 @@ jobs:
             cp core.* /tmp/core_dumps
           when: on_fail
       - codecov/upload: 
-          flags: 'follower'
+          flags: 'test_12,follower'
       - store_artifacts:
           path: '/tmp/core_dumps'
 
