@@ -5,7 +5,7 @@ orbs:
 jobs:
   build:
     docker:
-      - image: 'citus/extbuilder:dev'
+      - image: 'citus/extbuilder:latest'
     steps:
       - checkout
       - run: 
@@ -164,7 +164,7 @@ jobs:
 
   test-12_check-multi:
     docker:
-      - image: 'citus/exttester-12:dev'
+      - image: 'citus/exttester-12:latest'
     working_directory: /home/circleci/project
     steps:
       - attach_workspace: 
@@ -176,7 +176,7 @@ jobs:
           flags: 'test_12,multi'
   test-12_check-tt-van-mx:
     docker:
-      - image: 'citus/exttester-12:dev'
+      - image: 'citus/exttester-12:latest'
     working_directory: /home/circleci/project
     steps:
       - attach_workspace:
@@ -188,7 +188,7 @@ jobs:
           flags: 'test_12,tracker,vanilla,mx'
   test-12_check-iso-work-fol:
     docker:
-      - image: 'citus/exttester-12:dev'
+      - image: 'citus/exttester-12:latest'
     working_directory: /home/circleci/project
     steps:
       - attach_workspace:
@@ -200,7 +200,7 @@ jobs:
           flags: 'test_12,isolation,worker'
   test-12_check-fol:
     docker:
-      - image: 'citus/exttester-12:dev'
+      - image: 'citus/exttester-12:latest'
     working_directory: /home/circleci/project
     steps:
       - attach_workspace:
@@ -223,7 +223,7 @@ jobs:
 
   test-12_check-non-adaptive-multi:
     docker:
-      - image: 'citus/exttester-12:dev'
+      - image: 'citus/exttester-12:latest'
     working_directory: /home/circleci/project
     steps:
       - attach_workspace:
@@ -236,7 +236,7 @@ jobs:
 
   test-12_check-failure:
     docker:
-      - image: 'citus/failtester-12:dev'
+      - image: 'citus/failtester-12:latest'
     working_directory: /home/circleci/project
     steps:
       - attach_workspace: 
@@ -247,7 +247,7 @@ jobs:
 
   test-12_check-non-adaptive-failure:
     docker:
-      - image: 'citus/failtester-12:dev'
+      - image: 'citus/failtester-12:latest'
     working_directory: /home/circleci/project
     steps:
       - attach_workspace: 
@@ -260,7 +260,7 @@ jobs:
 
   test-12_check-non-adaptive-isolation:
     docker:
-      - image: 'citus/exttester-12:dev'
+      - image: 'citus/exttester-12:latest'
     working_directory: /home/circleci/project
     steps:
       - attach_workspace:
