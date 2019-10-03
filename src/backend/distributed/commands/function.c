@@ -53,7 +53,7 @@
 	(strncmp(arg, prefix, strlen(prefix)) == 0)
 
 /* forward declaration for helper functions*/
-static char * GetFunctionDDLCommand(const RegProcedure funcOid);
+static List * GetFunctionDDLCommand(const RegProcedure funcOid);
 static int GetDistributionArgIndex(Oid functionOid, char *distributionArgumentName,
 								   Oid *distributionArgumentOid);
 static int GetFunctionColocationId(Oid functionOid, char *colocateWithName, Oid
@@ -68,6 +68,12 @@ static void EnsureSequentialModeForFunctionDDL(void);
 static void TriggerSyncMetadataToPrimaryNodes(void);
 static bool ShouldPropagateCreateFunction(CreateFunctionStmt *stmt);
 static bool ShouldPropagateAlterFunction(const ObjectAddress *address);
+#if PG_VERSION_NUM >= 110000
+static Oid GetFunctionOwnerAndSchemaAndKind(Oid functionOid, char **schemaName,
+											char *prokind);
+#else
+static Oid GetFunctionOwnerAndSchema(Oid functionOid, char **schemaName);
+#endif
 static ObjectAddress * FunctionToObjectAddress(ObjectType objectType,
 											   ObjectWithArgs *objectWithArgs,
 											   bool missing_ok);
@@ -98,7 +104,7 @@ create_distributed_function(PG_FUNCTION_ARGS)
 	text *distributionArgumentNameText = NULL; /* optional */
 	text *colocateWithText = NULL; /* optional */
 
-	const char *ddlCommand = NULL;
+	List *ddlCommand = NULL;
 	ObjectAddress functionAddress = { 0 };
 
 	int distributionArgumentIndex = -1;
@@ -157,7 +163,7 @@ create_distributed_function(PG_FUNCTION_ARGS)
 	EnsureDependenciesExistsOnAllNodes(&functionAddress);
 
 	ddlCommand = GetFunctionDDLCommand(funcOid);
-	SendCommandToWorkers(ALL_WORKERS, ddlCommand);
+	SendBareCommandListToWorkers(ALL_WORKERS, ddlCommand);
 
 	MarkObjectDistributed(&functionAddress);
 
@@ -215,12 +221,9 @@ create_distributed_function(PG_FUNCTION_ARGS)
 List *
 CreateFunctionDDLCommandsIdempotent(const ObjectAddress *functionAddress)
 {
-	char *ddlCommand = NULL;
-
 	Assert(functionAddress->classId == ProcedureRelationId);
 
-	ddlCommand = GetFunctionDDLCommand(functionAddress->objectId);
-	return list_make1(ddlCommand);
+	return GetFunctionDDLCommand(functionAddress->objectId);
 }
 
 
@@ -532,12 +535,20 @@ UpdateFunctionDistributionInfo(const ObjectAddress *distAddress,
  * GetFunctionDDLCommand returns the complete "CREATE OR REPLACE FUNCTION ..." statement for
  * the specified function.
  */
-static char *
+static List *
 GetFunctionDDLCommand(const RegProcedure funcOid)
 {
 	OverrideSearchPath *overridePath = NULL;
 	Datum sqlTextDatum = 0;
 	char *sql = NULL;
+	char *username = NULL;
+	char *schemaName = NULL;
+#if PG_VERSION_NUM >= 110000
+	char prokind = '\0';
+#endif
+	StringInfoData buf = { 0 };
+
+	initStringInfo(&buf);
 
 	/*
 	 * Set search_path to NIL so that all objects outside of pg_catalog will be
@@ -556,7 +567,24 @@ GetFunctionDDLCommand(const RegProcedure funcOid)
 	PopOverrideSearchPath();
 
 	sql = TextDatumGetCString(sqlTextDatum);
-	return sql;
+
+#if PG_VERSION_NUM >= 110000
+	username = GetUserNameFromId(GetFunctionOwnerAndSchemaAndKind(funcOid, &schemaName,
+																  &prokind), false);
+	appendStringInfo(&buf, "ALTER %s %s OWNER TO %s;",
+					 (prokind == PROKIND_PROCEDURE ? "PROCEDURE" : "FUNCTION"),
+					 quote_qualified_identifier(schemaName, get_func_name(funcOid)),
+					 quote_identifier(username));
+
+#else
+	username = GetUserNameFromId(GetFunctionOwnerAndSchema(funcOid, &schemaName), false);
+	appendStringInfo(&buf, "ALTER FUNCTION %s OWNER TO %s;",
+					 quote_qualified_identifier(schemaName, get_func_name(funcOid)),
+					 quote_identifier(username));
+
+#endif
+
+	return list_make2(sql, buf.data);
 }
 
 
@@ -762,7 +790,7 @@ List *
 ProcessCreateFunctionStmt(CreateFunctionStmt *stmt, const char *queryString)
 {
 	const ObjectAddress *address = NULL;
-	const char *sql = NULL;
+	List *sql = NULL;
 	List *commands = NIL;
 
 	if (!ShouldPropagateCreateFunction(stmt))
@@ -775,9 +803,7 @@ ProcessCreateFunctionStmt(CreateFunctionStmt *stmt, const char *queryString)
 
 	sql = GetFunctionDDLCommand(address->objectId);
 
-	commands = list_make3(DISABLE_DDL_PROPAGATION,
-						  (void *) sql,
-						  ENABLE_DDL_PROPAGATION);
+	commands = lappend(lcons(DISABLE_DDL_PROPAGATION, sql), ENABLE_DDL_PROPAGATION);
 
 	return NodeDDLTaskList(ALL_WORKERS, commands);
 }
@@ -1262,6 +1288,44 @@ AlterFunctionSchemaStmtObjectAddress(AlterObjectSchemaStmt *stmt, bool missing_o
 	ObjectAddressSet(*address, ProcedureRelationId, funcOid);
 
 	return address;
+}
+
+
+#if PG_VERSION_NUM >= 110000
+
+/*
+ * GetFunctionOwnerAndSchemaAndKind returns owner of function given oid of function.
+ * schemaName is set to schema of function. prokind is set to kind of function.
+ */
+static Oid
+GetFunctionOwnerAndSchemaAndKind(Oid functionOid, char **schemaName, char *prokind)
+#else
+
+/*
+ * GetFunctionOwnerAndSchema returns owner of function given oid of function.
+ * schemaName is set to schema of function.
+ */
+static Oid
+GetFunctionOwnerAndSchema(Oid functionOid, char ** schemaName)
+#endif
+{
+	Oid result = InvalidOid;
+	HeapTuple tp = NULL;
+
+	tp = SearchSysCache1(PROCOID, ObjectIdGetDatum(functionOid));
+	if (HeapTupleIsValid(tp))
+	{
+		Form_pg_proc procform = (Form_pg_proc) GETSTRUCT(tp);
+
+		result = procform->proowner;
+		*schemaName = get_namespace_name(procform->pronamespace);
+#if PG_VERSION_NUM >= 110000
+		*prokind = procform->prokind;
+#endif
+		ReleaseSysCache(tp);
+	}
+
+	return result;
 }
 
 

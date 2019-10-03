@@ -555,9 +555,9 @@ SELECT typowner::regrole FROM pg_type WHERE typname = 'usage_access_type';
 (1 row)
 
 SELECT proowner::regrole FROM pg_proc WHERE proname = 'usage_access_func';
- proowner 
-----------
- postgres
+   proowner   
+--------------
+ usage_access
 (1 row)
 
 RESET ROLE;

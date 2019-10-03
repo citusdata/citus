@@ -424,7 +424,7 @@ INSERT INTO full_access_user_schema.t1 VALUES (1),(2),(3);
 -- not allowed to create a table
 SELECT create_distributed_table('full_access_user_schema.t1', 'id');
 ERROR:  permission denied for schema full_access_user_schema
-CONTEXT:  while executing command on localhost:57637
+CONTEXT:  while executing command on localhost:57638
 RESET ROLE;
 -- now we distribute the table as super user
 SELECT create_distributed_table('full_access_user_schema.t1', 'id');
@@ -555,9 +555,9 @@ SELECT typowner::regrole FROM pg_type WHERE typname = 'usage_access_type';
 (1 row)
 
 SELECT proowner::regrole FROM pg_proc WHERE proname = 'usage_access_func';
- proowner 
-----------
- postgres
+   proowner   
+--------------
+ usage_access
 (1 row)
 
 RESET ROLE;
