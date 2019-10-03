@@ -1,5 +1,7 @@
 /* citus--8.3-1--9.0-1 */
 
+SET search_path = 'pg_catalog';
+
 -- We swapped the groupid and nodeid sequences when creating pg_dist_node
 ALTER TABLE pg_dist_node ALTER COLUMN groupid SET DEFAULT nextval ('pg_dist_groupid_seq');
 ALTER TABLE pg_dist_node ALTER COLUMN nodeid SET DEFAULT nextval('pg_dist_node_nodeid_seq');
@@ -74,13 +76,12 @@ CREATE TRIGGER dist_object_cache_invalidate
  */
 ALTER TABLE pg_dist_poolinfo DROP CONSTRAINT pg_dist_poolinfo_nodeid_fkey;
 
+/* if the rebalancer extension is still around, drop it before creating Citus functions */
+DROP EXTENSION IF EXISTS shard_rebalancer;
+
 #include "udfs/get_rebalance_table_shards_plan/9.0-1.sql"
 #include "udfs/replicate_table_shards/9.0-1.sql"
 #include "udfs/rebalance_table_shards/9.0-1.sql"
-
-SET search_path = 'pg_catalog';
-
-DROP EXTENSION IF EXISTS shard_rebalancer;
 
 -- get_rebalance_progress returns the list of shard placement move operations along with
 -- their progressions for ongoing rebalance operations.
@@ -127,8 +128,6 @@ COMMENT ON FUNCTION master_add_inactive_node(nodename text,nodeport integer,
                                              nodecluster name)
   IS 'prepare node by adding it to pg_dist_node';
 
-SET search_path = 'pg_catalog';
-
 DROP FUNCTION master_activate_node(text, integer);
 CREATE FUNCTION master_activate_node(nodename text,
                                      nodeport integer)
@@ -170,6 +169,6 @@ CREATE FUNCTION worker_apply_sequence_command(create_sequence_command text,
 COMMENT ON FUNCTION worker_apply_sequence_command(text,regtype)
     IS 'create a sequence which produces globally unique values';
 
-RESET search_path;
-
 #include "udfs/citus_isolation_test_session_is_blocked/9.0-1.sql"
+
+RESET search_path;
