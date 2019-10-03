@@ -252,6 +252,14 @@ $cmd$);
 -- table
 SET ROLE usage_access;
 CREATE TABLE full_access_user_schema.t1 (id int);
+
+-- We'll also test that distributed objects have correct ownership
+CREATE TYPE usage_access_type AS ENUM ('a', 'b');
+CREATE FUNCTION usage_access_func(x usage_access_type) RETURNS usage_access_type
+    LANGUAGE plpgsql AS 'begin return x; end;';
+SELECT create_distributed_function('usage_access_func(usage_access_type)');
+SELECT typowner::regrole FROM pg_type WHERE typname = 'usage_access_type';
+SELECT proowner::regrole FROM pg_proc WHERE proname = 'usage_access_func';
 RESET ROLE;
 
 -- now we create the table for the user
@@ -339,6 +347,10 @@ RESET ROLE;
 \c - - - :worker_1_port
 SET ROLE full_access;
 SELECT worker_hash_partition_table(42,1,'SELECT a FROM generate_series(1,100) AS a', 'a', 23, ARRAY[-2147483648, -1073741824, 0, 1073741824]::int4[]);
+
+-- verify distributed objects have correct owners
+SELECT typowner::regrole FROM pg_type WHERE typname = 'usage_access_type';
+SELECT proowner::regrole FROM pg_proc WHERE proname = 'usage_access_func';
 RESET ROLE;
 
 -- all attempts for transfer are initiated from other workers

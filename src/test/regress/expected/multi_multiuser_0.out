@@ -391,6 +391,28 @@ CREATE TABLE full_access_user_schema.t1 (id int);
 ERROR:  permission denied for schema full_access_user_schema
 LINE 1: CREATE TABLE full_access_user_schema.t1 (id int);
                      ^
+-- We'll also test that distributed objects have correct ownership
+CREATE TYPE usage_access_type AS ENUM ('a', 'b');
+CREATE FUNCTION usage_access_func(x usage_access_type) RETURNS usage_access_type
+    LANGUAGE plpgsql AS 'begin return x; end;';
+SELECT create_distributed_function('usage_access_func(usage_access_type)');
+ create_distributed_function 
+-----------------------------
+ 
+(1 row)
+
+SELECT typowner::regrole FROM pg_type WHERE typname = 'usage_access_type';
+   typowner   
+--------------
+ usage_access
+(1 row)
+
+SELECT proowner::regrole FROM pg_proc WHERE proname = 'usage_access_func';
+   proowner   
+--------------
+ usage_access
+(1 row)
+
 RESET ROLE;
 -- now we create the table for the user
 CREATE TABLE full_access_user_schema.t1 (id int);
@@ -402,7 +424,7 @@ INSERT INTO full_access_user_schema.t1 VALUES (1),(2),(3);
 -- not allowed to create a table
 SELECT create_distributed_table('full_access_user_schema.t1', 'id');
 ERROR:  permission denied for schema full_access_user_schema
-CONTEXT:  while executing command on localhost:57638
+CONTEXT:  while executing command on localhost:57637
 RESET ROLE;
 -- now we distribute the table as super user
 SELECT create_distributed_table('full_access_user_schema.t1', 'id');
@@ -525,6 +547,19 @@ SELECT worker_hash_partition_table(42,1,'SELECT a FROM generate_series(1,100) AS
  
 (1 row)
 
+-- verify distributed objects have correct owners
+SELECT typowner::regrole FROM pg_type WHERE typname = 'usage_access_type';
+   typowner   
+--------------
+ usage_access
+(1 row)
+
+SELECT proowner::regrole FROM pg_proc WHERE proname = 'usage_access_func';
+ proowner 
+----------
+ postgres
+(1 row)
+
 RESET ROLE;
 -- all attempts for transfer are initiated from other workers
 \c - - - :worker_2_port
@@ -536,7 +571,7 @@ ERROR:  could not receive file "base/pgsql_job_cache/job_0042/task_000001/p_0000
 -- different user should not be able to fetch partition file
 SET ROLE usage_access;
 SELECT worker_fetch_partition_file(42, 1, 1, 1, 'localhost', :worker_1_port);
-WARNING:  could not open file "base/pgsql_job_cache/job_0042/task_000001/p_00001.18007": No such file or directory
+WARNING:  could not open file "base/pgsql_job_cache/job_0042/task_000001/p_00001.18030": No such file or directory
 CONTEXT:  while executing command on localhost:57637
 ERROR:  could not receive file "base/pgsql_job_cache/job_0042/task_000001/p_00001" from localhost:57637
 -- only the user whom created the files should be able to fetch
@@ -575,7 +610,7 @@ RESET ROLE;
 -- test that the super user is unable to read the contents of the intermediate file,
 -- although it does create the table
 SELECT worker_merge_files_into_table(42, 1, ARRAY['a'], ARRAY['integer']);
-WARNING:  Task file "task_000001.18003" does not have expected suffix ".10"
+WARNING:  Task file "task_000001.18016" does not have expected suffix ".10"
  worker_merge_files_into_table 
 -------------------------------
  
@@ -617,7 +652,7 @@ SELECT worker_merge_files_and_run_query(42, 1,
     'CREATE TABLE task_000001_merge(merge_column_0 int)',
     'CREATE TABLE task_000001 (a) AS SELECT sum(merge_column_0) FROM task_000001_merge'
 );
-WARNING:  Task file "task_000001.18003" does not have expected suffix ".10"
+WARNING:  Task file "task_000001.18016" does not have expected suffix ".10"
  worker_merge_files_and_run_query 
 ----------------------------------
  
