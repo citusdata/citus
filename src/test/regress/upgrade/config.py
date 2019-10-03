@@ -20,15 +20,16 @@ CITUS_VERSION_SQL = "SELECT extversion FROM pg_extension WHERE extname = 'citus'
 class CitusUpgradeConfig():
     def __init__(self, arguments):
         self.bindir = arguments['--bindir']
-        self.citus_version = arguments['--citus-version']
+        self.pre_tar_path = arguments['--citus-pre-tar']
+        self.post_tar_path = arguments['--citus-post-tar']
         self.pg_srcdir = arguments['--pgxsdir']
-        self.pg_version = arguments['--pg-version']
         self.temp_dir = './tmp_citus_upgrade'
         self.datadir = self.temp_dir + '/data'
         self.settings = {
             'shared_preload_libraries': 'citus',
             'citus.node_conninfo': 'sslmode=prefer'
         }
+        self.mixed_mode = arguments['--mixed']
 
 
 class PGUpgradeConfig():

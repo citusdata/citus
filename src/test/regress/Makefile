@@ -147,7 +147,11 @@ check-pg-upgrade:
 	$(pg_upgrade_check) --old-bindir=$(old-bindir) --new-bindir=$(new-bindir) --pgxsdir=$(pgxsdir)
 
 check-citus-upgrade:
-	$(citus_upgrade_check) --bindir=$(bindir) --citus-version=$(citus-version) --pgxsdir=$(pgxsdir) --pg-version=$(pg-version)
+	$(citus_upgrade_check) \
+		--bindir=$(bindir) \
+		--pgxsdir=$(pgxsdir) \
+		--citus-pre-tar=$(citus_top_builddir)/../citus-8.3.2.tar \
+		--citus-post-tar=$(citus_top_builddir)/../citus-master.tar
 
 clean distclean maintainer-clean:
 	rm -f $(output_files) $(input_files)
