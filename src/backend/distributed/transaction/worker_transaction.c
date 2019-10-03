@@ -97,7 +97,7 @@ TargetWorkerSetNodeList(TargetWorkerSet targetWorkerSet, LOCKMODE lockMode)
 	{
 		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
 		if (targetWorkerSet == WORKERS_WITH_METADATA &&
-			!workerNode->hasMetadata)
+			(!workerNode->hasMetadata || !workerNode->metadataSynced))
 		{
 			continue;
 		}
