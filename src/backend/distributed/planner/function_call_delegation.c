@@ -141,6 +141,12 @@ TryToDelegateFunctionCall(Query *query, bool *hasExternParam)
 		return NULL;
 	}
 
+	if (query->commandType != CMD_SELECT)
+	{
+		/* not a SELECT */
+		return NULL;
+	}
+
 	joinTree = query->jointree;
 	if (joinTree == NULL)
 	{
