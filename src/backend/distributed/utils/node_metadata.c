@@ -1633,6 +1633,11 @@ UnsetMetadataSyncedForAll(void)
 	HeapTuple heapTuple = NULL;
 	TupleDesc tupleDescriptor = NULL;
 
+	/*
+	 * Concurrent master_update_node() calls might iterate and try to update
+	 * pg_dist_node in different orders. To protect against deadlock, we
+	 * get an exclusive lock here.
+	 */
 	relation = heap_open(DistNodeRelationId(), ExclusiveLock);
 	tupleDescriptor = RelationGetDescr(relation);
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_node_hasmetadata,

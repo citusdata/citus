@@ -1263,24 +1263,28 @@ DetachPartitionCommandList(void)
 
 /*
  * SyncMetadataToNodes tries recreating the metadata snapshot in the
- * metadata workers that are out of sync. Returns false if synchronization
- * to at least one of the workers fails.
+ * metadata workers that are out of sync. Returns the result of
+ * synchronization.
  */
-bool
+MetadataSyncResult
 SyncMetadataToNodes(void)
 {
 	List *workerList = NIL;
 	ListCell *workerCell = NULL;
-	bool result = true;
+	MetadataSyncResult result = METADATA_SYNC_SUCCESS;
 
 	if (!IsCoordinator())
 	{
-		return true;
+		return METADATA_SYNC_SUCCESS;
 	}
 
-	LockRelationOid(DistNodeRelationId(), ExclusiveLock);
+	if (!ConditionalLockRelationOid(DistNodeRelationId(), AccessShareLock))
+	{
+		return METADATA_SYNC_FAILED_LOCK;
+	}
 
 	workerList = ActivePrimaryNodeList(NoLock);
+
 	foreach(workerCell, workerList)
 	{
 		WorkerNode *workerNode = lfirst(workerCell);
@@ -1288,9 +1292,20 @@ SyncMetadataToNodes(void)
 		if (workerNode->hasMetadata && !workerNode->metadataSynced)
 		{
 			bool raiseInterrupts = false;
-			if (!SyncMetadataSnapshotToNode(workerNode, raiseInterrupts))
+
+			/*
+			 * Request a RowExclusiveLock so we don't run concurrently with other
+			 * functions updating pg_dist_node, but allow concurrency with functions
+			 * which are just reading from pg_dist_node.
+			 */
+			if (!ConditionalLockRelationOid(DistNodeRelationId(), RowExclusiveLock))
 			{
-				result = false;
+				result = METADATA_SYNC_FAILED_LOCK;
+				break;
+			}
+			else if (!SyncMetadataSnapshotToNode(workerNode, raiseInterrupts))
+			{
+				result = METADATA_SYNC_FAILED_SYNC;
 			}
 			else
 			{

@@ -9,6 +9,16 @@ CREATE SCHEMA function_tests2 AUTHORIZATION functionuser;
 SET search_path TO function_tests;
 SET citus.shard_count TO 4;
 
+-- set sync intervals to less than 15s so wait_until_metadata_sync never times out
+ALTER SYSTEM SET citus.metadata_sync_interval TO 3000;
+ALTER SYSTEM SET citus.metadata_sync_retry_interval TO 500;
+SELECT pg_reload_conf();
+
+CREATE OR REPLACE FUNCTION wait_until_metadata_sync(timeout INTEGER DEFAULT 15000)
+    RETURNS void
+    LANGUAGE C STRICT
+    AS 'citus';
+
 -- Create and distribute a simple function
 CREATE FUNCTION add(integer, integer) RETURNS integer
     AS 'select $1 + $2;'
@@ -291,6 +301,9 @@ SELECT create_distributed_function('add_polygons(polygon,polygon)', '$1', coloca
 -- default colocation group
 SET citus.shard_count TO 55;
 SELECT create_distributed_function('add_with_param_names(int, int)', 'val1');
+
+-- sync metadata to workers for consistent results when clearing objects
+SELECT wait_until_metadata_sync();
 
 -- clear objects
 SELECT stop_metadata_sync_to_node(nodename,nodeport) FROM pg_dist_node WHERE isactive AND noderole = 'primary';
