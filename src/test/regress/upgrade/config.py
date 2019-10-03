@@ -27,7 +27,8 @@ class CitusUpgradeConfig():
         self.datadir = self.temp_dir + '/data'
         self.settings = {
             'shared_preload_libraries': 'citus',
-            'citus.node_conninfo': 'sslmode=prefer'
+            'citus.node_conninfo': 'sslmode=prefer',
+            'citus.enable_version_checks' : 'false'
         }
         self.mixed_mode = arguments['--mixed']
 

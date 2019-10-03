@@ -150,8 +150,16 @@ check-citus-upgrade:
 	$(citus_upgrade_check) \
 		--bindir=$(bindir) \
 		--pgxsdir=$(pgxsdir) \
-		--citus-pre-tar=$(citus_top_builddir)/../citus-8.3.2.tar \
-		--citus-post-tar=$(citus_top_builddir)/../citus-master.tar
+		--citus-pre-tar=$(citus-pre-tar) \
+		--citus-post-tar=$(citus-post-tar)
+
+check-citus-upgrade-mixed:
+	$(citus_upgrade_check) \
+		--bindir=$(bindir) \
+		--pgxsdir=$(pgxsdir) \
+		--citus-pre-tar=$(citus-pre-tar) \
+		--citus-post-tar=$(citus-post-tar) \
+		--mixed
 
 clean distclean maintainer-clean:
 	rm -f $(output_files) $(input_files)
