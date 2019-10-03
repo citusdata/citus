@@ -32,6 +32,16 @@ SELECT logicalrelid FROM pg_dist_partition
    AND relnamespace='upgrade_basic'::regnamespace
   ORDER BY logicalrelid;
 
+SELECT tgrelid::regclass, tgfoid::regproc, tgisinternal, tgenabled, tgtype::int4::bit(8)
+  FROM pg_dist_partition
+  JOIN pg_trigger ON tgrelid=logicalrelid
+  JOIN pg_class ON pg_class.oid=logicalrelid
+  WHERE
+    relnamespace='upgrade_basic'::regnamespace
+    AND tgname LIKE 'truncate_trigger_%'
+  ORDER BY tgrelid::regclass;
+
+
 SELECT * FROM t ORDER BY a;
 SELECT * FROM t WHERE a = 1;
 

@@ -59,7 +59,7 @@ SELECT sequence_name FROM information_schema.sequences
 SELECT logicalrelid FROM pg_dist_partition
   JOIN pg_depend ON logicalrelid=objid
   JOIN pg_catalog.pg_class ON logicalrelid=oid
-  WHERE 
+  WHERE
    refobjid=(select oid FROM pg_extension WHERE extname = 'citus')
    AND relnamespace='upgrade_basic'::regnamespace
   ORDER BY logicalrelid;
@@ -70,6 +70,23 @@ SELECT logicalrelid FROM pg_dist_partition
  t_ab
  r
  tr
+(5 rows)
+
+SELECT tgrelid::regclass, tgfoid::regproc, tgisinternal, tgenabled, tgtype::int4::bit(8)
+  FROM pg_dist_partition
+  JOIN pg_trigger ON tgrelid=logicalrelid
+  JOIN pg_class ON pg_class.oid=logicalrelid
+  WHERE
+    relnamespace='upgrade_basic'::regnamespace
+    AND tgname LIKE 'truncate_trigger_%'
+  ORDER BY tgrelid::regclass;
+ tgrelid |         tgfoid         | tgisinternal | tgenabled |  tgtype  
+---------+------------------------+--------------+-----------+----------
+ t       | citus_truncate_trigger | t            | O         | 00100010
+ tp      | citus_truncate_trigger | t            | O         | 00100010
+ t_ab    | citus_truncate_trigger | t            | O         | 00100010
+ r       | citus_truncate_trigger | t            | O         | 00100010
+ tr      | citus_truncate_trigger | t            | O         | 00100010
 (5 rows)
 
 SELECT * FROM t ORDER BY a;

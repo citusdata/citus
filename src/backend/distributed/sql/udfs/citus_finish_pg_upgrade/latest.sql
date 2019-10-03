@@ -52,7 +52,7 @@ BEGIN
     FOR table_name IN SELECT logicalrelid FROM pg_catalog.pg_dist_partition
     LOOP
         trigger_name := 'truncate_trigger_' || table_name::oid;
-        command := 'create trigger ' || trigger_name || ' after truncate on ' || table_name || ' execute procedure pg_catalog.citus_truncate_trigger()';
+        command := 'create trigger ' || trigger_name || ' before truncate on ' || table_name || ' execute procedure pg_catalog.citus_truncate_trigger()';
         EXECUTE command;
         command := 'update pg_trigger set tgisinternal = true where tgname = ' || quote_literal(trigger_name);
         EXECUTE command;
