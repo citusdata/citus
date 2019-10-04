@@ -24,7 +24,7 @@ jobs:
           command: citus_indent --check
   check-sql-snapshots:
     docker:
-      - image: 'citusdata/extbuilder:werror'
+      - image: 'citus/extbuilder:latest'
     steps:
       - checkout
       - run: 
