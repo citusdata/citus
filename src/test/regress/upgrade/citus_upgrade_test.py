@@ -27,12 +27,14 @@ from config import (
     NODE_NAMES, USER, WORKER1PORT, MASTER, HOME,
     AFTER_CITUS_UPGRADE_COORD_SCHEDULE, BEFORE_CITUS_UPGRADE_COORD_SCHEDULE
 )
-from upgrade_common import initialize_temp_dir, initialize_citus_cluster, run_pg_regress, stop_databases
+
+import upgrade_common as common
+
 
 def main(config):
     install_citus(config.pre_tar_path)
-    initialize_temp_dir(config.temp_dir)
-    initialize_citus_cluster(
+    common.initialize_temp_dir(config.temp_dir)
+    common.initialize_citus_cluster(
         config.bindir, config.datadir, config.settings)
 
     report_initial_version(config)
@@ -65,7 +67,7 @@ def get_actual_citus_version(pg_path, port):
     return get_version_number(citus_version)
 
 def run_test_on_coordinator(config, schedule):
-    run_pg_regress(config.bindir, config.pg_srcdir,
+    common.run_pg_regress(config.bindir, config.pg_srcdir,
                    NODE_PORTS[COORDINATOR_NAME], schedule)
 
 def remove_citus(tar_path):
@@ -113,5 +115,5 @@ def verify_upgrade(config, mixed_mode):
 
 if __name__ == '__main__':
     config = CitusUpgradeConfig(docopt(__doc__, version='citus_upgrade_test'))
-    atexit.register(stop_databases, config.bindir, config.datadir)
+    atexit.register(common.stop_databases, config.bindir, config.datadir)
     main(config)

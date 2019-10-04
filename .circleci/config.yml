@@ -275,7 +275,7 @@ jobs:
 
   test-11_check-citus-upgrade:
     docker:
-      - image: 'citus/citusupgradetester-11:dev'
+      - image: 'citus/citusupgradetester-11:latest'
     working_directory: /home/circleci/project     
     steps:
       - {attach_workspace: {at: .}}
@@ -283,15 +283,15 @@ jobs:
           name: 'Install and test citus upgrade'
           command: |
            chown -R circleci:circleci /home/circleci
-           install-and-test-ext --target check-citus-upgrade --citus-pre-tar /install-pg11-citusv8.0.0.tar --citus-post-tar /home/circleci/project/install-11.tar 
-           install-and-test-ext --target check-citus-upgrade --citus-pre-tar /install-pg11-citusv8.1.0.tar --citus-post-tar /home/circleci/project/install-11.tar 
-           install-and-test-ext --target check-citus-upgrade --citus-pre-tar /install-pg11-citusv8.2.0.tar --citus-post-tar /home/circleci/project/install-11.tar 
-           install-and-test-ext --target check-citus-upgrade --citus-pre-tar /install-pg11-citusv8.3.0.tar --citus-post-tar /home/circleci/project/install-11.tar 
+           install-and-test-ext --target check-citus-upgrade --citus-pre-tar /install-pg11-citusv8.0.0.tar
+           install-and-test-ext --target check-citus-upgrade --citus-pre-tar /install-pg11-citusv8.1.0.tar 
+           install-and-test-ext --target check-citus-upgrade --citus-pre-tar /install-pg11-citusv8.2.0.tar 
+           install-and-test-ext --target check-citus-upgrade --citus-pre-tar /install-pg11-citusv8.3.0.tar 
 
-           install-and-test-ext --target check-citus-upgrade-mixed --citus-pre-tar /install-pg11-citusv8.0.0.tar --citus-post-tar /home/circleci/project/install-11.tar 
-           install-and-test-ext --target check-citus-upgrade-mixed --citus-pre-tar /install-pg11-citusv8.1.0.tar --citus-post-tar /home/circleci/project/install-11.tar 
-           install-and-test-ext --target check-citus-upgrade-mixed --citus-pre-tar /install-pg11-citusv8.2.0.tar --citus-post-tar /home/circleci/project/install-11.tar 
-           install-and-test-ext --target check-citus-upgrade-mixed --citus-pre-tar /install-pg11-citusv8.3.0.tar --citus-post-tar /home/circleci/project/install-11.tar
+           install-and-test-ext --target check-citus-upgrade-mixed --citus-pre-tar /install-pg11-citusv8.0.0.tar
+           install-and-test-ext --target check-citus-upgrade-mixed --citus-pre-tar /install-pg11-citusv8.1.0.tar 
+           install-and-test-ext --target check-citus-upgrade-mixed --citus-pre-tar /install-pg11-citusv8.2.0.tar 
+           install-and-test-ext --target check-citus-upgrade-mixed --citus-pre-tar /install-pg11-citusv8.3.0.tar
 
 
           

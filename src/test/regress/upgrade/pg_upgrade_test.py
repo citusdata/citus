@@ -23,11 +23,7 @@ import sys
 import shutil
 import os
 
-from upgrade_common import (
-    initialize_temp_dir, initialize_citus_cluster, run_pg_regress,
-    stop_databases, initialize_db_for_cluster, start_databases
-)
-
+import upgrade_common as common
 
 def citus_prepare_pg_upgrade(pg_path):
     for port in NODE_PORTS.values():
@@ -58,29 +54,27 @@ def citus_finish_pg_upgrade(pg_path):
 
 
 def stop_all_databases(old_bindir, new_bindir, old_datadir, new_datadir):
-    stop_databases(old_bindir, old_datadir)
-    stop_databases(new_bindir, new_datadir)
+    common.stop_databases(old_bindir, old_datadir)
+    common.stop_databases(new_bindir, new_datadir)
 
 
 def main(config):
-    initialize_temp_dir(config.temp_dir)
-    initialize_citus_cluster(
-        config.old_bindir, config.old_datadir, config.settings)
-
-    run_pg_regress(config.old_bindir, config.pg_srcdir,
+    common.initialize_temp_dir(config.temp_dir)
+    common.initialize_citus_cluster(config.old_bindir, config.old_datadir, config.settings)   
+    common.run_pg_regress(config.old_bindir, config.pg_srcdir,
                    NODE_PORTS[COORDINATOR_NAME], BEFORE_PG_UPGRADE_SCHEDULE)
 
     citus_prepare_pg_upgrade(config.old_bindir)
-    stop_databases(config.old_bindir, config.old_datadir)
+    common.stop_databases(config.old_bindir, config.old_datadir)
 
-    initialize_db_for_cluster(
+    common.initialize_db_for_cluster(
         config.new_bindir, config.new_datadir, config.settings)
     perform_postgres_upgrade(
         config.old_bindir, config.new_bindir, config.old_datadir, config.new_datadir)
-    start_databases(config.new_bindir, config.new_datadir)
+    common.start_databases(config.new_bindir, config.new_datadir)
     citus_finish_pg_upgrade(config.new_bindir)
 
-    run_pg_regress(config.new_bindir, config.pg_srcdir,
+    common.run_pg_regress(config.new_bindir, config.pg_srcdir,
                    NODE_PORTS[COORDINATOR_NAME], AFTER_PG_UPGRADE_SCHEDULE)
 
 
