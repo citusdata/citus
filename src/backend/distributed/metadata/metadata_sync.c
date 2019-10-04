@@ -1278,7 +1278,12 @@ SyncMetadataToNodes(void)
 		return METADATA_SYNC_SUCCESS;
 	}
 
-	if (!ConditionalLockRelationOid(DistNodeRelationId(), AccessShareLock))
+	/*
+	 * Request a RowExclusiveLock so we don't run concurrently with other
+	 * functions updating pg_dist_node, but allow concurrency with functions
+	 * which are just reading from pg_dist_node.
+	 */
+	if (!ConditionalLockRelationOid(DistNodeRelationId(), RowExclusiveLock))
 	{
 		return METADATA_SYNC_FAILED_LOCK;
 	}
@@ -1293,17 +1298,7 @@ SyncMetadataToNodes(void)
 		{
 			bool raiseInterrupts = false;
 
-			/*
-			 * Request a RowExclusiveLock so we don't run concurrently with other
-			 * functions updating pg_dist_node, but allow concurrency with functions
-			 * which are just reading from pg_dist_node.
-			 */
-			if (!ConditionalLockRelationOid(DistNodeRelationId(), RowExclusiveLock))
-			{
-				result = METADATA_SYNC_FAILED_LOCK;
-				break;
-			}
-			else if (!SyncMetadataSnapshotToNode(workerNode, raiseInterrupts))
+			if (!SyncMetadataSnapshotToNode(workerNode, raiseInterrupts))
 			{
 				result = METADATA_SYNC_FAILED_SYNC;
 			}
