@@ -60,9 +60,11 @@ def stop_all_databases(old_bindir, new_bindir, old_datadir, new_datadir):
 
 def main(config):
     common.initialize_temp_dir(config.temp_dir)
-    common.initialize_citus_cluster(config.old_bindir, config.old_datadir, config.settings)   
+    common.initialize_citus_cluster(config.old_bindir, config.old_datadir, config.settings)
     common.run_pg_regress(config.old_bindir, config.pg_srcdir,
                    NODE_PORTS[COORDINATOR_NAME], BEFORE_PG_UPGRADE_SCHEDULE)
+    common.run_pg_regress(config.old_bindir, config.pg_srcdir,
+                   NODE_PORTS[COORDINATOR_NAME], AFTER_PG_UPGRADE_SCHEDULE)
 
     citus_prepare_pg_upgrade(config.old_bindir)
     common.stop_databases(config.old_bindir, config.old_datadir)
