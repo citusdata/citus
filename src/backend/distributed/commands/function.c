@@ -105,6 +105,7 @@ create_distributed_function(PG_FUNCTION_ARGS)
 	text *colocateWithText = NULL; /* optional */
 
 	List *ddlCommand = NULL;
+	ListCell *ddlCommandCell = NULL;
 	ObjectAddress functionAddress = { 0 };
 
 	int distributionArgumentIndex = -1;
@@ -163,7 +164,11 @@ create_distributed_function(PG_FUNCTION_ARGS)
 	EnsureDependenciesExistsOnAllNodes(&functionAddress);
 
 	ddlCommand = GetFunctionDDLCommand(funcOid);
-	SendBareCommandListToWorkers(ALL_WORKERS, ddlCommand);
+	foreach(ddlCommandCell, ddlCommand)
+	{
+		char *ddlCommandString = lfirst(ddlCommandCell);
+		SendCommandToWorkers(ALL_WORKERS, ddlCommandString);
+	}
 
 	MarkObjectDistributed(&functionAddress);
 
