@@ -17,6 +17,9 @@ ALTER FUNCTION citus.refresh_isolation_tester_prepared_statement SET SCHEMA citu
 ALTER FUNCTION citus.replace_isolation_tester_func SET SCHEMA citus_internal;
 ALTER FUNCTION citus.restore_isolation_tester_func SET SCHEMA citus_internal;
 
+-- we can now safely grant usage on the citus schema to use types
+GRANT USAGE ON SCHEMA citus TO public;
+
 #include "udfs/pg_dist_shard_placement_trigger_func/9.0-1.sql"
 
 CREATE OR REPLACE FUNCTION pg_catalog.worker_create_or_replace_object(statement text)

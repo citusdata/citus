@@ -128,6 +128,11 @@ SELECT task_tracker_assign_task(1, 1, 'SELECT 1');
 -- check read permission
 SET ROLE read_access;
 
+-- should be allowed to run commands, as the current user
+SELECT result FROM run_command_on_workers($$SELECT current_user$$);
+SELECT result FROM run_command_on_placements('test', $$SELECT current_user$$);
+SELECT result FROM run_command_on_colocated_placements('test', 'test_coloc', $$SELECT current_user$$);
+
 EXECUTE prepare_insert(1);
 EXECUTE prepare_select;
 
