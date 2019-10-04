@@ -4,6 +4,7 @@
 # Generated subdirectories
 /tmp_check/
 /tmp_upgrade/
+/tmp_citus_upgrade/
 /results/
 /log/
 

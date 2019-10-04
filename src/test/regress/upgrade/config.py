@@ -1,8 +1,39 @@
-BEFORE_UPGRADE_SCHEDULE = './before_upgrade_schedule'
-AFTER_UPGRADE_SCHEDULE = './after_upgrade_schedule'
+from os.path import expanduser
 
 
-class Config():
+BEFORE_PG_UPGRADE_SCHEDULE = './before_pg_upgrade_schedule'
+AFTER_PG_UPGRADE_SCHEDULE = './after_pg_upgrade_schedule'
+
+AFTER_CITUS_UPGRADE_COORD_SCHEDULE = './after_citus_upgrade_coord_schedule'
+BEFORE_CITUS_UPGRADE_COORD_SCHEDULE = './before_citus_upgrade_coord_schedule'
+
+MASTER = 'master'
+# This should be updated when citus version changes
+MASTER_VERSION = '9.0'
+
+HOME = expanduser("~")
+
+
+CITUS_VERSION_SQL = "SELECT extversion FROM pg_extension WHERE extname = 'citus';"
+
+
+class CitusUpgradeConfig():
+    def __init__(self, arguments):
+        self.bindir = arguments['--bindir']
+        self.pre_tar_path = arguments['--citus-pre-tar']
+        self.post_tar_path = arguments['--citus-post-tar']
+        self.pg_srcdir = arguments['--pgxsdir']
+        self.temp_dir = './tmp_citus_upgrade'
+        self.datadir = self.temp_dir + '/data'
+        self.settings = {
+            'shared_preload_libraries': 'citus',
+            'citus.node_conninfo': 'sslmode=prefer',
+            'citus.enable_version_checks' : 'false'
+        }
+        self.mixed_mode = arguments['--mixed']
+
+
+class PGUpgradeConfig():
     def __init__(self, arguments):
         self.old_bindir = arguments['--old-bindir']
         self.new_bindir = arguments['--new-bindir']
@@ -23,10 +54,13 @@ COORDINATOR_NAME = 'coordinator'
 WORKER1 = 'worker1'
 WORKER2 = 'worker2'
 NODE_NAMES = [COORDINATOR_NAME, WORKER1, WORKER2]
+COORDINATOR_PORT = 57635
+WORKER1PORT = 57636
+WORKER2PORT = 57637
 
-WORKER_PORTS = [57636, 57637]
+WORKER_PORTS = [WORKER1PORT, WORKER2PORT]
 NODE_PORTS = {
-    COORDINATOR_NAME: 57635,
-    WORKER1: 57636,
-    WORKER2: 57637,
+    COORDINATOR_NAME: COORDINATOR_PORT,
+    WORKER1: WORKER1PORT,
+    WORKER2: WORKER2PORT,
 }

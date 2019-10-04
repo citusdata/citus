@@ -149,7 +149,7 @@ jobs:
           at: .
       - run: 
           name: 'Install and test postgres upgrade'
-          command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext --target check-upgrade --old-pg-version 10 --new-pg-version 11'
+          command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext --target check-pg-upgrade --old-pg-version 10 --new-pg-version 11'
 
   test-11-12_check-pg-upgrade:
     docker:
@@ -160,7 +160,7 @@ jobs:
           at: .
       - run: 
           name: 'Install and test postgres upgrade'
-          command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext --target check-upgrade --old-pg-version 11 --new-pg-version 12'
+          command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext --target check-pg-upgrade --old-pg-version 11 --new-pg-version 12'
 
   test-12_check-multi:
     docker:
@@ -271,6 +271,32 @@ jobs:
       - codecov/upload: 
           flags: 'test_12,isolation'        
 
+
+
+  test-11_check-citus-upgrade:
+    docker:
+      - image: 'citus/citusupgradetester-11:latest'
+    working_directory: /home/circleci/project     
+    steps:
+      - {attach_workspace: {at: .}}
+      - run: 
+          name: 'Install and test citus upgrade'
+          command: |
+           chown -R circleci:circleci /home/circleci
+           install-and-test-ext --target check-citus-upgrade --citus-pre-tar /install-pg11-citusv8.0.0.tar
+           install-and-test-ext --target check-citus-upgrade --citus-pre-tar /install-pg11-citusv8.1.0.tar 
+           install-and-test-ext --target check-citus-upgrade --citus-pre-tar /install-pg11-citusv8.2.0.tar 
+           install-and-test-ext --target check-citus-upgrade --citus-pre-tar /install-pg11-citusv8.3.0.tar 
+
+           install-and-test-ext --target check-citus-upgrade-mixed --citus-pre-tar /install-pg11-citusv8.0.0.tar
+           install-and-test-ext --target check-citus-upgrade-mixed --citus-pre-tar /install-pg11-citusv8.1.0.tar 
+           install-and-test-ext --target check-citus-upgrade-mixed --citus-pre-tar /install-pg11-citusv8.2.0.tar 
+           install-and-test-ext --target check-citus-upgrade-mixed --citus-pre-tar /install-pg11-citusv8.3.0.tar
+
+
+          
+           
+
 workflows:
   version: 2
   build_and_test:
@@ -297,10 +323,6 @@ workflows:
       - test-11_check-non-adaptive-isolation:
           requires: [build]
 
-      - test-10-11_check-pg-upgrade: 
-          requires: [build]
-      - test-11-12_check-pg-upgrade: 
-          requires: [build]    
       - test-12_check-multi:
           requires: [build] 
       - test-12_check-tt-van-mx:
@@ -317,5 +339,13 @@ workflows:
       - test-12_check-non-adaptive-failure:
           requires: [build]   
       - test-12_check-non-adaptive-isolation:
-          requires: [build]
+          requires: [build] 
 
+      - test-10-11_check-pg-upgrade: 
+          requires: [build]
+      - test-11-12_check-pg-upgrade: 
+          requires: [build]    
+
+      - test-11_check-citus-upgrade:
+          requires: [build]    
+             

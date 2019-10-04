@@ -1,0 +1,3 @@
+# this schedule is to be run only on coordinators
+
+test: after_citus_upgrade_coord
