@@ -1,3 +1,1 @@
-test: upgrade_basic_before
-test: upgrade_type_before
-test: upgrade_ref2ref_before
+test: upgrade_basic_before upgrade_type_before upgrade_ref2ref_before
