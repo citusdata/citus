@@ -69,10 +69,10 @@ static void TriggerSyncMetadataToPrimaryNodes(void);
 static bool ShouldPropagateCreateFunction(CreateFunctionStmt *stmt);
 static bool ShouldPropagateAlterFunction(const ObjectAddress *address);
 #if PG_VERSION_NUM >= 110000
-static Oid GetFunctionOwnerAndSchemaAndKind(Oid functionOid, char **schemaName,
-											char *prokind);
+static Oid GetFunctionOwnerAndSignatureAndKind(Oid functionOid, char **qualifiedSignature,
+											   char *prokind);
 #else
-static Oid GetFunctionOwnerAndSchema(Oid functionOid, char **schemaName);
+static Oid GetFunctionOwnerAndSignature(Oid functionOid, char **qualifiedSignature);
 #endif
 static ObjectAddress * FunctionToObjectAddress(ObjectType objectType,
 											   ObjectWithArgs *objectWithArgs,
@@ -542,7 +542,7 @@ GetFunctionDDLCommand(const RegProcedure funcOid)
 	Datum sqlTextDatum = 0;
 	char *sql = NULL;
 	char *username = NULL;
-	char *schemaName = NULL;
+	char *qualifiedSignature = NULL;
 #if PG_VERSION_NUM >= 110000
 	char prokind = '\0';
 #endif
@@ -569,17 +569,20 @@ GetFunctionDDLCommand(const RegProcedure funcOid)
 	sql = TextDatumGetCString(sqlTextDatum);
 
 #if PG_VERSION_NUM >= 110000
-	username = GetUserNameFromId(GetFunctionOwnerAndSchemaAndKind(funcOid, &schemaName,
-																  &prokind), false);
+	username = GetUserNameFromId(GetFunctionOwnerAndSignatureAndKind(funcOid,
+																	 &qualifiedSignature,
+																	 &prokind), false);
 	appendStringInfo(&buf, "ALTER %s %s OWNER TO %s;",
 					 (prokind == PROKIND_PROCEDURE ? "PROCEDURE" : "FUNCTION"),
-					 quote_qualified_identifier(schemaName, get_func_name(funcOid)),
+					 qualifiedSignature,
 					 quote_identifier(username));
 
 #else
-	username = GetUserNameFromId(GetFunctionOwnerAndSchema(funcOid, &schemaName), false);
+	username = GetUserNameFromId(GetFunctionOwnerAndSignature(funcOid,
+															  &qualifiedSignature),
+								 false);
 	appendStringInfo(&buf, "ALTER FUNCTION %s OWNER TO %s;",
-					 quote_qualified_identifier(schemaName, get_func_name(funcOid)),
+					 qualifiedSignature,
 					 quote_identifier(username));
 
 #endif
@@ -1294,19 +1297,20 @@ AlterFunctionSchemaStmtObjectAddress(AlterObjectSchemaStmt *stmt, bool missing_o
 #if PG_VERSION_NUM >= 110000
 
 /*
- * GetFunctionOwnerAndSchemaAndKind returns owner of function given oid of function.
+ * GetFunctionOwnerAndSignatureAndKind returns owner of function given oid of function.
  * schemaName is set to schema of function. prokind is set to kind of function.
  */
 static Oid
-GetFunctionOwnerAndSchemaAndKind(Oid functionOid, char **schemaName, char *prokind)
+GetFunctionOwnerAndSignatureAndKind(Oid functionOid, char **qualifiedSignature,
+									char *prokind)
 #else
 
 /*
- * GetFunctionOwnerAndSchema returns owner of function given oid of function.
+ * GetFunctionOwnerAndSignature returns owner of function given oid of function.
  * schemaName is set to schema of function.
  */
 static Oid
-GetFunctionOwnerAndSchema(Oid functionOid, char ** schemaName)
+GetFunctionOwnerAndSignature(Oid functionOid, char ** qualifiedSignature)
 #endif
 {
 	Oid result = InvalidOid;
@@ -1316,12 +1320,49 @@ GetFunctionOwnerAndSchema(Oid functionOid, char ** schemaName)
 	if (HeapTupleIsValid(tp))
 	{
 		Form_pg_proc procform = (Form_pg_proc) GETSTRUCT(tp);
+		int numargs = 0;
+		int i = 0;
+		bool firstarg = true;
+		Oid *argtypes = NULL;
+		char **argnames = NULL;
+		char *argmodes = NULL;
+		char *schemaName = NULL;
+		StringInfoData sigbuf = { 0 };
+
+		initStringInfo(&sigbuf);
 
 		result = procform->proowner;
-		*schemaName = get_namespace_name(procform->pronamespace);
 #if PG_VERSION_NUM >= 110000
 		*prokind = procform->prokind;
 #endif
+		schemaName = get_namespace_name(procform->pronamespace);
+		appendStringInfo(&sigbuf, "%s(", quote_qualified_identifier(schemaName,
+																	get_func_name(
+																		functionOid)));
+		numargs = get_func_arg_info(tp, &argtypes, &argnames, &argmodes);
+		for (i = 0; i < numargs; i++)
+		{
+			if (argmodes == NULL || argmodes[i] == PROARGMODE_IN || argmodes[i] ==
+				PROARGMODE_INOUT || argmodes[i] == PROARGMODE_VARIADIC)
+			{
+				if (!firstarg)
+				{
+					appendStringInfoString(&sigbuf, ", ");
+				}
+				else
+				{
+					firstarg = false;
+				}
+				if (argmodes != NULL && argmodes[i] == PROARGMODE_VARIADIC)
+				{
+					appendStringInfoString(&sigbuf, "VARIADIC ");
+				}
+				appendStringInfoString(&sigbuf, format_type_be_qualified(argtypes[i]));
+			}
+		}
+		appendStringInfoChar(&sigbuf, ')');
+		*qualifiedSignature = sigbuf.data;
+
 		ReleaseSysCache(tp);
 	}
 
