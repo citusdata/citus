@@ -20,6 +20,13 @@
 extern int MetadataSyncInterval;
 extern int MetadataSyncRetryInterval;
 
+typedef enum
+{
+	METADATA_SYNC_SUCCESS = 0,
+	METADATA_SYNC_FAILED_LOCK = 1,
+	METADATA_SYNC_FAILED_SYNC = 2
+} MetadataSyncResult;
+
 /* Functions declarations for metadata syncing */
 extern void StartMetadatSyncToNode(char *nodeNameString, int32 nodePort);
 extern bool ClusterHasKnownMetadataWorkers(void);
@@ -43,7 +50,7 @@ extern char * PlacementUpsertCommand(uint64 shardId, uint64 placementId, int sha
 extern void CreateTableMetadataOnWorkers(Oid relationId);
 extern void MarkNodeHasMetadata(char *nodeName, int32 nodePort, bool hasMetadata);
 extern void MarkNodeMetadataSynced(char *nodeName, int32 nodePort, bool synced);
-extern bool SyncMetadataToNodes(void);
+extern MetadataSyncResult SyncMetadataToNodes(void);
 extern bool SendOptionalCommandListToWorkerInTransaction(char *nodeName, int32 nodePort,
 														 char *nodeUser,
 														 List *commandList);

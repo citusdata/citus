@@ -388,8 +388,17 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 			}
 			else if (CheckCitusVersion(DEBUG1) && CitusHasBeenLoaded())
 			{
-				metadataSyncFailed = !SyncMetadataToNodes();
-				Async_Notify(METADATA_SYNC_CHANNEL, NULL);
+				MetadataSyncResult result = SyncMetadataToNodes();
+				metadataSyncFailed = (result != METADATA_SYNC_SUCCESS);
+
+				/*
+				 * Notification means we had an attempt on synchronization
+				 * without being blocked for pg_dist_node access.
+				 */
+				if (result != METADATA_SYNC_FAILED_LOCK)
+				{
+					Async_Notify(METADATA_SYNC_CHANNEL, NULL);
+				}
 			}
 
 			PopActiveSnapshot();
