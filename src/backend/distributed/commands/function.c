@@ -33,6 +33,7 @@
 #include "distributed/commands/utility_hook.h"
 #include "distributed/deparser.h"
 #include "distributed/maintenanced.h"
+#include "distributed/master_metadata_utility.h"
 #include "distributed/master_protocol.h"
 #include "distributed/metadata/distobject.h"
 #include "distributed/metadata/pg_dist_object.h"
@@ -54,6 +55,7 @@
 
 /* forward declaration for helper functions*/
 static char * GetFunctionDDLCommand(const RegProcedure funcOid);
+static char * GetFunctionAlterOwnerCommand(const RegProcedure funcOid);
 static int GetDistributionArgIndex(Oid functionOid, char *distributionArgumentName,
 								   Oid *distributionArgumentOid);
 static int GetFunctionColocationId(Oid functionOid, char *colocateWithName, Oid
@@ -144,6 +146,7 @@ create_distributed_function(PG_FUNCTION_ARGS)
 		colocateWithTableName = text_to_cstring(colocateWithText);
 	}
 
+	EnsureFunctionOwner(funcOid);
 
 	ObjectAddressSet(functionAddress, ProcedureRelationId, funcOid);
 	ErrorIfFunctionDependsOnExtension(&functionAddress);
@@ -157,7 +160,8 @@ create_distributed_function(PG_FUNCTION_ARGS)
 	EnsureDependenciesExistsOnAllNodes(&functionAddress);
 
 	ddlCommand = GetFunctionDDLCommand(funcOid);
-	SendCommandToWorkers(ALL_WORKERS, ddlCommand);
+
+	SendCommandToWorkersAsUser(ALL_WORKERS, CurrentUserName(), ddlCommand);
 
 	MarkObjectDistributed(&functionAddress);
 
@@ -530,14 +534,17 @@ UpdateFunctionDistributionInfo(const ObjectAddress *distAddress,
 
 /*
  * GetFunctionDDLCommand returns the complete "CREATE OR REPLACE FUNCTION ..." statement for
- * the specified function.
+ * the specified function followed by "ALTER FUNCTION .. SET OWNER ..".
  */
 static char *
 GetFunctionDDLCommand(const RegProcedure funcOid)
 {
+	StringInfo ddlCommand = makeStringInfo();
+
 	OverrideSearchPath *overridePath = NULL;
 	Datum sqlTextDatum = 0;
-	char *sql = NULL;
+	char *createFunctionSQL = NULL;
+	char *alterFunctionOwnerSQL = NULL;
 
 	/*
 	 * Set search_path to NIL so that all objects outside of pg_catalog will be
@@ -555,8 +562,84 @@ GetFunctionDDLCommand(const RegProcedure funcOid)
 	/* revert back to original search_path */
 	PopOverrideSearchPath();
 
-	sql = TextDatumGetCString(sqlTextDatum);
-	return sql;
+	createFunctionSQL = TextDatumGetCString(sqlTextDatum);
+	alterFunctionOwnerSQL = GetFunctionAlterOwnerCommand(funcOid);
+
+	appendStringInfo(ddlCommand, "%s;%s", createFunctionSQL, alterFunctionOwnerSQL);
+
+	return ddlCommand->data;
+}
+
+
+/*
+ * GetFunctionAlterOwnerCommand returns "ALTER FUNCTION .. SET OWNER .." statement for
+ * the specified function.
+ */
+static char *
+GetFunctionAlterOwnerCommand(const RegProcedure funcOid)
+{
+	HeapTuple proctup = SearchSysCache1(PROCOID, ObjectIdGetDatum(funcOid));
+	StringInfo alterCommand = makeStringInfo();
+	bool isProcedure = false;
+	Oid procOwner = InvalidOid;
+
+	char *functionSignature = NULL;
+	char *functionOwner = NULL;
+
+	OverrideSearchPath *overridePath = NULL;
+	Datum functionSignatureDatum = 0;
+
+	if (HeapTupleIsValid(proctup))
+	{
+		Form_pg_proc procform;
+
+		procform = (Form_pg_proc) GETSTRUCT(proctup);
+
+		procOwner = procform->proowner;
+
+#if (PG_VERSION_NUM >= 110000)
+		isProcedure = procform->prokind == PROKIND_PROCEDURE;
+#endif
+
+		ReleaseSysCache(proctup);
+	}
+	else if (!OidIsValid(funcOid) || !HeapTupleIsValid(proctup))
+	{
+		ereport(ERROR, (errmsg("cannot find function with oid: %d", funcOid)));
+	}
+
+	/*
+	 * Set search_path to NIL so that all objects outside of pg_catalog will be
+	 * schema-prefixed. pg_catalog will be added automatically when we call
+	 * PushOverrideSearchPath(), since we set addCatalog to true;
+	 */
+	overridePath = GetOverrideSearchPath(CurrentMemoryContext);
+	overridePath->schemas = NIL;
+	overridePath->addCatalog = true;
+
+	PushOverrideSearchPath(overridePath);
+
+	/*
+	 * If the function exists we want to use pg_get_function_identity_arguments to
+	 * serialize its canonical arguments
+	 */
+	functionSignatureDatum =
+		DirectFunctionCall1(regprocedureout, ObjectIdGetDatum(funcOid));
+
+	/* revert back to original search_path */
+	PopOverrideSearchPath();
+
+	/* regprocedureout returns cstring */
+	functionSignature = DatumGetCString(functionSignatureDatum);
+
+	functionOwner = GetUserNameFromId(procOwner, false);
+
+	appendStringInfo(alterCommand, "ALTER %s %s OWNER TO %s;",
+					 (isProcedure ? "PROCEDURE" : "FUNCTION"),
+					 functionSignature,
+					 quote_identifier(functionOwner));
+
+	return alterCommand->data;
 }
 
 

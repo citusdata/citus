@@ -14,6 +14,18 @@ SELECT substring(:'server_version', '\d+')::int > 10 AS version_above_ten;
 SET citus.next_shard_id TO 1420000;
 ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1420000;
 SET citus.shard_replication_factor TO 1;
+ALTER SYSTEM SET citus.metadata_sync_interval TO 3000;
+ALTER SYSTEM SET citus.metadata_sync_retry_interval TO 500;
+SELECT pg_reload_conf();
+ pg_reload_conf 
+----------------
+ t
+(1 row)
+
+CREATE FUNCTION wait_until_metadata_sync(timeout INTEGER DEFAULT 15000)
+    RETURNS void
+    LANGUAGE C STRICT
+    AS 'citus';
 CREATE TABLE test (id integer, val integer);
 SELECT create_distributed_table('test', 'id');
  create_distributed_table 
@@ -428,7 +440,117 @@ INSERT INTO full_access_user_schema.t1 VALUES (1),(2),(3);
 -- not allowed to create a table
 SELECT create_distributed_table('full_access_user_schema.t1', 'id');
 ERROR:  permission denied for schema full_access_user_schema
-CONTEXT:  while executing command on localhost:57638
+CONTEXT:  while executing command on localhost:57637
+RESET ROLE;
+SET ROLE usage_access;
+CREATE TYPE usage_access_type AS ENUM ('a', 'b');
+CREATE FUNCTION usage_access_func(x usage_access_type, variadic v int[]) RETURNS int[]
+    LANGUAGE plpgsql AS 'begin return v; end;';
+SET ROLE no_access;
+SELECT create_distributed_function('usage_access_func(usage_access_type,int[])');
+ERROR:  must be owner of function usage_access_func
+SET ROLE usage_access;
+SELECT create_distributed_function('usage_access_func(usage_access_type,int[])');
+ create_distributed_function 
+-----------------------------
+ 
+(1 row)
+
+SELECT typowner::regrole FROM pg_type WHERE typname = 'usage_access_type';
+   typowner   
+--------------
+ usage_access
+(1 row)
+
+SELECT proowner::regrole FROM pg_proc WHERE proname = 'usage_access_func';
+   proowner   
+--------------
+ usage_access
+(1 row)
+
+SELECT run_command_on_workers($$SELECT typowner::regrole FROM pg_type WHERE typname = 'usage_access_type'$$);
+      run_command_on_workers      
+----------------------------------
+ (localhost,57637,t,usage_access)
+ (localhost,57638,t,usage_access)
+(2 rows)
+
+SELECT run_command_on_workers($$SELECT proowner::regrole FROM pg_proc WHERE proname = 'usage_access_func'$$);
+      run_command_on_workers      
+----------------------------------
+ (localhost,57637,t,usage_access)
+ (localhost,57638,t,usage_access)
+(2 rows)
+
+SELECT wait_until_metadata_sync();
+ wait_until_metadata_sync 
+--------------------------
+ 
+(1 row)
+
+-- now, make sure that the user can use the function 
+-- created in the transaction
+BEGIN;
+CREATE FUNCTION usage_access_func_second(key int, variadic v int[]) RETURNS text
+    LANGUAGE plpgsql AS 'begin return current_user; end;';
+SELECT create_distributed_function('usage_access_func_second(int,int[])', '$1');
+ create_distributed_function 
+-----------------------------
+ 
+(1 row)
+
+SELECT usage_access_func_second(1, 2,3,4,5) FROM full_access_user_schema.t1 LIMIT 1; 
+ usage_access_func_second 
+--------------------------
+ usage_access
+(1 row)
+
+ROLLBACK;
+CREATE FUNCTION usage_access_func_third(key int, variadic v int[]) RETURNS text
+    LANGUAGE plpgsql AS 'begin return current_user; end;';
+-- connect back as super user
+\c - - - :master_port
+-- show that the current user is a super user
+SELECT usesuper FROM pg_user where usename IN (SELECT current_user);
+ usesuper 
+----------
+ t
+(1 row)
+
+-- superuser creates the distributed function that is owned by a regular user
+SELECT create_distributed_function('usage_access_func_third(int,int[])', '$1');
+ create_distributed_function 
+-----------------------------
+ 
+(1 row)
+
+SELECT proowner::regrole FROM pg_proc WHERE proname = 'usage_access_func_third';
+   proowner   
+--------------
+ usage_access
+(1 row)
+
+SELECT run_command_on_workers($$SELECT proowner::regrole FROM pg_proc WHERE proname = 'usage_access_func_third'$$);
+      run_command_on_workers      
+----------------------------------
+ (localhost,57637,t,usage_access)
+ (localhost,57638,t,usage_access)
+(2 rows)
+
+-- we don't want other tests to have metadata synced
+-- that might change the test outputs, so we're just trying to be careful
+SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
+ stop_metadata_sync_to_node 
+----------------------------
+ 
+(1 row)
+
+SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
+ stop_metadata_sync_to_node 
+----------------------------
+ 
+(1 row)
+
 RESET ROLE;
 -- now we distribute the table as super user
 SELECT create_distributed_table('full_access_user_schema.t1', 'id');

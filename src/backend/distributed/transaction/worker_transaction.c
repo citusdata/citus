@@ -46,7 +46,30 @@ SendCommandToWorker(char *nodeName, int32 nodePort, const char *command)
 
 
 /*
- * SendCommandToWorkerAsUSer sends a command to a particular worker as a particular user
+ * SendCommandToWorkersAsUser sends a command to targetWorkerSet as a particular user
+ * as part of the 2PC.
+ */
+void
+SendCommandToWorkersAsUser(TargetWorkerSet targetWorkerSet, const char *nodeUser,
+						   const char *command)
+{
+	List *workerNodeList = TargetWorkerSetNodeList(targetWorkerSet, ShareLock);
+	ListCell *workerNodeCell = NULL;
+
+	/* run commands serially */
+	foreach(workerNodeCell, workerNodeList)
+	{
+		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
+		char *nodeName = workerNode->workerName;
+		int nodePort = workerNode->workerPort;
+
+		SendCommandToWorkerAsUser(nodeName, nodePort, nodeUser, command);
+	}
+}
+
+
+/*
+ * SendCommandToWorkerAsUser sends a command to a particular worker as a particular user
  * as part of the 2PC.
  */
 void

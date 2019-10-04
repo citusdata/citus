@@ -1413,6 +1413,22 @@ EnsureSequenceOwner(Oid sequenceOid)
 
 
 /*
+ * Check that the current user has owner rights to functionId, error out if
+ * not. Superusers are regarded as owners. Functions and procedures are
+ * treated equally.
+ */
+void
+EnsureFunctionOwner(Oid functionId)
+{
+	if (!pg_proc_ownercheck(functionId, GetUserId()))
+	{
+		aclcheck_error(ACLCHECK_NOT_OWNER, OBJECT_FUNCTION,
+					   get_func_name(functionId));
+	}
+}
+
+
+/*
  * EnsureSuperUser check that the current user is a superuser and errors out if not.
  */
 void
