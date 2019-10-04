@@ -255,9 +255,9 @@ CREATE TABLE full_access_user_schema.t1 (id int);
 
 -- We'll also test that distributed objects have correct ownership
 CREATE TYPE usage_access_type AS ENUM ('a', 'b');
-CREATE FUNCTION usage_access_func(x usage_access_type) RETURNS usage_access_type
-    LANGUAGE plpgsql AS 'begin return x; end;';
-SELECT create_distributed_function('usage_access_func(usage_access_type)');
+CREATE FUNCTION usage_access_func(x usage_access_type, variadic v int[]) RETURNS int[]
+    LANGUAGE plpgsql AS 'begin return v; end;';
+SELECT create_distributed_function('usage_access_func(usage_access_type,int[])');
 SELECT typowner::regrole FROM pg_type WHERE typname = 'usage_access_type';
 SELECT proowner::regrole FROM pg_proc WHERE proname = 'usage_access_func';
 RESET ROLE;

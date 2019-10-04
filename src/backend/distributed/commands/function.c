@@ -1358,10 +1358,6 @@ GetFunctionOwnerAndSignature(Oid functionOid, char ** qualifiedSignature)
 				{
 					firstarg = false;
 				}
-				if (argmodes != NULL && argmodes[i] == PROARGMODE_VARIADIC)
-				{
-					appendStringInfoString(&sigbuf, "VARIADIC ");
-				}
 				appendStringInfoString(&sigbuf, format_type_be_qualified(argtypes[i]));
 			}
 		}
