@@ -1,1 +1,3 @@
-test: upgrade_basic_before upgrade_type_before upgrade_ref2ref_before
+# The basic tests runs analyze which depends on shard numbers
+test: upgrade_basic_before
+test: upgrade_type_before upgrade_ref2ref_before
