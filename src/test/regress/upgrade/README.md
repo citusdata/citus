@@ -10,12 +10,12 @@ Before running the script, make sure that:
 - Citus is installed to both of the postgres versions. For each postgres version:
   - In citus source directory run:
 
-```bash
-make clean
-./configure PG_CONFIG=<your path to postgres pg config>
-PG_CONFIG=<your path to postgres pg config> make
-sudo PG_CONFIG=<your path to postgres pg config> make install
-```
+  ```bash
+    make clean
+    ./configure PG_CONFIG=<your path to postgres pg config>
+    PG_CONFIG=<your path to postgres pg config> make
+    sudo PG_CONFIG=<your path to postgres pg config> make install
+  ```
 
   Make sure you do this for both postgres versions, pg_config should be different for each postgres version.
 
@@ -44,8 +44,8 @@ How the postgres upgrade test works:
 - Database is initialized and citus cluster is created(1 coordinator + 2 workers) with old postgres.
 - `before_pg_upgrade_schedule` is run with `pg_regress`. This schedule sets up any
   objects and data that will be tested for preservation after the upgrade. It
-  also runs all the tests that will be run after the upgrade, to make sure their
-  output is the same before and after.
+- `after_pg_upgrade_schedule` is run with `pg_regress` to verify that the output
+  of those tests is the same before the upgrade as after.
 - `citus_prepare_pg_upgrade` is run in coordinators and workers.
 - Old database is stopped.
 - A new database is initialized with new postgres under `tmp_upgrade`.
