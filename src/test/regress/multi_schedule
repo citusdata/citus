@@ -280,7 +280,7 @@ test: ssl_by_default
 # ---------
 # object distribution tests
 # ---------
-test: distributed_types distributed_types_conflict disable_object_propagation
+test: distributed_types distributed_types_conflict disable_object_propagation distributed_types_xact_add_enum_value
 test: distributed_functions
 test: distributed_procedure
 
