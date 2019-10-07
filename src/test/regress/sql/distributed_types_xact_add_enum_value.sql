@@ -1,3 +1,5 @@
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int > 11 AS version_above_eleven;
 SET citus.next_shard_id TO 20040000;
 
 CREATE SCHEMA xact_enum_type;
