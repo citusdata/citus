@@ -5,6 +5,7 @@
 /tmp_check/
 /tmp_upgrade/
 /tmp_citus_upgrade/
+/tmp_citus_tarballs/
 /results/
 /log/
 

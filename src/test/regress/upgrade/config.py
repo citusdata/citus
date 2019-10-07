@@ -18,6 +18,7 @@ CITUS_VERSION_SQL = "SELECT extversion FROM pg_extension WHERE extname = 'citus'
 
 
 class CitusUpgradeConfig():
+
     def __init__(self, arguments):
         self.bindir = arguments['--bindir']
         self.pre_tar_path = arguments['--citus-pre-tar']
@@ -31,7 +32,6 @@ class CitusUpgradeConfig():
             'citus.enable_version_checks' : 'false'
         }
         self.mixed_mode = arguments['--mixed']
-
 
 class PGUpgradeConfig():
     def __init__(self, arguments):
