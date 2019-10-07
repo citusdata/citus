@@ -52,3 +52,12 @@ SELECT create_distributed_table('tr', 'pk');
 (1 row)
 
 INSERT INTO tr SELECT c, c FROM generate_series(1, 5) as c;
+CREATE TABLE t_append(id int, value_1 int);
+SELECT master_create_distributed_table('t_append', 'id', 'append');
+ master_create_distributed_table 
+---------------------------------
+ 
+(1 row)
+
+\copy t_append FROM STDIN DELIMITER ','
+\copy t_append FROM STDIN DELIMITER ','

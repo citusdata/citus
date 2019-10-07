@@ -33,3 +33,18 @@ INSERT INTO r SELECT * FROM generate_series(1, 5);
 CREATE TABLE tr(pk int, a int REFERENCES r(a) ON DELETE CASCADE ON UPDATE CASCADE);
 SELECT create_distributed_table('tr', 'pk');
 INSERT INTO tr SELECT c, c FROM generate_series(1, 5) as c;
+
+CREATE TABLE t_append(id int, value_1 int);
+SELECT master_create_distributed_table('t_append', 'id', 'append');
+
+\copy t_append FROM STDIN DELIMITER ','
+1,2
+2,3
+3,4
+\.
+
+\copy t_append FROM STDIN DELIMITER ','
+5,2
+6,3
+7,4
+\.

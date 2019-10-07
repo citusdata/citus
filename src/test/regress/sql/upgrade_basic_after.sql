@@ -99,4 +99,24 @@ INSERT INTO t3 VALUES (2, 22);
 INSERT INTO t3 VALUES (3, 33);
 
 SELECT * FROM t3 ORDER BY a;
+
+SELECT shardminvalue, shardmaxvalue FROM pg_dist_shard
+  WHERE logicalrelid = 't_append'::regclass
+  ORDER BY shardminvalue, shardmaxvalue;
+
+SELECT * FROM t_append ORDER BY id;
+
+\copy t_append FROM STDIN DELIMITER ','
+9,2
+10,3
+11,4
+\.
+
+SELECT shardminvalue, shardmaxvalue FROM pg_dist_shard
+  WHERE logicalrelid = 't_append'::regclass
+  ORDER BY shardminvalue, shardmaxvalue;
+
+SELECT * FROM t_append ORDER BY id;
+
+
 ROLLBACK;
