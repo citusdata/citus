@@ -128,31 +128,35 @@ def verify_upgrade(config, mixed_mode):
 
 
 def isLocalExecution(arguments):
-    print(arguments)
     return arguments['--citus-old-version']
 
 
 def generate_citus_tarballs(citus_version):
     tmp_dir = 'tmp_citus_tarballs'
-    common.initialize_temp_dir(tmp_dir)
+    citus_old_tarpath = os.path.abspath(os.path.join(
+        tmp_dir, 'install-citus{}.tar'.format(citus_version)))
+    citus_new_tarpath = os.path.abspath(os.path.join(tmp_dir, 'install-citusmaster.tar')) 
+
+    if doesAlreadyHaveTars(citus_old_tarpath, citus_new_tarpath):
+        return [citus_old_tarpath, citus_new_tarpath]
+
+    common.initialize_temp_dir_if_not_exists(tmp_dir)
     local_script_path = os.path.abspath('upgrade/generate_citus_tarballs.sh')
     with utils.cd(tmp_dir):
         subprocess.call([
             local_script_path, citus_version
         ])
 
-    citus_tarball_paths = [
-        os.path.abspath(os.path.join(
-            tmp_dir, 'install-citus{}.tar'.format(citus_version))),
-        os.path.abspath(os.path.join(tmp_dir, 'install-citusmaster.tar'))
-    ]
-    return citus_tarball_paths
+    return [citus_old_tarpath, citus_new_tarpath]
 
+def doesAlreadyHaveTars(citus_old_tarpath, citus_new_tarpath):
+    return os.path.exists(citus_old_tarpath) and os.path.exists(citus_new_tarpath)
 
 if __name__ == '__main__':
     args = docopt(__doc__, version='citus_upgrade_test')
     if isLocalExecution(args):
-        citus_tarball_paths = generate_citus_tarballs(args['--citus-old-version'])
+        citus_tarball_paths = generate_citus_tarballs(
+            args['--citus-old-version'])
         args['--citus-pre-tar'] = citus_tarball_paths[0]
         args['--citus-post-tar'] = citus_tarball_paths[1]
     config = CitusUpgradeConfig(args)
