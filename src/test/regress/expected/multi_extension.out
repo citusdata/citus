@@ -6,7 +6,6 @@
 -- It'd be nice to script generation of this file, but alas, that's
 -- not done yet.
 SET citus.next_shard_id TO 580000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 580000;
 CREATE SCHEMA test;
 CREATE OR REPLACE FUNCTION test.maintenance_worker(p_dbname text DEFAULT current_database())
     RETURNS pg_stat_activity

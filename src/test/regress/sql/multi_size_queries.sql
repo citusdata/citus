@@ -6,7 +6,6 @@
 -- citus_total_relation_size are also tested.
 
 SET citus.next_shard_id TO 1390000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1390000;
 
 -- Tests with invalid relation IDs
 SELECT citus_table_size(1);
