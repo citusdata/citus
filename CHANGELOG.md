@@ -1,3 +1,61 @@
+### citus v9.0.0 (October 7, 2019) ###
+
+* Adds support for PostgreSQL 12
+
+* Adds UDFs to help with PostgreSQL upgrades
+
+* Distributes types to worker nodes
+
+* Introduces `create_distributed_function` UDF
+
+* Introduces local query execution for Citus MX
+
+* Implements infrastructure for routing `CALL` to MX workers
+
+* Implements infrastructure for routing `SELECT function()` to MX workers
+
+* Adds support for foreign key constraints between reference tables
+
+* Adds a feature flag to turn off `CREATE TYPE` propagation
+
+* Adds option `citus.single_shard_commit_protocol`
+
+* Adds support for `EXPLAIN SUMMARY`
+
+* Adds support for `GENERATE ALWAYS AS STORED`
+
+* Adds support for `serial` and `smallserial` in MX mode
+
+* Adds support for anon composite types on the target list in router queries
+
+* Avoids race condition between `create_reference_table` & `master_add_node`
+
+* Fixes a bug in schemas of distributed sequence definitions
+
+* Fixes a bug that caused `run_command_on_colocated_placements` to fail
+
+* Fixes a bug that leads to various issues when a connection is lost
+
+* Fixes a schema leak on `CREATE INDEX` statement
+
+* Fixes assert failure in bare `SELECT FROM reference table FOR UPDATE` in MX
+
+* Makes `master_update_node` MX compatible
+
+* Prevents `pg_dist_colocation` from multiple records for reference tables
+
+* Prevents segfault in `worker_partition_protocol` edgecase
+
+* Propagates `ALTER FUNCTION` statements for distributed functions
+
+* Propagates `CREATE OR REPLACE FUNCTION` for distributed functions
+
+* Propagates `REINDEX` on tables & indexes
+
+* Provides a GUC to turn of the new dependency propagation functionality
+
+* Uses 2PC in adaptive executor when dealing with replication factors above 1
+
 ### citus v8.3.2 (August 09, 2019) ###
 
 * Fixes performance issues by skipping unnecessary relation access recordings
