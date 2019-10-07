@@ -832,7 +832,7 @@ EnumValsList(Oid typeOid)
 
 	enum_rel = heap_open(EnumRelationId, AccessShareLock);
 	enum_scan = systable_beginscan(enum_rel,
-								   EnumTypIdLabelIndexId,
+								   EnumTypIdSortOrderIndexId,
 								   true, NULL,
 								   1, &skey);
 
