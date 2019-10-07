@@ -208,4 +208,7 @@ $$;
 SELECT ensure_truncate_trigger_is_after();
 DROP FUNCTION ensure_truncate_trigger_is_after;
 
+-- This sequence is unused
+DROP SEQUENCE pg_catalog.pg_dist_jobid_seq;
+
 RESET search_path;

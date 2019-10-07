@@ -3,7 +3,6 @@
 -- this file is intended to create the table requires for the tests
 --
 SET citus.next_shard_id TO 1400000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1400000;
 SET citus.shard_replication_factor = 1;
 SET citus.shard_count = 32;
 

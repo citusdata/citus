@@ -5,7 +5,6 @@
 --
 -- We don't need shard id sequence here, so commented out to prevent conflicts with concurrent tests
 -- SET citus.next_shard_id TO 1400000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1400000;
  
  -- 
  -- UNIONs and JOINs mixed

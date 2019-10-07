@@ -3,7 +3,6 @@
 -- this file is intended to test multi shard update/delete queries
 --
 SET citus.next_shard_id TO 1440000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1440000;
 SET citus.shard_replication_factor to 1;
 SET citus.multi_shard_modify_mode to 'parallel';
 CREATE TABLE users_test_table(user_id int, value_1 int, value_2 int, value_3 int);

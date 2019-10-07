@@ -6,7 +6,6 @@
 -- citus_total_relation_size are also tested.
 
 SET citus.next_shard_id TO 1460000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1460000;
 
 SET citus.shard_replication_factor to 1;
 

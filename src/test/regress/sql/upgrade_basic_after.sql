@@ -19,9 +19,7 @@ SELECT sequence_name FROM information_schema.sequences
     'pg_dist_placement_placementid_seq',
     'pg_dist_groupid_seq',
     'pg_dist_node_nodeid_seq',
-    'pg_dist_colocationid_seq',
-    -- jobid is not actually stored in tables, so it does not need to be restored
-    'pg_dist_jobid_seq'
+    'pg_dist_colocationid_seq'
   );
 
 SELECT logicalrelid FROM pg_dist_partition
