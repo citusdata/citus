@@ -355,7 +355,12 @@ PlanAlterEnumStmt(AlterEnumStmt *stmt, const char *queryString)
 	QualifyTreeNode((Node *) stmt);
 	alterEnumStmtSql = DeparseTreeNode((Node *) stmt);
 
-	/* TODO this is not needed anymore for pg12, alter enum can actually run in a xact */
+	/*
+	 * Before pg12 ALTER ENUM ... ADD VALUE could not be within a xact block. Instead of
+	 * creating a DDLTaksList we won't return anything here. During the processing phase
+	 * we directly connect to workers and execute the commands remotely.
+	 */
+#if PG_VERSION_NUM < 120000
 	if (AlterEnumIsAddValue(stmt))
 	{
 		/*
@@ -364,6 +369,7 @@ PlanAlterEnumStmt(AlterEnumStmt *stmt, const char *queryString)
 		 */
 		return NIL;
 	}
+#endif
 
 	commands = list_make3(DISABLE_DDL_PROPAGATION,
 						  (void *) alterEnumStmtSql,
@@ -400,7 +406,15 @@ ProcessAlterEnumStmt(AlterEnumStmt *stmt, const char *queryString)
 		return;
 	}
 
-	/* TODO this is not needed anymore for pg12, alter enum can actually run in a xact */
+	/*
+	 * Before pg12 ALTER ENUM ... ADD VALUE could not be within a xact block. Normally we
+	 * would propagate the statements in a xact block to perform 2pc on changes via ddl.
+	 * Instead we need to connect directly to the workers here and execute the command.
+	 *
+	 * From pg12 and up we use the normal infrastructure and create the ddl jobs during
+	 * planning.
+	 */
+#if PG_VERSION_NUM < 120000
 	if (AlterEnumIsAddValue(stmt))
 	{
 		/*
@@ -437,6 +451,7 @@ ProcessAlterEnumStmt(AlterEnumStmt *stmt, const char *queryString)
 									  "all workers")));
 		}
 	}
+#endif
 }
 
 
@@ -832,7 +847,7 @@ EnumValsList(Oid typeOid)
 
 	enum_rel = heap_open(EnumRelationId, AccessShareLock);
 	enum_scan = systable_beginscan(enum_rel,
-								   EnumTypIdLabelIndexId,
+								   EnumTypIdSortOrderIndexId,
 								   true, NULL,
 								   1, &skey);
 

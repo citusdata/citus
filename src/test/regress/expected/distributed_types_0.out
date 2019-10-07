@@ -100,6 +100,20 @@ SELECT * FROM t4;
 
 -- ALTER TYPE ... ADD VALUE does not work in transactions
 COMMIT;
+-- verify order of enum labels
+SELECT string_agg(enumlabel, ',' ORDER BY enumsortorder ASC) FROM pg_enum WHERE enumtypid = 'type_tests.te2'::regtype;
+ string_agg 
+------------
+ yes,no
+(1 row)
+
+SELECT run_command_on_workers($$SELECT string_agg(enumlabel, ',' ORDER BY enumsortorder ASC) FROM pg_enum WHERE enumtypid = 'type_tests.te2'::regtype;$$);
+    run_command_on_workers    
+------------------------------
+ (localhost,57637,t,"yes,no")
+ (localhost,57638,t,"yes,no")
+(2 rows)
+
 -- test some combination of types without ddl propagation, this will prevent the workers
 -- from having those types created. They are created just-in-time on table distribution
 SET citus.enable_ddl_propagation TO off;
