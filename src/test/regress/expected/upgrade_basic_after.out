@@ -82,11 +82,11 @@ SELECT tgrelid::regclass, tgfoid::regproc, tgisinternal, tgenabled, tgtype::int4
   ORDER BY tgrelid::regclass;
  tgrelid |         tgfoid         | tgisinternal | tgenabled |  tgtype  
 ---------+------------------------+--------------+-----------+----------
- t       | citus_truncate_trigger | t            | O         | 00100010
- tp      | citus_truncate_trigger | t            | O         | 00100010
- t_ab    | citus_truncate_trigger | t            | O         | 00100010
- r       | citus_truncate_trigger | t            | O         | 00100010
- tr      | citus_truncate_trigger | t            | O         | 00100010
+ t       | citus_truncate_trigger | t            | O         | 00100000
+ tp      | citus_truncate_trigger | t            | O         | 00100000
+ t_ab    | citus_truncate_trigger | t            | O         | 00100000
+ r       | citus_truncate_trigger | t            | O         | 00100000
+ tr      | citus_truncate_trigger | t            | O         | 00100000
 (5 rows)
 
 SELECT * FROM t ORDER BY a;
