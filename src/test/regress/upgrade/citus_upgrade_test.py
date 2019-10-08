@@ -140,7 +140,7 @@ def generate_citus_tarballs(citus_version):
     common.initialize_temp_dir_if_not_exists(tmp_dir)
     local_script_path = os.path.abspath('upgrade/generate_citus_tarballs.sh')
     with utils.cd(tmp_dir):
-        subprocess.call([
+        subprocess.check_call([
             local_script_path, citus_version
         ])
 
