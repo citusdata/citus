@@ -161,6 +161,19 @@ check-citus-upgrade-mixed:
 		--citus-post-tar=$(citus-post-tar) \
 		--mixed
 
+check-citus-upgrade-local:
+	$(citus_upgrade_check) \
+		--bindir=$(bindir) \
+		--pgxsdir=$(pgxsdir) \
+		--citus-old-version=$(citus-old-version)	
+
+check-citus-upgrade-mixed-local:
+	$(citus_upgrade_check) \
+		--bindir=$(bindir) \
+		--pgxsdir=$(pgxsdir) \
+		--citus-old-version=$(citus-old-version) \
+		--mixed			
+
 clean distclean maintainer-clean:
 	rm -f $(output_files) $(input_files)
 	rm -rf tmp_check/

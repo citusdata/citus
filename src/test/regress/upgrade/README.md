@@ -98,3 +98,15 @@ To see full command list:
 ```bash
     pipenv run upgrade/citus_upgrade_test.py -help
 ```
+
+In order to run citus upgrade tests locally you can use:
+
+```bash
+    pipenv run make check-citus-upgrade-local citus-old-version=v8.0.0
+```
+
+For mixed mode:
+
+```bash
+    pipenv run make check-citus-upgrade-mixed-local citus-old-version=v8.0.0
+```

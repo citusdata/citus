@@ -16,6 +16,12 @@ def initialize_temp_dir(temp_dir):
     # Give full access to TEMP_DIR so that postgres user can use it.
     os.chmod(temp_dir, 0o777)
 
+def initialize_temp_dir_if_not_exists(temp_dir):
+    if os.path.exists(temp_dir):
+        return
+    os.mkdir(temp_dir)
+    # Give full access to TEMP_DIR so that postgres user can use it.
+    os.chmod(temp_dir, 0o777)
 
 def initialize_db_for_cluster(pg_path, rel_data_path, settings):
     subprocess.call(['mkdir', rel_data_path])
