@@ -43,13 +43,7 @@ void QualifyFunctionSchemaName(ObjectWithArgs *func, ObjectType type);
 void
 QualifyAlterFunctionStmt(AlterFunctionStmt *stmt)
 {
-	ObjectType objtype = OBJECT_FUNCTION;
-
-#if (PG_VERSION_NUM >= 110000)
-	objtype = stmt->objtype;
-#endif
-
-	QualifyFunction(stmt->func, objtype);
+	QualifyFunction(stmt->func, stmt->objtype);
 }
 
 
@@ -61,11 +55,7 @@ QualifyAlterFunctionStmt(AlterFunctionStmt *stmt)
 void
 QualifyRenameFunctionStmt(RenameStmt *stmt)
 {
-#if (PG_VERSION_NUM < 110000)
-	Assert(stmt->renameType == OBJECT_FUNCTION);
-#else
 	Assert(stmt->renameType == OBJECT_FUNCTION || stmt->renameType == OBJECT_PROCEDURE);
-#endif
 
 	QualifyFunction(castNode(ObjectWithArgs, stmt->object), stmt->renameType);
 }
@@ -79,11 +69,7 @@ QualifyRenameFunctionStmt(RenameStmt *stmt)
 void
 QualifyAlterFunctionSchemaStmt(AlterObjectSchemaStmt *stmt)
 {
-#if (PG_VERSION_NUM < 110000)
-	Assert(stmt->objectType == OBJECT_FUNCTION);
-#else
 	Assert(stmt->objectType == OBJECT_FUNCTION || stmt->objectType == OBJECT_PROCEDURE);
-#endif
 
 	QualifyFunction(castNode(ObjectWithArgs, stmt->object), stmt->objectType);
 }
@@ -97,11 +83,7 @@ QualifyAlterFunctionSchemaStmt(AlterObjectSchemaStmt *stmt)
 void
 QualifyAlterFunctionOwnerStmt(AlterOwnerStmt *stmt)
 {
-#if (PG_VERSION_NUM < 110000)
-	Assert(stmt->objectType == OBJECT_FUNCTION);
-#else
 	Assert(stmt->objectType == OBJECT_FUNCTION || stmt->objectType == OBJECT_PROCEDURE);
-#endif
 
 	QualifyFunction(castNode(ObjectWithArgs, stmt->object), stmt->objectType);
 }
@@ -115,11 +97,7 @@ QualifyAlterFunctionOwnerStmt(AlterOwnerStmt *stmt)
 void
 QualifyAlterFunctionDependsStmt(AlterObjectDependsStmt *stmt)
 {
-#if (PG_VERSION_NUM < 110000)
-	Assert(stmt->objectType == OBJECT_FUNCTION);
-#else
 	Assert(stmt->objectType == OBJECT_FUNCTION || stmt->objectType == OBJECT_PROCEDURE);
-#endif
 
 	QualifyFunction(castNode(ObjectWithArgs, stmt->object), stmt->objectType);
 }
@@ -156,7 +134,7 @@ QualifyFunctionSchemaName(ObjectWithArgs *func, ObjectType type)
 	Oid funcid = InvalidOid;
 	HeapTuple proctup;
 
-	funcid = LookupFuncWithArgsCompat(type, func, true);
+	funcid = LookupFuncWithArgs(type, func, true);
 	proctup = SearchSysCache1(PROCOID, ObjectIdGetDatum(funcid));
 
 	/*

@@ -2,14 +2,6 @@
 -- MULTI_EXPLAIN
 --
 SET citus.next_shard_id TO 570000;
--- print whether we're using version > 9 to make version-specific tests clear
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int > 9 AS version_above_nine;
- version_above_nine 
---------------------
- t
-(1 row)
-
 \a\t
 RESET citus.task_executor_type;
 SET citus.explain_distributed_queries TO on;
@@ -786,7 +778,6 @@ t
 SELECT true AS valid FROM explain_json($$
 	SELECT avg(l_linenumber) FROM lineitem WHERE l_orderkey > 9030$$);
 t
-	
 -- Test multi shard update
 EXPLAIN (COSTS FALSE)
 	UPDATE lineitem_hash_part
@@ -810,7 +801,6 @@ Custom Scan (Citus Adaptive)
         Node: host=localhost port=57638 dbname=regression
         ->  Update on lineitem_hash_part_360044 lineitem_hash_part
               ->  Seq Scan on lineitem_hash_part_360044 lineitem_hash_part
-	
 EXPLAIN (COSTS FALSE)
 	UPDATE lineitem_hash_part
 	SET l_suppkey = 12
@@ -1034,8 +1024,8 @@ SELECT true AS valid FROM explain_xml($$
 	AND o_custkey = c_custkey
 	AND l_suppkey = s_suppkey$$);
 t
--- make sure that EXPLAIN works without 
--- problems for queries that inlvolves only 
+-- make sure that EXPLAIN works without
+-- problems for queries that inlvolves only
 -- reference tables
 SELECT true AS valid FROM explain_xml($$
 	SELECT count(*)

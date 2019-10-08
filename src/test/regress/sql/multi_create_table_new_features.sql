@@ -2,10 +2,6 @@
 -- MULTI_CREATE_TABLE_NEW_FEATURES
 --
 
--- print whether we're using version > 9 to make version-specific tests clear
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int > 9 AS version_above_nine;
-
 -- Verify that the GENERATED ... AS IDENTITY feature in PostgreSQL 10
 -- is forbidden in distributed tables.
 

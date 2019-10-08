@@ -1,8 +1,5 @@
 
 SET citus.next_shard_id TO 990000;
--- print server version > 10 to make version-specific tests clear
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int > 10 as version_above_ten;
 
 -- ===================================================================
 -- test utility statement functionality

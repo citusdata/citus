@@ -1,10 +1,8 @@
--- 
+--
 -- Tests multiple commands in transactions where
 -- there is foreign key relation between reference
 -- tables and distributed tables
 --
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int > 10 AS version_above_ten;
 
 CREATE SCHEMA test_fkey_to_ref_in_tx;
 SET search_path TO 'test_fkey_to_ref_in_tx';
@@ -50,7 +48,7 @@ BEGIN;
 ROLLBACK;
 
 -- case 1.2: SELECT to a reference table is followed by a multiple router SELECTs to a distributed table
-BEGIN;	
+BEGIN;
 	SELECT count(*) FROM reference_table;
 	SELECT count(*) FROM on_update_fkey_table WHERE id = 15;
 	SELECT count(*) FROM on_update_fkey_table WHERE id = 16;
@@ -58,7 +56,7 @@ BEGIN;
 	SELECT count(*) FROM on_update_fkey_table WHERE id = 18;
 ROLLBACK;
 
-BEGIN;	
+BEGIN;
 	SELECT count(*) FROM transitive_reference_table;
 	SELECT count(*) FROM on_update_fkey_table WHERE id = 15;
 	SELECT count(*) FROM on_update_fkey_table WHERE id = 16;
@@ -95,28 +93,28 @@ BEGIN;
 ROLLBACK;
 
 -- case 1.5: SELECT to a reference table is followed by a DDL that touches fkey column
-BEGIN;	
+BEGIN;
 	SELECT count(*) FROM reference_table;
 	ALTER TABLE on_update_fkey_table ALTER COLUMN value_1 SET DATA TYPE bigint;
 ROLLBACK;
 
-BEGIN;	
+BEGIN;
 	SELECT count(*) FROM transitive_reference_table;
 	ALTER TABLE on_update_fkey_table ALTER COLUMN value_1 SET DATA TYPE bigint;
 ROLLBACK;
 
 -- case 1.6: SELECT to a reference table is followed by an unrelated DDL
-BEGIN;	
+BEGIN;
 	SELECT count(*) FROM reference_table;
 	ALTER TABLE on_update_fkey_table ADD COLUMN X INT;
 ROLLBACK;
 
-BEGIN;	
+BEGIN;
 	SELECT count(*) FROM transitive_reference_table;
 	ALTER TABLE on_update_fkey_table ADD COLUMN X INT;
 ROLLBACK;
 
--- case 1.7.1: SELECT to a reference table is followed by a DDL that is on 
+-- case 1.7.1: SELECT to a reference table is followed by a DDL that is on
 -- the foreign key column
 BEGIN;
 	SELECT count(*) FROM reference_table;
@@ -134,31 +132,31 @@ BEGIN;
 	ALTER TABLE on_update_fkey_table DROP COLUMN value_1 CASCADE;
 ROLLBACK;
 
--- case 1.7.2: SELECT to a reference table is followed by a DDL that is on 
+-- case 1.7.2: SELECT to a reference table is followed by a DDL that is on
 -- the foreign key column after a parallel query has been executed
-BEGIN;	
+BEGIN;
 	SELECT count(*) FROM unrelated_dist_table;
 	SELECT count(*) FROM reference_table;
 
 	ALTER TABLE on_update_fkey_table DROP COLUMN value_1 CASCADE;
 ROLLBACK;
 
-BEGIN;	
+BEGIN;
 	SELECT count(*) FROM unrelated_dist_table;
 	SELECT count(*) FROM transitive_reference_table;
 
 	ALTER TABLE on_update_fkey_table DROP COLUMN value_1 CASCADE;
 ROLLBACK;
 
--- case 1.7.3: SELECT to a reference table is followed by a DDL that is not on 
+-- case 1.7.3: SELECT to a reference table is followed by a DDL that is not on
 -- the foreign key column, and a parallel query has already been executed
-BEGIN;	
+BEGIN;
 	SELECT count(*) FROM unrelated_dist_table;
 	SELECT count(*) FROM reference_table;
 	ALTER TABLE on_update_fkey_table ADD COLUMN X INT;
 ROLLBACK;
 
-BEGIN;	
+BEGIN;
 	SELECT count(*) FROM unrelated_dist_table;
 	SELECT count(*) FROM transitive_reference_table;
 	ALTER TABLE on_update_fkey_table ADD COLUMN X INT;
@@ -629,7 +627,7 @@ ROLLBACK;
 -- an unrelated update followed by update on the reference table and update
 -- on the cascading distributed table
 -- note that the UPDATE on the reference table will try to set the execution
--- mode to sequential, which will fail since there is an already opened 
+-- mode to sequential, which will fail since there is an already opened
 -- parallel connections
 BEGIN;
 	UPDATE unrelated_dist_table SET value_1 = 15;
@@ -653,7 +651,7 @@ ROLLBACK;
 -- already executed a parallel query
 BEGIN;
 	CREATE TABLE test_table_1(id int PRIMARY KEY);
-	SELECT create_reference_table('test_table_1'); 
+	SELECT create_reference_table('test_table_1');
 
 	CREATE TABLE tt4(id int PRIMARY KEY, value_1 int, FOREIGN KEY(id) REFERENCES tt4(id));
 	SELECT create_distributed_table('tt4', 'id');
@@ -671,7 +669,7 @@ ROLLBACK;
 BEGIN;
 	SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
 	CREATE TABLE test_table_1(id int PRIMARY KEY);
-	SELECT create_reference_table('test_table_1'); 
+	SELECT create_reference_table('test_table_1');
 
 	CREATE TABLE tt4(id int PRIMARY KEY, value_1 int, FOREIGN KEY(id) REFERENCES tt4(id));
 	SELECT create_distributed_table('tt4', 'id');
@@ -688,7 +686,7 @@ ROLLBACK;
 -- parallel connection via create_distributed_table(), later
 -- adding foreign key to reference table fails
 BEGIN;
-	
+
 	CREATE TABLE test_table_1(id int PRIMARY KEY);
 	SELECT create_reference_table('test_table_1');
 
@@ -704,7 +702,7 @@ COMMIT;
 
 -- same test with the above on sequential mode should work fine
 BEGIN;
-	
+
 	SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
 
 	CREATE TABLE test_table_1(id int PRIMARY KEY);
@@ -721,7 +719,7 @@ BEGIN;
 COMMIT;
 
 
--- similar test with the above, but this time the order of 
+-- similar test with the above, but this time the order of
 -- create_distributed_table and create_reference_table is
 -- changed
 BEGIN;
@@ -778,7 +776,7 @@ ROLLBACK;
 -- make sure that we cannot create hash distributed tables with
 -- foreign keys to reference tables when they have data in it
 BEGIN;
-	
+
 	CREATE TABLE test_table_1(id int PRIMARY KEY);
 	INSERT INTO test_table_1 SELECT i FROM generate_series(0,100) i;
 
@@ -797,7 +795,7 @@ COMMIT;
 -- the same test with above in sequential mode would still not work
 -- since COPY cannot be executed in sequential mode
 BEGIN;
-	
+
 	SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
 
 	CREATE TABLE test_table_1(id int PRIMARY KEY);
@@ -808,16 +806,16 @@ BEGIN;
 
 	SELECT create_reference_table('test_table_1');
 	SELECT create_distributed_table('test_table_2', 'id');
-	
+
 	-- make sure that the output isn't too verbose
  	SET LOCAL client_min_messages TO ERROR;
 	DROP TABLE test_table_2, test_table_1;
-COMMIT; 
+COMMIT;
 
 -- we should be able to execute and DML/DDL/SELECT after we've
 -- switched to sequential via create_distributed_table
 BEGIN;
-	
+
 	CREATE TABLE test_table_1(id int PRIMARY KEY);
 	CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int, FOREIGN KEY(value_1) REFERENCES test_table_1(id));
 
@@ -848,11 +846,11 @@ SELECT create_reference_table('reference_table');
 CREATE TABLE distributed_table(id int PRIMARY KEY, value_1 int);
 SELECT create_distributed_table('distributed_table', 'id');
 
-ALTER TABLE 
-	distributed_table 
-ADD CONSTRAINT 
-	fkey_delete FOREIGN KEY(value_1) 
-REFERENCES 
+ALTER TABLE
+	distributed_table
+ADD CONSTRAINT
+	fkey_delete FOREIGN KEY(value_1)
+REFERENCES
 	reference_table(id) ON DELETE CASCADE;
 
 INSERT INTO reference_table SELECT i FROM generate_series(0, 10) i;
@@ -860,7 +858,7 @@ INSERT INTO distributed_table SELECT i, i % 10  FROM generate_series(0, 100) i;
 
 -- this query returns 100 rows in Postgres, but not in Citus
 -- see https://github.com/citusdata/citus_docs/issues/664 for the discussion
-WITH t1 AS (DELETE FROM reference_table RETURNING id) 
+WITH t1 AS (DELETE FROM reference_table RETURNING id)
 	DELETE FROM distributed_table USING t1 WHERE value_1 = t1.id RETURNING *;
 
 -- load some more data for one more test with real-time selects
@@ -869,10 +867,10 @@ INSERT INTO distributed_table SELECT i, i % 10  FROM generate_series(0, 100) i;
 
 -- this query returns 100 rows in Postgres, but not in Citus
 -- see https://github.com/citusdata/citus_docs/issues/664 for the discussion
-WITH t1 AS (DELETE FROM reference_table RETURNING id) 
+WITH t1 AS (DELETE FROM reference_table RETURNING id)
 	SELECT count(*) FROM distributed_table, t1 WHERE  value_1 = t1.id;
 
--- this query should fail since we first to a parallel access to a distributed table 
+-- this query should fail since we first to a parallel access to a distributed table
 -- with t1, and then access to t2
 WITH t1 AS (DELETE FROM distributed_table RETURNING id),
 	t2 AS (DELETE FROM reference_table RETURNING id)
@@ -887,7 +885,7 @@ WITH t1 AS (DELETE FROM distributed_table RETURNING id)
 -- finally, make sure that we can execute the same queries
 -- in the sequential mode
 BEGIN;
-	
+
 	SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
 
 	WITH t1 AS (DELETE FROM distributed_table RETURNING id),
@@ -896,7 +894,7 @@ BEGIN;
 ROLLBACK;
 
 BEGIN;
-	
+
 	SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
 
 	WITH t1 AS (DELETE FROM distributed_table RETURNING id)

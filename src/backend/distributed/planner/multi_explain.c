@@ -91,15 +91,6 @@ static void ExplainOneQuery(Query *query, int cursorOptions,
 							IntoClause *into, ExplainState *es,
 							const char *queryString, ParamListInfo params,
 							QueryEnvironment *queryEnv);
-#if (PG_VERSION_NUM < 110000)
-static void ExplainOpenGroup(const char *objtype, const char *labelname,
-							 bool labeled, ExplainState *es);
-static void ExplainCloseGroup(const char *objtype, const char *labelname,
-							  bool labeled, ExplainState *es);
-static void ExplainXMLTag(const char *tagname, int flags, ExplainState *es);
-static void ExplainJSONLineEnding(ExplainState *es);
-static void ExplainYAMLLineStarting(ExplainState *es);
-#endif
 
 
 /*
@@ -230,7 +221,7 @@ ExplainJob(Job *job, ExplainState *es)
 
 	ExplainOpenGroup("Job", "Job", true, es);
 
-	ExplainPropertyIntegerInternal("Task Count", NULL, taskCount, es);
+	ExplainPropertyInteger("Task Count", NULL, taskCount, es);
 
 	if (dependedJobCount > 0)
 	{
@@ -306,8 +297,8 @@ ExplainMapMergeJob(MapMergeJob *mapMergeJob, ExplainState *es)
 	}
 
 	ExplainOpenGroup("MapMergeJob", NULL, true, es);
-	ExplainPropertyIntegerInternal("Map Task Count", NULL, mapTaskCount, es);
-	ExplainPropertyIntegerInternal("Merge Task Count", NULL, mergeTaskCount, es);
+	ExplainPropertyInteger("Map Task Count", NULL, mapTaskCount, es);
+	ExplainPropertyInteger("Merge Task Count", NULL, mergeTaskCount, es);
 
 	if (dependedJobCount > 0)
 	{
@@ -649,13 +640,10 @@ ExplainOneQuery(Query *query, int cursorOptions,
 {
 	/* if an advisor plugin is present, let it manage things */
 	if (ExplainOneQuery_hook)
-#if (PG_VERSION_NUM >= 110000)
+	{
 		(*ExplainOneQuery_hook) (query, cursorOptions, into, es,
 								 queryString, params, queryEnv);
-#elif (PG_VERSION_NUM >= 100000)
-		(*ExplainOneQuery_hook) (query, cursorOptions, into, es,
-								 queryString, params);
-#endif
+	}
 	else
 	{
 		PlannedStmt *plan;
@@ -675,182 +663,3 @@ ExplainOneQuery(Query *query, int cursorOptions,
 					   &planduration);
 	}
 }
-
-#if (PG_VERSION_NUM < 110000)
-/*
- * Open a group of related objects.
- *
- * objtype is the type of the group object, labelname is its label within
- * a containing object (if any).
- *
- * If labeled is true, the group members will be labeled properties,
- * while if it's false, they'll be unlabeled objects.
- */
-static void
-ExplainOpenGroup(const char *objtype, const char *labelname,
-				 bool labeled, ExplainState *es)
-{
-	switch (es->format)
-	{
-		case EXPLAIN_FORMAT_TEXT:
-			/* nothing to do */
-			break;
-
-		case EXPLAIN_FORMAT_XML:
-			ExplainXMLTag(objtype, X_OPENING, es);
-			es->indent++;
-			break;
-
-		case EXPLAIN_FORMAT_JSON:
-			ExplainJSONLineEnding(es);
-			appendStringInfoSpaces(es->str, 2 * es->indent);
-			if (labelname)
-			{
-				escape_json(es->str, labelname);
-				appendStringInfoString(es->str, ": ");
-			}
-			appendStringInfoChar(es->str, labeled ? '{' : '[');
-
-			/*
-			 * In JSON format, the grouping_stack is an integer list.  0 means
-			 * we've emitted nothing at this grouping level, 1 means we've
-			 * emitted something (and so the next item needs a comma). See
-			 * ExplainJSONLineEnding().
-			 */
-			es->grouping_stack = lcons_int(0, es->grouping_stack);
-			es->indent++;
-			break;
-
-		case EXPLAIN_FORMAT_YAML:
-
-			/*
-			 * In YAML format, the grouping stack is an integer list.  0 means
-			 * we've emitted nothing at this grouping level AND this grouping
-			 * level is unlabelled and must be marked with "- ".  See
-			 * ExplainYAMLLineStarting().
-			 */
-			ExplainYAMLLineStarting(es);
-			if (labelname)
-			{
-				appendStringInfo(es->str, "%s: ", labelname);
-				es->grouping_stack = lcons_int(1, es->grouping_stack);
-			}
-			else
-			{
-				appendStringInfoString(es->str, "- ");
-				es->grouping_stack = lcons_int(0, es->grouping_stack);
-			}
-			es->indent++;
-			break;
-	}
-}
-
-
-/*
- * Close a group of related objects.
- * Parameters must match the corresponding ExplainOpenGroup call.
- */
-static void
-ExplainCloseGroup(const char *objtype, const char *labelname,
-				  bool labeled, ExplainState *es)
-{
-	switch (es->format)
-	{
-		case EXPLAIN_FORMAT_TEXT:
-			/* nothing to do */
-			break;
-
-		case EXPLAIN_FORMAT_XML:
-			es->indent--;
-			ExplainXMLTag(objtype, X_CLOSING, es);
-			break;
-
-		case EXPLAIN_FORMAT_JSON:
-			es->indent--;
-			appendStringInfoChar(es->str, '\n');
-			appendStringInfoSpaces(es->str, 2 * es->indent);
-			appendStringInfoChar(es->str, labeled ? '}' : ']');
-			es->grouping_stack = list_delete_first(es->grouping_stack);
-			break;
-
-		case EXPLAIN_FORMAT_YAML:
-			es->indent--;
-			es->grouping_stack = list_delete_first(es->grouping_stack);
-			break;
-	}
-}
-
-
-/*
- * Emit opening or closing XML tag.
- *
- * "flags" must contain X_OPENING, X_CLOSING, or X_CLOSE_IMMEDIATE.
- * Optionally, OR in X_NOWHITESPACE to suppress the whitespace we'd normally
- * add.
- *
- * XML tag names can't contain white space, so we replace any spaces in
- * "tagname" with dashes.
- */
-static void
-ExplainXMLTag(const char *tagname, int flags, ExplainState *es)
-{
-	const char *s;
-
-	if ((flags & X_NOWHITESPACE) == 0)
-		appendStringInfoSpaces(es->str, 2 * es->indent);
-	appendStringInfoCharMacro(es->str, '<');
-	if ((flags & X_CLOSING) != 0)
-		appendStringInfoCharMacro(es->str, '/');
-	for (s = tagname; *s; s++)
-		appendStringInfoCharMacro(es->str, (*s == ' ') ? '-' : *s);
-	if ((flags & X_CLOSE_IMMEDIATE) != 0)
-		appendStringInfoString(es->str, " /");
-	appendStringInfoCharMacro(es->str, '>');
-	if ((flags & X_NOWHITESPACE) == 0)
-		appendStringInfoCharMacro(es->str, '\n');
-}
-
-
-/*
- * Emit a JSON line ending.
- *
- * JSON requires a comma after each property but the last.  To facilitate this,
- * in JSON format, the text emitted for each property begins just prior to the
- * preceding line-break (and comma, if applicable).
- */
-static void
-ExplainJSONLineEnding(ExplainState *es)
-{
-	Assert(es->format == EXPLAIN_FORMAT_JSON);
-	if (linitial_int(es->grouping_stack) != 0)
-		appendStringInfoChar(es->str, ',');
-	else
-		linitial_int(es->grouping_stack) = 1;
-	appendStringInfoChar(es->str, '\n');
-}
-
-
-/*
- * Indent a YAML line.
- *
- * YAML lines are ordinarily indented by two spaces per indentation level.
- * The text emitted for each property begins just prior to the preceding
- * line-break, except for the first property in an unlabelled group, for which
- * it begins immediately after the "- " that introduces the group.  The first
- * property of the group appears on the same line as the opening "- ".
- */
-static void
-ExplainYAMLLineStarting(ExplainState *es)
-{
-	Assert(es->format == EXPLAIN_FORMAT_YAML);
-	if (linitial_int(es->grouping_stack) == 0)
-	{
-		linitial_int(es->grouping_stack) = 1;
-	}
-	else
-	{
-		appendStringInfoChar(es->str, '\n');
-		appendStringInfoSpaces(es->str, es->indent * 2);
-	}
-}
-#endif

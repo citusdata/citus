@@ -5,13 +5,9 @@
 
 SET citus.next_shard_id TO 880000;
 
--- print whether we're using version > 9 to make version-specific tests clear
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int > 9 AS version_above_nine;
-
 -- the function simply parses the results and returns 'shardId@worker'
 -- for all the explain task outputs
-CREATE OR REPLACE FUNCTION parse_explain_output(in qry text, in table_name text, out r text) 
+CREATE OR REPLACE FUNCTION parse_explain_output(in qry text, in table_name text, out r text)
 RETURNS SETOF TEXT AS $$
 DECLARE
        portOfTheTask text;
@@ -128,10 +124,10 @@ RESET client_min_messages;
 
 
 -- Now, lets test round-robin policy
--- round-robin policy relies on PostgreSQL's local transactionId, 
+-- round-robin policy relies on PostgreSQL's local transactionId,
 -- which might change and we don't have any control over it.
--- the important thing that we look for is that round-robin policy 
--- should give the same output for executions in the same transaction 
+-- the important thing that we look for is that round-robin policy
+-- should give the same output for executions in the same transaction
 -- and different output for executions that are not inside the
 -- same transaction. To ensure that, we define a helper function
 BEGIN;
@@ -141,9 +137,9 @@ SET LOCAL citus.explain_distributed_queries TO on;
 CREATE TEMPORARY TABLE explain_outputs (value text);
 SET LOCAL citus.task_assignment_policy TO 'round-robin';
 
-INSERT INTO explain_outputs 
+INSERT INTO explain_outputs
        SELECT parse_explain_output('EXPLAIN SELECT count(*) FROM task_assignment_reference_table;', 'task_assignment_reference_table');
-INSERT INTO explain_outputs 
+INSERT INTO explain_outputs
        SELECT parse_explain_output('EXPLAIN SELECT count(*) FROM task_assignment_reference_table;', 'task_assignment_reference_table');
 
 -- given that we're in the same transaction, the count should be 1
@@ -157,9 +153,9 @@ COMMIT;
 SET citus.task_assignment_policy TO 'round-robin';
 SET citus.explain_distributed_queries TO ON;
 
-INSERT INTO explain_outputs 
+INSERT INTO explain_outputs
        SELECT parse_explain_output('EXPLAIN SELECT count(*) FROM task_assignment_reference_table;', 'task_assignment_reference_table');
-INSERT INTO explain_outputs 
+INSERT INTO explain_outputs
        SELECT parse_explain_output('EXPLAIN SELECT count(*) FROM task_assignment_reference_table;', 'task_assignment_reference_table');
 
 -- given that we're in the same transaction, the count should be 2
@@ -169,7 +165,7 @@ TRUNCATE explain_outputs;
 
 -- same test with a distributed table
 -- we keep this test because as of this commit, the code
--- paths for reference tables and distributed tables are 
+-- paths for reference tables and distributed tables are
 -- not the same
 SET citus.shard_replication_factor TO 2;
 
@@ -181,9 +177,9 @@ BEGIN;
 SET LOCAL citus.explain_distributed_queries TO on;
 SET LOCAL citus.task_assignment_policy TO 'round-robin';
 
-INSERT INTO explain_outputs 
+INSERT INTO explain_outputs
        SELECT parse_explain_output('EXPLAIN SELECT count(*) FROM task_assignment_replicated_hash;', 'task_assignment_replicated_hash');
-INSERT INTO explain_outputs 
+INSERT INTO explain_outputs
        SELECT parse_explain_output('EXPLAIN SELECT count(*) FROM task_assignment_replicated_hash;', 'task_assignment_replicated_hash');
 
 -- given that we're in the same transaction, the count should be 1
@@ -197,9 +193,9 @@ COMMIT;
 SET citus.task_assignment_policy TO 'round-robin';
 SET citus.explain_distributed_queries TO ON;
 
-INSERT INTO explain_outputs 
+INSERT INTO explain_outputs
        SELECT parse_explain_output('EXPLAIN SELECT count(*) FROM task_assignment_replicated_hash;', 'task_assignment_replicated_hash');
-INSERT INTO explain_outputs 
+INSERT INTO explain_outputs
        SELECT parse_explain_output('EXPLAIN SELECT count(*) FROM task_assignment_replicated_hash;', 'task_assignment_replicated_hash');
 
 -- given that we're in the same transaction, the count should be 2

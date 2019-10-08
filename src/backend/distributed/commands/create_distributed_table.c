@@ -22,9 +22,6 @@
 #include "catalog/index.h"
 #include "catalog/pg_am.h"
 #include "catalog/pg_attribute.h"
-#if (PG_VERSION_NUM < 110000)
-#include "catalog/pg_constraint_fn.h"
-#endif
 #include "catalog/pg_enum.h"
 #include "catalog/pg_extension.h"
 #include "catalog/pg_opclass.h"
@@ -1166,9 +1163,9 @@ CreateTruncateTrigger(Oid relationId)
 	trigger->whenClause = NULL;
 	trigger->isconstraint = false;
 
-	CreateTriggerInternal(trigger, NULL, relationId, InvalidOid, InvalidOid, InvalidOid,
-						  InvalidOid, InvalidOid, NULL,
-						  internal, false);
+	CreateTrigger(trigger, NULL, relationId, InvalidOid, InvalidOid, InvalidOid,
+				  InvalidOid, InvalidOid, NULL,
+				  internal, false);
 }
 
 

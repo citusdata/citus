@@ -206,7 +206,7 @@ ColumnNameToColumn(Oid relationId, char *columnNodeString)
 							   columnNumber, relationName)));
 	}
 
-	columnName = get_attname_internal(relationId, column->varattno, false);
+	columnName = get_attname(relationId, column->varattno, false);
 	if (columnName == NULL)
 	{
 		char *relationName = get_rel_name(relationId);

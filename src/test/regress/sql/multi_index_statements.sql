@@ -5,9 +5,6 @@
 -- Check that we can run CREATE INDEX and DROP INDEX statements on distributed
 -- tables.
 
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int > 10 AS server_version_above_ten;
-
 --
 -- CREATE TEST TABLES
 --

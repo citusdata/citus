@@ -4,10 +4,6 @@
 -- Test user permissions.
 --
 
--- print whether we're using version > 10 to make version-specific tests clear
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int > 10 AS version_above_ten;
-
 SET citus.next_shard_id TO 1420000;
 
 SET citus.shard_replication_factor TO 1;
@@ -300,14 +296,14 @@ SELECT run_command_on_workers($$SELECT proowner::regrole FROM pg_proc WHERE pron
 
 SELECT wait_until_metadata_sync();
 
--- now, make sure that the user can use the function 
+-- now, make sure that the user can use the function
 -- created in the transaction
 BEGIN;
 CREATE FUNCTION usage_access_func_second(key int, variadic v int[]) RETURNS text
     LANGUAGE plpgsql AS 'begin return current_user; end;';
 SELECT create_distributed_function('usage_access_func_second(int,int[])', '$1');
 
-SELECT usage_access_func_second(1, 2,3,4,5) FROM full_access_user_schema.t1 LIMIT 1; 
+SELECT usage_access_func_second(1, 2,3,4,5) FROM full_access_user_schema.t1 LIMIT 1;
 
 ROLLBACK;
 

@@ -10,10 +10,6 @@
 SET citus.next_shard_id TO 690000;
 SET citus.enable_unique_job_ids TO off;
 
--- print whether we're using version > 9 to make version-specific tests clear
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int > 9 AS version_above_nine;
-
 BEGIN;
 SET client_min_messages TO DEBUG4;
 SET citus.task_executor_type TO 'task-tracker';

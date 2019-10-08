@@ -694,8 +694,6 @@ deparse_shard_index_statement(IndexStmt *origStmt, Oid distrelid, int64 shardid,
 	deparse_index_columns(buffer, indexStmt->indexParams, deparseContext);
 	appendStringInfoString(buffer, ") ");
 
-#if PG_VERSION_NUM >= 110000
-
 	/* column/expressions for INCLUDE list */
 	if (indexStmt->indexIncludingParams != NIL)
 	{
@@ -703,7 +701,6 @@ deparse_shard_index_statement(IndexStmt *origStmt, Oid distrelid, int64 shardid,
 		deparse_index_columns(buffer, indexStmt->indexIncludingParams, deparseContext);
 		appendStringInfoChar(buffer, ')');
 	}
-#endif
 
 	AppendStorageParametersToString(buffer, indexStmt->options);
 

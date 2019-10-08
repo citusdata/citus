@@ -7,10 +7,6 @@
 -- router queries, single row inserts, multi row inserts via insert
 -- into select, multi row insert via copy commands.
 
--- print whether we're using version > 10 to make version-specific tests clear
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int > 10 AS version_above_ten;
-
 SELECT count(*) FROM lineitem_hash_part;
 
 SELECT count(*) FROM orders_hash_part;
@@ -154,10 +150,10 @@ SELECT * FROM  lineitems_by_shipping_method ORDER BY 1,2 LIMIT 5;
 
 -- create a view with group by on partition column
 CREATE VIEW lineitems_by_orderkey AS
-	SELECT 
-		l_orderkey, count(*) 
-	FROM 
-		lineitem_hash_part 
+	SELECT
+		l_orderkey, count(*)
+	FROM
+		lineitem_hash_part
 	GROUP BY 1;
 
 -- this should work since we're able to push down this query
@@ -181,7 +177,7 @@ DROP VIEW priority_orders;
 CREATE VIEW recent_users AS
 	SELECT user_id, max(time) as lastseen FROM users_table
 	GROUP BY user_id
-	HAVING max(time) > '2017-11-23 16:20:33.264457'::timestamp order by 2 DESC; 
+	HAVING max(time) > '2017-11-23 16:20:33.264457'::timestamp order by 2 DESC;
 SELECT * FROM recent_users ORDER BY 2 DESC, 1 DESC;
 
 -- create a view for recent_events
@@ -194,16 +190,16 @@ SELECT count(*) FROM recent_events;
 -- count number of events of recent_users
 SELECT count(*) FROM recent_users ru JOIN events_table et ON (ru.user_id = et.user_id);
 -- count number of events of per recent users order by count
-SELECT ru.user_id, count(*) 
-	FROM recent_users ru 
+SELECT ru.user_id, count(*)
+	FROM recent_users ru
 		JOIN events_table et
 		ON (ru.user_id = et.user_id)
 	GROUP BY ru.user_id
 	ORDER BY 2 DESC, 1;
 
 -- the same query with a left join however, it would still generate the same result
-SELECT ru.user_id, count(*) 
-	FROM recent_users ru 
+SELECT ru.user_id, count(*)
+	FROM recent_users ru
 		LEFT JOIN events_table et
 		ON (ru.user_id = et.user_id)
 	GROUP BY ru.user_id
@@ -211,8 +207,8 @@ SELECT ru.user_id, count(*)
 
 -- query wrapped inside a subquery, it needs another top level order by
 SELECT * FROM
-	(SELECT ru.user_id, count(*) 
-		FROM recent_users ru 
+	(SELECT ru.user_id, count(*)
+		FROM recent_users ru
 			JOIN events_table et
 			ON (ru.user_id = et.user_id)
 		GROUP BY ru.user_id
@@ -222,8 +218,8 @@ ORDER BY 2 DESC, 1;
 -- non-partition key joins are supported inside subquery
 -- via pull-push execution
 SELECT * FROM
-	(SELECT ru.user_id, count(*) 
-		FROM recent_users ru 
+	(SELECT ru.user_id, count(*)
+		FROM recent_users ru
 			JOIN events_table et
 			ON (ru.user_id = et.event_type)
 		GROUP BY ru.user_id
@@ -238,7 +234,7 @@ SELECT ru.user_id FROM recent_users ru JOIN recent_events re USING(user_id) GROU
 -- recent_events who are not done by recent users
 SELECT count(*) FROM (
 	SELECT re.*, ru.user_id AS recent_user
-		FROM recent_events re LEFT JOIN recent_users ru USING(user_id)) reu 
+		FROM recent_events re LEFT JOIN recent_users ru USING(user_id)) reu
 	WHERE recent_user IS NULL;
 
 -- same query with anti-join
@@ -289,7 +285,7 @@ SELECT et.user_id, et.time FROM events_table et WHERE et.user_id IN (SELECT user
 SELECT count(*) FROM events_table et WHERE et.user_id IN (SELECT user_id FROM recent_selected_users WHERE user_id = 1);
 
 -- union between views is supported through recursive planning
-(SELECT user_id FROM recent_users) 
+(SELECT user_id FROM recent_users)
 UNION
 (SELECT user_id FROM selected_users)
 ORDER BY 1;
@@ -297,7 +293,7 @@ ORDER BY 1;
 -- wrapping it inside a SELECT * works
 SELECT *
 	FROM (
-		(SELECT user_id FROM recent_users) 
+		(SELECT user_id FROM recent_users)
 		UNION
 		(SELECT user_id FROM selected_users) ) u
 	WHERE user_id < 2 AND user_id > 0
@@ -306,7 +302,7 @@ SELECT *
 -- union all also works for views
 SELECT *
 	FROM (
-		(SELECT user_id FROM recent_users) 
+		(SELECT user_id FROM recent_users)
 		UNION ALL
 		(SELECT user_id FROM selected_users) ) u
 	WHERE user_id < 2 AND user_id > 0
@@ -314,7 +310,7 @@ SELECT *
 
 SELECT count(*)
 	FROM (
-		(SELECT user_id FROM recent_users) 
+		(SELECT user_id FROM recent_users)
 		UNION
 		(SELECT user_id FROM selected_users) ) u
 	WHERE user_id < 2 AND user_id > 0;
@@ -322,7 +318,7 @@ SELECT count(*)
 -- UNION ALL between views is supported through recursive planning
 SELECT count(*)
 	FROM (
-		(SELECT user_id FROM recent_users) 
+		(SELECT user_id FROM recent_users)
 		UNION ALL
 		(SELECT user_id FROM selected_users) ) u
 	WHERE user_id < 2 AND user_id > 0;
@@ -333,7 +329,7 @@ SELECT count(*)
 		(SELECT user_id FROM (SELECT user_id, max(time) as lastseen FROM users_table
 			GROUP BY user_id
 			HAVING max(time) > '2017-11-22 05:45:49.978738'::timestamp order by 2 DESC) aa
-		) 
+		)
 		UNION
 		(SELECT user_id FROM (SELECT * FROM users_table WHERE value_1 >= 1 and value_1 < 3) bb) ) u
 	WHERE user_id < 2 AND user_id > 0;
@@ -343,7 +339,7 @@ SELECT count(*)
 		(SELECT user_id FROM (SELECT user_id, max(time) as lastseen FROM users_table
 			GROUP BY user_id
 			HAVING max(time) > '2017-11-22 05:45:49.978738'::timestamp order by 2 DESC) aa
-		) 
+		)
 		UNION ALL
 		(SELECT user_id FROM (SELECT * FROM users_table WHERE value_1 >= 1 and value_1 < 3) bb) ) u
 	WHERE user_id < 2 AND user_id > 0;
@@ -411,7 +407,7 @@ EXPLAIN (COSTS FALSE) SELECT user_id FROM recent_selected_users GROUP BY 1 ORDER
 
 EXPLAIN (COSTS FALSE) SELECT *
 	FROM (
-		(SELECT user_id FROM recent_users) 
+		(SELECT user_id FROM recent_users)
 		UNION
 		(SELECT user_id FROM selected_users) ) u
 	WHERE user_id < 4 AND user_id > 1
