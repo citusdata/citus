@@ -29,17 +29,19 @@ build_current() {
   basedir="${base}/${citus_version}"
 
   mkdir -p "${basedir}"
-  cd "${basedir}"
-  citus_dir="${base}/../../../.."
+  citus_repo="${base}/../../../.."
+
+  cd "$citus_repo" && cp -R . /tmp/citus_copy
+  cp -R /tmp/citus_copy "${basedir}/citus_${citus_version}"
+  rm -R -f /tmp/citus_copy
   builddir="${basedir}/build"
+  cd "${basedir}"
+
+  citus_dir=${basedir}/citus_$citus_version
 
   make -C "${citus_dir}" clean
-  cd "${citus_dir}"
-  ./configure --without-libcurl
 
   install_citus_and_tar
-  make -C "${citus_dir}" clean
-
 }
 
 build_ext() {
