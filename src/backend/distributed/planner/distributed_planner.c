@@ -1240,8 +1240,7 @@ RemoteScanRangeTableEntry(List *columnNameList)
 {
 	RangeTblEntry *remoteScanRangeTableEntry = makeNode(RangeTblEntry);
 
-	/* we use RTE_VALUES for custom scan because we can't look up relation */
-	remoteScanRangeTableEntry->rtekind = RTE_VALUES;
+	remoteScanRangeTableEntry->rtekind = RTE_FUNCTION;
 	remoteScanRangeTableEntry->eref = makeAlias("remote_scan", columnNameList);
 	remoteScanRangeTableEntry->inh = false;
 	remoteScanRangeTableEntry->inFromCl = true;

@@ -30,6 +30,7 @@
 #include "optimizer/cost.h"
 #include "optimizer/planmain.h"
 #include "optimizer/tlist.h"
+#include "optimizer/subselect.h"
 #if PG_VERSION_NUM >= 120000
 #include "optimizer/optimizer.h"
 #else
@@ -46,7 +47,7 @@
 static List * MasterTargetList(List *workerTargetList);
 static PlannedStmt * BuildSelectStatement(Query *masterQuery, List *masterTargetList,
 										  CustomScan *remoteScan);
-static Agg * BuildAggregatePlan(Query *masterQuery, Plan *subPlan);
+static Agg * BuildAggregatePlan(PlannerInfo *root, Query *masterQuery, Plan *subPlan);
 static bool HasDistinctAggregate(Query *masterQuery);
 static bool UseGroupAggregateWithHLL(Query *masterQuery);
 static bool QueryContainsAggregateWithHLL(Query *query);
@@ -54,6 +55,7 @@ static Plan * BuildDistinctPlan(Query *masterQuery, Plan *subPlan);
 static List * PrepareTargetListForNextPlan(List *targetList);
 static Agg * makeAggNode(List *groupClauseList, List *havingQual,
 						 AggStrategy aggrStrategy, List *queryTargetList, Plan *subPlan);
+static void FinalizeStatement(PlannerInfo *root, PlannedStmt *stmt, Plan *topLevelPlan);
 
 
 /*
@@ -143,6 +145,15 @@ BuildSelectStatement(Query *masterQuery, List *masterTargetList, CustomScan *rem
 	List *columnNameList = NULL;
 	List *sortClauseList = copyObject(masterQuery->sortClause);
 
+	PlannerGlobal *glob = makeNode(PlannerGlobal);
+	PlannerInfo *root = makeNode(PlannerInfo);
+	root->parse = masterQuery;
+	root->glob = glob;
+	root->query_level = 1;
+	root->planner_cxt = CurrentMemoryContext;
+	root->wt_param_id = -1;
+
+
 	/* (1) make PlannedStmt and set basic information */
 	selectStatement = makeNode(PlannedStmt);
 	selectStatement->canSetTag = true;
@@ -169,8 +180,9 @@ BuildSelectStatement(Query *masterQuery, List *masterTargetList, CustomScan *rem
 	{
 		remoteScan->scan.plan.targetlist = masterTargetList;
 
-		aggregationPlan = BuildAggregatePlan(masterQuery, &remoteScan->scan.plan);
+		aggregationPlan = BuildAggregatePlan(root, masterQuery, &remoteScan->scan.plan);
 		topLevelPlan = (Plan *) aggregationPlan;
+		selectStatement->planTree = topLevelPlan;
 	}
 	else
 	{
@@ -252,10 +264,91 @@ BuildSelectStatement(Query *masterQuery, List *masterTargetList, CustomScan *rem
 		topLevelPlan = (Plan *) limitPlan;
 	}
 
-	/* (6) finally set our top level plan in the plan tree */
-	selectStatement->planTree = topLevelPlan;
+	/* (6) set top level plan in the plantree and copy over some things from
+	 * PlannerInfo */
+	FinalizeStatement(root, selectStatement, topLevelPlan);
 
 	return selectStatement;
+}
+
+
+/*
+ * FinalizeStatement sets some necessary fields on the final statement and its
+ * plan to make it work with the regular postgres executor. This code is copied
+ * almost verbatim from standard_planner in the PG source code.
+ *
+ * Modifications from original code:
+ * - Added SS_attach_initplans call
+ * - Commented out set_plan_references(root, top_plan)
+ * - Commented out setting result->rtable (we already do that before)
+ */
+static void
+FinalizeStatement(PlannerInfo *root, PlannedStmt *result, Plan *top_plan)
+{
+	ListCell *lp,
+			 *lr;
+	PlannerGlobal *glob = root->glob;
+
+	/* Taken from create_plan */
+	SS_attach_initplans(root, top_plan);
+
+	/*
+	 * If any Params were generated, run through the plan tree and compute
+	 * each plan node's extParam/allParam sets.  Ideally we'd merge this into
+	 * set_plan_references' tree traversal, but for now it has to be separate
+	 * because we need to visit subplans before not after main plan.
+	 */
+	if (glob->paramExecTypes != NIL)
+	{
+		Assert(list_length(glob->subplans) == list_length(glob->subroots));
+		forboth(lp, glob->subplans, lr, glob->subroots)
+		{
+			Plan *subplan = (Plan *) lfirst(lp);
+			PlannerInfo *subroot = lfirst_node(PlannerInfo, lr);
+
+			SS_finalize_plan(subroot, subplan);
+		}
+		SS_finalize_plan(root, top_plan);
+	}
+
+	/* final cleanup of the plan */
+	Assert(glob->finalrtable == NIL);
+	Assert(glob->finalrowmarks == NIL);
+	Assert(glob->resultRelations == NIL);
+	Assert(glob->rootResultRelations == NIL);
+
+	/* TODO: Uncomment when we fix:
+	 * ERROR:  variable not found in subplan target list
+	 */
+
+	/* top_plan = set_plan_references(root, top_plan); */
+
+	/* ... and the subplans (both regular subplans and initplans) */
+	Assert(list_length(glob->subplans) == list_length(glob->subroots));
+	forboth(lp, glob->subplans, lr, glob->subroots)
+	{
+		Plan *subplan = (Plan *) lfirst(lp);
+		PlannerInfo *subroot = lfirst_node(PlannerInfo, lr);
+
+		lfirst(lp) = set_plan_references(subroot, subplan);
+	}
+	result->transientPlan = glob->transientPlan;
+	result->dependsOnRole = glob->dependsOnRole;
+	result->parallelModeNeeded = glob->parallelModeNeeded;
+	result->planTree = top_plan;
+
+	/* result->rtable = glob->finalrtable; */
+	result->resultRelations = glob->resultRelations;
+#if PG_VERSION_NUM < 120000
+	result->nonleafResultRelations = glob->nonleafResultRelations;
+#endif
+	result->rootResultRelations = glob->rootResultRelations;
+	result->subplans = glob->subplans;
+	result->rewindPlanIDs = glob->rewindPlanIDs;
+	result->rowMarks = glob->finalrowmarks;
+	result->relationOids = glob->relationOids;
+	result->invalItems = glob->invalItems;
+	result->paramExecTypes = glob->paramExecTypes;
 }
 
 
@@ -265,7 +358,7 @@ BuildSelectStatement(Query *masterQuery, List *masterTargetList, CustomScan *rem
  * the master node.
  */
 static Agg *
-BuildAggregatePlan(Query *masterQuery, Plan *subPlan)
+BuildAggregatePlan(PlannerInfo *root, Query *masterQuery, Plan *subPlan)
 {
 	Agg *aggregatePlan = NULL;
 	AggStrategy aggregateStrategy = AGG_PLAIN;
@@ -283,13 +376,20 @@ BuildAggregatePlan(Query *masterQuery, Plan *subPlan)
 	Assert(masterQuery->hasAggs || masterQuery->groupClause);
 
 	aggregateTargetList = masterQuery->targetList;
-	havingQual = masterQuery->havingQual;
+
+	/* Would be nice if we could use masterQuery->hasSubLinks to only call
+	 * these when that is true. However, for some reason hasSubLinks is false
+	 * even when there are SubLinks. */
+	havingQual = SS_process_sublinks(root, masterQuery->havingQual, true);
+	havingQual = SS_replace_correlation_vars(root, havingQual);
+
 
 	/* estimate aggregate execution costs */
 	memset(&aggregateCosts, 0, sizeof(AggClauseCosts));
 	get_agg_clause_costs(NULL, (Node *) aggregateTargetList, AGGSPLIT_SIMPLE,
 						 &aggregateCosts);
-	get_agg_clause_costs(NULL, (Node *) havingQual, AGGSPLIT_SIMPLE, &aggregateCosts);
+
+	get_agg_clause_costs(root, (Node *) havingQual, AGGSPLIT_SIMPLE, &aggregateCosts);
 
 	/*
 	 * For upper level plans above the sequential scan, the planner expects the
@@ -363,6 +463,7 @@ BuildAggregatePlan(Query *masterQuery, Plan *subPlan)
 	aggregatePlan->plan.startup_cost = 0;
 	aggregatePlan->plan.total_cost = 0;
 	aggregatePlan->plan.plan_rows = 0;
+
 
 	return aggregatePlan;
 }

@@ -54,7 +54,7 @@ test: multi_partitioning_utils multi_partitioning replicated_partitioned_table
 # Tests for recursive subquery planning
 # ----------
 test: subquery_basics subquery_local_tables subquery_executors subquery_and_cte set_operations set_operation_and_local_tables
-test: subqueries_deep subquery_view subquery_partitioning subquery_complex_target_list subqueries_not_supported subquery_in_where 
+test: subqueries_deep subquery_view subquery_partitioning subquery_complex_target_list subqueries_not_supported subquery_in_where
 test: non_colocated_leaf_subquery_joins non_colocated_subquery_joins non_colocated_join_order
 test: subquery_prepared_statements pg12
 
@@ -74,6 +74,7 @@ test: custom_aggregate_support
 test: multi_average_expression multi_working_columns multi_having_pushdown
 test: multi_array_agg multi_limit_clause multi_orderby_limit_pushdown
 test: multi_jsonb_agg multi_jsonb_object_agg multi_json_agg multi_json_object_agg bool_agg
+test: ch_bench_having
 test: multi_agg_type_conversion multi_count_type_conversion
 test: multi_partition_pruning single_hash_repartition_join
 test: multi_join_pruning multi_hash_pruning
@@ -129,7 +130,7 @@ test: multi_shard_modify
 # ----------
 # Tests around DDL statements run on distributed tables
 # ----------
-test: multi_index_statements 
+test: multi_index_statements
 test: multi_alter_table_statements
 test: multi_alter_table_add_constraints
 
@@ -174,7 +175,7 @@ test: multi_create_fdw
 test: multi_complex_count_distinct multi_select_distinct
 test: multi_modifications
 test: multi_distribution_metadata
-test: multi_generate_ddl_commands multi_create_shards multi_prune_shard_list multi_repair_shards 
+test: multi_generate_ddl_commands multi_create_shards multi_prune_shard_list multi_repair_shards
 test: multi_upsert multi_simple_queries multi_data_types
 test: multi_utilities foreign_key_to_reference_table validate_constraint
 test: multi_modifying_xacts

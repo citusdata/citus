@@ -21,6 +21,18 @@ SELECT create_distributed_table('the_table', 'a');
 
 INSERT INTO the_table (a, b) VALUES (1, 1);
 INSERT INTO the_table (a, b) VALUES (1, 2);
+CREATE TABLE stock (
+  s_w_id int NOT NULL,
+  s_i_id int NOT NULL,
+  s_order_cnt int NOT NULL
+);
+SELECT create_distributed_table('stock','s_w_id');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+INSERT INTO stock SELECT c, c, c FROM generate_series(1, 5) as c;
 -- connect to the follower and check that a simple select query works, the follower
 -- is still in the default cluster and will send queries to the primary nodes
 \c - - - :follower_master_port
@@ -31,12 +43,24 @@ SELECT * FROM the_table;
  1 | 2
 (2 rows)
 
+select     s_i_id, sum(s_order_cnt) as ordercount
+from     stock
+group by s_i_id
+having   sum(s_order_cnt) > (select max(s_order_cnt) - 3 as having_query from stock)
+order by s_i_id;
+ s_i_id | ordercount 
+--------+------------
+      3 |          3
+      4 |          4
+      5 |          5
+(3 rows)
+
 -- now, connect to the follower but tell it to use secondary nodes. There are no
 -- secondary nodes so this should fail.
 -- (this is :follower_master_port but substitution doesn't work here)
 \c "port=9070 dbname=regression options='-c\ citus.use_secondary_nodes=always'"
 SELECT * FROM the_table;
-ERROR:  node group 2 does not have a secondary node
+ERROR:  node group 1 does not have a secondary node
 -- add the secondary nodes and try again, the SELECT statement should work this time
 \c - - - :master_port
 SELECT 1 FROM master_add_node('localhost', :follower_worker_1_port,
@@ -64,6 +88,18 @@ SELECT * FROM the_table;
  1 | 2
 (2 rows)
 
+select     s_i_id, sum(s_order_cnt) as ordercount
+from     stock
+group by s_i_id
+having   sum(s_order_cnt) > (select max(s_order_cnt) - 3 as having_query from stock)
+order by s_i_id;
+ s_i_id | ordercount 
+--------+------------
+      3 |          3
+      4 |          4
+      5 |          5
+(3 rows)
+
 SELECT
   node_name, node_port
 FROM
@@ -81,7 +117,13 @@ ORDER BY
 \c "port=9070 dbname=regression options='-c\ citus.use_secondary_nodes=always\ -c\ citus.cluster_name=second-cluster'"
 -- there are no secondary nodes in this cluster, so this should fail!
 SELECT * FROM the_table;
-ERROR:  there is a shard placement in node group 2 but there are no nodes in that group
+ERROR:  there is a shard placement in node group 1 but there are no nodes in that group
+select     s_i_id, sum(s_order_cnt) as ordercount
+from     stock
+group by s_i_id
+having   sum(s_order_cnt) > (select max(s_order_cnt) - 3 as having_query from stock)
+order by s_i_id;
+ERROR:  there is a shard placement in node group 1 but there are no nodes in that group
 -- now move the secondary nodes into the new cluster and see that the follower, finally
 -- correctly configured, can run select queries involving them
 \c - - - :master_port
@@ -97,3 +139,4 @@ SELECT * FROM the_table;
 -- clean up after ourselves
 \c - - - :master_port
 DROP TABLE the_table;
+DROP TABLE stock;

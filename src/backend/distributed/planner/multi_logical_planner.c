@@ -828,9 +828,9 @@ DeferErrorIfQueryNotSupported(Query *queryTree)
 
 	/*
 	 * There could be Sublinks in the target list as well. To produce better
-	 * error messages we're checking sublinks in the where clause.
+	 * error messages we're checking if that's the case.
 	 */
-	if (queryTree->hasSubLinks && !WhereClauseContainsSubquery(queryTree))
+	if (queryTree->hasSubLinks && TargetListContainsSubquery(queryTree))
 	{
 		preconditionsSatisfied = false;
 		errorMessage = "could not run distributed query with subquery outside the "

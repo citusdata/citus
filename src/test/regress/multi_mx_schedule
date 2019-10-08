@@ -39,3 +39,4 @@ test: multi_mx_transaction_recovery
 test: multi_mx_modifying_xacts
 test: multi_mx_explain
 test: multi_mx_reference_table
+test: ch_bench_having_mx
