@@ -1,10 +1,3 @@
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int >= 11 AS server_verion_eleven_and_above
-    \gset
-\if :server_verion_eleven_and_above
-\else
-\q
-\endif
 --
 -- Regression tests for deparsing ALTER/DROP PROCEDURE Queries
 --
@@ -26,13 +19,13 @@ SELECT substring(:'server_version', '\d+')::int >= 11 AS server_verion_eleven_an
 --     SET configuration_parameter FROM CURRENT
 --     RESET configuration_parameter
 --     RESET ALL
--- 
+--
 -- DROP PROCEDURE [ IF EXISTS ] name [ ( [ [ argmode ] [ argname ] argtype [, ...] ] ) ] [, ...]
 --     [ CASCADE | RESTRICT ]
--- 
+--
 -- Please note that current deparser does not return errors on some invalid queries.
--- 
--- For example CALLED ON NULL INPUT action is valid only for FUNCTIONS, but we still 
+--
+-- For example CALLED ON NULL INPUT action is valid only for FUNCTIONS, but we still
 -- allow deparsing them here.
 
 SET citus.next_shard_id TO 20030000;
@@ -43,10 +36,6 @@ SET search_path TO procedure_tests;
 SET citus.shard_count TO 4;
 SET client_min_messages TO INFO;
 
--- print whether we're using version > 10 to make version-specific tests clear
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int > 10 AS version_above_ten;
-
 CREATE FUNCTION deparse_test(text)
 	RETURNS text
 	AS 'citus'
@@ -56,7 +45,7 @@ CREATE FUNCTION deparse_and_run_on_workers(text)
     RETURNS SETOF record
     AS $fnc$
     WITH deparsed_query AS ( SELECT deparse_test($1) qualified_query )
-    SELECT run_command_on_workers(qualified_query) FROM deparsed_query d 
+    SELECT run_command_on_workers(qualified_query) FROM deparsed_query d
     $fnc$
     LANGUAGE SQL;
 

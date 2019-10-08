@@ -234,7 +234,7 @@ PlanReindexStmt(ReindexStmt *reindexStatement, const char *reindexCommand)
 #endif
 			state.locked_table_oid = InvalidOid;
 
-			indOid = RangeVarGetRelidInternal(reindexStatement->relation,
+			indOid = RangeVarGetRelidExtended(reindexStatement->relation,
 											  lockmode, 0,
 											  RangeVarCallbackForReindexIndex,
 											  &state);
@@ -243,7 +243,7 @@ PlanReindexStmt(ReindexStmt *reindexStatement, const char *reindexCommand)
 		}
 		else
 		{
-			RangeVarGetRelidInternal(reindexStatement->relation, lockmode, 0,
+			RangeVarGetRelidExtended(reindexStatement->relation, lockmode, 0,
 									 RangeVarCallbackOwnsTable, NULL);
 
 			relation = heap_openrv(reindexStatement->relation, NoLock);
@@ -349,7 +349,7 @@ PlanDropIndexStmt(DropStmt *dropIndexStatement, const char *dropIndexCommand)
 		state.heapOid = InvalidOid;
 		state.concurrent = dropIndexStatement->concurrent;
 
-		indexId = RangeVarGetRelidInternal(rangeVar, lockmode, rvrFlags,
+		indexId = RangeVarGetRelidExtended(rangeVar, lockmode, rvrFlags,
 										   RangeVarCallbackForDropIndex,
 										   (void *) &state);
 
@@ -654,10 +654,8 @@ RangeVarCallbackForDropIndex(const RangeVar *rel, Oid relOid, Oid oldRelOid, voi
 	 */
 	expected_relkind = classform->relkind;
 
-#if PG_VERSION_NUM >= 110000
 	if (expected_relkind == RELKIND_PARTITIONED_INDEX)
 		expected_relkind = RELKIND_INDEX;
-#endif
 
 	if (expected_relkind != relkind)
 		ereport(ERROR, (errcode(ERRCODE_WRONG_OBJECT_TYPE),
@@ -667,7 +665,7 @@ RangeVarCallbackForDropIndex(const RangeVar *rel, Oid relOid, Oid oldRelOid, voi
 	if (!pg_class_ownercheck(relOid, GetUserId()) &&
 	    !pg_namespace_ownercheck(classform->relnamespace, GetUserId()))
 	{
-		aclcheck_error(ACLCHECK_NOT_OWNER, ACLCHECK_OBJECT_INDEX, rel->relname);
+		aclcheck_error(ACLCHECK_NOT_OWNER, OBJECT_INDEX, rel->relname);
 	}
 
 	if (!allowSystemTableMods && IsSystemClass(relOid, classform))
@@ -747,11 +745,7 @@ RangeVarCallbackForReindexIndex(const RangeVar *relation, Oid relId, Oid oldRelI
 	relkind = get_rel_relkind(relId);
 	if (!relkind)
 		return;
-	if (relkind != RELKIND_INDEX
-#if PG_VERSION_NUM >= 110000
-		&& relkind != RELKIND_PARTITIONED_INDEX
-#endif
-		)
+	if (relkind != RELKIND_INDEX && relkind != RELKIND_PARTITIONED_INDEX)
 		ereport(ERROR,
 				(errcode(ERRCODE_WRONG_OBJECT_TYPE),
 				 errmsg("\"%s\" is not an index", relation->relname)));

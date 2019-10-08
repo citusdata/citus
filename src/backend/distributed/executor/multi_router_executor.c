@@ -684,15 +684,9 @@ SortTupleStore(CitusScanState *scanState)
 		sortKeyIndex++;
 	}
 
-#if (PG_VERSION_NUM >= 110000)
 	tuplesortstate =
 		tuplesort_begin_heap(tupleDescriptor, numberOfSortKeys, sortColIdx, sortOperators,
 							 collations, nullsFirst, work_mem, NULL, false);
-#else
-	tuplesortstate =
-		tuplesort_begin_heap(tupleDescriptor, numberOfSortKeys, sortColIdx, sortOperators,
-							 collations, nullsFirst, work_mem, false);
-#endif
 
 	while (true)
 	{

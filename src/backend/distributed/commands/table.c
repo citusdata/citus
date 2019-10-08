@@ -857,7 +857,7 @@ ErrorIfUnsupportedConstraint(Relation relation, char distributionMethod,
 		}
 
 		attributeCount = indexInfo->ii_NumIndexAttrs;
-		attributeNumberArray = IndexInfoAttributeNumberArray(indexInfo);
+		attributeNumberArray = indexInfo->ii_IndexAttrNumbers;
 
 		for (attributeIndex = 0; attributeIndex < attributeCount; attributeIndex++)
 		{

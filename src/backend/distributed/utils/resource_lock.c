@@ -839,7 +839,7 @@ lock_relation_if_exists(PG_FUNCTION_ARGS)
 	relation = makeRangeVarFromNameList(relationNameList);
 
 	/* lock the relation with the lock mode */
-	relationId = RangeVarGetRelidInternal(relation, lockMode, RVR_MISSING_OK,
+	relationId = RangeVarGetRelidExtended(relation, lockMode, RVR_MISSING_OK,
 										  CitusRangeVarCallbackForLockTable,
 										  (void *) &lockMode);
 	relationExists = OidIsValid(relationId);
@@ -879,13 +879,8 @@ CitusRangeVarCallbackForLockTable(const RangeVar *rangeVar, Oid relationId,
 	aclResult = CitusLockTableAclCheck(relationId, lockmode, GetUserId());
 	if (aclResult != ACLCHECK_OK)
 	{
-#if (PG_VERSION_NUM >= 110000)
 		aclcheck_error(aclResult, get_relkind_objtype(get_rel_relkind(relationId)),
 					   rangeVar->relname);
-#else
-
-		aclcheck_error(aclResult, ACL_KIND_CLASS, rangeVar->relname);
-#endif
 	}
 }
 

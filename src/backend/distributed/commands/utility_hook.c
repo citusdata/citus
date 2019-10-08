@@ -211,7 +211,7 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 
 		parsetree = ProcessCreateSubscriptionStmt(createSubStmt);
 	}
-#if (PG_VERSION_NUM >= 110000)
+
 	if (IsA(parsetree, CallStmt))
 	{
 		CallStmt *callStmt = (CallStmt *) parsetree;
@@ -253,7 +253,6 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 
 		return;
 	}
-#endif
 
 	if (IsA(parsetree, DoStmt))
 	{
@@ -426,9 +425,7 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 					break;
 				}
 
-#if PG_VERSION_NUM >= 110000
 				case OBJECT_PROCEDURE:
-#endif
 				case OBJECT_FUNCTION:
 				{
 					ddlJobs = PlanDropFunctionStmt(dropStatement, queryString);
@@ -484,9 +481,7 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 					break;
 				}
 
-#if PG_VERSION_NUM >= 110000
 				case OBJECT_PROCEDURE:
-#endif
 				case OBJECT_FUNCTION:
 				{
 					ddlJobs = PlanRenameFunctionStmt(renameStmt, queryString);
@@ -843,9 +838,7 @@ PlanAlterOwnerStmt(AlterOwnerStmt *stmt, const char *queryString)
 			return PlanAlterTypeOwnerStmt(stmt, queryString);
 		}
 
-#if PG_VERSION_NUM >= 110000
 		case OBJECT_PROCEDURE:
-#endif
 		case OBJECT_FUNCTION:
 		{
 			return PlanAlterFunctionOwnerStmt(stmt, queryString);
@@ -871,9 +864,7 @@ PlanAlterObjectDependsStmt(AlterObjectDependsStmt *stmt, const char *queryString
 {
 	switch (stmt->objectType)
 	{
-#if PG_VERSION_NUM >= 110000
 		case OBJECT_PROCEDURE:
-#endif
 		case OBJECT_FUNCTION:
 		{
 			return PlanAlterFunctionDependsStmt(stmt, queryString);

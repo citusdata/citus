@@ -1358,8 +1358,7 @@ ExtractFromExpressionWalker(Node *node, QualifierWalkerContext *walkerContext)
 			{
 				/* this part of code only run for subqueries */
 				Node *joinClause = eval_const_expressions(NULL, joinQualifiersNode);
-				joinClause = (Node *) canonicalize_qual_compat((Expr *) joinClause,
-															   false);
+				joinClause = (Node *) canonicalize_qual((Expr *) joinClause, false);
 				joinQualifierList = make_ands_implicit((Expr *) joinClause);
 			}
 		}
@@ -1392,8 +1391,7 @@ ExtractFromExpressionWalker(Node *node, QualifierWalkerContext *walkerContext)
 			{
 				/* this part of code only run for subqueries */
 				Node *fromClause = eval_const_expressions(NULL, fromQualifiersNode);
-				fromClause = (Node *) canonicalize_qual_compat((Expr *) fromClause,
-															   false);
+				fromClause = (Node *) canonicalize_qual((Expr *) fromClause, false);
 				fromQualifierList = make_ands_implicit((Expr *) fromClause);
 			}
 

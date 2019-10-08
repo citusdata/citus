@@ -2,9 +2,6 @@
 -- test top level window functions that are pushdownable
 -- ===================================================================
 
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int > 10 AS version_above_ten;
-
 -- a very simple window function with an aggregate and a window function
 -- distribution column is on the partition by clause
 SELECT
@@ -35,9 +32,9 @@ FROM (
 		DISTINCT us.user_id, us.value_2, value_1, random() as r1
 	FROM
 		users_table as us, events_table
-	WHERE 
+	WHERE
 		us.user_id = events_table.user_id AND event_type IN (1,2)
-	ORDER BY 
+	ORDER BY
 		user_id, value_2
 	) s
 GROUP BY
@@ -45,7 +42,7 @@ GROUP BY
 ORDER BY
 	2 DESC, 1;
 
--- window function operates on the results of 
+-- window function operates on the results of
 -- a join
 SELECT
 	us.user_id,
@@ -71,7 +68,7 @@ FROM
 	JOIN
   		events_table ev
 	USING (user_id )
-	) j 
+	) j
 GROUP BY
 	user_id,
 	value_1
@@ -114,42 +111,42 @@ ORDER BY
 DROP VIEW users_view, window_view;
 
 -- window function uses columns from two different tables
-SELECT 
+SELECT
 	DISTINCT ON (events_table.user_id, rnk) events_table.user_id, rank() OVER my_win AS rnk
-FROM 
+FROM
 	events_table, users_table
-WHERE 
+WHERE
 	users_table.user_id = events_table.user_id
 WINDOW
 	my_win AS (PARTITION BY events_table.user_id, users_table.value_1 ORDER BY events_table.time DESC)
-ORDER BY 
+ORDER BY
 	rnk DESC, 1 DESC
 LIMIT 10;
 
 -- the same query with reference table column is also on the partition by clause
-SELECT 
+SELECT
 	DISTINCT ON (events_table.user_id, rnk) events_table.user_id, rank() OVER my_win AS rnk
-FROM 
+FROM
 	events_table, users_ref_test_table uref
-WHERE 
+WHERE
 	uref.id = events_table.user_id
 WINDOW
 	my_win AS (PARTITION BY events_table.user_id, uref.k_no ORDER BY events_table.time DESC)
-ORDER BY 
+ORDER BY
 	rnk DESC, 1 DESC
 LIMIT 10;
 
 -- similar query with no distribution column is on the partition by clause
 -- is not supported
-SELECT 
+SELECT
 	DISTINCT ON (events_table.user_id, rnk) events_table.user_id, rank() OVER my_win AS rnk
-FROM 
+FROM
 	events_table, users_ref_test_table uref
-WHERE 
+WHERE
 	uref.id = events_table.user_id
 WINDOW
 	my_win AS (PARTITION BY events_table.value_2, uref.k_no ORDER BY events_table.time DESC)
-ORDER BY 
+ORDER BY
 	rnk DESC, 1 DESC
 LIMIT 10;
 
@@ -169,7 +166,7 @@ ORDER BY
 SELECT
 	COUNT(*) OVER (PARTITION BY user_id, user_id + 1),
 	rank() OVER (PARTITION BY user_id) as cnt1,
-	COUNT(*) OVER (PARTITION BY user_id, abs(value_1 - value_2)) as cnt2, 
+	COUNT(*) OVER (PARTITION BY user_id, abs(value_1 - value_2)) as cnt2,
 	date_trunc('min', lag(time) OVER (PARTITION BY user_id ORDER BY time)) as datee,
 	rank() OVER my_win  as rnnk,
 	avg(CASE
@@ -191,7 +188,7 @@ LIMIT 5;
 
 -- some tests with GROUP BY along with PARTITION BY
 SELECT
-	user_id, 
+	user_id,
 	rank() OVER my_win as my_rank,
 	avg(avg(event_type)) OVER my_win_2 as avg,
 	max(time) as mx_time
@@ -274,17 +271,17 @@ ORDER BY
 	user_id, value_1, 3, 4;
 
 -- some tests with GROUP BY, HAVING and LIMIT
-SELECT 
+SELECT
 	user_id, sum(event_type) OVER my_win , event_type
 FROM
 	events_table
 GROUP BY
 	user_id, event_type
-HAVING count(*) > 2 
+HAVING count(*) > 2
 	WINDOW my_win AS (PARTITION BY user_id, max(event_type) ORDER BY count(*) DESC)
-ORDER BY 
+ORDER BY
 	2 DESC, 3 DESC, 1 DESC
-LIMIT 
+LIMIT
 	5;
 
 -- Group by has more columns than partition by
@@ -323,11 +320,11 @@ ORDER BY
 	(SUM(value_1) OVER (PARTITION BY user_id)) , 2 DESC, 1
 LIMIT
 	10;
- 
+
 -- not a meaningful query, with interesting syntax
 SELECT
-	user_id, 
-	AVG(avg(value_1)) OVER (PARTITION BY user_id, max(user_id), MIN(value_2)), 
+	user_id,
+	AVG(avg(value_1)) OVER (PARTITION BY user_id, max(user_id), MIN(value_2)),
 	AVG(avg(user_id)) OVER (PARTITION BY user_id, min(user_id), AVG(value_1))
 FROM
 	users_table
@@ -339,8 +336,8 @@ ORDER BY
 SELECT coordinator_plan($Q$
 EXPLAIN (COSTS FALSE)
 SELECT
-	user_id, 
-	AVG(avg(value_1)) OVER (PARTITION BY user_id, max(user_id), MIN(value_2)), 
+	user_id,
+	AVG(avg(value_1)) OVER (PARTITION BY user_id, max(user_id), MIN(value_2)),
 	AVG(avg(user_id)) OVER (PARTITION BY user_id, min(user_id), AVG(value_1))
 FROM
 	users_table
@@ -373,7 +370,7 @@ ORDER BY
 	2 DESC, 1
 LIMIT 5;
 
--- rank and ordering in the reverse order 
+-- rank and ordering in the reverse order
 SELECT
 	user_id,
 	avg(value_1),

@@ -12,8 +12,6 @@
 
 #include "postgres.h"
 
-#if PG_VERSION_NUM >= 110000
-
 #include "catalog/pg_proc.h"
 #include "commands/defrem.h"
 #include "distributed/citus_ruleutils.h"
@@ -207,6 +205,3 @@ CallFuncExprRemotely(CallStmt *callStmt, DistObjectCacheEntry *procedure,
 
 	return true;
 }
-
-
-#endif /* PG_VERSION_NUM >= 110000 */

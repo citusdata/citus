@@ -78,9 +78,7 @@ StartLockAcquireHelperBackgroundWorker(int backendToHelp, int32 lock_cooldown)
 	snprintf(worker.bgw_name, BGW_MAXLEN,
 			 "Citus Lock Acquire Helper: %d/%u",
 			 backendToHelp, MyDatabaseId);
-#if PG_VERSION_NUM >= 110000
 	snprintf(worker.bgw_type, BGW_MAXLEN, "citus_lock_aqcuire");
-#endif
 
 	worker.bgw_flags = BGWORKER_SHMEM_ACCESS | BGWORKER_BACKEND_DATABASE_CONNECTION;
 	worker.bgw_start_time = BgWorkerStart_RecoveryFinished;

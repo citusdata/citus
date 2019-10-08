@@ -18,9 +18,6 @@
 #if (PG_VERSION_NUM >= 120000)
 #include "access/genam.h"
 #endif
-#if (PG_VERSION_NUM < 110000)
-#include "catalog/pg_constraint_fn.h"
-#endif
 #include "catalog/pg_type.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/commands.h"
@@ -151,7 +148,8 @@ ErrorIfUnsupportedForeignConstraintExists(Relation relation, char referencingDis
 	pgConstraint = heap_open(ConstraintRelationId, AccessShareLock);
 	ScanKeyInit(&scanKey[0], Anum_pg_constraint_conrelid, BTEqualStrategyNumber, F_OIDEQ,
 				relation->rd_id);
-	scanDescriptor = systable_beginscan(pgConstraint, ConstraintRelidIndexId, true, NULL,
+	scanDescriptor = systable_beginscan(pgConstraint, ConstraintRelidTypidNameIndexId,
+										true, NULL,
 										scanKeyCount, scanKey);
 
 	heapTuple = systable_getnext(scanDescriptor);
@@ -515,7 +513,8 @@ GetTableForeignConstraintCommands(Oid relationId)
 	pgConstraint = heap_open(ConstraintRelationId, AccessShareLock);
 	ScanKeyInit(&scanKey[0], Anum_pg_constraint_conrelid, BTEqualStrategyNumber, F_OIDEQ,
 				relationId);
-	scanDescriptor = systable_beginscan(pgConstraint, ConstraintRelidIndexId, true, NULL,
+	scanDescriptor = systable_beginscan(pgConstraint, ConstraintRelidTypidNameIndexId,
+										true, NULL,
 										scanKeyCount, scanKey);
 
 	heapTuple = systable_getnext(scanDescriptor);
@@ -523,11 +522,7 @@ GetTableForeignConstraintCommands(Oid relationId)
 	{
 		Form_pg_constraint constraintForm = (Form_pg_constraint) GETSTRUCT(heapTuple);
 
-#if (PG_VERSION_NUM >= 110000)
 		bool inheritedConstraint = OidIsValid(constraintForm->conparentid);
-#else
-		bool inheritedConstraint = false;
-#endif
 
 		if (!inheritedConstraint && constraintForm->contype == CONSTRAINT_FOREIGN)
 		{
@@ -571,7 +566,8 @@ HasForeignKeyToReferenceTable(Oid relationId)
 	pgConstraint = heap_open(ConstraintRelationId, AccessShareLock);
 	ScanKeyInit(&scanKey[0], Anum_pg_constraint_conrelid, BTEqualStrategyNumber, F_OIDEQ,
 				relationId);
-	scanDescriptor = systable_beginscan(pgConstraint, ConstraintRelidIndexId, true, NULL,
+	scanDescriptor = systable_beginscan(pgConstraint, ConstraintRelidTypidNameIndexId,
+										true, NULL,
 										scanKeyCount, scanKey);
 
 	heapTuple = systable_getnext(scanDescriptor);
@@ -679,7 +675,7 @@ HeapTupleOfForeignConstraintIncludesColumn(HeapTuple heapTuple, Oid relationId,
 	{
 		AttrNumber attrNo = DatumGetInt16(columnArray[attrIdx]);
 
-		char *colName = get_attname_internal(relationId, attrNo, false);
+		char *colName = get_attname(relationId, attrNo, false);
 		if (strncmp(colName, columnName, NAMEDATALEN) == 0)
 		{
 			return true;
