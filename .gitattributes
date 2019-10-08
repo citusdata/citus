@@ -26,9 +26,9 @@ configure				-whitespace
 
 # except these exceptions...
 src/backend/distributed/utils/citus_outfuncs.c -citus-style
-src/backend/distributed/utils/ruleutils_10.c -citus-style
-src/backend/distributed/utils/ruleutils_11.c -citus-style
-src/backend/distributed/utils/ruleutils_12.c -citus-style
+src/backend/distributed/deparser/ruleutils_10.c -citus-style
+src/backend/distributed/deparser/ruleutils_11.c -citus-style
+src/backend/distributed/deparser/ruleutils_12.c -citus-style
 src/include/distributed/citus_nodes.h -citus-style
 
 # Hide diff on github by default for copied udfs
