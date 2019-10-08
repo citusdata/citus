@@ -18,7 +18,7 @@ install_citus_and_tar() {
 
   cd "${installdir}" && find . -type f -print > "${builddir}/files.lst"
 
-  tar cvf "${basedir}/install-citus${citus_version}.tar" "$(cat "${builddir}"/files.lst)"
+  tar cvf "${basedir}/install-citus${citus_version}.tar" $(cat "${builddir}"/files.lst)
   mv "${basedir}/install-citus${citus_version}.tar" "${base}/install-citus${citus_version}.tar"
 
   cd "${builddir}" && rm -rf install files.lst && make clean
