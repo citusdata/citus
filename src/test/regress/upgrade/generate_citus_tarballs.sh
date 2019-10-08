@@ -8,12 +8,10 @@ base="$(pwd)"
 
 
 install_citus_and_tar() {
-  cd "${citus_dir}"
-  ./configure --without-libcurl
-
   # do everything in a subdirectory to avoid clutter in current directory
   mkdir -p "${builddir}" && cd "${builddir}"
 
+  "${citus_dir}/configure" --without-libcurl
 
   installdir="${builddir}/install"
   make "-j$(nproc)" && mkdir -p "${installdir}" && make DESTDIR="${installdir}" install
@@ -29,15 +27,18 @@ install_citus_and_tar() {
 build_current() {
   citus_version="$1"
   basedir="${base}/${citus_version}"
-  
+
   mkdir -p "${basedir}"
   cd "${basedir}"
-  citus_dir="${base}/../../../.."  
+  citus_dir="${base}/../../../.."
   builddir="${basedir}/build"
 
   make -C "${citus_dir}" clean
+  cd "${citus_dir}"
+  ./configure --without-libcurl
 
   install_citus_and_tar
+  make -C "${citus_dir}" clean
 
 }
 
