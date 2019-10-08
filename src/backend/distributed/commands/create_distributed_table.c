@@ -1160,7 +1160,7 @@ CreateTruncateTrigger(Oid relationId)
 	trigger->funcname = SystemFuncName("citus_truncate_trigger");
 	trigger->args = NIL;
 	trigger->row = false;
-	trigger->timing = TRIGGER_TYPE_BEFORE;
+	trigger->timing = TRIGGER_TYPE_AFTER;
 	trigger->events = TRIGGER_TYPE_TRUNCATE;
 	trigger->columns = NIL;
 	trigger->whenClause = NULL;

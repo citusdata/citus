@@ -9,7 +9,6 @@ SHOW server_version \gset
 SELECT substring(:'server_version', '\d+')::int > 10 AS version_above_ten;
 
 SET citus.next_shard_id TO 1420000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1420000;
 
 SET citus.shard_replication_factor TO 1;
 

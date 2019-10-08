@@ -42,7 +42,10 @@ How the postgres upgrade test works:
 
 - Temporary folder `tmp_upgrade` is created in `src/test/regress/`, if one exists it is removed first.
 - Database is initialized and citus cluster is created(1 coordinator + 2 workers) with old postgres.
-- `before_pg_upgrade_schedule` is run with `pg_regress`. This schedule does not drop any tables or data so that we can verify upgrade.
+- `before_pg_upgrade_schedule` is run with `pg_regress`. This schedule sets up any
+  objects and data that will be tested for preservation after the upgrade. It
+- `after_pg_upgrade_schedule` is run with `pg_regress` to verify that the output
+  of those tests is the same before the upgrade as after.
 - `citus_prepare_pg_upgrade` is run in coordinators and workers.
 - Old database is stopped.
 - A new database is initialized with new postgres under `tmp_upgrade`.
@@ -50,6 +53,20 @@ How the postgres upgrade test works:
 - New database is started in both coordinators and workers.
 - `citus_finish_pg_upgrade` is run in coordinators and workers to finalize the upgrade step.
 - `after_pg_upgrade_schedule` is run with `pg_regress` to verify that the previously created tables, and data still exist. Router and realtime queries are used to verify this.
+
+
+### Writing new PG upgrade tests
+
+The main important thing is that we have `upgrade_{name}_before` and
+`upgrade_{name}_after` tests. The `before` files are used to setup any objects
+and data before the upgrade. The `after` tests shouldn't have any side effects
+since they are run twice (once before and once after the upgrade).
+
+Furthermore, anything that is basic Citus functionality should go in the
+`upgrade_basic_before`/`upgrade_basic_after` tests. This test file is used
+during PG upgrades and Citus upgrades. Any features that don't work in old Citus
+versions should thus be added to their own file, because that file will then
+only be run during PG versions.
 
 ## Citus Upgrade Test
 
