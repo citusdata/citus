@@ -110,6 +110,7 @@ typedef struct DistObjectCacheEntry
 	DistObjectCacheEntryKey key;
 
 	bool isValid;
+	bool isDistributed;
 
 	int distributionArgIndex;
 	int colocationId;

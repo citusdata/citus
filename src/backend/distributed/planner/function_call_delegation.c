@@ -221,7 +221,7 @@ TryToDelegateFunctionCall(Query *query, bool *hasExternParam)
 
 	funcExpr = (FuncExpr *) targetEntry->expr;
 	procedure = LookupDistObjectCacheEntry(ProcedureRelationId, funcExpr->funcid, 0);
-	if (procedure == NULL)
+	if (procedure == NULL || !procedure->isDistributed)
 	{
 		/* not a distributed function call */
 		ereport(DEBUG4, (errmsg("function is not distributed")));
