@@ -14,7 +14,7 @@ test: isolation_cluster_management
 # the following tests depend on the distributed
 # transactionId, so should not be parallelized
 # and no tests should be added before these
-test: isolation_distributed_transaction_id 
+test: isolation_distributed_transaction_id
 test: isolation_dump_global_wait_edges
 test: isolation_citus_dist_activity
 
@@ -56,6 +56,7 @@ test: isolation_get_all_active_transactions
 test: isolation_validate_vs_insert
 test: isolation_insert_select_conflict
 test: isolation_ref2ref_foreign_keys
+test: isolation_multiuser_locking
 
 # MX tests
 test: isolation_reference_on_mx
