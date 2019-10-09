@@ -64,6 +64,11 @@ StartRemoteTransactionBegin(struct MultiConnection *connection)
 	List *activeSubXacts = NIL;
 	const char *timestamp = NULL;
 
+	char *x = 0;
+	*x = 'a';
+	(*x)++;
+	elog(WARNING, "%s", x);
+
 	Assert(transaction->transactionState == REMOTE_TRANS_INVALID);
 
 	/* remember transaction as being in-progress */
