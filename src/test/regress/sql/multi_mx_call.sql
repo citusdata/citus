@@ -27,6 +27,10 @@ create table mx_call_dist_table_2(id int, val int);
 select create_distributed_table('mx_call_dist_table_2', 'id');
 insert into mx_call_dist_table_2 values (1,1),(1,2),(2,2),(3,3),(3,4);
 
+create table mx_call_dist_table_bigint(id bigint, val bigint);
+select create_distributed_table('mx_call_dist_table_bigint', 'id');
+insert into mx_call_dist_table_bigint values (1,1),(1,2),(2,2),(3,3),(3,4);
+
 create table mx_call_dist_table_ref(id int, val int);
 select create_reference_table('mx_call_dist_table_ref');
 insert into mx_call_dist_table_ref values (2,7),(1,8),(2,8),(1,8),(2,8);
@@ -46,6 +50,12 @@ BEGIN
     -- we also make sure that we can run distributed queries in the procedures
     -- that are routed to the workers.
     y := y + (select sum(t1.val + t2.val) from multi_mx_call.mx_call_dist_table_1 t1 join multi_mx_call.mx_call_dist_table_2 t2 on t1.id = t2.id);
+END;$$;
+
+CREATE PROCEDURE mx_call_proc_bigint(x bigint, INOUT y bigint)
+LANGUAGE plpgsql AS $$
+BEGIN
+    y := x + y * 2;
 END;$$;
 
 -- create another procedure which verifies:
@@ -68,22 +78,28 @@ call mx_call_proc_custom_types('S', 'A');
 
 -- Mark both procedures as distributed ...
 select create_distributed_function('mx_call_proc(int,int)');
+select create_distributed_function('mx_call_proc_bigint(bigint,bigint)');
 select create_distributed_function('mx_call_proc_custom_types(mx_call_enum,mx_call_enum)');
 
 -- We still don't route them to the workers, because they aren't
 -- colocated with any distributed tables.
 SET client_min_messages TO DEBUG1;
 call multi_mx_call.mx_call_proc(2, 0);
+call mx_call_proc_bigint(4, 2);
 call multi_mx_call.mx_call_proc_custom_types('S', 'A');
 
 -- Mark them as colocated with a table. Now we should route them to workers.
 select colocate_proc_with_table('mx_call_proc', 'mx_call_dist_table_1'::regclass, 1);
+select colocate_proc_with_table('mx_call_proc_bigint', 'mx_call_dist_table_bigint'::regclass, 1);
 select colocate_proc_with_table('mx_call_proc_custom_types', 'mx_call_dist_table_enum'::regclass, 1);
 
 call multi_mx_call.mx_call_proc(2, 0);
 call multi_mx_call.mx_call_proc_custom_types('S', 'A');
 call mx_call_proc(2, 0);
 call mx_call_proc_custom_types('S', 'A');
+
+-- Test implicit cast of int to bigint
+call mx_call_proc_bigint(4, 2);
 
 -- We don't allow distributing calls inside transactions
 begin;
@@ -167,7 +183,7 @@ SET client_min_messages TO DEBUG1;
 --
 CREATE FUNCTION mx_call_add(int, int) RETURNS int
     AS 'select $1 + $2;' LANGUAGE SQL IMMUTABLE;
-SELECT create_distributed_function('mx_call_add(int,int)', '$1');
+SELECT create_distributed_function('mx_call_add(int,int)');
 
 -- non-const distribution parameters cannot be pushed down
 call multi_mx_call.mx_call_proc(2, mx_call_add(3, 4));

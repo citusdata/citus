@@ -34,6 +34,14 @@ select create_distributed_table('mx_call_dist_table_2', 'id');
 (1 row)
 
 insert into mx_call_dist_table_2 values (1,1),(1,2),(2,2),(3,3),(3,4);
+create table mx_call_dist_table_bigint(id bigint, val bigint);
+select create_distributed_table('mx_call_dist_table_bigint', 'id');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+insert into mx_call_dist_table_bigint values (1,1),(1,2),(2,2),(3,3),(3,4);
 create table mx_call_dist_table_ref(id int, val int);
 select create_reference_table('mx_call_dist_table_ref');
  create_reference_table 
@@ -60,6 +68,11 @@ BEGIN
     -- we also make sure that we can run distributed queries in the procedures
     -- that are routed to the workers.
     y := y + (select sum(t1.val + t2.val) from multi_mx_call.mx_call_dist_table_1 t1 join multi_mx_call.mx_call_dist_table_2 t2 on t1.id = t2.id);
+END;$$;
+CREATE PROCEDURE mx_call_proc_bigint(x bigint, INOUT y bigint)
+LANGUAGE plpgsql AS $$
+BEGIN
+    y := x + y * 2;
 END;$$;
 -- create another procedure which verifies:
 -- 1. we work fine with multiple return columns
@@ -103,6 +116,12 @@ select create_distributed_function('mx_call_proc(int,int)');
  
 (1 row)
 
+select create_distributed_function('mx_call_proc_bigint(bigint,bigint)');
+ create_distributed_function 
+-----------------------------
+ 
+(1 row)
+
 select create_distributed_function('mx_call_proc_custom_types(mx_call_enum,mx_call_enum)');
  create_distributed_function 
 -----------------------------
@@ -114,15 +133,22 @@ select create_distributed_function('mx_call_proc_custom_types(mx_call_enum,mx_ca
 SET client_min_messages TO DEBUG1;
 call multi_mx_call.mx_call_proc(2, 0);
 DEBUG:  stored procedure does not have co-located tables
-DEBUG:  generating subplan 10_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (multi_mx_call.mx_call_dist_table_1 t1 JOIN multi_mx_call.mx_call_dist_table_2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
+DEBUG:  generating subplan 11_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (multi_mx_call.mx_call_dist_table_1 t1 JOIN multi_mx_call.mx_call_dist_table_2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
 CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_call.mx_call_dist_table_1 t1 join multi_mx_call.mx_call_dist_table_2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_proc(integer,integer) line 8 at assignment
-DEBUG:  Plan 10 query after replacing subqueries and CTEs: SELECT (3 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('10_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
+DEBUG:  Plan 11 query after replacing subqueries and CTEs: SELECT (3 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('11_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
 CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_call.mx_call_dist_table_1 t1 join multi_mx_call.mx_call_dist_table_2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_proc(integer,integer) line 8 at assignment
  y  
 ----
  29
+(1 row)
+
+call mx_call_proc_bigint(4, 2);
+DEBUG:  stored procedure does not have co-located tables
+ y 
+---
+ 8
 (1 row)
 
 call multi_mx_call.mx_call_proc_custom_types('S', 'A');
@@ -134,6 +160,12 @@ DEBUG:  stored procedure does not have co-located tables
 
 -- Mark them as colocated with a table. Now we should route them to workers.
 select colocate_proc_with_table('mx_call_proc', 'mx_call_dist_table_1'::regclass, 1);
+ colocate_proc_with_table 
+--------------------------
+ 
+(1 row)
+
+select colocate_proc_with_table('mx_call_proc_bigint', 'mx_call_dist_table_bigint'::regclass, 1);
  colocate_proc_with_table 
 --------------------------
  
@@ -173,14 +205,22 @@ DEBUG:  pushing down the procedure
  S | S
 (1 row)
 
+-- Test implicit cast of int to bigint
+call mx_call_proc_bigint(4, 2);
+DEBUG:  pushing down the procedure
+ y 
+---
+ 8
+(1 row)
+
 -- We don't allow distributing calls inside transactions
 begin;
 call multi_mx_call.mx_call_proc(2, 0);
 DEBUG:  cannot push down CALL in multi-statement transaction
-DEBUG:  generating subplan 12_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (multi_mx_call.mx_call_dist_table_1 t1 JOIN multi_mx_call.mx_call_dist_table_2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
+DEBUG:  generating subplan 13_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (multi_mx_call.mx_call_dist_table_1 t1 JOIN multi_mx_call.mx_call_dist_table_2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
 CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_call.mx_call_dist_table_1 t1 join multi_mx_call.mx_call_dist_table_2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_proc(integer,integer) line 8 at assignment
-DEBUG:  Plan 12 query after replacing subqueries and CTEs: SELECT (3 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('12_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
+DEBUG:  Plan 13 query after replacing subqueries and CTEs: SELECT (3 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('13_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
 CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_call.mx_call_dist_table_1 t1 join multi_mx_call.mx_call_dist_table_2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_proc(integer,integer) line 8 at assignment
  y  
@@ -211,10 +251,10 @@ select colocate_proc_with_table('mx_call_proc', 'mx_call_dist_table_1'::regclass
 
 call multi_mx_call.mx_call_proc(2, 0);
 DEBUG:  cannot push down invalid distribution_argument_index
-DEBUG:  generating subplan 14_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (multi_mx_call.mx_call_dist_table_1 t1 JOIN multi_mx_call.mx_call_dist_table_2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
+DEBUG:  generating subplan 15_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (multi_mx_call.mx_call_dist_table_1 t1 JOIN multi_mx_call.mx_call_dist_table_2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
 CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_call.mx_call_dist_table_1 t1 join multi_mx_call.mx_call_dist_table_2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_proc(integer,integer) line 8 at assignment
-DEBUG:  Plan 14 query after replacing subqueries and CTEs: SELECT (3 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('14_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
+DEBUG:  Plan 15 query after replacing subqueries and CTEs: SELECT (3 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('15_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
 CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_call.mx_call_dist_table_1 t1 join multi_mx_call.mx_call_dist_table_2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_proc(integer,integer) line 8 at assignment
  y  
@@ -230,10 +270,10 @@ select colocate_proc_with_table('mx_call_proc', 'mx_call_dist_table_1'::regclass
 
 call multi_mx_call.mx_call_proc(2, 0);
 DEBUG:  cannot push down invalid distribution_argument_index
-DEBUG:  generating subplan 17_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (multi_mx_call.mx_call_dist_table_1 t1 JOIN multi_mx_call.mx_call_dist_table_2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
+DEBUG:  generating subplan 18_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (multi_mx_call.mx_call_dist_table_1 t1 JOIN multi_mx_call.mx_call_dist_table_2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
 CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_call.mx_call_dist_table_1 t1 join multi_mx_call.mx_call_dist_table_2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_proc(integer,integer) line 8 at assignment
-DEBUG:  Plan 17 query after replacing subqueries and CTEs: SELECT (3 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('17_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
+DEBUG:  Plan 18 query after replacing subqueries and CTEs: SELECT (3 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('18_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
 CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_call.mx_call_dist_table_1 t1 join multi_mx_call.mx_call_dist_table_2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_proc(integer,integer) line 8 at assignment
  y  
@@ -250,10 +290,10 @@ select colocate_proc_with_table('mx_call_proc', 'mx_call_dist_table_ref'::regcla
 
 call multi_mx_call.mx_call_proc(2, 0);
 DEBUG:  cannot push down CALL for reference tables
-DEBUG:  generating subplan 19_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (multi_mx_call.mx_call_dist_table_1 t1 JOIN multi_mx_call.mx_call_dist_table_2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
+DEBUG:  generating subplan 20_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (multi_mx_call.mx_call_dist_table_1 t1 JOIN multi_mx_call.mx_call_dist_table_2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
 CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_call.mx_call_dist_table_1 t1 join multi_mx_call.mx_call_dist_table_2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_proc(integer,integer) line 8 at assignment
-DEBUG:  Plan 19 query after replacing subqueries and CTEs: SELECT (3 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('19_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
+DEBUG:  Plan 20 query after replacing subqueries and CTEs: SELECT (3 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('20_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
 CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_call.mx_call_dist_table_1 t1 join multi_mx_call.mx_call_dist_table_2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_proc(integer,integer) line 8 at assignment
  y  
@@ -270,10 +310,10 @@ select colocate_proc_with_table('mx_call_proc', 'mx_call_dist_table_replica'::re
 
 call multi_mx_call.mx_call_proc(2, 0);
 DEBUG:  cannot push down CALL for replicated distributed tables
-DEBUG:  generating subplan 21_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (multi_mx_call.mx_call_dist_table_1 t1 JOIN multi_mx_call.mx_call_dist_table_2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
+DEBUG:  generating subplan 22_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (multi_mx_call.mx_call_dist_table_1 t1 JOIN multi_mx_call.mx_call_dist_table_2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
 CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_call.mx_call_dist_table_1 t1 join multi_mx_call.mx_call_dist_table_2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_proc(integer,integer) line 8 at assignment
-DEBUG:  Plan 21 query after replacing subqueries and CTEs: SELECT (3 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('21_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
+DEBUG:  Plan 22 query after replacing subqueries and CTEs: SELECT (3 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('22_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
 CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_call.mx_call_dist_table_1 t1 join multi_mx_call.mx_call_dist_table_2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_proc(integer,integer) line 8 at assignment
  y  
@@ -363,10 +403,10 @@ select stop_metadata_sync_to_node('localhost', :worker_2_port);
 
 call multi_mx_call.mx_call_proc(2, 0);
 DEBUG:  there is no worker node with metadata
-DEBUG:  generating subplan 27_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (multi_mx_call.mx_call_dist_table_1 t1 JOIN multi_mx_call.mx_call_dist_table_2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
+DEBUG:  generating subplan 28_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (multi_mx_call.mx_call_dist_table_1 t1 JOIN multi_mx_call.mx_call_dist_table_2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
 CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_call.mx_call_dist_table_1 t1 join multi_mx_call.mx_call_dist_table_2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_proc(integer,integer) line 8 at assignment
-DEBUG:  Plan 27 query after replacing subqueries and CTEs: SELECT (3 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('27_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
+DEBUG:  Plan 28 query after replacing subqueries and CTEs: SELECT (3 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('28_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
 CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_call.mx_call_dist_table_1 t1 join multi_mx_call.mx_call_dist_table_2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_proc(integer,integer) line 8 at assignment
  y  
@@ -398,7 +438,7 @@ SET client_min_messages TO DEBUG1;
 --
 CREATE FUNCTION mx_call_add(int, int) RETURNS int
     AS 'select $1 + $2;' LANGUAGE SQL IMMUTABLE;
-SELECT create_distributed_function('mx_call_add(int,int)', '$1');
+SELECT create_distributed_function('mx_call_add(int,int)');
 DEBUG:  switching to sequential query execution mode
 DETAIL:  A distributed function is created. To make sure subsequent commands see the type correctly we need to make sure to use only one connection for all future commands
  create_distributed_function 
@@ -445,4 +485,4 @@ PL/pgSQL function mx_call_proc(integer,integer) line 8 at assignment
 reset client_min_messages;
 \set VERBOSITY terse
 drop schema multi_mx_call cascade;
-NOTICE:  drop cascades to 9 other objects
+NOTICE:  drop cascades to 11 other objects
