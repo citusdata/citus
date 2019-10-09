@@ -54,7 +54,7 @@ CallDistributedProcedureRemotely(CallStmt *callStmt, DestReceiver *dest)
 	Oid functionId = funcExpr->funcid;
 
 	procedure = LookupDistObjectCacheEntry(ProcedureRelationId, functionId, 0);
-	if (procedure == NULL)
+	if (procedure == NULL || !procedure->isDistributed)
 	{
 		return false;
 	}

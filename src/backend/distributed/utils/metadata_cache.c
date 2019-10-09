@@ -991,6 +991,7 @@ LookupDistObjectCacheEntry(Oid classid, Oid objid, int32 objsubid)
 						  isNullArray);
 
 		cacheEntry->isValid = true;
+		cacheEntry->isDistributed = true;
 
 		cacheEntry->distributionArgIndex =
 			DatumGetInt32(datumArray[Anum_pg_dist_object_distribution_argument_index -
@@ -1000,8 +1001,8 @@ LookupDistObjectCacheEntry(Oid classid, Oid objid, int32 objsubid)
 	}
 	else
 	{
-		/* return NULL, cacheEntry left invalid in hash table */
-		cacheEntry = NULL;
+		cacheEntry->isValid = true;
+		cacheEntry->isDistributed = false;
 	}
 
 	systable_endscan(pgDistObjectScan);
