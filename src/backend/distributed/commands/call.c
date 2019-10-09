@@ -71,6 +71,7 @@ CallFuncExprRemotely(CallStmt *callStmt, DistObjectCacheEntry *procedure,
 					 FuncExpr *funcExpr, DestReceiver *dest)
 {
 	Oid colocatedRelationId = InvalidOid;
+	Node *partitionValueNode = NULL;
 	Const *partitionValue = NULL;
 	Datum partitionValueDatum = 0;
 	ShardInterval *shardInterval = NULL;
@@ -118,12 +119,15 @@ CallFuncExprRemotely(CallStmt *callStmt, DistObjectCacheEntry *procedure,
 		return false;
 	}
 
-	partitionValue = (Const *) list_nth(funcExpr->args, procedure->distributionArgIndex);
-	if (!IsA(partitionValue, Const))
+	partitionValueNode = (Node *) list_nth(funcExpr->args,
+										   procedure->distributionArgIndex);
+	partitionValueNode = strip_implicit_coercions(partitionValueNode);
+	if (!IsA(partitionValueNode, Const))
 	{
 		ereport(DEBUG1, (errmsg("distribution argument value must be a constant")));
 		return false;
 	}
+	partitionValue = (Const *) partitionValueNode;
 
 	partitionValueDatum = partitionValue->constvalue;
 	if (partitionValue->consttype != partitionColumn->vartype)

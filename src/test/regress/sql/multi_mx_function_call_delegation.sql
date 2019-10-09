@@ -25,6 +25,10 @@ create table mx_call_dist_table_2(id int, val int);
 select create_distributed_table('mx_call_dist_table_2', 'id');
 insert into mx_call_dist_table_2 values (1,1),(1,2),(2,2),(3,3),(3,4);
 
+create table mx_call_dist_table_bigint(id bigint, val bigint);
+select create_distributed_table('mx_call_dist_table_bigint', 'id');
+insert into mx_call_dist_table_bigint values (1,1),(1,2),(2,2),(3,3),(3,4);
+
 create table mx_call_dist_table_ref(id int, val int);
 select create_reference_table('mx_call_dist_table_ref');
 insert into mx_call_dist_table_ref values (2,7),(1,8),(2,8),(1,8),(2,8);
@@ -49,6 +53,12 @@ BEGIN
     y := y + (select sum(t1.val + t2.val) from multi_mx_function_call_delegation.mx_call_dist_table_1 t1 join multi_mx_function_call_delegation.mx_call_dist_table_2 t2 on t1.id = t2.id);
 END;$$;
 
+CREATE FUNCTION mx_call_func_bigint(x bigint, INOUT y bigint)
+LANGUAGE plpgsql AS $$
+BEGIN
+    y := x + y * 2;
+END;$$;
+
 -- create another function which verifies:
 -- 1. we work fine with multiple return columns
 -- 2. we work fine in combination with custom types
@@ -69,6 +79,7 @@ select mx_call_func(2, 0);
 
 -- Mark both functions as distributed ...
 select create_distributed_function('mx_call_func(int,int)');
+select create_distributed_function('mx_call_func_bigint(bigint,bigint)');
 select create_distributed_function('mx_call_func_custom_types(mx_call_enum,mx_call_enum)');
 select create_distributed_function('squares(int)');
 
@@ -76,14 +87,17 @@ select create_distributed_function('squares(int)');
 -- colocated with any distributed tables.
 SET client_min_messages TO DEBUG1;
 select mx_call_func(2, 0);
+select multi_mx_function_call_delegation.mx_call_func_bigint(4, 2);
 select mx_call_func_custom_types('S', 'A');
 
 -- Mark them as colocated with a table. Now we should route them to workers.
 select colocate_proc_with_table('mx_call_func', 'mx_call_dist_table_1'::regclass, 1);
+select colocate_proc_with_table('mx_call_func_bigint', 'mx_call_dist_table_bigint'::regclass, 1);
 select colocate_proc_with_table('mx_call_func_custom_types', 'mx_call_dist_table_enum'::regclass, 1);
 select colocate_proc_with_table('squares', 'mx_call_dist_table_2'::regclass, 0);
 
 select mx_call_func(2, 0);
+select mx_call_func_bigint(4, 2);
 select mx_call_func_custom_types('S', 'A');
 select squares(4);
 select multi_mx_function_call_delegation.mx_call_func(2, 0);
