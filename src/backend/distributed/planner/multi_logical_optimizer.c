@@ -1897,6 +1897,10 @@ MasterAggregateExpression(Aggref *originalAggregate,
 
 			newMasterExpression = (Expr *) newMasterAggregate;
 		}
+		else
+		{
+			elog(ERROR, "Aggregate lacks COMBINEFUNC");
+		}
 	}
 	else
 	{
@@ -2946,8 +2950,9 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 			Oid workerPartialId = AggregateFunctionOidWithoutInput(
 				WORKER_PARTIAL_AGGREGATE_NAME);
 
-			aggparam = makeConst(OIDOID, -1, InvalidOid, sizeof(Oid), ObjectIdGetDatum(
-									 originalAggregate->aggfnoid), false, true);
+			aggparam = makeConst(REGPROCEDUREOID, -1, InvalidOid, sizeof(Oid),
+								 ObjectIdGetDatum(originalAggregate->aggfnoid), false,
+								 true);
 			aggArguments = list_make1(makeTargetEntry((Expr *) aggparam, 1, NULL, false));
 			foreach(originalAggArgCell, originalAggregate->args)
 			{
