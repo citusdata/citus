@@ -1754,6 +1754,7 @@ UnsetMetadataSyncedForAll(void)
 	bool indexOK = false;
 	HeapTuple heapTuple = NULL;
 	TupleDesc tupleDescriptor = NULL;
+	CatalogIndexState indstate;
 
 	/*
 	 * Concurrent master_update_node() calls might iterate and try to update
@@ -1766,6 +1767,8 @@ UnsetMetadataSyncedForAll(void)
 				BTEqualStrategyNumber, F_BOOLEQ, BoolGetDatum(true));
 	ScanKeyInit(&scanKey[1], Anum_pg_dist_node_metadatasynced,
 				BTEqualStrategyNumber, F_BOOLEQ, BoolGetDatum(true));
+
+	indstate = CatalogOpenIndexes(relation);
 
 	scanDescriptor = systable_beginscan(relation,
 										InvalidOid, indexOK,
@@ -1794,7 +1797,8 @@ UnsetMetadataSyncedForAll(void)
 		newHeapTuple = heap_modify_tuple(heapTuple, tupleDescriptor, values, isnull,
 										 replace);
 
-		CatalogTupleUpdate(relation, &newHeapTuple->t_self, newHeapTuple);
+		CatalogTupleUpdateWithInfo(relation, &newHeapTuple->t_self, newHeapTuple,
+								   indstate);
 
 		CommandCounterIncrement();
 
@@ -1804,6 +1808,7 @@ UnsetMetadataSyncedForAll(void)
 	}
 
 	systable_endscan(scanDescriptor);
+	CatalogCloseIndexes(indstate);
 	heap_close(relation, NoLock);
 
 	return updatedAtLeastOne;
