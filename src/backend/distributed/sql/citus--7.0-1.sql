@@ -110,7 +110,7 @@ ALTER SEQUENCE  citus.pg_dist_shardid_seq SET SCHEMA pg_catalog;
 /*
  * internal sequence to generate 32-bit jobIds. These identifiers are then
  * used to identify jobs in the distributed database; and they wrap at 32-bits
- * to allow for slave nodes to independently execute their distributed jobs.
+ * to allow for worker nodes to independently execute their distributed jobs.
  */
 CREATE SEQUENCE citus.pg_dist_jobid_seq
     MINVALUE 2 /* first jobId reserved for clean up jobs */
