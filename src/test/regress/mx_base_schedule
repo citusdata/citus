@@ -5,4 +5,4 @@ test: multi_cluster_management
 test: multi_test_helpers
 
 # the following test has to be run sequentially
-test: base_enable_mx
+test: multi_mx_create_table

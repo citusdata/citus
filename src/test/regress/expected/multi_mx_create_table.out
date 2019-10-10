@@ -459,28 +459,28 @@ FROM pg_dist_partition NATURAL JOIN shard_counts
 ORDER BY colocationid, logicalrelid;
                       logicalrelid                      | colocationid | shard_count | partmethod | repmodel 
 --------------------------------------------------------+--------------+-------------+------------+----------
- citus_mx_test_schema_join_1.nation_hash                |            3 |           4 | h          | s
- citus_mx_test_schema_join_1.nation_hash_2              |            3 |           4 | h          | s
- citus_mx_test_schema_join_2.nation_hash                |            3 |           4 | h          | s
- citus_mx_test_schema.nation_hash_collation_search_path |            3 |           4 | h          | s
- citus_mx_test_schema.nation_hash_composite_types       |            3 |           4 | h          | s
- mx_ddl_table                                           |            3 |           4 | h          | s
- app_analytics_events_mx                                |            3 |           4 | h          | s
- company_employees_mx                                   |            3 |           4 | h          | s
- customer_mx                                            |            4 |           1 | n          | t
- nation_mx                                              |            4 |           1 | n          | t
- part_mx                                                |            4 |           1 | n          | t
- supplier_mx                                            |            4 |           1 | n          | t
  nation_hash                                            |      1390000 |          16 | h          | s
  citus_mx_test_schema.nation_hash                       |      1390000 |          16 | h          | s
- lineitem_mx                                            |      1390001 |          16 | h          | s
- orders_mx                                              |      1390001 |          16 | h          | s
- limit_orders_mx                                        |      1390002 |           2 | h          | s
- articles_hash_mx                                       |      1390002 |           2 | h          | s
- multiple_hash_mx                                       |      1390003 |           2 | h          | s
- researchers_mx                                         |      1390004 |           2 | h          | s
- labs_mx                                                |      1390005 |           1 | h          | s
- objects_mx                                             |      1390005 |           1 | h          | s
- articles_single_shard_hash_mx                          |      1390005 |           1 | h          | s
+ citus_mx_test_schema_join_1.nation_hash                |      1390001 |           4 | h          | s
+ citus_mx_test_schema_join_1.nation_hash_2              |      1390001 |           4 | h          | s
+ citus_mx_test_schema_join_2.nation_hash                |      1390001 |           4 | h          | s
+ citus_mx_test_schema.nation_hash_collation_search_path |      1390001 |           4 | h          | s
+ citus_mx_test_schema.nation_hash_composite_types       |      1390001 |           4 | h          | s
+ mx_ddl_table                                           |      1390001 |           4 | h          | s
+ app_analytics_events_mx                                |      1390001 |           4 | h          | s
+ company_employees_mx                                   |      1390001 |           4 | h          | s
+ lineitem_mx                                            |      1390002 |          16 | h          | s
+ orders_mx                                              |      1390002 |          16 | h          | s
+ customer_mx                                            |      1390003 |           1 | n          | t
+ nation_mx                                              |      1390003 |           1 | n          | t
+ part_mx                                                |      1390003 |           1 | n          | t
+ supplier_mx                                            |      1390003 |           1 | n          | t
+ limit_orders_mx                                        |      1390004 |           2 | h          | s
+ articles_hash_mx                                       |      1390004 |           2 | h          | s
+ multiple_hash_mx                                       |      1390005 |           2 | h          | s
+ researchers_mx                                         |      1390006 |           2 | h          | s
+ labs_mx                                                |      1390007 |           1 | h          | s
+ objects_mx                                             |      1390007 |           1 | h          | s
+ articles_single_shard_hash_mx                          |      1390007 |           1 | h          | s
 (23 rows)
 

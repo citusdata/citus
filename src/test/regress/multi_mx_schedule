@@ -19,10 +19,10 @@ test: multi_cluster_management
 test: multi_test_helpers
 
 # the following test has to be run sequentially
+test: multi_mx_create_table
 test: multi_mx_hide_shard_names
 test: multi_mx_modifications_to_reference_tables
 test: multi_mx_partitioning
-test: multi_mx_create_table
 test: multi_mx_copy_data multi_mx_router_planner
 test: multi_mx_schema_support multi_mx_tpch_query1 multi_mx_tpch_query10
 test: multi_mx_tpch_query12 multi_mx_tpch_query14 multi_mx_tpch_query19
@@ -31,7 +31,7 @@ test: multi_mx_tpch_query7_nested multi_mx_ddl
 test: recursive_dml_queries_mx multi_mx_truncate_from_worker
 test: multi_mx_repartition_udt_prepare mx_foreign_key_to_reference_table
 test: multi_mx_repartition_join_w1 multi_mx_repartition_join_w2 multi_mx_repartition_udt_w1 multi_mx_repartition_udt_w2
-test: multi_mx_metadata 
+test: multi_mx_metadata
 test: multi_mx_call
 test: multi_mx_function_call_delegation
 test: multi_mx_modifications local_shard_execution
