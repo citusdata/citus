@@ -939,10 +939,10 @@ FROM
 	users_table
 GROUP BY user_id, value_2
 ORDER BY user_id, avg(value_1) DESC;
-                                                                             QUERY PLAN                                                                             
---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                         QUERY PLAN                                                          
+-----------------------------------------------------------------------------------------------------------------------------
  Sort
-   Sort Key: remote_scan.user_id, (pg_catalog.sum(((pg_catalog.sum(remote_scan.avg) / pg_catalog.sum(remote_scan.avg_1)))) / pg_catalog.sum(remote_scan.rank)) DESC
+   Sort Key: remote_scan.user_id, ((pg_catalog.sum(remote_scan.avg) / pg_catalog.sum(remote_scan.avg_1))) DESC
    ->  HashAggregate
          Group Key: remote_scan.user_id, remote_scan.worker_column_5
          ->  Custom Scan (Citus Adaptive)
@@ -1014,11 +1014,11 @@ FROM
 GROUP BY user_id, value_2
 ORDER BY user_id, avg(value_1) DESC
 LIMIT 5;
-                                                                                QUERY PLAN                                                                                
---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                            QUERY PLAN                                                             
+-----------------------------------------------------------------------------------------------------------------------------------
  Limit
    ->  Sort
-         Sort Key: remote_scan.user_id, (pg_catalog.sum(((pg_catalog.sum(remote_scan.avg) / pg_catalog.sum(remote_scan.avg_1)))) / pg_catalog.sum(remote_scan.rank)) DESC
+         Sort Key: remote_scan.user_id, ((pg_catalog.sum(remote_scan.avg) / pg_catalog.sum(remote_scan.avg_1))) DESC
          ->  HashAggregate
                Group Key: remote_scan.user_id, remote_scan.worker_column_5
                ->  Custom Scan (Citus Adaptive)
@@ -1044,11 +1044,11 @@ FROM
 GROUP BY user_id, value_2
 ORDER BY user_id, avg(value_1) DESC
 LIMIT 5;
-                                                                                QUERY PLAN                                                                                
---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                            QUERY PLAN                                                             
+-----------------------------------------------------------------------------------------------------------------------------------
  Limit
    ->  Sort
-         Sort Key: remote_scan.user_id, (pg_catalog.sum(((pg_catalog.sum(remote_scan.avg) / pg_catalog.sum(remote_scan.avg_1)))) / pg_catalog.sum(remote_scan.rank)) DESC
+         Sort Key: remote_scan.user_id, ((pg_catalog.sum(remote_scan.avg) / pg_catalog.sum(remote_scan.avg_1))) DESC
          ->  HashAggregate
                Group Key: remote_scan.user_id, remote_scan.worker_column_5
                ->  Custom Scan (Citus Adaptive)
@@ -1074,11 +1074,11 @@ FROM
 GROUP BY user_id, value_2
 ORDER BY user_id, avg(value_1) DESC
 LIMIT 5;
-                                                                                QUERY PLAN                                                                                
---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                     QUERY PLAN                                                      
+---------------------------------------------------------------------------------------------------------------------
  Limit
    ->  Sort
-         Sort Key: remote_scan.user_id, (pg_catalog.sum(((pg_catalog.sum(remote_scan.avg) / pg_catalog.sum(remote_scan.avg_1)))) / pg_catalog.sum(remote_scan.rank)) DESC
+         Sort Key: remote_scan.user_id, ((pg_catalog.sum(remote_scan.avg) / pg_catalog.sum(remote_scan.avg_1))) DESC
          ->  HashAggregate
                Group Key: remote_scan.user_id, remote_scan.worker_column_5
                ->  Custom Scan (Citus Adaptive)
@@ -1104,11 +1104,11 @@ FROM
 GROUP BY user_id, value_2
 ORDER BY user_id, avg(value_1) DESC
 LIMIT 5;
-                                                                                QUERY PLAN                                                                                
---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                     QUERY PLAN                                                      
+---------------------------------------------------------------------------------------------------------------------
  Limit
    ->  Sort
-         Sort Key: remote_scan.user_id, (pg_catalog.sum(((pg_catalog.sum(remote_scan.avg) / pg_catalog.sum(remote_scan.avg_1)))) / pg_catalog.sum(remote_scan.rank)) DESC
+         Sort Key: remote_scan.user_id, ((pg_catalog.sum(remote_scan.avg) / pg_catalog.sum(remote_scan.avg_1))) DESC
          ->  HashAggregate
                Group Key: remote_scan.user_id, remote_scan.worker_column_5
                ->  Custom Scan (Citus Adaptive)

@@ -27,12 +27,12 @@ order by s_i_id;
                                           QUERY PLAN                                           
 -----------------------------------------------------------------------------------------------
  Sort
-   Sort Key: remote_scan.s_i_id
+   Sort Key: s_i_id
    InitPlan 1 (returns $0)
-     ->  Function Scan on read_intermediate_result remote_scan
+     ->  Function Scan on read_intermediate_result intermediate_result
    ->  HashAggregate
-         Group Key: remote_scan.s_i_id
-         Filter: ((pg_catalog.sum(remote_scan.worker_column_3))::bigint > $0)
+         Group Key: s_i_id
+         Filter: ((pg_catalog.sum(worker_column_3))::bigint > $0)
          ->  Custom Scan (Citus Adaptive)
                ->  Distributed Subplan 1_1
                      ->  Aggregate
@@ -73,12 +73,12 @@ order by s_i_id;
                                        QUERY PLAN                                        
 -----------------------------------------------------------------------------------------
  Sort
-   Sort Key: remote_scan.s_i_id
+   Sort Key: s_i_id
    InitPlan 1 (returns $0)
-     ->  Function Scan on read_intermediate_result remote_scan
+     ->  Function Scan on read_intermediate_result intermediate_result
    ->  HashAggregate
-         Group Key: remote_scan.s_i_id
-         Filter: ((pg_catalog.sum(remote_scan.worker_column_3))::bigint > $0)
+         Group Key: s_i_id
+         Filter: ((pg_catalog.sum(worker_column_3))::bigint > $0)
          ->  Custom Scan (Citus Adaptive)
                ->  Distributed Subplan 4_1
                      ->  Aggregate
@@ -106,10 +106,10 @@ having   sum(s_order_cnt) > (select max(s_order_cnt) - 3 as having_query from st
                                     QUERY PLAN                                     
 -----------------------------------------------------------------------------------
  HashAggregate
-   Group Key: remote_scan.s_i_id
-   Filter: ((pg_catalog.sum(remote_scan.worker_column_3))::bigint > $0)
+   Group Key: s_i_id
+   Filter: ((pg_catalog.sum(worker_column_3))::bigint > $0)
    InitPlan 1 (returns $0)
-     ->  Function Scan on read_intermediate_result remote_scan
+     ->  Function Scan on read_intermediate_result intermediate_result
    ->  Custom Scan (Citus Adaptive)
          ->  Distributed Subplan 6_1
                ->  Aggregate
