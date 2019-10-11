@@ -268,8 +268,8 @@ BuildSelectStatement(Query *masterQuery, List *masterTargetList, CustomScan *rem
 		columnNameList = lappend(columnNameList, makeString(targetEntry->resname));
 	}
 
-	customScanRangeTableEntry = RemoteScanRangeTableEntry(columnNameList);
-	list_head(selectStatement->rtable)->data.ptr_value = customScanRangeTableEntry;
+	customScanRangeTableEntry = linitial(selectStatement->rtable);
+	customScanRangeTableEntry->eref = makeAlias("remote_scan", columnNameList);
 
 	return selectStatement;
 }
@@ -379,7 +379,7 @@ BuildAggregatePlan(PlannerInfo *root, Query *masterQuery, Plan *subPlan)
 
 	/* estimate aggregate execution costs */
 	memset(&aggregateCosts, 0, sizeof(AggClauseCosts));
-	get_agg_clause_costs(NULL, (Node *) aggregateTargetList, AGGSPLIT_SIMPLE,
+	get_agg_clause_costs(root, (Node *) aggregateTargetList, AGGSPLIT_SIMPLE,
 						 &aggregateCosts);
 
 	get_agg_clause_costs(root, (Node *) havingQual, AGGSPLIT_SIMPLE, &aggregateCosts);

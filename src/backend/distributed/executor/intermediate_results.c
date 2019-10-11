@@ -263,9 +263,6 @@ RemoteFileDestReceiverStartup(DestReceiver *dest, int operation,
 
 		fileName = QueryResultFileName(resultId);
 
-		/* TODO: Uncomment this again, once we only write to local file when needed */
-		/* elog(DEBUG1, "writing to local file \"%s\"", fileName); */
-
 		resultDest->fileCompat = FileCompatFromFileStart(FileOpenForTransmit(fileName,
 																			 fileFlags,
 																			 fileMode));
