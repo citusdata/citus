@@ -370,10 +370,21 @@ BuildAggregatePlan(PlannerInfo *root, Query *masterQuery, Plan *subPlan)
 
 	aggregateTargetList = masterQuery->targetList;
 
-	/* Would be nice if we could use masterQuery->hasSubLinks to only call
+	/*
+	 * Replaces SubLink nodes with SubPlan nodes in the having section of the
+	 * query. (and creates the subplans in root->subplans)
+	 *
+	 * Would be nice if we could use masterQuery->hasSubLinks to only call
 	 * these when that is true. However, for some reason hasSubLinks is false
-	 * even when there are SubLinks. */
+	 * even when there are SubLinks.
+	 */
 	havingQual = SS_process_sublinks(root, masterQuery->havingQual, true);
+
+	/*
+	 * Right now this is not really needed, since we don't support correlated
+	 * subqueries anyway. Once we do calling this is critical to do right after
+	 * calling SS_process_sublinks, according to the postgres function comment.
+	 */
 	havingQual = SS_replace_correlation_vars(root, havingQual);
 
 
@@ -442,7 +453,6 @@ BuildAggregatePlan(PlannerInfo *root, Query *masterQuery, Plan *subPlan)
 	aggregatePlan->plan.startup_cost = 0;
 	aggregatePlan->plan.total_cost = 0;
 	aggregatePlan->plan.plan_rows = 0;
-
 
 	return aggregatePlan;
 }

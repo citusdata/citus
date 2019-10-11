@@ -317,7 +317,11 @@ IsFunctionRTE(Node *node)
 
 
 /*
- * IsNodeSubquery returns true if the given node is a Query.
+ * IsNodeSubquery returns true if the given node is a Query or SubPlan.
+ *
+ * The check for SubPlan is needed whev this is used on a already rewritten
+ * query. Such a query has SubPlan nodes instead of SubLink nodes (which
+ * contain a Query node).
  */
 static bool
 IsNodeSubquery(Node *node)
