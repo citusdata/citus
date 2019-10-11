@@ -834,7 +834,7 @@ DeferErrorIfQueryNotSupported(Query *queryTree)
 	{
 		preconditionsSatisfied = false;
 		errorMessage = "could not run distributed query with subquery outside the "
-					   "FROM and WHERE clauses";
+					   "FROM, WHERE and HAVING clauses";
 		errorHint = filterHint;
 	}
 

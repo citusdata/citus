@@ -705,9 +705,9 @@ WHERE
 
 -- Check unsupported subqueries in target list
 SELECT (SELECT 1) FROM orders_subquery;
-ERROR:  could not run distributed query with subquery outside the FROM and WHERE clauses
+ERROR:  could not run distributed query with subquery outside the FROM, WHERE and HAVING clauses
 SELECT sum((SELECT 1)) FROM orders_subquery;
-ERROR:  could not run distributed query with subquery outside the FROM and WHERE clauses
+ERROR:  could not run distributed query with subquery outside the FROM, WHERE and HAVING clauses
 -- Check that if subquery is pulled, we don't error and run query properly.
 SELECT count(*) FROM
 (
