@@ -36,9 +36,10 @@ ExecuteSubPlans(DistributedPlan *distributedPlan)
 	List *subPlanList = distributedPlan->subPlanList;
 	ListCell *subPlanCell = NULL;
 	List *nodeList = NIL;
-	ListCell *nodeCell = NULL;
-	bool writeLocalFile = true;
-	int32 localGroupId = GetLocalGroupId();
+
+	/* If you're not a worker node, you should write local file to make sure
+	 * you have the data too */
+	bool writeLocalFile = GetLocalGroupId() == 0;
 
 
 	if (subPlanList == NIL)
@@ -56,17 +57,6 @@ ExecuteSubPlans(DistributedPlan *distributedPlan)
 	BeginOrContinueCoordinatedTransaction();
 
 	nodeList = ActiveReadableNodeList();
-
-	/* Don't write twice in MX if you're connecting to yourself */
-	foreach(nodeCell, nodeList)
-	{
-		WorkerNode *node = lfirst(nodeCell);
-		if (node->groupId == localGroupId)
-		{
-			writeLocalFile = false;
-			break;
-		}
-	}
 
 	foreach(subPlanCell, subPlanList)
 	{
