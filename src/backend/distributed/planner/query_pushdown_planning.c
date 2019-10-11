@@ -69,6 +69,7 @@ bool SubqueryPushdown = false; /* is subquery pushdown enabled */
 static bool JoinTreeContainsSubqueryWalker(Node *joinTreeNode, void *context);
 static bool IsFunctionRTE(Node *node);
 static bool IsNodeSubquery(Node *node);
+static bool IsNodeSubqueryOrParamExec(Node *node);
 static bool IsOuterJoinExpr(Node *node);
 static bool WindowPartitionOnDistributionColumn(Query *query);
 static DeferredErrorMessage * DeferErrorIfFromClauseRecurs(Query *queryTree);
@@ -291,7 +292,7 @@ WhereOrHavingClauseContainsSubquery(Query *query)
 bool
 TargetListContainsSubquery(Query *query)
 {
-	return FindNodeCheck((Node *) query->targetList, IsNodeSubquery);
+	return FindNodeCheck((Node *) query->targetList, IsNodeSubqueryOrParamExec);
 }
 
 
@@ -316,7 +317,7 @@ IsFunctionRTE(Node *node)
 
 
 /*
- * IsNodeQuery returns true if the given node is a Query.
+ * IsNodeSubquery returns true if the given node is a Query.
  */
 static bool
 IsNodeSubquery(Node *node)
@@ -327,6 +328,31 @@ IsNodeSubquery(Node *node)
 	}
 
 	return IsA(node, Query) || IsA(node, SubPlan);
+}
+
+
+/*
+ * IsNodeSubqueryOrParamExec returns true if the given node is a subquery or a
+ * Param node with paramkind PARAM_EXEC.
+ */
+static bool
+IsNodeSubqueryOrParamExec(Node *node)
+{
+	if (node == NULL)
+	{
+		return false;
+	}
+
+	if (IsNodeSubquery(node))
+	{
+		return true;
+	}
+
+	if (!IsA(node, Param))
+	{
+		return false;
+	}
+	return ((Param *) node)->paramkind == PARAM_EXEC;
 }
 
 
