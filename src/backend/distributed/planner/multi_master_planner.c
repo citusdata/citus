@@ -52,7 +52,6 @@ static bool HasDistinctAggregate(Query *masterQuery);
 static bool UseGroupAggregateWithHLL(Query *masterQuery);
 static bool QueryContainsAggregateWithHLL(Query *query);
 static Plan * BuildDistinctPlan(Query *masterQuery, Plan *subPlan);
-static List * PrepareTargetListForNextPlan(List *targetList);
 static Agg * makeAggNode(List *groupClauseList, List *havingQual,
 						 AggStrategy aggrStrategy, List *queryTargetList, Plan *subPlan);
 static void FinalizeStatement(PlannerInfo *root, PlannedStmt *stmt, Plan *topLevelPlan);
@@ -138,12 +137,12 @@ static PlannedStmt *
 BuildSelectStatement(Query *masterQuery, List *masterTargetList, CustomScan *remoteScan)
 {
 	PlannedStmt *selectStatement = NULL;
-	RangeTblEntry *customScanRangeTableEntry = NULL;
 	Agg *aggregationPlan = NULL;
 	Plan *topLevelPlan = NULL;
+	List *sortClauseList = copyObject(masterQuery->sortClause);
 	ListCell *targetEntryCell = NULL;
 	List *columnNameList = NULL;
-	List *sortClauseList = copyObject(masterQuery->sortClause);
+	RangeTblEntry *customScanRangeTableEntry = NULL;
 
 	PlannerGlobal *glob = makeNode(PlannerGlobal);
 	PlannerInfo *root = makeNode(PlannerInfo);
@@ -163,21 +162,10 @@ BuildSelectStatement(Query *masterQuery, List *masterTargetList, CustomScan *rem
 	/* top level select query should have only one range table entry */
 	Assert(list_length(masterQuery->rtable) == 1);
 
-	/* compute column names for the custom range table entry */
-	foreach(targetEntryCell, masterTargetList)
-	{
-		TargetEntry *targetEntry = lfirst(targetEntryCell);
-		columnNameList = lappend(columnNameList, makeString(targetEntry->resname));
-	}
-
-	customScanRangeTableEntry = RemoteScanRangeTableEntry(columnNameList);
-
-	/* set the single element range table list */
-	selectStatement->rtable = list_make1(customScanRangeTableEntry);
-
 	/* (2) add an aggregation plan if needed */
 	if (masterQuery->hasAggs || masterQuery->groupClause)
 	{
+		remoteScan->custom_scan_tlist = masterTargetList;
 		remoteScan->scan.plan.targetlist = masterTargetList;
 
 		aggregationPlan = BuildAggregatePlan(root, masterQuery, &remoteScan->scan.plan);
@@ -187,6 +175,7 @@ BuildSelectStatement(Query *masterQuery, List *masterTargetList, CustomScan *rem
 	else
 	{
 		/* otherwise set the final projections on the scan plan directly */
+		remoteScan->custom_scan_tlist = masterQuery->targetList;
 		remoteScan->scan.plan.targetlist = masterQuery->targetList;
 		topLevelPlan = &remoteScan->scan.plan;
 	}
@@ -264,9 +253,23 @@ BuildSelectStatement(Query *masterQuery, List *masterTargetList, CustomScan *rem
 		topLevelPlan = (Plan *) limitPlan;
 	}
 
-	/* (6) set top level plan in the plantree and copy over some things from
-	 * PlannerInfo */
+	/*
+	 * (6) set top level plan in the plantree and copy over some things from
+	 * PlannerInfo
+	 */
 	FinalizeStatement(root, selectStatement, topLevelPlan);
+
+	/*
+	 * (7) Replace rangetable with one with nice names to show in EXPLAIN plans
+	 */
+	foreach(targetEntryCell, masterTargetList)
+	{
+		TargetEntry *targetEntry = lfirst(targetEntryCell);
+		columnNameList = lappend(columnNameList, makeString(targetEntry->resname));
+	}
+
+	customScanRangeTableEntry = RemoteScanRangeTableEntry(columnNameList);
+	list_head(selectStatement->rtable)->data.ptr_value = customScanRangeTableEntry;
 
 	return selectStatement;
 }
@@ -279,8 +282,6 @@ BuildSelectStatement(Query *masterQuery, List *masterTargetList, CustomScan *rem
  *
  * Modifications from original code:
  * - Added SS_attach_initplans call
- * - Commented out set_plan_references(root, top_plan)
- * - Commented out setting result->rtable (we already do that before)
  */
 static void
 FinalizeStatement(PlannerInfo *root, PlannedStmt *result, Plan *top_plan)
@@ -317,11 +318,7 @@ FinalizeStatement(PlannerInfo *root, PlannedStmt *result, Plan *top_plan)
 	Assert(glob->resultRelations == NIL);
 	Assert(glob->rootResultRelations == NIL);
 
-	/* TODO: Uncomment when we fix:
-	 * ERROR:  variable not found in subplan target list
-	 */
-
-	/* top_plan = set_plan_references(root, top_plan); */
+	top_plan = set_plan_references(root, top_plan);
 
 	/* ... and the subplans (both regular subplans and initplans) */
 	Assert(list_length(glob->subplans) == list_length(glob->subroots));
@@ -337,7 +334,7 @@ FinalizeStatement(PlannerInfo *root, PlannedStmt *result, Plan *top_plan)
 	result->parallelModeNeeded = glob->parallelModeNeeded;
 	result->planTree = top_plan;
 
-	/* result->rtable = glob->finalrtable; */
+	result->rtable = glob->finalrtable;
 	result->resultRelations = glob->resultRelations;
 #if PG_VERSION_NUM < 120000
 	result->nonleafResultRelations = glob->nonleafResultRelations;
@@ -365,10 +362,6 @@ BuildAggregatePlan(PlannerInfo *root, Query *masterQuery, Plan *subPlan)
 	AggClauseCosts aggregateCosts;
 	List *aggregateTargetList = NIL;
 	List *groupColumnList = NIL;
-	List *aggregateColumnList = NIL;
-	List *havingColumnList = NIL;
-	List *columnList = NIL;
-	ListCell *columnCell = NULL;
 	Node *havingQual = NULL;
 	uint32 groupColumnCount = 0;
 
@@ -390,20 +383,6 @@ BuildAggregatePlan(PlannerInfo *root, Query *masterQuery, Plan *subPlan)
 						 &aggregateCosts);
 
 	get_agg_clause_costs(root, (Node *) havingQual, AGGSPLIT_SIMPLE, &aggregateCosts);
-
-	/*
-	 * For upper level plans above the sequential scan, the planner expects the
-	 * table id (varno) to be set to OUTER_VAR.
-	 */
-	aggregateColumnList = pull_var_clause_default((Node *) aggregateTargetList);
-	havingColumnList = pull_var_clause_default(havingQual);
-
-	columnList = list_concat(aggregateColumnList, havingColumnList);
-	foreach(columnCell, columnList)
-	{
-		Var *column = (Var *) lfirst(columnCell);
-		column->varno = OUTER_VAR;
-	}
 
 	groupColumnList = masterQuery->groupClause;
 	groupColumnCount = list_length(groupColumnList);
@@ -601,14 +580,6 @@ BuildDistinctPlan(Query *masterQuery, Plan *subPlan)
 		return subPlan;
 	}
 
-	/*
-	 * We need to adjust varno to OUTER_VAR, since planner expects that for upper
-	 * level plans above the sequential scan. We also need to convert aggregations
-	 * (if exists) to regular Vars since the aggregation would be applied by the
-	 * previous aggregation plan and we don't want them to be applied again.
-	 */
-	targetList = PrepareTargetListForNextPlan(targetList);
-
 	Assert(masterQuery->distinctClause);
 	Assert(!masterQuery->hasDistinctOn);
 
@@ -634,38 +605,6 @@ BuildDistinctPlan(Query *masterQuery, Plan *subPlan)
 	}
 
 	return distinctPlan;
-}
-
-
-/*
- * PrepareTargetListForNextPlan handles both regular columns to have right varno
- * and convert aggregates to regular Vars in the target list.
- */
-static List *
-PrepareTargetListForNextPlan(List *targetList)
-{
-	List *newtargetList = NIL;
-	ListCell *targetEntryCell = NULL;
-
-	foreach(targetEntryCell, targetList)
-	{
-		TargetEntry *targetEntry = lfirst(targetEntryCell);
-		TargetEntry *newTargetEntry = NULL;
-		Var *newVar = NULL;
-
-		Assert(IsA(targetEntry, TargetEntry));
-
-		/*
-		 * For upper level plans above the sequential scan, the planner expects the
-		 * table id (varno) to be set to OUTER_VAR.
-		 */
-		newVar = makeVarFromTargetEntry(OUTER_VAR, targetEntry);
-		newTargetEntry = flatCopyTargetEntry(targetEntry);
-		newTargetEntry->expr = (Expr *) newVar;
-		newtargetList = lappend(newtargetList, newTargetEntry);
-	}
-
-	return newtargetList;
 }
 
 
