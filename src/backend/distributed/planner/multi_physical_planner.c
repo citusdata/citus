@@ -4375,7 +4375,7 @@ ColumnName(Var *column, List *rangeTableList)
 	else if (rangeTableKind == CITUS_RTE_RELATION)
 	{
 		Oid relationId = rangeTableEntry->relid;
-		columnName = get_attname_internal(relationId, columnNumber, false);
+		columnName = get_attname(relationId, columnNumber, false);
 	}
 
 	Assert(columnName != NULL);

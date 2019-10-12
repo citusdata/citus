@@ -44,6 +44,8 @@ static List * VacuumTaskList(Oid relationId, CitusVacuumParams vacuumParams,
 							 List *vacuumColumnList);
 static StringInfo DeparseVacuumStmtPrefix(CitusVacuumParams vacuumParams);
 static char * DeparseVacuumColumnNames(List *columnNameList);
+static List * VacuumColumnList(VacuumStmt *vacuumStmt, int relationIndex);
+static List * ExtractVacuumTargetRels(VacuumStmt *vacuumStmt);
 static CitusVacuumParams VacuumStmtParams(VacuumStmt *vacstmt);
 
 /*
@@ -376,6 +378,40 @@ DeparseVacuumColumnNames(List *columnNameList)
 	columnNames->data[columnNames->len - 1] = ')';
 
 	return columnNames->data;
+}
+
+
+/*
+ * VacuumColumnList returns list of columns from relation
+ * in the vacuum statement at specified relationIndex.
+ */
+static List *
+VacuumColumnList(VacuumStmt *vacuumStmt, int relationIndex)
+{
+	VacuumRelation *vacuumRelation = (VacuumRelation *) list_nth(vacuumStmt->rels,
+																 relationIndex);
+
+	return vacuumRelation->va_cols;
+}
+
+
+/*
+ * ExtractVacuumTargetRels returns list of target
+ * relations from vacuum statement.
+ */
+static List *
+ExtractVacuumTargetRels(VacuumStmt *vacuumStmt)
+{
+	List *vacuumList = NIL;
+
+	ListCell *vacuumRelationCell = NULL;
+	foreach(vacuumRelationCell, vacuumStmt->rels)
+	{
+		VacuumRelation *vacuumRelation = (VacuumRelation *) lfirst(vacuumRelationCell);
+		vacuumList = lappend(vacuumList, vacuumRelation->relation);
+	}
+
+	return vacuumList;
 }
 
 

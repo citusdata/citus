@@ -79,13 +79,8 @@ static void ErrorIfFunctionDependsOnExtension(const ObjectAddress *functionAddre
 
 PG_FUNCTION_INFO_V1(create_distributed_function);
 
-#if PG_VERSION_NUM >= 110000
 #define AssertIsFunctionOrProcedure(objtype) \
 	Assert((objtype) == OBJECT_FUNCTION || (objtype) == OBJECT_PROCEDURE)
-#else
-#define AssertIsFunctionOrProcedure(objtype) \
-	Assert(objtype == OBJECT_FUNCTION)
-#endif
 
 
 /*
@@ -597,9 +592,7 @@ GetFunctionAlterOwnerCommand(const RegProcedure funcOid)
 
 		procOwner = procform->proowner;
 
-#if (PG_VERSION_NUM >= 110000)
 		isProcedure = procform->prokind == PROKIND_PROCEDURE;
-#endif
 
 		ReleaseSysCache(proctup);
 	}
@@ -878,12 +871,10 @@ CreateFunctionStmtObjectAddress(CreateFunctionStmt *stmt, bool missing_ok)
 	ObjectWithArgs *objectWithArgs = NULL;
 	ListCell *parameterCell = NULL;
 
-#if PG_VERSION_NUM >= 110000
 	if (stmt->is_procedure)
 	{
 		objectType = OBJECT_PROCEDURE;
 	}
-#endif
 
 	objectWithArgs = makeNode(ObjectWithArgs);
 	objectWithArgs->objname = stmt->funcname;
@@ -910,10 +901,7 @@ PlanAlterFunctionStmt(AlterFunctionStmt *stmt, const char *queryString)
 	const ObjectAddress *address = NULL;
 	List *commands = NIL;
 
-	/* AlterFunctionStmt->objtype has only been added since pg11 */
-#if PG_VERSION_NUM >= 110000
 	AssertIsFunctionOrProcedure(stmt->objtype);
-#endif
 
 	address = GetObjectAddressFromParseTree((Node *) stmt, false);
 	if (!ShouldPropagateAlterFunction(address))
@@ -1249,13 +1237,7 @@ ProcessAlterFunctionSchemaStmt(AlterObjectSchemaStmt *stmt, const char *queryStr
 const ObjectAddress *
 AlterFunctionStmtObjectAddress(AlterFunctionStmt *stmt, bool missing_ok)
 {
-	ObjectType objectType = OBJECT_FUNCTION;
-
-#if PG_VERSION_NUM >= 110000
-	objectType = stmt->objtype;
-#endif
-
-	return FunctionToObjectAddress(objectType, stmt->func, missing_ok);
+	return FunctionToObjectAddress(stmt->objtype, stmt->func, missing_ok);
 }
 
 
@@ -1303,7 +1285,7 @@ AlterFunctionSchemaStmtObjectAddress(AlterObjectSchemaStmt *stmt, bool missing_o
 	AssertIsFunctionOrProcedure(stmt->objectType);
 
 	objectWithArgs = castNode(ObjectWithArgs, stmt->object);
-	funcOid = LookupFuncWithArgsCompat(stmt->objectType, objectWithArgs, true);
+	funcOid = LookupFuncWithArgs(stmt->objectType, objectWithArgs, true);
 	names = objectWithArgs->objname;
 
 	if (funcOid == InvalidOid)
@@ -1322,7 +1304,7 @@ AlterFunctionSchemaStmtObjectAddress(AlterObjectSchemaStmt *stmt, bool missing_o
 		 * error if the type didn't exist in the first place.
 		 */
 		objectWithArgs->objname = newNames;
-		funcOid = LookupFuncWithArgsCompat(stmt->objectType, objectWithArgs, true);
+		funcOid = LookupFuncWithArgs(stmt->objectType, objectWithArgs, true);
 		objectWithArgs->objname = names; /* restore the original names */
 
 		/*
@@ -1336,8 +1318,8 @@ AlterFunctionSchemaStmtObjectAddress(AlterObjectSchemaStmt *stmt, bool missing_o
 			 * has just been created (if possible at all). For safety we assign the
 			 * funcOid.
 			 */
-			funcOid = LookupFuncWithArgsCompat(stmt->objectType, objectWithArgs,
-											   missing_ok);
+			funcOid = LookupFuncWithArgs(stmt->objectType, objectWithArgs,
+										 missing_ok);
 		}
 	}
 
@@ -1363,7 +1345,7 @@ FunctionToObjectAddress(ObjectType objectType, ObjectWithArgs *objectWithArgs,
 
 	AssertIsFunctionOrProcedure(objectType);
 
-	funcOid = LookupFuncWithArgsCompat(objectType, objectWithArgs, missing_ok);
+	funcOid = LookupFuncWithArgs(objectType, objectWithArgs, missing_ok);
 	address = palloc0(sizeof(ObjectAddress));
 	ObjectAddressSet(*address, ProcedureRelationId, funcOid);
 

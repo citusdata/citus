@@ -276,9 +276,7 @@ ClusterHasDistributedFunctionWithDistArgument(void)
 
 	Relation pgDistObjectRel = heap_open(DistObjectRelationId(), AccessShareLock);
 
-#if (PG_VERSION_NUM >= 110000)
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistObjectRel);
-#endif
 
 	pgDistObjectScan =
 		systable_beginscan(pgDistObjectRel, InvalidOid, false, NULL, 0, NULL);
@@ -290,16 +288,10 @@ ClusterHasDistributedFunctionWithDistArgument(void)
 		if (pg_dist_object->classid == ProcedureRelationId)
 		{
 			bool distArgumentIsNull = false;
-#if (PG_VERSION_NUM >= 110000)
 			distArgumentIsNull =
 				heap_attisnull(pgDistObjectTup,
 							   Anum_pg_dist_object_distribution_argument_index,
 							   tupleDescriptor);
-#else
-			distArgumentIsNull =
-				heap_attisnull(pgDistObjectTup,
-							   Anum_pg_dist_object_distribution_argument_index);
-#endif
 
 			/* we found one distributed function that has an distribution argument */
 			if (!distArgumentIsNull)

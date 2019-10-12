@@ -1,10 +1,3 @@
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int >= 11 AS server_verion_eleven_and_above
-    \gset
-\if :server_verion_eleven_and_above
-\else
-\q
-\endif
 --
 -- Regression tests for deparsing ALTER/DROP PROCEDURE Queries
 --
@@ -38,14 +31,6 @@ CREATE SCHEMA procedure_tests;
 SET search_path TO procedure_tests;
 SET citus.shard_count TO 4;
 SET client_min_messages TO INFO;
--- print whether we're using version > 10 to make version-specific tests clear
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int > 10 AS version_above_ten;
- version_above_ten 
--------------------
- t
-(1 row)
-
 CREATE FUNCTION deparse_test(text)
 	RETURNS text
 	AS 'citus'

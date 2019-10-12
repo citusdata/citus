@@ -3,14 +3,6 @@
 --
 -- Test user permissions.
 --
--- print whether we're using version > 10 to make version-specific tests clear
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int > 10 AS version_above_ten;
- version_above_ten 
--------------------
- t
-(1 row)
-
 SET citus.next_shard_id TO 1420000;
 SET citus.shard_replication_factor TO 1;
 ALTER SYSTEM SET citus.metadata_sync_interval TO 3000;

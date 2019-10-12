@@ -4,10 +4,6 @@
 
 SET citus.next_shard_id TO 570000;
 
--- print whether we're using version > 9 to make version-specific tests clear
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int > 9 AS version_above_nine;
-
 \a\t
 
 RESET citus.task_executor_type;
@@ -390,12 +386,12 @@ SELECT true AS valid FROM explain_xml($$
 
 SELECT true AS valid FROM explain_json($$
 	SELECT avg(l_linenumber) FROM lineitem WHERE l_orderkey > 9030$$);
-	
+
 -- Test multi shard update
 EXPLAIN (COSTS FALSE)
 	UPDATE lineitem_hash_part
 	SET l_suppkey = 12;
-	
+
 EXPLAIN (COSTS FALSE)
 	UPDATE lineitem_hash_part
 	SET l_suppkey = 12
@@ -468,8 +464,8 @@ SELECT true AS valid FROM explain_xml($$
 	AND o_custkey = c_custkey
 	AND l_suppkey = s_suppkey$$);
 
--- make sure that EXPLAIN works without 
--- problems for queries that inlvolves only 
+-- make sure that EXPLAIN works without
+-- problems for queries that inlvolves only
 -- reference tables
 SELECT true AS valid FROM explain_xml($$
 	SELECT count(*)
