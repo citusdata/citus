@@ -162,10 +162,11 @@ BuildSelectStatement(Query *masterQuery, List *masterTargetList, CustomScan *rem
 	/* top level select query should have only one range table entry */
 	Assert(list_length(masterQuery->rtable) == 1);
 
+	remoteScan->custom_scan_tlist = masterTargetList;
+
 	/* (2) add an aggregation plan if needed */
 	if (masterQuery->hasAggs || masterQuery->groupClause)
 	{
-		remoteScan->custom_scan_tlist = masterTargetList;
 		remoteScan->scan.plan.targetlist = masterTargetList;
 
 		aggregationPlan = BuildAggregatePlan(root, masterQuery, &remoteScan->scan.plan);
@@ -175,7 +176,15 @@ BuildSelectStatement(Query *masterQuery, List *masterTargetList, CustomScan *rem
 	else
 	{
 		/* otherwise set the final projections on the scan plan directly */
-		remoteScan->custom_scan_tlist = masterQuery->targetList;
+
+		/*
+		 * The masterTargetList contains all columns that we fetch from
+		 * the worker as non-resjunk.
+		 *
+		 * Here the output of the plan node determines the output of the query.
+		 * We therefore use the targetList of masterQuery, which has non-output
+		 * columns set as resjunk.
+		 */
 		remoteScan->scan.plan.targetlist = masterQuery->targetList;
 		topLevelPlan = &remoteScan->scan.plan;
 	}
