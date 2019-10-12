@@ -291,7 +291,7 @@ ERROR:  complex joins are only supported when all distributed tables are joined 
 SET citus.replication_model TO streaming;
 SET citus.shard_replication_factor to 1;
 SET citus.shard_count to 4;
-SET search_path = ch_bench_having;
+SET search_path = ch_bench_having, public;
 DROP TABLE stock;
 CREATE TABLE stock (
   s_w_id int NOT NULL,
@@ -313,59 +313,57 @@ CREATE TABLE stock (
   s_dist_10 char(24) NOT NULL,
   PRIMARY KEY (s_w_id,s_i_id)
 );
-create table supplier (
-   su_suppkey int not null,
-   su_name char(25) not null,
-   su_address varchar(40) not null,
-   su_nationkey int not null,
-   su_phone char(15) not null,
-   su_acctbal numeric(12,2) not null,
-   su_comment char(101) not null,
-   PRIMARY KEY ( su_suppkey )
-);
-create table nation (
-   n_nationkey int not null,
-   n_name char(25) not null,
-   n_regionkey int not null,
-   n_comment char(152) not null,
-   PRIMARY KEY ( n_nationkey )
-);
+insert into stock VALUES
+(1, 33, 1, 1, 1, 1, '', '','','','','','','','','',''),
+(33, 1, 1, 1, 1, 1, '', '','','','','','','','','',''),
+(32, 1, 1, 1, 1, 1, '', '','','','','','','','','','');
 SELECT create_distributed_table('stock','s_w_id');
+NOTICE:  Copying data from local table...
  create_distributed_table 
 --------------------------
  
 (1 row)
 
-SELECT create_reference_table('nation');
- create_reference_table 
-------------------------
- 
-(1 row)
-
-SELECT create_reference_table('supplier');
- create_reference_table 
-------------------------
- 
-(1 row)
-
 \c - - - :worker_1_port
-SET search_path = ch_bench_having;
+SET search_path = ch_bench_having, public;
 select     s_i_id, sum(s_order_cnt) as ordercount
-from     stock, supplier, nation
-where     mod((s_w_id * s_i_id),10000) = su_suppkey
-     and su_nationkey = n_nationkey
-     and n_name = 'Germany'
+from     stock, supplier_mx, nation_mx
+where     mod((s_w_id * s_i_id),10000) = s_suppkey
+     and s_nationkey = n_nationkey
+     and n_name = 'GERMANY'
 group by s_i_id
 having   sum(s_order_cnt) >
         (select sum(s_order_cnt) * .005
-        from stock, supplier, nation
-        where mod((s_w_id * s_i_id),10000) = su_suppkey
-        and su_nationkey = n_nationkey
-        and n_name = 'Germany')
+        from stock, supplier_mx, nation_mx
+        where mod((s_w_id * s_i_id),10000) = s_suppkey
+        and s_nationkey = n_nationkey
+        and n_name = 'GERMANY')
 order by ordercount desc;
  s_i_id | ordercount 
 --------+------------
-(0 rows)
+     33 |          1
+      1 |          1
+(2 rows)
+
+insert into stock VALUES
+(10033, 1, 1, 1, 100000, 1, '', '','','','','','','','','','');
+select     s_i_id, sum(s_order_cnt) as ordercount
+from     stock, supplier_mx, nation_mx
+where     mod((s_w_id * s_i_id),10000) = s_suppkey
+     and s_nationkey = n_nationkey
+     and n_name = 'GERMANY'
+group by s_i_id
+having   sum(s_order_cnt) >
+        (select sum(s_order_cnt) * .005
+        from stock, supplier_mx, nation_mx
+        where mod((s_w_id * s_i_id),10000) = s_suppkey
+        and s_nationkey = n_nationkey
+        and n_name = 'GERMANY')
+order by ordercount desc;
+ s_i_id | ordercount 
+--------+------------
+      1 |     100001
+(1 row)
 
 \c - - - :master_port
 BEGIN;
