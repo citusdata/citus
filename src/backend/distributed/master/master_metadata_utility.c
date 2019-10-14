@@ -41,6 +41,7 @@
 #include "distributed/pg_dist_partition.h"
 #include "distributed/pg_dist_shard.h"
 #include "distributed/pg_dist_placement.h"
+#include "distributed/reference_table_utils.h"
 #include "distributed/relay_utility.h"
 #include "distributed/resource_lock.h"
 #include "distributed/remote_commands.h"
@@ -1292,7 +1293,7 @@ UpdateShardPlacementState(uint64 placementId, char shardState)
  * cache after updating replication factor.
  */
 void
-UpdateColocationGroupReplicationFactorForReferenceTables(int replicationFactor)
+UpdateColocationGroupReplicationFactorForReferenceTables(void)
 {
 	Relation pgDistColocation = NULL;
 	SysScanDesc scanDescriptor = NULL;
@@ -1301,6 +1302,7 @@ UpdateColocationGroupReplicationFactorForReferenceTables(int replicationFactor)
 	bool indexOK = false;
 	HeapTuple heapTuple = NULL;
 	TupleDesc tupleDescriptor = NULL;
+	int replicationFactor = ReferenceTableReplicationFactor();
 
 	/*
 	 * All reference tables share a colocation entry with:

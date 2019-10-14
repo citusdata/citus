@@ -3010,7 +3010,7 @@ InitializeWorkerNodeCache(void)
 	newWorkerNodeHash = hash_create("Worker Node Hash", maxTableSize, &info, hashFlags);
 
 	/* read the list from pg_dist_node */
-	workerNodeList = ReadWorkerNodes(includeNodesFromOtherClusters);
+	workerNodeList = ReadDistNode(includeNodesFromOtherClusters);
 
 	newWorkerNodeCount = list_length(workerNodeList);
 	newWorkerNodeArray = MemoryContextAlloc(MetadataCacheMemoryContext,

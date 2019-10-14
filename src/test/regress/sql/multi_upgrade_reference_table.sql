@@ -695,4 +695,3 @@ ORDER BY nodeport;
 \c - - - :master_port
 DROP TABLE upgrade_reference_table_mx;
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
-

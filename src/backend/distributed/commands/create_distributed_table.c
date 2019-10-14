@@ -272,7 +272,6 @@ create_reference_table(PG_FUNCTION_ARGS)
 
 	Relation relation = NULL;
 	char *colocateWithTableName = NULL;
-	List *workerNodeList = NIL;
 	int workerCount = 0;
 	Var *distributionColumn = NULL;
 	ObjectAddress tableAddress = { 0 };
@@ -306,10 +305,7 @@ create_reference_table(PG_FUNCTION_ARGS)
 	 */
 	EnsureRelationKindSupported(relationId);
 
-	workerNodeList = ActivePrimaryNodeList(ShareLock);
-	workerCount = list_length(workerNodeList);
-
-	/* if there are no workers, error out */
+	workerCount = ActivePrimaryNodeCount();
 	if (workerCount == 0)
 	{
 		char *relationName = get_rel_name(relationId);

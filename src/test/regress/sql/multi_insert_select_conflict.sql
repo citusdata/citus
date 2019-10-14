@@ -176,6 +176,7 @@ BEGIN;
 ROLLBACK;
 
 BEGIN;
+	SET LOCAL citus.enable_local_execution TO off;
 	DELETE FROM test_ref_table WHERE key > 10;
 	INSERT INTO 
 		target_table
@@ -188,6 +189,7 @@ ROLLBACK;
 -- Following two queries are supported since we no not modify but only select from
 -- the target_table after modification on test_ref_table.
 BEGIN;
+	SET LOCAL citus.enable_local_execution TO off;
 	TRUNCATE test_ref_table CASCADE;
 	INSERT INTO 
  		source_table_1
@@ -198,6 +200,7 @@ BEGIN;
 ROLLBACK;
 
 BEGIN;
+	SET LOCAL citus.enable_local_execution TO off;
 	DELETE FROM test_ref_table;
 	INSERT INTO 
  		source_table_1
@@ -297,4 +300,5 @@ INSERT INTO target_table SELECT * FROM cte_2 ON CONFLICT(col_1) DO UPDATE SET co
 SELECT * FROM target_table ORDER BY 1;
 
 RESET client_min_messages;
+DROP TABLE test_ref_table;
 DROP SCHEMA on_conflict CASCADE;

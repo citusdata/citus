@@ -306,11 +306,12 @@ NOTICE:  truncate cascades to table "target_table"
 		col_2,
 		col_1
 	FROM source_table_1 ON CONFLICT (col_1) DO UPDATE SET col_2 = 55 RETURNING *;
-ERROR:  insert or update on table "target_table_1900000" violates foreign key constraint "fkey_1900000"
-DETAIL:  Key (col_1)=(1) is not present in table "test_ref_table_1900012".
-CONTEXT:  while executing command on localhost:57637
+ERROR:  insert or update on table "target_table_1900001" violates foreign key constraint "fkey_1900001"
+DETAIL:  Key (col_1)=(3) is not present in table "test_ref_table_1900012".
+CONTEXT:  while executing command on localhost:57638
 ROLLBACK;
 BEGIN;
+	SET LOCAL citus.enable_local_execution TO off;
 	DELETE FROM test_ref_table WHERE key > 10;
 	INSERT INTO 
 		target_table
@@ -331,6 +332,7 @@ ROLLBACK;
 -- Following two queries are supported since we no not modify but only select from
 -- the target_table after modification on test_ref_table.
 BEGIN;
+	SET LOCAL citus.enable_local_execution TO off;
 	TRUNCATE test_ref_table CASCADE;
 NOTICE:  truncate cascades to table "target_table"
 	INSERT INTO 
@@ -345,6 +347,7 @@ NOTICE:  truncate cascades to table "target_table"
 
 ROLLBACK;
 BEGIN;
+	SET LOCAL citus.enable_local_execution TO off;
 	DELETE FROM test_ref_table;
 	INSERT INTO 
  		source_table_1
@@ -526,10 +529,10 @@ SELECT * FROM target_table ORDER BY 1;
 (10 rows)
 
 RESET client_min_messages;
+DROP TABLE test_ref_table;
 DROP SCHEMA on_conflict CASCADE;
-NOTICE:  drop cascades to 7 other objects
-DETAIL:  drop cascades to table test_ref_table
-drop cascades to table source_table_3
+NOTICE:  drop cascades to 6 other objects
+DETAIL:  drop cascades to table source_table_3
 drop cascades to table source_table_4
 drop cascades to table target_table_2
 drop cascades to table target_table

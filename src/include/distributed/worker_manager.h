@@ -72,15 +72,16 @@ extern WorkerNode * WorkerGetRoundRobinCandidateNode(List *workerNodeList,
 extern WorkerNode * WorkerGetLocalFirstCandidateNode(List *currentNodeList);
 extern uint32 ActivePrimaryNodeCount(void);
 extern List * ActivePrimaryNodeList(LOCKMODE lockMode);
+extern List * ActiveReferenceTablePlacementNodeList(LOCKMODE lockMode);
 extern List * ActivePrimaryShouldHaveShardsNodeList(LOCKMODE lockMode);
 extern uint32 ActiveReadableNodeCount(void);
 extern List * ActiveReadableNodeList(void);
 extern WorkerNode * GetWorkerNodeByNodeId(int nodeId);
 extern WorkerNode * FindWorkerNode(char *nodeName, int32 nodePort);
 extern WorkerNode * FindWorkerNodeAnyCluster(const char *nodeName, int32 nodePort);
-extern List * ReadWorkerNodes(bool includeNodesFromOtherClusters);
+extern List * ReadDistNode(bool includeNodesFromOtherClusters);
 extern void EnsureCoordinator(void);
-extern uint32 GroupForNode(char *nodeName, int32 nodePorT);
+extern uint32 GroupForNode(char *nodeName, int32 nodePort);
 extern WorkerNode * PrimaryNodeForGroup(int32 groupId, bool *groupContainsNodes);
 extern bool WorkerNodeIsPrimary(WorkerNode *worker);
 extern bool WorkerNodeIsSecondary(WorkerNode *worker);

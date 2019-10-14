@@ -750,12 +750,18 @@ worker_append_table_to_shard(PG_FUNCTION_ARGS)
 							 &sourceTableName);
 
 	/*
-	 * We lock on the shardId, but do not unlock. When the function returns, and
-	 * the transaction for this function commits, this lock will automatically
-	 * be released. This ensures appends to a shard happen in a serial manner.
+	 * We lock on the shard table, but do not unlock. When the transaction ends,
+	 * this lock will automatically be released. This ensures appends to a shard
+	 * happen in a serial manner.
+	 * 
+	 * We don't acquire lock on the shard id to avoid deadlock when doing
+	 * upgrade_to_reference_table(). upgrade_to_reference_table() acquires
+	 * a lock on shard resource on the coordinator, and opens connections
+	 * to all nodes and calls worker_append_table_to_shard(). This connection
+	 * might be a connection to the coordinator.
 	 */
 	shardId = ExtractShardIdFromTableName(shardTableName, false);
-	LockShardResource(shardId, AccessExclusiveLock);
+	LockRelationOid(RelnameGetRelid(shardTableName), AccessExclusiveLock);
 
 	/* copy remote table's data to this node */
 	localFilePath = makeStringInfo();

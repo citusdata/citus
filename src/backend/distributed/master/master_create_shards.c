@@ -369,8 +369,7 @@ void
 CreateReferenceTableShard(Oid distributedTableId)
 {
 	char shardStorageType = 0;
-	List *workerNodeList = NIL;
-	int32 workerNodeCount = 0;
+	List *nodeList = NIL;
 	List *existingShardList = NIL;
 	uint64 shardId = INVALID_SHARD_ID;
 	int workerStartIndex = 0;
@@ -407,17 +406,15 @@ CreateReferenceTableShard(Oid distributedTableId)
 
 	/*
 	 * load and sort the worker node list for deterministic placements
-	 * create_reference_table has already acquired ActivePrimaryNodeList lock
+	 * create_reference_table has already acquired pg_dist_node lock
 	 */
-	workerNodeList = ActivePrimaryNodeList(NoLock);
-	workerNodeList = SortList(workerNodeList, CompareWorkerNodes);
+	nodeList = ActiveReferenceTablePlacementNodeList(NoLock);
+	nodeList = SortList(nodeList, CompareWorkerNodes);
+
+	replicationFactor = ReferenceTableReplicationFactor();
 
 	/* get the next shard id */
 	shardId = GetNextShardId();
-
-	/* set the replication factor equal to the number of worker nodes */
-	workerNodeCount = list_length(workerNodeList);
-	replicationFactor = workerNodeCount;
 
 	/*
 	 * Grabbing the shard metadata lock isn't technically necessary since
@@ -431,7 +428,7 @@ CreateReferenceTableShard(Oid distributedTableId)
 				   shardMaxValue);
 
 	insertedShardPlacements = InsertShardPlacementRows(distributedTableId, shardId,
-													   workerNodeList, workerStartIndex,
+													   nodeList, workerStartIndex,
 													   replicationFactor);
 
 	CreateShardsOnWorkers(distributedTableId, insertedShardPlacements,
