@@ -15,6 +15,8 @@
 
 #include "postgres.h"
 
+#include "catalog/pg_aggregate.h"
+#include "catalog/pg_proc.h"
 #include "utils/rel.h"
 #include "nodes/parsenodes.h"
 #include "tcop/dest.h"
@@ -48,6 +50,10 @@ extern bool ConstraintIsAForeignKey(char *constraintName, Oid relationId);
 
 
 /* function.c - forward declarations */
+extern void appendStringInfoAggregateHelperSuffix(StringInfo helperSuffix,
+												  Form_pg_proc proc,
+												  Form_pg_aggregate agg);
+extern Oid AggregateHelperOid(char *helperName, HeapTuple proctup, int *numargs, Oid **argtypes);
 extern List * PlanCreateFunctionStmt(CreateFunctionStmt *stmt, const char *queryString);
 extern List * ProcessCreateFunctionStmt(CreateFunctionStmt *stmt, const
 										char *queryString);

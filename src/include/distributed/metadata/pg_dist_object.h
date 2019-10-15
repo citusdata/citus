@@ -50,7 +50,7 @@ typedef FormData_pg_dist_object *Form_pg_dist_object;
  *      compiler constants for pg_dist_object
  * ----------------
  */
-#define Natts_pg_dist_object 8
+#define Natts_pg_dist_object 9
 #define Anum_pg_dist_object_classid 1
 #define Anum_pg_dist_object_objid 2
 #define Anum_pg_dist_object_objsubid 3

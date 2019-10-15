@@ -28,6 +28,7 @@
 #include "distributed/citus_nodes.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/colocation_utils.h"
+#include "distributed/commands.h"
 #include "distributed/extended_op_node_utils.h"
 #include "distributed/function_utils.h"
 #include "distributed/metadata_cache.h"
@@ -3140,43 +3141,33 @@ AggregateFunctionOid(const char *functionName, Oid inputType)
 static Oid
 AggregateFunctionHelperOid(const char *helperPrefix, Oid aggOid)
 {
-	Oid functionOid = InvalidOid;
-	Relation procRelation = NULL;
-	SysScanDesc scanDescriptor = NULL;
-	ScanKeyData scanKey[1];
-	int scanKeyCount = 1;
-	HeapTuple heapTuple = NULL;
+	StringInfoData helperName;
+	int numargs;
+	Oid *argtypes;
+	HeapTuple proctup;
+	HeapTuple aggtup;
+	Form_pg_proc proc;
+	Form_pg_aggregate agg;
 
-	procRelation = heap_open(ProcedureRelationId, AccessShareLock);
-
-	ScanKeyInit(&scanKey[0], Anum_pg_proc_proname,
-				BTEqualStrategyNumber, F_NAMEEQ, CStringGetDatum(functionName));
-
-	scanDescriptor = systable_beginscan(procRelation,
-										ProcedureNameArgsNspIndexId, true,
-										NULL, scanKeyCount, scanKey);
-
-	/* loop until we find the right function */
-	heapTuple = systable_getnext(scanDescriptor);
-	if (HeapTupleIsValid(heapTuple))
+	proctup = SearchSysCache1(PROCOID, aggOid);
+	if (!HeapTupleIsValid(proctup))
 	{
-#if PG_VERSION_NUM < 120000
-		functionOid = HeapTupleGetOid(heapTuple);
-#else
-		Form_pg_proc procForm = (Form_pg_proc) GETSTRUCT(heapTuple);
-		functionOid = procForm->oid;
-#endif
+		return InvalidOid;
 	}
+	proc = (Form_pg_proc) GETSTRUCT(proctup);
 
-	if (functionOid == InvalidOid)
+	aggtup = SearchSysCache1(AGGFNOID, aggOid);
+	if (!HeapTupleIsValid(aggtup))
 	{
-		ereport(ERROR, (errmsg("no matching oid for function: %s", functionName)));
+		return InvalidOid;
 	}
+	agg = (Form_pg_aggregate) GETSTRUCT(aggtup);
 
-	systable_endscan(scanDescriptor);
-	heap_close(procRelation, AccessShareLock);
+	initStringInfo(&helperName);
+	appendStringInfoString(&helperName, helperPrefix);
+	appendStringInfoAggregateHelperSuffix(&helperName, proc, agg);
 
-	return functionOid;
+	return AggregateHelperOid(helperName.data, proctup, &numargs, &argtypes);
 }
 
 

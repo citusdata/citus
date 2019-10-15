@@ -87,7 +87,7 @@ static char * quote_qualified_func_name(Oid funcOid);
 
 
 PG_FUNCTION_INFO_V1(create_distributed_function);
-PG_FUNCTION_INFO_v1(mark_aggregate_for_distributed_execution);
+PG_FUNCTION_INFO_V1(mark_aggregate_for_distributed_execution);
 
 #define AssertIsFunctionOrProcedure(objtype) \
 	Assert((objtype) == OBJECT_FUNCTION || (objtype) == OBJECT_PROCEDURE || (objtype) == \
@@ -234,11 +234,10 @@ mark_aggregate_for_distributed_execution(PG_FUNCTION_ARGS)
 	Form_pg_aggregate agg = NULL;
 	HeapTuple proctup = SearchSysCache1(PROCOID, funcOid);
 	HeapTuple aggtup = NULL;
+	Oid helperOid = InvalidOid;
 	int numargs = 0;
 	Oid *argtypes = NULL;
-	char **argnames = NULL;
-	char *argmodes = NULL;
-	FuncCandidateList clist;
+
 
 	if (!HeapTupleIsValid(proctup))
 	{
@@ -259,110 +258,15 @@ mark_aggregate_for_distributed_execution(PG_FUNCTION_ARGS)
 	agg = (Form_pg_aggregate) GETSTRUCT(aggtup);
 
 	initStringInfo(&helperSuffix);
-
-	switch (proc->proparallel)
-	{
-		case PROPARALLEL_SAFE:
-		{
-			appendStringInfoString(&helperSuffix, "_ps");
-			break;
-		}
-
-		case PROPARALLEL_RESTRICTED:
-		{
-			appendStringInfoString(&helperSuffix, "_pr");
-			break;
-		}
-
-		case PROPARALLEL_UNSAFE:
-		{
-			appendStringInfoString(&helperSuffix, "_pu");
-			break;
-		}
-	}
-
-	if (agg->aggfinalfn != InvalidOid)
-	{
-		switch (agg->aggfinalmodify)
-		{
-			case AGGMODIFY_READ_ONLY:
-			{
-				appendStringInfoString(&helperSuffix, "_ro");
-				break;
-			}
-
-			case AGGMODIFY_SHAREABLE:
-			{
-				appendStringInfoString(&helperSuffix, "_rs");
-				break;
-			}
-
-			case AGGMODIFY_READ_WRITE:
-			{
-				appendStringInfoString(&helperSuffix, "_rw");
-				break;
-			}
-		}
-
-		if (agg->aggfinalextra)
-		{
-			appendStringInfoString(&helperSuffix, "_fx");
-		}
-	}
-
-	if (agg->aggmfinalfn != InvalidOid)
-	{
-		appendStringInfoString(&helperSuffix, "_m");
-
-		switch (agg->aggmfinalmodify)
-		{
-			case AGGMODIFY_READ_ONLY:
-			{
-				appendStringInfoString(&helperSuffix, "_ro");
-				break;
-			}
-
-			case AGGMODIFY_SHAREABLE:
-			{
-				appendStringInfoString(&helperSuffix, "_rs");
-				break;
-			}
-
-			case AGGMODIFY_READ_WRITE:
-			{
-				appendStringInfoString(&helperSuffix, "_rw");
-				break;
-			}
-		}
-
-		if (agg->aggmfinalextra)
-		{
-			appendStringInfoString(&helperSuffix, "_fx");
-		}
-	}
-
-	/* Parameters, borrows heavily from print_function_arguments in postgres */
+	appendStringInfoAggregateHelperSuffix(&helperSuffix, proc, agg);
 
 	/* coordinator_combine_agg */
 	initStringInfo(&helperName);
 	appendStringInfo(&helperName, "%s%s", COORD_COMBINE_AGGREGATE_NAME,
 					 helperSuffix.data);
+	helperOid = AggregateHelperOid(helperName.data, proctup, &numargs, &argtypes);
 
-	numargs = get_func_arg_info(proctup, &argtypes, &argnames, &argmodes);
-	clist = FuncnameGetCandidates(list_make2(makeString("citus"), makeString(
-												 helperName.data)), proc->pronargs + 1,
-								  NIL, false, false, true);
-
-	for (; clist; clist = clist->next)
-	{
-		if (clist->args[0] == OIDOID && memcmp(clist->args + 1, argtypes, numargs *
-											   sizeof(numargs)) == 0)
-		{
-			break;
-		}
-	}
-
-	if (clist == NULL)
+	if (helperOid == InvalidOid)
 	{
 		CreateAggregateHelper(helperName.data, COORD_COMBINE_AGGREGATE_NAME, proc, agg,
 							  numargs, argtypes);
@@ -372,22 +276,9 @@ mark_aggregate_for_distributed_execution(PG_FUNCTION_ARGS)
 	resetStringInfo(&helperName);
 	appendStringInfo(&helperName, "%s%s", WORKER_PARTIAL_AGGREGATE_NAME,
 					 helperSuffix.data);
+	helperOid = AggregateHelperOid(helperName.data, proctup, &numargs, &argtypes);
 
-	numargs = get_func_arg_info(proctup, &argtypes, &argnames, &argmodes);
-	clist = FuncnameGetCandidates(list_make2(makeString("citus"), makeString(
-												 helperName.data)), proc->pronargs + 1,
-								  NIL, false, false, true);
-
-	for (; clist; clist = clist->next)
-	{
-		if (clist->args[0] == OIDOID && memcmp(clist->args + 1, argtypes, numargs *
-											   sizeof(numargs)) == 0)
-		{
-			break;
-		}
-	}
-
-	if (clist == NULL)
+	if (helperOid == InvalidOid)
 	{
 		CreateAggregateHelper(helperName.data, WORKER_PARTIAL_AGGREGATE_NAME, proc, agg,
 							  numargs, argtypes);
@@ -407,6 +298,123 @@ early_exit:
 	}
 
 	PG_RETURN_VOID();
+}
+
+
+/*
+ * AggregateHelperOid returns helper aggregate oid for given proc's HeapTuple
+ */
+Oid
+AggregateHelperOid(char *helperName, HeapTuple proctup, int *numargs, Oid **argtypes)
+{
+	char **argnames = NULL;
+	char *argmodes = NULL;
+	FuncCandidateList clist;
+
+	*numargs = get_func_arg_info(proctup, argtypes, &argnames, &argmodes);
+	clist = FuncnameGetCandidates(list_make2(makeString("citus"), makeString(
+												 helperName)), *numargs + 1,
+								  NIL, false, false, true);
+
+	for (; clist; clist = clist->next)
+	{
+		if (clist->args[0] == OIDOID && memcmp(clist->args + 1, argtypes, *numargs *
+											   sizeof(Oid)) == 0)
+		{
+			return clist->oid;
+		}
+	}
+
+	return InvalidOid;
+}
+
+
+/*
+ * AggregateHelperName returns helper function name for a given aggregate.
+ */
+void appendStringInfoAggregateHelperSuffix(StringInfo helperSuffix, Form_pg_proc proc, Form_pg_aggregate agg)
+{
+	switch (proc->proparallel)
+	{
+		case PROPARALLEL_SAFE:
+		{
+			appendStringInfoString(helperSuffix, "_ps");
+			break;
+		}
+
+		case PROPARALLEL_RESTRICTED:
+		{
+			appendStringInfoString(helperSuffix, "_pr");
+			break;
+		}
+
+		case PROPARALLEL_UNSAFE:
+		{
+			appendStringInfoString(helperSuffix, "_pu");
+			break;
+		}
+	}
+
+	if (agg->aggfinalfn != InvalidOid)
+	{
+		switch (agg->aggfinalmodify)
+		{
+			case AGGMODIFY_READ_ONLY:
+			{
+				appendStringInfoString(helperSuffix, "_ro");
+				break;
+			}
+
+			case AGGMODIFY_SHAREABLE:
+			{
+				appendStringInfoString(helperSuffix, "_rs");
+				break;
+			}
+
+			case AGGMODIFY_READ_WRITE:
+			{
+				appendStringInfoString(helperSuffix, "_rw");
+				break;
+			}
+		}
+
+		if (agg->aggfinalextra)
+		{
+			appendStringInfoString(helperSuffix, "_fx");
+		}
+	}
+
+	if (agg->aggmfinalfn != InvalidOid)
+	{
+		appendStringInfoString(helperSuffix, "_m");
+
+		switch (agg->aggmfinalmodify)
+		{
+			case AGGMODIFY_READ_ONLY:
+			{
+				appendStringInfoString(helperSuffix, "_ro");
+				break;
+			}
+
+			case AGGMODIFY_SHAREABLE:
+			{
+				appendStringInfoString(helperSuffix, "_rs");
+				break;
+			}
+
+			case AGGMODIFY_READ_WRITE:
+			{
+				appendStringInfoString(helperSuffix, "_rw");
+				break;
+			}
+		}
+
+		if (agg->aggmfinalextra)
+		{
+			appendStringInfoString(helperSuffix, "_fx");
+		}
+	}
+
 }
 
 
