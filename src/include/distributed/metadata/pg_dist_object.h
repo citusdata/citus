@@ -34,7 +34,8 @@ typedef struct FormData_pg_dist_object
 	text[] object_arguments;
 
 	uint32 distribution_argument_index; /* only valid for distributed functions/procedures */
-	uint32 colocationid;            /* only valid for distributed functions/procedures */
+	uint32 colocationid;                /* only valid for distributed functions/procedures */
+	uint32 aggregation_strategy;        /* only valid for distributed aggregates */
 #endif
 } FormData_pg_dist_object;
 
@@ -58,5 +59,12 @@ typedef FormData_pg_dist_object *Form_pg_dist_object;
 #define Anum_pg_dist_object_object_args 6
 #define Anum_pg_dist_object_distribution_argument_index 7
 #define Anum_pg_dist_object_colocationid 8
+#define Anum_pg_dist_object_aggregation_strategy 9
+
+/*
+ * Values for aggregation_strategy
+ */
+#define AGGREGATION_STRATEGY_NONE 0
+#define AGGREGATION_STRATEGY_COMBINE 1
 
 #endif /* PG_DIST_OBJECT_H */

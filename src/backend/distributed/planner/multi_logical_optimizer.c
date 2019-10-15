@@ -24,6 +24,7 @@
 #include "catalog/pg_proc.h"
 #include "catalog/pg_type.h"
 #include "commands/extension.h"
+#include "distributed/metadata/pg_dist_object.h"
 #include "distributed/citus_nodes.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/colocation_utils.h"
@@ -253,7 +254,7 @@ static List * WorkerAggregateExpressionList(Aggref *originalAggregate,
 static AggregateType GetAggregateType(Oid aggFunctionId);
 static Oid AggregateArgumentType(Aggref *aggregate);
 static bool AggregateEnabledCustom(Oid aggregateOid);
-static Oid AggregateFunctionOidWithoutInput(const char *functionName);
+static Oid AggregateFunctionHelperOid(const char *helperPrefix, Oid aggOid);
 static Oid AggregateFunctionOid(const char *functionName, Oid inputType);
 static Oid TypeOid(Oid schemaId, const char *typeName);
 static SortGroupClause * CreateSortGroupClause(Var *column);
@@ -1867,8 +1868,8 @@ MasterAggregateExpression(Aggref *originalAggregate,
 			Var *column = NULL;
 			List *aggArguments = NIL;
 			Aggref *newMasterAggregate = NULL;
-			Oid coordCombineId = AggregateFunctionOidWithoutInput(
-				COORD_COMBINE_AGGREGATE_NAME);
+			Oid coordCombineId = AggregateFunctionHelperOid(
+				COORD_COMBINE_AGGREGATE_NAME, originalAggregate->aggfnoid);
 
 			Oid workerReturnType = BYTEAOID;
 			int32 workerReturnTypeMod = -1;
@@ -2947,8 +2948,8 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 			Aggref *newWorkerAggregate = NULL;
 			List *aggArguments = NIL;
 			ListCell *originalAggArgCell;
-			Oid workerPartialId = AggregateFunctionOidWithoutInput(
-				WORKER_PARTIAL_AGGREGATE_NAME);
+			Oid workerPartialId = AggregateFunctionHelperOid(
+				WORKER_PARTIAL_AGGREGATE_NAME, originalAggregate->aggfnoid);
 
 			aggparam = makeConst(REGPROCEDUREOID, -1, InvalidOid, sizeof(Oid),
 								 ObjectIdGetDatum(originalAggregate->aggfnoid), false,
@@ -3067,7 +3068,8 @@ AggregateEnabledCustom(Oid aggregateOid)
 	DistObjectCacheEntry *cacheEntry = LookupDistObjectCacheEntry(AggregateRelationId,
 																  aggregateOid, 0);
 
-	return cacheEntry != NULL;
+	return cacheEntry != NULL && cacheEntry->aggregationStrategy ==
+		   AGGREGATION_STRATEGY_COMBINE;
 }
 
 
@@ -3133,12 +3135,10 @@ AggregateFunctionOid(const char *functionName, Oid inputType)
 
 
 /*
- * AggregateFunctionOid performs a reverse lookup on aggregate function name,
- * and returns the corresponding aggregate function oid for the given function
- * name and input type.
+ * AggregateFunctionHelperOid finds the aggregate helper for a given aggregate.
  */
 static Oid
-AggregateFunctionOidWithoutInput(const char *functionName)
+AggregateFunctionHelperOid(const char *helperPrefix, Oid aggOid)
 {
 	Oid functionOid = InvalidOid;
 	Relation procRelation = NULL;

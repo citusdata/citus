@@ -114,6 +114,8 @@ typedef struct DistObjectCacheEntry
 
 	int distributionArgIndex;
 	int colocationId;
+
+	int aggregationStrategy;
 } DistObjectCacheEntry;
 
 

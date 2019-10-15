@@ -1,5 +1,12 @@
 SET search_path = 'pg_catalog';
 
+CREATE FUNCTION mark_aggregate_for_distributed_execution(internal)
+RETURNS void
+AS 'MODULE_PATHNAME'
+LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
+
+SET search_path = 'citus';
+
 CREATE FUNCTION citus_stype_serialize(internal)
 RETURNS bytea
 AS 'MODULE_PATHNAME'
@@ -35,31 +42,6 @@ RETURNS anyelement
 AS 'MODULE_PATHNAME'
 LANGUAGE C PARALLEL SAFE;
 
--- select worker_partial_agg(agg, ...)
--- equivalent to
--- select serialize_stype(agg_without_ffunc(...))
-CREATE AGGREGATE worker_partial_agg(oid, anyelement) (
-	STYPE = internal,
-	SFUNC = worker_partial_agg_sfunc,
-	FINALFUNC = worker_partial_agg_ffunc,
-	COMBINEFUNC = citus_stype_combine,
-	SERIALFUNC = citus_stype_serialize,
-	DESERIALFUNC = citus_stype_deserialize,
-	PARALLEL = SAFE
-);
-
--- select coord_combine_agg(agg, col)
--- equivalent to
--- select agg_ffunc(agg_combine(col))
-CREATE AGGREGATE coord_combine_agg(oid, bytea, anyelement) (
-	STYPE = internal,
-	SFUNC = coord_combine_agg_sfunc,
-	FINALFUNC = coord_combine_agg_ffunc,
-	FINALFUNC_EXTRA,
-	COMBINEFUNC = citus_stype_combine,
-	SERIALFUNC = citus_stype_serialize,
-	DESERIALFUNC = citus_stype_deserialize,
-	PARALLEL = SAFE
-);
+ALTER TABLE pg_dist_object ADD aggregation_strategy int;
 
 RESET search_path;

@@ -998,6 +998,8 @@ LookupDistObjectCacheEntry(Oid classid, Oid objid, int32 objsubid)
 									 1]);
 		cacheEntry->colocationId =
 			DatumGetInt32(datumArray[Anum_pg_dist_object_colocationid - 1]);
+		cacheEntry->aggregationStrategy =
+			DatumGetInt32(datumArray[Anum_pg_dist_object_aggregation_strategy - 1]);
 	}
 	else
 	{
