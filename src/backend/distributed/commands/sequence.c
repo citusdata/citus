@@ -4,7 +4,7 @@
  *     This file contains implementation of CREATE and ALTER SEQUENCE
  *     statement functions to run in a distributed setting
  *
- * Copyright (c) 2018, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */

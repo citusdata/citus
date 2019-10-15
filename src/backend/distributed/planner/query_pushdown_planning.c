@@ -14,7 +14,7 @@
  * subquery or function RTEs. For modify queries, Citus try to use query pushdown
  * planner if the query accesses multiple tables.
  *
- * Copyright (c) 2018, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */

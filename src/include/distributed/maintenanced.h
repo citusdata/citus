@@ -4,7 +4,7 @@
  *	  Background worker run for each citus using database in a postgres
  *    cluster.
  *
- * Copyright (c) 2017, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */

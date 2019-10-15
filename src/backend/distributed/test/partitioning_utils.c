@@ -5,7 +5,7 @@
  * This file contains functions to test partitioning utility functions
  * implemented in Citus.
  *
- * Copyright (c) 2017, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */

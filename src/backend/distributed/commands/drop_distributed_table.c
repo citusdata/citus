@@ -3,7 +3,7 @@
  * drop_distributed_table.c
  *	  Routines related to dropping distributed relations from a trigger.
  *
- * Copyright (c) 2012-2016, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */

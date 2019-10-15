@@ -9,7 +9,7 @@
  *   are acccesed inside a transaction, Citus should detect and act
  *   accordingly.
  *
- * Copyright (c) 2018, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */

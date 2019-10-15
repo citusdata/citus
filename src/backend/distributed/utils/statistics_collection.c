@@ -3,7 +3,7 @@
  * statistics_collection.c
  *	  Anonymous reports and statistics collection.
  *
- * Copyright (c) 2017, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */

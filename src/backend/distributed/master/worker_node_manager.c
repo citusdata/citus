@@ -4,7 +4,7 @@
  *	  Routines for reading worker nodes from membership file, and allocating
  *	  candidate nodes for shard placement.
  *
- * Copyright (c) 2012-2016, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  * $Id$
  *

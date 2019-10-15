@@ -3,7 +3,7 @@
  * tuplestore.h
  *	  Utilities regarding calls to PG functions
  *
- * Copyright (c) 2012-2018, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *-------------------------------------------------------------------------
  */
 

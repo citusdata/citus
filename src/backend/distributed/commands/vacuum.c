@@ -3,7 +3,7 @@
  * vacuum.c
  *    Commands for vacuuming distributed tables.
  *
- * Copyright (c) 2018, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */

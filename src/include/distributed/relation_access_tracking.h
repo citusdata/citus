@@ -3,7 +3,7 @@
  *
  * Function declartions for transaction access tracking.
  *
- * Copyright (c) 2018, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  */
 
 #ifndef RELATION_ACCESS_TRACKING_H_

@@ -5,7 +5,7 @@
  *	This file contains functions for monitoring the distributed transactions
  *	accross the cluster.
  *
- * Copyright (c) 2018, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */

@@ -4,7 +4,7 @@
  *
  * Routines for synchronizing metadata to all workers.
  *
- * Copyright (c) 2016, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  * $Id$
  *

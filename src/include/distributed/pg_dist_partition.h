@@ -7,7 +7,7 @@
  * partitioning for (smaller physical tables that we partition data to are
  * handled in another system catalog).
  *
- * Copyright (c) 2012-2016, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */

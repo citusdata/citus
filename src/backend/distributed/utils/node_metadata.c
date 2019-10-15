@@ -2,7 +2,7 @@
  * node_metadata.c
  *	  Functions that operate on pg_dist_node
  *
- * Copyright (c) 2012-2016, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  */
 #include "postgres.h"
 #include "miscadmin.h"

@@ -3,7 +3,7 @@
  * index.c
  *    Commands for creating and altering indices on distributed tables.
  *
- * Copyright (c) 2018, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */

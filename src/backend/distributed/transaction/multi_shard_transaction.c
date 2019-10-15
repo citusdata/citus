@@ -4,7 +4,7 @@
  *     This file contains functions for managing 1PC or 2PC transactions
  *     across many shard placements.
  *
- * Copyright (c) 2016, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */

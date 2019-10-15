@@ -4,7 +4,7 @@
  *	  Type and function declarations used for handling the distribution
  *    column of distributed tables.
  *
- * Copyright (c) 2016, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  * $Id$
  *

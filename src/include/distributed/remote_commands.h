@@ -3,7 +3,7 @@
  * remote_commands.h
  *	  Helpers to execute commands on remote nodes, over libpq.
  *
- * Copyright (c) 2016, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */

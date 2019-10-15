@@ -5,7 +5,7 @@
  * Routines for recovering two-phase commits started by this node if a
  * failure occurs between prepare and commit/abort.
  *
- * Copyright (c) 2016, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  * $Id$
  *

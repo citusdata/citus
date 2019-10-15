@@ -3,7 +3,7 @@
  * transaction_recovery.h
  *	  Type and function declarations used in recovering 2PC transactions.
  *
- * Copyright (c) 2016, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */

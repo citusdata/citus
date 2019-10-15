@@ -3,7 +3,7 @@
  * connection_management.h
  *   Central management of connections and their life-cycle
  *
- * Copyright (c) 2016, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */

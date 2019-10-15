@@ -3,7 +3,7 @@
  *
  * Routines roughly equivalent to postgres' util/clauses.
  *
- * Copyright (c) 2016-2016, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  */
 
 #include "postgres.h"

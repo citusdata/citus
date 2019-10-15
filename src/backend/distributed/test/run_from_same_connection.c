@@ -6,7 +6,7 @@
  * same connection. UDFs will be used to test MX functionalities in isolation
  * tests.
  *
- * Copyright (c) 2018, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */

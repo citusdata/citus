@@ -3,7 +3,7 @@
  * version_compat.h
  *	  Compatibility macros for writing code agnostic to PostgreSQL versions
  *
- * Copyright (c) 2017, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */

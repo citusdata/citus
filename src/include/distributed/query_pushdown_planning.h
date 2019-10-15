@@ -1,7 +1,7 @@
 /*-------------------------------------------------------------------------
  * query_pushdown_planning.h
  *
- * Copyright (c) 2018, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *    Function declarations used in query pushdown logic.
  *
  *-------------------------------------------------------------------------

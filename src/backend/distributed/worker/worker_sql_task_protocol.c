@@ -4,7 +4,7 @@
  *
  * Routines for executing SQL tasks during task-tracker execution.
  *
- * Copyright (c) 2012-2018, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */

@@ -3,7 +3,7 @@
  * citus_clauses.h
  *  Routines roughly equivalent to postgres' util/clauses.
  *
- * Copyright (c) 2012-2016, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */

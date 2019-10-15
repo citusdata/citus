@@ -5,7 +5,7 @@
  * This file contains functions to exercise progress monitoring functionality
  * within Citus.
  *
- * Copyright (c) 2017, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */

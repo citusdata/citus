@@ -7,7 +7,7 @@
  * nodes; and when partitioning data, we follow Hadoop's naming conventions as
  * much as possible.
  *
- * Copyright (c) 2012-2016, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  * $Id$
  *

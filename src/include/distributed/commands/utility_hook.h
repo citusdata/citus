@@ -3,7 +3,7 @@
  * utility_hook.h
  *	  Citus utility hook and related functionality.
  *
- * Copyright (c) 2012-2016, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *-------------------------------------------------------------------------
  */
 

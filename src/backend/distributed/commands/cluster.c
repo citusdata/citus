@@ -3,7 +3,7 @@
  * cluster.c
  *    Commands for CLUSTER statement
  *
- * Copyright (c) 2018, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */
