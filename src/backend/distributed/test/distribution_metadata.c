@@ -27,6 +27,7 @@
 #include "distributed/multi_join_order.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/pg_dist_shard.h"
+#include "distributed/query_utils.h"
 #include "distributed/resource_lock.h"
 #include "lib/stringinfo.h"
 #include "nodes/pg_list.h"

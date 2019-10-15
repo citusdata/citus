@@ -39,6 +39,7 @@
 #include "distributed/listutils.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/query_pushdown_planning.h"
+#include "distributed/query_utils.h"
 #include "distributed/relation_restriction_equivalence.h"
 #include "distributed/relay_utility.h"
 #include "distributed/resource_lock.h"
