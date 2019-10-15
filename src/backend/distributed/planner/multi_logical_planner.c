@@ -28,6 +28,7 @@
 #include "distributed/multi_physical_planner.h"
 #include "distributed/relation_restriction_equivalence.h"
 #include "distributed/query_pushdown_planning.h"
+#include "distributed/query_utils.h"
 #include "distributed/multi_router_planner.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/version_compat.h"
@@ -1178,34 +1179,6 @@ HasComplexRangeTableType(Query *queryTree)
 
 
 /*
- * ExtractRangeTableIndexWalker walks over a join tree, and finds all range
- * table indexes in that tree.
- */
-bool
-ExtractRangeTableIndexWalker(Node *node, List **rangeTableIndexList)
-{
-	bool walkerResult = false;
-	if (node == NULL)
-	{
-		return false;
-	}
-
-	if (IsA(node, RangeTblRef))
-	{
-		int rangeTableIndex = ((RangeTblRef *) node)->rtindex;
-		(*rangeTableIndexList) = lappend_int(*rangeTableIndexList, rangeTableIndex);
-	}
-	else
-	{
-		walkerResult = expression_tree_walker(node, ExtractRangeTableIndexWalker,
-											  rangeTableIndexList);
-	}
-
-	return walkerResult;
-}
-
-
-/*
  * WhereClauseList walks over the FROM expression in the query tree, and builds
  * a list of all clauses from the expression tree. The function checks for both
  * implicitly and explicitly defined clauses, but only selects INNER join
@@ -1964,105 +1937,6 @@ FindNodesOfType(MultiNode *node, int type)
 	}
 
 	return nodeList;
-}
-
-
-/*
- * ExtractRangeTableRelationWalker gathers all range table relation entries
- * in a query.
- */
-bool
-ExtractRangeTableRelationWalker(Node *node, List **rangeTableRelationList)
-{
-	bool walkIsComplete = false;
-
-	if (node == NULL)
-	{
-		return false;
-	}
-
-	if (IsA(node, RangeTblEntry))
-	{
-		RangeTblEntry *rangeTable = (RangeTblEntry *) node;
-
-		if (rangeTable->rtekind == RTE_RELATION && rangeTable->relkind != RELKIND_VIEW)
-		{
-			(*rangeTableRelationList) = lappend(*rangeTableRelationList, rangeTable);
-
-			walkIsComplete = false;
-		}
-	}
-	else if (IsA(node, Query))
-	{
-		walkIsComplete = query_tree_walker((Query *) node,
-										   ExtractRangeTableRelationWalker,
-										   rangeTableRelationList,
-										   QTW_EXAMINE_RTES_BEFORE);
-	}
-	else
-	{
-		walkIsComplete = expression_tree_walker(node, ExtractRangeTableRelationWalker,
-												rangeTableRelationList);
-	}
-
-	return walkIsComplete;
-}
-
-
-/*
- * ExtractRangeTableEntryWalker walks over a query tree, and finds all range
- * table entries. For recursing into the query tree, this function uses the
- * query tree walker since the expression tree walker doesn't recurse into
- * sub-queries.
- */
-bool
-ExtractRangeTableEntryWalker(Node *node, List **rangeTableList)
-{
-	bool walkIsComplete = false;
-	if (node == NULL)
-	{
-		return false;
-	}
-
-	if (IsA(node, RangeTblEntry))
-	{
-		RangeTblEntry *rangeTable = (RangeTblEntry *) node;
-		(*rangeTableList) = lappend(*rangeTableList, rangeTable);
-	}
-	else if (IsA(node, Query))
-	{
-		Query *query = (Query *) node;
-
-		/*
-		 * Since we're only interested in range table entries, we only descend
-		 * into all parts of the query when it is necessary. Otherwise, it is
-		 * sufficient to descend into range table list since its the only part
-		 * of the query that could contain range table entries.
-		 */
-		if (query->hasSubLinks || query->cteList || query->setOperations)
-		{
-			/* descend into all parts of the query */
-			walkIsComplete = query_tree_walker((Query *) node,
-											   ExtractRangeTableEntryWalker,
-											   rangeTableList,
-											   QTW_EXAMINE_RTES_BEFORE);
-		}
-		else
-		{
-			/* descend only into RTEs */
-			walkIsComplete = range_table_walker(query->rtable,
-												ExtractRangeTableEntryWalker,
-												rangeTableList,
-												QTW_EXAMINE_RTES_BEFORE);
-		}
-	}
-	else
-	{
-		walkIsComplete = expression_tree_walker(node, ExtractRangeTableEntryWalker,
-												rangeTableList);
-	}
-
-	return walkIsComplete;
 }
 
 
