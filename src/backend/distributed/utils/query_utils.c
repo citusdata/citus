@@ -40,8 +40,12 @@ ExtractRangeTableList(Node *node, ExtractRangeTableWalkerContext *context)
 	{
 		RangeTblEntry *rangeTable = (RangeTblEntry *) node;
 
-		if (walkerMode == EXTRACT_ALL_ENTRIES ||
-			(rangeTable->rtekind == RTE_RELATION && rangeTable->relkind != RELKIND_VIEW))
+		/* make sure that we are extracting only relation entries if walkerMode is set to EXTRACT_RELATION_ENTRIES*/
+		if (walkerMode == EXTRACT_ALL_ENTRIES || (walkerMode ==
+												  EXTRACT_RELATION_ENTRIES &&
+												  rangeTable->rtekind == RTE_RELATION &&
+												  rangeTable->relkind ==
+												  RELKIND_RELATION))
 		{
 			(*rangeTableRelationList) = lappend(*rangeTableRelationList, rangeTable);
 		}
