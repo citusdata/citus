@@ -14,6 +14,9 @@
 #ifndef WORKER_MANAGER_H
 #define WORKER_MANAGER_H
 
+#include "postgres.h"
+
+#include "storage/lockdefs.h"
 #include "nodes/pg_list.h"
 
 

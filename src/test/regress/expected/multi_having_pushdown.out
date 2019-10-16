@@ -26,11 +26,11 @@ EXPLAIN (COSTS FALSE)
 --------------------------------------------------------------------------------------------------------
  Limit
    ->  Sort
-         Sort Key: sum((sum(remote_scan.revenue))) DESC, remote_scan.l_orderkey
+         Sort Key: (sum(remote_scan.revenue)) DESC, remote_scan.l_orderkey
          ->  HashAggregate
                Group Key: remote_scan.l_orderkey
                Filter: (sum(remote_scan.worker_column_3) > '24'::numeric)
-               ->  Custom Scan (Citus Real-Time)
+               ->  Custom Scan (Citus Adaptive)
                      Task Count: 4
                      Tasks Shown: One of 4
                      ->  Task
@@ -50,15 +50,15 @@ EXPLAIN (COSTS FALSE)
     FROM lineitem
     GROUP BY l_orderkey HAVING sum(l_quantity) > 24
     ORDER BY 2 DESC, 1 ASC LIMIT 3;
-                                   QUERY PLAN                                   
---------------------------------------------------------------------------------
+                                 QUERY PLAN                                  
+-----------------------------------------------------------------------------
  Limit
    ->  Sort
-         Sort Key: sum((sum(remote_scan.revenue))) DESC, remote_scan.l_orderkey
+         Sort Key: (sum(remote_scan.revenue)) DESC, remote_scan.l_orderkey
          ->  HashAggregate
                Group Key: remote_scan.l_orderkey
                Filter: (sum(remote_scan.worker_column_3) > '24'::numeric)
-               ->  Custom Scan (Citus Real-Time)
+               ->  Custom Scan (Citus Adaptive)
                      Task Count: 2
                      Tasks Shown: One of 2
                      ->  Task
@@ -78,11 +78,11 @@ EXPLAIN (COSTS FALSE)
 ------------------------------------------------------------------------------------
  Limit
    ->  Sort
-         Sort Key: sum((sum(remote_scan.revenue))) DESC, remote_scan.l_shipmode
+         Sort Key: (sum(remote_scan.revenue)) DESC, remote_scan.l_shipmode
          ->  HashAggregate
                Group Key: remote_scan.l_shipmode
                Filter: (sum(remote_scan.worker_column_3) > '24'::numeric)
-               ->  Custom Scan (Citus Real-Time)
+               ->  Custom Scan (Citus Adaptive)
                      Task Count: 4
                      Tasks Shown: One of 4
                      ->  Task
@@ -102,11 +102,11 @@ EXPLAIN (COSTS FALSE)
 --------------------------------------------------------------------------------------------------------------------
  Limit
    ->  Sort
-         Sort Key: sum((sum(remote_scan.revenue))) DESC, remote_scan.l_shipmode, remote_scan.l_orderkey
+         Sort Key: (sum(remote_scan.revenue)) DESC, remote_scan.l_shipmode, remote_scan.l_orderkey
          ->  HashAggregate
                Group Key: remote_scan.l_shipmode, remote_scan.l_orderkey
                Filter: (sum(remote_scan.worker_column_4) > '24'::numeric)
-               ->  Custom Scan (Citus Real-Time)
+               ->  Custom Scan (Citus Adaptive)
                      Task Count: 4
                      Tasks Shown: One of 4
                      ->  Task
@@ -131,11 +131,11 @@ EXPLAIN (COSTS FALSE)
 -----------------------------------------------------------------------------------------------------------------------------------
  Limit
    ->  Sort
-         Sort Key: sum((sum(remote_scan.revenue))) DESC
+         Sort Key: (sum(remote_scan.revenue)) DESC
          ->  HashAggregate
                Group Key: remote_scan.worker_column_2, remote_scan.worker_column_3, remote_scan.worker_column_4
                Filter: (sum(remote_scan.worker_column_5) > '24'::numeric)
-               ->  Custom Scan (Citus Real-Time)
+               ->  Custom Scan (Citus Adaptive)
                      Task Count: 4
                      Tasks Shown: One of 4
                      ->  Task
@@ -163,11 +163,11 @@ EXPLAIN (COSTS FALSE)
 ------------------------------------------------------------------------------------------------------
  Limit
    ->  Sort
-         Sort Key: sum((sum(remote_scan.revenue))) DESC
+         Sort Key: (sum(remote_scan.revenue)) DESC
          ->  HashAggregate
                Group Key: remote_scan.worker_column_2, remote_scan.worker_column_3
                Filter: (sum(remote_scan.worker_column_4) > '24'::numeric)
-               ->  Custom Scan (Citus Real-Time)
+               ->  Custom Scan (Citus Adaptive)
                      Task Count: 4
                      Tasks Shown: One of 4
                      ->  Task

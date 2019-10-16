@@ -63,7 +63,7 @@ EXPLAIN (COSTS FALSE, FORMAT TEXT)
 	SELECT l_quantity, count(*) count_quantity FROM lineitem_mx
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
 Sort
-  Sort Key: COALESCE((pg_catalog.sum((COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint))))::bigint, '0'::bigint), remote_scan.l_quantity
+  Sort Key: (COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint)), remote_scan.l_quantity
   ->  HashAggregate
         Group Key: remote_scan.l_quantity
         ->  Custom Scan (Citus Adaptive)
@@ -83,7 +83,7 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
     "Plan": {
       "Node Type": "Sort",
       "Parallel Aware": false,
-      "Sort Key": ["COALESCE((pg_catalog.sum((COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint))))::bigint, '0'::bigint)", "remote_scan.l_quantity"],
+      "Sort Key": ["(COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint))", "remote_scan.l_quantity"],
       "Plans": [
         {
           "Node Type": "Aggregate",
@@ -155,7 +155,7 @@ EXPLAIN (COSTS FALSE, FORMAT XML)
       <Node-Type>Sort</Node-Type>
       <Parallel-Aware>false</Parallel-Aware>
       <Sort-Key>
-        <Item>COALESCE((pg_catalog.sum((COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint))))::bigint, '0'::bigint)</Item>
+        <Item>(COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint))</Item>
         <Item>remote_scan.l_quantity</Item>
       </Sort-Key>
       <Plans>
@@ -229,7 +229,7 @@ EXPLAIN (COSTS FALSE, FORMAT YAML)
     Node Type: "Sort"
     Parallel Aware: false
     Sort Key: 
-      - "COALESCE((pg_catalog.sum((COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint))))::bigint, '0'::bigint)"
+      - "(COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint))"
       - "remote_scan.l_quantity"
     Plans: 
       - Node Type: "Aggregate"
@@ -270,7 +270,7 @@ EXPLAIN (COSTS FALSE, FORMAT TEXT)
 	SELECT l_quantity, count(*) count_quantity FROM lineitem_mx
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
 Sort
-  Sort Key: COALESCE((pg_catalog.sum((COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint))))::bigint, '0'::bigint), remote_scan.l_quantity
+  Sort Key: (COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint)), remote_scan.l_quantity
   ->  HashAggregate
         Group Key: remote_scan.l_quantity
         ->  Custom Scan (Citus Adaptive)

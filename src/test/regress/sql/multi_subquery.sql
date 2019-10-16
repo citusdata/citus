@@ -22,11 +22,11 @@ FROM
 
 -- Update metadata in order to make all shards equal
 -- note that the table is created on multi_insert_select_create_table.sql
-UPDATE 
-	pg_dist_shard 
-SET 
-	shardmaxvalue = '14947' 
-WHERE 
+UPDATE
+	pg_dist_shard
+SET
+	shardmaxvalue = '14947'
+WHERE
 	shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'orders_subquery'::regclass ORDER BY shardid DESC LIMIT 1);
 
 SET client_min_messages TO DEBUG1;
@@ -272,46 +272,46 @@ LIMIT 10;
 SELECT DISTINCT ON (t1.user_id) t1.user_id, t2.value_1, t2.value_2, t2.value_3
 FROM events_table t1
 LEFT JOIN users_reference_table t2 ON t1.user_id = trunc(t2.user_id)
-ORDER BY 1 DESC, 2 DESC, 3 DESC, 4 DESC 
+ORDER BY 1 DESC, 2 DESC, 3 DESC, 4 DESC
 LIMIT 5;
 
 -- outer joins on reference tables with simple expressions should work
 SELECT DISTINCT ON (t1.user_id) t1.user_id, t2.value_1, t2.value_2, t2.value_3
 FROM events_table t1
 LEFT JOIN users_reference_table t2 ON t1.user_id > t2.user_id
-ORDER BY 1 DESC, 2 DESC, 3 DESC, 4 DESC 
+ORDER BY 1 DESC, 2 DESC, 3 DESC, 4 DESC
 LIMIT 5;
 
 -- outer joins on distributed tables with simple expressions should not work
 SELECT DISTINCT ON (t1.user_id) t1.user_id, t2.value_1, t2.value_2, t2.value_3
 FROM events_table t1
 LEFT JOIN users_table t2 ON t1.user_id > t2.user_id
-ORDER BY 1 DESC, 2 DESC, 3 DESC, 4 DESC 
+ORDER BY 1 DESC, 2 DESC, 3 DESC, 4 DESC
 LIMIT 5;
 
 -- outer joins on reference tables with expressions should work
 SELECT DISTINCT ON (t1.user_id) t1.user_id, t2.value_1, t2.value_2, t2.value_3
 FROM events_table t1
 LEFT JOIN users_reference_table t2 ON t1.user_id = (CASE WHEN t2.user_id > 3 THEN 3 ELSE t2.user_id END)
-ORDER BY 1 DESC, 2 DESC, 3 DESC, 4 DESC 
+ORDER BY 1 DESC, 2 DESC, 3 DESC, 4 DESC
 LIMIT 5;
 
 -- outer joins on distributed tables and reference tables with expressions should work
 SELECT DISTINCT ON (t1.user_id) t1.user_id, t2.value_1, t2.value_2, t2.value_3
- FROM 
+ FROM
  users_table t0 LEFT JOIN
  events_table t1  ON t0.user_id = t1.user_id
  LEFT JOIN users_reference_table t2 ON t1.user_id = trunc(t2.user_id)
- ORDER BY 1 DESC, 2 DESC, 3 DESC, 4 DESC 
+ ORDER BY 1 DESC, 2 DESC, 3 DESC, 4 DESC
  LIMIT 5;
 
 -- outer joins on distributed tables with expressions should not work
 SELECT DISTINCT ON (t1.user_id) t1.user_id, t2.value_1, t2.value_2, t2.value_3
- FROM 
+ FROM
  users_table t0 LEFT JOIN
  events_table t1  ON t0.user_id = trunc(t1.user_id)
  LEFT JOIN users_reference_table t2 ON t1.user_id = trunc(t2.user_id)
- ORDER BY 1 DESC, 2 DESC, 3 DESC, 4 DESC 
+ ORDER BY 1 DESC, 2 DESC, 3 DESC, 4 DESC
  LIMIT 5;
 
 -- outer joins as subqueries should work
@@ -329,7 +329,7 @@ LIMIT 5;
 SELECT DISTINCT ON (t1.user_id) t1.user_id, t2.value_1, t2.value_2, t2.value_3
 FROM events_table t1
 JOIN users_reference_table t2 ON t1.user_id = trunc(t2.user_id)
-ORDER BY 1 DESC, 2 DESC, 3 DESC, 4 DESC 
+ORDER BY 1 DESC, 2 DESC, 3 DESC, 4 DESC
 LIMIT 5;
 
 -- distinct queries work
@@ -466,6 +466,10 @@ FROM
 WHERE
 	unit_price > 1000 AND
 	unit_price < 10000;
+
+-- Check unsupported subqueries in target list
+SELECT (SELECT 1) FROM orders_subquery;
+SELECT sum((SELECT 1)) FROM orders_subquery;
 
 -- Check that if subquery is pulled, we don't error and run query properly.
 
@@ -780,7 +784,7 @@ GROUP BY
 	count_pay
 ORDER BY
 	count_pay;
-	
+
 -- Lateral join subquery pushdown
 -- set subquery_pushdown since there is limit in the query
 SET citus.subquery_pushdown to ON;

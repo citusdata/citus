@@ -223,7 +223,7 @@ ERROR:  Complex subqueries and CTEs are not supported when task_executor_type is
 -- subqueries are not supported in SELECT clause
 SELECT a.title AS name, (SELECT a2.id FROM articles_single_shard a2 WHERE a.id = a2.id  LIMIT 1)
 						 AS special_price FROM articles a;
-ERROR:  could not run distributed query with subquery outside the FROM and WHERE clauses
+ERROR:  could not run distributed query with subquery outside the FROM, WHERE and HAVING clauses
 HINT:  Consider using an equality filter on the distributed table's partition column.
 -- joins are not supported between local and distributed tables
 SELECT title, authors.name FROM authors, articles WHERE authors.id = articles.author_id;

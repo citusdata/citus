@@ -30,6 +30,7 @@
 #include "optimizer/cost.h"
 #include "optimizer/planmain.h"
 #include "optimizer/tlist.h"
+#include "optimizer/subselect.h"
 #if PG_VERSION_NUM >= 120000
 #include "optimizer/optimizer.h"
 #else
@@ -46,14 +47,14 @@
 static List * MasterTargetList(List *workerTargetList);
 static PlannedStmt * BuildSelectStatement(Query *masterQuery, List *masterTargetList,
 										  CustomScan *remoteScan);
-static Agg * BuildAggregatePlan(Query *masterQuery, Plan *subPlan);
+static Agg * BuildAggregatePlan(PlannerInfo *root, Query *masterQuery, Plan *subPlan);
 static bool HasDistinctAggregate(Query *masterQuery);
 static bool UseGroupAggregateWithHLL(Query *masterQuery);
 static bool QueryContainsAggregateWithHLL(Query *query);
 static Plan * BuildDistinctPlan(Query *masterQuery, Plan *subPlan);
-static List * PrepareTargetListForNextPlan(List *targetList);
 static Agg * makeAggNode(List *groupClauseList, List *havingQual,
 						 AggStrategy aggrStrategy, List *queryTargetList, Plan *subPlan);
+static void FinalizeStatement(PlannerInfo *root, PlannedStmt *stmt, Plan *topLevelPlan);
 
 
 /*
@@ -136,12 +137,21 @@ static PlannedStmt *
 BuildSelectStatement(Query *masterQuery, List *masterTargetList, CustomScan *remoteScan)
 {
 	PlannedStmt *selectStatement = NULL;
-	RangeTblEntry *customScanRangeTableEntry = NULL;
 	Agg *aggregationPlan = NULL;
 	Plan *topLevelPlan = NULL;
+	List *sortClauseList = copyObject(masterQuery->sortClause);
 	ListCell *targetEntryCell = NULL;
 	List *columnNameList = NULL;
-	List *sortClauseList = copyObject(masterQuery->sortClause);
+	RangeTblEntry *customScanRangeTableEntry = NULL;
+
+	PlannerGlobal *glob = makeNode(PlannerGlobal);
+	PlannerInfo *root = makeNode(PlannerInfo);
+	root->parse = masterQuery;
+	root->glob = glob;
+	root->query_level = 1;
+	root->planner_cxt = CurrentMemoryContext;
+	root->wt_param_id = -1;
+
 
 	/* (1) make PlannedStmt and set basic information */
 	selectStatement = makeNode(PlannedStmt);
@@ -152,29 +162,29 @@ BuildSelectStatement(Query *masterQuery, List *masterTargetList, CustomScan *rem
 	/* top level select query should have only one range table entry */
 	Assert(list_length(masterQuery->rtable) == 1);
 
-	/* compute column names for the custom range table entry */
-	foreach(targetEntryCell, masterTargetList)
-	{
-		TargetEntry *targetEntry = lfirst(targetEntryCell);
-		columnNameList = lappend(columnNameList, makeString(targetEntry->resname));
-	}
-
-	customScanRangeTableEntry = RemoteScanRangeTableEntry(columnNameList);
-
-	/* set the single element range table list */
-	selectStatement->rtable = list_make1(customScanRangeTableEntry);
+	remoteScan->custom_scan_tlist = masterTargetList;
 
 	/* (2) add an aggregation plan if needed */
 	if (masterQuery->hasAggs || masterQuery->groupClause)
 	{
 		remoteScan->scan.plan.targetlist = masterTargetList;
 
-		aggregationPlan = BuildAggregatePlan(masterQuery, &remoteScan->scan.plan);
+		aggregationPlan = BuildAggregatePlan(root, masterQuery, &remoteScan->scan.plan);
 		topLevelPlan = (Plan *) aggregationPlan;
+		selectStatement->planTree = topLevelPlan;
 	}
 	else
 	{
 		/* otherwise set the final projections on the scan plan directly */
+
+		/*
+		 * The masterTargetList contains all columns that we fetch from
+		 * the worker as non-resjunk.
+		 *
+		 * Here the output of the plan node determines the output of the query.
+		 * We therefore use the targetList of masterQuery, which has non-output
+		 * columns set as resjunk.
+		 */
 		remoteScan->scan.plan.targetlist = masterQuery->targetList;
 		topLevelPlan = &remoteScan->scan.plan;
 	}
@@ -252,10 +262,99 @@ BuildSelectStatement(Query *masterQuery, List *masterTargetList, CustomScan *rem
 		topLevelPlan = (Plan *) limitPlan;
 	}
 
-	/* (6) finally set our top level plan in the plan tree */
-	selectStatement->planTree = topLevelPlan;
+	/*
+	 * (6) set top level plan in the plantree and copy over some things from
+	 * PlannerInfo
+	 */
+	FinalizeStatement(root, selectStatement, topLevelPlan);
+
+	/*
+	 * (7) Replace rangetable with one with nice names to show in EXPLAIN plans
+	 */
+	foreach(targetEntryCell, masterTargetList)
+	{
+		TargetEntry *targetEntry = lfirst(targetEntryCell);
+		columnNameList = lappend(columnNameList, makeString(targetEntry->resname));
+	}
+
+	customScanRangeTableEntry = linitial(selectStatement->rtable);
+	customScanRangeTableEntry->eref = makeAlias("remote_scan", columnNameList);
 
 	return selectStatement;
+}
+
+
+/*
+ * FinalizeStatement sets some necessary fields on the final statement and its
+ * plan to make it work with the regular postgres executor. This code is copied
+ * almost verbatim from standard_planner in the PG source code.
+ *
+ * Modifications from original code:
+ * - Added SS_attach_initplans call
+ */
+static void
+FinalizeStatement(PlannerInfo *root, PlannedStmt *result, Plan *top_plan)
+{
+	ListCell *lp,
+			 *lr;
+	PlannerGlobal *glob = root->glob;
+
+	/* Taken from create_plan */
+	SS_attach_initplans(root, top_plan);
+
+	/*
+	 * If any Params were generated, run through the plan tree and compute
+	 * each plan node's extParam/allParam sets.  Ideally we'd merge this into
+	 * set_plan_references' tree traversal, but for now it has to be separate
+	 * because we need to visit subplans before not after main plan.
+	 */
+	if (glob->paramExecTypes != NIL)
+	{
+		Assert(list_length(glob->subplans) == list_length(glob->subroots));
+		forboth(lp, glob->subplans, lr, glob->subroots)
+		{
+			Plan *subplan = (Plan *) lfirst(lp);
+			PlannerInfo *subroot = lfirst_node(PlannerInfo, lr);
+
+			SS_finalize_plan(subroot, subplan);
+		}
+		SS_finalize_plan(root, top_plan);
+	}
+
+	/* final cleanup of the plan */
+	Assert(glob->finalrtable == NIL);
+	Assert(glob->finalrowmarks == NIL);
+	Assert(glob->resultRelations == NIL);
+	Assert(glob->rootResultRelations == NIL);
+
+	top_plan = set_plan_references(root, top_plan);
+
+	/* ... and the subplans (both regular subplans and initplans) */
+	Assert(list_length(glob->subplans) == list_length(glob->subroots));
+	forboth(lp, glob->subplans, lr, glob->subroots)
+	{
+		Plan *subplan = (Plan *) lfirst(lp);
+		PlannerInfo *subroot = lfirst_node(PlannerInfo, lr);
+
+		lfirst(lp) = set_plan_references(subroot, subplan);
+	}
+	result->transientPlan = glob->transientPlan;
+	result->dependsOnRole = glob->dependsOnRole;
+	result->parallelModeNeeded = glob->parallelModeNeeded;
+	result->planTree = top_plan;
+
+	result->rtable = glob->finalrtable;
+	result->resultRelations = glob->resultRelations;
+#if PG_VERSION_NUM < 120000
+	result->nonleafResultRelations = glob->nonleafResultRelations;
+#endif
+	result->rootResultRelations = glob->rootResultRelations;
+	result->subplans = glob->subplans;
+	result->rewindPlanIDs = glob->rewindPlanIDs;
+	result->rowMarks = glob->finalrowmarks;
+	result->relationOids = glob->relationOids;
+	result->invalItems = glob->invalItems;
+	result->paramExecTypes = glob->paramExecTypes;
 }
 
 
@@ -265,17 +364,13 @@ BuildSelectStatement(Query *masterQuery, List *masterTargetList, CustomScan *rem
  * the master node.
  */
 static Agg *
-BuildAggregatePlan(Query *masterQuery, Plan *subPlan)
+BuildAggregatePlan(PlannerInfo *root, Query *masterQuery, Plan *subPlan)
 {
 	Agg *aggregatePlan = NULL;
 	AggStrategy aggregateStrategy = AGG_PLAIN;
 	AggClauseCosts aggregateCosts;
 	List *aggregateTargetList = NIL;
 	List *groupColumnList = NIL;
-	List *aggregateColumnList = NIL;
-	List *havingColumnList = NIL;
-	List *columnList = NIL;
-	ListCell *columnCell = NULL;
 	Node *havingQual = NULL;
 	uint32 groupColumnCount = 0;
 
@@ -283,27 +378,31 @@ BuildAggregatePlan(Query *masterQuery, Plan *subPlan)
 	Assert(masterQuery->hasAggs || masterQuery->groupClause);
 
 	aggregateTargetList = masterQuery->targetList;
-	havingQual = masterQuery->havingQual;
+
+	/*
+	 * Replaces SubLink nodes with SubPlan nodes in the having section of the
+	 * query. (and creates the subplans in root->subplans)
+	 *
+	 * Would be nice if we could use masterQuery->hasSubLinks to only call
+	 * these when that is true. However, for some reason hasSubLinks is false
+	 * even when there are SubLinks.
+	 */
+	havingQual = SS_process_sublinks(root, masterQuery->havingQual, true);
+
+	/*
+	 * Right now this is not really needed, since we don't support correlated
+	 * subqueries anyway. Once we do calling this is critical to do right after
+	 * calling SS_process_sublinks, according to the postgres function comment.
+	 */
+	havingQual = SS_replace_correlation_vars(root, havingQual);
+
 
 	/* estimate aggregate execution costs */
 	memset(&aggregateCosts, 0, sizeof(AggClauseCosts));
-	get_agg_clause_costs(NULL, (Node *) aggregateTargetList, AGGSPLIT_SIMPLE,
+	get_agg_clause_costs(root, (Node *) aggregateTargetList, AGGSPLIT_SIMPLE,
 						 &aggregateCosts);
-	get_agg_clause_costs(NULL, (Node *) havingQual, AGGSPLIT_SIMPLE, &aggregateCosts);
 
-	/*
-	 * For upper level plans above the sequential scan, the planner expects the
-	 * table id (varno) to be set to OUTER_VAR.
-	 */
-	aggregateColumnList = pull_var_clause_default((Node *) aggregateTargetList);
-	havingColumnList = pull_var_clause_default(havingQual);
-
-	columnList = list_concat(aggregateColumnList, havingColumnList);
-	foreach(columnCell, columnList)
-	{
-		Var *column = (Var *) lfirst(columnCell);
-		column->varno = OUTER_VAR;
-	}
+	get_agg_clause_costs(root, (Node *) havingQual, AGGSPLIT_SIMPLE, &aggregateCosts);
 
 	groupColumnList = masterQuery->groupClause;
 	groupColumnCount = list_length(groupColumnList);
@@ -500,14 +599,6 @@ BuildDistinctPlan(Query *masterQuery, Plan *subPlan)
 		return subPlan;
 	}
 
-	/*
-	 * We need to adjust varno to OUTER_VAR, since planner expects that for upper
-	 * level plans above the sequential scan. We also need to convert aggregations
-	 * (if exists) to regular Vars since the aggregation would be applied by the
-	 * previous aggregation plan and we don't want them to be applied again.
-	 */
-	targetList = PrepareTargetListForNextPlan(targetList);
-
 	Assert(masterQuery->distinctClause);
 	Assert(!masterQuery->hasDistinctOn);
 
@@ -533,38 +624,6 @@ BuildDistinctPlan(Query *masterQuery, Plan *subPlan)
 	}
 
 	return distinctPlan;
-}
-
-
-/*
- * PrepareTargetListForNextPlan handles both regular columns to have right varno
- * and convert aggregates to regular Vars in the target list.
- */
-static List *
-PrepareTargetListForNextPlan(List *targetList)
-{
-	List *newtargetList = NIL;
-	ListCell *targetEntryCell = NULL;
-
-	foreach(targetEntryCell, targetList)
-	{
-		TargetEntry *targetEntry = lfirst(targetEntryCell);
-		TargetEntry *newTargetEntry = NULL;
-		Var *newVar = NULL;
-
-		Assert(IsA(targetEntry, TargetEntry));
-
-		/*
-		 * For upper level plans above the sequential scan, the planner expects the
-		 * table id (varno) to be set to OUTER_VAR.
-		 */
-		newVar = makeVarFromTargetEntry(OUTER_VAR, targetEntry);
-		newTargetEntry = flatCopyTargetEntry(targetEntry);
-		newTargetEntry->expr = (Expr *) newVar;
-		newtargetList = lappend(newtargetList, newTargetEntry);
-	}
-
-	return newtargetList;
 }
 
 

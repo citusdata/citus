@@ -68,7 +68,8 @@ bool SubqueryPushdown = false; /* is subquery pushdown enabled */
 /* Local functions forward declarations */
 static bool JoinTreeContainsSubqueryWalker(Node *joinTreeNode, void *context);
 static bool IsFunctionRTE(Node *node);
-static bool IsNodeQuery(Node *node);
+static bool IsNodeSubquery(Node *node);
+static bool IsNodeSubqueryOrParamExec(Node *node);
 static bool IsOuterJoinExpr(Node *node);
 static bool WindowPartitionOnDistributionColumn(Query *query);
 static DeferredErrorMessage * DeferErrorIfFromClauseRecurs(Query *queryTree);
@@ -126,7 +127,7 @@ ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery)
 	 * standard_planner() may replace the sublinks with anti/semi joins and
 	 * MultiPlanTree() cannot plan such queries.
 	 */
-	if (WhereClauseContainsSubquery(originalQuery))
+	if (WhereOrHavingClauseContainsSubquery(originalQuery))
 	{
 		return true;
 	}
@@ -259,14 +260,19 @@ JoinTreeContainsSubqueryWalker(Node *joinTreeNode, void *context)
 
 
 /*
- * WhereClauseContainsSubquery returns true if the input query contains
- * any subqueries in the WHERE clause.
+ * WhereOrHavingClauseContainsSubquery returns true if the input query contains
+ * any subqueries in the WHERE or HAVING clause.
  */
 bool
-WhereClauseContainsSubquery(Query *query)
+WhereOrHavingClauseContainsSubquery(Query *query)
 {
 	FromExpr *joinTree = query->jointree;
 	Node *queryQuals = NULL;
+
+	if (FindNodeCheck(query->havingQual, IsNodeSubquery))
+	{
+		return true;
+	}
 
 	if (!joinTree)
 	{
@@ -275,7 +281,18 @@ WhereClauseContainsSubquery(Query *query)
 
 	queryQuals = joinTree->quals;
 
-	return FindNodeCheck(queryQuals, IsNodeQuery);
+	return FindNodeCheck(queryQuals, IsNodeSubquery);
+}
+
+
+/*
+ * TargetList returns true if the input query contains
+ * any subqueries in the WHERE clause.
+ */
+bool
+TargetListContainsSubquery(Query *query)
+{
+	return FindNodeCheck((Node *) query->targetList, IsNodeSubqueryOrParamExec);
 }
 
 
@@ -300,17 +317,46 @@ IsFunctionRTE(Node *node)
 
 
 /*
- * IsNodeQuery returns true if the given node is a Query.
+ * IsNodeSubquery returns true if the given node is a Query or SubPlan.
+ *
+ * The check for SubPlan is needed whev this is used on a already rewritten
+ * query. Such a query has SubPlan nodes instead of SubLink nodes (which
+ * contain a Query node).
  */
 static bool
-IsNodeQuery(Node *node)
+IsNodeSubquery(Node *node)
 {
 	if (node == NULL)
 	{
 		return false;
 	}
 
-	return IsA(node, Query);
+	return IsA(node, Query) || IsA(node, SubPlan);
+}
+
+
+/*
+ * IsNodeSubqueryOrParamExec returns true if the given node is a subquery or a
+ * Param node with paramkind PARAM_EXEC.
+ */
+static bool
+IsNodeSubqueryOrParamExec(Node *node)
+{
+	if (node == NULL)
+	{
+		return false;
+	}
+
+	if (IsNodeSubquery(node))
+	{
+		return true;
+	}
+
+	if (!IsA(node, Param))
+	{
+		return false;
+	}
+	return ((Param *) node)->paramkind == PARAM_EXEC;
 }
 
 

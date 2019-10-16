@@ -36,7 +36,11 @@ ExecuteSubPlans(DistributedPlan *distributedPlan)
 	List *subPlanList = distributedPlan->subPlanList;
 	ListCell *subPlanCell = NULL;
 	List *nodeList = NIL;
-	bool writeLocalFile = false;
+
+	/* If you're not a worker node, you should write local file to make sure
+	 * you have the data too */
+	bool writeLocalFile = GetLocalGroupId() == 0;
+
 
 	if (subPlanList == NIL)
 	{

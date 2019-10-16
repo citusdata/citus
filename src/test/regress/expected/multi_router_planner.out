@@ -671,7 +671,7 @@ SELECT a.title AS name, (SELECT a2.id FROM articles_single_shard_hash a2 WHERE a
 						 AS special_price FROM articles_hash a;
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
-ERROR:  could not run distributed query with subquery outside the FROM and WHERE clauses
+ERROR:  could not run distributed query with subquery outside the FROM, WHERE and HAVING clauses
 HINT:  Consider using an equality filter on the distributed table's partition column.
 -- simple lookup query
 SELECT *

@@ -384,7 +384,7 @@ ShouldRecursivelyPlanNonColocatedSubqueries(Query *subquery,
 static bool
 ContainsSubquery(Query *query)
 {
-	return JoinTreeContainsSubquery(query) || WhereClauseContainsSubquery(query);
+	return JoinTreeContainsSubquery(query) || WhereOrHavingClauseContainsSubquery(query);
 }
 
 
