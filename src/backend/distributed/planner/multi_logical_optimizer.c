@@ -1854,7 +1854,6 @@ MasterAggregateExpression(Aggref *originalAggregate,
 								   ObjectIdGetDatum(originalAggregate->aggfnoid));
 		if (!HeapTupleIsValid(aggTuple))
 		{
-			elog(WARNING, "!@#");
 			elog(WARNING, "citus cache lookup failed for aggregate %u",
 				 originalAggregate->aggfnoid);
 			combine = InvalidOid;
@@ -2939,7 +2938,6 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 								   ObjectIdGetDatum(originalAggregate->aggfnoid));
 		if (!HeapTupleIsValid(aggTuple))
 		{
-			elog(WARNING, "!3434");
 			elog(WARNING, "citus cache lookup failed for aggregate %u",
 				 originalAggregate->aggfnoid);
 			combine = InvalidOid;

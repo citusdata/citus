@@ -239,7 +239,6 @@ mark_aggregate_for_distributed_execution(PG_FUNCTION_ARGS)
 	int numargs = 0;
 	Oid *argtypes = NULL;
 
-	elog(WARNING, "prelude");
 
 	if (!HeapTupleIsValid(proctup))
 	{
@@ -259,8 +258,6 @@ mark_aggregate_for_distributed_execution(PG_FUNCTION_ARGS)
 	}
 	agg = (Form_pg_aggregate) GETSTRUCT(aggtup);
 
-	elog(WARNING, "begins");
-
 	initStringInfo(&helperSuffix);
 	appendStringInfoAggregateHelperSuffix(&helperSuffix, proc, agg);
 
@@ -269,8 +266,6 @@ mark_aggregate_for_distributed_execution(PG_FUNCTION_ARGS)
 	appendStringInfo(&helperName, "%s%s", COORD_COMBINE_AGGREGATE_NAME,
 					 helperSuffix.data);
 	helperOid = CoordCombineAggOid(helperName.data);
-
-	elog(WARNING, "helperOid %d", helperOid);
 
 	if (helperOid == InvalidOid)
 	{
@@ -339,8 +334,6 @@ mark_aggregate_for_distributed_execution(PG_FUNCTION_ARGS)
 		CreateAggregateHelper(helperName.data, WORKER_PARTIAL_AGGREGATE_NAME, proc, agg,
 							  numargs, argtypes, false);
 	}
-
-	elog(WARNING, "mark em");
 
 	/* set strategy column value */
 	UpdateDistObjectAggregationStrategy(funcOid, AGGREGATION_STRATEGY_COMBINE);
@@ -575,7 +568,6 @@ CreateAggregateHelper(const char *helperName, const char *helperPrefix,
 
 	appendStringInfoChar(&command, ')');
 
-	elog(WARNING, "SEND %s", command.data);
 	SendCommandToWorkers(ALL_WORKERS, command.data);
 
 	/* TODO execute as CitusExtensionOwner */
@@ -588,8 +580,6 @@ CreateAggregateHelper(const char *helperName, const char *helperPrefix,
 		elog(ERROR, "SPI_execute %s failed", command.data);
 	}
 	SPI_finish();
-
-	elog(WARNING, "SENT");
 
 	pfree(command.data);
 }
@@ -891,8 +881,6 @@ UpdateDistObjectAggregationStrategy(Oid funcOid, int aggregationStrategy)
 	systable_endscan(scanDescriptor);
 
 	heap_close(pgDistObjectRel, NoLock);
-
-	elog(WARNING, "marked %d %d", funcOid, aggregationStrategy);
 }
 
 
