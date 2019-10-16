@@ -85,35 +85,6 @@ RESET client_min_messages;
 
 SELECT count(*) FROM priority_orders JOIN air_shipped_lineitems ON (o_custkey = l_suppkey);
 
--- materialized views work
--- insert into... select works with views
-CREATE TABLE temp_lineitem(LIKE lineitem_hash_part);
-SELECT create_distributed_table('temp_lineitem', 'l_orderkey', 'hash', 'lineitem_hash_part');
-INSERT INTO temp_lineitem SELECT * FROM air_shipped_lineitems;
-SELECT count(*) FROM temp_lineitem;
--- following is a where false query, should not be inserting anything
-INSERT INTO temp_lineitem SELECT * FROM air_shipped_lineitems WHERE l_shipmode = 'MAIL';
-SELECT count(*) FROM temp_lineitem;
-
--- can create and query materialized views
-CREATE MATERIALIZED VIEW mode_counts
-AS SELECT l_shipmode, count(*) FROM temp_lineitem GROUP BY l_shipmode;
-
-SELECT * FROM mode_counts WHERE l_shipmode = 'AIR' ORDER BY 2 DESC, 1 LIMIT 10;
-
--- materialized views are local, cannot join with distributed tables
-SELECT count(*) FROM mode_counts JOIN temp_lineitem USING (l_shipmode);
-
--- new data is not immediately reflected in the view
-INSERT INTO temp_lineitem SELECT * FROM air_shipped_lineitems;
-SELECT * FROM mode_counts WHERE l_shipmode = 'AIR' ORDER BY 2 DESC, 1 LIMIT 10;
-
--- refresh updates the materialised view with new data
-REFRESH MATERIALIZED VIEW mode_counts;
-SELECT * FROM mode_counts WHERE l_shipmode = 'AIR' ORDER BY 2 DESC, 1 LIMIT 10;
-
-DROP MATERIALIZED VIEW mode_counts;
-
 SET citus.task_executor_type to "task-tracker";
 
 -- single view repartition subqueries are not supported
@@ -162,7 +133,6 @@ SELECT * FROM  lineitems_by_orderkey ORDER BY 2 DESC, 1 ASC LIMIT 10;
 -- it would also work since it is made router plannable
 SELECT * FROM  lineitems_by_orderkey WHERE l_orderkey = 100;
 
-DROP TABLE temp_lineitem CASCADE;
 
 DROP VIEW supp_count_view;
 DROP VIEW lineitems_by_orderkey;
