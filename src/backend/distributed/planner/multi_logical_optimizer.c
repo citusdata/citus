@@ -254,7 +254,7 @@ static List * WorkerAggregateExpressionList(Aggref *originalAggregate,
 											WorkerAggregateWalkerContext *walkerContextry);
 static AggregateType GetAggregateType(Oid aggFunctionId);
 static Oid AggregateArgumentType(Aggref *aggregate);
-static bool AggregateEnabledCustom(Oid aggregateOid);
+static int AggregateEnabledCustom(Oid aggregateOid);
 static HeapTuple AggregateFunctionHelperOidHelper(Oid aggOid, StringInfo helperName);
 static Oid AggregateCoordCombineOid(Oid aggOid);
 static Oid AggregateWorkerPartialOid(Oid aggOid);
@@ -1848,7 +1848,7 @@ MasterAggregateExpression(Aggref *originalAggregate,
 
 		newMasterExpression = (Expr *) unionAggregate;
 	}
-	else if (aggregateType == AGGREGATE_CUSTOM)
+	else if (aggregateType == AGGREGATE_CUSTOM_COMBINE)
 	{
 		aggTuple = SearchSysCache1(AGGFNOID,
 								   ObjectIdGetDatum(originalAggregate->aggfnoid));
@@ -1869,12 +1869,14 @@ MasterAggregateExpression(Aggref *originalAggregate,
 		{
 			Const *aggparam = NULL;
 			Var *column = NULL;
+			Const *nulltag = NULL;
 			List *aggArguments = NIL;
 			Aggref *newMasterAggregate = NULL;
 			Oid coordCombineId = AggregateCoordCombineOid(originalAggregate->aggfnoid);
 			Oid workerReturnType = BYTEAOID;
 			int32 workerReturnTypeMod = -1;
 			Oid workerCollationId = InvalidOid;
+			Oid resultType = exprType((Node *) originalAggregate);
 
 			if (coordCombineId == InvalidOid)
 			{
@@ -1887,10 +1889,13 @@ MasterAggregateExpression(Aggref *originalAggregate,
 									 originalAggregate->aggfnoid), false, true);
 			column = makeVar(masterTableId, walkerContext->columnId, workerReturnType,
 							 workerReturnTypeMod, workerCollationId, columnLevelsUp);
+			nulltag = makeNullConst(resultType, -1, InvalidOid);
 
 			aggArguments = list_make1(makeTargetEntry((Expr *) aggparam, 1, NULL, false));
 			aggArguments = lappend(aggArguments, makeTargetEntry((Expr *) column, 2, NULL,
 																 false));
+			aggArguments = lappend(aggArguments, makeTargetEntry((Expr *) nulltag, 3,
+																 NULL, false));
 
 			/* coord_combine_agg(agg, workercol) */
 			newMasterAggregate = makeNode(Aggref);
@@ -1900,8 +1905,8 @@ MasterAggregateExpression(Aggref *originalAggregate,
 			newMasterAggregate->aggkind = AGGKIND_NORMAL;
 			newMasterAggregate->aggfilter = originalAggregate->aggfilter;
 			newMasterAggregate->aggtranstype = INTERNALOID;
-			newMasterAggregate->aggargtypes = list_concat(list_make1_oid(OIDOID),
-														  list_make1_oid(BYTEAOID));
+			newMasterAggregate->aggargtypes = list_make3_oid(OIDOID, BYTEAOID,
+															 resultType);
 			newMasterAggregate->aggsplit = AGGSPLIT_SIMPLE;
 
 			newMasterExpression = (Expr *) newMasterAggregate;
@@ -1925,14 +1930,8 @@ MasterAggregateExpression(Aggref *originalAggregate,
 		int32 workerReturnTypeMod = exprTypmod((Node *) originalAggregate);
 		Oid workerCollationId = exprCollation((Node *) originalAggregate);
 
-		const char *aggregateName = AggregateNames[aggregateType];
-		Oid aggregateFunctionId = AggregateFunctionOid(aggregateName, workerReturnType);
-		Oid masterReturnType = get_func_rettype(aggregateFunctionId);
-
 		Aggref *newMasterAggregate = copyObject(originalAggregate);
 		newMasterAggregate->aggdistinct = NULL;
-		newMasterAggregate->aggfnoid = aggregateFunctionId;
-		newMasterAggregate->aggtype = masterReturnType;
 		newMasterAggregate->aggfilter = NULL;
 
 		column = makeVar(masterTableId, walkerContext->columnId, workerReturnType,
@@ -2932,7 +2931,7 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 		workerAggregateList = lappend(workerAggregateList, sumAggregate);
 		workerAggregateList = lappend(workerAggregateList, countAggregate);
 	}
-	else if (aggregateType == AGGREGATE_CUSTOM)
+	else if (aggregateType == AGGREGATE_CUSTOM_COMBINE)
 	{
 		aggTuple = SearchSysCache1(AGGFNOID,
 								   ObjectIdGetDatum(originalAggregate->aggfnoid));
@@ -2990,11 +2989,16 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 
 			workerAggregateList = list_make1(newWorkerAggregate);
 		}
+		else
+		{
+			elog(ERROR, "Aggregate lacks COMBINEFUNC");
+		}
 	}
 	else
 	{
 		/*
 		 * All other aggregates are sent as they are to the worker nodes.
+		 * This includes AGGREGATE_CUSTOM_COMMUTE.
 		 */
 		Aggref *workerAggregate = copyObject(originalAggregate);
 		workerAggregateList = lappend(workerAggregateList, workerAggregate);
@@ -3023,6 +3027,7 @@ GetAggregateType(Oid aggFunctionId)
 	uint32 aggregateCount = 0;
 	uint32 aggregateIndex = 0;
 	bool found = false;
+	int customAggregationStrategy;
 
 	/* look up the function name */
 	aggregateProcName = get_func_name(aggFunctionId);
@@ -3032,9 +3037,10 @@ GetAggregateType(Oid aggFunctionId)
 							   aggFunctionId)));
 	}
 
-	if (AggregateEnabledCustom(aggFunctionId))
+	customAggregationStrategy = AggregateEnabledCustom(aggFunctionId);
+	if (customAggregationStrategy != AGGREGATION_STRATEGY_NONE)
 	{
-		return AGGREGATE_CUSTOM;
+		return AGGREGATE_CUSTOM + customAggregationStrategy;
 	}
 
 	aggregateCount = lengthof(AggregateNames);
@@ -3075,14 +3081,17 @@ AggregateArgumentType(Aggref *aggregate)
 }
 
 
-static bool
+static int
 AggregateEnabledCustom(Oid aggregateOid)
 {
 	DistObjectCacheEntry *cacheEntry = LookupDistObjectCacheEntry(ProcedureRelationId,
 																  aggregateOid, 0);
 
-	return cacheEntry != NULL && cacheEntry->isDistributed &&
-		   cacheEntry->aggregationStrategy == AGGREGATION_STRATEGY_COMBINE;
+	if (cacheEntry == NULL || !cacheEntry->isDistributed)
+	{
+		return AGGREGATION_STRATEGY_NONE;
+	}
+	return cacheEntry->aggregationStrategy;
 }
 
 

@@ -66,5 +66,6 @@ typedef FormData_pg_dist_object *Form_pg_dist_object;
  */
 #define AGGREGATION_STRATEGY_NONE 0
 #define AGGREGATION_STRATEGY_COMBINE 1
+#define AGGREGATION_STRATEGY_COMMUTE 2
 
 #endif /* PG_DIST_OBJECT_H */
