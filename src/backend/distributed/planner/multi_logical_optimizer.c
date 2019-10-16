@@ -255,7 +255,9 @@ static List * WorkerAggregateExpressionList(Aggref *originalAggregate,
 static AggregateType GetAggregateType(Oid aggFunctionId);
 static Oid AggregateArgumentType(Aggref *aggregate);
 static bool AggregateEnabledCustom(Oid aggregateOid);
-static Oid AggregateFunctionHelperOid(const char *helperPrefix, Oid aggOid);
+static HeapTuple AggregateFunctionHelperOidHelper(Oid aggOid, StringInfo helperName);
+static Oid AggregateCoordCombineOid(Oid aggOid);
+static Oid AggregateWorkerPartialOid(Oid aggOid);
 static Oid AggregateFunctionOid(const char *functionName, Oid inputType);
 static Oid TypeOid(Oid schemaId, const char *typeName);
 static SortGroupClause * CreateSortGroupClause(Var *column);
@@ -1852,6 +1854,7 @@ MasterAggregateExpression(Aggref *originalAggregate,
 								   ObjectIdGetDatum(originalAggregate->aggfnoid));
 		if (!HeapTupleIsValid(aggTuple))
 		{
+			elog(WARNING, "!@#");
 			elog(WARNING, "citus cache lookup failed for aggregate %u",
 				 originalAggregate->aggfnoid);
 			combine = InvalidOid;
@@ -1869,12 +1872,17 @@ MasterAggregateExpression(Aggref *originalAggregate,
 			Var *column = NULL;
 			List *aggArguments = NIL;
 			Aggref *newMasterAggregate = NULL;
-			Oid coordCombineId = AggregateFunctionHelperOid(
-				COORD_COMBINE_AGGREGATE_NAME, originalAggregate->aggfnoid);
-
+			Oid coordCombineId = AggregateCoordCombineOid(originalAggregate->aggfnoid);
 			Oid workerReturnType = BYTEAOID;
 			int32 workerReturnTypeMod = -1;
 			Oid workerCollationId = InvalidOid;
+
+			if (coordCombineId == InvalidOid)
+			{
+				elog(ERROR,
+					 "Could not find " COORD_COMBINE_AGGREGATE_NAME
+					 " with correct signature.");
+			}
 
 			aggparam = makeConst(OIDOID, -1, InvalidOid, sizeof(Oid), ObjectIdGetDatum(
 									 originalAggregate->aggfnoid), false, true);
@@ -1938,7 +1946,6 @@ MasterAggregateExpression(Aggref *originalAggregate,
 
 		newMasterExpression = (Expr *) newMasterAggregate;
 	}
-
 
 	/*
 	 * Aggregate functions could have changed the return type. If so, we wrap
@@ -2932,6 +2939,7 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 								   ObjectIdGetDatum(originalAggregate->aggfnoid));
 		if (!HeapTupleIsValid(aggTuple))
 		{
+			elog(WARNING, "!3434");
 			elog(WARNING, "citus cache lookup failed for aggregate %u",
 				 originalAggregate->aggfnoid);
 			combine = InvalidOid;
@@ -2949,8 +2957,14 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 			Aggref *newWorkerAggregate = NULL;
 			List *aggArguments = NIL;
 			ListCell *originalAggArgCell;
-			Oid workerPartialId = AggregateFunctionHelperOid(
-				WORKER_PARTIAL_AGGREGATE_NAME, originalAggregate->aggfnoid);
+			Oid workerPartialId = AggregateWorkerPartialOid(originalAggregate->aggfnoid);
+
+			if (workerPartialId == InvalidOid)
+			{
+				elog(ERROR,
+					 "Could not find " WORKER_PARTIAL_AGGREGATE_NAME
+					 " with correct signature.");
+			}
 
 			aggparam = makeConst(REGPROCEDUREOID, -1, InvalidOid, sizeof(Oid),
 								 ObjectIdGetDatum(originalAggregate->aggfnoid), false,
@@ -3066,11 +3080,11 @@ AggregateArgumentType(Aggref *aggregate)
 static bool
 AggregateEnabledCustom(Oid aggregateOid)
 {
-	DistObjectCacheEntry *cacheEntry = LookupDistObjectCacheEntry(AggregateRelationId,
+	DistObjectCacheEntry *cacheEntry = LookupDistObjectCacheEntry(ProcedureRelationId,
 																  aggregateOid, 0);
 
-	return cacheEntry != NULL && cacheEntry->aggregationStrategy ==
-		   AGGREGATION_STRATEGY_COMBINE;
+	return cacheEntry != NULL && cacheEntry->isDistributed &&
+		   cacheEntry->aggregationStrategy == AGGREGATION_STRATEGY_COMBINE;
 }
 
 
@@ -3138,12 +3152,9 @@ AggregateFunctionOid(const char *functionName, Oid inputType)
 /*
  * AggregateFunctionHelperOid finds the aggregate helper for a given aggregate.
  */
-static Oid
-AggregateFunctionHelperOid(const char *helperPrefix, Oid aggOid)
+static HeapTuple
+AggregateFunctionHelperOidHelper(Oid aggOid, StringInfo helperName)
 {
-	StringInfoData helperName;
-	int numargs;
-	Oid *argtypes;
 	HeapTuple proctup;
 	HeapTuple aggtup;
 	Form_pg_proc proc;
@@ -3152,22 +3163,73 @@ AggregateFunctionHelperOid(const char *helperPrefix, Oid aggOid)
 	proctup = SearchSysCache1(PROCOID, aggOid);
 	if (!HeapTupleIsValid(proctup))
 	{
-		return InvalidOid;
+		return NULL;
 	}
 	proc = (Form_pg_proc) GETSTRUCT(proctup);
 
 	aggtup = SearchSysCache1(AGGFNOID, aggOid);
 	if (!HeapTupleIsValid(aggtup))
 	{
-		return InvalidOid;
+		ReleaseSysCache(proctup);
+		return NULL;
 	}
 	agg = (Form_pg_aggregate) GETSTRUCT(aggtup);
 
-	initStringInfo(&helperName);
-	appendStringInfoString(&helperName, helperPrefix);
-	appendStringInfoAggregateHelperSuffix(&helperName, proc, agg);
+	appendStringInfoAggregateHelperSuffix(helperName, proc, agg);
 
-	return AggregateHelperOid(helperName.data, proctup, &numargs, &argtypes);
+	ReleaseSysCache(aggtup);
+	return proctup;
+}
+
+
+/*
+ * AggregateFunctionHelperOid finds the aggregate helper for a given aggregate.
+ */
+static Oid
+AggregateCoordCombineOid(Oid aggOid)
+{
+	StringInfoData helperName;
+	HeapTuple proctup;
+
+	initStringInfo(&helperName);
+	appendStringInfoString(&helperName, COORD_COMBINE_AGGREGATE_NAME);
+	proctup = AggregateFunctionHelperOidHelper(aggOid, &helperName);
+
+	if (proctup == NULL)
+	{
+		elog(ERROR, "Failed to locate appropriate " COORD_COMBINE_AGGREGATE_NAME);
+	}
+
+	ReleaseSysCache(proctup);
+	return CoordCombineAggOid(helperName.data);
+}
+
+
+/*
+ * AggregateFunctionHelperOid finds the aggregate helper for a given aggregate.
+ */
+static Oid
+AggregateWorkerPartialOid(Oid aggOid)
+{
+	Oid result;
+	int numargs;
+	Oid *argtypes;
+	StringInfoData helperName;
+	HeapTuple proctup;
+
+	initStringInfo(&helperName);
+	appendStringInfoString(&helperName, WORKER_PARTIAL_AGGREGATE_NAME);
+	proctup = AggregateFunctionHelperOidHelper(aggOid, &helperName);
+
+	if (proctup == NULL)
+	{
+		elog(ERROR, "Failed to locate appropriate " WORKER_PARTIAL_AGGREGATE_NAME);
+	}
+
+	result = WorkerPartialAggOid(helperName.data, proctup, &numargs, &argtypes);
+
+	ReleaseSysCache(proctup);
+	return result;
 }
 
 

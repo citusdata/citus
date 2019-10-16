@@ -44,6 +44,7 @@
 #include "distributed/multi_logical_optimizer.h"
 #include "distributed/relation_access_tracking.h"
 #include "distributed/worker_transaction.h"
+#include "executor/spi.h"
 #include "parser/parse_coerce.h"
 #include "parser/parse_type.h"
 #include "storage/lmgr.h"
@@ -62,7 +63,7 @@ static char * GetFunctionDDLCommand(const RegProcedure funcOid);
 static char * GetFunctionAlterOwnerCommand(const RegProcedure funcOid);
 static void CreateAggregateHelper(const char *helperName, const char *helperPrefix,
 								  Form_pg_proc proc, Form_pg_aggregate agg, int numargs,
-								  Oid *argtypes);
+								  Oid *argtypes, bool finalextra);
 static int GetDistributionArgIndex(Oid functionOid, char *distributionArgumentName,
 								   Oid *distributionArgumentOid);
 static int GetFunctionColocationId(Oid functionOid, char *colocateWithName, Oid
@@ -238,6 +239,7 @@ mark_aggregate_for_distributed_execution(PG_FUNCTION_ARGS)
 	int numargs = 0;
 	Oid *argtypes = NULL;
 
+	elog(WARNING, "prelude");
 
 	if (!HeapTupleIsValid(proctup))
 	{
@@ -257,6 +259,8 @@ mark_aggregate_for_distributed_execution(PG_FUNCTION_ARGS)
 	}
 	agg = (Form_pg_aggregate) GETSTRUCT(aggtup);
 
+	elog(WARNING, "begins");
+
 	initStringInfo(&helperSuffix);
 	appendStringInfoAggregateHelperSuffix(&helperSuffix, proc, agg);
 
@@ -264,25 +268,79 @@ mark_aggregate_for_distributed_execution(PG_FUNCTION_ARGS)
 	initStringInfo(&helperName);
 	appendStringInfo(&helperName, "%s%s", COORD_COMBINE_AGGREGATE_NAME,
 					 helperSuffix.data);
-	helperOid = AggregateHelperOid(helperName.data, proctup, &numargs, &argtypes);
+	helperOid = CoordCombineAggOid(helperName.data);
+
+	elog(WARNING, "helperOid %d", helperOid);
 
 	if (helperOid == InvalidOid)
 	{
+		Oid coordArgTypes[2] = { BYTEAOID, ANYELEMENTOID };
+
 		CreateAggregateHelper(helperName.data, COORD_COMBINE_AGGREGATE_NAME, proc, agg,
-							  numargs, argtypes);
+							  2, coordArgTypes, true);
 	}
 
 	/* worker_partial_agg */
 	resetStringInfo(&helperName);
 	appendStringInfo(&helperName, "%s%s", WORKER_PARTIAL_AGGREGATE_NAME,
 					 helperSuffix.data);
-	helperOid = AggregateHelperOid(helperName.data, proctup, &numargs, &argtypes);
+	helperOid = WorkerPartialAggOid(helperName.data, proctup, &numargs, &argtypes);
 
 	if (helperOid == InvalidOid)
 	{
+		/* Also check that we have a matching worker_partial_sfunc(internal, oid, ...) */
+		FuncCandidateList clist = FuncnameGetCandidates(list_make2(makeString("citus"),
+																   makeString(
+																	   "worker_partial_agg_sfunc")),
+														numargs + 2,
+														NIL, false, false, true);
+
+		for (; clist; clist = clist->next)
+		{
+			if (clist->args[0] == INTERNALOID && clist->args[1] == OIDOID &&
+				memcmp(clist->args + 2, argtypes, numargs * sizeof(Oid)) == 0)
+			{
+				break;
+				return clist->oid;
+			}
+		}
+
+		if (clist == NULL)
+		{
+			int i;
+			StringInfoData command;
+
+			initStringInfo(&command);
+			appendStringInfoString(&command,
+								   "CREATE FUNCTION citus.worker_partial_agg_sfunc(internal, oid");
+			for (i = 0; i < numargs; i++)
+			{
+				appendStringInfo(&command, ", %s", format_type_be_qualified(argtypes[i]));
+			}
+			appendStringInfoString(&command,
+								   ") RETURNS internal AS 'citus' LANGUAGE C PARALLEL SAFE");
+
+			SendCommandToWorkers(ALL_WORKERS, command.data);
+
+			/* TODO execute as CitusExtensionOwner */
+			if (SPI_connect() != SPI_OK_CONNECT)
+			{
+				elog(ERROR, "SPI_connect failed");
+			}
+			if (SPI_execute(command.data, false, 0) < 0)
+			{
+				elog(ERROR, "SPI_execute %s failed", command.data);
+			}
+			SPI_finish();
+
+			pfree(command.data);
+		}
+
 		CreateAggregateHelper(helperName.data, WORKER_PARTIAL_AGGREGATE_NAME, proc, agg,
-							  numargs, argtypes);
+							  numargs, argtypes, false);
 	}
+
+	elog(WARNING, "mark em");
 
 	/* set strategy column value */
 	UpdateDistObjectAggregationStrategy(funcOid, AGGREGATION_STRATEGY_COMBINE);
@@ -302,10 +360,36 @@ early_exit:
 
 
 /*
- * AggregateHelperOid returns helper aggregate oid for given proc's HeapTuple
+ * CoordCombineAggOid returns coord_combine_agg oid with given name.
  */
 Oid
-AggregateHelperOid(char *helperName, HeapTuple proctup, int *numargs, Oid **argtypes)
+CoordCombineAggOid(char *helperName)
+{
+	FuncCandidateList clist;
+
+	clist = FuncnameGetCandidates(list_make2(makeString("citus"),
+											 makeString(helperName)),
+								  3, NIL, false, false, true);
+
+	for (; clist; clist = clist->next)
+	{
+		if (clist->args[0] == OIDOID &&
+			clist->args[1] == BYTEAOID &&
+			clist->args[2] == ANYELEMENTOID)
+		{
+			return clist->oid;
+		}
+	}
+
+	return InvalidOid;
+}
+
+
+/*
+ * WorkerPartialAggOid returns worker_partial_agg oid for given proc's HeapTuple.
+ */
+Oid
+WorkerPartialAggOid(char *helperName, HeapTuple proctup, int *numargs, Oid **argtypes)
 {
 	char **argnames = NULL;
 	char *argmodes = NULL;
@@ -318,8 +402,8 @@ AggregateHelperOid(char *helperName, HeapTuple proctup, int *numargs, Oid **argt
 
 	for (; clist; clist = clist->next)
 	{
-		if (clist->args[0] == OIDOID && memcmp(clist->args + 1, argtypes, *numargs *
-											   sizeof(Oid)) == 0)
+		if (clist->args[0] == OIDOID &&
+			memcmp(clist->args + 1, *argtypes, *numargs * sizeof(Oid)) == 0)
 		{
 			return clist->oid;
 		}
@@ -332,7 +416,9 @@ AggregateHelperOid(char *helperName, HeapTuple proctup, int *numargs, Oid **argt
 /*
  * AggregateHelperName returns helper function name for a given aggregate.
  */
-void appendStringInfoAggregateHelperSuffix(StringInfo helperSuffix, Form_pg_proc proc, Form_pg_aggregate agg)
+void
+appendStringInfoAggregateHelperSuffix(StringInfo helperSuffix, Form_pg_proc proc,
+									  Form_pg_aggregate agg)
 {
 	switch (proc->proparallel)
 	{
@@ -377,11 +463,6 @@ void appendStringInfoAggregateHelperSuffix(StringInfo helperSuffix, Form_pg_proc
 				break;
 			}
 		}
-
-		if (agg->aggfinalextra)
-		{
-			appendStringInfoString(helperSuffix, "_fx");
-		}
 	}
 
 	if (agg->aggmfinalfn != InvalidOid)
@@ -414,7 +495,6 @@ void appendStringInfoAggregateHelperSuffix(StringInfo helperSuffix, Form_pg_proc
 			appendStringInfoString(helperSuffix, "_fx");
 		}
 	}
-
 }
 
 
@@ -424,18 +504,23 @@ void appendStringInfoAggregateHelperSuffix(StringInfo helperSuffix, Form_pg_proc
 static void
 CreateAggregateHelper(const char *helperName, const char *helperPrefix,
 					  Form_pg_proc proc, Form_pg_aggregate agg, int numargs,
-					  Oid *argtypes)
+					  Oid *argtypes, bool finalextra)
 {
+	int i;
 	StringInfoData command;
 
 	initStringInfo(&command);
 
-	appendStringInfo(&command, "CREATE AGGREGATE %s("
-							   "STYPE = internal, SFUNC = citus.%s_sfunc, FINALFUNC = %s_ffunc"
-							   ", COMBINEFUNC = citus.citus_stype_combine"
-							   ", SERIALFUNC = citus.citus_stype_serialize"
-							   ", DESERIALFUNC = citus.citus_stype_deserialize",
-					 quote_qualified_identifier("citus", helperName),
+	appendStringInfo(&command, "CREATE AGGREGATE citus.%s(oid", helperName);
+	for (i = 0; i < numargs; i++)
+	{
+		appendStringInfo(&command, ", %s", format_type_be_qualified(argtypes[i]));
+	}
+	appendStringInfo(&command,
+					 ") (STYPE = internal, SFUNC = citus.%s_sfunc, FINALFUNC = citus.%s_ffunc"
+					 ", COMBINEFUNC = citus.citus_stype_combine"
+					 ", SERIALFUNC = citus.citus_stype_serialize"
+					 ", DESERIALFUNC = citus.citus_stype_deserialize",
 					 helperPrefix, helperPrefix);
 
 	switch (proc->proparallel)
@@ -482,44 +567,29 @@ CreateAggregateHelper(const char *helperName, const char *helperPrefix,
 			}
 		}
 
-		if (agg->aggfinalextra)
+		if (finalextra)
 		{
 			appendStringInfoString(&command, ", FINALFUNC_EXTRA");
 		}
 	}
 
-	if (agg->aggmfinalfn != InvalidOid)
-	{
-		switch (agg->aggmfinalmodify)
-		{
-			case AGGMODIFY_READ_ONLY:
-			{
-				appendStringInfoString(&command, ", MFINALFUNC_MODIFY = READ_ONLY");
-				break;
-			}
-
-			case AGGMODIFY_SHAREABLE:
-			{
-				appendStringInfoString(&command, ", MFINALFUNC_MODIFY = SHAREABLE");
-				break;
-			}
-
-			case AGGMODIFY_READ_WRITE:
-			{
-				appendStringInfoString(&command, ", MFINALFUNC_MODIFY = READ_WRITE");
-				break;
-			}
-		}
-
-		if (agg->aggmfinalextra)
-		{
-			appendStringInfoString(&command, ", MFINALFUNC_EXTRA");
-		}
-	}
-
 	appendStringInfoChar(&command, ')');
 
+	elog(WARNING, "SEND %s", command.data);
 	SendCommandToWorkers(ALL_WORKERS, command.data);
+
+	/* TODO execute as CitusExtensionOwner */
+	if (SPI_connect() != SPI_OK_CONNECT)
+	{
+		elog(ERROR, "SPI_connect failed");
+	}
+	if (SPI_execute(command.data, false, 0) < 0)
+	{
+		elog(ERROR, "SPI_execute %s failed", command.data);
+	}
+	SPI_finish();
+
+	elog(WARNING, "SENT");
 
 	pfree(command.data);
 }
@@ -805,10 +875,10 @@ UpdateDistObjectAggregationStrategy(Oid funcOid, int aggregationStrategy)
 
 	memset(replace, 0, sizeof(replace));
 
-	replace[Anum_pg_dist_object_distribution_argument_index - 1] = true;
-	values[Anum_pg_dist_object_distribution_argument_index - 1] = Int32GetDatum(
+	replace[Anum_pg_dist_object_aggregation_strategy - 1] = true;
+	values[Anum_pg_dist_object_aggregation_strategy - 1] = Int32GetDatum(
 		aggregationStrategy);
-	isnull[Anum_pg_dist_object_distribution_argument_index - 1] = false;
+	isnull[Anum_pg_dist_object_aggregation_strategy - 1] = false;
 
 	heapTuple = heap_modify_tuple(heapTuple, tupleDescriptor, values, isnull, replace);
 
@@ -821,6 +891,8 @@ UpdateDistObjectAggregationStrategy(Oid funcOid, int aggregationStrategy)
 	systable_endscan(scanDescriptor);
 
 	heap_close(pgDistObjectRel, NoLock);
+
+	elog(WARNING, "marked %d %d", funcOid, aggregationStrategy);
 }
 
 
@@ -1148,7 +1220,7 @@ GetAggregateDDLCommand(const RegProcedure funcOid)
 			appendStringInfo(&buf, "%s ", quote_identifier(argname));
 		}
 
-		appendStringInfoString(&buf, format_type_be(argtype));
+		appendStringInfoString(&buf, format_type_be_qualified(argtype));
 
 		argsprinted++;
 

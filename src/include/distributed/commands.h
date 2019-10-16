@@ -53,7 +53,9 @@ extern bool ConstraintIsAForeignKey(char *constraintName, Oid relationId);
 extern void appendStringInfoAggregateHelperSuffix(StringInfo helperSuffix,
 												  Form_pg_proc proc,
 												  Form_pg_aggregate agg);
-extern Oid AggregateHelperOid(char *helperName, HeapTuple proctup, int *numargs, Oid **argtypes);
+extern Oid CoordCombineAggOid(char *helperName);
+extern Oid WorkerPartialAggOid(char *helperName, HeapTuple proctup, int *numargs,
+							   Oid **argtypes);
 extern List * PlanCreateFunctionStmt(CreateFunctionStmt *stmt, const char *queryString);
 extern List * ProcessCreateFunctionStmt(CreateFunctionStmt *stmt, const
 										char *queryString);
