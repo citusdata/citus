@@ -198,59 +198,6 @@ SELECT count(*) FROM priority_orders JOIN air_shipped_lineitems ON (o_custkey = 
    192
 (1 row)
 
--- materialized views work
--- insert into... select works with views
-CREATE TABLE temp_lineitem(LIKE lineitem_hash_part);
-SELECT create_distributed_table('temp_lineitem', 'l_orderkey', 'hash', 'lineitem_hash_part');
- create_distributed_table 
---------------------------
- 
-(1 row)
-
-INSERT INTO temp_lineitem SELECT * FROM air_shipped_lineitems;
-SELECT count(*) FROM temp_lineitem;
- count 
--------
-  1706
-(1 row)
-
--- following is a where false query, should not be inserting anything
-INSERT INTO temp_lineitem SELECT * FROM air_shipped_lineitems WHERE l_shipmode = 'MAIL';
-SELECT count(*) FROM temp_lineitem;
- count 
--------
-  1706
-(1 row)
-
--- can create and query materialized views
-CREATE MATERIALIZED VIEW mode_counts
-AS SELECT l_shipmode, count(*) FROM temp_lineitem GROUP BY l_shipmode;
-SELECT * FROM mode_counts WHERE l_shipmode = 'AIR' ORDER BY 2 DESC, 1 LIMIT 10;
- l_shipmode | count 
-------------+-------
- AIR        |  1706
-(1 row)
-
--- materialized views are local, cannot join with distributed tables
-SELECT count(*) FROM mode_counts JOIN temp_lineitem USING (l_shipmode);
-ERROR:  relation mode_counts is not distributed
--- new data is not immediately reflected in the view
-INSERT INTO temp_lineitem SELECT * FROM air_shipped_lineitems;
-SELECT * FROM mode_counts WHERE l_shipmode = 'AIR' ORDER BY 2 DESC, 1 LIMIT 10;
- l_shipmode | count 
-------------+-------
- AIR        |  1706
-(1 row)
-
--- refresh updates the materialised view with new data
-REFRESH MATERIALIZED VIEW mode_counts;
-SELECT * FROM mode_counts WHERE l_shipmode = 'AIR' ORDER BY 2 DESC, 1 LIMIT 10;
- l_shipmode | count 
-------------+-------
- AIR        |  3412
-(1 row)
-
-DROP MATERIALIZED VIEW mode_counts;
 SET citus.task_executor_type to "task-tracker";
 -- single view repartition subqueries are not supported
 SELECT l_suppkey, count(*) FROM
@@ -343,7 +290,6 @@ SELECT * FROM  lineitems_by_orderkey WHERE l_orderkey = 100;
         100 |     5
 (1 row)
 
-DROP TABLE temp_lineitem CASCADE;
 DROP VIEW supp_count_view;
 DROP VIEW lineitems_by_orderkey;
 DROP VIEW lineitems_by_shipping_method;
@@ -867,7 +813,7 @@ EXPLAIN (COSTS FALSE) SELECT et.* FROM recent_10_users JOIN events_table et USIN
    ->  Sort
          Sort Key: remote_scan."time" DESC
          ->  Custom Scan (Citus Adaptive)
-               ->  Distributed Subplan 98_1
+               ->  Distributed Subplan 90_1
                      ->  Limit
                            ->  Sort
                                  Sort Key: (max(remote_scan.lastseen)) DESC
