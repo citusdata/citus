@@ -55,7 +55,7 @@ LOG:  join order: [ "orders" ][ local partition join "lineitem" ][ single range 
                                            QUERY PLAN                                           
 ------------------------------------------------------------------------------------------------
  Sort  (cost=0.00..0.00 rows=0 width=0)
-   Sort Key: sum((sum(remote_scan.revenue))) DESC, remote_scan.o_orderdate
+   Sort Key: (sum(remote_scan.revenue)) DESC, remote_scan.o_orderdate
    ->  HashAggregate  (cost=0.00..0.00 rows=0 width=0)
          Group Key: remote_scan.l_orderkey, remote_scan.o_orderdate, remote_scan.o_shippriority
          ->  Custom Scan (Citus Task-Tracker)  (cost=0.00..0.00 rows=0 width=0)
@@ -98,7 +98,7 @@ LOG:  join order: [ "orders" ][ local partition join "lineitem" ][ single range 
                                                                                  QUERY PLAN                                                                                 
 ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
  Sort  (cost=0.00..0.00 rows=0 width=0)
-   Sort Key: sum((sum(remote_scan.revenue))) DESC
+   Sort Key: (sum(remote_scan.revenue)) DESC
    ->  HashAggregate  (cost=0.00..0.00 rows=0 width=0)
          Group Key: remote_scan.c_custkey, remote_scan.c_name, remote_scan.c_acctbal, remote_scan.c_phone, remote_scan.n_name, remote_scan.c_address, remote_scan.c_comment
          ->  Custom Scan (Citus Task-Tracker)  (cost=0.00..0.00 rows=0 width=0)

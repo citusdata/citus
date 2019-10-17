@@ -870,7 +870,7 @@ EXPLAIN (COSTS FALSE) SELECT et.* FROM recent_10_users JOIN events_table et USIN
                ->  Distributed Subplan 98_1
                      ->  Limit
                            ->  Sort
-                                 Sort Key: max((max(remote_scan.lastseen))) DESC
+                                 Sort Key: (max(remote_scan.lastseen)) DESC
                                  ->  HashAggregate
                                        Group Key: remote_scan.user_id
                                        ->  Custom Scan (Citus Adaptive)

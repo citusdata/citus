@@ -1546,6 +1546,8 @@ MasterAggregateExpression(Aggref *originalAggregate,
 				columnIndex++;
 			}
 
+			columnToUpdate->varno = masterTableId;
+			columnToUpdate->varnoold = masterTableId;
 			columnToUpdate->varattno = startColumnCount + columnIndex;
 			columnToUpdate->varoattno = startColumnCount + columnIndex;
 		}

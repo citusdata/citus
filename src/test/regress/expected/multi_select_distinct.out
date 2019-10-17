@@ -197,10 +197,10 @@ EXPLAIN (COSTS FALSE)
 		GROUP BY 1
 		HAVING count(*) > 5
 		ORDER BY 2 DESC, 1;
-                                                                           QUERY PLAN                                                                           
-----------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                  QUERY PLAN                                                   
+---------------------------------------------------------------------------------------------------------------
  Sort
-   Sort Key: COALESCE((pg_catalog.sum((COALESCE((pg_catalog.sum(remote_scan.count))::bigint, '0'::bigint))))::bigint, '0'::bigint) DESC, remote_scan.l_orderkey
+   Sort Key: (COALESCE((pg_catalog.sum(remote_scan.count))::bigint, '0'::bigint)) DESC, remote_scan.l_orderkey
    ->  HashAggregate
          Group Key: remote_scan.l_orderkey
          Filter: (COALESCE((pg_catalog.sum(remote_scan.worker_column_3))::bigint, '0'::bigint) > 5)
@@ -225,10 +225,10 @@ EXPLAIN (COSTS FALSE)
 		GROUP BY 1
 		HAVING count(*) > 5
 		ORDER BY 2 DESC, 1;
-                                                                           QUERY PLAN                                                                           
-----------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                  QUERY PLAN                                                   
+---------------------------------------------------------------------------------------------------------------
  Sort
-   Sort Key: COALESCE((pg_catalog.sum((COALESCE((pg_catalog.sum(remote_scan.count))::bigint, '0'::bigint))))::bigint, '0'::bigint) DESC, remote_scan.l_orderkey
+   Sort Key: (COALESCE((pg_catalog.sum(remote_scan.count))::bigint, '0'::bigint)) DESC, remote_scan.l_orderkey
    ->  GroupAggregate
          Group Key: remote_scan.l_orderkey
          Filter: (COALESCE((pg_catalog.sum(remote_scan.worker_column_3))::bigint, '0'::bigint) > 5)
@@ -296,13 +296,13 @@ EXPLAIN (COSTS FALSE)
 		FROM lineitem_hash_part
 		GROUP BY l_suppkey, l_linenumber
 		ORDER BY 1;
-                                                                                                               QUERY PLAN                                                                                                                
------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                QUERY PLAN                                                
+----------------------------------------------------------------------------------------------------------
  Sort
-   Sort Key: COALESCE((pg_catalog.sum((COALESCE((pg_catalog.sum((COALESCE((pg_catalog.sum((COALESCE((pg_catalog.sum(remote_scan.count))::bigint, '0'::bigint))))::bigint, '0'::bigint))))::bigint, '0'::bigint))))::bigint, '0'::bigint)
+   Sort Key: (COALESCE((pg_catalog.sum(remote_scan.count))::bigint, '0'::bigint))
    ->  Unique
          ->  Sort
-               Sort Key: COALESCE((pg_catalog.sum((COALESCE((pg_catalog.sum(remote_scan.count))::bigint, '0'::bigint))))::bigint, '0'::bigint)
+               Sort Key: (COALESCE((pg_catalog.sum(remote_scan.count))::bigint, '0'::bigint))
                ->  GroupAggregate
                      Group Key: remote_scan.worker_column_2, remote_scan.worker_column_3
                      ->  Sort
@@ -375,14 +375,14 @@ EXPLAIN (COSTS FALSE)
 		GROUP BY l_suppkey, l_linenumber
 		ORDER BY 1
 		LIMIT 10;
-                                                                                 QUERY PLAN                                                                                 
-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                        QUERY PLAN                                                         
+---------------------------------------------------------------------------------------------------------------------------
  Limit
    ->  Sort
          Sort Key: remote_scan.l_suppkey
          ->  Unique
                ->  Sort
-                     Sort Key: remote_scan.l_suppkey, COALESCE((pg_catalog.sum((COALESCE((pg_catalog.sum(remote_scan.count))::bigint, '0'::bigint))))::bigint, '0'::bigint)
+                     Sort Key: remote_scan.l_suppkey, (COALESCE((pg_catalog.sum(remote_scan.count))::bigint, '0'::bigint))
                      ->  GroupAggregate
                            Group Key: remote_scan.l_suppkey, remote_scan.worker_column_3
                            ->  Sort
@@ -456,7 +456,28 @@ EXPLAIN (COSTS FALSE)
 		GROUP BY l_suppkey, l_linenumber
 		ORDER BY 1,2
 		LIMIT 10;
-ERROR:  bogus varattno for OUTER_VAR var: 4
+                                                          QUERY PLAN                                                          
+------------------------------------------------------------------------------------------------------------------------------
+ Limit
+   ->  Sort
+         Sort Key: remote_scan.l_suppkey, ((pg_catalog.sum(remote_scan.avg) / pg_catalog.sum(remote_scan.avg_1)))
+         ->  Unique
+               ->  Sort
+                     Sort Key: remote_scan.l_suppkey, ((pg_catalog.sum(remote_scan.avg) / pg_catalog.sum(remote_scan.avg_1)))
+                     ->  GroupAggregate
+                           Group Key: remote_scan.l_suppkey, remote_scan.worker_column_4
+                           ->  Sort
+                                 Sort Key: remote_scan.l_suppkey, remote_scan.worker_column_4
+                                 ->  Custom Scan (Citus Adaptive)
+                                       Task Count: 4
+                                       Tasks Shown: One of 4
+                                       ->  Task
+                                             Node: host=localhost port=57637 dbname=regression
+                                             ->  HashAggregate
+                                                   Group Key: l_suppkey, l_linenumber
+                                                   ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
+(18 rows)
+
 SET enable_hashagg TO on;
 -- Similar to the above query but with distinct on
 SELECT DISTINCT ON (l_suppkey) avg(l_partkey)
@@ -487,12 +508,12 @@ EXPLAIN (COSTS FALSE)
 		GROUP BY l_suppkey, l_linenumber
 		ORDER BY l_suppkey,1
 		LIMIT 10;
-                                                                                          QUERY PLAN                                                                                          
-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                          QUERY PLAN                                                          
+------------------------------------------------------------------------------------------------------------------------------
  Limit
    ->  Unique
          ->  Sort
-               Sort Key: remote_scan.worker_column_4, (pg_catalog.sum(((pg_catalog.sum(remote_scan.avg) / pg_catalog.sum(remote_scan.avg_1)))) / pg_catalog.sum(remote_scan.worker_column_3))
+               Sort Key: remote_scan.worker_column_3, ((pg_catalog.sum(remote_scan.avg) / pg_catalog.sum(remote_scan.avg_1)))
                ->  HashAggregate
                      Group Key: remote_scan.worker_column_3, remote_scan.worker_column_4
                      ->  Custom Scan (Citus Adaptive)
@@ -514,12 +535,12 @@ EXPLAIN (COSTS FALSE)
 		GROUP BY l_suppkey, l_linenumber
 		ORDER BY l_suppkey,1
 		LIMIT 10;
-                                                                                          QUERY PLAN                                                                                          
-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                          QUERY PLAN                                                          
+------------------------------------------------------------------------------------------------------------------------------
  Limit
    ->  Unique
          ->  Sort
-               Sort Key: remote_scan.worker_column_4, (pg_catalog.sum(((pg_catalog.sum(remote_scan.avg) / pg_catalog.sum(remote_scan.avg_1)))) / pg_catalog.sum(remote_scan.worker_column_3))
+               Sort Key: remote_scan.worker_column_3, ((pg_catalog.sum(remote_scan.avg) / pg_catalog.sum(remote_scan.avg_1)))
                ->  GroupAggregate
                      Group Key: remote_scan.worker_column_3, remote_scan.worker_column_4
                      ->  Sort
@@ -591,7 +612,28 @@ EXPLAIN (COSTS FALSE)
 		GROUP BY l_suppkey, l_linenumber
 		ORDER BY 1
 		LIMIT 10;	
-ERROR:  bogus varattno for OUTER_VAR var: 4
+                                                   QUERY PLAN                                                   
+----------------------------------------------------------------------------------------------------------------
+ Limit
+   ->  Sort
+         Sort Key: ((sum(remote_scan.avg) / (pg_catalog.sum(remote_scan.avg_1))::double precision))
+         ->  Unique
+               ->  Sort
+                     Sort Key: ((sum(remote_scan.avg) / (pg_catalog.sum(remote_scan.avg_1))::double precision))
+                     ->  GroupAggregate
+                           Group Key: remote_scan.worker_column_3, remote_scan.worker_column_4
+                           ->  Sort
+                                 Sort Key: remote_scan.worker_column_3, remote_scan.worker_column_4
+                                 ->  Custom Scan (Citus Adaptive)
+                                       Task Count: 4
+                                       Tasks Shown: One of 4
+                                       ->  Task
+                                             Node: host=localhost port=57637 dbname=regression
+                                             ->  HashAggregate
+                                                   Group Key: l_suppkey, l_linenumber
+                                                   ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
+(18 rows)
+
 		
 SET enable_hashagg TO on;		
 -- expression among aggregations.
@@ -650,7 +692,28 @@ EXPLAIN (COSTS FALSE)
 		GROUP BY l_suppkey, l_linenumber
 		ORDER BY 1
 		LIMIT 10;	
-ERROR:  bogus varattno for OUTER_VAR var: 4
+                                                                    QUERY PLAN                                                                    
+--------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit
+   ->  Sort
+         Sort Key: (((pg_catalog.sum(remote_scan.dis))::bigint + COALESCE((pg_catalog.sum(remote_scan.dis_1))::bigint, '0'::bigint)))
+         ->  Unique
+               ->  Sort
+                     Sort Key: (((pg_catalog.sum(remote_scan.dis))::bigint + COALESCE((pg_catalog.sum(remote_scan.dis_1))::bigint, '0'::bigint)))
+                     ->  GroupAggregate
+                           Group Key: remote_scan.worker_column_3, remote_scan.worker_column_4
+                           ->  Sort
+                                 Sort Key: remote_scan.worker_column_3, remote_scan.worker_column_4
+                                 ->  Custom Scan (Citus Adaptive)
+                                       Task Count: 4
+                                       Tasks Shown: One of 4
+                                       ->  Task
+                                             Node: host=localhost port=57637 dbname=regression
+                                             ->  HashAggregate
+                                                   Group Key: l_suppkey, l_linenumber
+                                                   ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
+(18 rows)
+
 		
 SET enable_hashagg TO on;		
 		
@@ -809,13 +872,13 @@ EXPLAIN (COSTS FALSE)
 		FROM lineitem_hash_part
 		GROUP BY l_orderkey
 		ORDER BY 1,2;
-                                                                                                                                                                                                                               QUERY PLAN                                                                                                                                                                                                                               
-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                              QUERY PLAN                                                                              
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------
  Sort
-   Sort Key: COALESCE((pg_catalog.sum((COALESCE((pg_catalog.sum((COALESCE((pg_catalog.sum((COALESCE((pg_catalog.sum(remote_scan.count))::bigint, '0'::bigint))))::bigint, '0'::bigint))))::bigint, '0'::bigint))))::bigint, '0'::bigint), COALESCE((pg_catalog.sum((COALESCE((pg_catalog.sum((COALESCE((pg_catalog.sum((COALESCE((pg_catalog.sum(remote_scan.count_1))::bigint, '0'::bigint))))::bigint, '0'::bigint))))::bigint, '0'::bigint))))::bigint, '0'::bigint)
+   Sort Key: (COALESCE((pg_catalog.sum(remote_scan.count))::bigint, '0'::bigint)), (COALESCE((pg_catalog.sum(remote_scan.count_1))::bigint, '0'::bigint))
    ->  Unique
          ->  Sort
-               Sort Key: COALESCE((pg_catalog.sum((COALESCE((pg_catalog.sum(remote_scan.count))::bigint, '0'::bigint))))::bigint, '0'::bigint), COALESCE((pg_catalog.sum((COALESCE((pg_catalog.sum(remote_scan.count_1))::bigint, '0'::bigint))))::bigint, '0'::bigint)
+               Sort Key: (COALESCE((pg_catalog.sum(remote_scan.count))::bigint, '0'::bigint)), (COALESCE((pg_catalog.sum(remote_scan.count_1))::bigint, '0'::bigint))
                ->  GroupAggregate
                      Group Key: remote_scan.worker_column_3
                      ->  Sort
@@ -880,13 +943,13 @@ EXPLAIN (COSTS FALSE)
 		FROM lineitem_hash_part 
 		GROUP BY l_suppkey
 		ORDER BY 1;
-                                                                                                                                                                               QUERY PLAN                                                                                                                                                                                
--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                          QUERY PLAN                                                          
+------------------------------------------------------------------------------------------------------------------------------
  Sort
-   Sort Key: ceil(((COALESCE((pg_catalog.sum((ceil(((COALESCE((pg_catalog.sum((ceil(((COALESCE((pg_catalog.sum((ceil(((COALESCE((pg_catalog.sum(remote_scan.count))::bigint, '0'::bigint) / 2))::double precision))))::bigint, '0'::bigint) / 2))::double precision))))::bigint, '0'::bigint) / 2))::double precision))))::bigint, '0'::bigint) / 2))::double precision)
+   Sort Key: (ceil(((COALESCE((pg_catalog.sum(remote_scan.count))::bigint, '0'::bigint) / 2))::double precision))
    ->  Unique
          ->  Sort
-               Sort Key: ceil(((COALESCE((pg_catalog.sum((ceil(((COALESCE((pg_catalog.sum(remote_scan.count))::bigint, '0'::bigint) / 2))::double precision))))::bigint, '0'::bigint) / 2))::double precision)
+               Sort Key: (ceil(((COALESCE((pg_catalog.sum(remote_scan.count))::bigint, '0'::bigint) / 2))::double precision))
                ->  GroupAggregate
                      Group Key: remote_scan.worker_column_2
                      ->  Sort
@@ -940,14 +1003,14 @@ EXPLAIN (COSTS FALSE)
 		GROUP BY l_orderkey
 		ORDER BY 2
 		LIMIT 15;
-                                                                                    QUERY PLAN                                                                                    
-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                            QUERY PLAN                                                            
+----------------------------------------------------------------------------------------------------------------------------------
  Limit
    ->  Sort
-         Sort Key: array_length(array_cat_agg((array_length(array_cat_agg((array_length(array_cat_agg((array_length(array_cat_agg(remote_scan.array_length), 1))), 1))), 1))), 1)
+         Sort Key: (array_length(array_cat_agg(remote_scan.array_length), 1))
          ->  Unique
                ->  Sort
-                     Sort Key: array_length(array_cat_agg((array_length(array_cat_agg(remote_scan.array_length), 1))), 1), array_cat_agg((array_cat_agg(remote_scan.array_agg)))
+                     Sort Key: (array_length(array_cat_agg(remote_scan.array_length), 1)), (array_cat_agg(remote_scan.array_agg))
                      ->  GroupAggregate
                            Group Key: remote_scan.worker_column_3
                            ->  Sort

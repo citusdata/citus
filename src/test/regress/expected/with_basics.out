@@ -108,7 +108,7 @@ SELECT
   (SELECT user_id FROM cte_basic), user_id
 FROM
   users_table;
-ERROR:  could not run distributed query with subquery outside the FROM and WHERE clauses
+ERROR:  could not run distributed query with subquery outside the FROM, WHERE and HAVING clauses
 HINT:  Consider using an equality filter on the distributed table's partition column.
 -- single-row sublink is acceptable when there is no FROM
 WITH cte AS (

@@ -16,10 +16,10 @@ WHERE
 	and l_discount between 0.06 - 0.01 and 0.06 + 0.01
 	and l_quantity < 24;
 LOG:  join order: [ "lineitem" ]
-                              QUERY PLAN                               
------------------------------------------------------------------------
+                              QUERY PLAN                              
+----------------------------------------------------------------------
  Aggregate  (cost=0.00..0.00 rows=0 width=0)
-   ->  Custom Scan (Citus Real-Time)  (cost=0.00..0.00 rows=0 width=0)
+   ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
          explain statements for distributed queries are not enabled
 (3 rows)
 
@@ -50,10 +50,10 @@ LOG:  join order: [ "orders" ][ reference join "customer" ][ local partition joi
                                            QUERY PLAN                                           
 ------------------------------------------------------------------------------------------------
  Sort  (cost=0.00..0.00 rows=0 width=0)
-   Sort Key: sum((sum(remote_scan.revenue))) DESC, remote_scan.o_orderdate
+   Sort Key: (sum(remote_scan.revenue)) DESC, remote_scan.o_orderdate
    ->  HashAggregate  (cost=0.00..0.00 rows=0 width=0)
          Group Key: remote_scan.l_orderkey, remote_scan.o_orderdate, remote_scan.o_shippriority
-         ->  Custom Scan (Citus Real-Time)  (cost=0.00..0.00 rows=0 width=0)
+         ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
                explain statements for distributed queries are not enabled
 (6 rows)
 
@@ -93,10 +93,10 @@ LOG:  join order: [ "orders" ][ reference join "customer" ][ reference join "nat
                                                                                  QUERY PLAN                                                                                 
 ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
  Sort  (cost=0.00..0.00 rows=0 width=0)
-   Sort Key: sum((sum(remote_scan.revenue))) DESC
+   Sort Key: (sum(remote_scan.revenue)) DESC
    ->  HashAggregate  (cost=0.00..0.00 rows=0 width=0)
          Group Key: remote_scan.c_custkey, remote_scan.c_name, remote_scan.c_acctbal, remote_scan.c_phone, remote_scan.n_name, remote_scan.c_address, remote_scan.c_comment
-         ->  Custom Scan (Citus Real-Time)  (cost=0.00..0.00 rows=0 width=0)
+         ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
                explain statements for distributed queries are not enabled
 (6 rows)
 
@@ -131,10 +131,10 @@ WHERE
 		AND l_shipinstruct = 'DELIVER IN PERSON'
 	);
 LOG:  join order: [ "lineitem" ][ reference join "part" ]
-                              QUERY PLAN                               
------------------------------------------------------------------------
+                              QUERY PLAN                              
+----------------------------------------------------------------------
  Aggregate  (cost=0.00..0.00 rows=0 width=0)
-   ->  Custom Scan (Citus Real-Time)  (cost=0.00..0.00 rows=0 width=0)
+   ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
          explain statements for distributed queries are not enabled
 (3 rows)
 

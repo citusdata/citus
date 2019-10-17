@@ -35,7 +35,7 @@ EXPLAIN (COSTS FALSE, FORMAT TEXT)
 	SELECT l_quantity, count(*) count_quantity FROM lineitem
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
 Sort
-  Sort Key: COALESCE((pg_catalog.sum((COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint))))::bigint, '0'::bigint), remote_scan.l_quantity
+  Sort Key: (COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint)), remote_scan.l_quantity
   ->  HashAggregate
         Group Key: remote_scan.l_quantity
         ->  Custom Scan (Citus Adaptive)
@@ -52,7 +52,7 @@ EXPLAIN (COSTS FALSE, FORMAT TEXT)
 	SELECT l_quantity, count(*) count_quantity FROM lineitem
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
 Sort
-  Sort Key: COALESCE((pg_catalog.sum((COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint))))::bigint, '0'::bigint), remote_scan.l_quantity
+  Sort Key: (COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint)), remote_scan.l_quantity
   ->  GroupAggregate
         Group Key: remote_scan.l_quantity
         ->  Sort
@@ -75,7 +75,7 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
     "Plan": {
       "Node Type": "Sort",
       "Parallel Aware": false,
-      "Sort Key": ["COALESCE((pg_catalog.sum((COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint))))::bigint, '0'::bigint)", "remote_scan.l_quantity"],
+      "Sort Key": ["(COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint))", "remote_scan.l_quantity"],
       "Plans": [
         {
           "Node Type": "Aggregate",
@@ -146,7 +146,7 @@ EXPLAIN (COSTS FALSE, FORMAT XML)
       <Node-Type>Sort</Node-Type>
       <Parallel-Aware>false</Parallel-Aware>
       <Sort-Key>
-        <Item>COALESCE((pg_catalog.sum((COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint))))::bigint, '0'::bigint)</Item>
+        <Item>(COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint))</Item>
         <Item>remote_scan.l_quantity</Item>
       </Sort-Key>
       <Plans>
@@ -220,7 +220,7 @@ EXPLAIN (COSTS FALSE, FORMAT YAML)
     Node Type: "Sort"
     Parallel Aware: false
     Sort Key: 
-      - "COALESCE((pg_catalog.sum((COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint))))::bigint, '0'::bigint)"
+      - "(COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint))"
       - "remote_scan.l_quantity"
     Plans: 
       - Node Type: "Aggregate"
@@ -261,7 +261,7 @@ EXPLAIN (COSTS FALSE, FORMAT TEXT)
 	SELECT l_quantity, count(*) count_quantity FROM lineitem
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
 Sort
-  Sort Key: COALESCE((pg_catalog.sum((COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint))))::bigint, '0'::bigint), remote_scan.l_quantity
+  Sort Key: (COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint)), remote_scan.l_quantity
   ->  HashAggregate
         Group Key: remote_scan.l_quantity
         ->  Custom Scan (Citus Adaptive)
@@ -277,7 +277,7 @@ EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE)
 	SELECT l_quantity, count(*) count_quantity FROM lineitem
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
 Sort (actual rows=50 loops=1)
-  Sort Key: COALESCE((pg_catalog.sum((COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint))))::bigint, '0'::bigint), remote_scan.l_quantity
+  Sort Key: (COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint)), remote_scan.l_quantity
   Sort Method: quicksort  Memory: 27kB
   ->  HashAggregate (actual rows=50 loops=1)
         Group Key: remote_scan.l_quantity
@@ -678,7 +678,53 @@ GROUP BY
 	count_pay
 ORDER BY
 	count_pay;
-ERROR:  bogus varattno for OUTER_VAR var: 3
+Sort
+  Sort Key: remote_scan.count_pay
+  ->  HashAggregate
+        Group Key: remote_scan.count_pay
+        ->  Custom Scan (Citus Adaptive)
+              Task Count: 4
+              Tasks Shown: One of 4
+              ->  Task
+                    Node: host=localhost port=57637 dbname=regression
+                    ->  GroupAggregate
+                          Group Key: subquery_top.count_pay
+                          ->  Sort
+                                Sort Key: subquery_top.count_pay
+                                ->  Subquery Scan on subquery_top
+                                      ->  GroupAggregate
+                                            Group Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id), subquery_2.count_pay
+                                            Filter: (array_ndims(array_agg(('action=>1'::text) ORDER BY events.event_time)) > 0)
+                                            ->  Sort
+                                                  Sort Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id), subquery_2.count_pay
+                                                  ->  Hash Left Join
+                                                        Hash Cond: (users.composite_id = subquery_2.composite_id)
+                                                        ->  HashAggregate
+                                                              Group Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id), users.composite_id, ('action=>1'::text), events.event_time
+                                                              ->  Append
+                                                                    ->  Hash Join
+                                                                          Hash Cond: (users.composite_id = events.composite_id)
+                                                                          ->  Seq Scan on users_1400289 users
+                                                                                Filter: ((composite_id >= '(1,-9223372036854775808)'::user_composite_type) AND (composite_id <= '(1,9223372036854775807)'::user_composite_type))
+                                                                          ->  Hash
+                                                                                ->  Seq Scan on events_1400285 events
+                                                                                      Filter: ((event_type)::text = 'click'::text)
+                                                                    ->  Hash Join
+                                                                          Hash Cond: (users_1.composite_id = events_1.composite_id)
+                                                                          ->  Seq Scan on users_1400289 users_1
+                                                                                Filter: ((composite_id >= '(1,-9223372036854775808)'::user_composite_type) AND (composite_id <= '(1,9223372036854775807)'::user_composite_type))
+                                                                          ->  Hash
+                                                                                ->  Seq Scan on events_1400285 events_1
+                                                                                      Filter: ((event_type)::text = 'submit'::text)
+                                                        ->  Hash
+                                                              ->  Subquery Scan on subquery_2
+                                                                    ->  GroupAggregate
+                                                                          Group Key: events_2.composite_id
+                                                                          Filter: (count(*) > 2)
+                                                                          ->  Sort
+                                                                                Sort Key: events_2.composite_id
+                                                                                ->  Seq Scan on events_1400285 events_2
+                                                                                      Filter: ((composite_id >= '(1,-9223372036854775808)'::user_composite_type) AND (composite_id <= '(1,9223372036854775807)'::user_composite_type) AND ((event_type)::text = 'pay'::text))
 -- Lateral join subquery pushdown
 -- set subquery_pushdown due to limit in the query
 SET citus.subquery_pushdown to ON;
@@ -845,7 +891,7 @@ EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE)
 	SELECT l_quantity, count(*) count_quantity FROM lineitem
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
 Sort (actual rows=50 loops=1)
-  Sort Key: COALESCE((pg_catalog.sum((COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint))))::bigint, '0'::bigint), remote_scan.l_quantity
+  Sort Key: (COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint)), remote_scan.l_quantity
   Sort Method: quicksort  Memory: 27kB
   ->  HashAggregate (actual rows=50 loops=1)
         Group Key: remote_scan.l_quantity
@@ -1148,7 +1194,7 @@ Custom Scan (Citus INSERT ... SELECT via coordinator)
               Task Count: 4
               Tasks Shown: One of 4
               ->  Task
-                    Node: host=localhost port=57638 dbname=regression
+                    Node: host=localhost port=57637 dbname=regression
                     ->  Limit
                           ->  Seq Scan on orders_hash_part_360045 orders_hash_part
 SELECT true AS valid FROM explain_json($$
@@ -1165,7 +1211,7 @@ Custom Scan (Citus INSERT ... SELECT via coordinator)
               Task Count: 4
               Tasks Shown: One of 4
               ->  Task
-                    Node: host=localhost port=57638 dbname=regression
+                    Node: host=localhost port=57637 dbname=regression
                     ->  Limit
                           ->  Seq Scan on orders_hash_part_360045 orders_hash_part
 EXPLAIN (COSTS OFF)
