@@ -1934,6 +1934,21 @@ MasterAggregateExpression(Aggref *originalAggregate,
 		newMasterAggregate->aggdistinct = NULL;
 		newMasterAggregate->aggfilter = NULL;
 
+		if (aggregateType != AGGREGATE_CUSTOM_COMMUTE)
+		{
+			/*
+			 * Aggregates like sum may require passing to different signatures.
+			 * eg sum(bigint) returns numeric, so we need to use sum(numeric) on coordinator.
+			 */
+			const char *aggregateName = AggregateNames[aggregateType];
+			Oid aggregateFunctionId = AggregateFunctionOid(aggregateName,
+														   workerReturnType);
+			Oid masterReturnType = get_func_rettype(aggregateFunctionId);
+
+			newMasterAggregate->aggfnoid = aggregateFunctionId;
+			newMasterAggregate->aggtype = masterReturnType;
+		}
+
 		column = makeVar(masterTableId, walkerContext->columnId, workerReturnType,
 						 workerReturnTypeMod, workerCollationId, columnLevelsUp);
 		walkerContext->columnId++;
