@@ -97,12 +97,20 @@ begin
 end;
 $$;
 
+CREATE FUNCTION agg_combinefunc(state1 int, state2 int)
+RETURNS int IMMUTABLE LANGUAGE plpgsql AS $$
+begin
+    return state1 + state2;
+end;
+$$;
+
 CREATE AGGREGATE sum2(int) (
     sfunc = agg_sfunc,
     stype = int,
     sspace = 8,
     finalfunc = agg_finalfunc,
     finalfunc_extra,
+    combinefunc = agg_combinefunc,
     initcond = '5',
     msfunc = agg_sfunc,
     mstype = int,
@@ -119,8 +127,13 @@ CREATE AGGREGATE sum2(int) (
 SET citus.enable_ddl_propagation TO on;
 
 -- functions are distributed by int arguments, when run in isolation it is not guaranteed a table actually exists.
-CREATE TABLE colocation_table(id int);
+CREATE TABLE colocation_table(id int, val int);
 SELECT create_distributed_table('colocation_table','id');
+INSERT INTO colocation_table VALUES (1, 0), (2, 1), (3, 4), (6, 2), (3, 2), (2, 0), (8, 4);
+
+CREATE TABLE cojoin_table(id int, val int);
+SELECT create_distributed_table('cojoin_table','id');
+INSERT INTO cojoin_table VALUES (1, 2), (2, 3), (5, 6), (6, 7), (3, 4), (2, 3), (8, 9);
 
 -- make sure that none of the active and primary nodes hasmetadata
 -- at the start of the test
@@ -217,6 +230,26 @@ ALTER FUNCTION function_tests2.add(int,int) SET SCHEMA function_tests;
 
 ALTER AGGREGATE sum2(int) SET SCHEMA function_tests2;
 
+-- Test distributed execution
+-- This fails before being marked for distributed execution
+SELECT ct.val, function_tests2.sum2(ct.id + jt.val)
+FROM colocation_table ct
+JOIN cojoin_table jt ON ct.id = jt.id
+GROUP BY ct.val ORDER BY ct.val;
+
+SELECT mark_aggregate_for_distributed_execution('function_tests2.sum2(int)', 'combine');
+SELECT ct.val, function_tests2.sum2(ct.id + jt.val)
+FROM colocation_table ct
+JOIN cojoin_table jt ON ct.id = jt.id
+GROUP BY ct.val ORDER BY ct.val;
+
+-- Commute strategy isn't rejected, but gives incorrect results
+SELECT mark_aggregate_for_distributed_execution('function_tests2.sum2(int)', 'commute');
+SELECT ct.val, function_tests2.sum2(ct.id + jt.val)
+FROM colocation_table ct
+JOIN cojoin_table jt ON ct.id = jt.id
+GROUP BY ct.val ORDER BY ct.val;
+
 -- when a function is distributed and we create or replace the function we need to propagate the statement to the worker to keep it in sync with the coordinator
 CREATE OR REPLACE FUNCTION add(integer, integer) RETURNS integer
 AS 'select $1 * $2;' -- I know, this is not an add, but the output will tell us if the update succeeded
@@ -225,6 +258,9 @@ AS 'select $1 * $2;' -- I know, this is not an add, but the output will tell us 
     RETURNS NULL ON NULL INPUT;
 SELECT public.verify_function_is_same_on_workers('function_tests.add(int,int)');
 SELECT * FROM run_command_on_workers('SELECT function_tests.add(2,3);') ORDER BY 1,2;
+
+-- First test that we reject NULL
+SELECT create_distributed_function(NULL);
 
 -- distributed functions should not be allowed to depend on an extension, also functions
 -- that depend on an extension should not be allowed to be distributed.
