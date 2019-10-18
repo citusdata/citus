@@ -237,6 +237,10 @@ FROM colocation_table ct
 JOIN cojoin_table jt ON ct.id = jt.id
 GROUP BY ct.val ORDER BY ct.val;
 
+-- First test 3 erroneous inputs
+SELECT mark_aggregate_for_distributed_execution(NULL, 'none');
+SELECT mark_aggregate_for_distributed_execution('function_tests2.sum2(int)', NULL);
+SELECT mark_aggregate_for_distributed_execution('function_tests2.sum2(int)', 'asdf');
 SELECT mark_aggregate_for_distributed_execution('function_tests2.sum2(int)', 'combine');
 SELECT ct.val, function_tests2.sum2(ct.id + jt.val)
 FROM colocation_table ct
@@ -288,7 +292,6 @@ SELECT create_distributed_function('add_with_param_names(int, int)', '$-1');
 SELECT create_distributed_function('add_with_param_names(int, int)', '$-10');
 SELECT create_distributed_function('add_with_param_names(int, int)', '$3');
 SELECT create_distributed_function('add_with_param_names(int, int)', '$1a');
-
 -- non existing column name
 SELECT create_distributed_function('add_with_param_names(int, int)', 'aaa');
 

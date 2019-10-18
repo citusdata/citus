@@ -392,6 +392,13 @@ FROM colocation_table ct
 JOIN cojoin_table jt ON ct.id = jt.id
 GROUP BY ct.val ORDER BY ct.val;
 ERROR:  unsupported aggregate function sum2
+-- First test 3 erroneous inputs
+SELECT mark_aggregate_for_distributed_execution(NULL, 'none');
+ERROR:  the first parameter for mark_aggregate_for_distributed_execution() should be a single a valid function or procedure name followed by a list of parameters in parantheses
+SELECT mark_aggregate_for_distributed_execution('function_tests2.sum2(int)', NULL);
+ERROR:  mark_aggregate_for_distributed_execution expects a strategy that is one of: 'none', 'combine', 'commute'
+SELECT mark_aggregate_for_distributed_execution('function_tests2.sum2(int)', 'asdf');
+ERROR:  mark_aggregate_for_distributed_execution expects a strategy that is one of: 'none', 'combine', 'commute'
 SELECT mark_aggregate_for_distributed_execution('function_tests2.sum2(int)', 'combine');
  mark_aggregate_for_distributed_execution 
 ------------------------------------------
