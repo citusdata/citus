@@ -39,4 +39,6 @@ LANGUAGE C PARALLEL SAFE;
 
 ALTER TABLE pg_dist_object ADD aggregation_strategy int;
 
+#include "udfs/citus_finish_pg_upgrade/9.0-customagg.sql"
+
 RESET search_path;
