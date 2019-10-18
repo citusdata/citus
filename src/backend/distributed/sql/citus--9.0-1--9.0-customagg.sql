@@ -3,7 +3,7 @@ SET search_path = 'pg_catalog';
 CREATE FUNCTION mark_aggregate_for_distributed_execution(regprocedure, strategy text)
 RETURNS void
 AS 'MODULE_PATHNAME'
-LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
+LANGUAGE C;
 
 SET search_path = 'citus';
 
