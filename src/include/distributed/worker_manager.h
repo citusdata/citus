@@ -16,9 +16,9 @@
 
 #include "postgres.h"
 
+#include "storage/lmgr.h"
 #include "storage/lockdefs.h"
 #include "nodes/pg_list.h"
-#include "storage/lmgr.h"
 
 
 /* Worker nodeName's, nodePort's, and nodeCluster's maximum length */
