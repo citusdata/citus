@@ -685,17 +685,17 @@ select shouldhaveshards from pg_dist_node where nodeport = 8888;
 select shouldhaveshards from pg_dist_node where nodeport = 8888;
 
 
--- Check that master_mark_node_for_draining is correctly transferred to other mx nodes
+-- Check that setting shouldhaveshards to false is correctly transferred to other mx nodes
 \c - - - :master_port
-SELECT * from master_mark_node_for_draining('localhost', 8888);
+SELECT * from master_set_node_property('localhost', 8888, 'shouldhaveshards', false);
 select shouldhaveshards from pg_dist_node where nodeport = 8888;
 
 \c - postgres - :worker_1_port
 select shouldhaveshards from pg_dist_node where nodeport = 8888;
 
--- Check that master_make_data_node is correctly transferred to other mx nodes
+-- Check that setting shouldhaveshards to true is correctly transferred to other mx nodes
 \c - postgres - :master_port
-SELECT * from master_make_data_node('localhost', 8888);
+SELECT * from master_set_node_property('localhost', 8888, 'shouldhaveshards', true);
 select shouldhaveshards from pg_dist_node where nodeport = 8888;
 
 \c - postgres - :worker_1_port
