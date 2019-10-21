@@ -1048,8 +1048,8 @@ RemoveNodeFromCluster(char *nodeName, int32 nodePort)
 		if (NodeGroupHasShardPlacements(workerNode->groupId,
 										onlyConsiderActivePlacements))
 		{
-			ereport(ERROR, (errmsg(
-								"operation is not supported on a primary data node that has shard placements")));
+			ereport(ERROR, (errmsg("you cannot remove the primary node of a node group "
+								   "which has shard placements")));
 		}
 	}
 
