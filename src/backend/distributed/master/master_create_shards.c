@@ -177,7 +177,7 @@ CreateShardsWithRoundRobinPolicy(Oid distributedTableId, int32 shardCount,
 	LockRelationOid(DistNodeRelationId(), RowShareLock);
 
 	/* load and sort the worker node list for deterministic placement */
-	workerNodeList = ActivePrimaryDesiredDataNodeList(NoLock);
+	workerNodeList = ActivePrimaryShouldHaveShardsNodeList(NoLock);
 	workerNodeList = SortList(workerNodeList, CompareWorkerNodes);
 
 	/*
@@ -409,7 +409,7 @@ CreateReferenceTableShard(Oid distributedTableId)
 	 * load and sort the worker node list for deterministic placements
 	 * create_reference_table has already acquired ActivePrimaryNodeList lock
 	 */
-	workerNodeList = ActivePrimaryCurrentDataNodeList(NoLock);
+	workerNodeList = ActivePrimaryNodeList(NoLock);
 	workerNodeList = SortList(workerNodeList, CompareWorkerNodes);
 
 	/* get the next shard id */

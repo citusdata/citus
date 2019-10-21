@@ -307,17 +307,6 @@ ActivePrimaryNodeCount(void)
 
 
 /*
- * ActivePrimaryCurrentDataNodeCount returns the number of groups with a primary in the cluster.
- */
-uint32
-ActivePrimaryCurrentDataNodeCount(void)
-{
-	List *workerNodeList = ActivePrimaryCurrentDataNodeList(NoLock);
-	return list_length(workerNodeList);
-}
-
-
-/*
  * ActiveReadableNodeCount returns the number of groups with a node we can read from.
  */
 uint32
@@ -382,27 +371,14 @@ ActivePrimaryNodeList(LOCKMODE lockMode)
 
 
 /*
- * ActivePrimaryDesiredDataNodeList returns a list of all active, primary
- * worker nodes that can store new data, i.e isdatanode is 'true'.
+ * ActivePrimaryShouldHaveShardsNodeList returns a list of all active, primary
+ * worker nodes that can store new data, i.e shouldstoreshards is 'true'
  */
 List *
-ActivePrimaryDesiredDataNodeList(LOCKMODE lockMode)
+ActivePrimaryShouldHaveShardsNodeList(LOCKMODE lockMode)
 {
 	EnsureModificationsCanRun();
-	return FilterActiveNodeListFunc(lockMode, WorkerNodeIsPrimaryDesiredDataNode);
-}
-
-
-/*
- * ActivePrimaryCurrentDataNodeList returns a list of all active, primary
- * worker nodes that currently store data, i.e isdatanode is 'true' or
- * 'marked for draining'.
- */
-List *
-ActivePrimaryCurrentDataNodeList(LOCKMODE lockMode)
-{
-	EnsureModificationsCanRun();
-	return FilterActiveNodeListFunc(lockMode, WorkerNodeIsPrimaryCurrentDataNode);
+	return FilterActiveNodeListFunc(lockMode, WorkerNodeIsPrimaryShouldHaveShardsNode);
 }
 
 

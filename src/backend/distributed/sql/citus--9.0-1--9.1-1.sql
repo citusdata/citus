@@ -1,25 +1,6 @@
-SET search_path = 'pg_catalog';
-
-CREATE TYPE isdatanode AS ENUM('true', 'marked for draining', 'false');
-COMMENT ON TYPE isdatanode IS
-    'enum that contains the different possible states of pg_dist_node.isdatanode';
-
-ALTER TABLE pg_dist_node ADD isdatanode isdatanode NOT NULL DEFAULT 'true';
-COMMENT ON COLUMN pg_dist_node.isdatanode IS
+ALTER TABLE pg_catalog.pg_dist_node ADD shouldhaveshards bool NOT NULL DEFAULT true;
+COMMENT ON COLUMN pg_catalog.pg_dist_node.shouldhaveshards IS
     'indicates whether the node is eligible to contain data from distributed tables';
-
-RESET search_path;
-
-CREATE FUNCTION pg_catalog.master_make_nodata_node(nodename text,
-                                                   nodeport integer)
-  RETURNS VOID
-  LANGUAGE C STRICT
-  AS 'MODULE_PATHNAME', $$master_make_nodata_node$$;
-COMMENT ON FUNCTION pg_catalog.master_make_nodata_node(nodename text,
-                                                       nodeport integer)
-  IS 'make node a node that doesn''t store any distributed data';
-
-REVOKE ALL ON FUNCTION pg_catalog.master_make_nodata_node(text,int) FROM PUBLIC;
 
 CREATE FUNCTION pg_catalog.master_make_data_node(nodename text,
                                                  nodeport integer)

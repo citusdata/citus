@@ -900,26 +900,18 @@ NodeStateUpdateCommand(uint32 nodeId, bool isActive)
 
 
 /*
- * IsDataNodeUpdateCommand generates a command that can be executed to update
- * isdatanode column of a node in pg_dist_node table.
+ * ShouldHaveShardsUpdateCommand generates a command that can be executed to
+ * update the shouldhaveshards column of a node in pg_dist_node table.
  */
 char *
-IsDataNodeUpdateCommand(uint32 nodeId, Oid isDataNode)
+ShouldHaveShardsUpdateCommand(uint32 nodeId, bool shouldHaveShards)
 {
 	StringInfo nodeStateUpdateCommand = makeStringInfo();
-	char *isDataNodeString = "true";
-	if (isDataNode == IsDataNodeFalseId())
-	{
-		isDataNodeString = "false";
-	}
-	else if (isDataNode == IsDataNodeMarkedForRemovalId())
-	{
-		isDataNodeString = "marked for draining";
-	}
+	char *shouldHaveShardsString = shouldHaveShards ? "TRUE" : "FALSE";
 
 	appendStringInfo(nodeStateUpdateCommand,
-					 "UPDATE pg_dist_node SET isdatanode = '%s' "
-					 "WHERE nodeid = %u", isDataNodeString, nodeId);
+					 "UPDATE pg_dist_node SET shouldhaveshards = %s "
+					 "WHERE nodeid = %u", shouldHaveShardsString, nodeId);
 
 	return nodeStateUpdateCommand->data;
 }

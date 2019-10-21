@@ -2,7 +2,7 @@ SET citus.next_shard_id TO 1220000;
 
 -- Tests functions related to cluster membership
 
--- before starting the test, lets try to create reference table and see a 
+-- before starting the test, lets try to create reference table and see a
 -- meaningful error
 CREATE TABLE test_reference_table (y int primary key, name text);
 SELECT create_reference_table('test_reference_table');
@@ -21,14 +21,14 @@ SELECT * FROM master_add_node('localhost', :worker_1_port);
 SELECT master_get_active_worker_nodes();
 
 -- try to remove a node (with no placements)
-SELECT master_remove_node('localhost', :worker_2_port); 
+SELECT master_remove_node('localhost', :worker_2_port);
 
 -- verify that the node has been deleted
 SELECT master_get_active_worker_nodes();
 
 -- try to disable a node with no placements see that node is removed
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
-SELECT master_disable_node('localhost', :worker_2_port); 
+SELECT master_disable_node('localhost', :worker_2_port);
 SELECT master_get_active_worker_nodes();
 
 -- add some shard placements to the cluster
@@ -43,7 +43,7 @@ SELECT create_distributed_table('cluster_management_test', 'col_1', 'hash');
 SELECT shardid, shardstate, nodename, nodeport FROM pg_dist_shard_placement WHERE nodeport=:worker_2_port;
 
 -- try to remove a node with active placements and see that node removal is failed
-SELECT master_remove_node('localhost', :worker_2_port); 
+SELECT master_remove_node('localhost', :worker_2_port);
 SELECT master_get_active_worker_nodes();
 
 -- insert a row so that master_disable_node() exercises closing connections
@@ -51,7 +51,7 @@ INSERT INTO test_reference_table VALUES (1, '1');
 
 -- try to disable a node with active placements see that node is removed
 -- observe that a notification is displayed
-SELECT master_disable_node('localhost', :worker_2_port); 
+SELECT master_disable_node('localhost', :worker_2_port);
 SELECT master_get_active_worker_nodes();
 
 -- try to disable a node which does not exist and see that an error is thrown
@@ -98,7 +98,7 @@ SELECT master_get_active_worker_nodes();
 SELECT * FROM master_activate_node('localhost', :worker_2_port);
 
 -- try to remove a node with active placements and see that node removal is failed
-SELECT master_remove_node('localhost', :worker_2_port); 
+SELECT master_remove_node('localhost', :worker_2_port);
 
 -- mark all placements in the candidate node as inactive
 SELECT groupid AS worker_2_group FROM pg_dist_node WHERE nodeport=:worker_2_port \gset
@@ -106,7 +106,7 @@ UPDATE pg_dist_placement SET shardstate=3 WHERE groupid=:worker_2_group;
 SELECT shardid, shardstate, nodename, nodeport FROM pg_dist_shard_placement WHERE nodeport=:worker_2_port;
 
 -- try to remove a node with only inactive placements and see that removal still fails
-SELECT master_remove_node('localhost', :worker_2_port); 
+SELECT master_remove_node('localhost', :worker_2_port);
 SELECT master_get_active_worker_nodes();
 
 -- clean-up
@@ -154,8 +154,8 @@ SELECT nodename, nodeport FROM pg_dist_node WHERE nodename='localhost' AND nodep
 \c - - - :master_port
 
 -- check that removing two nodes in the same transaction works
-SELECT 
-	master_remove_node('localhost', :worker_1_port), 
+SELECT
+	master_remove_node('localhost', :worker_1_port),
 	master_remove_node('localhost', :worker_2_port);
 SELECT count(1) FROM pg_dist_node;
 
@@ -205,15 +205,15 @@ COMMIT;
 
 SELECT col1, col2 FROM temp ORDER BY col1;
 
-SELECT 
-	count(*) 
-FROM 
-	pg_dist_shard_placement, pg_dist_shard 
-WHERE 
+SELECT
+	count(*)
+FROM
+	pg_dist_shard_placement, pg_dist_shard
+WHERE
 	pg_dist_shard_placement.shardid = pg_dist_shard.shardid
 	AND pg_dist_shard.logicalrelid = 'temp'::regclass
 	AND pg_dist_shard_placement.nodeport = :worker_2_port;
-	
+
 DROP TABLE temp;
 
 \c - - - :worker_1_port
@@ -302,7 +302,7 @@ SET citus.shard_replication_factor TO 1;
 CREATE TABLE test_dist (x int, y int);
 SELECT create_distributed_table('test_dist', 'x');
 
--- testing behaviour when setting isdatanode to 'marked for draining'
+-- testing behaviour when setting shouldhaveshards to false on partially empty node
 SELECT * from master_mark_node_for_draining('localhost', :worker_2_port);
 CREATE TABLE test_dist_colocated (x int, y int);
 CREATE TABLE test_dist_non_colocated (x int, y int);
@@ -313,63 +313,56 @@ SELECT create_distributed_table('test_dist_non_colocated', 'x', colocate_with =>
 SELECT create_distributed_table('test_dist_colocated_with_non_colocated', 'x', colocate_with => 'test_dist_non_colocated');
 SELECT create_reference_table('test_ref');
 
--- colocated tables should still be placed on 'marked for draining' nodes for safety
+-- colocated tables should still be placed on shouldhaveshards false nodes for safety
 SELECT nodeport, count(*)
 FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
 WHERE logicalrelid = 'test_dist_colocated'::regclass GROUP BY nodeport;
 
--- non colocated tables should not be placed on 'marked for draining' nodes anymore
+-- non colocated tables should not be placed on shouldhaveshards false nodes anymore
 SELECT nodeport, count(*)
 FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
 WHERE logicalrelid = 'test_dist_non_colocated'::regclass GROUP BY nodeport;
 
 -- this table should be colocated with the test_dist_non_colocated table
--- correctly only on nodes without 'marked for draining' nodes
+-- correctly only on nodes with shouldhaveshards true
 SELECT nodeport, count(*)
 FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
 WHERE logicalrelid = 'test_dist_colocated_with_non_colocated'::regclass GROUP BY nodeport;
 
--- reference tables should be placed on 'marked for draining' nodes for safety
+-- reference tables should be placed on with shouldhaveshards false
 SELECT nodeport, count(*)
 FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
 WHERE logicalrelid = 'test_ref'::regclass GROUP BY nodeport;
 
--- make sure it's not allowed to set isdatanode to 'false' when there are still
--- distributed tables on the node
-SELECT * from master_make_nodata_node('localhost', :worker_2_port);
-
 -- cleanup for next test
 DROP TABLE test_dist, test_ref, test_dist_colocated, test_dist_non_colocated, test_dist_colocated_with_non_colocated;
 
--- testing behaviour when setting isdatanode to 'false'
-SELECT * from master_make_nodata_node('localhost', :worker_2_port);
+-- testing behaviour when setting shouldhaveshards to false on fully empty node
+SELECT * from master_mark_node_for_draining('localhost', :worker_2_port);
 CREATE TABLE test_dist (x int, y int);
 CREATE TABLE test_ref (a int, b int);
 SELECT create_distributed_table('test_dist', 'x');
 SELECT create_reference_table('test_ref');
 
--- distributed tables should still not be placed on nodes with isdatanode 'false'
+-- distributed tables should not be placed on nodes with shouldhaveshards false
 SELECT nodeport, count(*)
 FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
 WHERE logicalrelid = 'test_dist'::regclass GROUP BY nodeport;
 
--- reference tables should not be placed on nodes with isdatanode 'false'
+-- reference tables should be placed on nodes with shouldhaveshards false
 SELECT nodeport, count(*)
 FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
 WHERE logicalrelid = 'test_ref'::regclass GROUP BY nodeport;
 
--- shouldn't be possible to go from isdatanode 'false' to 'marked for draining'
-SELECT * from master_mark_node_for_draining('localhost', :worker_2_port);
-
 SELECT * from master_make_data_node('localhost', :worker_2_port);
 
 -- distributed tables should still not be placed on nodes that were switched to
--- isdatanode 'true'
+-- shouldhaveshards true
 SELECT nodeport, count(*)
 FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
 WHERE logicalrelid = 'test_dist'::regclass GROUP BY nodeport;
 
--- reference tables should now be placed on all nodes with isdatanode 'true'
+-- reference tables should still be placed on all nodes with isdatanode 'true'
 SELECT nodeport, count(*)
 FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
 WHERE logicalrelid = 'test_ref'::regclass GROUP BY nodeport;

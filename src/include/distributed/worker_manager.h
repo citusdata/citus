@@ -54,7 +54,7 @@ typedef struct WorkerNode
 	Oid nodeRole;                       /* the node's role in its group */
 	char nodeCluster[NAMEDATALEN];      /* the cluster the node is a part of */
 	bool metadataSynced;                /* node has the most recent metadata */
-	Oid isDataNode;                     /* if the node has shards on it or not */
+	bool shouldHaveShards;              /* if the node should have distributed table shards on it or not */
 } WorkerNode;
 
 
@@ -72,9 +72,7 @@ extern WorkerNode * WorkerGetRoundRobinCandidateNode(List *workerNodeList,
 extern WorkerNode * WorkerGetLocalFirstCandidateNode(List *currentNodeList);
 extern uint32 ActivePrimaryNodeCount(void);
 extern List * ActivePrimaryNodeList(LOCKMODE lockMode);
-extern List * ActivePrimaryDesiredDataNodeList(LOCKMODE lockMode);
-extern uint32 ActivePrimaryCurrentDataNodeCount(void);
-extern List * ActivePrimaryCurrentDataNodeList(LOCKMODE lockMode);
+extern List * ActivePrimaryShouldHaveShardsNodeList(LOCKMODE lockMode);
 extern uint32 ActiveReadableNodeCount(void);
 extern List * ActiveReadableNodeList(void);
 extern WorkerNode * GetWorkerNodeByNodeId(int nodeId);
@@ -86,8 +84,7 @@ extern uint32 GroupForNode(char *nodeName, int32 nodePorT);
 extern WorkerNode * PrimaryNodeForGroup(int32 groupId, bool *groupContainsNodes);
 extern bool WorkerNodeIsPrimary(WorkerNode *worker);
 extern bool WorkerNodeIsSecondary(WorkerNode *worker);
-extern bool WorkerNodeIsPrimaryCurrentDataNode(WorkerNode *worker);
-extern bool WorkerNodeIsPrimaryDesiredDataNode(WorkerNode *worker);
+extern bool WorkerNodeIsPrimaryShouldHaveShardsNode(WorkerNode *worker);
 extern bool WorkerNodeIsReadable(WorkerNode *worker);
 extern uint32 CountPrimariesWithMetadata(void);
 extern WorkerNode * GetFirstPrimaryWorkerNode(void);

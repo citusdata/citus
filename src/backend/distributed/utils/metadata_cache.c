@@ -143,9 +143,6 @@ typedef struct MetadataCacheData
 	Oid primaryNodeRoleId;
 	Oid secondaryNodeRoleId;
 	Oid unavailableNodeRoleId;
-	Oid isDataNodeTrueId;
-	Oid isDataNodeFalseId;
-	Oid isDataNodeMarkedForRemovalId;
 	Oid pgTableIsVisibleFuncId;
 	Oid citusTableIsVisibleFuncId;
 	bool databaseNameValid;
@@ -2496,47 +2493,6 @@ UnavailableNodeRoleId(void)
 }
 
 
-/* return the Oid of the 'true' isDataNode enum value */
-Oid
-IsDataNodeTrueId(void)
-{
-	if (!MetadataCache.isDataNodeTrueId)
-	{
-		MetadataCache.isDataNodeTrueId = LookupStringEnumValueId("isdatanode", "true");
-	}
-
-	return MetadataCache.isDataNodeTrueId;
-}
-
-
-/* return the Oid of the 'false' isDataNode enum value */
-Oid
-IsDataNodeFalseId(void)
-{
-	if (!MetadataCache.isDataNodeFalseId)
-	{
-		MetadataCache.isDataNodeFalseId = LookupStringEnumValueId("isdatanode", "false");
-	}
-
-	return MetadataCache.isDataNodeFalseId;
-}
-
-
-/* return the Oid of the 'marked for draining' isDataNode enum value */
-Oid
-IsDataNodeMarkedForRemovalId(void)
-{
-	if (!MetadataCache.isDataNodeMarkedForRemovalId)
-	{
-		MetadataCache.isDataNodeMarkedForRemovalId = LookupStringEnumValueId(
-			"isdatanode",
-			"marked for draining");
-	}
-
-	return MetadataCache.isDataNodeMarkedForRemovalId;
-}
-
-
 /*
  * master_dist_partition_cache_invalidate is a trigger function that performs
  * relcache invalidations when the contents of pg_dist_partition are changed
@@ -3083,7 +3039,7 @@ InitializeWorkerNodeCache(void)
 		workerNode->metadataSynced = currentNode->metadataSynced;
 		workerNode->isActive = currentNode->isActive;
 		workerNode->nodeRole = currentNode->nodeRole;
-		workerNode->isDataNode = currentNode->isDataNode;
+		workerNode->shouldHaveShards = currentNode->shouldHaveShards;
 		strlcpy(workerNode->nodeCluster, currentNode->nodeCluster, NAMEDATALEN);
 
 		newWorkerNodeArray[workerNodeIndex++] = workerNode;

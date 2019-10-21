@@ -306,7 +306,7 @@ create_reference_table(PG_FUNCTION_ARGS)
 	 */
 	EnsureRelationKindSupported(relationId);
 
-	workerNodeList = ActivePrimaryCurrentDataNodeList(ShareLock);
+	workerNodeList = ActivePrimaryNodeList(ShareLock);
 	workerCount = list_length(workerNodeList);
 
 	/* if there are no workers, error out */

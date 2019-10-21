@@ -1,6 +1,6 @@
 SET citus.next_shard_id TO 1220000;
 -- Tests functions related to cluster membership
--- before starting the test, lets try to create reference table and see a 
+-- before starting the test, lets try to create reference table and see a
 -- meaningful error
 CREATE TABLE test_reference_table (y int primary key, name text);
 SELECT create_reference_table('test_reference_table');
@@ -43,7 +43,7 @@ SELECT master_get_active_worker_nodes();
 (2 rows)
 
 -- try to remove a node (with no placements)
-SELECT master_remove_node('localhost', :worker_2_port); 
+SELECT master_remove_node('localhost', :worker_2_port);
  master_remove_node 
 --------------------
  
@@ -63,7 +63,7 @@ SELECT 1 FROM master_add_node('localhost', :worker_2_port);
         1
 (1 row)
 
-SELECT master_disable_node('localhost', :worker_2_port); 
+SELECT master_disable_node('localhost', :worker_2_port);
  master_disable_node 
 ---------------------
  
@@ -106,7 +106,7 @@ SELECT shardid, shardstate, nodename, nodeport FROM pg_dist_shard_placement WHER
 (8 rows)
 
 -- try to remove a node with active placements and see that node removal is failed
-SELECT master_remove_node('localhost', :worker_2_port); 
+SELECT master_remove_node('localhost', :worker_2_port);
 ERROR:  operation is not supported on a primary data node that has shard placements
 SELECT master_get_active_worker_nodes();
  master_get_active_worker_nodes 
@@ -119,7 +119,7 @@ SELECT master_get_active_worker_nodes();
 INSERT INTO test_reference_table VALUES (1, '1');
 -- try to disable a node with active placements see that node is removed
 -- observe that a notification is displayed
-SELECT master_disable_node('localhost', :worker_2_port); 
+SELECT master_disable_node('localhost', :worker_2_port);
 NOTICE:  Node localhost:57638 has active shard placements. Some queries may fail after this operation. Use SELECT master_activate_node('localhost', 57638) to activate this node back.
  master_disable_node 
 ---------------------
@@ -236,7 +236,7 @@ SELECT * FROM master_activate_node('localhost', :worker_2_port);
 (1 row)
 
 -- try to remove a node with active placements and see that node removal is failed
-SELECT master_remove_node('localhost', :worker_2_port); 
+SELECT master_remove_node('localhost', :worker_2_port);
 ERROR:  operation is not supported on a primary data node that has shard placements
 -- mark all placements in the candidate node as inactive
 SELECT groupid AS worker_2_group FROM pg_dist_node WHERE nodeport=:worker_2_port \gset
@@ -255,7 +255,7 @@ SELECT shardid, shardstate, nodename, nodeport FROM pg_dist_shard_placement WHER
 (8 rows)
 
 -- try to remove a node with only inactive placements and see that removal still fails
-SELECT master_remove_node('localhost', :worker_2_port); 
+SELECT master_remove_node('localhost', :worker_2_port);
 ERROR:  operation is not supported on a primary data node that has shard placements
 SELECT master_get_active_worker_nodes();
  master_get_active_worker_nodes 
@@ -362,8 +362,8 @@ SELECT nodename, nodeport FROM pg_dist_node WHERE nodename='localhost' AND nodep
 
 \c - - - :master_port
 -- check that removing two nodes in the same transaction works
-SELECT 
-	master_remove_node('localhost', :worker_1_port), 
+SELECT
+	master_remove_node('localhost', :worker_1_port),
 	master_remove_node('localhost', :worker_2_port);
  master_remove_node | master_remove_node 
 --------------------+--------------------
@@ -386,10 +386,10 @@ SELECT
 (1 row)
 
 SELECT * FROM pg_dist_node ORDER BY nodeid;
- nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole | nodecluster | metadatasynced | isdatanode 
---------+---------+-----------+----------+----------+-------------+----------+----------+-------------+----------------+------------
-     11 |       9 | localhost |    57637 | default  | f           | t        | primary  | default     | f              | true
-     12 |      10 | localhost |    57638 | default  | f           | t        | primary  | default     | f              | true
+ nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole | nodecluster | metadatasynced | shouldhaveshards 
+--------+---------+-----------+----------+----------+-------------+----------+----------+-------------+----------------+------------------
+     11 |       9 | localhost |    57637 | default  | f           | t        | primary  | default     | f              | t
+     12 |      10 | localhost |    57638 | default  | f           | t        | primary  | default     | f              | t
 (2 rows)
 
 -- check that mixed add/remove node commands work fine inside transaction
@@ -509,11 +509,11 @@ SELECT col1, col2 FROM temp ORDER BY col1;
  row2 |    2
 (2 rows)
 
-SELECT 
-	count(*) 
-FROM 
-	pg_dist_shard_placement, pg_dist_shard 
-WHERE 
+SELECT
+	count(*)
+FROM
+	pg_dist_shard_placement, pg_dist_shard
+WHERE
 	pg_dist_shard_placement.shardid = pg_dist_shard.shardid
 	AND pg_dist_shard.logicalrelid = 'temp'::regclass
 	AND pg_dist_shard_placement.nodeport = :worker_2_port;
@@ -522,7 +522,6 @@ WHERE
      4
 (1 row)
 
-	
 DROP TABLE temp;
 \c - - - :worker_1_port
 DELETE FROM pg_dist_partition;
@@ -608,11 +607,11 @@ CONTEXT:  PL/pgSQL function citus_internal.pg_dist_node_trigger_func() line 18 a
 INSERT INTO pg_dist_node (nodename, nodeport, groupid, noderole, nodecluster)
   VALUES ('localhost', 5000, 1000, 'primary', 'olap');
 ERROR:  new row for relation "pg_dist_node" violates check constraint "primaries_are_only_allowed_in_the_default_cluster"
-DETAIL:  Failing row contains (24, 1000, localhost, 5000, default, f, t, primary, olap, f, true).
+DETAIL:  Failing row contains (24, 1000, localhost, 5000, default, f, t, primary, olap, f, t).
 UPDATE pg_dist_node SET nodecluster = 'olap'
   WHERE nodeport = :worker_1_port;
 ERROR:  new row for relation "pg_dist_node" violates check constraint "primaries_are_only_allowed_in_the_default_cluster"
-DETAIL:  Failing row contains (16, 14, localhost, 57637, default, f, t, primary, olap, f, true).
+DETAIL:  Failing row contains (16, 14, localhost, 57637, default, f, t, primary, olap, f, t).
 -- check that you /can/ add a secondary node to a non-default cluster
 SELECT groupid AS worker_2_group FROM pg_dist_node WHERE nodeport = :worker_2_port \gset
 SELECT master_add_node('localhost', 8888, groupid => :worker_1_group, noderole => 'secondary', nodecluster=> 'olap');
@@ -635,9 +634,9 @@ SELECT master_add_node('localhost', 8887, groupid => :worker_1_group, noderole =
 (1 row)
 
 SELECT * FROM pg_dist_node WHERE nodeport=8887;
- nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole  |                           nodecluster                           | metadatasynced | isdatanode 
---------+---------+-----------+----------+----------+-------------+----------+-----------+-----------------------------------------------------------------+----------------+------------
-     26 |      14 | localhost |     8887 | default  | f           | t        | secondary | thisisasixtyfourcharacterstringrepeatedfourtimestomake256chars. | f              | true
+ nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole  |                           nodecluster                           | metadatasynced | shouldhaveshards 
+--------+---------+-----------+----------+----------+-------------+----------+-----------+-----------------------------------------------------------------+----------------+------------------
+     26 |      14 | localhost |     8887 | default  | f           | t        | secondary | thisisasixtyfourcharacterstringrepeatedfourtimestomake256chars. | f              | t
 (1 row)
 
 -- don't remove the secondary and unavailable nodes, check that no commands are sent to
@@ -678,9 +677,9 @@ SELECT master_update_node(:worker_1_node, 'somehost', 9000);
 (1 row)
 
 SELECT * FROM pg_dist_node WHERE nodeid = :worker_1_node;
- nodeid | groupid | nodename | nodeport | noderack | hasmetadata | isactive | noderole | nodecluster | metadatasynced | isdatanode 
---------+---------+----------+----------+----------+-------------+----------+----------+-------------+----------------+------------
-     16 |      14 | somehost |     9000 | default  | f           | t        | primary  | default     | f              | true
+ nodeid | groupid | nodename | nodeport | noderack | hasmetadata | isactive | noderole | nodecluster | metadatasynced | shouldhaveshards 
+--------+---------+----------+----------+----------+-------------+----------+----------+-------------+----------------+------------------
+     16 |      14 | somehost |     9000 | default  | f           | t        | primary  | default     | f              | t
 (1 row)
 
 -- cleanup
@@ -691,9 +690,9 @@ SELECT master_update_node(:worker_1_node, 'localhost', :worker_1_port);
 (1 row)
 
 SELECT * FROM pg_dist_node WHERE nodeid = :worker_1_node;
- nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole | nodecluster | metadatasynced | isdatanode 
---------+---------+-----------+----------+----------+-------------+----------+----------+-------------+----------------+------------
-     16 |      14 | localhost |    57637 | default  | f           | t        | primary  | default     | f              | true
+ nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole | nodecluster | metadatasynced | shouldhaveshards 
+--------+---------+-----------+----------+----------+-------------+----------+----------+-------------+----------------+------------------
+     16 |      14 | localhost |    57637 | default  | f           | t        | primary  | default     | f              | t
 (1 row)
 
 SET citus.shard_replication_factor TO 1;
@@ -704,7 +703,7 @@ SELECT create_distributed_table('test_dist', 'x');
  
 (1 row)
 
--- testing behaviour when setting isdatanode to 'marked for draining'
+-- testing behaviour when setting shouldhaveshards to false on partially empty node
 SELECT * from master_mark_node_for_draining('localhost', :worker_2_port);
  master_mark_node_for_draining 
 -------------------------------
@@ -739,7 +738,7 @@ SELECT create_reference_table('test_ref');
  
 (1 row)
 
--- colocated tables should still be placed on 'marked for draining' nodes for safety
+-- colocated tables should still be placed on shouldhaveshards false nodes for safety
 SELECT nodeport, count(*)
 FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
 WHERE logicalrelid = 'test_dist_colocated'::regclass GROUP BY nodeport;
@@ -749,7 +748,7 @@ WHERE logicalrelid = 'test_dist_colocated'::regclass GROUP BY nodeport;
     57638 |     2
 (2 rows)
 
--- non colocated tables should not be placed on 'marked for draining' nodes anymore
+-- non colocated tables should not be placed on shouldhaveshards false nodes anymore
 SELECT nodeport, count(*)
 FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
 WHERE logicalrelid = 'test_dist_non_colocated'::regclass GROUP BY nodeport;
@@ -759,7 +758,7 @@ WHERE logicalrelid = 'test_dist_non_colocated'::regclass GROUP BY nodeport;
 (1 row)
 
 -- this table should be colocated with the test_dist_non_colocated table
--- correctly only on nodes without 'marked for draining' nodes
+-- correctly only on nodes with shouldhaveshards true
 SELECT nodeport, count(*)
 FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
 WHERE logicalrelid = 'test_dist_colocated_with_non_colocated'::regclass GROUP BY nodeport;
@@ -768,7 +767,7 @@ WHERE logicalrelid = 'test_dist_colocated_with_non_colocated'::regclass GROUP BY
     57637 |     4
 (1 row)
 
--- reference tables should be placed on 'marked for draining' nodes for safety
+-- reference tables should be placed on with shouldhaveshards false
 SELECT nodeport, count(*)
 FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
 WHERE logicalrelid = 'test_ref'::regclass GROUP BY nodeport;
@@ -778,16 +777,12 @@ WHERE logicalrelid = 'test_ref'::regclass GROUP BY nodeport;
     57638 |     1
 (2 rows)
 
--- make sure it's not allowed to set isdatanode to 'false' when there are still
--- distributed tables on the node
-SELECT * from master_make_nodata_node('localhost', :worker_2_port);
-ERROR:  operation is not supported on a primary data node that has shard placements
 -- cleanup for next test
 DROP TABLE test_dist, test_ref, test_dist_colocated, test_dist_non_colocated, test_dist_colocated_with_non_colocated;
--- testing behaviour when setting isdatanode to 'false'
-SELECT * from master_make_nodata_node('localhost', :worker_2_port);
- master_make_nodata_node 
--------------------------
+-- testing behaviour when setting shouldhaveshards to false on fully empty node
+SELECT * from master_mark_node_for_draining('localhost', :worker_2_port);
+ master_mark_node_for_draining 
+-------------------------------
  
 (1 row)
 
@@ -805,7 +800,7 @@ SELECT create_reference_table('test_ref');
  
 (1 row)
 
--- distributed tables should still not be placed on nodes with isdatanode 'false'
+-- distributed tables should not be placed on nodes with shouldhaveshards false
 SELECT nodeport, count(*)
 FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
 WHERE logicalrelid = 'test_dist'::regclass GROUP BY nodeport;
@@ -814,27 +809,24 @@ WHERE logicalrelid = 'test_dist'::regclass GROUP BY nodeport;
     57637 |     4
 (1 row)
 
--- reference tables should not be placed on nodes with isdatanode 'false'
+-- reference tables should be placed on nodes with shouldhaveshards false
 SELECT nodeport, count(*)
 FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
 WHERE logicalrelid = 'test_ref'::regclass GROUP BY nodeport;
  nodeport | count 
 ----------+-------
     57637 |     1
-(1 row)
+    57638 |     1
+(2 rows)
 
--- shouldn't be possible to go from isdatanode 'false' to 'marked for draining'
-SELECT * from master_mark_node_for_draining('localhost', :worker_2_port);
-ERROR:  cannot mark a node for draining that is not a currently a data node
 SELECT * from master_make_data_node('localhost', :worker_2_port);
-NOTICE:  Replicating reference table "test_ref" to the node localhost:57638
  master_make_data_node 
 -----------------------
  
 (1 row)
 
 -- distributed tables should still not be placed on nodes that were switched to
--- isdatanode 'true'
+-- shouldhaveshards true
 SELECT nodeport, count(*)
 FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
 WHERE logicalrelid = 'test_dist'::regclass GROUP BY nodeport;
@@ -843,7 +835,7 @@ WHERE logicalrelid = 'test_dist'::regclass GROUP BY nodeport;
     57637 |     4
 (1 row)
 
--- reference tables should now be placed on all nodes with isdatanode 'true'
+-- reference tables should still be placed on all nodes with isdatanode 'true'
 SELECT nodeport, count(*)
 FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
 WHERE logicalrelid = 'test_ref'::regclass GROUP BY nodeport;
