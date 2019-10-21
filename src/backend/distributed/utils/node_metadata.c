@@ -96,6 +96,7 @@ static WorkerNode * SetShouldHaveShards(WorkerNode *workerNode, bool shouldHaveS
 PG_FUNCTION_INFO_V1(master_add_node);
 PG_FUNCTION_INFO_V1(master_add_inactive_node);
 PG_FUNCTION_INFO_V1(master_add_secondary_node);
+PG_FUNCTION_INFO_V1(master_set_node_property);
 PG_FUNCTION_INFO_V1(master_mark_node_for_draining);
 PG_FUNCTION_INFO_V1(master_make_nodata_node);
 PG_FUNCTION_INFO_V1(master_make_data_node);
@@ -310,17 +311,30 @@ master_disable_node(PG_FUNCTION_ARGS)
 
 
 /*
- * master_mark_node_for_draining marks a node for draining, i.e. no new
- * distributed tables will be created there.
+ * master_set_node_property sets a property of the node
  */
 Datum
-master_mark_node_for_draining(PG_FUNCTION_ARGS)
+master_set_node_property(PG_FUNCTION_ARGS)
 {
 	text *nodeNameText = PG_GETARG_TEXT_P(0);
 	int32 nodePort = PG_GETARG_INT32(1);
+	text *propertyText = PG_GETARG_TEXT_P(2);
+	bool value = PG_GETARG_BOOL(3);
+
 	WorkerNode *workerNode = ModifiableWorkerNode(text_to_cstring(nodeNameText),
 												  nodePort);
-	SetShouldHaveShards(workerNode, false);
+
+	if (strcmp(text_to_cstring(propertyText), "shouldhaveshards") == 0)
+	{
+		SetShouldHaveShards(workerNode, value);
+	}
+	else
+	{
+		ereport(ERROR, (errmsg(
+							"It's only supported to set 'shouldhaveshards' using this function"
+							)));
+	}
+
 
 	PG_RETURN_VOID();
 }

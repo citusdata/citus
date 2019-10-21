@@ -470,16 +470,16 @@ ORDER BY colocationid, logicalrelid;
  nation_mx                                              |      1390004 |           1 | n          | t
  part_mx                                                |      1390004 |           1 | n          | t
  supplier_mx                                            |      1390004 |           1 | n          | t
- nation_hash                                            |      1390005 |          16 | h          | s
- citus_mx_test_schema.nation_hash                       |      1390005 |          16 | h          | s
- lineitem_mx                                            |      1390006 |          16 | h          | s
- orders_mx                                              |      1390006 |          16 | h          | s
- limit_orders_mx                                        |      1390007 |           2 | h          | s
- articles_hash_mx                                       |      1390007 |           2 | h          | s
- multiple_hash_mx                                       |      1390008 |           2 | h          | s
- researchers_mx                                         |      1390009 |           2 | h          | s
- labs_mx                                                |      1390010 |           1 | h          | s
- objects_mx                                             |      1390010 |           1 | h          | s
- articles_single_shard_hash_mx                          |      1390010 |           1 | h          | s
+ nation_hash                                            |      1390006 |          16 | h          | s
+ citus_mx_test_schema.nation_hash                       |      1390006 |          16 | h          | s
+ lineitem_mx                                            |      1390007 |          16 | h          | s
+ orders_mx                                              |      1390007 |          16 | h          | s
+ limit_orders_mx                                        |      1390008 |           2 | h          | s
+ articles_hash_mx                                       |      1390008 |           2 | h          | s
+ multiple_hash_mx                                       |      1390009 |           2 | h          | s
+ researchers_mx                                         |      1390010 |           2 | h          | s
+ labs_mx                                                |      1390011 |           1 | h          | s
+ objects_mx                                             |      1390011 |           1 | h          | s
+ articles_single_shard_hash_mx                          |      1390011 |           1 | h          | s
 (23 rows)
 

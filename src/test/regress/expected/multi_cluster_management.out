@@ -705,9 +705,9 @@ SELECT create_distributed_table('test_dist', 'x');
 (1 row)
 
 -- testing behaviour when setting shouldhaveshards to false on partially empty node
-SELECT * from master_mark_node_for_draining('localhost', :worker_2_port);
- master_mark_node_for_draining 
--------------------------------
+SELECT * from master_set_node_property('localhost', :worker_2_port, 'shouldhaveshards', false);
+ master_set_node_property 
+--------------------------
  
 (1 row)
 
@@ -781,13 +781,15 @@ WHERE logicalrelid = 'test_ref'::regclass GROUP BY nodeport;
 -- cleanup for next test
 DROP TABLE test_dist, test_ref, test_dist_colocated, test_dist_non_colocated, test_dist_colocated_with_non_colocated;
 -- testing behaviour when setting shouldhaveshards to false on fully empty node
-SELECT * from master_mark_node_for_draining('localhost', :worker_2_port);
- master_mark_node_for_draining 
--------------------------------
+SELECT * from master_set_node_property('localhost', :worker_2_port, 'shouldhaveshards', false);
+ master_set_node_property 
+--------------------------
  
 (1 row)
 
 CREATE TABLE test_dist (x int, y int);
+CREATE TABLE test_dist_colocated (x int, y int);
+CREATE TABLE test_dist_non_colocated (x int, y int);
 CREATE TABLE test_ref (a int, b int);
 SELECT create_distributed_table('test_dist', 'x');
  create_distributed_table 
@@ -820,9 +822,9 @@ WHERE logicalrelid = 'test_ref'::regclass GROUP BY nodeport;
     57638 |     1
 (2 rows)
 
-SELECT * from master_make_data_node('localhost', :worker_2_port);
- master_make_data_node 
------------------------
+SELECT * from master_set_node_property('localhost', :worker_2_port, 'shouldhaveshards', true);
+ master_set_node_property 
+--------------------------
  
 (1 row)
 
@@ -846,4 +848,39 @@ WHERE logicalrelid = 'test_ref'::regclass GROUP BY nodeport;
     57638 |     1
 (2 rows)
 
-DROP TABLE test_dist, test_ref;
+SELECT create_distributed_table('test_dist_colocated', 'x');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+SELECT create_distributed_table('test_dist_non_colocated', 'x', colocate_with => 'none');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+-- colocated tables should not be placed on nodedes that were switched to
+-- shouldhaveshards true
+SELECT nodeport, count(*)
+FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
+WHERE logicalrelid = 'test_dist_colocated'::regclass GROUP BY nodeport;
+ nodeport | count 
+----------+-------
+    57637 |     4
+(1 row)
+
+-- non colocated tables should be placed on nodedes that were switched to
+-- shouldhaveshards true
+SELECT nodeport, count(*)
+FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
+WHERE logicalrelid = 'test_dist_non_colocated'::regclass GROUP BY nodeport;
+ nodeport | count 
+----------+-------
+    57637 |     2
+    57638 |     2
+(2 rows)
+
+SELECT * from master_set_node_property('localhost', :worker_2_port, 'bogusproperty', false);
+ERROR:  It's only supported to set 'shouldhaveshards' using this function
+DROP TABLE test_dist, test_ref, test_dist_colocated, test_dist_non_colocated;

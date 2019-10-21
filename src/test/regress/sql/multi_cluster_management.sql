@@ -304,7 +304,7 @@ CREATE TABLE test_dist (x int, y int);
 SELECT create_distributed_table('test_dist', 'x');
 
 -- testing behaviour when setting shouldhaveshards to false on partially empty node
-SELECT * from master_mark_node_for_draining('localhost', :worker_2_port);
+SELECT * from master_set_node_property('localhost', :worker_2_port, 'shouldhaveshards', false);
 CREATE TABLE test_dist_colocated (x int, y int);
 CREATE TABLE test_dist_non_colocated (x int, y int);
 CREATE TABLE test_dist_colocated_with_non_colocated (x int, y int);
@@ -339,8 +339,10 @@ WHERE logicalrelid = 'test_ref'::regclass GROUP BY nodeport;
 DROP TABLE test_dist, test_ref, test_dist_colocated, test_dist_non_colocated, test_dist_colocated_with_non_colocated;
 
 -- testing behaviour when setting shouldhaveshards to false on fully empty node
-SELECT * from master_mark_node_for_draining('localhost', :worker_2_port);
+SELECT * from master_set_node_property('localhost', :worker_2_port, 'shouldhaveshards', false);
 CREATE TABLE test_dist (x int, y int);
+CREATE TABLE test_dist_colocated (x int, y int);
+CREATE TABLE test_dist_non_colocated (x int, y int);
 CREATE TABLE test_ref (a int, b int);
 SELECT create_distributed_table('test_dist', 'x');
 SELECT create_reference_table('test_ref');
@@ -355,7 +357,7 @@ SELECT nodeport, count(*)
 FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
 WHERE logicalrelid = 'test_ref'::regclass GROUP BY nodeport;
 
-SELECT * from master_make_data_node('localhost', :worker_2_port);
+SELECT * from master_set_node_property('localhost', :worker_2_port, 'shouldhaveshards', true);
 
 -- distributed tables should still not be placed on nodes that were switched to
 -- shouldhaveshards true
@@ -368,4 +370,22 @@ SELECT nodeport, count(*)
 FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
 WHERE logicalrelid = 'test_ref'::regclass GROUP BY nodeport;
 
-DROP TABLE test_dist, test_ref;
+SELECT create_distributed_table('test_dist_colocated', 'x');
+SELECT create_distributed_table('test_dist_non_colocated', 'x', colocate_with => 'none');
+
+-- colocated tables should not be placed on nodedes that were switched to
+-- shouldhaveshards true
+SELECT nodeport, count(*)
+FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
+WHERE logicalrelid = 'test_dist_colocated'::regclass GROUP BY nodeport;
+
+
+-- non colocated tables should be placed on nodedes that were switched to
+-- shouldhaveshards true
+SELECT nodeport, count(*)
+FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
+WHERE logicalrelid = 'test_dist_non_colocated'::regclass GROUP BY nodeport;
+
+SELECT * from master_set_node_property('localhost', :worker_2_port, 'bogusproperty', false);
+
+DROP TABLE test_dist, test_ref, test_dist_colocated, test_dist_non_colocated;
