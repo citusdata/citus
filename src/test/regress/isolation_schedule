@@ -19,6 +19,7 @@ test: isolation_dump_global_wait_edges
 test: isolation_citus_dist_activity
 
 
+test: isolation_shouldhaveshards
 test: isolation_dml_vs_repair isolation_copy_placement_vs_copy_placement
 
 test: isolation_concurrent_dml isolation_data_migration

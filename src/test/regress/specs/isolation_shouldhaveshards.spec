@@ -14,21 +14,24 @@ teardown
 
 session "s1"
 
+step "s1-add-second-node" {
+	SELECT 1 FROM master_add_node('localhost', 57638);
+}
+
 step "s1-begin"
 {
 	BEGIN;
 }
 
-step "s1-nodata"
+step "s1-noshards"
 {
-	SELECT * from master_make_nodata_node('localhost', 57637);
+	SELECT * from master_set_node_property('localhost', 57637, 'shouldhaveshards', false);
 }
 
 step "s1-commit"
 {
 	COMMIT;
 }
-
 
 session "s2"
 
@@ -56,7 +59,15 @@ step "s2-commit"
 	COMMIT;
 }
 
-permutation "s1-begin" "s2-begin" "s2-create-distributed-table" "s1-nodata" "s2-commit" "s1-commit"
-permutation "s1-begin" "s2-begin" "s1-nodata" "s2-create-distributed-table" "s1-commit" "s2-commit"
-permutation "s1-begin" "s2-begin" "s1-nodata" "s2-update-node" "s1-commit" "s2-commit"
-permutation "s1-begin" "s2-begin" "s2-update-node" "s1-nodata" "s2-commit" "s1-commit"
+step "s2-shardcounts"
+{
+	SELECT nodeport, count(*)
+	FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
+	WHERE logicalrelid = 't1'::regclass GROUP BY nodeport;
+}
+
+
+permutation "s1-add-second-node" "s1-begin" "s2-begin" "s2-create-distributed-table" "s1-noshards" "s2-commit" "s1-commit" "s2-shardcounts"
+permutation "s1-add-second-node" "s1-begin" "s2-begin" "s1-noshards" "s2-create-distributed-table" "s1-commit" "s2-commit" "s2-shardcounts"
+permutation "s1-begin" "s2-begin" "s1-noshards" "s2-update-node" "s1-commit" "s2-commit"
+permutation "s1-begin" "s2-begin" "s2-update-node" "s1-noshards" "s2-commit" "s1-commit"
