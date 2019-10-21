@@ -9,7 +9,7 @@ BEFORE_CITUS_UPGRADE_COORD_SCHEDULE = './before_citus_upgrade_coord_schedule'
 
 MASTER = 'master'
 # This should be updated when citus version changes
-MASTER_VERSION = '9.0'
+MASTER_VERSION = '9.1'
 
 HOME = expanduser("~")
 
