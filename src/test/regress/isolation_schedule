@@ -5,6 +5,7 @@ test: isolation_add_node_vs_reference_table_operations
 test: isolation_create_table_vs_add_remove_node
 test: isolation_master_update_node
 test: isolation_ensure_dependency_activate_node
+test: isolation_shouldhaveshards
 
 # tests that change node metadata should precede
 # isolation_cluster_management such that tests
@@ -19,7 +20,6 @@ test: isolation_dump_global_wait_edges
 test: isolation_citus_dist_activity
 
 
-test: isolation_shouldhaveshards
 test: isolation_dml_vs_repair isolation_copy_placement_vs_copy_placement
 
 test: isolation_concurrent_dml isolation_data_migration
