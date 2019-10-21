@@ -1,4 +1,4 @@
-/* citus--8.0-11--8.0-12 */
+--  citus--8.0-11--8.0-12 
 SET search_path = 'pg_catalog';
 
 CREATE OR REPLACE FUNCTION pg_catalog.citus_stat_statements(OUT queryid bigint,

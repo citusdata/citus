@@ -1,4 +1,4 @@
-/* citus--7.0-14--7.0-15 */
+--  citus--7.0-14--7.0-15 
 
 DROP FUNCTION pg_catalog.dump_local_wait_edges(int4);
 

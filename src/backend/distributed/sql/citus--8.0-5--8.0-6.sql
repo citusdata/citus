@@ -1,4 +1,4 @@
-/* citus--8.0-5--8.0-6 */
+--  citus--8.0-5--8.0-6 
 SET search_path = 'pg_catalog';
 
 CREATE FUNCTION get_global_active_transactions(OUT datid oid, OUT process_id int, OUT initiator_node_identifier int4, OUT worker_query BOOL, OUT transaction_number int8, OUT transaction_stamp timestamptz)

@@ -1,4 +1,4 @@
-/* citus--8.2-3--8.2-4 */
+--  citus--8.2-3--8.2-4 
 
 CREATE OR REPLACE FUNCTION pg_catalog.citus_executor_name(executor_type int)
 RETURNS text

@@ -1,8 +1,6 @@
-/* citus--7.3-2--7.3-3 */
+--  citus--7.3-2--7.3-3 
 
-/*****************************************************************************
- * Citus json aggregate helpers
- *****************************************************************************/
+-- Citus json aggregate helpers
 
 CREATE FUNCTION pg_catalog.citus_jsonb_concatenate(state jsonb, val jsonb)
 	RETURNS jsonb
@@ -52,9 +50,7 @@ AS $function$
 $function$;
 
 
-/*****************************************************************************
- * Citus json aggregates
- *****************************************************************************/
+-- Citus json aggregates
 
 CREATE AGGREGATE pg_catalog.jsonb_cat_agg(jsonb) (
     SFUNC = citus_jsonb_concatenate,

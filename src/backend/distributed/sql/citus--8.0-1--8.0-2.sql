@@ -1,4 +1,4 @@
-/* citus--7.5-7--8.0-1 */
+--  citus--7.5-7--8.0-1 
 SET search_path = 'pg_catalog';
 
 CREATE OR REPLACE FUNCTION pg_catalog.relation_is_a_known_shard(regclass)

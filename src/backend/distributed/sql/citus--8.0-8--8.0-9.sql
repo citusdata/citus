@@ -1,4 +1,4 @@
-/* citus--8.0-8--8.0-9 */
+--  citus--8.0-8--8.0-9 
 SET search_path = 'pg_catalog';
 
 REVOKE ALL ON FUNCTION master_activate_node(text,int) FROM PUBLIC;

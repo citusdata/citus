@@ -1,4 +1,4 @@
-/* citus--8.0-6--8.0-7 */
+--  citus--8.0-6--8.0-7 
 SET search_path = 'pg_catalog';
 
 CREATE VIEW citus.citus_lock_waits AS

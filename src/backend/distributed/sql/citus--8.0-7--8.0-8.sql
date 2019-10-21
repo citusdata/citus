@@ -1,4 +1,4 @@
-/* citus--8.0-7--8.0-8 */
+--  citus--8.0-7--8.0-8 
 SET search_path = 'pg_catalog';
 
 DROP FUNCTION IF EXISTS pg_catalog.worker_drop_distributed_table(logicalrelid Oid);

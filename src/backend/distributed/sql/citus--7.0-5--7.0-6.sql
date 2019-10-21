@@ -1,4 +1,4 @@
-/* citus--7.0-5--7.0-6 */
+--  citus--7.0-5--7.0-6 
 
 CREATE FUNCTION pg_catalog.dump_local_wait_edges(
                     IN source_node_id int4,
