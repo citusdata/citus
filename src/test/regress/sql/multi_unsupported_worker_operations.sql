@@ -8,7 +8,7 @@ SET citus.next_shard_id TO 1270000;
 ALTER SEQUENCE pg_catalog.pg_dist_groupid_seq RESTART 1370000;
 ALTER SEQUENCE pg_catalog.pg_dist_node_nodeid_seq RESTART 1370000;
 
--- Set the colocation id to a safe value so that 
+-- Set the colocation id to a safe value so that
 -- it is not affected by future changes to colocation id sequence
 SELECT nextval('pg_catalog.pg_dist_colocationid_seq') AS last_colocation_id \gset
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 150000;
@@ -29,8 +29,8 @@ CREATE TABLE mx_ref_table (col_1 int, col_2 text);
 SELECT create_reference_table('mx_ref_table');
 
 -- Check that the created tables are colocated MX tables
-SELECT logicalrelid, repmodel, colocationid 
-FROM pg_dist_partition 
+SELECT logicalrelid, repmodel, colocationid
+FROM pg_dist_partition
 WHERE logicalrelid IN ('mx_table'::regclass, 'mx_table_2'::regclass)
 ORDER BY logicalrelid;
 
@@ -68,7 +68,7 @@ SELECT count(*) FROM pg_dist_partition WHERE logicalrelid='mx_table_worker'::reg
 DROP TABLE mx_table_worker;
 
 -- master_create_worker_shards
-CREATE TEMP TABLE pg_dist_shard_temp AS 
+CREATE TEMP TABLE pg_dist_shard_temp AS
 SELECT * FROM pg_dist_shard WHERE logicalrelid = 'mx_table'::regclass;
 
 DELETE FROM pg_dist_shard WHERE logicalrelid = 'mx_table'::regclass;
@@ -85,7 +85,6 @@ CREATE UNIQUE INDEX mx_test_uniq_index ON mx_table(col_1);
 \c - - - :worker_1_port
 
 -- changing isdatanode
-SELECT * from master_make_nodata_node('localhost', 8888);
 SELECT * from master_make_data_node('localhost', 8888);
 SELECT * from master_mark_node_for_draining('localhost', 8888);
 
@@ -131,11 +130,11 @@ SELECT mark_tables_colocated('mx_table', ARRAY['mx_table_2']);
 SELECT colocationid FROM pg_dist_partition WHERE logicalrelid='mx_table_2'::regclass;
 
 SELECT colocationid AS old_colocation_id
-FROM pg_dist_partition 
+FROM pg_dist_partition
 WHERE logicalrelid='mx_table'::regclass \gset
 
-UPDATE pg_dist_partition 
-SET colocationid = :old_colocation_id 
+UPDATE pg_dist_partition
+SET colocationid = :old_colocation_id
 WHERE logicalrelid='mx_table_2'::regclass;
 
 -- start_metadata_sync_to_node
@@ -171,7 +170,7 @@ SELECT master_remove_partition_metadata('mx_table'::regclass, 'public', 'mx_tabl
 SELECT count(*) FROM mx_table;
 
 -- master_copy_shard_placement
-SELECT logicalrelid, shardid AS testshardid, nodename, nodeport 
+SELECT logicalrelid, shardid AS testshardid, nodename, nodeport
 FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement
 WHERE logicalrelid = 'mx_table'::regclass AND nodeport=:worker_1_port
 ORDER BY shardid
@@ -183,7 +182,7 @@ VALUES (:worker_2_group, :testshardid, 3, 0);
 
 SELECT master_copy_shard_placement(:testshardid, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
 
-SELECT shardid, nodename, nodeport, shardstate 
+SELECT shardid, nodename, nodeport, shardstate
 FROM pg_dist_shard_placement
 WHERE shardid = :testshardid
 ORDER BY nodeport;
