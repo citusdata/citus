@@ -1,4 +1,5 @@
 SET citus.next_shard_id TO 1220000;
+ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 1390000;
 
 -- Tests functions related to cluster membership
 
