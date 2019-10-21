@@ -316,7 +316,7 @@ create_reference_table(PG_FUNCTION_ARGS)
 
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 						errmsg("cannot create reference table \"%s\"", relationName),
-						errdetail("There are no active data nodes.")));
+						errdetail("There are no active worker nodes.")));
 	}
 
 	CreateDistributedTable(relationId, distributionColumn, DISTRIBUTE_BY_NONE,
