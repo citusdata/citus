@@ -1,4 +1,4 @@
-/* citus--7.4-1--7.4-2 */
+--  citus--7.4-1--7.4-2 
 
 CREATE OR REPLACE FUNCTION pg_catalog.citus_drop_trigger()
     RETURNS event_trigger

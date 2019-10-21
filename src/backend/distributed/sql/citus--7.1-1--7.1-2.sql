@@ -1,4 +1,4 @@
-/* citus--7.1-1--7.1-2 */
+--  citus--7.1-1--7.1-2 
 
 CREATE OR REPLACE FUNCTION pg_catalog.citus_version()
     RETURNS text

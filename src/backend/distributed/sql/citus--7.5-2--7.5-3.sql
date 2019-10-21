@@ -1,4 +1,4 @@
-/* citus--7.5-2--7.5-3 */
+--  citus--7.5-2--7.5-3 
 SET search_path = 'pg_catalog';
 
 CREATE FUNCTION master_dist_authinfo_cache_invalidate()

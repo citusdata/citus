@@ -1,4 +1,4 @@
-/* citus--7.5-3--7.5-4 */
+--  citus--7.5-3--7.5-4 
 
 CREATE FUNCTION pg_catalog.citus_query_stats(OUT queryid bigint,
 											 OUT userid oid,

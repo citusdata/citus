@@ -1,4 +1,4 @@
-/* citus--8.0-12--8.0-13 */
+--  citus--8.0-12--8.0-13 
 CREATE FUNCTION citus_check_defaults_for_sslmode()
     RETURNS void
     LANGUAGE C STRICT

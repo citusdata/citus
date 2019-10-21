@@ -1,4 +1,4 @@
-/* citus--7.5-4--7.5-5 */
+--  citus--7.5-4--7.5-5 
 CREATE FUNCTION pg_catalog.citus_executor_name(executor_type int)
 RETURNS TEXT
 LANGUAGE plpgsql

@@ -1,4 +1,4 @@
-/* citus--7.1-2--7.1-3 */
+--  citus--7.1-2--7.1-3 
 
 CREATE TABLE citus.pg_dist_node_metadata(
     metadata jsonb NOT NULL

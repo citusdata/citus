@@ -1,4 +1,4 @@
-/* citus--7.5-6--7.5-7 */
+--  citus--7.5-6--7.5-7 
 SET search_path = 'pg_catalog';
 
 CREATE FUNCTION pg_catalog.poolinfo_valid(text)

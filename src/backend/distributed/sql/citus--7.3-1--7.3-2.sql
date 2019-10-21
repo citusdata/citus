@@ -1,4 +1,4 @@
-/* citus--7.3-1--7.3-2 */
+--  citus--7.3-1--7.3-2 
 
 CREATE FUNCTION pg_catalog.citus_text_send_as_jsonb(text)
 RETURNS bytea

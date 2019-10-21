@@ -1,6 +1,6 @@
-/* citus--7.0-1--7.0-2.sql */
+--  citus--7.0-1--7.0-2.sql 
 
-/* redefine shard_name as STRICT */
+--  redefine shard_name as STRICT 
 CREATE OR REPLACE FUNCTION pg_catalog.shard_name(object_name regclass, shard_id bigint)
     RETURNS text
     LANGUAGE C STABLE STRICT

@@ -1,4 +1,4 @@
-/* citus--7.0-6--7.0-7 */
+--  citus--7.0-6--7.0-7 
 
 CREATE FUNCTION citus.replace_isolation_tester_func()
 RETURNS void AS $$

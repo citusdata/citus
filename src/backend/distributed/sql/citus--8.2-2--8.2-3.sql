@@ -1,4 +1,4 @@
-/* citus--8.2-2--8.2-3 */
+--  citus--8.2-2--8.2-3 
 
 SET search_path = 'pg_catalog';
 

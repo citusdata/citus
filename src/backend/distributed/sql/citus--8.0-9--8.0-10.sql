@@ -1,4 +1,4 @@
-/* citus--8.0-9--8.0-10 */
+--  citus--8.0-9--8.0-10 
 SET search_path = 'pg_catalog';
 
 CREATE FUNCTION worker_execute_sql_task(jobid bigint, taskid integer, query text, binary bool)

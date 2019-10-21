@@ -1,4 +1,4 @@
-/* citus--7.2-1--7.2-2 */
+--  citus--7.2-1--7.2-2 
 
 CREATE TYPE citus.copy_format AS ENUM ('csv', 'binary', 'text');
 

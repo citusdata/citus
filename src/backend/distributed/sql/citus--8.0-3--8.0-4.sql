@@ -1,4 +1,4 @@
-/* citus--8.0-3--8.0-4 */
+--  citus--8.0-3--8.0-4 
 SET search_path = 'pg_catalog';
 
 CREATE OR REPLACE FUNCTION lock_relation_if_exists(table_name text, lock_mode text)
