@@ -85,9 +85,6 @@ static void SetUpDistributedTableDependencies(WorkerNode *workerNode);
 static List * ParseWorkerNodeFileAndRename(void);
 static WorkerNode * TupleToWorkerNode(TupleDesc tupleDescriptor, HeapTuple heapTuple);
 static WorkerNode * ModifiableWorkerNode(const char *nodeName, int32 nodePort);
-static WorkerNode * ModifiableWorkerNodeWithoutPrimaryPlacements(const char *nodeName,
-																 int32
-																 nodePort);
 static void UpdateNodeLocation(int32 nodeId, char *newNodeName, int32 newNodePort);
 static bool UnsetMetadataSyncedForAll(void);
 static WorkerNode * SetShouldHaveShards(WorkerNode *workerNode, bool shouldHaveShards);
@@ -429,40 +426,6 @@ ModifiableWorkerNode(const char *nodeName, int32 nodePort)
 		ereport(ERROR, (errmsg("node at \"%s:%u\" does not exist", nodeName, nodePort)));
 	}
 
-	return workerNode;
-}
-
-
-/*
- * ModifiableWorkerNode gets the requested WorkerNode and also gets locks
- * required for modifying it. This fails if the node does not exist.
- *
- * It also fails if the node is a primary with active distributed tables. To
- * check this it removes all the reference table placements from the node.
- * SO ONLY USE THIS when reference tables should be deleted from the node after
- * a succesful transaction.
- */
-static WorkerNode *
-ModifiableWorkerNodeWithoutPrimaryPlacements(const char *nodeName, int32 nodePort)
-{
-	WorkerNode *workerNode = ModifiableWorkerNode(nodeName, nodePort);
-	bool onlyConsiderActivePlacements = false;
-
-	if (!WorkerNodeIsPrimary(workerNode))
-	{
-		return workerNode;
-	}
-
-	/* Delete refrence table placements so they are not taken into account for
-	 * the check if there are placements after this */
-	DeleteAllReferenceTablePlacementsFromNodeGroup(workerNode->groupId);
-
-	if (NodeGroupHasShardPlacements(workerNode->groupId,
-									onlyConsiderActivePlacements))
-	{
-		ereport(ERROR, (errmsg(
-							"operation is not supported on a primary data node that has shard placements")));
-	}
 	return workerNode;
 }
 
@@ -1072,8 +1035,24 @@ static void
 RemoveNodeFromCluster(char *nodeName, int32 nodePort)
 {
 	char *nodeDeleteCommand = NULL;
-	WorkerNode *workerNode = ModifiableWorkerNodeWithoutPrimaryPlacements(nodeName,
-																		  nodePort);
+	WorkerNode *workerNode = ModifiableWorkerNode(nodeName, nodePort);
+
+	if (WorkerNodeIsPrimary(workerNode))
+	{
+		bool onlyConsiderActivePlacements = false;
+
+		/* Delete refrence table placements so they are not taken into account for
+		 * the check if there are placements after this */
+		DeleteAllReferenceTablePlacementsFromNodeGroup(workerNode->groupId);
+
+		if (NodeGroupHasShardPlacements(workerNode->groupId,
+										onlyConsiderActivePlacements))
+		{
+			ereport(ERROR, (errmsg(
+								"operation is not supported on a primary data node that has shard placements")));
+		}
+	}
+
 	DeleteNodeRow(workerNode->workerName, nodePort);
 
 	CleanUpReferenceTables(workerNode);
