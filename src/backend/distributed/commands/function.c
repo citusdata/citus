@@ -249,8 +249,6 @@ mark_aggregate_for_distributed_execution(PG_FUNCTION_ARGS)
 							"followed by a list of parameters in parantheses")));
 	}
 
-	EnsureFunctionOwner(funcOid);
-
 	if (!PG_ARGISNULL(1))
 	{
 		char *strategyParam = TextDatumGetCString(PG_GETARG_TEXT_P(1));
@@ -272,6 +270,15 @@ mark_aggregate_for_distributed_execution(PG_FUNCTION_ARGS)
 	{
 		elog(ERROR,
 			 "mark_aggregate_for_distributed_execution expects a strategy that is one of: 'none', 'combine', 'commute'");
+	}
+
+	if (aggregationStrategy == AGGREGATION_STRATEGY_COMBINE)
+	{
+		EnsureSuperUser();
+	}
+	else
+	{
+		EnsureFunctionOwner(funcOid);
 	}
 
 	if (aggregationStrategy == AGGREGATION_STRATEGY_COMBINE)
