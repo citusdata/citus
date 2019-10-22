@@ -181,7 +181,7 @@ LockTruncatedRelationMetadataInWorkers(TruncateStmt *truncateStatement)
 		Oid relationId = RangeVarGetRelid(rangeVar, NoLock, false);
 		DistTableCacheEntry *cacheEntry = NULL;
 		List *referencingTableList = NIL;
-		ListCell *referencingTableCell = NULL;
+		Oid referencingRelationId = InvalidOid;
 
 		if (!IsDistributedTable(relationId))
 		{
@@ -199,9 +199,8 @@ LockTruncatedRelationMetadataInWorkers(TruncateStmt *truncateStatement)
 		Assert(cacheEntry != NULL);
 
 		referencingTableList = cacheEntry->referencingRelationsViaForeignKey;
-		foreach(referencingTableCell, referencingTableList)
+		foreach_oid(referencingRelationId, referencingTableList)
 		{
-			Oid referencingRelationId = lfirst_oid(referencingTableCell);
 			distributedRelationList = list_append_unique_oid(distributedRelationList,
 															 referencingRelationId);
 		}
@@ -228,7 +227,7 @@ LockTruncatedRelationMetadataInWorkers(TruncateStmt *truncateStatement)
 static void
 AcquireDistributedLockOnRelations(List *relationIdList, LOCKMODE lockMode)
 {
-	ListCell *relationIdCell = NULL;
+	Oid relationId = InvalidOid;
 	List *workerNodeList = ActivePrimaryNodeList(NoLock);
 	const char *lockModeText = LockModeToLockModeText(lockMode);
 
@@ -241,10 +240,8 @@ AcquireDistributedLockOnRelations(List *relationIdList, LOCKMODE lockMode)
 
 	BeginOrContinueCoordinatedTransaction();
 
-	foreach(relationIdCell, relationIdList)
+	foreach_oid(relationId, relationIdList)
 	{
-		Oid relationId = lfirst_oid(relationIdCell);
-
 		/*
 		 * We only acquire distributed lock on relation if
 		 * the relation is sync'ed between mx nodes.
