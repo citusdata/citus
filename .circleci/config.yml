@@ -8,11 +8,11 @@ jobs:
       - image: 'citus/extbuilder:latest'
     steps:
       - checkout
-      - run: 
+      - run:
           name: 'Configure, Build, and Install'
           command: build-ext
-      - persist_to_workspace: 
-          root: . 
+      - persist_to_workspace:
+          root: .
           paths: [.]
   check-style:
     docker:
@@ -27,7 +27,7 @@ jobs:
       - image: 'citus/extbuilder:latest'
     steps:
       - checkout
-      - run: 
+      - run:
           name: 'Check Snapshots'
           command: "./configure && make check-sql-snapshots -C src/backend/distributed"
   test-11_check-multi:
@@ -37,10 +37,10 @@ jobs:
     steps:
       - attach_workspace:
           at: .
-      - run: 
+      - run:
           name: 'Install and Test (check-multi)'
           command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext check-multi'
-      - codecov/upload: 
+      - codecov/upload:
           flags: 'test_11,multi'
 
   test-11_check-tt-van-mx:
@@ -50,10 +50,10 @@ jobs:
     steps:
       - attach_workspace:
           at: .
-      - run: 
+      - run:
           name: 'Install and Test (check-tt-van-mx)'
           command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext check-multi-task-tracker-extra check-vanilla check-multi-mx'
-      - codecov/upload: 
+      - codecov/upload:
           flags: 'test_11,tracker,vanilla,mx'
   test-11_check-iso-work-fol:
     docker:
@@ -62,7 +62,7 @@ jobs:
     steps:
       - attach_workspace:
           at: .
-      - run: 
+      - run:
           name: 'Install and Test (check-iso-work-fol)'
           command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext check-isolation check-worker'
       - codecov/upload:
@@ -85,29 +85,29 @@ jobs:
             mkdir -p /tmp/core_dumps
             cp core.* /tmp/core_dumps
           when: on_fail
-      - codecov/upload: 
+      - codecov/upload:
           flags: 'test_11,follower'
-      - store_artifacts: 
+      - store_artifacts:
           path: '/tmp/core_dumps'
   test-11_check-failure:
     docker:
       - image: 'citus/failtester-11:latest'
     working_directory: /home/circleci/project
     steps:
-      - attach_workspace: 
+      - attach_workspace:
           at: .
-      - run: 
+      - run:
           name: 'Install and Test (check-failure)'
           command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext check-failure'
 
   test-11-12_check-pg-upgrade:
     docker:
       - image: 'citus/pgupgradetester:latest'
-    working_directory: /home/circleci/project     
+    working_directory: /home/circleci/project
     steps:
       - attach_workspace:
           at: .
-      - run: 
+      - run:
           name: 'Install and test postgres upgrade'
           command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext --target check-pg-upgrade --old-pg-version 11 --new-pg-version 12'
 
@@ -116,9 +116,9 @@ jobs:
       - image: 'citus/exttester-12:latest'
     working_directory: /home/circleci/project
     steps:
-      - attach_workspace: 
+      - attach_workspace:
           at: .
-      - run: 
+      - run:
           name: 'Install and Test (check-multi)'
           command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext check-multi'
       - codecov/upload:
@@ -142,10 +142,10 @@ jobs:
     steps:
       - attach_workspace:
            at: .
-      - run: 
+      - run:
           name: 'Install and Test (check-iso-work-fol)'
           command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext check-isolation check-worker'
-      - codecov/upload: 
+      - codecov/upload:
           flags: 'test_12,isolation,worker'
   test-12_check-fol:
     docker:
@@ -157,7 +157,7 @@ jobs:
       - run:
           name: 'Enable core dumps'
           command: 'ulimit -c unlimited'
-      - run: 
+      - run:
           name: 'Install and Test (fol)'
           command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext check-follower-cluster'
       - run:
@@ -165,7 +165,7 @@ jobs:
             mkdir -p /tmp/core_dumps
             cp core.* /tmp/core_dumps
           when: on_fail
-      - codecov/upload: 
+      - codecov/upload:
           flags: 'test_12,follower'
       - store_artifacts:
           path: '/tmp/core_dumps'
@@ -175,7 +175,7 @@ jobs:
       - image: 'citus/failtester-12:latest'
     working_directory: /home/circleci/project
     steps:
-      - attach_workspace: 
+      - attach_workspace:
           at: .
       - run:
           name: 'Install and Test (check-failure)'
@@ -184,26 +184,26 @@ jobs:
   test-11_check-citus-upgrade:
     docker:
       - image: 'citus/citusupgradetester-11:latest'
-    working_directory: /home/circleci/project     
+    working_directory: /home/circleci/project
     steps:
       - {attach_workspace: {at: .}}
-      - run: 
+      - run:
           name: 'Install and test citus upgrade'
           command: |
            chown -R circleci:circleci /home/circleci
            install-and-test-ext --target check-citus-upgrade --citus-pre-tar /install-pg11-citusv8.0.0.tar
-           install-and-test-ext --target check-citus-upgrade --citus-pre-tar /install-pg11-citusv8.1.0.tar 
-           install-and-test-ext --target check-citus-upgrade --citus-pre-tar /install-pg11-citusv8.2.0.tar 
-           install-and-test-ext --target check-citus-upgrade --citus-pre-tar /install-pg11-citusv8.3.0.tar 
+           install-and-test-ext --target check-citus-upgrade --citus-pre-tar /install-pg11-citusv8.1.0.tar
+           install-and-test-ext --target check-citus-upgrade --citus-pre-tar /install-pg11-citusv8.2.0.tar
+           install-and-test-ext --target check-citus-upgrade --citus-pre-tar /install-pg11-citusv8.3.0.tar
 
            install-and-test-ext --target check-citus-upgrade-mixed --citus-pre-tar /install-pg11-citusv8.0.0.tar
-           install-and-test-ext --target check-citus-upgrade-mixed --citus-pre-tar /install-pg11-citusv8.1.0.tar 
-           install-and-test-ext --target check-citus-upgrade-mixed --citus-pre-tar /install-pg11-citusv8.2.0.tar 
+           install-and-test-ext --target check-citus-upgrade-mixed --citus-pre-tar /install-pg11-citusv8.1.0.tar
+           install-and-test-ext --target check-citus-upgrade-mixed --citus-pre-tar /install-pg11-citusv8.2.0.tar
            install-and-test-ext --target check-citus-upgrade-mixed --citus-pre-tar /install-pg11-citusv8.3.0.tar
 
 
-          
-           
+
+
 
 workflows:
   version: 2
@@ -225,7 +225,7 @@ workflows:
           requires: [build]
 
       - test-12_check-multi:
-          requires: [build] 
+          requires: [build]
       - test-12_check-tt-van-mx:
           requires: [build]
       - test-12_check-iso-work-fol:
@@ -233,11 +233,11 @@ workflows:
       - test-12_check-fol:
           requires: [build]
       - test-12_check-failure:
-          requires: [build]        
+          requires: [build]
 
-      - test-11-12_check-pg-upgrade: 
-          requires: [build]    
+      - test-11-12_check-pg-upgrade:
+          requires: [build]
 
       - test-11_check-citus-upgrade:
-          requires: [build]    
-             
+          requires: [build]
+
