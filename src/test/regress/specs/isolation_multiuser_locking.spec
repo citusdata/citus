@@ -29,8 +29,8 @@ session "s1"
 step "s1-grant"
 {
 	SET ROLE test_user_1;
-	GRANT ALL ON test_table TO test_user_2;
 	SELECT bool_and(success) FROM run_command_on_placements('test_table', 'GRANT ALL ON TABLE %s TO test_user_2');
+	GRANT ALL ON test_table TO test_user_2;
 }
 
 step "s1-setrole"

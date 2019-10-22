@@ -26,8 +26,8 @@ step s1-commit:
 starting permutation: s1-grant s1-begin s2-begin s2-reindex s1-insert s2-insert s2-commit s1-commit
 step s1-grant: 
 	SET ROLE test_user_1;
-	GRANT ALL ON test_table TO test_user_2;
 	SELECT bool_and(success) FROM run_command_on_placements('test_table', 'GRANT ALL ON TABLE %s TO test_user_2');
+	GRANT ALL ON test_table TO test_user_2;
 
 bool_and       
 
@@ -61,8 +61,8 @@ step s1-commit:
 starting permutation: s1-grant s1-begin s2-begin s1-reindex s2-insert s1-insert s1-commit s2-commit
 step s1-grant: 
 	SET ROLE test_user_1;
-	GRANT ALL ON test_table TO test_user_2;
 	SELECT bool_and(success) FROM run_command_on_placements('test_table', 'GRANT ALL ON TABLE %s TO test_user_2');
+	GRANT ALL ON test_table TO test_user_2;
 
 bool_and       
 
@@ -121,8 +121,8 @@ step s2-drop-index:
 starting permutation: s1-grant s1-begin s2-begin s2-insert s1-index s2-insert s2-commit s1-commit s1-drop-index
 step s1-grant: 
 	SET ROLE test_user_1;
-	GRANT ALL ON test_table TO test_user_2;
 	SELECT bool_and(success) FROM run_command_on_placements('test_table', 'GRANT ALL ON TABLE %s TO test_user_2');
+	GRANT ALL ON test_table TO test_user_2;
 
 bool_and       
 
@@ -158,8 +158,8 @@ step s1-drop-index:
 starting permutation: s1-grant s1-begin s2-begin s1-index s2-index s1-insert s1-commit s2-commit s1-drop-index s2-drop-index
 step s1-grant: 
 	SET ROLE test_user_1;
-	GRANT ALL ON test_table TO test_user_2;
 	SELECT bool_and(success) FROM run_command_on_placements('test_table', 'GRANT ALL ON TABLE %s TO test_user_2');
+	GRANT ALL ON test_table TO test_user_2;
 
 bool_and       
 
@@ -221,8 +221,8 @@ step s1-commit:
 starting permutation: s1-grant s1-begin s2-begin s1-truncate s2-insert s1-insert s1-commit s2-commit
 step s1-grant: 
 	SET ROLE test_user_1;
-	GRANT ALL ON test_table TO test_user_2;
 	SELECT bool_and(success) FROM run_command_on_placements('test_table', 'GRANT ALL ON TABLE %s TO test_user_2');
+	GRANT ALL ON test_table TO test_user_2;
 
 bool_and       
 
@@ -255,8 +255,8 @@ step s2-commit:
 starting permutation: s1-grant s1-begin s2-begin s1-truncate s2-truncate s1-commit s2-commit
 step s1-grant: 
 	SET ROLE test_user_1;
-	GRANT ALL ON test_table TO test_user_2;
 	SELECT bool_and(success) FROM run_command_on_placements('test_table', 'GRANT ALL ON TABLE %s TO test_user_2');
+	GRANT ALL ON test_table TO test_user_2;
 
 bool_and       
 
