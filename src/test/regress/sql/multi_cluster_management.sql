@@ -317,23 +317,23 @@ SELECT create_reference_table('test_ref');
 -- colocated tables should still be placed on shouldhaveshards false nodes for safety
 SELECT nodeport, count(*)
 FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
-WHERE logicalrelid = 'test_dist_colocated'::regclass GROUP BY nodeport;
+WHERE logicalrelid = 'test_dist_colocated'::regclass GROUP BY nodeport ORDER BY nodeport;
 
 -- non colocated tables should not be placed on shouldhaveshards false nodes anymore
 SELECT nodeport, count(*)
 FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
-WHERE logicalrelid = 'test_dist_non_colocated'::regclass GROUP BY nodeport;
+WHERE logicalrelid = 'test_dist_non_colocated'::regclass GROUP BY nodeport ORDER BY nodeport;
 
 -- this table should be colocated with the test_dist_non_colocated table
 -- correctly only on nodes with shouldhaveshards true
 SELECT nodeport, count(*)
 FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
-WHERE logicalrelid = 'test_dist_colocated_with_non_colocated'::regclass GROUP BY nodeport;
+WHERE logicalrelid = 'test_dist_colocated_with_non_colocated'::regclass GROUP BY nodeport ORDER BY nodeport;
 
 -- reference tables should be placed on with shouldhaveshards false
 SELECT nodeport, count(*)
 FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
-WHERE logicalrelid = 'test_ref'::regclass GROUP BY nodeport;
+WHERE logicalrelid = 'test_ref'::regclass GROUP BY nodeport ORDER BY nodeport;
 
 -- cleanup for next test
 DROP TABLE test_dist, test_ref, test_dist_colocated, test_dist_non_colocated, test_dist_colocated_with_non_colocated;
@@ -350,12 +350,12 @@ SELECT create_reference_table('test_ref');
 -- distributed tables should not be placed on nodes with shouldhaveshards false
 SELECT nodeport, count(*)
 FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
-WHERE logicalrelid = 'test_dist'::regclass GROUP BY nodeport;
+WHERE logicalrelid = 'test_dist'::regclass GROUP BY nodeport ORDER BY nodeport;
 
 -- reference tables should be placed on nodes with shouldhaveshards false
 SELECT nodeport, count(*)
 FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
-WHERE logicalrelid = 'test_ref'::regclass GROUP BY nodeport;
+WHERE logicalrelid = 'test_ref'::regclass GROUP BY nodeport ORDER BY nodeport;
 
 SELECT * from master_set_node_property('localhost', :worker_2_port, 'shouldhaveshards', true);
 
@@ -363,12 +363,12 @@ SELECT * from master_set_node_property('localhost', :worker_2_port, 'shouldhaves
 -- shouldhaveshards true
 SELECT nodeport, count(*)
 FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
-WHERE logicalrelid = 'test_dist'::regclass GROUP BY nodeport;
+WHERE logicalrelid = 'test_dist'::regclass GROUP BY nodeport ORDER BY nodeport;
 
 -- reference tables should still be placed on all nodes with isdatanode 'true'
 SELECT nodeport, count(*)
 FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
-WHERE logicalrelid = 'test_ref'::regclass GROUP BY nodeport;
+WHERE logicalrelid = 'test_ref'::regclass GROUP BY nodeport ORDER BY nodeport;
 
 SELECT create_distributed_table('test_dist_colocated', 'x');
 SELECT create_distributed_table('test_dist_non_colocated', 'x', colocate_with => 'none');
@@ -377,14 +377,14 @@ SELECT create_distributed_table('test_dist_non_colocated', 'x', colocate_with =>
 -- shouldhaveshards true
 SELECT nodeport, count(*)
 FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
-WHERE logicalrelid = 'test_dist_colocated'::regclass GROUP BY nodeport;
+WHERE logicalrelid = 'test_dist_colocated'::regclass GROUP BY nodeport ORDER BY nodeport;
 
 
 -- non colocated tables should be placed on nodedes that were switched to
 -- shouldhaveshards true
 SELECT nodeport, count(*)
 FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
-WHERE logicalrelid = 'test_dist_non_colocated'::regclass GROUP BY nodeport;
+WHERE logicalrelid = 'test_dist_non_colocated'::regclass GROUP BY nodeport ORDER BY nodeport;
 
 SELECT * from master_set_node_property('localhost', :worker_2_port, 'bogusproperty', false);
 

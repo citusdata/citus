@@ -80,7 +80,6 @@ static int GetNextNodeId(void);
 static void InsertNodeRow(int nodeid, char *nodename, int32 nodeport, NodeMetadata
 						  *nodeMetadata);
 static void DeleteNodeRow(char *nodename, int32 nodeport);
-static void CleanUpReferenceTables(WorkerNode *workerNode);
 static void SetUpDistributedTableDependencies(WorkerNode *workerNode);
 static List * ParseWorkerNodeFileAndRename(void);
 static WorkerNode * TupleToWorkerNode(TupleDesc tupleDescriptor, HeapTuple heapTuple);
@@ -94,9 +93,6 @@ PG_FUNCTION_INFO_V1(master_add_node);
 PG_FUNCTION_INFO_V1(master_add_inactive_node);
 PG_FUNCTION_INFO_V1(master_add_secondary_node);
 PG_FUNCTION_INFO_V1(master_set_node_property);
-PG_FUNCTION_INFO_V1(master_mark_node_for_draining);
-PG_FUNCTION_INFO_V1(master_make_nodata_node);
-PG_FUNCTION_INFO_V1(master_make_data_node);
 PG_FUNCTION_INFO_V1(master_remove_node);
 PG_FUNCTION_INFO_V1(master_disable_node);
 PG_FUNCTION_INFO_V1(master_activate_node);
@@ -301,7 +297,11 @@ master_disable_node(PG_FUNCTION_ARGS)
 
 	SetNodeState(nodeName, nodePort, isActive);
 
-	CleanUpReferenceTables(workerNode);
+	if (WorkerNodeIsPrimary(workerNode))
+	{
+		UpdateColocationGroupReplicationFactorForReferenceTables(
+			ActivePrimaryNodeCount());
+	}
 
 	PG_RETURN_VOID();
 }
@@ -328,46 +328,12 @@ master_set_node_property(PG_FUNCTION_ARGS)
 	else
 	{
 		ereport(ERROR, (errmsg(
-							"It's only supported to set 'shouldhaveshards' using this function"
+							"only the 'shouldhaveshards' property can be set using this function"
 							)));
 	}
 
 
 	PG_RETURN_VOID();
-}
-
-
-/*
- * master_make_data_node sets the shouldhaveshards column in pg_dist_node to true,
- * i.e new distributed tables will get placements on this node.
- */
-Datum
-master_make_data_node(PG_FUNCTION_ARGS)
-{
-	text *nodeNameText = PG_GETARG_TEXT_P(0);
-	int32 nodePort = PG_GETARG_INT32(1);
-	WorkerNode *workerNode = ModifiableWorkerNode(text_to_cstring(nodeNameText),
-												  nodePort);
-	WorkerNode *newWorkerNode = SetShouldHaveShards(workerNode, true);
-
-	SetUpDistributedTableDependencies(newWorkerNode);
-
-	PG_RETURN_VOID();
-}
-
-
-/*
- * CleanupreferenceTables updates the replication factor for reference tables
- * to be one lower if the node had reference tables before and doesn't now.
- */
-static void
-CleanUpReferenceTables(WorkerNode *workerNode)
-{
-	if (WorkerNodeIsPrimary(workerNode))
-	{
-		UpdateColocationGroupReplicationFactorForReferenceTables(
-			ActivePrimaryNodeCount());
-	}
 }
 
 
@@ -1041,8 +1007,10 @@ RemoveNodeFromCluster(char *nodeName, int32 nodePort)
 	{
 		bool onlyConsiderActivePlacements = false;
 
-		/* Delete refrence table placements so they are not taken into account for
-		 * the check if there are placements after this */
+		/*
+		 * Delete reference table placements so they are not taken into account
+		 * for the check if there are placements after this
+		 */
 		DeleteAllReferenceTablePlacementsFromNodeGroup(workerNode->groupId);
 
 		if (NodeGroupHasShardPlacements(workerNode->groupId,
@@ -1055,7 +1023,11 @@ RemoveNodeFromCluster(char *nodeName, int32 nodePort)
 
 	DeleteNodeRow(workerNode->workerName, nodePort);
 
-	CleanUpReferenceTables(workerNode);
+	if (WorkerNodeIsPrimary(workerNode))
+	{
+		UpdateColocationGroupReplicationFactorForReferenceTables(
+			ActivePrimaryNodeCount());
+	}
 
 	nodeDeleteCommand = NodeDeleteCommand(workerNode->nodeId);
 

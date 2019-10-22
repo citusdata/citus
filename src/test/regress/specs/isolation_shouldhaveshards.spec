@@ -63,7 +63,7 @@ step "s2-shardcounts"
 {
 	SELECT nodeport, count(*)
 	FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
-	WHERE logicalrelid = 't1'::regclass GROUP BY nodeport;
+	WHERE logicalrelid = 't1'::regclass GROUP BY nodeport ORDER BY nodeport;
 }
 
 
