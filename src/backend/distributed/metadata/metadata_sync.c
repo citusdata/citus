@@ -910,7 +910,7 @@ ShouldHaveShardsUpdateCommand(uint32 nodeId, bool shouldHaveShards)
 	char *shouldHaveShardsString = shouldHaveShards ? "TRUE" : "FALSE";
 
 	appendStringInfo(nodeStateUpdateCommand,
-					 "UPDATE pg_dist_node SET shouldhaveshards = %s "
+					 "UPDATE pg_catalog.pg_dist_node SET shouldhaveshards = %s "
 					 "WHERE nodeid = %u", shouldHaveShardsString, nodeId);
 
 	return nodeStateUpdateCommand->data;

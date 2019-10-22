@@ -278,8 +278,10 @@ master_disable_node(PG_FUNCTION_ARGS)
 
 	if (WorkerNodeIsPrimary(workerNode))
 	{
-		/* Delete refrence table placements so they are not taken into account for
-		 * the check if there are placements after this */
+		/*
+		 * Delete reference table placements so they are not taken into account
+		 * for the check if there are placements after this
+		 */
 		DeleteAllReferenceTablePlacementsFromNodeGroup(workerNode->groupId);
 
 		if (NodeGroupHasShardPlacements(workerNode->groupId,
@@ -1235,7 +1237,7 @@ static WorkerNode *
 SetShouldHaveShards(WorkerNode *workerNode, bool shouldHaveShards)
 {
 	return SetWorkerColumn(workerNode, Anum_pg_dist_node_shouldhaveshards,
-						   ObjectIdGetDatum(shouldHaveShards));
+						   BoolGetDatum(shouldHaveShards));
 }
 
 
@@ -1411,7 +1413,7 @@ InsertNodeRow(int nodeid, char *nodeName, int32 nodePort, NodeMetadata *nodeMeta
 	values[Anum_pg_dist_node_isactive - 1] = BoolGetDatum(nodeMetadata->isActive);
 	values[Anum_pg_dist_node_noderole - 1] = ObjectIdGetDatum(nodeMetadata->nodeRole);
 	values[Anum_pg_dist_node_nodecluster - 1] = nodeClusterNameDatum;
-	values[Anum_pg_dist_node_shouldhaveshards - 1] = ObjectIdGetDatum(
+	values[Anum_pg_dist_node_shouldhaveshards - 1] = BoolGetDatum(
 		nodeMetadata->shouldHaveShards);
 
 	pgDistNode = heap_open(DistNodeRelationId(), RowExclusiveLock);
@@ -1679,7 +1681,7 @@ TupleToWorkerNode(TupleDesc tupleDescriptor, HeapTuple heapTuple)
 		DatumGetBool(datumArray[Anum_pg_dist_node_metadatasynced - 1]);
 	workerNode->isActive = DatumGetBool(datumArray[Anum_pg_dist_node_isactive - 1]);
 	workerNode->nodeRole = DatumGetObjectId(datumArray[Anum_pg_dist_node_noderole - 1]);
-	workerNode->shouldHaveShards = DatumGetObjectId(
+	workerNode->shouldHaveShards = DatumGetBool(
 		datumArray[Anum_pg_dist_node_shouldhaveshards -
 				   1]);
 
