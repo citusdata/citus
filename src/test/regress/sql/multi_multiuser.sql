@@ -25,7 +25,7 @@ CREATE TABLE test (id integer, val integer);
 SELECT create_distributed_table('test', 'id');
 
 CREATE TABLE test_coloc (id integer, val integer);
-SELECT create_distributed_table('test_coloc', 'id', colocate_with := 'none');
+SELECT create_distributed_table('test_coloc', 'id', colocate_with := 'test');
 
 SET citus.shard_count TO 1;
 CREATE TABLE singleshard (id integer, val integer);

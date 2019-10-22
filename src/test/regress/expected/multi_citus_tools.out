@@ -421,8 +421,8 @@ SELECT create_distributed_table('check_colocated', 'key', 'hash');
  
 (1 row)
 
-CREATE TABLE second_table (key int);
 SET citus.shard_count TO 4;
+CREATE TABLE second_table (key int);
 SELECT create_distributed_table('second_table', 'key', 'hash');
  create_distributed_table 
 --------------------------
@@ -433,15 +433,13 @@ SELECT * FROM run_command_on_colocated_placements('check_colocated', 'second_tab
 												  'select 1');
 ERROR:  tables check_colocated and second_table are not co-located
 -- even when the difference is in replication factor, an error is thrown
-SELECT master_drop_all_shards('second_table'::regclass, current_schema(), 'second_table');
- master_drop_all_shards 
-------------------------
-                      4
-(1 row)
-
-SELECT master_create_worker_shards('second_table', 5, 1);
- master_create_worker_shards 
------------------------------
+DROP TABLE second_table;
+SET citus.shard_replication_factor TO 1;
+SET citus.shard_count TO 5;
+CREATE TABLE second_table (key int);
+SELECT create_distributed_table('second_table', 'key', 'hash');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 
@@ -449,15 +447,13 @@ SELECT * FROM run_command_on_colocated_placements('check_colocated', 'second_tab
 												  'select 1');
 ERROR:  tables check_colocated and second_table are not co-located
 -- when everything matches, the command is run!
-SELECT master_drop_all_shards('second_table'::regclass, current_schema(), 'second_table');
- master_drop_all_shards 
-------------------------
-                      5
-(1 row)
-
-SELECT master_create_worker_shards('second_table', 5, 2);
- master_create_worker_shards 
------------------------------
+DROP TABLE second_table;
+SET citus.shard_replication_factor TO 2;
+SET citus.shard_count TO 5;
+CREATE TABLE second_table (key int);
+SELECT create_distributed_table('second_table', 'key', 'hash');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 
@@ -476,36 +472,6 @@ SELECT * FROM run_command_on_colocated_placements('check_colocated', 'second_tab
  localhost |    57637 |  1240009 |  1240023 | t       | 1
  localhost |    57638 |  1240009 |  1240023 | t       | 1
 (10 rows)
-
--- when a placement is invalid considers the tables to not be colocated
-UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid = (
-		SELECT shardid FROM pg_dist_shard
-		WHERE nodeport = :worker_1_port AND logicalrelid = 'second_table'::regclass
-		ORDER BY 1 ASC LIMIT 1
-);
-SELECT * FROM run_command_on_colocated_placements('check_colocated', 'second_table',
-												  'select 1');
-ERROR:  tables check_colocated and second_table are not co-located
--- when matching placement is also invalid, considers the tables to be colocated
-UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid = (
-		SELECT shardid FROM pg_dist_shard
-		WHERE nodeport = :worker_1_port AND logicalrelid = 'check_colocated'::regclass
-		ORDER BY 1 ASC LIMIT 1
-);
-SELECT * FROM run_command_on_colocated_placements('check_colocated', 'second_table',
-												  'select 1');
- nodename  | nodeport | shardid1 | shardid2 | success | result 
------------+----------+----------+----------+---------+--------
- localhost |    57638 |  1240005 |  1240019 | t       | 1
- localhost |    57637 |  1240006 |  1240020 | t       | 1
- localhost |    57638 |  1240006 |  1240020 | t       | 1
- localhost |    57637 |  1240007 |  1240021 | t       | 1
- localhost |    57638 |  1240007 |  1240021 | t       | 1
- localhost |    57637 |  1240008 |  1240022 | t       | 1
- localhost |    57638 |  1240008 |  1240022 | t       | 1
- localhost |    57637 |  1240009 |  1240023 | t       | 1
- localhost |    57638 |  1240009 |  1240023 | t       | 1
-(9 rows)
 
 DROP TABLE check_colocated CASCADE;
 DROP TABLE second_table CASCADE;
