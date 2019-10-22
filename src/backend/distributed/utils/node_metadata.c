@@ -64,6 +64,7 @@ typedef struct NodeMetadata
 	bool metadataSynced;
 	bool isActive;
 	Oid nodeRole;
+	bool shouldHaveShards;
 	char *nodeCluster;
 } NodeMetadata;
 
@@ -72,22 +73,26 @@ static int ActivateNode(char *nodeName, int nodePort);
 static void RemoveNodeFromCluster(char *nodeName, int32 nodePort);
 static int AddNodeMetadata(char *nodeName, int32 nodePort, NodeMetadata
 						   *nodeMetadata, bool *nodeAlreadyExists);
-static void SetNodeState(char *nodeName, int32 nodePort, bool isActive);
-static HeapTuple GetNodeTuple(char *nodeName, int32 nodePort);
+static WorkerNode * SetNodeState(char *nodeName, int32 nodePort, bool isActive);
+static HeapTuple GetNodeTuple(const char *nodeName, int32 nodePort);
 static int32 GetNextGroupId(void);
 static int GetNextNodeId(void);
 static void InsertNodeRow(int nodeid, char *nodename, int32 nodeport, NodeMetadata
 						  *nodeMetadata);
 static void DeleteNodeRow(char *nodename, int32 nodeport);
+static void SetUpDistributedTableDependencies(WorkerNode *workerNode);
 static List * ParseWorkerNodeFileAndRename(void);
 static WorkerNode * TupleToWorkerNode(TupleDesc tupleDescriptor, HeapTuple heapTuple);
+static WorkerNode * ModifiableWorkerNode(const char *nodeName, int32 nodePort);
 static void UpdateNodeLocation(int32 nodeId, char *newNodeName, int32 newNodePort);
 static bool UnsetMetadataSyncedForAll(void);
+static WorkerNode * SetShouldHaveShards(WorkerNode *workerNode, bool shouldHaveShards);
 
 /* declarations for dynamic loading */
 PG_FUNCTION_INFO_V1(master_add_node);
 PG_FUNCTION_INFO_V1(master_add_inactive_node);
 PG_FUNCTION_INFO_V1(master_add_secondary_node);
+PG_FUNCTION_INFO_V1(master_set_node_property);
 PG_FUNCTION_INFO_V1(master_remove_node);
 PG_FUNCTION_INFO_V1(master_disable_node);
 PG_FUNCTION_INFO_V1(master_activate_node);
@@ -105,6 +110,7 @@ DefaultNodeMetadata()
 {
 	NodeMetadata nodeMetadata = {
 		.nodeRack = WORKER_DEFAULT_RACK,
+		.shouldHaveShards = true,
 	};
 	return nodeMetadata;
 }
@@ -237,13 +243,12 @@ master_add_secondary_node(PG_FUNCTION_ARGS)
 Datum
 master_remove_node(PG_FUNCTION_ARGS)
 {
-	text *nodeName = PG_GETARG_TEXT_P(0);
+	text *nodeNameText = PG_GETARG_TEXT_P(0);
 	int32 nodePort = PG_GETARG_INT32(1);
-	char *nodeNameString = text_to_cstring(nodeName);
 
 	CheckCitusVersion(ERROR);
 
-	RemoveNodeFromCluster(nodeNameString, nodePort);
+	RemoveNodeFromCluster(text_to_cstring(nodeNameText), nodePort);
 
 	PG_RETURN_VOID();
 }
@@ -264,41 +269,32 @@ master_remove_node(PG_FUNCTION_ARGS)
 Datum
 master_disable_node(PG_FUNCTION_ARGS)
 {
-	const bool onlyConsiderActivePlacements = true;
 	text *nodeNameText = PG_GETARG_TEXT_P(0);
 	int32 nodePort = PG_GETARG_INT32(1);
-
 	char *nodeName = text_to_cstring(nodeNameText);
+	WorkerNode *workerNode = ModifiableWorkerNode(nodeName, nodePort);
 	bool isActive = false;
-
-	WorkerNode *workerNode = NULL;
-
-	CheckCitusVersion(ERROR);
-
-	EnsureCoordinator();
-
-	/* take an exclusive lock on pg_dist_node to serialize pg_dist_node changes */
-	LockRelationOid(DistNodeRelationId(), ExclusiveLock);
-
-	workerNode = FindWorkerNodeAnyCluster(nodeName, nodePort);
-	if (workerNode == NULL)
-	{
-		ereport(ERROR, (errmsg("node at \"%s:%u\" does not exist", nodeName, nodePort)));
-	}
+	bool onlyConsiderActivePlacements = false;
 
 	if (WorkerNodeIsPrimary(workerNode))
 	{
+		/*
+		 * Delete reference table placements so they are not taken into account
+		 * for the check if there are placements after this
+		 */
 		DeleteAllReferenceTablePlacementsFromNodeGroup(workerNode->groupId);
-	}
 
-	if (WorkerNodeIsPrimary(workerNode) &&
-		NodeGroupHasShardPlacements(workerNode->groupId, onlyConsiderActivePlacements))
-	{
-		ereport(NOTICE, (errmsg("Node %s:%d has active shard placements. Some queries "
-								"may fail after this operation. Use "
-								"SELECT master_activate_node('%s', %d) to activate this "
-								"node back.",
-								nodeName, nodePort, nodeName, nodePort)));
+		if (NodeGroupHasShardPlacements(workerNode->groupId,
+										onlyConsiderActivePlacements))
+		{
+			ereport(NOTICE, (errmsg(
+								 "Node %s:%d has active shard placements. Some queries "
+								 "may fail after this operation. Use "
+								 "SELECT master_activate_node('%s', %d) to activate this "
+								 "node back.",
+								 workerNode->workerName, nodePort, workerNode->workerName,
+								 nodePort)));
+		}
 	}
 
 	SetNodeState(nodeName, nodePort, isActive);
@@ -314,25 +310,109 @@ master_disable_node(PG_FUNCTION_ARGS)
 
 
 /*
+ * master_set_node_property sets a property of the node
+ */
+Datum
+master_set_node_property(PG_FUNCTION_ARGS)
+{
+	text *nodeNameText = PG_GETARG_TEXT_P(0);
+	int32 nodePort = PG_GETARG_INT32(1);
+	text *propertyText = PG_GETARG_TEXT_P(2);
+	bool value = PG_GETARG_BOOL(3);
+
+	WorkerNode *workerNode = ModifiableWorkerNode(text_to_cstring(nodeNameText),
+												  nodePort);
+
+	if (strcmp(text_to_cstring(propertyText), "shouldhaveshards") == 0)
+	{
+		SetShouldHaveShards(workerNode, value);
+	}
+	else
+	{
+		ereport(ERROR, (errmsg(
+							"only the 'shouldhaveshards' property can be set using this function"
+							)));
+	}
+
+
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * SetUpDistributedTableDependencies sets up up the following on a node if it's
+ * a primary node that currently stores data:
+ * - All dependencies (e.g., types, schemas)
+ * - Reference tables, because they are needed to handle queries efficiently.
+ * - Distributed functions
+ */
+static void
+SetUpDistributedTableDependencies(WorkerNode *newWorkerNode)
+{
+	if (WorkerNodeIsPrimary(newWorkerNode))
+	{
+		EnsureNoModificationsHaveBeenDone();
+		ReplicateAllDependenciesToNode(newWorkerNode->workerName,
+									   newWorkerNode->workerPort);
+		ReplicateAllReferenceTablesToNode(newWorkerNode->workerName,
+										  newWorkerNode->workerPort);
+
+		/*
+		 * Let the maintanince deamon do the hard work of syncing the metadata.
+		 * We prefer this because otherwise node activation might fail within
+		 * transaction blocks.
+		 */
+		if (ClusterHasDistributedFunctionWithDistArgument())
+		{
+			MarkNodeHasMetadata(newWorkerNode->workerName, newWorkerNode->workerPort,
+								true);
+			TriggerMetadataSync(MyDatabaseId);
+		}
+	}
+}
+
+
+/*
+ * ModifiableWorkerNode gets the requested WorkerNode and also gets locks
+ * required for modifying it. This fails if the node does not exist.
+ */
+static WorkerNode *
+ModifiableWorkerNode(const char *nodeName, int32 nodePort)
+{
+	WorkerNode *workerNode = NULL;
+
+	CheckCitusVersion(ERROR);
+
+	EnsureCoordinator();
+
+	/* take an exclusive lock on pg_dist_node to serialize pg_dist_node changes */
+	LockRelationOid(DistNodeRelationId(), ExclusiveLock);
+
+	workerNode = FindWorkerNodeAnyCluster(nodeName, nodePort);
+	if (workerNode == NULL)
+	{
+		ereport(ERROR, (errmsg("node at \"%s:%u\" does not exist", nodeName, nodePort)));
+	}
+
+	return workerNode;
+}
+
+
+/*
  * master_activate_node UDF activates the given node. It sets the node's isactive
  * value to active and replicates all reference tables to that node.
  */
 Datum
 master_activate_node(PG_FUNCTION_ARGS)
 {
-	text *nodeName = PG_GETARG_TEXT_P(0);
+	text *nodeNameText = PG_GETARG_TEXT_P(0);
 	int32 nodePort = PG_GETARG_INT32(1);
 
-	char *nodeNameString = text_to_cstring(nodeName);
-	int nodeId = 0;
+	WorkerNode *workerNode = ModifiableWorkerNode(text_to_cstring(nodeNameText),
+												  nodePort);
+	ActivateNode(workerNode->workerName, workerNode->workerPort);
 
-	CheckCitusVersion(ERROR);
-
-	EnsureCoordinator();
-
-	nodeId = ActivateNode(nodeNameString, nodePort);
-
-	PG_RETURN_INT32(nodeId);
+	PG_RETURN_INT32(workerNode->nodeId);
 }
 
 
@@ -388,6 +468,22 @@ WorkerNodeIsSecondary(WorkerNode *worker)
 	}
 
 	return worker->nodeRole == secondaryRole;
+}
+
+
+/*
+ * WorkerNodeIsPrimaryShouldHaveShardsNode returns whether the argument represents a
+ * primary node that is a eligible for new data.
+ */
+bool
+WorkerNodeIsPrimaryShouldHaveShardsNode(WorkerNode *worker)
+{
+	if (!WorkerNodeIsPrimary(worker))
+	{
+		return false;
+	}
+
+	return worker->shouldHaveShards;
 }
 
 
@@ -461,34 +557,16 @@ PrimaryNodeForGroup(int32 groupId, bool *groupContainsNodes)
 static int
 ActivateNode(char *nodeName, int nodePort)
 {
-	WorkerNode *workerNode = NULL;
+	WorkerNode *newWorkerNode = NULL;
 	bool isActive = true;
 
 	/* take an exclusive lock on pg_dist_node to serialize pg_dist_node changes */
 	LockRelationOid(DistNodeRelationId(), ExclusiveLock);
 
-	SetNodeState(nodeName, nodePort, isActive);
+	newWorkerNode = SetNodeState(nodeName, nodePort, isActive);
 
-	workerNode = FindWorkerNodeAnyCluster(nodeName, nodePort);
-
-	if (WorkerNodeIsPrimary(workerNode))
-	{
-		EnsureNoModificationsHaveBeenDone();
-		ReplicateAllDependenciesToNode(nodeName, nodePort);
-		ReplicateAllReferenceTablesToNode(nodeName, nodePort);
-
-		/*
-		 * Let the maintanince deamon do the hard work of syncing the metadata. We prefer
-		 * this because otherwise node activation might fail withing transaction blocks.
-		 */
-		if (ClusterHasDistributedFunctionWithDistArgument())
-		{
-			MarkNodeHasMetadata(nodeName, nodePort, true);
-			TriggerMetadataSync(MyDatabaseId);
-		}
-	}
-
-	return workerNode->nodeId;
+	SetUpDistributedTableDependencies(newWorkerNode);
+	return newWorkerNode->nodeId;
 }
 
 
@@ -845,7 +923,7 @@ FindWorkerNode(char *nodeName, int32 nodePort)
  * clusters do not exist.
  */
 WorkerNode *
-FindWorkerNodeAnyCluster(char *nodeName, int32 nodePort)
+FindWorkerNodeAnyCluster(const char *nodeName, int32 nodePort)
 {
 	WorkerNode *workerNode = NULL;
 
@@ -924,40 +1002,28 @@ ReadWorkerNodes(bool includeNodesFromOtherClusters)
 static void
 RemoveNodeFromCluster(char *nodeName, int32 nodePort)
 {
-	const bool onlyConsiderActivePlacements = false;
 	char *nodeDeleteCommand = NULL;
-	WorkerNode *workerNode = NULL;
-	uint32 deletedNodeId = INVALID_PLACEMENT_ID;
-
-	EnsureCoordinator();
-
-	/* take an exclusive lock on pg_dist_node to serialize pg_dist_node changes */
-	LockRelationOid(DistNodeRelationId(), ExclusiveLock);
-
-	workerNode = FindWorkerNodeAnyCluster(nodeName, nodePort);
-	if (workerNode == NULL)
-	{
-		ereport(ERROR, (errmsg("node at \"%s:%u\" does not exist", nodeName, nodePort)));
-	}
-
-	if (workerNode != NULL)
-	{
-		deletedNodeId = workerNode->nodeId;
-	}
+	WorkerNode *workerNode = ModifiableWorkerNode(nodeName, nodePort);
 
 	if (WorkerNodeIsPrimary(workerNode))
 	{
+		bool onlyConsiderActivePlacements = false;
+
+		/*
+		 * Delete reference table placements so they are not taken into account
+		 * for the check if there are placements after this
+		 */
 		DeleteAllReferenceTablePlacementsFromNodeGroup(workerNode->groupId);
+
+		if (NodeGroupHasShardPlacements(workerNode->groupId,
+										onlyConsiderActivePlacements))
+		{
+			ereport(ERROR, (errmsg("you cannot remove the primary node of a node group "
+								   "which has shard placements")));
+		}
 	}
 
-	if (WorkerNodeIsPrimary(workerNode) &&
-		NodeGroupHasShardPlacements(workerNode->groupId, onlyConsiderActivePlacements))
-	{
-		ereport(ERROR, (errmsg("you cannot remove the primary node of a node group "
-							   "which has shard placements")));
-	}
-
-	DeleteNodeRow(nodeName, nodePort);
+	DeleteNodeRow(workerNode->workerName, nodePort);
 
 	if (WorkerNodeIsPrimary(workerNode))
 	{
@@ -965,10 +1031,10 @@ RemoveNodeFromCluster(char *nodeName, int32 nodePort)
 			ActivePrimaryNodeCount());
 	}
 
-	nodeDeleteCommand = NodeDeleteCommand(deletedNodeId);
+	nodeDeleteCommand = NodeDeleteCommand(workerNode->nodeId);
 
 	/* make sure we don't have any lingering session lifespan connections */
-	CloseNodeConnectionsAfterTransaction(nodeName, nodePort);
+	CloseNodeConnectionsAfterTransaction(workerNode->workerName, nodePort);
 
 	SendCommandToWorkers(WORKERS_WITH_METADATA, nodeDeleteCommand);
 }
@@ -1088,38 +1154,62 @@ AddNodeMetadata(char *nodeName, int32 nodePort,
 		SendCommandToWorkers(WORKERS_WITH_METADATA, nodeInsertCommand);
 	}
 
-	return nextNodeIdInt;
+	return workerNode->nodeId;
 }
 
 
 /*
- * SetNodeState function sets the isactive column of the specified worker in
- * pg_dist_node to isActive.
+ * SetWorkerColumn function sets the column with the specified index
+ * (see pg_dist_node.h) on the worker in pg_dist_node.
+ * It returns the new worker node after the modification.
  */
-static void
-SetNodeState(char *nodeName, int32 nodePort, bool isActive)
+static WorkerNode *
+SetWorkerColumn(WorkerNode *workerNode, int columnIndex, Datum value)
 {
 	Relation pgDistNode = heap_open(DistNodeRelationId(), RowExclusiveLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistNode);
-	HeapTuple heapTuple = GetNodeTuple(nodeName, nodePort);
+	HeapTuple heapTuple = GetNodeTuple(workerNode->workerName, workerNode->workerPort);
+	WorkerNode *newWorkerNode = NULL;
 
 	Datum values[Natts_pg_dist_node];
 	bool isnull[Natts_pg_dist_node];
 	bool replace[Natts_pg_dist_node];
+	char *metadataSyncCommand = NULL;
 
-	char *nodeStateUpdateCommand = NULL;
-	WorkerNode *workerNode = NULL;
+
+	switch (columnIndex)
+	{
+		case Anum_pg_dist_node_isactive:
+		{
+			metadataSyncCommand = ShouldHaveShardsUpdateCommand(workerNode->nodeId,
+																DatumGetBool(value));
+			break;
+		}
+
+		case Anum_pg_dist_node_shouldhaveshards:
+		{
+			metadataSyncCommand = ShouldHaveShardsUpdateCommand(workerNode->nodeId,
+																DatumGetBool(value));
+			break;
+		}
+
+		default:
+		{
+			ereport(ERROR, (errmsg("could not find valid entry for node \"%s:%d\"",
+								   workerNode->workerName, workerNode->workerPort)));
+		}
+	}
 
 	if (heapTuple == NULL)
 	{
 		ereport(ERROR, (errmsg("could not find valid entry for node \"%s:%d\"",
-							   nodeName, nodePort)));
+							   workerNode->workerName, workerNode->workerPort)));
 	}
 
 	memset(replace, 0, sizeof(replace));
-	values[Anum_pg_dist_node_isactive - 1] = BoolGetDatum(isActive);
-	isnull[Anum_pg_dist_node_isactive - 1] = false;
-	replace[Anum_pg_dist_node_isactive - 1] = true;
+	values[columnIndex - 1] = value;
+	isnull[columnIndex - 1] = false;
+	replace[columnIndex - 1] = true;
 
 	heapTuple = heap_modify_tuple(heapTuple, tupleDescriptor, values, isnull, replace);
 
@@ -1128,13 +1218,40 @@ SetNodeState(char *nodeName, int32 nodePort, bool isActive)
 	CitusInvalidateRelcacheByRelid(DistNodeRelationId());
 	CommandCounterIncrement();
 
-	workerNode = TupleToWorkerNode(tupleDescriptor, heapTuple);
+	newWorkerNode = TupleToWorkerNode(tupleDescriptor, heapTuple);
 
 	heap_close(pgDistNode, NoLock);
 
-	/* we also update isactive column at worker nodes */
-	nodeStateUpdateCommand = NodeStateUpdateCommand(workerNode->nodeId, isActive);
-	SendCommandToWorkers(WORKERS_WITH_METADATA, nodeStateUpdateCommand);
+	/* we also update the column at worker nodes */
+	SendCommandToWorkers(WORKERS_WITH_METADATA, metadataSyncCommand);
+	return newWorkerNode;
+}
+
+
+/*
+ * SetShouldHaveShards function sets the shouldhaveshards column of the
+ * specified worker in pg_dist_node.
+ * It returns the new worker node after the modification.
+ */
+static WorkerNode *
+SetShouldHaveShards(WorkerNode *workerNode, bool shouldHaveShards)
+{
+	return SetWorkerColumn(workerNode, Anum_pg_dist_node_shouldhaveshards,
+						   BoolGetDatum(shouldHaveShards));
+}
+
+
+/*
+ * SetNodeState function sets the isactive column of the specified worker in
+ * pg_dist_node to isActive.
+ * It returns the new worker node after the modification.
+ */
+static WorkerNode *
+SetNodeState(char *nodeName, int nodePort, bool isActive)
+{
+	WorkerNode *workerNode = FindWorkerNodeAnyCluster(nodeName, nodePort);
+	return SetWorkerColumn(workerNode, Anum_pg_dist_node_isactive,
+						   BoolGetDatum(isActive));
 }
 
 
@@ -1145,7 +1262,7 @@ SetNodeState(char *nodeName, int32 nodePort, bool isActive)
  * This function may return worker nodes from other clusters.
  */
 static HeapTuple
-GetNodeTuple(char *nodeName, int32 nodePort)
+GetNodeTuple(const char *nodeName, int32 nodePort)
 {
 	Relation pgDistNode = heap_open(DistNodeRelationId(), AccessShareLock);
 	const int scanKeyCount = 2;
@@ -1296,6 +1413,8 @@ InsertNodeRow(int nodeid, char *nodeName, int32 nodePort, NodeMetadata *nodeMeta
 	values[Anum_pg_dist_node_isactive - 1] = BoolGetDatum(nodeMetadata->isActive);
 	values[Anum_pg_dist_node_noderole - 1] = ObjectIdGetDatum(nodeMetadata->nodeRole);
 	values[Anum_pg_dist_node_nodecluster - 1] = nodeClusterNameDatum;
+	values[Anum_pg_dist_node_shouldhaveshards - 1] = BoolGetDatum(
+		nodeMetadata->shouldHaveShards);
 
 	pgDistNode = heap_open(DistNodeRelationId(), RowExclusiveLock);
 
@@ -1562,6 +1681,9 @@ TupleToWorkerNode(TupleDesc tupleDescriptor, HeapTuple heapTuple)
 		DatumGetBool(datumArray[Anum_pg_dist_node_metadatasynced - 1]);
 	workerNode->isActive = DatumGetBool(datumArray[Anum_pg_dist_node_isactive - 1]);
 	workerNode->nodeRole = DatumGetObjectId(datumArray[Anum_pg_dist_node_noderole - 1]);
+	workerNode->shouldHaveShards = DatumGetBool(
+		datumArray[Anum_pg_dist_node_shouldhaveshards -
+				   1]);
 
 	/*
 	 * nodecluster column can be missing. In the case of extension creation/upgrade,

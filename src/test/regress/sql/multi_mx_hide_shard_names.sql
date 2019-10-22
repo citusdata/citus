@@ -39,7 +39,6 @@ SELECT * FROM citus_shard_indexes_on_worker;
 -- now show that we see the shards, but not the
 -- indexes as there are no indexes
 \c - - - :worker_1_port
-SET citus.next_shard_id TO 1330000;
 SET search_path TO 'mx_hide_shard_names';
 SELECT * FROM citus_shards_on_worker ORDER BY 2;
 SELECT * FROM citus_shard_indexes_on_worker ORDER BY 2;

@@ -16,6 +16,7 @@
 
 #include "postgres.h"
 
+#include "storage/lmgr.h"
 #include "storage/lockdefs.h"
 #include "nodes/pg_list.h"
 
@@ -38,6 +39,8 @@
 /*
  * In memory representation of pg_dist_node table elements. The elements are hold in
  * WorkerNodeHash table.
+ * IMPORTANT: The order of the fields in this definition should match the
+ * column order of pg_dist_node
  */
 typedef struct WorkerNode
 {
@@ -51,6 +54,7 @@ typedef struct WorkerNode
 	Oid nodeRole;                       /* the node's role in its group */
 	char nodeCluster[NAMEDATALEN];      /* the cluster the node is a part of */
 	bool metadataSynced;                /* node has the most recent metadata */
+	bool shouldHaveShards;              /* if the node should have distributed table shards on it or not */
 } WorkerNode;
 
 
@@ -68,17 +72,19 @@ extern WorkerNode * WorkerGetRoundRobinCandidateNode(List *workerNodeList,
 extern WorkerNode * WorkerGetLocalFirstCandidateNode(List *currentNodeList);
 extern uint32 ActivePrimaryNodeCount(void);
 extern List * ActivePrimaryNodeList(LOCKMODE lockMode);
+extern List * ActivePrimaryShouldHaveShardsNodeList(LOCKMODE lockMode);
 extern uint32 ActiveReadableNodeCount(void);
 extern List * ActiveReadableNodeList(void);
 extern WorkerNode * GetWorkerNodeByNodeId(int nodeId);
 extern WorkerNode * FindWorkerNode(char *nodeName, int32 nodePort);
-extern WorkerNode * FindWorkerNodeAnyCluster(char *nodeName, int32 nodePort);
+extern WorkerNode * FindWorkerNodeAnyCluster(const char *nodeName, int32 nodePort);
 extern List * ReadWorkerNodes(bool includeNodesFromOtherClusters);
 extern void EnsureCoordinator(void);
 extern uint32 GroupForNode(char *nodeName, int32 nodePorT);
 extern WorkerNode * PrimaryNodeForGroup(int32 groupId, bool *groupContainsNodes);
 extern bool WorkerNodeIsPrimary(WorkerNode *worker);
 extern bool WorkerNodeIsSecondary(WorkerNode *worker);
+extern bool WorkerNodeIsPrimaryShouldHaveShardsNode(WorkerNode *worker);
 extern bool WorkerNodeIsReadable(WorkerNode *worker);
 extern uint32 CountPrimariesWithMetadata(void);
 extern WorkerNode * GetFirstPrimaryWorkerNode(void);

@@ -12,6 +12,10 @@
 #ifndef REFERENCE_TABLE_UTILS_H_
 #define REFERENCE_TABLE_UTILS_H_
 
+#include "postgres.h"
+
+#include "listutils.h"
+
 extern uint32 CreateReferenceTableColocationId(void);
 extern void ReplicateAllReferenceTablesToNode(char *nodeName, int nodePort);
 extern void DeleteAllReferenceTablePlacementsFromNodeGroup(int32 groupId);

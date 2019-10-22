@@ -900,6 +900,24 @@ NodeStateUpdateCommand(uint32 nodeId, bool isActive)
 
 
 /*
+ * ShouldHaveShardsUpdateCommand generates a command that can be executed to
+ * update the shouldhaveshards column of a node in pg_dist_node table.
+ */
+char *
+ShouldHaveShardsUpdateCommand(uint32 nodeId, bool shouldHaveShards)
+{
+	StringInfo nodeStateUpdateCommand = makeStringInfo();
+	char *shouldHaveShardsString = shouldHaveShards ? "TRUE" : "FALSE";
+
+	appendStringInfo(nodeStateUpdateCommand,
+					 "UPDATE pg_catalog.pg_dist_node SET shouldhaveshards = %s "
+					 "WHERE nodeid = %u", shouldHaveShardsString, nodeId);
+
+	return nodeStateUpdateCommand->data;
+}
+
+
+/*
  * ColocationIdUpdateCommand creates the SQL command to change the colocationId
  * of the table with the given name to the given colocationId in pg_dist_partition
  * table.

@@ -20,10 +20,10 @@ CREATE FUNCTION master_metadata_snapshot()
     RETURNS text[]
     LANGUAGE C STRICT
     AS 'citus';
-    
+
 COMMENT ON FUNCTION master_metadata_snapshot()
     IS 'commands to create the metadata snapshot';
-    
+
 -- Show that none of the existing tables are qualified to be MX tables
 SELECT * FROM pg_dist_partition WHERE partmethod='h' AND repmodel='s';
 
@@ -36,7 +36,7 @@ CREATE TABLE mx_test_table (col_1 int UNIQUE, col_2 text NOT NULL, col_3 BIGSERI
 SELECT master_create_distributed_table('mx_test_table', 'col_1', 'hash');
 SELECT master_create_worker_shards('mx_test_table', 8, 1);
 
--- Set the replication model of the test table to streaming replication so that it is 
+-- Set the replication model of the test table to streaming replication so that it is
 -- considered as an MX table
 UPDATE pg_dist_partition SET repmodel='s' WHERE logicalrelid='mx_test_table'::regclass;
 
@@ -112,12 +112,12 @@ SET citus.replication_model TO 'streaming';
 CREATE SCHEMA mx_testing_schema_2;
 
 CREATE TABLE mx_testing_schema.fk_test_1 (col1 int, col2 text, col3 int, UNIQUE(col1, col3));
-CREATE TABLE mx_testing_schema_2.fk_test_2 (col1 int, col2 int, col3 text, 
+CREATE TABLE mx_testing_schema_2.fk_test_2 (col1 int, col2 int, col3 text,
 	FOREIGN KEY (col1, col2) REFERENCES mx_testing_schema.fk_test_1 (col1, col3));
 
 SELECT create_distributed_table('mx_testing_schema.fk_test_1', 'col1');
 SELECT create_distributed_table('mx_testing_schema_2.fk_test_2', 'col1');
-		
+
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 
 -- Check that foreign key metadata exists on the worker
@@ -184,7 +184,7 @@ SELECT * FROM mx_query_test ORDER BY a;
 \c - - - :master_port
 DROP TABLE mx_query_test;
 
--- Check that stop_metadata_sync_to_node function sets hasmetadata of the node to false 
+-- Check that stop_metadata_sync_to_node function sets hasmetadata of the node to false
 \c - - - :master_port
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_1_port;
@@ -224,27 +224,27 @@ SELECT create_distributed_table('mx_test_schema_1.mx_table_1', 'col1');
 SELECT create_distributed_table('mx_test_schema_2.mx_table_2', 'col1');
 
 -- Check that created tables are marked as streaming replicated tables
-SELECT 
-	logicalrelid, repmodel 
-FROM 
-	pg_dist_partition 
-WHERE 
+SELECT
+	logicalrelid, repmodel
+FROM
+	pg_dist_partition
+WHERE
 	logicalrelid = 'mx_test_schema_1.mx_table_1'::regclass
 	OR logicalrelid = 'mx_test_schema_2.mx_table_2'::regclass
-ORDER BY 
+ORDER BY
 	logicalrelid;
 
--- See the shards and placements of the mx tables 
-SELECT 
+-- See the shards and placements of the mx tables
+SELECT
 	logicalrelid, shardid, nodename, nodeport
-FROM 
+FROM
 	pg_dist_shard NATURAL JOIN pg_dist_shard_placement
-WHERE 
+WHERE
 	logicalrelid = 'mx_test_schema_1.mx_table_1'::regclass
 	OR logicalrelid = 'mx_test_schema_2.mx_table_2'::regclass
-ORDER BY 
+ORDER BY
 	logicalrelid, shardid;
-	
+
 -- Check that metadata of MX tables exist on the metadata worker
 \c - - - :worker_1_port
 
@@ -252,23 +252,23 @@ ORDER BY
 \dt mx_test_schema_?.mx_table_?
 
 -- Check that table metadata are created
-SELECT 
-	logicalrelid, repmodel 
-FROM 
-	pg_dist_partition 
-WHERE 
+SELECT
+	logicalrelid, repmodel
+FROM
+	pg_dist_partition
+WHERE
 	logicalrelid = 'mx_test_schema_1.mx_table_1'::regclass
 	OR logicalrelid = 'mx_test_schema_2.mx_table_2'::regclass;
 
 -- Check that shard and placement data are created
-SELECT 
+SELECT
 	logicalrelid, shardid, nodename, nodeport
-FROM 
+FROM
 	pg_dist_shard NATURAL JOIN pg_dist_shard_placement
-WHERE 
+WHERE
 	logicalrelid = 'mx_test_schema_1.mx_table_1'::regclass
 	OR logicalrelid = 'mx_test_schema_2.mx_table_2'::regclass
-ORDER BY 
+ORDER BY
 	logicalrelid, shardid;
 
 -- Check that metadata of MX tables don't exist on the non-metadata worker
@@ -306,11 +306,11 @@ SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
 SET citus.multi_shard_commit_protocol TO '2pc';
 ALTER TABLE mx_test_schema_1.mx_table_1 ADD COLUMN col3 NUMERIC;
 ALTER TABLE mx_test_schema_1.mx_table_1 ALTER COLUMN col3 SET DATA TYPE INT;
-ALTER TABLE 
-	mx_test_schema_1.mx_table_1 
-ADD CONSTRAINT 
-	mx_fk_constraint 
-FOREIGN KEY 
+ALTER TABLE
+	mx_test_schema_1.mx_table_1
+ADD CONSTRAINT
+	mx_fk_constraint
+FOREIGN KEY
 	(col1)
 REFERENCES
 	mx_test_schema_2.mx_table_2(col1);
@@ -321,12 +321,12 @@ SELECT "Constraint", "Definition" FROM table_fkeys WHERE relid='mx_test_schema_1
 -- Check that foreign key constraint with NOT VALID works as well
 \c - - - :master_port
 SET citus.multi_shard_commit_protocol TO '2pc';
-ALTER TABLE mx_test_schema_1.mx_table_1 DROP CONSTRAINT mx_fk_constraint; 
-ALTER TABLE 
-	mx_test_schema_1.mx_table_1 
-ADD CONSTRAINT 
+ALTER TABLE mx_test_schema_1.mx_table_1 DROP CONSTRAINT mx_fk_constraint;
+ALTER TABLE
+	mx_test_schema_1.mx_table_1
+ADD CONSTRAINT
 	mx_fk_constraint_2
-FOREIGN KEY 
+FOREIGN KEY
 	(col1)
 REFERENCES
 	mx_test_schema_2.mx_table_2(col1)
@@ -334,7 +334,7 @@ NOT VALID;
 \c - - - :worker_1_port
 SELECT "Constraint", "Definition" FROM table_fkeys WHERE relid='mx_test_schema_1.mx_table_1'::regclass;
 
--- Check that mark_tables_colocated call propagates the changes to the workers 
+-- Check that mark_tables_colocated call propagates the changes to the workers
 \c - - - :master_port
 SELECT nextval('pg_catalog.pg_dist_colocationid_seq') AS last_colocation_id \gset
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 10000;
@@ -349,51 +349,51 @@ CREATE TABLE mx_colocation_test_2 (a int);
 SELECT create_distributed_table('mx_colocation_test_2', 'a');
 
 -- Check the colocation IDs of the created tables
-SELECT 
+SELECT
 	logicalrelid, colocationid
-FROM 
-	pg_dist_partition 
+FROM
+	pg_dist_partition
 WHERE
 	logicalrelid = 'mx_colocation_test_1'::regclass
 	OR logicalrelid = 'mx_colocation_test_2'::regclass
 ORDER BY logicalrelid;
-	
+
 -- Reset the colocation IDs of the test tables
-DELETE FROM 
+DELETE FROM
 	pg_dist_colocation
 WHERE EXISTS (
-	SELECT 1 
-	FROM pg_dist_partition 
-	WHERE 
-		colocationid = pg_dist_partition.colocationid 
+	SELECT 1
+	FROM pg_dist_partition
+	WHERE
+		colocationid = pg_dist_partition.colocationid
 		AND pg_dist_partition.logicalrelid = 'mx_colocation_test_1'::regclass);
-UPDATE 
-	pg_dist_partition 
-SET 
+UPDATE
+	pg_dist_partition
+SET
 	colocationid = 0
-WHERE 
-	logicalrelid = 'mx_colocation_test_1'::regclass 
+WHERE
+	logicalrelid = 'mx_colocation_test_1'::regclass
 	OR logicalrelid = 'mx_colocation_test_2'::regclass;
 
 -- Mark tables colocated and see the changes on the master and the worker
 SELECT mark_tables_colocated('mx_colocation_test_1', ARRAY['mx_colocation_test_2']);
-SELECT 
-	logicalrelid, colocationid 
-FROM 
-	pg_dist_partition 
+SELECT
+	logicalrelid, colocationid
+FROM
+	pg_dist_partition
 WHERE
 	logicalrelid = 'mx_colocation_test_1'::regclass
 	OR logicalrelid = 'mx_colocation_test_2'::regclass;
 \c - - - :worker_1_port
-SELECT 
-	logicalrelid, colocationid 
-FROM 
-	pg_dist_partition 
+SELECT
+	logicalrelid, colocationid
+FROM
+	pg_dist_partition
 WHERE
 	logicalrelid = 'mx_colocation_test_1'::regclass
 	OR logicalrelid = 'mx_colocation_test_2'::regclass;
 
-\c - - - :master_port	
+\c - - - :master_port
 
 -- Check that DROP TABLE on MX tables works
 DROP TABLE mx_colocation_test_1;
@@ -404,9 +404,9 @@ DROP TABLE mx_colocation_test_2;
 \c - - - :worker_1_port
 \d mx_colocation_test_1
 \d mx_colocation_test_2
-	
+
 -- Check that dropped MX table can be recreated again
-\c - - - :master_port	
+\c - - - :master_port
 SET citus.shard_count TO 7;
 SET citus.shard_replication_factor TO 1;
 SET citus.replication_model TO 'streaming';
@@ -424,7 +424,7 @@ SELECT logicalrelid, repmodel FROM pg_dist_partition WHERE logicalrelid = 'mx_te
 DROP TABLE mx_temp_drop_test;
 
 -- Check that MX tables can be created with SERIAL columns
-\c - - - :master_port	
+\c - - - :master_port
 SET citus.shard_count TO 3;
 SET citus.shard_replication_factor TO 1;
 SET citus.replication_model TO 'streaming';
@@ -593,14 +593,14 @@ SELECT count(*) FROM pg_dist_colocation WHERE distributioncolumntype = 0;
 SELECT
 	logicalrelid, partmethod, repmodel, shardid, placementid, nodename, nodeport
 FROM
-	pg_dist_partition 
+	pg_dist_partition
 	NATURAL JOIN pg_dist_shard
 	NATURAL JOIN pg_dist_shard_placement
 WHERE
 	logicalrelid = 'mx_ref'::regclass
 ORDER BY
  	nodeport;
-	
+
 SELECT shardid AS ref_table_shardid FROM pg_dist_shard WHERE logicalrelid='mx_ref'::regclass \gset
 
 -- Check that DDL commands are propagated to reference tables on workers
@@ -616,7 +616,7 @@ SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_ref'::regclass;
 SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
     relid = 'mx_ref_index'::regclass;
-	
+
 -- Check that metada is cleaned successfully upon drop table
 \c - - - :master_port
 DROP TABLE mx_ref;
@@ -641,25 +641,25 @@ SELECT master_remove_node('localhost', :worker_2_port);
 CREATE TABLE mx_ref (col_1 int, col_2 text);
 SELECT create_reference_table('mx_ref');
 
-SELECT shardid, nodename, nodeport 
+SELECT shardid, nodename, nodeport
 FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement
 WHERE logicalrelid='mx_ref'::regclass;
 
 \c - - - :worker_1_port
-SELECT shardid, nodename, nodeport 
+SELECT shardid, nodename, nodeport
 FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement
 WHERE logicalrelid='mx_ref'::regclass;
 
 \c - - - :master_port
 SELECT master_add_node('localhost', :worker_2_port);
 
-SELECT shardid, nodename, nodeport 
+SELECT shardid, nodename, nodeport
 FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement
 WHERE logicalrelid='mx_ref'::regclass
 ORDER BY shardid, nodeport;
 
 \c - - - :worker_1_port
-SELECT shardid, nodename, nodeport 
+SELECT shardid, nodename, nodeport
 FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement
 WHERE logicalrelid='mx_ref'::regclass
 ORDER BY shardid, nodeport;
@@ -677,6 +677,30 @@ UPDATE pg_dist_placement
 UPDATE pg_dist_placement
   SET groupid = (SELECT groupid FROM pg_dist_node WHERE nodeport = :worker_2_port)
   WHERE groupid = :old_worker_2_group;
+
+-- Confirm that shouldhaveshards is 'true'
+\c - - - :master_port
+select shouldhaveshards from pg_dist_node where nodeport = 8888;
+\c - postgres - :worker_1_port
+select shouldhaveshards from pg_dist_node where nodeport = 8888;
+
+
+-- Check that setting shouldhaveshards to false is correctly transferred to other mx nodes
+\c - - - :master_port
+SELECT * from master_set_node_property('localhost', 8888, 'shouldhaveshards', false);
+select shouldhaveshards from pg_dist_node where nodeport = 8888;
+
+\c - postgres - :worker_1_port
+select shouldhaveshards from pg_dist_node where nodeport = 8888;
+
+-- Check that setting shouldhaveshards to true is correctly transferred to other mx nodes
+\c - postgres - :master_port
+SELECT * from master_set_node_property('localhost', 8888, 'shouldhaveshards', true);
+select shouldhaveshards from pg_dist_node where nodeport = 8888;
+
+\c - postgres - :worker_1_port
+select shouldhaveshards from pg_dist_node where nodeport = 8888;
+
 
 -- Cleanup
 \c - - - :master_port
