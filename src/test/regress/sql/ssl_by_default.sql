@@ -5,20 +5,9 @@
 -- sure connections to workers use SSL by having it required in citus.conn_nodeinfo and
 -- lastly we will inspect the ssl state for connections to the workers
 
--- ssl can only be enabled by default on installations of postgres 10 and above that are
--- OpenSSL-enabled.
-SHOW server_version \gset
+-- ssl can only be enabled by default on installations that are OpenSSL-enabled.
 SHOW ssl_ciphers \gset
-WITH features AS (
-    SELECT
-        substring(:'server_version', '\d+')::int >= 10 AS version_ten_or_above,
-        :'ssl_ciphers' != 'none' AS hasssl
-)
-SELECT (
-    true
-    AND version_ten_or_above
-    AND hasssl
-) AS ssl_by_default_supported FROM features;
+SELECT :'ssl_ciphers' != 'none' AS hasssl;
 
 SHOW ssl;
 SELECT run_command_on_workers($$
