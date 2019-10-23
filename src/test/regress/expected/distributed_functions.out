@@ -55,6 +55,9 @@ CREATE TYPE dup_result AS (f1 int, f2 text);
 CREATE FUNCTION dup(int) RETURNS dup_result
     AS $$ SELECT $1, CAST($1 AS text) || ' is text' $$
     LANGUAGE SQL;
+CREATE FUNCTION increment(int2) RETURNS int
+    AS $$ SELECT $1 + 1$$
+    LANGUAGE SQL;
 CREATE FUNCTION add_with_param_names(val1 integer, val2 integer) RETURNS integer
     AS 'select $1 + $2;'
     LANGUAGE SQL
@@ -73,9 +76,21 @@ CREATE FUNCTION add_mixed_param_names(integer, val1 integer) RETURNS integer
 -- make sure to propagate ddl propagation after we have setup our functions, this will
 -- allow alter statements to be propagated and keep the functions in sync across machines
 SET citus.enable_ddl_propagation TO on;
--- functions are distributed by int arguments, when run in isolation it is not guaranteed a table actually exists.
-CREATE TABLE colocation_table(id int);
-SELECT create_distributed_table('colocation_table','id');
+-- use an unusual type to force a new colocation group
+CREATE TABLE statement_table(id int2);
+SET citus.replication_model TO 'statement';
+SET citus.shard_replication_factor TO 1;
+SELECT create_distributed_table('statement_table','id');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+-- create a table uses streaming-based replication (can be synced)
+CREATE TABLE streaming_table(id int);
+SET citus.replication_model TO 'streaming';
+SET citus.shard_replication_factor TO 1;
+SELECT create_distributed_table('streaming_table','id');
  create_distributed_table 
 --------------------------
  
@@ -120,7 +135,24 @@ select bool_or(hasmetadata) from pg_dist_node WHERE isactive AND  noderole = 'pr
  f
 (1 row)
 
-SELECT create_distributed_function('dup(int)', '$1');
+-- try to co-locate with a table that uses statement-based replication
+SELECT create_distributed_function('increment(int2)', '$1');
+ERROR:  cannot colocate function "increment" and table "statement_table"
+DETAIL:  Citus currently only supports colocating function with distributed tables that are created using streaming replication model.
+HINT:  When distributing tables make sure that citus.replication_model = 'streaming'
+SELECT create_distributed_function('increment(int2)', '$1', colocate_with := 'statement_table');
+ERROR:  cannot colocate function "increment" and table "statement_table"
+DETAIL:  Citus currently only supports colocating function with distributed tables that are created using streaming replication model.
+HINT:  When distributing tables make sure that citus.replication_model = 'streaming'
+BEGIN;
+SET LOCAL citus.replication_model TO 'statement';
+DROP TABLE statement_table;
+SELECT create_distributed_function('increment(int2)', '$1');
+ERROR:  cannot create a function with a distribution argument when citus.replication_model is 'statement'
+HINT:  Set citus.replication_model to 'streaming' before creating distributed tables
+END;
+-- try to co-locate with a table that uses streaming replication
+SELECT create_distributed_function('dup(int)', '$1', colocate_with := 'streaming_table');
  create_distributed_function 
 -----------------------------
  
@@ -133,7 +165,7 @@ SELECT * FROM run_command_on_workers('SELECT function_tests.dup(42);') ORDER BY 
  localhost |    57638 | t       | (42,"42 is text")
 (2 rows)
 
-SELECT create_distributed_function('add(int,int)', '$1');
+SELECT create_distributed_function('add(int,int)', '$1', colocate_with := 'streaming_table');
  create_distributed_function 
 -----------------------------
  
@@ -455,7 +487,7 @@ SELECT create_distributed_table('replicated_table_func_test', 'a');
 SELECT create_distributed_function('add_with_param_names(int, int)', '$1', colocate_with:='replicated_table_func_test');
 ERROR:  cannot colocate function "add_with_param_names" and table "replicated_table_func_test"
 DETAIL:  Citus currently only supports colocating function with distributed tables that are created using streaming replication model.
-HINT:  When distributing tables make sure that "citus.replication_model" is set to "streaming"
+HINT:  When distributing tables make sure that citus.replication_model = 'streaming'
 -- a function can be colocated with a different distribution argument type
 -- as long as there is a coercion path
 SET citus.shard_replication_factor TO 1;
@@ -607,9 +639,9 @@ SELECT worker_drop_distributed_table(logicalrelid::text) FROM pg_dist_partition 
  
 (3 rows)
 
-TRUNCATE pg_dist_node;
 DROP SCHEMA function_tests CASCADE;
 DROP SCHEMA function_tests2 CASCADE;
+TRUNCATE pg_dist_node;
 \c - - - :worker_2_port
 SET client_min_messages TO error; -- suppress cascading objects dropping
 UPDATE pg_dist_local_group SET groupid = 0;
@@ -621,9 +653,9 @@ SELECT worker_drop_distributed_table(logicalrelid::text) FROM pg_dist_partition 
  
 (3 rows)
 
-TRUNCATE pg_dist_node;
 DROP SCHEMA function_tests CASCADE;
 DROP SCHEMA function_tests2 CASCADE;
+TRUNCATE pg_dist_node;
 \c - - - :master_port
 DROP USER functionuser;
 SELECT run_command_on_workers($$DROP USER functionuser;$$);
