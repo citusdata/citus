@@ -96,6 +96,9 @@ GRANT USAGE ON SCHEMA full_access_user_schema TO usage_access;
 
 \c - - - :master_port
 
+SET citus.replication_model TO 'streaming';
+SET citus.shard_replication_factor TO 1;
+
 -- create prepare tests
 PREPARE prepare_insert AS INSERT INTO test VALUES ($1);
 PREPARE prepare_select AS SELECT count(*) FROM test;
@@ -300,12 +303,15 @@ SELECT run_command_on_workers($$SELECT proowner::regrole FROM pg_proc WHERE pron
 
 SELECT wait_until_metadata_sync();
 
--- now, make sure that the user can use the function 
+CREATE TABLE colocation_table(id text);
+SELECT create_distributed_table('colocation_table','id');
+
+-- now, make sure that the user can use the function
 -- created in the transaction
 BEGIN;
 CREATE FUNCTION usage_access_func_second(key int, variadic v int[]) RETURNS text
     LANGUAGE plpgsql AS 'begin return current_user; end;';
-SELECT create_distributed_function('usage_access_func_second(int,int[])', '$1');
+SELECT create_distributed_function('usage_access_func_second(int,int[])', '$1', colocate_with := 'colocation_table');
 
 SELECT usage_access_func_second(1, 2,3,4,5) FROM full_access_user_schema.t1 LIMIT 1; 
 
@@ -321,7 +327,7 @@ CREATE FUNCTION usage_access_func_third(key int, variadic v int[]) RETURNS text
 SELECT usesuper FROM pg_user where usename IN (SELECT current_user);
 
 -- superuser creates the distributed function that is owned by a regular user
-SELECT create_distributed_function('usage_access_func_third(int,int[])', '$1');
+SELECT create_distributed_function('usage_access_func_third(int,int[])', '$1', colocate_with := 'colocation_table');
 
 SELECT proowner::regrole FROM pg_proc WHERE proname = 'usage_access_func_third';
 SELECT run_command_on_workers($$SELECT proowner::regrole FROM pg_proc WHERE proname = 'usage_access_func_third'$$);
@@ -503,7 +509,8 @@ DROP TABLE
     my_role_table_with_data,
     singleshard,
     test,
-    test_coloc;
+    test_coloc,
+    colocation_table;
 DROP USER full_access;
 DROP USER read_access;
 DROP USER no_access;

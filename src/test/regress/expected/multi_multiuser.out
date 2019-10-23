@@ -128,6 +128,8 @@ GRANT USAGE ON SCHEMA full_access_user_schema TO full_access;
 GRANT ALL ON SCHEMA full_access_user_schema TO full_access;
 GRANT USAGE ON SCHEMA full_access_user_schema TO usage_access;
 \c - - - :master_port
+SET citus.replication_model TO 'streaming';
+SET citus.shard_replication_factor TO 1;
 -- create prepare tests
 PREPARE prepare_insert AS INSERT INTO test VALUES ($1);
 PREPARE prepare_select AS SELECT count(*) FROM test;
@@ -439,7 +441,7 @@ INSERT INTO full_access_user_schema.t1 VALUES (1),(2),(3);
 -- not allowed to create a table
 SELECT create_distributed_table('full_access_user_schema.t1', 'id');
 ERROR:  permission denied for schema full_access_user_schema
-CONTEXT:  while executing command on localhost:57638
+CONTEXT:  while executing command on localhost:57637
 RESET ROLE;
 SET ROLE usage_access;
 CREATE TYPE usage_access_type AS ENUM ('a', 'b');
@@ -487,12 +489,19 @@ SELECT wait_until_metadata_sync();
  
 (1 row)
 
+CREATE TABLE colocation_table(id text);
+SELECT create_distributed_table('colocation_table','id');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
 -- now, make sure that the user can use the function
 -- created in the transaction
 BEGIN;
 CREATE FUNCTION usage_access_func_second(key int, variadic v int[]) RETURNS text
     LANGUAGE plpgsql AS 'begin return current_user; end;';
-SELECT create_distributed_function('usage_access_func_second(int,int[])', '$1');
+SELECT create_distributed_function('usage_access_func_second(int,int[])', '$1', colocate_with := 'colocation_table');
  create_distributed_function 
 -----------------------------
  
@@ -517,7 +526,7 @@ SELECT usesuper FROM pg_user where usename IN (SELECT current_user);
 (1 row)
 
 -- superuser creates the distributed function that is owned by a regular user
-SELECT create_distributed_function('usage_access_func_third(int,int[])', '$1');
+SELECT create_distributed_function('usage_access_func_third(int,int[])', '$1', colocate_with := 'colocation_table');
  create_distributed_function 
 -----------------------------
  
@@ -683,7 +692,7 @@ ERROR:  could not receive file "base/pgsql_job_cache/job_0042/task_000001/p_0000
 -- different user should not be able to fetch partition file
 SET ROLE usage_access;
 SELECT worker_fetch_partition_file(42, 1, 1, 1, 'localhost', :worker_1_port);
-WARNING:  could not open file "base/pgsql_job_cache/job_0042/task_000001/p_00001.37455": No such file or directory
+WARNING:  could not open file "base/pgsql_job_cache/job_0042/task_000001/p_00001.37457": No such file or directory
 CONTEXT:  while executing command on localhost:57637
 ERROR:  could not receive file "base/pgsql_job_cache/job_0042/task_000001/p_00001" from localhost:57637
 -- only the user whom created the files should be able to fetch
@@ -722,7 +731,7 @@ RESET ROLE;
 -- test that the super user is unable to read the contents of the intermediate file,
 -- although it does create the table
 SELECT worker_merge_files_into_table(42, 1, ARRAY['a'], ARRAY['integer']);
-WARNING:  Task file "task_000001.36164" does not have expected suffix ".10"
+WARNING:  Task file "task_000001.36145" does not have expected suffix ".10"
  worker_merge_files_into_table 
 -------------------------------
  
@@ -764,7 +773,7 @@ SELECT worker_merge_files_and_run_query(42, 1,
     'CREATE TABLE task_000001_merge(merge_column_0 int)',
     'CREATE TABLE task_000001 (a) AS SELECT sum(merge_column_0) FROM task_000001_merge'
 );
-WARNING:  Task file "task_000001.36164" does not have expected suffix ".10"
+WARNING:  Task file "task_000001.36145" does not have expected suffix ".10"
  worker_merge_files_and_run_query 
 ----------------------------------
  
@@ -834,7 +843,8 @@ DROP TABLE
     my_role_table_with_data,
     singleshard,
     test,
-    test_coloc;
+    test_coloc,
+    colocation_table;
 DROP USER full_access;
 DROP USER read_access;
 DROP USER no_access;

@@ -29,13 +29,15 @@ END;
 $proc$;
 -- procedures are distributed by text arguments, when run in isolation it is not guaranteed a table actually exists.
 CREATE TABLE colocation_table(id text);
+SET citus.replication_model TO 'streaming';
+SET citus.shard_replication_factor TO 1;
 SELECT create_distributed_table('colocation_table','id');
  create_distributed_table 
 --------------------------
  
 (1 row)
 
-SELECT create_distributed_function('raise_info(text)', '$1');
+SELECT create_distributed_function('raise_info(text)', '$1', colocate_with := 'colocation_table');
  create_distributed_function 
 -----------------------------
  

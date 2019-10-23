@@ -498,6 +498,7 @@ select start_metadata_sync_to_node('localhost', :worker_2_port);
 \c - - - :master_port
 SET search_path to multi_mx_function_call_delegation, public;
 SET client_min_messages TO DEBUG1;
+SET citus.replication_model = 'streaming';
 --
 -- Test non-const parameter values
 --
