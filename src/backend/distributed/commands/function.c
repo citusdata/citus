@@ -347,6 +347,8 @@ GetFunctionColocationId(Oid functionOid, char *colocateWithTableName,
 
 	if (pg_strncasecmp(colocateWithTableName, "default", NAMEDATALEN) == 0)
 	{
+		Oid colocatedTableId = InvalidOid;
+
 		/* check for default colocation group */
 		colocationId = ColocationId(ShardCount, ShardReplicationFactor,
 									distributionArgumentOid);
@@ -360,6 +362,22 @@ GetFunctionColocationId(Oid functionOid, char *colocateWithTableName,
 								   "is no table to colocate with", functionName),
 							errhint("Provide a distributed table via \"colocate_with\" "
 									"option to create_distributed_function()")));
+		}
+
+		colocatedTableId = ColocatedTableId(colocationId);
+		if (colocatedTableId != InvalidOid)
+		{
+			EnsureFunctionCanBeColocatedWithTable(functionOid, distributionArgumentOid,
+												  colocatedTableId);
+		}
+		else if (ReplicationModel == REPLICATION_MODEL_COORDINATOR)
+		{
+			/* streaming replication model is required for metadata syncing */
+			ereport(ERROR, (errmsg("cannot create a function with a distribution "
+								   "argument when citus.replication_model is "
+								   "'statement'"),
+							errhint("Set citus.replication_model to 'streaming' "
+									"before creating distributed tables")));
 		}
 	}
 	else
@@ -417,7 +435,7 @@ EnsureFunctionCanBeColocatedWithTable(Oid functionOid, Oid distributionColumnTyp
 								  "with distributed tables that are created using "
 								  "streaming replication model."),
 						errhint("When distributing tables make sure that "
-								"\"citus.replication_model\" is set to \"streaming\"")));
+								"citus.replication_model = 'streaming'")));
 	}
 
 	/*
