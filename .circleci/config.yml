@@ -140,17 +140,6 @@ jobs:
           name: 'Install and Test (check-failure)'
           command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext check-failure'
 
-  test-10-11_check-pg-upgrade:
-    docker:
-      - image: 'citus/pgupgradetester:latest'
-    working_directory: /home/circleci/project     
-    steps:
-      - attach_workspace:
-          at: .
-      - run: 
-          name: 'Install and test postgres upgrade'
-          command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext --target check-pg-upgrade --old-pg-version 10 --new-pg-version 11'
-
   test-11-12_check-pg-upgrade:
     docker:
       - image: 'citus/pgupgradetester:latest'
@@ -341,8 +330,6 @@ workflows:
       - test-12_check-non-adaptive-isolation:
           requires: [build] 
 
-      - test-10-11_check-pg-upgrade: 
-          requires: [build]
       - test-11-12_check-pg-upgrade: 
           requires: [build]    
 
