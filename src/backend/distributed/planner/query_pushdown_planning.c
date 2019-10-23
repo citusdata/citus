@@ -24,6 +24,7 @@
 #include "distributed/citus_clauses.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/deparse_shard_query.h"
+#include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_logical_optimizer.h"
 #include "distributed/multi_logical_planner.h"
@@ -1061,7 +1062,7 @@ DeferErrorIfUnsupportedTableCombination(Query *queryTree)
 {
 	List *rangeTableList = queryTree->rtable;
 	List *joinTreeTableIndexList = NIL;
-	ListCell *joinTreeTableIndexCell = NULL;
+	int joinTreeTableIndex = 0;
 	bool unsupportedTableCombination = false;
 	char *errorDetail = NULL;
 
@@ -1071,13 +1072,12 @@ DeferErrorIfUnsupportedTableCombination(Query *queryTree)
 	 */
 	ExtractRangeTableIndexWalker((Node *) queryTree->jointree, &joinTreeTableIndexList);
 
-	foreach(joinTreeTableIndexCell, joinTreeTableIndexList)
+	foreach_int(joinTreeTableIndex, joinTreeTableIndexList)
 	{
 		/*
 		 * Join tree's range table index starts from 1 in the query tree. But,
 		 * list indexes start from 0.
 		 */
-		int joinTreeTableIndex = lfirst_int(joinTreeTableIndexCell);
 		int rangeTableListIndex = joinTreeTableIndex - 1;
 
 		RangeTblEntry *rangeTableEntry =
