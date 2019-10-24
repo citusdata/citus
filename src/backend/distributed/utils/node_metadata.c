@@ -765,8 +765,8 @@ UpdateNodeLocation(int32 nodeId, char *newNodeName, int32 newNodePort)
 Datum
 master_initialize_node_metadata(PG_FUNCTION_ARGS)
 {
+	ListCell *workerNodeCell = NULL;
 	List *workerNodes = NIL;
-	WorkerNode *workerNode = NULL;
 
 	CheckCitusVersion(ERROR);
 
@@ -779,8 +779,9 @@ master_initialize_node_metadata(PG_FUNCTION_ARGS)
 
 	workerNodes = ParseWorkerNodeFileAndRename();
 
-	foreach_ptr(workerNode, workerNodes)
+	foreach(workerNodeCell, workerNodes)
 	{
+		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
 		bool nodeAlreadyExists = false;
 		NodeMetadata nodeMetadata = DefaultNodeMetadata();
 		nodeMetadata.nodeRack = workerNode->workerRack;
