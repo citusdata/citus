@@ -41,6 +41,8 @@
 
 
 /* forward declaration for deparse functions */
+static const char * ObjectTypeToKeyword(ObjectType objtype);
+
 static void AppendAlterFunctionStmt(StringInfo buf, AlterFunctionStmt *stmt);
 static void AppendDropFunctionStmt(StringInfo buf, DropStmt *stmt);
 static void AppendFunctionName(StringInfo buf, ObjectWithArgs *func, ObjectType objtype);
@@ -79,6 +81,37 @@ DeparseAlterFunctionStmt(AlterFunctionStmt *stmt)
 
 
 /*
+ * ObjectTypeToKeyword returns an appropriate string for the given ObjectType
+ * Where the string will be one of "FUNCTION", "PROCEDURE", or "AGGREGATE"
+ */
+static const char *
+ObjectTypeToKeyword(ObjectType objtype)
+{
+	switch (objtype)
+	{
+		case OBJECT_FUNCTION:
+		{
+			return "FUNCTION";
+		}
+
+		case OBJECT_PROCEDURE:
+		{
+			return "PROCEDURE";
+		}
+
+		case OBJECT_AGGREGATE:
+		{
+			return "AGGREGATE";
+		}
+
+		default:
+			elog(ERROR, "Unknown object type: %d", objtype);
+			return NULL;
+	}
+}
+
+
+/*
  * AppendAlterFunctionStmt appends a string representing the AlterFunctionStmt to a buffer
  */
 static void
@@ -86,19 +119,7 @@ AppendAlterFunctionStmt(StringInfo buf, AlterFunctionStmt *stmt)
 {
 	ListCell *actionCell = NULL;
 
-	if (stmt->objtype == OBJECT_FUNCTION)
-	{
-		appendStringInfo(buf, "ALTER FUNCTION ");
-	}
-	else if (stmt->objtype == OBJECT_PROCEDURE)
-	{
-		appendStringInfo(buf, "ALTER PROCEDURE ");
-	}
-	else
-	{
-		appendStringInfo(buf, "ALTER AGGREGATE ");
-	}
-
+	appendStringInfo(buf, "ALTER %s ", ObjectTypeToKeyword(stmt->objtype));
 	AppendFunctionName(buf, stmt->func, stmt->objtype);
 
 	foreach(actionCell, stmt->actions)
@@ -317,21 +338,8 @@ AppendRenameFunctionStmt(StringInfo buf, RenameStmt *stmt)
 {
 	ObjectWithArgs *func = castNode(ObjectWithArgs, stmt->object);
 
-	if (stmt->renameType == OBJECT_FUNCTION)
-	{
-		appendStringInfoString(buf, "ALTER FUNCTION ");
-	}
-	else if (stmt->renameType == OBJECT_PROCEDURE)
-	{
-		appendStringInfoString(buf, "ALTER PROCEDURE ");
-	}
-	else
-	{
-		appendStringInfoString(buf, "ALTER AGGREGATE ");
-	}
-
+	appendStringInfo(buf, "ALTER %s ", ObjectTypeToKeyword(stmt->renameType));
 	AppendFunctionName(buf, func, stmt->renameType);
-
 	appendStringInfo(buf, " RENAME TO %s;", quote_identifier(stmt->newname));
 }
 
@@ -361,19 +369,7 @@ AppendAlterFunctionSchemaStmt(StringInfo buf, AlterObjectSchemaStmt *stmt)
 {
 	ObjectWithArgs *func = castNode(ObjectWithArgs, stmt->object);
 
-	if (stmt->objectType == OBJECT_FUNCTION)
-	{
-		appendStringInfoString(buf, "ALTER FUNCTION ");
-	}
-	else if (stmt->objectType == OBJECT_PROCEDURE)
-	{
-		appendStringInfoString(buf, "ALTER PROCEDURE ");
-	}
-	else
-	{
-		appendStringInfoString(buf, "ALTER AGGREGATE ");
-	}
-
+	appendStringInfo(buf, "ALTER %s ", ObjectTypeToKeyword(stmt->objectType));
 	AppendFunctionName(buf, func, stmt->objectType);
 	appendStringInfo(buf, " SET SCHEMA %s;", quote_identifier(stmt->newschema));
 }
@@ -404,19 +400,7 @@ AppendAlterFunctionOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt)
 {
 	ObjectWithArgs *func = castNode(ObjectWithArgs, stmt->object);
 
-	if (stmt->objectType == OBJECT_FUNCTION)
-	{
-		appendStringInfoString(buf, "ALTER FUNCTION ");
-	}
-	else if (stmt->objectType == OBJECT_PROCEDURE)
-	{
-		appendStringInfoString(buf, "ALTER PROCEDURE ");
-	}
-	else
-	{
-		appendStringInfoString(buf, "ALTER AGGREGATE ");
-	}
-
+	appendStringInfo(buf, "ALTER %s ", ObjectTypeToKeyword(stmt->objectType));
 	AppendFunctionName(buf, func, stmt->objectType);
 	appendStringInfo(buf, " OWNER TO %s;", RoleSpecString(stmt->newowner));
 }
@@ -447,19 +431,7 @@ AppendAlterFunctionDependsStmt(StringInfo buf, AlterObjectDependsStmt *stmt)
 {
 	ObjectWithArgs *func = castNode(ObjectWithArgs, stmt->object);
 
-	if (stmt->objectType == OBJECT_FUNCTION)
-	{
-		appendStringInfoString(buf, "ALTER FUNCTION ");
-	}
-	else if (stmt->objectType == OBJECT_PROCEDURE)
-	{
-		appendStringInfoString(buf, "ALTER PROCEDURE ");
-	}
-	else
-	{
-		appendStringInfoString(buf, "ALTER AGGREGATE ");
-	}
-
+	appendStringInfo(buf, "ALTER %s ", ObjectTypeToKeyword(stmt->objectType));
 	AppendFunctionName(buf, func, stmt->objectType);
 	appendStringInfo(buf, " DEPENDS ON EXTENSION %s;", strVal(stmt->extname));
 }
@@ -488,18 +460,7 @@ DeparseDropFunctionStmt(DropStmt *stmt)
 static void
 AppendDropFunctionStmt(StringInfo buf, DropStmt *stmt)
 {
-	if (stmt->removeType == OBJECT_FUNCTION)
-	{
-		appendStringInfoString(buf, "DROP FUNCTION ");
-	}
-	else if (stmt->removeType == OBJECT_PROCEDURE)
-	{
-		appendStringInfoString(buf, "DROP PROCEDURE ");
-	}
-	else
-	{
-		appendStringInfoString(buf, "DROP AGGREGATE ");
-	}
+	appendStringInfo(buf, "DROP %s ", ObjectTypeToKeyword(stmt->removeType));
 
 	if (stmt->missing_ok)
 	{
