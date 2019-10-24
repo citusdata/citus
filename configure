@@ -3639,7 +3639,11 @@ if ${citusac_cv_prog_cc_cflags__std_gnu99+:} false; then :
   $as_echo_n "(cached) " >&6
 else
   citusac_save_CFLAGS=$CFLAGS
-CFLAGS="$citusac_save_CFLAGS -std=gnu99"
+flag=-std=gnu99
+case $flag in -Wno*)
+	 flag=-W$(echo $flag | cut -c 6-)
+esac
+CFLAGS="$citusac_save_CFLAGS $flag"
 ac_save_c_werror_flag=$ac_c_werror_flag
 ac_c_werror_flag=yes
 cat confdefs.h - <<_ACEOF >conftest.$ac_ext
@@ -3674,7 +3678,11 @@ if ${citusac_cv_prog_cc_cflags__Wall+:} false; then :
   $as_echo_n "(cached) " >&6
 else
   citusac_save_CFLAGS=$CFLAGS
-CFLAGS="$citusac_save_CFLAGS -Wall"
+flag=-Wall
+case $flag in -Wno*)
+	 flag=-W$(echo $flag | cut -c 6-)
+esac
+CFLAGS="$citusac_save_CFLAGS $flag"
 ac_save_c_werror_flag=$ac_c_werror_flag
 ac_c_werror_flag=yes
 cat confdefs.h - <<_ACEOF >conftest.$ac_ext
@@ -3709,7 +3717,11 @@ if ${citusac_cv_prog_cc_cflags__Wextra+:} false; then :
   $as_echo_n "(cached) " >&6
 else
   citusac_save_CFLAGS=$CFLAGS
-CFLAGS="$citusac_save_CFLAGS -Wextra"
+flag=-Wextra
+case $flag in -Wno*)
+	 flag=-W$(echo $flag | cut -c 6-)
+esac
+CFLAGS="$citusac_save_CFLAGS $flag"
 ac_save_c_werror_flag=$ac_c_werror_flag
 ac_c_werror_flag=yes
 cat confdefs.h - <<_ACEOF >conftest.$ac_ext
@@ -3745,7 +3757,11 @@ if ${citusac_cv_prog_cc_cflags__Wno_unused_parameter+:} false; then :
   $as_echo_n "(cached) " >&6
 else
   citusac_save_CFLAGS=$CFLAGS
-CFLAGS="$citusac_save_CFLAGS -Wno-unused-parameter"
+flag=-Wno-unused-parameter
+case $flag in -Wno*)
+	 flag=-W$(echo $flag | cut -c 6-)
+esac
+CFLAGS="$citusac_save_CFLAGS $flag"
 ac_save_c_werror_flag=$ac_c_werror_flag
 ac_c_werror_flag=yes
 cat confdefs.h - <<_ACEOF >conftest.$ac_ext
@@ -3780,7 +3796,11 @@ if ${citusac_cv_prog_cc_cflags__Wno_sign_compare+:} false; then :
   $as_echo_n "(cached) " >&6
 else
   citusac_save_CFLAGS=$CFLAGS
-CFLAGS="$citusac_save_CFLAGS -Wno-sign-compare"
+flag=-Wno-sign-compare
+case $flag in -Wno*)
+	 flag=-W$(echo $flag | cut -c 6-)
+esac
+CFLAGS="$citusac_save_CFLAGS $flag"
 ac_save_c_werror_flag=$ac_c_werror_flag
 ac_c_werror_flag=yes
 cat confdefs.h - <<_ACEOF >conftest.$ac_ext
@@ -3815,7 +3835,11 @@ if ${citusac_cv_prog_cc_cflags__Wno_missing_field_initializers+:} false; then :
   $as_echo_n "(cached) " >&6
 else
   citusac_save_CFLAGS=$CFLAGS
-CFLAGS="$citusac_save_CFLAGS -Wno-missing-field-initializers"
+flag=-Wno-missing-field-initializers
+case $flag in -Wno*)
+	 flag=-W$(echo $flag | cut -c 6-)
+esac
+CFLAGS="$citusac_save_CFLAGS $flag"
 ac_save_c_werror_flag=$ac_c_werror_flag
 ac_c_werror_flag=yes
 cat confdefs.h - <<_ACEOF >conftest.$ac_ext
@@ -3850,7 +3874,11 @@ if ${citusac_cv_prog_cc_cflags__Wno_clobbered+:} false; then :
   $as_echo_n "(cached) " >&6
 else
   citusac_save_CFLAGS=$CFLAGS
-CFLAGS="$citusac_save_CFLAGS -Wno-clobbered"
+flag=-Wno-clobbered
+case $flag in -Wno*)
+	 flag=-W$(echo $flag | cut -c 6-)
+esac
+CFLAGS="$citusac_save_CFLAGS $flag"
 ac_save_c_werror_flag=$ac_c_werror_flag
 ac_c_werror_flag=yes
 cat confdefs.h - <<_ACEOF >conftest.$ac_ext
@@ -3885,7 +3913,11 @@ if ${citusac_cv_prog_cc_cflags__Wno_gnu_variable_sized_type_not_at_end+:} false;
   $as_echo_n "(cached) " >&6
 else
   citusac_save_CFLAGS=$CFLAGS
-CFLAGS="$citusac_save_CFLAGS -Wno-gnu-variable-sized-type-not-at-end"
+flag=-Wno-gnu-variable-sized-type-not-at-end
+case $flag in -Wno*)
+	 flag=-W$(echo $flag | cut -c 6-)
+esac
+CFLAGS="$citusac_save_CFLAGS $flag"
 ac_save_c_werror_flag=$ac_c_werror_flag
 ac_c_werror_flag=yes
 cat confdefs.h - <<_ACEOF >conftest.$ac_ext
@@ -3921,7 +3953,11 @@ if ${citusac_cv_prog_cc_cflags__Wendif_labels+:} false; then :
   $as_echo_n "(cached) " >&6
 else
   citusac_save_CFLAGS=$CFLAGS
-CFLAGS="$citusac_save_CFLAGS -Wendif-labels"
+flag=-Wendif-labels
+case $flag in -Wno*)
+	 flag=-W$(echo $flag | cut -c 6-)
+esac
+CFLAGS="$citusac_save_CFLAGS $flag"
 ac_save_c_werror_flag=$ac_c_werror_flag
 ac_c_werror_flag=yes
 cat confdefs.h - <<_ACEOF >conftest.$ac_ext
@@ -3956,7 +3992,11 @@ if ${citusac_cv_prog_cc_cflags__Wmissing_format_attribute+:} false; then :
   $as_echo_n "(cached) " >&6
 else
   citusac_save_CFLAGS=$CFLAGS
-CFLAGS="$citusac_save_CFLAGS -Wmissing-format-attribute"
+flag=-Wmissing-format-attribute
+case $flag in -Wno*)
+	 flag=-W$(echo $flag | cut -c 6-)
+esac
+CFLAGS="$citusac_save_CFLAGS $flag"
 ac_save_c_werror_flag=$ac_c_werror_flag
 ac_c_werror_flag=yes
 cat confdefs.h - <<_ACEOF >conftest.$ac_ext
@@ -3991,7 +4031,11 @@ if ${citusac_cv_prog_cc_cflags__Wmissing_declarations+:} false; then :
   $as_echo_n "(cached) " >&6
 else
   citusac_save_CFLAGS=$CFLAGS
-CFLAGS="$citusac_save_CFLAGS -Wmissing-declarations"
+flag=-Wmissing-declarations
+case $flag in -Wno*)
+	 flag=-W$(echo $flag | cut -c 6-)
+esac
+CFLAGS="$citusac_save_CFLAGS $flag"
 ac_save_c_werror_flag=$ac_c_werror_flag
 ac_c_werror_flag=yes
 cat confdefs.h - <<_ACEOF >conftest.$ac_ext
@@ -4026,7 +4070,11 @@ if ${citusac_cv_prog_cc_cflags__Wmissing_prototypes+:} false; then :
   $as_echo_n "(cached) " >&6
 else
   citusac_save_CFLAGS=$CFLAGS
-CFLAGS="$citusac_save_CFLAGS -Wmissing-prototypes"
+flag=-Wmissing-prototypes
+case $flag in -Wno*)
+	 flag=-W$(echo $flag | cut -c 6-)
+esac
+CFLAGS="$citusac_save_CFLAGS $flag"
 ac_save_c_werror_flag=$ac_c_werror_flag
 ac_c_werror_flag=yes
 cat confdefs.h - <<_ACEOF >conftest.$ac_ext
@@ -4061,7 +4109,11 @@ if ${citusac_cv_prog_cc_cflags__Wshadow+:} false; then :
   $as_echo_n "(cached) " >&6
 else
   citusac_save_CFLAGS=$CFLAGS
-CFLAGS="$citusac_save_CFLAGS -Wshadow"
+flag=-Wshadow
+case $flag in -Wno*)
+	 flag=-W$(echo $flag | cut -c 6-)
+esac
+CFLAGS="$citusac_save_CFLAGS $flag"
 ac_save_c_werror_flag=$ac_c_werror_flag
 ac_c_werror_flag=yes
 cat confdefs.h - <<_ACEOF >conftest.$ac_ext
@@ -4096,7 +4148,11 @@ if ${citusac_cv_prog_cc_cflags__Werror_vla+:} false; then :
   $as_echo_n "(cached) " >&6
 else
   citusac_save_CFLAGS=$CFLAGS
-CFLAGS="$citusac_save_CFLAGS -Werror=vla"
+flag=-Werror=vla
+case $flag in -Wno*)
+	 flag=-W$(echo $flag | cut -c 6-)
+esac
+CFLAGS="$citusac_save_CFLAGS $flag"
 ac_save_c_werror_flag=$ac_c_werror_flag
 ac_c_werror_flag=yes
 cat confdefs.h - <<_ACEOF >conftest.$ac_ext
