@@ -76,12 +76,7 @@ JobExecutorType(DistributedPlan *distributedPlan)
 			}
 		}
 
-		if (TaskExecutorType == MULTI_EXECUTOR_ADAPTIVE)
-		{
-			return TaskExecutorType;
-		}
-
-		return MULTI_EXECUTOR_ROUTER;
+		return MULTI_EXECUTOR_ADAPTIVE;
 	}
 
 	if (distributedPlan->insertSelectSubquery != NULL)
