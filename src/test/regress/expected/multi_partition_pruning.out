@@ -153,7 +153,7 @@ SELECT count(*) FROM varchar_partitioned_table WHERE varchar_column = 'BA2';
                    QUERY PLAN                    
 -------------------------------------------------
  Aggregate
-   ->  Custom Scan (Citus Real-Time)
+   ->  Custom Scan (Citus Adaptive)
          Task Count: 1
          Tasks Shown: All
          ->  Task
@@ -166,7 +166,7 @@ SELECT count(*) FROM array_partitioned_table
                    QUERY PLAN                    
 -------------------------------------------------
  Aggregate
-   ->  Custom Scan (Citus Real-Time)
+   ->  Custom Scan (Citus Adaptive)
          Task Count: 1
          Tasks Shown: All
          ->  Task
@@ -179,7 +179,7 @@ SELECT count(*) FROM composite_partitioned_table
                    QUERY PLAN                    
 -------------------------------------------------
  Aggregate
-   ->  Custom Scan (Citus Real-Time)
+   ->  Custom Scan (Citus Adaptive)
          Task Count: 1
          Tasks Shown: All
          ->  Task
