@@ -45,14 +45,10 @@ MultiExecutorType
 JobExecutorType(DistributedPlan *distributedPlan)
 {
 	Job *job = distributedPlan->workerJob;
-	List *workerNodeList = NIL;
-	int workerNodeCount = 0;
-	int taskCount = 0;
-	double tasksPerNode = 0.;
 	MultiExecutorType executorType = TaskExecutorType;
 	bool routerExecutablePlan = distributedPlan->routerExecutable;
 
-	/* check if can switch to router executor */
+	/* debug distribution column value */
 	if (routerExecutablePlan)
 	{
 		if (log_min_messages <= DEBUG2 || client_min_messages <= DEBUG2)
@@ -92,43 +88,7 @@ JobExecutorType(DistributedPlan *distributedPlan)
 
 	Assert(distributedPlan->modLevel == ROW_MODIFY_READONLY);
 
-	workerNodeList = ActiveReadableNodeList();
-	workerNodeCount = list_length(workerNodeList);
-	taskCount = list_length(job->taskList);
-	tasksPerNode = taskCount / ((double) workerNodeCount);
-
-	if (executorType == MULTI_EXECUTOR_REAL_TIME)
-	{
-		double reasonableConnectionCount = 0;
-
-		/* if we need to open too many connections per worker, warn the user */
-		if (tasksPerNode >= MaxConnections)
-		{
-			ereport(WARNING, (errmsg("this query uses more connections than the "
-									 "configured max_connections limit"),
-							  errhint("Consider increasing max_connections or setting "
-									  "citus.task_executor_type to "
-									  "\"task-tracker\".")));
-		}
-
-		/*
-		 * If we need to open too many outgoing connections, warn the user.
-		 * The real-time executor caps the number of tasks it starts by the same limit,
-		 * but we still issue this warning because it degrades performance.
-		 */
-		reasonableConnectionCount = MaxMasterConnectionCount();
-		if (taskCount >= reasonableConnectionCount)
-		{
-			ereport(WARNING, (errmsg("this query uses more file descriptors than the "
-									 "configured max_files_per_process limit"),
-							  errhint("Consider increasing max_files_per_process or "
-									  "setting citus.task_executor_type to "
-									  "\"task-tracker\".")));
-		}
-	}
-
-	if (executorType == MULTI_EXECUTOR_REAL_TIME ||
-		executorType == MULTI_EXECUTOR_ADAPTIVE)
+	if (executorType == MULTI_EXECUTOR_ADAPTIVE)
 	{
 		/* if we have repartition jobs with real time executor and repartition
 		 * joins are not enabled, error out. Otherwise, switch to task-tracker
@@ -153,6 +113,11 @@ JobExecutorType(DistributedPlan *distributedPlan)
 	}
 	else
 	{
+		List *workerNodeList = ActiveReadableNodeList();
+		int workerNodeCount = list_length(workerNodeList);
+		int taskCount = list_length(job->taskList);
+		double tasksPerNode = taskCount / ((double) workerNodeCount);
+
 		/* if we have more tasks per node than what can be tracked, warn the user */
 		if (tasksPerNode >= MaxTrackedTasksPerNode)
 		{
