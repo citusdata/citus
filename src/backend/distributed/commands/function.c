@@ -83,10 +83,6 @@ static char * quote_qualified_func_name(Oid funcOid);
 
 PG_FUNCTION_INFO_V1(create_distributed_function);
 
-#define AssertIsFunctionOrProcedure(objtype) \
-	Assert((objtype) == OBJECT_FUNCTION || (objtype) == OBJECT_PROCEDURE || (objtype) == \
-		   OBJECT_AGGREGATE)
-
 
 /*
  * create_distributed_function gets a function or procedure name with their list of
@@ -1300,7 +1296,7 @@ PlanAlterFunctionStmt(AlterFunctionStmt *stmt, const char *queryString)
 	const ObjectAddress *address = NULL;
 	List *commands = NIL;
 
-	AssertIsFunctionOrProcedure(stmt->objtype);
+	AssertObjectTypeIsFunctional(stmt->objtype);
 
 	address = GetObjectAddressFromParseTree((Node *) stmt, false);
 	if (!ShouldPropagateAlterFunction(address))
@@ -1337,7 +1333,7 @@ PlanRenameFunctionStmt(RenameStmt *stmt, const char *queryString)
 	const ObjectAddress *address = NULL;
 	List *commands = NIL;
 
-	AssertIsFunctionOrProcedure(stmt->renameType);
+	AssertObjectTypeIsFunctional(stmt->renameType);
 
 	address = GetObjectAddressFromParseTree((Node *) stmt, false);
 	if (!ShouldPropagateAlterFunction(address))
@@ -1371,7 +1367,7 @@ PlanAlterFunctionSchemaStmt(AlterObjectSchemaStmt *stmt, const char *queryString
 	const ObjectAddress *address = NULL;
 	List *commands = NIL;
 
-	AssertIsFunctionOrProcedure(stmt->objectType);
+	AssertObjectTypeIsFunctional(stmt->objectType);
 
 	address = GetObjectAddressFromParseTree((Node *) stmt, false);
 	if (!ShouldPropagateAlterFunction(address))
@@ -1406,7 +1402,7 @@ PlanAlterFunctionOwnerStmt(AlterOwnerStmt *stmt, const char *queryString)
 	const char *sql = NULL;
 	List *commands = NULL;
 
-	AssertIsFunctionOrProcedure(stmt->objectType);
+	AssertObjectTypeIsFunctional(stmt->objectType);
 
 	address = GetObjectAddressFromParseTree((Node *) stmt, false);
 	if (!ShouldPropagateAlterFunction(address))
@@ -1448,7 +1444,7 @@ PlanDropFunctionStmt(DropStmt *stmt, const char *queryString)
 	ListCell *objectWithArgsListCell = NULL;
 	DropStmt *stmtCopy = NULL;
 
-	AssertIsFunctionOrProcedure(stmt->removeType);
+	AssertObjectTypeIsFunctional(stmt->removeType);
 
 	if (creating_extension)
 	{
@@ -1550,7 +1546,7 @@ PlanAlterFunctionDependsStmt(AlterObjectDependsStmt *stmt, const char *queryStri
 	const ObjectAddress *address = NULL;
 	const char *functionName = NULL;
 
-	AssertIsFunctionOrProcedure(stmt->objectType);
+	AssertObjectTypeIsFunctional(stmt->objectType);
 
 	if (creating_extension)
 	{
@@ -1598,7 +1594,7 @@ PlanAlterFunctionDependsStmt(AlterObjectDependsStmt *stmt, const char *queryStri
 const ObjectAddress *
 AlterFunctionDependsStmtObjectAddress(AlterObjectDependsStmt *stmt, bool missing_ok)
 {
-	AssertIsFunctionOrProcedure(stmt->objectType);
+	AssertObjectTypeIsFunctional(stmt->objectType);
 
 	return FunctionToObjectAddress(stmt->objectType,
 								   castNode(ObjectWithArgs, stmt->object), missing_ok);
@@ -1615,7 +1611,7 @@ ProcessAlterFunctionSchemaStmt(AlterObjectSchemaStmt *stmt, const char *queryStr
 {
 	const ObjectAddress *address = NULL;
 
-	AssertIsFunctionOrProcedure(stmt->objectType);
+	AssertObjectTypeIsFunctional(stmt->objectType);
 
 	address = GetObjectAddressFromParseTree((Node *) stmt, false);
 	if (!ShouldPropagateAlterFunction(address))
@@ -1681,7 +1677,7 @@ AlterFunctionSchemaStmtObjectAddress(AlterObjectSchemaStmt *stmt, bool missing_o
 	List *names = NIL;
 	ObjectAddress *address = NULL;
 
-	AssertIsFunctionOrProcedure(stmt->objectType);
+	AssertObjectTypeIsFunctional(stmt->objectType);
 
 	objectWithArgs = castNode(ObjectWithArgs, stmt->object);
 	funcOid = LookupFuncWithArgs(stmt->objectType, objectWithArgs, true);
@@ -1742,7 +1738,7 @@ FunctionToObjectAddress(ObjectType objectType, ObjectWithArgs *objectWithArgs,
 	Oid funcOid = InvalidOid;
 	ObjectAddress *address = NULL;
 
-	AssertIsFunctionOrProcedure(objectType);
+	AssertObjectTypeIsFunctional(objectType);
 
 	funcOid = LookupFuncWithArgs(objectType, objectWithArgs, missing_ok);
 	address = palloc0(sizeof(ObjectAddress));

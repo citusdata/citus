@@ -36,8 +36,9 @@ static void QualifyFunctionSchemaName(ObjectWithArgs *func, ObjectType type);
 void
 AssertObjectTypeIsFunctional(ObjectType type)
 {
-	Assert(type == OBJECT_AGGREGATE || type == OBJECT_FUNCTION || type ==
-		   OBJECT_PROCEDURE);
+	Assert(type == OBJECT_AGGREGATE ||
+		   type == OBJECT_FUNCTION ||
+		   type == OBJECT_PROCEDURE);
 }
 
 
