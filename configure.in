@@ -150,6 +150,7 @@ fi
 undefine([Ac_cachevar])dnl
 ])# CITUSAC_PROG_CC_CFLAGS_OPT
 
+CITUSAC_PROG_CC_CFLAGS_OPT([-std=gnu99])
 CITUSAC_PROG_CC_CFLAGS_OPT([-Wall])
 CITUSAC_PROG_CC_CFLAGS_OPT([-Wextra])
 # disarm options included in the above, which are too noisy for now
@@ -159,7 +160,6 @@ CITUSAC_PROG_CC_CFLAGS_OPT([-Wno-missing-field-initializers])
 CITUSAC_PROG_CC_CFLAGS_OPT([-Wno-clobbered])
 CITUSAC_PROG_CC_CFLAGS_OPT([-Wno-gnu-variable-sized-type-not-at-end])
 # And add a few extra warnings
-CITUSAC_PROG_CC_CFLAGS_OPT([-Wdeclaration-after-statement])
 CITUSAC_PROG_CC_CFLAGS_OPT([-Wendif-labels])
 CITUSAC_PROG_CC_CFLAGS_OPT([-Wmissing-format-attribute])
 CITUSAC_PROG_CC_CFLAGS_OPT([-Wmissing-declarations])
