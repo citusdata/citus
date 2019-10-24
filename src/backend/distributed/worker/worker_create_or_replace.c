@@ -1,7 +1,6 @@
 /*-------------------------------------------------------------------------
  *
- * worker_create_if_not_exist.c
- *   TODO rename file and document, was named after old function
+ * worker_create_or_replace.c
  *
  * Copyright (c) 2019, Citus Data, Inc.
  *
@@ -79,7 +78,7 @@ worker_create_or_replace_object(PG_FUNCTION_ARGS)
 		if (strcmp(sqlStatement, localSqlStatement) == 0)
 		{
 			/*
-			 * TODO string compare is a poor mans comparison, but calling equal on the
+			 * TODO string compare is a poor man's comparison, but calling equal on the
 			 * parsetree's returns false because there is extra information list character
 			 * position of some sort
 			 */
@@ -131,7 +130,8 @@ CreateStmtByObjectAddress(const ObjectAddress *address)
 
 		default:
 		{
-			ereport(ERROR, (errmsg("unsupported object to construct a create statment")));
+			ereport(ERROR, (errmsg(
+								"unsupported object to construct a create statement")));
 		}
 	}
 }

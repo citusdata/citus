@@ -35,11 +35,8 @@ static const char * DeparseAlterObjectDependsStmt(AlterObjectDependsStmt *stmt);
  *  - ALTER TYPE
  *  - DROP TYPE
  *
- *  - ALTER FUNCTION
- *  - DROP FUNCTION
- *
- *  - ALTER PROCEDURE
- *  - DROP PROCEDURE
+ *  - ALTER FUNCTION, ALTER PROCEDURE, ALTER AGGREGATE
+ *  - DROP FUNCTION, DROP PROCEDURE, DROP AGGREGATE
  */
 const char *
 DeparseTreeNode(Node *stmt)
