@@ -136,7 +136,11 @@ AC_DEFUN([CITUSAC_PROG_CC_CFLAGS_OPT],
 [define([Ac_cachevar], [AS_TR_SH([citusac_cv_prog_cc_cflags_$1])])dnl
 AC_CACHE_CHECK([whether $CC supports $1], [Ac_cachevar],
 [citusac_save_CFLAGS=$CFLAGS
-CFLAGS="$citusac_save_CFLAGS $1"
+flag=$1
+case $flag in -Wno*)
+	 flag=-W$(echo $flag | cut -c 6-)
+esac
+CFLAGS="$citusac_save_CFLAGS $flag"
 ac_save_c_werror_flag=$ac_c_werror_flag
 ac_c_werror_flag=yes
 _AC_COMPILE_IFELSE([AC_LANG_PROGRAM()],
