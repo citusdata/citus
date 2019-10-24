@@ -541,9 +541,11 @@ GetFunctionDDLCommand(const RegProcedure funcOid)
 	char *createFunctionSQL = NULL;
 	char *alterFunctionOwnerSQL = NULL;
 
-	createFunctionSQL = GetAggregateDDLCommand(funcOid);
-
-	if (createFunctionSQL == NULL)
+	if (get_func_prokind(funcOid) == PROKIND_AGGREGATE)
+	{
+		createFunctionSQL = GetAggregateDDLCommand(funcOid);
+	}
+	else
 	{
 		Datum sqlTextDatum = (Datum) 0;
 
@@ -652,7 +654,6 @@ GetFunctionAlterOwnerCommand(const RegProcedure funcOid)
 
 /*
  * GetAggregateDDLCommand returns a string for creating an aggregate.
- * Returns NULL if funcOid is not an aggregate.
  */
 static char *
 GetAggregateDDLCommand(const RegProcedure funcOid)
@@ -685,15 +686,12 @@ GetAggregateDDLCommand(const RegProcedure funcOid)
 	proctup = SearchSysCache1(PROCOID, funcOid);
 	if (!HeapTupleIsValid(proctup))
 	{
-		goto early_exit;
+		elog(ERROR, "cache lookup failed for %d", funcOid);
 	}
 
 	proc = (Form_pg_proc) GETSTRUCT(proctup);
 
-	if (proc->prokind != PROKIND_AGGREGATE)
-	{
-		goto early_exit;
-	}
+	Assert(proc->prokind == PROKIND_AGGREGATE);
 
 	initStringInfo(&buf);
 
@@ -714,7 +712,7 @@ GetAggregateDDLCommand(const RegProcedure funcOid)
 	aggtup = SearchSysCache1(AGGFNOID, funcOid);
 	if (!HeapTupleIsValid(aggtup))
 	{
-		goto early_exit;
+		elog(ERROR, "cache lookup failed for %d", funcOid);
 	}
 	agg = (Form_pg_aggregate) GETSTRUCT(aggtup);
 
@@ -1014,15 +1012,9 @@ GetAggregateDDLCommand(const RegProcedure funcOid)
 	}
 #endif
 
-early_exit:
-	if (aggtup && HeapTupleIsValid(aggtup))
-	{
-		ReleaseSysCache(aggtup);
-	}
-	if (proctup && HeapTupleIsValid(proctup))
-	{
-		ReleaseSysCache(proctup);
-	}
+	ReleaseSysCache(aggtup);
+	ReleaseSysCache(proctup);
+
 #if PG_VERSION_NUM >= 120000
 	return buf.data;
 #else
