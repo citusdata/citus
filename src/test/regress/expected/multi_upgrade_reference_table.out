@@ -5,6 +5,7 @@
 --
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1360000;
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 1360000;
+SET client_min_messages TO WARNING;
 -- test with not distributed table
 CREATE TABLE upgrade_reference_table_local(column1 int);
 SELECT upgrade_to_reference_table('upgrade_reference_table_local');
@@ -74,7 +75,8 @@ SELECT create_distributed_table('upgrade_reference_table_unhealthy', 'column1');
 (1 row)
 
 UPDATE pg_dist_partition SET repmodel='c' WHERE logicalrelid='upgrade_reference_table_unhealthy'::regclass;
-UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid = 1360006;
+UPDATE pg_dist_shard_placement SET shardstate = 3
+   WHERE shardid = (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'upgrade_reference_table_unhealthy'::regclass::oid);
 SELECT upgrade_to_reference_table('upgrade_reference_table_unhealthy');
 ERROR:  could not find any healthy placement for shard 1360006
 DROP TABLE upgrade_reference_table_unhealthy;
@@ -91,13 +93,13 @@ SELECT create_distributed_table('upgrade_reference_table_composite', 'column1');
 
 UPDATE pg_dist_partition SET repmodel='c' WHERE logicalrelid='upgrade_reference_table_composite'::regclass;
 SELECT upgrade_to_reference_table('upgrade_reference_table_composite');
-NOTICE:  Replicating reference table "upgrade_reference_table_composite" to the node localhost:57638
  upgrade_to_reference_table 
 ----------------------------
  
 (1 row)
 
 DROP TABLE upgrade_reference_table_composite;
+DROP TYPE upgrade_test_composite_type;
 -- test with reference table
 CREATE TABLE upgrade_reference_table_reference(column1 int);
 SELECT create_reference_table('upgrade_reference_table_reference');
@@ -142,30 +144,29 @@ WHERE
  1360009 | f                   | f
 (1 row)
 
-SELECT *
-FROM pg_dist_colocation
-WHERE colocationid IN
-    (SELECT colocationid
-     FROM pg_dist_partition
-     WHERE logicalrelid = 'upgrade_reference_table_append'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype 
---------------+------------+-------------------+------------------------
+SELECT colocationid, shardcount, replicated_on_all_nodes, distributioncolumntype
+FROM colocation_view
+WHERE logicalrelid = 'upgrade_reference_table_append'::regclass;
+ colocationid | shardcount | replicated_on_all_nodes | distributioncolumntype 
+--------------+------------+-------------------------+------------------------
 (0 rows)
 
+SELECT count(*) active_primaries FROM pg_dist_node WHERE isactive AND noderole='primary' \gset
 SELECT
-    shardid, shardstate, shardlength, nodename, nodeport
+    shardid, count(distinct nodeport) = :active_primaries
 FROM pg_dist_shard_placement
 WHERE shardid IN
     (SELECT shardid
      FROM pg_dist_shard
-     WHERE logicalrelid = 'upgrade_reference_table_append'::regclass);
- shardid | shardstate | shardlength | nodename  | nodeport 
----------+------------+-------------+-----------+----------
- 1360009 |          1 |        8192 | localhost |    57637
+     WHERE logicalrelid = 'upgrade_reference_table_append'::regclass)
+GROUP BY shardid
+ORDER BY shardid;
+ shardid | ?column? 
+---------+----------
+ 1360009 | f
 (1 row)
 
 SELECT upgrade_to_reference_table('upgrade_reference_table_append');
-NOTICE:  Replicating reference table "upgrade_reference_table_append" to the node localhost:57638
  upgrade_to_reference_table 
 ----------------------------
  
@@ -194,31 +195,27 @@ WHERE
  1360009 | t                   | t
 (1 row)
 
-SELECT *
-FROM pg_dist_colocation
-WHERE colocationid IN
-    (SELECT colocationid
-     FROM pg_dist_partition
-     WHERE logicalrelid = 'upgrade_reference_table_append'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype 
---------------+------------+-------------------+------------------------
-        10004 |          1 |                 2 |                      0
+SELECT colocationid, shardcount, replicated_on_all_nodes, distributioncolumntype
+FROM colocation_view
+WHERE logicalrelid = 'upgrade_reference_table_append'::regclass;
+ colocationid | shardcount | replicated_on_all_nodes | distributioncolumntype 
+--------------+------------+-------------------------+------------------------
+        10004 |          1 | t                       |                      0
 (1 row)
 
 SELECT
-    shardid, shardstate, shardlength, nodename, nodeport
+    shardid, count(distinct nodeport) = :active_primaries
 FROM pg_dist_shard_placement
 WHERE shardid IN
     (SELECT shardid
      FROM pg_dist_shard
      WHERE logicalrelid = 'upgrade_reference_table_append'::regclass)
-ORDER BY
-    nodeport;
- shardid | shardstate | shardlength | nodename  | nodeport 
----------+------------+-------------+-----------+----------
- 1360009 |          1 |        8192 | localhost |    57637
- 1360009 |          1 |           0 | localhost |    57638
-(2 rows)
+GROUP BY shardid
+ORDER BY shardid;
+ shardid | ?column? 
+---------+----------
+ 1360009 | t
+(1 row)
 
     
 DROP TABLE upgrade_reference_table_append;
@@ -254,31 +251,29 @@ WHERE
  1360010 | f                   | f
 (1 row)
 
-SELECT *
-FROM pg_dist_colocation
-WHERE colocationid IN
-    (SELECT colocationid
-     FROM pg_dist_partition
-     WHERE logicalrelid = 'upgrade_reference_table_one_worker'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype 
---------------+------------+-------------------+------------------------
-      1360001 |          1 |                 1 |                     23
+SELECT colocationid, shardcount, replicated_on_all_nodes, distributioncolumntype
+FROM colocation_view
+WHERE logicalrelid = 'upgrade_reference_table_one_worker'::regclass;
+ colocationid | shardcount | replicated_on_all_nodes | distributioncolumntype 
+--------------+------------+-------------------------+------------------------
+      1360001 |          1 | f                       |                     23
 (1 row)
 
 SELECT
-    shardid, shardstate, shardlength, nodename, nodeport
+    shardid, count(distinct nodeport) = :active_primaries
 FROM pg_dist_shard_placement
 WHERE shardid IN
     (SELECT shardid
      FROM pg_dist_shard
-     WHERE logicalrelid = 'upgrade_reference_table_one_worker'::regclass);
- shardid | shardstate | shardlength | nodename  | nodeport 
----------+------------+-------------+-----------+----------
- 1360010 |          1 |           0 | localhost |    57637
+     WHERE logicalrelid = 'upgrade_reference_table_one_worker'::regclass)
+GROUP BY shardid
+ORDER BY shardid;
+ shardid | ?column? 
+---------+----------
+ 1360010 | f
 (1 row)
 
 SELECT upgrade_to_reference_table('upgrade_reference_table_one_worker');
-NOTICE:  Replicating reference table "upgrade_reference_table_one_worker" to the node localhost:57638
  upgrade_to_reference_table 
 ----------------------------
  
@@ -307,31 +302,27 @@ WHERE
  1360010 | t                   | t
 (1 row)
 
-SELECT *
-FROM pg_dist_colocation
-WHERE colocationid IN
-    (SELECT colocationid
-     FROM pg_dist_partition
-     WHERE logicalrelid = 'upgrade_reference_table_one_worker'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype 
---------------+------------+-------------------+------------------------
-        10004 |          1 |                 2 |                      0
+SELECT colocationid, shardcount, replicated_on_all_nodes, distributioncolumntype
+FROM colocation_view
+WHERE logicalrelid = 'upgrade_reference_table_one_worker'::regclass;
+ colocationid | shardcount | replicated_on_all_nodes | distributioncolumntype 
+--------------+------------+-------------------------+------------------------
+        10004 |          1 | t                       |                      0
 (1 row)
 
 SELECT
-    shardid, shardstate, shardlength, nodename, nodeport
+    shardid, count(distinct nodeport) = :active_primaries
 FROM pg_dist_shard_placement
 WHERE shardid IN
     (SELECT shardid
      FROM pg_dist_shard
      WHERE logicalrelid = 'upgrade_reference_table_one_worker'::regclass)
-ORDER BY
-    nodeport;
- shardid | shardstate | shardlength | nodename  | nodeport 
----------+------------+-------------+-----------+----------
- 1360010 |          1 |           0 | localhost |    57637
- 1360010 |          1 |           0 | localhost |    57638
-(2 rows)
+GROUP BY shardid
+ORDER BY shardid;
+ shardid | ?column? 
+---------+----------
+ 1360010 | t
+(1 row)
 
     
 DROP TABLE upgrade_reference_table_one_worker;
@@ -344,7 +335,8 @@ SELECT create_distributed_table('upgrade_reference_table_one_unhealthy', 'column
  
 (1 row)
 
-UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid = 1360010 AND nodeport = :worker_1_port;
+UPDATE pg_dist_shard_placement SET shardstate = 3
+WHERE shardid = (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'upgrade_reference_table_one_unhealthy'::regclass::oid) AND nodeport = :worker_1_port;
 -- situation before upgrade_reference_table
 SELECT
     partmethod, (partkey IS NULL) as partkeyisnull, colocationid, repmodel
@@ -368,31 +360,28 @@ WHERE
  1360011 | f                   | f
 (1 row)
 
-SELECT *
-FROM pg_dist_colocation
-WHERE colocationid IN
-    (SELECT colocationid
-     FROM pg_dist_partition
-     WHERE logicalrelid = 'upgrade_reference_table_one_unhealthy'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype 
---------------+------------+-------------------+------------------------
-      1360002 |          1 |                 2 |                     23
+SELECT colocationid, shardcount, distributioncolumntype
+FROM colocation_view
+WHERE logicalrelid = 'upgrade_reference_table_one_unhealthy'::regclass;
+ colocationid | shardcount | distributioncolumntype 
+--------------+------------+------------------------
+      1360002 |          1 |                     23
 (1 row)
 
 SELECT
-    shardid, shardstate, shardlength, nodename, nodeport
+    shardid, count(distinct nodeport) = :active_primaries
 FROM pg_dist_shard_placement
 WHERE shardid IN
     (SELECT shardid
      FROM pg_dist_shard
      WHERE logicalrelid = 'upgrade_reference_table_one_unhealthy'::regclass)
-ORDER BY
-    nodeport;
- shardid | shardstate | shardlength | nodename  | nodeport 
----------+------------+-------------+-----------+----------
- 1360011 |          1 |           0 | localhost |    57637
- 1360011 |          1 |           0 | localhost |    57638
-(2 rows)
+    AND shardstate = 1
+GROUP BY shardid
+ORDER BY shardid;
+ shardid | ?column? 
+---------+----------
+ 1360011 | f
+(1 row)
 
 SELECT upgrade_to_reference_table('upgrade_reference_table_one_unhealthy');
  upgrade_to_reference_table 
@@ -423,31 +412,28 @@ WHERE
  1360011 | t                   | t
 (1 row)
 
-SELECT *
-FROM pg_dist_colocation
-WHERE colocationid IN
-    (SELECT colocationid
-     FROM pg_dist_partition
-     WHERE logicalrelid = 'upgrade_reference_table_one_unhealthy'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype 
---------------+------------+-------------------+------------------------
-        10004 |          1 |                 2 |                      0
+SELECT colocationid, shardcount, distributioncolumntype
+FROM colocation_view
+WHERE logicalrelid = 'upgrade_reference_table_one_unhealthy'::regclass;
+ colocationid | shardcount | distributioncolumntype 
+--------------+------------+------------------------
+        10004 |          1 |                      0
 (1 row)
 
 SELECT
-    shardid, shardstate, shardlength, nodename, nodeport
+    shardid, count(distinct nodeport) = :active_primaries
 FROM pg_dist_shard_placement
 WHERE shardid IN
     (SELECT shardid
      FROM pg_dist_shard
      WHERE logicalrelid = 'upgrade_reference_table_one_unhealthy'::regclass)
-ORDER BY
-    nodeport;
- shardid | shardstate | shardlength | nodename  | nodeport 
----------+------------+-------------+-----------+----------
- 1360011 |          1 |           0 | localhost |    57637
- 1360011 |          1 |           0 | localhost |    57638
-(2 rows)
+    AND shardstate = 1
+GROUP BY shardid
+ORDER BY shardid;
+ shardid | ?column? 
+---------+----------
+ 1360011 | t
+(1 row)
 
     
 DROP TABLE upgrade_reference_table_one_unhealthy;
@@ -482,31 +468,27 @@ WHERE
  1360012 | f                   | f
 (1 row)
 
-SELECT *
-FROM pg_dist_colocation
-WHERE colocationid IN
-    (SELECT colocationid
-     FROM pg_dist_partition
-     WHERE logicalrelid = 'upgrade_reference_table_both_healthy'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype 
---------------+------------+-------------------+------------------------
-      1360003 |          1 |                 2 |                     23
+SELECT colocationid, shardcount, distributioncolumntype
+FROM colocation_view
+WHERE logicalrelid = 'upgrade_reference_table_both_healthy'::regclass;
+ colocationid | shardcount | distributioncolumntype 
+--------------+------------+------------------------
+      1360003 |          1 |                     23
 (1 row)
 
 SELECT
-    shardid, shardstate, shardlength, nodename, nodeport
+    shardid
 FROM pg_dist_shard_placement
 WHERE shardid IN
     (SELECT shardid
      FROM pg_dist_shard
      WHERE logicalrelid = 'upgrade_reference_table_both_healthy'::regclass)
-ORDER BY
-    nodeport;
- shardid | shardstate | shardlength | nodename  | nodeport 
----------+------------+-------------+-----------+----------
- 1360012 |          1 |           0 | localhost |    57637
- 1360012 |          1 |           0 | localhost |    57638
-(2 rows)
+GROUP BY shardid
+ORDER BY shardid;
+ shardid 
+---------
+ 1360012
+(1 row)
 
 SELECT upgrade_to_reference_table('upgrade_reference_table_both_healthy');
  upgrade_to_reference_table 
@@ -537,31 +519,27 @@ WHERE
  1360012 | t                   | t
 (1 row)
 
-SELECT *
-FROM pg_dist_colocation
-WHERE colocationid IN
-    (SELECT colocationid
-     FROM pg_dist_partition
-     WHERE logicalrelid = 'upgrade_reference_table_both_healthy'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype 
---------------+------------+-------------------+------------------------
-        10004 |          1 |                 2 |                      0
+SELECT colocationid, shardcount, replicated_on_all_nodes, distributioncolumntype
+FROM colocation_view
+WHERE logicalrelid = 'upgrade_reference_table_both_healthy'::regclass;
+ colocationid | shardcount | replicated_on_all_nodes | distributioncolumntype 
+--------------+------------+-------------------------+------------------------
+        10004 |          1 | t                       |                      0
 (1 row)
 
 SELECT
-    shardid, shardstate, shardlength, nodename, nodeport
+    shardid, count(distinct nodeport) = :active_primaries
 FROM pg_dist_shard_placement
 WHERE shardid IN
     (SELECT shardid
      FROM pg_dist_shard
      WHERE logicalrelid = 'upgrade_reference_table_both_healthy'::regclass)
-ORDER BY
-    nodeport;
- shardid | shardstate | shardlength | nodename  | nodeport 
----------+------------+-------------+-----------+----------
- 1360012 |          1 |           0 | localhost |    57637
- 1360012 |          1 |           0 | localhost |    57638
-(2 rows)
+GROUP BY shardid
+ORDER BY shardid;
+ shardid | ?column? 
+---------+----------
+ 1360012 | t
+(1 row)
 
     
 DROP TABLE upgrade_reference_table_both_healthy;
@@ -598,32 +576,30 @@ WHERE
  1360013 | f                   | f
 (1 row)
 
-SELECT *
-FROM pg_dist_colocation
-WHERE colocationid IN
-    (SELECT colocationid
-     FROM pg_dist_partition
-     WHERE logicalrelid = 'upgrade_reference_table_transaction_rollback'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype 
---------------+------------+-------------------+------------------------
-      1360004 |          1 |                 1 |                     23
+SELECT colocationid, shardcount, replicated_on_all_nodes, distributioncolumntype
+FROM colocation_view
+WHERE logicalrelid = 'upgrade_reference_table_transaction_rollback'::regclass;
+ colocationid | shardcount | replicated_on_all_nodes | distributioncolumntype 
+--------------+------------+-------------------------+------------------------
+      1360004 |          1 | f                       |                     23
 (1 row)
 
 SELECT
-    shardid, shardstate, shardlength, nodename, nodeport
+    shardid, count(distinct nodeport) = :active_primaries
 FROM pg_dist_shard_placement
 WHERE shardid IN
     (SELECT shardid
      FROM pg_dist_shard
-     WHERE logicalrelid = 'upgrade_reference_table_transaction_rollback'::regclass);
- shardid | shardstate | shardlength | nodename  | nodeport 
----------+------------+-------------+-----------+----------
- 1360013 |          1 |           0 | localhost |    57637
+     WHERE logicalrelid = 'upgrade_reference_table_transaction_rollback'::regclass)
+GROUP BY shardid
+ORDER BY shardid;
+ shardid | ?column? 
+---------+----------
+ 1360013 | f
 (1 row)
 
 BEGIN;
 SELECT upgrade_to_reference_table('upgrade_reference_table_transaction_rollback');
-NOTICE:  Replicating reference table "upgrade_reference_table_transaction_rollback" to the node localhost:57638
  upgrade_to_reference_table 
 ----------------------------
  
@@ -653,27 +629,26 @@ WHERE
  1360013 | f                   | f
 (1 row)
 
-SELECT *
-FROM pg_dist_colocation
-WHERE colocationid IN
-    (SELECT colocationid
-     FROM pg_dist_partition
-     WHERE logicalrelid = 'upgrade_reference_table_transaction_rollback'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype 
---------------+------------+-------------------+------------------------
-      1360004 |          1 |                 1 |                     23
+SELECT colocationid, shardcount, replicated_on_all_nodes, distributioncolumntype
+FROM colocation_view
+WHERE logicalrelid = 'upgrade_reference_table_transaction_rollback'::regclass;
+ colocationid | shardcount | replicated_on_all_nodes | distributioncolumntype 
+--------------+------------+-------------------------+------------------------
+      1360004 |          1 | f                       |                     23
 (1 row)
 
 SELECT
-    shardid, shardstate, shardlength, nodename, nodeport
+    shardid, count(distinct nodeport) = :active_primaries
 FROM pg_dist_shard_placement
 WHERE shardid IN
     (SELECT shardid
      FROM pg_dist_shard
-     WHERE logicalrelid = 'upgrade_reference_table_transaction_rollback'::regclass);
- shardid | shardstate | shardlength | nodename  | nodeport 
----------+------------+-------------+-----------+----------
- 1360013 |          1 |           0 | localhost |    57637
+     WHERE logicalrelid = 'upgrade_reference_table_transaction_rollback'::regclass)
+GROUP BY shardid
+ORDER BY shardid;
+ shardid | ?column? 
+---------+----------
+ 1360013 | f
 (1 row)
 
      
@@ -711,32 +686,30 @@ WHERE
  1360014 | f                   | f
 (1 row)
 
-SELECT *
-FROM pg_dist_colocation
-WHERE colocationid IN
-    (SELECT colocationid
-     FROM pg_dist_partition
-     WHERE logicalrelid = 'upgrade_reference_table_transaction_commit'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype 
---------------+------------+-------------------+------------------------
-      1360004 |          1 |                 1 |                     23
+SELECT colocationid, shardcount, replicated_on_all_nodes, distributioncolumntype
+FROM colocation_view
+WHERE logicalrelid = 'upgrade_reference_table_transaction_commit'::regclass;
+ colocationid | shardcount | replicated_on_all_nodes | distributioncolumntype 
+--------------+------------+-------------------------+------------------------
+      1360004 |          1 | f                       |                     23
 (1 row)
 
 SELECT
-    shardid, shardstate, shardlength, nodename, nodeport
+    shardid, count(distinct nodeport) = :active_primaries
 FROM pg_dist_shard_placement
 WHERE shardid IN
     (SELECT shardid
      FROM pg_dist_shard
-     WHERE logicalrelid = 'upgrade_reference_table_transaction_commit'::regclass);
- shardid | shardstate | shardlength | nodename  | nodeport 
----------+------------+-------------+-----------+----------
- 1360014 |          1 |           0 | localhost |    57637
+     WHERE logicalrelid = 'upgrade_reference_table_transaction_commit'::regclass)
+GROUP BY shardid
+ORDER BY shardid;
+ shardid | ?column? 
+---------+----------
+ 1360014 | f
 (1 row)
 
 BEGIN;
 SELECT upgrade_to_reference_table('upgrade_reference_table_transaction_commit');
-NOTICE:  Replicating reference table "upgrade_reference_table_transaction_commit" to the node localhost:57638
  upgrade_to_reference_table 
 ----------------------------
  
@@ -766,31 +739,27 @@ WHERE
  1360014 | t                   | t
 (1 row)
 
-SELECT *
-FROM pg_dist_colocation
-WHERE colocationid IN
-    (SELECT colocationid
-     FROM pg_dist_partition
-     WHERE logicalrelid = 'upgrade_reference_table_transaction_commit'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype 
---------------+------------+-------------------+------------------------
-        10004 |          1 |                 2 |                      0
+SELECT colocationid, shardcount, replicated_on_all_nodes, distributioncolumntype
+FROM colocation_view
+WHERE logicalrelid = 'upgrade_reference_table_transaction_commit'::regclass;
+ colocationid | shardcount | replicated_on_all_nodes | distributioncolumntype 
+--------------+------------+-------------------------+------------------------
+        10004 |          1 | t                       |                      0
 (1 row)
 
 SELECT
-    shardid, shardstate, shardlength, nodename, nodeport
+    shardid, count(distinct nodeport) = :active_primaries
 FROM pg_dist_shard_placement
 WHERE shardid IN
     (SELECT shardid
      FROM pg_dist_shard
      WHERE logicalrelid = 'upgrade_reference_table_transaction_commit'::regclass)
-ORDER BY
-    nodeport;
- shardid | shardstate | shardlength | nodename  | nodeport 
----------+------------+-------------+-----------+----------
- 1360014 |          1 |           0 | localhost |    57637
- 1360014 |          1 |           0 | localhost |    57638
-(2 rows)
+GROUP BY shardid
+ORDER BY shardid;
+ shardid | ?column? 
+---------+----------
+ 1360014 | t
+(1 row)
 
 -- verify that shard is replicated to other worker
 \c - - - :worker_2_port
@@ -837,28 +806,26 @@ WHERE
  1360015 | f                   | f
 (1 row)
 
-SELECT *
-FROM pg_dist_colocation
-WHERE colocationid IN
-    (SELECT colocationid
-     FROM pg_dist_partition
-     WHERE logicalrelid = 'upgrade_reference_table_mx'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype 
---------------+------------+-------------------+------------------------
-      1360005 |          1 |                 1 |                     23
+SELECT colocationid, shardcount, distributioncolumntype
+FROM colocation_view
+WHERE logicalrelid = 'upgrade_reference_table_mx'::regclass;
+ colocationid | shardcount | distributioncolumntype 
+--------------+------------+------------------------
+      1360005 |          1 |                     23
 (1 row)
 
 SELECT
-    shardid, shardstate, shardlength, nodename, nodeport
+    shardid
 FROM pg_dist_shard_placement
 WHERE shardid IN
     (SELECT shardid
      FROM pg_dist_shard
      WHERE logicalrelid = 'upgrade_reference_table_mx'::regclass)
-ORDER BY nodeport;
- shardid | shardstate | shardlength | nodename  | nodeport 
----------+------------+-------------+-----------+----------
- 1360015 |          1 |           0 | localhost |    57637
+GROUP BY shardid
+ORDER BY shardid;
+ shardid 
+---------
+ 1360015
 (1 row)
 
      
@@ -889,28 +856,26 @@ WHERE
  1360015 | f                   | f
 (1 row)
 
-SELECT *
-FROM pg_dist_colocation
-WHERE colocationid IN
-    (SELECT colocationid
-     FROM pg_dist_partition
-     WHERE logicalrelid = 'upgrade_reference_table_mx'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype 
---------------+------------+-------------------+------------------------
-      1360005 |          1 |                 1 |                     23
+SELECT colocationid, shardcount, replicated_on_all_nodes, distributioncolumntype
+FROM colocation_view
+WHERE logicalrelid = 'upgrade_reference_table_mx'::regclass;
+ colocationid | shardcount | replicated_on_all_nodes | distributioncolumntype 
+--------------+------------+-------------------------+------------------------
+      1360005 |          1 | f                       |                     23
 (1 row)
 
 SELECT
-    shardid, shardstate, shardlength, nodename, nodeport
+    shardid, count(distinct nodeport) = :active_primaries
 FROM pg_dist_shard_placement
 WHERE shardid IN
     (SELECT shardid
      FROM pg_dist_shard
      WHERE logicalrelid = 'upgrade_reference_table_mx'::regclass)
-ORDER BY nodeport;
- shardid | shardstate | shardlength | nodename  | nodeport 
----------+------------+-------------+-----------+----------
- 1360015 |          1 |           0 | localhost |    57637
+GROUP BY shardid
+ORDER BY shardid;
+ shardid | ?column? 
+---------+----------
+ 1360015 | f
 (1 row)
 
 DROP TABLE upgrade_reference_table_mx;
@@ -958,34 +923,31 @@ WHERE
  1360016 | f                   | f
 (1 row)
 
-SELECT *
-FROM pg_dist_colocation
-WHERE colocationid IN
-    (SELECT colocationid
-     FROM pg_dist_partition
-     WHERE logicalrelid = 'upgrade_reference_table_mx'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype 
---------------+------------+-------------------+------------------------
-      1360006 |          1 |                 2 |                     23
+SELECT colocationid, shardcount, distributioncolumntype
+FROM colocation_view
+WHERE logicalrelid = 'upgrade_reference_table_mx'::regclass;
+ colocationid | shardcount | distributioncolumntype 
+--------------+------------+------------------------
+      1360006 |          1 |                     23
 (1 row)
 
 SELECT
-    shardid, shardstate, shardlength, nodename, nodeport
+    shardid
 FROM pg_dist_shard_placement
 WHERE shardid IN
     (SELECT shardid
      FROM pg_dist_shard
      WHERE logicalrelid = 'upgrade_reference_table_mx'::regclass)
-ORDER BY nodeport;
- shardid | shardstate | shardlength | nodename  | nodeport 
----------+------------+-------------+-----------+----------
- 1360016 |          1 |           0 | localhost |    57637
- 1360016 |          3 |           0 | localhost |    57638
-(2 rows)
+GROUP BY shardid
+ORDER BY shardid;
+ shardid 
+---------
+ 1360016
+(1 row)
 
      
+SET client_min_messages TO WARNING;
 SELECT upgrade_to_reference_table('upgrade_reference_table_mx');
-NOTICE:  Replicating reference table "upgrade_reference_table_mx" to the node localhost:57638
  upgrade_to_reference_table 
 ----------------------------
  
@@ -1015,30 +977,27 @@ WHERE
  1360016 | t                   | t
 (1 row)
 
-SELECT *
-FROM pg_dist_colocation
-WHERE colocationid IN
-    (SELECT colocationid
-     FROM pg_dist_partition
-     WHERE logicalrelid = 'upgrade_reference_table_mx'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype 
---------------+------------+-------------------+------------------------
-        10004 |          1 |                 2 |                      0
+SELECT colocationid, shardcount, replicated_on_all_nodes, distributioncolumntype
+FROM colocation_view
+WHERE logicalrelid = 'upgrade_reference_table_mx'::regclass;
+ colocationid | shardcount | replicated_on_all_nodes | distributioncolumntype 
+--------------+------------+-------------------------+------------------------
+        10004 |          1 | t                       |                      0
 (1 row)
 
 SELECT
-    shardid, shardstate, shardlength, nodename, nodeport
+    shardid, count(distinct nodeport) = :active_primaries
 FROM pg_dist_shard_placement
 WHERE shardid IN
     (SELECT shardid
      FROM pg_dist_shard
      WHERE logicalrelid = 'upgrade_reference_table_mx'::regclass)
-ORDER BY nodeport;
- shardid | shardstate | shardlength | nodename  | nodeport 
----------+------------+-------------+-----------+----------
- 1360016 |          1 |           0 | localhost |    57637
- 1360016 |          1 |           0 | localhost |    57638
-(2 rows)
+GROUP BY shardid
+ORDER BY shardid;
+ shardid | ?column? 
+---------+----------
+ 1360016 | t
+(1 row)
 
      
 -- situation on metadata worker
@@ -1066,18 +1025,18 @@ WHERE
 (1 row)
 
 SELECT
-    shardid, shardstate, shardlength, nodename, nodeport
+    shardid, count(distinct nodeport) = :active_primaries
 FROM pg_dist_shard_placement
 WHERE shardid IN
     (SELECT shardid
      FROM pg_dist_shard
      WHERE logicalrelid = 'upgrade_reference_table_mx'::regclass)
-ORDER BY nodeport;
- shardid | shardstate | shardlength | nodename  | nodeport 
----------+------------+-------------+-----------+----------
- 1360016 |          1 |           0 | localhost |    57637
- 1360016 |          1 |           0 | localhost |    57638
-(2 rows)
+GROUP BY shardid
+ORDER BY shardid;
+ shardid | ?column? 
+---------+----------
+ 1360016 | t
+(1 row)
 
      
 \c - - - :master_port
@@ -1088,3 +1047,7 @@ SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
  
 (1 row)
 
+RESET client_min_messages TO WARNING;
+ERROR:  syntax error at or near "TO"
+LINE 1: RESET client_min_messages TO WARNING;
+                                  ^

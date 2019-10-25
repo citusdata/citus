@@ -1,7 +1,7 @@
 -- File to create functions and helpers needed for subsequent tests
 
 -- create a helper function to create objects on each node
-CREATE FUNCTION run_command_on_master_and_workers(p_sql text)
+CREATE OR REPLACE FUNCTION run_command_on_master_and_workers(p_sql text)
 RETURNS void LANGUAGE plpgsql AS $$
 BEGIN
      EXECUTE p_sql;
@@ -14,7 +14,7 @@ END;$$;
 -- was safely accomplished by a \d invocation.
 SELECT run_command_on_master_and_workers(
 $desc_views$
-CREATE VIEW table_fkey_cols AS
+CREATE OR REPLACE VIEW table_fkey_cols AS
 SELECT rc.constraint_name AS "name",
        kcu.column_name AS "column_name",
        uc_kcu.column_name AS "refd_column_name",
@@ -29,7 +29,7 @@ WHERE rc.constraint_schema = kcu.constraint_schema AND
       rc.unique_constraint_schema = uc_kcu.constraint_schema AND
       rc.unique_constraint_name = uc_kcu.constraint_name;
 
-CREATE VIEW table_fkeys AS
+CREATE OR REPLACE VIEW table_fkeys AS
 SELECT name AS "Constraint",
        format('FOREIGN KEY (%s) REFERENCES %s(%s)',
               string_agg(DISTINCT quote_ident(column_name), ', '),
@@ -39,7 +39,7 @@ SELECT name AS "Constraint",
 FROM table_fkey_cols
 GROUP BY (name, relid);
 
-CREATE VIEW table_attrs AS
+CREATE OR REPLACE VIEW table_attrs AS
 SELECT c.column_name AS "name",
        c.data_type AS "type",
        CASE
@@ -55,7 +55,7 @@ SELECT c.column_name AS "name",
 FROM information_schema.columns AS c
 ORDER BY ordinal_position;
 
-CREATE VIEW table_desc AS
+CREATE OR REPLACE VIEW table_desc AS
 SELECT "name" AS "Column",
        "type" || "modifier" AS "Type",
        rtrim((
@@ -71,7 +71,7 @@ SELECT "name" AS "Column",
 	   "relid"
 FROM table_attrs;
 
-CREATE VIEW table_checks AS
+CREATE OR REPLACE VIEW table_checks AS
 SELECT cc.constraint_name AS "Constraint",
        ('CHECK ' || regexp_replace(check_clause, '^\((.*)\)$', '\1')) AS "Definition",
        format('%I.%I', ccu.table_schema, ccu.table_name)::regclass::oid AS relid
@@ -81,7 +81,7 @@ WHERE cc.constraint_schema = ccu.constraint_schema AND
       cc.constraint_name = ccu.constraint_name
 ORDER BY cc.constraint_name ASC;
 
-CREATE VIEW index_attrs AS
+CREATE OR REPLACE VIEW index_attrs AS
 WITH indexoid AS (
 	SELECT c.oid,
 	  n.nspname,
@@ -109,7 +109,7 @@ $desc_views$
 );
 
 -- Create a function to make sure that queries returning the same result
-CREATE FUNCTION raise_failed_execution(query text) RETURNS void AS $$
+CREATE OR REPLACE FUNCTION raise_failed_execution(query text) RETURNS void AS $$
 BEGIN
 	EXECUTE query;
 	EXCEPTION WHEN OTHERS THEN
@@ -134,7 +134,7 @@ BEGIN
 END; $$ language plpgsql;
 
 -- helper function to quickly run SQL on the whole cluster
-CREATE FUNCTION run_command_on_coordinator_and_workers(p_sql text)
+CREATE OR REPLACE FUNCTION run_command_on_coordinator_and_workers(p_sql text)
 RETURNS void LANGUAGE plpgsql AS $$
 BEGIN
      EXECUTE p_sql;
@@ -143,7 +143,7 @@ END;$$;
 
 -- 1. Marks the given procedure as colocated with the given table.
 -- 2. Marks the argument index with which we route the procedure.
-CREATE FUNCTION colocate_proc_with_table(procname text, tablerelid regclass, argument_index int)
+CREATE OR REPLACE FUNCTION colocate_proc_with_table(procname text, tablerelid regclass, argument_index int)
 RETURNS void LANGUAGE plpgsql AS $$
 BEGIN
     update citus.pg_dist_object
@@ -172,3 +172,10 @@ BEGIN
     RETURN true;
 END;
 $func$;
+
+CREATE OR REPLACE VIEW colocation_view AS
+SELECT a.logicalrelid, b.colocationid, b.shardcount, b.replicationfactor,
+       b.replicationfactor=(SELECT count(*) FROM pg_dist_node WHERE isactive AND noderole='primary') AS replicated_on_all_nodes,
+       b.distributioncolumntype
+FROM pg_dist_partition a, pg_dist_colocation b
+WHERE a.colocationid = b.colocationid;

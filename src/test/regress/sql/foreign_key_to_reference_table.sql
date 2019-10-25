@@ -249,6 +249,7 @@ INSERT INTO referencing_schema.referencing_table SELECT x, x from generate_serie
 DELETE FROM referenced_schema.referenced_table WHERE id > 800;
 SELECT count(*) FROM referencing_schema.referencing_table;
 
+DROP TABLE referenced_schema.referenced_table, referencing_schema.referencing_table;
 DROP SCHEMA referenced_schema CASCADE;
 DROP SCHEMA referencing_schema CASCADE;
 

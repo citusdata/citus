@@ -1017,7 +1017,7 @@ WHERE colocationid IN
      WHERE logicalrelid = 'remove_node_reference_table'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype 
 --------------+------------+-------------------+------------------------
-        10004 |          1 |                 2 |                      0
+        10004 |          1 |                 1 |                      0
 (1 row)
 
 \c - - - :worker_1_port

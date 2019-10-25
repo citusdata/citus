@@ -18,8 +18,8 @@
 test: multi_extension
 test: multi_703_upgrade
 test: multi_cluster_management
-test: multi_test_helpers
 test: multi_table_ddl
+test: multi_test_helpers
 test: multi_name_lengths
 test: multi_name_resolution
 test: multi_metadata_access
@@ -202,6 +202,7 @@ test: multi_size_queries
 # multi_drop_extension makes sure we can safely drop and recreate the extension
 # ----------
 test: multi_drop_extension
+test: multi_test_helpers
 
 # ----------
 # multi_metadata_sync tests the propagation of mx-related metadata changes to metadata workers
@@ -252,6 +253,17 @@ test: multi_upgrade_reference_table
 test: multi_replicate_reference_table
 test: multi_remove_node_reference_table
 
+# --------
+# Replicating reference tables to coordinator.  Add coordinator to pg_dist_node
+# and rerun some of the tests.
+# --------
+test: add_coordinator
+test: multi_upgrade_reference_table
+test: multi_replicate_reference_table
+test: multi_reference_table
+test: foreign_key_to_reference_table
+test: remove_coordinator
+
 # ----------
 # multi_transactional_drop_shards tests for dropping shards using connection API
 # ----------
@@ -289,13 +301,3 @@ test: distributed_procedure
 # deparsing logic tests
 # ---------
 test: multi_deparse_function multi_deparse_procedure
-
-# --------
-# Replicating reference tables to coordinator.  Add coordinator to pg_dist_node
-# and rerun some of the tests.
-# --------
-test: add_coordinator
-test: multi_upgrade_reference_table
-test: multi_replicate_reference_table
-test: multi_remove_node_reference_table
-test: remove_coordinator

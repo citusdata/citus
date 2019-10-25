@@ -527,12 +527,9 @@ SELECT count(*) FROM referencing_schema.referencing_table;
    800
 (1 row)
 
+DROP TABLE referenced_schema.referenced_table, referencing_schema.referencing_table;
 DROP SCHEMA referenced_schema CASCADE;
-NOTICE:  drop cascades to 2 other objects
-DETAIL:  drop cascades to table referenced_schema.referenced_table
-drop cascades to constraint fkey_ref on table referencing_schema.referencing_table
 DROP SCHEMA referencing_schema CASCADE;
-NOTICE:  drop cascades to table referencing_schema.referencing_table
 -- on delete set update cascades properly
 CREATE TABLE referenced_table(test_column int, test_column2 int, PRIMARY KEY(test_column));
 CREATE TABLE referencing_table(id int, ref_id int DEFAULT 1);
@@ -646,8 +643,8 @@ INSERT INTO referenced_table SELECT x,x FROM generate_series(1,1000) AS f(x);
 INSERT INTO referencing_table(id) SELECT x FROM generate_series(1,1000) AS f(x);
 -- Fails for non existing value inserts (serial is already incremented)
 INSERT INTO referencing_table(id) SELECT x FROM generate_series(1,10) AS f(x);
-ERROR:  insert or update on table "referencing_table_7000190" violates foreign key constraint "fkey_ref_7000190"
-DETAIL:  Key (ref_id)=(1004) is not present in table "referenced_table_7000187".
+ERROR:  insert or update on table "referencing_table_7000193" violates foreign key constraint "fkey_ref_7000193"
+DETAIL:  Key (ref_id)=(1006) is not present in table "referenced_table_7000187".
 DROP TABLE referenced_table CASCADE;
 NOTICE:  drop cascades to constraint fkey_ref on table referencing_table
 DROP TABLE referencing_table CASCADE;
@@ -677,8 +674,8 @@ INSERT INTO referenced_table(test_column2) SELECT x FROM generate_series(1,1000)
 INSERT INTO referencing_table(id) SELECT x FROM generate_series(1,1000) AS f(x);
 -- Fails for non existing value inserts (serial is already incremented)
 INSERT INTO referencing_table(id) SELECT x FROM generate_series(1,10) AS f(x);
-ERROR:  insert or update on table "referencing_table_7000199" violates foreign key constraint "fkey_ref_7000199"
-DETAIL:  Key (ref_id)=(1004) is not present in table "referenced_table_7000196".
+ERROR:  insert or update on table "referencing_table_7000200" violates foreign key constraint "fkey_ref_7000200"
+DETAIL:  Key (ref_id)=(1003) is not present in table "referenced_table_7000196".
 DROP TABLE referenced_table CASCADE;
 NOTICE:  drop cascades to constraint fkey_ref on table referencing_table
 DROP TABLE referencing_table CASCADE;
@@ -819,16 +816,16 @@ INSERT INTO referenced_table SELECT x, x+1 FROM generate_series(0,1000) AS f(x);
 INSERT INTO referenced_table2 SELECT x, x+1 FROM generate_series(500,1500) AS f(x);
 -- should fail
 INSERT INTO referencing_table SELECT x, x+1 FROM generate_series(0,1500) AS f(x);
-ERROR:  insert or update on table "referencing_table_7000230" violates foreign key constraint "foreign_key_2_7000230"
-DETAIL:  Key (id)=(28) is not present in table "referenced_table2_7000225".
+ERROR:  insert or update on table "referencing_table_7000229" violates foreign key constraint "foreign_key_2_7000229"
+DETAIL:  Key (id)=(0) is not present in table "referenced_table2_7000225".
 -- should fail
 INSERT INTO referencing_table SELECT x, x+1 FROM generate_series(0,400) AS f(x);
-ERROR:  insert or update on table "referencing_table_7000226" violates foreign key constraint "foreign_key_2_7000226"
-DETAIL:  Key (id)=(1) is not present in table "referenced_table2_7000225".
+ERROR:  insert or update on table "referencing_table_7000229" violates foreign key constraint "foreign_key_2_7000229"
+DETAIL:  Key (id)=(0) is not present in table "referenced_table2_7000225".
 -- should fail
 INSERT INTO referencing_table SELECT x, x+1 FROM generate_series(1000,1400) AS f(x);
-ERROR:  insert or update on table "referencing_table_7000228" violates foreign key constraint "fkey_ref_7000228"
-DETAIL:  Key (id)=(1015) is not present in table "referenced_table_7000224".
+ERROR:  insert or update on table "referencing_table_7000231" violates foreign key constraint "fkey_ref_7000231"
+DETAIL:  Key (id)=(1001) is not present in table "referenced_table_7000224".
 -- should succeed
 INSERT INTO referencing_table SELECT x, x+1 FROM generate_series(600,900) AS f(x);
 SELECT count(*) FROM referencing_table;
@@ -947,13 +944,13 @@ INSERT INTO referenced_table SELECT x, x+1 FROM generate_series(0,1000) AS f(x);
 INSERT INTO referenced_table2 SELECT x, x+1 FROM generate_series(500,1500) AS f(x);
 -- should fail
 INSERT INTO referencing_table SELECT x, x+1 FROM generate_series(0,1500) AS f(x);
-ERROR:  insert or update on table "referencing_table_7000246" violates foreign key constraint "foreign_key_2_7000246"
+ERROR:  insert or update on table "referencing_table_7000249" violates foreign key constraint "foreign_key_2_7000249"
 -- should fail
 INSERT INTO referencing_table SELECT x, x+1 FROM generate_series(0,400) AS f(x);
-ERROR:  insert or update on table "referencing_table_7000246" violates foreign key constraint "foreign_key_2_7000246"
+ERROR:  insert or update on table "referencing_table_7000249" violates foreign key constraint "foreign_key_2_7000249"
 -- should fail
 INSERT INTO referencing_table SELECT x, x+1 FROM generate_series(1000,1400) AS f(x);
-ERROR:  insert or update on table "referencing_table_7000248" violates foreign key constraint "fkey_ref_7000248"
+ERROR:  insert or update on table "referencing_table_7000251" violates foreign key constraint "fkey_ref_7000251"
 -- should succeed
 INSERT INTO referencing_table SELECT x, x+501 FROM generate_series(0,1000) AS f(x);
 SELECT count(*) FROM referencing_table;
@@ -1085,14 +1082,14 @@ SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' A
 INSERT INTO referenced_table SELECT x, x+1 FROM generate_series(0,1000) AS f(x);
 -- should fail
 INSERT INTO referencing_table2 SELECT x, x+1 FROM generate_series(0,100) AS f(x);
-ERROR:  insert or update on table "referencing_table2_7000273" violates foreign key constraint "fkey_ref_to_dist_7000273"
-DETAIL:  Key (id)=(1) is not present in table "referencing_table_7000265".
+ERROR:  insert or update on table "referencing_table2_7000276" violates foreign key constraint "fkey_ref_to_dist_7000276"
+DETAIL:  Key (id)=(0) is not present in table "referencing_table_7000268".
 -- should succeed
 INSERT INTO referencing_table SELECT x, x+1 FROM generate_series(0,400) AS f(x);
 -- should fail
 INSERT INTO referencing_table2 SELECT x, x+1 FROM generate_series(200,500) AS f(x);
-ERROR:  insert or update on table "referencing_table2_7000273" violates foreign key constraint "fkey_ref_to_dist_7000273"
-DETAIL:  Key (id)=(401) is not present in table "referencing_table_7000265".
+ERROR:  insert or update on table "referencing_table2_7000274" violates foreign key constraint "fkey_ref_to_dist_7000274"
+DETAIL:  Key (id)=(403) is not present in table "referencing_table_7000266".
 -- should succeed
 INSERT INTO referencing_table2 SELECT x, x+1 FROM generate_series(0,300) AS f(x);
 DELETE FROM referenced_table WHERE test_column < 200;
