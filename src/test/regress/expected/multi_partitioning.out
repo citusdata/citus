@@ -412,7 +412,7 @@ SELECT * FROM partitioning_test WHERE id = 9 OR id = 10 ORDER BY 1;
 -- create default partition
 CREATE TABLE partitioning_test_default PARTITION OF partitioning_test DEFAULT;
 \d+ partitioning_test
-                             Table "public.partitioning_test"
+                       Partitioned table "public.partitioning_test"
  Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
 --------+---------+-----------+----------+---------+---------+--------------+-------------
  id     | integer |           |          |         | plain   |              | 
@@ -1475,21 +1475,13 @@ WHERE
     pid = pg_backend_pid()
 ORDER BY
     1, 2, 3;
-      logicalrelid       | locktype |           mode           
--------------------------+----------+--------------------------
- partitioning_locks      | advisory | ShareUpdateExclusiveLock
- partitioning_locks      | advisory | ShareUpdateExclusiveLock
- partitioning_locks      | advisory | ShareUpdateExclusiveLock
- partitioning_locks      | advisory | ShareUpdateExclusiveLock
+      logicalrelid       | locktype |   mode    
+-------------------------+----------+-----------
  partitioning_locks_2009 | advisory | ShareLock
  partitioning_locks_2009 | advisory | ShareLock
  partitioning_locks_2009 | advisory | ShareLock
  partitioning_locks_2009 | advisory | ShareLock
- partitioning_locks_2009 | advisory | ShareUpdateExclusiveLock
- partitioning_locks_2009 | advisory | ShareUpdateExclusiveLock
- partitioning_locks_2009 | advisory | ShareUpdateExclusiveLock
- partitioning_locks_2009 | advisory | ShareUpdateExclusiveLock
-(12 rows)
+(4 rows)
 
 COMMIT;
 -- test shard resource locks with INSERT/SELECT
@@ -1583,7 +1575,7 @@ EXPLAIN (COSTS OFF)
 SELECT * FROM partitioning_hash_test JOIN partitioning_hash_join_test USING (id, subid);
                                                                                 QUERY PLAN                                                                                
 --------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- Custom Scan (Citus Real-Time)
+ Custom Scan (Citus Adaptive)
    Task Count: 4
    Tasks Shown: One of 4
    ->  Task
@@ -1623,7 +1615,7 @@ EXPLAIN (COSTS OFF)
 SELECT * FROM partitioning_hash_test JOIN partitioning_hash_join_test USING (id, subid);
                                                                                   QUERY PLAN                                                                                  
 ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- Custom Scan (Citus Real-Time)
+ Custom Scan (Citus Adaptive)
    Task Count: 4
    Tasks Shown: One of 4
    ->  Task
@@ -1653,7 +1645,7 @@ EXPLAIN (COSTS OFF)
 SELECT * FROM partitioning_hash_test JOIN partitioning_hash_join_test USING (id);
                                                QUERY PLAN                                                
 ---------------------------------------------------------------------------------------------------------
- Custom Scan (Citus Real-Time)
+ Custom Scan (Citus Adaptive)
    Task Count: 4
    Tasks Shown: One of 4
    ->  Task
