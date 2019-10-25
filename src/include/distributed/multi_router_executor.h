@@ -66,7 +66,7 @@ extern void ExtractParametersFromParamListInfo(ParamListInfo paramListInfo,
 											   Oid **parameterTypes,
 											   const char ***parameterValues);
 extern void ExtractParametersFromParamListInfoLocal(ParamListInfo paramListInfo,
-											   Oid **parameterTypes,
-											   const char ***parameterValues);											   
+													Oid **parameterTypes,
+													const char ***parameterValues);
 
 #endif /* MULTI_ROUTER_EXECUTOR_H_ */

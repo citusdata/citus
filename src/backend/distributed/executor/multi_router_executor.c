@@ -117,8 +117,10 @@ static bool StoreQueryResult(CitusScanState *scanState, MultiConnection *connect
 static bool ConsumeQueryResult(MultiConnection *connection, bool
 							   alwaysThrowErrorOnFailure, int64 *rows);
 
-void ExtractParametersFromParamListInfoInternal(ParamListInfo paramListInfo, Oid **parameterTypes,
-										const char ***parameterValues, bool isLocalExecution);
+void ExtractParametersFromParamListInfoInternal(ParamListInfo paramListInfo,
+												Oid **parameterTypes,
+												const char ***parameterValues, bool
+												isLocalExecution);
 
 /*
  * AcquireMetadataLocks acquires metadata locks on each of the anchor
@@ -1763,30 +1765,39 @@ SendQueryInSingleRowMode(MultiConnection *connection, char *query,
  * ExtractParametersFromParamListInfo extracts parameter types and values from
  * the given ParamListInfo structure, and fills parameter type and value arrays.
  */
-void ExtractParametersFromParamListInfo(ParamListInfo paramListInfo, Oid **parameterTypes,
-										const char ***parameterValues)
+void
+ExtractParametersFromParamListInfo(ParamListInfo paramListInfo, Oid **parameterTypes,
+								   const char ***parameterValues)
 {
-	ExtractParametersFromParamListInfoInternal(paramListInfo, parameterTypes, parameterValues, false);
+	ExtractParametersFromParamListInfoInternal(paramListInfo, parameterTypes,
+											   parameterValues, false);
 }
+
 
 /*
  * ExtractParametersFromParamListInfoLocal extracts parameter types and values from
  * the given ParamListInfo structure, and fills parameter type and value arrays.
  */
-void ExtractParametersFromParamListInfoLocal(ParamListInfo paramListInfo, Oid **parameterTypes,
+void
+ExtractParametersFromParamListInfoLocal(ParamListInfo paramListInfo, Oid **parameterTypes,
 										const char ***parameterValues)
 {
-	ExtractParametersFromParamListInfoInternal(paramListInfo, parameterTypes, parameterValues, true);
+	ExtractParametersFromParamListInfoInternal(paramListInfo, parameterTypes,
+											   parameterValues, true);
 }
 
-void ExtractParametersFromParamListInfoInternal(ParamListInfo paramListInfo, Oid **parameterTypes,
-										const char ***parameterValues, bool isLocalExecution)
+
+void
+ExtractParametersFromParamListInfoInternal(ParamListInfo paramListInfo,
+										   Oid **parameterTypes,
+										   const char ***parameterValues, bool
+										   isLocalExecution)
 {
 	int parameterIndex = 0;
 	int parameterCount = paramListInfo->numParams;
 
-	*parameterTypes = (Oid *)palloc0(parameterCount * sizeof(Oid));
-	*parameterValues = (const char **)palloc0(parameterCount * sizeof(char *));
+	*parameterTypes = (Oid *) palloc0(parameterCount * sizeof(Oid));
+	*parameterValues = (const char **) palloc0(parameterCount * sizeof(char *));
 
 	/* get parameter types and values */
 	for (parameterIndex = 0; parameterIndex < parameterCount; parameterIndex++)
@@ -1841,6 +1852,7 @@ void ExtractParametersFromParamListInfoInternal(ParamListInfo paramListInfo, Oid
 																   parameterData->value);
 	}
 }
+
 
 /*
  * StoreQueryResult gets the query results from the given connection, builds
