@@ -96,6 +96,19 @@ GetObjectAddressFromParseTree(Node *parseTree, bool missing_ok)
 				castNode(AlterObjectDependsStmt, parseTree), missing_ok);
 		}
 
+		case T_DefineStmt:
+		{
+			DefineStmt *stmt = castNode(DefineStmt, parseTree);
+			if (stmt->kind == OBJECT_AGGREGATE)
+			{
+				return DefineAggregateStmtObjectAddress(stmt, missing_ok);
+			}
+
+			ereport(ERROR, (errmsg(
+								"unsupported object type to get object address for DefineStmt")));
+			return NULL;
+		}
+
 		default:
 		{
 			/*

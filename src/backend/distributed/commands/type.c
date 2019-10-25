@@ -60,6 +60,7 @@
 #include "distributed/relation_access_tracking.h"
 #include "distributed/remote_commands.h"
 #include "distributed/transaction_management.h"
+#include "distributed/worker_create_or_replace.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_transaction.h"
 #include "miscadmin.h"
@@ -78,7 +79,6 @@
 
 
 #define ALTER_TYPE_OWNER_COMMAND "ALTER TYPE %s OWNER TO %s;"
-#define CREATE_OR_REPLACE_COMMAND "SELECT worker_create_or_replace_object(%s);"
 
 
 /* guc to turn of the automatic type distribution */
@@ -90,7 +90,6 @@ static List * TypeNameListToObjectAddresses(List *objects);
 static TypeName * MakeTypeNameFromRangeVar(const RangeVar *relation);
 static void EnsureSequentialModeForTypeDDL(void);
 static Oid GetTypeOwner(Oid typeOid);
-static const char * WrapCreateOrReplace(const char *sql);
 
 /* recreate functions */
 static CompositeTypeStmt * RecreateCompositeTypeStmt(Oid typeOid);
@@ -1144,7 +1143,7 @@ CreateTypeDDLCommandsIdempotent(const ObjectAddress *typeAddress)
 /*
  * GenerateBackupNameForTypeCollision generates a new type name for an existing type. The
  * name is generated in such a way that the new name doesn't overlap with an existing type
- * by adding a postfix with incrementing number after the new name.
+ * by adding a suffix with incrementing number after the new name.
  */
 char *
 GenerateBackupNameForTypeCollision(const ObjectAddress *address)
@@ -1152,26 +1151,26 @@ GenerateBackupNameForTypeCollision(const ObjectAddress *address)
 	List *names = stringToQualifiedNameList(format_type_be_qualified(address->objectId));
 	RangeVar *rel = makeRangeVarFromNameList(names);
 
-	char newName[NAMEDATALEN] = { 0 };
-	char postfix[NAMEDATALEN] = { 0 };
+	char *newName = palloc0(NAMEDATALEN);
+	char suffix[NAMEDATALEN] = { 0 };
 	char *baseName = rel->relname;
+	int baseLength = strlen(baseName);
 	int count = 0;
 
 	while (true)
 	{
-		int postfixLength = snprintf(postfix, NAMEDATALEN - 1, "(citus_backup_%d)",
-									 count);
-		int baseLength = strlen(baseName);
+		int suffixLength = snprintf(suffix, NAMEDATALEN - 1, "(citus_backup_%d)",
+									count);
 		TypeName *newTypeName = NULL;
 		Oid typeOid = InvalidOid;
 
-		/* trim the base name at the end to leave space for the postfix and trailing \0 */
-		baseLength = Min(baseLength, NAMEDATALEN - postfixLength - 1);
+		/* trim the base name at the end to leave space for the suffix and trailing \0 */
+		baseLength = Min(baseLength, NAMEDATALEN - suffixLength - 1);
 
-		/* clear newName before copying the potentially trimmed baseName and postfix */
+		/* clear newName before copying the potentially trimmed baseName and suffix */
 		memset(newName, 0, NAMEDATALEN);
 		strncpy(newName, baseName, baseLength);
-		strncpy(newName + baseLength, postfix, postfixLength);
+		strncpy(newName + baseLength, suffix, suffixLength);
 
 		rel->relname = newName;
 		newTypeName = makeTypeNameFromNameList(MakeNameListFromRangeVar(rel));
@@ -1179,49 +1178,11 @@ GenerateBackupNameForTypeCollision(const ObjectAddress *address)
 		typeOid = LookupTypeNameOid(NULL, newTypeName, true);
 		if (typeOid == InvalidOid)
 		{
-			/*
-			 * Typename didn't exist yet.
-			 * Need to pstrdup the name as it was stack allocated during calculations.
-			 */
-			return pstrdup(newName);
+			return newName;
 		}
 
 		count++;
 	}
-}
-
-
-/*
- * CreateRenameTypeStmt creates a rename statement for a type based on its ObjectAddress.
- * The rename statement will rename the existing object on its address to the value
- * provided in newName.
- */
-RenameStmt *
-CreateRenameTypeStmt(const ObjectAddress *address, char *newName)
-{
-	RenameStmt *stmt = NULL;
-
-	stmt = makeNode(RenameStmt);
-	stmt->renameType = OBJECT_TYPE;
-	stmt->object = (Node *) stringToQualifiedNameList(format_type_be_qualified(
-														  address->objectId));
-	stmt->newname = newName;
-
-	return stmt;
-}
-
-
-/*
- * WrapCreateOrReplace takes a sql CREATE command and wraps it in a call to citus' udf to
- * create or replace the existing object based on its create command.
- */
-const char *
-WrapCreateOrReplace(const char *sql)
-{
-	StringInfoData buf = { 0 };
-	initStringInfo(&buf);
-	appendStringInfo(&buf, CREATE_OR_REPLACE_COMMAND, quote_literal_cstr(sql));
-	return buf.data;
 }
 
 

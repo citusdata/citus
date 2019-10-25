@@ -42,7 +42,9 @@
 #include "distributed/metadata_sync.h"
 #include "distributed/multi_executor.h"
 #include "distributed/relation_access_tracking.h"
+#include "distributed/worker_create_or_replace.h"
 #include "distributed/worker_transaction.h"
+#include "nodes/makefuncs.h"
 #include "parser/parse_coerce.h"
 #include "parser/parse_type.h"
 #include "storage/lmgr.h"
@@ -51,13 +53,13 @@
 #include "utils/fmgrprotos.h"
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
+#include "utils/regproc.h"
 
 #define argumentStartsWith(arg, prefix) \
 	(strncmp(arg, prefix, strlen(prefix)) == 0)
 
 /* forward declaration for helper functions*/
 static char * GetAggregateDDLCommand(const RegProcedure funcOid);
-static char * GetFunctionDDLCommand(const RegProcedure funcOid);
 static char * GetFunctionAlterOwnerCommand(const RegProcedure funcOid);
 static int GetDistributionArgIndex(Oid functionOid, char *distributionArgumentName,
 								   Oid *distributionArgumentOid);
@@ -96,7 +98,9 @@ create_distributed_function(PG_FUNCTION_ARGS)
 	text *distributionArgumentNameText = NULL; /* optional */
 	text *colocateWithText = NULL; /* optional */
 
-	const char *ddlCommand = NULL;
+	StringInfoData ddlCommand = { 0 };
+	const char *createFunctionSQL = NULL;
+	const char *alterFunctionOwnerSQL = NULL;
 	ObjectAddress functionAddress = { 0 };
 
 	int distributionArgumentIndex = -1;
@@ -155,9 +159,11 @@ create_distributed_function(PG_FUNCTION_ARGS)
 
 	EnsureDependenciesExistsOnAllNodes(&functionAddress);
 
-	ddlCommand = GetFunctionDDLCommand(funcOid);
-
-	SendCommandToWorkersAsUser(ALL_WORKERS, CurrentUserName(), ddlCommand);
+	createFunctionSQL = GetFunctionDDLCommand(funcOid, true);
+	alterFunctionOwnerSQL = GetFunctionAlterOwnerCommand(funcOid);
+	initStringInfo(&ddlCommand);
+	appendStringInfo(&ddlCommand, "%s;%s", createFunctionSQL, alterFunctionOwnerSQL);
+	SendCommandToWorkersAsUser(ALL_WORKERS, CurrentUserName(), ddlCommand.data);
 
 	MarkObjectDistributed(&functionAddress);
 
@@ -216,11 +222,14 @@ List *
 CreateFunctionDDLCommandsIdempotent(const ObjectAddress *functionAddress)
 {
 	char *ddlCommand = NULL;
+	char *alterFunctionOwnerSQL = NULL;
 
 	Assert(functionAddress->classId == ProcedureRelationId);
 
-	ddlCommand = GetFunctionDDLCommand(functionAddress->objectId);
-	return list_make1(ddlCommand);
+	ddlCommand = GetFunctionDDLCommand(functionAddress->objectId, true);
+	alterFunctionOwnerSQL = GetFunctionAlterOwnerCommand(functionAddress->objectId);
+
+	return list_make2(ddlCommand, alterFunctionOwnerSQL);
 }
 
 
@@ -532,18 +541,21 @@ UpdateFunctionDistributionInfo(const ObjectAddress *distAddress,
  * GetFunctionDDLCommand returns the complete "CREATE OR REPLACE FUNCTION ..." statement for
  * the specified function followed by "ALTER FUNCTION .. SET OWNER ..".
  */
-static char *
-GetFunctionDDLCommand(const RegProcedure funcOid)
+char *
+GetFunctionDDLCommand(const RegProcedure funcOid, bool wrapWithCreateOrReplace)
 {
-	StringInfo ddlCommand = makeStringInfo();
-
 	OverrideSearchPath *overridePath = NULL;
 	char *createFunctionSQL = NULL;
-	char *alterFunctionOwnerSQL = NULL;
 
 	if (get_func_prokind(funcOid) == PROKIND_AGGREGATE)
 	{
 		createFunctionSQL = GetAggregateDDLCommand(funcOid);
+#if PG_VERSION_NUM < 120000
+		if (wrapWithCreateOrReplace)
+		{
+			createFunctionSQL = WrapCreateOrReplace(createFunctionSQL);
+		}
+#endif
 	}
 	else
 	{
@@ -567,11 +579,7 @@ GetFunctionDDLCommand(const RegProcedure funcOid)
 		PopOverrideSearchPath();
 	}
 
-	alterFunctionOwnerSQL = GetFunctionAlterOwnerCommand(funcOid);
-
-	appendStringInfo(ddlCommand, "%s;%s", createFunctionSQL, alterFunctionOwnerSQL);
-
-	return ddlCommand->data;
+	return createFunctionSQL;
 }
 
 
@@ -654,20 +662,15 @@ GetFunctionAlterOwnerCommand(const RegProcedure funcOid)
 
 /*
  * GetAggregateDDLCommand returns a string for creating an aggregate.
+ * CREATE OR REPLACE AGGREGATE was only introduced in pg12,
+ * therefore in pg11 we only return a CREATE AGGREGATE statement.
+ *
+ * worker_create_or_replace_object is aware of this difference.
  */
 static char *
 GetAggregateDDLCommand(const RegProcedure funcOid)
 {
 	StringInfoData buf = { 0 };
-#if PG_VERSION_NUM < 120000
-
-	/*
-	 * CREATE OR REPLACE AGGREGATE only introduced in pg12,
-	 * so we hack around that with a DO block & exception handler.
-	 * Requires some care to pick the correct $delimiter$
-	 */
-	StringInfoData resultbuf = { 0 };
-#endif
 	HeapTuple proctup = NULL;
 	Form_pg_proc proc = NULL;
 	HeapTuple aggtup = NULL;
@@ -702,11 +705,15 @@ GetAggregateDDLCommand(const RegProcedure funcOid)
 	appendStringInfo(&buf, "CREATE OR REPLACE AGGREGATE %s(",
 					 quote_qualified_identifier(nsp, name));
 #else
+
+	/* For whoever removes PG11 support:
+	 * Update top level comment & worker_create_or_replace_object
+	 */
 	appendStringInfo(&buf, "CREATE AGGREGATE %s(",
 					 quote_qualified_identifier(nsp, name));
 #endif
 
-	/* Parameters, orrows heavily from print_function_arguments in postgres */
+	/* Parameters, borrows heavily from print_function_arguments in postgres */
 	numargs = get_func_arg_info(proctup, &argtypes, &argnames, &argmodes);
 
 	aggtup = SearchSysCache1(AGGFNOID, funcOid);
@@ -990,36 +997,10 @@ GetAggregateDDLCommand(const RegProcedure funcOid)
 
 	appendStringInfoChar(&buf, ')');
 
-#if PG_VERSION_NUM < 120000
-	{
-		/* construct a dollar quoted string, making sure the quoted text doesn't contain the dollar quote */
-		StringInfoData delim;
-		initStringInfo(&delim);
-		initStringInfo(&resultbuf);
-
-		appendStringInfoChar(&delim, '$');
-		while (strstr(buf.data, delim.data) != NULL)
-		{
-			appendStringInfoChar(&delim, 'z');
-		}
-
-		appendStringInfo(&resultbuf,
-						 "DO %s$BEGIN %s;EXCEPTION WHEN duplicate_function THEN NULL;END%s$",
-						 delim.data, buf.data, delim.data);
-
-		pfree(delim.data);
-		pfree(buf.data);
-	}
-#endif
-
 	ReleaseSysCache(aggtup);
 	ReleaseSysCache(proctup);
 
-#if PG_VERSION_NUM >= 120000
 	return buf.data;
-#else
-	return resultbuf.data;
-#endif
 }
 
 
@@ -1225,7 +1206,6 @@ List *
 ProcessCreateFunctionStmt(CreateFunctionStmt *stmt, const char *queryString)
 {
 	const ObjectAddress *address = NULL;
-	const char *sql = NULL;
 	List *commands = NIL;
 
 	if (!ShouldPropagateCreateFunction(stmt))
@@ -1236,10 +1216,9 @@ ProcessCreateFunctionStmt(CreateFunctionStmt *stmt, const char *queryString)
 	address = GetObjectAddressFromParseTree((Node *) stmt, false);
 	EnsureDependenciesExistsOnAllNodes(address);
 
-	sql = GetFunctionDDLCommand(address->objectId);
-
-	commands = list_make3(DISABLE_DDL_PROPAGATION,
-						  (void *) sql,
+	commands = list_make4(DISABLE_DDL_PROPAGATION,
+						  GetFunctionDDLCommand(address->objectId, true),
+						  GetFunctionAlterOwnerCommand(address->objectId),
 						  ENABLE_DDL_PROPAGATION);
 
 	return NodeDDLTaskList(ALL_WORKERS, commands);
@@ -1273,6 +1252,27 @@ CreateFunctionStmtObjectAddress(CreateFunctionStmt *stmt, bool missing_ok)
 	}
 
 	return FunctionToObjectAddress(objectType, objectWithArgs, missing_ok);
+}
+
+
+const ObjectAddress *
+DefineAggregateStmtObjectAddress(DefineStmt *stmt, bool missing_ok)
+{
+	ObjectWithArgs *objectWithArgs = NULL;
+	ListCell *parameterCell = NULL;
+
+	Assert(stmt->kind == OBJECT_AGGREGATE);
+
+	objectWithArgs = makeNode(ObjectWithArgs);
+	objectWithArgs->objname = stmt->defnames;
+
+	foreach(parameterCell, linitial(stmt->args))
+	{
+		FunctionParameter *funcParam = castNode(FunctionParameter, lfirst(parameterCell));
+		objectWithArgs->objargs = lappend(objectWithArgs->objargs, funcParam->argType);
+	}
+
+	return FunctionToObjectAddress(OBJECT_AGGREGATE, objectWithArgs, missing_ok);
 }
 
 
@@ -1714,6 +1714,110 @@ AlterFunctionSchemaStmtObjectAddress(AlterObjectSchemaStmt *stmt, bool missing_o
 	ObjectAddressSet(*address, ProcedureRelationId, funcOid);
 
 	return address;
+}
+
+
+/*
+ * GenerateBackupNameForProcCollision generates a new proc name for an existing proc. The
+ * name is generated in such a way that the new name doesn't overlap with an existing proc
+ * by adding a suffix with incrementing number after the new name.
+ */
+char *
+GenerateBackupNameForProcCollision(const ObjectAddress *address)
+{
+	char *newName = palloc0(NAMEDATALEN);
+	char suffix[NAMEDATALEN] = { 0 };
+	int count = 0;
+	Value *namespace = makeString(get_namespace_name(get_func_namespace(
+														 address->objectId)));
+	char *baseName = get_func_name(address->objectId);
+	int baseLength = strlen(baseName);
+	int numargs = 0;
+	Oid *argtypes;
+	char **argnames;
+	char *argmodes;
+	HeapTuple proctup = SearchSysCache1(PROCOID, address->objectId);
+	if (!HeapTupleIsValid(proctup))
+	{
+		elog(ERROR, "citus cache lookup failed.");
+	}
+
+	numargs = get_func_arg_info(proctup, &argtypes, &argnames, &argmodes);
+	ReleaseSysCache(proctup);
+
+	while (true)
+	{
+		int suffixLength = snprintf(suffix, NAMEDATALEN - 1, "(citus_backup_%d)",
+									count);
+		List *newProcName = NIL;
+		FuncCandidateList clist = NULL;
+
+		/* trim the base name at the end to leave space for the suffix and trailing \0 */
+		baseLength = Min(baseLength, NAMEDATALEN - suffixLength - 1);
+
+		/* clear newName before copying the potentially trimmed baseName and suffix */
+		memset(newName, 0, NAMEDATALEN);
+		strncpy(newName, baseName, baseLength);
+		strncpy(newName + baseLength, suffix, suffixLength);
+
+		newProcName = list_make2(namespace, makeString(newName));
+
+		clist = FuncnameGetCandidates(newProcName, numargs, NIL, false, false, true);
+		for (; clist; clist = clist->next)
+		{
+			if (memcmp(clist->args, argtypes, sizeof(Oid) * numargs) == 0)
+			{
+				break;
+			}
+		}
+
+		if (!clist)
+		{
+			return newName;
+		}
+
+		count++;
+	}
+}
+
+
+/*
+ *
+ */
+ObjectWithArgs *
+ObjectWithArgsFromOid(Oid funcOid)
+{
+	ObjectWithArgs *objectWithArgs = makeNode(ObjectWithArgs);
+	List *objargs = NIL;
+	Oid *argTypes = NULL;
+	char **argNames = NULL;
+	char *argModes = NULL;
+	int numargs = 0;
+	int i = 0;
+	HeapTuple proctup = SearchSysCache1(PROCOID, funcOid);
+
+	if (!HeapTupleIsValid(proctup))
+	{
+		elog(ERROR, "citus cache lookup failed.");
+	}
+
+	numargs = get_func_arg_info(proctup, &argTypes, &argNames, &argModes);
+
+	objectWithArgs->objname = list_make2(
+		makeString(get_namespace_name(get_func_namespace(funcOid))),
+		makeString(get_func_name(funcOid))
+		);
+
+	for (i = 0; i < numargs; i++)
+	{
+		if (argModes[i] != PROARGMODE_OUT || argModes[i] != PROARGMODE_TABLE)
+		{
+			objargs = lappend(objargs, makeTypeNameFromOid(argTypes[i], -1));
+		}
+	}
+	objectWithArgs->objargs = objargs;
+
+	return objectWithArgs;
 }
 
 

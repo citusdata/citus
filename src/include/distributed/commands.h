@@ -53,6 +53,8 @@ extern List * ProcessCreateFunctionStmt(CreateFunctionStmt *stmt, const
 										char *queryString);
 extern const ObjectAddress * CreateFunctionStmtObjectAddress(CreateFunctionStmt *stmt,
 															 bool missing_ok);
+extern const ObjectAddress * DefineAggregateStmtObjectAddress(DefineStmt *stmt, bool
+															  missing_ok);
 extern List * PlanAlterFunctionStmt(AlterFunctionStmt *stmt, const char *queryString);
 extern const ObjectAddress * AlterFunctionStmtObjectAddress(AlterFunctionStmt *stmt,
 															bool missing_ok);
@@ -189,10 +191,13 @@ extern const ObjectAddress * AlterTypeOwnerObjectAddress(AlterOwnerStmt *stmt,
 														 bool missing_ok);
 extern List * CreateTypeDDLCommandsIdempotent(const ObjectAddress *typeAddress);
 extern char * GenerateBackupNameForTypeCollision(const ObjectAddress *address);
-extern RenameStmt * CreateRenameTypeStmt(const ObjectAddress *address, char *newName);
 
 /* function.c - forward declarations */
 extern List * CreateFunctionDDLCommandsIdempotent(const ObjectAddress *functionAddress);
+extern char * GetFunctionDDLCommand(const RegProcedure funcOid, bool
+									wrapWithCreateOrReplace);
+extern char * GenerateBackupNameForProcCollision(const ObjectAddress *address);
+extern ObjectWithArgs * ObjectWithArgsFromOid(Oid funcOid);
 
 /* vacuum.c - froward declarations */
 extern void ProcessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand);
