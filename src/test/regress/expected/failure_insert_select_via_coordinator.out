@@ -53,10 +53,10 @@ SELECT citus.mitmproxy('conn.onQuery(query="^COPY").kill()');
 (1 row)
 
 INSERT INTO events_summary SELECT event_id, event_type, count(*) FROM events_table GROUP BY 1,2;
-WARNING:  could not consume data from worker node
-WARNING:  could not consume data from worker node
-WARNING:  could not consume data from worker node
-ERROR:  failed to execute task 1
+ERROR:  server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+CONTEXT:  while executing command on localhost:9060
 -- kill data push
 SELECT citus.mitmproxy('conn.onQuery(query="^COPY coordinator_insert_select").kill()');
  mitmproxy 
@@ -109,10 +109,10 @@ SELECT citus.mitmproxy('conn.onQuery(query="^COPY").kill()');
 (1 row)
 
 INSERT INTO events_reference SELECT event_type, count(*) FROM events_table GROUP BY 1;
-WARNING:  could not consume data from worker node
-WARNING:  could not consume data from worker node
-WARNING:  could not consume data from worker node
-ERROR:  failed to execute task 1
+ERROR:  server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+CONTEXT:  while executing command on localhost:9060
 -- kill data push
 SELECT citus.mitmproxy('conn.onQuery(query="^COPY coordinator_insert_select").kill()');
  mitmproxy 

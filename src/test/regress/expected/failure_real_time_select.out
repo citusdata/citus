@@ -33,7 +33,10 @@ SELECT citus.mitmproxy('conn.onQuery(query="SELECT|COPY").kill()');
 (1 row)
 
 SELECT count(*) FROM test_table;
-ERROR:  failed to execute task 1
+ERROR:  connection error: localhost:9060
+DETAIL:  server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
 SET client_min_messages TO DEFAULT;
 -- Kill the connection with a CTE
 SELECT citus.mitmproxy('conn.onQuery(query=".*SELECT.*test_table.*").kill()');
@@ -46,13 +49,10 @@ WITH
 results AS (SELECT * FROM test_table)
 SELECT * FROM test_table, results
 WHERE test_table.id = results.id;
-WARNING:  could not consume data from worker node
-WARNING:  could not consume data from worker node
-WARNING:  could not consume data from worker node
-WARNING:  could not consume data from worker node
-WARNING:  could not consume data from worker node
-WARNING:  could not consume data from worker node
-ERROR:  failed to execute task 1
+ERROR:  connection error: localhost:9060
+DETAIL:  server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
 -- Since the outer query uses the connection opened by the CTE,
 -- killing connection after first successful query should break.
 SET client_min_messages TO ERROR;
@@ -141,12 +141,10 @@ SELECT citus.mitmproxy('conn.onQuery(query="SELECT|COPY").after(1).kill()');
 
 BEGIN;
 SELECT count(*) FROM test_table;
-WARNING:  could not consume data from worker node
-WARNING:  could not consume data from worker node
-WARNING:  could not consume data from worker node
-WARNING:  could not consume data from worker node
-WARNING:  could not consume data from worker node
-ERROR:  failed to execute task 1
+ERROR:  connection error: localhost:9060
+DETAIL:  server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
 COMMIT;
 -- Cancel a real-time executor query - in sequential mode
 SELECT citus.mitmproxy('conn.onQuery(query="SELECT|COPY").cancel(' || pg_backend_pid() || ')');
@@ -209,8 +207,14 @@ SELECT citus.mitmproxy('conn.onQuery(query="SELECT|COPY").kill()');
 (1 row)
 
 SELECT count(*) FROM test_table;
-WARNING:  could not consume data from worker node
-WARNING:  could not consume data from worker node
+WARNING:  connection error: localhost:9060
+DETAIL:  server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+WARNING:  connection error: localhost:9060
+DETAIL:  server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
  count 
 -------
      6
@@ -226,8 +230,14 @@ SELECT citus.mitmproxy('conn.onQuery(query="SELECT|COPY").kill()');
 
 BEGIN;
 SELECT count(*) FROM test_table;
-WARNING:  could not consume data from worker node
-WARNING:  could not consume data from worker node
+WARNING:  connection error: localhost:9060
+DETAIL:  server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+WARNING:  connection error: localhost:9060
+DETAIL:  server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
  count 
 -------
      6
@@ -289,8 +299,10 @@ SELECT citus.mitmproxy('conn.onQuery(query="SELECT|COPY").after(1).kill()');
 
 BEGIN;
 SELECT count(*) FROM test_table;
-WARNING:  could not consume data from worker node
-WARNING:  could not consume data from worker node
+WARNING:  connection error: localhost:9060
+DETAIL:  server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
  count 
 -------
      6

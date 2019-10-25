@@ -25,10 +25,10 @@ SELECT citus.mitmproxy('conn.onQuery().kill()');
 (1 row)
 
 SELECT create_reference_table('ref_table');
-WARNING:  connection not open
-CONTEXT:  while executing command on localhost:9060
 ERROR:  connection error: localhost:9060
-DETAIL:  connection not open
+DETAIL:  server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
 SELECT count(*) FROM pg_dist_shard_placement;
  count 
 -------
@@ -43,10 +43,10 @@ SELECT citus.mitmproxy('conn.onCommandComplete(command="BEGIN").kill()');
 (1 row)
 
 SELECT create_reference_table('ref_table');
-WARNING:  connection not open
-CONTEXT:  while executing command on localhost:9060
 ERROR:  connection error: localhost:9060
-DETAIL:  connection not open
+DETAIL:  server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
 SELECT count(*) FROM pg_dist_shard_placement;
  count 
 -------
@@ -76,10 +76,10 @@ SELECT citus.mitmproxy('conn.onCommandComplete(command="SELECT 1").kill()');
 (1 row)
 
 SELECT create_reference_table('ref_table');
-WARNING:  connection not open
-CONTEXT:  while executing command on localhost:9060
 ERROR:  connection error: localhost:9060
-DETAIL:  connection not open
+DETAIL:  server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
 SELECT count(*) FROM pg_dist_shard_placement;
  count 
 -------

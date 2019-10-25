@@ -984,21 +984,9 @@ FinalizePlan(PlannedStmt *localPlan, DistributedPlan *distributedPlan)
 			break;
 		}
 
-		case MULTI_EXECUTOR_REAL_TIME:
-		{
-			customScan->methods = &RealTimeCustomScanMethods;
-			break;
-		}
-
 		case MULTI_EXECUTOR_TASK_TRACKER:
 		{
 			customScan->methods = &TaskTrackerCustomScanMethods;
-			break;
-		}
-
-		case MULTI_EXECUTOR_ROUTER:
-		{
-			customScan->methods = &RouterCustomScanMethods;
 			break;
 		}
 

@@ -33,10 +33,10 @@ SELECT citus.mitmproxy('conn.onQuery(query="^DELETE").kill()');
 
 BEGIN;
 DELETE FROM dml_test WHERE id = 1;
-ERROR:  server closed the connection unexpectedly
+ERROR:  connection error: localhost:9060
+DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
-CONTEXT:  while executing command on localhost:9060
 DELETE FROM dml_test WHERE id = 2;
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
 INSERT INTO dml_test VALUES (5, 'Epsilon');
@@ -96,10 +96,10 @@ BEGIN;
 DELETE FROM dml_test WHERE id = 1;
 DELETE FROM dml_test WHERE id = 2;
 INSERT INTO dml_test VALUES (5, 'Epsilon');
-ERROR:  server closed the connection unexpectedly
+ERROR:  connection error: localhost:9060
+DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
-CONTEXT:  while executing command on localhost:9060
 UPDATE dml_test SET name = 'alpha' WHERE id = 1;
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
 UPDATE dml_test SET name = 'gamma' WHERE id = 3;
@@ -154,10 +154,10 @@ DELETE FROM dml_test WHERE id = 1;
 DELETE FROM dml_test WHERE id = 2;
 INSERT INTO dml_test VALUES (5, 'Epsilon');
 UPDATE dml_test SET name = 'alpha' WHERE id = 1;
-ERROR:  server closed the connection unexpectedly
+ERROR:  connection error: localhost:9060
+DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
-CONTEXT:  while executing command on localhost:9060
 UPDATE dml_test SET name = 'gamma' WHERE id = 3;
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
 COMMIT;

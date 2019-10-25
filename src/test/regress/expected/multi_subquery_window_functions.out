@@ -716,7 +716,7 @@ EXPLAIN (COSTS FALSE, VERBOSE TRUE)
    ->  Sort
          Output: remote_scan.user_id, remote_scan.sum
          Sort Key: remote_scan.sum DESC, remote_scan.user_id DESC
-         ->  Custom Scan (Citus Real-Time)
+         ->  Custom Scan (Citus Adaptive)
                Output: remote_scan.user_id, remote_scan.sum
                Task Count: 4
                Tasks Shown: One of 4

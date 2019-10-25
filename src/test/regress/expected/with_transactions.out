@@ -1,6 +1,7 @@
 CREATE SCHEMA with_transactions;
 SET search_path TO 	with_transactions, public;
 SET citus.shard_count TO 4;
+SET citus.shard_replication_factor TO 1; -- https://github.com/citusdata/citus/issues/3061
 SET citus.next_placement_id TO 800000;
 CREATE TABLE with_transactions.raw_table (tenant_id int, income float, created_at timestamptz);
 SELECT create_distributed_table('raw_table', 'tenant_id');
@@ -82,18 +83,17 @@ WITH ids_inserted AS
 UPDATE raw_table SET created_at = '2001-02-10 20:00:00' WHERE tenant_id IN (SELECT tenant_id FROM ids_inserted);
 DEBUG:  generating subplan 12_1 for CTE ids_inserted: INSERT INTO with_transactions.raw_table (tenant_id, income, created_at) VALUES (11,1000,now()), (12,1000,now()), (13,1000,now()) RETURNING raw_table.tenant_id
 DEBUG:  Plan 12 query after replacing subqueries and CTEs: UPDATE with_transactions.raw_table SET created_at = 'Sat Feb 10 20:00:00 2001 PST'::timestamp with time zone WHERE (tenant_id OPERATOR(pg_catalog.=) ANY (SELECT ids_inserted.tenant_id FROM (SELECT intermediate_result.tenant_id FROM read_intermediate_result('12_1'::text, 'binary'::citus_copy_format) intermediate_result(tenant_id integer)) ids_inserted))
-ERROR:  cannot establish a new connection for placement 800007, since DML has been executed on a connection that is in use
 -- make sure that everything committed
 SELECT count(*) FROM raw_table;
  count 
 -------
-   102
+   105
 (1 row)
 
 SELECT count(*) FROM raw_table WHERE created_at = '2001-02-10 20:00:00';
  count 
 -------
-     1
+     4
 (1 row)
 
 SELECT count(*) FROM second_raw_table;

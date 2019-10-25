@@ -112,7 +112,7 @@ static const struct config_enum_entry replication_model_options[] = {
 
 static const struct config_enum_entry task_executor_type_options[] = {
 	{ "adaptive", MULTI_EXECUTOR_ADAPTIVE, false },
-	{ "real-time", MULTI_EXECUTOR_REAL_TIME, false },
+	{ "real-time", MULTI_EXECUTOR_ADAPTIVE, false }, /* ignore real-time executor, always use adaptive */
 	{ "task-tracker", MULTI_EXECUTOR_TASK_TRACKER, false },
 	{ NULL, 0, false }
 };
