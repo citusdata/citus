@@ -65,5 +65,8 @@ extern List * BuildPlacementDDLList(int32 groupId, List *relationShardList);
 extern void ExtractParametersFromParamListInfo(ParamListInfo paramListInfo,
 											   Oid **parameterTypes,
 											   const char ***parameterValues);
+extern void ExtractParametersFromParamListInfoLocal(ParamListInfo paramListInfo,
+											   Oid **parameterTypes,
+											   const char ***parameterValues);											   
 
 #endif /* MULTI_ROUTER_EXECUTOR_H_ */
