@@ -916,14 +916,14 @@ SELECT master_copy_shard_placement(:a_shard_id, 'localhost', :worker_2_port, 'lo
 SELECT shardid, shardstate FROM pg_dist_shard_placement WHERE placementid = :a_placement_id;
 
 -- some queries that are captured in functions
-CREATE FUNCTION select_count_all() RETURNS bigint AS '
+CREATE OR REPLACE FUNCTION select_count_all() RETURNS bigint AS '
         SELECT
                 count(*)
         FROM
                 reference_table_test;
 ' LANGUAGE SQL;
 
-CREATE FUNCTION insert_into_ref_table(value_1 int, value_2 float, value_3 text, value_4 timestamp) 
+CREATE OR REPLACE FUNCTION insert_into_ref_table(value_1 int, value_2 float, value_3 text, value_4 timestamp) 
 RETURNS void AS '
        INSERT INTO reference_table_test VALUES ($1, $2, $3, $4);
 ' LANGUAGE SQL;
@@ -999,9 +999,11 @@ ALTER TABLE reference_table_test ADD COLUMN value_dummy INT;
 INSERT INTO reference_table_test VALUES (2, 2.0, '2', '2016-12-02');
 ROLLBACK;
 
--- clean up tables
+-- clean up tables, ...
 DROP SEQUENCE example_ref_value_seq;
 DROP TABLE reference_table_test, reference_table_test_second, reference_table_test_third, 
 		   reference_table_test_fourth, reference_schema.reference_table_ddl, reference_table_composite,
-		   reference_schema.reference_table_test_sixth, reference_schema.reference_table_test_seventh;
+		   reference_schema.reference_table_test_sixth, reference_schema.reference_table_test_seventh,
+		   colocated_table_test, colocated_table_test_2, append_reference_tmp_table;
+DROP TYPE reference_comp_key;
 DROP SCHEMA reference_schema CASCADE;
