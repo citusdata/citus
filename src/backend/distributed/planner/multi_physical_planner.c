@@ -2216,7 +2216,7 @@ static void
 ErrorIfUnsupportedShardDistribution(Query *query)
 {
 	Oid firstTableRelationId = InvalidOid;
-	List *relationIdList = RelationIdList(query);
+	List *relationIdList = DistributedRelationIdList(query);
 	List *nonReferenceRelations = NIL;
 	ListCell *relationIdCell = NULL;
 	uint32 relationIndex = 0;

@@ -17,6 +17,10 @@
 #include "distributed/version_compat.h"
 #include "nodes/nodeFuncs.h"
 
+
+static bool CitusQueryableRangeTableRelation(RangeTblEntry *rangeTableEntry);
+
+
 /*
  * ExtractRangeTableList walks over a tree to gather entries.
  * Execution is parameterized by passing walkerMode flag via ExtractRangeTableWalkerContext
@@ -40,12 +44,9 @@ ExtractRangeTableList(Node *node, ExtractRangeTableWalkerContext *context)
 	{
 		RangeTblEntry *rangeTable = (RangeTblEntry *) node;
 
-		/* make sure that we are extracting only relation entries if walkerMode is set to EXTRACT_RELATION_ENTRIES*/
-		if (walkerMode == EXTRACT_ALL_ENTRIES || (walkerMode ==
-												  EXTRACT_RELATION_ENTRIES &&
-												  rangeTable->rtekind == RTE_RELATION &&
-												  rangeTable->relkind ==
-												  RELKIND_RELATION))
+		if (walkerMode == EXTRACT_ALL_ENTRIES ||
+			(walkerMode == EXTRACT_RELATION_ENTRIES &&
+			 CitusQueryableRangeTableRelation(rangeTable)))
 		{
 			(*rangeTableRelationList) = lappend(*rangeTableRelationList, rangeTable);
 		}
@@ -82,8 +83,42 @@ ExtractRangeTableList(Node *node, ExtractRangeTableWalkerContext *context)
 
 
 /*
+ * CitusQueryableRangeTableRelation returns true if the input range table
+ * entry is a relation and it can be used in a distributed query, including
+ * local tables and materialized views as well.
+ */
+static bool
+CitusQueryableRangeTableRelation(RangeTblEntry *rangeTableEntry)
+{
+	char relationKind = '\0';
+
+	if (rangeTableEntry->rtekind != RTE_RELATION)
+	{
+		/* we're only interested in relations */
+		return false;
+	}
+
+	relationKind = rangeTableEntry->relkind;
+	if (relationKind == RELKIND_RELATION || relationKind == RELKIND_PARTITIONED_TABLE ||
+		relationKind == RELKIND_FOREIGN_TABLE || relationKind == RELKIND_MATVIEW)
+	{
+		/*
+		 * RELKIND_VIEW are automatically replaced with a subquery in
+		 * the query tree, so we ignore them here.
+		 *
+		 * RELKIND_MATVIEW is equivalent of a local table in postgres.
+		 */
+		return true;
+	}
+
+	return false;
+}
+
+
+/*
  * ExtractRangeTableRelationWalker gathers all range table relation entries
- * in a query.
+ * in a query. The caller is responsible for checking whether the returned
+ * entries are distributed or not.
  */
 bool
 ExtractRangeTableRelationWalker(Node *node, List **rangeTableRelationList)
