@@ -163,6 +163,7 @@ CITUSAC_PROG_CC_CFLAGS_OPT([-Wno-sign-compare])
 CITUSAC_PROG_CC_CFLAGS_OPT([-Wno-missing-field-initializers])
 CITUSAC_PROG_CC_CFLAGS_OPT([-Wno-clobbered])
 CITUSAC_PROG_CC_CFLAGS_OPT([-Wno-gnu-variable-sized-type-not-at-end])
+CITUSAC_PROG_CC_CFLAGS_OPT([-Wno-declaration-after-statement])
 # And add a few extra warnings
 CITUSAC_PROG_CC_CFLAGS_OPT([-Wendif-labels])
 CITUSAC_PROG_CC_CFLAGS_OPT([-Wmissing-format-attribute])

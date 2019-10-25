@@ -16,6 +16,7 @@
 #include "commands/extension.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/function_utils.h"
+#include "distributed/listutils.h"
 #include "distributed/multi_logical_optimizer.h"
 #include "distributed/multi_master_planner.h"
 #include "distributed/multi_physical_planner.h"
@@ -136,13 +137,8 @@ MasterTargetList(List *workerTargetList)
 static PlannedStmt *
 BuildSelectStatement(Query *masterQuery, List *masterTargetList, CustomScan *remoteScan)
 {
-	PlannedStmt *selectStatement = NULL;
-	Agg *aggregationPlan = NULL;
-	Plan *topLevelPlan = NULL;
-	List *sortClauseList = copyObject(masterQuery->sortClause);
-	ListCell *targetEntryCell = NULL;
-	List *columnNameList = NULL;
-	RangeTblEntry *customScanRangeTableEntry = NULL;
+	/* top level select query should have only one range table entry */
+	Assert(list_length(masterQuery->rtable) == 1);
 
 	PlannerGlobal *glob = makeNode(PlannerGlobal);
 	PlannerInfo *root = makeNode(PlannerInfo);
@@ -154,17 +150,17 @@ BuildSelectStatement(Query *masterQuery, List *masterTargetList, CustomScan *rem
 
 
 	/* (1) make PlannedStmt and set basic information */
-	selectStatement = makeNode(PlannedStmt);
+	PlannedStmt *selectStatement = makeNode(PlannedStmt);
 	selectStatement->canSetTag = true;
 	selectStatement->relationOids = NIL;
 	selectStatement->commandType = CMD_SELECT;
 
-	/* top level select query should have only one range table entry */
-	Assert(list_length(masterQuery->rtable) == 1);
 
 	remoteScan->custom_scan_tlist = masterTargetList;
 
 	/* (2) add an aggregation plan if needed */
+	Agg *aggregationPlan = NULL;
+	Plan *topLevelPlan = NULL;
 	if (masterQuery->hasAggs || masterQuery->groupClause)
 	{
 		remoteScan->scan.plan.targetlist = masterTargetList;
@@ -207,6 +203,7 @@ BuildSelectStatement(Query *masterQuery, List *masterTargetList, CustomScan *rem
 	 * on hashable property of columns in distinct clause. If there is order by
 	 * clause, it is handled after distinct planning.
 	 */
+	List *sortClauseList = copyObject(masterQuery->sortClause);
 	if (masterQuery->hasDistinctOn)
 	{
 		ListCell *distinctCell = NULL;
@@ -271,13 +268,14 @@ BuildSelectStatement(Query *masterQuery, List *masterTargetList, CustomScan *rem
 	/*
 	 * (7) Replace rangetable with one with nice names to show in EXPLAIN plans
 	 */
-	foreach(targetEntryCell, masterTargetList)
+	List *columnNameList = NIL;
+	TargetEntry *targetEntry = NULL;
+	foreach_ptr(targetEntry, masterTargetList)
 	{
-		TargetEntry *targetEntry = lfirst(targetEntryCell);
 		columnNameList = lappend(columnNameList, makeString(targetEntry->resname));
 	}
 
-	customScanRangeTableEntry = linitial(selectStatement->rtable);
+	RangeTblEntry *customScanRangeTableEntry = linitial(selectStatement->rtable);
 	customScanRangeTableEntry->eref = makeAlias("remote_scan", columnNameList);
 
 	return selectStatement;
@@ -366,18 +364,10 @@ FinalizeStatement(PlannerInfo *root, PlannedStmt *result, Plan *top_plan)
 static Agg *
 BuildAggregatePlan(PlannerInfo *root, Query *masterQuery, Plan *subPlan)
 {
-	Agg *aggregatePlan = NULL;
-	AggStrategy aggregateStrategy = AGG_PLAIN;
-	AggClauseCosts aggregateCosts;
-	List *aggregateTargetList = NIL;
-	List *groupColumnList = NIL;
-	Node *havingQual = NULL;
-	uint32 groupColumnCount = 0;
-
 	/* assert that we need to build an aggregate plan */
 	Assert(masterQuery->hasAggs || masterQuery->groupClause);
 
-	aggregateTargetList = masterQuery->targetList;
+	List *aggregateTargetList = masterQuery->targetList;
 
 	/*
 	 * Replaces SubLink nodes with SubPlan nodes in the having section of the
@@ -387,7 +377,7 @@ BuildAggregatePlan(PlannerInfo *root, Query *masterQuery, Plan *subPlan)
 	 * these when that is true. However, for some reason hasSubLinks is false
 	 * even when there are SubLinks.
 	 */
-	havingQual = SS_process_sublinks(root, masterQuery->havingQual, true);
+	Node *havingQual = SS_process_sublinks(root, masterQuery->havingQual, true);
 
 	/*
 	 * Right now this is not really needed, since we don't support correlated
@@ -398,16 +388,18 @@ BuildAggregatePlan(PlannerInfo *root, Query *masterQuery, Plan *subPlan)
 
 
 	/* estimate aggregate execution costs */
+	AggClauseCosts aggregateCosts;
 	memset(&aggregateCosts, 0, sizeof(AggClauseCosts));
 	get_agg_clause_costs(root, (Node *) aggregateTargetList, AGGSPLIT_SIMPLE,
 						 &aggregateCosts);
 
 	get_agg_clause_costs(root, (Node *) havingQual, AGGSPLIT_SIMPLE, &aggregateCosts);
 
-	groupColumnList = masterQuery->groupClause;
-	groupColumnCount = list_length(groupColumnList);
+	List *groupColumnList = masterQuery->groupClause;
+	uint32 groupColumnCount = list_length(groupColumnList);
 
 	/* if we have grouping, then initialize appropriate information */
+	AggStrategy aggregateStrategy = AGG_PLAIN;
 	if (groupColumnCount > 0)
 	{
 		bool groupingIsHashable = grouping_is_hashable(groupColumnList);
@@ -455,8 +447,8 @@ BuildAggregatePlan(PlannerInfo *root, Query *masterQuery, Plan *subPlan)
 	}
 
 	/* finally create the plan */
-	aggregatePlan = makeAggNode(groupColumnList, (List *) havingQual,
-								aggregateStrategy, aggregateTargetList, subPlan);
+	Agg *aggregatePlan = makeAggNode(groupColumnList, (List *) havingQual,
+									 aggregateStrategy, aggregateTargetList, subPlan);
 
 	/* just for reproducible costs between different PostgreSQL versions */
 	aggregatePlan->plan.startup_cost = 0;
