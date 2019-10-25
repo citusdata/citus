@@ -824,21 +824,17 @@ LocalJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 	char candidatePartitionMethod = PartitionMethod(relationId);
 	char currentPartitionMethod = currentJoinNode->partitionMethod;
 	TableEntry *currentAnchorTable = currentJoinNode->anchorTable;
-	JoinRuleType currentJoinRuleType = currentJoinNode->joinRuleType;
 	bool joinOnPartitionColumns = false;
 	bool coPartitionedTables = false;
 
 	/*
-	 * If we previously dual-hash re-partitioned the tables for a join or made
-	 * cartesian product, we currently don't allow local join.
+	 * If we previously dual-hash re-partitioned the tables for a join or made cartesian
+	 * product, there is no anchor table anymore. In that case we don't allow local join.
 	 */
-	if (currentJoinRuleType == DUAL_PARTITION_JOIN ||
-		currentJoinRuleType == CARTESIAN_PRODUCT)
+	if (currentAnchorTable == NULL)
 	{
 		return NULL;
 	}
-
-	Assert(currentAnchorTable != NULL);
 
 	/* the partition method should be the same for a local join */
 	if (currentPartitionMethod != candidatePartitionMethod)
