@@ -374,7 +374,7 @@ RegisterCitusConfigVariables(void)
 		&NodeConnectionTimeout,
 		5 * MS_PER_SECOND, 10 * MS, MS_PER_HOUR,
 		PGC_USERSET,
-		GUC_UNIT_MS | GUC_ALLOW_ALL,
+		GUC_UNIT_MS | GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	/* keeping temporarily for updates from pre-6.0 versions */
@@ -408,7 +408,7 @@ RegisterCitusConfigVariables(void)
 		&BinaryMasterCopyFormat,
 		false,
 		PGC_USERSET,
-		GUC_ALLOW_ALL,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -420,7 +420,7 @@ RegisterCitusConfigVariables(void)
 		&BinaryWorkerCopyFormat,
 		false,
 		PGC_SIGHUP,
-		GUC_ALLOW_ALL,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -430,7 +430,7 @@ RegisterCitusConfigVariables(void)
 		&ExpireCachedShards,
 		false,
 		PGC_SIGHUP,
-		GUC_ALLOW_ALL,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -441,7 +441,7 @@ RegisterCitusConfigVariables(void)
 		&EnableLocalExecution,
 		true,
 		PGC_USERSET,
-		GUC_ALLOW_ALL,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -499,7 +499,7 @@ RegisterCitusConfigVariables(void)
 		&SubqueryPushdown,
 		false,
 		PGC_USERSET,
-		GUC_ALLOW_ALL,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -520,7 +520,7 @@ RegisterCitusConfigVariables(void)
 		&LogRemoteCommands,
 		false,
 		PGC_USERSET,
-		GUC_ALLOW_ALL,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -567,7 +567,7 @@ RegisterCitusConfigVariables(void)
 		&ExplainAllTasks,
 		false,
 		PGC_USERSET,
-		GUC_ALLOW_ALL,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -577,7 +577,7 @@ RegisterCitusConfigVariables(void)
 		&AllModificationsCommutative,
 		false,
 		PGC_USERSET,
-		GUC_ALLOW_ALL,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomRealVariable(
@@ -590,7 +590,7 @@ RegisterCitusConfigVariables(void)
 		&DistributedDeadlockDetectionTimeoutFactor,
 		2.0, -1.0, 1000.0,
 		PGC_SIGHUP,
-		GUC_ALLOW_ALL,
+		GUC_STANDARD,
 		ErrorIfNotASuitableDeadlockFactor, NULL, NULL);
 
 	DefineCustomIntVariable(
@@ -604,7 +604,7 @@ RegisterCitusConfigVariables(void)
 		&Recover2PCInterval,
 		60 * MS_PER_SECOND, -1, 7 * MS_PER_DAY,
 		PGC_SIGHUP,
-		GUC_UNIT_MS | GUC_ALLOW_ALL,
+		GUC_UNIT_MS | GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
@@ -706,7 +706,7 @@ RegisterCitusConfigVariables(void)
 		&EnableDeadlockPrevention,
 		true,
 		PGC_USERSET,
-		GUC_ALLOW_ALL,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -716,7 +716,7 @@ RegisterCitusConfigVariables(void)
 		&EnableDDLPropagation,
 		true,
 		PGC_USERSET,
-		GUC_ALLOW_ALL,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -748,7 +748,7 @@ RegisterCitusConfigVariables(void)
 		PROPSETCMD_NONE,
 		propagate_set_commands_options,
 		PGC_USERSET,
-		GUC_ALLOW_ALL,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -769,7 +769,7 @@ RegisterCitusConfigVariables(void)
 		&ShardCount,
 		32, 1, MAX_SHARD_COUNT,
 		PGC_USERSET,
-		GUC_ALLOW_ALL,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
@@ -782,7 +782,7 @@ RegisterCitusConfigVariables(void)
 		&ShardReplicationFactor,
 		1, 1, MAX_SHARD_REPLICATION_FACTOR,
 		PGC_USERSET,
-		GUC_ALLOW_ALL,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
@@ -797,7 +797,7 @@ RegisterCitusConfigVariables(void)
 		&ShardMaxSize,
 		1048576, 256, INT_MAX, /* max allowed size not set to MAX_KILOBYTES on purpose */
 		PGC_USERSET,
-		GUC_UNIT_KB | GUC_ALLOW_ALL,
+		GUC_UNIT_KB | GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -822,7 +822,7 @@ RegisterCitusConfigVariables(void)
 		&MaxIntermediateResult,
 		1048576, -1, MAX_KILOBYTES,
 		PGC_USERSET,
-		GUC_UNIT_KB | GUC_ALLOW_ALL,
+		GUC_UNIT_KB | GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
@@ -840,7 +840,7 @@ RegisterCitusConfigVariables(void)
 		&MaxAdaptiveExecutorPoolSize,
 		16, 1, INT_MAX,
 		PGC_USERSET,
-		GUC_ALLOW_ALL,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
@@ -854,7 +854,7 @@ RegisterCitusConfigVariables(void)
 		&MaxWorkerNodesTracked,
 		2048, 8, INT_MAX,
 		PGC_POSTMASTER,
-		GUC_ALLOW_ALL,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
@@ -867,7 +867,7 @@ RegisterCitusConfigVariables(void)
 		&RemoteTaskCheckInterval,
 		10, 1, INT_MAX,
 		PGC_USERSET,
-		GUC_UNIT_MS | GUC_ALLOW_ALL,
+		GUC_UNIT_MS | GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
@@ -881,7 +881,7 @@ RegisterCitusConfigVariables(void)
 		&TaskTrackerDelay,
 		200 * MS, 1, 100 * MS_PER_SECOND,
 		PGC_SIGHUP,
-		GUC_UNIT_MS | GUC_ALLOW_ALL,
+		GUC_UNIT_MS | GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
@@ -895,7 +895,7 @@ RegisterCitusConfigVariables(void)
 		&MaxCachedConnectionsPerWorker,
 		1, 0, INT_MAX,
 		PGC_USERSET,
-		GUC_ALLOW_ALL,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
@@ -909,7 +909,7 @@ RegisterCitusConfigVariables(void)
 		&MaxAssignTaskBatchSize,
 		64, 1, INT_MAX,
 		PGC_USERSET,
-		GUC_ALLOW_ALL,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
@@ -923,7 +923,7 @@ RegisterCitusConfigVariables(void)
 		&MaxTrackedTasksPerNode,
 		1024, 8, INT_MAX,
 		PGC_POSTMASTER,
-		GUC_ALLOW_ALL,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
@@ -936,7 +936,7 @@ RegisterCitusConfigVariables(void)
 		&MaxRunningTasksPerNode,
 		8, 1, INT_MAX,
 		PGC_SIGHUP,
-		GUC_ALLOW_ALL,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
@@ -950,7 +950,7 @@ RegisterCitusConfigVariables(void)
 		&PartitionBufferSize,
 		8192, 0, (INT_MAX / 1024), /* result stored in int variable */
 		PGC_USERSET,
-		GUC_UNIT_KB | GUC_ALLOW_ALL,
+		GUC_UNIT_KB | GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
@@ -975,7 +975,7 @@ RegisterCitusConfigVariables(void)
 		&LimitClauseRowFetchCount,
 		-1, -1, INT_MAX,
 		PGC_USERSET,
-		GUC_ALLOW_ALL,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomRealVariable(
@@ -988,7 +988,7 @@ RegisterCitusConfigVariables(void)
 		&CountDistinctErrorRate,
 		0.0, 0.0, 1.0,
 		PGC_USERSET,
-		GUC_ALLOW_ALL,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomEnumVariable(
@@ -1002,7 +1002,7 @@ RegisterCitusConfigVariables(void)
 		COMMIT_PROTOCOL_2PC,
 		shard_commit_protocol_options,
 		PGC_USERSET,
-		GUC_ALLOW_ALL,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomEnumVariable(
@@ -1034,7 +1034,7 @@ RegisterCitusConfigVariables(void)
 		TASK_ASSIGNMENT_GREEDY,
 		task_assignment_policy_options,
 		PGC_USERSET,
-		GUC_ALLOW_ALL,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomEnumVariable(
@@ -1065,7 +1065,7 @@ RegisterCitusConfigVariables(void)
 		MULTI_EXECUTOR_ADAPTIVE,
 		task_executor_type_options,
 		PGC_USERSET,
-		GUC_ALLOW_ALL,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -1075,7 +1075,7 @@ RegisterCitusConfigVariables(void)
 		&EnableRepartitionJoins,
 		false,
 		PGC_USERSET,
-		GUC_ALLOW_ALL,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomEnumVariable(
@@ -1091,7 +1091,7 @@ RegisterCitusConfigVariables(void)
 		&ShardPlacementPolicy,
 		SHARD_PLACEMENT_ROUND_ROBIN, shard_placement_policy_options,
 		PGC_USERSET,
-		GUC_ALLOW_ALL,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomEnumVariable(
@@ -1101,7 +1101,7 @@ RegisterCitusConfigVariables(void)
 		&ReadFromSecondaries,
 		USE_SECONDARY_NODES_NEVER, use_secondary_nodes_options,
 		PGC_SU_BACKEND,
-		GUC_ALLOW_ALL,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomEnumVariable(
@@ -1111,7 +1111,7 @@ RegisterCitusConfigVariables(void)
 		&MultiTaskQueryLogLevel,
 		MULTI_TASK_QUERY_INFO_OFF, multi_task_query_log_level_options,
 		PGC_USERSET,
-		GUC_ALLOW_ALL,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomEnumVariable(
@@ -1121,7 +1121,7 @@ RegisterCitusConfigVariables(void)
 		&MultiShardConnectionType,
 		PARALLEL_CONNECTION, multi_shard_modify_connection_options,
 		PGC_USERSET,
-		GUC_ALLOW_ALL,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomStringVariable(
@@ -1131,7 +1131,7 @@ RegisterCitusConfigVariables(void)
 		&CitusVersion,
 		CITUS_VERSION,
 		PGC_INTERNAL,
-		GUC_ALLOW_ALL,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomStringVariable(
@@ -1141,7 +1141,7 @@ RegisterCitusConfigVariables(void)
 		&CurrentCluster,
 		"default",
 		PGC_SU_BACKEND,
-		GUC_ALLOW_ALL,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -1151,7 +1151,7 @@ RegisterCitusConfigVariables(void)
 		&WritableStandbyCoordinator,
 		false,
 		PGC_USERSET,
-		GUC_ALLOW_ALL,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -1216,7 +1216,7 @@ RegisterCitusConfigVariables(void)
 		&MaxTaskStringSize,
 		12288, 8192, 65536,
 		PGC_POSTMASTER,
-		GUC_ALLOW_ALL,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
