@@ -408,7 +408,7 @@ CreateReferenceTableShard(Oid distributedTableId)
 	 * load and sort the worker node list for deterministic placements
 	 * create_reference_table has already acquired pg_dist_node lock
 	 */
-	nodeList = ActiveReferenceTablePlacementNodeList(NoLock);
+	nodeList = ActiveReferenceTablePlacementNodeList(ShareLock);
 	nodeList = SortList(nodeList, CompareWorkerNodes);
 
 	replicationFactor = ReferenceTableReplicationFactor();
