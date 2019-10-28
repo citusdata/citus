@@ -2925,8 +2925,8 @@ StartPlacementExecutionOnSession(TaskPlacementExecution *placementExecution,
 		/* force evaluation of bound params */
 		paramListInfo = copyParamList(paramListInfo);
 
-		ExtractParametersFromParamListInfo(paramListInfo, &parameterTypes,
-										   &parameterValues);
+		ExtractParametersForRemoteExecution(paramListInfo, &parameterTypes,
+											&parameterValues);
 		querySent = SendRemoteCommandParams(connection, queryString, parameterCount,
 											parameterTypes, parameterValues);
 	}

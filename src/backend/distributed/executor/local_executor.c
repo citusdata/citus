@@ -130,8 +130,8 @@ ExecuteLocalTaskList(CitusScanState *scanState, List *taskList)
 	{
 		const char **parameterValues = NULL; /* not used anywhere, so decleare here */
 
-		ExtractParametersFromParamListInfoLocal(paramListInfo, &parameterTypes,
-												&parameterValues);
+		ExtractParametersForLocalExecution(paramListInfo, &parameterTypes,
+										   &parameterValues);
 
 		numParams = paramListInfo->numParams;
 	}

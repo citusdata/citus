@@ -117,10 +117,10 @@ static bool StoreQueryResult(CitusScanState *scanState, MultiConnection *connect
 static bool ConsumeQueryResult(MultiConnection *connection, bool
 							   alwaysThrowErrorOnFailure, int64 *rows);
 
-void ExtractParametersFromParamListInfoInternal(ParamListInfo paramListInfo,
-												Oid **parameterTypes,
-												const char ***parameterValues, bool
-												isLocalExecution);
+static void ExtractParametersInternal(ParamListInfo paramListInfo,
+									  Oid **parameterTypes,
+									  const char ***parameterValues, bool
+									  isLocalExecution);
 
 /*
  * AcquireMetadataLocks acquires metadata locks on each of the anchor
@@ -1729,8 +1729,8 @@ SendQueryInSingleRowMode(MultiConnection *connection, char *query,
 		/* force evaluation of bound params */
 		paramListInfo = copyParamList(paramListInfo);
 
-		ExtractParametersFromParamListInfo(paramListInfo, &parameterTypes,
-										   &parameterValues);
+		ExtractParametersForRemoteExecution(paramListInfo, &parameterTypes,
+											&parameterValues);
 
 		querySent = SendRemoteCommandParams(connection, query, parameterCount,
 											parameterTypes, parameterValues);
@@ -1762,36 +1762,44 @@ SendQueryInSingleRowMode(MultiConnection *connection, char *query,
 
 
 /*
- * ExtractParametersFromParamListInfo extracts parameter types and values from
+ * ExtractParametersForRemoteExecution extracts parameter types and values from
  * the given ParamListInfo structure, and fills parameter type and value arrays.
+ * It changes oid of custom types to InvalidOid so that they are the same in workers
+ * and coordinators.
  */
 void
-ExtractParametersFromParamListInfo(ParamListInfo paramListInfo, Oid **parameterTypes,
-								   const char ***parameterValues)
+ExtractParametersForRemoteExecution(ParamListInfo paramListInfo, Oid **parameterTypes,
+									const char ***parameterValues)
 {
-	ExtractParametersFromParamListInfoInternal(paramListInfo, parameterTypes,
-											   parameterValues, false);
+	ExtractParametersInternal(paramListInfo, parameterTypes,
+							  parameterValues, false);
 }
 
 
 /*
- * ExtractParametersFromParamListInfoLocal extracts parameter types and values from
+ * ExtractParametersForLocalExecution extracts parameter types and values from
  * the given ParamListInfo structure, and fills parameter type and value arrays.
+ * It does not change the oid of custom types, because the query will be run locally.
  */
 void
-ExtractParametersFromParamListInfoLocal(ParamListInfo paramListInfo, Oid **parameterTypes,
-										const char ***parameterValues)
+ExtractParametersForLocalExecution(ParamListInfo paramListInfo, Oid **parameterTypes,
+								   const char ***parameterValues)
 {
-	ExtractParametersFromParamListInfoInternal(paramListInfo, parameterTypes,
-											   parameterValues, true);
+	ExtractParametersInternal(paramListInfo, parameterTypes,
+							  parameterValues, true);
 }
 
 
+/*
+ * ExtractParametersInternal extracts parameter types and values from
+ * the given ParamListInfo structure, and fills parameter type and value arrays.
+ * If isLocalExecution is true, it does not change the oid of custom types.
+ */
 void
-ExtractParametersFromParamListInfoInternal(ParamListInfo paramListInfo,
-										   Oid **parameterTypes,
-										   const char ***parameterValues, bool
-										   isLocalExecution)
+ExtractParametersInternal(ParamListInfo paramListInfo,
+						  Oid **parameterTypes,
+						  const char ***parameterValues, bool
+						  isLocalExecution)
 {
 	int parameterIndex = 0;
 	int parameterCount = paramListInfo->numParams;
