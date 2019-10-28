@@ -107,6 +107,10 @@ static uint64 ExecuteLocalTaskPlan(CitusScanState *scanState, PlannedStmt *taskP
 static bool TaskAccessesLocalNode(Task *task);
 static void LogLocalCommand(const char *command);
 
+static void
+ExtractParametersForLocalExecution(ParamListInfo paramListInfo, Oid **parameterTypes,
+								   const char ***parameterValues);
+
 
 /*
  * ExecuteLocalTasks gets a CitusScanState node and list of local tasks.
@@ -170,6 +174,19 @@ ExecuteLocalTaskList(CitusScanState *scanState, List *taskList)
 	}
 
 	return totalRowsProcessed;
+}
+
+/*
+ * ExtractParametersForLocalExecution extracts parameter types and values from
+ * the given ParamListInfo structure, and fills parameter type and value arrays.
+ * It does not change the oid of custom types, because the query will be run locally.
+ */
+static void
+ExtractParametersForLocalExecution(ParamListInfo paramListInfo, Oid **parameterTypes,
+								   const char ***parameterValues)
+{
+	ExtractParametersFromParamList(paramListInfo, parameterTypes,
+							  parameterValues, true);
 }
 
 

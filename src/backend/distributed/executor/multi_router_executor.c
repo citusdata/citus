@@ -117,11 +117,6 @@ static bool StoreQueryResult(CitusScanState *scanState, MultiConnection *connect
 static bool ConsumeQueryResult(MultiConnection *connection, bool
 							   alwaysThrowErrorOnFailure, int64 *rows);
 
-static void ExtractParametersInternal(ParamListInfo paramListInfo,
-									  Oid **parameterTypes,
-									  const char ***parameterValues, bool
-									  isLocalExecution);
-
 /*
  * AcquireMetadataLocks acquires metadata locks on each of the anchor
  * shards in the task list to prevent a shard being modified while it
@@ -1771,35 +1766,20 @@ void
 ExtractParametersForRemoteExecution(ParamListInfo paramListInfo, Oid **parameterTypes,
 									const char ***parameterValues)
 {
-	ExtractParametersInternal(paramListInfo, parameterTypes,
+	ExtractParametersFromParamList(paramListInfo, parameterTypes,
 							  parameterValues, false);
 }
 
-
 /*
- * ExtractParametersForLocalExecution extracts parameter types and values from
+ * ExtractParametersFromParamList extracts parameter types and values from
  * the given ParamListInfo structure, and fills parameter type and value arrays.
- * It does not change the oid of custom types, because the query will be run locally.
+ * If useOriginalCustomTypeOids is true, it uses the original oids for custom types.
  */
 void
-ExtractParametersForLocalExecution(ParamListInfo paramListInfo, Oid **parameterTypes,
-								   const char ***parameterValues)
-{
-	ExtractParametersInternal(paramListInfo, parameterTypes,
-							  parameterValues, true);
-}
-
-
-/*
- * ExtractParametersInternal extracts parameter types and values from
- * the given ParamListInfo structure, and fills parameter type and value arrays.
- * If isLocalExecution is true, it does not change the oid of custom types.
- */
-void
-ExtractParametersInternal(ParamListInfo paramListInfo,
+ExtractParametersFromParamList(ParamListInfo paramListInfo,
 						  Oid **parameterTypes,
 						  const char ***parameterValues, bool
-						  isLocalExecution)
+						  useOriginalCustomTypeOids)
 {
 	int parameterIndex = 0;
 	int parameterCount = paramListInfo->numParams;
@@ -1819,7 +1799,7 @@ ExtractParametersInternal(ParamListInfo paramListInfo,
 		 * the master and worker nodes. Therefore, the worker nodes can
 		 * infer the correct oid.
 		 */
-		if (parameterData->ptype >= FirstNormalObjectId && !isLocalExecution)
+		if (parameterData->ptype >= FirstNormalObjectId && !useOriginalCustomTypeOids)
 		{
 			(*parameterTypes)[parameterIndex] = 0;
 		}
