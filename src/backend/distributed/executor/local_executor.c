@@ -107,9 +107,9 @@ static uint64 ExecuteLocalTaskPlan(CitusScanState *scanState, PlannedStmt *taskP
 static bool TaskAccessesLocalNode(Task *task);
 static void LogLocalCommand(const char *command);
 
-static void
-ExtractParametersForLocalExecution(ParamListInfo paramListInfo, Oid **parameterTypes,
-								   const char ***parameterValues);
+static void ExtractParametersForLocalExecution(ParamListInfo paramListInfo,
+											   Oid **parameterTypes,
+											   const char ***parameterValues);
 
 
 /*
@@ -176,6 +176,7 @@ ExecuteLocalTaskList(CitusScanState *scanState, List *taskList)
 	return totalRowsProcessed;
 }
 
+
 /*
  * ExtractParametersForLocalExecution extracts parameter types and values from
  * the given ParamListInfo structure, and fills parameter type and value arrays.
@@ -186,7 +187,7 @@ ExtractParametersForLocalExecution(ParamListInfo paramListInfo, Oid **parameterT
 								   const char ***parameterValues)
 {
 	ExtractParametersFromParamList(paramListInfo, parameterTypes,
-							  parameterValues, true);
+								   parameterValues, true);
 }
 
 

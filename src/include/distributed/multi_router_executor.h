@@ -66,8 +66,8 @@ extern void ExtractParametersForRemoteExecution(ParamListInfo paramListInfo,
 												Oid **parameterTypes,
 												const char ***parameterValues);
 extern void ExtractParametersFromParamList(ParamListInfo paramListInfo,
-									  Oid **parameterTypes,
-									  const char ***parameterValues, bool
-									  useOriginalCustomTypeOids);
+										   Oid **parameterTypes,
+										   const char ***parameterValues, bool
+										   useOriginalCustomTypeOids);
 
 #endif /* MULTI_ROUTER_EXECUTOR_H_ */

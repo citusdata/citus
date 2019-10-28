@@ -1767,8 +1767,9 @@ ExtractParametersForRemoteExecution(ParamListInfo paramListInfo, Oid **parameter
 									const char ***parameterValues)
 {
 	ExtractParametersFromParamList(paramListInfo, parameterTypes,
-							  parameterValues, false);
+								   parameterValues, false);
 }
+
 
 /*
  * ExtractParametersFromParamList extracts parameter types and values from
@@ -1777,9 +1778,9 @@ ExtractParametersForRemoteExecution(ParamListInfo paramListInfo, Oid **parameter
  */
 void
 ExtractParametersFromParamList(ParamListInfo paramListInfo,
-						  Oid **parameterTypes,
-						  const char ***parameterValues, bool
-						  useOriginalCustomTypeOids)
+							   Oid **parameterTypes,
+							   const char ***parameterValues, bool
+							   useOriginalCustomTypeOids)
 {
 	int parameterIndex = 0;
 	int parameterCount = paramListInfo->numParams;
