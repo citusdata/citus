@@ -15,8 +15,8 @@
 # ---
 test: multi_extension
 test: multi_cluster_management
-test: multi_test_helpers
 test: multi_table_ddl
+test: multi_test_helpers
 
 # ----------
 # The following distributed tests depend on creating a partitioned table and
