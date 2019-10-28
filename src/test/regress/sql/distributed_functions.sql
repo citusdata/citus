@@ -55,6 +55,10 @@ CREATE FUNCTION dup(int) RETURNS dup_result
     AS $$ SELECT $1, CAST($1 AS text) || ' is text' $$
     LANGUAGE SQL;
 
+CREATE FUNCTION increment(int2) RETURNS int
+    AS $$ SELECT $1 + 1$$
+    LANGUAGE SQL;
+
 CREATE FUNCTION add_with_param_names(val1 integer, val2 integer) RETURNS integer
     AS 'select $1 + $2;'
     LANGUAGE SQL
@@ -77,9 +81,17 @@ CREATE FUNCTION add_mixed_param_names(integer, val1 integer) RETURNS integer
 -- allow alter statements to be propagated and keep the functions in sync across machines
 SET citus.enable_ddl_propagation TO on;
 
--- functions are distributed by int arguments, when run in isolation it is not guaranteed a table actually exists.
-CREATE TABLE colocation_table(id int);
-SELECT create_distributed_table('colocation_table','id');
+-- use an unusual type to force a new colocation group
+CREATE TABLE statement_table(id int2);
+SET citus.replication_model TO 'statement';
+SET citus.shard_replication_factor TO 1;
+SELECT create_distributed_table('statement_table','id');
+
+-- create a table uses streaming-based replication (can be synced)
+CREATE TABLE streaming_table(id int);
+SET citus.replication_model TO 'streaming';
+SET citus.shard_replication_factor TO 1;
+SELECT create_distributed_table('streaming_table','id');
 
 -- make sure that none of the active and primary nodes hasmetadata
 -- at the start of the test
@@ -98,10 +110,20 @@ SELECT * FROM run_command_on_workers('SELECT function_tests.add_mixed_param_name
 -- since the function doesn't have a parameter
 select bool_or(hasmetadata) from pg_dist_node WHERE isactive AND  noderole = 'primary';
 
-SELECT create_distributed_function('dup(int)', '$1');
+-- try to co-locate with a table that uses statement-based replication
+SELECT create_distributed_function('increment(int2)', '$1');
+SELECT create_distributed_function('increment(int2)', '$1', colocate_with := 'statement_table');
+BEGIN;
+SET LOCAL citus.replication_model TO 'statement';
+DROP TABLE statement_table;
+SELECT create_distributed_function('increment(int2)', '$1');
+END;
+
+-- try to co-locate with a table that uses streaming replication
+SELECT create_distributed_function('dup(int)', '$1', colocate_with := 'streaming_table');
 SELECT * FROM run_command_on_workers('SELECT function_tests.dup(42);') ORDER BY 1,2;
 
-SELECT create_distributed_function('add(int,int)', '$1');
+SELECT create_distributed_function('add(int,int)', '$1', colocate_with := 'streaming_table');
 SELECT * FROM run_command_on_workers('SELECT function_tests.add(2,3);') ORDER BY 1,2;
 SELECT public.verify_function_is_same_on_workers('function_tests.add(int,int)');
 
@@ -318,17 +340,17 @@ DROP SCHEMA function_tests2 CASCADE;
 SET client_min_messages TO error; -- suppress cascading objects dropping
 UPDATE pg_dist_local_group SET groupid = 0;
 SELECT worker_drop_distributed_table(logicalrelid::text) FROM pg_dist_partition WHERE logicalrelid::text ILIKE '%replicated_table_func_test%';
-TRUNCATE pg_dist_node;
 DROP SCHEMA function_tests CASCADE;
 DROP SCHEMA function_tests2 CASCADE;
+TRUNCATE pg_dist_node;
 
 \c - - - :worker_2_port
 SET client_min_messages TO error; -- suppress cascading objects dropping
 UPDATE pg_dist_local_group SET groupid = 0;
 SELECT worker_drop_distributed_table(logicalrelid::text) FROM pg_dist_partition WHERE logicalrelid::text ILIKE '%replicated_table_func_test%';
-TRUNCATE pg_dist_node;
 DROP SCHEMA function_tests CASCADE;
 DROP SCHEMA function_tests2 CASCADE;
+TRUNCATE pg_dist_node;
 
 \c - - - :master_port
 
