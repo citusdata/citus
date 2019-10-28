@@ -319,6 +319,9 @@ ActiveReadableNodeCount(void)
 }
 
 
+/*
+ * NodeIsCoordinator returns true if the given node represents the coordinator.
+ */
 static bool
 NodeIsCoordinator(WorkerNode *node)
 {
@@ -384,6 +387,11 @@ ActivePrimaryNodeList(LOCKMODE lockMode)
 }
 
 
+/*
+ * ActiveReferenceTablePlacementNodeList returns the set of nodes that should
+ * have reference table placements. This includes all primaries, including the
+ * coordinator if known.
+ */
 List *
 ActiveReferenceTablePlacementNodeList(LOCKMODE lockMode)
 {

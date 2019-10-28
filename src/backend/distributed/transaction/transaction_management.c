@@ -166,11 +166,6 @@ BeginCoordinatedTransaction(void)
 		ereport(ERROR, (errmsg("starting transaction in wrong state")));
 	}
 
-	if (LocalExecutionHappened)
-	{
-		ereport(WARNING, (errmsg("Local transaction has happend?!!")));
-	}
-
 	CurrentCoordinatedTransactionState = COORD_TRANS_STARTED;
 
 	AssignDistributedTransactionId();

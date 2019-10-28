@@ -1,3 +1,4 @@
+-- Update the default groupId to -1
 DROP FUNCTION master_add_inactive_node(text, integer, integer, noderole, name);
 CREATE FUNCTION master_add_inactive_node(nodename text,
                                          nodeport integer,
