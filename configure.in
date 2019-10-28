@@ -162,9 +162,7 @@ CITUSAC_PROG_CC_CFLAGS_OPT([-Wno-unused-parameter])
 CITUSAC_PROG_CC_CFLAGS_OPT([-Wno-sign-compare])
 CITUSAC_PROG_CC_CFLAGS_OPT([-Wno-missing-field-initializers])
 CITUSAC_PROG_CC_CFLAGS_OPT([-Wno-clobbered])
-if test x"$GCC" = x"no" ; then
-  CITUSAC_PROG_CC_CFLAGS_OPT([-Wno-gnu-variable-sized-type-not-at-end])
-fi
+CITUSAC_PROG_CC_CFLAGS_OPT([-Wno-gnu-variable-sized-type-not-at-end])
 # And add a few extra warnings
 CITUSAC_PROG_CC_CFLAGS_OPT([-Wendif-labels])
 CITUSAC_PROG_CC_CFLAGS_OPT([-Wmissing-format-attribute])

@@ -3907,8 +3907,7 @@ if test x"$citusac_cv_prog_cc_cflags__Wno_clobbered" = x"yes"; then
   CITUS_CFLAGS="$CITUS_CFLAGS -Wno-clobbered"
 fi
 
-if test x"$GCC" = x"no" ; then
-  { $as_echo "$as_me:${as_lineno-$LINENO}: checking whether $CC supports -Wno-gnu-variable-sized-type-not-at-end" >&5
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking whether $CC supports -Wno-gnu-variable-sized-type-not-at-end" >&5
 $as_echo_n "checking whether $CC supports -Wno-gnu-variable-sized-type-not-at-end... " >&6; }
 if ${citusac_cv_prog_cc_cflags__Wno_gnu_variable_sized_type_not_at_end+:} false; then :
   $as_echo_n "(cached) " >&6
@@ -3947,7 +3946,6 @@ if test x"$citusac_cv_prog_cc_cflags__Wno_gnu_variable_sized_type_not_at_end" = 
   CITUS_CFLAGS="$CITUS_CFLAGS -Wno-gnu-variable-sized-type-not-at-end"
 fi
 
-fi
 # And add a few extra warnings
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking whether $CC supports -Wendif-labels" >&5
 $as_echo_n "checking whether $CC supports -Wendif-labels... " >&6; }
