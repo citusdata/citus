@@ -753,7 +753,7 @@ worker_append_table_to_shard(PG_FUNCTION_ARGS)
 	 * We lock on the shard table, but do not unlock. When the transaction ends,
 	 * this lock will automatically be released. This ensures appends to a shard
 	 * happen in a serial manner.
-	 * 
+	 *
 	 * We don't acquire lock on the shard id to avoid deadlock when doing
 	 * upgrade_to_reference_table(). upgrade_to_reference_table() acquires
 	 * a lock on shard resource on the coordinator, and opens connections

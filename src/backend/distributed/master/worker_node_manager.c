@@ -402,7 +402,8 @@ ActivePrimaryShouldHaveShardsNodeList(LOCKMODE lockMode)
 {
 	bool excludeCoordinator = true;
 	EnsureModificationsCanRun();
-	return FilterActiveNodeListFunc(lockMode, WorkerNodeIsPrimaryShouldHaveShardsNode, excludeCoordinator);
+	return FilterActiveNodeListFunc(lockMode, WorkerNodeIsPrimaryShouldHaveShardsNode,
+									excludeCoordinator);
 }
 
 
