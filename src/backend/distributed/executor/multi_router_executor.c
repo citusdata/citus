@@ -117,7 +117,6 @@ static bool StoreQueryResult(CitusScanState *scanState, MultiConnection *connect
 static bool ConsumeQueryResult(MultiConnection *connection, bool
 							   alwaysThrowErrorOnFailure, int64 *rows);
 
-
 /*
  * AcquireMetadataLocks acquires metadata locks on each of the anchor
  * shards in the task list to prevent a shard being modified while it
@@ -1725,8 +1724,8 @@ SendQueryInSingleRowMode(MultiConnection *connection, char *query,
 		/* force evaluation of bound params */
 		paramListInfo = copyParamList(paramListInfo);
 
-		ExtractParametersFromParamListInfo(paramListInfo, &parameterTypes,
-										   &parameterValues);
+		ExtractParametersForRemoteExecution(paramListInfo, &parameterTypes,
+											&parameterValues);
 
 		querySent = SendRemoteCommandParams(connection, query, parameterCount,
 											parameterTypes, parameterValues);
@@ -1758,12 +1757,30 @@ SendQueryInSingleRowMode(MultiConnection *connection, char *query,
 
 
 /*
- * ExtractParametersFromParamListInfo extracts parameter types and values from
+ * ExtractParametersForRemoteExecution extracts parameter types and values from
  * the given ParamListInfo structure, and fills parameter type and value arrays.
+ * It changes oid of custom types to InvalidOid so that they are the same in workers
+ * and coordinators.
  */
 void
-ExtractParametersFromParamListInfo(ParamListInfo paramListInfo, Oid **parameterTypes,
-								   const char ***parameterValues)
+ExtractParametersForRemoteExecution(ParamListInfo paramListInfo, Oid **parameterTypes,
+									const char ***parameterValues)
+{
+	ExtractParametersFromParamList(paramListInfo, parameterTypes,
+								   parameterValues, false);
+}
+
+
+/*
+ * ExtractParametersFromParamList extracts parameter types and values from
+ * the given ParamListInfo structure, and fills parameter type and value arrays.
+ * If useOriginalCustomTypeOids is true, it uses the original oids for custom types.
+ */
+void
+ExtractParametersFromParamList(ParamListInfo paramListInfo,
+							   Oid **parameterTypes,
+							   const char ***parameterValues, bool
+							   useOriginalCustomTypeOids)
 {
 	int parameterIndex = 0;
 	int parameterCount = paramListInfo->numParams;
@@ -1783,7 +1800,7 @@ ExtractParametersFromParamListInfo(ParamListInfo paramListInfo, Oid **parameterT
 		 * the master and worker nodes. Therefore, the worker nodes can
 		 * infer the correct oid.
 		 */
-		if (parameterData->ptype >= FirstNormalObjectId)
+		if (parameterData->ptype >= FirstNormalObjectId && !useOriginalCustomTypeOids)
 		{
 			(*parameterTypes)[parameterIndex] = 0;
 		}
