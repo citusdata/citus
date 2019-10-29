@@ -247,7 +247,6 @@ test: multi_foreign_key multi_foreign_key_relation_graph
 # multi_upgrade_reference_table tests for upgrade_reference_table UDF
 # multi_replicate_reference_table tests replicating reference tables to new nodes after we add new nodes
 # multi_remove_node_reference_table tests metadata changes after master_remove_node
-# replicate_reference_tables_to_coordinator tests replicating reference tables to coordinator
 # ----------
 test: multi_upgrade_reference_table
 test: multi_replicate_reference_table
@@ -262,6 +261,7 @@ test: multi_upgrade_reference_table
 test: multi_replicate_reference_table
 test: multi_reference_table
 test: foreign_key_to_reference_table
+test: replicate_reference_tables_to_coordinator
 test: remove_coordinator
 
 # ----------

@@ -17,31 +17,6 @@ CREATE TABLE squares(a int, b int);
 SELECT create_reference_table('squares');
 INSERT INTO squares SELECT i, i * i FROM generate_series(1, 10) i;
 
-SELECT groupid FROM pg_dist_placement 
-WHERE shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid='squares'::regclass::oid)
-ORDER BY groupid;
-
--- should be executed on a worker
-SELECT count(*) FROM squares;
-
--- The colocation group for reference tables should have replication factor 2
-SELECT replicationfactor = 2 FROM pg_dist_colocation WHERE distributioncolumntype=0;
-
-SELECT master_add_node('localhost', :master_port, groupid => 0) AS master_nodeid \gset
-
--- adding the same node again should return the existing nodeid
-SELECT master_add_node('localhost', :master_port, groupid => 0) = :master_nodeid;
-
--- adding another node with groupid=0 should error out
-SELECT master_add_node('localhost', 12345, groupid => 0) = :master_nodeid;
-
--- The colocation group for reference tables should have replication factor 3
-SELECT replicationfactor = 3 FROM pg_dist_colocation WHERE distributioncolumntype=0;
-
-SELECT groupid FROM pg_dist_placement 
-WHERE shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid='squares'::regclass::oid)
-ORDER BY groupid;
-
 -- should be executed locally
 SELECT count(*) FROM squares;
 
@@ -63,12 +38,19 @@ INSERT INTO numbers SELECT a FROM squares WHERE a < 3;
 SELECT * FROM numbers ORDER BY a;
 ROLLBACK;
 
--- removing coordinator from pg_dist_node should update pg_dist_colocation
-SELECT master_remove_node('localhost', :master_port);
-SELECT replicationfactor = 2 FROM pg_dist_colocation WHERE distributioncolumntype=0;
+-- Interact with a local table
+CREATE TABLE local_table(a int);
+INSERT INTO local_table VALUES (30), (31);
+
+EXPLAIN (costs off) SELECT * FROM numbers, local_table;
+BEGIN;
+INSERT INTO numbers SELECT * FROM local_table;
+SELECT * FROM numbers, local_table WHERE numbers.a != local_table.a;
+ROLLBACK;
 
 -- clean-up
 SET client_min_messages TO ERROR;
+DROP TABLE squares, numbers, local_table;
 DROP SCHEMA replicate_ref_to_coordinator CASCADE;
 SET search_path TO DEFAULT;
 RESET client_min_messages;

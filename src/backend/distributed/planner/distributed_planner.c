@@ -18,6 +18,7 @@
 #include "catalog/pg_type.h"
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/citus_nodes.h"
+#include "distributed/deparse_shard_query.h"
 #include "distributed/function_call_delegation.h"
 #include "distributed/insert_select_planner.h"
 #include "distributed/intermediate_results.h"
@@ -33,6 +34,7 @@
 #include "distributed/query_utils.h"
 #include "distributed/recursive_planning.h"
 #include "distributed/shardinterval_utils.h"
+#include "distributed/version_compat.h"
 #include "distributed/worker_shard_visibility.h"
 #include "executor/executor.h"
 #include "nodes/makefuncs.h"
@@ -70,7 +72,8 @@ static DistributedPlan * CreateDistributedPlan(uint64 planId, Query *originalQue
 											   Query *query, ParamListInfo boundParams,
 											   bool hasUnresolvedParams,
 											   PlannerRestrictionContext *
-											   plannerRestrictionContext);
+											   plannerRestrictionContext,
+											   PlannedStmt **localPlan);
 static DeferredErrorMessage * DeferErrorIfPartitionTableNotSingleReplicated(Oid
 																			relationId);
 
@@ -97,7 +100,13 @@ static void PopPlannerRestrictionContext(void);
 static void ResetPlannerRestrictionContext(
 	PlannerRestrictionContext *plannerRestrictionContext);
 static bool HasUnresolvedExternParamsWalker(Node *expression, ParamListInfo boundParams);
-
+static bool IsLocalReferenceTableSelect(PlannerRestrictionContext *restrictionContext,
+										Query *parse);
+static PlannedStmt * PlanLocalReferenceTableSelect(
+	PlannerRestrictionContext *restrictionContext,
+	Query *parse, int cursorOptions,
+	ParamListInfo boundParams);
+static bool UpdateReferenceTableWithShard(Node *node, void *context);
 
 /* Distributed planner hook */
 PlannedStmt *
@@ -240,6 +249,113 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 	}
 
 	return result;
+}
+
+
+/*
+ * LocalReferenceTableSelect returns true if the query is a SELECT query that
+ * involves reference tables and can be executed locally.
+ */
+static bool
+IsLocalReferenceTableSelect(PlannerRestrictionContext *restrictionContext, Query *parse)
+{
+	bool currentNodeKnown = false;
+	bool allReferenceTables =
+		restrictionContext->relationRestrictionContext->allReferenceTables;
+
+	PrimaryNodeForGroup(GetLocalGroupId(), &currentNodeKnown);
+
+	/*
+	 * If there is an active primary entry for the current node in pg_dist_node,
+	 * then reference tables are also replicated to it.
+	 */
+
+	return allReferenceTables && currentNodeKnown && parse->commandType == CMD_SELECT;
+}
+
+
+/*
+ * PlanLocalReferenceTableSelect returns a plan for the given query that can be executed
+ * locally, assuming it satisfies the conditions in IsLocalReferenceTableSelect().
+ */
+static PlannedStmt *
+PlanLocalReferenceTableSelect(PlannerRestrictionContext *restrictionContext,
+							  Query *parse, int cursorOptions, ParamListInfo boundParams)
+{
+	PlannedStmt *plan = NULL;
+	Query *updatedQuery = copyObject(parse);
+
+	Assert(IsLocalReferenceTableSelect(restrictionContext, parse));
+
+	UpdateReferenceTableWithShard((Node *) updatedQuery, NULL);
+	plan = standard_planner(updatedQuery, cursorOptions, boundParams);
+
+	return plan;
+}
+
+
+/*
+ * UpdateReferenceTableWithShard recursively replaces the reference table names
+ * in the given query with the shard table names.
+ */
+static bool
+UpdateReferenceTableWithShard(Node *node, void *context)
+{
+	RangeTblEntry *newRte = NULL;
+	uint64 shardId = INVALID_SHARD_ID;
+	Oid relationId = InvalidOid;
+	Oid schemaId = InvalidOid;
+	char *relationName = NULL;
+	DistTableCacheEntry *cacheEntry = NULL;
+	ShardInterval *shardInterval = NULL;
+
+	if (node == NULL)
+	{
+		return false;
+	}
+
+	/* want to look at all RTEs, even in subqueries, CTEs and such */
+	if (IsA(node, Query))
+	{
+		return query_tree_walker((Query *) node, UpdateReferenceTableWithShard,
+								 NULL, QTW_EXAMINE_RTES_BEFORE);
+	}
+
+	if (!IsA(node, RangeTblEntry))
+	{
+		return expression_tree_walker(node, UpdateReferenceTableWithShard,
+									  NULL);
+	}
+
+	newRte = (RangeTblEntry *) node;
+
+	if (newRte->rtekind != RTE_RELATION)
+	{
+		return false;
+	}
+
+	relationId = newRte->relid;
+	if (!IsDistributedTable(relationId))
+	{
+		return false;
+	}
+
+	cacheEntry = DistributedTableCacheEntry(relationId);
+	if (cacheEntry->partitionMethod != DISTRIBUTE_BY_NONE)
+	{
+		return false;
+	}
+
+	shardInterval = cacheEntry->sortedShardIntervalArray[0];
+	shardId = shardInterval->shardId;
+
+	relationName = get_rel_name(relationId);
+	AppendShardIdToName(&relationName, shardId);
+
+	schemaId = get_rel_namespace(relationId);
+	newRte->relid = get_relname_relid(relationName, schemaId);
+
+	return false;
 }
 
 
@@ -515,7 +631,12 @@ CreateDistributedPlannedStmt(uint64 planId, PlannedStmt *localPlan, Query *origi
 
 	distributedPlan =
 		CreateDistributedPlan(planId, originalQuery, query, boundParams,
-							  hasUnresolvedParams, plannerRestrictionContext);
+							  hasUnresolvedParams, plannerRestrictionContext,
+							  &resultPlan);
+	if (resultPlan != NULL)
+	{
+		return resultPlan;
+	}
 
 	/*
 	 * If no plan was generated, prepare a generic error to be emitted.
@@ -594,12 +715,14 @@ CreateDistributedPlannedStmt(uint64 planId, PlannedStmt *localPlan, Query *origi
 static DistributedPlan *
 CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamListInfo
 					  boundParams, bool hasUnresolvedParams,
-					  PlannerRestrictionContext *plannerRestrictionContext)
+					  PlannerRestrictionContext *plannerRestrictionContext,
+					  PlannedStmt **localPlan)
 {
 	DistributedPlan *distributedPlan = NULL;
 	MultiTreeRoot *logicalPlan = NULL;
 	List *subPlanList = NIL;
 	bool hasCtes = originalQuery->cteList != NIL;
+	Query *unmodifiedOriginalQuery = copyObject(originalQuery);
 
 	if (IsModifyCommand(originalQuery))
 	{
@@ -746,7 +869,7 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 
 		/* recurse into CreateDistributedPlan with subqueries/CTEs replaced */
 		distributedPlan = CreateDistributedPlan(planId, originalQuery, query, NULL, false,
-												plannerRestrictionContext);
+												plannerRestrictionContext, NULL);
 		distributedPlan->subPlanList = subPlanList;
 
 		return distributedPlan;
@@ -760,6 +883,15 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 	if (IsModifyCommand(originalQuery))
 	{
 		return distributedPlan;
+	}
+
+	if (localPlan != NULL &&
+		IsLocalReferenceTableSelect(plannerRestrictionContext, query))
+	{
+		*localPlan = PlanLocalReferenceTableSelect(plannerRestrictionContext,
+												   unmodifiedOriginalQuery,
+												   0, boundParams);
+		return NULL;
 	}
 
 	/*
@@ -1388,7 +1520,7 @@ multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo, Index
 	relationRestrictionContext->hasLocalRelation |= localTable;
 
 	/*
-	 * We're also keeping track of whether all participant
+	 * We're also keeping track of whether all participant distributed
 	 * tables are reference tables.
 	 */
 	if (distributedTable)

@@ -18,66 +18,6 @@ SELECT create_reference_table('squares');
 (1 row)
 
 INSERT INTO squares SELECT i, i * i FROM generate_series(1, 10) i;
-SELECT groupid FROM pg_dist_placement 
-WHERE shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid='squares'::regclass::oid)
-ORDER BY groupid;
- groupid 
----------
-      14
-      16
-(2 rows)
-
--- should be executed on a worker
-SELECT count(*) FROM squares;
- count 
--------
-    10
-(1 row)
-
--- The colocation group for reference tables should have replication factor 2
-SELECT replicationfactor = 2 FROM pg_dist_colocation WHERE distributioncolumntype=0;
- ?column? 
-----------
- t
-(1 row)
-
-SELECT master_add_node('localhost', :master_port, groupid => 0) AS master_nodeid \gset
-NOTICE:  Replicating reference table "orders_reference" to the node localhost:57636
-NOTICE:  Replicating reference table "customer" to the node localhost:57636
-NOTICE:  Replicating reference table "nation" to the node localhost:57636
-NOTICE:  Replicating reference table "part" to the node localhost:57636
-NOTICE:  Replicating reference table "supplier" to the node localhost:57636
-NOTICE:  Replicating reference table "users_ref_test_table" to the node localhost:57636
-NOTICE:  Replicating reference table "events_reference_table" to the node localhost:57636
-NOTICE:  Replicating reference table "users_reference_table" to the node localhost:57636
-NOTICE:  Replicating reference table "squares" to the node localhost:57636
--- adding the same node again should return the existing nodeid
-SELECT master_add_node('localhost', :master_port, groupid => 0) = :master_nodeid;
- ?column? 
-----------
- t
-(1 row)
-
--- adding another node with groupid=0 should error out
-SELECT master_add_node('localhost', 12345, groupid => 0) = :master_nodeid;
-ERROR:  group 0 already has a primary node
--- The colocation group for reference tables should have replication factor 3
-SELECT replicationfactor = 3 FROM pg_dist_colocation WHERE distributioncolumntype=0;
- ?column? 
-----------
- t
-(1 row)
-
-SELECT groupid FROM pg_dist_placement 
-WHERE shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid='squares'::regclass::oid)
-ORDER BY groupid;
- groupid 
----------
-       0
-      14
-      16
-(3 rows)
-
 -- should be executed locally
 SELECT count(*) FROM squares;
 LOG:  executing the command locally: SELECT count(*) AS count FROM replicate_ref_to_coordinator.squares_8000000 squares
@@ -95,6 +35,7 @@ SELECT create_reference_table('numbers');
 (1 row)
 
 INSERT INTO numbers VALUES (20), (21);
+LOG:  executing the command locally: INSERT INTO replicate_ref_to_coordinator.numbers_8000001 AS citus_table_alias (a) VALUES (20), (21)
 -- INSERT ... SELECT between reference tables
 BEGIN;
 EXPLAIN INSERT INTO squares SELECT a, a*a FROM numbers;
@@ -104,16 +45,18 @@ EXPLAIN INSERT INTO squares SELECT a, a*a FROM numbers;
    Task Count: 1
    Tasks Shown: All
    ->  Task
-         Node: host=localhost port=57637 dbname=regression
+         Node: host=localhost port=57636 dbname=regression
          ->  Insert on squares_8000000 citus_table_alias  (cost=0.00..41.88 rows=2550 width=8)
                ->  Seq Scan on numbers_8000001 numbers  (cost=0.00..41.88 rows=2550 width=8)
 (7 rows)
 
 INSERT INTO squares SELECT a, a*a FROM numbers;
 SELECT * FROM squares WHERE a >= 20 ORDER BY a;
- a | b 
----+---
-(0 rows)
+ a  |  b  
+----+-----
+ 20 | 400
+ 21 | 441
+(2 rows)
 
 ROLLBACK;
 BEGIN;
@@ -124,7 +67,7 @@ EXPLAIN INSERT INTO numbers SELECT a FROM squares WHERE a < 3;
    Task Count: 1
    Tasks Shown: All
    ->  Task
-         Node: host=localhost port=57637 dbname=regression
+         Node: host=localhost port=57636 dbname=regression
          ->  Insert on numbers_8000001 citus_table_alias  (cost=0.00..38.25 rows=753 width=4)
                ->  Seq Scan on squares_8000000 squares  (cost=0.00..38.25 rows=753 width=4)
                      Filter: (a < 3)
@@ -132,26 +75,42 @@ EXPLAIN INSERT INTO numbers SELECT a FROM squares WHERE a < 3;
 
 INSERT INTO numbers SELECT a FROM squares WHERE a < 3;
 SELECT * FROM numbers ORDER BY a;
- a 
----
-(0 rows)
+ a  
+----
+  1
+  2
+ 20
+ 21
+(4 rows)
 
 ROLLBACK;
--- removing coordinator from pg_dist_node should update pg_dist_colocation
-SELECT master_remove_node('localhost', :master_port);
- master_remove_node 
---------------------
- 
-(1 row)
+-- Interact with a local table
+CREATE TABLE local_table(a int);
+INSERT INTO local_table VALUES (30), (31);
+EXPLAIN (costs off) SELECT * FROM numbers, local_table;
+             QUERY PLAN              
+-------------------------------------
+ Nested Loop
+   ->  Seq Scan on numbers_8000001
+   ->  Materialize
+         ->  Seq Scan on local_table
+(4 rows)
 
-SELECT replicationfactor = 2 FROM pg_dist_colocation WHERE distributioncolumntype=0;
- ?column? 
-----------
- t
-(1 row)
+BEGIN;
+INSERT INTO numbers SELECT * FROM local_table;
+SELECT * FROM numbers, local_table WHERE numbers.a != local_table.a;
+ a  | a  
+----+----
+ 20 | 30
+ 20 | 31
+ 21 | 30
+ 21 | 31
+(4 rows)
 
+ROLLBACK;
 -- clean-up
 SET client_min_messages TO ERROR;
+DROP TABLE squares, numbers, local_table;
 DROP SCHEMA replicate_ref_to_coordinator CASCADE;
 SET search_path TO DEFAULT;
 RESET client_min_messages;
