@@ -91,6 +91,7 @@ step "s2-create-table"
 {
 	CREATE TABLE t1 (a int, b int);
     -- session needs to have replication factor set to 1, can't do in setup
+	SET citus.replication_model TO 'streaming';
 	SET citus.shard_replication_factor TO 1;
 	SELECT create_distributed_table('t1', 'a');
 }
@@ -104,6 +105,7 @@ step "s2-create-table-with-type"
 {
 	CREATE TABLE t1 (a int, b tt1);
     -- session needs to have replication factor set to 1, can't do in setup
+	SET citus.replication_model TO 'streaming';
 	SET citus.shard_replication_factor TO 1;
 	SELECT create_distributed_table('t1', 'a');
 }

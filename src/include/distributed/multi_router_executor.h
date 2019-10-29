@@ -62,8 +62,12 @@ extern bool TaskListRequires2PC(List *taskList);
 extern bool ReadOnlyTask(TaskType taskType);
 extern List * BuildPlacementSelectList(int32 groupId, List *relationShardList);
 extern List * BuildPlacementDDLList(int32 groupId, List *relationShardList);
-extern void ExtractParametersFromParamListInfo(ParamListInfo paramListInfo,
-											   Oid **parameterTypes,
-											   const char ***parameterValues);
+extern void ExtractParametersForRemoteExecution(ParamListInfo paramListInfo,
+												Oid **parameterTypes,
+												const char ***parameterValues);
+extern void ExtractParametersFromParamList(ParamListInfo paramListInfo,
+										   Oid **parameterTypes,
+										   const char ***parameterValues, bool
+										   useOriginalCustomTypeOids);
 
 #endif /* MULTI_ROUTER_EXECUTOR_H_ */
