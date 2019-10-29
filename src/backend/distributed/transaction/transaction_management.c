@@ -166,6 +166,12 @@ BeginCoordinatedTransaction(void)
 		ereport(ERROR, (errmsg("starting transaction in wrong state")));
 	}
 
+	if (LocalPlanningHasHappened)
+	{
+		ereport(ERROR, (errmsg("cannot start a distributed transaction after "
+							   "joining reference tables and local tables.")));
+	}
+
 	CurrentCoordinatedTransactionState = COORD_TRANS_STARTED;
 
 	AssignDistributedTransactionId();
@@ -228,6 +234,7 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			CurrentCoordinatedTransactionState = COORD_TRANS_NONE;
 			XactModificationLevel = XACT_MODIFICATION_NONE;
 			LocalExecutionHappened = false;
+			LocalPlanningHasHappened = false;
 			dlist_init(&InProgressTransactions);
 			activeSetStmts = NULL;
 			CoordinatedTransactionUses2PC = false;
@@ -282,6 +289,7 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			CurrentCoordinatedTransactionState = COORD_TRANS_NONE;
 			XactModificationLevel = XACT_MODIFICATION_NONE;
 			LocalExecutionHappened = false;
+			LocalPlanningHasHappened = false;
 			dlist_init(&InProgressTransactions);
 			activeSetStmts = NULL;
 			CoordinatedTransactionUses2PC = false;

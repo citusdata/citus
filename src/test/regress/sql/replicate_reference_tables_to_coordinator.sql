@@ -48,6 +48,11 @@ INSERT INTO numbers SELECT * FROM local_table;
 SELECT * FROM numbers, local_table WHERE numbers.a != local_table.a;
 ROLLBACK;
 
+BEGIN;
+SELECT * FROM numbers, local_table WHERE numbers.a != local_table.a;
+INSERT INTO numbers SELECT * FROM local_table;
+ROLLBACK;
+
 -- Make sure we hide shard tables ...
  SELECT citus_table_is_visible('numbers_8000001'::regclass::oid);
 

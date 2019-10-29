@@ -29,6 +29,8 @@
 
 #define CURSOR_OPT_FORCE_DISTRIBUTED 0x080000
 
+extern bool LocalPlanningHasHappened;
+
 typedef struct RelationRestrictionContext
 {
 	bool hasDistributedRelation;

@@ -34,6 +34,7 @@
 #include "distributed/query_utils.h"
 #include "distributed/recursive_planning.h"
 #include "distributed/shardinterval_utils.h"
+#include "distributed/transaction_management.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_shard_visibility.h"
 #include "executor/executor.h"
@@ -59,6 +60,7 @@
 static List *plannerRestrictionContextList = NIL;
 int MultiTaskQueryLogLevel = MULTI_TASK_QUERY_INFO_OFF; /* multi-task query log level */
 static uint64 NextPlanId = 1;
+bool LocalPlanningHasHappened = false;
 
 
 static bool ListContainsDistributedTableRTE(List *rangeTableList);
@@ -885,9 +887,20 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 		return distributedPlan;
 	}
 
+	/*
+	 * We only try this after trying router planner so we maintain better
+	 * transactional support.
+	 */
 	if (localPlan != NULL &&
 		IsLocalReferenceTableSelect(plannerRestrictionContext, query))
 	{
+		if (InCoordinatedTransaction())
+		{
+			ereport(ERROR, (errmsg("cannot join reference tables with local tables "
+								   "in a coordinated transaction")));
+		}
+
+		LocalPlanningHasHappened = true;
 		*localPlan = PlanLocalReferenceTableSelect(plannerRestrictionContext,
 												   unmodifiedOriginalQuery,
 												   0, boundParams);

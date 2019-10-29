@@ -99,6 +99,10 @@ EXPLAIN (costs off) SELECT * FROM numbers, local_table;
 BEGIN;
 INSERT INTO numbers SELECT * FROM local_table;
 SELECT * FROM numbers, local_table WHERE numbers.a != local_table.a;
+ERROR:  cannot join reference tables with local tablesin a coordinated transaction
+ROLLBACK;
+BEGIN;
+SELECT * FROM numbers, local_table WHERE numbers.a != local_table.a;
  a  | a  
 ----+----
  20 | 30
@@ -107,6 +111,8 @@ SELECT * FROM numbers, local_table WHERE numbers.a != local_table.a;
  21 | 31
 (4 rows)
 
+INSERT INTO numbers SELECT * FROM local_table;
+ERROR:  cannot start a distributed transaction after joining reference tables and local tables.
 ROLLBACK;
 -- Make sure we hide shard tables ...
  SELECT citus_table_is_visible('numbers_8000001'::regclass::oid);
