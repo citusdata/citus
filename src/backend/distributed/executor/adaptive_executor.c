@@ -753,21 +753,7 @@ AdjustDistributedExecutionAfterLocalExecution(DistributedExecution *execution)
 void
 ExecuteUtilityTaskListWithoutResults(List *taskList)
 {
-	if (TaskExecutorType == MULTI_EXECUTOR_ADAPTIVE)
-	{
-		ExecuteTaskList(ROW_MODIFY_NONE, taskList, MaxAdaptiveExecutorPoolSize);
-	}
-	else
-	{
-		if (MultiShardConnectionType == SEQUENTIAL_CONNECTION)
-		{
-			ExecuteModifyTasksSequentiallyWithoutResults(taskList, ROW_MODIFY_NONE);
-		}
-		else
-		{
-			ExecuteModifyTasksWithoutResults(taskList);
-		}
-	}
+	ExecuteTaskList(ROW_MODIFY_NONE, taskList, MaxAdaptiveExecutorPoolSize);
 }
 
 

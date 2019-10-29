@@ -34,6 +34,7 @@
 #include "distributed/multi_executor.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_server_executor.h"
+#include "distributed/multi_resowner.h"
 #include "distributed/pg_dist_partition.h"
 #include "distributed/resource_lock.h"
 #include "distributed/subplan_execution.h"
@@ -3032,4 +3033,20 @@ TaskTrackerExecScan(CustomScanState *node)
 	resultSlot = ReturnTupleFromTuplestore(scanState);
 
 	return resultSlot;
+}
+
+
+/*
+ * PrepareMasterJobDirectory creates a directory on the master node to keep job
+ * execution results. We also register this directory for automatic cleanup on
+ * portal delete.
+ */
+void
+PrepareMasterJobDirectory(Job *workerJob)
+{
+	StringInfo jobDirectoryName = MasterJobDirectoryName(workerJob->jobId);
+	CitusCreateDirectory(jobDirectoryName);
+
+	ResourceOwnerEnlargeJobDirectories(CurrentResourceOwner);
+	ResourceOwnerRememberJobDirectory(CurrentResourceOwner, workerJob->jobId);
 }

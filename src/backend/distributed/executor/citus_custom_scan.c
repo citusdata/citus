@@ -30,9 +30,7 @@
 
 /* functions for creating custom scan nodes */
 static Node * AdaptiveExecutorCreateScan(CustomScan *scan);
-static Node * RealTimeCreateScan(CustomScan *scan);
 static Node * TaskTrackerCreateScan(CustomScan *scan);
-static Node * RouterCreateScan(CustomScan *scan);
 static Node * CoordinatorInsertSelectCreateScan(CustomScan *scan);
 static Node * DelayedErrorCreateScan(CustomScan *scan);
 
@@ -48,19 +46,9 @@ CustomScanMethods AdaptiveExecutorCustomScanMethods = {
 	AdaptiveExecutorCreateScan
 };
 
-CustomScanMethods RealTimeCustomScanMethods = {
-	"Citus Real-Time",
-	RealTimeCreateScan
-};
-
 CustomScanMethods TaskTrackerCustomScanMethods = {
 	"Citus Task-Tracker",
 	TaskTrackerCreateScan
-};
-
-CustomScanMethods RouterCustomScanMethods = {
-	"Citus Router",
-	RouterCreateScan
 };
 
 CustomScanMethods CoordinatorInsertSelectCustomScanMethods = {
@@ -86,37 +74,10 @@ static CustomExecMethods AdaptiveExecutorCustomExecMethods = {
 	.ExplainCustomScan = CitusExplainScan
 };
 
-static CustomExecMethods RealTimeCustomExecMethods = {
-	.CustomName = "RealTimeScan",
-	.BeginCustomScan = CitusBeginScan,
-	.ExecCustomScan = RealTimeExecScan,
-	.EndCustomScan = CitusEndScan,
-	.ReScanCustomScan = CitusReScan,
-	.ExplainCustomScan = CitusExplainScan
-};
-
 static CustomExecMethods TaskTrackerCustomExecMethods = {
 	.CustomName = "TaskTrackerScan",
 	.BeginCustomScan = CitusBeginScan,
 	.ExecCustomScan = TaskTrackerExecScan,
-	.EndCustomScan = CitusEndScan,
-	.ReScanCustomScan = CitusReScan,
-	.ExplainCustomScan = CitusExplainScan
-};
-
-static CustomExecMethods RouterModifyCustomExecMethods = {
-	.CustomName = "RouterModifyScan",
-	.BeginCustomScan = CitusBeginScan,
-	.ExecCustomScan = RouterModifyExecScan,
-	.EndCustomScan = CitusEndScan,
-	.ReScanCustomScan = CitusReScan,
-	.ExplainCustomScan = CitusExplainScan
-};
-
-static CustomExecMethods RouterSelectCustomExecMethods = {
-	.CustomName = "RouterSelectScan",
-	.BeginCustomScan = CitusBeginScan,
-	.ExecCustomScan = RouterSelectExecScan,
 	.EndCustomScan = CitusEndScan,
 	.ReScanCustomScan = CitusReScan,
 	.ExplainCustomScan = CitusExplainScan
@@ -139,9 +100,7 @@ void
 RegisterCitusCustomScanMethods(void)
 {
 	RegisterCustomScanMethods(&AdaptiveExecutorCustomScanMethods);
-	RegisterCustomScanMethods(&RealTimeCustomScanMethods);
 	RegisterCustomScanMethods(&TaskTrackerCustomScanMethods);
-	RegisterCustomScanMethods(&RouterCustomScanMethods);
 	RegisterCustomScanMethods(&CoordinatorInsertSelectCustomScanMethods);
 	RegisterCustomScanMethods(&DelayedErrorCustomScanMethods);
 }
@@ -223,24 +182,6 @@ AdaptiveExecutorCreateScan(CustomScan *scan)
 
 
 /*
- * RealTimeCreateScan creates the scan state for real-time executor queries.
- */
-static Node *
-RealTimeCreateScan(CustomScan *scan)
-{
-	CitusScanState *scanState = palloc0(sizeof(CitusScanState));
-
-	scanState->executorType = MULTI_EXECUTOR_REAL_TIME;
-	scanState->customScanState.ss.ps.type = T_CustomScanState;
-	scanState->distributedPlan = GetDistributedPlan(scan);
-
-	scanState->customScanState.methods = &RealTimeCustomExecMethods;
-
-	return (Node *) scanState;
-}
-
-
-/*
  * TaskTrackerCreateScan creates the scan state for task-tracker executor queries.
  */
 static Node *
@@ -253,49 +194,6 @@ TaskTrackerCreateScan(CustomScan *scan)
 	scanState->distributedPlan = GetDistributedPlan(scan);
 
 	scanState->customScanState.methods = &TaskTrackerCustomExecMethods;
-
-	return (Node *) scanState;
-}
-
-
-/*
- * RouterCreateScan creates the scan state for router executor queries.
- */
-static Node *
-RouterCreateScan(CustomScan *scan)
-{
-	CitusScanState *scanState = palloc0(sizeof(CitusScanState));
-	DistributedPlan *distributedPlan = NULL;
-	Job *workerJob = NULL;
-	List *taskList = NIL;
-	bool isModificationQuery = false;
-
-	List *relationRowLockList = NIL;
-
-	scanState->executorType = MULTI_EXECUTOR_ROUTER;
-	scanState->customScanState.ss.ps.type = T_CustomScanState;
-	scanState->distributedPlan = GetDistributedPlan(scan);
-
-	distributedPlan = scanState->distributedPlan;
-	workerJob = distributedPlan->workerJob;
-	taskList = workerJob->taskList;
-	isModificationQuery = IsModifyDistributedPlan(distributedPlan);
-
-	if (list_length(taskList) == 1)
-	{
-		Task *task = (Task *) linitial(taskList);
-		relationRowLockList = task->relationRowLockList;
-	}
-
-	/* if query is SELECT ... FOR UPDATE query, use modify logic */
-	if (isModificationQuery || relationRowLockList != NIL)
-	{
-		scanState->customScanState.methods = &RouterModifyCustomExecMethods;
-	}
-	else
-	{
-		scanState->customScanState.methods = &RouterSelectCustomExecMethods;
-	}
 
 	return (Node *) scanState;
 }

@@ -43,6 +43,12 @@ int MultiShardCommitProtocol = COMMIT_PROTOCOL_2PC;
 int SingleShardCommitProtocol = COMMIT_PROTOCOL_2PC;
 int SavedMultiShardCommitProtocol = COMMIT_PROTOCOL_BARE;
 
+/*
+ * GUC that determines whether a SELECT in a transaction block should also run in
+ * a transaction block on the worker even if no writes have occurred yet.
+ */
+bool SelectOpensTransactionBlock;
+
 /* state needed to keep track of operations used during a transaction */
 XactModificationType XactModificationLevel = XACT_MODIFICATION_NONE;
 

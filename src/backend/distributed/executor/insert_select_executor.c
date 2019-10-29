@@ -170,40 +170,25 @@ CoordinatorInsertSelectExecScanInternal(CustomScanState *node)
 
 			if (prunedTaskList != NIL)
 			{
-				if (TaskExecutorType != MULTI_EXECUTOR_ADAPTIVE)
-				{
-					if (MultiShardConnectionType == SEQUENTIAL_CONNECTION)
-					{
-						ExecuteModifyTasksSequentially(scanState, prunedTaskList,
-													   ROW_MODIFY_COMMUTATIVE,
-													   hasReturning);
-					}
-					else
-					{
-						ExecuteMultipleTasks(scanState, prunedTaskList, true,
-											 hasReturning);
-					}
-				}
-				else
-				{
-					TupleDesc tupleDescriptor = ScanStateGetTupleDescriptor(scanState);
-					bool randomAccess = true;
-					bool interTransactions = false;
 
-					Assert(scanState->tuplestorestate == NULL);
-					scanState->tuplestorestate =
-						tuplestore_begin_heap(randomAccess, interTransactions, work_mem);
+				TupleDesc tupleDescriptor = ScanStateGetTupleDescriptor(scanState);
+				bool randomAccess = true;
+				bool interTransactions = false;
 
-					ExecuteTaskListExtended(ROW_MODIFY_COMMUTATIVE, prunedTaskList,
-											tupleDescriptor, scanState->tuplestorestate,
-											hasReturning, MaxAdaptiveExecutorPoolSize);
-				}
+				Assert(scanState->tuplestorestate == NULL);
+				scanState->tuplestorestate =
+					tuplestore_begin_heap(randomAccess, interTransactions, work_mem);
 
-				if (SortReturning && hasReturning)
-				{
-					SortTupleStore(scanState);
-				}
+				ExecuteTaskListExtended(ROW_MODIFY_COMMUTATIVE, prunedTaskList,
+										tupleDescriptor, scanState->tuplestorestate,
+										hasReturning, MaxAdaptiveExecutorPoolSize);
 			}
+
+			if (SortReturning && hasReturning)
+			{
+				SortTupleStore(scanState);
+			}
+
 		}
 		else
 		{
