@@ -108,6 +108,13 @@ SELECT * FROM numbers, local_table WHERE numbers.a != local_table.a;
 (4 rows)
 
 ROLLBACK;
+-- Make sure we hide shard tables ...
+ SELECT citus_table_is_visible('numbers_8000001'::regclass::oid);
+ citus_table_is_visible 
+------------------------
+ f
+(1 row)
+
 -- clean-up
 SET client_min_messages TO ERROR;
 DROP TABLE squares, numbers, local_table;
