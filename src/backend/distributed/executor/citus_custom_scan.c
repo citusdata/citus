@@ -340,8 +340,7 @@ CitusEndScan(CustomScanState *node)
 	/* queryId is not set if pg_stat_statements is not installed */
 	if (queryId != 0)
 	{
-		if (partitionKeyConst != NULL && (executorType == MULTI_EXECUTOR_ROUTER ||
-										  executorType == MULTI_EXECUTOR_ADAPTIVE))
+		if (partitionKeyConst != NULL && executorType == MULTI_EXECUTOR_ADAPTIVE)
 		{
 			partitionKeyString = DatumToString(partitionKeyConst->constvalue,
 											   partitionKeyConst->consttype);

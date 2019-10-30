@@ -1,13 +1,18 @@
-/*
- * placement_access.c
+/*-------------------------------------------------------------------------
  *
- *  Created on: Oct 30, 2019
- *      Author: onderkalaci
+ * citus_custom_scan.c
+ *
+ * Definitions of the functions used in generating the placement accesses
+ * for distributed query execution.
+ *
+ * Copyright (c) Citus Data, Inc.
+ *-------------------------------------------------------------------------
  */
-
 #include "distributed/placement_access.h"
 #include "distributed/metadata_cache.h"
 
+static List * BuildPlacementSelectList(int32 groupId, List *relationShardList);
+static List * BuildPlacementDDLList(int32 groupId, List *relationShardList);
 static List * BuildPlacementAccessList(int32 groupId, List *relationShardList,
 									   ShardPlacementAccessType accessType);
 
@@ -92,7 +97,7 @@ PlacementAccessListForTask(Task *task, ShardPlacement *taskPlacement)
  * GetPlacementListConnection. If the node group does not have a placement
  * (e.g. in case of a broadcast join) then the shard is skipped.
  */
-List *
+static  List *
 BuildPlacementSelectList(int32 groupId, List *relationShardList)
 {
 	return BuildPlacementAccessList(groupId, relationShardList, PLACEMENT_ACCESS_SELECT);
@@ -102,7 +107,7 @@ BuildPlacementSelectList(int32 groupId, List *relationShardList)
 /*
  * BuildPlacementDDLList is a warpper around BuildPlacementAccessList() for DDL access.
  */
-List *
+static List *
 BuildPlacementDDLList(int32 groupId, List *relationShardList)
 {
 	return BuildPlacementAccessList(groupId, relationShardList, PLACEMENT_ACCESS_DDL);

@@ -77,8 +77,6 @@ static List * PlanAlterOwnerStmt(AlterOwnerStmt *stmt, const char *queryString);
 static List * PlanAlterObjectDependsStmt(AlterObjectDependsStmt *stmt,
 										 const char *queryString);
 
-static void ExecuteNodeBaseDDLCommands(List *taskList);
-
 
 /*
  * CitusProcessUtility is a convenience method to create a PlannedStmt out of pieces of a
@@ -907,19 +905,8 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 		EnsurePartitionTableNotReplicated(ddlJob->targetRelationId);
 	}
 
-	if (TaskExecutorType != MULTI_EXECUTOR_ADAPTIVE &&
-		ddlJob->targetRelationId == InvalidOid)
-	{
-		/*
-		 * Some ddl jobs can only be run by the adaptive executor and not our legacy ones.
-		 *
-		 * These are tasks that are not pinned to any relation nor shards. We can execute
-		 * these very naively with a simple for loop that sends them to the target worker.
-		 */
 
-		ExecuteNodeBaseDDLCommands(ddlJob->taskList);
-	}
-	else if (!ddlJob->concurrentIndexCmd)
+	if (!ddlJob->concurrentIndexCmd)
 	{
 		if (shouldSyncMetadata)
 		{
@@ -983,34 +970,6 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 							 "invalid index, then retry the original command.")));
 		}
 		PG_END_TRY();
-	}
-}
-
-
-/*
- * ExecuteNodeBaseDDLCommands executes ddl commands naively only when we are not using the
- * adaptive executor. It gets connections to the target placements and executes the
- * commands.
- */
-static void
-ExecuteNodeBaseDDLCommands(List *taskList)
-{
-	ListCell *taskCell = NULL;
-
-	foreach(taskCell, taskList)
-	{
-		Task *task = (Task *) lfirst(taskCell);
-		ListCell *taskPlacementCell = NULL;
-
-		/* these tasks should not be pinned to any shard */
-		Assert(task->anchorShardId == INVALID_SHARD_ID);
-
-		foreach(taskPlacementCell, task->taskPlacementList)
-		{
-			ShardPlacement *placement = (ShardPlacement *) lfirst(taskPlacementCell);
-			SendCommandToWorkerAsUser(placement->nodeName, placement->nodePort, NULL,
-									  task->queryString);
-		}
 	}
 }
 

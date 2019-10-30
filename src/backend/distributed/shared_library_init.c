@@ -1055,7 +1055,7 @@ RegisterCitusConfigVariables(void)
 		"citus.task_executor_type",
 		gettext_noop("Sets the executor type to be used for distributed queries."),
 		gettext_noop("The master node chooses between two different executor types "
-					 "when executing a distributed query.The real-time executor is "
+					 "when executing a distributed query.The adaptive executor is "
 					 "optimal for simple key-value lookup queries and queries that "
 					 "involve aggregations and/or co-located joins on multiple shards. "
 					 "The task-tracker executor is optimal for long-running, complex "

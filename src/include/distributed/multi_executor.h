@@ -25,16 +25,14 @@ typedef enum
 	PARALLEL_CONNECTION = 0,
 	SEQUENTIAL_CONNECTION = 1
 } MultiShardConnectionTypes;
+
 extern int MultiShardConnectionType;
-
-
 extern bool WritableStandbyCoordinator;
 extern bool ForceMaxQueryParallelization;
 extern int MaxAdaptiveExecutorPoolSize;
 extern int ExecutorSlowStartInterval;
-extern bool AllModificationsCommutative;
-extern bool EnableDeadlockPrevention;
 extern bool SortReturning;
+
 
 extern void CitusExecutorStart(QueryDesc *queryDesc, int eflags);
 extern void CitusExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint64 count,

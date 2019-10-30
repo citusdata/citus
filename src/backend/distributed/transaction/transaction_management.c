@@ -46,7 +46,7 @@ int SavedMultiShardCommitProtocol = COMMIT_PROTOCOL_BARE;
  * GUC that determines whether a SELECT in a transaction block should also run in
  * a transaction block on the worker even if no writes have occurred yet.
  */
-bool SelectOpensTransactionBlock;
+bool SelectOpensTransactionBlock = true;
 
 /* controls use of locks to enforce safe commutativity */
 bool AllModificationsCommutative = false;

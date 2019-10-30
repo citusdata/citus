@@ -1,3 +1,12 @@
+/*-------------------------------------------------------------------------
+ *
+ * placement_access.h
+ * 		Declarations of the structs and functions used in generating the
+ * 		placement accesses for distributed query execution.
+ * Copyright (c) Citus Data, Inc.
+ *-------------------------------------------------------------------------
+ */
+
 #ifndef PLACEMENT_ACCESS_H
 #define PLACEMENT_ACCESS_H
 
@@ -31,10 +40,9 @@ typedef struct ShardPlacementAccess
 	ShardPlacementAccessType accessType;
 } ShardPlacementAccess;
 
+
 extern List * PlacementAccessListForTask(Task *task, ShardPlacement *taskPlacement);
 extern ShardPlacementAccess * CreatePlacementAccess(ShardPlacement *placement,
 													ShardPlacementAccessType accessType);
-extern List * BuildPlacementSelectList(int32 groupId, List *relationShardList);
-extern List * BuildPlacementDDLList(int32 groupId, List *relationShardList);
 
 #endif /* PLACEMENT_ACCESS_H */

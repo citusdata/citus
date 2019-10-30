@@ -1,24 +1,25 @@
-/*
- * distributed_execution_locks.c
+/*-------------------------------------------------------------------------
  *
- * Function used in executing distributed execution locking.
+ * citus_custom_scan.c
  *
+ * Definitions of the functions used in executing distributed
+ * execution locking.
+ *
+ * Copyright (c) Citus Data, Inc.
+ *-------------------------------------------------------------------------
  */
 #include "distributed/distributed_execution_locks.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_partitioning_utils.h"
-
 #include "distributed/pg_dist_partition.h"
 #include "distributed/resource_lock.h"
 #include "distributed/transaction_management.h"
 
-/* Lock partitions of partitioned table */
 
-
+static bool RequiresConsistentSnapshot(Task *task);
 static void AcquireExecutorShardLockForRowModify(Task *task, RowModifyLevel modLevel);
 static void AcquireExecutorShardLocksForRelationRowLockList(List *relationRowLockList);
-static bool RequiresConsistentSnapshot(Task *task);
 
 
 /*
