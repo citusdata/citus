@@ -185,18 +185,6 @@ typedef struct TaskTracker
 } TaskTracker;
 
 
-/*
- * WorkerNodeState keeps state for a worker node. The real-time executor uses this to
- * keep track of the number of open connections to a worker node.
- */
-typedef struct WorkerNodeState
-{
-	uint32 workerPort;
-	char workerName[WORKER_LENGTH];
-	uint32 openConnectionCount;
-} WorkerNodeState;
-
-
 /* Config variable managed via guc.c */
 extern int RemoteTaskCheckInterval;
 extern int MaxAssignTaskBatchSize;
@@ -207,7 +195,6 @@ extern int MultiTaskQueryLogLevel;
 
 
 /* Function declarations for distributed execution */
-extern void MultiRealTimeExecute(Job *job);
 extern void MultiTaskTrackerExecute(Job *job);
 
 /* Function declarations common to more than one executor */
@@ -222,7 +209,6 @@ extern void AdjustStateForFailure(TaskExecution *taskExecution);
 extern int MaxMasterConnectionCount(void);
 
 
-extern TupleTableSlot * RealTimeExecScan(CustomScanState *node);
 extern TupleTableSlot * TaskTrackerExecScan(CustomScanState *node);
 
 #endif /* MULTI_SERVER_EXECUTOR_H */

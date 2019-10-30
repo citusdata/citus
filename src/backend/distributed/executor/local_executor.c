@@ -65,10 +65,9 @@
  *  currently only supports queries. In other words, any utility commands like TRUNCATE,
  *  fails if the command is executed after a local execution inside a transaction block.
  *  Forth, the local execution cannot be mixed with the executors other than adaptive,
- *  namely task-tracker, real-time and router executors. Finally, related with the
- *  previous item, COPY command cannot be mixed with local execution in a transaction.
- *  The implication of that any part of INSERT..SELECT via coordinator cannot happen
- *  via the local execution.
+ *  namely task-tracker executor. Finally, related with the previous item, COPY command
+ *  cannot be mixed with local execution in a transaction. The implication of that any
+ *  part of INSERT..SELECT via coordinator cannot happen via the local execution.
  */
 #include "postgres.h"
 #include "miscadmin.h"

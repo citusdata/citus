@@ -71,7 +71,7 @@ struct ColocatedPlacementsHashEntry;
  *
  * This stores a list of connections for each placement, because multiple
  * connections to the same placement may exist at the same time. E.g. a
- * real-time executor query may reference the same placement in several
+ * adaptive executor query may reference the same placement in several
  * sub-tasks.
  *
  * We keep track about a connection having executed DML or DDL, since we can

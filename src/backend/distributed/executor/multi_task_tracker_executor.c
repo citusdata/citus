@@ -182,7 +182,7 @@ MultiTaskTrackerExecute(Job *job)
 	{
 		ereport(ERROR, (errmsg("task tracker queries are not allowed while "
 							   "citus.use_secondary_nodes is 'always'"),
-						errhint("try setting citus.task_executor_type TO 'real-time'")));
+						errhint("try setting citus.task_executor_type TO 'adaptive'")));
 	}
 
 	/*

@@ -68,8 +68,8 @@
  *
  *  In other words, the following types of queries won't be observed in these
  *  views:
- *      - Router queries that are not inside transaction blocks
- *      - Real-time queries that are not inside transaction blocks
+ *      - Single-shard queries that are not inside transaction blocks
+ *      - Multi-shard select queries that are not inside transaction blocks
  *      - Task-tracker queries
  *
  *

@@ -45,7 +45,7 @@
 
 /*
  * Controls the connection type for multi shard modifications, DDLs
- * TRUNCATE and real-time SELECT queries.
+ * TRUNCATE and multi-shard SELECT queries.
  */
 int MultiShardConnectionType = PARALLEL_CONNECTION;
 bool WritableStandbyCoordinator = false;
@@ -271,7 +271,7 @@ ReturnTupleFromTuplestore(CitusScanState *scanState)
 
 
 /*
- * Load data collected by real-time or task-tracker executors into the tuplestore
+ * Load data collected by task-tracker executor into the tuplestore
  * of CitusScanState. For that, we first create a tuple store, and then copy the
  * files one-by-one into the tuple store.
  *
