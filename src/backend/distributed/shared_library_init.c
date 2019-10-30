@@ -69,7 +69,7 @@
 PG_MODULE_MAGIC;
 
 static char *CitusVersion = CITUS_VERSION;
-static const int DummyRealTimeExecutorEnumValue = 9999999;
+static int DummyRealTimeExecutorEnumValue = 9999999;
 
 void _PG_init(void);
 
@@ -1315,7 +1315,7 @@ WarnIfDeprecatedExecutorUsed(int *newval, void **extra, GucSource source)
 	{
 		ereport(WARNING, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 						  errmsg("Ignoring the setting, real-time executor is "
-								  "deprecated")));
+								 "deprecated")));
 
 		/* adaptive executor is superset of real-time, so switch to that */
 		*newval = MULTI_EXECUTOR_ADAPTIVE;
