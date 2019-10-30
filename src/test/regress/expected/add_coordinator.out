@@ -26,3 +26,7 @@ SELECT replicationfactor = 3 FROM pg_dist_colocation WHERE distributioncolumntyp
  t
 (1 row)
 
+-- start_metadata_sync_to_node() for coordinator should fail
+SELECT start_metadata_sync_to_node('localhost', :master_port);
+ERROR:  you cannot sync metadata to the coordinator
+HINT:  Coordinator already should have the metadata
