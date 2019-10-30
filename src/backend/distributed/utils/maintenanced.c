@@ -366,8 +366,9 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 		}
 #endif
 
-		if (MetadataSyncTriggeredCheckAndReset(myDbData) ||
-			GetCurrentTimestamp() >= nextMetadataSyncTime)
+		if (!RecoveryInProgress() &&
+			(MetadataSyncTriggeredCheckAndReset(myDbData) ||
+			 GetCurrentTimestamp() >= nextMetadataSyncTime))
 		{
 			bool metadataSyncFailed = false;
 			int64 nextTimeout = 0;
