@@ -22,7 +22,6 @@
 #include "distributed/connection_management.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
-#include "distributed/multi_shard_transaction.h"
 #include "distributed/resource_lock.h"
 #include "distributed/remote_commands.h"
 #include "distributed/pg_dist_node.h"

@@ -12,13 +12,13 @@
 #include "miscadmin.h"
 
 #include "distributed/commands/multi_copy.h"
+#include "distributed/distributed_execution_locks.h"
 #include "distributed/insert_select_executor.h"
 #include "distributed/insert_select_planner.h"
 #include "distributed/local_executor.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/multi_physical_planner.h"
-#include "distributed/multi_router_executor.h"
 #include "distributed/distributed_planner.h"
 #include "distributed/relation_access_tracking.h"
 #include "distributed/resource_lock.h"
@@ -170,7 +170,6 @@ CoordinatorInsertSelectExecScanInternal(CustomScanState *node)
 
 			if (prunedTaskList != NIL)
 			{
-
 				TupleDesc tupleDescriptor = ScanStateGetTupleDescriptor(scanState);
 				bool randomAccess = true;
 				bool interTransactions = false;
@@ -182,13 +181,12 @@ CoordinatorInsertSelectExecScanInternal(CustomScanState *node)
 				ExecuteTaskListExtended(ROW_MODIFY_COMMUTATIVE, prunedTaskList,
 										tupleDescriptor, scanState->tuplestorestate,
 										hasReturning, MaxAdaptiveExecutorPoolSize);
-			}
 
-			if (SortReturning && hasReturning)
-			{
-				SortTupleStore(scanState);
+				if (SortReturning && hasReturning)
+				{
+					SortTupleStore(scanState);
+				}
 			}
-
 		}
 		else
 		{

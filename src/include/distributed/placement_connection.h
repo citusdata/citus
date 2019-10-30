@@ -11,32 +11,7 @@
 
 
 #include "distributed/connection_management.h"
-
-/* forward declare, to avoid dependency on ShardPlacement definition */
-struct ShardPlacement;
-
-/* represents the way in which a placement is accessed */
-typedef enum ShardPlacementAccessType
-{
-	/* read from placement */
-	PLACEMENT_ACCESS_SELECT,
-
-	/* modify rows in placement */
-	PLACEMENT_ACCESS_DML,
-
-	/* modify placement schema */
-	PLACEMENT_ACCESS_DDL
-} ShardPlacementAccessType;
-
-/* represents access to a placement */
-typedef struct ShardPlacementAccess
-{
-	/* placement that is accessed */
-	struct ShardPlacement *placement;
-
-	/* the way in which the placement is accessed */
-	ShardPlacementAccessType accessType;
-} ShardPlacementAccess;
+#include "distributed/placement_access.h"
 
 
 extern MultiConnection * GetPlacementConnection(uint32 flags,

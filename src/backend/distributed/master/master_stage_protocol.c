@@ -32,7 +32,7 @@
 #include "distributed/distributed_planner.h"
 #include "distributed/listutils.h"
 #include "distributed/multi_client_executor.h"
-#include "distributed/multi_router_executor.h"
+#include "distributed/multi_executor.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"

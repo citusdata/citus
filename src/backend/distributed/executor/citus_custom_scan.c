@@ -13,11 +13,14 @@
 
 #include "commands/copy.h"
 #include "distributed/backend_data.h"
+#include "distributed/citus_clauses.h"
 #include "distributed/citus_custom_scan.h"
+#include "distributed/deparse_shard_query.h"
+#include "distributed/distributed_execution_locks.h"
 #include "distributed/insert_select_executor.h"
 #include "distributed/insert_select_planner.h"
+#include "distributed/multi_executor.h"
 #include "distributed/multi_server_executor.h"
-#include "distributed/multi_router_executor.h"
 #include "distributed/multi_router_planner.h"
 #include "distributed/query_stats.h"
 #include "distributed/subplan_execution.h"
@@ -36,6 +39,7 @@ static Node * DelayedErrorCreateScan(CustomScan *scan);
 
 /* functions that are common to different scans */
 static void CitusBeginScan(CustomScanState *node, EState *estate, int eflags);
+static void CitusModifyBeginScan(CustomScanState *node, EState *estate, int eflags);
 static void CitusEndScan(CustomScanState *node);
 static void CitusReScan(CustomScanState *node);
 
@@ -160,6 +164,82 @@ CitusExecScan(CustomScanState *node)
 	resultSlot = ReturnTupleFromTuplestore(scanState);
 
 	return resultSlot;
+}
+
+
+/*
+ * CitusModifyBeginScan first evaluates expressions in the query and then
+ * performs shard pruning in case the partition column in an insert was
+ * defined as a function call.
+ *
+ * The function also checks the validity of the given custom scan node and
+ * gets locks on the shards involved in the task list of the distributed plan.
+ */
+static void
+CitusModifyBeginScan(CustomScanState *node, EState *estate, int eflags)
+{
+	CitusScanState *scanState = (CitusScanState *) node;
+	DistributedPlan *distributedPlan = NULL;
+	Job *workerJob = NULL;
+	Query *jobQuery = NULL;
+	List *taskList = NIL;
+
+	/*
+	 * We must not change the distributed plan since it may be reused across multiple
+	 * executions of a prepared statement. Instead we create a deep copy that we only
+	 * use for the current execution.
+	 */
+	distributedPlan = scanState->distributedPlan = copyObject(scanState->distributedPlan);
+
+	workerJob = distributedPlan->workerJob;
+	jobQuery = workerJob->jobQuery;
+	taskList = workerJob->taskList;
+
+	if (workerJob->requiresMasterEvaluation)
+	{
+		PlanState *planState = &(scanState->customScanState.ss.ps);
+		EState *executorState = planState->state;
+
+		ExecuteMasterEvaluableFunctions(jobQuery, planState);
+
+		/*
+		 * We've processed parameters in ExecuteMasterEvaluableFunctions and
+		 * don't need to send their values to workers, since they will be
+		 * represented as constants in the deparsed query. To avoid sending
+		 * parameter values, we set the parameter list to NULL.
+		 */
+		executorState->es_param_list_info = NULL;
+
+		if (workerJob->deferredPruning)
+		{
+			DeferredErrorMessage *planningError = NULL;
+
+			/* need to perform shard pruning, rebuild the task list from scratch */
+			taskList = RouterInsertTaskList(jobQuery, &planningError);
+
+			if (planningError != NULL)
+			{
+				RaiseDeferredError(planningError, ERROR);
+			}
+
+			workerJob->taskList = taskList;
+			workerJob->partitionKeyValue = ExtractInsertPartitionKeyValue(jobQuery);
+		}
+
+		RebuildQueryStrings(jobQuery, taskList);
+	}
+
+	/* prevent concurrent placement changes */
+	AcquireMetadataLocks(taskList);
+
+	/*
+	 * We are taking locks on partitions of partitioned tables. These locks are
+	 * necessary for locking tables that appear in the SELECT part of the query.
+	 */
+	LockPartitionsInRelationList(distributedPlan->relationIdList, AccessShareLock);
+
+	/* modify tasks are always assigned using first-replica policy */
+	workerJob->taskList = FirstReplicaAssignTaskList(taskList);
 }
 
 

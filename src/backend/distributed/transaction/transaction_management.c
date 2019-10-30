@@ -25,7 +25,6 @@
 #include "distributed/intermediate_results.h"
 #include "distributed/local_executor.h"
 #include "distributed/multi_executor.h"
-#include "distributed/multi_shard_transaction.h"
 #include "distributed/transaction_management.h"
 #include "distributed/placement_connection.h"
 #include "distributed/subplan_execution.h"
@@ -106,6 +105,7 @@ static void CoordinatedSubTransactionCallback(SubXactEvent event, SubTransaction
 											  SubTransactionId parentSubid, void *arg);
 
 /* remaining functions */
+static void ResetShardPlacementTransactionState(void);
 static void AdjustMaxPreparedTransactions(void);
 static void PushSubXact(SubTransactionId subId);
 static void PopSubXact(SubTransactionId subId);
@@ -420,6 +420,21 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			}
 			break;
 		}
+	}
+}
+
+
+/*
+ * ResetShardPlacementTransactionState performs cleanup after the end of a
+ * transaction.
+ */
+static void
+ResetShardPlacementTransactionState(void)
+{
+	if (MultiShardCommitProtocol == COMMIT_PROTOCOL_BARE)
+	{
+		MultiShardCommitProtocol = SavedMultiShardCommitProtocol;
+		SavedMultiShardCommitProtocol = COMMIT_PROTOCOL_BARE;
 	}
 }
 

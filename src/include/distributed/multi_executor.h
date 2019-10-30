@@ -32,7 +32,9 @@ extern bool WritableStandbyCoordinator;
 extern bool ForceMaxQueryParallelization;
 extern int MaxAdaptiveExecutorPoolSize;
 extern int ExecutorSlowStartInterval;
-
+extern bool AllModificationsCommutative;
+extern bool EnableDeadlockPrevention;
+extern bool SortReturning;
 
 extern void CitusExecutorStart(QueryDesc *queryDesc, int eflags);
 extern void CitusExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint64 count,
@@ -62,6 +64,10 @@ extern void SetLocalMultiShardModifyModeToSequential(void);
 extern void SetLocalForceMaxQueryParallelization(void);
 extern void SortTupleStore(CitusScanState *scanState);
 extern bool DistributedPlanModifiesDatabase(DistributedPlan *plan);
+extern void ExtractParametersFromParamList(ParamListInfo paramListInfo,
+										   Oid **parameterTypes,
+										   const char ***parameterValues, bool
+										   useOriginalCustomTypeOids);
 
 
 #endif /* MULTI_EXECUTOR_H */

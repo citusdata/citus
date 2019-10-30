@@ -79,7 +79,6 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/relation_access_tracking.h"
 #include "distributed/remote_commands.h" /* to access LogRemoteCommands */
-#include "distributed/multi_router_executor.h"
 #include "distributed/transaction_management.h"
 #include "executor/tstoreReceiver.h"
 #include "executor/tuptable.h"
