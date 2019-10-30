@@ -682,7 +682,7 @@ WHERE
 SET citus.log_multi_join_order TO FALSE;
 
 SET citus.shard_count TO DEFAULT;
-SET citus.task_executor_type to "real-time";
+SET citus.task_executor_type to "adaptive";
 
 -- some INSERT .. SELECT queries that involve both hash distributed and reference tables
 

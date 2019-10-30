@@ -69,6 +69,7 @@
 PG_MODULE_MAGIC;
 
 static char *CitusVersion = CITUS_VERSION;
+static const int DummyRealTimeExecutorEnumValue = 9999999;
 
 void _PG_init(void);
 
@@ -78,6 +79,7 @@ static void CreateRequiredDirectories(void);
 static void RegisterCitusConfigVariables(void);
 static bool ErrorIfNotASuitableDeadlockFactor(double *newval, void **extra,
 											  GucSource source);
+static bool WarnIfDeprecatedExecutorUsed(int *newval, void **extra, GucSource source);
 static void NormalizeWorkerListPath(void);
 static bool NodeConninfoGucCheckHook(char **newval, void **extra, GucSource source);
 static void NodeConninfoGucAssignHook(const char *newval, void *extra);
@@ -113,7 +115,7 @@ static const struct config_enum_entry replication_model_options[] = {
 
 static const struct config_enum_entry task_executor_type_options[] = {
 	{ "adaptive", MULTI_EXECUTOR_ADAPTIVE, false },
-	{ "real-time", MULTI_EXECUTOR_ADAPTIVE, false }, /* ignore real-time executor, always use adaptive */
+	{ "real-time", DummyRealTimeExecutorEnumValue, false }, /* keep it for backward comp. */
 	{ "task-tracker", MULTI_EXECUTOR_TASK_TRACKER, false },
 	{ NULL, 0, false }
 };
@@ -1066,7 +1068,7 @@ RegisterCitusConfigVariables(void)
 		task_executor_type_options,
 		PGC_USERSET,
 		GUC_STANDARD,
-		NULL, NULL, NULL);
+		WarnIfDeprecatedExecutorUsed, NULL, NULL);
 
 	DefineCustomBoolVariable(
 		"citus.enable_repartition_joins",
@@ -1296,6 +1298,27 @@ ErrorIfNotASuitableDeadlockFactor(double *newval, void **extra, GucSource source
 							  "To disable distributed deadlock detection set the value to -1.")));
 
 		return false;
+	}
+
+	return true;
+}
+
+
+/*
+ * WarnIfDeprecatedExecutorUsed prints a warning and sets the config value to
+ * adaptive executor (a.k.a., ignores real-time executor).
+ */
+static bool
+WarnIfDeprecatedExecutorUsed(int *newval, void **extra, GucSource source)
+{
+	if (*newval == DummyRealTimeExecutorEnumValue)
+	{
+		ereport(WARNING, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+						  errmsg("Ignoring the setting, real-time executor is "
+								  "deprecated")));
+
+		/* adaptive executor is superset of real-time, so switch to that */
+		*newval = MULTI_EXECUTOR_ADAPTIVE;
 	}
 
 	return true;
