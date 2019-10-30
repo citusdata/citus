@@ -21,7 +21,7 @@ SELECT * FROM tab;
 SET citus.task_executor_type TO 'task-tracker';
 SELECT * FROM tab;
 ERROR:  task tracker queries are not allowed while citus.use_secondary_nodes is 'always'
-HINT:  try setting citus.task_executor_type TO 'real-time'
+HINT:  try setting citus.task_executor_type TO 'adaptive'
 -- clean up
 \c - - - :master_port
 DROP TABLE tab;

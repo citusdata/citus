@@ -1,6 +1,6 @@
 /*-------------------------------------------------------------------------
  *
- * citus_custom_scan.c
+ * distributed_execution_locks.c
  *
  * Definitions of the functions used in executing distributed
  * execution locking.
