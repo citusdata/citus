@@ -127,6 +127,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include "access/transam.h"
 #include "access/xact.h"
 #include "catalog/pg_type.h"
 #include "commands/dbcommands.h"

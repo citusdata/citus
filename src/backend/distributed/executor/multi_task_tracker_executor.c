@@ -93,6 +93,7 @@ static TaskTracker * ResolveMapTaskTracker(HTAB *trackerHash, Task *task,
 										   TaskExecution *taskExecution);
 static TaskTracker * TrackerHashLookup(HTAB *trackerHash, const char *nodeName,
 									   uint32 nodePort);
+static void PrepareMasterJobDirectory(Job *workerJob);
 
 /* Local functions forward declarations to manage tasks and their assignments */
 static TaskExecStatus ManageTaskExecution(TaskTracker *taskTracker,
@@ -3042,7 +3043,7 @@ TaskTrackerExecScan(CustomScanState *node)
  * execution results. We also register this directory for automatic cleanup on
  * portal delete.
  */
-void
+static void
 PrepareMasterJobDirectory(Job *workerJob)
 {
 	StringInfo jobDirectoryName = MasterJobDirectoryName(workerJob->jobId);

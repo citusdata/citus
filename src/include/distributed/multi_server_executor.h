@@ -222,7 +222,6 @@ extern void ErrorSizeLimitIsExceeded(void);
 extern bool TaskExecutionFailed(TaskExecution *taskExecution);
 extern void AdjustStateForFailure(TaskExecution *taskExecution);
 extern int MaxMasterConnectionCount(void);
-extern void PrepareMasterJobDirectory(Job *workerJob);
 
 
 extern TupleTableSlot * RealTimeExecScan(CustomScanState *node);
