@@ -65,6 +65,7 @@ bool EnableDDLPropagation = true; /* ddl propagation is enabled */
 PropSetCmdBehavior PropagateSetCommands = PROPSETCMD_NONE; /* SET prop off */
 static bool shouldInvalidateForeignKeyGraph = false;
 static int activeAlterTables = 0;
+static int activeDropSchemas = 0;
 
 
 /* Local functions forward declarations for helper functions */
@@ -76,7 +77,7 @@ static List * PlanRenameAttributeStmt(RenameStmt *stmt, const char *queryString)
 static List * PlanAlterOwnerStmt(AlterOwnerStmt *stmt, const char *queryString);
 static List * PlanAlterObjectDependsStmt(AlterObjectDependsStmt *stmt,
 										 const char *queryString);
-
+static bool IsDropSchema(Node *parsetree);
 static void ExecuteNodeBaseDDLCommands(List *taskList);
 
 
@@ -655,6 +656,11 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 			activeAlterTables++;
 		}
 
+		if (IsDropSchema(parsetree))
+		{
+			activeDropSchemas++;
+		}
+
 		standard_ProcessUtility(pstmt, queryString, context,
 								params, queryEnv, dest, completionTag);
 
@@ -678,12 +684,22 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		{
 			activeAlterTables--;
 		}
+
+		if (IsDropSchema(parsetree))
+		{
+			activeDropSchemas--;
+		}
 	}
 	PG_CATCH();
 	{
 		if (IsA(parsetree, AlterTableStmt))
 		{
 			activeAlterTables--;
+		}
+
+		if (IsDropSchema(parsetree))
+		{
+			activeDropSchemas--;
 		}
 
 		PG_RE_THROW();
@@ -793,6 +809,24 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 	 * EXTENSION. This is important to register some invalidation callbacks.
 	 */
 	CitusHasBeenLoaded();
+}
+
+
+/*
+ * IsDropSchema returns true if parsetree represents DROP SCHEMA ...
+ */
+static bool
+IsDropSchema(Node *parsetree)
+{
+	DropStmt *dropStatement = NULL;
+
+	if (!IsA(parsetree, DropStmt))
+	{
+		return false;
+	}
+
+	dropStatement = (DropStmt *) parsetree;
+	return (dropStatement->removeType == OBJECT_SCHEMA);
 }
 
 
@@ -1235,4 +1269,15 @@ bool
 AlterTableInProgress(void)
 {
 	return activeAlterTables > 0;
+}
+
+
+/*
+ * DropSchemaInProgress returns true if we're processing an DROP SCHEMA command
+ * right now.
+ */
+bool
+DropSchemaInProgress(void)
+{
+	return activeDropSchemas > 0;
 }

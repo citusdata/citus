@@ -58,7 +58,10 @@ ROLLBACK;
 
 -- clean-up
 SET client_min_messages TO ERROR;
-DROP TABLE squares, numbers, local_table;
 DROP SCHEMA replicate_ref_to_coordinator CASCADE;
+
+-- Make sure the shard was dropped
+ SELECT 'numbers_8000001'::regclass::oid;
+
 SET search_path TO DEFAULT;
 RESET client_min_messages;

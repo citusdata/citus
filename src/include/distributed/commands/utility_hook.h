@@ -58,5 +58,6 @@ extern void InvalidateForeignKeyGraphForDDL(void);
 extern List * DDLTaskList(Oid relationId, const char *commandString);
 extern List * NodeDDLTaskList(TargetWorkerSet targets, List *commands);
 extern bool AlterTableInProgress(void);
+extern bool DropSchemaInProgress(void);
 
 #endif /* MULTI_UTILITY_H */

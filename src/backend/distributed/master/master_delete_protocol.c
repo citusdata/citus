@@ -422,28 +422,38 @@ DropShards(Oid relationId, char *schemaName, char *relationName,
 								 quotedShardName);
 			}
 
-			connection = GetPlacementConnection(connectionFlags, shardPlacement, NULL);
-
-			RemoteTransactionBeginIfNecessary(connection);
-
-			if (PQstatus(connection->pgConn) != CONNECTION_OK)
+			/*
+			 * The active DROP SCHEMA ... CASCADE will drop the shard, if we try to drop
+			 * it over another connection, we will get into a distributed deadlock.
+			 */
+			if (!(shardPlacement->groupId == 0 &&
+				  IsCoordinator() &&
+				  DropSchemaInProgress()))
 			{
-				uint64 placementId = shardPlacement->placementId;
+				connection = GetPlacementConnection(connectionFlags, shardPlacement,
+													NULL);
 
-				ereport(WARNING, (errmsg("could not connect to shard \"%s\" on node "
-										 "\"%s:%u\"", shardRelationName, workerName,
-										 workerPort),
-								  errdetail("Marking this shard placement for "
-											"deletion")));
+				RemoteTransactionBeginIfNecessary(connection);
 
-				UpdateShardPlacementState(placementId, FILE_TO_DELETE);
+				if (PQstatus(connection->pgConn) != CONNECTION_OK)
+				{
+					uint64 placementId = shardPlacement->placementId;
 
-				continue;
+					ereport(WARNING, (errmsg("could not connect to shard \"%s\" on node "
+											 "\"%s:%u\"", shardRelationName, workerName,
+											 workerPort),
+									  errdetail("Marking this shard placement for "
+												"deletion")));
+
+					UpdateShardPlacementState(placementId, FILE_TO_DELETE);
+
+					continue;
+				}
+
+				MarkRemoteTransactionCritical(connection);
+
+				ExecuteCriticalRemoteCommand(connection, workerDropQuery->data);
 			}
-
-			MarkRemoteTransactionCritical(connection);
-
-			ExecuteCriticalRemoteCommand(connection, workerDropQuery->data);
 
 			DeleteShardPlacementRow(shardPlacement->placementId);
 		}

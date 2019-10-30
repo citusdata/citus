@@ -99,7 +99,7 @@ EXPLAIN (costs off) SELECT * FROM numbers, local_table;
 BEGIN;
 INSERT INTO numbers SELECT * FROM local_table;
 SELECT * FROM numbers, local_table WHERE numbers.a != local_table.a;
-ERROR:  cannot join reference tables with local tablesin a coordinated transaction
+ERROR:  cannot join reference tables with local tables in a coordinated transaction
 ROLLBACK;
 BEGIN;
 SELECT * FROM numbers, local_table WHERE numbers.a != local_table.a;
@@ -123,7 +123,11 @@ ROLLBACK;
 
 -- clean-up
 SET client_min_messages TO ERROR;
-DROP TABLE squares, numbers, local_table;
 DROP SCHEMA replicate_ref_to_coordinator CASCADE;
+-- Make sure the shard was dropped
+ SELECT 'numbers_8000001'::regclass::oid;
+ERROR:  relation "numbers_8000001" does not exist
+LINE 1: SELECT 'numbers_8000001'::regclass::oid;
+               ^
 SET search_path TO DEFAULT;
 RESET client_min_messages;
