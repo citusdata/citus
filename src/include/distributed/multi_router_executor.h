@@ -20,18 +20,6 @@
 #include "nodes/pg_list.h"
 
 
-/*
- * XactShardConnSet keeps track of the mapping from shard to the set of nodes
- * involved in multi-statement transaction-wrapped modifications of that shard.
- * This information is used to mark placements inactive at transaction close.
- */
-typedef struct XactShardConnSet
-{
-	uint64 shardId;            /* identifier of the shard that was modified */
-	List *connectionEntryList; /* NodeConnectionEntry pointers to participating nodes */
-} XactShardConnSet;
-
-
 /* Config variables managed via guc.c */
 extern bool AllModificationsCommutative;
 extern bool EnableDeadlockPrevention;
@@ -39,17 +27,6 @@ extern bool SortReturning;
 
 
 extern void CitusModifyBeginScan(CustomScanState *node, EState *estate, int eflags);
-extern TupleTableSlot * RouterSelectExecScan(CustomScanState *node);
-extern TupleTableSlot * RouterModifyExecScan(CustomScanState *node);
-
-extern void ExecuteMultipleTasks(CitusScanState *scanState, List *taskList,
-								 bool isModificationQuery, bool expectResults);
-
-int64 ExecuteModifyTasksSequentially(CitusScanState *scanState, List *taskList,
-									 RowModifyLevel modLevel, bool hasReturning);
-extern int64 ExecuteModifyTasksWithoutResults(List *taskList);
-extern int64 ExecuteModifyTasksSequentiallyWithoutResults(List *taskList,
-														  RowModifyLevel modLevel);
 extern ShardPlacementAccess * CreatePlacementAccess(ShardPlacement *placement,
 													ShardPlacementAccessType accessType);
 

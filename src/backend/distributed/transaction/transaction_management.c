@@ -49,6 +49,18 @@ int SavedMultiShardCommitProtocol = COMMIT_PROTOCOL_BARE;
  */
 bool SelectOpensTransactionBlock;
 
+/* controls use of locks to enforce safe commutativity */
+bool AllModificationsCommutative = false;
+
+/* we've deprecated this flag, keeping here for some time not to break existing users */
+bool EnableDeadlockPrevention = true;
+
+/* number of nested stored procedure call levels we are currently in */
+int StoredProcedureLevel = 0;
+
+/* number of nested DO block levels we are currently in */
+int DoBlockLevel = 0;
+
 /* state needed to keep track of operations used during a transaction */
 XactModificationType XactModificationLevel = XACT_MODIFICATION_NONE;
 
