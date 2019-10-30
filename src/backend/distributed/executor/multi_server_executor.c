@@ -176,7 +176,6 @@ InitTaskExecution(Task *task, TaskExecStatus initialTaskExecStatus)
 	taskExecution->jobId = task->jobId;
 	taskExecution->taskId = task->taskId;
 	taskExecution->nodeCount = nodeCount;
-	taskExecution->connectStartTime = 0;
 	taskExecution->currentNodeIndex = 0;
 	taskExecution->failureCount = 0;
 
@@ -244,11 +243,6 @@ CleanupTaskExecution(TaskExecution *taskExecution)
 bool
 TaskExecutionFailed(TaskExecution *taskExecution)
 {
-	if (taskExecution->criticalErrorOccurred)
-	{
-		return true;
-	}
-
 	if (taskExecution->failureCount >= MAX_TASK_EXECUTION_FAILURES)
 	{
 		return true;
