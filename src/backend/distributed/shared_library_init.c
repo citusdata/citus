@@ -68,8 +68,9 @@
 /* marks shared object as one loadable by the postgres version compiled against */
 PG_MODULE_MAGIC;
 
+#define DUMMY_REAL_TIME_EXECUTOR_ENUM_VALUE 9999999
 static char *CitusVersion = CITUS_VERSION;
-static int DummyRealTimeExecutorEnumValue = 9999999;
+
 
 void _PG_init(void);
 
@@ -115,7 +116,7 @@ static const struct config_enum_entry replication_model_options[] = {
 
 static const struct config_enum_entry task_executor_type_options[] = {
 	{ "adaptive", MULTI_EXECUTOR_ADAPTIVE, false },
-	{ "real-time", DummyRealTimeExecutorEnumValue, false }, /* keep it for backward comp. */
+	{ "real-time", DUMMY_REAL_TIME_EXECUTOR_ENUM_VALUE, false }, /* keep it for backward comp. */
 	{ "task-tracker", MULTI_EXECUTOR_TASK_TRACKER, false },
 	{ NULL, 0, false }
 };
@@ -1311,7 +1312,7 @@ ErrorIfNotASuitableDeadlockFactor(double *newval, void **extra, GucSource source
 static bool
 WarnIfDeprecatedExecutorUsed(int *newval, void **extra, GucSource source)
 {
-	if (*newval == DummyRealTimeExecutorEnumValue)
+	if (*newval == DUMMY_REAL_TIME_EXECUTOR_ENUM_VALUE)
 	{
 		ereport(WARNING, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 						  errmsg("Ignoring the setting, real-time executor is "
