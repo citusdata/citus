@@ -97,7 +97,7 @@ PlacementAccessListForTask(Task *task, ShardPlacement *taskPlacement)
  * GetPlacementListConnection. If the node group does not have a placement
  * (e.g. in case of a broadcast join) then the shard is skipped.
  */
-static  List *
+static List *
 BuildPlacementSelectList(int32 groupId, List *relationShardList)
 {
 	return BuildPlacementAccessList(groupId, relationShardList, PLACEMENT_ACCESS_SELECT);

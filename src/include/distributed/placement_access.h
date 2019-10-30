@@ -1,8 +1,8 @@
 /*-------------------------------------------------------------------------
  *
  * placement_access.h
- * 		Declarations of the structs and functions used in generating the
- * 		placement accesses for distributed query execution.
+ *      Declarations of the structs and functions used in generating the
+ *      placement accesses for distributed query execution.
  * Copyright (c) Citus Data, Inc.
  *-------------------------------------------------------------------------
  */
