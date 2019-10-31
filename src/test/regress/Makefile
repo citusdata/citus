@@ -16,11 +16,6 @@ MAKEFILE_DIR := $(dir $(realpath $(firstword $(MAKEFILE_LIST))))
 export PATH := $(MAKEFILE_DIR)/bin:$(PATH)
 export PG_REGRESS_DIFF_OPTS = -dU10 -w
 
-SPECS_DIR := $(citus_abs_srcdir)/specs
-## Prepend common mx for isolation tests
-
-SHELL_RES := $(shell $(SPECS_DIR)/prepend_mx_common.py $(SPECS_DIR) )
-
 ##
 ## Citus regression support
 ##
@@ -31,6 +26,8 @@ MULTI_REGRESS_OPTS = --inputdir=$(citus_abs_srcdir) $(pg_regress_locale_flags) -
 pg_upgrade_check = $(citus_abs_srcdir)/upgrade/pg_upgrade_test.py
 citus_upgrade_check = $(citus_abs_srcdir)/upgrade/citus_upgrade_test.py
 
+template_mx_files = $(shell find $(citus_abs_srcdir)/specs/ -name 'base*mx.spec')
+generated_mx_files = $(patsubst $(citus_abs_srcdir)/specs/base_isolation%,$(citus_abs_srcdir)/specs/isolation%,$(template_mx_files))
 # XXX: Can't actually do useful testruns against install - $libdir
 # etc will point to the directory configured during postgres'
 # build. We could copy the installed tree around, but that's quite
@@ -52,6 +49,14 @@ output_files := $(patsubst $(citus_abs_srcdir)/output/%.source,expected/%.out, $
 check: check-full
 # check-full triggers all tests that ought to be run routinely
 check-full: check-multi check-multi-mx check-multi-task-tracker-extra check-worker check-follower-cluster check-failure
+
+# this can be used to print a value of variable
+# ex: make print-generated_mx_files
+print-%  : ; @echo $* = $($*)
+
+$(generated_mx_files): $(citus_abs_srcdir)/specs/%: $(citus_abs_srcdir)/specs/base_%
+	echo $@
+	cd $(citus_abs_srcdir) && cpp -undef -w -P -MMD -MP -MT $@ $< > $@
 
 # using pg_regress_multi_check unnecessarily starts up multiple nodes, which isn't needed
 # for check-worker. But that's harmless besides a few cycles.
@@ -106,7 +111,7 @@ check-failure-non-adaptive-base: all tempinstall-main
 	--server-option=citus.task_executor_type=real-time \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/failure_base_schedule $(EXTRA_TESTS)
 
-check-isolation-non-adaptive: all tempinstall-main
+check-isolation-non-adaptive: all tempinstall-main $(generated_mx_files)
 	$(pg_regress_multi_check) --load-extension=citus --isolationtester \
 	--server-option=citus.task_executor_type=real-time \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/isolation_schedule $(EXTRA_TESTS)
@@ -116,11 +121,11 @@ check-multi-vg: all tempinstall-main
 	--pg_ctl-timeout=360 --connection-timeout=500000 --valgrind-path=valgrind --valgrind-log-file=$(VALGRIND_LOG_FILE) \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_schedule $(EXTRA_TESTS)
 
-check-isolation: all tempinstall-main
+check-isolation: all tempinstall-main $(generated_mx_files)
 	$(pg_regress_multi_check) --load-extension=citus --isolationtester \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/isolation_schedule $(EXTRA_TESTS)
 
-check-isolation-base: all tempinstall-main
+check-isolation-base: all tempinstall-main $(generated_mx_files)
 	$(pg_regress_multi_check) --load-extension=citus --isolationtester \
 	-- $(MULTI_REGRESS_OPTS) $(EXTRA_TESTS)
 

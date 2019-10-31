@@ -1,3 +1,5 @@
+#include "isolation_mx_common.spec"
+
 setup 
 {
 	CREATE TABLE insert_table(id integer, value integer);
@@ -5,8 +7,8 @@ setup
 	COPY insert_table FROM PROGRAM 'echo 1, 10 && echo 2, 20 && echo 3, 30 && echo 4, 40 && echo 5, 50' WITH CSV;
 }
 
-# Create and use UDF to close the connection opened in the setup step. Also return the cluster
-# back to the initial state.
+// Create and use UDF to close the connection opened in the setup step. Also return the cluster
+// back to the initial state.
 teardown
 {
         DROP TABLE IF EXISTS insert_table CASCADE;
@@ -16,7 +18,7 @@ teardown
 
 session "s1"
 
-# We do not need to begin a transaction on coordinator, since it will be open on workers.
+// We do not need to begin a transaction on coordinator, since it will be open on workers.
 
 step "s1-start-session-level-connection"
 {
@@ -51,7 +53,7 @@ step "s1-stop-connection"
 
 session "s2"
 
-# We do not need to begin a transaction on coordinator, since it will be open on workers.
+// We do not need to begin a transaction on coordinator, since it will be open on workers.
 
 step "s2-start-session-level-connection"
 {
@@ -145,5 +147,5 @@ permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-insert-
 permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-insert" "s2-start-session-level-connection" "s2-begin-on-worker" "s2-copy" "s1-commit-worker" "s2-commit-worker""s3-select-count" "s1-stop-connection" "s2-stop-connection"
 permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-insert" "s2-start-session-level-connection" "s2-begin-on-worker" "s2-truncate" "s1-commit-worker" "s2-commit-worker""s3-select-count" "s1-stop-connection" "s2-stop-connection"
 permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-insert" "s2-start-session-level-connection" "s2-begin-on-worker" "s2-select-for-update" "s1-commit-worker" "s2-commit-worker""s3-select-count" "s1-stop-connection" "s2-stop-connection"
-#Not able to test the next permutation, until issue with CREATE INDEX CONCURRENTLY's locks is resolved. Issue #2966 
-#permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-insert" "s2-coordinator-create-index-concurrently" "s1-commit-worker" "s3-select-count" "s1-stop-connection"
+//Not able to test the next permutation, until issue with CREATE INDEX CONCURRENTLY's locks is resolved. Issue //2966 
+//permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-insert" "s2-coordinator-create-index-concurrently" "s1-commit-worker" "s3-select-count" "s1-stop-connection"

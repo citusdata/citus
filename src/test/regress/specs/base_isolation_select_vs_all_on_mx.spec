@@ -1,3 +1,5 @@
+#include "isolation_mx_common.spec"
+
 setup 
 {
 	CREATE TABLE select_table(id integer, value integer);
@@ -5,8 +7,8 @@ setup
 	COPY select_table FROM PROGRAM 'echo 1, 10 && echo 2, 20 && echo 3, 30 && echo 4, 40 && echo 5, 50' WITH CSV;
 }
 
-# Create and use UDF to close the connection opened in the setup step. Also return the cluster
-# back to the initial state.
+// Create and use UDF to close the connection opened in the setup step. Also return the cluster
+// back to the initial state.
 teardown
 {
         DROP TABLE IF EXISTS select_table CASCADE;
@@ -15,7 +17,7 @@ teardown
 
 session "s1"
 
-# We do not need to begin a transaction on coordinator, since it will be open on workers.
+// We do not need to begin a transaction on coordinator, since it will be open on workers.
 
 step "s1-start-session-level-connection"
 {
@@ -50,7 +52,7 @@ step "s2-begin"
 	BEGIN;
 }
 
-# We do not need to begin a transaction on coordinator, since it will be open on workers.
+// We do not need to begin a transaction on coordinator, since it will be open on workers.
 
 step "s2-start-session-level-connection"
 {

@@ -1,3 +1,5 @@
+#include "isolation_mx_common.spec"
+
 setup 
 {
 	CREATE TABLE ref_table(user_id int, value_1 int);
@@ -5,8 +7,8 @@ setup
 	INSERT INTO ref_table VALUES (1, 11), (2, 21), (3, 31), (4, 41), (5, 51), (6, 61), (7, 71);
 }
 
-# Create and use UDF to close the connection opened in the setup step. Also return the cluster
-# back to the initial state.
+// Create and use UDF to close the connection opened in the setup step. Also return the cluster
+// back to the initial state.
 teardown
 {
 	DROP TABLE ref_table;
@@ -20,7 +22,7 @@ step "s1-begin"
 	BEGIN;
 }
 
-# We do not need to begin a transaction on coordinator, since it will be open on workers.
+// We do not need to begin a transaction on coordinator, since it will be open on workers.
 
 step "s1-start-session-level-connection"
 {

@@ -1,3 +1,5 @@
+#include "isolation_mx_common.spec"
+
 setup 
 {
     CREATE TABLE ref_table_1(id int PRIMARY KEY, value int);
@@ -121,18 +123,18 @@ step "s2-stop-connection"
 	SELECT stop_session_level_connection_to_node();
 }
 
-# Case 1. UPDATE/DELETE ref_table_1 should only lock its own shard in Exclusive mode.
+// Case 1. UPDATE/DELETE ref_table_1 should only lock its own shard in Exclusive mode.
 permutation "s2-start-session-level-connection" "s2-begin-on-worker" "s2-update-table-1" "s1-start-session-level-connection"  "s1-view-locks" "s2-rollback-worker" "s1-view-locks" "s1-stop-connection" "s2-stop-connection"
 permutation "s2-start-session-level-connection" "s2-begin-on-worker" "s2-delete-table-1" "s1-start-session-level-connection"  "s1-view-locks" "s2-rollback-worker" "s1-view-locks" "s1-stop-connection" "s2-stop-connection"
-# Case 2. Modifying ref_table_2 should also lock ref_table_1 shard in Exclusive mode.
+// Case 2. Modifying ref_table_2 should also lock ref_table_1 shard in Exclusive mode.
 permutation "s2-start-session-level-connection" "s2-begin-on-worker" "s2-update-table-2" "s1-start-session-level-connection"  "s1-view-locks" "s2-rollback-worker" "s1-view-locks" "s1-stop-connection" "s2-stop-connection"
 permutation "s2-start-session-level-connection" "s2-begin-on-worker" "s2-delete-table-2" "s1-start-session-level-connection"  "s1-view-locks" "s2-rollback-worker" "s1-view-locks" "s1-stop-connection" "s2-stop-connection"
-# Case 3. Modifying ref_table_3 should also lock ref_table_1 and ref_table_2 shards in Exclusive mode.
+// Case 3. Modifying ref_table_3 should also lock ref_table_1 and ref_table_2 shards in Exclusive mode.
 permutation "s2-start-session-level-connection" "s2-begin-on-worker" "s2-update-table-3" "s1-start-session-level-connection"  "s1-view-locks" "s2-rollback-worker" "s1-view-locks" "s1-stop-connection" "s2-stop-connection"
 permutation "s2-start-session-level-connection" "s2-begin-on-worker" "s2-delete-table-3" "s1-start-session-level-connection"  "s1-view-locks" "s2-rollback-worker" "s1-view-locks" "s1-stop-connection" "s2-stop-connection"
-# Case 4. Inserting into ref_table_1 should only lock its own shard in RowExclusive mode.
+// Case 4. Inserting into ref_table_1 should only lock its own shard in RowExclusive mode.
 permutation "s2-start-session-level-connection" "s2-begin-on-worker" "s2-insert-table-1" "s1-start-session-level-connection"  "s1-view-locks" "s2-rollback-worker" "s1-view-locks" "s1-stop-connection" "s2-stop-connection"
-# Case 5. Modifying ref_table_2 should also lock ref_table_1 in RowExclusive mode.
+// Case 5. Modifying ref_table_2 should also lock ref_table_1 in RowExclusive mode.
 permutation "s2-start-session-level-connection" "s2-begin-on-worker" "s2-insert-table-2" "s1-start-session-level-connection"  "s1-view-locks" "s2-rollback-worker" "s1-view-locks" "s1-stop-connection" "s2-stop-connection"
-# Case 6. Modifying ref_table_2 should also lock ref_table_1 in RowExclusive mode.
+// Case 6. Modifying ref_table_2 should also lock ref_table_1 in RowExclusive mode.
 permutation "s2-start-session-level-connection" "s2-begin-on-worker" "s2-insert-table-3" "s1-start-session-level-connection"  "s1-view-locks" "s2-rollback-worker" "s1-view-locks" "s1-stop-connection" "s2-stop-connection"

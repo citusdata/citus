@@ -1,5 +1,5 @@
-# Create and use UDF to send commands from the same connection. Also make the cluster
-# ready for testing MX functionalities.
+// Create and use UDF to send commands from the same connection. Also make the cluster
+// ready for testing MX functionalities.
 setup
 {
     CREATE OR REPLACE FUNCTION start_session_level_connection_to_node(text, integer)
