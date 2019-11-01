@@ -127,8 +127,6 @@ extern void DeletePartitionRow(Oid distributedRelationId);
 extern void DeleteShardRow(uint64 shardId);
 extern void UpdateShardPlacementState(uint64 placementId, char shardState);
 extern void DeleteShardPlacementRow(uint64 placementId);
-extern void UpdateColocationGroupReplicationFactorForReferenceTables(int
-																	 replicationFactor);
 extern void CreateDistributedTable(Oid relationId, Var *distributionColumn,
 								   char distributionMethod, char *colocateWithTableName,
 								   bool viaDeprecatedAPI);
