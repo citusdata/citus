@@ -424,7 +424,7 @@ GROUP BY
   types
 ORDER BY 
   types;
-DEBUG:  cannot use real time executor with repartition jobs
+DEBUG:  cannot use adaptive executor with repartition jobs
 HINT:  Since you enabled citus.enable_repartition_joins Citus chose to use task-tracker.
 DEBUG:  generating subplan 16_1 for subquery SELECT max(events."time") AS max, 0 AS event, events.user_id FROM public.events_table events, public.users_table users WHERE ((events.user_id OPERATOR(pg_catalog.=) users.value_2) AND (events.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2]))) GROUP BY events.user_id
 DEBUG:  generating subplan 16_2 for subquery SELECT "time", event, user_id FROM (SELECT events."time", 0 AS event, events.user_id FROM public.events_table events WHERE (events.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2]))) events_subquery_1
