@@ -399,3 +399,247 @@ DROP VIEW recent_selected_users;
 DROP VIEW selected_users;
 DROP VIEW recent_events;
 DROP VIEW recent_users;
+
+-- modify statements on/with views
+-- create two tables and a view
+CREATE TABLE large (id int, tenant_id int);
+-- constraint id to be unique for "insert into on conflict" test
+CREATE TABLE small (id int, tenant_id int, unique(tenant_id));
+
+SELECT create_distributed_table('large','tenant_id');
+SELECT create_distributed_table('small','tenant_id');
+
+CREATE VIEW small_view AS SELECT * from small where id < 100;
+
+\copy small FROM STDIN DELIMITER ','
+250, 25
+470, 13
+8,5
+6,3
+7,4
+1,2
+\.
+
+\copy large FROM STDIN DELIMITER ','
+1,2
+2,3
+5,4
+6,5
+\.
+
+-- running modify statements "on" views is still not supported, hence below two statements will fail
+UPDATE small_view SET id = 1;
+DELETE FROM small_view;
+INSERT INTO small_view VALUES(8, 5) ON CONFLICT(tenant_id) DO UPDATE SET tenant_id=99;
+
+-- using views in modify statements' FROM / WHERE clauses is still valid 
+UPDATE large SET id=20 FROM small_view WHERE small_view.id=large.id;
+SELECT * FROM large order by 1, 2;
+
+-- we should still have identical rows for next test statements, then insert new rows to both tables
+INSERT INTO large VALUES(14, 14);
+INSERT INTO small VALUES(14, 14);
+
+-- using views in subqueries within modify statements is still valid 
+UPDATE large SET id=23 FROM (SELECT *, id*2 from small_view ORDER BY 1,2 LIMIT 5) as small_view WHERE small_view.id=large.id;
+SELECT * FROM large order by 1, 2;
+
+-- we should still have identical rows for next test statements, then insert a new row to large table
+INSERT INTO large VALUES(14, 14);
+
+-- using views in modify statements' FROM / WHERE clauses is still valid 
+UPDATE large SET id=27 FROM small_view WHERE small_view.tenant_id=large.tenant_id; 
+SELECT * FROM large ORDER BY 1, 2;
+
+-- we should still have identical rows for next test statements, then insert a new row to large table
+INSERT INTO large VALUES(14, 14);
+
+-- test on a router executable update statement
+UPDATE large SET id=28 FROM small_view WHERE small_view.id=large.id and small_view.tenant_id=14 and large.tenant_id=14;
+SELECT * FROM large ORDER BY 1, 2;
+
+-- we should still have identical rows for next test statements, then insert new rows to both tables
+INSERT INTO large VALUES(14, 14);
+INSERT INTO large VALUES(99, 78);
+INSERT INTO small VALUES(99, 99);
+
+-- run these tests with RETURNING clause to observe the functionality
+-- print the columns from the "view" as well to test "rewrite resjunk" behaviour
+UPDATE large SET id=36 FROM small_view WHERE small_view.id=large.id RETURNING large.id, large.tenant_id, small_view.tenant_id;
+SELECT * FROM large ORDER BY 1, 2;
+-- below statement should not update anything. so it should return empty
+UPDATE large SET id=46 FROM small_view WHERE small_view.id=large.id and large.id=15 RETURNING large.id, large.tenant_id;
+
+-- we should still have identical rows for next test statements, then insert a new row to large table
+INSERT INTO large VALUES(14, 14);
+
+-- delete statement on large
+DELETE FROM large WHERE id in (SELECT id FROM small_view);
+SELECT * FROM large ORDER BY 1, 2;
+
+-- we should still have identical rows for next test statement, then insert a new row to large table
+INSERT INTO large VALUES(14, 14);
+
+-- delete statement with CTE
+WITH all_small_view_ids AS (SELECT id FROM small_view)
+DELETE FROM large WHERE id in (SELECT * FROM all_small_view_ids);
+SELECT * FROM large ORDER BY 1, 2;
+
+-- INSERT INTO views is still not supported
+INSERT INTO small_view VALUES(3, 3);
+
+DROP TABLE large;
+DROP TABLE small CASCADE;
+
+-- now, run the same modify statement tests on a partitioned table
+CREATE TABLE small (id int, tenant_id int);
+
+CREATE TABLE large_partitioned (id int, tenant_id int) partition by range(tenant_id);
+
+CREATE TABLE large_partitioned_p1 PARTITION OF large_partitioned FOR VALUES FROM (1) TO (10);
+CREATE TABLE large_partitioned_p2 PARTITION OF large_partitioned FOR VALUES FROM (10) TO (20);
+CREATE TABLE large_partitioned_p3 PARTITION OF large_partitioned FOR VALUES FROM (20) TO (100);
+
+SELECT create_distributed_table('large_partitioned','tenant_id');
+SELECT create_distributed_table('small','tenant_id');
+
+CREATE VIEW small_view AS SELECT * from small where id < 100;
+
+\copy small FROM STDIN DELIMITER ','
+250, 25
+470, 13
+8,2
+6,3
+7,4
+1,2
+\.
+
+\copy large_partitioned FROM STDIN DELIMITER ','
+1,2
+2,3
+5,4
+6,5
+29,15
+26,32
+60,51
+\.
+
+-- running modify statements "on" views is still not supported, hence below two statements will fail
+UPDATE small_view SET id = 1;
+DELETE FROM small_view;
+
+UPDATE large_partitioned SET id=27 FROM small_view WHERE small_view.tenant_id=large_partitioned.tenant_id;
+SELECT * FROM large_partitioned ORDER BY 1, 2;
+
+-- we should still have identical rows for next test statements, then insert identical rows to both tables
+INSERT INTO small VALUES(14, 14);
+INSERT INTO large_partitioned VALUES(14, 14);
+
+-- test on a router executable update statement
+UPDATE large_partitioned SET id=28 FROM small_view WHERE small_view.id=large_partitioned.id and small_view.tenant_id=14 and large_partitioned.tenant_id=14;
+SELECT * FROM large_partitioned ORDER BY 1, 2;
+
+-- we should still have identical rows for next test statements, then insert a new row to large_partitioned table
+INSERT INTO large_partitioned VALUES(14, 14);
+
+-- delete statement on large
+DELETE FROM large_partitioned WHERE tenant_id in (SELECT tenant_id FROM small_view);
+SELECT * FROM large_partitioned ORDER BY 1, 2;
+
+-- we should still have identical rows for next test statement, then insert a new row to large table
+INSERT INTO large_partitioned VALUES(14, 14);
+
+-- delete statement with CTE
+WITH all_small_view_tenant_ids AS (SELECT tenant_id FROM small_view)
+DELETE FROM large_partitioned WHERE tenant_id in (SELECT * FROM all_small_view_tenant_ids);
+SELECT * FROM large_partitioned ORDER BY 1, 2;
+
+DROP TABLE large_partitioned;
+DROP TABLE small CASCADE;
+
+-- perform similar tests with a little bit complicated view
+
+-- create two tables and a view
+CREATE TABLE large (id int, tenant_id int);
+-- constraint id to be unique for "insert into on conflict" test
+CREATE TABLE small (id int, tenant_id int, unique(tenant_id));
+
+SELECT create_distributed_table('large','tenant_id');
+SELECT create_distributed_table('small','tenant_id');
+
+CREATE VIEW small_view AS SELECT id, tenant_id FROM (SELECT *, id*2 FROM small WHERE id < 100 ORDER BY 1,2 LIMIT 5) as foo;
+
+\copy small FROM STDIN DELIMITER ','
+250, 25
+470, 13
+8,5
+6,3
+7,4
+1,2
+\.
+
+\copy large FROM STDIN DELIMITER ','
+1,2
+2,3
+5,4
+6,5
+\.
+
+-- using views in modify statements' FROM / WHERE clauses is still valid 
+UPDATE large SET id=20 FROM small_view WHERE small_view.id=large.id;
+SELECT * FROM large order by 1, 2;
+
+-- we should still have identical rows for next test statements, then insert new rows to both tables
+INSERT INTO large VALUES(14, 14);
+INSERT INTO small VALUES(14, 14);
+
+-- using views in subqueries within modify statements is still valid 
+UPDATE large SET id=23 FROM (SELECT *, id*2 from small_view ORDER BY 1,2 LIMIT 5) as small_view WHERE small_view.id=large.id;
+SELECT * FROM large order by 1, 2;
+
+-- we should still have identical rows for next test statements, then insert a new row to large table
+INSERT INTO large VALUES(14, 14);
+
+-- using views in modify statements' FROM / WHERE clauses is still valid 
+UPDATE large SET id=27 FROM small_view WHERE small_view.tenant_id=large.tenant_id; 
+SELECT * FROM large ORDER BY 1, 2;
+
+-- we should still have identical rows for next test statements, then insert a new row to large table
+INSERT INTO large VALUES(14, 14);
+
+-- test on a router executable update statement
+UPDATE large SET id=28 FROM small_view WHERE small_view.id=large.id and small_view.tenant_id=14 and large.tenant_id=14;
+SELECT * FROM large ORDER BY 1, 2;
+
+-- we should still have identical rows for next test statements, then insert new rows to both tables
+INSERT INTO large VALUES(14, 14);
+INSERT INTO large VALUES(99, 78);
+INSERT INTO small VALUES(99, 99);
+
+-- run these tests with RETURNING clause to observe the functionality
+-- print the columns from the "view" as well to test "rewrite resjunk" behaviour
+UPDATE large SET id=36 FROM small_view WHERE small_view.id=large.id RETURNING large.id, large.tenant_id, small_view.tenant_id;
+SELECT * FROM large ORDER BY 1, 2;
+-- below statement should not update anything. so it should return empty
+UPDATE large SET id=46 FROM small_view WHERE small_view.id=large.id and large.id=15 RETURNING large.id, large.tenant_id;
+
+-- we should still have identical rows for next test statements, then insert a new row to large table
+INSERT INTO large VALUES(14, 14);
+
+-- delete statement on large
+DELETE FROM large WHERE id in (SELECT id FROM small_view);
+SELECT * FROM large ORDER BY 1, 2;
+
+-- we should still have identical rows for next test statement, then insert a new row to large table
+INSERT INTO large VALUES(14, 14);
+
+-- delete statement with CTE
+WITH all_small_view_ids AS (SELECT id FROM small_view)
+DELETE FROM large WHERE id in (SELECT * FROM all_small_view_ids);
+SELECT * FROM large ORDER BY 1, 2;
+
+-- INSERT INTO views is still not supported
+INSERT INTO small_view VALUES(3, 3);
+
+DROP TABLE large;
+DROP TABLE small CASCADE;

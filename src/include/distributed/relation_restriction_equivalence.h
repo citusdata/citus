@@ -31,7 +31,7 @@ extern List * GenerateAllAttributeEquivalences(PlannerRestrictionContext *
 											   plannerRestrictionContext);
 extern uint32 ReferenceRelationCount(RelationRestrictionContext *restrictionContext);
 
-extern List * RelationIdList(Query *query);
+extern List * DistributedRelationIdList(Query *query);
 extern PlannerRestrictionContext * FilterPlannerRestrictionForQuery(
 	PlannerRestrictionContext *plannerRestrictionContext,
 	Query *query);

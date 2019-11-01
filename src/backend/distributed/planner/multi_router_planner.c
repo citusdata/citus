@@ -132,6 +132,7 @@ static bool TargetEntryChangesValue(TargetEntry *targetEntry, Var *column,
 static Job * RouterInsertJob(Query *originalQuery, Query *query,
 							 DeferredErrorMessage **planningError);
 static void ErrorIfNoShardsExist(DistTableCacheEntry *cacheEntry);
+static DeferredErrorMessage * DeferErrorIfModifyView(Query *queryTree);
 static bool CanShardPrune(Oid distributedTableId, Query *query);
 static Job * CreateJob(Query *query);
 static Task * CreateTask(TaskType taskType);
@@ -567,6 +568,12 @@ ModifyQuerySupported(Query *queryTree, Query *originalQuery, bool multiShardQuer
 	uint32 queryTableCount = 0;
 	CmdType commandType = queryTree->commandType;
 
+	deferredError = DeferErrorIfModifyView(queryTree);
+	if (deferredError != NULL)
+	{
+		return deferredError;
+	}
+
 	/*
 	 * Here, we check if a recursively planned query tries to modify
 	 * rows based on the ctid column. This is a bad idea because ctid of
@@ -656,29 +663,40 @@ ModifyQuerySupported(Query *queryTree, Query *originalQuery, bool multiShardQuer
 
 		if (rangeTableEntry->rtekind == RTE_RELATION)
 		{
-			Oid relationId = rangeTableEntry->relid;
-
-			if (!IsDistributedTable(relationId))
-			{
-				StringInfo errorMessage = makeStringInfo();
-				char *relationName = get_rel_name(rangeTableEntry->relid);
-
-				appendStringInfo(errorMessage, "relation %s is not distributed",
-								 relationName);
-
-				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-									 errorMessage->data, NULL, NULL);
-			}
-
-			queryTableCount++;
-
 			/* we do not expect to see a view in modify query */
 			if (rangeTableEntry->relkind == RELKIND_VIEW)
 			{
+				/*
+				 * we already check if modify is run on a view in DeferErrorIfModifyView
+				 * function call. In addition, since Postgres replaced views in FROM
+				 * clause with subqueries, encountering with a view should not be a problem here.
+				 */
+			}
+			else if (rangeTableEntry->relkind == RELKIND_MATVIEW)
+			{
 				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-									 "cannot modify views over distributed tables",
+									 "materialized views in modify queries are not supported",
 									 NULL, NULL);
 			}
+			/* for other kinds of relations, check if its distributed */
+			else
+			{
+				Oid relationId = rangeTableEntry->relid;
+
+				if (!IsDistributedTable(relationId))
+				{
+					StringInfo errorMessage = makeStringInfo();
+					char *relationName = get_rel_name(rangeTableEntry->relid);
+
+					appendStringInfo(errorMessage, "relation %s is not distributed",
+									 relationName);
+
+					return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+										 errorMessage->data, NULL, NULL);
+				}
+			}
+
+			queryTableCount++;
 		}
 		else if (rangeTableEntry->rtekind == RTE_VALUES
 #if PG_VERSION_NUM >= 120000
@@ -889,6 +907,39 @@ ModifyQuerySupported(Query *queryTree, Query *originalQuery, bool multiShardQuer
 	if (deferredError != NULL)
 	{
 		return deferredError;
+	}
+
+	return NULL;
+}
+
+
+/*
+ * Modify statements on simple updetable views are not supported yet.
+ * Actually, we need the original query (the query before postgres
+ * pg_rewrite_query) to detect if the view sitting in rtable is to
+ * be updated or just to be used in FROM clause.
+ * Hence, tracing the postgres source code, we deduced that postgres
+ * puts the relation to be modified to the first entry of rtable.
+ * If first element of the range table list is a simple updatable
+ * view and this view is not coming from FROM clause (inFromCl = False),
+ * then update is run "on" that view.
+ */
+static DeferredErrorMessage *
+DeferErrorIfModifyView(Query *queryTree)
+{
+	if (queryTree->rtable != NIL)
+	{
+		RangeTblEntry *firstRangeTableElement = (RangeTblEntry *) linitial(
+			queryTree->rtable);
+
+		if (firstRangeTableElement->rtekind == RTE_RELATION &&
+			firstRangeTableElement->relkind == RELKIND_VIEW &&
+			firstRangeTableElement->inFromCl == false)
+		{
+			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+								 "cannot modify views over distributed tables", NULL,
+								 NULL);
+		}
 	}
 
 	return NULL;
