@@ -193,7 +193,7 @@ CitusExecScan(CustomScanState *node)
 
 	if (!scanState->finishedRemoteScan)
 	{
-		AdaptiveExecutor(node);
+		AdaptiveExecutor(scanState);
 
 		scanState->finishedRemoteScan = true;
 	}

@@ -600,9 +600,8 @@ static TaskExecutionState TaskExecutionStateMachine(ShardCommandExecution *
  * of the input scanScate.
  */
 TupleTableSlot *
-AdaptiveExecutor(CustomScanState *node)
+AdaptiveExecutor(CitusScanState *scanState)
 {
-	CitusScanState *scanState = (CitusScanState *) node;
 	TupleTableSlot *resultSlot = NULL;
 
 	DistributedPlan *distributedPlan = scanState->distributedPlan;
