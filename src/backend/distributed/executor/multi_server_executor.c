@@ -105,7 +105,7 @@ JobExecutorType(DistributedPlan *distributedPlan)
 			}
 
 			ereport(DEBUG1, (errmsg(
-								 "cannot use real time executor with repartition jobs"),
+								 "cannot use adaptive executor with repartition jobs"),
 							 errhint("Since you enabled citus.enable_repartition_joins "
 									 "Citus chose to use task-tracker.")));
 			return MULTI_EXECUTOR_TASK_TRACKER;
