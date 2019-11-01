@@ -1054,8 +1054,44 @@ DEBUG:  Plan is router executable
 DEBUG:  generating subplan 109_6 for subquery SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.event_type, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('109_4'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, event_type integer, value_2 integer, value_3 double precision, value_4 bigint) INTERSECT SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.event_type, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('109_5'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, event_type integer, value_2 integer, value_3 double precision, value_4 bigint)
 DEBUG:  Router planner cannot handle multi-shard select queries
 ERROR:  cannot pushdown the subquery
+-- make sure that non-colocated subquery joins work fine in
+-- modifications
+CREATE TABLE table1 (id int, tenant_id int);
+CREATE VIEW table1_view AS SELECT * from table1 where id < 100;
+CREATE TABLE table2 (id int, tenant_id int) partition by range(tenant_id);
+CREATE TABLE table2_p1 PARTITION OF table2 FOR VALUES FROM (1) TO (10);
+-- modifications on the partitons are only allowed with rep=1
+SET citus.shard_replication_factor TO 1;
+SELECT create_distributed_table('table2','tenant_id');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+SELECT create_distributed_table('table1','tenant_id');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+-- all of the above queries are non-colocated subquery joins
+-- because the views are replaced with subqueries
+UPDATE table2 SET id=20 FROM table1_view WHERE table1_view.id=table2.id;
+DEBUG:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  generating subplan 117_1 for subquery SELECT table1.id, table1.tenant_id FROM non_colocated_subquery.table1 WHERE (table1.id OPERATOR(pg_catalog.<) 100)
+DEBUG:  Plan 117 query after replacing subqueries and CTEs: UPDATE non_colocated_subquery.table2 SET id = 20 FROM (SELECT intermediate_result.id, intermediate_result.tenant_id FROM read_intermediate_result('117_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer, tenant_id integer)) table1_view WHERE (table1_view.id OPERATOR(pg_catalog.=) table2.id)
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+UPDATE table2_p1 SET id=20 FROM table1_view WHERE table1_view.id=table2_p1.id;
+DEBUG:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  generating subplan 119_1 for subquery SELECT table1.id, table1.tenant_id FROM non_colocated_subquery.table1 WHERE (table1.id OPERATOR(pg_catalog.<) 100)
+DEBUG:  Plan 119 query after replacing subqueries and CTEs: UPDATE non_colocated_subquery.table2_p1 SET id = 20 FROM (SELECT intermediate_result.id, intermediate_result.tenant_id FROM read_intermediate_result('119_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer, tenant_id integer)) table1_view WHERE (table1_view.id OPERATOR(pg_catalog.=) table2_p1.id)
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
 RESET client_min_messages;
 DROP FUNCTION explain_json_2(text);
 SET search_path TO 'public';
 DROP SCHEMA non_colocated_subquery CASCADE;
-NOTICE:  drop cascades to 2 other objects
+NOTICE:  drop cascades to 5 other objects

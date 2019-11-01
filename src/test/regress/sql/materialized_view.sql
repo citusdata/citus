@@ -246,5 +246,9 @@ INSERT INTO small VALUES(14, 14);
 WITH all_small_view_ids AS (SELECT id FROM small_view)
 DELETE FROM large_partitioned WHERE id in (SELECT * FROM all_small_view_ids);
 
+-- make sure that materialized view in a CTE/subquery can be joined with a distributed table
+WITH cte AS (SELECT *, random() FROM small_view) SELECT count(*) FROM cte JOIN small USING(id);
+SELECT count(*) FROM (SELECT *, random() FROM small_view) as subquery JOIN small USING(id);
+
 DROP TABLE large_partitioned;
 DROP TABLE small CASCADE;

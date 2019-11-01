@@ -995,8 +995,8 @@ HasUnsupportedJoinWalker(Node *node, void *context)
 static bool
 ErrorHintRequired(const char *errorHint, Query *queryTree)
 {
-	List *rangeTableList = NIL;
-	ListCell *rangeTableCell = NULL;
+	List *distributedRelationIdList = DistributedRelationIdList(queryTree);
+	ListCell *relationIdCell = NULL;
 	List *colocationIdList = NIL;
 
 	if (errorHint == NULL)
@@ -1004,11 +1004,9 @@ ErrorHintRequired(const char *errorHint, Query *queryTree)
 		return false;
 	}
 
-	ExtractRangeTableRelationWalker((Node *) queryTree, &rangeTableList);
-	foreach(rangeTableCell, rangeTableList)
+	foreach(relationIdCell, distributedRelationIdList)
 	{
-		RangeTblEntry *rte = (RangeTblEntry *) lfirst(rangeTableCell);
-		Oid relationId = rte->relid;
+		Oid relationId = lfirst_oid(relationIdCell);
 		char partitionMethod = PartitionMethod(relationId);
 		if (partitionMethod == DISTRIBUTE_BY_NONE)
 		{
