@@ -88,30 +88,7 @@ JobExecutorType(DistributedPlan *distributedPlan)
 
 	Assert(distributedPlan->modLevel == ROW_MODIFY_READONLY);
 
-	if (executorType == MULTI_EXECUTOR_ADAPTIVE)
-	{
-		/* if we have repartition jobs with real time executor and repartition
-		 * joins are not enabled, error out. Otherwise, switch to task-tracker
-		 */
-		int dependedJobCount = list_length(job->dependedJobList);
-		if (dependedJobCount > 0)
-		{
-			if (!EnableRepartitionJoins)
-			{
-				ereport(ERROR, (errmsg(
-									"the query contains a join that requires repartitioning"),
-								errhint("Set citus.enable_repartition_joins to on "
-										"to enable repartitioning")));
-			}
-
-			ereport(DEBUG1, (errmsg(
-								 "cannot use adaptive executor with repartition jobs"),
-							 errhint("Since you enabled citus.enable_repartition_joins "
-									 "Citus chose to use task-tracker.")));
-			return MULTI_EXECUTOR_TASK_TRACKER;
-		}
-	}
-	else
+	if (executorType != MULTI_EXECUTOR_ADAPTIVE)
 	{
 		List *workerNodeList = ActiveReadableNodeList();
 		int workerNodeCount = list_length(workerNodeList);
