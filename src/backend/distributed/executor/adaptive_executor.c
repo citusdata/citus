@@ -754,9 +754,8 @@ AdjustDistributedExecutionAfterLocalExecution(DistributedExecution *execution)
 
 /*
  * ExecuteUtilityTaskListWithoutResults is a wrapper around executing task
- * list for utility commands. If the adaptive executor is enabled, the function
- * executes the task list via the adaptive executor. Else, the function goes
- * through router executor.
+ * list for utility commands. It simply calls in adaptive executor's task
+ * execution function.
  */
 void
 ExecuteUtilityTaskListWithoutResults(List *taskList)
