@@ -90,7 +90,7 @@ JobExecutorType(DistributedPlan *distributedPlan)
 
 	if (executorType == MULTI_EXECUTOR_ADAPTIVE)
 	{
-		/* if we have repartition jobs with real time executor and repartition
+		/* if we have repartition jobs with adaptive executor and repartition
 		 * joins are not enabled, error out. Otherwise, switch to task-tracker
 		 */
 		int dependedJobCount = list_length(job->dependedJobList);
