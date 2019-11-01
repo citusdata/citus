@@ -37,7 +37,7 @@ extern int ExecutorSlowStartInterval;
 extern void CitusExecutorStart(QueryDesc *queryDesc, int eflags);
 extern void CitusExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint64 count,
 							 bool execute_once);
-extern TupleTableSlot * AdaptiveExecutor(CustomScanState *node);
+extern TupleTableSlot * AdaptiveExecutor(CitusScanState *scanState);
 extern uint64 ExecuteTaskListExtended(RowModifyLevel modLevel, List *taskList,
 									  TupleDesc tupleDescriptor,
 									  Tuplestorestate *tupleStore,
