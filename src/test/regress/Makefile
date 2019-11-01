@@ -23,6 +23,8 @@ MULTI_INSTALLDIR=$(CURDIR)/tmp_check/install
 pg_regress_multi_check = $(PERL) $(citus_abs_srcdir)/pg_regress_multi.pl --pgxsdir="$(pgxsdir)" --bindir="$(bindir)" --libdir="$(libdir)" --majorversion="$(MAJORVERSION)" --postgres-builddir="$(postgres_abs_builddir)"  --postgres-srcdir="$(postgres_abs_srcdir)"
 MULTI_REGRESS_OPTS = --inputdir=$(citus_abs_srcdir) $(pg_regress_locale_flags) --launcher="$(citus_abs_srcdir)/log_test_times"
 
+MX_DEPDIR := .deps
+
 pg_upgrade_check = $(citus_abs_srcdir)/upgrade/pg_upgrade_test.py
 citus_upgrade_check = $(citus_abs_srcdir)/upgrade/citus_upgrade_test.py
 
@@ -55,8 +57,7 @@ check-full: check-multi check-multi-mx check-multi-task-tracker-extra check-work
 print-%  : ; @echo $* = $($*)
 
 $(generated_mx_files): $(citus_abs_srcdir)/specs/%: $(citus_abs_srcdir)/specs/base_%
-	echo $@
-	cd $(citus_abs_srcdir) && cpp -undef -w -P -MMD -MP -MT $@ $< > $@
+	cd $(citus_abs_srcdir) && cpp -undef -w -P -MMD -MP -MT -MF $(DEPDIR)/$*.d $@ $< > $@
 
 # using pg_regress_multi_check unnecessarily starts up multiple nodes, which isn't needed
 # for check-worker. But that's harmless besides a few cycles.
