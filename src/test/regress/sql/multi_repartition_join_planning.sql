@@ -10,6 +10,29 @@
 SET citus.next_shard_id TO 690000;
 SET citus.enable_unique_job_ids TO off;
 
+create schema repartition_join;
+DROP TABLE IF EXISTS repartition_join.order_line;
+CREATE TABLE order_line (
+  ol_w_id int NOT NULL,
+  ol_d_id int NOT NULL,
+  ol_o_id int NOT NULL,
+  ol_number int NOT NULL,
+  ol_i_id int NOT NULL,
+  ol_quantity decimal(2,0) NOT NULL,
+  PRIMARY KEY (ol_w_id,ol_d_id,ol_o_id,ol_number)
+);
+
+DROP TABLE IF EXISTS repartition_join.stock;
+CREATE TABLE stock (
+  s_w_id int NOT NULL,
+  s_i_id int NOT NULL,
+  s_quantity decimal(4,0) NOT NULL,
+  PRIMARY KEY (s_w_id,s_i_id)
+);
+
+SELECT create_distributed_table('order_line','ol_w_id');
+SELECT create_distributed_table('stock','s_w_id');
+
 BEGIN;
 SET client_min_messages TO DEBUG4;
 SET citus.task_executor_type TO 'task-tracker';
@@ -52,7 +75,59 @@ GROUP BY
 ORDER BY
 	l_partkey, o_orderkey;
 
+-- Check that grouping by primary key allows o_shippriority to be in the target list
+SELECT
+	o_orderkey, o_shippriority, count(*)
+FROM
+	lineitem, orders
+WHERE
+	l_suppkey = o_shippriority
+GROUP BY
+	o_orderkey
+ORDER BY
+	o_orderkey;
+
+-- Check that grouping by primary key allows o_shippriority to be in the target
+-- list
+-- Postgres removes o_shippriority from the group by clause here
+SELECT
+	o_orderkey, o_shippriority, count(*)
+FROM
+	lineitem, orders
+WHERE
+	l_suppkey = o_shippriority
+GROUP BY
+	o_orderkey, o_shippriority
+ORDER BY
+	o_orderkey;
+
+-- Check that calling any_value manually works as well
+SELECT
+	o_orderkey, any_value(o_shippriority)
+FROM
+	lineitem, orders
+WHERE
+	l_suppkey = o_shippriority
+GROUP BY
+	o_orderkey, o_shippriority
+ORDER BY
+	o_orderkey;
+
+
+-- Check that grouping by primary key allows s_quantity to be in the having
+-- list
+-- Postgres removes s_quantity from the group by clause here
+
+select  s_i_id
+    from  stock, order_line
+    where ol_i_id=s_i_id
+    group by s_i_id, s_w_id, s_quantity
+    having   s_quantity > random()
+;
+
 -- Reset client logging level to its previous value
 
 SET client_min_messages TO NOTICE;
 COMMIT;
+
+drop schema repartition_join;

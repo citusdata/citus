@@ -1847,6 +1847,7 @@ MasterAggregateExpression(Aggref *originalAggregate,
 		 */
 		Var *column = NULL;
 		TargetEntry *columnTargetEntry = NULL;
+		Aggref *newMasterAggregate = NULL;
 
 		/* worker aggregate and original aggregate have the same return type */
 		Oid workerReturnType = exprType((Node *) originalAggregate);
@@ -1857,7 +1858,16 @@ MasterAggregateExpression(Aggref *originalAggregate,
 		Oid aggregateFunctionId = AggregateFunctionOid(aggregateName, workerReturnType);
 		Oid masterReturnType = get_func_rettype(aggregateFunctionId);
 
-		Aggref *newMasterAggregate = copyObject(originalAggregate);
+		/*
+		 * If return type aggregate is anyelement, it's actual return type is
+		 * determined on the type of its argument. So we replace it with the
+		 * argument type in that case.
+		 */
+		if (masterReturnType == ANYELEMENTOID)
+		{
+			masterReturnType = workerReturnType;
+		}
+		newMasterAggregate = copyObject(originalAggregate);
 		newMasterAggregate->aggdistinct = NULL;
 		newMasterAggregate->aggfnoid = aggregateFunctionId;
 		newMasterAggregate->aggtype = masterReturnType;
@@ -2968,7 +2978,8 @@ AggregateFunctionOid(const char *functionName, Oid inputType)
 		if (argumentCount == 1)
 		{
 			/* check if input type and found value type match */
-			if (procForm->proargtypes.values[0] == inputType)
+			if (procForm->proargtypes.values[0] == inputType ||
+				procForm->proargtypes.values[0] == ANYELEMENTOID)
 			{
 #if PG_VERSION_NUM < 120000
 				functionOid = HeapTupleGetOid(heapTuple);
