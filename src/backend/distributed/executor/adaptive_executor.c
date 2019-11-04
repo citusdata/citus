@@ -275,6 +275,25 @@ typedef struct DistributedExecution
 	char **columnArray;
 } DistributedExecution;
 
+/* TaskMapKey is used as a key in task hash */
+typedef struct TaskMapKey
+{
+	TaskType taskType;
+	uint64 jobId;
+	uint32 taskId;
+} TaskMapKey;
+
+
+/*
+ * TaskMapEntry is used as entry in task hash. We need to keep a pointer
+ * of the task in the entry.
+ */
+typedef struct TaskMapEntry
+{
+	TaskMapKey key;
+	Task *task;
+} TaskMapEntry;
+
 /*
  * WorkerPool represents a pool of sessions on the same worker.
  *
@@ -530,6 +549,12 @@ int ExecutorSlowStartInterval = 10;
 
 
 /* local functions */
+static List *
+TaskAndExecutionList(List *jobTaskList);
+static HTAB *
+TaskHashCreate(uint32 taskHashSize);
+static Task *
+TaskHashLookup(HTAB *taskHash, TaskType taskType, uint64 jobId, uint32 taskId);
 static DistributedExecution * CreateDistributedExecution(RowModifyLevel modLevel,
 														 List *taskList,
 														 bool hasReturning,
@@ -542,6 +567,8 @@ static void RunLocalExecution(CitusScanState *scanState, DistributedExecution *e
 static void RunDistributedExecution(DistributedExecution *execution);
 static bool ShouldRunTasksSequentially(List *taskList);
 static void SequentialRunDistributedExecution(DistributedExecution *execution);
+static Task *
+TaskHashEnter(HTAB *taskHash, Task *task);
 
 static void FinishDistributedExecution(DistributedExecution *execution);
 static void CleanUpSessions(DistributedExecution *execution);
@@ -616,7 +643,7 @@ AdaptiveExecutor(CustomScanState *node)
 
 
 	Job *job = distributedPlan->workerJob;
-	List *taskList = job->taskList;
+	List *taskList =  TaskAndExecutionList(job->taskList);
 
 	/* we should only call this once before the scan finished */
 	Assert(!scanState->finishedRemoteScan);
@@ -697,6 +724,188 @@ AdaptiveExecutor(CustomScanState *node)
 
 	return resultSlot;
 }
+
+/*
+ * TaskAndExecutionList visits all tasks in the job tree, starting with the given
+ * job's task list. For each visited task, the function creates a task execution
+ * struct, associates the task execution with the task, and adds the task and its
+ * execution to a list. The function then returns the list.
+ */
+static List *
+TaskAndExecutionList(List *jobTaskList)
+{
+	List *taskAndExecutionList = NIL;
+	List *taskQueue = NIL;
+	const int topLevelTaskHashSize = 32;
+	int taskHashSize = list_length(jobTaskList) * topLevelTaskHashSize;
+	HTAB *taskHash = TaskHashCreate(taskHashSize);
+
+	/*
+	 * We walk over the task tree using breadth-first search. For the search, we
+	 * first queue top level tasks in the task tree.
+	 */
+	taskQueue = list_copy(jobTaskList);
+	while (taskQueue != NIL)
+	{
+		TaskExecution *taskExecution = NULL;
+		List *dependendTaskList = NIL;
+		ListCell *dependedTaskCell = NULL;
+
+		/* pop first element from the task queue */
+		Task *task = (Task *) linitial(taskQueue);
+		taskQueue = list_delete_first(taskQueue);
+
+		/* create task execution and associate it with task */
+		taskExecution = InitTaskExecution(task, EXEC_TASK_UNASSIGNED);
+		task->taskExecution = taskExecution;
+
+		taskAndExecutionList = lappend(taskAndExecutionList, task);
+
+		dependendTaskList = task->dependedTaskList;
+
+		/*
+		 * Push task node's children into the task queue, if and only if
+		 * they're not already there. As task dependencies have to form a
+		 * directed-acyclic-graph and are processed in a breadth-first search
+		 * we can never re-encounter nodes we've already processed.
+		 *
+		 * While we're checking this, we can also fix the problem that
+		 * copyObject() might have duplicated nodes in the graph - if a node
+		 * isn't pushed to the graph because it is already planned to be
+		 * visited, we can simply replace it with the copy. Note that, here
+		 * we only consider dependend tasks. Since currently top level tasks
+		 * cannot be on any dependend task list, we do not check them for duplicates.
+		 *
+		 * taskHash is used to reduce the complexity of keeping track of
+		 * the tasks that are already encountered.
+		 */
+		foreach(dependedTaskCell, dependendTaskList)
+		{
+			Task *dependendTask = lfirst(dependedTaskCell);
+			Task *dependendTaskInHash = TaskHashLookup(taskHash,
+													   dependendTask->taskType,
+													   dependendTask->jobId,
+													   dependendTask->taskId);
+
+			/*
+			 * If the dependend task encountered for the first time, add it to the hash.
+			 * Also, add this task to the task queue. Note that, we do not need to
+			 * add the tasks to the queue which are already encountered, because
+			 * they are already added to the queue.
+			 */
+			if (!dependendTaskInHash)
+			{
+				dependendTaskInHash = TaskHashEnter(taskHash, dependendTask);
+				taskQueue = lappend(taskQueue, dependendTaskInHash);
+			}
+
+			/* update dependedTaskList element to the one which is in the hash */
+			lfirst(dependedTaskCell) = dependendTaskInHash;
+		}
+	}
+
+	return taskAndExecutionList;
+}
+
+/*
+ * TaskHashEnter creates a reference to the task entry in the given task
+ * hash. The function errors-out if the same key exists multiple times.
+ */
+static Task *
+TaskHashEnter(HTAB *taskHash, Task *task)
+{
+	void *hashKey = NULL;
+	TaskMapEntry *taskInTheHash = NULL;
+	bool handleFound = false;
+
+	TaskMapKey taskKey;
+	memset(&taskKey, 0, sizeof(TaskMapKey));
+
+	taskKey.taskType = task->taskType;
+	taskKey.jobId = task->jobId;
+	taskKey.taskId = task->taskId;
+
+	hashKey = (void *) &taskKey;
+	taskInTheHash = (TaskMapEntry *) hash_search(taskHash, hashKey, HASH_ENTER,
+												 &handleFound);
+
+	/* if same node appears twice, we error-out */
+	if (handleFound)
+	{
+		ereport(ERROR, (errmsg("multiple entries for task: \"%d:" UINT64_FORMAT ":%u\"",
+							   task->taskType, task->jobId, task->taskId)));
+	}
+
+	/* save the pointer to the original task in the hash */
+	taskInTheHash->task = task;
+
+	return task;
+}
+
+
+/*
+ * TaskHashLookup looks for the tasks that corresponds to the given
+ * taskType, jobId and taskId, and returns the found task, NULL otherwise.
+ */
+static Task *
+TaskHashLookup(HTAB *taskHash, TaskType taskType, uint64 jobId, uint32 taskId)
+{
+	TaskMapEntry *taskEntry = NULL;
+	Task *task = NULL;
+	void *hashKey = NULL;
+	bool handleFound = false;
+
+	TaskMapKey taskKey;
+	memset(&taskKey, 0, sizeof(TaskMapKey));
+
+	taskKey.taskType = taskType;
+	taskKey.jobId = jobId;
+	taskKey.taskId = taskId;
+
+	hashKey = (void *) &taskKey;
+	taskEntry = (TaskMapEntry *) hash_search(taskHash, hashKey, HASH_FIND, &handleFound);
+
+	if (taskEntry != NULL)
+	{
+		task = taskEntry->task;
+	}
+
+	return task;
+}
+
+/*
+ * TaskHashCreate allocates memory for a task hash, initializes an
+ * empty hash, and returns this hash.
+ */
+static HTAB *
+TaskHashCreate(uint32 taskHashSize)
+{
+	HASHCTL info;
+	const char *taskHashName = "Task Hash";
+	int hashFlags = 0;
+	HTAB *taskHash = NULL;
+
+	/*
+	 * Can't create a hashtable of size 0. Normally that shouldn't happen, but
+	 * shard pruning currently can lead to this (Job with 0 Tasks). See #833.
+	 */
+	if (taskHashSize == 0)
+	{
+		taskHashSize = 2;
+	}
+
+	memset(&info, 0, sizeof(info));
+	info.keysize = sizeof(TaskMapKey);
+	info.entrysize = sizeof(TaskMapEntry);
+	info.hash = tag_hash;
+	info.hcxt = CurrentMemoryContext;
+	hashFlags = (HASH_ELEM | HASH_FUNCTION | HASH_CONTEXT);
+
+	taskHash = hash_create(taskHashName, taskHashSize, &info, hashFlags);
+
+	return taskHash;
+}
+
 
 
 /*
