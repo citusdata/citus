@@ -13,6 +13,11 @@
 #include "distributed/log_utils.h"
 
 
+/*
+ * IsLoggableLevel returns true if either of client or server log guc is configured to
+ * log the given log level.
+ * In postgres, log can be configured differently for clients and servers.
+ */
 bool
 IsLoggableLevel(int logLevel)
 {
