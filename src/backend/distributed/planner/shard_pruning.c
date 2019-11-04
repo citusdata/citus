@@ -46,6 +46,7 @@
  *-------------------------------------------------------------------------
  */
 #include "postgres.h"
+#include "fmgr.h"
 
 #include "distributed/shard_pruning.h"
 
@@ -148,7 +149,6 @@ typedef union \
 } FunctionCall2InfoData;
 #else
 typedef FunctionCallInfoData FunctionCall2InfoData;
-typedef FunctionCallInfoData *FunctionCallInfo;
 #endif
 
 /*
