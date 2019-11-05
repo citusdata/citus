@@ -224,8 +224,11 @@ TryToDelegateFunctionCall(Query *query, bool *hasExternParam)
 	if (procedure == NULL || !procedure->isDistributed)
 	{
 		/* not a distributed function call */
-		ereport(DEBUG4, (errmsg("function is not distributed")));
 		return NULL;
+	}
+	else
+	{
+		ereport(DEBUG4, (errmsg("function is distributed")));
 	}
 
 	if (IsMultiStatementTransaction())
