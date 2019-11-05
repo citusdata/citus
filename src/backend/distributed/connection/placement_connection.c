@@ -257,23 +257,6 @@ StartPlacementConnection(uint32 flags, ShardPlacement *placement, const char *us
 
 
 /*
- * GetPlacementListConnection establishes a connection for a set of placement
- * accesses.
- *
- * See StartPlacementListConnection for details.
- */
-MultiConnection *
-GetPlacementListConnection(uint32 flags, List *placementAccessList, const char *userName)
-{
-	MultiConnection *connection = StartPlacementListConnection(flags, placementAccessList,
-															   userName);
-
-	FinishConnectionEstablishment(connection);
-	return connection;
-}
-
-
-/*
  * StartPlacementListConnection returns a connection to a remote node suitable for
  * a placement accesses (SELECT, DML, DDL) or throws an error if no suitable
  * connection can be established if would cause a self-deadlock or consistency

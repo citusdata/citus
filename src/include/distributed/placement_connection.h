@@ -23,9 +23,6 @@ extern MultiConnection * StartPlacementConnection(uint32 flags,
 extern MultiConnection *  GetConnectionIfPlacementAccessedInXact(int flags,
 																 List *placementAccessList,
 																 const char *userName);
-extern MultiConnection * GetPlacementListConnection(uint32 flags,
-													List *placementAccessList,
-													const char *userName);
 extern MultiConnection * StartPlacementListConnection(uint32 flags,
 													  List *placementAccessList,
 													  const char *userName);
