@@ -18,6 +18,7 @@
 test: multi_extension
 test: multi_703_upgrade
 test: multi_cluster_management
+test: alter_role_propagation
 test: multi_test_helpers
 test: multi_table_ddl
 test: multi_name_lengths

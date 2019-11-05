@@ -402,7 +402,7 @@ AppendAlterFunctionOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt)
 
 	appendStringInfo(buf, "ALTER %s ", ObjectTypeToKeyword(stmt->objectType));
 	AppendFunctionName(buf, func, stmt->objectType);
-	appendStringInfo(buf, " OWNER TO %s;", RoleSpecString(stmt->newowner));
+	appendStringInfo(buf, " OWNER TO %s;", RoleSpecString(stmt->newowner, true));
 }
 
 

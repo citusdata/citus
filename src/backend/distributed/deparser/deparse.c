@@ -93,6 +93,11 @@ DeparseTreeNode(Node *stmt)
 			return DeparseAlterObjectDependsStmt(castNode(AlterObjectDependsStmt, stmt));
 		}
 
+		case T_AlterRoleStmt:
+		{
+			return DeparseAlterRoleStmt(castNode(AlterRoleStmt, stmt));
+		}
+
 		default:
 		{
 			ereport(ERROR, (errmsg("unsupported statement for deparsing")));
