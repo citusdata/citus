@@ -249,7 +249,6 @@ MultiClientDisconnect(int32 connectionId)
 }
 
 
-
 /*
  * MultiClientConnectionUp checks if the connection status is up, in other words,
  * it is not bad.
