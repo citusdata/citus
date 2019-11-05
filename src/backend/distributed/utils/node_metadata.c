@@ -38,6 +38,7 @@
 #include "distributed/shardinterval_utils.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_transaction.h"
+#include "distributed/commands.h"
 #include "lib/stringinfo.h"
 #include "storage/bufmgr.h"
 #include "storage/lmgr.h"
@@ -367,6 +368,22 @@ SetUpDistributedTableDependencies(WorkerNode *newWorkerNode)
 
 
 /*
+ * SetPasswords sets the password of users with passwords in the new node.
+ */
+static void
+SetPasswords(WorkerNode *newWorkerNode)
+{
+	List *ddlCommands = NIL;
+
+	ddlCommands = CreateSetPasswordQueriesOfUsersWithPassword();
+
+	SendCommandListToWorkerInSingleTransaction(newWorkerNode->workerName,
+											   newWorkerNode->workerPort,
+											   CitusExtensionOwnerName(), ddlCommands);
+}
+
+
+/*
  * ModifiableWorkerNode gets the requested WorkerNode and also gets locks
  * required for modifying it. This fails if the node does not exist.
  */
@@ -560,6 +577,7 @@ ActivateNode(char *nodeName, int nodePort)
 	newWorkerNode = SetNodeState(nodeName, nodePort, isActive);
 
 	SetUpDistributedTableDependencies(newWorkerNode);
+	SetPasswords(newWorkerNode);
 	return newWorkerNode->nodeId;
 }
 

@@ -10,3 +10,4 @@ COMMENT ON COLUMN pg_catalog.pg_dist_node.shouldhaveshards IS
 UPDATE pg_dist_colocation SET replicationfactor = -1 WHERE distributioncolumntype = 0;
 
 #include "udfs/any_value/9.1-1.sql"
+#include "udfs/set_password_if_role_exists/9.1-1.sql"

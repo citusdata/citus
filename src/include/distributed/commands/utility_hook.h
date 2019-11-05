@@ -30,6 +30,7 @@ extern PropSetCmdBehavior PropagateSetCommands;
 extern bool EnableDDLPropagation;
 extern bool EnableDependencyCreation;
 extern bool EnableCreateTypePropagation;
+extern bool EnablePasswordPropagation;
 
 /*
  * A DDLJob encapsulates the remote tasks and commands needed to process all or

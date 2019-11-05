@@ -722,6 +722,13 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 			ddlJobs = ProcessCreateFunctionStmt(castNode(CreateFunctionStmt, parsetree),
 												queryString);
 		}
+
+		if (IsA(parsetree, AlterRoleStmt))
+		{
+			Assert(ddlJobs == NIL); /* jobs should not have been set before */
+			ddlJobs = ProcessAlterRoleStmt(castNode(AlterRoleStmt, parsetree),
+										   queryString);
+		}
 	}
 
 	/*
