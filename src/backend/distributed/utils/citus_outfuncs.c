@@ -494,11 +494,9 @@ OutTaskExecution(OUTFUNC_ARGS)
 	WRITE_INT_ARRAY(connectionIdArray, node->nodeCount);
 	WRITE_INT_ARRAY(fileDescriptorArray, node->nodeCount);
 
-	WRITE_INT64_FIELD(connectStartTime);
 	WRITE_UINT_FIELD(currentNodeIndex);
 	WRITE_UINT_FIELD(querySourceNodeIndex);
 	WRITE_UINT_FIELD(failureCount);
-	WRITE_BOOL_FIELD(criticalErrorOccurred);
 }
 
 

@@ -26,9 +26,9 @@
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
+#include "distributed/multi_join_order.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/distributed_planner.h"
-#include "distributed/multi_router_executor.h"
 #include "distributed/relay_utility.h"
 #include "distributed/reference_table_utils.h"
 #include "distributed/remote_commands.h"
@@ -690,50 +690,6 @@ LockParentShardResourceIfPartition(uint64 shardId, LOCKMODE lockMode)
 		uint64 parentShardId = ColocatedShardIdInRelation(parentRelationId, shardIndex);
 
 		LockShardResource(parentShardId, lockMode);
-	}
-}
-
-
-/*
- * LockPartitionsInRelationList iterates over given list and acquires locks on
- * partitions of each partitioned table. It does nothing for non-partitioned tables.
- */
-void
-LockPartitionsInRelationList(List *relationIdList, LOCKMODE lockmode)
-{
-	ListCell *relationIdCell = NULL;
-
-	foreach(relationIdCell, relationIdList)
-	{
-		Oid relationId = lfirst_oid(relationIdCell);
-		if (PartitionedTable(relationId))
-		{
-			LockPartitionRelations(relationId, lockmode);
-		}
-	}
-}
-
-
-/*
- * LockPartitionRelations acquires relation lock on all partitions of given
- * partitioned relation. This function expects that given relation is a
- * partitioned relation.
- */
-void
-LockPartitionRelations(Oid relationId, LOCKMODE lockMode)
-{
-	/*
-	 * PartitionList function generates partition list in the same order
-	 * as PostgreSQL. Therefore we do not need to sort it before acquiring
-	 * locks.
-	 */
-	List *partitionList = PartitionList(relationId);
-	ListCell *partitionCell = NULL;
-
-	foreach(partitionCell, partitionList)
-	{
-		Oid partitionRelationId = lfirst_oid(partitionCell);
-		LockRelationOid(partitionRelationId, lockMode);
 	}
 }
 

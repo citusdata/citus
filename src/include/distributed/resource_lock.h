@@ -101,10 +101,6 @@ extern void SerializeNonCommutativeWrites(List *shardIntervalList, LOCKMODE lock
 extern void LockRelationShardResources(List *relationShardList, LOCKMODE lockMode);
 extern List * GetSortedReferenceShardIntervals(List *relationList);
 
-/* Lock partitions of partitioned table */
-extern void LockPartitionsInRelationList(List *relationIdList, LOCKMODE lockmode);
-extern void LockPartitionRelations(Oid relationId, LOCKMODE lockMode);
-
 /* Lock parent table's colocated shard resource */
 extern void LockParentShardResourceIfPartition(uint64 shardId, LOCKMODE lockMode);
 

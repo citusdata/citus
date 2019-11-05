@@ -177,65 +177,6 @@ MultiClientConnectStart(const char *nodeName, uint32 nodePort, const char *nodeD
 }
 
 
-/*
- * MultiClientPlacementConnectStart asynchronously tries to establish a connection
- * for a particular set of shard placements. If it succeeds, it returns the
- * the connection id. Otherwise, it reports connection error and returns
- * INVALID_CONNECTION_ID.
- */
-int32
-MultiClientPlacementConnectStart(List *placementAccessList, const char *userName)
-{
-	MultiConnection *connection = NULL;
-	ConnStatusType connStatusType = CONNECTION_OK;
-	int32 connectionId = AllocateConnectionId();
-	int connectionFlags = 0;
-
-	/*
-	 * Although we're opening connections for SELECT queries, we're relying
-	 * on multi_shard_modify_mode GUC. The name of the GUC is unfortunate, but,
-	 * adding one more GUC (or renaming the GUC) would make the UX even worse.
-	 */
-	if (MultiShardConnectionType == PARALLEL_CONNECTION)
-	{
-		connectionFlags = CONNECTION_PER_PLACEMENT;
-	}
-
-	if (connectionId == INVALID_CONNECTION_ID)
-	{
-		ereport(WARNING, (errmsg("could not allocate connection in connection pool")));
-		return connectionId;
-	}
-
-	/* prepare asynchronous request for worker node connection */
-	connection = StartPlacementListConnection(connectionFlags, placementAccessList,
-											  userName);
-
-	ClaimConnectionExclusively(connection);
-
-	connStatusType = PQstatus(connection->pgConn);
-
-	/*
-	 * If prepared, we save the connection, and set its initial polling status
-	 * to PGRES_POLLING_WRITING as specified in "Database Connection Control
-	 * Functions" section of the PostgreSQL documentation.
-	 */
-	if (connStatusType != CONNECTION_BAD)
-	{
-		ClientConnectionArray[connectionId] = connection;
-		ClientPollingStatusArray[connectionId] = PGRES_POLLING_WRITING;
-	}
-	else
-	{
-		ReportConnectionError(connection, WARNING);
-
-		connectionId = INVALID_CONNECTION_ID;
-	}
-
-	return connectionId;
-}
-
-
 /* MultiClientConnectPoll returns the status of client connection. */
 ConnectStatus
 MultiClientConnectPoll(int32 connectionId)
@@ -290,22 +231,6 @@ MultiClientConnectPoll(int32 connectionId)
 }
 
 
-/* MultiClientGetConnection returns the connection with the given ID from the pool */
-MultiConnection *
-MultiClientGetConnection(int32 connectionId)
-{
-	if (connectionId == INVALID_CONNECTION_ID)
-	{
-		return NULL;
-	}
-
-	Assert(connectionId >= 0);
-	Assert(connectionId < MAX_CONNECTION_COUNT);
-
-	return ClientConnectionArray[connectionId];
-}
-
-
 /* MultiClientDisconnect disconnects the connection. */
 void
 MultiClientDisconnect(int32 connectionId)
@@ -318,40 +243,6 @@ MultiClientDisconnect(int32 connectionId)
 	Assert(connection != NULL);
 
 	CloseConnection(connection);
-
-	ClientConnectionArray[connectionId] = NULL;
-	ClientPollingStatusArray[connectionId] = InvalidPollingStatus;
-}
-
-
-/*
- * MultiClientReleaseConnection removes a connection from the client
- * executor pool without disconnecting if it is run in the transaction
- * otherwise it disconnects.
- *
- * This allows the connection to be used for other operations in the
- * same transaction. The connection will still be closed at COMMIT
- * or ABORT time.
- */
-void
-MultiClientReleaseConnection(int32 connectionId)
-{
-	MultiConnection *connection = NULL;
-	const int InvalidPollingStatus = -1;
-
-	Assert(connectionId != INVALID_CONNECTION_ID);
-	connection = ClientConnectionArray[connectionId];
-	Assert(connection != NULL);
-
-	/* allow using same connection only in the same transaction */
-	if (!InCoordinatedTransaction())
-	{
-		MultiClientDisconnect(connectionId);
-	}
-	else
-	{
-		UnclaimConnection(connection);
-	}
 
 	ClientConnectionArray[connectionId] = NULL;
 	ClientPollingStatusArray[connectionId] = InvalidPollingStatus;
@@ -380,26 +271,6 @@ MultiClientConnectionUp(int32 connectionId)
 	}
 
 	return connectionUp;
-}
-
-
-/* MultiClientExecute synchronously executes a query over the given connection. */
-bool
-MultiClientExecute(int32 connectionId, const char *query, void **queryResult,
-				   int *rowCount, int *columnCount)
-{
-	bool querySent = false;
-	bool queryOK = false;
-
-	querySent = MultiClientSendQuery(connectionId, query);
-	if (!querySent)
-	{
-		return false;
-	}
-
-	queryOK = MultiClientQueryResult(connectionId, queryResult, rowCount, columnCount);
-
-	return queryOK;
 }
 
 
@@ -499,51 +370,6 @@ MultiClientResultStatus(int32 connectionId)
 }
 
 
-/* MultiClientQueryResult gets results for an asynchronous query. */
-bool
-MultiClientQueryResult(int32 connectionId, void **queryResult, int *rowCount,
-					   int *columnCount)
-{
-	MultiConnection *connection = NULL;
-	PGresult *result = NULL;
-	ConnStatusType connStatusType = CONNECTION_OK;
-	ExecStatusType resultStatus = PGRES_COMMAND_OK;
-	bool raiseInterrupts = true;
-
-	Assert(connectionId != INVALID_CONNECTION_ID);
-	connection = ClientConnectionArray[connectionId];
-	Assert(connection != NULL);
-
-	connStatusType = PQstatus(connection->pgConn);
-	if (connStatusType == CONNECTION_BAD)
-	{
-		ereport(WARNING, (errmsg("could not maintain connection to worker node")));
-		return false;
-	}
-
-	result = GetRemoteCommandResult(connection, raiseInterrupts);
-	resultStatus = PQresultStatus(result);
-	if (resultStatus == PGRES_TUPLES_OK)
-	{
-		(*queryResult) = (void **) result;
-		(*rowCount) = PQntuples(result);
-		(*columnCount) = PQnfields(result);
-	}
-	else
-	{
-		ReportResultError(connection, result, WARNING);
-		PQclear(result);
-
-		return false;
-	}
-
-	/* clear extra result objects */
-	ForgetResults(connection);
-
-	return true;
-}
-
-
 /*
  * MultiClientBatchResult returns results for a "batch" of queries, meaning a
  * string containing multiple select statements separated by semicolons. This
@@ -616,15 +442,6 @@ MultiClientGetValue(void *queryResult, int rowIndex, int columnIndex)
 {
 	char *value = PQgetvalue((PGresult *) queryResult, rowIndex, columnIndex);
 	return value;
-}
-
-
-/* MultiClientValueIsNull returns whether the value at the given position is null. */
-bool
-MultiClientValueIsNull(void *queryResult, int rowIndex, int columnIndex)
-{
-	bool isNull = PQgetisnull((PGresult *) queryResult, rowIndex, columnIndex);
-	return isNull;
 }
 
 
@@ -812,236 +629,6 @@ MultiClientCopyData(int32 connectionId, int32 fileDescriptor, uint64 *returnByte
 	}
 
 	return copyStatus;
-}
-
-
-/*
- * MultiClientCreateWaitInfo creates a WaitInfo structure, capable of keeping
- * track of what maxConnections connections are waiting for; to allow
- * efficiently waiting for all of them at once.
- *
- * Connections can be added using MultiClientRegisterWait(). All added
- * connections can then be waited upon together using MultiClientWait().
- */
-WaitInfo *
-MultiClientCreateWaitInfo(int maxConnections)
-{
-	WaitInfo *waitInfo = palloc(sizeof(WaitInfo));
-
-#ifndef HAVE_POLL
-
-	/* we subtract 2 to make room for the WL_POSTMASTER_DEATH and WL_LATCH_SET events */
-	if (maxConnections > FD_SETSIZE - 2)
-	{
-		maxConnections = FD_SETSIZE - 2;
-	}
-#endif
-
-	waitInfo->maxWaiters = maxConnections;
-
-	/* we use poll(2) if available, otherwise select(2) */
-#ifdef HAVE_POLL
-	waitInfo->pollfds = palloc(maxConnections * sizeof(struct pollfd));
-#endif
-
-	/* initialize remaining fields */
-	MultiClientResetWaitInfo(waitInfo);
-
-	return waitInfo;
-}
-
-
-/* MultiClientResetWaitInfo clears all pending waits from a WaitInfo. */
-void
-MultiClientResetWaitInfo(WaitInfo *waitInfo)
-{
-	waitInfo->registeredWaiters = 0;
-	waitInfo->haveReadyWaiter = false;
-	waitInfo->haveFailedWaiter = false;
-
-#ifndef HAVE_POLL
-	FD_ZERO(&(waitInfo->readFileDescriptorSet));
-	FD_ZERO(&(waitInfo->writeFileDescriptorSet));
-	FD_ZERO(&(waitInfo->exceptionFileDescriptorSet));
-
-	waitInfo->maxConnectionFileDescriptor = 0;
-#endif
-}
-
-
-/* MultiClientFreeWaitInfo frees a resources associated with a waitInfo struct. */
-void
-MultiClientFreeWaitInfo(WaitInfo *waitInfo)
-{
-#ifdef HAVE_POLL
-	pfree(waitInfo->pollfds);
-#endif
-
-	pfree(waitInfo);
-}
-
-
-/*
- * MultiClientRegisterWait adds a connection to be waited upon, waiting for
- * executionStatus.
- */
-void
-MultiClientRegisterWait(WaitInfo *waitInfo, TaskExecutionStatus executionStatus,
-						int32 connectionId)
-{
-	MultiConnection *connection = NULL;
-#ifdef HAVE_POLL
-	struct pollfd *pollfd = NULL;
-#else
-	int connectionFileDescriptor = 0;
-#endif
-
-	/* This is to make sure we could never register more than maxWaiters in Windows */
-	if (waitInfo->registeredWaiters >= waitInfo->maxWaiters)
-	{
-		return;
-	}
-
-	if (executionStatus == TASK_STATUS_READY)
-	{
-		waitInfo->haveReadyWaiter = true;
-		return;
-	}
-	else if (executionStatus == TASK_STATUS_ERROR)
-	{
-		waitInfo->haveFailedWaiter = true;
-		return;
-	}
-
-	connection = ClientConnectionArray[connectionId];
-#ifdef HAVE_POLL
-	pollfd = &waitInfo->pollfds[waitInfo->registeredWaiters];
-	pollfd->fd = PQsocket(connection->pgConn);
-	if (executionStatus == TASK_STATUS_SOCKET_READ)
-	{
-		pollfd->events = POLLERR | POLLIN;
-	}
-	else if (executionStatus == TASK_STATUS_SOCKET_WRITE)
-	{
-		pollfd->events = POLLERR | POLLOUT;
-	}
-
-#else
-	connectionFileDescriptor = PQsocket(connection->pgConn);
-	if (connectionFileDescriptor > waitInfo->maxConnectionFileDescriptor)
-	{
-		waitInfo->maxConnectionFileDescriptor = connectionFileDescriptor;
-	}
-
-	if (executionStatus == TASK_STATUS_SOCKET_READ)
-	{
-		FD_SET(connectionFileDescriptor, &(waitInfo->readFileDescriptorSet));
-	}
-	else if (executionStatus == TASK_STATUS_SOCKET_WRITE)
-	{
-		FD_SET(connectionFileDescriptor, &(waitInfo->writeFileDescriptorSet));
-	}
-#endif
-
-	waitInfo->registeredWaiters++;
-}
-
-
-/*
- * MultiClientWait waits until at least one connection added with
- * MultiClientRegisterWait is ready to be processed again.
- */
-void
-MultiClientWait(WaitInfo *waitInfo)
-{
-	/*
-	 * If we had a failure, we always want to sleep for a bit, to prevent
-	 * flooding the other system, probably making the situation worse.
-	 */
-	if (waitInfo->haveFailedWaiter)
-	{
-		long sleepIntervalPerCycle = RemoteTaskCheckInterval * 1000L;
-
-		pg_usleep(sleepIntervalPerCycle);
-		return;
-	}
-
-	/* if there are tasks that already need attention again, don't wait */
-	if (waitInfo->haveReadyWaiter)
-	{
-		return;
-	}
-
-	while (true)
-	{
-		/*
-		 * Wait for activity on any of the sockets. Limit the maximum time
-		 * spent waiting in one wait cycle, as insurance against edge
-		 * cases. For efficiency we don't want to wake quite as often as
-		 * citus.remote_task_check_interval, so rather arbitrarily sleep ten
-		 * times as long.
-		 */
-#ifdef HAVE_POLL
-		int rc = poll(waitInfo->pollfds, waitInfo->registeredWaiters,
-					  RemoteTaskCheckInterval * 10);
-#else
-		int maxConnectionFileDescriptor = waitInfo->maxConnectionFileDescriptor;
-		const int maxTimeout = RemoteTaskCheckInterval * 10 * 1000L;
-		struct timeval selectTimeout = { 0, maxTimeout };
-		int rc = 0;
-
-		/* it is not okay to call select when there is nothing to wait for */
-		if (waitInfo->registeredWaiters == 0)
-		{
-			return;
-		}
-
-		rc = (select) (maxConnectionFileDescriptor + 1,
-					   &(waitInfo->readFileDescriptorSet),
-					   &(waitInfo->writeFileDescriptorSet),
-					   &(waitInfo->exceptionFileDescriptorSet),
-					   &selectTimeout);
-
-#endif
-
-		if (rc < 0)
-		{
-			/*
-			 * Signals that arrive can interrupt our poll(). In that case just
-			 * return. Every other error is unexpected and treated as such.
-			 */
-			int errorCode = errno;
-#ifdef WIN32
-			errorCode = WSAGetLastError();
-#endif
-
-			if (errorCode == 0)
-			{
-				return;
-			}
-			else if (errorCode == EAGAIN || errorCode == EINTR)
-			{
-				return;
-			}
-			else
-			{
-				ereport(ERROR, (errcode_for_file_access(),
-								errmsg("poll failed: %m")));
-			}
-		}
-		else if (rc == 0)
-		{
-			ereport(DEBUG5,
-					(errmsg("waiting for activity on tasks took longer than %d ms",
-							(int) RemoteTaskCheckInterval * 10)));
-		}
-
-		/*
-		 * At least one fd changed received a readiness notification, time to
-		 * process tasks again.
-		 */
-		return;
-	}
 }
 
 

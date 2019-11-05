@@ -1145,17 +1145,6 @@ SetCitusNoticeProcessor(MultiConnection *connection)
 
 
 /*
- * SetCitusNoticeLevel is used to set the notice level for distributed
- * queries.
- */
-void
-SetCitusNoticeLevel(int level)
-{
-	CitusNoticeLogLevel = level;
-}
-
-
-/*
  * UnsetCitusNoticeLevel sets the CitusNoticeLogLevel back to
  * its default value.
  */

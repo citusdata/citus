@@ -25,7 +25,6 @@
 #include "distributed/intermediate_results.h"
 #include "distributed/local_executor.h"
 #include "distributed/multi_executor.h"
-#include "distributed/multi_shard_transaction.h"
 #include "distributed/transaction_management.h"
 #include "distributed/placement_connection.h"
 #include "distributed/subplan_execution.h"
@@ -42,6 +41,24 @@ CoordinatedTransactionState CurrentCoordinatedTransactionState = COORD_TRANS_NON
 int MultiShardCommitProtocol = COMMIT_PROTOCOL_2PC;
 int SingleShardCommitProtocol = COMMIT_PROTOCOL_2PC;
 int SavedMultiShardCommitProtocol = COMMIT_PROTOCOL_BARE;
+
+/*
+ * GUC that determines whether a SELECT in a transaction block should also run in
+ * a transaction block on the worker even if no writes have occurred yet.
+ */
+bool SelectOpensTransactionBlock = true;
+
+/* controls use of locks to enforce safe commutativity */
+bool AllModificationsCommutative = false;
+
+/* we've deprecated this flag, keeping here for some time not to break existing users */
+bool EnableDeadlockPrevention = true;
+
+/* number of nested stored procedure call levels we are currently in */
+int StoredProcedureLevel = 0;
+
+/* number of nested DO block levels we are currently in */
+int DoBlockLevel = 0;
 
 /* state needed to keep track of operations used during a transaction */
 XactModificationType XactModificationLevel = XACT_MODIFICATION_NONE;
@@ -88,6 +105,7 @@ static void CoordinatedSubTransactionCallback(SubXactEvent event, SubTransaction
 											  SubTransactionId parentSubid, void *arg);
 
 /* remaining functions */
+static void ResetShardPlacementTransactionState(void);
 static void AdjustMaxPreparedTransactions(void);
 static void PushSubXact(SubTransactionId subId);
 static void PopSubXact(SubTransactionId subId);
@@ -402,6 +420,21 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			}
 			break;
 		}
+	}
+}
+
+
+/*
+ * ResetShardPlacementTransactionState performs cleanup after the end of a
+ * transaction.
+ */
+static void
+ResetShardPlacementTransactionState(void)
+{
+	if (MultiShardCommitProtocol == COMMIT_PROTOCOL_BARE)
+	{
+		MultiShardCommitProtocol = SavedMultiShardCommitProtocol;
+		SavedMultiShardCommitProtocol = COMMIT_PROTOCOL_BARE;
 	}
 }
 

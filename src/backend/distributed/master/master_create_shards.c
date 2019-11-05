@@ -180,15 +180,6 @@ CreateShardsWithRoundRobinPolicy(Oid distributedTableId, int32 shardCount,
 	workerNodeList = ActivePrimaryShouldHaveShardsNodeList(NoLock);
 	workerNodeList = SortList(workerNodeList, CompareWorkerNodes);
 
-	/*
-	 * Make sure we don't process cancel signals until all shards
-	 * are created if the executor is not enabled.
-	 */
-	if (TaskExecutorType != MULTI_EXECUTOR_ADAPTIVE)
-	{
-		HOLD_INTERRUPTS();
-	}
-
 	workerNodeCount = list_length(workerNodeList);
 	if (replicationFactor > workerNodeCount)
 	{
@@ -253,18 +244,6 @@ CreateShardsWithRoundRobinPolicy(Oid distributedTableId, int32 shardCount,
 
 	CreateShardsOnWorkers(distributedTableId, insertedShardPlacements,
 						  useExclusiveConnections, colocatedShard);
-
-	if (TaskExecutorType != MULTI_EXECUTOR_ADAPTIVE)
-	{
-		if (QueryCancelPending)
-		{
-			ereport(WARNING, (errmsg(
-								  "cancel requests are ignored during shard creation")));
-			QueryCancelPending = false;
-		}
-
-		RESUME_INTERRUPTS();
-	}
 }
 
 

@@ -32,11 +32,11 @@
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
+#include "distributed/multi_executor.h"
 #include "distributed/multi_explain.h"
 #include "distributed/multi_join_order.h"
 #include "distributed/multi_logical_optimizer.h"
 #include "distributed/distributed_planner.h"
-#include "distributed/multi_router_executor.h"
 #include "distributed/multi_router_planner.h"
 #include "distributed/multi_server_executor.h"
 #include "distributed/pg_dist_partition.h"
@@ -68,7 +68,9 @@
 /* marks shared object as one loadable by the postgres version compiled against */
 PG_MODULE_MAGIC;
 
+#define DUMMY_REAL_TIME_EXECUTOR_ENUM_VALUE 9999999
 static char *CitusVersion = CITUS_VERSION;
+
 
 void _PG_init(void);
 
@@ -78,6 +80,7 @@ static void CreateRequiredDirectories(void);
 static void RegisterCitusConfigVariables(void);
 static bool ErrorIfNotASuitableDeadlockFactor(double *newval, void **extra,
 											  GucSource source);
+static bool WarnIfDeprecatedExecutorUsed(int *newval, void **extra, GucSource source);
 static void NormalizeWorkerListPath(void);
 static bool NodeConninfoGucCheckHook(char **newval, void **extra, GucSource source);
 static void NodeConninfoGucAssignHook(const char *newval, void *extra);
@@ -113,7 +116,7 @@ static const struct config_enum_entry replication_model_options[] = {
 
 static const struct config_enum_entry task_executor_type_options[] = {
 	{ "adaptive", MULTI_EXECUTOR_ADAPTIVE, false },
-	{ "real-time", MULTI_EXECUTOR_ADAPTIVE, false }, /* ignore real-time executor, always use adaptive */
+	{ "real-time", DUMMY_REAL_TIME_EXECUTOR_ENUM_VALUE, false }, /* keep it for backward comp. */
 	{ "task-tracker", MULTI_EXECUTOR_TASK_TRACKER, false },
 	{ NULL, 0, false }
 };
@@ -1055,7 +1058,7 @@ RegisterCitusConfigVariables(void)
 		"citus.task_executor_type",
 		gettext_noop("Sets the executor type to be used for distributed queries."),
 		gettext_noop("The master node chooses between two different executor types "
-					 "when executing a distributed query.The real-time executor is "
+					 "when executing a distributed query.The adaptive executor is "
 					 "optimal for simple key-value lookup queries and queries that "
 					 "involve aggregations and/or co-located joins on multiple shards. "
 					 "The task-tracker executor is optimal for long-running, complex "
@@ -1066,7 +1069,7 @@ RegisterCitusConfigVariables(void)
 		task_executor_type_options,
 		PGC_USERSET,
 		GUC_STANDARD,
-		NULL, NULL, NULL);
+		WarnIfDeprecatedExecutorUsed, NULL, NULL);
 
 	DefineCustomBoolVariable(
 		"citus.enable_repartition_joins",
@@ -1296,6 +1299,27 @@ ErrorIfNotASuitableDeadlockFactor(double *newval, void **extra, GucSource source
 							  "To disable distributed deadlock detection set the value to -1.")));
 
 		return false;
+	}
+
+	return true;
+}
+
+
+/*
+ * WarnIfDeprecatedExecutorUsed prints a warning and sets the config value to
+ * adaptive executor (a.k.a., ignores real-time executor).
+ */
+static bool
+WarnIfDeprecatedExecutorUsed(int *newval, void **extra, GucSource source)
+{
+	if (*newval == DUMMY_REAL_TIME_EXECUTOR_ENUM_VALUE)
+	{
+		ereport(WARNING, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+						  errmsg("Ignoring the setting, real-time executor is "
+								 "deprecated")));
+
+		/* adaptive executor is superset of real-time, so switch to that */
+		*newval = MULTI_EXECUTOR_ADAPTIVE;
 	}
 
 	return true;

@@ -12,13 +12,13 @@
 #include "miscadmin.h"
 
 #include "distributed/commands/multi_copy.h"
+#include "distributed/distributed_execution_locks.h"
 #include "distributed/insert_select_executor.h"
 #include "distributed/insert_select_planner.h"
 #include "distributed/local_executor.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/multi_physical_planner.h"
-#include "distributed/multi_router_executor.h"
 #include "distributed/distributed_planner.h"
 #include "distributed/relation_access_tracking.h"
 #include "distributed/resource_lock.h"
@@ -170,34 +170,17 @@ CoordinatorInsertSelectExecScanInternal(CustomScanState *node)
 
 			if (prunedTaskList != NIL)
 			{
-				if (TaskExecutorType != MULTI_EXECUTOR_ADAPTIVE)
-				{
-					if (MultiShardConnectionType == SEQUENTIAL_CONNECTION)
-					{
-						ExecuteModifyTasksSequentially(scanState, prunedTaskList,
-													   ROW_MODIFY_COMMUTATIVE,
-													   hasReturning);
-					}
-					else
-					{
-						ExecuteMultipleTasks(scanState, prunedTaskList, true,
-											 hasReturning);
-					}
-				}
-				else
-				{
-					TupleDesc tupleDescriptor = ScanStateGetTupleDescriptor(scanState);
-					bool randomAccess = true;
-					bool interTransactions = false;
+				TupleDesc tupleDescriptor = ScanStateGetTupleDescriptor(scanState);
+				bool randomAccess = true;
+				bool interTransactions = false;
 
-					Assert(scanState->tuplestorestate == NULL);
-					scanState->tuplestorestate =
-						tuplestore_begin_heap(randomAccess, interTransactions, work_mem);
+				Assert(scanState->tuplestorestate == NULL);
+				scanState->tuplestorestate =
+					tuplestore_begin_heap(randomAccess, interTransactions, work_mem);
 
-					ExecuteTaskListExtended(ROW_MODIFY_COMMUTATIVE, prunedTaskList,
-											tupleDescriptor, scanState->tuplestorestate,
-											hasReturning, MaxAdaptiveExecutorPoolSize);
-				}
+				ExecuteTaskListExtended(ROW_MODIFY_COMMUTATIVE, prunedTaskList,
+										tupleDescriptor, scanState->tuplestorestate,
+										hasReturning, MaxAdaptiveExecutorPoolSize);
 
 				if (SortReturning && hasReturning)
 				{

@@ -127,17 +127,20 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include "access/transam.h"
 #include "access/xact.h"
+#include "catalog/pg_type.h"
 #include "commands/dbcommands.h"
 #include "distributed/citus_custom_scan.h"
 #include "distributed/connection_management.h"
+#include "distributed/distributed_execution_locks.h"
 #include "distributed/local_executor.h"
 #include "distributed/multi_client_executor.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_resowner.h"
-#include "distributed/multi_router_executor.h"
 #include "distributed/multi_server_executor.h"
+#include "distributed/placement_access.h"
 #include "distributed/placement_connection.h"
 #include "distributed/relation_access_tracking.h"
 #include "distributed/remote_commands.h"
@@ -150,6 +153,7 @@
 #include "storage/fd.h"
 #include "storage/latch.h"
 #include "utils/int8.h"
+#include "utils/lsyscache.h"
 #include "utils/memutils.h"
 #include "utils/timestamp.h"
 
@@ -553,6 +557,8 @@ static void AdjustDistributedExecutionAfterLocalExecution(DistributedExecution *
 static bool DistributedExecutionModifiesDatabase(DistributedExecution *execution);
 static bool TaskListModifiesDatabase(RowModifyLevel modLevel, List *taskList);
 static bool DistributedExecutionRequiresRollback(DistributedExecution *execution);
+static bool TaskListRequires2PC(List *taskList);
+static bool ReadOnlyTask(TaskType taskType);
 static bool SelectForUpdateOnReferenceTable(RowModifyLevel modLevel, List *taskList);
 static void AssignTasksToConnections(DistributedExecution *execution);
 static void UnclaimAllSessionConnections(List *sessionList);
@@ -574,7 +580,6 @@ static TaskPlacementExecution * PopAssignedPlacementExecution(WorkerSession *ses
 static TaskPlacementExecution * PopUnassignedPlacementExecution(WorkerPool *workerPool);
 static bool StartPlacementExecutionOnSession(TaskPlacementExecution *placementExecution,
 											 WorkerSession *session);
-static List * PlacementAccessListForTask(Task *task, ShardPlacement *taskPlacement);
 static void ConnectionStateMachine(WorkerSession *session);
 static void Activate2PCIfModifyingTransactionExpandsToNewNode(WorkerSession *session);
 static bool TransactionModifiedDistributedTable(DistributedExecution *execution);
@@ -592,6 +597,9 @@ static bool ShouldMarkPlacementsInvalidOnFailure(DistributedExecution *execution
 static void PlacementExecutionReady(TaskPlacementExecution *placementExecution);
 static TaskExecutionState TaskExecutionStateMachine(ShardCommandExecution *
 													shardCommandExecution);
+static void ExtractParametersForRemoteExecution(ParamListInfo paramListInfo,
+												Oid **parameterTypes,
+												const char ***parameterValues);
 
 
 /*
@@ -746,28 +754,13 @@ AdjustDistributedExecutionAfterLocalExecution(DistributedExecution *execution)
 
 /*
  * ExecuteUtilityTaskListWithoutResults is a wrapper around executing task
- * list for utility commands. If the adaptive executor is enabled, the function
- * executes the task list via the adaptive executor. Else, the function goes
- * through router executor.
+ * list for utility commands. It simply calls in adaptive executor's task
+ * execution function.
  */
 void
 ExecuteUtilityTaskListWithoutResults(List *taskList)
 {
-	if (TaskExecutorType == MULTI_EXECUTOR_ADAPTIVE)
-	{
-		ExecuteTaskList(ROW_MODIFY_NONE, taskList, MaxAdaptiveExecutorPoolSize);
-	}
-	else
-	{
-		if (MultiShardConnectionType == SEQUENTIAL_CONNECTION)
-		{
-			ExecuteModifyTasksSequentiallyWithoutResults(taskList, ROW_MODIFY_NONE);
-		}
-		else
-		{
-			ExecuteModifyTasksWithoutResults(taskList);
-		}
-	}
+	ExecuteTaskList(ROW_MODIFY_NONE, taskList, MaxAdaptiveExecutorPoolSize);
 }
 
 
@@ -1111,6 +1104,86 @@ DistributedExecutionRequiresRollback(DistributedExecution *execution)
 		 * should not require BEGIN/COMMIT/ROLLBACK.
 		 */
 		return false;
+	}
+
+	return false;
+}
+
+
+/*
+ * TaskListRequires2PC determines whether the given task list requires 2PC
+ * because the tasks provided operates on a reference table or there are multiple
+ * tasks and the commit protocol is 2PC.
+ *
+ * Note that we currently do not generate tasks lists that involves multiple different
+ * tables, thus we only check the first task in the list for reference tables.
+ */
+static bool
+TaskListRequires2PC(List *taskList)
+{
+	Task *task = NULL;
+	bool multipleTasks = false;
+	uint64 anchorShardId = INVALID_SHARD_ID;
+
+	if (taskList == NIL)
+	{
+		return false;
+	}
+
+	task = (Task *) linitial(taskList);
+	if (task->replicationModel == REPLICATION_MODEL_2PC)
+	{
+		return true;
+	}
+
+	/*
+	 * Some tasks don't set replicationModel thus we rely on
+	 * the anchorShardId as well replicationModel.
+	 *
+	 * TODO: Do we ever need replicationModel in the Task structure?
+	 * Can't we always rely on anchorShardId?
+	 */
+	anchorShardId = task->anchorShardId;
+	if (anchorShardId != INVALID_SHARD_ID && ReferenceTableShardId(anchorShardId))
+	{
+		return true;
+	}
+
+	multipleTasks = list_length(taskList) > 1;
+	if (!ReadOnlyTask(task->taskType) &&
+		multipleTasks && MultiShardCommitProtocol == COMMIT_PROTOCOL_2PC)
+	{
+		return true;
+	}
+
+	if (task->taskType == DDL_TASK)
+	{
+		if (MultiShardCommitProtocol == COMMIT_PROTOCOL_2PC ||
+			task->replicationModel == REPLICATION_MODEL_2PC)
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+
+/*
+ * ReadOnlyTask returns true if the input task does a read-only operation
+ * on the database.
+ */
+static bool
+ReadOnlyTask(TaskType taskType)
+{
+	if (taskType == ROUTER_TASK || taskType == SQL_TASK)
+	{
+		/*
+		 * TODO: We currently do not execute modifying CTEs via ROUTER_TASK/SQL_TASK.
+		 * When we implement it, we should either not use the mentioned task types for
+		 * modifying CTEs detect them here.
+		 */
+		return true;
 	}
 
 	return false;
@@ -2952,80 +3025,6 @@ StartPlacementExecutionOnSession(TaskPlacementExecution *placementExecution,
 
 
 /*
- * PlacementAccessListForTask returns a list of placement accesses for a given
- * task and task placement.
- */
-static List *
-PlacementAccessListForTask(Task *task, ShardPlacement *taskPlacement)
-{
-	List *placementAccessList = NIL;
-	List *relationShardList = task->relationShardList;
-	bool addAnchorAccess = false;
-	ShardPlacementAccessType accessType = PLACEMENT_ACCESS_SELECT;
-
-	if (task->taskType == MODIFY_TASK)
-	{
-		/* DML command */
-		addAnchorAccess = true;
-		accessType = PLACEMENT_ACCESS_DML;
-	}
-	else if (task->taskType == DDL_TASK || task->taskType == VACUUM_ANALYZE_TASK)
-	{
-		/* DDL command */
-		addAnchorAccess = true;
-		accessType = PLACEMENT_ACCESS_DDL;
-	}
-	else if (relationShardList == NIL)
-	{
-		/* SELECT query that does not touch any shard placements */
-		addAnchorAccess = true;
-		accessType = PLACEMENT_ACCESS_SELECT;
-	}
-
-	if (addAnchorAccess)
-	{
-		ShardPlacementAccess *placementAccess =
-			CreatePlacementAccess(taskPlacement, accessType);
-
-		placementAccessList = lappend(placementAccessList, placementAccess);
-	}
-
-	/*
-	 * We've already added anchor shardId's placement access to the list. Now,
-	 * add the other placements in the relationShardList.
-	 */
-	if (accessType == PLACEMENT_ACCESS_DDL)
-	{
-		/*
-		 * All relations appearing inter-shard DDL commands should be marked
-		 * with DDL access.
-		 */
-		List *relationShardAccessList =
-			BuildPlacementDDLList(taskPlacement->groupId, relationShardList);
-
-		placementAccessList = list_concat(placementAccessList, relationShardAccessList);
-	}
-	else
-	{
-		/*
-		 * In case of SELECTs or DML's, we add SELECT placement accesses to the
-		 * elements in relationShardList. For SELECT queries, it is trivial, since
-		 * the query is literally accesses the relationShardList in the same query.
-		 *
-		 * For DMLs, create placement accesses for placements that appear in a
-		 * subselect.
-		 */
-		List *relationShardAccessList =
-			BuildPlacementSelectList(taskPlacement->groupId, relationShardList);
-
-		placementAccessList = list_concat(placementAccessList, relationShardAccessList);
-	}
-
-	return placementAccessList;
-}
-
-
-/*
  * ReceiveResults reads the result of a command or query and writes returned
  * rows to the tuple store of the scan state. It returns whether fetching results
  * were done. On failure, it throws an error.
@@ -3702,4 +3701,91 @@ SetLocalForceMaxQueryParallelization(void)
 	set_config_option("citus.force_max_query_parallelization", "on",
 					  (superuser() ? PGC_SUSET : PGC_USERSET), PGC_S_SESSION,
 					  GUC_ACTION_LOCAL, true, 0, false);
+}
+
+
+/*
+ * ExtractParametersForRemoteExecution extracts parameter types and values from
+ * the given ParamListInfo structure, and fills parameter type and value arrays.
+ * It changes oid of custom types to InvalidOid so that they are the same in workers
+ * and coordinators.
+ */
+static void
+ExtractParametersForRemoteExecution(ParamListInfo paramListInfo, Oid **parameterTypes,
+									const char ***parameterValues)
+{
+	ExtractParametersFromParamList(paramListInfo, parameterTypes,
+								   parameterValues, false);
+}
+
+
+/*
+ * ExtractParametersFromParamList extracts parameter types and values from
+ * the given ParamListInfo structure, and fills parameter type and value arrays.
+ * If useOriginalCustomTypeOids is true, it uses the original oids for custom types.
+ */
+void
+ExtractParametersFromParamList(ParamListInfo paramListInfo,
+							   Oid **parameterTypes,
+							   const char ***parameterValues, bool
+							   useOriginalCustomTypeOids)
+{
+	int parameterIndex = 0;
+	int parameterCount = paramListInfo->numParams;
+
+	*parameterTypes = (Oid *) palloc0(parameterCount * sizeof(Oid));
+	*parameterValues = (const char **) palloc0(parameterCount * sizeof(char *));
+
+	/* get parameter types and values */
+	for (parameterIndex = 0; parameterIndex < parameterCount; parameterIndex++)
+	{
+		ParamExternData *parameterData = &paramListInfo->params[parameterIndex];
+		Oid typeOutputFunctionId = InvalidOid;
+		bool variableLengthType = false;
+
+		/*
+		 * Use 0 for data types where the oid values can be different on
+		 * the master and worker nodes. Therefore, the worker nodes can
+		 * infer the correct oid.
+		 */
+		if (parameterData->ptype >= FirstNormalObjectId && !useOriginalCustomTypeOids)
+		{
+			(*parameterTypes)[parameterIndex] = 0;
+		}
+		else
+		{
+			(*parameterTypes)[parameterIndex] = parameterData->ptype;
+		}
+
+		/*
+		 * If the parameter is not referenced / used (ptype == 0) and
+		 * would otherwise have errored out inside standard_planner()),
+		 * don't pass a value to the remote side, and pass text oid to prevent
+		 * undetermined data type errors on workers.
+		 */
+		if (parameterData->ptype == 0)
+		{
+			(*parameterValues)[parameterIndex] = NULL;
+			(*parameterTypes)[parameterIndex] = TEXTOID;
+
+			continue;
+		}
+
+		/*
+		 * If the parameter is NULL then we preserve its type, but
+		 * don't need to evaluate its value.
+		 */
+		if (parameterData->isnull)
+		{
+			(*parameterValues)[parameterIndex] = NULL;
+
+			continue;
+		}
+
+		getTypeOutputInfo(parameterData->ptype, &typeOutputFunctionId,
+						  &variableLengthType);
+
+		(*parameterValues)[parameterIndex] = OidOutputFunctionCall(typeOutputFunctionId,
+																   parameterData->value);
+	}
 }
