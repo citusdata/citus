@@ -80,7 +80,7 @@ wait_until_metadata_sync(PG_FUNCTION_ARGS)
 	uint32 timeout = PG_GETARG_UINT32(0);
 	int waitResult = 0;
 
-	List *workerList = ActivePrimaryNodeList(NoLock);
+	List *workerList = ActivePrimaryWorkerNodeList(NoLock);
 	ListCell *workerCell = NULL;
 	bool waitNotifications = false;
 	MultiConnection *connection = NULL;

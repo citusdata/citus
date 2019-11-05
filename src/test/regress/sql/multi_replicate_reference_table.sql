@@ -3,7 +3,6 @@
 --
 -- Tests that check that reference tables are replicated when adding new nodes.
 
-
 SET citus.next_shard_id TO 1370000;
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 1370000;
 ALTER SEQUENCE pg_catalog.pg_dist_groupid_seq RESTART 1370000;
@@ -71,7 +70,8 @@ SELECT
 FROM
     pg_dist_shard_placement
 WHERE
-    nodeport = :worker_2_port;
+    nodeport = :worker_2_port
+ORDER BY shardid, nodeport;
 
 SELECT *
 FROM pg_dist_colocation
@@ -88,7 +88,8 @@ SELECT
 FROM
     pg_dist_shard_placement
 WHERE
-    nodeport = :worker_2_port;
+    nodeport = :worker_2_port
+ORDER BY shardid, nodeport;
 
 SELECT *
 FROM pg_dist_colocation
@@ -106,7 +107,8 @@ SELECT
 FROM
     pg_dist_shard_placement
 WHERE
-    nodeport = :worker_2_port;
+    nodeport = :worker_2_port
+ORDER BY shardid, nodeport;
 
 SELECT *
 FROM pg_dist_colocation
@@ -123,7 +125,8 @@ SELECT
 FROM
     pg_dist_shard_placement
 WHERE
-    nodeport = :worker_2_port;
+    nodeport = :worker_2_port
+ORDER BY shardid, nodeport;
 
 SELECT *
 FROM pg_dist_colocation
@@ -147,7 +150,8 @@ SELECT
 FROM
     pg_dist_shard_placement
 WHERE
-    nodeport = :worker_2_port;
+    nodeport = :worker_2_port
+ORDER BY shardid, nodeport;
 
 SELECT *
 FROM pg_dist_colocation
@@ -166,7 +170,8 @@ SELECT
 FROM
     pg_dist_shard_placement
 WHERE
-    nodeport = :worker_2_port;
+    nodeport = :worker_2_port
+ORDER BY shardid, nodeport;
 
 SELECT *
 FROM pg_dist_colocation
@@ -188,7 +193,8 @@ SELECT
 FROM
     pg_dist_shard_placement
 WHERE
-    nodeport = :worker_2_port;
+    nodeport = :worker_2_port
+ORDER BY shardid, nodeport;
 
 SELECT *
 FROM pg_dist_colocation
@@ -207,7 +213,8 @@ SELECT
 FROM
     pg_dist_shard_placement
 WHERE
-    nodeport = :worker_2_port;
+    nodeport = :worker_2_port
+ORDER BY shardid, nodeport;
 
 SELECT *
 FROM pg_dist_colocation
@@ -251,8 +258,10 @@ WHERE colocationid IN
      FROM pg_dist_partition
      WHERE logicalrelid = 'replicate_reference_table_reference_one'::regclass);
 
+SELECT colocationid AS reference_table_colocationid FROM pg_dist_colocation WHERE distributioncolumntype = 0 \gset
+
 SELECT
-    logicalrelid, partmethod, colocationid, repmodel
+    logicalrelid, partmethod, colocationid = :reference_table_colocationid, repmodel
 FROM
     pg_dist_partition
 WHERE
@@ -260,6 +269,7 @@ WHERE
 ORDER BY logicalrelid;
 
 BEGIN;
+SET LOCAL client_min_messages TO ERROR;
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 SELECT upgrade_to_reference_table('replicate_reference_table_hash');
 SELECT create_reference_table('replicate_reference_table_reference_two');
@@ -272,8 +282,7 @@ FROM
     pg_dist_shard_placement
 WHERE
     nodeport = :worker_2_port
-ORDER BY
-    shardid;
+ORDER BY shardid, nodeport;
 
 SELECT *
 FROM pg_dist_colocation
@@ -283,7 +292,7 @@ WHERE colocationid IN
      WHERE logicalrelid = 'replicate_reference_table_reference_one'::regclass);
 
 SELECT
-    logicalrelid, partmethod, colocationid, repmodel
+    logicalrelid, partmethod, colocationid = :reference_table_colocationid, repmodel
 FROM
     pg_dist_partition
 WHERE
@@ -350,7 +359,8 @@ SELECT
 FROM
     pg_dist_shard_placement
 WHERE
-    nodeport = :worker_2_port;
+    nodeport = :worker_2_port
+ORDER BY shardid, nodeport;
 
 SELECT *
 FROM pg_dist_colocation
@@ -370,7 +380,8 @@ SELECT
 FROM
     pg_dist_shard_placement
 WHERE
-    nodeport = :worker_2_port;
+    nodeport = :worker_2_port
+ORDER BY shardid, nodeport;
 
 SELECT * FROM pg_dist_colocation WHERE colocationid = 1370009;
 
@@ -387,7 +398,8 @@ SELECT
 FROM
     pg_dist_shard_placement
 WHERE
-    nodeport = :worker_2_port;
+    nodeport = :worker_2_port
+ORDER BY shardid, nodeport;
 
 SELECT *
 FROM pg_dist_colocation
@@ -404,7 +416,8 @@ SELECT
 FROM
     pg_dist_shard_placement
 WHERE
-    nodeport = :worker_2_port;
+    nodeport = :worker_2_port
+ORDER BY shardid, nodeport;
 
 SELECT *
 FROM pg_dist_colocation
@@ -434,7 +447,8 @@ SELECT
 FROM
     pg_dist_shard_placement
 WHERE
-    nodeport = :worker_2_port;
+    nodeport = :worker_2_port
+ORDER BY shardid, nodeport;
 
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 
@@ -444,7 +458,8 @@ SELECT
 FROM
     pg_dist_shard_placement
 WHERE
-    nodeport = :worker_2_port;
+    nodeport = :worker_2_port
+ORDER BY shardid, nodeport;
 
 -- verify constraints have been created on the new node
 SELECT run_command_on_workers('select count(*) from pg_constraint where contype=''f'' AND conname like ''ref_table%'';');
@@ -459,7 +474,7 @@ SELECT create_reference_table('initially_not_replicated_reference_table');
 
 SELECT 1 FROM master_add_inactive_node('localhost', :worker_2_port);
 
--- we should see only one shard placements
+-- we should see only one shard placements (other than coordinator)
 SELECT
     shardid, shardstate, shardlength, nodename, nodeport
 FROM
@@ -471,6 +486,7 @@ WHERE
                     pg_dist_shard 
                 WHERE 
                     logicalrelid = 'initially_not_replicated_reference_table'::regclass)
+    AND nodeport != :master_port
 ORDER BY 1,4,5;
 
 -- we should see the two shard placements after activation
@@ -487,6 +503,7 @@ WHERE
                     pg_dist_shard 
                 WHERE 
                     logicalrelid = 'initially_not_replicated_reference_table'::regclass)
+    AND nodeport != :master_port
 ORDER BY 1,4,5;
 
 -- this should have no effect

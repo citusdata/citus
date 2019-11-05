@@ -368,7 +368,7 @@ step "s6-commit"
   COMMIT;
 }
 
-# we disable the deamon during the regression tests in order to get consistent results
+# we disable the daemon during the regression tests in order to get consistent results
 # thus we manually issue the deadlock detection 
 session "deadlock-checker"
 

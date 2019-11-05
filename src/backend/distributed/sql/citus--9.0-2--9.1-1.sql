@@ -6,6 +6,8 @@ COMMENT ON COLUMN pg_catalog.pg_dist_node.shouldhaveshards IS
 #include "udfs/master_drain_node/9.1-1.sql"
 #include "udfs/rebalance_table_shards/9.1-1.sql"
 #include "udfs/get_rebalance_table_shards_plan/9.1-1.sql"
+#include "udfs/master_add_node/9.1-1.sql"
+#include "udfs/master_add_inactive_node/9.1-1.sql"
 
 -- we don't maintain replication factor of reference tables anymore and just
 -- use -1 instead.

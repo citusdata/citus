@@ -56,7 +56,7 @@ ExecuteSubPlans(DistributedPlan *distributedPlan)
 	 */
 	BeginOrContinueCoordinatedTransaction();
 
-	nodeList = ActiveReadableNodeList();
+	nodeList = ActiveReadableWorkerNodeList();
 
 	foreach(subPlanCell, subPlanList)
 	{

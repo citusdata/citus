@@ -251,6 +251,18 @@ test: multi_upgrade_reference_table
 test: multi_replicate_reference_table
 test: multi_remove_node_reference_table
 
+# --------
+# Replicating reference tables to coordinator.  Add coordinator to pg_dist_node
+# and rerun some of the tests.
+# --------
+test: add_coordinator
+test: multi_upgrade_reference_table
+test: multi_replicate_reference_table
+test: multi_reference_table
+test: foreign_key_to_reference_table
+test: replicate_reference_tables_to_coordinator
+test: remove_coordinator
+
 # ----------
 # multi_transactional_drop_shards tests for dropping shards using connection API
 # ----------

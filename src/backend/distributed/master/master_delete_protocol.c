@@ -422,7 +422,21 @@ DropShards(Oid relationId, char *schemaName, char *relationName,
 								 quotedShardName);
 			}
 
-			connection = GetPlacementConnection(connectionFlags, shardPlacement, NULL);
+			/*
+			 * The active DROP SCHEMA/DATABASE ... CASCADE will drop the shard, if we
+			 * try to drop it over another connection, we will get into a distributed
+			 * deadlock.
+			 */
+			if (shardPlacement->groupId == COORDINATOR_GROUP_ID &&
+				IsCoordinator() &&
+				DropSchemaOrDBInProgress())
+			{
+				DeleteShardPlacementRow(shardPlacement->placementId);
+				continue;
+			}
+
+			connection = GetPlacementConnection(connectionFlags, shardPlacement,
+												NULL);
 
 			RemoteTransactionBeginIfNecessary(connection);
 

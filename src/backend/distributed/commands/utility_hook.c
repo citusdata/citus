@@ -65,6 +65,7 @@ bool EnableDDLPropagation = true; /* ddl propagation is enabled */
 PropSetCmdBehavior PropagateSetCommands = PROPSETCMD_NONE; /* SET prop off */
 static bool shouldInvalidateForeignKeyGraph = false;
 static int activeAlterTables = 0;
+static int activeDropSchemaOrDBs = 0;
 
 
 /* Local functions forward declarations for helper functions */
@@ -76,6 +77,7 @@ static List * PlanRenameAttributeStmt(RenameStmt *stmt, const char *queryString)
 static List * PlanAlterOwnerStmt(AlterOwnerStmt *stmt, const char *queryString);
 static List * PlanAlterObjectDependsStmt(AlterObjectDependsStmt *stmt,
 										 const char *queryString);
+static bool IsDropSchemaOrDB(Node *parsetree);
 
 
 /*
@@ -655,6 +657,11 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 			activeAlterTables++;
 		}
 
+		if (IsDropSchemaOrDB(parsetree))
+		{
+			activeDropSchemaOrDBs++;
+		}
+
 		standard_ProcessUtility(pstmt, queryString, context,
 								params, queryEnv, dest, completionTag);
 
@@ -678,12 +685,22 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		{
 			activeAlterTables--;
 		}
+
+		if (IsDropSchemaOrDB(parsetree))
+		{
+			activeDropSchemaOrDBs--;
+		}
 	}
 	PG_CATCH();
 	{
 		if (IsA(parsetree, AlterTableStmt))
 		{
 			activeAlterTables--;
+		}
+
+		if (IsDropSchemaOrDB(parsetree))
+		{
+			activeDropSchemaOrDBs--;
 		}
 
 		PG_RE_THROW();
@@ -793,6 +810,26 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 	 * EXTENSION. This is important to register some invalidation callbacks.
 	 */
 	CitusHasBeenLoaded();
+}
+
+
+/*
+ * IsDropSchemaOrDB returns true if parsetree represents DROP SCHEMA ...or
+ * a DROP DATABASE.
+ */
+static bool
+IsDropSchemaOrDB(Node *parsetree)
+{
+	DropStmt *dropStatement = NULL;
+
+	if (!IsA(parsetree, DropStmt))
+	{
+		return false;
+	}
+
+	dropStatement = (DropStmt *) parsetree;
+	return (dropStatement->removeType == OBJECT_SCHEMA) ||
+		   (dropStatement->removeType == OBJECT_DATABASE);
 }
 
 
@@ -1197,4 +1234,15 @@ bool
 AlterTableInProgress(void)
 {
 	return activeAlterTables > 0;
+}
+
+
+/*
+ * DropSchemaOrDBInProgress returns true if we're processing a DROP SCHEMA
+ * or a DROP DATABASE command right now.
+ */
+bool
+DropSchemaOrDBInProgress(void)
+{
+	return activeDropSchemaOrDBs > 0;
 }

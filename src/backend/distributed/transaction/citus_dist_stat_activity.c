@@ -317,7 +317,7 @@ CitusStatActivity(const char *statQuery)
 {
 	List *citusStatsList = NIL;
 
-	List *workerNodeList = ActivePrimaryNodeList(NoLock);
+	List *workerNodeList = ActivePrimaryWorkerNodeList(NoLock);
 	ListCell *workerNodeCell = NULL;
 	char *nodeUser = NULL;
 	List *connectionList = NIL;
@@ -455,7 +455,7 @@ GetLocalNodeCitusDistStat(const char *statQuery)
 	localGroupId = GetLocalGroupId();
 
 	/* get the current worker's node stats */
-	workerNodeList = ActivePrimaryNodeList(NoLock);
+	workerNodeList = ActivePrimaryWorkerNodeList(NoLock);
 	foreach(workerNodeCell, workerNodeList)
 	{
 		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);

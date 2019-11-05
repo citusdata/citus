@@ -249,8 +249,10 @@ INSERT INTO referencing_schema.referencing_table SELECT x, x from generate_serie
 DELETE FROM referenced_schema.referenced_table WHERE id > 800;
 SELECT count(*) FROM referencing_schema.referencing_table;
 
+SET client_min_messages TO ERROR;
 DROP SCHEMA referenced_schema CASCADE;
 DROP SCHEMA referencing_schema CASCADE;
+RESET client_min_messages;
 
 -- on delete set update cascades properly
 CREATE TABLE referenced_table(test_column int, test_column2 int, PRIMARY KEY(test_column));
@@ -952,5 +954,7 @@ ROLLBACK;
 DROP TABLE referenced_table CASCADE;
 DROP TABLE referencing_table;
 
+SET client_min_messages TO ERROR;
 DROP SCHEMA fkey_reference_table CASCADE;
 SET search_path TO DEFAULT;
+RESET client_min_messages;

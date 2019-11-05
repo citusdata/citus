@@ -121,7 +121,7 @@ OpenConnectionsToAllWorkerNodes(LOCKMODE lockMode)
 	ListCell *workerNodeCell = NULL;
 	int connectionFlags = FORCE_NEW_CONNECTION;
 
-	workerNodeList = ActivePrimaryNodeList(lockMode);
+	workerNodeList = ActivePrimaryWorkerNodeList(lockMode);
 
 	foreach(workerNodeCell, workerNodeList)
 	{
