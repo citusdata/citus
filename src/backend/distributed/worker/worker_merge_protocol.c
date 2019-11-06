@@ -49,8 +49,7 @@ static void CreateTaskTable(StringInfo schemaName, StringInfo relationName,
 							List *columnNameList, List *columnTypeList);
 static void CopyTaskFilesFromDirectory(StringInfo schemaName, StringInfo relationName,
 									   StringInfo sourceDirectoryName, Oid userId);
-static void
-CreateJobSchema(StringInfo schemaName);									   
+static void CreateJobSchema(StringInfo schemaName);
 
 
 /* exports for SQL callable functions */
@@ -144,7 +143,7 @@ worker_merge_files_into_table(PG_FUNCTION_ARGS)
 		appendStringInfoString(jobSchemaName, "public");
 	}
 	else
-	 {
+	{
 		Oid schemaId = get_namespace_oid(jobSchemaName->data, false);
 
 		EnsureSchemaOwner(schemaId);
@@ -155,6 +154,7 @@ worker_merge_files_into_table(PG_FUNCTION_ARGS)
 	columnTypeList = ArrayObjectToCStringList(columnTypeObject);
 
 	CreateTaskTable(jobSchemaName, taskTableName, columnNameList, columnTypeList);
+
 	/* need superuser to copy from files */
 	GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
 	SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);
@@ -356,6 +356,7 @@ TaskTableName(uint32 taskId)
 	return taskTableName;
 }
 
+
 /*
  * CreateJobSchema creates a job schema with the given schema name. Note that
  * this function ensures that our pg_ prefixed schema names can be created.
@@ -401,6 +402,7 @@ CreateJobSchema(StringInfo schemaName)
 	SetUserIdAndSecContext(savedUserId, savedSecurityContext);
 	allowSystemTableMods = oldAllowSystemTableMods;
 }
+
 
 /* Creates a list of cstrings from a single dimensional array object. */
 static List *

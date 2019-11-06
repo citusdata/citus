@@ -821,8 +821,9 @@ TaskListRequires2PC(List *taskList)
 bool
 ReadOnlyTask(TaskType taskType)
 {
-	if (taskType == ROUTER_TASK || taskType == SQL_TASK || MAP_TASK || MAP_OUTPUT_FETCH_TASK
-	 || MERGE_TASK)
+	if (taskType == ROUTER_TASK || taskType == SQL_TASK || MAP_TASK ||
+		MAP_OUTPUT_FETCH_TASK ||
+		MERGE_TASK)
 	{
 		/*
 		 * TODO: We currently do not execute modifying CTEs via ROUTER_TASK/SQL_TASK.
