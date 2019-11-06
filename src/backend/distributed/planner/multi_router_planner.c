@@ -1616,6 +1616,7 @@ CreateTask(TaskType taskType)
 	task->relationRowLockList = NIL;
 
 	task->modifyWithSubquery = false;
+	task->partiallyLocalOrRemote = false;
 	task->relationShardList = NIL;
 
 	return task;
