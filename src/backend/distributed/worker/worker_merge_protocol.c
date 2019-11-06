@@ -39,6 +39,8 @@
 #include "utils/builtins.h"
 #include "utils/snapmgr.h"
 #include "utils/syscache.h"
+#include "commands/schemacmds.h"
+#include "distributed/resource_lock.h"
 
 
 /* Local functions forward declarations */
@@ -47,12 +49,36 @@ static void CreateTaskTable(StringInfo schemaName, StringInfo relationName,
 							List *columnNameList, List *columnTypeList);
 static void CopyTaskFilesFromDirectory(StringInfo schemaName, StringInfo relationName,
 									   StringInfo sourceDirectoryName, Oid userId);
+static void
+CreateJobSchema(StringInfo schemaName);									   
 
 
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(worker_merge_files_into_table);
 PG_FUNCTION_INFO_V1(worker_merge_files_and_run_query);
 PG_FUNCTION_INFO_V1(worker_cleanup_job_schema_cache);
+PG_FUNCTION_INFO_V1(worker_create_schema);
+
+
+Datum
+worker_create_schema(PG_FUNCTION_ARGS)
+{
+	uint64 jobId = PG_GETARG_INT64(0);
+
+	StringInfo jobSchemaName = JobSchemaName(jobId);
+	bool schemaExists = false;
+	CheckCitusVersion(ERROR);
+
+	LockJobResource(jobId, AccessExclusiveLock);
+	schemaExists = JobSchemaExists(jobSchemaName);
+	if (!schemaExists)
+	{
+		CreateJobSchema(jobSchemaName);
+	}
+	UnlockJobResource(jobId, AccessExclusiveLock);
+
+	PG_RETURN_VOID();
+}
 
 
 /*
@@ -118,7 +144,7 @@ worker_merge_files_into_table(PG_FUNCTION_ARGS)
 		appendStringInfoString(jobSchemaName, "public");
 	}
 	else
-	{
+	 {
 		Oid schemaId = get_namespace_oid(jobSchemaName->data, false);
 
 		EnsureSchemaOwner(schemaId);
@@ -129,7 +155,6 @@ worker_merge_files_into_table(PG_FUNCTION_ARGS)
 	columnTypeList = ArrayObjectToCStringList(columnTypeObject);
 
 	CreateTaskTable(jobSchemaName, taskTableName, columnNameList, columnTypeList);
-
 	/* need superuser to copy from files */
 	GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
 	SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);
@@ -138,7 +163,6 @@ worker_merge_files_into_table(PG_FUNCTION_ARGS)
 							   userId);
 
 	SetUserIdAndSecContext(savedUserId, savedSecurityContext);
-
 	PG_RETURN_VOID();
 }
 
@@ -332,6 +356,51 @@ TaskTableName(uint32 taskId)
 	return taskTableName;
 }
 
+/*
+ * CreateJobSchema creates a job schema with the given schema name. Note that
+ * this function ensures that our pg_ prefixed schema names can be created.
+ * Further note that the created schema does not become visible to other
+ * processes until the transaction commits.
+ */
+static void
+CreateJobSchema(StringInfo schemaName)
+{
+	const char *queryString = NULL;
+	bool oldAllowSystemTableMods = false;
+
+	Oid savedUserId = InvalidOid;
+	int savedSecurityContext = 0;
+	CreateSchemaStmt *createSchemaStmt = NULL;
+	RoleSpec currentUserRole = { 0 };
+
+	/* allow schema names that start with pg_ */
+	oldAllowSystemTableMods = allowSystemTableMods;
+	allowSystemTableMods = true;
+
+	/* ensure we're allowed to create this schema */
+	GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
+	SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);
+
+	/* build a CREATE SCHEMA statement */
+	currentUserRole.type = T_RoleSpec;
+	currentUserRole.roletype = ROLESPEC_CSTRING;
+	currentUserRole.rolename = GetUserNameFromId(savedUserId, false);
+	currentUserRole.location = -1;
+
+	createSchemaStmt = makeNode(CreateSchemaStmt);
+	createSchemaStmt->schemaname = schemaName->data;
+	createSchemaStmt->schemaElts = NIL;
+
+	/* actually create schema with the current user as owner */
+	createSchemaStmt->authrole = &currentUserRole;
+	CreateSchemaCommand(createSchemaStmt, queryString, -1, -1);
+
+	CommandCounterIncrement();
+
+	/* and reset environment */
+	SetUserIdAndSecContext(savedUserId, savedSecurityContext);
+	allowSystemTableMods = oldAllowSystemTableMods;
+}
 
 /* Creates a list of cstrings from a single dimensional array object. */
 static List *

@@ -152,6 +152,7 @@ extern Datum worker_apply_shard_ddl_command(PG_FUNCTION_ARGS);
 extern Datum worker_range_partition_table(PG_FUNCTION_ARGS);
 extern Datum worker_hash_partition_table(PG_FUNCTION_ARGS);
 extern Datum worker_merge_files_into_table(PG_FUNCTION_ARGS);
+extern Datum worker_create_schema(PG_FUNCTION_ARGS);
 extern Datum worker_merge_files_and_run_query(PG_FUNCTION_ARGS);
 extern Datum worker_cleanup_job_schema_cache(PG_FUNCTION_ARGS);
 

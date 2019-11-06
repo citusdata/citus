@@ -147,6 +147,7 @@
 #include "distributed/worker_protocol.h"
 #include "distributed/version_compat.h"
 #include "lib/ilist.h"
+#include "commands/schemacmds.h"
 #include "storage/fd.h"
 #include "storage/latch.h"
 #include "utils/int8.h"
@@ -619,6 +620,17 @@ static bool ShouldMarkPlacementsInvalidOnFailure(DistributedExecution *execution
 static void PlacementExecutionReady(TaskPlacementExecution *placementExecution);
 static TaskExecutionState TaskExecutionStateMachine(ShardCommandExecution *
 													shardCommandExecution);
+static void FillTaskGroups(List** allTasks, List** mapTasks, List** outputFetchTasks,
+ List** mergeTasks, List** mergeFetchTasks);
+static void ExecuteDependedTasks(List *taskList); 
+static StringInfo
+MapFetchTaskQueryString(Task *mapFetchTask, Task *mapTask);
+static void PutMapOutputFetchQueryStrings(List** mapOutputFetchTasks);
+static void CreateTemporarySchemas(List *mergeTasks);
+static List* CreateJobIds(List* mergeTasks);
+static void CreateSchemasOnAllWorkers(char* createSchemasCommand);
+static char* GenerateCreateSchemasCommand(List* jobIds);
+static bool doesJobIDExist(List* jobIds, uint64 jobId);
 
 
 /*
@@ -643,7 +655,7 @@ AdaptiveExecutor(CustomScanState *node)
 
 
 	Job *job = distributedPlan->workerJob;
-	List *taskList =  TaskAndExecutionList(job->taskList);
+	List *taskList =  job->taskList;
 
 	/* we should only call this once before the scan finished */
 	Assert(!scanState->finishedRemoteScan);
@@ -656,6 +668,7 @@ AdaptiveExecutor(CustomScanState *node)
 	LockPartitionsForDistributedPlan(distributedPlan);
 
 	ExecuteSubPlans(distributedPlan);
+	ExecuteDependedTasks(taskList);
 
 	if (MultiShardConnectionType == SEQUENTIAL_CONNECTION)
 	{
@@ -724,6 +737,150 @@ AdaptiveExecutor(CustomScanState *node)
 
 	return resultSlot;
 }
+
+
+static void ExecuteDependedTasks(List *taskList) {
+	List* allTasks = TaskAndExecutionList(taskList);
+
+	List* mapTasks = NIL;
+	List* mapOutputFetchTasks = NIL;
+	List* mergeTasks = NIL;
+	List* mergeFetchTasks = NIL;
+
+	FillTaskGroups(&allTasks, &mapTasks, &mapOutputFetchTasks, &mergeTasks, &mergeFetchTasks);
+	PutMapOutputFetchQueryStrings(&mapOutputFetchTasks);
+
+	CreateTemporarySchemas(mergeTasks);
+
+	ExecuteTaskList(ROW_MODIFY_NONE, mapTasks, MaxAdaptiveExecutorPoolSize);
+	ExecuteTaskList(ROW_MODIFY_NONE, mapOutputFetchTasks, MaxAdaptiveExecutorPoolSize);
+	ExecuteTaskList(ROW_MODIFY_NONE, mergeTasks, MaxAdaptiveExecutorPoolSize);
+	ExecuteTaskList(ROW_MODIFY_NONE, mergeFetchTasks, MaxAdaptiveExecutorPoolSize);
+
+}
+
+static void CreateTemporarySchemas(List *mergeTasks) {
+	List* jobIds = CreateJobIds(mergeTasks);		
+	char* createSchemasCommand = GenerateCreateSchemasCommand(jobIds);
+	CreateSchemasOnAllWorkers(createSchemasCommand);
+}
+
+static List* CreateJobIds(List* mergeTasks) {
+	ListCell *taskCell = NULL;
+	List* jobIds = NIL;
+
+	foreach(taskCell, mergeTasks) {
+		Task *task = (Task *) lfirst(taskCell);
+		if (!doesJobIDExist(jobIds, task->jobId)) {
+			jobIds = lappend(jobIds, task->jobId);
+		}
+	}
+	return jobIds;
+}
+
+static void CreateSchemasOnAllWorkers(char* createSchemasCommand) {
+	ListCell *workerNodeCell = NULL;
+	char *extensionOwner = CitusExtensionOwnerName();
+	List* workerNodeList = ActiveReadableNodeList();
+	List* commandList = list_make1(createSchemasCommand);
+
+	foreach(workerNodeCell, workerNodeList) {
+		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
+		SendCommandListToWorkerInSingleTransaction(workerNode->workerName,
+		 	workerNode->workerPort, extensionOwner, commandList);
+	}
+}
+
+static char* GenerateCreateSchemasCommand(List* jobIds) {
+	StringInfo createSchemaCommand = makeStringInfo();
+	ListCell *jobIdCell = NULL;
+
+	foreach(jobIdCell, jobIds) {
+		uint64 jobId = (uint64) lfirst(jobIdCell);
+		appendStringInfo(createSchemaCommand, WORKER_CREATE_SCHEMA_QUERY, jobId);
+	}
+	return createSchemaCommand->data;
+}
+
+
+static bool doesJobIDExist(List* jobIds, uint64 jobId) {
+	ListCell *jobIdCell = NULL;
+	foreach(jobIdCell, jobIds) {
+		uint64 curJobId = (uint64) lfirst(jobIdCell);
+		if(curJobId == jobId) return true;
+	}
+	return false;
+}
+
+static void FillTaskGroups(List** allTasks, List** mapTasks, List** outputFetchTasks,
+ List** mergeTasks, List** mergeFetchTasks) {
+	ListCell *taskCell = NULL;
+
+	foreach(taskCell, *allTasks) {
+		Task *task = (Task *) lfirst(taskCell);
+
+		if (task->taskType == MAP_TASK) {
+			*mapTasks = lappend(*mapTasks, task);
+		}
+		if (task->taskType == MAP_OUTPUT_FETCH_TASK) {
+			*outputFetchTasks = lappend(*outputFetchTasks, task);
+		}
+		if (task->taskType == MERGE_TASK) {
+			*mergeTasks = lappend(*mergeTasks, task);
+		}
+		if (task->taskType == MERGE_FETCH_TASK) {
+			*mergeFetchTasks = lappend(*mergeFetchTasks, task);
+		}
+	} 
+}
+
+static void PutMapOutputFetchQueryStrings(List** mapOutputFetchTasks) {
+	ListCell *taskCell = NULL;
+	foreach(taskCell, *mapOutputFetchTasks) {
+		Task *task = (Task *) lfirst(taskCell);
+		StringInfo mapFetchTaskQueryString = NULL;
+		Task *mapTask = (Task *) linitial(task->dependedTaskList);
+
+		mapFetchTaskQueryString = MapFetchTaskQueryString(task, mapTask);
+		task->queryString = mapFetchTaskQueryString->data;
+	}
+}
+
+/*
+ * MapFetchTaskQueryString constructs the map fetch query string from the given
+ * map output fetch task and its downstream map task dependency. The constructed
+ * query string allows fetching the map task's partitioned output file from the
+ * worker node it's created to the worker node that will execute the merge task.
+ */
+static StringInfo
+MapFetchTaskQueryString(Task *mapFetchTask, Task *mapTask)
+{
+	StringInfo mapFetchQueryString = NULL;
+	uint32 partitionFileId = mapFetchTask->partitionId;
+	uint32 mergeTaskId = mapFetchTask->upstreamTaskId;
+
+	/* find the node name/port for map task's execution */
+	List *mapTaskPlacementList = mapTask->taskPlacementList;
+	TaskExecution *mapTaskExecution = mapTask->taskExecution;
+	uint32 currentIndex = mapTaskExecution->currentNodeIndex;
+
+	ShardPlacement *mapTaskPlacement = list_nth(mapTaskPlacementList, currentIndex);
+	char *mapTaskNodeName = mapTaskPlacement->nodeName;
+	uint32 mapTaskNodePort = mapTaskPlacement->nodePort;
+
+	Assert(mapFetchTask->taskType == MAP_OUTPUT_FETCH_TASK);
+	Assert(mapTask->taskType == MAP_TASK);
+
+	mapFetchQueryString = makeStringInfo();
+	appendStringInfo(mapFetchQueryString, MAP_OUTPUT_FETCH_COMMAND,
+					 mapTask->jobId, mapTask->taskId, partitionFileId,
+					 mergeTaskId, /* fetch results to merge task */
+					 mapTaskNodeName, mapTaskNodePort);
+
+	return mapFetchQueryString;
+}
+
+
 
 /*
  * TaskAndExecutionList visits all tasks in the job tree, starting with the given
@@ -1788,14 +1945,13 @@ ExecutionOrderForTask(RowModifyLevel modLevel, Task *task)
 
 		case DDL_TASK:
 		case VACUUM_ANALYZE_TASK:
-		{
-			return EXECUTION_ORDER_PARALLEL;
-		}
-
 		case MAP_TASK:
 		case MERGE_TASK:
 		case MAP_OUTPUT_FETCH_TASK:
 		case MERGE_FETCH_TASK:
+		{
+			return EXECUTION_ORDER_PARALLEL;
+		}
 		default:
 		{
 			ereport(ERROR, (errmsg("unsupported task type %d in adaptive executor",

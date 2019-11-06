@@ -51,6 +51,7 @@
 #include "utils/lsyscache.h"
 #include "utils/regproc.h"
 #include "utils/varlena.h"
+#include "commands/schemacmds.h"
 
 
 /* Local functions forward declarations */
@@ -67,6 +68,8 @@ static bool check_log_statement(List *stmt_list);
 static void AlterSequenceMinMax(Oid sequenceId, char *schemaName, char *sequenceName,
 								Oid sequenceTypeId);
 static void SetDefElemArg(AlterSeqStmt *statement, const char *name, Node *arg);
+static void
+CreateJobSchema(StringInfo schemaName);
 
 
 /* exports for SQL callable functions */
@@ -101,6 +104,8 @@ worker_fetch_partition_file(PG_FUNCTION_ARGS)
 	text *nodeNameText = PG_GETARG_TEXT_P(4);
 	uint32 nodePort = PG_GETARG_UINT32(5);
 	char *nodeName = NULL;
+	StringInfo jobSchemaName = JobSchemaName(jobId);
+	bool schemaExists = false;
 
 	/* remote filename is <jobId>/<partitionTaskId>/<partitionFileId> */
 	StringInfo remoteDirectoryName = TaskDirectoryName(jobId, partitionTaskId);
@@ -123,12 +128,67 @@ worker_fetch_partition_file(PG_FUNCTION_ARGS)
 		InitTaskDirectory(jobId, upstreamTaskId);
 	}
 
+
+	// LockJobResource(jobId, AccessExclusiveLock);
+	// schemaExists = JobSchemaExists(jobSchemaName);
+	// if (!schemaExists)
+	// {
+	// 	CreateJobSchema(jobSchemaName);
+	// }
+	// UnlockJobResource(jobId, AccessExclusiveLock);
 	nodeName = text_to_cstring(nodeNameText);
 
 	/* we've made sure the file names are sanitized, safe to fetch as superuser */
 	FetchRegularFileAsSuperUser(nodeName, nodePort, remoteFilename, taskFilename);
 
 	PG_RETURN_VOID();
+}
+
+
+/*
+ * CreateJobSchema creates a job schema with the given schema name. Note that
+ * this function ensures that our pg_ prefixed schema names can be created.
+ * Further note that the created schema does not become visible to other
+ * processes until the transaction commits.
+ */
+static void
+CreateJobSchema(StringInfo schemaName)
+{
+	const char *queryString = NULL;
+	bool oldAllowSystemTableMods = false;
+
+	Oid savedUserId = InvalidOid;
+	int savedSecurityContext = 0;
+	CreateSchemaStmt *createSchemaStmt = NULL;
+	RoleSpec currentUserRole = { 0 };
+
+	/* allow schema names that start with pg_ */
+	oldAllowSystemTableMods = allowSystemTableMods;
+	allowSystemTableMods = true;
+
+	/* ensure we're allowed to create this schema */
+	GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
+	SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);
+
+	/* build a CREATE SCHEMA statement */
+	currentUserRole.type = T_RoleSpec;
+	currentUserRole.roletype = ROLESPEC_CSTRING;
+	currentUserRole.rolename = GetUserNameFromId(savedUserId, false);
+	currentUserRole.location = -1;
+
+	createSchemaStmt = makeNode(CreateSchemaStmt);
+	createSchemaStmt->schemaname = schemaName->data;
+	createSchemaStmt->schemaElts = NIL;
+
+	/* actually create schema with the current user as owner */
+	createSchemaStmt->authrole = &currentUserRole;
+	CreateSchemaCommand(createSchemaStmt, queryString, -1, -1);
+
+	CommandCounterIncrement();
+
+	/* and reset environment */
+	SetUserIdAndSecContext(savedUserId, savedSecurityContext);
+	allowSystemTableMods = oldAllowSystemTableMods;
 }
 
 
