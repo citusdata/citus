@@ -267,8 +267,6 @@ static void ErrorIfContainsUnsupportedAggregate(MultiNode *logicalPlanNode);
 static void ErrorIfUnsupportedArrayAggregate(Aggref *arrayAggregateExpression);
 static void ErrorIfUnsupportedJsonAggregate(AggregateType type,
 											Aggref *aggregateExpression);
-static void ErrorIfUnsupportedJsonObjectAggregate(AggregateType type,
-												  Aggref *aggregateExpression);
 static void ErrorIfUnsupportedAggregateDistinct(Aggref *aggregateExpression,
 												MultiNode *logicalPlanNode);
 static Var * AggregateDistinctColumn(Aggref *aggregateExpression);
@@ -3198,7 +3196,7 @@ ErrorIfContainsUnsupportedAggregate(MultiNode *logicalPlanNode)
 		else if (aggregateType == AGGREGATE_JSONB_OBJECT_AGG ||
 				 aggregateType == AGGREGATE_JSON_OBJECT_AGG)
 		{
-			ErrorIfUnsupportedJsonObjectAggregate(aggregateType, aggregateExpression);
+			ErrorIfUnsupportedJsonAggregate(aggregateType, aggregateExpression);
 		}
 		else if (aggregateExpression->aggdistinct)
 		{
@@ -3250,33 +3248,6 @@ ErrorIfUnsupportedJsonAggregate(AggregateType type,
 	}
 
 	/* if json aggregate has distinct, we error out */
-	if (aggregateExpression->aggdistinct)
-	{
-		const char *name = AggregateNames[type];
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("%s (distinct) is unsupported", name)));
-	}
-}
-
-
-/*
- * ErrorIfUnsupportedJsonObjectAggregate checks if we can transform the
- * json object aggregate expression and push it down to the worker node.
- * If we cannot transform the aggregate, this function errors.
- */
-static void
-ErrorIfUnsupportedJsonObjectAggregate(AggregateType type,
-									  Aggref *aggregateExpression)
-{
-	/* if json object aggregate has order by, we error out */
-	if (aggregateExpression->aggorder)
-	{
-		const char *name = AggregateNames[type];
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("%s with order by is unsupported", name)));
-	}
-
-	/* if json object aggregate has distinct, we error out */
 	if (aggregateExpression->aggdistinct)
 	{
 		const char *name = AggregateNames[type];
