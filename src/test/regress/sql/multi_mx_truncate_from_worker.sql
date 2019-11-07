@@ -8,15 +8,15 @@ SET citus.shard_replication_factor TO 1;
 SET citus.shard_count TO 6;
 SET citus.replication_model TO streaming;
 
-CREATE TABLE referece_table(id int PRIMARY KEY);
-SELECT create_reference_table('referece_table');
+CREATE TABLE "refer'ence_table"(id int PRIMARY KEY);
+SELECT create_reference_table('refer''ence_table');
 
 CREATE TABLE on_update_fkey_table(id int PRIMARY KEY, value_1 int);
 SELECT create_distributed_table('on_update_fkey_table', 'id');
 
-ALTER TABLE on_update_fkey_table ADD CONSTRAINT fkey FOREIGN KEY(value_1) REFERENCES referece_table(id) ON UPDATE CASCADE;
+ALTER TABLE on_update_fkey_table ADD CONSTRAINT fkey FOREIGN KEY(value_1) REFERENCES "refer'ence_table"(id) ON UPDATE CASCADE;
 
-INSERT INTO referece_table SELECT i FROM generate_series(0, 100) i;
+INSERT INTO "refer'ence_table" SELECT i FROM generate_series(0, 100) i;
 INSERT INTO on_update_fkey_table SELECT i, i % 100  FROM generate_series(0, 1000) i;
 
 -- first, make sure that truncate from the coordinator workers as expected
@@ -27,12 +27,12 @@ SELECT count(*) FROM on_update_fkey_table;
 INSERT INTO on_update_fkey_table SELECT i, i % 100  FROM generate_series(0, 1000) i;
 
 -- now, show that TRUNCATE CASCADE works expected from the coordinator
-TRUNCATE referece_table CASCADE;
+TRUNCATE "refer'ence_table" CASCADE;
 SELECT count(*) FROM on_update_fkey_table;
-SELECT count(*) FROM referece_table;
+SELECT count(*) FROM "refer'ence_table";
 
 -- load some data for the next tests
-INSERT INTO referece_table SELECT i FROM generate_series(0, 100) i;
+INSERT INTO "refer'ence_table" SELECT i FROM generate_series(0, 100) i;
 INSERT INTO on_update_fkey_table SELECT i, i % 100  FROM generate_series(0, 1000) i;
 
 -- make sure that DDLs along with TRUNCATE worker fine
@@ -50,13 +50,13 @@ SET search_path TO 'truncate_from_workers';
 TRUNCATE on_update_fkey_table;
 SELECT count(*) FROM on_update_fkey_table;
 
--- load some data 
+-- load some data
 INSERT INTO on_update_fkey_table SELECT i, i % 100  FROM generate_series(0, 1000) i;
 
 -- now, show that TRUNCATE CASCADE works expected from the worker
-TRUNCATE referece_table CASCADE;
+TRUNCATE "refer'ence_table" CASCADE;
 SELECT count(*) FROM on_update_fkey_table;
-SELECT count(*) FROM referece_table;
+SELECT count(*) FROM "refer'ence_table";
 
 -- test within transaction blocks
 BEGIN;
@@ -65,20 +65,20 @@ ROLLBACK;
 
 -- test within transaction blocks
 BEGIN;
-	TRUNCATE referece_table CASCADE;
+	TRUNCATE "refer'ence_table" CASCADE;
 ROLLBACK;
 
 -- test with sequential mode and CASCADE
 BEGIN;
 	SET LOCAL citus.multi_shard_modify_mode TO sequential;
 	TRUNCATE on_update_fkey_table;
-	TRUNCATE referece_table CASCADE;
+	TRUNCATE "refer'ence_table" CASCADE;
 ROLLBACK;
 
 -- fill some data for the next test
 \c - - - :master_port
 SET search_path TO 'truncate_from_workers';
-INSERT INTO referece_table SELECT i FROM generate_series(0, 100) i;
+INSERT INTO "refer'ence_table" SELECT i FROM generate_series(0, 100) i;
 
 \c - - - :worker_1_port
 SET search_path TO 'truncate_from_workers';
@@ -95,7 +95,7 @@ RESET client_min_messages;
 
 \c - - - :master_port
 
--- also test the infrastructure that is used for supporting 
+-- also test the infrastructure that is used for supporting
 -- TRUNCATE from worker nodes
 
 -- should fail since it is not in transaction block
