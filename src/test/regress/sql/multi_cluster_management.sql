@@ -70,7 +70,6 @@ GRANT EXECUTE ON FUNCTION master_update_node(int,text,int,bool,int) TO node_meta
 
 -- try to manipulate node metadata via non-super user
 SET ROLE non_super_user;
-SELECT 1 FROM master_initialize_node_metadata();
 SELECT 1 FROM master_add_inactive_node('localhost', :worker_2_port + 1);
 SELECT 1 FROM master_activate_node('localhost', :worker_2_port + 1);
 SELECT 1 FROM master_disable_node('localhost', :worker_2_port + 1);
