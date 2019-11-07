@@ -598,6 +598,7 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 
 	/* finish the COPY commands */
 	dest->rShutdown(dest);
+	dest->rDestroy(dest);
 
 	ExecDropSingleTupleTableSlot(tupleTableSlot);
 	FreeExecutorState(executorState);
@@ -2692,6 +2693,9 @@ ShutdownCopyConnectionState(CopyConnectionState *connectionState,
 }
 
 
+/*
+ * CitusCopyDestReceiverDestroy frees the DestReceiver
+ */
 static void
 CitusCopyDestReceiverDestroy(DestReceiver *destReceiver)
 {
@@ -2710,6 +2714,16 @@ CitusCopyDestReceiverDestroy(DestReceiver *destReceiver)
 	if (copyDest->columnCoercionPaths)
 	{
 		pfree(copyDest->columnCoercionPaths);
+	}
+
+	if (copyDest->shardStateHash)
+	{
+		hash_destroy(copyDest->shardStateHash);
+	}
+
+	if (copyDest->connectionStateHash)
+	{
+		hash_destroy(copyDest->connectionStateHash);
 	}
 
 	pfree(copyDest);
