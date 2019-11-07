@@ -23,6 +23,7 @@
 #include "distributed/colocation_utils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/insert_select_planner.h"
+#include "distributed/listutils.h"
 #include "distributed/multi_logical_optimizer.h"
 #include "distributed/multi_logical_planner.h"
 #include "distributed/multi_physical_planner.h"
@@ -1387,62 +1388,52 @@ ExtractFromExpressionWalker(Node *node, QualifierWalkerContext *walkerContext)
 bool
 IsJoinClause(Node *clause)
 {
-	bool isJoinClause = false;
 	OpExpr *operatorExpression = NULL;
-	List *argumentList = NIL;
-	Node *leftArgument = NULL;
-	Node *rightArgument = NULL;
-	Node *strippedLeftArgument = NULL;
-	Node *strippedRightArgument = NULL;
+	bool equalsOperator = false;
+	List *varList = NIL;
+	Var *initialVar = NULL;
+	Var *var = NULL;
 
 	if (!IsA(clause, OpExpr))
 	{
 		return false;
 	}
 
-	operatorExpression = (OpExpr *) clause;
-	argumentList = operatorExpression->args;
+	operatorExpression = castNode(OpExpr, clause);
+	equalsOperator = OperatorImplementsEquality(operatorExpression->opno);
 
-	/* join clauses must have two arguments */
-	if (list_length(argumentList) != 2)
+	if (!equalsOperator)
 	{
+		/* Not an equi-join */
 		return false;
 	}
 
-	/* get left and right side of the expression */
-	leftArgument = (Node *) linitial(argumentList);
-	rightArgument = (Node *) lsecond(argumentList);
-
-	strippedLeftArgument = strip_implicit_coercions(leftArgument);
-	strippedRightArgument = strip_implicit_coercions(rightArgument);
-
-	/* each side of the expression should have only one column */
-	if (IsA(strippedLeftArgument, Var) && IsA(strippedRightArgument, Var))
+	/*
+	 * take all column references from the clause, if we find 2 column references from a
+	 * different relation we assume this is a join clause
+	 */
+	varList = pull_var_clause_default(clause);
+	if (list_length(varList) <= 0)
 	{
-		Var *leftColumn = (Var *) strippedLeftArgument;
-		Var *rightColumn = (Var *) strippedRightArgument;
-		bool equiJoin = false;
-		bool joinBetweenDifferentTables = false;
+		/* no column references in query, not describing a join */
+		return false;
+	}
+	initialVar = castNode(Var, linitial(varList));
 
-		bool equalsOperator = OperatorImplementsEquality(operatorExpression->opno);
-		if (equalsOperator)
+	foreach_ptr(var, varList)
+	{
+		if (var->varno != initialVar->varno)
 		{
-			equiJoin = true;
-		}
-
-		if (leftColumn->varno != rightColumn->varno)
-		{
-			joinBetweenDifferentTables = true;
-		}
-
-		/* codifies our logic for determining if this node is a join clause */
-		if (equiJoin && joinBetweenDifferentTables)
-		{
-			isJoinClause = true;
+			/*
+			 * this column reference comes from a different relation, hence describing a
+			 * join
+			 */
+			return true;
 		}
 	}
 
-	return isJoinClause;
+	/* all column references were to the same relation, no join */
+	return false;
 }
 
 

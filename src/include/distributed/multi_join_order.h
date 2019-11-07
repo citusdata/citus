@@ -87,8 +87,12 @@ extern List * ApplicableJoinClauses(List *leftTableIdList, uint32 rightTableId,
 extern OpExpr * SinglePartitionJoinClause(Var *partitionColumn,
 										  List *applicableJoinClauses);
 extern OpExpr * DualPartitionJoinClause(List *applicableJoinClauses);
+extern Node * LeftHandExpr(OpExpr *joinClause);
 extern Var * LeftColumn(OpExpr *joinClause);
+extern Var * LeftColumnOrNULL(OpExpr *joinClause);
+extern Node * RightHandExpr(OpExpr *joinClause);
 extern Var * RightColumn(OpExpr *joinClause);
+extern Var * RightColumnOrNULL(OpExpr *joinClause);
 extern Var * PartitionColumn(Oid relationId, uint32 rangeTableId);
 extern Var * DistPartitionKey(Oid relationId);
 extern char PartitionMethod(Oid relationId);

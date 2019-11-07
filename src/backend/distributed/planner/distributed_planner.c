@@ -816,7 +816,7 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
  * one.
  *
  * If the table is not a partition or replication factor is 1, the function
- * becomes a no-op.
+ * becomes a no-op.§
  */
 void
 EnsurePartitionTableNotReplicated(Oid relationId)
