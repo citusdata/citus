@@ -153,6 +153,9 @@
 #include "utils/int8.h"
 #include "utils/memutils.h"
 #include "utils/timestamp.h"
+#include "access/hash.h"
+#include "distributed/hash_helpers.h"
+
 
 /*
  * DistributedExecution represents the execution of a distributed query
@@ -540,6 +543,18 @@ typedef struct TaskPlacementExecution
 	int placementExecutionIndex;
 } TaskPlacementExecution;
 
+typedef struct TaskHashKey
+{
+	uint64 jobId;
+	uint32 taskId;
+}TaskHashKey;
+
+typedef struct TaskHashEntry
+{
+	TaskHashKey key;
+	Task *task;
+}TaskHashEntry;
+
 
 /* GUC, determining whether Citus opens 1 connection per task */
 bool ForceMaxQueryParallelization = false;
@@ -627,7 +642,16 @@ static List * CreateJobIds(List *mergeTasks);
 static void CreateSchemasOnAllWorkers(char *createSchemasCommand);
 static char * GenerateCreateSchemasCommand(List *jobIds);
 static bool doesJobIDExist(List *jobIds, uint64 jobId);
-static bool DoesHaveDependedTasks(List *taskList);
+static bool DoesHaveDependedJobs(Job *mainJob);
+static HASHCTL InitHashTableInfo();
+static HTAB * CreateTaskHashTable();
+static void FillTaskKey(TaskHashKey *taskKey, Task *task);
+static bool IsAllDependencyCompleted(Task *task, HTAB *completedTasks);
+static void AddCompletedTasks(List *curCompletedTasks, HTAB *completedTasks);
+static void ExecuteTasksInDependencyOrder(List *allTasks, List *topLevelTasks);
+static int TaskHashCompare(const void *key1, const void *key2, Size keysize);
+static uint32 TaskHash(const void *key, Size keysize);
+static bool IsTaskAlreadyCompleted(Task *task, HTAB *completedTasks);
 
 
 /*
@@ -665,7 +689,11 @@ AdaptiveExecutor(CustomScanState *node)
 	LockPartitionsForDistributedPlan(distributedPlan);
 
 	ExecuteSubPlans(distributedPlan);
-	ExecuteDependedTasks(taskList);
+
+	if (DoesHaveDependedJobs(job))
+	{
+		ExecuteDependedTasks(taskList);
+	}
 
 	if (MultiShardConnectionType == SEQUENTIAL_CONNECTION)
 	{
@@ -737,7 +765,7 @@ AdaptiveExecutor(CustomScanState *node)
 
 
 static void
-ExecuteDependedTasks(List *taskList)
+ExecuteDependedTasks(List *topLevelTasks)
 {
 	List *allTasks = NIL;
 
@@ -746,11 +774,7 @@ ExecuteDependedTasks(List *taskList)
 	List *mergeTasks = NIL;
 	List *mergeFetchTasks = NIL;
 
-	if (!DoesHaveDependedTasks(taskList))
-	{
-		return;
-	}
-	allTasks = TaskAndExecutionList(taskList);
+	allTasks = TaskAndExecutionList(topLevelTasks);
 
 	FillTaskGroups(&allTasks, &mapTasks, &mapOutputFetchTasks, &mergeTasks,
 				   &mergeFetchTasks);
@@ -758,27 +782,162 @@ ExecuteDependedTasks(List *taskList)
 
 	CreateTemporarySchemas(mergeTasks);
 
-	ExecuteTaskList(ROW_MODIFY_NONE, mapTasks, MaxAdaptiveExecutorPoolSize);
-	ExecuteTaskList(ROW_MODIFY_NONE, mapOutputFetchTasks, MaxAdaptiveExecutorPoolSize);
-	ExecuteTaskList(ROW_MODIFY_NONE, mergeTasks, MaxAdaptiveExecutorPoolSize);
-	ExecuteTaskList(ROW_MODIFY_NONE, mergeFetchTasks, MaxAdaptiveExecutorPoolSize);
+	ExecuteTasksInDependencyOrder(allTasks, topLevelTasks);
+
+
+	/* ExecuteTaskList(ROW_MODIFY_NONE, mapTasks, MaxAdaptiveExecutorPoolSize); */
+	/* ExecuteTaskList(ROW_MODIFY_NONE, mapOutputFetchTasks, MaxAdaptiveExecutorPoolSize); */
+	/* ExecuteTaskList(ROW_MODIFY_NONE, mergeTasks, MaxAdaptiveExecutorPoolSize); */
+	/* ExecuteTaskList(ROW_MODIFY_NONE, mergeFetchTasks, MaxAdaptiveExecutorPoolSize); */
+}
+
+
+static void
+ExecuteTasksInDependencyOrder(List *allTasks, List *topLevelTasks)
+{
+	List *curTasks = NIL;
+	ListCell *taskCell = NULL;
+	TaskHashKey taskKey;
+
+	HTAB *completedTasks = CreateTaskHashTable();
+	/* We only execute depended jobs' tasks, therefore to not execute */
+	/* top level tasks, we add them to the completedTasks. */
+	AddCompletedTasks(topLevelTasks, completedTasks);
+	while (true)
+	{
+		foreach(taskCell, allTasks)
+		{
+			Task *task = (Task *) lfirst(taskCell);
+			FillTaskKey(&taskKey, task);
+
+			if (IsAllDependencyCompleted(task, completedTasks) &&
+				!IsTaskAlreadyCompleted(task, completedTasks))
+			{
+				curTasks = lappend(curTasks, task);
+			}
+		}
+
+		if (list_length(curTasks) == 0)
+		{
+			break;
+		}
+		ExecuteTaskList(ROW_MODIFY_NONE, curTasks, MaxAdaptiveExecutorPoolSize);
+		AddCompletedTasks(curTasks, completedTasks);
+		curTasks = NIL;
+	}
 }
 
 
 static bool
-DoesHaveDependedTasks(List *taskList)
+IsTaskAlreadyCompleted(Task *task, HTAB *completedTasks)
+{
+	TaskHashKey taskKey;
+	bool found;
+
+	FillTaskKey(&taskKey, task);
+	hash_search(completedTasks, &taskKey, HASH_ENTER, &found);
+	return found;
+}
+
+
+static void
+AddCompletedTasks(List *curCompletedTasks, HTAB *completedTasks)
 {
 	ListCell *taskCell = NULL;
+	TaskHashKey taskKey;
+	bool found;
 
-	foreach(taskCell, taskList)
+	foreach(taskCell, curCompletedTasks)
 	{
 		Task *task = (Task *) lfirst(taskCell);
-		if (task->dependedTaskList)
+		FillTaskKey(&taskKey, task);
+		hash_search(completedTasks, &taskKey, HASH_ENTER, &found);
+	}
+}
+
+
+static bool
+IsAllDependencyCompleted(Task *targetTask, HTAB *completedTasks)
+{
+	ListCell *taskCell = NULL;
+	bool found = false;
+	TaskHashKey taskKey;
+
+	foreach(taskCell, targetTask->dependedTaskList)
+	{
+		Task *task = (Task *) lfirst(taskCell);
+		FillTaskKey(&taskKey, task);
+
+		hash_search(completedTasks, &taskKey, HASH_FIND, &found);
+		if (!found)
 		{
-			return true;
+			return false;
 		}
 	}
-	return false;
+	return true;
+}
+
+
+static void
+FillTaskKey(TaskHashKey *taskKey, Task *task)
+{
+	taskKey->jobId = task->jobId;
+	taskKey->taskId = task->taskId;
+}
+
+
+static HTAB *
+CreateTaskHashTable()
+{
+	uint32 hashFlags = (HASH_ELEM | HASH_FUNCTION | HASH_CONTEXT | HASH_COMPARE);
+	HASHCTL info = InitHashTableInfo();
+	return hash_create("citus task completed list (jobId, taskId)",
+					   64, &info, hashFlags);
+}
+
+
+static HASHCTL
+InitHashTableInfo()
+{
+	HASHCTL info;
+
+	memset(&info, 0, sizeof(info));
+	info.keysize = sizeof(TaskHashKey);
+	info.entrysize = sizeof(TaskHashEntry);
+	info.hash = TaskHash;
+	info.match = TaskHashCompare;
+	info.hcxt = CurrentMemoryContext;
+
+	return info;
+}
+
+
+static uint32
+TaskHash(const void *key, Size keysize)
+{
+	TaskHashKey *taskKey = (TaskHashKey *) key;
+	uint32 hash = 0;
+
+	hash = hash_combine(hash, hash_uint32((uint32) taskKey->jobId));
+	hash = hash_combine(hash, hash_uint32(taskKey->taskId));
+
+	return hash;
+}
+
+
+static int
+TaskHashCompare(const void *key1, const void *key2, Size keysize)
+{
+	TaskHashKey *taskKey1 = (TaskHashKey *) key1;
+	TaskHashKey *taskKey2 = (TaskHashKey *) key2;
+	return taskKey1->jobId != taskKey2->jobId || taskKey1->taskId != taskKey2->taskId;
+}
+
+
+static bool
+DoesHaveDependedJobs(Job *mainJob)
+{
+	return list_length(mainJob->dependedJobList) > 0;
 }
 
 
