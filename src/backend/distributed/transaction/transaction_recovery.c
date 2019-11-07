@@ -499,12 +499,14 @@ RecoverPreparedTransactionOnWorker(MultiConnection *connection, char *transactio
 	if (shouldCommit)
 	{
 		/* should have committed this prepared transaction */
-		appendStringInfo(command, "COMMIT PREPARED '%s'", transactionName);
+		appendStringInfo(command, "COMMIT PREPARED %s",
+						 quote_literal_cstr(transactionName));
 	}
 	else
 	{
 		/* should have aborted this prepared transaction */
-		appendStringInfo(command, "ROLLBACK PREPARED '%s'", transactionName);
+		appendStringInfo(command, "ROLLBACK PREPARED %s",
+						 quote_literal_cstr(transactionName));
 	}
 
 	executeCommand = ExecuteOptionalRemoteCommand(connection, command->data, &result);
