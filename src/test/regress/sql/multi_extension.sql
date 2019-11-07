@@ -110,6 +110,8 @@ ALTER EXTENSION citus UPDATE TO '8.2-3';
 ALTER EXTENSION citus UPDATE TO '8.2-4';
 ALTER EXTENSION citus UPDATE TO '8.3-1';
 ALTER EXTENSION citus UPDATE TO '9.0-1';
+ALTER EXTENSION citus UPDATE TO '9.0-2';
+ALTER EXTENSION citus UPDATE TO '9.1-1';
 
 -- show running version
 SHOW citus.version;
@@ -261,7 +263,7 @@ CREATE SCHEMA test_deamon;
 
 -- we create a similar function on the regression database
 -- note that this function checks for the existence of the daemon
--- when not found, returns true else tries for 5 times and 
+-- when not found, returns true else tries for 5 times and
 -- returns false
 CREATE OR REPLACE FUNCTION test_deamon.maintenance_deamon_died(p_dbname text)
     RETURNS boolean
@@ -285,9 +287,9 @@ $$;
 
 -- drop the database and see that the deamon is dead
 DROP DATABASE another;
-SELECT 
+SELECT
     *
-FROM 
+FROM
     test_deamon.maintenance_deamon_died('another');
 
 -- we don't need the schema and the function anymore
