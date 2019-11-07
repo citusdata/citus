@@ -27,9 +27,6 @@
 /* Maximum length of worker port number (represented as string) */
 #define MAX_PORT_LENGTH 10
 
-/* default filename for citus.worker_list_file */
-#define WORKER_LIST_FILENAME "pg_worker_list.conf"
-
 /* Implementation specific definitions used in finding worker nodes */
 #define WORKER_RACK_TRIES 5
 #define WORKER_DEFAULT_RACK "default"

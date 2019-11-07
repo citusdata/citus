@@ -81,7 +81,6 @@ static void InsertNodeRow(int nodeid, char *nodename, int32 nodeport, NodeMetada
 						  *nodeMetadata);
 static void DeleteNodeRow(char *nodename, int32 nodeport);
 static void SetUpDistributedTableDependencies(WorkerNode *workerNode);
-static List * ParseWorkerNodeFileAndRename(void);
 static WorkerNode * TupleToWorkerNode(TupleDesc tupleDescriptor, HeapTuple heapTuple);
 static WorkerNode * ModifiableWorkerNode(const char *nodeName, int32 nodePort);
 static void UpdateNodeLocation(int32 nodeId, char *newNodeName, int32 newNodePort);
@@ -97,7 +96,6 @@ PG_FUNCTION_INFO_V1(master_remove_node);
 PG_FUNCTION_INFO_V1(master_disable_node);
 PG_FUNCTION_INFO_V1(master_activate_node);
 PG_FUNCTION_INFO_V1(master_update_node);
-PG_FUNCTION_INFO_V1(master_initialize_node_metadata);
 PG_FUNCTION_INFO_V1(get_shard_id_for_distribution_column);
 
 
@@ -748,43 +746,6 @@ UpdateNodeLocation(int32 nodeId, char *newNodeName, int32 newNodePort)
 
 	systable_endscan(scanDescriptor);
 	heap_close(pgDistNode, NoLock);
-}
-
-
-/*
- * master_initialize_node_metadata is run once, when upgrading citus. It ingests the
- * existing pg_worker_list.conf into pg_dist_node, then adds a header to the file stating
- * that it's no longer used.
- */
-Datum
-master_initialize_node_metadata(PG_FUNCTION_ARGS)
-{
-	List *workerNodes = NIL;
-	WorkerNode *workerNode = NULL;
-
-	CheckCitusVersion(ERROR);
-
-	/*
-	 * This function should only ever be called from the create extension
-	 * script, but just to be sure, take an exclusive lock on pg_dist_node
-	 * to prevent concurrent calls.
-	 */
-	LockRelationOid(DistNodeRelationId(), ExclusiveLock);
-
-	workerNodes = ParseWorkerNodeFileAndRename();
-
-	foreach_ptr(workerNode, workerNodes)
-	{
-		bool nodeAlreadyExists = false;
-		NodeMetadata nodeMetadata = DefaultNodeMetadata();
-		nodeMetadata.nodeRack = workerNode->workerRack;
-		nodeMetadata.isActive = workerNode->isActive;
-
-		AddNodeMetadata(workerNode->workerName, workerNode->workerPort, &nodeMetadata,
-						&nodeAlreadyExists);
-	}
-
-	PG_RETURN_BOOL(true);
 }
 
 
@@ -1469,159 +1430,6 @@ DeleteNodeRow(char *nodeName, int32 nodePort)
 
 	heap_close(replicaIndex, AccessShareLock);
 	heap_close(pgDistNode, NoLock);
-}
-
-
-/*
- * ParseWorkerNodeFileAndRename opens and parses the node name and node port from the
- * specified configuration file and after that, renames it marking it is not used anymore.
- * Note that this function is deprecated. Do not use this function for any new
- * features.
- */
-static List *
-ParseWorkerNodeFileAndRename()
-{
-	FILE *workerFileStream = NULL;
-	List *workerNodeList = NIL;
-	char workerNodeLine[MAXPGPATH];
-	char *workerFilePath = make_absolute_path(WorkerListFileName);
-	StringInfo renamedWorkerFilePath = makeStringInfo();
-	char *workerPatternTemplate = "%%%u[^# \t]%%*[ \t]%%%u[^# \t]%%*[ \t]%%%u[^# \t]";
-	char workerLinePattern[1024];
-	const int workerNameIndex = 0;
-	const int workerPortIndex = 1;
-
-	memset(workerLinePattern, '\0', sizeof(workerLinePattern));
-
-	workerFileStream = AllocateFile(workerFilePath, PG_BINARY_R);
-	if (workerFileStream == NULL)
-	{
-		if (errno == ENOENT)
-		{
-			ereport(DEBUG1, (errmsg("worker list file located at \"%s\" is not present",
-									workerFilePath)));
-		}
-		else
-		{
-			ereport(ERROR, (errcode_for_file_access(),
-							errmsg("could not open worker list file \"%s\": %m",
-								   workerFilePath)));
-		}
-		return NIL;
-	}
-
-	/* build pattern to contain node name length limit */
-	snprintf(workerLinePattern, sizeof(workerLinePattern), workerPatternTemplate,
-			 WORKER_LENGTH, MAX_PORT_LENGTH, WORKER_LENGTH);
-
-	while (fgets(workerNodeLine, sizeof(workerNodeLine), workerFileStream) != NULL)
-	{
-		const int workerLineLength = strnlen(workerNodeLine, MAXPGPATH);
-		WorkerNode *workerNode = NULL;
-		char *linePointer = NULL;
-		int32 nodePort = 5432; /* default port number */
-		int fieldCount = 0;
-		bool lineIsInvalid = false;
-		char nodeName[WORKER_LENGTH + 1];
-		char nodeRack[WORKER_LENGTH + 1];
-		char nodePortString[MAX_PORT_LENGTH + 1];
-
-		memset(nodeName, '\0', sizeof(nodeName));
-		strlcpy(nodeRack, WORKER_DEFAULT_RACK, sizeof(nodeRack));
-		memset(nodePortString, '\0', sizeof(nodePortString));
-
-		if (workerLineLength == MAXPGPATH - 1)
-		{
-			ereport(ERROR, (errcode(ERRCODE_CONFIG_FILE_ERROR),
-							errmsg("worker node list file line exceeds the maximum "
-								   "length of %d", MAXPGPATH)));
-		}
-
-		/* trim trailing newlines preserved by fgets, if any */
-		linePointer = workerNodeLine + workerLineLength - 1;
-		while (linePointer >= workerNodeLine &&
-			   (*linePointer == '\n' || *linePointer == '\r'))
-		{
-			*linePointer-- = '\0';
-		}
-
-		/* skip leading whitespace */
-		for (linePointer = workerNodeLine; *linePointer; linePointer++)
-		{
-			if (!isspace((unsigned char) *linePointer))
-			{
-				break;
-			}
-		}
-
-		/* if the entire line is whitespace or a comment, skip it */
-		if (*linePointer == '\0' || *linePointer == '#')
-		{
-			continue;
-		}
-
-		/* parse line; node name is required, but port and rack are optional */
-		fieldCount = sscanf(linePointer, workerLinePattern,
-							nodeName, nodePortString, nodeRack);
-
-		/* adjust field count for zero based indexes */
-		fieldCount--;
-
-		/* raise error if no fields were assigned */
-		if (fieldCount < workerNameIndex)
-		{
-			lineIsInvalid = true;
-		}
-
-		/* no special treatment for nodeName: already parsed by sscanf */
-
-		/* if a second token was specified, convert to integer port */
-		if (fieldCount >= workerPortIndex)
-		{
-			char *nodePortEnd = NULL;
-
-			errno = 0;
-			nodePort = strtol(nodePortString, &nodePortEnd, 10);
-
-			if (errno != 0 || (*nodePortEnd) != '\0' || nodePort <= 0)
-			{
-				lineIsInvalid = true;
-			}
-		}
-
-		if (lineIsInvalid)
-		{
-			ereport(ERROR, (errcode(ERRCODE_CONFIG_FILE_ERROR),
-							errmsg("could not parse worker node line: %s",
-								   workerNodeLine),
-							errhint("Lines in the worker node file must contain a valid "
-									"node name and, optionally, a positive port number. "
-									"Comments begin with a '#' character and extend to "
-									"the end of their line.")));
-		}
-
-		/* allocate worker node structure and set fields */
-		workerNode = (WorkerNode *) palloc0(sizeof(WorkerNode));
-
-		strlcpy(workerNode->workerName, nodeName, WORKER_LENGTH);
-		strlcpy(workerNode->workerRack, nodeRack, WORKER_LENGTH);
-		workerNode->workerPort = nodePort;
-		workerNode->hasMetadata = false;
-		workerNode->metadataSynced = false;
-		workerNode->isActive = true;
-
-		workerNodeList = lappend(workerNodeList, workerNode);
-	}
-
-	/* rename the file, marking that it is not used anymore */
-	appendStringInfo(renamedWorkerFilePath, "%s", workerFilePath);
-	appendStringInfo(renamedWorkerFilePath, ".obsolete");
-	rename(workerFilePath, renamedWorkerFilePath->data);
-
-	FreeFile(workerFileStream);
-	free(workerFilePath);
-
-	return workerNodeList;
 }
 
 

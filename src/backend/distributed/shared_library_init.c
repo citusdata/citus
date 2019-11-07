@@ -81,7 +81,6 @@ static void RegisterCitusConfigVariables(void);
 static bool ErrorIfNotASuitableDeadlockFactor(double *newval, void **extra,
 											  GucSource source);
 static bool WarnIfDeprecatedExecutorUsed(int *newval, void **extra, GucSource source);
-static void NormalizeWorkerListPath(void);
 static bool NodeConninfoGucCheckHook(char **newval, void **extra, GucSource source);
 static void NodeConninfoGucAssignHook(const char *newval, void *extra);
 static bool StatisticsCollectionGucCheckHook(bool *newval, void **extra, GucSource
@@ -379,18 +378,6 @@ RegisterCitusConfigVariables(void)
 		PGC_USERSET,
 		GUC_UNIT_MS | GUC_STANDARD,
 		NULL, NULL, NULL);
-
-	/* keeping temporarily for updates from pre-6.0 versions */
-	DefineCustomStringVariable(
-		"citus.worker_list_file",
-		gettext_noop("Sets the server's \"worker_list\" configuration file."),
-		NULL,
-		&WorkerListFileName,
-		NULL,
-		PGC_POSTMASTER,
-		GUC_SUPERUSER_ONLY | GUC_NO_SHOW_ALL,
-		NULL, NULL, NULL);
-	NormalizeWorkerListPath();
 
 	DefineCustomIntVariable(
 		"citus.sslmode",
@@ -1276,9 +1263,6 @@ RegisterCitusConfigVariables(void)
 		GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
-	NormalizeWorkerListPath();
-
-
 	/* warn about config items in the citus namespace that are not registered above */
 	EmitWarningsOnPlaceholders("citus");
 }
@@ -1323,51 +1307,6 @@ WarnIfDeprecatedExecutorUsed(int *newval, void **extra, GucSource source)
 	}
 
 	return true;
-}
-
-
-/*
- * NormalizeWorkerListPath converts the path configured via
- * citus.worker_list_file into an absolute path, falling back to the default
- * value if necessary. The previous value of the config variable is
- * overwritten with the normalized value.
- *
- * NB: This has to be called before ChangeToDataDir() is called as otherwise
- * the relative paths won't make much sense to the user anymore.
- */
-static void
-NormalizeWorkerListPath(void)
-{
-	char *absoluteFileName = NULL;
-
-	if (WorkerListFileName != NULL)
-	{
-		absoluteFileName = make_absolute_path(WorkerListFileName);
-	}
-	else if (DataDir != NULL)
-	{
-		absoluteFileName = malloc(strlen(DataDir) + strlen(WORKER_LIST_FILENAME) + 2);
-		if (absoluteFileName == NULL)
-		{
-			ereport(FATAL, (errcode(ERRCODE_OUT_OF_MEMORY),
-							errmsg("out of memory")));
-		}
-
-		sprintf(absoluteFileName, "%s/%s", DataDir, WORKER_LIST_FILENAME);
-	}
-	else
-	{
-		ereport(FATAL, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-						errmsg("%s does not know where to find the \"worker_list_file\" "
-							   "configuration file.\n"
-							   "This can be specified as \"citus.worker_list_file\" in "
-							   "\"%s\", or by the -D invocation option, or by the PGDATA "
-							   "environment variable.\n", progname, ConfigFileName)));
-	}
-
-	SetConfigOption("citus.worker_list_file", absoluteFileName, PGC_POSTMASTER,
-					PGC_S_OVERRIDE);
-	free(absoluteFileName);
 }
 
 

@@ -1,4 +1,4 @@
---  citus--7.0-1.sql 
+--  citus--7.0-1.sql
 
 -- complain if script is sourced in psql, rather than via CREATE EXTENSION
 \echo Use "CREATE EXTENSION citus" to load this file. \quit
@@ -44,7 +44,7 @@ CREATE TABLE citus.pg_dist_partition(
 	colocationid integer DEFAULT 0 NOT NULL,
 	repmodel "char" DEFAULT 'c' NOT NULL
 );
---  SELECT granted to PUBLIC in upgrade script 
+--  SELECT granted to PUBLIC in upgrade script
 CREATE UNIQUE INDEX pg_dist_partition_logical_relid_index
 ON citus.pg_dist_partition using btree(logicalrelid);
 ALTER TABLE citus.pg_dist_partition SET SCHEMA pg_catalog;
@@ -62,7 +62,7 @@ CREATE TABLE citus.pg_dist_shard(
 -- ALTER-after-CREATE to keep table tuple layout consistent
 -- with earlier versions of Citus.
 ALTER TABLE citus.pg_dist_shard DROP shardalias;
---  SELECT granted to PUBLIC in upgrade script 
+--  SELECT granted to PUBLIC in upgrade script
 CREATE UNIQUE INDEX pg_dist_shard_shardid_index
 ON citus.pg_dist_shard using btree(shardid);
 CREATE INDEX pg_dist_shard_logical_relid_index
@@ -82,7 +82,7 @@ CREATE TABLE citus.pg_dist_shard_placement(
     nodeport int8 NOT NULL,
 	placementid bigint NOT NULL DEFAULT nextval('pg_catalog.pg_dist_shard_placement_placementid_seq')
 );
---  SELECT granted to PUBLIC in upgrade script 
+--  SELECT granted to PUBLIC in upgrade script
 CREATE UNIQUE INDEX pg_dist_shard_placement_placementid_index
 ON citus.pg_dist_shard_placement using btree(placementid);
 CREATE INDEX pg_dist_shard_placement_shardid_index
@@ -105,17 +105,17 @@ ALTER SEQUENCE  citus.pg_dist_shardid_seq SET SCHEMA pg_catalog;
 -- used to identify jobs in the distributed database; and they wrap at 32-bits
 -- to allow for worker nodes to independently execute their distributed jobs.
 CREATE SEQUENCE citus.pg_dist_jobid_seq
-    MINVALUE 2 --  first jobId reserved for clean up jobs 
+    MINVALUE 2 --  first jobId reserved for clean up jobs
     MAXVALUE 4294967296;
 ALTER SEQUENCE  citus.pg_dist_jobid_seq SET SCHEMA pg_catalog;
 
 
 -- Citus functions
 
---  For backward compatibility and ease of use create functions et al. in pg_catalog 
+--  For backward compatibility and ease of use create functions et al. in pg_catalog
 SET search_path = 'pg_catalog';
 
---  master_* functions 
+--  master_* functions
 
 CREATE FUNCTION master_get_table_metadata(relation_name text, OUT logical_relid oid,
                                           OUT part_storage_type "char",
@@ -198,7 +198,7 @@ RETURNS void
 AS 'MODULE_PATHNAME'
 LANGUAGE C STRICT;
 
---  task_tracker_* functions 
+--  task_tracker_* functions
 
 CREATE FUNCTION task_tracker_assign_task(bigint, integer, text)
     RETURNS void
@@ -222,7 +222,7 @@ COMMENT ON FUNCTION task_tracker_cleanup_job(bigint)
     IS 'clean up all tasks associated with a job';
 
 
---  worker_* functions 
+--  worker_* functions
 
 CREATE FUNCTION worker_fetch_partition_file(bigint, integer, integer, integer, text,
                                             integer)
@@ -284,7 +284,7 @@ CREATE FUNCTION master_drop_sequences(sequence_names text[])
 COMMENT ON FUNCTION master_drop_sequences(text[])
     IS 'drop specified sequences from the cluster';
 
---  trigger functions 
+--  trigger functions
 
 CREATE FUNCTION pg_catalog.citus_drop_trigger()
     RETURNS event_trigger
@@ -347,7 +347,7 @@ COMMENT ON FUNCTION master_dist_shard_cache_invalidate()
     IS 'register relcache invalidation for changed rows';
 
 
---  internal functions, not user accessible 
+--  internal functions, not user accessible
 
 CREATE FUNCTION citus_extradata_container(INTERNAL)
     RETURNS void
@@ -385,7 +385,7 @@ GRANT SELECT ON pg_catalog.pg_dist_partition TO public;
 GRANT SELECT ON pg_catalog.pg_dist_shard TO public;
 GRANT SELECT ON pg_catalog.pg_dist_shard_placement TO public;
 
---  empty, but required to update the extension version 
+--  empty, but required to update the extension version
 CREATE FUNCTION pg_catalog.master_modify_multiple_shards(text)
     RETURNS integer
     LANGUAGE C STRICT
@@ -462,7 +462,7 @@ CREATE SEQUENCE citus.pg_dist_node_nodeid_seq
 ALTER SEQUENCE citus.pg_dist_groupid_seq SET SCHEMA pg_catalog;
 ALTER SEQUENCE citus.pg_dist_node_nodeid_seq SET SCHEMA pg_catalog;
 
---  add pg_dist_node 
+--  add pg_dist_node
 CREATE TABLE citus.pg_dist_node(
 	nodeid int NOT NULL DEFAULT nextval('pg_dist_groupid_seq') PRIMARY KEY,
 	groupid int NOT NULL DEFAULT nextval('pg_dist_node_nodeid_seq'),
@@ -495,14 +495,6 @@ CREATE FUNCTION master_remove_node(nodename text, nodeport integer)
 	AS 'MODULE_PATHNAME', $$master_remove_node$$;
 COMMENT ON FUNCTION master_remove_node(nodename text, nodeport integer)
 	IS 'remove node from the cluster';
-
---  this only needs to run once, now. 
-CREATE FUNCTION master_initialize_node_metadata()
-    RETURNS BOOL
-    LANGUAGE C STRICT
-    AS 'MODULE_PATHNAME', $$master_initialize_node_metadata$$;
-
-SELECT master_initialize_node_metadata();
 
 RESET search_path;
 
@@ -552,7 +544,7 @@ CREATE TABLE citus.pg_dist_local_group(
     groupid int NOT NULL PRIMARY KEY)
 ;
 
---  insert the default value for being the coordinator node 
+--  insert the default value for being the coordinator node
 INSERT INTO citus.pg_dist_local_group VALUES (0);
 
 ALTER TABLE citus.pg_dist_local_group SET SCHEMA pg_catalog;
@@ -588,7 +580,7 @@ CREATE SEQUENCE citus.pg_dist_colocationid_seq
 
 ALTER SEQUENCE citus.pg_dist_colocationid_seq SET SCHEMA pg_catalog;
 
---  add pg_dist_colocation 
+--  add pg_dist_colocation
 CREATE TABLE citus.pg_dist_colocation(
 	colocationid int NOT NULL PRIMARY KEY,
 	shardcount int NOT NULL,
