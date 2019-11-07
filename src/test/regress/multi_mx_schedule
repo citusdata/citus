@@ -14,7 +14,7 @@
 # Tests around schema changes, these are run first, so there's no preexisting objects.
 # ---
 test: multi_extension
-test: multi_mx_master_update_node
+test: multi_mx_node_metadata
 test: multi_cluster_management
 test: multi_test_helpers
 
