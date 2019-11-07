@@ -28,6 +28,7 @@
 #include "distributed/citus_ruleutils.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/commands.h"
+#include "distributed/adaptive_executor.h"
 #include "distributed/connection_management.h"
 #include "distributed/distributed_planner.h"
 #include "distributed/listutils.h"
