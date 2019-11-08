@@ -227,6 +227,8 @@ JoinOnColumns(Var *currentColumn, Var *candidateColumn, List *joinClauseList)
 	foreach(joinClauseCell, joinClauseList)
 	{
 		OpExpr *joinClause = castNode(OpExpr, lfirst(joinClauseCell));
+		Var *leftColumn = NULL;
+		Var *rightColumn = NULL;
 		if (!OperatorImplementsEquality(joinClause->opno))
 		{
 			/* this clause is not an equi-join, the rest assumes an equi-join */
@@ -238,8 +240,8 @@ JoinOnColumns(Var *currentColumn, Var *candidateColumn, List *joinClauseList)
 		 * NULL, since we assert no NULL's in the input we know they will not equal on
 		 * this clause
 		 */
-		Var *leftColumn = LeftColumnOrNULL(joinClause);
-		Var *rightColumn = RightColumnOrNULL(joinClause);
+		leftColumn = LeftColumnOrNULL(joinClause);
+		rightColumn = RightColumnOrNULL(joinClause);
 
 		/* check if both join columns and both partition key columns match */
 		if (equal(leftColumn, currentColumn) &&
