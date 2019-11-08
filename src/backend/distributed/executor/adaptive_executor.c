@@ -618,7 +618,7 @@ AdaptiveExecutor(CustomScanState *node)
 	bool randomAccess = true;
 	bool interTransactions = false;
 	int targetPoolSize = MaxAdaptiveExecutorPoolSize;
-
+	bool hasDependedJobs = false;
 
 	Job *job = distributedPlan->workerJob;
 	List *taskList = job->taskList;
@@ -635,7 +635,8 @@ AdaptiveExecutor(CustomScanState *node)
 
 	ExecuteSubPlans(distributedPlan);
 
-	if (DoesHaveDependedJobs(job))
+	hasDependedJobs = DoesHaveDependedJobs(job);
+	if (hasDependedJobs)
 	{
 		ExecuteDependedTasks(taskList);
 	}
@@ -699,6 +700,11 @@ AdaptiveExecutor(CustomScanState *node)
 	}
 
 	FinishDistributedExecution(execution);
+
+	if (hasDependedJobs)
+	{
+		CleanUpSchemas();
+	}
 
 	if (SortReturning && distributedPlan->hasReturning)
 	{

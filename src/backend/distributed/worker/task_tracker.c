@@ -75,7 +75,6 @@ static void TrackerSigHupHandler(SIGNAL_ARGS);
 static void TrackerShutdownHandler(SIGNAL_ARGS);
 
 /* Local functions forward declarations */
-static void TrackerCleanupJobDirectories(void);
 static void TrackerCleanupJobSchemas(void);
 static void TrackerCleanupConnections(HTAB *WorkerTasksHash);
 static void TrackerRegisterShutDown(HTAB *WorkerTasksHash);
@@ -342,7 +341,7 @@ WorkerTasksHashFind(uint64 jobId, uint32 taskId)
  * associated files cannot be cleaned up safely. We therefore perform this
  * cleanup when the process restarts.
  */
-static void
+void
 TrackerCleanupJobDirectories(void)
 {
 	/* use the default tablespace in {datadir}/base */

@@ -41,6 +41,8 @@ static void ExecuteTasksInDependencyOrder(List *allTasks, List *topLevelTasks);
 static int TaskHashCompare(const void *key1, const void *key2, Size keysize);
 static uint32 TaskHash(const void *key, Size keysize);
 static bool IsTaskAlreadyCompleted(Task *task, HTAB *completedTasks);
+static void SendCommandToAllWorkers(List *commandList);
+
 
 void
 ExecuteDependedTasks(List *topLevelTasks)
@@ -50,7 +52,7 @@ ExecuteDependedTasks(List *topLevelTasks)
 	List *mapOutputFetchTasks = NIL;
 	List *mergeTasks = NIL;
 
-
+	TrackerCleanupJobDirectories();
 	allTasks = TaskAndExecutionList(topLevelTasks);
 
 	FillTaskGroups(&allTasks, &mapOutputFetchTasks, &mergeTasks);
@@ -134,6 +136,15 @@ MapFetchTaskQueryString(Task *mapFetchTask, Task *mapTask)
 }
 
 
+static void
+CreateTemporarySchemas(List *mergeTasks)
+{
+	List *jobIds = CreateJobIds(mergeTasks);
+	char *createSchemasCommand = GenerateCreateSchemasCommand(jobIds);
+	CreateSchemasOnAllWorkers(createSchemasCommand);
+}
+
+
 static List *
 CreateJobIds(List *mergeTasks)
 {
@@ -155,10 +166,18 @@ CreateJobIds(List *mergeTasks)
 static void
 CreateSchemasOnAllWorkers(char *createSchemasCommand)
 {
+	List *commandList = list_make1(createSchemasCommand);
+
+	SendCommandToAllWorkers(commandList);
+}
+
+
+static void
+SendCommandToAllWorkers(List *commandList)
+{
 	ListCell *workerNodeCell = NULL;
 	char *extensionOwner = CitusExtensionOwnerName();
 	List *workerNodeList = ActiveReadableNodeList();
-	List *commandList = list_make1(createSchemasCommand);
 
 	foreach(workerNodeCell, workerNodeList)
 	{
@@ -344,10 +363,9 @@ TaskHashCompare(const void *key1, const void *key2, Size keysize)
 }
 
 
-static void
-CreateTemporarySchemas(List *mergeTasks)
+void
+CleanUpSchemas()
 {
-	List *jobIds = CreateJobIds(mergeTasks);
-	char *createSchemasCommand = GenerateCreateSchemasCommand(jobIds);
-	CreateSchemasOnAllWorkers(createSchemasCommand);
+	List *commandList = list_make1(JOB_SCHEMA_CLEANUP);
+	SendCommandToAllWorkers(commandList);
 }
