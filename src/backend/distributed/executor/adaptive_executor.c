@@ -738,12 +738,6 @@ RunLocalExecution(CitusScanState *scanState, DistributedExecution *execution)
 static void
 AdjustDistributedExecutionAfterLocalExecution(DistributedExecution *execution)
 {
-	/*
-	 * Local execution already stores the  tuples for returning, so we should not
-	 * store again.
-	 */
-	execution->hasReturning = false;
-
 	/* we only need to execute the remote tasks */
 	execution->tasksToExecute = execution->remoteTaskList;
 
@@ -1467,8 +1461,9 @@ AssignTasksToConnections(DistributedExecution *execution)
 												sizeof(TaskPlacementExecution *));
 		shardCommandExecution->placementExecutionCount = placementExecutionCount;
 
-		shardCommandExecution->expectResults = hasReturning ||
-											   modLevel == ROW_MODIFY_READONLY;
+		shardCommandExecution->expectResults =
+			(hasReturning && !task->partiallyLocalOrRemote) ||
+			modLevel == ROW_MODIFY_READONLY;
 
 		foreach(taskPlacementCell, task->taskPlacementList)
 		{
