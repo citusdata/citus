@@ -1331,6 +1331,14 @@ multi_join_restriction_hook(PlannerInfo *root,
 	joinRestrictionContext->joinRestrictionList =
 		lappend(joinRestrictionContext->joinRestrictionList, joinRestriction);
 
+	/*
+	 * Keep track if we received any semi joins here. If we didn't we can
+	 * later safely convert any semi joins in the rewritten query to inner
+	 * joins.
+	 */
+	plannerRestrictionContext->hasSemiJoin = plannerRestrictionContext->hasSemiJoin ||
+											 extra->sjinfo->jointype == JOIN_SEMI;
+
 	MemoryContextSwitchTo(oldMemoryContext);
 }
 
