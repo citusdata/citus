@@ -1088,6 +1088,48 @@ LOG:  executing the command locally: INSERT INTO local_shard_execution.reference
  1000
 (1 row)
 
+-- clean the table for the next tests
+SET search_path TO local_shard_execution;
+TRUNCATE distributed_table CASCADE;
+NOTICE:  truncate cascades to table "second_distributed_table"
+-- load some data on a remote shard
+INSERT INTO reference_table (key) VALUES (1), (2);
+LOG:  executing the command locally: INSERT INTO local_shard_execution.reference_table_1470000 AS citus_table_alias (key) VALUES (1), (2)
+INSERT INTO distributed_table (key) VALUES (2);
+BEGIN;
+    -- local execution followed by a distributed query
+    INSERT INTO distributed_table (key) VALUES (1);
+LOG:  executing the command locally: INSERT INTO local_shard_execution.distributed_table_1470001 (key) VALUES (1)
+    DELETE FROM distributed_table RETURNING key;
+LOG:  executing the command locally: DELETE FROM local_shard_execution.distributed_table_1470001 distributed_table RETURNING key
+LOG:  executing the command locally: DELETE FROM local_shard_execution.distributed_table_1470003 distributed_table RETURNING key
+ key 
+-----
+   1
+   2
+(2 rows)
+
+COMMIT;
+-- a similar test with a reference table
+TRUNCATE reference_table CASCADE;
+NOTICE:  truncate cascades to table "distributed_table"
+NOTICE:  truncate cascades to table "second_distributed_table"
+-- load some data on a remote shard
+INSERT INTO reference_table (key) VALUES (2);
+LOG:  executing the command locally: INSERT INTO local_shard_execution.reference_table_1470000 (key) VALUES (2)
+BEGIN;
+    -- local execution followed by a distributed query
+    INSERT INTO reference_table (key) VALUES (1);
+LOG:  executing the command locally: INSERT INTO local_shard_execution.reference_table_1470000 (key) VALUES (1)
+    DELETE FROM reference_table RETURNING key;
+LOG:  executing the command locally: DELETE FROM local_shard_execution.reference_table_1470000 reference_table RETURNING key
+ key 
+-----
+   1
+   2
+(2 rows)
+
+COMMIT;
 \c - - - :master_port
 -- local execution with custom type 
 SET citus.replication_model TO "streaming";
