@@ -62,6 +62,7 @@ extern void SetLocalMultiShardModifyModeToSequential(void);
 extern void SetLocalForceMaxQueryParallelization(void);
 extern void SortTupleStore(CitusScanState *scanState);
 extern bool DistributedPlanModifiesDatabase(DistributedPlan *plan);
+extern bool ReadOnlyTask(TaskType taskType);
 extern void ExtractParametersFromParamList(ParamListInfo paramListInfo,
 										   Oid **parameterTypes,
 										   const char ***parameterValues, bool

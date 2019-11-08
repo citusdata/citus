@@ -30,6 +30,7 @@
 #include "distributed/master_metadata_utility.h"
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/multi_executor.h"
 #include "distributed/multi_join_order.h"
 #include "distributed/multi_logical_planner.h"
 #include "distributed/multi_logical_optimizer.h"
@@ -167,6 +168,7 @@ static void ReorderTaskPlacementsByTaskAssignmentPolicy(Job *job,
 														TaskAssignmentPolicyType
 														taskAssignmentPolicy,
 														List *placementList);
+static List * RemoveCoordinatorPlacement(List *placementList);
 
 
 /*
@@ -1779,6 +1781,20 @@ ReorderTaskPlacementsByTaskAssignmentPolicy(Job *job,
 		Assert(list_length(job->taskList) == 1);
 		task = (Task *) linitial(job->taskList);
 
+		/*
+		 * For round-robin SELECT queries, we don't want to include the coordinator
+		 * because the user is trying to distributed the load across nodes via
+		 * round-robin policy. Otherwise, the local execution would prioritize
+		 * executing the local tasks and especially for reference tables on the
+		 * coordinator this would prevent load balancing accross nodes.
+		 *
+		 * For other worker nodes in Citus MX, we let the local execution to kick-in
+		 * even for round-robin policy, that's because we expect the clients to evenly
+		 * connect to the worker nodes.
+		 */
+		Assert(ReadOnlyTask(task->taskType));
+		placementList = RemoveCoordinatorPlacement(placementList);
+
 		/* reorder the placement list */
 		reorderedPlacementList = RoundRobinReorder(task, placementList);
 		task->taskPlacementList = reorderedPlacementList;
@@ -1788,6 +1804,37 @@ ReorderTaskPlacementsByTaskAssignmentPolicy(Job *job,
 								primaryPlacement->nodeName,
 								primaryPlacement->nodePort)));
 	}
+}
+
+
+/*
+ * RemoveCoordinatorPlacement gets a task placement list and returns the list
+ * by removing the placement belonging to the coordinator (if any).
+ *
+ * If the list has a single entry or no placements on the coordinator, the list
+ * is return unmodified.
+ */
+static List *
+RemoveCoordinatorPlacement(List *placementList)
+{
+	ListCell *placementCell = NULL;
+
+	if (list_length(placementList) < 2)
+	{
+		return placementList;
+	}
+
+	foreach(placementCell, placementList)
+	{
+		ShardPlacement *placement = (ShardPlacement *) lfirst(placementCell);
+
+		if (placement->groupId == COORDINATOR_GROUP_ID)
+		{
+			return list_delete_ptr(placementList, placement);
+		}
+	}
+
+	return placementList;
 }
 
 
