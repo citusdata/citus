@@ -301,7 +301,8 @@ JOIN
 ON (l_orderkey::int4 = o_orderkey::int8)
 ORDER BY l_orderkey DESC
 LIMIT 10;
-ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
+ERROR:  cannot perform distributed planning on this query
+DETAIL:  Cartesian products are currently unsupported
 -- type casts in filters are supported as long as
 -- a valid equi-join exists
 SELECT l_orderkey
@@ -377,7 +378,8 @@ JOIN
 ON (l_orderkey = o_orderkey + 1)
 ORDER BY l_orderkey DESC
 LIMIT 10;
-ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
+ERROR:  cannot perform distributed planning on this query
+DETAIL:  Cartesian products are currently unsupported
 -- query is not supported if does not have equi-join clause
 SELECT l_orderkey
 FROM

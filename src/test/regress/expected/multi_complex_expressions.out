@@ -343,7 +343,8 @@ SELECT count(*) FROM lineitem JOIN orders ON l_orderkey = o_orderkey
 
 -- Check that we make sure local joins are between columns only.
 SELECT count(*) FROM lineitem, orders WHERE l_orderkey + 1 = o_orderkey;
-ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
+ERROR:  cannot perform distributed planning on this query
+DETAIL:  Cartesian products are currently unsupported
 -- Check that we can issue limit/offset queries
 -- the subquery is recursively planned since it contains OFFSET, which is not pushdownable
 SELECT * FROM (SELECT o_custkey FROM orders GROUP BY o_custkey ORDER BY o_custkey OFFSET 20) sq ORDER BY 1 LIMIT 5;
