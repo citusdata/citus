@@ -1071,9 +1071,8 @@ DualPartitionJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 	OpExpr *joinClause = DualPartitionJoinClause(applicableJoinClauses);
 	if (joinClause)
 	{
-		Var *nextPartitionColumn = LeftColumn(joinClause);
 		nextJoinNode = MakeJoinOrderNode(candidateTable, DUAL_PARTITION_JOIN,
-										 nextPartitionColumn, REDISTRIBUTE_BY_HASH,
+										 NULL, REDISTRIBUTE_BY_HASH,
 										 anchorTable);
 	}
 
