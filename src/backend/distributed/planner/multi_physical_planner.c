@@ -24,6 +24,7 @@
 #include "access/nbtree.h"
 #include "access/skey.h"
 #include "access/xlog.h"
+#include "catalog/pg_aggregate.h"
 #include "catalog/pg_am.h"
 #include "catalog/pg_operator.h"
 #include "catalog/pg_type.h"
@@ -203,6 +204,7 @@ static StringInfo IntermediateTableQueryString(uint64 jobId, uint32 taskIdIndex,
 static uint32 FinalTargetEntryCount(List *targetEntryList);
 static bool CoPlacedShardIntervals(ShardInterval *firstInterval,
 								   ShardInterval *secondInterval);
+static Node * AddAnyValueAggregates(Node *node, void *context);
 
 
 /*
@@ -593,6 +595,7 @@ BuildJobQuery(MultiNode *multiNode, List *dependedJobList)
 	Node *havingQual = NULL;
 	bool hasDistinctOn = false;
 	List *distinctClause = NIL;
+	bool isRepartitionJoin = false;
 
 	/* we start building jobs from below the collect node */
 	Assert(!CitusIsA(multiNode, MultiCollect));
@@ -623,6 +626,7 @@ BuildJobQuery(MultiNode *multiNode, List *dependedJobList)
 		if (CitusIsA(job, MapMergeJob))
 		{
 			MapMergeJob *mapMergeJob = (MapMergeJob *) job;
+			isRepartitionJoin = true;
 			if (mapMergeJob->reduceQuery)
 			{
 				updateColumnAttributes = false;
@@ -672,6 +676,7 @@ BuildJobQuery(MultiNode *multiNode, List *dependedJobList)
 	/* build group clauses */
 	groupClauseList = QueryGroupClauseList(multiNode);
 
+
 	/* build the where clause list using select predicates */
 	selectClauseList = QuerySelectClauseList(multiNode);
 
@@ -681,6 +686,23 @@ BuildJobQuery(MultiNode *multiNode, List *dependedJobList)
 		UpdateAllColumnAttributes((Node *) selectClauseList, rangeTableList,
 								  dependedJobList);
 		UpdateAllColumnAttributes(havingQual, rangeTableList, dependedJobList);
+	}
+
+	/*
+	 * Group by on primary key allows all columns to appear in the target
+	 * list, but after re-partitioning we will be querying an intermediate
+	 * table that does not have the primary key. We therefore wrap all the
+	 * columns that do not appear in the GROUP BY in an any_value aggregate.
+	 */
+	if (groupClauseList != NIL && isRepartitionJoin)
+	{
+		targetList = (List *) expression_tree_mutator((Node *) targetList,
+													  AddAnyValueAggregates,
+													  groupClauseList);
+
+		havingQual = expression_tree_mutator((Node *) havingQual,
+											 AddAnyValueAggregates,
+											 groupClauseList);
 	}
 
 	/*
@@ -952,6 +974,63 @@ TargetEntryList(List *expressionList)
 	}
 
 	return targetEntryList;
+}
+
+
+/*
+ * AddAnyValueAggregates wraps all vars that do not apear in the GROUP BY
+ * clause or are inside an aggregate function in an any_value aggregate
+ * function. This is needed for repartition joins because primary keys are not
+ * present on intermediate tables.
+ */
+static Node *
+AddAnyValueAggregates(Node *node, void *context)
+{
+	List *groupClauseList = context;
+	if (node == NULL)
+	{
+		return node;
+	}
+
+	if (IsA(node, Var))
+	{
+		Var *var = (Var *) node;
+		Aggref *agg = makeNode(Aggref);
+		agg->aggfnoid = CitusAnyValueFunctionId();
+		agg->aggtype = var->vartype;
+		agg->args = list_make1(makeTargetEntry((Expr *) var, 1, NULL, false));
+		agg->aggkind = AGGKIND_NORMAL;
+		agg->aggtranstype = InvalidOid;
+		agg->aggargtypes = list_make1_oid(var->vartype);
+		agg->aggsplit = AGGSPLIT_SIMPLE;
+		return (Node *) agg;
+	}
+	if (IsA(node, TargetEntry))
+	{
+		TargetEntry *targetEntry = (TargetEntry *) node;
+
+
+		/*
+		 * Stop searching this part of the tree if the targetEntry is part of
+		 * the group by clause.
+		 */
+		if (targetEntry->ressortgroupref != 0)
+		{
+			SortGroupClause *sortGroupClause = NULL;
+			foreach_ptr(sortGroupClause, groupClauseList)
+			{
+				if (sortGroupClause->tleSortGroupRef == targetEntry->ressortgroupref)
+				{
+					return node;
+				}
+			}
+		}
+	}
+	if (IsA(node, Aggref))
+	{
+		return node;
+	}
+	return expression_tree_mutator(node, AddAnyValueAggregates, context);
 }
 
 
@@ -1488,6 +1567,7 @@ BuildSubqueryJobQuery(MultiNode *multiNode)
 		hasDistinctOn = false;
 		distinctClause = NIL;
 	}
+
 
 	/*
 	 * Build the From/Where construct. We keep the where-clause list implicitly

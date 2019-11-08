@@ -8,3 +8,5 @@ COMMENT ON COLUMN pg_catalog.pg_dist_node.shouldhaveshards IS
 -- we don't maintain replication factor of reference tables anymore and just
 -- use -1 instead.
 UPDATE pg_dist_colocation SET replicationfactor = -1 WHERE distributioncolumntype = 0;
+
+#include "udfs/any_value/9.1-1.sql"
