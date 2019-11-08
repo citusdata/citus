@@ -10,7 +10,7 @@ extern int MaxAdaptiveExecutorPoolSize;
 /* GUC, number of ms to wait between opening connections to the same worker */
 extern int ExecutorSlowStartInterval;
 
-extern uint64
-ExecuteTaskList(RowModifyLevel modLevel, List *taskList, int targetPoolSize);
+extern uint64 ExecuteTaskList(RowModifyLevel modLevel, List *taskList, int
+							  targetPoolSize);
 
 #endif /* ADAPTIVE_EXECUTOR_H */

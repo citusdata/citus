@@ -31,6 +31,7 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/version_compat.h"
+#include "distributed/task_tracker_protocol.h"
 #include "executor/spi.h"
 #include "nodes/makefuncs.h"
 #include "parser/parse_type.h"
@@ -49,7 +50,6 @@ static void CreateTaskTable(StringInfo schemaName, StringInfo relationName,
 							List *columnNameList, List *columnTypeList);
 static void CopyTaskFilesFromDirectory(StringInfo schemaName, StringInfo relationName,
 									   StringInfo sourceDirectoryName, Oid userId);
-static void CreateJobSchema(StringInfo schemaName);
 
 
 /* exports for SQL callable functions */
@@ -354,53 +354,6 @@ TaskTableName(uint32 taskId)
 					 TASK_TABLE_PREFIX, MIN_TASK_FILENAME_WIDTH, taskId);
 
 	return taskTableName;
-}
-
-
-/*
- * CreateJobSchema creates a job schema with the given schema name. Note that
- * this function ensures that our pg_ prefixed schema names can be created.
- * Further note that the created schema does not become visible to other
- * processes until the transaction commits.
- */
-static void
-CreateJobSchema(StringInfo schemaName)
-{
-	const char *queryString = NULL;
-	bool oldAllowSystemTableMods = false;
-
-	Oid savedUserId = InvalidOid;
-	int savedSecurityContext = 0;
-	CreateSchemaStmt *createSchemaStmt = NULL;
-	RoleSpec currentUserRole = { 0 };
-
-	/* allow schema names that start with pg_ */
-	oldAllowSystemTableMods = allowSystemTableMods;
-	allowSystemTableMods = true;
-
-	/* ensure we're allowed to create this schema */
-	GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
-	SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);
-
-	/* build a CREATE SCHEMA statement */
-	currentUserRole.type = T_RoleSpec;
-	currentUserRole.roletype = ROLESPEC_CSTRING;
-	currentUserRole.rolename = GetUserNameFromId(savedUserId, false);
-	currentUserRole.location = -1;
-
-	createSchemaStmt = makeNode(CreateSchemaStmt);
-	createSchemaStmt->schemaname = schemaName->data;
-	createSchemaStmt->schemaElts = NIL;
-
-	/* actually create schema with the current user as owner */
-	createSchemaStmt->authrole = &currentUserRole;
-	CreateSchemaCommand(createSchemaStmt, queryString, -1, -1);
-
-	CommandCounterIncrement();
-
-	/* and reset environment */
-	SetUserIdAndSecContext(savedUserId, savedSecurityContext);
-	allowSystemTableMods = oldAllowSystemTableMods;
 }
 
 

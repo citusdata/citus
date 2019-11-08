@@ -39,6 +39,7 @@
 #include "distributed/subplan_execution.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/version_compat.h"
+#include "distributed/multi_task_tracker_executor.h"
 #include "storage/fd.h"
 #include "utils/builtins.h"
 #include "utils/hsearch.h"
@@ -70,7 +71,7 @@ typedef struct TaskMapEntry
 
 
 /* Local functions forward declarations to init tasks and trackers */
-static List * TaskAndExecutionList(List *jobTaskList);
+
 static HTAB * TaskHashCreate(uint32 taskHashSize);
 static Task * TaskHashEnter(HTAB *taskHash, Task *task);
 static Task * TaskHashLookup(HTAB *trackerHash, TaskType taskType, uint64 jobId,
@@ -463,7 +464,7 @@ MultiTaskTrackerExecute(Job *job)
  * struct, associates the task execution with the task, and adds the task and its
  * execution to a list. The function then returns the list.
  */
-static List *
+List *
 TaskAndExecutionList(List *jobTaskList)
 {
 	List *taskAndExecutionList = NIL;
