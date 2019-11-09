@@ -6,7 +6,7 @@
 #include "nodes/pg_list.h"
 
 extern void ExecuteDependedTasks(List *taskList);
-extern void CleanUpSchemas();
+extern void CleanUpSchemas(void);
 
 
 #endif /* ADAPTIVE_EXECUTOR_REPARTITIONING_H */
