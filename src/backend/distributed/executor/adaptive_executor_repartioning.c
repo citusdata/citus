@@ -10,6 +10,7 @@
 #include "distributed/worker_transaction.h"
 #include "distributed/multi_task_tracker_executor.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/transmit.h"
 
 
 typedef struct TaskHashKey
@@ -97,6 +98,7 @@ PutMapOutputFetchQueryStrings(List **mapOutputFetchTasks)
 
 		mapFetchTaskQueryString = MapFetchTaskQueryString(task, mapTask);
 		task->queryString = mapFetchTaskQueryString->data;
+		
 	}
 }
 
@@ -116,10 +118,8 @@ MapFetchTaskQueryString(Task *mapFetchTask, Task *mapTask)
 
 	/* find the node name/port for map task's execution */
 	List *mapTaskPlacementList = mapTask->taskPlacementList;
-	TaskExecution *mapTaskExecution = mapTask->taskExecution;
-	uint32 currentIndex = mapTaskExecution->currentNodeIndex;
 
-	ShardPlacement *mapTaskPlacement = list_nth(mapTaskPlacementList, currentIndex);
+	ShardPlacement *mapTaskPlacement = linitial(mapTaskPlacementList);
 	char *mapTaskNodeName = mapTaskPlacement->nodeName;
 	uint32 mapTaskNodePort = mapTaskPlacement->nodePort;
 
