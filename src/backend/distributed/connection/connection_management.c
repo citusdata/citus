@@ -59,6 +59,12 @@ enum MultiConnectionPhase
 	MULTI_CONNECTION_PHASE_CONNECTED,
 	MULTI_CONNECTION_PHASE_ERROR,
 };
+typedef enum MultiConnectionStateChanged
+{
+	MULTI_CONNECTION_STATE_CHANGED_NO_CHANGED,
+	MULTI_CONNECTION_STATE_CHANGED_CHANGED,
+	MULTI_CONNECTION_STATE_CHANGED_REBUILD_EVENT,
+} MultiConnectionStateChanged;
 typedef struct MultiConnectionPollState
 {
 	enum MultiConnectionPhase phase;
@@ -68,7 +74,8 @@ typedef struct MultiConnectionPollState
 
 
 /* helper functions for async connection management */
-static bool MultiConnectionStatePoll(MultiConnectionPollState *connectionState);
+static MultiConnectionStateChanged MultiConnectionStatePoll(
+	MultiConnectionPollState *connectionState);
 static WaitEventSet * WaitEventSetFromMultiConnectionStates(List *connections,
 															int *waitCount);
 static void CloseNotReadyMultiConnectionStates(List *connectionStates);
@@ -501,7 +508,7 @@ ShutdownConnection(MultiConnection *connection)
  * connection establishment. The return value of this function indicates if the
  * MultiConnectionPollState has been changed, which could require a change to the WaitEventSet
  */
-static bool
+static MultiConnectionStateChanged
 MultiConnectionStatePoll(MultiConnectionPollState *connectionState)
 {
 	MultiConnection *connection = connectionState->connection;
@@ -513,13 +520,13 @@ MultiConnectionStatePoll(MultiConnectionPollState *connectionState)
 	if (status == CONNECTION_OK)
 	{
 		connectionState->phase = MULTI_CONNECTION_PHASE_CONNECTED;
-		return true;
+		return MULTI_CONNECTION_STATE_CHANGED_CHANGED;
 	}
 	else if (status == CONNECTION_BAD)
 	{
 		/* FIXME: retries? */
 		connectionState->phase = MULTI_CONNECTION_PHASE_ERROR;
-		return true;
+		return MULTI_CONNECTION_STATE_CHANGED_CHANGED;
 	}
 	else
 	{
@@ -528,18 +535,24 @@ MultiConnectionStatePoll(MultiConnectionPollState *connectionState)
 
 	connectionState->pollmode = PQconnectPoll(connection->pgConn);
 
+	if (status == CONNECTION_CHECK_WRITABLE && connectionState->pollmode !=
+		PGRES_POLLING_OK)
+	{
+		return MULTI_CONNECTION_STATE_CHANGED_REBUILD_EVENT;
+	}
+
 	/*
 	 * FIXME: Do we want to add transparent retry support here?
 	 */
 	if (connectionState->pollmode == PGRES_POLLING_FAILED)
 	{
 		connectionState->phase = MULTI_CONNECTION_PHASE_ERROR;
-		return true;
+		return MULTI_CONNECTION_STATE_CHANGED_CHANGED;
 	}
 	else if (connectionState->pollmode == PGRES_POLLING_OK)
 	{
 		connectionState->phase = MULTI_CONNECTION_PHASE_CONNECTED;
-		return true;
+		return MULTI_CONNECTION_STATE_CHANGED_CHANGED;
 	}
 	else
 	{
@@ -547,7 +560,9 @@ MultiConnectionStatePoll(MultiConnectionPollState *connectionState)
 			   connectionState->pollmode == PGRES_POLLING_READING);
 	}
 
-	return (oldPollmode != connectionState->pollmode) ? true : false;
+	return (oldPollmode != connectionState->pollmode) ?
+		   MULTI_CONNECTION_STATE_CHANGED_CHANGED :
+		   MULTI_CONNECTION_STATE_CHANGED_NO_CHANGED;
 }
 
 
@@ -736,7 +751,7 @@ FinishConnectionListEstablishment(List *multiConnectionList)
 		for (eventIndex = 0; eventIndex < eventCount; eventIndex++)
 		{
 			WaitEvent *event = &events[eventIndex];
-			bool connectionStateChanged = false;
+			MultiConnectionStateChanged connectionStateChanged;
 			MultiConnectionPollState *connectionState =
 				(MultiConnectionPollState *) event->user_data;
 
@@ -765,7 +780,7 @@ FinishConnectionListEstablishment(List *multiConnectionList)
 			}
 
 			connectionStateChanged = MultiConnectionStatePoll(connectionState);
-			if (connectionStateChanged)
+			if (connectionStateChanged == MULTI_CONNECTION_STATE_CHANGED_CHANGED)
 			{
 				if (connectionState->phase != MULTI_CONNECTION_PHASE_CONNECTING)
 				{
@@ -789,6 +804,11 @@ FinishConnectionListEstablishment(List *multiConnectionList)
 
 					connection->connectionState = MULTI_CONNECTION_CONNECTED;
 				}
+			}
+			else if (connectionStateChanged ==
+					 MULTI_CONNECTION_STATE_CHANGED_REBUILD_EVENT)
+			{
+				waitEventSetRebuild = true;
 			}
 		}
 
