@@ -10,6 +10,8 @@
 #ifndef DISTRIBUTED_PLANNER_H
 #define DISTRIBUTED_PLANNER_H
 
+#include "postgres.h"
+
 #include "nodes/plannodes.h"
 
 #if PG_VERSION_NUM >= 120000
@@ -81,6 +83,7 @@ typedef struct PlannerRestrictionContext
 {
 	RelationRestrictionContext *relationRestrictionContext;
 	JoinRestrictionContext *joinRestrictionContext;
+	bool hasSemiJoin;
 	MemoryContext memoryContext;
 } PlannerRestrictionContext;
 

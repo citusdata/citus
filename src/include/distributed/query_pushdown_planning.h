@@ -22,7 +22,8 @@
 extern bool SubqueryPushdown;
 
 
-extern bool ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery);
+extern bool ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery,
+									  PlannerRestrictionContext *plannerRestrictionContext);
 extern bool JoinTreeContainsSubquery(Query *query);
 extern bool HasEmptyJoinTree(Query *query);
 extern bool WhereOrHavingClauseContainsSubquery(Query *query);
