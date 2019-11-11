@@ -2096,6 +2096,8 @@ ManageWorkerPool(WorkerPool *workerPool)
 	{
 		MultiConnection *connection = NULL;
 		WorkerSession *session = NULL;
+		PostgresPollingStatusType pollMode;
+		int waitFlags = 0;
 
 		/* experimental: just to see the perf benefits of caching connections */
 		int connectionFlags = 0;
@@ -2122,8 +2124,30 @@ ManageWorkerPool(WorkerPool *workerPool)
 		/* create a session for the connection */
 		session = FindOrCreateWorkerSession(workerPool, connection);
 
+		pollMode = PQconnectPoll(connection->pgConn);
+		if (pollMode == PGRES_POLLING_FAILED)
+		{
+			ereport(ERROR, (errcode(ERRCODE_CONNECTION_FAILURE),
+						errmsg("could not establish any connections to the node "
+							"%s:%d", workerPool->nodeName,
+							workerPool->nodePort)));
+		}
+		else if (pollMode == PGRES_POLLING_READING)
+		{
+			waitFlags |= WL_SOCKET_READABLE;
+		}
+		else if (pollMode == PGRES_POLLING_WRITING)
+		{
+			waitFlags |= WL_SOCKET_WRITEABLE;
+		}
+		else
+		{
+			/* PGRES_POLLING_OK */
+			waitFlags |= WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE;
+		}
+
 		/* always poll the connection in the first round */
-		UpdateConnectionWaitFlags(session, WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE);
+		UpdateConnectionWaitFlags(session, waitFlags);
 	}
 
 	workerPool->lastConnectionOpenTime = GetCurrentTimestamp();
