@@ -53,7 +53,6 @@ ExecuteDependedTasks(List *topLevelTasks)
 	List *mapOutputFetchTasks = NIL;
 	List *mergeTasks = NIL;
 
-	TrackerCleanupJobDirectories();
 	allTasks = TaskAndExecutionList(topLevelTasks);
 
 	FillTaskGroups(&allTasks, &mapOutputFetchTasks, &mergeTasks);
@@ -98,7 +97,6 @@ PutMapOutputFetchQueryStrings(List **mapOutputFetchTasks)
 
 		mapFetchTaskQueryString = MapFetchTaskQueryString(task, mapTask);
 		task->queryString = mapFetchTaskQueryString->data;
-		
 	}
 }
 

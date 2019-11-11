@@ -32,6 +32,7 @@
 #include "distributed/worker_protocol.h"
 #include "distributed/version_compat.h"
 #include "distributed/task_tracker_protocol.h"
+#include "distributed/task_tracker.h"
 #include "executor/spi.h"
 #include "nodes/makefuncs.h"
 #include "parser/parse_type.h"
@@ -328,6 +329,9 @@ worker_cleanup_job_schema_cache(PG_FUNCTION_ARGS)
 
 	heap_endscan(scanDescriptor);
 	heap_close(pgNamespace, AccessExclusiveLock);
+
+	TrackerCleanupJobDirectories();
+
 
 	PG_RETURN_VOID();
 }
