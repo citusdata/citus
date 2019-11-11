@@ -144,24 +144,6 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 {
 	switch (getObjectClass(dependency))
 	{
-		case OCLASS_SCHEMA:
-		{
-			const char *schemaDDLCommand = CreateSchemaDDLCommand(dependency->objectId);
-
-			if (schemaDDLCommand == NULL)
-			{
-				/* no schema to create */
-				return NIL;
-			}
-
-			return list_make1((void *) schemaDDLCommand);
-		}
-
-		case OCLASS_TYPE:
-		{
-			return CreateTypeDDLCommandsIdempotent(dependency);
-		}
-
 		case OCLASS_CLASS:
 		{
 			/*
@@ -180,6 +162,24 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 		case OCLASS_PROC:
 		{
 			return CreateFunctionDDLCommandsIdempotent(dependency);
+		}
+
+		case OCLASS_SCHEMA:
+		{
+			const char *schemaDDLCommand = CreateSchemaDDLCommand(dependency->objectId);
+
+			if (schemaDDLCommand == NULL)
+			{
+				/* no schema to create */
+				return NIL;
+			}
+
+			return list_make1((void *) schemaDDLCommand);
+		}
+
+		case OCLASS_TYPE:
+		{
+			return CreateTypeDDLCommandsIdempotent(dependency);
 		}
 
 		default:

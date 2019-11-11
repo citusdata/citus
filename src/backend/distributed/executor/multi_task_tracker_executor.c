@@ -28,12 +28,14 @@
 #include "distributed/citus_custom_scan.h"
 #include "distributed/citus_nodes.h"
 #include "distributed/connection_management.h"
+#include "distributed/distributed_execution_locks.h"
 #include "distributed/local_executor.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_client_executor.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_server_executor.h"
+#include "distributed/multi_resowner.h"
 #include "distributed/pg_dist_partition.h"
 #include "distributed/resource_lock.h"
 #include "distributed/subplan_execution.h"
@@ -92,6 +94,7 @@ static TaskTracker * ResolveMapTaskTracker(HTAB *trackerHash, Task *task,
 										   TaskExecution *taskExecution);
 static TaskTracker * TrackerHashLookup(HTAB *trackerHash, const char *nodeName,
 									   uint32 nodePort);
+static void PrepareMasterJobDirectory(Job *workerJob);
 
 /* Local functions forward declarations to manage tasks and their assignments */
 static TaskExecStatus ManageTaskExecution(TaskTracker *taskTracker,
@@ -180,7 +183,7 @@ MultiTaskTrackerExecute(Job *job)
 	{
 		ereport(ERROR, (errmsg("task tracker queries are not allowed while "
 							   "citus.use_secondary_nodes is 'always'"),
-						errhint("try setting citus.task_executor_type TO 'real-time'")));
+						errhint("try setting citus.task_executor_type TO 'adaptive'")));
 	}
 
 	/*
@@ -3033,4 +3036,20 @@ TaskTrackerExecScan(CustomScanState *node)
 	resultSlot = ReturnTupleFromTuplestore(scanState);
 
 	return resultSlot;
+}
+
+
+/*
+ * PrepareMasterJobDirectory creates a directory on the master node to keep job
+ * execution results. We also register this directory for automatic cleanup on
+ * portal delete.
+ */
+static void
+PrepareMasterJobDirectory(Job *workerJob)
+{
+	StringInfo jobDirectoryName = MasterJobDirectoryName(workerJob->jobId);
+	CitusCreateDirectory(jobDirectoryName);
+
+	ResourceOwnerEnlargeJobDirectories(CurrentResourceOwner);
+	ResourceOwnerRememberJobDirectory(CurrentResourceOwner, workerJob->jobId);
 }

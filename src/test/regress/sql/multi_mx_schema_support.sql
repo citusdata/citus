@@ -217,8 +217,8 @@ FROM
 WHERE
     n1.n_regionkey = n2.n_regionkey;
 
--- set task_executor back to real-time
-SET citus.task_executor_type TO "real-time";
+-- set task_executor back to adaptive
+SET citus.task_executor_type TO "adaptive";
 
 -- connect to the master and do some test
 -- regarding DDL support on schemas where

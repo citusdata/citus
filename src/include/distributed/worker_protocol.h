@@ -134,8 +134,6 @@ extern int64 WorkerExecuteSqlTask(Query *query, char *taskFilename,
 /* Function declarations shared with the master planner */
 extern StringInfo TaskFilename(StringInfo directoryName, uint32 taskId);
 extern StringInfo UserTaskFilename(StringInfo directoryName, uint32 taskId);
-extern List * ExecuteRemoteQuery(const char *nodeName, uint32 nodePort, char *runAsUser,
-								 StringInfo queryString);
 extern List * ColumnDefinitionList(List *columnNameList, List *columnTypeList);
 extern CreateStmt * CreateStatement(RangeVar *relation, List *columnDefinitionList);
 extern CopyStmt * CopyStatement(RangeVar *relation, char *sourceFilename);

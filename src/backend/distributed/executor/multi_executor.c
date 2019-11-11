@@ -23,16 +23,18 @@
 #include "distributed/multi_executor.h"
 #include "distributed/multi_master_planner.h"
 #include "distributed/distributed_planner.h"
-#include "distributed/multi_router_executor.h"
 #include "distributed/multi_router_planner.h"
 #include "distributed/multi_resowner.h"
 #include "distributed/multi_server_executor.h"
 #include "distributed/resource_lock.h"
+#include "distributed/transaction_management.h"
 #include "distributed/worker_protocol.h"
 #include "executor/execdebug.h"
 #include "commands/copy.h"
 #include "nodes/makefuncs.h"
+#include "nodes/nodeFuncs.h"
 #include "parser/parsetree.h"
+#include "parser/parse_oper.h"
 #include "storage/lmgr.h"
 #include "tcop/dest.h"
 #include "tcop/pquery.h"
@@ -43,10 +45,14 @@
 
 /*
  * Controls the connection type for multi shard modifications, DDLs
- * TRUNCATE and real-time SELECT queries.
+ * TRUNCATE and multi-shard SELECT queries.
  */
 int MultiShardConnectionType = PARALLEL_CONNECTION;
 bool WritableStandbyCoordinator = false;
+
+
+/* sort the returning to get consistent outputs, used only for testing */
+bool SortReturning = false;
 
 
 /* local function forward declarations */
@@ -265,7 +271,7 @@ ReturnTupleFromTuplestore(CitusScanState *scanState)
 
 
 /*
- * Load data collected by real-time or task-tracker executors into the tuplestore
+ * Load data collected by task-tracker executor into the tuplestore
  * of CitusScanState. For that, we first create a tuple store, and then copy the
  * files one-by-one into the tuple store.
  *
@@ -368,6 +374,106 @@ ReadFileIntoTupleStore(char *fileName, char *copyFormat, TupleDesc tupleDescript
 	EndCopyFrom(copyState);
 	pfree(columnValues);
 	pfree(columnNulls);
+}
+
+
+/*
+ * SortTupleStore gets a CitusScanState and sorts the tuplestore by all the
+ * entries in the target entry list, starting from the first one and
+ * ending with the last entry.
+ *
+ * The sorting is done in ASC order.
+ */
+void
+SortTupleStore(CitusScanState *scanState)
+{
+	TupleDesc tupleDescriptor = ScanStateGetTupleDescriptor(scanState);
+	Tuplestorestate *tupleStore = scanState->tuplestorestate;
+
+	List *targetList = scanState->customScanState.ss.ps.plan->targetlist;
+	uint32 expectedColumnCount = list_length(targetList);
+
+	/* Convert list-ish representation to arrays wanted by executor */
+	int numberOfSortKeys = expectedColumnCount;
+	AttrNumber *sortColIdx = (AttrNumber *) palloc(numberOfSortKeys * sizeof(AttrNumber));
+	Oid *sortOperators = (Oid *) palloc(numberOfSortKeys * sizeof(Oid));
+	Oid *collations = (Oid *) palloc(numberOfSortKeys * sizeof(Oid));
+	bool *nullsFirst = (bool *) palloc(numberOfSortKeys * sizeof(bool));
+
+	ListCell *targetCell = NULL;
+	int sortKeyIndex = 0;
+
+	Tuplesortstate *tuplesortstate = NULL;
+
+	/*
+	 * Iterate on the returning target list and generate the necessary information
+	 * for sorting the tuples.
+	 */
+	foreach(targetCell, targetList)
+	{
+		TargetEntry *returningEntry = (TargetEntry *) lfirst(targetCell);
+		Oid sortop = InvalidOid;
+
+		/* determine the sortop, we don't need anything else */
+		get_sort_group_operators(exprType((Node *) returningEntry->expr),
+								 true, false, false,
+								 &sortop, NULL, NULL,
+								 NULL);
+
+		sortColIdx[sortKeyIndex] = sortKeyIndex + 1;
+		sortOperators[sortKeyIndex] = sortop;
+		collations[sortKeyIndex] = exprCollation((Node *) returningEntry->expr);
+		nullsFirst[sortKeyIndex] = false;
+
+		sortKeyIndex++;
+	}
+
+	tuplesortstate =
+		tuplesort_begin_heap(tupleDescriptor, numberOfSortKeys, sortColIdx, sortOperators,
+							 collations, nullsFirst, work_mem, NULL, false);
+
+	while (true)
+	{
+		TupleTableSlot *slot = ReturnTupleFromTuplestore(scanState);
+
+		if (TupIsNull(slot))
+		{
+			break;
+		}
+
+		/* tuplesort_puttupleslot copies the slot into sort context */
+		tuplesort_puttupleslot(tuplesortstate, slot);
+	}
+
+	/* perform the actual sort operation */
+	tuplesort_performsort(tuplesortstate);
+
+	/*
+	 * Truncate the existing tupleStore, because we'll fill it back
+	 * from the sorted tuplestore.
+	 */
+	tuplestore_clear(tupleStore);
+
+	/* iterate over all the sorted tuples, add them to original tuplestore */
+	while (true)
+	{
+		TupleTableSlot *newSlot = MakeSingleTupleTableSlotCompat(tupleDescriptor,
+																 &TTSOpsMinimalTuple);
+		bool found = tuplesort_gettupleslot(tuplesortstate, true, false, newSlot, NULL);
+
+		if (!found)
+		{
+			break;
+		}
+
+		/* tuplesort_puttupleslot copies the slot into the tupleStore context */
+		tuplestore_puttupleslot(tupleStore, newSlot);
+	}
+
+	tuplestore_rescan(scanState->tuplestorestate);
+
+	/* terminate the sort, clear unnecessary resources */
+	tuplesort_end(tuplesortstate);
 }
 
 

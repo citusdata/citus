@@ -18,7 +18,7 @@
  *   These queries can use nearly all SQL features, but only if they have
  *   a single-valued filter on the distribution column.
  *
- * - Real-time queries that can be executed by performing a task for each
+ * - Multi-shard queries that can be executed by performing a task for each
  *   shard in a distributed table and performing a merge step.
  *
  *   These queries have limited SQL support. They may only include

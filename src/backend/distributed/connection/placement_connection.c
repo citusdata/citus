@@ -71,7 +71,7 @@ struct ColocatedPlacementsHashEntry;
  *
  * This stores a list of connections for each placement, because multiple
  * connections to the same placement may exist at the same time. E.g. a
- * real-time executor query may reference the same placement in several
+ * adaptive executor query may reference the same placement in several
  * sub-tasks.
  *
  * We keep track about a connection having executed DML or DDL, since we can
@@ -253,23 +253,6 @@ StartPlacementConnection(uint32 flags, ShardPlacement *placement, const char *us
 	}
 
 	return StartPlacementListConnection(flags, list_make1(placementAccess), userName);
-}
-
-
-/*
- * GetPlacementListConnection establishes a connection for a set of placement
- * accesses.
- *
- * See StartPlacementListConnection for details.
- */
-MultiConnection *
-GetPlacementListConnection(uint32 flags, List *placementAccessList, const char *userName)
-{
-	MultiConnection *connection = StartPlacementListConnection(flags, placementAccessList,
-															   userName);
-
-	FinishConnectionEstablishment(connection);
-	return connection;
 }
 
 
@@ -628,80 +611,6 @@ FindPlacementListConnection(int flags, List *placementAccessList, const char *us
 				/* this connection performed writes, we must use it */
 				foundModifyingConnection = true;
 			}
-		}
-		else if (placementConnection->hadDDL)
-		{
-			/*
-			 * There is an existing connection, but we cannot use it and it executed
-			 * DDL. Any subsequent operation needs to be able to see the results of
-			 * the DDL command and thus cannot proceed if it cannot use the connection.
-			 */
-
-			Assert(placementConnection != NULL);
-			Assert(!CanUseExistingConnection(flags, userName, placementConnection));
-
-			ereport(ERROR,
-					(errcode(ERRCODE_ACTIVE_SQL_TRANSACTION),
-					 errmsg("cannot establish a new connection for "
-							"placement " UINT64_FORMAT
-							", since DDL has been executed on a connection that is in use",
-							placement->placementId)));
-		}
-		else if (placementConnection->hadDML)
-		{
-			/*
-			 * There is an existing connection, but we cannot use it and it executed
-			 * DML. Any subsequent operation needs to be able to see the results of
-			 * the DML command and thus cannot proceed if it cannot use the connection.
-			 *
-			 * Note that this is not meaningfully different from the previous case. We
-			 * just produce a different error message based on whether DDL was or only
-			 * DML was executed.
-			 */
-
-			Assert(placementConnection != NULL);
-			Assert(!CanUseExistingConnection(flags, userName, placementConnection));
-			Assert(!placementConnection->hadDDL);
-
-			ereport(ERROR,
-					(errcode(ERRCODE_ACTIVE_SQL_TRANSACTION),
-					 errmsg("cannot establish a new connection for "
-							"placement " UINT64_FORMAT
-							", since DML has been executed on a connection that is in use",
-							placement->placementId)));
-		}
-		else if (accessType == PLACEMENT_ACCESS_DDL)
-		{
-			/*
-			 * There is an existing connection, but we cannot use it and we want to
-			 * execute DDL. The operation on the existing connection might conflict
-			 * with the DDL statement.
-			 */
-
-			Assert(placementConnection != NULL);
-			Assert(!CanUseExistingConnection(flags, userName, placementConnection));
-			Assert(!placementConnection->hadDDL);
-			Assert(!placementConnection->hadDML);
-
-			ereport(ERROR,
-					(errcode(ERRCODE_ACTIVE_SQL_TRANSACTION),
-					 errmsg("cannot perform a parallel DDL command because multiple "
-							"placements have been accessed over the same connection")));
-		}
-		else
-		{
-			/*
-			 * The placement has a connection assigned to it, but it cannot be used,
-			 * most likely because it has been claimed exclusively. Fortunately, it
-			 * has only been used for reads and we're not performing a DDL command.
-			 * We can therefore use a different connection for this placement.
-			 */
-
-			Assert(placementConnection != NULL);
-			Assert(!CanUseExistingConnection(flags, userName, placementConnection));
-			Assert(!placementConnection->hadDDL);
-			Assert(!placementConnection->hadDML);
-			Assert(accessType != PLACEMENT_ACCESS_DDL);
 		}
 	}
 

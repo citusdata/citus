@@ -1,7 +1,6 @@
 /*-------------------------------------------------------------------------
  *
- * worker_create_if_not_exist.c
- *   TODO rename file and document, was named after old function
+ * worker_create_or_replace.c
  *
  * Copyright (c) 2019, Citus Data, Inc.
  *
@@ -11,6 +10,7 @@
 #include "postgres.h"
 
 #include "catalog/dependency.h"
+#include "catalog/pg_proc.h"
 #include "catalog/pg_type.h"
 #include "fmgr.h"
 #include "nodes/makefuncs.h"
@@ -19,19 +19,35 @@
 #include "tcop/dest.h"
 #include "tcop/utility.h"
 #include "utils/builtins.h"
+#include "utils/lsyscache.h"
 #include "utils/regproc.h"
 
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
 #include "distributed/deparser.h"
 #include "distributed/metadata/distobject.h"
+#include "distributed/worker_create_or_replace.h"
 #include "distributed/worker_protocol.h"
 
-static Node * CreateStmtByObjectAddress(const ObjectAddress *address);
+static const char * CreateStmtByObjectAddress(const ObjectAddress *address);
 static RenameStmt * CreateRenameStatement(const ObjectAddress *address, char *newName);
 static char * GenerateBackupNameForCollision(const ObjectAddress *address);
 
 PG_FUNCTION_INFO_V1(worker_create_or_replace_object);
+
+
+/*
+ * WrapCreateOrReplace takes a sql CREATE command and wraps it in a call to citus' udf to
+ * create or replace the existing object based on its create command.
+ */
+char *
+WrapCreateOrReplace(const char *sql)
+{
+	StringInfoData buf = { 0 };
+	initStringInfo(&buf);
+	appendStringInfo(&buf, CREATE_OR_REPLACE_COMMAND, quote_literal_cstr(sql));
+	return buf.data;
+}
 
 
 /*
@@ -68,18 +84,15 @@ worker_create_or_replace_object(PG_FUNCTION_ARGS)
 	address = GetObjectAddressFromParseTree(parseTree, true);
 	if (ObjectExists(address))
 	{
-		Node *localCreateStmt = NULL;
-		const char *localSqlStatement = NULL;
 		char *newName = NULL;
-		RenameStmt *renameStmt = NULL;
 		const char *sqlRenameStmt = NULL;
+		RenameStmt *renameStmt = NULL;
+		const char *localSqlStatement = CreateStmtByObjectAddress(address);
 
-		localCreateStmt = CreateStmtByObjectAddress(address);
-		localSqlStatement = DeparseTreeNode(localCreateStmt);
 		if (strcmp(sqlStatement, localSqlStatement) == 0)
 		{
 			/*
-			 * TODO string compare is a poor mans comparison, but calling equal on the
+			 * TODO string compare is a poor man's comparison, but calling equal on the
 			 * parsetree's returns false because there is extra information list character
 			 * position of some sort
 			 */
@@ -98,7 +111,8 @@ worker_create_or_replace_object(PG_FUNCTION_ARGS)
 
 		renameStmt = CreateRenameStatement(address, newName);
 		sqlRenameStmt = DeparseTreeNode((Node *) renameStmt);
-		CitusProcessUtility((Node *) renameStmt, sqlRenameStmt, PROCESS_UTILITY_TOPLEVEL,
+		CitusProcessUtility((Node *) renameStmt, sqlRenameStmt,
+							PROCESS_UTILITY_TOPLEVEL,
 							NULL, None_Receiver, NULL);
 	}
 
@@ -119,19 +133,25 @@ worker_create_or_replace_object(PG_FUNCTION_ARGS)
  * therefore you cannot equal this tree against parsed statement. Instead it can be
  * deparsed to do a string comparison.
  */
-static Node *
+static const char *
 CreateStmtByObjectAddress(const ObjectAddress *address)
 {
 	switch (getObjectClass(address))
 	{
+		case OCLASS_PROC:
+		{
+			return GetFunctionDDLCommand(address->objectId, false);
+		}
+
 		case OCLASS_TYPE:
 		{
-			return CreateTypeStmtByObjectAddress(address);
+			return DeparseTreeNode(CreateTypeStmtByObjectAddress(address));
 		}
 
 		default:
 		{
-			ereport(ERROR, (errmsg("unsupported object to construct a create statment")));
+			ereport(ERROR, (errmsg(
+								"unsupported object to construct a create statement")));
 		}
 	}
 }
@@ -147,6 +167,11 @@ GenerateBackupNameForCollision(const ObjectAddress *address)
 {
 	switch (getObjectClass(address))
 	{
+		case OCLASS_PROC:
+		{
+			return GenerateBackupNameForProcCollision(address);
+		}
+
 		case OCLASS_TYPE:
 		{
 			return GenerateBackupNameForTypeCollision(address);
@@ -163,6 +188,67 @@ GenerateBackupNameForCollision(const ObjectAddress *address)
 
 
 /*
+ * CreateRenameTypeStmt creates a rename statement for a type based on its ObjectAddress.
+ * The rename statement will rename the existing object on its address to the value
+ * provided in newName.
+ */
+static RenameStmt *
+CreateRenameTypeStmt(const ObjectAddress *address, char *newName)
+{
+	RenameStmt *stmt = makeNode(RenameStmt);
+
+	stmt->renameType = OBJECT_TYPE;
+	stmt->object = (Node *) stringToQualifiedNameList(format_type_be_qualified(
+														  address->objectId));
+	stmt->newname = newName;
+
+	return stmt;
+}
+
+
+/*
+ * CreateRenameTypeStmt creates a rename statement for a type based on its ObjectAddress.
+ * The rename statement will rename the existing object on its address to the value
+ * provided in newName.
+ */
+static RenameStmt *
+CreateRenameProcStmt(const ObjectAddress *address, char *newName)
+{
+	RenameStmt *stmt = makeNode(RenameStmt);
+
+	switch (get_func_prokind(address->objectId))
+	{
+		case PROKIND_AGGREGATE:
+		{
+			stmt->renameType = OBJECT_AGGREGATE;
+			break;
+		}
+
+		case PROKIND_PROCEDURE:
+		{
+			stmt->renameType = OBJECT_PROCEDURE;
+			break;
+		}
+
+		case PROKIND_FUNCTION:
+		{
+			stmt->renameType = OBJECT_FUNCTION;
+			break;
+		}
+
+		default:
+			elog(ERROR, "Unexpected prokind");
+			return NULL;
+	}
+
+	stmt->object = (Node *) ObjectWithArgsFromOid(address->objectId);
+	stmt->newname = newName;
+
+	return stmt;
+}
+
+
+/*
  * CreateRenameStatement creates a rename statement for an existing object to rename the
  * object to newName.
  */
@@ -171,6 +257,11 @@ CreateRenameStatement(const ObjectAddress *address, char *newName)
 {
 	switch (getObjectClass(address))
 	{
+		case OCLASS_PROC:
+		{
+			return CreateRenameProcStmt(address, newName);
+		}
+
 		case OCLASS_TYPE:
 		{
 			return CreateRenameTypeStmt(address, newName);

@@ -213,6 +213,15 @@ typedef struct Task
 	List *relationShardList;
 
 	List *rowValuesLists;          /* rows to use when building multi-row INSERT */
+
+	/*
+	 * Used only when local execution happens. Indicates that this task is part of
+	 * both local and remote executions. We use "or" in the field name because this
+	 * is set to true for both the remote and local tasks generated for such
+	 * executions. The most common example is modifications to reference tables where
+	 * the task splitted into local and remote tasks.
+	 */
+	bool partiallyLocalOrRemote;
 } Task;
 
 

@@ -77,7 +77,6 @@
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_router_planner.h"
-#include "distributed/multi_shard_transaction.h"
 #include "distributed/multi_executor.h"
 #include "distributed/placement_connection.h"
 #include "distributed/relation_access_tracking.h"
@@ -184,6 +183,15 @@ struct CopyShardState
 	/* List of CopyPlacementStates for all active placements of the shard. */
 	List *placementStateList;
 };
+
+/* ShardConnections represents a set of connections for each placement of a shard */
+typedef struct ShardConnections
+{
+	int64 shardId;
+
+	/* list of MultiConnection structs */
+	List *connectionList;
+} ShardConnections;
 
 
 /* Local functions forward declarations */

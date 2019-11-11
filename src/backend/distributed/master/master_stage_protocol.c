@@ -33,7 +33,7 @@
 #include "distributed/distributed_planner.h"
 #include "distributed/listutils.h"
 #include "distributed/multi_client_executor.h"
-#include "distributed/multi_router_executor.h"
+#include "distributed/multi_executor.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
@@ -59,14 +59,6 @@
 
 
 /* Local functions forward declarations */
-static void CreateShardsOnWorkersViaExecutor(Oid distributedRelationId,
-											 List *shardPlacements,
-											 bool useExclusiveConnection, bool
-											 colocatedShard);
-static void CreateShardsOnWorkersViaCommands(Oid distributedRelationId,
-											 List *shardPlacements,
-											 bool useExclusiveConnection, bool
-											 colocatedShard);
 static List * RelationShardListForShardCreate(ShardInterval *shardInterval);
 static bool WorkerShardStats(ShardPlacement *placement, Oid relationId,
 							 char *shardName, uint64 *shardSize,
@@ -504,33 +496,12 @@ InsertShardPlacementRows(Oid relationId, int64 shardId, List *workerNodeList,
 
 /*
  * CreateShardsOnWorkers creates shards on worker nodes given the shard placements
- * as a parameter. Function branches into two: either use the executor or execute the
- * commands one by one.
+ * as a parameter The function  creates the shards via the executor. This means
+ * that it can adopt the number of connections required to create the shards.
  */
 void
 CreateShardsOnWorkers(Oid distributedRelationId, List *shardPlacements,
 					  bool useExclusiveConnection, bool colocatedShard)
-{
-	if (TaskExecutorType == MULTI_EXECUTOR_ADAPTIVE)
-	{
-		CreateShardsOnWorkersViaExecutor(distributedRelationId, shardPlacements,
-										 useExclusiveConnection, colocatedShard);
-	}
-	else
-	{
-		CreateShardsOnWorkersViaCommands(distributedRelationId, shardPlacements,
-										 useExclusiveConnection, colocatedShard);
-	}
-}
-
-
-/*
- * CreateShardsOnWorkersViaExecutor creates the shards via the executor. This means
- * that it can adopt the number of connections required to create the shards.
- */
-static void
-CreateShardsOnWorkersViaExecutor(Oid distributedRelationId, List *shardPlacements, bool
-								 useExclusiveConnection, bool colocatedShard)
 {
 	bool includeSequenceDefaults = false;
 	List *ddlCommandList = GetTableDDLEvents(distributedRelationId,
@@ -600,125 +571,6 @@ CreateShardsOnWorkersViaExecutor(Oid distributedRelationId, List *shardPlacement
 	}
 
 	ExecuteTaskList(ROW_MODIFY_NONE, taskList, poolSize);
-}
-
-
-/*
- * CreateShardsOnWorkersViaCommands creates shards on worker nodes given the shard
- * placements as a parameter. Function opens connections in transactional way. If the
- * caller needs an exclusive connection (in case of distributing local table with data
- * on it) or creating shards in a transaction, per placement connection is opened
- * for each placement.
- */
-static void
-CreateShardsOnWorkersViaCommands(Oid distributedRelationId, List *shardPlacements,
-								 bool useExclusiveConnection, bool colocatedShard)
-{
-	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(distributedRelationId);
-
-	bool includeSequenceDefaults = false;
-	List *ddlCommandList = GetTableDDLEvents(distributedRelationId,
-											 includeSequenceDefaults);
-	List *foreignConstraintCommandList = GetTableForeignConstraintCommands(
-		distributedRelationId);
-	List *claimedConnectionList = NIL;
-	ListCell *connectionCell = NULL;
-	ListCell *shardPlacementCell = NULL;
-	int connectionFlags = FOR_DDL;
-	bool partitionTable = PartitionTable(distributedRelationId);
-
-	if (useExclusiveConnection)
-	{
-		connectionFlags |= CONNECTION_PER_PLACEMENT;
-	}
-
-
-	BeginOrContinueCoordinatedTransaction();
-
-	if (MultiShardCommitProtocol == COMMIT_PROTOCOL_2PC ||
-		cacheEntry->replicationModel == REPLICATION_MODEL_2PC)
-	{
-		CoordinatedTransactionUse2PC();
-	}
-
-	/* mark parallel relation accesses before opening connections */
-	if (ShouldRecordRelationAccess() && useExclusiveConnection)
-	{
-		RecordParallelDDLAccess(distributedRelationId);
-
-		/* we should mark the parent as well */
-		if (partitionTable)
-		{
-			Oid parentRelationId = PartitionParentOid(distributedRelationId);
-			RecordParallelDDLAccess(parentRelationId);
-		}
-	}
-
-	foreach(shardPlacementCell, shardPlacements)
-	{
-		ShardPlacement *shardPlacement = (ShardPlacement *) lfirst(shardPlacementCell);
-		uint64 shardId = shardPlacement->shardId;
-		ShardInterval *shardInterval = LoadShardInterval(shardId);
-		List *relationShardList = NIL;
-		MultiConnection *connection = NULL;
-		int shardIndex = -1;
-		List *commandList = NIL;
-
-		if (colocatedShard)
-		{
-			shardIndex = ShardIndex(shardInterval);
-		}
-
-		/*
-		 * For partitions, make sure that we mark the parent table relation access
-		 * with DDL. This is only important for parallel relation access in transaction
-		 * blocks, thus check useExclusiveConnection and transaction block as well.
-		 */
-		if (ShouldRecordRelationAccess() && useExclusiveConnection && partitionTable)
-		{
-			List *placementAccessList = NIL;
-
-			relationShardList = RelationShardListForShardCreate(shardInterval);
-
-			placementAccessList = BuildPlacementDDLList(shardPlacement->groupId,
-														relationShardList);
-
-			connection = GetPlacementListConnection(connectionFlags, placementAccessList,
-													NULL);
-		}
-		else
-		{
-			connection = GetPlacementConnection(connectionFlags, shardPlacement,
-												NULL);
-		}
-
-		if (useExclusiveConnection)
-		{
-			ClaimConnectionExclusively(connection);
-			claimedConnectionList = lappend(claimedConnectionList, connection);
-		}
-
-		RemoteTransactionBeginIfNecessary(connection);
-		MarkRemoteTransactionCritical(connection);
-
-		commandList = WorkerCreateShardCommandList(distributedRelationId, shardIndex,
-												   shardId,
-												   ddlCommandList,
-												   foreignConstraintCommandList);
-
-		ExecuteCriticalRemoteCommandList(connection, commandList);
-	}
-
-	/*
-	 * We need to unclaim all connections to make them usable again for the copy
-	 * command, otherwise copy going to open new connections to placements and
-	 * can not see uncommitted changes.
-	 */
-	foreach(connectionCell, claimedConnectionList)
-	{
-		MultiConnection *connection = (MultiConnection *) lfirst(connectionCell);
-		UnclaimConnection(connection);
-	}
 }
 
 

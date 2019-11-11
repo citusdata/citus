@@ -24,8 +24,6 @@
 #define RESERVED_FD_COUNT 64           /* file descriptors unavailable to executor */
 
 /* copy out query results */
-#define COPY_QUERY_TO_STDOUT_TEXT "COPY (%s) TO STDOUT"
-#define COPY_QUERY_TO_STDOUT_BINARY "COPY (%s) TO STDOUT WITH (FORMAT binary)"
 #define EXECUTE_SQL_TASK_TO_FILE_BINARY \
 	"SELECT worker_execute_sql_task("UINT64_FORMAT ", %u, %s, true)"
 #define EXECUTE_SQL_TASK_TO_FILE_TEXT \
@@ -46,26 +44,15 @@
 /* Enumeration to track one task's execution status */
 typedef enum
 {
-	EXEC_TASK_INVALID_FIRST = 0,
-	EXEC_TASK_CONNECT_START = 1,
-	EXEC_TASK_CONNECT_POLL = 2,
-	EXEC_TASK_FAILED = 3,
-	EXEC_COMPUTE_TASK_START = 4,
-	EXEC_COMPUTE_TASK_RUNNING = 5,
-	EXEC_COMPUTE_TASK_COPYING = 6,
-	EXEC_TASK_DONE = 7,
-
 	/* used for task tracker executor */
-	EXEC_TASK_UNASSIGNED = 11,
-	EXEC_TASK_QUEUED = 12,
-	EXEC_TASK_TRACKER_RETRY = 13,
-	EXEC_TASK_TRACKER_FAILED = 14,
-	EXEC_SOURCE_TASK_TRACKER_RETRY = 15,
-	EXEC_SOURCE_TASK_TRACKER_FAILED = 16,
-
-	/* transactional operations */
-	EXEC_BEGIN_START = 20,
-	EXEC_BEGIN_RUNNING = 21
+	EXEC_TASK_INVALID_FIRST = 0,
+	EXEC_TASK_DONE = 1,
+	EXEC_TASK_UNASSIGNED = 2,
+	EXEC_TASK_QUEUED = 3,
+	EXEC_TASK_TRACKER_RETRY = 4,
+	EXEC_TASK_TRACKER_FAILED = 5,
+	EXEC_SOURCE_TASK_TRACKER_RETRY = 6,
+	EXEC_SOURCE_TASK_TRACKER_FAILED = 7,
 } TaskExecStatus;
 
 
@@ -98,20 +85,9 @@ typedef enum
 {
 	MULTI_EXECUTOR_INVALID_FIRST = 0,
 	MULTI_EXECUTOR_ADAPTIVE = 1,
-	MULTI_EXECUTOR_REAL_TIME = 2,
-	MULTI_EXECUTOR_TASK_TRACKER = 3,
-	MULTI_EXECUTOR_ROUTER = 4,
-	MULTI_EXECUTOR_COORDINATOR_INSERT_SELECT = 5
+	MULTI_EXECUTOR_TASK_TRACKER = 2,
+	MULTI_EXECUTOR_COORDINATOR_INSERT_SELECT = 3
 } MultiExecutorType;
-
-
-/* Enumeration that represents a (dis)connect action taken */
-typedef enum
-{
-	CONNECT_ACTION_NONE = 0,
-	CONNECT_ACTION_OPENED = 1,
-	CONNECT_ACTION_CLOSED = 2
-} ConnectAction;
 
 
 /*
@@ -128,10 +104,8 @@ typedef struct DistributedExecutionStats
 
 
 /*
- * TaskExecution holds state that relates to a task's execution. In the case of
- * the real-time executor, this struct encapsulates all information necessary to
- * run the task. The task tracker executor however manages its connection logic
- * elsewhere, and doesn't use connection related fields defined in here.
+ * TaskExecution holds state that relates to a task's execution for task-tracker
+ * executor.
  */
 struct TaskExecution
 {
@@ -143,12 +117,10 @@ struct TaskExecution
 	TransmitExecStatus *transmitStatusArray;
 	int32 *connectionIdArray;
 	int32 *fileDescriptorArray;
-	TimestampTz connectStartTime;
 	uint32 nodeCount;
 	uint32 currentNodeIndex;
 	uint32 querySourceNodeIndex; /* only applies to map fetch tasks */
 	uint32 failureCount;
-	bool criticalErrorOccurred;
 };
 
 
@@ -191,18 +163,6 @@ typedef struct TaskTracker
 } TaskTracker;
 
 
-/*
- * WorkerNodeState keeps state for a worker node. The real-time executor uses this to
- * keep track of the number of open connections to a worker node.
- */
-typedef struct WorkerNodeState
-{
-	uint32 workerPort;
-	char workerName[WORKER_LENGTH];
-	uint32 openConnectionCount;
-} WorkerNodeState;
-
-
 /* Config variable managed via guc.c */
 extern int RemoteTaskCheckInterval;
 extern int MaxAssignTaskBatchSize;
@@ -213,7 +173,6 @@ extern int MultiTaskQueryLogLevel;
 
 
 /* Function declarations for distributed execution */
-extern void MultiRealTimeExecute(Job *job);
 extern void MultiTaskTrackerExecute(Job *job);
 
 /* Function declarations common to more than one executor */
@@ -226,10 +185,8 @@ extern void ErrorSizeLimitIsExceeded(void);
 extern bool TaskExecutionFailed(TaskExecution *taskExecution);
 extern void AdjustStateForFailure(TaskExecution *taskExecution);
 extern int MaxMasterConnectionCount(void);
-extern void PrepareMasterJobDirectory(Job *workerJob);
 
 
-extern TupleTableSlot * RealTimeExecScan(CustomScanState *node);
 extern TupleTableSlot * TaskTrackerExecScan(CustomScanState *node);
 
 #endif /* MULTI_SERVER_EXECUTOR_H */

@@ -13,11 +13,14 @@
 
 #include "commands/copy.h"
 #include "distributed/backend_data.h"
+#include "distributed/citus_clauses.h"
 #include "distributed/citus_custom_scan.h"
+#include "distributed/deparse_shard_query.h"
+#include "distributed/distributed_execution_locks.h"
 #include "distributed/insert_select_executor.h"
 #include "distributed/insert_select_planner.h"
+#include "distributed/multi_executor.h"
 #include "distributed/multi_server_executor.h"
-#include "distributed/multi_router_executor.h"
 #include "distributed/multi_router_planner.h"
 #include "distributed/query_stats.h"
 #include "distributed/subplan_execution.h"
@@ -30,14 +33,13 @@
 
 /* functions for creating custom scan nodes */
 static Node * AdaptiveExecutorCreateScan(CustomScan *scan);
-static Node * RealTimeCreateScan(CustomScan *scan);
 static Node * TaskTrackerCreateScan(CustomScan *scan);
-static Node * RouterCreateScan(CustomScan *scan);
 static Node * CoordinatorInsertSelectCreateScan(CustomScan *scan);
 static Node * DelayedErrorCreateScan(CustomScan *scan);
 
 /* functions that are common to different scans */
 static void CitusBeginScan(CustomScanState *node, EState *estate, int eflags);
+static void CitusModifyBeginScan(CustomScanState *node, EState *estate, int eflags);
 static void CitusEndScan(CustomScanState *node);
 static void CitusReScan(CustomScanState *node);
 
@@ -48,19 +50,9 @@ CustomScanMethods AdaptiveExecutorCustomScanMethods = {
 	AdaptiveExecutorCreateScan
 };
 
-CustomScanMethods RealTimeCustomScanMethods = {
-	"Citus Real-Time",
-	RealTimeCreateScan
-};
-
 CustomScanMethods TaskTrackerCustomScanMethods = {
 	"Citus Task-Tracker",
 	TaskTrackerCreateScan
-};
-
-CustomScanMethods RouterCustomScanMethods = {
-	"Citus Router",
-	RouterCreateScan
 };
 
 CustomScanMethods CoordinatorInsertSelectCustomScanMethods = {
@@ -86,37 +78,10 @@ static CustomExecMethods AdaptiveExecutorCustomExecMethods = {
 	.ExplainCustomScan = CitusExplainScan
 };
 
-static CustomExecMethods RealTimeCustomExecMethods = {
-	.CustomName = "RealTimeScan",
-	.BeginCustomScan = CitusBeginScan,
-	.ExecCustomScan = RealTimeExecScan,
-	.EndCustomScan = CitusEndScan,
-	.ReScanCustomScan = CitusReScan,
-	.ExplainCustomScan = CitusExplainScan
-};
-
 static CustomExecMethods TaskTrackerCustomExecMethods = {
 	.CustomName = "TaskTrackerScan",
 	.BeginCustomScan = CitusBeginScan,
 	.ExecCustomScan = TaskTrackerExecScan,
-	.EndCustomScan = CitusEndScan,
-	.ReScanCustomScan = CitusReScan,
-	.ExplainCustomScan = CitusExplainScan
-};
-
-static CustomExecMethods RouterModifyCustomExecMethods = {
-	.CustomName = "RouterModifyScan",
-	.BeginCustomScan = CitusBeginScan,
-	.ExecCustomScan = RouterModifyExecScan,
-	.EndCustomScan = CitusEndScan,
-	.ReScanCustomScan = CitusReScan,
-	.ExplainCustomScan = CitusExplainScan
-};
-
-static CustomExecMethods RouterSelectCustomExecMethods = {
-	.CustomName = "RouterSelectScan",
-	.BeginCustomScan = CitusBeginScan,
-	.ExecCustomScan = RouterSelectExecScan,
 	.EndCustomScan = CitusEndScan,
 	.ReScanCustomScan = CitusReScan,
 	.ExplainCustomScan = CitusExplainScan
@@ -139,9 +104,7 @@ void
 RegisterCitusCustomScanMethods(void)
 {
 	RegisterCustomScanMethods(&AdaptiveExecutorCustomScanMethods);
-	RegisterCustomScanMethods(&RealTimeCustomScanMethods);
 	RegisterCustomScanMethods(&TaskTrackerCustomScanMethods);
-	RegisterCustomScanMethods(&RouterCustomScanMethods);
 	RegisterCustomScanMethods(&CoordinatorInsertSelectCustomScanMethods);
 	RegisterCustomScanMethods(&DelayedErrorCustomScanMethods);
 }
@@ -193,7 +156,7 @@ CitusExecScan(CustomScanState *node)
 
 	if (!scanState->finishedRemoteScan)
 	{
-		AdaptiveExecutor(node);
+		AdaptiveExecutor(scanState);
 
 		scanState->finishedRemoteScan = true;
 	}
@@ -201,6 +164,82 @@ CitusExecScan(CustomScanState *node)
 	resultSlot = ReturnTupleFromTuplestore(scanState);
 
 	return resultSlot;
+}
+
+
+/*
+ * CitusModifyBeginScan first evaluates expressions in the query and then
+ * performs shard pruning in case the partition column in an insert was
+ * defined as a function call.
+ *
+ * The function also checks the validity of the given custom scan node and
+ * gets locks on the shards involved in the task list of the distributed plan.
+ */
+static void
+CitusModifyBeginScan(CustomScanState *node, EState *estate, int eflags)
+{
+	CitusScanState *scanState = (CitusScanState *) node;
+	DistributedPlan *distributedPlan = NULL;
+	Job *workerJob = NULL;
+	Query *jobQuery = NULL;
+	List *taskList = NIL;
+
+	/*
+	 * We must not change the distributed plan since it may be reused across multiple
+	 * executions of a prepared statement. Instead we create a deep copy that we only
+	 * use for the current execution.
+	 */
+	distributedPlan = scanState->distributedPlan = copyObject(scanState->distributedPlan);
+
+	workerJob = distributedPlan->workerJob;
+	jobQuery = workerJob->jobQuery;
+	taskList = workerJob->taskList;
+
+	if (workerJob->requiresMasterEvaluation)
+	{
+		PlanState *planState = &(scanState->customScanState.ss.ps);
+		EState *executorState = planState->state;
+
+		ExecuteMasterEvaluableFunctions(jobQuery, planState);
+
+		/*
+		 * We've processed parameters in ExecuteMasterEvaluableFunctions and
+		 * don't need to send their values to workers, since they will be
+		 * represented as constants in the deparsed query. To avoid sending
+		 * parameter values, we set the parameter list to NULL.
+		 */
+		executorState->es_param_list_info = NULL;
+
+		if (workerJob->deferredPruning)
+		{
+			DeferredErrorMessage *planningError = NULL;
+
+			/* need to perform shard pruning, rebuild the task list from scratch */
+			taskList = RouterInsertTaskList(jobQuery, &planningError);
+
+			if (planningError != NULL)
+			{
+				RaiseDeferredError(planningError, ERROR);
+			}
+
+			workerJob->taskList = taskList;
+			workerJob->partitionKeyValue = ExtractInsertPartitionKeyValue(jobQuery);
+		}
+
+		RebuildQueryStrings(jobQuery, taskList);
+	}
+
+	/* prevent concurrent placement changes */
+	AcquireMetadataLocks(taskList);
+
+	/*
+	 * We are taking locks on partitions of partitioned tables. These locks are
+	 * necessary for locking tables that appear in the SELECT part of the query.
+	 */
+	LockPartitionsInRelationList(distributedPlan->relationIdList, AccessShareLock);
+
+	/* modify tasks are always assigned using first-replica policy */
+	workerJob->taskList = FirstReplicaAssignTaskList(taskList);
 }
 
 
@@ -223,24 +262,6 @@ AdaptiveExecutorCreateScan(CustomScan *scan)
 
 
 /*
- * RealTimeCreateScan creates the scan state for real-time executor queries.
- */
-static Node *
-RealTimeCreateScan(CustomScan *scan)
-{
-	CitusScanState *scanState = palloc0(sizeof(CitusScanState));
-
-	scanState->executorType = MULTI_EXECUTOR_REAL_TIME;
-	scanState->customScanState.ss.ps.type = T_CustomScanState;
-	scanState->distributedPlan = GetDistributedPlan(scan);
-
-	scanState->customScanState.methods = &RealTimeCustomExecMethods;
-
-	return (Node *) scanState;
-}
-
-
-/*
  * TaskTrackerCreateScan creates the scan state for task-tracker executor queries.
  */
 static Node *
@@ -253,49 +274,6 @@ TaskTrackerCreateScan(CustomScan *scan)
 	scanState->distributedPlan = GetDistributedPlan(scan);
 
 	scanState->customScanState.methods = &TaskTrackerCustomExecMethods;
-
-	return (Node *) scanState;
-}
-
-
-/*
- * RouterCreateScan creates the scan state for router executor queries.
- */
-static Node *
-RouterCreateScan(CustomScan *scan)
-{
-	CitusScanState *scanState = palloc0(sizeof(CitusScanState));
-	DistributedPlan *distributedPlan = NULL;
-	Job *workerJob = NULL;
-	List *taskList = NIL;
-	bool isModificationQuery = false;
-
-	List *relationRowLockList = NIL;
-
-	scanState->executorType = MULTI_EXECUTOR_ROUTER;
-	scanState->customScanState.ss.ps.type = T_CustomScanState;
-	scanState->distributedPlan = GetDistributedPlan(scan);
-
-	distributedPlan = scanState->distributedPlan;
-	workerJob = distributedPlan->workerJob;
-	taskList = workerJob->taskList;
-	isModificationQuery = IsModifyDistributedPlan(distributedPlan);
-
-	if (list_length(taskList) == 1)
-	{
-		Task *task = (Task *) linitial(taskList);
-		relationRowLockList = task->relationRowLockList;
-	}
-
-	/* if query is SELECT ... FOR UPDATE query, use modify logic */
-	if (isModificationQuery || relationRowLockList != NIL)
-	{
-		scanState->customScanState.methods = &RouterModifyCustomExecMethods;
-	}
-	else
-	{
-		scanState->customScanState.methods = &RouterSelectCustomExecMethods;
-	}
 
 	return (Node *) scanState;
 }
@@ -362,8 +340,7 @@ CitusEndScan(CustomScanState *node)
 	/* queryId is not set if pg_stat_statements is not installed */
 	if (queryId != 0)
 	{
-		if (partitionKeyConst != NULL && (executorType == MULTI_EXECUTOR_ROUTER ||
-										  executorType == MULTI_EXECUTOR_ADAPTIVE))
+		if (partitionKeyConst != NULL && executorType == MULTI_EXECUTOR_ADAPTIVE)
 		{
 			partitionKeyString = DatumToString(partitionKeyConst->constvalue,
 											   partitionKeyConst->consttype);

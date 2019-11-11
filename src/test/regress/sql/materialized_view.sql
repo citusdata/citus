@@ -145,3 +145,110 @@ SELECT count(*) FROM materialized_view;
 DROP MATERIALIZED VIEW materialized_view;
 
 DROP SCHEMA materialized_view CASCADE;
+
+-- modify statements on/with views
+-- create two tables and a view
+CREATE TABLE large (id int, tenant_id int);
+CREATE TABLE small (id int, tenant_id int);
+
+SELECT create_distributed_table('large','tenant_id');
+SELECT create_distributed_table('small','tenant_id');
+
+\copy small FROM STDIN DELIMITER ','
+250, 25
+470, 13
+8,2
+6,3
+7,4
+1,2
+\.
+
+CREATE MATERIALIZED VIEW small_view AS SELECT * from small where id < 100;
+
+\copy large FROM STDIN DELIMITER ','
+1,2
+2,3
+5,4
+6,5
+\.
+
+-- running any kind of modify statements "on" materialized views is not supported by postgres
+UPDATE small_view SET id = 1;
+
+-- for now, using materialized views in modify statements' FROM / WHERE clauses is not supported
+UPDATE large SET id=20 FROM small_view WHERE small_view.id=large.id;
+SELECT * FROM large ORDER BY 1, 2;
+
+-- test on a router executable update statement, this will also fail
+UPDATE large SET id=28 FROM small_view WHERE small_view.id=large.id and small_view.tenant_id=2 and large.tenant_id=2;
+SELECT * FROM large ORDER BY 1, 2;
+
+-- delete statement on large with subquery, this should succeed
+DELETE FROM large WHERE tenant_id in (SELECT tenant_id FROM small_view);
+SELECT * FROM large ORDER BY 1, 2;
+
+-- INSERT INTO views is already not supported by PostgreSQL
+INSERT INTO small_view VALUES(3, 3);
+
+DROP TABLE small CASCADE;
+DROP TABLE large;
+
+-- now, run the same modify statement tests on a partitioned table
+CREATE TABLE small (id int, tenant_id int);
+
+CREATE TABLE large_partitioned (id int, tenant_id int) partition by range(tenant_id);
+
+CREATE TABLE large_partitioned_p1 PARTITION OF large_partitioned FOR VALUES FROM (1) TO (10);
+CREATE TABLE large_partitioned_p2 PARTITION OF large_partitioned FOR VALUES FROM (10) TO (20);
+CREATE TABLE large_partitioned_p3 PARTITION OF large_partitioned FOR VALUES FROM (20) TO (100);
+
+SELECT create_distributed_table('large_partitioned','tenant_id');
+SELECT create_distributed_table('small','tenant_id');
+
+\copy small FROM STDIN DELIMITER ','
+250, 25
+470, 13
+8,2
+6,3
+7,4
+1,2
+\.
+
+CREATE MATERIALIZED VIEW small_view AS SELECT * from small where id < 100;
+
+\copy large_partitioned FROM STDIN DELIMITER ','
+1,2
+2,3
+5,4
+6,5
+29,15
+26,32
+60,51
+\.
+
+-- running modify statements "on" views is still not supported, hence below two statements will fail
+UPDATE small_view SET id = 1;
+DELETE FROM small_view;
+
+-- using mat. view in modify statements' FROM / WHERE clauses is not valid yet
+UPDATE large_partitioned SET id=20 FROM small_view WHERE small_view.id=large_partitioned.id;
+SELECT * FROM large_partitioned ORDER BY 1, 2;
+
+-- delete statement on large_partitioned
+DELETE FROM large_partitioned WHERE id in (SELECT id FROM small_view);
+SELECT * FROM large_partitioned ORDER BY 1, 2;
+
+-- we should still have identical rows for next test statement, then insert new rows to both tables
+INSERT INTO large_partitioned VALUES(14, 14);
+INSERT INTO small VALUES(14, 14);
+
+-- delete statement with CTE
+WITH all_small_view_ids AS (SELECT id FROM small_view)
+DELETE FROM large_partitioned WHERE id in (SELECT * FROM all_small_view_ids);
+
+-- make sure that materialized view in a CTE/subquery can be joined with a distributed table
+WITH cte AS (SELECT *, random() FROM small_view) SELECT count(*) FROM cte JOIN small USING(id);
+SELECT count(*) FROM (SELECT *, random() FROM small_view) as subquery JOIN small USING(id);
+
+DROP TABLE large_partitioned;
+DROP TABLE small CASCADE;

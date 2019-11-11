@@ -136,6 +136,7 @@ typedef struct MetadataCacheData
 	Oid readIntermediateResultFuncId;
 	Oid extraDataContainerFuncId;
 	Oid workerHashFunctionId;
+	Oid anyValueFunctionId;
 	Oid textSendAsJsonbFunctionId;
 	Oid extensionOwner;
 	Oid binaryCopyFormatId;
@@ -2213,6 +2214,21 @@ CitusWorkerHashFunctionId(void)
 	}
 
 	return MetadataCache.workerHashFunctionId;
+}
+
+
+/* return oid of the any_value aggregate function */
+Oid
+CitusAnyValueFunctionId(void)
+{
+	if (MetadataCache.anyValueFunctionId == InvalidOid)
+	{
+		const int argCount = 1;
+		MetadataCache.anyValueFunctionId =
+			FunctionOid("pg_catalog", "any_value", argCount);
+	}
+
+	return MetadataCache.anyValueFunctionId;
 }
 
 
