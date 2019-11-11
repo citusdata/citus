@@ -167,7 +167,7 @@ SET client_min_messages TO DEBUG1;
 --
 CREATE FUNCTION mx_call_add(int, int) RETURNS int
     AS 'select $1 + $2;' LANGUAGE SQL IMMUTABLE;
-SELECT create_distributed_function('mx_call_add(int,int)', '$1');
+SELECT create_distributed_function('mx_call_add(int,int)', '$1', 'mx_call_dist_table_1');
 
 -- non-const distribution parameters cannot be pushed down
 call multi_mx_call.mx_call_proc(2, mx_call_add(3, 4));
