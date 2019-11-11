@@ -1,3 +1,22 @@
+/*-------------------------------------------------------------------------
+ *
+ * adaptive_executor_repartition.c
+ * 
+ * Adaptive executor repartition's main entry point is ExecuteDependedTasks.
+ * ExecuteDependedTasks takes a list of top level tasks. Its logic is as follows:
+ * - It generates all the tasks by descending in the tasks tree. Note that each task 
+ *  has a dependedTaskList.
+ * - It generates FetchTask queryStrings with the MapTask queries. It uses the first replicate to 
+ *  fetch data when replication factor is > 1. Note that if a task fails in any replica adaptive executor
+ *  gives an error, so if we come to a fetchTask we know for sure that its dependedMapTask is executed in all
+ *  replicas.
+ * - It creates schemas in each worker in a single transaction to store intermediate results.
+ * - It iterates all tasks and finds the ones whose dependencies are already executed, and executes them with
+ *  adaptive executor logic.
+
+
+*/
+
 #include "postgres.h"
 #include "access/hash.h"
 #include "distributed/hash_helpers.h"
@@ -32,7 +51,7 @@ static void CreateTemporarySchemas(List *mergeTasks);
 static List * CreateJobIds(List *mergeTasks);
 static void CreateSchemasOnAllWorkers(char *createSchemasCommand);
 static char * GenerateCreateSchemasCommand(List *jobIds);
-static bool doesJobIDExist(List *jobIds, uint64 jobId);
+static bool DoesJobIDExist(List *jobIds, uint64 jobId);
 static HASHCTL InitHashTableInfo(void);
 static HTAB * CreateTaskHashTable(void);
 static void FillTaskKey(TaskHashKey *taskKey, Task *task);
@@ -45,6 +64,11 @@ static bool IsTaskAlreadyCompleted(Task *task, HTAB *completedTasks);
 static void SendCommandToAllWorkers(List *commandList);
 
 
+/*
+ * ExecuteDependedTasks executes all tasks except the top level tasks 
+ * in order from the task tree. At a time, it can execute different tasks from 
+ * different jobs. 
+ */
 void
 ExecuteDependedTasks(List *topLevelTasks)
 {
@@ -64,6 +88,10 @@ ExecuteDependedTasks(List *topLevelTasks)
 }
 
 
+/*
+ * FillTaskGroups iterates all tasks and creates a group for outputFetchTasks
+ * and mergeTasks. 
+ */
 static void
 FillTaskGroups(List **allTasks, List **outputFetchTasks, List **mergeTasks)
 {
@@ -84,7 +112,11 @@ FillTaskGroups(List **allTasks, List **outputFetchTasks, List **mergeTasks)
 	}
 }
 
-
+/* 
+ * PutMapOutputFetchQueryStrings adds the queryStrings for fetchTasks from their mapTasks.
+ * Note that it is not created during the planner, but it is probably safe
+ * to create the queryStrings for fetchTasks in the planner phase too.
+ */
 static void
 PutMapOutputFetchQueryStrings(List **mapOutputFetchTasks)
 {
@@ -134,6 +166,10 @@ MapFetchTaskQueryString(Task *mapFetchTask, Task *mapTask)
 }
 
 
+/*
+ * CreateTemporarySchemas creates the necessary schemas that will be used 
+ * later in each worker. Single transaction is used to create the schemas.
+ */
 static void
 CreateTemporarySchemas(List *mergeTasks)
 {
@@ -143,6 +179,10 @@ CreateTemporarySchemas(List *mergeTasks)
 }
 
 
+/*
+ * CreateJobIds returns a list of unique job ids that will be used 
+ * in mergeTasks.
+ */
 static List *
 CreateJobIds(List *mergeTasks)
 {
@@ -152,7 +192,7 @@ CreateJobIds(List *mergeTasks)
 	foreach(taskCell, mergeTasks)
 	{
 		Task *task = (Task *) lfirst(taskCell);
-		if (!doesJobIDExist(jobIds, task->jobId))
+		if (!DoesJobIDExist(jobIds, task->jobId))
 		{
 			jobIds = lappend(jobIds, (void *) task->jobId);
 		}
@@ -160,7 +200,9 @@ CreateJobIds(List *mergeTasks)
 	return jobIds;
 }
 
-
+/*
+ * CreateSchemasOnAllWorkers creates schemas in all workers.
+ */
 static void
 CreateSchemasOnAllWorkers(char *createSchemasCommand)
 {
@@ -169,7 +211,10 @@ CreateSchemasOnAllWorkers(char *createSchemasCommand)
 	SendCommandToAllWorkers(commandList);
 }
 
-
+/*
+ * SendCommandToAllWorkers sends the given command to all workers in
+ * a single transaction.
+ */
 static void
 SendCommandToAllWorkers(List *commandList)
 {
@@ -186,7 +231,14 @@ SendCommandToAllWorkers(List *commandList)
 	}
 }
 
-
+/*
+ * GenerateCreateSchemasCommand returns the command to generate 
+ * schemas. The returned command is a concatenated which contains 
+ * exactly list_length(jobIds) subcommands.
+ *  E.g create_schema(jobId1); create_schema(jobId2); ... 
+ * This way we can send the command in just one latency to a worker to
+ * create all the necessary schemas.
+ */
 static char *
 GenerateCreateSchemasCommand(List *jobIds)
 {
@@ -203,7 +255,7 @@ GenerateCreateSchemasCommand(List *jobIds)
 
 
 static bool
-doesJobIDExist(List *jobIds, uint64 jobId)
+DoesJobIDExist(List *jobIds, uint64 jobId)
 {
 	ListCell *jobIdCell = NULL;
 	foreach(jobIdCell, jobIds)
@@ -217,7 +269,12 @@ doesJobIDExist(List *jobIds, uint64 jobId)
 	return false;
 }
 
-
+/*
+ * ExecuteTasksInDependencyOrder executes the given tasks except the top
+ * level tasks in their dependency order. To do so, it iterates all
+ * the tasks and finds the ones that can be executed at that time, it tries to
+ * execute all of them in parallel. The parallelism is bound by MaxAdaptiveExecutorPoolSize.
+ */
 static void
 ExecuteTasksInDependencyOrder(List *allTasks, List *topLevelTasks)
 {
@@ -254,7 +311,9 @@ ExecuteTasksInDependencyOrder(List *allTasks, List *topLevelTasks)
 	}
 }
 
-
+/*
+ * AddCompletedTasks adds the givens tasks to completedTasks HTAB.
+ */
 static void
 AddCompletedTasks(List *curCompletedTasks, HTAB *completedTasks)
 {
@@ -270,7 +329,9 @@ AddCompletedTasks(List *curCompletedTasks, HTAB *completedTasks)
 	}
 }
 
-
+/*
+ * CreateTaskHashTable creates a HTAB with the necessary initialization.
+ */ 
 static HTAB *
 CreateTaskHashTable()
 {
@@ -280,7 +341,10 @@ CreateTaskHashTable()
 					   64, &info, hashFlags);
 }
 
-
+/*
+ * IsTaskAlreadyCompleted returns true if the given task 
+ * is found in the completedTasks HTAB.
+ */ 
 static bool
 IsTaskAlreadyCompleted(Task *task, HTAB *completedTasks)
 {
@@ -292,7 +356,10 @@ IsTaskAlreadyCompleted(Task *task, HTAB *completedTasks)
 	return found;
 }
 
-
+/*
+ * IsAllDependencyCompleted return true if the given task's 
+ * dependencies are completed.
+ */
 static bool
 IsAllDependencyCompleted(Task *targetTask, HTAB *completedTasks)
 {
@@ -361,6 +428,10 @@ TaskHashCompare(const void *key1, const void *key2, Size keysize)
 }
 
 
+/*
+ * CleanUpSchemas removes all the schemas that start with pg_ 
+ * in every worker.
+ */
 void
 CleanUpSchemas()
 {
