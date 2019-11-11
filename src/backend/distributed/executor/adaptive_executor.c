@@ -708,9 +708,9 @@ AdaptiveExecutor(CitusScanState *scanState)
 
 	FinishDistributedExecution(execution);
 
-	if (hasDependedJobs)
+	if (hasDependedJobs && SubPlanLevel == 0)
 	{
-		/* CleanUpSchemas(); */
+		CleanUpSchemas();
 	}
 
 	if (SortReturning && distributedPlan->hasReturning)
@@ -1193,19 +1193,27 @@ TaskListRequires2PC(List *taskList)
 static bool
 ReadOnlyTask(TaskType taskType)
 {
-	if (taskType == ROUTER_TASK || taskType == SQL_TASK || taskType ==
-		MAP_OUTPUT_FETCH_TASK ||
-		taskType == MAP_TASK || taskType == MERGE_TASK)
+	switch (taskType)
 	{
-		/*
-		 * TODO: We currently do not execute modifying CTEs via ROUTER_TASK/SQL_TASK.
-		 * When we implement it, we should either not use the mentioned task types for
-		 * modifying CTEs detect them here.
-		 */
-		return true;
-	}
+		case ROUTER_TASK:
+		case SQL_TASK:
+		case MAP_OUTPUT_FETCH_TASK:
+		case MAP_TASK:
+		case MERGE_TASK:
+		{
+			/*
+			 * TODO: We currently do not execute modifying CTEs via ROUTER_TASK/SQL_TASK.
+			 * When we implement it, we should either not use the mentioned task types for
+			 * modifying CTEs detect them here.
+			 */
+			return true;
+		}
 
-	return false;
+		default:
+		{
+			return false;
+		}
+	}
 }
 
 

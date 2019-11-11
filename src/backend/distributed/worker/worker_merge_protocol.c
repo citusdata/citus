@@ -60,6 +60,9 @@ PG_FUNCTION_INFO_V1(worker_cleanup_job_schema_cache);
 PG_FUNCTION_INFO_V1(worker_create_schema);
 
 
+/*
+ * worker_create_schema creates a schema with the given job id in local.
+ */ 
 Datum
 worker_create_schema(PG_FUNCTION_ARGS)
 {
