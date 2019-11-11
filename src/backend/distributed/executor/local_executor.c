@@ -241,7 +241,7 @@ ExtractLocalAndRemoteTasks(bool readOnly, List *taskList, List **localTaskList,
 		}
 		else
 		{
-			Task *localTask = copyObject(task);
+			Task *localTask = NULL;
 			Task *remoteTask = NULL;
 
 			/*
@@ -250,6 +250,9 @@ ExtractLocalAndRemoteTasks(bool readOnly, List *taskList, List **localTaskList,
 			 * prefer to use local placement, and require remote placements only for
 			 * modifications.
 			 */
+			task->partiallyLocalOrRemote = true;
+
+			localTask = copyObject(task);
 
 			localTask->taskPlacementList = localTaskPlacementList;
 			*localTaskList = lappend(*localTaskList, localTask);

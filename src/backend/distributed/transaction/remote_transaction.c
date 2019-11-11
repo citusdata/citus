@@ -236,8 +236,8 @@ StartRemoteTransactionCommit(MultiConnection *connection)
 		StringInfoData command;
 
 		initStringInfo(&command);
-		appendStringInfo(&command, "COMMIT PREPARED '%s'",
-						 transaction->preparedName);
+		appendStringInfo(&command, "COMMIT PREPARED %s",
+						 quote_literal_cstr(transaction->preparedName));
 
 		transaction->transactionState = REMOTE_TRANS_2PC_COMMITTING;
 
@@ -371,8 +371,8 @@ StartRemoteTransactionAbort(MultiConnection *connection)
 		ForgetResults(connection);
 
 		initStringInfo(&command);
-		appendStringInfo(&command, "ROLLBACK PREPARED '%s'",
-						 transaction->preparedName);
+		appendStringInfo(&command, "ROLLBACK PREPARED %s",
+						 quote_literal_cstr(transaction->preparedName));
 
 		if (!SendRemoteCommand(connection, command.data))
 		{
@@ -497,8 +497,8 @@ StartRemoteTransactionPrepare(struct MultiConnection *connection)
 	}
 
 	initStringInfo(&command);
-	appendStringInfo(&command, "PREPARE TRANSACTION '%s'",
-					 transaction->preparedName);
+	appendStringInfo(&command, "PREPARE TRANSACTION %s",
+					 quote_literal_cstr(transaction->preparedName));
 
 	if (!SendRemoteCommand(connection, command.data))
 	{
@@ -1314,8 +1314,6 @@ CheckRemoteTransactionsHealth(void)
  * The connection number is used to distinguish connections made to a node
  * within the same transaction.
  *
- * NB: we rely on the fact that we don't need to do full escaping on the names
- * generated here.
  */
 static void
 Assign2PCIdentifier(MultiConnection *connection)
@@ -1431,13 +1429,13 @@ WarnAboutLeakedPreparedTransaction(MultiConnection *connection, bool commit)
 
 	if (commit)
 	{
-		appendStringInfo(&command, "COMMIT PREPARED '%s'",
-						 transaction->preparedName);
+		appendStringInfo(&command, "COMMIT PREPARED %s",
+						 quote_literal_cstr(transaction->preparedName));
 	}
 	else
 	{
-		appendStringInfo(&command, "ROLLBACK PREPARED '%s'",
-						 transaction->preparedName);
+		appendStringInfo(&command, "ROLLBACK PREPARED %s",
+						 quote_literal_cstr(transaction->preparedName));
 	}
 
 	/* log a warning so the user may abort the transaction later */

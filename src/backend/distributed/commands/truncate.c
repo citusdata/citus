@@ -25,11 +25,12 @@
 #include "distributed/transaction_management.h"
 #include "distributed/worker_transaction.h"
 #include "storage/lmgr.h"
+#include "utils/builtins.h"
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
 
 
-#define LOCK_RELATION_IF_EXISTS "SELECT lock_relation_if_exists('%s', '%s');"
+#define LOCK_RELATION_IF_EXISTS "SELECT lock_relation_if_exists(%s, '%s');"
 
 
 /* Local functions forward declarations for unsupported command checks */
@@ -253,7 +254,8 @@ AcquireDistributedLockOnRelations(List *relationIdList, LOCKMODE lockMode)
 			ListCell *workerNodeCell = NULL;
 
 			appendStringInfo(lockRelationCommand, LOCK_RELATION_IF_EXISTS,
-							 qualifiedRelationName, lockModeText);
+							 quote_literal_cstr(qualifiedRelationName),
+							 lockModeText);
 
 			foreach(workerNodeCell, workerNodeList)
 			{

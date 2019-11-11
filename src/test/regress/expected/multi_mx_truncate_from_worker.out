@@ -5,8 +5,8 @@ SET citus.next_placement_id TO 2380000;
 SET citus.shard_replication_factor TO 1;
 SET citus.shard_count TO 6;
 SET citus.replication_model TO streaming;
-CREATE TABLE referece_table(id int PRIMARY KEY);
-SELECT create_reference_table('referece_table');
+CREATE TABLE "refer'ence_table"(id int PRIMARY KEY);
+SELECT create_reference_table('refer''ence_table');
  create_reference_table 
 ------------------------
  
@@ -19,8 +19,8 @@ SELECT create_distributed_table('on_update_fkey_table', 'id');
  
 (1 row)
 
-ALTER TABLE on_update_fkey_table ADD CONSTRAINT fkey FOREIGN KEY(value_1) REFERENCES referece_table(id) ON UPDATE CASCADE;
-INSERT INTO referece_table SELECT i FROM generate_series(0, 100) i;
+ALTER TABLE on_update_fkey_table ADD CONSTRAINT fkey FOREIGN KEY(value_1) REFERENCES "refer'ence_table"(id) ON UPDATE CASCADE;
+INSERT INTO "refer'ence_table" SELECT i FROM generate_series(0, 100) i;
 INSERT INTO on_update_fkey_table SELECT i, i % 100  FROM generate_series(0, 1000) i;
 -- first, make sure that truncate from the coordinator workers as expected
 TRUNCATE on_update_fkey_table;
@@ -33,7 +33,7 @@ SELECT count(*) FROM on_update_fkey_table;
 -- fill the table again
 INSERT INTO on_update_fkey_table SELECT i, i % 100  FROM generate_series(0, 1000) i;
 -- now, show that TRUNCATE CASCADE works expected from the coordinator
-TRUNCATE referece_table CASCADE;
+TRUNCATE "refer'ence_table" CASCADE;
 NOTICE:  truncate cascades to table "on_update_fkey_table"
 SELECT count(*) FROM on_update_fkey_table;
  count 
@@ -41,14 +41,14 @@ SELECT count(*) FROM on_update_fkey_table;
      0
 (1 row)
 
-SELECT count(*) FROM referece_table;
+SELECT count(*) FROM "refer'ence_table";
  count 
 -------
      0
 (1 row)
 
 -- load some data for the next tests
-INSERT INTO referece_table SELECT i FROM generate_series(0, 100) i;
+INSERT INTO "refer'ence_table" SELECT i FROM generate_series(0, 100) i;
 INSERT INTO on_update_fkey_table SELECT i, i % 100  FROM generate_series(0, 1000) i;
 -- make sure that DDLs along with TRUNCATE worker fine
 BEGIN;
@@ -71,10 +71,10 @@ SELECT count(*) FROM on_update_fkey_table;
      0
 (1 row)
 
--- load some data 
+-- load some data
 INSERT INTO on_update_fkey_table SELECT i, i % 100  FROM generate_series(0, 1000) i;
 -- now, show that TRUNCATE CASCADE works expected from the worker
-TRUNCATE referece_table CASCADE;
+TRUNCATE "refer'ence_table" CASCADE;
 NOTICE:  truncate cascades to table "on_update_fkey_table"
 SELECT count(*) FROM on_update_fkey_table;
  count 
@@ -82,7 +82,7 @@ SELECT count(*) FROM on_update_fkey_table;
      0
 (1 row)
 
-SELECT count(*) FROM referece_table;
+SELECT count(*) FROM "refer'ence_table";
  count 
 -------
      0
@@ -94,20 +94,20 @@ BEGIN;
 ROLLBACK;
 -- test within transaction blocks
 BEGIN;
-	TRUNCATE referece_table CASCADE;
+	TRUNCATE "refer'ence_table" CASCADE;
 NOTICE:  truncate cascades to table "on_update_fkey_table"
 ROLLBACK;
 -- test with sequential mode and CASCADE
 BEGIN;
 	SET LOCAL citus.multi_shard_modify_mode TO sequential;
 	TRUNCATE on_update_fkey_table;
-	TRUNCATE referece_table CASCADE;
+	TRUNCATE "refer'ence_table" CASCADE;
 NOTICE:  truncate cascades to table "on_update_fkey_table"
 ROLLBACK;
 -- fill some data for the next test
 \c - - - :master_port
 SET search_path TO 'truncate_from_workers';
-INSERT INTO referece_table SELECT i FROM generate_series(0, 100) i;
+INSERT INTO "refer'ence_table" SELECT i FROM generate_series(0, 100) i;
 \c - - - :worker_1_port
 SET search_path TO 'truncate_from_workers';
 -- make sure that DMLs-SELECTs works along with TRUNCATE worker fine
@@ -129,7 +129,7 @@ BEGIN;
 ROLLBACK;
 RESET client_min_messages;
 \c - - - :master_port
--- also test the infrastructure that is used for supporting 
+-- also test the infrastructure that is used for supporting
 -- TRUNCATE from worker nodes
 -- should fail since it is not in transaction block
 SELECT lock_relation_if_exists('on_update_fkey_table', 'ACCESS SHARE');
@@ -240,6 +240,6 @@ BEGIN;
 COMMIT;
 DROP SCHEMA truncate_from_workers CASCADE;
 NOTICE:  drop cascades to 2 other objects
-DETAIL:  drop cascades to table truncate_from_workers.referece_table
+DETAIL:  drop cascades to table truncate_from_workers."refer'ence_table"
 drop cascades to table truncate_from_workers.on_update_fkey_table
 SET search_path TO public;

@@ -75,7 +75,8 @@ typedef enum
 	AGGREGATE_HLL_ADD = 16,
 	AGGREGATE_HLL_UNION = 17,
 	AGGREGATE_TOPN_ADD_AGG = 18,
-	AGGREGATE_TOPN_UNION_AGG = 19
+	AGGREGATE_TOPN_UNION_AGG = 19,
+	AGGREGATE_ANY_VALUE = 20
 } AggregateType;
 
 
@@ -122,7 +123,8 @@ static const char *const AggregateNames[] = {
 	"json_agg", "json_object_agg",
 	"bit_and", "bit_or", "bool_and", "bool_or", "every",
 	"hll_add_agg", "hll_union_agg",
-	"topn_add_agg", "topn_union_agg"
+	"topn_add_agg", "topn_union_agg",
+	"any_value"
 };
 
 

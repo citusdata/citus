@@ -621,6 +621,31 @@ COMMIT;
 -- Citus currently doesn't allow using task_assignment_policy for intermediate results
 WITH distributed_local_mixed AS (INSERT INTO reference_table VALUES (1000) RETURNING *) SELECT * FROM distributed_local_mixed;
 
+-- clean the table for the next tests
+SET search_path TO local_shard_execution;
+TRUNCATE distributed_table CASCADE;
+
+-- load some data on a remote shard
+INSERT INTO reference_table (key) VALUES (1), (2);
+INSERT INTO distributed_table (key) VALUES (2);
+BEGIN;
+    -- local execution followed by a distributed query
+    INSERT INTO distributed_table (key) VALUES (1);
+    DELETE FROM distributed_table RETURNING key;
+COMMIT;
+
+-- a similar test with a reference table
+TRUNCATE reference_table CASCADE;
+
+-- load some data on a remote shard
+INSERT INTO reference_table (key) VALUES (2);
+BEGIN;
+    -- local execution followed by a distributed query
+    INSERT INTO reference_table (key) VALUES (1);
+    DELETE FROM reference_table RETURNING key;
+COMMIT;
+
+
 \c - - - :master_port
 
 -- local execution with custom type 
