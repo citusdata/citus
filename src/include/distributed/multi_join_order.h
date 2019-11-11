@@ -82,6 +82,8 @@ extern bool EnableSingleHashRepartitioning;
 /* Function declaration for determining table join orders */
 extern List * JoinExprList(FromExpr *fromExpr);
 extern List * JoinOrderList(List *rangeTableEntryList, List *joinClauseList);
+extern bool IsApplicableJoinClause(List *leftTableIdList, uint32 rightTableId,
+								   OpExpr *joinClause);
 extern List * ApplicableJoinClauses(List *leftTableIdList, uint32 rightTableId,
 									List *joinClauseList);
 extern OpExpr * SinglePartitionJoinClause(Var *partitionColumn,

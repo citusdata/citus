@@ -66,5 +66,5 @@ INSERT INTO order_line SELECT c, c, c, c, c, NULL, c, c, c, 'abc' FROM generate_
      AND mod((s_w_id * s_i_id),10000) = su_suppkey
 ORDER BY 1,2,3,4;
 
-SET LOCAL client_min_messages TO WARNING;
+SET client_min_messages TO WARNING;
 DROP SCHEMA ch_bench_join_expr CASCADE;

@@ -209,7 +209,7 @@ ExtractLeftMostRangeTableIndex(Node *node, int *rangeTableIndex)
 
 
 /*
- * JoinOnColumns determines whether two columns are joined directly with an equi-join.
+ * JoinOnColumns determines whether two columns are joined by a given join clause list.
  */
 static bool
 JoinOnColumns(Var *currentColumn, Var *candidateColumn, List *joinClauseList)
@@ -227,23 +227,14 @@ JoinOnColumns(Var *currentColumn, Var *candidateColumn, List *joinClauseList)
 	foreach(joinClauseCell, joinClauseList)
 	{
 		OpExpr *joinClause = castNode(OpExpr, lfirst(joinClauseCell));
-		Var *leftColumn = NULL;
-		Var *rightColumn = NULL;
-		if (!OperatorImplementsEquality(joinClause->opno))
-		{
-			/* this clause is not an equi-join, the rest assumes an equi-join */
-			continue;
-		}
+		Var *leftColumn = LeftColumnOrNULL(joinClause);
+		Var *rightColumn = RightColumnOrNULL(joinClause);
 
 		/*
-		 * If the join is not a `columnA = columnB` any of the left/right columns will be
-		 * NULL, since we assert no NULL's in the input we know they will not equal on
-		 * this clause
+		 * Check if both join columns and both partition key columns match, since the
+		 * current and candidate column's can't be NULL we know they wont match if either
+		 * of the columns resolved to NULL above.
 		 */
-		leftColumn = LeftColumnOrNULL(joinClause);
-		rightColumn = RightColumnOrNULL(joinClause);
-
-		/* check if both join columns and both partition key columns match */
 		if (equal(leftColumn, currentColumn) &&
 			equal(rightColumn, candidateColumn))
 		{
@@ -1023,15 +1014,9 @@ SinglePartitionJoinClause(Var *partitionColumn, List *applicableJoinClauses)
 
 		/*
 		 * We first check if partition column matches either of the join columns
-		 * and if it does, we then check if the join types match. If the types are
-		 * different, we would use different hash functions for the two sides which would
-		 * cause incorrectly repartition the data.
-		 *
-		 * Be aware that this is not about the column types, as the columns could be
-		 * wrapped in operations or expressions. However because we have the target
-		 * partition column directly (without transformations) the other side could be
-		 * partitioned towards this partition once the column transformation has been
-		 * applied.
+		 * and if it does, we then check if the join column types match. If the
+		 * types are different, we will use different hash functions for the two
+		 * column types, and will incorrectly repartition the data.
 		 */
 		if (equal(leftColumn, partitionColumn) || equal(rightColumn, partitionColumn))
 		{
@@ -1041,11 +1026,6 @@ SinglePartitionJoinClause(Var *partitionColumn, List *applicableJoinClauses)
 			}
 			else
 			{
-				/*
-				 * TODO I hope postgres would actually enforce the above constraint which
-				 * makes this statement unreachable. We should find a query that would
-				 * trigger this side to proof this is not the case
-				 */
 				ereport(DEBUG1, (errmsg("single partition column types do not match")));
 			}
 		}
@@ -1066,19 +1046,18 @@ static JoinOrderNode *
 DualPartitionJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 				  List *applicableJoinClauses, JoinType joinType)
 {
-	/* Because of the dual partition, anchor table information got lost */
-	TableEntry *anchorTable = NULL;
-	JoinOrderNode *nextJoinNode = NULL;
-
 	OpExpr *joinClause = DualPartitionJoinClause(applicableJoinClauses);
 	if (joinClause)
 	{
-		nextJoinNode = MakeJoinOrderNode(candidateTable, DUAL_PARTITION_JOIN,
-										 NULL, REDISTRIBUTE_BY_HASH,
-										 anchorTable);
+		/* because of the dual partition, anchor table and partition column get lost */
+		return MakeJoinOrderNode(candidateTable,
+								 DUAL_PARTITION_JOIN,
+								 NULL,
+								 REDISTRIBUTE_BY_HASH,
+								 NULL);
 	}
 
-	return nextJoinNode;
+	return NULL;
 }
 
 
@@ -1128,14 +1107,10 @@ CartesianProduct(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 				 List *applicableJoinClauses, JoinType joinType)
 {
 	/* Because of the cartesian product, anchor table information got lost */
-	TableEntry *anchorTable = NULL;
-
-	JoinOrderNode *nextJoinNode = MakeJoinOrderNode(candidateTable, CARTESIAN_PRODUCT,
-													currentJoinNode->partitionColumn,
-													currentJoinNode->partitionMethod,
-													anchorTable);
-
-	return nextJoinNode;
+	return MakeJoinOrderNode(candidateTable, CARTESIAN_PRODUCT,
+							 currentJoinNode->partitionColumn,
+							 currentJoinNode->partitionMethod,
+							 NULL);
 }
 
 
@@ -1158,6 +1133,46 @@ MakeJoinOrderNode(TableEntry *tableEntry, JoinRuleType joinRuleType,
 
 
 /*
+ * IsApplicableJoinClause tests if the current joinClause is applicable to the join at
+ * hand.
+ *
+ *   Given a list of left hand tables and a candidate right hand table the join clause is
+ *   valid if atleast 1 column is from the right hand table AND all columns can be found
+ *   in either the list of tables on the left *or* in the right hand table.
+ */
+bool
+IsApplicableJoinClause(List *leftTableIdList, uint32 rightTableId, OpExpr *joinClause)
+{
+	List *varList = pull_var_clause_default((Node *) joinClause);
+	Var *var = NULL;
+	bool joinContainsRightTable = false;
+	foreach_ptr(var, varList)
+	{
+		uint32 columnTableId = var->varno;
+		if (rightTableId == columnTableId)
+		{
+			joinContainsRightTable = true;
+		}
+		else if (!list_member_int(leftTableIdList, columnTableId))
+		{
+			/*
+			 * We couldn't find this column either on the right hand side (first if
+			 * statement), nor in the list on the left. This join clause involves a table
+			 * not yet available during the candidate join.
+			 */
+			return false;
+		}
+	}
+
+	/*
+	 * All columns referenced in this clause are available during this join, now the join
+	 * is applicable if we found our candidate table as well
+	 */
+	return joinContainsRightTable;
+}
+
+
+/*
  * ApplicableJoinClauses finds all join clauses that apply between the given
  * left table list and the right table, and returns these found join clauses.
  */
@@ -1173,36 +1188,7 @@ ApplicableJoinClauses(List *leftTableIdList, uint32 rightTableId, List *joinClau
 	foreach(joinClauseCell, joinClauseList)
 	{
 		OpExpr *joinClause = castNode(OpExpr, lfirst(joinClauseCell));
-		List *varList = pull_var_clause_default((Node *) joinClause);
-		Var *var = NULL;
-		bool joinContainsAllVars = false;
-		bool joinContainsRightTable = false;
-
-		/*
-		 * verify all columns in join clause are available in this relation, if we find a
-		 * column that is not from the right table and not in the list of left tables we
-		 * know we don't have all column references for this clause yet.
-		 *
-		 * TODO: extract to function for easy readability
-		 */
-		joinContainsAllVars = true;
-		joinContainsRightTable = false;
-		foreach_ptr(var, varList)
-		{
-			uint32 columnTableId = var->varno;
-			if (rightTableId != columnTableId &&
-				!list_member_int(leftTableIdList, columnTableId))
-			{
-				joinContainsAllVars = false;
-			}
-
-			if (columnTableId == rightTableId)
-			{
-				joinContainsRightTable = true;
-			}
-		}
-
-		if (joinContainsAllVars && joinContainsRightTable)
+		if (IsApplicableJoinClause(leftTableIdList, rightTableId, joinClause))
 		{
 			applicableJoinClauses = lappend(applicableJoinClauses, joinClause);
 		}
@@ -1212,6 +1198,7 @@ ApplicableJoinClauses(List *leftTableIdList, uint32 rightTableId, List *joinClau
 }
 
 
+/* Returns the left expression in the given join clause. */
 Node *
 LeftHandExpr(OpExpr *joinClause)
 {
@@ -1253,6 +1240,7 @@ LeftColumnOrNULL(OpExpr *joinClause)
 }
 
 
+/* Returns the right expression in the given join clause. */
 Node *
 RightHandExpr(OpExpr *joinClause)
 {

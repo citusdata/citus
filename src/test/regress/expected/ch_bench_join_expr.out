@@ -81,10 +81,5 @@ ORDER BY 1,2,3,4;
           9 |      3 |      3 |              3
 (4 rows)
 
-SET LOCAL client_min_messages TO WARNING;
-WARNING:  SET LOCAL can only be used in transaction blocks
+SET client_min_messages TO WARNING;
 DROP SCHEMA ch_bench_join_expr CASCADE;
-NOTICE:  drop cascades to 3 other objects
-DETAIL:  drop cascades to table order_line
-drop cascades to table stock
-drop cascades to table supplier
