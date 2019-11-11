@@ -139,6 +139,11 @@ BuildSelectStatement(Query *masterQuery, List *masterTargetList, CustomScan *rem
 {
 	/* top level select query should have only one range table entry */
 	Assert(list_length(masterQuery->rtable) == 1);
+	Agg *aggregationPlan = NULL;
+	Plan *topLevelPlan = NULL;
+	List *sortClauseList = copyObject(masterQuery->sortClause);
+	List *columnNameList = NIL;
+	TargetEntry *targetEntry = NULL;
 
 	PlannerGlobal *glob = makeNode(PlannerGlobal);
 	PlannerInfo *root = makeNode(PlannerInfo);
@@ -159,8 +164,6 @@ BuildSelectStatement(Query *masterQuery, List *masterTargetList, CustomScan *rem
 	remoteScan->custom_scan_tlist = masterTargetList;
 
 	/* (2) add an aggregation plan if needed */
-	Agg *aggregationPlan = NULL;
-	Plan *topLevelPlan = NULL;
 	if (masterQuery->hasAggs || masterQuery->groupClause)
 	{
 		remoteScan->scan.plan.targetlist = masterTargetList;
@@ -203,7 +206,6 @@ BuildSelectStatement(Query *masterQuery, List *masterTargetList, CustomScan *rem
 	 * on hashable property of columns in distinct clause. If there is order by
 	 * clause, it is handled after distinct planning.
 	 */
-	List *sortClauseList = copyObject(masterQuery->sortClause);
 	if (masterQuery->hasDistinctOn)
 	{
 		ListCell *distinctCell = NULL;
@@ -268,8 +270,6 @@ BuildSelectStatement(Query *masterQuery, List *masterTargetList, CustomScan *rem
 	/*
 	 * (7) Replace rangetable with one with nice names to show in EXPLAIN plans
 	 */
-	List *columnNameList = NIL;
-	TargetEntry *targetEntry = NULL;
 	foreach_ptr(targetEntry, masterTargetList)
 	{
 		columnNameList = lappend(columnNameList, makeString(targetEntry->resname));
@@ -366,7 +366,9 @@ BuildAggregatePlan(PlannerInfo *root, Query *masterQuery, Plan *subPlan)
 {
 	/* assert that we need to build an aggregate plan */
 	Assert(masterQuery->hasAggs || masterQuery->groupClause);
-
+	AggClauseCosts aggregateCosts;
+	AggStrategy aggregateStrategy = AGG_PLAIN;
+	List *groupColumnList = masterQuery->groupClause;
 	List *aggregateTargetList = masterQuery->targetList;
 
 	/*
@@ -388,19 +390,15 @@ BuildAggregatePlan(PlannerInfo *root, Query *masterQuery, Plan *subPlan)
 
 
 	/* estimate aggregate execution costs */
-	AggClauseCosts aggregateCosts;
 	memset(&aggregateCosts, 0, sizeof(AggClauseCosts));
 	get_agg_clause_costs(root, (Node *) aggregateTargetList, AGGSPLIT_SIMPLE,
 						 &aggregateCosts);
 
 	get_agg_clause_costs(root, (Node *) havingQual, AGGSPLIT_SIMPLE, &aggregateCosts);
 
-	List *groupColumnList = masterQuery->groupClause;
-	uint32 groupColumnCount = list_length(groupColumnList);
 
 	/* if we have grouping, then initialize appropriate information */
-	AggStrategy aggregateStrategy = AGG_PLAIN;
-	if (groupColumnCount > 0)
+	if (list_length(groupColumnList) > 0)
 	{
 		bool groupingIsHashable = grouping_is_hashable(groupColumnList);
 		bool groupingIsSortable = grouping_is_sortable(groupColumnList);
