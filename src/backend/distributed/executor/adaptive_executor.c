@@ -710,7 +710,7 @@ AdaptiveExecutor(CitusScanState *scanState)
 
 	if (hasDependedJobs)
 	{
-		// CleanUpSchemas();
+		/* CleanUpSchemas(); */
 	}
 
 	if (SortReturning && distributedPlan->hasReturning)

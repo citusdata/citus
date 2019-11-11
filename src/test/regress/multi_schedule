@@ -104,7 +104,8 @@ test: multi_join_order_tpch_repartition
 # new shards before these tests, as they expect specific shard identifiers in
 # the output.
 # ----------
-test: multi_repartition_join_planning multi_repartition_join_pruning multi_repartition_join_task_assignment adaptive_executor_repartition
+test: multi_repartition_join_planning multi_repartition_join_pruning multi_repartition_join_task_assignment
+test: adaptive_executor_repartition
 
 # ---------
 # Tests that modify data should run sequentially
