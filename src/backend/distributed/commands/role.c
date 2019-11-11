@@ -1,15 +1,14 @@
-#include "postgres.h"
-
-#include "nodes/parsenodes.h"
-#include "utils/syscache.h"
+#include "access/heapam.h"
 #include "access/table.h"
 #include "catalog/pg_authid.h"
-#include "utils/rel.h"
-#include "utils/builtins.h"
-#include "access/heapam.h"
-#include "distributed/worker_transaction.h"
 #include "distributed/commands/utility_hook.h"
 #include "distributed/master_protocol.h"
+#include "distributed/worker_transaction.h"
+#include "nodes/parsenodes.h"
+#include "postgres.h"
+#include "utils/builtins.h"
+#include "utils/rel.h"
+#include "utils/syscache.h"
 
 List * ProcessAlterRoleStmt(AlterRoleStmt *stmt, const char *queryString);
 static const char * CreateSetPasswordQueryForWorkerNodes(const char *rolename);

@@ -9,13 +9,13 @@
  *-------------------------------------------------------------------------
  */
 
-#include "postgres.h"
-#include "fmgr.h"
-#include "utils/builtins.h"
 #include "distributed/commands/utility_hook.h"
+#include "distributed/worker_protocol.h"
+#include "fmgr.h"
+#include "postgres.h"
 #include "tcop/dest.h"
 #include "tcop/utility.h"
-#include "distributed/worker_protocol.h"
+#include "utils/builtins.h"
 
 PG_FUNCTION_INFO_V1(set_password_if_role_exists);
 
