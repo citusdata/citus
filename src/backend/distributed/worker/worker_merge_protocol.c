@@ -330,7 +330,7 @@ worker_cleanup_job_schema_cache(PG_FUNCTION_ARGS)
 	heap_endscan(scanDescriptor);
 	heap_close(pgNamespace, AccessExclusiveLock);
 
-	TrackerCleanupJobDirectories();
+	// TrackerCleanupJobDirectories();
 
 
 	PG_RETURN_VOID();
