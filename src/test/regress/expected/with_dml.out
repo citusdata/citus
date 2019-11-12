@@ -32,6 +32,8 @@ WITH ids_to_delete AS (
 DELETE FROM reference_table WHERE id IN (SELECT tenant_id FROM ids_to_delete); 
 DEBUG:  generating subplan 4_1 for CTE ids_to_delete: SELECT tenant_id FROM with_dml.distributed_table WHERE (dept OPERATOR(pg_catalog.=) 1)
 DEBUG:  Plan 4 query after replacing subqueries and CTEs: DELETE FROM with_dml.reference_table WHERE (id OPERATOR(pg_catalog.=) ANY (SELECT ids_to_delete.tenant_id FROM (SELECT intermediate_result.tenant_id FROM read_intermediate_result('4_1'::text, 'binary'::citus_copy_format) intermediate_result(tenant_id text)) ids_to_delete))
+DEBUG:  4_1 is broadcasted to localhost:57637
+DEBUG:  4_1 is broadcasted to localhost:57638
 -- update the name of the users whose dept is 2
 WITH ids_to_update AS (
   SELECT tenant_id FROM distributed_table WHERE dept = 2
@@ -39,6 +41,8 @@ WITH ids_to_update AS (
 UPDATE reference_table SET name = 'new_' || name WHERE id IN (SELECT tenant_id FROM ids_to_update);
 DEBUG:  generating subplan 6_1 for CTE ids_to_update: SELECT tenant_id FROM with_dml.distributed_table WHERE (dept OPERATOR(pg_catalog.=) 2)
 DEBUG:  Plan 6 query after replacing subqueries and CTEs: UPDATE with_dml.reference_table SET name = ('new_'::text OPERATOR(pg_catalog.||) name) WHERE (id OPERATOR(pg_catalog.=) ANY (SELECT ids_to_update.tenant_id FROM (SELECT intermediate_result.tenant_id FROM read_intermediate_result('6_1'::text, 'binary'::citus_copy_format) intermediate_result(tenant_id text)) ids_to_update))
+DEBUG:  6_1 is broadcasted to localhost:57637
+DEBUG:  6_1 is broadcasted to localhost:57638
 -- now the CTE is also modifying
 WITH ids_deleted_3 AS 
 (
@@ -53,6 +57,10 @@ DEBUG:  generating subplan 8_1 for CTE ids_deleted_3: DELETE FROM with_dml.distr
 DEBUG:  generating subplan 8_2 for CTE ids_deleted_4: DELETE FROM with_dml.distributed_table WHERE (dept OPERATOR(pg_catalog.=) 4) RETURNING tenant_id
 DEBUG:  generating subplan 8_3 for subquery SELECT ids_deleted_3.tenant_id FROM (SELECT intermediate_result.tenant_id FROM read_intermediate_result('8_1'::text, 'binary'::citus_copy_format) intermediate_result(tenant_id text)) ids_deleted_3 UNION SELECT ids_deleted_4.tenant_id FROM (SELECT intermediate_result.tenant_id FROM read_intermediate_result('8_2'::text, 'binary'::citus_copy_format) intermediate_result(tenant_id text)) ids_deleted_4
 DEBUG:  Plan 8 query after replacing subqueries and CTEs: DELETE FROM with_dml.reference_table WHERE (id OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.tenant_id FROM read_intermediate_result('8_3'::text, 'binary'::citus_copy_format) intermediate_result(tenant_id text)))
+DEBUG:  8_1 is broadcasted to localhost:57638
+DEBUG:  8_2 is broadcasted to localhost:57638
+DEBUG:  8_3 is broadcasted to localhost:57637
+DEBUG:  8_3 is broadcasted to localhost:57638
 -- now the final UPDATE command is pushdownable
 WITH ids_to_delete AS 
 (
@@ -70,6 +78,8 @@ WHERE
 	AND EXISTS (SELECT * FROM ids_to_delete);
 DEBUG:  generating subplan 12_1 for CTE ids_to_delete: SELECT tenant_id FROM with_dml.distributed_table WHERE (dept OPERATOR(pg_catalog.=) 5)
 DEBUG:  Plan 12 query after replacing subqueries and CTEs: UPDATE with_dml.distributed_table SET dept = (distributed_table.dept OPERATOR(pg_catalog.+) 1) FROM (SELECT intermediate_result.tenant_id FROM read_intermediate_result('12_1'::text, 'binary'::citus_copy_format) intermediate_result(tenant_id text)) ids_to_delete, (SELECT distributed_table_1.tenant_id FROM with_dml.distributed_table distributed_table_1 WHERE ((distributed_table_1.tenant_id)::integer OPERATOR(pg_catalog.<) 60)) some_tenants WHERE ((some_tenants.tenant_id OPERATOR(pg_catalog.=) ids_to_delete.tenant_id) AND (distributed_table.tenant_id OPERATOR(pg_catalog.=) some_tenants.tenant_id) AND (EXISTS (SELECT ids_to_delete_1.tenant_id FROM (SELECT intermediate_result.tenant_id FROM read_intermediate_result('12_1'::text, 'binary'::citus_copy_format) intermediate_result(tenant_id text)) ids_to_delete_1)))
+DEBUG:  12_1 is broadcasted to localhost:57637
+DEBUG:  12_1 is broadcasted to localhost:57638
 -- this query errors out since we've some hard
 -- errors in the INSERT ... SELECT pushdown
 -- which prevents to fallback to recursive planning 
@@ -100,6 +110,9 @@ DEBUG:  Collecting INSERT ... SELECT results on coordinator
 DEBUG:  generating subplan 16_1 for CTE ids_to_insert: SELECT (((tenant_id)::integer OPERATOR(pg_catalog.*) 100))::text AS tenant_id FROM with_dml.distributed_table WHERE (dept OPERATOR(pg_catalog.>) 7)
 DEBUG:  generating subplan 16_2 for subquery SELECT DISTINCT ids_to_insert.tenant_id FROM (SELECT intermediate_result.tenant_id FROM read_intermediate_result('16_1'::text, 'binary'::citus_copy_format) intermediate_result(tenant_id text)) ids_to_insert, with_dml.distributed_table WHERE (distributed_table.tenant_id OPERATOR(pg_catalog.<) ids_to_insert.tenant_id)
 DEBUG:  Plan 16 query after replacing subqueries and CTEs: SELECT tenant_id FROM (SELECT intermediate_result.tenant_id FROM read_intermediate_result('16_2'::text, 'binary'::citus_copy_format) intermediate_result(tenant_id text)) citus_insert_select_subquery
+DEBUG:  16_1 is broadcasted to localhost:57637
+DEBUG:  16_1 is broadcasted to localhost:57638
+DEBUG:  16_2 is broadcasted to localhost:57637
 -- not a very meaningful query
 -- but has two modifying CTEs along with another
 -- modify statement
@@ -136,6 +149,9 @@ DEBUG:  generating subplan 20_1 for CTE copy_to_other_table: INSERT INTO with_dm
 DEBUG:  generating subplan 20_2 for CTE main_table_deleted: DELETE FROM with_dml.distributed_table WHERE ((dept OPERATOR(pg_catalog.<) 10) AND (NOT (EXISTS (SELECT 1 FROM with_dml.second_distributed_table WHERE ((second_distributed_table.dept OPERATOR(pg_catalog.=) 1) AND (second_distributed_table.tenant_id OPERATOR(pg_catalog.=) distributed_table.tenant_id)))))) RETURNING tenant_id, dept
 DEBUG:  generating subplan 20_3 for subquery SELECT main_table_deleted.tenant_id, main_table_deleted.dept FROM (SELECT intermediate_result.tenant_id, intermediate_result.dept FROM read_intermediate_result('20_2'::text, 'binary'::citus_copy_format) intermediate_result(tenant_id text, dept integer)) main_table_deleted EXCEPT SELECT copy_to_other_table.tenant_id, copy_to_other_table.dept FROM (SELECT intermediate_result.tenant_id, intermediate_result.dept FROM read_intermediate_result('20_1'::text, 'binary'::citus_copy_format) intermediate_result(tenant_id text, dept integer)) copy_to_other_table
 DEBUG:  Plan 20 query after replacing subqueries and CTEs: SELECT tenant_id, dept FROM (SELECT intermediate_result.tenant_id, intermediate_result.dept FROM read_intermediate_result('20_3'::text, 'binary'::citus_copy_format) intermediate_result(tenant_id text, dept integer)) citus_insert_select_subquery
+DEBUG:  20_1 is broadcasted to localhost:57638
+DEBUG:  20_2 is broadcasted to localhost:57638
+DEBUG:  20_3 is broadcasted to localhost:57637
 SET citus.force_max_query_parallelization TO off;
 -- CTE inside the UPDATE statement
 UPDATE 
@@ -147,6 +163,8 @@ SET dept =
 		WHERE dept = 8;
 DEBUG:  generating subplan 24_1 for CTE vals: SELECT DISTINCT (tenant_id)::integer AS tenant_id FROM with_dml.distributed_table
 DEBUG:  Plan 24 query after replacing subqueries and CTEs: UPDATE with_dml.second_distributed_table SET dept = (SELECT vals.tenant_id FROM (SELECT intermediate_result.tenant_id FROM read_intermediate_result('24_1'::text, 'binary'::citus_copy_format) intermediate_result(tenant_id integer)) vals WHERE (vals.tenant_id OPERATOR(pg_catalog.=) 8)) WHERE (dept OPERATOR(pg_catalog.=) 8)
+DEBUG:  24_1 is broadcasted to localhost:57637
+DEBUG:  24_1 is broadcasted to localhost:57638
 -- Subquery inside the UPDATE statement
 UPDATE 
 	second_distributed_table 
@@ -156,6 +174,8 @@ SET dept =
 		WHERE dept = 8;
 DEBUG:  generating subplan 26_1 for subquery SELECT DISTINCT (tenant_id)::integer AS tenant_id FROM with_dml.distributed_table WHERE (tenant_id OPERATOR(pg_catalog.=) '9'::text)
 DEBUG:  Plan 26 query after replacing subqueries and CTEs: UPDATE with_dml.second_distributed_table SET dept = (SELECT intermediate_result.tenant_id FROM read_intermediate_result('26_1'::text, 'binary'::citus_copy_format) intermediate_result(tenant_id integer)) WHERE (dept OPERATOR(pg_catalog.=) 8)
+DEBUG:  26_1 is broadcasted to localhost:57637
+DEBUG:  26_1 is broadcasted to localhost:57638
 -- delete all remaining tenants
 WITH ids_to_delete AS (
   SELECT tenant_id FROM distributed_table
@@ -163,6 +183,8 @@ WITH ids_to_delete AS (
 DELETE FROM distributed_table WHERE tenant_id = ANY(SELECT tenant_id FROM ids_to_delete);
 DEBUG:  generating subplan 28_1 for CTE ids_to_delete: SELECT tenant_id FROM with_dml.distributed_table
 DEBUG:  Plan 28 query after replacing subqueries and CTEs: DELETE FROM with_dml.distributed_table WHERE (tenant_id OPERATOR(pg_catalog.=) ANY (SELECT ids_to_delete.tenant_id FROM (SELECT intermediate_result.tenant_id FROM read_intermediate_result('28_1'::text, 'binary'::citus_copy_format) intermediate_result(tenant_id text)) ids_to_delete))
+DEBUG:  28_1 is broadcasted to localhost:57637
+DEBUG:  28_1 is broadcasted to localhost:57638
 WITH ids_to_delete AS (
   SELECT id FROM reference_table
 )

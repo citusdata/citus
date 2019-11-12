@@ -40,6 +40,7 @@ FROM
 DEBUG:  push down of limit count: 5
 DEBUG:  generating subplan 3_1 for subquery SELECT DISTINCT id FROM subquery_and_partitioning.partitioning_test LIMIT 5
 DEBUG:  Plan 3 query after replacing subqueries and CTEs: SELECT id FROM (SELECT intermediate_result.id FROM read_intermediate_result('3_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) foo ORDER BY id DESC
+DEBUG:  3_1 is broadcasted to localhost:57638
  id 
 ----
   4
@@ -71,6 +72,8 @@ DEBUG:  generating subplan 5_1 for subquery SELECT DISTINCT id FROM subquery_and
 DEBUG:  push down of limit count: 5
 DEBUG:  generating subplan 5_2 for subquery SELECT DISTINCT "time" FROM subquery_and_partitioning.partitioning_test LIMIT 5
 DEBUG:  Plan 5 query after replacing subqueries and CTEs: SELECT foo.id, bar."time" FROM (SELECT intermediate_result.id FROM read_intermediate_result('5_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) foo, (SELECT intermediate_result."time" FROM read_intermediate_result('5_2'::text, 'binary'::citus_copy_format) intermediate_result("time" date)) bar WHERE ((foo.id)::double precision OPERATOR(pg_catalog.=) date_part('day'::text, bar."time")) ORDER BY bar."time" DESC, foo.id
+DEBUG:  5_1 is broadcasted to localhost:57637
+DEBUG:  5_2 is broadcasted to localhost:57637
  id |    time    
 ----+------------
   3 | 03-03-2010
@@ -100,6 +103,8 @@ DEBUG:  push down of limit count: 5
 DEBUG:  generating subplan 8_1 for subquery SELECT DISTINCT "time" FROM subquery_and_partitioning.partitioning_test ORDER BY "time" DESC LIMIT 5
 DEBUG:  Plan 8 query after replacing subqueries and CTEs: SELECT foo."time", bar.id FROM (SELECT intermediate_result."time" FROM read_intermediate_result('8_1'::text, 'binary'::citus_copy_format) intermediate_result("time" date)) foo, (SELECT DISTINCT partitioning_test.id FROM subquery_and_partitioning.partitioning_test) bar WHERE (date_part('day'::text, foo."time") OPERATOR(pg_catalog.=) (bar.id)::double precision) ORDER BY bar.id DESC, foo."time" DESC LIMIT 3
 DEBUG:  push down of limit count: 3
+DEBUG:  8_1 is broadcasted to localhost:57637
+DEBUG:  8_1 is broadcasted to localhost:57638
     time    | id 
 ------------+----
  03-03-2010 |  3
@@ -130,6 +135,8 @@ DEBUG:  push down of limit count: 5
 DEBUG:  generating subplan 10_1 for subquery SELECT DISTINCT "time" FROM subquery_and_partitioning.partitioning_test ORDER BY "time" DESC LIMIT 5
 DEBUG:  Plan 10 query after replacing subqueries and CTEs: SELECT foo."time", bar.id, partitioning_test.id, partitioning_test.value_1, partitioning_test."time" FROM (SELECT intermediate_result."time" FROM read_intermediate_result('10_1'::text, 'binary'::citus_copy_format) intermediate_result("time" date)) foo, (SELECT DISTINCT partitioning_test_1.id FROM subquery_and_partitioning.partitioning_test partitioning_test_1) bar, subquery_and_partitioning.partitioning_test WHERE ((date_part('day'::text, foo."time") OPERATOR(pg_catalog.=) (bar.id)::double precision) AND (partitioning_test.id OPERATOR(pg_catalog.=) bar.id)) ORDER BY bar.id DESC, foo."time" DESC LIMIT 3
 DEBUG:  push down of limit count: 3
+DEBUG:  10_1 is broadcasted to localhost:57637
+DEBUG:  10_1 is broadcasted to localhost:57638
     time    | id | id | value_1 |    time    
 ------------+----+----+---------+------------
  03-03-2010 |  3 |  3 |       3 | 11-22-2017
@@ -142,6 +149,8 @@ WHERE
 	id IN (SELECT DISTINCT date_part('day', time) FROM partitioning_test);
 DEBUG:  generating subplan 12_1 for subquery SELECT DISTINCT date_part('day'::text, "time") AS date_part FROM subquery_and_partitioning.partitioning_test
 DEBUG:  Plan 12 query after replacing subqueries and CTEs: SELECT DISTINCT id FROM subquery_and_partitioning.partitioning_test WHERE ((id)::double precision OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.date_part FROM read_intermediate_result('12_1'::text, 'binary'::citus_copy_format) intermediate_result(date_part double precision)))
+DEBUG:  12_1 is broadcasted to localhost:57637
+DEBUG:  12_1 is broadcasted to localhost:57638
  id 
 ----
   3
@@ -163,6 +172,8 @@ DEBUG:  cannot use adaptive executor with repartition jobs
 HINT:  Since you enabled citus.enable_repartition_joins Citus chose to use task-tracker.
 DEBUG:  generating subplan 14_1 for subquery SELECT DISTINCT p1.value_1 FROM subquery_and_partitioning.partitioning_test p1, subquery_and_partitioning.partitioning_test p2 WHERE (p1.id OPERATOR(pg_catalog.=) p2.value_1)
 DEBUG:  Plan 14 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.value_1 FROM read_intermediate_result('14_1'::text, 'binary'::citus_copy_format) intermediate_result(value_1 integer)) foo, (SELECT users_table.user_id FROM public.users_table) bar WHERE (foo.value_1 OPERATOR(pg_catalog.=) bar.user_id)
+DEBUG:  14_1 is broadcasted to localhost:57637
+DEBUG:  14_1 is broadcasted to localhost:57638
  count 
 -------
     47
@@ -222,6 +233,16 @@ DEBUG:  generating subplan 16_2 for subquery SELECT DISTINCT events_table.user_i
 DEBUG:  generating subplan 16_3 for subquery SELECT count(*) AS cnt FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('16_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) cte, (SELECT intermediate_result.user_id FROM read_intermediate_result('16_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) foo WHERE (foo.user_id OPERATOR(pg_catalog.=) cte.user_id)
 DEBUG:  Plan 16 query after replacing subqueries and CTEs: SELECT cnt, user_id, "time", value_1, value_2, value_3, value_4 FROM (SELECT foo.cnt, users_table.user_id, users_table."time", users_table.value_1, users_table.value_2, users_table.value_3, users_table.value_4 FROM (SELECT intermediate_result.cnt FROM read_intermediate_result('16_3'::text, 'binary'::citus_copy_format) intermediate_result(cnt bigint)) foo, public.users_table WHERE (foo.cnt OPERATOR(pg_catalog.>) users_table.value_2)) subquery_and_ctes ORDER BY "time" DESC, cnt DESC, user_id DESC, value_1 DESC LIMIT 5
 DEBUG:  push down of limit count: 5
+DEBUG:  16_1 is broadcasted to localhost:57637
+DEBUG:  17_1 is broadcasted to localhost:57638
+DEBUG:  17_2 is broadcasted to localhost:57638
+DEBUG:  18_1 is broadcasted to localhost:57637
+DEBUG:  18_1 is broadcasted to localhost:57638
+DEBUG:  18_2 is broadcasted to localhost:57637
+DEBUG:  18_2 is broadcasted to localhost:57638
+DEBUG:  16_2 is broadcasted to localhost:57637
+DEBUG:  16_3 is broadcasted to localhost:57637
+DEBUG:  16_3 is broadcasted to localhost:57638
  cnt | user_id |              time               | value_1 | value_2 | value_3 | value_4 
 -----+---------+---------------------------------+---------+---------+---------+---------
  105 |       1 | Thu Nov 23 17:30:34.635085 2017 |       3 |       4 |       4 |        
@@ -278,6 +299,17 @@ DEBUG:  generating subplan 23_4 for subquery SELECT avg(events_table.event_type)
 DEBUG:  generating subplan 23_5 for subquery SELECT min(partitioning_test.value_1) AS min FROM (SELECT intermediate_result.avg_ev_type FROM read_intermediate_result('23_4'::text, 'binary'::citus_copy_format) intermediate_result(avg_ev_type numeric)) level_5, subquery_and_partitioning.partitioning_test WHERE (level_5.avg_ev_type OPERATOR(pg_catalog.=) (partitioning_test.id)::numeric) GROUP BY level_5.avg_ev_type
 DEBUG:  generating subplan 23_6 for subquery SELECT avg(level_6.min) AS avg FROM (SELECT intermediate_result.min FROM read_intermediate_result('23_5'::text, 'binary'::citus_copy_format) intermediate_result(min integer)) level_6, public.users_table WHERE (users_table.user_id OPERATOR(pg_catalog.=) level_6.min) GROUP BY users_table.value_1
 DEBUG:  Plan 23 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.avg FROM read_intermediate_result('23_6'::text, 'binary'::citus_copy_format) intermediate_result(avg numeric)) bar
+DEBUG:  23_1 is broadcasted to localhost:57637
+DEBUG:  23_1 is broadcasted to localhost:57638
+DEBUG:  23_2 is broadcasted to localhost:57637
+DEBUG:  23_2 is broadcasted to localhost:57638
+DEBUG:  23_3 is broadcasted to localhost:57637
+DEBUG:  23_3 is broadcasted to localhost:57638
+DEBUG:  23_4 is broadcasted to localhost:57637
+DEBUG:  23_4 is broadcasted to localhost:57638
+DEBUG:  23_5 is broadcasted to localhost:57637
+DEBUG:  23_5 is broadcasted to localhost:57638
+DEBUG:  23_6 is broadcasted to localhost:57638
  count 
 -------
      0

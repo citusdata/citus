@@ -39,6 +39,7 @@ extern void CitusExplainScan(CustomScanState *node, List *ancestors, struct
 extern TupleDesc ScanStateGetTupleDescriptor(CitusScanState *scanState);
 extern EState * ScanStateGetExecutorState(CitusScanState *scanState);
 
+extern CustomScan * FetchCitusCustomScanIfExists(Plan *plan);
 extern bool IsCitusPlan(Plan *plan);
 extern bool IsCitusCustomScan(Plan *plan);
 #endif /* CITUS_CUSTOM_SCAN_H */

@@ -655,6 +655,8 @@ WHERE user_id IN (SELECT user_id FROM users_table WHERE value_1 >= 1 AND value_1
 DEBUG:  generating subplan 26_1 for subquery SELECT user_id FROM public.users_table WHERE ((value_1 OPERATOR(pg_catalog.>=) 5) AND (value_1 OPERATOR(pg_catalog.<=) 6))
 DEBUG:  Plan 26 query after replacing subqueries and CTEs: SELECT user_id FROM public.users_table WHERE ((user_id OPERATOR(pg_catalog.=) ANY (SELECT users_table_1.user_id FROM public.users_table users_table_1 WHERE ((users_table_1.value_1 OPERATOR(pg_catalog.>=) 1) AND (users_table_1.value_1 OPERATOR(pg_catalog.<=) 2)))) AND (user_id OPERATOR(pg_catalog.=) ANY (SELECT users_table_1.user_id FROM public.users_table users_table_1 WHERE ((users_table_1.value_1 OPERATOR(pg_catalog.>=) 3) AND (users_table_1.value_1 OPERATOR(pg_catalog.<=) 4)))) AND (value_2 OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.user_id FROM read_intermediate_result('26_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)))) ORDER BY user_id DESC LIMIT 3
 DEBUG:  push down of limit count: 3
+DEBUG:  26_1 is broadcasted to localhost:57637
+DEBUG:  26_1 is broadcasted to localhost:57638
  user_id 
 ---------
        6

@@ -810,11 +810,11 @@ IsReadIntermediateResultFunction(Node *node)
 
 
 /*
- * FindResultIdOfIntermediateResultFunction extracts the id of the intermediate result
+ * FindIntermediateResultIdIfExists extracts the id of the intermediate result
  * if the given RTE contains a read_intermediate_results function, NULL otherwise
  */
 Const *
-FindResultIdOfIntermediateResultFunction(RangeTblEntry *rte)
+FindIntermediateResultIdIfExists(RangeTblEntry *rte)
 {
 	List *functionList = NULL;
 	RangeTblFunction *rangeTblfunction = NULL;

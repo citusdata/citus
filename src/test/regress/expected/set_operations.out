@@ -27,6 +27,8 @@ DEBUG:  generating subplan 3_2 for subquery SELECT x, y FROM recursive_union.tes
 DEBUG:  Plan 3 query after replacing subqueries and CTEs: SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('3_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer) UNION SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('3_2'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer) ORDER BY 1, 2
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DEBUG:  3_1 is broadcasted to localhost:57638
+DEBUG:  3_2 is broadcasted to localhost:57638
  x | y 
 ---+---
  1 | 1
@@ -40,6 +42,8 @@ DEBUG:  generating subplan 6_1 for subquery SELECT x, y FROM recursive_union.tes
 DEBUG:  Plan 6 query after replacing subqueries and CTEs: SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('6_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer) UNION SELECT ref.a, ref.b FROM recursive_union.ref ORDER BY 1, 2
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DEBUG:  6_1 is broadcasted to localhost:57637
+DEBUG:  6_1 is broadcasted to localhost:57638
  x | y 
 ---+---
  1 | 1
@@ -65,6 +69,8 @@ DEBUG:  generating subplan 9_2 for subquery SELECT x, y FROM recursive_union.tes
 DEBUG:  Plan 9 query after replacing subqueries and CTEs: SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('9_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer) UNION ALL SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('9_2'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer) ORDER BY 1, 2
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DEBUG:  9_1 is broadcasted to localhost:57637
+DEBUG:  9_2 is broadcasted to localhost:57637
  x | y 
 ---+---
  1 | 1
@@ -80,6 +86,8 @@ DEBUG:  generating subplan 12_1 for subquery SELECT x, y FROM recursive_union.te
 DEBUG:  Plan 12 query after replacing subqueries and CTEs: SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('12_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer) UNION ALL SELECT ref.a, ref.b FROM recursive_union.ref ORDER BY 1, 2
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DEBUG:  12_1 is broadcasted to localhost:57637
+DEBUG:  12_1 is broadcasted to localhost:57638
  x | y 
 ---+---
  1 | 1
@@ -108,6 +116,8 @@ DEBUG:  generating subplan 15_2 for subquery SELECT x, y FROM recursive_union.te
 DEBUG:  Plan 15 query after replacing subqueries and CTEs: SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('15_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer) INTERSECT SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('15_2'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer) ORDER BY 1, 2
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DEBUG:  15_1 is broadcasted to localhost:57638
+DEBUG:  15_2 is broadcasted to localhost:57638
  x | y 
 ---+---
  1 | 1
@@ -121,6 +131,8 @@ DEBUG:  generating subplan 18_1 for subquery SELECT x, y FROM recursive_union.te
 DEBUG:  Plan 18 query after replacing subqueries and CTEs: SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('18_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer) INTERSECT SELECT ref.a, ref.b FROM recursive_union.ref ORDER BY 1, 2
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DEBUG:  18_1 is broadcasted to localhost:57637
+DEBUG:  18_1 is broadcasted to localhost:57638
  x | y 
 ---+---
  2 | 2
@@ -144,6 +156,8 @@ DEBUG:  generating subplan 21_2 for subquery SELECT x, y FROM recursive_union.te
 DEBUG:  Plan 21 query after replacing subqueries and CTEs: SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('21_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer) INTERSECT ALL SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('21_2'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer) ORDER BY 1, 2
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DEBUG:  21_1 is broadcasted to localhost:57637
+DEBUG:  21_2 is broadcasted to localhost:57637
  x | y 
 ---+---
  1 | 1
@@ -157,6 +171,8 @@ DEBUG:  generating subplan 24_1 for subquery SELECT x, y FROM recursive_union.te
 DEBUG:  Plan 24 query after replacing subqueries and CTEs: SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('24_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer) INTERSECT ALL SELECT ref.a, ref.b FROM recursive_union.ref ORDER BY 1, 2
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DEBUG:  24_1 is broadcasted to localhost:57637
+DEBUG:  24_1 is broadcasted to localhost:57638
  x | y 
 ---+---
  2 | 2
@@ -180,6 +196,8 @@ DEBUG:  generating subplan 27_2 for subquery SELECT x, y FROM recursive_union.te
 DEBUG:  Plan 27 query after replacing subqueries and CTEs: SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('27_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer) EXCEPT SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('27_2'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer) ORDER BY 1, 2
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DEBUG:  27_1 is broadcasted to localhost:57638
+DEBUG:  27_2 is broadcasted to localhost:57638
  x | y 
 ---+---
 (0 rows)
@@ -191,6 +209,8 @@ DEBUG:  generating subplan 30_1 for subquery SELECT x, y FROM recursive_union.te
 DEBUG:  Plan 30 query after replacing subqueries and CTEs: SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('30_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer) EXCEPT SELECT ref.a, ref.b FROM recursive_union.ref ORDER BY 1, 2
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DEBUG:  30_1 is broadcasted to localhost:57637
+DEBUG:  30_1 is broadcasted to localhost:57638
  x | y 
 ---+---
  1 | 1
@@ -212,6 +232,8 @@ DEBUG:  generating subplan 33_2 for subquery SELECT x, y FROM recursive_union.te
 DEBUG:  Plan 33 query after replacing subqueries and CTEs: SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('33_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer) EXCEPT ALL SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('33_2'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer) ORDER BY 1, 2
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DEBUG:  33_1 is broadcasted to localhost:57637
+DEBUG:  33_2 is broadcasted to localhost:57637
  x | y 
 ---+---
 (0 rows)
@@ -223,6 +245,8 @@ DEBUG:  generating subplan 36_1 for subquery SELECT x, y FROM recursive_union.te
 DEBUG:  Plan 36 query after replacing subqueries and CTEs: SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('36_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer) EXCEPT ALL SELECT ref.a, ref.b FROM recursive_union.ref ORDER BY 1, 2
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DEBUG:  36_1 is broadcasted to localhost:57637
+DEBUG:  36_1 is broadcasted to localhost:57638
  x | y 
 ---+---
  1 | 1
@@ -254,6 +278,10 @@ DEBUG:  generating subplan 39_2 for subquery SELECT test.x, ref.a FROM (recursiv
 DEBUG:  Plan 39 query after replacing subqueries and CTEs: (((SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('39_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer) INTERSECT SELECT ref.a, ref.b FROM recursive_union.ref) UNION ALL SELECT s.s, s.s FROM generate_series(1, 10) s(s)) EXCEPT SELECT 1, 1) UNION SELECT intermediate_result.x, intermediate_result.a FROM read_intermediate_result('39_2'::text, 'binary'::citus_copy_format) intermediate_result(x integer, a integer) ORDER BY 1, 2
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DEBUG:  39_1 is broadcasted to localhost:57637
+DEBUG:  39_1 is broadcasted to localhost:57638
+DEBUG:  39_2 is broadcasted to localhost:57637
+DEBUG:  39_2 is broadcasted to localhost:57638
  x  | y  
 ----+----
   1 |   
@@ -289,6 +317,9 @@ DEBUG:  generating subplan 43_3 for subquery SELECT intermediate_result.x, inter
 DEBUG:  Plan 43 query after replacing subqueries and CTEs: SELECT x, y FROM (SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('43_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)) u ORDER BY x, y
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DEBUG:  43_1 is broadcasted to localhost:57638
+DEBUG:  43_2 is broadcasted to localhost:57638
+DEBUG:  43_3 is broadcasted to localhost:57637
  x | y 
 ---+---
  1 | 1
@@ -305,6 +336,9 @@ DEBUG:  generating subplan 47_2 for subquery SELECT intermediate_result.x, inter
 DEBUG:  Plan 47 query after replacing subqueries and CTEs: SELECT x, y FROM (SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('47_2'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)) u ORDER BY x, y
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DEBUG:  47_1 is broadcasted to localhost:57637
+DEBUG:  47_1 is broadcasted to localhost:57638
+DEBUG:  47_2 is broadcasted to localhost:57638
  x | y 
 ---+---
  1 | 1
@@ -351,6 +385,9 @@ DEBUG:  generating subplan 53_2 for subquery SELECT intermediate_result.x, inter
 DEBUG:  Plan 53 query after replacing subqueries and CTEs: SELECT x, y FROM (SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('53_2'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)) u ORDER BY x, y
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DEBUG:  53_1 is broadcasted to localhost:57637
+DEBUG:  53_1 is broadcasted to localhost:57638
+DEBUG:  53_2 is broadcasted to localhost:57637
  x | y 
 ---+---
  1 | 1
@@ -382,6 +419,9 @@ DEBUG:  generating subplan 57_3 for subquery SELECT intermediate_result.x, inter
 DEBUG:  Plan 57 query after replacing subqueries and CTEs: SELECT x, y FROM (SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('57_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)) u ORDER BY x, y
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DEBUG:  57_1 is broadcasted to localhost:57638
+DEBUG:  57_2 is broadcasted to localhost:57638
+DEBUG:  57_3 is broadcasted to localhost:57637
  x | y 
 ---+---
  1 | 1
@@ -400,6 +440,9 @@ DEBUG:  generating subplan 61_3 for subquery SELECT intermediate_result.x, inter
 DEBUG:  Plan 61 query after replacing subqueries and CTEs: SELECT x, y FROM (SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('61_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)) u ORDER BY x, y
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DEBUG:  61_1 is broadcasted to localhost:57638
+DEBUG:  61_2 is broadcasted to localhost:57638
+DEBUG:  61_3 is broadcasted to localhost:57637
  x | y 
 ---+---
  1 | 1
@@ -416,6 +459,9 @@ DEBUG:  generating subplan 65_2 for subquery SELECT intermediate_result.x, inter
 DEBUG:  Plan 65 query after replacing subqueries and CTEs: SELECT x, y FROM (SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('65_2'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)) u ORDER BY x, y
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DEBUG:  65_1 is broadcasted to localhost:57637
+DEBUG:  65_1 is broadcasted to localhost:57638
+DEBUG:  65_2 is broadcasted to localhost:57638
  x | y 
 ---+---
  2 | 2
@@ -442,6 +488,9 @@ DEBUG:  generating subplan 69_3 for subquery SELECT intermediate_result.x, inter
 DEBUG:  Plan 69 query after replacing subqueries and CTEs: SELECT x, y FROM (SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('69_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)) u ORDER BY x, y
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DEBUG:  69_1 is broadcasted to localhost:57637
+DEBUG:  69_2 is broadcasted to localhost:57637
+DEBUG:  69_3 is broadcasted to localhost:57638
  x | y 
 ---+---
 (0 rows)
@@ -458,6 +507,9 @@ DEBUG:  generating subplan 73_3 for subquery SELECT intermediate_result.x, inter
 DEBUG:  Plan 73 query after replacing subqueries and CTEs: SELECT x, y FROM (SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('73_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)) u ORDER BY x, y
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DEBUG:  73_1 is broadcasted to localhost:57637
+DEBUG:  73_2 is broadcasted to localhost:57637
+DEBUG:  73_3 is broadcasted to localhost:57638
  x | y 
 ---+---
 (0 rows)
@@ -472,6 +524,9 @@ DEBUG:  generating subplan 77_2 for subquery SELECT intermediate_result.x, inter
 DEBUG:  Plan 77 query after replacing subqueries and CTEs: SELECT x, y FROM (SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('77_2'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)) u ORDER BY x, y
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DEBUG:  77_1 is broadcasted to localhost:57637
+DEBUG:  77_1 is broadcasted to localhost:57638
+DEBUG:  77_2 is broadcasted to localhost:57637
  x | y 
 ---+---
  1 | 1
@@ -516,6 +571,10 @@ DEBUG:  Plan is router executable
 DEBUG:  generating subplan 83_3 for subquery SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('83_2'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer) UNION SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('83_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)
 DEBUG:  Plan 83 query after replacing subqueries and CTEs: SELECT u.x, u.y, test.y FROM ((SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('83_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)) u JOIN recursive_union.test USING (x)) ORDER BY u.x, u.y
 DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  83_1 is broadcasted to localhost:57638
+DEBUG:  83_2 is broadcasted to localhost:57638
+DEBUG:  83_3 is broadcasted to localhost:57637
+DEBUG:  83_3 is broadcasted to localhost:57638
  x | y | y 
 ---+---+---
  1 | 1 | 1
@@ -548,6 +607,10 @@ DEBUG:  Plan is router executable
 DEBUG:  generating subplan 91_3 for subquery SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('91_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer) UNION SELECT intermediate_result.y, intermediate_result.x FROM read_intermediate_result('91_2'::text, 'binary'::citus_copy_format) intermediate_result(y integer, x integer)
 DEBUG:  Plan 91 query after replacing subqueries and CTEs: SELECT u.x, u.y, test.y FROM ((SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('91_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)) u JOIN recursive_union.test USING (x)) ORDER BY u.x, u.y
 DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  91_1 is broadcasted to localhost:57638
+DEBUG:  91_2 is broadcasted to localhost:57638
+DEBUG:  91_3 is broadcasted to localhost:57637
+DEBUG:  91_3 is broadcasted to localhost:57638
  x | y | y 
 ---+---+---
  1 | 1 | 1
@@ -565,6 +628,10 @@ DEBUG:  Plan is router executable
 DEBUG:  generating subplan 95_3 for subquery SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('95_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer) UNION SELECT intermediate_result."?column?", intermediate_result."?column?_1" AS "?column?" FROM read_intermediate_result('95_2'::text, 'binary'::citus_copy_format) intermediate_result("?column?" integer, "?column?_1" integer)
 DEBUG:  Plan 95 query after replacing subqueries and CTEs: SELECT u.x, u.y, test.y FROM ((SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('95_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)) u JOIN recursive_union.test USING (x)) ORDER BY u.x, u.y
 DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  95_1 is broadcasted to localhost:57637
+DEBUG:  95_2 is broadcasted to localhost:57637
+DEBUG:  95_3 is broadcasted to localhost:57637
+DEBUG:  95_3 is broadcasted to localhost:57638
  x | y | y 
 ---+---+---
  1 | 1 | 1
@@ -593,6 +660,9 @@ DEBUG:  generating subplan 100_3 for subquery SELECT intermediate_result.x, inte
 DEBUG:  Plan 100 query after replacing subqueries and CTEs: SELECT u.x, u.y FROM ((SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('100_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)) u JOIN (SELECT x_1.x FROM generate_series(1, 10) x_1(x)) x USING (x)) ORDER BY u.x, u.y
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DEBUG:  100_1 is broadcasted to localhost:57638
+DEBUG:  100_2 is broadcasted to localhost:57638
+DEBUG:  100_3 is broadcasted to localhost:57637
  x | y 
 ---+---
 (0 rows)
@@ -610,6 +680,8 @@ DEBUG:  push down of limit count: 4
 DEBUG:  generating subplan 105_1 for subquery SELECT y FROM recursive_union.test ORDER BY y LIMIT 4
 DEBUG:  Plan 105 query after replacing subqueries and CTEs: SELECT x, y FROM (SELECT test.x, test.y FROM recursive_union.test UNION SELECT test.x, test.y FROM recursive_union.test) foo WHERE (x OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.y FROM read_intermediate_result('105_1'::text, 'binary'::citus_copy_format) intermediate_result(y integer))) ORDER BY x
 DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  105_1 is broadcasted to localhost:57637
+DEBUG:  105_1 is broadcasted to localhost:57638
  x | y 
 ---+---
  1 | 1
@@ -632,6 +704,10 @@ DEBUG:  generating subplan 107_4 for subquery SELECT intermediate_result.x, inte
 DEBUG:  Plan 107 query after replacing subqueries and CTEs: SELECT x, y FROM (SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('107_4'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)) foo WHERE (x OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.y FROM read_intermediate_result('107_1'::text, 'binary'::citus_copy_format) intermediate_result(y integer))) ORDER BY x
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DEBUG:  107_1 is broadcasted to localhost:57637
+DEBUG:  107_2 is broadcasted to localhost:57638
+DEBUG:  107_3 is broadcasted to localhost:57638
+DEBUG:  107_4 is broadcasted to localhost:57637
  x | y 
 ---+---
  1 | 1
@@ -653,6 +729,10 @@ DEBUG:  generating subplan 112_4 for subquery SELECT y FROM recursive_union.test
 DEBUG:  Plan 112 query after replacing subqueries and CTEs: SELECT x, y FROM (SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('112_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)) foo WHERE (x OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.y FROM read_intermediate_result('112_4'::text, 'binary'::citus_copy_format) intermediate_result(y integer))) ORDER BY x
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DEBUG:  112_1 is broadcasted to localhost:57638
+DEBUG:  112_2 is broadcasted to localhost:57638
+DEBUG:  112_3 is broadcasted to localhost:57637
+DEBUG:  112_4 is broadcasted to localhost:57637
  x | y 
 ---+---
  1 | 1
@@ -672,6 +752,8 @@ DEBUG:  generating subplan 117_2 for subquery SELECT x, y, rnk FROM (SELECT test
 DEBUG:  Plan 117 query after replacing subqueries and CTEs: SELECT intermediate_result.x, intermediate_result.y, intermediate_result.rnk FROM read_intermediate_result('117_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer, rnk bigint) UNION SELECT intermediate_result.x, intermediate_result.y, intermediate_result.rnk FROM read_intermediate_result('117_2'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer, rnk bigint) ORDER BY 1 DESC, 2 DESC, 3 DESC
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DEBUG:  117_1 is broadcasted to localhost:57638
+DEBUG:  117_2 is broadcasted to localhost:57638
  x | y | rnk 
 ---+---+-----
  2 | 2 |   1
@@ -699,6 +781,10 @@ DEBUG:  Plan is router executable
 DEBUG:  generating subplan 122_3 for subquery SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('122_2'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer) EXCEPT SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('122_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)
 DEBUG:  Plan 122 query after replacing subqueries and CTEs: SELECT u.x, u.y, test.y FROM ((SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('122_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)) u JOIN recursive_union.test USING (x)) ORDER BY u.x, u.y
 DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  122_1 is broadcasted to localhost:57637
+DEBUG:  122_2 is broadcasted to localhost:57637
+DEBUG:  122_3 is broadcasted to localhost:57637
+DEBUG:  122_3 is broadcasted to localhost:57638
  x | y | y 
 ---+---+---
  2 | 2 | 2
@@ -734,6 +820,11 @@ DEBUG:  generating subplan 130_4 for subquery SELECT intermediate_result.x, inte
 DEBUG:  Plan 130 query after replacing subqueries and CTEs: SELECT x, y FROM (SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('130_4'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)) u ORDER BY x, y
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DEBUG:  130_1 is broadcasted to localhost:57637
+DEBUG:  130_1 is broadcasted to localhost:57638
+DEBUG:  130_2 is broadcasted to localhost:57637
+DEBUG:  130_3 is broadcasted to localhost:57637
+DEBUG:  130_4 is broadcasted to localhost:57638
  x | y 
 ---+---
  1 | 1
@@ -763,6 +854,10 @@ DEBUG:  Plan is router executable
 DEBUG:  generating subplan 136_1 for subquery SELECT b.x FROM recursive_union.test b WHERE (b.y OPERATOR(pg_catalog.=) 1) UNION SELECT c.x FROM recursive_union.test c WHERE (c.y OPERATOR(pg_catalog.=) 2)
 DEBUG:  Plan 136 query after replacing subqueries and CTEs: SELECT x, y FROM recursive_union.test a WHERE (NOT (x OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.x FROM read_intermediate_result('136_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer)))) ORDER BY x, y
 DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  136_1 is broadcasted to localhost:57637
+DEBUG:  136_1 is broadcasted to localhost:57638
+DEBUG:  137_1 is broadcasted to localhost:57637
+DEBUG:  137_2 is broadcasted to localhost:57637
  x | y 
 ---+---
 (0 rows)
@@ -779,6 +874,10 @@ DEBUG:  Plan is router executable
 DEBUG:  generating subplan 140_3 for subquery SELECT intermediate_result.x FROM read_intermediate_result('140_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer) UNION SELECT intermediate_result.y FROM read_intermediate_result('140_2'::text, 'binary'::citus_copy_format) intermediate_result(y integer)
 DEBUG:  Plan 140 query after replacing subqueries and CTEs: SELECT x, y FROM recursive_union.test a WHERE (x OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.x FROM read_intermediate_result('140_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer))) ORDER BY x, y
 DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  140_1 is broadcasted to localhost:57638
+DEBUG:  140_2 is broadcasted to localhost:57638
+DEBUG:  140_3 is broadcasted to localhost:57637
+DEBUG:  140_3 is broadcasted to localhost:57638
  x | y 
 ---+---
  1 | 1
@@ -813,6 +912,9 @@ DEBUG:  generating subplan 146_1 for subquery SELECT test.x, test.y FROM recursi
 DEBUG:  Plan 146 query after replacing subqueries and CTEs: SELECT x, y FROM (SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('146_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)) foo ORDER BY x DESC LIMIT 3
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DEBUG:  146_1 is broadcasted to localhost:57638
+DEBUG:  147_1 is broadcasted to localhost:57637
+DEBUG:  147_2 is broadcasted to localhost:57637
  x | y 
 ---+---
  2 | 2
@@ -832,6 +934,9 @@ DEBUG:  generating subplan 150_3 for subquery SELECT intermediate_result.x FROM 
 DEBUG:  Plan 150 query after replacing subqueries and CTEs: SELECT count(DISTINCT x) AS count FROM (SELECT intermediate_result.x FROM read_intermediate_result('150_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer)) t(x) ORDER BY (count(DISTINCT x))
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DEBUG:  150_1 is broadcasted to localhost:57637
+DEBUG:  150_2 is broadcasted to localhost:57637
+DEBUG:  150_3 is broadcasted to localhost:57638
  count 
 -------
      2
@@ -849,6 +954,9 @@ DEBUG:  generating subplan 154_3 for subquery SELECT intermediate_result.count F
 DEBUG:  Plan 154 query after replacing subqueries and CTEs: SELECT count(DISTINCT x) AS count FROM (SELECT intermediate_result.count FROM read_intermediate_result('154_3'::text, 'binary'::citus_copy_format) intermediate_result(count bigint)) t(x) ORDER BY (count(DISTINCT x))
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DEBUG:  154_1 is broadcasted to localhost:57637
+DEBUG:  154_2 is broadcasted to localhost:57637
+DEBUG:  154_3 is broadcasted to localhost:57638
  count 
 -------
      1
@@ -867,6 +975,9 @@ DEBUG:  generating subplan 158_3 for subquery SELECT intermediate_result.avg FRO
 DEBUG:  Plan 158 query after replacing subqueries and CTEs: SELECT avg(DISTINCT x) AS avg FROM (SELECT intermediate_result.avg FROM read_intermediate_result('158_3'::text, 'binary'::citus_copy_format) intermediate_result(avg numeric)) t(x) ORDER BY (avg(DISTINCT x))
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DEBUG:  158_1 is broadcasted to localhost:57637
+DEBUG:  158_2 is broadcasted to localhost:57637
+DEBUG:  158_3 is broadcasted to localhost:57638
           avg           
 ------------------------
  1.50000000000000000000
@@ -921,6 +1032,8 @@ DEBUG:  generating subplan 164_2 for subquery SELECT x FROM recursive_union.test
 DEBUG:  Plan 164 query after replacing subqueries and CTEs: SELECT intermediate_result.x FROM read_intermediate_result('164_2'::text, 'binary'::citus_copy_format) intermediate_result(x integer) INTERSECT SELECT intermediate_result.x FROM read_intermediate_result('164_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer) ORDER BY 1 DESC
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DEBUG:  164_1 is broadcasted to localhost:57637
+DEBUG:  164_2 is broadcasted to localhost:57637
  x 
 ---
 (0 rows)
@@ -965,6 +1078,8 @@ DEBUG:  generating subplan 167_2 for subquery SELECT x FROM recursive_union.test
 DEBUG:  Plan 167 query after replacing subqueries and CTEs: SELECT intermediate_result.x FROM read_intermediate_result('167_2'::text, 'binary'::citus_copy_format) intermediate_result(x integer) INTERSECT SELECT intermediate_result.x FROM read_intermediate_result('167_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer) ORDER BY 1 DESC
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DEBUG:  167_1 is broadcasted to localhost:57638
+DEBUG:  167_2 is broadcasted to localhost:57638
  x 
 ---
  2
@@ -986,6 +1101,9 @@ DEBUG:  generating subplan 170_3 for subquery SELECT intermediate_result.y FROM 
 DEBUG:  Plan 170 query after replacing subqueries and CTEs: SELECT y FROM (SELECT intermediate_result.y FROM read_intermediate_result('170_3'::text, 'binary'::citus_copy_format) intermediate_result(y integer)) set_view_recursive ORDER BY y DESC
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DEBUG:  170_1 is broadcasted to localhost:57637
+DEBUG:  170_2 is broadcasted to localhost:57637
+DEBUG:  170_3 is broadcasted to localhost:57638
  y 
 ---
  2
@@ -1015,6 +1133,10 @@ DEBUG:  Plan is router executable
 DEBUG:  generating subplan 175_3 for subquery SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('175_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer) UNION SELECT intermediate_result."?column?", intermediate_result."?column?_1" AS "?column?" FROM read_intermediate_result('175_2'::text, 'binary'::citus_copy_format) intermediate_result("?column?" integer, "?column?_1" integer)
 DEBUG:  Plan 175 query after replacing subqueries and CTEs: SELECT x, y FROM (SELECT u.x, test.y FROM ((SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('175_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)) u JOIN recursive_union.test USING (x)) ORDER BY u.x, test.y) set_view_recursive_second ORDER BY x, y
 DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  175_1 is broadcasted to localhost:57637
+DEBUG:  175_2 is broadcasted to localhost:57637
+DEBUG:  175_3 is broadcasted to localhost:57637
+DEBUG:  175_3 is broadcasted to localhost:57638
  x | y 
 ---+---
  1 | 1
@@ -1045,6 +1167,15 @@ DEBUG:  generating subplan 179_8 for subquery SELECT x FROM (SELECT test.x FROM 
 DEBUG:  Plan 179 query after replacing subqueries and CTEs: (SELECT intermediate_result.x FROM read_intermediate_result('179_7'::text, 'binary'::citus_copy_format) intermediate_result(x integer) INTERSECT SELECT set_view_recursive.y FROM (SELECT intermediate_result.y FROM read_intermediate_result('179_6'::text, 'binary'::citus_copy_format) intermediate_result(y integer)) set_view_recursive) EXCEPT SELECT intermediate_result.x FROM read_intermediate_result('179_8'::text, 'binary'::citus_copy_format) intermediate_result(x integer)
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DEBUG:  179_1 is broadcasted to localhost:57638
+DEBUG:  179_2 is broadcasted to localhost:57638
+DEBUG:  179_3 is broadcasted to localhost:57637
+DEBUG:  179_3 is broadcasted to localhost:57638
+DEBUG:  179_4 is broadcasted to localhost:57637
+DEBUG:  179_5 is broadcasted to localhost:57637
+DEBUG:  179_6 is broadcasted to localhost:57638
+DEBUG:  179_7 is broadcasted to localhost:57638
+DEBUG:  179_8 is broadcasted to localhost:57638
  x 
 ---
 (0 rows)

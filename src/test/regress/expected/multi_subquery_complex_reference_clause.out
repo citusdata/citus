@@ -284,6 +284,8 @@ DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan 30_1 for subquery SELECT id FROM random() users_ref_test_table(id)
 DEBUG:  Plan 30 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT random() AS random FROM (public.user_buy_test_table JOIN (SELECT intermediate_result.id FROM read_intermediate_result('30_1'::text, 'binary'::citus_copy_format) intermediate_result(id double precision)) users_ref_test_table(id) ON (((user_buy_test_table.item_id)::double precision OPERATOR(pg_catalog.>) users_ref_test_table.id)))) subquery_1
 DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  30_1 is broadcasted to localhost:57637
+DEBUG:  30_1 is broadcasted to localhost:57638
  count 
 -------
      4
@@ -298,6 +300,8 @@ DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan 31_1 for subquery SELECT id FROM generate_series((random())::integer, 10) users_ref_test_table(id)
 DEBUG:  Plan 31 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT user_buy_test_table.item_id FROM (public.user_buy_test_table JOIN (SELECT intermediate_result.id FROM read_intermediate_result('31_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) users_ref_test_table(id) ON ((user_buy_test_table.item_id OPERATOR(pg_catalog.>) users_ref_test_table.id)))) subquery_1 WHERE (item_id OPERATOR(pg_catalog.=) 6)
 DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  31_1 is broadcasted to localhost:57637
+DEBUG:  31_1 is broadcasted to localhost:57638
  count 
 -------
      0
@@ -317,6 +321,8 @@ DEBUG:  generating subplan 32_2 for subquery SELECT intermediate_result.user_id 
 DEBUG:  Plan 32 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('32_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) subquery_1
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DEBUG:  32_1 is broadcasted to localhost:57638
+DEBUG:  32_2 is broadcasted to localhost:57637
  count 
 -------
     14
@@ -369,6 +375,8 @@ DEBUG:  generating subplan 39_2 for subquery SELECT intermediate_result.user_id 
 DEBUG:  Plan 39 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('39_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) subquery_1
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DEBUG:  39_1 is broadcasted to localhost:57638
+DEBUG:  39_2 is broadcasted to localhost:57637
  count 
 -------
      5
@@ -391,6 +399,9 @@ DEBUG:  generating subplan 42_2 for subquery SELECT users_ref_test_table.id FROM
 DEBUG:  Plan 42 query after replacing subqueries and CTEs: SELECT id FROM (SELECT intermediate_result.id FROM read_intermediate_result('42_2'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) sub ORDER BY id DESC
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DEBUG:  42_1 is broadcasted to localhost:57637
+DEBUG:  42_1 is broadcasted to localhost:57638
+DEBUG:  42_2 is broadcasted to localhost:57638
  id 
 ----
   7
@@ -417,6 +428,9 @@ DEBUG:  generating subplan 45_2 for subquery SELECT sub1.id, (random() OPERATOR(
 DEBUG:  Plan 45 query after replacing subqueries and CTEs: SELECT id, "?column?" FROM (SELECT intermediate_result.id, intermediate_result."?column?" FROM read_intermediate_result('45_2'::text, 'binary'::citus_copy_format) intermediate_result(id integer, "?column?" double precision)) sub ORDER BY id DESC
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DEBUG:  45_1 is broadcasted to localhost:57637
+DEBUG:  45_1 is broadcasted to localhost:57638
+DEBUG:  45_2 is broadcasted to localhost:57637
  id | ?column? 
 ----+----------
   7 |        0
@@ -1350,6 +1364,8 @@ SELECT count(*) FROM
 WHERE subquery_1.user_id != subquery_2.user_id ;
 DEBUG:  generating subplan 84_1 for subquery SELECT user_buy_test_table.user_id, random() AS random FROM (public.user_buy_test_table LEFT JOIN public.users_ref_test_table ON ((user_buy_test_table.user_id OPERATOR(pg_catalog.>) users_ref_test_table.id)))
 DEBUG:  Plan 84 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT user_buy_test_table.user_id, random() AS random FROM (public.user_buy_test_table LEFT JOIN public.users_ref_test_table ON ((user_buy_test_table.item_id OPERATOR(pg_catalog.>) users_ref_test_table.id)))) subquery_1, (SELECT intermediate_result.user_id, intermediate_result.random FROM read_intermediate_result('84_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, random double precision)) subquery_2 WHERE (subquery_1.user_id OPERATOR(pg_catalog.<>) subquery_2.user_id)
+DEBUG:  84_1 is broadcasted to localhost:57637
+DEBUG:  84_1 is broadcasted to localhost:57638
  count 
 -------
     67

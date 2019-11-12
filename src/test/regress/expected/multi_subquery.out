@@ -44,6 +44,7 @@ FROM
 		l_suppkey) AS order_counts;
 DEBUG:  generating subplan 2_1 for subquery SELECT l_suppkey, count(*) AS order_count FROM public.lineitem_subquery GROUP BY l_suppkey
 DEBUG:  Plan 2 query after replacing subqueries and CTEs: SELECT avg(order_count) AS avg FROM (SELECT intermediate_result.l_suppkey, intermediate_result.order_count FROM read_intermediate_result('2_1'::text, 'binary'::citus_copy_format) intermediate_result(l_suppkey integer, order_count bigint)) order_counts
+DEBUG:  2_1 is broadcasted to localhost:57638
         avg         
 --------------------
  1.7199369356456930
@@ -89,6 +90,8 @@ DEBUG:  generating subplan 7_2 for subquery SELECT intermediate_result.l_orderke
 DEBUG:  Plan 7 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.l_orderkey FROM read_intermediate_result('7_2'::text, 'binary'::citus_copy_format) intermediate_result(l_orderkey bigint)) b
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DEBUG:  7_1 is broadcasted to localhost:57637
+DEBUG:  7_2 is broadcasted to localhost:57638
  count 
 -------
  12001
@@ -111,6 +114,9 @@ DEBUG:  generating subplan 10_3 for subquery SELECT intermediate_result.l_orderk
 DEBUG:  Plan 10 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.l_orderkey FROM read_intermediate_result('10_3'::text, 'binary'::citus_copy_format) intermediate_result(l_orderkey bigint)) b
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DEBUG:  10_1 is broadcasted to localhost:57637
+DEBUG:  10_2 is broadcasted to localhost:57637
+DEBUG:  10_3 is broadcasted to localhost:57638
  count 
 -------
  14496

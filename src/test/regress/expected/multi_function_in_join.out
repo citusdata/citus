@@ -29,6 +29,8 @@ CREATE SEQUENCE numbers;
 SELECT * FROM table1 JOIN nextval('numbers') n ON (id = n) ORDER BY id ASC;
 DEBUG:  generating subplan 2_1 for subquery SELECT n FROM nextval('functions_in_joins.numbers'::regclass) n(n)
 DEBUG:  Plan 2 query after replacing subqueries and CTEs: SELECT table1.id, table1.data, n.n FROM (functions_in_joins.table1 JOIN (SELECT intermediate_result.n FROM read_intermediate_result('2_1'::text, 'binary'::citus_copy_format) intermediate_result(n bigint)) n ON ((table1.id OPERATOR(pg_catalog.=) n.n))) ORDER BY table1.id
+DEBUG:  2_1 is broadcasted to localhost:57637
+DEBUG:  2_1 is broadcasted to localhost:57638
  id | data | n 
 ----+------+---
   1 |    1 | 1
@@ -41,6 +43,8 @@ LANGUAGE SQL;
 SELECT * FROM table1 JOIN add(3,5) sum ON (id = sum) ORDER BY id ASC;
 DEBUG:  generating subplan 3_1 for subquery SELECT sum FROM functions_in_joins.add(3, 5) sum(sum)
 DEBUG:  Plan 3 query after replacing subqueries and CTEs: SELECT table1.id, table1.data, sum.sum FROM (functions_in_joins.table1 JOIN (SELECT intermediate_result.sum FROM read_intermediate_result('3_1'::text, 'binary'::citus_copy_format) intermediate_result(sum integer)) sum ON ((table1.id OPERATOR(pg_catalog.=) sum.sum))) ORDER BY table1.id
+DEBUG:  3_1 is broadcasted to localhost:57637
+DEBUG:  3_1 is broadcasted to localhost:57638
  id | data | sum 
 ----+------+-----
   8 |   64 |   8
@@ -56,6 +60,8 @@ $$ LANGUAGE plpgsql;
 SELECT * FROM table1 JOIN increment(2) val ON (id = val) ORDER BY id ASC;
 DEBUG:  generating subplan 4_1 for subquery SELECT val FROM functions_in_joins.increment(2) val(val)
 DEBUG:  Plan 4 query after replacing subqueries and CTEs: SELECT table1.id, table1.data, val.val FROM (functions_in_joins.table1 JOIN (SELECT intermediate_result.val FROM read_intermediate_result('4_1'::text, 'binary'::citus_copy_format) intermediate_result(val integer)) val ON ((table1.id OPERATOR(pg_catalog.=) val.val))) ORDER BY table1.id
+DEBUG:  4_1 is broadcasted to localhost:57637
+DEBUG:  4_1 is broadcasted to localhost:57638
  id | data | val 
 ----+------+-----
   3 |    9 |   3
@@ -75,6 +81,8 @@ FROM table1 JOIN next_k_integers(3,2) next_integers ON (id = next_integers.resul
 ORDER BY id ASC;
 DEBUG:  generating subplan 5_1 for subquery SELECT result FROM functions_in_joins.next_k_integers(3, 2) next_integers(result)
 DEBUG:  Plan 5 query after replacing subqueries and CTEs: SELECT table1.id, table1.data, next_integers.result FROM (functions_in_joins.table1 JOIN (SELECT intermediate_result.result FROM read_intermediate_result('5_1'::text, 'binary'::citus_copy_format) intermediate_result(result integer)) next_integers ON ((table1.id OPERATOR(pg_catalog.=) next_integers.result))) ORDER BY table1.id
+DEBUG:  5_1 is broadcasted to localhost:57637
+DEBUG:  5_1 is broadcasted to localhost:57638
  id | data | result 
 ----+------+--------
   3 |    9 |      3
@@ -89,6 +97,8 @@ LANGUAGE SQL;
 SELECT * FROM table1 JOIN get_set_of_records() AS t2(x int, y int) ON (id = x) ORDER BY id ASC;
 DEBUG:  generating subplan 6_1 for subquery SELECT x, y FROM functions_in_joins.get_set_of_records() t2(x integer, y integer)
 DEBUG:  Plan 6 query after replacing subqueries and CTEs: SELECT table1.id, table1.data, t2.x, t2.y FROM (functions_in_joins.table1 JOIN (SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('6_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)) t2 ON ((table1.id OPERATOR(pg_catalog.=) t2.x))) ORDER BY table1.id
+DEBUG:  6_1 is broadcasted to localhost:57637
+DEBUG:  6_1 is broadcasted to localhost:57638
  id | data | x | y 
 ----+------+---+---
   1 |    1 | 1 | 2
@@ -104,6 +114,8 @@ LANGUAGE SQL;
 SELECT f.* FROM table1 t JOIN dup(32) f ON (f1 = id);
 DEBUG:  generating subplan 7_1 for subquery SELECT f1, f2 FROM functions_in_joins.dup(32) f(f1, f2)
 DEBUG:  Plan 7 query after replacing subqueries and CTEs: SELECT f.f1, f.f2 FROM (functions_in_joins.table1 t JOIN (SELECT intermediate_result.f1, intermediate_result.f2 FROM read_intermediate_result('7_1'::text, 'binary'::citus_copy_format) intermediate_result(f1 integer, f2 text)) f ON ((f.f1 OPERATOR(pg_catalog.=) t.id)))
+DEBUG:  7_1 is broadcasted to localhost:57637
+DEBUG:  7_1 is broadcasted to localhost:57638
  f1 |     f2     
 ----+------------
  32 | 32 is text
@@ -115,6 +127,8 @@ CREATE OR REPLACE FUNCTION the_minimum_id()
 SELECT * FROM table1 JOIN the_minimum_id() min_id ON (id = min_id);
 DEBUG:  generating subplan 8_1 for subquery SELECT min_id FROM functions_in_joins.the_minimum_id() min_id(min_id)
 DEBUG:  Plan 8 query after replacing subqueries and CTEs: SELECT table1.id, table1.data, min_id.min_id FROM (functions_in_joins.table1 JOIN (SELECT intermediate_result.min_id FROM read_intermediate_result('8_1'::text, 'binary'::citus_copy_format) intermediate_result(min_id integer)) min_id ON ((table1.id OPERATOR(pg_catalog.=) min_id.min_id)))
+DEBUG:  8_1 is broadcasted to localhost:57637
+DEBUG:  8_1 is broadcasted to localhost:57638
  id | data | min_id 
 ----+------+--------
   1 |    1 |      1
@@ -139,6 +153,10 @@ DEBUG:  generating subplan 11_1 for CTE next_row_to_process: SELECT table1.id, t
 DEBUG:  generating subplan 12_1 for subquery SELECT n FROM nextval('functions_in_joins.numbers'::regclass) n(n)
 DEBUG:  Plan 12 query after replacing subqueries and CTEs: SELECT table1.id, table1.data, n.n FROM (functions_in_joins.table1 JOIN (SELECT intermediate_result.n FROM read_intermediate_result('12_1'::text, 'binary'::citus_copy_format) intermediate_result(n bigint)) n ON ((table1.id OPERATOR(pg_catalog.=) n.n)))
 DEBUG:  Plan 11 query after replacing subqueries and CTEs: SELECT table1.id, table1.data, next_row_to_process.id, next_row_to_process.data, next_row_to_process.n FROM functions_in_joins.table1, (SELECT intermediate_result.id, intermediate_result.data, intermediate_result.n FROM read_intermediate_result('11_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer, data integer, n bigint)) next_row_to_process WHERE (table1.data OPERATOR(pg_catalog.<=) next_row_to_process.data) ORDER BY table1.id, table1.data
+DEBUG:  11_1 is broadcasted to localhost:57637
+DEBUG:  11_1 is broadcasted to localhost:57638
+DEBUG:  12_1 is broadcasted to localhost:57637
+DEBUG:  12_1 is broadcasted to localhost:57638
  id | data | id | data | n 
 ----+------+----+------+---
   1 |    1 |  2 |    4 | 2
@@ -150,6 +168,8 @@ SELECT * FROM ROWS FROM (next_k_integers(5), next_k_integers(10)) AS f(a, b),
     table1 WHERE id = a ORDER BY id ASC;
 DEBUG:  generating subplan 13_1 for subquery SELECT a, b FROM ROWS FROM(functions_in_joins.next_k_integers(5), functions_in_joins.next_k_integers(10)) f(a, b)
 DEBUG:  Plan 13 query after replacing subqueries and CTEs: SELECT f.a, f.b, table1.id, table1.data FROM (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('13_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) f(a, b), functions_in_joins.table1 WHERE (table1.id OPERATOR(pg_catalog.=) f.a) ORDER BY table1.id
+DEBUG:  13_1 is broadcasted to localhost:57637
+DEBUG:  13_1 is broadcasted to localhost:57638
  a | b  | id | data 
 ---+----+----+------
  5 | 10 |  5 |   25
@@ -176,6 +196,8 @@ $$ language plpgsql;
 SELECT * FROM table1 JOIN max_and_min() m ON (m.maximum = data OR m.minimum = data) ORDER BY 1,2,3,4;
 DEBUG:  generating subplan 14_1 for subquery SELECT minimum, maximum FROM functions_in_joins.max_and_min() m(minimum, maximum)
 DEBUG:  Plan 14 query after replacing subqueries and CTEs: SELECT table1.id, table1.data, m.minimum, m.maximum FROM (functions_in_joins.table1 JOIN (SELECT intermediate_result.minimum, intermediate_result.maximum FROM read_intermediate_result('14_1'::text, 'binary'::citus_copy_format) intermediate_result(minimum integer, maximum integer)) m ON (((m.maximum OPERATOR(pg_catalog.=) table1.data) OR (m.minimum OPERATOR(pg_catalog.=) table1.data)))) ORDER BY table1.id, table1.data, m.minimum, m.maximum
+DEBUG:  14_1 is broadcasted to localhost:57637
+DEBUG:  14_1 is broadcasted to localhost:57638
  id  | data  | minimum | maximum 
 -----+-------+---------+---------
    1 |     1 |       1 |   10000

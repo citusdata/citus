@@ -38,6 +38,11 @@ DEBUG:  generating subplan 1_2 for subquery SELECT avg(bar.event_type) AS avg_va
 DEBUG:  push down of limit count: 3
 DEBUG:  generating subplan 1_3 for subquery SELECT users_table.user_id FROM public.users_table, (SELECT intermediate_result.avg_val FROM read_intermediate_result('1_2'::text, 'binary'::citus_copy_format) intermediate_result(avg_val numeric)) baz WHERE (baz.avg_val OPERATOR(pg_catalog.<) (users_table.user_id)::numeric) ORDER BY users_table.user_id LIMIT 3
 DEBUG:  Plan 1 query after replacing subqueries and CTEs: SELECT DISTINCT user_id FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('1_3'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) sub1 ORDER BY user_id DESC
+DEBUG:  1_1 is broadcasted to localhost:57637
+DEBUG:  1_1 is broadcasted to localhost:57638
+DEBUG:  1_2 is broadcasted to localhost:57637
+DEBUG:  1_2 is broadcasted to localhost:57638
+DEBUG:  1_3 is broadcasted to localhost:57638
  user_id 
 ---------
        3
@@ -79,6 +84,13 @@ DEBUG:  generating subplan 5_2 for subquery SELECT user_id FROM public.users_tab
 DEBUG:  generating subplan 5_3 for subquery SELECT DISTINCT ON ((e.event_type)::text) (e.event_type)::text AS event, e."time", e.user_id FROM public.users_table u, public.events_table e WHERE ((u.user_id OPERATOR(pg_catalog.=) e.user_id) AND (u.user_id OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.user_id FROM read_intermediate_result('5_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer))))
 DEBUG:  generating subplan 5_4 for subquery SELECT t.event, array_agg(t.user_id) AS events_table FROM (SELECT intermediate_result.event, intermediate_result."time", intermediate_result.user_id FROM read_intermediate_result('5_3'::text, 'binary'::citus_copy_format) intermediate_result(event text, "time" timestamp without time zone, user_id integer)) t, public.users_table WHERE (users_table.value_1 OPERATOR(pg_catalog.=) (t.event)::integer) GROUP BY t.event
 DEBUG:  Plan 5 query after replacing subqueries and CTEs: SELECT event, array_length(events_table, 1) AS array_length FROM (SELECT intermediate_result.event, intermediate_result.events_table FROM read_intermediate_result('5_4'::text, 'binary'::citus_copy_format) intermediate_result(event text, events_table integer[])) q ORDER BY (array_length(events_table, 1)) DESC, event
+DEBUG:  5_1 is broadcasted to localhost:57637
+DEBUG:  5_1 is broadcasted to localhost:57638
+DEBUG:  5_2 is broadcasted to localhost:57637
+DEBUG:  5_2 is broadcasted to localhost:57638
+DEBUG:  5_3 is broadcasted to localhost:57637
+DEBUG:  5_3 is broadcasted to localhost:57638
+DEBUG:  5_4 is broadcasted to localhost:57637
  event | array_length 
 -------+--------------
  3     |           26
@@ -137,6 +149,17 @@ DEBUG:  generating subplan 10_4 for subquery SELECT avg(events_table.event_type)
 DEBUG:  generating subplan 10_5 for subquery SELECT min(users_table.value_1) AS min FROM (SELECT intermediate_result.avg_ev_type FROM read_intermediate_result('10_4'::text, 'binary'::citus_copy_format) intermediate_result(avg_ev_type numeric)) level_5, public.users_table WHERE (level_5.avg_ev_type OPERATOR(pg_catalog.=) (users_table.user_id)::numeric) GROUP BY level_5.avg_ev_type
 DEBUG:  generating subplan 10_6 for subquery SELECT avg(level_6.min) AS avg FROM (SELECT intermediate_result.min FROM read_intermediate_result('10_5'::text, 'binary'::citus_copy_format) intermediate_result(min integer)) level_6, public.users_table WHERE (users_table.user_id OPERATOR(pg_catalog.=) level_6.min) GROUP BY users_table.value_1
 DEBUG:  Plan 10 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.avg FROM read_intermediate_result('10_6'::text, 'binary'::citus_copy_format) intermediate_result(avg numeric)) bar
+DEBUG:  10_1 is broadcasted to localhost:57637
+DEBUG:  10_1 is broadcasted to localhost:57638
+DEBUG:  10_2 is broadcasted to localhost:57637
+DEBUG:  10_2 is broadcasted to localhost:57638
+DEBUG:  10_3 is broadcasted to localhost:57637
+DEBUG:  10_3 is broadcasted to localhost:57638
+DEBUG:  10_4 is broadcasted to localhost:57637
+DEBUG:  10_4 is broadcasted to localhost:57638
+DEBUG:  10_5 is broadcasted to localhost:57637
+DEBUG:  10_5 is broadcasted to localhost:57638
+DEBUG:  10_6 is broadcasted to localhost:57638
  count 
 -------
      0
@@ -197,6 +220,19 @@ DEBUG:  generating subplan 17_5 for subquery SELECT min(users_table.value_1) AS 
 DEBUG:  generating subplan 17_6 for subquery SELECT avg(level_6.min) AS avg FROM (SELECT intermediate_result.min FROM read_intermediate_result('17_5'::text, 'binary'::citus_copy_format) intermediate_result(min integer)) level_6, public.users_table WHERE (users_table.user_id OPERATOR(pg_catalog.=) level_6.min) GROUP BY users_table.value_1
 DEBUG:  generating subplan 17_7 for subquery SELECT count(*) AS count FROM (SELECT intermediate_result.avg FROM read_intermediate_result('17_6'::text, 'binary'::citus_copy_format) intermediate_result(avg numeric)) bar
 DEBUG:  Plan 17 query after replacing subqueries and CTEs: SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.users_table WHERE (user_id OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.count FROM read_intermediate_result('17_7'::text, 'binary'::citus_copy_format) intermediate_result(count bigint)))
+DEBUG:  17_1 is broadcasted to localhost:57637
+DEBUG:  17_1 is broadcasted to localhost:57638
+DEBUG:  17_2 is broadcasted to localhost:57637
+DEBUG:  17_2 is broadcasted to localhost:57638
+DEBUG:  17_3 is broadcasted to localhost:57637
+DEBUG:  17_3 is broadcasted to localhost:57638
+DEBUG:  17_4 is broadcasted to localhost:57637
+DEBUG:  17_4 is broadcasted to localhost:57638
+DEBUG:  17_5 is broadcasted to localhost:57637
+DEBUG:  17_5 is broadcasted to localhost:57638
+DEBUG:  17_6 is broadcasted to localhost:57637
+DEBUG:  17_7 is broadcasted to localhost:57637
+DEBUG:  17_7 is broadcasted to localhost:57638
  user_id | time | value_1 | value_2 | value_3 | value_4 
 ---------+------+---------+---------+---------+---------
 (0 rows)

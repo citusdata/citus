@@ -11,6 +11,8 @@ ORDER BY 1 DESC;
 DEBUG:  generating subplan 1_1 for CTE cte_1: SELECT user_id FROM public.users_table
 DEBUG:  generating subplan 1_2 for CTE cte_2: SELECT user_id FROM public.events_table
 DEBUG:  Plan 1 query after replacing subqueries and CTEs: SELECT cte_1.user_id FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('1_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) cte_1 UNION SELECT cte_2.user_id FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('1_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) cte_2 ORDER BY 1 DESC
+DEBUG:  1_1 is broadcasted to localhost:57638
+DEBUG:  1_2 is broadcasted to localhost:57638
  user_id 
 ---------
        6
@@ -34,6 +36,9 @@ DEBUG:  generating subplan 4_1 for CTE cte_1: SELECT user_id FROM public.users_t
 DEBUG:  generating subplan 4_2 for CTE cte_2: SELECT user_id FROM public.events_table
 DEBUG:  generating subplan 4_3 for subquery SELECT cte_1.user_id FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('4_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) cte_1 UNION SELECT cte_2.user_id FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('4_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) cte_2
 DEBUG:  Plan 4 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('4_3'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) foo
+DEBUG:  4_1 is broadcasted to localhost:57637
+DEBUG:  4_2 is broadcasted to localhost:57637
+DEBUG:  4_3 is broadcasted to localhost:57638
  count 
 -------
      6
@@ -49,6 +54,9 @@ DEBUG:  generating subplan 8_1 for CTE cte_1: SELECT user_id FROM public.users_t
 DEBUG:  generating subplan 8_2 for CTE cte_2: SELECT user_id FROM public.events_table
 DEBUG:  generating subplan 8_3 for CTE cte_3: SELECT cte_1.user_id FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('8_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) cte_1 UNION SELECT cte_2.user_id FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('8_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) cte_2
 DEBUG:  Plan 8 query after replacing subqueries and CTEs: SELECT user_id FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('8_3'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) cte_3 ORDER BY user_id DESC
+DEBUG:  8_1 is broadcasted to localhost:57637
+DEBUG:  8_2 is broadcasted to localhost:57637
+DEBUG:  8_3 is broadcasted to localhost:57638
  user_id 
 ---------
        6
@@ -68,6 +76,9 @@ DEBUG:  generating subplan 13_1 for subquery SELECT user_id FROM public.users_ta
 DEBUG:  generating subplan 13_2 for subquery SELECT user_id FROM public.users_table
 DEBUG:  Plan 13 query after replacing subqueries and CTEs: SELECT intermediate_result.user_id FROM read_intermediate_result('13_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer) UNION SELECT intermediate_result.user_id FROM read_intermediate_result('13_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)
 DEBUG:  Plan 12 query after replacing subqueries and CTEs: SELECT user_id FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('12_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) cte_1 ORDER BY user_id DESC
+DEBUG:  12_1 is broadcasted to localhost:57638
+DEBUG:  13_1 is broadcasted to localhost:57637
+DEBUG:  13_2 is broadcasted to localhost:57637
  user_id 
 ---------
        6
@@ -88,6 +99,10 @@ DEBUG:  generating subplan 17_2 for subquery SELECT user_id FROM public.users_ta
 DEBUG:  Plan 17 query after replacing subqueries and CTEs: SELECT intermediate_result.user_id FROM read_intermediate_result('17_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer) UNION SELECT intermediate_result.user_id FROM read_intermediate_result('17_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)
 DEBUG:  generating subplan 16_2 for subquery SELECT user_id FROM public.users_table
 DEBUG:  Plan 16 query after replacing subqueries and CTEs: SELECT cte_1.user_id FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('16_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) cte_1 INTERSECT SELECT intermediate_result.user_id FROM read_intermediate_result('16_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer) ORDER BY 1 DESC
+DEBUG:  16_1 is broadcasted to localhost:57638
+DEBUG:  17_1 is broadcasted to localhost:57637
+DEBUG:  17_2 is broadcasted to localhost:57637
+DEBUG:  16_2 is broadcasted to localhost:57638
  user_id 
 ---------
        6
@@ -111,6 +126,11 @@ DEBUG:  Plan 22 query after replacing subqueries and CTEs: SELECT intermediate_r
 DEBUG:  generating subplan 21_2 for subquery SELECT user_id FROM public.events_table WHERE (user_id OPERATOR(pg_catalog.<) 3)
 DEBUG:  generating subplan 21_3 for subquery SELECT user_id FROM public.users_table WHERE (user_id OPERATOR(pg_catalog.>) 4)
 DEBUG:  Plan 21 query after replacing subqueries and CTEs: SELECT cte_1.user_id FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('21_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) cte_1 INTERSECT (SELECT intermediate_result.user_id FROM read_intermediate_result('21_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer) EXCEPT SELECT intermediate_result.user_id FROM read_intermediate_result('21_3'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) ORDER BY 1 DESC
+DEBUG:  21_1 is broadcasted to localhost:57638
+DEBUG:  22_1 is broadcasted to localhost:57637
+DEBUG:  22_2 is broadcasted to localhost:57637
+DEBUG:  21_2 is broadcasted to localhost:57638
+DEBUG:  21_3 is broadcasted to localhost:57638
  user_id 
 ---------
        2
@@ -122,6 +142,8 @@ DEBUG:  Plan 21 query after replacing subqueries and CTEs: SELECT cte_1.user_id 
 DEBUG:  generating subplan 27_1 for CTE cte_1: SELECT user_id FROM public.events_table WHERE (user_id OPERATOR(pg_catalog.<) 3)
 DEBUG:  generating subplan 27_2 for subquery SELECT user_id FROM public.users_table
 DEBUG:  Plan 27 query after replacing subqueries and CTEs: SELECT cte_1.user_id FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('27_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) cte_1 INTERSECT SELECT intermediate_result.user_id FROM read_intermediate_result('27_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer) ORDER BY 1
+DEBUG:  27_1 is broadcasted to localhost:57637
+DEBUG:  27_2 is broadcasted to localhost:57637
  user_id 
 ---------
        1
@@ -144,6 +166,10 @@ DEBUG:  generating subplan 31_1 for subquery SELECT user_id FROM public.events_t
 DEBUG:  generating subplan 31_2 for subquery SELECT user_id FROM public.events_table WHERE (user_id OPERATOR(pg_catalog.<) 2)
 DEBUG:  Plan 31 query after replacing subqueries and CTEs: SELECT intermediate_result.user_id FROM read_intermediate_result('31_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer) INTERSECT SELECT intermediate_result.user_id FROM read_intermediate_result('31_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)
 DEBUG:  Plan 30 query after replacing subqueries and CTEs: SELECT DISTINCT users_table.user_id FROM public.users_table, (SELECT cte_1.user_id FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('30_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) cte_1) foo WHERE (users_table.user_id OPERATOR(pg_catalog.=) foo.user_id) ORDER BY users_table.user_id DESC
+DEBUG:  30_1 is broadcasted to localhost:57637
+DEBUG:  30_1 is broadcasted to localhost:57638
+DEBUG:  31_1 is broadcasted to localhost:57638
+DEBUG:  31_2 is broadcasted to localhost:57638
  user_id 
 ---------
        1
@@ -166,6 +192,10 @@ DEBUG:  generating subplan 34_1 for CTE cte_1: SELECT user_id FROM public.users_
 DEBUG:  generating subplan 34_2 for CTE cte_2: SELECT user_id FROM public.events_table
 DEBUG:  generating subplan 34_3 for subquery SELECT cte_1.user_id FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('34_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) cte_1 UNION SELECT cte_2.user_id FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('34_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) cte_2
 DEBUG:  Plan 34 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM public.events_table, (SELECT intermediate_result.user_id FROM read_intermediate_result('34_3'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) foo WHERE (foo.user_id OPERATOR(pg_catalog.=) events_table.event_type)
+DEBUG:  34_1 is broadcasted to localhost:57637
+DEBUG:  34_2 is broadcasted to localhost:57637
+DEBUG:  34_3 is broadcasted to localhost:57637
+DEBUG:  34_3 is broadcasted to localhost:57638
  count 
 -------
     95
@@ -179,6 +209,8 @@ ORDER BY 1 DESC;
 DEBUG:  generating subplan 38_1 for subquery SELECT DISTINCT events_table.user_id FROM public.users_table, public.events_table WHERE (users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id)
 DEBUG:  generating subplan 38_2 for subquery SELECT DISTINCT events_table.user_id FROM public.users_table, public.events_table WHERE (users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id)
 DEBUG:  Plan 38 query after replacing subqueries and CTEs: SELECT intermediate_result.user_id FROM read_intermediate_result('38_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer) INTERSECT SELECT intermediate_result.user_id FROM read_intermediate_result('38_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer) ORDER BY 1 DESC
+DEBUG:  38_1 is broadcasted to localhost:57638
+DEBUG:  38_2 is broadcasted to localhost:57638
  user_id 
 ---------
        6
@@ -199,6 +231,8 @@ DEBUG:  generating subplan 41_1 for subquery SELECT DISTINCT events_table.user_i
 DEBUG:  push down of limit count: 10
 DEBUG:  generating subplan 41_2 for subquery SELECT DISTINCT events_table.user_id FROM public.users_table, public.events_table WHERE (users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) LIMIT 10
 DEBUG:  Plan 41 query after replacing subqueries and CTEs: SELECT intermediate_result.user_id FROM read_intermediate_result('41_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer) INTERSECT SELECT intermediate_result.user_id FROM read_intermediate_result('41_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer) ORDER BY 1 DESC
+DEBUG:  41_1 is broadcasted to localhost:57637
+DEBUG:  41_2 is broadcasted to localhost:57637
  user_id 
 ---------
        6
@@ -229,6 +263,10 @@ DEBUG:  generating subplan 46_1 for subquery SELECT DISTINCT events_table.user_i
 DEBUG:  generating subplan 46_2 for subquery SELECT DISTINCT events_table.user_id FROM public.users_table, public.events_table WHERE (users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id)
 DEBUG:  Plan 46 query after replacing subqueries and CTEs: SELECT intermediate_result.user_id FROM read_intermediate_result('46_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer) INTERSECT SELECT intermediate_result.user_id FROM read_intermediate_result('46_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)
 DEBUG:  Plan 44 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.value_2 FROM read_intermediate_result('44_1'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer)) events_table, (SELECT foo_1.user_id FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('44_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) foo_1) foo WHERE (foo.user_id OPERATOR(pg_catalog.=) events_table.value_2)
+DEBUG:  44_1 is broadcasted to localhost:57637
+DEBUG:  44_2 is broadcasted to localhost:57637
+DEBUG:  46_1 is broadcasted to localhost:57638
+DEBUG:  46_2 is broadcasted to localhost:57638
  count 
 -------
      5
@@ -250,6 +288,10 @@ DEBUG:  generating subplan 49_2 for subquery SELECT DISTINCT events_table.user_i
 DEBUG:  generating subplan 49_3 for subquery SELECT DISTINCT events_table.user_id FROM public.users_table, public.events_table WHERE (users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id)
 DEBUG:  generating subplan 49_4 for subquery SELECT intermediate_result.user_id FROM read_intermediate_result('49_3'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer) INTERSECT SELECT intermediate_result.user_id FROM read_intermediate_result('49_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)
 DEBUG:  Plan 49 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT events_table_1.user_id FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('49_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) events_table_1) events_table, (SELECT intermediate_result.user_id FROM read_intermediate_result('49_4'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) foo WHERE (foo.user_id OPERATOR(pg_catalog.=) events_table.user_id)
+DEBUG:  49_1 is broadcasted to localhost:57637
+DEBUG:  49_2 is broadcasted to localhost:57638
+DEBUG:  49_3 is broadcasted to localhost:57638
+DEBUG:  49_4 is broadcasted to localhost:57637
  count 
 -------
      6
@@ -261,6 +303,8 @@ DEBUG:  Plan 49 query after replacing subqueries and CTEs: SELECT count(*) AS co
 DEBUG:  generating subplan 54_1 for CTE cte_1: SELECT user_id FROM public.users_table
 DEBUG:  generating subplan 54_2 for CTE cte_1: SELECT user_id FROM public.users_table
 DEBUG:  Plan 54 query after replacing subqueries and CTEs: SELECT cte_1.user_id FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('54_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) cte_1 UNION SELECT cte_1.user_id FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('54_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) cte_1 ORDER BY 1 DESC
+DEBUG:  54_1 is broadcasted to localhost:57638
+DEBUG:  54_2 is broadcasted to localhost:57638
  user_id 
 ---------
        6
@@ -285,6 +329,10 @@ DEBUG:  generating subplan 57_1 for CTE cte_1: SELECT user_id FROM public.users_
 DEBUG:  generating subplan 57_2 for CTE cte_1: SELECT user_id FROM public.users_table
 DEBUG:  generating subplan 57_3 for subquery SELECT cte_1.user_id FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('57_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) cte_1 UNION SELECT cte_1.user_id FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('57_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) cte_1
 DEBUG:  Plan 57 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('57_3'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) foo, public.users_table WHERE (users_table.value_2 OPERATOR(pg_catalog.=) foo.user_id)
+DEBUG:  57_1 is broadcasted to localhost:57637
+DEBUG:  57_2 is broadcasted to localhost:57637
+DEBUG:  57_3 is broadcasted to localhost:57637
+DEBUG:  57_3 is broadcasted to localhost:57638
  count 
 -------
     92
@@ -296,6 +344,8 @@ DEBUG:  Plan 57 query after replacing subqueries and CTEs: SELECT count(*) AS co
 DEBUG:  generating subplan 61_1 for CTE cte_1: SELECT user_id, value_2 FROM public.users_table
 DEBUG:  generating subplan 61_2 for CTE cte_1: SELECT user_id, value_2 FROM public.users_table
 DEBUG:  Plan 61 query after replacing subqueries and CTEs: SELECT cte_1.x, cte_1.value_2 FROM (SELECT intermediate_result.user_id AS x, intermediate_result.value_2 FROM read_intermediate_result('61_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, value_2 integer)) cte_1 UNION SELECT cte_1.x, cte_1.value_2 FROM (SELECT intermediate_result.user_id AS x, intermediate_result.value_2 FROM read_intermediate_result('61_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, value_2 integer)) cte_1 ORDER BY 1 DESC, 2 DESC LIMIT 5
+DEBUG:  61_1 is broadcasted to localhost:57638
+DEBUG:  61_2 is broadcasted to localhost:57638
  x | value_2 
 ---+---------
  6 |        
@@ -326,6 +376,10 @@ DEBUG:  generating subplan 65_1 for subquery SELECT user_id FROM public.users_ta
 DEBUG:  generating subplan 65_2 for subquery SELECT user_id FROM public.events_table
 DEBUG:  Plan 65 query after replacing subqueries and CTEs: SELECT intermediate_result.user_id FROM read_intermediate_result('65_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer) UNION SELECT intermediate_result.user_id FROM read_intermediate_result('65_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)
 DEBUG:  Plan 64 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM public.users_table WHERE (value_2 OPERATOR(pg_catalog.=) ANY (SELECT DISTINCT cte_1.user_id FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('64_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) cte_1)) ORDER BY (count(*)) DESC
+DEBUG:  64_1 is broadcasted to localhost:57637
+DEBUG:  64_1 is broadcasted to localhost:57638
+DEBUG:  65_1 is broadcasted to localhost:57637
+DEBUG:  65_2 is broadcasted to localhost:57637
  count 
 -------
     92
@@ -349,6 +403,10 @@ DEBUG:  generating subplan 68_1 for CTE cte_1: SELECT user_id FROM public.users_
 DEBUG:  generating subplan 68_2 for CTE cte_2: SELECT user_id FROM public.events_table
 DEBUG:  generating subplan 68_3 for subquery SELECT cte_1.user_id FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('68_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) cte_1 UNION SELECT cte_2.user_id FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('68_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) cte_2
 DEBUG:  Plan 68 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM public.users_table WHERE (value_2 OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.user_id FROM read_intermediate_result('68_3'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer))) ORDER BY (count(*)) DESC
+DEBUG:  68_1 is broadcasted to localhost:57638
+DEBUG:  68_2 is broadcasted to localhost:57638
+DEBUG:  68_3 is broadcasted to localhost:57637
+DEBUG:  68_3 is broadcasted to localhost:57638
  count 
 -------
     92
@@ -377,6 +435,10 @@ DEBUG:  generating subplan 72_1 for CTE cte_1: SELECT user_id FROM public.users_
 DEBUG:  generating subplan 72_2 for CTE cte_1: SELECT user_id FROM public.users_table
 DEBUG:  generating subplan 72_3 for subquery SELECT cte_1.user_id FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('72_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) cte_1 UNION SELECT cte_1.user_id FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('72_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) cte_1
 DEBUG:  Plan 72 query after replacing subqueries and CTEs: SELECT DISTINCT user_id FROM public.events_table WHERE (event_type OPERATOR(pg_catalog.=) ANY (SELECT users_table.user_id FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('72_3'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) foo, public.users_table WHERE ((users_table.value_2 OPERATOR(pg_catalog.=) foo.user_id) AND (events_table.user_id OPERATOR(pg_catalog.=) users_table.user_id)))) ORDER BY user_id DESC
+DEBUG:  72_1 is broadcasted to localhost:57637
+DEBUG:  72_2 is broadcasted to localhost:57637
+DEBUG:  72_3 is broadcasted to localhost:57637
+DEBUG:  72_3 is broadcasted to localhost:57638
  user_id 
 ---------
        5

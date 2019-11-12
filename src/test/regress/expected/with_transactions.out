@@ -39,6 +39,10 @@ BEGIN;
 DEBUG:  generating subplan 3_1 for CTE ids_to_delete: SELECT tenant_id FROM with_transactions.raw_table WHERE (income OPERATOR(pg_catalog.<) (250)::double precision)
 DEBUG:  generating subplan 3_2 for CTE deleted_ids: DELETE FROM with_transactions.raw_table WHERE ((created_at OPERATOR(pg_catalog.<) 'Mon Feb 10 20:00:00 2014 PST'::timestamp with time zone) AND (tenant_id OPERATOR(pg_catalog.=) ANY (SELECT ids_to_delete.tenant_id FROM (SELECT intermediate_result.tenant_id FROM read_intermediate_result('3_1'::text, 'binary'::citus_copy_format) intermediate_result(tenant_id integer)) ids_to_delete))) RETURNING tenant_id
 DEBUG:  Plan 3 query after replacing subqueries and CTEs: UPDATE with_transactions.raw_table SET income = (income OPERATOR(pg_catalog.*) (2)::double precision) WHERE (tenant_id OPERATOR(pg_catalog.=) ANY (SELECT deleted_ids.tenant_id FROM (SELECT intermediate_result.tenant_id FROM read_intermediate_result('3_2'::text, 'binary'::citus_copy_format) intermediate_result(tenant_id integer)) deleted_ids))
+DEBUG:  3_1 is broadcasted to localhost:57637
+DEBUG:  3_1 is broadcasted to localhost:57638
+DEBUG:  3_2 is broadcasted to localhost:57637
+DEBUG:  3_2 is broadcasted to localhost:57638
 ROLLBACK;
 -- see that both UPDATE and DELETE commands are rollbacked
 SELECT count(*) FROM raw_table;
@@ -73,6 +77,10 @@ BEGIN;
 DEBUG:  generating subplan 9_1 for CTE distinct_count: SELECT count(DISTINCT created_at) AS count FROM with_transactions.raw_table
 DEBUG:  generating subplan 9_2 for CTE ids_inserted: INSERT INTO with_transactions.raw_table (tenant_id, income, created_at) VALUES (11, 1000, now()) RETURNING tenant_id
 DEBUG:  Plan 9 query after replacing subqueries and CTEs: UPDATE with_transactions.raw_table SET created_at = 'Sat Feb 10 20:00:00 2001 PST'::timestamp with time zone WHERE ((tenant_id OPERATOR(pg_catalog.=) ANY (SELECT ids_inserted.tenant_id FROM (SELECT intermediate_result.tenant_id FROM read_intermediate_result('9_2'::text, 'binary'::citus_copy_format) intermediate_result(tenant_id integer)) ids_inserted)) AND (tenant_id OPERATOR(pg_catalog.<) (SELECT distinct_count.count FROM (SELECT intermediate_result.count FROM read_intermediate_result('9_1'::text, 'binary'::citus_copy_format) intermediate_result(count bigint)) distinct_count)))
+DEBUG:  9_1 is broadcasted to localhost:57637
+DEBUG:  9_1 is broadcasted to localhost:57638
+DEBUG:  9_2 is broadcasted to localhost:57637
+DEBUG:  9_2 is broadcasted to localhost:57638
 	TRUNCATE second_raw_table;
 COMMIT;
 -- sequential insert followed by parallel update works just fine
@@ -83,6 +91,8 @@ WITH ids_inserted AS
 UPDATE raw_table SET created_at = '2001-02-10 20:00:00' WHERE tenant_id IN (SELECT tenant_id FROM ids_inserted);
 DEBUG:  generating subplan 12_1 for CTE ids_inserted: INSERT INTO with_transactions.raw_table (tenant_id, income, created_at) VALUES (11,1000,now()), (12,1000,now()), (13,1000,now()) RETURNING raw_table.tenant_id
 DEBUG:  Plan 12 query after replacing subqueries and CTEs: UPDATE with_transactions.raw_table SET created_at = 'Sat Feb 10 20:00:00 2001 PST'::timestamp with time zone WHERE (tenant_id OPERATOR(pg_catalog.=) ANY (SELECT ids_inserted.tenant_id FROM (SELECT intermediate_result.tenant_id FROM read_intermediate_result('12_1'::text, 'binary'::citus_copy_format) intermediate_result(tenant_id integer)) ids_inserted))
+DEBUG:  12_1 is broadcasted to localhost:57637
+DEBUG:  12_1 is broadcasted to localhost:57638
 -- make sure that everything committed
 SELECT count(*) FROM raw_table;
  count 
@@ -113,6 +123,8 @@ SELECT income FROM second_raw_table WHERE tenant_id IN (SELECT * FROM ids_insert
 DEBUG:  generating subplan 17_1 for CTE ids_inserted: INSERT INTO with_transactions.raw_table (tenant_id) VALUES (11), (12), (13), (14) RETURNING raw_table.tenant_id
 DEBUG:  Plan 17 query after replacing subqueries and CTEs: SELECT income FROM with_transactions.second_raw_table WHERE (tenant_id OPERATOR(pg_catalog.=) ANY (SELECT ids_inserted.tenant_id FROM (SELECT intermediate_result.tenant_id FROM read_intermediate_result('17_1'::text, 'binary'::citus_copy_format) intermediate_result(tenant_id integer)) ids_inserted)) ORDER BY income DESC LIMIT 3
 DEBUG:  push down of limit count: 3
+DEBUG:  17_1 is broadcasted to localhost:57637
+DEBUG:  17_1 is broadcasted to localhost:57638
  income 
 --------
 (0 rows)

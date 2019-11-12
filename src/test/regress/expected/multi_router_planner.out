@@ -354,6 +354,8 @@ DETAIL:  distribution column value: 2
 DEBUG:  Plan 67 query after replacing subqueries and CTEs: SELECT id_author.id, id_author.author_id, id_title.id, id_title.title FROM (SELECT intermediate_result.id, intermediate_result.author_id FROM read_intermediate_result('67_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, author_id bigint)) id_author, (SELECT intermediate_result.id, intermediate_result.title FROM read_intermediate_result('67_2'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, title character varying(20))) id_title WHERE (id_author.id OPERATOR(pg_catalog.=) id_title.id)
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DEBUG:  67_1 is broadcasted to localhost:57637
+DEBUG:  67_2 is broadcasted to localhost:57637
  id | author_id | id | title 
 ----+-----------+----+-------
 (0 rows)
@@ -468,6 +470,7 @@ DETAIL:  distribution column value: 1
 DEBUG:  Plan 81 query after replacing subqueries and CTEs: SELECT id, author_id, title, word_count FROM (SELECT intermediate_result.id, intermediate_result.author_id, intermediate_result.title, intermediate_result.word_count FROM read_intermediate_result('81_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, author_id bigint, title character varying(20), word_count integer)) new_article
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DEBUG:  81_1 is broadcasted to localhost:57638
  id | author_id |  title   | word_count 
 ----+-----------+----------+------------
   1 |         1 | arsenous |          9
@@ -484,6 +487,7 @@ DEBUG:  Plan is router executable
 DEBUG:  Plan 83 query after replacing subqueries and CTEs: SELECT id, author_id, title, word_count FROM (SELECT intermediate_result.id, intermediate_result.author_id, intermediate_result.title, intermediate_result.word_count FROM read_intermediate_result('83_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, author_id bigint, title character varying(20), word_count integer)) update_article
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DEBUG:  83_1 is broadcasted to localhost:57637
  id | author_id |  title   | word_count 
 ----+-----------+----------+------------
   1 |         1 | arsenous |         10
@@ -500,6 +504,7 @@ DEBUG:  Plan is router executable
 DEBUG:  Plan 85 query after replacing subqueries and CTEs: SELECT id, author_id, title, word_count FROM (SELECT intermediate_result.id, intermediate_result.author_id, intermediate_result.title, intermediate_result.word_count FROM read_intermediate_result('85_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, author_id bigint, title character varying(20), word_count integer)) delete_article
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DEBUG:  85_1 is broadcasted to localhost:57638
  id | author_id |  title   | word_count 
 ----+-----------+----------+------------
   1 |         1 | arsenous |         10
@@ -637,6 +642,8 @@ DEBUG:  generating subplan 93_1 for subquery SELECT id, word_count FROM public.a
 DEBUG:  Plan 93 query after replacing subqueries and CTEs: SELECT articles_hash.id, test.word_count FROM public.articles_hash, (SELECT intermediate_result.id, intermediate_result.word_count FROM read_intermediate_result('93_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, word_count integer)) test WHERE (test.id OPERATOR(pg_catalog.=) articles_hash.id) ORDER BY test.word_count DESC, articles_hash.id LIMIT 5
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  push down of limit count: 5
+DEBUG:  93_1 is broadcasted to localhost:57637
+DEBUG:  93_1 is broadcasted to localhost:57638
  id | word_count 
 ----+------------
  50 |      19519
@@ -657,6 +664,7 @@ DEBUG:  Plan 95 query after replacing subqueries and CTEs: SELECT articles_hash.
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 DETAIL:  distribution column value: 1
+DEBUG:  95_1 is broadcasted to localhost:57637
  id | word_count 
 ----+------------
   1 |       9572
@@ -785,6 +793,7 @@ DEBUG:  Plan 104 query after replacing subqueries and CTEs: SELECT a.author_id A
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 DETAIL:  distribution column value: 2
+DEBUG:  104_1 is broadcasted to localhost:57638
  first_author | second_word_count 
 --------------+-------------------
 (0 rows)
