@@ -46,6 +46,7 @@
 #include "optimizer/prep.h"
 #include "optimizer/tlist.h"
 #include "parser/parsetree.h"
+#include "utils/builtins.h"
 #include "utils/datum.h"
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
@@ -805,6 +806,33 @@ IsReadIntermediateResultFunction(Node *node)
 	}
 
 	return false;
+}
+
+
+/*
+ * FindResultIdOfIntermediateResultFunction extracts the id of the intermediate result
+ * if the given RTE contains a read_intermediate_results function, NULL otherwise
+ */
+Const *
+FindResultIdOfIntermediateResultFunction(RangeTblEntry *rte)
+{
+	List *functionList = NULL;
+	RangeTblFunction *rangeTblfunction = NULL;
+	FuncExpr *funcExpr = NULL;
+	Const *resultIdConst = NULL;
+
+	Assert(rte->rtekind == RTE_FUNCTION);
+
+	functionList = rte->functions;
+	rangeTblfunction = (RangeTblFunction *) linitial(functionList);
+	funcExpr = (FuncExpr *) rangeTblfunction->funcexpr;
+
+	if (IsReadIntermediateResultFunction((Node *) funcExpr))
+	{
+		resultIdConst = linitial(funcExpr->args);
+	}
+
+	return resultIdConst;
 }
 
 

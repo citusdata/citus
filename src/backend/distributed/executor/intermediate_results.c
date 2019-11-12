@@ -735,3 +735,27 @@ read_intermediate_result(PG_FUNCTION_ARGS)
 
 	return (Datum) 0;
 }
+
+
+/*
+ * makeIntermediateResultHTAB is a helper method that creates a Hash Table that store information on the intermediate result.
+ */
+HTAB *
+makeIntermediateResultHTAB()
+{
+	HTAB *intermediateResultsHash = NULL;
+	uint32 hashFlags = 0;
+	HASHCTL info = { 0 };
+	int initialNumberOfElements = 64;
+
+	info.keysize = sizeof(IntermediateResultHashKey);
+	info.entrysize = sizeof(IntermediateResultHashEntry);
+	info.hash = string_hash;
+	info.hcxt = CurrentMemoryContext;
+	hashFlags = (HASH_ELEM | HASH_FUNCTION | HASH_CONTEXT);
+
+	intermediateResultsHash = hash_create("Intermediate results hash",
+										  initialNumberOfElements, &info, hashFlags);
+
+	return intermediateResultsHash;
+}
