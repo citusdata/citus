@@ -281,6 +281,8 @@ typedef struct DistributedExecution
 	 */
 	AttInMetadata *attributeInputMetadata;
 	char **columnArray;
+
+	bool isRepartition;
 } DistributedExecution;
 
 
@@ -539,12 +541,13 @@ typedef struct TaskPlacementExecution
 
 /* local functions */
 static DistributedExecution * CreateDistributedExecution(RowModifyLevel modLevel,
-														 List *taskList,
-														 bool hasReturning,
+														 List *taskList, bool
+														 hasReturning,
 														 ParamListInfo paramListInfo,
 														 TupleDesc tupleDescriptor,
-														 Tuplestorestate *tupleStore,
-														 int targetPoolSize);
+														 Tuplestorestate *tupleStore, int
+														 targetPoolSize, bool
+														 isRepartition);
 static void StartDistributedExecution(DistributedExecution *execution);
 static void RunLocalExecution(CitusScanState *scanState, DistributedExecution *execution);
 static void RunDistributedExecution(DistributedExecution *execution);
@@ -660,7 +663,9 @@ AdaptiveExecutor(CitusScanState *scanState)
 	execution = CreateDistributedExecution(distributedPlan->modLevel, taskList,
 										   distributedPlan->hasReturning, paramListInfo,
 										   tupleDescriptor,
-										   scanState->tuplestorestate, targetPoolSize);
+										   scanState->tuplestorestate, targetPoolSize,
+										   hasDependedJobs);
+
 
 	/*
 	 * Make sure that we acquire the appropriate locks even if the local tasks
@@ -782,6 +787,22 @@ ExecuteUtilityTaskListWithoutResults(List *taskList)
 
 
 /*
+ * ExecuteTaskListRepartiton is a proxy to ExecuteTaskListExtended() with defaults
+ * for some of the arguments for a repartition query.
+ */
+uint64
+ExecuteTaskListRepartition(RowModifyLevel modLevel, List *taskList, int targetPoolSize)
+{
+	TupleDesc tupleDescriptor = NULL;
+	Tuplestorestate *tupleStore = NULL;
+	bool hasReturning = false;
+
+	return ExecuteTaskListExtended(modLevel, taskList, tupleDescriptor,
+								   tupleStore, hasReturning, targetPoolSize, true);
+}
+
+
+/*
  * ExecuteTaskList is a proxy to ExecuteTaskListExtended() with defaults
  * for some of the arguments.
  */
@@ -793,7 +814,7 @@ ExecuteTaskList(RowModifyLevel modLevel, List *taskList, int targetPoolSize)
 	bool hasReturning = false;
 
 	return ExecuteTaskListExtended(modLevel, taskList, tupleDescriptor,
-								   tupleStore, hasReturning, targetPoolSize);
+								   tupleStore, hasReturning, targetPoolSize, false);
 }
 
 
@@ -804,7 +825,7 @@ ExecuteTaskList(RowModifyLevel modLevel, List *taskList, int targetPoolSize)
 uint64
 ExecuteTaskListExtended(RowModifyLevel modLevel, List *taskList,
 						TupleDesc tupleDescriptor, Tuplestorestate *tupleStore,
-						bool hasReturning, int targetPoolSize)
+						bool hasReturning, int targetPoolSize, bool isRepartition)
 {
 	DistributedExecution *execution = NULL;
 	ParamListInfo paramListInfo = NULL;
@@ -822,7 +843,9 @@ ExecuteTaskListExtended(RowModifyLevel modLevel, List *taskList,
 
 	execution =
 		CreateDistributedExecution(modLevel, taskList, hasReturning, paramListInfo,
-								   tupleDescriptor, tupleStore, targetPoolSize);
+								   tupleDescriptor, tupleStore, targetPoolSize,
+								   isRepartition);
+
 
 	StartDistributedExecution(execution);
 	RunDistributedExecution(execution);
@@ -839,7 +862,8 @@ ExecuteTaskListExtended(RowModifyLevel modLevel, List *taskList,
 static DistributedExecution *
 CreateDistributedExecution(RowModifyLevel modLevel, List *taskList, bool hasReturning,
 						   ParamListInfo paramListInfo, TupleDesc tupleDescriptor,
-						   Tuplestorestate *tupleStore, int targetPoolSize)
+						   Tuplestorestate *tupleStore, int targetPoolSize, bool
+						   isRepartition)
 {
 	DistributedExecution *execution =
 		(DistributedExecution *) palloc0(sizeof(DistributedExecution));
@@ -869,6 +893,8 @@ CreateDistributedExecution(RowModifyLevel modLevel, List *taskList, bool hasRetu
 
 	execution->connectionSetChanged = false;
 	execution->waitFlagsChanged = false;
+
+	execution->isRepartition = isRepartition;
 
 	/* allocate execution specific data once, on the ExecutorState memory context */
 	if (tupleDescriptor != NULL)
@@ -1078,7 +1104,8 @@ DistributedExecutionRequiresRollback(DistributedExecution *execution)
 
 	if (ReadOnlyTask(task->taskType))
 	{
-		return SelectOpensTransactionBlock && IsTransactionBlock();
+		return !execution->isRepartition && SelectOpensTransactionBlock &&
+			   IsTransactionBlock();
 	}
 
 	if (IsMultiStatementTransaction())

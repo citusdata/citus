@@ -58,6 +58,7 @@ static void FillTaskKey(TaskHashKey *taskKey, Task *task);
 static bool IsAllDependencyCompleted(Task *task, HTAB *completedTasks);
 static void AddCompletedTasks(List *curCompletedTasks, HTAB *completedTasks);
 static void ExecuteTasksInDependencyOrder(List *allTasks, List *topLevelTasks);
+static List * FindExecutableTasks(List *allTasks, HTAB *completedTasks);
 static int TaskHashCompare(const void *key1, const void *key2, Size keysize);
 static uint32 TaskHash(const void *key, Size keysize);
 static bool IsTaskAlreadyCompleted(Task *task, HTAB *completedTasks);
@@ -223,7 +224,7 @@ SendCommandToAllWorkers(List *commandList)
 {
 	ListCell *workerNodeCell = NULL;
 	char *extensionOwner = CitusExtensionOwnerName();
-	List *workerNodeList = ActiveReadableNodeList();
+	List *workerNodeList = ReadWorkerNodes(false);
 
 	foreach(workerNodeCell, workerNodeList)
 	{
@@ -283,10 +284,6 @@ DoesJobIDExist(List *jobIds, uint64 jobId)
 static void
 ExecuteTasksInDependencyOrder(List *allTasks, List *topLevelTasks)
 {
-	List *curTasks = NIL;
-	ListCell *taskCell = NULL;
-	TaskHashKey taskKey;
-
 	HTAB *completedTasks = CreateTaskHashTable();
 
 	/* We only execute depended jobs' tasks, therefore to not execute */
@@ -294,26 +291,45 @@ ExecuteTasksInDependencyOrder(List *allTasks, List *topLevelTasks)
 	AddCompletedTasks(topLevelTasks, completedTasks);
 	while (true)
 	{
-		foreach(taskCell, allTasks)
-		{
-			Task *task = (Task *) lfirst(taskCell);
-			FillTaskKey(&taskKey, task);
-
-			if (IsAllDependencyCompleted(task, completedTasks) &&
-				!IsTaskAlreadyCompleted(task, completedTasks))
-			{
-				curTasks = lappend(curTasks, task);
-			}
-		}
-
+		List *curTasks = FindExecutableTasks(allTasks, completedTasks);
 		if (list_length(curTasks) == 0)
 		{
 			break;
 		}
-		ExecuteTaskList(ROW_MODIFY_NONE, curTasks, MaxAdaptiveExecutorPoolSize);
+
+		ExecuteTaskListRepartition(ROW_MODIFY_NONE, curTasks,
+								   MaxAdaptiveExecutorPoolSize);
 		AddCompletedTasks(curTasks, completedTasks);
 		curTasks = NIL;
 	}
+}
+
+
+/*
+ * FindExecutableTasks finds the tasks that can be executed currently,
+ * which means that all of their dependencies are executed. If a task
+ * is already executed, it is not added to the result.
+ */
+static List *
+FindExecutableTasks(List *allTasks, HTAB *completedTasks)
+{
+	List *curTasks = NIL;
+	ListCell *taskCell = NULL;
+	TaskHashKey taskKey;
+
+	foreach(taskCell, allTasks)
+	{
+		Task *task = (Task *) lfirst(taskCell);
+		FillTaskKey(&taskKey, task);
+
+		if (IsAllDependencyCompleted(task, completedTasks) &&
+			!IsTaskAlreadyCompleted(task, completedTasks))
+		{
+			curTasks = lappend(curTasks, task);
+		}
+	}
+
+	return curTasks;
 }
 
 

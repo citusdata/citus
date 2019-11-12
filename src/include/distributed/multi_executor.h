@@ -41,7 +41,8 @@ extern TupleTableSlot * AdaptiveExecutor(CitusScanState *scanState);
 extern uint64 ExecuteTaskListExtended(RowModifyLevel modLevel, List *taskList,
 									  TupleDesc tupleDescriptor,
 									  Tuplestorestate *tupleStore,
-									  bool hasReturning, int targetPoolSize);
+									  bool hasReturning, int targetPoolSize, bool
+									  isRepartition);
 extern void ExecuteUtilityTaskListWithoutResults(List *taskList);
 extern uint64 ExecuteTaskList(RowModifyLevel modLevel, List *taskList, int
 							  targetPoolSize);

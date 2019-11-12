@@ -181,7 +181,7 @@ CoordinatorInsertSelectExecScanInternal(CustomScanState *node)
 
 				ExecuteTaskListExtended(ROW_MODIFY_COMMUTATIVE, prunedTaskList,
 										tupleDescriptor, scanState->tuplestorestate,
-										hasReturning, MaxAdaptiveExecutorPoolSize);
+										hasReturning, MaxAdaptiveExecutorPoolSize, false);
 
 				if (SortReturning && hasReturning)
 				{

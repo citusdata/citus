@@ -189,7 +189,7 @@ CallFuncExprRemotely(CallStmt *callStmt, DistObjectCacheEntry *procedure,
 
 		ExecuteTaskListExtended(ROW_MODIFY_NONE, list_make1(task),
 								tupleDesc, tupleStore, hasReturning,
-								MaxAdaptiveExecutorPoolSize);
+								MaxAdaptiveExecutorPoolSize, false);
 
 		while (tuplestore_gettupleslot(tupleStore, true, false, slot))
 		{
