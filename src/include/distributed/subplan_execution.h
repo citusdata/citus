@@ -19,5 +19,15 @@ extern int SubPlanLevel;
 
 extern void ExecuteSubPlans(DistributedPlan *distributedPlan);
 
+typedef struct IntermediateResultsHashKey
+{
+	char intermediate_result_id[NAMEDATALEN];
+} IntermediateResultsHashKey;
+
+typedef struct IntermediateResultsHashEntry
+{
+	IntermediateResultsHashKey key;
+	List *nodeIdList;
+} IntermediateResultsHashEntry;
 
 #endif /* SUBPLAN_EXECUTION_H */

@@ -43,6 +43,8 @@ WHERE
 	foo.avg_tenant_id::int::text = reference_table.id;
 DEBUG:  generating subplan 4_1 for subquery SELECT avg((tenant_id)::integer) AS avg_tenant_id FROM recursive_dml_queries_mx.second_distributed_table
 DEBUG:  Plan 4 query after replacing subqueries and CTEs: UPDATE recursive_dml_queries_mx.reference_table SET name = ('new_'::text OPERATOR(pg_catalog.||) reference_table.name) FROM (SELECT intermediate_result.avg_tenant_id FROM read_intermediate_result('4_1'::text, 'binary'::citus_copy_format) intermediate_result(avg_tenant_id numeric)) foo WHERE (((foo.avg_tenant_id)::integer)::text OPERATOR(pg_catalog.=) reference_table.id)
+DEBUG:  4_1 is broadcasted to localhost:57637
+DEBUG:  4_1 is broadcasted to localhost:57638
 -- the subquery foo is recursively planned
 -- but note that the subquery foo itself is pushdownable
 UPDATE 
@@ -69,6 +71,8 @@ WHERE
 	AND second_distributed_table.dept IN (2);
 DEBUG:  generating subplan 6_1 for subquery SELECT DISTINCT ON (tenant_id) tenant_id, max(dept) AS max_dept FROM (SELECT second_distributed_table.dept, second_distributed_table.tenant_id FROM recursive_dml_queries_mx.second_distributed_table, recursive_dml_queries_mx.distributed_table WHERE (distributed_table.tenant_id OPERATOR(pg_catalog.=) second_distributed_table.tenant_id)) foo_inner GROUP BY tenant_id ORDER BY tenant_id DESC
 DEBUG:  Plan 6 query after replacing subqueries and CTEs: UPDATE recursive_dml_queries_mx.second_distributed_table SET dept = (foo.max_dept OPERATOR(pg_catalog.*) 2) FROM (SELECT intermediate_result.tenant_id, intermediate_result.max_dept FROM read_intermediate_result('6_1'::text, 'binary'::citus_copy_format) intermediate_result(tenant_id text, max_dept integer)) foo WHERE ((foo.tenant_id OPERATOR(pg_catalog.<>) second_distributed_table.tenant_id) AND (second_distributed_table.dept OPERATOR(pg_catalog.=) 2))
+DEBUG:  6_1 is broadcasted to localhost:57637
+DEBUG:  6_1 is broadcasted to localhost:57638
 -- run some queries from worker nodes
 \c - - - :worker_1_port
 SET search_path TO recursive_dml_queries_mx, public;

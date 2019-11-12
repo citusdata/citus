@@ -929,30 +929,6 @@ FindWorkerNodeAnyCluster(const char *nodeName, int32 nodePort)
 
 
 /*
- * GetWorkerNodeByNodeId iterates over worker nodes and returns a pointer to the
- * one that has the given id
- *
- * TODO: hanefi Use the index on id for faster lookups here, ScanKeyInit...
- */
-WorkerNode *
-GetWorkerNodeByNodeId(int nodeId)
-{
-	List *workerNodes = ReadWorkerNodes(false);
-	ListCell *lc = NULL;
-
-	foreach(lc, workerNodes)
-	{
-		WorkerNode *w = lfirst(lc);
-		if (w->nodeId == nodeId)
-		{
-			return w;
-		}
-	}
-	return NULL;
-}
-
-
-/*
  * ReadDistNode iterates over pg_dist_node table, converts each row
  * into it's memory representation (i.e., WorkerNode) and adds them into
  * a list. Lastly, the list is returned to the caller.

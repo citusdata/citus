@@ -127,6 +127,8 @@ DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  Plan 18 query after replacing subqueries and CTEs: SELECT key, value_1, value_2 FROM (SELECT intermediate_result.key, intermediate_result.value_1, intermediate_result.value_2 FROM read_intermediate_result('18_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value_1 integer, value_2 text)) t2
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DEBUG:  18_1 is not broadcasted to any node, write to local only
+DEBUG:  18_2 is broadcasted to localhost:57637
  key | value_1 | value_2 
 -----+---------+---------
 (0 rows)

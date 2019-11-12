@@ -70,6 +70,8 @@ FROM
 DEBUG:  generating subplan 4_1 for CTE cte: SELECT DISTINCT dest_table.a FROM public.dest_table, public.source_table WHERE ((source_table.a OPERATOR(pg_catalog.=) dest_table.a) AND (dest_table.b OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4])))
 DEBUG:  generating subplan 4_2 for subquery SELECT a FROM (SELECT intermediate_result.a FROM read_intermediate_result('4_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) cte ORDER BY a DESC LIMIT 5
 DEBUG:  Plan 4 query after replacing subqueries and CTEs: SELECT a FROM (SELECT intermediate_result.a FROM read_intermediate_result('4_2'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) foo ORDER BY a
+DEBUG:  4_1 is broadcasted to localhost:57638
+DEBUG:  4_2 is broadcasted to localhost:57637
  a 
 ---
 (0 rows)

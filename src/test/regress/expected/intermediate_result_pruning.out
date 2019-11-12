@@ -1,0 +1,934 @@
+CREATE SCHEMA intermediate_result_pruning;
+SET search_path TO intermediate_result_pruning;
+SET citus.shard_count TO 4;
+SET citus.next_shard_id TO 1480000;
+SET citus.shard_replication_factor = 1;
+CREATE TABLE table_1 (key int, value text);
+SELECT create_distributed_table('table_1', 'key');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+CREATE TABLE table_2 (key int, value text);
+SELECT create_distributed_table('table_2', 'key');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+CREATE TABLE table_3 (key int, value text);
+SELECT create_distributed_table('table_3', 'key');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+CREATE TABLE ref_table (key int, value text);
+SELECT create_reference_table('ref_table');
+ create_reference_table 
+------------------------
+ 
+(1 row)
+
+-- load some data
+INSERT INTO table_1    VALUES (1, '1'), (2, '2'), (3, '3'), (4, '4');
+INSERT INTO table_2    VALUES                     (3, '3'), (4, '4'), (5, '5'), (6, '6');
+INSERT INTO table_3    VALUES                     (3, '3'), (4, '4'), (5, '5'), (6, '6');
+INSERT INTO ref_table  VALUES (1, '1'), (2, '2'), (3, '3'), (4, '4'), (5, '5'), (6, '6');
+-- see which workers are hit for intermediate results
+SET client_min_messages TO DEBUG1;
+-- a very basic case, where the intermediate result
+-- should go to both workers
+WITH some_values_1 AS
+	(SELECT key FROM table_1 WHERE value IN ('3', '4'))
+SELECT
+	count(*)
+FROM
+	some_values_1 JOIN table_2 USING (key);
+DEBUG:  generating subplan 5_1 for CTE some_values_1: SELECT key FROM intermediate_result_pruning.table_1 WHERE (value OPERATOR(pg_catalog.=) ANY (ARRAY['3'::text, '4'::text]))
+DEBUG:  Plan 5 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT intermediate_result.key FROM read_intermediate_result('5_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) some_values_1 JOIN intermediate_result_pruning.table_2 USING (key))
+DEBUG:  5_1 is broadcasted to localhost:57637
+DEBUG:  5_1 is broadcasted to localhost:57638
+ count 
+-------
+     2
+(1 row)
+
+-- a very basic case, where the intermediate result
+-- should only go to one worker because the final query is a router
+-- we use random() to prevent postgres inline the CTE(s)
+WITH some_values_1 AS
+	(SELECT key, random() FROM table_1 WHERE value IN ('3', '4'))
+SELECT
+	count(*)
+FROM
+	some_values_1 JOIN table_2 USING (key) WHERE table_2.key = 1;
+DEBUG:  generating subplan 7_1 for CTE some_values_1: SELECT key, random() AS random FROM intermediate_result_pruning.table_1 WHERE (value OPERATOR(pg_catalog.=) ANY (ARRAY['3'::text, '4'::text]))
+DEBUG:  Plan 7 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT intermediate_result.key, intermediate_result.random FROM read_intermediate_result('7_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, random double precision)) some_values_1 JOIN intermediate_result_pruning.table_2 USING (key)) WHERE (table_2.key OPERATOR(pg_catalog.=) 1)
+DEBUG:  7_1 is broadcasted to localhost:57637
+ count 
+-------
+     0
+(1 row)
+
+-- a similar query, but with a reference table now
+-- given that reference tables are replicated to all nodes
+-- we have to broadcast to all nodes
+WITH some_values_1 AS
+	(SELECT key, random() FROM table_1 WHERE value IN ('3', '4'))
+SELECT
+	count(*)
+FROM
+	some_values_1 JOIN ref_table USING (key);
+DEBUG:  generating subplan 9_1 for CTE some_values_1: SELECT key, random() AS random FROM intermediate_result_pruning.table_1 WHERE (value OPERATOR(pg_catalog.=) ANY (ARRAY['3'::text, '4'::text]))
+DEBUG:  Plan 9 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT intermediate_result.key, intermediate_result.random FROM read_intermediate_result('9_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, random double precision)) some_values_1 JOIN intermediate_result_pruning.ref_table USING (key))
+DEBUG:  9_1 is broadcasted to localhost:57637
+DEBUG:  9_1 is broadcasted to localhost:57638
+ count 
+-------
+     2
+(1 row)
+
+-- a similar query as above, but this time use the CTE inside
+-- another CTE
+WITH some_values_1 AS
+	(SELECT key, random() FROM table_1 WHERE value IN ('3', '4')),
+	some_values_2 AS
+	(SELECT key, random() FROM some_values_1)
+SELECT
+	count(*)
+FROM
+	some_values_2 JOIN table_2 USING (key) WHERE table_2.key = 1;
+DEBUG:  generating subplan 11_1 for CTE some_values_1: SELECT key, random() AS random FROM intermediate_result_pruning.table_1 WHERE (value OPERATOR(pg_catalog.=) ANY (ARRAY['3'::text, '4'::text]))
+DEBUG:  generating subplan 11_2 for CTE some_values_2: SELECT key, random() AS random FROM (SELECT intermediate_result.key, intermediate_result.random FROM read_intermediate_result('11_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, random double precision)) some_values_1
+DEBUG:  Plan 11 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT intermediate_result.key, intermediate_result.random FROM read_intermediate_result('11_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, random double precision)) some_values_2 JOIN intermediate_result_pruning.table_2 USING (key)) WHERE (table_2.key OPERATOR(pg_catalog.=) 1)
+DEBUG:  11_1 is broadcasted to localhost:57638
+DEBUG:  11_2 is broadcasted to localhost:57637
+ count 
+-------
+     0
+(1 row)
+
+-- the second CTE does a join with a distributed table
+-- and the final query is a router query
+WITH some_values_1 AS
+	(SELECT key, random() FROM table_1 WHERE value IN ('3', '4')),
+	some_values_2 AS
+	(SELECT key, random() FROM some_values_1 JOIN table_2 USING (key))
+SELECT
+	count(*)
+FROM
+	some_values_2 JOIN table_2 USING (key) WHERE table_2.key = 3;
+DEBUG:  generating subplan 14_1 for CTE some_values_1: SELECT key, random() AS random FROM intermediate_result_pruning.table_1 WHERE (value OPERATOR(pg_catalog.=) ANY (ARRAY['3'::text, '4'::text]))
+DEBUG:  generating subplan 14_2 for CTE some_values_2: SELECT some_values_1.key, random() AS random FROM ((SELECT intermediate_result.key, intermediate_result.random FROM read_intermediate_result('14_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, random double precision)) some_values_1 JOIN intermediate_result_pruning.table_2 USING (key))
+DEBUG:  Plan 14 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT intermediate_result.key, intermediate_result.random FROM read_intermediate_result('14_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, random double precision)) some_values_2 JOIN intermediate_result_pruning.table_2 USING (key)) WHERE (table_2.key OPERATOR(pg_catalog.=) 3)
+DEBUG:  14_1 is broadcasted to localhost:57637
+DEBUG:  14_1 is broadcasted to localhost:57638
+DEBUG:  14_2 is broadcasted to localhost:57638
+ count 
+-------
+     1
+(1 row)
+
+-- the first CTE is used both within second CTE and the final query
+-- the second CTE does a join with a distributed table
+-- and the final query is a router query
+WITH some_values_1 AS
+	(SELECT key, random() FROM table_1 WHERE value IN ('3', '4')),
+	some_values_2 AS
+	(SELECT key, random() FROM some_values_1 JOIN table_2 USING (key))
+SELECT
+	count(*)
+FROM
+	(some_values_2 JOIN table_2 USING (key)) JOIN some_values_1 USING (key) WHERE table_2.key = 3;
+DEBUG:  generating subplan 17_1 for CTE some_values_1: SELECT key, random() AS random FROM intermediate_result_pruning.table_1 WHERE (value OPERATOR(pg_catalog.=) ANY (ARRAY['3'::text, '4'::text]))
+DEBUG:  generating subplan 17_2 for CTE some_values_2: SELECT some_values_1.key, random() AS random FROM ((SELECT intermediate_result.key, intermediate_result.random FROM read_intermediate_result('17_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, random double precision)) some_values_1 JOIN intermediate_result_pruning.table_2 USING (key))
+DEBUG:  Plan 17 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (((SELECT intermediate_result.key, intermediate_result.random FROM read_intermediate_result('17_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, random double precision)) some_values_2 JOIN intermediate_result_pruning.table_2 USING (key)) JOIN (SELECT intermediate_result.key, intermediate_result.random FROM read_intermediate_result('17_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, random double precision)) some_values_1 USING (key)) WHERE (table_2.key OPERATOR(pg_catalog.=) 3)
+DEBUG:  17_1 is broadcasted to localhost:57638
+DEBUG:  17_1 is broadcasted to localhost:57637
+DEBUG:  17_2 is broadcasted to localhost:57638
+ count 
+-------
+     1
+(1 row)
+
+-- the first CTE is used both within second CTE and the final query
+-- the second CTE does a join with a distributed table but a router query on a worker
+-- and the final query is another router query on another worker
+WITH some_values_1 AS
+	(SELECT key, random() FROM table_1 WHERE value IN ('3', '4')),
+	some_values_2 AS
+	(SELECT key, random() FROM some_values_1 JOIN table_2 USING (key) WHERE table_2.key = 1)
+SELECT
+	count(*)
+FROM
+	(some_values_2 JOIN table_2 USING (key)) JOIN some_values_1 USING (key) WHERE table_2.key = 3;
+DEBUG:  generating subplan 20_1 for CTE some_values_1: SELECT key, random() AS random FROM intermediate_result_pruning.table_1 WHERE (value OPERATOR(pg_catalog.=) ANY (ARRAY['3'::text, '4'::text]))
+DEBUG:  generating subplan 20_2 for CTE some_values_2: SELECT some_values_1.key, random() AS random FROM ((SELECT intermediate_result.key, intermediate_result.random FROM read_intermediate_result('20_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, random double precision)) some_values_1 JOIN intermediate_result_pruning.table_2 USING (key)) WHERE (table_2.key OPERATOR(pg_catalog.=) 1)
+DEBUG:  Plan 20 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (((SELECT intermediate_result.key, intermediate_result.random FROM read_intermediate_result('20_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, random double precision)) some_values_2 JOIN intermediate_result_pruning.table_2 USING (key)) JOIN (SELECT intermediate_result.key, intermediate_result.random FROM read_intermediate_result('20_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, random double precision)) some_values_1 USING (key)) WHERE (table_2.key OPERATOR(pg_catalog.=) 3)
+DEBUG:  20_1 is broadcasted to localhost:57638
+DEBUG:  20_1 is broadcasted to localhost:57637
+DEBUG:  20_2 is broadcasted to localhost:57638
+ count 
+-------
+     0
+(1 row)
+
+-- the first CTE is used both within second CTE and the final query
+-- the second CTE does a join with a distributed table but a router query on a worker
+-- and the final query is a router query on the same worker, so the first result is only
+-- broadcasted to a single node
+WITH some_values_1 AS
+	(SELECT key, random() FROM table_1 WHERE value IN ('3', '4')),
+	some_values_2 AS
+	(SELECT key, random() FROM some_values_1 JOIN table_2 USING (key) WHERE table_2.key = 1)
+SELECT
+	count(*)
+FROM
+	(some_values_2 JOIN table_2 USING (key)) JOIN some_values_1 USING (key) WHERE table_2.key = 1;
+DEBUG:  generating subplan 23_1 for CTE some_values_1: SELECT key, random() AS random FROM intermediate_result_pruning.table_1 WHERE (value OPERATOR(pg_catalog.=) ANY (ARRAY['3'::text, '4'::text]))
+DEBUG:  generating subplan 23_2 for CTE some_values_2: SELECT some_values_1.key, random() AS random FROM ((SELECT intermediate_result.key, intermediate_result.random FROM read_intermediate_result('23_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, random double precision)) some_values_1 JOIN intermediate_result_pruning.table_2 USING (key)) WHERE (table_2.key OPERATOR(pg_catalog.=) 1)
+DEBUG:  Plan 23 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (((SELECT intermediate_result.key, intermediate_result.random FROM read_intermediate_result('23_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, random double precision)) some_values_2 JOIN intermediate_result_pruning.table_2 USING (key)) JOIN (SELECT intermediate_result.key, intermediate_result.random FROM read_intermediate_result('23_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, random double precision)) some_values_1 USING (key)) WHERE (table_2.key OPERATOR(pg_catalog.=) 1)
+DEBUG:  23_1 is broadcasted to localhost:57637
+DEBUG:  23_2 is broadcasted to localhost:57637
+ count 
+-------
+     0
+(1 row)
+
+-- the same query with the above, but the final query is hitting all shards
+WITH some_values_1 AS
+	(SELECT key, random() FROM table_1 WHERE value IN ('3', '4')),
+	some_values_2 AS
+	(SELECT key, random() FROM some_values_1 JOIN table_2 USING (key))
+SELECT
+	count(*)
+FROM
+	(some_values_2 JOIN table_2 USING (key)) JOIN some_values_1 USING (key) WHERE table_2.key != 3;
+DEBUG:  generating subplan 26_1 for CTE some_values_1: SELECT key, random() AS random FROM intermediate_result_pruning.table_1 WHERE (value OPERATOR(pg_catalog.=) ANY (ARRAY['3'::text, '4'::text]))
+DEBUG:  generating subplan 26_2 for CTE some_values_2: SELECT some_values_1.key, random() AS random FROM ((SELECT intermediate_result.key, intermediate_result.random FROM read_intermediate_result('26_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, random double precision)) some_values_1 JOIN intermediate_result_pruning.table_2 USING (key))
+DEBUG:  Plan 26 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (((SELECT intermediate_result.key, intermediate_result.random FROM read_intermediate_result('26_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, random double precision)) some_values_2 JOIN intermediate_result_pruning.table_2 USING (key)) JOIN (SELECT intermediate_result.key, intermediate_result.random FROM read_intermediate_result('26_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, random double precision)) some_values_1 USING (key)) WHERE (table_2.key OPERATOR(pg_catalog.<>) 3)
+DEBUG:  26_1 is broadcasted to localhost:57637
+DEBUG:  26_1 is broadcasted to localhost:57638
+DEBUG:  26_2 is broadcasted to localhost:57637
+DEBUG:  26_2 is broadcasted to localhost:57638
+ count 
+-------
+     1
+(1 row)
+
+-- even if we add a filter on the first query and make it a router query,
+-- the first intermediate result still hits all workers because of the final
+-- join is hitting all workers
+WITH some_values_1 AS
+	(SELECT key, random() FROM table_1 WHERE value IN ('3', '4')),
+	some_values_2 AS
+	(SELECT key, random() FROM some_values_1 JOIN table_2 USING (key) WHERE table_2.key = 3)
+SELECT
+	count(*)
+FROM
+	(some_values_2 JOIN table_2 USING (key)) JOIN some_values_1 USING (key) WHERE table_2.key != 3;
+DEBUG:  generating subplan 29_1 for CTE some_values_1: SELECT key, random() AS random FROM intermediate_result_pruning.table_1 WHERE (value OPERATOR(pg_catalog.=) ANY (ARRAY['3'::text, '4'::text]))
+DEBUG:  generating subplan 29_2 for CTE some_values_2: SELECT some_values_1.key, random() AS random FROM ((SELECT intermediate_result.key, intermediate_result.random FROM read_intermediate_result('29_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, random double precision)) some_values_1 JOIN intermediate_result_pruning.table_2 USING (key)) WHERE (table_2.key OPERATOR(pg_catalog.=) 3)
+DEBUG:  Plan 29 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (((SELECT intermediate_result.key, intermediate_result.random FROM read_intermediate_result('29_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, random double precision)) some_values_2 JOIN intermediate_result_pruning.table_2 USING (key)) JOIN (SELECT intermediate_result.key, intermediate_result.random FROM read_intermediate_result('29_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, random double precision)) some_values_1 USING (key)) WHERE (table_2.key OPERATOR(pg_catalog.<>) 3)
+DEBUG:  29_1 is broadcasted to localhost:57637
+DEBUG:  29_1 is broadcasted to localhost:57638
+DEBUG:  29_2 is broadcasted to localhost:57637
+DEBUG:  29_2 is broadcasted to localhost:57638
+ count 
+-------
+     0
+(1 row)
+
+-- the reference table is joined with a distributed table and an intermediate
+-- result, but the distributed table hits all shards, so the intermediate
+-- result is sent to all nodes
+WITH some_values_1 AS
+	(SELECT key, random() FROM ref_table WHERE value IN ('3', '4'))
+SELECT
+	count(*)
+FROM
+	(some_values_1 JOIN ref_table USING (key)) JOIN table_2 USING (key);
+DEBUG:  generating subplan 32_1 for CTE some_values_1: SELECT key, random() AS random FROM intermediate_result_pruning.ref_table WHERE (value OPERATOR(pg_catalog.=) ANY (ARRAY['3'::text, '4'::text]))
+DEBUG:  Plan 32 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (((SELECT intermediate_result.key, intermediate_result.random FROM read_intermediate_result('32_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, random double precision)) some_values_1 JOIN intermediate_result_pruning.ref_table USING (key)) JOIN intermediate_result_pruning.table_2 USING (key))
+DEBUG:  32_1 is broadcasted to localhost:57637
+DEBUG:  32_1 is broadcasted to localhost:57638
+ count 
+-------
+     2
+(1 row)
+
+-- similar query as above, but this time the whole query is a router
+-- query, so no intermediate results
+WITH some_values_1 AS
+	(SELECT key, random() FROM ref_table WHERE value IN ('3', '4'))
+SELECT
+	count(*)
+FROM
+	(some_values_1 JOIN ref_table USING (key)) JOIN table_2 USING (key) WHERE table_2.key = 1;
+ count 
+-------
+     0
+(1 row)
+
+-- now, the second CTE has a single shard join with a distributed table
+-- so the first CTE should only be broadcasted to that node
+-- since the final query doesn't have a join, it should simply be broadcasted
+-- to one node
+WITH some_values_1 AS
+	(SELECT key, random() FROM table_1 WHERE value IN ('3', '4')),
+	some_values_2 AS
+	(SELECT key, random() FROM some_values_1 JOIN table_2 USING (key) WHERE key = 1)
+SELECT
+	count(*)
+FROM
+	some_values_2;
+DEBUG:  generating subplan 35_1 for CTE some_values_1: SELECT key, random() AS random FROM intermediate_result_pruning.table_1 WHERE (value OPERATOR(pg_catalog.=) ANY (ARRAY['3'::text, '4'::text]))
+DEBUG:  generating subplan 35_2 for CTE some_values_2: SELECT some_values_1.key, random() AS random FROM ((SELECT intermediate_result.key, intermediate_result.random FROM read_intermediate_result('35_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, random double precision)) some_values_1 JOIN intermediate_result_pruning.table_2 USING (key)) WHERE (some_values_1.key OPERATOR(pg_catalog.=) 1)
+DEBUG:  Plan 35 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.key, intermediate_result.random FROM read_intermediate_result('35_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, random double precision)) some_values_2
+DEBUG:  35_1 is broadcasted to localhost:57637
+DEBUG:  35_2 is broadcasted to localhost:57637
+ count 
+-------
+     0
+(1 row)
+
+-- the same query inlined inside a CTE, and the final query has a
+-- join with a distributed table
+WITH top_cte as (
+		WITH some_values_1 AS
+		(SELECT key, random() FROM table_1 WHERE value IN ('3', '4')),
+		some_values_2 AS
+		(SELECT key, random() FROM some_values_1 JOIN table_2 USING (key) WHERE key = 1)
+	SELECT
+		DISTINCT key
+	FROM
+		some_values_2
+)
+SELECT
+	count(*)
+FROM
+	top_cte JOIN table_2 USING (key);
+DEBUG:  generating subplan 38_1 for CTE top_cte: WITH some_values_1 AS (SELECT table_1.key, random() AS random FROM intermediate_result_pruning.table_1 WHERE (table_1.value OPERATOR(pg_catalog.=) ANY (ARRAY['3'::text, '4'::text]))), some_values_2 AS (SELECT some_values_1.key, random() AS random FROM (some_values_1 JOIN intermediate_result_pruning.table_2 USING (key)) WHERE (some_values_1.key OPERATOR(pg_catalog.=) 1)) SELECT DISTINCT key FROM some_values_2
+DEBUG:  generating subplan 39_1 for CTE some_values_1: SELECT key, random() AS random FROM intermediate_result_pruning.table_1 WHERE (value OPERATOR(pg_catalog.=) ANY (ARRAY['3'::text, '4'::text]))
+DEBUG:  generating subplan 39_2 for CTE some_values_2: SELECT some_values_1.key, random() AS random FROM ((SELECT intermediate_result.key, intermediate_result.random FROM read_intermediate_result('39_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, random double precision)) some_values_1 JOIN intermediate_result_pruning.table_2 USING (key)) WHERE (some_values_1.key OPERATOR(pg_catalog.=) 1)
+DEBUG:  Plan 39 query after replacing subqueries and CTEs: SELECT DISTINCT key FROM (SELECT intermediate_result.key, intermediate_result.random FROM read_intermediate_result('39_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, random double precision)) some_values_2
+DEBUG:  Plan 38 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT intermediate_result.key FROM read_intermediate_result('38_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) top_cte JOIN intermediate_result_pruning.table_2 USING (key))
+DEBUG:  38_1 is broadcasted to localhost:57637
+DEBUG:  38_1 is broadcasted to localhost:57638
+DEBUG:  39_1 is broadcasted to localhost:57637
+DEBUG:  39_2 is broadcasted to localhost:57638
+ count 
+-------
+     0
+(1 row)
+
+-- very much the same query, but this time the top query is also a router query
+-- on a single worker, so all intermediate results only hit a single node
+WITH top_cte as (
+		WITH some_values_1 AS
+		(SELECT key, random() FROM table_1 WHERE value IN ('3', '4')),
+		some_values_2 AS
+		(SELECT key, random() FROM some_values_1 JOIN table_2 USING (key) WHERE key = 1)
+	SELECT
+		DISTINCT key
+	FROM
+		some_values_2
+)
+SELECT
+	count(*)
+FROM
+	top_cte JOIN table_2 USING (key) WHERE table_2.key = 2;
+DEBUG:  generating subplan 42_1 for CTE top_cte: WITH some_values_1 AS (SELECT table_1.key, random() AS random FROM intermediate_result_pruning.table_1 WHERE (table_1.value OPERATOR(pg_catalog.=) ANY (ARRAY['3'::text, '4'::text]))), some_values_2 AS (SELECT some_values_1.key, random() AS random FROM (some_values_1 JOIN intermediate_result_pruning.table_2 USING (key)) WHERE (some_values_1.key OPERATOR(pg_catalog.=) 1)) SELECT DISTINCT key FROM some_values_2
+DEBUG:  generating subplan 43_1 for CTE some_values_1: SELECT key, random() AS random FROM intermediate_result_pruning.table_1 WHERE (value OPERATOR(pg_catalog.=) ANY (ARRAY['3'::text, '4'::text]))
+DEBUG:  generating subplan 43_2 for CTE some_values_2: SELECT some_values_1.key, random() AS random FROM ((SELECT intermediate_result.key, intermediate_result.random FROM read_intermediate_result('43_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, random double precision)) some_values_1 JOIN intermediate_result_pruning.table_2 USING (key)) WHERE (some_values_1.key OPERATOR(pg_catalog.=) 1)
+DEBUG:  Plan 43 query after replacing subqueries and CTEs: SELECT DISTINCT key FROM (SELECT intermediate_result.key, intermediate_result.random FROM read_intermediate_result('43_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, random double precision)) some_values_2
+DEBUG:  Plan 42 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT intermediate_result.key FROM read_intermediate_result('42_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) top_cte JOIN intermediate_result_pruning.table_2 USING (key)) WHERE (table_2.key OPERATOR(pg_catalog.=) 2)
+DEBUG:  42_1 is broadcasted to localhost:57638
+DEBUG:  43_1 is broadcasted to localhost:57637
+DEBUG:  43_2 is broadcasted to localhost:57637
+ count 
+-------
+     0
+(1 row)
+
+-- some_values_1 is first used by a single shard-query, and than with a multi-shard
+-- CTE, finally a cartesian product join
+WITH some_values_1 AS
+	(SELECT key, random() FROM table_1 WHERE value IN ('3', '4')),
+	some_values_2 AS
+	(SELECT key, random() FROM some_values_1 JOIN table_2 USING (key) WHERE key = 1),
+	some_values_3 AS
+	(SELECT key FROM (some_values_2 JOIN table_2 USING (key)) JOIN some_values_1 USING (key))
+SELECT * FROM some_values_3 JOIN ref_table ON (true);
+DEBUG:  generating subplan 46_1 for CTE some_values_1: SELECT key, random() AS random FROM intermediate_result_pruning.table_1 WHERE (value OPERATOR(pg_catalog.=) ANY (ARRAY['3'::text, '4'::text]))
+DEBUG:  generating subplan 46_2 for CTE some_values_2: SELECT some_values_1.key, random() AS random FROM ((SELECT intermediate_result.key, intermediate_result.random FROM read_intermediate_result('46_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, random double precision)) some_values_1 JOIN intermediate_result_pruning.table_2 USING (key)) WHERE (some_values_1.key OPERATOR(pg_catalog.=) 1)
+DEBUG:  generating subplan 46_3 for CTE some_values_3: SELECT some_values_2.key FROM (((SELECT intermediate_result.key, intermediate_result.random FROM read_intermediate_result('46_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, random double precision)) some_values_2 JOIN intermediate_result_pruning.table_2 USING (key)) JOIN (SELECT intermediate_result.key, intermediate_result.random FROM read_intermediate_result('46_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, random double precision)) some_values_1 USING (key))
+DEBUG:  Plan 46 query after replacing subqueries and CTEs: SELECT some_values_3.key, ref_table.key, ref_table.value FROM ((SELECT intermediate_result.key FROM read_intermediate_result('46_3'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) some_values_3 JOIN intermediate_result_pruning.ref_table ON (true))
+DEBUG:  46_1 is broadcasted to localhost:57637
+DEBUG:  46_1 is broadcasted to localhost:57638
+DEBUG:  46_2 is broadcasted to localhost:57637
+DEBUG:  46_2 is broadcasted to localhost:57638
+DEBUG:  46_3 is broadcasted to localhost:57637
+DEBUG:  46_3 is broadcasted to localhost:57638
+ key | key | value 
+-----+-----+-------
+(0 rows)
+
+-- join on intermediate results, so should only
+-- go to a single node
+WITH some_values_1 AS
+	(SELECT key, random() FROM table_1 WHERE value IN ('3', '4')),
+	some_values_2 AS
+	(SELECT key, random() FROM table_2 WHERE value IN ('3', '4'))
+SELECT count(*) FROM some_values_2 JOIN some_values_1 USING (key);
+DEBUG:  generating subplan 50_1 for CTE some_values_1: SELECT key, random() AS random FROM intermediate_result_pruning.table_1 WHERE (value OPERATOR(pg_catalog.=) ANY (ARRAY['3'::text, '4'::text]))
+DEBUG:  generating subplan 50_2 for CTE some_values_2: SELECT key, random() AS random FROM intermediate_result_pruning.table_2 WHERE (value OPERATOR(pg_catalog.=) ANY (ARRAY['3'::text, '4'::text]))
+DEBUG:  Plan 50 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT intermediate_result.key, intermediate_result.random FROM read_intermediate_result('50_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, random double precision)) some_values_2 JOIN (SELECT intermediate_result.key, intermediate_result.random FROM read_intermediate_result('50_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, random double precision)) some_values_1 USING (key))
+DEBUG:  50_1 is broadcasted to localhost:57638
+DEBUG:  50_2 is broadcasted to localhost:57638
+ count 
+-------
+     2
+(1 row)
+
+-- same query with WHERE false make sure that we're not broken
+-- for such edge cases
+WITH some_values_1 AS
+	(SELECT key, random() FROM table_1 WHERE value IN ('3', '4')),
+	some_values_2 AS
+	(SELECT key, random() FROM table_2 WHERE value IN ('3', '4'))
+SELECT count(*) FROM some_values_2 JOIN some_values_1 USING (key) WHERE false;
+DEBUG:  generating subplan 53_1 for CTE some_values_1: SELECT key, random() AS random FROM intermediate_result_pruning.table_1 WHERE (value OPERATOR(pg_catalog.=) ANY (ARRAY['3'::text, '4'::text]))
+DEBUG:  generating subplan 53_2 for CTE some_values_2: SELECT key, random() AS random FROM intermediate_result_pruning.table_2 WHERE (value OPERATOR(pg_catalog.=) ANY (ARRAY['3'::text, '4'::text]))
+DEBUG:  Plan 53 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT intermediate_result.key, intermediate_result.random FROM read_intermediate_result('53_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, random double precision)) some_values_2 JOIN (SELECT intermediate_result.key, intermediate_result.random FROM read_intermediate_result('53_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, random double precision)) some_values_1 USING (key)) WHERE false
+DEBUG:  53_1 is broadcasted to localhost:57637
+DEBUG:  53_2 is broadcasted to localhost:57637
+ count 
+-------
+     0
+(1 row)
+
+-- do not use some_values_2 at all, so only 2 intermediate results are
+-- broadcasted
+WITH some_values_1 AS
+	(SELECT key, random() FROM table_1 WHERE value IN ('3', '4')),
+	some_values_2 AS
+	(SELECT key, random() FROM some_values_1),
+	some_values_3 AS
+	(SELECT key, random() FROM some_values_1)
+SELECT
+	count(*)
+FROM
+	some_values_3;
+DEBUG:  generating subplan 56_1 for CTE some_values_1: SELECT key, random() AS random FROM intermediate_result_pruning.table_1 WHERE (value OPERATOR(pg_catalog.=) ANY (ARRAY['3'::text, '4'::text]))
+DEBUG:  generating subplan 56_2 for CTE some_values_3: SELECT key, random() AS random FROM (SELECT intermediate_result.key, intermediate_result.random FROM read_intermediate_result('56_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, random double precision)) some_values_1
+DEBUG:  Plan 56 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.key, intermediate_result.random FROM read_intermediate_result('56_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, random double precision)) some_values_3
+DEBUG:  56_1 is broadcasted to localhost:57638
+DEBUG:  56_2 is broadcasted to localhost:57637
+ count 
+-------
+     2
+(1 row)
+
+-- lets have some deeper intermediate results
+-- the inner most two results and the final query (which contains only intermediate results)
+-- hitting single worker, others hitting all workers
+-- (see below query where all intermediate results hit a single node)
+SELECT count(*) FROM
+(
+	SELECT avg(min::int) FROM
+	(
+		SELECT min(table_1.value) FROM
+		(
+			SELECT avg(value::int) as avg_ev_type FROM
+			(
+				SELECT max(value) as mx_val_1 FROM
+				(
+					SELECT avg(value::int) as avg FROM
+					(
+						SELECT cnt FROM
+						(
+							SELECT count(*) as cnt, value
+							FROM table_1
+							WHERE key = 1
+							GROUP BY value
+						) as level_1, table_1
+						WHERE table_1.key = level_1.cnt AND key = 3
+					) as level_2, table_2
+					WHERE table_2.key = level_2.cnt AND key = 5
+					GROUP BY level_2.cnt
+				) as level_3, table_1
+				WHERE value::numeric = level_3.avg AND key = 6
+				GROUP BY level_3.avg
+			) as level_4, table_2
+			WHERE level_4.mx_val_1::int = table_2.key
+			GROUP BY level_4.mx_val_1
+		) as level_5, table_1
+		WHERE level_5.avg_ev_type = table_1.key AND key > 111
+		GROUP BY level_5.avg_ev_type
+	) as level_6, table_1 WHERE table_1.key::int = level_6.min::int
+	GROUP BY table_1.value
+) as bar;
+DEBUG:  generating subplan 59_1 for subquery SELECT count(*) AS cnt, value FROM intermediate_result_pruning.table_1 WHERE (key OPERATOR(pg_catalog.=) 1) GROUP BY value
+DEBUG:  generating subplan 59_2 for subquery SELECT avg((table_2.value)::integer) AS avg FROM (SELECT level_1.cnt FROM (SELECT intermediate_result.cnt, intermediate_result.value FROM read_intermediate_result('59_1'::text, 'binary'::citus_copy_format) intermediate_result(cnt bigint, value text)) level_1, intermediate_result_pruning.table_1 WHERE ((table_1.key OPERATOR(pg_catalog.=) level_1.cnt) AND (table_1.key OPERATOR(pg_catalog.=) 3))) level_2, intermediate_result_pruning.table_2 WHERE ((table_2.key OPERATOR(pg_catalog.=) level_2.cnt) AND (table_2.key OPERATOR(pg_catalog.=) 5)) GROUP BY level_2.cnt
+DEBUG:  generating subplan 59_3 for subquery SELECT max(table_1.value) AS mx_val_1 FROM (SELECT intermediate_result.avg FROM read_intermediate_result('59_2'::text, 'binary'::citus_copy_format) intermediate_result(avg numeric)) level_3, intermediate_result_pruning.table_1 WHERE (((table_1.value)::numeric OPERATOR(pg_catalog.=) level_3.avg) AND (table_1.key OPERATOR(pg_catalog.=) 6)) GROUP BY level_3.avg
+DEBUG:  generating subplan 59_4 for subquery SELECT avg((table_2.value)::integer) AS avg_ev_type FROM (SELECT intermediate_result.mx_val_1 FROM read_intermediate_result('59_3'::text, 'binary'::citus_copy_format) intermediate_result(mx_val_1 text)) level_4, intermediate_result_pruning.table_2 WHERE ((level_4.mx_val_1)::integer OPERATOR(pg_catalog.=) table_2.key) GROUP BY level_4.mx_val_1
+DEBUG:  generating subplan 59_5 for subquery SELECT min(table_1.value) AS min FROM (SELECT intermediate_result.avg_ev_type FROM read_intermediate_result('59_4'::text, 'binary'::citus_copy_format) intermediate_result(avg_ev_type numeric)) level_5, intermediate_result_pruning.table_1 WHERE ((level_5.avg_ev_type OPERATOR(pg_catalog.=) (table_1.key)::numeric) AND (table_1.key OPERATOR(pg_catalog.>) 111)) GROUP BY level_5.avg_ev_type
+DEBUG:  generating subplan 59_6 for subquery SELECT avg((level_6.min)::integer) AS avg FROM (SELECT intermediate_result.min FROM read_intermediate_result('59_5'::text, 'binary'::citus_copy_format) intermediate_result(min text)) level_6, intermediate_result_pruning.table_1 WHERE (table_1.key OPERATOR(pg_catalog.=) (level_6.min)::integer) GROUP BY table_1.value
+DEBUG:  Plan 59 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.avg FROM read_intermediate_result('59_6'::text, 'binary'::citus_copy_format) intermediate_result(avg numeric)) bar
+DEBUG:  59_1 is broadcasted to localhost:57638
+DEBUG:  59_2 is broadcasted to localhost:57637
+DEBUG:  59_3 is broadcasted to localhost:57637
+DEBUG:  59_3 is broadcasted to localhost:57638
+DEBUG:  59_4 is broadcasted to localhost:57637
+DEBUG:  59_4 is broadcasted to localhost:57638
+DEBUG:  59_5 is broadcasted to localhost:57637
+DEBUG:  59_5 is broadcasted to localhost:57638
+DEBUG:  59_6 is broadcasted to localhost:57637
+ count 
+-------
+     0
+(1 row)
+
+-- the same query where all intermediate results hits one
+-- worker because each and every query is a router query -- but on different nodes
+SELECT count(*) FROM
+(
+	SELECT avg(min::int) FROM
+	(
+		SELECT min(table_1.value) FROM
+		(
+			SELECT avg(value::int) as avg_ev_type FROM
+			(
+				SELECT max(value) as mx_val_1 FROM
+				(
+					SELECT avg(value::int) as avg FROM
+					(
+						SELECT cnt FROM
+						(
+							SELECT count(*) as cnt, value
+							FROM table_1
+							WHERE key = 1
+							GROUP BY value
+						) as level_1, table_1
+						WHERE table_1.key = level_1.cnt AND key = 3
+					) as level_2, table_2
+					WHERE table_2.key = level_2.cnt AND key = 5
+					GROUP BY level_2.cnt
+				) as level_3, table_1
+				WHERE value::numeric = level_3.avg AND key = 6
+				GROUP BY level_3.avg
+			) as level_4, table_2
+			WHERE level_4.mx_val_1::int = table_2.key AND table_2.key = 1
+			GROUP BY level_4.mx_val_1
+		) as level_5, table_1
+		WHERE level_5.avg_ev_type = table_1.key AND key = 111
+		GROUP BY level_5.avg_ev_type
+	) as level_6, table_1
+	WHERE table_1.key::int = level_6.min::int AND table_1.key = 4
+	GROUP BY table_1.value
+) as bar;
+DEBUG:  generating subplan 66_1 for subquery SELECT count(*) AS cnt, value FROM intermediate_result_pruning.table_1 WHERE (key OPERATOR(pg_catalog.=) 1) GROUP BY value
+DEBUG:  generating subplan 66_2 for subquery SELECT avg((table_2.value)::integer) AS avg FROM (SELECT level_1.cnt FROM (SELECT intermediate_result.cnt, intermediate_result.value FROM read_intermediate_result('66_1'::text, 'binary'::citus_copy_format) intermediate_result(cnt bigint, value text)) level_1, intermediate_result_pruning.table_1 WHERE ((table_1.key OPERATOR(pg_catalog.=) level_1.cnt) AND (table_1.key OPERATOR(pg_catalog.=) 3))) level_2, intermediate_result_pruning.table_2 WHERE ((table_2.key OPERATOR(pg_catalog.=) level_2.cnt) AND (table_2.key OPERATOR(pg_catalog.=) 5)) GROUP BY level_2.cnt
+DEBUG:  generating subplan 66_3 for subquery SELECT max(table_1.value) AS mx_val_1 FROM (SELECT intermediate_result.avg FROM read_intermediate_result('66_2'::text, 'binary'::citus_copy_format) intermediate_result(avg numeric)) level_3, intermediate_result_pruning.table_1 WHERE (((table_1.value)::numeric OPERATOR(pg_catalog.=) level_3.avg) AND (table_1.key OPERATOR(pg_catalog.=) 6)) GROUP BY level_3.avg
+DEBUG:  generating subplan 66_4 for subquery SELECT avg((table_2.value)::integer) AS avg_ev_type FROM (SELECT intermediate_result.mx_val_1 FROM read_intermediate_result('66_3'::text, 'binary'::citus_copy_format) intermediate_result(mx_val_1 text)) level_4, intermediate_result_pruning.table_2 WHERE (((level_4.mx_val_1)::integer OPERATOR(pg_catalog.=) table_2.key) AND (table_2.key OPERATOR(pg_catalog.=) 1)) GROUP BY level_4.mx_val_1
+DEBUG:  generating subplan 66_5 for subquery SELECT min(table_1.value) AS min FROM (SELECT intermediate_result.avg_ev_type FROM read_intermediate_result('66_4'::text, 'binary'::citus_copy_format) intermediate_result(avg_ev_type numeric)) level_5, intermediate_result_pruning.table_1 WHERE ((level_5.avg_ev_type OPERATOR(pg_catalog.=) (table_1.key)::numeric) AND (table_1.key OPERATOR(pg_catalog.=) 111)) GROUP BY level_5.avg_ev_type
+DEBUG:  generating subplan 66_6 for subquery SELECT avg((level_6.min)::integer) AS avg FROM (SELECT intermediate_result.min FROM read_intermediate_result('66_5'::text, 'binary'::citus_copy_format) intermediate_result(min text)) level_6, intermediate_result_pruning.table_1 WHERE ((table_1.key OPERATOR(pg_catalog.=) (level_6.min)::integer) AND (table_1.key OPERATOR(pg_catalog.=) 4)) GROUP BY table_1.value
+DEBUG:  Plan 66 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.avg FROM read_intermediate_result('66_6'::text, 'binary'::citus_copy_format) intermediate_result(avg numeric)) bar
+DEBUG:  66_1 is broadcasted to localhost:57638
+DEBUG:  66_2 is broadcasted to localhost:57637
+DEBUG:  66_3 is broadcasted to localhost:57637
+DEBUG:  66_4 is broadcasted to localhost:57638
+DEBUG:  66_5 is broadcasted to localhost:57638
+DEBUG:  66_6 is broadcasted to localhost:57637
+ count 
+-------
+     0
+(1 row)
+
+-- sanity checks for set operations
+-- the intermediate results should just hit a single worker
+(SELECT key FROM table_1 WHERE key = 1)
+INTERSECT
+(SELECT key FROM table_1 WHERE key = 2);
+DEBUG:  generating subplan 73_1 for subquery SELECT key FROM intermediate_result_pruning.table_1 WHERE (key OPERATOR(pg_catalog.=) 1)
+DEBUG:  generating subplan 73_2 for subquery SELECT key FROM intermediate_result_pruning.table_1 WHERE (key OPERATOR(pg_catalog.=) 2)
+DEBUG:  Plan 73 query after replacing subqueries and CTEs: SELECT intermediate_result.key FROM read_intermediate_result('73_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer) INTERSECT SELECT intermediate_result.key FROM read_intermediate_result('73_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer)
+DEBUG:  73_1 is broadcasted to localhost:57638
+DEBUG:  73_2 is broadcasted to localhost:57638
+ key 
+-----
+(0 rows)
+
+-- the intermediate results should just hit a single worker
+WITH cte_1 AS
+(
+	(SELECT key FROM table_1 WHERE key = 1)
+	INTERSECT
+	(SELECT key FROM table_1 WHERE key = 2)
+),
+cte_2 AS
+(
+	(SELECT key FROM table_1 WHERE key = 3)
+	INTERSECT
+	(SELECT key FROM table_1 WHERE key = 4)
+)
+SELECT * FROM cte_1
+	UNION
+SELECT * FROM cte_2;
+DEBUG:  generating subplan 76_1 for CTE cte_1: SELECT table_1.key FROM intermediate_result_pruning.table_1 WHERE (table_1.key OPERATOR(pg_catalog.=) 1) INTERSECT SELECT table_1.key FROM intermediate_result_pruning.table_1 WHERE (table_1.key OPERATOR(pg_catalog.=) 2)
+DEBUG:  generating subplan 77_1 for subquery SELECT key FROM intermediate_result_pruning.table_1 WHERE (key OPERATOR(pg_catalog.=) 1)
+DEBUG:  generating subplan 77_2 for subquery SELECT key FROM intermediate_result_pruning.table_1 WHERE (key OPERATOR(pg_catalog.=) 2)
+DEBUG:  Plan 77 query after replacing subqueries and CTEs: SELECT intermediate_result.key FROM read_intermediate_result('77_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer) INTERSECT SELECT intermediate_result.key FROM read_intermediate_result('77_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer)
+DEBUG:  generating subplan 76_2 for CTE cte_2: SELECT table_1.key FROM intermediate_result_pruning.table_1 WHERE (table_1.key OPERATOR(pg_catalog.=) 3) INTERSECT SELECT table_1.key FROM intermediate_result_pruning.table_1 WHERE (table_1.key OPERATOR(pg_catalog.=) 4)
+DEBUG:  Plan 76 query after replacing subqueries and CTEs: SELECT cte_1.key FROM (SELECT intermediate_result.key FROM read_intermediate_result('76_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) cte_1 UNION SELECT cte_2.key FROM (SELECT intermediate_result.key FROM read_intermediate_result('76_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) cte_2
+DEBUG:  76_1 is broadcasted to localhost:57638
+DEBUG:  77_1 is broadcasted to localhost:57637
+DEBUG:  77_2 is broadcasted to localhost:57637
+DEBUG:  76_2 is broadcasted to localhost:57638
+ key 
+-----
+(0 rows)
+
+-- one final test with SET operations, where
+-- we join the results with distributed tables
+-- so cte_1 should hit all workers, but still the
+-- others should hit single worker each
+WITH cte_1 AS
+(
+	(SELECT key FROM table_1 WHERE key = 1)
+	INTERSECT
+	(SELECT key FROM table_1 WHERE key = 2)
+),
+cte_2 AS
+(
+	SELECT count(*) FROM table_1 JOIN cte_1 USING (key)
+)
+SELECT * FROM cte_2;
+DEBUG:  generating subplan 81_1 for CTE cte_1: SELECT table_1.key FROM intermediate_result_pruning.table_1 WHERE (table_1.key OPERATOR(pg_catalog.=) 1) INTERSECT SELECT table_1.key FROM intermediate_result_pruning.table_1 WHERE (table_1.key OPERATOR(pg_catalog.=) 2)
+DEBUG:  generating subplan 82_1 for subquery SELECT key FROM intermediate_result_pruning.table_1 WHERE (key OPERATOR(pg_catalog.=) 1)
+DEBUG:  generating subplan 82_2 for subquery SELECT key FROM intermediate_result_pruning.table_1 WHERE (key OPERATOR(pg_catalog.=) 2)
+DEBUG:  Plan 82 query after replacing subqueries and CTEs: SELECT intermediate_result.key FROM read_intermediate_result('82_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer) INTERSECT SELECT intermediate_result.key FROM read_intermediate_result('82_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer)
+DEBUG:  generating subplan 81_2 for CTE cte_2: SELECT count(*) AS count FROM (intermediate_result_pruning.table_1 JOIN (SELECT intermediate_result.key FROM read_intermediate_result('81_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) cte_1 USING (key))
+DEBUG:  Plan 81 query after replacing subqueries and CTEs: SELECT count FROM (SELECT intermediate_result.count FROM read_intermediate_result('81_2'::text, 'binary'::citus_copy_format) intermediate_result(count bigint)) cte_2
+DEBUG:  81_1 is broadcasted to localhost:57637
+DEBUG:  81_1 is broadcasted to localhost:57638
+DEBUG:  82_1 is broadcasted to localhost:57637
+DEBUG:  82_2 is broadcasted to localhost:57637
+DEBUG:  81_2 is broadcasted to localhost:57638
+ count 
+-------
+     0
+(1 row)
+
+-- sanity checks for non-colocated subquery joins
+-- the recursively planned subquery (bar) should hit all
+-- nodes
+SELECT
+	count(*)
+FROM
+	(SELECT key, random() FROM table_1) as foo,
+	(SELECT key, random() FROM table_2) as bar
+WHERE
+	foo.key != bar.key;
+DEBUG:  generating subplan 86_1 for subquery SELECT key, random() AS random FROM intermediate_result_pruning.table_2
+DEBUG:  Plan 86 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT table_1.key, random() AS random FROM intermediate_result_pruning.table_1) foo, (SELECT intermediate_result.key, intermediate_result.random FROM read_intermediate_result('86_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, random double precision)) bar WHERE (foo.key OPERATOR(pg_catalog.<>) bar.key)
+DEBUG:  86_1 is broadcasted to localhost:57637
+DEBUG:  86_1 is broadcasted to localhost:57638
+ count 
+-------
+    14
+(1 row)
+
+-- the recursively planned subquery (bar) should hit one
+-- node because foo goes to a single node
+SELECT
+	count(*)
+FROM
+	(SELECT key, random() FROM table_1 WHERE key = 1) as foo,
+	(SELECT key, random() FROM table_2) as bar
+WHERE
+	foo.key != bar.key;
+DEBUG:  generating subplan 88_1 for subquery SELECT key, random() AS random FROM intermediate_result_pruning.table_2
+DEBUG:  Plan 88 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT table_1.key, random() AS random FROM intermediate_result_pruning.table_1 WHERE (table_1.key OPERATOR(pg_catalog.=) 1)) foo, (SELECT intermediate_result.key, intermediate_result.random FROM read_intermediate_result('88_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, random double precision)) bar WHERE (foo.key OPERATOR(pg_catalog.<>) bar.key)
+DEBUG:  88_1 is broadcasted to localhost:57637
+ count 
+-------
+     4
+(1 row)
+
+-- sanity checks for modification queries
+-- select_data goes to a single node, because it is used in another subquery
+-- raw_data is also the final router query, so hits a single shard
+-- however, the subquery in WHERE clause of the DELETE query is broadcasted to all
+-- nodes
+BEGIN;
+WITH select_data AS (
+	SELECT * FROM table_1
+),
+raw_data AS (
+	DELETE FROM table_2 WHERE key >= (SELECT min(key) FROM select_data WHERE key > 1) RETURNING *
+)
+SELECT * FROM raw_data;
+DEBUG:  generating subplan 90_1 for CTE select_data: SELECT key, value FROM intermediate_result_pruning.table_1
+DEBUG:  generating subplan 90_2 for CTE raw_data: DELETE FROM intermediate_result_pruning.table_2 WHERE (key OPERATOR(pg_catalog.>=) (SELECT min(select_data.key) AS min FROM (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('90_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) select_data WHERE (select_data.key OPERATOR(pg_catalog.>) 1))) RETURNING key, value
+DEBUG:  generating subplan 92_1 for subquery SELECT min(key) AS min FROM (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('90_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) select_data WHERE (key OPERATOR(pg_catalog.>) 1)
+DEBUG:  Plan 92 query after replacing subqueries and CTEs: DELETE FROM intermediate_result_pruning.table_2 WHERE (key OPERATOR(pg_catalog.>=) (SELECT intermediate_result.min FROM read_intermediate_result('92_1'::text, 'binary'::citus_copy_format) intermediate_result(min integer))) RETURNING key, value
+DEBUG:  Plan 90 query after replacing subqueries and CTEs: SELECT key, value FROM (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('90_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) raw_data
+DEBUG:  90_1 is broadcasted to localhost:57637
+DEBUG:  90_2 is broadcasted to localhost:57638
+DEBUG:  92_1 is broadcasted to localhost:57637
+DEBUG:  92_1 is broadcasted to localhost:57638
+ key | value 
+-----+-------
+   3 | 3
+   4 | 4
+   5 | 5
+   6 | 6
+(4 rows)
+
+ROLLBACK;
+-- select_data goes to a single node, because it is used in another subquery
+-- raw_data is also the final router query, so hits a single shard
+-- however, the subquery in WHERE clause of the DELETE query is broadcasted to all
+-- nodes
+BEGIN;
+WITH select_data AS (
+	SELECT * FROM table_1
+),
+raw_data AS (
+	DELETE FROM table_2 WHERE value::int >= (SELECT min(key) FROM select_data WHERE key > 1 + random()) RETURNING *
+)
+SELECT * FROM raw_data;
+DEBUG:  generating subplan 94_1 for CTE select_data: SELECT key, value FROM intermediate_result_pruning.table_1
+DEBUG:  generating subplan 94_2 for CTE raw_data: DELETE FROM intermediate_result_pruning.table_2 WHERE ((value)::integer OPERATOR(pg_catalog.>=) (SELECT min(select_data.key) AS min FROM (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('94_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) select_data WHERE ((select_data.key)::double precision OPERATOR(pg_catalog.>) ((1)::double precision OPERATOR(pg_catalog.+) random())))) RETURNING key, value
+DEBUG:  generating subplan 96_1 for subquery SELECT min(key) AS min FROM (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('94_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) select_data WHERE ((key)::double precision OPERATOR(pg_catalog.>) ((1)::double precision OPERATOR(pg_catalog.+) random()))
+DEBUG:  Plan 96 query after replacing subqueries and CTEs: DELETE FROM intermediate_result_pruning.table_2 WHERE ((value)::integer OPERATOR(pg_catalog.>=) (SELECT intermediate_result.min FROM read_intermediate_result('96_1'::text, 'binary'::citus_copy_format) intermediate_result(min integer))) RETURNING key, value
+DEBUG:  Plan 94 query after replacing subqueries and CTEs: SELECT key, value FROM (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('94_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) raw_data
+DEBUG:  94_1 is broadcasted to localhost:57637
+DEBUG:  94_2 is broadcasted to localhost:57638
+DEBUG:  96_1 is broadcasted to localhost:57637
+DEBUG:  96_1 is broadcasted to localhost:57638
+ key | value 
+-----+-------
+   3 | 3
+   4 | 4
+   5 | 5
+   6 | 6
+(4 rows)
+
+ROLLBACK;
+-- now, we need only two intermediate results as the subquery in WHERE clause is
+-- router plannable
+BEGIN;
+WITH select_data AS (
+	SELECT * FROM table_1
+),
+raw_data AS (
+	DELETE FROM table_2 WHERE value::int >= (SELECT min(key) FROM table_1 WHERE key > random()) AND key = 6 RETURNING *
+)
+SELECT * FROM raw_data;
+DEBUG:  generating subplan 98_1 for CTE raw_data: DELETE FROM intermediate_result_pruning.table_2 WHERE (((value)::integer OPERATOR(pg_catalog.>=) (SELECT min(table_1.key) AS min FROM intermediate_result_pruning.table_1 WHERE ((table_1.key)::double precision OPERATOR(pg_catalog.>) random()))) AND (key OPERATOR(pg_catalog.=) 6)) RETURNING key, value
+DEBUG:  generating subplan 99_1 for subquery SELECT min(key) AS min FROM intermediate_result_pruning.table_1 WHERE ((key)::double precision OPERATOR(pg_catalog.>) random())
+DEBUG:  Plan 99 query after replacing subqueries and CTEs: DELETE FROM intermediate_result_pruning.table_2 WHERE (((value)::integer OPERATOR(pg_catalog.>=) (SELECT intermediate_result.min FROM read_intermediate_result('99_1'::text, 'binary'::citus_copy_format) intermediate_result(min integer))) AND (key OPERATOR(pg_catalog.=) 6)) RETURNING key, value
+DEBUG:  Plan 98 query after replacing subqueries and CTEs: SELECT key, value FROM (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('98_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) raw_data
+DEBUG:  98_1 is broadcasted to localhost:57637
+DEBUG:  99_1 is broadcasted to localhost:57637
+ key | value 
+-----+-------
+   6 | 6
+(1 row)
+
+ROLLBACK;
+-- test with INSERT SELECT via coordinator
+-- INSERT .. SELECT via coordinator that doesn't have any intermediate results
+INSERT INTO table_1
+	SELECT * FROM table_2 OFFSET 0;
+DEBUG:  OFFSET clauses are not allowed in distributed INSERT ... SELECT queries
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+-- INSERT .. SELECT via coordinator which has intermediate result,
+-- and can be pruned to a single worker because the final query is on
+-- single shard via filter in key
+INSERT INTO table_1
+	SELECT * FROM table_2 where value IN (SELECT value FROM table_1 WHERE random() > 1) AND key = 1;
+DEBUG:  volatile functions are not allowed in distributed INSERT ... SELECT queries
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+DEBUG:  generating subplan 104_1 for subquery SELECT value FROM intermediate_result_pruning.table_1 WHERE (random() OPERATOR(pg_catalog.>) (1)::double precision)
+DEBUG:  Plan 104 query after replacing subqueries and CTEs: SELECT key, value FROM intermediate_result_pruning.table_2 WHERE ((value OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.value FROM read_intermediate_result('104_1'::text, 'binary'::citus_copy_format) intermediate_result(value text))) AND (key OPERATOR(pg_catalog.=) 1))
+DEBUG:  104_1 is broadcasted to localhost:57637
+-- a similar query, with more complex subquery
+INSERT INTO table_1
+	SELECT * FROM table_2 where key = 1 AND
+ value::int IN
+		(WITH cte_1 AS
+		(
+			(SELECT key FROM table_1 WHERE key = 1)
+			INTERSECT
+			(SELECT key FROM table_1 WHERE key = 2)
+		),
+		cte_2 AS
+		(
+			(SELECT key FROM table_1 WHERE key = 3)
+			INTERSECT
+			(SELECT key FROM table_1 WHERE key = 4)
+		)
+		SELECT * FROM cte_1
+			UNION
+		SELECT * FROM cte_2);
+DEBUG:  Set operations are not allowed in distributed INSERT ... SELECT queries
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+DEBUG:  generating subplan 107_1 for CTE cte_1: SELECT table_1.key FROM intermediate_result_pruning.table_1 WHERE (table_1.key OPERATOR(pg_catalog.=) 1) INTERSECT SELECT table_1.key FROM intermediate_result_pruning.table_1 WHERE (table_1.key OPERATOR(pg_catalog.=) 2)
+DEBUG:  generating subplan 108_1 for subquery SELECT key FROM intermediate_result_pruning.table_1 WHERE (key OPERATOR(pg_catalog.=) 1)
+DEBUG:  generating subplan 108_2 for subquery SELECT key FROM intermediate_result_pruning.table_1 WHERE (key OPERATOR(pg_catalog.=) 2)
+DEBUG:  Plan 108 query after replacing subqueries and CTEs: SELECT intermediate_result.key FROM read_intermediate_result('108_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer) INTERSECT SELECT intermediate_result.key FROM read_intermediate_result('108_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer)
+DEBUG:  generating subplan 107_2 for CTE cte_2: SELECT table_1.key FROM intermediate_result_pruning.table_1 WHERE (table_1.key OPERATOR(pg_catalog.=) 3) INTERSECT SELECT table_1.key FROM intermediate_result_pruning.table_1 WHERE (table_1.key OPERATOR(pg_catalog.=) 4)
+DEBUG:  generating subplan 107_3 for subquery SELECT cte_1.key FROM (SELECT intermediate_result.key FROM read_intermediate_result('107_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) cte_1 UNION SELECT cte_2.key FROM (SELECT intermediate_result.key FROM read_intermediate_result('107_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) cte_2
+DEBUG:  Plan 107 query after replacing subqueries and CTEs: SELECT key, value FROM intermediate_result_pruning.table_2 WHERE ((key OPERATOR(pg_catalog.=) 1) AND ((value)::integer OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.key FROM read_intermediate_result('107_3'::text, 'binary'::citus_copy_format) intermediate_result(key integer))))
+DEBUG:  107_1 is broadcasted to localhost:57637
+DEBUG:  108_1 is broadcasted to localhost:57638
+DEBUG:  108_2 is broadcasted to localhost:57638
+DEBUG:  107_2 is broadcasted to localhost:57637
+DEBUG:  107_3 is broadcasted to localhost:57637
+-- same query, cte is on the FROM clause
+-- and this time the final query (and top-level intermediate result)
+-- hits all the shards because table_2.key != 1
+INSERT INTO table_1
+	SELECT table_2.* FROM table_2,
+	(WITH cte_1 AS
+		(
+			(SELECT key FROM table_1 WHERE key = 1)
+			INTERSECT
+			(SELECT key FROM table_1 WHERE key = 2)
+		),
+		cte_2 AS
+		(
+			(SELECT key FROM table_1 WHERE key = 3)
+			INTERSECT
+			(SELECT key FROM table_1 WHERE key = 4)
+		)
+		SELECT * FROM cte_1
+			UNION
+		SELECT * FROM cte_2
+	 ) foo
+	 where table_2.key != 1 AND
+ 	foo.key = table_2.value::int;
+DEBUG:  Set operations are not allowed in distributed INSERT ... SELECT queries
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+DEBUG:  generating subplan 114_1 for CTE cte_1: SELECT table_1.key FROM intermediate_result_pruning.table_1 WHERE (table_1.key OPERATOR(pg_catalog.=) 1) INTERSECT SELECT table_1.key FROM intermediate_result_pruning.table_1 WHERE (table_1.key OPERATOR(pg_catalog.=) 2)
+DEBUG:  generating subplan 115_1 for subquery SELECT key FROM intermediate_result_pruning.table_1 WHERE (key OPERATOR(pg_catalog.=) 1)
+DEBUG:  generating subplan 115_2 for subquery SELECT key FROM intermediate_result_pruning.table_1 WHERE (key OPERATOR(pg_catalog.=) 2)
+DEBUG:  Plan 115 query after replacing subqueries and CTEs: SELECT intermediate_result.key FROM read_intermediate_result('115_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer) INTERSECT SELECT intermediate_result.key FROM read_intermediate_result('115_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer)
+DEBUG:  generating subplan 114_2 for CTE cte_2: SELECT table_1.key FROM intermediate_result_pruning.table_1 WHERE (table_1.key OPERATOR(pg_catalog.=) 3) INTERSECT SELECT table_1.key FROM intermediate_result_pruning.table_1 WHERE (table_1.key OPERATOR(pg_catalog.=) 4)
+DEBUG:  generating subplan 114_3 for subquery SELECT cte_1.key FROM (SELECT intermediate_result.key FROM read_intermediate_result('114_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) cte_1 UNION SELECT cte_2.key FROM (SELECT intermediate_result.key FROM read_intermediate_result('114_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) cte_2
+DEBUG:  Plan 114 query after replacing subqueries and CTEs: SELECT table_2.key, table_2.value FROM intermediate_result_pruning.table_2, (SELECT intermediate_result.key FROM read_intermediate_result('114_3'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) foo WHERE ((table_2.key OPERATOR(pg_catalog.<>) 1) AND (foo.key OPERATOR(pg_catalog.=) (table_2.value)::integer))
+DEBUG:  114_1 is broadcasted to localhost:57637
+DEBUG:  115_1 is broadcasted to localhost:57638
+DEBUG:  115_2 is broadcasted to localhost:57638
+DEBUG:  114_2 is broadcasted to localhost:57637
+DEBUG:  114_3 is broadcasted to localhost:57637
+DEBUG:  114_3 is broadcasted to localhost:57638
+-- append partitioned/heap-type
+SET citus.replication_model TO statement;
+-- do not print out 'building index pg_toast_xxxxx_index' messages
+SET client_min_messages TO DEFAULT;
+CREATE TABLE range_partitioned(range_column text, data int);
+SET client_min_messages TO DEBUG1;
+SELECT create_distributed_table('range_partitioned', 'range_column', 'range');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+SELECT master_create_empty_shard('range_partitioned');
+ master_create_empty_shard 
+---------------------------
+                   1480013
+(1 row)
+
+SELECT master_create_empty_shard('range_partitioned');
+ master_create_empty_shard 
+---------------------------
+                   1480014
+(1 row)
+
+SELECT master_create_empty_shard('range_partitioned');
+ master_create_empty_shard 
+---------------------------
+                   1480015
+(1 row)
+
+SELECT master_create_empty_shard('range_partitioned');
+ master_create_empty_shard 
+---------------------------
+                   1480016
+(1 row)
+
+SELECT master_create_empty_shard('range_partitioned');
+ master_create_empty_shard 
+---------------------------
+                   1480017
+(1 row)
+
+UPDATE pg_dist_shard SET shardminvalue = 'A', shardmaxvalue = 'D' WHERE shardid = 1480013;
+UPDATE pg_dist_shard SET shardminvalue = 'D', shardmaxvalue = 'G' WHERE shardid = 1480014;
+UPDATE pg_dist_shard SET shardminvalue = 'G', shardmaxvalue = 'K' WHERE shardid = 1480015;
+UPDATE pg_dist_shard SET shardminvalue = 'K', shardmaxvalue = 'O' WHERE shardid = 1480016;
+UPDATE pg_dist_shard SET shardminvalue = 'O', shardmaxvalue = 'Z' WHERE shardid = 1480017;
+-- final query goes to a single shard
+SELECT
+	count(*)
+FROM
+	range_partitioned
+WHERE
+	range_column = 'A' AND
+	data IN (SELECT data FROM range_partitioned);
+DEBUG:  generating subplan 120_1 for subquery SELECT data FROM intermediate_result_pruning.range_partitioned
+DEBUG:  Plan 120 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM intermediate_result_pruning.range_partitioned WHERE ((range_column OPERATOR(pg_catalog.=) 'A'::text) AND (data OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.data FROM read_intermediate_result('120_1'::text, 'binary'::citus_copy_format) intermediate_result(data integer))))
+DEBUG:  120_1 is broadcasted to localhost:57637
+ count 
+-------
+     0
+(1 row)
+
+-- final query goes to three shards, so multiple workers
+SELECT
+	count(*)
+FROM
+	range_partitioned
+WHERE
+	range_column >= 'A' AND range_column <= 'K' AND
+	data IN (SELECT data FROM range_partitioned);
+DEBUG:  generating subplan 122_1 for subquery SELECT data FROM intermediate_result_pruning.range_partitioned
+DEBUG:  Plan 122 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM intermediate_result_pruning.range_partitioned WHERE ((range_column OPERATOR(pg_catalog.>=) 'A'::text) AND (range_column OPERATOR(pg_catalog.<=) 'K'::text) AND (data OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.data FROM read_intermediate_result('122_1'::text, 'binary'::citus_copy_format) intermediate_result(data integer))))
+DEBUG:  122_1 is broadcasted to localhost:57637
+DEBUG:  122_1 is broadcasted to localhost:57638
+ count 
+-------
+     0
+(1 row)
+
+-- two shards, both of which are on the first node
+WITH some_data AS (
+	SELECT data FROM range_partitioned
+)
+SELECT
+	count(*)
+FROM
+	range_partitioned
+WHERE
+	range_column IN ('A', 'E') AND
+	range_partitioned.data IN (SELECT data FROM some_data);
+DEBUG:  generating subplan 124_1 for CTE some_data: SELECT data FROM intermediate_result_pruning.range_partitioned
+DEBUG:  Plan 124 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM intermediate_result_pruning.range_partitioned WHERE ((range_column OPERATOR(pg_catalog.=) ANY (ARRAY['A'::text, 'E'::text])) AND (data OPERATOR(pg_catalog.=) ANY (SELECT some_data.data FROM (SELECT intermediate_result.data FROM read_intermediate_result('124_1'::text, 'binary'::citus_copy_format) intermediate_result(data integer)) some_data)))
+DEBUG:  124_1 is broadcasted to localhost:57637
+DEBUG:  124_1 is broadcasted to localhost:57638
+ count 
+-------
+     0
+(1 row)
+
+SET client_min_messages TO DEFAULT;
+DROP TABLE table_1, table_2, table_3, ref_table, range_partitioned;
+DROP SCHEMA intermediate_result_pruning;

@@ -1083,6 +1083,8 @@ DEBUG:  generating subplan 117_1 for subquery SELECT table1.id, table1.tenant_id
 DEBUG:  Plan 117 query after replacing subqueries and CTEs: UPDATE non_colocated_subquery.table2 SET id = 20 FROM (SELECT intermediate_result.id, intermediate_result.tenant_id FROM read_intermediate_result('117_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer, tenant_id integer)) table1_view WHERE (table1_view.id OPERATOR(pg_catalog.=) table2.id)
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DEBUG:  117_1 is broadcasted to localhost:57637
+DEBUG:  117_1 is broadcasted to localhost:57638
 UPDATE table2_p1 SET id=20 FROM table1_view WHERE table1_view.id=table2_p1.id;
 DEBUG:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
 DEBUG:  Router planner cannot handle multi-shard select queries
@@ -1090,6 +1092,8 @@ DEBUG:  generating subplan 119_1 for subquery SELECT table1.id, table1.tenant_id
 DEBUG:  Plan 119 query after replacing subqueries and CTEs: UPDATE non_colocated_subquery.table2_p1 SET id = 20 FROM (SELECT intermediate_result.id, intermediate_result.tenant_id FROM read_intermediate_result('119_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer, tenant_id integer)) table1_view WHERE (table1_view.id OPERATOR(pg_catalog.=) table2_p1.id)
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DEBUG:  119_1 is broadcasted to localhost:57637
+DEBUG:  119_1 is broadcasted to localhost:57638
 RESET client_min_messages;
 DROP FUNCTION explain_json_2(text);
 SET search_path TO 'public';

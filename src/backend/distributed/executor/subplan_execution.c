@@ -10,7 +10,7 @@
 
 #include "postgres.h"
 
-#include "distributed/citus_custom_scan.h"
+#include "distributed/intermediate_result_pruning.h"
 #include "distributed/intermediate_results.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_physical_planner.h"
@@ -26,13 +26,6 @@ int MaxIntermediateResult = 1048576; /* maximum size in KB the intermediate resu
 int SubPlanLevel = 0;
 
 
-static List * AppendAllAccessedWorkerNodes(List *workerNodeList,
-										   DistributedPlan *distributedPlan);
-static CustomScan * FetchCitusCustomScanIfExists(Plan *plan);
-static void RecordSubplanExecutionsOnNodes(HTAB *intermediateResultsHash,
-										   DistributedPlan *distributedPlan);
-
-
 /*
  * ExecuteSubPlans executes a list of subplans from a distributed plan
  * by sequentially executing each plan from the top.
@@ -43,8 +36,7 @@ ExecuteSubPlans(DistributedPlan *distributedPlan)
 	uint64 planId = distributedPlan->planId;
 	List *subPlanList = distributedPlan->subPlanList;
 	ListCell *subPlanCell = NULL;
-	List *nodeList = NIL;
-	HTAB *intermediateResultHash = NULL;
+	HTAB *intermediateResultsHash = NULL;
 
 	if (subPlanList == NIL)
 	{
@@ -52,8 +44,8 @@ ExecuteSubPlans(DistributedPlan *distributedPlan)
 		return;
 	}
 
-	intermediateResultHash = makeIntermediateResultHTAB();
-	RecordSubplanExecutionsOnNodes(intermediateResultHash, distributedPlan);
+	intermediateResultsHash = MakeIntermediateResultHTAB();
+	RecordSubplanExecutionsOnNodes(intermediateResultsHash, distributedPlan);
 
 
 	/*
@@ -72,51 +64,35 @@ ExecuteSubPlans(DistributedPlan *distributedPlan)
 		DestReceiver *copyDest = NULL;
 		ParamListInfo params = NULL;
 		EState *estate = NULL;
-
+		bool writeLocalFile = false;
 		char *resultId = GenerateResultId(planId, subPlanId);
-
-		IntermediateResultHashKey key;
-		IntermediateResultHashEntry *entry = NULL;
-		bool found = false;
-
-		nodeList = NIL;
+		List *workerNodeList =
+			FindAllWorkerNodesUsingSubplan(intermediateResultsHash, resultId);
 
 		/*
 		 * Write intermediate results to local file only if there is no worker
-		 * node that receives them
+		 * node that receives them.
+		 *
+		 * This could happen in two cases:
+		 * (a) Subquery in the having
+		 * (b) The intermediate result is not used, such as RETURNING of a
+		 *     modifying CTE is not used
+		 *
+		 * For SELECT, Postgres/Citus is clever enough to not execute the CTE
+		 * if it is not used at all, but for modifications we have to execute
+		 * the queries.
 		 */
-		bool writeLocalFile = false;
-
-
-		strlcpy(key.intermediate_result_id, resultId, NAMEDATALEN);
-		entry = hash_search(intermediateResultHash, &key, HASH_ENTER, &found);
-
-		if (found)
+		if (workerNodeList == NIL)
 		{
-			ListCell *lcInner = NULL;
-			foreach(lcInner, entry->nodeList)
-			{
-				WorkerNode *w = GetWorkerNodeByNodeId(lfirst_int(lcInner));
-
-				nodeList = lappend(nodeList, w);
-				elog(DEBUG4, "%s is send to %s:%d", key.intermediate_result_id,
-					 w->workerName, w->workerPort);
-			}
-		}
-		else
-		{
-			/* TODO: Think more on this. Consider HAVING. */
-			nodeList = NIL;
 			writeLocalFile = true;
-			elog(DEBUG4, "%s is not sent to any node, write to local only",
-				 key.intermediate_result_id);
+			elog(DEBUG1, "%s is not broadcasted to any node, write to local only",
+				 resultId);
 		}
-
 
 		SubPlanLevel++;
 		estate = CreateExecutorState();
 		copyDest = (DestReceiver *) CreateRemoteFileDestReceiver(resultId, estate,
-																 nodeList,
+																 workerNodeList,
 																 writeLocalFile);
 
 		ExecutePlanIntoDestReceiver(plannedStmt, params, copyDest);
@@ -124,129 +100,4 @@ ExecuteSubPlans(DistributedPlan *distributedPlan)
 		SubPlanLevel--;
 		FreeExecutorState(estate);
 	}
-}
-
-
-/*
- * RecordSubplanExecutionsOnNodes iterates over the usedSubPlanNodeList,
- * and for each entry, record the workerNodes that are accessed by
- * the distributed plan.
- *
- * Later, we'll use this information while we broadcast the intermediate
- * results to the worker nodes. The idea is that the intermediate result
- * should only be broadcasted to the worker nodes that are accessed by
- * the distributedPlan(s) that the subPlan is used in.
- *
- * Finally, the function recursively descends into the actual subplans
- * of the input distributedPlan as well.
- */
-static void
-RecordSubplanExecutionsOnNodes(HTAB *intermediateResultsHash,
-							   DistributedPlan *distributedPlan)
-{
-	List *usedSubPlanNodeList = distributedPlan->usedSubPlanNodeList;
-	ListCell *usedSubPlanNodeCell = NULL;
-	List *subPlanList = distributedPlan->subPlanList;
-	ListCell *subPlanCell = NULL;
-
-	foreach(usedSubPlanNodeCell, usedSubPlanNodeList)
-	{
-		Const *resultIdConst = lfirst(usedSubPlanNodeCell);
-		Datum resultIdDatum = resultIdConst->constvalue;
-		char *resultId = TextDatumGetCString(resultIdDatum);
-
-		IntermediateResultHashKey key;
-		IntermediateResultHashEntry *entry = NULL;
-		bool found = false;
-
-		strlcpy(key.intermediate_result_id, resultId, NAMEDATALEN);
-		entry = hash_search(intermediateResultsHash, &key, HASH_ENTER, &found);
-
-		if (!found)
-		{
-			entry->nodeList = NIL;
-		}
-
-		/* TODO: hanefi: fix hardcoded worker node count */
-		if (list_length(entry->nodeList) == 3)
-		{
-			entry->containsAllNodes = true;
-
-			/* TODO: hanefi use a continue here */
-		}
-		else
-		{
-			entry->containsAllNodes = false;
-		}
-
-		/* TODO: hanefi skip if all nodes are already in nodeList */
-		entry->nodeList = AppendAllAccessedWorkerNodes(entry->nodeList, distributedPlan);
-
-		elog(DEBUG4, "subplan %s  is used in %lu", resultId, distributedPlan->planId);
-	}
-
-	/* descend into the subPlans */
-	foreach(subPlanCell, subPlanList)
-	{
-		DistributedSubPlan *subPlan = (DistributedSubPlan *) lfirst(subPlanCell);
-		CustomScan *customScan = FetchCitusCustomScanIfExists(subPlan->plan->planTree);
-		if (customScan)
-		{
-			DistributedPlan *distributedPlanOfSubPlan = GetDistributedPlan(customScan);
-			RecordSubplanExecutionsOnNodes(intermediateResultsHash,
-										   distributedPlanOfSubPlan);
-		}
-	}
-}
-
-
-/* TODO: hanefi super inefficient, multiple recursions */
-static CustomScan *
-FetchCitusCustomScanIfExists(Plan *plan)
-{
-	if (plan == NULL)
-	{
-		return NULL;
-	}
-
-	if (IsCitusCustomScan(plan))
-	{
-		return (CustomScan *) plan;
-	}
-
-	if (plan->lefttree != NULL && IsCitusPlan(plan->lefttree))
-	{
-		return FetchCitusCustomScanIfExists(plan->lefttree);
-	}
-
-	if (plan->righttree != NULL && IsCitusPlan(plan->righttree))
-	{
-		return FetchCitusCustomScanIfExists(plan->righttree);
-	}
-
-	return NULL;
-}
-
-
-/*
- * TODO: hanefi this is super slow, improve the performance
- */
-static List *
-AppendAllAccessedWorkerNodes(List *workerNodeList, DistributedPlan *distributedPlan)
-{
-	List *taskList = distributedPlan->workerJob->taskList;
-	ListCell *taskCell = NULL;
-
-	foreach(taskCell, taskList)
-	{
-		Task *task = lfirst(taskCell);
-		ListCell *placementCell = NULL;
-		foreach(placementCell, task->taskPlacementList)
-		{
-			ShardPlacement *placement = lfirst(placementCell);
-			workerNodeList = list_append_unique_int(workerNodeList, placement->nodeId);
-		}
-	}
-
-	return workerNodeList;
 }

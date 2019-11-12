@@ -91,7 +91,7 @@ ORDER BY
 -- see that we get unique vialitons
 \set VERBOSITY TERSE
 INSERT INTO raw_events_second  SELECT * FROM raw_events_first;
-ERROR:  duplicate key value violates unique constraint "raw_events_second_user_id_value_1_key_13300004"
+ERROR:  duplicate key value violates unique constraint "raw_events_second_user_id_value_1_key_13300005"
 \set VERBOSITY DEFAULT
 -- stable functions should be allowed
 INSERT INTO raw_events_second (user_id, time)
@@ -697,6 +697,7 @@ DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  Plan 51 query after replacing subqueries and CTEs: SELECT user_id, v1_agg FROM (SELECT fist_table_agg.v1_agg, fist_table_agg.user_id FROM (SELECT intermediate_result.v1_agg, intermediate_result.user_id FROM read_intermediate_result('51_1'::text, 'binary'::citus_copy_format) intermediate_result(v1_agg integer, user_id integer)) fist_table_agg) citus_insert_select_subquery
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DEBUG:  51_1 is broadcasted to localhost:57638
 ROLLBACK;
 -- We don't support CTEs that are referenced in the target list
 INSERT INTO agg_events
@@ -746,6 +747,9 @@ DEBUG:  generating subplan 58_3 for subquery SELECT intermediate_result.user_id 
 DEBUG:  Plan 58 query after replacing subqueries and CTEs: SELECT user_id FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('58_3'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) citus_insert_select_subquery
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DEBUG:  58_1 is broadcasted to localhost:57637
+DEBUG:  58_2 is broadcasted to localhost:57637
+DEBUG:  58_3 is broadcasted to localhost:57638
 ROLLBACK;
 -- If the query is router plannable then it is executed via the coordinator
 INSERT INTO
@@ -1101,6 +1105,7 @@ DEBUG:  generating subplan 88_1 for subquery SELECT sum(raw_events_second.value_
 DEBUG:  Plan 88 query after replacing subqueries and CTEs: SELECT id, v1, v4 FROM (SELECT intermediate_result.v4, intermediate_result.v1, intermediate_result.id FROM read_intermediate_result('88_1'::text, 'binary'::citus_copy_format) intermediate_result(v4 numeric, v1 bigint, id double precision)) foo
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DEBUG:  88_1 is broadcasted to localhost:57637
 ERROR:  the partition column of table public.agg_events cannot be NULL
 -- error cases
 -- no part column at all
@@ -1241,6 +1246,8 @@ DEBUG:  join prunable for intervals [1073741824,2147483647] and [0,1073741823]
 DEBUG:  generating subplan 107_1 for subquery SELECT sum(raw_events_second.value_4) AS v4, raw_events_second.value_1 AS v1, sum(raw_events_second.user_id) AS id FROM public.raw_events_first, public.raw_events_second WHERE (raw_events_first.user_id OPERATOR(pg_catalog.=) raw_events_second.user_id) GROUP BY raw_events_second.value_1 HAVING (sum(raw_events_second.value_4) OPERATOR(pg_catalog.>) (10)::numeric)
 DEBUG:  Plan 107 query after replacing subqueries and CTEs: SELECT f2.id FROM ((SELECT foo.id FROM (SELECT reference_table.user_id AS id FROM public.raw_events_first, public.reference_table WHERE (raw_events_first.user_id OPERATOR(pg_catalog.=) reference_table.user_id)) foo) f JOIN (SELECT foo2.v4, foo2.v1, foo2.id FROM (SELECT intermediate_result.v4, intermediate_result.v1, intermediate_result.id FROM read_intermediate_result('107_1'::text, 'binary'::citus_copy_format) intermediate_result(v4 numeric, v1 integer, id bigint)) foo2) f2 ON ((f.id OPERATOR(pg_catalog.=) f2.id)))
 DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  107_1 is broadcasted to localhost:57637
+DEBUG:  107_1 is broadcasted to localhost:57638
 -- the second part of the query is not routable since
 -- GROUP BY not on the partition column (i.e., value_1) and thus join
 -- on f.id = f2.id is not on the partition key (instead on the sum of partition key)
@@ -1286,6 +1293,8 @@ DEBUG:  join prunable for intervals [1073741824,2147483647] and [0,1073741823]
 DEBUG:  generating subplan 110_1 for subquery SELECT sum(raw_events_second.value_4) AS v4, raw_events_second.value_1 AS v1, sum(raw_events_second.user_id) AS id FROM public.raw_events_first, public.raw_events_second WHERE (raw_events_first.user_id OPERATOR(pg_catalog.=) raw_events_second.user_id) GROUP BY raw_events_second.value_1 HAVING (sum(raw_events_second.value_4) OPERATOR(pg_catalog.>) (10)::numeric)
 DEBUG:  Plan 110 query after replacing subqueries and CTEs: SELECT f.id FROM ((SELECT foo.id FROM (SELECT raw_events_first.user_id AS id FROM public.raw_events_first, public.reference_table WHERE (raw_events_first.user_id OPERATOR(pg_catalog.=) reference_table.user_id)) foo) f JOIN (SELECT foo2.v4, foo2.v1, foo2.id FROM (SELECT intermediate_result.v4, intermediate_result.v1, intermediate_result.id FROM read_intermediate_result('110_1'::text, 'binary'::citus_copy_format) intermediate_result(v4 numeric, v1 integer, id bigint)) foo2) f2 ON ((f.id OPERATOR(pg_catalog.=) f2.id)))
 DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  110_1 is broadcasted to localhost:57637
+DEBUG:  110_1 is broadcasted to localhost:57638
 -- cannot pushdown the query since the JOIN is not equi JOIN
 INSERT INTO agg_events
             (user_id, value_4_agg)

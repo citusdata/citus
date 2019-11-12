@@ -35,6 +35,8 @@ SET dept = foo.dept FROM
 	AND distributed_table.tenant_id = bar.tenant_id; 
 DEBUG:  generating subplan 3_1 for subquery SELECT tenant_id FROM recursive_dml_with_different_planner_executors.second_distributed_table WHERE (dept OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4])) OFFSET 0
 DEBUG:  Plan 3 query after replacing subqueries and CTEs: UPDATE recursive_dml_with_different_planner_executors.distributed_table SET dept = foo.dept FROM (SELECT second_distributed_table.tenant_id, second_distributed_table.dept FROM recursive_dml_with_different_planner_executors.second_distributed_table WHERE (second_distributed_table.dept OPERATOR(pg_catalog.=) 1)) foo, (SELECT intermediate_result.tenant_id FROM read_intermediate_result('3_1'::text, 'binary'::citus_copy_format) intermediate_result(tenant_id text)) bar WHERE ((foo.tenant_id OPERATOR(pg_catalog.=) bar.tenant_id) AND (distributed_table.tenant_id OPERATOR(pg_catalog.=) bar.tenant_id))
+DEBUG:  3_1 is broadcasted to localhost:57637
+DEBUG:  3_1 is broadcasted to localhost:57638
 -- a non colocated subquery inside the UPDATE
 UPDATE distributed_table SET dept = foo.max_dept FROM 
 (
@@ -48,6 +50,10 @@ UPDATE distributed_table SET dept = foo.max_dept FROM
 DEBUG:  generating subplan 5_1 for subquery SELECT tenant_id FROM recursive_dml_with_different_planner_executors.second_distributed_table WHERE (dept OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4]))
 DEBUG:  generating subplan 5_2 for subquery SELECT max(dept) AS max_dept FROM (SELECT DISTINCT distributed_table_1.tenant_id, distributed_table_1.dept FROM recursive_dml_with_different_planner_executors.distributed_table distributed_table_1) distributed_table WHERE (NOT (tenant_id OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.tenant_id FROM read_intermediate_result('5_1'::text, 'binary'::citus_copy_format) intermediate_result(tenant_id text))))
 DEBUG:  Plan 5 query after replacing subqueries and CTEs: UPDATE recursive_dml_with_different_planner_executors.distributed_table SET dept = foo.max_dept FROM (SELECT intermediate_result.max_dept FROM read_intermediate_result('5_2'::text, 'binary'::citus_copy_format) intermediate_result(max_dept integer)) foo WHERE (foo.max_dept OPERATOR(pg_catalog.>) (distributed_table.dept OPERATOR(pg_catalog.*) 3))
+DEBUG:  5_1 is broadcasted to localhost:57637
+DEBUG:  5_1 is broadcasted to localhost:57638
+DEBUG:  5_2 is broadcasted to localhost:57637
+DEBUG:  5_2 is broadcasted to localhost:57638
 -- subquery with repartition query
 SET citus.enable_repartition_joins to ON;
 UPDATE distributed_table SET dept = foo.some_tenants::int FROM 
@@ -60,6 +66,8 @@ DEBUG:  cannot use adaptive executor with repartition jobs
 HINT:  Since you enabled citus.enable_repartition_joins Citus chose to use task-tracker.
 DEBUG:  generating subplan 8_1 for subquery SELECT DISTINCT second_distributed_table.tenant_id AS some_tenants FROM recursive_dml_with_different_planner_executors.second_distributed_table, recursive_dml_with_different_planner_executors.distributed_table WHERE (second_distributed_table.dept OPERATOR(pg_catalog.=) distributed_table.dept)
 DEBUG:  Plan 8 query after replacing subqueries and CTEs: UPDATE recursive_dml_with_different_planner_executors.distributed_table SET dept = (foo.some_tenants)::integer FROM (SELECT intermediate_result.some_tenants FROM read_intermediate_result('8_1'::text, 'binary'::citus_copy_format) intermediate_result(some_tenants text)) foo
+DEBUG:  8_1 is broadcasted to localhost:57637
+DEBUG:  8_1 is broadcasted to localhost:57638
 SET citus.enable_repartition_joins to OFF;
 -- final query is router 
 UPDATE distributed_table SET dept = foo.max_dept FROM 
@@ -73,6 +81,8 @@ UPDATE distributed_table SET dept = foo.max_dept FROM
 ) as  foo WHERE foo.max_dept >= dept and tenant_id = '8';
 DEBUG:  generating subplan 10_1 for subquery SELECT max(dept) AS max_dept FROM (SELECT DISTINCT distributed_table_1.tenant_id, distributed_table_1.dept FROM recursive_dml_with_different_planner_executors.distributed_table distributed_table_1) distributed_table WHERE (tenant_id OPERATOR(pg_catalog.=) ANY (SELECT second_distributed_table.tenant_id FROM recursive_dml_with_different_planner_executors.second_distributed_table WHERE (second_distributed_table.dept OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4]))))
 DEBUG:  Plan 10 query after replacing subqueries and CTEs: UPDATE recursive_dml_with_different_planner_executors.distributed_table SET dept = foo.max_dept FROM (SELECT intermediate_result.max_dept FROM read_intermediate_result('10_1'::text, 'binary'::citus_copy_format) intermediate_result(max_dept integer)) foo WHERE ((foo.max_dept OPERATOR(pg_catalog.>=) distributed_table.dept) AND (distributed_table.tenant_id OPERATOR(pg_catalog.=) '8'::text))
+DEBUG:  10_1 is broadcasted to localhost:57638
+DEBUG:  10_1 is broadcasted to localhost:57637
 RESET client_min_messages;
 DROP SCHEMA recursive_dml_with_different_planner_executors CASCADE;
 NOTICE:  drop cascades to 3 other objects

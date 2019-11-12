@@ -525,7 +525,7 @@ BEGIN;
 DEBUG:  switching to sequential query execution mode
 DETAIL:  Reference relation "transitive_reference_table" is modified, which might lead to data inconsistencies or distributed deadlocks via parallel accesses to hash distributed relations due to foreign keys. Any parallel modification to those hash distributed relations in the same transaction can only be executed in sequential query execution mode
 	COPY on_update_fkey_table FROM STDIN WITH CSV;
-ERROR:  insert or update on table "on_update_fkey_table_2380004" violates foreign key constraint "fkey_2380004"
+ERROR:  insert or update on table "on_update_fkey_table_2380005" violates foreign key constraint "fkey_2380005"
 DETAIL:  Key (value_1)=(101) is not present in table "reference_table_2380001".
 ROLLBACK;
 -- case 2.8: UPDATE to a reference table is followed by TRUNCATE
@@ -1361,6 +1361,8 @@ WITH t1 AS (DELETE FROM reference_table RETURNING id)
 	DELETE FROM distributed_table USING t1 WHERE value_1 = t1.id RETURNING *;
 DEBUG:  generating subplan 170_1 for CTE t1: DELETE FROM test_fkey_to_ref_in_tx.reference_table RETURNING id
 DEBUG:  Plan 170 query after replacing subqueries and CTEs: DELETE FROM test_fkey_to_ref_in_tx.distributed_table USING (SELECT intermediate_result.id FROM read_intermediate_result('170_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) t1 WHERE (distributed_table.value_1 OPERATOR(pg_catalog.=) t1.id) RETURNING distributed_table.id, distributed_table.value_1, t1.id
+DEBUG:  170_1 is broadcasted to localhost:57637
+DEBUG:  170_1 is broadcasted to localhost:57638
 DEBUG:  switching to sequential query execution mode
 DETAIL:  Reference relation "reference_table" is modified, which might lead to data inconsistencies or distributed deadlocks via parallel accesses to hash distributed relations due to foreign keys. Any parallel modification to those hash distributed relations in the same transaction can only be executed in sequential query execution mode
  id | value_1 | id 
@@ -1382,6 +1384,8 @@ WITH t1 AS (DELETE FROM reference_table RETURNING id)
 	SELECT count(*) FROM distributed_table, t1 WHERE  value_1 = t1.id;
 DEBUG:  generating subplan 174_1 for CTE t1: DELETE FROM test_fkey_to_ref_in_tx.reference_table RETURNING id
 DEBUG:  Plan 174 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM test_fkey_to_ref_in_tx.distributed_table, (SELECT intermediate_result.id FROM read_intermediate_result('174_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) t1 WHERE (distributed_table.value_1 OPERATOR(pg_catalog.=) t1.id)
+DEBUG:  174_1 is broadcasted to localhost:57637
+DEBUG:  174_1 is broadcasted to localhost:57638
 DEBUG:  switching to sequential query execution mode
 DETAIL:  Reference relation "reference_table" is modified, which might lead to data inconsistencies or distributed deadlocks via parallel accesses to hash distributed relations due to foreign keys. Any parallel modification to those hash distributed relations in the same transaction can only be executed in sequential query execution mode
  count 
@@ -1397,6 +1401,10 @@ WITH t1 AS (DELETE FROM distributed_table RETURNING id),
 DEBUG:  generating subplan 176_1 for CTE t1: DELETE FROM test_fkey_to_ref_in_tx.distributed_table RETURNING id
 DEBUG:  generating subplan 176_2 for CTE t2: DELETE FROM test_fkey_to_ref_in_tx.reference_table RETURNING id
 DEBUG:  Plan 176 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM test_fkey_to_ref_in_tx.distributed_table, (SELECT intermediate_result.id FROM read_intermediate_result('176_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) t1, (SELECT intermediate_result.id FROM read_intermediate_result('176_2'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) t2 WHERE ((distributed_table.value_1 OPERATOR(pg_catalog.=) t1.id) AND (distributed_table.value_1 OPERATOR(pg_catalog.=) t2.id))
+DEBUG:  176_1 is broadcasted to localhost:57637
+DEBUG:  176_1 is broadcasted to localhost:57638
+DEBUG:  176_2 is broadcasted to localhost:57637
+DEBUG:  176_2 is broadcasted to localhost:57638
 ERROR:  cannot execute DML on reference relation "reference_table" because there was a parallel DML access to distributed relation "distributed_table" in the same transaction
 HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
 -- similarly this should fail since we first access to a distributed
@@ -1405,6 +1413,7 @@ WITH t1 AS (DELETE FROM distributed_table RETURNING id)
 	DELETE FROM reference_table RETURNING id;
 DEBUG:  generating subplan 179_1 for CTE t1: DELETE FROM test_fkey_to_ref_in_tx.distributed_table RETURNING id
 DEBUG:  Plan 179 query after replacing subqueries and CTEs: DELETE FROM test_fkey_to_ref_in_tx.reference_table RETURNING id
+DEBUG:  179_1 is not broadcasted to any node, write to local only
 ERROR:  cannot execute DML on reference relation "reference_table" because there was a parallel DML access to distributed relation "distributed_table" in the same transaction
 HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
 -- finally, make sure that we can execute the same queries
@@ -1417,6 +1426,10 @@ BEGIN;
 DEBUG:  generating subplan 181_1 for CTE t1: DELETE FROM test_fkey_to_ref_in_tx.distributed_table RETURNING id
 DEBUG:  generating subplan 181_2 for CTE t2: DELETE FROM test_fkey_to_ref_in_tx.reference_table RETURNING id
 DEBUG:  Plan 181 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM test_fkey_to_ref_in_tx.distributed_table, (SELECT intermediate_result.id FROM read_intermediate_result('181_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) t1, (SELECT intermediate_result.id FROM read_intermediate_result('181_2'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) t2 WHERE ((distributed_table.value_1 OPERATOR(pg_catalog.=) t1.id) AND (distributed_table.value_1 OPERATOR(pg_catalog.=) t2.id))
+DEBUG:  181_1 is broadcasted to localhost:57637
+DEBUG:  181_1 is broadcasted to localhost:57638
+DEBUG:  181_2 is broadcasted to localhost:57637
+DEBUG:  181_2 is broadcasted to localhost:57638
  count 
 -------
      0
@@ -1429,6 +1442,7 @@ BEGIN;
 		DELETE FROM reference_table RETURNING id;
 DEBUG:  generating subplan 184_1 for CTE t1: DELETE FROM test_fkey_to_ref_in_tx.distributed_table RETURNING id
 DEBUG:  Plan 184 query after replacing subqueries and CTEs: DELETE FROM test_fkey_to_ref_in_tx.reference_table RETURNING id
+DEBUG:  184_1 is not broadcasted to any node, write to local only
  id 
 ----
 (0 rows)

@@ -19,6 +19,7 @@ FROM
 DEBUG:  push down of limit count: 5
 DEBUG:  generating subplan 1_1 for subquery SELECT DISTINCT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4]))) ORDER BY users_table.user_id DESC LIMIT 5
 DEBUG:  Plan 1 query after replacing subqueries and CTEs: SELECT user_id FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('1_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) foo ORDER BY user_id DESC
+DEBUG:  1_1 is broadcasted to localhost:57638
  user_id 
 ---------
        6
@@ -45,6 +46,7 @@ FROM
      ORDER BY 1 DESC;
 DEBUG:  generating subplan 3_1 for subquery SELECT DISTINCT users_table.value_1 FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4]))) ORDER BY users_table.value_1
 DEBUG:  Plan 3 query after replacing subqueries and CTEs: SELECT value_1 FROM (SELECT intermediate_result.value_1 FROM read_intermediate_result('3_1'::text, 'binary'::citus_copy_format) intermediate_result(value_1 integer)) foo ORDER BY value_1 DESC
+DEBUG:  3_1 is broadcasted to localhost:57637
  value_1 
 ---------
        5
@@ -73,6 +75,7 @@ FROM
     ORDER BY 2 DESC, 1;
 DEBUG:  generating subplan 5_1 for subquery SELECT users_table.value_2, avg(users_table.value_1) AS avg FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4]))) GROUP BY users_table.value_2 ORDER BY users_table.value_2 DESC
 DEBUG:  Plan 5 query after replacing subqueries and CTEs: SELECT value_2, avg FROM (SELECT intermediate_result.value_2, intermediate_result.avg FROM read_intermediate_result('5_1'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer, avg numeric)) foo ORDER BY avg DESC, value_2
+DEBUG:  5_1 is broadcasted to localhost:57638
  value_2 |        avg         
 ---------+--------------------
        4 | 2.8453608247422680
@@ -104,6 +107,7 @@ FROM
 DEBUG:  push down of limit count: 5
 DEBUG:  generating subplan 7_1 for subquery SELECT value_2 FROM public.events_table WHERE (event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4])) ORDER BY value_2 DESC LIMIT 5
 DEBUG:  Plan 7 query after replacing subqueries and CTEs: SELECT foo.value_2, bar.i FROM (SELECT intermediate_result.value_2 FROM read_intermediate_result('7_1'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer)) foo, (SELECT i.i FROM generate_series(0, 100) i(i)) bar WHERE (foo.value_2 OPERATOR(pg_catalog.=) bar.i) ORDER BY bar.i DESC, foo.value_2
+DEBUG:  7_1 is broadcasted to localhost:57637
  value_2 | i 
 ---------+---
        5 | 5
@@ -126,6 +130,7 @@ FROM
      ) as foo;
 DEBUG:  generating subplan 9_1 for subquery SELECT count(*) AS count FROM public.events_table WHERE (event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4]))
 DEBUG:  Plan 9 query after replacing subqueries and CTEs: SELECT count FROM (SELECT intermediate_result.count FROM read_intermediate_result('9_1'::text, 'binary'::citus_copy_format) intermediate_result(count bigint)) foo
+DEBUG:  9_1 is broadcasted to localhost:57638
  count 
 -------
     87
@@ -146,6 +151,7 @@ FROM
      ) as foo;
 DEBUG:  generating subplan 11_1 for subquery SELECT sum(user_id) AS sum FROM public.events_table WHERE (event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4])) HAVING (min(value_2) OPERATOR(pg_catalog.>) 2)
 DEBUG:  Plan 11 query after replacing subqueries and CTEs: SELECT sum FROM (SELECT intermediate_result.sum FROM read_intermediate_result('11_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)) foo
+DEBUG:  11_1 is broadcasted to localhost:57637
  sum 
 -----
 (0 rows)
@@ -180,6 +186,8 @@ FROM
 DEBUG:  generating subplan 13_1 for subquery SELECT users_table.value_2 FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4]))) GROUP BY users_table.value_2 ORDER BY users_table.value_2 DESC
 DEBUG:  generating subplan 13_2 for subquery SELECT users_table.value_3 FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[5, 6, 7, 8]))) GROUP BY users_table.value_3 ORDER BY users_table.value_3 DESC
 DEBUG:  Plan 13 query after replacing subqueries and CTEs: SELECT foo.value_2, bar.value_3 FROM (SELECT intermediate_result.value_2 FROM read_intermediate_result('13_1'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer)) foo, (SELECT intermediate_result.value_3 FROM read_intermediate_result('13_2'::text, 'binary'::citus_copy_format) intermediate_result(value_3 double precision)) bar WHERE ((foo.value_2)::double precision OPERATOR(pg_catalog.=) bar.value_3) ORDER BY bar.value_3 DESC, foo.value_2
+DEBUG:  13_1 is broadcasted to localhost:57638
+DEBUG:  13_2 is broadcasted to localhost:57638
  value_2 | value_3 
 ---------+---------
        5 |       5
@@ -219,6 +227,8 @@ FROM
 DEBUG:  generating subplan 16_1 for subquery SELECT users_table.value_2 FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4]))) GROUP BY users_table.value_2 ORDER BY users_table.value_2 DESC
 DEBUG:  Plan 16 query after replacing subqueries and CTEs: SELECT DISTINCT ON (bar.citus) bar.citus, foo.postgres, (bar.citus OPERATOR(pg_catalog.+) 1) AS c1, (foo.postgres OPERATOR(pg_catalog.-) 1) AS p1 FROM (SELECT intermediate_result.value_2 FROM read_intermediate_result('16_1'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer)) foo(postgres), (SELECT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[5, 6, 7, 8]))) ORDER BY users_table.user_id DESC) bar(citus) WHERE (foo.postgres OPERATOR(pg_catalog.=) bar.citus) ORDER BY bar.citus DESC, foo.postgres DESC LIMIT 3
 DEBUG:  push down of limit count: 3
+DEBUG:  16_1 is broadcasted to localhost:57637
+DEBUG:  16_1 is broadcasted to localhost:57638
  citus | postgres | c1 | p1 
 -------+----------+----+----
      5 |        5 |  6 |  4
@@ -256,6 +266,8 @@ FROM
 DEBUG:  generating subplan 18_1 for subquery SELECT users_table.value_2 FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4]))) GROUP BY users_table.value_2 ORDER BY users_table.value_2 DESC
 DEBUG:  Plan 18 query after replacing subqueries and CTEs: SELECT foo.value_2, bar.user_id FROM (SELECT intermediate_result.value_2 FROM read_intermediate_result('18_1'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer)) foo, (SELECT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[5, 6, 7, 8]))) ORDER BY users_table.user_id DESC) bar WHERE (foo.value_2 OPERATOR(pg_catalog.=) bar.user_id) ORDER BY bar.user_id DESC, foo.value_2 DESC LIMIT 3
 DEBUG:  push down of limit count: 3
+DEBUG:  18_1 is broadcasted to localhost:57637
+DEBUG:  18_1 is broadcasted to localhost:57638
  value_2 | user_id 
 ---------+---------
        5 |       5
@@ -272,6 +284,8 @@ WHERE
 DEBUG:  push down of limit count: 5
 DEBUG:  generating subplan 20_1 for subquery SELECT DISTINCT value_2 FROM public.users_table WHERE ((value_1 OPERATOR(pg_catalog.>=) 1) AND (value_1 OPERATOR(pg_catalog.<=) 20)) ORDER BY value_2 LIMIT 5
 DEBUG:  Plan 20 query after replacing subqueries and CTEs: SELECT DISTINCT user_id FROM public.users_table WHERE (user_id OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.value_2 FROM read_intermediate_result('20_1'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer))) ORDER BY user_id DESC
+DEBUG:  20_1 is broadcasted to localhost:57637
+DEBUG:  20_1 is broadcasted to localhost:57638
  user_id 
 ---------
        4
@@ -302,6 +316,8 @@ FROM
 DEBUG:  generating subplan 22_1 for subquery SELECT user_id, event_type FROM public.events_table WHERE (value_2 OPERATOR(pg_catalog.<) 3) OFFSET 3
 DEBUG:  Plan 22 query after replacing subqueries and CTEs: SELECT DISTINCT user_id FROM (SELECT users_table.user_id FROM public.users_table, (SELECT bar.event_type, bar.user_id FROM (SELECT foo.event_type, users_table_1.user_id FROM public.users_table users_table_1, (SELECT intermediate_result.user_id, intermediate_result.event_type FROM read_intermediate_result('22_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, event_type integer)) foo WHERE (foo.user_id OPERATOR(pg_catalog.=) users_table_1.user_id)) bar) baz WHERE (baz.user_id OPERATOR(pg_catalog.=) users_table.user_id)) sub1 ORDER BY user_id DESC LIMIT 3
 DEBUG:  push down of limit count: 3
+DEBUG:  22_1 is broadcasted to localhost:57637
+DEBUG:  22_1 is broadcasted to localhost:57638
  user_id 
 ---------
        6
@@ -338,6 +354,8 @@ ORDER BY 2 DESC, 1;
 DEBUG:  push down of limit count: 5
 DEBUG:  generating subplan 24_1 for subquery SELECT user_id FROM public.users_table WHERE ((value_2 OPERATOR(pg_catalog.>=) 5) AND (EXISTS (SELECT events_table.user_id FROM public.events_table WHERE ((events_table.event_type OPERATOR(pg_catalog.>) 1) AND (events_table.event_type OPERATOR(pg_catalog.<=) 3) AND (events_table.value_3 OPERATOR(pg_catalog.>) (1)::double precision) AND (events_table.user_id OPERATOR(pg_catalog.=) users_table.user_id)))) AND (NOT (EXISTS (SELECT events_table.user_id FROM public.events_table WHERE ((events_table.event_type OPERATOR(pg_catalog.>) 3) AND (events_table.event_type OPERATOR(pg_catalog.<=) 4) AND (events_table.value_3 OPERATOR(pg_catalog.>) (1)::double precision) AND (events_table.user_id OPERATOR(pg_catalog.=) users_table.user_id)))))) LIMIT 5
 DEBUG:  Plan 24 query after replacing subqueries and CTEs: SELECT user_id, array_length(events_table, 1) AS array_length FROM (SELECT t.user_id, array_agg(t.event ORDER BY t."time") AS events_table FROM (SELECT u.user_id, (e.event_type)::text AS event, e."time" FROM public.users_table u, public.events_table e WHERE ((u.user_id OPERATOR(pg_catalog.=) e.user_id) AND (u.user_id OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.user_id FROM read_intermediate_result('24_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer))))) t GROUP BY t.user_id) q ORDER BY (array_length(events_table, 1)) DESC, user_id
+DEBUG:  24_1 is broadcasted to localhost:57637
+DEBUG:  24_1 is broadcasted to localhost:57638
  user_id | array_length 
 ---------+--------------
        5 |          364
@@ -416,6 +434,8 @@ ORDER BY 1;
 DEBUG:  push down of limit count: 10
 DEBUG:  generating subplan 26_1 for subquery SELECT user_id, count(*) AS count_pay FROM public.users_table WHERE ((user_id OPERATOR(pg_catalog.>=) 1) AND (user_id OPERATOR(pg_catalog.<=) 3) AND (value_1 OPERATOR(pg_catalog.>) 3) AND (value_1 OPERATOR(pg_catalog.<) 5)) GROUP BY user_id HAVING (count(*) OPERATOR(pg_catalog.>) 1) LIMIT 10
 DEBUG:  Plan 26 query after replacing subqueries and CTEs: SELECT user_id FROM public.users_table WHERE (user_id OPERATOR(pg_catalog.=) ANY (SELECT subquery_top.user_id FROM (SELECT subquery_1.user_id, subquery_2.count_pay FROM ((SELECT users_table_1.user_id, 'action=>1'::text AS event, events_table."time" FROM public.users_table users_table_1, public.events_table WHERE ((users_table_1.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (users_table_1.user_id OPERATOR(pg_catalog.>=) 1) AND (users_table_1.user_id OPERATOR(pg_catalog.<=) 3) AND (events_table.event_type OPERATOR(pg_catalog.>) 1) AND (events_table.event_type OPERATOR(pg_catalog.<) 3)) UNION SELECT users_table_1.user_id, 'action=>2'::text AS event, events_table."time" FROM public.users_table users_table_1, public.events_table WHERE ((users_table_1.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (users_table_1.user_id OPERATOR(pg_catalog.>=) 1) AND (users_table_1.user_id OPERATOR(pg_catalog.<=) 3) AND (events_table.event_type OPERATOR(pg_catalog.>) 2) AND (events_table.event_type OPERATOR(pg_catalog.<) 4))) subquery_1 LEFT JOIN (SELECT intermediate_result.user_id, intermediate_result.count_pay FROM read_intermediate_result('26_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, count_pay bigint)) subquery_2 ON ((subquery_1.user_id OPERATOR(pg_catalog.=) subquery_2.user_id))) GROUP BY subquery_1.user_id, subquery_2.count_pay) subquery_top GROUP BY subquery_top.count_pay, subquery_top.user_id)) GROUP BY user_id HAVING ((count(*) OPERATOR(pg_catalog.>) 1) AND (sum(value_2) OPERATOR(pg_catalog.>) 29)) ORDER BY user_id
+DEBUG:  26_1 is broadcasted to localhost:57637
+DEBUG:  26_1 is broadcasted to localhost:57638
  user_id 
 ---------
        2
@@ -440,6 +460,8 @@ DEBUG:  push down of limit count: 5
 DEBUG:  generating subplan 28_1 for subquery SELECT users_table.user_id FROM public.users_table, (SELECT events_table.user_id FROM public.events_table) evs WHERE (users_table.user_id OPERATOR(pg_catalog.=) evs.user_id) ORDER BY users_table.user_id LIMIT 5
 DEBUG:  generating subplan 28_2 for subquery SELECT count(*) AS count FROM public.users_table GROUP BY user_id
 DEBUG:  Plan 28 query after replacing subqueries and CTEs: SELECT user_id FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('28_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) foo WHERE (user_id OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.count FROM read_intermediate_result('28_2'::text, 'binary'::citus_copy_format) intermediate_result(count bigint)))
+DEBUG:  28_1 is broadcasted to localhost:57637
+DEBUG:  28_2 is broadcasted to localhost:57637
  user_id 
 ---------
 (0 rows)
