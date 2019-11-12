@@ -196,6 +196,7 @@ OutDistributedPlan(OUTFUNC_ARGS)
 	WRITE_STRING_FIELD(intermediateResultIdPrefix);
 
 	WRITE_NODE_FIELD(subPlanList);
+	WRITE_NODE_FIELD(usedSubPlanNodeList);
 
 	WRITE_NODE_FIELD(planningError);
 }

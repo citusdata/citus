@@ -73,6 +73,8 @@ static DistributedPlan * CreateDistributedPlan(uint64 planId, Query *originalQue
 											   bool hasUnresolvedParams,
 											   PlannerRestrictionContext *
 											   plannerRestrictionContext);
+static void FindSubPlansUsedInPlan(DistributedPlan *plan);
+static bool ShouldFindSubPlansUsedInPlan(DistributedPlan *plan);
 static DeferredErrorMessage * DeferErrorIfPartitionTableNotSingleReplicated(Oid
 																			relationId);
 
@@ -572,6 +574,12 @@ CreateDistributedPlannedStmt(uint64 planId, PlannedStmt *localPlan, Query *origi
 		RaiseDeferredError(distributedPlan->planningError, ERROR);
 	}
 
+	/* traverse distributedPlan and extract the list of used subplans */
+	if (ShouldFindSubPlansUsedInPlan(distributedPlan))
+	{
+		FindSubPlansUsedInPlan(distributedPlan);
+	}
+
 	/* remember the plan's identifier for identifying subplans */
 	distributedPlan->planId = planId;
 
@@ -595,6 +603,76 @@ CreateDistributedPlannedStmt(uint64 planId, PlannedStmt *localPlan, Query *origi
 	}
 
 	return resultPlan;
+}
+
+
+/*
+ * FindSubPlansUsedInPlan adds all the subplans used by the plan into
+ * plan->usedSubPlanNodeList field. Simply traversing the range table entries in the plan.
+ */
+static void
+FindSubPlansUsedInPlan(DistributedPlan *plan)
+{
+	Query *jobQuery = NULL;
+	List *rangeTableList = NIL;
+	ListCell *rangeTableCell = NULL;
+
+	jobQuery = plan->workerJob == NULL ? plan->insertSelectSubquery :
+			   plan->workerJob->jobQuery;
+	rangeTableList = ExtractRangeTableEntryList(jobQuery);
+
+	foreach(rangeTableCell, rangeTableList)
+	{
+		RangeTblEntry *rangeTableEntry = lfirst(rangeTableCell);
+		if (rangeTableEntry->rtekind == RTE_FUNCTION)
+		{
+			Const *resultIdConst = NULL;
+			Datum resultIdDatum = 0;
+			char *resultId = NULL;
+
+			resultIdConst = FindResultIdOfIntermediateResultFunction(rangeTableEntry);
+
+			if (resultIdConst == NULL)
+			{
+				continue;
+			}
+
+			resultIdDatum = resultIdConst->constvalue;
+			resultId = TextDatumGetCString(resultIdDatum);
+
+			elog(DEBUG4, "resultId: %s", resultId);
+			plan->usedSubPlanNodeList = list_append_unique(plan->usedSubPlanNodeList,
+														   resultIdConst);
+		}
+	}
+}
+
+
+/*
+ * ShouldFindSubPlansUsedInPlan decides if we need to traverse a distributed plan
+ * and extract all the subplans used in this query.
+ *
+ * We do not wish to proceed if one of the following is met:
+ * - there are no intermediate results
+ * - the query hits all the worker nodes
+ */
+static bool
+ShouldFindSubPlansUsedInPlan(DistributedPlan *plan)
+{
+	/*
+	 * Decide if there are no intermediate results.
+	 *
+	 * We usually store the intermediate result info in workerJob field. We currently
+	 * have a single exception to this, which is SELECT INTO queries that have
+	 * ON CONFLICT/RETURNING clauses. If the query is of such a query we need to consider
+	 * pruning intermediate results even though we do not have a workerjob field
+	 */
+	if (plan->workerJob == NULL && plan->insertSelectSubquery == NULL)
+	{
+		return false;
+	}
+
+	return true;
 }
 
 
@@ -805,6 +883,12 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 
 	/* distributed plan currently should always succeed or error out */
 	Assert(distributedPlan && distributedPlan->planningError == NULL);
+
+	/* traverse distributedPlan and extract the list of used subplans */
+	if (ShouldFindSubPlansUsedInPlan(distributedPlan))
+	{
+		FindSubPlansUsedInPlan(distributedPlan);
+	}
 
 	return distributedPlan;
 }

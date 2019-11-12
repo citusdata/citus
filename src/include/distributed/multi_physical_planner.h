@@ -305,6 +305,16 @@ typedef struct DistributedPlan
 	List *subPlanList;
 
 	/*
+	 * List of subPlans that are used in the DistributedPlan
+	 * Note that this is different that "subPlanList" field which
+	 * contains the subplans generated part of the DistributedPlan.
+	 *
+	 * On the other hand, usedSubPlanNodeList keeps track of which subPlans
+	 * are used within this distributed plan.
+	 */
+	List *usedSubPlanNodeList;
+
+	/*
 	 * NULL if this a valid plan, an error description otherwise. This will
 	 * e.g. be set if SQL features are present that a planner doesn't support,
 	 * or if prepared statement parameters prevented successful planning.
