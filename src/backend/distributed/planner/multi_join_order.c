@@ -274,7 +274,19 @@ JoinOrderList(List *tableEntryList, List *joinClauseList)
 		candidateJoinOrder = JoinOrderForTable(startingTable, tableEntryList,
 											   joinClauseList);
 
-		candidateJoinOrderList = lappend(candidateJoinOrderList, candidateJoinOrder);
+		if (candidateJoinOrder != NULL)
+		{
+			candidateJoinOrderList = lappend(candidateJoinOrderList, candidateJoinOrder);
+		}
+	}
+
+	if (list_length(candidateJoinOrderList) == 0)
+	{
+		/* there are no plans that we can create, time to error */
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("complex joins are only supported when all distributed "
+							   "tables are joined on their distribution columns with "
+							   "equal operator")));
 	}
 
 	bestJoinOrder = BestJoinOrder(candidateJoinOrderList);
@@ -350,6 +362,12 @@ JoinOrderForTable(TableEntry *firstTable, List *tableEntryList, List *joinClause
 			pendingJoinNode = EvaluateJoinRules(joinedTableList, currentJoinNode,
 												pendingTable, joinClauseList, joinType);
 
+			if (pendingJoinNode == NULL)
+			{
+				/* no join order could be generated, we try our next pending table */
+				continue;
+			}
+
 			/* if this rule is better than previous ones, keep it */
 			pendingJoinRuleType = pendingJoinNode->joinRuleType;
 			if (pendingJoinRuleType < nextJoinRuleType)
@@ -357,6 +375,15 @@ JoinOrderForTable(TableEntry *firstTable, List *tableEntryList, List *joinClause
 				nextJoinNode = pendingJoinNode;
 				nextJoinRuleType = pendingJoinRuleType;
 			}
+		}
+
+		if (nextJoinNode == NULL)
+		{
+			/*
+			 * There is no next join node found, this will repeat indefinitely hence we
+			 * bail and let JoinOrderList try a new initial table
+			 */
+			return NULL;
 		}
 
 		Assert(nextJoinNode != NULL);
@@ -667,6 +694,11 @@ EvaluateJoinRules(List *joinedTableList, JoinOrderNode *currentJoinNode,
 		{
 			break;
 		}
+	}
+
+	if (nextJoinNode == NULL)
+	{
+		return NULL;
 	}
 
 	Assert(nextJoinNode != NULL);
@@ -1106,11 +1138,16 @@ static JoinOrderNode *
 CartesianProduct(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 				 List *applicableJoinClauses, JoinType joinType)
 {
-	/* Because of the cartesian product, anchor table information got lost */
-	return MakeJoinOrderNode(candidateTable, CARTESIAN_PRODUCT,
-							 currentJoinNode->partitionColumn,
-							 currentJoinNode->partitionMethod,
-							 NULL);
+	if (list_length(applicableJoinClauses) == 0)
+	{
+		/* Because of the cartesian product, anchor table information got lost */
+		return MakeJoinOrderNode(candidateTable, CARTESIAN_PRODUCT,
+								 currentJoinNode->partitionColumn,
+								 currentJoinNode->partitionMethod,
+								 NULL);
+	}
+
+	return NULL;
 }
 
 
