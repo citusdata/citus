@@ -134,7 +134,8 @@ MultiLogicalPlanCreate(Query *originalQuery, Query *queryTree,
 	MultiNode *multiQueryNode = NULL;
 	MultiTreeRoot *rootNode = NULL;
 
-	if (ShouldUseSubqueryPushDown(originalQuery, queryTree))
+
+	if (ShouldUseSubqueryPushDown(originalQuery, queryTree, plannerRestrictionContext))
 	{
 		multiQueryNode = SubqueryMultiNodeTree(originalQuery, queryTree,
 											   plannerRestrictionContext);
@@ -969,7 +970,7 @@ HasUnsupportedJoinWalker(Node *node, void *context)
 		JoinExpr *joinExpr = (JoinExpr *) node;
 		JoinType joinType = joinExpr->jointype;
 		bool outerJoin = IS_OUTER_JOIN(joinType);
-		if (!outerJoin && joinType != JOIN_INNER)
+		if (!outerJoin && joinType != JOIN_INNER && joinType != JOIN_SEMI)
 		{
 			hasUnsupportedJoin = true;
 		}
@@ -1335,7 +1336,7 @@ ExtractFromExpressionWalker(Node *node, QualifierWalkerContext *walkerContext)
 		}
 
 		/* return outer join clauses in a separate list */
-		if (joinType == JOIN_INNER)
+		if (joinType == JOIN_INNER || joinType == JOIN_SEMI)
 		{
 			walkerContext->baseQualifierList =
 				list_concat(walkerContext->baseQualifierList, joinQualifierList);
