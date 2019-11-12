@@ -283,6 +283,8 @@ typedef struct DistributedExecution
 	char **columnArray;
 
 	bool isRepartition;
+
+	List *forcedConnections;
 } DistributedExecution;
 
 
@@ -555,6 +557,7 @@ static bool ShouldRunTasksSequentially(List *taskList);
 static void SequentialRunDistributedExecution(DistributedExecution *execution);
 
 static void FinishDistributedExecution(DistributedExecution *execution);
+static void CloseForcedConnections(List *forcedConnections);
 static void CleanUpSessions(DistributedExecution *execution);
 
 static void LockPartitionsForDistributedPlan(DistributedPlan *distributedPlan);
@@ -608,6 +611,7 @@ static bool DoesHaveDependedJobs(Job *mainJob);
 static void ExtractParametersForRemoteExecution(ParamListInfo paramListInfo,
 												Oid **parameterTypes,
 												const char ***parameterValues);
+static void LogSessionId(uint64 sessionId);
 
 
 /*
@@ -664,7 +668,7 @@ AdaptiveExecutor(CitusScanState *scanState)
 										   distributedPlan->hasReturning, paramListInfo,
 										   tupleDescriptor,
 										   scanState->tuplestorestate, targetPoolSize,
-										   hasDependedJobs);
+										   false);
 
 
 	/*
@@ -874,6 +878,7 @@ CreateDistributedExecution(RowModifyLevel modLevel, List *taskList, bool hasRetu
 
 	execution->localTaskList = NIL;
 	execution->remoteTaskList = NIL;
+	execution->forcedConnections = NIL;
 
 	execution->executionStats =
 		(DistributedExecutionStats *) palloc0(sizeof(DistributedExecutionStats));
@@ -1370,10 +1375,37 @@ FinishDistributedExecution(DistributedExecution *execution)
 {
 	UnsetCitusNoticeLevel();
 
+	if (execution->isRepartition)
+	{
+		CloseForcedConnections(execution->forcedConnections);
+	}
+
 	if (DistributedExecutionModifiesDatabase(execution))
 	{
 		/* prevent copying shards in same transaction */
 		XactModificationLevel = XACT_MODIFICATION_DATA;
+	}
+}
+
+
+static void
+CloseForcedConnections(List *forcedConnections)
+{
+	ListCell *conCell = NULL;
+
+	foreach(conCell, forcedConnections)
+	{
+		MultiConnection *con = lfirst(conCell);
+
+		/* TODO:: the last connection seems corrupted. The second check is for that. */
+		/* We need to remove it once we find why the last connection is corrupted. */
+		/* it is just there for testing purposes */
+		if (con->connectionState <= MULTI_CONNECTION_LOST)
+		{
+			UnclaimConnection(con);
+			con->remoteTransaction.transactionState = REMOTE_TRANS_INVALID;
+			CloseConnection(con);
+		}
 	}
 }
 
@@ -1563,6 +1595,11 @@ AssignTasksToConnections(DistributedExecution *execution)
 			placementExecutionIndex++;
 
 			placementAccessList = PlacementAccessListForTask(task, taskPlacement);
+
+			if (execution->isRepartition)
+			{
+				connectionFlags |= FORCE_NEW_CONNECTION;
+			}
 
 			/*
 			 * Determine whether the task has to be assigned to a particular connection
@@ -1785,6 +1822,7 @@ FindOrCreateWorkerSession(WorkerPool *workerPool, MultiConnection *connection)
 			return session;
 		}
 	}
+
 
 	session = (WorkerSession *) palloc0(sizeof(WorkerSession));
 	session->sessionId = sessionId++;
@@ -2160,11 +2198,21 @@ ManageWorkerPool(WorkerPool *workerPool)
 		/* experimental: just to see the perf benefits of caching connections */
 		int connectionFlags = 0;
 
+		if (execution->isRepartition)
+		{
+			connectionFlags |= FORCE_NEW_CONNECTION;
+		}
+
 		/* open a new connection to the worker */
 		connection = StartNodeUserDatabaseConnection(connectionFlags,
 													 workerPool->nodeName,
 													 workerPool->nodePort,
 													 NULL, NULL);
+		if (execution->isRepartition)
+		{
+			execution->forcedConnections = lappend(execution->forcedConnections,
+												   connection);
+		}
 
 		/*
 		 * Assign the initial state in the connection state machine. The connection
@@ -2671,7 +2719,7 @@ TransactionStateMachine(WorkerSession *session)
 		{
 			case REMOTE_TRANS_INVALID:
 			{
-				if (execution->isTransaction)
+				if (execution->isTransaction && !execution->isRepartition)
 				{
 					/* if we're expanding the nodes in a transaction, use 2PC */
 					Activate2PCIfModifyingTransactionExpandsToNewNode(session);
@@ -3023,11 +3071,15 @@ StartPlacementExecutionOnSession(TaskPlacementExecution *placementExecution,
 	int querySent = 0;
 	int singleRowMode = 0;
 
-	/*
-	 * Make sure that subsequent commands on the same placement
-	 * use the same connection.
-	 */
-	AssignPlacementListToConnection(placementAccessList, connection);
+	if (!execution->isRepartition)
+	{
+		/*
+		 * Make sure that subsequent commands on the same placement
+		 * use the same connection.
+		 */
+		AssignPlacementListToConnection(placementAccessList, connection);
+	}
+
 
 	/* one more command is sent over the session */
 	session->commandsSent++;
@@ -3043,6 +3095,7 @@ StartPlacementExecutionOnSession(TaskPlacementExecution *placementExecution,
 	session->currentTask = placementExecution;
 	placementExecution->executionState = PLACEMENT_EXECUTION_RUNNING;
 
+	LogSessionId(session->sessionId);
 	if (paramListInfo != NULL)
 	{
 		int parameterCount = paramListInfo->numParams;
@@ -3076,6 +3129,13 @@ StartPlacementExecutionOnSession(TaskPlacementExecution *placementExecution,
 	}
 
 	return true;
+}
+
+
+static void
+LogSessionId(uint64 sessionId)
+{
+	ereport(DEBUG4, (errmsg("Command will be sent on session id: %ld", sessionId)));
 }
 
 

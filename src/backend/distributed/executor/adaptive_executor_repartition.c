@@ -296,9 +296,9 @@ ExecuteTasksInDependencyOrder(List *allTasks, List *topLevelTasks)
 		{
 			break;
 		}
-
 		ExecuteTaskListRepartition(ROW_MODIFY_NONE, curTasks,
 								   MaxAdaptiveExecutorPoolSize);
+
 		AddCompletedTasks(curTasks, completedTasks);
 		curTasks = NIL;
 	}
