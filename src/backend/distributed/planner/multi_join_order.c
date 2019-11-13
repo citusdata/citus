@@ -1173,9 +1173,9 @@ MakeJoinOrderNode(TableEntry *tableEntry, JoinRuleType joinRuleType,
  * IsApplicableJoinClause tests if the current joinClause is applicable to the join at
  * hand.
  *
- *   Given a list of left hand tables and a candidate right hand table the join clause is
- *   valid if atleast 1 column is from the right hand table AND all columns can be found
- *   in either the list of tables on the left *or* in the right hand table.
+ * Given a list of left hand tables and a candidate right hand table the join clause is
+ * valid if atleast 1 column is from the right hand table AND all columns can be found
+ * in either the list of tables on the left *or* in the right hand table.
  */
 bool
 IsApplicableJoinClause(List *leftTableIdList, uint32 rightTableId, OpExpr *joinClause)
