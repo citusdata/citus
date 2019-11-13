@@ -12,3 +12,7 @@ COMMENT ON COLUMN pg_catalog.pg_dist_node.shouldhaveshards IS
 UPDATE pg_dist_colocation SET replicationfactor = -1 WHERE distributioncolumntype = 0;
 
 #include "udfs/any_value/9.1-1.sql"
+
+-- drop function which was used for upgrading from 6.0
+-- creation was removed from citus--7.0-1.sql
+DROP FUNCTION IF EXISTS pg_catalog.master_initialize_node_metadata;
