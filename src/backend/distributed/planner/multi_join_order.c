@@ -1235,31 +1235,6 @@ ApplicableJoinClauses(List *leftTableIdList, uint32 rightTableId, List *joinClau
 }
 
 
-/* Returns the left expression in the given join clause. */
-Node *
-LeftHandExpr(OpExpr *joinClause)
-{
-	List *argumentList = joinClause->args;
-	return (Node *) linitial(argumentList);
-}
-
-
-/* Returns the left column in the given join clause. */
-Var *
-LeftColumn(OpExpr *joinClause)
-{
-	Node *leftArgument = LeftHandExpr(joinClause);
-
-	List *varList = pull_var_clause_default(leftArgument);
-	Var *leftColumn = NULL;
-
-	Assert(list_length(varList) == 1);
-	leftColumn = (Var *) linitial(varList);
-
-	return leftColumn;
-}
-
-
 /*
  * Returns the left column only when directly referenced in the given join clause,
  * otherwise NULL is returned.
@@ -1267,38 +1242,15 @@ LeftColumn(OpExpr *joinClause)
 Var *
 LeftColumnOrNULL(OpExpr *joinClause)
 {
-	Node *leftArgument = LeftHandExpr(joinClause);
+	List *argumentList = joinClause->args;
+	Node *leftArgument = (Node *) linitial(argumentList);
+
 	leftArgument = strip_implicit_coercions(leftArgument);
 	if (!IsA(leftArgument, Var))
 	{
 		return NULL;
 	}
 	return castNode(Var, leftArgument);
-}
-
-
-/* Returns the right expression in the given join clause. */
-Node *
-RightHandExpr(OpExpr *joinClause)
-{
-	List *argumentList = joinClause->args;
-	return (Node *) lsecond(argumentList);
-}
-
-
-/* Returns the right column in the given join clause. */
-Var *
-RightColumn(OpExpr *joinClause)
-{
-	Node *rightArgument = RightHandExpr(joinClause);
-
-	List *varList = pull_var_clause_default(rightArgument);
-	Var *rightColumn = NULL;
-
-	Assert(list_length(varList) == 1);
-	rightColumn = (Var *) linitial(varList);
-
-	return rightColumn;
 }
 
 
@@ -1309,7 +1261,9 @@ RightColumn(OpExpr *joinClause)
 Var *
 RightColumnOrNULL(OpExpr *joinClause)
 {
-	Node *rightArgument = RightHandExpr(joinClause);
+	List *argumentList = joinClause->args;
+	Node *rightArgument = (Node *) lsecond(argumentList);
+
 	rightArgument = strip_implicit_coercions(rightArgument);
 	if (!IsA(rightArgument, Var))
 	{

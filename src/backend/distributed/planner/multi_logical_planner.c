@@ -2134,8 +2134,12 @@ ApplySinglePartitionJoin(MultiNode *leftNode, MultiNode *rightNode,
 	joinClause = SinglePartitionJoinClause(partitionColumn, applicableJoinClauses);
 	Assert(joinClause != NULL);
 
-	leftColumn = LeftColumn(joinClause);
-	rightColumn = RightColumn(joinClause);
+	/* both are verified in SinglePartitionJoinClause to not be NULL, assert is to guard */
+	leftColumn = LeftColumnOrNULL(joinClause);
+	rightColumn = RightColumnOrNULL(joinClause);
+
+	Assert(leftColumn != NULL);
+	Assert(rightColumn != NULL);
 
 	if (equal(partitionColumn, leftColumn))
 	{
@@ -2209,8 +2213,11 @@ ApplyDualPartitionJoin(MultiNode *leftNode, MultiNode *rightNode,
 	joinClause = DualPartitionJoinClause(applicableJoinClauses);
 	Assert(joinClause != NULL);
 
-	leftColumn = LeftColumn(joinClause);
-	rightColumn = RightColumn(joinClause);
+	/* both are verified in DualPartitionJoinClause to not be NULL, assert is to guard */
+	leftColumn = LeftColumnOrNULL(joinClause);
+	rightColumn = RightColumnOrNULL(joinClause);
+	Assert(leftColumn != NULL);
+	Assert(rightColumn != NULL);
 
 	rightTableIdList = OutputTableIdList(rightNode);
 	rightTableId = (uint32) linitial_int(rightTableIdList);
