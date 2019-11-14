@@ -20,6 +20,7 @@
 #include "distributed/commands/utility_hook.h"
 #include "distributed/insert_select_executor.h"
 #include "distributed/insert_select_planner.h"
+#include "distributed/master_protocol.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_master_planner.h"
 #include "distributed/distributed_planner.h"
@@ -28,6 +29,7 @@
 #include "distributed/multi_server_executor.h"
 #include "distributed/resource_lock.h"
 #include "distributed/transaction_management.h"
+#include "distributed/worker_shard_visibility.h"
 #include "distributed/worker_protocol.h"
 #include "executor/execdebug.h"
 #include "commands/copy.h"
@@ -60,6 +62,7 @@ static bool IsCitusPlan(Plan *plan);
 static bool IsCitusCustomScan(Plan *plan);
 static Relation StubRelation(TupleDesc tupleDescriptor);
 static bool AlterTableConstraintCheck(QueryDesc *queryDesc);
+static bool IsLocalReferenceTableJoinPlan(PlannedStmt *plan);
 
 /*
  * CitusExecutorStart is the ExecutorStart_hook that gets called when
@@ -69,6 +72,23 @@ void
 CitusExecutorStart(QueryDesc *queryDesc, int eflags)
 {
 	PlannedStmt *plannedStmt = queryDesc->plannedstmt;
+
+	if (CitusHasBeenLoaded())
+	{
+		if (IsLocalReferenceTableJoinPlan(plannedStmt) &&
+			IsMultiStatementTransaction())
+		{
+			/*
+			 * Currently we don't support this to avoid problems with tuple
+			 * visibility, locking, etc. For example, change to the reference
+			 * table can go through a MultiConnection, which won't be visible
+			 * to the locally planned queries.
+			 */
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("cannot join local tables and reference tables in "
+								   "a transaction block")));
+		}
+	}
 
 	/*
 	 * We cannot modify XactReadOnly on Windows because it is not
@@ -630,4 +650,80 @@ AlterTableConstraintCheck(QueryDesc *queryDesc)
 	}
 
 	return true;
+}
+
+
+/*
+ * IsLocalReferenceTableJoinPlan returns true if the given plan joins local tables
+ * with reference table shards.
+ *
+ * This should be consistent with IsLocalReferenceTableJoin() in distributed_planner.c.
+ */
+static bool
+IsLocalReferenceTableJoinPlan(PlannedStmt *plan)
+{
+	bool hasReferenceTable = false;
+	bool hasLocalTable = false;
+	ListCell *oidCell = NULL;
+	bool hasReferenceTableReplica = false;
+
+	/*
+	 * We only allow join between reference tables and local tables in the
+	 * coordinator.
+	 */
+	if (!IsCoordinator())
+	{
+		return false;
+	}
+
+	/*
+	 * All groups that have pg_dist_node entries, also have reference
+	 * table replicas.
+	 */
+	PrimaryNodeForGroup(GetLocalGroupId(), &hasReferenceTableReplica);
+
+	/*
+	 * If reference table doesn't have replicas on the coordinator, we don't
+	 * allow joins with local tables.
+	 */
+	if (!hasReferenceTableReplica)
+	{
+		return false;
+	}
+
+	/*
+	 * No need to check FOR UPDATE/SHARE or modifying subqueries, those have
+	 * already errored out in distributed_planner.c if they contain mix of
+	 * local and distributed tables.
+	 */
+	if (plan->commandType != CMD_SELECT)
+	{
+		return false;
+	}
+
+	foreach(oidCell, plan->relationOids)
+	{
+		Oid relationId = lfirst_oid(oidCell);
+		bool onlySearchPath = false;
+
+		if (RelationIsAKnownShard(relationId, onlySearchPath))
+		{
+			/*
+			 * We don't allow joining non-reference distributed tables, so we
+			 * can skip checking that this is a reference table shard or not.
+			 */
+			hasReferenceTable = true;
+		}
+		else
+		{
+			hasLocalTable = true;
+		}
+
+		if (hasReferenceTable && hasLocalTable)
+		{
+			return true;
+		}
+	}
+
+	return false;
 }
