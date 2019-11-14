@@ -30,6 +30,9 @@ SELECT DISTINCT l_orderkey, strpos(l_shipmode, 'I')
 	ORDER BY 2, 1
 	LIMIT 5;
 
+-- row types are supported
+SELECT DISTINCT (l_orderkey, l_partkey) AS pair FROM lineitem_hash_part ORDER BY 1 LIMIT 5;
+
 -- distinct on partition column
 -- verify counts match with respect to count(distinct)
 CREATE TEMP TABLE temp_orderkeys AS SELECT DISTINCT l_orderkey FROM lineitem_hash_part;
