@@ -27,6 +27,7 @@
 #include "distributed/multi_server_executor.h"
 #include "distributed/adaptive_executor_repartitioning.h"
 #include "distributed/worker_transaction.h"
+#include "distributed/transaction_management.h"
 #include "distributed/multi_task_tracker_executor.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/transmit.h"
@@ -77,6 +78,8 @@ ExecuteDependedTasks(List *topLevelTasks)
 
 	List *mapOutputFetchTasks = NIL;
 	List *mergeTasks = NIL;
+
+	EnsureNoModificationsHaveBeenDone();
 
 	allTasks = TaskAndExecutionList(topLevelTasks);
 
