@@ -1382,7 +1382,7 @@ MasterExtendedOpNode(MultiExtendedOp *originalOpNode,
 	foreach(targetEntryCell, targetEntryList)
 	{
 		TargetEntry *originalTargetEntry = (TargetEntry *) lfirst(targetEntryCell);
-		TargetEntry *newTargetEntry = copyObject(originalTargetEntry);
+		TargetEntry *newTargetEntry = flatCopyTargetEntry(originalTargetEntry);
 		Expr *originalExpression = originalTargetEntry->expr;
 		Expr *newExpression = NULL;
 
@@ -1411,6 +1411,11 @@ MasterExtendedOpNode(MultiExtendedOp *originalOpNode,
 			column->varattno = walkerContext->columnId;
 			column->varoattno = walkerContext->columnId;
 			walkerContext->columnId++;
+
+			if (column->vartype == RECORDOID)
+			{
+				column->vartypmod = BlessRecordExpression(originalTargetEntry->expr);
+			}
 
 			newExpression = (Expr *) column;
 		}

@@ -1542,7 +1542,7 @@ ShouldTransformRTE(RangeTblEntry *rangeTableEntry)
 	/*
 	 * We should wrap only function rtes that are not LATERAL and
 	 * without WITH ORDINALITY clause
-	 * */
+	 */
 	if (rangeTableEntry->rtekind != RTE_FUNCTION ||
 		rangeTableEntry->lateral ||
 		rangeTableEntry->funcordinality)
