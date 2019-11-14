@@ -668,7 +668,7 @@ AdaptiveExecutor(CitusScanState *scanState)
 										   distributedPlan->hasReturning, paramListInfo,
 										   tupleDescriptor,
 										   scanState->tuplestorestate, targetPoolSize,
-										   false);
+										   hasDependedJobs);
 
 
 	/*
@@ -717,7 +717,7 @@ AdaptiveExecutor(CitusScanState *scanState)
 
 	FinishDistributedExecution(execution);
 
-	if (hasDependedJobs && SubPlanLevel == 0)
+	if (hasDependedJobs)
 	{
 		CleanUpSchemas();
 	}
