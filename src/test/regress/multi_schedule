@@ -117,6 +117,7 @@ test: with_prepare
 # ---------
 test: with_nested with_where with_basics with_set_operations
 test: with_modifying cte_prepared_modify cte_nested_modification
+test: ensure_no_intermediate_data_leak
 test: with_executors with_join with_partitioning with_transactions with_dml
 
 

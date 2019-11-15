@@ -25,5 +25,31 @@ WHERE k.a = l.b AND k.a = m.b AND t.b = l.a;
     10
 (1 row)
 
+SELECT count(*) FROM (SELECT k.a FROM ab k, ab l WHERE k.a = l.b) first, (SELECT * FROM ab) second WHERE first.a = second.b;
+ count 
+-------
+    10
+(1 row)
+
+BEGIN;
+SELECT count(*) FROM (SELECT k.a FROM ab k, ab l WHERE k.a = l.b) first, (SELECT * FROM ab) second WHERE first.a = second.b;
+ count 
+-------
+    10
+(1 row)
+
+SELECT count(*) FROM (SELECT k.a FROM ab k, ab l WHERE k.a = l.b) first, (SELECT * FROM ab) second WHERE first.a = second.b;
+ count 
+-------
+    10
+(1 row)
+
+SELECT count(*) FROM (SELECT k.a FROM ab k, ab l WHERE k.a = l.b) first, (SELECT * FROM ab) second WHERE first.a = second.b;
+ count 
+-------
+    10
+(1 row)
+
+ROLLBACK;
 DROP SCHEMA adaptive_executor CASCADE;
 NOTICE:  drop cascades to table ab

@@ -72,8 +72,6 @@ FROM
 	SELECT user_id FROM users_table
 ) as bar
 WHERE foo.value_2 = bar.user_id; 
-DEBUG:  cannot use adaptive executor with repartition jobs
-HINT:  Since you enabled citus.enable_repartition_joins Citus chose to use task-tracker.
 DEBUG:  generating subplan 8_1 for subquery SELECT DISTINCT users_table.value_2 FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.value_2) AND (users_table.user_id OPERATOR(pg_catalog.<) 2))
 DEBUG:  Plan 8 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.value_2 FROM read_intermediate_result('8_1'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer)) foo, (SELECT users_table.user_id FROM public.users_table) bar WHERE (foo.value_2 OPERATOR(pg_catalog.=) bar.user_id)
  count 
@@ -100,8 +98,6 @@ FROM
 WHERE foo.value_2 = bar.user_id AND baz.value_2 = bar.user_id AND bar.user_id = baw.user_id; 
 DEBUG:  generating subplan 10_1 for subquery SELECT value_2 FROM public.users_table WHERE (user_id OPERATOR(pg_catalog.=) 15) OFFSET 0
 DEBUG:  generating subplan 10_2 for subquery SELECT user_id FROM public.users_table OFFSET 0
-DEBUG:  cannot use adaptive executor with repartition jobs
-HINT:  Since you enabled citus.enable_repartition_joins Citus chose to use task-tracker.
 DEBUG:  generating subplan 10_3 for subquery SELECT DISTINCT users_table.value_2 FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.value_2) AND (users_table.user_id OPERATOR(pg_catalog.<) 2))
 DEBUG:  generating subplan 10_4 for subquery SELECT user_id FROM subquery_executor.users_table_local WHERE (user_id OPERATOR(pg_catalog.=) 2)
 DEBUG:  Plan 10 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.value_2 FROM read_intermediate_result('10_1'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer)) foo, (SELECT intermediate_result.user_id FROM read_intermediate_result('10_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) bar, (SELECT intermediate_result.value_2 FROM read_intermediate_result('10_3'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer)) baz, (SELECT intermediate_result.user_id FROM read_intermediate_result('10_4'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) baw WHERE ((foo.value_2 OPERATOR(pg_catalog.=) bar.user_id) AND (baz.value_2 OPERATOR(pg_catalog.=) bar.user_id) AND (bar.user_id OPERATOR(pg_catalog.=) baw.user_id))

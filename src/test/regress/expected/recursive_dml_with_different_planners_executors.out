@@ -56,8 +56,6 @@ UPDATE distributed_table SET dept = foo.some_tenants::int FROM
 	 	DISTINCT second_distributed_table.tenant_id as some_tenants
 	 FROM second_distributed_table, distributed_table WHERE second_distributed_table.dept = distributed_table.dept
 ) as foo;
-DEBUG:  cannot use adaptive executor with repartition jobs
-HINT:  Since you enabled citus.enable_repartition_joins Citus chose to use task-tracker.
 DEBUG:  generating subplan 8_1 for subquery SELECT DISTINCT second_distributed_table.tenant_id AS some_tenants FROM recursive_dml_with_different_planner_executors.second_distributed_table, recursive_dml_with_different_planner_executors.distributed_table WHERE (second_distributed_table.dept OPERATOR(pg_catalog.=) distributed_table.dept)
 DEBUG:  Plan 8 query after replacing subqueries and CTEs: UPDATE recursive_dml_with_different_planner_executors.distributed_table SET dept = (foo.some_tenants)::integer FROM (SELECT intermediate_result.some_tenants FROM read_intermediate_result('8_1'::text, 'binary'::citus_copy_format) intermediate_result(some_tenants text)) foo
 SET citus.enable_repartition_joins to OFF;

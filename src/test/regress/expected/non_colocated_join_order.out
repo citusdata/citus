@@ -42,8 +42,6 @@ SET citus.shard_replication_factor to 1;
 SET citus.enable_repartition_joins to ON;
 SELECT count(*) FROM test_table_1, test_table_2 WHERE test_table_1.id = test_table_2.id;
 LOG:  join order: [ "test_table_1" ][ single range partition join "test_table_2" ]
-DEBUG:  cannot use adaptive executor with repartition jobs
-HINT:  Since you enabled citus.enable_repartition_joins Citus chose to use task-tracker.
  count 
 -------
      9
