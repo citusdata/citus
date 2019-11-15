@@ -102,7 +102,6 @@ CREATE TABLE district (
     d_zip char(9) NOT NULL,
     PRIMARY KEY (d_w_id,d_id)
 );
-
 CREATE TABLE item (
     i_id int NOT NULL,
     i_name varchar(24) NOT NULL,
@@ -160,17 +159,63 @@ SELECT create_reference_table('region');
 SELECT create_reference_table('nation');
 SELECT create_reference_table('supplier');
 
+TRUNCATE order_line, new_order, stock, oorder, history, customer, district, warehouse, item, region, nation, supplier; -- for easy copy in development
 INSERT INTO supplier SELECT c, 'abc', 'def', c, 'ghi', c, 'jkl' FROM generate_series(0,10) AS c;
 INSERT INTO stock SELECT c,c,c,c,c,c, 'abc','abc','abc','abc','abc','abc','abc','abc','abc','abc','abc' FROM generate_series(1,3) AS c;
 INSERT INTO stock SELECT c, 5000,c,c,c,c, 'abc','abc','abc','abc','abc','abc','abc','abc','abc','abc','abc' FROM generate_series(1,3) AS c; -- mod(2*5000,10000) == 0
-INSERT INTO order_line SELECT c, c, c, c, c, NULL, c, c, c, 'abc' FROM generate_series(0,10) AS c;
-
+INSERT INTO order_line SELECT c, c, c, c, c, '2008-10-17 00:00:00.000000', c, c, c, 'abc' FROM generate_series(0,10) AS c;
+INSERT INTO oorder SELECT c, c, c, c, c, 1, 1, '2008-10-17 00:00:00.000000' FROM generate_series(0,10) AS c;
+INSERT INTO customer SELECT c, c, c, 0, 'XX', 'John', 'Doe', 1000, 0, 0, c, c, 'Name', 'Street', 'Some City', 'CA', '12345', '+1 000 0000000', '2007-01-02 00:00:00.000000', 'NA', 'nothing special' FROM generate_series(0,10) AS c;
+INSERT INTO nation VALUES
+    (1, 'United States', 1, 'Big'),
+    (4, 'The Netherlands', 2, 'Flat'),
+    (9, 'Germany', 3, 'Germany must be in here for Q7'),
+    (67, 'Cambodia', 67, 'I don''t understand how we got from California to Cambodia but I will take it');
 -- MVP for CH-BenCHmark queries 7/8/9 where a join with an expression is done between a distributed table and a reference table.
   SELECT su_suppkey, s_w_id, s_i_id, ol_supply_w_id
     FROM supplier, stock, order_line
    WHERE ol_supply_w_id = s_w_id
      AND mod((s_w_id * s_i_id),10000) = su_suppkey
 ORDER BY 1,2,3,4;
+
+-- Query 7
+SELECT
+    su_nationkey as supp_nation,
+    substr(c_state,1,1) as cust_nation,
+    extract(year from o_entry_d) as l_year,
+    sum(ol_amount) as revenue
+FROM
+    supplier,
+    stock,
+    order_line,
+    oorder,
+    customer,
+    nation n1,
+    nation n2
+WHERE ol_supply_w_id = s_w_id
+  AND ol_i_id = s_i_id
+  AND mod((s_w_id * s_i_id), 10000) = su_suppkey
+  AND ol_w_id = o_w_id
+  AND ol_d_id = o_d_id
+  AND ol_o_id = o_id
+  AND c_id = o_c_id
+  AND c_w_id = o_w_id
+  AND c_d_id = o_d_id
+  AND su_nationkey = n1.n_nationkey
+  AND ascii(substr(c_state,1,1)) = n2.n_nationkey
+  AND (
+         (n1.n_name = 'Germany' AND n2.n_name = 'Cambodia')
+      OR (n1.n_name = 'Cambodia' AND n2.n_name = 'Germany')
+      )
+  AND ol_delivery_d BETWEEN '2007-01-02 00:00:00.000000' AND '2012-01-02 00:00:00.000000'
+GROUP BY
+    su_nationkey,
+    substr(c_state,1,1),
+    extract(year from o_entry_d)
+ORDER BY
+    su_nationkey,
+    cust_nation,
+    l_year;
 
 SET client_min_messages TO WARNING;
 DROP SCHEMA ch_bench_join_expr CASCADE;
