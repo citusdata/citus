@@ -431,6 +431,36 @@ ORDER BY
     n_name,
     l_year DESC;
 
+-- Query 10
+SELECT
+    c_id,
+    c_last,
+    sum(ol_amount) AS revenue,
+    c_city,
+    c_phone,
+    n_name
+FROM
+    customer,
+    oorder,
+    order_line,
+    nation
+WHERE c_id = o_c_id
+  AND c_w_id = o_w_id
+  AND c_d_id = o_d_id
+  AND ol_w_id = o_w_id
+  AND ol_d_id = o_d_id
+  AND ol_o_id = o_id
+  AND o_entry_d >= '2007-01-02 00:00:00.000000'
+  AND o_entry_d <= ol_delivery_d
+  AND n_nationkey = ascii(substr(c_state,1,1))
+GROUP BY
+    c_id,
+    c_last,
+    c_city,
+    c_phone,
+    n_name
+ORDER BY revenue DESC;
+
 -- Query 11
 SELECT
     s_i_id,
@@ -453,6 +483,22 @@ HAVING sum(s_order_cnt) >
             AND su_nationkey = n_nationkey
             AND n_name = 'Germany')
 ORDER BY ordercount DESC;
+
+-- Query 12
+SELECT
+    o_ol_cnt,
+    sum(case when o_carrier_id = 1 or o_carrier_id = 2 then 1 else 0 end) as high_line_count,
+    sum(case when o_carrier_id <> 1 and o_carrier_id <> 2 then 1 else 0 end) as low_line_count
+FROM
+    oorder,
+    order_line
+WHERE ol_w_id = o_w_id
+  AND ol_d_id = o_d_id
+  AND ol_o_id = o_id
+  AND o_entry_d <= ol_delivery_d
+  AND ol_delivery_d < '2020-01-01 00:00:00.000000'
+GROUP BY o_ol_cnt
+ORDER BY o_ol_cnt;
 
 -- Query 20
 SELECT
