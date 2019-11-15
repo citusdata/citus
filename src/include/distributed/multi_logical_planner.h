@@ -16,6 +16,7 @@
 
 #include "distributed/citus_nodes.h"
 #include "distributed/errormessage.h"
+#include "distributed/log_utils.h"
 #include "distributed/multi_join_order.h"
 #include "distributed/relation_restriction_equivalence.h"
 #include "nodes/nodes.h"

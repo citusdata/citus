@@ -16,6 +16,7 @@
 #include "distributed/multi_logical_planner.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/errormessage.h"
+#include "distributed/log_utils.h"
 
 
 /* Config variables managed via guc.c */

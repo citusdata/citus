@@ -20,6 +20,7 @@
 #include "datatype/timestamp.h"
 #include "distributed/citus_nodes.h"
 #include "distributed/errormessage.h"
+#include "distributed/log_utils.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/multi_logical_planner.h"
 #include "distributed/distributed_planner.h"
