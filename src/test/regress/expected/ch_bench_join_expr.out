@@ -737,6 +737,29 @@ ORDER BY supplier_cnt DESC;
  Keyboard | co    |   50.00 |            3
 (1 row)
 
+--Q17
+SELECT
+       sum(ol_amount) / 2.0 AS avg_yearly
+FROM
+    order_line,
+    (SELECT
+         i_id,
+         avg(ol_quantity) AS a
+     FROM
+         item,
+         order_line
+     WHERE i_data LIKE '%b'
+       AND ol_i_id = i_id
+     GROUP BY i_id) t
+WHERE ol_i_id = t.i_id;
+     avg_yearly      
+---------------------
+ 27.5000000000000000
+(1 row)
+
+-- this filter was at the end causing the dataset to be empty. it should not have any
+-- influence on how the query gets planned so I removed the clause
+--AND ol_quantity < t.a;
 -- Query 20
 SELECT
     su_name,
