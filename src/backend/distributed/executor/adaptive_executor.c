@@ -558,7 +558,6 @@ static bool DistributedExecutionModifiesDatabase(DistributedExecution *execution
 static bool TaskListModifiesDatabase(RowModifyLevel modLevel, List *taskList);
 static bool DistributedExecutionRequiresRollback(DistributedExecution *execution);
 static bool TaskListRequires2PC(List *taskList);
-static bool ReadOnlyTask(TaskType taskType);
 static bool SelectForUpdateOnReferenceTable(RowModifyLevel modLevel, List *taskList);
 static void AssignTasksToConnections(DistributedExecution *execution);
 static void UnclaimAllSessionConnections(List *sessionList);
@@ -1167,7 +1166,7 @@ TaskListRequires2PC(List *taskList)
  * ReadOnlyTask returns true if the input task does a read-only operation
  * on the database.
  */
-static bool
+bool
 ReadOnlyTask(TaskType taskType)
 {
 	if (taskType == ROUTER_TASK || taskType == SQL_TASK)

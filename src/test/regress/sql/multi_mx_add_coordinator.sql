@@ -18,6 +18,26 @@ SELECT verify_metadata('localhost', :worker_1_port),
 CREATE TABLE ref(a int);
 SELECT create_reference_table('ref');
 
+SET citus.log_local_commands TO ON;
+SET client_min_messages TO DEBUG;
+
+-- if the placement policy is not round-robin, SELECTs on the reference
+-- tables use local execution
+SELECT count(*) FROM ref;
+SELECT count(*) FROM ref;
+
+-- for round-robin policy, always go to workers
+SET citus.task_assignment_policy TO "round-robin";
+SELECT count(*) FROM ref;
+SELECT count(*) FROM ref;
+SELECT count(*) FROM ref;
+
+-- modifications always go through local shard as well as remote ones
+INSERT INTO ref VALUES (1);
+
+-- get it ready for the next executions
+TRUNCATE ref;
+
 -- test that changes from a metadata node is reflected in the coordinator placement
 \c - - - :worker_1_port
 SET search_path TO mx_add_coordinator,public;

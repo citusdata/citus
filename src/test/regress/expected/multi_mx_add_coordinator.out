@@ -33,6 +33,66 @@ SELECT create_reference_table('ref');
  
 (1 row)
 
+SET citus.log_local_commands TO ON;
+SET client_min_messages TO DEBUG;
+-- if the placement policy is not round-robin, SELECTs on the reference
+-- tables use local execution
+SELECT count(*) FROM ref;
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+LOG:  executing the command locally: SELECT count(*) AS count FROM mx_add_coordinator.ref_7000000 ref
+ count 
+-------
+     0
+(1 row)
+
+SELECT count(*) FROM ref;
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+LOG:  executing the command locally: SELECT count(*) AS count FROM mx_add_coordinator.ref_7000000 ref
+ count 
+-------
+     0
+(1 row)
+
+-- for round-robin policy, always go to workers
+SET citus.task_assignment_policy TO "round-robin";
+SELECT count(*) FROM ref;
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ count 
+-------
+     0
+(1 row)
+
+SELECT count(*) FROM ref;
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ count 
+-------
+     0
+(1 row)
+
+SELECT count(*) FROM ref;
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ count 
+-------
+     0
+(1 row)
+
+-- modifications always go through local shard as well as remote ones
+INSERT INTO ref VALUES (1);
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+LOG:  executing the command locally: INSERT INTO mx_add_coordinator.ref_7000000 (a) VALUES (1)
+-- get it ready for the next executions
+TRUNCATE ref;
 -- test that changes from a metadata node is reflected in the coordinator placement
 \c - - - :worker_1_port
 SET search_path TO mx_add_coordinator,public;
