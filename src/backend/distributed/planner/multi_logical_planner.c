@@ -813,13 +813,13 @@ IsReadIntermediateResultFunction(Node *node)
  * FindIntermediateResultIdIfExists extracts the id of the intermediate result
  * if the given RTE contains a read_intermediate_results function, NULL otherwise
  */
-Const *
+char *
 FindIntermediateResultIdIfExists(RangeTblEntry *rte)
 {
 	List *functionList = NULL;
 	RangeTblFunction *rangeTblfunction = NULL;
 	FuncExpr *funcExpr = NULL;
-	Const *resultIdConst = NULL;
+	char *resultId = NULL;
 
 	Assert(rte->rtekind == RTE_FUNCTION);
 
@@ -829,10 +829,15 @@ FindIntermediateResultIdIfExists(RangeTblEntry *rte)
 
 	if (IsReadIntermediateResultFunction((Node *) funcExpr))
 	{
-		resultIdConst = linitial(funcExpr->args);
+		Const *resultIdConst = linitial(funcExpr->args);
+
+		if (!resultIdConst->constisnull)
+		{
+			resultId = TextDatumGetCString(resultIdConst->constvalue);
+		}
 	}
 
-	return resultIdConst;
+	return resultId;
 }
 
 
