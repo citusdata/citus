@@ -19,6 +19,7 @@
 #include "commands/dbcommands.h"
 #include "distributed/connection_management.h"
 #include "distributed/errormessage.h"
+#include "distributed/log_utils.h"
 #include "distributed/memutils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/hash_helpers.h"

@@ -23,3 +23,13 @@ IsLoggableLevel(int logLevel)
 {
 	return log_min_messages <= logLevel || client_min_messages <= logLevel;
 }
+
+
+/*
+ * ApplyLogRedaction is only supported in Citus Enterprise
+ */
+char *
+ApplyLogRedaction(const char *logText)
+{
+	return (char *) logText;
+}

@@ -15,6 +15,7 @@
 
 #include "distributed/connection_management.h"
 #include "distributed/errormessage.h"
+#include "distributed/log_utils.h"
 #include "distributed/remote_commands.h"
 #include "lib/stringinfo.h"
 #include "miscadmin.h"

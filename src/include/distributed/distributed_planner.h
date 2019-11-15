@@ -22,6 +22,7 @@
 
 #include "distributed/citus_nodes.h"
 #include "distributed/errormessage.h"
+#include "distributed/log_utils.h"
 
 
 /* values used by jobs and tasks which do not require identifiers */

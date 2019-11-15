@@ -25,6 +25,7 @@
 #include "distributed/deparse_shard_query.h"
 #include "distributed/distribution_column.h"
 #include "distributed/errormessage.h"
+#include "distributed/log_utils.h"
 #include "distributed/insert_select_planner.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/master_protocol.h"

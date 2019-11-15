@@ -15,6 +15,7 @@
 
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/errormessage.h"
+#include "distributed/log_utils.h"
 #include "distributed/distributed_planner.h"
 #include "distributed/multi_server_executor.h"
 #include "nodes/parsenodes.h"

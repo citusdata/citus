@@ -10,5 +10,6 @@
 #define LOG_UTILS_H
 
 extern bool IsLoggableLevel(int logLevel);
+extern char * ApplyLogRedaction(const char *text);
 
 #endif /* LOG_UTILS_H */
