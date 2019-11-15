@@ -426,6 +426,18 @@ ORDER BY revenue DESC;
  The Netherlands           |    2.00
 (2 rows)
 
+-- Query 6
+SELECT
+    sum(ol_amount) AS revenue
+FROM order_line
+WHERE ol_delivery_d >= '1999-01-01 00:00:00.000000'
+  AND ol_delivery_d < '2020-01-01 00:00:00.000000'
+  AND ol_quantity BETWEEN 1 AND 100000;
+ revenue 
+---------
+   55.00
+(1 row)
+
 -- Query 7
 SELECT
     su_nationkey as supp_nation,
