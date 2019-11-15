@@ -760,6 +760,44 @@ WHERE ol_i_id = t.i_id;
 -- this filter was at the end causing the dataset to be empty. it should not have any
 -- influence on how the query gets planned so I removed the clause
 --AND ol_quantity < t.a;
+-- Query 18
+SELECT
+    c_last,
+    c_id o_id,
+    o_entry_d,
+    o_ol_cnt,
+    sum(ol_amount)
+FROM
+    customer,
+    oorder,
+    order_line
+WHERE c_id = o_c_id
+  AND c_w_id = o_w_id
+  AND c_d_id = o_d_id
+  AND ol_w_id = o_w_id
+  AND ol_d_id = o_d_id
+  AND ol_o_id = o_id
+GROUP BY
+    o_id,
+    o_w_id,
+    o_d_id,
+    c_id,
+    c_last,
+    o_entry_d,
+    o_ol_cnt
+HAVING sum(ol_amount) > 5 -- was 200, but thats too big for the dataset
+ORDER BY
+    sum(ol_amount) DESC,
+    o_entry_d;
+ c_last | o_id |        o_entry_d         | o_ol_cnt |  sum  
+--------+------+--------------------------+----------+-------
+ John   |   10 | Fri Oct 17 00:00:00 2008 |        1 | 10.00
+ John   |    9 | Fri Oct 17 00:00:00 2008 |        1 |  9.00
+ John   |    8 | Fri Oct 17 00:00:00 2008 |        1 |  8.00
+ John   |    7 | Fri Oct 17 00:00:00 2008 |        1 |  7.00
+ John   |    6 | Fri Oct 17 00:00:00 2008 |        1 |  6.00
+(5 rows)
+
 -- Query 20
 SELECT
     su_name,
