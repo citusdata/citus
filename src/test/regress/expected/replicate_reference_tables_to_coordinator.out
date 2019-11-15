@@ -85,12 +85,87 @@ SELECT * FROM numbers ORDER BY a;
 
 ROLLBACK;
 -- Make sure we hide shard tables ...
- SELECT citus_table_is_visible('numbers_8000001'::regclass::oid);
+SELECT citus_table_is_visible('numbers_8000001'::regclass::oid);
  citus_table_is_visible 
 ------------------------
  f
 (1 row)
 
+-- Join between reference tables and local tables
+CREATE TABLE local_table(a int);
+INSERT INTO local_table VALUES (2), (4), (7), (20);
+EXPLAIN SELECT local_table.a, numbers.a FROM local_table NATURAL JOIN numbers;
+                                  QUERY PLAN                                   
+-------------------------------------------------------------------------------
+ Merge Join  (cost=359.57..860.00 rows=32512 width=8)
+   Merge Cond: (local_table.a = numbers_8000001.a)
+   ->  Sort  (cost=179.78..186.16 rows=2550 width=4)
+         Sort Key: local_table.a
+         ->  Seq Scan on local_table  (cost=0.00..35.50 rows=2550 width=4)
+   ->  Sort  (cost=179.78..186.16 rows=2550 width=4)
+         Sort Key: numbers_8000001.a
+         ->  Seq Scan on numbers_8000001  (cost=0.00..35.50 rows=2550 width=4)
+(8 rows)
+
+SELECT local_table.a, numbers.a FROM local_table NATURAL JOIN numbers ORDER BY 1;
+ a  | a  
+----+----
+ 20 | 20
+(1 row)
+
+-- error if in transaction block
+BEGIN;
+SELECT local_table.a, numbers.a FROM local_table NATURAL JOIN numbers ORDER BY 1;
+ERROR:  cannot join local tables and reference tables in a transaction block
+ROLLBACK;
+-- error if in a transaction block even if reference table is not in search path
+CREATE SCHEMA s1;
+CREATE TABLE s1.ref(a int);
+SELECT create_reference_table('s1.ref');
+ create_reference_table 
+------------------------
+ 
+(1 row)
+
+BEGIN;
+SELECT local_table.a, r.a FROM local_table NATURAL JOIN s1.ref r ORDER BY 1;
+ERROR:  cannot join local tables and reference tables in a transaction block
+ROLLBACK;
+DROP SCHEMA s1 CASCADE;
+NOTICE:  drop cascades to 2 other objects
+DETAIL:  drop cascades to table s1.ref
+drop cascades to table s1.ref_8000002
+-- shouldn't plan locally if modifications happen in CTEs, ...
+WITH ins AS (INSERT INTO numbers VALUES (1) RETURNING *) SELECT * FROM numbers, local_table;
+ERROR:  relation local_table is not distributed
+WITH t AS (SELECT *, random() x FROM numbers FOR UPDATE) SELECT * FROM numbers, local_table
+  WHERE EXISTS (SELECT * FROM t WHERE t.x = numbers.a);
+ERROR:  relation local_table is not distributed
+-- but this should be fine
+WITH t AS (SELECT *, random() x FROM numbers) SELECT * FROM numbers, local_table
+  WHERE EXISTS (SELECT * FROM t WHERE t.x = numbers.a);
+ a | a 
+---+---
+(0 rows)
+
+-- shouldn't plan locally even if distributed table is in CTE or subquery
+CREATE TABLE dist(a int);
+SELECT create_distributed_table('dist', 'a');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+WITH t AS (SELECT *, random() x FROM dist) SELECT * FROM numbers, local_table
+  WHERE EXISTS (SELECT * FROM t WHERE t.x = numbers.a);
+ERROR:  relation local_table is not distributed
+ -- error if FOR UPDATE/FOR SHARE
+ SELECT local_table.a, numbers.a FROM local_table NATURAL JOIN numbers FOR SHARE;
+ERROR:  could not run distributed query with FOR UPDATE/SHARE commands
+HINT:  Consider using an equality filter on the distributed table's partition column.
+ SELECT local_table.a, numbers.a FROM local_table NATURAL JOIN numbers FOR UPDATE;
+ERROR:  could not run distributed query with FOR UPDATE/SHARE commands
+HINT:  Consider using an equality filter on the distributed table's partition column.
 -- clean-up
 SET client_min_messages TO ERROR;
 DROP SCHEMA replicate_ref_to_coordinator CASCADE;

@@ -213,7 +213,6 @@ extern List * TableEntryList(List *rangeTableList);
 extern List * UsedTableEntryList(Query *query);
 extern List * pull_var_clause_default(Node *node);
 extern bool OperatorImplementsEquality(Oid opno);
-extern bool FindNodeCheck(Node *node, bool (*check)(Node *));
 extern DeferredErrorMessage * DeferErrorIfUnsupportedClause(List *clauseList);
 extern MultiProject * MultiProjectNode(List *targetEntryList);
 extern MultiExtendedOp * MultiExtendedOpNode(Query *queryTree);

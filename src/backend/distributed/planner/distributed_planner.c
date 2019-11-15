@@ -21,6 +21,7 @@
 #include "distributed/function_call_delegation.h"
 #include "distributed/insert_select_planner.h"
 #include "distributed/intermediate_results.h"
+#include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_executor.h"
 #include "distributed/distributed_planner.h"
@@ -33,6 +34,7 @@
 #include "distributed/query_utils.h"
 #include "distributed/recursive_planning.h"
 #include "distributed/shardinterval_utils.h"
+#include "distributed/version_compat.h"
 #include "distributed/worker_shard_visibility.h"
 #include "executor/executor.h"
 #include "nodes/makefuncs.h"
@@ -96,7 +98,9 @@ static void PopPlannerRestrictionContext(void);
 static void ResetPlannerRestrictionContext(
 	PlannerRestrictionContext *plannerRestrictionContext);
 static bool HasUnresolvedExternParamsWalker(Node *expression, ParamListInfo boundParams);
-
+static bool IsLocalReferenceTableJoin(Query *parse, List *rangeTableList);
+static bool QueryIsNotSimpleSelect(Node *node);
+static bool UpdateReferenceTablesWithShard(Node *node, void *context);
 
 /* Distributed planner hook */
 PlannedStmt *
@@ -118,7 +122,20 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 	}
 	else if (CitusHasBeenLoaded())
 	{
-		needsDistributedPlanning = ListContainsDistributedTableRTE(rangeTableList);
+		if (IsLocalReferenceTableJoin(parse, rangeTableList))
+		{
+			/*
+			 * For joins between reference tables and local tables, we replace
+			 * reference table names with shard tables names in the query, so
+			 * we can use the standard_planner for planning it locally.
+			 */
+			needsDistributedPlanning = false;
+			UpdateReferenceTablesWithShard((Node *) parse, NULL);
+		}
+		else
+		{
+			needsDistributedPlanning = ListContainsDistributedTableRTE(rangeTableList);
+		}
 	}
 
 	if (needsDistributedPlanning)
@@ -1769,4 +1786,173 @@ HasUnresolvedExternParamsWalker(Node *expression, ParamListInfo boundParams)
 									  HasUnresolvedExternParamsWalker,
 									  boundParams);
 	}
+}
+
+
+/*
+ * IsLocalReferenceTableJoin returns if the given query is a join between
+ * reference tables and local tables.
+ */
+static bool
+IsLocalReferenceTableJoin(Query *parse, List *rangeTableList)
+{
+	bool hasReferenceTable = false;
+	bool hasLocalTable = false;
+	ListCell *rangeTableCell = false;
+
+	bool hasReferenceTableReplica = false;
+
+	/*
+	 * We only allow join between reference tables and local tables in the
+	 * coordinator.
+	 */
+	if (!IsCoordinator())
+	{
+		return false;
+	}
+
+	/*
+	 * All groups that have pg_dist_node entries, also have reference
+	 * table replicas.
+	 */
+	PrimaryNodeForGroup(COORDINATOR_GROUP_ID, &hasReferenceTableReplica);
+
+	/*
+	 * If reference table doesn't have replicas on the coordinator, we don't
+	 * allow joins with local tables.
+	 */
+	if (!hasReferenceTableReplica)
+	{
+		return false;
+	}
+
+	if (FindNodeCheck((Node *) parse, QueryIsNotSimpleSelect))
+	{
+		return false;
+	}
+
+	foreach(rangeTableCell, rangeTableList)
+	{
+		RangeTblEntry *rangeTableEntry = (RangeTblEntry *) lfirst(rangeTableCell);
+		DistTableCacheEntry *cacheEntry = NULL;
+
+		if (rangeTableEntry->rtekind == RTE_FUNCTION)
+		{
+			return false;
+		}
+
+		if (rangeTableEntry->rtekind != RTE_RELATION)
+		{
+			continue;
+		}
+
+
+		if (!IsDistributedTable(rangeTableEntry->relid))
+		{
+			hasLocalTable = true;
+			continue;
+		}
+
+		cacheEntry = DistributedTableCacheEntry(rangeTableEntry->relid);
+		if (cacheEntry->partitionMethod == DISTRIBUTE_BY_NONE)
+		{
+			hasReferenceTable = true;
+		}
+		else
+		{
+			return false;
+		}
+	}
+
+	return hasLocalTable && hasReferenceTable;
+}
+
+
+/*
+ * QueryIsNotSimpleSelect returns true if node is a query which modifies or
+ * marks for modifications.
+ */
+static bool
+QueryIsNotSimpleSelect(Node *node)
+{
+	Query *query = NULL;
+
+	if (!IsA(node, Query))
+	{
+		return false;
+	}
+
+	query = (Query *) node;
+	return (query->commandType != CMD_SELECT) || (query->rowMarks != NIL);
+}
+
+
+/*
+ * UpdateReferenceTablesWithShard recursively replaces the reference table names
+ * in the given query with the shard table names.
+ */
+static bool
+UpdateReferenceTablesWithShard(Node *node, void *context)
+{
+	RangeTblEntry *newRte = NULL;
+	uint64 shardId = INVALID_SHARD_ID;
+	Oid relationId = InvalidOid;
+	Oid schemaId = InvalidOid;
+	char *relationName = NULL;
+	DistTableCacheEntry *cacheEntry = NULL;
+	ShardInterval *shardInterval = NULL;
+
+	if (node == NULL)
+	{
+		return false;
+	}
+
+	/* want to look at all RTEs, even in subqueries, CTEs and such */
+	if (IsA(node, Query))
+	{
+		return query_tree_walker((Query *) node, UpdateReferenceTablesWithShard,
+								 NULL, QTW_EXAMINE_RTES_BEFORE);
+	}
+
+	if (!IsA(node, RangeTblEntry))
+	{
+		return expression_tree_walker(node, UpdateReferenceTablesWithShard,
+									  NULL);
+	}
+
+	newRte = (RangeTblEntry *) node;
+
+	if (newRte->rtekind != RTE_RELATION)
+	{
+		return false;
+	}
+
+	relationId = newRte->relid;
+	if (!IsDistributedTable(relationId))
+	{
+		return false;
+	}
+
+	cacheEntry = DistributedTableCacheEntry(relationId);
+	if (cacheEntry->partitionMethod != DISTRIBUTE_BY_NONE)
+	{
+		return false;
+	}
+
+	shardInterval = cacheEntry->sortedShardIntervalArray[0];
+	shardId = shardInterval->shardId;
+
+	relationName = get_rel_name(relationId);
+	AppendShardIdToName(&relationName, shardId);
+
+	schemaId = get_rel_namespace(relationId);
+	newRte->relid = get_relname_relid(relationName, schemaId);
+
+	/*
+	 * Parser locks relations in addRangeTableEntry(). So we should lock the
+	 * modified ones too.
+	 */
+	LockRelationOid(newRte->relid, AccessShareLock);
+
+	return false;
 }
