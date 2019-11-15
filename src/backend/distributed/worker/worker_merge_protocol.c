@@ -86,7 +86,7 @@ worker_create_schema(PG_FUNCTION_ARGS)
 
 
 /*
- * worker_remove_jobdir removes the directory that has the given job id.
+ * worker_remove_jobdir removes the job directory with the given job id.
  */
 Datum
 worker_remove_jobdir(PG_FUNCTION_ARGS)

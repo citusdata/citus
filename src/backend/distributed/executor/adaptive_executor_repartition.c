@@ -52,6 +52,7 @@ static List * CreateTemporarySchemas(List *mergeTasks);
 static List * CreateJobIds(List *mergeTasks);
 static void CreateSchemasOnAllWorkers(char *createSchemasCommand);
 static char * GenerateCreateSchemasCommand(List *jobIds);
+static char * GenerateCommand(List *jobIds, char *templateCommand);
 static bool DoesJobIDExist(List *jobIds, uint64 jobId);
 static HASHCTL InitHashTableInfo(void);
 static HTAB * CreateTaskHashTable(void);
@@ -247,15 +248,24 @@ SendCommandToAllWorkers(List *commandList)
 
 
 /*
- * GenerateCreateSchemasCommand returns the command to generate
- * schemas. The returned command is a concatenated which contains
- * exactly list_length(jobIds) subcommands.
- *  E.g create_schema(jobId1); create_schema(jobId2); ...
- * This way we can send the command in just one latency to a worker to
- * create all the necessary schemas.
+ * GenerateCreateSchemasCommand returns concatanated create schema commands.
  */
 static char *
 GenerateCreateSchemasCommand(List *jobIds)
+{
+	return GenerateCommand(jobIds, WORKER_CREATE_SCHEMA_QUERY);
+}
+
+
+/*
+ * GenerateCommand returns concatenated commands with the given template
+ * command for each job id from the given job ids. The returned command is
+ * exactly list_length(jobIds) subcommands.
+ *  E.g create_schema(jobId1); create_schema(jobId2); ...
+ * This way we can send the command in just one latency to a worker.
+ */
+static char *
+GenerateCommand(List *jobIds, char *templateCommand)
 {
 	StringInfo createSchemaCommand = makeStringInfo();
 	ListCell *jobIdCell = NULL;
@@ -263,12 +273,15 @@ GenerateCreateSchemasCommand(List *jobIds)
 	foreach(jobIdCell, jobIds)
 	{
 		uint64 jobId = (uint64) lfirst(jobIdCell);
-		appendStringInfo(createSchemaCommand, WORKER_CREATE_SCHEMA_QUERY, jobId);
+		appendStringInfo(createSchemaCommand, templateCommand, jobId);
 	}
 	return createSchemaCommand->data;
 }
 
 
+/*
+ * DoesJobIDExist returns true if the given job id exists in the given list.
+ */
 static bool
 DoesJobIDExist(List *jobIds, uint64 jobId)
 {
@@ -425,6 +438,11 @@ FillTaskKey(TaskHashKey *taskKey, Task *task)
 }
 
 
+/*
+ * InitHashTableInfo returns hash table info, the hash table is
+ * configured to be created in the CurrentMemoryContext so that
+ * it will be cleaned when this memory context gets freed/reset.
+ */
 static HASHCTL
 InitHashTableInfo()
 {
@@ -475,6 +493,10 @@ CleanUpSchemas()
 }
 
 
+/*
+ * RemoveTempJobDirs removes the temporary job directories that are
+ * used for repartition queries for the given job ids.
+ */
 static void
 RemoveTempJobDirs(List *jobIds)
 {
@@ -483,16 +505,11 @@ RemoveTempJobDirs(List *jobIds)
 }
 
 
+/*
+ * GenerateDeleteJobsCommand returns concatanated remove job dir commands.
+ */
 static char *
 GenerateDeleteJobsCommand(List *jobIds)
 {
-	StringInfo createSchemaCommand = makeStringInfo();
-	ListCell *jobIdCell = NULL;
-
-	foreach(jobIdCell, jobIds)
-	{
-		uint64 jobId = (uint64) lfirst(jobIdCell);
-		appendStringInfo(createSchemaCommand, WORKER_DELETE_JOBDIR_QUERY, jobId);
-	}
-	return createSchemaCommand->data;
+	return GenerateCommand(jobIds, WORKER_DELETE_JOBDIR_QUERY);
 }

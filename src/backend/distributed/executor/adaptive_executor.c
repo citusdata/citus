@@ -1392,6 +1392,9 @@ FinishDistributedExecution(DistributedExecution *execution)
 }
 
 
+/*
+ * CloseForcedConnections closes all the given connections.
+ */
 static void
 CloseForcedConnections(List *forcedConnections)
 {
