@@ -633,6 +633,8 @@ AdaptiveExecutor(CitusScanState *scanState)
 	bool interTransactions = false;
 	int targetPoolSize = MaxAdaptiveExecutorPoolSize;
 	bool hasDependedJobs = false;
+	static bool hasDependedJobsInAllTree = false;
+
 
 	Job *job = distributedPlan->workerJob;
 	List *taskList = job->taskList;
@@ -650,6 +652,7 @@ AdaptiveExecutor(CitusScanState *scanState)
 	ExecuteSubPlans(distributedPlan);
 
 	hasDependedJobs = DoesHaveDependedJobs(job);
+	hasDependedJobsInAllTree |= hasDependedJobs;
 	if (hasDependedJobs)
 	{
 		ExecuteDependedTasks(taskList);
@@ -717,9 +720,10 @@ AdaptiveExecutor(CitusScanState *scanState)
 
 	FinishDistributedExecution(execution);
 
-	if (hasDependedJobs)
+	if (hasDependedJobsInAllTree && SubPlanLevel == 0)
 	{
 		CleanUpSchemas();
+		hasDependedJobsInAllTree = false;
 	}
 
 	if (SortReturning && distributedPlan->hasReturning)

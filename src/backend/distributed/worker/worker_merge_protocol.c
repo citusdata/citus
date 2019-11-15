@@ -58,6 +58,7 @@ PG_FUNCTION_INFO_V1(worker_merge_files_into_table);
 PG_FUNCTION_INFO_V1(worker_merge_files_and_run_query);
 PG_FUNCTION_INFO_V1(worker_cleanup_job_schema_cache);
 PG_FUNCTION_INFO_V1(worker_create_schema);
+PG_FUNCTION_INFO_V1(worker_remove_jobdir);
 
 
 /*
@@ -79,6 +80,23 @@ worker_create_schema(PG_FUNCTION_ARGS)
 		CreateJobSchema(jobSchemaName);
 	}
 	UnlockJobResource(jobId, AccessExclusiveLock);
+
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * worker_remove_jobdir removes the directory that has the given job id.
+ */
+Datum
+worker_remove_jobdir(PG_FUNCTION_ARGS)
+{
+	uint64 jobId = PG_GETARG_INT64(0);
+	StringInfo jobDirectoryName = JobDirectoryName(jobId);
+
+	CheckCitusVersion(ERROR);
+
+	CitusRemoveDirectory(jobDirectoryName);
 
 	PG_RETURN_VOID();
 }
@@ -332,9 +350,6 @@ worker_cleanup_job_schema_cache(PG_FUNCTION_ARGS)
 
 	heap_endscan(scanDescriptor);
 	heap_close(pgNamespace, AccessExclusiveLock);
-
-	/* TrackerCleanupJobDirectories(); */
-
 
 	PG_RETURN_VOID();
 }

@@ -24,6 +24,7 @@
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_resowner.h"
 #include "distributed/multi_server_executor.h"
+#include "distributed/master_protocol.h"
 #include "distributed/subplan_execution.h"
 #include "distributed/worker_protocol.h"
 #include "utils/lsyscache.h"
@@ -103,6 +104,10 @@ JobExecutorType(DistributedPlan *distributedPlan)
 									"the query contains a join that requires repartitioning"),
 								errhint("Set citus.enable_repartition_joins to on "
 										"to enable repartitioning")));
+			}
+			if (ShardReplicationFactor > 1)
+			{
+				return MULTI_EXECUTOR_TASK_TRACKER;
 			}
 			return MULTI_EXECUTOR_ADAPTIVE;
 		}

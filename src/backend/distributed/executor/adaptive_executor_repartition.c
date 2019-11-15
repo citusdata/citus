@@ -48,7 +48,7 @@ typedef struct TaskHashEntry
 static void FillTaskGroups(List **allTasks, List **outputFetchTasks, List **mergeTasks);
 static StringInfo MapFetchTaskQueryString(Task *mapFetchTask, Task *mapTask);
 static void PutMapOutputFetchQueryStrings(List **mapOutputFetchTasks);
-static void CreateTemporarySchemas(List *mergeTasks);
+static List * CreateTemporarySchemas(List *mergeTasks);
 static List * CreateJobIds(List *mergeTasks);
 static void CreateSchemasOnAllWorkers(char *createSchemasCommand);
 static char * GenerateCreateSchemasCommand(List *jobIds);
@@ -64,6 +64,8 @@ static int TaskHashCompare(const void *key1, const void *key2, Size keysize);
 static uint32 TaskHash(const void *key, Size keysize);
 static bool IsTaskAlreadyCompleted(Task *task, HTAB *completedTasks);
 static void SendCommandToAllWorkers(List *commandList);
+static char * GenerateDeleteJobsCommand(List *jobIds);
+static void RemoveTempJobDirs(List *jobIds);
 
 
 /*
@@ -79,6 +81,8 @@ ExecuteDependedTasks(List *topLevelTasks)
 	List *mapOutputFetchTasks = NIL;
 	List *mergeTasks = NIL;
 
+	List *jobIds = NIL;
+
 	EnsureNoModificationsHaveBeenDone();
 
 	allTasks = TaskAndExecutionList(topLevelTasks);
@@ -86,9 +90,11 @@ ExecuteDependedTasks(List *topLevelTasks)
 	FillTaskGroups(&allTasks, &mapOutputFetchTasks, &mergeTasks);
 	PutMapOutputFetchQueryStrings(&mapOutputFetchTasks);
 
-	CreateTemporarySchemas(mergeTasks);
+	jobIds = CreateTemporarySchemas(mergeTasks);
 
 	ExecuteTasksInDependencyOrder(allTasks, topLevelTasks);
+
+	RemoveTempJobDirs(jobIds);
 }
 
 
@@ -175,12 +181,13 @@ MapFetchTaskQueryString(Task *mapFetchTask, Task *mapTask)
  * CreateTemporarySchemas creates the necessary schemas that will be used
  * later in each worker. Single transaction is used to create the schemas.
  */
-static void
+static List *
 CreateTemporarySchemas(List *mergeTasks)
 {
 	List *jobIds = CreateJobIds(mergeTasks);
 	char *createSchemasCommand = GenerateCreateSchemasCommand(jobIds);
 	CreateSchemasOnAllWorkers(createSchemasCommand);
+	return jobIds;
 }
 
 
@@ -465,4 +472,27 @@ CleanUpSchemas()
 {
 	List *commandList = list_make1(JOB_SCHEMA_CLEANUP);
 	SendCommandToAllWorkers(commandList);
+}
+
+
+static void
+RemoveTempJobDirs(List *jobIds)
+{
+	List *commandList = list_make1(GenerateDeleteJobsCommand(jobIds));
+	SendCommandToAllWorkers(commandList);
+}
+
+
+static char *
+GenerateDeleteJobsCommand(List *jobIds)
+{
+	StringInfo createSchemaCommand = makeStringInfo();
+	ListCell *jobIdCell = NULL;
+
+	foreach(jobIdCell, jobIds)
+	{
+		uint64 jobId = (uint64) lfirst(jobIdCell);
+		appendStringInfo(createSchemaCommand, WORKER_DELETE_JOBDIR_QUERY, jobId);
+	}
+	return createSchemaCommand->data;
 }
