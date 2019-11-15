@@ -114,7 +114,7 @@ JobExecutorType(DistributedPlan *distributedPlan)
 	}
 	else
 	{
-		List *workerNodeList = ActiveReadableNodeList();
+		List *workerNodeList = ActiveReadableWorkerNodeList();
 		int workerNodeCount = list_length(workerNodeList);
 		int taskCount = list_length(job->taskList);
 		double tasksPerNode = taskCount / ((double) workerNodeCount);

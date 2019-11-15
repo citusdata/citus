@@ -49,6 +49,7 @@
 #include "utils/rel.h"
 #include "utils/relcache.h"
 
+#define INVALID_GROUP_ID -1
 
 /* default group size */
 int GroupSize = 1;
@@ -109,6 +110,7 @@ DefaultNodeMetadata()
 	NodeMetadata nodeMetadata = {
 		.nodeRack = WORKER_DEFAULT_RACK,
 		.shouldHaveShards = true,
+		.groupId = INVALID_GROUP_ID,
 	};
 	return nodeMetadata;
 }
@@ -277,7 +279,7 @@ master_disable_node(PG_FUNCTION_ARGS)
 
 	PG_TRY();
 	{
-		if (WorkerNodeIsPrimary(workerNode))
+		if (NodeIsPrimary(workerNode))
 		{
 			/*
 			 * Delete reference table placements so they are not taken into account
@@ -363,7 +365,7 @@ master_set_node_property(PG_FUNCTION_ARGS)
 static void
 SetUpDistributedTableDependencies(WorkerNode *newWorkerNode)
 {
-	if (WorkerNodeIsPrimary(newWorkerNode))
+	if (NodeIsPrimary(newWorkerNode))
 	{
 		EnsureNoModificationsHaveBeenDone();
 		ReplicateAllDependenciesToNode(newWorkerNode->workerName,
@@ -450,10 +452,10 @@ GroupForNode(char *nodeName, int nodePort)
 
 
 /*
- * WorkerNodeIsPrimary returns whether the argument represents a primary node.
+ * NodeIsPrimary returns whether the argument represents a primary node.
  */
 bool
-WorkerNodeIsPrimary(WorkerNode *worker)
+NodeIsPrimary(WorkerNode *worker)
 {
 	Oid primaryRole = PrimaryNodeRoleId();
 
@@ -468,10 +470,10 @@ WorkerNodeIsPrimary(WorkerNode *worker)
 
 
 /*
- * WorkerNodeIsSecondary returns whether the argument represents a secondary node.
+ * NodeIsSecondary returns whether the argument represents a secondary node.
  */
 bool
-WorkerNodeIsSecondary(WorkerNode *worker)
+NodeIsSecondary(WorkerNode *worker)
 {
 	Oid secondaryRole = SecondaryNodeRoleId();
 
@@ -486,36 +488,20 @@ WorkerNodeIsSecondary(WorkerNode *worker)
 
 
 /*
- * WorkerNodeIsPrimaryShouldHaveShardsNode returns whether the argument represents a
- * primary node that is a eligible for new data.
- */
-bool
-WorkerNodeIsPrimaryShouldHaveShardsNode(WorkerNode *worker)
-{
-	if (!WorkerNodeIsPrimary(worker))
-	{
-		return false;
-	}
-
-	return worker->shouldHaveShards;
-}
-
-
-/*
- * WorkerNodeIsReadable returns whether we're allowed to send SELECT queries to this
+ * NodeIsReadable returns whether we're allowed to send SELECT queries to this
  * node.
  */
 bool
-WorkerNodeIsReadable(WorkerNode *workerNode)
+NodeIsReadable(WorkerNode *workerNode)
 {
 	if (ReadFromSecondaries == USE_SECONDARY_NODES_NEVER &&
-		WorkerNodeIsPrimary(workerNode))
+		NodeIsPrimary(workerNode))
 	{
 		return true;
 	}
 
 	if (ReadFromSecondaries == USE_SECONDARY_NODES_ALWAYS &&
-		WorkerNodeIsSecondary(workerNode))
+		NodeIsSecondary(workerNode))
 	{
 		return true;
 	}
@@ -552,7 +538,7 @@ PrimaryNodeForGroup(int32 groupId, bool *groupContainsNodes)
 			*groupContainsNodes = true;
 		}
 
-		if (WorkerNodeIsPrimary(workerNode))
+		if (NodeIsPrimary(workerNode))
 		{
 			hash_seq_term(&status);
 			return workerNode;
@@ -668,7 +654,7 @@ master_update_node(PG_FUNCTION_ARGS)
 	 * though we currently only query secondaries on follower clusters
 	 * where these locks will have no effect.
 	 */
-	if (WorkerNodeIsPrimary(workerNode))
+	if (NodeIsPrimary(workerNode))
 	{
 		/*
 		 * before acquiring the locks check if we want a background worker to help us to
@@ -918,7 +904,7 @@ FindWorkerNodeAnyCluster(const char *nodeName, int32 nodePort)
 
 
 /*
- * ReadWorkerNodes iterates over pg_dist_node table, converts each row
+ * ReadDistNode iterates over pg_dist_node table, converts each row
  * into it's memory representation (i.e., WorkerNode) and adds them into
  * a list. Lastly, the list is returned to the caller.
  *
@@ -926,7 +912,7 @@ FindWorkerNodeAnyCluster(const char *nodeName, int32 nodePort)
  * by includeNodesFromOtherClusters.
  */
 List *
-ReadWorkerNodes(bool includeNodesFromOtherClusters)
+ReadDistNode(bool includeNodesFromOtherClusters)
 {
 	SysScanDesc scanDescriptor = NULL;
 	ScanKeyData scanKey[1];
@@ -981,7 +967,7 @@ RemoveNodeFromCluster(char *nodeName, int32 nodePort)
 	char *nodeDeleteCommand = NULL;
 	WorkerNode *workerNode = ModifiableWorkerNode(nodeName, nodePort);
 
-	if (WorkerNodeIsPrimary(workerNode))
+	if (NodeIsPrimary(workerNode))
 	{
 		bool onlyConsiderActivePlacements = false;
 
@@ -1024,7 +1010,7 @@ CountPrimariesWithMetadata(void)
 
 	while ((workerNode = hash_seq_search(&status)) != NULL)
 	{
-		if (workerNode->hasMetadata && WorkerNodeIsPrimary(workerNode))
+		if (workerNode->hasMetadata && NodeIsPrimary(workerNode))
 		{
 			primariesWithMetadata++;
 		}
@@ -1074,9 +1060,16 @@ AddNodeMetadata(char *nodeName, int32 nodePort,
 	}
 
 	/* user lets Citus to decide on the group that the newly added node should be in */
-	if (nodeMetadata->groupId == 0)
+	if (nodeMetadata->groupId == INVALID_GROUP_ID)
 	{
 		nodeMetadata->groupId = GetNextGroupId();
+	}
+
+	/* if this is a coordinator, we shouldn't place shards on it */
+	if (nodeMetadata->groupId == COORDINATOR_GROUP_ID)
+	{
+		nodeMetadata->shouldHaveShards = false;
+		nodeMetadata->hasMetadata = true;
 	}
 
 	/* if nodeRole hasn't been added yet there's a constraint for one-node-per-group */

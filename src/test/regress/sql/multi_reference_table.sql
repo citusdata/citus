@@ -23,14 +23,17 @@ FROM
 	pg_dist_shard
 WHERE
 	logicalrelid = 'reference_table_test'::regclass;
+
+SELECT count(*) active_primaries FROM pg_dist_node WHERE isactive AND noderole='primary' \gset
+
 SELECT
-	shardid, shardstate, nodename, nodeport
+	shardid, bool_and(shardstate = 1) all_placements_healthy, COUNT(distinct nodeport) = :active_primaries replicated_to_all
 FROM
 	pg_dist_shard_placement
 WHERE
 	shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'reference_table_test'::regclass)
-ORDER BY
-	placementid;
+GROUP BY shardid
+ORDER BY shardid;
 
 -- check whether data was copied into distributed table
 SELECT * FROM reference_table_test;
@@ -478,6 +481,8 @@ ORDER BY
 CREATE TABLE reference_table_test_fourth (value_1 int, value_2 float PRIMARY KEY, value_3 text, value_4 timestamp);
 SELECT create_reference_table('reference_table_test_fourth');
 
+\set VERBOSITY terse
+
 -- insert a row
 INSERT INTO reference_table_test_fourth VALUES (1, 1.0, '1', '2016-12-01');
 
@@ -486,6 +491,8 @@ INSERT INTO reference_table_test_fourth VALUES (1, 1.0, '1', '2016-12-01');
 
 -- now get null constraint violation due to primary key
 INSERT INTO reference_table_test_fourth (value_1, value_3, value_4) VALUES (1, '1.0', '2016-12-01');
+
+\set VERBOSITY default
 
 -- lets run some upserts
 INSERT INTO reference_table_test_fourth VALUES (1, 1.0, '1', '2016-12-01') ON CONFLICT DO NOTHING RETURNING *;
@@ -499,13 +506,13 @@ INSERT INTO reference_table_test_fourth VALUES (1, 1.0, '10', '2016-12-01') ON C
 
 -- finally see that shard healths are OK
 SELECT
-	shardid, shardstate, nodename, nodeport
+	shardid, bool_and(shardstate = 1) all_placements_healthy, COUNT(distinct nodeport) = :active_primaries replicated_to_all
 FROM
 	pg_dist_shard_placement
 WHERE
 	shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'reference_table_test_fourth'::regclass)
-ORDER BY
-	placementid;
+GROUP BY shardid
+ORDER BY shardid;
 
 -- let's not run some update/delete queries on arbitrary columns
 DELETE FROM
@@ -909,14 +916,14 @@ SELECT master_copy_shard_placement(:a_shard_id, 'localhost', :worker_2_port, 'lo
 SELECT shardid, shardstate FROM pg_dist_shard_placement WHERE placementid = :a_placement_id;
 
 -- some queries that are captured in functions
-CREATE FUNCTION select_count_all() RETURNS bigint AS '
+CREATE OR REPLACE FUNCTION select_count_all() RETURNS bigint AS '
         SELECT
                 count(*)
         FROM
                 reference_table_test;
 ' LANGUAGE SQL;
 
-CREATE FUNCTION insert_into_ref_table(value_1 int, value_2 float, value_3 text, value_4 timestamp) 
+CREATE OR REPLACE FUNCTION insert_into_ref_table(value_1 int, value_2 float, value_3 text, value_4 timestamp) 
 RETURNS void AS '
        INSERT INTO reference_table_test VALUES ($1, $2, $3, $4);
 ' LANGUAGE SQL;
@@ -992,7 +999,12 @@ ALTER TABLE reference_table_test ADD COLUMN value_dummy INT;
 INSERT INTO reference_table_test VALUES (2, 2.0, '2', '2016-12-02');
 ROLLBACK;
 
--- clean up tables
+-- clean up tables, ...
+SET client_min_messages TO ERROR;
+DROP SEQUENCE example_ref_value_seq;
 DROP TABLE reference_table_test, reference_table_test_second, reference_table_test_third, 
-		   reference_table_test_fourth, reference_schema.reference_table_ddl, reference_table_composite;
+		   reference_table_test_fourth, reference_schema.reference_table_ddl, reference_table_composite,
+		   colocated_table_test, colocated_table_test_2, append_reference_tmp_table;
+DROP TYPE reference_comp_key;
 DROP SCHEMA reference_schema CASCADE;
+RESET client_min_messages;

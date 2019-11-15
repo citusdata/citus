@@ -1991,7 +1991,7 @@ BuildMapMergeJob(Query *jobQuery, List *dependedJobList, Var *partitionKey,
 static uint32
 HashPartitionCount(void)
 {
-	uint32 groupCount = ActiveReadableNodeCount();
+	uint32 groupCount = ActiveReadableWorkerNodeCount();
 	double maxReduceTasksPerNode = MaxRunningTasksPerNode / 2.0;
 
 	uint32 partitionCount = (uint32) rint(groupCount * maxReduceTasksPerNode);
@@ -5024,7 +5024,7 @@ GreedyAssignTaskList(List *taskList)
 	uint32 taskCount = list_length(taskList);
 
 	/* get the worker node list and sort the list */
-	List *workerNodeList = ActiveReadableNodeList();
+	List *workerNodeList = ActiveReadableWorkerNodeList();
 	workerNodeList = SortList(workerNodeList, CompareWorkerNodes);
 
 	/*
@@ -5472,7 +5472,7 @@ AssignDualHashTaskList(List *taskList)
 	 * if subsequent jobs have a small number of tasks, we won't allocate the
 	 * tasks to the same worker repeatedly.
 	 */
-	List *workerNodeList = ActiveReadableNodeList();
+	List *workerNodeList = ActiveReadableWorkerNodeList();
 	uint32 workerNodeCount = (uint32) list_length(workerNodeList);
 	uint32 beginningNodeIndex = jobId % workerNodeCount;
 

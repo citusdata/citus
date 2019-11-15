@@ -111,13 +111,14 @@ SendCommandToWorkers(TargetWorkerSet targetWorkerSet, const char *command)
 List *
 TargetWorkerSetNodeList(TargetWorkerSet targetWorkerSet, LOCKMODE lockMode)
 {
-	List *workerNodeList = ActivePrimaryNodeList(lockMode);
+	List *workerNodeList = ActivePrimaryWorkerNodeList(lockMode);
 	ListCell *workerNodeCell = NULL;
 	List *result = NIL;
 
 	foreach(workerNodeCell, workerNodeList)
 	{
 		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
+
 		if (targetWorkerSet == WORKERS_WITH_METADATA &&
 			(!workerNode->hasMetadata || !workerNode->metadataSynced))
 		{

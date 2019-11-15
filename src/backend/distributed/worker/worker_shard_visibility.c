@@ -122,11 +122,18 @@ RelationIsAKnownShard(Oid shardRelationId)
 	localGroupId = GetLocalGroupId();
 	if (localGroupId == 0)
 	{
-		/*
-		 * We're not interested in shards in the coordinator
-		 * or non-mx worker nodes.
-		 */
-		return false;
+		bool coordinatorIsKnown = false;
+		PrimaryNodeForGroup(0, &coordinatorIsKnown);
+
+		if (!coordinatorIsKnown)
+		{
+			/*
+			 * We're not interested in shards in the coordinator
+			 * or non-mx worker nodes, unless the coordinator is
+			 * in pg_dist_node.
+			 */
+			return false;
+		}
 	}
 
 	/* we're not interested in the relations that are not in the search path */

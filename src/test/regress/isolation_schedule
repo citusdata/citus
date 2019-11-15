@@ -30,6 +30,7 @@ test: isolation_dump_local_wait_edges
 
 test: isolation_replace_wait_function
 test: isolation_distributed_deadlock_detection
+test: isolation_replicate_reference_tables_to_coordinator
 
 # creating a restore point briefly blocks all
 # writes, run this test serially.

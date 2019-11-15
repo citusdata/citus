@@ -21,6 +21,7 @@ test: multi_test_helpers
 # the following test has to be run sequentially
 test: multi_mx_create_table
 test: multi_mx_hide_shard_names
+test: multi_mx_add_coordinator
 test: multi_mx_modifications_to_reference_tables
 test: multi_mx_partitioning
 test: multi_mx_copy_data multi_mx_router_planner
