@@ -645,6 +645,30 @@ ORDER BY o_ol_cnt;
         1 |               2 |              9
 (1 row)
 
+-- Query 13
+SELECT
+    c_count,
+    count(*) AS custdist
+FROM (SELECT
+          c_id,
+          count(o_id)
+      FROM customer
+               LEFT OUTER JOIN oorder ON (
+                  c_w_id = o_w_id
+              AND c_d_id = o_d_id
+              AND c_id = o_c_id
+              AND o_carrier_id > 8)
+      GROUP BY c_id) AS c_orders (c_id, c_count)
+GROUP BY c_count
+ORDER BY
+    custdist DESC,
+    c_count DESC;
+ c_count | custdist 
+---------+----------
+       0 |        9
+       1 |        2
+(2 rows)
+
 -- Query 20
 SELECT
     su_name,
