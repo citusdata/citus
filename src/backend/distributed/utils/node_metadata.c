@@ -273,29 +273,51 @@ master_disable_node(PG_FUNCTION_ARGS)
 	WorkerNode *workerNode = ModifiableWorkerNode(nodeName, nodePort);
 	bool isActive = false;
 	bool onlyConsiderActivePlacements = false;
+	MemoryContext savedContext = CurrentMemoryContext;
 
-	if (WorkerNodeIsPrimary(workerNode))
+	PG_TRY();
 	{
-		/*
-		 * Delete reference table placements so they are not taken into account
-		 * for the check if there are placements after this
-		 */
-		DeleteAllReferenceTablePlacementsFromNodeGroup(workerNode->groupId);
-
-		if (NodeGroupHasShardPlacements(workerNode->groupId,
-										onlyConsiderActivePlacements))
+		if (WorkerNodeIsPrimary(workerNode))
 		{
-			ereport(NOTICE, (errmsg(
-								 "Node %s:%d has active shard placements. Some queries "
-								 "may fail after this operation. Use "
-								 "SELECT master_activate_node('%s', %d) to activate this "
-								 "node back.",
-								 workerNode->workerName, nodePort, workerNode->workerName,
-								 nodePort)));
-		}
-	}
+			/*
+			 * Delete reference table placements so they are not taken into account
+			 * for the check if there are placements after this.
+			 */
+			DeleteAllReferenceTablePlacementsFromNodeGroup(workerNode->groupId);
 
-	SetNodeState(nodeName, nodePort, isActive);
+			if (NodeGroupHasShardPlacements(workerNode->groupId,
+											onlyConsiderActivePlacements))
+			{
+				ereport(NOTICE, (errmsg(
+									 "Node %s:%d has active shard placements. Some queries "
+									 "may fail after this operation. Use "
+									 "SELECT master_activate_node('%s', %d) to activate this "
+									 "node back.",
+									 workerNode->workerName, nodePort,
+									 workerNode->workerName,
+									 nodePort)));
+			}
+		}
+
+		SetNodeState(nodeName, nodePort, isActive);
+	}
+	PG_CATCH();
+	{
+		ErrorData *edata = NULL;
+
+		/* CopyErrorData() requires (CurrentMemoryContext != ErrorContext) */
+		MemoryContextSwitchTo(savedContext);
+		edata = CopyErrorData();
+
+		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+						errmsg("Disabling %s:%d failed", workerNode->workerName,
+							   nodePort),
+						errdetail("%s", edata->message),
+						errhint(
+							"If you are using MX, try stop_metadata_sync_to_node(hostname, port) "
+							"for nodes that are down before disabling them.")));
+	}
+	PG_END_TRY();
 
 	PG_RETURN_VOID();
 }
@@ -350,7 +372,7 @@ SetUpDistributedTableDependencies(WorkerNode *newWorkerNode)
 										  newWorkerNode->workerPort);
 
 		/*
-		 * Let the maintanince deamon do the hard work of syncing the metadata.
+		 * Let the maintenance daemon do the hard work of syncing the metadata.
 		 * We prefer this because otherwise node activation might fail within
 		 * transaction blocks.
 		 */
@@ -1129,8 +1151,8 @@ SetWorkerColumn(WorkerNode *workerNode, int columnIndex, Datum value)
 	{
 		case Anum_pg_dist_node_isactive:
 		{
-			metadataSyncCommand = ShouldHaveShardsUpdateCommand(workerNode->nodeId,
-																DatumGetBool(value));
+			metadataSyncCommand = NodeStateUpdateCommand(workerNode->nodeId,
+														 DatumGetBool(value));
 			break;
 		}
 

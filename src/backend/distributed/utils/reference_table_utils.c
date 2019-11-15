@@ -406,8 +406,7 @@ CreateReferenceTableColocationId()
 /*
  * DeleteAllReferenceTablePlacementsFromNodeGroup function iterates over list of reference
  * tables and deletes all reference table placements from pg_dist_placement table
- * for given group. However, it does not modify replication factor of the colocation
- * group of reference tables. It is caller's responsibility to do that if it is necessary.
+ * for given group.
  */
 void
 DeleteAllReferenceTablePlacementsFromNodeGroup(int32 groupId)

@@ -121,7 +121,7 @@ SELECT nodeid, hasmetadata, metadatasynced FROM pg_dist_node;
 -- Test updating a node when another node is in readonly-mode
 --------------------------------------------------------------------------
 
-SELECT FROM master_add_node('localhost', :worker_2_port) AS nodeid_2 \gset
+SELECT master_add_node('localhost', :worker_2_port) AS nodeid_2 \gset
 SELECT 1 FROM start_metadata_sync_to_node('localhost', :worker_2_port);
 
 -- Create a table with shards on both nodes
@@ -197,8 +197,70 @@ SELECT nodeid, hasmetadata, metadatasynced FROM pg_dist_node ORDER BY nodeid;
 SELECT verify_metadata('localhost', :worker_1_port),
        verify_metadata('localhost', :worker_2_port);
 
+--------------------------------------------------------------------------
+-- Test that changes in isactive is propagated to the metadata nodes
+--------------------------------------------------------------------------
+-- Don't drop the reference table so it has shards on the nodes being disabled
+DROP TABLE dist_table_1, dist_table_2;
+
+SELECT 1 FROM master_disable_node('localhost', :worker_2_port);
+SELECT verify_metadata('localhost', :worker_1_port);
+
+SELECT 1 FROM master_activate_node('localhost', :worker_2_port);
+SELECT verify_metadata('localhost', :worker_1_port);
+
+------------------------------------------------------------------------------------
+-- Test master_disable_node() when the node that is being disabled is actually down
+------------------------------------------------------------------------------------
+SELECT master_update_node(:nodeid_2, 'localhost', 1);
+SELECT wait_until_metadata_sync();
+
+-- set metadatasynced so we try porpagating metadata changes
+UPDATE pg_dist_node SET metadatasynced = TRUE WHERE nodeid IN (:nodeid_1, :nodeid_2);
+
+-- should error out
+SELECT 1 FROM master_disable_node('localhost', 1);
+
+-- try again after stopping metadata sync
+SELECT stop_metadata_sync_to_node('localhost', 1);
+SELECT 1 FROM master_disable_node('localhost', 1);
+
+SELECT verify_metadata('localhost', :worker_1_port);
+
+SELECT master_update_node(:nodeid_2, 'localhost', :worker_2_port);
+SELECT wait_until_metadata_sync();
+
+SELECT 1 FROM master_activate_node('localhost', :worker_2_port);
+SELECT verify_metadata('localhost', :worker_1_port);
+
+
+------------------------------------------------------------------------------------
+-- Test master_disable_node() when the other node is down
+------------------------------------------------------------------------------------
+-- node 1 is down.
+SELECT master_update_node(:nodeid_1, 'localhost', 1);
+SELECT wait_until_metadata_sync();
+
+-- set metadatasynced so we try porpagating metadata changes
+UPDATE pg_dist_node SET metadatasynced = TRUE WHERE nodeid IN (:nodeid_1, :nodeid_2);
+
+-- should error out
+SELECT 1 FROM master_disable_node('localhost', :worker_2_port);
+
+-- try again after stopping metadata sync
+SELECT stop_metadata_sync_to_node('localhost', 1);
+SELECT 1 FROM master_disable_node('localhost', :worker_2_port);
+
+-- bring up node 1
+SELECT master_update_node(:nodeid_1, 'localhost', :worker_1_port);
+SELECT wait_until_metadata_sync();
+
+SELECT 1 FROM master_activate_node('localhost', :worker_2_port);
+
+SELECT verify_metadata('localhost', :worker_1_port);
+
 -- cleanup
-DROP TABLE dist_table_1, ref_table, dist_table_2;
+DROP TABLE ref_table;
 TRUNCATE pg_dist_colocation;
 SELECT count(*) FROM (SELECT master_remove_node(nodename, nodeport) FROM pg_dist_node) t;
 ALTER SEQUENCE pg_catalog.pg_dist_groupid_seq RESTART :last_group_id;
