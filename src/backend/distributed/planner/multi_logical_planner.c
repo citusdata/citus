@@ -457,7 +457,6 @@ FullCompositeFieldList(List *compositeFieldList)
 	foreach(fieldSelectCell, compositeFieldList)
 	{
 		FieldSelect *fieldSelect = (FieldSelect *) lfirst(fieldSelectCell);
-		uint32 compositeFieldIndex = 0;
 
 		Expr *fieldExpression = fieldSelect->arg;
 		if (!IsA(fieldExpression, Var))
@@ -467,7 +466,6 @@ FullCompositeFieldList(List *compositeFieldList)
 
 		if (compositeFieldArray == NULL)
 		{
-			uint32 index = 0;
 			Var *compositeColumn = (Var *) fieldExpression;
 			Oid compositeTypeId = compositeColumn->vartype;
 			Oid compositeRelationId = get_typ_typrelid(compositeTypeId);
@@ -478,13 +476,15 @@ FullCompositeFieldList(List *compositeFieldList)
 			compositeFieldArray = palloc0(compositeFieldCount * sizeof(bool));
 			relation_close(relation, AccessShareLock);
 
-			for (index = 0; index < compositeFieldCount; index++)
+			for (uint32 compositeFieldIndex = 0;
+				 compositeFieldIndex < compositeFieldCount;
+				 compositeFieldIndex++)
 			{
-				compositeFieldArray[index] = false;
+				compositeFieldArray[compositeFieldIndex] = false;
 			}
 		}
 
-		compositeFieldIndex = fieldSelect->fieldnum - 1;
+		uint32 compositeFieldIndex = fieldSelect->fieldnum - 1;
 		compositeFieldArray[compositeFieldIndex] = true;
 	}
 

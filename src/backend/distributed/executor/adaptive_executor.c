@@ -3611,7 +3611,7 @@ BuildWaitEventSet(List *sessionList)
 	{
 		WorkerSession *session = lfirst(sessionCell);
 		MultiConnection *connection = session->connection;
-		int socket = 0;
+		int sock = 0;
 		int waitEventSetIndex = 0;
 
 		if (connection->pgConn == NULL)
@@ -3626,14 +3626,14 @@ BuildWaitEventSet(List *sessionList)
 			continue;
 		}
 
-		socket = PQsocket(connection->pgConn);
-		if (socket == -1)
+		sock = PQsocket(connection->pgConn);
+		if (sock == -1)
 		{
 			/* connection was closed */
 			continue;
 		}
 
-		waitEventSetIndex = AddWaitEventToSet(waitEventSet, connection->waitFlags, socket,
+		waitEventSetIndex = AddWaitEventToSet(waitEventSet, connection->waitFlags, sock,
 											  NULL, (void *) session);
 		session->waitEventSetIndex = waitEventSetIndex;
 	}
@@ -3658,7 +3658,7 @@ UpdateWaitEventSetFlags(WaitEventSet *waitEventSet, List *sessionList)
 	{
 		WorkerSession *session = lfirst(sessionCell);
 		MultiConnection *connection = session->connection;
-		int socket = 0;
+		int sock = 0;
 		int waitEventSetIndex = session->waitEventSetIndex;
 
 		if (connection->pgConn == NULL)
@@ -3673,8 +3673,8 @@ UpdateWaitEventSetFlags(WaitEventSet *waitEventSet, List *sessionList)
 			continue;
 		}
 
-		socket = PQsocket(connection->pgConn);
-		if (socket == -1)
+		sock = PQsocket(connection->pgConn);
+		if (sock == -1)
 		{
 			/* connection was closed */
 			continue;
