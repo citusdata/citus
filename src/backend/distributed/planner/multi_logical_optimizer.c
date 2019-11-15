@@ -252,12 +252,16 @@ static List * WorkerAggregateExpressionList(Aggref *originalAggregate,
 											WorkerAggregateWalkerContext *walkerContextry);
 static AggregateType GetAggregateType(Oid aggFunctionId);
 static Oid AggregateArgumentType(Aggref *aggregate);
+static bool AggregateEnabledCustom(Oid aggregateOid);
+static Oid CitusFunctionOidWithSignature(char *functionName, int numargs, Oid *argtypes);
+static Oid WorkerPartialAggOid(void);
+static Oid CoordCombineAggOid(void);
 static Oid AggregateFunctionOid(const char *functionName, Oid inputType);
 static Oid TypeOid(Oid schemaId, const char *typeName);
 static SortGroupClause * CreateSortGroupClause(Var *column);
 
 /* Local functions forward declarations for count(distinct) approximations */
-static char * CountDistinctHashFunctionName(Oid argumentType);
+static const char * CountDistinctHashFunctionName(Oid argumentType);
 static int CountDistinctStorageSize(double approximationErrorRate);
 static Const * MakeIntegerConst(int32 integerValue);
 static Const * MakeIntegerConstInt64(int64 integerValue);
@@ -1382,7 +1386,7 @@ MasterExtendedOpNode(MultiExtendedOp *originalOpNode,
 	foreach(targetEntryCell, targetEntryList)
 	{
 		TargetEntry *originalTargetEntry = (TargetEntry *) lfirst(targetEntryCell);
-		TargetEntry *newTargetEntry = copyObject(originalTargetEntry);
+		TargetEntry *newTargetEntry = flatCopyTargetEntry(originalTargetEntry);
 		Expr *originalExpression = originalTargetEntry->expr;
 		Expr *newExpression = NULL;
 
@@ -1411,6 +1415,11 @@ MasterExtendedOpNode(MultiExtendedOp *originalOpNode,
 			column->varattno = walkerContext->columnId;
 			column->varoattno = walkerContext->columnId;
 			walkerContext->columnId++;
+
+			if (column->vartype == RECORDOID)
+			{
+				column->vartypmod = BlessRecordExpression(originalTargetEntry->expr);
+			}
 
 			newExpression = (Expr *) column;
 		}
@@ -1560,7 +1569,7 @@ MasterAggregateExpression(Aggref *originalAggregate,
 	{
 		/*
 		 * If enabled, we check for count(distinct) approximations before count
-		 * distincts. For this, we first compute hll_add_agg(hll_hash(column) on
+		 * distincts. For this, we first compute hll_add_agg(hll_hash(column)) on
 		 * worker nodes, and get hll values. We then gather hlls on the master
 		 * node, and compute hll_cardinality(hll_union_agg(hll)).
 		 */
@@ -1837,6 +1846,72 @@ MasterAggregateExpression(Aggref *originalAggregate,
 
 		newMasterExpression = (Expr *) unionAggregate;
 	}
+	else if (aggregateType == AGGREGATE_CUSTOM)
+	{
+		HeapTuple aggTuple = SearchSysCache1(AGGFNOID,
+											 ObjectIdGetDatum(
+												 originalAggregate->aggfnoid));
+		Form_pg_aggregate aggform;
+		Oid combine;
+
+		if (!HeapTupleIsValid(aggTuple))
+		{
+			elog(ERROR, "citus cache lookup failed for aggregate %u",
+				 originalAggregate->aggfnoid);
+			return NULL;
+		}
+		else
+		{
+			aggform = (Form_pg_aggregate) GETSTRUCT(aggTuple);
+			combine = aggform->aggcombinefn;
+			ReleaseSysCache(aggTuple);
+		}
+
+		if (combine != InvalidOid)
+		{
+			Const *aggOidParam = NULL;
+			Var *column = NULL;
+			Const *nullTag = NULL;
+			List *aggArguments = NIL;
+			Aggref *newMasterAggregate = NULL;
+			Oid coordCombineId = CoordCombineAggOid();
+			Oid workerReturnType = CSTRINGOID;
+			int32 workerReturnTypeMod = -1;
+			Oid workerCollationId = InvalidOid;
+			Oid resultType = exprType((Node *) originalAggregate);
+
+			aggOidParam = makeConst(OIDOID, -1, InvalidOid, sizeof(Oid),
+									ObjectIdGetDatum(originalAggregate->aggfnoid),
+									false, true);
+			column = makeVar(masterTableId, walkerContext->columnId, workerReturnType,
+							 workerReturnTypeMod, workerCollationId, columnLevelsUp);
+			walkerContext->columnId++;
+			nullTag = makeNullConst(resultType, -1, InvalidOid);
+
+			aggArguments = list_make3(makeTargetEntry((Expr *) aggOidParam, 1, NULL,
+													  false),
+									  makeTargetEntry((Expr *) column, 2, NULL, false),
+									  makeTargetEntry((Expr *) nullTag, 3, NULL, false));
+
+			/* coord_combine_agg(agg, workercol) */
+			newMasterAggregate = makeNode(Aggref);
+			newMasterAggregate->aggfnoid = coordCombineId;
+			newMasterAggregate->aggtype = originalAggregate->aggtype;
+			newMasterAggregate->args = aggArguments;
+			newMasterAggregate->aggkind = AGGKIND_NORMAL;
+			newMasterAggregate->aggfilter = originalAggregate->aggfilter;
+			newMasterAggregate->aggtranstype = INTERNALOID;
+			newMasterAggregate->aggargtypes = list_make3_oid(OIDOID, CSTRINGOID,
+															 resultType);
+			newMasterAggregate->aggsplit = AGGSPLIT_SIMPLE;
+
+			newMasterExpression = (Expr *) newMasterAggregate;
+		}
+		else
+		{
+			elog(ERROR, "Aggregate lacks COMBINEFUNC");
+		}
+	}
 	else
 	{
 		/*
@@ -1881,6 +1956,7 @@ MasterAggregateExpression(Aggref *originalAggregate,
 
 		newMasterExpression = (Expr *) newMasterAggregate;
 	}
+
 
 	/*
 	 * Aggregate functions could have changed the return type. If so, we wrap
@@ -2793,7 +2869,7 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 		Oid hllSchemaOid = get_extension_schema(hllId);
 		const char *hllSchemaName = get_namespace_name(hllSchemaOid);
 
-		char *hashFunctionName = CountDistinctHashFunctionName(argumentType);
+		const char *hashFunctionName = CountDistinctHashFunctionName(argumentType);
 		Oid hashFunctionId = FunctionOid(hllSchemaName, hashFunctionName,
 										 hashArgumentCount);
 		Oid hashFunctionReturnType = get_func_rettype(hashFunctionId);
@@ -2865,6 +2941,67 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 		workerAggregateList = lappend(workerAggregateList, sumAggregate);
 		workerAggregateList = lappend(workerAggregateList, countAggregate);
 	}
+	else if (aggregateType == AGGREGATE_CUSTOM)
+	{
+		HeapTuple aggTuple = SearchSysCache1(AGGFNOID,
+											 ObjectIdGetDatum(
+												 originalAggregate->aggfnoid));
+		Form_pg_aggregate aggform;
+		Oid combine;
+
+		if (!HeapTupleIsValid(aggTuple))
+		{
+			elog(ERROR, "citus cache lookup failed for aggregate %u",
+				 originalAggregate->aggfnoid);
+			return NULL;
+		}
+		else
+		{
+			aggform = (Form_pg_aggregate) GETSTRUCT(aggTuple);
+			combine = aggform->aggcombinefn;
+			ReleaseSysCache(aggTuple);
+		}
+
+		if (combine != InvalidOid)
+		{
+			Const *aggOidParam = NULL;
+			Aggref *newWorkerAggregate = NULL;
+			List *aggArguments = NIL;
+			ListCell *originalAggArgCell;
+			Oid workerPartialId = WorkerPartialAggOid();
+
+			aggOidParam = makeConst(REGPROCEDUREOID, -1, InvalidOid, sizeof(Oid),
+									ObjectIdGetDatum(originalAggregate->aggfnoid), false,
+									true);
+			aggArguments = list_make1(makeTargetEntry((Expr *) aggOidParam, 1, NULL,
+													  false));
+			foreach(originalAggArgCell, originalAggregate->args)
+			{
+				TargetEntry *arg = lfirst(originalAggArgCell);
+				TargetEntry *newArg = copyObject(arg);
+				newArg->resno++;
+				aggArguments = lappend(aggArguments, newArg);
+			}
+
+			/* worker_partial_agg(agg, ...args) */
+			newWorkerAggregate = makeNode(Aggref);
+			newWorkerAggregate->aggfnoid = workerPartialId;
+			newWorkerAggregate->aggtype = CSTRINGOID;
+			newWorkerAggregate->args = aggArguments;
+			newWorkerAggregate->aggkind = AGGKIND_NORMAL;
+			newWorkerAggregate->aggfilter = originalAggregate->aggfilter;
+			newWorkerAggregate->aggtranstype = INTERNALOID;
+			newWorkerAggregate->aggargtypes = lcons_oid(OIDOID,
+														originalAggregate->aggargtypes);
+			newWorkerAggregate->aggsplit = AGGSPLIT_SIMPLE;
+
+			workerAggregateList = list_make1(newWorkerAggregate);
+		}
+		else
+		{
+			elog(ERROR, "Aggregate lacks COMBINEFUNC");
+		}
+	}
 	else
 	{
 		/*
@@ -2902,12 +3039,14 @@ GetAggregateType(Oid aggFunctionId)
 	aggregateProcName = get_func_name(aggFunctionId);
 	if (aggregateProcName == NULL)
 	{
-		ereport(ERROR, (errmsg("cache lookup failed for function %u", aggFunctionId)));
+		ereport(ERROR, (errmsg("citus cache lookup failed for function %u",
+							   aggFunctionId)));
 	}
 
 	aggregateCount = lengthof(AggregateNames);
 
 	Assert(AGGREGATE_INVALID_FIRST == 0);
+
 	for (aggregateIndex = 1; aggregateIndex < aggregateCount; aggregateIndex++)
 	{
 		const char *aggregateName = AggregateNames[aggregateIndex];
@@ -2920,6 +3059,11 @@ GetAggregateType(Oid aggFunctionId)
 
 	if (!found)
 	{
+		if (AggregateEnabledCustom(aggFunctionId))
+		{
+			return AGGREGATE_CUSTOM;
+		}
+
 		ereport(ERROR, (errmsg("unsupported aggregate function %s", aggregateProcName)));
 	}
 
@@ -2939,6 +3083,48 @@ AggregateArgumentType(Aggref *aggregate)
 	Assert(list_length(argumentList) == 1);
 
 	return returnTypeId;
+}
+
+
+/*
+ * AggregateEnabledCustom returns whether given aggregate can be
+ * distributed across workers using worker_partial_agg & coord_combine_agg.
+ */
+static bool
+AggregateEnabledCustom(Oid aggregateOid)
+{
+	HeapTuple aggTuple;
+	Form_pg_aggregate aggform;
+	HeapTuple typeTuple;
+	Form_pg_type typeform;
+	bool supportsSafeCombine;
+
+	aggTuple = SearchSysCache1(AGGFNOID, aggregateOid);
+	if (!HeapTupleIsValid(aggTuple))
+	{
+		elog(ERROR, "citus cache lookup failed.");
+	}
+	aggform = (Form_pg_aggregate) GETSTRUCT(aggTuple);
+
+	if (aggform->aggcombinefn == InvalidOid)
+	{
+		ReleaseSysCache(aggTuple);
+		return false;
+	}
+
+	typeTuple = SearchSysCache1(TYPEOID, aggform->aggtranstype);
+	if (!HeapTupleIsValid(typeTuple))
+	{
+		elog(ERROR, "citus cache lookup failed.");
+	}
+	typeform = (Form_pg_type) GETSTRUCT(typeTuple);
+
+	supportsSafeCombine = typeform->typtype != TYPTYPE_PSEUDO;
+
+	ReleaseSysCache(aggTuple);
+	ReleaseSysCache(typeTuple);
+
+	return supportsSafeCombine;
 }
 
 
@@ -3005,6 +3191,62 @@ AggregateFunctionOid(const char *functionName, Oid inputType)
 
 
 /*
+ * AggregateFunctionOidWithoutInput performs a reverse lookup on aggregate function name,
+ * and returns the corresponding aggregate function oid for the given function
+ * name and input type.
+ */
+static Oid
+CitusFunctionOidWithSignature(char *functionName, int numargs, Oid *argtypes)
+{
+	List *aggregateName = list_make2(makeString("citus"), makeString(functionName));
+	FuncCandidateList clist = FuncnameGetCandidates(aggregateName, numargs, NIL, false,
+													false, true);
+
+	for (; clist; clist = clist->next)
+	{
+		if (memcmp(clist->args, argtypes, numargs * sizeof(Oid)) == 0)
+		{
+			return clist->oid;
+		}
+	}
+
+	ereport(ERROR, (errmsg("no matching oid for function: %s", functionName)));
+	return InvalidOid;
+}
+
+
+/*
+ * Lookup oid of citus.worker_partial_agg
+ */
+static Oid
+WorkerPartialAggOid()
+{
+	Oid argtypes[] = {
+		OIDOID,
+		ANYELEMENTOID,
+	};
+
+	return CitusFunctionOidWithSignature(WORKER_PARTIAL_AGGREGATE_NAME, 2, argtypes);
+}
+
+
+/*
+ * Lookup oid of citus.coord_combine_agg
+ */
+static Oid
+CoordCombineAggOid()
+{
+	Oid argtypes[] = {
+		OIDOID,
+		CSTRINGOID,
+		ANYELEMENTOID,
+	};
+
+	return CitusFunctionOidWithSignature(COORD_COMBINE_AGGREGATE_NAME, 3, argtypes);
+}
+
+
+/*
  * TypeOid looks for a type that has the given name and schema, and returns the
  * corresponding type's oid.
  */
@@ -3013,8 +3255,8 @@ TypeOid(Oid schemaId, const char *typeName)
 {
 	Oid typeOid;
 
-	typeOid = GetSysCacheOid2Compat(TYPENAMENSP, Anum_pg_type_oid, PointerGetDatum(
-										typeName),
+	typeOid = GetSysCacheOid2Compat(TYPENAMENSP, Anum_pg_type_oid,
+									PointerGetDatum(typeName),
 									ObjectIdGetDatum(schemaId));
 
 	return typeOid;
@@ -3050,42 +3292,34 @@ CreateSortGroupClause(Var *column)
  * CountDistinctHashFunctionName resolves the hll_hash function name to use for
  * the given input type, and returns this function name.
  */
-static char *
+static const char *
 CountDistinctHashFunctionName(Oid argumentType)
 {
-	char *hashFunctionName = NULL;
-
 	/* resolve hash function name based on input argument type */
 	switch (argumentType)
 	{
 		case INT4OID:
 		{
-			hashFunctionName = pstrdup(HLL_HASH_INTEGER_FUNC_NAME);
-			break;
+			return HLL_HASH_INTEGER_FUNC_NAME;
 		}
 
 		case INT8OID:
 		{
-			hashFunctionName = pstrdup(HLL_HASH_BIGINT_FUNC_NAME);
-			break;
+			return HLL_HASH_BIGINT_FUNC_NAME;
 		}
 
 		case TEXTOID:
 		case BPCHAROID:
 		case VARCHAROID:
 		{
-			hashFunctionName = pstrdup(HLL_HASH_TEXT_FUNC_NAME);
-			break;
+			return HLL_HASH_TEXT_FUNC_NAME;
 		}
 
 		default:
 		{
-			hashFunctionName = pstrdup(HLL_HASH_ANY_FUNC_NAME);
-			break;
+			return HLL_HASH_ANY_FUNC_NAME;
 		}
 	}
-
-	return hashFunctionName;
 }
 
 

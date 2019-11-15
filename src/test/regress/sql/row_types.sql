@@ -26,7 +26,7 @@ SELECT create_distributed_function('record_returner(int)');
 
 INSERT INTO test VALUES (1,2), (1,3), (2,2), (2,3);
 
--- multi-shard queries do not support row types
+-- multi-shard queries support row types
 SELECT (x,y) FROM test ORDER BY x, y;
 SELECT (x,y) FROM test GROUP BY x, y ORDER BY x, y;
 select distinct (x,y) AS foo, x, y FROM test ORDER BY x, y;
