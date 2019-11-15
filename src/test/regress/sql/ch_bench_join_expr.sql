@@ -161,6 +161,7 @@ SELECT create_reference_table('supplier');
 
 TRUNCATE order_line, new_order, stock, oorder, history, customer, district, warehouse, item, region, nation, supplier; -- for easy copy in development
 INSERT INTO supplier SELECT c, 'abc', 'def', c, 'ghi', c, 'jkl' FROM generate_series(0,10) AS c;
+INSERT INTO new_order SELECT c, c, c FROM generate_series(0,10) AS c;
 INSERT INTO stock SELECT c,c,c,c,c,c, 'abc','abc','abc','abc','abc','abc','abc','abc','abc','abc','abc' FROM generate_series(1,3) AS c;
 INSERT INTO stock SELECT c, 5000,c,c,c,c, 'abc','abc','abc','abc','abc','abc','abc','abc','abc','abc','abc' FROM generate_series(1,3) AS c; -- mod(2*5000,10000) == 0
 INSERT INTO order_line SELECT c, c, c, c, c, '2008-10-17 00:00:00.000000', c, c, c, 'abc' FROM generate_series(0,10) AS c;
@@ -237,6 +238,55 @@ ORDER BY
     n_name,
     su_name,
     i_id;
+
+-- Query 3
+SELECT
+    ol_o_id,
+    ol_w_id,
+    ol_d_id,
+    sum(ol_amount) AS revenue,
+    o_entry_d
+FROM
+    customer,
+    new_order,
+    oorder,
+    order_line
+WHERE c_state LIKE 'C%' -- used to ba A%, but C% works with our small data
+  AND c_id = o_c_id
+  AND c_w_id = o_w_id
+  AND c_d_id = o_d_id
+  AND no_w_id = o_w_id
+  AND no_d_id = o_d_id
+  AND no_o_id = o_id
+  AND ol_w_id = o_w_id
+  AND ol_d_id = o_d_id
+  AND ol_o_id = o_id
+  AND o_entry_d > '2007-01-02 00:00:00.000000'
+GROUP BY
+    ol_o_id,
+    ol_w_id,
+    ol_d_id,
+    o_entry_d
+ORDER BY
+    revenue DESC,
+    o_entry_d;
+
+-- Query 4
+SELECT
+    o_ol_cnt,
+    count(*) as order_count
+FROM
+    oorder
+WHERE o_entry_d >= '2007-01-02 00:00:00.000000'
+  AND o_entry_d < '2012-01-02 00:00:00.000000'
+  AND exists (SELECT *
+              FROM order_line
+              WHERE o_id = ol_o_id
+                AND o_w_id = ol_w_id
+                AND o_d_id = ol_d_id
+                AND ol_delivery_d >= o_entry_d)
+GROUP BY o_ol_cnt
+ORDER BY o_ol_cnt;
 
 -- Query 7
 SELECT
