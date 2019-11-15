@@ -1348,8 +1348,8 @@ multi_join_restriction_hook(PlannerInfo *root,
  * it to retrieve restrictions on relations.
  */
 void
-multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo, Index index,
-								RangeTblEntry *rte)
+multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo,
+								Index restrictionIndex, RangeTblEntry *rte)
 {
 	PlannerRestrictionContext *plannerRestrictionContext = NULL;
 	RelationRestrictionContext *relationRestrictionContext = NULL;
@@ -1379,7 +1379,7 @@ multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo, Index
 	localTable = !distributedTable;
 
 	relationRestriction = palloc0(sizeof(RelationRestriction));
-	relationRestriction->index = index;
+	relationRestriction->index = restrictionIndex;
 	relationRestriction->relationId = rte->relid;
 	relationRestriction->rte = rte;
 	relationRestriction->relOptInfo = relOptInfo;

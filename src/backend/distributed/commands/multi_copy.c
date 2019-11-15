@@ -3216,14 +3216,14 @@ GetConnectionState(HTAB *connectionStateHash, MultiConnection *connection)
 	CopyConnectionState *connectionState = NULL;
 	bool found = false;
 
-	int socket = PQsocket(connection->pgConn);
-	Assert(socket != -1);
+	int sock = PQsocket(connection->pgConn);
+	Assert(sock != -1);
 
-	connectionState = (CopyConnectionState *) hash_search(connectionStateHash, &socket,
+	connectionState = (CopyConnectionState *) hash_search(connectionStateHash, &sock,
 														  HASH_ENTER, &found);
 	if (!found)
 	{
-		connectionState->socket = socket;
+		connectionState->socket = sock;
 		connectionState->connection = connection;
 		connectionState->activePlacementState = NULL;
 		dlist_init(&connectionState->bufferedPlacementList);

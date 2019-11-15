@@ -598,7 +598,7 @@ WaitEventSetFromMultiConnectionStates(List *connections, int *waitCount)
 	{
 		MultiConnectionPollState *connectionState = (MultiConnectionPollState *) lfirst(
 			connectionCell);
-		int socket = 0;
+		int sock = 0;
 		int eventMask = 0;
 
 		if (numEventsAdded >= eventSetSize)
@@ -613,11 +613,11 @@ WaitEventSetFromMultiConnectionStates(List *connections, int *waitCount)
 			continue;
 		}
 
-		socket = PQsocket(connectionState->connection->pgConn);
+		sock = PQsocket(connectionState->connection->pgConn);
 
 		eventMask = MultiConnectionStateEventMask(connectionState);
 
-		AddWaitEventToSet(waitEventSet, eventMask, socket, NULL, connectionState);
+		AddWaitEventToSet(waitEventSet, eventMask, sock, NULL, connectionState);
 		numEventsAdded++;
 
 		if (waitCount)
