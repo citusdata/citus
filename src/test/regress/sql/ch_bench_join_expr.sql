@@ -175,12 +175,68 @@ INSERT INTO nation VALUES
     (4, 'The Netherlands', 2, 'Flat'),
     (9, 'Germany', 2, 'Germany must be in here for Q7'),
     (67, 'Cambodia', 2, 'I don''t understand how we got from California to Cambodia but I will take it, it also is not in Europe, but we need it to be for Q8');
+
 -- MVP for CH-BenCHmark queries 7/8/9 where a join with an expression is done between a distributed table and a reference table.
   SELECT su_suppkey, s_w_id, s_i_id, ol_supply_w_id
     FROM supplier, stock, order_line
    WHERE ol_supply_w_id = s_w_id
      AND mod((s_w_id * s_i_id),10000) = su_suppkey
 ORDER BY 1,2,3,4;
+
+-- Query 1
+SELECT
+    ol_number,
+    sum(ol_quantity) as sum_qty,
+    sum(ol_amount) as sum_amount,
+    avg(ol_quantity) as avg_qty,
+    avg(ol_amount) as avg_amount,
+    count(*) as count_order
+FROM order_line
+WHERE ol_delivery_d > '2007-01-02 00:00:00.000000'
+GROUP BY ol_number
+ORDER BY ol_number;
+
+-- Query 2
+SELECT
+    su_suppkey,
+    su_name,
+    n_name,
+    i_id,
+    i_name,
+    su_address,
+    su_phone,
+    su_comment
+FROM
+    item,
+    supplier,
+    stock,
+    nation,
+    region,
+    (SELECT
+         s_i_id AS m_i_id,
+         min(s_quantity) as m_s_quantity
+     FROM
+         stock,
+         supplier,
+         nation,
+         region
+     WHERE mod((s_w_id*s_i_id),10000)=su_suppkey
+       AND su_nationkey=n_nationkey
+       AND n_regionkey=r_regionkey
+       AND r_name LIKE 'Europ%'
+     GROUP BY s_i_id) m
+WHERE i_id = s_i_id
+  AND mod((s_w_id * s_i_id), 10000) = su_suppkey
+  AND su_nationkey = n_nationkey
+  AND n_regionkey = r_regionkey
+  AND i_data LIKE '%b'
+  AND r_name LIKE 'Europ%'
+  AND i_id = m_i_id
+  AND s_quantity = m_s_quantity
+ORDER BY
+    n_name,
+    su_name,
+    i_id;
 
 -- Query 7
 SELECT
