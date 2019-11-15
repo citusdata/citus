@@ -223,11 +223,15 @@ INSERT INTO stock SELECT c, 5000,c,c,c,c, 'abc','abc','abc','abc','abc','abc','a
 INSERT INTO order_line SELECT c, c, c, c, c, '2008-10-17 00:00:00.000000', c, c, c, 'abc' FROM generate_series(0,10) AS c;
 INSERT INTO oorder SELECT c, c, c, c, c, 1, 1, '2008-10-17 00:00:00.000000' FROM generate_series(0,10) AS c;
 INSERT INTO customer SELECT c, c, c, 0, 'XX', 'John', 'Doe', 1000, 0, 0, c, c, 'Name', 'Street', 'Some City', 'CA', '12345', '+1 000 0000000', '2007-01-02 00:00:00.000000', 'NA', 'nothing special' FROM generate_series(0,10) AS c;
+INSERT INTO item SELECT c, 'Keyboard', 50, 'needs to end in a b', c FROM generate_series(0,10) AS c;
+INSERT INTO region VALUES
+    (1, 'Not Europe', 'Big'),
+    (2, 'Europe', 'Big');
 INSERT INTO nation VALUES
-    (1, 'United States', 1, 'Big'),
+    (1, 'United States', 1, 'Also Big'),
     (4, 'The Netherlands', 2, 'Flat'),
-    (9, 'Germany', 3, 'Germany must be in here for Q7'),
-    (67, 'Cambodia', 67, 'I don''t understand how we got from California to Cambodia but I will take it');
+    (9, 'Germany', 2, 'Germany must be in here for Q7'),
+    (67, 'Cambodia', 2, 'I don''t understand how we got from California to Cambodia but I will take it, it also is not in Europe, but we need it to be for Q8');
 -- MVP for CH-BenCHmark queries 7/8/9 where a join with an expression is done between a distributed table and a reference table.
   SELECT su_suppkey, s_w_id, s_i_id, ol_supply_w_id
     FROM supplier, stock, order_line
@@ -284,6 +288,77 @@ ORDER BY
 -------------+-------------+--------+---------
            9 | C           |   2008 |    3.00
 (1 row)
+
+SELECT
+    extract(year from o_entry_d) as l_year,
+    sum(case when n2.n_name = 'Germany' then ol_amount else 0 end) / sum(ol_amount) as mkt_share
+FROM
+    item,
+    supplier,
+    stock,
+    order_line,
+    oorder,
+    customer,
+    nation n1,
+    nation n2,
+    region
+WHERE i_id = s_i_id
+  AND ol_i_id = s_i_id
+  AND ol_supply_w_id = s_w_id
+  AND mod((s_w_id * s_i_id),10000) = su_suppkey
+  AND ol_w_id = o_w_id
+  AND ol_d_id = o_d_id
+  AND ol_o_id = o_id
+  AND c_id = o_c_id
+  AND c_w_id = o_w_id
+  AND c_d_id = o_d_id
+  AND n1.n_nationkey = ascii(substr(c_state,1,1))
+  AND n1.n_regionkey = r_regionkey
+  AND ol_i_id < 1000
+  AND r_name = 'Europe'
+  AND su_nationkey = n2.n_nationkey
+  AND o_entry_d BETWEEN '2007-01-02 00:00:00.000000' AND '2012-01-02 00:00:00.000000'
+  AND i_data LIKE '%b'
+  AND i_id = ol_i_id
+GROUP BY extract(YEAR FROM o_entry_d)
+ORDER BY l_year;
+ l_year |       mkt_share        
+--------+------------------------
+   2008 | 0.50000000000000000000
+(1 row)
+
+SELECT
+    n_name,
+    extract(year from o_entry_d) as l_year,
+    sum(ol_amount) as sum_profit
+FROM
+    item,
+     stock,
+     supplier,
+     order_line,
+     oorder,
+     nation
+WHERE ol_i_id = s_i_id
+  AND ol_supply_w_id = s_w_id
+  AND mod((s_w_id * s_i_id), 10000) = su_suppkey
+  AND ol_w_id = o_w_id
+  AND ol_d_id = o_d_id
+  AND ol_o_id = o_id
+  AND ol_i_id = i_id
+  AND su_nationkey = n_nationkey
+  AND i_data LIKE '%b' -- this used to be %BB but that will not work with our small dataset
+GROUP BY
+    n_name,
+    extract(YEAR FROM o_entry_d)
+ORDER BY
+    n_name,
+    l_year DESC;
+          n_name           | l_year | sum_profit 
+---------------------------+--------+------------
+ Germany                   |   2008 |       3.00
+ The Netherlands           |   2008 |       2.00
+ United States             |   2008 |       1.00
+(3 rows)
 
 SET client_min_messages TO WARNING;
 DROP SCHEMA ch_bench_join_expr CASCADE;
