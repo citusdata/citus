@@ -223,7 +223,7 @@ INSERT INTO stock SELECT c, 5000,c,c,c,c, 'abc','abc','abc','abc','abc','abc','a
 INSERT INTO order_line SELECT c, c, c, c, c, '2008-10-17 00:00:00.000000', c, c, c, 'abc' FROM generate_series(0,10) AS c;
 INSERT INTO oorder SELECT c, c, c, c, c, 1, 1, '2008-10-17 00:00:00.000000' FROM generate_series(0,10) AS c;
 INSERT INTO customer SELECT c, c, c, 0, 'XX', 'John', 'Doe', 1000, 0, 0, c, c, 'Name', 'Street', 'Some City', 'CA', '12345', '+1 000 0000000', '2007-01-02 00:00:00.000000', 'NA', 'nothing special' FROM generate_series(0,10) AS c;
-INSERT INTO item SELECT c, 'Keyboard', 50, 'needs to end in a b', c FROM generate_series(0,10) AS c;
+INSERT INTO item SELECT c, 'Keyboard', 50, 'co b', c FROM generate_series(0,10) AS c; --co% and %b filters all around
 INSERT INTO region VALUES
     (1, 'Not Europe', 'Big'),
     (2, 'Europe', 'Big');
@@ -289,6 +289,7 @@ ORDER BY
            9 | C           |   2008 |    3.00
 (1 row)
 
+-- Query 8
 SELECT
     extract(year from o_entry_d) as l_year,
     sum(case when n2.n_name = 'Germany' then ol_amount else 0 end) / sum(ol_amount) as mkt_share
@@ -327,17 +328,18 @@ ORDER BY l_year;
    2008 | 0.50000000000000000000
 (1 row)
 
+-- Query 9
 SELECT
     n_name,
     extract(year from o_entry_d) as l_year,
     sum(ol_amount) as sum_profit
 FROM
     item,
-     stock,
-     supplier,
-     order_line,
-     oorder,
-     nation
+    stock,
+    supplier,
+    order_line,
+    oorder,
+    nation
 WHERE ol_i_id = s_i_id
   AND ol_supply_w_id = s_w_id
   AND mod((s_w_id * s_i_id), 10000) = su_suppkey
@@ -359,6 +361,62 @@ ORDER BY
  The Netherlands           |   2008 |       2.00
  United States             |   2008 |       1.00
 (3 rows)
+
+-- Query 11
+SELECT
+    s_i_id,
+    sum(s_order_cnt) AS ordercount
+FROM
+    stock,
+    supplier,
+    nation
+WHERE mod((s_w_id * s_i_id),10000) = su_suppkey
+  AND su_nationkey = n_nationkey
+  AND n_name = 'Germany'
+GROUP BY s_i_id
+HAVING sum(s_order_cnt) >
+         (SELECT sum(s_order_cnt) * .005
+          FROM
+              stock,
+              supplier,
+              nation
+          WHERE mod((s_w_id * s_i_id),10000) = su_suppkey
+            AND su_nationkey = n_nationkey
+            AND n_name = 'Germany')
+ORDER BY ordercount DESC;
+ s_i_id | ordercount 
+--------+------------
+      3 |          3
+(1 row)
+
+-- Query 20
+SELECT
+    su_name,
+    su_address
+FROM
+    supplier,
+    nation
+WHERE su_suppkey in
+      (SELECT
+           mod(s_i_id * s_w_id, 10000)
+       FROM
+           stock,
+           order_line
+       WHERE s_i_id IN
+             (SELECT i_id
+              FROM item
+              WHERE i_data LIKE 'co%')
+       AND ol_i_id = s_i_id
+       AND ol_delivery_d > '2008-05-23 12:00:00' -- was 2010, but our order is in 2008
+       GROUP BY s_i_id, s_w_id, s_quantity
+       HAVING   2*s_quantity > sum(ol_quantity))
+  AND su_nationkey = n_nationkey
+  AND n_name = 'Germany'
+ORDER BY su_name;
+          su_name          | su_address 
+---------------------------+------------
+ abc                       | def
+(1 row)
 
 SET client_min_messages TO WARNING;
 DROP SCHEMA ch_bench_join_expr CASCADE;
