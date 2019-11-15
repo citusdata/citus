@@ -17,7 +17,7 @@
 /* Enum to define execution flow of ExtractRangeTableList */
 typedef enum ExtractRangeTableMode
 {
-	EXTRACT_RELATION_ENTRIES,
+	EXTRACT_RELATION_ENTRIES, /* inclduding local, foreign and partitioned tables */
 	EXTRACT_ALL_ENTRIES
 } ExtractRangeTableMode;
 

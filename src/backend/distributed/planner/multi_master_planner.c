@@ -13,6 +13,7 @@
 
 #include "postgres.h"
 
+#include "catalog/pg_type.h"
 #include "commands/extension.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/function_utils.h"
@@ -84,7 +85,7 @@ MasterNodeSelectPlan(DistributedPlan *distributedPlan, CustomScan *remoteScan)
 
 /*
  * MasterTargetList uses the given worker target list's expressions, and creates
- * a target target list for the master node. This master target list keeps the
+ * a target list for the master node. This master target list keeps the
  * temporary table's columns on the master node.
  */
 static List *
@@ -106,12 +107,15 @@ MasterTargetList(List *workerTargetList)
 			continue;
 		}
 
-		masterTargetEntry = copyObject(workerTargetEntry);
-
 		masterColumn = makeVarFromTargetEntry(tableId, workerTargetEntry);
 		masterColumn->varattno = columnId;
 		masterColumn->varoattno = columnId;
 		columnId++;
+
+		if (masterColumn->vartype == RECORDOID)
+		{
+			masterColumn->vartypmod = BlessRecordExpression(workerTargetEntry->expr);
+		}
 
 		/*
 		 * The master target entry has two pieces to it. The first piece is the
@@ -120,6 +124,7 @@ MasterTargetList(List *workerTargetList)
 		 * from the worker target entry. Note that any changes to worker target
 		 * entry's sort and group clauses will *break* us here.
 		 */
+		masterTargetEntry = flatCopyTargetEntry(workerTargetEntry);
 		masterTargetEntry->expr = (Expr *) masterColumn;
 		masterTargetList = lappend(masterTargetList, masterTargetEntry);
 	}

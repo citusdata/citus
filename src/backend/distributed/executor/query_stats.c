@@ -94,19 +94,9 @@ CitusExecutorName(MultiExecutorType executorType)
 			return "adaptive";
 		}
 
-		case MULTI_EXECUTOR_REAL_TIME:
-		{
-			return "real-time";
-		}
-
 		case MULTI_EXECUTOR_TASK_TRACKER:
 		{
 			return "task-tracker";
-		}
-
-		case MULTI_EXECUTOR_ROUTER:
-		{
-			return "router";
 		}
 
 		case MULTI_EXECUTOR_COORDINATOR_INSERT_SELECT:

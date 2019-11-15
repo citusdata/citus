@@ -130,7 +130,6 @@ ReplicateAllReferenceTablesToNode(char *nodeName, int nodePort)
 {
 	List *referenceTableList = ReferenceTableOidList();
 	ListCell *referenceTableCell = NULL;
-	uint32 workerCount = ActivePrimaryNodeCount();
 
 	/* if there is no reference table, we do not need to replicate anything */
 	if (list_length(referenceTableList) > 0)
@@ -181,12 +180,6 @@ ReplicateAllReferenceTablesToNode(char *nodeName, int nodePort)
 													   commandList);
 		}
 	}
-
-	/*
-	 * Update replication factor column for colocation group of reference tables
-	 * so that worker count will be equal to replication factor again.
-	 */
-	UpdateColocationGroupReplicationFactorForReferenceTables(workerCount);
 }
 
 
@@ -389,10 +382,14 @@ uint32
 CreateReferenceTableColocationId()
 {
 	uint32 colocationId = INVALID_COLOCATION_ID;
-	List *workerNodeList = ActivePrimaryNodeList(ShareLock);
 	int shardCount = 1;
-	int replicationFactor = list_length(workerNodeList);
 	Oid distributionColumnType = InvalidOid;
+
+	/*
+	 * We don't maintain replication factor of reference tables anymore and
+	 * just use -1 instead. We don't use this value in any places.
+	 */
+	int replicationFactor = -1;
 
 	/* check for existing colocations */
 	colocationId = ColocationId(shardCount, replicationFactor, distributionColumnType);

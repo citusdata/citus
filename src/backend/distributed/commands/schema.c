@@ -122,6 +122,7 @@ PlanAlterObjectSchemaStmt(AlterObjectSchemaStmt *stmt, const char *queryString)
 		}
 
 		case OBJECT_PROCEDURE:
+		case OBJECT_AGGREGATE:
 		case OBJECT_FUNCTION:
 		{
 			return PlanAlterFunctionSchemaStmt(stmt, queryString);
@@ -197,6 +198,7 @@ ProcessAlterObjectSchemaStmt(AlterObjectSchemaStmt *stmt, const char *queryStrin
 		}
 
 		case OBJECT_PROCEDURE:
+		case OBJECT_AGGREGATE:
 		case OBJECT_FUNCTION:
 		{
 			ProcessAlterFunctionSchemaStmt(stmt, queryString);

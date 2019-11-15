@@ -33,10 +33,10 @@
 #define GetSysCacheOid3Compat GetSysCacheOid3
 #define GetSysCacheOid4Compat GetSysCacheOid4
 
-#define fcSetArg(fc, n, argval) \
-	(((fc)->args[n].isnull = false), ((fc)->args[n].value = (argval)))
-#define fcSetArgNull(fc, n) \
-	(((fc)->args[n].isnull = true), ((fc)->args[n].value = (Datum) 0))
+#define fcGetArgValue(fc, n) ((fc)->args[n].value)
+#define fcGetArgNull(fc, n) ((fc)->args[n].isnull)
+#define fcSetArgExt(fc, n, val, is_null) \
+	(((fc)->args[n].isnull = (is_null)), ((fc)->args[n].value = (val)))
 
 typedef struct
 {
@@ -104,10 +104,10 @@ FileCompatFromFileStart(File fileDesc)
 	FunctionCallInfoData name ## data; \
 	FunctionCallInfoData *name = &name ## data
 
-#define fcSetArg(fc, n, value) \
-	(((fc)->argnull[n] = false), ((fc)->arg[n] = (value)))
-#define fcSetArgNull(fc, n) \
-	(((fc)->argnull[n] = true), ((fc)->arg[n] = (Datum) 0))
+#define fcGetArgValue(fc, n) ((fc)->arg[n])
+#define fcGetArgNull(fc, n) ((fc)->argnull[n])
+#define fcSetArgExt(fc, n, val, is_null) \
+	(((fc)->argnull[n] = (is_null)), ((fc)->arg[n] = (val)))
 
 typedef struct
 {
@@ -140,5 +140,8 @@ FileCompatFromFileStart(File fileDesc)
 
 
 #endif /* PG12 */
+
+#define fcSetArg(fc, n, value) fcSetArgExt(fc, n, value, false)
+#define fcSetArgNull(fc, n) fcSetArgExt(fc, n, (Datum) 0, true)
 
 #endif   /* VERSION_COMPAT_H */

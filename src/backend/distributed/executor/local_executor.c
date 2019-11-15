@@ -65,10 +65,9 @@
  *  currently only supports queries. In other words, any utility commands like TRUNCATE,
  *  fails if the command is executed after a local execution inside a transaction block.
  *  Forth, the local execution cannot be mixed with the executors other than adaptive,
- *  namely task-tracker, real-time and router executors. Finally, related with the
- *  previous item, COPY command cannot be mixed with local execution in a transaction.
- *  The implication of that any part of INSERT..SELECT via coordinator cannot happen
- *  via the local execution.
+ *  namely task-tracker executor. Finally, related with the previous item, COPY command
+ *  cannot be mixed with local execution in a transaction. The implication of that any
+ *  part of INSERT..SELECT via coordinator cannot happen via the local execution.
  */
 #include "postgres.h"
 #include "miscadmin.h"
@@ -79,7 +78,6 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/relation_access_tracking.h"
 #include "distributed/remote_commands.h" /* to access LogRemoteCommands */
-#include "distributed/multi_router_executor.h"
 #include "distributed/transaction_management.h"
 #include "executor/tstoreReceiver.h"
 #include "executor/tuptable.h"
@@ -107,6 +105,10 @@ static uint64 ExecuteLocalTaskPlan(CitusScanState *scanState, PlannedStmt *taskP
 static bool TaskAccessesLocalNode(Task *task);
 static void LogLocalCommand(const char *command);
 
+static void ExtractParametersForLocalExecution(ParamListInfo paramListInfo,
+											   Oid **parameterTypes,
+											   const char ***parameterValues);
+
 
 /*
  * ExecuteLocalTasks gets a CitusScanState node and list of local tasks.
@@ -130,7 +132,7 @@ ExecuteLocalTaskList(CitusScanState *scanState, List *taskList)
 	{
 		const char **parameterValues = NULL; /* not used anywhere, so decleare here */
 
-		ExtractParametersFromParamListInfo(paramListInfo, &parameterTypes,
+		ExtractParametersForLocalExecution(paramListInfo, &parameterTypes,
 										   &parameterValues);
 
 		numParams = paramListInfo->numParams;
@@ -170,6 +172,20 @@ ExecuteLocalTaskList(CitusScanState *scanState, List *taskList)
 	}
 
 	return totalRowsProcessed;
+}
+
+
+/*
+ * ExtractParametersForLocalExecution extracts parameter types and values from
+ * the given ParamListInfo structure, and fills parameter type and value arrays.
+ * It does not change the oid of custom types, because the query will be run locally.
+ */
+static void
+ExtractParametersForLocalExecution(ParamListInfo paramListInfo, Oid **parameterTypes,
+								   const char ***parameterValues)
+{
+	ExtractParametersFromParamList(paramListInfo, parameterTypes,
+								   parameterValues, true);
 }
 
 
@@ -225,7 +241,7 @@ ExtractLocalAndRemoteTasks(bool readOnly, List *taskList, List **localTaskList,
 		}
 		else
 		{
-			Task *localTask = copyObject(task);
+			Task *localTask = NULL;
 			Task *remoteTask = NULL;
 
 			/*
@@ -234,6 +250,9 @@ ExtractLocalAndRemoteTasks(bool readOnly, List *taskList, List **localTaskList,
 			 * prefer to use local placement, and require remote placements only for
 			 * modifications.
 			 */
+			task->partiallyLocalOrRemote = true;
+
+			localTask = copyObject(task);
 
 			localTask->taskPlacementList = localTaskPlacementList;
 			*localTaskList = lappend(*localTaskList, localTask);

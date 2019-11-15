@@ -371,8 +371,8 @@ WHERE
    125
 (1 row)
 
--- set task_executor back to real-time
-SET citus.task_executor_type TO "real-time";
+-- set task_executor back to adaptive
+SET citus.task_executor_type TO "adaptive";
 -- connect to the master and do some test
 -- regarding DDL support on schemas where
 -- the search_path is set

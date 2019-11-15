@@ -166,6 +166,7 @@ extern Oid DistPlacementRelationId(void);
 extern Oid DistNodeRelationId(void);
 extern Oid DistLocalGroupIdRelationId(void);
 extern Oid DistObjectRelationId(void);
+extern Oid DistEnabledCustomAggregatesId(void);
 
 /* index oids */
 extern Oid DistNodeNodeIdIndexId(void);
@@ -188,6 +189,7 @@ extern Oid CitusCopyFormatTypeId(void);
 extern Oid CitusReadIntermediateResultFuncId(void);
 extern Oid CitusExtraDataContainerFuncId(void);
 extern Oid CitusWorkerHashFunctionId(void);
+extern Oid CitusAnyValueFunctionId(void);
 extern Oid CitusTextSendAsJsonbFunctionId(void);
 extern Oid PgTableVisibleFuncId(void);
 extern Oid CitusTableVisibleFuncId(void);

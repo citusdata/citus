@@ -32,11 +32,11 @@
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
+#include "distributed/multi_executor.h"
 #include "distributed/multi_explain.h"
 #include "distributed/multi_join_order.h"
 #include "distributed/multi_logical_optimizer.h"
 #include "distributed/distributed_planner.h"
-#include "distributed/multi_router_executor.h"
 #include "distributed/multi_router_planner.h"
 #include "distributed/multi_server_executor.h"
 #include "distributed/pg_dist_partition.h"
@@ -44,6 +44,7 @@
 #include "distributed/relation_access_tracking.h"
 #include "distributed/run_from_same_connection.h"
 #include "distributed/query_pushdown_planning.h"
+#include "distributed/time_constants.h"
 #include "distributed/query_stats.h"
 #include "distributed/remote_commands.h"
 #include "distributed/shared_library_init.h"
@@ -67,7 +68,9 @@
 /* marks shared object as one loadable by the postgres version compiled against */
 PG_MODULE_MAGIC;
 
+#define DUMMY_REAL_TIME_EXECUTOR_ENUM_VALUE 9999999
 static char *CitusVersion = CITUS_VERSION;
+
 
 void _PG_init(void);
 
@@ -77,7 +80,7 @@ static void CreateRequiredDirectories(void);
 static void RegisterCitusConfigVariables(void);
 static bool ErrorIfNotASuitableDeadlockFactor(double *newval, void **extra,
 											  GucSource source);
-static void NormalizeWorkerListPath(void);
+static bool WarnIfDeprecatedExecutorUsed(int *newval, void **extra, GucSource source);
 static bool NodeConninfoGucCheckHook(char **newval, void **extra, GucSource source);
 static void NodeConninfoGucAssignHook(const char *newval, void *extra);
 static bool StatisticsCollectionGucCheckHook(bool *newval, void **extra, GucSource
@@ -112,7 +115,7 @@ static const struct config_enum_entry replication_model_options[] = {
 
 static const struct config_enum_entry task_executor_type_options[] = {
 	{ "adaptive", MULTI_EXECUTOR_ADAPTIVE, false },
-	{ "real-time", MULTI_EXECUTOR_ADAPTIVE, false }, /* ignore real-time executor, always use adaptive */
+	{ "real-time", DUMMY_REAL_TIME_EXECUTOR_ENUM_VALUE, false }, /* keep it for backward comp. */
 	{ "task-tracker", MULTI_EXECUTOR_TASK_TRACKER, false },
 	{ NULL, 0, false }
 };
@@ -371,22 +374,10 @@ RegisterCitusConfigVariables(void)
 		gettext_noop("Sets the maximum duration to connect to worker nodes."),
 		NULL,
 		&NodeConnectionTimeout,
-		5000, 10, 60 * 60 * 1000,
+		5 * MS_PER_SECOND, 10 * MS, MS_PER_HOUR,
 		PGC_USERSET,
-		GUC_UNIT_MS,
+		GUC_UNIT_MS | GUC_STANDARD,
 		NULL, NULL, NULL);
-
-	/* keeping temporarily for updates from pre-6.0 versions */
-	DefineCustomStringVariable(
-		"citus.worker_list_file",
-		gettext_noop("Sets the server's \"worker_list\" configuration file."),
-		NULL,
-		&WorkerListFileName,
-		NULL,
-		PGC_POSTMASTER,
-		GUC_SUPERUSER_ONLY | GUC_NO_SHOW_ALL,
-		NULL, NULL, NULL);
-	NormalizeWorkerListPath();
 
 	DefineCustomIntVariable(
 		"citus.sslmode",
@@ -407,7 +398,7 @@ RegisterCitusConfigVariables(void)
 		&BinaryMasterCopyFormat,
 		false,
 		PGC_USERSET,
-		0,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -419,7 +410,7 @@ RegisterCitusConfigVariables(void)
 		&BinaryWorkerCopyFormat,
 		false,
 		PGC_SIGHUP,
-		0,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -429,7 +420,7 @@ RegisterCitusConfigVariables(void)
 		&ExpireCachedShards,
 		false,
 		PGC_SIGHUP,
-		0,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -440,7 +431,7 @@ RegisterCitusConfigVariables(void)
 		&EnableLocalExecution,
 		true,
 		PGC_USERSET,
-		0,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -498,7 +489,7 @@ RegisterCitusConfigVariables(void)
 		&SubqueryPushdown,
 		false,
 		PGC_USERSET,
-		0,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -519,7 +510,7 @@ RegisterCitusConfigVariables(void)
 		&LogRemoteCommands,
 		false,
 		PGC_USERSET,
-		0,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -566,7 +557,7 @@ RegisterCitusConfigVariables(void)
 		&ExplainAllTasks,
 		false,
 		PGC_USERSET,
-		0,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -576,7 +567,7 @@ RegisterCitusConfigVariables(void)
 		&AllModificationsCommutative,
 		false,
 		PGC_USERSET,
-		0,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomRealVariable(
@@ -589,7 +580,7 @@ RegisterCitusConfigVariables(void)
 		&DistributedDeadlockDetectionTimeoutFactor,
 		2.0, -1.0, 1000.0,
 		PGC_SIGHUP,
-		0,
+		GUC_STANDARD,
 		ErrorIfNotASuitableDeadlockFactor, NULL, NULL);
 
 	DefineCustomIntVariable(
@@ -601,9 +592,9 @@ RegisterCitusConfigVariables(void)
 					 "determines how often recovery should run, "
 					 "use -1 to disable."),
 		&Recover2PCInterval,
-		60000, -1, 7 * 24 * 3600 * 1000,
+		60 * MS_PER_SECOND, -1, 7 * MS_PER_DAY,
 		PGC_SIGHUP,
-		GUC_UNIT_MS,
+		GUC_UNIT_MS | GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
@@ -613,7 +604,7 @@ RegisterCitusConfigVariables(void)
 					 "to synchronize metadata to metadata nodes "
 					 "that are out of sync."),
 		&MetadataSyncInterval,
-		60000, 1, 7 * 24 * 3600 * 1000,
+		60 * MS_PER_SECOND, 1, 7 * MS_PER_DAY,
 		PGC_SIGHUP,
 		GUC_UNIT_MS | GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
@@ -625,7 +616,7 @@ RegisterCitusConfigVariables(void)
 					 "to synchronize metadata to metadata nodes "
 					 "that are out of sync."),
 		&MetadataSyncRetryInterval,
-		5000, 1, 7 * 24 * 3600 * 1000,
+		5 * MS_PER_SECOND, 1, 7 * MS_PER_DAY,
 		PGC_SIGHUP,
 		GUC_UNIT_MS | GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
@@ -705,7 +696,7 @@ RegisterCitusConfigVariables(void)
 		&EnableDeadlockPrevention,
 		true,
 		PGC_USERSET,
-		0,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -715,7 +706,7 @@ RegisterCitusConfigVariables(void)
 		&EnableDDLPropagation,
 		true,
 		PGC_USERSET,
-		0,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -747,7 +738,7 @@ RegisterCitusConfigVariables(void)
 		PROPSETCMD_NONE,
 		propagate_set_commands_options,
 		PGC_USERSET,
-		0,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -766,9 +757,9 @@ RegisterCitusConfigVariables(void)
 					 "created with create_distributed_table()."),
 		NULL,
 		&ShardCount,
-		32, 1, 64000,
+		32, 1, MAX_SHARD_COUNT,
 		PGC_USERSET,
-		0,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
@@ -779,9 +770,9 @@ RegisterCitusConfigVariables(void)
 					 "configuration value at sharded table creation time, "
 					 "and later reuse the initially read value."),
 		&ShardReplicationFactor,
-		1, 1, 100,
+		1, 1, MAX_SHARD_REPLICATION_FACTOR,
 		PGC_USERSET,
-		0,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
@@ -796,7 +787,7 @@ RegisterCitusConfigVariables(void)
 		&ShardMaxSize,
 		1048576, 256, INT_MAX, /* max allowed size not set to MAX_KILOBYTES on purpose */
 		PGC_USERSET,
-		GUC_UNIT_KB,
+		GUC_UNIT_KB | GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -821,7 +812,7 @@ RegisterCitusConfigVariables(void)
 		&MaxIntermediateResult,
 		1048576, -1, MAX_KILOBYTES,
 		PGC_USERSET,
-		GUC_UNIT_KB,
+		GUC_UNIT_KB | GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
@@ -839,7 +830,7 @@ RegisterCitusConfigVariables(void)
 		&MaxAdaptiveExecutorPoolSize,
 		16, 1, INT_MAX,
 		PGC_USERSET,
-		0,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
@@ -853,7 +844,7 @@ RegisterCitusConfigVariables(void)
 		&MaxWorkerNodesTracked,
 		2048, 8, INT_MAX,
 		PGC_POSTMASTER,
-		0,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
@@ -866,7 +857,7 @@ RegisterCitusConfigVariables(void)
 		&RemoteTaskCheckInterval,
 		10, 1, INT_MAX,
 		PGC_USERSET,
-		GUC_UNIT_MS,
+		GUC_UNIT_MS | GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
@@ -878,9 +869,9 @@ RegisterCitusConfigVariables(void)
 					 "before walking over these tasks again. This configuration "
 					 "value determines the length of that sleeping period."),
 		&TaskTrackerDelay,
-		200, 1, 100000,
+		200 * MS, 1, 100 * MS_PER_SECOND,
 		PGC_SIGHUP,
-		GUC_UNIT_MS,
+		GUC_UNIT_MS | GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
@@ -894,7 +885,7 @@ RegisterCitusConfigVariables(void)
 		&MaxCachedConnectionsPerWorker,
 		1, 0, INT_MAX,
 		PGC_USERSET,
-		0,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
@@ -908,7 +899,7 @@ RegisterCitusConfigVariables(void)
 		&MaxAssignTaskBatchSize,
 		64, 1, INT_MAX,
 		PGC_USERSET,
-		0,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
@@ -922,7 +913,7 @@ RegisterCitusConfigVariables(void)
 		&MaxTrackedTasksPerNode,
 		1024, 8, INT_MAX,
 		PGC_POSTMASTER,
-		0,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
@@ -935,7 +926,7 @@ RegisterCitusConfigVariables(void)
 		&MaxRunningTasksPerNode,
 		8, 1, INT_MAX,
 		PGC_SIGHUP,
-		0,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
@@ -949,7 +940,7 @@ RegisterCitusConfigVariables(void)
 		&PartitionBufferSize,
 		8192, 0, (INT_MAX / 1024), /* result stored in int variable */
 		PGC_USERSET,
-		GUC_UNIT_KB,
+		GUC_UNIT_KB | GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
@@ -974,7 +965,7 @@ RegisterCitusConfigVariables(void)
 		&LimitClauseRowFetchCount,
 		-1, -1, INT_MAX,
 		PGC_USERSET,
-		0,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomRealVariable(
@@ -987,7 +978,7 @@ RegisterCitusConfigVariables(void)
 		&CountDistinctErrorRate,
 		0.0, 0.0, 1.0,
 		PGC_USERSET,
-		0,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomEnumVariable(
@@ -1001,7 +992,7 @@ RegisterCitusConfigVariables(void)
 		COMMIT_PROTOCOL_2PC,
 		shard_commit_protocol_options,
 		PGC_USERSET,
-		0,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomEnumVariable(
@@ -1033,7 +1024,7 @@ RegisterCitusConfigVariables(void)
 		TASK_ASSIGNMENT_GREEDY,
 		task_assignment_policy_options,
 		PGC_USERSET,
-		0,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomEnumVariable(
@@ -1054,7 +1045,7 @@ RegisterCitusConfigVariables(void)
 		"citus.task_executor_type",
 		gettext_noop("Sets the executor type to be used for distributed queries."),
 		gettext_noop("The master node chooses between two different executor types "
-					 "when executing a distributed query.The real-time executor is "
+					 "when executing a distributed query.The adaptive executor is "
 					 "optimal for simple key-value lookup queries and queries that "
 					 "involve aggregations and/or co-located joins on multiple shards. "
 					 "The task-tracker executor is optimal for long-running, complex "
@@ -1064,8 +1055,8 @@ RegisterCitusConfigVariables(void)
 		MULTI_EXECUTOR_ADAPTIVE,
 		task_executor_type_options,
 		PGC_USERSET,
-		0,
-		NULL, NULL, NULL);
+		GUC_STANDARD,
+		WarnIfDeprecatedExecutorUsed, NULL, NULL);
 
 	DefineCustomBoolVariable(
 		"citus.enable_repartition_joins",
@@ -1074,7 +1065,7 @@ RegisterCitusConfigVariables(void)
 		&EnableRepartitionJoins,
 		false,
 		PGC_USERSET,
-		0,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomEnumVariable(
@@ -1090,7 +1081,7 @@ RegisterCitusConfigVariables(void)
 		&ShardPlacementPolicy,
 		SHARD_PLACEMENT_ROUND_ROBIN, shard_placement_policy_options,
 		PGC_USERSET,
-		0,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomEnumVariable(
@@ -1100,7 +1091,7 @@ RegisterCitusConfigVariables(void)
 		&ReadFromSecondaries,
 		USE_SECONDARY_NODES_NEVER, use_secondary_nodes_options,
 		PGC_SU_BACKEND,
-		0,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomEnumVariable(
@@ -1110,7 +1101,7 @@ RegisterCitusConfigVariables(void)
 		&MultiTaskQueryLogLevel,
 		MULTI_TASK_QUERY_INFO_OFF, multi_task_query_log_level_options,
 		PGC_USERSET,
-		0,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomEnumVariable(
@@ -1120,7 +1111,7 @@ RegisterCitusConfigVariables(void)
 		&MultiShardConnectionType,
 		PARALLEL_CONNECTION, multi_shard_modify_connection_options,
 		PGC_USERSET,
-		0,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomStringVariable(
@@ -1130,7 +1121,7 @@ RegisterCitusConfigVariables(void)
 		&CitusVersion,
 		CITUS_VERSION,
 		PGC_INTERNAL,
-		0,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomStringVariable(
@@ -1140,7 +1131,7 @@ RegisterCitusConfigVariables(void)
 		&CurrentCluster,
 		"default",
 		PGC_SU_BACKEND,
-		0,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -1150,7 +1141,7 @@ RegisterCitusConfigVariables(void)
 		&WritableStandbyCoordinator,
 		false,
 		PGC_USERSET,
-		0,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -1215,7 +1206,7 @@ RegisterCitusConfigVariables(void)
 		&MaxTaskStringSize,
 		12288, 8192, 65536,
 		PGC_POSTMASTER,
-		0,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -1272,9 +1263,6 @@ RegisterCitusConfigVariables(void)
 		GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
-	NormalizeWorkerListPath();
-
-
 	/* warn about config items in the citus namespace that are not registered above */
 	EmitWarningsOnPlaceholders("citus");
 }
@@ -1302,47 +1290,23 @@ ErrorIfNotASuitableDeadlockFactor(double *newval, void **extra, GucSource source
 
 
 /*
- * NormalizeWorkerListPath converts the path configured via
- * citus.worker_list_file into an absolute path, falling back to the default
- * value if necessary. The previous value of the config variable is
- * overwritten with the normalized value.
- *
- * NB: This has to be called before ChangeToDataDir() is called as otherwise
- * the relative paths won't make much sense to the user anymore.
+ * WarnIfDeprecatedExecutorUsed prints a warning and sets the config value to
+ * adaptive executor (a.k.a., ignores real-time executor).
  */
-static void
-NormalizeWorkerListPath(void)
+static bool
+WarnIfDeprecatedExecutorUsed(int *newval, void **extra, GucSource source)
 {
-	char *absoluteFileName = NULL;
+	if (*newval == DUMMY_REAL_TIME_EXECUTOR_ENUM_VALUE)
+	{
+		ereport(WARNING, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+						  errmsg("Ignoring the setting, real-time executor is "
+								 "deprecated")));
 
-	if (WorkerListFileName != NULL)
-	{
-		absoluteFileName = make_absolute_path(WorkerListFileName);
-	}
-	else if (DataDir != NULL)
-	{
-		absoluteFileName = malloc(strlen(DataDir) + strlen(WORKER_LIST_FILENAME) + 2);
-		if (absoluteFileName == NULL)
-		{
-			ereport(FATAL, (errcode(ERRCODE_OUT_OF_MEMORY),
-							errmsg("out of memory")));
-		}
-
-		sprintf(absoluteFileName, "%s/%s", DataDir, WORKER_LIST_FILENAME);
-	}
-	else
-	{
-		ereport(FATAL, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-						errmsg("%s does not know where to find the \"worker_list_file\" "
-							   "configuration file.\n"
-							   "This can be specified as \"citus.worker_list_file\" in "
-							   "\"%s\", or by the -D invocation option, or by the PGDATA "
-							   "environment variable.\n", progname, ConfigFileName)));
+		/* adaptive executor is superset of real-time, so switch to that */
+		*newval = MULTI_EXECUTOR_ADAPTIVE;
 	}
 
-	SetConfigOption("citus.worker_list_file", absoluteFileName, PGC_POSTMASTER,
-					PGC_S_OVERRIDE);
-	free(absoluteFileName);
+	return true;
 }
 
 

@@ -1686,7 +1686,7 @@ RelationRestrictionPartitionKeyIndex(RelationRestriction *relationRestriction)
  * RelationIdList returns list of unique relation ids in query tree.
  */
 List *
-RelationIdList(Query *query)
+DistributedRelationIdList(Query *query)
 {
 	List *rangeTableList = NIL;
 	List *tableEntryList = NIL;
@@ -1700,6 +1700,11 @@ RelationIdList(Query *query)
 	{
 		TableEntry *tableEntry = (TableEntry *) lfirst(tableEntryCell);
 		Oid relationId = tableEntry->relationId;
+
+		if (!IsDistributedTable(relationId))
+		{
+			continue;
+		}
 
 		relationIdList = list_append_unique_oid(relationIdList, relationId);
 	}

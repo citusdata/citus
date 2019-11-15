@@ -262,6 +262,7 @@ CopyNodeTask(COPYFUNC_ARGS)
 	COPY_NODE_FIELD(relationShardList);
 	COPY_NODE_FIELD(relationRowLockList);
 	COPY_NODE_FIELD(rowValuesLists);
+	COPY_SCALAR_FIELD(partiallyLocalOrRemote);
 }
 
 
@@ -279,11 +280,9 @@ CopyNodeTaskExecution(COPYFUNC_ARGS)
 	COPY_SCALAR_ARRAY(connectionIdArray, int32, from->nodeCount);
 	COPY_SCALAR_ARRAY(fileDescriptorArray, int32, from->nodeCount);
 
-	COPY_SCALAR_FIELD(connectStartTime);
 	COPY_SCALAR_FIELD(currentNodeIndex);
 	COPY_SCALAR_FIELD(querySourceNodeIndex);
 	COPY_SCALAR_FIELD(failureCount);
-	COPY_SCALAR_FIELD(criticalErrorOccurred);
 }
 
 

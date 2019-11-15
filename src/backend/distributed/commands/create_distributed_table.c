@@ -1343,6 +1343,7 @@ CopyLocalDataIntoShards(Oid distributedRelationId)
 
 	/* finish writing into the shards */
 	copyDest->rShutdown(copyDest);
+	copyDest->rDestroy(copyDest);
 
 	/* free memory and close the relation */
 	ExecDropSingleTupleTableSlot(slot);

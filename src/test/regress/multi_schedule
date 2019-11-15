@@ -70,10 +70,10 @@ test: multi_subquery_in_where_reference_clause full_join adaptive_executor propa
 test: multi_subquery_union multi_subquery_in_where_clause multi_subquery_misc
 test: multi_agg_distinct multi_agg_approximate_distinct multi_limit_clause_approximate multi_outer_join_reference multi_single_relation_subquery multi_prepare_plsql
 test: multi_reference_table multi_select_for_update relation_access_tracking
-test: custom_aggregate_support
+test: custom_aggregate_support aggregate_support
 test: multi_average_expression multi_working_columns multi_having_pushdown
 test: multi_array_agg multi_limit_clause multi_orderby_limit_pushdown
-test: multi_jsonb_agg multi_jsonb_object_agg multi_json_agg multi_json_object_agg bool_agg ch_bench_having
+test: multi_jsonb_agg multi_jsonb_object_agg multi_json_agg multi_json_object_agg bool_agg ch_bench_having ch_bench_subquery_repartition
 test: multi_agg_type_conversion multi_count_type_conversion
 test: multi_partition_pruning single_hash_repartition_join
 test: multi_join_pruning multi_hash_pruning
@@ -281,7 +281,7 @@ test: ssl_by_default
 # object distribution tests
 # ---------
 test: distributed_types distributed_types_conflict disable_object_propagation distributed_types_xact_add_enum_value
-test: distributed_functions
+test: distributed_functions distributed_functions_conflict
 test: distributed_procedure
 
 # ---------

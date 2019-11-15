@@ -88,6 +88,12 @@ extern CoordinatedTransactionState CurrentCoordinatedTransactionState;
 /* list of connections that are part of the current coordinated transaction */
 extern dlist_head InProgressTransactions;
 
+/* controls use of locks to enforce safe commutativity */
+extern bool AllModificationsCommutative;
+
+/* we've deprecated this flag, keeping here for some time not to break existing users */
+extern bool EnableDeadlockPrevention;
+
 /* number of nested stored procedure call levels we are currently in */
 extern int StoredProcedureLevel;
 

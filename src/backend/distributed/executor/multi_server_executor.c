@@ -2,7 +2,7 @@
  *
  * multi_server_executor.c
  *
- * Function definitions for distributed task execution for real-time
+ * Function definitions for distributed task execution for adaptive
  * and task-tracker executors, and routines common to both. The common
  * routines are implement backend-side logic; and they trigger executions
  * on the client-side via function hooks that they load.
@@ -90,7 +90,7 @@ JobExecutorType(DistributedPlan *distributedPlan)
 
 	if (executorType == MULTI_EXECUTOR_ADAPTIVE)
 	{
-		/* if we have repartition jobs with real time executor and repartition
+		/* if we have repartition jobs with adaptive executor and repartition
 		 * joins are not enabled, error out. Otherwise, switch to task-tracker
 		 */
 		int dependedJobCount = list_length(job->dependedJobList);
@@ -105,7 +105,7 @@ JobExecutorType(DistributedPlan *distributedPlan)
 			}
 
 			ereport(DEBUG1, (errmsg(
-								 "cannot use real time executor with repartition jobs"),
+								 "cannot use adaptive executor with repartition jobs"),
 							 errhint("Since you enabled citus.enable_repartition_joins "
 									 "Citus chose to use task-tracker.")));
 			return MULTI_EXECUTOR_TASK_TRACKER;
@@ -176,7 +176,6 @@ InitTaskExecution(Task *task, TaskExecStatus initialTaskExecStatus)
 	taskExecution->jobId = task->jobId;
 	taskExecution->taskId = task->taskId;
 	taskExecution->nodeCount = nodeCount;
-	taskExecution->connectStartTime = 0;
 	taskExecution->currentNodeIndex = 0;
 	taskExecution->failureCount = 0;
 
@@ -244,11 +243,6 @@ CleanupTaskExecution(TaskExecution *taskExecution)
 bool
 TaskExecutionFailed(TaskExecution *taskExecution)
 {
-	if (taskExecution->criticalErrorOccurred)
-	{
-		return true;
-	}
-
 	if (taskExecution->failureCount >= MAX_TASK_EXECUTION_FAILURES)
 	{
 		return true;

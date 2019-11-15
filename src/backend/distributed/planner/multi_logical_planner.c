@@ -134,7 +134,8 @@ MultiLogicalPlanCreate(Query *originalQuery, Query *queryTree,
 	MultiNode *multiQueryNode = NULL;
 	MultiTreeRoot *rootNode = NULL;
 
-	if (ShouldUseSubqueryPushDown(originalQuery, queryTree))
+
+	if (ShouldUseSubqueryPushDown(originalQuery, queryTree, plannerRestrictionContext))
 	{
 		multiQueryNode = SubqueryMultiNodeTree(originalQuery, queryTree,
 											   plannerRestrictionContext);
@@ -776,7 +777,7 @@ MultiNodeTree(Query *queryTree)
 
 /*
  * ContainsReadIntermediateResultFunction determines whether an expresion tree contains
- * a call to the read_intermediate_results function.
+ * a call to the read_intermediate_result function.
  */
 bool
 ContainsReadIntermediateResultFunction(Node *node)
@@ -969,7 +970,7 @@ HasUnsupportedJoinWalker(Node *node, void *context)
 		JoinExpr *joinExpr = (JoinExpr *) node;
 		JoinType joinType = joinExpr->jointype;
 		bool outerJoin = IS_OUTER_JOIN(joinType);
-		if (!outerJoin && joinType != JOIN_INNER)
+		if (!outerJoin && joinType != JOIN_INNER && joinType != JOIN_SEMI)
 		{
 			hasUnsupportedJoin = true;
 		}
@@ -995,8 +996,8 @@ HasUnsupportedJoinWalker(Node *node, void *context)
 static bool
 ErrorHintRequired(const char *errorHint, Query *queryTree)
 {
-	List *rangeTableList = NIL;
-	ListCell *rangeTableCell = NULL;
+	List *distributedRelationIdList = DistributedRelationIdList(queryTree);
+	ListCell *relationIdCell = NULL;
 	List *colocationIdList = NIL;
 
 	if (errorHint == NULL)
@@ -1004,11 +1005,9 @@ ErrorHintRequired(const char *errorHint, Query *queryTree)
 		return false;
 	}
 
-	ExtractRangeTableRelationWalker((Node *) queryTree, &rangeTableList);
-	foreach(rangeTableCell, rangeTableList)
+	foreach(relationIdCell, distributedRelationIdList)
 	{
-		RangeTblEntry *rte = (RangeTblEntry *) lfirst(rangeTableCell);
-		Oid relationId = rte->relid;
+		Oid relationId = lfirst_oid(relationIdCell);
 		char partitionMethod = PartitionMethod(relationId);
 		if (partitionMethod == DISTRIBUTE_BY_NONE)
 		{
@@ -1337,7 +1336,7 @@ ExtractFromExpressionWalker(Node *node, QualifierWalkerContext *walkerContext)
 		}
 
 		/* return outer join clauses in a separate list */
-		if (joinType == JOIN_INNER)
+		if (joinType == JOIN_INNER || joinType == JOIN_SEMI)
 		{
 			walkerContext->baseQualifierList =
 				list_concat(walkerContext->baseQualifierList, joinQualifierList);

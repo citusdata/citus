@@ -15,7 +15,6 @@
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
 #include "distributed/metadata_cache.h"
-#include "distributed/multi_router_executor.h"
 #include "distributed/resource_lock.h"
 #include "distributed/transaction_management.h"
 #include "distributed/version_compat.h"

@@ -621,7 +621,66 @@ COMMIT;
 -- Citus currently doesn't allow using task_assignment_policy for intermediate results
 WITH distributed_local_mixed AS (INSERT INTO reference_table VALUES (1000) RETURNING *) SELECT * FROM distributed_local_mixed;
 
+-- clean the table for the next tests
+SET search_path TO local_shard_execution;
+TRUNCATE distributed_table CASCADE;
+
+-- load some data on a remote shard
+INSERT INTO reference_table (key) VALUES (1), (2);
+INSERT INTO distributed_table (key) VALUES (2);
+BEGIN;
+    -- local execution followed by a distributed query
+    INSERT INTO distributed_table (key) VALUES (1);
+    DELETE FROM distributed_table RETURNING key;
+COMMIT;
+
+-- a similar test with a reference table
+TRUNCATE reference_table CASCADE;
+
+-- load some data on a remote shard
+INSERT INTO reference_table (key) VALUES (2);
+BEGIN;
+    -- local execution followed by a distributed query
+    INSERT INTO reference_table (key) VALUES (1);
+    DELETE FROM reference_table RETURNING key;
+COMMIT;
+
+
 \c - - - :master_port
+
+-- local execution with custom type 
+SET citus.replication_model TO "streaming";
+SET citus.shard_replication_factor TO 1;
+CREATE TYPE invite_resp AS ENUM ('yes', 'no', 'maybe'); 
+
+CREATE TABLE event_responses (
+  event_id int,
+  user_id int,
+  response invite_resp,
+  primary key (event_id, user_id)
+);
+
+SELECT create_distributed_table('event_responses', 'event_id');
+
+CREATE OR REPLACE PROCEDURE register_for_event(p_event_id int, p_user_id int, p_choice invite_resp)
+LANGUAGE plpgsql AS $fn$
+BEGIN
+   INSERT INTO event_responses VALUES (p_event_id, p_user_id, p_choice)
+   ON CONFLICT (event_id, user_id)
+   DO UPDATE SET response = EXCLUDED.response;
+END;
+$fn$;
+
+SELECT create_distributed_function('register_for_event(int,int,invite_resp)', 'p_event_id', 'event_responses');
+
+-- call 6 times to make sure it works after the 5th time(postgres binds values after the 5th time)
+CALL register_for_event(16, 1, 'yes');
+CALL register_for_event(16, 1, 'yes');
+CALL register_for_event(16, 1, 'yes');
+CALL register_for_event(16, 1, 'yes');
+CALL register_for_event(16, 1, 'yes');
+CALL register_for_event(16, 1, 'yes');
+
 SET client_min_messages TO ERROR;
 SET search_path TO public;
 DROP SCHEMA local_shard_execution CASCADE;

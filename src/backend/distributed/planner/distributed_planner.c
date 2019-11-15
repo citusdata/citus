@@ -84,7 +84,6 @@ static PlannedStmt * FinalizeNonRouterPlan(PlannedStmt *localPlan,
 										   DistributedPlan *distributedPlan,
 										   CustomScan *customScan);
 static PlannedStmt * FinalizeRouterPlan(PlannedStmt *localPlan, CustomScan *customScan);
-static int32 BlessRecordExpression(Expr *expr);
 static void CheckNodeIsDumpable(Node *node);
 static Node * CheckNodeCopyAndSerialization(Node *node);
 static void AdjustReadIntermediateResultCost(RangeTblEntry *rangeTableEntry,
@@ -648,7 +647,7 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 		/*
 		 * For select queries we, if router executor is enabled, first try to
 		 * plan the query as a router query. If not supported, otherwise try
-		 * the full blown plan/optimize/physical planing process needed to
+		 * the full blown plan/optimize/physical planning process needed to
 		 * produce distributed query plans.
 		 */
 
@@ -1040,7 +1039,7 @@ FinalizePlan(PlannedStmt *localPlan, DistributedPlan *distributedPlan)
 
 /*
  * FinalizeNonRouterPlan gets the distributed custom scan plan, and creates the
- * final master select plan on the top of this distributed plan for real-time
+ * final master select plan on the top of this distributed plan for adaptive
  * and task-tracker executors.
  */
 static PlannedStmt *
@@ -1151,7 +1150,7 @@ FinalizeRouterPlan(PlannedStmt *localPlan, CustomScan *customScan)
  * "bless" the tuple descriptor, which adds a transient type to the type cache
  * and assigns it a type mod value, which is the key in the type cache.
  */
-static int32
+int32
 BlessRecordExpression(Expr *expr)
 {
 	int32 typeMod = -1;
@@ -1330,6 +1329,14 @@ multi_join_restriction_hook(PlannerInfo *root,
 
 	joinRestrictionContext->joinRestrictionList =
 		lappend(joinRestrictionContext->joinRestrictionList, joinRestriction);
+
+	/*
+	 * Keep track if we received any semi joins here. If we didn't we can
+	 * later safely convert any semi joins in the rewritten query to inner
+	 * joins.
+	 */
+	plannerRestrictionContext->hasSemiJoin = plannerRestrictionContext->hasSemiJoin ||
+											 extra->sjinfo->jointype == JOIN_SEMI;
 
 	MemoryContextSwitchTo(oldMemoryContext);
 }

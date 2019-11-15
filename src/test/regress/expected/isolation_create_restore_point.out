@@ -1,7 +1,7 @@
 Parsed test spec with 2 sessions
 
 starting permutation: s1-begin s1-create-distributed s2-create-restore s1-commit
-create_distributed_table
+create_reference_table
 
                
 step s1-begin: 
@@ -27,7 +27,7 @@ step s2-create-restore: <... completed>
 1              
 
 starting permutation: s1-begin s1-insert s2-create-restore s1-commit
-create_distributed_table
+create_reference_table
 
                
 step s1-begin: 
@@ -48,7 +48,7 @@ step s1-commit:
 
 
 starting permutation: s1-begin s1-modify-multiple s2-create-restore s1-commit
-create_distributed_table
+create_reference_table
 
                
 step s1-begin: 
@@ -69,7 +69,7 @@ step s1-commit:
 
 
 starting permutation: s1-begin s1-ddl s2-create-restore s1-commit
-create_distributed_table
+create_reference_table
 
                
 step s1-begin: 
@@ -90,7 +90,7 @@ step s1-commit:
 
 
 starting permutation: s1-begin s1-copy s2-create-restore s1-commit
-create_distributed_table
+create_reference_table
 
                
 step s1-begin: 
@@ -111,7 +111,7 @@ step s1-commit:
 
 
 starting permutation: s1-begin s1-recover s2-create-restore s1-commit
-create_distributed_table
+create_reference_table
 
                
 step s1-begin: 
@@ -136,7 +136,7 @@ step s2-create-restore: <... completed>
 1              
 
 starting permutation: s1-begin s1-drop s2-create-restore s1-commit
-create_distributed_table
+create_reference_table
 
                
 step s1-begin: 
@@ -158,7 +158,7 @@ step s2-create-restore: <... completed>
 1              
 
 starting permutation: s1-begin s1-add-node s2-create-restore s1-commit
-create_distributed_table
+create_reference_table
 
                
 step s1-begin: 
@@ -183,7 +183,7 @@ step s2-create-restore: <... completed>
 1              
 
 starting permutation: s1-begin s1-remove-node s2-create-restore s1-commit
-create_distributed_table
+create_reference_table
 
                
 step s1-begin: 
@@ -208,7 +208,7 @@ step s2-create-restore: <... completed>
 1              
 
 starting permutation: s1-begin s1-create-restore s2-create-restore s1-commit
-create_distributed_table
+create_reference_table
 
                
 step s1-begin: 
@@ -233,7 +233,7 @@ step s2-create-restore: <... completed>
 1              
 
 starting permutation: s2-begin s2-create-restore s1-modify-multiple s2-commit
-create_distributed_table
+create_reference_table
 
                
 step s2-begin: 
@@ -254,7 +254,7 @@ step s2-commit:
 step s1-modify-multiple: <... completed>
 
 starting permutation: s2-begin s2-create-restore s1-ddl s2-commit
-create_distributed_table
+create_reference_table
 
                
 step s2-begin: 
@@ -275,7 +275,7 @@ step s2-commit:
 step s1-ddl: <... completed>
 
 starting permutation: s2-begin s2-create-restore s1-multi-statement s2-commit
-create_distributed_table
+create_reference_table
 
                
 step s2-begin: 
@@ -298,3 +298,203 @@ step s2-commit:
 	COMMIT;
 
 step s1-multi-statement: <... completed>
+
+starting permutation: s1-begin s1-create-reference s2-create-restore s1-commit
+create_reference_table
+
+               
+step s1-begin: 
+	BEGIN;
+	SET citus.multi_shard_commit_protocol TO '2pc';
+
+step s1-create-reference: 
+	CREATE TABLE test_create_reference_table (test_id integer NOT NULL, data text);
+	SELECT create_reference_table('test_create_reference_table');
+
+create_reference_table
+
+               
+step s2-create-restore: 
+	SELECT 1 FROM citus_create_restore_point('citus-test');
+ <waiting ...>
+step s1-commit: 
+	COMMIT;
+
+step s2-create-restore: <... completed>
+?column?       
+
+1              
+
+starting permutation: s1-begin s1-insert-ref s2-create-restore s1-commit
+create_reference_table
+
+               
+step s1-begin: 
+	BEGIN;
+	SET citus.multi_shard_commit_protocol TO '2pc';
+
+step s1-insert-ref: 
+	INSERT INTO restore_ref_table VALUES (1,'hello');
+
+step s2-create-restore: 
+	SELECT 1 FROM citus_create_restore_point('citus-test');
+
+?column?       
+
+1              
+step s1-commit: 
+	COMMIT;
+
+
+starting permutation: s1-begin s1-modify-multiple-ref s2-create-restore s1-commit
+create_reference_table
+
+               
+step s1-begin: 
+	BEGIN;
+	SET citus.multi_shard_commit_protocol TO '2pc';
+
+step s1-modify-multiple-ref: 
+	UPDATE restore_ref_table SET data = 'world';
+
+step s2-create-restore: 
+	SELECT 1 FROM citus_create_restore_point('citus-test');
+
+?column?       
+
+1              
+step s1-commit: 
+	COMMIT;
+
+
+starting permutation: s1-begin s1-ddl-ref s2-create-restore s1-commit
+create_reference_table
+
+               
+step s1-begin: 
+	BEGIN;
+	SET citus.multi_shard_commit_protocol TO '2pc';
+
+step s1-ddl-ref: 
+	ALTER TABLE restore_ref_table ADD COLUMN x int;
+
+step s2-create-restore: 
+	SELECT 1 FROM citus_create_restore_point('citus-test');
+ <waiting ...>
+step s1-commit: 
+	COMMIT;
+
+step s2-create-restore: <... completed>
+?column?       
+
+1              
+
+starting permutation: s1-begin s1-copy-ref s2-create-restore s1-commit
+create_reference_table
+
+               
+step s1-begin: 
+	BEGIN;
+	SET citus.multi_shard_commit_protocol TO '2pc';
+
+step s1-copy-ref: 
+	COPY restore_ref_table FROM PROGRAM 'echo 1,hello' WITH CSV;
+
+step s2-create-restore: 
+	SELECT 1 FROM citus_create_restore_point('citus-test');
+
+?column?       
+
+1              
+step s1-commit: 
+	COMMIT;
+
+
+starting permutation: s1-begin s1-drop-ref s2-create-restore s1-commit
+create_reference_table
+
+               
+step s1-begin: 
+	BEGIN;
+	SET citus.multi_shard_commit_protocol TO '2pc';
+
+step s1-drop-ref: 
+	DROP TABLE restore_ref_table;
+
+step s2-create-restore: 
+	SELECT 1 FROM citus_create_restore_point('citus-test');
+ <waiting ...>
+step s1-commit: 
+	COMMIT;
+
+step s2-create-restore: <... completed>
+?column?       
+
+1              
+
+starting permutation: s2-begin s2-create-restore s1-modify-multiple-ref s2-commit
+create_reference_table
+
+               
+step s2-begin: 
+	BEGIN;
+
+step s2-create-restore: 
+	SELECT 1 FROM citus_create_restore_point('citus-test');
+
+?column?       
+
+1              
+step s1-modify-multiple-ref: 
+	UPDATE restore_ref_table SET data = 'world';
+ <waiting ...>
+step s2-commit: 
+	COMMIT;
+
+step s1-modify-multiple-ref: <... completed>
+
+starting permutation: s2-begin s2-create-restore s1-ddl-ref s2-commit
+create_reference_table
+
+               
+step s2-begin: 
+	BEGIN;
+
+step s2-create-restore: 
+	SELECT 1 FROM citus_create_restore_point('citus-test');
+
+?column?       
+
+1              
+step s1-ddl-ref: 
+	ALTER TABLE restore_ref_table ADD COLUMN x int;
+ <waiting ...>
+step s2-commit: 
+	COMMIT;
+
+step s1-ddl-ref: <... completed>
+
+starting permutation: s2-begin s2-create-restore s1-multi-statement-ref s2-commit
+create_reference_table
+
+               
+step s2-begin: 
+	BEGIN;
+
+step s2-create-restore: 
+	SELECT 1 FROM citus_create_restore_point('citus-test');
+
+?column?       
+
+1              
+step s1-multi-statement-ref: 
+	SET citus.multi_shard_commit_protocol TO '2pc';
+	BEGIN;
+	INSERT INTO restore_ref_table VALUES (1,'hello');
+	INSERT INTO restore_ref_table VALUES (2,'hello');
+	COMMIT;
+ <waiting ...>
+step s2-commit: 
+	COMMIT;
+
+step s1-multi-statement-ref: <... completed>

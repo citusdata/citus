@@ -171,6 +171,9 @@ CITUSAC_PROG_CC_CFLAGS_OPT([-Wmissing-declarations])
 CITUSAC_PROG_CC_CFLAGS_OPT([-Wmissing-prototypes])
 CITUSAC_PROG_CC_CFLAGS_OPT([-Wshadow])
 CITUSAC_PROG_CC_CFLAGS_OPT([-Werror=vla])  # visual studio does not support these
+CITUSAC_PROG_CC_CFLAGS_OPT([-Werror=implicit-int])
+CITUSAC_PROG_CC_CFLAGS_OPT([-Werror=implicit-function-declaration])
+CITUSAC_PROG_CC_CFLAGS_OPT([-Werror=return-type])
 
 #
 # --enable-coverage enables generation of code coverage metrics with gcov
