@@ -9,7 +9,7 @@ coverage:
 
   ignore:
     - "src/backend/distributed/utils/citus_outfuncs.c"
-    - "src/backend/distributed/utils/ruleutils_*.c"
+    - "src/backend/distributed/deparser/ruleutils_*.c"
     - "src/include/distributed/citus_nodes.h"
 
   status:
