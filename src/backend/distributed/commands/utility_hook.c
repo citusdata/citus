@@ -739,6 +739,38 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 			ddlJobs = ProcessCreateFunctionStmt(castNode(CreateFunctionStmt, parsetree),
 												queryString);
 		}
+
+		if (IsA(parsetree, AlterRoleStmt))
+		{
+			Assert(ddlJobs == NIL); /* jobs should not have been set before */
+			ddlJobs = ProcessAlterRoleStmt(castNode(AlterRoleStmt, parsetree),
+										   queryString);
+		}
+
+		if (IsA(parsetree, AlterRoleSetStmt) && EnableAlterRolePropagation)
+		{
+			ereport(NOTICE, (errmsg("Citus partially supports ALTER ROLE for "
+									"distributed databases"),
+
+							 errdetail(
+								 "Citus does not propagate ALTER ROLE ... SET/RESET "
+								 "commands to workers"),
+
+							 errhint("You can manually alter roles on workers.")));
+		}
+
+		if (IsA(parsetree, RenameStmt) && ((RenameStmt *) parsetree)->renameType ==
+			OBJECT_ROLE && EnableAlterRolePropagation)
+		{
+			ereport(NOTICE, (errmsg("Citus partially supports ALTER ROLE for "
+									"distributed databases"),
+
+							 errdetail(
+								 "Citus does not propagate ALTER ROLE ... RENAME TO "
+								 "commands to workers"),
+
+							 errhint("You can manually alter roles on workers.")));
+		}
 	}
 
 	/*

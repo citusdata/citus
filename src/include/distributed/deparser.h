@@ -69,4 +69,8 @@ extern void QualifyAlterFunctionSchemaStmt(AlterObjectSchemaStmt *stmt);
 extern void QualifyAlterFunctionOwnerStmt(AlterOwnerStmt *stmt);
 extern void QualifyAlterFunctionDependsStmt(AlterObjectDependsStmt *stmt);
 
+
+/* forward declarations for deparse_role_stmts.c */
+extern const char * DeparseAlterRoleStmt(AlterRoleStmt *stmt);
+
 #endif /* CITUS_DEPARSER_H */

@@ -505,5 +505,5 @@ AppendAlterTypeOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt)
 
 	names = (List *) stmt->object;
 	appendStringInfo(buf, "ALTER TYPE %s OWNER TO %s;", NameListToQuotedString(names),
-					 RoleSpecString(stmt->newowner));
+					 RoleSpecString(stmt->newowner, true));
 }
