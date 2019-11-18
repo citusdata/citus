@@ -67,18 +67,7 @@ EnsureDependenciesExistsOnAllNodes(const ObjectAddress *target)
 	foreach(dependencyCell, dependencies)
 	{
 		ObjectAddress *dependency = (ObjectAddress *) lfirst(dependencyCell);
-		List *dependencyCommands = NIL;
-
-		if (CitusExtensionObject(dependency))
-		{
-			/*
-			 * We currently do not prefer to mark Citus extension as distributed
-			 * because it could complicate role management.
-			 */
-			continue;
-		}
-
-		dependencyCommands = GetDependencyCreateDDLCommands(dependency);
+		List *dependencyCommands = GetDependencyCreateDDLCommands(dependency);
 		ddlCommands = list_concat(ddlCommands, dependencyCommands);
 
 		/* create a new list with dependencies that actually created commands */
@@ -119,16 +108,6 @@ EnsureDependenciesExistsOnAllNodes(const ObjectAddress *target)
 	foreach(dependencyCell, dependenciesWithCommands)
 	{
 		ObjectAddress *dependency = (ObjectAddress *) lfirst(dependencyCell);
-
-		if (CitusExtensionObject(dependency))
-		{
-			/*
-			 * We currently do not prefer to mark Citus extension as distributed
-			 * because it could complicate role management.
-			 */
-			continue;
-		}
-
 		MarkObjectDistributed(dependency);
 	}
 

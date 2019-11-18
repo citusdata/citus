@@ -124,10 +124,6 @@ ObjectExists(const ObjectAddress *address)
 /*
  * MarkObjectDistributed marks an object as a distributed object by citus. Marking is done
  * by adding appropriate entries to citus.pg_dist_object.
- *
- * The only exception is the Citus extension itself, we never mark it as distributed
- * object because that'd prevent rolling upgrades as we propagate ALTER EXTENSION
- * commands on distributed extensions.
  */
 void
 MarkObjectDistributed(const ObjectAddress *distAddress)
