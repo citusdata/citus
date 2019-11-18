@@ -467,8 +467,8 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		}
 
 		/*
-		 * ALTER TABLE ... RENAME statements have their node type as RenameStmt and
-		 * not AlterTableStmt. So, we intercept RenameStmt to tackle these commands.
+		 * ALTER ... RENAME statements have their node type as RenameStmt.
+		 * So intercept RenameStmt to tackle these commands.
 		 */
 		if (IsA(parsetree, RenameStmt))
 		{

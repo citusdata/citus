@@ -26,7 +26,7 @@ static void AppendAlterRoleStmt(StringInfo buf, AlterRoleStmt *stmt);
  * DeparseAlterRoleStmt builds and returns a string representing of the
  * AlterRoleStmt for application on a remote server.
  */
-const char *
+char *
 DeparseAlterRoleStmt(AlterRoleStmt *stmt)
 {
 	StringInfoData buf = { 0 };

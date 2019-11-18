@@ -125,10 +125,12 @@ QualifyRenameStmt(RenameStmt *stmt)
 			return;
 		}
 
+		case OBJECT_AGGREGATE:
 		case OBJECT_FUNCTION:
 		case OBJECT_PROCEDURE:
 		{
 			QualifyRenameFunctionStmt(stmt);
+			return;
 		}
 
 		default:
@@ -196,10 +198,12 @@ QualifyAlterObjectSchemaStmt(AlterObjectSchemaStmt *stmt)
 			return;
 		}
 
+		case OBJECT_AGGREGATE:
 		case OBJECT_FUNCTION:
 		case OBJECT_PROCEDURE:
 		{
 			QualifyAlterFunctionSchemaStmt(stmt);
+			return;
 		}
 
 		default:
@@ -222,10 +226,12 @@ QualifyAlterOwnerStmt(AlterOwnerStmt *stmt)
 			return;
 		}
 
+		case OBJECT_AGGREGATE:
 		case OBJECT_FUNCTION:
 		case OBJECT_PROCEDURE:
 		{
 			QualifyAlterFunctionOwnerStmt(stmt);
+			return;
 		}
 
 		default:
@@ -245,6 +251,7 @@ QualifyAlterObjectDependsStmt(AlterObjectDependsStmt *stmt)
 		case OBJECT_PROCEDURE:
 		{
 			QualifyAlterFunctionDependsStmt(stmt);
+			return;
 		}
 
 		default:
