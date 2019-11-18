@@ -133,6 +133,8 @@ extern void CreateDistributedTable(Oid relationId, Var *distributionColumn,
 extern void CreateTruncateTrigger(Oid relationId);
 
 extern void EnsureDependenciesExistsOnAllNodes(const ObjectAddress *target);
+extern bool ShouldPropagate(void);
+extern bool ShouldPropagateObject(const ObjectAddress *address);
 extern void ReplicateAllDependenciesToNode(const char *nodeName, int nodePort);
 
 /* Remaining metadata utility functions  */

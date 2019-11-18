@@ -27,6 +27,7 @@
 #include "distributed/metadata/namespace.h"
 #include "nodes/makefuncs.h"
 #include "parser/parse_type.h"
+#include "utils/syscache.h"
 #include "utils/lsyscache.h"
 
 static char * GetTypeNamespaceNameByNameList(List *names);
@@ -53,17 +54,20 @@ static Oid
 TypeOidGetNamespaceOid(Oid typeOid)
 {
 	Form_pg_type typeData = NULL;
-	Relation catalog = heap_open(TypeRelationId, AccessShareLock);
-#if PG_VERSION_NUM >= 120000
-	HeapTuple typeTuple = get_catalog_object_by_oid(catalog, Anum_pg_type_oid, typeOid);
-#else
-	HeapTuple typeTuple = get_catalog_object_by_oid(catalog, typeOid);
-#endif
-	heap_close(catalog, AccessShareLock);
+	HeapTuple typeTuple = SearchSysCache1(TYPEOID, typeOid);
+	Oid typnamespace = InvalidOid;
 
+	if (!HeapTupleIsValid(typeTuple))
+	{
+		elog(ERROR, "citus cache lookup failed");
+		return InvalidOid;
+	}
 	typeData = (Form_pg_type) GETSTRUCT(typeTuple);
+	typnamespace = typeData->typnamespace;
 
-	return typeData->typnamespace;
+	ReleaseSysCache(typeTuple);
+
+	return typnamespace;
 }
 
 

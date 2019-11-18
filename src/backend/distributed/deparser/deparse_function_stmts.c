@@ -41,7 +41,7 @@
 
 
 /* forward declaration for deparse functions */
-static const char * ObjectTypeToKeyword(ObjectType objtype);
+static char * ObjectTypeToKeyword(ObjectType objtype);
 
 static void AppendAlterFunctionStmt(StringInfo buf, AlterFunctionStmt *stmt);
 static void AppendDropFunctionStmt(StringInfo buf, DropStmt *stmt);
@@ -68,7 +68,7 @@ static char * CopyAndConvertToUpperCase(const char *str);
 /*
  * DeparseAlterFunctionStmt builds and returns a string representing the AlterFunctionStmt
  */
-const char *
+char *
 DeparseAlterFunctionStmt(AlterFunctionStmt *stmt)
 {
 	StringInfoData str = { 0 };
@@ -84,7 +84,7 @@ DeparseAlterFunctionStmt(AlterFunctionStmt *stmt)
  * ObjectTypeToKeyword returns an appropriate string for the given ObjectType
  * Where the string will be one of "FUNCTION", "PROCEDURE", or "AGGREGATE"
  */
-static const char *
+static char *
 ObjectTypeToKeyword(ObjectType objtype)
 {
 	switch (objtype)
@@ -316,7 +316,7 @@ AppendDefElemSet(StringInfo buf, DefElem *def)
 /*
  * DeparseRenameFunctionStmt builds and returns a string representing the RenameStmt
  */
-const char *
+char *
 DeparseRenameFunctionStmt(RenameStmt *stmt)
 {
 	StringInfoData str = { 0 };
@@ -347,7 +347,7 @@ AppendRenameFunctionStmt(StringInfo buf, RenameStmt *stmt)
 /*
  * DeparseAlterFunctionSchemaStmt builds and returns a string representing the AlterObjectSchemaStmt
  */
-const char *
+char *
 DeparseAlterFunctionSchemaStmt(AlterObjectSchemaStmt *stmt)
 {
 	StringInfoData str = { 0 };
@@ -378,7 +378,7 @@ AppendAlterFunctionSchemaStmt(StringInfo buf, AlterObjectSchemaStmt *stmt)
 /*
  * DeparseAlterFunctionOwnerStmt builds and returns a string representing the AlterOwnerStmt
  */
-const char *
+char *
 DeparseAlterFunctionOwnerStmt(AlterOwnerStmt *stmt)
 {
 	StringInfoData str = { 0 };
@@ -409,7 +409,7 @@ AppendAlterFunctionOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt)
 /*
  * DeparseAlterFunctionDependsStmt builds and returns a string representing the AlterObjectDependsStmt
  */
-const char *
+char *
 DeparseAlterFunctionDependsStmt(AlterObjectDependsStmt *stmt)
 {
 	StringInfoData str = { 0 };
@@ -440,7 +440,7 @@ AppendAlterFunctionDependsStmt(StringInfo buf, AlterObjectDependsStmt *stmt)
 /*
  * DeparseDropFunctionStmt builds and returns a string representing the DropStmt
  */
-const char *
+char *
 DeparseDropFunctionStmt(DropStmt *stmt)
 {
 	StringInfoData str = { 0 };

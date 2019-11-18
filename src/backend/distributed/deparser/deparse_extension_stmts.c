@@ -67,7 +67,7 @@ GetExtensionOption(List *extensionOptions, const char *defname)
  * DeparseCreateExtensionStmt builds and returns a string representing the
  * CreateExtensionStmt to be sent to worker nodes.
  */
-const char *
+char *
 DeparseCreateExtensionStmt(CreateExtensionStmt *createExtensionStmt)
 {
 	StringInfoData sql = { 0 };
@@ -139,7 +139,7 @@ AppendCreateExtensionStmt(StringInfo buf, CreateExtensionStmt *createExtensionSt
  * DeparseAlterExtensionStmt builds and returns a string representing the
  * AlterExtensionStmt to be sent to worker nodes.
  */
-const char *
+char *
 DeparseAlterExtensionStmt(AlterExtensionStmt *alterExtensionStmt)
 {
 	StringInfoData sql = { 0 };
@@ -181,7 +181,7 @@ AppendAlterExtensionStmt(StringInfo buf, AlterExtensionStmt *alterExtensionStmt)
 /*
  * DeparseDropExtensionStmt builds and returns a string representing the DropStmt
  */
-const char *
+char *
 DeparseDropExtensionStmt(DropStmt *dropStmt)
 {
 	StringInfoData str = { 0 };
@@ -248,7 +248,7 @@ AppendExtensionNameList(StringInfo str, List *objects)
  * DeparseAlterExtensionSchemaStmt builds and returns a string representing the
  * AlterObjectSchemaStmt (ALTER EXTENSION SET SCHEMA).
  */
-const char *
+char *
 DeparseAlterExtensionSchemaStmt(AlterObjectSchemaStmt *alterExtensionSchemaStmt)
 {
 	StringInfoData str = { 0 };

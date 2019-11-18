@@ -98,7 +98,6 @@ static CreateEnumStmt * RecreateEnumStmt(Oid typeOid);
 static List * EnumValsList(Oid typeOid);
 
 static bool ShouldPropagateTypeCreate(void);
-static bool ShouldPropagateAlterType(const ObjectAddress *address);
 
 
 /*
@@ -210,7 +209,7 @@ PlanAlterTypeStmt(AlterTableStmt *stmt, const char *queryString)
 	Assert(stmt->relkind == OBJECT_TYPE);
 
 	typeAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
-	if (!ShouldPropagateAlterType(typeAddress))
+	if (!ShouldPropagateObject(typeAddress))
 	{
 		return NIL;
 	}
@@ -332,7 +331,7 @@ PlanAlterEnumStmt(AlterEnumStmt *stmt, const char *queryString)
 	List *commands = NIL;
 
 	typeAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
-	if (!ShouldPropagateAlterType(typeAddress))
+	if (!ShouldPropagateObject(typeAddress))
 	{
 		return NIL;
 	}
@@ -400,7 +399,7 @@ ProcessAlterEnumStmt(AlterEnumStmt *stmt, const char *queryString)
 	const ObjectAddress *typeAddress = NULL;
 
 	typeAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
-	if (!ShouldPropagateAlterType(typeAddress))
+	if (!ShouldPropagateObject(typeAddress))
 	{
 		return;
 	}
@@ -473,20 +472,8 @@ PlanDropTypeStmt(DropStmt *stmt, const char *queryString)
 	List *distributedTypeAddresses = NIL;
 	List *commands = NIL;
 
-	if (creating_extension)
+	if (!ShouldPropagate())
 	{
-		/*
-		 * extensions should be created separately on the workers, types cascading from an
-		 * extension should therefor not be propagated here.
-		 */
-		return NIL;
-	}
-
-	if (!EnableDependencyCreation)
-	{
-		/*
-		 * we are configured to disable object propagation, should not propagate anything
-		 */
 		return NIL;
 	}
 
@@ -549,7 +536,7 @@ PlanRenameTypeStmt(RenameStmt *stmt, const char *queryString)
 	List *commands = NIL;
 
 	typeAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
-	if (!ShouldPropagateAlterType(typeAddress))
+	if (!ShouldPropagateObject(typeAddress))
 	{
 		return NIL;
 	}
@@ -589,7 +576,7 @@ PlanRenameTypeAttributeStmt(RenameStmt *stmt, const char *queryString)
 	Assert(stmt->relationType == OBJECT_TYPE);
 
 	typeAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
-	if (!ShouldPropagateAlterType(typeAddress))
+	if (!ShouldPropagateObject(typeAddress))
 	{
 		return NIL;
 	}
@@ -623,7 +610,7 @@ PlanAlterTypeSchemaStmt(AlterObjectSchemaStmt *stmt, const char *queryString)
 	Assert(stmt->objectType == OBJECT_TYPE);
 
 	typeAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
-	if (!ShouldPropagateAlterType(typeAddress))
+	if (!ShouldPropagateObject(typeAddress))
 	{
 		return NIL;
 	}
@@ -656,7 +643,7 @@ ProcessAlterTypeSchemaStmt(AlterObjectSchemaStmt *stmt, const char *queryString)
 	Assert(stmt->objectType == OBJECT_TYPE);
 
 	typeAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
-	if (!ShouldPropagateAlterType(typeAddress))
+	if (!ShouldPropagateObject(typeAddress))
 	{
 		return;
 	}
@@ -667,8 +654,8 @@ ProcessAlterTypeSchemaStmt(AlterObjectSchemaStmt *stmt, const char *queryString)
 
 
 /*
- * PlanAlterTypeOwnerStmt is called for change of owner ship of types before the owner
- * ship is changed on the local instance.
+ * PlanAlterTypeOwnerStmt is called for change of ownership of types before the
+ * ownership is changed on the local instance.
  *
  * If the type for which the owner is changed is distributed we execute the change on all
  * the workers to keep the type in sync across the cluster.
@@ -683,7 +670,7 @@ PlanAlterTypeOwnerStmt(AlterOwnerStmt *stmt, const char *queryString)
 	Assert(stmt->objectType == OBJECT_TYPE);
 
 	typeAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
-	if (!ShouldPropagateAlterType(typeAddress))
+	if (!ShouldPropagateObject(typeAddress))
 	{
 		return NIL;
 	}
@@ -865,13 +852,13 @@ EnumValsList(Oid typeOid)
 
 /*
  * CompositeTypeStmtObjectAddress finds the ObjectAddress for the composite type described
- * by the  CompositeTypeStmt. If missing_ok is false this function throws an error if the
+ * by the CompositeTypeStmt. If missing_ok is false this function throws an error if the
  * type does not exist.
  *
  * Never returns NULL, but the objid in the address could be invalid if missing_ok was set
  * to true.
  */
-const ObjectAddress *
+ObjectAddress *
 CompositeTypeStmtObjectAddress(CompositeTypeStmt *stmt, bool missing_ok)
 {
 	TypeName *typeName = NULL;
@@ -895,7 +882,7 @@ CompositeTypeStmtObjectAddress(CompositeTypeStmt *stmt, bool missing_ok)
  * Never returns NULL, but the objid in the address could be invalid if missing_ok was set
  * to true.
  */
-const ObjectAddress *
+ObjectAddress *
 CreateEnumStmtObjectAddress(CreateEnumStmt *stmt, bool missing_ok)
 {
 	TypeName *typeName = NULL;
@@ -919,7 +906,7 @@ CreateEnumStmtObjectAddress(CreateEnumStmt *stmt, bool missing_ok)
  * Never returns NULL, but the objid in the address could be invalid if missing_ok was set
  * to true.
  */
-const ObjectAddress *
+ObjectAddress *
 AlterTypeStmtObjectAddress(AlterTableStmt *stmt, bool missing_ok)
 {
 	TypeName *typeName = NULL;
@@ -939,9 +926,9 @@ AlterTypeStmtObjectAddress(AlterTableStmt *stmt, bool missing_ok)
 
 /*
  * AlterEnumStmtObjectAddress return the ObjectAddress of the enum type that is the
- * subject of the AlterEnumStmt. Errors is missing_ok is false.
+ * object of the AlterEnumStmt. Errors is missing_ok is false.
  */
-const ObjectAddress *
+ObjectAddress *
 AlterEnumStmtObjectAddress(AlterEnumStmt *stmt, bool missing_ok)
 {
 	TypeName *typeName = NULL;
@@ -958,10 +945,10 @@ AlterEnumStmtObjectAddress(AlterEnumStmt *stmt, bool missing_ok)
 
 
 /*
- * RenameTypeStmtObjectAddress returns the ObjectAddress of the type that is the subject
+ * RenameTypeStmtObjectAddress returns the ObjectAddress of the type that is the object
  * of the RenameStmt. Errors if missing_ok is false.
  */
-const ObjectAddress *
+ObjectAddress *
 RenameTypeStmtObjectAddress(RenameStmt *stmt, bool missing_ok)
 {
 	TypeName *typeName = NULL;
@@ -981,14 +968,14 @@ RenameTypeStmtObjectAddress(RenameStmt *stmt, bool missing_ok)
 
 /*
  * AlterTypeSchemaStmtObjectAddress returns the ObjectAddress of the type that is the
- * subject of the AlterObjectSchemaStmt. Errors if missing_ok is false.
+ * object of the AlterObjectSchemaStmt. Errors if missing_ok is false.
  *
  * This could be called both before or after it has been applied locally. It will look in
  * the old schema first, if the type cannot be found in that schema it will look in the
  * new schema. Errors if missing_ok is false and the type cannot be found in either of the
  * schemas.
  */
-const ObjectAddress *
+ObjectAddress *
 AlterTypeSchemaStmtObjectAddress(AlterObjectSchemaStmt *stmt, bool missing_ok)
 {
 	ObjectAddress *address = NULL;
@@ -1021,9 +1008,9 @@ AlterTypeSchemaStmtObjectAddress(AlterObjectSchemaStmt *stmt, bool missing_ok)
 		 * we don't error here either, as the error would be not a good user facing
 		 * error if the type didn't exist in the first place.
 		 */
-		names = list_make2(makeString(stmt->newschema), typeNameStr);
-		typeName = makeTypeNameFromNameList(names);
-		typeOid = LookupTypeNameOid(NULL, typeName, true);
+		List *newNames = list_make2(makeString(stmt->newschema), typeNameStr);
+		TypeName *newTypeName = makeTypeNameFromNameList(newNames);
+		typeOid = LookupTypeNameOid(NULL, newTypeName, true);
 
 		/*
 		 * if the type is still invalid we couldn't find the type, error with the same
@@ -1031,9 +1018,6 @@ AlterTypeSchemaStmtObjectAddress(AlterObjectSchemaStmt *stmt, bool missing_ok)
 		 */
 		if (!missing_ok && typeOid == InvalidOid)
 		{
-			names = (List *) stmt->object;
-			typeName = makeTypeNameFromNameList(names);
-
 			ereport(ERROR, (errcode(ERRCODE_UNDEFINED_OBJECT),
 							errmsg("type \"%s\" does not exist",
 								   TypeNameToString(typeName))));
@@ -1049,13 +1033,13 @@ AlterTypeSchemaStmtObjectAddress(AlterObjectSchemaStmt *stmt, bool missing_ok)
 
 /*
  * RenameTypeAttributeStmtObjectAddress returns the ObjectAddress of the type that is the
- * subject of the RenameStmt. Errors if missing_ok is false.
+ * object of the RenameStmt. Errors if missing_ok is false.
  *
  * The ObjectAddress is that of the type, not that of the attributed for which the name is
  * changed as Attributes are not distributed on their own but as a side effect of the
  * whole type distribution.
  */
-const ObjectAddress *
+ObjectAddress *
 RenameTypeAttributeStmtObjectAddress(RenameStmt *stmt, bool missing_ok)
 {
 	TypeName *typeName = NULL;
@@ -1075,10 +1059,10 @@ RenameTypeAttributeStmtObjectAddress(RenameStmt *stmt, bool missing_ok)
 
 
 /*
- * AlterTypeOwnerObjectAddress returns the ObjectAddress of the type that is the subject
+ * AlterTypeOwnerObjectAddress returns the ObjectAddress of the type that is the object
  * of the AlterOwnerStmt. Errors if missing_ok is false.
  */
-const ObjectAddress *
+ObjectAddress *
 AlterTypeOwnerObjectAddress(AlterOwnerStmt *stmt, bool missing_ok)
 {
 	TypeName *typeName = NULL;
@@ -1222,7 +1206,7 @@ FilterNameListForDistributedTypes(List *objects, bool missing_ok)
 
 /*
  * TypeNameListToObjectAddresses transforms a List * of TypeName *'s into a List * of
- * ObjectAddress *'s. For this to succeed all Types identiefied by the TypeName *'s should
+ * ObjectAddress *'s. For this to succeed all Types identified by the TypeName *'s should
  * exist on this postgres, an error will be thrown otherwise.
  */
 static List *
@@ -1287,7 +1271,7 @@ MakeTypeNameFromRangeVar(const RangeVar *relation)
  * EnsureSequentialModeForTypeDDL makes sure that the current transaction is already in
  * sequential mode, or can still safely be put in sequential mode, it errors if that is
  * not possible. The error contains information for the user to retry the transaction with
- * sequential mode set from the beginnig.
+ * sequential mode set from the begining.
  *
  * As types are node scoped objects there exists only 1 instance of the type used by
  * potentially multiple shards. To make sure all shards in the transaction can interact
@@ -1338,11 +1322,8 @@ EnsureSequentialModeForTypeDDL(void)
 static bool
 ShouldPropagateTypeCreate()
 {
-	if (!EnableDependencyCreation)
+	if (!ShouldPropagate())
 	{
-		/*
-		 * we are configured to disable object propagation, should not propagate anything
-		 */
 		return false;
 	}
 
@@ -1354,15 +1335,6 @@ ShouldPropagateTypeCreate()
 		return false;
 	}
 
-	if (creating_extension)
-	{
-		/*
-		 * extensions should be created separately on the workers, types cascading from an
-		 * extension should therefor not be propagated here.
-		 */
-		return false;
-	}
-
 	/*
 	 * by not propagating in a transaction block we allow for parallelism to be used when
 	 * this type will be used as a column in a table that will be created and distributed
@@ -1370,40 +1342,6 @@ ShouldPropagateTypeCreate()
 	 */
 	if (IsMultiStatementTransaction())
 	{
-		return false;
-	}
-
-	return true;
-}
-
-
-/*
- * ShouldPropagateAlterType determines if we should be propagating type alterations based
- * on its object address.
- */
-static bool
-ShouldPropagateAlterType(const ObjectAddress *address)
-{
-	if (creating_extension)
-	{
-		/*
-		 * extensions should be created separately on the workers, types cascading from an
-		 * extension should therefor not be propagated.
-		 */
-		return false;
-	}
-
-	if (!EnableDependencyCreation)
-	{
-		/*
-		 * we are configured to disable object propagation, should not propagate anything
-		 */
-		return false;
-	}
-
-	if (!IsObjectDistributed(address))
-	{
-		/* do not propagate alter types for non-distributed types */
 		return false;
 	}
 

@@ -18,28 +18,25 @@
 #include "catalog/objectaddress.h"
 #include "catalog/pg_extension_d.h"
 
-static const ObjectAddress * AlterTableStmtObjectAddress(AlterTableStmt *stmt,
-														 bool missing_ok);
-static const ObjectAddress * RenameStmtObjectAddress(RenameStmt *stmt, bool missing_ok);
-static const ObjectAddress * AlterObjectSchemaStmtObjectAddress(
-	AlterObjectSchemaStmt *stmt, bool missing_ok);
-static const ObjectAddress * RenameAttributeStmtObjectAddress(RenameStmt *stmt,
-															  bool missing_ok);
-static const ObjectAddress * AlterOwnerStmtObjectAddress(AlterOwnerStmt *stmt,
-														 bool missing_ok);
-static const ObjectAddress * AlterObjectDependsStmtObjectAddress(
-	AlterObjectDependsStmt *stmt, bool missing_ok);
-static const ObjectAddress * CreateExtensionStmtObjectAddress(CreateExtensionStmt *stmt,
-															  bool missing_ok);
-static const ObjectAddress * AlterExtensionStmtObjectAddress(
-	AlterExtensionStmt *alterExtensionStmt, bool
-	missing_ok);
+static ObjectAddress * AlterTableStmtObjectAddress(AlterTableStmt *stmt, bool missing_ok);
+static ObjectAddress * RenameStmtObjectAddress(RenameStmt *stmt, bool missing_ok);
+static ObjectAddress * AlterObjectSchemaStmtObjectAddress(AlterObjectSchemaStmt *stmt,
+														  bool missing_ok);
+static ObjectAddress * RenameAttributeStmtObjectAddress(RenameStmt *stmt, bool
+														missing_ok);
+static ObjectAddress * AlterOwnerStmtObjectAddress(AlterOwnerStmt *stmt, bool missing_ok);
+static ObjectAddress * AlterObjectDependsStmtObjectAddress(AlterObjectDependsStmt *stmt,
+														   bool missing_ok);
+static ObjectAddress * CreateExtensionStmtObjectAddress(CreateExtensionStmt *stmt, bool
+														missing_ok);
+static ObjectAddress * AlterExtensionStmtObjectAddress(
+	AlterExtensionStmt *alterExtensionStmt, bool missing_ok);
 
 /*
- * GetObjectAddressFromParseTree returns the ObjectAdderss of the main target of the parse
+ * GetObjectAddressFromParseTree returns the ObjectAddress of the main target of the parse
  * tree.
  */
-const ObjectAddress *
+ObjectAddress *
 GetObjectAddressFromParseTree(Node *parseTree, bool missing_ok)
 {
 	switch (parseTree->type)
@@ -141,7 +138,7 @@ GetObjectAddressFromParseTree(Node *parseTree, bool missing_ok)
 }
 
 
-static const ObjectAddress *
+static ObjectAddress *
 AlterTableStmtObjectAddress(AlterTableStmt *stmt, bool missing_ok)
 {
 	switch (stmt->relkind)
@@ -160,7 +157,7 @@ AlterTableStmtObjectAddress(AlterTableStmt *stmt, bool missing_ok)
 }
 
 
-static const ObjectAddress *
+static ObjectAddress *
 RenameStmtObjectAddress(RenameStmt *stmt, bool missing_ok)
 {
 	switch (stmt->renameType)
@@ -191,7 +188,7 @@ RenameStmtObjectAddress(RenameStmt *stmt, bool missing_ok)
 }
 
 
-static const ObjectAddress *
+static ObjectAddress *
 AlterObjectSchemaStmtObjectAddress(AlterObjectSchemaStmt *stmt, bool missing_ok)
 {
 	switch (stmt->objectType)
@@ -222,7 +219,7 @@ AlterObjectSchemaStmtObjectAddress(AlterObjectSchemaStmt *stmt, bool missing_ok)
 }
 
 
-static const ObjectAddress *
+static ObjectAddress *
 RenameAttributeStmtObjectAddress(RenameStmt *stmt, bool missing_ok)
 {
 	Assert(stmt->renameType == OBJECT_ATTRIBUTE);
@@ -243,7 +240,7 @@ RenameAttributeStmtObjectAddress(RenameStmt *stmt, bool missing_ok)
 }
 
 
-static const ObjectAddress *
+static ObjectAddress *
 AlterOwnerStmtObjectAddress(AlterOwnerStmt *stmt, bool missing_ok)
 {
 	switch (stmt->objectType)
@@ -279,7 +276,7 @@ AlterOwnerStmtObjectAddress(AlterOwnerStmt *stmt, bool missing_ok)
  * If missing_ok is set to fails the object specific implementation is supposed to raise
  * an error explaining the user the object is not existing.
  */
-static const ObjectAddress *
+static ObjectAddress *
 AlterObjectDependsStmtObjectAddress(AlterObjectDependsStmt *stmt, bool missing_ok)
 {
 	switch (stmt->objectType)
@@ -307,7 +304,7 @@ AlterObjectDependsStmtObjectAddress(AlterObjectDependsStmt *stmt, bool missing_o
  * Never returns NULL, but the objid in the address could be invalid if missing_ok was set
  * to true.
  */
-static const ObjectAddress *
+static ObjectAddress *
 CreateExtensionStmtObjectAddress(CreateExtensionStmt *createExtensionStmt, bool
 								 missing_ok)
 {
@@ -339,7 +336,7 @@ CreateExtensionStmtObjectAddress(CreateExtensionStmt *createExtensionStmt, bool
  * Never returns NULL, but the objid in the address could be invalid if missing_ok was set
  * to true.
  */
-static const ObjectAddress *
+static ObjectAddress *
 AlterExtensionStmtObjectAddress(AlterExtensionStmt *alterExtensionStmt, bool
 								missing_ok)
 {

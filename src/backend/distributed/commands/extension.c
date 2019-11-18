@@ -780,7 +780,7 @@ RecreateExtensionStmt(Oid extensionOid)
  * AlterExtensionSchemaStmtObjectAddress returns the ObjectAddress of the extension that is
  * the subject of the AlterObjectSchemaStmt. Errors if missing_ok is false.
  */
-const ObjectAddress *
+ObjectAddress *
 AlterExtensionSchemaStmtObjectAddress(AlterObjectSchemaStmt *alterExtensionSchemaStmt,
 									  bool missing_ok)
 {
@@ -812,7 +812,7 @@ AlterExtensionSchemaStmtObjectAddress(AlterObjectSchemaStmt *alterExtensionSchem
  * AlterExtensionUpdateStmtObjectAddress returns the ObjectAddress of the extension that is
  * the subject of the AlterExtensionStmt. Errors if missing_ok is false.
  */
-const ObjectAddress *
+ObjectAddress *
 AlterExtensionUpdateStmtObjectAddress(AlterExtensionStmt *alterExtensionStmt,
 									  bool missing_ok)
 {

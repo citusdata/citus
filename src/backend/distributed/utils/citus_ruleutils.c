@@ -1372,31 +1372,31 @@ simple_quote_literal(StringInfo buf, const char *val)
  * CURRENT_USER - resolved to the user name of the current role being used
  * SESSION_USER - resolved to the user name of the user that opened the session
  *
- * withQuoteIdendifier is used, because if the results will be used in a query the quotes are needed but if not there
+ * withQuoteIdentifier is used, because if the results will be used in a query the quotes are needed but if not there
  * should not be extra quotes.
  */
 const char *
-RoleSpecString(RoleSpec *spec, bool withQuoteIdendifier)
+RoleSpecString(RoleSpec *spec, bool withQuoteIdentifier)
 {
 	switch (spec->roletype)
 	{
 		case ROLESPEC_CSTRING:
 		{
-			return withQuoteIdendifier ?
+			return withQuoteIdentifier ?
 				   quote_identifier(spec->rolename) :
 				   spec->rolename;
 		}
 
 		case ROLESPEC_CURRENT_USER:
 		{
-			return withQuoteIdendifier ?
+			return withQuoteIdentifier ?
 				   quote_identifier(GetUserNameFromId(GetUserId(), false)) :
 				   GetUserNameFromId(GetUserId(), false);
 		}
 
 		case ROLESPEC_SESSION_USER:
 		{
-			return withQuoteIdendifier ?
+			return withQuoteIdentifier ?
 				   quote_identifier(GetUserNameFromId(GetSessionUserId(), false)) :
 				   GetUserNameFromId(GetSessionUserId(), false);
 		}
