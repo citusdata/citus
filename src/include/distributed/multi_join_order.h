@@ -82,13 +82,15 @@ extern bool EnableSingleHashRepartitioning;
 /* Function declaration for determining table join orders */
 extern List * JoinExprList(FromExpr *fromExpr);
 extern List * JoinOrderList(List *rangeTableEntryList, List *joinClauseList);
+extern bool IsApplicableJoinClause(List *leftTableIdList, uint32 rightTableId,
+								   OpExpr *joinClause);
 extern List * ApplicableJoinClauses(List *leftTableIdList, uint32 rightTableId,
 									List *joinClauseList);
 extern OpExpr * SinglePartitionJoinClause(Var *partitionColumn,
 										  List *applicableJoinClauses);
 extern OpExpr * DualPartitionJoinClause(List *applicableJoinClauses);
-extern Var * LeftColumn(OpExpr *joinClause);
-extern Var * RightColumn(OpExpr *joinClause);
+extern Var * LeftColumnOrNULL(OpExpr *joinClause);
+extern Var * RightColumnOrNULL(OpExpr *joinClause);
 extern Var * PartitionColumn(Oid relationId, uint32 rangeTableId);
 extern Var * DistPartitionKey(Oid relationId);
 extern char PartitionMethod(Oid relationId);
