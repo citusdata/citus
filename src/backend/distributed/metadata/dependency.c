@@ -561,6 +561,12 @@ FollowNewSupportedDependencies(ObjectAddressCollector *collector, Form_pg_depend
 		return false;
 	}
 
+	if (CitusExtensionObject(&address))
+	{
+		/* following citus extension could complicate role management */
+		return false;
+	}
+
 	return true;
 }
 
@@ -611,6 +617,12 @@ FollowAllSupportedDependencies(ObjectAddressCollector *collector, Form_pg_depend
 		return false;
 	}
 
+	if (CitusExtensionObject(&address))
+	{
+		/* following citus extension could complicate role management */
+		return false;
+	}
+
 	return true;
 }
 
@@ -632,10 +644,6 @@ ApplyAddToDependencyList(ObjectAddressCollector *collector, Form_pg_depend pg_de
 	 * the extension in the cluster, we we don't want explicitly create them.
 	 */
 	if (IsObjectAddressOwnedByExtension(&address, NULL))
-	{
-		return;
-	}
-	else if (CitusExtensionObject(&address))
 	{
 		return;
 	}
