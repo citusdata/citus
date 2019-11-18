@@ -1404,7 +1404,14 @@ IsJoinClause(Node *clause)
 
 	if (!equalsOperator)
 	{
-		/* Not an equi-join */
+		/*
+		 * The single and dual repartition join and local join planners expect the clauses
+		 * to be equi-join to calculate a hash on which to distribute.
+		 *
+		 * In the future we should move this clause to those planners and allow
+		 * non-equi-join's in the reference join and cartesian product. This is tracked in
+		 * https://github.com/citusdata/citus/issues/3198
+		 */
 		return false;
 	}
 
