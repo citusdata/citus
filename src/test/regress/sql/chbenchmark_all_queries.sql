@@ -1,6 +1,6 @@
 SET citus.next_shard_id TO 1650000;
-CREATE SCHEMA ch_bench_join_expr;
-SET search_path TO ch_bench_join_expr;
+CREATE SCHEMA chbenchmark_all_queries;
+SET search_path TO chbenchmark_all_queries;
 
 SET citus.enable_repartition_joins TO on;
 CREATE TABLE order_line (
@@ -719,4 +719,4 @@ GROUP BY substr(c_state,1,1)
 ORDER BY substr(c_state,1,1);
 
 SET client_min_messages TO WARNING;
-DROP SCHEMA ch_bench_join_expr CASCADE;
+DROP SCHEMA chbenchmark_all_queries CASCADE;
