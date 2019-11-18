@@ -177,13 +177,6 @@ INSERT INTO nation VALUES
     (9, 'Germany', 2, 'Germany must be in here for Q7'),
     (67, 'Cambodia', 2, 'I don''t understand how we got from California to Cambodia but I will take it, it also is not in Europe, but we need it to be for Q8');
 
--- MVP for CH-BenCHmark queries 7/8/9 where a join with an expression is done between a distributed table and a reference table.
-  SELECT su_suppkey, s_w_id, s_i_id, ol_supply_w_id
-    FROM supplier, stock, order_line
-   WHERE ol_supply_w_id = s_w_id
-     AND mod((s_w_id * s_i_id),10000) = su_suppkey
-ORDER BY 1,2,3,4;
-
 -- Query 1
 SELECT
     ol_number,
