@@ -270,6 +270,12 @@ master_drop_sequences(PG_FUNCTION_ARGS)
 	bool isNull = false;
 	StringInfo dropSeqCommand = makeStringInfo();
 
+	if (!CitusHasBeenLoaded())
+	{
+		/* ignore calls during CREATE EXTENSION citus */
+		PG_RETURN_VOID();
+	}
+
 	CheckCitusVersion(ERROR);
 
 	/*
