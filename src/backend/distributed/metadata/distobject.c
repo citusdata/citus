@@ -19,9 +19,12 @@
 #include "catalog/dependency.h"
 #include "catalog/namespace.h"
 #include "catalog/objectaddress.h"
+#include "catalog/pg_extension_d.h"
 #include "catalog/pg_namespace.h"
 #include "catalog/pg_proc.h"
 #include "catalog/pg_type.h"
+#include "citus_version.h"
+#include "commands/extension.h"
 #include "distributed/metadata/distobject.h"
 #include "distributed/metadata/pg_dist_object.h"
 #include "distributed/metadata_cache.h"
@@ -120,7 +123,7 @@ ObjectExists(const ObjectAddress *address)
 
 /*
  * MarkObjectDistributed marks an object as a distributed object by citus. Marking is done
- * by adding appropriate entries to citus.pg_dist_object
+ * by adding appropriate entries to citus.pg_dist_object.
  */
 void
 MarkObjectDistributed(const ObjectAddress *distAddress)
@@ -147,6 +150,31 @@ MarkObjectDistributed(const ObjectAddress *distAddress)
 	{
 		ereport(ERROR, (errmsg("failed to insert object into citus.pg_dist_object")));
 	}
+}
+
+
+/*
+ * CitusExtensionObject returns true if the objectAddress represents
+ * the Citus extension.
+ */
+bool
+CitusExtensionObject(const ObjectAddress *objectAddress)
+{
+	char *extensionName = false;
+
+	if (objectAddress->classId != ExtensionRelationId)
+	{
+		return false;
+	}
+
+	extensionName = get_extension_name(objectAddress->objectId);
+	if (extensionName != NULL &&
+		strncasecmp(extensionName, CITUS_NAME, NAMEDATALEN) == 0)
+	{
+		return true;
+	}
+
+	return false;
 }
 
 
