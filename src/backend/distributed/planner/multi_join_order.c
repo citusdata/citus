@@ -941,8 +941,6 @@ SinglePartitionJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 	/*
 	 * If we previously dual-hash re-partitioned the tables for a join or made
 	 * cartesian product, we currently don't allow a single-repartition join.
-	 *
-	 * TODO: verify what happens when there was an other join in between our current evaluation and below joins, this pattern has caused crashes before.
 	 */
 	if (currentJoinRuleType == DUAL_PARTITION_JOIN ||
 		currentJoinRuleType == CARTESIAN_PRODUCT)
