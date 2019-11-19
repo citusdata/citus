@@ -75,7 +75,7 @@ static DistributedPlan * CreateDistributedPlan(uint64 planId, Query *originalQue
 											   bool hasUnresolvedParams,
 											   PlannerRestrictionContext *
 											   plannerRestrictionContext);
-static void RecordSubPlansUsedInPlan(DistributedPlan *plan, Query *originalQuery);
+static void FinalizeDistributedPlan(DistributedPlan *plan, Query *originalQuery);
 static DeferredErrorMessage * DeferErrorIfPartitionTableNotSingleReplicated(Oid
 																			relationId);
 
@@ -656,7 +656,7 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 
 		if (distributedPlan->planningError == NULL)
 		{
-			RecordSubPlansUsedInPlan(distributedPlan, originalQuery);
+			FinalizeDistributedPlan(distributedPlan, originalQuery);
 
 			return distributedPlan;
 		}
@@ -678,7 +678,7 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 										   plannerRestrictionContext);
 		if (distributedPlan->planningError == NULL)
 		{
-			RecordSubPlansUsedInPlan(distributedPlan, originalQuery);
+			FinalizeDistributedPlan(distributedPlan, originalQuery);
 
 			return distributedPlan;
 		}
@@ -772,7 +772,7 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 												plannerRestrictionContext);
 		distributedPlan->subPlanList = subPlanList;
 
-		RecordSubPlansUsedInPlan(distributedPlan, originalQuery);
+		FinalizeDistributedPlan(distributedPlan, originalQuery);
 
 		return distributedPlan;
 	}
@@ -784,7 +784,7 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 	 */
 	if (IsModifyCommand(originalQuery))
 	{
-		RecordSubPlansUsedInPlan(distributedPlan, originalQuery);
+		FinalizeDistributedPlan(distributedPlan, originalQuery);
 
 		return distributedPlan;
 	}
@@ -817,14 +817,14 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 	/* distributed plan currently should always succeed or error out */
 	Assert(distributedPlan && distributedPlan->planningError == NULL);
 
-	RecordSubPlansUsedInPlan(distributedPlan, originalQuery);
+	FinalizeDistributedPlan(distributedPlan, originalQuery);
 
 	return distributedPlan;
 }
 
 
 /*
- * RecordSubPlansUsedInPlan gets a distributed plan a queryTree, and
+ * FinalizeDistributedPlan gets a distributed plan a queryTree, and
  * updates the usedSubPlanNodeList of the distributed plan.
  *
  * The function simply pulls all the subPlans that are used in the queryTree
@@ -832,7 +832,7 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
  * in the function.
  */
 static void
-RecordSubPlansUsedInPlan(DistributedPlan *plan, Query *originalQuery)
+FinalizeDistributedPlan(DistributedPlan *plan, Query *originalQuery)
 {
 	/* first, get all the subplans in the query */
 	plan->usedSubPlanNodeList = FindSubPlansUsedInNode((Node *) originalQuery);
