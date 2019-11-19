@@ -80,7 +80,7 @@ static void RecordSubPlansUsedInPlan(DistributedPlan *plan, Query *originalQuery
 static DeferredErrorMessage * DeferErrorIfPartitionTableNotSingleReplicated(Oid
 																			relationId);
 
-static void AssignRTEIdentities(List *rangeTableList);
+static int AssignRTEIdentities(List *rangeTableList, int rteIdCounter);
 static void AssignRTEIdentity(RangeTblEntry *rangeTableEntry, int rteIdentifier);
 static void AdjustPartitioningForDistributedPlanning(List *rangeTableList,
 													 bool setPartitionedTablesInherited);
@@ -115,6 +115,7 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 	Query *originalQuery = NULL;
 	bool setPartitionedTablesInherited = false;
 	List *rangeTableList = ExtractRangeTableEntryList(parse);
+	int rteIdCounter = 1;
 
 	if (cursorOptions & CURSOR_OPT_FORCE_DISTRIBUTED)
 	{
@@ -165,7 +166,7 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 		 * of the query tree. Note that we copy the query tree once we're sure it's a
 		 * distributed query.
 		 */
-		AssignRTEIdentities(rangeTableList);
+		rteIdCounter = AssignRTEIdentities(rangeTableList, rteIdCounter);
 		originalQuery = copyObject(parse);
 
 		setPartitionedTablesInherited = false;
@@ -201,6 +202,13 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 		else
 		{
 			result = standard_planner(parse, cursorOptions, boundParams);
+
+			if (needsDistributedPlanning)
+			{
+				/* may've inlined new relation rtes */
+				rangeTableList = ExtractRangeTableEntryList(parse);
+				rteIdCounter = AssignRTEIdentities(rangeTableList, rteIdCounter);
+			}
 		}
 
 		if (needsDistributedPlanning)
@@ -246,7 +254,7 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 	/*
 	 * In some cases, for example; parameterized SQL functions, we may miss that
 	 * there is a need for distributed planning. Such cases only become clear after
-	 * standart_planner performs some modifications on parse tree. In such cases
+	 * standard_planner performs some modifications on parse tree. In such cases
 	 * we will simply error out.
 	 */
 	if (!needsDistributedPlanning && NeedsDistributedPlanning(parse))
@@ -346,12 +354,14 @@ ListContainsDistributedTableRTE(List *rangeTableList)
  * Please note that, we want to avoid modifying query tree as much as possible
  * because if PostgreSQL changes the way it uses modified fields, that may break
  * our logic.
+ *
+ * Returns the next id. This can be used to call on a rangeTableList that may've
+ * been partially assigned. Should be set to 1 initially.
  */
-static void
-AssignRTEIdentities(List *rangeTableList)
+static int
+AssignRTEIdentities(List *rangeTableList, int rteIdCounter)
 {
 	ListCell *rangeTableCell = NULL;
-	int rteIdentifier = 1;
 
 	foreach(rangeTableCell, rangeTableList)
 	{
@@ -366,11 +376,14 @@ AssignRTEIdentities(List *rangeTableList)
 		 * Note that we're only interested in RTE_RELATIONs and thus assigning
 		 * identifiers to those RTEs only.
 		 */
-		if (rangeTableEntry->rtekind == RTE_RELATION)
+		if (rangeTableEntry->rtekind == RTE_RELATION &&
+			rangeTableEntry->values_lists == NIL)
 		{
-			AssignRTEIdentity(rangeTableEntry, rteIdentifier++);
+			AssignRTEIdentity(rangeTableEntry, rteIdCounter++);
 		}
 	}
+
+	return rteIdCounter;
 }
 
 
@@ -445,6 +458,7 @@ int
 GetRTEIdentity(RangeTblEntry *rte)
 {
 	Assert(rte->rtekind == RTE_RELATION);
+	Assert(rte->values_lists != NIL);
 	Assert(IsA(rte->values_lists, IntList));
 	Assert(list_length(rte->values_lists) == 1);
 
