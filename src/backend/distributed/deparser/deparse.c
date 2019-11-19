@@ -37,6 +37,10 @@ static const char * DeparseAlterObjectDependsStmt(AlterObjectDependsStmt *stmt);
  *
  *  - ALTER FUNCTION, ALTER PROCEDURE, ALTER AGGREGATE
  *  - DROP FUNCTION, DROP PROCEDURE, DROP AGGREGATE
+ *
+ *  - CREATE EXTENSION
+ *  - ALTER EXTENSION
+ *  - DROP EXTENSION
  */
 const char *
 DeparseTreeNode(Node *stmt)
@@ -98,6 +102,16 @@ DeparseTreeNode(Node *stmt)
 			return DeparseAlterRoleStmt(castNode(AlterRoleStmt, stmt));
 		}
 
+		case T_CreateExtensionStmt:
+		{
+			return DeparseCreateExtensionStmt(castNode(CreateExtensionStmt, stmt));
+		}
+
+		case T_AlterExtensionStmt:
+		{
+			return DeparseAlterExtensionStmt(castNode(AlterExtensionStmt, stmt));
+		}
+
 		default:
 		{
 			ereport(ERROR, (errmsg("unsupported statement for deparsing")));
@@ -127,6 +141,11 @@ DeparseDropStmt(DropStmt *stmt)
 		case OBJECT_FUNCTION:
 		{
 			return DeparseDropFunctionStmt(stmt);
+		}
+
+		case OBJECT_EXTENSION:
+		{
+			return DeparseDropExtensionStmt(stmt);
 		}
 
 		default:
@@ -248,6 +267,11 @@ DeparseAlterObjectSchemaStmt(AlterObjectSchemaStmt *stmt)
 		case OBJECT_FUNCTION:
 		{
 			return DeparseAlterFunctionSchemaStmt(stmt);
+		}
+
+		case OBJECT_EXTENSION:
+		{
+			return DeparseAlterExtensionSchemaStmt(stmt);
 		}
 
 		default:

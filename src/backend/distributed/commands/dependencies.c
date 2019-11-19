@@ -182,6 +182,11 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 			return CreateTypeDDLCommandsIdempotent(dependency);
 		}
 
+		case OCLASS_EXTENSION:
+		{
+			return CreateExtensionDDLCommand(dependency);
+		}
+
 		default:
 		{
 			break;

@@ -32,6 +32,7 @@ extern void AssertObjectTypeIsFunctional(ObjectType type);
 extern void QualifyTreeNode(Node *stmt);
 extern const char * DeparseTreeNode(Node *stmt);
 
+/* forward declarations for deparse_type_stmts.c */
 extern const char * DeparseCompositeTypeStmt(CompositeTypeStmt *stmt);
 extern const char * DeparseCreateEnumStmt(CreateEnumStmt *stmt);
 extern const char * DeparseDropTypeStmt(DropStmt *stmt);
@@ -69,8 +70,16 @@ extern void QualifyAlterFunctionSchemaStmt(AlterObjectSchemaStmt *stmt);
 extern void QualifyAlterFunctionOwnerStmt(AlterOwnerStmt *stmt);
 extern void QualifyAlterFunctionDependsStmt(AlterObjectDependsStmt *stmt);
 
-
 /* forward declarations for deparse_role_stmts.c */
 extern const char * DeparseAlterRoleStmt(AlterRoleStmt *stmt);
+
+/* forward declarations for deparse_extension_stmts.c */
+extern Value * GetExtensionOption(List *extensionOptions, const
+								  char *defname);
+extern const char * DeparseCreateExtensionStmt(CreateExtensionStmt *stmt);
+extern const char * DeparseDropExtensionStmt(DropStmt *stmt);
+extern const char * DeparseAlterExtensionSchemaStmt(
+	AlterObjectSchemaStmt *alterExtensionSchemaStmt);
+extern const char * DeparseAlterExtensionStmt(AlterExtensionStmt *alterExtensionStmt);
 
 #endif /* CITUS_DEPARSER_H */

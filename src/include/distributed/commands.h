@@ -23,12 +23,30 @@
 /* cluster.c - forward declarations */
 extern List * PlanClusterStmt(ClusterStmt *clusterStmt, const char *clusterCommand);
 
+
 /* call.c */
 extern bool CallDistributedProcedureRemotely(CallStmt *callStmt, DestReceiver *dest);
 
+
 /* extension.c - forward declarations */
-extern bool IsCitusExtensionStmt(Node *parsetree);
+extern bool IsCreateAlterExtensionUpdateCitusStmt(Node *parsetree);
 extern void ErrorIfUnstableCreateOrAlterExtensionStmt(Node *parsetree);
+extern List * PlanCreateExtensionStmt(CreateExtensionStmt *stmt, const char *queryString);
+extern void ProcessCreateExtensionStmt(CreateExtensionStmt *stmt, const
+									   char *queryString);
+extern List * PlanDropExtensionStmt(DropStmt *stmt, const char *queryString);
+extern List * PlanAlterExtensionSchemaStmt(AlterObjectSchemaStmt *alterExtensionStmt,
+										   const char *queryString);
+extern void ProcessAlterExtensionSchemaStmt(AlterObjectSchemaStmt *alterExtensionStmt,
+											const char *queryString);
+extern List * PlanAlterExtensionUpdateStmt(AlterExtensionStmt *alterExtensionStmt, const
+										   char *queryString);
+extern List * CreateExtensionDDLCommand(const ObjectAddress *extensionAddress);
+extern const ObjectAddress * AlterExtensionSchemaStmtObjectAddress(
+	AlterObjectSchemaStmt *stmt, bool missing_ok);
+extern const ObjectAddress * AlterExtensionUpdateStmtObjectAddress(
+	AlterExtensionStmt *alterExtensionStmt,
+	bool missing_ok);
 
 
 /* foreign_constraint.c - forward declarations */
