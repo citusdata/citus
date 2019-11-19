@@ -1,6 +1,6 @@
 CREATE SCHEMA intermediate_result_pruning;
 SET search_path TO intermediate_result_pruning;
-
+SET citus.log_intermediate_results TO TRUE;
 
 SET citus.shard_count TO 4;
 SET citus.next_shard_id TO 1480000;

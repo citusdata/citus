@@ -26,6 +26,7 @@
 #include "distributed/commands/utility_hook.h"
 #include "distributed/connection_management.h"
 #include "distributed/distributed_deadlock_detection.h"
+#include "distributed/intermediate_result_pruning.h"
 #include "distributed/local_executor.h"
 #include "distributed/maintenanced.h"
 #include "distributed/master_metadata_utility.h"
@@ -519,6 +520,16 @@ RegisterCitusConfigVariables(void)
 					 "citus.log_remote_commands"),
 		NULL,
 		&LogLocalCommands,
+		false,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		"citus.log_intermediate_results",
+		gettext_noop("Log intermediate results sent to other nodes"),
+		NULL,
+		&LogIntermediateResults,
 		false,
 		PGC_USERSET,
 		GUC_NO_SHOW_ALL,
