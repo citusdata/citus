@@ -1404,15 +1404,7 @@ CloseForcedConnections(List *forcedConnections)
 	{
 		MultiConnection *con = lfirst(conCell);
 
-		/* TODO:: the last connection seems corrupted. The second check is for that. */
-		/* We need to remove it once we find why the last connection is corrupted. */
-		/* it is just there for testing purposes */
-		if (con->connectionState <= MULTI_CONNECTION_LOST)
-		{
-			UnclaimConnection(con);
-			con->remoteTransaction.transactionState = REMOTE_TRANS_INVALID;
-			CloseConnection(con);
-		}
+		ShutdownConnection(con);
 	}
 }
 
@@ -1455,8 +1447,14 @@ CleanUpSessions(DistributedExecution *execution)
 			 * We cannot get MULTI_CONNECTION_LOST via the ConnectionStateMachine,
 			 * but we might get it via the connection API and find us here before
 			 * changing any states in the ConnectionStateMachine.
+			 *
+			 * If execution is a repartition query, then the connection will be shutdown later so
+			 * we can skip it here.
 			 */
-			CloseConnection(connection);
+			if (!execution->isRepartition)
+			{
+				CloseConnection(connection);
+			}
 		}
 		else if (connection->connectionState == MULTI_CONNECTION_CONNECTED)
 		{
