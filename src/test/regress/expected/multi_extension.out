@@ -109,11 +109,13 @@ ALTER EXTENSION citus UPDATE TO '8.2-3';
 ALTER EXTENSION citus UPDATE TO '8.2-4';
 ALTER EXTENSION citus UPDATE TO '8.3-1';
 ALTER EXTENSION citus UPDATE TO '9.0-1';
+ALTER EXTENSION citus UPDATE TO '9.0-2';
+ALTER EXTENSION citus UPDATE TO '9.1-1';
 -- show running version
 SHOW citus.version;
  citus.version 
 ---------------
- 9.0devel
+ 9.1devel
 (1 row)
 
 -- ensure no objects were created outside pg_catalog
@@ -135,7 +137,7 @@ RESET citus.enable_version_checks;
 DROP EXTENSION citus;
 CREATE EXTENSION citus VERSION '7.0-1';
 ERROR:  specified version incompatible with loaded Citus library
-DETAIL:  Loaded library requires 9.0, but 7.0-1 was specified.
+DETAIL:  Loaded library requires 9.1, but 7.0-1 was specified.
 HINT:  If a newer library is present, restart the database and try the command again.
 -- Test non-distributed queries work even in version mismatch
 SET citus.enable_version_checks TO 'false';
@@ -178,7 +180,7 @@ ORDER BY 1;
 -- We should not distribute table in version mistmatch
 SELECT create_distributed_table('version_mismatch_table', 'column1');
 ERROR:  loaded Citus library version differs from installed extension version
-DETAIL:  Loaded library requires 9.0, but the installed extension version is 7.1-1.
+DETAIL:  Loaded library requires 9.1, but the installed extension version is 7.1-1.
 HINT:  Run ALTER EXTENSION citus UPDATE and try again.
 -- This function will cause fail in next ALTER EXTENSION
 CREATE OR REPLACE FUNCTION pg_catalog.master_dist_authinfo_cache_invalidate()
@@ -278,7 +280,7 @@ FROM test.maintenance_worker();
 CREATE SCHEMA test_deamon;
 -- we create a similar function on the regression database
 -- note that this function checks for the existence of the daemon
--- when not found, returns true else tries for 5 times and 
+-- when not found, returns true else tries for 5 times and
 -- returns false
 CREATE OR REPLACE FUNCTION test_deamon.maintenance_deamon_died(p_dbname text)
     RETURNS boolean
@@ -301,9 +303,9 @@ END;
 $$;
 -- drop the database and see that the deamon is dead
 DROP DATABASE another;
-SELECT 
+SELECT
     *
-FROM 
+FROM
     test_deamon.maintenance_deamon_died('another');
  maintenance_deamon_died 
 -------------------------

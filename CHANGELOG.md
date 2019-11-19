@@ -1,3 +1,9 @@
+### citus v9.0.1 (October 25, 2019) ###
+
+* Fixes a memory leak in the executor
+
+* Revokes usage from the citus schema from public
+
 ### citus v9.0.0 (October 7, 2019) ###
 
 * Adds support for PostgreSQL 12
