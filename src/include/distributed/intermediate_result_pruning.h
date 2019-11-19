@@ -15,7 +15,7 @@
 
 extern bool LogIntermediateResults;
 
-extern List * FindSubPlansUsedInPlan(DistributedPlan *plan);
+extern List * FindSubPlansUsedInNode(Node *node);
 extern List * FindAllWorkerNodesUsingSubplan(HTAB *intermediateResultsHash,
 											 char *resultId);
 extern HTAB * MakeIntermediateResultHTAB(void);
