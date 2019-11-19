@@ -76,6 +76,7 @@ static DistributedPlan * CreateDistributedPlan(uint64 planId, Query *originalQue
 											   PlannerRestrictionContext *
 											   plannerRestrictionContext);
 static void FinalizeDistributedPlan(DistributedPlan *plan, Query *originalQuery);
+static void RecordSubPlansUsedInPlan(DistributedPlan *plan, Query *originalQuery);
 static DeferredErrorMessage * DeferErrorIfPartitionTableNotSingleReplicated(Oid
 																			relationId);
 
@@ -824,7 +825,18 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 
 
 /*
- * FinalizeDistributedPlan gets a distributed plan a queryTree, and
+ * FinalizeDistributedPlan is the final step of distributed planning. The function
+ * currently only implements some optimizations for intermediate result(s) pruning.
+ */
+static void
+FinalizeDistributedPlan(DistributedPlan *plan, Query *originalQuery)
+{
+	RecordSubPlansUsedInPlan(plan, originalQuery);
+}
+
+
+/*
+ * RecordSubPlansUsedInPlan gets a distributed plan a queryTree, and
  * updates the usedSubPlanNodeList of the distributed plan.
  *
  * The function simply pulls all the subPlans that are used in the queryTree
@@ -832,7 +844,7 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
  * in the function.
  */
 static void
-FinalizeDistributedPlan(DistributedPlan *plan, Query *originalQuery)
+RecordSubPlansUsedInPlan(DistributedPlan *plan, Query *originalQuery)
 {
 	/* first, get all the subplans in the query */
 	plan->usedSubPlanNodeList = FindSubPlansUsedInNode((Node *) originalQuery);
