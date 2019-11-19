@@ -22,6 +22,8 @@
 #include "commands/sequence.h"
 #include "distributed/citus_acquire_lock.h"
 #include "distributed/colocation_utils.h"
+#include "distributed/commands.h"
+#include "distributed/commands/utility_hook.h"
 #include "distributed/connection_management.h"
 #include "distributed/maintenanced.h"
 #include "distributed/master_protocol.h"
@@ -389,6 +391,28 @@ SetUpDistributedTableDependencies(WorkerNode *newWorkerNode)
 
 
 /*
+ * PropagateRolesToNewNode copies the roles' attributes in the new node. Roles that do
+ * not exist in the workers are not created and simply skipped.
+ */
+static void
+PropagateRolesToNewNode(WorkerNode *newWorkerNode)
+{
+	List *ddlCommands = NIL;
+
+	if (!EnableAlterRolePropagation)
+	{
+		return;
+	}
+
+	ddlCommands = GenerateAlterRoleIfExistsCommandAllRoles();
+
+	SendCommandListToWorkerInSingleTransaction(newWorkerNode->workerName,
+											   newWorkerNode->workerPort,
+											   CitusExtensionOwnerName(), ddlCommands);
+}
+
+
+/*
  * ModifiableWorkerNode gets the requested WorkerNode and also gets locks
  * required for modifying it. This fails if the node does not exist.
  */
@@ -565,6 +589,7 @@ ActivateNode(char *nodeName, int nodePort)
 
 	newWorkerNode = SetNodeState(nodeName, nodePort, isActive);
 
+	PropagateRolesToNewNode(newWorkerNode);
 	SetUpDistributedTableDependencies(newWorkerNode);
 	return newWorkerNode->nodeId;
 }

@@ -561,6 +561,12 @@ FollowNewSupportedDependencies(ObjectAddressCollector *collector, Form_pg_depend
 		return false;
 	}
 
+	if (CitusExtensionObject(&address))
+	{
+		/* following citus extension could complicate role management */
+		return false;
+	}
+
 	return true;
 }
 
@@ -608,6 +614,12 @@ FollowAllSupportedDependencies(ObjectAddressCollector *collector, Form_pg_depend
 	if (!SupportedDependencyByCitus(&address) &&
 		!IsObjectAddressOwnedByExtension(&address, NULL))
 	{
+		return false;
+	}
+
+	if (CitusExtensionObject(&address))
+	{
+		/* following citus extension could complicate role management */
 		return false;
 	}
 

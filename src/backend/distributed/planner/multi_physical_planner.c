@@ -3603,8 +3603,13 @@ JoinSequenceArray(List *rangeTableFragmentsList, Query *jobQuery, List *depended
 				continue;
 			}
 
-			leftColumn = LeftColumn(nextJoinClause);
-			rightColumn = RightColumn(nextJoinClause);
+			leftColumn = LeftColumnOrNULL(nextJoinClause);
+			rightColumn = RightColumnOrNULL(nextJoinClause);
+			if (leftColumn == NULL || rightColumn == NULL)
+			{
+				continue;
+			}
+
 			leftRangeTableId = leftColumn->varno;
 			rightRangeTableId = rightColumn->varno;
 

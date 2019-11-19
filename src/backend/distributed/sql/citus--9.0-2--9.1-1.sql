@@ -8,6 +8,7 @@ COMMENT ON COLUMN pg_catalog.pg_dist_node.shouldhaveshards IS
 #include "udfs/get_rebalance_table_shards_plan/9.1-1.sql"
 #include "udfs/master_add_node/9.1-1.sql"
 #include "udfs/master_add_inactive_node/9.1-1.sql"
+#include "udfs/alter_role_if_exists/9.1-1.sql"
 
 -- we don't maintain replication factor of reference tables anymore and just
 -- use -1 instead.
@@ -70,4 +71,3 @@ CREATE AGGREGATE citus.coord_combine_agg(oid, cstring, anyelement) (
 );
 COMMENT ON AGGREGATE citus.coord_combine_agg(oid, cstring, anyelement)
     IS 'support aggregate for implementing combining partial aggregate results from workers';
-
