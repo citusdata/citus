@@ -36,6 +36,7 @@
 #include "distributed/worker_manager.h"
 #include "utils/builtins.h"
 
+/* controlled via GUC, used mostly for testing */
 bool LogIntermediateResults = false;
 
 static List * AppendAllAccessedWorkerNodes(List *workerNodeList,
