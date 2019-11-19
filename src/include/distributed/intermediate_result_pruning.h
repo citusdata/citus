@@ -13,9 +13,9 @@
 
 #include "distributed/subplan_execution.h"
 
+extern bool LogIntermediateResults;
 
 extern List * FindSubPlansUsedInPlan(DistributedPlan *plan);
-
 extern List * FindAllWorkerNodesUsingSubplan(HTAB *intermediateResultsHash,
 											 char *resultId);
 extern HTAB * MakeIntermediateResultHTAB(void);

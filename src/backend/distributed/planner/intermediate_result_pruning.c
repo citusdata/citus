@@ -36,6 +36,8 @@
 #include "distributed/worker_manager.h"
 #include "utils/builtins.h"
 
+bool LogIntermediateResults = false;
+
 static List * AppendAllAccessedWorkerNodes(List *workerNodeList,
 										   DistributedPlan *distributedPlan,
 										   int workerNodeCount);
@@ -143,17 +145,24 @@ RecordSubplanExecutionsOnNodes(HTAB *intermediateResultsHash,
 		/* no need to traverse the whole plan if all the workers are hit */
 		if (list_length(entry->nodeIdList) == workerNodeCount)
 		{
-			elog(DEBUG4, "subplan %s is used in all workers", resultId);
+			elog(DEBUG4, "Subplan %s is used in all workers", resultId);
 
 			break;
 		}
 		else
 		{
+			/*
+			 * traverse the plan and add find all worker nodes
+			 *
+			 * If we have reference tables in the distributed plan, all the
+			 * workers will be in the node list. We can improve intermediate result
+			 * pruning by deciding which reference table shard will be accessed earlier
+			 */
 			entry->nodeIdList = AppendAllAccessedWorkerNodes(entry->nodeIdList,
 															 distributedPlan,
 															 workerNodeCount);
 
-			elog(DEBUG4, "subplan %s is used in %lu", resultId, distributedPlan->planId);
+			elog(DEBUG4, "Subplan %s is used in %lu", resultId, distributedPlan->planId);
 		}
 	}
 
@@ -176,7 +185,10 @@ RecordSubplanExecutionsOnNodes(HTAB *intermediateResultsHash,
  * AppendAllAccessedWorkerNodes iterates over all the tasks in a distributed plan
  * to create the list of worker nodes that can be accessed when this plan is executed.
  *
- * If there are multiple placements of a Shard, all of them are considered.
+ * If there are multiple placements of a Shard, all of them are considered and
+ * all the workers with placements are appended to the list. This effectively
+ * means that if there is a reference table access in the distributed plan, all
+ * the workers will be in the resulting list.
  */
 static List *
 AppendAllAccessedWorkerNodes(List *workerNodeList, DistributedPlan *distributedPlan, int
@@ -249,8 +261,13 @@ FindAllWorkerNodesUsingSubplan(HTAB *intermediateResultsHash,
 		WorkerNode *workerNode = LookupNodeByNodeId(lfirst_int(nodeIdCell));
 
 		workerNodeList = lappend(workerNodeList, workerNode);
-		elog(DEBUG1, "%s is broadcasted to %s:%d", resultId, workerNode->workerName,
-			 workerNode->workerPort);
+
+		if ((LogIntermediateResults && IsLoggableLevel(DEBUG1)) ||
+			IsLoggableLevel(DEBUG4))
+		{
+			elog(DEBUG1, "Subplan %s will be sent to %s:%d", resultId,
+				 workerNode->workerName, workerNode->workerPort);
+		}
 	}
 
 	return workerNodeList;
