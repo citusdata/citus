@@ -137,7 +137,7 @@ RESET citus.enable_version_checks;
 DROP EXTENSION citus;
 CREATE EXTENSION citus VERSION '7.0-1';
 ERROR:  specified version incompatible with loaded Citus library
-DETAIL:  Loaded library requires 9.0, but 7.0-1 was specified.
+DETAIL:  Loaded library requires 9.1, but 7.0-1 was specified.
 HINT:  If a newer library is present, restart the database and try the command again.
 -- Test non-distributed queries work even in version mismatch
 SET citus.enable_version_checks TO 'false';
