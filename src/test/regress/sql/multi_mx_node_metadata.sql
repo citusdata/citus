@@ -27,6 +27,7 @@ CREATE FUNCTION verify_metadata(hostname TEXT, port INTEGER, master_port INTEGER
     RETURNS BOOLEAN
     LANGUAGE sql
     AS $$
+SELECT wait_until_metadata_sync();
 WITH dist_node_summary AS (
     SELECT 'SELECT jsonb_agg(ROW(nodeid, groupid, nodename, nodeport, isactive) ORDER BY nodeid) FROM  pg_dist_node' as query
 ), dist_node_check AS (
@@ -48,7 +49,7 @@ SELECT dist_node_check.matches AND dist_placement_check.matches
 FROM dist_node_check CROSS JOIN dist_placement_check
 $$;
 
--- Simulates a readonly node by setting default_transaction_read_only. 
+-- Simulates a readonly node by setting default_transaction_read_only.
 CREATE FUNCTION mark_node_readonly(hostname TEXT, port INTEGER, isreadonly BOOLEAN)
     RETURNS TEXT
     LANGUAGE sql
