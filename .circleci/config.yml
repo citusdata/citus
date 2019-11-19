@@ -23,6 +23,12 @@ jobs:
           name: 'Check Style'
           command: citus_indent --check
       - run:
+          name: 'Fix whitespace'
+          command: ci/editorconfig.sh
+      - run:
+          name: 'Check if whitespace fixing changed anything, install editorconfig if it did'
+          command: git diff --exit-code
+      - run:
           name: 'Remove useless declarations'
           command: ci/remove_useless_declarations.sh
       - run:
