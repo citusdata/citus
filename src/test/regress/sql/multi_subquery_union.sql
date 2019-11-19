@@ -890,5 +890,14 @@ FROM
 GROUP BY types
 ORDER BY types;
 
+-- Previously this produced a segfault from standard_planner introducing a subquery after we'd called AssignRTEIdentities
+CREATE OR REPLACE FUNCTION users_udf()
+RETURNS TABLE(user_id int)
+AS $$SELECT user_id FROM users_reference_table;$$
+LANGUAGE sql stable;
+
+SELECT user_id FROM users_table
+UNION SELECT u.user_id FROM users_table, users_udf() u;
+
 DROP TABLE events_reference_table;
 DROP TABLE users_reference_table;
