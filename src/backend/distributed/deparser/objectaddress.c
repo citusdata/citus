@@ -12,8 +12,11 @@
 
 #include "postgres.h"
 
+#include "commands/extension.h"
 #include "distributed/commands.h"
 #include "distributed/deparser.h"
+#include "catalog/objectaddress.h"
+#include "catalog/pg_extension_d.h"
 
 static const ObjectAddress * AlterTableStmtObjectAddress(AlterTableStmt *stmt,
 														 bool missing_ok);
@@ -26,7 +29,11 @@ static const ObjectAddress * AlterOwnerStmtObjectAddress(AlterOwnerStmt *stmt,
 														 bool missing_ok);
 static const ObjectAddress * AlterObjectDependsStmtObjectAddress(
 	AlterObjectDependsStmt *stmt, bool missing_ok);
-
+static const ObjectAddress * CreateExtensionStmtObjectAddress(CreateExtensionStmt *stmt,
+															  bool missing_ok);
+static const ObjectAddress * AlterExtensionStmtObjectAddress(
+	AlterExtensionStmt *alterExtensionStmt, bool
+	missing_ok);
 
 /*
  * GetObjectAddressFromParseTree returns the ObjectAdderss of the main target of the parse
@@ -109,6 +116,18 @@ GetObjectAddressFromParseTree(Node *parseTree, bool missing_ok)
 			return NULL;
 		}
 
+		case T_CreateExtensionStmt:
+		{
+			return CreateExtensionStmtObjectAddress(castNode(CreateExtensionStmt,
+															 parseTree), missing_ok);
+		}
+
+		case T_AlterExtensionStmt:
+		{
+			return AlterExtensionStmtObjectAddress(castNode(AlterExtensionStmt,
+															parseTree), missing_ok);
+		}
+
 		default:
 		{
 			/*
@@ -187,6 +206,11 @@ AlterObjectSchemaStmtObjectAddress(AlterObjectSchemaStmt *stmt, bool missing_ok)
 		case OBJECT_FUNCTION:
 		{
 			return AlterFunctionSchemaStmtObjectAddress(stmt, missing_ok);
+		}
+
+		case OBJECT_EXTENSION:
+		{
+			return AlterExtensionSchemaStmtObjectAddress(stmt, missing_ok);
 		}
 
 		default:
@@ -272,4 +296,68 @@ AlterObjectDependsStmtObjectAddress(AlterObjectDependsStmt *stmt, bool missing_o
 								   "get object address for")));
 		}
 	}
+}
+
+
+/*
+ * CreateExtensionStmtObjectAddress finds the ObjectAddress for the extension described
+ * by the CreateExtensionStmt. If missing_ok is false, then this function throws an
+ * error if the extension does not exist.
+ *
+ * Never returns NULL, but the objid in the address could be invalid if missing_ok was set
+ * to true.
+ */
+static const ObjectAddress *
+CreateExtensionStmtObjectAddress(CreateExtensionStmt *createExtensionStmt, bool
+								 missing_ok)
+{
+	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
+
+	const char *extensionName = createExtensionStmt->extname;
+
+	Oid extensionoid = get_extension_oid(extensionName, missing_ok);
+
+	/* if we couldn't find the extension, error if missing_ok is false */
+	if (!missing_ok && extensionoid == InvalidOid)
+	{
+		ereport(ERROR, (errcode(ERRCODE_UNDEFINED_OBJECT),
+						errmsg("extension \"%s\" does not exist",
+							   extensionName)));
+	}
+
+	ObjectAddressSet(*address, ExtensionRelationId, extensionoid);
+
+	return address;
+}
+
+
+/*
+ * AlterExtensionStmtObjectAddress finds the ObjectAddress for the extension described
+ * by the AlterExtensionStmt. If missing_ok is false, then this function throws an
+ * error if the extension is not created before.
+ *
+ * Never returns NULL, but the objid in the address could be invalid if missing_ok was set
+ * to true.
+ */
+static const ObjectAddress *
+AlterExtensionStmtObjectAddress(AlterExtensionStmt *alterExtensionStmt, bool
+								missing_ok)
+{
+	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
+
+	const char *extensionName = alterExtensionStmt->extname;
+
+	Oid extensionoid = get_extension_oid(extensionName, missing_ok);
+
+	/* if we couldn't find the extension, error if missing_ok is false */
+	if (!missing_ok && extensionoid == InvalidOid)
+	{
+		ereport(ERROR, (errcode(ERRCODE_UNDEFINED_OBJECT),
+						errmsg("extension \"%s\" does not exist",
+							   extensionName)));
+	}
+
+	ObjectAddressSet(*address, ExtensionRelationId, extensionoid);
+
+	return address;
 }

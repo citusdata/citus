@@ -117,7 +117,7 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 {
 	Node *parsetree = pstmt->utilityStmt;
 	List *ddlJobs = NIL;
-	bool checkExtensionVersion = false;
+	bool checkCreateAlterExtensionVersion = false;
 
 	if (IsA(parsetree, TransactionStmt) ||
 		IsA(parsetree, LockStmt) ||
@@ -143,12 +143,11 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		return;
 	}
 
-	checkExtensionVersion = IsCitusExtensionStmt(parsetree);
-	if (EnableVersionChecks && checkExtensionVersion)
+	checkCreateAlterExtensionVersion = IsCreateAlterExtensionUpdateCitusStmt(parsetree);
+	if (EnableVersionChecks && checkCreateAlterExtensionVersion)
 	{
 		ErrorIfUnstableCreateOrAlterExtensionStmt(parsetree);
 	}
-
 
 	if (!CitusHasBeenLoaded())
 	{
@@ -430,6 +429,13 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 				case OBJECT_FUNCTION:
 				{
 					ddlJobs = PlanDropFunctionStmt(dropStatement, queryString);
+					break;
+				}
+
+				case OBJECT_EXTENSION:
+				{
+					ddlJobs = PlanDropExtensionStmt(dropStatement, queryString);
+					break;
 				}
 
 				default:
@@ -563,6 +569,20 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		{
 			ddlJobs = PlanAlterObjectDependsStmt(
 				castNode(AlterObjectDependsStmt, parsetree), queryString);
+		}
+
+		if (IsA(parsetree, AlterExtensionStmt))
+		{
+			ddlJobs = PlanAlterExtensionUpdateStmt(castNode(AlterExtensionStmt,
+															parsetree), queryString);
+		}
+
+		if (IsA(parsetree, AlterExtensionContentsStmt))
+		{
+			ereport(NOTICE, (errmsg(
+								 "Citus does not propagate adding/dropping member objects"),
+							 errhint(
+								 "You can add/drop the member objects on the workers as well.")));
 		}
 
 		/*
@@ -793,6 +813,20 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		AlterTableStmt *alterTableStatement = (AlterTableStmt *) parsetree;
 
 		ProcessAlterTableStmtAttachPartition(alterTableStatement);
+	}
+
+	/*
+	 * We call PlanCreateExtensionStmt and ProcessCreateExtensionStmt after standard_ProcessUtility
+	 * does its work to learn the schema that the extension belongs to (if statement does not include
+	 * WITH SCHEMA clause)
+	 */
+	if (EnableDDLPropagation && IsA(parsetree, CreateExtensionStmt))
+	{
+		CreateExtensionStmt *createExtensionStmt = castNode(CreateExtensionStmt,
+															parsetree);
+
+		ddlJobs = PlanCreateExtensionStmt(createExtensionStmt, queryString);
+		ProcessCreateExtensionStmt(createExtensionStmt, queryString);
 	}
 
 	/* don't run post-process code for local commands */
