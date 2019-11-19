@@ -1,12 +1,13 @@
--- 
--- Test DDL command propagation failures 
+--
+-- Test DDL command propagation failures
 -- Different dimensions we're testing:
 --    Replication factor, 1PC-2PC, sequential-parallel modes
--- 
+--
 
 
 CREATE SCHEMA ddl_failure;
 
+SET citus.force_max_query_parallelization TO ON;
 SET search_path TO 'ddl_failure';
 
 -- do not cache any connections
@@ -27,13 +28,13 @@ SET citus.shard_replication_factor = 1;
 CREATE TABLE test_table (key int, value int);
 SELECT create_distributed_table('test_table', 'key');
 
--- in the first test, kill just in the first 
+-- in the first test, kill just in the first
 -- response we get from the worker
 SELECT citus.mitmproxy('conn.onAuthenticationOk().kill()');
 ALTER TABLE test_table ADD COLUMN new_column INT;
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
 
--- cancel just in the first 
+-- cancel just in the first
 -- response we get from the worker
 SELECT citus.mitmproxy('conn.onAuthenticationOk().cancel(' ||  pg_backend_pid() || ')');
 ALTER TABLE test_table ADD COLUMN new_column INT;
@@ -71,7 +72,7 @@ SELECT citus.mitmproxy('conn.allow()');
 -- since we've killed the connection just after
 -- the coordinator sends the COMMIT, the command should be applied
 -- to the distributed table and the shards on the other worker
--- however, there is no way to recover the failure on the shards 
+-- however, there is no way to recover the failure on the shards
 -- that live in the failed worker, since we're running 1PC
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
 SELECT run_command_on_placements('test_table', $$SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = '%s'::regclass;$$) ORDER BY 1;
@@ -91,7 +92,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^COMMIT").cancel(' ||  pg_backend_pi
 ALTER TABLE test_table ADD COLUMN new_column INT;
 SELECT citus.mitmproxy('conn.allow()');
 
--- interrupts are held during COMMIT/ROLLBACK, so the command 
+-- interrupts are held during COMMIT/ROLLBACK, so the command
 -- should have been applied without any issues since cancel is ignored
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
 SELECT run_command_on_placements('test_table', $$SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = '%s'::regclass;$$) ORDER BY 1;
@@ -99,7 +100,7 @@ SELECT run_command_on_placements('test_table', $$SELECT array_agg(name::text ORD
 -- the following tests rely the column not exists, so drop manually
 ALTER TABLE test_table DROP COLUMN new_column;
 
--- but now kill just after the worker sends response to 
+-- but now kill just after the worker sends response to
 -- COMMIT command, so we'll have lots of warnings but the command
 -- should have been committed both on the distributed table and the placements
 SET client_min_messages TO WARNING;
@@ -112,7 +113,7 @@ SET client_min_messages TO ERROR;
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
 SELECT run_command_on_placements('test_table', $$SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = '%s'::regclass;$$) ORDER BY 1;
 
--- now cancel just after the worker sends response to 
+-- now cancel just after the worker sends response to
 -- but Postgres doesn't accepts interrupts during COMMIT and ROLLBACK
 -- so should not cancel at all, so not an effective test but adding in
 -- case Citus messes up this behaviour
@@ -133,7 +134,7 @@ SET LOCAL client_min_messages TO WARNING;
 ALTER TABLE test_table DROP COLUMN new_column;
 ROLLBACK;
 
--- now cancel just after the worker sends response to 
+-- now cancel just after the worker sends response to
 -- but Postgres doesn't accepts interrupts during COMMIT and ROLLBACK
 -- so should not cancel at all, so not an effective test but adding in
 -- case Citus messes up this behaviour
@@ -142,7 +143,7 @@ BEGIN;
 ALTER TABLE test_table DROP COLUMN new_column;
 ROLLBACK;
 
--- but now kill just after the worker sends response to 
+-- but now kill just after the worker sends response to
 -- ROLLBACK command, so we'll have lots of warnings but the command
 -- should have been rollbacked both on the distributed table and the placements
 SELECT citus.mitmproxy('conn.onCommandComplete(command="ROLLBACK").kill()');
@@ -154,16 +155,16 @@ SELECT citus.mitmproxy('conn.allow()');
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
 SELECT run_command_on_placements('test_table', $$SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = '%s'::regclass;$$) ORDER BY 1;
 
--- now, lets test with 2PC 
+-- now, lets test with 2PC
 SET citus.multi_shard_commit_protocol TO '2pc';
 
--- in the first test, kill just in the first 
+-- in the first test, kill just in the first
 -- response we get from the worker
 SELECT citus.mitmproxy('conn.onAuthenticationOk().kill()');
 ALTER TABLE test_table DROP COLUMN new_column;
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
 
--- cancel just in the first 
+-- cancel just in the first
 -- response we get from the worker
 SELECT citus.mitmproxy('conn.onAuthenticationOk().cancel(' ||  pg_backend_pid() || ')');
 ALTER TABLE test_table DROP COLUMN new_column;
@@ -257,7 +258,7 @@ SELECT citus.mitmproxy('conn.allow()');
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
 SELECT run_command_on_placements('test_table', $$SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = '%s'::regclass;$$) ORDER BY 1;
 
--- but now kill just after the worker sends response to 
+-- but now kill just after the worker sends response to
 -- ROLLBACK command, so we'll have lots of warnings but the command
 -- should have been rollbacked both on the distributed table and the placements
 SELECT citus.mitmproxy('conn.onCommandComplete(command="ROLLBACK").kill()');
@@ -281,13 +282,13 @@ DROP TABLE test_table;
 CREATE TABLE test_table (key int, value int);
 SELECT create_distributed_table('test_table', 'key');
 
--- in the first test, kill just in the first 
+-- in the first test, kill just in the first
 -- response we get from the worker
 SELECT citus.mitmproxy('conn.onAuthenticationOk().kill()');
 ALTER TABLE test_table ADD COLUMN new_column INT;
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
 
--- cancel just in the first 
+-- cancel just in the first
 -- response we get from the worker
 SELECT citus.mitmproxy('conn.onAuthenticationOk().cancel(' ||  pg_backend_pid() || ')');
 ALTER TABLE test_table ADD COLUMN new_column INT;
@@ -321,7 +322,7 @@ SELECT citus.mitmproxy('conn.allow()');
 -- we should be able to recover the transaction and
 -- see that the command is rollbacked on all workers
 -- note that in this case recover_prepared_transactions()
--- sends ROLLBACK PREPARED to the workers given that 
+-- sends ROLLBACK PREPARED to the workers given that
 -- the transaction has not been commited on any placement yet
 SELECT recover_prepared_transactions();
 SELECT run_command_on_placements('test_table', $$SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = '%s'::regclass;$$) ORDER BY 1;
@@ -368,7 +369,7 @@ SELECT citus.mitmproxy('conn.allow()');
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
 SELECT run_command_on_placements('test_table', $$SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = '%s'::regclass;$$) ORDER BY 1;
 
--- but now kill just after the worker sends response to 
+-- but now kill just after the worker sends response to
 -- ROLLBACK command, so we'll have lots of warnings but the command
 -- should have been rollbacked both on the distributed table and the placements
 SELECT citus.mitmproxy('conn.onCommandComplete(command="ROLLBACK").kill()');
