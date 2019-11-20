@@ -32,6 +32,9 @@
 #include "utils/memutils.h"
 
 
+static void ErrorIfAnyMetadataNodeOutOfSync(List *metadataNodeList);
+
+
 /*
  * SendCommandToWorker sends a command to a particular worker as part of the
  * 2PC.
@@ -54,6 +57,11 @@ SendCommandToWorkersAsUser(TargetWorkerSet targetWorkerSet, const char *nodeUser
 {
 	List *workerNodeList = TargetWorkerSetNodeList(targetWorkerSet, ShareLock);
 	ListCell *workerNodeCell = NULL;
+
+	if (targetWorkerSet == WORKERS_WITH_METADATA)
+	{
+		ErrorIfAnyMetadataNodeOutOfSync(workerNodeList);
+	}
 
 	/* run commands serially */
 	foreach(workerNodeCell, workerNodeList)
@@ -120,8 +128,7 @@ TargetWorkerSetNodeList(TargetWorkerSet targetWorkerSet, LOCKMODE lockMode)
 	{
 		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
 
-		if (targetWorkerSet == WORKERS_WITH_METADATA &&
-			(!workerNode->hasMetadata || !workerNode->metadataSynced))
+		if (targetWorkerSet == WORKERS_WITH_METADATA && !workerNode->hasMetadata)
 		{
 			continue;
 		}
@@ -152,6 +159,11 @@ SendBareCommandListToWorkers(TargetWorkerSet targetWorkerSet, List *commandList)
 	ListCell *workerNodeCell = NULL;
 	char *nodeUser = CitusExtensionOwnerName();
 	ListCell *commandCell = NULL;
+
+	if (targetWorkerSet == WORKERS_WITH_METADATA)
+	{
+		ErrorIfAnyMetadataNodeOutOfSync(workerNodeList);
+	}
 
 	/* run commands serially */
 	foreach(workerNodeCell, workerNodeList)
@@ -192,6 +204,11 @@ SendBareOptionalCommandListToWorkersAsUser(TargetWorkerSet targetWorkerSet,
 	ListCell *workerNodeCell = NULL;
 	ListCell *commandCell = NULL;
 	int maxError = RESPONSE_OKAY;
+
+	if (targetWorkerSet == WORKERS_WITH_METADATA)
+	{
+		ErrorIfAnyMetadataNodeOutOfSync(workerNodeList);
+	}
 
 	/* run commands serially */
 	foreach(workerNodeCell, workerNodeList)
@@ -243,6 +260,11 @@ SendCommandToWorkersParams(TargetWorkerSet targetWorkerSet, const char *command,
 	ListCell *connectionCell = NULL;
 	List *workerNodeList = TargetWorkerSetNodeList(targetWorkerSet, ShareLock);
 	ListCell *workerNodeCell = NULL;
+
+	if (targetWorkerSet == WORKERS_WITH_METADATA)
+	{
+		ErrorIfAnyMetadataNodeOutOfSync(workerNodeList);
+	}
 
 	BeginOrContinueCoordinatedTransaction();
 	CoordinatedTransactionUse2PC();
@@ -346,4 +368,43 @@ SendCommandListToWorkerInSingleTransaction(const char *nodeName, int32 nodePort,
 
 	RemoteTransactionCommit(workerConnection);
 	CloseConnection(workerConnection);
+}
+
+
+/*
+ * ErrorIfAnyMetadataNodeOutOfSync raises an error if any of the given
+ * metadata nodes are out of sync. It is safer to avoid metadata changing
+ * commands (e.g. DDL or node addition) until all metadata nodes have
+ * been synced.
+ *
+ * An example of we could get in a bad situation without doing so is:
+ *  1. Create a reference table
+ *  2. After the node becomes out of sync, add a new active node
+ *  3. Insert into the reference table from the out of sync node
+ *
+ * Since the out-of-sync might not know about the new node, it won't propagate
+ * the changes to the new node and replicas will be in an inconsistent state.
+ */
+static void
+ErrorIfAnyMetadataNodeOutOfSync(List *metadataNodeList)
+{
+	ListCell *workerNodeCell = NULL;
+
+	foreach(workerNodeCell, metadataNodeList)
+	{
+		WorkerNode *metadataNode = lfirst(workerNodeCell);
+
+		Assert(metadataNode->hasMetadata);
+
+		if (!metadataNode->metadataSynced)
+		{
+			const char *workerName = metadataNode->workerName;
+			int workerPort = metadataNode->workerPort;
+			ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+							errmsg("%s:%d is a metadata node, but is out of sync",
+								   workerName, workerPort),
+							errhint("If the node is up, wait until metadata"
+									" gets synced to it and try again.")));
+		}
+	}
 }

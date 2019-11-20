@@ -624,6 +624,12 @@ SELECT create_distributed_function('add_with_param_names(int, int)', '$1', coloc
 ERROR:  cannot colocate function "add_with_param_names" and table "replicated_table_func_test"
 DETAIL:  Citus currently only supports colocating function with distributed tables that are created using streaming replication model.
 HINT:  When distributing tables make sure that citus.replication_model = 'streaming'
+SELECT wait_until_metadata_sync();
+ wait_until_metadata_sync 
+--------------------------
+ 
+(1 row)
+
 -- a function can be colocated with a different distribution argument type
 -- as long as there is a coercion path
 SET citus.shard_replication_factor TO 1;
@@ -767,6 +773,7 @@ DROP SCHEMA function_tests2 CASCADE;
 \c - - - :worker_1_port
 SET client_min_messages TO error; -- suppress cascading objects dropping
 UPDATE pg_dist_local_group SET groupid = 0;
+UPDATE pg_dist_node SET hasmetadata=false;
 SELECT worker_drop_distributed_table(logicalrelid::text) FROM pg_dist_partition WHERE logicalrelid::text ILIKE '%replicated_table_func_test%';
  worker_drop_distributed_table 
 -------------------------------
@@ -781,6 +788,7 @@ TRUNCATE pg_dist_node;
 \c - - - :worker_2_port
 SET client_min_messages TO error; -- suppress cascading objects dropping
 UPDATE pg_dist_local_group SET groupid = 0;
+UPDATE pg_dist_node SET hasmetadata=false;
 SELECT worker_drop_distributed_table(logicalrelid::text) FROM pg_dist_partition WHERE logicalrelid::text ILIKE '%replicated_table_func_test%';
  worker_drop_distributed_table 
 -------------------------------
