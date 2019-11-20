@@ -28,8 +28,8 @@ MX_DEPDIR := .deps
 pg_upgrade_check = $(citus_abs_srcdir)/upgrade/pg_upgrade_test.py
 citus_upgrade_check = $(citus_abs_srcdir)/upgrade/citus_upgrade_test.py
 
-template_mx_files = $(shell find $(citus_abs_srcdir)/specs/ -name 'base*mx.spec')
-generated_mx_files = $(patsubst $(citus_abs_srcdir)/specs/base_isolation%,$(citus_abs_srcdir)/specs/isolation%,$(template_mx_files))
+template_mx_files = $(shell find $(citus_abs_srcdir)/specs/ -name '*.spec')
+generated_mx_files = $(patsubst $(citus_abs_srcdir)/specs/%,$(citus_abs_srcdir)/build/specs/%,$(template_mx_files))
 # XXX: Can't actually do useful testruns against install - $libdir
 # etc will point to the directory configured during postgres'
 # build. We could copy the installed tree around, but that's quite
@@ -54,7 +54,7 @@ check-full: check-multi check-multi-mx check-multi-task-tracker-extra check-work
 
 
 ISOLATION_DEPDIR=.deps/isolation
-ISOLATION_BUILDDIR=build/isolation
+ISOLATION_BUILDDIR=build/specs
 
 # this can be used to print a value of variable
 # ex: make print-generated_mx_files
@@ -63,7 +63,7 @@ print-%  : ; @echo $* = $($*)
 $(ISOLATION_DEPDIR) $(ISOLATION_BUILDDIR):
 	mkdir -p $(citus_abs_srcdir)/$@
 
-$(generated_mx_files): $(citus_abs_srcdir)/specs/%: $(citus_abs_srcdir)/specs/base_% $(ISOLATION_DEPDIR) $(ISOLATION_BUILDDIR)
+$(generated_mx_files): $(citus_abs_srcdir)/build/specs/%: $(citus_abs_srcdir)/specs/% $(ISOLATION_DEPDIR) $(ISOLATION_BUILDDIR)
 	cd $(citus_abs_srcdir) && cpp -undef -w -P -MMD -MP -MF$(ISOLATION_DEPDIR)/$(*F).Po -MT$@ $< > $@
 
 Isolation_Po_files := $(wildcard $(ISOLATION_DEPDIR)/*.Po)

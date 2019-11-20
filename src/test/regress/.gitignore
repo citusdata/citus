@@ -6,6 +6,7 @@
 /tmp_upgrade/
 /tmp_citus_upgrade/
 /tmp_citus_tarballs/
+/build/
 /results/
 /log/
 
