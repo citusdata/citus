@@ -52,12 +52,24 @@ check: check-full
 # check-full triggers all tests that ought to be run routinely
 check-full: check-multi check-multi-mx check-multi-task-tracker-extra check-worker check-follower-cluster check-failure
 
+
+ISOLATION_DEPDIR=.deps/isolation
+ISOLATION_BUILDDIR=build/isolation
+
 # this can be used to print a value of variable
 # ex: make print-generated_mx_files
 print-%  : ; @echo $* = $($*)
 
-$(generated_mx_files): $(citus_abs_srcdir)/specs/%: $(citus_abs_srcdir)/specs/base_%
-	cd $(citus_abs_srcdir) && cpp -undef -w -P -MMD -MP -MT -MF $(DEPDIR)/$*.d $@ $< > $@
+$(ISOLATION_DEPDIR) $(ISOLATION_BUILDDIR):
+	mkdir -p $(citus_abs_srcdir)/$@
+
+$(generated_mx_files): $(citus_abs_srcdir)/specs/%: $(citus_abs_srcdir)/specs/base_% $(ISOLATION_DEPDIR) $(ISOLATION_BUILDDIR)
+	cd $(citus_abs_srcdir) && cpp -undef -w -P -MMD -MP -MF$(ISOLATION_DEPDIR)/$(*F).Po -MT$@ $< > $@
+
+Isolation_Po_files := $(wildcard $(ISOLATION_DEPDIR)/*.Po)
+ifneq (,$(Isolation_Po_files))
+include $(Isolation_Po_files)
+endif	
 
 # using pg_regress_multi_check unnecessarily starts up multiple nodes, which isn't needed
 # for check-worker. But that's harmless besides a few cycles.
