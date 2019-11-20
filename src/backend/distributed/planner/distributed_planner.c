@@ -1169,7 +1169,7 @@ FinalizeRouterPlan(PlannedStmt *localPlan, CustomScan *customScan)
 		/* build target entry pointing to remote scan range table entry */
 		Var *newVar = makeVarFromTargetEntry(customScanRangeTableIndex, targetEntry);
 
-		if (newVar->vartype == RECORDOID)
+		if (newVar->vartype == RECORDOID || newVar->vartype == RECORDARRAYOID)
 		{
 			/*
 			 * Add the anonymous composite type to the type cache and store
@@ -1263,7 +1263,7 @@ BlessRecordExpression(Expr *expr)
 			Oid rowArgTypeId = exprType(rowArg);
 			int rowArgTypeMod = exprTypmod(rowArg);
 
-			if (rowArgTypeId == RECORDOID)
+			if (rowArgTypeId == RECORDOID || rowArgTypeId == RECORDARRAYOID)
 			{
 				/* ensure nested rows are blessed as well */
 				rowArgTypeMod = BlessRecordExpression((Expr *) rowArg);
@@ -1280,6 +1280,33 @@ BlessRecordExpression(Expr *expr)
 		BlessTupleDesc(rowTupleDesc);
 
 		typeMod = rowTupleDesc->tdtypmod;
+	}
+	else if (IsA(expr, ArrayExpr))
+	{
+		/*
+		 * Handle row array expressions, e.g. SELECT ARRAY[(1,2)];
+		 */
+		ArrayExpr *arrayExpr = (ArrayExpr *) expr;
+		ListCell *elemCell = NULL;
+
+		foreach(elemCell, arrayExpr->elements)
+		{
+			Node *elemArg = (Node *) lfirst(elemCell);
+			int32 arrayTypeMod = BlessRecordExpression((Expr *) elemArg);
+
+			/*
+			 * Postgres allows ARRAY[(1,2),(1,2,3)]. We do not.
+			 * If multiple RECORD shapes exist in an ArrayExpr, bail out.
+			 */
+			if (typeMod == -1)
+			{
+				typeMod = arrayTypeMod;
+			}
+			else if (arrayTypeMod != typeMod)
+			{
+				return -1;
+			}
+		}
 	}
 
 	return typeMod;
