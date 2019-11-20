@@ -104,10 +104,8 @@ FROM
 DEBUG:  generating subplan 11_1 for CTE some_values_1: SELECT key, random() AS random FROM intermediate_result_pruning.table_1 WHERE (value OPERATOR(pg_catalog.=) ANY (ARRAY['3'::text, '4'::text]))
 DEBUG:  generating subplan 11_2 for CTE some_values_2: SELECT key, random() AS random FROM (SELECT intermediate_result.key, intermediate_result.random FROM read_intermediate_result('11_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, random double precision)) some_values_1
 DEBUG:  Plan 11 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT intermediate_result.key, intermediate_result.random FROM read_intermediate_result('11_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, random double precision)) some_values_2 JOIN intermediate_result_pruning.table_2 USING (key)) WHERE (table_2.key OPERATOR(pg_catalog.=) 1)
-DEBUG:  Subplan 11_1 will be sent to localhost:57637
 DEBUG:  Subplan 11_1 will be sent to localhost:57638
 DEBUG:  Subplan 11_2 will be sent to localhost:57637
-DEBUG:  Subplan 11_2 will be sent to localhost:57638
  count 
 -------
      0
@@ -126,10 +124,9 @@ FROM
 DEBUG:  generating subplan 14_1 for CTE some_values_1: SELECT key, random() AS random FROM intermediate_result_pruning.table_1 WHERE (value OPERATOR(pg_catalog.=) ANY (ARRAY['3'::text, '4'::text]))
 DEBUG:  generating subplan 14_2 for CTE some_values_2: SELECT some_values_1.key, random() AS random FROM ((SELECT intermediate_result.key, intermediate_result.random FROM read_intermediate_result('14_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, random double precision)) some_values_1 JOIN intermediate_result_pruning.table_2 USING (key))
 DEBUG:  Plan 14 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT intermediate_result.key, intermediate_result.random FROM read_intermediate_result('14_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, random double precision)) some_values_2 JOIN intermediate_result_pruning.table_2 USING (key)) WHERE (table_2.key OPERATOR(pg_catalog.=) 3)
-DEBUG:  Subplan 14_1 will be sent to localhost:57638
 DEBUG:  Subplan 14_1 will be sent to localhost:57637
+DEBUG:  Subplan 14_1 will be sent to localhost:57638
 DEBUG:  Subplan 14_2 will be sent to localhost:57638
-DEBUG:  Subplan 14_2 will be sent to localhost:57637
  count 
 -------
      1
@@ -152,7 +149,6 @@ DEBUG:  Plan 17 query after replacing subqueries and CTEs: SELECT count(*) AS co
 DEBUG:  Subplan 17_1 will be sent to localhost:57638
 DEBUG:  Subplan 17_1 will be sent to localhost:57637
 DEBUG:  Subplan 17_2 will be sent to localhost:57638
-DEBUG:  Subplan 17_2 will be sent to localhost:57637
  count 
 -------
      1
@@ -175,7 +171,6 @@ DEBUG:  Plan 20 query after replacing subqueries and CTEs: SELECT count(*) AS co
 DEBUG:  Subplan 20_1 will be sent to localhost:57638
 DEBUG:  Subplan 20_1 will be sent to localhost:57637
 DEBUG:  Subplan 20_2 will be sent to localhost:57638
-DEBUG:  Subplan 20_2 will be sent to localhost:57637
  count 
 -------
      0
@@ -323,10 +318,8 @@ DEBUG:  Plan 39 query after replacing subqueries and CTEs: SELECT DISTINCT key F
 DEBUG:  Plan 38 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT intermediate_result.key FROM read_intermediate_result('38_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) top_cte JOIN intermediate_result_pruning.table_2 USING (key))
 DEBUG:  Subplan 38_1 will be sent to localhost:57637
 DEBUG:  Subplan 38_1 will be sent to localhost:57638
-DEBUG:  Subplan 39_1 will be sent to localhost:57638
 DEBUG:  Subplan 39_1 will be sent to localhost:57637
 DEBUG:  Subplan 39_2 will be sent to localhost:57638
-DEBUG:  Subplan 39_2 will be sent to localhost:57637
  count 
 -------
      0
@@ -433,10 +426,8 @@ FROM
 DEBUG:  generating subplan 56_1 for CTE some_values_1: SELECT key, random() AS random FROM intermediate_result_pruning.table_1 WHERE (value OPERATOR(pg_catalog.=) ANY (ARRAY['3'::text, '4'::text]))
 DEBUG:  generating subplan 56_2 for CTE some_values_3: SELECT key, random() AS random FROM (SELECT intermediate_result.key, intermediate_result.random FROM read_intermediate_result('56_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, random double precision)) some_values_1
 DEBUG:  Plan 56 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.key, intermediate_result.random FROM read_intermediate_result('56_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, random double precision)) some_values_3
-DEBUG:  Subplan 56_1 will be sent to localhost:57637
 DEBUG:  Subplan 56_1 will be sent to localhost:57638
 DEBUG:  Subplan 56_2 will be sent to localhost:57637
-DEBUG:  Subplan 56_2 will be sent to localhost:57638
  count 
 -------
      2
@@ -488,10 +479,8 @@ DEBUG:  generating subplan 59_4 for subquery SELECT avg((table_2.value)::integer
 DEBUG:  generating subplan 59_5 for subquery SELECT min(table_1.value) AS min FROM (SELECT intermediate_result.avg_ev_type FROM read_intermediate_result('59_4'::text, 'binary'::citus_copy_format) intermediate_result(avg_ev_type numeric)) level_5, intermediate_result_pruning.table_1 WHERE ((level_5.avg_ev_type OPERATOR(pg_catalog.=) (table_1.key)::numeric) AND (table_1.key OPERATOR(pg_catalog.>) 111)) GROUP BY level_5.avg_ev_type
 DEBUG:  generating subplan 59_6 for subquery SELECT avg((level_6.min)::integer) AS avg FROM (SELECT intermediate_result.min FROM read_intermediate_result('59_5'::text, 'binary'::citus_copy_format) intermediate_result(min text)) level_6, intermediate_result_pruning.table_1 WHERE (table_1.key OPERATOR(pg_catalog.=) (level_6.min)::integer) GROUP BY table_1.value
 DEBUG:  Plan 59 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.avg FROM read_intermediate_result('59_6'::text, 'binary'::citus_copy_format) intermediate_result(avg numeric)) bar
-DEBUG:  Subplan 59_1 will be sent to localhost:57637
 DEBUG:  Subplan 59_1 will be sent to localhost:57638
 DEBUG:  Subplan 59_2 will be sent to localhost:57637
-DEBUG:  Subplan 59_2 will be sent to localhost:57638
 DEBUG:  Subplan 59_3 will be sent to localhost:57637
 DEBUG:  Subplan 59_3 will be sent to localhost:57638
 DEBUG:  Subplan 59_4 will be sent to localhost:57637
@@ -499,7 +488,6 @@ DEBUG:  Subplan 59_4 will be sent to localhost:57638
 DEBUG:  Subplan 59_5 will be sent to localhost:57637
 DEBUG:  Subplan 59_5 will be sent to localhost:57638
 DEBUG:  Subplan 59_6 will be sent to localhost:57637
-DEBUG:  Subplan 59_6 will be sent to localhost:57638
  count 
 -------
      0
@@ -550,18 +538,12 @@ DEBUG:  generating subplan 66_4 for subquery SELECT avg((table_2.value)::integer
 DEBUG:  generating subplan 66_5 for subquery SELECT min(table_1.value) AS min FROM (SELECT intermediate_result.avg_ev_type FROM read_intermediate_result('66_4'::text, 'binary'::citus_copy_format) intermediate_result(avg_ev_type numeric)) level_5, intermediate_result_pruning.table_1 WHERE ((level_5.avg_ev_type OPERATOR(pg_catalog.=) (table_1.key)::numeric) AND (table_1.key OPERATOR(pg_catalog.=) 111)) GROUP BY level_5.avg_ev_type
 DEBUG:  generating subplan 66_6 for subquery SELECT avg((level_6.min)::integer) AS avg FROM (SELECT intermediate_result.min FROM read_intermediate_result('66_5'::text, 'binary'::citus_copy_format) intermediate_result(min text)) level_6, intermediate_result_pruning.table_1 WHERE ((table_1.key OPERATOR(pg_catalog.=) (level_6.min)::integer) AND (table_1.key OPERATOR(pg_catalog.=) 4)) GROUP BY table_1.value
 DEBUG:  Plan 66 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.avg FROM read_intermediate_result('66_6'::text, 'binary'::citus_copy_format) intermediate_result(avg numeric)) bar
-DEBUG:  Subplan 66_1 will be sent to localhost:57637
 DEBUG:  Subplan 66_1 will be sent to localhost:57638
 DEBUG:  Subplan 66_2 will be sent to localhost:57637
-DEBUG:  Subplan 66_2 will be sent to localhost:57638
 DEBUG:  Subplan 66_3 will be sent to localhost:57637
-DEBUG:  Subplan 66_3 will be sent to localhost:57638
-DEBUG:  Subplan 66_4 will be sent to localhost:57637
 DEBUG:  Subplan 66_4 will be sent to localhost:57638
-DEBUG:  Subplan 66_5 will be sent to localhost:57637
 DEBUG:  Subplan 66_5 will be sent to localhost:57638
 DEBUG:  Subplan 66_6 will be sent to localhost:57637
-DEBUG:  Subplan 66_6 will be sent to localhost:57638
  count 
 -------
      0
@@ -632,12 +614,11 @@ DEBUG:  generating subplan 82_2 for subquery SELECT key FROM intermediate_result
 DEBUG:  Plan 82 query after replacing subqueries and CTEs: SELECT intermediate_result.key FROM read_intermediate_result('82_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer) INTERSECT SELECT intermediate_result.key FROM read_intermediate_result('82_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer)
 DEBUG:  generating subplan 81_2 for CTE cte_2: SELECT count(*) AS count FROM (intermediate_result_pruning.table_1 JOIN (SELECT intermediate_result.key FROM read_intermediate_result('81_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) cte_1 USING (key))
 DEBUG:  Plan 81 query after replacing subqueries and CTEs: SELECT count FROM (SELECT intermediate_result.count FROM read_intermediate_result('81_2'::text, 'binary'::citus_copy_format) intermediate_result(count bigint)) cte_2
-DEBUG:  Subplan 81_1 will be sent to localhost:57638
 DEBUG:  Subplan 81_1 will be sent to localhost:57637
+DEBUG:  Subplan 81_1 will be sent to localhost:57638
 DEBUG:  Subplan 82_1 will be sent to localhost:57637
 DEBUG:  Subplan 82_2 will be sent to localhost:57637
 DEBUG:  Subplan 81_2 will be sent to localhost:57638
-DEBUG:  Subplan 81_2 will be sent to localhost:57637
  count 
 -------
      0
@@ -697,10 +678,8 @@ DEBUG:  generating subplan 90_2 for CTE raw_data: DELETE FROM intermediate_resul
 DEBUG:  generating subplan 92_1 for subquery SELECT min(key) AS min FROM (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('90_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) select_data WHERE (key OPERATOR(pg_catalog.>) 1)
 DEBUG:  Plan 92 query after replacing subqueries and CTEs: DELETE FROM intermediate_result_pruning.table_2 WHERE (key OPERATOR(pg_catalog.>=) (SELECT intermediate_result.min FROM read_intermediate_result('92_1'::text, 'binary'::citus_copy_format) intermediate_result(min integer))) RETURNING key, value
 DEBUG:  Plan 90 query after replacing subqueries and CTEs: SELECT key, value FROM (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('90_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) raw_data
-DEBUG:  Subplan 90_1 will be sent to localhost:57638
 DEBUG:  Subplan 90_1 will be sent to localhost:57637
 DEBUG:  Subplan 90_2 will be sent to localhost:57638
-DEBUG:  Subplan 90_2 will be sent to localhost:57637
 DEBUG:  Subplan 92_1 will be sent to localhost:57637
 DEBUG:  Subplan 92_1 will be sent to localhost:57638
  key | value 
@@ -729,10 +708,8 @@ DEBUG:  generating subplan 94_2 for CTE raw_data: DELETE FROM intermediate_resul
 DEBUG:  generating subplan 96_1 for subquery SELECT min(key) AS min FROM (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('94_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) select_data WHERE ((key)::double precision OPERATOR(pg_catalog.>) ((1)::double precision OPERATOR(pg_catalog.+) random()))
 DEBUG:  Plan 96 query after replacing subqueries and CTEs: DELETE FROM intermediate_result_pruning.table_2 WHERE ((value)::integer OPERATOR(pg_catalog.>=) (SELECT intermediate_result.min FROM read_intermediate_result('96_1'::text, 'binary'::citus_copy_format) intermediate_result(min integer))) RETURNING key, value
 DEBUG:  Plan 94 query after replacing subqueries and CTEs: SELECT key, value FROM (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('94_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) raw_data
-DEBUG:  Subplan 94_1 will be sent to localhost:57638
 DEBUG:  Subplan 94_1 will be sent to localhost:57637
 DEBUG:  Subplan 94_2 will be sent to localhost:57638
-DEBUG:  Subplan 94_2 will be sent to localhost:57637
 DEBUG:  Subplan 96_1 will be sent to localhost:57637
 DEBUG:  Subplan 96_1 will be sent to localhost:57638
  key | value 
@@ -848,11 +825,9 @@ DEBUG:  generating subplan 114_2 for CTE cte_2: SELECT table_1.key FROM intermed
 DEBUG:  generating subplan 114_3 for subquery SELECT cte_1.key FROM (SELECT intermediate_result.key FROM read_intermediate_result('114_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) cte_1 UNION SELECT cte_2.key FROM (SELECT intermediate_result.key FROM read_intermediate_result('114_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) cte_2
 DEBUG:  Plan 114 query after replacing subqueries and CTEs: SELECT table_2.key, table_2.value FROM intermediate_result_pruning.table_2, (SELECT intermediate_result.key FROM read_intermediate_result('114_3'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) foo WHERE ((table_2.key OPERATOR(pg_catalog.<>) 1) AND (foo.key OPERATOR(pg_catalog.=) (table_2.value)::integer))
 DEBUG:  Subplan 114_1 will be sent to localhost:57637
-DEBUG:  Subplan 114_1 will be sent to localhost:57638
 DEBUG:  Subplan 115_1 will be sent to localhost:57638
 DEBUG:  Subplan 115_2 will be sent to localhost:57638
 DEBUG:  Subplan 114_2 will be sent to localhost:57637
-DEBUG:  Subplan 114_2 will be sent to localhost:57638
 DEBUG:  Subplan 114_3 will be sent to localhost:57637
 DEBUG:  Subplan 114_3 will be sent to localhost:57638
 -- append partitioned/heap-type

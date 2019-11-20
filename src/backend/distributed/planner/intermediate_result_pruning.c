@@ -207,7 +207,7 @@ MakeIntermediateResultHTAB()
 	HASHCTL info = { 0 };
 	int initialNumberOfElements = 16;
 
-	info.keysize = sizeof(NAMEDATALEN);
+	info.keysize = sizeof(char *);
 	info.entrysize = sizeof(IntermediateResultsHashEntry);
 	info.hash = string_hash;
 	info.hcxt = CurrentMemoryContext;
