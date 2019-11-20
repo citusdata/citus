@@ -69,7 +69,6 @@ bool SubqueryPushdown = false; /* is subquery pushdown enabled */
 /* Local functions forward declarations */
 static bool JoinTreeContainsSubqueryWalker(Node *joinTreeNode, void *context);
 static bool IsFunctionRTE(Node *node);
-static bool IsNodeSubquery(Node *node);
 static bool IsOuterJoinExpr(Node *node);
 static bool WindowPartitionOnDistributionColumn(Query *query);
 static DeferredErrorMessage * DeferErrorIfFromClauseRecurs(Query *queryTree);
@@ -344,7 +343,7 @@ IsFunctionRTE(Node *node)
  * (select 1) are converted to init plans in the rewritten query. In this case
  * the only thing left in the query tree is a Param node with type PARAM_EXEC.
  */
-static bool
+bool
 IsNodeSubquery(Node *node)
 {
 	if (node == NULL)

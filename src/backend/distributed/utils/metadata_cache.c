@@ -2979,6 +2979,20 @@ GetWorkerNodeHash(void)
 
 
 /*
+ * GetWorkerNodeCount returns the number of worker nodes
+ *
+ * If the Worker Node cache is not (yet) valid, it is first rebuilt.
+ */
+int
+GetWorkerNodeCount(void)
+{
+	PrepareWorkerNodeCache();
+
+	return WorkerNodeCount;
+}
+
+
+/*
  * PrepareWorkerNodeCache makes sure the worker node data from pg_dist_node is cached,
  * if it is not already cached.
  */

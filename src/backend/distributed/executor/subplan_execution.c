@@ -10,6 +10,7 @@
 
 #include "postgres.h"
 
+#include "distributed/intermediate_result_pruning.h"
 #include "distributed/intermediate_results.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_physical_planner.h"
@@ -35,18 +36,17 @@ ExecuteSubPlans(DistributedPlan *distributedPlan)
 	uint64 planId = distributedPlan->planId;
 	List *subPlanList = distributedPlan->subPlanList;
 	ListCell *subPlanCell = NULL;
-	List *nodeList = NIL;
-
-	/* If you're not a worker node, you should write local file to make sure
-	 * you have the data too */
-	bool writeLocalFile = GetLocalGroupId() == 0;
-
+	HTAB *intermediateResultsHash = NULL;
 
 	if (subPlanList == NIL)
 	{
 		/* no subplans to execute */
 		return;
 	}
+
+	intermediateResultsHash = MakeIntermediateResultHTAB();
+	RecordSubplanExecutionsOnNodes(intermediateResultsHash, distributedPlan);
+
 
 	/*
 	 * Make sure that this transaction has a distributed transaction ID.
@@ -56,8 +56,6 @@ ExecuteSubPlans(DistributedPlan *distributedPlan)
 	 */
 	BeginOrContinueCoordinatedTransaction();
 
-	nodeList = ActiveReadableWorkerNodeList();
-
 	foreach(subPlanCell, subPlanList)
 	{
 		DistributedSubPlan *subPlan = (DistributedSubPlan *) lfirst(subPlanCell);
@@ -66,14 +64,39 @@ ExecuteSubPlans(DistributedPlan *distributedPlan)
 		DestReceiver *copyDest = NULL;
 		ParamListInfo params = NULL;
 		EState *estate = NULL;
-
+		bool writeLocalFile = false;
 		char *resultId = GenerateResultId(planId, subPlanId);
+		List *workerNodeList =
+			FindAllWorkerNodesUsingSubplan(intermediateResultsHash, resultId);
+
+		/*
+		 * Write intermediate results to local file only if there is no worker
+		 * node that receives them.
+		 *
+		 * This could happen in two cases:
+		 * (a) Subquery in the having
+		 * (b) The intermediate result is not used, such as RETURNING of a
+		 *     modifying CTE is not used
+		 *
+		 * For SELECT, Postgres/Citus is clever enough to not execute the CTE
+		 * if it is not used at all, but for modifications we have to execute
+		 * the queries.
+		 */
+		if (workerNodeList == NIL)
+		{
+			writeLocalFile = true;
+
+			if ((LogIntermediateResults && IsLoggableLevel(DEBUG1)) ||
+				IsLoggableLevel(DEBUG4))
+			{
+				elog(DEBUG1, "Subplan %s will be written to local file", resultId);
+			}
+		}
 
 		SubPlanLevel++;
 		estate = CreateExecutorState();
-		copyDest = (DestReceiver *) CreateRemoteFileDestReceiver(resultId, estate,
-																 nodeList,
-																 writeLocalFile);
+		copyDest = CreateRemoteFileDestReceiver(resultId, estate, workerNodeList,
+												writeLocalFile);
 
 		ExecutePlanIntoDestReceiver(plannedStmt, params, copyDest);
 

@@ -224,6 +224,7 @@ ReadDistributedPlan(READFUNC_ARGS)
 	READ_STRING_FIELD(intermediateResultIdPrefix);
 
 	READ_NODE_FIELD(subPlanList);
+	READ_NODE_FIELD(usedSubPlanNodeList);
 
 	READ_NODE_FIELD(planningError);
 

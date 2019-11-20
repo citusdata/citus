@@ -20,11 +20,13 @@
 #include "distributed/citus_nodes.h"
 #include "distributed/function_call_delegation.h"
 #include "distributed/insert_select_planner.h"
+#include "distributed/intermediate_result_pruning.h"
 #include "distributed/intermediate_results.h"
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_executor.h"
 #include "distributed/distributed_planner.h"
+#include "distributed/query_pushdown_planning.h"
 #include "distributed/multi_logical_optimizer.h"
 #include "distributed/multi_logical_planner.h"
 #include "distributed/multi_partitioning_utils.h"
@@ -73,6 +75,8 @@ static DistributedPlan * CreateDistributedPlan(uint64 planId, Query *originalQue
 											   bool hasUnresolvedParams,
 											   PlannerRestrictionContext *
 											   plannerRestrictionContext);
+static void FinalizeDistributedPlan(DistributedPlan *plan, Query *originalQuery);
+static void RecordSubPlansUsedInPlan(DistributedPlan *plan, Query *originalQuery);
 static DeferredErrorMessage * DeferErrorIfPartitionTableNotSingleReplicated(Oid
 																			relationId);
 
@@ -617,6 +621,7 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 	List *subPlanList = NIL;
 	bool hasCtes = originalQuery->cteList != NIL;
 
+
 	if (IsModifyCommand(originalQuery))
 	{
 		Oid targetRelationId = InvalidOid;
@@ -652,6 +657,8 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 
 		if (distributedPlan->planningError == NULL)
 		{
+			FinalizeDistributedPlan(distributedPlan, originalQuery);
+
 			return distributedPlan;
 		}
 		else
@@ -672,7 +679,8 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 										   plannerRestrictionContext);
 		if (distributedPlan->planningError == NULL)
 		{
-			/* successfully created a router plan */
+			FinalizeDistributedPlan(distributedPlan, originalQuery);
+
 			return distributedPlan;
 		}
 		else
@@ -765,6 +773,8 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 												plannerRestrictionContext);
 		distributedPlan->subPlanList = subPlanList;
 
+		FinalizeDistributedPlan(distributedPlan, originalQuery);
+
 		return distributedPlan;
 	}
 
@@ -775,6 +785,8 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 	 */
 	if (IsModifyCommand(originalQuery))
 	{
+		FinalizeDistributedPlan(distributedPlan, originalQuery);
+
 		return distributedPlan;
 	}
 
@@ -806,7 +818,51 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 	/* distributed plan currently should always succeed or error out */
 	Assert(distributedPlan && distributedPlan->planningError == NULL);
 
+	FinalizeDistributedPlan(distributedPlan, originalQuery);
+
 	return distributedPlan;
+}
+
+
+/*
+ * FinalizeDistributedPlan is the final step of distributed planning. The function
+ * currently only implements some optimizations for intermediate result(s) pruning.
+ */
+static void
+FinalizeDistributedPlan(DistributedPlan *plan, Query *originalQuery)
+{
+	RecordSubPlansUsedInPlan(plan, originalQuery);
+}
+
+
+/*
+ * RecordSubPlansUsedInPlan gets a distributed plan a queryTree, and
+ * updates the usedSubPlanNodeList of the distributed plan.
+ *
+ * The function simply pulls all the subPlans that are used in the queryTree
+ * with one exception: subPlans in the HAVING clause. The reason is explained
+ * in the function.
+ */
+static void
+RecordSubPlansUsedInPlan(DistributedPlan *plan, Query *originalQuery)
+{
+	/* first, get all the subplans in the query */
+	plan->usedSubPlanNodeList = FindSubPlansUsedInNode((Node *) originalQuery);
+
+	/*
+	 * Later, remove the subplans used in the HAVING clause, because they
+	 * are only required in the coordinator. Including them in the
+	 * usedSubPlanNodeList prevents the intermediate results to be sent to the
+	 * coordinator only.
+	 */
+	if (originalQuery->hasSubLinks &&
+		FindNodeCheck(originalQuery->havingQual, IsNodeSubquery))
+	{
+		List *subplansInHaving = FindSubPlansUsedInNode(originalQuery->havingQual);
+
+		plan->usedSubPlanNodeList =
+			list_difference(plan->usedSubPlanNodeList, subplansInHaving);
+	}
 }
 
 
