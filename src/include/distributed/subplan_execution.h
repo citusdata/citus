@@ -31,7 +31,7 @@ extern void ExecuteSubPlans(DistributedPlan *distributedPlan);
  */
 typedef struct IntermediateResultsHashEntry
 {
-	char *key;
+	char key[NAMEDATALEN];
 	List *nodeIdList;
 } IntermediateResultsHashEntry;
 
