@@ -639,7 +639,7 @@ IsCreateAlterExtensionUpdateCitusStmt(Node *parseTree)
 	 * Now that we have CreateExtensionStmt or AlterExtensionStmt,
 	 * check if it is run for/on citus
 	 */
-	return (strncasecmp(extensionName, CITUS_NAME, NAMEDATALEN) == 0);
+	return (strncasecmp(extensionName, "citus", NAMEDATALEN) == 0);
 }
 
 
@@ -663,7 +663,7 @@ IsDropCitusStmt(Node *parseTree)
 	{
 		const char *extensionName = strVal(lfirst(objectCell));
 
-		if (strncasecmp(extensionName, CITUS_NAME, NAMEDATALEN) == 0)
+		if (strncasecmp(extensionName, "citus", NAMEDATALEN) == 0)
 		{
 			return true;
 		}
@@ -696,7 +696,7 @@ IsAlterExtensionSetSchemaCitus(Node *parseTree)
 			 * Now that we have AlterObjectSchemaStmt for an extension,
 			 * check if it is run for/on citus
 			 */
-			return (strncasecmp(extensionName, CITUS_NAME, NAMEDATALEN) == 0);
+			return (strncasecmp(extensionName, "citus", NAMEDATALEN) == 0);
 		}
 	}
 
