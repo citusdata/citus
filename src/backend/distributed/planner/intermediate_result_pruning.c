@@ -207,7 +207,7 @@ MakeIntermediateResultHTAB()
 	HASHCTL info = { 0 };
 	int initialNumberOfElements = 16;
 
-	info.keysize = sizeof(IntermediateResultsHashKey);
+	info.keysize = sizeof(NAMEDATALEN);
 	info.entrysize = sizeof(IntermediateResultsHashEntry);
 	info.hash = string_hash;
 	info.hcxt = CurrentMemoryContext;
@@ -260,12 +260,10 @@ FindAllWorkerNodesUsingSubplan(HTAB *intermediateResultsHash,
 static IntermediateResultsHashEntry *
 SearchIntermediateResult(HTAB *intermediateResultsHash, char *resultId)
 {
-	IntermediateResultsHashKey key;
 	IntermediateResultsHashEntry *entry = NULL;
 	bool found = false;
 
-	strlcpy(key.intermediate_result_id, resultId, NAMEDATALEN);
-	entry = hash_search(intermediateResultsHash, &key, HASH_ENTER, &found);
+	entry = hash_search(intermediateResultsHash, resultId, HASH_ENTER, &found);
 
 	/* use sane defaults */
 	if (!found)

@@ -19,14 +19,19 @@ extern int SubPlanLevel;
 
 extern void ExecuteSubPlans(DistributedPlan *distributedPlan);
 
-typedef struct IntermediateResultsHashKey
-{
-	char intermediate_result_id[NAMEDATALEN];
-} IntermediateResultsHashKey;
-
+/**
+ * IntermediateResultsHashEntry is used to store which nodes need to receive
+ * intermediate results. Given an intermediate result name, you can lookup
+ * the list of nodes that can possibly run a query that will use the
+ * intermediate results.
+ *
+ * The nodeIdList contains a set of unique WorkerNode ids that have placements
+ * that can be used in non-colocated subquery joins with the intermediate result
+ * given in the key.
+ */
 typedef struct IntermediateResultsHashEntry
 {
-	IntermediateResultsHashKey key;
+	char *key;
 	List *nodeIdList;
 } IntermediateResultsHashEntry;
 
