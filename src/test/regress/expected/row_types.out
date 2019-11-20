@@ -34,6 +34,19 @@ SELECT create_distributed_function('record_returner(int)');
  
 (1 row)
 
+CREATE OR REPLACE FUNCTION identity_returner(x anyelement)
+RETURNS anyelement
+AS $$
+BEGIN
+	RETURN x;
+END;
+$$ language plpgsql;
+SELECT create_distributed_function('identity_returner(anyelement)');
+ create_distributed_function 
+-----------------------------
+ 
+(1 row)
+
 INSERT INTO test VALUES (1,2), (1,3), (2,2), (2,3);
 -- multi-shard queries support row types
 SELECT (x,y) FROM test ORDER BY x, y;
@@ -54,13 +67,13 @@ SELECT (x,y) FROM test GROUP BY x, y ORDER BY x, y;
  (2,3)
 (4 rows)
 
-SELECT ARRAY[(x,(y,x)),(y,(x,y))] FROM test ORDER BY x, y;
-               array               
------------------------------------
- {"(1,\"(2,1)\")","(2,\"(1,2)\")"}
- {"(1,\"(3,1)\")","(3,\"(1,3)\")"}
- {"(2,\"(2,2)\")","(2,\"(2,2)\")"}
- {"(2,\"(3,2)\")","(3,\"(2,3)\")"}
+SELECT ARRAY[NULL,(x,(y,x)),NULL,(y,(x,y))] FROM test ORDER BY x, y;
+                    array                    
+---------------------------------------------
+ {NULL,"(1,\"(2,1)\")",NULL,"(2,\"(1,2)\")"}
+ {NULL,"(1,\"(3,1)\")",NULL,"(3,\"(1,3)\")"}
+ {NULL,"(2,\"(2,2)\")",NULL,"(2,\"(2,2)\")"}
+ {NULL,"(2,\"(3,2)\")",NULL,"(3,\"(2,3)\")"}
 (4 rows)
 
 SELECT ARRAY[[(x,(y,x))],[(x,(x,y))]] FROM test ORDER BY x, y;
@@ -99,10 +112,71 @@ SELECT record_returner(x) FROM test ORDER BY x, y;
  (3,returned)
 (4 rows)
 
--- RECORD[] with varying shape unsupported
+SELECT NULLIF((x, y), (y, x)) FROM test ORDER BY x, y;
+ nullif 
+--------
+ (1,2)
+ (1,3)
+ 
+ (2,3)
+(4 rows)
+
+SELECT LEAST((x, y), (y, x)) FROM test ORDER BY x, y;
+ least 
+-------
+ (1,2)
+ (1,3)
+ (2,2)
+ (2,3)
+(4 rows)
+
+SELECT GREATEST((x, y), (y, x)) FROM test ORDER BY x, y;
+ greatest 
+----------
+ (2,1)
+ (3,1)
+ (2,2)
+ (3,2)
+(4 rows)
+
+SELECT COALESCE(NULL, (x, y), (y, x)) FROM test ORDER BY x, y;
+ coalesce 
+----------
+ (1,2)
+ (1,3)
+ (2,2)
+ (2,3)
+(4 rows)
+
+SELECT CASE x WHEN 2 THEN (x, y) ELSE (y, x) END FROM test ORDER BY x, y;
+  row  
+-------
+ (2,1)
+ (3,1)
+ (2,2)
+ (2,3)
+(4 rows)
+
+SELECT CASE x WHEN 2 THEN (x, y) END FROM test ORDER BY x, y;
+ case  
+-------
+ 
+ 
+ (2,2)
+ (2,3)
+(4 rows)
+
+-- varying shape unsupported
 SELECT ARRAY[(x,(y,x),y),(y,(x,y))] FROM test ORDER BY x, y;
 ERROR:  input of anonymous composite types is not implemented
 SELECT ARRAY[[(x,(y,x))],[((x,x),y)]] FROM test ORDER BY x, y;
+ERROR:  input of anonymous composite types is not implemented
+SELECT CASE x WHEN 2 THEN (x, y, x) ELSE (y, x) END FROM test ORDER BY x, y;
+ERROR:  input of anonymous composite types is not implemented
+-- RECORD from polymorphic types unsupported
+SELECT identity_returner((x, y)) FROM test ORDER BY x, y;
+ERROR:  input of anonymous composite types is not implemented
+SELECT array_agg((x, y)) FROM test;
 ERROR:  input of anonymous composite types is not implemented
 -- router queries support row types
 SELECT (x,y) FROM test WHERE x = 1 ORDER BY x, y;
@@ -119,11 +193,11 @@ SELECT (x,y) AS foo FROM test WHERE x = 1 ORDER BY x, y;
  (1,3)
 (2 rows)
 
-SELECT ARRAY[(x,(y,x)),(y,(x,y))] FROM test WHERE x = 1 ORDER BY x, y;
-               array               
------------------------------------
- {"(1,\"(2,1)\")","(2,\"(1,2)\")"}
- {"(1,\"(3,1)\")","(3,\"(1,3)\")"}
+SELECT ARRAY[NULL,(x,(y,x)),NULL,(y,(x,y))] FROM test WHERE x = 1 ORDER BY x, y;
+                    array                    
+---------------------------------------------
+ {NULL,"(1,\"(2,1)\")",NULL,"(2,\"(1,2)\")"}
+ {NULL,"(1,\"(3,1)\")",NULL,"(3,\"(1,3)\")"}
 (2 rows)
 
 SELECT ARRAY[[(x,(y,x))],[(x,(x,y))]] FROM test WHERE x = 1 ORDER BY x, y;
@@ -154,10 +228,59 @@ SELECT record_returner(x) FROM test WHERE x = 1 ORDER BY x, y;
  (2,returned)
 (2 rows)
 
--- RECORD[] with varying shape unsupported
+SELECT NULLIF((x, y), (y, x)) FROM test WHERE x = 1 ORDER BY x, y;
+ nullif 
+--------
+ (1,2)
+ (1,3)
+(2 rows)
+
+SELECT LEAST((x, y), (y, x)) FROM test WHERE x = 1 ORDER BY x, y;
+ least 
+-------
+ (1,2)
+ (1,3)
+(2 rows)
+
+SELECT GREATEST((x, y), (y, x)) FROM test WHERE x = 1 ORDER BY x, y;
+ greatest 
+----------
+ (2,1)
+ (3,1)
+(2 rows)
+
+SELECT COALESCE(NULL, (x, y), (y, x)) FROM test WHERE x = 1 ORDER BY x, y;
+ coalesce 
+----------
+ (1,2)
+ (1,3)
+(2 rows)
+
+SELECT CASE x WHEN 2 THEN (x, y) ELSE (y, x) END FROM test WHERE x = 1 ORDER BY x, y;
+  row  
+-------
+ (2,1)
+ (3,1)
+(2 rows)
+
+SELECT CASE x WHEN 2 THEN (x, y) END FROM test WHERE x = 1 ORDER BY x, y;
+ case 
+------
+ 
+ 
+(2 rows)
+
+-- varying shape unsupported
 SELECT ARRAY[(x,(y,x),y),(y,(x,y))] FROM test WHERE x = 1 ORDER BY x, y;
 ERROR:  input of anonymous composite types is not implemented
 SELECT ARRAY[[(x,(y,x))],[((x,x),y)]] FROM test WHERE x = 1 ORDER BY x, y;
+ERROR:  input of anonymous composite types is not implemented
+SELECT CASE x WHEN 2 THEN (x, y, x) ELSE (y, x) END FROM test WHERE x = 1 ORDER BY x, y;
+ERROR:  input of anonymous composite types is not implemented
+-- RECORD from polymorphic types unsupported
+SELECT identity_returner((x, y)) FROM test WHERE x = 1 ORDER BY x, y;
+ERROR:  input of anonymous composite types is not implemented
+SELECT array_agg((x, y)) FROM test WHERE x = 1;
 ERROR:  input of anonymous composite types is not implemented
 -- nested row expressions
 SELECT (x,(x,y)) AS foo FROM test WHERE x = 1 ORDER BY x, y;
@@ -221,8 +344,5 @@ EXECUTE rec(1);
  (1,3)
 (2 rows)
 
+SET client_min_messages TO error;
 DROP SCHEMA row_types CASCADE;
-NOTICE:  drop cascades to 3 other objects
-DETAIL:  drop cascades to table test
-drop cascades to function table_returner(integer)
-drop cascades to function record_returner(integer)
