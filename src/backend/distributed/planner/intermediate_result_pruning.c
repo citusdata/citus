@@ -3,26 +3,9 @@
  * intermediate_result_pruning.c
  *   Functions for pruning intermediate result broadcasting.
  *
- * In plain words, each distributed plan pulls the necessary intermediate
- * results to the worker nodes that the plan hits. This is primarily useful
- * in three ways. First, if the distributed plan that uses intermediate
- * result(s) is a router query, then the intermediate results are only
- * broadcasted to a single node. Second, if a distributed plan consists
- * of only intermediate results, which is not uncommon, the intermediate
- * results are broadcasted to a single node only. Finally, if a distributed
- * query hits a sub-set of the shards in multiple workers, the intermediate
- * results will be broadcasted to the relevant node(s). The final item becomes
- * crucial for append/range distributed tables where typically the distributed
- * queries hit a small subset of shards/workers.
- *
- * To do this, for each query that Citus creates a distributed plan, we keep
- * track of the subPlans used in the queryTree, and save it in the distributed
- * plan. Just before Citus executes each subPlan, Citus first keeps track of
- * every worker node that the distributed plan hits, and marks every subPlan
- * should be broadcasted to these nodes. Later, for each subPlan which is a
- * distributed plan, Citus does this operation recursively since these
- * distributed plans may access to different subPlans, and those have to be
- * recorded as well.
+ * We only send intermediate results of subqueries and CTEs to worker nodes
+ * that use them in the remainder of the distributed plan to avoid unnecessary
+ * network traffic.
  *
  * Copyright (c) Citus Data, Inc.
  *
