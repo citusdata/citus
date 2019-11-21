@@ -27,6 +27,7 @@
 #include "distributed/master_protocol.h"
 #include "distributed/subplan_execution.h"
 #include "distributed/worker_protocol.h"
+#include "distributed/log_utils.h"
 #include "utils/lsyscache.h"
 
 int RemoteTaskCheckInterval = 100; /* per cycle sleep interval in millisecs */
@@ -52,7 +53,7 @@ JobExecutorType(DistributedPlan *distributedPlan)
 	/* debug distribution column value */
 	if (routerExecutablePlan)
 	{
-		if (log_min_messages <= DEBUG2 || client_min_messages <= DEBUG2)
+		if (IsLoggableLevel(DEBUG2))
 		{
 			Const *partitionValueConst = job->partitionKeyValue;
 
@@ -114,7 +115,7 @@ JobExecutorType(DistributedPlan *distributedPlan)
 	}
 	else
 	{
-		List *workerNodeList = ActiveReadableNodeList();
+		List *workerNodeList = ActiveReadableWorkerNodeList();
 		int workerNodeCount = list_length(workerNodeList);
 		int taskCount = list_length(job->taskList);
 		double tasksPerNode = taskCount / ((double) workerNodeCount);

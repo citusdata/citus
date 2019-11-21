@@ -118,6 +118,7 @@ CopyNodeDistributedPlan(COPYFUNC_ARGS)
 	COPY_STRING_FIELD(intermediateResultIdPrefix);
 
 	COPY_NODE_FIELD(subPlanList);
+	COPY_NODE_FIELD(usedSubPlanNodeList);
 
 	COPY_NODE_FIELD(planningError);
 }

@@ -16,14 +16,17 @@
 #include "distributed/multi_logical_planner.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/errormessage.h"
+#include "distributed/log_utils.h"
 
 
 /* Config variables managed via guc.c */
 extern bool SubqueryPushdown;
 
 
-extern bool ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery);
+extern bool ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery,
+									  PlannerRestrictionContext *plannerRestrictionContext);
 extern bool JoinTreeContainsSubquery(Query *query);
+extern bool IsNodeSubquery(Node *node);
 extern bool HasEmptyJoinTree(Query *query);
 extern bool WhereOrHavingClauseContainsSubquery(Query *query);
 extern bool TargetListContainsSubquery(Query *query);

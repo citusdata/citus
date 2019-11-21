@@ -27,14 +27,13 @@
 /* Maximum length of worker port number (represented as string) */
 #define MAX_PORT_LENGTH 10
 
-/* default filename for citus.worker_list_file */
-#define WORKER_LIST_FILENAME "pg_worker_list.conf"
-
 /* Implementation specific definitions used in finding worker nodes */
 #define WORKER_RACK_TRIES 5
 #define WORKER_DEFAULT_RACK "default"
 
 #define WORKER_DEFAULT_CLUSTER "default"
+
+#define COORDINATOR_GROUP_ID 0
 
 /*
  * In memory representation of pg_dist_node table elements. The elements are hold in
@@ -70,22 +69,24 @@ extern WorkerNode * WorkerGetRoundRobinCandidateNode(List *workerNodeList,
 													 uint64 shardId,
 													 uint32 placementIndex);
 extern WorkerNode * WorkerGetLocalFirstCandidateNode(List *currentNodeList);
-extern uint32 ActivePrimaryNodeCount(void);
+extern uint32 ActivePrimaryWorkerNodeCount(void);
+extern List * ActivePrimaryWorkerNodeList(LOCKMODE lockMode);
 extern List * ActivePrimaryNodeList(LOCKMODE lockMode);
-extern List * ActivePrimaryShouldHaveShardsNodeList(LOCKMODE lockMode);
-extern uint32 ActiveReadableNodeCount(void);
+extern List * ReferenceTablePlacementNodeList(LOCKMODE lockMode);
+extern List * DistributedTablePlacementNodeList(LOCKMODE lockMode);
+extern uint32 ActiveReadableWorkerNodeCount(void);
+extern List * ActiveReadableWorkerNodeList(void);
 extern List * ActiveReadableNodeList(void);
-extern WorkerNode * GetWorkerNodeByNodeId(int nodeId);
 extern WorkerNode * FindWorkerNode(char *nodeName, int32 nodePort);
 extern WorkerNode * FindWorkerNodeAnyCluster(const char *nodeName, int32 nodePort);
-extern List * ReadWorkerNodes(bool includeNodesFromOtherClusters);
+extern List * ReadDistNode(bool includeNodesFromOtherClusters);
 extern void EnsureCoordinator(void);
-extern uint32 GroupForNode(char *nodeName, int32 nodePorT);
+extern uint32 GroupForNode(char *nodeName, int32 nodePort);
 extern WorkerNode * PrimaryNodeForGroup(int32 groupId, bool *groupContainsNodes);
-extern bool WorkerNodeIsPrimary(WorkerNode *worker);
-extern bool WorkerNodeIsSecondary(WorkerNode *worker);
-extern bool WorkerNodeIsPrimaryShouldHaveShardsNode(WorkerNode *worker);
-extern bool WorkerNodeIsReadable(WorkerNode *worker);
+extern bool NodeIsPrimary(WorkerNode *worker);
+extern bool NodeIsSecondary(WorkerNode *worker);
+extern bool NodeIsReadable(WorkerNode *worker);
+extern bool NodeIsCoordinator(WorkerNode *node);
 extern uint32 CountPrimariesWithMetadata(void);
 extern WorkerNode * GetFirstPrimaryWorkerNode(void);
 

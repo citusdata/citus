@@ -44,7 +44,7 @@ WHERE shardid IN (
 ) AND shardstate = 3 RETURNING placementid;
  placementid 
 -------------
-         137
+         125
 (1 row)
 
 TRUNCATE mod_test;
@@ -85,7 +85,7 @@ WHERE shardid IN (
 ) AND shardstate = 3 RETURNING placementid;
  placementid 
 -------------
-         137
+         125
 (1 row)
 
 TRUNCATE mod_test;
@@ -120,7 +120,7 @@ WHERE shardid IN (
 ) AND shardstate = 3 RETURNING placementid;
  placementid 
 -------------
-         137
+         125
 (1 row)
 
 TRUNCATE mod_test;

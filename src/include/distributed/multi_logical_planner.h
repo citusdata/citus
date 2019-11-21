@@ -16,6 +16,7 @@
 
 #include "distributed/citus_nodes.h"
 #include "distributed/errormessage.h"
+#include "distributed/log_utils.h"
 #include "distributed/multi_join_order.h"
 #include "distributed/relation_restriction_equivalence.h"
 #include "nodes/nodes.h"
@@ -192,6 +193,7 @@ extern bool FindNodeCheckInRangeTableList(List *rtable, bool (*check)(Node *));
 extern bool IsDistributedTableRTE(Node *node);
 extern bool QueryContainsDistributedTableRTE(Query *query);
 extern bool ContainsReadIntermediateResultFunction(Node *node);
+extern char * FindIntermediateResultIdIfExists(RangeTblEntry *rte);
 extern MultiNode * ParentNode(MultiNode *multiNode);
 extern MultiNode * ChildNode(MultiUnaryNode *multiNode);
 extern MultiNode * GrandChildNode(MultiUnaryNode *multiNode);
@@ -212,7 +214,6 @@ extern List * TableEntryList(List *rangeTableList);
 extern List * UsedTableEntryList(Query *query);
 extern List * pull_var_clause_default(Node *node);
 extern bool OperatorImplementsEquality(Oid opno);
-extern bool FindNodeCheck(Node *node, bool (*check)(Node *));
 extern DeferredErrorMessage * DeferErrorIfUnsupportedClause(List *clauseList);
 extern MultiProject * MultiProjectNode(List *targetEntryList);
 extern MultiExtendedOp * MultiExtendedOpNode(Query *queryTree);

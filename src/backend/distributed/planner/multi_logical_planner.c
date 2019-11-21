@@ -23,6 +23,7 @@
 #include "distributed/colocation_utils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/insert_select_planner.h"
+#include "distributed/listutils.h"
 #include "distributed/multi_logical_optimizer.h"
 #include "distributed/multi_logical_planner.h"
 #include "distributed/multi_physical_planner.h"
@@ -45,6 +46,7 @@
 #include "optimizer/prep.h"
 #include "optimizer/tlist.h"
 #include "parser/parsetree.h"
+#include "utils/builtins.h"
 #include "utils/datum.h"
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
@@ -134,7 +136,8 @@ MultiLogicalPlanCreate(Query *originalQuery, Query *queryTree,
 	MultiNode *multiQueryNode = NULL;
 	MultiTreeRoot *rootNode = NULL;
 
-	if (ShouldUseSubqueryPushDown(originalQuery, queryTree))
+
+	if (ShouldUseSubqueryPushDown(originalQuery, queryTree, plannerRestrictionContext))
 	{
 		multiQueryNode = SubqueryMultiNodeTree(originalQuery, queryTree,
 											   plannerRestrictionContext);
@@ -456,7 +459,6 @@ FullCompositeFieldList(List *compositeFieldList)
 	foreach(fieldSelectCell, compositeFieldList)
 	{
 		FieldSelect *fieldSelect = (FieldSelect *) lfirst(fieldSelectCell);
-		uint32 compositeFieldIndex = 0;
 
 		Expr *fieldExpression = fieldSelect->arg;
 		if (!IsA(fieldExpression, Var))
@@ -466,7 +468,6 @@ FullCompositeFieldList(List *compositeFieldList)
 
 		if (compositeFieldArray == NULL)
 		{
-			uint32 index = 0;
 			Var *compositeColumn = (Var *) fieldExpression;
 			Oid compositeTypeId = compositeColumn->vartype;
 			Oid compositeRelationId = get_typ_typrelid(compositeTypeId);
@@ -477,13 +478,15 @@ FullCompositeFieldList(List *compositeFieldList)
 			compositeFieldArray = palloc0(compositeFieldCount * sizeof(bool));
 			relation_close(relation, AccessShareLock);
 
-			for (index = 0; index < compositeFieldCount; index++)
+			for (uint32 compositeFieldIndex = 0;
+				 compositeFieldIndex < compositeFieldCount;
+				 compositeFieldIndex++)
 			{
-				compositeFieldArray[index] = false;
+				compositeFieldArray[compositeFieldIndex] = false;
 			}
 		}
 
-		compositeFieldIndex = fieldSelect->fieldnum - 1;
+		uint32 compositeFieldIndex = fieldSelect->fieldnum - 1;
 		compositeFieldArray[compositeFieldIndex] = true;
 	}
 
@@ -776,7 +779,7 @@ MultiNodeTree(Query *queryTree)
 
 /*
  * ContainsReadIntermediateResultFunction determines whether an expresion tree contains
- * a call to the read_intermediate_results function.
+ * a call to the read_intermediate_result function.
  */
 bool
 ContainsReadIntermediateResultFunction(Node *node)
@@ -803,6 +806,38 @@ IsReadIntermediateResultFunction(Node *node)
 	}
 
 	return false;
+}
+
+
+/*
+ * FindIntermediateResultIdIfExists extracts the id of the intermediate result
+ * if the given RTE contains a read_intermediate_results function, NULL otherwise
+ */
+char *
+FindIntermediateResultIdIfExists(RangeTblEntry *rte)
+{
+	List *functionList = NULL;
+	RangeTblFunction *rangeTblfunction = NULL;
+	FuncExpr *funcExpr = NULL;
+	char *resultId = NULL;
+
+	Assert(rte->rtekind == RTE_FUNCTION);
+
+	functionList = rte->functions;
+	rangeTblfunction = (RangeTblFunction *) linitial(functionList);
+	funcExpr = (FuncExpr *) rangeTblfunction->funcexpr;
+
+	if (IsReadIntermediateResultFunction((Node *) funcExpr))
+	{
+		Const *resultIdConst = linitial(funcExpr->args);
+
+		if (!resultIdConst->constisnull)
+		{
+			resultId = TextDatumGetCString(resultIdConst->constvalue);
+		}
+	}
+
+	return resultId;
 }
 
 
@@ -969,7 +1004,7 @@ HasUnsupportedJoinWalker(Node *node, void *context)
 		JoinExpr *joinExpr = (JoinExpr *) node;
 		JoinType joinType = joinExpr->jointype;
 		bool outerJoin = IS_OUTER_JOIN(joinType);
-		if (!outerJoin && joinType != JOIN_INNER)
+		if (!outerJoin && joinType != JOIN_INNER && joinType != JOIN_SEMI)
 		{
 			hasUnsupportedJoin = true;
 		}
@@ -1335,7 +1370,7 @@ ExtractFromExpressionWalker(Node *node, QualifierWalkerContext *walkerContext)
 		}
 
 		/* return outer join clauses in a separate list */
-		if (joinType == JOIN_INNER)
+		if (joinType == JOIN_INNER || joinType == JOIN_SEMI)
 		{
 			walkerContext->baseQualifierList =
 				list_concat(walkerContext->baseQualifierList, joinQualifierList);
@@ -1386,62 +1421,59 @@ ExtractFromExpressionWalker(Node *node, QualifierWalkerContext *walkerContext)
 bool
 IsJoinClause(Node *clause)
 {
-	bool isJoinClause = false;
 	OpExpr *operatorExpression = NULL;
-	List *argumentList = NIL;
-	Node *leftArgument = NULL;
-	Node *rightArgument = NULL;
-	Node *strippedLeftArgument = NULL;
-	Node *strippedRightArgument = NULL;
+	bool equalsOperator = false;
+	List *varList = NIL;
+	Var *initialVar = NULL;
+	Var *var = NULL;
 
 	if (!IsA(clause, OpExpr))
 	{
 		return false;
 	}
 
-	operatorExpression = (OpExpr *) clause;
-	argumentList = operatorExpression->args;
+	operatorExpression = castNode(OpExpr, clause);
+	equalsOperator = OperatorImplementsEquality(operatorExpression->opno);
 
-	/* join clauses must have two arguments */
-	if (list_length(argumentList) != 2)
+	if (!equalsOperator)
 	{
+		/*
+		 * The single and dual repartition join and local join planners expect the clauses
+		 * to be equi-join to calculate a hash on which to distribute.
+		 *
+		 * In the future we should move this clause to those planners and allow
+		 * non-equi-join's in the reference join and cartesian product. This is tracked in
+		 * https://github.com/citusdata/citus/issues/3198
+		 */
 		return false;
 	}
 
-	/* get left and right side of the expression */
-	leftArgument = (Node *) linitial(argumentList);
-	rightArgument = (Node *) lsecond(argumentList);
-
-	strippedLeftArgument = strip_implicit_coercions(leftArgument);
-	strippedRightArgument = strip_implicit_coercions(rightArgument);
-
-	/* each side of the expression should have only one column */
-	if (IsA(strippedLeftArgument, Var) && IsA(strippedRightArgument, Var))
+	/*
+	 * take all column references from the clause, if we find 2 column references from a
+	 * different relation we assume this is a join clause
+	 */
+	varList = pull_var_clause_default(clause);
+	if (list_length(varList) <= 0)
 	{
-		Var *leftColumn = (Var *) strippedLeftArgument;
-		Var *rightColumn = (Var *) strippedRightArgument;
-		bool equiJoin = false;
-		bool joinBetweenDifferentTables = false;
+		/* no column references in query, not describing a join */
+		return false;
+	}
+	initialVar = castNode(Var, linitial(varList));
 
-		bool equalsOperator = OperatorImplementsEquality(operatorExpression->opno);
-		if (equalsOperator)
+	foreach_ptr(var, varList)
+	{
+		if (var->varno != initialVar->varno)
 		{
-			equiJoin = true;
-		}
-
-		if (leftColumn->varno != rightColumn->varno)
-		{
-			joinBetweenDifferentTables = true;
-		}
-
-		/* codifies our logic for determining if this node is a join clause */
-		if (equiJoin && joinBetweenDifferentTables)
-		{
-			isJoinClause = true;
+			/*
+			 * this column reference comes from a different relation, hence describing a
+			 * join
+			 */
+			return true;
 		}
 	}
 
-	return isJoinClause;
+	/* all column references were to the same relation, no join */
+	return false;
 }
 
 
@@ -2142,8 +2174,12 @@ ApplySinglePartitionJoin(MultiNode *leftNode, MultiNode *rightNode,
 	joinClause = SinglePartitionJoinClause(partitionColumn, applicableJoinClauses);
 	Assert(joinClause != NULL);
 
-	leftColumn = LeftColumn(joinClause);
-	rightColumn = RightColumn(joinClause);
+	/* both are verified in SinglePartitionJoinClause to not be NULL, assert is to guard */
+	leftColumn = LeftColumnOrNULL(joinClause);
+	rightColumn = RightColumnOrNULL(joinClause);
+
+	Assert(leftColumn != NULL);
+	Assert(rightColumn != NULL);
 
 	if (equal(partitionColumn, leftColumn))
 	{
@@ -2217,8 +2253,11 @@ ApplyDualPartitionJoin(MultiNode *leftNode, MultiNode *rightNode,
 	joinClause = DualPartitionJoinClause(applicableJoinClauses);
 	Assert(joinClause != NULL);
 
-	leftColumn = LeftColumn(joinClause);
-	rightColumn = RightColumn(joinClause);
+	/* both are verified in DualPartitionJoinClause to not be NULL, assert is to guard */
+	leftColumn = LeftColumnOrNULL(joinClause);
+	rightColumn = RightColumnOrNULL(joinClause);
+	Assert(leftColumn != NULL);
+	Assert(rightColumn != NULL);
 
 	rightTableIdList = OutputTableIdList(rightNode);
 	rightTableId = (uint32) linitial_int(rightTableIdList);

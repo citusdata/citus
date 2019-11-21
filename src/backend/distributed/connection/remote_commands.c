@@ -15,6 +15,7 @@
 
 #include "distributed/connection_management.h"
 #include "distributed/errormessage.h"
+#include "distributed/log_utils.h"
 #include "distributed/remote_commands.h"
 #include "lib/stringinfo.h"
 #include "miscadmin.h"
@@ -706,7 +707,7 @@ static bool
 FinishConnectionIO(MultiConnection *connection, bool raiseInterrupts)
 {
 	PGconn *pgConn = connection->pgConn;
-	int socket = PQsocket(pgConn);
+	int sock = PQsocket(pgConn);
 
 	Assert(pgConn);
 	Assert(PQisnonblocking(pgConn));
@@ -752,7 +753,7 @@ FinishConnectionIO(MultiConnection *connection, bool raiseInterrupts)
 			return true;
 		}
 
-		rc = WaitLatchOrSocket(MyLatch, waitFlags, socket, 0, PG_WAIT_EXTENSION);
+		rc = WaitLatchOrSocket(MyLatch, waitFlags, sock, 0, PG_WAIT_EXTENSION);
 		if (rc & WL_POSTMASTER_DEATH)
 		{
 			ereport(ERROR, (errmsg("postmaster was shut down, exiting")));
@@ -1047,7 +1048,7 @@ BuildWaitEventSet(MultiConnection **allConnections, int totalConnectionCount,
 	{
 		MultiConnection *connection = allConnections[pendingConnectionsStartIndex +
 													 connectionIndex];
-		int socket = PQsocket(connection->pgConn);
+		int sock = PQsocket(connection->pgConn);
 
 		/*
 		 * Always start by polling for both readability (server sent bytes)
@@ -1055,7 +1056,7 @@ BuildWaitEventSet(MultiConnection **allConnections, int totalConnectionCount,
 		 */
 		int eventMask = WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE;
 
-		AddWaitEventToSet(waitEventSet, eventMask, socket, NULL, (void *) connection);
+		AddWaitEventToSet(waitEventSet, eventMask, sock, NULL, (void *) connection);
 	}
 
 	/*

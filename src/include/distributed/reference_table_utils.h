@@ -21,6 +21,7 @@ extern void ReplicateAllReferenceTablesToNode(char *nodeName, int nodePort);
 extern void DeleteAllReferenceTablePlacementsFromNodeGroup(int32 groupId);
 extern List * ReferenceTableOidList(void);
 extern int CompareOids(const void *leftElement, const void *rightElement);
+extern int ReferenceTableReplicationFactor(void);
 
 
 #endif /* REFERENCE_TABLE_UTILS_H_ */

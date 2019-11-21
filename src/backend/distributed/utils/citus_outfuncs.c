@@ -23,6 +23,7 @@
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/citus_nodes.h"
 #include "distributed/errormessage.h"
+#include "distributed/log_utils.h"
 #include "distributed/multi_logical_planner.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/distributed_planner.h"
@@ -195,6 +196,7 @@ OutDistributedPlan(OUTFUNC_ARGS)
 	WRITE_STRING_FIELD(intermediateResultIdPrefix);
 
 	WRITE_NODE_FIELD(subPlanList);
+	WRITE_NODE_FIELD(usedSubPlanNodeList);
 
 	WRITE_NODE_FIELD(planningError);
 }

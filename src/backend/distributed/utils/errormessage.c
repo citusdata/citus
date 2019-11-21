@@ -10,17 +10,7 @@
 
 #include "distributed/citus_nodes.h"
 #include "distributed/errormessage.h"
-
-
-/*
- * ApplyLogRedaction is only supported in Citus Enterprise
- */
-char *
-ApplyLogRedaction(const char *logText)
-{
-	return (char *) logText;
-}
-
+#include "distributed/log_utils.h"
 
 /*
  * DeferredErrorInternal is a helper function for DeferredError().

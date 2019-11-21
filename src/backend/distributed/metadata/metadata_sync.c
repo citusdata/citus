@@ -124,9 +124,17 @@ StartMetadatSyncToNode(char *nodeNameString, int32 nodePort)
 								escapedNodeName, nodePort)));
 	}
 
+	if (NodeIsCoordinator(workerNode))
+	{
+		ereport(NOTICE, (errmsg("%s:%d is the coordinator and already contains "
+								"metadata, skipping syncing the metadata",
+								nodeNameString, nodePort)));
+		return;
+	}
+
 	MarkNodeHasMetadata(nodeNameString, nodePort, true);
 
-	if (!WorkerNodeIsPrimary(workerNode))
+	if (!NodeIsPrimary(workerNode))
 	{
 		/*
 		 * If this is a secondary node we can't actually sync metadata to it; we assume
@@ -346,7 +354,7 @@ MetadataCreateCommands(void)
 	List *distributedTableList = DistributedTableList();
 	List *propagatedTableList = NIL;
 	bool includeNodesFromOtherClusters = true;
-	List *workerNodeList = ReadWorkerNodes(includeNodesFromOtherClusters);
+	List *workerNodeList = ReadDistNode(includeNodesFromOtherClusters);
 	ListCell *distributedTableCell = NULL;
 	char *nodeListInsertCommand = NULL;
 	bool includeSequenceDefaults = true;
@@ -1177,7 +1185,7 @@ SchemaOwnerName(Oid objectId)
 static bool
 HasMetadataWorkers(void)
 {
-	List *workerNodeList = ActivePrimaryNodeList(NoLock);
+	List *workerNodeList = ActivePrimaryWorkerNodeList(NoLock);
 	ListCell *workerNodeCell = NULL;
 
 	foreach(workerNodeCell, workerNodeList)
@@ -1306,7 +1314,7 @@ SyncMetadataToNodes(void)
 		return METADATA_SYNC_FAILED_LOCK;
 	}
 
-	workerList = ActivePrimaryNodeList(NoLock);
+	workerList = ActivePrimaryWorkerNodeList(NoLock);
 
 	foreach(workerCell, workerList)
 	{

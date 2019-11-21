@@ -17,6 +17,7 @@
 
 
 extern bool ObjectExists(const ObjectAddress *address);
+extern bool CitusExtensionObject(const ObjectAddress *objectAddress);
 extern bool IsObjectDistributed(const ObjectAddress *address);
 extern bool ClusterHasDistributedFunctionWithDistArgument(void);
 extern void MarkObjectDistributed(const ObjectAddress *distAddress);

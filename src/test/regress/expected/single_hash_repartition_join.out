@@ -243,7 +243,7 @@ DEBUG:  dual partition column types do not match
 DEBUG:  single partition column types do not match
 DEBUG:  single partition column types do not match
 DEBUG:  dual partition column types do not match
-LOG:  join order: [ "single_hash_repartition_first" ][ local partition join "single_hash_repartition_first" ][ cartesian product "single_hash_repartition_second" ]
+LOG:  join order: [ "single_hash_repartition_second" ][ cartesian product "single_hash_repartition_first" ][ dual partition join "single_hash_repartition_first" ]
 ERROR:  cannot perform distributed planning on this query
 DETAIL:  Cartesian products are currently unsupported
 -- single repartition query in CTE

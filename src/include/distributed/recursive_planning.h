@@ -12,6 +12,7 @@
 
 
 #include "distributed/errormessage.h"
+#include "distributed/log_utils.h"
 #include "distributed/relation_restriction_equivalence.h"
 #include "nodes/pg_list.h"
 #include "nodes/primnodes.h"

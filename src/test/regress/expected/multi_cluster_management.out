@@ -151,8 +151,6 @@ GRANT EXECUTE ON FUNCTION master_remove_node(text,int) TO node_metadata_user;
 GRANT EXECUTE ON FUNCTION master_update_node(int,text,int,bool,int) TO node_metadata_user;
 -- try to manipulate node metadata via non-super user
 SET ROLE non_super_user;
-SELECT 1 FROM master_initialize_node_metadata();
-ERROR:  permission denied for function master_initialize_node_metadata
 SELECT 1 FROM master_add_inactive_node('localhost', :worker_2_port + 1);
 ERROR:  permission denied for function master_add_inactive_node
 SELECT 1 FROM master_activate_node('localhost', :worker_2_port + 1);

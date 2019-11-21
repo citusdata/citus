@@ -72,6 +72,7 @@
 #include "distributed/commands/utility_hook.h"
 #include "distributed/intermediate_results.h"
 #include "distributed/local_executor.h"
+#include "distributed/log_utils.h"
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_partitioning_utils.h"
@@ -598,6 +599,7 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 
 	/* finish the COPY commands */
 	dest->rShutdown(dest);
+	dest->rDestroy(dest);
 
 	ExecDropSingleTupleTableSlot(tupleTableSlot);
 	FreeExecutorState(executorState);
@@ -2692,6 +2694,9 @@ ShutdownCopyConnectionState(CopyConnectionState *connectionState,
 }
 
 
+/*
+ * CitusCopyDestReceiverDestroy frees the DestReceiver
+ */
 static void
 CitusCopyDestReceiverDestroy(DestReceiver *destReceiver)
 {
@@ -2710,6 +2715,16 @@ CitusCopyDestReceiverDestroy(DestReceiver *destReceiver)
 	if (copyDest->columnCoercionPaths)
 	{
 		pfree(copyDest->columnCoercionPaths);
+	}
+
+	if (copyDest->shardStateHash)
+	{
+		hash_destroy(copyDest->shardStateHash);
+	}
+
+	if (copyDest->connectionStateHash)
+	{
+		hash_destroy(copyDest->connectionStateHash);
 	}
 
 	pfree(copyDest);
@@ -3202,14 +3217,14 @@ GetConnectionState(HTAB *connectionStateHash, MultiConnection *connection)
 	CopyConnectionState *connectionState = NULL;
 	bool found = false;
 
-	int socket = PQsocket(connection->pgConn);
-	Assert(socket != -1);
+	int sock = PQsocket(connection->pgConn);
+	Assert(sock != -1);
 
-	connectionState = (CopyConnectionState *) hash_search(connectionStateHash, &socket,
+	connectionState = (CopyConnectionState *) hash_search(connectionStateHash, &sock,
 														  HASH_ENTER, &found);
 	if (!found)
 	{
-		connectionState->socket = socket;
+		connectionState->socket = sock;
 		connectionState->connection = connection;
 		connectionState->activePlacementState = NULL;
 		dlist_init(&connectionState->bufferedPlacementList);

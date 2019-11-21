@@ -202,6 +202,7 @@ static char * InstalledExtensionVersion(void);
 static bool HasOverlappingShardInterval(ShardInterval **shardIntervalArray,
 										int shardIntervalArrayLength,
 										FmgrInfo *shardIntervalSortCompareFunction);
+static bool CitusHasBeenLoadedInternal(void);
 static void InitializeCaches(void);
 static void InitializeDistCache(void);
 static void InitializeDistObjectCache(void);
@@ -627,7 +628,7 @@ LookupNodeForGroup(int32 groupId)
 
 		foundAnyNodes = true;
 
-		if (WorkerNodeIsReadable(workerNode))
+		if (NodeIsReadable(workerNode))
 		{
 			return workerNode;
 		}
@@ -1528,41 +1529,27 @@ HasOverlappingShardInterval(ShardInterval **shardIntervalArray,
 bool
 CitusHasBeenLoaded(void)
 {
-	/* recheck presence until citus has been loaded */
 	if (!MetadataCache.extensionLoaded || creating_extension)
 	{
-		bool extensionPresent = false;
-		bool extensionScriptExecuted = true;
+		/*
+		 * Refresh if we have not determined whether the extension has been
+		 * loaded yet, or in case of ALTER EXTENSION since we want to treat
+		 * Citus as "not loaded" during ALTER EXTENSION citus.
+		 */
+		bool extensionLoaded = CitusHasBeenLoadedInternal();
 
-		Oid extensionOid = get_extension_oid("citus", true);
-		if (extensionOid != InvalidOid)
+		if (extensionLoaded && !MetadataCache.extensionLoaded)
 		{
-			extensionPresent = true;
-		}
-
-		if (extensionPresent)
-		{
-			/* check if Citus extension objects are still being created */
-			if (creating_extension && CurrentExtensionObject == extensionOid)
-			{
-				extensionScriptExecuted = false;
-			}
+			/*
+			 * Loaded Citus for the first time in this session, or first time after
+			 * CREATE/ALTER EXTENSION citus. Do some initialisation.
+			 */
 
 			/*
-			 * Whenever the extension exists, even when currently creating it,
-			 * we need the infrastructure to run citus in this database to be
-			 * ready.
+			 * Make sure the maintenance daemon is running if it was not already.
 			 */
 			StartupCitusBackend();
-		}
 
-		/* we disable extension features during pg_upgrade */
-		MetadataCache.extensionLoaded = extensionPresent &&
-										extensionScriptExecuted &&
-										!IsBinaryUpgrade;
-
-		if (MetadataCache.extensionLoaded)
-		{
 			/*
 			 * InvalidateDistRelationCacheCallback resets state such as extensionLoaded
 			 * when it notices changes to pg_dist_partition (which usually indicate
@@ -1576,23 +1563,55 @@ CitusHasBeenLoaded(void)
 			 */
 			DistPartitionRelationId();
 
-
 			/*
 			 * This needs to be initialized so we can receive foreign relation graph
 			 * invalidation messages in InvalidateForeignRelationGraphCacheCallback().
 			 * See the comments of InvalidateForeignKeyGraph for more context.
 			 */
 			DistColocationRelationId();
-
-			/*
-			 * We also reset citusVersionKnownCompatible, so it will be re-read in
-			 * case of extension update.
-			 */
-			citusVersionKnownCompatible = false;
 		}
+
+		MetadataCache.extensionLoaded = extensionLoaded;
 	}
 
 	return MetadataCache.extensionLoaded;
+}
+
+
+/*
+ * CitusHasBeenLoadedInternal returns true if the citus extension has been created
+ * in the current database and the extension script has been executed. Otherwise,
+ * it returns false.
+ */
+static bool
+CitusHasBeenLoadedInternal(void)
+{
+	Oid citusExtensionOid = InvalidOid;
+
+	if (IsBinaryUpgrade)
+	{
+		/* never use Citus logic during pg_upgrade */
+		return false;
+	}
+
+	citusExtensionOid = get_extension_oid("citus", true);
+	if (citusExtensionOid == InvalidOid)
+	{
+		/* Citus extension does not exist yet */
+		return false;
+	}
+
+	if (creating_extension && CurrentExtensionObject == citusExtensionOid)
+	{
+		/*
+		 * We do not use Citus hooks during CREATE/ALTER EXTENSION citus
+		 * since the objects used by the C code might be not be there yet.
+		 */
+		return false;
+	}
+
+	/* citus extension exists and has been created */
+	return true;
 }
 
 
@@ -2960,6 +2979,20 @@ GetWorkerNodeHash(void)
 
 
 /*
+ * GetWorkerNodeCount returns the number of worker nodes
+ *
+ * If the Worker Node cache is not (yet) valid, it is first rebuilt.
+ */
+int
+GetWorkerNodeCount(void)
+{
+	PrepareWorkerNodeCache();
+
+	return WorkerNodeCount;
+}
+
+
+/*
  * PrepareWorkerNodeCache makes sure the worker node data from pg_dist_node is cached,
  * if it is not already cached.
  */
@@ -3026,7 +3059,7 @@ InitializeWorkerNodeCache(void)
 	newWorkerNodeHash = hash_create("Worker Node Hash", maxTableSize, &info, hashFlags);
 
 	/* read the list from pg_dist_node */
-	workerNodeList = ReadWorkerNodes(includeNodesFromOtherClusters);
+	workerNodeList = ReadDistNode(includeNodesFromOtherClusters);
 
 	newWorkerNodeCount = list_length(workerNodeList);
 	newWorkerNodeArray = MemoryContextAlloc(MetadataCacheMemoryContext,

@@ -65,6 +65,7 @@ bool EnableDDLPropagation = true; /* ddl propagation is enabled */
 PropSetCmdBehavior PropagateSetCommands = PROPSETCMD_NONE; /* SET prop off */
 static bool shouldInvalidateForeignKeyGraph = false;
 static int activeAlterTables = 0;
+static int activeDropSchemaOrDBs = 0;
 
 
 /* Local functions forward declarations for helper functions */
@@ -76,6 +77,7 @@ static List * PlanRenameAttributeStmt(RenameStmt *stmt, const char *queryString)
 static List * PlanAlterOwnerStmt(AlterOwnerStmt *stmt, const char *queryString);
 static List * PlanAlterObjectDependsStmt(AlterObjectDependsStmt *stmt,
 										 const char *queryString);
+static bool IsDropSchemaOrDB(Node *parsetree);
 
 
 /*
@@ -115,7 +117,7 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 {
 	Node *parsetree = pstmt->utilityStmt;
 	List *ddlJobs = NIL;
-	bool checkExtensionVersion = false;
+	bool checkCreateAlterExtensionVersion = false;
 
 	if (IsA(parsetree, TransactionStmt) ||
 		IsA(parsetree, LockStmt) ||
@@ -141,12 +143,11 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		return;
 	}
 
-	checkExtensionVersion = IsCitusExtensionStmt(parsetree);
-	if (EnableVersionChecks && checkExtensionVersion)
+	checkCreateAlterExtensionVersion = IsCreateAlterExtensionUpdateCitusStmt(parsetree);
+	if (EnableVersionChecks && checkCreateAlterExtensionVersion)
 	{
 		ErrorIfUnstableCreateOrAlterExtensionStmt(parsetree);
 	}
-
 
 	if (!CitusHasBeenLoaded())
 	{
@@ -428,6 +429,13 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 				case OBJECT_FUNCTION:
 				{
 					ddlJobs = PlanDropFunctionStmt(dropStatement, queryString);
+					break;
+				}
+
+				case OBJECT_EXTENSION:
+				{
+					ddlJobs = PlanDropExtensionStmt(dropStatement, queryString);
+					break;
 				}
 
 				default:
@@ -459,8 +467,8 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		}
 
 		/*
-		 * ALTER TABLE ... RENAME statements have their node type as RenameStmt and
-		 * not AlterTableStmt. So, we intercept RenameStmt to tackle these commands.
+		 * ALTER ... RENAME statements have their node type as RenameStmt.
+		 * So intercept RenameStmt to tackle these commands.
 		 */
 		if (IsA(parsetree, RenameStmt))
 		{
@@ -563,6 +571,20 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 				castNode(AlterObjectDependsStmt, parsetree), queryString);
 		}
 
+		if (IsA(parsetree, AlterExtensionStmt))
+		{
+			ddlJobs = PlanAlterExtensionUpdateStmt(castNode(AlterExtensionStmt,
+															parsetree), queryString);
+		}
+
+		if (IsA(parsetree, AlterExtensionContentsStmt))
+		{
+			ereport(NOTICE, (errmsg(
+								 "Citus does not propagate adding/dropping member objects"),
+							 errhint(
+								 "You can add/drop the member objects on the workers as well.")));
+		}
+
 		/*
 		 * ALTER TABLE ALL IN TABLESPACE statements have their node type as
 		 * AlterTableMoveAllStmt. At the moment we do not support this functionality in
@@ -655,6 +677,11 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 			activeAlterTables++;
 		}
 
+		if (IsDropSchemaOrDB(parsetree))
+		{
+			activeDropSchemaOrDBs++;
+		}
+
 		standard_ProcessUtility(pstmt, queryString, context,
 								params, queryEnv, dest, completionTag);
 
@@ -678,12 +705,22 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		{
 			activeAlterTables--;
 		}
+
+		if (IsDropSchemaOrDB(parsetree))
+		{
+			activeDropSchemaOrDBs--;
+		}
 	}
 	PG_CATCH();
 	{
 		if (IsA(parsetree, AlterTableStmt))
 		{
 			activeAlterTables--;
+		}
+
+		if (IsDropSchemaOrDB(parsetree))
+		{
+			activeDropSchemaOrDBs--;
 		}
 
 		PG_RE_THROW();
@@ -722,6 +759,38 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 			ddlJobs = ProcessCreateFunctionStmt(castNode(CreateFunctionStmt, parsetree),
 												queryString);
 		}
+
+		if (IsA(parsetree, AlterRoleStmt))
+		{
+			Assert(ddlJobs == NIL); /* jobs should not have been set before */
+			ddlJobs = ProcessAlterRoleStmt(castNode(AlterRoleStmt, parsetree),
+										   queryString);
+		}
+
+		if (IsA(parsetree, AlterRoleSetStmt) && EnableAlterRolePropagation)
+		{
+			ereport(NOTICE, (errmsg("Citus partially supports ALTER ROLE for "
+									"distributed databases"),
+
+							 errdetail(
+								 "Citus does not propagate ALTER ROLE ... SET/RESET "
+								 "commands to workers"),
+
+							 errhint("You can manually alter roles on workers.")));
+		}
+
+		if (IsA(parsetree, RenameStmt) && ((RenameStmt *) parsetree)->renameType ==
+			OBJECT_ROLE && EnableAlterRolePropagation)
+		{
+			ereport(NOTICE, (errmsg("Citus partially supports ALTER ROLE for "
+									"distributed databases"),
+
+							 errdetail(
+								 "Citus does not propagate ALTER ROLE ... RENAME TO "
+								 "commands to workers"),
+
+							 errhint("You can manually alter roles on workers.")));
+		}
 	}
 
 	/*
@@ -744,6 +813,20 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		AlterTableStmt *alterTableStatement = (AlterTableStmt *) parsetree;
 
 		ProcessAlterTableStmtAttachPartition(alterTableStatement);
+	}
+
+	/*
+	 * We call PlanCreateExtensionStmt and ProcessCreateExtensionStmt after standard_ProcessUtility
+	 * does its work to learn the schema that the extension belongs to (if statement does not include
+	 * WITH SCHEMA clause)
+	 */
+	if (EnableDDLPropagation && IsA(parsetree, CreateExtensionStmt))
+	{
+		CreateExtensionStmt *createExtensionStmt = castNode(CreateExtensionStmt,
+															parsetree);
+
+		ddlJobs = PlanCreateExtensionStmt(createExtensionStmt, queryString);
+		ProcessCreateExtensionStmt(createExtensionStmt, queryString);
 	}
 
 	/* don't run post-process code for local commands */
@@ -793,6 +876,26 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 	 * EXTENSION. This is important to register some invalidation callbacks.
 	 */
 	CitusHasBeenLoaded();
+}
+
+
+/*
+ * IsDropSchemaOrDB returns true if parsetree represents DROP SCHEMA ...or
+ * a DROP DATABASE.
+ */
+static bool
+IsDropSchemaOrDB(Node *parsetree)
+{
+	DropStmt *dropStatement = NULL;
+
+	if (!IsA(parsetree, DropStmt))
+	{
+		return false;
+	}
+
+	dropStatement = (DropStmt *) parsetree;
+	return (dropStatement->removeType == OBJECT_SCHEMA) ||
+		   (dropStatement->removeType == OBJECT_DATABASE);
 }
 
 
@@ -1197,4 +1300,15 @@ bool
 AlterTableInProgress(void)
 {
 	return activeAlterTables > 0;
+}
+
+
+/*
+ * DropSchemaOrDBInProgress returns true if we're processing a DROP SCHEMA
+ * or a DROP DATABASE command right now.
+ */
+bool
+DropSchemaOrDBInProgress(void)
+{
+	return activeDropSchemaOrDBs > 0;
 }

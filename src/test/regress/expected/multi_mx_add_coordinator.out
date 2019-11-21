@@ -1,0 +1,150 @@
+CREATE SCHEMA mx_add_coordinator;
+SET search_path TO mx_add_coordinator,public;
+SET citus.shard_replication_factor TO 1;
+SET citus.shard_count TO 8;
+SET citus.next_shard_id TO 7000000;
+SET citus.next_placement_id TO 7000000;
+SET citus.replication_model TO streaming;
+SET client_min_messages TO WARNING;
+SELECT 1 FROM master_add_node('localhost', :master_port, groupId => 0);
+ ?column? 
+----------
+        1
+(1 row)
+
+-- test that coordinator pg_dist_node entry is synced to the workers
+SELECT wait_until_metadata_sync();
+ wait_until_metadata_sync 
+--------------------------
+ 
+(1 row)
+
+SELECT verify_metadata('localhost', :worker_1_port),
+       verify_metadata('localhost', :worker_2_port);
+ verify_metadata | verify_metadata 
+-----------------+-----------------
+ t               | t
+(1 row)
+
+CREATE TABLE ref(a int);
+SELECT create_reference_table('ref');
+ create_reference_table 
+------------------------
+ 
+(1 row)
+
+SET citus.log_local_commands TO ON;
+SET client_min_messages TO DEBUG;
+-- if the placement policy is not round-robin, SELECTs on the reference
+-- tables use local execution
+SELECT count(*) FROM ref;
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+LOG:  executing the command locally: SELECT count(*) AS count FROM mx_add_coordinator.ref_7000000 ref
+ count 
+-------
+     0
+(1 row)
+
+SELECT count(*) FROM ref;
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+LOG:  executing the command locally: SELECT count(*) AS count FROM mx_add_coordinator.ref_7000000 ref
+ count 
+-------
+     0
+(1 row)
+
+-- for round-robin policy, always go to workers
+SET citus.task_assignment_policy TO "round-robin";
+SELECT count(*) FROM ref;
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ count 
+-------
+     0
+(1 row)
+
+SELECT count(*) FROM ref;
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ count 
+-------
+     0
+(1 row)
+
+SELECT count(*) FROM ref;
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ count 
+-------
+     0
+(1 row)
+
+-- modifications always go through local shard as well as remote ones
+INSERT INTO ref VALUES (1);
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+LOG:  executing the command locally: INSERT INTO mx_add_coordinator.ref_7000000 (a) VALUES (1)
+-- get it ready for the next executions
+TRUNCATE ref;
+-- test that changes from a metadata node is reflected in the coordinator placement
+\c - - - :worker_1_port
+SET search_path TO mx_add_coordinator,public;
+INSERT INTO ref VALUES (1), (2), (3);
+UPDATE ref SET a = a + 1;
+DELETE FROM ref WHERE a > 3;
+\c - - - :master_port
+SET search_path TO mx_add_coordinator,public;
+SELECT * FROM ref ORDER BY a;
+ a 
+---
+ 2
+ 3
+(2 rows)
+
+-- Clear pg_dist_transaction before removing the node. This is to keep the output
+-- of multi_mx_transaction_recovery consistent.
+SELECT recover_prepared_transactions();
+ recover_prepared_transactions 
+-------------------------------
+                             0
+(1 row)
+
+SELECT count(*) FROM run_command_on_workers('SELECT recover_prepared_transactions()');
+ count 
+-------
+     2
+(1 row)
+
+SELECT master_remove_node('localhost', :master_port);
+ master_remove_node 
+--------------------
+ 
+(1 row)
+
+-- test that coordinator pg_dist_node entry was removed from the workers
+SELECT wait_until_metadata_sync();
+ wait_until_metadata_sync 
+--------------------------
+ 
+(1 row)
+
+SELECT verify_metadata('localhost', :worker_1_port),
+       verify_metadata('localhost', :worker_2_port);
+ verify_metadata | verify_metadata 
+-----------------+-----------------
+ t               | t
+(1 row)
+
+DROP SCHEMA mx_add_coordinator CASCADE;
+NOTICE:  drop cascades to 2 other objects
+DETAIL:  drop cascades to table ref
+drop cascades to table ref_7000000
+SET search_path TO DEFAULT;
+RESET client_min_messages;

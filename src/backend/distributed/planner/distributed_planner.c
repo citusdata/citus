@@ -20,10 +20,13 @@
 #include "distributed/citus_nodes.h"
 #include "distributed/function_call_delegation.h"
 #include "distributed/insert_select_planner.h"
+#include "distributed/intermediate_result_pruning.h"
 #include "distributed/intermediate_results.h"
+#include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_executor.h"
 #include "distributed/distributed_planner.h"
+#include "distributed/query_pushdown_planning.h"
 #include "distributed/multi_logical_optimizer.h"
 #include "distributed/multi_logical_planner.h"
 #include "distributed/multi_partitioning_utils.h"
@@ -33,6 +36,7 @@
 #include "distributed/query_utils.h"
 #include "distributed/recursive_planning.h"
 #include "distributed/shardinterval_utils.h"
+#include "distributed/version_compat.h"
 #include "distributed/worker_shard_visibility.h"
 #include "executor/executor.h"
 #include "nodes/makefuncs.h"
@@ -71,6 +75,8 @@ static DistributedPlan * CreateDistributedPlan(uint64 planId, Query *originalQue
 											   bool hasUnresolvedParams,
 											   PlannerRestrictionContext *
 											   plannerRestrictionContext);
+static void FinalizeDistributedPlan(DistributedPlan *plan, Query *originalQuery);
+static void RecordSubPlansUsedInPlan(DistributedPlan *plan, Query *originalQuery);
 static DeferredErrorMessage * DeferErrorIfPartitionTableNotSingleReplicated(Oid
 																			relationId);
 
@@ -84,7 +90,6 @@ static PlannedStmt * FinalizeNonRouterPlan(PlannedStmt *localPlan,
 										   DistributedPlan *distributedPlan,
 										   CustomScan *customScan);
 static PlannedStmt * FinalizeRouterPlan(PlannedStmt *localPlan, CustomScan *customScan);
-static int32 BlessRecordExpression(Expr *expr);
 static void CheckNodeIsDumpable(Node *node);
 static Node * CheckNodeCopyAndSerialization(Node *node);
 static void AdjustReadIntermediateResultCost(RangeTblEntry *rangeTableEntry,
@@ -97,7 +102,9 @@ static void PopPlannerRestrictionContext(void);
 static void ResetPlannerRestrictionContext(
 	PlannerRestrictionContext *plannerRestrictionContext);
 static bool HasUnresolvedExternParamsWalker(Node *expression, ParamListInfo boundParams);
-
+static bool IsLocalReferenceTableJoin(Query *parse, List *rangeTableList);
+static bool QueryIsNotSimpleSelect(Node *node);
+static bool UpdateReferenceTablesWithShard(Node *node, void *context);
 
 /* Distributed planner hook */
 PlannedStmt *
@@ -119,7 +126,20 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 	}
 	else if (CitusHasBeenLoaded())
 	{
-		needsDistributedPlanning = ListContainsDistributedTableRTE(rangeTableList);
+		if (IsLocalReferenceTableJoin(parse, rangeTableList))
+		{
+			/*
+			 * For joins between reference tables and local tables, we replace
+			 * reference table names with shard tables names in the query, so
+			 * we can use the standard_planner for planning it locally.
+			 */
+			needsDistributedPlanning = false;
+			UpdateReferenceTablesWithShard((Node *) parse, NULL);
+		}
+		else
+		{
+			needsDistributedPlanning = ListContainsDistributedTableRTE(rangeTableList);
+		}
 	}
 
 	if (needsDistributedPlanning)
@@ -601,6 +621,7 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 	List *subPlanList = NIL;
 	bool hasCtes = originalQuery->cteList != NIL;
 
+
 	if (IsModifyCommand(originalQuery))
 	{
 		Oid targetRelationId = InvalidOid;
@@ -636,6 +657,8 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 
 		if (distributedPlan->planningError == NULL)
 		{
+			FinalizeDistributedPlan(distributedPlan, originalQuery);
+
 			return distributedPlan;
 		}
 		else
@@ -648,7 +671,7 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 		/*
 		 * For select queries we, if router executor is enabled, first try to
 		 * plan the query as a router query. If not supported, otherwise try
-		 * the full blown plan/optimize/physical planing process needed to
+		 * the full blown plan/optimize/physical planning process needed to
 		 * produce distributed query plans.
 		 */
 
@@ -656,7 +679,8 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 										   plannerRestrictionContext);
 		if (distributedPlan->planningError == NULL)
 		{
-			/* successfully created a router plan */
+			FinalizeDistributedPlan(distributedPlan, originalQuery);
+
 			return distributedPlan;
 		}
 		else
@@ -749,6 +773,8 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 												plannerRestrictionContext);
 		distributedPlan->subPlanList = subPlanList;
 
+		FinalizeDistributedPlan(distributedPlan, originalQuery);
+
 		return distributedPlan;
 	}
 
@@ -759,6 +785,8 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 	 */
 	if (IsModifyCommand(originalQuery))
 	{
+		FinalizeDistributedPlan(distributedPlan, originalQuery);
+
 		return distributedPlan;
 	}
 
@@ -790,7 +818,51 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 	/* distributed plan currently should always succeed or error out */
 	Assert(distributedPlan && distributedPlan->planningError == NULL);
 
+	FinalizeDistributedPlan(distributedPlan, originalQuery);
+
 	return distributedPlan;
+}
+
+
+/*
+ * FinalizeDistributedPlan is the final step of distributed planning. The function
+ * currently only implements some optimizations for intermediate result(s) pruning.
+ */
+static void
+FinalizeDistributedPlan(DistributedPlan *plan, Query *originalQuery)
+{
+	RecordSubPlansUsedInPlan(plan, originalQuery);
+}
+
+
+/*
+ * RecordSubPlansUsedInPlan gets a distributed plan a queryTree, and
+ * updates the usedSubPlanNodeList of the distributed plan.
+ *
+ * The function simply pulls all the subPlans that are used in the queryTree
+ * with one exception: subPlans in the HAVING clause. The reason is explained
+ * in the function.
+ */
+static void
+RecordSubPlansUsedInPlan(DistributedPlan *plan, Query *originalQuery)
+{
+	/* first, get all the subplans in the query */
+	plan->usedSubPlanNodeList = FindSubPlansUsedInNode((Node *) originalQuery);
+
+	/*
+	 * Later, remove the subplans used in the HAVING clause, because they
+	 * are only required in the coordinator. Including them in the
+	 * usedSubPlanNodeList prevents the intermediate results to be sent to the
+	 * coordinator only.
+	 */
+	if (originalQuery->hasSubLinks &&
+		FindNodeCheck(originalQuery->havingQual, IsNodeSubquery))
+	{
+		List *subplansInHaving = FindSubPlansUsedInNode(originalQuery->havingQual);
+
+		plan->usedSubPlanNodeList =
+			list_difference(plan->usedSubPlanNodeList, subplansInHaving);
+	}
 }
 
 
@@ -1151,7 +1223,7 @@ FinalizeRouterPlan(PlannedStmt *localPlan, CustomScan *customScan)
  * "bless" the tuple descriptor, which adds a transient type to the type cache
  * and assigns it a type mod value, which is the key in the type cache.
  */
-static int32
+int32
 BlessRecordExpression(Expr *expr)
 {
 	int32 typeMod = -1;
@@ -1331,6 +1403,14 @@ multi_join_restriction_hook(PlannerInfo *root,
 	joinRestrictionContext->joinRestrictionList =
 		lappend(joinRestrictionContext->joinRestrictionList, joinRestriction);
 
+	/*
+	 * Keep track if we received any semi joins here. If we didn't we can
+	 * later safely convert any semi joins in the rewritten query to inner
+	 * joins.
+	 */
+	plannerRestrictionContext->hasSemiJoin = plannerRestrictionContext->hasSemiJoin ||
+											 extra->sjinfo->jointype == JOIN_SEMI;
+
 	MemoryContextSwitchTo(oldMemoryContext);
 }
 
@@ -1341,8 +1421,8 @@ multi_join_restriction_hook(PlannerInfo *root,
  * it to retrieve restrictions on relations.
  */
 void
-multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo, Index index,
-								RangeTblEntry *rte)
+multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo,
+								Index restrictionIndex, RangeTblEntry *rte)
 {
 	PlannerRestrictionContext *plannerRestrictionContext = NULL;
 	RelationRestrictionContext *relationRestrictionContext = NULL;
@@ -1372,7 +1452,7 @@ multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo, Index
 	localTable = !distributedTable;
 
 	relationRestriction = palloc0(sizeof(RelationRestriction));
-	relationRestriction->index = index;
+	relationRestriction->index = restrictionIndex;
 	relationRestriction->relationId = rte->relid;
 	relationRestriction->rte = rte;
 	relationRestriction->relOptInfo = relOptInfo;
@@ -1762,4 +1842,173 @@ HasUnresolvedExternParamsWalker(Node *expression, ParamListInfo boundParams)
 									  HasUnresolvedExternParamsWalker,
 									  boundParams);
 	}
+}
+
+
+/*
+ * IsLocalReferenceTableJoin returns if the given query is a join between
+ * reference tables and local tables.
+ */
+static bool
+IsLocalReferenceTableJoin(Query *parse, List *rangeTableList)
+{
+	bool hasReferenceTable = false;
+	bool hasLocalTable = false;
+	ListCell *rangeTableCell = false;
+
+	bool hasReferenceTableReplica = false;
+
+	/*
+	 * We only allow join between reference tables and local tables in the
+	 * coordinator.
+	 */
+	if (!IsCoordinator())
+	{
+		return false;
+	}
+
+	/*
+	 * All groups that have pg_dist_node entries, also have reference
+	 * table replicas.
+	 */
+	PrimaryNodeForGroup(COORDINATOR_GROUP_ID, &hasReferenceTableReplica);
+
+	/*
+	 * If reference table doesn't have replicas on the coordinator, we don't
+	 * allow joins with local tables.
+	 */
+	if (!hasReferenceTableReplica)
+	{
+		return false;
+	}
+
+	if (FindNodeCheck((Node *) parse, QueryIsNotSimpleSelect))
+	{
+		return false;
+	}
+
+	foreach(rangeTableCell, rangeTableList)
+	{
+		RangeTblEntry *rangeTableEntry = (RangeTblEntry *) lfirst(rangeTableCell);
+		DistTableCacheEntry *cacheEntry = NULL;
+
+		if (rangeTableEntry->rtekind == RTE_FUNCTION)
+		{
+			return false;
+		}
+
+		if (rangeTableEntry->rtekind != RTE_RELATION)
+		{
+			continue;
+		}
+
+
+		if (!IsDistributedTable(rangeTableEntry->relid))
+		{
+			hasLocalTable = true;
+			continue;
+		}
+
+		cacheEntry = DistributedTableCacheEntry(rangeTableEntry->relid);
+		if (cacheEntry->partitionMethod == DISTRIBUTE_BY_NONE)
+		{
+			hasReferenceTable = true;
+		}
+		else
+		{
+			return false;
+		}
+	}
+
+	return hasLocalTable && hasReferenceTable;
+}
+
+
+/*
+ * QueryIsNotSimpleSelect returns true if node is a query which modifies or
+ * marks for modifications.
+ */
+static bool
+QueryIsNotSimpleSelect(Node *node)
+{
+	Query *query = NULL;
+
+	if (!IsA(node, Query))
+	{
+		return false;
+	}
+
+	query = (Query *) node;
+	return (query->commandType != CMD_SELECT) || (query->rowMarks != NIL);
+}
+
+
+/*
+ * UpdateReferenceTablesWithShard recursively replaces the reference table names
+ * in the given query with the shard table names.
+ */
+static bool
+UpdateReferenceTablesWithShard(Node *node, void *context)
+{
+	RangeTblEntry *newRte = NULL;
+	uint64 shardId = INVALID_SHARD_ID;
+	Oid relationId = InvalidOid;
+	Oid schemaId = InvalidOid;
+	char *relationName = NULL;
+	DistTableCacheEntry *cacheEntry = NULL;
+	ShardInterval *shardInterval = NULL;
+
+	if (node == NULL)
+	{
+		return false;
+	}
+
+	/* want to look at all RTEs, even in subqueries, CTEs and such */
+	if (IsA(node, Query))
+	{
+		return query_tree_walker((Query *) node, UpdateReferenceTablesWithShard,
+								 NULL, QTW_EXAMINE_RTES_BEFORE);
+	}
+
+	if (!IsA(node, RangeTblEntry))
+	{
+		return expression_tree_walker(node, UpdateReferenceTablesWithShard,
+									  NULL);
+	}
+
+	newRte = (RangeTblEntry *) node;
+
+	if (newRte->rtekind != RTE_RELATION)
+	{
+		return false;
+	}
+
+	relationId = newRte->relid;
+	if (!IsDistributedTable(relationId))
+	{
+		return false;
+	}
+
+	cacheEntry = DistributedTableCacheEntry(relationId);
+	if (cacheEntry->partitionMethod != DISTRIBUTE_BY_NONE)
+	{
+		return false;
+	}
+
+	shardInterval = cacheEntry->sortedShardIntervalArray[0];
+	shardId = shardInterval->shardId;
+
+	relationName = get_rel_name(relationId);
+	AppendShardIdToName(&relationName, shardId);
+
+	schemaId = get_rel_namespace(relationId);
+	newRte->relid = get_relname_relid(relationName, schemaId);
+
+	/*
+	 * Parser locks relations in addRangeTableEntry(). So we should lock the
+	 * modified ones too.
+	 */
+	LockRelationOid(newRte->relid, AccessShareLock);
+
+	return false;
 }

@@ -161,7 +161,7 @@ function.
 Then copy the `latest.sql` file to `{version}.sql`, where `{version}` is the
 version for which this sql change is, e.g. `{9.0-1.sql}`. Now that you've
 created this stable snapshot of the function definition for your version you
-should use it in your actual sql file, .e.g.
+should use it in your actual sql file, e.g.
 `src/backend/distributed/sql/citus--8.3-1--9.0-1.sql`. You do this by using C
 style `#include` statements like this:
 ```

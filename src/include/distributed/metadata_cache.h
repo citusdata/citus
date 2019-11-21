@@ -150,6 +150,7 @@ extern void EnsureModificationsCanRun(void);
 
 /* access WorkerNodeHash */
 extern HTAB * GetWorkerNodeHash(void);
+extern int GetWorkerNodeCount(void);
 extern WorkerNode * LookupNodeByNodeId(uint32 nodeId);
 extern WorkerNode * LookupNodeForGroup(int32 groupId);
 
@@ -166,6 +167,7 @@ extern Oid DistPlacementRelationId(void);
 extern Oid DistNodeRelationId(void);
 extern Oid DistLocalGroupIdRelationId(void);
 extern Oid DistObjectRelationId(void);
+extern Oid DistEnabledCustomAggregatesId(void);
 
 /* index oids */
 extern Oid DistNodeNodeIdIndexId(void);

@@ -69,8 +69,6 @@ bool SubqueryPushdown = false; /* is subquery pushdown enabled */
 /* Local functions forward declarations */
 static bool JoinTreeContainsSubqueryWalker(Node *joinTreeNode, void *context);
 static bool IsFunctionRTE(Node *node);
-static bool IsNodeSubquery(Node *node);
-static bool IsNodeSubqueryOrParamExec(Node *node);
 static bool IsOuterJoinExpr(Node *node);
 static bool WindowPartitionOnDistributionColumn(Query *query);
 static DeferredErrorMessage * DeferErrorIfFromClauseRecurs(Query *queryTree);
@@ -100,21 +98,21 @@ static List * CreateSubqueryTargetEntryList(List *columnList);
 static bool RelationInfoContainsOnlyRecurringTuples(PlannerInfo *plannerInfo,
 													RelOptInfo *relationInfo);
 
-
 /*
  * ShouldUseSubqueryPushDown determines whether it's desirable to use
  * subquery pushdown to plan the query based on the original and
  * rewritten query.
  */
 bool
-ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery)
+ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery,
+						  PlannerRestrictionContext *plannerRestrictionContext)
 {
 	List *qualifierList = NIL;
 	StringInfo errorMessage = NULL;
 
 	/*
 	 * We check the existence of subqueries in FROM clause on the modified query
-	 * given that if postgres already flattened the subqueries, MultiPlanTree()
+	 * given that if postgres already flattened the subqueries, MultiNodeTree()
 	 * can plan corresponding distributed plan.
 	 */
 	if (JoinTreeContainsSubquery(rewrittenQuery))
@@ -123,15 +121,34 @@ ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery)
 	}
 
 	/*
-	 * We also check the existence of subqueries in WHERE clause. Note that
-	 * this check needs to be done on the original query given that
-	 * standard_planner() may replace the sublinks with anti/semi joins and
-	 * MultiPlanTree() cannot plan such queries.
+	 * We check the existence of subqueries in WHERE and HAVING clause on the
+	 * modified query. In some cases subqueries in the original query are
+	 * converted into inner joins and in those cases MultiNodeTree() can plan
+	 * the rewritten plan.
 	 */
-	if (WhereOrHavingClauseContainsSubquery(originalQuery))
+	if (WhereOrHavingClauseContainsSubquery(rewrittenQuery))
 	{
 		return true;
 	}
+
+	/*
+	 * We check if postgres planned any semi joins, MultiNodeTree doesn't
+	 * support these so we fail. Postgres is able to replace some IN/ANY
+	 * subqueries with semi joins and then replace those with inner joins (ones
+	 * where the subquery returns unique results). This allows MultiNodeTree to
+	 * execute these subqueries (because they are converted to inner joins).
+	 * However, even in that case the rewrittenQuery still contains join nodes
+	 * with jointype JOIN_SEMI because Postgres doesn't actually update these.
+	 * The way we find out instead if it actually planned semi joins, is by
+	 * checking the joins that were sent to multi_join_restriction_hook. If no
+	 * joins of type JOIN_SEMI are sent it is safe to convert all JOIN_SEMI
+	 * nodes to JOIN_INNER nodes (which is what is done in MultiNodeTree).
+	 */
+	if (plannerRestrictionContext->hasSemiJoin)
+	{
+		return true;
+	}
+
 
 	/*
 	 * We process function RTEs as subqueries, since the join order planner
@@ -159,8 +176,6 @@ ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery)
 	 */
 	if (FindNodeCheck((Node *) rewrittenQuery->jointree, IsOuterJoinExpr))
 	{
-		/* Assert what _should_ be only situation this occurs in. */
-		Assert(JoinTreeContainsSubquery(originalQuery));
 		return true;
 	}
 
@@ -293,7 +308,7 @@ WhereOrHavingClauseContainsSubquery(Query *query)
 bool
 TargetListContainsSubquery(Query *query)
 {
-	return FindNodeCheck((Node *) query->targetList, IsNodeSubqueryOrParamExec);
+	return FindNodeCheck((Node *) query->targetList, IsNodeSubquery);
 }
 
 
@@ -318,13 +333,17 @@ IsFunctionRTE(Node *node)
 
 
 /*
- * IsNodeSubquery returns true if the given node is a Query or SubPlan.
+ * IsNodeSubquery returns true if the given node is a Query or SubPlan or a
+ * Param node with paramkind PARAM_EXEC.
  *
  * The check for SubPlan is needed whev this is used on a already rewritten
  * query. Such a query has SubPlan nodes instead of SubLink nodes (which
  * contain a Query node).
+ * The check for PARAM_EXEC is needed because some very simple subqueries like
+ * (select 1) are converted to init plans in the rewritten query. In this case
+ * the only thing left in the query tree is a Param node with type PARAM_EXEC.
  */
-static bool
+bool
 IsNodeSubquery(Node *node)
 {
 	if (node == NULL)
@@ -332,23 +351,7 @@ IsNodeSubquery(Node *node)
 		return false;
 	}
 
-	return IsA(node, Query) || IsA(node, SubPlan);
-}
-
-
-/*
- * IsNodeSubqueryOrParamExec returns true if the given node is a subquery or a
- * Param node with paramkind PARAM_EXEC.
- */
-static bool
-IsNodeSubqueryOrParamExec(Node *node)
-{
-	if (node == NULL)
-	{
-		return false;
-	}
-
-	if (IsNodeSubquery(node))
+	if (IsA(node, Query) || IsA(node, SubPlan))
 	{
 		return true;
 	}

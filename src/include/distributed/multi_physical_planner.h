@@ -20,6 +20,7 @@
 #include "datatype/timestamp.h"
 #include "distributed/citus_nodes.h"
 #include "distributed/errormessage.h"
+#include "distributed/log_utils.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/multi_logical_planner.h"
 #include "distributed/distributed_planner.h"
@@ -302,6 +303,16 @@ typedef struct DistributedPlan
 
 	/* list of subplans to execute before the distributed query */
 	List *subPlanList;
+
+	/*
+	 * List of subPlans that are used in the DistributedPlan
+	 * Note that this is different that "subPlanList" field which
+	 * contains the subplans generated part of the DistributedPlan.
+	 *
+	 * On the other hand, usedSubPlanNodeList keeps track of which subPlans
+	 * are used within this distributed plan.
+	 */
+	List *usedSubPlanNodeList;
 
 	/*
 	 * NULL if this a valid plan, an error description otherwise. This will

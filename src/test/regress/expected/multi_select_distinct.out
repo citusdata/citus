@@ -77,6 +77,17 @@ SELECT DISTINCT l_orderkey, strpos(l_shipmode, 'I')
          33 |      2
 (5 rows)
 
+-- row types are supported
+SELECT DISTINCT (l_orderkey, l_partkey) AS pair FROM lineitem_hash_part ORDER BY 1 LIMIT 5;
+   pair    
+-----------
+ (1,2132)
+ (1,15635)
+ (1,24027)
+ (1,63700)
+ (1,67310)
+(5 rows)
+
 -- distinct on partition column
 -- verify counts match with respect to count(distinct)
 CREATE TEMP TABLE temp_orderkeys AS SELECT DISTINCT l_orderkey FROM lineitem_hash_part;

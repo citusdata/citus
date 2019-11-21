@@ -23,12 +23,30 @@
 /* cluster.c - forward declarations */
 extern List * PlanClusterStmt(ClusterStmt *clusterStmt, const char *clusterCommand);
 
+
 /* call.c */
 extern bool CallDistributedProcedureRemotely(CallStmt *callStmt, DestReceiver *dest);
 
+
 /* extension.c - forward declarations */
-extern bool IsCitusExtensionStmt(Node *parsetree);
+extern bool IsCreateAlterExtensionUpdateCitusStmt(Node *parsetree);
 extern void ErrorIfUnstableCreateOrAlterExtensionStmt(Node *parsetree);
+extern List * PlanCreateExtensionStmt(CreateExtensionStmt *stmt, const char *queryString);
+extern void ProcessCreateExtensionStmt(CreateExtensionStmt *stmt, const
+									   char *queryString);
+extern List * PlanDropExtensionStmt(DropStmt *stmt, const char *queryString);
+extern List * PlanAlterExtensionSchemaStmt(AlterObjectSchemaStmt *alterExtensionStmt,
+										   const char *queryString);
+extern void ProcessAlterExtensionSchemaStmt(AlterObjectSchemaStmt *alterExtensionStmt,
+											const char *queryString);
+extern List * PlanAlterExtensionUpdateStmt(AlterExtensionStmt *alterExtensionStmt, const
+										   char *queryString);
+extern List * CreateExtensionDDLCommand(const ObjectAddress *extensionAddress);
+extern ObjectAddress * AlterExtensionSchemaStmtObjectAddress(AlterObjectSchemaStmt *stmt,
+															 bool missing_ok);
+extern ObjectAddress * AlterExtensionUpdateStmtObjectAddress(
+	AlterExtensionStmt *alterExtensionStmt,
+	bool missing_ok);
 
 
 /* foreign_constraint.c - forward declarations */
@@ -51,30 +69,30 @@ extern bool ConstraintIsAForeignKey(char *constraintName, Oid relationId);
 extern List * PlanCreateFunctionStmt(CreateFunctionStmt *stmt, const char *queryString);
 extern List * ProcessCreateFunctionStmt(CreateFunctionStmt *stmt, const
 										char *queryString);
-extern const ObjectAddress * CreateFunctionStmtObjectAddress(CreateFunctionStmt *stmt,
-															 bool missing_ok);
-extern const ObjectAddress * DefineAggregateStmtObjectAddress(DefineStmt *stmt, bool
-															  missing_ok);
+extern ObjectAddress * CreateFunctionStmtObjectAddress(CreateFunctionStmt *stmt,
+													   bool missing_ok);
+extern ObjectAddress * DefineAggregateStmtObjectAddress(DefineStmt *stmt, bool
+														missing_ok);
 extern List * PlanAlterFunctionStmt(AlterFunctionStmt *stmt, const char *queryString);
-extern const ObjectAddress * AlterFunctionStmtObjectAddress(AlterFunctionStmt *stmt,
-															bool missing_ok);
+extern ObjectAddress * AlterFunctionStmtObjectAddress(AlterFunctionStmt *stmt,
+													  bool missing_ok);
 extern List * PlanRenameFunctionStmt(RenameStmt *stmt, const char *queryString);
-extern const ObjectAddress * RenameFunctionStmtObjectAddress(RenameStmt *stmt,
-															 bool missing_ok);
+extern ObjectAddress * RenameFunctionStmtObjectAddress(RenameStmt *stmt,
+													   bool missing_ok);
 extern List * PlanAlterFunctionOwnerStmt(AlterOwnerStmt *stmt, const char *queryString);
-extern const ObjectAddress * AlterFunctionOwnerObjectAddress(AlterOwnerStmt *stmt,
-															 bool missing_ok);
+extern ObjectAddress * AlterFunctionOwnerObjectAddress(AlterOwnerStmt *stmt,
+													   bool missing_ok);
 extern List * PlanAlterFunctionSchemaStmt(AlterObjectSchemaStmt *stmt,
 										  const char *queryString);
-extern const ObjectAddress * AlterFunctionSchemaStmtObjectAddress(
-	AlterObjectSchemaStmt *stmt, bool missing_ok);
+extern ObjectAddress * AlterFunctionSchemaStmtObjectAddress(AlterObjectSchemaStmt *stmt,
+															bool missing_ok);
 extern void ProcessAlterFunctionSchemaStmt(AlterObjectSchemaStmt *stmt,
 										   const char *queryString);
 extern List * PlanDropFunctionStmt(DropStmt *stmt, const char *queryString);
 extern List * PlanAlterFunctionDependsStmt(AlterObjectDependsStmt *stmt,
 										   const char *queryString);
-extern const ObjectAddress * AlterFunctionDependsStmtObjectAddress(
-	AlterObjectDependsStmt *stmt, bool missing_ok);
+extern ObjectAddress * AlterFunctionDependsStmtObjectAddress(AlterObjectDependsStmt *stmt,
+															 bool missing_ok);
 
 
 /* grant.c - forward declarations */
@@ -114,6 +132,11 @@ extern void DropPolicyEventExtendNames(DropStmt *stmt, const char *schemaName, u
 /* rename.c - forward declarations*/
 extern List * PlanRenameStmt(RenameStmt *renameStmt, const char *renameCommand);
 extern void ErrorIfUnsupportedRenameStmt(RenameStmt *renameStmt);
+
+
+/* role.c - forward declarations*/
+extern List * ProcessAlterRoleStmt(AlterRoleStmt *stmt, const char *queryString);
+extern List * GenerateAlterRoleIfExistsCommandAllRoles(void);
 
 
 /* schema.c - forward declarations */
@@ -173,22 +196,17 @@ extern List * PlanAlterTypeOwnerStmt(AlterOwnerStmt *stmt, const char *queryStri
 extern void ProcessAlterTypeSchemaStmt(AlterObjectSchemaStmt *stmt,
 									   const char *queryString);
 extern Node * CreateTypeStmtByObjectAddress(const ObjectAddress *address);
-extern const ObjectAddress * CompositeTypeStmtObjectAddress(CompositeTypeStmt *stmt,
-															bool missing_ok);
-extern const ObjectAddress * CreateEnumStmtObjectAddress(CreateEnumStmt *stmt,
-														 bool missing_ok);
-extern const ObjectAddress * AlterTypeStmtObjectAddress(AlterTableStmt *stmt,
+extern ObjectAddress * CompositeTypeStmtObjectAddress(CompositeTypeStmt *stmt, bool
+													  missing_ok);
+extern ObjectAddress * CreateEnumStmtObjectAddress(CreateEnumStmt *stmt, bool missing_ok);
+extern ObjectAddress * AlterTypeStmtObjectAddress(AlterTableStmt *stmt, bool missing_ok);
+extern ObjectAddress * AlterEnumStmtObjectAddress(AlterEnumStmt *stmt, bool missing_ok);
+extern ObjectAddress * RenameTypeStmtObjectAddress(RenameStmt *stmt, bool missing_ok);
+extern ObjectAddress * AlterTypeSchemaStmtObjectAddress(AlterObjectSchemaStmt *stmt,
 														bool missing_ok);
-extern const ObjectAddress * AlterEnumStmtObjectAddress(AlterEnumStmt *stmt,
-														bool missing_ok);
-extern const ObjectAddress * RenameTypeStmtObjectAddress(RenameStmt *stmt,
-														 bool missing_ok);
-extern const ObjectAddress * AlterTypeSchemaStmtObjectAddress(AlterObjectSchemaStmt *stmt,
-															  bool missing_ok);
-extern const ObjectAddress * RenameTypeAttributeStmtObjectAddress(RenameStmt *stmt,
-																  bool missing_ok);
-extern const ObjectAddress * AlterTypeOwnerObjectAddress(AlterOwnerStmt *stmt,
-														 bool missing_ok);
+extern ObjectAddress * RenameTypeAttributeStmtObjectAddress(RenameStmt *stmt, bool
+															missing_ok);
+extern ObjectAddress * AlterTypeOwnerObjectAddress(AlterOwnerStmt *stmt, bool missing_ok);
 extern List * CreateTypeDDLCommandsIdempotent(const ObjectAddress *typeAddress);
 extern char * GenerateBackupNameForTypeCollision(const ObjectAddress *address);
 

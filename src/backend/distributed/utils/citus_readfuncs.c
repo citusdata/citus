@@ -15,6 +15,7 @@
 
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/errormessage.h"
+#include "distributed/log_utils.h"
 #include "distributed/distributed_planner.h"
 #include "distributed/multi_server_executor.h"
 #include "nodes/parsenodes.h"
@@ -223,6 +224,7 @@ ReadDistributedPlan(READFUNC_ARGS)
 	READ_STRING_FIELD(intermediateResultIdPrefix);
 
 	READ_NODE_FIELD(subPlanList);
+	READ_NODE_FIELD(usedSubPlanNodeList);
 
 	READ_NODE_FIELD(planningError);
 

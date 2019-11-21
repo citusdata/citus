@@ -43,6 +43,7 @@
 #include "distributed/multi_logical_optimizer.h"
 #include "distributed/multi_logical_planner.h"
 #include "distributed/multi_physical_planner.h"
+#include "distributed/log_utils.h"
 #include "distributed/pg_dist_partition.h"
 #include "distributed/pg_dist_shard.h"
 #include "distributed/query_pushdown_planning.h"
@@ -1990,7 +1991,7 @@ BuildMapMergeJob(Query *jobQuery, List *dependedJobList, Var *partitionKey,
 static uint32
 HashPartitionCount(void)
 {
-	uint32 groupCount = ActiveReadableNodeCount();
+	uint32 groupCount = ActiveReadableWorkerNodeCount();
 	double maxReduceTasksPerNode = MaxRunningTasksPerNode / 2.0;
 
 	uint32 partitionCount = (uint32) rint(groupCount * maxReduceTasksPerNode);
@@ -3602,8 +3603,13 @@ JoinSequenceArray(List *rangeTableFragmentsList, Query *jobQuery, List *depended
 				continue;
 			}
 
-			leftColumn = LeftColumn(nextJoinClause);
-			rightColumn = RightColumn(nextJoinClause);
+			leftColumn = LeftColumnOrNULL(nextJoinClause);
+			rightColumn = RightColumnOrNULL(nextJoinClause);
+			if (leftColumn == NULL || rightColumn == NULL)
+			{
+				continue;
+			}
+
 			leftRangeTableId = leftColumn->varno;
 			rightRangeTableId = rightColumn->varno;
 
@@ -3834,7 +3840,7 @@ JoinPrunable(RangeTableFragment *leftFragment, RangeTableFragment *rightFragment
 	overlap = ShardIntervalsOverlap(leftFragmentInterval, rightFragmentInterval);
 	if (!overlap)
 	{
-		if (log_min_messages <= DEBUG2 || client_min_messages <= DEBUG2)
+		if (IsLoggableLevel(DEBUG2))
 		{
 			StringInfo leftString = FragmentIntervalString(leftFragmentInterval);
 			StringInfo rightString = FragmentIntervalString(rightFragmentInterval);
@@ -5023,7 +5029,7 @@ GreedyAssignTaskList(List *taskList)
 	uint32 taskCount = list_length(taskList);
 
 	/* get the worker node list and sort the list */
-	List *workerNodeList = ActiveReadableNodeList();
+	List *workerNodeList = ActiveReadableWorkerNodeList();
 	workerNodeList = SortList(workerNodeList, CompareWorkerNodes);
 
 	/*
@@ -5471,7 +5477,7 @@ AssignDualHashTaskList(List *taskList)
 	 * if subsequent jobs have a small number of tasks, we won't allocate the
 	 * tasks to the same worker repeatedly.
 	 */
-	List *workerNodeList = ActiveReadableNodeList();
+	List *workerNodeList = ActiveReadableWorkerNodeList();
 	uint32 workerNodeCount = (uint32) list_length(workerNodeList);
 	uint32 beginningNodeIndex = jobId % workerNodeCount;
 

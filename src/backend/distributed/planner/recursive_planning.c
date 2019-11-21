@@ -59,6 +59,7 @@
 #include "distributed/commands/multi_copy.h"
 #include "distributed/distributed_planner.h"
 #include "distributed/errormessage.h"
+#include "distributed/log_utils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_logical_planner.h"
 #include "distributed/multi_router_planner.h"
@@ -68,6 +69,7 @@
 #include "distributed/query_pushdown_planning.h"
 #include "distributed/recursive_planning.h"
 #include "distributed/relation_restriction_equivalence.h"
+#include "distributed/log_utils.h"
 #include "distributed/version_compat.h"
 #include "lib/stringinfo.h"
 #include "optimizer/planner.h"
@@ -222,8 +224,7 @@ GenerateSubplansForSubqueriesAndCTEs(uint64 planId, Query *originalQuery,
 		RaiseDeferredError(error, ERROR);
 	}
 
-	if (context.subPlanList && (log_min_messages <= DEBUG1 || client_min_messages <=
-								DEBUG1))
+	if (context.subPlanList && IsLoggableLevel(DEBUG1))
 	{
 		StringInfo subPlanString = makeStringInfo();
 		pg_get_query_def(originalQuery, subPlanString);
@@ -730,7 +731,7 @@ RecursivelyPlanCTEs(Query *query, RecursivePlanningContext *planningContext)
 
 		subPlanId = list_length(planningContext->subPlanList) + 1;
 
-		if (log_min_messages <= DEBUG1 || client_min_messages <= DEBUG1)
+		if (IsLoggableLevel(DEBUG1))
 		{
 			StringInfo subPlanString = makeStringInfo();
 			pg_get_query_def(subquery, subPlanString);
@@ -1129,7 +1130,7 @@ RecursivelyPlanSubquery(Query *subquery, RecursivePlanningContext *planningConte
 	 * Subquery will go through the standard planner, thus to properly deparse it
 	 * we keep its copy: debugQuery.
 	 */
-	if (log_min_messages <= DEBUG1 || client_min_messages <= DEBUG1)
+	if (IsLoggableLevel(DEBUG1))
 	{
 		debugQuery = copyObject(subquery);
 	}
@@ -1151,7 +1152,7 @@ RecursivelyPlanSubquery(Query *subquery, RecursivePlanningContext *planningConte
 	 */
 	resultQuery = BuildSubPlanResultQuery(subquery->targetList, NIL, resultId);
 
-	if (log_min_messages <= DEBUG1 || client_min_messages <= DEBUG1)
+	if (IsLoggableLevel(DEBUG1))
 	{
 		StringInfo subqueryString = makeStringInfo();
 
@@ -1446,6 +1447,7 @@ TransformFunctionRTE(RangeTblEntry *rangeTblEntry)
 			subquery->targetList = lappend(subquery->targetList, targetEntry);
 		}
 	}
+
 	/*
 	 * If tupleDesc is NULL we have 2 different cases:
 	 *
@@ -1496,6 +1498,7 @@ TransformFunctionRTE(RangeTblEntry *rangeTblEntry)
 				columnType = list_nth_oid(rangeTblFunction->funccoltypes,
 										  targetColumnIndex);
 			}
+
 			/* use the types in the function definition otherwise */
 			else
 			{
@@ -1542,7 +1545,7 @@ ShouldTransformRTE(RangeTblEntry *rangeTableEntry)
 	/*
 	 * We should wrap only function rtes that are not LATERAL and
 	 * without WITH ORDINALITY clause
-	 * */
+	 */
 	if (rangeTableEntry->rtekind != RTE_FUNCTION ||
 		rangeTableEntry->lateral ||
 		rangeTableEntry->funcordinality)

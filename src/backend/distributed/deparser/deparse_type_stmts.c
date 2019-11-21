@@ -61,7 +61,7 @@ static void AppendAlterTypeOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt);
  * DeparseCompositeTypeStmt builds and returns a string representing the
  * CompositeTypeStmt for application on a remote server.
  */
-const char *
+char *
 DeparseCompositeTypeStmt(CompositeTypeStmt *stmt)
 {
 	StringInfoData sql = { 0 };
@@ -73,7 +73,7 @@ DeparseCompositeTypeStmt(CompositeTypeStmt *stmt)
 }
 
 
-const char *
+char *
 DeparseCreateEnumStmt(CreateEnumStmt *stmt)
 {
 	StringInfoData sql = { 0 };
@@ -85,7 +85,7 @@ DeparseCreateEnumStmt(CreateEnumStmt *stmt)
 }
 
 
-const char *
+char *
 DeparseAlterEnumStmt(AlterEnumStmt *stmt)
 {
 	StringInfoData sql = { 0 };
@@ -97,7 +97,7 @@ DeparseAlterEnumStmt(AlterEnumStmt *stmt)
 }
 
 
-const char *
+char *
 DeparseDropTypeStmt(DropStmt *stmt)
 {
 	StringInfoData str = { 0 };
@@ -111,7 +111,7 @@ DeparseDropTypeStmt(DropStmt *stmt)
 }
 
 
-const char *
+char *
 DeparseAlterTypeStmt(AlterTableStmt *stmt)
 {
 	StringInfoData str = { 0 };
@@ -398,7 +398,7 @@ AppendColumnDef(StringInfo str, ColumnDef *columnDef)
 }
 
 
-const char *
+char *
 DeparseRenameTypeStmt(RenameStmt *stmt)
 {
 	StringInfoData str = { 0 };
@@ -422,7 +422,7 @@ AppendRenameTypeStmt(StringInfo buf, RenameStmt *stmt)
 }
 
 
-const char *
+char *
 DeparseRenameTypeAttributeStmt(RenameStmt *stmt)
 {
 	StringInfoData str = { 0 };
@@ -455,7 +455,7 @@ AppendRenameTypeAttributeStmt(StringInfo buf, RenameStmt *stmt)
 }
 
 
-const char *
+char *
 DeparseAlterTypeSchemaStmt(AlterObjectSchemaStmt *stmt)
 {
 	StringInfoData str = { 0 };
@@ -482,7 +482,7 @@ AppendAlterTypeSchemaStmt(StringInfo buf, AlterObjectSchemaStmt *stmt)
 }
 
 
-const char *
+char *
 DeparseAlterTypeOwnerStmt(AlterOwnerStmt *stmt)
 {
 	StringInfoData str = { 0 };
@@ -505,5 +505,5 @@ AppendAlterTypeOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt)
 
 	names = (List *) stmt->object;
 	appendStringInfo(buf, "ALTER TYPE %s OWNER TO %s;", NameListToQuotedString(names),
-					 RoleSpecString(stmt->newowner));
+					 RoleSpecString(stmt->newowner, true));
 }

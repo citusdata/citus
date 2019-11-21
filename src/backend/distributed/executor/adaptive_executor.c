@@ -568,7 +568,6 @@ static bool DistributedExecutionModifiesDatabase(DistributedExecution *execution
 static bool TaskListModifiesDatabase(RowModifyLevel modLevel, List *taskList);
 static bool DistributedExecutionRequiresRollback(DistributedExecution *execution);
 static bool TaskListRequires2PC(List *taskList);
-static bool ReadOnlyTask(TaskType taskType);
 static bool SelectForUpdateOnReferenceTable(RowModifyLevel modLevel, List *taskList);
 static void AssignTasksToConnections(DistributedExecution *execution);
 static void UnclaimAllSessionConnections(List *sessionList);
@@ -1226,7 +1225,7 @@ TaskListRequires2PC(List *taskList)
  * ReadOnlyTask returns true if the input task does a read-only operation
  * on the database.
  */
-static bool
+bool
 ReadOnlyTask(TaskType taskType)
 {
 	switch (taskType)
@@ -3736,7 +3735,7 @@ BuildWaitEventSet(List *sessionList)
 	{
 		WorkerSession *session = lfirst(sessionCell);
 		MultiConnection *connection = session->connection;
-		int socket = 0;
+		int sock = 0;
 		int waitEventSetIndex = 0;
 
 		if (connection->pgConn == NULL)
@@ -3751,14 +3750,14 @@ BuildWaitEventSet(List *sessionList)
 			continue;
 		}
 
-		socket = PQsocket(connection->pgConn);
-		if (socket == -1)
+		sock = PQsocket(connection->pgConn);
+		if (sock == -1)
 		{
 			/* connection was closed */
 			continue;
 		}
 
-		waitEventSetIndex = AddWaitEventToSet(waitEventSet, connection->waitFlags, socket,
+		waitEventSetIndex = AddWaitEventToSet(waitEventSet, connection->waitFlags, sock,
 											  NULL, (void *) session);
 		session->waitEventSetIndex = waitEventSetIndex;
 	}
@@ -3783,7 +3782,7 @@ UpdateWaitEventSetFlags(WaitEventSet *waitEventSet, List *sessionList)
 	{
 		WorkerSession *session = lfirst(sessionCell);
 		MultiConnection *connection = session->connection;
-		int socket = 0;
+		int sock = 0;
 		int waitEventSetIndex = session->waitEventSetIndex;
 
 		if (connection->pgConn == NULL)
@@ -3798,8 +3797,8 @@ UpdateWaitEventSetFlags(WaitEventSet *waitEventSet, List *sessionList)
 			continue;
 		}
 
-		socket = PQsocket(connection->pgConn);
-		if (socket == -1)
+		sock = PQsocket(connection->pgConn);
+		if (sock == -1)
 		{
 			/* connection was closed */
 			continue;

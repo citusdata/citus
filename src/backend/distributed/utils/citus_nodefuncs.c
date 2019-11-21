@@ -14,6 +14,7 @@
 #include "distributed/citus_nodes.h"
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/errormessage.h"
+#include "distributed/log_utils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/distributed_planner.h"
 #include "distributed/multi_router_planner.h"

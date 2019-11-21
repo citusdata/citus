@@ -1074,7 +1074,7 @@ EnsureSequentialModeForFunctionDDL(void)
 static void
 TriggerSyncMetadataToPrimaryNodes(void)
 {
-	List *workerList = ActivePrimaryNodeList(ShareLock);
+	List *workerList = ActivePrimaryWorkerNodeList(ShareLock);
 	ListCell *workerCell = NULL;
 	bool triggerMetadataSync = false;
 
@@ -1256,7 +1256,7 @@ ProcessCreateFunctionStmt(CreateFunctionStmt *stmt, const char *queryString)
  * CREATE [OR REPLACE] FUNCTION statement. If missing_ok is false it will error with the
  * normal postgres error for unfound functions.
  */
-const ObjectAddress *
+ObjectAddress *
 CreateFunctionStmtObjectAddress(CreateFunctionStmt *stmt, bool missing_ok)
 {
 	ObjectType objectType = OBJECT_FUNCTION;
@@ -1281,7 +1281,15 @@ CreateFunctionStmtObjectAddress(CreateFunctionStmt *stmt, bool missing_ok)
 }
 
 
-const ObjectAddress *
+/*
+ * DefineAggregateStmtObjectAddress finds the ObjectAddress for the composite type described
+ * by the DefineStmtObjectAddress. If missing_ok is false this function throws an error if the
+ * aggregate does not exist.
+ *
+ * Never returns NULL, but the objid in the address could be invalid if missing_ok was set
+ * to true.
+ */
+ObjectAddress *
 DefineAggregateStmtObjectAddress(DefineStmt *stmt, bool missing_ok)
 {
 	ObjectWithArgs *objectWithArgs = NULL;
@@ -1609,7 +1617,7 @@ PlanAlterFunctionDependsStmt(AlterObjectDependsStmt *stmt, const char *queryStri
  * is the subject of an ALTER FUNCTION ... DEPENS ON EXTENSION ... statement. If
  * missing_ok is set to false the lookup will raise an error.
  */
-const ObjectAddress *
+ObjectAddress *
 AlterFunctionDependsStmtObjectAddress(AlterObjectDependsStmt *stmt, bool missing_ok)
 {
 	AssertObjectTypeIsFunctional(stmt->objectType);
@@ -1647,7 +1655,7 @@ ProcessAlterFunctionSchemaStmt(AlterObjectSchemaStmt *stmt, const char *queryStr
  * AlterFunctionStmt. If missing_ok is set to false an error will be raised if postgres
  * was unable to find the function/procedure that was the target of the statement.
  */
-const ObjectAddress *
+ObjectAddress *
 AlterFunctionStmtObjectAddress(AlterFunctionStmt *stmt, bool missing_ok)
 {
 	return FunctionToObjectAddress(stmt->objtype, stmt->func, missing_ok);
@@ -1658,7 +1666,7 @@ AlterFunctionStmtObjectAddress(AlterFunctionStmt *stmt, bool missing_ok)
  * RenameFunctionStmtObjectAddress returns the ObjectAddress of the function that is the
  * subject of the RenameStmt. Errors if missing_ok is false.
  */
-const ObjectAddress *
+ObjectAddress *
 RenameFunctionStmtObjectAddress(RenameStmt *stmt, bool missing_ok)
 {
 	return FunctionToObjectAddress(stmt->renameType,
@@ -1670,7 +1678,7 @@ RenameFunctionStmtObjectAddress(RenameStmt *stmt, bool missing_ok)
  * AlterFunctionOwnerObjectAddress returns the ObjectAddress of the function that is the
  * subject of the AlterOwnerStmt. Errors if missing_ok is false.
  */
-const ObjectAddress *
+ObjectAddress *
 AlterFunctionOwnerObjectAddress(AlterOwnerStmt *stmt, bool missing_ok)
 {
 	return FunctionToObjectAddress(stmt->objectType,
@@ -1687,7 +1695,7 @@ AlterFunctionOwnerObjectAddress(AlterOwnerStmt *stmt, bool missing_ok)
  * the new schema. Errors if missing_ok is false and the type cannot be found in either of
  * the schemas.
  */
-const ObjectAddress *
+ObjectAddress *
 AlterFunctionSchemaStmtObjectAddress(AlterObjectSchemaStmt *stmt, bool missing_ok)
 {
 	ObjectWithArgs *objectWithArgs = NULL;

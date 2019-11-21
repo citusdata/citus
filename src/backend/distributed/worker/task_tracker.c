@@ -91,6 +91,7 @@ static void ManageWorkerTasksHash(HTAB *WorkerTasksHash);
 static void ManageWorkerTask(WorkerTask *workerTask, HTAB *WorkerTasksHash);
 static void RemoveWorkerTask(WorkerTask *workerTask, HTAB *WorkerTasksHash);
 static void CreateJobDirectoryIfNotExists(uint64 jobId);
+static void MarkWorkerTaskAsFailed(WorkerTask *workerTask);
 static int32 ConnectToLocalBackend(const char *databaseName, const char *userName);
 
 
@@ -930,8 +931,7 @@ ManageWorkerTask(WorkerTask *workerTask, HTAB *WorkerTasksHash)
 				}
 				else
 				{
-					workerTask->taskStatus = TASK_FAILED;
-					workerTask->failureCount++;
+					MarkWorkerTaskAsFailed(workerTask);
 
 					MultiClientDisconnect(workerTask->connectionId);
 					workerTask->connectionId = INVALID_CONNECTION_ID;
@@ -939,8 +939,7 @@ ManageWorkerTask(WorkerTask *workerTask, HTAB *WorkerTasksHash)
 			}
 			else
 			{
-				workerTask->taskStatus = TASK_FAILED;
-				workerTask->failureCount++;
+				MarkWorkerTaskAsFailed(workerTask);
 			}
 
 			break;
@@ -961,8 +960,7 @@ ManageWorkerTask(WorkerTask *workerTask, HTAB *WorkerTasksHash)
 				}
 				else if (queryStatus == CLIENT_QUERY_FAILED)
 				{
-					workerTask->taskStatus = TASK_FAILED;
-					workerTask->failureCount++;
+					MarkWorkerTaskAsFailed(workerTask);
 				}
 				else
 				{
@@ -975,8 +973,7 @@ ManageWorkerTask(WorkerTask *workerTask, HTAB *WorkerTasksHash)
 			}
 			else if (resultStatus == CLIENT_RESULT_UNAVAILABLE)
 			{
-				workerTask->taskStatus = TASK_FAILED;
-				workerTask->failureCount++;
+				MarkWorkerTaskAsFailed(workerTask);
 			}
 
 			/* clean up the connection if we are done with the task */
@@ -1061,6 +1058,19 @@ ManageWorkerTask(WorkerTask *workerTask, HTAB *WorkerTasksHash)
 	}
 
 	Assert(workerTask->failureCount <= MAX_TASK_FAILURE_COUNT);
+}
+
+
+/*
+ * MarkWorkerTaskAsFailed marks the given worker task as failed
+ * and increases the failure count. Failure count is used to
+ * determine if the task should be marked as permanently failed.
+ */
+static void
+MarkWorkerTaskAsFailed(WorkerTask *workerTask)
+{
+	workerTask->taskStatus = TASK_FAILED;
+	workerTask->failureCount++;
 }
 
 

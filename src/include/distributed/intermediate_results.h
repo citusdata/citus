@@ -18,6 +18,7 @@
 #include "nodes/execnodes.h"
 #include "nodes/pg_list.h"
 #include "tcop/dest.h"
+#include "utils/builtins.h"
 #include "utils/palloc.h"
 
 

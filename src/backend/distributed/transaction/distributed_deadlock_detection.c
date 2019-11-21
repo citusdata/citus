@@ -18,6 +18,7 @@
 #include "distributed/backend_data.h"
 #include "distributed/distributed_deadlock_detection.h"
 #include "distributed/errormessage.h"
+#include "distributed/log_utils.h"
 #include "distributed/hash_helpers.h"
 #include "distributed/listutils.h"
 #include "distributed/lock_graph.h"

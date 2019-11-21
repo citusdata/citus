@@ -41,6 +41,7 @@
 #include "distributed/pg_dist_partition.h"
 #include "distributed/pg_dist_shard.h"
 #include "distributed/pg_dist_placement.h"
+#include "distributed/reference_table_utils.h"
 #include "distributed/relay_utility.h"
 #include "distributed/resource_lock.h"
 #include "distributed/remote_commands.h"

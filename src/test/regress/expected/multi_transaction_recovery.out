@@ -1,5 +1,16 @@
 -- Tests for prepared transaction recovery
 SET citus.next_shard_id TO 1220000;
+-- reference tables can have placements on the coordinator. Add it so
+-- verify we recover transactions which do DML on coordinator placements
+-- properly.
+SET client_min_messages TO ERROR;
+SELECT 1 FROM master_add_node('localhost', :master_port, groupid => 0);
+ ?column? 
+----------
+        1
+(1 row)
+
+RESET client_min_messages;
 -- enforce 1 connection per placement since
 -- the tests are prepared for that
 SET citus.force_max_query_parallelization TO ON;
@@ -30,20 +41,43 @@ BEGIN;
 CREATE TABLE should_be_sorted_into_middle (value int);
 PREPARE TRANSACTION 'citus_0_should_be_sorted_into_middle';
 \c - - - :master_port
+BEGIN;
+CREATE TABLE should_abort (value int);
+PREPARE TRANSACTION 'citus_0_should_abort';
+BEGIN;
+CREATE TABLE should_commit (value int);
+PREPARE TRANSACTION 'citus_0_should_commit';
+BEGIN;
+CREATE TABLE should_be_sorted_into_middle (value int);
+PREPARE TRANSACTION 'citus_0_should_be_sorted_into_middle';
 SET citus.force_max_query_parallelization TO ON;
 -- Add "fake" pg_dist_transaction records and run recovery
-INSERT INTO pg_dist_transaction VALUES (1, 'citus_0_should_commit');
-INSERT INTO pg_dist_transaction VALUES (1, 'citus_0_should_be_forgotten');
+INSERT INTO pg_dist_transaction VALUES (1, 'citus_0_should_commit'),
+                                       (0, 'citus_0_should_commit');
+INSERT INTO pg_dist_transaction VALUES (1, 'citus_0_should_be_forgotten'),
+                                       (0, 'citus_0_should_be_forgotten');
 SELECT recover_prepared_transactions();
  recover_prepared_transactions 
 -------------------------------
-                             3
+                             6
 (1 row)
 
 SELECT count(*) FROM pg_dist_transaction;
  count 
 -------
      0
+(1 row)
+
+SELECT count(*) FROM pg_tables WHERE tablename = 'should_abort';
+ count 
+-------
+     0
+(1 row)
+
+SELECT count(*) FROM pg_tables WHERE tablename = 'should_commit';
+ count 
+-------
+     1
 (1 row)
 
 -- Confirm that transactions were correctly rolled forward
@@ -328,3 +362,9 @@ SELECT pg_reload_conf();
 DROP TABLE test_recovery_ref;
 DROP TABLE test_recovery;
 DROP TABLE test_recovery_single;
+SELECT 1 FROM master_remove_node('localhost', :master_port);
+ ?column? 
+----------
+        1
+(1 row)
+

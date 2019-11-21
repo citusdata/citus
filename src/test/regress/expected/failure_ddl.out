@@ -4,6 +4,7 @@
 --    Replication factor, 1PC-2PC, sequential-parallel modes
 -- 
 CREATE SCHEMA ddl_failure;
+SET citus.force_max_query_parallelization TO ON;
 SET search_path TO 'ddl_failure';
 -- do not cache any connections
 SET citus.max_cached_conns_per_worker TO 0;

@@ -30,6 +30,7 @@ extern PropSetCmdBehavior PropagateSetCommands;
 extern bool EnableDDLPropagation;
 extern bool EnableDependencyCreation;
 extern bool EnableCreateTypePropagation;
+extern bool EnableAlterRolePropagation;
 
 /*
  * A DDLJob encapsulates the remote tasks and commands needed to process all or
@@ -58,5 +59,6 @@ extern void InvalidateForeignKeyGraphForDDL(void);
 extern List * DDLTaskList(Oid relationId, const char *commandString);
 extern List * NodeDDLTaskList(TargetWorkerSet targets, List *commands);
 extern bool AlterTableInProgress(void);
+extern bool DropSchemaOrDBInProgress(void);
 
 #endif /* MULTI_UTILITY_H */

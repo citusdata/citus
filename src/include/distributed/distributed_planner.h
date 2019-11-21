@@ -10,6 +10,8 @@
 #ifndef DISTRIBUTED_PLANNER_H
 #define DISTRIBUTED_PLANNER_H
 
+#include "postgres.h"
+
 #include "nodes/plannodes.h"
 
 #if PG_VERSION_NUM >= 120000
@@ -20,6 +22,7 @@
 
 #include "distributed/citus_nodes.h"
 #include "distributed/errormessage.h"
+#include "distributed/log_utils.h"
 
 
 /* values used by jobs and tasks which do not require identifiers */
@@ -81,6 +84,7 @@ typedef struct PlannerRestrictionContext
 {
 	RelationRestrictionContext *relationRestrictionContext;
 	JoinRestrictionContext *joinRestrictionContext;
+	bool hasSemiJoin;
 	MemoryContext memoryContext;
 } PlannerRestrictionContext;
 
@@ -105,7 +109,7 @@ extern List * ExtractRangeTableEntryList(Query *query);
 extern bool NeedsDistributedPlanning(Query *query);
 extern struct DistributedPlan * GetDistributedPlan(CustomScan *node);
 extern void multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo,
-											Index index, RangeTblEntry *rte);
+											Index restrictionIndex, RangeTblEntry *rte);
 extern void multi_join_restriction_hook(PlannerInfo *root,
 										RelOptInfo *joinrel,
 										RelOptInfo *outerrel,
@@ -119,5 +123,6 @@ extern Node * ResolveExternalParams(Node *inputNode, ParamListInfo boundParams);
 extern bool IsMultiTaskPlan(struct DistributedPlan *distributedPlan);
 extern RangeTblEntry * RemoteScanRangeTableEntry(List *columnNameList);
 extern int GetRTEIdentity(RangeTblEntry *rte);
+extern int32 BlessRecordExpression(Expr *expr);
 
 #endif /* DISTRIBUTED_PLANNER_H */

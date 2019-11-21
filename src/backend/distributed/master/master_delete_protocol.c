@@ -270,6 +270,12 @@ master_drop_sequences(PG_FUNCTION_ARGS)
 	bool isNull = false;
 	StringInfo dropSeqCommand = makeStringInfo();
 
+	if (!CitusHasBeenLoaded())
+	{
+		/* ignore calls during CREATE EXTENSION citus */
+		PG_RETURN_VOID();
+	}
+
 	CheckCitusVersion(ERROR);
 
 	/*
@@ -422,7 +428,21 @@ DropShards(Oid relationId, char *schemaName, char *relationName,
 								 quotedShardName);
 			}
 
-			connection = GetPlacementConnection(connectionFlags, shardPlacement, NULL);
+			/*
+			 * The active DROP SCHEMA/DATABASE ... CASCADE will drop the shard, if we
+			 * try to drop it over another connection, we will get into a distributed
+			 * deadlock.
+			 */
+			if (shardPlacement->groupId == COORDINATOR_GROUP_ID &&
+				IsCoordinator() &&
+				DropSchemaOrDBInProgress())
+			{
+				DeleteShardPlacementRow(shardPlacement->placementId);
+				continue;
+			}
+
+			connection = GetPlacementConnection(connectionFlags, shardPlacement,
+												NULL);
 
 			RemoteTransactionBeginIfNecessary(connection);
 

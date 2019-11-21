@@ -12,6 +12,7 @@
 
 #include "catalog/dependency.h"
 #include "catalog/objectaddress.h"
+#include "commands/extension.h"
 #include "distributed/commands.h"
 #include "distributed/connection_management.h"
 #include "distributed/metadata/dependency.h"
@@ -93,7 +94,7 @@ EnsureDependenciesExistsOnAllNodes(const ObjectAddress *target)
 	 * either get it now, or get it in master_add_node after this transaction finishes and
 	 * the pg_dist_object record becomes visible.
 	 */
-	workerNodeList = ActivePrimaryNodeList(RowShareLock);
+	workerNodeList = ActivePrimaryWorkerNodeList(RowShareLock);
 
 	/*
 	 * right after we acquired the lock we mark our objects as distributed, these changes
@@ -182,6 +183,11 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 			return CreateTypeDDLCommandsIdempotent(dependency);
 		}
 
+		case OCLASS_EXTENSION:
+		{
+			return CreateExtensionDDLCommand(dependency);
+		}
+
 		default:
 		{
 			break;
@@ -259,6 +265,55 @@ ReplicateAllDependenciesToNode(const char *nodeName, int nodePort)
 
 	SendCommandListToWorkerInSingleTransaction(nodeName, nodePort,
 											   CitusExtensionOwnerName(), ddlCommands);
+}
+
+
+/*
+ * ShouldPropagate determines if we should be propagating anything
+ */
+bool
+ShouldPropagate(void)
+{
+	if (creating_extension)
+	{
+		/*
+		 * extensions should be created separately on the workers, types cascading from an
+		 * extension should therefore not be propagated.
+		 */
+		return false;
+	}
+
+	if (!EnableDependencyCreation)
+	{
+		/*
+		 * we are configured to disable object propagation, should not propagate anything
+		 */
+		return false;
+	}
+
+	return true;
+}
+
+
+/*
+ * ShouldPropagateObject determines if we should be propagating DDLs based
+ * on their object address.
+ */
+bool
+ShouldPropagateObject(const ObjectAddress *address)
+{
+	if (!ShouldPropagate())
+	{
+		return false;
+	}
+
+	if (!IsObjectDistributed(address))
+	{
+		/* do not propagate for non-distributed types */
+		return false;
+	}
+
+	return true;
 }
 
 

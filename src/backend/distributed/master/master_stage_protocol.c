@@ -161,7 +161,7 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 	shardId = GetNextShardId();
 
 	/* if enough live groups, add an extra candidate node as backup */
-	workerNodeList = ActivePrimaryNodeList(NoLock);
+	workerNodeList = DistributedTablePlacementNodeList(NoLock);
 
 	if (list_length(workerNodeList) > ShardReplicationFactor)
 	{

@@ -17,13 +17,13 @@
 
 #include "distributed/deparser.h"
 
-static const char * DeparseDropStmt(DropStmt *stmt);
-static const char * DeparseAlterTableStmt(AlterTableStmt *stmt);
-static const char * DeparseRenameStmt(RenameStmt *stmt);
-static const char * DeparseRenameAttributeStmt(RenameStmt *stmt);
-static const char * DeparseAlterObjectSchemaStmt(AlterObjectSchemaStmt *stmt);
-static const char * DeparseAlterOwnerStmt(AlterOwnerStmt *stmt);
-static const char * DeparseAlterObjectDependsStmt(AlterObjectDependsStmt *stmt);
+static char * DeparseDropStmt(DropStmt *stmt);
+static char * DeparseAlterTableStmt(AlterTableStmt *stmt);
+static char * DeparseRenameStmt(RenameStmt *stmt);
+static char * DeparseRenameAttributeStmt(RenameStmt *stmt);
+static char * DeparseAlterObjectSchemaStmt(AlterObjectSchemaStmt *stmt);
+static char * DeparseAlterOwnerStmt(AlterOwnerStmt *stmt);
+static char * DeparseAlterObjectDependsStmt(AlterObjectDependsStmt *stmt);
 
 /*
  * DeparseTreeNode aims to be the inverse of postgres' ParseTreeNode. Currently with
@@ -31,14 +31,15 @@ static const char * DeparseAlterObjectDependsStmt(AlterObjectDependsStmt *stmt);
  * required.
  *
  * Currently supported:
- *  - CREATE TYPE
- *  - ALTER TYPE
- *  - DROP TYPE
- *
+ *  - CREATE TYPE, ALTER TYPE, DROP TYPE
  *  - ALTER FUNCTION, ALTER PROCEDURE, ALTER AGGREGATE
  *  - DROP FUNCTION, DROP PROCEDURE, DROP AGGREGATE
+ *
+ *  - CREATE EXTENSION
+ *  - ALTER EXTENSION
+ *  - DROP EXTENSION
  */
-const char *
+char *
 DeparseTreeNode(Node *stmt)
 {
 	switch (nodeTag(stmt))
@@ -93,6 +94,21 @@ DeparseTreeNode(Node *stmt)
 			return DeparseAlterObjectDependsStmt(castNode(AlterObjectDependsStmt, stmt));
 		}
 
+		case T_AlterRoleStmt:
+		{
+			return DeparseAlterRoleStmt(castNode(AlterRoleStmt, stmt));
+		}
+
+		case T_CreateExtensionStmt:
+		{
+			return DeparseCreateExtensionStmt(castNode(CreateExtensionStmt, stmt));
+		}
+
+		case T_AlterExtensionStmt:
+		{
+			return DeparseAlterExtensionStmt(castNode(AlterExtensionStmt, stmt));
+		}
+
 		default:
 		{
 			ereport(ERROR, (errmsg("unsupported statement for deparsing")));
@@ -107,7 +123,7 @@ DeparseTreeNode(Node *stmt)
  * Currently with limited support. Check support before using, and add support for new
  * statements as required.
  */
-static const char *
+static char *
 DeparseDropStmt(DropStmt *stmt)
 {
 	switch (stmt->removeType)
@@ -122,6 +138,11 @@ DeparseDropStmt(DropStmt *stmt)
 		case OBJECT_FUNCTION:
 		{
 			return DeparseDropFunctionStmt(stmt);
+		}
+
+		case OBJECT_EXTENSION:
+		{
+			return DeparseDropExtensionStmt(stmt);
 		}
 
 		default:
@@ -141,7 +162,7 @@ DeparseDropStmt(DropStmt *stmt)
  * Currently with limited support. Check support before using, and add support for new
  * statements as required.
  */
-static const char *
+static char *
 DeparseAlterTableStmt(AlterTableStmt *stmt)
 {
 	switch (stmt->relkind)
@@ -169,7 +190,7 @@ DeparseAlterTableStmt(AlterTableStmt *stmt)
  * Currently with limited support. Check support before using, and add support for new
  * statements as required.
  */
-static const char *
+static char *
 DeparseRenameStmt(RenameStmt *stmt)
 {
 	switch (stmt->renameType)
@@ -199,7 +220,7 @@ DeparseRenameStmt(RenameStmt *stmt)
 }
 
 
-static const char *
+static char *
 DeparseRenameAttributeStmt(RenameStmt *stmt)
 {
 	Assert(stmt->renameType == OBJECT_ATTRIBUTE);
@@ -228,7 +249,7 @@ DeparseRenameAttributeStmt(RenameStmt *stmt)
  * Currently with limited support. Check support before using, and add support for new
  * statements as required.
  */
-static const char *
+static char *
 DeparseAlterObjectSchemaStmt(AlterObjectSchemaStmt *stmt)
 {
 	switch (stmt->objectType)
@@ -243,6 +264,11 @@ DeparseAlterObjectSchemaStmt(AlterObjectSchemaStmt *stmt)
 		case OBJECT_FUNCTION:
 		{
 			return DeparseAlterFunctionSchemaStmt(stmt);
+		}
+
+		case OBJECT_EXTENSION:
+		{
+			return DeparseAlterExtensionSchemaStmt(stmt);
 		}
 
 		default:
@@ -261,7 +287,7 @@ DeparseAlterObjectSchemaStmt(AlterObjectSchemaStmt *stmt)
  * Currently with limited support. Check support before using, and add support for new
  * statements as required.
  */
-static const char *
+static char *
 DeparseAlterOwnerStmt(AlterOwnerStmt *stmt)
 {
 	switch (stmt->objectType)
@@ -294,7 +320,7 @@ DeparseAlterOwnerStmt(AlterOwnerStmt *stmt)
  * Currently with limited support. Check support before using, and add support for new
  * statements as required.
  */
-static const char *
+static char *
 DeparseAlterObjectDependsStmt(AlterObjectDependsStmt *stmt)
 {
 	switch (stmt->objectType)

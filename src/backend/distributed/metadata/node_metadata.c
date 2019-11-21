@@ -22,6 +22,8 @@
 #include "commands/sequence.h"
 #include "distributed/citus_acquire_lock.h"
 #include "distributed/colocation_utils.h"
+#include "distributed/commands.h"
+#include "distributed/commands/utility_hook.h"
 #include "distributed/connection_management.h"
 #include "distributed/maintenanced.h"
 #include "distributed/master_protocol.h"
@@ -49,6 +51,7 @@
 #include "utils/rel.h"
 #include "utils/relcache.h"
 
+#define INVALID_GROUP_ID -1
 
 /* default group size */
 int GroupSize = 1;
@@ -81,7 +84,6 @@ static void InsertNodeRow(int nodeid, char *nodename, int32 nodeport, NodeMetada
 						  *nodeMetadata);
 static void DeleteNodeRow(char *nodename, int32 nodeport);
 static void SetUpDistributedTableDependencies(WorkerNode *workerNode);
-static List * ParseWorkerNodeFileAndRename(void);
 static WorkerNode * TupleToWorkerNode(TupleDesc tupleDescriptor, HeapTuple heapTuple);
 static WorkerNode * ModifiableWorkerNode(const char *nodeName, int32 nodePort);
 static void UpdateNodeLocation(int32 nodeId, char *newNodeName, int32 newNodePort);
@@ -97,7 +99,6 @@ PG_FUNCTION_INFO_V1(master_remove_node);
 PG_FUNCTION_INFO_V1(master_disable_node);
 PG_FUNCTION_INFO_V1(master_activate_node);
 PG_FUNCTION_INFO_V1(master_update_node);
-PG_FUNCTION_INFO_V1(master_initialize_node_metadata);
 PG_FUNCTION_INFO_V1(get_shard_id_for_distribution_column);
 
 
@@ -111,6 +112,7 @@ DefaultNodeMetadata()
 	NodeMetadata nodeMetadata = {
 		.nodeRack = WORKER_DEFAULT_RACK,
 		.shouldHaveShards = true,
+		.groupId = INVALID_GROUP_ID,
 	};
 	return nodeMetadata;
 }
@@ -275,29 +277,51 @@ master_disable_node(PG_FUNCTION_ARGS)
 	WorkerNode *workerNode = ModifiableWorkerNode(nodeName, nodePort);
 	bool isActive = false;
 	bool onlyConsiderActivePlacements = false;
+	MemoryContext savedContext = CurrentMemoryContext;
 
-	if (WorkerNodeIsPrimary(workerNode))
+	PG_TRY();
 	{
-		/*
-		 * Delete reference table placements so they are not taken into account
-		 * for the check if there are placements after this
-		 */
-		DeleteAllReferenceTablePlacementsFromNodeGroup(workerNode->groupId);
-
-		if (NodeGroupHasShardPlacements(workerNode->groupId,
-										onlyConsiderActivePlacements))
+		if (NodeIsPrimary(workerNode))
 		{
-			ereport(NOTICE, (errmsg(
-								 "Node %s:%d has active shard placements. Some queries "
-								 "may fail after this operation. Use "
-								 "SELECT master_activate_node('%s', %d) to activate this "
-								 "node back.",
-								 workerNode->workerName, nodePort, workerNode->workerName,
-								 nodePort)));
-		}
-	}
+			/*
+			 * Delete reference table placements so they are not taken into account
+			 * for the check if there are placements after this.
+			 */
+			DeleteAllReferenceTablePlacementsFromNodeGroup(workerNode->groupId);
 
-	SetNodeState(nodeName, nodePort, isActive);
+			if (NodeGroupHasShardPlacements(workerNode->groupId,
+											onlyConsiderActivePlacements))
+			{
+				ereport(NOTICE, (errmsg(
+									 "Node %s:%d has active shard placements. Some queries "
+									 "may fail after this operation. Use "
+									 "SELECT master_activate_node('%s', %d) to activate this "
+									 "node back.",
+									 workerNode->workerName, nodePort,
+									 workerNode->workerName,
+									 nodePort)));
+			}
+		}
+
+		SetNodeState(nodeName, nodePort, isActive);
+	}
+	PG_CATCH();
+	{
+		ErrorData *edata = NULL;
+
+		/* CopyErrorData() requires (CurrentMemoryContext != ErrorContext) */
+		MemoryContextSwitchTo(savedContext);
+		edata = CopyErrorData();
+
+		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+						errmsg("Disabling %s:%d failed", workerNode->workerName,
+							   nodePort),
+						errdetail("%s", edata->message),
+						errhint(
+							"If you are using MX, try stop_metadata_sync_to_node(hostname, port) "
+							"for nodes that are down before disabling them.")));
+	}
+	PG_END_TRY();
 
 	PG_RETURN_VOID();
 }
@@ -343,7 +367,7 @@ master_set_node_property(PG_FUNCTION_ARGS)
 static void
 SetUpDistributedTableDependencies(WorkerNode *newWorkerNode)
 {
-	if (WorkerNodeIsPrimary(newWorkerNode))
+	if (NodeIsPrimary(newWorkerNode))
 	{
 		EnsureNoModificationsHaveBeenDone();
 		ReplicateAllDependenciesToNode(newWorkerNode->workerName,
@@ -352,7 +376,7 @@ SetUpDistributedTableDependencies(WorkerNode *newWorkerNode)
 										  newWorkerNode->workerPort);
 
 		/*
-		 * Let the maintanince deamon do the hard work of syncing the metadata.
+		 * Let the maintenance daemon do the hard work of syncing the metadata.
 		 * We prefer this because otherwise node activation might fail within
 		 * transaction blocks.
 		 */
@@ -363,6 +387,28 @@ SetUpDistributedTableDependencies(WorkerNode *newWorkerNode)
 			TriggerMetadataSync(MyDatabaseId);
 		}
 	}
+}
+
+
+/*
+ * PropagateRolesToNewNode copies the roles' attributes in the new node. Roles that do
+ * not exist in the workers are not created and simply skipped.
+ */
+static void
+PropagateRolesToNewNode(WorkerNode *newWorkerNode)
+{
+	List *ddlCommands = NIL;
+
+	if (!EnableAlterRolePropagation)
+	{
+		return;
+	}
+
+	ddlCommands = GenerateAlterRoleIfExistsCommandAllRoles();
+
+	SendCommandListToWorkerInSingleTransaction(newWorkerNode->workerName,
+											   newWorkerNode->workerPort,
+											   CitusExtensionOwnerName(), ddlCommands);
 }
 
 
@@ -430,10 +476,10 @@ GroupForNode(char *nodeName, int nodePort)
 
 
 /*
- * WorkerNodeIsPrimary returns whether the argument represents a primary node.
+ * NodeIsPrimary returns whether the argument represents a primary node.
  */
 bool
-WorkerNodeIsPrimary(WorkerNode *worker)
+NodeIsPrimary(WorkerNode *worker)
 {
 	Oid primaryRole = PrimaryNodeRoleId();
 
@@ -448,10 +494,10 @@ WorkerNodeIsPrimary(WorkerNode *worker)
 
 
 /*
- * WorkerNodeIsSecondary returns whether the argument represents a secondary node.
+ * NodeIsSecondary returns whether the argument represents a secondary node.
  */
 bool
-WorkerNodeIsSecondary(WorkerNode *worker)
+NodeIsSecondary(WorkerNode *worker)
 {
 	Oid secondaryRole = SecondaryNodeRoleId();
 
@@ -466,36 +512,20 @@ WorkerNodeIsSecondary(WorkerNode *worker)
 
 
 /*
- * WorkerNodeIsPrimaryShouldHaveShardsNode returns whether the argument represents a
- * primary node that is a eligible for new data.
- */
-bool
-WorkerNodeIsPrimaryShouldHaveShardsNode(WorkerNode *worker)
-{
-	if (!WorkerNodeIsPrimary(worker))
-	{
-		return false;
-	}
-
-	return worker->shouldHaveShards;
-}
-
-
-/*
- * WorkerNodeIsReadable returns whether we're allowed to send SELECT queries to this
+ * NodeIsReadable returns whether we're allowed to send SELECT queries to this
  * node.
  */
 bool
-WorkerNodeIsReadable(WorkerNode *workerNode)
+NodeIsReadable(WorkerNode *workerNode)
 {
 	if (ReadFromSecondaries == USE_SECONDARY_NODES_NEVER &&
-		WorkerNodeIsPrimary(workerNode))
+		NodeIsPrimary(workerNode))
 	{
 		return true;
 	}
 
 	if (ReadFromSecondaries == USE_SECONDARY_NODES_ALWAYS &&
-		WorkerNodeIsSecondary(workerNode))
+		NodeIsSecondary(workerNode))
 	{
 		return true;
 	}
@@ -532,7 +562,7 @@ PrimaryNodeForGroup(int32 groupId, bool *groupContainsNodes)
 			*groupContainsNodes = true;
 		}
 
-		if (WorkerNodeIsPrimary(workerNode))
+		if (NodeIsPrimary(workerNode))
 		{
 			hash_seq_term(&status);
 			return workerNode;
@@ -559,6 +589,7 @@ ActivateNode(char *nodeName, int nodePort)
 
 	newWorkerNode = SetNodeState(nodeName, nodePort, isActive);
 
+	PropagateRolesToNewNode(newWorkerNode);
 	SetUpDistributedTableDependencies(newWorkerNode);
 	return newWorkerNode->nodeId;
 }
@@ -648,7 +679,7 @@ master_update_node(PG_FUNCTION_ARGS)
 	 * though we currently only query secondaries on follower clusters
 	 * where these locks will have no effect.
 	 */
-	if (WorkerNodeIsPrimary(workerNode))
+	if (NodeIsPrimary(workerNode))
 	{
 		/*
 		 * before acquiring the locks check if we want a background worker to help us to
@@ -748,43 +779,6 @@ UpdateNodeLocation(int32 nodeId, char *newNodeName, int32 newNodePort)
 
 	systable_endscan(scanDescriptor);
 	heap_close(pgDistNode, NoLock);
-}
-
-
-/*
- * master_initialize_node_metadata is run once, when upgrading citus. It ingests the
- * existing pg_worker_list.conf into pg_dist_node, then adds a header to the file stating
- * that it's no longer used.
- */
-Datum
-master_initialize_node_metadata(PG_FUNCTION_ARGS)
-{
-	List *workerNodes = NIL;
-	WorkerNode *workerNode = NULL;
-
-	CheckCitusVersion(ERROR);
-
-	/*
-	 * This function should only ever be called from the create extension
-	 * script, but just to be sure, take an exclusive lock on pg_dist_node
-	 * to prevent concurrent calls.
-	 */
-	LockRelationOid(DistNodeRelationId(), ExclusiveLock);
-
-	workerNodes = ParseWorkerNodeFileAndRename();
-
-	foreach_ptr(workerNode, workerNodes)
-	{
-		bool nodeAlreadyExists = false;
-		NodeMetadata nodeMetadata = DefaultNodeMetadata();
-		nodeMetadata.nodeRack = workerNode->workerRack;
-		nodeMetadata.isActive = workerNode->isActive;
-
-		AddNodeMetadata(workerNode->workerName, workerNode->workerPort, &nodeMetadata,
-						&nodeAlreadyExists);
-	}
-
-	PG_RETURN_BOOL(true);
 }
 
 
@@ -935,7 +929,7 @@ FindWorkerNodeAnyCluster(const char *nodeName, int32 nodePort)
 
 
 /*
- * ReadWorkerNodes iterates over pg_dist_node table, converts each row
+ * ReadDistNode iterates over pg_dist_node table, converts each row
  * into it's memory representation (i.e., WorkerNode) and adds them into
  * a list. Lastly, the list is returned to the caller.
  *
@@ -943,7 +937,7 @@ FindWorkerNodeAnyCluster(const char *nodeName, int32 nodePort)
  * by includeNodesFromOtherClusters.
  */
 List *
-ReadWorkerNodes(bool includeNodesFromOtherClusters)
+ReadDistNode(bool includeNodesFromOtherClusters)
 {
 	SysScanDesc scanDescriptor = NULL;
 	ScanKeyData scanKey[1];
@@ -998,7 +992,7 @@ RemoveNodeFromCluster(char *nodeName, int32 nodePort)
 	char *nodeDeleteCommand = NULL;
 	WorkerNode *workerNode = ModifiableWorkerNode(nodeName, nodePort);
 
-	if (WorkerNodeIsPrimary(workerNode))
+	if (NodeIsPrimary(workerNode))
 	{
 		bool onlyConsiderActivePlacements = false;
 
@@ -1041,7 +1035,7 @@ CountPrimariesWithMetadata(void)
 
 	while ((workerNode = hash_seq_search(&status)) != NULL)
 	{
-		if (workerNode->hasMetadata && WorkerNodeIsPrimary(workerNode))
+		if (workerNode->hasMetadata && NodeIsPrimary(workerNode))
 		{
 			primariesWithMetadata++;
 		}
@@ -1091,9 +1085,16 @@ AddNodeMetadata(char *nodeName, int32 nodePort,
 	}
 
 	/* user lets Citus to decide on the group that the newly added node should be in */
-	if (nodeMetadata->groupId == 0)
+	if (nodeMetadata->groupId == INVALID_GROUP_ID)
 	{
 		nodeMetadata->groupId = GetNextGroupId();
+	}
+
+	/* if this is a coordinator, we shouldn't place shards on it */
+	if (nodeMetadata->groupId == COORDINATOR_GROUP_ID)
+	{
+		nodeMetadata->shouldHaveShards = false;
+		nodeMetadata->hasMetadata = true;
 	}
 
 	/* if nodeRole hasn't been added yet there's a constraint for one-node-per-group */
@@ -1168,8 +1169,8 @@ SetWorkerColumn(WorkerNode *workerNode, int columnIndex, Datum value)
 	{
 		case Anum_pg_dist_node_isactive:
 		{
-			metadataSyncCommand = ShouldHaveShardsUpdateCommand(workerNode->nodeId,
-																DatumGetBool(value));
+			metadataSyncCommand = NodeStateUpdateCommand(workerNode->nodeId,
+														 DatumGetBool(value));
 			break;
 		}
 
@@ -1469,159 +1470,6 @@ DeleteNodeRow(char *nodeName, int32 nodePort)
 
 	heap_close(replicaIndex, AccessShareLock);
 	heap_close(pgDistNode, NoLock);
-}
-
-
-/*
- * ParseWorkerNodeFileAndRename opens and parses the node name and node port from the
- * specified configuration file and after that, renames it marking it is not used anymore.
- * Note that this function is deprecated. Do not use this function for any new
- * features.
- */
-static List *
-ParseWorkerNodeFileAndRename()
-{
-	FILE *workerFileStream = NULL;
-	List *workerNodeList = NIL;
-	char workerNodeLine[MAXPGPATH];
-	char *workerFilePath = make_absolute_path(WorkerListFileName);
-	StringInfo renamedWorkerFilePath = makeStringInfo();
-	char *workerPatternTemplate = "%%%u[^# \t]%%*[ \t]%%%u[^# \t]%%*[ \t]%%%u[^# \t]";
-	char workerLinePattern[1024];
-	const int workerNameIndex = 0;
-	const int workerPortIndex = 1;
-
-	memset(workerLinePattern, '\0', sizeof(workerLinePattern));
-
-	workerFileStream = AllocateFile(workerFilePath, PG_BINARY_R);
-	if (workerFileStream == NULL)
-	{
-		if (errno == ENOENT)
-		{
-			ereport(DEBUG1, (errmsg("worker list file located at \"%s\" is not present",
-									workerFilePath)));
-		}
-		else
-		{
-			ereport(ERROR, (errcode_for_file_access(),
-							errmsg("could not open worker list file \"%s\": %m",
-								   workerFilePath)));
-		}
-		return NIL;
-	}
-
-	/* build pattern to contain node name length limit */
-	snprintf(workerLinePattern, sizeof(workerLinePattern), workerPatternTemplate,
-			 WORKER_LENGTH, MAX_PORT_LENGTH, WORKER_LENGTH);
-
-	while (fgets(workerNodeLine, sizeof(workerNodeLine), workerFileStream) != NULL)
-	{
-		const int workerLineLength = strnlen(workerNodeLine, MAXPGPATH);
-		WorkerNode *workerNode = NULL;
-		char *linePointer = NULL;
-		int32 nodePort = 5432; /* default port number */
-		int fieldCount = 0;
-		bool lineIsInvalid = false;
-		char nodeName[WORKER_LENGTH + 1];
-		char nodeRack[WORKER_LENGTH + 1];
-		char nodePortString[MAX_PORT_LENGTH + 1];
-
-		memset(nodeName, '\0', sizeof(nodeName));
-		strlcpy(nodeRack, WORKER_DEFAULT_RACK, sizeof(nodeRack));
-		memset(nodePortString, '\0', sizeof(nodePortString));
-
-		if (workerLineLength == MAXPGPATH - 1)
-		{
-			ereport(ERROR, (errcode(ERRCODE_CONFIG_FILE_ERROR),
-							errmsg("worker node list file line exceeds the maximum "
-								   "length of %d", MAXPGPATH)));
-		}
-
-		/* trim trailing newlines preserved by fgets, if any */
-		linePointer = workerNodeLine + workerLineLength - 1;
-		while (linePointer >= workerNodeLine &&
-			   (*linePointer == '\n' || *linePointer == '\r'))
-		{
-			*linePointer-- = '\0';
-		}
-
-		/* skip leading whitespace */
-		for (linePointer = workerNodeLine; *linePointer; linePointer++)
-		{
-			if (!isspace((unsigned char) *linePointer))
-			{
-				break;
-			}
-		}
-
-		/* if the entire line is whitespace or a comment, skip it */
-		if (*linePointer == '\0' || *linePointer == '#')
-		{
-			continue;
-		}
-
-		/* parse line; node name is required, but port and rack are optional */
-		fieldCount = sscanf(linePointer, workerLinePattern,
-							nodeName, nodePortString, nodeRack);
-
-		/* adjust field count for zero based indexes */
-		fieldCount--;
-
-		/* raise error if no fields were assigned */
-		if (fieldCount < workerNameIndex)
-		{
-			lineIsInvalid = true;
-		}
-
-		/* no special treatment for nodeName: already parsed by sscanf */
-
-		/* if a second token was specified, convert to integer port */
-		if (fieldCount >= workerPortIndex)
-		{
-			char *nodePortEnd = NULL;
-
-			errno = 0;
-			nodePort = strtol(nodePortString, &nodePortEnd, 10);
-
-			if (errno != 0 || (*nodePortEnd) != '\0' || nodePort <= 0)
-			{
-				lineIsInvalid = true;
-			}
-		}
-
-		if (lineIsInvalid)
-		{
-			ereport(ERROR, (errcode(ERRCODE_CONFIG_FILE_ERROR),
-							errmsg("could not parse worker node line: %s",
-								   workerNodeLine),
-							errhint("Lines in the worker node file must contain a valid "
-									"node name and, optionally, a positive port number. "
-									"Comments begin with a '#' character and extend to "
-									"the end of their line.")));
-		}
-
-		/* allocate worker node structure and set fields */
-		workerNode = (WorkerNode *) palloc0(sizeof(WorkerNode));
-
-		strlcpy(workerNode->workerName, nodeName, WORKER_LENGTH);
-		strlcpy(workerNode->workerRack, nodeRack, WORKER_LENGTH);
-		workerNode->workerPort = nodePort;
-		workerNode->hasMetadata = false;
-		workerNode->metadataSynced = false;
-		workerNode->isActive = true;
-
-		workerNodeList = lappend(workerNodeList, workerNode);
-	}
-
-	/* rename the file, marking that it is not used anymore */
-	appendStringInfo(renamedWorkerFilePath, "%s", workerFilePath);
-	appendStringInfo(renamedWorkerFilePath, ".obsolete");
-	rename(workerFilePath, renamedWorkerFilePath->data);
-
-	FreeFile(workerFileStream);
-	free(workerFilePath);
-
-	return workerNodeList;
 }
 
 

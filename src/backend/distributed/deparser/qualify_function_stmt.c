@@ -116,7 +116,7 @@ QualifyAlterFunctionDependsStmt(AlterObjectDependsStmt *stmt)
 
 
 /*
- * QualifyFunction transforms a function in place and makes it's name fully qualified.
+ * QualifyFunction transforms a function in place and makes its name fully qualified.
  */
 void
 QualifyFunction(ObjectWithArgs *func, ObjectType type)
