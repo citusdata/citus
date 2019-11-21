@@ -134,7 +134,6 @@ MultiLogicalPlanCreate(Query *originalQuery, Query *queryTree,
 					   PlannerRestrictionContext *plannerRestrictionContext)
 {
 	MultiNode *multiQueryNode = NULL;
-	MultiTreeRoot *rootNode = NULL;
 
 
 	if (ShouldUseSubqueryPushDown(originalQuery, queryTree, plannerRestrictionContext))
@@ -148,7 +147,7 @@ MultiLogicalPlanCreate(Query *originalQuery, Query *queryTree,
 	}
 
 	/* add a root node to serve as the permanent handle to the tree */
-	rootNode = CitusMakeNode(MultiTreeRoot);
+	MultiTreeRoot *rootNode = CitusMakeNode(MultiTreeRoot);
 	SetChild((MultiUnaryNode *) rootNode, multiQueryNode);
 
 	return rootNode;
@@ -206,9 +205,7 @@ bool
 SingleRelationRepartitionSubquery(Query *queryTree)
 {
 	List *rangeTableIndexList = NULL;
-	RangeTblEntry *rangeTableEntry = NULL;
 	List *rangeTableList = queryTree->rtable;
-	int rangeTableIndex = 0;
 
 	/* we don't support subqueries in WHERE */
 	if (queryTree->hasSubLinks)
@@ -234,8 +231,8 @@ SingleRelationRepartitionSubquery(Query *queryTree)
 		return false;
 	}
 
-	rangeTableIndex = linitial_int(rangeTableIndexList);
-	rangeTableEntry = rt_fetch(rangeTableIndex, rangeTableList);
+	int rangeTableIndex = linitial_int(rangeTableIndexList);
+	RangeTblEntry *rangeTableEntry = rt_fetch(rangeTableIndex, rangeTableList);
 	if (rangeTableEntry->rtekind == RTE_RELATION)
 	{
 		return true;
@@ -413,9 +410,6 @@ QueryContainsDistributedTableRTE(Query *query)
 bool
 IsDistributedTableRTE(Node *node)
 {
-	RangeTblEntry *rangeTableEntry = NULL;
-	Oid relationId = InvalidOid;
-
 	if (node == NULL)
 	{
 		return false;
@@ -426,13 +420,13 @@ IsDistributedTableRTE(Node *node)
 		return false;
 	}
 
-	rangeTableEntry = (RangeTblEntry *) node;
+	RangeTblEntry *rangeTableEntry = (RangeTblEntry *) node;
 	if (rangeTableEntry->rtekind != RTE_RELATION)
 	{
 		return false;
 	}
 
-	relationId = rangeTableEntry->relid;
+	Oid relationId = rangeTableEntry->relid;
 	if (!IsDistributedTable(relationId) ||
 		PartitionMethod(relationId) == DISTRIBUTE_BY_NONE)
 	{
@@ -453,7 +447,6 @@ FullCompositeFieldList(List *compositeFieldList)
 	bool fullCompositeFieldList = true;
 	bool *compositeFieldArray = NULL;
 	uint32 compositeFieldCount = 0;
-	uint32 fieldIndex = 0;
 
 	ListCell *fieldSelectCell = NULL;
 	foreach(fieldSelectCell, compositeFieldList)
@@ -490,7 +483,7 @@ FullCompositeFieldList(List *compositeFieldList)
 		compositeFieldArray[compositeFieldIndex] = true;
 	}
 
-	for (fieldIndex = 0; fieldIndex < compositeFieldCount; fieldIndex++)
+	for (uint32 fieldIndex = 0; fieldIndex < compositeFieldCount; fieldIndex++)
 	{
 		if (!compositeFieldArray[fieldIndex])
 		{
@@ -523,8 +516,6 @@ CompositeFieldRecursive(Expr *expression, Query *query)
 {
 	FieldSelect *compositeField = NULL;
 	List *rangetableList = query->rtable;
-	Index rangeTableEntryIndex = 0;
-	RangeTblEntry *rangeTableEntry = NULL;
 	Var *candidateColumn = NULL;
 
 	if (IsA(expression, FieldSelect))
@@ -542,8 +533,8 @@ CompositeFieldRecursive(Expr *expression, Query *query)
 		return NULL;
 	}
 
-	rangeTableEntryIndex = candidateColumn->varno - 1;
-	rangeTableEntry = list_nth(rangetableList, rangeTableEntryIndex);
+	Index rangeTableEntryIndex = candidateColumn->varno - 1;
+	RangeTblEntry *rangeTableEntry = list_nth(rangetableList, rangeTableEntryIndex);
 
 	if (rangeTableEntry->rtekind == RTE_SUBQUERY)
 	{
@@ -633,29 +624,24 @@ MultiNodeTree(Query *queryTree)
 {
 	List *rangeTableList = queryTree->rtable;
 	List *targetEntryList = queryTree->targetList;
-	List *whereClauseList = NIL;
 	List *joinClauseList = NIL;
 	List *joinOrderList = NIL;
 	List *tableEntryList = NIL;
 	List *tableNodeList = NIL;
 	List *collectTableList = NIL;
-	List *subqueryEntryList = NIL;
 	MultiNode *joinTreeNode = NULL;
-	MultiSelect *selectNode = NULL;
-	MultiProject *projectNode = NULL;
-	MultiExtendedOp *extendedOpNode = NULL;
 	MultiNode *currentTopNode = NULL;
-	DeferredErrorMessage *unsupportedQueryError = NULL;
 
 	/* verify we can perform distributed planning on this query */
-	unsupportedQueryError = DeferErrorIfQueryNotSupported(queryTree);
+	DeferredErrorMessage *unsupportedQueryError = DeferErrorIfQueryNotSupported(
+		queryTree);
 	if (unsupportedQueryError != NULL)
 	{
 		RaiseDeferredError(unsupportedQueryError, ERROR);
 	}
 
 	/* extract where clause qualifiers and verify we can plan for them */
-	whereClauseList = WhereClauseList(queryTree->jointree);
+	List *whereClauseList = WhereClauseList(queryTree->jointree);
 	unsupportedQueryError = DeferErrorIfUnsupportedClause(whereClauseList);
 	if (unsupportedQueryError)
 	{
@@ -666,29 +652,23 @@ MultiNodeTree(Query *queryTree)
 	 * If we have a subquery, build a multi table node for the subquery and
 	 * add a collect node on top of the multi table node.
 	 */
-	subqueryEntryList = SubqueryEntryList(queryTree);
+	List *subqueryEntryList = SubqueryEntryList(queryTree);
 	if (subqueryEntryList != NIL)
 	{
-		RangeTblEntry *subqueryRangeTableEntry = NULL;
 		MultiCollect *subqueryCollectNode = CitusMakeNode(MultiCollect);
-		MultiTable *subqueryNode = NULL;
-		MultiNode *subqueryExtendedNode = NULL;
-		Query *subqueryTree = NULL;
-		List *whereClauseColumnList = NIL;
-		List *targetListColumnList = NIL;
-		List *columnList = NIL;
 		ListCell *columnCell = NULL;
 
 		/* we only support single subquery in the entry list */
 		Assert(list_length(subqueryEntryList) == 1);
 
-		subqueryRangeTableEntry = (RangeTblEntry *) linitial(subqueryEntryList);
-		subqueryTree = subqueryRangeTableEntry->subquery;
+		RangeTblEntry *subqueryRangeTableEntry = (RangeTblEntry *) linitial(
+			subqueryEntryList);
+		Query *subqueryTree = subqueryRangeTableEntry->subquery;
 
 		/* ensure if subquery satisfies preconditions */
 		Assert(DeferErrorIfUnsupportedSubqueryRepartition(subqueryTree) == NULL);
 
-		subqueryNode = CitusMakeNode(MultiTable);
+		MultiTable *subqueryNode = CitusMakeNode(MultiTable);
 		subqueryNode->relationId = SUBQUERY_RELATION_ID;
 		subqueryNode->rangeTableId = SUBQUERY_RANGE_TABLE_ID;
 		subqueryNode->partitionColumn = NULL;
@@ -704,10 +684,10 @@ MultiNodeTree(Query *queryTree)
 		 */
 		Assert(list_length(subqueryEntryList) == 1);
 
-		whereClauseColumnList = pull_var_clause_default((Node *) whereClauseList);
-		targetListColumnList = pull_var_clause_default((Node *) targetEntryList);
+		List *whereClauseColumnList = pull_var_clause_default((Node *) whereClauseList);
+		List *targetListColumnList = pull_var_clause_default((Node *) targetEntryList);
 
-		columnList = list_concat(whereClauseColumnList, targetListColumnList);
+		List *columnList = list_concat(whereClauseColumnList, targetListColumnList);
 		foreach(columnCell, columnList)
 		{
 			Var *column = (Var *) lfirst(columnCell);
@@ -715,7 +695,7 @@ MultiNodeTree(Query *queryTree)
 		}
 
 		/* recursively create child nested multitree */
-		subqueryExtendedNode = MultiNodeTree(subqueryTree);
+		MultiNode *subqueryExtendedNode = MultiNodeTree(subqueryTree);
 
 		SetChild((MultiUnaryNode *) subqueryCollectNode, (MultiNode *) subqueryNode);
 		SetChild((MultiUnaryNode *) subqueryNode, subqueryExtendedNode);
@@ -751,7 +731,7 @@ MultiNodeTree(Query *queryTree)
 	Assert(currentTopNode != NULL);
 
 	/* build select node if the query has selection criteria */
-	selectNode = MultiSelectNode(whereClauseList);
+	MultiSelect *selectNode = MultiSelectNode(whereClauseList);
 	if (selectNode != NULL)
 	{
 		SetChild((MultiUnaryNode *) selectNode, currentTopNode);
@@ -759,7 +739,7 @@ MultiNodeTree(Query *queryTree)
 	}
 
 	/* build project node for the columns to project */
-	projectNode = MultiProjectNode(targetEntryList);
+	MultiProject *projectNode = MultiProjectNode(targetEntryList);
 	SetChild((MultiUnaryNode *) projectNode, currentTopNode);
 	currentTopNode = (MultiNode *) projectNode;
 
@@ -769,7 +749,7 @@ MultiNodeTree(Query *queryTree)
 	 * distinguish between aggregates and expressions; and we address this later
 	 * in the logical optimizer.
 	 */
-	extendedOpNode = MultiExtendedOpNode(queryTree);
+	MultiExtendedOp *extendedOpNode = MultiExtendedOpNode(queryTree);
 	SetChild((MultiUnaryNode *) extendedOpNode, currentTopNode);
 	currentTopNode = (MultiNode *) extendedOpNode;
 
@@ -816,16 +796,13 @@ IsReadIntermediateResultFunction(Node *node)
 char *
 FindIntermediateResultIdIfExists(RangeTblEntry *rte)
 {
-	List *functionList = NULL;
-	RangeTblFunction *rangeTblfunction = NULL;
-	FuncExpr *funcExpr = NULL;
 	char *resultId = NULL;
 
 	Assert(rte->rtekind == RTE_FUNCTION);
 
-	functionList = rte->functions;
-	rangeTblfunction = (RangeTblFunction *) linitial(functionList);
-	funcExpr = (FuncExpr *) rangeTblfunction->funcexpr;
+	List *functionList = rte->functions;
+	RangeTblFunction *rangeTblfunction = (RangeTblFunction *) linitial(functionList);
+	FuncExpr *funcExpr = (FuncExpr *) rangeTblfunction->funcexpr;
 
 	if (IsReadIntermediateResultFunction((Node *) funcExpr))
 	{
@@ -850,9 +827,6 @@ DeferredErrorMessage *
 DeferErrorIfQueryNotSupported(Query *queryTree)
 {
 	char *errorMessage = NULL;
-	bool hasTablesample = false;
-	bool hasUnsupportedJoin = false;
-	bool hasComplexRangeTableType = false;
 	bool preconditionsSatisfied = true;
 	StringInfo errorInfo = NULL;
 	const char *errorHint = NULL;
@@ -922,7 +896,7 @@ DeferErrorIfQueryNotSupported(Query *queryTree)
 		errorHint = filterHint;
 	}
 
-	hasTablesample = HasTablesample(queryTree);
+	bool hasTablesample = HasTablesample(queryTree);
 	if (hasTablesample)
 	{
 		preconditionsSatisfied = false;
@@ -930,7 +904,8 @@ DeferErrorIfQueryNotSupported(Query *queryTree)
 		errorHint = filterHint;
 	}
 
-	hasUnsupportedJoin = HasUnsupportedJoinWalker((Node *) queryTree->jointree, NULL);
+	bool hasUnsupportedJoin = HasUnsupportedJoinWalker((Node *) queryTree->jointree,
+													   NULL);
 	if (hasUnsupportedJoin)
 	{
 		preconditionsSatisfied = false;
@@ -939,7 +914,7 @@ DeferErrorIfQueryNotSupported(Query *queryTree)
 		errorHint = joinHint;
 	}
 
-	hasComplexRangeTableType = HasComplexRangeTableType(queryTree);
+	bool hasComplexRangeTableType = HasComplexRangeTableType(queryTree);
 	if (hasComplexRangeTableType)
 	{
 		preconditionsSatisfied = false;
@@ -1079,9 +1054,6 @@ DeferErrorIfUnsupportedSubqueryRepartition(Query *subqueryTree)
 	char *errorDetail = NULL;
 	bool preconditionsSatisfied = true;
 	List *joinTreeTableIndexList = NIL;
-	int rangeTableIndex = 0;
-	RangeTblEntry *rangeTableEntry = NULL;
-	Query *innerSubquery = NULL;
 
 	if (!subqueryTree->hasAggs)
 	{
@@ -1136,15 +1108,15 @@ DeferErrorIfUnsupportedSubqueryRepartition(Query *subqueryTree)
 	Assert(list_length(joinTreeTableIndexList) == 1);
 
 	/* continue with the inner subquery */
-	rangeTableIndex = linitial_int(joinTreeTableIndexList);
-	rangeTableEntry = rt_fetch(rangeTableIndex, subqueryTree->rtable);
+	int rangeTableIndex = linitial_int(joinTreeTableIndexList);
+	RangeTblEntry *rangeTableEntry = rt_fetch(rangeTableIndex, subqueryTree->rtable);
 	if (rangeTableEntry->rtekind == RTE_RELATION)
 	{
 		return NULL;
 	}
 
 	Assert(rangeTableEntry->rtekind == RTE_SUBQUERY);
-	innerSubquery = rangeTableEntry->subquery;
+	Query *innerSubquery = rangeTableEntry->subquery;
 
 	/* recursively continue to the inner subqueries */
 	return DeferErrorIfUnsupportedSubqueryRepartition(innerSubquery);
@@ -1225,10 +1197,9 @@ WhereClauseList(FromExpr *fromExpr)
 {
 	FromExpr *fromExprCopy = copyObject(fromExpr);
 	QualifierWalkerContext *walkerContext = palloc0(sizeof(QualifierWalkerContext));
-	List *whereClauseList = NIL;
 
 	ExtractFromExpressionWalker((Node *) fromExprCopy, walkerContext);
-	whereClauseList = walkerContext->baseQualifierList;
+	List *whereClauseList = walkerContext->baseQualifierList;
 
 	return whereClauseList;
 }
@@ -1335,7 +1306,6 @@ JoinClauseList(List *whereClauseList)
 static bool
 ExtractFromExpressionWalker(Node *node, QualifierWalkerContext *walkerContext)
 {
-	bool walkerResult = false;
 	if (node == NULL)
 	{
 		return false;
@@ -1406,8 +1376,8 @@ ExtractFromExpressionWalker(Node *node, QualifierWalkerContext *walkerContext)
 		}
 	}
 
-	walkerResult = expression_tree_walker(node, ExtractFromExpressionWalker,
-										  (void *) walkerContext);
+	bool walkerResult = expression_tree_walker(node, ExtractFromExpressionWalker,
+											   (void *) walkerContext);
 
 	return walkerResult;
 }
@@ -1421,10 +1391,6 @@ ExtractFromExpressionWalker(Node *node, QualifierWalkerContext *walkerContext)
 bool
 IsJoinClause(Node *clause)
 {
-	OpExpr *operatorExpression = NULL;
-	bool equalsOperator = false;
-	List *varList = NIL;
-	Var *initialVar = NULL;
 	Var *var = NULL;
 
 	if (!IsA(clause, OpExpr))
@@ -1432,8 +1398,8 @@ IsJoinClause(Node *clause)
 		return false;
 	}
 
-	operatorExpression = castNode(OpExpr, clause);
-	equalsOperator = OperatorImplementsEquality(operatorExpression->opno);
+	OpExpr *operatorExpression = castNode(OpExpr, clause);
+	bool equalsOperator = OperatorImplementsEquality(operatorExpression->opno);
 
 	if (!equalsOperator)
 	{
@@ -1452,13 +1418,13 @@ IsJoinClause(Node *clause)
 	 * take all column references from the clause, if we find 2 column references from a
 	 * different relation we assume this is a join clause
 	 */
-	varList = pull_var_clause_default(clause);
+	List *varList = pull_var_clause_default(clause);
 	if (list_length(varList) <= 0)
 	{
 		/* no column references in query, not describing a join */
 		return false;
 	}
-	initialVar = castNode(Var, linitial(varList));
+	Var *initialVar = castNode(Var, linitial(varList));
 
 	foreach_ptr(var, varList)
 	{
@@ -1635,16 +1601,17 @@ MultiJoinTree(List *joinOrderList, List *collectTableList, List *joinWhereClause
 			JoinRuleType joinRuleType = joinOrderNode->joinRuleType;
 			JoinType joinType = joinOrderNode->joinType;
 			Var *partitionColumn = joinOrderNode->partitionColumn;
-			MultiNode *newJoinNode = NULL;
 			List *joinClauseList = joinOrderNode->joinClauseList;
 
 			/*
 			 * Build a join node between the top of our join tree and the next
 			 * table in the join order.
 			 */
-			newJoinNode = ApplyJoinRule(currentTopNode, (MultiNode *) collectNode,
-										joinRuleType, partitionColumn, joinType,
-										joinClauseList);
+			MultiNode *newJoinNode = ApplyJoinRule(currentTopNode,
+												   (MultiNode *) collectNode,
+												   joinRuleType, partitionColumn,
+												   joinType,
+												   joinClauseList);
 
 			/* the new join node becomes the top of our join tree */
 			currentTopNode = newJoinNode;
@@ -1727,22 +1694,19 @@ MultiSelectNode(List *whereClauseList)
 static bool
 IsSelectClause(Node *clause)
 {
-	List *columnList = NIL;
 	ListCell *columnCell = NULL;
-	Var *firstColumn = NULL;
-	Index firstColumnTableId = 0;
 	bool isSelectClause = true;
 
 	/* extract columns from the clause */
-	columnList = pull_var_clause_default(clause);
+	List *columnList = pull_var_clause_default(clause);
 	if (list_length(columnList) == 0)
 	{
 		return true;
 	}
 
 	/* get first column's tableId */
-	firstColumn = (Var *) linitial(columnList);
-	firstColumnTableId = firstColumn->varno;
+	Var *firstColumn = (Var *) linitial(columnList);
+	Index firstColumnTableId = firstColumn->varno;
 
 	/* check if all columns are from the same table */
 	foreach(columnCell, columnList)
@@ -1766,13 +1730,11 @@ IsSelectClause(Node *clause)
 MultiProject *
 MultiProjectNode(List *targetEntryList)
 {
-	MultiProject *projectNode = NULL;
 	List *uniqueColumnList = NIL;
-	List *columnList = NIL;
 	ListCell *columnCell = NULL;
 
 	/* extract the list of columns and remove any duplicates */
-	columnList = pull_var_clause_default((Node *) targetEntryList);
+	List *columnList = pull_var_clause_default((Node *) targetEntryList);
 	foreach(columnCell, columnList)
 	{
 		Var *column = (Var *) lfirst(columnCell);
@@ -1781,7 +1743,7 @@ MultiProjectNode(List *targetEntryList)
 	}
 
 	/* create project node with list of columns to project */
-	projectNode = CitusMakeNode(MultiProject);
+	MultiProject *projectNode = CitusMakeNode(MultiProject);
 	projectNode->columnList = uniqueColumnList;
 
 	return projectNode;
@@ -1932,7 +1894,6 @@ List *
 FindNodesOfType(MultiNode *node, int type)
 {
 	List *nodeList = NIL;
-	int nodeType = T_Invalid;
 
 	/* terminal condition for recursion */
 	if (node == NULL)
@@ -1941,7 +1902,7 @@ FindNodesOfType(MultiNode *node, int type)
 	}
 
 	/* current node has expected node type */
-	nodeType = CitusNodeTag(node);
+	int nodeType = CitusNodeTag(node);
 	if (nodeType == type)
 	{
 		nodeList = lappend(nodeList, node);
@@ -1997,27 +1958,22 @@ static MultiNode *
 ApplyJoinRule(MultiNode *leftNode, MultiNode *rightNode, JoinRuleType ruleType,
 			  Var *partitionColumn, JoinType joinType, List *joinClauseList)
 {
-	RuleApplyFunction ruleApplyFunction = NULL;
-	MultiNode *multiNode = NULL;
-
-	List *applicableJoinClauses = NIL;
 	List *leftTableIdList = OutputTableIdList(leftNode);
 	List *rightTableIdList = OutputTableIdList(rightNode);
 	int rightTableIdCount PG_USED_FOR_ASSERTS_ONLY = 0;
-	uint32 rightTableId = 0;
 
 	rightTableIdCount = list_length(rightTableIdList);
 	Assert(rightTableIdCount == 1);
 
 	/* find applicable join clauses between the left and right data sources */
-	rightTableId = (uint32) linitial_int(rightTableIdList);
-	applicableJoinClauses = ApplicableJoinClauses(leftTableIdList, rightTableId,
-												  joinClauseList);
+	uint32 rightTableId = (uint32) linitial_int(rightTableIdList);
+	List *applicableJoinClauses = ApplicableJoinClauses(leftTableIdList, rightTableId,
+														joinClauseList);
 
 	/* call the join rule application function to create the new join node */
-	ruleApplyFunction = JoinRuleApplyFunction(ruleType);
-	multiNode = (*ruleApplyFunction)(leftNode, rightNode, partitionColumn,
-									 joinType, applicableJoinClauses);
+	RuleApplyFunction ruleApplyFunction = JoinRuleApplyFunction(ruleType);
+	MultiNode *multiNode = (*ruleApplyFunction)(leftNode, rightNode, partitionColumn,
+												joinType, applicableJoinClauses);
 
 	if (joinType != JOIN_INNER && CitusIsA(multiNode, MultiJoin))
 	{
@@ -2041,7 +1997,6 @@ static RuleApplyFunction
 JoinRuleApplyFunction(JoinRuleType ruleType)
 {
 	static bool ruleApplyFunctionInitialized = false;
-	RuleApplyFunction ruleApplyFunction = NULL;
 
 	if (!ruleApplyFunctionInitialized)
 	{
@@ -2057,7 +2012,7 @@ JoinRuleApplyFunction(JoinRuleType ruleType)
 		ruleApplyFunctionInitialized = true;
 	}
 
-	ruleApplyFunction = RuleApplyFunctionArray[ruleType];
+	RuleApplyFunction ruleApplyFunction = RuleApplyFunctionArray[ruleType];
 	Assert(ruleApplyFunction != NULL);
 
 	return ruleApplyFunction;
@@ -2154,11 +2109,6 @@ ApplySinglePartitionJoin(MultiNode *leftNode, MultiNode *rightNode,
 						 Var *partitionColumn, JoinType joinType,
 						 List *applicableJoinClauses)
 {
-	OpExpr *joinClause = NULL;
-	Var *leftColumn = NULL;
-	Var *rightColumn = NULL;
-	List *rightTableIdList = NIL;
-	uint32 rightTableId = 0;
 	uint32 partitionTableId = partitionColumn->varno;
 
 	/* create all operator structures up front */
@@ -2171,12 +2121,13 @@ ApplySinglePartitionJoin(MultiNode *leftNode, MultiNode *rightNode,
 	 * column against the join clause's columns. If one of the columns matches,
 	 * we introduce a (re-)partition operator for the other column.
 	 */
-	joinClause = SinglePartitionJoinClause(partitionColumn, applicableJoinClauses);
+	OpExpr *joinClause = SinglePartitionJoinClause(partitionColumn,
+												   applicableJoinClauses);
 	Assert(joinClause != NULL);
 
 	/* both are verified in SinglePartitionJoinClause to not be NULL, assert is to guard */
-	leftColumn = LeftColumnOrNULL(joinClause);
-	rightColumn = RightColumnOrNULL(joinClause);
+	Var *leftColumn = LeftColumnOrNULL(joinClause);
+	Var *rightColumn = RightColumnOrNULL(joinClause);
 
 	Assert(leftColumn != NULL);
 	Assert(rightColumn != NULL);
@@ -2193,8 +2144,8 @@ ApplySinglePartitionJoin(MultiNode *leftNode, MultiNode *rightNode,
 	}
 
 	/* determine the node the partition operator goes on top of */
-	rightTableIdList = OutputTableIdList(rightNode);
-	rightTableId = (uint32) linitial_int(rightTableIdList);
+	List *rightTableIdList = OutputTableIdList(rightNode);
+	uint32 rightTableId = (uint32) linitial_int(rightTableIdList);
 	Assert(list_length(rightTableIdList) == 1);
 
 	/*
@@ -2238,33 +2189,22 @@ ApplyDualPartitionJoin(MultiNode *leftNode, MultiNode *rightNode,
 					   Var *partitionColumn, JoinType joinType,
 					   List *applicableJoinClauses)
 {
-	MultiJoin *joinNode = NULL;
-	OpExpr *joinClause = NULL;
-	MultiPartition *leftPartitionNode = NULL;
-	MultiPartition *rightPartitionNode = NULL;
-	MultiCollect *leftCollectNode = NULL;
-	MultiCollect *rightCollectNode = NULL;
-	Var *leftColumn = NULL;
-	Var *rightColumn = NULL;
-	List *rightTableIdList = NIL;
-	uint32 rightTableId = 0;
-
 	/* find the appropriate join clause */
-	joinClause = DualPartitionJoinClause(applicableJoinClauses);
+	OpExpr *joinClause = DualPartitionJoinClause(applicableJoinClauses);
 	Assert(joinClause != NULL);
 
 	/* both are verified in DualPartitionJoinClause to not be NULL, assert is to guard */
-	leftColumn = LeftColumnOrNULL(joinClause);
-	rightColumn = RightColumnOrNULL(joinClause);
+	Var *leftColumn = LeftColumnOrNULL(joinClause);
+	Var *rightColumn = RightColumnOrNULL(joinClause);
 	Assert(leftColumn != NULL);
 	Assert(rightColumn != NULL);
 
-	rightTableIdList = OutputTableIdList(rightNode);
-	rightTableId = (uint32) linitial_int(rightTableIdList);
+	List *rightTableIdList = OutputTableIdList(rightNode);
+	uint32 rightTableId = (uint32) linitial_int(rightTableIdList);
 	Assert(list_length(rightTableIdList) == 1);
 
-	leftPartitionNode = CitusMakeNode(MultiPartition);
-	rightPartitionNode = CitusMakeNode(MultiPartition);
+	MultiPartition *leftPartitionNode = CitusMakeNode(MultiPartition);
+	MultiPartition *rightPartitionNode = CitusMakeNode(MultiPartition);
 
 	/* find the partition node each join clause column belongs to */
 	if (leftColumn->varno == rightTableId)
@@ -2283,14 +2223,14 @@ ApplyDualPartitionJoin(MultiNode *leftNode, MultiNode *rightNode,
 	SetChild((MultiUnaryNode *) rightPartitionNode, rightNode);
 
 	/* add collect operators on top of the two partition operators */
-	leftCollectNode = CitusMakeNode(MultiCollect);
-	rightCollectNode = CitusMakeNode(MultiCollect);
+	MultiCollect *leftCollectNode = CitusMakeNode(MultiCollect);
+	MultiCollect *rightCollectNode = CitusMakeNode(MultiCollect);
 
 	SetChild((MultiUnaryNode *) leftCollectNode, (MultiNode *) leftPartitionNode);
 	SetChild((MultiUnaryNode *) rightCollectNode, (MultiNode *) rightPartitionNode);
 
 	/* add join operator on top of the two collect operators */
-	joinNode = CitusMakeNode(MultiJoin);
+	MultiJoin *joinNode = CitusMakeNode(MultiJoin);
 	joinNode->joinRuleType = DUAL_PARTITION_JOIN;
 	joinNode->joinType = joinType;
 	joinNode->joinClauseList = applicableJoinClauses;

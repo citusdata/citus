@@ -94,26 +94,20 @@ master_get_table_metadata(PG_FUNCTION_ARGS)
 	text *relationName = PG_GETARG_TEXT_P(0);
 	Oid relationId = ResolveRelationId(relationName, false);
 
-	DistTableCacheEntry *partitionEntry = NULL;
-	char *partitionKeyString = NULL;
-	TypeFuncClass resultTypeClass = 0;
 	Datum partitionKeyExpr = 0;
 	Datum partitionKey = 0;
-	Datum metadataDatum = 0;
-	HeapTuple metadataTuple = NULL;
 	TupleDesc metadataDescriptor = NULL;
-	uint64 shardMaxSizeInBytes = 0;
-	char shardStorageType = 0;
 	Datum values[TABLE_METADATA_FIELDS];
 	bool isNulls[TABLE_METADATA_FIELDS];
 
 	CheckCitusVersion(ERROR);
 
 	/* find partition tuple for partitioned relation */
-	partitionEntry = DistributedTableCacheEntry(relationId);
+	DistTableCacheEntry *partitionEntry = DistributedTableCacheEntry(relationId);
 
 	/* create tuple descriptor for return value */
-	resultTypeClass = get_call_result_type(fcinfo, NULL, &metadataDescriptor);
+	TypeFuncClass resultTypeClass = get_call_result_type(fcinfo, NULL,
+														 &metadataDescriptor);
 	if (resultTypeClass != TYPEFUNC_COMPOSITE)
 	{
 		ereport(ERROR, (errmsg("return type must be a row type")));
@@ -123,7 +117,7 @@ master_get_table_metadata(PG_FUNCTION_ARGS)
 	memset(values, 0, sizeof(values));
 	memset(isNulls, false, sizeof(isNulls));
 
-	partitionKeyString = partitionEntry->partitionKeyString;
+	char *partitionKeyString = partitionEntry->partitionKeyString;
 
 	/* reference tables do not have partition key */
 	if (partitionKeyString == NULL)
@@ -140,10 +134,10 @@ master_get_table_metadata(PG_FUNCTION_ARGS)
 										   ObjectIdGetDatum(relationId));
 	}
 
-	shardMaxSizeInBytes = (int64) ShardMaxSize * 1024L;
+	uint64 shardMaxSizeInBytes = (int64) ShardMaxSize * 1024L;
 
 	/* get storage type */
-	shardStorageType = ShardStorageType(relationId);
+	char shardStorageType = ShardStorageType(relationId);
 
 	values[0] = ObjectIdGetDatum(relationId);
 	values[1] = shardStorageType;
@@ -153,8 +147,8 @@ master_get_table_metadata(PG_FUNCTION_ARGS)
 	values[5] = Int64GetDatum(shardMaxSizeInBytes);
 	values[6] = Int32GetDatum(ShardPlacementPolicy);
 
-	metadataTuple = heap_form_tuple(metadataDescriptor, values, isNulls);
-	metadataDatum = HeapTupleGetDatum(metadataTuple);
+	HeapTuple metadataTuple = heap_form_tuple(metadataDescriptor, values, isNulls);
+	Datum metadataDatum = HeapTupleGetDatum(metadataTuple);
 
 	PG_RETURN_DATUM(metadataDatum);
 }
@@ -212,17 +206,16 @@ master_get_table_ddl_events(PG_FUNCTION_ARGS)
 		Oid relationId = ResolveRelationId(relationName, false);
 		bool includeSequenceDefaults = true;
 
-		MemoryContext oldContext = NULL;
-		List *tableDDLEventList = NIL;
 
 		/* create a function context for cross-call persistence */
 		functionContext = SRF_FIRSTCALL_INIT();
 
 		/* switch to memory context appropriate for multiple function calls */
-		oldContext = MemoryContextSwitchTo(functionContext->multi_call_memory_ctx);
+		MemoryContext oldContext = MemoryContextSwitchTo(
+			functionContext->multi_call_memory_ctx);
 
 		/* allocate DDL statements, and then save position in DDL statements */
-		tableDDLEventList = GetTableDDLEvents(relationId, includeSequenceDefaults);
+		List *tableDDLEventList = GetTableDDLEvents(relationId, includeSequenceDefaults);
 		tableDDLEventCell = list_head(tableDDLEventList);
 
 		functionContext->user_fctx = tableDDLEventCell;
@@ -266,14 +259,11 @@ master_get_table_ddl_events(PG_FUNCTION_ARGS)
 Datum
 master_get_new_shardid(PG_FUNCTION_ARGS)
 {
-	uint64 shardId = 0;
-	Datum shardIdDatum = 0;
-
 	EnsureCoordinator();
 	CheckCitusVersion(ERROR);
 
-	shardId = GetNextShardId();
-	shardIdDatum = Int64GetDatum(shardId);
+	uint64 shardId = GetNextShardId();
+	Datum shardIdDatum = Int64GetDatum(shardId);
 
 	PG_RETURN_DATUM(shardIdDatum);
 }
@@ -290,12 +280,8 @@ master_get_new_shardid(PG_FUNCTION_ARGS)
 uint64
 GetNextShardId()
 {
-	text *sequenceName = NULL;
-	Oid sequenceId = InvalidOid;
-	Datum sequenceIdDatum = 0;
 	Oid savedUserId = InvalidOid;
 	int savedSecurityContext = 0;
-	Datum shardIdDatum = 0;
 	uint64 shardId = 0;
 
 	/*
@@ -313,15 +299,15 @@ GetNextShardId()
 		return shardId;
 	}
 
-	sequenceName = cstring_to_text(SHARDID_SEQUENCE_NAME);
-	sequenceId = ResolveRelationId(sequenceName, false);
-	sequenceIdDatum = ObjectIdGetDatum(sequenceId);
+	text *sequenceName = cstring_to_text(SHARDID_SEQUENCE_NAME);
+	Oid sequenceId = ResolveRelationId(sequenceName, false);
+	Datum sequenceIdDatum = ObjectIdGetDatum(sequenceId);
 
 	GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
 	SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);
 
 	/* generate new and unique shardId from sequence */
-	shardIdDatum = DirectFunctionCall1(nextval_oid, sequenceIdDatum);
+	Datum shardIdDatum = DirectFunctionCall1(nextval_oid, sequenceIdDatum);
 
 	SetUserIdAndSecContext(savedUserId, savedSecurityContext);
 
@@ -343,14 +329,11 @@ GetNextShardId()
 Datum
 master_get_new_placementid(PG_FUNCTION_ARGS)
 {
-	uint64 placementId = 0;
-	Datum placementIdDatum = 0;
-
 	EnsureCoordinator();
 	CheckCitusVersion(ERROR);
 
-	placementId = GetNextPlacementId();
-	placementIdDatum = Int64GetDatum(placementId);
+	uint64 placementId = GetNextPlacementId();
+	Datum placementIdDatum = Int64GetDatum(placementId);
 
 	PG_RETURN_DATUM(placementIdDatum);
 }
@@ -369,12 +352,8 @@ master_get_new_placementid(PG_FUNCTION_ARGS)
 uint64
 GetNextPlacementId(void)
 {
-	text *sequenceName = NULL;
-	Oid sequenceId = InvalidOid;
-	Datum sequenceIdDatum = 0;
 	Oid savedUserId = InvalidOid;
 	int savedSecurityContext = 0;
-	Datum placementIdDatum = 0;
 	uint64 placementId = 0;
 
 	/*
@@ -392,15 +371,15 @@ GetNextPlacementId(void)
 		return placementId;
 	}
 
-	sequenceName = cstring_to_text(PLACEMENTID_SEQUENCE_NAME);
-	sequenceId = ResolveRelationId(sequenceName, false);
-	sequenceIdDatum = ObjectIdGetDatum(sequenceId);
+	text *sequenceName = cstring_to_text(PLACEMENTID_SEQUENCE_NAME);
+	Oid sequenceId = ResolveRelationId(sequenceName, false);
+	Datum sequenceIdDatum = ObjectIdGetDatum(sequenceId);
 
 	GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
 	SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);
 
 	/* generate new and unique placement id from sequence */
-	placementIdDatum = DirectFunctionCall1(nextval_oid, sequenceIdDatum);
+	Datum placementIdDatum = DirectFunctionCall1(nextval_oid, sequenceIdDatum);
 
 	SetUserIdAndSecContext(savedUserId, savedSecurityContext);
 
@@ -465,17 +444,16 @@ master_get_active_worker_nodes(PG_FUNCTION_ARGS)
 
 	if (SRF_IS_FIRSTCALL())
 	{
-		MemoryContext oldContext = NULL;
-		List *workerNodeList = NIL;
 		TupleDesc tupleDescriptor = NULL;
 
 		/* create a function context for cross-call persistence */
 		functionContext = SRF_FIRSTCALL_INIT();
 
 		/* switch to memory context appropriate for multiple function calls */
-		oldContext = MemoryContextSwitchTo(functionContext->multi_call_memory_ctx);
+		MemoryContext oldContext = MemoryContextSwitchTo(
+			functionContext->multi_call_memory_ctx);
 
-		workerNodeList = ActiveReadableWorkerNodeList();
+		List *workerNodeList = ActiveReadableWorkerNodeList();
 		workerNodeCount = (uint32) list_length(workerNodeList);
 
 		functionContext->user_fctx = workerNodeList;
@@ -525,14 +503,10 @@ master_get_active_worker_nodes(PG_FUNCTION_ARGS)
 Oid
 ResolveRelationId(text *relationName, bool missingOk)
 {
-	List *relationNameList = NIL;
-	RangeVar *relation = NULL;
-	Oid relationId = InvalidOid;
-
 	/* resolve relationId from passed in schema and relation name */
-	relationNameList = textToQualifiedNameList(relationName);
-	relation = makeRangeVarFromNameList(relationNameList);
-	relationId = RangeVarGetRelid(relation, NoLock, missingOk);
+	List *relationNameList = textToQualifiedNameList(relationName);
+	RangeVar *relation = makeRangeVarFromNameList(relationNameList);
+	Oid relationId = RangeVarGetRelid(relation, NoLock, missingOk);
 
 	return relationId;
 }
@@ -551,22 +525,18 @@ List *
 GetTableDDLEvents(Oid relationId, bool includeSequenceDefaults)
 {
 	List *tableDDLEventList = NIL;
-	List *tableCreationCommandList = NIL;
-	List *indexAndConstraintCommandList = NIL;
-	List *replicaIdentityEvents = NIL;
-	List *policyCommands = NIL;
 
-	tableCreationCommandList = GetTableCreationCommands(relationId,
-														includeSequenceDefaults);
+	List *tableCreationCommandList = GetTableCreationCommands(relationId,
+															  includeSequenceDefaults);
 	tableDDLEventList = list_concat(tableDDLEventList, tableCreationCommandList);
 
-	indexAndConstraintCommandList = GetTableIndexAndConstraintCommands(relationId);
+	List *indexAndConstraintCommandList = GetTableIndexAndConstraintCommands(relationId);
 	tableDDLEventList = list_concat(tableDDLEventList, indexAndConstraintCommandList);
 
-	replicaIdentityEvents = GetTableReplicaIdentityCommand(relationId);
+	List *replicaIdentityEvents = GetTableReplicaIdentityCommand(relationId);
 	tableDDLEventList = list_concat(tableDDLEventList, replicaIdentityEvents);
 
-	policyCommands = CreatePolicyCommands(relationId);
+	List *policyCommands = CreatePolicyCommands(relationId);
 	tableDDLEventList = list_concat(tableDDLEventList, policyCommands);
 
 	return tableDDLEventList;
@@ -581,7 +551,6 @@ static List *
 GetTableReplicaIdentityCommand(Oid relationId)
 {
 	List *replicaIdentityCreateCommandList = NIL;
-	char *replicaIdentityCreateCommand = NULL;
 
 	/*
 	 * We skip non-relations because postgres does not support
@@ -593,7 +562,7 @@ GetTableReplicaIdentityCommand(Oid relationId)
 		return NIL;
 	}
 
-	replicaIdentityCreateCommand = pg_get_replica_identity_command(relationId);
+	char *replicaIdentityCreateCommand = pg_get_replica_identity_command(relationId);
 
 	if (replicaIdentityCreateCommand)
 	{
@@ -614,10 +583,6 @@ List *
 GetTableCreationCommands(Oid relationId, bool includeSequenceDefaults)
 {
 	List *tableDDLEventList = NIL;
-	char tableType = 0;
-	char *tableSchemaDef = NULL;
-	char *tableColumnOptionsDef = NULL;
-	char *tableOwnerDef = NULL;
 
 	/*
 	 * Set search_path to NIL so that all objects outside of pg_catalog will be
@@ -630,7 +595,7 @@ GetTableCreationCommands(Oid relationId, bool includeSequenceDefaults)
 	PushOverrideSearchPath(overridePath);
 
 	/* if foreign table, fetch extension and server definitions */
-	tableType = get_rel_relkind(relationId);
+	char tableType = get_rel_relkind(relationId);
 	if (tableType == RELKIND_FOREIGN_TABLE)
 	{
 		char *extensionDef = pg_get_extensiondef_string(relationId);
@@ -644,8 +609,9 @@ GetTableCreationCommands(Oid relationId, bool includeSequenceDefaults)
 	}
 
 	/* fetch table schema and column option definitions */
-	tableSchemaDef = pg_get_tableschemadef_string(relationId, includeSequenceDefaults);
-	tableColumnOptionsDef = pg_get_tablecolumnoptionsdef_string(relationId);
+	char *tableSchemaDef = pg_get_tableschemadef_string(relationId,
+														includeSequenceDefaults);
+	char *tableColumnOptionsDef = pg_get_tablecolumnoptionsdef_string(relationId);
 
 	tableDDLEventList = lappend(tableDDLEventList, tableSchemaDef);
 	if (tableColumnOptionsDef != NULL)
@@ -653,7 +619,7 @@ GetTableCreationCommands(Oid relationId, bool includeSequenceDefaults)
 		tableDDLEventList = lappend(tableDDLEventList, tableColumnOptionsDef);
 	}
 
-	tableOwnerDef = TableOwnerResetCommand(relationId);
+	char *tableOwnerDef = TableOwnerResetCommand(relationId);
 	if (tableOwnerDef != NULL)
 	{
 		tableDDLEventList = lappend(tableDDLEventList, tableOwnerDef);
@@ -674,11 +640,8 @@ List *
 GetTableIndexAndConstraintCommands(Oid relationId)
 {
 	List *indexDDLEventList = NIL;
-	Relation pgIndex = NULL;
-	SysScanDesc scanDescriptor = NULL;
 	ScanKeyData scanKey[1];
 	int scanKeyCount = 1;
-	HeapTuple heapTuple = NULL;
 
 	/*
 	 * Set search_path to NIL so that all objects outside of pg_catalog will be
@@ -691,16 +654,16 @@ GetTableIndexAndConstraintCommands(Oid relationId)
 	PushOverrideSearchPath(overridePath);
 
 	/* open system catalog and scan all indexes that belong to this table */
-	pgIndex = heap_open(IndexRelationId, AccessShareLock);
+	Relation pgIndex = heap_open(IndexRelationId, AccessShareLock);
 
 	ScanKeyInit(&scanKey[0], Anum_pg_index_indrelid,
 				BTEqualStrategyNumber, F_OIDEQ, relationId);
 
-	scanDescriptor = systable_beginscan(pgIndex,
-										IndexIndrelidIndexId, true, /* indexOK */
-										NULL, scanKeyCount, scanKey);
+	SysScanDesc scanDescriptor = systable_beginscan(pgIndex,
+													IndexIndrelidIndexId, true, /* indexOK */
+													NULL, scanKeyCount, scanKey);
 
-	heapTuple = systable_getnext(scanDescriptor);
+	HeapTuple heapTuple = systable_getnext(scanDescriptor);
 	while (HeapTupleIsValid(heapTuple))
 	{
 		Form_pg_index indexForm = (Form_pg_index) GETSTRUCT(heapTuple);
@@ -824,8 +787,6 @@ WorkerNodeGetDatum(WorkerNode *workerNode, TupleDesc tupleDescriptor)
 {
 	Datum values[WORKER_NODE_FIELDS];
 	bool isNulls[WORKER_NODE_FIELDS];
-	HeapTuple workerNodeTuple = NULL;
-	Datum workerNodeDatum = 0;
 
 	memset(values, 0, sizeof(values));
 	memset(isNulls, false, sizeof(isNulls));
@@ -833,8 +794,8 @@ WorkerNodeGetDatum(WorkerNode *workerNode, TupleDesc tupleDescriptor)
 	values[0] = CStringGetTextDatum(workerNode->workerName);
 	values[1] = Int64GetDatum((int64) workerNode->workerPort);
 
-	workerNodeTuple = heap_form_tuple(tupleDescriptor, values, isNulls);
-	workerNodeDatum = HeapTupleGetDatum(workerNodeTuple);
+	HeapTuple workerNodeTuple = heap_form_tuple(tupleDescriptor, values, isNulls);
+	Datum workerNodeDatum = HeapTupleGetDatum(workerNodeTuple);
 
 	return workerNodeDatum;
 }

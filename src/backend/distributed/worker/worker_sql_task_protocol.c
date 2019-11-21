@@ -78,15 +78,13 @@ worker_execute_sql_task(PG_FUNCTION_ARGS)
 	char *queryString = text_to_cstring(queryText);
 	bool binaryCopyFormat = PG_GETARG_BOOL(3);
 
-	int64 tuplesSent = 0;
-	Query *query = NULL;
 
 	/* job directory is created prior to scheduling the task */
 	StringInfo jobDirectoryName = JobDirectoryName(jobId);
 	StringInfo taskFilename = UserTaskFilename(jobDirectoryName, taskId);
 
-	query = ParseQueryString(queryString, NULL, 0);
-	tuplesSent = WorkerExecuteSqlTask(query, taskFilename->data, binaryCopyFormat);
+	Query *query = ParseQueryString(queryString, NULL, 0);
+	int64 tuplesSent = WorkerExecuteSqlTask(query, taskFilename->data, binaryCopyFormat);
 
 	PG_RETURN_INT64(tuplesSent);
 }
@@ -99,19 +97,16 @@ worker_execute_sql_task(PG_FUNCTION_ARGS)
 int64
 WorkerExecuteSqlTask(Query *query, char *taskFilename, bool binaryCopyFormat)
 {
-	EState *estate = NULL;
-	TaskFileDestReceiver *taskFileDest = NULL;
 	ParamListInfo paramListInfo = NULL;
-	int64 tuplesSent = 0L;
 
-	estate = CreateExecutorState();
-	taskFileDest =
+	EState *estate = CreateExecutorState();
+	TaskFileDestReceiver *taskFileDest =
 		(TaskFileDestReceiver *) CreateTaskFileDestReceiver(taskFilename, estate,
 															binaryCopyFormat);
 
 	ExecuteQueryIntoDestReceiver(query, paramListInfo, (DestReceiver *) taskFileDest);
 
-	tuplesSent = taskFileDest->tuplesSent;
+	int64 tuplesSent = taskFileDest->tuplesSent;
 
 	taskFileDest->pub.rDestroy((DestReceiver *) taskFileDest);
 	FreeExecutorState(estate);
@@ -127,9 +122,8 @@ WorkerExecuteSqlTask(Query *query, char *taskFilename, bool binaryCopyFormat)
 static DestReceiver *
 CreateTaskFileDestReceiver(char *filePath, EState *executorState, bool binaryCopyFormat)
 {
-	TaskFileDestReceiver *taskFileDest = NULL;
-
-	taskFileDest = (TaskFileDestReceiver *) palloc0(sizeof(TaskFileDestReceiver));
+	TaskFileDestReceiver *taskFileDest = (TaskFileDestReceiver *) palloc0(
+		sizeof(TaskFileDestReceiver));
 
 	/* set up the DestReceiver function pointers */
 	taskFileDest->pub.receiveSlot = TaskFileDestReceiverReceive;
@@ -159,7 +153,6 @@ TaskFileDestReceiverStartup(DestReceiver *dest, int operation,
 {
 	TaskFileDestReceiver *taskFileDest = (TaskFileDestReceiver *) dest;
 
-	CopyOutState copyOutState = NULL;
 	const char *delimiterCharacter = "\t";
 	const char *nullPrintCharacter = "\\N";
 
@@ -172,7 +165,7 @@ TaskFileDestReceiverStartup(DestReceiver *dest, int operation,
 	taskFileDest->tupleDescriptor = inputTupleDescriptor;
 
 	/* define how tuples will be serialised */
-	copyOutState = (CopyOutState) palloc0(sizeof(CopyOutStateData));
+	CopyOutState copyOutState = (CopyOutState) palloc0(sizeof(CopyOutStateData));
 	copyOutState->delim = (char *) delimiterCharacter;
 	copyOutState->null_print = (char *) nullPrintCharacter;
 	copyOutState->null_print_client = (char *) nullPrintCharacter;
@@ -217,8 +210,6 @@ TaskFileDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
 	CopyOutState copyOutState = taskFileDest->copyOutState;
 	FmgrInfo *columnOutputFunctions = taskFileDest->columnOutputFunctions;
 
-	Datum *columnValues = NULL;
-	bool *columnNulls = NULL;
 	StringInfo copyData = copyOutState->fe_msgbuf;
 
 	EState *executorState = taskFileDest->executorState;
@@ -227,8 +218,8 @@ TaskFileDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
 
 	slot_getallattrs(slot);
 
-	columnValues = slot->tts_values;
-	columnNulls = slot->tts_isnull;
+	Datum *columnValues = slot->tts_values;
+	bool *columnNulls = slot->tts_isnull;
 
 	resetStringInfo(copyData);
 

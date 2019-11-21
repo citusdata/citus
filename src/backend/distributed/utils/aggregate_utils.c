@@ -149,7 +149,6 @@ static void
 InitializeStypeBox(FunctionCallInfo fcinfo, StypeBox *box, HeapTuple aggTuple, Oid
 				   transtype)
 {
-	Datum textInitVal;
 	Form_pg_aggregate aggform = (Form_pg_aggregate) GETSTRUCT(aggTuple);
 	Oid userId = GetUserId();
 
@@ -161,9 +160,9 @@ InitializeStypeBox(FunctionCallInfo fcinfo, StypeBox *box, HeapTuple aggTuple, O
 	aclcheckAggregate(OBJECT_FUNCTION, userId, aggform->aggserialfn);
 	aclcheckAggregate(OBJECT_FUNCTION, userId, aggform->aggcombinefn);
 
-	textInitVal = SysCacheGetAttr(AGGFNOID, aggTuple,
-								  Anum_pg_aggregate_agginitval,
-								  &box->valueNull);
+	Datum textInitVal = SysCacheGetAttr(AGGFNOID, aggTuple,
+										Anum_pg_aggregate_agginitval,
+										&box->valueNull);
 	box->transtype = transtype;
 	box->valueInit = !box->valueNull;
 	if (box->valueNull)
@@ -174,18 +173,16 @@ InitializeStypeBox(FunctionCallInfo fcinfo, StypeBox *box, HeapTuple aggTuple, O
 	{
 		Oid typinput,
 			typioparam;
-		char *strInitVal;
 
 		MemoryContext aggregateContext;
-		MemoryContext oldContext;
 		if (!AggCheckCallContext(fcinfo, &aggregateContext))
 		{
 			elog(ERROR, "InitializeStypeBox called from non aggregate context");
 		}
-		oldContext = MemoryContextSwitchTo(aggregateContext);
+		MemoryContext oldContext = MemoryContextSwitchTo(aggregateContext);
 
 		getTypeInputInfo(transtype, &typinput, &typioparam);
-		strInitVal = TextDatumGetCString(textInitVal);
+		char *strInitVal = TextDatumGetCString(textInitVal);
 		box->value = OidInputFunctionCall(typinput, strInitVal,
 										  typioparam, -1);
 		pfree(strInitVal);
@@ -211,7 +208,6 @@ HandleTransition(StypeBox *box, FunctionCallInfo fcinfo, FunctionCallInfo innerF
 		if (!newValIsNull)
 		{
 			MemoryContext aggregateContext;
-			MemoryContext oldContext;
 
 			if (!AggCheckCallContext(fcinfo, &aggregateContext))
 			{
@@ -219,7 +215,7 @@ HandleTransition(StypeBox *box, FunctionCallInfo fcinfo, FunctionCallInfo innerF
 					 "HandleTransition called from non aggregate context");
 			}
 
-			oldContext = MemoryContextSwitchTo(aggregateContext);
+			MemoryContext oldContext = MemoryContextSwitchTo(aggregateContext);
 			if (!(DatumIsReadWriteExpandedObject(newVal,
 												 false, box->transtypeLen) &&
 				  MemoryContextGetParent(DatumGetEOHP(newVal)->eoh_context) ==
@@ -257,14 +253,13 @@ static void
 HandleStrictUninit(StypeBox *box, FunctionCallInfo fcinfo, Datum value)
 {
 	MemoryContext aggregateContext;
-	MemoryContext oldContext;
 
 	if (!AggCheckCallContext(fcinfo, &aggregateContext))
 	{
 		elog(ERROR, "HandleStrictUninit called from non aggregate context");
 	}
 
-	oldContext = MemoryContextSwitchTo(aggregateContext);
+	MemoryContext oldContext = MemoryContextSwitchTo(aggregateContext);
 	box->value = datumCopy(value, box->transtypeByVal, box->transtypeLen);
 	MemoryContextSwitchTo(oldContext);
 
@@ -287,8 +282,6 @@ worker_partial_agg_sfunc(PG_FUNCTION_ARGS)
 {
 	StypeBox *box = NULL;
 	Form_pg_aggregate aggform;
-	HeapTuple aggtuple;
-	Oid aggsfunc;
 	LOCAL_FCINFO(innerFcinfo, FUNC_MAX_ARGS);
 	FmgrInfo info;
 	int argumentIndex = 0;
@@ -305,8 +298,8 @@ worker_partial_agg_sfunc(PG_FUNCTION_ARGS)
 		Assert(box->agg == PG_GETARG_OID(1));
 	}
 
-	aggtuple = GetAggregateForm(box->agg, &aggform);
-	aggsfunc = aggform->aggtransfn;
+	HeapTuple aggtuple = GetAggregateForm(box->agg, &aggform);
+	Oid aggsfunc = aggform->aggtransfn;
 	if (initialCall)
 	{
 		InitializeStypeBox(fcinfo, box, aggtuple, aggform->aggtranstype);
@@ -370,19 +363,16 @@ worker_partial_agg_ffunc(PG_FUNCTION_ARGS)
 	LOCAL_FCINFO(innerFcinfo, 1);
 	FmgrInfo info;
 	StypeBox *box = (StypeBox *) (PG_ARGISNULL(0) ? NULL : PG_GETARG_POINTER(0));
-	HeapTuple aggtuple;
 	Form_pg_aggregate aggform;
 	Oid typoutput = InvalidOid;
 	bool typIsVarlena = false;
-	Oid transtype;
-	Datum result;
 
 	if (box == NULL || box->valueNull)
 	{
 		PG_RETURN_NULL();
 	}
 
-	aggtuple = GetAggregateForm(box->agg, &aggform);
+	HeapTuple aggtuple = GetAggregateForm(box->agg, &aggform);
 
 	if (aggform->aggcombinefn == InvalidOid)
 	{
@@ -397,7 +387,7 @@ worker_partial_agg_ffunc(PG_FUNCTION_ARGS)
 					 "worker_partial_agg_ffunc does not support aggregates with INTERNAL transition state")));
 	}
 
-	transtype = aggform->aggtranstype;
+	Oid transtype = aggform->aggtranstype;
 	ReleaseSysCache(aggtuple);
 
 	getTypeOutputInfo(transtype, &typoutput, &typIsVarlena);
@@ -408,7 +398,7 @@ worker_partial_agg_ffunc(PG_FUNCTION_ARGS)
 							 fcinfo->context, fcinfo->resultinfo);
 	fcSetArgExt(innerFcinfo, 0, box->value, box->valueNull);
 
-	result = FunctionCallInvoke(innerFcinfo);
+	Datum result = FunctionCallInvoke(innerFcinfo);
 
 	if (innerFcinfo->isnull)
 	{
@@ -433,15 +423,9 @@ coord_combine_agg_sfunc(PG_FUNCTION_ARGS)
 {
 	LOCAL_FCINFO(innerFcinfo, 3);
 	FmgrInfo info;
-	HeapTuple aggtuple;
-	HeapTuple transtypetuple;
 	Form_pg_aggregate aggform;
 	Form_pg_type transtypeform;
-	Oid combine;
-	Oid deserial;
-	Oid ioparam;
 	Datum value;
-	bool valueNull;
 	StypeBox *box = NULL;
 
 	if (PG_ARGISNULL(0))
@@ -455,7 +439,7 @@ coord_combine_agg_sfunc(PG_FUNCTION_ARGS)
 		Assert(box->agg == PG_GETARG_OID(1));
 	}
 
-	aggtuple = GetAggregateForm(box->agg, &aggform);
+	HeapTuple aggtuple = GetAggregateForm(box->agg, &aggform);
 
 	if (aggform->aggcombinefn == InvalidOid)
 	{
@@ -470,7 +454,7 @@ coord_combine_agg_sfunc(PG_FUNCTION_ARGS)
 					 "coord_combine_agg_sfunc does not support aggregates with INTERNAL transition state")));
 	}
 
-	combine = aggform->aggcombinefn;
+	Oid combine = aggform->aggcombinefn;
 
 	if (PG_ARGISNULL(0))
 	{
@@ -486,10 +470,10 @@ coord_combine_agg_sfunc(PG_FUNCTION_ARGS)
 						&box->transtypeByVal);
 	}
 
-	valueNull = PG_ARGISNULL(2);
-	transtypetuple = GetTypeForm(box->transtype, &transtypeform);
-	ioparam = getTypeIOParam(transtypetuple);
-	deserial = transtypeform->typinput;
+	bool valueNull = PG_ARGISNULL(2);
+	HeapTuple transtypetuple = GetTypeForm(box->transtype, &transtypeform);
+	Oid ioparam = getTypeIOParam(transtypetuple);
+	Oid deserial = transtypeform->typinput;
 	ReleaseSysCache(transtypetuple);
 
 	fmgr_info(deserial, &info);
@@ -551,19 +535,12 @@ coord_combine_agg_sfunc(PG_FUNCTION_ARGS)
 Datum
 coord_combine_agg_ffunc(PG_FUNCTION_ARGS)
 {
-	Datum result;
 	StypeBox *box = (StypeBox *) (PG_ARGISNULL(0) ? NULL : PG_GETARG_POINTER(0));
 	LOCAL_FCINFO(innerFcinfo, FUNC_MAX_ARGS);
 	FmgrInfo info;
 	int innerNargs = 0;
-	HeapTuple aggtuple;
-	HeapTuple ffunctuple;
 	Form_pg_aggregate aggform;
 	Form_pg_proc ffuncform;
-	Oid ffunc = InvalidOid;
-	bool fextra = false;
-	bool finalStrict = false;
-	int argumentIndex = 0;
 
 	if (box == NULL)
 	{
@@ -574,9 +551,9 @@ coord_combine_agg_ffunc(PG_FUNCTION_ARGS)
 		PG_RETURN_NULL();
 	}
 
-	aggtuple = GetAggregateForm(box->agg, &aggform);
-	ffunc = aggform->aggfinalfn;
-	fextra = aggform->aggfinalextra;
+	HeapTuple aggtuple = GetAggregateForm(box->agg, &aggform);
+	Oid ffunc = aggform->aggfinalfn;
+	bool fextra = aggform->aggfinalextra;
 	ReleaseSysCache(aggtuple);
 
 	if (ffunc == InvalidOid)
@@ -588,8 +565,8 @@ coord_combine_agg_ffunc(PG_FUNCTION_ARGS)
 		PG_RETURN_DATUM(box->value);
 	}
 
-	ffunctuple = GetProcForm(ffunc, &ffuncform);
-	finalStrict = ffuncform->proisstrict;
+	HeapTuple ffunctuple = GetProcForm(ffunc, &ffuncform);
+	bool finalStrict = ffuncform->proisstrict;
 	ReleaseSysCache(ffunctuple);
 
 	if (finalStrict && box->valueNull)
@@ -609,12 +586,12 @@ coord_combine_agg_ffunc(PG_FUNCTION_ARGS)
 	InitFunctionCallInfoData(*innerFcinfo, &info, innerNargs, fcinfo->fncollation,
 							 fcinfo->context, fcinfo->resultinfo);
 	fcSetArgExt(innerFcinfo, 0, box->value, box->valueNull);
-	for (argumentIndex = 1; argumentIndex < innerNargs; argumentIndex++)
+	for (int argumentIndex = 1; argumentIndex < innerNargs; argumentIndex++)
 	{
 		fcSetArgNull(innerFcinfo, argumentIndex);
 	}
 
-	result = FunctionCallInvoke(innerFcinfo);
+	Datum result = FunctionCallInvoke(innerFcinfo);
 	fcinfo->isnull = innerFcinfo->isnull;
 	return result;
 }

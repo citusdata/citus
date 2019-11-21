@@ -111,10 +111,7 @@ broadcast_intermediate_result(PG_FUNCTION_ARGS)
 	char *resultIdString = text_to_cstring(resultIdText);
 	text *queryText = PG_GETARG_TEXT_P(1);
 	char *queryString = text_to_cstring(queryText);
-	EState *estate = NULL;
-	List *nodeList = NIL;
 	bool writeLocalFile = false;
-	RemoteFileDestReceiver *resultDest = NULL;
 	ParamListInfo paramListInfo = NULL;
 
 	CheckCitusVersion(ERROR);
@@ -127,11 +124,13 @@ broadcast_intermediate_result(PG_FUNCTION_ARGS)
 	 */
 	BeginOrContinueCoordinatedTransaction();
 
-	nodeList = ActivePrimaryWorkerNodeList(NoLock);
-	estate = CreateExecutorState();
-	resultDest = (RemoteFileDestReceiver *) CreateRemoteFileDestReceiver(resultIdString,
-																		 estate, nodeList,
-																		 writeLocalFile);
+	List *nodeList = ActivePrimaryWorkerNodeList(NoLock);
+	EState *estate = CreateExecutorState();
+	RemoteFileDestReceiver *resultDest =
+		(RemoteFileDestReceiver *) CreateRemoteFileDestReceiver(resultIdString,
+																estate,
+																nodeList,
+																writeLocalFile);
 
 	ExecuteQueryStringIntoDestReceiver(queryString, paramListInfo,
 									   (DestReceiver *) resultDest);
@@ -153,10 +152,8 @@ create_intermediate_result(PG_FUNCTION_ARGS)
 	char *resultIdString = text_to_cstring(resultIdText);
 	text *queryText = PG_GETARG_TEXT_P(1);
 	char *queryString = text_to_cstring(queryText);
-	EState *estate = NULL;
 	List *nodeList = NIL;
 	bool writeLocalFile = true;
-	RemoteFileDestReceiver *resultDest = NULL;
 	ParamListInfo paramListInfo = NULL;
 
 	CheckCitusVersion(ERROR);
@@ -169,10 +166,12 @@ create_intermediate_result(PG_FUNCTION_ARGS)
 	 */
 	BeginOrContinueCoordinatedTransaction();
 
-	estate = CreateExecutorState();
-	resultDest = (RemoteFileDestReceiver *) CreateRemoteFileDestReceiver(resultIdString,
-																		 estate, nodeList,
-																		 writeLocalFile);
+	EState *estate = CreateExecutorState();
+	RemoteFileDestReceiver *resultDest =
+		(RemoteFileDestReceiver *) CreateRemoteFileDestReceiver(resultIdString,
+																estate,
+																nodeList,
+																writeLocalFile);
 
 	ExecuteQueryStringIntoDestReceiver(queryString, paramListInfo,
 									   (DestReceiver *) resultDest);
@@ -193,9 +192,8 @@ DestReceiver *
 CreateRemoteFileDestReceiver(char *resultId, EState *executorState,
 							 List *initialNodeList, bool writeLocalFile)
 {
-	RemoteFileDestReceiver *resultDest = NULL;
-
-	resultDest = (RemoteFileDestReceiver *) palloc0(sizeof(RemoteFileDestReceiver));
+	RemoteFileDestReceiver *resultDest = (RemoteFileDestReceiver *) palloc0(
+		sizeof(RemoteFileDestReceiver));
 
 	/* set up the DestReceiver function pointers */
 	resultDest->pub.receiveSlot = RemoteFileDestReceiverReceive;
@@ -228,7 +226,6 @@ RemoteFileDestReceiverStartup(DestReceiver *dest, int operation,
 
 	const char *resultId = resultDest->resultId;
 
-	CopyOutState copyOutState = NULL;
 	const char *delimiterCharacter = "\t";
 	const char *nullPrintCharacter = "\\N";
 
@@ -240,7 +237,7 @@ RemoteFileDestReceiverStartup(DestReceiver *dest, int operation,
 	resultDest->tupleDescriptor = inputTupleDescriptor;
 
 	/* define how tuples will be serialised */
-	copyOutState = (CopyOutState) palloc0(sizeof(CopyOutStateData));
+	CopyOutState copyOutState = (CopyOutState) palloc0(sizeof(CopyOutStateData));
 	copyOutState->delim = (char *) delimiterCharacter;
 	copyOutState->null_print = (char *) nullPrintCharacter;
 	copyOutState->null_print_client = (char *) nullPrintCharacter;
@@ -256,12 +253,11 @@ RemoteFileDestReceiverStartup(DestReceiver *dest, int operation,
 	{
 		const int fileFlags = (O_APPEND | O_CREAT | O_RDWR | O_TRUNC | PG_BINARY);
 		const int fileMode = (S_IRUSR | S_IWUSR);
-		const char *fileName = NULL;
 
 		/* make sure the directory exists */
 		CreateIntermediateResultsDirectory();
 
-		fileName = QueryResultFileName(resultId);
+		const char *fileName = QueryResultFileName(resultId);
 
 		resultDest->fileCompat = FileCompatFromFileStart(FileOpenForTransmit(fileName,
 																			 fileFlags,
@@ -273,7 +269,6 @@ RemoteFileDestReceiverStartup(DestReceiver *dest, int operation,
 		WorkerNode *workerNode = (WorkerNode *) lfirst(initialNodeCell);
 		char *nodeName = workerNode->workerName;
 		int nodePort = workerNode->workerPort;
-		MultiConnection *connection = NULL;
 
 		/*
 		 * We prefer to use a connection that is not associcated with
@@ -281,7 +276,7 @@ RemoteFileDestReceiverStartup(DestReceiver *dest, int operation,
 		 * exclusively and that would prevent the consecutive DML/DDL
 		 * use the same connection.
 		 */
-		connection = StartNonDataAccessConnection(nodeName, nodePort);
+		MultiConnection *connection = StartNonDataAccessConnection(nodeName, nodePort);
 		ClaimConnectionExclusively(connection);
 		MarkRemoteTransactionCritical(connection);
 
@@ -296,12 +291,10 @@ RemoteFileDestReceiverStartup(DestReceiver *dest, int operation,
 	foreach(connectionCell, connectionList)
 	{
 		MultiConnection *connection = (MultiConnection *) lfirst(connectionCell);
-		StringInfo copyCommand = NULL;
-		bool querySent = false;
 
-		copyCommand = ConstructCopyResultStatement(resultId);
+		StringInfo copyCommand = ConstructCopyResultStatement(resultId);
 
-		querySent = SendRemoteCommand(connection, copyCommand->data);
+		bool querySent = SendRemoteCommand(connection, copyCommand->data);
 		if (!querySent)
 		{
 			ReportConnectionError(connection, ERROR);
@@ -371,8 +364,6 @@ RemoteFileDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
 	CopyOutState copyOutState = resultDest->copyOutState;
 	FmgrInfo *columnOutputFunctions = resultDest->columnOutputFunctions;
 
-	Datum *columnValues = NULL;
-	bool *columnNulls = NULL;
 	StringInfo copyData = copyOutState->fe_msgbuf;
 
 	EState *executorState = resultDest->executorState;
@@ -381,8 +372,8 @@ RemoteFileDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
 
 	slot_getallattrs(slot);
 
-	columnValues = slot->tts_values;
-	columnNulls = slot->tts_isnull;
+	Datum *columnValues = slot->tts_values;
+	bool *columnNulls = slot->tts_isnull;
 
 	resetStringInfo(copyData);
 
@@ -526,11 +517,9 @@ RemoteFileDestReceiverDestroy(DestReceiver *destReceiver)
 void
 ReceiveQueryResultViaCopy(const char *resultId)
 {
-	const char *resultFileName = NULL;
-
 	CreateIntermediateResultsDirectory();
 
-	resultFileName = QueryResultFileName(resultId);
+	const char *resultFileName = QueryResultFileName(resultId);
 
 	RedirectCopyDataToRegularFile(resultFileName);
 }
@@ -671,12 +660,10 @@ RemoveIntermediateResultsDirectory(void)
 int64
 IntermediateResultSize(char *resultId)
 {
-	char *resultFileName = NULL;
 	struct stat fileStat;
-	int statOK = 0;
 
-	resultFileName = QueryResultFileName(resultId);
-	statOK = stat(resultFileName, &fileStat);
+	char *resultFileName = QueryResultFileName(resultId);
+	int statOK = stat(resultFileName, &fileStat);
 	if (statOK < 0)
 	{
 		return -1;
@@ -710,24 +697,21 @@ read_intermediate_result(PG_FUNCTION_ARGS)
 	Datum copyFormatLabelDatum = DirectFunctionCall1(enum_out, copyFormatOidDatum);
 	char *copyFormatLabel = DatumGetCString(copyFormatLabelDatum);
 
-	char *resultFileName = NULL;
 	struct stat fileStat;
-	int statOK = 0;
 
-	Tuplestorestate *tupstore = NULL;
 	TupleDesc tupleDescriptor = NULL;
 
 	CheckCitusVersion(ERROR);
 
-	resultFileName = QueryResultFileName(resultIdString);
-	statOK = stat(resultFileName, &fileStat);
+	char *resultFileName = QueryResultFileName(resultIdString);
+	int statOK = stat(resultFileName, &fileStat);
 	if (statOK != 0)
 	{
 		ereport(ERROR, (errcode_for_file_access(),
 						errmsg("result \"%s\" does not exist", resultIdString)));
 	}
 
-	tupstore = SetupTuplestore(fcinfo, &tupleDescriptor);
+	Tuplestorestate *tupstore = SetupTuplestore(fcinfo, &tupleDescriptor);
 
 	ReadFileIntoTupleStore(resultFileName, copyFormatLabel, tupleDescriptor, tupstore);
 

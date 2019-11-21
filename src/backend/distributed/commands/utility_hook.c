@@ -117,7 +117,6 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 {
 	Node *parsetree = pstmt->utilityStmt;
 	List *ddlJobs = NIL;
-	bool checkCreateAlterExtensionVersion = false;
 
 	if (IsA(parsetree, TransactionStmt) ||
 		IsA(parsetree, LockStmt) ||
@@ -143,7 +142,8 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		return;
 	}
 
-	checkCreateAlterExtensionVersion = IsCreateAlterExtensionUpdateCitusStmt(parsetree);
+	bool checkCreateAlterExtensionVersion = IsCreateAlterExtensionUpdateCitusStmt(
+		parsetree);
 	if (EnableVersionChecks && checkCreateAlterExtensionVersion)
 	{
 		ErrorIfUnstableCreateOrAlterExtensionStmt(parsetree);
@@ -332,12 +332,11 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 	if (IsA(parsetree, CopyStmt))
 	{
 		MemoryContext planContext = GetMemoryChunkContext(parsetree);
-		MemoryContext previousContext;
 
 		parsetree = copyObject(parsetree);
 		parsetree = ProcessCopyStmt((CopyStmt *) parsetree, completionTag, queryString);
 
-		previousContext = MemoryContextSwitchTo(planContext);
+		MemoryContext previousContext = MemoryContextSwitchTo(planContext);
 		parsetree = copyObject(parsetree);
 		MemoryContextSwitchTo(previousContext);
 
@@ -886,14 +885,12 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 static bool
 IsDropSchemaOrDB(Node *parsetree)
 {
-	DropStmt *dropStatement = NULL;
-
 	if (!IsA(parsetree, DropStmt))
 	{
 		return false;
 	}
 
-	dropStatement = (DropStmt *) parsetree;
+	DropStmt *dropStatement = (DropStmt *) parsetree;
 	return (dropStatement->removeType == OBJECT_SCHEMA) ||
 		   (dropStatement->removeType == OBJECT_DATABASE);
 }
@@ -1091,7 +1088,6 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 static char *
 SetSearchPathToCurrentSearchPathCommand(void)
 {
-	StringInfo setCommand = NULL;
 	char *currentSearchPath = CurrentSearchPath();
 
 	if (currentSearchPath == NULL)
@@ -1099,7 +1095,7 @@ SetSearchPathToCurrentSearchPathCommand(void)
 		return NULL;
 	}
 
-	setCommand = makeStringInfo();
+	StringInfo setCommand = makeStringInfo();
 	appendStringInfo(setCommand, "SET search_path TO %s;", currentSearchPath);
 
 	return setCommand->data;
@@ -1217,7 +1213,6 @@ DDLTaskList(Oid relationId, const char *commandString)
 		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
 		uint64 shardId = shardInterval->shardId;
 		StringInfo applyCommand = makeStringInfo();
-		Task *task = NULL;
 
 		/*
 		 * If rightRelationId is not InvalidOid, instead of worker_apply_shard_ddl_command
@@ -1226,7 +1221,7 @@ DDLTaskList(Oid relationId, const char *commandString)
 		appendStringInfo(applyCommand, WORKER_APPLY_SHARD_DDL_COMMAND, shardId,
 						 escapedSchemaName, escapedCommandString);
 
-		task = CitusMakeNode(Task);
+		Task *task = CitusMakeNode(Task);
 		task->jobId = jobId;
 		task->taskId = taskId++;
 		task->taskType = DDL_TASK;
@@ -1252,9 +1247,7 @@ NodeDDLTaskList(TargetWorkerSet targets, List *commands)
 {
 	List *workerNodes = TargetWorkerSetNodeList(targets, NoLock);
 	char *concatenatedCommands = StringJoin(commands, ';');
-	DDLJob *ddlJob = NULL;
 	ListCell *workerNodeCell = NULL;
-	Task *task = NULL;
 
 	if (list_length(workerNodes) <= 0)
 	{
@@ -1265,16 +1258,15 @@ NodeDDLTaskList(TargetWorkerSet targets, List *commands)
 		return NIL;
 	}
 
-	task = CitusMakeNode(Task);
+	Task *task = CitusMakeNode(Task);
 	task->taskType = DDL_TASK;
 	task->queryString = concatenatedCommands;
 
 	foreach(workerNodeCell, workerNodes)
 	{
 		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
-		ShardPlacement *targetPlacement = NULL;
 
-		targetPlacement = CitusMakeNode(ShardPlacement);
+		ShardPlacement *targetPlacement = CitusMakeNode(ShardPlacement);
 		targetPlacement->nodeName = workerNode->workerName;
 		targetPlacement->nodePort = workerNode->workerPort;
 		targetPlacement->groupId = workerNode->groupId;
@@ -1282,7 +1274,7 @@ NodeDDLTaskList(TargetWorkerSet targets, List *commands)
 		task->taskPlacementList = lappend(task->taskPlacementList, targetPlacement);
 	}
 
-	ddlJob = palloc0(sizeof(DDLJob));
+	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 	ddlJob->targetRelationId = InvalidOid;
 	ddlJob->concurrentIndexCmd = false;
 	ddlJob->commandString = NULL;

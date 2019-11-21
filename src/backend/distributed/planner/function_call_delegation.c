@@ -98,7 +98,6 @@ contain_param_walker(Node *node, void *context)
 DistributedPlan *
 TryToDelegateFunctionCall(Query *query, bool *hasExternParam)
 {
-	FromExpr *joinTree = NULL;
 	List *targetList = NIL;
 	TargetEntry *targetEntry = NULL;
 	FuncExpr *funcExpr = NULL;
@@ -116,7 +115,6 @@ TryToDelegateFunctionCall(Query *query, bool *hasExternParam)
 	Task *task = NULL;
 	Job *job = NULL;
 	DistributedPlan *distributedPlan = NULL;
-	int32 groupId = 0;
 	struct ParamWalkerContext walkerParamContext = { 0 };
 
 	/* set hasExternParam now in case of early exit */
@@ -128,7 +126,7 @@ TryToDelegateFunctionCall(Query *query, bool *hasExternParam)
 		return NULL;
 	}
 
-	groupId = GetLocalGroupId();
+	int32 groupId = GetLocalGroupId();
 	if (groupId != 0 || groupId == GROUP_ID_UPGRADING)
 	{
 		/* do not delegate from workers, or while upgrading */
@@ -147,7 +145,7 @@ TryToDelegateFunctionCall(Query *query, bool *hasExternParam)
 		return NULL;
 	}
 
-	joinTree = query->jointree;
+	FromExpr *joinTree = query->jointree;
 	if (joinTree == NULL)
 	{
 		/* no join tree (mostly here to be defensive) */

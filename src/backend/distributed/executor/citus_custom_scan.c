@@ -119,12 +119,11 @@ RegisterCitusCustomScanMethods(void)
 static void
 CitusBeginScan(CustomScanState *node, EState *estate, int eflags)
 {
-	CitusScanState *scanState = NULL;
 	DistributedPlan *distributedPlan = NULL;
 
 	MarkCitusInitiatedCoordinatorBackend();
 
-	scanState = (CitusScanState *) node;
+	CitusScanState *scanState = (CitusScanState *) node;
 
 #if PG_VERSION_NUM >= 120000
 	ExecInitResultSlot(&scanState->customScanState.ss.ps, &TTSOpsMinimalTuple);
@@ -152,7 +151,6 @@ TupleTableSlot *
 CitusExecScan(CustomScanState *node)
 {
 	CitusScanState *scanState = (CitusScanState *) node;
-	TupleTableSlot *resultSlot = NULL;
 
 	if (!scanState->finishedRemoteScan)
 	{
@@ -161,7 +159,7 @@ CitusExecScan(CustomScanState *node)
 		scanState->finishedRemoteScan = true;
 	}
 
-	resultSlot = ReturnTupleFromTuplestore(scanState);
+	TupleTableSlot *resultSlot = ReturnTupleFromTuplestore(scanState);
 
 	return resultSlot;
 }
@@ -179,21 +177,18 @@ static void
 CitusModifyBeginScan(CustomScanState *node, EState *estate, int eflags)
 {
 	CitusScanState *scanState = (CitusScanState *) node;
-	DistributedPlan *distributedPlan = NULL;
-	Job *workerJob = NULL;
-	Query *jobQuery = NULL;
-	List *taskList = NIL;
 
 	/*
 	 * We must not change the distributed plan since it may be reused across multiple
 	 * executions of a prepared statement. Instead we create a deep copy that we only
 	 * use for the current execution.
 	 */
-	distributedPlan = scanState->distributedPlan = copyObject(scanState->distributedPlan);
+	DistributedPlan *distributedPlan = scanState->distributedPlan = copyObject(
+		scanState->distributedPlan);
 
-	workerJob = distributedPlan->workerJob;
-	jobQuery = workerJob->jobQuery;
-	taskList = workerJob->taskList;
+	Job *workerJob = distributedPlan->workerJob;
+	Query *jobQuery = workerJob->jobQuery;
+	List *taskList = workerJob->taskList;
 
 	if (workerJob->requiresMasterEvaluation)
 	{
@@ -407,8 +402,6 @@ ScanStateGetExecutorState(CitusScanState *scanState)
 CustomScan *
 FetchCitusCustomScanIfExists(Plan *plan)
 {
-	CustomScan *customScan = NULL;
-
 	if (plan == NULL)
 	{
 		return NULL;
@@ -419,7 +412,7 @@ FetchCitusCustomScanIfExists(Plan *plan)
 		return (CustomScan *) plan;
 	}
 
-	customScan = FetchCitusCustomScanIfExists(plan->lefttree);
+	CustomScan *customScan = FetchCitusCustomScanIfExists(plan->lefttree);
 
 	if (customScan == NULL)
 	{
@@ -457,9 +450,6 @@ IsCitusPlan(Plan *plan)
 bool
 IsCitusCustomScan(Plan *plan)
 {
-	CustomScan *customScan = NULL;
-	Node *privateNode = NULL;
-
 	if (plan == NULL)
 	{
 		return false;
@@ -470,13 +460,13 @@ IsCitusCustomScan(Plan *plan)
 		return false;
 	}
 
-	customScan = (CustomScan *) plan;
+	CustomScan *customScan = (CustomScan *) plan;
 	if (list_length(customScan->custom_private) == 0)
 	{
 		return false;
 	}
 
-	privateNode = (Node *) linitial(customScan->custom_private);
+	Node *privateNode = (Node *) linitial(customScan->custom_private);
 	if (!CitusIsA(privateNode, DistributedPlan))
 	{
 		return false;

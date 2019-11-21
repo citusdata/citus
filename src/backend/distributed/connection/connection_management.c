@@ -85,7 +85,6 @@ void
 InitializeConnectionManagement(void)
 {
 	HASHCTL info, connParamsInfo;
-	uint32 hashFlags = 0;
 
 	/*
 	 * Create a single context for connection and transaction related memory
@@ -105,7 +104,7 @@ InitializeConnectionManagement(void)
 	info.hash = ConnectionHashHash;
 	info.match = ConnectionHashCompare;
 	info.hcxt = ConnectionContext;
-	hashFlags = (HASH_ELEM | HASH_FUNCTION | HASH_CONTEXT | HASH_COMPARE);
+	uint32 hashFlags = (HASH_ELEM | HASH_FUNCTION | HASH_CONTEXT | HASH_COMPARE);
 
 	memcpy(&connParamsInfo, &info, sizeof(HASHCTL));
 	connParamsInfo.entrysize = sizeof(ConnParamsHashEntry);
@@ -187,9 +186,7 @@ GetNodeConnection(uint32 flags, const char *hostname, int32 port)
 MultiConnection *
 GetNonDataAccessConnection(const char *hostname, int32 port)
 {
-	MultiConnection *connection;
-
-	connection = StartNonDataAccessConnection(hostname, port);
+	MultiConnection *connection = StartNonDataAccessConnection(hostname, port);
 
 	FinishConnectionEstablishment(connection);
 
@@ -243,9 +240,8 @@ MultiConnection *
 GetNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port, const
 							  char *user, const char *database)
 {
-	MultiConnection *connection;
-
-	connection = StartNodeUserDatabaseConnection(flags, hostname, port, user, database);
+	MultiConnection *connection = StartNodeUserDatabaseConnection(flags, hostname, port,
+																  user, database);
 
 	FinishConnectionEstablishment(connection);
 
@@ -269,11 +265,11 @@ StartWorkerListConnections(List *workerNodeList, uint32 flags, const char *user,
 		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
 		char *nodeName = workerNode->workerName;
 		int nodePort = workerNode->workerPort;
-		MultiConnection *connection = NULL;
 		int connectionFlags = 0;
 
-		connection = StartNodeUserDatabaseConnection(connectionFlags, nodeName, nodePort,
-													 user, database);
+		MultiConnection *connection = StartNodeUserDatabaseConnection(connectionFlags,
+																	  nodeName, nodePort,
+																	  user, database);
 
 		connectionList = lappend(connectionList, connection);
 	}
@@ -298,7 +294,6 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port, 
 								char *user, const char *database)
 {
 	ConnectionHashKey key;
-	ConnectionHashEntry *entry = NULL;
 	MultiConnection *connection;
 	bool found;
 
@@ -340,7 +335,7 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port, 
 	 * connection list empty.
 	 */
 
-	entry = hash_search(ConnectionHash, &key, HASH_ENTER, &found);
+	ConnectionHashEntry *entry = hash_search(ConnectionHash, &key, HASH_ENTER, &found);
 	if (!found)
 	{
 		entry->connections = MemoryContextAlloc(ConnectionContext,
@@ -412,14 +407,13 @@ CloseNodeConnectionsAfterTransaction(char *nodeName, int nodePort)
 	while ((entry = (ConnectionHashEntry *) hash_seq_search(&status)) != 0)
 	{
 		dlist_iter iter;
-		dlist_head *connections = NULL;
 
 		if (strcmp(entry->key.hostname, nodeName) != 0 || entry->key.port != nodePort)
 		{
 			continue;
 		}
 
-		connections = entry->connections;
+		dlist_head *connections = entry->connections;
 		dlist_foreach(iter, connections)
 		{
 			MultiConnection *connection =
@@ -575,7 +569,6 @@ EventSetSizeForConnectionList(List *connections)
 static WaitEventSet *
 WaitEventSetFromMultiConnectionStates(List *connections, int *waitCount)
 {
-	WaitEventSet *waitEventSet = NULL;
 	ListCell *connectionCell = NULL;
 
 	const int eventSetSize = EventSetSizeForConnectionList(connections);
@@ -586,7 +579,7 @@ WaitEventSetFromMultiConnectionStates(List *connections, int *waitCount)
 		*waitCount = 0;
 	}
 
-	waitEventSet = CreateWaitEventSet(CurrentMemoryContext, eventSetSize);
+	WaitEventSet *waitEventSet = CreateWaitEventSet(CurrentMemoryContext, eventSetSize);
 	EnsureReleaseResource((MemoryContextCallbackFunction) (&FreeWaitEventSet),
 						  waitEventSet);
 
@@ -602,8 +595,6 @@ WaitEventSetFromMultiConnectionStates(List *connections, int *waitCount)
 	{
 		MultiConnectionPollState *connectionState = (MultiConnectionPollState *) lfirst(
 			connectionCell);
-		int sock = 0;
-		int eventMask = 0;
 
 		if (numEventsAdded >= eventSetSize)
 		{
@@ -617,9 +608,9 @@ WaitEventSetFromMultiConnectionStates(List *connections, int *waitCount)
 			continue;
 		}
 
-		sock = PQsocket(connectionState->connection->pgConn);
+		int sock = PQsocket(connectionState->connection->pgConn);
 
-		eventMask = MultiConnectionStateEventMask(connectionState);
+		int eventMask = MultiConnectionStateEventMask(connectionState);
 
 		AddWaitEventToSet(waitEventSet, eventMask, sock, NULL, connectionState);
 		numEventsAdded++;
@@ -672,8 +663,6 @@ FinishConnectionListEstablishment(List *multiConnectionList)
 	WaitEventSet *waitEventSet = NULL;
 	bool waitEventSetRebuild = true;
 	int waitCount = 0;
-	WaitEvent *events = NULL;
-	MemoryContext oldContext = NULL;
 
 	foreach(multiConnectionCell, multiConnectionList)
 	{
@@ -699,23 +688,22 @@ FinishConnectionListEstablishment(List *multiConnectionList)
 	}
 
 	/* prepare space for socket events */
-	events = (WaitEvent *) palloc0(EventSetSizeForConnectionList(connectionStates) *
-								   sizeof(WaitEvent));
+	WaitEvent *events = (WaitEvent *) palloc0(EventSetSizeForConnectionList(
+												  connectionStates) *
+											  sizeof(WaitEvent));
 
 	/*
 	 * for high connection counts with lots of round trips we could potentially have a lot
 	 * of (big) waitsets that we'd like to clean right after we have used them. To do this
 	 * we switch to a temporary memory context for this loop which gets reset at the end
 	 */
-	oldContext = MemoryContextSwitchTo(
+	MemoryContext oldContext = MemoryContextSwitchTo(
 		AllocSetContextCreate(CurrentMemoryContext,
 							  "connection establishment temporary context",
 							  ALLOCSET_DEFAULT_SIZES));
 	while (waitCount > 0)
 	{
 		long timeout = DeadlineTimestampTzToTimeout(deadline);
-		int eventCount = 0;
-		int eventIndex = 0;
 
 		if (waitEventSetRebuild)
 		{
@@ -730,13 +718,12 @@ FinishConnectionListEstablishment(List *multiConnectionList)
 			}
 		}
 
-		eventCount = WaitEventSetWait(waitEventSet, timeout, events, waitCount,
-									  WAIT_EVENT_CLIENT_READ);
+		int eventCount = WaitEventSetWait(waitEventSet, timeout, events, waitCount,
+										  WAIT_EVENT_CLIENT_READ);
 
-		for (eventIndex = 0; eventIndex < eventCount; eventIndex++)
+		for (int eventIndex = 0; eventIndex < eventCount; eventIndex++)
 		{
 			WaitEvent *event = &events[eventIndex];
-			bool connectionStateChanged = false;
 			MultiConnectionPollState *connectionState =
 				(MultiConnectionPollState *) event->user_data;
 
@@ -764,7 +751,7 @@ FinishConnectionListEstablishment(List *multiConnectionList)
 				continue;
 			}
 
-			connectionStateChanged = MultiConnectionStatePoll(connectionState);
+			bool connectionStateChanged = MultiConnectionStatePoll(connectionState);
 			if (connectionStateChanged)
 			{
 				if (connectionState->phase != MULTI_CONNECTION_PHASE_CONNECTING)
@@ -909,9 +896,8 @@ static uint32
 ConnectionHashHash(const void *key, Size keysize)
 {
 	ConnectionHashKey *entry = (ConnectionHashKey *) key;
-	uint32 hash = 0;
 
-	hash = string_hash(entry->hostname, NAMEDATALEN);
+	uint32 hash = string_hash(entry->hostname, NAMEDATALEN);
 	hash = hash_combine(hash, hash_uint32(entry->port));
 	hash = hash_combine(hash, string_hash(entry->user, NAMEDATALEN));
 	hash = hash_combine(hash, string_hash(entry->database, NAMEDATALEN));
@@ -948,11 +934,9 @@ static MultiConnection *
 StartConnectionEstablishment(ConnectionHashKey *key)
 {
 	bool found = false;
-	MultiConnection *connection = NULL;
-	ConnParamsHashEntry *entry = NULL;
 
 	/* search our cache for precomputed connection settings */
-	entry = hash_search(ConnParamsHash, key, HASH_ENTER, &found);
+	ConnParamsHashEntry *entry = hash_search(ConnParamsHash, key, HASH_ENTER, &found);
 	if (!found || !entry->isValid)
 	{
 		/* avoid leaking memory in the keys and values arrays */
@@ -968,7 +952,8 @@ StartConnectionEstablishment(ConnectionHashKey *key)
 		entry->isValid = true;
 	}
 
-	connection = MemoryContextAllocZero(ConnectionContext, sizeof(MultiConnection));
+	MultiConnection *connection = MemoryContextAllocZero(ConnectionContext,
+														 sizeof(MultiConnection));
 
 	strlcpy(connection->hostname, key->hostname, MAX_NODE_LENGTH);
 	connection->port = key->port;
@@ -1218,9 +1203,8 @@ char *
 TrimLogLevel(const char *message)
 {
 	char *chompedMessage = pchomp(message);
-	size_t n;
 
-	n = 0;
+	size_t n = 0;
 	while (n < strlen(chompedMessage) && chompedMessage[n] != ':')
 	{
 		n++;

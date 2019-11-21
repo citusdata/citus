@@ -128,13 +128,13 @@ GetForeignConstraintRelationshipHelper(Oid relationId, bool isReferencing)
 	List *foreignNodeList = NIL;
 	ListCell *nodeCell = NULL;
 	bool isFound = false;
-	ForeignConstraintRelationshipNode *relationNode = NULL;
 
 	CreateForeignConstraintRelationshipGraph();
 
-	relationNode = (ForeignConstraintRelationshipNode *) hash_search(
-		fConstraintRelationshipGraph->nodeMap, &relationId,
-		HASH_FIND, &isFound);
+	ForeignConstraintRelationshipNode *relationNode =
+		(ForeignConstraintRelationshipNode *) hash_search(
+			fConstraintRelationshipGraph->nodeMap, &relationId,
+			HASH_FIND, &isFound);
 
 	if (!isFound)
 	{
@@ -175,10 +175,7 @@ GetForeignConstraintRelationshipHelper(Oid relationId, bool isReferencing)
 static void
 CreateForeignConstraintRelationshipGraph()
 {
-	MemoryContext oldContext;
-	MemoryContext fConstraintRelationshipMemoryContext = NULL;
 	HASHCTL info;
-	uint32 hashFlags = 0;
 
 	/* if we have already created the graph, use it */
 	if (IsForeignConstraintRelationshipGraphValid())
@@ -188,14 +185,15 @@ CreateForeignConstraintRelationshipGraph()
 
 	ClearForeignConstraintRelationshipGraphContext();
 
-	fConstraintRelationshipMemoryContext = AllocSetContextCreateExtended(
+	MemoryContext fConstraintRelationshipMemoryContext = AllocSetContextCreateExtended(
 		CacheMemoryContext,
 		"Forign Constraint Relationship Graph Context",
 		ALLOCSET_DEFAULT_MINSIZE,
 		ALLOCSET_DEFAULT_INITSIZE,
 		ALLOCSET_DEFAULT_MAXSIZE);
 
-	oldContext = MemoryContextSwitchTo(fConstraintRelationshipMemoryContext);
+	MemoryContext oldContext = MemoryContextSwitchTo(
+		fConstraintRelationshipMemoryContext);
 
 	fConstraintRelationshipGraph = (ForeignConstraintRelationshipGraph *) palloc(
 		sizeof(ForeignConstraintRelationshipGraph));
@@ -207,7 +205,7 @@ CreateForeignConstraintRelationshipGraph()
 	info.entrysize = sizeof(ForeignConstraintRelationshipNode);
 	info.hash = oid_hash;
 	info.hcxt = CurrentMemoryContext;
-	hashFlags = (HASH_ELEM | HASH_FUNCTION | HASH_CONTEXT);
+	uint32 hashFlags = (HASH_ELEM | HASH_FUNCTION | HASH_CONTEXT);
 
 	fConstraintRelationshipGraph->nodeMap = hash_create(
 		"foreign key relationship map (oid)",
@@ -293,9 +291,7 @@ GetConnectedListHelper(ForeignConstraintRelationshipNode *node, List **adjacentN
 static void
 PopulateAdjacencyLists(void)
 {
-	SysScanDesc scanDescriptor;
 	HeapTuple tuple;
-	Relation pgConstraint;
 	ScanKeyData scanKey[1];
 	int scanKeyCount = 1;
 
@@ -304,19 +300,18 @@ PopulateAdjacencyLists(void)
 	List *frelEdgeList = NIL;
 	ListCell *frelEdgeCell = NULL;
 
-	pgConstraint = heap_open(ConstraintRelationId, AccessShareLock);
+	Relation pgConstraint = heap_open(ConstraintRelationId, AccessShareLock);
 
 	ScanKeyInit(&scanKey[0], Anum_pg_constraint_contype, BTEqualStrategyNumber, F_CHAREQ,
 				CharGetDatum(CONSTRAINT_FOREIGN));
-	scanDescriptor = systable_beginscan(pgConstraint, InvalidOid, false,
-										NULL, scanKeyCount, scanKey);
+	SysScanDesc scanDescriptor = systable_beginscan(pgConstraint, InvalidOid, false,
+													NULL, scanKeyCount, scanKey);
 
 	while (HeapTupleIsValid(tuple = systable_getnext(scanDescriptor)))
 	{
 		Form_pg_constraint constraintForm = (Form_pg_constraint) GETSTRUCT(tuple);
-		ForeignConstraintRelationshipEdge *currentFConstraintRelationshipEdge = NULL;
 
-		currentFConstraintRelationshipEdge = palloc(
+		ForeignConstraintRelationshipEdge *currentFConstraintRelationshipEdge = palloc(
 			sizeof(ForeignConstraintRelationshipEdge));
 		currentFConstraintRelationshipEdge->referencingRelationOID =
 			constraintForm->conrelid;

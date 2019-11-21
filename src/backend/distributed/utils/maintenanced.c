@@ -136,15 +136,17 @@ InitializeMaintenanceDaemon(void)
 void
 InitializeMaintenanceDaemonBackend(void)
 {
-	MaintenanceDaemonDBData *dbData = NULL;
 	Oid extensionOwner = CitusExtensionOwner();
 	bool found;
 
 	LWLockAcquire(&MaintenanceDaemonControl->lock, LW_EXCLUSIVE);
 
-	dbData = (MaintenanceDaemonDBData *) hash_search(MaintenanceDaemonDBHash,
-													 &MyDatabaseId,
-													 HASH_ENTER_NULL, &found);
+	MaintenanceDaemonDBData *dbData = (MaintenanceDaemonDBData *) hash_search(
+		MaintenanceDaemonDBHash,
+		&
+		MyDatabaseId,
+		HASH_ENTER_NULL,
+		&found);
 
 	if (dbData == NULL)
 	{
@@ -228,7 +230,6 @@ void
 CitusMaintenanceDaemonMain(Datum main_arg)
 {
 	Oid databaseOid = DatumGetObjectId(main_arg);
-	MaintenanceDaemonDBData *myDbData = NULL;
 	TimestampTz nextStatsCollectionTime USED_WITH_LIBCURL_ONLY =
 		TimestampTzPlusMilliseconds(GetCurrentTimestamp(), 60 * 1000);
 	bool retryStatsCollection USED_WITH_LIBCURL_ONLY = false;
@@ -241,8 +242,9 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 	 */
 	LWLockAcquire(&MaintenanceDaemonControl->lock, LW_SHARED);
 
-	myDbData = (MaintenanceDaemonDBData *)
-			   hash_search(MaintenanceDaemonDBHash, &databaseOid, HASH_FIND, NULL);
+	MaintenanceDaemonDBData *myDbData = (MaintenanceDaemonDBData *)
+										hash_search(MaintenanceDaemonDBHash, &databaseOid,
+													HASH_FIND, NULL);
 	if (!myDbData)
 	{
 		/*
@@ -371,7 +373,6 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 			 GetCurrentTimestamp() >= nextMetadataSyncTime))
 		{
 			bool metadataSyncFailed = false;
-			int64 nextTimeout = 0;
 
 			InvalidateMetadataSystemCache();
 			StartTransactionCommand();
@@ -406,8 +407,8 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 			CommitTransactionCommand();
 			ProcessCompletedNotifies();
 
-			nextTimeout = metadataSyncFailed ? MetadataSyncRetryInterval :
-						  MetadataSyncInterval;
+			int64 nextTimeout = metadataSyncFailed ? MetadataSyncRetryInterval :
+								MetadataSyncInterval;
 			nextMetadataSyncTime =
 				TimestampTzPlusMilliseconds(GetCurrentTimestamp(), nextTimeout);
 			timeout = Min(timeout, nextTimeout);
@@ -561,7 +562,6 @@ static size_t
 MaintenanceDaemonShmemSize(void)
 {
 	Size size = 0;
-	Size hashSize = 0;
 
 	size = add_size(size, sizeof(MaintenanceDaemonControlData));
 
@@ -570,7 +570,8 @@ MaintenanceDaemonShmemSize(void)
 	 * worker process. We couldn't start more anyway, so there's little point
 	 * in allocating more.
 	 */
-	hashSize = hash_estimate_size(max_worker_processes, sizeof(MaintenanceDaemonDBData));
+	Size hashSize = hash_estimate_size(max_worker_processes,
+									   sizeof(MaintenanceDaemonDBData));
 	size = add_size(size, hashSize);
 
 	return size;
@@ -586,7 +587,6 @@ MaintenanceDaemonShmemInit(void)
 {
 	bool alreadyInitialized = false;
 	HASHCTL hashInfo;
-	int hashFlags = 0;
 
 	LWLockAcquire(AddinShmemInitLock, LW_EXCLUSIVE);
 
@@ -615,7 +615,7 @@ MaintenanceDaemonShmemInit(void)
 	hashInfo.keysize = sizeof(Oid);
 	hashInfo.entrysize = sizeof(MaintenanceDaemonDBData);
 	hashInfo.hash = tag_hash;
-	hashFlags = (HASH_ELEM | HASH_FUNCTION);
+	int hashFlags = (HASH_ELEM | HASH_FUNCTION);
 
 	MaintenanceDaemonDBHash = ShmemInitHash("Maintenance Database Hash",
 											max_worker_processes, max_worker_processes,
@@ -669,8 +669,6 @@ MaintenanceDaemonErrorContext(void *arg)
 static bool
 LockCitusExtension(void)
 {
-	Oid recheckExtensionOid = InvalidOid;
-
 	Oid extensionOid = get_extension_oid("citus", true);
 	if (extensionOid == InvalidOid)
 	{
@@ -684,7 +682,7 @@ LockCitusExtension(void)
 	 * The extension may have been dropped and possibly recreated prior to
 	 * obtaining a lock. Check whether we still get the expected OID.
 	 */
-	recheckExtensionOid = get_extension_oid("citus", true);
+	Oid recheckExtensionOid = get_extension_oid("citus", true);
 	if (recheckExtensionOid != extensionOid)
 	{
 		return false;
@@ -703,13 +701,14 @@ void
 StopMaintenanceDaemon(Oid databaseId)
 {
 	bool found = false;
-	MaintenanceDaemonDBData *dbData = NULL;
 	pid_t workerPid = 0;
 
 	LWLockAcquire(&MaintenanceDaemonControl->lock, LW_EXCLUSIVE);
 
-	dbData = (MaintenanceDaemonDBData *) hash_search(MaintenanceDaemonDBHash,
-													 &databaseId, HASH_REMOVE, &found);
+	MaintenanceDaemonDBData *dbData = (MaintenanceDaemonDBData *) hash_search(
+		MaintenanceDaemonDBHash,
+		&databaseId,
+		HASH_REMOVE, &found);
 	if (found)
 	{
 		workerPid = dbData->workerPid;
@@ -732,12 +731,13 @@ void
 TriggerMetadataSync(Oid databaseId)
 {
 	bool found = false;
-	MaintenanceDaemonDBData *dbData = NULL;
 
 	LWLockAcquire(&MaintenanceDaemonControl->lock, LW_EXCLUSIVE);
 
-	dbData = (MaintenanceDaemonDBData *) hash_search(MaintenanceDaemonDBHash,
-													 &databaseId, HASH_FIND, &found);
+	MaintenanceDaemonDBData *dbData = (MaintenanceDaemonDBData *) hash_search(
+		MaintenanceDaemonDBHash,
+		&databaseId,
+		HASH_FIND, &found);
 	if (found)
 	{
 		dbData->triggerMetadataSync = true;
@@ -757,11 +757,9 @@ TriggerMetadataSync(Oid databaseId)
 static bool
 MetadataSyncTriggeredCheckAndReset(MaintenanceDaemonDBData *dbData)
 {
-	bool metadataSyncTriggered = false;
-
 	LWLockAcquire(&MaintenanceDaemonControl->lock, LW_EXCLUSIVE);
 
-	metadataSyncTriggered = dbData->triggerMetadataSync;
+	bool metadataSyncTriggered = dbData->triggerMetadataSync;
 	dbData->triggerMetadataSync = false;
 
 	LWLockRelease(&MaintenanceDaemonControl->lock);

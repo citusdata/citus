@@ -62,7 +62,6 @@ void
 ProcessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand)
 {
 	int relationIndex = 0;
-	bool distributedVacuumStmt = false;
 	List *vacuumRelationList = ExtractVacuumTargetRels(vacuumStmt);
 	ListCell *vacuumRelationCell = NULL;
 	List *relationIdList = NIL;
@@ -79,7 +78,8 @@ ProcessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand)
 		relationIdList = lappend_oid(relationIdList, relationId);
 	}
 
-	distributedVacuumStmt = IsDistributedVacuumStmt(vacuumParams.options, relationIdList);
+	bool distributedVacuumStmt = IsDistributedVacuumStmt(vacuumParams.options,
+														 relationIdList);
 	if (!distributedVacuumStmt)
 	{
 		return;
@@ -91,9 +91,6 @@ ProcessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand)
 		Oid relationId = lfirst_oid(relationIdCell);
 		if (IsDistributedTable(relationId))
 		{
-			List *vacuumColumnList = NIL;
-			List *taskList = NIL;
-
 			/*
 			 * VACUUM commands cannot run inside a transaction block, so we use
 			 * the "bare" commit protocol without BEGIN/COMMIT. However, ANALYZE
@@ -108,8 +105,8 @@ ProcessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand)
 				MultiShardCommitProtocol = COMMIT_PROTOCOL_BARE;
 			}
 
-			vacuumColumnList = VacuumColumnList(vacuumStmt, relationIndex);
-			taskList = VacuumTaskList(relationId, vacuumParams, vacuumColumnList);
+			List *vacuumColumnList = VacuumColumnList(vacuumStmt, relationIndex);
+			List *taskList = VacuumTaskList(relationId, vacuumParams, vacuumColumnList);
 
 			/* use adaptive executor when enabled */
 			ExecuteUtilityTaskListWithoutResults(taskList);
@@ -135,13 +132,12 @@ IsDistributedVacuumStmt(int vacuumOptions, List *vacuumRelationIdList)
 	bool distributeStmt = false;
 	ListCell *relationIdCell = NULL;
 	int distributedRelationCount = 0;
-	int vacuumedRelationCount = 0;
 
 	/*
 	 * No table in the vacuum statement means vacuuming all relations
 	 * which is not supported by citus.
 	 */
-	vacuumedRelationCount = list_length(vacuumRelationIdList);
+	int vacuumedRelationCount = list_length(vacuumRelationIdList);
 	if (vacuumedRelationCount == 0)
 	{
 		/* WARN for unqualified VACUUM commands */
@@ -188,18 +184,16 @@ static List *
 VacuumTaskList(Oid relationId, CitusVacuumParams vacuumParams, List *vacuumColumnList)
 {
 	List *taskList = NIL;
-	List *shardIntervalList = NIL;
 	ListCell *shardIntervalCell = NULL;
 	uint64 jobId = INVALID_JOB_ID;
 	int taskId = 1;
 	StringInfo vacuumString = DeparseVacuumStmtPrefix(vacuumParams);
-	const char *columnNames = NULL;
 	const int vacuumPrefixLen = vacuumString->len;
 	Oid schemaId = get_rel_namespace(relationId);
 	char *schemaName = get_namespace_name(schemaId);
 	char *tableName = get_rel_name(relationId);
 
-	columnNames = DeparseVacuumColumnNames(vacuumColumnList);
+	const char *columnNames = DeparseVacuumColumnNames(vacuumColumnList);
 
 	/*
 	 * We obtain ShareUpdateExclusiveLock here to not conflict with INSERT's
@@ -209,7 +203,7 @@ VacuumTaskList(Oid relationId, CitusVacuumParams vacuumParams, List *vacuumColum
 	 */
 	LockRelationOid(relationId, ShareUpdateExclusiveLock);
 
-	shardIntervalList = LoadShardIntervalList(relationId);
+	List *shardIntervalList = LoadShardIntervalList(relationId);
 
 	/* grab shard lock before getting placement list */
 	LockShardListMetadata(shardIntervalList, ShareLock);
@@ -218,7 +212,6 @@ VacuumTaskList(Oid relationId, CitusVacuumParams vacuumParams, List *vacuumColum
 	{
 		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
 		uint64 shardId = shardInterval->shardId;
-		Task *task = NULL;
 
 		char *shardName = pstrdup(tableName);
 		AppendShardIdToName(&shardName, shardInterval->shardId);
@@ -228,7 +221,7 @@ VacuumTaskList(Oid relationId, CitusVacuumParams vacuumParams, List *vacuumColum
 		appendStringInfoString(vacuumString, shardName);
 		appendStringInfoString(vacuumString, columnNames);
 
-		task = CitusMakeNode(Task);
+		Task *task = CitusMakeNode(Task);
 		task->jobId = jobId;
 		task->taskId = taskId++;
 		task->taskType = VACUUM_ANALYZE_TASK;

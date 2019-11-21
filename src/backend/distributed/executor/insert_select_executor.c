@@ -93,7 +93,6 @@ static TupleTableSlot *
 CoordinatorInsertSelectExecScanInternal(CustomScanState *node)
 {
 	CitusScanState *scanState = (CitusScanState *) node;
-	TupleTableSlot *resultSlot = NULL;
 
 	if (!scanState->finishedRemoteScan)
 	{
@@ -197,7 +196,7 @@ CoordinatorInsertSelectExecScanInternal(CustomScanState *node)
 		scanState->finishedRemoteScan = true;
 	}
 
-	resultSlot = ReturnTupleFromTuplestore(scanState);
+	TupleTableSlot *resultSlot = ReturnTupleFromTuplestore(scanState);
 
 	return resultSlot;
 }
@@ -217,36 +216,34 @@ ExecuteSelectIntoColocatedIntermediateResults(Oid targetRelationId,
 											  char *intermediateResultIdPrefix)
 {
 	ParamListInfo paramListInfo = executorState->es_param_list_info;
-	int partitionColumnIndex = -1;
-	List *columnNameList = NIL;
 	bool stopOnFailure = false;
-	char partitionMethod = 0;
-	CitusCopyDestReceiver *copyDest = NULL;
-	Query *queryCopy = NULL;
 
-	partitionMethod = PartitionMethod(targetRelationId);
+	char partitionMethod = PartitionMethod(targetRelationId);
 	if (partitionMethod == DISTRIBUTE_BY_NONE)
 	{
 		stopOnFailure = true;
 	}
 
 	/* Get column name list and partition column index for the target table */
-	columnNameList = BuildColumnNameListFromTargetList(targetRelationId,
-													   insertTargetList);
-	partitionColumnIndex = PartitionColumnIndexFromColumnList(targetRelationId,
-															  columnNameList);
+	List *columnNameList = BuildColumnNameListFromTargetList(targetRelationId,
+															 insertTargetList);
+	int partitionColumnIndex = PartitionColumnIndexFromColumnList(targetRelationId,
+																  columnNameList);
 
 	/* set up a DestReceiver that copies into the intermediate table */
-	copyDest = CreateCitusCopyDestReceiver(targetRelationId, columnNameList,
-										   partitionColumnIndex, executorState,
-										   stopOnFailure, intermediateResultIdPrefix);
+	CitusCopyDestReceiver *copyDest = CreateCitusCopyDestReceiver(targetRelationId,
+																  columnNameList,
+																  partitionColumnIndex,
+																  executorState,
+																  stopOnFailure,
+																  intermediateResultIdPrefix);
 
 	/*
 	 * Make a copy of the query, since ExecuteQueryIntoDestReceiver may scribble on it
 	 * and we want it to be replanned every time if it is stored in a prepared
 	 * statement.
 	 */
-	queryCopy = copyObject(selectQuery);
+	Query *queryCopy = copyObject(selectQuery);
 
 	ExecuteQueryIntoDestReceiver(queryCopy, paramListInfo, (DestReceiver *) copyDest);
 
@@ -268,36 +265,33 @@ ExecuteSelectIntoRelation(Oid targetRelationId, List *insertTargetList,
 						  Query *selectQuery, EState *executorState)
 {
 	ParamListInfo paramListInfo = executorState->es_param_list_info;
-	int partitionColumnIndex = -1;
-	List *columnNameList = NIL;
 	bool stopOnFailure = false;
-	char partitionMethod = 0;
-	CitusCopyDestReceiver *copyDest = NULL;
-	Query *queryCopy = NULL;
 
-	partitionMethod = PartitionMethod(targetRelationId);
+	char partitionMethod = PartitionMethod(targetRelationId);
 	if (partitionMethod == DISTRIBUTE_BY_NONE)
 	{
 		stopOnFailure = true;
 	}
 
 	/* Get column name list and partition column index for the target table */
-	columnNameList = BuildColumnNameListFromTargetList(targetRelationId,
-													   insertTargetList);
-	partitionColumnIndex = PartitionColumnIndexFromColumnList(targetRelationId,
-															  columnNameList);
+	List *columnNameList = BuildColumnNameListFromTargetList(targetRelationId,
+															 insertTargetList);
+	int partitionColumnIndex = PartitionColumnIndexFromColumnList(targetRelationId,
+																  columnNameList);
 
 	/* set up a DestReceiver that copies into the distributed table */
-	copyDest = CreateCitusCopyDestReceiver(targetRelationId, columnNameList,
-										   partitionColumnIndex, executorState,
-										   stopOnFailure, NULL);
+	CitusCopyDestReceiver *copyDest = CreateCitusCopyDestReceiver(targetRelationId,
+																  columnNameList,
+																  partitionColumnIndex,
+																  executorState,
+																  stopOnFailure, NULL);
 
 	/*
 	 * Make a copy of the query, since ExecuteQueryIntoDestReceiver may scribble on it
 	 * and we want it to be replanned every time if it is stored in a prepared
 	 * statement.
 	 */
-	queryCopy = copyObject(selectQuery);
+	Query *queryCopy = copyObject(selectQuery);
 
 	ExecuteQueryIntoDestReceiver(queryCopy, paramListInfo, (DestReceiver *) copyDest);
 

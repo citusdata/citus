@@ -126,14 +126,10 @@ master_create_distributed_table(PG_FUNCTION_ARGS)
 	text *distributionColumnText = PG_GETARG_TEXT_P(1);
 	Oid distributionMethodOid = PG_GETARG_OID(2);
 
-	char *distributionColumnName = NULL;
-	Var *distributionColumn = NULL;
-	char distributionMethod = 0;
 	char *colocateWithTableName = NULL;
 	bool viaDeprecatedAPI = true;
 	ObjectAddress tableAddress = { 0 };
 
-	Relation relation = NULL;
 
 	CheckCitusVersion(ERROR);
 	EnsureCoordinator();
@@ -153,7 +149,7 @@ master_create_distributed_table(PG_FUNCTION_ARGS)
 	 * sense of this table until we've committed, and we don't want multiple
 	 * backends manipulating this relation.
 	 */
-	relation = try_relation_open(relationId, ExclusiveLock);
+	Relation relation = try_relation_open(relationId, ExclusiveLock);
 
 	if (relation == NULL)
 	{
@@ -168,10 +164,10 @@ master_create_distributed_table(PG_FUNCTION_ARGS)
 	 */
 	EnsureRelationKindSupported(relationId);
 
-	distributionColumnName = text_to_cstring(distributionColumnText);
-	distributionColumn = BuildDistributionKeyFromColumnName(relation,
-															distributionColumnName);
-	distributionMethod = LookupDistributionMethod(distributionMethodOid);
+	char *distributionColumnName = text_to_cstring(distributionColumnText);
+	Var *distributionColumn = BuildDistributionKeyFromColumnName(relation,
+																 distributionColumnName);
+	char distributionMethod = LookupDistributionMethod(distributionMethodOid);
 
 	CreateDistributedTable(relationId, distributionColumn, distributionMethod,
 						   colocateWithTableName, viaDeprecatedAPI);
@@ -190,28 +186,18 @@ master_create_distributed_table(PG_FUNCTION_ARGS)
 Datum
 create_distributed_table(PG_FUNCTION_ARGS)
 {
-	Oid relationId = InvalidOid;
-	text *distributionColumnText = NULL;
-	Oid distributionMethodOid = InvalidOid;
-	text *colocateWithTableNameText = NULL;
 	ObjectAddress tableAddress = { 0 };
 
-	Relation relation = NULL;
-	char *distributionColumnName = NULL;
-	Var *distributionColumn = NULL;
-	char distributionMethod = 0;
-
-	char *colocateWithTableName = NULL;
 
 	bool viaDeprecatedAPI = false;
 
 	CheckCitusVersion(ERROR);
 	EnsureCoordinator();
 
-	relationId = PG_GETARG_OID(0);
-	distributionColumnText = PG_GETARG_TEXT_P(1);
-	distributionMethodOid = PG_GETARG_OID(2);
-	colocateWithTableNameText = PG_GETARG_TEXT_P(3);
+	Oid relationId = PG_GETARG_OID(0);
+	text *distributionColumnText = PG_GETARG_TEXT_P(1);
+	Oid distributionMethodOid = PG_GETARG_OID(2);
+	text *colocateWithTableNameText = PG_GETARG_TEXT_P(3);
 
 	EnsureTableOwner(relationId);
 
@@ -229,7 +215,7 @@ create_distributed_table(PG_FUNCTION_ARGS)
 	 * sense of this table until we've committed, and we don't want multiple
 	 * backends manipulating this relation.
 	 */
-	relation = try_relation_open(relationId, ExclusiveLock);
+	Relation relation = try_relation_open(relationId, ExclusiveLock);
 
 	if (relation == NULL)
 	{
@@ -244,12 +230,12 @@ create_distributed_table(PG_FUNCTION_ARGS)
 	 */
 	EnsureRelationKindSupported(relationId);
 
-	distributionColumnName = text_to_cstring(distributionColumnText);
-	distributionColumn = BuildDistributionKeyFromColumnName(relation,
-															distributionColumnName);
-	distributionMethod = LookupDistributionMethod(distributionMethodOid);
+	char *distributionColumnName = text_to_cstring(distributionColumnText);
+	Var *distributionColumn = BuildDistributionKeyFromColumnName(relation,
+																 distributionColumnName);
+	char distributionMethod = LookupDistributionMethod(distributionMethodOid);
 
-	colocateWithTableName = text_to_cstring(colocateWithTableNameText);
+	char *colocateWithTableName = text_to_cstring(colocateWithTableNameText);
 
 	CreateDistributedTable(relationId, distributionColumn, distributionMethod,
 						   colocateWithTableName, viaDeprecatedAPI);
@@ -270,10 +256,7 @@ create_reference_table(PG_FUNCTION_ARGS)
 {
 	Oid relationId = PG_GETARG_OID(0);
 
-	Relation relation = NULL;
 	char *colocateWithTableName = NULL;
-	List *workerNodeList = NIL;
-	int workerCount = 0;
 	Var *distributionColumn = NULL;
 	ObjectAddress tableAddress = { 0 };
 
@@ -297,7 +280,7 @@ create_reference_table(PG_FUNCTION_ARGS)
 	 * sense of this table until we've committed, and we don't want multiple
 	 * backends manipulating this relation.
 	 */
-	relation = relation_open(relationId, ExclusiveLock);
+	Relation relation = relation_open(relationId, ExclusiveLock);
 
 	/*
 	 * We should do this check here since the codes in the following lines rely
@@ -306,8 +289,8 @@ create_reference_table(PG_FUNCTION_ARGS)
 	 */
 	EnsureRelationKindSupported(relationId);
 
-	workerNodeList = ActivePrimaryNodeList(ShareLock);
-	workerCount = list_length(workerNodeList);
+	List *workerNodeList = ActivePrimaryNodeList(ShareLock);
+	int workerCount = list_length(workerNodeList);
 
 	/* if there are no workers, error out */
 	if (workerCount == 0)
@@ -344,27 +327,24 @@ void
 CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributionMethod,
 					   char *colocateWithTableName, bool viaDeprecatedAPI)
 {
-	char replicationModel = REPLICATION_MODEL_INVALID;
-	uint32 colocationId = INVALID_COLOCATION_ID;
-	Oid colocatedTableId = InvalidOid;
-	bool localTableEmpty = false;
-
-	replicationModel = AppropriateReplicationModel(distributionMethod, viaDeprecatedAPI);
+	char replicationModel = AppropriateReplicationModel(distributionMethod,
+														viaDeprecatedAPI);
 
 	/*
 	 * ColocationIdForNewTable assumes caller acquires lock on relationId. In our case,
 	 * our caller already acquired lock on relationId.
 	 */
-	colocationId = ColocationIdForNewTable(relationId, distributionColumn,
-										   distributionMethod, replicationModel,
-										   colocateWithTableName, viaDeprecatedAPI);
+	uint32 colocationId = ColocationIdForNewTable(relationId, distributionColumn,
+												  distributionMethod, replicationModel,
+												  colocateWithTableName,
+												  viaDeprecatedAPI);
 
 	EnsureRelationCanBeDistributed(relationId, distributionColumn, distributionMethod,
 								   colocationId, replicationModel, viaDeprecatedAPI);
 
 	/* we need to calculate these variables before creating distributed metadata */
-	localTableEmpty = LocalTableEmpty(relationId);
-	colocatedTableId = ColocatedTableId(colocationId);
+	bool localTableEmpty = LocalTableEmpty(relationId);
+	Oid colocatedTableId = ColocatedTableId(colocationId);
 
 	/* create an entry for distributed table in pg_dist_partition */
 	InsertIntoPgDistPartition(relationId, distributionMethod, distributionColumn,
@@ -642,9 +622,6 @@ EnsureRelationCanBeDistributed(Oid relationId, Var *distributionColumn,
 							   char distributionMethod, uint32 colocationId,
 							   char replicationModel, bool viaDeprecatedAPI)
 {
-	Relation relation = NULL;
-	TupleDesc relationDesc = NULL;
-	char *relationName = NULL;
 	Oid parentRelationId = InvalidOid;
 
 	EnsureTableNotDistributed(relationId);
@@ -652,9 +629,9 @@ EnsureRelationCanBeDistributed(Oid relationId, Var *distributionColumn,
 	EnsureReplicationSettings(InvalidOid, replicationModel);
 
 	/* we assume callers took necessary locks */
-	relation = relation_open(relationId, NoLock);
-	relationDesc = RelationGetDescr(relation);
-	relationName = RelationGetRelationName(relation);
+	Relation relation = relation_open(relationId, NoLock);
+	TupleDesc relationDesc = RelationGetDescr(relation);
+	char *relationName = RelationGetRelationName(relation);
 
 	if (!RelationUsesHeapAccessMethodOrNone(relation))
 	{
@@ -805,7 +782,6 @@ EnsureTableCanBeColocatedWith(Oid relationId, char replicationModel,
 	char sourceDistributionMethod = sourceTableEntry->partitionMethod;
 	char sourceReplicationModel = sourceTableEntry->replicationModel;
 	Var *sourceDistributionColumn = DistPartitionKey(sourceRelationId);
-	Oid sourceDistributionColumnType = InvalidOid;
 
 	if (sourceDistributionMethod != DISTRIBUTE_BY_HASH)
 	{
@@ -826,7 +802,7 @@ EnsureTableCanBeColocatedWith(Oid relationId, char replicationModel,
 								  sourceRelationName, relationName)));
 	}
 
-	sourceDistributionColumnType = sourceDistributionColumn->vartype;
+	Oid sourceDistributionColumnType = sourceDistributionColumn->vartype;
 	if (sourceDistributionColumnType != distributionColumnType)
 	{
 		char *relationName = get_rel_name(relationId);
@@ -898,9 +874,8 @@ static void
 EnsureTableNotDistributed(Oid relationId)
 {
 	char *relationName = get_rel_name(relationId);
-	bool isDistributedTable = false;
 
-	isDistributedTable = IsDistributedTable(relationId);
+	bool isDistributedTable = IsDistributedTable(relationId);
 
 	if (isDistributedTable)
 	{
@@ -949,20 +924,18 @@ EnsureReplicationSettings(Oid relationId, char replicationModel)
 static char
 LookupDistributionMethod(Oid distributionMethodOid)
 {
-	HeapTuple enumTuple = NULL;
-	Form_pg_enum enumForm = NULL;
 	char distributionMethod = 0;
-	const char *enumLabel = NULL;
 
-	enumTuple = SearchSysCache1(ENUMOID, ObjectIdGetDatum(distributionMethodOid));
+	HeapTuple enumTuple = SearchSysCache1(ENUMOID, ObjectIdGetDatum(
+											  distributionMethodOid));
 	if (!HeapTupleIsValid(enumTuple))
 	{
 		ereport(ERROR, (errmsg("invalid internal value for enum: %u",
 							   distributionMethodOid)));
 	}
 
-	enumForm = (Form_pg_enum) GETSTRUCT(enumTuple);
-	enumLabel = NameStr(enumForm->enumlabel);
+	Form_pg_enum enumForm = (Form_pg_enum) GETSTRUCT(enumTuple);
+	const char *enumLabel = NameStr(enumForm->enumlabel);
 
 	if (strncmp(enumLabel, "append", NAMEDATALEN) == 0)
 	{
@@ -997,9 +970,6 @@ static Oid
 SupportFunctionForColumn(Var *partitionColumn, Oid accessMethodId,
 						 int16 supportFunctionNumber)
 {
-	Oid operatorFamilyId = InvalidOid;
-	Oid supportFunctionOid = InvalidOid;
-	Oid operatorClassInputType = InvalidOid;
 	Oid columnOid = partitionColumn->vartype;
 	Oid operatorClassId = GetDefaultOpClass(columnOid, accessMethodId);
 
@@ -1014,11 +984,11 @@ SupportFunctionForColumn(Var *partitionColumn, Oid accessMethodId,
 								  " class defined.")));
 	}
 
-	operatorFamilyId = get_opclass_family(operatorClassId);
-	operatorClassInputType = get_opclass_input_type(operatorClassId);
-	supportFunctionOid = get_opfamily_proc(operatorFamilyId, operatorClassInputType,
-										   operatorClassInputType,
-										   supportFunctionNumber);
+	Oid operatorFamilyId = get_opclass_family(operatorClassId);
+	Oid operatorClassInputType = get_opclass_input_type(operatorClassId);
+	Oid supportFunctionOid = get_opfamily_proc(operatorFamilyId, operatorClassInputType,
+											   operatorClassInputType,
+											   supportFunctionNumber);
 
 	return supportFunctionOid;
 }
@@ -1037,13 +1007,8 @@ LocalTableEmpty(Oid tableId)
 	char *tableName = get_rel_name(tableId);
 	char *tableQualifiedName = quote_qualified_identifier(schemaName, tableName);
 
-	int spiConnectionResult = 0;
-	int spiQueryResult = 0;
 	StringInfo selectExistQueryString = makeStringInfo();
 
-	HeapTuple tuple = NULL;
-	Datum hasDataDatum = 0;
-	bool localTableEmpty = false;
 	bool columnNull = false;
 	bool readOnly = true;
 
@@ -1052,7 +1017,7 @@ LocalTableEmpty(Oid tableId)
 
 	AssertArg(!IsDistributedTable(tableId));
 
-	spiConnectionResult = SPI_connect();
+	int spiConnectionResult = SPI_connect();
 	if (spiConnectionResult != SPI_OK_CONNECT)
 	{
 		ereport(ERROR, (errmsg("could not connect to SPI manager")));
@@ -1060,7 +1025,7 @@ LocalTableEmpty(Oid tableId)
 
 	appendStringInfo(selectExistQueryString, SELECT_EXIST_QUERY, tableQualifiedName);
 
-	spiQueryResult = SPI_execute(selectExistQueryString->data, readOnly, 0);
+	int spiQueryResult = SPI_execute(selectExistQueryString->data, readOnly, 0);
 	if (spiQueryResult != SPI_OK_SELECT)
 	{
 		ereport(ERROR, (errmsg("execution was not successful \"%s\"",
@@ -1070,9 +1035,10 @@ LocalTableEmpty(Oid tableId)
 	/* we expect that SELECT EXISTS query will return single value in a single row */
 	Assert(SPI_processed == 1);
 
-	tuple = SPI_tuptable->vals[rowId];
-	hasDataDatum = SPI_getbinval(tuple, SPI_tuptable->tupdesc, attributeId, &columnNull);
-	localTableEmpty = !DatumGetBool(hasDataDatum);
+	HeapTuple tuple = SPI_tuptable->vals[rowId];
+	Datum hasDataDatum = SPI_getbinval(tuple, SPI_tuptable->tupdesc, attributeId,
+									   &columnNull);
+	bool localTableEmpty = !DatumGetBool(hasDataDatum);
 
 	SPI_finish();
 
@@ -1145,13 +1111,12 @@ CanUseExclusiveConnections(Oid relationId, bool localTableEmpty)
 void
 CreateTruncateTrigger(Oid relationId)
 {
-	CreateTrigStmt *trigger = NULL;
 	StringInfo triggerName = makeStringInfo();
 	bool internal = true;
 
 	appendStringInfo(triggerName, "truncate_trigger");
 
-	trigger = makeNode(CreateTrigStmt);
+	CreateTrigStmt *trigger = makeNode(CreateTrigStmt);
 	trigger->trigname = triggerName->data;
 	trigger->relation = NULL;
 	trigger->funcname = SystemFuncName("citus_truncate_trigger");
@@ -1232,9 +1197,7 @@ CopyLocalDataIntoShards(Oid distributedRelationId)
 	HeapScanDesc scan = NULL;
 #endif
 	HeapTuple tuple = NULL;
-	ExprContext *econtext = NULL;
 	MemoryContext oldContext = NULL;
-	TupleTableSlot *slot = NULL;
 	uint64 rowsCopied = 0;
 
 	/* take an ExclusiveLock to block all operations except SELECT */
@@ -1264,7 +1227,8 @@ CopyLocalDataIntoShards(Oid distributedRelationId)
 
 	/* get the table columns */
 	tupleDescriptor = RelationGetDescr(distributedRelation);
-	slot = MakeSingleTupleTableSlotCompat(tupleDescriptor, &TTSOpsHeapTuple);
+	TupleTableSlot *slot = MakeSingleTupleTableSlotCompat(tupleDescriptor,
+														  &TTSOpsHeapTuple);
 	columnNameList = TupleDescColumnNameList(tupleDescriptor);
 
 	/* determine the partition column in the tuple descriptor */
@@ -1276,7 +1240,7 @@ CopyLocalDataIntoShards(Oid distributedRelationId)
 
 	/* initialise per-tuple memory context */
 	estate = CreateExecutorState();
-	econtext = GetPerTupleExprContext(estate);
+	ExprContext *econtext = GetPerTupleExprContext(estate);
 	econtext->ecxt_scantuple = slot;
 
 	copyDest =
@@ -1362,9 +1326,8 @@ static List *
 TupleDescColumnNameList(TupleDesc tupleDescriptor)
 {
 	List *columnNameList = NIL;
-	int columnIndex = 0;
 
-	for (columnIndex = 0; columnIndex < tupleDescriptor->natts; columnIndex++)
+	for (int columnIndex = 0; columnIndex < tupleDescriptor->natts; columnIndex++)
 	{
 		Form_pg_attribute currentColumn = TupleDescAttr(tupleDescriptor, columnIndex);
 		char *columnName = NameStr(currentColumn->attname);
@@ -1392,9 +1355,7 @@ TupleDescColumnNameList(TupleDesc tupleDescriptor)
 static bool
 RelationUsesIdentityColumns(TupleDesc relationDesc)
 {
-	int attributeIndex = 0;
-
-	for (attributeIndex = 0; attributeIndex < relationDesc->natts; attributeIndex++)
+	for (int attributeIndex = 0; attributeIndex < relationDesc->natts; attributeIndex++)
 	{
 		Form_pg_attribute attributeForm = TupleDescAttr(relationDesc, attributeIndex);
 

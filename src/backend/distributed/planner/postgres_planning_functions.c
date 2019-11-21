@@ -43,9 +43,6 @@ make_unique_from_sortclauses(Plan *lefttree, List *distinctList)
 	Plan *plan = &node->plan;
 	int numCols = list_length(distinctList);
 	int keyno = 0;
-	AttrNumber *uniqColIdx;
-	Oid *uniqOperators;
-	Oid *uniqCollations;
 	ListCell *slitem;
 
 	plan->targetlist = lefttree->targetlist;
@@ -58,9 +55,9 @@ make_unique_from_sortclauses(Plan *lefttree, List *distinctList)
 	 * operators, as wanted by executor
 	 */
 	Assert(numCols > 0);
-	uniqColIdx = (AttrNumber *) palloc(sizeof(AttrNumber) * numCols);
-	uniqOperators = (Oid *) palloc(sizeof(Oid) * numCols);
-	uniqCollations = (Oid *) palloc(sizeof(Oid) * numCols);
+	AttrNumber *uniqColIdx = (AttrNumber *) palloc(sizeof(AttrNumber) * numCols);
+	Oid *uniqOperators = (Oid *) palloc(sizeof(Oid) * numCols);
+	Oid *uniqCollations = (Oid *) palloc(sizeof(Oid) * numCols);
 
 	foreach(slitem, distinctList)
 	{
@@ -97,8 +94,6 @@ make_unique_from_sortclauses(Plan *lefttree, List *distinctList)
 	Plan *plan = &node->plan;
 	int numCols = list_length(distinctList);
 	int keyno = 0;
-	AttrNumber *uniqColIdx;
-	Oid *uniqOperators;
 	ListCell *slitem;
 
 	plan->targetlist = lefttree->targetlist;
@@ -111,8 +106,8 @@ make_unique_from_sortclauses(Plan *lefttree, List *distinctList)
 	 * operators, as wanted by executor
 	 */
 	Assert(numCols > 0);
-	uniqColIdx = (AttrNumber *) palloc(sizeof(AttrNumber) * numCols);
-	uniqOperators = (Oid *) palloc(sizeof(Oid) * numCols);
+	AttrNumber *uniqColIdx = (AttrNumber *) palloc(sizeof(AttrNumber) * numCols);
+	Oid *uniqOperators = (Oid *) palloc(sizeof(Oid) * numCols);
 
 	foreach(slitem, distinctList)
 	{

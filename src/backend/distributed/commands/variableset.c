@@ -96,9 +96,8 @@ IsSettingSafeToPropagate(char *name)
 		"exit_on_error",
 		"max_stack_depth"
 	};
-	Index settingIndex = 0;
 
-	for (settingIndex = 0; settingIndex < lengthof(skipSettings); settingIndex++)
+	for (Index settingIndex = 0; settingIndex < lengthof(skipSettings); settingIndex++)
 	{
 		if (pg_strcasecmp(skipSettings[settingIndex], name) == 0)
 		{
@@ -138,9 +137,8 @@ ProcessVariableSetStmt(VariableSetStmt *setStmt, const char *setStmtString)
 	{
 		MultiConnection *connection = dlist_container(MultiConnection, transactionNode,
 													  iter.cur);
-		RemoteTransaction *transaction = NULL;
 
-		transaction = &connection->remoteTransaction;
+		RemoteTransaction *transaction = &connection->remoteTransaction;
 		if (transaction->transactionFailed)
 		{
 			continue;
@@ -162,10 +160,9 @@ ProcessVariableSetStmt(VariableSetStmt *setStmt, const char *setStmtString)
 	{
 		MultiConnection *connection = dlist_container(MultiConnection, transactionNode,
 													  iter.cur);
-		RemoteTransaction *transaction = NULL;
 		const bool raiseErrors = true;
 
-		transaction = &connection->remoteTransaction;
+		RemoteTransaction *transaction = &connection->remoteTransaction;
 		if (transaction->transactionFailed)
 		{
 			continue;

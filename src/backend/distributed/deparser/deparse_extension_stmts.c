@@ -270,11 +270,9 @@ static void
 AppendAlterExtensionSchemaStmt(StringInfo buf,
 							   AlterObjectSchemaStmt *alterExtensionSchemaStmt)
 {
-	const char *extensionName = NULL;
-
 	Assert(alterExtensionSchemaStmt->objectType == OBJECT_EXTENSION);
 
-	extensionName = strVal(alterExtensionSchemaStmt->object);
+	const char *extensionName = strVal(alterExtensionSchemaStmt->object);
 	appendStringInfo(buf, "ALTER EXTENSION %s SET SCHEMA %s;", extensionName,
 					 quote_identifier(alterExtensionSchemaStmt->newschema));
 }

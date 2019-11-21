@@ -36,7 +36,6 @@ ExecuteSubPlans(DistributedPlan *distributedPlan)
 	uint64 planId = distributedPlan->planId;
 	List *subPlanList = distributedPlan->subPlanList;
 	ListCell *subPlanCell = NULL;
-	HTAB *intermediateResultsHash = NULL;
 
 	if (subPlanList == NIL)
 	{
@@ -44,7 +43,7 @@ ExecuteSubPlans(DistributedPlan *distributedPlan)
 		return;
 	}
 
-	intermediateResultsHash = MakeIntermediateResultHTAB();
+	HTAB *intermediateResultsHash = MakeIntermediateResultHTAB();
 	RecordSubplanExecutionsOnNodes(intermediateResultsHash, distributedPlan);
 
 
@@ -61,9 +60,7 @@ ExecuteSubPlans(DistributedPlan *distributedPlan)
 		DistributedSubPlan *subPlan = (DistributedSubPlan *) lfirst(subPlanCell);
 		PlannedStmt *plannedStmt = subPlan->plan;
 		uint32 subPlanId = subPlan->subPlanId;
-		DestReceiver *copyDest = NULL;
 		ParamListInfo params = NULL;
-		EState *estate = NULL;
 		bool writeLocalFile = false;
 		char *resultId = GenerateResultId(planId, subPlanId);
 		List *workerNodeList =
@@ -94,9 +91,10 @@ ExecuteSubPlans(DistributedPlan *distributedPlan)
 		}
 
 		SubPlanLevel++;
-		estate = CreateExecutorState();
-		copyDest = CreateRemoteFileDestReceiver(resultId, estate, workerNodeList,
-												writeLocalFile);
+		EState *estate = CreateExecutorState();
+		DestReceiver *copyDest = CreateRemoteFileDestReceiver(resultId, estate,
+															  workerNodeList,
+															  writeLocalFile);
 
 		ExecutePlanIntoDestReceiver(plannedStmt, params, copyDest);
 
