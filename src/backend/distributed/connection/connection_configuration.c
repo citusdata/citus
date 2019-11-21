@@ -76,8 +76,7 @@ InitConnParams()
 void
 ResetConnParams()
 {
-	Index paramIdx = 0;
-	for (paramIdx = 0; paramIdx < ConnParams.size; paramIdx++)
+	for (Index paramIdx = 0; paramIdx < ConnParams.size; paramIdx++)
 	{
 		free((void *) ConnParams.keywords[paramIdx]);
 		free((void *) ConnParams.values[paramIdx]);
@@ -135,7 +134,6 @@ bool
 CheckConninfo(const char *conninfo, const char **whitelist,
 			  Size whitelistLength, char **errorMsg)
 {
-	PQconninfoOption *optionArray = NULL;
 	PQconninfoOption *option = NULL;
 	Index whitelistIdx PG_USED_FOR_ASSERTS_ONLY = 0;
 	char *errorMsgString = NULL;
@@ -165,7 +163,7 @@ CheckConninfo(const char *conninfo, const char **whitelist,
 	}
 
 	/* this should at least parse */
-	optionArray = PQconninfoParse(conninfo, NULL);
+	PQconninfoOption *optionArray = PQconninfoParse(conninfo, NULL);
 	if (optionArray == NULL)
 	{
 		*errorMsg = "Provided string is not a valid libpq connection info string";
@@ -187,15 +185,13 @@ CheckConninfo(const char *conninfo, const char **whitelist,
 
 	for (option = optionArray; option->keyword != NULL; option++)
 	{
-		void *matchingKeyword = NULL;
-
 		if (option->val == NULL || option->val[0] == '\0')
 		{
 			continue;
 		}
 
-		matchingKeyword = bsearch(&option->keyword, whitelist, whitelistLength,
-								  sizeof(char *), pg_qsort_strcmp);
+		void *matchingKeyword = bsearch(&option->keyword, whitelist, whitelistLength,
+										sizeof(char *), pg_qsort_strcmp);
 		if (matchingKeyword == NULL)
 		{
 			/* the whitelist lacks this keyword; error out! */
@@ -283,8 +279,6 @@ GetConnParams(ConnectionHashKey *key, char ***keywords, char ***values,
 	/* auth keywords will begin after global and runtime ones are appended */
 	Index authParamsIdx = ConnParams.size + lengthof(runtimeKeywords);
 
-	Index paramIndex = 0;
-	Index runtimeParamIndex = 0;
 
 	if (ConnParams.size + lengthof(runtimeKeywords) >= ConnParams.maxSize)
 	{
@@ -296,7 +290,7 @@ GetConnParams(ConnectionHashKey *key, char ***keywords, char ***values,
 	pg_ltoa(key->port, nodePortString); /* populate node port string with port */
 
 	/* first step: copy global parameters to beginning of array */
-	for (paramIndex = 0; paramIndex < ConnParams.size; paramIndex++)
+	for (Index paramIndex = 0; paramIndex < ConnParams.size; paramIndex++)
 	{
 		/* copy the keyword&value pointers to the new array */
 		connKeywords[paramIndex] = ConnParams.keywords[paramIndex];
@@ -311,7 +305,7 @@ GetConnParams(ConnectionHashKey *key, char ***keywords, char ***values,
 	*runtimeParamStart = ConnParams.size;
 
 	/* second step: begin after global params and copy runtime params into our context */
-	for (runtimeParamIndex = 0;
+	for (Index runtimeParamIndex = 0;
 		 runtimeParamIndex < lengthof(runtimeKeywords);
 		 runtimeParamIndex++)
 	{
@@ -334,9 +328,7 @@ GetConnParams(ConnectionHashKey *key, char ***keywords, char ***values,
 const char *
 GetConnParam(const char *keyword)
 {
-	Index i = 0;
-
-	for (i = 0; i < ConnParams.size; i++)
+	for (Index i = 0; i < ConnParams.size; i++)
 	{
 		if (strcmp(keyword, ConnParams.keywords[i]) == 0)
 		{
@@ -357,10 +349,9 @@ static Size
 CalculateMaxSize()
 {
 	PQconninfoOption *defaults = PQconndefaults();
-	PQconninfoOption *option = NULL;
 	Size maxSize = 0;
 
-	for (option = defaults;
+	for (PQconninfoOption *option = defaults;
 		 option->keyword != NULL;
 		 option++, maxSize++)
 	{

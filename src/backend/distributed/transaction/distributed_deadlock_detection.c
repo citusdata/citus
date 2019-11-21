@@ -103,11 +103,8 @@ check_distributed_deadlocks(PG_FUNCTION_ARGS)
 bool
 CheckForDistributedDeadlocks(void)
 {
-	WaitGraph *waitGraph = NULL;
-	HTAB *adjacencyLists = NULL;
 	HASH_SEQ_STATUS status;
 	TransactionNode *transactionNode = NULL;
-	int edgeCount = 0;
 	int localGroupId = GetLocalGroupId();
 	List *workerNodeList = ActiveReadableNodeList();
 
@@ -122,10 +119,10 @@ CheckForDistributedDeadlocks(void)
 		return false;
 	}
 
-	waitGraph = BuildGlobalWaitGraph();
-	adjacencyLists = BuildAdjacencyListsForWaitGraph(waitGraph);
+	WaitGraph *waitGraph = BuildGlobalWaitGraph();
+	HTAB *adjacencyLists = BuildAdjacencyListsForWaitGraph(waitGraph);
 
-	edgeCount = waitGraph->edgeCount;
+	int edgeCount = waitGraph->edgeCount;
 
 	/*
 	 * We iterate on transaction nodes and search for deadlocks where the
@@ -134,7 +131,6 @@ CheckForDistributedDeadlocks(void)
 	hash_seq_init(&status, adjacencyLists);
 	while ((transactionNode = (TransactionNode *) hash_seq_search(&status)) != 0)
 	{
-		bool deadlockFound = false;
 		List *deadlockPath = NIL;
 
 		/*
@@ -151,9 +147,9 @@ CheckForDistributedDeadlocks(void)
 
 		ResetVisitedFields(adjacencyLists);
 
-		deadlockFound = CheckDeadlockForTransactionNode(transactionNode,
-														maxStackDepth,
-														&deadlockPath);
+		bool deadlockFound = CheckDeadlockForTransactionNode(transactionNode,
+															 maxStackDepth,
+															 &deadlockPath);
 		if (deadlockFound)
 		{
 			TransactionNode *youngestAliveTransaction = NULL;
@@ -184,8 +180,6 @@ CheckForDistributedDeadlocks(void)
 					(TransactionNode *) lfirst(participantTransactionCell);
 				bool transactionAssociatedWithProc =
 					AssociateDistributedTransactionWithBackendProc(currentNode);
-				TimestampTz youngestTimestamp = 0;
-				TimestampTz currentTimestamp = 0;
 
 				LogTransactionNode(currentNode);
 
@@ -201,8 +195,9 @@ CheckForDistributedDeadlocks(void)
 					continue;
 				}
 
-				youngestTimestamp = youngestAliveTransaction->transactionId.timestamp;
-				currentTimestamp = currentNode->transactionId.timestamp;
+				TimestampTz youngestTimestamp =
+					youngestAliveTransaction->transactionId.timestamp;
+				TimestampTz currentTimestamp = currentNode->transactionId.timestamp;
 				if (timestamptz_cmp_internal(currentTimestamp, youngestTimestamp) == 1)
 				{
 					youngestAliveTransaction = currentNode;
@@ -258,7 +253,6 @@ CheckDeadlockForTransactionNode(TransactionNode *startingTransactionNode,
 	/* traverse the graph and search for the deadlocks */
 	while (toBeVisitedNodes != NIL)
 	{
-		int currentStackDepth;
 		QueuedTransactionNode *queuedTransactionNode =
 			(QueuedTransactionNode *) linitial(toBeVisitedNodes);
 		TransactionNode *currentTransactionNode = queuedTransactionNode->transactionNode;
@@ -284,7 +278,7 @@ CheckDeadlockForTransactionNode(TransactionNode *startingTransactionNode,
 		currentTransactionNode->transactionVisited = true;
 
 		/* set the stack's corresponding element with the current node */
-		currentStackDepth = queuedTransactionNode->currentStackDepth;
+		int currentStackDepth = queuedTransactionNode->currentStackDepth;
 		Assert(currentStackDepth < maxStackDepth);
 		transactionNodeStack[currentStackDepth] = currentTransactionNode;
 
@@ -335,11 +329,10 @@ BuildDeadlockPathList(QueuedTransactionNode *cycledTransactionNode,
 					  List **deadlockPath)
 {
 	int deadlockStackDepth = cycledTransactionNode->currentStackDepth;
-	int stackIndex = 0;
 
 	*deadlockPath = NIL;
 
-	for (stackIndex = 0; stackIndex < deadlockStackDepth; stackIndex++)
+	for (int stackIndex = 0; stackIndex < deadlockStackDepth; stackIndex++)
 	{
 		*deadlockPath = lappend(*deadlockPath, transactionNodeStack[stackIndex]);
 	}
@@ -380,13 +373,10 @@ ResetVisitedFields(HTAB *adjacencyList)
 static bool
 AssociateDistributedTransactionWithBackendProc(TransactionNode *transactionNode)
 {
-	int backendIndex = 0;
-
-	for (backendIndex = 0; backendIndex < MaxBackends; ++backendIndex)
+	for (int backendIndex = 0; backendIndex < MaxBackends; ++backendIndex)
 	{
 		PGPROC *currentProc = &ProcGlobal->allProcs[backendIndex];
 		BackendData currentBackendData;
-		DistributedTransactionId *currentTransactionId = NULL;
 
 		/* we're not interested in processes that are not active or waiting on a lock */
 		if (currentProc->pid <= 0)
@@ -402,7 +392,8 @@ AssociateDistributedTransactionWithBackendProc(TransactionNode *transactionNode)
 			continue;
 		}
 
-		currentTransactionId = &currentBackendData.transactionId;
+		DistributedTransactionId *currentTransactionId =
+			&currentBackendData.transactionId;
 
 		if (currentTransactionId->transactionNumber !=
 			transactionNode->transactionId.transactionNumber)
@@ -455,9 +446,6 @@ extern HTAB *
 BuildAdjacencyListsForWaitGraph(WaitGraph *waitGraph)
 {
 	HASHCTL info;
-	uint32 hashFlags = 0;
-	HTAB *adjacencyList = NULL;
-	int edgeIndex = 0;
 	int edgeCount = waitGraph->edgeCount;
 
 	memset(&info, 0, sizeof(info));
@@ -466,15 +454,14 @@ BuildAdjacencyListsForWaitGraph(WaitGraph *waitGraph)
 	info.hash = DistributedTransactionIdHash;
 	info.match = DistributedTransactionIdCompare;
 	info.hcxt = CurrentMemoryContext;
-	hashFlags = (HASH_ELEM | HASH_FUNCTION | HASH_CONTEXT | HASH_COMPARE);
+	uint32 hashFlags = (HASH_ELEM | HASH_FUNCTION | HASH_CONTEXT | HASH_COMPARE);
 
-	adjacencyList = hash_create("distributed deadlock detection", 64, &info, hashFlags);
+	HTAB *adjacencyList = hash_create("distributed deadlock detection", 64, &info,
+									  hashFlags);
 
-	for (edgeIndex = 0; edgeIndex < edgeCount; edgeIndex++)
+	for (int edgeIndex = 0; edgeIndex < edgeCount; edgeIndex++)
 	{
 		WaitEdge *edge = &waitGraph->edges[edgeIndex];
-		TransactionNode *waitingTransaction = NULL;
-		TransactionNode *blockingTransaction = NULL;
 		bool transactionOriginator = false;
 
 		DistributedTransactionId waitingId = {
@@ -491,9 +478,9 @@ BuildAdjacencyListsForWaitGraph(WaitGraph *waitGraph)
 			edge->blockingTransactionStamp
 		};
 
-		waitingTransaction =
+		TransactionNode *waitingTransaction =
 			GetOrCreateTransactionNode(adjacencyList, &waitingId);
-		blockingTransaction =
+		TransactionNode *blockingTransaction =
 			GetOrCreateTransactionNode(adjacencyList, &blockingId);
 
 		waitingTransaction->waitsFor = lappend(waitingTransaction->waitsFor,
@@ -512,11 +499,12 @@ BuildAdjacencyListsForWaitGraph(WaitGraph *waitGraph)
 static TransactionNode *
 GetOrCreateTransactionNode(HTAB *adjacencyList, DistributedTransactionId *transactionId)
 {
-	TransactionNode *transactionNode = NULL;
 	bool found = false;
 
-	transactionNode = (TransactionNode *) hash_search(adjacencyList, transactionId,
-													  HASH_ENTER, &found);
+	TransactionNode *transactionNode = (TransactionNode *) hash_search(adjacencyList,
+																	   transactionId,
+																	   HASH_ENTER,
+																	   &found);
 	if (!found)
 	{
 		transactionNode->waitsFor = NIL;
@@ -535,9 +523,8 @@ static uint32
 DistributedTransactionIdHash(const void *key, Size keysize)
 {
 	DistributedTransactionId *entry = (DistributedTransactionId *) key;
-	uint32 hash = 0;
 
-	hash = hash_uint32(entry->initiatorNodeIdentifier);
+	uint32 hash = hash_uint32(entry->initiatorNodeIdentifier);
 	hash = hash_combine(hash, hash_any((unsigned char *) &entry->transactionNumber,
 									   sizeof(int64)));
 	hash = hash_combine(hash, hash_any((unsigned char *) &entry->timestamp,
@@ -601,14 +588,12 @@ DistributedTransactionIdCompare(const void *a, const void *b, Size keysize)
 static void
 LogCancellingBackend(TransactionNode *transactionNode)
 {
-	StringInfo logMessage = NULL;
-
 	if (!LogDistributedDeadlockDetection)
 	{
 		return;
 	}
 
-	logMessage = makeStringInfo();
+	StringInfo logMessage = makeStringInfo();
 
 	appendStringInfo(logMessage, "Cancelling the following backend "
 								 "to resolve distributed deadlock "
@@ -627,16 +612,13 @@ LogCancellingBackend(TransactionNode *transactionNode)
 static void
 LogTransactionNode(TransactionNode *transactionNode)
 {
-	StringInfo logMessage = NULL;
-	DistributedTransactionId *transactionId = NULL;
-
 	if (!LogDistributedDeadlockDetection)
 	{
 		return;
 	}
 
-	logMessage = makeStringInfo();
-	transactionId = &(transactionNode->transactionId);
+	StringInfo logMessage = makeStringInfo();
+	DistributedTransactionId *transactionId = &(transactionNode->transactionId);
 
 	appendStringInfo(logMessage,
 					 "[DistributedTransactionId: (%d, " UINT64_FORMAT ", %s)] = ",

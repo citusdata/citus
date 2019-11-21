@@ -298,8 +298,6 @@ PG_FUNCTION_INFO_V1(citus_text_send_as_jsonb);
 static void
 CitusCopyFrom(CopyStmt *copyStatement, char *completionTag)
 {
-	bool isCopyFromWorker = false;
-
 	BeginOrContinueCoordinatedTransaction();
 
 	/* disallow COPY to/from file or program except for superusers */
@@ -324,7 +322,7 @@ CitusCopyFrom(CopyStmt *copyStatement, char *completionTag)
 	}
 
 	masterConnection = NULL; /* reset, might still be set after error */
-	isCopyFromWorker = IsCopyFromWorker(copyStatement);
+	bool isCopyFromWorker = IsCopyFromWorker(copyStatement);
 	if (isCopyFromWorker)
 	{
 		CopyFromWorkerNode(copyStatement, completionTag);
@@ -387,9 +385,6 @@ CopyFromWorkerNode(CopyStmt *copyStatement, char *completionTag)
 	NodeAddress *masterNodeAddress = MasterNodeAddress(copyStatement);
 	char *nodeName = masterNodeAddress->nodeName;
 	int32 nodePort = masterNodeAddress->nodePort;
-	Oid relationId = InvalidOid;
-	char partitionMethod = 0;
-	char *schemaName = NULL;
 	uint32 connectionFlags = FOR_DML;
 
 	masterConnection = GetNodeConnection(connectionFlags, nodeName, nodePort);
@@ -399,14 +394,14 @@ CopyFromWorkerNode(CopyStmt *copyStatement, char *completionTag)
 	RemoteTransactionBeginIfNecessary(masterConnection);
 
 	/* strip schema name for local reference */
-	schemaName = copyStatement->relation->schemaname;
+	char *schemaName = copyStatement->relation->schemaname;
 	copyStatement->relation->schemaname = NULL;
 
-	relationId = RangeVarGetRelid(copyStatement->relation, NoLock, false);
+	Oid relationId = RangeVarGetRelid(copyStatement->relation, NoLock, false);
 
 	/* put schema name back */
 	copyStatement->relation->schemaname = schemaName;
-	partitionMethod = MasterPartitionMethod(copyStatement->relation);
+	char partitionMethod = MasterPartitionMethod(copyStatement->relation);
 	if (partitionMethod != DISTRIBUTE_BY_APPEND)
 	{
 		ereport(ERROR, (errmsg("copy from worker nodes is only supported "
@@ -439,18 +434,10 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 	CitusCopyDestReceiver *copyDest = NULL;
 	DestReceiver *dest = NULL;
 
-	Relation distributedRelation = NULL;
 	Relation copiedDistributedRelation = NULL;
 	Form_pg_class copiedDistributedRelationTuple = NULL;
-	TupleDesc tupleDescriptor = NULL;
-	uint32 columnCount = 0;
-	Datum *columnValues = NULL;
-	bool *columnNulls = NULL;
-	int columnIndex = 0;
 	List *columnNameList = NIL;
-	Var *partitionColumn = NULL;
 	int partitionColumnIndex = INVALID_PARTITION_COLUMN_INDEX;
-	TupleTableSlot *tupleTableSlot = NULL;
 
 	EState *executorState = NULL;
 	MemoryContext executorTupleContext = NULL;
@@ -465,27 +452,28 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 	ErrorContextCallback errorCallback;
 
 	/* allocate column values and nulls arrays */
-	distributedRelation = heap_open(tableId, RowExclusiveLock);
-	tupleDescriptor = RelationGetDescr(distributedRelation);
-	columnCount = tupleDescriptor->natts;
-	columnValues = palloc0(columnCount * sizeof(Datum));
-	columnNulls = palloc0(columnCount * sizeof(bool));
+	Relation distributedRelation = heap_open(tableId, RowExclusiveLock);
+	TupleDesc tupleDescriptor = RelationGetDescr(distributedRelation);
+	uint32 columnCount = tupleDescriptor->natts;
+	Datum *columnValues = palloc0(columnCount * sizeof(Datum));
+	bool *columnNulls = palloc0(columnCount * sizeof(bool));
 
 	/* set up a virtual tuple table slot */
-	tupleTableSlot = MakeSingleTupleTableSlotCompat(tupleDescriptor, &TTSOpsVirtual);
+	TupleTableSlot *tupleTableSlot = MakeSingleTupleTableSlotCompat(tupleDescriptor,
+																	&TTSOpsVirtual);
 	tupleTableSlot->tts_nvalid = columnCount;
 	tupleTableSlot->tts_values = columnValues;
 	tupleTableSlot->tts_isnull = columnNulls;
 
 	/* determine the partition column index in the tuple descriptor */
-	partitionColumn = PartitionColumn(tableId, 0);
+	Var *partitionColumn = PartitionColumn(tableId, 0);
 	if (partitionColumn != NULL)
 	{
 		partitionColumnIndex = partitionColumn->varattno - 1;
 	}
 
 	/* build the list of column names for remote COPY statements */
-	for (columnIndex = 0; columnIndex < columnCount; columnIndex++)
+	for (int columnIndex = 0; columnIndex < columnCount; columnIndex++)
 	{
 		Form_pg_attribute currentColumn = TupleDescAttr(tupleDescriptor, columnIndex);
 		char *columnName = NameStr(currentColumn->attname);
@@ -566,16 +554,13 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 
 	while (true)
 	{
-		bool nextRowFound = false;
-		MemoryContext oldContext = NULL;
-
 		ResetPerTupleExprContext(executorState);
 
-		oldContext = MemoryContextSwitchTo(executorTupleContext);
+		MemoryContext oldContext = MemoryContextSwitchTo(executorTupleContext);
 
 		/* parse a row from the input */
-		nextRowFound = NextCopyFromCompat(copyState, executorExpressionContext,
-										  columnValues, columnNulls);
+		bool nextRowFound = NextCopyFromCompat(copyState, executorExpressionContext,
+											   columnValues, columnNulls);
 
 		if (!nextRowFound)
 		{
@@ -625,8 +610,6 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 static void
 CopyToNewShards(CopyStmt *copyStatement, char *completionTag, Oid relationId)
 {
-	FmgrInfo *columnOutputFunctions = NULL;
-
 	/* allocate column values and nulls arrays */
 	Relation distributedRelation = heap_open(relationId, RowExclusiveLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(distributedRelation);
@@ -668,7 +651,8 @@ CopyToNewShards(CopyStmt *copyStatement, char *completionTag, Oid relationId)
 	copyOutState->fe_msgbuf = makeStringInfo();
 	copyOutState->rowcontext = executorTupleContext;
 
-	columnOutputFunctions = ColumnOutputFunctions(tupleDescriptor, copyOutState->binary);
+	FmgrInfo *columnOutputFunctions = ColumnOutputFunctions(tupleDescriptor,
+															copyOutState->binary);
 
 	/* set up callback to identify error line number */
 	errorCallback.callback = CopyFromErrorCallback;
@@ -684,19 +668,15 @@ CopyToNewShards(CopyStmt *copyStatement, char *completionTag, Oid relationId)
 
 	while (true)
 	{
-		bool nextRowFound = false;
-		MemoryContext oldContext = NULL;
-		uint64 messageBufferSize = 0;
-
 		ResetPerTupleExprContext(executorState);
 
 		/* switch to tuple memory context and start showing line number in errors */
 		error_context_stack = &errorCallback;
-		oldContext = MemoryContextSwitchTo(executorTupleContext);
+		MemoryContext oldContext = MemoryContextSwitchTo(executorTupleContext);
 
 		/* parse a row from the input */
-		nextRowFound = NextCopyFromCompat(copyState, executorExpressionContext,
-										  columnValues, columnNulls);
+		bool nextRowFound = NextCopyFromCompat(copyState, executorExpressionContext,
+											   columnValues, columnNulls);
 
 		if (!nextRowFound)
 		{
@@ -739,7 +719,7 @@ CopyToNewShards(CopyStmt *copyStatement, char *completionTag, Oid relationId)
 		SendCopyDataToAll(copyOutState->fe_msgbuf, currentShardId,
 						  shardConnections->connectionList);
 
-		messageBufferSize = copyOutState->fe_msgbuf->len;
+		uint64 messageBufferSize = copyOutState->fe_msgbuf->len;
 		copiedDataSizeInBytes = copiedDataSizeInBytes + messageBufferSize;
 
 		/*
@@ -841,7 +821,6 @@ static char
 MasterPartitionMethod(RangeVar *relation)
 {
 	char partitionMethod = '\0';
-	PGresult *queryResult = NULL;
 	bool raiseInterrupts = true;
 
 	char *relationName = relation->relname;
@@ -855,7 +834,7 @@ MasterPartitionMethod(RangeVar *relation)
 	{
 		ReportConnectionError(masterConnection, ERROR);
 	}
-	queryResult = GetRemoteCommandResult(masterConnection, raiseInterrupts);
+	PGresult *queryResult = GetRemoteCommandResult(masterConnection, raiseInterrupts);
 	if (PQresultStatus(queryResult) == PGRES_TUPLES_OK)
 	{
 		char *partitionMethodString = PQgetvalue((PGresult *) queryResult, 0, 0);
@@ -923,7 +902,6 @@ OpenCopyConnectionsForNewShards(CopyStmt *copyStatement,
 								ShardConnections *shardConnections,
 								bool stopOnFailure, bool useBinaryCopyFormat)
 {
-	List *finalizedPlacementList = NIL;
 	int failedPlacementCount = 0;
 	ListCell *placementCell = NULL;
 	List *connectionList = NULL;
@@ -940,7 +918,7 @@ OpenCopyConnectionsForNewShards(CopyStmt *copyStatement,
 	/* release finalized placement list at the end of this function */
 	MemoryContext oldContext = MemoryContextSwitchTo(localContext);
 
-	finalizedPlacementList = MasterShardPlacementList(shardId);
+	List *finalizedPlacementList = MasterShardPlacementList(shardId);
 
 	MemoryContextSwitchTo(oldContext);
 
@@ -948,10 +926,7 @@ OpenCopyConnectionsForNewShards(CopyStmt *copyStatement,
 	{
 		ShardPlacement *placement = (ShardPlacement *) lfirst(placementCell);
 		char *nodeUser = CurrentUserName();
-		MultiConnection *connection = NULL;
 		uint32 connectionFlags = FOR_DML;
-		StringInfo copyCommand = NULL;
-		PGresult *result = NULL;
 
 		/*
 		 * For hash partitioned tables, connection establishment happens in
@@ -959,7 +934,8 @@ OpenCopyConnectionsForNewShards(CopyStmt *copyStatement,
 		 */
 		Assert(placement->partitionMethod != DISTRIBUTE_BY_HASH);
 
-		connection = GetPlacementConnection(connectionFlags, placement, nodeUser);
+		MultiConnection *connection = GetPlacementConnection(connectionFlags, placement,
+															 nodeUser);
 
 		if (PQstatus(connection->pgConn) != CONNECTION_OK)
 		{
@@ -987,14 +963,15 @@ OpenCopyConnectionsForNewShards(CopyStmt *copyStatement,
 		ClaimConnectionExclusively(connection);
 		RemoteTransactionBeginIfNecessary(connection);
 
-		copyCommand = ConstructCopyStatement(copyStatement, shardConnections->shardId,
-											 useBinaryCopyFormat);
+		StringInfo copyCommand = ConstructCopyStatement(copyStatement,
+														shardConnections->shardId,
+														useBinaryCopyFormat);
 
 		if (!SendRemoteCommand(connection, copyCommand->data))
 		{
 			ReportConnectionError(connection, ERROR);
 		}
-		result = GetRemoteCommandResult(connection, raiseInterrupts);
+		PGresult *result = GetRemoteCommandResult(connection, raiseInterrupts);
 		if (PQresultStatus(result) != PGRES_COPY_IN)
 		{
 			ReportResultError(connection, result, ERROR);
@@ -1035,9 +1012,8 @@ CanUseBinaryCopyFormat(TupleDesc tupleDescription)
 {
 	bool useBinaryCopyFormat = true;
 	int totalColumnCount = tupleDescription->natts;
-	int columnIndex = 0;
 
-	for (columnIndex = 0; columnIndex < totalColumnCount; columnIndex++)
+	for (int columnIndex = 0; columnIndex < totalColumnCount; columnIndex++)
 	{
 		Form_pg_attribute currentColumn = TupleDescAttr(tupleDescription, columnIndex);
 		Oid typeId = InvalidOid;
@@ -1149,7 +1125,6 @@ static List *
 RemoteFinalizedShardPlacementList(uint64 shardId)
 {
 	List *finalizedPlacementList = NIL;
-	PGresult *queryResult = NULL;
 	bool raiseInterrupts = true;
 
 	StringInfo shardPlacementsCommand = makeStringInfo();
@@ -1159,13 +1134,12 @@ RemoteFinalizedShardPlacementList(uint64 shardId)
 	{
 		ReportConnectionError(masterConnection, ERROR);
 	}
-	queryResult = GetRemoteCommandResult(masterConnection, raiseInterrupts);
+	PGresult *queryResult = GetRemoteCommandResult(masterConnection, raiseInterrupts);
 	if (PQresultStatus(queryResult) == PGRES_TUPLES_OK)
 	{
 		int rowCount = PQntuples(queryResult);
-		int rowIndex = 0;
 
-		for (rowIndex = 0; rowIndex < rowCount; rowIndex++)
+		for (int rowIndex = 0; rowIndex < rowCount; rowIndex++)
 		{
 			char *placementIdString = PQgetvalue(queryResult, rowIndex, 0);
 			char *nodeName = pstrdup(PQgetvalue(queryResult, rowIndex, 1));
@@ -1236,11 +1210,10 @@ ConstructCopyStatement(CopyStmt *copyStatement, int64 shardId, bool useBinaryCop
 	char *relationName = copyStatement->relation->relname;
 
 	char *shardName = pstrdup(relationName);
-	char *shardQualifiedName = NULL;
 
 	AppendShardIdToName(&shardName, shardId);
 
-	shardQualifiedName = quote_qualified_identifier(schemaName, shardName);
+	char *shardQualifiedName = quote_qualified_identifier(schemaName, shardName);
 
 	appendStringInfo(command, "COPY %s ", shardQualifiedName);
 
@@ -1331,7 +1304,6 @@ EndRemoteCopy(int64 shardId, List *connectionList)
 	foreach(connectionCell, connectionList)
 	{
 		MultiConnection *connection = (MultiConnection *) lfirst(connectionCell);
-		PGresult *result = NULL;
 		bool raiseInterrupts = true;
 
 		/* end the COPY input */
@@ -1343,7 +1315,7 @@ EndRemoteCopy(int64 shardId, List *connectionList)
 		}
 
 		/* check whether there were any COPY errors */
-		result = GetRemoteCommandResult(connection, raiseInterrupts);
+		PGresult *result = GetRemoteCommandResult(connection, raiseInterrupts);
 		if (PQresultStatus(result) != PGRES_COMMAND_OK)
 		{
 			ReportCopyError(connection, result);
@@ -1487,14 +1459,13 @@ static Oid
 TypeForColumnName(Oid relationId, TupleDesc tupleDescriptor, char *columnName)
 {
 	AttrNumber destAttrNumber = get_attnum(relationId, columnName);
-	Form_pg_attribute attr = NULL;
 
 	if (destAttrNumber == InvalidAttrNumber)
 	{
 		ereport(ERROR, (errmsg("invalid attr? %s", columnName)));
 	}
 
-	attr = TupleDescAttr(tupleDescriptor, destAttrNumber - 1);
+	Form_pg_attribute attr = TupleDescAttr(tupleDescriptor, destAttrNumber - 1);
 	return attr->atttypid;
 }
 
@@ -1508,9 +1479,8 @@ TypeArrayFromTupleDescriptor(TupleDesc tupleDescriptor)
 {
 	int columnCount = tupleDescriptor->natts;
 	Oid *typeArray = palloc0(columnCount * sizeof(Oid));
-	int columnIndex = 0;
 
-	for (columnIndex = 0; columnIndex < columnCount; columnIndex++)
+	for (int columnIndex = 0; columnIndex < columnCount; columnIndex++)
 	{
 		Form_pg_attribute attr = TupleDescAttr(tupleDescriptor, columnIndex);
 		if (attr->attisdropped)
@@ -1537,15 +1507,13 @@ ColumnCoercionPaths(TupleDesc destTupleDescriptor, TupleDesc inputTupleDescripto
 					Oid destRelId, List *columnNameList,
 					Oid *finalColumnTypeArray)
 {
-	int columnIndex = 0;
 	int columnCount = inputTupleDescriptor->natts;
 	CopyCoercionData *coercePaths = palloc0(columnCount * sizeof(CopyCoercionData));
 	Oid *inputTupleTypes = TypeArrayFromTupleDescriptor(inputTupleDescriptor);
 	ListCell *currentColumnName = list_head(columnNameList);
 
-	for (columnIndex = 0; columnIndex < columnCount; columnIndex++)
+	for (int columnIndex = 0; columnIndex < columnCount; columnIndex++)
 	{
-		Oid destTupleType = InvalidOid;
 		Oid inputTupleType = inputTupleTypes[columnIndex];
 		char *columnName = lfirst(currentColumnName);
 
@@ -1555,7 +1523,7 @@ ColumnCoercionPaths(TupleDesc destTupleDescriptor, TupleDesc inputTupleDescripto
 			continue;
 		}
 
-		destTupleType = TypeForColumnName(destRelId, destTupleDescriptor, columnName);
+		Oid destTupleType = TypeForColumnName(destRelId, destTupleDescriptor, columnName);
 
 		finalColumnTypeArray[columnIndex] = destTupleType;
 
@@ -1584,8 +1552,7 @@ TypeOutputFunctions(uint32 columnCount, Oid *typeIdArray, bool binaryFormat)
 {
 	FmgrInfo *columnOutputFunctions = palloc0(columnCount * sizeof(FmgrInfo));
 
-	uint32 columnIndex = 0;
-	for (columnIndex = 0; columnIndex < columnCount; columnIndex++)
+	for (uint32 columnIndex = 0; columnIndex < columnCount; columnIndex++)
 	{
 		FmgrInfo *currentOutputFunction = &columnOutputFunctions[columnIndex];
 		Oid columnTypeId = typeIdArray[columnIndex];
@@ -1665,7 +1632,6 @@ AppendCopyRowData(Datum *valueArray, bool *isNullArray, TupleDesc rowDescriptor,
 	uint32 totalColumnCount = (uint32) rowDescriptor->natts;
 	uint32 availableColumnCount = AvailableColumnCount(rowDescriptor);
 	uint32 appendedColumnCount = 0;
-	uint32 columnIndex = 0;
 
 	MemoryContext oldContext = MemoryContextSwitchTo(rowOutputState->rowcontext);
 
@@ -1673,7 +1639,7 @@ AppendCopyRowData(Datum *valueArray, bool *isNullArray, TupleDesc rowDescriptor,
 	{
 		CopySendInt16(rowOutputState, availableColumnCount);
 	}
-	for (columnIndex = 0; columnIndex < totalColumnCount; columnIndex++)
+	for (uint32 columnIndex = 0; columnIndex < totalColumnCount; columnIndex++)
 	{
 		Form_pg_attribute currentColumn = TupleDescAttr(rowDescriptor, columnIndex);
 		Datum value = valueArray[columnIndex];
@@ -1803,9 +1769,8 @@ static uint32
 AvailableColumnCount(TupleDesc tupleDescriptor)
 {
 	uint32 columnCount = 0;
-	uint32 columnIndex = 0;
 
-	for (columnIndex = 0; columnIndex < tupleDescriptor->natts; columnIndex++)
+	for (uint32 columnIndex = 0; columnIndex < tupleDescriptor->natts; columnIndex++)
 	{
 		Form_pg_attribute currentColumn = TupleDescAttr(tupleDescriptor, columnIndex);
 
@@ -1916,13 +1881,11 @@ MasterCreateEmptyShard(char *relationName)
 static int64
 CreateEmptyShard(char *relationName)
 {
-	int64 shardId = 0;
-
 	text *relationNameText = cstring_to_text(relationName);
 	Datum relationNameDatum = PointerGetDatum(relationNameText);
 	Datum shardIdDatum = DirectFunctionCall1(master_create_empty_shard,
 											 relationNameDatum);
-	shardId = DatumGetInt64(shardIdDatum);
+	int64 shardId = DatumGetInt64(shardIdDatum);
 
 	return shardId;
 }
@@ -1936,7 +1899,6 @@ static int64
 RemoteCreateEmptyShard(char *relationName)
 {
 	int64 shardId = 0;
-	PGresult *queryResult = NULL;
 	bool raiseInterrupts = true;
 
 	StringInfo createEmptyShardCommand = makeStringInfo();
@@ -1946,7 +1908,7 @@ RemoteCreateEmptyShard(char *relationName)
 	{
 		ReportConnectionError(masterConnection, ERROR);
 	}
-	queryResult = GetRemoteCommandResult(masterConnection, raiseInterrupts);
+	PGresult *queryResult = GetRemoteCommandResult(masterConnection, raiseInterrupts);
 	if (PQresultStatus(queryResult) == PGRES_TUPLES_OK)
 	{
 		char *shardIdString = PQgetvalue((PGresult *) queryResult, 0, 0);
@@ -1991,7 +1953,6 @@ MasterUpdateShardStatistics(uint64 shardId)
 static void
 RemoteUpdateShardStatistics(uint64 shardId)
 {
-	PGresult *queryResult = NULL;
 	bool raiseInterrupts = true;
 
 	StringInfo updateShardStatisticsCommand = makeStringInfo();
@@ -2002,7 +1963,7 @@ RemoteUpdateShardStatistics(uint64 shardId)
 	{
 		ReportConnectionError(masterConnection, ERROR);
 	}
-	queryResult = GetRemoteCommandResult(masterConnection, raiseInterrupts);
+	PGresult *queryResult = GetRemoteCommandResult(masterConnection, raiseInterrupts);
 	if (PQresultStatus(queryResult) != PGRES_TUPLES_OK)
 	{
 		ereport(ERROR, (errmsg("could not update shard statistics")));
@@ -2067,7 +2028,6 @@ static void
 CopyAttributeOutText(CopyOutState cstate, char *string)
 {
 	char *pointer = NULL;
-	char *start = NULL;
 	char c = '\0';
 	char delimc = cstate->delim[0];
 
@@ -2092,7 +2052,7 @@ CopyAttributeOutText(CopyOutState cstate, char *string)
 	 * skip doing pg_encoding_mblen(), because in valid backend encodings,
 	 * extra bytes of a multibyte character never look like ASCII.
 	 */
-	start = pointer;
+	char *start = pointer;
 	while ((c = *pointer) != '\0')
 	{
 		if ((unsigned char) c < (unsigned char) 0x20)
@@ -2184,9 +2144,8 @@ CreateCitusCopyDestReceiver(Oid tableId, List *columnNameList, int partitionColu
 							EState *executorState, bool stopOnFailure,
 							char *intermediateResultIdPrefix)
 {
-	CitusCopyDestReceiver *copyDest = NULL;
-
-	copyDest = (CitusCopyDestReceiver *) palloc0(sizeof(CitusCopyDestReceiver));
+	CitusCopyDestReceiver *copyDest = (CitusCopyDestReceiver *) palloc0(
+		sizeof(CitusCopyDestReceiver));
 
 	/* set up the DestReceiver function pointers */
 	copyDest->pub.receiveSlot = CitusCopyDestReceiverReceive;
@@ -2225,20 +2184,14 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
 	Oid schemaOid = get_rel_namespace(tableId);
 	char *schemaName = get_namespace_name(schemaOid);
 
-	Relation distributedRelation = NULL;
 	List *columnNameList = copyDest->columnNameList;
 	List *quotedColumnNameList = NIL;
 
 	ListCell *columnNameCell = NULL;
 
 	char partitionMethod = '\0';
-	DistTableCacheEntry *cacheEntry = NULL;
 
-	CopyStmt *copyStatement = NULL;
 
-	List *shardIntervalList = NULL;
-
-	CopyOutState copyOutState = NULL;
 	const char *delimiterCharacter = "\t";
 	const char *nullPrintCharacter = "\\N";
 
@@ -2246,15 +2199,15 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
 	ErrorIfLocalExecutionHappened();
 
 	/* look up table properties */
-	distributedRelation = heap_open(tableId, RowExclusiveLock);
-	cacheEntry = DistributedTableCacheEntry(tableId);
+	Relation distributedRelation = heap_open(tableId, RowExclusiveLock);
+	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(tableId);
 	partitionMethod = cacheEntry->partitionMethod;
 
 	copyDest->distributedRelation = distributedRelation;
 	copyDest->tupleDescriptor = inputTupleDescriptor;
 
 	/* load the list of shards and verify that we have shards to copy into */
-	shardIntervalList = LoadShardIntervalList(tableId);
+	List *shardIntervalList = LoadShardIntervalList(tableId);
 	if (shardIntervalList == NIL)
 	{
 		if (partitionMethod == DISTRIBUTE_BY_HASH)
@@ -2307,7 +2260,7 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
 	}
 
 	/* define how tuples will be serialised */
-	copyOutState = (CopyOutState) palloc0(sizeof(CopyOutStateData));
+	CopyOutState copyOutState = (CopyOutState) palloc0(sizeof(CopyOutStateData));
 	copyOutState->delim = (char *) delimiterCharacter;
 	copyOutState->null_print = (char *) nullPrintCharacter;
 	copyOutState->null_print_client = (char *) nullPrintCharacter;
@@ -2349,15 +2302,15 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
 	}
 
 	/* define the template for the COPY statement that is sent to workers */
-	copyStatement = makeNode(CopyStmt);
+	CopyStmt *copyStatement = makeNode(CopyStmt);
 
 	if (copyDest->intermediateResultIdPrefix != NULL)
 	{
-		DefElem *formatResultOption = NULL;
 		copyStatement->relation = makeRangeVar(NULL, copyDest->intermediateResultIdPrefix,
 											   -1);
 
-		formatResultOption = makeDefElem("format", (Node *) makeString("result"), -1);
+		DefElem *formatResultOption = makeDefElem("format", (Node *) makeString("result"),
+												  -1);
 		copyStatement->options = list_make1(formatResultOption);
 	}
 	else
@@ -2422,7 +2375,6 @@ CitusSendTupleToPlacements(TupleTableSlot *slot, CitusCopyDestReceiver *copyDest
 	TupleDesc tupleDescriptor = copyDest->tupleDescriptor;
 	CopyStmt *copyStatement = copyDest->copyStatement;
 
-	CopyShardState *shardState = NULL;
 	CopyOutState copyOutState = copyDest->copyOutState;
 	FmgrInfo *columnOutputFunctions = copyDest->columnOutputFunctions;
 	CopyCoercionData *columnCoercionPaths = copyDest->columnCoercionPaths;
@@ -2432,10 +2384,6 @@ CitusSendTupleToPlacements(TupleTableSlot *slot, CitusCopyDestReceiver *copyDest
 
 	bool stopOnFailure = copyDest->stopOnFailure;
 
-	Datum *columnValues = NULL;
-	bool *columnNulls = NULL;
-
-	int64 shardId = 0;
 
 	EState *executorState = copyDest->executorState;
 	MemoryContext executorTupleContext = GetPerTupleMemoryContext(executorState);
@@ -2443,17 +2391,18 @@ CitusSendTupleToPlacements(TupleTableSlot *slot, CitusCopyDestReceiver *copyDest
 
 	slot_getallattrs(slot);
 
-	columnValues = slot->tts_values;
-	columnNulls = slot->tts_isnull;
+	Datum *columnValues = slot->tts_values;
+	bool *columnNulls = slot->tts_isnull;
 
-	shardId = ShardIdForTuple(copyDest, columnValues, columnNulls);
+	int64 shardId = ShardIdForTuple(copyDest, columnValues, columnNulls);
 
 	/* connections hash is kept in memory context */
 	MemoryContextSwitchTo(copyDest->memoryContext);
 
-	shardState = GetShardState(shardId, copyDest->shardStateHash,
-							   copyDest->connectionStateHash, stopOnFailure,
-							   &cachedShardStateFound);
+	CopyShardState *shardState = GetShardState(shardId, copyDest->shardStateHash,
+											   copyDest->connectionStateHash,
+											   stopOnFailure,
+											   &cachedShardStateFound);
 	if (!cachedShardStateFound)
 	{
 		firstTupleInShard = true;
@@ -2564,7 +2513,6 @@ ShardIdForTuple(CitusCopyDestReceiver *copyDest, Datum *columnValues, bool *colu
 	int partitionColumnIndex = copyDest->partitionColumnIndex;
 	Datum partitionColumnValue = 0;
 	CopyCoercionData *columnCoercionPaths = copyDest->columnCoercionPaths;
-	ShardInterval *shardInterval = NULL;
 
 	/*
 	 * Find the partition column value and corresponding shard interval
@@ -2605,7 +2553,8 @@ ShardIdForTuple(CitusCopyDestReceiver *copyDest, Datum *columnValues, bool *colu
 	 * For reference table, this function blindly returns the tables single
 	 * shard.
 	 */
-	shardInterval = FindShardInterval(partitionColumnValue, copyDest->tableMetadata);
+	ShardInterval *shardInterval = FindShardInterval(partitionColumnValue,
+													 copyDest->tableMetadata);
 	if (shardInterval == NULL)
 	{
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
@@ -2628,11 +2577,10 @@ CitusCopyDestReceiverShutdown(DestReceiver *destReceiver)
 	CitusCopyDestReceiver *copyDest = (CitusCopyDestReceiver *) destReceiver;
 
 	HTAB *connectionStateHash = copyDest->connectionStateHash;
-	List *connectionStateList = NIL;
 	ListCell *connectionStateCell = NULL;
 	Relation distributedRelation = copyDest->distributedRelation;
 
-	connectionStateList = ConnectionStateList(connectionStateHash);
+	List *connectionStateList = ConnectionStateList(connectionStateHash);
 
 	PG_TRY();
 	{
@@ -2820,21 +2768,20 @@ ProcessCopyStmt(CopyStmt *copyStatement, char *completionTag, const char *queryS
 		else
 		{
 			bool isFrom = copyStatement->is_from;
-			Relation copiedRelation = NULL;
-			char *schemaName = NULL;
-			MemoryContext relationContext = NULL;
 
 			/* consider using RangeVarGetRelidExtended to check perms before locking */
-			copiedRelation = heap_openrv(copyStatement->relation,
-										 isFrom ? RowExclusiveLock : AccessShareLock);
+			Relation copiedRelation = heap_openrv(copyStatement->relation,
+												  isFrom ? RowExclusiveLock :
+												  AccessShareLock);
 
 			isDistributedRelation = IsDistributedTable(RelationGetRelid(copiedRelation));
 
 			/* ensure future lookups hit the same relation */
-			schemaName = get_namespace_name(RelationGetNamespace(copiedRelation));
+			char *schemaName = get_namespace_name(RelationGetNamespace(copiedRelation));
 
 			/* ensure we copy string into proper context */
-			relationContext = GetMemoryChunkContext(copyStatement->relation);
+			MemoryContext relationContext = GetMemoryChunkContext(
+				copyStatement->relation);
 			schemaName = MemoryContextStrdup(relationContext, schemaName);
 			copyStatement->relation->schemaname = schemaName;
 
@@ -2906,16 +2853,15 @@ ProcessCopyStmt(CopyStmt *copyStatement, char *completionTag, const char *queryS
 			!copyStatement->is_from && !is_absolute_path(filename))
 		{
 			bool binaryCopyFormat = CopyStatementHasFormat(copyStatement, "binary");
-			int64 tuplesSent = 0;
 			Query *query = NULL;
 			Node *queryNode = copyStatement->query;
-			List *queryTreeList = NIL;
 			StringInfo userFilePath = makeStringInfo();
 
 			RawStmt *rawStmt = makeNode(RawStmt);
 			rawStmt->stmt = queryNode;
 
-			queryTreeList = pg_analyze_and_rewrite(rawStmt, queryString, NULL, 0, NULL);
+			List *queryTreeList = pg_analyze_and_rewrite(rawStmt, queryString, NULL, 0,
+														 NULL);
 
 			if (list_length(queryTreeList) != 1)
 			{
@@ -2931,7 +2877,7 @@ ProcessCopyStmt(CopyStmt *copyStatement, char *completionTag, const char *queryS
 			 */
 			appendStringInfo(userFilePath, "%s.%u", filename, GetUserId());
 
-			tuplesSent = WorkerExecuteSqlTask(query, filename, binaryCopyFormat);
+			int64 tuplesSent = WorkerExecuteSqlTask(query, filename, binaryCopyFormat);
 
 			snprintf(completionTag, COMPLETION_TAG_BUFSIZE,
 					 "COPY " UINT64_FORMAT, tuplesSent);
@@ -2952,7 +2898,6 @@ ProcessCopyStmt(CopyStmt *copyStatement, char *completionTag, const char *queryS
 static void
 CreateLocalTable(RangeVar *relation, char *nodeName, int32 nodePort)
 {
-	List *ddlCommandList = NIL;
 	ListCell *ddlCommandCell = NULL;
 
 	char *relationName = relation->relname;
@@ -2964,7 +2909,7 @@ CreateLocalTable(RangeVar *relation, char *nodeName, int32 nodePort)
 	 * enough; therefore, we just throw an error which says that we could not
 	 * run the copy operation.
 	 */
-	ddlCommandList = TableDDLCommandList(nodeName, nodePort, qualifiedRelationName);
+	List *ddlCommandList = TableDDLCommandList(nodeName, nodePort, qualifiedRelationName);
 	if (ddlCommandList == NIL)
 	{
 		ereport(ERROR, (errmsg("could not run copy from the worker node")));
@@ -3045,14 +2990,13 @@ CheckCopyPermissions(CopyStmt *copyStatement)
 	AclMode		required_access = (is_from ? ACL_INSERT : ACL_SELECT);
 	List	   *attnums;
 	ListCell   *cur;
-	RangeTblEntry *rte;
 
 	rel = heap_openrv(copyStatement->relation,
 	                  is_from ? RowExclusiveLock : AccessShareLock);
 
 	relid = RelationGetRelid(rel);
 
-	rte = makeNode(RangeTblEntry);
+	RangeTblEntry *rte = makeNode(RangeTblEntry);
 	rte->rtekind = RTE_RELATION;
 	rte->relid = relid;
 	rte->relkind = rel->rd_rel->relkind;
@@ -3166,18 +3110,16 @@ CopyGetAttnums(TupleDesc tupDesc, Relation rel, List *attnamelist)
 static HTAB *
 CreateConnectionStateHash(MemoryContext memoryContext)
 {
-	HTAB *connectionStateHash = NULL;
-	int hashFlags = 0;
 	HASHCTL info;
 
 	memset(&info, 0, sizeof(info));
 	info.keysize = sizeof(int);
 	info.entrysize = sizeof(CopyConnectionState);
 	info.hcxt = memoryContext;
-	hashFlags = (HASH_ELEM | HASH_CONTEXT | HASH_BLOBS);
+	int hashFlags = (HASH_ELEM | HASH_CONTEXT | HASH_BLOBS);
 
-	connectionStateHash = hash_create("Copy Connection State Hash", 128, &info,
-									  hashFlags);
+	HTAB *connectionStateHash = hash_create("Copy Connection State Hash", 128, &info,
+											hashFlags);
 
 	return connectionStateHash;
 }
@@ -3191,17 +3133,15 @@ CreateConnectionStateHash(MemoryContext memoryContext)
 static HTAB *
 CreateShardStateHash(MemoryContext memoryContext)
 {
-	HTAB *shardStateHash = NULL;
-	int hashFlags = 0;
 	HASHCTL info;
 
 	memset(&info, 0, sizeof(info));
 	info.keysize = sizeof(uint64);
 	info.entrysize = sizeof(CopyShardState);
 	info.hcxt = memoryContext;
-	hashFlags = (HASH_ELEM | HASH_CONTEXT | HASH_BLOBS);
+	int hashFlags = (HASH_ELEM | HASH_CONTEXT | HASH_BLOBS);
 
-	shardStateHash = hash_create("Copy Shard State Hash", 128, &info, hashFlags);
+	HTAB *shardStateHash = hash_create("Copy Shard State Hash", 128, &info, hashFlags);
 
 	return shardStateHash;
 }
@@ -3214,14 +3154,15 @@ CreateShardStateHash(MemoryContext memoryContext)
 static CopyConnectionState *
 GetConnectionState(HTAB *connectionStateHash, MultiConnection *connection)
 {
-	CopyConnectionState *connectionState = NULL;
 	bool found = false;
 
 	int sock = PQsocket(connection->pgConn);
 	Assert(sock != -1);
 
-	connectionState = (CopyConnectionState *) hash_search(connectionStateHash, &sock,
-														  HASH_ENTER, &found);
+	CopyConnectionState *connectionState = (CopyConnectionState *) hash_search(
+		connectionStateHash, &sock,
+		HASH_ENTER,
+		&found);
 	if (!found)
 	{
 		connectionState->socket = sock;
@@ -3243,11 +3184,11 @@ ConnectionStateList(HTAB *connectionStateHash)
 {
 	List *connectionStateList = NIL;
 	HASH_SEQ_STATUS status;
-	CopyConnectionState *connectionState = NULL;
 
 	hash_seq_init(&status, connectionStateHash);
 
-	connectionState = (CopyConnectionState *) hash_seq_search(&status);
+	CopyConnectionState *connectionState = (CopyConnectionState *) hash_seq_search(
+		&status);
 	while (connectionState != NULL)
 	{
 		connectionStateList = lappend(connectionStateList, connectionState);
@@ -3268,10 +3209,8 @@ static CopyShardState *
 GetShardState(uint64 shardId, HTAB *shardStateHash,
 			  HTAB *connectionStateHash, bool stopOnFailure, bool *found)
 {
-	CopyShardState *shardState = NULL;
-
-	shardState = (CopyShardState *) hash_search(shardStateHash, &shardId,
-												HASH_ENTER, found);
+	CopyShardState *shardState = (CopyShardState *) hash_search(shardStateHash, &shardId,
+																HASH_ENTER, found);
 	if (!*found)
 	{
 		InitializeCopyShardState(shardState, connectionStateHash,
@@ -3292,7 +3231,6 @@ InitializeCopyShardState(CopyShardState *shardState,
 						 HTAB *connectionStateHash, uint64 shardId,
 						 bool stopOnFailure)
 {
-	List *finalizedPlacementList = NIL;
 	ListCell *placementCell = NULL;
 	int failedPlacementCount = 0;
 
@@ -3306,7 +3244,7 @@ InitializeCopyShardState(CopyShardState *shardState,
 	/* release finalized placement list at the end of this function */
 	MemoryContext oldContext = MemoryContextSwitchTo(localContext);
 
-	finalizedPlacementList = MasterShardPlacementList(shardId);
+	List *finalizedPlacementList = MasterShardPlacementList(shardId);
 
 	MemoryContextSwitchTo(oldContext);
 
@@ -3316,8 +3254,6 @@ InitializeCopyShardState(CopyShardState *shardState,
 	foreach(placementCell, finalizedPlacementList)
 	{
 		ShardPlacement *placement = (ShardPlacement *) lfirst(placementCell);
-		CopyConnectionState *connectionState = NULL;
-		CopyPlacementState *placementState = NULL;
 
 		MultiConnection *connection =
 			CopyGetPlacementConnection(placement, stopOnFailure);
@@ -3327,7 +3263,8 @@ InitializeCopyShardState(CopyShardState *shardState,
 			continue;
 		}
 
-		connectionState = GetConnectionState(connectionStateHash, connection);
+		CopyConnectionState *connectionState = GetConnectionState(connectionStateHash,
+																  connection);
 
 		/*
 		 * If this is the first time we are using this connection for copying a
@@ -3338,7 +3275,7 @@ InitializeCopyShardState(CopyShardState *shardState,
 			RemoteTransactionBeginIfNecessary(connection);
 		}
 
-		placementState = palloc0(sizeof(CopyPlacementState));
+		CopyPlacementState *placementState = palloc0(sizeof(CopyPlacementState));
 		placementState->shardState = shardState;
 		placementState->data = makeStringInfo();
 		placementState->connectionState = connectionState;
@@ -3380,19 +3317,19 @@ InitializeCopyShardState(CopyShardState *shardState,
 static MultiConnection *
 CopyGetPlacementConnection(ShardPlacement *placement, bool stopOnFailure)
 {
-	MultiConnection *connection = NULL;
 	uint32 connectionFlags = FOR_DML;
 	char *nodeUser = CurrentUserName();
-	ShardPlacementAccess *placementAccess = NULL;
 
 	/*
 	 * Determine whether the task has to be assigned to a particular connection
 	 * due to a preceding access to the placement in the same transaction.
 	 */
-	placementAccess = CreatePlacementAccess(placement, PLACEMENT_ACCESS_DML);
-	connection = GetConnectionIfPlacementAccessedInXact(connectionFlags,
-														list_make1(placementAccess),
-														NULL);
+	ShardPlacementAccess *placementAccess = CreatePlacementAccess(placement,
+																  PLACEMENT_ACCESS_DML);
+	MultiConnection *connection = GetConnectionIfPlacementAccessedInXact(connectionFlags,
+																		 list_make1(
+																			 placementAccess),
+																		 NULL);
 	if (connection != NULL)
 	{
 		return connection;
@@ -3451,21 +3388,19 @@ static void
 StartPlacementStateCopyCommand(CopyPlacementState *placementState,
 							   CopyStmt *copyStatement, CopyOutState copyOutState)
 {
-	StringInfo copyCommand = NULL;
-	PGresult *result = NULL;
 	MultiConnection *connection = placementState->connectionState->connection;
 	uint64 shardId = placementState->shardState->shardId;
 	bool raiseInterrupts = true;
 	bool binaryCopy = copyOutState->binary;
 
-	copyCommand = ConstructCopyStatement(copyStatement, shardId, binaryCopy);
+	StringInfo copyCommand = ConstructCopyStatement(copyStatement, shardId, binaryCopy);
 
 	if (!SendRemoteCommand(connection, copyCommand->data))
 	{
 		ReportConnectionError(connection, ERROR);
 	}
 
-	result = GetRemoteCommandResult(connection, raiseInterrupts);
+	PGresult *result = GetRemoteCommandResult(connection, raiseInterrupts);
 	if (PQresultStatus(result) != PGRES_COPY_IN)
 	{
 		ReportResultError(connection, result, ERROR);

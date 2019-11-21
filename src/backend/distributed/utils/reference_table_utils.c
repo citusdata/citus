@@ -55,8 +55,6 @@ Datum
 upgrade_to_reference_table(PG_FUNCTION_ARGS)
 {
 	Oid relationId = PG_GETARG_OID(0);
-	List *shardIntervalList = NIL;
-	DistTableCacheEntry *tableEntry = NULL;
 
 	CheckCitusVersion(ERROR);
 	EnsureCoordinator();
@@ -72,7 +70,7 @@ upgrade_to_reference_table(PG_FUNCTION_ARGS)
 								"create_reference_table('%s');", relationName)));
 	}
 
-	tableEntry = DistributedTableCacheEntry(relationId);
+	DistTableCacheEntry *tableEntry = DistributedTableCacheEntry(relationId);
 
 	if (tableEntry->partitionMethod == DISTRIBUTE_BY_NONE)
 	{
@@ -95,7 +93,7 @@ upgrade_to_reference_table(PG_FUNCTION_ARGS)
 
 	LockRelationOid(relationId, AccessExclusiveLock);
 
-	shardIntervalList = LoadShardIntervalList(relationId);
+	List *shardIntervalList = LoadShardIntervalList(relationId);
 	if (list_length(shardIntervalList) != 1)
 	{
 		char *relationName = get_rel_name(relationId);
@@ -237,11 +235,10 @@ ReplicateSingleShardTableToAllNodes(Oid relationId)
 static void
 ReplicateShardToAllNodes(ShardInterval *shardInterval)
 {
-	List *workerNodeList = NULL;
 	ListCell *workerNodeCell = NULL;
 
 	/* prevent concurrent pg_dist_node changes */
-	workerNodeList = ReferenceTablePlacementNodeList(ShareLock);
+	List *workerNodeList = ReferenceTablePlacementNodeList(ShareLock);
 
 	/*
 	 * We will iterate over all worker nodes and if a healthy placement does not exist
@@ -376,7 +373,6 @@ ConvertToReferenceTableMetadata(Oid relationId, uint64 shardId)
 uint32
 CreateReferenceTableColocationId()
 {
-	uint32 colocationId = INVALID_COLOCATION_ID;
 	int shardCount = 1;
 	Oid distributionColumnType = InvalidOid;
 
@@ -387,7 +383,8 @@ CreateReferenceTableColocationId()
 	int replicationFactor = -1;
 
 	/* check for existing colocations */
-	colocationId = ColocationId(shardCount, replicationFactor, distributionColumnType);
+	uint32 colocationId = ColocationId(shardCount, replicationFactor,
+									   distributionColumnType);
 	if (colocationId == INVALID_COLOCATION_ID)
 	{
 		colocationId = CreateColocationGroup(shardCount, replicationFactor,
@@ -430,7 +427,6 @@ DeleteAllReferenceTablePlacementsFromNodeGroup(int32 groupId)
 
 	foreach(referenceTableCell, referenceTableList)
 	{
-		GroupShardPlacement *placement = NULL;
 		StringInfo deletePlacementCommand = makeStringInfo();
 
 		Oid referenceTableId = lfirst_oid(referenceTableCell);
@@ -442,7 +438,7 @@ DeleteAllReferenceTablePlacementsFromNodeGroup(int32 groupId)
 			continue;
 		}
 
-		placement = (GroupShardPlacement *) linitial(placements);
+		GroupShardPlacement *placement = (GroupShardPlacement *) linitial(placements);
 
 		LockShardDistributionMetadata(placement->shardId, ExclusiveLock);
 
@@ -474,10 +470,9 @@ ReferenceTableOidList()
 
 	foreach(distTableOidCell, distTableOidList)
 	{
-		DistTableCacheEntry *cacheEntry = NULL;
 		Oid relationId = lfirst_oid(distTableOidCell);
 
-		cacheEntry = DistributedTableCacheEntry(relationId);
+		DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(relationId);
 
 		if (cacheEntry->partitionMethod == DISTRIBUTE_BY_NONE)
 		{

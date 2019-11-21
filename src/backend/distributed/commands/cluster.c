@@ -28,11 +28,10 @@ PlanClusterStmt(ClusterStmt *clusterStmt, const char *clusterCommand)
 	}
 	else
 	{
-		Oid relationId = InvalidOid;
 		bool missingOK = false;
 
-		relationId = RangeVarGetRelid(clusterStmt->relation, AccessShareLock,
-									  missingOK);
+		Oid relationId = RangeVarGetRelid(clusterStmt->relation, AccessShareLock,
+										  missingOK);
 
 		if (OidIsValid(relationId))
 		{

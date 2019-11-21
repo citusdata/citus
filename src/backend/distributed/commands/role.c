@@ -46,7 +46,6 @@ List *
 ProcessAlterRoleStmt(AlterRoleStmt *stmt, const char *queryString)
 {
 	ListCell *optionCell = NULL;
-	List *commands = NIL;
 
 	if (!EnableAlterRolePropagation || !IsCoordinator())
 	{
@@ -82,7 +81,7 @@ ProcessAlterRoleStmt(AlterRoleStmt *stmt, const char *queryString)
 			break;
 		}
 	}
-	commands = list_make1((void *) CreateAlterRoleIfExistsCommand(stmt));
+	List *commands = list_make1((void *) CreateAlterRoleIfExistsCommand(stmt));
 
 	return NodeDDLTaskList(ALL_WORKERS, commands);
 }
@@ -120,15 +119,14 @@ ExtractEncryptedPassword(Oid roleOid)
 	TupleDesc pgAuthIdDescription = RelationGetDescr(pgAuthId);
 	HeapTuple tuple = SearchSysCache1(AUTHOID, roleOid);
 	bool isNull = true;
-	Datum passwordDatum;
 
 	if (!HeapTupleIsValid(tuple))
 	{
 		return NULL;
 	}
 
-	passwordDatum = heap_getattr(tuple, Anum_pg_authid_rolpassword,
-								 pgAuthIdDescription, &isNull);
+	Datum passwordDatum = heap_getattr(tuple, Anum_pg_authid_rolpassword,
+									   pgAuthIdDescription, &isNull);
 
 	heap_close(pgAuthId, AccessShareLock);
 	ReleaseSysCache(tuple);
@@ -151,8 +149,6 @@ GenerateAlterRoleIfExistsCommand(HeapTuple tuple, TupleDesc pgAuthIdDescription)
 {
 	char *rolPassword = "";
 	char *rolValidUntil = "infinity";
-	Datum rolValidUntilDatum;
-	Datum rolPasswordDatum;
 	bool isNull = true;
 	Form_pg_authid role = ((Form_pg_authid) GETSTRUCT(tuple));
 	AlterRoleStmt *stmt = makeNode(AlterRoleStmt);
@@ -199,8 +195,8 @@ GenerateAlterRoleIfExistsCommand(HeapTuple tuple, TupleDesc pgAuthIdDescription)
 				makeDefElemInt("connectionlimit", role->rolconnlimit));
 
 
-	rolPasswordDatum = heap_getattr(tuple, Anum_pg_authid_rolpassword,
-									pgAuthIdDescription, &isNull);
+	Datum rolPasswordDatum = heap_getattr(tuple, Anum_pg_authid_rolpassword,
+										  pgAuthIdDescription, &isNull);
 	if (!isNull)
 	{
 		rolPassword = pstrdup(TextDatumGetCString(rolPasswordDatum));
@@ -214,8 +210,8 @@ GenerateAlterRoleIfExistsCommand(HeapTuple tuple, TupleDesc pgAuthIdDescription)
 		stmt->options = lappend(stmt->options, makeDefElem("password", NULL, -1));
 	}
 
-	rolValidUntilDatum = heap_getattr(tuple, Anum_pg_authid_rolvaliduntil,
-									  pgAuthIdDescription, &isNull);
+	Datum rolValidUntilDatum = heap_getattr(tuple, Anum_pg_authid_rolvaliduntil,
+											pgAuthIdDescription, &isNull);
 	if (!isNull)
 	{
 		rolValidUntil = pstrdup((char *) timestamptz_to_str(rolValidUntilDatum));

@@ -62,16 +62,13 @@ Datum
 worker_hash(PG_FUNCTION_ARGS)
 {
 	Datum valueDatum = PG_GETARG_DATUM(0);
-	Datum hashedValueDatum = 0;
-	TypeCacheEntry *typeEntry = NULL;
-	FmgrInfo *hashFunction = NULL;
-	Oid valueDataType = InvalidOid;
 
 	CheckCitusVersion(ERROR);
 
 	/* figure out hash function from the data type */
-	valueDataType = get_fn_expr_argtype(fcinfo->flinfo, 0);
-	typeEntry = lookup_type_cache(valueDataType, TYPECACHE_HASH_PROC_FINFO);
+	Oid valueDataType = get_fn_expr_argtype(fcinfo->flinfo, 0);
+	TypeCacheEntry *typeEntry = lookup_type_cache(valueDataType,
+												  TYPECACHE_HASH_PROC_FINFO);
 
 	if (typeEntry->hash_proc_finfo.fn_oid == InvalidOid)
 	{
@@ -80,11 +77,12 @@ worker_hash(PG_FUNCTION_ARGS)
 						errhint("Cast input to a data type with a hash function.")));
 	}
 
-	hashFunction = palloc0(sizeof(FmgrInfo));
+	FmgrInfo *hashFunction = palloc0(sizeof(FmgrInfo));
 	fmgr_info_copy(hashFunction, &(typeEntry->hash_proc_finfo), CurrentMemoryContext);
 
 	/* calculate hash value */
-	hashedValueDatum = FunctionCall1Coll(hashFunction, PG_GET_COLLATION(), valueDatum);
+	Datum hashedValueDatum = FunctionCall1Coll(hashFunction, PG_GET_COLLATION(),
+											   valueDatum);
 
 	PG_RETURN_INT32(hashedValueDatum);
 }

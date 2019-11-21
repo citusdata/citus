@@ -52,7 +52,6 @@ FindSubPlansUsedInNode(Node *node)
 		{
 			char *resultId =
 				FindIntermediateResultIdIfExists(rangeTableEntry);
-			Value *resultIdValue = NULL;
 
 			if (resultId == NULL)
 			{
@@ -63,7 +62,7 @@ FindSubPlansUsedInNode(Node *node)
 			 * Use a Value to be able to use list_append_unique and store
 			 * the result ID in the DistributedPlan.
 			 */
-			resultIdValue = makeString(resultId);
+			Value *resultIdValue = makeString(resultId);
 			subPlanList = list_append_unique(subPlanList, resultIdValue);
 		}
 	}
@@ -185,8 +184,6 @@ AppendAllAccessedWorkerNodes(List *workerNodeList, DistributedPlan *distributedP
 HTAB *
 MakeIntermediateResultHTAB()
 {
-	HTAB *intermediateResultsHash = NULL;
-	uint32 hashFlags = 0;
 	HASHCTL info = { 0 };
 	int initialNumberOfElements = 16;
 
@@ -194,10 +191,11 @@ MakeIntermediateResultHTAB()
 	info.entrysize = sizeof(IntermediateResultsHashEntry);
 	info.hash = string_hash;
 	info.hcxt = CurrentMemoryContext;
-	hashFlags = (HASH_ELEM | HASH_FUNCTION | HASH_CONTEXT);
+	uint32 hashFlags = (HASH_ELEM | HASH_FUNCTION | HASH_CONTEXT);
 
-	intermediateResultsHash = hash_create("Intermediate results hash",
-										  initialNumberOfElements, &info, hashFlags);
+	HTAB *intermediateResultsHash = hash_create("Intermediate results hash",
+												initialNumberOfElements, &info,
+												hashFlags);
 
 	return intermediateResultsHash;
 }
@@ -243,10 +241,10 @@ FindAllWorkerNodesUsingSubplan(HTAB *intermediateResultsHash,
 static IntermediateResultsHashEntry *
 SearchIntermediateResult(HTAB *intermediateResultsHash, char *resultId)
 {
-	IntermediateResultsHashEntry *entry = NULL;
 	bool found = false;
 
-	entry = hash_search(intermediateResultsHash, resultId, HASH_ENTER, &found);
+	IntermediateResultsHashEntry *entry = hash_search(intermediateResultsHash, resultId,
+													  HASH_ENTER, &found);
 
 	/* use sane defaults */
 	if (!found)

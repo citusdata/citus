@@ -158,16 +158,14 @@ PlanAlterObjectSchemaStmt(AlterObjectSchemaStmt *stmt, const char *queryString)
 List *
 PlanAlterTableSchemaStmt(AlterObjectSchemaStmt *stmt, const char *queryString)
 {
-	Oid relationId = InvalidOid;
-
 	if (stmt->relation == NULL)
 	{
 		return NIL;
 	}
 
-	relationId = RangeVarGetRelid(stmt->relation,
-								  AccessExclusiveLock,
-								  stmt->missing_ok);
+	Oid relationId = RangeVarGetRelid(stmt->relation,
+									  AccessExclusiveLock,
+									  stmt->missing_ok);
 
 	/* first check whether a distributed relation is affected */
 	if (!OidIsValid(relationId) || !IsDistributedTable(relationId))

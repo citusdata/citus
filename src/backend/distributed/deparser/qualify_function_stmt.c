@@ -143,11 +143,9 @@ QualifyFunctionSchemaName(ObjectWithArgs *func, ObjectType type)
 {
 	char *schemaName = NULL;
 	char *functionName = NULL;
-	Oid funcid = InvalidOid;
-	HeapTuple proctup;
 
-	funcid = LookupFuncWithArgs(type, func, true);
-	proctup = SearchSysCache1(PROCOID, ObjectIdGetDatum(funcid));
+	Oid funcid = LookupFuncWithArgs(type, func, true);
+	HeapTuple proctup = SearchSysCache1(PROCOID, ObjectIdGetDatum(funcid));
 
 	/*
 	 * We can not qualify the function if the catalogs do not have any records.
@@ -156,9 +154,7 @@ QualifyFunctionSchemaName(ObjectWithArgs *func, ObjectType type)
 	 */
 	if (HeapTupleIsValid(proctup))
 	{
-		Form_pg_proc procform;
-
-		procform = (Form_pg_proc) GETSTRUCT(proctup);
+		Form_pg_proc procform = (Form_pg_proc) GETSTRUCT(proctup);
 		schemaName = get_namespace_name(procform->pronamespace);
 		functionName = NameStr(procform->proname);
 		functionName = pstrdup(functionName); /* we release the tuple before used */

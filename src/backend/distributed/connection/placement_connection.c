@@ -267,14 +267,15 @@ StartPlacementListConnection(uint32 flags, List *placementAccessList,
 							 const char *userName)
 {
 	char *freeUserName = NULL;
-	MultiConnection *chosenConnection = NULL;
 
 	if (userName == NULL)
 	{
 		userName = freeUserName = CurrentUserName();
 	}
 
-	chosenConnection = FindPlacementListConnection(flags, placementAccessList, userName);
+	MultiConnection *chosenConnection = FindPlacementListConnection(flags,
+																	placementAccessList,
+																	userName);
 	if (chosenConnection == NULL)
 	{
 		/* use the first placement from the list to extract nodename and nodeport */
@@ -346,10 +347,6 @@ AssignPlacementListToConnection(List *placementAccessList, MultiConnection *conn
 		ShardPlacement *placement = placementAccess->placement;
 		ShardPlacementAccessType accessType = placementAccess->accessType;
 
-		ConnectionPlacementHashEntry *placementEntry = NULL;
-		ConnectionReference *placementConnection = NULL;
-
-		Oid relationId = InvalidOid;
 
 		if (placement->shardId == INVALID_SHARD_ID)
 		{
@@ -363,8 +360,9 @@ AssignPlacementListToConnection(List *placementAccessList, MultiConnection *conn
 			continue;
 		}
 
-		placementEntry = FindOrCreatePlacementEntry(placement);
-		placementConnection = placementEntry->primaryConnection;
+		ConnectionPlacementHashEntry *placementEntry = FindOrCreatePlacementEntry(
+			placement);
+		ConnectionReference *placementConnection = placementEntry->primaryConnection;
 
 		if (placementConnection->connection == connection)
 		{
@@ -438,7 +436,7 @@ AssignPlacementListToConnection(List *placementAccessList, MultiConnection *conn
 		}
 
 		/* record the relation access */
-		relationId = RelationIdForShard(placement->shardId);
+		Oid relationId = RelationIdForShard(placement->shardId);
 		RecordRelationAccessIfReferenceTable(relationId, accessType);
 	}
 }
@@ -453,7 +451,6 @@ MultiConnection *
 GetConnectionIfPlacementAccessedInXact(int flags, List *placementAccessList,
 									   const char *userName)
 {
-	MultiConnection *connection = NULL;
 	char *freeUserName = NULL;
 
 	if (userName == NULL)
@@ -461,8 +458,8 @@ GetConnectionIfPlacementAccessedInXact(int flags, List *placementAccessList,
 		userName = freeUserName = CurrentUserName();
 	}
 
-	connection = FindPlacementListConnection(flags, placementAccessList,
-											 userName);
+	MultiConnection *connection = FindPlacementListConnection(flags, placementAccessList,
+															  userName);
 
 	if (freeUserName != NULL)
 	{
@@ -515,9 +512,6 @@ FindPlacementListConnection(int flags, List *placementAccessList, const char *us
 		ShardPlacement *placement = placementAccess->placement;
 		ShardPlacementAccessType accessType = placementAccess->accessType;
 
-		ConnectionPlacementHashEntry *placementEntry = NULL;
-		ColocatedPlacementsHashEntry *colocatedEntry = NULL;
-		ConnectionReference *placementConnection = NULL;
 
 		if (placement->shardId == INVALID_SHARD_ID)
 		{
@@ -530,9 +524,10 @@ FindPlacementListConnection(int flags, List *placementAccessList, const char *us
 			continue;
 		}
 
-		placementEntry = FindOrCreatePlacementEntry(placement);
-		colocatedEntry = placementEntry->colocatedEntry;
-		placementConnection = placementEntry->primaryConnection;
+		ConnectionPlacementHashEntry *placementEntry = FindOrCreatePlacementEntry(
+			placement);
+		ColocatedPlacementsHashEntry *colocatedEntry = placementEntry->colocatedEntry;
+		ConnectionReference *placementConnection = placementEntry->primaryConnection;
 
 		/* note: the Asserts below are primarily for clarifying the conditions */
 
@@ -628,12 +623,13 @@ static ConnectionPlacementHashEntry *
 FindOrCreatePlacementEntry(ShardPlacement *placement)
 {
 	ConnectionPlacementHashKey connKey;
-	ConnectionPlacementHashEntry *placementEntry = NULL;
 	bool found = false;
 
 	connKey.placementId = placement->placementId;
 
-	placementEntry = hash_search(ConnectionPlacementHash, &connKey, HASH_ENTER, &found);
+	ConnectionPlacementHashEntry *placementEntry = hash_search(ConnectionPlacementHash,
+															   &connKey, HASH_ENTER,
+															   &found);
 	if (!found)
 	{
 		/* no connection has been chosen for this placement */
@@ -646,15 +642,15 @@ FindOrCreatePlacementEntry(ShardPlacement *placement)
 			placement->partitionMethod == DISTRIBUTE_BY_NONE)
 		{
 			ColocatedPlacementsHashKey coloKey;
-			ColocatedPlacementsHashEntry *colocatedEntry = NULL;
 
 			coloKey.nodeId = placement->nodeId;
 			coloKey.colocationGroupId = placement->colocationGroupId;
 			coloKey.representativeValue = placement->representativeValue;
 
 			/* look for a connection assigned to co-located placements */
-			colocatedEntry = hash_search(ColocatedPlacementsHash, &coloKey, HASH_ENTER,
-										 &found);
+			ColocatedPlacementsHashEntry *colocatedEntry = hash_search(
+				ColocatedPlacementsHash, &coloKey, HASH_ENTER,
+				&found);
 			if (!found)
 			{
 				void *conRef = MemoryContextAllocZero(TopTransactionContext,
@@ -835,12 +831,12 @@ AssociatePlacementWithShard(ConnectionPlacementHashEntry *placementEntry,
 							ShardPlacement *placement)
 {
 	ConnectionShardHashKey shardKey;
-	ConnectionShardHashEntry *shardEntry = NULL;
 	bool found = false;
 	dlist_iter placementIter;
 
 	shardKey.shardId = placement->shardId;
-	shardEntry = hash_search(ConnectionShardHash, &shardKey, HASH_ENTER, &found);
+	ConnectionShardHashEntry *shardEntry = hash_search(ConnectionShardHash, &shardKey,
+													   HASH_ENTER, &found);
 	if (!found)
 	{
 		dlist_init(&shardEntry->placementConnections);
@@ -1033,7 +1029,6 @@ CheckShardPlacements(ConnectionShardHashEntry *shardEntry)
 		ConnectionPlacementHashEntry *placementEntry =
 			dlist_container(ConnectionPlacementHashEntry, shardNode, placementIter.cur);
 		ConnectionReference *primaryConnection = placementEntry->primaryConnection;
-		MultiConnection *connection = NULL;
 
 		/* we only consider shards that are modified */
 		if (primaryConnection == NULL ||
@@ -1042,7 +1037,7 @@ CheckShardPlacements(ConnectionShardHashEntry *shardEntry)
 			continue;
 		}
 
-		connection = primaryConnection->connection;
+		MultiConnection *connection = primaryConnection->connection;
 
 		if (!connection || connection->remoteTransaction.transactionFailed)
 		{
@@ -1096,7 +1091,6 @@ void
 InitPlacementConnectionManagement(void)
 {
 	HASHCTL info;
-	uint32 hashFlags = 0;
 
 	/* create (placementId) -> [ConnectionReference] hash */
 	memset(&info, 0, sizeof(info));
@@ -1104,7 +1098,7 @@ InitPlacementConnectionManagement(void)
 	info.entrysize = sizeof(ConnectionPlacementHashEntry);
 	info.hash = tag_hash;
 	info.hcxt = ConnectionContext;
-	hashFlags = (HASH_ELEM | HASH_BLOBS | HASH_CONTEXT);
+	uint32 hashFlags = (HASH_ELEM | HASH_BLOBS | HASH_CONTEXT);
 
 	ConnectionPlacementHash = hash_create("citus connection cache (placementid)",
 										  64, &info, hashFlags);
@@ -1141,9 +1135,8 @@ static uint32
 ColocatedPlacementsHashHash(const void *key, Size keysize)
 {
 	ColocatedPlacementsHashKey *entry = (ColocatedPlacementsHashKey *) key;
-	uint32 hash = 0;
 
-	hash = hash_uint32(entry->nodeId);
+	uint32 hash = hash_uint32(entry->nodeId);
 	hash = hash_combine(hash, hash_uint32(entry->colocationGroupId));
 	hash = hash_combine(hash, hash_uint32(entry->representativeValue));
 

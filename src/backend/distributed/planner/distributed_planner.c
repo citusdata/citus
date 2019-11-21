@@ -113,7 +113,6 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 	PlannedStmt *result = NULL;
 	bool needsDistributedPlanning = false;
 	Query *originalQuery = NULL;
-	PlannerRestrictionContext *plannerRestrictionContext = NULL;
 	bool setPartitionedTablesInherited = false;
 	List *rangeTableList = ExtractRangeTableEntryList(parse);
 
@@ -181,7 +180,8 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 	ReplaceTableVisibleFunction((Node *) parse);
 
 	/* create a restriction context and put it at the end if context list */
-	plannerRestrictionContext = CreateAndPushPlannerRestrictionContext();
+	PlannerRestrictionContext *plannerRestrictionContext =
+		CreateAndPushPlannerRestrictionContext();
 
 	PG_TRY();
 	{
@@ -519,8 +519,6 @@ CreateDistributedPlannedStmt(uint64 planId, PlannedStmt *localPlan, Query *origi
 							 Query *query, ParamListInfo boundParams,
 							 PlannerRestrictionContext *plannerRestrictionContext)
 {
-	DistributedPlan *distributedPlan = NULL;
-	PlannedStmt *resultPlan = NULL;
 	bool hasUnresolvedParams = false;
 	JoinRestrictionContext *joinRestrictionContext =
 		plannerRestrictionContext->joinRestrictionContext;
@@ -533,7 +531,7 @@ CreateDistributedPlannedStmt(uint64 planId, PlannedStmt *localPlan, Query *origi
 	plannerRestrictionContext->joinRestrictionContext =
 		RemoveDuplicateJoinRestrictions(joinRestrictionContext);
 
-	distributedPlan =
+	DistributedPlan *distributedPlan =
 		CreateDistributedPlan(planId, originalQuery, query, boundParams,
 							  hasUnresolvedParams, plannerRestrictionContext);
 
@@ -580,7 +578,7 @@ CreateDistributedPlannedStmt(uint64 planId, PlannedStmt *localPlan, Query *origi
 	distributedPlan->planId = planId;
 
 	/* create final plan by combining local plan with distributed plan */
-	resultPlan = FinalizePlan(localPlan, distributedPlan);
+	PlannedStmt *resultPlan = FinalizePlan(localPlan, distributedPlan);
 
 	/*
 	 * As explained above, force planning costs to be unrealistically high if
@@ -617,17 +615,14 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 					  PlannerRestrictionContext *plannerRestrictionContext)
 {
 	DistributedPlan *distributedPlan = NULL;
-	MultiTreeRoot *logicalPlan = NULL;
-	List *subPlanList = NIL;
 	bool hasCtes = originalQuery->cteList != NIL;
 
 
 	if (IsModifyCommand(originalQuery))
 	{
-		Oid targetRelationId = InvalidOid;
 		EnsureModificationsCanRun();
 
-		targetRelationId = ModifyQueryResultRelationId(query);
+		Oid targetRelationId = ModifyQueryResultRelationId(query);
 		EnsurePartitionTableNotReplicated(targetRelationId);
 
 		if (InsertSelectIntoDistributedTable(originalQuery))
@@ -722,8 +717,8 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 	 * Plan subqueries and CTEs that cannot be pushed down by recursively
 	 * calling the planner and return the resulting plans to subPlanList.
 	 */
-	subPlanList = GenerateSubplansForSubqueriesAndCTEs(planId, originalQuery,
-													   plannerRestrictionContext);
+	List *subPlanList = GenerateSubplansForSubqueriesAndCTEs(planId, originalQuery,
+															 plannerRestrictionContext);
 
 	/*
 	 * If subqueries were recursively planned then we need to replan the query
@@ -798,8 +793,8 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 	query->cteList = NIL;
 	Assert(originalQuery->cteList == NIL);
 
-	logicalPlan = MultiLogicalPlanCreate(originalQuery, query,
-										 plannerRestrictionContext);
+	MultiTreeRoot *logicalPlan = MultiLogicalPlanCreate(originalQuery, query,
+														plannerRestrictionContext);
 	MultiLogicalPlanOptimize(logicalPlan);
 
 	/*
@@ -937,14 +932,11 @@ ResolveExternalParams(Node *inputNode, ParamListInfo boundParams)
 	if (IsA(inputNode, Param))
 	{
 		Param *paramToProcess = (Param *) inputNode;
-		ParamExternData *correspondingParameterData = NULL;
 		int numberOfParameters = boundParams->numParams;
 		int parameterId = paramToProcess->paramid;
 		int16 typeLength = 0;
 		bool typeByValue = false;
 		Datum constValue = 0;
-		bool paramIsNull = false;
-		int parameterIndex = 0;
 
 		if (paramToProcess->paramkind != PARAM_EXTERN)
 		{
@@ -957,13 +949,14 @@ ResolveExternalParams(Node *inputNode, ParamListInfo boundParams)
 		}
 
 		/* parameterId starts from 1 */
-		parameterIndex = parameterId - 1;
+		int parameterIndex = parameterId - 1;
 		if (parameterIndex >= numberOfParameters)
 		{
 			return inputNode;
 		}
 
-		correspondingParameterData = &boundParams->params[parameterIndex];
+		ParamExternData *correspondingParameterData =
+			&boundParams->params[parameterIndex];
 
 		if (!(correspondingParameterData->pflags & PARAM_FLAG_CONST))
 		{
@@ -972,7 +965,7 @@ ResolveExternalParams(Node *inputNode, ParamListInfo boundParams)
 
 		get_typlenbyval(paramToProcess->paramtype, &typeLength, &typeByValue);
 
-		paramIsNull = correspondingParameterData->isnull;
+		bool paramIsNull = correspondingParameterData->isnull;
 		if (paramIsNull)
 		{
 			constValue = 0;
@@ -1015,17 +1008,14 @@ ResolveExternalParams(Node *inputNode, ParamListInfo boundParams)
 DistributedPlan *
 GetDistributedPlan(CustomScan *customScan)
 {
-	Node *node = NULL;
-	DistributedPlan *distributedPlan = NULL;
-
 	Assert(list_length(customScan->custom_private) == 1);
 
-	node = (Node *) linitial(customScan->custom_private);
+	Node *node = (Node *) linitial(customScan->custom_private);
 	Assert(CitusIsA(node, DistributedPlan));
 
 	CheckNodeCopyAndSerialization(node);
 
-	distributedPlan = (DistributedPlan *) node;
+	DistributedPlan *distributedPlan = (DistributedPlan *) node;
 
 	return distributedPlan;
 }
@@ -1040,7 +1030,6 @@ FinalizePlan(PlannedStmt *localPlan, DistributedPlan *distributedPlan)
 {
 	PlannedStmt *finalPlan = NULL;
 	CustomScan *customScan = makeNode(CustomScan);
-	Node *distributedPlanData = NULL;
 	MultiExecutorType executorType = MULTI_EXECUTOR_INVALID_FIRST;
 
 	if (!distributedPlan->planningError)
@@ -1092,7 +1081,7 @@ FinalizePlan(PlannedStmt *localPlan, DistributedPlan *distributedPlan)
 	distributedPlan->relationIdList = localPlan->relationOids;
 	distributedPlan->queryId = localPlan->queryId;
 
-	distributedPlanData = (Node *) distributedPlan;
+	Node *distributedPlanData = (Node *) distributedPlan;
 
 	customScan->custom_private = list_make1(distributedPlanData);
 	customScan->flags = CUSTOMPATH_SUPPORT_BACKWARD_SCAN;
@@ -1119,9 +1108,7 @@ static PlannedStmt *
 FinalizeNonRouterPlan(PlannedStmt *localPlan, DistributedPlan *distributedPlan,
 					  CustomScan *customScan)
 {
-	PlannedStmt *finalPlan = NULL;
-
-	finalPlan = MasterNodeSelectPlan(distributedPlan, customScan);
+	PlannedStmt *finalPlan = MasterNodeSelectPlan(distributedPlan, customScan);
 	finalPlan->queryId = localPlan->queryId;
 	finalPlan->utilityStmt = localPlan->utilityStmt;
 
@@ -1141,8 +1128,6 @@ FinalizeNonRouterPlan(PlannedStmt *localPlan, DistributedPlan *distributedPlan,
 static PlannedStmt *
 FinalizeRouterPlan(PlannedStmt *localPlan, CustomScan *customScan)
 {
-	PlannedStmt *routerPlan = NULL;
-	RangeTblEntry *remoteScanRangeTableEntry = NULL;
 	ListCell *targetEntryCell = NULL;
 	List *targetList = NIL;
 	List *columnNameList = NIL;
@@ -1154,9 +1139,6 @@ FinalizeRouterPlan(PlannedStmt *localPlan, CustomScan *customScan)
 	foreach(targetEntryCell, localPlan->planTree->targetlist)
 	{
 		TargetEntry *targetEntry = lfirst(targetEntryCell);
-		TargetEntry *newTargetEntry = NULL;
-		Var *newVar = NULL;
-		Value *columnName = NULL;
 
 		Assert(IsA(targetEntry, TargetEntry));
 
@@ -1171,7 +1153,7 @@ FinalizeRouterPlan(PlannedStmt *localPlan, CustomScan *customScan)
 		}
 
 		/* build target entry pointing to remote scan range table entry */
-		newVar = makeVarFromTargetEntry(customScanRangeTableIndex, targetEntry);
+		Var *newVar = makeVarFromTargetEntry(customScanRangeTableIndex, targetEntry);
 
 		if (newVar->vartype == RECORDOID)
 		{
@@ -1184,20 +1166,20 @@ FinalizeRouterPlan(PlannedStmt *localPlan, CustomScan *customScan)
 			newVar->vartypmod = BlessRecordExpression(targetEntry->expr);
 		}
 
-		newTargetEntry = flatCopyTargetEntry(targetEntry);
+		TargetEntry *newTargetEntry = flatCopyTargetEntry(targetEntry);
 		newTargetEntry->expr = (Expr *) newVar;
 		targetList = lappend(targetList, newTargetEntry);
 
-		columnName = makeString(targetEntry->resname);
+		Value *columnName = makeString(targetEntry->resname);
 		columnNameList = lappend(columnNameList, columnName);
 	}
 
 	customScan->scan.plan.targetlist = targetList;
 
-	routerPlan = makeNode(PlannedStmt);
+	PlannedStmt *routerPlan = makeNode(PlannedStmt);
 	routerPlan->planTree = (Plan *) customScan;
 
-	remoteScanRangeTableEntry = RemoteScanRangeTableEntry(columnNameList);
+	RangeTblEntry *remoteScanRangeTableEntry = RemoteScanRangeTableEntry(columnNameList);
 	routerPlan->rtable = list_make1(remoteScanRangeTableEntry);
 
 	/* add original range table list for access permission checks */
@@ -1236,11 +1218,10 @@ BlessRecordExpression(Expr *expr)
 		 */
 		Oid resultTypeId = InvalidOid;
 		TupleDesc resultTupleDesc = NULL;
-		TypeFuncClass typeClass;
 
 		/* get_expr_result_type blesses the tuple descriptor */
-		typeClass = get_expr_result_type((Node *) expr, &resultTypeId,
-										 &resultTupleDesc);
+		TypeFuncClass typeClass = get_expr_result_type((Node *) expr, &resultTypeId,
+													   &resultTupleDesc);
 		if (typeClass == TYPEFUNC_COMPOSITE)
 		{
 			typeMod = resultTupleDesc->tdtypmod;
@@ -1368,32 +1349,27 @@ multi_join_restriction_hook(PlannerInfo *root,
 							JoinType jointype,
 							JoinPathExtraData *extra)
 {
-	PlannerRestrictionContext *plannerRestrictionContext = NULL;
-	JoinRestrictionContext *joinRestrictionContext = NULL;
-	JoinRestriction *joinRestriction = NULL;
-	MemoryContext restrictionsMemoryContext = NULL;
-	MemoryContext oldMemoryContext = NULL;
-	List *restrictInfoList = NIL;
-
 	/*
 	 * Use a memory context that's guaranteed to live long enough, could be
 	 * called in a more shorted lived one (e.g. with GEQO).
 	 */
-	plannerRestrictionContext = CurrentPlannerRestrictionContext();
-	restrictionsMemoryContext = plannerRestrictionContext->memoryContext;
-	oldMemoryContext = MemoryContextSwitchTo(restrictionsMemoryContext);
+	PlannerRestrictionContext *plannerRestrictionContext =
+		CurrentPlannerRestrictionContext();
+	MemoryContext restrictionsMemoryContext = plannerRestrictionContext->memoryContext;
+	MemoryContext oldMemoryContext = MemoryContextSwitchTo(restrictionsMemoryContext);
 
 	/*
 	 * We create a copy of restrictInfoList because it may be created in a memory
 	 * context which will be deleted when we still need it, thus we create a copy
 	 * of it in our memory context.
 	 */
-	restrictInfoList = copyObject(extra->restrictlist);
+	List *restrictInfoList = copyObject(extra->restrictlist);
 
-	joinRestrictionContext = plannerRestrictionContext->joinRestrictionContext;
+	JoinRestrictionContext *joinRestrictionContext =
+		plannerRestrictionContext->joinRestrictionContext;
 	Assert(joinRestrictionContext != NULL);
 
-	joinRestriction = palloc0(sizeof(JoinRestriction));
+	JoinRestriction *joinRestriction = palloc0(sizeof(JoinRestriction));
 	joinRestriction->joinType = jointype;
 	joinRestriction->joinRestrictInfoList = restrictInfoList;
 	joinRestriction->plannerInfo = root;
@@ -1424,14 +1400,7 @@ void
 multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo,
 								Index restrictionIndex, RangeTblEntry *rte)
 {
-	PlannerRestrictionContext *plannerRestrictionContext = NULL;
-	RelationRestrictionContext *relationRestrictionContext = NULL;
-	MemoryContext restrictionsMemoryContext = NULL;
-	MemoryContext oldMemoryContext = NULL;
-	RelationRestriction *relationRestriction = NULL;
 	DistTableCacheEntry *cacheEntry = NULL;
-	bool distributedTable = false;
-	bool localTable = false;
 
 	AdjustReadIntermediateResultCost(rte, relOptInfo);
 
@@ -1444,14 +1413,15 @@ multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo,
 	 * Use a memory context that's guaranteed to live long enough, could be
 	 * called in a more shorted lived one (e.g. with GEQO).
 	 */
-	plannerRestrictionContext = CurrentPlannerRestrictionContext();
-	restrictionsMemoryContext = plannerRestrictionContext->memoryContext;
-	oldMemoryContext = MemoryContextSwitchTo(restrictionsMemoryContext);
+	PlannerRestrictionContext *plannerRestrictionContext =
+		CurrentPlannerRestrictionContext();
+	MemoryContext restrictionsMemoryContext = plannerRestrictionContext->memoryContext;
+	MemoryContext oldMemoryContext = MemoryContextSwitchTo(restrictionsMemoryContext);
 
-	distributedTable = IsDistributedTable(rte->relid);
-	localTable = !distributedTable;
+	bool distributedTable = IsDistributedTable(rte->relid);
+	bool localTable = !distributedTable;
 
-	relationRestriction = palloc0(sizeof(RelationRestriction));
+	RelationRestriction *relationRestriction = palloc0(sizeof(RelationRestriction));
 	relationRestriction->index = restrictionIndex;
 	relationRestriction->relationId = rte->relid;
 	relationRestriction->rte = rte;
@@ -1463,7 +1433,8 @@ multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo,
 	/* see comments on GetVarFromAssignedParam() */
 	relationRestriction->outerPlanParamsList = OuterPlanParamsList(root);
 
-	relationRestrictionContext = plannerRestrictionContext->relationRestrictionContext;
+	RelationRestrictionContext *relationRestrictionContext =
+		plannerRestrictionContext->relationRestrictionContext;
 	relationRestrictionContext->hasDistributedRelation |= distributedTable;
 	relationRestrictionContext->hasLocalRelation |= localTable;
 
@@ -1644,9 +1615,8 @@ static List *
 OuterPlanParamsList(PlannerInfo *root)
 {
 	List *planParamsList = NIL;
-	PlannerInfo *outerNodeRoot = NULL;
 
-	for (outerNodeRoot = root->parent_root; outerNodeRoot != NULL;
+	for (PlannerInfo *outerNodeRoot = root->parent_root; outerNodeRoot != NULL;
 		 outerNodeRoot = outerNodeRoot->parent_root)
 	{
 		RootPlanParams *rootPlanParams = palloc0(sizeof(RootPlanParams));
@@ -1729,11 +1699,9 @@ CreateAndPushPlannerRestrictionContext(void)
 static PlannerRestrictionContext *
 CurrentPlannerRestrictionContext(void)
 {
-	PlannerRestrictionContext *plannerRestrictionContext = NULL;
-
 	Assert(plannerRestrictionContextList != NIL);
 
-	plannerRestrictionContext =
+	PlannerRestrictionContext *plannerRestrictionContext =
 		(PlannerRestrictionContext *) linitial(plannerRestrictionContextList);
 
 	if (plannerRestrictionContext == NULL)
@@ -1804,7 +1772,6 @@ HasUnresolvedExternParamsWalker(Node *expression, ParamListInfo boundParams)
 		if (boundParams && paramId > 0 && paramId <= boundParams->numParams)
 		{
 			ParamExternData *externParam = NULL;
-			Oid paramType = InvalidOid;
 
 			/* give hook a chance in case parameter is dynamic */
 			if (boundParams->paramFetch != NULL)
@@ -1818,7 +1785,7 @@ HasUnresolvedExternParamsWalker(Node *expression, ParamListInfo boundParams)
 				externParam = &boundParams->params[paramId - 1];
 			}
 
-			paramType = externParam->ptype;
+			Oid paramType = externParam->ptype;
 			if (OidIsValid(paramType))
 			{
 				return false;
@@ -1890,7 +1857,6 @@ IsLocalReferenceTableJoin(Query *parse, List *rangeTableList)
 	foreach(rangeTableCell, rangeTableList)
 	{
 		RangeTblEntry *rangeTableEntry = (RangeTblEntry *) lfirst(rangeTableCell);
-		DistTableCacheEntry *cacheEntry = NULL;
 
 		if (rangeTableEntry->rtekind == RTE_FUNCTION)
 		{
@@ -1909,7 +1875,8 @@ IsLocalReferenceTableJoin(Query *parse, List *rangeTableList)
 			continue;
 		}
 
-		cacheEntry = DistributedTableCacheEntry(rangeTableEntry->relid);
+		DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(
+			rangeTableEntry->relid);
 		if (cacheEntry->partitionMethod == DISTRIBUTE_BY_NONE)
 		{
 			hasReferenceTable = true;
@@ -1931,14 +1898,12 @@ IsLocalReferenceTableJoin(Query *parse, List *rangeTableList)
 static bool
 QueryIsNotSimpleSelect(Node *node)
 {
-	Query *query = NULL;
-
 	if (!IsA(node, Query))
 	{
 		return false;
 	}
 
-	query = (Query *) node;
+	Query *query = (Query *) node;
 	return (query->commandType != CMD_SELECT) || (query->rowMarks != NIL);
 }
 
@@ -1950,14 +1915,6 @@ QueryIsNotSimpleSelect(Node *node)
 static bool
 UpdateReferenceTablesWithShard(Node *node, void *context)
 {
-	RangeTblEntry *newRte = NULL;
-	uint64 shardId = INVALID_SHARD_ID;
-	Oid relationId = InvalidOid;
-	Oid schemaId = InvalidOid;
-	char *relationName = NULL;
-	DistTableCacheEntry *cacheEntry = NULL;
-	ShardInterval *shardInterval = NULL;
-
 	if (node == NULL)
 	{
 		return false;
@@ -1976,32 +1933,32 @@ UpdateReferenceTablesWithShard(Node *node, void *context)
 									  NULL);
 	}
 
-	newRte = (RangeTblEntry *) node;
+	RangeTblEntry *newRte = (RangeTblEntry *) node;
 
 	if (newRte->rtekind != RTE_RELATION)
 	{
 		return false;
 	}
 
-	relationId = newRte->relid;
+	Oid relationId = newRte->relid;
 	if (!IsDistributedTable(relationId))
 	{
 		return false;
 	}
 
-	cacheEntry = DistributedTableCacheEntry(relationId);
+	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(relationId);
 	if (cacheEntry->partitionMethod != DISTRIBUTE_BY_NONE)
 	{
 		return false;
 	}
 
-	shardInterval = cacheEntry->sortedShardIntervalArray[0];
-	shardId = shardInterval->shardId;
+	ShardInterval *shardInterval = cacheEntry->sortedShardIntervalArray[0];
+	uint64 shardId = shardInterval->shardId;
 
-	relationName = get_rel_name(relationId);
+	char *relationName = get_rel_name(relationId);
 	AppendShardIdToName(&relationName, shardId);
 
-	schemaId = get_rel_namespace(relationId);
+	Oid schemaId = get_rel_namespace(relationId);
 	newRte->relid = get_relname_relid(relationName, schemaId);
 
 	/*

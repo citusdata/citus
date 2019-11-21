@@ -488,14 +488,13 @@ AppendFunctionNameList(StringInfo buf, List *objects, ObjectType objtype)
 	foreach(objectCell, objects)
 	{
 		Node *object = lfirst(objectCell);
-		ObjectWithArgs *func = NULL;
 
 		if (objectCell != list_head(objects))
 		{
 			appendStringInfo(buf, ", ");
 		}
 
-		func = castNode(ObjectWithArgs, object);
+		ObjectWithArgs *func = castNode(ObjectWithArgs, object);
 
 		AppendFunctionName(buf, func, objtype);
 	}
@@ -508,14 +507,11 @@ AppendFunctionNameList(StringInfo buf, List *objects, ObjectType objtype)
 static void
 AppendFunctionName(StringInfo buf, ObjectWithArgs *func, ObjectType objtype)
 {
-	Oid funcid = InvalidOid;
-	HeapTuple proctup;
 	char *functionName = NULL;
 	char *schemaName = NULL;
-	char *qualifiedFunctionName;
 
-	funcid = LookupFuncWithArgs(objtype, func, true);
-	proctup = SearchSysCache1(PROCOID, ObjectIdGetDatum(funcid));
+	Oid funcid = LookupFuncWithArgs(objtype, func, true);
+	HeapTuple proctup = SearchSysCache1(PROCOID, ObjectIdGetDatum(funcid));
 
 	if (!HeapTupleIsValid(proctup))
 	{
@@ -529,9 +525,7 @@ AppendFunctionName(StringInfo buf, ObjectWithArgs *func, ObjectType objtype)
 	}
 	else
 	{
-		Form_pg_proc procform;
-
-		procform = (Form_pg_proc) GETSTRUCT(proctup);
+		Form_pg_proc procform = (Form_pg_proc) GETSTRUCT(proctup);
 		functionName = NameStr(procform->proname);
 		functionName = pstrdup(functionName); /* we release the tuple before used */
 		schemaName = get_namespace_name(procform->pronamespace);
@@ -539,7 +533,7 @@ AppendFunctionName(StringInfo buf, ObjectWithArgs *func, ObjectType objtype)
 		ReleaseSysCache(proctup);
 	}
 
-	qualifiedFunctionName = quote_qualified_identifier(schemaName, functionName);
+	char *qualifiedFunctionName = quote_qualified_identifier(schemaName, functionName);
 	appendStringInfoString(buf, qualifiedFunctionName);
 
 	if (OidIsValid(funcid))
@@ -548,28 +542,25 @@ AppendFunctionName(StringInfo buf, ObjectWithArgs *func, ObjectType objtype)
 		 * If the function exists we want to use pg_get_function_identity_arguments to
 		 * serialize its canonical arguments
 		 */
-		OverrideSearchPath *overridePath = NULL;
-		Datum sqlTextDatum = 0;
-		const char *args = NULL;
 
 		/*
 		 * Set search_path to NIL so that all objects outside of pg_catalog will be
 		 * schema-prefixed. pg_catalog will be added automatically when we call
 		 * PushOverrideSearchPath(), since we set addCatalog to true;
 		 */
-		overridePath = GetOverrideSearchPath(CurrentMemoryContext);
+		OverrideSearchPath *overridePath = GetOverrideSearchPath(CurrentMemoryContext);
 		overridePath->schemas = NIL;
 		overridePath->addCatalog = true;
 
 		PushOverrideSearchPath(overridePath);
 
-		sqlTextDatum = DirectFunctionCall1(pg_get_function_identity_arguments,
-										   ObjectIdGetDatum(funcid));
+		Datum sqlTextDatum = DirectFunctionCall1(pg_get_function_identity_arguments,
+												 ObjectIdGetDatum(funcid));
 
 		/* revert back to original search_path */
 		PopOverrideSearchPath();
 
-		args = TextDatumGetCString(sqlTextDatum);
+		const char *args = TextDatumGetCString(sqlTextDatum);
 		appendStringInfo(buf, "(%s)", args);
 	}
 	else if (!func->args_unspecified)
@@ -580,9 +571,8 @@ AppendFunctionName(StringInfo buf, ObjectWithArgs *func, ObjectType objtype)
 		 * postgres' TypeNameListToString. For now the best we can do until we understand
 		 * the underlying cause better.
 		 */
-		const char *args = NULL;
 
-		args = TypeNameListToString(func->objargs);
+		const char *args = TypeNameListToString(func->objargs);
 		appendStringInfo(buf, "(%s)", args);
 	}
 

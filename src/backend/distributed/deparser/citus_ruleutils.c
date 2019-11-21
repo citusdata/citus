@@ -200,19 +200,15 @@ pg_get_serverdef_string(Oid tableRelationId)
 char *
 pg_get_sequencedef_string(Oid sequenceRelationId)
 {
-	char *qualifiedSequenceName = NULL;
-	char *sequenceDef = NULL;
-	Form_pg_sequence pgSequenceForm = NULL;
-
-	pgSequenceForm = pg_get_sequencedef(sequenceRelationId);
+	Form_pg_sequence pgSequenceForm = pg_get_sequencedef(sequenceRelationId);
 
 	/* build our DDL command */
-	qualifiedSequenceName = generate_qualified_relation_name(sequenceRelationId);
+	char *qualifiedSequenceName = generate_qualified_relation_name(sequenceRelationId);
 
-	sequenceDef = psprintf(CREATE_SEQUENCE_COMMAND, qualifiedSequenceName,
-						   pgSequenceForm->seqincrement, pgSequenceForm->seqmin,
-						   pgSequenceForm->seqmax, pgSequenceForm->seqstart,
-						   pgSequenceForm->seqcycle ? "" : "NO ");
+	char *sequenceDef = psprintf(CREATE_SEQUENCE_COMMAND, qualifiedSequenceName,
+								 pgSequenceForm->seqincrement, pgSequenceForm->seqmin,
+								 pgSequenceForm->seqmax, pgSequenceForm->seqstart,
+								 pgSequenceForm->seqcycle ? "" : "NO ");
 
 	return sequenceDef;
 }
@@ -225,16 +221,13 @@ pg_get_sequencedef_string(Oid sequenceRelationId)
 Form_pg_sequence
 pg_get_sequencedef(Oid sequenceRelationId)
 {
-	Form_pg_sequence pgSequenceForm = NULL;
-	HeapTuple heapTuple = NULL;
-
-	heapTuple = SearchSysCache1(SEQRELID, sequenceRelationId);
+	HeapTuple heapTuple = SearchSysCache1(SEQRELID, sequenceRelationId);
 	if (!HeapTupleIsValid(heapTuple))
 	{
 		elog(ERROR, "cache lookup failed for sequence %u", sequenceRelationId);
 	}
 
-	pgSequenceForm = (Form_pg_sequence) GETSTRUCT(heapTuple);
+	Form_pg_sequence pgSequenceForm = (Form_pg_sequence) GETSTRUCT(heapTuple);
 
 	ReleaseSysCache(heapTuple);
 
@@ -253,12 +246,7 @@ pg_get_sequencedef(Oid sequenceRelationId)
 char *
 pg_get_tableschemadef_string(Oid tableRelationId, bool includeSequenceDefaults)
 {
-	Relation relation = NULL;
-	char *relationName = NULL;
 	char relationKind = 0;
-	TupleDesc tupleDescriptor = NULL;
-	TupleConstr *tupleConstraints = NULL;
-	int attributeIndex = 0;
 	bool firstAttributePrinted = false;
 	AttrNumber defaultValueIndex = 0;
 	AttrNumber constraintIndex = 0;
@@ -273,8 +261,8 @@ pg_get_tableschemadef_string(Oid tableRelationId, bool includeSequenceDefaults)
 	 * pg_attribute, pg_constraint, and pg_class; and therefore using the
 	 * descriptor saves us from a lot of additional work.
 	 */
-	relation = relation_open(tableRelationId, AccessShareLock);
-	relationName = generate_relation_name(tableRelationId, NIL);
+	Relation relation = relation_open(tableRelationId, AccessShareLock);
+	char *relationName = generate_relation_name(tableRelationId, NIL);
 
 	EnsureRelationKindSupported(tableRelationId);
 
@@ -301,10 +289,11 @@ pg_get_tableschemadef_string(Oid tableRelationId, bool includeSequenceDefaults)
 	 * and is not inherited from another table, print the column's name and its
 	 * formatted type.
 	 */
-	tupleDescriptor = RelationGetDescr(relation);
-	tupleConstraints = tupleDescriptor->constr;
+	TupleDesc tupleDescriptor = RelationGetDescr(relation);
+	TupleConstr *tupleConstraints = tupleDescriptor->constr;
 
-	for (attributeIndex = 0; attributeIndex < tupleDescriptor->natts; attributeIndex++)
+	for (int attributeIndex = 0; attributeIndex < tupleDescriptor->natts;
+		 attributeIndex++)
 	{
 		Form_pg_attribute attributeForm = TupleDescAttr(tupleDescriptor, attributeIndex);
 
@@ -318,45 +307,40 @@ pg_get_tableschemadef_string(Oid tableRelationId, bool includeSequenceDefaults)
 		 */
 		if (!attributeForm->attisdropped)
 		{
-			const char *attributeName = NULL;
-			const char *attributeTypeName = NULL;
-
 			if (firstAttributePrinted)
 			{
 				appendStringInfoString(&buffer, ", ");
 			}
 			firstAttributePrinted = true;
 
-			attributeName = NameStr(attributeForm->attname);
+			const char *attributeName = NameStr(attributeForm->attname);
 			appendStringInfo(&buffer, "%s ", quote_identifier(attributeName));
 
-			attributeTypeName = format_type_with_typemod(attributeForm->atttypid,
-														 attributeForm->atttypmod);
+			const char *attributeTypeName = format_type_with_typemod(
+				attributeForm->atttypid,
+				attributeForm->
+				atttypmod);
 			appendStringInfoString(&buffer, attributeTypeName);
 
 			/* if this column has a default value, append the default value */
 			if (attributeForm->atthasdef)
 			{
-				AttrDefault *defaultValueList = NULL;
-				AttrDefault *defaultValue = NULL;
-
-				Node *defaultNode = NULL;
 				List *defaultContext = NULL;
 				char *defaultString = NULL;
 
 				Assert(tupleConstraints != NULL);
 
-				defaultValueList = tupleConstraints->defval;
+				AttrDefault *defaultValueList = tupleConstraints->defval;
 				Assert(defaultValueList != NULL);
 
-				defaultValue = &(defaultValueList[defaultValueIndex]);
+				AttrDefault *defaultValue = &(defaultValueList[defaultValueIndex]);
 				defaultValueIndex++;
 
 				Assert(defaultValue->adnum == (attributeIndex + 1));
 				Assert(defaultValueIndex <= tupleConstraints->num_defval);
 
 				/* convert expression to node tree, and prepare deparse context */
-				defaultNode = (Node *) stringToNode(defaultValue->adbin);
+				Node *defaultNode = (Node *) stringToNode(defaultValue->adbin);
 
 				/*
 				 * if column default value is explicitly requested, or it is
@@ -418,9 +402,6 @@ pg_get_tableschemadef_string(Oid tableRelationId, bool includeSequenceDefaults)
 		ConstrCheck *checkConstraintList = tupleConstraints->check;
 		ConstrCheck *checkConstraint = &(checkConstraintList[constraintIndex]);
 
-		Node *checkNode = NULL;
-		List *checkContext = NULL;
-		char *checkString = NULL;
 
 		/* if an attribute or constraint has been printed, format properly */
 		if (firstAttributePrinted || constraintIndex > 0)
@@ -432,11 +413,11 @@ pg_get_tableschemadef_string(Oid tableRelationId, bool includeSequenceDefaults)
 						 quote_identifier(checkConstraint->ccname));
 
 		/* convert expression to node tree, and prepare deparse context */
-		checkNode = (Node *) stringToNode(checkConstraint->ccbin);
-		checkContext = deparse_context_for(relationName, tableRelationId);
+		Node *checkNode = (Node *) stringToNode(checkConstraint->ccbin);
+		List *checkContext = deparse_context_for(relationName, tableRelationId);
 
 		/* deparse check constraint string */
-		checkString = deparse_expression(checkNode, checkContext, false, false);
+		char *checkString = deparse_expression(checkNode, checkContext, false, false);
 
 		appendStringInfoString(&buffer, checkString);
 	}
@@ -491,10 +472,9 @@ void
 EnsureRelationKindSupported(Oid relationId)
 {
 	char relationKind = get_rel_relkind(relationId);
-	bool supportedRelationKind = false;
 
-	supportedRelationKind = RegularTable(relationId) ||
-							relationKind == RELKIND_FOREIGN_TABLE;
+	bool supportedRelationKind = RegularTable(relationId) ||
+								 relationKind == RELKIND_FOREIGN_TABLE;
 
 	/*
 	 * Citus doesn't support bare inherited tables (i.e., not a partition or
@@ -523,9 +503,6 @@ EnsureRelationKindSupported(Oid relationId)
 char *
 pg_get_tablecolumnoptionsdef_string(Oid tableRelationId)
 {
-	Relation relation = NULL;
-	TupleDesc tupleDescriptor = NULL;
-	AttrNumber attributeIndex = 0;
 	List *columnOptionList = NIL;
 	ListCell *columnOptionCell = NULL;
 	bool firstOptionPrinted = false;
@@ -536,7 +513,7 @@ pg_get_tablecolumnoptionsdef_string(Oid tableRelationId)
 	 * and use the relation's tuple descriptor to access attribute information.
 	 * This is primarily to maintain symmetry with pg_get_tableschemadef.
 	 */
-	relation = relation_open(tableRelationId, AccessShareLock);
+	Relation relation = relation_open(tableRelationId, AccessShareLock);
 
 	EnsureRelationKindSupported(tableRelationId);
 
@@ -545,9 +522,10 @@ pg_get_tablecolumnoptionsdef_string(Oid tableRelationId)
 	 * and is not inherited from another table, check if column storage or
 	 * statistics statements need to be printed.
 	 */
-	tupleDescriptor = RelationGetDescr(relation);
+	TupleDesc tupleDescriptor = RelationGetDescr(relation);
 
-	for (attributeIndex = 0; attributeIndex < tupleDescriptor->natts; attributeIndex++)
+	for (AttrNumber attributeIndex = 0; attributeIndex < tupleDescriptor->natts;
+		 attributeIndex++)
 	{
 		Form_pg_attribute attributeForm = TupleDescAttr(tupleDescriptor, attributeIndex);
 		char *attributeName = NameStr(attributeForm->attname);
@@ -631,8 +609,6 @@ pg_get_tablecolumnoptionsdef_string(Oid tableRelationId)
 	 */
 	foreach(columnOptionCell, columnOptionList)
 	{
-		char *columnOptionStatement = NULL;
-
 		if (!firstOptionPrinted)
 		{
 			initStringInfo(&buffer);
@@ -645,7 +621,7 @@ pg_get_tablecolumnoptionsdef_string(Oid tableRelationId)
 		}
 		firstOptionPrinted = true;
 
-		columnOptionStatement = (char *) lfirst(columnOptionCell);
+		char *columnOptionStatement = (char *) lfirst(columnOptionCell);
 		appendStringInfoString(&buffer, columnOptionStatement);
 
 		pfree(columnOptionStatement);
@@ -670,14 +646,13 @@ deparse_shard_index_statement(IndexStmt *origStmt, Oid distrelid, int64 shardid,
 	IndexStmt *indexStmt = copyObject(origStmt); /* copy to avoid modifications */
 	char *relationName = indexStmt->relation->relname;
 	char *indexName = indexStmt->idxname;
-	List *deparseContext = NULL;
 
 	/* extend relation and index name using shard identifier */
 	AppendShardIdToName(&relationName, shardid);
 	AppendShardIdToName(&indexName, shardid);
 
 	/* use extended shard name and transformed stmt for deparsing */
-	deparseContext = deparse_context_for(relationName, distrelid);
+	List *deparseContext = deparse_context_for(relationName, distrelid);
 	indexStmt = transformIndexStmt(distrelid, indexStmt, NULL);
 
 	appendStringInfo(buffer, "CREATE %s INDEX %s %s %s ON %s USING %s ",
@@ -850,19 +825,17 @@ deparse_index_columns(StringInfo buffer, List *indexParameterList, List *deparse
 char *
 pg_get_indexclusterdef_string(Oid indexRelationId)
 {
-	HeapTuple indexTuple = NULL;
-	Form_pg_index indexForm = NULL;
-	Oid tableRelationId = InvalidOid;
 	StringInfoData buffer = { NULL, 0, 0, 0 };
 
-	indexTuple = SearchSysCache(INDEXRELID, ObjectIdGetDatum(indexRelationId), 0, 0, 0);
+	HeapTuple indexTuple = SearchSysCache(INDEXRELID, ObjectIdGetDatum(indexRelationId),
+										  0, 0, 0);
 	if (!HeapTupleIsValid(indexTuple))
 	{
 		ereport(ERROR, (errmsg("cache lookup failed for index %u", indexRelationId)));
 	}
 
-	indexForm = (Form_pg_index) GETSTRUCT(indexTuple);
-	tableRelationId = indexForm->indrelid;
+	Form_pg_index indexForm = (Form_pg_index) GETSTRUCT(indexTuple);
+	Oid tableRelationId = indexForm->indrelid;
 
 	/* check if the table is clustered on this index */
 	if (indexForm->indisclustered)
@@ -892,20 +865,16 @@ pg_get_table_grants(Oid relationId)
 {
 	/* *INDENT-OFF* */
 	StringInfoData buffer;
-	Relation relation = NULL;
-	char *relationName = NULL;
 	List *defs = NIL;
-	HeapTuple classTuple = NULL;
-	Datum aclDatum = 0;
 	bool isNull = false;
 
-	relation = relation_open(relationId, AccessShareLock);
-	relationName = generate_relation_name(relationId, NIL);
+	Relation relation = relation_open(relationId, AccessShareLock);
+	char *relationName = generate_relation_name(relationId, NIL);
 
 	initStringInfo(&buffer);
 
 	/* lookup all table level grants */
-	classTuple = SearchSysCache1(RELOID, ObjectIdGetDatum(relationId));
+	HeapTuple classTuple = SearchSysCache1(RELOID, ObjectIdGetDatum(relationId));
 	if (!HeapTupleIsValid(classTuple))
 	{
 		ereport(ERROR,
@@ -914,17 +883,13 @@ pg_get_table_grants(Oid relationId)
 						relationId)));
 	}
 
-	aclDatum = SysCacheGetAttr(RELOID, classTuple, Anum_pg_class_relacl,
+	Datum aclDatum = SysCacheGetAttr(RELOID, classTuple, Anum_pg_class_relacl,
 							   &isNull);
 
 	ReleaseSysCache(classTuple);
 
 	if (!isNull)
 	{
-		int i = 0;
-		AclItem *aidat = NULL;
-		Acl *acl = NULL;
-		int offtype = 0;
 
 		/*
 		 * First revoke all default permissions, so we can start adding the
@@ -943,11 +908,11 @@ pg_get_table_grants(Oid relationId)
 
 		/* iterate through the acl datastructure, emit GRANTs */
 
-		acl = DatumGetAclP(aclDatum);
-		aidat = ACL_DAT(acl);
+		Acl *acl = DatumGetAclP(aclDatum);
+		AclItem *aidat = ACL_DAT(acl);
 
-		offtype = -1;
-		i = 0;
+		int offtype = -1;
+		int i = 0;
 		while (i < ACL_NUM(acl))
 		{
 			AclItem    *aidata = NULL;
@@ -975,9 +940,8 @@ pg_get_table_grants(Oid relationId)
 
 				if (aidata->ai_grantee != 0)
 				{
-					HeapTuple htup;
 
-					htup = SearchSysCache1(AUTHOID, ObjectIdGetDatum(aidata->ai_grantee));
+					HeapTuple htup = SearchSysCache1(AUTHOID, ObjectIdGetDatum(aidata->ai_grantee));
 					if (HeapTupleIsValid(htup))
 					{
 						Form_pg_authid authForm = ((Form_pg_authid) GETSTRUCT(htup));
@@ -1029,28 +993,22 @@ pg_get_table_grants(Oid relationId)
 char *
 generate_qualified_relation_name(Oid relid)
 {
-	HeapTuple tp;
-	Form_pg_class reltup;
-	char *relname;
-	char *nspname;
-	char *result;
-
-	tp = SearchSysCache1(RELOID, ObjectIdGetDatum(relid));
+	HeapTuple tp = SearchSysCache1(RELOID, ObjectIdGetDatum(relid));
 	if (!HeapTupleIsValid(tp))
 	{
 		elog(ERROR, "cache lookup failed for relation %u", relid);
 	}
-	reltup = (Form_pg_class) GETSTRUCT(tp);
-	relname = NameStr(reltup->relname);
+	Form_pg_class reltup = (Form_pg_class) GETSTRUCT(tp);
+	char *relname = NameStr(reltup->relname);
 
-	nspname = get_namespace_name(reltup->relnamespace);
+	char *nspname = get_namespace_name(reltup->relnamespace);
 	if (!nspname)
 	{
 		elog(ERROR, "cache lookup failed for namespace %u",
 			 reltup->relnamespace);
 	}
 
-	result = quote_qualified_identifier(nspname, relname);
+	char *result = quote_qualified_identifier(nspname, relname);
 
 	ReleaseSysCache(tp);
 
@@ -1202,16 +1160,13 @@ contain_nextval_expression_walker(Node *node, void *context)
 char *
 pg_get_replica_identity_command(Oid tableRelationId)
 {
-	Relation relation = NULL;
 	StringInfo buf = makeStringInfo();
-	char *relationName = NULL;
-	char replicaIdentity = 0;
 
-	relation = heap_open(tableRelationId, AccessShareLock);
+	Relation relation = heap_open(tableRelationId, AccessShareLock);
 
-	replicaIdentity = relation->rd_rel->relreplident;
+	char replicaIdentity = relation->rd_rel->relreplident;
 
-	relationName = generate_qualified_relation_name(tableRelationId);
+	char *relationName = generate_qualified_relation_name(tableRelationId);
 
 	if (replicaIdentity == REPLICA_IDENTITY_INDEX)
 	{
@@ -1251,18 +1206,16 @@ static char *
 flatten_reloptions(Oid relid)
 {
 	char *result = NULL;
-	HeapTuple tuple;
-	Datum reloptions;
 	bool isnull;
 
-	tuple = SearchSysCache1(RELOID, ObjectIdGetDatum(relid));
+	HeapTuple tuple = SearchSysCache1(RELOID, ObjectIdGetDatum(relid));
 	if (!HeapTupleIsValid(tuple))
 	{
 		elog(ERROR, "cache lookup failed for relation %u", relid);
 	}
 
-	reloptions = SysCacheGetAttr(RELOID, tuple,
-								 Anum_pg_class_reloptions, &isnull);
+	Datum reloptions = SysCacheGetAttr(RELOID, tuple,
+									   Anum_pg_class_reloptions, &isnull);
 	if (!isnull)
 	{
 		StringInfoData buf;
@@ -1279,16 +1232,14 @@ flatten_reloptions(Oid relid)
 		for (i = 0; i < noptions; i++)
 		{
 			char *option = TextDatumGetCString(options[i]);
-			char *name;
-			char *separator;
 			char *value;
 
 			/*
 			 * Each array element should have the form name=value.  If the "="
 			 * is missing for some reason, treat it like an empty value.
 			 */
-			name = option;
-			separator = strchr(option, '=');
+			char *name = option;
+			char *separator = strchr(option, '=');
 			if (separator)
 			{
 				*separator = '\0';
@@ -1343,15 +1294,13 @@ flatten_reloptions(Oid relid)
 static void
 simple_quote_literal(StringInfo buf, const char *val)
 {
-	const char *valptr;
-
 	/*
 	 * We form the string literal according to the prevailing setting of
 	 * standard_conforming_strings; we never use E''. User is responsible for
 	 * making sure result is used correctly.
 	 */
 	appendStringInfoChar(buf, '\'');
-	for (valptr = val; *valptr; valptr++)
+	for (const char *valptr = val; *valptr; valptr++)
 	{
 		char ch = *valptr;
 

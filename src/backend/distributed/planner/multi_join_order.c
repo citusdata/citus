@@ -116,18 +116,16 @@ JoinExprList(FromExpr *fromExpr)
 		if (joinList != NIL)
 		{
 			/* multiple nodes in from clause, add an explicit join between them */
-			JoinExpr *newJoinExpr = NULL;
-			RangeTblRef *nextRangeTableRef = NULL;
 			int nextRangeTableIndex = 0;
 
 			/* find the left most range table in this node */
 			ExtractLeftMostRangeTableIndex((Node *) fromExpr, &nextRangeTableIndex);
 
-			nextRangeTableRef = makeNode(RangeTblRef);
+			RangeTblRef *nextRangeTableRef = makeNode(RangeTblRef);
 			nextRangeTableRef->rtindex = nextRangeTableIndex;
 
 			/* join the previous node with nextRangeTableRef */
-			newJoinExpr = makeNode(JoinExpr);
+			JoinExpr *newJoinExpr = makeNode(JoinExpr);
 			newJoinExpr->jointype = JOIN_INNER;
 			newJoinExpr->rarg = (Node *) nextRangeTableRef;
 			newJoinExpr->quals = NULL;
@@ -261,18 +259,16 @@ JoinOnColumns(Var *currentColumn, Var *candidateColumn, List *joinClauseList)
 List *
 JoinOrderList(List *tableEntryList, List *joinClauseList)
 {
-	List *bestJoinOrder = NIL;
 	List *candidateJoinOrderList = NIL;
 	ListCell *tableEntryCell = NULL;
 
 	foreach(tableEntryCell, tableEntryList)
 	{
 		TableEntry *startingTable = (TableEntry *) lfirst(tableEntryCell);
-		List *candidateJoinOrder = NIL;
 
 		/* each candidate join order starts with a different table */
-		candidateJoinOrder = JoinOrderForTable(startingTable, tableEntryList,
-											   joinClauseList);
+		List *candidateJoinOrder = JoinOrderForTable(startingTable, tableEntryList,
+													 joinClauseList);
 
 		if (candidateJoinOrder != NULL)
 		{
@@ -289,7 +285,7 @@ JoinOrderList(List *tableEntryList, List *joinClauseList)
 							   "equal operator")));
 	}
 
-	bestJoinOrder = BestJoinOrder(candidateJoinOrderList);
+	List *bestJoinOrder = BestJoinOrder(candidateJoinOrderList);
 
 	/* if logging is enabled, print join order */
 	if (LogMultiJoinOrder)
@@ -312,10 +308,7 @@ JoinOrderList(List *tableEntryList, List *joinClauseList)
 static List *
 JoinOrderForTable(TableEntry *firstTable, List *tableEntryList, List *joinClauseList)
 {
-	JoinOrderNode *currentJoinNode = NULL;
 	JoinRuleType firstJoinRule = JOIN_RULE_INVALID_FIRST;
-	List *joinOrderList = NIL;
-	List *joinedTableList = NIL;
 	int joinedTableCount = 1;
 	int totalTableCount = list_length(tableEntryList);
 
@@ -331,20 +324,19 @@ JoinOrderForTable(TableEntry *firstTable, List *tableEntryList, List *joinClause
 													 firstTable);
 
 	/* add first node to the join order */
-	joinOrderList = list_make1(firstJoinNode);
-	joinedTableList = list_make1(firstTable);
-	currentJoinNode = firstJoinNode;
+	List *joinOrderList = list_make1(firstJoinNode);
+	List *joinedTableList = list_make1(firstTable);
+	JoinOrderNode *currentJoinNode = firstJoinNode;
 
 	/* loop until we join all remaining tables */
 	while (joinedTableCount < totalTableCount)
 	{
-		List *pendingTableList = NIL;
 		ListCell *pendingTableCell = NULL;
 		JoinOrderNode *nextJoinNode = NULL;
-		TableEntry *nextJoinedTable = NULL;
 		JoinRuleType nextJoinRuleType = JOIN_RULE_LAST;
 
-		pendingTableList = TableEntryListDifference(tableEntryList, joinedTableList);
+		List *pendingTableList = TableEntryListDifference(tableEntryList,
+														  joinedTableList);
 
 		/*
 		 * Iterate over all pending tables, and find the next best table to
@@ -354,13 +346,13 @@ JoinOrderForTable(TableEntry *firstTable, List *tableEntryList, List *joinClause
 		foreach(pendingTableCell, pendingTableList)
 		{
 			TableEntry *pendingTable = (TableEntry *) lfirst(pendingTableCell);
-			JoinOrderNode *pendingJoinNode = NULL;
-			JoinRuleType pendingJoinRuleType = JOIN_RULE_LAST;
 			JoinType joinType = JOIN_INNER;
 
 			/* evaluate all join rules for this pending table */
-			pendingJoinNode = EvaluateJoinRules(joinedTableList, currentJoinNode,
-												pendingTable, joinClauseList, joinType);
+			JoinOrderNode *pendingJoinNode = EvaluateJoinRules(joinedTableList,
+															   currentJoinNode,
+															   pendingTable,
+															   joinClauseList, joinType);
 
 			if (pendingJoinNode == NULL)
 			{
@@ -369,7 +361,7 @@ JoinOrderForTable(TableEntry *firstTable, List *tableEntryList, List *joinClause
 			}
 
 			/* if this rule is better than previous ones, keep it */
-			pendingJoinRuleType = pendingJoinNode->joinRuleType;
+			JoinRuleType pendingJoinRuleType = pendingJoinNode->joinRuleType;
 			if (pendingJoinRuleType < nextJoinRuleType)
 			{
 				nextJoinNode = pendingJoinNode;
@@ -387,7 +379,7 @@ JoinOrderForTable(TableEntry *firstTable, List *tableEntryList, List *joinClause
 		}
 
 		Assert(nextJoinNode != NULL);
-		nextJoinedTable = nextJoinNode->tableEntry;
+		TableEntry *nextJoinedTable = nextJoinNode->tableEntry;
 
 		/* add next node to the join order */
 		joinOrderList = lappend(joinOrderList, nextJoinNode);
@@ -411,8 +403,6 @@ JoinOrderForTable(TableEntry *firstTable, List *tableEntryList, List *joinClause
 static List *
 BestJoinOrder(List *candidateJoinOrders)
 {
-	List *bestJoinOrder = NULL;
-	uint32 ruleTypeIndex = 0;
 	uint32 highestValidIndex = JOIN_RULE_LAST - 1;
 	uint32 candidateCount PG_USED_FOR_ASSERTS_ONLY = 0;
 
@@ -429,7 +419,7 @@ BestJoinOrder(List *candidateJoinOrders)
 	 * have 3 or more, if there isn't a join order with fewer DPs; and so
 	 * forth.
 	 */
-	for (ruleTypeIndex = highestValidIndex; ruleTypeIndex > 0; ruleTypeIndex--)
+	for (uint32 ruleTypeIndex = highestValidIndex; ruleTypeIndex > 0; ruleTypeIndex--)
 	{
 		JoinRuleType ruleType = (JoinRuleType) ruleTypeIndex;
 
@@ -451,7 +441,7 @@ BestJoinOrder(List *candidateJoinOrders)
 	 * If there still is a tie, we pick the join order whose relation appeared
 	 * earliest in the query's range table entry list.
 	 */
-	bestJoinOrder = (List *) linitial(candidateJoinOrders);
+	List *bestJoinOrder = (List *) linitial(candidateJoinOrders);
 
 	return bestJoinOrder;
 }
@@ -662,24 +652,21 @@ EvaluateJoinRules(List *joinedTableList, JoinOrderNode *currentJoinNode,
 				  JoinType joinType)
 {
 	JoinOrderNode *nextJoinNode = NULL;
-	uint32 candidateTableId = 0;
-	List *joinedTableIdList = NIL;
-	List *applicableJoinClauses = NIL;
 	uint32 lowestValidIndex = JOIN_RULE_INVALID_FIRST + 1;
 	uint32 highestValidIndex = JOIN_RULE_LAST - 1;
-	uint32 ruleIndex = 0;
 
 	/*
 	 * We first find all applicable join clauses between already joined tables
 	 * and the candidate table.
 	 */
-	joinedTableIdList = RangeTableIdList(joinedTableList);
-	candidateTableId = candidateTable->rangeTableId;
-	applicableJoinClauses = ApplicableJoinClauses(joinedTableIdList, candidateTableId,
-												  joinClauseList);
+	List *joinedTableIdList = RangeTableIdList(joinedTableList);
+	uint32 candidateTableId = candidateTable->rangeTableId;
+	List *applicableJoinClauses = ApplicableJoinClauses(joinedTableIdList,
+														candidateTableId,
+														joinClauseList);
 
 	/* we then evaluate all join rules in order */
-	for (ruleIndex = lowestValidIndex; ruleIndex <= highestValidIndex; ruleIndex++)
+	for (uint32 ruleIndex = lowestValidIndex; ruleIndex <= highestValidIndex; ruleIndex++)
 	{
 		JoinRuleType ruleType = (JoinRuleType) ruleIndex;
 		RuleEvalFunction ruleEvalFunction = JoinRuleEvalFunction(ruleType);
@@ -737,7 +724,6 @@ static RuleEvalFunction
 JoinRuleEvalFunction(JoinRuleType ruleType)
 {
 	static bool ruleEvalFunctionsInitialized = false;
-	RuleEvalFunction ruleEvalFunction = NULL;
 
 	if (!ruleEvalFunctionsInitialized)
 	{
@@ -751,7 +737,7 @@ JoinRuleEvalFunction(JoinRuleType ruleType)
 		ruleEvalFunctionsInitialized = true;
 	}
 
-	ruleEvalFunction = RuleEvalFunctionArray[ruleType];
+	RuleEvalFunction ruleEvalFunction = RuleEvalFunctionArray[ruleType];
 	Assert(ruleEvalFunction != NULL);
 
 	return ruleEvalFunction;
@@ -763,7 +749,6 @@ static char *
 JoinRuleName(JoinRuleType ruleType)
 {
 	static bool ruleNamesInitialized = false;
-	char *ruleName = NULL;
 
 	if (!ruleNamesInitialized)
 	{
@@ -780,7 +765,7 @@ JoinRuleName(JoinRuleType ruleType)
 		ruleNamesInitialized = true;
 	}
 
-	ruleName = RuleNameArray[ruleType];
+	char *ruleName = RuleNameArray[ruleType];
 	Assert(ruleName != NULL);
 
 	return ruleName;
@@ -857,7 +842,6 @@ static JoinOrderNode *
 LocalJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 		  List *applicableJoinClauses, JoinType joinType)
 {
-	JoinOrderNode *nextJoinNode = NULL;
 	Oid relationId = candidateTable->relationId;
 	uint32 tableId = candidateTable->rangeTableId;
 	Var *candidatePartitionColumn = PartitionColumn(relationId, tableId);
@@ -865,8 +849,6 @@ LocalJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 	char candidatePartitionMethod = PartitionMethod(relationId);
 	char currentPartitionMethod = currentJoinNode->partitionMethod;
 	TableEntry *currentAnchorTable = currentJoinNode->anchorTable;
-	bool joinOnPartitionColumns = false;
-	bool coPartitionedTables = false;
 
 	/*
 	 * If we previously dual-hash re-partitioned the tables for a join or made cartesian
@@ -883,26 +865,27 @@ LocalJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 		return NULL;
 	}
 
-	joinOnPartitionColumns = JoinOnColumns(currentPartitionColumn,
-										   candidatePartitionColumn,
-										   applicableJoinClauses);
+	bool joinOnPartitionColumns = JoinOnColumns(currentPartitionColumn,
+												candidatePartitionColumn,
+												applicableJoinClauses);
 	if (!joinOnPartitionColumns)
 	{
 		return NULL;
 	}
 
 	/* shard interval lists must have 1-1 matching for local joins */
-	coPartitionedTables = CoPartitionedTables(currentAnchorTable->relationId, relationId);
+	bool coPartitionedTables = CoPartitionedTables(currentAnchorTable->relationId,
+												   relationId);
 
 	if (!coPartitionedTables)
 	{
 		return NULL;
 	}
 
-	nextJoinNode = MakeJoinOrderNode(candidateTable, LOCAL_PARTITION_JOIN,
-									 currentPartitionColumn,
-									 currentPartitionMethod,
-									 currentAnchorTable);
+	JoinOrderNode *nextJoinNode = MakeJoinOrderNode(candidateTable, LOCAL_PARTITION_JOIN,
+													currentPartitionColumn,
+													currentPartitionMethod,
+													currentAnchorTable);
 
 
 	return nextJoinNode;
@@ -925,7 +908,6 @@ SinglePartitionJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 	TableEntry *currentAnchorTable = currentJoinNode->anchorTable;
 	JoinRuleType currentJoinRuleType = currentJoinNode->joinRuleType;
 
-	OpExpr *joinClause = NULL;
 
 	Oid relationId = candidateTable->relationId;
 	uint32 tableId = candidateTable->rangeTableId;
@@ -948,7 +930,7 @@ SinglePartitionJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 		return NULL;
 	}
 
-	joinClause =
+	OpExpr *joinClause =
 		SinglePartitionJoinClause(currentPartitionColumn, applicableJoinClauses);
 	if (joinClause != NULL)
 	{

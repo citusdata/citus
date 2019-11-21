@@ -122,9 +122,8 @@ CollectBasicUsageStatistics(void)
 	}
 	PG_CATCH();
 	{
-		ErrorData *edata = NULL;
 		MemoryContextSwitchTo(savedContext);
-		edata = CopyErrorData();
+		ErrorData *edata = CopyErrorData();
 		FlushErrorState();
 
 		RollbackAndReleaseCurrentSubTransaction();
@@ -193,7 +192,6 @@ DistributedTablesSize(List *distTableOids)
 	foreach(distTableOidCell, distTableOids)
 	{
 		Oid relationId = lfirst_oid(distTableOidCell);
-		Datum tableSizeDatum = 0;
 
 		/*
 		 * Relations can get dropped after getting the Oid list and before we
@@ -217,8 +215,8 @@ DistributedTablesSize(List *distTableOids)
 			continue;
 		}
 
-		tableSizeDatum = DirectFunctionCall1(citus_table_size,
-											 ObjectIdGetDatum(relationId));
+		Datum tableSizeDatum = DirectFunctionCall1(citus_table_size,
+												   ObjectIdGetDatum(relationId));
 		totalSize += DatumGetInt64(tableSizeDatum);
 		heap_close(relation, AccessShareLock);
 	}
@@ -265,10 +263,9 @@ SendHttpPostJsonRequest(const char *url, const char *jsonObj, long timeoutSecond
 						curl_write_callback responseCallback)
 {
 	bool success = false;
-	CURL *curl = NULL;
 
 	curl_global_init(CURL_GLOBAL_DEFAULT);
-	curl = curl_easy_init();
+	CURL *curl = curl_easy_init();
 	if (curl)
 	{
 		struct curl_slist *headers = NULL;
@@ -348,8 +345,7 @@ citus_server_id(PG_FUNCTION_ARGS)
 	 */
 	if (!pg_strong_random((char *) buf, UUID_LEN))
 	{
-		int bufIdx = 0;
-		for (bufIdx = 0; bufIdx < UUID_LEN; bufIdx++)
+		for (int bufIdx = 0; bufIdx < UUID_LEN; bufIdx++)
 		{
 			buf[bufIdx] = (uint8) (random() & 0xFF);
 		}
@@ -411,11 +407,10 @@ uname(struct utsname *buf)
 
 	{
 		SYSTEM_INFO info;
-		DWORD procarch;
 		char *arch;
 
 		GetSystemInfo(&info);
-		procarch = info.wProcessorArchitecture;
+		DWORD procarch = info.wProcessorArchitecture;
 
 		switch (procarch)
 		{

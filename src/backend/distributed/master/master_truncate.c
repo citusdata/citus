@@ -41,21 +41,16 @@ PG_FUNCTION_INFO_V1(citus_truncate_trigger);
 Datum
 citus_truncate_trigger(PG_FUNCTION_ARGS)
 {
-	TriggerData *triggerData = NULL;
-	Relation truncatedRelation = NULL;
-	Oid relationId = InvalidOid;
-	char partitionMethod = 0;
-
 	if (!CALLED_AS_TRIGGER(fcinfo))
 	{
 		ereport(ERROR, (errcode(ERRCODE_E_R_I_E_TRIGGER_PROTOCOL_VIOLATED),
 						errmsg("must be called as trigger")));
 	}
 
-	triggerData = (TriggerData *) fcinfo->context;
-	truncatedRelation = triggerData->tg_relation;
-	relationId = RelationGetRelid(truncatedRelation);
-	partitionMethod = PartitionMethod(relationId);
+	TriggerData *triggerData = (TriggerData *) fcinfo->context;
+	Relation truncatedRelation = triggerData->tg_relation;
+	Oid relationId = RelationGetRelid(truncatedRelation);
+	char partitionMethod = PartitionMethod(relationId);
 
 	if (!EnableDDLPropagation)
 	{
@@ -110,7 +105,6 @@ TruncateTaskList(Oid relationId)
 		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
 		uint64 shardId = shardInterval->shardId;
 		StringInfo shardQueryString = makeStringInfo();
-		Task *task = NULL;
 		char *shardName = pstrdup(relationName);
 
 		AppendShardIdToName(&shardName, shardId);
@@ -118,7 +112,7 @@ TruncateTaskList(Oid relationId)
 		appendStringInfo(shardQueryString, "TRUNCATE TABLE %s CASCADE",
 						 quote_qualified_identifier(schemaName, shardName));
 
-		task = CitusMakeNode(Task);
+		Task *task = CitusMakeNode(Task);
 		task->jobId = INVALID_JOB_ID;
 		task->taskId = taskId++;
 		task->taskType = DDL_TASK;

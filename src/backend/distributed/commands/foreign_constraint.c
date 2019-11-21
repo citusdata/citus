@@ -49,25 +49,21 @@ static void ForeignConstraintFindDistKeys(HeapTuple pgConstraintTuple,
 bool
 ConstraintIsAForeignKeyToReferenceTable(char *constraintName, Oid relationId)
 {
-	Relation pgConstraint = NULL;
-	SysScanDesc scanDescriptor = NULL;
 	ScanKeyData scanKey[1];
 	int scanKeyCount = 1;
-	HeapTuple heapTuple = NULL;
 	bool foreignKeyToReferenceTable = false;
 
 
-	pgConstraint = heap_open(ConstraintRelationId, AccessShareLock);
+	Relation pgConstraint = heap_open(ConstraintRelationId, AccessShareLock);
 
 	ScanKeyInit(&scanKey[0], Anum_pg_constraint_contype, BTEqualStrategyNumber, F_CHAREQ,
 				CharGetDatum(CONSTRAINT_FOREIGN));
-	scanDescriptor = systable_beginscan(pgConstraint, InvalidOid, false,
-										NULL, scanKeyCount, scanKey);
+	SysScanDesc scanDescriptor = systable_beginscan(pgConstraint, InvalidOid, false,
+													NULL, scanKeyCount, scanKey);
 
-	heapTuple = systable_getnext(scanDescriptor);
+	HeapTuple heapTuple = systable_getnext(scanDescriptor);
 	while (HeapTupleIsValid(heapTuple))
 	{
-		Oid referencedTableId = InvalidOid;
 		Form_pg_constraint constraintForm = (Form_pg_constraint) GETSTRUCT(heapTuple);
 		char *tupleConstraintName = (constraintForm->conname).data;
 
@@ -78,7 +74,7 @@ ConstraintIsAForeignKeyToReferenceTable(char *constraintName, Oid relationId)
 			continue;
 		}
 
-		referencedTableId = constraintForm->confrelid;
+		Oid referencedTableId = constraintForm->confrelid;
 
 		Assert(IsDistributedTable(referencedTableId));
 
@@ -122,11 +118,8 @@ ErrorIfUnsupportedForeignConstraintExists(Relation relation, char referencingDis
 										  Var *referencingDistKey,
 										  uint32 referencingColocationId)
 {
-	Relation pgConstraint = NULL;
-	SysScanDesc scanDescriptor = NULL;
 	ScanKeyData scanKey[1];
 	int scanKeyCount = 1;
-	HeapTuple heapTuple = NULL;
 
 	Oid referencingTableId = relation->rd_id;
 	Oid referencedTableId = InvalidOid;
@@ -145,26 +138,22 @@ ErrorIfUnsupportedForeignConstraintExists(Relation relation, char referencingDis
 		referencingNotReplicated = (ShardReplicationFactor == 1);
 	}
 
-	pgConstraint = heap_open(ConstraintRelationId, AccessShareLock);
+	Relation pgConstraint = heap_open(ConstraintRelationId, AccessShareLock);
 	ScanKeyInit(&scanKey[0], Anum_pg_constraint_conrelid, BTEqualStrategyNumber, F_OIDEQ,
 				relation->rd_id);
-	scanDescriptor = systable_beginscan(pgConstraint, ConstraintRelidTypidNameIndexId,
-										true, NULL,
-										scanKeyCount, scanKey);
+	SysScanDesc scanDescriptor = systable_beginscan(pgConstraint,
+													ConstraintRelidTypidNameIndexId,
+													true, NULL,
+													scanKeyCount, scanKey);
 
-	heapTuple = systable_getnext(scanDescriptor);
+	HeapTuple heapTuple = systable_getnext(scanDescriptor);
 	while (HeapTupleIsValid(heapTuple))
 	{
 		Form_pg_constraint constraintForm = (Form_pg_constraint) GETSTRUCT(heapTuple);
-		bool referencedIsDistributed = false;
 		char referencedDistMethod = 0;
 		Var *referencedDistKey = NULL;
-		bool referencingIsReferenceTable = false;
-		bool referencedIsReferenceTable = false;
 		int referencingAttrIndex = -1;
 		int referencedAttrIndex = -1;
-		bool referencingColumnsIncludeDistKey = false;
-		bool foreignConstraintOnDistKey = false;
 
 		if (constraintForm->contype != CONSTRAINT_FOREIGN)
 		{
@@ -175,7 +164,7 @@ ErrorIfUnsupportedForeignConstraintExists(Relation relation, char referencingDis
 		referencedTableId = constraintForm->confrelid;
 		selfReferencingTable = (referencingTableId == referencedTableId);
 
-		referencedIsDistributed = IsDistributedTable(referencedTableId);
+		bool referencedIsDistributed = IsDistributedTable(referencedTableId);
 		if (!referencedIsDistributed && !selfReferencingTable)
 		{
 			ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
@@ -199,8 +188,8 @@ ErrorIfUnsupportedForeignConstraintExists(Relation relation, char referencingDis
 			referencedColocationId = referencingColocationId;
 		}
 
-		referencingIsReferenceTable = (referencingDistMethod == DISTRIBUTE_BY_NONE);
-		referencedIsReferenceTable = (referencedDistMethod == DISTRIBUTE_BY_NONE);
+		bool referencingIsReferenceTable = (referencingDistMethod == DISTRIBUTE_BY_NONE);
+		bool referencedIsReferenceTable = (referencedDistMethod == DISTRIBUTE_BY_NONE);
 
 
 		/*
@@ -250,8 +239,8 @@ ErrorIfUnsupportedForeignConstraintExists(Relation relation, char referencingDis
 									  referencedDistKey,
 									  &referencingAttrIndex,
 									  &referencedAttrIndex);
-		referencingColumnsIncludeDistKey = (referencingAttrIndex != -1);
-		foreignConstraintOnDistKey =
+		bool referencingColumnsIncludeDistKey = (referencingAttrIndex != -1);
+		bool foreignConstraintOnDistKey =
 			(referencingColumnsIncludeDistKey && referencingAttrIndex ==
 			 referencedAttrIndex);
 
@@ -353,14 +342,11 @@ ForeignConstraintFindDistKeys(HeapTuple pgConstraintTuple,
 							  int *referencingAttrIndex,
 							  int *referencedAttrIndex)
 {
-	Datum referencingColumnsDatum = 0;
 	Datum *referencingColumnArray = NULL;
 	int referencingColumnCount = 0;
-	Datum referencedColumnsDatum = 0;
 	Datum *referencedColumnArray = NULL;
 	int referencedColumnCount = 0;
 	bool isNull = false;
-	int attrIdx = 0;
 
 	*referencedAttrIndex = -1;
 	*referencedAttrIndex = -1;
@@ -371,10 +357,10 @@ ForeignConstraintFindDistKeys(HeapTuple pgConstraintTuple,
 	 * attributes together because partition column must be at the same place in both
 	 * referencing and referenced side of the foreign key constraint.
 	 */
-	referencingColumnsDatum = SysCacheGetAttr(CONSTROID, pgConstraintTuple,
-											  Anum_pg_constraint_conkey, &isNull);
-	referencedColumnsDatum = SysCacheGetAttr(CONSTROID, pgConstraintTuple,
-											 Anum_pg_constraint_confkey, &isNull);
+	Datum referencingColumnsDatum = SysCacheGetAttr(CONSTROID, pgConstraintTuple,
+													Anum_pg_constraint_conkey, &isNull);
+	Datum referencedColumnsDatum = SysCacheGetAttr(CONSTROID, pgConstraintTuple,
+												   Anum_pg_constraint_confkey, &isNull);
 
 	deconstruct_array(DatumGetArrayTypeP(referencingColumnsDatum), INT2OID, 2, true,
 					  's', &referencingColumnArray, NULL, &referencingColumnCount);
@@ -383,7 +369,7 @@ ForeignConstraintFindDistKeys(HeapTuple pgConstraintTuple,
 
 	Assert(referencingColumnCount == referencedColumnCount);
 
-	for (attrIdx = 0; attrIdx < referencingColumnCount; ++attrIdx)
+	for (int attrIdx = 0; attrIdx < referencingColumnCount; ++attrIdx)
 	{
 		AttrNumber referencingAttrNo = DatumGetInt16(referencingColumnArray[attrIdx]);
 		AttrNumber referencedAttrNo = DatumGetInt16(referencedColumnArray[attrIdx]);
@@ -412,31 +398,26 @@ ForeignConstraintFindDistKeys(HeapTuple pgConstraintTuple,
 bool
 ColumnAppearsInForeignKeyToReferenceTable(char *columnName, Oid relationId)
 {
-	Relation pgConstraint = NULL;
-	SysScanDesc scanDescriptor = NULL;
 	ScanKeyData scanKey[1];
 	int scanKeyCount = 1;
-	HeapTuple heapTuple = NULL;
 	bool foreignKeyToReferenceTableIncludesGivenColumn = false;
 
-	pgConstraint = heap_open(ConstraintRelationId, AccessShareLock);
+	Relation pgConstraint = heap_open(ConstraintRelationId, AccessShareLock);
 
 	ScanKeyInit(&scanKey[0], Anum_pg_constraint_contype, BTEqualStrategyNumber, F_CHAREQ,
 				CharGetDatum(CONSTRAINT_FOREIGN));
 
-	scanDescriptor = systable_beginscan(pgConstraint, InvalidOid, false,
-										NULL, scanKeyCount, scanKey);
+	SysScanDesc scanDescriptor = systable_beginscan(pgConstraint, InvalidOid, false,
+													NULL, scanKeyCount, scanKey);
 
-	heapTuple = systable_getnext(scanDescriptor);
+	HeapTuple heapTuple = systable_getnext(scanDescriptor);
 	while (HeapTupleIsValid(heapTuple))
 	{
-		Oid referencedTableId = InvalidOid;
-		Oid referencingTableId = InvalidOid;
 		int pgConstraintKey = 0;
 		Form_pg_constraint constraintForm = (Form_pg_constraint) GETSTRUCT(heapTuple);
 
-		referencedTableId = constraintForm->confrelid;
-		referencingTableId = constraintForm->conrelid;
+		Oid referencedTableId = constraintForm->confrelid;
+		Oid referencingTableId = constraintForm->conrelid;
 
 		if (referencedTableId == relationId)
 		{
@@ -493,11 +474,8 @@ GetTableForeignConstraintCommands(Oid relationId)
 {
 	List *tableForeignConstraints = NIL;
 
-	Relation pgConstraint = NULL;
-	SysScanDesc scanDescriptor = NULL;
 	ScanKeyData scanKey[1];
 	int scanKeyCount = 1;
-	HeapTuple heapTuple = NULL;
 
 	/*
 	 * Set search_path to NIL so that all objects outside of pg_catalog will be
@@ -510,14 +488,15 @@ GetTableForeignConstraintCommands(Oid relationId)
 	PushOverrideSearchPath(overridePath);
 
 	/* open system catalog and scan all constraints that belong to this table */
-	pgConstraint = heap_open(ConstraintRelationId, AccessShareLock);
+	Relation pgConstraint = heap_open(ConstraintRelationId, AccessShareLock);
 	ScanKeyInit(&scanKey[0], Anum_pg_constraint_conrelid, BTEqualStrategyNumber, F_OIDEQ,
 				relationId);
-	scanDescriptor = systable_beginscan(pgConstraint, ConstraintRelidTypidNameIndexId,
-										true, NULL,
-										scanKeyCount, scanKey);
+	SysScanDesc scanDescriptor = systable_beginscan(pgConstraint,
+													ConstraintRelidTypidNameIndexId,
+													true, NULL,
+													scanKeyCount, scanKey);
 
-	heapTuple = systable_getnext(scanDescriptor);
+	HeapTuple heapTuple = systable_getnext(scanDescriptor);
 	while (HeapTupleIsValid(heapTuple))
 	{
 		Form_pg_constraint constraintForm = (Form_pg_constraint) GETSTRUCT(heapTuple);
@@ -556,24 +535,21 @@ GetTableForeignConstraintCommands(Oid relationId)
 bool
 HasForeignKeyToReferenceTable(Oid relationId)
 {
-	Relation pgConstraint = NULL;
-	SysScanDesc scanDescriptor = NULL;
 	ScanKeyData scanKey[1];
 	int scanKeyCount = 1;
-	HeapTuple heapTuple = NULL;
 	bool hasForeignKeyToReferenceTable = false;
 
-	pgConstraint = heap_open(ConstraintRelationId, AccessShareLock);
+	Relation pgConstraint = heap_open(ConstraintRelationId, AccessShareLock);
 	ScanKeyInit(&scanKey[0], Anum_pg_constraint_conrelid, BTEqualStrategyNumber, F_OIDEQ,
 				relationId);
-	scanDescriptor = systable_beginscan(pgConstraint, ConstraintRelidTypidNameIndexId,
-										true, NULL,
-										scanKeyCount, scanKey);
+	SysScanDesc scanDescriptor = systable_beginscan(pgConstraint,
+													ConstraintRelidTypidNameIndexId,
+													true, NULL,
+													scanKeyCount, scanKey);
 
-	heapTuple = systable_getnext(scanDescriptor);
+	HeapTuple heapTuple = systable_getnext(scanDescriptor);
 	while (HeapTupleIsValid(heapTuple))
 	{
-		Oid referencedTableId = InvalidOid;
 		Form_pg_constraint constraintForm = (Form_pg_constraint) GETSTRUCT(heapTuple);
 
 		if (constraintForm->contype != CONSTRAINT_FOREIGN)
@@ -582,7 +558,7 @@ HasForeignKeyToReferenceTable(Oid relationId)
 			continue;
 		}
 
-		referencedTableId = constraintForm->confrelid;
+		Oid referencedTableId = constraintForm->confrelid;
 
 		if (!IsDistributedTable(referencedTableId))
 		{
@@ -615,22 +591,20 @@ HasForeignKeyToReferenceTable(Oid relationId)
 bool
 TableReferenced(Oid relationId)
 {
-	Relation pgConstraint = NULL;
-	HeapTuple heapTuple = NULL;
-	SysScanDesc scanDescriptor = NULL;
 	ScanKeyData scanKey[1];
 	int scanKeyCount = 1;
 	Oid scanIndexId = InvalidOid;
 	bool useIndex = false;
 
-	pgConstraint = heap_open(ConstraintRelationId, AccessShareLock);
+	Relation pgConstraint = heap_open(ConstraintRelationId, AccessShareLock);
 
 	ScanKeyInit(&scanKey[0], Anum_pg_constraint_confrelid, BTEqualStrategyNumber, F_OIDEQ,
 				relationId);
-	scanDescriptor = systable_beginscan(pgConstraint, scanIndexId, useIndex, NULL,
-										scanKeyCount, scanKey);
+	SysScanDesc scanDescriptor = systable_beginscan(pgConstraint, scanIndexId, useIndex,
+													NULL,
+													scanKeyCount, scanKey);
 
-	heapTuple = systable_getnext(scanDescriptor);
+	HeapTuple heapTuple = systable_getnext(scanDescriptor);
 	while (HeapTupleIsValid(heapTuple))
 	{
 		Form_pg_constraint constraintForm = (Form_pg_constraint) GETSTRUCT(heapTuple);
@@ -661,17 +635,15 @@ static bool
 HeapTupleOfForeignConstraintIncludesColumn(HeapTuple heapTuple, Oid relationId,
 										   int pgConstraintKey, char *columnName)
 {
-	Datum columnsDatum = 0;
 	Datum *columnArray = NULL;
 	int columnCount = 0;
-	int attrIdx = 0;
 	bool isNull = false;
 
-	columnsDatum = SysCacheGetAttr(CONSTROID, heapTuple, pgConstraintKey, &isNull);
+	Datum columnsDatum = SysCacheGetAttr(CONSTROID, heapTuple, pgConstraintKey, &isNull);
 	deconstruct_array(DatumGetArrayTypeP(columnsDatum), INT2OID, 2, true,
 					  's', &columnArray, NULL, &columnCount);
 
-	for (attrIdx = 0; attrIdx < columnCount; ++attrIdx)
+	for (int attrIdx = 0; attrIdx < columnCount; ++attrIdx)
 	{
 		AttrNumber attrNo = DatumGetInt16(columnArray[attrIdx]);
 
@@ -696,22 +668,20 @@ HeapTupleOfForeignConstraintIncludesColumn(HeapTuple heapTuple, Oid relationId,
 bool
 TableReferencing(Oid relationId)
 {
-	Relation pgConstraint = NULL;
-	HeapTuple heapTuple = NULL;
-	SysScanDesc scanDescriptor = NULL;
 	ScanKeyData scanKey[1];
 	int scanKeyCount = 1;
 	Oid scanIndexId = InvalidOid;
 	bool useIndex = false;
 
-	pgConstraint = heap_open(ConstraintRelationId, AccessShareLock);
+	Relation pgConstraint = heap_open(ConstraintRelationId, AccessShareLock);
 
 	ScanKeyInit(&scanKey[0], Anum_pg_constraint_conrelid, BTEqualStrategyNumber, F_OIDEQ,
 				relationId);
-	scanDescriptor = systable_beginscan(pgConstraint, scanIndexId, useIndex, NULL,
-										scanKeyCount, scanKey);
+	SysScanDesc scanDescriptor = systable_beginscan(pgConstraint, scanIndexId, useIndex,
+													NULL,
+													scanKeyCount, scanKey);
 
-	heapTuple = systable_getnext(scanDescriptor);
+	HeapTuple heapTuple = systable_getnext(scanDescriptor);
 	while (HeapTupleIsValid(heapTuple))
 	{
 		Form_pg_constraint constraintForm = (Form_pg_constraint) GETSTRUCT(heapTuple);
@@ -741,20 +711,17 @@ TableReferencing(Oid relationId)
 bool
 ConstraintIsAForeignKey(char *constraintNameInput, Oid relationId)
 {
-	Relation pgConstraint = NULL;
-	SysScanDesc scanDescriptor = NULL;
 	ScanKeyData scanKey[1];
 	int scanKeyCount = 1;
-	HeapTuple heapTuple = NULL;
 
-	pgConstraint = heap_open(ConstraintRelationId, AccessShareLock);
+	Relation pgConstraint = heap_open(ConstraintRelationId, AccessShareLock);
 
 	ScanKeyInit(&scanKey[0], Anum_pg_constraint_contype, BTEqualStrategyNumber, F_CHAREQ,
 				CharGetDatum(CONSTRAINT_FOREIGN));
-	scanDescriptor = systable_beginscan(pgConstraint, InvalidOid, false,
-										NULL, scanKeyCount, scanKey);
+	SysScanDesc scanDescriptor = systable_beginscan(pgConstraint, InvalidOid, false,
+													NULL, scanKeyCount, scanKey);
 
-	heapTuple = systable_getnext(scanDescriptor);
+	HeapTuple heapTuple = systable_getnext(scanDescriptor);
 	while (HeapTupleIsValid(heapTuple))
 	{
 		Form_pg_constraint constraintForm = (Form_pg_constraint) GETSTRUCT(heapTuple);
