@@ -1,5 +1,5 @@
 setup
-{	
+{
   	CREATE TABLE table_to_distribute(id int);
 }
 

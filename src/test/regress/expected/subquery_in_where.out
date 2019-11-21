@@ -4,13 +4,13 @@
 CREATE SCHEMA subquery_in_where;
 SET search_path TO subquery_in_where, public;
 SET client_min_messages TO DEBUG1;
---CTEs can be used as a recurring tuple with subqueries in WHERE 
+--CTEs can be used as a recurring tuple with subqueries in WHERE
 WITH event_id
-     AS (SELECT user_id AS events_user_id, 
-                time    AS events_time, 
+     AS (SELECT user_id AS events_user_id,
+                time    AS events_time,
                 event_type
-         FROM   events_table) 
-SELECT Count(*) 
+         FROM   events_table)
+SELECT Count(*)
 FROM   event_id
 WHERE  events_user_id IN (SELECT user_id
                           FROM   users_table);
@@ -22,27 +22,27 @@ DEBUG:  Plan 1 query after replacing subqueries and CTEs: SELECT count(*) AS cou
    101
 (1 row)
 
---Correlated subqueries can not be used in WHERE clause 
-WITH event_id 
-     AS (SELECT user_id AS events_user_id, 
-                time    AS events_time, 
-                event_type 
-         FROM   events_table) 
-SELECT Count(*) 
-FROM   event_id 
-WHERE  events_user_id IN (SELECT user_id 
-                          FROM   users_table 
-                          WHERE  users_table.time = events_time); 
+--Correlated subqueries can not be used in WHERE clause
+WITH event_id
+     AS (SELECT user_id AS events_user_id,
+                time    AS events_time,
+                event_type
+         FROM   events_table)
+SELECT Count(*)
+FROM   event_id
+WHERE  events_user_id IN (SELECT user_id
+                          FROM   users_table
+                          WHERE  users_table.time = events_time);
 DEBUG:  generating subplan 4_1 for CTE event_id: SELECT user_id AS events_user_id, "time" AS events_time, event_type FROM public.events_table
 DEBUG:  Plan 4 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.events_user_id, intermediate_result.events_time, intermediate_result.event_type FROM read_intermediate_result('4_1'::text, 'binary'::citus_copy_format) intermediate_result(events_user_id integer, events_time timestamp without time zone, event_type integer)) event_id WHERE (events_user_id OPERATOR(pg_catalog.=) ANY (SELECT users_table.user_id FROM public.users_table WHERE (users_table."time" OPERATOR(pg_catalog.=) event_id.events_time)))
 ERROR:  cannot pushdown the subquery
 DETAIL:  Complex subqueries and CTEs are not allowed in the FROM clause when the query has subqueries in the WHERE clause and it references a column from another query
--- Recurring tuples as empty join tree 
-SELECT * 
+-- Recurring tuples as empty join tree
+SELECT *
 FROM   (SELECT 1 AS id, 2 AS value_1, 3 AS value_3
-		UNION ALL SELECT 2 as id, 3 as value_1, 4 as value_3) AS tt1 
-WHERE  id IN (SELECT user_id 
-              FROM   events_table); 
+		UNION ALL SELECT 2 as id, 3 as value_1, 4 as value_3) AS tt1
+WHERE  id IN (SELECT user_id
+              FROM   events_table);
 DEBUG:  generating subplan 6_1 for subquery SELECT 1 AS id, 2 AS value_1, 3 AS value_3 UNION ALL SELECT 2 AS id, 3 AS value_1, 4 AS value_3
 DEBUG:  generating subplan 6_2 for subquery SELECT user_id FROM public.events_table
 DEBUG:  Plan 6 query after replacing subqueries and CTEs: SELECT id, value_1, value_3 FROM (SELECT intermediate_result.id, intermediate_result.value_1, intermediate_result.value_3 FROM read_intermediate_result('6_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer, value_1 integer, value_3 integer)) tt1 WHERE (id OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.user_id FROM read_intermediate_result('6_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)))
@@ -55,12 +55,12 @@ DEBUG:  Plan 6 query after replacing subqueries and CTEs: SELECT id, value_1, va
 -- Recurring tuples in from clause as CTE and SET operation in WHERE clause
 SELECT Count(*)
 FROM   (WITH event_id AS
-       (SELECT user_id AS events_user_id, time AS events_time, event_type 
+       (SELECT user_id AS events_user_id, time AS events_time, event_type
         FROM events_table)
        SELECT events_user_id, events_time, event_type
-	   FROM event_id 
+	   FROM event_id
 	   ORDER BY 1,2,3
-	   LIMIT 10) AS sub_table 
+	   LIMIT 10) AS sub_table
 WHERE  events_user_id IN (
        (SELECT user_id
         FROM users_table
@@ -218,7 +218,7 @@ FROM
 		user_id as events_user_id, time as events_time, event_type
 	FROM
 		events_table
-	ORDER BY 
+	ORDER BY
 		1,2,3
 	LIMIT
 		10
@@ -628,7 +628,6 @@ DEBUG:  Plan 65 query after replacing subqueries and CTEs: SELECT generate_serie
                3
 (3 rows)
 
-	
 -- Local tables also planned recursively, so using it as part of the FROM clause
 -- make the clause recurring
 CREATE TABLE local_table(id int, value_1 int);
@@ -656,7 +655,6 @@ DEBUG:  Plan 67 query after replacing subqueries and CTEs: SELECT id, value_1 FR
   2 |       2
 (2 rows)
 
-		
 -- Use local table in WHERE clause
 SELECT
 	COUNT(*)
@@ -667,7 +665,7 @@ FROM
 		users_table
 	ORDER BY
 		user_id
-	LIMIT 
+	LIMIT
 		10) as sub_table
 WHERE
 	user_id

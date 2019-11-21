@@ -1,4 +1,4 @@
---  citus--7.2-2--7.2-3 
+--  citus--7.2-2--7.2-3
 
 DROP FUNCTION pg_catalog.read_intermediate_result(text,citus.copy_format);
 DROP TYPE citus.copy_format;

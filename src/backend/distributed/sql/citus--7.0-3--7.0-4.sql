@@ -1,4 +1,4 @@
---  citus--7.0-3--7.0-4.sql 
+--  citus--7.0-3--7.0-4.sql
 
 SET search_path = 'pg_catalog';
 

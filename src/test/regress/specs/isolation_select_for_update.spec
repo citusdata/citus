@@ -41,7 +41,7 @@ step "s1-select-from-t1-t2-for-update"
 {
  	SELECT * FROM
 		test_table_1_rf1 as tt1 INNER JOIN test_table_2_rf1 as tt2 on tt1.id = tt2.id
-		WHERE tt1.id = 1 
+		WHERE tt1.id = 1
 		ORDER BY 1
 		FOR UPDATE;
 }
@@ -50,7 +50,7 @@ step "s1-select-from-t1-t2-for-share"
 {
 	SELECT * FROM
 		test_table_1_rf1 as tt1 INNER JOIN test_table_2_rf1 as tt2 on tt1.id = tt2.id
-		WHERE tt1.id = 1 
+		WHERE tt1.id = 1
 		ORDER BY 1
 		FOR SHARE;
 }
@@ -132,7 +132,7 @@ step "s2-select-from-t1-t2-for-share"
 {
 	SELECT * FROM
 		test_table_1_rf1 as tt1 INNER JOIN test_table_1_rf1 as tt2 on tt1.id = tt2.id
-		WHERE tt1.id = 1 
+		WHERE tt1.id = 1
 		ORDER BY 1
 		FOR SHARE;
 }
@@ -141,7 +141,7 @@ step "s2-select-from-t1-t2-for-update"
 {
  	SELECT * FROM
 		test_table_1_rf1 as tt1 INNER JOIN test_table_1_rf1 as tt2 on tt1.id = tt2.id
-		WHERE tt1.id = 1 
+		WHERE tt1.id = 1
 		ORDER BY 1
 		FOR UPDATE;
 }

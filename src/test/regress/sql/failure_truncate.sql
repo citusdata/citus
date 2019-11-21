@@ -1,6 +1,6 @@
--- 
--- Test TRUNCATE command failures 
--- 
+--
+-- Test TRUNCATE command failures
+--
 CREATE SCHEMA truncate_failure;
 SET search_path TO 'truncate_failure';
 SET citus.next_shard_id TO 120000;
@@ -25,15 +25,15 @@ SELECT create_distributed_table('test_table', 'key');
 
 INSERT INTO test_table SELECT x,x FROM generate_series(1,20) as f(x);
 
-CREATE VIEW unhealthy_shard_count AS 
-  SELECT count(*) 
-  FROM pg_dist_shard_placement pdsp 
-  JOIN 
-  pg_dist_shard pds 
-  ON pdsp.shardid=pds.shardid 
+CREATE VIEW unhealthy_shard_count AS
+  SELECT count(*)
+  FROM pg_dist_shard_placement pdsp
+  JOIN
+  pg_dist_shard pds
+  ON pdsp.shardid=pds.shardid
   WHERE logicalrelid='truncate_failure.test_table'::regclass AND shardstate != 1;
 
--- in the first test, kill just in the first 
+-- in the first test, kill just in the first
 -- response we get from the worker
 SELECT citus.mitmproxy('conn.onAuthenticationOk().kill()');
 TRUNCATE test_table;
@@ -41,7 +41,7 @@ SELECT citus.mitmproxy('conn.allow()');
 SELECT * FROM unhealthy_shard_count;
 SELECT count(*) FROM test_table;
 
--- cancel just in the first 
+-- cancel just in the first
 -- response we get from the worker
 SELECT citus.mitmproxy('conn.onAuthenticationOk().cancel(' ||  pg_backend_pid() || ')');
 TRUNCATE test_table;
@@ -79,7 +79,7 @@ SELECT count(*) FROM test_table;
 
 -- kill as soon as the coordinator sends COMMIT
 -- One shard should not get truncated but the other should
--- since it is sent from another connection. 
+-- since it is sent from another connection.
 -- Thus, we should see a partially successful truncate
 -- Note: This is the result of using 1pc and there is no way to recover from it
 SELECT citus.mitmproxy('conn.onQuery(query="^COMMIT").kill()');
@@ -93,7 +93,7 @@ TRUNCATE test_table;
 INSERT INTO test_table SELECT x,x FROM generate_series(1,20) as f(x);
 
 -- cancel as soon as the coordinator sends COMMIT
--- interrupts are held during COMMIT/ROLLBACK, so the command 
+-- interrupts are held during COMMIT/ROLLBACK, so the command
 -- should have been applied without any issues since cancel is ignored
 SELECT citus.mitmproxy('conn.onQuery(query="^COMMIT").cancel(' ||  pg_backend_pid() || ')');
 TRUNCATE test_table;
@@ -106,7 +106,7 @@ TRUNCATE test_table;
 INSERT INTO test_table SELECT x,x FROM generate_series(1,20) as f(x);
 
 SET client_min_messages TO WARNING;
--- now kill just after the worker sends response to 
+-- now kill just after the worker sends response to
 -- COMMIT command, so we'll have lots of warnings but the command
 -- should have been committed both on the distributed table and the placements
 SELECT citus.mitmproxy('conn.onCommandComplete(command="^COMMIT").kill()');
@@ -118,7 +118,7 @@ SET client_min_messages TO ERROR;
 
 INSERT INTO test_table SELECT x,x FROM generate_series(1,20) as f(x);
 
--- now cancel just after the worker sends response to 
+-- now cancel just after the worker sends response to
 -- but Postgres doesn't accept interrupts during COMMIT and ROLLBACK
 -- so should not cancel at all, so not an effective test but adding in
 -- case Citus messes up this behaviour
@@ -154,7 +154,7 @@ SELECT * FROM unhealthy_shard_count;
 SELECT count(*) FROM test_table;
 SELECT count(*) FROM reference_table;
 
--- immediately kill when we see cascading TRUNCATE on the hash table to see 
+-- immediately kill when we see cascading TRUNCATE on the hash table to see
 -- rollbacked properly
 SELECT citus.mitmproxy('conn.onQuery(query="^TRUNCATE TABLE").after(2).kill()');
 TRUNCATE reference_table CASCADE;
@@ -163,7 +163,7 @@ SELECT * FROM unhealthy_shard_count;
 SELECT count(*) FROM test_table;
 SELECT count(*) FROM reference_table;
 
--- immediately cancel when we see cascading TRUNCATE on the hash table to see 
+-- immediately cancel when we see cascading TRUNCATE on the hash table to see
 -- if the command still cascaded to referencing table or failed successfuly
 SELECT citus.mitmproxy('conn.onQuery(query="^TRUNCATE TABLE").after(2).cancel(' ||  pg_backend_pid() || ')');
 TRUNCATE reference_table CASCADE;
@@ -195,7 +195,7 @@ SELECT count(*) FROM test_table;
 -- now, lets test with 2PC
 SET citus.multi_shard_commit_protocol TO '2pc';
 
--- in the first test, kill just in the first 
+-- in the first test, kill just in the first
 -- response we get from the worker
 SELECT citus.mitmproxy('conn.onAuthenticationOk().kill()');
 TRUNCATE test_table;
@@ -203,7 +203,7 @@ SELECT citus.mitmproxy('conn.allow()');
 SELECT * FROM unhealthy_shard_count;
 SELECT count(*) FROM test_table;
 
--- cancel just in the first 
+-- cancel just in the first
 -- response we get from the worker
 SELECT citus.mitmproxy('conn.onAuthenticationOk().cancel(' ||  pg_backend_pid() || ')');
 TRUNCATE test_table;
@@ -277,7 +277,7 @@ INSERT INTO test_table SELECT x,x FROM generate_series(1,20) as f(x);
 SELECT citus.mitmproxy('conn.onQuery(query="^COMMIT PREPARED").kill()');
 TRUNCATE test_table;
 SELECT citus.mitmproxy('conn.allow()');
--- Since we kill connections to one worker after commit arrives but the 
+-- Since we kill connections to one worker after commit arrives but the
 -- other worker connections are healthy, we cannot commit on 1 worker
 -- which has 2 active shard placements, but the other does. That's why
 -- we expect to see 2 recovered prepared transactions.
@@ -296,7 +296,7 @@ ROLLBACK;
 SELECT citus.mitmproxy('conn.allow()');
 SELECT count(*) FROM test_table;
 
--- but now kill just after the worker sends response to 
+-- but now kill just after the worker sends response to
 -- ROLLBACK command, so we'll have lots of warnings but the command
 -- should have been rollbacked both on the distributed table and the placements
 SELECT citus.mitmproxy('conn.onCommandComplete(command="^ROLLBACK").kill()');
@@ -318,15 +318,15 @@ CREATE TABLE test_table (key int, value int);
 SELECT create_distributed_table('test_table', 'key');
 INSERT INTO test_table SELECT x,x FROM generate_series(1,20) as f(x);
 
-CREATE VIEW unhealthy_shard_count AS 
-  SELECT count(*) 
-  FROM pg_dist_shard_placement pdsp 
-  JOIN 
-  pg_dist_shard pds 
-  ON pdsp.shardid=pds.shardid 
+CREATE VIEW unhealthy_shard_count AS
+  SELECT count(*)
+  FROM pg_dist_shard_placement pdsp
+  JOIN
+  pg_dist_shard pds
+  ON pdsp.shardid=pds.shardid
   WHERE logicalrelid='truncate_failure.test_table'::regclass AND shardstate != 1;
 
--- in the first test, kill just in the first 
+-- in the first test, kill just in the first
 -- response we get from the worker
 SELECT citus.mitmproxy('conn.onAuthenticationOk().kill()');
 TRUNCATE test_table;
@@ -334,7 +334,7 @@ SELECT citus.mitmproxy('conn.allow()');
 SELECT * FROM unhealthy_shard_count;
 SELECT count(*) FROM test_table;
 
--- cancel just in the first 
+-- cancel just in the first
 -- response we get from the worker
 SELECT citus.mitmproxy('conn.onAuthenticationOk().cancel(' ||  pg_backend_pid() || ')');
 TRUNCATE test_table;
@@ -399,7 +399,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^COMMIT PREPARED").kill()');
 TRUNCATE test_table;
 SELECT citus.mitmproxy('conn.allow()');
 SELECT * FROM unhealthy_shard_count;
--- Since we kill connections to one worker after commit arrives but the 
+-- Since we kill connections to one worker after commit arrives but the
 -- other worker connections are healthy, we cannot commit on 1 worker
 -- which has 4 active shard placements (2 shards, replication factor=2),
 -- but the other does. That's why we expect to see 4 recovered prepared
@@ -420,7 +420,7 @@ SELECT citus.mitmproxy('conn.allow()');
 SELECT * FROM unhealthy_shard_count;
 SELECT count(*) FROM test_table;
 
--- but now kill just after the worker sends response to 
+-- but now kill just after the worker sends response to
 -- ROLLBACK command, so we'll have lots of warnings but the command
 -- should have been rollbacked both on the distributed table and the placements
 SELECT citus.mitmproxy('conn.onCommandComplete(command="^ROLLBACK").kill()');

@@ -83,7 +83,7 @@ SELECT create_distributed_table('test_count_distinct_schema.nation_hash', 'n_nat
 \copy test_count_distinct_schema.nation_hash FROM STDIN with delimiter '|';
 0|ALGERIA|0|haggle. carefully final deposits detect slyly agai
 1|ARGENTINA|1|al foxes promise slyly according to the regular accounts. bold requests alon
-2|BRAZIL|1|y alongside of the pending deposits. carefully special packages are about the ironic forges. slyly special 
+2|BRAZIL|1|y alongside of the pending deposits. carefully special packages are about the ironic forges. slyly special
 3|CANADA|1|eas hang ironic, silent packages. slyly regular packages are furiously over the tithes. fluffily bold
 4|EGYPT|4|y above the carefully unusual theodolites. final dugouts are quickly across the furiously regular d
 5|ETHIOPIA|0|ven packages wake quickly. regu
@@ -102,13 +102,13 @@ SET search_path TO public;
 -- worker nodes, we need to error out. Otherwise, we are fine.
 
 SET citus.limit_clause_row_fetch_count = 1000;
-SELECT l_returnflag, count(DISTINCT l_shipdate) as count_distinct, count(*) as total 
+SELECT l_returnflag, count(DISTINCT l_shipdate) as count_distinct, count(*) as total
 	FROM lineitem
 	GROUP BY l_returnflag
 	ORDER BY count_distinct
 	LIMIT 10;
 
-SELECT l_returnflag, count(DISTINCT l_shipdate) as count_distinct, count(*) as total 
+SELECT l_returnflag, count(DISTINCT l_shipdate) as count_distinct, count(*) as total
 	FROM lineitem
 	GROUP BY l_returnflag
 	ORDER BY total

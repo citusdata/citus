@@ -87,7 +87,6 @@ ERROR:  connection error: localhost:9060
 DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
-	  
 -- kill at the third copy (pull)
 SELECT citus.mitmproxy('conn.onQuery(query="SELECT DISTINCT users_table.user").kill()');
  mitmproxy 

@@ -1,5 +1,5 @@
 -- ===================================================================
--- test recursive planning functionality with complex target entries 
+-- test recursive planning functionality with complex target entries
 -- and some utilities
 -- ===================================================================
 CREATE SCHEMA subquery_complex;
@@ -13,7 +13,7 @@ SELECT
 FROM
   events_table
 WHERE
-  user_id IN (SELECT user_id FROM users_table GROUP BY user_id ORDER BY count(*) DESC LIMIT 20) 
+  user_id IN (SELECT user_id FROM users_table GROUP BY user_id ORDER BY count(*) DESC LIMIT 20)
 GROUP BY
   event_type
 ORDER BY 1 DESC, 2 DESC
@@ -46,8 +46,8 @@ FROM
     	SELECT count(distinct value_2) as cnt_2 FROM users_table ORDER BY 1 DESC LIMIT 4
     ) as baz,
 	(
-		SELECT user_id, sum(distinct value_2) as sum FROM users_table GROUP BY user_id ORDER BY 1 DESC LIMIT 4   
-    ) as bat, events_table 
+		SELECT user_id, sum(distinct value_2) as sum FROM users_table GROUP BY user_id ORDER BY 1 DESC LIMIT 4
+    ) as bat, events_table
     WHERE foo.avg != bar.cnt_1 AND baz.cnt_2 = events_table.event_type
     ORDER BY 1 DESC;
 
@@ -56,29 +56,29 @@ SELECT
    *
 FROM
     (
-    	SELECT 
+    	SELECT
     		min(user_id) * 2, max(user_id) / 2, sum(user_id), count(user_id)::float, avg(user_id)::bigint
-    	FROM 
-    		users_table 
-    	ORDER BY 1 DESC 
+    	FROM
+    		users_table
+    	ORDER BY 1 DESC
     	LIMIT 3
     ) as foo,
     (
-    	   SELECT 
+    	   SELECT
     		min(value_3) * 2, max(value_3) / 2, sum(value_3), count(value_3), avg(value_3)
-    	FROM 
-    		users_table 
-    	ORDER BY 1 DESC 
+    	FROM
+    		users_table
+    	ORDER BY 1 DESC
     	LIMIT 3
     ) as bar,
 	(
-    	SELECT 
-    		min(time), max(time), count(time), 
-    		count(*) FILTER (WHERE user_id = 3) as cnt_with_filter, 
+    	SELECT
+    		min(time), max(time), count(time),
+    		count(*) FILTER (WHERE user_id = 3) as cnt_with_filter,
     		count(*) FILTER (WHERE user_id::text LIKE '%3%') as cnt_with_filter_2
-    	FROM 
-    		users_table 
-    	ORDER BY 1 DESC 
+    	FROM
+    		users_table
+    	ORDER BY 1 DESC
     	LIMIT 3
     ) as baz
     ORDER BY 1 DESC;
@@ -95,11 +95,11 @@ FROM
     	SELECT sum(user_id * (5.0 / (value_1 + value_2 + 0.1)) * value_3) as cnt_1 FROM users_table ORDER BY 1 DESC LIMIT 3
     ) as bar,
 	(
-    	SELECT     
+    	SELECT
     		avg(case
             	when user_id > 4
             	then value_1
-        	end) as cnt_2, 
+        	end) as cnt_2,
     		avg(case
             	when user_id > 500
             	then value_1
@@ -112,16 +112,16 @@ FROM
 			end) as sum_1,
 			extract(year FROM max(time)) as l_year,
 			strpos(max(user_id)::text, '1') as pos
-         FROM 
-         		users_table 
-         ORDER BY 
-         	1 DESC 
+         FROM
+         		users_table
+         ORDER BY
+         	1 DESC
          LIMIT 4
-    ) as baz, 
+    ) as baz,
 	(
 		SELECT  COALESCE(value_3, 20) AS count_pay FROM users_table ORDER BY 1 OFFSET 20 LIMIT 5
 	) as tar,
-    events_table 
+    events_table
     WHERE foo.avg != bar.cnt_1 AND baz.cnt_2 != events_table.event_type
     ORDER BY 1 DESC;
 
@@ -183,7 +183,7 @@ FROM (
       		sum(value_1) > 10
       	   ORDER BY (sum(value_3) - avg(value_1) - COALESCE(array_upper(ARRAY[max(user_id)],1) * 5,0)) DESC
       	   LIMIT 3
-        ) as c 
+        ) as c
 
         WHERE b.value_2 != a.user_id
         ORDER BY 3 DESC, 2 DESC, 1 DESC
@@ -193,20 +193,20 @@ FROM (
 SELECT
    bar.user_id
 FROM
-    (SELECT 
-    	DISTINCT users_table.user_id 
-     FROM 
-     	users_table, events_table 
-     WHERE 
-     	users_table.user_id = events_table.user_id AND 
+    (SELECT
+    	DISTINCT users_table.user_id
+     FROM
+     	users_table, events_table
+     WHERE
+     	users_table.user_id = events_table.user_id AND
      event_type IN (1,2,3,4)
      ORDER BY 1 DESC LIMIT 5
      ) as foo,
-    (SELECT 
-    	DISTINCT users_table.user_id 
-     FROM 
-     	users_table, events_table 
-     WHERE 
+    (SELECT
+    	DISTINCT users_table.user_id
+     FROM
+     	users_table, events_table
+     WHERE
      	users_table.user_id = events_table.user_id AND false AND
      event_type IN (1,2,3,4)
      ORDER BY 1 DESC LIMIT 5
@@ -215,7 +215,7 @@ FROM
     ORDER BY 1 DESC;
 
 -- window functions tests, both is recursively planned
-SELECT * FROM 
+SELECT * FROM
 (
 	SELECT
 	   user_id, time, rnk
@@ -244,7 +244,7 @@ SELECT * FROM
 	    *, rank() OVER my_win as rnk
 	  FROM
 	    events_table
-	  WHERE 
+	  WHERE
 	   	user_id = 3
 	  WINDOW my_win AS (PARTITION BY event_type ORDER BY time DESC)
 
@@ -256,14 +256,14 @@ ORDER BY foo.rnk DESC, foo.time DESC, bar.time LIMIT 5;
 
 -- cursor test
 BEGIN;
-	
-	DECLARE recursive_subquery CURSOR FOR     
+
+	DECLARE recursive_subquery CURSOR FOR
 	SELECT
 	  event_type, count(distinct value_2)
 	FROM
 	  events_table
 	WHERE
-	  user_id IN (SELECT user_id FROM users_table GROUP BY user_id ORDER BY count(*) DESC LIMIT 20) 
+	  user_id IN (SELECT user_id FROM users_table GROUP BY user_id ORDER BY count(*) DESC LIMIT 20)
 	GROUP BY
 	  event_type
 	ORDER BY 1 DESC, 2 DESC
@@ -277,14 +277,14 @@ COMMIT;
 
 -- cursor test with FETCH ALL
 BEGIN;
-	
-	DECLARE recursive_subquery CURSOR FOR     
+
+	DECLARE recursive_subquery CURSOR FOR
 	SELECT
 	  event_type, count(distinct value_2)
 	FROM
 	  events_table
 	WHERE
-	  user_id IN (SELECT user_id FROM users_table GROUP BY user_id ORDER BY count(*) DESC LIMIT 20) 
+	  user_id IN (SELECT user_id FROM users_table GROUP BY user_id ORDER BY count(*) DESC LIMIT 20)
 	GROUP BY
 	  event_type
 	ORDER BY 1 DESC, 2 DESC

@@ -1,5 +1,5 @@
 -- Test two concurrent reparttition joins from two different workers
--- This test runs the below query from the :worker_2_port and the 
+-- This test runs the below query from the :worker_2_port and the
 -- concurrent test runs the same query on :worker_1_port. Note that, both
 -- tests use the same sequence ids but the queries should not fail.
 \c - - - :worker_2_port

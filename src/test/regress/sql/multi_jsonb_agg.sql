@@ -15,7 +15,7 @@ $$;
 
 -- Check multi_cat_agg() aggregate which is used to implement jsonb_agg()
 
-SELECT jsonb_cat_agg(i) FROM 
+SELECT jsonb_cat_agg(i) FROM
 	(VALUES ('[1,{"a":2}]'::jsonb), ('[null]'::jsonb), (NULL), ('["3",5,4]'::jsonb)) AS t(i);
 
 -- Check that we don't support distinct and order by with jsonb_agg()
@@ -65,17 +65,17 @@ SELECT l_quantity, array_sort(jsonb_agg(l_orderkey * 2 + 1)) FROM lineitem WHERE
 
 SELECT jsonb_agg(case when l_quantity > 20 then l_quantity else NULL end)
 	FROM lineitem WHERE l_orderkey < 5;
-	
+
 -- Check that we can execute jsonb_agg() with an expression containing different types
 
 SELECT jsonb_agg(case when l_quantity > 20 then to_jsonb(l_quantity) else '"f"'::jsonb end)
 	FROM lineitem WHERE l_orderkey < 5;
-	
+
 -- Check that we can execute jsonb_agg() with an expression containing jsonb arrays
 
 SELECT jsonb_agg(jsonb_build_array(l_quantity, l_shipdate))
 	FROM lineitem WHERE l_orderkey < 3;
-	
+
 -- Check that we can execute jsonb_agg() with an expression containing arrays
 
 SELECT jsonb_agg(ARRAY[l_quantity, l_orderkey])

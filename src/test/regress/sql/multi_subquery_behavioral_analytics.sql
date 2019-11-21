@@ -327,11 +327,11 @@ ORDER BY
   (
    SELECT
       users_table.user_id,
-      CASE 
-        WHEN 
+      CASE
+        WHEN
           events_table.event_type > 1 AND events_table.event_type < 3
-        THEN 'action=>1' 
-        ELSE 'action=>2' 
+        THEN 'action=>1'
+        ELSE 'action=>2'
       END AS event,
       events_table.time
     FROM
@@ -466,7 +466,7 @@ FROM users_table
 WHERE user_id IN (SELECT user_id FROM users_table WHERE value_1 >= 1 AND value_1 <= 2)
     AND user_id IN (SELECT user_id FROM users_table WHERE value_1 >= 3 AND value_1 <= 4)
     AND user_id IN (SELECT user_id FROM users_table WHERE  value_1 >= 5 AND value_1 <= 6)
-GROUP BY 
+GROUP BY
   user_id
 ORDER BY
   user_id DESC
@@ -532,9 +532,9 @@ SELECT user_id,
                             AND user_id = users_table.user_id
                      GROUP  BY user_id
                      HAVING Count(*) > 2)
-GROUP BY 
+GROUP BY
   user_id
-ORDER BY 
+ORDER BY
   1 DESC, 2 DESC
 LIMIT 5;
 
@@ -543,30 +543,30 @@ LIMIT 5;
 ------------------------------------
 SELECT user_id, value_1 from
 (
-  SELECT 
+  SELECT
     user_id, value_1 From users_table
-  WHERE 
-    value_2 > 1 and user_id = 2 
-  GROUP BY 
-    value_1, user_id 
-  HAVING 
+  WHERE
+    value_2 > 1 and user_id = 2
+  GROUP BY
+    value_1, user_id
+  HAVING
     count(*) > 1
 ) AS a
-ORDER BY 
+ORDER BY
   user_id ASC, value_1 ASC;
 
 -- same query with additional filter to make it not router plannable
 SELECT user_id, value_1 from
 (
-  SELECT 
+  SELECT
     user_id, value_1 From users_table
-  WHERE 
-    value_2 > 1 and (user_id = 2 OR user_id = 3) 
-  GROUP BY 
-    value_1, user_id 
+  WHERE
+    value_2 > 1 and (user_id = 2 OR user_id = 3)
+  GROUP BY
+    value_1, user_id
   HAVING count(*) > 1
 ) AS a
-ORDER BY 
+ORDER BY
   user_id ASC, value_1 ASC;
 
 ------------------------------------
@@ -575,11 +575,11 @@ ORDER BY
 SELECT user_id
 FROM events_table
 WHERE
-	event_type = 3 AND value_2 > 2 AND 
+	event_type = 3 AND value_2 > 2 AND
   user_id IN
-            (SELECT 
+            (SELECT
                 user_id
-             FROM 
+             FROM
               users_table
              WHERE
    	          value_1 = 1 AND value_2 > 2
@@ -589,13 +589,13 @@ ORDER BY 1;
 ------------------------------------
 -- Which events_table did people who has done some specific events_table
 ------------------------------------
-SELECT 
+SELECT
   user_id, event_type FROM events_table
-WHERE 
+WHERE
   user_id in (SELECT user_id from events_table WHERE event_type > 3 and event_type < 5)
-GROUP BY 
+GROUP BY
   user_id, event_type
-ORDER BY 2 DESC, 1 
+ORDER BY 2 DESC, 1
 LIMIT 3;
 
 ------------------------------------
@@ -607,14 +607,14 @@ SELECT user_id FROM
      user_id
   FROM
    	events_table
-  WHERE 
+  WHERE
     event_type = 2
-  GROUP BY 
-    user_id 
-  HAVING 
+  GROUP BY
+    user_id
+  HAVING
     count(*) > 1
 ) AS a
-ORDER BY 
+ORDER BY
   user_id;
 
 ------------------------------------
@@ -634,7 +634,7 @@ FROM
     	short_list.user_id = ma.user_id and ma.value_1 < 2 and short_list.event_type < 2
     ) temp
   ON users_table.user_id = temp.user_id
-  WHERE 
+  WHERE
     users_table.value_1 < 2;
 
   -- get some statistics from the aggregated results to ensure the results are correct
@@ -647,16 +647,16 @@ DROP TABLE assets;
 SET client_min_messages TO DEBUG1;
 SELECT count(*) FROM
 (
-  SELECT 
+  SELECT
     user_id
-  FROM 
+  FROM
     users_table
-  WHERE 
-    (value_1 = '1' OR value_1 = '3') AND 
+  WHERE
+    (value_1 = '1' OR value_1 = '3') AND
     user_id NOT IN (select user_id from users_table where value_1 = '4')
-  GROUP BY 
+  GROUP BY
     user_id
-  HAVING 
+  HAVING
     count(distinct value_1) = 2
 ) as foo;
 
@@ -671,9 +671,9 @@ SELECT subquery_count FROM
             users_table
         WHERE
             (value_1 = '1' OR value_1 = '3')
-        GROUP BY 
+        GROUP BY
           user_id
-        HAVING 
+        HAVING
           count(distinct value_1) = 2) as a
         LEFT JOIN
         (SELECT
@@ -682,12 +682,12 @@ SELECT subquery_count FROM
             users_table
         WHERE
             (value_1 = '2')
-        GROUP BY 
-          user_id) as b 
-        ON a.user_id = b.user_id 
-        WHERE 
+        GROUP BY
+          user_id) as b
+        ON a.user_id = b.user_id
+        WHERE
           b.user_id IS NULL
-    GROUP BY 
+    GROUP BY
       a.user_id
     ) AS inner_subquery;
 
@@ -700,9 +700,9 @@ FROM (
 		users_table
 	WHERE
 		(value_1 = '1' OR value_1 = '3')
-	GROUP BY 
+	GROUP BY
     user_id
-	HAVING 
+	HAVING
     count(distinct value_1) = 2
 	) as a
 	LEFT JOIN (
@@ -712,12 +712,12 @@ FROM (
 		users_table
 	WHERE
 		(value_1 = '2')
-	GROUP BY 
+	GROUP BY
     user_id) AS b
 	ON a.user_id = b.user_id
-WHERE 
+WHERE
   b.user_id IS NULL
-GROUP BY 
+GROUP BY
   a.user_id;
 
 -- most queries below has limit clause
@@ -787,9 +787,9 @@ FROM (
   ORDER BY time
   LIMIT 1
 ) e5 ON true
-WHERE 
+WHERE
   e1.user_id = 1
-GROUP BY 
+GROUP BY
   e1.user_id
 LIMIT 1;
 
@@ -926,9 +926,9 @@ FROM (
 		  users_table
 	   WHERE
 		  (value_1 > 2)
-	   GROUP BY 
+	   GROUP BY
       user_id
-	   HAVING 
+	   HAVING
       count(distinct value_1) > 2
 	) as a
 	LEFT JOIN (
@@ -939,11 +939,11 @@ FROM (
 	WHERE
 		(value_1 > 3)) AS b
 ON a.user_id = b.user_id
-WHERE 
+WHERE
   b.user_id IS NOT NULL
-GROUP BY 
+GROUP BY
   a.user_id
-ORDER BY 
+ORDER BY
   avg(b.value_3), 2, 1
 LIMIT 5;
 
@@ -967,45 +967,45 @@ FROM (
 	WHERE
 		(value_1 > 3)) AS b
 ON a.user_id = b.user_id
-WHERE 
+WHERE
   b.user_id IS NOT NULL
-GROUP BY 
+GROUP BY
   a.user_id
-HAVING 
+HAVING
   sum(b.value_3) > 5
-ORDER BY 
+ORDER BY
   avg(b.value_3), 2, 1
 LIMIT 5;
 
 -- avg on the value_3 is not a resjunk
 SELECT a.user_id, avg(b.value_2) as subquery_avg, avg(b.value_3)
 FROM
-	(SELECT 
+	(SELECT
       user_id
-    FROM 
+    FROM
       users_table
-	  WHERE 
+	  WHERE
       (value_1 > 2)
-	  GROUP BY 
+	  GROUP BY
       user_id
-	 HAVING 
+	 HAVING
     count(distinct value_1) > 2
 	) as a
 	LEFT JOIN
 	(
-      SELECT 
+      SELECT
         user_id, value_2, value_3
-	    FROM 
+	    FROM
         users_table
-	    WHERE 
+	    WHERE
         (value_1 > 3)
 	) AS b
 	ON a.user_id = b.user_id
-WHERE 
+WHERE
   b.user_id IS NOT NULL
-GROUP BY 
+GROUP BY
   a.user_id
-ORDER BY 
+ORDER BY
   avg(b.value_3) DESC, 2, 1
 LIMIT 5;
 
@@ -1015,24 +1015,24 @@ SELECT  u.user_id, sub.value_2, sub.value_3, COUNT(e2.user_id) counts
 FROM
 	users_table u
 	LEFT OUTER JOIN LATERAL
-	(SELECT 
+	(SELECT
       *
-   FROM 
+   FROM
       events_table e1
-   WHERE 
+   WHERE
       e1.user_id = u.user_id
-    ORDER BY 
+    ORDER BY
       e1.value_3 DESC
     LIMIT 1
     ) sub
 	ON true
 	LEFT OUTER JOIN events_table e2
 	ON e2.user_id = sub.user_id
-WHERE 
+WHERE
   e2.value_2 > 1 AND e2.value_2 < 5 AND u.value_2 > 1 AND u.value_2 < 5
-GROUP BY 
+GROUP BY
   u.user_id, sub.value_2, sub.value_3
-ORDER BY 
+ORDER BY
   4 DESC, 1 DESC, 2 ASC, 3 ASC
 LIMIT 10;
 
@@ -1042,15 +1042,15 @@ SELECT
   count(*) as users_count
 FROM events_table
 	JOIN
-	(SELECT 
+	(SELECT
       DISTINCT user_id
-   FROM 
+   FROM
     users_table
   ) as distinct_users
   ON distinct_users.user_id = events_table.user_id
-GROUP BY 
+GROUP BY
   distinct_users.user_id
-ORDER BY 
+ORDER BY
   users_count desc, avg_type DESC
 LIMIT 5;
 
@@ -1062,64 +1062,64 @@ FROM events_table
 	JOIN
 	(SELECT distinct_users.user_id, count(1) as ct
      FROM
-     	(SELECT 
+     	(SELECT
           user_id
-    	 FROM 
+    	 FROM
           users_table
   		) as distinct_users
-  	 GROUP BY 
+  	 GROUP BY
         distinct_users.user_id
     ) as users_count
     ON users_count.user_id = events_table.user_id
-ORDER BY 
+ORDER BY
   users_count.ct desc, event_type DESC
 LIMIT 5;
 
 --- now, test (subquery JOIN subquery)
 SELECT n1.user_id, count_1, total_count
 FROM
-	(SELECT 
+	(SELECT
       user_id, count(1) as count_1
-   FROM 
+   FROM
       users_table
-   GROUP BY 
+   GROUP BY
       user_id
     ) n1
  	INNER JOIN
   	(
-        SELECT 
+        SELECT
           user_id, count(1) as total_count
-        FROM 
+        FROM
          events_table
-     GROUP BY 
+     GROUP BY
         user_id, event_type
     ) n2
     ON (n2.user_id = n1.user_id)
-ORDER BY 
+ORDER BY
   total_count DESC, count_1 DESC, 1 DESC
 LIMIT 10;
 
 SELECT a.user_id, avg(b.value_2) as subquery_avg
 FROM
-	(SELECT 
+	(SELECT
       user_id
-   FROM 
+   FROM
     users_table
-	 WHERE 
+	 WHERE
     (value_1 > 2)
-	 GROUP BY 
+	 GROUP BY
     user_id
-	 HAVING 
+	 HAVING
     count(distinct value_1) > 2
 	) as a
 	LEFT JOIN
-	(SELECT 
+	(SELECT
       DISTINCT ON (user_id) user_id, value_2, value_3
-   FROM 
+   FROM
         users_table
-   WHERE 
+   WHERE
         (value_1 > 3)
-   ORDER BY  
+   ORDER BY
         1,2,3
     ) AS b
     ON a.user_id = b.user_id
@@ -1132,25 +1132,25 @@ LIMIT 5;
 -- when used in target list
 SELECT a.user_id, avg(b.value_2) as subquery_avg
 FROM
-	(SELECT 
+	(SELECT
       user_id
-   FROM 
+   FROM
       users_table
-	 WHERE 
+	 WHERE
       (value_1 > 2)
-	 GROUP BY 
+	 GROUP BY
       user_id
-	 HAVING 
+	 HAVING
       count(distinct value_1) > 2
 	) as a
 	LEFT JOIN
-	(SELECT 
+	(SELECT
       DISTINCT ON (value_2) value_2 , user_id, value_3
-	 FROM 
+	 FROM
       users_table
-	 WHERE 
+	 WHERE
       (value_1 > 3)
-	 ORDER BY 
+	 ORDER BY
       1,2,3
 	) AS b
 	USING (user_id)
@@ -1158,64 +1158,64 @@ GROUP BY user_id;
 
 SELECT a.user_id, avg(b.value_2) as subquery_avg
 FROM
-	(SELECT 
+	(SELECT
       user_id
-   FROM 
+   FROM
       users_table
-	 WHERE 
+	 WHERE
       (value_1 > 2)
-	 GROUP BY 
+	 GROUP BY
       user_id
-	 HAVING 
+	 HAVING
       count(distinct value_1) > 2
 	) as a
 	LEFT JOIN
-	(SELECT 
+	(SELECT
       DISTINCT ON (value_2, user_id) value_2 , user_id, value_3
-	 FROM 
+	 FROM
       users_table
-	 WHERE 
+	 WHERE
       (value_1 > 3)
-	 ORDER BY 
+	 ORDER BY
       1,2,3
 	) AS b
 	ON a.user_id = b.user_id
-WHERE 
+WHERE
   b.user_id IS NOT NULL
-GROUP BY 
+GROUP BY
   a.user_id
-ORDER BY 
+ORDER BY
   avg(b.value_3), 2, 1
 LIMIT 5;
 
 SELECT user_id, event_type
-FROM 
+FROM
 	(SELECT *
 	 FROM
 	 	(
-	 		(SELECT 
-          event_type, user_id as a_user_id 
-        FROM 
+	 		(SELECT
+          event_type, user_id as a_user_id
+        FROM
           events_table) AS a
       JOIN
       (SELECT
           ma.user_id AS user_id, ma.value_2 AS value_2,
           (GREATEST(coalesce((ma.value_3 * ma.value_2) / 20, 0.0) + GREATEST(1.0))) / 2 AS prob
-       FROM 
+       FROM
           users_table AS ma
-       WHERE 
+       WHERE
           (ma.value_2 > 1)
-       ORDER BY 
+       ORDER BY
           prob DESC, value_2 DESC, user_id DESC
         LIMIT 10
         ) AS ma
         ON (a.a_user_id = ma.user_id)
       ) AS inner_sub
-  	ORDER BY 
+  	ORDER BY
       prob DESC, value_2 DESC, user_id DESC, event_type DESC
    	LIMIT 10
    	) AS outer_sub
-ORDER BY 
+ORDER BY
   prob DESC, value_2 DESC, user_id DESC, event_type DESC
 LIMIT 10;
 
@@ -1223,57 +1223,57 @@ LIMIT 10;
 -- ordering difference in the previous one's inner query
 SELECT user_id, event_type
 FROM
-	 (SELECT 
-      event_type, user_id as a_user_id 
-    FROM 
+	 (SELECT
+      event_type, user_id as a_user_id
+    FROM
       events_table) AS a
     JOIN
    (SELECT
      	 ma.user_id AS user_id, ma.value_2 AS value_2,
        (GREATEST(coalesce((ma.value_3 * ma.value_2) / 20, 0.0) + GREATEST(1.0))) / 2 AS prob
-      FROM 
+      FROM
         users_table AS ma
-      WHERE 
+      WHERE
         (ma.value_2 > 1)
-      ORDER BY 
+      ORDER BY
         prob DESC, user_id DESC
       LIMIT 10
      ) AS ma
      ON (a.a_user_id = ma.user_id)
-ORDER BY 
+ORDER BY
   prob DESC, event_type DESC, user_id DESC
 LIMIT 10;
 
 -- now they produce the same result when ordering fixed in 'outer_sub'
 SELECT user_id, event_type
-FROM 
+FROM
 	(SELECT *
 	 FROM
 	 	(
-	 		(SELECT 
-          event_type, user_id as a_user_id 
-       FROM 
+	 		(SELECT
+          event_type, user_id as a_user_id
+       FROM
         events_table
       ) AS a
       JOIN
       (SELECT
           ma.user_id AS user_id, ma.value_2 AS value_2,
           (GREATEST(coalesce((ma.value_3 * ma.value_2) / 20, 0.0) + GREATEST(1.0))) / 2 AS prob
-       FROM 
+       FROM
         users_table AS ma
-       WHERE 
+       WHERE
           (ma.value_2 > 1)
-        ORDER BY 
+        ORDER BY
           prob DESC, user_id DESC
         LIMIT 10
         ) AS ma
          ON (a.a_user_id = ma.user_id)
       ) AS inner_sub
-  	ORDER BY 
+  	ORDER BY
       prob DESC, event_type DESC, user_id DESC
    	LIMIT 10
    	) AS outer_sub
-ORDER BY 
+ORDER BY
   prob DESC, event_type DESC, user_id DESC
 LIMIT 10;
 
@@ -1315,54 +1315,54 @@ FROM
                         FROM
                           (SELECT *
                            FROM (
-                                   (SELECT 
+                                   (SELECT
                                       user_id AS user_id_p
-                                    FROM 
+                                    FROM
                                       events_table
-                                    WHERE 
+                                    WHERE
                                       (event_type IN (1,2,3,4,5)) ) AS ma_p
                                  JOIN
-                                   (SELECT 
+                                   (SELECT
                                       user_id AS user_id_a
-                                    FROM 
+                                    FROM
                                       users_table
-                                    WHERE 
-                                      (value_2 % 5 = 1) ) AS a 
+                                    WHERE
+                                      (value_2 % 5 = 1) ) AS a
                                   ON (a.user_id_a = ma_p.user_id_p) ) ) AS a_ma_p ) AS inner_filter_q
                      JOIN
-                       (SELECT 
+                       (SELECT
                           value_2, value_3, user_id AS user_id_ck
-                        FROM 
+                        FROM
                           events_table
-                        WHERE 
+                        WHERE
                           event_type = ANY(ARRAY [4, 5, 6])
-                        ORDER BY 
+                        ORDER BY
                           value_3 ASC, user_id_ck DESC, array_index(ARRAY [1, 2, 3], (value_2 % 3)) ASC
-                        LIMIT 10 ) 
-                       AS ma_ck ON (ma_ck.user_id_ck = inner_filter_q.user_id) ) 
+                        LIMIT 10 )
+                       AS ma_ck ON (ma_ck.user_id_ck = inner_filter_q.user_id) )
                     AS inner_sub_q
-                    ORDER BY 
+                    ORDER BY
                         value_3 ASC, user_id_ck DESC, array_index(ARRAY [1, 2, 3], (value_2 % 3)) ASC
-                    LIMIT 10 ) 
+                    LIMIT 10 )
                 AS outer_sub_q
-                ORDER BY 
+                ORDER BY
                   value_3 ASC, user_id DESC, array_index(ARRAY [1, 2, 3], (value_2 % 3)) ASC
-                LIMIT 10) 
-            AS inner_search_q 
-          ON (ma_e.user_id_e = inner_search_q.user_id) ) 
+                LIMIT 10)
+            AS inner_search_q
+          ON (ma_e.user_id_e = inner_search_q.user_id) )
         AS outer_inner_sub_q
-        ORDER BY 
+        ORDER BY
           value_3 ASC, user_id DESC, array_index(ARRAY [1, 2, 3], (value_2 % 3)) ASC, event_type_e DESC
-        LIMIT 10) 
+        LIMIT 10)
 AS outer_outer_sub_q
-ORDER BY 
+ORDER BY
   value_3 ASC, user_id DESC, array_index(ARRAY [1, 2, 3], (value_2 % 3)) ASC, event_type_e DESC
 LIMIT 10;
 
--- top level select * is removed now there is 
+-- top level select * is removed now there is
 -- a join at top level.
 SELECT *
-FROM 
+FROM
 	(
 		(SELECT
 		 	user_id AS user_id_e, event_type as event_type_e
@@ -1373,30 +1373,30 @@ FROM
       (SELECT
           value_2, value_3, user_id
        FROM
-       (SELECT 
+       (SELECT
           *
         FROM
          	(
-         		(SELECT 
+         		(SELECT
                 user_id_p AS user_id
              FROM
-               	(SELECT 
+               	(SELECT
                     *
                  FROM
                   	(
-                    		(SELECT 
+                    		(SELECT
                             user_id AS user_id_p
-                         FROM 
+                         FROM
                           events_table
-                         WHERE 
+                         WHERE
                           (event_type IN (1, 2, 3, 4, 5))
                        	 ) AS ma_p
                         JOIN
-                         (SELECT 
+                         (SELECT
                             user_id AS user_id_a
-                         	 FROM 
+                         	 FROM
                             users_table
-                         	 WHERE 
+                         	 WHERE
                             (value_2 % 5 = 1)
                          	) AS a
                          	ON (a.user_id_a = ma_p.user_id_p)
@@ -1406,9 +1406,9 @@ FROM
                    JOIN
                    (SELECT
                         value_2, value_3, user_id AS user_id_ck
-                    FROM 
+                    FROM
                       events_table
-                    WHERE 
+                    WHERE
                       event_type = ANY(ARRAY [4, 5, 6])
                     ORDER BY
                      		value_3 ASC, user_id_ck DESC, array_index(ARRAY [1, 2, 3], (value_2 % 3)) ASC
@@ -1438,63 +1438,63 @@ DROP FUNCTION array_index(ANYARRAY, ANYELEMENT);
 -- a query with a constant subquery
 SELECT count(*) as subquery_count
 FROM (
-  SELECT 
+  SELECT
     user_id
   FROM
     users_table
   WHERE
     (value_1 = '1' OR value_1 = '3')
-  GROUP BY user_id                                                                          
+  GROUP BY user_id
   HAVING count(distinct value_1) = 2
   ) as a
   LEFT JOIN (
   SELECT
     1 as user_id
-  ) AS b 
-  ON a.user_id = b.user_id 
+  ) AS b
+  ON a.user_id = b.user_id
 WHERE b.user_id IS NULL
 GROUP BY a.user_id;
 
 -- volatile function in the subquery
 SELECT count(*) as subquery_count
 FROM (
-  SELECT 
+  SELECT
       user_id
     FROM
     users_table
   WHERE
     (value_1 = '1' OR value_1 = '3')
-  GROUP BY user_id                                                                          
+  GROUP BY user_id
   HAVING count(distinct value_1) = 2
   ) as a
   INNER JOIN (
   SELECT
     random()::int as user_id
-  ) AS b 
-  ON a.user_id = b.user_id 
+  ) AS b
+  ON a.user_id = b.user_id
 WHERE b.user_id IS NULL
 GROUP BY a.user_id;
 
 -- this is slightly different, we use RTE_VALUEs here
-SELECT Count(*) AS subquery_count 
-FROM (SELECT 
-        user_id 
-      FROM 
-        users_table 
-      WHERE 
-        (value_1 = '1' OR value_1 = '3' ) 
-      GROUP BY 
-        user_id 
-      HAVING 
-        Count(DISTINCT value_1) = 2) AS a 
-    INNER JOIN 
-     (SELECT 
-        * 
-      FROM 
-        (VALUES (1, 'one'), (2, 'two'), (3, 'three')) AS t (user_id, letter)) AS b 
-    ON a.user_id = b.user_id 
-WHERE b.user_id IS NULL 
-GROUP BY a.user_id;  
+SELECT Count(*) AS subquery_count
+FROM (SELECT
+        user_id
+      FROM
+        users_table
+      WHERE
+        (value_1 = '1' OR value_1 = '3' )
+      GROUP BY
+        user_id
+      HAVING
+        Count(DISTINCT value_1) = 2) AS a
+    INNER JOIN
+     (SELECT
+        *
+      FROM
+        (VALUES (1, 'one'), (2, 'two'), (3, 'three')) AS t (user_id, letter)) AS b
+    ON a.user_id = b.user_id
+WHERE b.user_id IS NULL
+GROUP BY a.user_id;
 
 
 -- same query without LIMIT/OFFSET returns 30 rows
@@ -1505,12 +1505,12 @@ SELECT user_id, array_length(events_table, 1)
 FROM (
   SELECT user_id, array_agg(event ORDER BY time) AS events_table
   FROM (
-    SELECT 
+    SELECT
       u.user_id, e.event_type::text AS event, e.time
-    FROM 
+    FROM
       users_table AS u,
       events_table AS e
-    WHERE 
+    WHERE
       u.user_id = e.user_id AND e.event_type IN (1, 2)
   ) t
   GROUP BY user_id
@@ -1523,12 +1523,12 @@ SELECT user_id, array_length(events_table, 1)
 FROM (
   SELECT user_id, array_agg(event ORDER BY time) AS events_table
   FROM (
-    SELECT 
+    SELECT
       u.user_id, e.event_type::text AS event, e.time
-    FROM 
+    FROM
       users_table AS u,
       events_table AS e
-    WHERE 
+    WHERE
       u.user_id = e.user_id AND e.event_type IN (1, 2)
   ) t
   GROUP BY user_id
@@ -1547,12 +1547,12 @@ SELECT user_id, array_length(events_table, 1)
 FROM (
   SELECT user_id, array_agg(event ORDER BY time) AS events_table
   FROM (
-    SELECT 
+    SELECT
       u.user_id, e.event_type::text AS event, e.time
-    FROM 
+    FROM
       users_table AS u,
       events_table AS e
-    WHERE 
+    WHERE
       u.user_id = e.user_id AND e.event_type IN (1, 2, 3, 4)
   ) t
   GROUP BY user_id
@@ -1565,12 +1565,12 @@ SELECT user_id, array_length(events_table, 1)
 FROM (
   SELECT user_id, array_agg(event ORDER BY time) AS events_table
   FROM (
-    SELECT 
+    SELECT
       u.user_id, e.event_type::text AS event, e.time
-    FROM 
+    FROM
       users_table AS u,
       events_table AS e
-    WHERE 
+    WHERE
       u.user_id = e.user_id AND e.event_type IN (1, 2)
   ) t
   GROUP BY user_id
@@ -1639,7 +1639,7 @@ CREATE FUNCTION test_join_function_2(integer, integer) RETURNS bool
 
 $f$);
 
--- we don't support joins via functions 
+-- we don't support joins via functions
 SELECT user_id, array_length(events_table, 1)
 FROM (
   SELECT user_id, array_agg(event ORDER BY time) AS events_table
@@ -1669,7 +1669,7 @@ FROM
       short_list.user_id = ma.user_id and ma.value_1 < 3 and short_list.event_type < 3
     ) temp
   ON users_table.user_id = temp.user_id
-  WHERE 
+  WHERE
     users_table.value_1 < 3 AND test_join_function_2(users_table.user_id, temp.user_id);
 
 -- we do support the following since there is already an equality on the partition
@@ -1688,7 +1688,7 @@ FROM
        test_join_function_2(ma.value_1, short_list.value_2)
     ) temp
   ON users_table.user_id = temp.user_id
-  WHERE 
+  WHERE
     users_table.value_1 < 3
   ORDER BY 2 DESC, 1 DESC
   LIMIT 10;
@@ -1698,13 +1698,13 @@ FROM
 SELECT
   count(*)
 FROM
-  (SELECT 
-    event_type, random() 
-  FROM 
-    events_table, users_table 
-  WHERE 
-    events_table.user_id = users_table.user_id AND 
-    events_table.time > users_table.time AND 
+  (SELECT
+    event_type, random()
+  FROM
+    events_table, users_table
+  WHERE
+    events_table.user_id = users_table.user_id AND
+    events_table.time > users_table.time AND
     events_table.value_2 IN (0, 4)
   ) as foo;
 
@@ -1712,13 +1712,13 @@ FROM
 SELECT
   count(*)
 FROM
-  (SELECT 
-    event_type, random() 
-  FROM 
-    events_table, users_table 
-  WHERE 
-    events_table.user_id > users_table.user_id AND 
-    events_table.time = users_table.time AND 
+  (SELECT
+    event_type, random()
+  FROM
+    events_table, users_table
+  WHERE
+    events_table.user_id > users_table.user_id AND
+    events_table.time = users_table.time AND
     events_table.value_2 IN (0, 4)
   ) as foo;
 
@@ -1726,22 +1726,22 @@ FROM
 SELECT
   count(*)
 FROM
-  (SELECT 
-    event_type, random(), events_table.user_id 
-  FROM 
-    events_table, users_table 
-  WHERE 
-    events_table.user_id = users_table.user_id AND 
+  (SELECT
+    event_type, random(), events_table.user_id
+  FROM
+    events_table, users_table
+  WHERE
+    events_table.user_id = users_table.user_id AND
     events_table.value_2 IN (0, 4)
   ) as foo,
-(SELECT 
-    event_type, random(), events_table.user_id 
-  FROM 
-    events_table, users_table 
-  WHERE 
-    events_table.user_id = users_table.user_id AND 
+(SELECT
+    event_type, random(), events_table.user_id
+  FROM
+    events_table, users_table
+  WHERE
+    events_table.user_id = users_table.user_id AND
     events_table.value_2 IN (1, 5)
-  ) as bar 
+  ) as bar
 WHERE foo.event_type > bar.event_type
 AND foo.user_id = bar.user_id;
 
@@ -1750,38 +1750,38 @@ AND foo.user_id = bar.user_id;
 SELECT
   count(*)
 FROM
-  (SELECT 
-    event_type, random() 
-  FROM 
-    events_table, users_table 
-  WHERE 
-    events_table.user_id = users_table.user_id AND 
+  (SELECT
+    event_type, random()
+  FROM
+    events_table, users_table
+  WHERE
+    events_table.user_id = users_table.user_id AND
     events_table.value_2 IN (0, 4)
   ) as foo,
-(SELECT 
-    event_type, random() 
-  FROM 
-    events_table, users_table 
-  WHERE 
-    events_table.user_id = users_table.user_id AND 
+(SELECT
+    event_type, random()
+  FROM
+    events_table, users_table
+  WHERE
+    events_table.user_id = users_table.user_id AND
     events_table.value_2 IN (1, 5)
-  ) as bar 
+  ) as bar
 WHERE foo.event_type = bar.event_type;
 
 -- DISTINCT in the outer query and DISTINCT in the subquery
 SELECT
     DISTINCT users_ids.user_id
-FROM 
+FROM
    (SELECT DISTINCT user_id FROM users_table) as users_ids
-        JOIN 
-   (SELECT  
+        JOIN
+   (SELECT
       ma.user_id, ma.value_1, (GREATEST(coalesce(ma.value_4 / 250, 0.0) + GREATEST(1.0))) / 2 AS prob
-    FROM 
+    FROM
       users_table AS ma, events_table as short_list
-    WHERE 
+    WHERE
       short_list.user_id = ma.user_id and ma.value_1 < 3 and short_list.event_type < 3
-    ) temp 
-  ON users_ids.user_id = temp.user_id 
+    ) temp
+  ON users_ids.user_id = temp.user_id
   WHERE temp.value_1 < 3
   ORDER BY 1
   LIMIT 5;
@@ -1789,17 +1789,17 @@ FROM
 -- DISTINCT ON in the outer query and DISTINCT in the subquery
 SELECT
     DISTINCT ON (users_ids.user_id) users_ids.user_id, temp.value_1, prob
-FROM 
+FROM
    (SELECT DISTINCT user_id FROM users_table) as users_ids
-        JOIN 
-   (SELECT  
+        JOIN
+   (SELECT
       ma.user_id, ma.value_1, (GREATEST(coalesce(ma.value_4 / 250, 0.0) + GREATEST(1.0))) / 2 AS prob
-    FROM 
+    FROM
       users_table AS ma, events_table as short_list
-    WHERE 
+    WHERE
       short_list.user_id = ma.user_id and ma.value_1 < 3 and short_list.event_type < 2
-    ) temp 
-  ON users_ids.user_id = temp.user_id 
+    ) temp
+  ON users_ids.user_id = temp.user_id
   WHERE temp.value_1 < 3
   ORDER BY 1, 2
   LIMIT 5;
@@ -1807,17 +1807,17 @@ FROM
 -- DISTINCT ON in the outer query and DISTINCT ON in the subquery
 SELECT
     DISTINCT ON (users_ids.user_id) users_ids.user_id, temp.value_1, prob
-FROM 
+FROM
    (SELECT DISTINCT ON (user_id) user_id, value_1 FROM users_table ORDER BY 1,2) as users_ids
-        JOIN 
-   (SELECT  
+        JOIN
+   (SELECT
       ma.user_id, ma.value_1, (GREATEST(coalesce(ma.value_4 / 250, 0.0) + GREATEST(1.0))) / 2 AS prob
-    FROM 
+    FROM
       users_table AS ma, events_table as short_list
-    WHERE 
+    WHERE
       short_list.user_id = ma.user_id and ma.value_1 < 2 and short_list.event_type < 3
-    ) temp 
-  ON users_ids.user_id = temp.user_id 
+    ) temp
+  ON users_ids.user_id = temp.user_id
   ORDER BY 1,2
   LIMIT 5;
 

@@ -1,4 +1,4 @@
---  citus--7.5-7--8.0-1 
+--  citus--7.5-7--8.0-1
 SET search_path = 'pg_catalog';
 
 CREATE OR REPLACE FUNCTION pg_catalog.relation_is_a_known_shard(regclass)
@@ -20,7 +20,7 @@ COMMENT ON FUNCTION citus_table_is_visible(oid)
 -- this is the exact same query with what \d
 -- command produces, except pg_table_is_visible
 -- is replaced with pg_catalog.relation_is_a_known_shard(c.oid)
-CREATE VIEW citus.citus_shards_on_worker AS 
+CREATE VIEW citus.citus_shards_on_worker AS
 	SELECT n.nspname as "Schema",
 	  c.relname as "Name",
 	  CASE c.relkind WHEN 'r' THEN 'table' WHEN 'v' THEN 'view' WHEN 'm' THEN 'materialized view' WHEN 'i' THEN 'index' WHEN 'S' THEN 'sequence' WHEN 's' THEN 'special' WHEN 'f' THEN 'foreign table' WHEN 'p' THEN 'table' END as "Type",
@@ -39,7 +39,7 @@ GRANT SELECT ON pg_catalog.citus_shards_on_worker TO public;
 -- this is the exact same query with what \di
 -- command produces, except pg_table_is_visible
 -- is replaced with pg_catalog.relation_is_a_known_shard(c.oid)
-CREATE VIEW citus.citus_shard_indexes_on_worker AS 
+CREATE VIEW citus.citus_shard_indexes_on_worker AS
 SELECT n.nspname as "Schema",
   c.relname as "Name",
   CASE c.relkind WHEN 'r' THEN 'table' WHEN 'v' THEN 'view' WHEN 'm' THEN 'materialized view' WHEN 'i' THEN 'index' WHEN 'S' THEN 'sequence' WHEN 's' THEN 'special' WHEN 'f' THEN 'foreign table' WHEN 'p' THEN 'table' END as "Type",

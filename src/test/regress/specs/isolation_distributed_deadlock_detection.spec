@@ -12,7 +12,7 @@ setup
 
   CREATE TABLE local_deadlock_table (user_id int UNIQUE, some_val int);
 
-  CREATE TABLE deadlock_detection_test_rep_2  (user_id int UNIQUE, some_val int); 
+  CREATE TABLE deadlock_detection_test_rep_2  (user_id int UNIQUE, some_val int);
   SET citus.shard_replication_factor = 2;
   SELECT create_distributed_table('deadlock_detection_test_rep_2', 'user_id');
 
@@ -369,7 +369,7 @@ step "s6-commit"
 }
 
 # we disable the daemon during the regression tests in order to get consistent results
-# thus we manually issue the deadlock detection 
+# thus we manually issue the deadlock detection
 session "deadlock-checker"
 
 # we issue the checker not only when there are deadlocks to ensure that we never cancel
@@ -406,7 +406,7 @@ permutation "s1-begin" "s2-begin" "s2-insert-ref-10" "s1-update-1" "deadlock-che
 # slightly more complex case, loop with three nodes
 permutation "s1-begin" "s2-begin" "s3-begin"  "s1-update-1" "s2-update-2" "s3-update-3" "deadlock-checker-call" "s1-update-2" "s2-update-3" "s3-update-1" "deadlock-checker-call" "s3-commit" "s2-commit" "s1-commit"
 
-# similar to the above (i.e., 3 nodes), but the cycle starts from the second node 
+# similar to the above (i.e., 3 nodes), but the cycle starts from the second node
 permutation "s1-begin" "s2-begin" "s3-begin"  "s2-update-1" "s1-update-1" "s2-update-2" "s3-update-3" "s3-update-2" "deadlock-checker-call" "s2-update-3" "deadlock-checker-call" "s3-commit" "s2-commit" "s1-commit"
 
 # not connected graph
@@ -416,13 +416,13 @@ permutation "s1-begin" "s2-begin" "s3-begin" "s4-begin" "s1-update-1" "s2-update
 permutation "s1-begin" "s2-begin" "s3-begin" "s4-begin" "s4-update-1" "s1-update-1" "deadlock-checker-call" "s2-update-2" "s3-update-3" "s2-update-3" "s3-update-2" "deadlock-checker-call" "s3-commit" "s2-commit" "s4-commit" "s1-commit"
 
 #  multiple deadlocks on a not connected graph
-permutation "s1-begin" "s2-begin" "s3-begin" "s4-begin" "s1-update-1" "s4-update-4" "s2-update-2" "s3-update-3" "s3-update-2" "s4-update-1" "s1-update-4" "deadlock-checker-call" "s1-commit" "s4-commit" "s2-update-3" "deadlock-checker-call"  "s2-commit" "s3-commit" 
+permutation "s1-begin" "s2-begin" "s3-begin" "s4-begin" "s1-update-1" "s4-update-4" "s2-update-2" "s3-update-3" "s3-update-2" "s4-update-1" "s1-update-4" "deadlock-checker-call" "s1-commit" "s4-commit" "s2-update-3" "deadlock-checker-call"  "s2-commit" "s3-commit"
 
 # a larger graph where the first node is in the distributed deadlock
 permutation "s1-begin" "s2-begin" "s3-begin" "s4-begin" "s5-begin" "s6-begin" "s1-update-1" "s5-update-5" "s3-update-2" "s2-update-3" "s4-update-4" "s3-update-4" "deadlock-checker-call" "s6-update-6" "s4-update-6" "s1-update-5" "s5-update-1" "deadlock-checker-call" "s1-commit" "s5-commit" "s6-commit" "s4-commit" "s3-commit" "s2-commit"
- 
+
 # a larger graph where the deadlock starts from a middle node
-permutation "s1-begin" "s2-begin" "s3-begin" "s4-begin" "s5-begin" "s6-begin" "s6-update-6" "s5-update-5" "s5-update-6" "s4-update-4" "s1-update-4" "s4-update-5" "deadlock-checker-call" "s2-update-3" "s3-update-2" "s2-update-2" "s3-update-3" "deadlock-checker-call" "s6-commit" "s5-commit" "s4-commit" "s1-commit" "s3-commit" "s2-commit" 
+permutation "s1-begin" "s2-begin" "s3-begin" "s4-begin" "s5-begin" "s6-begin" "s6-update-6" "s5-update-5" "s5-update-6" "s4-update-4" "s1-update-4" "s4-update-5" "deadlock-checker-call" "s2-update-3" "s3-update-2" "s2-update-2" "s3-update-3" "deadlock-checker-call" "s6-commit" "s5-commit" "s4-commit" "s1-commit" "s3-commit" "s2-commit"
 
 # a larger graph where the deadlock starts from the last node
 permutation "s1-begin" "s2-begin" "s3-begin" "s4-begin" "s5-begin" "s6-begin" "s5-update-5" "s3-update-2" "s2-update-2" "s4-update-4" "s3-update-4" "s4-update-5" "s1-update-4" "deadlock-checker-call" "s6-update-6" "s5-update-6" "s6-update-5" "deadlock-checker-call" "s5-commit" "s6-commit" "s4-commit" "s3-commit"  "s1-commit" "s2-commit"
@@ -430,7 +430,7 @@ permutation "s1-begin" "s2-begin" "s3-begin" "s4-begin" "s5-begin" "s6-begin" "s
 # a backend is blocked on multiple backends
 # note that session 5 is not strictly necessary to simulate the deadlock
 # we only added that such that session 4 waits on for that
-# thus if any cancellation happens on session 4, we'd be able to 
-# observe it, otherwise cancelling idle backends has not affect 
+# thus if any cancellation happens on session 4, we'd be able to
+# observe it, otherwise cancelling idle backends has not affect
 # (cancelling wrong backend used to be a bug and already fixed)
 permutation "s1-begin" "s2-begin" "s3-begin" "s4-begin" "s5-begin" "s1-update-1" "s3-update-3" "s2-update-4" "s2-update-3" "s4-update-2" "s5-random-adv-lock" "s4-random-adv-lock" "s3-update-1" "s1-update-2-4" "deadlock-checker-call" "deadlock-checker-call" "s5-commit" "s4-commit" "s2-commit" "s1-commit" "s3-commit"

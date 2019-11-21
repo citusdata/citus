@@ -1,9 +1,9 @@
 setup
-{	
+{
 	CREATE TABLE target_table(col_1 int primary key, col_2 int);
 	SELECT create_distributed_table('target_table','col_1');
 	INSERT INTO target_table VALUES(1,2),(2,3),(3,4),(4,5),(5,6);
-	
+
 	CREATE TABLE source_table(col_1 int, col_2 int, col_3 int);
 	SELECT create_distributed_table('source_table','col_1');
 	INSERT INTO source_table VALUES(1,1,1),(2,2,2),(3,3,3),(4,4,4),(5,5,5);
@@ -35,11 +35,11 @@ step "s1-begin-replication-factor-2"
 step "s1-insert-into-select-conflict-update"
 {
 	INSERT INTO target_table
-	SELECT 
+	SELECT
 		col_1, col_2
 	FROM (
-		SELECT 
-			col_1, col_2, col_3 
+		SELECT
+			col_1, col_2, col_3
 		FROM
 			source_table
 		LIMIT 5
@@ -50,11 +50,11 @@ step "s1-insert-into-select-conflict-update"
 step "s1-insert-into-select-conflict-do-nothing"
 {
 	INSERT INTO target_table
-	SELECT 
+	SELECT
 		col_1, col_2
 	FROM (
-		SELECT 
-			col_1, col_2, col_3 
+		SELECT
+			col_1, col_2, col_3
 		FROM
 			source_table
 		LIMIT 5
@@ -70,11 +70,11 @@ step "s1-commit"
 step "s1-insert-into-select-conflict-update-replication-factor-2"
 {
 	INSERT INTO target_table_2
-	SELECT 
+	SELECT
 		col_1, col_2
 	FROM (
-		SELECT 
-			col_1, col_2, col_3 
+		SELECT
+			col_1, col_2, col_3
 		FROM
 			source_table
 		LIMIT 5
@@ -98,11 +98,11 @@ step "s2-begin-replication-factor-2"
 step "s2-insert-into-select-conflict-update"
 {
 	INSERT INTO target_table
-	SELECT 
+	SELECT
 		col_1, col_2
 	FROM (
-		SELECT 
-			col_1, col_2, col_3 
+		SELECT
+			col_1, col_2, col_3
 		FROM
 			source_table
 		LIMIT 5
@@ -113,11 +113,11 @@ step "s2-insert-into-select-conflict-update"
 step "s2-insert-into-select-conflict-update-replication-factor-2"
 {
 	INSERT INTO target_table_2
-	SELECT 
+	SELECT
 		col_1, col_2
 	FROM (
-		SELECT 
-			col_1, col_2, col_3 
+		SELECT
+			col_1, col_2, col_3
 		FROM
 			source_table
 		LIMIT 5
@@ -128,11 +128,11 @@ step "s2-insert-into-select-conflict-update-replication-factor-2"
 step "s2-insert-into-select-conflict-do-nothing"
 {
 	INSERT INTO target_table
-	SELECT 
+	SELECT
 		col_1, col_2
 	FROM (
-		SELECT 
-			col_1, col_2, col_3 
+		SELECT
+			col_1, col_2, col_3
 		FROM
 			source_table
 		LIMIT 5

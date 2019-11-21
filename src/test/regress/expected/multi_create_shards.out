@@ -223,9 +223,7 @@ SELECT shardmaxvalue::integer - shardminvalue::integer AS shard_size
 DELETE FROM pg_dist_shard_placement
 	WHERE shardid IN (SELECT shardid FROM pg_dist_shard
 					   WHERE logicalrelid = 'foreign_table_to_distribute'::regclass);
-	
 DELETE FROM pg_dist_shard
 	WHERE logicalrelid = 'foreign_table_to_distribute'::regclass;
-	
 DELETE FROM pg_dist_partition
 	WHERE logicalrelid = 'foreign_table_to_distribute'::regclass;

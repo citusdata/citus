@@ -27,25 +27,25 @@ INSERT INTO distributed_table SELECT i::text, i % 10, row_to_json(row(i, i*i)) F
 INSERT INTO second_distributed_table SELECT i::text, i % 10, row_to_json(row(i, i*i)) FROM generate_series (0, 100) i;
 INSERT INTO reference_table SELECT i::text, 'user_' || i FROM generate_series (0, 100) i;
 INSERT INTO local_table SELECT i::text, 'user_' || i FROM generate_series (0, 100) i;
-CREATE VIEW tenant_ids AS 
-	SELECT 
-		tenant_id, name 
-	FROM 
+CREATE VIEW tenant_ids AS
+	SELECT
+		tenant_id, name
+	FROM
 		distributed_table, reference_table
-	WHERE 
+	WHERE
 		distributed_table.dept::text = reference_table.id
 	ORDER BY 2 DESC, 1 DESC;
 SET client_min_messages TO DEBUG1;
 -- the subquery foo is recursively planned
-UPDATE 
-	reference_table 
-SET 
-	name = 'new_' || name 
-FROM 
+UPDATE
+	reference_table
+SET
+	name = 'new_' || name
+FROM
 (
-	SELECT 
+	SELECT
 		avg(second_distributed_table.tenant_id::int) as avg_tenant_id
-	FROM 
+	FROM
 		second_distributed_table
 ) as foo
 WHERE
@@ -61,27 +61,27 @@ DEBUG:  Plan 4 query after replacing subqueries and CTEs: UPDATE recursive_dml_q
 
 -- the subquery foo is recursively planned
 -- but note that the subquery foo itself is pushdownable
-UPDATE 
-	second_distributed_table 
-SET 
+UPDATE
+	second_distributed_table
+SET
 	dept = foo.max_dept * 2
-FROM 
+FROM
 (
-	SELECT DISTINCT ON (tenant_id) tenant_id, max(dept) as max_dept FROM 
+	SELECT DISTINCT ON (tenant_id) tenant_id, max(dept) as max_dept FROM
 	(
-		SELECT 
+		SELECT
 			second_distributed_table.dept, second_distributed_table.tenant_id
-		FROM 
+		FROM
 			second_distributed_table, distributed_table
-		WHERE 
+		WHERE
 			distributed_table.tenant_id = second_distributed_table.tenant_id
 	) foo_inner
 	GROUP BY
-		tenant_id 
+		tenant_id
 	ORDER BY 1 DESC
 ) as foo
 WHERE
-	foo.tenant_id != second_distributed_table.tenant_id 
+	foo.tenant_id != second_distributed_table.tenant_id
 	AND second_distributed_table.dept IN (2)
 RETURNING
 	second_distributed_table.tenant_id, second_distributed_table.dept;
@@ -103,29 +103,29 @@ DEBUG:  Plan 6 query after replacing subqueries and CTEs: UPDATE recursive_dml_q
 
 -- the subquery foo is recursively planned
 -- and foo itself is a non colocated subquery and recursively planned
-UPDATE 
-	second_distributed_table 
-SET 
+UPDATE
+	second_distributed_table
+SET
 	dept = foo.tenant_id::int / 4
-FROM 
+FROM
 (
-	SELECT DISTINCT foo_inner_1.tenant_id FROM 
+	SELECT DISTINCT foo_inner_1.tenant_id FROM
 	(
-		SELECT 
+		SELECT
 			second_distributed_table.dept, second_distributed_table.tenant_id
-		FROM 
+		FROM
 			second_distributed_table, distributed_table
-		WHERE 
+		WHERE
 			distributed_table.tenant_id = second_distributed_table.tenant_id
 		AND
 			second_distributed_table.dept IN (3,4)
 	) foo_inner_1,
 	(
-		SELECT 
-			second_distributed_table.tenant_id 
-		FROM 
+		SELECT
+			second_distributed_table.tenant_id
+		FROM
 			second_distributed_table, distributed_table
-		WHERE 
+		WHERE
 			distributed_table.tenant_id = second_distributed_table.tenant_id
 		AND
 			second_distributed_table.dept IN (4,5)
@@ -133,21 +133,21 @@ FROM
 	WHERE foo_inner_1.tenant_id != foo_inner_2.tenant_id
 ) as foo
 WHERE
-	foo.tenant_id != second_distributed_table.tenant_id 
+	foo.tenant_id != second_distributed_table.tenant_id
 	AND second_distributed_table.dept IN (3);
 DEBUG:  generating subplan 8_1 for subquery SELECT second_distributed_table.tenant_id FROM recursive_dml_queries.second_distributed_table, recursive_dml_queries.distributed_table WHERE ((distributed_table.tenant_id OPERATOR(pg_catalog.=) second_distributed_table.tenant_id) AND (second_distributed_table.dept OPERATOR(pg_catalog.=) ANY (ARRAY[4, 5])))
 DEBUG:  generating subplan 8_2 for subquery SELECT DISTINCT foo_inner_1.tenant_id FROM (SELECT second_distributed_table.dept, second_distributed_table.tenant_id FROM recursive_dml_queries.second_distributed_table, recursive_dml_queries.distributed_table WHERE ((distributed_table.tenant_id OPERATOR(pg_catalog.=) second_distributed_table.tenant_id) AND (second_distributed_table.dept OPERATOR(pg_catalog.=) ANY (ARRAY[3, 4])))) foo_inner_1, (SELECT intermediate_result.tenant_id FROM read_intermediate_result('8_1'::text, 'binary'::citus_copy_format) intermediate_result(tenant_id text)) foo_inner_2 WHERE (foo_inner_1.tenant_id OPERATOR(pg_catalog.<>) foo_inner_2.tenant_id)
 DEBUG:  Plan 8 query after replacing subqueries and CTEs: UPDATE recursive_dml_queries.second_distributed_table SET dept = ((foo.tenant_id)::integer OPERATOR(pg_catalog./) 4) FROM (SELECT intermediate_result.tenant_id FROM read_intermediate_result('8_2'::text, 'binary'::citus_copy_format) intermediate_result(tenant_id text)) foo WHERE ((foo.tenant_id OPERATOR(pg_catalog.<>) second_distributed_table.tenant_id) AND (second_distributed_table.dept OPERATOR(pg_catalog.=) 3))
 -- we currently do not allow local tables in modification queries
-UPDATE 
-	distributed_table 
-SET 
+UPDATE
+	distributed_table
+SET
 	dept = avg_tenant_id::int
-FROM 
+FROM
 (
-	SELECT 
+	SELECT
 		avg(local_table.id::int) as avg_tenant_id
-	FROM 
+	FROM
 		local_table
 ) as foo
 WHERE
@@ -162,15 +162,15 @@ DEBUG:  Plan 11 query after replacing subqueries and CTEs: UPDATE recursive_dml_
 (1 row)
 
 -- we currently do not allow views in modification queries
-UPDATE 
-	distributed_table 
-SET 
+UPDATE
+	distributed_table
+SET
 	dept = avg_tenant_id::int
-FROM 
+FROM
 (
-	SELECT 
+	SELECT
 		avg(tenant_id::int) as avg_tenant_id
-	FROM 
+	FROM
 		tenant_ids
 ) as foo
 WHERE
@@ -184,32 +184,32 @@ DEBUG:  Plan 12 query after replacing subqueries and CTEs: UPDATE recursive_dml_
  50        |   50 | {"f1": 50, "f2": 2500}
 (1 row)
 
--- there is a lateral join (e.g., corrolated subquery) thus the subqueries cannot be 
+-- there is a lateral join (e.g., corrolated subquery) thus the subqueries cannot be
 -- recursively planned
-UPDATE 
-	second_distributed_table 
-SET 
+UPDATE
+	second_distributed_table
+SET
 	dept = foo.tenant_id::int / 4
-FROM 
+FROM
 (
-	SELECT DISTINCT foo_inner_1.tenant_id FROM 
+	SELECT DISTINCT foo_inner_1.tenant_id FROM
 	(
-		SELECT 
+		SELECT
 			second_distributed_table.dept, second_distributed_table.tenant_id
-		FROM 
+		FROM
 			second_distributed_table, distributed_table
-		WHERE 
+		WHERE
 			distributed_table.tenant_id = second_distributed_table.tenant_id
 		AND
 			second_distributed_table.dept IN (3,4)
-	) 
+	)
 	foo_inner_1 JOIN LATERAL
 	(
-		SELECT 
-			second_distributed_table.tenant_id 
-		FROM 
+		SELECT
+			second_distributed_table.tenant_id
+		FROM
 			second_distributed_table, distributed_table
-		WHERE 
+		WHERE
 			distributed_table.tenant_id = second_distributed_table.tenant_id
 			AND foo_inner_1.dept = second_distributed_table.dept
 		AND
@@ -222,55 +222,54 @@ ERROR:  complex joins are only supported when all distributed tables are joined 
 -- again a corrolated subquery
 -- this time distribution key eq. exists
 -- however recursive planning is prevented due to correlated subqueries
-UPDATE 
-	second_distributed_table 
-SET 
+UPDATE
+	second_distributed_table
+SET
 	dept = foo.tenant_id::int / 4
-FROM 
+FROM
 (
-	SELECT baz.tenant_id FROM 
+	SELECT baz.tenant_id FROM
 	(
-		SELECT 
+		SELECT
 			second_distributed_table.dept, second_distributed_table.tenant_id
-		FROM 
+		FROM
 			second_distributed_table, distributed_table as d1
-		WHERE 
+		WHERE
 			d1.tenant_id = second_distributed_table.tenant_id
 		AND
 			second_distributed_table.dept IN (3,4)
-			AND 
-			second_distributed_table.tenant_id IN 
+			AND
+			second_distributed_table.tenant_id IN
 			(
 					SELECT s2.tenant_id
 					FROM second_distributed_table as s2
 					GROUP BY d1.tenant_id, s2.tenant_id
-			) 
+			)
 	) as baz
 	) as foo WHERE second_distributed_table.tenant_id = foo.tenant_id
 RETURNING *;
 ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
 -- we don't support subqueries/CTEs inside VALUES
-INSERT INTO 
-	second_distributed_table (tenant_id, dept) 
+INSERT INTO
+	second_distributed_table (tenant_id, dept)
 VALUES ('3', (WITH  vals AS (SELECT 3) select * from vals));
 DEBUG:  generating subplan 18_1 for CTE vals: SELECT 3
 DEBUG:  Plan 18 query after replacing subqueries and CTEs: INSERT INTO recursive_dml_queries.second_distributed_table (tenant_id, dept) VALUES ('3'::text, (SELECT vals."?column?" FROM (SELECT intermediate_result."?column?" FROM read_intermediate_result('18_1'::text, 'binary'::citus_copy_format) intermediate_result("?column?" integer)) vals))
 ERROR:  subqueries are not supported within INSERT queries
 HINT:  Try rewriting your queries with 'INSERT INTO ... SELECT' syntax.
-INSERT INTO 
-	second_distributed_table (tenant_id, dept) 
+INSERT INTO
+	second_distributed_table (tenant_id, dept)
 VALUES ('3', (SELECT 3));
 ERROR:  subqueries are not supported within INSERT queries
 HINT:  Try rewriting your queries with 'INSERT INTO ... SELECT' syntax.
 -- DML with an unreferenced SELECT CTE
 WITH cte_1 AS (
     WITH cte_2 AS (
-        SELECT tenant_id as cte2_id 
-        FROM second_distributed_table 
+        SELECT tenant_id as cte2_id
+        FROM second_distributed_table
         WHERE dept >= 2
     )
-    
-    UPDATE distributed_table 
+    UPDATE distributed_table
     SET dept = 10
     RETURNING *
 )
@@ -282,12 +281,11 @@ DEBUG:  generating subplan 20_1 for CTE cte_1: WITH cte_2 AS (SELECT second_dist
 DEBUG:  Plan 20 query after replacing subqueries and CTEs: UPDATE recursive_dml_queries.distributed_table SET dept = 5 FROM (SELECT intermediate_result.tenant_id, intermediate_result.dept, intermediate_result.info FROM read_intermediate_result('20_1'::text, 'binary'::citus_copy_format) intermediate_result(tenant_id text, dept integer, info jsonb)) cte_1 WHERE (distributed_table.tenant_id OPERATOR(pg_catalog.<) cte_1.tenant_id)
 WITH cte_1 AS (
     WITH cte_2 AS (
-        SELECT tenant_id as cte2_id 
-        FROM second_distributed_table 
+        SELECT tenant_id as cte2_id
+        FROM second_distributed_table
         WHERE dept >= 2
     )
-    
-    UPDATE distributed_table 
+    UPDATE distributed_table
     SET dept = 10
     RETURNING *
 )
@@ -299,13 +297,13 @@ DEBUG:  generating subplan 22_1 for CTE cte_1: WITH cte_2 AS (SELECT second_dist
 DEBUG:  Plan 22 query after replacing subqueries and CTEs: UPDATE recursive_dml_queries.distributed_table SET dept = 5 FROM (SELECT intermediate_result.tenant_id, intermediate_result.dept, intermediate_result.info FROM read_intermediate_result('22_1'::text, 'binary'::citus_copy_format) intermediate_result(tenant_id text, dept integer, info jsonb)) cte_1 WHERE (distributed_table.tenant_id OPERATOR(pg_catalog.<) cte_1.tenant_id)
 -- we don't support updating local table with a join with
 -- distributed tables
-UPDATE 
-	local_table 
-SET 
+UPDATE
+	local_table
+SET
 	id = 'citus_test'
-FROM 
+FROM
 	distributed_table
-WHERE 
+WHERE
 	distributed_table.tenant_id = local_table.id;
 ERROR:  relation local_table is not distributed
 RESET client_min_messages;

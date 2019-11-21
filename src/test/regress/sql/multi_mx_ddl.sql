@@ -11,7 +11,7 @@ CREATE INDEX CONCURRENTLY ddl_test_concurrent_index ON mx_ddl_table(value);
 ALTER TABLE mx_ddl_table ADD COLUMN version INTEGER;
 
 -- SET DEFAULT
-ALTER TABLE mx_ddl_table ALTER COLUMN version SET DEFAULT 1; 
+ALTER TABLE mx_ddl_table ALTER COLUMN version SET DEFAULT 1;
 
 UPDATE mx_ddl_table SET version=0.1 WHERE version IS NULL;
 

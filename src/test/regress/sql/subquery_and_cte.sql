@@ -26,19 +26,19 @@ WITH cte AS (
 	)
 	SELECT dist_cte.user_id FROM local_cte JOIN dist_cte ON dist_cte.user_id=local_cte.user_id
 )
-SELECT 
-	count(*) 
-FROM 
+SELECT
+	count(*)
+FROM
 	cte,
-	  (SELECT 
-    	DISTINCT users_table.user_id 
-     FROM 
-     	users_table, events_table 
-     WHERE 
-     	users_table.user_id = events_table.user_id AND 
+	  (SELECT
+    	DISTINCT users_table.user_id
+     FROM
+     	users_table, events_table
+     WHERE
+     	users_table.user_id = events_table.user_id AND
      event_type IN (1,2,3,4)
      ORDER BY 1 DESC LIMIT 5
-     ) as foo 
+     ) as foo
 	  WHERE foo.user_id = cte.user_id;
 
 -- CTEs are colocated, route entire query
@@ -94,8 +94,8 @@ UPDATE dist_table dt SET value = cte1.value
 FROM cte1 WHERE dt.id = 1;
 
 -- CTEs are recursively planned, and subquery foo is also recursively planned
--- final plan becomes a real-time plan since we also have events_table in the 
--- range table entries 
+-- final plan becomes a real-time plan since we also have events_table in the
+-- range table entries
 WITH cte AS (
 	WITH local_cte AS (
 		SELECT * FROM users_table_local
@@ -105,23 +105,23 @@ WITH cte AS (
 	)
 	SELECT dist_cte.user_id FROM local_cte JOIN dist_cte ON dist_cte.user_id=local_cte.user_id
 )
-SELECT 
-	count(*) 
-FROM 
+SELECT
+	count(*)
+FROM
 	cte,
-	  (SELECT 
-    	DISTINCT users_table.user_id 
-     FROM 
-     	users_table, events_table 
-     WHERE 
-     	users_table.user_id = events_table.user_id AND 
+	  (SELECT
+    	DISTINCT users_table.user_id
+     FROM
+     	users_table, events_table
+     WHERE
+     	users_table.user_id = events_table.user_id AND
      event_type IN (1,2,3,4)
      ORDER BY 1 DESC LIMIT 5
      ) as foo, events_table
 	  WHERE foo.user_id = cte.user_id AND events_table.user_id = cte.user_id;
 
 -- CTEs are replaced and subquery in WHERE is also replaced
--- but the query is still real-time query since users_table is in the 
+-- but the query is still real-time query since users_table is in the
 -- range table list
 WITH cte AS (
 	WITH local_cte AS (
@@ -134,7 +134,7 @@ WITH cte AS (
 )
 SELECT DISTINCT cte.user_id
 FROM users_table, cte
-WHERE 
+WHERE
 	users_table.user_id = cte.user_id AND
 	users_table.user_id IN (SELECT DISTINCT value_2 FROM users_table WHERE value_1 >= 1 AND value_1 <= 20 ORDER BY 1 LIMIT 5)
     ORDER BY 1 DESC;
@@ -152,7 +152,7 @@ WITH cte AS (
 )
 SELECT DISTINCT cte.user_id
 FROM cte
-WHERE 
+WHERE
 	cte.user_id IN (SELECT DISTINCT user_id FROM users_table WHERE value_1 >= 1 AND value_1 <= 20)
     ORDER BY 1 DESC;
 
@@ -163,12 +163,12 @@ SELECT
 FROM
     (
 	     WITH cte AS (
-	    SELECT 
-	    	DISTINCT users_table.user_id 
-	     FROM 
-	     	users_table, events_table 
-	     WHERE 
-	     	users_table.user_id = events_table.user_id AND 
+	    SELECT
+	    	DISTINCT users_table.user_id
+	     FROM
+	     	users_table, events_table
+	     WHERE
+	     	users_table.user_id = events_table.user_id AND
 	     event_type IN (1,2,3,4)
 	     ) SELECT * FROM cte ORDER BY 1 DESC
      ) as foo
@@ -182,25 +182,25 @@ SELECT
 FROM
     (
 	     WITH cte AS (
-	    SELECT 
-	    	DISTINCT users_table.user_id 
-	     FROM 
-	     	users_table, events_table 
-	     WHERE 
-	     	users_table.user_id = events_table.user_id AND 
+	    SELECT
+	    	DISTINCT users_table.user_id
+	     FROM
+	     	users_table, events_table
+	     WHERE
+	     	users_table.user_id = events_table.user_id AND
 	     event_type IN (1,2,3,4)
 	     ) SELECT * FROM cte ORDER BY 1 DESC
-     ) as foo, 
+     ) as foo,
     (
-	    SELECT 
-	    	DISTINCT users_table.user_id 
-	     FROM 
-	     	users_table, events_table 
-	     WHERE 
-	     	users_table.user_id = events_table.user_id AND 
+	    SELECT
+	    	DISTINCT users_table.user_id
+	     FROM
+	     	users_table, events_table
+	     WHERE
+	     	users_table.user_id = events_table.user_id AND
 	     event_type IN (1,2,3,4)
-	    
-     ) as bar  
+
+     ) as bar
 WHERE foo.user_id = bar.user_id
 ORDER BY 1 DESC;
 
@@ -211,47 +211,47 @@ SELECT
 FROM
     (
 	     WITH cte AS (
-	    SELECT 
-	    	DISTINCT users_table.user_id 
-	     FROM 
-	     	users_table, events_table 
-	     WHERE 
-	     	users_table.user_id = events_table.user_id AND 
+	    SELECT
+	    	DISTINCT users_table.user_id
+	     FROM
+	     	users_table, events_table
+	     WHERE
+	     	users_table.user_id = events_table.user_id AND
 	     event_type IN (1,2,3,4)
 	     ) SELECT * FROM cte ORDER BY 1 DESC
-     ) as foo, 
+     ) as foo,
     (
-	    SELECT 
+	    SELECT
 	    	users_table.user_id, some_events.event_type
-	     FROM 
-	     	users_table, 
+	     FROM
+	     	users_table,
 	     	(
 	     		WITH cte AS (
-			    SELECT 
+			    SELECT
 			    	event_type, users_table.user_id
-			     FROM 
-			     	users_table, events_table 
-			     WHERE 
-			     	users_table.user_id = events_table.user_id AND 
+			     FROM
+			     	users_table, events_table
+			     WHERE
+			     	users_table.user_id = events_table.user_id AND
 			     value_1 IN (1,2)
 			     ) SELECT * FROM cte ORDER BY 1 DESC
 	     	) as some_events
-	     WHERE 
-	     	users_table.user_id = some_events.user_id AND 
+	     WHERE
+	     	users_table.user_id = some_events.user_id AND
 	     event_type IN (1,2,3,4)
 	     ORDER BY 2,1
 	     LIMIT 2
-	    
-     ) as bar  
+
+     ) as bar
 WHERE foo.user_id = bar.user_id
 ORDER BY 1 DESC LIMIT 5;
 
 
 
--- CTEs on the different parts of the query is replaced 
+-- CTEs on the different parts of the query is replaced
 -- and subquery foo is also replaced since it contains
--- DISTINCT on a non-partition key 
-SELECT * FROM 
+-- DISTINCT on a non-partition key
+SELECT * FROM
 (
 	WITH cte AS (
 		WITH local_cte AS (
@@ -264,16 +264,16 @@ SELECT * FROM
 	)
 	SELECT DISTINCT cte.user_id
 	FROM users_table, cte
-	WHERE 
+	WHERE
 		users_table.user_id = cte.user_id AND
-		users_table.user_id IN 
+		users_table.user_id IN
 			(WITH cte_in_where AS (SELECT DISTINCT value_2 FROM users_table WHERE value_1 >= 1 AND value_1 <= 20 ORDER BY 1 LIMIT 5) SELECT * FROM cte_in_where)
 	    ORDER BY 1 DESC
-	    ) as foo, 
-			events_table 
-		WHERE 
+	    ) as foo,
+			events_table
+		WHERE
 			foo.user_id = events_table.value_2
-ORDER BY 3 DESC, 2 DESC, 1 DESC 
+ORDER BY 3 DESC, 2 DESC, 1 DESC
 LIMIT 5;
 
 
@@ -283,36 +283,36 @@ WITH cte AS (
 		SELECT * FROM users_table_local
 	),
 	dist_cte AS (
-		SELECT 
+		SELECT
 			user_id
-		FROM 
-			events_table, 
+		FROM
+			events_table,
 			(SELECT DISTINCT value_2 FROM users_table OFFSET 0) as foo
-		WHERE 
+		WHERE
 			events_table.user_id = foo.value_2 AND
 			events_table.user_id IN (SELECT DISTINCT value_1 FROM users_table ORDER BY 1 LIMIT 3)
 	)
 	SELECT dist_cte.user_id FROM local_cte JOIN dist_cte ON dist_cte.user_id=local_cte.user_id
 )
-SELECT 
-	count(*) 
-FROM 
+SELECT
+	count(*)
+FROM
 	cte,
-	  (SELECT 
-    	DISTINCT users_table.user_id 
-     FROM 
-     	users_table, events_table 
-     WHERE 
-     	users_table.user_id = events_table.user_id AND 
+	  (SELECT
+    	DISTINCT users_table.user_id
+     FROM
+     	users_table, events_table
+     WHERE
+     	users_table.user_id = events_table.user_id AND
      event_type IN (1,2,3,4)
      ORDER BY 1 DESC LIMIT 5
-     ) as foo 
+     ) as foo
 	  WHERE foo.user_id = cte.user_id;
 
 -- the same query, but this time the CTEs also live inside a subquery
-SELECT 
-	* 
-FROM 
+SELECT
+	*
+FROM
 (
 
 	WITH cte AS (
@@ -320,33 +320,33 @@ FROM
 		SELECT * FROM users_table_local
 	),
 	dist_cte AS (
-		SELECT 
+		SELECT
 			user_id
-		FROM 
-			events_table, 
+		FROM
+			events_table,
 			(SELECT DISTINCT value_2 FROM users_table OFFSET 0) as foo
-		WHERE 
+		WHERE
 			events_table.user_id = foo.value_2 AND
 			events_table.user_id IN (SELECT DISTINCT value_1 FROM users_table ORDER BY 1 LIMIT 3)
 	)
 	SELECT dist_cte.user_id FROM local_cte JOIN dist_cte ON dist_cte.user_id=local_cte.user_id
 )
-SELECT 
+SELECT
 	count(*)  as cnt
-FROM 
+FROM
 	cte,
-	  (SELECT 
-    	DISTINCT users_table.user_id 
-     FROM 
+	  (SELECT
+    	DISTINCT users_table.user_id
+     FROM
      	users_table, events_table
-     WHERE 
-     	users_table.user_id = events_table.user_id AND 
+     WHERE
+     	users_table.user_id = events_table.user_id AND
      event_type IN (1,2,3,4)
      ORDER BY 1 DESC LIMIT 5
-     ) as foo 
+     ) as foo
 	  WHERE foo.user_id = cte.user_id
 
-) as foo, users_table WHERE foo.cnt > users_table.value_2 
+) as foo, users_table WHERE foo.cnt > users_table.value_2
 ORDER BY 3 DESC, 1 DESC, 2 DESC, 4 DESC
 LIMIT 5;
 
@@ -356,25 +356,25 @@ SELECT
 FROM
     (
 	     WITH RECURSIVE cte AS (
-	    SELECT 
-	    	DISTINCT users_table.user_id 
-	     FROM 
-	     	users_table, events_table 
-	     WHERE 
-	     	users_table.user_id = events_table.user_id AND 
+	    SELECT
+	    	DISTINCT users_table.user_id
+	     FROM
+	     	users_table, events_table
+	     WHERE
+	     	users_table.user_id = events_table.user_id AND
 	     event_type IN (1,2,3,4)
 	     ) SELECT * FROM cte ORDER BY 1 DESC
-     ) as foo, 
+     ) as foo,
     (
-	    SELECT 
-	    	DISTINCT users_table.user_id 
-	     FROM 
-	     	users_table, events_table 
-	     WHERE 
-	     	users_table.user_id = events_table.user_id AND 
+	    SELECT
+	    	DISTINCT users_table.user_id
+	     FROM
+	     	users_table, events_table
+	     WHERE
+	     	users_table.user_id = events_table.user_id AND
 	     event_type IN (1,2,3,4)
-	    
-     ) as bar  
+
+     ) as bar
 WHERE foo.user_id = bar.user_id
 ORDER BY 1 DESC;
 

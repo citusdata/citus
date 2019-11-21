@@ -137,7 +137,7 @@ $$ LANGUAGE SQL STABLE;
 CREATE OR REPLACE FUNCTION test_parameterized_sql_function_in_subquery_where(org_id_val integer)
 RETURNS TABLE (a bigint)
 AS $$
-    SELECT count(*) AS count_val from test_parameterized_sql as t1 where 
+    SELECT count(*) AS count_val from test_parameterized_sql as t1 where
     org_id IN (SELECT org_id FROM test_parameterized_sql as t2 WHERE t2.org_id = t1.org_id AND org_id = org_id_val);
 $$ LANGUAGE SQL STABLE;
 

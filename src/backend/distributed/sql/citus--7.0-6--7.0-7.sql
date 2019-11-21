@@ -1,4 +1,4 @@
---  citus--7.0-6--7.0-7 
+--  citus--7.0-6--7.0-7
 
 CREATE FUNCTION citus.replace_isolation_tester_func()
 RETURNS void AS $$
@@ -66,7 +66,7 @@ RETURNS int4[] AS $$
     -- pg says we're not blocked locally; check whether we're blocked globally.
     SELECT transaction_number INTO mLocalTransactionNum
       FROM get_all_active_transactions() WHERE process_id = pBlockedPid;
-    
+
     SELECT array_agg(process_id) INTO mRemoteBlockingPids FROM (
       WITH activeTransactions AS (
         SELECT process_id, transaction_number FROM get_all_active_transactions()

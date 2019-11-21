@@ -83,15 +83,15 @@ step "s2-lock-ref-table-placement-on-coordinator"
 
 step "s2-view-dist"
 {
-	SELECT query, query_hostname, query_hostport, master_query_host_name, master_query_host_port, state, wait_event_type, wait_event, usename, datname FROM citus_dist_stat_activity WHERE query NOT ILIKE '%pg_prepared_xacts%' AND query NOT ILIKE '%COMMIT%' ORDER BY query DESC;	
+	SELECT query, query_hostname, query_hostport, master_query_host_name, master_query_host_port, state, wait_event_type, wait_event, usename, datname FROM citus_dist_stat_activity WHERE query NOT ILIKE '%pg_prepared_xacts%' AND query NOT ILIKE '%COMMIT%' ORDER BY query DESC;
 }
 
 step "s2-view-worker"
 {
-	SELECT query, query_hostname, query_hostport, master_query_host_name, 
-           master_query_host_port, state, wait_event_type, wait_event, usename, datname 
+	SELECT query, query_hostname, query_hostport, master_query_host_name,
+           master_query_host_port, state, wait_event_type, wait_event, usename, datname
     FROM citus_worker_stat_activity
-    WHERE query NOT ILIKE '%pg_prepared_xacts%' AND 
+    WHERE query NOT ILIKE '%pg_prepared_xacts%' AND
           query NOT ILIKE '%COMMIT%' AND
           query NOT ILIKE '%dump_local_wait_edges%'
     ORDER BY query, query_hostport DESC;
@@ -111,7 +111,7 @@ step "s2-active-transactions"
 }
 
 # we disable the daemon during the regression tests in order to get consistent results
-# thus we manually issue the deadlock detection 
+# thus we manually issue the deadlock detection
 session "deadlock-checker"
 
 # we issue the checker not only when there are deadlocks to ensure that we never cancel

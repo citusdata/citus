@@ -9,9 +9,9 @@ SET citus.next_shard_id TO 1240000;
 -- test with invalid port, prevent OS dependent warning from being displayed
 SET client_min_messages to ERROR;
 -- PG 9.5 does not show context for plpgsql raise
--- message whereas PG 9.6 shows. disabling it 
+-- message whereas PG 9.6 shows. disabling it
 -- for this test only to have consistent behavior
--- b/w PG 9.6+ and PG 9.5. 
+-- b/w PG 9.6+ and PG 9.5.
 \set SHOW_CONTEXT never
 
 SELECT * FROM master_run_on_worker(ARRAY['localhost']::text[], ARRAY['666']::int[],
@@ -44,7 +44,7 @@ SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]:
 SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]::int[],
 								   ARRAY['select a from generate_series(1,2) a']::text[],
 								   false);
-								   
+
 -- send multiple queries
 SELECT * FROM master_run_on_worker(ARRAY[:node_name, :node_name]::text[],
 								   ARRAY[:node_port, :node_port]::int[],
@@ -109,7 +109,7 @@ SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]:
 SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]::int[],
 								   ARRAY['drop table second_table']::text[],
 								   false);
-	
+
 -- verify table is dropped
 SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]::int[],
 								   ARRAY['select count(*) from second_table']::text[],
@@ -133,7 +133,7 @@ SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]:
 SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]::int[],
 								   ARRAY['select a from generate_series(1,2) a']::text[],
 								   true);
-								   
+
 -- send multiple queries
 SELECT * FROM master_run_on_worker(ARRAY[:node_name, :node_name]::text[],
 								   ARRAY[:node_port, :node_port]::int[],

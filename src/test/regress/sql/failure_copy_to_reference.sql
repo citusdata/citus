@@ -1,6 +1,6 @@
--- 
---  Failure tests for COPY to reference tables 
--- 
+--
+--  Failure tests for COPY to reference tables
+--
 CREATE SCHEMA copy_reference_failure;
 SET search_path TO 'copy_reference_failure';
 SET citus.next_shard_id TO 130000;
@@ -13,15 +13,15 @@ SELECT citus.mitmproxy('conn.allow()');
 CREATE TABLE test_table(id int, value_1 int);
 SELECT create_reference_table('test_table');
 
-CREATE VIEW unhealthy_shard_count AS 
-  SELECT count(*) 
-  FROM pg_dist_shard_placement pdsp 
-  JOIN 
-  pg_dist_shard pds 
-  ON pdsp.shardid=pds.shardid 
+CREATE VIEW unhealthy_shard_count AS
+  SELECT count(*)
+  FROM pg_dist_shard_placement pdsp
+  JOIN
+  pg_dist_shard pds
+  ON pdsp.shardid=pds.shardid
   WHERE logicalrelid='copy_reference_failure.test_table'::regclass AND shardstate != 1;
 
--- in the first test, kill just in the first 
+-- in the first test, kill just in the first
 -- response we get from the worker
 SELECT citus.mitmproxy('conn.kill()');
 \copy test_table FROM STDIN DELIMITER ','
@@ -99,7 +99,7 @@ SELECT citus.mitmproxy('conn.allow()');
 SELECT * FROM unhealthy_shard_count;
 SELECT count(*) FROM test_table;
 
--- kill the connection when we try to start the COPY 
+-- kill the connection when we try to start the COPY
 -- the query should abort
 SELECT citus.mitmproxy('conn.onQuery(query="FROM STDIN WITH").killall()');
 \copy test_table FROM STDIN DELIMITER ','
@@ -158,7 +158,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^COMMIT").kill()');
 3,4
 \.
 SELECT citus.mitmproxy('conn.allow()');
--- Since we kill connections to one worker after commit arrives but the 
+-- Since we kill connections to one worker after commit arrives but the
 -- other worker connections are healthy, we cannot commit on 1 worker
 -- which has 1 active shard placements, but the other does. That's why
 -- we expect to see 1 recovered prepared transactions.
@@ -182,7 +182,7 @@ SELECT citus.mitmproxy('conn.allow()');
 SELECT * FROM unhealthy_shard_count;
 SELECT count(*) FROM test_table;
 
--- but now kill just after the worker sends response to 
+-- but now kill just after the worker sends response to
 -- ROLLBACK command, command should have been rollbacked
 -- both on the distributed table and the placements
 SELECT citus.mitmproxy('conn.onCommandComplete(command="^ROLLBACK").kill()');

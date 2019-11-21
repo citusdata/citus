@@ -129,7 +129,7 @@ WHERE logicalrelid = 'citus_mx_schema_for_xacts.objects_for_xacts'::regclass;
 SET citus.shard_replication_factor TO 1;
 SET citus.replication_model TO streaming;
 
--- now show that we can rollback on creating mx table, but shards remain.... 
+-- now show that we can rollback on creating mx table, but shards remain....
 BEGIN;
 CREATE SCHEMA IF NOT EXISTS citus_mx_schema_for_xacts;
 SET search_path TO citus_mx_schema_for_xacts;
@@ -196,24 +196,24 @@ SELECT run_command_on_workers($$CREATE USER no_access_mx;$$);
 
 SET ROLE no_access_mx;
 
-SELECT raise_failed_aclcheck($$ 
+SELECT raise_failed_aclcheck($$
     DROP TABLE distributed_mx_table;
 $$);
 
-SELECT raise_failed_aclcheck($$ 
+SELECT raise_failed_aclcheck($$
     SELECT master_remove_distributed_table_metadata_from_workers('distributed_mx_table'::regclass, 'public', 'distributed_mx_table');
  $$);
 
-SELECT raise_failed_aclcheck($$ 
+SELECT raise_failed_aclcheck($$
     SELECT master_drop_all_shards('distributed_mx_table'::regclass, 'public', 'distributed_mx_table');
 $$);
-SELECT raise_failed_aclcheck($$ 
+SELECT raise_failed_aclcheck($$
     SELECT master_remove_partition_metadata('distributed_mx_table'::regclass, 'public', 'distributed_mx_table');
 $$);
-SELECT raise_failed_aclcheck($$ 
+SELECT raise_failed_aclcheck($$
     SELECT master_drop_sequences(ARRAY['public.distributed_mx_table_some_val_seq']);
 $$);
-SELECT raise_failed_aclcheck($$ 
+SELECT raise_failed_aclcheck($$
     SELECT master_drop_sequences(ARRAY['distributed_mx_table_some_val_seq']);
 $$);
 
@@ -247,15 +247,15 @@ BEGIN
 END;
 $$LANGUAGE plpgsql;
 
-SELECT raise_failed_aclcheck($$ 
+SELECT raise_failed_aclcheck($$
     DROP TABLE distributed_mx_table;
 $$);
 
-SELECT raise_failed_aclcheck($$ 
+SELECT raise_failed_aclcheck($$
     SELECT master_remove_distributed_table_metadata_from_workers('distributed_mx_table'::regclass, 'public', 'distributed_mx_table');
  $$);
 
-SELECT raise_failed_aclcheck($$ 
+SELECT raise_failed_aclcheck($$
     SELECT master_drop_sequences(ARRAY['public.distributed_mx_table_some_val_seq']);
 $$);
 

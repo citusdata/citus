@@ -22,7 +22,6 @@ CREATE TABLE lineitem_hash (
 	l_shipmode char(10) not null,
 	l_comment varchar(44) not null,
 	PRIMARY KEY(l_orderkey, l_linenumber) );
-	
 SELECT create_distributed_table('lineitem_hash', 'l_orderkey', 'hash');
  create_distributed_table 
 --------------------------

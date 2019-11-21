@@ -6,17 +6,17 @@
 -- We don't need shard id sequence here, so commented out to prevent conflicts with concurrent tests
 
 -- subqueries in WHERE with greater operator
-SELECT 
+SELECT
   user_id
-FROM 
+FROM
   users_table
-WHERE 
-  value_2 >  
-          (SELECT 
-              max(value_2) 
-           FROM 
-              events_table  
-           WHERE 
+WHERE
+  value_2 >
+          (SELECT
+              max(value_2)
+           FROM
+              events_table
+           WHERE
               users_table.user_id = events_table.user_id AND event_type = 1
            GROUP BY
               user_id
@@ -27,17 +27,17 @@ ORDER BY user_id
 LIMIT 5;
 
 -- same query with one additional join on non distribution column
-SELECT 
+SELECT
   user_id
-FROM 
+FROM
   users_table
-WHERE 
-  value_2 >  
-          (SELECT 
-              max(value_2) 
-           FROM 
-              events_table 
-           WHERE 
+WHERE
+  value_2 >
+          (SELECT
+              max(value_2)
+           FROM
+              events_table
+           WHERE
               users_table.user_id = events_table.user_id AND event_type = 1 AND
               users_table.time > events_table.time
            GROUP BY
@@ -46,20 +46,20 @@ WHERE
 GROUP BY user_id
 HAVING count(*) > 1
 ORDER BY user_id
-LIMIT 5; 
+LIMIT 5;
 
 -- the other way around is not supported
-SELECT 
+SELECT
   user_id
-FROM 
+FROM
   users_table
-WHERE 
-  value_2 >  
-          (SELECT 
-              max(value_2) 
-           FROM 
-              events_table 
-           WHERE 
+WHERE
+  value_2 >
+          (SELECT
+              max(value_2)
+           FROM
+              events_table
+           WHERE
               users_table.user_id > events_table.user_id AND event_type = 1 AND
               users_table.time = events_table.time
            GROUP BY
@@ -68,32 +68,32 @@ WHERE
 GROUP BY user_id
 HAVING count(*) > 1
 ORDER BY user_id
-LIMIT 5; 
+LIMIT 5;
 
 -- subqueries in where with ALL operator
-SELECT 
+SELECT
   user_id
-FROM 
-  users_table   
-WHERE 
+FROM
+  users_table
+WHERE
   value_2 > 1 AND
   value_2 < ALL (SELECT avg(value_3) FROM events_table WHERE users_table.user_id = events_table.user_id GROUP BY user_id)
-GROUP BY 
+GROUP BY
   1
-ORDER BY 
+ORDER BY
   1 DESC
-LIMIT 3; 
+LIMIT 3;
 
 -- IN operator on non-partition key
-SELECT 
+SELECT
   user_id
-FROM 
+FROM
   events_table as e1
 WHERE
   event_type IN
-            (SELECT 
+            (SELECT
                 event_type
-             FROM 
+             FROM
               events_table as e2
              WHERE
               value_2 = 1 AND value_3 > 3 AND
@@ -102,15 +102,15 @@ WHERE
 ORDER BY 1;
 
 -- NOT IN on non-partition key
-SELECT 
+SELECT
   user_id
-FROM 
+FROM
   events_table as e1
 WHERE
   event_type NOT IN
-            (SELECT 
+            (SELECT
                 event_type
-             FROM 
+             FROM
               events_table as e2
              WHERE
               value_2 = 1 AND value_3 > 3 AND
@@ -122,28 +122,28 @@ HAVING count(*) > 2
 ORDER BY 1;
 
 -- non-correlated query with =ANY on partition keys
- SELECT 
-  user_id, count(*) 
-FROM 
-  users_table 
-WHERE 
+ SELECT
+  user_id, count(*)
+FROM
+  users_table
+WHERE
   user_id =ANY(SELECT user_id FROM users_table WHERE value_1 >= 1 AND value_1 <= 2) GROUP BY 1 ORDER BY 2 DESC LIMIT 5;
 
 -- users that appeared more than 118 times
-SELECT 
+SELECT
   user_id
-FROM 
+FROM
   users_table
 WHERE 2 <=
-      (SELECT 
-          count(*) 
-        FROM 
-          events_table 
-        WHERE 
-        	users_table.user_id = events_table.user_id 
-        GROUP BY 
+      (SELECT
+          count(*)
+        FROM
+          events_table
+        WHERE
+        	users_table.user_id = events_table.user_id
+        GROUP BY
         	user_id)
-GROUP BY 
+GROUP BY
 	user_id
 ORDER BY
 	user_id;
@@ -218,10 +218,10 @@ ORDER BY 1, 2;
 -- the following query doesn't have a meaningful result
 -- but it is a valid query with an arbitrary subquery in
 -- WHERE clause
-SELECT 
-	user_id 
-FROM 
-	users_table 
+SELECT
+	user_id
+FROM
+	users_table
 WHERE
  user_id IN
 (
@@ -294,18 +294,18 @@ SELECT user_id, array_length(events_table, 1)
 FROM (
   SELECT user_id, array_agg(event ORDER BY time) AS events_table
   FROM (
-    SELECT 
+    SELECT
     	u.user_id, e.event_type::text AS event, e.time
-    FROM 
+    FROM
     	users_table AS u,
         events_table AS e
-    WHERE u.user_id = e.user_id AND 
-    		u.user_id IN 
+    WHERE u.user_id = e.user_id AND
+    		u.user_id IN
     		(
-    			SELECT 
-    				user_id 
-    			FROM 
-    				users_table 
+    			SELECT
+    				user_id
+    			FROM
+    				users_table
     			WHERE value_2 >= 1
 			    AND  EXISTS (SELECT user_id FROM events_table WHERE event_type > 1 AND event_type <= 3 AND value_3 > 1 AND user_id = users_table.user_id)
 				AND  NOT EXISTS (SELECT user_id FROM events_table WHERE event_type > 3 AND event_type <= 4  AND value_3 > 1 AND user_id = users_table.user_id)
@@ -315,8 +315,8 @@ FROM (
 ) q
 ORDER BY 2 DESC, 1;
 
--- 
--- below tests only aims for cases where all relations 
+--
+-- below tests only aims for cases where all relations
 -- are not joined on partition key
 --
 
@@ -383,10 +383,10 @@ SELECT user_id, value_2 FROM users_table WHERE
 
 
 -- left leaf query does not return partition key
-SELECT 
-	user_id 
-FROM 
-	users_table 
+SELECT
+	user_id
+FROM
+	users_table
 WHERE
  user_id IN
 (
@@ -456,18 +456,18 @@ SELECT user_id, array_length(events_table, 1)
 FROM (
   SELECT user_id, array_agg(event ORDER BY time) AS events_table
   FROM (
-    SELECT 
+    SELECT
     	u.user_id, e.event_type::text AS event, e.time
-    FROM 
+    FROM
     	users_table AS u,
         events_table AS e
-    WHERE u.user_id = e.user_id AND 
-    		u.user_id IN 
+    WHERE u.user_id = e.user_id AND
+    		u.user_id IN
     		(
-    			SELECT 
-    				user_id 
-    			FROM 
-    				users_table 
+    			SELECT
+    				user_id
+    			FROM
+    				users_table
     			WHERE value_2 >= 5
 			    AND  EXISTS (SELECT user_id FROM events_table WHERE event_type > 1 AND event_type <= 3 AND value_3 > 1 AND user_id = users_table.user_id)
 				AND  NOT EXISTS (SELECT user_id FROM events_table WHERE event_type > 3 AND event_type <= 4  AND value_3 > 1 AND user_id != users_table.user_id)
@@ -501,17 +501,17 @@ ORDER BY 1 ASC
 LIMIT 2;
 
 -- OFFSET is not supported in the subquey
-SELECT 
+SELECT
   user_id
-FROM 
+FROM
   users_table
-WHERE 
-  value_2 >  
-          (SELECT 
-              max(value_2) 
-           FROM 
-              events_table  
-           WHERE 
+WHERE
+  value_2 >
+          (SELECT
+              max(value_2)
+           FROM
+              events_table
+           WHERE
               users_table.user_id = events_table.user_id AND event_type = 2
            GROUP BY
               user_id
@@ -521,26 +521,26 @@ WHERE
 -- we can detect unsupported subqueries even if they appear
 -- in WHERE subquery -> FROM subquery -> WHERE subquery
 -- but we can recursively plan that anyway
-SELECT DISTINCT user_id 
-FROM   users_table 
-WHERE  user_id 
-  IN (SELECT 
-      f_inner.user_id 
-        FROM  
+SELECT DISTINCT user_id
+FROM   users_table
+WHERE  user_id
+  IN (SELECT
+      f_inner.user_id
+        FROM
             (
-              SELECT 
-                e1.user_id 
-              FROM 
-                users_table u1, events_table e1 
-              WHERE 
+              SELECT
+                e1.user_id
+              FROM
+                users_table u1, events_table e1
+              WHERE
                 e1.user_id = u1.user_id
              ) as f_inner,
 				  (
-              SELECT 
-                e1.user_id 
-              FROM 
-                users_table u1, events_table e1 
-              WHERE 
+              SELECT
+                e1.user_id
+              FROM
+                users_table u1, events_table e1
+              WHERE
                 e1.user_id = u1.user_id
                 AND e1.user_id IN (SELECT user_id FROM users_table ORDER BY user_id LIMIT 3)
              ) as f_outer

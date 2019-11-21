@@ -1,5 +1,5 @@
 --
--- Full join with subquery pushdown support 
+-- Full join with subquery pushdown support
 --
 
 SET citus.next_shard_id TO 9000000;
@@ -26,7 +26,7 @@ SELECT id FROM test_table_1 FULL JOIN test_table_3 using(id) ORDER BY 1;
 SELECT * FROM test_table_1 FULL JOIN test_table_3 using(id) ORDER BY 1;
 
 -- Join subqueries using single column
-SELECT * FROM 
+SELECT * FROM
 	(SELECT test_table_1.id FROM test_table_1 FULL JOIN test_table_3 using(id)) as j1
 		FULL JOIN
 	(SELECT test_table_1.id FROM test_table_1 FULL JOIN test_table_3 using(id)) as j2
@@ -34,7 +34,7 @@ SELECT * FROM
 	ORDER BY 1;
 
 -- Join subqueries using multiple columns
-SELECT * FROM 
+SELECT * FROM
 	(SELECT test_table_1.id, test_table_1.val1 FROM test_table_1 FULL JOIN test_table_3 using(id)) as j1
 		FULL JOIN
 	(SELECT test_table_1.id, test_table_1.val1 FROM test_table_1 FULL JOIN test_table_3 using(id)) as j2
@@ -45,7 +45,7 @@ SELECT * FROM
 SELECT * FROM test_table_1 FULL JOIN test_table_3 USING(id, val1) ORDER BY 1;
 
 -- Full join with complicated target lists
-SELECT count(DISTINCT id), (avg(test_table_1.val1) + id * id)::integer as avg_value, id::numeric IS NOT NULL as not_null 
+SELECT count(DISTINCT id), (avg(test_table_1.val1) + id * id)::integer as avg_value, id::numeric IS NOT NULL as not_null
 FROM test_table_1 FULL JOIN test_table_3 using(id)
 WHERE id::bigint < 55
 GROUP BY id
@@ -102,7 +102,7 @@ SELECT id FROM test_table_1 FULL JOIN test_table_2 using(id) ORDER BY 1;
 SELECT * FROM test_table_1 FULL JOIN test_table_2 using(id) ORDER BY 1;
 
 -- Join subqueries using multiple columns
-SELECT * FROM 
+SELECT * FROM
 	(SELECT test_table_1.id, test_table_1.val1 FROM test_table_1 FULL JOIN test_table_2 using(id)) as j1
 		FULL JOIN
 	(SELECT test_table_2.id, test_table_2.val1 FROM test_table_1 FULL JOIN test_table_2 using(id)) as j2

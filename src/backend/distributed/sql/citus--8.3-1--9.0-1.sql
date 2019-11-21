@@ -1,4 +1,4 @@
---  citus--8.3-1--9.0-1 
+--  citus--8.3-1--9.0-1
 
 SET search_path = 'pg_catalog';
 
@@ -77,7 +77,7 @@ CREATE TRIGGER dist_object_cache_invalidate
 -- by the operator.
 ALTER TABLE pg_dist_poolinfo DROP CONSTRAINT pg_dist_poolinfo_nodeid_fkey;
 
---  if the rebalancer extension is still around, drop it before creating Citus functions 
+--  if the rebalancer extension is still around, drop it before creating Citus functions
 DROP EXTENSION IF EXISTS shard_rebalancer;
 
 #include "udfs/get_rebalance_table_shards_plan/9.0-1.sql"

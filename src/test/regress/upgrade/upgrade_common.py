@@ -101,4 +101,3 @@ def initialize_citus_cluster(old_bindir, old_datadir, settings):
     start_databases(old_bindir, old_datadir)
     create_citus_extension(old_bindir)
     add_workers(old_bindir)
-    
