@@ -169,7 +169,7 @@ CitusExtensionObject(const ObjectAddress *objectAddress)
 
 	extensionName = get_extension_name(objectAddress->objectId);
 	if (extensionName != NULL &&
-		strncasecmp(extensionName, CITUS_NAME, NAMEDATALEN) == 0)
+		strncasecmp(extensionName, "citus", NAMEDATALEN) == 0)
 	{
 		return true;
 	}
