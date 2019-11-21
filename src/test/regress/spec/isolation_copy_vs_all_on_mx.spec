@@ -1,6 +1,6 @@
 #include "isolation_mx_common.spec"
 
-setup 
+setup
 {
 	CREATE TABLE copy_table(id integer, value integer);
 	SELECT create_distributed_table('copy_table', 'id');

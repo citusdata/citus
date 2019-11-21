@@ -1,6 +1,6 @@
 #include "isolation_mx_common.spec"
 
-setup 
+setup
 {
 	CREATE TABLE insert_table(id integer, value integer);
 	SELECT create_distributed_table('insert_table', 'id');

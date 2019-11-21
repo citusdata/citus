@@ -1,6 +1,6 @@
 #include "isolation_mx_common.spec"
 
-setup 
+setup
 {
 	CREATE TABLE select_table(id integer, value integer);
 	SELECT create_distributed_table('select_table', 'id');
@@ -13,7 +13,7 @@ teardown
 {
         DROP TABLE IF EXISTS select_table CASCADE;
         SELECT citus_internal.restore_isolation_tester_func();
-}	
+}
 
 session "s1"
 

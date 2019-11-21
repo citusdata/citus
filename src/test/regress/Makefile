@@ -71,7 +71,7 @@ $(generated_isolation_files): $(citus_abs_srcdir)/build/specs/%: $(citus_abs_src
 Isolation_Po_files := $(wildcard $(ISOLATION_DEPDIR)/*.Po)
 ifneq (,$(Isolation_Po_files))
 include $(Isolation_Po_files)
-endif	
+endif
 
 # using pg_regress_multi_check unnecessarily starts up multiple nodes, which isn't needed
 # for check-worker. But that's harmless besides a few cycles.

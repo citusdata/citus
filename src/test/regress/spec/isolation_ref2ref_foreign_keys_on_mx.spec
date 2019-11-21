@@ -1,6 +1,6 @@
 #include "isolation_mx_common.spec"
 
-setup 
+setup
 {
     CREATE TABLE ref_table_1(id int PRIMARY KEY, value int);
 	SELECT create_reference_table('ref_table_1');
