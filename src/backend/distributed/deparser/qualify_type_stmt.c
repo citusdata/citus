@@ -53,17 +53,15 @@ GetTypeNamespaceNameByNameList(List *names)
 static Oid
 TypeOidGetNamespaceOid(Oid typeOid)
 {
-	Form_pg_type typeData = NULL;
 	HeapTuple typeTuple = SearchSysCache1(TYPEOID, typeOid);
-	Oid typnamespace = InvalidOid;
 
 	if (!HeapTupleIsValid(typeTuple))
 	{
 		elog(ERROR, "citus cache lookup failed");
 		return InvalidOid;
 	}
-	typeData = (Form_pg_type) GETSTRUCT(typeTuple);
-	typnamespace = typeData->typnamespace;
+	Form_pg_type typeData = (Form_pg_type) GETSTRUCT(typeTuple);
+	Oid typnamespace = typeData->typnamespace;
 
 	ReleaseSysCache(typeTuple);
 
@@ -161,11 +159,9 @@ QualifyCreateEnumStmt(CreateEnumStmt *stmt)
 void
 QualifyAlterTypeSchemaStmt(AlterObjectSchemaStmt *stmt)
 {
-	List *names = NIL;
-
 	Assert(stmt->objectType == OBJECT_TYPE);
 
-	names = (List *) stmt->object;
+	List *names = (List *) stmt->object;
 	if (list_length(names) == 1)
 	{
 		/* not qualified with schema, lookup type and its schema s*/
@@ -179,11 +175,9 @@ QualifyAlterTypeSchemaStmt(AlterObjectSchemaStmt *stmt)
 void
 QualifyAlterTypeOwnerStmt(AlterOwnerStmt *stmt)
 {
-	List *names = NIL;
-
 	Assert(stmt->objectType == OBJECT_TYPE);
 
-	names = (List *) stmt->object;
+	List *names = (List *) stmt->object;
 	if (list_length(names) == 1)
 	{
 		/* not qualified with schema, lookup type and its schema s*/

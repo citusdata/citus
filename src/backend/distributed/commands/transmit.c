@@ -42,7 +42,6 @@ void
 RedirectCopyDataToRegularFile(const char *filename)
 {
 	StringInfo copyData = makeStringInfo();
-	bool copyDone = false;
 	const int fileFlags = (O_APPEND | O_CREAT | O_RDWR | O_TRUNC | PG_BINARY);
 	const int fileMode = (S_IRUSR | S_IWUSR);
 	File fileDesc = FileOpenForTransmit(filename, fileFlags, fileMode);
@@ -50,7 +49,7 @@ RedirectCopyDataToRegularFile(const char *filename)
 
 	SendCopyInStart();
 
-	copyDone = ReceiveCopyData(copyData);
+	bool copyDone = ReceiveCopyData(copyData);
 	while (!copyDone)
 	{
 		/* if received data has contents, append to regular file */
@@ -83,8 +82,6 @@ RedirectCopyDataToRegularFile(const char *filename)
 void
 SendRegularFile(const char *filename)
 {
-	StringInfo fileBuffer = NULL;
-	int readBytes = -1;
 	const uint32 fileBufferSize = 32768; /* 32 KB */
 	const int fileFlags = (O_RDONLY | PG_BINARY);
 	const int fileMode = 0;
@@ -97,13 +94,13 @@ SendRegularFile(const char *filename)
 	 * We read file's contents into buffers of 32 KB. This buffer size is twice
 	 * as large as Hadoop's default buffer size, and may later be configurable.
 	 */
-	fileBuffer = makeStringInfo();
+	StringInfo fileBuffer = makeStringInfo();
 	enlargeStringInfo(fileBuffer, fileBufferSize);
 
 	SendCopyOutStart();
 
-	readBytes = FileReadCompat(&fileCompat, fileBuffer->data, fileBufferSize,
-							   PG_WAIT_IO);
+	int readBytes = FileReadCompat(&fileCompat, fileBuffer->data, fileBufferSize,
+								   PG_WAIT_IO);
 	while (readBytes > 0)
 	{
 		fileBuffer->len = readBytes;
@@ -141,11 +138,9 @@ FreeStringInfo(StringInfo stringInfo)
 File
 FileOpenForTransmit(const char *filename, int fileFlags, int fileMode)
 {
-	File fileDesc = -1;
-	int fileStated = -1;
 	struct stat fileStat;
 
-	fileStated = stat(filename, &fileStat);
+	int fileStated = stat(filename, &fileStat);
 	if (fileStated >= 0)
 	{
 		if (S_ISDIR(fileStat.st_mode))
@@ -155,7 +150,7 @@ FileOpenForTransmit(const char *filename, int fileFlags, int fileMode)
 		}
 	}
 
-	fileDesc = PathNameOpenFilePerm((char *) filename, fileFlags, fileMode);
+	File fileDesc = PathNameOpenFilePerm((char *) filename, fileFlags, fileMode);
 	if (fileDesc < 0)
 	{
 		ereport(ERROR, (errcode_for_file_access(),
@@ -175,7 +170,6 @@ SendCopyInStart(void)
 {
 	StringInfoData copyInStart = { NULL, 0, 0, 0 };
 	const char copyFormat = 1; /* binary copy format */
-	int flushed = 0;
 
 	pq_beginmessage(&copyInStart, 'G');
 	pq_sendbyte(&copyInStart, copyFormat);
@@ -183,7 +177,7 @@ SendCopyInStart(void)
 	pq_endmessage(&copyInStart);
 
 	/* flush here to ensure that FE knows it can send data */
-	flushed = pq_flush();
+	int flushed = pq_flush();
 	if (flushed != 0)
 	{
 		ereport(WARNING, (errmsg("could not flush copy start data")));
@@ -213,13 +207,12 @@ static void
 SendCopyDone(void)
 {
 	StringInfoData copyDone = { NULL, 0, 0, 0 };
-	int flushed = 0;
 
 	pq_beginmessage(&copyDone, 'c');
 	pq_endmessage(&copyDone);
 
 	/* flush here to signal to FE that we are done */
-	flushed = pq_flush();
+	int flushed = pq_flush();
 	if (flushed != 0)
 	{
 		ereport(WARNING, (errmsg("could not flush copy start data")));
@@ -250,14 +243,12 @@ SendCopyData(StringInfo fileBuffer)
 static bool
 ReceiveCopyData(StringInfo copyData)
 {
-	int messageType = 0;
-	int messageCopied = 0;
 	bool copyDone = true;
 	const int unlimitedSize = 0;
 
 	HOLD_CANCEL_INTERRUPTS();
 	pq_startmsgread();
-	messageType = pq_getbyte();
+	int messageType = pq_getbyte();
 	if (messageType == EOF)
 	{
 		ereport(ERROR, (errcode(ERRCODE_CONNECTION_FAILURE),
@@ -265,7 +256,7 @@ ReceiveCopyData(StringInfo copyData)
 	}
 
 	/* consume the rest of message before checking for message type */
-	messageCopied = pq_getmessage(copyData, unlimitedSize);
+	int messageCopied = pq_getmessage(copyData, unlimitedSize);
 	if (messageCopied == EOF)
 	{
 		ereport(ERROR, (errcode(ERRCODE_CONNECTION_FAILURE),
@@ -382,8 +373,6 @@ TransmitStatementUser(CopyStmt *copyStatement)
 void
 VerifyTransmitStmt(CopyStmt *copyStatement)
 {
-	char *fileName = NULL;
-
 	EnsureSuperUser();
 
 	/* do some minimal option verification */
@@ -394,7 +383,7 @@ VerifyTransmitStmt(CopyStmt *copyStatement)
 						errmsg("FORMAT 'transmit' requires a target file")));
 	}
 
-	fileName = copyStatement->relation->relname;
+	char *fileName = copyStatement->relation->relname;
 
 	if (is_absolute_path(fileName))
 	{

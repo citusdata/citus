@@ -137,14 +137,12 @@ AppendAlterTypeStmt(StringInfo buf, AlterTableStmt *stmt)
 	appendStringInfo(buf, "ALTER TYPE %s", identifier);
 	foreach(cmdCell, stmt->cmds)
 	{
-		AlterTableCmd *alterTableCmd = NULL;
-
 		if (cmdCell != list_head(stmt->cmds))
 		{
 			appendStringInfoString(buf, ", ");
 		}
 
-		alterTableCmd = castNode(AlterTableCmd, lfirst(cmdCell));
+		AlterTableCmd *alterTableCmd = castNode(AlterTableCmd, lfirst(cmdCell));
 		AppendAlterTypeCmd(buf, alterTableCmd);
 	}
 
@@ -317,13 +315,11 @@ AppendCompositeTypeStmt(StringInfo str, CompositeTypeStmt *stmt)
 static void
 AppendCreateEnumStmt(StringInfo str, CreateEnumStmt *stmt)
 {
-	RangeVar *typevar = NULL;
-	const char *identifier = NULL;
-
-	typevar = makeRangeVarFromNameList(stmt->typeName);
+	RangeVar *typevar = makeRangeVarFromNameList(stmt->typeName);
 
 	/* create the identifier from the fully qualified rangevar */
-	identifier = quote_qualified_identifier(typevar->schemaname, typevar->relname);
+	const char *identifier = quote_qualified_identifier(typevar->schemaname,
+														typevar->relname);
 
 	appendStringInfo(str, "CREATE TYPE %s AS ENUM (", identifier);
 	AppendStringList(str, stmt->vals);
@@ -472,11 +468,9 @@ DeparseAlterTypeSchemaStmt(AlterObjectSchemaStmt *stmt)
 static void
 AppendAlterTypeSchemaStmt(StringInfo buf, AlterObjectSchemaStmt *stmt)
 {
-	List *names = NIL;
-
 	Assert(stmt->objectType == OBJECT_TYPE);
 
-	names = (List *) stmt->object;
+	List *names = (List *) stmt->object;
 	appendStringInfo(buf, "ALTER TYPE %s SET SCHEMA %s;", NameListToQuotedString(names),
 					 quote_identifier(stmt->newschema));
 }
@@ -499,11 +493,9 @@ DeparseAlterTypeOwnerStmt(AlterOwnerStmt *stmt)
 static void
 AppendAlterTypeOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt)
 {
-	List *names = NIL;
-
 	Assert(stmt->objectType == OBJECT_TYPE);
 
-	names = (List *) stmt->object;
+	List *names = (List *) stmt->object;
 	appendStringInfo(buf, "ALTER TYPE %s OWNER TO %s;", NameListToQuotedString(names),
 					 RoleSpecString(stmt->newowner, true));
 }

@@ -60,7 +60,7 @@ SELECT get_referencing_relation_id_list::regclass FROM get_referencing_relation_
 SELECT get_referenced_relation_id_list::regclass FROM get_referenced_relation_id_list('dtt4'::regclass) ORDER BY 1;
 SELECT get_referencing_relation_id_list::regclass FROM get_referencing_relation_id_list('dtt4'::regclass) ORDER BY 1;
 
--- some tests within transction blocks to make sure that 
+-- some tests within transction blocks to make sure that
 -- cache invalidation works fine
 CREATE TABLE test_1 (id int UNIQUE);
 CREATE TABLE test_2 (id int UNIQUE);
@@ -74,17 +74,17 @@ SELECT create_distributed_Table('test_3', 'id');
 SELECT create_distributed_Table('test_4', 'id');
 SELECT create_distributed_Table('test_5', 'id');
 
-CREATE VIEW referential_integrity_summary AS 
-    WITH RECURSIVE referential_integrity_summary(n, table_name, referencing_relations, referenced_relations) AS 
+CREATE VIEW referential_integrity_summary AS
+    WITH RECURSIVE referential_integrity_summary(n, table_name, referencing_relations, referenced_relations) AS
     (
         SELECT 0,'0','{}'::regclass[],'{}'::regclass[]
       UNION ALL
-        SELECT 
-          n + 1, 
-          'test_' || n + 1|| '' as table_name, 
-          (SELECT  array_agg(get_referencing_relation_id_list::regclass ORDER BY 1) FROM get_referencing_relation_id_list(('test_' || (n +1) ) ::regclass)) as referencing_relations, 
+        SELECT
+          n + 1,
+          'test_' || n + 1|| '' as table_name,
+          (SELECT  array_agg(get_referencing_relation_id_list::regclass ORDER BY 1) FROM get_referencing_relation_id_list(('test_' || (n +1) ) ::regclass)) as referencing_relations,
           (SELECT  array_agg(get_referenced_relation_id_list::regclass ORDER BY 1) FROM get_referenced_relation_id_list(('test_' || (n +1) ) ::regclass)) as referenced_by_relations
-        FROM referential_integrity_summary, pg_class 
+        FROM referential_integrity_summary, pg_class
         WHERE
          pg_class.relname = ('test_' || (n +1))
         AND n < 5
@@ -93,7 +93,7 @@ CREATE VIEW referential_integrity_summary AS
 
 -- make sure that invalidation through ALTER TABLE works fine
 BEGIN;
-    ALTER TABLE test_2 ADD CONSTRAINT fkey_1 FOREIGN KEY(id) REFERENCES test_1(id);   
+    ALTER TABLE test_2 ADD CONSTRAINT fkey_1 FOREIGN KEY(id) REFERENCES test_1(id);
     SELECT * FROM referential_integrity_summary;
     ALTER TABLE test_3 ADD CONSTRAINT fkey_1 FOREIGN KEY(id) REFERENCES test_2(id);
     SELECT * FROM referential_integrity_summary;
@@ -105,7 +105,7 @@ ROLLBACK;
 
 -- similar test, but slightly different order of creating foreign keys
 BEGIN;
-    ALTER TABLE test_2 ADD CONSTRAINT fkey_1 FOREIGN KEY(id) REFERENCES test_1(id);   
+    ALTER TABLE test_2 ADD CONSTRAINT fkey_1 FOREIGN KEY(id) REFERENCES test_1(id);
     SELECT * FROM referential_integrity_summary;
     ALTER TABLE test_4 ADD CONSTRAINT fkey_1 FOREIGN KEY(id) REFERENCES test_3(id);
     SELECT * FROM referential_integrity_summary;
@@ -117,7 +117,7 @@ ROLLBACK;
 
 -- make sure that DROP CONSTRAINT works invalidates the cache correctly
 BEGIN;
-    ALTER TABLE test_2 ADD CONSTRAINT fkey_1 FOREIGN KEY(id) REFERENCES test_1(id);   
+    ALTER TABLE test_2 ADD CONSTRAINT fkey_1 FOREIGN KEY(id) REFERENCES test_1(id);
     ALTER TABLE test_3 ADD CONSTRAINT fkey_1 FOREIGN KEY(id) REFERENCES test_2(id);
     ALTER TABLE test_4 ADD CONSTRAINT fkey_1 FOREIGN KEY(id) REFERENCES test_3(id);
     ALTER TABLE test_5 ADD CONSTRAINT fkey_1 FOREIGN KEY(id) REFERENCES test_4(id);
@@ -149,7 +149,7 @@ COMMIT;
 -- DROP TABLE works expected
 -- re-create the constraints
 BEGIN;
-    ALTER TABLE test_2 ADD CONSTRAINT fkey_1 FOREIGN KEY(id) REFERENCES test_1(id);   
+    ALTER TABLE test_2 ADD CONSTRAINT fkey_1 FOREIGN KEY(id) REFERENCES test_1(id);
     ALTER TABLE test_3 ADD CONSTRAINT fkey_1 FOREIGN KEY(id) REFERENCES test_2(id);
     ALTER TABLE test_4 ADD CONSTRAINT fkey_1 FOREIGN KEY(id) REFERENCES test_3(id);
     ALTER TABLE test_5 ADD CONSTRAINT fkey_1 FOREIGN KEY(id) REFERENCES test_4(id);
@@ -217,7 +217,7 @@ BEGIN;
 
     SELECT get_referencing_relation_id_list::regclass FROM get_referencing_relation_id_list('test_7'::regclass) ORDER BY 1;
     SELECT get_referenced_relation_id_list::regclass FROM get_referenced_relation_id_list('test_7'::regclass) ORDER BY 1;
-    
+
 ROLLBACK;
 
 SET search_path TO public;

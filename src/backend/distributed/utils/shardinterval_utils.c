@@ -250,7 +250,6 @@ ShardInterval *
 FindShardInterval(Datum partitionColumnValue, DistTableCacheEntry *cacheEntry)
 {
 	Datum searchedValue = partitionColumnValue;
-	int shardIndex = INVALID_SHARD_INDEX;
 
 	if (cacheEntry->partitionMethod == DISTRIBUTE_BY_HASH)
 	{
@@ -259,7 +258,7 @@ FindShardInterval(Datum partitionColumnValue, DistTableCacheEntry *cacheEntry)
 										  partitionColumnValue);
 	}
 
-	shardIndex = FindShardIntervalIndex(searchedValue, cacheEntry);
+	int shardIndex = FindShardIntervalIndex(searchedValue, cacheEntry);
 
 	if (shardIndex == INVALID_SHARD_INDEX)
 	{
@@ -379,13 +378,12 @@ SearchCachedShardInterval(Datum partitionColumnValue, ShardInterval **shardInter
 	while (lowerBoundIndex < upperBoundIndex)
 	{
 		int middleIndex = (lowerBoundIndex + upperBoundIndex) / 2;
-		int maxValueComparison = 0;
-		int minValueComparison = 0;
 
-		minValueComparison = FunctionCall2Coll(compareFunction,
-											   DEFAULT_COLLATION_OID,
-											   partitionColumnValue,
-											   shardIntervalCache[middleIndex]->minValue);
+		int minValueComparison = FunctionCall2Coll(compareFunction,
+												   DEFAULT_COLLATION_OID,
+												   partitionColumnValue,
+												   shardIntervalCache[middleIndex]->
+												   minValue);
 
 		if (DatumGetInt32(minValueComparison) < 0)
 		{
@@ -393,10 +391,11 @@ SearchCachedShardInterval(Datum partitionColumnValue, ShardInterval **shardInter
 			continue;
 		}
 
-		maxValueComparison = FunctionCall2Coll(compareFunction,
-											   DEFAULT_COLLATION_OID,
-											   partitionColumnValue,
-											   shardIntervalCache[middleIndex]->maxValue);
+		int maxValueComparison = FunctionCall2Coll(compareFunction,
+												   DEFAULT_COLLATION_OID,
+												   partitionColumnValue,
+												   shardIntervalCache[middleIndex]->
+												   maxValue);
 
 		if (DatumGetInt32(maxValueComparison) <= 0)
 		{
@@ -420,7 +419,6 @@ SingleReplicatedTable(Oid relationId)
 {
 	List *shardList = LoadShardList(relationId);
 	List *shardPlacementList = NIL;
-	Oid shardId = INVALID_SHARD_ID;
 
 	/* we could have append/range distributed tables without shards */
 	if (list_length(shardList) <= 1)
@@ -429,7 +427,7 @@ SingleReplicatedTable(Oid relationId)
 	}
 
 	/* checking only for the first shard id should suffice */
-	shardId = (*(uint64 *) linitial(shardList));
+	Oid shardId = (*(uint64 *) linitial(shardList));
 
 	/* for hash distributed tables, it is sufficient to only check one shard */
 	if (PartitionMethod(relationId) == DISTRIBUTE_BY_HASH)

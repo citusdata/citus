@@ -1,5 +1,5 @@
 setup
-{	
+{
   	CREATE TABLE table_to_delete_from(id int);
 
   	SELECT create_distributed_table('table_to_delete_from', 'id', 'append');

@@ -1,5 +1,5 @@
 setup
-{	
+{
   	SELECT citus_internal.replace_isolation_tester_func();
   	SELECT citus_internal.refresh_isolation_tester_prepared_statement();
 
@@ -94,7 +94,7 @@ step "s2-change_connection_mode_to_sequential"
     set citus.multi_shard_modify_mode to 'sequential';
 }
 
-step "s2-select" 
+step "s2-select"
 {
 	SELECT * FROM users_test_table ORDER BY value_2, value_3;
 }
@@ -145,11 +145,11 @@ permutation "s1-begin" "s1-update_even_concurrently" "s2-begin" "s2-update_odd_c
 permutation "s1-begin" "s1-update_even_concurrently" "s2-begin" "s2-update_value_1_of_4_or_6_to_4" "s1-commit" "s2-commit"
 
 // test with shard pruning (should not conflict)
-permutation "s1-begin" "s1-update_value_1_of_1_or_3_to_5" "s2-begin" "s2-update_value_1_of_4_or_6_to_4" "s1-commit" "s2-commit" "s2-select" 
-permutation "s1-begin" "s1-update_value_1_of_1_or_3_to_5" "s2-begin" "s2-update_value_1_of_1_or_3_to_8" "s1-commit" "s2-commit" "s2-select" 
+permutation "s1-begin" "s1-update_value_1_of_1_or_3_to_5" "s2-begin" "s2-update_value_1_of_4_or_6_to_4" "s1-commit" "s2-commit" "s2-select"
+permutation "s1-begin" "s1-update_value_1_of_1_or_3_to_5" "s2-begin" "s2-update_value_1_of_1_or_3_to_8" "s1-commit" "s2-commit" "s2-select"
 
 // test with inserts
-permutation "s1-begin" "s1-update_all_value_1" "s2-begin" "s2-insert-to-table" "s1-commit" "s2-commit" "s2-select" 
+permutation "s1-begin" "s1-update_all_value_1" "s2-begin" "s2-insert-to-table" "s1-commit" "s2-commit" "s2-select"
 permutation "s1-begin" "s1-update_all_value_1" "s2-begin" "s2-insert-into-select" "s1-commit" "s2-commit" "s2-select"
 
 // multi-shard update affecting the same rows

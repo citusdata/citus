@@ -237,9 +237,9 @@ INSERT INTO modify_table VALUES (21, 1), (22, 2), (23, 3);
 -- read ids from the same table
 WITH distinct_ids AS (
   SELECT DISTINCT id FROM modify_table
-), 
+),
 update_data AS (
-  UPDATE modify_table SET val = 100 WHERE id > 10 AND 
+  UPDATE modify_table SET val = 100 WHERE id > 10 AND
   	id IN (SELECT * FROM distinct_ids) RETURNING *
 )
 SELECT count(*) FROM update_data;
@@ -247,7 +247,7 @@ SELECT count(*) FROM update_data;
 -- read ids from a different table
 WITH distinct_ids AS (
   SELECT DISTINCT id FROM summary_table
-), 
+),
 update_data AS (
   UPDATE modify_table SET val = 100 WHERE id > 10 AND
   	id IN (SELECT * FROM distinct_ids) RETURNING *
@@ -255,12 +255,12 @@ update_data AS (
 SELECT count(*) FROM update_data;
 
 -- test update with generate series
-UPDATE modify_table SET val = 200 WHERE id > 10 AND 
+UPDATE modify_table SET val = 200 WHERE id > 10 AND
 	id IN (SELECT 2*s FROM generate_series(1,20) s);
 
 -- test update with generate series in CTE
 WITH update_data AS (
-	UPDATE modify_table SET val = 300 WHERE id > 10 AND 
+	UPDATE modify_table SET val = 300 WHERE id > 10 AND
 	id IN (SELECT 3*s FROM generate_series(1,20) s) RETURNING *
 )
 SELECT COUNT(*) FROM update_data;
@@ -389,8 +389,8 @@ WITH select_data AS (
 	SELECT * FROM modify_table
 ),
 raw_data AS (
-	UPDATE modify_table SET val = 0 WHERE 
-		id IN (SELECT id FROM select_data) AND 
+	UPDATE modify_table SET val = 0 WHERE
+		id IN (SELECT id FROM select_data) AND
 		val IN (SELECT counter FROM summary_table)
 	RETURNING id, val
 )
@@ -427,7 +427,7 @@ BEGIN;
 ROLLBACK;
 
 -- similarly, make sure that the intermediate result uses a seperate connection
- WITH first_query AS (INSERT INTO modify_table (id) VALUES (10001)), 
+ WITH first_query AS (INSERT INTO modify_table (id) VALUES (10001)),
  	second_query AS (SELECT * FROM modify_table) SELECT count(*) FROM second_query;
 
 DROP SCHEMA with_modifying CASCADE;

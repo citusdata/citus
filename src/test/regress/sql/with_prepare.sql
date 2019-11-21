@@ -4,7 +4,7 @@ WITH basic AS(
   SELECT * FROM users_table
 )
 SELECT
-  * 
+  *
 FROM
   basic
 WHERE
@@ -49,7 +49,7 @@ user_coolness AS(
     user_id
 )
 SELECT
-  * 
+  *
 FROM
   user_coolness
 ORDER BY
@@ -62,7 +62,7 @@ PREPARE prepared_test_3(integer) AS
 WITH users_events AS(
   -- events 1 and 2 only
   WITH spec_events AS(
-    SELECT 
+    SELECT
       *
     FROM
       events_table
@@ -115,7 +115,7 @@ user_coolness AS(
     user_id
 )
 SELECT
-  * 
+  *
 FROM
   user_coolness
 ORDER BY
@@ -129,7 +129,7 @@ WITH basic AS(
   SELECT * FROM users_table WHERE value_2 IN ($1, $2, $3)
 )
 SELECT
-  * 
+  *
 FROM
   basic
 ORDER BY
@@ -192,7 +192,7 @@ WITH event_id AS (
 	FROM events_table
 )
 SELECT
-	count(*) 
+	count(*)
 FROM
 	event_id
 WHERE

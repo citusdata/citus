@@ -2,8 +2,8 @@
 SET citus.next_shard_id TO 850000;
 
 -- many of the tests in this file is intended for testing non-fast-path
--- router planner, so we're explicitly disabling it in this file. 
--- We've bunch of other tests that triggers fast-path-router 
+-- router planner, so we're explicitly disabling it in this file.
+-- We've bunch of other tests that triggers fast-path-router
 SET citus.enable_fast_path_router_planner TO false;
 
 -- ===================================================================
@@ -203,7 +203,7 @@ SELECT author_id FROM articles
 	HAVING author_id <= 2 OR author_id = 8
 	ORDER BY author_id;
 
-SELECT o_orderstatus, count(*), avg(o_totalprice) FROM orders 
+SELECT o_orderstatus, count(*), avg(o_totalprice) FROM orders
 	GROUP BY o_orderstatus
 	HAVING count(*) > 1450 OR avg(o_totalprice) > 150000
 	ORDER BY o_orderstatus;
@@ -290,7 +290,7 @@ DROP AGGREGATE invalid(int);
 SET client_min_messages to 'DEBUG2';
 
 -- max, min, sum, count is somehow implemented
--- differently in distributed planning 
+-- differently in distributed planning
 SELECT max(word_count) as max, min(word_count) as min,
 	   sum(word_count) as sum, count(word_count) as cnt
 	FROM articles

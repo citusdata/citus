@@ -93,7 +93,7 @@ SELECT "relname", "Column", "Type", "Definition" FROM index_attrs WHERE
 SET citus.shard_count TO 2;
 SET citus.shard_replication_factor TO 2;
 
--- Verify that distributed tables with too-long names 
+-- Verify that distributed tables with too-long names
 -- for CHECK constraints are no trouble.
 CREATE TABLE sneaky_name_lengths (
 	col1 integer not null,

@@ -467,7 +467,7 @@ IN
 	)
 ORDER BY
 	generate_series ASC;
-	
+
 -- Local tables also planned recursively, so using it as part of the FROM clause
 -- make the clause recurring
 CREATE TABLE local_table(id int, value_1 int);
@@ -487,7 +487,7 @@ IN
 		user_id
 	FROM
 		users_table);
-		
+
 -- Use local table in WHERE clause
 SELECT
 	COUNT(*)

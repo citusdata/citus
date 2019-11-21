@@ -12,12 +12,18 @@ insert_final_newline = true
 charset = utf-8
 trim_trailing_whitespace = true
 
-# Don't change test output files
-[*.out]
+# Don't change test output files, pngs or test data files
+[*.{out,png,data}]
 insert_final_newline = unset
 trim_trailing_whitespace = unset
 
-[*.sql]
+# Don't change test/regress/output directory, this needs to be a separate rule
+# for some reason
+[/src/test/regress/output/**]
+insert_final_newline = unset
+trim_trailing_whitespace = unset
+
+[*.sql,*.sh]
 indent_style = space
 indent_size = 4
 tab_width = 4

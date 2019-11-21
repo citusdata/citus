@@ -118,7 +118,6 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 						 command->subtype == AT_ValidateConstraint)
 				{
 					char **constraintName = &(command->name);
-					Oid constraintOid = InvalidOid;
 					const bool constraintMissingOk = true;
 
 					if (!OidIsValid(relationId))
@@ -129,9 +128,9 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 													  rvMissingOk);
 					}
 
-					constraintOid = get_relation_constraint_oid(relationId,
-																command->name,
-																constraintMissingOk);
+					Oid constraintOid = get_relation_constraint_oid(relationId,
+																	command->name,
+																	constraintMissingOk);
 					if (!OidIsValid(constraintOid))
 					{
 						AppendShardIdToName(constraintName, shardId);
@@ -161,8 +160,6 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 		case T_ClusterStmt:
 		{
 			ClusterStmt *clusterStmt = (ClusterStmt *) parseTree;
-			char **relationName = NULL;
-			char **relationSchemaName = NULL;
 
 			/* we do not support clustering the entire database */
 			if (clusterStmt->relation == NULL)
@@ -170,8 +167,8 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 				ereport(ERROR, (errmsg("cannot extend name for multi-relation cluster")));
 			}
 
-			relationName = &(clusterStmt->relation->relname);
-			relationSchemaName = &(clusterStmt->relation->schemaname);
+			char **relationName = &(clusterStmt->relation->relname);
+			char **relationSchemaName = &(clusterStmt->relation->schemaname);
 
 			/* prefix with schema name if it is not added already */
 			SetSchemaNameIfNotExist(relationSchemaName, schemaName);
@@ -232,11 +229,8 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 			if (objectType == OBJECT_TABLE || objectType == OBJECT_INDEX ||
 				objectType == OBJECT_FOREIGN_TABLE || objectType == OBJECT_FOREIGN_SERVER)
 			{
-				List *relationNameList = NULL;
-				int relationNameListLength = 0;
 				Value *relationSchemaNameValue = NULL;
 				Value *relationNameValue = NULL;
-				char **relationName = NULL;
 
 				uint32 dropCount = list_length(dropStmt->objects);
 				if (dropCount > 1)
@@ -253,8 +247,8 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 				 * have the correct memory address for the name.
 				 */
 
-				relationNameList = (List *) linitial(dropStmt->objects);
-				relationNameListLength = list_length(relationNameList);
+				List *relationNameList = (List *) linitial(dropStmt->objects);
+				int relationNameListLength = list_length(relationNameList);
 
 				switch (relationNameListLength)
 				{
@@ -294,7 +288,7 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 					relationNameList = lcons(schemaNameValue, relationNameList);
 				}
 
-				relationName = &(relationNameValue->val.str);
+				char **relationName = &(relationNameValue->val.str);
 				AppendShardIdToName(relationName, shardId);
 			}
 			else if (objectType == OBJECT_POLICY)
@@ -418,7 +412,6 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 				char **oldRelationName = &(renameStmt->relation->relname);
 				char **newRelationName = &(renameStmt->newname);
 				char **objectSchemaName = &(renameStmt->relation->schemaname);
-				int newRelationNameLength;
 
 				/* prefix with schema name if it is not added already */
 				SetSchemaNameIfNotExist(objectSchemaName, schemaName);
@@ -440,7 +433,7 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 				 *
 				 * See also https://github.com/citusdata/citus/issues/1664
 				 */
-				newRelationNameLength = strlen(*newRelationName);
+				int newRelationNameLength = strlen(*newRelationName);
 				if (newRelationNameLength >= (NAMEDATALEN - 1))
 				{
 					ereport(ERROR,
@@ -676,10 +669,8 @@ AppendShardIdToName(char **name, uint64 shardId)
 	char extendedName[NAMEDATALEN];
 	int nameLength = strlen(*name);
 	char shardIdAndSeparator[NAMEDATALEN];
-	int shardIdAndSeparatorLength;
 	uint32 longNameHash = 0;
 	int multiByteClipLength = 0;
-	int neededBytes = 0;
 
 	if (nameLength >= NAMEDATALEN)
 	{
@@ -690,7 +681,7 @@ AppendShardIdToName(char **name, uint64 shardId)
 
 	snprintf(shardIdAndSeparator, NAMEDATALEN, "%c" UINT64_FORMAT,
 			 SHARD_NAME_SEPARATOR, shardId);
-	shardIdAndSeparatorLength = strlen(shardIdAndSeparator);
+	int shardIdAndSeparatorLength = strlen(shardIdAndSeparator);
 
 	/*
 	 * If *name strlen is < (NAMEDATALEN - shardIdAndSeparatorLength),
@@ -740,7 +731,7 @@ AppendShardIdToName(char **name, uint64 shardId)
 	}
 
 	(*name) = (char *) repalloc((*name), NAMEDATALEN);
-	neededBytes = snprintf((*name), NAMEDATALEN, "%s", extendedName);
+	int neededBytes = snprintf((*name), NAMEDATALEN, "%s", extendedName);
 	if (neededBytes < 0)
 	{
 		ereport(ERROR, (errcode(ERRCODE_OUT_OF_MEMORY),
@@ -764,10 +755,7 @@ shard_name(PG_FUNCTION_ARGS)
 {
 	Oid relationId = PG_GETARG_OID(0);
 	int64 shardId = PG_GETARG_INT64(1);
-	char *relationName = NULL;
 
-	Oid schemaId = InvalidOid;
-	char *schemaName = NULL;
 	char *qualifiedName = NULL;
 
 	CheckCitusVersion(ERROR);
@@ -785,7 +773,7 @@ shard_name(PG_FUNCTION_ARGS)
 						errmsg("object_name does not reference a valid relation")));
 	}
 
-	relationName = get_rel_name(relationId);
+	char *relationName = get_rel_name(relationId);
 
 	if (relationName == NULL)
 	{
@@ -795,8 +783,8 @@ shard_name(PG_FUNCTION_ARGS)
 
 	AppendShardIdToName(&relationName, shardId);
 
-	schemaId = get_rel_namespace(relationId);
-	schemaName = get_namespace_name(schemaId);
+	Oid schemaId = get_rel_namespace(relationId);
+	char *schemaName = get_namespace_name(schemaId);
 
 	if (strncmp(schemaName, "public", NAMEDATALEN) == 0)
 	{

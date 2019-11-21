@@ -72,7 +72,7 @@ step "s2-sleep"
 step "s2-view-dist"
 {
 	SELECT query, query_hostname, query_hostport, master_query_host_name, master_query_host_port, state, wait_event_type, wait_event, usename, datname FROM citus_dist_stat_activity WHERE query NOT ILIKE '%pg_prepared_xacts%' AND query NOT ILIKE '%COMMIT%' ORDER BY query DESC;
-	
+
 }
 
 session "s3"

@@ -54,7 +54,7 @@ SELECT citus.mitmproxy('conn.delay(500)');
 
 -- we cannot control which replica of the reference table will be queried and there is
 -- only one specific client we can control the connection for.
--- by using round-robin task_assignment_policy we can force to hit both machines. 
+-- by using round-robin task_assignment_policy we can force to hit both machines.
 -- and in the end, dumping the network traffic shows that the connection establishment
 -- is initiated to the node behind the proxy
 SET client_min_messages TO ERROR;
@@ -70,7 +70,7 @@ SELECT citus.dump_network_traffic();
 
 SELECT citus.mitmproxy('conn.allow()');
 
--- similar test with the above but this time on a 
+-- similar test with the above but this time on a
 -- distributed table instead of a reference table
 -- and with citus.force_max_query_parallelization is set
 SET citus.force_max_query_parallelization TO ON;
@@ -80,7 +80,7 @@ SELECT citus.mitmproxy('conn.delay(500)');
 SELECT count(*) FROM products;
 SELECT count(*) FROM products;
 
--- use OFFSET 1 to prevent printing the line where source 
+-- use OFFSET 1 to prevent printing the line where source
 -- is the worker
 SELECT citus.dump_network_traffic() ORDER BY 1 OFFSET 1;
 
@@ -102,22 +102,22 @@ SET citus.force_max_query_parallelization TO OFF;
 -- mark placement INVALID
 SELECT citus.mitmproxy('conn.allow()');
 BEGIN;
-SELECT 
+SELECT
 	count(*) as invalid_placement_count
-FROM 
-	pg_dist_shard_placement 
-WHERE 
-	shardstate = 3 AND 
+FROM
+	pg_dist_shard_placement
+WHERE
+	shardstate = 3 AND
 	shardid IN (SELECT shardid from pg_dist_shard where logicalrelid = 'products'::regclass);
 SELECT citus.mitmproxy('conn.delay(500)');
 INSERT INTO products VALUES (100, '100', 100);
 COMMIT;
-SELECT 
+SELECT
 	count(*) as invalid_placement_count
-FROM 
-	pg_dist_shard_placement 
-WHERE 
-	shardstate = 3 AND 
+FROM
+	pg_dist_shard_placement
+WHERE
+	shardstate = 3 AND
 	shardid IN (SELECT shardid from pg_dist_shard where logicalrelid = 'products'::regclass);
 
 -- show that INSERT went through

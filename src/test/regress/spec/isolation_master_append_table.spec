@@ -1,5 +1,5 @@
 setup
-{	
+{
   	CREATE TABLE table_to_append(id int);
   	CREATE TABLE table_to_be_appended(id int);
 
@@ -24,7 +24,7 @@ step "s1-begin"
 
 step "s1-master_append_table_to_shard"
 {
-   	SELECT	
+   	SELECT
    		master_append_table_to_shard(shardid, 'table_to_be_appended', 'localhost', 57636)
 	FROM
 		pg_dist_shard
@@ -47,7 +47,7 @@ step "s2-begin"
 step "s2-master_append_table_to_shard"
 {
 
-   	SELECT	
+   	SELECT
    		master_append_table_to_shard(shardid, 'table_to_be_appended', 'localhost', 57636)
 	FROM
 		pg_dist_shard

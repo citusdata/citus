@@ -2,7 +2,7 @@
 -- MULTI_MX_TPCH_QUERY10
 --
 
--- Query #10 from the TPC-H decision support benchmark. 
+-- Query #10 from the TPC-H decision support benchmark.
 
 
 -- connect to master

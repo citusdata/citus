@@ -74,17 +74,10 @@ SetRangeTblExtraData(RangeTblEntry *rte, CitusRTEKind rteKind,
 					 char *fragmentSchemaName, char *fragmentTableName,
 					 List *tableIdList)
 {
-	RangeTblFunction *fauxFunction = NULL;
-	FuncExpr *fauxFuncExpr = NULL;
-	Const *rteKindData = NULL;
-	Const *fragmentSchemaData = NULL;
-	Const *fragmentTableData = NULL;
-	Const *tableIdListData = NULL;
-
 	Assert(rte->eref);
 
 	/* store RTE kind as a plain int4 */
-	rteKindData = makeNode(Const);
+	Const *rteKindData = makeNode(Const);
 	rteKindData->consttype = INT4OID;
 	rteKindData->constlen = 4;
 	rteKindData->constvalue = Int32GetDatum(rteKind);
@@ -93,7 +86,7 @@ SetRangeTblExtraData(RangeTblEntry *rte, CitusRTEKind rteKind,
 	rteKindData->location = -1;
 
 	/* store the fragment schema as a cstring */
-	fragmentSchemaData = makeNode(Const);
+	Const *fragmentSchemaData = makeNode(Const);
 	fragmentSchemaData->consttype = CSTRINGOID;
 	fragmentSchemaData->constlen = -2;
 	fragmentSchemaData->constvalue = CStringGetDatum(fragmentSchemaName);
@@ -102,7 +95,7 @@ SetRangeTblExtraData(RangeTblEntry *rte, CitusRTEKind rteKind,
 	fragmentSchemaData->location = -1;
 
 	/* store the fragment name as a cstring */
-	fragmentTableData = makeNode(Const);
+	Const *fragmentTableData = makeNode(Const);
 	fragmentTableData->consttype = CSTRINGOID;
 	fragmentTableData->constlen = -2;
 	fragmentTableData->constvalue = CStringGetDatum(fragmentTableName);
@@ -111,7 +104,7 @@ SetRangeTblExtraData(RangeTblEntry *rte, CitusRTEKind rteKind,
 	fragmentTableData->location = -1;
 
 	/* store the table id list as an array of integers: FIXME */
-	tableIdListData = makeNode(Const);
+	Const *tableIdListData = makeNode(Const);
 	tableIdListData->consttype = CSTRINGOID;
 	tableIdListData->constbyval = false;
 	tableIdListData->constlen = -2;
@@ -130,14 +123,14 @@ SetRangeTblExtraData(RangeTblEntry *rte, CitusRTEKind rteKind,
 	}
 
 	/* create function expression to store our faux arguments in */
-	fauxFuncExpr = makeNode(FuncExpr);
+	FuncExpr *fauxFuncExpr = makeNode(FuncExpr);
 	fauxFuncExpr->funcid = CitusExtraDataContainerFuncId();
 	fauxFuncExpr->funcretset = true;
 	fauxFuncExpr->location = -1;
 	fauxFuncExpr->args = list_make4(rteKindData, fragmentSchemaData,
 									fragmentTableData, tableIdListData);
 
-	fauxFunction = makeNode(RangeTblFunction);
+	RangeTblFunction *fauxFunction = makeNode(RangeTblFunction);
 	fauxFunction->funcexpr = (Node *) fauxFuncExpr;
 
 	/* set the column count to pass ruleutils checks, not used elsewhere */
@@ -159,10 +152,6 @@ ExtractRangeTblExtraData(RangeTblEntry *rte, CitusRTEKind *rteKind,
 						 char **fragmentSchemaName, char **fragmentTableName,
 						 List **tableIdList)
 {
-	RangeTblFunction *fauxFunction = NULL;
-	FuncExpr *fauxFuncExpr = NULL;
-	Const *tmpConst = NULL;
-
 	/* set base rte kind first, so this can be used for 'non-extended' RTEs as well */
 	if (rteKind != NULL)
 	{
@@ -199,13 +188,13 @@ ExtractRangeTblExtraData(RangeTblEntry *rte, CitusRTEKind *rteKind,
 	}
 
 	/* should pretty much always be a FuncExpr, but be liberal in what we expect... */
-	fauxFunction = linitial(rte->functions);
+	RangeTblFunction *fauxFunction = linitial(rte->functions);
 	if (!IsA(fauxFunction->funcexpr, FuncExpr))
 	{
 		return;
 	}
 
-	fauxFuncExpr = (FuncExpr *) fauxFunction->funcexpr;
+	FuncExpr *fauxFuncExpr = (FuncExpr *) fauxFunction->funcexpr;
 
 	/*
 	 * There will never be a range table entry with this function id, but for
@@ -229,7 +218,7 @@ ExtractRangeTblExtraData(RangeTblEntry *rte, CitusRTEKind *rteKind,
 	}
 
 	/* extract rteKind */
-	tmpConst = (Const *) linitial(fauxFuncExpr->args);
+	Const *tmpConst = (Const *) linitial(fauxFuncExpr->args);
 	Assert(IsA(tmpConst, Const));
 	Assert(tmpConst->consttype == INT4OID);
 	if (rteKind != NULL)
@@ -419,12 +408,10 @@ const ExtensibleNodeMethods nodeMethods[] =
 void
 RegisterNodes(void)
 {
-	int off;
-
 	StaticAssertExpr(lengthof(nodeMethods) == lengthof(CitusNodeTagNamesD),
 					 "number of node methods and names do not match");
 
-	for (off = 0; off < lengthof(nodeMethods); off++)
+	for (int off = 0; off < lengthof(nodeMethods); off++)
 	{
 		RegisterExtensibleNodeMethods(&nodeMethods[off]);
 	}

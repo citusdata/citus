@@ -47,7 +47,7 @@ CREATE TABLE repartition_udt_other (
     udtcol test_udt,
     txtcol text
 );
--- Connect directly to a worker, create and drop the type, then 
+-- Connect directly to a worker, create and drop the type, then
 -- proceed with type creation as above; thus the OIDs will be different.
 -- so that the OID is off.
 \c - - - :worker_1_port
@@ -194,6 +194,5 @@ LOG:  join order: [ "repartition_udt" ][ dual partition join "repartition_udt_ot
   6 | (2,3)  | foo    | 12 | (2,3)  | foo
 (5 rows)
 
-    
 \c - - - :worker_1_port
 \c - - - :worker_2_port

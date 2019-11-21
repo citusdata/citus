@@ -75,14 +75,15 @@ void
 SendCommandToWorkerAsUser(char *nodeName, int32 nodePort, const char *nodeUser,
 						  const char *command)
 {
-	MultiConnection *transactionConnection = NULL;
 	uint connectionFlags = 0;
 
 	BeginOrContinueCoordinatedTransaction();
 	CoordinatedTransactionUse2PC();
 
-	transactionConnection = GetNodeUserDatabaseConnection(connectionFlags, nodeName,
-														  nodePort, nodeUser, NULL);
+	MultiConnection *transactionConnection = GetNodeUserDatabaseConnection(
+		connectionFlags, nodeName,
+		nodePort,
+		nodeUser, NULL);
 
 	MarkRemoteTransactionCritical(transactionConnection);
 	RemoteTransactionBeginIfNecessary(transactionConnection);
@@ -155,14 +156,15 @@ SendBareCommandListToWorkers(TargetWorkerSet targetWorkerSet, List *commandList)
 	/* run commands serially */
 	foreach(workerNodeCell, workerNodeList)
 	{
-		MultiConnection *workerConnection = NULL;
 		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
 		char *nodeName = workerNode->workerName;
 		int nodePort = workerNode->workerPort;
 		int connectionFlags = FORCE_NEW_CONNECTION;
 
-		workerConnection = GetNodeUserDatabaseConnection(connectionFlags, nodeName,
-														 nodePort, nodeUser, NULL);
+		MultiConnection *workerConnection = GetNodeUserDatabaseConnection(connectionFlags,
+																		  nodeName,
+																		  nodePort,
+																		  nodeUser, NULL);
 
 		/* iterate over the commands and execute them in the same connection */
 		foreach(commandCell, commandList)
@@ -194,14 +196,15 @@ SendBareOptionalCommandListToWorkersAsUser(TargetWorkerSet targetWorkerSet,
 	/* run commands serially */
 	foreach(workerNodeCell, workerNodeList)
 	{
-		MultiConnection *workerConnection = NULL;
 		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
 		char *nodeName = workerNode->workerName;
 		int nodePort = workerNode->workerPort;
 		int connectionFlags = FORCE_NEW_CONNECTION;
 
-		workerConnection = GetNodeUserDatabaseConnection(connectionFlags, nodeName,
-														 nodePort, user, NULL);
+		MultiConnection *workerConnection = GetNodeUserDatabaseConnection(connectionFlags,
+																		  nodeName,
+																		  nodePort, user,
+																		  NULL);
 
 		/* iterate over the commands and execute them in the same connection */
 		foreach(commandCell, commandList)
@@ -250,11 +253,11 @@ SendCommandToWorkersParams(TargetWorkerSet targetWorkerSet, const char *command,
 		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
 		char *nodeName = workerNode->workerName;
 		int nodePort = workerNode->workerPort;
-		MultiConnection *connection = NULL;
 		int32 connectionFlags = 0;
 
-		connection = StartNodeUserDatabaseConnection(connectionFlags, nodeName, nodePort,
-													 user, NULL);
+		MultiConnection *connection = StartNodeUserDatabaseConnection(connectionFlags,
+																	  nodeName, nodePort,
+																	  user, NULL);
 
 		MarkRemoteTransactionCritical(connection);
 
@@ -323,12 +326,12 @@ void
 SendCommandListToWorkerInSingleTransaction(const char *nodeName, int32 nodePort,
 										   const char *nodeUser, List *commandList)
 {
-	MultiConnection *workerConnection = NULL;
 	ListCell *commandCell = NULL;
 	int connectionFlags = FORCE_NEW_CONNECTION;
 
-	workerConnection = GetNodeUserDatabaseConnection(connectionFlags, nodeName, nodePort,
-													 nodeUser, NULL);
+	MultiConnection *workerConnection = GetNodeUserDatabaseConnection(connectionFlags,
+																	  nodeName, nodePort,
+																	  nodeUser, NULL);
 
 	MarkRemoteTransactionCritical(workerConnection);
 	RemoteTransactionBegin(workerConnection);

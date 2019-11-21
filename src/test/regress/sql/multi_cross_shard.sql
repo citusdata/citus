@@ -7,7 +7,7 @@
 -- Create a distributed table and add data to it
 CREATE TABLE multi_task_table
 (
-	id int, 
+	id int,
 	name varchar(20)
 );
 SELECT create_distributed_table('multi_task_table', 'id');
@@ -29,7 +29,7 @@ SELECT AVG(id) AS avg_id FROM multi_task_table;
 SET citus.multi_task_query_log_level TO error;
 SELECT * FROM multi_task_table;
 
--- Check the log message with INSERT INTO ... SELECT 
+-- Check the log message with INSERT INTO ... SELECT
 CREATE TABLE raw_table
 (
     id int,

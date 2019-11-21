@@ -27,7 +27,7 @@ step "s1-start-session-level-connection"
 
 step "s1-begin-on-worker"
 {
-	SELECT run_commands_on_session_level_connection_to_node('BEGIN'); 
+	SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 }
 
 step "s1-delete"
@@ -64,7 +64,7 @@ step "s2-start-session-level-connection"
 
 step "s2-begin-on-worker"
 {
-	SELECT run_commands_on_session_level_connection_to_node('BEGIN'); 
+	SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 }
 
 step "s2-insert"

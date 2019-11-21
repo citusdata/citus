@@ -139,9 +139,6 @@ BlockWritesToShardList(List *shardList)
 {
 	ListCell *shardCell = NULL;
 
-	bool shouldSyncMetadata = false;
-	ShardInterval *firstShardInterval = NULL;
-	Oid firstDistributedTableId = InvalidOid;
 
 	foreach(shardCell, shardList)
 	{
@@ -167,10 +164,10 @@ BlockWritesToShardList(List *shardList)
 	 * Since the function assumes that the input shards are colocated,
 	 * calculating shouldSyncMetadata for a single table is sufficient.
 	 */
-	firstShardInterval = (ShardInterval *) linitial(shardList);
-	firstDistributedTableId = firstShardInterval->relationId;
+	ShardInterval *firstShardInterval = (ShardInterval *) linitial(shardList);
+	Oid firstDistributedTableId = firstShardInterval->relationId;
 
-	shouldSyncMetadata = ShouldSyncTableMetadata(firstDistributedTableId);
+	bool shouldSyncMetadata = ShouldSyncTableMetadata(firstDistributedTableId);
 	if (shouldSyncMetadata)
 	{
 		LockShardListMetadataOnWorkers(ExclusiveLock, shardList);
@@ -225,13 +222,7 @@ RepairShardPlacement(int64 shardId, char *sourceNodeName, int32 sourceNodePort,
 	char relationKind = get_rel_relkind(distributedTableId);
 	char *tableOwner = TableOwner(shardInterval->relationId);
 	bool missingOk = false;
-	bool includeData = false;
-	bool partitionedTable = false;
 
-	List *ddlCommandList = NIL;
-	List *foreignConstraintCommandList = NIL;
-	List *placementList = NIL;
-	ShardPlacement *placement = NULL;
 
 	/* prevent table from being dropped */
 	LockRelationOid(distributedTableId, AccessShareLock);
@@ -287,13 +278,14 @@ RepairShardPlacement(int64 shardId, char *sourceNodeName, int32 sourceNodePort,
 	 * If the shard belongs to a partitioned table, we need to load the data after
 	 * creating the partitions and the partitioning hierarcy.
 	 */
-	partitionedTable = PartitionedTableNoLock(distributedTableId);
-	includeData = !partitionedTable;
+	bool partitionedTable = PartitionedTableNoLock(distributedTableId);
+	bool includeData = !partitionedTable;
 
 	/* we generate necessary commands to recreate the shard in target node */
-	ddlCommandList =
+	List *ddlCommandList =
 		CopyShardCommandList(shardInterval, sourceNodeName, sourceNodePort, includeData);
-	foreignConstraintCommandList = CopyShardForeignConstraintCommandList(shardInterval);
+	List *foreignConstraintCommandList = CopyShardForeignConstraintCommandList(
+		shardInterval);
 	ddlCommandList = list_concat(ddlCommandList, foreignConstraintCommandList);
 
 	/*
@@ -305,12 +297,10 @@ RepairShardPlacement(int64 shardId, char *sourceNodeName, int32 sourceNodePort,
 	 */
 	if (partitionedTable)
 	{
-		List *partitionCommandList = NIL;
-
 		char *shardName = ConstructQualifiedShardName(shardInterval);
 		StringInfo copyShardDataCommand = makeStringInfo();
 
-		partitionCommandList =
+		List *partitionCommandList =
 			CopyPartitionShardsCommandList(shardInterval, sourceNodeName, sourceNodePort);
 		ddlCommandList = list_concat(ddlCommandList, partitionCommandList);
 
@@ -328,9 +318,10 @@ RepairShardPlacement(int64 shardId, char *sourceNodeName, int32 sourceNodePort,
 											   ddlCommandList);
 
 	/* after successful repair, we update shard state as healthy*/
-	placementList = ShardPlacementList(shardId);
-	placement = SearchShardPlacementInList(placementList, targetNodeName, targetNodePort,
-										   missingOk);
+	List *placementList = ShardPlacementList(shardId);
+	ShardPlacement *placement = SearchShardPlacementInList(placementList, targetNodeName,
+														   targetNodePort,
+														   missingOk);
 	UpdateShardPlacementState(placement->placementId, FILE_FINALIZED);
 }
 
@@ -347,13 +338,12 @@ CopyPartitionShardsCommandList(ShardInterval *shardInterval, char *sourceNodeNam
 							   int32 sourceNodePort)
 {
 	Oid distributedTableId = shardInterval->relationId;
-	List *partitionList = NIL;
 	ListCell *partitionOidCell = NULL;
 	List *ddlCommandList = NIL;
 
 	Assert(PartitionedTableNoLock(distributedTableId));
 
-	partitionList = PartitionList(distributedTableId);
+	List *partitionList = PartitionList(distributedTableId);
 	foreach(partitionOidCell, partitionList)
 	{
 		Oid partitionOid = lfirst_oid(partitionOidCell);
@@ -361,15 +351,13 @@ CopyPartitionShardsCommandList(ShardInterval *shardInterval, char *sourceNodeNam
 			ColocatedShardIdInRelation(partitionOid, shardInterval->shardIndex);
 		ShardInterval *partitionShardInterval = LoadShardInterval(partitionShardId);
 		bool includeData = false;
-		List *copyCommandList = NIL;
-		char *attachPartitionCommand = NULL;
 
-		copyCommandList =
+		List *copyCommandList =
 			CopyShardCommandList(partitionShardInterval, sourceNodeName, sourceNodePort,
 								 includeData);
 		ddlCommandList = list_concat(ddlCommandList, copyCommandList);
 
-		attachPartitionCommand =
+		char *attachPartitionCommand =
 			GenerateAttachShardPartitionCommand(partitionShardInterval);
 		ddlCommandList = lappend(ddlCommandList, attachPartitionCommand);
 	}
@@ -387,21 +375,23 @@ EnsureShardCanBeRepaired(int64 shardId, char *sourceNodeName, int32 sourceNodePo
 						 char *targetNodeName, int32 targetNodePort)
 {
 	List *shardPlacementList = ShardPlacementList(shardId);
-	ShardPlacement *sourcePlacement = NULL;
-	ShardPlacement *targetPlacement = NULL;
 	bool missingSourceOk = false;
 	bool missingTargetOk = false;
 
-	sourcePlacement = SearchShardPlacementInList(shardPlacementList, sourceNodeName,
-												 sourceNodePort, missingSourceOk);
+	ShardPlacement *sourcePlacement = SearchShardPlacementInList(shardPlacementList,
+																 sourceNodeName,
+																 sourceNodePort,
+																 missingSourceOk);
 	if (sourcePlacement->shardState != FILE_FINALIZED)
 	{
 		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 						errmsg("source placement must be in finalized state")));
 	}
 
-	targetPlacement = SearchShardPlacementInList(shardPlacementList, targetNodeName,
-												 targetNodePort, missingTargetOk);
+	ShardPlacement *targetPlacement = SearchShardPlacementInList(shardPlacementList,
+																 targetNodeName,
+																 targetNodePort,
+																 missingTargetOk);
 	if (targetPlacement->shardState != FILE_INACTIVE)
 	{
 		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
@@ -462,13 +452,11 @@ CopyShardCommandList(ShardInterval *shardInterval, char *sourceNodeName,
 {
 	int64 shardId = shardInterval->shardId;
 	char *shardName = ConstructQualifiedShardName(shardInterval);
-	List *tableRecreationCommandList = NIL;
-	List *indexCommandList = NIL;
 	List *copyShardToNodeCommandsList = NIL;
 	StringInfo copyShardDataCommand = makeStringInfo();
 	Oid relationId = shardInterval->relationId;
 
-	tableRecreationCommandList = RecreateTableDDLCommandList(relationId);
+	List *tableRecreationCommandList = RecreateTableDDLCommandList(relationId);
 	tableRecreationCommandList =
 		WorkerApplyShardDDLCommandList(tableRecreationCommandList, shardId);
 
@@ -491,7 +479,7 @@ CopyShardCommandList(ShardInterval *shardInterval, char *sourceNodeName,
 											  copyShardDataCommand->data);
 	}
 
-	indexCommandList = GetTableIndexAndConstraintCommands(relationId);
+	List *indexCommandList = GetTableIndexAndConstraintCommands(relationId);
 	indexCommandList = WorkerApplyShardDDLCommandList(indexCommandList, shardId);
 
 	copyShardToNodeCommandsList = list_concat(copyShardToNodeCommandsList,
@@ -555,17 +543,13 @@ CopyShardForeignConstraintCommandListGrouped(ShardInterval *shardInterval,
 		char *command = (char *) lfirst(commandCell);
 		char *escapedCommand = quote_literal_cstr(command);
 
-		Oid referencedRelationId = InvalidOid;
-		Oid referencedSchemaId = InvalidOid;
-		char *referencedSchemaName = NULL;
-		char *escapedReferencedSchemaName = NULL;
 		uint64 referencedShardId = INVALID_SHARD_ID;
 		bool colocatedForeignKey = false;
 
 		StringInfo applyForeignConstraintCommand = makeStringInfo();
 
 		/* we need to parse the foreign constraint command to get referencing table id */
-		referencedRelationId = ForeignConstraintGetReferencedTableId(command);
+		Oid referencedRelationId = ForeignConstraintGetReferencedTableId(command);
 		if (referencedRelationId == InvalidOid)
 		{
 			ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
@@ -573,9 +557,9 @@ CopyShardForeignConstraintCommandListGrouped(ShardInterval *shardInterval,
 							errdetail("Referenced relation cannot be found.")));
 		}
 
-		referencedSchemaId = get_rel_namespace(referencedRelationId);
-		referencedSchemaName = get_namespace_name(referencedSchemaId);
-		escapedReferencedSchemaName = quote_literal_cstr(referencedSchemaName);
+		Oid referencedSchemaId = get_rel_namespace(referencedRelationId);
+		char *referencedSchemaName = get_namespace_name(referencedSchemaId);
+		char *escapedReferencedSchemaName = quote_literal_cstr(referencedSchemaName);
 
 		if (PartitionMethod(referencedRelationId) == DISTRIBUTE_BY_NONE)
 		{
@@ -635,9 +619,8 @@ ConstructQualifiedShardName(ShardInterval *shardInterval)
 	Oid schemaId = get_rel_namespace(shardInterval->relationId);
 	char *schemaName = get_namespace_name(schemaId);
 	char *tableName = get_rel_name(shardInterval->relationId);
-	char *shardName = NULL;
 
-	shardName = pstrdup(tableName);
+	char *shardName = pstrdup(tableName);
 	AppendShardIdToName(&shardName, shardInterval->shardId);
 	shardName = quote_qualified_identifier(schemaName, shardName);
 
@@ -660,9 +643,6 @@ RecreateTableDDLCommandList(Oid relationId)
 																   relationName);
 
 	StringInfo dropCommand = makeStringInfo();
-	List *createCommandList = NIL;
-	List *dropCommandList = NIL;
-	List *recreateCommandList = NIL;
 	char relationKind = get_rel_relkind(relationId);
 	bool includeSequenceDefaults = false;
 
@@ -684,9 +664,10 @@ RecreateTableDDLCommandList(Oid relationId)
 							   "table")));
 	}
 
-	dropCommandList = list_make1(dropCommand->data);
-	createCommandList = GetTableCreationCommands(relationId, includeSequenceDefaults);
-	recreateCommandList = list_concat(dropCommandList, createCommandList);
+	List *dropCommandList = list_make1(dropCommand->data);
+	List *createCommandList = GetTableCreationCommands(relationId,
+													   includeSequenceDefaults);
+	List *recreateCommandList = list_concat(dropCommandList, createCommandList);
 
 	return recreateCommandList;
 }

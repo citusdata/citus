@@ -51,7 +51,6 @@ BEGIN;
  
 (1 row)
 
-	
 	-- we can even run queries (sequentially) over the distributed table
 	SELECT * FROM dist_table;
  key | value 
@@ -103,7 +102,7 @@ SELECT run_command_on_workers($$SELECT extversion FROM pg_extension WHERE extnam
 
 -- now, update to a newer version
 ALTER EXTENSION isn UPDATE TO '1.2';
--- show that ALTER EXTENSION is propagated 
+-- show that ALTER EXTENSION is propagated
 SELECT run_command_on_workers($$SELECT extversion FROM pg_extension WHERE extname = 'isn'$$);
  run_command_on_workers  
 -------------------------
@@ -145,8 +144,8 @@ DROP EXTENSION isn CASCADE;
 -- restore client_min_messages after DROP EXTENSION
 RESET client_min_messages;
 -- now make sure that the reference tables depending on an extension can be succesfully created.
--- we should also ensure that we replicate this reference table (and hence the extension) 
--- to new nodes after calling master_activate_node. 
+-- we should also ensure that we replicate this reference table (and hence the extension)
+-- to new nodes after calling master_activate_node.
 -- now, first drop seg and existing objects before next test
 SET client_min_messages TO WARNING;
 DROP EXTENSION seg CASCADE;
@@ -207,7 +206,7 @@ SELECT run_command_on_workers($$SELECT extversion FROM pg_extension WHERE extnam
 (2 rows)
 
 -- and similarly check for the reference table
-select count(*) from pg_dist_partition where partmethod='n' and logicalrelid='ref_table_2'::regclass; 
+select count(*) from pg_dist_partition where partmethod='n' and logicalrelid='ref_table_2'::regclass;
  count 
 -------
      1
@@ -241,7 +240,7 @@ SELECT run_command_on_workers($$SELECT count(*) FROM pg_extension WHERE extname 
 (2 rows)
 
 -- give a notice for the following commands saying that it is not
--- propagated to the workers. the user should run it manually on the workers 
+-- propagated to the workers. the user should run it manually on the workers
 CREATE TABLE t1 (A int);
 CREATE VIEW v1 AS select * from t1;
 ALTER EXTENSION seg ADD VIEW v1;
@@ -346,8 +345,8 @@ BEGIN;
 	SET citus.shard_replication_factor TO 1;
 	CREATE EXTENSION seg;
 	CREATE EXTENSION isn;
-	CREATE TYPE test_type AS (a int, b seg); 
-	CREATE TYPE test_type_2 AS (a int, b test_type); 
+	CREATE TYPE test_type AS (a int, b seg);
+	CREATE TYPE test_type_2 AS (a int, b test_type);
 	CREATE TABLE t2 (a int, b test_type_2, c issn);
 	SELECT create_distributed_table('t2', 'a');
  create_distributed_table 
@@ -355,8 +354,7 @@ BEGIN;
  
 (1 row)
 
-	
-	CREATE TYPE test_type_3 AS (a int, b test_type, c issn); 
+	CREATE TYPE test_type_3 AS (a int, b test_type, c issn);
 	CREATE TABLE t3 (a int, b test_type_3);
 	SELECT create_reference_table('t3');
  create_reference_table 

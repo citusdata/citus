@@ -100,7 +100,6 @@ worker_fetch_partition_file(PG_FUNCTION_ARGS)
 	uint32 upstreamTaskId = PG_GETARG_UINT32(3);
 	text *nodeNameText = PG_GETARG_TEXT_P(4);
 	uint32 nodePort = PG_GETARG_UINT32(5);
-	char *nodeName = NULL;
 
 	/* remote filename is <jobId>/<partitionTaskId>/<partitionFileId> */
 	StringInfo remoteDirectoryName = TaskDirectoryName(jobId, partitionTaskId);
@@ -123,7 +122,7 @@ worker_fetch_partition_file(PG_FUNCTION_ARGS)
 		InitTaskDirectory(jobId, upstreamTaskId);
 	}
 
-	nodeName = text_to_cstring(nodeNameText);
+	char *nodeName = text_to_cstring(nodeNameText);
 
 	/* we've made sure the file names are sanitized, safe to fetch as superuser */
 	FetchRegularFileAsSuperUser(nodeName, nodePort, remoteFilename, taskFilename);
@@ -169,32 +168,27 @@ static void
 FetchRegularFileAsSuperUser(const char *nodeName, uint32 nodePort,
 							StringInfo remoteFilename, StringInfo localFilename)
 {
-	char *nodeUser = NULL;
-	StringInfo attemptFilename = NULL;
-	StringInfo transmitCommand = NULL;
 	char *userName = CurrentUserName();
 	uint32 randomId = (uint32) random();
-	bool received = false;
-	int renamed = 0;
 
 	/*
 	 * We create an attempt file to signal that the file is still in transit. We
 	 * further append a random id to the filename to handle the unexpected case
 	 * of another process concurrently fetching the same file.
 	 */
-	attemptFilename = makeStringInfo();
+	StringInfo attemptFilename = makeStringInfo();
 	appendStringInfo(attemptFilename, "%s_%0*u%s", localFilename->data,
 					 MIN_TASK_FILENAME_WIDTH, randomId, ATTEMPT_FILE_SUFFIX);
 
-	transmitCommand = makeStringInfo();
+	StringInfo transmitCommand = makeStringInfo();
 	appendStringInfo(transmitCommand, TRANSMIT_WITH_USER_COMMAND, remoteFilename->data,
 					 quote_literal_cstr(userName));
 
 	/* connect as superuser to give file access */
-	nodeUser = CitusExtensionOwnerName();
+	char *nodeUser = CitusExtensionOwnerName();
 
-	received = ReceiveRegularFile(nodeName, nodePort, nodeUser, transmitCommand,
-								  attemptFilename);
+	bool received = ReceiveRegularFile(nodeName, nodePort, nodeUser, transmitCommand,
+									   attemptFilename);
 	if (!received)
 	{
 		ereport(ERROR, (errmsg("could not receive file \"%s\" from %s:%u",
@@ -202,7 +196,7 @@ FetchRegularFileAsSuperUser(const char *nodeName, uint32 nodePort,
 	}
 
 	/* atomically rename the attempt file */
-	renamed = rename(attemptFilename->data, localFilename->data);
+	int renamed = rename(attemptFilename->data, localFilename->data);
 	if (renamed != 0)
 	{
 		ereport(ERROR, (errcode_for_file_access(),
@@ -224,23 +218,17 @@ static bool
 ReceiveRegularFile(const char *nodeName, uint32 nodePort, const char *nodeUser,
 				   StringInfo transmitCommand, StringInfo filePath)
 {
-	int32 fileDescriptor = -1;
 	char filename[MAXPGPATH];
-	int closed = -1;
 	const int fileFlags = (O_APPEND | O_CREAT | O_RDWR | O_TRUNC | PG_BINARY);
 	const int fileMode = (S_IRUSR | S_IWUSR);
 
-	QueryStatus queryStatus = CLIENT_INVALID_QUERY;
-	int32 connectionId = INVALID_CONNECTION_ID;
-	char *nodeDatabase = NULL;
-	bool querySent = false;
 	bool queryReady = false;
 	bool copyDone = false;
 
 	/* create local file to append remote data to */
 	snprintf(filename, MAXPGPATH, "%s", filePath->data);
 
-	fileDescriptor = BasicOpenFilePerm(filename, fileFlags, fileMode);
+	int32 fileDescriptor = BasicOpenFilePerm(filename, fileFlags, fileMode);
 	if (fileDescriptor < 0)
 	{
 		ereport(WARNING, (errcode_for_file_access(),
@@ -250,10 +238,10 @@ ReceiveRegularFile(const char *nodeName, uint32 nodePort, const char *nodeUser,
 	}
 
 	/* we use the same database name on the master and worker nodes */
-	nodeDatabase = CurrentDatabaseName();
+	char *nodeDatabase = CurrentDatabaseName();
 
 	/* connect to remote node */
-	connectionId = MultiClientConnect(nodeName, nodePort, nodeDatabase, nodeUser);
+	int32 connectionId = MultiClientConnect(nodeName, nodePort, nodeDatabase, nodeUser);
 	if (connectionId == INVALID_CONNECTION_ID)
 	{
 		ReceiveResourceCleanup(connectionId, filename, fileDescriptor);
@@ -262,7 +250,7 @@ ReceiveRegularFile(const char *nodeName, uint32 nodePort, const char *nodeUser,
 	}
 
 	/* send request to remote node to start transmitting data */
-	querySent = MultiClientSendQuery(connectionId, transmitCommand->data);
+	bool querySent = MultiClientSendQuery(connectionId, transmitCommand->data);
 	if (!querySent)
 	{
 		ReceiveResourceCleanup(connectionId, filename, fileDescriptor);
@@ -293,7 +281,7 @@ ReceiveRegularFile(const char *nodeName, uint32 nodePort, const char *nodeUser,
 	}
 
 	/* check query response is as expected */
-	queryStatus = MultiClientQueryStatus(connectionId);
+	QueryStatus queryStatus = MultiClientQueryStatus(connectionId);
 	if (queryStatus != CLIENT_QUERY_COPY)
 	{
 		ReceiveResourceCleanup(connectionId, filename, fileDescriptor);
@@ -324,7 +312,7 @@ ReceiveRegularFile(const char *nodeName, uint32 nodePort, const char *nodeUser,
 	/* we are done executing; release the connection and the file handle */
 	MultiClientDisconnect(connectionId);
 
-	closed = close(fileDescriptor);
+	int closed = close(fileDescriptor);
 	if (closed < 0)
 	{
 		ereport(WARNING, (errcode_for_file_access(),
@@ -357,17 +345,14 @@ ReceiveResourceCleanup(int32 connectionId, const char *filename, int32 fileDescr
 
 	if (fileDescriptor != -1)
 	{
-		int closed = -1;
-		int deleted = -1;
-
-		closed = close(fileDescriptor);
+		int closed = close(fileDescriptor);
 		if (closed < 0)
 		{
 			ereport(WARNING, (errcode_for_file_access(),
 							  errmsg("could not close file \"%s\": %m", filename)));
 		}
 
-		deleted = unlink(filename);
+		int deleted = unlink(filename);
 		if (deleted != 0)
 		{
 			ereport(WARNING, (errcode_for_file_access(),
@@ -462,10 +447,6 @@ worker_apply_sequence_command(PG_FUNCTION_ARGS)
 	Oid sequenceTypeId = PG_GETARG_OID(1);
 	const char *commandString = text_to_cstring(commandText);
 	Node *commandNode = ParseTreeNode(commandString);
-	CreateSeqStmt *createSequenceStatement = NULL;
-	char *sequenceName = NULL;
-	char *sequenceSchema = NULL;
-	Oid sequenceRelationId = InvalidOid;
 
 	NodeTag nodeType = nodeTag(commandNode);
 
@@ -483,14 +464,14 @@ worker_apply_sequence_command(PG_FUNCTION_ARGS)
 						None_Receiver, NULL);
 	CommandCounterIncrement();
 
+	CreateSeqStmt *createSequenceStatement = (CreateSeqStmt *) commandNode;
+
+	char *sequenceName = createSequenceStatement->sequence->relname;
+	char *sequenceSchema = createSequenceStatement->sequence->schemaname;
 	createSequenceStatement = (CreateSeqStmt *) commandNode;
 
-	sequenceName = createSequenceStatement->sequence->relname;
-	sequenceSchema = createSequenceStatement->sequence->schemaname;
-	createSequenceStatement = (CreateSeqStmt *) commandNode;
-
-	sequenceRelationId = RangeVarGetRelid(createSequenceStatement->sequence,
-										  AccessShareLock, false);
+	Oid sequenceRelationId = RangeVarGetRelid(createSequenceStatement->sequence,
+											  AccessShareLock, false);
 	Assert(sequenceRelationId != InvalidOid);
 
 	AlterSequenceMinMax(sequenceRelationId, sequenceSchema, sequenceName, sequenceTypeId);
@@ -507,12 +488,10 @@ worker_apply_sequence_command(PG_FUNCTION_ARGS)
 uint64
 ExtractShardIdFromTableName(const char *tableName, bool missingOk)
 {
-	uint64 shardId = 0;
-	char *shardIdString = NULL;
 	char *shardIdStringEnd = NULL;
 
 	/* find the last underscore and increment for shardId string */
-	shardIdString = strrchr(tableName, SHARD_NAME_SEPARATOR);
+	char *shardIdString = strrchr(tableName, SHARD_NAME_SEPARATOR);
 	if (shardIdString == NULL && !missingOk)
 	{
 		ereport(ERROR, (errmsg("could not extract shardId from table name \"%s\"",
@@ -526,7 +505,7 @@ ExtractShardIdFromTableName(const char *tableName, bool missingOk)
 	shardIdString++;
 
 	errno = 0;
-	shardId = pg_strtouint64(shardIdString, &shardIdStringEnd, 0);
+	uint64 shardId = pg_strtouint64(shardIdString, &shardIdStringEnd, 0);
 
 	if (errno != 0 || (*shardIdStringEnd != '\0'))
 	{
@@ -553,18 +532,15 @@ ExtractShardIdFromTableName(const char *tableName, bool missingOk)
 List *
 TableDDLCommandList(const char *nodeName, uint32 nodePort, const char *tableName)
 {
-	List *ddlCommandList = NIL;
-	StringInfo queryString = NULL;
-	MultiConnection *connection = NULL;
 	PGresult *result = NULL;
 	uint32 connectionFlag = FORCE_NEW_CONNECTION;
 
-	queryString = makeStringInfo();
+	StringInfo queryString = makeStringInfo();
 	appendStringInfo(queryString, GET_TABLE_DDL_EVENTS, tableName);
-	connection = GetNodeConnection(connectionFlag, nodeName, nodePort);
+	MultiConnection *connection = GetNodeConnection(connectionFlag, nodeName, nodePort);
 
 	ExecuteOptionalRemoteCommand(connection, queryString->data, &result);
-	ddlCommandList = ReadFirstColumnAsText(result);
+	List *ddlCommandList = ReadFirstColumnAsText(result);
 
 	PQclear(result);
 	ForgetResults(connection);
@@ -594,11 +570,7 @@ ParseTreeNode(const char *ddlCommand)
 Node *
 ParseTreeRawStmt(const char *ddlCommand)
 {
-	Node *parseTreeNode = NULL;
-	List *parseTreeList = NULL;
-	uint32 parseTreeCount = 0;
-
-	parseTreeList = pg_parse_query(ddlCommand);
+	List *parseTreeList = pg_parse_query(ddlCommand);
 
 	/* log immediately if dictated by log statement */
 	if (check_log_statement(parseTreeList))
@@ -607,7 +579,7 @@ ParseTreeRawStmt(const char *ddlCommand)
 					  errhidestmt(true)));
 	}
 
-	parseTreeCount = list_length(parseTreeList);
+	uint32 parseTreeCount = list_length(parseTreeList);
 	if (parseTreeCount != 1)
 	{
 		ereport(ERROR, (errmsg("cannot execute multiple utility events")));
@@ -619,7 +591,7 @@ ParseTreeRawStmt(const char *ddlCommand)
 	 * those commands are safe, we can safely set the ProcessUtilityContext to
 	 * PROCESS_UTILITY_TOPLEVEL.
 	 */
-	parseTreeNode = (Node *) linitial(parseTreeList);
+	Node *parseTreeNode = (Node *) linitial(parseTreeList);
 
 	return parseTreeNode;
 }
@@ -644,20 +616,9 @@ worker_append_table_to_shard(PG_FUNCTION_ARGS)
 
 	char *shardTableName = NULL;
 	char *shardSchemaName = NULL;
-	char *shardQualifiedName = NULL;
 	char *sourceSchemaName = NULL;
 	char *sourceTableName = NULL;
-	char *sourceQualifiedName = NULL;
 
-	StringInfo localFilePath = NULL;
-	StringInfo sourceCopyCommand = NULL;
-	CopyStmt *localCopyCommand = NULL;
-	RangeVar *localTable = NULL;
-	uint64 shardId = INVALID_SHARD_ID;
-	bool received = false;
-	StringInfo queryString = NULL;
-	Oid sourceShardRelationId = InvalidOid;
-	Oid sourceSchemaId = InvalidOid;
 	Oid savedUserId = InvalidOid;
 	int savedSecurityContext = 0;
 
@@ -674,16 +635,17 @@ worker_append_table_to_shard(PG_FUNCTION_ARGS)
 	 * the transaction for this function commits, this lock will automatically
 	 * be released. This ensures appends to a shard happen in a serial manner.
 	 */
-	shardId = ExtractShardIdFromTableName(shardTableName, false);
+	uint64 shardId = ExtractShardIdFromTableName(shardTableName, false);
 	LockShardResource(shardId, AccessExclusiveLock);
 
 	/* copy remote table's data to this node */
-	localFilePath = makeStringInfo();
+	StringInfo localFilePath = makeStringInfo();
 	appendStringInfo(localFilePath, "base/%s/%s" UINT64_FORMAT,
 					 PG_JOB_CACHE_DIR, TABLE_FILE_PREFIX, shardId);
 
-	sourceQualifiedName = quote_qualified_identifier(sourceSchemaName, sourceTableName);
-	sourceCopyCommand = makeStringInfo();
+	char *sourceQualifiedName = quote_qualified_identifier(sourceSchemaName,
+														   sourceTableName);
+	StringInfo sourceCopyCommand = makeStringInfo();
 
 	/*
 	 * Partitioned tables do not support "COPY table TO STDOUT". Thus, we use
@@ -692,8 +654,8 @@ worker_append_table_to_shard(PG_FUNCTION_ARGS)
 	 * If the schema name is not explicitly set, we use the public schema.
 	 */
 	sourceSchemaName = sourceSchemaName ? sourceSchemaName : "public";
-	sourceSchemaId = get_namespace_oid(sourceSchemaName, false);
-	sourceShardRelationId = get_relname_relid(sourceTableName, sourceSchemaId);
+	Oid sourceSchemaId = get_namespace_oid(sourceSchemaName, false);
+	Oid sourceShardRelationId = get_relname_relid(sourceTableName, sourceSchemaId);
 	if (PartitionedTableNoLock(sourceShardRelationId))
 	{
 		appendStringInfo(sourceCopyCommand, COPY_SELECT_ALL_OUT_COMMAND,
@@ -704,8 +666,9 @@ worker_append_table_to_shard(PG_FUNCTION_ARGS)
 		appendStringInfo(sourceCopyCommand, COPY_OUT_COMMAND, sourceQualifiedName);
 	}
 
-	received = ReceiveRegularFile(sourceNodeName, sourceNodePort, NULL, sourceCopyCommand,
-								  localFilePath);
+	bool received = ReceiveRegularFile(sourceNodeName, sourceNodePort, NULL,
+									   sourceCopyCommand,
+									   localFilePath);
 	if (!received)
 	{
 		ereport(ERROR, (errmsg("could not copy table \"%s\" from \"%s:%u\"",
@@ -713,13 +676,13 @@ worker_append_table_to_shard(PG_FUNCTION_ARGS)
 	}
 
 	/* copy local file into the given shard */
-	localTable = makeRangeVar(shardSchemaName, shardTableName, -1);
-	localCopyCommand = CopyStatement(localTable, localFilePath->data);
+	RangeVar *localTable = makeRangeVar(shardSchemaName, shardTableName, -1);
+	CopyStmt *localCopyCommand = CopyStatement(localTable, localFilePath->data);
 
-	shardQualifiedName = quote_qualified_identifier(shardSchemaName,
-													shardTableName);
+	char *shardQualifiedName = quote_qualified_identifier(shardSchemaName,
+														  shardTableName);
 
-	queryString = makeStringInfo();
+	StringInfo queryString = makeStringInfo();
 	appendStringInfo(queryString, COPY_IN_COMMAND, shardQualifiedName,
 					 localFilePath->data);
 
@@ -796,8 +759,6 @@ AlterSequenceMinMax(Oid sequenceId, char *schemaName, char *sequenceName,
 					Oid sequenceTypeId)
 {
 	Form_pg_sequence sequenceData = pg_get_sequencedef(sequenceId);
-	int64 startValue = 0;
-	int64 maxValue = 0;
 	int64 sequenceMaxValue = sequenceData->seqmax;
 	int64 sequenceMinValue = sequenceData->seqmin;
 	int valueBitLength = 48;
@@ -815,8 +776,8 @@ AlterSequenceMinMax(Oid sequenceId, char *schemaName, char *sequenceName,
 	}
 
 	/* calculate min/max values that the sequence can generate in this worker */
-	startValue = (((int64) GetLocalGroupId()) << valueBitLength) + 1;
-	maxValue = startValue + ((int64) 1 << valueBitLength);
+	int64 startValue = (((int64) GetLocalGroupId()) << valueBitLength) + 1;
+	int64 maxValue = startValue + ((int64) 1 << valueBitLength);
 
 	/*
 	 * We alter the sequence if the previously set min and max values are not equal to
@@ -826,8 +787,6 @@ AlterSequenceMinMax(Oid sequenceId, char *schemaName, char *sequenceName,
 	{
 		StringInfo startNumericString = makeStringInfo();
 		StringInfo maxNumericString = makeStringInfo();
-		Node *startFloatArg = NULL;
-		Node *maxFloatArg = NULL;
 		AlterSeqStmt *alterSequenceStatement = makeNode(AlterSeqStmt);
 		const char *dummyString = "-";
 
@@ -838,10 +797,10 @@ AlterSequenceMinMax(Oid sequenceId, char *schemaName, char *sequenceName,
 		 * larger numbers we need to construct a float represented as a string.
 		 */
 		appendStringInfo(startNumericString, INT64_FORMAT, startValue);
-		startFloatArg = (Node *) makeFloat(startNumericString->data);
+		Node *startFloatArg = (Node *) makeFloat(startNumericString->data);
 
 		appendStringInfo(maxNumericString, INT64_FORMAT, maxValue);
-		maxFloatArg = (Node *) makeFloat(maxNumericString->data);
+		Node *maxFloatArg = (Node *) makeFloat(maxNumericString->data);
 
 		SetDefElemArg(alterSequenceStatement, "start", startFloatArg);
 		SetDefElemArg(alterSequenceStatement, "minvalue", startFloatArg);

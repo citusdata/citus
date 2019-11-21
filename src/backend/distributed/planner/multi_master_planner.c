@@ -71,13 +71,13 @@ PlannedStmt *
 MasterNodeSelectPlan(DistributedPlan *distributedPlan, CustomScan *remoteScan)
 {
 	Query *masterQuery = distributedPlan->masterQuery;
-	PlannedStmt *masterSelectPlan = NULL;
 
 	Job *workerJob = distributedPlan->workerJob;
 	List *workerTargetList = workerJob->jobQuery->targetList;
 	List *masterTargetList = MasterTargetList(workerTargetList);
 
-	masterSelectPlan = BuildSelectStatement(masterQuery, masterTargetList, remoteScan);
+	PlannedStmt *masterSelectPlan = BuildSelectStatement(masterQuery, masterTargetList,
+														 remoteScan);
 
 	return masterSelectPlan;
 }
@@ -99,15 +99,13 @@ MasterTargetList(List *workerTargetList)
 	foreach(workerTargetCell, workerTargetList)
 	{
 		TargetEntry *workerTargetEntry = (TargetEntry *) lfirst(workerTargetCell);
-		TargetEntry *masterTargetEntry = NULL;
-		Var *masterColumn = NULL;
 
 		if (workerTargetEntry->resjunk)
 		{
 			continue;
 		}
 
-		masterColumn = makeVarFromTargetEntry(tableId, workerTargetEntry);
+		Var *masterColumn = makeVarFromTargetEntry(tableId, workerTargetEntry);
 		masterColumn->varattno = columnId;
 		masterColumn->varoattno = columnId;
 		columnId++;
@@ -124,7 +122,7 @@ MasterTargetList(List *workerTargetList)
 		 * from the worker target entry. Note that any changes to worker target
 		 * entry's sort and group clauses will *break* us here.
 		 */
-		masterTargetEntry = flatCopyTargetEntry(workerTargetEntry);
+		TargetEntry *masterTargetEntry = flatCopyTargetEntry(workerTargetEntry);
 		masterTargetEntry->expr = (Expr *) masterColumn;
 		masterTargetList = lappend(masterTargetList, masterTargetEntry);
 	}
@@ -469,16 +467,14 @@ BuildAggregatePlan(PlannerInfo *root, Query *masterQuery, Plan *subPlan)
 static bool
 HasDistinctAggregate(Query *masterQuery)
 {
-	List *targetVarList = NIL;
-	List *havingVarList = NIL;
-	List *allColumnList = NIL;
 	ListCell *allColumnCell = NULL;
 
-	targetVarList = pull_var_clause((Node *) masterQuery->targetList,
-									PVC_INCLUDE_AGGREGATES);
-	havingVarList = pull_var_clause(masterQuery->havingQual, PVC_INCLUDE_AGGREGATES);
+	List *targetVarList = pull_var_clause((Node *) masterQuery->targetList,
+										  PVC_INCLUDE_AGGREGATES);
+	List *havingVarList = pull_var_clause(masterQuery->havingQual,
+										  PVC_INCLUDE_AGGREGATES);
 
-	allColumnList = list_concat(targetVarList, havingVarList);
+	List *allColumnList = list_concat(targetVarList, havingVarList);
 	foreach(allColumnCell, allColumnList)
 	{
 		Node *columnNode = lfirst(allColumnCell);
@@ -506,7 +502,6 @@ static bool
 UseGroupAggregateWithHLL(Query *masterQuery)
 {
 	Oid hllId = get_extension_oid(HLL_EXTENSION_NAME, true);
-	const char *gucStrValue = NULL;
 
 	/* If HLL extension is not loaded, return false */
 	if (!OidIsValid(hllId))
@@ -515,7 +510,7 @@ UseGroupAggregateWithHLL(Query *masterQuery)
 	}
 
 	/* If HLL is loaded but related GUC is not set, return false */
-	gucStrValue = GetConfigOption(HLL_FORCE_GROUPAGG_GUC_NAME, true, false);
+	const char *gucStrValue = GetConfigOption(HLL_FORCE_GROUPAGG_GUC_NAME, true, false);
 	if (gucStrValue == NULL || strcmp(gucStrValue, "off") == 0)
 	{
 		return false;
@@ -532,10 +527,9 @@ UseGroupAggregateWithHLL(Query *masterQuery)
 static bool
 QueryContainsAggregateWithHLL(Query *query)
 {
-	List *varList = NIL;
 	ListCell *varCell = NULL;
 
-	varList = pull_var_clause((Node *) query->targetList, PVC_INCLUDE_AGGREGATES);
+	List *varList = pull_var_clause((Node *) query->targetList, PVC_INCLUDE_AGGREGATES);
 	foreach(varCell, varList)
 	{
 		Var *var = (Var *) lfirst(varCell);
@@ -579,10 +573,8 @@ static Plan *
 BuildDistinctPlan(Query *masterQuery, Plan *subPlan)
 {
 	Plan *distinctPlan = NULL;
-	bool distinctClausesHashable = true;
 	List *distinctClauseList = masterQuery->distinctClause;
 	List *targetList = copyObject(masterQuery->targetList);
-	bool hasDistinctAggregate = false;
 
 	/*
 	 * We don't need to add distinct plan if all of the columns used in group by
@@ -602,8 +594,8 @@ BuildDistinctPlan(Query *masterQuery, Plan *subPlan)
 	 * members are hashable, and not containing distinct aggregate.
 	 * Otherwise create sort+unique plan.
 	 */
-	distinctClausesHashable = grouping_is_hashable(distinctClauseList);
-	hasDistinctAggregate = HasDistinctAggregate(masterQuery);
+	bool distinctClausesHashable = grouping_is_hashable(distinctClauseList);
+	bool hasDistinctAggregate = HasDistinctAggregate(masterQuery);
 
 	if (enable_hashagg && distinctClausesHashable && !hasDistinctAggregate)
 	{

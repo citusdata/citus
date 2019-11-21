@@ -3,7 +3,7 @@
 #
 # Regression tests for task tracker executor. This schedule runs tests
 # in task tracker executor. Any test that do not explicitly set the task executor
-# are expected to be placed here in addition to multi_schedule. 
+# are expected to be placed here in addition to multi_schedule.
 #
 # Note that we use variant comparison files to test version dependent regression
 # test results. For more information:
@@ -29,7 +29,7 @@ test: multi_load_data
 # ----------
 # Miscellaneous tests to check our query planning behavior
 # ----------
-test: multi_basic_queries multi_complex_expressions 
+test: multi_basic_queries multi_complex_expressions
 test: multi_agg_distinct multi_limit_clause_approximate
 test: multi_average_expression multi_working_columns
 test: multi_array_agg multi_limit_clause

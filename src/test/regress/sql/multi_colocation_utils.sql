@@ -10,7 +10,7 @@ CREATE SEQUENCE colocation_test_seq
     MINVALUE 1000
     NO CYCLE;
 
-/* a very simple UDF that only sets the colocation ids the same 
+/* a very simple UDF that only sets the colocation ids the same
  * DO NOT USE THIS FUNCTION IN PRODUCTION. It manually sets colocationid column of
  * pg_dist_partition and it does not check anything about pyshical state about shards.
  */
@@ -29,7 +29,7 @@ BEGIN
             FROM pg_dist_partition p1, pg_dist_partition p2
             WHERE
                 p2.logicalrelid = source_table AND
-                (p1.logicalrelid = source_table OR 
+                (p1.logicalrelid = source_table OR
                 (p1.colocationId = p2.colocationId AND p1.colocationId != 0)))
         UNION
         (SELECT target_table)
@@ -204,12 +204,12 @@ CREATE FOREIGN TABLE table3_groupD ( id int ) SERVER fake_fdw_server;
 SELECT create_distributed_table('table3_groupD', 'id');
 
 -- check metadata
-SELECT * FROM pg_dist_colocation 
-    WHERE colocationid >= 1 AND colocationid < 1000 
+SELECT * FROM pg_dist_colocation
+    WHERE colocationid >= 1 AND colocationid < 1000
     ORDER BY colocationid;
 
 SELECT logicalrelid, colocationid FROM pg_dist_partition
-    WHERE colocationid >= 1 AND colocationid < 1000 
+    WHERE colocationid >= 1 AND colocationid < 1000
     ORDER BY logicalrelid;
 
 -- check effects of dropping tables
@@ -305,7 +305,7 @@ SELECT * FROM pg_dist_colocation
     ORDER BY colocationid;
 
 -- cross check with internal colocation API
-SELECT 
+SELECT
     p1.logicalrelid::regclass AS table1,
     p2.logicalrelid::regclass AS table2,
     tables_colocated(p1.logicalrelid , p2.logicalrelid) AS colocated
@@ -392,8 +392,8 @@ CREATE TABLE table2_group_none ( id int );
 SELECT create_distributed_table('table2_group_none', 'id', colocate_with => 'NONE');
 
 -- check metadata to see colocation groups are created successfully
-SELECT * FROM pg_dist_colocation 
-    WHERE colocationid >= 1 AND colocationid < 1000 
+SELECT * FROM pg_dist_colocation
+    WHERE colocationid >= 1 AND colocationid < 1000
     ORDER BY colocationid;
 
 SELECT logicalrelid, colocationid FROM pg_dist_partition

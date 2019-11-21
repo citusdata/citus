@@ -25,19 +25,19 @@ WITH cte AS (
 	)
 	SELECT dist_cte.user_id FROM local_cte join dist_cte on dist_cte.user_id=local_cte.user_id
 )
-SELECT 
-	count(*) 
-FROM 
+SELECT
+	count(*)
+FROM
 	cte,
-	  (SELECT 
-    	DISTINCT users_table.user_id 
-     FROM 
-     	users_table, events_table 
-     WHERE 
-     	users_table.user_id = events_table.user_id AND 
+	  (SELECT
+    	DISTINCT users_table.user_id
+     FROM
+     	users_table, events_table
+     WHERE
+     	users_table.user_id = events_table.user_id AND
      event_type IN (1,2,3,4)
      ORDER BY 1 DESC LIMIT 5
-     ) as foo 
+     ) as foo
 	  WHERE foo.user_id = cte.user_id;
 
 -- kill at the second copy (pull)
@@ -52,21 +52,21 @@ WITH cte AS (
 	)
 	SELECT dist_cte.user_id FROM local_cte join dist_cte on dist_cte.user_id=local_cte.user_id
 )
-SELECT 
-	count(*) 
-FROM 
+SELECT
+	count(*)
+FROM
 	cte,
-	  (SELECT 
-    	DISTINCT users_table.user_id 
-     FROM 
-     	users_table, events_table 
-     WHERE 
-     	users_table.user_id = events_table.user_id AND 
+	  (SELECT
+    	DISTINCT users_table.user_id
+     FROM
+     	users_table, events_table
+     WHERE
+     	users_table.user_id = events_table.user_id AND
      event_type IN (1,2,3,4)
      ORDER BY 1 DESC LIMIT 5
-     ) as foo 
+     ) as foo
 	  WHERE foo.user_id = cte.user_id;
-	  
+
 -- kill at the third copy (pull)
 SELECT citus.mitmproxy('conn.onQuery(query="SELECT DISTINCT users_table.user").kill()');
 
@@ -79,19 +79,19 @@ WITH cte AS (
 	)
 	SELECT dist_cte.user_id FROM local_cte join dist_cte on dist_cte.user_id=local_cte.user_id
 )
-SELECT 
-	count(*) 
-FROM 
+SELECT
+	count(*)
+FROM
 	cte,
-	  (SELECT 
-    	DISTINCT users_table.user_id 
-     FROM 
-     	users_table, events_table 
-     WHERE 
-     	users_table.user_id = events_table.user_id AND 
+	  (SELECT
+    	DISTINCT users_table.user_id
+     FROM
+     	users_table, events_table
+     WHERE
+     	users_table.user_id = events_table.user_id AND
      event_type IN (1,2,3,4)
      ORDER BY 1 DESC LIMIT 5
-     ) as foo 
+     ) as foo
 	  WHERE foo.user_id = cte.user_id;
 
 -- cancel at the first copy (push)
@@ -106,19 +106,19 @@ WITH cte AS (
 	)
 	SELECT dist_cte.user_id FROM local_cte join dist_cte on dist_cte.user_id=local_cte.user_id
 )
-SELECT 
-	count(*) 
-FROM 
+SELECT
+	count(*)
+FROM
 	cte,
-	  (SELECT 
-    	DISTINCT users_table.user_id 
-     FROM 
-     	users_table, events_table 
-     WHERE 
-     	users_table.user_id = events_table.user_id AND 
+	  (SELECT
+    	DISTINCT users_table.user_id
+     FROM
+     	users_table, events_table
+     WHERE
+     	users_table.user_id = events_table.user_id AND
      event_type IN (1,2,3,4)
      ORDER BY 1 DESC LIMIT 5
-     ) as foo 
+     ) as foo
 	  WHERE foo.user_id = cte.user_id;
 
 -- cancel at the second copy (pull)
@@ -133,19 +133,19 @@ WITH cte AS (
 	)
 	SELECT dist_cte.user_id FROM local_cte join dist_cte on dist_cte.user_id=local_cte.user_id
 )
-SELECT 
-	count(*) 
-FROM 
+SELECT
+	count(*)
+FROM
 	cte,
-	  (SELECT 
-    	DISTINCT users_table.user_id 
-     FROM 
-     	users_table, events_table 
-     WHERE 
-     	users_table.user_id = events_table.user_id AND 
+	  (SELECT
+    	DISTINCT users_table.user_id
+     FROM
+     	users_table, events_table
+     WHERE
+     	users_table.user_id = events_table.user_id AND
      event_type IN (1,2,3,4)
      ORDER BY 1 DESC LIMIT 5
-     ) as foo 
+     ) as foo
 	  WHERE foo.user_id = cte.user_id;
 
 -- cancel at the third copy (pull)
@@ -160,19 +160,19 @@ WITH cte AS (
 	)
 	SELECT dist_cte.user_id FROM local_cte join dist_cte on dist_cte.user_id=local_cte.user_id
 )
-SELECT 
-	count(*) 
-FROM 
+SELECT
+	count(*)
+FROM
 	cte,
-	  (SELECT 
-    	DISTINCT users_table.user_id 
-     FROM 
-     	users_table, events_table 
-     WHERE 
-     	users_table.user_id = events_table.user_id AND 
+	  (SELECT
+    	DISTINCT users_table.user_id
+     FROM
+     	users_table, events_table
+     WHERE
+     	users_table.user_id = events_table.user_id AND
      event_type IN (1,2,3,4)
      ORDER BY 1 DESC LIMIT 5
-     ) as foo 
+     ) as foo
 	  WHERE foo.user_id = cte.user_id;
 
 -- distributed update tests

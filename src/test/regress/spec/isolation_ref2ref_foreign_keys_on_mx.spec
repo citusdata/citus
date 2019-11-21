@@ -31,7 +31,7 @@ step "s1-start-session-level-connection"
 
 step "s1-begin-on-worker"
 {
-	SELECT run_commands_on_session_level_connection_to_node('BEGIN'); 
+	SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 }
 
 step "s1-view-locks"
@@ -41,7 +41,7 @@ step "s1-view-locks"
 		ARRAY[57637]::int[],
 		ARRAY[$$
           SELECT array_agg(ROW(t.mode, t.count) ORDER BY t.mode) FROM
-          (SELECT mode, count(*) count FROM pg_locks 
+          (SELECT mode, count(*) count FROM pg_locks
            WHERE locktype='advisory' GROUP BY mode) t$$]::text[],
 		false);
 }
@@ -65,7 +65,7 @@ step "s2-start-session-level-connection"
 
 step "s2-begin-on-worker"
 {
-	SELECT run_commands_on_session_level_connection_to_node('BEGIN'); 
+	SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 }
 
 step "s2-insert-table-1"

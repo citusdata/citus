@@ -6,8 +6,8 @@
 
 -- We don't need shard id sequence here, so commented out to prevent conflicts with concurrent tests
 -- SET citus.next_shard_id TO 1400000;
- 
- -- 
+
+ --
  -- UNIONs and JOINs mixed
  --
 SELECT ("final_query"."event_types") as types, count(*) AS sumOfEventType
@@ -18,57 +18,57 @@ FROM
       FROM
         ( SELECT "t1"."user_id", min("t1"."time") AS "time", array_agg(("t1"."event") ORDER BY TIME ASC, event DESC) AS collected_events
          FROM (
-                 (SELECT 
+                 (SELECT
                     *
                   FROM
-                   (SELECT 
+                   (SELECT
                       "events"."user_id", "events"."time", 0 AS event
-                    FROM 
+                    FROM
                       events_table as  "events"
-                    WHERE 
-                      event_type IN (1, 2) ) events_subquery_1) 
-                 UNION 
-                 (SELECT 
+                    WHERE
+                      event_type IN (1, 2) ) events_subquery_1)
+                 UNION
+                 (SELECT
                     *
                   FROM
-                    (SELECT 
+                    (SELECT
                         "events"."user_id", "events"."time", 1 AS event
-                     FROM 
+                     FROM
                         events_table as "events"
-                     WHERE 
+                     WHERE
                       event_type IN (3, 4) ) events_subquery_2)
-               UNION 
-                 (SELECT 
+               UNION
+                 (SELECT
                     *
                   FROM
-                    (SELECT 
+                    (SELECT
                         "events"."user_id", "events"."time", 2 AS event
-                     FROM 
+                     FROM
                         events_table as  "events"
-                     WHERE 
+                     WHERE
                       event_type IN (5, 6) ) events_subquery_3)
-                UNION 
-                  (SELECT 
+                UNION
+                  (SELECT
                       *
                    FROM
-                    (SELECT 
+                    (SELECT
                         "events"."user_id", "events"."time", 3 AS event
-                     FROM 
+                     FROM
                       events_table as "events"
-                     WHERE 
+                     WHERE
                       event_type IN (1, 6)) events_subquery_4)) t1
-         GROUP BY "t1"."user_id") AS t) "q" 
+         GROUP BY "t1"."user_id") AS t) "q"
 INNER JOIN
-     (SELECT 
+     (SELECT
         "users"."user_id"
-      FROM 
+      FROM
         users_table as "users"
-      WHERE 
-        value_1 > 0 and value_1 < 4) AS t 
+      WHERE
+        value_1 > 0 and value_1 < 4) AS t
     ON (t.user_id = q.user_id)) as final_query
-GROUP BY 
+GROUP BY
   types
-ORDER BY 
+ORDER BY
   types;
 
 -- same query with target entries shuffled inside UNIONs
@@ -82,51 +82,51 @@ FROM
          FROM (
                  (SELECT *
                   FROM
-                   (SELECT 
+                   (SELECT
                           "events"."time", 0 AS event, "events"."user_id"
-                    FROM 
+                    FROM
                       events_table as  "events"
-                    WHERE 
-                      event_type IN (1, 2) ) events_subquery_1) 
-                 UNION 
+                    WHERE
+                      event_type IN (1, 2) ) events_subquery_1)
+                 UNION
                  (SELECT *
                   FROM
-                    (SELECT 
+                    (SELECT
                         "events"."time", 1 AS event, "events"."user_id"
-                     FROM 
+                     FROM
                       events_table as "events"
-                     WHERE 
+                     WHERE
                       event_type IN (3, 4) ) events_subquery_2)
-               UNION 
+               UNION
                  (SELECT *
                   FROM
-                    (SELECT 
+                    (SELECT
                         "events"."time", 2 AS event, "events"."user_id"
-                     FROM 
+                     FROM
                       events_table as  "events"
-                     WHERE 
+                     WHERE
                       event_type IN (5, 6) ) events_subquery_3)
-               UNION 
+               UNION
                  (SELECT *
                   FROM
-                    (SELECT 
+                    (SELECT
                         "events"."time", 3 AS event, "events"."user_id"
-                     FROM 
+                     FROM
                       events_table as "events"
-                     WHERE 
+                     WHERE
                       event_type IN (1, 6)) events_subquery_4)) t1
-         GROUP BY "t1"."user_id") AS t) "q" 
+         GROUP BY "t1"."user_id") AS t) "q"
 INNER JOIN
-     (SELECT 
+     (SELECT
         "users"."user_id"
-      FROM 
+      FROM
         users_table as "users"
-      WHERE 
-        value_1 > 0 and value_1 < 4) AS t 
+      WHERE
+        value_1 > 0 and value_1 < 4) AS t
   ON (t.user_id = q.user_id)) as final_query
-GROUP BY 
+GROUP BY
   types
-ORDER BY 
+ORDER BY
   types;
 
 -- supported through recursive planning since events_subquery_2 doesn't have partition key on the target list
@@ -141,51 +141,51 @@ FROM
          FROM (
                  (SELECT *
                   FROM
-                   (SELECT 
+                   (SELECT
                           "events"."time", 0 AS event, "events"."user_id"
-                    FROM 
+                    FROM
                       events_table as  "events"
-                    WHERE 
-                      event_type IN (1, 2) ) events_subquery_1) 
-                 UNION 
+                    WHERE
+                      event_type IN (1, 2) ) events_subquery_1)
+                 UNION
                  (SELECT *
                   FROM
-                    (SELECT 
+                    (SELECT
                         "events"."time", 1 AS event, "events"."user_id" * 2
-                     FROM 
+                     FROM
                       events_table as "events"
-                     WHERE 
+                     WHERE
                       event_type IN (3, 4) ) events_subquery_2)
-               UNION 
+               UNION
                  (SELECT *
                   FROM
-                    (SELECT 
+                    (SELECT
                         "events"."time", 2 AS event, "events"."user_id"
-                     FROM 
+                     FROM
                       events_table as  "events"
-                     WHERE 
+                     WHERE
                       event_type IN (5, 6) ) events_subquery_3)
-               UNION 
+               UNION
                  (SELECT *
                   FROM
-                    (SELECT 
+                    (SELECT
                         "events"."time", 3 AS event, "events"."user_id"
-                     FROM 
+                     FROM
                       events_table as "events"
-                     WHERE 
+                     WHERE
                       event_type IN (1, 6)) events_subquery_4)) t1
-         GROUP BY "t1"."user_id") AS t) "q" 
+         GROUP BY "t1"."user_id") AS t) "q"
 INNER JOIN
-     (SELECT 
+     (SELECT
         "users"."user_id"
-      FROM 
+      FROM
         users_table as "users"
-      WHERE 
-        value_1 > 0 and value_1 < 4) AS t 
+      WHERE
+        value_1 > 0 and value_1 < 4) AS t
   ON (t.user_id = q.user_id)) as final_query
-GROUP BY 
+GROUP BY
   types
-ORDER BY 
+ORDER BY
   types;
 
 -- supported through recursive planning since events_subquery_2 doesn't have partition key on the target list
@@ -199,123 +199,123 @@ FROM
          FROM (
                  (SELECT *
                   FROM
-                   (SELECT 
+                   (SELECT
                           "events"."time", 0 AS event, "events"."user_id"
-                    FROM 
+                    FROM
                       events_table as  "events"
-                    WHERE 
-                      event_type IN (1, 2) ) events_subquery_1) 
-                 UNION 
+                    WHERE
+                      event_type IN (1, 2) ) events_subquery_1)
+                 UNION
                  (SELECT *
                   FROM
-                    (SELECT 
+                    (SELECT
                         "events"."time", 1 AS event, "events"."value_2" as user_id
-                     FROM 
+                     FROM
                       events_table as "events"
-                     WHERE 
+                     WHERE
                       event_type IN (3, 4) ) events_subquery_2)
-               UNION 
+               UNION
                  (SELECT *
                   FROM
-                    (SELECT 
+                    (SELECT
                         "events"."time", 2 AS event, "events"."user_id"
-                     FROM 
+                     FROM
                       events_table as  "events"
-                     WHERE 
+                     WHERE
                       event_type IN (5, 6) ) events_subquery_3)
-               UNION 
+               UNION
                  (SELECT *
                   FROM
-                    (SELECT 
+                    (SELECT
                         "events"."time", 3 AS event, "events"."user_id"
-                     FROM 
+                     FROM
                       events_table as "events"
-                     WHERE 
+                     WHERE
                       event_type IN (1, 6)) events_subquery_4)) t1
-         GROUP BY "t1"."user_id") AS t) "q" 
+         GROUP BY "t1"."user_id") AS t) "q"
 INNER JOIN
-     (SELECT 
+     (SELECT
         "users"."user_id"
-      FROM 
+      FROM
         users_table as "users"
-      WHERE 
-        value_1 > 0 and value_1 < 4) AS t 
+      WHERE
+        value_1 > 0 and value_1 < 4) AS t
   ON (t.user_id = q.user_id)) as final_query
-GROUP BY 
+GROUP BY
   types
-ORDER BY 
+ORDER BY
   types;
 
 -- we can support arbitrary subqueries within UNIONs
 SELECT ("final_query"."event_types") as types, count(*) AS sumOfEventType
 FROM
-  ( SELECT 
+  ( SELECT
       *, random()
     FROM
-     (SELECT 
+     (SELECT
         "t"."user_id", "t"."time", unnest("t"."collected_events") AS "event_types"
       FROM
-        ( SELECT 
+        ( SELECT
             "t1"."user_id", min("t1"."time") AS "time", array_agg(("t1"."event") ORDER BY TIME ASC, event DESC) AS collected_events
           FROM (
-                (SELECT 
+                (SELECT
                     *
                  FROM
-                   (SELECT 
+                   (SELECT
                           "events"."time", 0 AS event, "events"."user_id"
-                    FROM 
+                    FROM
                       events_table as "events"
-                    WHERE 
-                      event_type IN (1, 2) ) events_subquery_1) 
-                UNION 
+                    WHERE
+                      event_type IN (1, 2) ) events_subquery_1)
+                UNION
                  (SELECT *
                   FROM
                     (
                           SELECT * FROM
                           (
-                              SELECT 
+                              SELECT
                                 max("events"."time"),
                                 0 AS event,
                                 "events"."user_id"
-                              FROM 
+                              FROM
                                 events_table as  "events", users_table as "users"
-                              WHERE 
+                              WHERE
                                 events.user_id = users.user_id AND
                                 event_type IN (1, 2)
                                 GROUP BY   "events"."user_id"
                           ) as events_subquery_5
                      ) events_subquery_2)
-               UNION 
+               UNION
                  (SELECT *
                   FROM
-                    (SELECT 
+                    (SELECT
                         "events"."time", 2 AS event, "events"."user_id"
-                     FROM 
+                     FROM
                         events_table as  "events"
-                     WHERE 
+                     WHERE
                       event_type IN (3, 4) ) events_subquery_3)
-               UNION 
+               UNION
                  (SELECT *
                   FROM
                     (SELECT
                        "events"."time", 3 AS event, "events"."user_id"
-                     FROM 
+                     FROM
                       events_table as "events"
-                     WHERE 
+                     WHERE
                       event_type IN (5, 6)) events_subquery_4)
                  ) t1
-         GROUP BY "t1"."user_id") AS t) "q" 
+         GROUP BY "t1"."user_id") AS t) "q"
 INNER JOIN
-     (SELECT 
+     (SELECT
         "users"."user_id"
-      FROM 
+      FROM
         users_table as "users"
-      WHERE 
-        value_1 > 0 and value_1 < 4) AS t 
+      WHERE
+        value_1 > 0 and value_1 < 4) AS t
      ON (t.user_id = q.user_id)) as final_query
-GROUP BY 
+GROUP BY
   types
-ORDER BY 
+ORDER BY
   types;
 
 SET citus.enable_repartition_joins to ON;
@@ -324,73 +324,73 @@ SET client_min_messages TO DEBUG1;
 -- recursively planned since events_subquery_5 is not joined on partition key
 SELECT ("final_query"."event_types") as types, count(*) AS sumOfEventType
 FROM
-  ( SELECT 
+  ( SELECT
       *, random()
     FROM
-     (SELECT 
+     (SELECT
         "t"."user_id", "t"."time", unnest("t"."collected_events") AS "event_types"
       FROM
-        ( SELECT 
+        ( SELECT
             "t1"."user_id", min("t1"."time") AS "time", array_agg(("t1"."event") ORDER BY TIME ASC, event DESC) AS collected_events
           FROM (
-                (SELECT 
+                (SELECT
                     *
                  FROM
-                   (SELECT 
+                   (SELECT
                           "events"."time", 0 AS event, "events"."user_id"
-                    FROM 
+                    FROM
                       events_table as "events"
-                    WHERE 
-                      event_type IN (1, 2) ) events_subquery_1) 
-                UNION 
+                    WHERE
+                      event_type IN (1, 2) ) events_subquery_1)
+                UNION
                  (SELECT *
                   FROM
                     (
                           SELECT * FROM
                           (
-                              SELECT 
+                              SELECT
                                 max("events"."time"),
                                 0 AS event,
                                 "events"."user_id"
-                              FROM 
+                              FROM
                                 events_table as  "events", users_table as "users"
-                              WHERE 
+                              WHERE
                                 events.user_id = users.value_2 AND
                                 event_type IN (1, 2)
                                 GROUP BY   "events"."user_id"
                           ) as events_subquery_5
                      ) events_subquery_2)
-               UNION 
+               UNION
                  (SELECT *
                   FROM
-                    (SELECT 
+                    (SELECT
                         "events"."time", 2 AS event, "events"."user_id"
-                     FROM 
+                     FROM
                         events_table as  "events"
-                     WHERE 
+                     WHERE
                       event_type IN (3, 4) ) events_subquery_3)
-               UNION 
+               UNION
                  (SELECT *
                   FROM
                     (SELECT
                        "events"."time", 3 AS event, "events"."user_id"
-                     FROM 
+                     FROM
                       events_table as "events"
-                     WHERE 
+                     WHERE
                       event_type IN (5, 6)) events_subquery_4)
                  ) t1
-         GROUP BY "t1"."user_id") AS t) "q" 
+         GROUP BY "t1"."user_id") AS t) "q"
 INNER JOIN
-     (SELECT 
+     (SELECT
         "users"."user_id"
-      FROM 
+      FROM
         users_table as "users"
-      WHERE 
-        value_1 > 0 and value_1 < 4) AS t 
+      WHERE
+        value_1 > 0 and value_1 < 4) AS t
      ON (t.user_id = q.user_id)) as final_query
-GROUP BY 
+GROUP BY
   types
-ORDER BY 
+ORDER BY
   types;
 
 RESET client_min_messages;
@@ -406,57 +406,57 @@ FROM
       FROM
         ( SELECT "t1"."user_id", min("t1"."time") AS "time", array_agg(("t1"."event") ORDER BY TIME ASC, event DESC) AS collected_events
          FROM (
-                 (SELECT 
+                 (SELECT
                     *
                   FROM
-                   (SELECT 
+                   (SELECT
                       "events"."user_id", "events"."time", 0 AS event
-                    FROM 
+                    FROM
                       events_table as  "events"
-                    WHERE 
-                      event_type IN (1, 2) ) events_subquery_1) 
-                 UNION 
-                 (SELECT 
+                    WHERE
+                      event_type IN (1, 2) ) events_subquery_1)
+                 UNION
+                 (SELECT
                     *
                   FROM
-                    (SELECT 
+                    (SELECT
                         "events"."user_id", "events"."time", 1 AS event
-                     FROM 
+                     FROM
                         events_table as "events"
-                     WHERE 
+                     WHERE
                       event_type IN (3, 4) ) events_subquery_2)
-               UNION 
-                 (SELECT 
+               UNION
+                 (SELECT
                     *
                   FROM
-                    (SELECT 
+                    (SELECT
                         "events"."user_id", "events"."time", 2 AS event
-                     FROM 
+                     FROM
                         events_table as  "events"
-                     WHERE 
+                     WHERE
                       event_type IN (5, 6) ) events_subquery_3)
-                UNION 
-                  (SELECT 
+                UNION
+                  (SELECT
                       *
                    FROM
-                    (SELECT 
+                    (SELECT
                         "events"."user_id", "events"."time", 3 AS event
-                     FROM 
+                     FROM
                       events_table as "events"
-                     WHERE 
+                     WHERE
                       event_type IN (4, 5)) events_subquery_4)) t1
-         GROUP BY "t1"."user_id") AS t) "q" 
+         GROUP BY "t1"."user_id") AS t) "q"
 INNER JOIN
-     (SELECT 
+     (SELECT
         "users"."user_id"
-      FROM 
+      FROM
         users_table as "users"
-      WHERE 
-        value_1 > 0 and value_1 < 4) AS t 
+      WHERE
+        value_1 > 0 and value_1 < 4) AS t
     ON (t.user_id != q.user_id)) as final_query
-GROUP BY 
+GROUP BY
   types
-ORDER BY 
+ORDER BY
   types;
 RESET client_min_messages;
 
@@ -469,57 +469,57 @@ FROM
       FROM
         ( SELECT "t1"."user_id", min("t1"."time") AS "time", array_agg(("t1"."event") ORDER BY TIME ASC, event DESC) AS collected_events
          FROM (
-                 (SELECT 
+                 (SELECT
                     *
                   FROM
-                   (SELECT 
+                   (SELECT
                       "events"."user_id", "events"."time", 0 AS event
-                    FROM 
+                    FROM
                       events_table as  "events"
-                    WHERE 
-                      event_type IN (1, 2) ) events_subquery_1) 
-                 UNION 
-                 (SELECT 
+                    WHERE
+                      event_type IN (1, 2) ) events_subquery_1)
+                 UNION
+                 (SELECT
                     *
                   FROM
-                    (SELECT 
+                    (SELECT
                         "events"."user_id", "events"."time", 1 AS event
-                     FROM 
+                     FROM
                         events_table as "events"
-                     WHERE 
+                     WHERE
                       event_type IN (3, 4) ) events_subquery_2)
-               UNION 
-                 (SELECT 
+               UNION
+                 (SELECT
                     *
                   FROM
-                    (SELECT 
+                    (SELECT
                         "events"."user_id", "events"."time", 2 AS event
-                     FROM 
+                     FROM
                         events_table as  "events",  users_table as "users"
-                     WHERE 
+                     WHERE
                       event_type IN (5, 6)  AND users.user_id != events.user_id ) events_subquery_3)
-                UNION 
-                  (SELECT 
+                UNION
+                  (SELECT
                       *
                    FROM
-                    (SELECT 
+                    (SELECT
                         "events"."user_id", "events"."time", 3 AS event
-                     FROM 
+                     FROM
                       events_table as "events"
-                     WHERE 
+                     WHERE
                       event_type IN (4, 5)) events_subquery_4)) t1
-         GROUP BY "t1"."user_id") AS t) "q" 
+         GROUP BY "t1"."user_id") AS t) "q"
 INNER JOIN
-     (SELECT 
+     (SELECT
         "users"."user_id"
-      FROM 
+      FROM
         users_table as "users"
-      WHERE 
-        value_1 > 0 and value_1 < 4) AS t 
+      WHERE
+        value_1 > 0 and value_1 < 4) AS t
     ON (t.user_id = q.user_id)) as final_query
-GROUP BY 
+GROUP BY
   types
-ORDER BY 
+ORDER BY
   types;
 
 -- similar query with more union statements (to enable UNION tree become larger)
@@ -533,71 +533,71 @@ FROM
          FROM (
                  (SELECT *
                   FROM
-                   (SELECT 
+                   (SELECT
                       "events"."user_id", "events"."time", 0 AS event
-                    FROM 
+                    FROM
                       events_table as  "events"
-                    WHERE 
-                      event_type IN (1, 2) ) events_subquery_1) 
-                UNION 
+                    WHERE
+                      event_type IN (1, 2) ) events_subquery_1)
+                UNION
                  (SELECT *
                   FROM
-                    (SELECT 
+                    (SELECT
                         "events"."user_id", "events"."time", 1 AS event
-                     FROM 
+                     FROM
                         events_table as "events"
-                     WHERE 
+                     WHERE
                        event_type IN (2, 3) ) events_subquery_2)
-               UNION 
+               UNION
                  (SELECT *
                   FROM
-                    (SELECT 
+                    (SELECT
                         "events"."user_id", "events"."time", 2 AS event
-                     FROM 
+                     FROM
                         events_table as  "events"
-                     WHERE 
+                     WHERE
                         event_type IN (3, 4) ) events_subquery_3)
-               UNION 
+               UNION
                  (SELECT *
                   FROM
-                    (SELECT 
+                    (SELECT
                         "events"."user_id", "events"."time", 3 AS event
-                     FROM 
+                     FROM
                         events_table as "events"
-                     WHERE 
+                     WHERE
                         event_type IN (4, 5)) events_subquery_4)
 
-                  UNION 
+                  UNION
                  (SELECT *
                   FROM
-                    (SELECT 
+                    (SELECT
                         "events"."user_id", "events"."time", 4 AS event
-                     FROM 
+                     FROM
                         events_table as "events"
-                     WHERE 
+                     WHERE
                         event_type IN (5, 6)) events_subquery_5)
 
-                  UNION 
+                  UNION
                  (SELECT *
                   FROM
-                    (SELECT 
+                    (SELECT
                         "events"."user_id", "events"."time", 5 AS event
-                     FROM 
+                     FROM
                         events_table as "events"
-                     WHERE 
+                     WHERE
                         event_type IN (6, 1)) events_subquery_6)
 
-                  UNION 
+                  UNION
                  (SELECT *
                   FROM
-                    (SELECT 
+                    (SELECT
                         "events"."user_id", "events"."time", 6 AS event
-                     FROM 
+                     FROM
                         events_table as "events"
-                     WHERE 
+                     WHERE
                         event_type IN (2, 5)) events_subquery_6)
                  ) t1
-         GROUP BY "t1"."user_id") AS t) "q" 
+         GROUP BY "t1"."user_id") AS t) "q"
 INNER JOIN
      (SELECT "users"."user_id"
       FROM users_table as "users"
@@ -606,7 +606,7 @@ GROUP BY types
 ORDER BY types;
 
 
--- 
+--
 -- UNION ALL Queries
 --
 SELECT ("final_query"."event_types") as types, count(*) AS sumOfEventType
@@ -619,40 +619,40 @@ FROM
          FROM (
                  (SELECT *
                   FROM
-                   (SELECT 
+                   (SELECT
                       "events"."user_id", "events"."time", 0 AS event
-                    FROM 
+                    FROM
                       events_table as  "events"
-                    WHERE 
-                      event_type IN (1, 2) ) events_subquery_1) 
+                    WHERE
+                      event_type IN (1, 2) ) events_subquery_1)
                 UNION ALL
                  (SELECT *
                   FROM
-                    (SELECT 
+                    (SELECT
                         "events"."user_id", "events"."time", 1 AS event
-                     FROM 
+                     FROM
                         events_table as "events"
-                     WHERE 
+                     WHERE
                         event_type IN (3, 4) ) events_subquery_2)
                UNION ALL
                  (SELECT *
                   FROM
-                    (SELECT 
+                    (SELECT
                         "events"."user_id", "events"."time", 2 AS event
-                     FROM 
+                     FROM
                         events_table as  "events"
-                     WHERE 
+                     WHERE
                         event_type IN (5, 6) ) events_subquery_3)
                UNION ALL
                  (SELECT *
                   FROM
-                    (SELECT 
+                    (SELECT
                         "events"."user_id", "events"."time", 3 AS event
-                     FROM 
+                     FROM
                         events_table as "events"
-                     WHERE 
+                     WHERE
                         event_type IN (6, 1)) events_subquery_4)) t1
-         GROUP BY "t1"."user_id") AS t) "q" 
+         GROUP BY "t1"."user_id") AS t) "q"
 INNER JOIN
      (SELECT "users"."user_id"
       FROM users_table as "users"
@@ -671,47 +671,47 @@ FROM
          FROM (
                  (SELECT *
                   FROM
-                   (SELECT 
+                   (SELECT
                           "events"."time", 0 AS event, "events"."user_id"
-                    FROM 
+                    FROM
                       events_table as  "events"
-                    WHERE 
-                      event_type IN (1, 2) ) events_subquery_1) 
+                    WHERE
+                      event_type IN (1, 2) ) events_subquery_1)
                 UNION ALL
                  (SELECT *
                   FROM
-                    (SELECT 
+                    (SELECT
                         "events"."time", 1 AS event, "events"."user_id"
-                     FROM 
+                     FROM
                         events_table as "events"
-                     WHERE 
+                     WHERE
                         event_type IN (3, 4) ) events_subquery_2)
                UNION ALL
                  (SELECT *
                   FROM
-                    (SELECT 
+                    (SELECT
                         "events"."time", 2 AS event, "events"."user_id"
-                     FROM 
+                     FROM
                         events_table as  "events"
-                     WHERE 
+                     WHERE
                         event_type IN (5, 6) ) events_subquery_3)
                UNION ALL
                  (SELECT *
                   FROM
-                    (SELECT 
+                    (SELECT
                         "events"."time", 3 AS event, "events"."user_id"
-                     FROM 
+                     FROM
                         events_table as "events"
-                     WHERE 
+                     WHERE
                         event_type IN (1, 6)) events_subquery_4)) t1
-         GROUP BY "t1"."user_id") AS t) "q" 
+         GROUP BY "t1"."user_id") AS t) "q"
 INNER JOIN
-     (SELECT 
+     (SELECT
         "users"."user_id"
-      FROM 
+      FROM
         users_table as "users"
-      WHERE 
-        value_1 > 0 and value_1 < 4) AS t 
+      WHERE
+        value_1 > 0 and value_1 < 4) AS t
 ON (t.user_id = q.user_id)) as final_query
 GROUP BY types
 ORDER BY types;
@@ -727,40 +727,40 @@ FROM
          FROM (
                  (SELECT *
                   FROM
-                   (SELECT 
+                   (SELECT
                       "events"."user_id", "events"."time", 0 AS event
-                    FROM 
+                    FROM
                       events_table as  "events"
-                    WHERE 
-                      event_type IN (1, 2) ) events_subquery_1) 
+                    WHERE
+                      event_type IN (1, 2) ) events_subquery_1)
                 UNION ALL
                  (SELECT *
                   FROM
-                    (SELECT 
+                    (SELECT
                         "events"."user_id", "events"."time", 1 AS event
-                     FROM 
+                     FROM
                         events_table as "events"
-                     WHERE 
+                     WHERE
                         event_type IN (3, 4) ) events_subquery_2)
                UNION ALL
                  (SELECT *
                   FROM
-                    (SELECT 
+                    (SELECT
                         "events"."value_2", "events"."time", 2 AS event
-                     FROM 
+                     FROM
                         events_table as  "events"
-                     WHERE 
+                     WHERE
                         event_type IN (5, 6) ) events_subquery_3)
                UNION ALL
                  (SELECT *
                   FROM
-                    (SELECT 
+                    (SELECT
                         "events"."user_id", "events"."time", 3 AS event
-                     FROM 
+                     FROM
                         events_table as "events"
-                     WHERE 
+                     WHERE
                         event_type IN (1, 6)) events_subquery_4)) t1
-         GROUP BY "t1"."user_id") AS t) "q" 
+         GROUP BY "t1"."user_id") AS t) "q"
 INNER JOIN
      (SELECT "users"."user_id"
       FROM users_table as "users"
@@ -768,7 +768,7 @@ INNER JOIN
 GROUP BY types
 ORDER BY types;
 
--- supported through recursive planning since events_subquery_4 does not have partition key on the 
+-- supported through recursive planning since events_subquery_4 does not have partition key on the
 -- target list
 SELECT ("final_query"."event_types") as types, count(*) AS sumOfEventType
 FROM
@@ -780,47 +780,47 @@ FROM
          FROM (
                  (SELECT *
                   FROM
-                   (SELECT 
+                   (SELECT
                           "events"."time", 0 AS event, "events"."user_id"
-                    FROM 
+                    FROM
                       events_table as  "events"
-                    WHERE 
-                      event_type IN (1, 2) ) events_subquery_1) 
+                    WHERE
+                      event_type IN (1, 2) ) events_subquery_1)
                 UNION ALL
                  (SELECT *
                   FROM
-                    (SELECT 
+                    (SELECT
                         "events"."time", 1 AS event, "events"."user_id"
-                     FROM 
+                     FROM
                         events_table as "events"
-                     WHERE 
+                     WHERE
                         event_type IN (3, 4) ) events_subquery_2)
                UNION ALL
                  (SELECT *
                   FROM
-                    (SELECT 
+                    (SELECT
                         "events"."time", 2 AS event, "events"."user_id"
-                     FROM 
+                     FROM
                         events_table as  "events"
-                     WHERE 
+                     WHERE
                         event_type IN (5, 6) ) events_subquery_3)
                UNION ALL
                  (SELECT *
                   FROM
-                    (SELECT 
+                    (SELECT
                         "events"."time", 3 AS event, "events"."user_id" * 2
-                     FROM 
+                     FROM
                         events_table as "events"
-                     WHERE 
+                     WHERE
                         event_type IN (1, 6)) events_subquery_4)) t1
-         GROUP BY "t1"."user_id") AS t) "q" 
+         GROUP BY "t1"."user_id") AS t) "q"
 INNER JOIN
-     (SELECT 
+     (SELECT
         "users"."user_id"
-      FROM 
+      FROM
         users_table as "users"
-      WHERE 
-        value_1 > 0 and value_1 < 4) AS t 
+      WHERE
+        value_1 > 0 and value_1 < 4) AS t
 ON (t.user_id = q.user_id)) as final_query
 GROUP BY types
 ORDER BY types;
@@ -830,72 +830,72 @@ SELECT user_id, count(*) as cnt
 FROM
   (SELECT first_query.user_id, random()
    FROM
-     ( SELECT 
+     ( SELECT
         "t"."user_id", "t"."time", unnest("t"."collected_events") AS "event_types"
        FROM
-        ( SELECT 
+        ( SELECT
             "t1"."user_id", min("t1"."time") AS "time", array_agg(("t1"."event") ORDER BY TIME ASC, event DESC) AS collected_events
          FROM (
                  (SELECT *
                   FROM
-                    (SELECT 
+                    (SELECT
                         "events"."user_id", "events"."time", 0 AS event
-                     FROM 
+                     FROM
                         events_table as  "events"
-                     WHERE 
-                        event_type IN (1, 2) ) events_subquery_1) 
+                     WHERE
+                        event_type IN (1, 2) ) events_subquery_1)
                UNION ALL
                  (SELECT *
                   FROM
-                    (SELECT 
+                    (SELECT
                         "events"."user_id", "events"."time", 1 AS event
-                     FROM 
+                     FROM
                         events_table as "events"
-                     WHERE 
+                     WHERE
                         event_type IN (3, 4) ) events_subquery_2)
                UNION ALL
                  (SELECT *
                   FROM
-                    (SELECT 
+                    (SELECT
                         "events"."user_id", "events"."time", 2 AS event
-                     FROM 
+                     FROM
                         events_table as  "events"
-                     WHERE 
+                     WHERE
                         event_type IN (5, 6) ) events_subquery_3)
                UNION ALL
                  (SELECT *
                   FROM
-                    (SELECT 
+                    (SELECT
                         "events"."user_id", "events"."time", 3 AS event
-                     FROM 
+                     FROM
                         events_table as "events"
-                     WHERE 
+                     WHERE
                         event_type IN (1, 6)) events_subquery_4)) t1
-         GROUP BY "t1"."user_id") AS t) "first_query" 
+         GROUP BY "t1"."user_id") AS t) "first_query"
 INNER JOIN
      (SELECT "t"."user_id"
       FROM
-        (SELECT 
+        (SELECT
             "users"."user_id"
-         FROM 
+         FROM
            users_table as "users"
-        WHERE 
+        WHERE
           value_1 > 0 and value_1 < 4) AS t
         LEFT OUTER JOIN
         (
-          SELECT 
+          SELECT
             DISTINCT "events"."user_id" as user_id
-          FROM 
+          FROM
             events_table as "events"
-          WHERE 
+          WHERE
             event_type IN (0, 6)
-          GROUP BY 
+          GROUP BY
             user_id
-         ) as t2 
+         ) as t2
     ON (t2.user_id = t.user_id) WHERE t2.user_id is NULL) as second_query
-  ON ("first_query".user_id = "second_query".user_id)) as final_query 
-GROUP BY 
-  user_id ORDER BY cnt DESC, user_id DESC 
+  ON ("first_query".user_id = "second_query".user_id)) as final_query
+GROUP BY
+  user_id ORDER BY cnt DESC, user_id DESC
 LIMIT 10;
 
 -- recursively planned since the join between t and t2 is not equi join
@@ -905,149 +905,149 @@ SELECT user_id, count(*) as cnt
 FROM
   (SELECT first_query.user_id, random()
    FROM
-     ( SELECT 
+     ( SELECT
         "t"."user_id", "t"."time", unnest("t"."collected_events") AS "event_types"
        FROM
-        ( SELECT 
+        ( SELECT
             "t1"."user_id", min("t1"."time") AS "time", array_agg(("t1"."event") ORDER BY TIME ASC, event DESC) AS collected_events
          FROM (
                  (SELECT *
                   FROM
-                    (SELECT 
+                    (SELECT
                         "events"."user_id", "events"."time", 0 AS event
-                     FROM 
+                     FROM
                         events_table as  "events"
-                     WHERE 
-                        event_type IN (1, 2) ) events_subquery_1) 
+                     WHERE
+                        event_type IN (1, 2) ) events_subquery_1)
                UNION ALL
                  (SELECT *
                   FROM
-                    (SELECT 
+                    (SELECT
                         "events"."user_id", "events"."time", 1 AS event
-                     FROM 
+                     FROM
                         events_table as "events"
-                     WHERE 
+                     WHERE
                         event_type IN (3, 4) ) events_subquery_2)
                UNION ALL
                  (SELECT *
                   FROM
-                    (SELECT 
+                    (SELECT
                         "events"."user_id", "events"."time", 2 AS event
-                     FROM 
+                     FROM
                         events_table as  "events"
-                     WHERE 
+                     WHERE
                         event_type IN (5, 6) ) events_subquery_3)
                UNION ALL
                  (SELECT *
                   FROM
-                    (SELECT 
+                    (SELECT
                         "events"."user_id", "events"."time", 3 AS event
-                     FROM 
+                     FROM
                         events_table as "events"
-                     WHERE 
+                     WHERE
                         event_type IN (1, 6)) events_subquery_4)) t1
-         GROUP BY "t1"."user_id") AS t) "first_query" 
+         GROUP BY "t1"."user_id") AS t) "first_query"
 INNER JOIN
      (SELECT "t"."user_id"
       FROM
-        (SELECT 
+        (SELECT
             "users"."user_id"
-         FROM 
+         FROM
            users_table as "users"
-        WHERE 
+        WHERE
           value_1 > 0 and value_1 < 4) AS t
         LEFT OUTER JOIN
         (
-          SELECT 
+          SELECT
             DISTINCT "events"."user_id" as user_id
-          FROM 
+          FROM
             events_table as "events"
-          WHERE 
+          WHERE
             event_type IN (0, 6)
-          GROUP BY 
+          GROUP BY
             user_id
-         ) as t2 
+         ) as t2
     ON (t2.user_id > t.user_id) WHERE t2.user_id is NULL) as second_query
-  ON ("first_query".user_id = "second_query".user_id)) as final_query 
-GROUP BY 
-  user_id ORDER BY cnt DESC, user_id DESC 
+  ON ("first_query".user_id = "second_query".user_id)) as final_query
+GROUP BY
+  user_id ORDER BY cnt DESC, user_id DESC
 LIMIT 10;
 
 RESET client_min_messages;
 
- -- 
+ --
  -- Union, inner join and left join
  --
 SELECT user_id, count(*) as cnt
 FROM
   (SELECT first_query.user_id, random()
    FROM
-     ( SELECT 
+     ( SELECT
         "t"."user_id", "t"."time", unnest("t"."collected_events") AS "event_types"
        FROM
-        ( SELECT 
+        ( SELECT
             "t1"."user_id", min("t1"."time") AS "time", array_agg(("t1"."event") ORDER BY TIME ASC, event DESC) AS collected_events
          FROM (
                  (SELECT *
                   FROM
-                    (SELECT 
+                    (SELECT
                         "events"."user_id", "events"."time", 0 AS event
-                     FROM 
+                     FROM
                         events_table as  "events"
-                     WHERE 
-                        event_type IN (1, 2) ) events_subquery_1) 
+                     WHERE
+                        event_type IN (1, 2) ) events_subquery_1)
                UNION
                  (SELECT *
                   FROM
-                    (SELECT 
+                    (SELECT
                         "events"."user_id", "events"."time", 1 AS event
-                     FROM 
+                     FROM
                         events_table as "events"
-                     WHERE 
+                     WHERE
                         event_type IN (3, 4) ) events_subquery_2)
                UNION
                  (SELECT *
                   FROM
-                    (SELECT 
+                    (SELECT
                         "events"."user_id", "events"."time", 2 AS event
-                     FROM 
+                     FROM
                         events_table as  "events"
-                     WHERE 
+                     WHERE
                         event_type IN (5, 6) ) events_subquery_3)
                UNION
                  (SELECT *
                   FROM
-                    (SELECT 
+                    (SELECT
                         "events"."user_id", "events"."time", 3 AS event
-                     FROM 
+                     FROM
                         events_table as "events"
-                     WHERE 
+                     WHERE
                         event_type IN (1, 6)) events_subquery_4)) t1
-         GROUP BY "t1"."user_id") AS t) "first_query" 
+         GROUP BY "t1"."user_id") AS t) "first_query"
 INNER JOIN
      (SELECT "t"."user_id"
       FROM
-        (SELECT 
+        (SELECT
             "users"."user_id"
-         FROM 
+         FROM
            users_table as "users"
-        WHERE 
+        WHERE
           value_1 > 0 and value_1 < 4) AS t
         LEFT OUTER JOIN
         (
-          SELECT 
+          SELECT
             DISTINCT "events"."user_id" as user_id
-          FROM 
+          FROM
             events_table as "events"
-          WHERE 
+          WHERE
             event_type IN (0, 6)
-          GROUP BY 
+          GROUP BY
             user_id
-         ) as t2 
+         ) as t2
     ON (t2.user_id = t.user_id) WHERE t2.user_id is NULL) as second_query
-  ON ("first_query".user_id = "second_query".user_id)) as final_query 
-GROUP BY 
-  user_id ORDER BY cnt DESC, user_id DESC 
+  ON ("first_query".user_id = "second_query".user_id)) as final_query
+GROUP BY
+  user_id ORDER BY cnt DESC, user_id DESC
 LIMIT 10;
 
 -- Simple LATERAL JOINs with GROUP BYs in each side
@@ -1061,33 +1061,33 @@ FROM
       FROM
         (SELECT user_id, time
          FROM
-           (SELECT 
+           (SELECT
               user_id, time
-            FROM 
+            FROM
               events_table as "events"
-            WHERE 
+            WHERE
               user_id > 1 and user_id < 4) "events_1"
-         ORDER BY 
+         ORDER BY
           time DESC
          LIMIT 1000) "recent_events_1"
-      GROUP BY 
+      GROUP BY
         user_id
-      ORDER BY 
+      ORDER BY
         max(time) DESC) "some_recent_users"
    JOIN LATERAL
-     (SELECT 
+     (SELECT
         "users".user_id
-      FROM 
+      FROM
         users_table as "users"
-      WHERE 
-        "users"."user_id" = "some_recent_users"."user_id" AND 
+      WHERE
+        "users"."user_id" = "some_recent_users"."user_id" AND
         users.value_2 > 1 and users.value_2 < 3
-      LIMIT 1) "some_users_data" 
+      LIMIT 1) "some_users_data"
     ON TRUE
-   ORDER BY 
+   ORDER BY
     lastseen DESC
    LIMIT 50) "some_users"
-order BY 
+order BY
   user_id
 LIMIT 50;
 
@@ -1098,30 +1098,30 @@ FROM
       FROM
         (SELECT user_id, time
          FROM
-           (SELECT 
+           (SELECT
               user_id, time
-            FROM 
+            FROM
               events_table as "events"
-            WHERE 
+            WHERE
               user_id > 1 and user_id < 4) "events_1"
          ORDER BY
            time DESC
          LIMIT 1000) "recent_events_1"
-      GROUP BY 
+      GROUP BY
         user_id
-      ORDER BY 
+      ORDER BY
         max(TIME) DESC) "some_recent_users"
    JOIN LATERAL
-     (SELECT 
+     (SELECT
         "users".user_id
-      FROM 
+      FROM
         users_table as "users"
-      WHERE 
-        "users"."user_id" = "some_recent_users"."user_id" AND 
+      WHERE
+        "users"."user_id" = "some_recent_users"."user_id" AND
         users.value_2 > 1 and users.value_2 < 3
-      LIMIT 1) "some_users_data" 
+      LIMIT 1) "some_users_data"
      ON TRUE
-ORDER BY 
+ORDER BY
   user_id
 limit 50;
 
@@ -1137,34 +1137,34 @@ FROM
       FROM
         (SELECT user_id, time
          FROM
-           (SELECT 
+           (SELECT
               user_id, time
-            FROM 
+            FROM
               events_table as "events"
-            WHERE 
+            WHERE
               user_id > 1 and user_id < 4) "events_1"
          ORDER BY
            time DESC
          LIMIT 1000) "recent_events_1"
-      GROUP BY 
+      GROUP BY
         user_id
-      ORDER BY 
+      ORDER BY
         max(TIME) DESC) "some_recent_users"
    JOIN LATERAL
-     (SELECT 
+     (SELECT
         "users".user_id
-      FROM 
+      FROM
         users_table as "users"
-      WHERE 
-        "users"."value_1" = "some_recent_users"."user_id" AND 
+      WHERE
+        "users"."value_1" = "some_recent_users"."user_id" AND
         users.value_2 > 1 and users.value_2 < 3
-      LIMIT 1) "some_users_data" 
+      LIMIT 1) "some_users_data"
      ON TRUE
-ORDER BY 
+ORDER BY
   user_id
 limit 50;
 
--- we recursively plan some queries but fail in the end 
+-- we recursively plan some queries but fail in the end
 -- since some_users_data since it has a reference
 -- from an outer query which is not recursively planned
 SELECT "some_users_data".user_id, lastseen
@@ -1173,30 +1173,30 @@ FROM
       FROM
         (SELECT user_id, time
          FROM
-           (SELECT 
+           (SELECT
               user_id, time
-            FROM 
+            FROM
               events_table as "events"
-            WHERE 
+            WHERE
               user_id > 1 and user_id < 4) "events_1"
          ORDER BY
            time DESC
          LIMIT 1000) "recent_events_1"
-      GROUP BY 
+      GROUP BY
         user_id
-      ORDER BY 
+      ORDER BY
         max(TIME) DESC) "some_recent_users"
    JOIN LATERAL
-     (SELECT 
+     (SELECT
         "users".user_id
-      FROM 
+      FROM
         users_table as "users"
-      WHERE 
-        "users"."user_id" = "some_recent_users"."user_id" AND 
+      WHERE
+        "users"."user_id" = "some_recent_users"."user_id" AND
         users.value_2 > 1 and users.value_2 < 3
-      LIMIT 1) "some_users_data" 
+      LIMIT 1) "some_users_data"
      ON TRUE
-ORDER BY 
+ORDER BY
   user_id
 limit 50;
 
@@ -1204,59 +1204,59 @@ limit 50;
 SET citus.subquery_pushdown to ON;
 SELECT user_id, lastseen
 FROM
-  (SELECT 
+  (SELECT
       "some_users_data".user_id, lastseen
    FROM
-     (SELECT 
+     (SELECT
         filter_users_1.user_id, time AS lastseen
       FROM
-        (SELECT 
+        (SELECT
             user_where_1_1.user_id
          FROM
-           (SELECT 
+           (SELECT
               "users"."user_id"
-            FROM 
+            FROM
               users_table as "users"
-            WHERE 
+            WHERE
               user_id > 1 and user_id < 3 and value_1 > 2) user_where_1_1
          INNER JOIN
-           (SELECT 
+           (SELECT
               "users"."user_id"
-            FROM 
+            FROM
               users_table as "users"
-            WHERE 
-              user_id > 1 and user_id < 3 and value_2 > 3) user_where_1_join_1 
-           ON ("user_where_1_1".user_id = "user_where_1_join_1".user_id)) 
-        filter_users_1 
+            WHERE
+              user_id > 1 and user_id < 3 and value_2 > 3) user_where_1_join_1
+           ON ("user_where_1_1".user_id = "user_where_1_join_1".user_id))
+        filter_users_1
       JOIN LATERAL
-        (SELECT 
+        (SELECT
             user_id, time
-         FROM 
+         FROM
           events_table as "events"
          WHERE
-           user_id > 1 and user_id < 3 AND 
+           user_id > 1 and user_id < 3 AND
            user_id = filter_users_1.user_id
-         ORDER BY 
+         ORDER BY
           time DESC
-         LIMIT 1) "last_events_1" 
+         LIMIT 1) "last_events_1"
         ON TRUE
-      ORDER BY 
+      ORDER BY
         time DESC
       LIMIT 10) "some_recent_users"
    JOIN LATERAL
-     (SELECT 
+     (SELECT
         "users".user_id
-      FROM 
+      FROM
         users_table  as "users"
-      WHERE 
-        "users"."user_id" = "some_recent_users"."user_id" AND 
+      WHERE
+        "users"."user_id" = "some_recent_users"."user_id" AND
         "users"."value_2" > 4
-      LIMIT 1) "some_users_data" 
+      LIMIT 1) "some_users_data"
     ON TRUE
-   ORDER BY 
+   ORDER BY
       lastseen DESC
    LIMIT 10) "some_users"
-ORDER BY 
+ORDER BY
   user_id DESC, lastseen DESC
 LIMIT 10;
 
@@ -1266,45 +1266,45 @@ LIMIT 10;
 --
 SELECT "some_users_data".user_id, MAX(lastseen), count(*)
    FROM
-     (SELECT 
+     (SELECT
         filter_users_1.user_id, time AS lastseen
       FROM
-        (SELECT 
+        (SELECT
             user_where_1_1.user_id
          FROM
-           (SELECT 
+           (SELECT
               "users"."user_id"
-            FROM 
+            FROM
               users_table as "users"
-            WHERE 
+            WHERE
               user_id > 1 and user_id < 3 and value_1 > 2) user_where_1_1
          INNER JOIN
-           (SELECT 
+           (SELECT
               "users"."user_id"
-            FROM 
+            FROM
               users_table as "users"
-            WHERE 
-              user_id > 1 and user_id < 3 and value_2 > 3) user_where_1_join_1 
-           ON ("user_where_1_1".user_id = "user_where_1_join_1".user_id)) filter_users_1 
+            WHERE
+              user_id > 1 and user_id < 3 and value_2 > 3) user_where_1_join_1
+           ON ("user_where_1_1".user_id = "user_where_1_join_1".user_id)) filter_users_1
       JOIN LATERAL
-        (SELECT 
+        (SELECT
             user_id, time
-         FROM 
+         FROM
           events_table as "events"
-         WHERE 
+         WHERE
           user_id > 1 and user_id < 3 and user_id = filter_users_1.user_id
-         ORDER BY 
+         ORDER BY
           time DESC
          LIMIT 1) "last_events_1" ON true
       ORDER BY time DESC
       LIMIT 10) "some_recent_users"
    JOIN LATERAL
-     (SELECT 
+     (SELECT
         "users".user_id
-      FROM 
+      FROM
         users_table  as "users"
-      WHERE 
-        "users"."user_id" = "some_recent_users"."user_id" AND 
+      WHERE
+        "users"."user_id" = "some_recent_users"."user_id" AND
         "users"."value_2" > 4
       LIMIT 1) "some_users_data" ON true
 GROUP BY 1
@@ -1317,54 +1317,54 @@ SET citus.subquery_pushdown to OFF;
 SET client_min_messages TO DEBUG2;
 SELECT user_id, lastseen
 FROM
-  (SELECT 
+  (SELECT
       "some_users_data".user_id, lastseen
    FROM
-     (SELECT 
+     (SELECT
         filter_users_1.user_id, time AS lastseen
       FROM
-        (SELECT 
+        (SELECT
             user_where_1_1.user_id
          FROM
-           (SELECT 
+           (SELECT
               "users"."user_id"
-            FROM 
+            FROM
               users_table as "users"
-            WHERE 
+            WHERE
               user_id > 1 and user_id < 4 and value_1 > 2) user_where_1_1
          INNER JOIN
-           (SELECT 
+           (SELECT
               "users"."user_id"
-            FROM 
+            FROM
               users_table as "users"
-            WHERE 
-              user_id > 1 and user_id < 4  and value_2 > 3) user_where_1_join_1 
-           ON ("user_where_1_1".user_id != "user_where_1_join_1".user_id)) filter_users_1 
+            WHERE
+              user_id > 1 and user_id < 4  and value_2 > 3) user_where_1_join_1
+           ON ("user_where_1_1".user_id != "user_where_1_join_1".user_id)) filter_users_1
       JOIN LATERAL
-        (SELECT 
+        (SELECT
             user_id, time
-         FROM 
+         FROM
           events_table as "events"
-         WHERE 
+         WHERE
           user_id > 1 and user_id < 4 and user_id = filter_users_1.user_id
-         ORDER BY 
+         ORDER BY
           time DESC
          LIMIT 1) "last_events_1" ON true
       ORDER BY time DESC
       LIMIT 10) "some_recent_users"
    JOIN LATERAL
-     (SELECT 
+     (SELECT
         "users".user_id
-      FROM 
+      FROM
         users_table  as "users"
-      WHERE 
-        "users"."user_id" = "some_recent_users"."user_id" AND 
+      WHERE
+        "users"."user_id" = "some_recent_users"."user_id" AND
         "users"."value_2" > 4
       LIMIT 1) "some_users_data" ON true
-   ORDER BY 
+   ORDER BY
     lastseen DESC
    LIMIT 10) "some_users"
-ORDER BY 
+ORDER BY
   user_id DESC, lastseen DESC
 LIMIT 10;
 
@@ -1375,54 +1375,54 @@ SET client_min_messages TO DEBUG1;
 -- recursively planner since the inner JOIN is not on the partition key
 SELECT user_id, lastseen
 FROM
-  (SELECT 
+  (SELECT
       "some_users_data".user_id, lastseen
    FROM
-     (SELECT 
+     (SELECT
         filter_users_1.user_id, time AS lastseen
       FROM
-        (SELECT 
+        (SELECT
             user_where_1_1.user_id
          FROM
-           (SELECT 
+           (SELECT
               "users"."user_id"
-            FROM 
+            FROM
               users_table as "users"
-            WHERE 
+            WHERE
               user_id > 1 and user_id < 4 and value_1 > 2) user_where_1_1
          INNER JOIN
-           (SELECT 
+           (SELECT
               "users"."user_id", "users"."value_1"
-            FROM 
+            FROM
               users_table as "users"
-            WHERE 
-              user_id > 1 and user_id < 4 and value_2 > 3) user_where_1_join_1 
-           ON ("user_where_1_1".user_id = "user_where_1_join_1".value_1)) filter_users_1 
+            WHERE
+              user_id > 1 and user_id < 4 and value_2 > 3) user_where_1_join_1
+           ON ("user_where_1_1".user_id = "user_where_1_join_1".value_1)) filter_users_1
       JOIN LATERAL
-        (SELECT 
+        (SELECT
             user_id, time
-         FROM 
+         FROM
           events_table as "events"
-         WHERE 
+         WHERE
           user_id > 1 and user_id < 4 and user_id = filter_users_1.user_id
-         ORDER BY 
+         ORDER BY
           time DESC
          LIMIT 1) "last_events_1" ON true
       ORDER BY time DESC
       LIMIT 10) "some_recent_users"
    JOIN LATERAL
-     (SELECT 
+     (SELECT
         "users".user_id
-      FROM 
+      FROM
         users_table  as "users"
-      WHERE 
-        "users"."user_id" = "some_recent_users"."user_id" AND 
+      WHERE
+        "users"."user_id" = "some_recent_users"."user_id" AND
         "users"."value_2" > 4
       LIMIT 1) "some_users_data" ON true
-   ORDER BY 
+   ORDER BY
     lastseen DESC
    LIMIT 10) "some_users"
-ORDER BY 
+ORDER BY
   user_id DESC, lastseen DESC
 LIMIT 10;
 
@@ -1433,54 +1433,54 @@ RESET client_min_messages;
 -- not supported since upper LATERAL JOIN is not equi join
 SELECT user_id, lastseen
 FROM
-  (SELECT 
+  (SELECT
       "some_users_data".user_id, lastseen
    FROM
-     (SELECT 
+     (SELECT
         filter_users_1.user_id, time AS lastseen
       FROM
-        (SELECT 
+        (SELECT
             user_where_1_1.user_id
          FROM
-           (SELECT 
+           (SELECT
               "users"."user_id"
-            FROM 
+            FROM
               users_table as "users"
-            WHERE 
+            WHERE
               user_id > 1 and user_id < 3 and value_1 > 2) user_where_1_1
          INNER JOIN
-           (SELECT 
+           (SELECT
               "users"."user_id", "users"."value_1"
-            FROM 
+            FROM
               users_table as "users"
-            WHERE 
-              user_id > 1 and user_id < 3 and value_2 > 3) user_where_1_join_1 
-           ON ("user_where_1_1".user_id = "user_where_1_join_1".user_id)) filter_users_1 
+            WHERE
+              user_id > 1 and user_id < 3 and value_2 > 3) user_where_1_join_1
+           ON ("user_where_1_1".user_id = "user_where_1_join_1".user_id)) filter_users_1
       JOIN LATERAL
-        (SELECT 
+        (SELECT
             user_id, time
-         FROM 
+         FROM
           events_table as "events"
-         WHERE 
+         WHERE
           user_id > 1 and user_id < 3 and user_id != filter_users_1.user_id
-         ORDER BY 
+         ORDER BY
           time DESC
          LIMIT 1) "last_events_1" ON true
       ORDER BY time DESC
       LIMIT 10) "some_recent_users"
    JOIN LATERAL
-     (SELECT 
+     (SELECT
         "users".user_id
-      FROM 
+      FROM
         users_table  as "users"
-      WHERE 
-        "users"."user_id" = "some_recent_users"."user_id" AND 
+      WHERE
+        "users"."user_id" = "some_recent_users"."user_id" AND
         "users"."value_2" > 4
       LIMIT 1) "some_users_data" ON true
-   ORDER BY 
+   ORDER BY
     lastseen DESC
    LIMIT 10) "some_users"
-ORDER BY 
+ORDER BY
   user_id DESC, lastseen DESC
 LIMIT 10;
 
@@ -1489,98 +1489,98 @@ LIMIT 10;
 -- from an outer query
 SELECT user_id, lastseen
 FROM
-  (SELECT 
+  (SELECT
       "some_users_data".user_id, lastseen
    FROM
-     (SELECT 
+     (SELECT
         filter_users_1.user_id, time AS lastseen
       FROM
-        (SELECT 
+        (SELECT
             user_where_1_1.user_id
          FROM
-           (SELECT 
+           (SELECT
               "users"."user_id"
-            FROM 
+            FROM
               users_table as "users"
-            WHERE 
+            WHERE
               user_id > 1 and user_id < 3 and value_1 > 2) user_where_1_1
          INNER JOIN
-           (SELECT 
+           (SELECT
               "users"."user_id", "users"."value_1"
-            FROM 
+            FROM
               users_table as "users"
-            WHERE 
-              user_id > 1 and user_id < 3 and value_2 > 3) user_where_1_join_1 
-           ON ("user_where_1_1".user_id = "user_where_1_join_1".user_id)) filter_users_1 
+            WHERE
+              user_id > 1 and user_id < 3 and value_2 > 3) user_where_1_join_1
+           ON ("user_where_1_1".user_id = "user_where_1_join_1".user_id)) filter_users_1
       JOIN LATERAL
-        (SELECT 
+        (SELECT
             user_id, time
-         FROM 
+         FROM
           events_table as "events"
-         WHERE 
+         WHERE
           user_id > 1 and user_id < 3 and user_id = filter_users_1.user_id
-         ORDER BY 
+         ORDER BY
           time DESC
          LIMIT 1) "last_events_1" ON true
       ORDER BY time DESC
       LIMIT 10) "some_recent_users"
    JOIN LATERAL
-     (SELECT 
+     (SELECT
         "users".user_id
-      FROM 
+      FROM
         users_table  as "users"
-      WHERE 
-        "users"."value_1" = "some_recent_users"."user_id" AND 
+      WHERE
+        "users"."value_1" = "some_recent_users"."user_id" AND
         "users"."value_2" > 4
       LIMIT 1) "some_users_data" ON true
-   ORDER BY 
+   ORDER BY
     lastseen DESC
    LIMIT 10) "some_users"
-ORDER BY 
+ORDER BY
   user_id DESC, lastseen DESC
 LIMIT 10;
 
 -- NESTED INNER JOINs
-SELECT 
- count(*) AS value, "generated_group_field" 
+SELECT
+ count(*) AS value, "generated_group_field"
  FROM
-  (SELECT 
+  (SELECT
       DISTINCT "pushedDownQuery"."real_user_id", "generated_group_field"
     FROM
-     (SELECT 
+     (SELECT
         "eventQuery"."real_user_id", "eventQuery"."time", random(), ("eventQuery"."value_2") AS "generated_group_field"
       FROM
-        (SELECT 
+        (SELECT
             *
          FROM
-           (SELECT 
+           (SELECT
               "events"."time", "events"."user_id", "events"."value_2"
-            FROM 
+            FROM
               events_table as "events"
-            WHERE 
+            WHERE
               user_id > 1 and user_id < 4 AND event_type IN (4, 5) ) "temp_data_queries"
             INNER  JOIN
-           (SELECT 
+           (SELECT
               user_where_1_1.real_user_id
             FROM
-              (SELECT 
+              (SELECT
                   "users"."user_id" as real_user_id
-               FROM  
+               FROM
                 users_table as "users"
                WHERE
                  user_id > 1 and user_id < 4 and value_2 > 3 ) user_where_1_1
             INNER JOIN
-              (SELECT 
+              (SELECT
                   "users"."user_id"
-               FROM 
+               FROM
                 users_table as "users"
-               WHERE 
-                user_id > 1 and user_id < 4 and value_3 > 3 ) user_where_1_join_1 
+               WHERE
+                user_id > 1 and user_id < 4 and value_3 > 3 ) user_where_1_join_1
            ON ("user_where_1_1".real_user_id = "user_where_1_join_1".user_id)) "user_filters_1"
       ON ("temp_data_queries".user_id = "user_filters_1".real_user_id)) "eventQuery") "pushedDownQuery") "pushedDownQuery"
-GROUP BY 
-  "generated_group_field" 
-ORDER BY 
+GROUP BY
+  "generated_group_field"
+ORDER BY
   generated_group_field DESC, value DESC;
 
 
@@ -1588,130 +1588,130 @@ SET citus.enable_repartition_joins to ON;
 SET client_min_messages TO DEBUG1;
 
 -- recursively planned since the first inner join is not on the partition key
-SELECT 
- count(*) AS value, "generated_group_field" 
+SELECT
+ count(*) AS value, "generated_group_field"
  FROM
-  (SELECT 
+  (SELECT
       DISTINCT "pushedDownQuery"."real_user_id", "generated_group_field"
     FROM
-     (SELECT 
+     (SELECT
         "eventQuery"."real_user_id", "eventQuery"."time", random(), ("eventQuery"."value_2") AS "generated_group_field"
       FROM
-        (SELECT 
+        (SELECT
             *
          FROM
-           (SELECT 
+           (SELECT
               "events"."time", "events"."user_id", "events"."value_2"
-            FROM 
+            FROM
               events_table as "events"
-            WHERE 
+            WHERE
               user_id > 1 and user_id < 4 AND event_type IN (4, 5) ) "temp_data_queries"
             INNER  JOIN
-           (SELECT 
+           (SELECT
               user_where_1_1.real_user_id
             FROM
-              (SELECT 
+              (SELECT
                   "users"."user_id" as real_user_id
-               FROM  
+               FROM
                 users_table as "users"
                WHERE
                  user_id > 1 and user_id < 4 and value_2 > 3 ) user_where_1_1
             INNER JOIN
-              (SELECT 
+              (SELECT
                   "users"."user_id", "users"."value_2"
-               FROM 
+               FROM
                 users_table as "users"
-               WHERE 
-                user_id > 1 and user_id < 4 and value_3 > 3 ) user_where_1_join_1 
+               WHERE
+                user_id > 1 and user_id < 4 and value_3 > 3 ) user_where_1_join_1
            ON ("user_where_1_1".real_user_id = "user_where_1_join_1".value_2)) "user_filters_1"
       ON ("temp_data_queries".user_id = "user_filters_1".real_user_id)) "eventQuery") "pushedDownQuery") "pushedDownQuery"
-GROUP BY 
-  "generated_group_field" 
-ORDER BY 
+GROUP BY
+  "generated_group_field"
+ORDER BY
   generated_group_field DESC, value DESC;
 
 -- recursive planning kicked-in since the non-equi join is among subqueries
-SELECT 
- count(*) AS value, "generated_group_field" 
+SELECT
+ count(*) AS value, "generated_group_field"
  FROM
-  (SELECT 
+  (SELECT
       DISTINCT "pushedDownQuery"."real_user_id", "generated_group_field"
     FROM
-     (SELECT 
+     (SELECT
         "eventQuery"."real_user_id", "eventQuery"."time", random(), ("eventQuery"."value_2") AS "generated_group_field"
       FROM
-        (SELECT 
+        (SELECT
             *
          FROM
-           (SELECT 
+           (SELECT
               "events"."time", "events"."user_id", "events"."value_2"
-            FROM 
+            FROM
               events_table as "events"
-            WHERE 
+            WHERE
               user_id > 1 and user_id < 4 AND event_type IN (4, 5) ) "temp_data_queries"
             INNER  JOIN
-           (SELECT 
+           (SELECT
               user_where_1_1.real_user_id
             FROM
-              (SELECT 
+              (SELECT
                   "users"."user_id" as real_user_id
-               FROM  
+               FROM
                 users_table as "users"
                WHERE
                  user_id > 1 and user_id < 4 and value_2 > 3 ) user_where_1_1
             INNER JOIN
-              (SELECT 
+              (SELECT
                   "users"."user_id", "users"."value_2"
-               FROM 
+               FROM
                 users_table as "users"
-               WHERE 
-                user_id > 1 and user_id < 4 and value_3 > 3 ) user_where_1_join_1 
+               WHERE
+                user_id > 1 and user_id < 4 and value_3 > 3 ) user_where_1_join_1
            ON ("user_where_1_1".real_user_id >= "user_where_1_join_1".user_id)) "user_filters_1"
       ON ("temp_data_queries".user_id = "user_filters_1".real_user_id)) "eventQuery") "pushedDownQuery") "pushedDownQuery"
-GROUP BY 
-  "generated_group_field" 
-ORDER BY 
+GROUP BY
+  "generated_group_field"
+ORDER BY
   generated_group_field DESC, value DESC;
 
- 
+
 SET citus.enable_repartition_joins to OFF;
 RESET client_min_messages;
 
 -- single level inner joins
-SELECT 
-  "value_3", count(*) AS cnt 
+SELECT
+  "value_3", count(*) AS cnt
 FROM
-	(SELECT 
+	(SELECT
       "value_3", "user_id",  random()
   	 FROM
-    	(SELECT 
-          users_in_segment_1.user_id, value_3 
+    	(SELECT
+          users_in_segment_1.user_id, value_3
          FROM
-      		(SELECT 
+      		(SELECT
               user_id, value_3 * 2 as value_3
         	 FROM
-         		(SELECT 
-                user_id, value_3 
+         		(SELECT
+                user_id, value_3
           		 FROM
-           			(SELECT 
+           			(SELECT
                     "users"."user_id", value_3
-                 FROM 
+                 FROM
                   users_table as "users"
-                 WHERE 
+                 WHERE
                   user_id > 1 and user_id < 4 and value_2 > 2
                 ) simple_user_where_1
             ) all_buckets_1
         ) users_in_segment_1
         JOIN
-        (SELECT 
+        (SELECT
             "users"."user_id"
-         FROM 
+         FROM
           users_table as "users"
-         WHERE 
+         WHERE
           user_id > 1 and user_id < 4 and value_2 > 3
         ) some_users_data
         ON ("users_in_segment_1".user_id = "some_users_data".user_id)
-    ) segmentalias_1) "tempQuery" 
+    ) segmentalias_1) "tempQuery"
 GROUP BY "value_3"
 ORDER BY cnt, value_3 DESC LIMIT 10;
 
@@ -1723,40 +1723,40 @@ SET client_min_messages TO DEBUG1;
 -- although there is no column equality at all
 -- still recursive planning plans "some_users_data"
 -- and the query becomes OK
-SELECT 
-  "value_3", count(*) AS cnt 
+SELECT
+  "value_3", count(*) AS cnt
 FROM
-  (SELECT 
+  (SELECT
       "value_3", "user_id",  random()
      FROM
-      (SELECT 
-          users_in_segment_1.user_id, value_3 
+      (SELECT
+          users_in_segment_1.user_id, value_3
          FROM
-          (SELECT 
+          (SELECT
               user_id, value_3 * 2 as value_3
            FROM
-            (SELECT 
-                user_id, value_3 
+            (SELECT
+                user_id, value_3
                FROM
-                (SELECT 
+                (SELECT
                     "users"."user_id", value_3
-                 FROM 
+                 FROM
                   users_table as "users"
-                 WHERE 
+                 WHERE
                   user_id > 1 and user_id < 4 and value_2 > 2
                 ) simple_user_where_1
             ) all_buckets_1
         ) users_in_segment_1
         JOIN
-        (SELECT 
+        (SELECT
             "users"."user_id"
-         FROM 
+         FROM
           users_table as "users"
-         WHERE 
+         WHERE
           user_id > 1 and user_id < 4 and value_2 > 3
         ) some_users_data
         ON (true)
-    ) segmentalias_1) "tempQuery" 
+    ) segmentalias_1) "tempQuery"
 GROUP BY "value_3"
 ORDER BY cnt, value_3 DESC LIMIT 10;
 
@@ -1769,66 +1769,66 @@ SELECT *
 FROM
   (SELECT "some_users_data".user_id, "some_recent_users".value_3
    FROM
-     (SELECT 
+     (SELECT
         filter_users_1.user_id, value_3
       FROM
-        (SELECT 
+        (SELECT
             "users"."user_id"
-         FROM 
+         FROM
           users_table as "users"
-         WHERE 
+         WHERE
           user_id > 1 and user_id < 4 and users.value_2 = 2) filter_users_1
       JOIN LATERAL
-        (SELECT 
+        (SELECT
             user_id, value_3
-         FROM 
+         FROM
           events_table as "events"
          WHERE
-           user_id > 1 and user_id < 4 AND 
+           user_id > 1 and user_id < 4 AND
            ("events".user_id = "filter_users_1".user_id)
-         ORDER BY 
+         ORDER BY
            value_3 DESC
          LIMIT 1) "last_events_1" ON true
       ORDER BY value_3 DESC
       LIMIT 10) "some_recent_users"
    JOIN LATERAL
-     (SELECT 
+     (SELECT
         "users".user_id
-      FROM 
+      FROM
         users_table as "users"
-      WHERE 
-        "users"."user_id" = "some_recent_users"."user_id" AND 
+      WHERE
+        "users"."user_id" = "some_recent_users"."user_id" AND
         users.value_2 > 2
       LIMIT 1) "some_users_data" ON true
-   ORDER BY 
+   ORDER BY
     value_3 DESC
 LIMIT 10) "some_users"
-ORDER BY 
+ORDER BY
   value_3 DESC, user_id ASC
 LIMIT 10;
 
 -- nested lateral join at top most level
 SELECT "some_users_data".user_id, "some_recent_users".value_3
 FROM
-	(SELECT 
+	(SELECT
       filter_users_1.user_id, value_3
      FROM
-     	(SELECT 
+     	(SELECT
           "users"."user_id"
-       FROM 
+       FROM
         users_table as "users"
-       WHERE 
+       WHERE
         user_id > 1 and user_id < 4 and users.value_2 = 2
         ) filter_users_1
         JOIN LATERAL
-        (SELECT 
+        (SELECT
             user_id, value_3
-         FROM 
+         FROM
           events_table as "events"
-         WHERE 
-          user_id > 1 and user_id < 4 AND 
+         WHERE
+          user_id > 1 and user_id < 4 AND
           ("events".user_id = "filter_users_1".user_id)
-         ORDER BY 
+         ORDER BY
           value_3 DESC
          LIMIT 1
         ) "last_events_1" ON true
@@ -1836,16 +1836,16 @@ FROM
      LIMIT 10
    ) "some_recent_users"
    JOIN LATERAL
-   (SELECT 
+   (SELECT
       "users".user_id
-    FROM 
+    FROM
       users_table as "users"
-    WHERE 
-      "users"."user_id" = "some_recent_users"."user_id" AND 
+    WHERE
+      "users"."user_id" = "some_recent_users"."user_id" AND
       users.value_2 > 2
     LIMIT 1
    ) "some_users_data" ON true
-ORDER BY 
+ORDER BY
   value_3 DESC, user_id ASC
 LIMIT 10;
 
@@ -1856,40 +1856,40 @@ FROM
    FROM
      (SELECT filter_users_1.user_id, value_3
       FROM
-        (SELECT 
+        (SELECT
             "users"."user_id"
-         FROM 
+         FROM
           users_table as "users"
-         WHERE 
+         WHERE
           user_id > 1 and user_id < 4 and users.value_2 = 2) filter_users_1
       JOIN LATERAL
-        (SELECT 
+        (SELECT
             user_id, value_3
-         FROM 
+         FROM
           events_table as "events"
-         WHERE 
-          user_id > 1 and user_id < 4 AND 
+         WHERE
+          user_id > 1 and user_id < 4 AND
           ("events".user_id = "filter_users_1".user_id)
-         ORDER BY 
+         ORDER BY
           value_3 DESC
          LIMIT 1) "last_events_1" ON true
-      ORDER BY 
+      ORDER BY
         value_3 DESC
       LIMIT 10) "some_recent_users"
    JOIN LATERAL
-     (SELECT 
+     (SELECT
         "users".user_id
-      FROM 
+      FROM
         users_table as "users"
-      WHERE 
-        "users"."user_id" = "some_recent_users"."user_id" AND 
+      WHERE
+        "users"."user_id" = "some_recent_users"."user_id" AND
         users.value_2 > 2
       LIMIT 1) "some_users_data" ON true
-   ORDER BY 
+   ORDER BY
     value_3 DESC
    LIMIT 10) "some_users"
 ORDER BY
-  value_3 DESC, user_id DESC 
+  value_3 DESC, user_id DESC
 LIMIT 10;
 
 -- longer nested lateral join wth top level join
@@ -1897,23 +1897,23 @@ SELECT "some_users_data".user_id, "some_recent_users".value_3
 FROM
 	(SELECT filter_users_1.user_id, value_3
      FROM
-     	(SELECT 
+     	(SELECT
           "users"."user_id"
-       FROM 
+       FROM
         users_table as "users"
-       WHERE 
+       WHERE
         user_id > 1 and user_id < 4 and users.value_2 = 2
         ) filter_users_1
         JOIN LATERAL
-        (SELECT 
+        (SELECT
             user_id, value_3
-         FROM 
+         FROM
           events_table as "events"
-         WHERE 
+         WHERE
           user_id > 1 and user_id < 4
-         AND 
+         AND
           ("events".user_id = "filter_users_1".user_id)
-         ORDER BY 
+         ORDER BY
           value_3 DESC
          LIMIT 1
         ) "last_events_1" ON TRUE
@@ -1921,12 +1921,12 @@ FROM
      LIMIT 10
     ) "some_recent_users"
     JOIN LATERAL
-    (SELECT 
+    (SELECT
         "users".user_id
-     FROM 
+     FROM
       users_table as "users"
-     WHERE 
-      "users"."user_id" = "some_recent_users"."user_id" AND 
+     WHERE
+      "users"."user_id" = "some_recent_users"."user_id" AND
       users.value_2 > 2
      LIMIT 1
     ) "some_users_data" ON TRUE
@@ -1939,37 +1939,37 @@ SET citus.subquery_pushdown to OFF;
 SELECT
 count(*) AS cnt, "generated_group_field"
  FROM
-  (SELECT 
+  (SELECT
       "eventQuery"."user_id", random(), generated_group_field
    FROM
-     (SELECT 
+     (SELECT
         "multi_group_wrapper_1".*, generated_group_field, random()
       FROM
         (SELECT *
          FROM
-           (SELECT 
+           (SELECT
               "events"."time", "events"."user_id" as event_user_id
-            FROM 
+            FROM
               events_table as "events"
-            WHERE 
+            WHERE
               user_id > 4) "temp_data_queries"
            INNER JOIN
-           (SELECT 
+           (SELECT
               "users"."user_id"
-            FROM 
+            FROM
               users_table as "users"
-            WHERE 
-              user_id > 4 and value_2 = 5) "user_filters_1" 
+            WHERE
+              user_id > 4 and value_2 = 5) "user_filters_1"
            ON ("temp_data_queries".event_user_id = "user_filters_1".user_id)) AS "multi_group_wrapper_1"
         LEFT JOIN
-        (SELECT 
+        (SELECT
             "users"."user_id" AS "user_id", value_2 AS "generated_group_field"
-         FROM 
+         FROM
           users_table as "users") "left_group_by_1"
-        ON ("left_group_by_1".user_id = "multi_group_wrapper_1".event_user_id)) "eventQuery") "pushedDownQuery" 
+        ON ("left_group_by_1".user_id = "multi_group_wrapper_1".event_user_id)) "eventQuery") "pushedDownQuery"
   group BY
     "generated_group_field"
-  ORDER BY 
+  ORDER BY
     cnt DESC, generated_group_field ASC
   LIMIT 10;
 
@@ -1977,18 +1977,18 @@ count(*) AS cnt, "generated_group_field"
 SELECT
 count(*) AS cnt, user_id
 FROM
-  (SELECT 
+  (SELECT
       "eventQuery"."user_id", random()
    FROM
-     (SELECT 
+     (SELECT
         "events"."user_id"
-      FROM 
+      FROM
         events_table "events"
-      WHERE 
+      WHERE
         event_type IN (1, 2)) "eventQuery") "pushedDownQuery"
 GROUP BY
   "user_id"
-ORDER BY 
+ORDER BY
   cnt DESC, user_id DESC
 LIMIT 10;
 
@@ -1996,39 +1996,39 @@ LIMIT 10;
 SET citus.subquery_pushdown to ON;
 SELECT *
 FROM
-  (SELECT 
+  (SELECT
       "some_users_data".user_id, value_2
    FROM
      (SELECT user_id, max(value_2) AS value_2
       FROM
         (SELECT user_id, value_2
          FROM
-           (SELECT 
+           (SELECT
               user_id, value_2
-            FROM 
+            FROM
               events_table as "events"
-            WHERE 
+            WHERE
               user_id > 1 and user_id < 3) "events_1"
-         ORDER BY 
+         ORDER BY
           value_2 DESC
          LIMIT 10000) "recent_events_1"
-      GROUP BY 
+      GROUP BY
         user_id
-      ORDER BY 
+      ORDER BY
         max(value_2) DESC) "some_recent_users"
    JOIN LATERAL
-     (SELECT 
+     (SELECT
         "users".user_id
-      FROM 
+      FROM
         users_table as "users"
-      WHERE 
-        "users"."user_id" = "some_recent_users"."user_id" AND 
+      WHERE
+        "users"."user_id" = "some_recent_users"."user_id" AND
         value_2 > 4
       LIMIT 1) "some_users_data" ON true
-   ORDER BY 
+   ORDER BY
     value_2 DESC
    LIMIT 10) "some_users"
-ORDER BY 
+ORDER BY
     value_2 DESC, user_id DESC
 LIMIT 10;
 SET citus.subquery_pushdown to OFF;
@@ -2038,39 +2038,39 @@ SET citus.subquery_pushdown to OFF;
 -- from an outer query
 SELECT *
 FROM
-  (SELECT 
+  (SELECT
       "some_users_data".user_id, value_2
    FROM
      (SELECT user_id, max(value_2) AS value_2
       FROM
         (SELECT user_id, value_2
          FROM
-           (SELECT 
+           (SELECT
               user_id, value_2
-            FROM 
+            FROM
               events_table as "events"
-            WHERE 
+            WHERE
               user_id > 1 and user_id < 3) "events_1"
-         ORDER BY 
+         ORDER BY
           value_2 DESC
          LIMIT 10000) "recent_events_1"
-      GROUP BY 
+      GROUP BY
         user_id
-      ORDER BY 
+      ORDER BY
         max(value_2) DESC) "some_recent_users"
    JOIN LATERAL
-     (SELECT 
+     (SELECT
         "users".user_id
-      FROM 
+      FROM
         users_table as "users"
-      WHERE 
-        "users"."value_2" = "some_recent_users"."user_id" AND 
+      WHERE
+        "users"."value_2" = "some_recent_users"."user_id" AND
         value_2 > 4
       LIMIT 1) "some_users_data" ON true
-   ORDER BY 
+   ORDER BY
     value_2 DESC
    LIMIT 10) "some_users"
-ORDER BY 
+ORDER BY
     value_2 DESC, user_id DESC
 LIMIT 10;
 
@@ -2085,57 +2085,57 @@ FROM
       FROM
         ( SELECT "t1"."user_id", min("t1"."time") AS "time", array_agg(("t1"."event") ORDER BY TIME ASC, event DESC) AS collected_events
          FROM (
-                 (SELECT 
+                 (SELECT
                     *
                   FROM
-                   (SELECT 
+                   (SELECT
                       "events"."user_id", "events"."time", 0 AS event
-                    FROM 
+                    FROM
                       events_table as  "events"
-                    WHERE 
-                      event_type IN (1, 2) ) events_subquery_1) 
-                 UNION 
-                 (SELECT 
+                    WHERE
+                      event_type IN (1, 2) ) events_subquery_1)
+                 UNION
+                 (SELECT
                     *
                   FROM
-                    (SELECT 
+                    (SELECT
                         "events"."user_id", "events"."time", 1 AS event
-                     FROM 
+                     FROM
                         events_table as "events"
-                     WHERE 
+                     WHERE
                       event_type IN (3, 4) ) events_subquery_2)
-               UNION 
-                 (SELECT 
+               UNION
+                 (SELECT
                     *
                   FROM
-                    (SELECT 
+                    (SELECT
                         "events"."user_id", "events"."time", 2 AS event
-                     FROM 
+                     FROM
                         events_table as  "events"
-                     WHERE 
+                     WHERE
                       event_type IN (5, 6) ) events_subquery_3)
-                INTERSECT 
-                  (SELECT 
+                INTERSECT
+                  (SELECT
                       *
                    FROM
-                    (SELECT 
+                    (SELECT
                         "events"."user_id", "events"."time", 3 AS event
-                     FROM 
+                     FROM
                       events_table as "events"
-                     WHERE 
+                     WHERE
                       event_type IN (4, 5)) events_subquery_4)) t1
-         GROUP BY "t1"."user_id") AS t) "q" 
+         GROUP BY "t1"."user_id") AS t) "q"
 INNER JOIN
-     (SELECT 
+     (SELECT
         "users"."user_id"
-      FROM 
+      FROM
         users_table as "users"
-      WHERE 
-        value_1 > 0 and value_1 < 4) AS t 
+      WHERE
+        value_1 > 0 and value_1 < 4) AS t
     ON (t.user_id = q.user_id)) as final_query
-GROUP BY 
+GROUP BY
   types
-ORDER BY 
+ORDER BY
   types;
 
 -- supported through recursive planning
@@ -2147,57 +2147,57 @@ FROM
       FROM
         ( SELECT "t1"."user_id", min("t1"."time") AS "time", array_agg(("t1"."event") ORDER BY TIME ASC, event DESC) AS collected_events
          FROM (
-                 (SELECT 
+                 (SELECT
                     *
                   FROM
-                   (SELECT 
+                   (SELECT
                       "events"."user_id", "events"."time", 0 AS event
-                    FROM 
+                    FROM
                       events_table as  "events"
-                    WHERE 
-                      event_type IN (1, 2) ) events_subquery_1) 
-                 UNION 
-                 (SELECT 
+                    WHERE
+                      event_type IN (1, 2) ) events_subquery_1)
+                 UNION
+                 (SELECT
                     *
                   FROM
-                    (SELECT 
+                    (SELECT
                         "events"."user_id", "events"."time", 1 AS event
-                     FROM 
+                     FROM
                         events_table as "events"
-                     WHERE 
+                     WHERE
                       event_type IN (3, 4) ) events_subquery_2)
-               UNION 
-                 (SELECT 
+               UNION
+                 (SELECT
                     *
                   FROM
-                    (SELECT 
+                    (SELECT
                         "events"."user_id", "events"."time", 2 AS event
-                     FROM 
+                     FROM
                         events_table as  "events"
-                     WHERE 
+                     WHERE
                       event_type IN (5, 6) ) events_subquery_3)
-                UNION 
-                  (SELECT 
+                UNION
+                  (SELECT
                       *
                    FROM
-                    (SELECT 
+                    (SELECT
                         "events"."user_id", "events"."time", 3 AS event
-                     FROM 
+                     FROM
                       events_table as "events"
-                     WHERE 
+                     WHERE
                       event_type IN (4, 5)) events_subquery_4) ORDER BY 1, 2 OFFSET 3) t1
-         GROUP BY "t1"."user_id") AS t) "q" 
+         GROUP BY "t1"."user_id") AS t) "q"
 INNER JOIN
-     (SELECT 
+     (SELECT
         "users"."user_id"
-      FROM 
+      FROM
         users_table as "users"
-      WHERE 
-        value_1 > 0 and value_1 < 4) AS t 
+      WHERE
+        value_1 > 0 and value_1 < 4) AS t
     ON (t.user_id = q.user_id)) as final_query
-GROUP BY 
+GROUP BY
   types
-ORDER BY 
+ORDER BY
   types;
 
 -- not supported due to non relation rte
@@ -2209,54 +2209,54 @@ FROM
       FROM
         ( SELECT "t1"."user_id", min("t1"."time") AS "time", array_agg(("t1"."event") ORDER BY TIME ASC, event DESC) AS collected_events
          FROM (
-                 (SELECT 
+                 (SELECT
                     *
                   FROM
-                   (SELECT 
+                   (SELECT
                       "events"."user_id", "events"."time", 0 AS event
-                    FROM 
+                    FROM
                       events_table as  "events"
-                    WHERE 
-                      event_type IN (1, 2) ) events_subquery_1) 
-                 UNION 
-                 (SELECT 
+                    WHERE
+                      event_type IN (1, 2) ) events_subquery_1)
+                 UNION
+                 (SELECT
                     *
                   FROM
-                    (SELECT 
+                    (SELECT
                         "events"."user_id", "events"."time", 1 AS event
-                     FROM 
+                     FROM
                         events_table as "events"
-                     WHERE 
+                     WHERE
                       event_type IN (3, 4) ) events_subquery_2)
-               UNION 
-                 (SELECT 
+               UNION
+                 (SELECT
                     *
                   FROM
-                    (SELECT 
+                    (SELECT
                         "events"."user_id", "events"."time", 2 AS event
-                     FROM 
+                     FROM
                         events_table as  "events"
-                     WHERE 
+                     WHERE
                       event_type IN (5, 6) ) events_subquery_3)
-                UNION 
-                  (SELECT 
+                UNION
+                  (SELECT
                       *
                    FROM
-                    (SELECT 
+                    (SELECT
                         1 as user_id, now(), 3 AS event
                     ) events_subquery_4)) t1
-         GROUP BY "t1"."user_id") AS t) "q" 
+         GROUP BY "t1"."user_id") AS t) "q"
 INNER JOIN
-     (SELECT 
+     (SELECT
         "users"."user_id"
-      FROM 
+      FROM
         users_table as "users"
-      WHERE 
-        value_1 > 0 and value_1 < 4) AS t 
+      WHERE
+        value_1 > 0 and value_1 < 4) AS t
     ON (t.user_id = q.user_id)) as final_query
-GROUP BY 
+GROUP BY
   types
-ORDER BY 
+ORDER BY
   types;
 
 -- similar to the above, but constant rte is on the right side of the query
@@ -2268,52 +2268,52 @@ FROM
       FROM
         ( SELECT "t1"."user_id", min("t1"."time") AS "time", array_agg(("t1"."event") ORDER BY TIME ASC, event DESC) AS collected_events
          FROM (
-                 (SELECT 
+                 (SELECT
                     *
                   FROM
-                   (SELECT 
+                   (SELECT
                       "events"."user_id", "events"."time", 0 AS event
-                    FROM 
+                    FROM
                       events_table as  "events"
-                    WHERE 
-                      event_type IN (1, 2) ) events_subquery_1) 
-                 UNION 
-                 (SELECT 
+                    WHERE
+                      event_type IN (1, 2) ) events_subquery_1)
+                 UNION
+                 (SELECT
                     *
                   FROM
-                    (SELECT 
+                    (SELECT
                         "events"."user_id", "events"."time", 1 AS event
-                     FROM 
+                     FROM
                         events_table as "events"
-                     WHERE 
+                     WHERE
                       event_type IN (3, 4) ) events_subquery_2)
-               UNION 
-                 (SELECT 
+               UNION
+                 (SELECT
                     *
                   FROM
-                    (SELECT 
+                    (SELECT
                         "events"."user_id", "events"."time", 2 AS event
-                     FROM 
+                     FROM
                         events_table as  "events"
-                     WHERE 
+                     WHERE
                       event_type IN (5, 6) ) events_subquery_3)
-                UNION 
-                  (SELECT 
+                UNION
+                  (SELECT
                       *
                    FROM
-                    (SELECT 
+                    (SELECT
                         1 as user_id, now(), 3 AS event
                     ) events_subquery_4)) t1
-         GROUP BY "t1"."user_id") AS t) "q" 
+         GROUP BY "t1"."user_id") AS t) "q"
 INNER JOIN
-     (SELECT 1 as user_id) AS t 
+     (SELECT 1 as user_id) AS t
     ON (t.user_id = q.user_id)) as final_query
-GROUP BY 
+GROUP BY
   types
-ORDER BY 
+ORDER BY
   types;
 
--- we've fixed a bug related to joins w/wout alias 
+-- we've fixed a bug related to joins w/wout alias
 -- while implementing top window functions
 -- thus adding some tests related to that (i.e., next 3 tests)
 WITH users_events AS
@@ -2327,7 +2327,7 @@ SELECT
   uid,
   event_type,
   value_2,
-  value_3 
+  value_3
 FROM (
   (SELECT
     user_id as uid
@@ -2347,25 +2347,25 @@ LIMIT 5;
 -- the only difference is the final GROUP BY
 SELECT a.user_id, avg(b.value_2) as subquery_avg
 FROM
-  (SELECT 
+  (SELECT
       user_id
-   FROM 
+   FROM
       users_table
-   WHERE 
+   WHERE
       (value_1 > 2)
-   GROUP BY 
+   GROUP BY
       user_id
-   HAVING 
+   HAVING
       count(distinct value_1) > 2
   ) as a
   LEFT JOIN
-  (SELECT 
+  (SELECT
       DISTINCT ON (value_2) value_2 , user_id, value_3
-   FROM 
+   FROM
       users_table
-   WHERE 
+   WHERE
       (value_1 > 3)
-   ORDER BY 
+   ORDER BY
       1,2,3
   ) AS b
   USING (user_id)
@@ -2375,25 +2375,25 @@ ORDER BY 1, 2;
 -- see the comment for the above query
 SELECT a.user_id, avg(b.value_2) as subquery_avg
 FROM
-  (SELECT 
+  (SELECT
       user_id
-   FROM 
+   FROM
       users_table
-   WHERE 
+   WHERE
       (value_1 > 2)
-   GROUP BY 
+   GROUP BY
       user_id
-   HAVING 
+   HAVING
       count(distinct value_1) > 2
   ) as a
   LEFT JOIN
-  (SELECT 
+  (SELECT
       DISTINCT ON (value_2) value_2 , user_id, value_3
-   FROM 
+   FROM
       users_table
-   WHERE 
+   WHERE
       (value_1 > 3)
-   ORDER BY 
+   ORDER BY
       1,2,3
   ) AS b
   USING (user_id)
@@ -2403,14 +2403,14 @@ ORDER BY 1, 2;
 -- queries where column aliases are used
 -- the query is not very complex. join is given an alias with aliases
 -- for each output column
-SELECT k1 
+SELECT k1
 FROM (
 	SELECT k1, random()
 	FROM (users_table JOIN events_table USING (user_id)) k (k1, k2, k3)) l
 ORDER BY k1
 LIMIT 5;
 
-SELECT DISTINCT k1 
+SELECT DISTINCT k1
 FROM (
 	SELECT k1, random()
 	FROM (users_table JOIN events_table USING (user_id)) k (k1, k2, k3)) l
@@ -2457,7 +2457,7 @@ LIMIT 10;
 -- nested joins
 SELECT bar, value_3_table.value_3
 FROM ((users_table
-      JOIN (events_table INNER JOIN users_reference_table foo ON (events_table.user_id = foo.value_2)) AS deeper_join(user_id_deep)  
+      JOIN (events_table INNER JOIN users_reference_table foo ON (events_table.user_id = foo.value_2)) AS deeper_join(user_id_deep)
      	ON (users_table.user_id = deeper_join.user_id_deep)) AS test(c_custkey, c_nationkey)
 		LEFT JOIN users_table AS u2 ON (test.c_custkey = u2.user_id)) outer_test(bar,foo)
 
@@ -2486,14 +2486,14 @@ SELECT bar, foo.value_3, c_custkey, test_2.time_2 FROM
 (
 	SELECT bar, value_3_table.value_3, random()
 	FROM ((users_table
-	      JOIN (events_table INNER JOIN users_reference_table foo ON (events_table.user_id = foo.value_2)) AS deeper_join(user_id_deep)  
+	      JOIN (events_table INNER JOIN users_reference_table foo ON (events_table.user_id = foo.value_2)) AS deeper_join(user_id_deep)
 	     	ON (users_table.user_id = deeper_join.user_id_deep)) AS test(c_custkey, c_nationkey)
 			LEFT JOIN users_table AS u2 ON (test.c_custkey = u2.user_id)) outer_test(bar,foo)
 
 		JOIN LATERAL (SELECT value_3 FROM events_table WHERE user_id = bar) as value_3_table ON true
 	GROUP BY 1,2
 ) as foo, (users_table
-	      JOIN (events_table INNER JOIN users_reference_table foo ON (events_table.user_id = foo.value_2)) AS deeper_join_2(user_id_deep)  
+	      JOIN (events_table INNER JOIN users_reference_table foo ON (events_table.user_id = foo.value_2)) AS deeper_join_2(user_id_deep)
 	     	ON (users_table.user_id = deeper_join_2.user_id_deep)) AS test_2(c_custkey, time_2) WHERE foo.bar = test_2.c_custkey
 ORDER BY 2 DESC, 1 DESC, 3 DESC, 4 DESC
 LIMIT 10;

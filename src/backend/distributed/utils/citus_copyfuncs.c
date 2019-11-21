@@ -118,6 +118,7 @@ CopyNodeDistributedPlan(COPYFUNC_ARGS)
 	COPY_STRING_FIELD(intermediateResultIdPrefix);
 
 	COPY_NODE_FIELD(subPlanList);
+	COPY_NODE_FIELD(usedSubPlanNodeList);
 
 	COPY_NODE_FIELD(planningError);
 }
@@ -168,7 +169,6 @@ void
 CopyNodeMapMergeJob(COPYFUNC_ARGS)
 {
 	DECLARE_FROM_AND_NEW_NODE(MapMergeJob);
-	int arrayLength = 0;
 
 	copyJobInfo(&newnode->job, &from->job);
 
@@ -178,7 +178,7 @@ CopyNodeMapMergeJob(COPYFUNC_ARGS)
 	COPY_SCALAR_FIELD(partitionCount);
 	COPY_SCALAR_FIELD(sortedShardIntervalArrayLength);
 
-	arrayLength = from->sortedShardIntervalArrayLength;
+	int arrayLength = from->sortedShardIntervalArrayLength;
 
 	/* now build & read sortedShardIntervalArray */
 	COPY_NODE_ARRAY(sortedShardIntervalArray, ShardInterval, arrayLength);

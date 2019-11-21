@@ -8,7 +8,7 @@ AS $$
 SELECT count(*) FROM (SELECT * FROM jsonb_object_keys($1)) t
 $$;
 -- Check multi_cat_agg() aggregate which is used to implement jsonb_object_agg()
-SELECT jsonb_cat_agg(i) FROM 
+SELECT jsonb_cat_agg(i) FROM
 	(VALUES ('{"c":[], "b":2}'::jsonb), (NULL), ('{"d":null, "a":{"b":3}, "b":2}'::jsonb)) AS t(i);
                 jsonb_cat_agg                
 ---------------------------------------------
@@ -23,7 +23,7 @@ ERROR:  jsonb_object_agg with order by is unsupported
 SELECT jsonb_object_agg(distinct l_orderkey, l_shipmode ORDER BY l_orderkey) FROM lineitem;
 ERROR:  jsonb_object_agg with order by is unsupported
 -- Check jsonb_object_agg() for different data types and LIMIT clauses
-SELECT jsonb_object_agg(l_orderkey::text || l_linenumber::text, l_partkey) 
+SELECT jsonb_object_agg(l_orderkey::text || l_linenumber::text, l_partkey)
 	FROM lineitem GROUP BY l_orderkey
 	ORDER BY l_orderkey LIMIT 10;
                                          jsonb_object_agg                                         
@@ -40,7 +40,7 @@ SELECT jsonb_object_agg(l_orderkey::text || l_linenumber::text, l_partkey)
  {"341": 88362, "342": 89414, "343": 169544}
 (10 rows)
 
-SELECT jsonb_object_agg(l_orderkey::text || l_linenumber::text, l_extendedprice) 
+SELECT jsonb_object_agg(l_orderkey::text || l_linenumber::text, l_extendedprice)
 	FROM lineitem GROUP BY l_orderkey
 	ORDER BY l_orderkey LIMIT 10;
                                                 jsonb_object_agg                                                 
@@ -57,7 +57,7 @@ SELECT jsonb_object_agg(l_orderkey::text || l_linenumber::text, l_extendedprice)
  {"341": 17554.68, "342": 30875.02, "343": 9681.24}
 (10 rows)
 
-SELECT jsonb_object_agg(l_orderkey::text || l_linenumber::text, l_shipmode) 
+SELECT jsonb_object_agg(l_orderkey::text || l_linenumber::text, l_shipmode)
 	FROM lineitem GROUP BY l_orderkey
 	ORDER BY l_orderkey LIMIT 10;
                                                                jsonb_object_agg                                                               
@@ -74,7 +74,7 @@ SELECT jsonb_object_agg(l_orderkey::text || l_linenumber::text, l_shipmode)
  {"341": "REG AIR   ", "342": "FOB       ", "343": "FOB       "}
 (10 rows)
 
-SELECT jsonb_object_agg(l_orderkey::text || l_linenumber::text, l_shipdate) 
+SELECT jsonb_object_agg(l_orderkey::text || l_linenumber::text, l_shipdate)
 	FROM lineitem GROUP BY l_orderkey
 	ORDER BY l_orderkey LIMIT 10;
                                                                jsonb_object_agg                                                               
@@ -102,8 +102,8 @@ SELECT count_keys(jsonb_object_agg(l_shipdate, l_orderkey)) FROM lineitem;
 -- shards and contain different aggregates, filter clauses and other complex
 -- expressions. Note that the l_orderkey ranges are such that the matching rows
 -- lie in different shards.
-SELECT l_quantity, count(*), avg(l_extendedprice), 
-		jsonb_object_agg(l_orderkey::text || l_linenumber::text, l_shipdate) 
+SELECT l_quantity, count(*), avg(l_extendedprice),
+		jsonb_object_agg(l_orderkey::text || l_linenumber::text, l_shipdate)
 	FROM lineitem
 	WHERE l_quantity < 5 AND l_orderkey > 5000 AND l_orderkey < 5300
 	GROUP BY l_quantity ORDER BY l_quantity;
@@ -115,7 +115,7 @@ SELECT l_quantity, count(*), avg(l_extendedprice),
        4.00 |     4 | 5795.6800000000000000 | {"50313": "1994-12-26", "50622": "1993-02-06", "50891": "1992-09-18", "51893": "1993-12-21"}
 (4 rows)
 
-SELECT l_quantity, jsonb_object_agg(l_orderkey::text || l_linenumber::text, 
+SELECT l_quantity, jsonb_object_agg(l_orderkey::text || l_linenumber::text,
 									extract (month FROM o_orderdate))
 	FROM lineitem, orders WHERE l_orderkey = o_orderkey AND l_quantity < 5
 	AND l_orderkey > 5000 AND l_orderkey < 5300 GROUP BY l_quantity ORDER BY l_quantity;
@@ -127,7 +127,7 @@ SELECT l_quantity, jsonb_object_agg(l_orderkey::text || l_linenumber::text,
        4.00 | {"50313": 12, "50622": 10, "50891": 7, "51893": 11}
 (4 rows)
 
-SELECT l_quantity, jsonb_object_agg(l_orderkey::text || l_linenumber::text, l_orderkey * 2 + 1) 
+SELECT l_quantity, jsonb_object_agg(l_orderkey::text || l_linenumber::text, l_orderkey * 2 + 1)
 	FROM lineitem WHERE l_quantity < 5
 	AND octet_length(l_comment) + octet_length('randomtext'::text) > 40
 	AND l_orderkey > 5000 AND l_orderkey < 6000 GROUP BY l_quantity ORDER BY l_quantity;
@@ -140,7 +140,7 @@ SELECT l_quantity, jsonb_object_agg(l_orderkey::text || l_linenumber::text, l_or
 (4 rows)
 
 -- Check that we can execute jsonb_object_agg() with an expression containing NULL values
-SELECT jsonb_object_agg(l_orderkey::text || l_linenumber::text, 
+SELECT jsonb_object_agg(l_orderkey::text || l_linenumber::text,
 						case when l_quantity > 20 then l_quantity else NULL end)
 	FROM lineitem WHERE l_orderkey < 5;
                                                                                   jsonb_object_agg                                                                                   
@@ -148,9 +148,8 @@ SELECT jsonb_object_agg(l_orderkey::text || l_linenumber::text,
  {"11": null, "12": 36.00, "13": null, "14": 28.00, "15": 24.00, "16": 32.00, "21": 38.00, "31": 45.00, "32": 49.00, "33": 27.00, "34": null, "35": 28.00, "36": 26.00, "41": 30.00}
 (1 row)
 
-	
 -- Check that we can execute jsonb_object_agg() with an expression containing different types
-SELECT jsonb_object_agg(l_orderkey::text || l_linenumber::text, 
+SELECT jsonb_object_agg(l_orderkey::text || l_linenumber::text,
 						case when l_quantity > 20 then to_jsonb(l_quantity) else '"f"'::jsonb end)
 	FROM lineitem WHERE l_orderkey < 5;
                                                                                  jsonb_object_agg                                                                                 
@@ -158,7 +157,6 @@ SELECT jsonb_object_agg(l_orderkey::text || l_linenumber::text,
  {"11": "f", "12": 36.00, "13": "f", "14": 28.00, "15": 24.00, "16": 32.00, "21": 38.00, "31": 45.00, "32": 49.00, "33": 27.00, "34": "f", "35": 28.00, "36": 26.00, "41": 30.00}
 (1 row)
 
-	
 -- Check that we can execute jsonb_object_agg() with an expression containing jsonb arrays
 SELECT jsonb_object_agg(l_orderkey::text || l_linenumber::text, jsonb_build_array(l_quantity, l_shipdate))
 	FROM lineitem WHERE l_orderkey < 3;
@@ -167,7 +165,6 @@ SELECT jsonb_object_agg(l_orderkey::text || l_linenumber::text, jsonb_build_arra
  {"11": [17.00, "1996-03-13"], "12": [36.00, "1996-04-12"], "13": [8.00, "1996-01-29"], "14": [28.00, "1996-04-21"], "15": [24.00, "1996-03-30"], "16": [32.00, "1996-01-30"], "21": [38.00, "1997-01-28"]}
 (1 row)
 
-	
 -- Check that we can execute jsonb_object_agg() with an expression containing arrays
 SELECT jsonb_object_agg(l_orderkey::text || l_linenumber::text, ARRAY[l_quantity, l_orderkey])
 	FROM lineitem WHERE l_orderkey < 3;

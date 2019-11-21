@@ -7,8 +7,8 @@
 -- use prepared statements internally.
 
 -- many of the tests in this file is intended for testing non-fast-path
--- router planner, so we're explicitly disabling it in this file. 
--- We've bunch of other tests that triggers fast-path-router 
+-- router planner, so we're explicitly disabling it in this file.
+-- We've bunch of other tests that triggers fast-path-router
 SET citus.enable_fast_path_router_planner TO false;
 
 CREATE FUNCTION plpgsql_test_1() RETURNS TABLE(count bigint) AS $$

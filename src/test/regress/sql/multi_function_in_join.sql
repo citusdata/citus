@@ -114,7 +114,7 @@ SELECT * FROM table1 JOIN max_and_min() m ON (m.maximum = data OR m.minimum = da
 
 -- The following tests will fail as we do not support  all joins on
 -- all kinds of functions
--- In other words, we cannot recursively plan the functions and hence 
+-- In other words, we cannot recursively plan the functions and hence
 -- the query fails on the workers
 SET client_min_messages TO ERROR;
 \set VERBOSITY terse

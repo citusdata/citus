@@ -126,7 +126,7 @@ EXECUTE foo_plan(0,0);
 
 SELECT SUM(value_1), SUM(value_3) FROM users_test_table;
 
--- Test on append table (set executor mode to sequential, since with the append 
+-- Test on append table (set executor mode to sequential, since with the append
 -- distributed tables parallel executor may create tons of connections)
 SET citus.multi_shard_modify_mode to sequential;
 CREATE TABLE append_stage_table(id int, col_2 int);
@@ -170,7 +170,7 @@ INSERT INTO tt1 VALUES(7,7);
 INSERT INTO tt1 VALUES(9,8);
 BEGIN;
 -- Update rows from partititon tt1_1120
-UPDATE tt1 SET col_2 = 12 WHERE col_2 > 10 and col_2 < 20; 
+UPDATE tt1 SET col_2 = 12 WHERE col_2 > 10 and col_2 < 20;
 -- Update rows from partititon tt1_510
 UPDATE tt1 SET col_2 = 7 WHERE col_2 < 10 and col_2 > 5;
 COMMIT;
@@ -178,7 +178,7 @@ SELECT * FROM tt1 ORDER BY id;
 
 -- Modify main table and partition table within same transaction
 BEGIN;
-UPDATE tt1 SET col_2 = 12 WHERE col_2 > 10 and col_2 < 20; 
+UPDATE tt1 SET col_2 = 12 WHERE col_2 > 10 and col_2 < 20;
 UPDATE tt1 SET col_2 = 7 WHERE col_2 < 10 and col_2 > 5;
 DELETE FROM tt1_510;
 DELETE FROM tt1_1120;
@@ -305,7 +305,7 @@ WHERE  user_id IN (SELECT user_id
               FROM   users_test_table
               UNION
               SELECT user_id
-              FROM   events_test_table) returning value_3; 
+              FROM   events_test_table) returning value_3;
 
 UPDATE users_test_table
 SET    value_1 = 4
@@ -317,13 +317,13 @@ WHERE  user_id IN (SELECT user_id
 
 UPDATE users_test_table
 SET value_1 = 5
-WHERE 
-  value_2 >  
-          (SELECT 
-              max(value_2) 
-           FROM 
-              events_test_table  
-           WHERE 
+WHERE
+  value_2 >
+          (SELECT
+              max(value_2)
+           FROM
+              events_test_table
+           WHERE
               users_test_table.user_id = events_test_table.user_id
            GROUP BY
               user_id
@@ -331,21 +331,21 @@ WHERE
 
 UPDATE users_test_table
 SET value_3 = 1
-WHERE 
-  value_2 >  
-          (SELECT 
-              max(value_2) 
-           FROM 
-              events_test_table 
-           WHERE 
-              users_test_table.user_id = events_test_table.user_id AND 
+WHERE
+  value_2 >
+          (SELECT
+              max(value_2)
+           FROM
+              events_test_table
+           WHERE
+              users_test_table.user_id = events_test_table.user_id AND
               users_test_table.value_2 > events_test_table.value_2
            GROUP BY
               user_id
           );
 
 UPDATE users_test_table
-SET value_2 = 4 
+SET value_2 = 4
 WHERE
   value_1 > 1 AND value_1 < 3
   AND value_2 >= 1
@@ -416,7 +416,7 @@ WHERE  users_reference_copy_table.user_id = events_test_table.value_1;
 -- Both reference tables and hash distributed tables can be used in subquery
 UPDATE events_test_table as ett
 SET    value_2 = 6
-WHERE ett.value_3 IN (SELECT utt.value_3 
+WHERE ett.value_3 IN (SELECT utt.value_3
                                     FROM users_test_table as utt, users_reference_copy_table as uct
                                     WHERE utt.user_id = uct.user_id AND utt.user_id = ett.user_id);
 
@@ -625,7 +625,7 @@ SET    value_2 = 5
 FROM   events_test_table_2
 WHERE  users_test_table.user_id = events_test_table_2.user_id;
 
--- Should error out due to multiple row return from subquery, but we can not get this information within 
+-- Should error out due to multiple row return from subquery, but we can not get this information within
 -- subquery pushdown planner. This query will be sent to worker with recursive planner.
 \set VERBOSITY terse
 DELETE FROM users_test_table

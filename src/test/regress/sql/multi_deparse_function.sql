@@ -3,7 +3,7 @@
 --
 -- This test implements all the possible queries as of Postgres 11
 -- in the order they are listed in the docs
--- 
+--
 -- ALTER FUNCTION name [ ( [ [ argmode ] [ argname ] argtype [, ...] ] ) ]
 --     action [ ... ] [ RESTRICT ]
 -- ALTER FUNCTION name [ ( [ [ argmode ] [ argname ] argtype [, ...] ] ) ]
@@ -14,9 +14,9 @@
 --     SET SCHEMA new_schema
 -- ALTER FUNCTION name [ ( [ [ argmode ] [ argname ] argtype [, ...] ] ) ]
 --     DEPENDS ON EXTENSION extension_name
--- 
+--
 -- where action is one of:
--- 
+--
 --     CALLED ON NULL INPUT | RETURNS NULL ON NULL INPUT | STRICT
 --     IMMUTABLE | STABLE | VOLATILE | [ NOT ] LEAKPROOF
 --     [ EXTERNAL ] SECURITY INVOKER | [ EXTERNAL ] SECURITY DEFINER
@@ -27,7 +27,7 @@
 --     SET configuration_parameter FROM CURRENT
 --     RESET configuration_parameter
 --     RESET ALL
--- 
+--
 -- DROP FUNCTION [ IF EXISTS ] name [ ( [ [ argmode ] [ argname ] argtype [, ...] ] ) ] [, ...]
 --     [ CASCADE | RESTRICT ]
 
@@ -308,7 +308,7 @@ SELECT deparse_and_run_on_workers($cmd$
 ALTER FUNCTION square SET search_path TO DEFAULT;
 $cmd$);
 
--- a function with variadic input. 
+-- a function with variadic input.
 CREATE FUNCTION sum_avg(
    VARIADIC list NUMERIC[],
    OUT total NUMERIC,
@@ -317,7 +317,7 @@ AS $$
 BEGIN
    SELECT INTO total SUM(list[i])
    FROM generate_subscripts(list, 1) g(i);
- 
+
    SELECT INTO average AVG(list[i])
    FROM generate_subscripts(list, 1) g(i);
 END; $$
@@ -328,7 +328,7 @@ SELECT deparse_and_run_on_workers($cmd$
 ALTER FUNCTION sum_avg COST 10000;
 $cmd$);
 
--- a function with a custom type IN parameter 
+-- a function with a custom type IN parameter
 CREATE TYPE intpair AS (x int, y int);
 CREATE FUNCTION func_custom_param(IN param intpair, OUT total INT)
     AS $$ SELECT param.x + param.y $$

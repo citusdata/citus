@@ -21,7 +21,7 @@ SET client_min_messages TO DEBUG1;
 WITH ids_to_delete AS (
   SELECT tenant_id FROM distributed_table WHERE dept = 1
 )
-DELETE FROM reference_table WHERE id IN (SELECT tenant_id FROM ids_to_delete); 
+DELETE FROM reference_table WHERE id IN (SELECT tenant_id FROM ids_to_delete);
 
 -- update the name of the users whose dept is 2
 WITH ids_to_update AS (
@@ -30,26 +30,26 @@ WITH ids_to_update AS (
 UPDATE reference_table SET name = 'new_' || name WHERE id IN (SELECT tenant_id FROM ids_to_update);
 
 -- now the CTE is also modifying
-WITH ids_deleted_3 AS 
+WITH ids_deleted_3 AS
 (
 	DELETE FROM distributed_table WHERE dept = 3 RETURNING tenant_id
 ),
-ids_deleted_4 AS 
+ids_deleted_4 AS
 (
 	DELETE FROM distributed_table WHERE dept = 4 RETURNING tenant_id
 )
 DELETE FROM reference_table WHERE id IN (SELECT * FROM ids_deleted_3 UNION SELECT * FROM ids_deleted_4);
 
 -- now the final UPDATE command is pushdownable
-WITH ids_to_delete AS 
+WITH ids_to_delete AS
 (
 	SELECT tenant_id FROM distributed_table WHERE dept = 5
 )
-UPDATE 
-	distributed_table 
-SET 
+UPDATE
+	distributed_table
+SET
 	dept = dept + 1
-FROM 
+FROM
 	ids_to_delete, (SELECT tenant_id FROM distributed_table WHERE tenant_id::int < 60) as some_tenants
 WHERE
 	some_tenants.tenant_id = ids_to_delete.tenant_id
@@ -58,24 +58,24 @@ WHERE
 
 -- this query errors out since we've some hard
 -- errors in the INSERT ... SELECT pushdown
--- which prevents to fallback to recursive planning 
-WITH ids_to_upsert AS 
+-- which prevents to fallback to recursive planning
+WITH ids_to_upsert AS
 (
 	SELECT tenant_id FROM distributed_table WHERE dept > 7
 )
-INSERT INTO distributed_table  
+INSERT INTO distributed_table
        SELECT distributed_table.tenant_id FROM ids_to_upsert, distributed_table
        		WHERE  distributed_table.tenant_id = ids_to_upsert.tenant_id
        	ON CONFLICT (tenant_id) DO UPDATE SET dept = 8;
 
 -- the following query is very similar to the above one
--- but this time the query is pulled to coordinator since 
+-- but this time the query is pulled to coordinator since
 -- we return before hitting any hard errors
-WITH ids_to_insert AS 
+WITH ids_to_insert AS
 (
 	SELECT (tenant_id::int * 100)::text as tenant_id FROM distributed_table WHERE dept > 7
 )
-INSERT INTO distributed_table  
+INSERT INTO distributed_table
        SELECT DISTINCT ids_to_insert.tenant_id FROM ids_to_insert, distributed_table
        		WHERE  distributed_table.tenant_id < ids_to_insert.tenant_id;
 
@@ -89,7 +89,7 @@ INSERT INTO distributed_table
 -- since COPY cannot be executed
 SET citus.force_max_query_parallelization TO on;
 WITH copy_to_other_table AS (
-    INSERT INTO distributed_table 
+    INSERT INTO distributed_table
         SELECT *
             FROM second_distributed_table
         WHERE dept = 3
@@ -97,10 +97,10 @@ WITH copy_to_other_table AS (
         RETURNING *
 ),
 main_table_deleted AS (
-    DELETE 
-    FROM distributed_table 
+    DELETE
+    FROM distributed_table
     WHERE dept < 10
-      AND NOT EXISTS (SELECT 1 FROM second_distributed_table 
+      AND NOT EXISTS (SELECT 1 FROM second_distributed_table
                       WHERE second_distributed_table.dept = 1
                         AND second_distributed_table.tenant_id = distributed_table.tenant_id)
                         RETURNING *
@@ -108,26 +108,26 @@ main_table_deleted AS (
 INSERT INTO second_distributed_table
         SELECT *
             FROM main_table_deleted
-        EXCEPT 
+        EXCEPT
         SELECT *
             FROM copy_to_other_table;
 
 SET citus.force_max_query_parallelization TO off;
 
 -- CTE inside the UPDATE statement
-UPDATE 
-	second_distributed_table 
-SET dept = 
+UPDATE
+	second_distributed_table
+SET dept =
 		(WITH  vals AS (
 		SELECT DISTINCT tenant_id::int FROM distributed_table
-		) select * from vals where tenant_id = 8 ) 
+		) select * from vals where tenant_id = 8 )
 		WHERE dept = 8;
 
 -- Subquery inside the UPDATE statement
-UPDATE 
-	second_distributed_table 
-SET dept = 
-		
+UPDATE
+	second_distributed_table
+SET dept =
+
 		(SELECT DISTINCT tenant_id::int FROM distributed_table WHERE tenant_id = '9')
 		WHERE dept = 8;
 

@@ -190,14 +190,14 @@ check-citus-upgrade-local:
 	$(citus_upgrade_check) \
 		--bindir=$(bindir) \
 		--pgxsdir=$(pgxsdir) \
-		--citus-old-version=$(citus-old-version)	
+		--citus-old-version=$(citus-old-version)
 
 check-citus-upgrade-mixed-local:
 	$(citus_upgrade_check) \
 		--bindir=$(bindir) \
 		--pgxsdir=$(pgxsdir) \
 		--citus-old-version=$(citus-old-version) \
-		--mixed			
+		--mixed
 
 clean distclean maintainer-clean:
 	rm -f $(output_files) $(input_files)

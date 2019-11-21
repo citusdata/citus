@@ -126,8 +126,6 @@ static void
 MasterRemoveDistributedTableMetadataFromWorkers(Oid relationId, char *schemaName,
 												char *tableName)
 {
-	char *deleteDistributionCommand = NULL;
-
 	/*
 	 * The SQL_DROP trigger calls this function even for tables that are
 	 * not distributed. In that case, silently ignore. This is not very
@@ -147,6 +145,6 @@ MasterRemoveDistributedTableMetadataFromWorkers(Oid relationId, char *schemaName
 	}
 
 	/* drop the distributed table metadata on the workers */
-	deleteDistributionCommand = DistributionDeleteCommand(schemaName, tableName);
+	char *deleteDistributionCommand = DistributionDeleteCommand(schemaName, tableName);
 	SendCommandToWorkers(WORKERS_WITH_METADATA, deleteDistributionCommand);
 }

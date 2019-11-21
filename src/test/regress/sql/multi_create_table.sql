@@ -125,7 +125,7 @@ CREATE TABLE supplier
 );
 SELECT create_reference_table('supplier');
 
--- create a single shard supplier table which is not 
+-- create a single shard supplier table which is not
 -- a reference table
 CREATE TABLE supplier_single_shard
 (
@@ -166,7 +166,7 @@ DROP TABLE s_table;
 
 RESET citus.replication_model;
 
--- Show that create_distributed_table with append and range distributions ignore 
+-- Show that create_distributed_table with append and range distributions ignore
 -- citus.replication_model GUC
 SET citus.shard_replication_factor TO 2;
 SET citus.replication_model TO streaming;
@@ -363,8 +363,8 @@ ROLLBACK;
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid = (SELECT oid FROM pg_class WHERE relname LIKE 'rollback_table%');
 \c - - - :master_port
 
--- Insert 3 rows to make sure that copy after shard creation touches the same 
--- worker node twice. 
+-- Insert 3 rows to make sure that copy after shard creation touches the same
+-- worker node twice.
 BEGIN;
 CREATE TABLE rollback_table(id int, name varchar(20));
 INSERT INTO rollback_table VALUES(1, 'Name_1');
@@ -389,7 +389,7 @@ SELECT create_distributed_table('rollback_table','id');
 CREATE INDEX rollback_index ON rollback_table(id);
 COMMIT;
 
--- Check the table is created 
+-- Check the table is created
 SELECT count(*) FROM rollback_table;
 DROP TABLE rollback_table;
 
@@ -426,7 +426,7 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid = 'public.tt2_3
 DROP TABLE tt1;
 DROP TABLE tt2;
 
--- It is known that creating a table with master_create_empty_shard is not 
+-- It is known that creating a table with master_create_empty_shard is not
 -- transactional, so table stay remaining on the worker node after the rollback
 BEGIN;
 CREATE TABLE append_tt1(id int);
@@ -493,7 +493,7 @@ DROP TABLE stage_table;
 SELECT * FROM sample_table WHERE id = 3;
 COMMIT;
 
--- Show that rows of sample_table are updated 
+-- Show that rows of sample_table are updated
 SELECT count(*) FROM sample_table;
 DROP table sample_table;
 

@@ -30,7 +30,7 @@ BEGIN;
   -- this should not succeed as we do not distribute extension commands within transaction blocks
 	CREATE TABLE dist_table (key int, value public.issn);
 	SELECT create_distributed_table('dist_table', 'key');
-	
+
 	-- we can even run queries (sequentially) over the distributed table
 	SELECT * FROM dist_table;
 	INSERT INTO dist_table VALUES (1, public.issn('1436-4522'));
@@ -59,7 +59,7 @@ SELECT run_command_on_workers($$SELECT extversion FROM pg_extension WHERE extnam
 -- now, update to a newer version
 ALTER EXTENSION isn UPDATE TO '1.2';
 
--- show that ALTER EXTENSION is propagated 
+-- show that ALTER EXTENSION is propagated
 SELECT run_command_on_workers($$SELECT extversion FROM pg_extension WHERE extname = 'isn'$$);
 
 -- before changing the schema, ensure the current schmea
@@ -85,8 +85,8 @@ DROP EXTENSION isn CASCADE;
 RESET client_min_messages;
 
 -- now make sure that the reference tables depending on an extension can be succesfully created.
--- we should also ensure that we replicate this reference table (and hence the extension) 
--- to new nodes after calling master_activate_node. 
+-- we should also ensure that we replicate this reference table (and hence the extension)
+-- to new nodes after calling master_activate_node.
 
 -- now, first drop seg and existing objects before next test
 SET client_min_messages TO WARNING;
@@ -118,7 +118,7 @@ SELECT run_command_on_workers($$SELECT count(extnamespace) FROM pg_extension WHE
 SELECT run_command_on_workers($$SELECT extversion FROM pg_extension WHERE extname = 'seg'$$);
 
 -- and similarly check for the reference table
-select count(*) from pg_dist_partition where partmethod='n' and logicalrelid='ref_table_2'::regclass; 
+select count(*) from pg_dist_partition where partmethod='n' and logicalrelid='ref_table_2'::regclass;
 SELECT count(*) FROM pg_dist_shard WHERE logicalrelid='ref_table_2'::regclass;
 DROP TABLE ref_table_2;
 -- now test create extension in another transaction block but rollback this time
@@ -134,7 +134,7 @@ SELECT count(*) FROM citus.pg_dist_object WHERE objid = (SELECT oid FROM pg_exte
 SELECT run_command_on_workers($$SELECT count(*) FROM pg_extension WHERE extname = 'isn'$$);
 
 -- give a notice for the following commands saying that it is not
--- propagated to the workers. the user should run it manually on the workers 
+-- propagated to the workers. the user should run it manually on the workers
 CREATE TABLE t1 (A int);
 CREATE VIEW v1 AS select * from t1;
 
@@ -210,13 +210,13 @@ BEGIN;
 	SET citus.shard_replication_factor TO 1;
 	CREATE EXTENSION seg;
 	CREATE EXTENSION isn;
-	CREATE TYPE test_type AS (a int, b seg); 
-	CREATE TYPE test_type_2 AS (a int, b test_type); 
+	CREATE TYPE test_type AS (a int, b seg);
+	CREATE TYPE test_type_2 AS (a int, b test_type);
 
 	CREATE TABLE t2 (a int, b test_type_2, c issn);
 	SELECT create_distributed_table('t2', 'a');
-	
-	CREATE TYPE test_type_3 AS (a int, b test_type, c issn); 
+
+	CREATE TYPE test_type_3 AS (a int, b test_type, c issn);
 	CREATE TABLE t3 (a int, b test_type_3);
 	SELECT create_reference_table('t3');
 

@@ -1,10 +1,10 @@
 // the test expects to have zero nodes in pg_dist_node at the beginning
 // add single one of the nodes for the purpose of the test
 setup
-{	
+{
 	SET citus.shard_replication_factor to 1;
 	SELECT 1 FROM master_add_node('localhost', 57637);
-	
+
 	CREATE TABLE test_reference_table (test_id integer);
 	CREATE TABLE test_reference_table_2 (test_id integer);
 	INSERT INTO test_reference_table_2 VALUES (8);

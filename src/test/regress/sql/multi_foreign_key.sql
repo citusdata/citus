@@ -66,7 +66,7 @@ DROP TABLE referencing_table;
 DROP TABLE referenced_table;
 
 -- test foreign constraint creation on append and range distributed tables
--- foreign keys are supported either in between distributed tables including the 
+-- foreign keys are supported either in between distributed tables including the
 -- distribution column or from distributed tables to reference tables.
 SET citus.shard_replication_factor TO 1;
 CREATE TABLE referenced_table(id int UNIQUE, test_column int, PRIMARY KEY(id, test_column));

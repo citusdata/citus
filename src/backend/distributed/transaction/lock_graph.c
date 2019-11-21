@@ -73,9 +73,7 @@ PG_FUNCTION_INFO_V1(dump_global_wait_edges);
 Datum
 dump_global_wait_edges(PG_FUNCTION_ARGS)
 {
-	WaitGraph *waitGraph = NULL;
-
-	waitGraph = BuildGlobalWaitGraph();
+	WaitGraph *waitGraph = BuildGlobalWaitGraph();
 
 	ReturnWaitGraph(waitGraph, fcinfo);
 
@@ -106,7 +104,6 @@ BuildGlobalWaitGraph(void)
 		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
 		char *nodeName = workerNode->workerName;
 		int nodePort = workerNode->workerPort;
-		MultiConnection *connection = NULL;
 		int connectionFlags = 0;
 
 		if (workerNode->groupId == localNodeId)
@@ -115,8 +112,9 @@ BuildGlobalWaitGraph(void)
 			continue;
 		}
 
-		connection = StartNodeUserDatabaseConnection(connectionFlags, nodeName, nodePort,
-													 nodeUser, NULL);
+		MultiConnection *connection = StartNodeUserDatabaseConnection(connectionFlags,
+																	  nodeName, nodePort,
+																	  nodeUser, NULL);
 
 		connectionList = lappend(connectionList, connection);
 	}
@@ -127,10 +125,9 @@ BuildGlobalWaitGraph(void)
 	foreach(connectionCell, connectionList)
 	{
 		MultiConnection *connection = (MultiConnection *) lfirst(connectionCell);
-		int querySent = false;
 		const char *command = "SELECT * FROM dump_local_wait_edges()";
 
-		querySent = SendRemoteCommand(connection, command);
+		int querySent = SendRemoteCommand(connection, command);
 		if (querySent == 0)
 		{
 			ReportConnectionError(connection, WARNING);
@@ -141,21 +138,17 @@ BuildGlobalWaitGraph(void)
 	foreach(connectionCell, connectionList)
 	{
 		MultiConnection *connection = (MultiConnection *) lfirst(connectionCell);
-		PGresult *result = NULL;
 		bool raiseInterrupts = true;
-		int64 rowIndex = 0;
-		int64 rowCount = 0;
-		int64 colCount = 0;
 
-		result = GetRemoteCommandResult(connection, raiseInterrupts);
+		PGresult *result = GetRemoteCommandResult(connection, raiseInterrupts);
 		if (!IsResponseOK(result))
 		{
 			ReportResultError(connection, result, WARNING);
 			continue;
 		}
 
-		rowCount = PQntuples(result);
-		colCount = PQnfields(result);
+		int64 rowCount = PQntuples(result);
+		int64 colCount = PQnfields(result);
 
 		if (colCount != 9)
 		{
@@ -164,7 +157,7 @@ BuildGlobalWaitGraph(void)
 			continue;
 		}
 
-		for (rowIndex = 0; rowIndex < rowCount; rowIndex++)
+		for (int64 rowIndex = 0; rowIndex < rowCount; rowIndex++)
 		{
 			AddWaitEdgeFromResult(waitGraph, result, rowIndex);
 		}
@@ -205,14 +198,12 @@ AddWaitEdgeFromResult(WaitGraph *waitGraph, PGresult *result, int rowIndex)
 int64
 ParseIntField(PGresult *result, int rowIndex, int colIndex)
 {
-	char *resultString = NULL;
-
 	if (PQgetisnull(result, rowIndex, colIndex))
 	{
 		return 0;
 	}
 
-	resultString = PQgetvalue(result, rowIndex, colIndex);
+	char *resultString = PQgetvalue(result, rowIndex, colIndex);
 
 	return pg_strtouint64(resultString, NULL, 10);
 }
@@ -225,14 +216,12 @@ ParseIntField(PGresult *result, int rowIndex, int colIndex)
 bool
 ParseBoolField(PGresult *result, int rowIndex, int colIndex)
 {
-	char *resultString = NULL;
-
 	if (PQgetisnull(result, rowIndex, colIndex))
 	{
 		return false;
 	}
 
-	resultString = PQgetvalue(result, rowIndex, colIndex);
+	char *resultString = PQgetvalue(result, rowIndex, colIndex);
 	if (strlen(resultString) != 1)
 	{
 		return false;
@@ -249,18 +238,14 @@ ParseBoolField(PGresult *result, int rowIndex, int colIndex)
 TimestampTz
 ParseTimestampTzField(PGresult *result, int rowIndex, int colIndex)
 {
-	char *resultString = NULL;
-	Datum resultStringDatum = 0;
-	Datum timestampDatum = 0;
-
 	if (PQgetisnull(result, rowIndex, colIndex))
 	{
 		return DT_NOBEGIN;
 	}
 
-	resultString = PQgetvalue(result, rowIndex, colIndex);
-	resultStringDatum = CStringGetDatum(resultString);
-	timestampDatum = DirectFunctionCall3(timestamptz_in, resultStringDatum, 0, -1);
+	char *resultString = PQgetvalue(result, rowIndex, colIndex);
+	Datum resultStringDatum = CStringGetDatum(resultString);
+	Datum timestampDatum = DirectFunctionCall3(timestamptz_in, resultStringDatum, 0, -1);
 
 	return DatumGetTimestampTz(timestampDatum);
 }
@@ -286,7 +271,6 @@ dump_local_wait_edges(PG_FUNCTION_ARGS)
 static void
 ReturnWaitGraph(WaitGraph *waitGraph, FunctionCallInfo fcinfo)
 {
-	size_t curEdgeNum = 0;
 	TupleDesc tupleDesc;
 	Tuplestorestate *tupleStore = SetupTuplestore(fcinfo, &tupleDesc);
 
@@ -302,7 +286,7 @@ ReturnWaitGraph(WaitGraph *waitGraph, FunctionCallInfo fcinfo)
 	 * 07: blocking_transaction_stamp
 	 * 08: blocking_transaction_waiting
 	 */
-	for (curEdgeNum = 0; curEdgeNum < waitGraph->edgeCount; curEdgeNum++)
+	for (size_t curEdgeNum = 0; curEdgeNum < waitGraph->edgeCount; curEdgeNum++)
 	{
 		Datum values[9];
 		bool nulls[9];
@@ -353,8 +337,6 @@ ReturnWaitGraph(WaitGraph *waitGraph, FunctionCallInfo fcinfo)
 static WaitGraph *
 BuildLocalWaitGraph(void)
 {
-	WaitGraph *waitGraph = NULL;
-	int curBackend = 0;
 	PROCStack remaining;
 	int totalProcs = TotalProcCount();
 
@@ -364,7 +346,7 @@ BuildLocalWaitGraph(void)
 	 * more than enough space to build the list of wait edges without a single
 	 * allocation.
 	 */
-	waitGraph = (WaitGraph *) palloc0(sizeof(WaitGraph));
+	WaitGraph *waitGraph = (WaitGraph *) palloc0(sizeof(WaitGraph));
 	waitGraph->localNodeId = GetLocalGroupId();
 	waitGraph->allocatedSize = totalProcs * 3;
 	waitGraph->edgeCount = 0;
@@ -384,7 +366,7 @@ BuildLocalWaitGraph(void)
 	 */
 
 	/* build list of starting procs */
-	for (curBackend = 0; curBackend < totalProcs; curBackend++)
+	for (int curBackend = 0; curBackend < totalProcs; curBackend++)
 	{
 		PGPROC *currentProc = &ProcGlobal->allProcs[curBackend];
 		BackendData currentBackendData;
@@ -476,24 +458,20 @@ BuildLocalWaitGraph(void)
 static bool
 IsProcessWaitingForSafeOperations(PGPROC *proc)
 {
-	PROCLOCK *waitProcLock = NULL;
-	LOCK *waitLock = NULL;
-	PGXACT *pgxact = NULL;
-
 	if (proc->waitStatus != STATUS_WAITING)
 	{
 		return false;
 	}
 
 	/* get the transaction that the backend associated with */
-	pgxact = &ProcGlobal->allPgXact[proc->pgprocno];
+	PGXACT *pgxact = &ProcGlobal->allPgXact[proc->pgprocno];
 	if (pgxact->vacuumFlags & PROC_IS_AUTOVACUUM)
 	{
 		return true;
 	}
 
-	waitProcLock = proc->waitProcLock;
-	waitLock = waitProcLock->tag.myLock;
+	PROCLOCK *waitProcLock = proc->waitProcLock;
+	LOCK *waitLock = waitProcLock->tag.myLock;
 
 	return waitLock->tag.locktag_type == LOCKTAG_RELATION_EXTEND ||
 		   waitLock->tag.locktag_type == LOCKTAG_PAGE ||
@@ -511,11 +489,9 @@ IsProcessWaitingForSafeOperations(PGPROC *proc)
 static void
 LockLockData(void)
 {
-	int partitionNum = 0;
-
 	LockBackendSharedMemory(LW_SHARED);
 
-	for (partitionNum = 0; partitionNum < NUM_LOCK_PARTITIONS; partitionNum++)
+	for (int partitionNum = 0; partitionNum < NUM_LOCK_PARTITIONS; partitionNum++)
 	{
 		LWLockAcquire(LockHashPartitionLockByIndex(partitionNum), LW_SHARED);
 	}
@@ -533,9 +509,7 @@ LockLockData(void)
 static void
 UnlockLockData(void)
 {
-	int partitionNum = 0;
-
-	for (partitionNum = NUM_LOCK_PARTITIONS - 1; partitionNum >= 0; partitionNum--)
+	for (int partitionNum = NUM_LOCK_PARTITIONS - 1; partitionNum >= 0; partitionNum--)
 	{
 		LWLockRelease(LockHashPartitionLockByIndex(partitionNum));
 	}

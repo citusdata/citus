@@ -95,8 +95,7 @@ show_progress(PG_FUNCTION_ARGS)
 		ProgressMonitorData *monitor = lfirst(monitorCell);
 		uint64 *steps = monitor->steps;
 
-		int stepIndex = 0;
-		for (stepIndex = 0; stepIndex < monitor->stepCount; stepIndex++)
+		for (int stepIndex = 0; stepIndex < monitor->stepCount; stepIndex++)
 		{
 			uint64 step = steps[stepIndex];
 

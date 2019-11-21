@@ -11,7 +11,7 @@ SET citus.shard_count to 4;
 
 CREATE TABLE test_table(id int, value_1 int);
 
--- Kill connection before sending query to the worker 
+-- Kill connection before sending query to the worker
 SELECT citus.mitmproxy('conn.kill()');
 SELECT create_distributed_table('test_table','id');
 
@@ -117,7 +117,7 @@ CREATE SCHEMA failure_create_table;
 CREATE TABLE test_table(id int, value_1 int);
 
 -- Test inside transaction
--- Kill connection before sending query to the worker 
+-- Kill connection before sending query to the worker
 SELECT citus.mitmproxy('conn.kill()');
 
 BEGIN;

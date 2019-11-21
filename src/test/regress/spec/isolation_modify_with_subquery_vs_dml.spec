@@ -1,5 +1,5 @@
 setup
-{	
+{
 	SET citus.shard_replication_factor to 2;
 
 	CREATE TABLE users_test_table(user_id int, value_1 int, value_2 int, value_3 int);
@@ -71,7 +71,7 @@ step "s2-modify_with_subquery_v1"
     UPDATE users_test_table SET value_2 = 5 FROM events_test_table WHERE users_test_table.user_id = events_test_table.user_id;
 }
 
-step "s2-modify_with_subquery_v2" 
+step "s2-modify_with_subquery_v2"
 {
 	UPDATE users_test_table SET value_1 = 3 WHERE user_id IN (SELECT user_id FROM events_test_table);
 }

@@ -21,16 +21,16 @@ SET citus.log_multi_join_order TO ON;
 SET client_min_messages TO DEBUG2;
 
 -- a very basic single hash re-partitioning example
-EXPLAIN SELECT 
-	count(*) 
+EXPLAIN SELECT
+	count(*)
 FROM
 	single_hash_repartition_first t1, single_hash_repartition_second t2
 WHERE
 	t1.id = t2.sum;
 
 -- the same query with the orders of the tables have changed
-EXPLAIN SELECT 
-	count(*) 
+EXPLAIN SELECT
+	count(*)
 FROM
 	single_hash_repartition_second t1, single_hash_repartition_first t2
 WHERE
@@ -45,8 +45,8 @@ WHERE
 	r1.id = t1.id AND t2.sum = t1.id;
 
 -- a more complicated join order, first colocated join, later single hash repartition join
-EXPLAIN SELECT 
-	count(*) 
+EXPLAIN SELECT
+	count(*)
 FROM
 	single_hash_repartition_first t1, single_hash_repartition_first t2, single_hash_repartition_second t3
 WHERE
@@ -54,16 +54,16 @@ WHERE
 
 
 -- a more complicated join order, first hash-repartition join, later single hash repartition join
-EXPLAIN SELECT 
-	count(*) 
+EXPLAIN SELECT
+	count(*)
 FROM
 	single_hash_repartition_first t1, single_hash_repartition_first t2, single_hash_repartition_second t3
 WHERE
 	t1.sum = t2.sum AND t1.sum = t3.id;
 
 -- single hash repartitioning is not supported between different column types
-EXPLAIN SELECT 
-	count(*) 
+EXPLAIN SELECT
+	count(*)
 FROM
 	single_hash_repartition_first t1, single_hash_repartition_first t2, single_hash_repartition_second t3
 WHERE
@@ -71,9 +71,9 @@ WHERE
 
 -- single repartition query in CTE
 -- should work fine
-EXPLAIN WITH cte1 AS 
+EXPLAIN WITH cte1 AS
 (
-	SELECT 
+	SELECT
 		t1.id * t2.avg as data
 	FROM
 		single_hash_repartition_first t1, single_hash_repartition_second t2
@@ -92,7 +92,7 @@ WHERE
 
 
 -- two single repartitions
-EXPLAIN SELECT 
+EXPLAIN SELECT
 	count(*)
 FROM
 	single_hash_repartition_first t1, single_hash_repartition_second t2, single_hash_repartition_second t3
@@ -100,9 +100,9 @@ WHERE
 	t1.id = t2.sum AND t2.sum = t3.id;
 
 
--- two single repartitions again, but this 
+-- two single repartitions again, but this
 -- time the columns of the second join is reverted
-EXPLAIN SELECT 
+EXPLAIN SELECT
 	avg(t1.avg + t2.avg)
 FROM
 	single_hash_repartition_first t1, single_hash_repartition_second t2, single_hash_repartition_second t3
@@ -118,8 +118,8 @@ LIMIT 10;
 -- the following queries should also be a single hash repartition queries
 -- note that since we've manually updated the metadata without changing the
 -- the corresponding data, the results of the query would be wrong
-EXPLAIN SELECT 
-	count(*) 
+EXPLAIN SELECT
+	count(*)
 FROM
 	single_hash_repartition_first t1, single_hash_repartition_second t2
 WHERE
@@ -128,8 +128,8 @@ WHERE
 -- the following queries should also be a single hash repartition queries
 -- note that since we've manually updated the metadata without changing the
 -- the corresponding data, the results of the query would be wrong
-EXPLAIN SELECT 
-	count(*) 
+EXPLAIN SELECT
+	count(*)
 FROM
 	single_hash_repartition_first t1, single_hash_repartition_second t2
 WHERE

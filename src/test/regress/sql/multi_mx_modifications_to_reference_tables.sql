@@ -64,7 +64,7 @@ SET search_path TO 'mx_modify_reference_table';
 SELECT SUM(value_1) FROM ref_table;
 SELECT SUM(value_1) FROM ref_table_2;
 
--- Run basic queries from second worker node. These tests have been added 
+-- Run basic queries from second worker node. These tests have been added
 -- since locking logic is slightly different between running these commands
 -- from first worker node and the second one
 INSERT INTO ref_table VALUES(1,1),(2,2);

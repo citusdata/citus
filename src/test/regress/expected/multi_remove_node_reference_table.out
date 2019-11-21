@@ -145,7 +145,6 @@ WHERE colocationid IN
         10004 |          1 |                -1 |                      0
 (1 row)
 
-     
 \c - - - :worker_1_port
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
  count 
@@ -164,7 +163,6 @@ WHERE
  1380000 |          1 |           0 | localhost |    57638
 (1 row)
 
-    
 \c - - - :master_port
 SELECT master_remove_node('localhost', :worker_2_port);
  master_remove_node 
@@ -217,7 +215,6 @@ WHERE
 ---------+------------+-------------+----------+----------
 (0 rows)
 
-    
 \c - - - :master_port
 -- remove same node twice
 SELECT master_remove_node('localhost', :worker_2_port);
@@ -281,7 +278,6 @@ WHERE colocationid IN
         10004 |          1 |                -1 |                      0
 (1 row)
 
-     
 \c - - - :worker_1_port
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
  count 
@@ -300,7 +296,6 @@ WHERE
  1380000 |          1 |           0 | localhost |    57638
 (1 row)
 
-    
 \c - - - :master_port
 BEGIN;
 SELECT master_remove_node('localhost', :worker_2_port);
@@ -357,7 +352,6 @@ WHERE
  1380000 |          1 |           0 | localhost |    57638
 (1 row)
 
-    
 \c - - - :master_port
 -- remove node in a transaction and COMMIT
 -- status before master_remove_node
@@ -389,7 +383,6 @@ WHERE colocationid IN
         10004 |          1 |                -1 |                      0
 (1 row)
 
-     
 \c - - - :worker_1_port
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
  count 
@@ -408,7 +401,6 @@ WHERE
  1380000 |          1 |           0 | localhost |    57638
 (1 row)
 
-    
 \c - - - :master_port
 BEGIN;
 SELECT master_remove_node('localhost', :worker_2_port);
@@ -446,7 +438,6 @@ WHERE colocationid IN
         10004 |          1 |                -1 |                      0
 (1 row)
 
-     
 \c - - - :worker_1_port
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
  count 
@@ -464,7 +455,6 @@ WHERE
 ---------+------------+-------------+----------+----------
 (0 rows)
 
-    
 \c - - - :master_port
 -- re-add the node for next tests
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
@@ -522,9 +512,7 @@ WHERE
  1380000 |          1 |           0 | localhost |    57638
 (1 row)
 
-    
-\c - - - :master_port     
-     
+\c - - - :master_port
 BEGIN;
 INSERT INTO remove_node_reference_table VALUES(1);
 SELECT master_remove_node('localhost', :worker_2_port);
@@ -586,14 +574,12 @@ WHERE
 ---------+------------+-------------+----------+----------
 (0 rows)
 
-    
 SELECT * FROM remove_node_reference_table;
  column1 
 ---------
        1
 (1 row)
 
-    
 \c - - - :master_port
 -- re-add the node for next tests
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
@@ -651,7 +637,6 @@ WHERE
  1380000 |          1 |           0 | localhost |    57638
 (1 row)
 
-    
 \c - - - :master_port
 BEGIN;
 ALTER TABLE remove_node_reference_table ADD column2 int;
@@ -690,7 +675,6 @@ WHERE colocationid IN
         10004 |          1 |                -1 |                      0
 (1 row)
 
-     
 \c - - - :worker_1_port
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
  count 
@@ -708,7 +692,6 @@ WHERE
 ---------+------------+-------------+----------+----------
 (0 rows)
 
-    
 \c - - - :master_port
 SET citus.next_shard_id TO 1380001;
 -- verify table structure is changed
@@ -844,7 +827,6 @@ WHERE colocationid IN
         10004 |          1 |                -1 |                      0
 (1 row)
 
-     
 \c - - - :worker_1_port
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
  count 
@@ -918,9 +900,7 @@ WHERE
 ---------+------------+-------------+----------+----------
 (0 rows)
 
-    
-\c - - - :master_port     
-     
+\c - - - :master_port
 -- re-add the node for next tests
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 NOTICE:  Replicating reference table "remove_node_reference_table" to the node localhost:57638
@@ -983,9 +963,7 @@ ORDER BY shardid ASC;
  1380002 |          1 |           0 | localhost |    57638
 (2 rows)
 
-    
-\c - - - :master_port     
-     
+\c - - - :master_port
 SELECT master_disable_node('localhost', :worker_2_port);
  master_disable_node 
 ---------------------
@@ -1037,7 +1015,6 @@ WHERE
 ---------+------------+-------------+----------+----------
 (0 rows)
 
-    
 \c - - - :master_port
 -- re-add the node for next tests
 SELECT 1 FROM master_activate_node('localhost', :worker_2_port);

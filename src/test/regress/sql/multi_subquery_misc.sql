@@ -81,7 +81,7 @@ FROM users_table
 WHERE user_id IN (SELECT user_id FROM users_table WHERE value_1 >= $4 AND value_1 <= $3)
     AND user_id IN (SELECT user_id FROM users_table WHERE value_1 >= $5 AND value_1 <= $6)
     AND user_id IN (SELECT user_id FROM users_table WHERE  value_1 >= $1 AND value_1 <= $2)
-GROUP BY 
+GROUP BY
   user_id
 ORDER BY
   user_id DESC
@@ -113,7 +113,7 @@ BEGIN
 			    	short_list.user_id = ma.user_id and ma.value_1 < $1 and short_list.event_type < 3
 			    ) temp
 			  ON users_table.user_id = temp.user_id
-			  WHERE 
+			  WHERE
 			    users_table.value_1 < $2;
 
 END;
@@ -144,7 +144,7 @@ CREATE FUNCTION sql_subquery_test(int, int) RETURNS bigint AS $$
 	    	short_list.user_id = ma.user_id and ma.value_1 < $1 and short_list.event_type < 3
 	    ) temp
 	  ON users_table.user_id = temp.user_id
-	  WHERE 
+	  WHERE
 	    users_table.value_1 < $2;
 $$ LANGUAGE SQL;
 
@@ -154,7 +154,7 @@ SELECT sql_subquery_test(1,1);
 
 
 -- the joins are actually removed since they are
--- not needed by PostgreSQL planner (e.g., target list 
+-- not needed by PostgreSQL planner (e.g., target list
 -- doesn't contain anything from there)
 -- but Citus can still pushdown this query
 SELECT
@@ -182,7 +182,7 @@ ORDER BY 2 DESC;
 
 
 -- the joins are actually removed since they are
--- not needed by PostgreSQL planner (e.g., target list 
+-- not needed by PostgreSQL planner (e.g., target list
 -- doesn't contain anything from there)
 -- but Citus can still plan this query even though the query
 -- is not safe to pushdown

@@ -23,18 +23,18 @@ FROM
 		orders,
 		customer,
 		(
-		SELECT 
+		SELECT
 			n1.n_nationkey AS supp_nation_key,
 			n2.n_nationkey AS cust_nation_key,
 			n1.n_name AS supp_nation,
 			n2.n_name AS cust_nation
-		FROM 
+		FROM
 			nation n1,
 			nation n2
-		WHERE 
+		WHERE
 			(
 			(n1.n_name = 'FRANCE' AND n2.n_name = 'GERMANY')
-			OR (n1.n_name = 'GERMANY' AND n2.n_name = 'FRANCE')   
+			OR (n1.n_name = 'GERMANY' AND n2.n_name = 'FRANCE')
 			)
 		) AS temp
         WHERE

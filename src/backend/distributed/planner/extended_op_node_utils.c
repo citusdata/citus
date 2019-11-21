@@ -45,28 +45,21 @@ ExtendedOpNodeProperties
 BuildExtendedOpNodeProperties(MultiExtendedOp *extendedOpNode)
 {
 	ExtendedOpNodeProperties extendedOpNodeProperties;
-	List *tableNodeList = NIL;
-	List *targetList = NIL;
-	Node *havingQual = NULL;
 
-	bool groupedByDisjointPartitionColumn = false;
-	bool repartitionSubquery = false;
-	bool hasNonPartitionColumnDistinctAgg = false;
-	bool pullDistinctColumns = false;
-	bool pushDownWindowFunctions = false;
 
-	tableNodeList = FindNodesOfType((MultiNode *) extendedOpNode, T_MultiTable);
-	groupedByDisjointPartitionColumn = GroupedByDisjointPartitionColumn(tableNodeList,
-																		extendedOpNode);
+	List *tableNodeList = FindNodesOfType((MultiNode *) extendedOpNode, T_MultiTable);
+	bool groupedByDisjointPartitionColumn = GroupedByDisjointPartitionColumn(
+		tableNodeList,
+		extendedOpNode);
 
-	repartitionSubquery = ExtendedOpNodeContainsRepartitionSubquery(extendedOpNode);
+	bool repartitionSubquery = ExtendedOpNodeContainsRepartitionSubquery(extendedOpNode);
 
-	targetList = extendedOpNode->targetList;
-	havingQual = extendedOpNode->havingQual;
-	hasNonPartitionColumnDistinctAgg =
+	List *targetList = extendedOpNode->targetList;
+	Node *havingQual = extendedOpNode->havingQual;
+	bool hasNonPartitionColumnDistinctAgg =
 		HasNonPartitionColumnDistinctAgg(targetList, havingQual, tableNodeList);
 
-	pullDistinctColumns =
+	bool pullDistinctColumns =
 		ShouldPullDistinctColumn(repartitionSubquery, groupedByDisjointPartitionColumn,
 								 hasNonPartitionColumnDistinctAgg);
 
@@ -75,7 +68,7 @@ BuildExtendedOpNodeProperties(MultiExtendedOp *extendedOpNode)
 	 * using hasWindowFuncs is safe for now. However, this should be fixed
 	 * when we support pull-to-master window functions.
 	 */
-	pushDownWindowFunctions = extendedOpNode->hasWindowFuncs;
+	bool pushDownWindowFunctions = extendedOpNode->hasWindowFuncs;
 
 	extendedOpNodeProperties.groupedByDisjointPartitionColumn =
 		groupedByDisjointPartitionColumn;
@@ -103,14 +96,13 @@ GroupedByDisjointPartitionColumn(List *tableNodeList, MultiExtendedOp *opNode)
 	{
 		MultiTable *tableNode = (MultiTable *) lfirst(tableNodeCell);
 		Oid relationId = tableNode->relationId;
-		char partitionMethod = 0;
 
 		if (relationId == SUBQUERY_RELATION_ID || !IsDistributedTable(relationId))
 		{
 			continue;
 		}
 
-		partitionMethod = PartitionMethod(relationId);
+		char partitionMethod = PartitionMethod(relationId);
 		if (partitionMethod != DISTRIBUTE_BY_RANGE &&
 			partitionMethod != DISTRIBUTE_BY_HASH)
 		{
@@ -173,12 +165,8 @@ HasNonPartitionColumnDistinctAgg(List *targetEntryList, Node *havingQual,
 	foreach(aggregateCheckCell, aggregateCheckList)
 	{
 		Node *targetNode = lfirst(aggregateCheckCell);
-		Aggref *targetAgg = NULL;
-		List *varList = NIL;
 		ListCell *varCell = NULL;
 		bool isPartitionColumn = false;
-		TargetEntry *firstTargetEntry = NULL;
-		Node *firstTargetExprNode = NULL;
 
 		if (IsA(targetNode, Var))
 		{
@@ -186,7 +174,7 @@ HasNonPartitionColumnDistinctAgg(List *targetEntryList, Node *havingQual,
 		}
 
 		Assert(IsA(targetNode, Aggref));
-		targetAgg = (Aggref *) targetNode;
+		Aggref *targetAgg = (Aggref *) targetNode;
 		if (targetAgg->aggdistinct == NIL)
 		{
 			continue;
@@ -201,14 +189,15 @@ HasNonPartitionColumnDistinctAgg(List *targetEntryList, Node *havingQual,
 			return true;
 		}
 
-		firstTargetEntry = linitial_node(TargetEntry, targetAgg->args);
-		firstTargetExprNode = strip_implicit_coercions((Node *) firstTargetEntry->expr);
+		TargetEntry *firstTargetEntry = linitial_node(TargetEntry, targetAgg->args);
+		Node *firstTargetExprNode = strip_implicit_coercions(
+			(Node *) firstTargetEntry->expr);
 		if (!IsA(firstTargetExprNode, Var))
 		{
 			return true;
 		}
 
-		varList = pull_var_clause_default((Node *) targetAgg->args);
+		List *varList = pull_var_clause_default((Node *) targetAgg->args);
 		foreach(varCell, varList)
 		{
 			Node *targetVar = (Node *) lfirst(varCell);

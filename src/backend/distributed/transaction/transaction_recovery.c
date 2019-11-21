@@ -65,11 +65,9 @@ static bool RecoverPreparedTransactionOnWorker(MultiConnection *connection,
 Datum
 recover_prepared_transactions(PG_FUNCTION_ARGS)
 {
-	int recoveredTransactionCount = 0;
-
 	CheckCitusVersion(ERROR);
 
-	recoveredTransactionCount = RecoverTwoPhaseCommits();
+	int recoveredTransactionCount = RecoverTwoPhaseCommits();
 
 	PG_RETURN_INT32(recoveredTransactionCount);
 }
@@ -83,9 +81,6 @@ recover_prepared_transactions(PG_FUNCTION_ARGS)
 void
 LogTransactionRecord(int32 groupId, char *transactionName)
 {
-	Relation pgDistTransaction = NULL;
-	TupleDesc tupleDescriptor = NULL;
-	HeapTuple heapTuple = NULL;
 	Datum values[Natts_pg_dist_transaction];
 	bool isNulls[Natts_pg_dist_transaction];
 
@@ -97,10 +92,10 @@ LogTransactionRecord(int32 groupId, char *transactionName)
 	values[Anum_pg_dist_transaction_gid - 1] = CStringGetTextDatum(transactionName);
 
 	/* open transaction relation and insert new tuple */
-	pgDistTransaction = heap_open(DistTransactionRelationId(), RowExclusiveLock);
+	Relation pgDistTransaction = heap_open(DistTransactionRelationId(), RowExclusiveLock);
 
-	tupleDescriptor = RelationGetDescr(pgDistTransaction);
-	heapTuple = heap_form_tuple(tupleDescriptor, values, isNulls);
+	TupleDesc tupleDescriptor = RelationGetDescr(pgDistTransaction);
+	HeapTuple heapTuple = heap_form_tuple(tupleDescriptor, values, isNulls);
 
 	CatalogTupleInsert(pgDistTransaction, heapTuple);
 
@@ -118,11 +113,10 @@ LogTransactionRecord(int32 groupId, char *transactionName)
 int
 RecoverTwoPhaseCommits(void)
 {
-	List *workerList = NIL;
 	ListCell *workerNodeCell = NULL;
 	int recoveredTransactionCount = 0;
 
-	workerList = ActivePrimaryNodeList(NoLock);
+	List *workerList = ActivePrimaryNodeList(NoLock);
 
 	foreach(workerNodeCell, workerList)
 	{
@@ -148,26 +142,14 @@ RecoverWorkerTransactions(WorkerNode *workerNode)
 	char *nodeName = workerNode->workerName;
 	int nodePort = workerNode->workerPort;
 
-	List *activeTransactionNumberList = NIL;
-	HTAB *activeTransactionNumberSet = NULL;
 
-	List *pendingTransactionList = NIL;
-	HTAB *pendingTransactionSet = NULL;
-	List *recheckTransactionList = NIL;
-	HTAB *recheckTransactionSet = NULL;
-
-	Relation pgDistTransaction = NULL;
-	SysScanDesc scanDescriptor = NULL;
 	ScanKeyData scanKey[1];
 	int scanKeyCount = 1;
 	bool indexOK = true;
 	HeapTuple heapTuple = NULL;
-	TupleDesc tupleDescriptor = NULL;
 
 	HASH_SEQ_STATUS status;
 
-	MemoryContext localContext = NULL;
-	MemoryContext oldContext = NULL;
 	bool recoveryFailed = false;
 
 	int connectionFlags = 0;
@@ -180,17 +162,18 @@ RecoverWorkerTransactions(WorkerNode *workerNode)
 		return 0;
 	}
 
-	localContext = AllocSetContextCreateExtended(CurrentMemoryContext,
-												 "RecoverWorkerTransactions",
-												 ALLOCSET_DEFAULT_MINSIZE,
-												 ALLOCSET_DEFAULT_INITSIZE,
-												 ALLOCSET_DEFAULT_MAXSIZE);
+	MemoryContext localContext = AllocSetContextCreateExtended(CurrentMemoryContext,
+															   "RecoverWorkerTransactions",
+															   ALLOCSET_DEFAULT_MINSIZE,
+															   ALLOCSET_DEFAULT_INITSIZE,
+															   ALLOCSET_DEFAULT_MAXSIZE);
 
-	oldContext = MemoryContextSwitchTo(localContext);
+	MemoryContext oldContext = MemoryContextSwitchTo(localContext);
 
 	/* take table lock first to avoid running concurrently */
-	pgDistTransaction = heap_open(DistTransactionRelationId(), ShareUpdateExclusiveLock);
-	tupleDescriptor = RelationGetDescr(pgDistTransaction);
+	Relation pgDistTransaction = heap_open(DistTransactionRelationId(),
+										   ShareUpdateExclusiveLock);
+	TupleDesc tupleDescriptor = RelationGetDescr(pgDistTransaction);
 
 	/*
 	 * We're going to check the list of prepared transactions on the worker,
@@ -225,31 +208,33 @@ RecoverWorkerTransactions(WorkerNode *workerNode)
 	 */
 
 	/* find stale prepared transactions on the remote node */
-	pendingTransactionList = PendingWorkerTransactionList(connection);
-	pendingTransactionSet = ListToHashSet(pendingTransactionList, NAMEDATALEN, true);
+	List *pendingTransactionList = PendingWorkerTransactionList(connection);
+	HTAB *pendingTransactionSet = ListToHashSet(pendingTransactionList, NAMEDATALEN,
+												true);
 
 	/* find in-progress distributed transactions */
-	activeTransactionNumberList = ActiveDistributedTransactionNumbers();
-	activeTransactionNumberSet = ListToHashSet(activeTransactionNumberList,
-											   sizeof(uint64), false);
+	List *activeTransactionNumberList = ActiveDistributedTransactionNumbers();
+	HTAB *activeTransactionNumberSet = ListToHashSet(activeTransactionNumberList,
+													 sizeof(uint64), false);
 
 	/* scan through all recovery records of the current worker */
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_transaction_groupid,
 				BTEqualStrategyNumber, F_INT4EQ, Int32GetDatum(groupId));
 
 	/* get a snapshot of pg_dist_transaction */
-	scanDescriptor = systable_beginscan(pgDistTransaction,
-										DistTransactionGroupIndexId(), indexOK,
-										NULL, scanKeyCount, scanKey);
+	SysScanDesc scanDescriptor = systable_beginscan(pgDistTransaction,
+													DistTransactionGroupIndexId(),
+													indexOK,
+													NULL, scanKeyCount, scanKey);
 
 	/* find stale prepared transactions on the remote node */
-	recheckTransactionList = PendingWorkerTransactionList(connection);
-	recheckTransactionSet = ListToHashSet(recheckTransactionList, NAMEDATALEN, true);
+	List *recheckTransactionList = PendingWorkerTransactionList(connection);
+	HTAB *recheckTransactionSet = ListToHashSet(recheckTransactionList, NAMEDATALEN,
+												true);
 
 	while (HeapTupleIsValid(heapTuple = systable_getnext(scanDescriptor)))
 	{
 		bool isNull = false;
-		bool isTransactionInProgress = false;
 		bool foundPreparedTransactionBeforeCommit = false;
 		bool foundPreparedTransactionAfterCommit = false;
 
@@ -258,8 +243,8 @@ RecoverWorkerTransactions(WorkerNode *workerNode)
 												  tupleDescriptor, &isNull);
 		char *transactionName = TextDatumGetCString(transactionNameDatum);
 
-		isTransactionInProgress = IsTransactionInProgress(activeTransactionNumberSet,
-														  transactionName);
+		bool isTransactionInProgress = IsTransactionInProgress(activeTransactionNumberSet,
+															   transactionName);
 		if (isTransactionInProgress)
 		{
 			/*
@@ -375,17 +360,15 @@ RecoverWorkerTransactions(WorkerNode *workerNode)
 
 		while ((pendingTransactionName = hash_seq_search(&status)) != NULL)
 		{
-			bool isTransactionInProgress = false;
-			bool shouldCommit = false;
-
-			isTransactionInProgress = IsTransactionInProgress(activeTransactionNumberSet,
-															  pendingTransactionName);
+			bool isTransactionInProgress = IsTransactionInProgress(
+				activeTransactionNumberSet,
+				pendingTransactionName);
 			if (isTransactionInProgress)
 			{
 				continue;
 			}
 
-			shouldCommit = false;
+			bool shouldCommit = false;
 			abortSucceeded = RecoverPreparedTransactionOnWorker(connection,
 																pendingTransactionName,
 																shouldCommit);
@@ -415,10 +398,6 @@ PendingWorkerTransactionList(MultiConnection *connection)
 {
 	StringInfo command = makeStringInfo();
 	bool raiseInterrupts = true;
-	int querySent = 0;
-	PGresult *result = NULL;
-	int rowCount = 0;
-	int rowIndex = 0;
 	List *transactionNames = NIL;
 	int coordinatorId = GetLocalGroupId();
 
@@ -426,21 +405,21 @@ PendingWorkerTransactionList(MultiConnection *connection)
 							  "WHERE gid LIKE 'citus\\_%d\\_%%'",
 					 coordinatorId);
 
-	querySent = SendRemoteCommand(connection, command->data);
+	int querySent = SendRemoteCommand(connection, command->data);
 	if (querySent == 0)
 	{
 		ReportConnectionError(connection, ERROR);
 	}
 
-	result = GetRemoteCommandResult(connection, raiseInterrupts);
+	PGresult *result = GetRemoteCommandResult(connection, raiseInterrupts);
 	if (!IsResponseOK(result))
 	{
 		ReportResultError(connection, result, ERROR);
 	}
 
-	rowCount = PQntuples(result);
+	int rowCount = PQntuples(result);
 
-	for (rowIndex = 0; rowIndex < rowCount; rowIndex++)
+	for (int rowIndex = 0; rowIndex < rowCount; rowIndex++)
 	{
 		const int columnIndex = 0;
 		char *transactionName = PQgetvalue(result, rowIndex, columnIndex);
@@ -468,11 +447,12 @@ IsTransactionInProgress(HTAB *activeTransactionNumberSet, char *preparedTransact
 	int procId = 0;
 	uint32 connectionNumber = 0;
 	uint64 transactionNumber = 0;
-	bool isValidName = false;
 	bool isTransactionInProgress = false;
 
-	isValidName = ParsePreparedTransactionName(preparedTransactionName, &groupId, &procId,
-											   &transactionNumber, &connectionNumber);
+	bool isValidName = ParsePreparedTransactionName(preparedTransactionName, &groupId,
+													&procId,
+													&transactionNumber,
+													&connectionNumber);
 	if (isValidName)
 	{
 		hash_search(activeTransactionNumberSet, &transactionNumber, HASH_FIND,
@@ -493,7 +473,6 @@ RecoverPreparedTransactionOnWorker(MultiConnection *connection, char *transactio
 {
 	StringInfo command = makeStringInfo();
 	PGresult *result = NULL;
-	int executeCommand = 0;
 	bool raiseInterrupts = false;
 
 	if (shouldCommit)
@@ -509,7 +488,7 @@ RecoverPreparedTransactionOnWorker(MultiConnection *connection, char *transactio
 						 quote_literal_cstr(transactionName));
 	}
 
-	executeCommand = ExecuteOptionalRemoteCommand(connection, command->data, &result);
+	int executeCommand = ExecuteOptionalRemoteCommand(connection, command->data, &result);
 	if (executeCommand == QUERY_SEND_FAILED)
 	{
 		return false;

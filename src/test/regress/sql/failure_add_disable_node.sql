@@ -4,7 +4,7 @@
 -- master_disable_node and master_add_inactive_node can not be
 -- tested as they don't create network activity
 --
- 
+
 SELECT citus.mitmproxy('conn.allow()');
 
 SET citus.next_shard_id TO 200000;

@@ -142,8 +142,6 @@ ExecuteLocalTaskList(CitusScanState *scanState, List *taskList)
 	{
 		Task *task = (Task *) lfirst(taskCell);
 
-		PlannedStmt *localPlan = NULL;
-		int cursorOptions = 0;
 		const char *shardQueryString = task->queryString;
 		Query *shardQuery = ParseQueryString(shardQueryString, parameterTypes, numParams);
 
@@ -153,7 +151,7 @@ ExecuteLocalTaskList(CitusScanState *scanState, List *taskList)
 		 * go through the distributed executor, which we do not want since the
 		 * query is already known to be local.
 		 */
-		cursorOptions = 0;
+		int cursorOptions = 0;
 
 		/*
 		 * Altough the shardQuery is local to this node, we prefer planner()
@@ -163,7 +161,7 @@ ExecuteLocalTaskList(CitusScanState *scanState, List *taskList)
 		 * implemented. So, let planner to call distributed_planner() which
 		 * eventually calls standard_planner().
 		 */
-		localPlan = planner(shardQuery, cursorOptions, paramListInfo);
+		PlannedStmt *localPlan = planner(shardQuery, cursorOptions, paramListInfo);
 
 		LogLocalCommand(shardQueryString);
 
@@ -241,7 +239,6 @@ ExtractLocalAndRemoteTasks(bool readOnly, List *taskList, List **localTaskList,
 		}
 		else
 		{
-			Task *localTask = NULL;
 			Task *remoteTask = NULL;
 
 			/*
@@ -252,7 +249,7 @@ ExtractLocalAndRemoteTasks(bool readOnly, List *taskList, List **localTaskList,
 			 */
 			task->partiallyLocalOrRemote = true;
 
-			localTask = copyObject(task);
+			Task *localTask = copyObject(task);
 
 			localTask->taskPlacementList = localTaskPlacementList;
 			*localTaskList = lappend(*localTaskList, localTask);
@@ -318,7 +315,6 @@ ExecuteLocalTaskPlan(CitusScanState *scanState, PlannedStmt *taskPlan, char *que
 	DestReceiver *tupleStoreDestReceiever = CreateDestReceiver(DestTuplestore);
 	ScanDirection scanDirection = ForwardScanDirection;
 	QueryEnvironment *queryEnv = create_queryEnv();
-	QueryDesc *queryDesc = NULL;
 	int eflags = 0;
 	uint64 totalRowsProcessed = 0;
 
@@ -331,10 +327,10 @@ ExecuteLocalTaskPlan(CitusScanState *scanState, PlannedStmt *taskPlan, char *que
 									CurrentMemoryContext, false);
 
 	/* Create a QueryDesc for the query */
-	queryDesc = CreateQueryDesc(taskPlan, queryString,
-								GetActiveSnapshot(), InvalidSnapshot,
-								tupleStoreDestReceiever, paramListInfo,
-								queryEnv, 0);
+	QueryDesc *queryDesc = CreateQueryDesc(taskPlan, queryString,
+										   GetActiveSnapshot(), InvalidSnapshot,
+										   tupleStoreDestReceiever, paramListInfo,
+										   queryEnv, 0);
 
 	ExecutorStart(queryDesc, eflags);
 	ExecutorRun(queryDesc, scanDirection, 0L, true);
@@ -365,8 +361,6 @@ ExecuteLocalTaskPlan(CitusScanState *scanState, PlannedStmt *taskPlan, char *que
 bool
 ShouldExecuteTasksLocally(List *taskList)
 {
-	bool singleTask = false;
-
 	if (!EnableLocalExecution)
 	{
 		return false;
@@ -394,7 +388,7 @@ ShouldExecuteTasksLocally(List *taskList)
 		return true;
 	}
 
-	singleTask = (list_length(taskList) == 1);
+	bool singleTask = (list_length(taskList) == 1);
 	if (singleTask && TaskAccessesLocalNode((Task *) linitial(taskList)))
 	{
 		/*

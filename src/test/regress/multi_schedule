@@ -15,8 +15,8 @@
 # ---
 # Tests around schema changes, these are run first, so there's no preexisting objects.
 #
-# propagate_extension_commands lies just after multi_cluster_management as we do 
-# remove / add node operations, we do not want any preexisting objects before 
+# propagate_extension_commands lies just after multi_cluster_management as we do
+# remove / add node operations, we do not want any preexisting objects before
 # propagate_extension_commands
 # ---
 test: multi_extension
@@ -82,7 +82,7 @@ test: multi_array_agg multi_limit_clause multi_orderby_limit_pushdown
 test: multi_jsonb_agg multi_jsonb_object_agg multi_json_agg multi_json_object_agg bool_agg ch_bench_having ch_bench_subquery_repartition chbenchmark_all_queries expression_reference_join
 test: multi_agg_type_conversion multi_count_type_conversion
 test: multi_partition_pruning single_hash_repartition_join
-test: multi_join_pruning multi_hash_pruning
+test: multi_join_pruning multi_hash_pruning intermediate_result_pruning
 test: multi_null_minmax_value_pruning
 test: multi_query_directory_cleanup
 test: multi_task_assignment_policy multi_cross_shard

@@ -99,8 +99,6 @@ create_distributed_function(PG_FUNCTION_ARGS)
 	text *colocateWithText = NULL; /* optional */
 
 	StringInfoData ddlCommand = { 0 };
-	const char *createFunctionSQL = NULL;
-	const char *alterFunctionOwnerSQL = NULL;
 	ObjectAddress functionAddress = { 0 };
 
 	int distributionArgumentIndex = -1;
@@ -159,8 +157,8 @@ create_distributed_function(PG_FUNCTION_ARGS)
 
 	EnsureDependenciesExistsOnAllNodes(&functionAddress);
 
-	createFunctionSQL = GetFunctionDDLCommand(funcOid, true);
-	alterFunctionOwnerSQL = GetFunctionAlterOwnerCommand(funcOid);
+	const char *createFunctionSQL = GetFunctionDDLCommand(funcOid, true);
+	const char *alterFunctionOwnerSQL = GetFunctionAlterOwnerCommand(funcOid);
 	initStringInfo(&ddlCommand);
 	appendStringInfo(&ddlCommand, "%s;%s", createFunctionSQL, alterFunctionOwnerSQL);
 	SendCommandToWorkersAsUser(ALL_WORKERS, CurrentUserName(), ddlCommand.data);
@@ -221,13 +219,10 @@ create_distributed_function(PG_FUNCTION_ARGS)
 List *
 CreateFunctionDDLCommandsIdempotent(const ObjectAddress *functionAddress)
 {
-	char *ddlCommand = NULL;
-	char *alterFunctionOwnerSQL = NULL;
-
 	Assert(functionAddress->classId == ProcedureRelationId);
 
-	ddlCommand = GetFunctionDDLCommand(functionAddress->objectId, true);
-	alterFunctionOwnerSQL = GetFunctionAlterOwnerCommand(functionAddress->objectId);
+	char *ddlCommand = GetFunctionDDLCommand(functionAddress->objectId, true);
+	char *alterFunctionOwnerSQL = GetFunctionAlterOwnerCommand(functionAddress->objectId);
 
 	return list_make2(ddlCommand, alterFunctionOwnerSQL);
 }
@@ -243,23 +238,20 @@ GetDistributionArgIndex(Oid functionOid, char *distributionArgumentName,
 {
 	int distributionArgumentIndex = -1;
 
-	int numberOfArgs = 0;
-	int argIndex = 0;
 	Oid *argTypes = NULL;
 	char **argNames = NULL;
 	char *argModes = NULL;
 
-	HeapTuple proctup = NULL;
 
 	*distributionArgumentOid = InvalidOid;
 
-	proctup = SearchSysCache1(PROCOID, ObjectIdGetDatum(functionOid));
+	HeapTuple proctup = SearchSysCache1(PROCOID, ObjectIdGetDatum(functionOid));
 	if (!HeapTupleIsValid(proctup))
 	{
 		elog(ERROR, "cache lookup failed for function %u", functionOid);
 	}
 
-	numberOfArgs = get_func_arg_info(proctup, &argTypes, &argNames, &argModes);
+	int numberOfArgs = get_func_arg_info(proctup, &argTypes, &argNames, &argModes);
 
 	if (argumentStartsWith(distributionArgumentName, "$"))
 	{
@@ -301,7 +293,7 @@ GetDistributionArgIndex(Oid functionOid, char *distributionArgumentName,
 	 * So, loop over the arguments and try to find the argument name that matches
 	 * the parameter that user provided.
 	 */
-	for (argIndex = 0; argIndex < numberOfArgs; ++argIndex)
+	for (int argIndex = 0; argIndex < numberOfArgs; ++argIndex)
 	{
 		char *argNameOnIndex = argNames != NULL ? argNames[argIndex] : NULL;
 
@@ -352,8 +344,6 @@ GetFunctionColocationId(Oid functionOid, char *colocateWithTableName,
 
 	if (pg_strncasecmp(colocateWithTableName, "default", NAMEDATALEN) == 0)
 	{
-		Oid colocatedTableId = InvalidOid;
-
 		/* check for default colocation group */
 		colocationId = ColocationId(ShardCount, ShardReplicationFactor,
 									distributionArgumentOid);
@@ -369,7 +359,7 @@ GetFunctionColocationId(Oid functionOid, char *colocateWithTableName,
 									"option to create_distributed_function()")));
 		}
 
-		colocatedTableId = ColocatedTableId(colocationId);
+		Oid colocatedTableId = ColocatedTableId(colocationId);
 		if (colocatedTableId != InvalidOid)
 		{
 			EnsureFunctionCanBeColocatedWithTable(functionOid, distributionArgumentOid,
@@ -415,7 +405,6 @@ EnsureFunctionCanBeColocatedWithTable(Oid functionOid, Oid distributionColumnTyp
 	char sourceDistributionMethod = sourceTableEntry->partitionMethod;
 	char sourceReplicationModel = sourceTableEntry->replicationModel;
 	Var *sourceDistributionColumn = DistPartitionKey(sourceRelationId);
-	Oid sourceDistributionColumnType = InvalidOid;
 
 	if (sourceDistributionMethod != DISTRIBUTE_BY_HASH)
 	{
@@ -447,13 +436,12 @@ EnsureFunctionCanBeColocatedWithTable(Oid functionOid, Oid distributionColumnTyp
 	 * If the types are the same, we're good. If not, we still check if there
 	 * is any coercion path between the types.
 	 */
-	sourceDistributionColumnType = sourceDistributionColumn->vartype;
+	Oid sourceDistributionColumnType = sourceDistributionColumn->vartype;
 	if (sourceDistributionColumnType != distributionColumnType)
 	{
 		Oid coercionFuncId = InvalidOid;
-		CoercionPathType coercionType = COERCION_PATH_NONE;
 
-		coercionType =
+		CoercionPathType coercionType =
 			find_coercion_pathway(distributionColumnType, sourceDistributionColumnType,
 								  COERCION_EXPLICIT, &coercionFuncId);
 
@@ -483,17 +471,13 @@ UpdateFunctionDistributionInfo(const ObjectAddress *distAddress,
 {
 	const bool indexOK = true;
 
-	Relation pgDistObjectRel = NULL;
-	TupleDesc tupleDescriptor = NULL;
 	ScanKeyData scanKey[3];
-	SysScanDesc scanDescriptor = NULL;
-	HeapTuple heapTuple = NULL;
 	Datum values[Natts_pg_dist_object];
 	bool isnull[Natts_pg_dist_object];
 	bool replace[Natts_pg_dist_object];
 
-	pgDistObjectRel = heap_open(DistObjectRelationId(), RowExclusiveLock);
-	tupleDescriptor = RelationGetDescr(pgDistObjectRel);
+	Relation pgDistObjectRel = heap_open(DistObjectRelationId(), RowExclusiveLock);
+	TupleDesc tupleDescriptor = RelationGetDescr(pgDistObjectRel);
 
 	/* scan pg_dist_object for classid = $1 AND objid = $2 AND objsubid = $3 via index */
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_object_classid, BTEqualStrategyNumber, F_OIDEQ,
@@ -503,11 +487,12 @@ UpdateFunctionDistributionInfo(const ObjectAddress *distAddress,
 	ScanKeyInit(&scanKey[2], Anum_pg_dist_object_objsubid, BTEqualStrategyNumber,
 				F_INT4EQ, ObjectIdGetDatum(distAddress->objectSubId));
 
-	scanDescriptor = systable_beginscan(pgDistObjectRel, DistObjectPrimaryKeyIndexId(),
-										indexOK,
-										NULL, 3, scanKey);
+	SysScanDesc scanDescriptor = systable_beginscan(pgDistObjectRel,
+													DistObjectPrimaryKeyIndexId(),
+													indexOK,
+													NULL, 3, scanKey);
 
-	heapTuple = systable_getnext(scanDescriptor);
+	HeapTuple heapTuple = systable_getnext(scanDescriptor);
 	if (!HeapTupleIsValid(heapTuple))
 	{
 		ereport(ERROR, (errmsg("could not find valid entry for node \"%d,%d,%d\" "
@@ -609,17 +594,10 @@ GetFunctionAlterOwnerCommand(const RegProcedure funcOid)
 	char *kindString = "FUNCTION";
 	Oid procOwner = InvalidOid;
 
-	char *functionSignature = NULL;
-	char *functionOwner = NULL;
-
-	OverrideSearchPath *overridePath = NULL;
-	Datum functionSignatureDatum = 0;
 
 	if (HeapTupleIsValid(proctup))
 	{
-		Form_pg_proc procform;
-
-		procform = (Form_pg_proc) GETSTRUCT(proctup);
+		Form_pg_proc procform = (Form_pg_proc) GETSTRUCT(proctup);
 
 		procOwner = procform->proowner;
 
@@ -644,7 +622,7 @@ GetFunctionAlterOwnerCommand(const RegProcedure funcOid)
 	 * schema-prefixed. pg_catalog will be added automatically when we call
 	 * PushOverrideSearchPath(), since we set addCatalog to true;
 	 */
-	overridePath = GetOverrideSearchPath(CurrentMemoryContext);
+	OverrideSearchPath *overridePath = GetOverrideSearchPath(CurrentMemoryContext);
 	overridePath->schemas = NIL;
 	overridePath->addCatalog = true;
 
@@ -654,16 +632,16 @@ GetFunctionAlterOwnerCommand(const RegProcedure funcOid)
 	 * If the function exists we want to use pg_get_function_identity_arguments to
 	 * serialize its canonical arguments
 	 */
-	functionSignatureDatum =
+	Datum functionSignatureDatum =
 		DirectFunctionCall1(regprocedureout, ObjectIdGetDatum(funcOid));
 
 	/* revert back to original search_path */
 	PopOverrideSearchPath();
 
 	/* regprocedureout returns cstring */
-	functionSignature = DatumGetCString(functionSignatureDatum);
+	char *functionSignature = DatumGetCString(functionSignatureDatum);
 
-	functionOwner = GetUserNameFromId(procOwner, false);
+	char *functionOwner = GetUserNameFromId(procOwner, false);
 
 	appendStringInfo(alterCommand, "ALTER %s %s OWNER TO %s;",
 					 kindString,
@@ -686,12 +664,8 @@ static char *
 GetAggregateDDLCommand(const RegProcedure funcOid, bool useCreateOrReplace)
 {
 	StringInfoData buf = { 0 };
-	HeapTuple proctup = NULL;
-	Form_pg_proc proc = NULL;
 	HeapTuple aggtup = NULL;
 	Form_pg_aggregate agg = NULL;
-	const char *name = NULL;
-	const char *nsp = NULL;
 	int numargs = 0;
 	int i = 0;
 	Oid *argtypes = NULL;
@@ -701,20 +675,20 @@ GetAggregateDDLCommand(const RegProcedure funcOid, bool useCreateOrReplace)
 	int argsprinted = 0;
 	int inputargno = 0;
 
-	proctup = SearchSysCache1(PROCOID, funcOid);
+	HeapTuple proctup = SearchSysCache1(PROCOID, funcOid);
 	if (!HeapTupleIsValid(proctup))
 	{
 		elog(ERROR, "cache lookup failed for %d", funcOid);
 	}
 
-	proc = (Form_pg_proc) GETSTRUCT(proctup);
+	Form_pg_proc proc = (Form_pg_proc) GETSTRUCT(proctup);
 
 	Assert(proc->prokind == PROKIND_AGGREGATE);
 
 	initStringInfo(&buf);
 
-	name = NameStr(proc->proname);
-	nsp = get_namespace_name(proc->pronamespace);
+	const char *name = NameStr(proc->proname);
+	const char *nsp = get_namespace_name(proc->pronamespace);
 
 #if PG_VERSION_NUM >= 120000
 	if (useCreateOrReplace)
@@ -1112,8 +1086,6 @@ TriggerSyncMetadataToPrimaryNodes(void)
 static bool
 ShouldPropagateCreateFunction(CreateFunctionStmt *stmt)
 {
-	const ObjectAddress *address = NULL;
-
 	if (creating_extension)
 	{
 		/*
@@ -1144,7 +1116,7 @@ ShouldPropagateCreateFunction(CreateFunctionStmt *stmt)
 	 * Even though its a replace we should accept an non-existing function, it will just
 	 * not be distributed
 	 */
-	address = GetObjectAddressFromParseTree((Node *) stmt, true);
+	const ObjectAddress *address = GetObjectAddressFromParseTree((Node *) stmt, true);
 	if (!IsObjectDistributed(address))
 	{
 		/* do not propagate alter function for non-distributed functions */
@@ -1231,21 +1203,18 @@ PlanCreateFunctionStmt(CreateFunctionStmt *stmt, const char *queryString)
 List *
 ProcessCreateFunctionStmt(CreateFunctionStmt *stmt, const char *queryString)
 {
-	const ObjectAddress *address = NULL;
-	List *commands = NIL;
-
 	if (!ShouldPropagateCreateFunction(stmt))
 	{
 		return NIL;
 	}
 
-	address = GetObjectAddressFromParseTree((Node *) stmt, false);
+	const ObjectAddress *address = GetObjectAddressFromParseTree((Node *) stmt, false);
 	EnsureDependenciesExistsOnAllNodes(address);
 
-	commands = list_make4(DISABLE_DDL_PROPAGATION,
-						  GetFunctionDDLCommand(address->objectId, true),
-						  GetFunctionAlterOwnerCommand(address->objectId),
-						  ENABLE_DDL_PROPAGATION);
+	List *commands = list_make4(DISABLE_DDL_PROPAGATION,
+								GetFunctionDDLCommand(address->objectId, true),
+								GetFunctionAlterOwnerCommand(address->objectId),
+								ENABLE_DDL_PROPAGATION);
 
 	return NodeDDLTaskList(ALL_WORKERS, commands);
 }
@@ -1260,7 +1229,6 @@ ObjectAddress *
 CreateFunctionStmtObjectAddress(CreateFunctionStmt *stmt, bool missing_ok)
 {
 	ObjectType objectType = OBJECT_FUNCTION;
-	ObjectWithArgs *objectWithArgs = NULL;
 	ListCell *parameterCell = NULL;
 
 	if (stmt->is_procedure)
@@ -1268,7 +1236,7 @@ CreateFunctionStmtObjectAddress(CreateFunctionStmt *stmt, bool missing_ok)
 		objectType = OBJECT_PROCEDURE;
 	}
 
-	objectWithArgs = makeNode(ObjectWithArgs);
+	ObjectWithArgs *objectWithArgs = makeNode(ObjectWithArgs);
 	objectWithArgs->objname = stmt->funcname;
 
 	foreach(parameterCell, stmt->parameters)
@@ -1292,12 +1260,11 @@ CreateFunctionStmtObjectAddress(CreateFunctionStmt *stmt, bool missing_ok)
 ObjectAddress *
 DefineAggregateStmtObjectAddress(DefineStmt *stmt, bool missing_ok)
 {
-	ObjectWithArgs *objectWithArgs = NULL;
 	ListCell *parameterCell = NULL;
 
 	Assert(stmt->kind == OBJECT_AGGREGATE);
 
-	objectWithArgs = makeNode(ObjectWithArgs);
+	ObjectWithArgs *objectWithArgs = makeNode(ObjectWithArgs);
 	objectWithArgs->objname = stmt->defnames;
 
 	foreach(parameterCell, linitial(stmt->args))
@@ -1318,13 +1285,9 @@ DefineAggregateStmtObjectAddress(DefineStmt *stmt, bool missing_ok)
 List *
 PlanAlterFunctionStmt(AlterFunctionStmt *stmt, const char *queryString)
 {
-	const char *sql = NULL;
-	const ObjectAddress *address = NULL;
-	List *commands = NIL;
-
 	AssertObjectTypeIsFunctional(stmt->objtype);
 
-	address = GetObjectAddressFromParseTree((Node *) stmt, false);
+	const ObjectAddress *address = GetObjectAddressFromParseTree((Node *) stmt, false);
 	if (!ShouldPropagateAlterFunction(address))
 	{
 		return NIL;
@@ -1334,11 +1297,11 @@ PlanAlterFunctionStmt(AlterFunctionStmt *stmt, const char *queryString)
 	ErrorIfUnsupportedAlterFunctionStmt(stmt);
 	EnsureSequentialModeForFunctionDDL();
 	QualifyTreeNode((Node *) stmt);
-	sql = DeparseTreeNode((Node *) stmt);
+	const char *sql = DeparseTreeNode((Node *) stmt);
 
-	commands = list_make3(DISABLE_DDL_PROPAGATION,
-						  (void *) sql,
-						  ENABLE_DDL_PROPAGATION);
+	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
+								(void *) sql,
+								ENABLE_DDL_PROPAGATION);
 
 	return NodeDDLTaskList(ALL_WORKERS, commands);
 }
@@ -1355,13 +1318,9 @@ PlanAlterFunctionStmt(AlterFunctionStmt *stmt, const char *queryString)
 List *
 PlanRenameFunctionStmt(RenameStmt *stmt, const char *queryString)
 {
-	const char *sql = NULL;
-	const ObjectAddress *address = NULL;
-	List *commands = NIL;
-
 	AssertObjectTypeIsFunctional(stmt->renameType);
 
-	address = GetObjectAddressFromParseTree((Node *) stmt, false);
+	const ObjectAddress *address = GetObjectAddressFromParseTree((Node *) stmt, false);
 	if (!ShouldPropagateAlterFunction(address))
 	{
 		return NIL;
@@ -1370,11 +1329,11 @@ PlanRenameFunctionStmt(RenameStmt *stmt, const char *queryString)
 	EnsureCoordinator();
 	EnsureSequentialModeForFunctionDDL();
 	QualifyTreeNode((Node *) stmt);
-	sql = DeparseTreeNode((Node *) stmt);
+	const char *sql = DeparseTreeNode((Node *) stmt);
 
-	commands = list_make3(DISABLE_DDL_PROPAGATION,
-						  (void *) sql,
-						  ENABLE_DDL_PROPAGATION);
+	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
+								(void *) sql,
+								ENABLE_DDL_PROPAGATION);
 
 	return NodeDDLTaskList(ALL_WORKERS, commands);
 }
@@ -1389,13 +1348,9 @@ PlanRenameFunctionStmt(RenameStmt *stmt, const char *queryString)
 List *
 PlanAlterFunctionSchemaStmt(AlterObjectSchemaStmt *stmt, const char *queryString)
 {
-	const char *sql = NULL;
-	const ObjectAddress *address = NULL;
-	List *commands = NIL;
-
 	AssertObjectTypeIsFunctional(stmt->objectType);
 
-	address = GetObjectAddressFromParseTree((Node *) stmt, false);
+	const ObjectAddress *address = GetObjectAddressFromParseTree((Node *) stmt, false);
 	if (!ShouldPropagateAlterFunction(address))
 	{
 		return NIL;
@@ -1404,11 +1359,11 @@ PlanAlterFunctionSchemaStmt(AlterObjectSchemaStmt *stmt, const char *queryString
 	EnsureCoordinator();
 	EnsureSequentialModeForFunctionDDL();
 	QualifyTreeNode((Node *) stmt);
-	sql = DeparseTreeNode((Node *) stmt);
+	const char *sql = DeparseTreeNode((Node *) stmt);
 
-	commands = list_make3(DISABLE_DDL_PROPAGATION,
-						  (void *) sql,
-						  ENABLE_DDL_PROPAGATION);
+	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
+								(void *) sql,
+								ENABLE_DDL_PROPAGATION);
 
 	return NodeDDLTaskList(ALL_WORKERS, commands);
 }
@@ -1424,13 +1379,9 @@ PlanAlterFunctionSchemaStmt(AlterObjectSchemaStmt *stmt, const char *queryString
 List *
 PlanAlterFunctionOwnerStmt(AlterOwnerStmt *stmt, const char *queryString)
 {
-	const ObjectAddress *address = NULL;
-	const char *sql = NULL;
-	List *commands = NULL;
-
 	AssertObjectTypeIsFunctional(stmt->objectType);
 
-	address = GetObjectAddressFromParseTree((Node *) stmt, false);
+	const ObjectAddress *address = GetObjectAddressFromParseTree((Node *) stmt, false);
 	if (!ShouldPropagateAlterFunction(address))
 	{
 		return NIL;
@@ -1439,11 +1390,11 @@ PlanAlterFunctionOwnerStmt(AlterOwnerStmt *stmt, const char *queryString)
 	EnsureCoordinator();
 	EnsureSequentialModeForFunctionDDL();
 	QualifyTreeNode((Node *) stmt);
-	sql = DeparseTreeNode((Node *) stmt);
+	const char *sql = DeparseTreeNode((Node *) stmt);
 
-	commands = list_make3(DISABLE_DDL_PROPAGATION,
-						  (void *) sql,
-						  ENABLE_DDL_PROPAGATION);
+	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
+								(void *) sql,
+								ENABLE_DDL_PROPAGATION);
 
 	return NodeDDLTaskList(ALL_WORKERS, commands);
 }
@@ -1465,10 +1416,7 @@ PlanDropFunctionStmt(DropStmt *stmt, const char *queryString)
 	List *distributedObjectWithArgsList = NIL;
 	List *distributedFunctionAddresses = NIL;
 	ListCell *addressCell = NULL;
-	const char *dropStmtSql = NULL;
-	List *commands = NULL;
 	ListCell *objectWithArgsListCell = NULL;
-	DropStmt *stmtCopy = NULL;
 
 	AssertObjectTypeIsFunctional(stmt->removeType);
 
@@ -1502,11 +1450,9 @@ PlanDropFunctionStmt(DropStmt *stmt, const char *queryString)
 	 */
 	foreach(objectWithArgsListCell, deletingObjectWithArgsList)
 	{
-		ObjectWithArgs *func = NULL;
-		ObjectAddress *address = NULL;
-
-		func = castNode(ObjectWithArgs, lfirst(objectWithArgsListCell));
-		address = FunctionToObjectAddress(stmt->removeType, func, stmt->missing_ok);
+		ObjectWithArgs *func = castNode(ObjectWithArgs, lfirst(objectWithArgsListCell));
+		ObjectAddress *address = FunctionToObjectAddress(stmt->removeType, func,
+														 stmt->missing_ok);
 
 		if (!IsObjectDistributed(address))
 		{
@@ -1543,13 +1489,13 @@ PlanDropFunctionStmt(DropStmt *stmt, const char *queryString)
 	 * Swap the list of objects before deparsing and restore the old list after. This
 	 * ensures we only have distributed functions in the deparsed drop statement.
 	 */
-	stmtCopy = copyObject(stmt);
+	DropStmt *stmtCopy = copyObject(stmt);
 	stmtCopy->objects = distributedObjectWithArgsList;
-	dropStmtSql = DeparseTreeNode((Node *) stmtCopy);
+	const char *dropStmtSql = DeparseTreeNode((Node *) stmtCopy);
 
-	commands = list_make3(DISABLE_DDL_PROPAGATION,
-						  (void *) dropStmtSql,
-						  ENABLE_DDL_PROPAGATION);
+	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
+								(void *) dropStmtSql,
+								ENABLE_DDL_PROPAGATION);
 
 	return NodeDDLTaskList(ALL_WORKERS, commands);
 }
@@ -1569,9 +1515,6 @@ PlanDropFunctionStmt(DropStmt *stmt, const char *queryString)
 List *
 PlanAlterFunctionDependsStmt(AlterObjectDependsStmt *stmt, const char *queryString)
 {
-	const ObjectAddress *address = NULL;
-	const char *functionName = NULL;
-
 	AssertObjectTypeIsFunctional(stmt->objectType);
 
 	if (creating_extension)
@@ -1591,7 +1534,7 @@ PlanAlterFunctionDependsStmt(AlterObjectDependsStmt *stmt, const char *queryStri
 		return NIL;
 	}
 
-	address = GetObjectAddressFromParseTree((Node *) stmt, true);
+	const ObjectAddress *address = GetObjectAddressFromParseTree((Node *) stmt, true);
 	if (!IsObjectDistributed(address))
 	{
 		return NIL;
@@ -1603,7 +1546,7 @@ PlanAlterFunctionDependsStmt(AlterObjectDependsStmt *stmt, const char *queryStri
 	 * workers
 	 */
 
-	functionName = getObjectIdentity(address);
+	const char *functionName = getObjectIdentity(address);
 	ereport(ERROR, (errmsg("distrtibuted functions are not allowed to depend on an "
 						   "extension"),
 					errdetail("Function \"%s\" is already distributed. Functions from "
@@ -1635,11 +1578,9 @@ AlterFunctionDependsStmtObjectAddress(AlterObjectDependsStmt *stmt, bool missing
 void
 ProcessAlterFunctionSchemaStmt(AlterObjectSchemaStmt *stmt, const char *queryString)
 {
-	const ObjectAddress *address = NULL;
-
 	AssertObjectTypeIsFunctional(stmt->objectType);
 
-	address = GetObjectAddressFromParseTree((Node *) stmt, false);
+	const ObjectAddress *address = GetObjectAddressFromParseTree((Node *) stmt, false);
 	if (!ShouldPropagateAlterFunction(address))
 	{
 		return;
@@ -1698,16 +1639,11 @@ AlterFunctionOwnerObjectAddress(AlterOwnerStmt *stmt, bool missing_ok)
 ObjectAddress *
 AlterFunctionSchemaStmtObjectAddress(AlterObjectSchemaStmt *stmt, bool missing_ok)
 {
-	ObjectWithArgs *objectWithArgs = NULL;
-	Oid funcOid = InvalidOid;
-	List *names = NIL;
-	ObjectAddress *address = NULL;
-
 	AssertObjectTypeIsFunctional(stmt->objectType);
 
-	objectWithArgs = castNode(ObjectWithArgs, stmt->object);
-	funcOid = LookupFuncWithArgs(stmt->objectType, objectWithArgs, true);
-	names = objectWithArgs->objname;
+	ObjectWithArgs *objectWithArgs = castNode(ObjectWithArgs, stmt->object);
+	Oid funcOid = LookupFuncWithArgs(stmt->objectType, objectWithArgs, true);
+	List *names = objectWithArgs->objname;
 
 	if (funcOid == InvalidOid)
 	{
@@ -1744,7 +1680,7 @@ AlterFunctionSchemaStmtObjectAddress(AlterObjectSchemaStmt *stmt, bool missing_o
 		}
 	}
 
-	address = palloc0(sizeof(ObjectAddress));
+	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
 	ObjectAddressSet(*address, ProcedureRelationId, funcOid);
 
 	return address;
@@ -1766,7 +1702,6 @@ GenerateBackupNameForProcCollision(const ObjectAddress *address)
 														 address->objectId)));
 	char *baseName = get_func_name(address->objectId);
 	int baseLength = strlen(baseName);
-	int numargs = 0;
 	Oid *argtypes = NULL;
 	char **argnames = NULL;
 	char *argmodes = NULL;
@@ -1777,15 +1712,13 @@ GenerateBackupNameForProcCollision(const ObjectAddress *address)
 		elog(ERROR, "citus cache lookup failed.");
 	}
 
-	numargs = get_func_arg_info(proctup, &argtypes, &argnames, &argmodes);
+	int numargs = get_func_arg_info(proctup, &argtypes, &argnames, &argmodes);
 	ReleaseSysCache(proctup);
 
 	while (true)
 	{
 		int suffixLength = snprintf(suffix, NAMEDATALEN - 1, "(citus_backup_%d)",
 									count);
-		List *newProcName = NIL;
-		FuncCandidateList clist = NULL;
 
 		/* trim the base name at the end to leave space for the suffix and trailing \0 */
 		baseLength = Min(baseLength, NAMEDATALEN - suffixLength - 1);
@@ -1795,10 +1728,11 @@ GenerateBackupNameForProcCollision(const ObjectAddress *address)
 		strncpy(newName, baseName, baseLength);
 		strncpy(newName + baseLength, suffix, suffixLength);
 
-		newProcName = list_make2(namespace, makeString(newName));
+		List *newProcName = list_make2(namespace, makeString(newName));
 
 		/* don't need to rename if the input arguments don't match */
-		clist = FuncnameGetCandidates(newProcName, numargs, NIL, false, false, true);
+		FuncCandidateList clist = FuncnameGetCandidates(newProcName, numargs, NIL, false,
+														false, true);
 		for (; clist; clist = clist->next)
 		{
 			if (memcmp(clist->args, argtypes, sizeof(Oid) * numargs) == 0)
@@ -1828,8 +1762,6 @@ ObjectWithArgsFromOid(Oid funcOid)
 	Oid *argTypes = NULL;
 	char **argNames = NULL;
 	char *argModes = NULL;
-	int numargs = 0;
-	int i = 0;
 	HeapTuple proctup = SearchSysCache1(PROCOID, funcOid);
 
 	if (!HeapTupleIsValid(proctup))
@@ -1837,14 +1769,14 @@ ObjectWithArgsFromOid(Oid funcOid)
 		elog(ERROR, "citus cache lookup failed.");
 	}
 
-	numargs = get_func_arg_info(proctup, &argTypes, &argNames, &argModes);
+	int numargs = get_func_arg_info(proctup, &argTypes, &argNames, &argModes);
 
 	objectWithArgs->objname = list_make2(
 		makeString(get_namespace_name(get_func_namespace(funcOid))),
 		makeString(get_func_name(funcOid))
 		);
 
-	for (i = 0; i < numargs; i++)
+	for (int i = 0; i < numargs; i++)
 	{
 		if (argModes == NULL ||
 			argModes[i] != PROARGMODE_OUT || argModes[i] != PROARGMODE_TABLE)
@@ -1870,13 +1802,10 @@ static ObjectAddress *
 FunctionToObjectAddress(ObjectType objectType, ObjectWithArgs *objectWithArgs,
 						bool missing_ok)
 {
-	Oid funcOid = InvalidOid;
-	ObjectAddress *address = NULL;
-
 	AssertObjectTypeIsFunctional(objectType);
 
-	funcOid = LookupFuncWithArgs(objectType, objectWithArgs, missing_ok);
-	address = palloc0(sizeof(ObjectAddress));
+	Oid funcOid = LookupFuncWithArgs(objectType, objectWithArgs, missing_ok);
+	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
 	ObjectAddressSet(*address, ProcedureRelationId, funcOid);
 
 	return address;

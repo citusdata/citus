@@ -795,8 +795,8 @@ SELECT   s.logicalrelid::regclass::text, sp.shardstate, count(*)
 FROM     pg_dist_shard_placement AS sp,
 	     pg_dist_shard           AS s
 WHERE    sp.shardid = s.shardid
-AND      (s.logicalrelid = 'reference_modifying_xacts'::regclass OR 
-		  s.logicalrelid = 'hash_modifying_xacts'::regclass)	
+AND      (s.logicalrelid = 'reference_modifying_xacts'::regclass OR
+		  s.logicalrelid = 'hash_modifying_xacts'::regclass)
 GROUP BY s.logicalrelid, sp.shardstate
 ORDER BY s.logicalrelid, sp.shardstate;
 
@@ -831,8 +831,8 @@ SELECT   s.logicalrelid::regclass::text, sp.shardstate, count(*)
 FROM     pg_dist_shard_placement AS sp,
 	     pg_dist_shard           AS s
 WHERE    sp.shardid = s.shardid
-AND      (s.logicalrelid = 'reference_modifying_xacts'::regclass OR 
-		  s.logicalrelid = 'hash_modifying_xacts'::regclass)	
+AND      (s.logicalrelid = 'reference_modifying_xacts'::regclass OR
+		  s.logicalrelid = 'hash_modifying_xacts'::regclass)
 GROUP BY s.logicalrelid, sp.shardstate
 ORDER BY s.logicalrelid, sp.shardstate;
 
@@ -901,7 +901,7 @@ SELECT create_distributed_table('numbers_hash_failure_test', 'key');
 \c - test_user - :worker_1_port
 \dt reference_failure_test_1200015
 
--- now connect with the default user, 
+-- now connect with the default user,
 -- and rename the existing user
 \c - :default_user - :worker_1_port
 ALTER USER test_user RENAME TO test_user_new;
@@ -933,7 +933,7 @@ SELECT   s.logicalrelid::regclass::text, sp.shardstate, count(*)
 FROM     pg_dist_shard_placement AS sp,
 	     pg_dist_shard           AS s
 WHERE    sp.shardid = s.shardid
-AND      s.logicalrelid = 'reference_failure_test'::regclass	
+AND      s.logicalrelid = 'reference_failure_test'::regclass
 GROUP BY s.logicalrelid, sp.shardstate
 ORDER BY s.logicalrelid, sp.shardstate;
 
@@ -992,7 +992,7 @@ ALTER USER test_user RENAME TO test_user_new;
 -- fails on all shard placements
 INSERT INTO numbers_hash_failure_test VALUES (2,2);
 
--- connect back to the master with the proper user to continue the tests 
+-- connect back to the master with the proper user to continue the tests
 \c - :default_user - :master_port
 SET citus.next_shard_id TO 1200020;
 SET citus.next_placement_id TO 1200033;
@@ -1103,7 +1103,7 @@ SELECT user_id FROM items JOIN itemgroups ON (item_group = gid) WHERE user_id = 
 SELECT user_id FROM items JOIN itemgroups ON (item_group = gid) WHERE user_id = 3;
 -- perform a DDL command on the reference table errors
 -- because the current implementation of COPY always opens one connection
--- per placement SELECTs have to use those connections for correctness  
+-- per placement SELECTs have to use those connections for correctness
 ALTER TABLE itemgroups ADD COLUMN last_update timestamptz;
 END;
 

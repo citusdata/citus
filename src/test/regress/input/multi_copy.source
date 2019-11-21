@@ -28,7 +28,7 @@ SELECT master_create_worker_shards('customer_copy_hash', 64, 1);
 COPY customer_copy_hash FROM STDIN;
 \.
 
--- Test syntax error 
+-- Test syntax error
 COPY customer_copy_hash (c_custkey,c_name) FROM STDIN;
 1,customer1
 2,customer2,
@@ -519,7 +519,7 @@ SELECT master_create_distributed_table('numbers_append', 'a', 'append');
 
 -- no shards is created yet
 SELECT shardid, nodename, nodeport
-	FROM pg_dist_shard_placement join pg_dist_shard using(shardid) 
+	FROM pg_dist_shard_placement join pg_dist_shard using(shardid)
 	WHERE logicalrelid = 'numbers_append'::regclass order by placementid;
 
 COPY numbers_append FROM STDIN WITH (FORMAT 'csv');
@@ -534,13 +534,13 @@ COPY numbers_append FROM STDIN WITH (FORMAT 'csv');
 
 -- verify there are shards at both workers
 SELECT shardid, nodename, nodeport
-	FROM pg_dist_shard_placement join pg_dist_shard using(shardid) 
+	FROM pg_dist_shard_placement join pg_dist_shard using(shardid)
 	WHERE logicalrelid = 'numbers_append'::regclass order by placementid;
 
 -- disable the first node
 SELECT master_disable_node('localhost', :worker_1_port);
 -- set replication factor to 1 so that copy will
--- succeed without replication count error 
+-- succeed without replication count error
 SET citus.shard_replication_factor TO 1;
 
 -- add two new shards and verify they are created at the other node
@@ -555,7 +555,7 @@ COPY numbers_append FROM STDIN WITH (FORMAT 'csv');
 \.
 
 SELECT shardid, nodename, nodeport
-	FROM pg_dist_shard_placement join pg_dist_shard using(shardid) 
+	FROM pg_dist_shard_placement join pg_dist_shard using(shardid)
 	WHERE logicalrelid = 'numbers_append'::regclass order by placementid;
 
 -- add the node back
@@ -573,7 +573,7 @@ COPY numbers_append FROM STDIN WITH (FORMAT 'csv');
 \.
 
 SELECT shardid, nodename, nodeport
-	FROM pg_dist_shard_placement join pg_dist_shard using(shardid) 
+	FROM pg_dist_shard_placement join pg_dist_shard using(shardid)
 	WHERE logicalrelid = 'numbers_append'::regclass order by placementid;
 DROP TABLE numbers_append;
 
@@ -600,7 +600,7 @@ COPY numbers_hash FROM STDIN WITH (FORMAT 'csv');
 
 -- verify each placement is active
 SELECT shardid, shardstate, nodename, nodeport
-	FROM pg_dist_shard_placement join pg_dist_shard using(shardid) 
+	FROM pg_dist_shard_placement join pg_dist_shard using(shardid)
 	WHERE logicalrelid = 'numbers_hash'::regclass order by shardid, nodeport;
 
 -- create a reference table
@@ -615,7 +615,7 @@ COPY numbers_reference FROM STDIN WITH (FORMAT 'csv');
 CREATE TABLE numbers_hash_other(a int, b int);
 SELECT create_distributed_table('numbers_hash_other', 'a');
 SELECT shardid, shardstate, nodename, nodeport
-	FROM pg_dist_shard_placement join pg_dist_shard using(shardid) 
+	FROM pg_dist_shard_placement join pg_dist_shard using(shardid)
 	WHERE logicalrelid = 'numbers_hash_other'::regclass order by shardid, nodeport;
 
 -- manually corrupt pg_dist_shard such that both copies of one shard is placed in
@@ -643,7 +643,7 @@ COPY numbers_hash FROM STDIN WITH (FORMAT 'csv');
 
 -- verify shards in the first worker as marked invalid
 SELECT shardid, shardstate, nodename, nodeport
-	FROM pg_dist_shard_placement join pg_dist_shard using(shardid) 
+	FROM pg_dist_shard_placement join pg_dist_shard using(shardid)
 	WHERE logicalrelid = 'numbers_hash'::regclass order by shardid, nodeport;
 
 -- try to insert into a reference table copy should fail
@@ -654,7 +654,7 @@ COPY numbers_reference FROM STDIN WITH (FORMAT 'csv');
 
 -- verify shards for reference table are still valid
 SELECT shardid, shardstate, nodename, nodeport
-	FROM pg_dist_shard_placement join pg_dist_shard using(shardid) 
+	FROM pg_dist_shard_placement join pg_dist_shard using(shardid)
 	WHERE logicalrelid = 'numbers_reference'::regclass order by placementid;
 
 
@@ -670,7 +670,7 @@ COPY numbers_hash_other FROM STDIN WITH (FORMAT 'csv');
 -- verify shards for numbers_hash_other are still valid
 -- since copy has failed altogether
 SELECT shardid, shardstate, nodename, nodeport
-	FROM pg_dist_shard_placement join pg_dist_shard using(shardid) 
+	FROM pg_dist_shard_placement join pg_dist_shard using(shardid)
 	WHERE logicalrelid = 'numbers_hash_other'::regclass order by shardid, nodeport;
 
 -- re-enable test_user on the first worker
@@ -716,7 +716,7 @@ SELECT count(a) FROM numbers_hash;
 
 -- verify shard is still marked as valid
 SELECT shardid, shardstate, nodename, nodeport
-	FROM pg_dist_shard_placement join pg_dist_shard using(shardid) 
+	FROM pg_dist_shard_placement join pg_dist_shard using(shardid)
 	WHERE logicalrelid = 'numbers_hash'::regclass order by shardid, nodeport;
 
 DROP TABLE numbers_hash;

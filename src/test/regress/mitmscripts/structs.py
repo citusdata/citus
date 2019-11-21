@@ -442,7 +442,7 @@ class Frontend(FrontendMessage):
         "length" / Int32ub,  # "32-bit unsigned big-endian"
         "raw_body" / Bytes(this.length - 4),
         # try to parse the body into something more structured than raw bytes
-        "body" / RestreamData(this.raw_body, frontend_switch),  
+        "body" / RestreamData(this.raw_body, frontend_switch),
     )
 
     def print(message):
@@ -463,7 +463,7 @@ class Backend(BackendMessage):
         "length" / Int32ub,  # "32-bit unsigned big-endian"
         "raw_body" / Bytes(this.length - 4),
         # try to parse the body into something more structured than raw bytes
-        "body" / RestreamData(this.raw_body, backend_switch),  
+        "body" / RestreamData(this.raw_body, backend_switch),
     )
 
     def print(message):

@@ -39,18 +39,16 @@ Oid
 FunctionOidExtended(const char *schemaName, const char *functionName, int argumentCount,
 					bool missingOK)
 {
-	FuncCandidateList functionList = NULL;
-	Oid functionOid = InvalidOid;
-
 	char *qualifiedFunctionName = quote_qualified_identifier(schemaName, functionName);
 	List *qualifiedFunctionNameList = stringToQualifiedNameList(qualifiedFunctionName);
 	List *argumentList = NIL;
 	const bool findVariadics = false;
 	const bool findDefaults = false;
 
-	functionList = FuncnameGetCandidates(qualifiedFunctionNameList, argumentCount,
-										 argumentList, findVariadics,
-										 findDefaults, true);
+	FuncCandidateList functionList = FuncnameGetCandidates(qualifiedFunctionNameList,
+														   argumentCount,
+														   argumentList, findVariadics,
+														   findDefaults, true);
 
 	if (functionList == NULL)
 	{
@@ -69,7 +67,7 @@ FunctionOidExtended(const char *schemaName, const char *functionName, int argume
 	}
 
 	/* get function oid from function list's head */
-	functionOid = functionList->oid;
+	Oid functionOid = functionList->oid;
 
 	return functionOid;
 }

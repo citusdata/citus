@@ -1,6 +1,6 @@
--- 
---  Failure tests for COPY to reference tables 
--- 
+--
+--  Failure tests for COPY to reference tables
+--
 
 -- We have to keep two copies of this failure test
 -- because if the shards are created via the executor
@@ -60,7 +60,7 @@ SELECT run_command_on_workers($$SELECT count(*) FROM information_schema.schemata
 
 -- cancel as soon as the coordinator sends begin
 -- if the shards are created via the executor, the table creation will fail
--- otherwise shards will be created because we ignore cancel requests during the shard creation 
+-- otherwise shards will be created because we ignore cancel requests during the shard creation
 -- Interrupts are hold in CreateShardsWithRoundRobinPolicy
 SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED").cancel(' ||  pg_backend_pid() || ')');
 SELECT create_distributed_table('test_table', 'id');
@@ -86,7 +86,7 @@ SELECT citus.mitmproxy('conn.onCommandComplete(command="COPY").kill()');
 SELECT create_distributed_table('test_table', 'id');
 SELECT count(*) FROM pg_dist_shard WHERE logicalrelid='create_distributed_table_non_empty_failure.test_table'::regclass;
 
--- cancel as soon as the coordinator sends COPY, table 
+-- cancel as soon as the coordinator sends COPY, table
 -- should not be created and rollbacked properly
 SELECT citus.mitmproxy('conn.onQuery(query="COPY").cancel(' ||  pg_backend_pid() || ')');
 SELECT create_distributed_table('test_table', 'id');
@@ -149,7 +149,7 @@ ROLLBACK;
 SELECT count(*) FROM pg_dist_shard WHERE logicalrelid='create_distributed_table_non_empty_failure.test_table'::regclass;
 
 -- cancel as soon as the coordinator sends ROLLBACK
--- should be rollbacked 
+-- should be rollbacked
 SELECT citus.mitmproxy('conn.onQuery(query="^ROLLBACK").cancel(' ||  pg_backend_pid() || ')');
 BEGIN;
 SELECT create_distributed_table('test_table', 'id');
@@ -244,7 +244,7 @@ SELECT run_command_on_workers($$SELECT count(*) FROM information_schema.schemata
 
 -- cancel as soon as the coordinator sends begin
 -- if the shards are created via the executor, the table creation will fail
--- otherwise shards will be created because we ignore cancel requests during the shard creation 
+-- otherwise shards will be created because we ignore cancel requests during the shard creation
 -- Interrupts are hold in CreateShardsWithRoundRobinPolicy
 SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED").cancel(' ||  pg_backend_pid() || ')');
 SELECT create_distributed_table('test_table', 'id');
@@ -270,7 +270,7 @@ SELECT citus.mitmproxy('conn.onCommandComplete(command="COPY").kill()');
 SELECT create_distributed_table('test_table', 'id');
 SELECT count(*) FROM pg_dist_shard WHERE logicalrelid='create_distributed_table_non_empty_failure.test_table'::regclass;
 
--- cancel as soon as the coordinator sends COPY, table 
+-- cancel as soon as the coordinator sends COPY, table
 -- should not be created and rollbacked properly
 SELECT citus.mitmproxy('conn.onQuery(query="COPY").cancel(' ||  pg_backend_pid() || ')');
 SELECT create_distributed_table('test_table', 'id');
@@ -290,7 +290,7 @@ ROLLBACK;
 SELECT count(*) FROM pg_dist_shard WHERE logicalrelid='create_distributed_table_non_empty_failure.test_table'::regclass;
 
 -- cancel as soon as the coordinator sends ROLLBACK
--- should be rollbacked 
+-- should be rollbacked
 SELECT citus.mitmproxy('conn.onQuery(query="^ROLLBACK").cancel(' ||  pg_backend_pid() || ')');
 BEGIN;
 SELECT create_distributed_table('test_table', 'id');

@@ -91,7 +91,6 @@ start_metadata_sync_to_node(PG_FUNCTION_ARGS)
 void
 StartMetadatSyncToNode(char *nodeNameString, int32 nodePort)
 {
-	WorkerNode *workerNode = NULL;
 	char *escapedNodeName = quote_literal_cstr(nodeNameString);
 
 	/* fail if metadata synchronization doesn't succeed */
@@ -106,7 +105,7 @@ StartMetadatSyncToNode(char *nodeNameString, int32 nodePort)
 
 	LockRelationOid(DistNodeRelationId(), ExclusiveLock);
 
-	workerNode = FindWorkerNode(nodeNameString, nodePort);
+	WorkerNode *workerNode = FindWorkerNode(nodeNameString, nodePort);
 	if (workerNode == NULL)
 	{
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
@@ -159,7 +158,6 @@ stop_metadata_sync_to_node(PG_FUNCTION_ARGS)
 	text *nodeName = PG_GETARG_TEXT_P(0);
 	int32 nodePort = PG_GETARG_INT32(1);
 	char *nodeNameString = text_to_cstring(nodeName);
-	WorkerNode *workerNode = NULL;
 
 	EnsureCoordinator();
 	EnsureSuperUser();
@@ -167,7 +165,7 @@ stop_metadata_sync_to_node(PG_FUNCTION_ARGS)
 
 	LockRelationOid(DistNodeRelationId(), ExclusiveLock);
 
-	workerNode = FindWorkerNode(nodeNameString, nodePort);
+	WorkerNode *workerNode = FindWorkerNode(nodeNameString, nodePort);
 	if (workerNode == NULL)
 	{
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
@@ -297,13 +295,13 @@ bool
 SendOptionalCommandListToWorkerInTransaction(char *nodeName, int32 nodePort,
 											 char *nodeUser, List *commandList)
 {
-	MultiConnection *workerConnection = NULL;
 	ListCell *commandCell = NULL;
 	int connectionFlags = FORCE_NEW_CONNECTION;
 	bool failed = false;
 
-	workerConnection = GetNodeUserDatabaseConnection(connectionFlags, nodeName, nodePort,
-													 nodeUser, NULL);
+	MultiConnection *workerConnection = GetNodeUserDatabaseConnection(connectionFlags,
+																	  nodeName, nodePort,
+																	  nodeUser, NULL);
 
 	RemoteTransactionBegin(workerConnection);
 
@@ -356,14 +354,13 @@ MetadataCreateCommands(void)
 	bool includeNodesFromOtherClusters = true;
 	List *workerNodeList = ReadDistNode(includeNodesFromOtherClusters);
 	ListCell *distributedTableCell = NULL;
-	char *nodeListInsertCommand = NULL;
 	bool includeSequenceDefaults = true;
 
 	/* make sure we have deterministic output for our tests */
 	workerNodeList = SortList(workerNodeList, CompareWorkerNodes);
 
 	/* generate insert command for pg_dist_node table */
-	nodeListInsertCommand = NodeListInsertCommand(workerNodeList);
+	char *nodeListInsertCommand = NodeListInsertCommand(workerNodeList);
 	metadataSnapshotCommandList = lappend(metadataSnapshotCommandList,
 										  nodeListInsertCommand);
 
@@ -441,26 +438,22 @@ MetadataCreateCommands(void)
 	{
 		DistTableCacheEntry *cacheEntry =
 			(DistTableCacheEntry *) lfirst(distributedTableCell);
-		List *shardIntervalList = NIL;
-		List *shardCreateCommandList = NIL;
-		char *metadataCommand = NULL;
-		char *truncateTriggerCreateCommand = NULL;
 		Oid clusteredTableId = cacheEntry->relationId;
 
 		/* add the table metadata command first*/
-		metadataCommand = DistributionCreateCommand(cacheEntry);
+		char *metadataCommand = DistributionCreateCommand(cacheEntry);
 		metadataSnapshotCommandList = lappend(metadataSnapshotCommandList,
 											  metadataCommand);
 
 		/* add the truncate trigger command after the table became distributed */
-		truncateTriggerCreateCommand =
+		char *truncateTriggerCreateCommand =
 			TruncateTriggerCreateCommand(cacheEntry->relationId);
 		metadataSnapshotCommandList = lappend(metadataSnapshotCommandList,
 											  truncateTriggerCreateCommand);
 
 		/* add the pg_dist_shard{,placement} entries */
-		shardIntervalList = LoadShardIntervalList(clusteredTableId);
-		shardCreateCommandList = ShardListInsertCommand(shardIntervalList);
+		List *shardIntervalList = LoadShardIntervalList(clusteredTableId);
+		List *shardCreateCommandList = ShardListInsertCommand(shardIntervalList);
 
 		metadataSnapshotCommandList = list_concat(metadataSnapshotCommandList,
 												  shardCreateCommandList);
@@ -481,44 +474,36 @@ GetDistributedTableDDLEvents(Oid relationId)
 {
 	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(relationId);
 
-	List *shardIntervalList = NIL;
 	List *commandList = NIL;
-	List *foreignConstraintCommands = NIL;
-	List *shardMetadataInsertCommandList = NIL;
-	List *sequenceDDLCommands = NIL;
-	List *tableDDLCommands = NIL;
-	char *tableOwnerResetCommand = NULL;
-	char *metadataCommand = NULL;
-	char *truncateTriggerCreateCommand = NULL;
 	bool includeSequenceDefaults = true;
 
 	/* commands to create sequences */
-	sequenceDDLCommands = SequenceDDLCommandsForTable(relationId);
+	List *sequenceDDLCommands = SequenceDDLCommandsForTable(relationId);
 	commandList = list_concat(commandList, sequenceDDLCommands);
 
 	/* commands to create the table */
-	tableDDLCommands = GetTableDDLEvents(relationId, includeSequenceDefaults);
+	List *tableDDLCommands = GetTableDDLEvents(relationId, includeSequenceDefaults);
 	commandList = list_concat(commandList, tableDDLCommands);
 
 	/* command to reset the table owner */
-	tableOwnerResetCommand = TableOwnerResetCommand(relationId);
+	char *tableOwnerResetCommand = TableOwnerResetCommand(relationId);
 	commandList = lappend(commandList, tableOwnerResetCommand);
 
 	/* command to insert pg_dist_partition entry */
-	metadataCommand = DistributionCreateCommand(cacheEntry);
+	char *metadataCommand = DistributionCreateCommand(cacheEntry);
 	commandList = lappend(commandList, metadataCommand);
 
 	/* commands to create the truncate trigger of the table */
-	truncateTriggerCreateCommand = TruncateTriggerCreateCommand(relationId);
+	char *truncateTriggerCreateCommand = TruncateTriggerCreateCommand(relationId);
 	commandList = lappend(commandList, truncateTriggerCreateCommand);
 
 	/* commands to insert pg_dist_shard & pg_dist_placement entries */
-	shardIntervalList = LoadShardIntervalList(relationId);
-	shardMetadataInsertCommandList = ShardListInsertCommand(shardIntervalList);
+	List *shardIntervalList = LoadShardIntervalList(relationId);
+	List *shardMetadataInsertCommandList = ShardListInsertCommand(shardIntervalList);
 	commandList = list_concat(commandList, shardMetadataInsertCommandList);
 
 	/* commands to create foreign key constraints */
-	foreignConstraintCommands = GetTableForeignConstraintCommands(relationId);
+	List *foreignConstraintCommands = GetTableForeignConstraintCommands(relationId);
 	commandList = list_concat(commandList, foreignConstraintCommands);
 
 	/* commands to create partitioning hierarchy */
@@ -686,10 +671,9 @@ DistributionCreateCommand(DistTableCacheEntry *cacheEntry)
 char *
 DistributionDeleteCommand(char *schemaName, char *tableName)
 {
-	char *distributedRelationName = NULL;
 	StringInfo deleteDistributionCommand = makeStringInfo();
 
-	distributedRelationName = quote_qualified_identifier(schemaName, tableName);
+	char *distributedRelationName = quote_qualified_identifier(schemaName, tableName);
 
 	appendStringInfo(deleteDistributionCommand,
 					 "SELECT worker_drop_distributed_table(%s)",
@@ -850,11 +834,9 @@ ShardDeleteCommandList(ShardInterval *shardInterval)
 {
 	uint64 shardId = shardInterval->shardId;
 	List *commandList = NIL;
-	StringInfo deletePlacementCommand = NULL;
-	StringInfo deleteShardCommand = NULL;
 
 	/* create command to delete shard placements */
-	deletePlacementCommand = makeStringInfo();
+	StringInfo deletePlacementCommand = makeStringInfo();
 	appendStringInfo(deletePlacementCommand,
 					 "DELETE FROM pg_dist_placement WHERE shardid = " UINT64_FORMAT,
 					 shardId);
@@ -862,7 +844,7 @@ ShardDeleteCommandList(ShardInterval *shardInterval)
 	commandList = lappend(commandList, deletePlacementCommand->data);
 
 	/* create command to delete shard */
-	deleteShardCommand = makeStringInfo();
+	StringInfo deleteShardCommand = makeStringInfo();
 	appendStringInfo(deleteShardCommand,
 					 "DELETE FROM pg_dist_shard WHERE shardid = " UINT64_FORMAT, shardId);
 
@@ -1013,27 +995,23 @@ UpdateDistNodeBoolAttr(char *nodeName, int32 nodePort, int attrNum, bool value)
 {
 	const bool indexOK = false;
 
-	Relation pgDistNode = NULL;
-	TupleDesc tupleDescriptor = NULL;
 	ScanKeyData scanKey[2];
-	SysScanDesc scanDescriptor = NULL;
-	HeapTuple heapTuple = NULL;
 	Datum values[Natts_pg_dist_node];
 	bool isnull[Natts_pg_dist_node];
 	bool replace[Natts_pg_dist_node];
 
-	pgDistNode = heap_open(DistNodeRelationId(), RowExclusiveLock);
-	tupleDescriptor = RelationGetDescr(pgDistNode);
+	Relation pgDistNode = heap_open(DistNodeRelationId(), RowExclusiveLock);
+	TupleDesc tupleDescriptor = RelationGetDescr(pgDistNode);
 
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_node_nodename,
 				BTEqualStrategyNumber, F_TEXTEQ, CStringGetTextDatum(nodeName));
 	ScanKeyInit(&scanKey[1], Anum_pg_dist_node_nodeport,
 				BTEqualStrategyNumber, F_INT4EQ, Int32GetDatum(nodePort));
 
-	scanDescriptor = systable_beginscan(pgDistNode, InvalidOid, indexOK,
-										NULL, 2, scanKey);
+	SysScanDesc scanDescriptor = systable_beginscan(pgDistNode, InvalidOid, indexOK,
+													NULL, 2, scanKey);
 
-	heapTuple = systable_getnext(scanDescriptor);
+	HeapTuple heapTuple = systable_getnext(scanDescriptor);
 	if (!HeapTupleIsValid(heapTuple))
 	{
 		ereport(ERROR, (errmsg("could not find valid entry for node \"%s:%d\"",
@@ -1113,18 +1091,15 @@ char *
 CreateSchemaDDLCommand(Oid schemaId)
 {
 	char *schemaName = get_namespace_name(schemaId);
-	StringInfo schemaNameDef = NULL;
-	const char *ownerName = NULL;
-	const char *quotedSchemaName = NULL;
 
 	if (strncmp(schemaName, "public", NAMEDATALEN) == 0)
 	{
 		return NULL;
 	}
 
-	schemaNameDef = makeStringInfo();
-	quotedSchemaName = quote_identifier(schemaName);
-	ownerName = quote_identifier(SchemaOwnerName(schemaId));
+	StringInfo schemaNameDef = makeStringInfo();
+	const char *quotedSchemaName = quote_identifier(schemaName);
+	const char *ownerName = quote_identifier(SchemaOwnerName(schemaId));
 	appendStringInfo(schemaNameDef, CREATE_SCHEMA_COMMAND, quotedSchemaName, ownerName);
 
 	return schemaNameDef->data;
@@ -1155,11 +1130,9 @@ TruncateTriggerCreateCommand(Oid relationId)
 static char *
 SchemaOwnerName(Oid objectId)
 {
-	HeapTuple tuple = NULL;
 	Oid ownerId = InvalidOid;
-	char *ownerName = NULL;
 
-	tuple = SearchSysCache1(NAMESPACEOID, ObjectIdGetDatum(objectId));
+	HeapTuple tuple = SearchSysCache1(NAMESPACEOID, ObjectIdGetDatum(objectId));
 	if (HeapTupleIsValid(tuple))
 	{
 		ownerId = ((Form_pg_namespace) GETSTRUCT(tuple))->nspowner;
@@ -1169,7 +1142,7 @@ SchemaOwnerName(Oid objectId)
 		ownerId = GetUserId();
 	}
 
-	ownerName = GetUserNameFromId(ownerId, false);
+	char *ownerName = GetUserNameFromId(ownerId, false);
 
 	ReleaseSysCache(tuple);
 
@@ -1248,7 +1221,6 @@ DetachPartitionCommandList(void)
 	{
 		DistTableCacheEntry *cacheEntry =
 			(DistTableCacheEntry *) lfirst(distributedTableCell);
-		List *partitionList = NIL;
 		ListCell *partitionCell = NULL;
 
 		if (!PartitionedTable(cacheEntry->relationId))
@@ -1256,7 +1228,7 @@ DetachPartitionCommandList(void)
 			continue;
 		}
 
-		partitionList = PartitionList(cacheEntry->relationId);
+		List *partitionList = PartitionList(cacheEntry->relationId);
 		foreach(partitionCell, partitionList)
 		{
 			Oid partitionRelationId = lfirst_oid(partitionCell);
@@ -1295,7 +1267,6 @@ DetachPartitionCommandList(void)
 MetadataSyncResult
 SyncMetadataToNodes(void)
 {
-	List *workerList = NIL;
 	ListCell *workerCell = NULL;
 	MetadataSyncResult result = METADATA_SYNC_SUCCESS;
 
@@ -1314,7 +1285,7 @@ SyncMetadataToNodes(void)
 		return METADATA_SYNC_FAILED_LOCK;
 	}
 
-	workerList = ActivePrimaryWorkerNodeList(NoLock);
+	List *workerList = ActivePrimaryWorkerNodeList(NoLock);
 
 	foreach(workerCell, workerList)
 	{

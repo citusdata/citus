@@ -122,5 +122,5 @@ permutation "s1-add-primary-key""s1-start-session-level-connection" "s1-begin-on
 permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-delete" "s2-start-session-level-connection" "s2-begin-on-worker" "s2-insert-select-ref-table" "s1-commit-worker" "s2-commit-worker" "s1-stop-connection" "s2-stop-connection" "s3-select-count"
 permutation "s1-add-primary-key" "s1-start-session-level-connection" "s1-begin-on-worker" "s1-upsert" "s2-start-session-level-connection" "s2-begin-on-worker" "s2-drop" "s1-commit-worker" "s2-commit-worker" "s1-stop-connection" "s2-stop-connection" "s3-select-count"
 permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-delete" "s2-start-session-level-connection" "s2-begin-on-worker" "s2-truncate" "s1-commit-worker" "s2-commit-worker" "s1-stop-connection" "s2-stop-connection" "s3-select-count"
-//Not able to test the next permutation, until issue with CREATE INDEX CONCURRENTLY's locks is resolved. Issue //2966 
+//Not able to test the next permutation, until issue with CREATE INDEX CONCURRENTLY's locks is resolved. Issue #2966
 //permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-update" "s2-coordinator-create-index-concurrently" "s1-commit-worker" "s3-select-count" "s1-stop-connection"

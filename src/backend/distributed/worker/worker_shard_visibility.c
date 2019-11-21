@@ -107,14 +107,8 @@ citus_table_is_visible(PG_FUNCTION_ARGS)
 bool
 RelationIsAKnownShard(Oid shardRelationId, bool onlySearchPath)
 {
-	int localGroupId = -1;
-	char *shardRelationName = NULL;
-	char *generatedRelationName = NULL;
 	bool missingOk = true;
-	uint64 shardId = INVALID_SHARD_ID;
-	Oid relationId = InvalidOid;
 	char relKind = '\0';
-	Relation relation = NULL;
 
 	if (!OidIsValid(shardRelationId))
 	{
@@ -122,7 +116,7 @@ RelationIsAKnownShard(Oid shardRelationId, bool onlySearchPath)
 		return false;
 	}
 
-	localGroupId = GetLocalGroupId();
+	int localGroupId = GetLocalGroupId();
 	if (localGroupId == 0)
 	{
 		bool coordinatorIsKnown = false;
@@ -139,7 +133,7 @@ RelationIsAKnownShard(Oid shardRelationId, bool onlySearchPath)
 		}
 	}
 
-	relation = try_relation_open(shardRelationId, AccessShareLock);
+	Relation relation = try_relation_open(shardRelationId, AccessShareLock);
 	if (relation == NULL)
 	{
 		return false;
@@ -164,9 +158,9 @@ RelationIsAKnownShard(Oid shardRelationId, bool onlySearchPath)
 	}
 
 	/* get the shard's relation name */
-	shardRelationName = get_rel_name(shardRelationId);
+	char *shardRelationName = get_rel_name(shardRelationId);
 
-	shardId = ExtractShardIdFromTableName(shardRelationName, missingOk);
+	uint64 shardId = ExtractShardIdFromTableName(shardRelationName, missingOk);
 	if (shardId == INVALID_SHARD_ID)
 	{
 		/*
@@ -177,7 +171,7 @@ RelationIsAKnownShard(Oid shardRelationId, bool onlySearchPath)
 	}
 
 	/* try to get the relation id */
-	relationId = LookupShardRelation(shardId, true);
+	Oid relationId = LookupShardRelation(shardId, true);
 	if (!OidIsValid(relationId))
 	{
 		/* there is no such relation */
@@ -195,7 +189,7 @@ RelationIsAKnownShard(Oid shardRelationId, bool onlySearchPath)
 	 * to do that because otherwise a local table with a valid shardId
 	 * appended to its name could be misleading.
 	 */
-	generatedRelationName = get_rel_name(relationId);
+	char *generatedRelationName = get_rel_name(relationId);
 	AppendShardIdToName(&generatedRelationName, shardId);
 	if (strncmp(shardRelationName, generatedRelationName, NAMEDATALEN) == 0)
 	{
