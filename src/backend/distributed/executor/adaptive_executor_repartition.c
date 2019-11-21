@@ -35,6 +35,7 @@
 #include "distributed/multi_server_executor.h"
 #include "distributed/adaptive_executor_repartitioning.h"
 #include "distributed/worker_transaction.h"
+#include "distributed/worker_manager.h"
 #include "distributed/transaction_management.h"
 #include "distributed/multi_task_tracker_executor.h"
 #include "distributed/metadata_cache.h"
@@ -243,7 +244,7 @@ SendCommandToAllWorkers(List *commandList)
 {
 	ListCell *workerNodeCell = NULL;
 	char *extensionOwner = CitusExtensionOwnerName();
-	List *workerNodeList = ReadWorkerNodes(false);
+	List *workerNodeList = ActiveReadableNodeList();
 
 	foreach(workerNodeCell, workerNodeList)
 	{

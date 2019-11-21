@@ -1403,7 +1403,9 @@ CloseForcedConnections(List *forcedConnections)
 	{
 		MultiConnection *con = lfirst(conCell);
 
-		ShutdownConnection(con);
+		UnclaimConnection(con);
+		con->remoteTransaction.transactionState = REMOTE_TRANS_INVALID;
+		CloseConnection(con);
 	}
 }
 
