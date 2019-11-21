@@ -48,7 +48,7 @@ FROM users_table
 GROUP BY user_id
 ORDER BY 2  DESC;
 
-EXPLAIN 
+EXPLAIN
 SELECT user_id, avg(value_1) + count(value_2)
 FROM users_table
 GROUP BY user_id

@@ -20,7 +20,7 @@ INSERT INTO reference_table VALUES (1);
 INSERT INTO distributed_table VALUES (1, '1', 20);
 INSERT INTO second_distributed_table VALUES (1, '1');
 
--- a simple test for 
+-- a simple test for
 CREATE TABLE collections_list (
 	key bigserial,
 	ser bigserial,
@@ -32,7 +32,7 @@ CREATE TABLE collections_list (
 
 SELECT create_distributed_table('collections_list', 'key');
 
-CREATE TABLE collections_list_0 
+CREATE TABLE collections_list_0
 	PARTITION OF collections_list (key, ser, ts, collection_id, value)
 	FOR VALUES IN ( 0 );
 
@@ -44,19 +44,19 @@ SET search_path TO local_shard_execution;
 -- on the distributed tables (e.g., WHERE key = 1), we'll hit a shard
 -- placement which is local to this not
 CREATE OR REPLACE FUNCTION shard_of_distribution_column_is_local(dist_key int) RETURNS bool AS $$
-	
+
 		DECLARE shard_is_local BOOLEAN := FALSE;
 
 		BEGIN
-		  
+
 		  	WITH  local_shard_ids 			  AS (SELECT get_shard_id_for_distribution_column('local_shard_execution.distributed_table', dist_key)),
 				  all_local_shard_ids_on_node AS (SELECT shardid FROM pg_dist_placement WHERE groupid IN (SELECT groupid FROM pg_dist_local_group))
-		SELECT 
+		SELECT
 			true INTO shard_is_local
-		FROM 
-			local_shard_ids 
-		WHERE 
-			get_shard_id_for_distribution_column IN (SELECT * FROM all_local_shard_ids_on_node); 
+		FROM
+			local_shard_ids
+		WHERE
+			get_shard_id_for_distribution_column IN (SELECT * FROM all_local_shard_ids_on_node);
 
 		IF shard_is_local IS NULL THEN
 			shard_is_local = FALSE;
@@ -68,14 +68,14 @@ $$ LANGUAGE plpgsql;
 
 -- pick some example values that reside on the shards locally and remote
 
--- distribution key values of 1,6, 500 and 701 are LOCAL to shards, 
+-- distribution key values of 1,6, 500 and 701 are LOCAL to shards,
 -- we'll use these values in the tests
 SELECT shard_of_distribution_column_is_local(1);
 SELECT shard_of_distribution_column_is_local(6);
 SELECT shard_of_distribution_column_is_local(500);
 SELECT shard_of_distribution_column_is_local(701);
 
--- distribution key values of 11 and 12 are REMOTE to shards 
+-- distribution key values of 11 and 12 are REMOTE to shards
 SELECT shard_of_distribution_column_is_local(11);
 SELECT shard_of_distribution_column_is_local(12);
 
@@ -83,7 +83,7 @@ SELECT shard_of_distribution_column_is_local(12);
 SET client_min_messages TO LOG;
 SET citus.log_local_commands TO ON;
 
--- first, make sure that local execution works fine 
+-- first, make sure that local execution works fine
 -- with simple queries that are not in transcation blocks
 SELECT count(*) FROM distributed_table WHERE key = 1;
 
@@ -116,26 +116,26 @@ DELETE FROM second_distributed_table;
 -- load some more data for the following tests
 INSERT INTO second_distributed_table VALUES (1, '1');
 
--- INSERT .. SELECT hitting a single single (co-located) shard(s) should 
+-- INSERT .. SELECT hitting a single single (co-located) shard(s) should
 -- be executed locally
-INSERT INTO distributed_table 
-SELECT 
-	distributed_table.* 
-FROM 
-	distributed_table, second_distributed_table 
-WHERE 
-	distributed_table.key = 1 and distributed_table.key=second_distributed_table.key 
+INSERT INTO distributed_table
+SELECT
+	distributed_table.*
+FROM
+	distributed_table, second_distributed_table
+WHERE
+	distributed_table.key = 1 and distributed_table.key=second_distributed_table.key
 ON CONFLICT(key) DO UPDATE SET value = '22'
 RETURNING *;
 
 -- INSERT .. SELECT hitting multi-shards should go thourgh distributed execution
-INSERT INTO distributed_table 
-SELECT 
-	distributed_table.* 
-FROM 
-	distributed_table, second_distributed_table 
-WHERE 
-	distributed_table.key != 1 and distributed_table.key=second_distributed_table.key 
+INSERT INTO distributed_table
+SELECT
+	distributed_table.*
+FROM
+	distributed_table, second_distributed_table
+WHERE
+	distributed_table.key != 1 and distributed_table.key=second_distributed_table.key
 ON CONFLICT(key) DO UPDATE SET value = '22'
 RETURNING *;
 
@@ -180,11 +180,11 @@ COPY second_distributed_table FROM STDIN WITH CSV;
 6,'6'
 \.
 
--- the behaviour in transaction blocks is the following: 
+-- the behaviour in transaction blocks is the following:
 	-- (a) Unless the first query is a local query, always use distributed execution.
-	-- (b) If the executor has used local execution, it has to use local execution 
-	--     for the remaining of the transaction block. If that's not possible, the 
-	-- 	   executor has to error out (e.g., TRUNCATE is a utility command and we 
+	-- (b) If the executor has used local execution, it has to use local execution
+	--     for the remaining of the transaction block. If that's not possible, the
+	-- 	   executor has to error out (e.g., TRUNCATE is a utility command and we
 	--	   currently do not support local execution of utility commands)
 
 -- rollback should be able to rollback local execution
@@ -214,9 +214,9 @@ SELECT count(*) FROM second_distributed_table;
 -- that has done before
 BEGIN;
 	-- INSERT is executed locally
-	INSERT INTO distributed_table VALUES (1, '11',21) ON CONFLICT(key) DO UPDATE SET value = '23' RETURNING *; 
+	INSERT INTO distributed_table VALUES (1, '11',21) ON CONFLICT(key) DO UPDATE SET value = '23' RETURNING *;
 
-	-- since the INSERT is executed locally, the SELECT should also be 
+	-- since the INSERT is executed locally, the SELECT should also be
 	-- executed locally and see the changes
 	SELECT * FROM distributed_table WHERE key = 1 ORDER BY 1,2,3;
 
@@ -236,7 +236,7 @@ COMMIT;
 SELECT * FROM distributed_table WHERE key = 1 ORDER BY 1,2,3;
 
 -- if we start with a distributed execution, we should keep
--- using that and never switch back to local execution 
+-- using that and never switch back to local execution
 BEGIN;
 	DELETE FROM distributed_table WHERE value = '11';
 
@@ -313,15 +313,15 @@ ROLLBACK;
 -- a local query is followed by a command that cannot be executed locally
 BEGIN;
 	SELECT count(*) FROM distributed_table WHERE key = 1;
-	
-	INSERT INTO distributed_table (key) SELECT i FROM generate_series(1,10)i; 
+
+	INSERT INTO distributed_table (key) SELECT i FROM generate_series(1,10)i;
 ROLLBACK;
 
 -- a local query is followed by a command that cannot be executed locally
 BEGIN;
 	SELECT count(*) FROM distributed_table WHERE key = 1;
-	
-	INSERT INTO distributed_table (key) SELECT key+1 FROM distributed_table; 
+
+	INSERT INTO distributed_table (key) SELECT key+1 FROM distributed_table;
 ROLLBACK;
 
 INSERT INTO distributed_table VALUES (1, '11',21) ON CONFLICT(key) DO UPDATE SET value = '29' RETURNING *;
@@ -353,7 +353,7 @@ CREATE OR REPLACE PROCEDURE only_local_execution() AS $$
 		BEGIN
 			INSERT INTO distributed_table VALUES (1, '11',21) ON CONFLICT(key) DO UPDATE SET value = '29';
 			SELECT count(*) INTO cnt FROM distributed_table WHERE key = 1;
-			DELETE FROM distributed_table WHERE key = 1;	
+			DELETE FROM distributed_table WHERE key = 1;
         END;
 $$ LANGUAGE plpgsql;
 
@@ -395,11 +395,11 @@ SELECT * FROM local_insert, distributed_local_mixed ORDER BY 1,2,3,4,5;
 
 -- router CTE pushdown
 WITH all_data AS (SELECT * FROM distributed_table WHERE key = 1)
-SELECT 
-	count(*) 
-FROM 
-	distributed_table, all_data 
-WHERE 
+SELECT
+	count(*)
+FROM
+	distributed_table, all_data
+WHERE
 	distributed_table.key = all_data.key AND distributed_table.key = 1;
 
 INSERT INTO reference_table VALUES (2);
@@ -408,26 +408,26 @@ INSERT INTO second_distributed_table VALUES (2, '29');
 
 -- single shard that is not a local query followed by a local query
 WITH all_data AS (SELECT * FROM second_distributed_table WHERE key = 2)
-SELECT 
+SELECT
 	distributed_table.key
-FROM 
-	distributed_table, all_data 
-WHERE 
+FROM
+	distributed_table, all_data
+WHERE
 	distributed_table.value = all_data.value AND distributed_table.key = 1
-ORDER BY 
+ORDER BY
 	1 DESC;
 
 -- multi-shard CTE is followed by a query which could be executed locally, but
 -- since the query started with a parallel query, it doesn't use local execution
--- note that if we allow Postgres to inline the CTE (e.g., not have the EXISTS 
--- subquery), then it'd pushdown the filters and the query becomes single-shard, 
+-- note that if we allow Postgres to inline the CTE (e.g., not have the EXISTS
+-- subquery), then it'd pushdown the filters and the query becomes single-shard,
 -- locally executable query
 WITH all_data AS (SELECT * FROM distributed_table)
-SELECT 
-	count(*) 
-FROM 
-	distributed_table, all_data 
-WHERE 
+SELECT
+	count(*)
+FROM
+	distributed_table, all_data
+WHERE
 	distributed_table.key = all_data.key AND distributed_table.key = 1
 	AND EXISTS (SELECT * FROM all_data);
 
@@ -435,11 +435,11 @@ WHERE
 -- a subquery that needs to be recursively planned and a parallel
 -- query, so do not use local execution
 WITH all_data AS (SELECT age FROM distributed_table)
-SELECT 
-	count(*) 
-FROM 
-	distributed_table, all_data 
-WHERE 
+SELECT
+	count(*)
+FROM
+	distributed_table, all_data
+WHERE
 	distributed_table.key = all_data.age AND distributed_table.key = 1;
 
 -- get ready for the next commands
@@ -452,7 +452,7 @@ INSERT INTO reference_table VALUES (1),(2),(3),(4),(5),(6) RETURNING *;
 INSERT INTO distributed_table VALUES (1, '11',21), (5,'55',22) ON CONFLICT(key) DO UPDATE SET value = (EXCLUDED.value::int + 1)::text RETURNING *;
 
 
--- distributed execution of multi-rows INSERTs, where some part of the execution 
+-- distributed execution of multi-rows INSERTs, where some part of the execution
 -- could have been done via local execution but the executor choose the other way around
 -- because the command is a multi-shard query
 INSERT INTO distributed_table VALUES (1, '11',21), (2,'22',22), (3,'33',33), (4,'44',44),(5,'55',55) ON CONFLICT(key) DO UPDATE SET value = (EXCLUDED.value::int + 1)::text RETURNING *;
@@ -480,10 +480,10 @@ BEGIN;
 
 	-- followed by a non-local execution
 	EXECUTE remote_prepare_param(1);
-COMMIT;	
+COMMIT;
 
 
--- failures of local execution should rollback both the 
+-- failures of local execution should rollback both the
 -- local execution and remote executions
 
 -- fail on a local execution
@@ -534,7 +534,7 @@ BEGIN;
 ROLLBACK;
 
 BEGIN;
-	
+
 	DELETE FROM reference_table WHERE key = 500 RETURNING *;
 
 	DELETE FROM reference_table;
@@ -563,14 +563,14 @@ ROLLBACK;
 
 -- probably not a realistic case since views are not very
 -- well supported with MX
-CREATE VIEW v_local_query_execution AS 
+CREATE VIEW v_local_query_execution AS
 SELECT * FROM distributed_table WHERE key = 500;
 
 SELECT * FROM v_local_query_execution;
 
 -- similar test, but this time the view itself is a non-local
 -- query, but the query on the view is local
-CREATE VIEW v_local_query_execution_2 AS 
+CREATE VIEW v_local_query_execution_2 AS
 SELECT * FROM distributed_table;
 
 SELECT * FROM v_local_query_execution_2 WHERE key = 500;
@@ -583,9 +583,9 @@ BEGIN;
 	SELECT count(*) FROM distributed_table;
 
     DELETE FROM distributed_table WHERE key = 500;
-	
+
     ROLLBACK TO SAVEPOINT my_savepoint;
-	
+
 	DELETE FROM distributed_table WHERE key = 500;
 
 COMMIT;
@@ -593,15 +593,15 @@ COMMIT;
 -- even if we switch from local execution -> remote execution,
 -- we are able to use local execution after rollback
 BEGIN;
-	   
+
 	SAVEPOINT my_savepoint;
 
     DELETE FROM distributed_table WHERE key = 500;
-	
+
 	SELECT count(*) FROM distributed_table;
 
     ROLLBACK TO SAVEPOINT my_savepoint;
-	
+
 	DELETE FROM distributed_table WHERE key = 500;
 
 COMMIT;
@@ -617,7 +617,7 @@ BEGIN;
 COMMIT;
 
 -- the final queries for the following CTEs are going to happen on the intermediate results only
--- one of them will be executed remotely, and the other is locally 
+-- one of them will be executed remotely, and the other is locally
 -- Citus currently doesn't allow using task_assignment_policy for intermediate results
 WITH distributed_local_mixed AS (INSERT INTO reference_table VALUES (1000) RETURNING *) SELECT * FROM distributed_local_mixed;
 
@@ -648,10 +648,10 @@ COMMIT;
 
 \c - - - :master_port
 
--- local execution with custom type 
+-- local execution with custom type
 SET citus.replication_model TO "streaming";
 SET citus.shard_replication_factor TO 1;
-CREATE TYPE invite_resp AS ENUM ('yes', 'no', 'maybe'); 
+CREATE TYPE invite_resp AS ENUM ('yes', 'no', 'maybe');
 
 CREATE TABLE event_responses (
   event_id int,

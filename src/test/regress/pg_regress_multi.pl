@@ -308,7 +308,7 @@ chomp $sharedir;
 my $pg_stat_statements_control = catfile($sharedir, "extension", "pg_stat_statements.control");
 if (-e $pg_stat_statements_control)
 {
-	$sharedPreloadLibraries .= ',pg_stat_statements'; 
+	$sharedPreloadLibraries .= ',pg_stat_statements';
 }
 
 # check if hll extension is installed
@@ -444,7 +444,7 @@ if ($usingWindows)
 sysopen my $fh, catfile($TMP_CHECKDIR, $TMP_BINDIR, $psql_name), O_CREAT|O_TRUNC|O_RDWR, 0700
 	or die "Could not create psql wrapper";
 if ($usingWindows)
-{ 
+{
     print $fh "\@echo off\n";
 }
 print $fh catfile($bindir, "psql")." ";
@@ -472,7 +472,7 @@ if ($usingWindows)
 }
 else
 {
-	print $fh "--variable=dev_null=\"/dev/null\" ";	
+	print $fh "--variable=dev_null=\"/dev/null\" ";
 	print $fh "--variable=temp_dir=\"/tmp/\" ";
 	print $fh "--variable=psql=\"psql\" ";
 }
@@ -515,7 +515,7 @@ if ($usingWindows)
 	{
 		system(catfile("$bindir", "initdb"), ("--nosync", "-U", $user, "--encoding", "UTF8", catfile($TMP_CHECKDIR, "worker.$port", "data"))) == 0
 		    or die "Could not create worker data directory";
-	}	
+	}
 }
 else
 {

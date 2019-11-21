@@ -1,7 +1,7 @@
 setup
 {
-	SELECT 1 FROM master_add_node('localhost', 57638);	
-	
+	SELECT 1 FROM master_add_node('localhost', 57638);
+
 	create schema if not exists schema1;
 	create schema if not exists schema2;
 	CREATE schema if not exists schema3;
@@ -114,8 +114,8 @@ permutation "s1-begin" "s1-add-node-1" "s2-drop-extension" "s1-commit" "s1-print
 permutation "s1-add-node-1" "s1-create-extension-with-schema2" "s1-begin" "s1-remove-node-1" "s2-alter-extension-set-schema3" "s1-commit" "s1-print"
 permutation "s1-add-node-1" "s2-drop-extension" "s1-begin" "s1-remove-node-1" "s2-create-extension-with-schema1" "s1-commit" "s1-print"
 
-# extension command vs master_#_node 
-permutation "s2-add-node-1" "s2-drop-extension" "s2-remove-node-1" "s2-begin" "s2-create-extension-version-11" "s1-add-node-1" "s2-commit" "s1-print" 
+# extension command vs master_#_node
+permutation "s2-add-node-1" "s2-drop-extension" "s2-remove-node-1" "s2-begin" "s2-create-extension-version-11" "s1-add-node-1" "s2-commit" "s1-print"
 permutation "s2-drop-extension" "s2-add-node-1" "s2-create-extension-version-11" "s2-remove-node-1" "s2-begin" "s2-alter-extension-update-to-version-12" "s1-add-node-1" "s2-commit" "s1-print"
 permutation "s2-add-node-1" "s2-begin" "s2-drop-extension" "s1-remove-node-1" "s2-commit" "s1-print"
 permutation "s2-begin" "s2-create-extension-with-schema1" "s1-add-node-1" "s2-commit" "s1-print"

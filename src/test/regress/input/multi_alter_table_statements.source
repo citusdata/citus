@@ -87,7 +87,7 @@ ALTER TABLE lineitem_alter ALTER COLUMN int_column2 DROP DEFAULT;
 ALTER TABLE lineitem_alter ALTER COLUMN int_column2 DROP NOT NULL;
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.lineitem_alter'::regclass;
 
--- \copy should succeed now 
+-- \copy should succeed now
 \copy lineitem_alter (l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment) FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
 SELECT count(*) from lineitem_alter;
 
@@ -353,7 +353,7 @@ SELECT create_distributed_table('test_ab', 'a', 'hash');
 INSERT INTO test_ab VALUES (2, 10);
 INSERT INTO test_ab VALUES (2, 11);
 CREATE UNIQUE INDEX temp_unique_index_1 ON test_ab(a);
-SELECT shardid FROM pg_dist_shard_placement NATURAL JOIN pg_dist_shard 
+SELECT shardid FROM pg_dist_shard_placement NATURAL JOIN pg_dist_shard
 WHERE logicalrelid='test_ab'::regclass AND shardstate=3;
 
 -- Check that the schema on the worker still looks reasonable

@@ -135,7 +135,7 @@ def generate_citus_tarballs(citus_version):
     tmp_dir = 'tmp_citus_tarballs'
     citus_old_tarpath = os.path.abspath(os.path.join(
         tmp_dir, 'install-citus{}.tar'.format(citus_version)))
-    citus_new_tarpath = os.path.abspath(os.path.join(tmp_dir, 'install-citusmaster.tar')) 
+    citus_new_tarpath = os.path.abspath(os.path.join(tmp_dir, 'install-citusmaster.tar'))
 
     common.initialize_temp_dir_if_not_exists(tmp_dir)
     local_script_path = os.path.abspath('upgrade/generate_citus_tarballs.sh')

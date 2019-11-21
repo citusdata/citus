@@ -14,7 +14,7 @@ SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 -- 1-) Distributing partitioned table
 -- create partitioned table
 CREATE TABLE partitioning_test(id int, time date) PARTITION BY RANGE (time);
- 
+
 -- create its partitions
 CREATE TABLE partitioning_test_2009 PARTITION OF partitioning_test FOR VALUES FROM ('2009-01-01') TO ('2010-01-01');
 CREATE TABLE partitioning_test_2010 PARTITION OF partitioning_test FOR VALUES FROM ('2010-01-01') TO ('2011-01-01');
@@ -35,17 +35,17 @@ SELECT create_distributed_table('partitioning_test', 'id');
 SELECT * FROM partitioning_test ORDER BY 1;
 
 -- see from MX node, partitioned table and its partitions are distributed
-SELECT 
-	logicalrelid 
-FROM 
-	pg_dist_partition 
-WHERE 
+SELECT
+	logicalrelid
+FROM
+	pg_dist_partition
+WHERE
 	logicalrelid IN ('partitioning_test', 'partitioning_test_2009', 'partitioning_test_2010')
 ORDER BY 1;
 
-SELECT 
-	logicalrelid, count(*) 
-FROM pg_dist_shard 
+SELECT
+	logicalrelid, count(*)
+FROM pg_dist_shard
 	WHERE logicalrelid IN ('partitioning_test', 'partitioning_test_2009', 'partitioning_test_2010')
 GROUP BY
 	logicalrelid
@@ -65,17 +65,17 @@ CREATE TABLE partitioning_test_2011 PARTITION OF partitioning_test FOR VALUES FR
 -- see from MX node, new partition is automatically distributed as well
 \c - - - :worker_1_port
 
-SELECT 
-	logicalrelid 
-FROM 
-	pg_dist_partition 
-WHERE 
+SELECT
+	logicalrelid
+FROM
+	pg_dist_partition
+WHERE
 	logicalrelid IN ('partitioning_test', 'partitioning_test_2011')
 ORDER BY 1;
 
-SELECT 
-	logicalrelid, count(*) 
-FROM pg_dist_shard 
+SELECT
+	logicalrelid, count(*)
+FROM pg_dist_shard
 	WHERE logicalrelid IN ('partitioning_test', 'partitioning_test_2011')
 GROUP BY
 	logicalrelid
@@ -101,17 +101,17 @@ ALTER TABLE partitioning_test ATTACH PARTITION partitioning_test_2012 FOR VALUES
 -- see from MX node, attached partition is distributed as well
 \c - - - :worker_1_port
 
-SELECT 
-	logicalrelid 
-FROM 
-	pg_dist_partition 
-WHERE 
+SELECT
+	logicalrelid
+FROM
+	pg_dist_partition
+WHERE
 	logicalrelid IN ('partitioning_test', 'partitioning_test_2012')
 ORDER BY 1;
 
-SELECT 
-	logicalrelid, count(*) 
-FROM pg_dist_shard 
+SELECT
+	logicalrelid, count(*)
+FROM pg_dist_shard
 	WHERE logicalrelid IN ('partitioning_test', 'partitioning_test_2012')
 GROUP BY
 	logicalrelid

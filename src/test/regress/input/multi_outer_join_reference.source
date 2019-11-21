@@ -335,7 +335,7 @@ SELECT
 FROM
 	multi_outer_join_left_hash l1
 	FULL JOIN multi_outer_join_right_hash r1 ON (l1.l_custkey = r1.r_custkey)
-WHERE 
+WHERE
 	r_custkey is NULL
 ORDER BY 1;
 
@@ -345,7 +345,7 @@ SELECT
 FROM
 	multi_outer_join_left_hash l1
 	FULL JOIN multi_outer_join_right_hash r1 ON (l1.l_custkey = r1.r_custkey)
-WHERE 
+WHERE
 	l_custkey is NULL
 ORDER BY 2;
 
@@ -355,7 +355,7 @@ SELECT
 FROM
 	multi_outer_join_left_hash l1
 	FULL JOIN multi_outer_join_right_hash r1 ON (l1.l_custkey = r1.r_custkey)
-WHERE 
+WHERE
 	l_custkey is NULL or r_custkey is NULL
 ORDER BY 1,2 DESC;
 
@@ -414,10 +414,10 @@ WHERE
 ORDER BY 1;
 
 -- Test joinExpr aliases by performing an outer-join.
-SELECT 
+SELECT
 	t_custkey
-FROM   
-	(multi_outer_join_right_hash r1 
+FROM
+	(multi_outer_join_right_hash r1
 	LEFT OUTER JOIN multi_outer_join_left_hash l1 ON (l1.l_custkey = r1.r_custkey)) AS
     test(c_custkey, c_nationkey)
     INNER JOIN multi_outer_join_third_reference t1 ON (test.c_custkey = t1.t_custkey)
@@ -442,10 +442,10 @@ ORDER BY cnt DESC, l1.l_custkey DESC
 LIMIT 20;
 
 -- full join among reference tables should go thourgh router planner
-SELECT 
-	t_custkey, r_custkey 
-FROM 
-	multi_outer_join_right_reference FULL JOIN 
+SELECT
+	t_custkey, r_custkey
+FROM
+	multi_outer_join_right_reference FULL JOIN
 	multi_outer_join_third_reference ON (t_custkey = r_custkey)
 ORDER BY 1;
 

@@ -15,8 +15,8 @@
 # ---
 # Tests around schema changes, these are run first, so there's no preexisting objects.
 #
-# propagate_extension_commands lies just after multi_cluster_management as we do 
-# remove / add node operations, we do not want any preexisting objects before 
+# propagate_extension_commands lies just after multi_cluster_management as we do
+# remove / add node operations, we do not want any preexisting objects before
 # propagate_extension_commands
 # ---
 test: multi_extension

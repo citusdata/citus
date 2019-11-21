@@ -1,9 +1,9 @@
---  citus--8.0-6--8.0-7 
+--  citus--8.0-6--8.0-7
 SET search_path = 'pg_catalog';
 
 CREATE VIEW citus.citus_lock_waits AS
 
-WITH 
+WITH
 citus_dist_stat_activity AS
 (
   SELECT * FROM citus_dist_stat_activity
@@ -19,7 +19,7 @@ citus_dist_stat_activity_with_node_id AS
   FROM
   citus_dist_stat_activity LEFT JOIN pg_dist_node
   ON
-  citus_dist_stat_activity.master_query_host_name = pg_dist_node.nodename AND 
+  citus_dist_stat_activity.master_query_host_name = pg_dist_node.nodename AND
   citus_dist_stat_activity.master_query_host_port = pg_dist_node.nodeport
 )
 SELECT

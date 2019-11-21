@@ -43,7 +43,7 @@ SELECT create_distributed_table('raw_events_2', 'tenant_id', 'hash');
 
 CREATE TABLE aggregated_events
 	(tenant_id bigint,
-	 sum_value_1 bigint, 
+	 sum_value_1 bigint,
 	 average_value_2 float,
 	 average_value_3 float,
 	 sum_value_4 bigint,
@@ -225,10 +225,10 @@ SELECT
 
 SELECT deparse_shard_query_test('
 INSERT INTO raw_events_1(value_7, value_1, tenant_id)
-SELECT 
+SELECT
 	value_7, value_1, tenant_id
 FROM
-	(SELECT 
+	(SELECT
 		tenant_id, value_2 as value_7, value_1
 	FROM
 		raw_events_2
@@ -237,15 +237,15 @@ FROM
 
 SELECT deparse_shard_query_test(E'
 INSERT INTO aggregated_events(sum_value_1, tenant_id, sum_value_5)
-SELECT 
+SELECT
 	sum(value_1), tenant_id, sum(value_5::bigint)
 FROM
-	(SELECT 
+	(SELECT
 		raw_events_1.event_at, raw_events_2.tenant_id, raw_events_2.value_5, raw_events_1.value_1
 	FROM
 		raw_events_2, raw_events_1
 	WHERE
-		raw_events_1.tenant_id = raw_events_2.tenant_id	
+		raw_events_1.tenant_id = raw_events_2.tenant_id
 	) as foo
 GROUP BY
 	tenant_id, date_trunc(\'hour\', event_at)
@@ -254,10 +254,10 @@ GROUP BY
 
 SELECT deparse_shard_query_test(E'
 INSERT INTO raw_events_2(tenant_id, value_1, value_2, value_3, value_4)
-SELECT 
+SELECT
 	tenant_id, value_1, value_2, value_3, value_4
 FROM
-	(SELECT 
+	(SELECT
 		value_2, value_4, tenant_id, value_1, value_3
 	FROM
 		raw_events_1
@@ -267,10 +267,10 @@ FROM
 
 SELECT deparse_shard_query_test(E'
 INSERT INTO raw_events_2(tenant_id, value_1, value_4, value_2, value_3)
-SELECT 
+SELECT
 	*
 FROM
-	(SELECT 
+	(SELECT
 		value_2, value_4, tenant_id, value_1, value_3
 	FROM
 		raw_events_1

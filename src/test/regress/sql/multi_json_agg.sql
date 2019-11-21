@@ -15,7 +15,7 @@ $$;
 
 -- Check multi_cat_agg() aggregate which is used to implement json_agg()
 
-SELECT json_cat_agg(i) FROM 
+SELECT json_cat_agg(i) FROM
 	(VALUES ('[1,{"a":2}]'::json), ('[null]'::json), (NULL), ('["3",5,4]'::json)) AS t(i);
 
 -- Check that we don't support distinct and order by with json_agg()
@@ -65,17 +65,17 @@ SELECT l_quantity, array_sort(json_agg(l_orderkey * 2 + 1)) FROM lineitem WHERE 
 
 SELECT json_agg(case when l_quantity > 20 then l_quantity else NULL end)
 	FROM lineitem WHERE l_orderkey < 5;
-	
+
 -- Check that we can execute json_agg() with an expression containing different types
 
 SELECT json_agg(case when l_quantity > 20 then to_json(l_quantity) else '"f"'::json end)
 	FROM lineitem WHERE l_orderkey < 5;
-	
+
 -- Check that we can execute json_agg() with an expression containing json arrays
 
 SELECT json_agg(json_build_array(l_quantity, l_shipdate))
 	FROM lineitem WHERE l_orderkey < 3;
-	
+
 -- Check that we can execute json_agg() with an expression containing arrays
 
 SELECT json_agg(ARRAY[l_quantity, l_orderkey])

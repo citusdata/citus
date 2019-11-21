@@ -1,6 +1,6 @@
 --
 -- MULTI_DISTRIBUTED_TRANSACTION_ID
--- 
+--
 -- Unit tests for distributed transaction id functionality
 --
 
@@ -16,7 +16,7 @@ SET TIME ZONE 'PST8PDT';
 SELECT initiator_node_identifier, transaction_number, transaction_stamp FROM get_current_transaction_id();
 
 BEGIN;
-	
+
 	-- we should still see the uninitialized values
 	SELECT initiator_node_identifier, transaction_number, transaction_stamp, (process_id = pg_backend_pid()) FROM get_current_transaction_id();
 
@@ -37,7 +37,7 @@ SELECT initiator_node_identifier, transaction_number, transaction_stamp, (proces
 
 -- also see that ROLLBACK (i.e., failures in the transaction) clears the shared memory
 BEGIN;
-	
+
 	-- we should still see the uninitialized values
 	SELECT initiator_node_identifier, transaction_number, transaction_stamp, (process_id = pg_backend_pid()) FROM get_current_transaction_id();
 
@@ -53,7 +53,7 @@ COMMIT;
 
 -- we should also see that a new connection means an uninitialized transaction id
 BEGIN;
-	
+
 	SELECT assign_distributed_transaction_id(52, 52, '2015-01-01 00:00:00+0');
 
 	SELECT initiator_node_identifier, transaction_number, transaction_stamp, (process_id = pg_backend_pid()) FROM get_current_transaction_id();
@@ -81,7 +81,7 @@ ROLLBACK PREPARED 'dist_xact_id_test';
 SET TIME ZONE DEFAULT;
 
 -- parallel safe wrapper for getting the current transaction number
-CREATE OR REPLACE FUNCTION parallel_worker_transaction_id_test() 
+CREATE OR REPLACE FUNCTION parallel_worker_transaction_id_test()
 RETURNS bigint STRICT VOLATILE PARALLEL SAFE AS $$
 	SELECT transaction_number FROM get_current_transaction_id();
 $$ LANGUAGE sql;

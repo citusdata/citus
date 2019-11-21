@@ -40,12 +40,12 @@ SELECT
 FROM
     (
 	     WITH cte AS (
-	    SELECT 
-	    	DISTINCT dest_table.a 
-	     FROM 
-	     	dest_table, source_table 
-	     WHERE 
-	     	source_table.a = dest_table.a AND 
+	    SELECT
+	    	DISTINCT dest_table.a
+	     FROM
+	     	dest_table, source_table
+	     WHERE
+	     	source_table.a = dest_table.a AND
 	     dest_table.b IN (1,2,3,4)
 	     ) SELECT * FROM cte ORDER BY 1 DESC LIMIT 5
      ) as foo ORDER BY 1;

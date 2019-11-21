@@ -15,7 +15,7 @@ RETURNS boolean AS $$
     -- number when the worker process waiting for other session.
     IF EXISTS (SELECT transaction_number FROM get_global_active_transactions()
                WHERE process_id = workerProcessId AND pBlockedPid = coordinatorProcessId) THEN
-      SELECT transaction_number INTO mBlockedTransactionNum FROM get_global_active_transactions() 
+      SELECT transaction_number INTO mBlockedTransactionNum FROM get_global_active_transactions()
       WHERE process_id = workerProcessId AND pBlockedPid = coordinatorProcessId;
     ELSE
       -- Check whether transactions initiated from the coordinator get locked

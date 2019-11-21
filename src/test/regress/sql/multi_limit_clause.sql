@@ -219,7 +219,7 @@ SELECT
 	DISTINCT ON (RANK() OVER (partition by l_orderkey)) l_orderkey, RANK() OVER (partition by l_orderkey)
 	FROM lineitem_hash
 	GROUP BY l_orderkey
-	ORDER BY 2 DESC, 1 
+	ORDER BY 2 DESC, 1
 	LIMIT 5;
 
 SET client_min_messages TO NOTICE;

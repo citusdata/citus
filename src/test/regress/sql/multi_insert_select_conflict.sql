@@ -18,25 +18,25 @@ INSERT INTO source_table_2 VALUES(6,6,6),(7,7,7),(8,8,8),(9,9,9),(10,10,10);
 SET client_min_messages to debug1;
 
 -- Generate series directly on the coordinator and on conflict do nothing
-INSERT INTO target_table (col_1, col_2) 
-SELECT 
-	s, s 
-FROM 
-	generate_series(1,10) s 
+INSERT INTO target_table (col_1, col_2)
+SELECT
+	s, s
+FROM
+	generate_series(1,10) s
 ON CONFLICT DO NOTHING;
 
 -- Generate series directly on the coordinator and on conflict update the target table
-INSERT INTO target_table (col_1, col_2) 
-SELECT s, s 
-FROM 
-	generate_series(1,10) s 
+INSERT INTO target_table (col_1, col_2)
+SELECT s, s
+FROM
+	generate_series(1,10) s
 ON CONFLICT(col_1) DO UPDATE SET col_2 = EXCLUDED.col_2 + 1;
 
 -- Since partition columns do not match, pull the data to the coordinator
 -- and do not change conflicted values
 INSERT INTO target_table
-SELECT 
-	col_2, col_3 
+SELECT
+	col_2, col_3
 FROM
 	source_table_1
 ON CONFLICT DO NOTHING;
@@ -46,8 +46,8 @@ ON CONFLICT DO NOTHING;
 -- ordered result.
 WITH inserted_table AS (
 	INSERT INTO target_table
-	SELECT 
-		col_2, col_3 
+	SELECT
+		col_2, col_3
 	FROM
 		source_table_1
 	ON CONFLICT(col_1) DO UPDATE SET col_2 = EXCLUDED.col_2 RETURNING *
@@ -55,11 +55,11 @@ WITH inserted_table AS (
 
 -- Subquery should be recursively planned due to the limit and do nothing on conflict
 INSERT INTO target_table
-SELECT 
+SELECT
 	col_1, col_2
 FROM (
-	SELECT 
-		col_1, col_2, col_3 
+	SELECT
+		col_1, col_2, col_3
 	FROM
 		source_table_1
 	LIMIT 5
@@ -70,11 +70,11 @@ ON CONFLICT DO NOTHING;
 -- Query is wrapped by CTE to return ordered result.
 WITH inserted_table AS (
 	INSERT INTO target_table
-	SELECT 
+	SELECT
 		col_1, col_2
 	FROM (
-		SELECT 
-			col_1, col_2, col_3 
+		SELECT
+			col_1, col_2, col_3
 		FROM
 			source_table_1
 		LIMIT 5
@@ -85,11 +85,11 @@ WITH inserted_table AS (
 -- Test with multiple subqueries. Query is wrapped by CTE to return ordered result.
 WITH inserted_table AS (
 	INSERT INTO target_table
-	SELECT 
+	SELECT
 		col_1, col_2
 	FROM (
-		(SELECT 
-			col_1, col_2, col_3 
+		(SELECT
+			col_1, col_2, col_3
 		FROM
 			source_table_1
 		LIMIT 5)
@@ -147,13 +147,13 @@ RESET client_min_messages;
 -- Following query is not supported since error checks of the subquery pushdown planner
 -- and insert select planner have not been unified. It should work after unifying them.
 WITH cte AS (
-	SELECT 
+	SELECT
 		col_1, col_2
-   	FROM 
+   	FROM
    		source_table_1
-) 
-INSERT INTO target_table 
-SELECT 
+)
+INSERT INTO target_table
+SELECT
 	source_table_1.col_1,
 	source_table_1.col_2
 FROM cte, source_table_1
@@ -167,9 +167,9 @@ ALTER TABLE target_table ADD CONSTRAINT fkey FOREIGN KEY (col_1) REFERENCES test
 
 BEGIN;
 	TRUNCATE test_ref_table CASCADE;
-	INSERT INTO 
-		target_table  
-	SELECT 
+	INSERT INTO
+		target_table
+	SELECT
 		col_2,
 		col_1
 	FROM source_table_1 ON CONFLICT (col_1) DO UPDATE SET col_2 = 55 RETURNING *;
@@ -177,11 +177,11 @@ ROLLBACK;
 
 BEGIN;
 	DELETE FROM test_ref_table WHERE key > 10;
-	INSERT INTO 
+	INSERT INTO
 		target_table
-	SELECT 
-		col_2, 
-		col_1 
+	SELECT
+		col_2,
+		col_1
 	FROM source_table_1 ON CONFLICT (col_1) DO UPDATE SET col_2 = 1 RETURNING *;
 ROLLBACK;
 
@@ -189,19 +189,19 @@ ROLLBACK;
 -- the target_table after modification on test_ref_table.
 BEGIN;
 	TRUNCATE test_ref_table CASCADE;
-	INSERT INTO 
+	INSERT INTO
  		source_table_1
-	SELECT 
+	SELECT
 		col_2,
-		col_1 
+		col_1
 	FROM target_table ON CONFLICT (col_1) DO UPDATE SET col_2 = 55 RETURNING *;
 ROLLBACK;
 
 BEGIN;
 	DELETE FROM test_ref_table;
-	INSERT INTO 
+	INSERT INTO
  		source_table_1
-	SELECT 
+	SELECT
  		col_2,
  		col_1
  	FROM target_table ON CONFLICT (col_1) DO UPDATE SET col_2 = 55 RETURNING *;
@@ -224,16 +224,16 @@ INSERT INTO target_table_2 VALUES(1, '{"abc","def","gyx"}');
 SET client_min_messages to debug1;
 
 INSERT INTO target_table
-SELECT 
-	col_1, col_2 
+SELECT
+	col_1, col_2
 FROM
 	source_table_3
 ON CONFLICT(col_1) DO UPDATE SET col_2 = EXCLUDED.col_2;
 SELECT * FROM target_table ORDER BY 1;
 
 INSERT INTO target_table_2
-SELECT 
-	* 
+SELECT
+	*
 FROM
 	source_table_4
 ON CONFLICT DO NOTHING;
@@ -261,20 +261,20 @@ INSERT INTO source_table_2 VALUES(6,6,6),(7,7,7),(8,8,8),(9,9,9),(10,10,10);
 SET client_min_messages to debug1;
 
 -- Generate series directly on the coordinator and on conflict do nothing
-INSERT INTO target_table (col_1, col_2) 
-SELECT 
-	s, s 
-FROM 
-	generate_series(1,10) s 
+INSERT INTO target_table (col_1, col_2)
+SELECT
+	s, s
+FROM
+	generate_series(1,10) s
 ON CONFLICT DO NOTHING;
 
 -- Test with multiple subqueries
 INSERT INTO target_table
-SELECT 
+SELECT
 	col_1, col_2
 FROM (
-	(SELECT 
-		col_1, col_2, col_3 
+	(SELECT
+		col_1, col_2, col_3
 	FROM
 		source_table_1
 	LIMIT 5)

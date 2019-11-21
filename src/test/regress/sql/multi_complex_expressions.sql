@@ -17,7 +17,7 @@ SELECT 100 * avg(l_quantity) as average_times_hundred FROM lineitem;
 
 SELECT 100 * avg(l_quantity) / 10 as average_times_ten FROM lineitem;
 
-SELECT l_quantity, 10 * count(*) count_quantity FROM lineitem 
+SELECT l_quantity, 10 * count(*) count_quantity FROM lineitem
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
 
 -- Check that we can handle complex select clause expressions.
@@ -169,15 +169,15 @@ SELECT o_orderkey FROM orders ORDER BY o_orderkey LIMIT 10 OFFSET 20;
 -- LIMIT/OFFSET with a subquery
 SET citus.task_executor_type TO 'task-tracker';
 
-SELECT 
+SELECT
 	customer_keys.o_custkey,
-	SUM(order_count) AS total_order_count 
-FROM 
-	(SELECT o_custkey, o_orderstatus, COUNT(*) AS order_count 
+	SUM(order_count) AS total_order_count
+FROM
+	(SELECT o_custkey, o_orderstatus, COUNT(*) AS order_count
 	 FROM orders GROUP BY o_custkey, o_orderstatus ) customer_keys
-GROUP BY 
+GROUP BY
 	customer_keys.o_custkey
-ORDER BY 
+ORDER BY
 	customer_keys.o_custkey DESC
 LIMIT 10 OFFSET 20;
 
@@ -205,13 +205,13 @@ SELECT o_custkey, COUNT(*) AS ccnt FROM orders GROUP BY o_custkey ORDER BY ccnt 
 SELECT o_custkey FROM orders ORDER BY o_custkey OFFSET 2980;
 
 -- LIMIT/OFFSET with Joins
-SELECT 
+SELECT
 	li.l_partkey,
 	o.o_custkey,
 	li.l_quantity
-FROM 
+FROM
 	lineitem li JOIN orders o ON li.l_orderkey = o.o_orderkey
-WHERE 
+WHERE
 	li.l_quantity > 25
 ORDER BY 1, 2, 3
 LIMIT 10 OFFSET 20;

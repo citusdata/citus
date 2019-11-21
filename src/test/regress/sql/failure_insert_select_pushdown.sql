@@ -19,7 +19,7 @@ SELECT create_distributed_table('events_summary', 'user_id');
 INSERT INTO events_table VALUES (1, 1, 3 ), (1, 2, 1), (1, 3, 2), (2, 4, 3), (3, 5, 1), (4, 7, 1), (4, 1, 9), (4, 3, 2);
 
 
-SELECT count(*) FROM events_summary; 
+SELECT count(*) FROM events_summary;
 
 -- insert/select from one distributed table to another
 

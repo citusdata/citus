@@ -18,7 +18,7 @@ WITH cte_1 AS (
         FROM tt1
         WHERE value_1 >= 2
     )
-    
+
     DELETE FROM tt2
     USING cte_2
     WHERE tt2.id = cte_2.cte2_id
@@ -38,7 +38,7 @@ WITH cte_1 AS (
         FROM tt1
         WHERE value_1 >= 2
     )
-    
+
     DELETE FROM tt2
     USING cte_2
     WHERE tt2.id = cte_2.cte2_id
@@ -56,9 +56,9 @@ WITH cte_1(id) AS (
         FROM tt1
         WHERE value_1 >= 2
     )
-    
+
     DELETE FROM tt2
-    USING cte_2 
+    USING cte_2
     WHERE tt2.id = cte_2.cte2_id
     RETURNING cte2_id
 )
@@ -74,7 +74,7 @@ WITH cte_1 AS (
         FROM tt1
         WHERE value_1 >= 2
     )
-    
+
     UPDATE tt2
     SET value_1 = 10
     FROM cte_2
@@ -92,7 +92,7 @@ WITH cte_1 AS (
     WITH cte_2 AS (
         SELECT * FROM tt3
     )
-    
+
     UPDATE tt2
     SET value_1 = (SELECT max((json_val->>'qty')::int) FROM cte_2)
     RETURNING id, value_1

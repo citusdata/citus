@@ -28,7 +28,7 @@ INSERT INTO customer_engagements VALUES (1, '03-01-2015', 'third event');
 -- the following queries does the following:
 -- (i)    create a new shard
 -- (ii)   mark the second shard placements as unhealthy
--- (iii)  do basic checks i.e., only allow copy from healthy placement to unhealthy ones 
+-- (iii)  do basic checks i.e., only allow copy from healthy placement to unhealthy ones
 -- (iv)   do a successful master_copy_shard_placement from the first placement to the second
 -- (v)    mark the first placement as unhealthy and execute a query that is routed to the second placement
 

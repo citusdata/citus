@@ -10,34 +10,34 @@ SET citus.next_shard_id TO 830000;
 \c - - - :master_port
 DROP FUNCTION IF EXISTS median(double precision[]);
 
-CREATE FUNCTION median(double precision[]) RETURNS double precision 
-LANGUAGE sql IMMUTABLE AS $_$ 
-	SELECT AVG(val) FROM 
-	  (SELECT val FROM unnest($1) val 
-	   ORDER BY 1 LIMIT  2 - MOD(array_upper($1, 1), 2) 
-	   OFFSET CEIL(array_upper($1, 1) / 2.0) - 1) sub; 
+CREATE FUNCTION median(double precision[]) RETURNS double precision
+LANGUAGE sql IMMUTABLE AS $_$
+	SELECT AVG(val) FROM
+	  (SELECT val FROM unnest($1) val
+	   ORDER BY 1 LIMIT  2 - MOD(array_upper($1, 1), 2)
+	   OFFSET CEIL(array_upper($1, 1) / 2.0) - 1) sub;
 $_$;
 
 \c - - - :worker_1_port
 DROP FUNCTION IF EXISTS median(double precision[]);
 
-CREATE FUNCTION median(double precision[]) RETURNS double precision 
-LANGUAGE sql IMMUTABLE AS $_$ 
-	SELECT AVG(val) FROM 
-	  (SELECT val FROM unnest($1) val 
-	   ORDER BY 1 LIMIT  2 - MOD(array_upper($1, 1), 2) 
-	   OFFSET CEIL(array_upper($1, 1) / 2.0) - 1) sub; 
+CREATE FUNCTION median(double precision[]) RETURNS double precision
+LANGUAGE sql IMMUTABLE AS $_$
+	SELECT AVG(val) FROM
+	  (SELECT val FROM unnest($1) val
+	   ORDER BY 1 LIMIT  2 - MOD(array_upper($1, 1), 2)
+	   OFFSET CEIL(array_upper($1, 1) / 2.0) - 1) sub;
 $_$;
 
 \c - - - :worker_2_port
 DROP FUNCTION IF EXISTS median(double precision[]);
 
-CREATE FUNCTION median(double precision[]) RETURNS double precision 
-LANGUAGE sql IMMUTABLE AS $_$ 
-	SELECT AVG(val) FROM 
-	  (SELECT val FROM unnest($1) val 
-	   ORDER BY 1 LIMIT  2 - MOD(array_upper($1, 1), 2) 
-	   OFFSET CEIL(array_upper($1, 1) / 2.0) - 1) sub; 
+CREATE FUNCTION median(double precision[]) RETURNS double precision
+LANGUAGE sql IMMUTABLE AS $_$
+	SELECT AVG(val) FROM
+	  (SELECT val FROM unnest($1) val
+	   ORDER BY 1 LIMIT  2 - MOD(array_upper($1, 1), 2)
+	   OFFSET CEIL(array_upper($1, 1) / 2.0) - 1) sub;
 $_$;
 
 -- Run query on master

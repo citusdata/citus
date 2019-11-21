@@ -5,7 +5,7 @@
 ------------------------------------
 CREATE TABLE test_table_1(id int);
 
-INSERT INTO test_table_1 
+INSERT INTO test_table_1
 SELECT user_id FROM users_table;
 
 DROP TABLE test_table_1;
@@ -69,10 +69,10 @@ FROM (
       AND e.event_type IN (103, 104, 105)
     )
   ) t1 LEFT JOIN (
-      SELECT DISTINCT user_id, 
+      SELECT DISTINCT user_id,
         'Has done event'::TEXT AS hasdone_event
       FROM  events_table AS e
-      
+
       WHERE  e.user_id >= 10
       AND e.user_id <= 25
       AND e.event_type IN (106, 107, 108)
@@ -111,10 +111,10 @@ FROM (
       AND e.event_type IN (103, 104, 105)
     )
   ) t1 LEFT JOIN (
-      SELECT DISTINCT user_id, 
+      SELECT DISTINCT user_id,
         'Has done event'::TEXT AS hasdone_event
       FROM  events_table AS e
-      
+
       WHERE  e.user_id >= 10
       AND e.user_id <= 25
       AND e.event_type IN (106, 107, 108)
@@ -155,10 +155,10 @@ FROM (
       AND e.event_type IN (103, 104, 105)
     )
   ) t1 LEFT JOIN (
-      SELECT DISTINCT user_id, 
+      SELECT DISTINCT user_id,
         'Has done event'::TEXT AS hasdone_event
       FROM  events_table AS e
-      
+
       WHERE  e.user_id >= 10
       AND e.user_id <= 25
       AND e.event_type IN (106, 107, 108)
@@ -224,7 +224,7 @@ SELECT
       users_table
     WHERE
       user_id >= 10 AND
-      user_id <= 70 AND    
+      user_id <= 70 AND
       users_table.value_1 > 15 AND users_table.value_1 < 17
     GROUP BY
       user_id
@@ -294,7 +294,7 @@ SELECT
       users_table
     WHERE
       user_id >= 10 AND
-      user_id <= 70 AND    
+      user_id <= 70 AND
       users_table.value_1 > 15 AND users_table.value_1 < 17
     GROUP BY
       user_id
@@ -332,7 +332,7 @@ FROM (
         max(u.time) as user_lastseen,
         array_agg(event_type ORDER BY u.time) AS event_array
     FROM (
-        
+
         SELECT user_id, time
         FROM users_table
         WHERE
@@ -362,7 +362,7 @@ FROM (
         max(u.time) as user_lastseen,
         array_agg(event_type ORDER BY u.time) AS event_array
     FROM (
-        
+
         SELECT user_id, time
         FROM users_table
         WHERE
@@ -392,7 +392,7 @@ FROM (
         max(u.time) as user_lastseen,
         array_agg(event_type ORDER BY u.time) AS event_array
     FROM (
-        
+
         SELECT user_id, time, value_3 as val_3
         FROM users_table
         WHERE
@@ -504,7 +504,7 @@ SELECT user_id, value_2 FROM users_table WHERE
   value_2 >= 5
   AND  EXISTS (SELECT user_id FROM events_table WHERE event_type > 100 AND event_type <= 300 AND value_3 > 100 AND user_id!=users_table.user_id)
   AND  NOT EXISTS (SELECT user_id FROM events_table WHERE event_type > 300 AND event_type <= 350  AND value_3 > 100 AND user_id=users_table.user_id);
-  
+
 ------------------------------------
 ------------------------------------
 -- Customers who have done X more than 2 times, and satisfy other customer specific criteria
@@ -513,53 +513,53 @@ SELECT user_id, value_2 FROM users_table WHERE
 
 -- not pushable since the second join is not an equi join
 INSERT INTO agg_results_third(user_id, value_2_agg)
-  SELECT user_id, 
-         value_2 
+  SELECT user_id,
+         value_2
   FROM   users_table
-  WHERE  value_1 > 100 
-         AND value_1 < 124 
-         AND value_2 >= 5 
-         AND EXISTS (SELECT user_id 
+  WHERE  value_1 > 100
+         AND value_1 < 124
+         AND value_2 >= 5
+         AND EXISTS (SELECT user_id
                      FROM   events_table
-                     WHERE  event_type > 100 
-                            AND event_type < 124 
-                            AND value_3 > 100 
-                            AND user_id != users_table.user_id 
-                     GROUP  BY user_id 
+                     WHERE  event_type > 100
+                            AND event_type < 124
+                            AND value_3 > 100
+                            AND user_id != users_table.user_id
+                     GROUP  BY user_id
                      HAVING Count(*) > 2);
 
 -- not pushable since the second join is not on the partition key
 INSERT INTO agg_results_third(user_id, value_2_agg)
-  SELECT user_id, 
-         value_2 
+  SELECT user_id,
+         value_2
   FROM   users_table
-  WHERE  value_1 > 100 
-         AND value_1 < 124 
-         AND value_2 >= 5 
-         AND EXISTS (SELECT user_id 
+  WHERE  value_1 > 100
+         AND value_1 < 124
+         AND value_2 >= 5
+         AND EXISTS (SELECT user_id
                      FROM   events_table
-                     WHERE  event_type > 100 
-                            AND event_type < 124 
-                            AND value_3 > 100 
-                            AND event_type = users_table.user_id 
-                     GROUP  BY user_id 
+                     WHERE  event_type > 100
+                            AND event_type < 124
+                            AND value_3 > 100
+                            AND event_type = users_table.user_id
+                     GROUP  BY user_id
                      HAVING Count(*) > 2);
 
 -- not pushable since the second join is not on the partition key
 INSERT INTO agg_results_third(user_id, value_2_agg)
-  SELECT user_id, 
-         value_2 
+  SELECT user_id,
+         value_2
   FROM   users_table
-  WHERE  value_1 > 100 
-         AND value_1 < 124 
-         AND value_2 >= 5 
-         AND EXISTS (SELECT user_id 
+  WHERE  value_1 > 100
+         AND value_1 < 124
+         AND value_2 >= 5
+         AND EXISTS (SELECT user_id
                      FROM   events_table
-                     WHERE  event_type > 100 
-                            AND event_type < 124 
-                            AND value_3 > 100 
-                            AND user_id = users_table.value_1 
-                     GROUP  BY user_id 
+                     WHERE  event_type > 100
+                            AND event_type < 124
+                            AND value_3 > 100
+                            AND user_id = users_table.value_1
+                     GROUP  BY user_id
                      HAVING Count(*) > 2);
 
 ------------------------------------
@@ -578,7 +578,7 @@ And user_id NOT in
   (select user_id
    From users_table
    Where value_1 = 15
-   And value_2 > 25); 
+   And value_2 > 25);
 
 -- not pushable since we're not selecting the partition key
 INSERT INTO agg_results_third(user_id)
@@ -590,8 +590,8 @@ And user_id  in
   (select value_3
    From users_table
    Where value_1 = 15
-   And value_2 > 25);  
- 
+   And value_2 > 25);
+
  -- not pushable since we're not selecting the partition key
  -- from the events table
 INSERT INTO agg_results_third(user_id)
@@ -603,7 +603,7 @@ And event_type  in
   (select user_id
    From users_table
    Where value_1 = 15
-   And value_2 > 25);  
+   And value_2 > 25);
 
 ------------------------------------
 ------------------------------------
@@ -639,34 +639,34 @@ GROUP BY user_id, event_type;
 INSERT INTO agg_results_third(user_id, value_1_agg, value_3_agg)
 SELECT
     users_table.user_id, users_table.value_1, prob
-FROM 
+FROM
    users_table
-        JOIN 
-   (SELECT  
+        JOIN
+   (SELECT
       ma.user_id, (GREATEST(coalesce(ma.value_4 / 250, 0.0) + GREATEST(1.0))) / 2 AS prob
-    FROM 
+    FROM
       users_table AS ma, events_table as short_list
-    WHERE 
+    WHERE
       short_list.user_id != ma.user_id and ma.value_1 < 50 and short_list.event_type < 50
-    ) temp 
-  ON users_table.user_id = temp.user_id 
+    ) temp
+  ON users_table.user_id = temp.user_id
   WHERE users_table.value_1 < 50;
 
 -- not pushable since the join is not on the partition key
 INSERT INTO agg_results_third(user_id, value_1_agg, value_3_agg)
 SELECT
     users_table.user_id, users_table.value_1, prob
-FROM 
+FROM
    users_table
-        JOIN 
-   (SELECT  
+        JOIN
+   (SELECT
       ma.user_id, (GREATEST(coalesce(ma.value_4 / 250, 0.0) + GREATEST(1.0))) / 2 AS prob
-    FROM 
+    FROM
       users_table AS ma, events_table as short_list
-    WHERE 
+    WHERE
       short_list.user_id = ma.value_2 and ma.value_1 < 50 and short_list.event_type < 50
-    ) temp 
-  ON users_table.user_id = temp.user_id 
+    ) temp
+  ON users_table.user_id = temp.user_id
   WHERE users_table.value_1 < 50;
 
 -- supported via recursive planning

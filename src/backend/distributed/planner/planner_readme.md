@@ -6,7 +6,7 @@ If the input query is trivial (e.g., no joins, no subqueries/ctes, single table 
 
 Distributed planning (`CreateDistributedPlan`) tries several different methods to plan the query:
 
- 
+
  1. Fast-path router planner, proceed if the query prunes down to a single shard of a single table
  2. Router planner, proceed if the query prunes down to a single set of co-located shards
  3. Modification planning, proceed if the query is a DML command and all joins are co-located
@@ -15,7 +15,7 @@ Distributed planning (`CreateDistributedPlan`) tries several different methods t
 
 ## Fast-path router planner
 
-By examining the query tree, if we can decide that the query hits only a single shard of a single table, we can skip calling `standard_planner()`. Later on the execution, we simply fetch the filter on the distribution key and do the pruning. 
+By examining the query tree, if we can decide that the query hits only a single shard of a single table, we can skip calling `standard_planner()`. Later on the execution, we simply fetch the filter on the distribution key and do the pruning.
 
 As the name reveals, this can be considered as a sub-item of Router planner described below. The only difference is that fast-path planner doesn't rely on `standard_planner()` for collecting restriction information.
 

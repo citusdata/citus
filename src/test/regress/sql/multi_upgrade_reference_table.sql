@@ -156,7 +156,7 @@ WHERE shardid IN
      WHERE logicalrelid = 'upgrade_reference_table_append'::regclass)
 GROUP BY shardid
 ORDER BY shardid;
-    
+
 DROP TABLE upgrade_reference_table_append;
 
 -- test valid cases, shard exists at one worker
@@ -229,7 +229,7 @@ WHERE shardid IN
      WHERE logicalrelid = 'upgrade_reference_table_one_worker'::regclass)
 GROUP BY shardid
 ORDER BY shardid;
-    
+
 DROP TABLE upgrade_reference_table_one_worker;
 
 -- test valid cases, shard exists at both workers but one is unhealthy
@@ -306,7 +306,7 @@ WHERE shardid IN
     AND shardstate = 1
 GROUP BY shardid
 ORDER BY shardid;
-    
+
 DROP TABLE upgrade_reference_table_one_unhealthy;
 
 -- test valid cases, shard exists at both workers and both are healthy
@@ -378,7 +378,7 @@ WHERE shardid IN
      WHERE logicalrelid = 'upgrade_reference_table_both_healthy'::regclass)
 GROUP BY shardid
 ORDER BY shardid;
-    
+
 DROP TABLE upgrade_reference_table_both_healthy;
 
 -- test valid cases, do it in transaction and ROLLBACK
@@ -455,7 +455,7 @@ WHERE shardid IN
      WHERE logicalrelid = 'upgrade_reference_table_transaction_rollback'::regclass)
 GROUP BY shardid
 ORDER BY shardid;
-     
+
 DROP TABLE upgrade_reference_table_transaction_rollback;
 
 -- test valid cases, do it in transaction and COMMIT
@@ -577,11 +577,11 @@ WHERE shardid IN
      WHERE logicalrelid = 'upgrade_reference_table_mx'::regclass)
 GROUP BY shardid
 ORDER BY shardid;
-     
+
 
 SELECT upgrade_to_reference_table('upgrade_reference_table_mx');
 
-     
+
 -- situation after upgrade_reference_table
 SELECT
     partmethod, (partkey IS NULL) as partkeyisnull, colocationid, repmodel
@@ -622,10 +622,10 @@ SET citus.shard_replication_factor TO 2;
 RESET citus.replication_model;
 CREATE TABLE upgrade_reference_table_mx(column1 int);
 SELECT create_distributed_table('upgrade_reference_table_mx', 'column1');
-UPDATE pg_dist_shard_placement SET shardstate = 3 
-WHERE nodeport = :worker_2_port AND 
+UPDATE pg_dist_shard_placement SET shardstate = 3
+WHERE nodeport = :worker_2_port AND
 	shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid='upgrade_reference_table_mx'::regclass);
-	
+
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 
 -- situation before upgrade_reference_table
@@ -659,11 +659,11 @@ WHERE shardid IN
      WHERE logicalrelid = 'upgrade_reference_table_mx'::regclass)
 GROUP BY shardid
 ORDER BY shardid;
-     
+
 SET client_min_messages TO WARNING;
 SELECT upgrade_to_reference_table('upgrade_reference_table_mx');
 
-     
+
 -- situation after upgrade_reference_table
 SELECT
     partmethod, (partkey IS NULL) as partkeyisnull, colocationid, repmodel
@@ -695,7 +695,7 @@ WHERE shardid IN
      WHERE logicalrelid = 'upgrade_reference_table_mx'::regclass)
 GROUP BY shardid
 ORDER BY shardid;
-     
+
 -- situation on metadata worker
 \c - - - :worker_1_port
 SELECT
@@ -721,7 +721,7 @@ WHERE shardid IN
      WHERE logicalrelid = 'upgrade_reference_table_mx'::regclass)
 GROUP BY shardid
 ORDER BY shardid;
-     
+
 \c - - - :master_port
 DROP TABLE upgrade_reference_table_mx;
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);

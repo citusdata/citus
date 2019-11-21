@@ -10,30 +10,30 @@ CREATE TYPE subquery_prepared_statements.xy AS (x int, y int);
 
 SET client_min_messages TO DEBUG1;
 
-PREPARE subquery_prepare_without_param AS 
+PREPARE subquery_prepare_without_param AS
 SELECT
    DISTINCT values_of_subquery
 FROM
-    (SELECT 
+    (SELECT
       DISTINCT (users_table.user_id, events_table.event_type)::xy  as values_of_subquery
-     FROM 
-      users_table, events_table 
-     WHERE 
-      users_table.user_id = events_table.user_id AND 
+     FROM
+      users_table, events_table
+     WHERE
+      users_table.user_id = events_table.user_id AND
      event_type IN (1,2,3,4)
      ORDER BY 1 DESC LIMIT 5
      ) as foo
     ORDER BY 1 DESC;
 
-PREPARE subquery_prepare_param_on_partkey(int) AS 
+PREPARE subquery_prepare_param_on_partkey(int) AS
 SELECT
    DISTINCT values_of_subquery
 FROM
-    (SELECT 
+    (SELECT
       DISTINCT (users_table.user_id, events_table.event_type)::xy  as values_of_subquery
-     FROM 
-      users_table, events_table 
-     WHERE 
+     FROM
+      users_table, events_table
+     WHERE
       users_table.user_id = events_table.user_id AND
       (users_table.user_id = $1 OR users_table.user_id = 2) AND
      event_type IN (1,2,3,4)
@@ -41,16 +41,16 @@ FROM
      ) as foo
     ORDER BY 1 DESC;
 
-PREPARE subquery_prepare_param_non_partkey(int) AS 
+PREPARE subquery_prepare_param_non_partkey(int) AS
 SELECT
    DISTINCT values_of_subquery
 FROM
-    (SELECT 
+    (SELECT
       DISTINCT (users_table.user_id, events_table.event_type)::xy  as values_of_subquery
-     FROM 
-      users_table, events_table 
-     WHERE 
-      users_table.user_id = events_table.user_id AND 
+     FROM
+      users_table, events_table
+     WHERE
+      users_table.user_id = events_table.user_id AND
      event_type = $1
      ORDER BY 1 DESC LIMIT 5
      ) as foo

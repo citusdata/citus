@@ -1,12 +1,12 @@
 # we use 5 as the partition key value through out the test
 # so setting the corresponding shard here is useful
 setup
-{	
+{
 	SET citus.shard_count TO 2;
 	SET citus.shard_replication_factor TO 2;
 	CREATE TABLE test_copy_placement_vs_modification (x int, y int);
 	SELECT create_distributed_table('test_copy_placement_vs_modification', 'x');
-	
+
 	SELECT get_shard_id_for_distribution_column('test_copy_placement_vs_modification', 5) INTO selected_shard;
 }
 
@@ -25,7 +25,7 @@ step "s1-begin"
 }
 
 # since test_copy_placement_vs_modification has rep > 1 simple select query doesn't hit all placements
-# hence not all placements are cached 
+# hence not all placements are cached
 step "s1-load-cache"
 {
 	TRUNCATE test_copy_placement_vs_modification;
@@ -90,9 +90,9 @@ step "s2-commit"
 
 step "s2-print-content"
 {
-	SELECT 
-		nodeport, success, result 
-	FROM 
+	SELECT
+		nodeport, success, result
+	FROM
 		run_command_on_placements('test_copy_placement_vs_modification', 'select y from %s WHERE x = 5')
 	WHERE
 		shardid IN (SELECT * FROM selected_shard)
@@ -102,9 +102,9 @@ step "s2-print-content"
 
 step "s2-print-index-count"
 {
-	SELECT 
-		nodeport, success, result 
-	FROM 
+	SELECT
+		nodeport, success, result
+	FROM
 		run_command_on_placements('test_copy_placement_vs_modification', 'select count(*) from pg_indexes WHERE tablename = ''%s''')
 	ORDER BY
 		nodeport;

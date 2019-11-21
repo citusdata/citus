@@ -3,38 +3,38 @@ SET citus.enable_repartition_joins to ON;
 
 SET citus.max_intermediate_result_size TO 2;
 -- should fail because the copy size is ~4kB for each cte
-WITH cte AS 
+WITH cte AS
 (
 	SELECT * FROM users_table
 ),
 cte2 AS (
 	SELECT * FROM events_table
-) 
+)
 SELECT cte.user_id, cte.value_2 FROM cte,cte2 ORDER BY 1,2 LIMIT 10;
 
 
 SET citus.max_intermediate_result_size TO 9;
 -- regular task-tracker CTE should fail
-WITH cte AS 
+WITH cte AS
 (
-	SELECT 
+	SELECT
 		users_table.user_id, users_table.value_1, users_table.value_2
-	FROM 
+	FROM
 		users_table
-		join 
+		join
 		events_table
-	on 
+	on
 		(users_table.value_3=events_table.value_3)
 ),
 cte2 AS (
 	SELECT * FROM events_table
-) 
-SELECT 
-	cte.user_id, cte2.value_2 
-FROM 
+)
+SELECT
+	cte.user_id, cte2.value_2
+FROM
 	cte JOIN cte2 ON (cte.value_1 = cte2.event_type)
-ORDER BY 
-	1,2 
+ORDER BY
+	1,2
 LIMIT 10;
 
 
@@ -110,7 +110,7 @@ WITH cte AS (
 	cte3 AS (
 		SELECT * FROM events_table WHERE event_type = 1
 	)
-	SELECT * FROM cte2, cte3 WHERE cte2.value_1 IN (SELECT value_2 FROM cte3) 
+	SELECT * FROM cte2, cte3 WHERE cte2.value_1 IN (SELECT value_2 FROM cte3)
 )
 SELECT * FROM cte;
 
@@ -171,42 +171,42 @@ SELECT * FROM cte UNION ALL
 SELECT * FROM cte4 ORDER BY 1,2,3,4,5 LIMIT 5;
 
 -- regular task-tracker CTE, should work since -1 disables the limit
-WITH cte AS 
+WITH cte AS
 (
-	SELECT 
+	SELECT
 		users_table.user_id, users_table.value_1, users_table.value_2
-	FROM 
+	FROM
 		users_table
-		join 
+		join
 		events_table
-	on 
+	on
 		(users_table.value_2=events_table.value_2)
 ),
 cte2 AS (
 	SELECT * FROM events_table
-) 
-SELECT 
-	cte.user_id, cte2.value_2 
-FROM 
+)
+SELECT
+	cte.user_id, cte2.value_2
+FROM
 	cte JOIN cte2 ON (cte.value_1 = cte2.event_type)
-ORDER BY 
-	1,2 
+ORDER BY
+	1,2
 LIMIT 10;
 
 
 -- regular real-time CTE fetches around ~4kb data in each subplan
-WITH cte AS 
+WITH cte AS
 (
 	SELECT * FROM users_table
 ),
 cte2 AS (
 	SELECT * FROM events_table
-) 
+)
 SELECT cte.user_id, cte.value_2 FROM cte,cte2 ORDER BY 1,2 LIMIT 10;
 
 
 -- regular real-time query fetches ~4kB
-WITH cte AS 
+WITH cte AS
 (
 	SELECT * FROM users_table WHERE user_id IN (1,2,3,4,5)
 )
@@ -221,11 +221,11 @@ WITH cte AS (
 	cte3 AS (
 		SELECT * FROM events_table
 	)
-	SELECT 
+	SELECT
 		cte2.user_id, cte2.time, cte3.event_type, cte3.value_2, cte3.value_3
-	FROM 
-		cte2, cte3 
-	WHERE 
+	FROM
+		cte2, cte3
+	WHERE
 		cte2.user_id = cte3.user_id AND cte2.user_id = 1
 )
 SELECT * FROM cte ORDER BY 1,2,3,4,5 LIMIT 10;

@@ -1,12 +1,12 @@
 # we use 5 as the partition key value through out the test
 # so setting the corresponding shard here is useful
 setup
-{	
+{
 	SET citus.shard_count TO 2;
 	SET citus.shard_replication_factor TO 2;
 	CREATE TABLE test_hash_table (x int, y int);
 	SELECT create_distributed_table('test_hash_table', 'x');
-	
+
 	SELECT get_shard_id_for_distribution_column('test_hash_table', 5) INTO selected_shard_for_test_table;
 }
 

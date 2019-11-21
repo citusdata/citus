@@ -14,7 +14,7 @@ UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE nodeport = :worker_2_por
 -- test repairing colocated shards
 -- status before shard repair
 SELECT s.shardid, s.logicalrelid::regclass, sp.nodeport, p.colocationid, sp.shardstate
-FROM 
+FROM
     pg_dist_partition p, pg_dist_shard s, pg_dist_shard_placement sp
 WHERE
     p.logicalrelid = s.logicalrelid AND
@@ -27,7 +27,7 @@ SELECT master_copy_shard_placement(1300000, 'localhost', :worker_1_port, 'localh
 
 -- status after shard repair
 SELECT s.shardid, s.logicalrelid::regclass, sp.nodeport, p.colocationid, sp.shardstate
-FROM 
+FROM
     pg_dist_partition p, pg_dist_shard s, pg_dist_shard_placement sp
 WHERE
     p.logicalrelid = s.logicalrelid AND
@@ -39,7 +39,7 @@ ORDER BY s.shardid, sp.nodeport;
 -- test repairing NOT colocated shard
 -- status before shard repair
 SELECT s.shardid, s.logicalrelid::regclass, sp.nodeport, p.colocationid, sp.shardstate
-FROM 
+FROM
     pg_dist_partition p, pg_dist_shard s, pg_dist_shard_placement sp
 WHERE
     p.logicalrelid = s.logicalrelid AND
@@ -52,7 +52,7 @@ SELECT master_copy_shard_placement(1300016, 'localhost', :worker_1_port, 'localh
 
 -- status after shard repair
 SELECT s.shardid, s.logicalrelid::regclass, sp.nodeport, p.colocationid, sp.shardstate
-FROM 
+FROM
     pg_dist_partition p, pg_dist_shard s, pg_dist_shard_placement sp
 WHERE
     p.logicalrelid = s.logicalrelid AND
@@ -64,7 +64,7 @@ ORDER BY s.shardid, sp.nodeport;
 -- test repairing shard in append distributed table
 -- status before shard repair
 SELECT s.shardid, s.logicalrelid::regclass, sp.nodeport, p.colocationid, sp.shardstate
-FROM 
+FROM
     pg_dist_partition p, pg_dist_shard s, pg_dist_shard_placement sp
 WHERE
     p.logicalrelid = s.logicalrelid AND
@@ -77,7 +77,7 @@ SELECT master_copy_shard_placement(1300020, 'localhost', :worker_1_port, 'localh
 
 -- status after shard repair
 SELECT s.shardid, s.logicalrelid::regclass, sp.nodeport, p.colocationid, sp.shardstate
-FROM 
+FROM
     pg_dist_partition p, pg_dist_shard s, pg_dist_shard_placement sp
 WHERE
     p.logicalrelid = s.logicalrelid AND
@@ -92,7 +92,7 @@ UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid = 1300000;
 
 -- status before shard repair
 SELECT s.shardid, s.logicalrelid::regclass, sp.nodeport, p.colocationid, sp.shardstate
-FROM 
+FROM
     pg_dist_partition p, pg_dist_shard s, pg_dist_shard_placement sp
 WHERE
     p.logicalrelid = s.logicalrelid AND
@@ -105,7 +105,7 @@ SELECT master_copy_shard_placement(1300000, 'localhost', :worker_1_port, 'localh
 
 -- status after shard repair
 SELECT s.shardid, s.logicalrelid::regclass, sp.nodeport, p.colocationid, sp.shardstate
-FROM 
+FROM
     pg_dist_partition p, pg_dist_shard s, pg_dist_shard_placement sp
 WHERE
     p.logicalrelid = s.logicalrelid AND

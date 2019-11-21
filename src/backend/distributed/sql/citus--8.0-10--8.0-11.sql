@@ -1,4 +1,4 @@
---  citus--8.0-10--8.0-11 
+--  citus--8.0-10--8.0-11
 SET search_path = 'pg_catalog';
 
 -- Deprecated functions

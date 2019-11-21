@@ -45,7 +45,7 @@ CREATE OPERATOR FAMILY cats_op_fam USING hash;
 -- ... create a test HASH function. Though it is a poor hash function,
 -- it is acceptable for our tests
 CREATE FUNCTION test_composite_type_hash(test_composite_type) RETURNS int
-AS 'SELECT hashtext( ($1.i + $1.i2)::text);'      
+AS 'SELECT hashtext( ($1.i + $1.i2)::text);'
 LANGUAGE SQL
 IMMUTABLE
 RETURNS NULL ON NULL INPUT;
@@ -73,7 +73,7 @@ CREATE TABLE composite_type_partitioned_table
 SET citus.shard_replication_factor TO 1;
 SELECT create_distributed_table('composite_type_partitioned_table', 'col', 'hash');
 
--- execute INSERT, SELECT and UPDATE queries on composite_type_partitioned_table   
+-- execute INSERT, SELECT and UPDATE queries on composite_type_partitioned_table
 INSERT INTO composite_type_partitioned_table VALUES  (1, '(1, 2)'::test_composite_type);
 INSERT INTO composite_type_partitioned_table VALUES  (2, '(3, 4)'::test_composite_type);
 INSERT INTO composite_type_partitioned_table VALUES  (3, '(5, 6)'::test_composite_type);
@@ -91,13 +91,13 @@ SELECT * FROM composite_type_partitioned_table WHERE col =  '(7, 8)'::test_compo
 CREATE TYPE bug_status AS ENUM ('new', 'open', 'closed');
 
 CREATE TABLE bugs (
-    id integer, 
+    id integer,
     status bug_status
 );
 
 SELECT create_distributed_table('bugs', 'status', 'hash');
 
--- execute INSERT, SELECT and UPDATE queries on composite_type_partitioned_table   
+-- execute INSERT, SELECT and UPDATE queries on composite_type_partitioned_table
 INSERT INTO bugs VALUES  (1, 'new');
 INSERT INTO bugs VALUES  (2, 'open');
 INSERT INTO bugs VALUES  (3, 'closed');
@@ -111,7 +111,7 @@ UPDATE bugs SET status = 'closed'::bug_status WHERE id = 2;
 SELECT * FROM bugs WHERE status = 'open'::bug_status;
 
 -- create and distribute a table on varchar column
-CREATE TABLE varchar_hash_partitioned_table    
+CREATE TABLE varchar_hash_partitioned_table
 (
 	id int,
     name varchar
@@ -119,7 +119,7 @@ CREATE TABLE varchar_hash_partitioned_table
 
 SELECT create_distributed_table('varchar_hash_partitioned_table', 'name', 'hash');
 
--- execute INSERT, SELECT and UPDATE queries on composite_type_partitioned_table   
+-- execute INSERT, SELECT and UPDATE queries on composite_type_partitioned_table
 INSERT INTO varchar_hash_partitioned_table VALUES  (1, 'Jason');
 INSERT INTO varchar_hash_partitioned_table VALUES  (2, 'Ozgun');
 INSERT INTO varchar_hash_partitioned_table VALUES  (3, 'Onder');
