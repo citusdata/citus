@@ -228,7 +228,6 @@ ORDER BY shardid;
  1360009 | t
 (1 row)
 
-    
 DROP TABLE upgrade_reference_table_append;
 -- test valid cases, shard exists at one worker
 CREATE TABLE upgrade_reference_table_one_worker(column1 int);
@@ -341,7 +340,6 @@ ORDER BY shardid;
  1360010 | t
 (1 row)
 
-    
 DROP TABLE upgrade_reference_table_one_worker;
 -- test valid cases, shard exists at both workers but one is unhealthy
 SET citus.shard_replication_factor TO 2;
@@ -458,7 +456,6 @@ ORDER BY shardid;
  1360011 | t
 (1 row)
 
-    
 DROP TABLE upgrade_reference_table_one_unhealthy;
 -- test valid cases, shard exists at both workers and both are healthy
 CREATE TABLE upgrade_reference_table_both_healthy(column1 int);
@@ -570,7 +567,6 @@ ORDER BY shardid;
  1360012 | t
 (1 row)
 
-    
 DROP TABLE upgrade_reference_table_both_healthy;
 -- test valid cases, do it in transaction and ROLLBACK
 SET citus.shard_replication_factor TO 1;
@@ -686,7 +682,6 @@ ORDER BY shardid;
  1360013 | f
 (1 row)
 
-     
 DROP TABLE upgrade_reference_table_transaction_rollback;
 -- test valid cases, do it in transaction and COMMIT
 SET citus.shard_replication_factor TO 1;
@@ -872,11 +867,9 @@ ORDER BY shardid;
  1360015
 (1 row)
 
-     
 SELECT upgrade_to_reference_table('upgrade_reference_table_mx');
 ERROR:  cannot upgrade to reference table
 DETAIL:  Upgrade is only supported for statement-based replicated tables but "upgrade_reference_table_mx" is streaming replicated
-     
 -- situation after upgrade_reference_table
 SELECT
     partmethod, (partkey IS NULL) as partkeyisnull, colocationid, repmodel
@@ -937,10 +930,9 @@ SELECT create_distributed_table('upgrade_reference_table_mx', 'column1');
  
 (1 row)
 
-UPDATE pg_dist_shard_placement SET shardstate = 3 
-WHERE nodeport = :worker_2_port AND 
+UPDATE pg_dist_shard_placement SET shardstate = 3
+WHERE nodeport = :worker_2_port AND
 	shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid='upgrade_reference_table_mx'::regclass);
-	
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
  start_metadata_sync_to_node 
 -----------------------------
@@ -995,7 +987,6 @@ ORDER BY shardid;
  1360016
 (1 row)
 
-     
 SET client_min_messages TO WARNING;
 SELECT upgrade_to_reference_table('upgrade_reference_table_mx');
  upgrade_to_reference_table 
@@ -1003,7 +994,6 @@ SELECT upgrade_to_reference_table('upgrade_reference_table_mx');
  
 (1 row)
 
-     
 -- situation after upgrade_reference_table
 SELECT
     partmethod, (partkey IS NULL) as partkeyisnull, colocationid, repmodel
@@ -1052,7 +1042,6 @@ ORDER BY shardid;
  1360016 | t
 (1 row)
 
-     
 -- situation on metadata worker
 \c - - - :worker_1_port
 SELECT
@@ -1091,7 +1080,6 @@ ORDER BY shardid;
  1360016 | t
 (1 row)
 
-     
 \c - - - :master_port
 DROP TABLE upgrade_reference_table_mx;
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
