@@ -1,5 +1,4 @@
 -- Tests related to distributed DDL commands on mx cluster
-
 SELECT * FROM mx_ddl_table ORDER BY key;
 
 -- CREATE INDEX
@@ -17,7 +16,6 @@ UPDATE mx_ddl_table SET version=0.1 WHERE version IS NULL;
 
 -- SET NOT NULL
 ALTER TABLE mx_ddl_table ALTER COLUMN version SET NOT NULL;
-
 
 -- See that the changes are applied on coordinator, worker tables and shards
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_ddl_table'::regclass;

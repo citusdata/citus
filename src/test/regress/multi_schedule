@@ -25,6 +25,7 @@ test: multi_cluster_management
 test: alter_role_propagation
 test: propagate_extension_commands
 test: multi_test_helpers
+test: multi_test_catalog_views
 test: multi_table_ddl
 test: multi_name_lengths
 test: multi_name_resolution
@@ -267,6 +268,7 @@ test: multi_replicate_reference_table
 test: multi_reference_table
 test: foreign_key_to_reference_table
 test: replicate_reference_tables_to_coordinator
+
 test: remove_coordinator
 
 # ----------
