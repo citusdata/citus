@@ -36,13 +36,7 @@
 
 * Introduces distributing aggregate definitions to workers
 
-* Prevents Citus extension becoming distributed object
-
-* Refactors some of hard coded values in citus gucs
-
 * Removes `citus.worker_list_file` GUC
-
-* Removes pg10 from pg upgrade tests
 
 * Revokes usage from the citus schema from public
 
