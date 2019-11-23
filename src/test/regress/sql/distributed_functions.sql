@@ -223,6 +223,13 @@ ALTER FUNCTION add(int,int) SET client_min_messages TO debug;
 SELECT public.verify_function_is_same_on_workers('function_tests.add(int,int)');
 ALTER FUNCTION add(int,int) RESET client_min_messages;
 SELECT public.verify_function_is_same_on_workers('function_tests.add(int,int)');
+ALTER FUNCTION add(int,int) SET "citus.setting;'" TO 'hello '' world';
+SELECT public.verify_function_is_same_on_workers('function_tests.add(int,int)');
+ALTER FUNCTION add(int,int) RESET "citus.setting;'";
+SELECT public.verify_function_is_same_on_workers('function_tests.add(int,int)');
+ALTER FUNCTION add(int,int) SET search_path TO 'sch'';ma', public;
+SELECT public.verify_function_is_same_on_workers('function_tests.add(int,int)');
+ALTER FUNCTION add(int,int) RESET search_path;
 
 -- SET ... FROM CURRENT is not supported, verify the query fails with a descriptive error irregardless of where in the action list the statement occurs
 ALTER FUNCTION add(int,int) SET client_min_messages FROM CURRENT;
