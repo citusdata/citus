@@ -85,9 +85,10 @@ DeparseCreateExtensionStmt(CreateExtensionStmt *createExtensionStmt)
 static void
 AppendCreateExtensionStmt(StringInfo buf, CreateExtensionStmt *createExtensionStmt)
 {
-	const char *extensionName = createExtensionStmt->extname;
-
 	List *optionsList = createExtensionStmt->options;
+
+	const char *extensionName = createExtensionStmt->extname;
+	extensionName = quote_identifier(extensionName);
 
 	/*
 	 * We fetch "new_version", "schema" and "cascade" options from
@@ -157,9 +158,10 @@ DeparseAlterExtensionStmt(AlterExtensionStmt *alterExtensionStmt)
 static void
 AppendAlterExtensionStmt(StringInfo buf, AlterExtensionStmt *alterExtensionStmt)
 {
-	const char *extensionName = alterExtensionStmt->extname;
-
 	List *optionsList = alterExtensionStmt->options;
+
+	const char *extensionName = alterExtensionStmt->extname;
+	extensionName = quote_identifier(extensionName);
 
 	Value *newVersionValue = GetExtensionOption(optionsList, "new_version");
 
@@ -233,6 +235,7 @@ AppendExtensionNameList(StringInfo str, List *objects)
 	foreach(objectCell, objects)
 	{
 		const char *extensionName = strVal(lfirst(objectCell));
+		extensionName = quote_identifier(extensionName);
 
 		if (objectCell != list_head(objects))
 		{
@@ -273,6 +276,11 @@ AppendAlterExtensionSchemaStmt(StringInfo buf,
 	Assert(alterExtensionSchemaStmt->objectType == OBJECT_EXTENSION);
 
 	const char *extensionName = strVal(alterExtensionSchemaStmt->object);
+	const char *newSchemaName = alterExtensionSchemaStmt->newschema;
+
+	extensionName = quote_identifier(extensionName);
+	newSchemaName = quote_identifier(newSchemaName);
+
 	appendStringInfo(buf, "ALTER EXTENSION %s SET SCHEMA %s;", extensionName,
-					 quote_identifier(alterExtensionSchemaStmt->newschema));
+					 newSchemaName);
 }
