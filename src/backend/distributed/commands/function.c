@@ -618,29 +618,10 @@ GetFunctionAlterOwnerCommand(const RegProcedure funcOid)
 	}
 
 	/*
-	 * Set search_path to NIL so that all objects outside of pg_catalog will be
-	 * schema-prefixed. pg_catalog will be added automatically when we call
-	 * PushOverrideSearchPath(), since we set addCatalog to true;
-	 */
-	OverrideSearchPath *overridePath = GetOverrideSearchPath(CurrentMemoryContext);
-	overridePath->schemas = NIL;
-	overridePath->addCatalog = true;
-
-	PushOverrideSearchPath(overridePath);
-
-	/*
-	 * If the function exists we want to use pg_get_function_identity_arguments to
+	 * If the function exists we want to use format_procedure_qualified to
 	 * serialize its canonical arguments
 	 */
-	Datum functionSignatureDatum =
-		DirectFunctionCall1(regprocedureout, ObjectIdGetDatum(funcOid));
-
-	/* revert back to original search_path */
-	PopOverrideSearchPath();
-
-	/* regprocedureout returns cstring */
-	char *functionSignature = DatumGetCString(functionSignatureDatum);
-
+	char *functionSignature = format_procedure_qualified(funcOid);
 	char *functionOwner = GetUserNameFromId(procOwner, false);
 
 	appendStringInfo(alterCommand, "ALTER %s %s OWNER TO %s;",

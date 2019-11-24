@@ -70,7 +70,7 @@ CREATE FUNCTION add_without_param_names(integer, integer) RETURNS integer
     LANGUAGE SQL
     IMMUTABLE
     RETURNS NULL ON NULL INPUT;
-CREATE FUNCTION add_mixed_param_names(integer, val1 integer) RETURNS integer
+CREATE FUNCTION "add_mi'xed_param_names"(integer, "va'l1" integer) RETURNS integer
     AS 'select $1 + $2;'
     LANGUAGE SQL
     IMMUTABLE
@@ -168,21 +168,21 @@ select bool_or(hasmetadata) from pg_dist_node WHERE isactive AND  noderole = 'pr
 
 -- if not paremeters are supplied, we'd see that function doesn't have
 -- distribution_argument_index and colocationid
-SELECT create_distributed_function('add_mixed_param_names(int, int)');
+SELECT create_distributed_function('"add_mi''xed_param_names"(int, int)');
  create_distributed_function 
 -----------------------------
  
 (1 row)
 
 SELECT distribution_argument_index is NULL, colocationid is NULL from citus.pg_dist_object
-WHERE objid = 'add_mixed_param_names(int, int)'::regprocedure;
+WHERE objid = 'add_mi''xed_param_names(int, int)'::regprocedure;
  ?column? | ?column? 
 ----------+----------
  t        | t
 (1 row)
 
 -- also show that we can use the function
-SELECT * FROM run_command_on_workers('SELECT function_tests.add_mixed_param_names(2,3);') ORDER BY 1,2;
+SELECT * FROM run_command_on_workers('SELECT function_tests."add_mi''xed_param_names"(2,3);') ORDER BY 1,2;
  nodename  | nodeport | success | result 
 -----------+----------+---------+--------
  localhost |    57637 | t       | 5
@@ -510,7 +510,7 @@ SELECT create_distributed_function('add_with_param_names(int, int)', '$3');
 ERROR:  cannot distribute the function "add_with_param_names" since the distribution argument is not valid
 HINT:  Either provide a valid function argument name or a valid "$paramIndex" to create_distributed_function()
 SELECT create_distributed_function('add_with_param_names(int, int)', '$1a');
-ERROR:  invalid input syntax for integer: "1a"
+ERROR:  invalid input syntax for type integer: "1a"
 -- non existing column name
 SELECT create_distributed_function('add_with_param_names(int, int)', 'aaa');
 ERROR:  cannot distribute the function "add_with_param_names" since the distribution argument is not valid 

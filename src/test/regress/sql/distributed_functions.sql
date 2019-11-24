@@ -73,7 +73,7 @@ CREATE FUNCTION add_without_param_names(integer, integer) RETURNS integer
     IMMUTABLE
     RETURNS NULL ON NULL INPUT;
 
-CREATE FUNCTION add_mixed_param_names(integer, val1 integer) RETURNS integer
+CREATE FUNCTION "add_mi'xed_param_names"(integer, "va'l1" integer) RETURNS integer
     AS 'select $1 + $2;'
     LANGUAGE SQL
     IMMUTABLE
@@ -170,12 +170,12 @@ select bool_or(hasmetadata) from pg_dist_node WHERE isactive AND  noderole = 'pr
 
 -- if not paremeters are supplied, we'd see that function doesn't have
 -- distribution_argument_index and colocationid
-SELECT create_distributed_function('add_mixed_param_names(int, int)');
+SELECT create_distributed_function('"add_mi''xed_param_names"(int, int)');
 SELECT distribution_argument_index is NULL, colocationid is NULL from citus.pg_dist_object
-WHERE objid = 'add_mixed_param_names(int, int)'::regprocedure;
+WHERE objid = 'add_mi''xed_param_names(int, int)'::regprocedure;
 
 -- also show that we can use the function
-SELECT * FROM run_command_on_workers('SELECT function_tests.add_mixed_param_names(2,3);') ORDER BY 1,2;
+SELECT * FROM run_command_on_workers('SELECT function_tests."add_mi''xed_param_names"(2,3);') ORDER BY 1,2;
 
 -- make sure that none of the active and primary nodes hasmetadata
 -- since the function doesn't have a parameter
