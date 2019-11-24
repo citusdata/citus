@@ -111,7 +111,7 @@ CREATE TABLE ref_table_2 (x seg);
 SELECT create_reference_table('ref_table_2');
 
 -- and add the other node
-SELECT 1 from master_add_node('localhost', 57638);
+SELECT 1 from master_add_node('localhost', :worker_2_port);
 
 -- show that the extension is created on both existing and new node
 SELECT run_command_on_workers($$SELECT count(extnamespace) FROM pg_extension WHERE extname = 'seg'$$);
@@ -228,6 +228,34 @@ SELECT 1 from master_add_node('localhost', :worker_2_port);
 -- make sure that both extensions are created on both nodes
 SELECT count(*) FROM citus.pg_dist_object WHERE objid IN (SELECT oid FROM pg_extension WHERE extname IN ('seg', 'isn'));
 SELECT run_command_on_workers($$SELECT count(*) FROM pg_extension WHERE extname IN ('seg', 'isn')$$);
+
+-- test if citus can escape the extension name
+CREATE EXTENSION "uuid-ossp";
+
+-- show that the extension is created on both nodes
+SELECT run_command_on_workers($$SELECT count(*) FROM pg_extension WHERE extname = 'uuid-ossp'$$);
+
+SET client_min_messages TO WARNING;
+DROP EXTENSION "uuid-ossp";
+RESET client_min_messages;
+
+-- show that the extension is dropped from both nodes
+SELECT run_command_on_workers($$SELECT count(*) FROM pg_extension WHERE extname = 'uuid-ossp'$$);
+
+-- show that extension recreation on new nodes works also fine with extension names that require escaping
+SELECT 1 from master_remove_node('localhost', :worker_2_port);
+
+CREATE EXTENSION "uuid-ossp";
+
+-- and add the other node
+SELECT 1 from master_add_node('localhost', :worker_2_port);
+
+-- show that the extension exists on both nodes
+SELECT run_command_on_workers($$SELECT count(*) FROM pg_extension WHERE extname = 'uuid-ossp'$$);
+
+SET client_min_messages TO WARNING;
+DROP EXTENSION "uuid-ossp";
+RESET client_min_messages;
 
 -- drop the schema and all the objects
 SET client_min_messages TO WARNING;
