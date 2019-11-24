@@ -166,17 +166,23 @@ select array_collect_sort(val) from aggdata;
 create user notsuper;
 NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
 HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
-grant all on schema aggregate_support to notsuper;
-grant all on all tables in schema aggregate_support to notsuper;
-select run_command_on_workers($$
-create user notsuper;
-grant all on schema aggregate_support to notsuper;
-grant all on all tables in schema aggregate_support to notsuper;
-$$);
+select run_command_on_workers($$create user notsuper$$);
       run_command_on_workers       
 -----------------------------------
  (localhost,57637,t,"CREATE ROLE")
  (localhost,57638,t,"CREATE ROLE")
+(2 rows)
+
+grant all on schema aggregate_support to notsuper;
+grant all on all tables in schema aggregate_support to notsuper;
+select run_command_on_workers($$
+grant all on schema aggregate_support to notsuper;
+grant all on all tables in schema aggregate_support to notsuper;
+$$);
+  run_command_on_workers   
+---------------------------
+ (localhost,57637,t,GRANT)
+ (localhost,57638,t,GRANT)
 (2 rows)
 
 set role notsuper;
