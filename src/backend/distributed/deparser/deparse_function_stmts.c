@@ -20,6 +20,7 @@
 #include "access/htup_details.h"
 #include "catalog/namespace.h"
 #include "catalog/pg_proc.h"
+#include "catalog/pg_type.h"
 #include "commands/defrem.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/commands.h"
