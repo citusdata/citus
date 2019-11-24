@@ -274,25 +274,27 @@ AppendDefElemSet(StringInfo buf, DefElem *def)
 	{
 		case VAR_SET_VALUE:
 		{
-			appendStringInfo(buf, " SET %s = %s", setStmt->name, setVariableArgs);
+			appendStringInfo(buf, " SET %s = %s", quote_identifier(setStmt->name),
+							 setVariableArgs);
 			break;
 		}
 
 		case VAR_SET_CURRENT:
 		{
-			appendStringInfo(buf, " SET %s FROM CURRENT", setStmt->name);
+			appendStringInfo(buf, " SET %s FROM CURRENT", quote_identifier(
+								 setStmt->name));
 			break;
 		}
 
 		case VAR_SET_DEFAULT:
 		{
-			appendStringInfo(buf, " SET %s TO DEFAULT", setStmt->name);
+			appendStringInfo(buf, " SET %s TO DEFAULT", quote_identifier(setStmt->name));
 			break;
 		}
 
 		case VAR_RESET:
 		{
-			appendStringInfo(buf, " RESET %s", setStmt->name);
+			appendStringInfo(buf, " RESET %s", quote_identifier(setStmt->name));
 			break;
 		}
 
