@@ -1,4 +1,4 @@
-#include "isolation_mx_common.spec"
+#include "isolation_mx_common.include.spec"
 
 setup
 {

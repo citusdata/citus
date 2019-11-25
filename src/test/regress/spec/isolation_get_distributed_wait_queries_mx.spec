@@ -1,4 +1,4 @@
-#include "isolation_mx_common.spec"
+#include "isolation_mx_common.include.spec"
 
 setup {
 	CREATE TABLE ref_table(user_id int, value_1 int);
