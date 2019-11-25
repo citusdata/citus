@@ -3119,14 +3119,14 @@ AggregateFunctionOid(const char *functionName, Oid inputType)
 
 
 /*
- * AggregateFunctionOidWithoutInput performs a reverse lookup on aggregate function name,
- * and returns the corresponding aggregate function oid for the given function
- * name and input type.
+ * CitusFunctionOidWithSignature looks up a function with given input types.
+ * Looks in pg_catalog schema, as this function's sole purpose is
+ * support aggregate lookup.
  */
 static Oid
 CitusFunctionOidWithSignature(char *functionName, int numargs, Oid *argtypes)
 {
-	List *aggregateName = list_make2(makeString("citus"), makeString(functionName));
+	List *aggregateName = list_make2(makeString("pg_catalog"), makeString(functionName));
 	FuncCandidateList clist = FuncnameGetCandidates(aggregateName, numargs, NIL, false,
 													false, true);
 
@@ -3144,7 +3144,7 @@ CitusFunctionOidWithSignature(char *functionName, int numargs, Oid *argtypes)
 
 
 /*
- * Lookup oid of citus.worker_partial_agg
+ * WorkerPartialAggOid looks up oid of pg_catalog.worker_partial_agg
  */
 static Oid
 WorkerPartialAggOid()
@@ -3159,7 +3159,7 @@ WorkerPartialAggOid()
 
 
 /*
- * Lookup oid of citus.coord_combine_agg
+ * CoordCombineAggOid looks up oid of pg_catalog.coord_combine_agg
  */
 static Oid
 CoordCombineAggOid()
