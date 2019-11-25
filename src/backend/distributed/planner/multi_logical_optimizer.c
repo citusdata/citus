@@ -2322,7 +2322,7 @@ ProcessHavingClauseForWorkerQuery(Node *originalHavingQual,
 /*
  * PrcoessDistinctClauseForWorkerQuery gets the inputs and modifies the outputs
  * such that worker query's DISTINCT and DISTINCT ON clauses are set accordingly.
- * Note the the function may or may not decide to pushdown the DISTINCT and DISTINCT
+ * Note the function may or may not decide to pushdown the DISTINCT and DISTINCT
  * on clauses based on the inputs.
  *
  * See the detailed comments in the function for the rules of pushing down DISTINCT

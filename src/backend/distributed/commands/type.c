@@ -368,7 +368,7 @@ PlanAlterEnumStmt(AlterEnumStmt *stmt, const char *queryString)
 /*
  * ProcessAlterEnumStmt is called after the AlterEnumStmt has been applied locally.
  *
- * This function is used for ALTER ENUM ... ADD VALUE for postgres versions lower then 12
+ * This function is used for ALTER ENUM ... ADD VALUE for postgres versions lower than 12
  * to distribute the call. Before pg12 these statements could not be called in a
  * transaction. If we would plan the distirbution of these statements the same as we do
  * with the other statements they would get executed in a transaction to perform 2PC, that

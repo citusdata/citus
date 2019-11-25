@@ -989,7 +989,7 @@ GetAggregateDDLCommand(const RegProcedure funcOid, bool useCreateOrReplace)
  * EnsureSequentialModeForFunctionDDL makes sure that the current transaction is already in
  * sequential mode, or can still safely be put in sequential mode, it errors if that is
  * not possible. The error contains information for the user to retry the transaction with
- * sequential mode set from the beginnig.
+ * sequential mode set from the beginning.
  *
  * As functions are node scoped objects there exists only 1 instance of the function used by
  * potentially multiple shards. To make sure all shards in the transaction can interact

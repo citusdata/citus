@@ -315,7 +315,7 @@ AppendDefElemSet(StringInfo buf, DefElem *def)
 
 
 /*
- * AppendVarSetValue deparses a VariableSetStmt with VAR_SET_VALUE_KIND
+ * AppendVarSetValue deparses a VariableSetStmt with VAR_SET_VALUE kind.
  * It takes from flatten_set_variable_args in postgres's utils/misc/guc.c,
  * however flatten_set_variable_args does not apply correct quoting.
  */

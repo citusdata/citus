@@ -695,7 +695,7 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		 * CommandCounterIncrement twice, as the call is a no-op if the command id is not
 		 * used yet.
 		 *
-		 * Once versions older then above are not deemed important anymore this patch can
+		 * Once versions older than above are not deemed important anymore this patch can
 		 * be remove from citus.
 		 */
 		CommandCounterIncrement();

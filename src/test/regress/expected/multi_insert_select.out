@@ -1986,7 +1986,7 @@ FROM
 DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300017 AS citus_table_alias (store_id, first_name, default_1, last_name, default_2) SELECT store_id, 'Andres'::text AS first_name, 10, 'Freund'::text AS last_name, 20 FROM public.table_with_defaults_13300017 table_with_defaults WHERE ((worker_hash(store_id) OPERATOR(pg_catalog.>=) '-2147483648'::integer) AND (worker_hash(store_id) OPERATOR(pg_catalog.<=) '-1'::integer))
 DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300018 AS citus_table_alias (store_id, first_name, default_1, last_name, default_2) SELECT store_id, 'Andres'::text AS first_name, 10, 'Freund'::text AS last_name, 20 FROM public.table_with_defaults_13300018 table_with_defaults WHERE ((worker_hash(store_id) OPERATOR(pg_catalog.>=) 0) AND (worker_hash(store_id) OPERATOR(pg_catalog.<=) 2147483647))
 DEBUG:  Plan is router executable
--- some of the the ultimate queries where we have constants,
+-- some of the ultimate queries where we have constants,
 -- defaults and group by entry is not on the target entry
 INSERT INTO table_with_defaults (default_2, store_id, first_name)
 SELECT

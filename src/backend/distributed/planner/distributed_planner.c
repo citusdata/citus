@@ -1707,7 +1707,7 @@ CreateAndPushPlannerRestrictionContext(void)
 
 
 /*
- * CurrentRestrictionContext returns the the most recently added
+ * CurrentRestrictionContext returns the most recently added
  * PlannerRestrictionContext from the plannerRestrictionContextList list.
  */
 static PlannerRestrictionContext *

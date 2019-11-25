@@ -366,7 +366,7 @@ ExplainTaskList(List *taskList, ExplainState *es)
 
 
 /*
- * RemoteExplain fetches the the remote EXPLAIN output for a single
+ * RemoteExplain fetches the remote EXPLAIN output for a single
  * task. It tries each shard placement until one succeeds or all
  * failed.
  */

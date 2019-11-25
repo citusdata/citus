@@ -522,7 +522,7 @@ PlanAlterExtensionUpdateStmt(AlterExtensionStmt *alterExtensionStmt, const
  * EnsureSequentialModeForExtensionDDL makes sure that the current transaction is already in
  * sequential mode, or can still safely be put in sequential mode, it errors if that is
  * not possible. The error contains information for the user to retry the transaction with
- * sequential mode set from the beginnig.
+ * sequential mode set from the beginning.
  *
  * As extensions are node scoped objects there exists only 1 instance of the
  * extension used by potentially multiple shards. To make sure all shards in

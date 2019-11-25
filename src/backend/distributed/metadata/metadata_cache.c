@@ -1620,7 +1620,7 @@ CheckAvailableVersion(int elevel)
 
 
 /*
- * CheckInstalledVersion compares CITUS_EXTENSIONVERSION and the the
+ * CheckInstalledVersion compares CITUS_EXTENSIONVERSION and the
  * extension's current version from the pg_extemsion catalog table. If they
  * are not compatible, this function logs an error with the specified elevel,
  * otherwise it returns true.
