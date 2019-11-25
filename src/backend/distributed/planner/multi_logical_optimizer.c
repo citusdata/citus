@@ -2078,11 +2078,11 @@ WorkerExtendedOpNode(MultiExtendedOp *originalOpNode,
 	bool queryHasAggregates = TargetListHasAggragates(originalTargetEntryList);
 
 	/* initialize to default values */
-	memset(&queryTargetList, 0, sizeof(queryGroupClause));
+	memset(&queryTargetList, 0, sizeof(queryTargetList));
 	memset(&queryGroupClause, 0, sizeof(queryGroupClause));
-	memset(&queryDistinctClause, 0, sizeof(queryGroupClause));
-	memset(&queryWindowClause, 0, sizeof(queryGroupClause));
-	memset(&queryOrderByLimit, 0, sizeof(queryGroupClause));
+	memset(&queryDistinctClause, 0, sizeof(queryDistinctClause));
+	memset(&queryWindowClause, 0, sizeof(queryWindowClause));
+	memset(&queryOrderByLimit, 0, sizeof(queryOrderByLimit));
 
 	/* calculate the next sort group index based on the original target list */
 	Index nextSortGroupRefIndex = GetNextSortGroupRef(originalTargetEntryList);
