@@ -32,6 +32,15 @@
 #include "utils/memutils.h"
 
 
+static void SendCommandToMetadataWorkersParams(const char *command,
+											   const char *user, int parameterCount,
+											   const Oid *parameterTypes, const
+											   char *const *parameterValues);
+static void SendCommandToWorkersParamsInternal(TargetWorkerSet targetWorkerSet,
+											   const char *command, const char *user,
+											   int parameterCount, const
+											   Oid *parameterTypes,
+											   const char *const *parameterValues);
 static void ErrorIfAnyMetadataNodeOutOfSync(List *metadataNodeList);
 
 
@@ -57,11 +66,6 @@ SendCommandToWorkersAsUser(TargetWorkerSet targetWorkerSet, const char *nodeUser
 {
 	List *workerNodeList = TargetWorkerSetNodeList(targetWorkerSet, ShareLock);
 	ListCell *workerNodeCell = NULL;
-
-	if (targetWorkerSet == WORKERS_WITH_METADATA)
-	{
-		ErrorIfAnyMetadataNodeOutOfSync(workerNodeList);
-	}
 
 	/* run commands serially */
 	foreach(workerNodeCell, workerNodeList)
@@ -106,10 +110,10 @@ SendCommandToWorkerAsUser(char *nodeName, int32 nodePort, const char *nodeUser,
  * owner to ensure write access to the Citus metadata tables.
  */
 void
-SendCommandToWorkers(TargetWorkerSet targetWorkerSet, const char *command)
+SendCommandToWorkersWithMetadata(const char *command)
 {
-	SendCommandToWorkersParams(targetWorkerSet, command, CitusExtensionOwnerName(),
-							   0, NULL, NULL);
+	SendCommandToMetadataWorkersParams(command, CitusExtensionOwnerName(),
+									   0, NULL, NULL);
 }
 
 
@@ -146,24 +150,22 @@ TargetWorkerSetNodeList(TargetWorkerSet targetWorkerSet, LOCKMODE lockMode)
 
 
 /*
- * SendBareCommandListToWorkers sends a list of commands to a set of target
+ * SendBareCommandListToMetadataWorkers sends a list of commands to metadata
  * workers in serial. Commands are committed immediately: new connections are
  * always used and no transaction block is used (hence "bare"). The connections
  * are made as the extension owner to ensure write access to the Citus metadata
  * tables. Primarly useful for INDEX commands using CONCURRENTLY.
  */
 void
-SendBareCommandListToWorkers(TargetWorkerSet targetWorkerSet, List *commandList)
+SendBareCommandListToMetadataWorkers(List *commandList)
 {
+	TargetWorkerSet targetWorkerSet = WORKERS_WITH_METADATA;
 	List *workerNodeList = TargetWorkerSetNodeList(targetWorkerSet, ShareLock);
 	ListCell *workerNodeCell = NULL;
 	char *nodeUser = CitusExtensionOwnerName();
 	ListCell *commandCell = NULL;
 
-	if (targetWorkerSet == WORKERS_WITH_METADATA)
-	{
-		ErrorIfAnyMetadataNodeOutOfSync(workerNodeList);
-	}
+	ErrorIfAnyMetadataNodeOutOfSync(workerNodeList);
 
 	/* run commands serially */
 	foreach(workerNodeCell, workerNodeList)
@@ -192,23 +194,18 @@ SendBareCommandListToWorkers(TargetWorkerSet targetWorkerSet, List *commandList)
 
 
 /*
- * SendBareOptionalCommandListToWorkersAsUser sends a list of commands to a set of target
- * workers in serial. Commands are committed immediately: new connections are
- * always used and no transaction block is used (hence "bare").
+ * SendBareOptionalCommandListToAllWorkersAsUser sends a list of commands
+ * to all workers in serial. Commands are committed immediately: new
+ * connections are always used and no transaction block is used (hence "bare").
  */
 int
-SendBareOptionalCommandListToWorkersAsUser(TargetWorkerSet targetWorkerSet,
-										   List *commandList, const char *user)
+SendBareOptionalCommandListToAllWorkersAsUser(List *commandList, const char *user)
 {
+	TargetWorkerSet targetWorkerSet = ALL_WORKERS;
 	List *workerNodeList = TargetWorkerSetNodeList(targetWorkerSet, ShareLock);
 	ListCell *workerNodeCell = NULL;
 	ListCell *commandCell = NULL;
 	int maxError = RESPONSE_OKAY;
-
-	if (targetWorkerSet == WORKERS_WITH_METADATA)
-	{
-		ErrorIfAnyMetadataNodeOutOfSync(workerNodeList);
-	}
 
 	/* run commands serially */
 	foreach(workerNodeCell, workerNodeList)
@@ -244,27 +241,43 @@ SendBareOptionalCommandListToWorkersAsUser(TargetWorkerSet targetWorkerSet,
 
 
 /*
- * SendCommandToWorkersParams sends a command to all workers in parallel.
+ * SendCommandToMetadataWorkersParams is a wrapper around
+ * SendCommandToWorkersParamsInternal() enforcing some extra checks.
+ */
+static void
+SendCommandToMetadataWorkersParams(const char *command,
+								   const char *user, int parameterCount,
+								   const Oid *parameterTypes, const
+								   char *const *parameterValues)
+{
+	List *workerNodeList = TargetWorkerSetNodeList(WORKERS_WITH_METADATA, ShareLock);
+
+	ErrorIfAnyMetadataNodeOutOfSync(workerNodeList);
+
+	SendCommandToWorkersParamsInternal(WORKERS_WITH_METADATA, command, user,
+									   parameterCount, parameterTypes,
+									   parameterValues);
+}
+
+
+/*
+ * SendCommandToWorkersParamsInternal sends a command to all workers in parallel.
  * Commands are committed on the workers when the local transaction commits. The
  * connection are made as the extension owner to ensure write access to the Citus
  * metadata tables. Parameters can be specified as for PQexecParams, except that
  * paramLengths, paramFormats and resultFormat are hard-coded to NULL, NULL and 0
  * respectively.
  */
-void
-SendCommandToWorkersParams(TargetWorkerSet targetWorkerSet, const char *command,
-						   const char *user, int parameterCount,
-						   const Oid *parameterTypes, const char *const *parameterValues)
+static void
+SendCommandToWorkersParamsInternal(TargetWorkerSet targetWorkerSet, const char *command,
+								   const char *user, int parameterCount,
+								   const Oid *parameterTypes, const
+								   char *const *parameterValues)
 {
 	List *connectionList = NIL;
 	ListCell *connectionCell = NULL;
 	List *workerNodeList = TargetWorkerSetNodeList(targetWorkerSet, ShareLock);
 	ListCell *workerNodeCell = NULL;
-
-	if (targetWorkerSet == WORKERS_WITH_METADATA)
-	{
-		ErrorIfAnyMetadataNodeOutOfSync(workerNodeList);
-	}
 
 	BeginOrContinueCoordinatedTransaction();
 	CoordinatedTransactionUse2PC();
