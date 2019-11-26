@@ -74,6 +74,7 @@ extern List * ActivePrimaryWorkerNodeList(LOCKMODE lockMode);
 extern List * ActivePrimaryNodeList(LOCKMODE lockMode);
 extern List * ReferenceTablePlacementNodeList(LOCKMODE lockMode);
 extern List * DistributedTablePlacementNodeList(LOCKMODE lockMode);
+extern bool NodeCanHaveDistTablePlacements(WorkerNode *node);
 extern uint32 ActiveReadableWorkerNodeCount(void);
 extern List * ActiveReadableWorkerNodeList(void);
 extern List * ActiveReadableNodeList(void);

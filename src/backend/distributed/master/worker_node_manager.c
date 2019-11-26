@@ -45,7 +45,6 @@ static WorkerNode * FindRandomNodeFromList(List *candidateWorkerNodeList);
 static bool OddNumber(uint32 number);
 static bool ListMember(List *currentList, WorkerNode *workerNode);
 static bool NodeIsPrimaryWorker(WorkerNode *node);
-static bool NodeCanHaveDistTablePlacements(WorkerNode *node);
 static bool NodeIsReadableWorker(WorkerNode *node);
 
 
@@ -430,7 +429,7 @@ DistributedTablePlacementNodeList(LOCKMODE lockMode)
  * NodeCanHaveDistTablePlacements returns true if the given node can have
  * shards of a distributed table.
  */
-static bool
+bool
 NodeCanHaveDistTablePlacements(WorkerNode *node)
 {
 	if (!NodeIsPrimary(node))
