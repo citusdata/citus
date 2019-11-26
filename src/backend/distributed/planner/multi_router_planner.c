@@ -90,7 +90,7 @@ typedef struct InsertValues
 
 
 /*
- * A ModifyRoute encapsulates the the information needed to route modifications
+ * A ModifyRoute encapsulates the information needed to route modifications
  * to the appropriate shard. For a single-shard modification, only one route
  * is needed, but in the case of e.g. a multi-row INSERT, lists of these values
  * will help divide the rows by their destination shards, permitting later
@@ -2429,7 +2429,7 @@ WorkersContainingAllShards(List *prunedShardIntervalsList)
 
 		/*
 		 * Bail out if placement list becomes empty. This means there is no worker
-		 * containing all shards referecend by the query, hence we can not forward
+		 * containing all shards referenced by the query, hence we can not forward
 		 * this query directly to any worker.
 		 */
 		if (currentPlacementList == NIL)

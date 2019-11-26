@@ -462,7 +462,7 @@ PrunableExpressions(Node *node, ClauseWalkerContext *context)
 	 * be pending.
 	 *
 	 * We copy the partial PruningInstance, and continue adding information by
-	 * calling PrunableExpressionsWalker() on the copy, continuing at the the
+	 * calling PrunableExpressionsWalker() on the copy, continuing at the
 	 * node stored in PendingPruningInstance->continueAt.
 	 */
 	while (context->pendingInstances != NIL)

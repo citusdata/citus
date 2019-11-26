@@ -2771,7 +2771,7 @@ UpdateConnectionWaitFlags(WorkerSession *session, int waitFlags)
 
 
 /*
- * CheckConnectionReady returns true if the the connection is ready to
+ * CheckConnectionReady returns true if the connection is ready to
  * read or write, or false if it still has bytes to send/receive.
  */
 static bool

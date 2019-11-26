@@ -255,7 +255,7 @@ StartRemoteTransactionCommit(MultiConnection *connection)
 			/*
 			 * For a moment there I thought we were in trouble.
 			 *
-			 * Failing in this state means that we don't know whether the the
+			 * Failing in this state means that we don't know whether the
 			 * commit has succeeded.
 			 */
 			HandleRemoteTransactionConnectionError(connection, raiseErrors);
@@ -288,7 +288,7 @@ FinishRemoteTransactionCommit(MultiConnection *connection)
 
 		/*
 		 * Failing in this state means that we will often not know whether
-		 * the the commit has succeeded (particularly in case of network
+		 * the commit has succeeded (particularly in case of network
 		 * troubles).
 		 *
 		 * XXX: It might be worthwhile to discern cases where we got a
