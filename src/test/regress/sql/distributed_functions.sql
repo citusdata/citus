@@ -431,34 +431,29 @@ SELECT create_distributed_function('add_with_param_names(int, int)', 'val1');
 -- sync metadata to workers for consistent results when clearing objects
 SELECT wait_until_metadata_sync();
 
--- clear objects
-SELECT stop_metadata_sync_to_node(nodename,nodeport) FROM pg_dist_node WHERE isactive AND noderole = 'primary';
 
 SET client_min_messages TO error; -- suppress cascading objects dropping
 DROP SCHEMA function_tests CASCADE;
 DROP SCHEMA function_tests2 CASCADE;
 
+-- clear objects
+SELECT stop_metadata_sync_to_node(nodename,nodeport) FROM pg_dist_node WHERE isactive AND noderole = 'primary';
 -- This is hacky, but we should clean-up the resources as below
 
 \c - - - :worker_1_port
-SET client_min_messages TO error; -- suppress cascading objects dropping
 UPDATE pg_dist_local_group SET groupid = 0;
-UPDATE pg_dist_node SET hasmetadata=false;
-SELECT worker_drop_distributed_table(logicalrelid::text) FROM pg_dist_partition WHERE logicalrelid::text ILIKE '%replicated_table_func_test%';
+TRUNCATE pg_dist_node;
+SET client_min_messages TO error; -- suppress cascading objects dropping
 DROP SCHEMA function_tests CASCADE;
 DROP SCHEMA function_tests2 CASCADE;
-TRUNCATE pg_dist_node;
-
+SET search_path TO function_tests, function_tests2;
 \c - - - :worker_2_port
-SET client_min_messages TO error; -- suppress cascading objects dropping
 UPDATE pg_dist_local_group SET groupid = 0;
-UPDATE pg_dist_node SET hasmetadata=false;
-SELECT worker_drop_distributed_table(logicalrelid::text) FROM pg_dist_partition WHERE logicalrelid::text ILIKE '%replicated_table_func_test%';
+TRUNCATE pg_dist_node;
+SET client_min_messages TO error; -- suppress cascading objects dropping
 DROP SCHEMA function_tests CASCADE;
 DROP SCHEMA function_tests2 CASCADE;
-TRUNCATE pg_dist_node;
-
 \c - - - :master_port
 
 DROP USER functionuser;
-SELECT run_command_on_workers($$DROP USER functionuser;$$);
+SELECT run_command_on_workers($$DROP USER functionuser$$);
