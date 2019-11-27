@@ -110,7 +110,7 @@ MasterTargetList(List *workerTargetList)
 		masterColumn->varoattno = columnId;
 		columnId++;
 
-		if (masterColumn->vartype == RECORDOID)
+		if (masterColumn->vartype == RECORDOID || masterColumn->vartype == RECORDARRAYOID)
 		{
 			masterColumn->vartypmod = BlessRecordExpression(workerTargetEntry->expr);
 		}
