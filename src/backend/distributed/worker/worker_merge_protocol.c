@@ -73,13 +73,11 @@ worker_create_schema(PG_FUNCTION_ARGS)
 	bool schemaExists = false;
 	CheckCitusVersion(ERROR);
 
-	LockJobResource(jobId, AccessExclusiveLock);
 	schemaExists = JobSchemaExists(jobSchemaName);
 	if (!schemaExists)
 	{
 		CreateJobSchema(jobSchemaName);
 	}
-	UnlockJobResource(jobId, AccessExclusiveLock);
 
 	PG_RETURN_VOID();
 }
@@ -93,9 +91,13 @@ worker_remove_jobdir(PG_FUNCTION_ARGS)
 {
 	uint64 jobId = PG_GETARG_INT64(0);
 	StringInfo jobDirectoryName = JobDirectoryName(jobId);
+	StringInfo jobSchemaName = JobSchemaName(jobId);
 
 	CheckCitusVersion(ERROR);
 
+	Oid schemaId = get_namespace_oid(jobSchemaName->data, false);
+
+	EnsureSchemaOwner(schemaId);
 	CitusRemoveDirectory(jobDirectoryName);
 
 	PG_RETURN_VOID();

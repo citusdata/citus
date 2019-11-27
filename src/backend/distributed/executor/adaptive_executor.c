@@ -282,9 +282,7 @@ typedef struct DistributedExecution
 	AttInMetadata *attributeInputMetadata;
 	char **columnArray;
 
-	bool isRepartition;
-
-	List *forcedConnections;
+	bool isOutsideTransaction;
 } DistributedExecution;
 
 
@@ -549,7 +547,7 @@ static DistributedExecution * CreateDistributedExecution(RowModifyLevel modLevel
 														 TupleDesc tupleDescriptor,
 														 Tuplestorestate *tupleStore, int
 														 targetPoolSize, bool
-														 isRepartition);
+														 isOutsideTransaction);
 static void StartDistributedExecution(DistributedExecution *execution);
 static void RunLocalExecution(CitusScanState *scanState, DistributedExecution *execution);
 static void RunDistributedExecution(DistributedExecution *execution);
@@ -557,7 +555,7 @@ static bool ShouldRunTasksSequentially(List *taskList);
 static void SequentialRunDistributedExecution(DistributedExecution *execution);
 
 static void FinishDistributedExecution(DistributedExecution *execution);
-static void CloseForcedConnections(List *forcedConnections);
+static void CloseConnections(List *sessionList);
 static void CleanUpSessions(DistributedExecution *execution);
 
 static void LockPartitionsForDistributedPlan(DistributedPlan *distributedPlan);
@@ -832,7 +830,7 @@ ExecuteTaskList(RowModifyLevel modLevel, List *taskList, int targetPoolSize)
 uint64
 ExecuteTaskListExtended(RowModifyLevel modLevel, List *taskList,
 						TupleDesc tupleDescriptor, Tuplestorestate *tupleStore,
-						bool hasReturning, int targetPoolSize, bool isRepartition)
+						bool hasReturning, int targetPoolSize, bool isOutsideTransaction)
 {
 	DistributedExecution *execution = NULL;
 	ParamListInfo paramListInfo = NULL;
@@ -851,7 +849,7 @@ ExecuteTaskListExtended(RowModifyLevel modLevel, List *taskList,
 	execution =
 		CreateDistributedExecution(modLevel, taskList, hasReturning, paramListInfo,
 								   tupleDescriptor, tupleStore, targetPoolSize,
-								   isRepartition);
+								   isOutsideTransaction);
 
 
 	StartDistributedExecution(execution);
@@ -870,7 +868,7 @@ static DistributedExecution *
 CreateDistributedExecution(RowModifyLevel modLevel, List *taskList, bool hasReturning,
 						   ParamListInfo paramListInfo, TupleDesc tupleDescriptor,
 						   Tuplestorestate *tupleStore, int targetPoolSize, bool
-						   isRepartition)
+						   isOutsideTransaction)
 {
 	DistributedExecution *execution =
 		(DistributedExecution *) palloc0(sizeof(DistributedExecution));
@@ -881,7 +879,6 @@ CreateDistributedExecution(RowModifyLevel modLevel, List *taskList, bool hasRetu
 
 	execution->localTaskList = NIL;
 	execution->remoteTaskList = NIL;
-	execution->forcedConnections = NIL;
 
 	execution->executionStats =
 		(DistributedExecutionStats *) palloc0(sizeof(DistributedExecutionStats));
@@ -902,7 +899,7 @@ CreateDistributedExecution(RowModifyLevel modLevel, List *taskList, bool hasRetu
 	execution->connectionSetChanged = false;
 	execution->waitFlagsChanged = false;
 
-	execution->isRepartition = isRepartition;
+	execution->isOutsideTransaction = isOutsideTransaction;
 
 	/* allocate execution specific data once, on the ExecutorState memory context */
 	if (tupleDescriptor != NULL)
@@ -1112,7 +1109,7 @@ DistributedExecutionRequiresRollback(DistributedExecution *execution)
 
 	if (ReadOnlyTask(task->taskType))
 	{
-		return !execution->isRepartition && SelectOpensTransactionBlock &&
+		return !execution->isOutsideTransaction && SelectOpensTransactionBlock &&
 			   IsTransactionBlock();
 	}
 
@@ -1378,9 +1375,9 @@ FinishDistributedExecution(DistributedExecution *execution)
 {
 	UnsetCitusNoticeLevel();
 
-	if (execution->isRepartition)
+	if (execution->isOutsideTransaction)
 	{
-		CloseForcedConnections(execution->forcedConnections);
+		CloseConnections(execution->sessionList);
 	}
 
 	if (DistributedExecutionModifiesDatabase(execution))
@@ -1392,16 +1389,17 @@ FinishDistributedExecution(DistributedExecution *execution)
 
 
 /*
- * CloseForcedConnections closes all the given connections.
+ * CloseConnections closes all the connections from the given sessionList.
  */
 static void
-CloseForcedConnections(List *forcedConnections)
+CloseConnections(List *sessionList)
 {
-	ListCell *conCell = NULL;
+	ListCell *sessionCell = NULL;
 
-	foreach(conCell, forcedConnections)
+	foreach(sessionCell, sessionList)
 	{
-		MultiConnection *con = lfirst(conCell);
+		WorkerSession *session = lfirst(sessionCell);
+		MultiConnection *con = session->connection;
 
 		UnclaimConnection(con);
 		con->remoteTransaction.transactionState = REMOTE_TRANS_INVALID;
@@ -1449,10 +1447,10 @@ CleanUpSessions(DistributedExecution *execution)
 			 * but we might get it via the connection API and find us here before
 			 * changing any states in the ConnectionStateMachine.
 			 *
-			 * If execution is a repartition query, then the connection will be shutdown later so
+			 * If execution is outside a transaction, then the connection will be shutdown later so
 			 * we can skip it here.
 			 */
-			if (!execution->isRepartition)
+			if (!execution->isOutsideTransaction)
 			{
 				CloseConnection(connection);
 			}
@@ -1602,18 +1600,17 @@ AssignTasksToConnections(DistributedExecution *execution)
 
 			placementAccessList = PlacementAccessListForTask(task, taskPlacement);
 
-			if (execution->isRepartition)
+			if (!execution->isOutsideTransaction)
 			{
-				connectionFlags |= FORCE_NEW_CONNECTION;
+				/*
+				 * Determine whether the task has to be assigned to a particular connection
+				 * due to a preceding access to the placement in the same transaction.
+				 */
+				connection = GetConnectionIfPlacementAccessedInXact(connectionFlags,
+																	placementAccessList,
+																	NULL);
 			}
 
-			/*
-			 * Determine whether the task has to be assigned to a particular connection
-			 * due to a preceding access to the placement in the same transaction.
-			 */
-			connection = GetConnectionIfPlacementAccessedInXact(connectionFlags,
-																placementAccessList,
-																NULL);
 			if (connection != NULL)
 			{
 				/*
@@ -2204,7 +2201,7 @@ ManageWorkerPool(WorkerPool *workerPool)
 		/* experimental: just to see the perf benefits of caching connections */
 		int connectionFlags = 0;
 
-		if (execution->isRepartition)
+		if (execution->isOutsideTransaction)
 		{
 			connectionFlags |= FORCE_NEW_CONNECTION;
 		}
@@ -2214,11 +2211,6 @@ ManageWorkerPool(WorkerPool *workerPool)
 													 workerPool->nodeName,
 													 workerPool->nodePort,
 													 NULL, NULL);
-		if (execution->isRepartition)
-		{
-			execution->forcedConnections = lappend(execution->forcedConnections,
-												   connection);
-		}
 
 		/*
 		 * Assign the initial state in the connection state machine. The connection
@@ -2725,7 +2717,7 @@ TransactionStateMachine(WorkerSession *session)
 		{
 			case REMOTE_TRANS_INVALID:
 			{
-				if (execution->isTransaction && !execution->isRepartition)
+				if (execution->isTransaction && !execution->isOutsideTransaction)
 				{
 					/* if we're expanding the nodes in a transaction, use 2PC */
 					Activate2PCIfModifyingTransactionExpandsToNewNode(session);
@@ -3077,7 +3069,7 @@ StartPlacementExecutionOnSession(TaskPlacementExecution *placementExecution,
 	int querySent = 0;
 	int singleRowMode = 0;
 
-	if (!execution->isRepartition)
+	if (!execution->isOutsideTransaction)
 	{
 		/*
 		 * Make sure that subsequent commands on the same placement
