@@ -990,7 +990,7 @@ RemoveNodeFromCluster(char *nodeName, int32 nodePort)
 	/* make sure we don't have any lingering session lifespan connections */
 	CloseNodeConnectionsAfterTransaction(workerNode->workerName, nodePort);
 
-	SendCommandToWorkers(WORKERS_WITH_METADATA, nodeDeleteCommand);
+	SendCommandToWorkersWithMetadata(nodeDeleteCommand);
 }
 
 
@@ -1098,7 +1098,7 @@ AddNodeMetadata(char *nodeName, int32 nodePort,
 
 	/* send the delete command to all primary nodes with metadata */
 	char *nodeDeleteCommand = NodeDeleteCommand(workerNode->nodeId);
-	SendCommandToWorkers(WORKERS_WITH_METADATA, nodeDeleteCommand);
+	SendCommandToWorkersWithMetadata(nodeDeleteCommand);
 
 	/* finally prepare the insert command and send it to all primary nodes */
 	uint32 primariesWithMetadata = CountPrimariesWithMetadata();
@@ -1107,7 +1107,7 @@ AddNodeMetadata(char *nodeName, int32 nodePort,
 		List *workerNodeList = list_make1(workerNode);
 		char *nodeInsertCommand = NodeListInsertCommand(workerNodeList);
 
-		SendCommandToWorkers(WORKERS_WITH_METADATA, nodeInsertCommand);
+		SendCommandToWorkersWithMetadata(nodeInsertCommand);
 	}
 
 	return workerNode->nodeId;
@@ -1178,7 +1178,7 @@ SetWorkerColumn(WorkerNode *workerNode, int columnIndex, Datum value)
 	heap_close(pgDistNode, NoLock);
 
 	/* we also update the column at worker nodes */
-	SendCommandToWorkers(WORKERS_WITH_METADATA, metadataSyncCommand);
+	SendCommandToWorkersWithMetadata(metadataSyncCommand);
 	return newWorkerNode;
 }
 

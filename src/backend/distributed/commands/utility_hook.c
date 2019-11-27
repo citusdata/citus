@@ -1015,7 +1015,7 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 		{
 			char *setSearchPathCommand = SetSearchPathToCurrentSearchPathCommand();
 
-			SendCommandToWorkers(WORKERS_WITH_METADATA, DISABLE_DDL_PROPAGATION);
+			SendCommandToWorkersWithMetadata(DISABLE_DDL_PROPAGATION);
 
 			/*
 			 * Given that we're relaying the query to the worker nodes directly,
@@ -1023,10 +1023,10 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 			 */
 			if (setSearchPathCommand != NULL)
 			{
-				SendCommandToWorkers(WORKERS_WITH_METADATA, setSearchPathCommand);
+				SendCommandToWorkersWithMetadata(setSearchPathCommand);
 			}
 
-			SendCommandToWorkers(WORKERS_WITH_METADATA, (char *) ddlJob->commandString);
+			SendCommandToWorkersWithMetadata((char *) ddlJob->commandString);
 		}
 
 		/* use adaptive executor when enabled */
@@ -1060,7 +1060,7 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 
 				commandList = lappend(commandList, (char *) ddlJob->commandString);
 
-				SendBareCommandListToWorkers(WORKERS_WITH_METADATA, commandList);
+				SendBareCommandListToMetadataWorkers(commandList);
 			}
 		}
 		PG_CATCH();

@@ -1188,14 +1188,14 @@ CreateTableMetadataOnWorkers(Oid relationId)
 	ListCell *commandCell = NULL;
 
 	/* prevent recursive propagation */
-	SendCommandToWorkers(WORKERS_WITH_METADATA, DISABLE_DDL_PROPAGATION);
+	SendCommandToWorkersWithMetadata(DISABLE_DDL_PROPAGATION);
 
 	/* send the commands one by one */
 	foreach(commandCell, commandList)
 	{
 		char *command = (char *) lfirst(commandCell);
 
-		SendCommandToWorkers(WORKERS_WITH_METADATA, command);
+		SendCommandToWorkersWithMetadata(command);
 	}
 }
 
