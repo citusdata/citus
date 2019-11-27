@@ -415,8 +415,7 @@ ProcessAlterEnumStmt(AlterEnumStmt *stmt, const char *queryString)
 
 		List *commands = list_make2(DISABLE_DDL_PROPAGATION, (void *) alterEnumStmtSql);
 
-		int result = SendBareOptionalCommandListToWorkersAsUser(ALL_WORKERS, commands,
-																NULL);
+		int result = SendBareOptionalCommandListToAllWorkersAsUser(commands, NULL);
 
 		if (result != RESPONSE_OKAY)
 		{

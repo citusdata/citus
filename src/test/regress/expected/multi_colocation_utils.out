@@ -1041,6 +1041,8 @@ DROP TABLE table1_groupd;
 DROP TABLE table2_groupd;
 DROP TABLE table1_groupf;
 DROP TABLE table2_groupf;
+DROP TABLE table1_groupg;
+DROP TABLE table2_groupg;
 DROP TABLE table1_groupe;
 DROP TABLE table2_groupe;
 DROP TABLE table3_groupe;

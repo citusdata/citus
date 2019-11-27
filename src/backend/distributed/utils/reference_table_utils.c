@@ -329,7 +329,7 @@ ReplicateShardToNode(ShardInterval *shardInterval, char *nodeName, int nodePort)
 															FILE_FINALIZED, 0,
 															groupId);
 
-			SendCommandToWorkers(WORKERS_WITH_METADATA, placementCommand);
+			SendCommandToWorkersWithMetadata(placementCommand);
 		}
 	}
 }
@@ -448,7 +448,7 @@ DeleteAllReferenceTablePlacementsFromNodeGroup(int32 groupId)
 						 "DELETE FROM pg_dist_placement WHERE placementid = "
 						 UINT64_FORMAT,
 						 placement->placementId);
-		SendCommandToWorkers(WORKERS_WITH_METADATA, deletePlacementCommand->data);
+		SendCommandToWorkersWithMetadata(deletePlacementCommand->data);
 	}
 }
 
