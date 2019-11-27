@@ -12,8 +12,9 @@ extern int ExecutorSlowStartInterval;
 
 extern uint64 ExecuteTaskList(RowModifyLevel modLevel, List *taskList, int
 							  targetPoolSize);
-extern uint64 ExecuteTaskListRepartition(RowModifyLevel modLevel, List *taskList, int
-										 targetPoolSize);
+extern uint64 ExecuteTaskListOutsideTransaction(RowModifyLevel modLevel, List *taskList,
+												int
+												targetPoolSize);
 
 
 #endif /* ADAPTIVE_EXECUTOR_H */

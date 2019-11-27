@@ -794,7 +794,8 @@ ExecuteUtilityTaskListWithoutResults(List *taskList)
  * for some of the arguments for a repartition query.
  */
 uint64
-ExecuteTaskListRepartition(RowModifyLevel modLevel, List *taskList, int targetPoolSize)
+ExecuteTaskListOutsideTransaction(RowModifyLevel modLevel, List *taskList, int
+								  targetPoolSize)
 {
 	TupleDesc tupleDescriptor = NULL;
 	Tuplestorestate *tupleStore = NULL;

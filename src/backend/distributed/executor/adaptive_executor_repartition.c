@@ -2,7 +2,7 @@
  *
  * adaptive_executor_repartition.c
  *
- * Adaptive executor repartition's main entry point is ExecuteDependedTasks.
+ * This file contains repartition specific logic.
  * ExecuteDependedTasks takes a list of top level tasks. Its logic is as follows:
  * - It generates all the tasks by descending in the tasks tree. Note that each task
  *  has a dependedTaskList.
@@ -15,10 +15,7 @@
  *  adaptive executor logic.
  *
  *
- * When executing repartition queries, new connections are opened,
- * this is achieved with `FORCE_NEW_CONNECTION` flag.
- * At the end of execution `FinishDistributedExecution` those connections are closed.
- * Also repartition queries do not begin a transaction even if we are in
+ * Repartition queries do not begin a transaction even if we are in
  * a transaction block. As we dont begin a transaction, they wont see the
  * DDLs that happened earlier in the transaction because we dont have that
  * transaction id with repartition queries. Therefore we error in this case.
@@ -323,8 +320,8 @@ ExecuteTasksInDependencyOrder(List *allTasks, List *topLevelTasks)
 		{
 			break;
 		}
-		ExecuteTaskListRepartition(ROW_MODIFY_NONE, curTasks,
-								   MaxAdaptiveExecutorPoolSize);
+		ExecuteTaskListOutsideTransaction(ROW_MODIFY_NONE, curTasks,
+										  MaxAdaptiveExecutorPoolSize);
 
 		AddCompletedTasks(curTasks, completedTasks);
 		curTasks = NIL;
